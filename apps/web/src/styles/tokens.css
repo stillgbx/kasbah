@@ -1,0 +1,36 @@
+/* Jetons de design : une seule source pour le CSS maison ET pour Vuetify (voir plugins/vuetify.ts
+   qui reprend ces valeurs) et pour la scène 3D (variables --v-theme-scene*). L'accent est posé par
+   le store des réglages (--accent / --accent-soft / --on-accent) parmi quatre couleurs. */
+:root {
+  --bg: #e9edf1;
+  --surface: #ffffff;
+  --surface2: #f2f5f8;
+  --text: #141a22;
+  --muted: #66717f;
+  --line: rgba(20, 26, 34, 0.09);
+  --accent: #1f6f78;
+  --accent-soft: rgba(31, 111, 120, 0.12);
+  --on-accent: #ffffff;
+  --shadow: 0 8px 30px rgba(20, 26, 34, 0.08);
+  --radius: 16px;
+  --radius-sm: 12px;
+  --font: 'DM Sans Variable', 'DM Sans', system-ui, -apple-system, sans-serif;
+  --rail-w: 72px;
+  --aside-w: 340px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+:root[data-theme='dark'] {
+  --bg: #0d1420;
+  --surface: #161e2d;
+  --surface2: #1d2839;
+  --text: #e8edf3;
+  --muted: #8d9ab0;
+  --line: rgba(255, 255, 255, 0.08);
+  --accent: #4fb3bd;
+  --accent-soft: rgba(79, 179, 189, 0.16);
+  --on-accent: #0b1118;
+  --shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+}

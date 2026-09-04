@@ -1,0 +1,562 @@
+{
+  "schemaVersion": 1,
+  "id": "demo",
+  "name": "Maison démo",
+  "origin": {
+    "lat": 45.764,
+    "lon": 4.8357,
+    "alt": 180,
+    "heading": 15
+  },
+  "defaults": {
+    "levelHeight": 2.6,
+    "interiorWallThickness": 0.1,
+    "exteriorWallThickness": 0.3
+  },
+  "levels": [
+    {
+      "id": "rdc",
+      "name": "Rez-de-chaussée",
+      "shortName": "RDC",
+      "elevation": 0.2,
+      "height": 2.6
+    },
+    {
+      "id": "etage",
+      "name": "Étage",
+      "elevation": 3.05,
+      "height": 2.5,
+      "outline": [[-0.3, -0.3], [10.3, -0.3], [10.3, 8.3], [-0.3, 8.3]]
+    }
+  ],
+  "rooms": [
+    {
+      "id": "entree",
+      "levelId": "rdc",
+      "name": "Entrée",
+      "kind": "corridor",
+      "polygon": [[0, 0], [3, 0], [3, 8], [0, 8]],
+      "openings": [
+        {
+          "id": "porte-entree",
+          "type": "door",
+          "segment": 0,
+          "offset": 1.0,
+          "width": 0.9,
+          "height": 2.1
+        },
+        {
+          "id": "porte-salon",
+          "type": "door",
+          "segment": 1,
+          "offset": 1.0,
+          "width": 0.9,
+          "height": 2.1
+        }
+      ]
+    },
+    {
+      "id": "salon",
+      "levelId": "rdc",
+      "name": "Salon",
+      "polygon": [[3.2, 0], [10, 0], [10, 5], [3.2, 5]],
+      "walls": [
+        {
+          "segment": 2,
+          "kind": "none"
+        }
+      ],
+      "style": {
+        "floor": "wood"
+      },
+      "openings": [
+        {
+          "id": "baie",
+          "type": "window",
+          "segment": 0,
+          "offset": 1.5,
+          "width": 2.4,
+          "height": 2.15,
+          "sill": 0.2
+        },
+        {
+          "id": "fen-salon-est",
+          "type": "window",
+          "segment": 1,
+          "offset": 1.5,
+          "width": 1.2,
+          "height": 1.3,
+          "sill": 0.9
+        }
+      ]
+    },
+    {
+      "id": "cuisine",
+      "levelId": "rdc",
+      "name": "Cuisine",
+      "polygon": [[3.2, 5], [10, 5], [10, 8], [3.2, 8]],
+      "walls": [
+        {
+          "segment": 0,
+          "kind": "none"
+        }
+      ],
+      "style": {
+        "floor": "tile"
+      },
+      "openings": [
+        {
+          "id": "fen-cuisine",
+          "type": "window",
+          "segment": 1,
+          "offset": 0.8,
+          "width": 1.2,
+          "height": 1.2,
+          "sill": 1.0
+        },
+        {
+          "id": "porte-terrasse",
+          "type": "door",
+          "segment": 2,
+          "offset": 2.5,
+          "width": 1.6,
+          "height": 2.15
+        }
+      ]
+    },
+    {
+      "id": "chambre1",
+      "levelId": "etage",
+      "name": "Chambre 1",
+      "polygon": [[0, 0], [4.9, 0], [4.9, 4.9], [0, 4.9]],
+      "style": {
+        "floor": "carpet"
+      },
+      "openings": [
+        {
+          "id": "fen-ch1",
+          "type": "window",
+          "segment": 0,
+          "offset": 1.7,
+          "width": 1.4,
+          "height": 1.3,
+          "sill": 0.9
+        }
+      ]
+    },
+    {
+      "id": "chambre2",
+      "levelId": "etage",
+      "name": "Chambre 2",
+      "polygon": [[5.1, 0], [10, 0], [10, 4.9], [5.1, 4.9]],
+      "openings": [
+        {
+          "id": "fen-ch2",
+          "type": "window",
+          "segment": 0,
+          "offset": 1.7,
+          "width": 1.4,
+          "height": 1.3,
+          "sill": 0.9
+        }
+      ]
+    },
+    {
+      "id": "sdb",
+      "levelId": "etage",
+      "name": "Salle de bain",
+      "polygon": [[5.1, 5.1], [10, 5.1], [10, 8], [5.1, 8]],
+      "style": {
+        "floor": "tile"
+      },
+      "openings": [
+        {
+          "id": "fen-sdb",
+          "type": "window",
+          "segment": 1,
+          "offset": 1.0,
+          "width": 0.8,
+          "height": 0.8,
+          "sill": 1.3
+        }
+      ]
+    },
+    {
+      "id": "palier",
+      "levelId": "etage",
+      "name": "Palier",
+      "kind": "corridor",
+      "polygon": [[0, 5.1], [4.9, 5.1], [4.9, 8], [0, 8]],
+      "openings": [
+        {
+          "id": "porte-ch1",
+          "type": "door",
+          "segment": 0,
+          "offset": 2.0,
+          "width": 0.8,
+          "height": 2.05
+        },
+        {
+          "id": "porte-sdb",
+          "type": "door",
+          "segment": 1,
+          "offset": 1.0,
+          "width": 0.8,
+          "height": 2.05
+        }
+      ]
+    }
+  ],
+  "site": {
+    "elevation": 0,
+    "terrain": [[-6, -8], [26, -8], [26, 22], [-6, 22]],
+    "zones": [
+      {
+        "id": "allee",
+        "name": "Allée",
+        "kind": "driveway",
+        "polygon": [[-6, -8], [-1, -8], [-1, 3], [-6, 3]]
+      },
+      {
+        "id": "terrasse",
+        "name": "Terrasse",
+        "kind": "terrace",
+        "polygon": [[3, 8.3], [10.3, 8.3], [10.3, 12], [3, 12]]
+      },
+      {
+        "id": "pelouse",
+        "name": "Pelouse",
+        "kind": "lawn",
+        "polygon": [[-1, 12], [26, 12], [26, 22], [-1, 22]]
+      },
+      {
+        "id": "piscine",
+        "name": "Piscine",
+        "kind": "pool",
+        "polygon": [[14, 2], [22, 2], [22, 6], [14, 6]]
+      }
+    ]
+  },
+  "devices": [
+    {
+      "id": "light.salon",
+      "name": "Plafonnier salon",
+      "deviceId": "mock:light-living",
+      "roomId": "salon",
+      "levelId": "rdc",
+      "position": [6.6, 2.5, 2.5],
+      "mount": "ceiling"
+    },
+    {
+      "id": "light.cuisine",
+      "name": "Spots cuisine",
+      "deviceId": "mock:light-kitchen",
+      "roomId": "cuisine",
+      "levelId": "rdc",
+      "position": [6.6, 6.5, 2.5],
+      "mount": "ceiling"
+    },
+    {
+      "id": "light.chambre1",
+      "name": "Lampe chambre 1",
+      "deviceId": "mock:light-bedroom1",
+      "roomId": "chambre1",
+      "levelId": "etage",
+      "position": [2.4, 2.4, 2.4],
+      "mount": "ceiling"
+    },
+    {
+      "id": "cover.baie",
+      "name": "Volet baie",
+      "deviceId": "mock:cover-living",
+      "roomId": "salon",
+      "levelId": "rdc",
+      "position": [4.2, 0.05, 1.3],
+      "openingId": "baie"
+    },
+    {
+      "id": "cover.cuisine",
+      "name": "Volet cuisine",
+      "deviceId": "mock:cover-kitchen",
+      "roomId": "cuisine",
+      "levelId": "rdc",
+      "position": [9.95, 5.8, 1.6],
+      "openingId": "fen-cuisine"
+    },
+    {
+      "id": "cover.chambre1",
+      "name": "Volet chambre 1",
+      "deviceId": "mock:cover-bedroom1",
+      "roomId": "chambre1",
+      "levelId": "etage",
+      "position": [2.4, 0.05, 1.55],
+      "openingId": "fen-ch1"
+    },
+    {
+      "id": "speaker.salon",
+      "name": "Enceinte salon",
+      "deviceId": "mock:speaker-living",
+      "roomId": "salon",
+      "levelId": "rdc",
+      "position": [9.7, 4.5, 0.6],
+      "mount": "floor"
+    },
+    {
+      "id": "speaker.cuisine",
+      "name": "Enceinte cuisine",
+      "deviceId": "mock:speaker-kitchen",
+      "roomId": "cuisine",
+      "levelId": "rdc",
+      "position": [8.5, 7.85, 1.0],
+      "mount": "wall"
+    },
+    {
+      "id": "climate.pac",
+      "name": "Pompe à chaleur",
+      "deviceId": "mock:climate-heatpump",
+      "roomId": "entree",
+      "levelId": "rdc",
+      "position": [0.15, 6.5, 1.5],
+      "mount": "wall"
+    },
+    {
+      "id": "vacuum.roomba",
+      "name": "Aspirateur",
+      "deviceId": "mock:vacuum-roomba",
+      "roomId": "entree",
+      "levelId": "rdc",
+      "position": [2.6, 7.6, 0.1],
+      "mount": "floor"
+    },
+    {
+      "id": "sensor.ch1",
+      "name": "Température chambre 1",
+      "deviceId": "mock:sensor-bedroom1-temp",
+      "roomId": "chambre1",
+      "levelId": "etage",
+      "position": [0.05, 2.5, 1.5],
+      "mount": "wall"
+    },
+    {
+      "id": "sensor.exterieur",
+      "name": "Température extérieure",
+      "deviceId": "mock:sensor-outdoor-temp",
+      "zoneId": "terrasse",
+      "position": [10.2, 8.5, 1.8],
+      "mount": "wall"
+    },
+    {
+      "id": "sensor.piscine",
+      "name": "Température piscine",
+      "deviceId": "mock:sensor-pool-temp",
+      "zoneId": "piscine",
+      "position": [18, 4, 0.1]
+    },
+    {
+      "id": "sensor.filtration",
+      "name": "Pression filtration",
+      "deviceId": "mock:sensor-filtration-pressure",
+      "zoneId": "piscine",
+      "position": [23, 4, 0.5]
+    },
+    {
+      "id": "energy.site",
+      "name": "Énergie Enphase",
+      "deviceId": "mock:energy-site",
+      "roomId": "entree",
+      "levelId": "rdc",
+      "position": [0.15, 1.0, 1.4],
+      "mount": "wall"
+    },
+    {
+      "id": "charger.garage",
+      "name": "Borne de recharge",
+      "deviceId": "mock:charger-home",
+      "zoneId": "allee",
+      "position": [-1.2, 1.0, 1.0],
+      "mount": "wall"
+    },
+    {
+      "id": "vehicle.tesla",
+      "name": "Tesla",
+      "deviceId": "mock:vehicle-tesla",
+      "zoneId": "allee",
+      "position": [-3.5, -1.0, 0.7],
+      "yaw": 0
+    },
+    {
+      "id": "vehicle.zoe",
+      "name": "Zoé",
+      "deviceId": "mock:vehicle-zoe",
+      "zoneId": "allee",
+      "position": [-3.5, -6.0, 0.7],
+      "yaw": 0
+    },
+    {
+      "id": "mower.pelouse",
+      "name": "Tondeuse",
+      "deviceId": "mock:mower-automower",
+      "zoneId": "pelouse",
+      "position": [12, 16, 0.15]
+    }
+  ],
+  "scenes": [
+    {
+      "id": "leave",
+      "name": "Départ",
+      "icon": "leave",
+      "actions": [
+        {
+          "deviceId": "mock:light-living",
+          "command": {
+            "type": "light.set",
+            "on": false
+          }
+        },
+        {
+          "deviceId": "mock:light-kitchen",
+          "command": {
+            "type": "light.set",
+            "on": false
+          }
+        },
+        {
+          "deviceId": "mock:light-bedroom1",
+          "command": {
+            "type": "light.set",
+            "on": false
+          }
+        },
+        {
+          "deviceId": "mock:cover-living",
+          "command": {
+            "type": "cover.close"
+          }
+        },
+        {
+          "deviceId": "mock:cover-kitchen",
+          "command": {
+            "type": "cover.close"
+          }
+        },
+        {
+          "deviceId": "mock:cover-bedroom1",
+          "command": {
+            "type": "cover.close"
+          }
+        },
+        {
+          "deviceId": "mock:speaker-living",
+          "command": {
+            "type": "media_player.pause"
+          }
+        },
+        {
+          "deviceId": "mock:speaker-kitchen",
+          "command": {
+            "type": "media_player.pause"
+          }
+        },
+        {
+          "deviceId": "mock:vacuum-roomba",
+          "command": {
+            "type": "vacuum.start"
+          }
+        }
+      ]
+    },
+    {
+      "id": "night",
+      "name": "Nuit",
+      "icon": "night",
+      "actions": [
+        {
+          "deviceId": "mock:light-living",
+          "command": {
+            "type": "light.set",
+            "on": false
+          }
+        },
+        {
+          "deviceId": "mock:light-kitchen",
+          "command": {
+            "type": "light.set",
+            "on": false
+          }
+        },
+        {
+          "deviceId": "mock:cover-living",
+          "command": {
+            "type": "cover.close"
+          }
+        },
+        {
+          "deviceId": "mock:cover-kitchen",
+          "command": {
+            "type": "cover.close"
+          }
+        },
+        {
+          "deviceId": "mock:cover-bedroom1",
+          "command": {
+            "type": "cover.close"
+          }
+        },
+        {
+          "deviceId": "mock:speaker-living",
+          "command": {
+            "type": "media_player.pause"
+          }
+        },
+        {
+          "deviceId": "mock:speaker-kitchen",
+          "command": {
+            "type": "media_player.pause"
+          }
+        },
+        {
+          "deviceId": "mock:climate-heatpump",
+          "command": {
+            "type": "climate.set_target_temp",
+            "targetTempC": 18.5
+          }
+        }
+      ]
+    },
+    {
+      "id": "movie",
+      "name": "Cinéma",
+      "icon": "movie",
+      "actions": [
+        {
+          "deviceId": "mock:light-living",
+          "command": {
+            "type": "light.set",
+            "on": true,
+            "brightness": 20,
+            "colorTempMirek": 450
+          }
+        },
+        {
+          "deviceId": "mock:cover-living",
+          "command": {
+            "type": "cover.close"
+          }
+        },
+        {
+          "deviceId": "mock:speaker-living",
+          "command": {
+            "type": "media_player.play"
+          }
+        }
+      ]
+    }
+  ],
+  "roof": {
+    "type": "gable",
+    "levelId": "etage",
+    "ridgeAxis": "x",
+    "pitch": 35,
+    "overhang": 0.4
+  }
+}

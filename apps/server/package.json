@@ -1,0 +1,31 @@
+{
+  "name": "@kasbah/server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=.env src/main.ts",
+    "build": "node build.mjs",
+    "start": "node --env-file-if-exists=.env dist/main.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fastify/static": "^10.0.0",
+    "@fastify/websocket": "^11.0.0",
+    "@kasbah/mock-sim": "*",
+    "@kasbah/shared": "*",
+    "dotenv": "^17.0.0",
+    "fastify": "^5.0.0",
+    "pino": "^10.0.0",
+    "undici": "^8.0.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.0.0",
+    "esbuild": "^0.28.0",
+    "pino-pretty": "^13.0.0",
+    "tsx": "^4.0.0",
+    "ws": "^8.0.0"
+  }
+}

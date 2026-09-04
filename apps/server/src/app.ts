@@ -1,0 +1,78 @@
+import Fastify, { type FastifyInstance } from 'fastify'
+import type { Logger } from 'pino'
+import type { Env } from './config/env'
+import { loadHouse, type LoadedHouse } from './config/house'
+import { Bus } from './core/bus'
+import { systemClock, type Clock } from './core/clock'
+import type { PluginFactory } from './core/plugin'
+import { PluginHost } from './core/plugin-host'
+import { DeviceRegistry } from './core/registry'
+import { EnergyHistory } from './core/history'
+import { registerRoutes } from './http/routes'
+import { registerStatic } from './http/static'
+import { PLUGIN_FACTORIES } from './plugins'
+import { WsHub } from './ws/hub'
+
+export interface BuildAppOptions {
+  env: Env
+  logger: Logger
+  clock?: Clock
+  factories?: Record<string, PluginFactory>
+  envSource?: NodeJS.ProcessEnv
+  /** Maison déjà chargée (tests) ; sinon lue depuis env.KASBAH_HOUSE_FILE. */
+  house?: LoadedHouse
+  serveStatic?: boolean
+}
+
+export interface KasbahApp {
+  app: FastifyInstance
+  registry: DeviceRegistry
+  bus: Bus
+  hub: WsHub
+  host: PluginHost
+  house: LoadedHouse
+  /** Démarre les plugins (après app.ready()/listen pour que les routes soient prêtes). */
+  startPlugins(): Promise<void>
+  close(): Promise<void>
+}
+
+/** Assemble l'application sans écouter : utilisé par main.ts et par les tests (app.inject). */
+export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
+  const clock = opts.clock ?? systemClock
+  // le child pino spécialise le type générique de l'instance : on revient au FastifyInstance nominal
+  const app = Fastify({ loggerInstance: opts.logger.child({ component: 'http' }, { level: 'warn' }) }) as unknown as FastifyInstance
+  const house = opts.house ?? (await loadHouse(opts.env.KASBAH_HOUSE_FILE))
+  for (const w of house.warnings) opts.logger.warn({ path: w.path, code: w.code }, w.message)
+
+  const bus = new Bus()
+  const registry = new DeviceRegistry(bus, clock, opts.logger.child({ component: 'registry' }))
+  const hub = new WsHub(registry, bus, clock, opts.logger.child({ component: 'ws' }))
+  const history = new EnergyHistory(bus, clock)
+  const host = new PluginHost({
+    enabled: opts.env.KASBAH_PLUGINS,
+    strict: opts.env.KASBAH_STRICT_PLUGINS,
+    factories: opts.factories ?? PLUGIN_FACTORIES,
+    registry, clock, logger: opts.logger,
+    ...(opts.envSource ? { envSource: opts.envSource } : {}),
+    commandTimeoutMs: opts.env.KASBAH_COMMAND_TIMEOUT_MS,
+  })
+
+  await hub.attach(app)
+  registerRoutes(app, { registry, host, house, hub, history, startedAt: clock.now() })
+  host.registerRoutes(app)
+  if (opts.serveStatic ?? true) {
+    const served = await registerStatic(app, opts.env.KASBAH_STATIC_DIR)
+    opts.logger.info({ dir: opts.env.KASBAH_STATIC_DIR, served }, served ? 'serving web build' : 'no web build found (dev mode: use Vite)')
+  }
+
+  return {
+    app, registry, bus, hub, host, house,
+    startPlugins: () => host.startAll(),
+    async close() {
+      await host.stopAll()
+      hub.close()
+      history.close()
+      await app.close()
+    },
+  }
+}

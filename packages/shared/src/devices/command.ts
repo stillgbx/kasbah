@@ -1,0 +1,82 @@
+import { z } from 'zod'
+import { CLIMATE_MODES, type Capability, type DeviceKind } from './kinds'
+import { xySchema } from './state'
+
+// Commandes nommées `<kind>.<verbe>` : le préfixe donne le kind gratuitement et
+// `COMMAND_REQUIRES` permet au serveur de refuser une commande non supportée par l'appareil.
+
+const pct = z.number().min(0).max(100)
+
+export const commandSchema = z.discriminatedUnion('type', [
+  // light — une seule commande fusionnée (miroir du PUT Hue, évite 4 allers-retours par mouvement de picker)
+  z.object({
+    type: z.literal('light.set'),
+    on: z.boolean().optional(),
+    brightness: pct.optional(),
+    colorTempMirek: z.number().optional(),
+    color: xySchema.optional(),
+    transitionMs: z.number().int().min(0).optional(),
+  }),
+  // cover
+  z.object({ type: z.literal('cover.open') }),
+  z.object({ type: z.literal('cover.close') }),
+  z.object({ type: z.literal('cover.stop') }),
+  z.object({ type: z.literal('cover.set_position'), position: pct }),
+  z.object({ type: z.literal('cover.set_tilt'), tilt: pct }),
+  // media_player
+  z.object({ type: z.literal('media_player.play') }),
+  z.object({ type: z.literal('media_player.pause') }),
+  z.object({ type: z.literal('media_player.next') }),
+  z.object({ type: z.literal('media_player.previous') }),
+  z.object({ type: z.literal('media_player.set_volume'), volume: pct }),
+  z.object({ type: z.literal('media_player.set_mute'), muted: z.boolean() }),
+  // climate
+  z.object({ type: z.literal('climate.set_mode'), mode: z.enum(CLIMATE_MODES) }),
+  z.object({ type: z.literal('climate.set_target_temp'), targetTempC: z.number() }),
+  // vacuum
+  z.object({ type: z.literal('vacuum.start') }),
+  z.object({ type: z.literal('vacuum.pause') }),
+  z.object({ type: z.literal('vacuum.dock') }),
+  z.object({ type: z.literal('vacuum.locate') }),
+  // mower
+  z.object({ type: z.literal('mower.start'), durationMin: z.number().int().positive().optional() }),
+  z.object({ type: z.literal('mower.pause') }),
+  z.object({ type: z.literal('mower.park'), untilNextSchedule: z.boolean().default(true) }),
+  // ev_charger
+  z.object({ type: z.literal('ev_charger.start') }),
+  z.object({ type: z.literal('ev_charger.stop') }),
+  z.object({ type: z.literal('ev_charger.set_current'), amps: z.number().positive() }),
+  // vehicle
+  z.object({ type: z.literal('vehicle.lock') }),
+  z.object({ type: z.literal('vehicle.unlock') }),
+  z.object({ type: z.literal('vehicle.start_charge') }),
+  z.object({ type: z.literal('vehicle.stop_charge') }),
+  z.object({ type: z.literal('vehicle.set_charge_limit'), percent: pct }),
+  z.object({ type: z.literal('vehicle.wake') }),
+])
+export type Command = z.infer<typeof commandSchema>
+export type CommandInput = z.input<typeof commandSchema>
+export type CommandType = Command['type']
+export type CommandOf<T extends CommandType> = Extract<Command, { type: T }>
+
+/** Capacité requise pour accepter chaque commande. */
+export const COMMAND_REQUIRES: Record<CommandType, Capability> = {
+  'light.set': 'on_off',
+  'cover.open': 'position', 'cover.close': 'position', 'cover.stop': 'stop',
+  'cover.set_position': 'position', 'cover.set_tilt': 'tilt',
+  'media_player.play': 'playback', 'media_player.pause': 'playback',
+  'media_player.next': 'track_skip', 'media_player.previous': 'track_skip',
+  'media_player.set_volume': 'volume', 'media_player.set_mute': 'mute',
+  'climate.set_mode': 'hvac_mode', 'climate.set_target_temp': 'target_temp',
+  'vacuum.start': 'clean', 'vacuum.pause': 'clean', 'vacuum.dock': 'dock', 'vacuum.locate': 'locate',
+  'mower.start': 'mow', 'mower.pause': 'mow', 'mower.park': 'park',
+  'ev_charger.start': 'charge_control', 'ev_charger.stop': 'charge_control', 'ev_charger.set_current': 'charge_current',
+  'vehicle.lock': 'lock', 'vehicle.unlock': 'lock',
+  'vehicle.start_charge': 'charging', 'vehicle.stop_charge': 'charging',
+  'vehicle.set_charge_limit': 'charge_limit', 'vehicle.wake': 'soc',
+}
+
+export function commandKind(cmd: Command | CommandType): DeviceKind {
+  const type = typeof cmd === 'string' ? cmd : cmd.type
+  return type.slice(0, type.indexOf('.')) as DeviceKind
+}

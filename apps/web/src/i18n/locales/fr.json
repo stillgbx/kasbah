@@ -1,0 +1,91 @@
+{
+  "app": { "name": "Kasbah" },
+  "nav": { "main": "Navigation", "home": "Maison", "energy": "Énergie", "vehicles": "Véhicules", "settings": "Réglages" },
+  "common": {
+    "close": "Fermer", "back": "Retour", "retry": "Réessayer", "all": "Tout", "none": "Aucun", "unavailable": "Indisponible",
+    "loading": "Chargement de la maison…", "on": "Allumé", "off": "Éteint", "open": "Ouvrir", "stop": "Stop", "closeCover": "Fermer",
+    "start": "Démarrer", "pause": "Pause", "dock": "Retour base", "park": "Rentrer", "locate": "Localiser",
+    "lock": "Verrouiller", "unlock": "Déverrouiller", "unknown": "Inconnu", "status": "État", "mode": "Mode"
+  },
+  "connection": {
+    "connecting": "Connexion au serveur…", "online": "Connecté", "stale": "Lien silencieux, reconnexion…",
+    "offline": "Serveur injoignable. Les états affichés peuvent être périmés."
+  },
+  "summary": { "lightsOn": "{n} lumière allumée | {n} lumière allumée | {n} lumières allumées", "solar": "Solaire" },
+  "floors": { "garden": "Jardin", "all": "Tout", "roof": "Toit" },
+  "home": {
+    "lightsOn": "lumières allumées", "shuttersOpen": "volets ouverts", "solar": "Solaire", "battery": "Batterie",
+    "scenes": "Scènes", "rooms": "Pièces", "garden": "Jardin",
+    "devicesCount": "{n} appareil | {n} appareil | {n} appareils", "active": "{n} actif | {n} actif | {n} actifs",
+    "selectHint": "Touchez une pièce ou un appareil dans la vue 3D",
+    "hint3d": "1 doigt : orbiter · 2 doigts : zoom et déplacement · molette : zoom",
+    "resetView": "Vue d'ensemble", "openPanel": "Panneau", "noScenes": "Aucune scène définie dans la maison."
+  },
+  "kinds": {
+    "light": "Lumière", "cover": "Volet", "media_player": "Enceinte", "climate": "Chauffage", "vacuum": "Aspirateur",
+    "mower": "Tondeuse", "sensor": "Capteur", "energy": "Énergie", "ev_charger": "Borne de recharge", "vehicle": "Véhicule"
+  },
+  "device": {
+    "unbound": "Cet appareil n'est lié à aucun plugin ({id}).", "notPlaced": "Non placés", "outdoor": "Extérieur",
+    "pending": "Commande en cours…", "lastUpdate": "Mis à jour {time}", "empty": "Aucun appareil connu. Vérifiez les plugins dans les réglages."
+  },
+  "light": { "brightness": "Luminosité", "colorTemp": "Température", "color": "Couleur", "warm": "Chaud", "cold": "Froid" },
+  "cover": { "position": "Ouverture", "opening": "Ouverture en cours", "closing": "Fermeture en cours", "stopped": "À l'arrêt", "tilt": "Inclinaison", "closed": "Fermé", "open": "Ouvert" },
+  "media": { "volume": "Volume", "mute": "Muet", "nothing": "Rien en lecture", "playing": "En lecture", "paused": "En pause", "idle": "Inactif", "off": "Éteint" },
+  "climate": {
+    "target": "Consigne", "current": "Mesuré", "humidity": "Humidité", "mode": "Mode",
+    "modes": { "off": "Arrêt", "heat": "Chauffage", "cool": "Rafraîchissement", "auto": "Auto", "eco": "Éco", "fan_only": "Ventilation" },
+    "actions": { "heating": "Chauffe", "cooling": "Refroidit", "idle": "En veille", "off": "Arrêt" }
+  },
+  "vacuum": {
+    "battery": "Batterie", "binFull": "Bac plein",
+    "activities": { "docked": "À la base", "cleaning": "Nettoyage", "paused": "En pause", "returning": "Retour base", "error": "Erreur" }
+  },
+  "mower": {
+    "battery": "Batterie", "nextStart": "Prochain départ {time}", "startFor": "Tondre 1 h",
+    "activities": { "parked": "Au garage", "mowing": "Tonte en cours", "charging": "En charge", "returning": "Rentre", "paused": "En pause", "error": "Erreur" }
+  },
+  "energy": {
+    "title": "Énergie", "production": "Production", "consumption": "Consommation", "house": "Maison", "grid": "Réseau",
+    "import": "soutirage", "export": "injection", "battery": "Batterie", "charging": "Charge", "discharging": "Décharge",
+    "today": "Aujourd'hui", "selfConsumption": "autoconsommation", "productionToday": "Production du jour", "kWhToday": "kWh produits",
+    "charger": "Borne", "noData": "Aucun appareil énergie", "noHistory": "L'historique se remplit au fil de la journée."
+  },
+  "charger": {
+    "status": { "disconnected": "Débranchée", "connected": "Branchée", "charging": "En charge", "finished": "Charge terminée", "error": "Erreur" },
+    "power": "Puissance", "session": "Session", "maxCurrent": "Courant max"
+  },
+  "vehicle": {
+    "soc": "Charge", "range": "Autonomie", "chargeLimit": "Limite de charge", "pluggedIn": "Branché", "unplugged": "Débranché",
+    "charging": "En charge", "locked": "Verrouillé", "unlocked": "Déverrouillé", "atHome": "À la maison", "away": "À {distance}",
+    "startCharge": "Lancer la charge", "stopCharge": "Arrêter la charge", "odometer": "Kilométrage", "location": "Position",
+    "mapPlaceholder": "Carte — position du véhicule", "none": "Aucun véhicule connu"
+  },
+  "settings": {
+    "title": "Réglages", "appearance": "Apparence", "system": "Système", "light": "Clair", "dark": "Sombre",
+    "accent": "Couleur d'accent", "accents": { "teal": "Lagon", "terracotta": "Terre cuite", "indigo": "Indigo", "moss": "Mousse" },
+    "language": "Langue", "auto": "Automatique", "fullscreen": "Plein écran",
+    "gps": "Origine GPS du repère local", "gpsHeading": "cap", "houseStats": "{levels} niveaux · {rooms} pièces · {devices} appareils",
+    "plugins": "Plugins", "keys": "Clés .env", "noKeys": "aucune clé", "pluginStatus": {
+      "ok": "Connecté", "degraded": "Dégradé", "needs_pairing": "Appairage requis", "error": "Erreur",
+      "not_implemented": "Pas encore implémenté", "disabled": "Désactivé"
+    },
+    "devicesCount": "{n} appareil | {n} appareil | {n} appareils",
+    "hue": {
+      "title": "Philips Hue", "pair": "Appairer le bridge", "pairing": "Appairage…",
+      "instructions": "Appuyez sur le bouton central du bridge Hue, puis lancez l'appairage dans les 30 secondes.",
+      "success": "Bridge appairé. Ajoutez HUE_APP_KEY={key} dans apps/server/.env pour conserver l'appairage.",
+      "buttonNotPressed": "Le bouton du bridge n'a pas été pressé. Appuyez dessus puis réessayez."
+    },
+    "about": "Kasbah v{version} · {house}"
+  },
+  "errors": {
+    "NETWORK": "{name} : serveur injoignable.", "HTTP_ERROR": "{name} : {message}", "NOT_FOUND": "{name} : appareil inconnu.",
+    "INVALID_BODY": "{name} : commande invalide.", "KIND_MISMATCH": "{name} : commande incompatible.",
+    "UNSUPPORTED_COMMAND": "{name} : commande non supportée.", "DEVICE_UNAVAILABLE": "{name} est indisponible.",
+    "UPSTREAM_ERROR": "{name} : le service du fabricant a échoué.", "RATE_LIMITED": "{name} : trop de commandes, patientez.",
+    "NEEDS_PAIRING": "{name} : appairage requis.", "TIMEOUT": "{name} : pas de réponse.", "NOT_IMPLEMENTED": "{name} : plugin non implémenté.",
+    "INTERNAL": "{name} : erreur serveur.", "UNKNOWN": "{name} : {message}", "houseLoad": "Impossible de charger la maison : {message}"
+  },
+  "scene": { "webglUnavailable": "La 3D n'est pas disponible sur cet appareil." }
+}

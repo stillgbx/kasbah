@@ -1,0 +1,449 @@
+import {
+  AmbientLight, DirectionalLight, HemisphereLight, PCFSoftShadowMap, PerspectiveCamera, Raycaster, Scene, TOUCH, Vector2, Vector3,
+  WebGLRenderer, type Box3, type Material, type Mesh, type MeshStandardMaterial, type Object3D,
+} from 'three'
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js'
+import {
+  buildingBounds, computeHouseGeometry, deviceFloorZ, geoDistance, indexHouse, resolveDefaults, resolveDeviceLevelId, roomBounds, zoneBounds,
+  type DeviceDescriptor, type DeviceState, type House, type HouseGeometry, type HouseIndex,
+} from '@kasbah/shared'
+import { applyTheme, createMaterials, disposeMaterials, type MaterialSet } from './builders/materials'
+import { buildHouse, type HouseNodes } from './builders/buildHouse'
+import { clamp, fitBox, sphericalOf } from './core/cameraFit'
+import { boundsToWorldBox } from './core/coords'
+import { disposeObject3D } from './core/dispose'
+import { createTapDetector, type TapEvent } from './core/input'
+import { createRenderLoop, type RenderLoop } from './core/renderLoop'
+import { defaultSceneTheme, type SceneTheme } from './core/theme'
+import { createTween, easeInOutCubic } from './core/tween'
+import { createMarker } from './markers/createMarker'
+import type { DeviceMarker } from './markers/DeviceMarker'
+
+// Contrôleur de scène sans Vue. Dépendances injectables (renderer, RAF) → instanciable en Node
+// pour les tests sans WebGL. Le composable useHouseScene est son adaptateur réactif.
+
+export type LevelFocusMode = 'hide' | 'ghost'
+
+export interface HouseSceneOptions {
+  levelFocusMode: LevelFocusMode
+  shadows: boolean
+}
+
+export interface HouseSceneDeps {
+  createRenderer?: (canvas: HTMLCanvasElement) => WebGLRenderer | null
+  createLabelRenderer?: (layer: HTMLElement) => CSS2DRenderer
+  requestFrame?: (cb: (now: number) => void) => number
+  cancelFrame?: (h: number) => void
+  now?: () => number
+  theme?: SceneTheme
+  labelLayer?: HTMLElement | null
+  /** Désactive OrbitControls/tap (tests Node). */
+  headless?: boolean
+}
+
+export interface SceneEvents {
+  deviceTap: (key: string) => void
+  roomTap: (roomId: string) => void
+  zoneTap: (zoneId: string) => void
+  backgroundTap: () => void
+}
+
+const HOME_RADIUS_M = 120
+const DEFAULT_AZIMUTH = -Math.PI / 4     // depuis le sud-est
+const DEFAULT_POLAR = (55 * Math.PI) / 180
+
+export class HouseScene {
+  readonly scene = new Scene()
+  readonly camera: PerspectiveCamera
+  readonly renderer: WebGLRenderer | null
+  readonly labelRenderer: CSS2DRenderer | null
+  readonly controls: OrbitControls | null
+  readonly loop: RenderLoop
+  readonly markers = new Map<string, DeviceMarker>()
+  readonly supported: boolean
+
+  private materials: MaterialSet
+  private theme: SceneTheme
+  private nodes: HouseNodes | null = null
+  private house: House | null = null
+  private index: HouseIndex | null = null
+  private geometry: HouseGeometry | null = null
+  private options: HouseSceneOptions = { levelFocusMode: 'hide', shadows: true }
+  private focusedLevelId: string | null = null
+  private highlightedRoom: string | null = null
+  private selectedKey: string | null = null
+  private listeners: { [K in keyof SceneEvents]: Set<SceneEvents[K]> } = {
+    deviceTap: new Set(), roomTap: new Set(), zoneTap: new Set(), backgroundTap: new Set(),
+  }
+  private detachInput: (() => void) | null = null
+  private readonly raycaster = new Raycaster()
+  private size = { width: 1, height: 1 }
+  private cameraTween: { cancel(): void } | null = null
+  private readonly deps: HouseSceneDeps
+  private readonly sun: DirectionalLight
+  private readonly hemi: HemisphereLight
+  private descriptors = new Map<string, DeviceDescriptor>()
+  private states: Record<string, DeviceState> = {}
+
+  constructor(readonly canvas: HTMLCanvasElement, deps: HouseSceneDeps = {}) {
+    this.deps = deps
+    this.theme = deps.theme ?? defaultSceneTheme()
+    this.materials = createMaterials(this.theme)
+    this.camera = new PerspectiveCamera(38, 1, 0.1, 500)
+    this.camera.position.set(20, 18, 20)
+
+    const create = deps.createRenderer ?? defaultCreateRenderer
+    this.renderer = deps.headless ? null : create(canvas)
+    this.supported = deps.headless ? true : this.renderer !== null
+    if (this.renderer) { this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = PCFSoftShadowMap }
+    this.labelRenderer = deps.labelLayer ? (deps.createLabelRenderer ?? ((el) => new CSS2DRenderer({ element: el })))(deps.labelLayer) : null
+
+    this.hemi = new HemisphereLight(0xffffff, 0x8899aa, this.theme.isDark ? 0.55 : 1.1)
+    this.scene.add(this.hemi)
+    this.scene.add(new AmbientLight(0xffffff, 0.25))
+    this.sun = new DirectionalLight(0xffffff, this.theme.isDark ? 1.1 : 2)
+    this.sun.position.set(14, 24, 10)
+    this.sun.castShadow = true
+    this.sun.shadow.mapSize.set(2048, 2048)
+    this.sun.shadow.bias = -0.0005
+    this.scene.add(this.sun)
+
+    if (!deps.headless && this.renderer) {
+      this.controls = new OrbitControls(this.camera, canvas)
+      this.controls.enableDamping = true
+      this.controls.dampingFactor = 0.08
+      this.controls.rotateSpeed = 0.6
+      this.controls.screenSpacePanning = false
+      this.controls.minDistance = 4
+      this.controls.maxDistance = 120
+      this.controls.maxPolarAngle = Math.PI / 2 - 0.08
+      this.controls.touches = { ONE: TOUCH.ROTATE, TWO: TOUCH.DOLLY_PAN }
+      this.controls.addEventListener('change', () => this.loop.invalidate())
+      this.controls.addEventListener('start', () => { this.cameraTween?.cancel(); this.cameraTween = null })
+    } else this.controls = null
+
+    this.loop = createRenderLoop({
+      render: () => this.render(),
+      updateControls: () => (this.controls ? this.controls.update() : false),
+      ...(deps.requestFrame ? { requestFrame: deps.requestFrame } : {}),
+      ...(deps.cancelFrame ? { cancelFrame: deps.cancelFrame } : {}),
+      ...(deps.now ? { now: deps.now } : {}),
+    })
+
+    if (!deps.headless) this.detachInput = createTapDetector(canvas, { onTap: (ev) => this.handleTap(ev) })
+  }
+
+  // ---- événements ---------------------------------------------------------
+  on<K extends keyof SceneEvents>(event: K, fn: SceneEvents[K]): () => void {
+    this.listeners[event].add(fn)
+    return () => this.listeners[event].delete(fn)
+  }
+  private emit<K extends keyof SceneEvents>(event: K, ...args: Parameters<SceneEvents[K]>) {
+    for (const fn of this.listeners[event]) (fn as (...a: Parameters<SceneEvents[K]>) => void)(...args)
+  }
+
+  // ---- chargement ---------------------------------------------------------
+  load(house: House): void {
+    const firstLoad = this.house === null
+    this.clear()
+    this.house = house
+    this.index = indexHouse(house)
+    this.geometry = computeHouseGeometry(house)
+    this.nodes = buildHouse(this.geometry, this.materials)
+    this.nodes.terrain.receiveShadow = true
+    this.scene.add(this.nodes.root)
+    this.fitSunShadow()
+    this.buildMarkers()
+    const c = this.geometry.bounds
+    this.controls?.target.set((c.min[0] + c.max[0]) / 2, 0, -(c.min[1] + c.max[1]) / 2)
+    this.applyLevelFocus()
+    if (firstLoad) this.resetView(false)
+    this.loop.invalidate()
+  }
+
+  private fitSunShadow(): void {
+    if (!this.geometry) return
+    const b = boundsToWorldBox(this.geometry.bounds)
+    const center = b.getCenter(new Vector3())
+    const r = b.getSize(new Vector3()).length() / 2
+    this.sun.position.set(center.x + r * 0.6, center.y + r * 1.2, center.z + r * 0.4)
+    this.sun.target.position.copy(center)
+    this.scene.add(this.sun.target)
+    const cam = this.sun.shadow.camera
+    cam.left = -r; cam.right = r; cam.top = r; cam.bottom = -r; cam.near = 0.5; cam.far = r * 4
+    cam.updateProjectionMatrix()
+  }
+
+  clear(): void {
+    for (const m of this.markers.values()) m.dispose()
+    this.markers.clear()
+    if (this.nodes) {
+      disposeObject3D(this.nodes.root, new Set<Material>(this.materials.all))
+      this.nodes = null
+    }
+    this.house = null
+    this.index = null
+    this.geometry = null
+    this.highlightedRoom = null
+  }
+
+  /** Descripteurs de plugin (type de marqueur, icône). Reconstruit les marqueurs. */
+  setDescriptors(descriptors: Record<string, DeviceDescriptor>): void {
+    this.descriptors = new Map(Object.entries(descriptors))
+    if (this.house) { this.buildMarkers(); this.updateStates(this.states, true); this.applyLevelFocus(); this.loop.invalidate() }
+  }
+
+  private buildMarkers(): void {
+    if (!this.house || !this.index || !this.nodes || !this.geometry) return
+    for (const m of this.markers.values()) m.dispose()
+    this.markers.clear()
+    const openings = new Map(this.geometry.levels.flatMap((l) => l.openings.map((o) => [o.openingId, o] as const)))
+    for (const device of this.house.devices) {
+      const descriptor = device.deviceId ? this.descriptors.get(device.deviceId) : undefined
+      const levelId = resolveDeviceLevelId(device, this.index.roomsById)
+      const levelNodes = levelId ? this.nodes.levels.get(levelId) : undefined
+      const parent = levelNodes ? levelNodes.markers : this.nodes.outdoorMarkers
+      const opening = device.openingId ? openings.get(device.openingId) : undefined
+      const marker = createMarker(device, {
+        materials: this.materials, theme: this.theme, descriptor, ...(opening ? { opening } : {}),
+        addAnimation: (a) => this.loop.addAnimation(a),
+        onTap: (key) => this.emit('deviceTap', key),
+        label: device.name,
+      }, (state) => this.isAtHome(state))
+      const z = levelNodes ? device.position[2] : device.position[2] + deviceFloorZ(this.house, device, this.index)
+      marker.object.position.set(device.position[0], device.position[1], z)
+      parent.add(marker.object)
+      marker.setSelected(this.selectedKey === device.id)
+      this.markers.set(device.id, marker)
+    }
+  }
+
+  private isAtHome(state: DeviceState): boolean {
+    if (state.kind !== 'vehicle' || !state.location || !this.house) return true
+    return geoDistance(this.house.origin, state.location) < HOME_RADIUS_M
+  }
+
+  // ---- états --------------------------------------------------------------
+  /** Diff par référence : seuls les appareils dont l'objet d'état a changé sont mis à jour. */
+  updateStates(states: Record<string, DeviceState>, force = false): void {
+    const prev = this.states
+    this.states = states
+    let touched = false
+    for (const marker of this.markers.values()) {
+      const id = marker.device.deviceId
+      if (!id) { if (force) marker.update(undefined); continue }
+      const next = states[id]
+      if (force || next !== prev[id] || !marker.currentState) { marker.update(next); touched = true }
+    }
+    if (touched) this.loop.invalidate()
+  }
+
+  // ---- focus / caméra -----------------------------------------------------
+  setOptions(opts: Partial<HouseSceneOptions>): void {
+    this.options = { ...this.options, ...opts }
+    if (this.renderer) this.renderer.shadowMap.enabled = this.options.shadows
+    this.applyLevelFocus()
+    this.loop.invalidate()
+  }
+
+  focusLevel(levelId: string | null): void {
+    this.focusedLevelId = levelId
+    this.applyLevelFocus()
+    this.loop.invalidate()
+  }
+
+  private applyLevelFocus(): void {
+    if (!this.nodes || !this.house) return
+    const focused = this.focusedLevelId ? this.house.levels.find((l) => l.id === this.focusedLevelId) : null
+    for (const [id, nodes] of this.nodes.levels) {
+      const level = this.house.levels.find((l) => l.id === id)!
+      const above = !!focused && level.elevation > focused.elevation
+      const ghost = above && this.options.levelFocusMode === 'ghost'
+      nodes.group.visible = !above || ghost
+      nodes.markers.visible = !above
+      for (const mesh of [...nodes.walls, ...nodes.floors.values(), ...nodes.panes]) {
+        mesh.material = ghost ? this.materials.ghost : (mesh.userData.material as Material)
+      }
+      // pilules : seulement le niveau focalisé (lisibilité) ; l'appareil sélectionné reste visible
+      for (const m of this.markers.values()) if (m.object.parent === nodes.markers) m.setPillVisible(focused?.id === id)
+    }
+    if (this.nodes.roof) this.nodes.roof.visible = !focused
+    for (const m of this.markers.values()) if (m.object.parent === this.nodes.outdoorMarkers) m.setPillVisible(true)
+  }
+
+  resetView(animate = true): void {
+    if (!this.house || !this.geometry) return
+    const box = boundsToWorldBox(buildingBounds(this.house, resolveDefaults(this.house.defaults), this.geometry.roof))
+    box.expandByScalar(2)
+    this.flyTo(box, DEFAULT_AZIMUTH, DEFAULT_POLAR, animate, 1.1)
+  }
+
+  focusRoom(roomId: string, animate = true): void {
+    if (!this.house) return
+    const room = this.house.rooms.find((r) => r.id === roomId)
+    if (!room) return
+    if (this.focusedLevelId !== room.levelId) this.focusLevel(room.levelId)
+    const b = roomBounds(this.house, roomId, resolveDefaults(this.house.defaults))
+    if (!b) return
+    this.highlightRoom(roomId)
+    const { azimuth, polar } = this.currentSpherical()
+    this.flyTo(boundsToWorldBox(b), azimuth, clamp(polar, (35 * Math.PI) / 180, (60 * Math.PI) / 180), animate, 1.6)
+  }
+
+  focusZone(zoneId: string, animate = true): void {
+    if (!this.house) return
+    const b = zoneBounds(this.house, zoneId)
+    if (!b) return
+    this.highlightRoom(null)
+    const { azimuth, polar } = this.currentSpherical()
+    this.flyTo(boundsToWorldBox(b), azimuth, clamp(polar, (35 * Math.PI) / 180, (60 * Math.PI) / 180), animate, 1.3)
+  }
+
+  focusOutdoor(animate = true): void {
+    if (!this.geometry) return
+    this.focusLevel(null)
+    this.highlightRoom(null)
+    this.flyTo(boundsToWorldBox(this.geometry.bounds), DEFAULT_AZIMUTH, (50 * Math.PI) / 180, animate, 1.05)
+  }
+
+  /** Cadre un niveau entier (après un changement d'onglet). */
+  focusLevelView(levelId: string, animate = true): void {
+    if (!this.house || !this.geometry) return
+    this.focusLevel(levelId)
+    this.highlightRoom(null)
+    const box = boundsToWorldBox(buildingBounds(this.house, resolveDefaults(this.house.defaults), undefined))
+    const { azimuth } = this.currentSpherical()
+    this.flyTo(box, azimuth, (52 * Math.PI) / 180, animate, 1.15)
+  }
+
+  private currentSpherical() {
+    const target = this.controls?.target ?? new Vector3()
+    return sphericalOf(this.camera.position, target)
+  }
+
+  private flyTo(box: Box3, azimuth: number, polar: number, animate: boolean, padding: number): void {
+    const pose = fitBox(box, this.camera.fov, this.camera.aspect, { azimuth, polar, padding })
+    pose.position.y = Math.max(pose.position.y, 0.5)
+    const target = this.controls?.target ?? new Vector3()
+    this.cameraTween?.cancel()
+    if (!animate || !this.controls) {
+      this.camera.position.copy(pose.position)
+      target.copy(pose.target)
+      this.controls?.update()
+      this.loop.invalidate()
+      return
+    }
+    const fromPos = this.camera.position.clone(), fromTarget = target.clone()
+    const tw = createTween({
+      durationMs: 650, now: this.deps.now?.() ?? performance.now(), easing: easeInOutCubic,
+      onUpdate: (k) => {
+        this.camera.position.lerpVectors(fromPos, pose.position, k)
+        target.lerpVectors(fromTarget, pose.target, k)
+        this.controls!.update()
+      },
+    })
+    this.cameraTween = tw
+    this.loop.addTween(tw)
+  }
+
+  /** Surbrillance d'une pièce : le sol tire vers l'accent (comme un onglet actif). */
+  highlightRoom(roomId: string | null): void {
+    if (!this.nodes) return
+    for (const nodes of this.nodes.levels.values()) {
+      for (const [id, mesh] of nodes.floors) {
+        const m = mesh.userData.material as MeshStandardMaterial
+        const base = mesh.userData.baseMaterial as MeshStandardMaterial
+        m.color.copy(base.color)
+        if (id === roomId) m.color.lerp(this.theme.primary, 0.45)
+      }
+    }
+    this.highlightedRoom = roomId
+    this.loop.invalidate()
+  }
+
+  // ---- sélection ----------------------------------------------------------
+  setSelected(key: string | null): void {
+    if (this.selectedKey) this.markers.get(this.selectedKey)?.setSelected(false)
+    this.selectedKey = key
+    if (key) this.markers.get(key)?.setSelected(true)
+    this.applyLevelFocus()
+    this.loop.invalidate()
+  }
+
+  /** Sélection au point NDC par lancer de rayon : objet d'appareil, sol de pièce, zone. */
+  pick(ndc: { x: number; y: number }): { kind: 'device'; key: string } | { kind: 'room'; roomId: string } | { kind: 'zone'; zoneId: string } | null {
+    if (!this.nodes) return null
+    this.raycaster.setFromCamera(new Vector2(ndc.x, ndc.y), this.camera)
+    const pickables: Object3D[] = []
+    for (const m of this.markers.values()) if (m.visibleInScene) pickables.push(...m.pickables)
+    const hitDevice = this.raycaster.intersectObjects(pickables, false)[0]
+    if (hitDevice) return { kind: 'device', key: hitDevice.object.userData.key as string }
+    const floors: Mesh[] = []
+    for (const nodes of this.nodes.levels.values()) if (nodes.group.visible && nodes.markers.visible) floors.push(...nodes.floors.values())
+    const hitFloor = this.raycaster.intersectObjects(floors, false)[0]
+    if (hitFloor) return { kind: 'room', roomId: hitFloor.object.userData.roomId as string }
+    // les zones du jardin ne se sélectionnent qu'en vue d'ensemble / jardin
+    if (this.focusedLevelId === null) {
+      const hitZone = this.raycaster.intersectObjects([...this.nodes.zones.values()], false)[0]
+      if (hitZone) return { kind: 'zone', zoneId: hitZone.object.userData.zoneId as string }
+    }
+    return null
+  }
+
+  private handleTap(ev: TapEvent): void {
+    const hit = this.pick(ev.ndc)
+    if (!hit) { this.emit('backgroundTap'); return }
+    if (hit.kind === 'device') this.emit('deviceTap', hit.key)
+    else if (hit.kind === 'room') this.emit('roomTap', hit.roomId)
+    else this.emit('zoneTap', hit.zoneId)
+  }
+
+  // ---- thème / taille / rendu --------------------------------------------
+  setTheme(theme: SceneTheme): void {
+    this.theme = theme
+    applyTheme(this.materials, theme)
+    this.hemi.intensity = theme.isDark ? 0.55 : 1.1
+    this.sun.intensity = theme.isDark ? 1.1 : 2
+    for (const m of this.markers.values()) m.setTheme(theme)
+    this.highlightRoom(this.highlightedRoom)
+    this.loop.invalidate()
+  }
+
+  resize(width: number, height: number): void {
+    this.size = { width: Math.max(1, width), height: Math.max(1, height) }
+    this.camera.aspect = this.size.width / this.size.height
+    this.camera.updateProjectionMatrix()
+    this.renderer?.setSize(this.size.width, this.size.height, false)
+    this.labelRenderer?.setSize(this.size.width, this.size.height)
+    this.loop.invalidate()
+  }
+
+  private render(): void {
+    this.renderer?.render(this.scene, this.camera)
+    this.labelRenderer?.render(this.scene, this.camera)
+  }
+
+  setPaused(paused: boolean): void { this.loop.setPaused(paused) }
+
+  dispose(): void {
+    this.detachInput?.()
+    this.loop.dispose()
+    this.controls?.dispose()
+    this.clear()
+    disposeMaterials(this.materials)
+    this.renderer?.dispose()
+    if (this.labelRenderer) this.labelRenderer.domElement.replaceChildren()
+  }
+}
+
+function defaultCreateRenderer(canvas: HTMLCanvasElement): WebGLRenderer | null {
+  try {
+    const r = new WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' })
+    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
+    r.setClearColor(0x000000, 0)
+    return r
+  } catch {
+    return null
+  }
+}

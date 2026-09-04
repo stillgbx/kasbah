@@ -1,0 +1,20 @@
+// Bundle du serveur : les paquets @kasbah/* (sources TS des workspaces) sont inclus,
+// les dépendances npm restent externes (chargées depuis node_modules en prod).
+import { build } from 'esbuild'
+import { readFile } from 'node:fs/promises'
+
+const pkg = JSON.parse(await readFile(new URL('./package.json', import.meta.url), 'utf8'))
+const external = Object.keys(pkg.dependencies ?? {}).filter((d) => !d.startsWith('@kasbah/'))
+
+await build({
+  entryPoints: ['src/main.ts'],
+  outfile: 'dist/main.js',
+  bundle: true,
+  platform: 'node',
+  target: 'node22',
+  format: 'esm',
+  sourcemap: true,
+  external: [...external, 'pino-pretty'],
+  banner: { js: '// @kasbah/server — bundle esbuild' },
+  logLevel: 'info',
+})

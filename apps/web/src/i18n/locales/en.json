@@ -1,0 +1,91 @@
+{
+  "app": { "name": "Kasbah" },
+  "nav": { "main": "Navigation", "home": "Home", "energy": "Energy", "vehicles": "Vehicles", "settings": "Settings" },
+  "common": {
+    "close": "Close", "back": "Back", "retry": "Retry", "all": "All", "none": "None", "unavailable": "Unavailable",
+    "loading": "Loading house…", "on": "On", "off": "Off", "open": "Open", "stop": "Stop", "closeCover": "Close",
+    "start": "Start", "pause": "Pause", "dock": "Return to dock", "park": "Park", "locate": "Locate",
+    "lock": "Lock", "unlock": "Unlock", "unknown": "Unknown", "status": "Status", "mode": "Mode"
+  },
+  "connection": {
+    "connecting": "Connecting to the server…", "online": "Connected", "stale": "Silent link, reconnecting…",
+    "offline": "Server unreachable. Displayed states may be outdated."
+  },
+  "summary": { "lightsOn": "{n} light on | {n} light on | {n} lights on", "solar": "Solar" },
+  "floors": { "garden": "Garden", "all": "All", "roof": "Roof" },
+  "home": {
+    "lightsOn": "lights on", "shuttersOpen": "shutters open", "solar": "Solar", "battery": "Battery",
+    "scenes": "Scenes", "rooms": "Rooms", "garden": "Garden",
+    "devicesCount": "{n} device | {n} device | {n} devices", "active": "{n} active | {n} active | {n} active",
+    "selectHint": "Tap a room or a device in the 3D view",
+    "hint3d": "1 finger: orbit · 2 fingers: zoom & pan · wheel: zoom",
+    "resetView": "Overview", "openPanel": "Panel", "noScenes": "No scene defined in the house."
+  },
+  "kinds": {
+    "light": "Light", "cover": "Shutter", "media_player": "Speaker", "climate": "Heating", "vacuum": "Vacuum",
+    "mower": "Mower", "sensor": "Sensor", "energy": "Energy", "ev_charger": "EV charger", "vehicle": "Vehicle"
+  },
+  "device": {
+    "unbound": "This device is not bound to any plugin ({id}).", "notPlaced": "Not placed", "outdoor": "Outdoor",
+    "pending": "Command in progress…", "lastUpdate": "Updated {time}", "empty": "No known device. Check the plugins in settings."
+  },
+  "light": { "brightness": "Brightness", "colorTemp": "Temperature", "color": "Color", "warm": "Warm", "cold": "Cold" },
+  "cover": { "position": "Opening", "opening": "Opening", "closing": "Closing", "stopped": "Stopped", "tilt": "Tilt", "closed": "Closed", "open": "Open" },
+  "media": { "volume": "Volume", "mute": "Mute", "nothing": "Nothing playing", "playing": "Playing", "paused": "Paused", "idle": "Idle", "off": "Off" },
+  "climate": {
+    "target": "Target", "current": "Measured", "humidity": "Humidity", "mode": "Mode",
+    "modes": { "off": "Off", "heat": "Heating", "cool": "Cooling", "auto": "Auto", "eco": "Eco", "fan_only": "Fan only" },
+    "actions": { "heating": "Heating", "cooling": "Cooling", "idle": "Idle", "off": "Off" }
+  },
+  "vacuum": {
+    "battery": "Battery", "binFull": "Bin full",
+    "activities": { "docked": "Docked", "cleaning": "Cleaning", "paused": "Paused", "returning": "Returning to dock", "error": "Error" }
+  },
+  "mower": {
+    "battery": "Battery", "nextStart": "Next start {time}", "startFor": "Mow for 1 h",
+    "activities": { "parked": "Parked", "mowing": "Mowing", "charging": "Charging", "returning": "Returning", "paused": "Paused", "error": "Error" }
+  },
+  "energy": {
+    "title": "Energy", "production": "Production", "consumption": "Consumption", "house": "Home", "grid": "Grid",
+    "import": "import", "export": "export", "battery": "Battery", "charging": "Charging", "discharging": "Discharging",
+    "today": "Today", "selfConsumption": "self-consumption", "productionToday": "Production today", "kWhToday": "kWh produced",
+    "charger": "Charger", "noData": "No energy device", "noHistory": "History fills up as the day goes on."
+  },
+  "charger": {
+    "status": { "disconnected": "Disconnected", "connected": "Connected", "charging": "Charging", "finished": "Charge finished", "error": "Error" },
+    "power": "Power", "session": "Session", "maxCurrent": "Max current"
+  },
+  "vehicle": {
+    "soc": "Charge", "range": "Range", "chargeLimit": "Charge limit", "pluggedIn": "Plugged in", "unplugged": "Unplugged",
+    "charging": "Charging", "locked": "Locked", "unlocked": "Unlocked", "atHome": "At home", "away": "{distance} away",
+    "startCharge": "Start charging", "stopCharge": "Stop charging", "odometer": "Odometer", "location": "Location",
+    "mapPlaceholder": "Map — vehicle location", "none": "No known vehicle"
+  },
+  "settings": {
+    "title": "Settings", "appearance": "Appearance", "system": "System", "light": "Light", "dark": "Dark",
+    "accent": "Accent color", "accents": { "teal": "Lagoon", "terracotta": "Terracotta", "indigo": "Indigo", "moss": "Moss" },
+    "language": "Language", "auto": "Automatic", "fullscreen": "Full screen",
+    "gps": "GPS origin of the local frame", "gpsHeading": "heading", "houseStats": "{levels} floors · {rooms} rooms · {devices} devices",
+    "plugins": "Plugins", "keys": ".env keys", "noKeys": "no key", "pluginStatus": {
+      "ok": "Connected", "degraded": "Degraded", "needs_pairing": "Pairing required", "error": "Error",
+      "not_implemented": "Not implemented yet", "disabled": "Disabled"
+    },
+    "devicesCount": "{n} device | {n} device | {n} devices",
+    "hue": {
+      "title": "Philips Hue", "pair": "Pair the bridge", "pairing": "Pairing…",
+      "instructions": "Press the round button on the Hue bridge, then start pairing within 30 seconds.",
+      "success": "Bridge paired. Add HUE_APP_KEY={key} to apps/server/.env to keep the pairing.",
+      "buttonNotPressed": "The bridge button was not pressed. Press it, then retry."
+    },
+    "about": "Kasbah v{version} · {house}"
+  },
+  "errors": {
+    "NETWORK": "{name}: server unreachable.", "HTTP_ERROR": "{name}: {message}", "NOT_FOUND": "{name}: unknown device.",
+    "INVALID_BODY": "{name}: invalid command.", "KIND_MISMATCH": "{name}: incompatible command.",
+    "UNSUPPORTED_COMMAND": "{name}: unsupported command.", "DEVICE_UNAVAILABLE": "{name} is unavailable.",
+    "UPSTREAM_ERROR": "{name}: the vendor service failed.", "RATE_LIMITED": "{name}: too many commands, please wait.",
+    "NEEDS_PAIRING": "{name}: pairing required.", "TIMEOUT": "{name}: no response.", "NOT_IMPLEMENTED": "{name}: plugin not implemented.",
+    "INTERNAL": "{name}: server error.", "UNKNOWN": "{name}: {message}", "houseLoad": "Could not load the house: {message}"
+  },
+  "scene": { "webglUnavailable": "3D is not available on this device." }
+}

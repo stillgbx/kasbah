@@ -1,0 +1,72 @@
+@import '@fontsource-variable/dm-sans';
+@import './tokens.css';
+
+/* Tablette : la page ne scrolle jamais ; chaque colonne gère son propre défilement. */
+html, body, #app { height: 100%; }
+body {
+  margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+}
+.v-application { font-family: var(--font) !important; min-height: 100dvh !important; }
+.v-application__wrap { min-height: 100dvh !important; }
+
+button, .v-btn, .v-chip, .v-slider, .v-switch, .touch-target { touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+button { font-family: inherit; cursor: pointer; }
+
+/* ---- primitives du langage visuel ---- */
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.card--soft { background: var(--surface2); border: 0; }
+.section-label { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.muted { color: var(--muted); }
+.pill {
+  height: 40px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--text); font-weight: 500; font-size: 14px;
+  display: inline-flex; align-items: center; gap: 8px; transition: background .15s, color .15s, border-color .15s;
+}
+.pill:hover { background: var(--surface2); }
+.pill[data-on='1'] { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+.pill:disabled { opacity: .45; cursor: default; }
+.icon-square {
+  width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; flex: 0 0 auto;
+  background: var(--surface2); color: var(--muted);
+}
+.icon-square[data-on='1'] { background: var(--accent-soft); color: var(--accent); }
+.stat-value { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.big-value { font-size: 32px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
+
+/* Vuetify recolorié sur les jetons : boutons en pilule, curseurs et interrupteurs sur l'accent. */
+.v-btn { border-radius: 999px !important; text-transform: none !important; letter-spacing: 0 !important; font-weight: 500 !important; }
+.v-slider .v-slider-track__fill, .v-slider .v-slider-thumb__surface { background-color: var(--accent) !important; border-color: var(--accent) !important; }
+.v-slider .v-slider-track__background { background-color: var(--line) !important; opacity: 1 !important; }
+.v-switch .v-selection-control__input > .v-icon { opacity: 0; }
+.v-switch--inset .v-switch__track { background-color: var(--line) !important; opacity: 1 !important; }
+.v-switch--inset .v-selection-control--dirty .v-switch__track { background-color: var(--accent) !important; }
+.v-switch--inset .v-switch__thumb { background-color: var(--surface) !important; }
+.v-switch--inset .v-selection-control--dirty .v-switch__thumb { background-color: var(--on-accent) !important; }
+.v-overlay__scrim { background: rgba(0, 0, 0, .45) !important; }
+
+/* Le canvas 3D capte tous les gestes (OrbitControls) : aucun défilement/zoom natif. */
+.scene-canvas { touch-action: none; display: block; width: 100%; height: 100%; outline: none; }
+
+/* Couche des marqueurs DOM projetés (CSS2DRenderer) : contexte d'empilement isolé pour que le
+   z-index posé par le renderer ne passe jamais au-dessus des surcouches de l'app. */
+.scene-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 1; isolation: isolate; }
+.marker-pill {
+  pointer-events: auto; height: 34px; padding: 0 10px 0 8px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--text); box-shadow: 0 2px 10px rgba(0, 0, 0, .12);
+  display: inline-flex; align-items: center; gap: 6px; font: 500 12px/1 var(--font); white-space: nowrap;
+  transform: translateY(-60%); transition: background .15s, color .15s, transform .15s;
+}
+.marker-anchor { pointer-events: none; }
+.marker-pill svg { width: 16px; height: 16px; flex: 0 0 auto; }
+.marker-pill[data-on='1'] { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.marker-pill[data-sel='1'] { background: var(--accent); color: var(--on-accent); border-color: transparent; transform: translateY(-60%) scale(1.06); }
+.marker-pill[data-unavailable='1'] { opacity: .55; }
+.marker-pill:hover { transform: translateY(-60%) scale(1.04); }
+
+* { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }

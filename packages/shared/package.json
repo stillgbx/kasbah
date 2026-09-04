@@ -1,0 +1,20 @@
+{
+  "name": "@kasbah/shared",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./house": "./src/house/index.ts",
+    "./devices": "./src/devices/index.ts",
+    "./protocol": "./src/protocol/index.ts",
+    "./demo-house.json": "./src/house/__fixtures__/demo-house.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^4.0.0"
+  }
+}

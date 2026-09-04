@@ -1,0 +1,23 @@
+import type { PluginFactory } from '../core/plugin'
+import { makeStubPlugin } from './_stub'
+import { createHuePlugin } from './hue'
+import { createMockPlugin } from './mock'
+
+// Table statique des plugins : typée, grep-able, sans import dynamique. `KASBAH_PLUGINS`
+// sélectionne parmi ces ids.
+
+export const PLUGIN_FACTORIES: Record<string, PluginFactory> = {
+  mock: createMockPlugin,
+  hue: createHuePlugin,
+  tahoma: makeStubPlugin('tahoma', 'Somfy TaHoma'),
+  nest: makeStubPlugin('nest', 'Google Nest'),
+  google_home: makeStubPlugin('google_home', 'Google Home speakers'),
+  sonos: makeStubPlugin('sonos', 'Sonos'),
+  irobot: makeStubPlugin('irobot', 'iRobot'),
+  automower: makeStubPlugin('automower', 'Husqvarna Automower'),
+  melcloud: makeStubPlugin('melcloud', 'Mitsubishi MELCloud'),
+  comap: makeStubPlugin('comap', 'COMAP Proteo'),
+  enphase: makeStubPlugin('enphase', 'Enphase Enlighten'),
+  tesla: makeStubPlugin('tesla', 'Tesla Fleet API'),
+  renault: makeStubPlugin('renault', 'Renault'),
+}
