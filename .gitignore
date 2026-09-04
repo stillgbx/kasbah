@@ -7,4 +7,6 @@ coverage/
 *.log
 .DS_Store
 Thumbs.db
-.design
+_design
+_generated-ai-doc
+.gitnexus
