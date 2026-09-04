@@ -31,7 +31,7 @@ const panelOpen = ref(false)
 
 const scene = useHouseScene({
   canvas, labelLayer,
-  house: computed(() => house.house),
+  house: computed(() => house.effective),
   states: computed(() => devices.states),
 })
 

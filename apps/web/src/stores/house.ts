@@ -1,19 +1,38 @@
 import { computed, ref, shallowRef } from 'vue'
 import { defineStore } from 'pinia'
-import { indexHouse, type House, type HouseDevice, type HouseIndex, type Level, type Room, type Zone } from '@kasbah/shared'
+import { autoPlaceDevices, indexHouse, type House, type HouseDevice, type HouseIndex, type Level, type PlaceableDevice, type Room, type Zone } from '@kasbah/shared'
 import { getTransport } from '../api'
+import { useDevicesStore } from './devices'
 
 // Maison (immuable : `shallowRef`, ré-indexée quand l'objet change) + sélection courante :
 // niveau focalisé (ou jardin, ou tout), pièce/zone, appareil. Partagée par la scène, les panneaux et l'URL.
+// `effective` = maison du JSON + appareils de plugin auto-placés (voir `autoPlaceDevices`) : c'est
+// elle qu'on indexe et qu'on donne à la scène 3D, jamais `house` seule.
 
 export type FloorTab = 'garden' | 'all' | string
 
 export const useHouseStore = defineStore('house', () => {
+  const devices = useDevicesStore()
   const house = shallowRef<House | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  const index = computed<HouseIndex | null>(() => (house.value ? indexHouse(house.value) : null))
+  /** Appareils remontés par les plugins, dans la forme attendue par l'auto-placement. */
+  const placeable = computed<PlaceableDevice[]>(() =>
+    Object.values(devices.descriptors).map((d) => ({ id: d.id, kind: d.kind, room: d.meta.room })),
+  )
+  const placement = computed(() => {
+    if (!house.value) return null
+    return autoPlaceDevices(house.value, placeable.value, indexHouse(house.value))
+  })
+  const effective = computed<House | null>(() => {
+    const h = house.value
+    const placed = placement.value?.placed ?? []
+    if (!h || placed.length === 0) return h
+    return { ...h, devices: [...h.devices, ...placed] }
+  })
+
+  const index = computed<HouseIndex | null>(() => (effective.value ? indexHouse(effective.value) : null))
   const levels = computed<Level[]>(() => index.value?.levelsSorted ?? [])
   const zones = computed<Zone[]>(() => house.value?.site.zones ?? [])
 
@@ -81,7 +100,7 @@ export const useHouseStore = defineStore('house', () => {
   }
 
   return {
-    house, loading, error, index, levels, zones,
+    house, effective, loading, error, index, levels, zones,
     focusedLevelId, gardenFocus, selectedRoomId, selectedKey, floorTab, selectedRoom, selectedZone,
     load, setFloorTab, focusLevel, selectRoom, selectDevice, clearSelection, backToHome, houseDeviceFor,
   }

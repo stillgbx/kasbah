@@ -29,7 +29,7 @@ function row(d: HouseDevice) {
   const state = d.deviceId ? devices.states[d.deviceId] : undefined
   const toggle = state ? toggleCommand(state) : null
   return {
-    key: d.id, name: d.name, icon: kindIcon(descriptor?.kind ?? d.kind, descriptor),
+    key: d.id, name: d.name ?? descriptor?.name ?? d.id, icon: kindIcon(descriptor?.kind ?? d.kind, descriptor),
     on: !!state && isDeviceOn(state),
     status: descriptor && state ? statusLabel(descriptor, state, t, locale.value) : t('device.unbound', { id: d.deviceId ?? '—' }),
     toggle, deviceId: d.deviceId, available: state?.available ?? false,

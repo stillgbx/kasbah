@@ -128,7 +128,8 @@ export type Site = z.infer<typeof siteSchema>
 export const MOUNTS = ['ceiling', 'wall', 'floor', 'free'] as const
 export const houseDeviceSchema = z.object({
   id: idSchema,
-  name: z.string().min(1),
+  /** Absent → le nom du descripteur de plugin fait foi (renommer dans l'app du fabricant se propage). */
+  name: z.string().min(1).optional(),
   /** Liaison vers un appareil de plugin (`hue:…`, `mock:…`). Absent → appareil « non lié » (affiché grisé). */
   deviceId: deviceIdSchema.optional(),
   /** Indice de kind quand l'appareil n'est pas (encore) lié ; sinon le descripteur fait foi. */

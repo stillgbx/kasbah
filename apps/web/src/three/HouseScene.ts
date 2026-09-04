@@ -209,7 +209,7 @@ export class HouseScene {
         materials: this.materials, theme: this.theme, descriptor, ...(opening ? { opening } : {}),
         addAnimation: (a) => this.loop.addAnimation(a),
         onTap: (key) => this.emit('deviceTap', key),
-        label: device.name,
+        label: device.name ?? descriptor?.name ?? device.id,
       }, (state) => this.isAtHome(state))
       const z = levelNodes ? device.position[2] : device.position[2] + deviceFloorZ(this.house, device, this.index)
       marker.object.position.set(device.position[0], device.position[1], z)

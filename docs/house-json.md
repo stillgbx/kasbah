@@ -63,7 +63,7 @@ Le fichier décrit la maison et le jardin ; il est validé au démarrage du serv
 
 ```jsonc
 {
-  "id": "light.salon", "name": "Plafonnier salon",
+  "id": "light.salon", "name": "Plafonnier salon",  // optionnel : absent → le nom du plugin fait foi
   "deviceId": "hue:6f2c…",              // liaison plugin : "<pluginId>:<externalId>" ; absent → affiché « non lié »
   "kind": "light",                      // indice si non lié ; sinon le descripteur du plugin fait foi
   "position": [6.6, 2.5, 2.5],          // x, y absolus ; z RELATIF au sol de l'ancre (niveau ou terrain)
@@ -73,6 +73,8 @@ Le fichier décrit la maison et le jardin ; il est validé au démarrage du serv
   "mount": "ceiling", "yaw": 0          // optionnels (yaw en degrés, 0 = face à +y)
 }
 ```
+
+Un appareil peut se réduire à sa **liaison** et à sa **position** (`{ id, deviceId, position, roomId, mount }`) : nom, kind et capacités viennent du plugin. Mieux : un appareil de plugin **absent** de ce tableau est placé automatiquement au centre du plafond de la pièce qui porte le nom de sa pièce côté fabricant (pièce Hue) ; l’entrée JSON ne sert donc qu’à **préciser** une position. Une lampe qu’aucune pièce ne réclame reste pilotable depuis la vue Lumières, sans marqueur 3D.
 
 Les ids des appareils du plugin `mock` sont stables (`mock:light-living`, `mock:cover-kitchen`, `mock:energy-site`, `mock:vehicle-tesla`…) ; les ids Hue sont les UUID des ressources `light` du bridge (visibles dans `GET /api/devices`).
 

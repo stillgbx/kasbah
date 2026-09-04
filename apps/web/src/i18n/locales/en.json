@@ -1,6 +1,6 @@
 {
   "app": { "name": "Kasbah" },
-  "nav": { "main": "Navigation", "home": "Home", "energy": "Energy", "vehicles": "Vehicles", "settings": "Settings" },
+  "nav": { "main": "Navigation", "home": "Home", "energy": "Energy", "vehicles": "Vehicles", "settings": "Settings", "lights": "Lights" },
   "common": {
     "close": "Close", "back": "Back", "retry": "Retry", "all": "All", "none": "None", "unavailable": "Unavailable",
     "loading": "Loading house…", "on": "On", "off": "Off", "open": "Open", "stop": "Stop", "closeCover": "Close",
@@ -30,6 +30,16 @@
     "pending": "Command in progress…", "lastUpdate": "Updated {time}", "empty": "No known device. Check the plugins in settings."
   },
   "light": { "brightness": "Brightness", "colorTemp": "Temperature", "color": "Color", "warm": "Warm", "cold": "Cold" },
+  "lights": {
+    "summary": "{on} on out of {total}", "none": "No light reported by the plugins.",
+    "noRoom": "No room", "notInHouse": "Not in the house",
+    "dangling": "Dead bindings", "danglingHint": "The JSON points at an id no plugin reports",
+    "origins": {
+      "json": "Placed", "jsonHint": "Position set in house.json",
+      "auto": "Auto", "autoHint": "Matched automatically to the room named like the plugin room",
+      "unplaced": "Unplaced", "unplacedHint": "No house room is named like the plugin room: absent from the 3D scene"
+    }
+  },
   "cover": { "position": "Opening", "opening": "Opening", "closing": "Closing", "stopped": "Stopped", "tilt": "Tilt", "closed": "Closed", "open": "Open" },
   "media": { "volume": "Volume", "mute": "Mute", "nothing": "Nothing playing", "playing": "Playing", "paused": "Paused", "idle": "Idle", "off": "Off" },
   "climate": {
