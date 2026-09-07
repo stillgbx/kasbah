@@ -86,6 +86,51 @@ Lots de commandes exécutés d'un geste depuis le panneau Maison : `{ "id", "nam
 
 `flat` (dalle sur l'emprise) ou `gable` (deux pentes) ; `pitch` en degrés, `ridgeAxis` (`x` ou `y`, défaut : le côté le plus long), `overhang` en mètres. Masqué dès qu'un niveau est mis au point.
 
+## Relevé métré (`meta.survey`)
+
+Une maison réelle se mesure **à l'intérieur des pièces** : chaque cloison mitoyenne s'y retrouve réduite à une seule ligne partagée, alors que les polygones doivent être écartés de la somme des demi-cloisons (cf. **Murs** ci-dessus). Plutôt que de corriger les cotes à la main, les mesures brutes sont conservées dans `meta` — que le schéma laisse libre — et les `polygon` en sont **dérivés** par un script.
+
+```jsonc
+{
+  "meta": {
+    "survey": {
+      "unit": "cm",                        // cm | mm | absent → mètres
+      "frame": "0;0 = coin sud-ouest du plan, +x est, +y nord",
+      "partition": 0.08,                   // cloison COMPLÈTE entre deux pièces murées (m)
+      "levelOffsets": { "rdc": [0, 92] }   // correction de repère d'un niveau, dans l'unité du relevé
+    }
+  },
+  "rooms": [{
+    "id": "chambre", "levelId": "etage", "name": "Chambre",
+    "polygon": [[…]],                                                    // DÉRIVÉ — ne pas éditer
+    "walls": [{ "segment": 2, "kind": "interior", "thickness": 0.04 }],  // DÉRIVÉ aussi
+    "meta": {
+      "survey": {
+        "points": [[0, 0], [360, 0], [360, 120], [360, 300], [0, 300]],  // les cotes relevées, jamais retouchées
+        "note": "point 360;120 ajouté (colinéaire) : le mur est est mitoyen au-delà, en façade en dessous"
+      }
+    }
+  }]
+}
+```
+
+Régénérer après toute modification d'un relevé :
+
+```bash
+node house/fit-survey.mjs house/ma-maison.json           # réécrit polygon, walls et outline
+node house/fit-survey.mjs house/ma-maison.json --check   # vérifie sans écrire (sortie 1 si divergence)
+```
+
+Le script rentre chaque face de l'épaisseur que le voisin pousse dans elle, laisse les façades en place (l'emprise du relevé est donc conservée), pose `kind` et `thickness` sur les arêtes mitoyennes, et recalcule l'`outline` du niveau sur ses pièces murées. Cinq points à connaître :
+
+- **`partition` est indépendant de `defaults.interiorWallThickness`** : le défaut global continue de servir aux niveaux non relevés ; un relevé peut porter des cloisons plus fines sans les déplacer.
+- **`levelOffsets`** corrige le **repère** d'une campagne de relevé dont le `0;0` ne tombe pas sur celui des autres niveaux : c'est une translation appliquée aux points bruts, donc un seul nombre à ajuster, et les cotes restent intactes.
+- **Une arête ne porte qu'une nature et qu'une épaisseur.** Une arête à cheval — mitoyenne sur une partie, en façade sur le reste (décroché de façade) — doit être coupée en insérant un point **colinéaire** dans `points` : la pièce mesurée est inchangée et chaque portion reçoit son mur. Le script signale les arêtes concernées.
+- **Une pièce sans mur** (`terrace`, `balcony` : terrasse, balcon, sas ouvert) ne crée pas de mitoyenneté : la pièce murée d'en face garde sa façade, et c'est la pièce sans mur qui l'absorbe. Son `polygon` est donc son **sol fini** — le décroché brut moins les façades qui le bordent.
+- **Les ouvertures sont ancrées sur un index d'arête** : elles sont à revoir dès qu'un relevé change un polygone. Idem pour la `position` des appareils, qui peut se retrouver hors de sa pièce.
+
+Enfin, `origin` attend le GPS du `0;0` du relevé. Si le seul point connu tombe ailleurs (marqueur d'adresse, repère d'un service de cartographie), le **ramener** au `0;0` plutôt que de le recopier tel quel ; et `heading` se mesure sur les arêtes du bâtiment, un relevé étant aligné sur les murs et non sur le nord.
+
 ## Exemple complet
 
 [house/demo-house.json](../house/demo-house.json) : deux niveaux, sept pièces, jardin avec allée, terrasse, pelouse et piscine, dix-neuf appareils liés au plugin de simulation.
