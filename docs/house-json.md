@@ -76,6 +76,8 @@ Le fichier décrit la maison et le jardin ; il est validé au démarrage du serv
 
 Un appareil peut se réduire à sa **liaison** et à sa **position** (`{ id, deviceId, position, roomId, mount }`) : nom, kind et capacités viennent du plugin. Mieux : un appareil de plugin **absent** de ce tableau est placé automatiquement au centre du plafond de la pièce qui porte le nom de sa pièce côté fabricant (pièce Hue) ; l’entrée JSON ne sert donc qu’à **préciser** une position. Une lampe qu’aucune pièce ne réclame reste pilotable depuis la vue Lumières, sans marqueur 3D.
 
+**Depuis l'UI** : panneau d'un appareil → « Déplacer » → glisser dans la 3D (x;y), préréglages et curseur pour la hauteur. Chaque dépôt est envoyé au serveur (`PUT /api/house/devices/:id`, corps `{ position, roomId?, mount?, deviceId? }`) qui **réécrit le fichier** (`KASBAH_HOUSE_FILE`) après validation complète, garde la version précédente en `<fichier>.bak` et pousse la maison aux tablettes connectées (message WebSocket `house`). Un appareil auto-placé y gagne son entrée minimale ; le fichier est reformaté (`JSON.stringify` à deux espaces), l'ordre des clés est conservé. Volets (ancrés à une ouverture) et tondeuse ne se déplacent pas ainsi.
+
 Les ids des appareils du plugin `mock` sont stables (`mock:light-living`, `mock:cover-kitchen`, `mock:energy-site`, `mock:vehicle-tesla`…) ; les ids Hue sont les UUID des ressources `light` du bridge (visibles dans `GET /api/devices`).
 
 ### Scènes (`scenes`)

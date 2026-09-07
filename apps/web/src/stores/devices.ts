@@ -1,6 +1,6 @@
 import { computed, ref, shallowRef } from 'vue'
 import { defineStore } from 'pinia'
-import type { CommandInput, DeviceDescriptor, DeviceEntry, DeviceState, HealthResponse, ServerMessage } from '@kasbah/shared'
+import type { CommandInput, DeviceDescriptor, DeviceEntry, DeviceState, HealthResponse, House, ServerMessage } from '@kasbah/shared'
 import { ApiRequestError, getTransport, type ConnectionStatus } from '../api'
 import { t } from '../i18n'
 import { optimisticPatch } from '../lib/optimistic'
@@ -16,6 +16,8 @@ export const useDevicesStore = defineStore('devices', () => {
   const connection = ref<ConnectionStatus>('connecting')
   const pending = ref<Record<string, number>>({})
   const health = ref<HealthResponse | null>(null)
+  /** Dernière maison poussée par le serveur (réécriture de house.json) ; le store `house` la suit. */
+  const serverHouse = shallowRef<House | null>(null)
   let disconnect: (() => void) | null = null
 
   const list = computed<DeviceEntry[]>(() =>
@@ -49,6 +51,7 @@ export const useDevicesStore = defineStore('devices', () => {
         states.value = next
         break
       }
+      case 'house': serverHouse.value = msg.house; break
       case 'error': useNotificationsStore().error(msg.message); break
     }
   }
@@ -101,5 +104,5 @@ export const useDevicesStore = defineStore('devices', () => {
     await Promise.all(actions.filter((a) => descriptors.value[a.deviceId]).map((a) => sendCommand(a.deviceId, a.command)))
   }
 
-  return { descriptors, states, connection, pending, health, list, count, start, stop, applyMessage, sendCommand, runScene, isPending, refreshHealth, setEntries }
+  return { descriptors, states, connection, pending, health, serverHouse, list, count, start, stop, applyMessage, sendCommand, runScene, isPending, refreshHealth, setEntries }
 })

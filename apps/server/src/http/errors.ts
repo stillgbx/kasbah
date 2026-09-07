@@ -1,4 +1,4 @@
-import { CommandNotAllowedError, type ApiError } from '@kasbah/shared'
+import { CommandNotAllowedError, HouseValidationError, type ApiError } from '@kasbah/shared'
 import type { FastifyReply } from 'fastify'
 import { ZodError } from 'zod'
 import { PluginError, type PluginErrorCode } from '../core/plugin'
@@ -25,6 +25,7 @@ export function sendError(reply: FastifyReply, status: number, code: string, mes
 export function describeError(err: unknown): { status: number; code: string; message: string } {
   if (err instanceof PluginError) return { status: STATUS_BY_CODE[err.code], code: err.code, message: err.message }
   if (err instanceof CommandNotAllowedError) return { status: 400, code: err.code, message: err.message }
+  if (err instanceof HouseValidationError) return { status: 400, code: 'INVALID_HOUSE', message: err.issues.map((i) => `${i.path}: ${i.message}`).join('; ') }
   if (err instanceof ZodError) {
     return { status: 400, code: 'INVALID_BODY', message: err.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ') }
   }

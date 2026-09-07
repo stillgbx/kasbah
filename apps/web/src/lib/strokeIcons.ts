@@ -33,6 +33,7 @@ export const ICONS = {
   list: 'M4 6h16M4 12h16M4 18h16',
   play: 'M7 5l12 7-12 7z',
   pause: 'M7 5h4v14H7zM13 5h4v14h-4z',
+  move: 'M12 2v20M2 12h20M12 2l-3 3M12 2l3 3M12 22l-3-3M12 22l3-3M2 12l3-3M2 12l3 3M22 12l-3-3M22 12l-3 3',
   link: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1',
 } as const
 export type IconName = keyof typeof ICONS

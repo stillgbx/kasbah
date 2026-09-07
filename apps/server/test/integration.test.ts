@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { resolve } from 'node:path'
+import { copyFile, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import { ManualClock } from '@kasbah/mock-sim'
 import { serverMessageSchema, type ServerMessage } from '@kasbah/shared'
 import pino from 'pino'
@@ -112,5 +114,51 @@ describe('WebSocket hub', () => {
     }
     ws.close()
     await kasbah.close()
+  })
+})
+
+describe('device placement (PUT /api/house/devices/:id)', () => {
+  it('rewrites the house file atomically, keeps a .bak and broadcasts the new house', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'kasbah-house-'))
+    const file = join(dir, 'maison.json')
+    await copyFile(HOUSE, file)
+    const env = loadEnv({ KASBAH_PLUGINS: 'mock', KASBAH_HOUSE_FILE: file, KASBAH_LOG_LEVEL: 'silent' })
+    const kasbah = await buildApp({ env, logger: pino({ level: 'silent' }), serveStatic: false })
+    await kasbah.app.ready()
+    try {
+      const r = await kasbah.app.inject({ method: 'PUT', url: '/api/house/devices/light.salon', payload: { position: [5, 3, 0.75], mount: 'free' } })
+      expect(r.statusCode).toBe(200)
+      const moved = r.json().house.devices.find((d: { id: string }) => d.id === 'light.salon')
+      expect(moved).toMatchObject({ position: [5, 3, 0.75], mount: 'free', name: 'Plafonnier salon' })
+
+      const served = (await kasbah.app.inject({ method: 'GET', url: '/api/house' })).json()
+      expect(served.devices.find((d: { id: string }) => d.id === 'light.salon').position).toEqual([5, 3, 0.75])
+
+      const onDisk = JSON.parse(await readFile(file, 'utf8'))
+      expect(onDisk.devices.find((d: { id: string }) => d.id === 'light.salon').position).toEqual([5, 3, 0.75])
+      expect(onDisk.rooms[1].kind).toBeUndefined()            // le fichier ne reçoit pas les défauts zod (salon : kind 'room' implicite)
+      expect(JSON.parse(await readFile(`${file}.bak`, 'utf8')).devices.find((d: { id: string }) => d.id === 'light.salon').position).toEqual([6.6, 2.5, 2.5])
+
+      // création d'une entrée pour un appareil auto-placé
+      const created = await kasbah.app.inject({ method: 'PUT', url: '/api/house/devices/auto.hue-abc', payload: { position: [1, 1, 2.4], roomId: 'salon', deviceId: 'hue:abc' } })
+      expect(created.statusCode).toBe(200)
+      expect(JSON.parse(await readFile(file, 'utf8')).devices.at(-1)).toEqual({ id: 'auto.hue-abc', deviceId: 'hue:abc', position: [1, 1, 2.4], roomId: 'salon' })
+
+      // refus : corps invalide, pièce inconnue, appareil inconnu sans deviceId, pièce d'un autre niveau
+      expect((await kasbah.app.inject({ method: 'PUT', url: '/api/house/devices/light.salon', payload: { position: [1, 2] } })).json().error.code).toBe('INVALID_BODY')
+      expect((await kasbah.app.inject({ method: 'PUT', url: '/api/house/devices/light.salon', payload: { position: [1, 2, 3], roomId: 'veranda' } })).json().error.code).toBe('INVALID_PLACEMENT')
+      expect((await kasbah.app.inject({ method: 'PUT', url: '/api/house/devices/nope', payload: { position: [1, 2, 3] } })).statusCode).toBe(400)
+      // changer de pièce entraîne le levelId ; un volet ancré à une ouverture d'une autre pièce est refusé par la validation croisée
+      const cross = await kasbah.app.inject({ method: 'PUT', url: '/api/house/devices/light.salon', payload: { position: [2.4, 2.4, 2.4], roomId: 'chambre1' } })
+      expect(cross.statusCode).toBe(200)
+      expect(cross.json().house.devices.find((d: { id: string }) => d.id === 'light.salon').levelId).toBe('etage')
+      const invalid = await kasbah.app.inject({ method: 'PUT', url: '/api/house/devices/cover.baie', payload: { position: [6.6, 6.5, 1.3], roomId: 'cuisine' } })
+      expect(invalid.statusCode).toBe(400)
+      expect(invalid.json().error.code).toBe('INVALID_HOUSE')
+      expect(JSON.parse(await readFile(file, 'utf8')).devices.find((d: { id: string }) => d.id === 'cover.baie').roomId).toBe('salon')   // rien n'a été écrit
+    } finally {
+      await kasbah.close()
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 })

@@ -1,4 +1,4 @@
-import { Group, Vector3, type Object3D } from 'three'
+import { BufferGeometry, Group, Line, LineBasicMaterial, Mesh, MeshBasicMaterial, RingGeometry, Vector3, type Object3D } from 'three'
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js'
 import type { DeviceDescriptor, DeviceState, HouseDevice, OpeningRect } from '@kasbah/shared'
 import type { SceneTheme } from '../core/theme'
@@ -36,6 +36,8 @@ export abstract class DeviceMarker {
   private pillAllowed = true
   /** Maillages cliquables (userData.key). */
   readonly pickables: Object3D[] = []
+  /** Mode « déplacer » : anneau au sol + fil vertical, pour lire x;y d'un appareil en hauteur. */
+  private guide: { ring: Mesh<RingGeometry, MeshBasicMaterial>; line: Line<BufferGeometry, LineBasicMaterial> } | null = null
 
   constructor(readonly device: HouseDevice, protected ctx: MarkerContext) {
     this.key = device.id
@@ -92,10 +94,49 @@ export abstract class DeviceMarker {
     if (this.css) this.css.visible = v || this.selected
   }
 
-  setTheme(theme: SceneTheme): void { this.ctx = { ...this.ctx, theme }; this.onState(this.state) }
+  setTheme(theme: SceneTheme): void {
+    this.ctx = { ...this.ctx, theme }
+    if (this.guide) { this.guide.ring.material.color.copy(theme.primary); this.guide.line.material.color.copy(theme.primary) }
+    this.onState(this.state)
+  }
 
   /** Position monde de l'ancre. */
   worldAnchor(out = new Vector3()): Vector3 { return this.object.getWorldPosition(out) }
+  /** Position monde de la pilule (ancre + lift). */
+  worldPill(out = new Vector3()): Vector3 { return this.css ? this.css.getWorldPosition(out) : this.worldAnchor(out) }
+
+  /** Mode « déplacer » : la pilule laisse passer le pointeur (CSS) et un guide relie l'appareil au sol. */
+  setMoving(on: boolean, height: number): void {
+    if (this.pill) this.pill.dataset.moving = on ? '1' : '0'
+    if (on) {
+      if (!this.guide) {
+        const color = this.ctx.theme.primary
+        const ring = new Mesh(new RingGeometry(0.22, 0.3, 40), new MeshBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false }))
+        const line = new Line(new BufferGeometry(), new LineBasicMaterial({ color, transparent: true, opacity: 0.7 }))
+        this.object.add(ring, line)
+        this.guide = { ring, line }
+      }
+      this.setGuideHeight(height)
+    } else if (this.guide) {
+      this.disposeGuide()
+    }
+  }
+
+  /** Hauteur (m) de l'appareil au-dessus du sol : l'anneau reste au sol quand la hauteur change. */
+  setGuideHeight(height: number): void {
+    if (!this.guide) return
+    const floor = -height + 0.01
+    this.guide.ring.position.z = floor
+    this.guide.line.geometry.setFromPoints([new Vector3(0, 0, 0), new Vector3(0, 0, floor)])
+  }
+
+  private disposeGuide(): void {
+    if (!this.guide) return
+    this.guide.ring.geometry.dispose(); this.guide.ring.material.dispose()
+    this.guide.line.geometry.dispose(); this.guide.line.material.dispose()
+    this.object.remove(this.guide.ring, this.guide.line)
+    this.guide = null
+  }
 
   get visibleInScene(): boolean {
     let o: Object3D | null = this.object
@@ -104,6 +145,7 @@ export abstract class DeviceMarker {
   }
 
   dispose(): void {
+    this.disposeGuide()
     this.stopAnimation?.()
     this.stopAnimation = null
     this.css?.element.remove()

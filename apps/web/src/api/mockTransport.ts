@@ -1,4 +1,4 @@
-import { commandSchema, defaultState, mergeState, parseHouse, type CommandInput, type DeviceEntry, type DeviceState, type House, type StatePatch } from '@kasbah/shared'
+import { commandSchema, defaultState, mergeState, parseHouse, placeDeviceInJson, type CommandInput, type DeviceEntry, type DeviceState, type House, type StatePatch } from '@kasbah/shared'
 import { SimError, Simulation, solarGeometry, type ScenarioName } from '@kasbah/mock-sim'
 import demoHouse from '@kasbah/shared/demo-house.json'
 import { ApiRequestError, type Transport, type TransportHandlers } from './transport'
@@ -12,7 +12,7 @@ export interface MockTransportOptions { scenario?: ScenarioName; seed?: number; 
 
 export function createMockTransport(opts: MockTransportOptions = {}): Transport & { sim: Simulation } {
   const sim = new Simulation({ scenario: opts.scenario ?? 'default', seed: opts.seed ?? 42, timeScale: opts.timeScale ?? 1 })
-  const house = opts.house ?? parseHouse(demoHouse)
+  let house = opts.house ?? parseHouse(demoHouse)
   const states = new Map<string, DeviceState>()
   const descriptors = sim.devices()
   for (const d of descriptors) states.set(d.id, { ...sim.getState(d.externalId)!, updatedAt: Date.now() })
@@ -57,6 +57,12 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
         points.push({ t, productionW, consumptionW: 350 + Math.round(600 * Math.abs(Math.sin(h / 3))), gridW: 0, samples: 1 })
       }
       return { deviceId, points }
+    },
+    async placeDevice(id, placement) {
+      // même logique que le serveur, en mémoire (rien n'est écrit) ; le message `house` suit comme en réel
+      house = parseHouse(placeDeviceInJson(house, id, placement))
+      handlers?.onMessage({ type: 'house', house })
+      return house
     },
     async pairHue() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Hue bridge in mock mode') },
     connect(h) {

@@ -29,6 +29,7 @@
     "unbound": "Cet appareil n'est lié à aucun plugin ({id}).", "notPlaced": "Non placés", "outdoor": "Extérieur",
     "pending": "Commande en cours…", "lastUpdate": "Mis à jour {time}", "empty": "Aucun appareil connu. Vérifiez les plugins dans les réglages."
   },
+  "place": {"title": "Emplacement", "move": "Déplacer", "done": "Terminé", "hint": "Faites glisser l'appareil dans la vue 3D pour le déplacer. La hauteur se règle ici.", "height": "Hauteur", "presets": {"ceiling": "Plafond", "wall": "Applique", "table": "Table", "floor": "Sol"}, "revert": "Rétablir", "outside": "hors pièce", "saveError": "Position non enregistrée : {message}"},
   "light": { "brightness": "Luminosité", "colorTemp": "Température", "color": "Couleur", "warm": "Chaud", "cold": "Froid" },
   "lights": {
     "summary": "{on} allumées sur {total}", "none": "Aucune lampe remontée par les plugins.",

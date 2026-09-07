@@ -1,6 +1,6 @@
-import { assertCommandAllowed, commandSchema, type HealthResponse } from '@kasbah/shared'
+import { assertCommandAllowed, commandSchema, devicePlacementSchema, placeDeviceInJson, type HealthResponse } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
-import type { LoadedHouse } from '../config/house'
+import { updateHouseFile, type LoadedHouse } from '../config/house'
 import type { PluginHost } from '../core/plugin-host'
 import type { DeviceRegistry } from '../core/registry'
 import type { EnergyHistory } from '../core/history'
@@ -39,6 +39,15 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
   })
 
   app.get('/api/house/warnings', async () => ({ warnings: deps.house.warnings }))
+
+  // Placement d'un appareil depuis l'UI : réécrit house.json (voir config/house.ts) et diffuse la
+  // maison entière aux tablettes connectées. Seule écriture du serveur dans le JSON.
+  app.put<{ Params: { id: string } }>('/api/house/devices/:id', async (req) => {
+    const placement = devicePlacementSchema.parse(req.body)   // ZodError → 400
+    const house = await updateHouseFile(deps.house, (doc) => placeDeviceInJson(doc, req.params.id, placement))
+    deps.hub.broadcast({ type: 'house', house })
+    return { house }
+  })
 
   app.get('/api/devices', async () => ({ devices: deps.registry.list() }))
 

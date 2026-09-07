@@ -16,6 +16,10 @@ export function toNdc(el: HTMLElement, clientX: number, clientY: number): { x: n
   return { x: ((clientX - r.left) / r.width) * 2 - 1, y: -(((clientY - r.top) / r.height) * 2 - 1) }
 }
 
+function toTapEvent(el: HTMLElement, e: PointerEvent): TapEvent {
+  return { ndc: toNdc(el, e.clientX, e.clientY), pointerType: e.pointerType, clientX: e.clientX, clientY: e.clientY }
+}
+
 export function createTapDetector(el: HTMLElement, opts: TapDetectorOptions): () => void {
   const maxDuration = opts.maxDurationMs ?? 350
   let down: { x: number; y: number; t: number; id: number; type: string } | null = null
@@ -32,7 +36,7 @@ export function createTapDetector(el: HTMLElement, opts: TapDetectorOptions): ()
     const limit = down.type === 'mouse' ? (opts.maxMoveMouse ?? 8) : (opts.maxMoveTouch ?? 14)
     const ok = performance.now() - down.t <= maxDuration && moved <= limit
     down = null
-    if (ok) opts.onTap({ ndc: toNdc(el, e.clientX, e.clientY), pointerType: e.pointerType, clientX: e.clientX, clientY: e.clientY })
+    if (ok) opts.onTap(toTapEvent(el, e))
   }
   const onCancel = () => { down = null }
   const onMove = (e: PointerEvent) => {
@@ -54,5 +58,65 @@ export function createTapDetector(el: HTMLElement, opts: TapDetectorOptions): ()
     el.removeEventListener('pointermove', onMove)
     el.removeEventListener('pointerleave', onLeave)
     if (hoverFrame) cancelAnimationFrame(hoverFrame)
+  }
+}
+
+// Glissement d'un objet (mode « déplacer un appareil »). L'appui ne démarre un glissement que si
+// `hitTest` l'accepte ; sinon il suit son cours normal (orbite, tap). Le détecteur de tap voit aussi
+// le pointerup final : `DragDetector.active()` lui permet d'ignorer ce faux tap.
+
+export interface DragDetectorOptions {
+  hitTest(ev: TapEvent): boolean
+  onStart(ev: TapEvent): void
+  onMove(ev: TapEvent): void
+  onEnd(ev: TapEvent, moved: boolean): void
+}
+
+export interface DragDetector {
+  detach(): void
+  /** Vrai pendant le glissement et juste après sa fin (le pointerup de fin est encore en cours de dispatch). */
+  active(): boolean
+}
+
+const AFTER_END_MS = 150
+
+export function createDragDetector(el: HTMLElement, opts: DragDetectorOptions): DragDetector {
+  let id: number | null = null
+  let moved = false
+  let endedAt = -Infinity
+
+  const onDown = (e: PointerEvent) => {
+    if (!e.isPrimary || id !== null) return
+    const ev = toTapEvent(el, e)
+    if (!opts.hitTest(ev)) return
+    id = e.pointerId
+    moved = false
+    try { el.setPointerCapture(e.pointerId) } catch { /* pointeur déjà relâché */ }
+    opts.onStart(ev)
+  }
+  const onMove = (e: PointerEvent) => {
+    if (e.pointerId !== id) return
+    moved = true
+    opts.onMove(toTapEvent(el, e))
+  }
+  const onUp = (e: PointerEvent) => {
+    if (e.pointerId !== id) return
+    id = null
+    endedAt = performance.now()
+    opts.onEnd(toTapEvent(el, e), moved)
+  }
+
+  el.addEventListener('pointerdown', onDown)
+  el.addEventListener('pointermove', onMove)
+  el.addEventListener('pointerup', onUp)
+  el.addEventListener('pointercancel', onUp)
+  return {
+    detach() {
+      el.removeEventListener('pointerdown', onDown)
+      el.removeEventListener('pointermove', onMove)
+      el.removeEventListener('pointerup', onUp)
+      el.removeEventListener('pointercancel', onUp)
+    },
+    active: () => id !== null || performance.now() - endedAt < AFTER_END_MS,
   }
 }

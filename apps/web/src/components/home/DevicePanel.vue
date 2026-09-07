@@ -9,6 +9,7 @@ import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import DeviceControl from '../controls/DeviceControl.vue'
+import PlacementControl from './PlacementControl.vue'
 
 // Panneau « appareil » : fil d'Ariane vers la pièce, en-tête (icône, nom, fabricant, bascule),
 // grande valeur, puis le contrôle propre au type.
@@ -26,6 +27,11 @@ const crumb = computed(() => {
 const on = computed(() => !!resolved.value?.state && isDeviceOn(resolved.value.state))
 const toggle = computed(() => (resolved.value?.state ? toggleCommand(resolved.value.state) : null))
 const headline = computed(() => (resolved.value?.descriptor && resolved.value.state ? headlineValue(resolved.value.descriptor, resolved.value.state, t, locale.value) : ''))
+/** Déplaçable : dans le JSON ou auto-placé, hors volets (ancrés à une ouverture) et tondeuse (position publiée). */
+const placeable = computed(() => {
+  const hd = resolved.value?.houseDevice
+  return !!hd && !hd.openingId && (resolved.value?.descriptor?.kind ?? hd.kind) !== 'mower'
+})
 const brand = computed(() => resolved.value?.descriptor?.meta.manufacturer ?? (resolved.value?.deviceId?.split(':')[0] ?? ''))
 
 function send(cmd: CommandInput) {
@@ -53,6 +59,7 @@ function send(cmd: CommandInput) {
     <DeviceControl v-if="resolved.descriptor && resolved.state" :descriptor="resolved.descriptor" :state="resolved.state"
                    :pending="devices.isPending(resolved.deviceId!)" @command="send" />
     <div v-else class="card card--soft unbound muted">{{ $t('device.unbound', { id: resolved.houseDevice?.deviceId ?? resolved.key }) }}</div>
+    <PlacementControl v-if="placeable" :device="resolved.houseDevice!" />
   </template>
 </template>
 

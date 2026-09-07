@@ -1,7 +1,7 @@
 import { nextTick, onBeforeUnmount, onMounted, ref, watch, type ComputedRef, type Ref } from 'vue'
 import { useTheme } from 'vuetify'
 import { useDocumentVisibility, useResizeObserver } from '@vueuse/core'
-import type { DeviceState, House } from '@kasbah/shared'
+import type { DeviceState, House, Vec3 } from '@kasbah/shared'
 import { readVuetifyTheme } from '../three/core/theme'
 import { HouseScene, type HouseSceneOptions } from '../three/HouseScene'
 import { useDevicesStore } from '../stores/devices'
@@ -31,6 +31,8 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   const roomTap = new Set<Handler<[string]>>()
   const zoneTap = new Set<Handler<[string]>>()
   const backgroundTap = new Set<Handler<[]>>()
+  const deviceDrag = new Set<Handler<[string, [number, number], string | null]>>()
+  const deviceDrop = new Set<Handler<[string, [number, number], string | null]>>()
 
   onMounted(() => {
     const canvas = args.canvas.value
@@ -42,6 +44,8 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     scene.on('roomTap', (id) => roomTap.forEach((f) => f(id)))
     scene.on('zoneTap', (id) => zoneTap.forEach((f) => f(id)))
     scene.on('backgroundTap', () => backgroundTap.forEach((f) => f()))
+    scene.on('deviceDrag', (k, xy, r) => deviceDrag.forEach((f) => f(k, xy, r)))
+    scene.on('deviceDrop', (k, xy, r) => deviceDrop.forEach((f) => f(k, xy, r)))
 
     const parent = canvas.parentElement ?? canvas
     const fit = () => { const r = parent.getBoundingClientRect(); scene?.resize(r.width, r.height) }
@@ -55,7 +59,12 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     ready.value = true
   })
 
-  watch(args.house, (h) => { if (scene && h) { scene.load(h); scene.setDescriptors(devices.descriptors); scene.updateStates(args.states.value, true) } })
+  // seuls les appareils ont changé (placement, auto-placement) → marqueurs seulement, la caméra ne bouge pas
+  watch(args.house, (h, prev) => {
+    if (!scene || !h) return
+    if (prev && sameShell(prev, h)) { scene.updateDevices(h); return }
+    scene.load(h); scene.setDescriptors(devices.descriptors); scene.updateStates(args.states.value, true)
+  })
   watch(() => devices.descriptors, (d) => scene?.setDescriptors(d))
   watch(args.states, (s) => scene?.updateStates(s))
   if (args.options) watch(args.options, (o) => scene?.setOptions(o), { deep: true })
@@ -79,6 +88,16 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     resetView: () => scene?.resetView(),
     highlightRoom: (id: string | null) => scene?.highlightRoom(id),
     setSelected: (key: string | null) => scene?.setSelected(key),
+    onDeviceDrag: (f: Handler<[string, [number, number], string | null]>) => { deviceDrag.add(f) },
+    onDeviceDrop: (f: Handler<[string, [number, number], string | null]>) => { deviceDrop.add(f) },
+    setMovable: (key: string | null) => scene?.setMovable(key),
+    moveMarker: (key: string, position: Vec3) => scene?.moveMarker(key, position),
     controller: () => scene,
   }
+}
+
+/** Même bâti (niveaux, pièces, site, toit, défauts) : seul `devices` peut différer. */
+function sameShell(a: House, b: House): boolean {
+  const shell = (h: House) => JSON.stringify([h.levels, h.rooms, h.site, h.roof, h.defaults])
+  return shell(a) === shell(b)
 }

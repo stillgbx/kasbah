@@ -11,3 +11,4 @@ _design
 _generated-ai-doc
 .gitnexus
 house/maison.json
+house/*.bak

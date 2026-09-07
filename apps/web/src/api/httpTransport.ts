@@ -1,4 +1,4 @@
-import { apiErrorSchema, devicesResponseSchema, energyHistorySchema, healthResponseSchema, houseSchema, serverMessageSchema, type CommandInput, type DeviceEntry, type EnergyHistory, type HealthResponse, type House } from '@kasbah/shared'
+import { apiErrorSchema, devicesResponseSchema, energyHistorySchema, healthResponseSchema, houseSchema, serverMessageSchema, type CommandInput, type DeviceEntry, type DevicePlacement, type EnergyHistory, type HealthResponse, type House } from '@kasbah/shared'
 import { ApiRequestError, type ConnectionStatus, type Transport, type TransportHandlers } from './transport'
 
 // URLs relatives : même origine en prod (Fastify sert le build) et via le proxy Vite en dev.
@@ -32,6 +32,11 @@ export function createHttpTransport(base = ''): Transport {
       `${base}/api/devices/${encodeURIComponent(deviceId)}/command`,
       { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(command) },
       () => undefined,
+    ),
+    placeDevice: (id, placement: DevicePlacement) => request(
+      `${base}/api/house/devices/${encodeURIComponent(id)}`,
+      { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(placement) },
+      (j) => houseSchema.parse((j as { house: unknown }).house) as House,
     ),
     pairHue: () => request(`${base}/api/plugins/hue/pair`, { method: 'POST' }, (j) => j as { appKey: string; hint: string }),
     connect: (handlers) => connectWebSocket(base, handlers),

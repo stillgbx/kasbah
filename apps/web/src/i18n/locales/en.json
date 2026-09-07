@@ -29,6 +29,7 @@
     "unbound": "This device is not bound to any plugin ({id}).", "notPlaced": "Not placed", "outdoor": "Outdoor",
     "pending": "Command in progress…", "lastUpdate": "Updated {time}", "empty": "No known device. Check the plugins in settings."
   },
+  "place": {"title": "Placement", "move": "Move", "done": "Done", "hint": "Drag the device in the 3D view to move it. Set the height here.", "height": "Height", "presets": {"ceiling": "Ceiling", "wall": "Wall", "table": "Table", "floor": "Floor"}, "revert": "Revert", "outside": "outside rooms", "saveError": "Position not saved: {message}"},
   "light": { "brightness": "Brightness", "colorTemp": "Temperature", "color": "Color", "warm": "Warm", "cold": "Cold" },
   "lights": {
     "summary": "{on} on out of {total}", "none": "No light reported by the plugins.",

@@ -1,19 +1,19 @@
 import {
-  AmbientLight, DirectionalLight, HemisphereLight, PCFSoftShadowMap, PerspectiveCamera, Raycaster, Scene, TOUCH, Vector2, Vector3,
+  AmbientLight, DirectionalLight, HemisphereLight, PCFSoftShadowMap, PerspectiveCamera, Plane, Raycaster, Scene, TOUCH, Vector2, Vector3,
   WebGLRenderer, type Box3, type Material, type Mesh, type MeshStandardMaterial, type Object3D,
 } from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js'
 import {
-  buildingBounds, computeHouseGeometry, deviceFloorZ, geoDistance, indexHouse, resolveDefaults, resolveDeviceLevelId, roomBounds, zoneBounds,
-  type DeviceDescriptor, type DeviceState, type House, type HouseGeometry, type HouseIndex,
+  buildingBounds, computeHouseGeometry, deviceFloorZ, geoDistance, indexHouse, pointInPolygon, resolveDefaults, resolveDeviceLevelId, roomBounds, zoneBounds,
+  type DeviceDescriptor, type DeviceState, type House, type HouseDevice, type HouseGeometry, type HouseIndex, type Vec3,
 } from '@kasbah/shared'
 import { applyTheme, createMaterials, disposeMaterials, type MaterialSet } from './builders/materials'
 import { buildHouse, type HouseNodes } from './builders/buildHouse'
 import { clamp, fitBox, sphericalOf } from './core/cameraFit'
 import { boundsToWorldBox } from './core/coords'
 import { disposeObject3D } from './core/dispose'
-import { createTapDetector, type TapEvent } from './core/input'
+import { createDragDetector, createTapDetector, type DragDetector, type TapEvent } from './core/input'
 import { createRenderLoop, type RenderLoop } from './core/renderLoop'
 import { defaultSceneTheme, type SceneTheme } from './core/theme'
 import { createTween, easeInOutCubic } from './core/tween'
@@ -47,11 +47,17 @@ export interface SceneEvents {
   roomTap: (roomId: string) => void
   zoneTap: (zoneId: string) => void
   backgroundTap: () => void
+  /** Glissement de l'appareil déplaçable : position au sol (repère maison) et pièce survolée (même niveau) ou null. */
+  deviceDrag: (key: string, xy: [number, number], roomId: string | null) => void
+  deviceDrop: (key: string, xy: [number, number], roomId: string | null) => void
 }
 
 const HOME_RADIUS_M = 120
 const DEFAULT_AZIMUTH = -Math.PI / 4     // depuis le sud-est
 const DEFAULT_POLAR = (55 * Math.PI) / 180
+const WORLD_UP = new Vector3(0, 1, 0)
+/** Rayon (px) autour de l'ancre ou de la pilule où l'appui saisit l'appareil déplaçable. */
+const GRAB_RADIUS_PX = { touch: 44, mouse: 28 }
 
 export class HouseScene {
   readonly scene = new Scene()
@@ -74,9 +80,14 @@ export class HouseScene {
   private highlightedRoom: string | null = null
   private selectedKey: string | null = null
   private listeners: { [K in keyof SceneEvents]: Set<SceneEvents[K]> } = {
-    deviceTap: new Set(), roomTap: new Set(), zoneTap: new Set(), backgroundTap: new Set(),
+    deviceTap: new Set(), roomTap: new Set(), zoneTap: new Set(), backgroundTap: new Set(), deviceDrag: new Set(), deviceDrop: new Set(),
   }
   private detachInput: (() => void) | null = null
+  private movableKey: string | null = null
+  private drag: DragDetector | null = null
+  private readonly dragPlane = new Plane()
+  private readonly dragOffset = new Vector3()
+  private lastDrag: { xy: [number, number]; roomId: string | null } | null = null
   private readonly raycaster = new Raycaster()
   private size = { width: 1, height: 1 }
   private cameraTween: { cancel(): void } | null = null
@@ -211,12 +222,109 @@ export class HouseScene {
         onTap: (key) => this.emit('deviceTap', key),
         label: device.name ?? descriptor?.name ?? device.id,
       }, (state) => this.isAtHome(state))
-      const z = levelNodes ? device.position[2] : device.position[2] + deviceFloorZ(this.house, device, this.index)
-      marker.object.position.set(device.position[0], device.position[1], z)
+      marker.object.position.set(device.position[0], device.position[1], this.localZ(device, device.position[2]))
       parent.add(marker.object)
       marker.setSelected(this.selectedKey === device.id)
+      if (this.movableKey === device.id) marker.setMoving(true, device.position[2])
       this.markers.set(device.id, marker)
     }
+  }
+
+  /** z local au groupe parent : tel quel sous un niveau, décalé du terrain pour un appareil extérieur. */
+  private localZ(device: HouseDevice, z: number): number {
+    const levelId = resolveDeviceLevelId(device, this.index!.roomsById)
+    return levelId && this.nodes!.levels.has(levelId) ? z : z + deviceFloorZ(this.house!, device, this.index!)
+  }
+
+  /** Seuls les appareils ont changé (placement) : on refait les marqueurs sans toucher aux murs ni à la caméra. */
+  updateDevices(house: House): void {
+    if (!this.nodes) { this.load(house); return }
+    this.house = house
+    this.index = indexHouse(house)
+    this.buildMarkers()
+    this.updateStates(this.states, true)
+    this.applyLevelFocus()
+    this.loop.invalidate()
+  }
+
+  // ---- mode « déplacer » ---------------------------------------------------
+  /** Rend un appareil déplaçable au doigt (un seul à la fois) ; null pour sortir du mode. */
+  setMovable(key: string | null): void {
+    this.movableKey = key
+    for (const m of this.markers.values()) m.setMoving(m.key === key, m.device.position[2])
+    this.drag?.detach()
+    this.drag = null
+    if (key && !this.deps.headless) {
+      this.drag = createDragDetector(this.canvas, {
+        hitTest: (ev) => this.grabs(key, ev),
+        onStart: () => this.startDrag(key),
+        onMove: (ev) => this.moveDrag(key, ev),
+        onEnd: (_ev, moved) => this.endDrag(key, moved),
+      })
+    }
+    this.loop.invalidate()
+  }
+
+  /** Déplace un marqueur (aperçu) ; `position` dans le repère maison (z relatif au sol de l'ancre). */
+  moveMarker(key: string, position: Vec3): void {
+    const marker = this.markers.get(key)
+    if (!marker || !this.house || !this.index) return
+    marker.object.position.set(position[0], position[1], this.localZ(marker.device, position[2]))
+    marker.setGuideHeight(position[2])
+    this.loop.invalidate()
+  }
+
+  private grabs(key: string, ev: TapEvent): boolean {
+    const marker = this.markers.get(key)
+    if (!marker || !marker.visibleInScene) return false
+    this.raycaster.setFromCamera(new Vector2(ev.ndc.x, ev.ndc.y), this.camera)
+    if (this.raycaster.intersectObjects(marker.pickables, false).length > 0) return true
+    const radius = ev.pointerType === 'mouse' ? GRAB_RADIUS_PX.mouse : GRAB_RADIUS_PX.touch
+    const near = (p: Vector3) => {
+      p.project(this.camera)
+      return Math.hypot((p.x - ev.ndc.x) * this.size.width / 2, (p.y - ev.ndc.y) * this.size.height / 2) <= radius
+    }
+    return near(marker.worldAnchor()) || near(marker.worldPill())
+  }
+
+  private startDrag(key: string): void {
+    const marker = this.markers.get(key)
+    if (!marker) return
+    if (this.controls) this.controls.enabled = false
+    this.cameraTween?.cancel()
+    // plan horizontal à la hauteur de l'appareil : il suit exactement le doigt, sans saut initial
+    const anchor = marker.worldAnchor()
+    this.dragPlane.setFromNormalAndCoplanarPoint(WORLD_UP, anchor)
+    const hit = this.raycaster.ray.intersectPlane(this.dragPlane, new Vector3())
+    this.dragOffset.copy(hit ? hit.sub(anchor) : new Vector3())
+    this.lastDrag = null
+  }
+
+  private moveDrag(key: string, ev: TapEvent): void {
+    const marker = this.markers.get(key)
+    if (!marker) return
+    this.raycaster.setFromCamera(new Vector2(ev.ndc.x, ev.ndc.y), this.camera)
+    const hit = this.raycaster.ray.intersectPlane(this.dragPlane, new Vector3())
+    if (!hit) return
+    hit.sub(this.dragOffset)
+    const xy: [number, number] = [hit.x, -hit.z]   // monde (x, y, z) ← maison (x, z, -y)
+    const roomId = this.roomAt(marker.device, xy)
+    this.lastDrag = { xy, roomId }
+    this.emit('deviceDrag', key, xy, roomId)
+  }
+
+  private endDrag(key: string, moved: boolean): void {
+    if (this.controls) this.controls.enabled = true
+    if (moved && this.lastDrag) this.emit('deviceDrop', key, this.lastDrag.xy, this.lastDrag.roomId)
+    this.lastDrag = null
+  }
+
+  /** Pièce du niveau de l'appareil contenant le point, sinon null (extérieur, hors de toute pièce). */
+  private roomAt(device: HouseDevice, xy: [number, number]): string | null {
+    if (!this.index) return null
+    const levelId = resolveDeviceLevelId(device, this.index.roomsById)
+    if (!levelId) return null
+    return (this.index.roomsByLevel.get(levelId) ?? []).find((r) => pointInPolygon(xy, r.polygon))?.id ?? null
   }
 
   private isAtHome(state: DeviceState): boolean {
@@ -392,6 +500,7 @@ export class HouseScene {
   }
 
   private handleTap(ev: TapEvent): void {
+    if (this.drag?.active()) return   // fin d'un glissement, pas un tap
     const hit = this.pick(ev.ndc)
     if (!hit) { this.emit('backgroundTap'); return }
     if (hit.kind === 'device') this.emit('deviceTap', hit.key)
@@ -428,6 +537,7 @@ export class HouseScene {
 
   dispose(): void {
     this.detachInput?.()
+    this.drag?.detach()
     this.loop.dispose()
     this.controls?.dispose()
     this.clear()
