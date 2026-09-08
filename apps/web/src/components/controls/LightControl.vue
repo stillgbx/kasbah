@@ -42,7 +42,7 @@ const sendColor = useDebounceFn((h: string) => {
 
     <template v-if="has('brightness')">
       <div class="text-caption text-medium-emphasis">{{ $t('light.brightness') }} · {{ Math.round(brightness) }} %</div>
-      <v-slider v-model="brightness" :min="1" :max="100" :step="1" :disabled="disabled" color="warning"
+      <v-slider v-model="brightness" :min="1" :max="100" :step="1" :disabled="disabled"
                 @end="(v: number) => emit('command', { type: 'light.set', brightness: Math.round(v) })" />
     </template>
 

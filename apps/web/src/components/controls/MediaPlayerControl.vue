@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { mdiPause, mdiPlay, mdiSkipNext, mdiSkipPrevious, mdiVolumeHigh, mdiVolumeOff } from '@mdi/js'
 import type { CommandInput, DeviceDescriptor, StateFor } from '@kasbah/shared'
 
 const props = defineProps<{ descriptor: DeviceDescriptor; state: StateFor<'media_player'>; pending?: boolean; disabled?: boolean }>()
@@ -26,15 +25,15 @@ const fmt = (s?: number) => (s === undefined ? '' : `${Math.floor(s / 60)}:${Str
       <div v-else class="text-body-2 text-medium-emphasis">{{ $t('media.nothing') }} · {{ $t(`media.${state.playback}`) }}</div>
     </div>
     <div class="d-flex align-center justify-center ga-3 mb-3">
-      <v-btn v-if="has('track_skip')" :icon="mdiSkipPrevious" variant="tonal" size="large" :disabled="disabled" @click="emit('command', { type: 'media_player.previous' })" />
-      <v-btn :icon="state.playback === 'playing' ? mdiPause : mdiPlay" color="primary" size="x-large" :disabled="disabled"
+      <v-btn v-if="has('track_skip')" icon="skipPrev" variant="tonal" size="large" :disabled="disabled" @click="emit('command', { type: 'media_player.previous' })" />
+      <v-btn :icon="state.playback === 'playing' ? 'pause' : 'play'" color="primary" size="x-large" :disabled="disabled"
              @click="emit('command', { type: state.playback === 'playing' ? 'media_player.pause' : 'media_player.play' })" />
-      <v-btn v-if="has('track_skip')" :icon="mdiSkipNext" variant="tonal" size="large" :disabled="disabled" @click="emit('command', { type: 'media_player.next' })" />
+      <v-btn v-if="has('track_skip')" icon="skipNext" variant="tonal" size="large" :disabled="disabled" @click="emit('command', { type: 'media_player.next' })" />
     </div>
     <div v-if="has('volume')" class="d-flex align-center ga-2">
-      <v-btn v-if="has('mute')" :icon="state.muted ? mdiVolumeOff : mdiVolumeHigh" variant="text" :disabled="disabled"
+      <v-btn v-if="has('mute')" :icon="state.muted ? 'volumeOff' : 'volume'" variant="text" :disabled="disabled"
              @click="emit('command', { type: 'media_player.set_mute', muted: !state.muted })" />
-      <v-slider v-model="volume" class="flex-grow-1" :min="0" :max="100" :step="1" :disabled="disabled || state.muted" color="primary"
+      <v-slider v-model="volume" class="flex-grow-1" :min="0" :max="100" :step="1" :disabled="disabled || state.muted"
                 @end="(v: number) => emit('command', { type: 'media_player.set_volume', volume: Math.round(v) })" />
       <span class="text-caption" style="width: 3ch; text-align: right">{{ Math.round(volume) }}</span>
     </div>

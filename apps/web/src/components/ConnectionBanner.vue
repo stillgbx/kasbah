@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { mdiLanDisconnect, mdiLanPending } from '@mdi/js'
 import { useDevicesStore } from '../stores/devices'
 
 // Bandeau discret en haut : visible seulement quand le lien serveur n'est pas nominal.
@@ -14,7 +13,7 @@ watch(() => devices.connection, (s) => {
   timer = setTimeout(() => { visible.value = true }, s === 'connecting' ? 1500 : 0)
 }, { immediate: true })
 const color = computed(() => (devices.connection === 'offline' ? 'error' : 'warning'))
-const icon = computed(() => (devices.connection === 'offline' ? mdiLanDisconnect : mdiLanPending))
+const icon = computed(() => (devices.connection === 'offline' ? 'linkOff' : 'dots'))
 </script>
 
 <template>

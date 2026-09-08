@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { mdiMinus, mdiPlus } from '@mdi/js'
 import { CLIMATE_MODES, type CommandInput, type DeviceDescriptor, type StateFor } from '@kasbah/shared'
 import { formatPercent, formatTemp } from '../../lib/format'
 
@@ -23,9 +22,9 @@ const step = (d: number) => emit('command', { type: 'climate.set_target_temp', t
     </div>
     <div class="text-caption text-medium-emphasis">{{ $t('climate.target') }}</div>
     <div class="d-flex align-center justify-center ga-4 my-2">
-      <v-btn :icon="mdiMinus" variant="tonal" size="large" :disabled="disabled || state.mode === 'off'" @click="step(-0.5)" />
+      <v-btn icon="minus" variant="tonal" size="large" :disabled="disabled || state.mode === 'off'" @click="step(-0.5)" />
       <span class="text-h3 font-weight-medium target">{{ formatTemp(state.targetTempC, $i18n.locale) }}</span>
-      <v-btn :icon="mdiPlus" variant="tonal" size="large" :disabled="disabled || state.mode === 'off'" @click="step(0.5)" />
+      <v-btn icon="plus" variant="tonal" size="large" :disabled="disabled || state.mode === 'off'" @click="step(0.5)" />
     </div>
     <div class="text-caption text-medium-emphasis mb-1">{{ $t('climate.mode') }}</div>
     <v-chip-group :model-value="state.mode" mandatory selected-class="text-primary" column

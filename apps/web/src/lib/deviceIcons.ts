@@ -1,30 +1,26 @@
-import {
-  mdiBatteryCharging, mdiBrightness6, mdiCar, mdiCarElectric, mdiDevices, mdiEvStation, mdiFlash, mdiGauge, mdiHeatPump,
-  mdiLightbulbOn, mdiLightbulbOutline, mdiRobotMower, mdiRobotVacuum, mdiSolarPower, mdiSpeaker, mdiSpeakerWireless,
-  mdiThermometer, mdiWaterPercent, mdiWaves, mdiWindowShutter, mdiWindowShutterOpen, mdiFlaskOutline, mdiPulse,
-} from '@mdi/js'
 import type { DeviceDescriptor, DeviceKind, DeviceState, SensorClass } from '@kasbah/shared'
+import type { IconName } from './strokeIcons'
 
-// Icônes (chemins SVG @mdi/js) par kind et état. Partagées par l'UI Vuetify et l'atlas de sprites 3D.
+// Icônes (jeu « trait », voir strokeIcons.ts) par kind et état, pour <v-icon> comme pour StrokeIcon.
 
-const SENSOR_ICONS: Record<SensorClass, string> = {
-  temperature: mdiThermometer, humidity: mdiWaterPercent, power: mdiFlash, energy: mdiFlash, pressure: mdiGauge,
-  flow: mdiWaves, illuminance: mdiBrightness6, ph: mdiFlaskOutline, battery: mdiBatteryCharging, generic: mdiPulse,
+const SENSOR_ICONS: Record<SensorClass, IconName> = {
+  temperature: 'thermostat', humidity: 'droplet', power: 'bolt', energy: 'bolt', pressure: 'gauge',
+  flow: 'waves', illuminance: 'sun', ph: 'flask', battery: 'battery', generic: 'sensor',
 }
 
-export const KIND_ICONS: Record<DeviceKind, string> = {
-  light: mdiLightbulbOutline, cover: mdiWindowShutter, media_player: mdiSpeaker, climate: mdiHeatPump, vacuum: mdiRobotVacuum,
-  mower: mdiRobotMower, sensor: mdiThermometer, energy: mdiSolarPower, ev_charger: mdiEvStation, vehicle: mdiCar,
+export const KIND_ICONS: Record<DeviceKind, IconName> = {
+  light: 'light', cover: 'shutter', media_player: 'speaker', climate: 'heatpump', vacuum: 'vacuum',
+  mower: 'mower', sensor: 'thermostat', energy: 'solar', ev_charger: 'charger', vehicle: 'vehicle',
 }
 
-export function deviceIcon(descriptor: DeviceDescriptor | undefined, state?: DeviceState): string {
-  if (!descriptor) return mdiDevices
+export function deviceIcon(descriptor: DeviceDescriptor | undefined, state?: DeviceState): IconName {
+  if (!descriptor) return 'devices'
   switch (descriptor.kind) {
-    case 'light': return state?.kind === 'light' && state.on ? mdiLightbulbOn : mdiLightbulbOutline
-    case 'cover': return state?.kind === 'cover' && state.position > 50 ? mdiWindowShutterOpen : mdiWindowShutter
-    case 'media_player': return state?.kind === 'media_player' && state.playback === 'playing' ? mdiSpeakerWireless : mdiSpeaker
+    case 'light': return state?.kind === 'light' && state.on ? 'lightOn' : 'light'
+    case 'cover': return state?.kind === 'cover' && state.position > 50 ? 'shutterOpen' : 'shutter'
+    case 'media_player': return state?.kind === 'media_player' && state.playback === 'playing' ? 'speakerOn' : 'speaker'
     case 'sensor': return SENSOR_ICONS[descriptor.meta.sensor?.deviceClass ?? 'generic']
-    case 'vehicle': return state?.kind === 'vehicle' && state.charging ? mdiCarElectric : mdiCar
+    case 'vehicle': return state?.kind === 'vehicle' && state.charging ? 'charger' : 'vehicle'
     default: return KIND_ICONS[descriptor.kind]
   }
 }

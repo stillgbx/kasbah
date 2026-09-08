@@ -39,16 +39,14 @@ button { font-family: inherit; cursor: pointer; }
 .stat-value { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .big-value { font-size: 32px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
 
-/* Vuetify recolorié sur les jetons : boutons en pilule, curseurs et interrupteurs sur l'accent. */
-.v-btn { border-radius: 999px !important; text-transform: none !important; letter-spacing: 0 !important; font-weight: 500 !important; }
-.v-slider .v-slider-track__fill, .v-slider .v-slider-thumb__surface { background-color: var(--accent) !important; border-color: var(--accent) !important; }
-.v-slider .v-slider-track__background { background-color: var(--line) !important; opacity: 1 !important; }
-.v-switch .v-selection-control__input > .v-icon { opacity: 0; }
-.v-switch--inset .v-switch__track { background-color: var(--line) !important; opacity: 1 !important; }
-.v-switch--inset .v-selection-control--dirty .v-switch__track { background-color: var(--accent) !important; }
-.v-switch--inset .v-switch__thumb { background-color: var(--surface) !important; }
-.v-switch--inset .v-selection-control--dirty .v-switch__thumb { background-color: var(--on-accent) !important; }
-.v-overlay__scrim { background: rgba(0, 0, 0, .45) !important; }
+/* Vuetify recolorié sur les jetons. Les couleurs (accent, piste) passent par les props par défaut
+   (plugins/vuetify.ts) ; ne restent ici que les valeurs sans prop équivalente. Les styles Vuetify
+   vivent dans @layer vuetify-components : une règle non calquée suffit, sans !important. */
+.v-btn { text-transform: none; letter-spacing: 0; font-weight: 500; }
+.v-switch--inset .v-switch__track { opacity: 1; }
+.v-switch--inset .v-switch__thumb { background-color: var(--surface); }
+.v-switch--inset .v-selection-control--dirty .v-switch__thumb { background-color: var(--on-accent); }
+.v-overlay__scrim { background: rgba(0, 0, 0, .45); }
 
 /* Le canvas 3D capte tous les gestes (OrbitControls) : aucun défilement/zoom natif. */
 .scene-canvas { touch-action: none; display: block; width: 100%; height: 100%; outline: none; }

@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { mdiArrowCollapseDown, mdiArrowCollapseUp, mdiStop } from '@mdi/js'
 import type { CommandInput, DeviceDescriptor, StateFor } from '@kasbah/shared'
 
 const props = defineProps<{ descriptor: DeviceDescriptor; state: StateFor<'cover'>; pending?: boolean; disabled?: boolean }>()
@@ -19,19 +18,19 @@ const hasStop = props.descriptor.capabilities.includes('stop')
       <v-chip size="small" :color="state.motion === 'stopped' ? undefined : 'primary'" variant="tonal">{{ $t(`cover.${state.motion}`) }}</v-chip>
     </div>
     <div class="d-flex ga-2 mb-3">
-      <v-btn class="flex-grow-1" height="56" variant="tonal" color="primary" :prepend-icon="mdiArrowCollapseUp" :disabled="disabled"
+      <v-btn class="flex-grow-1" height="56" variant="tonal" color="primary" prepend-icon="collapseUp" :disabled="disabled"
              @click="emit('command', { type: 'cover.open' })">{{ $t('common.open') }}</v-btn>
-      <v-btn v-if="hasStop" class="flex-grow-1" height="56" variant="tonal" :prepend-icon="mdiStop" :disabled="disabled"
+      <v-btn v-if="hasStop" class="flex-grow-1" height="56" variant="tonal" prepend-icon="stop" :disabled="disabled"
              @click="emit('command', { type: 'cover.stop' })">{{ $t('common.stop') }}</v-btn>
-      <v-btn class="flex-grow-1" height="56" variant="tonal" color="primary" :prepend-icon="mdiArrowCollapseDown" :disabled="disabled"
+      <v-btn class="flex-grow-1" height="56" variant="tonal" color="primary" prepend-icon="collapseDown" :disabled="disabled"
              @click="emit('command', { type: 'cover.close' })">{{ $t('common.closeCover') }}</v-btn>
     </div>
     <div class="text-caption text-medium-emphasis">{{ $t('cover.position') }}</div>
-    <v-slider v-model="position" :min="0" :max="100" :step="5" :disabled="disabled" color="primary" show-ticks
+    <v-slider v-model="position" :min="0" :max="100" :step="5" :disabled="disabled" show-ticks
               @start="dragging = true" @end="(v: number) => { dragging = false; emit('command', { type: 'cover.set_position', position: Math.round(v) }) }" />
     <template v-if="hasTilt">
       <div class="text-caption text-medium-emphasis">{{ $t('cover.tilt') }} · {{ state.tilt ?? 0 }} %</div>
-      <v-slider :model-value="state.tilt ?? 0" :min="0" :max="100" :step="10" :disabled="disabled" color="secondary"
+      <v-slider :model-value="state.tilt ?? 0" :min="0" :max="100" :step="10" :disabled="disabled"
                 @end="(v: number) => emit('command', { type: 'cover.set_tilt', tilt: Math.round(v) })" />
     </template>
   </div>

@@ -1,6 +1,6 @@
 import 'vuetify/styles'
 import { createVuetify, type ThemeDefinition } from 'vuetify'
-import { aliases, mdi } from 'vuetify/iconsets/mdi-svg'
+import { aliases, strokeIcons } from './icons'
 
 // Thèmes Vuetify dérivés des jetons (styles/tokens.css) : 2 apparences × 4 accents. Les couleurs de
 // la SCÈNE 3D (scene*) vivent ici aussi et sont lues via --v-theme-* par Three.js (readVuetifyTheme).
@@ -64,12 +64,14 @@ export function accentColor(accent: AccentId, isDark: boolean): string {
 
 export const vuetify = createVuetify({
   theme: { defaultTheme: 'tealLight', themes: THEMES },
-  icons: { defaultSet: 'mdi', aliases, sets: { mdi } },
+  icons: { defaultSet: 'stroke', aliases, sets: { stroke: strokeIcons } },
+  // Les couleurs passent par les props (les jetons CSS sont acceptés tels quels) plutôt que par des
+  // surcharges CSS visant les classes internes de Vuetify : voir styles/app.css.
   defaults: {
     VBtn: { rounded: 'pill' },
     VCard: { rounded: 'xl', flat: true },
-    VSlider: { thumbSize: 22, trackSize: 6, hideDetails: true },
-    VSwitch: { inset: true, hideDetails: true, color: 'primary' },
+    VSlider: { thumbSize: 22, trackSize: 6, hideDetails: true, trackFillColor: 'primary', thumbColor: 'primary', trackColor: 'var(--line)' },
+    VSwitch: { inset: true, hideDetails: true, color: 'primary', baseColor: 'var(--line)' },
     VChip: { rounded: 'pill' },
   },
 })

@@ -113,7 +113,7 @@ function commit(id: string, v: number) {
             <v-switch :model-value="r.on" :disabled="!r.available" density="compact" hide-details class="row__switch"
                       @update:model-value="devices.sendCommand(r.id, { type: 'light.set', on: !r.on })" />
             <v-slider v-if="r.brightness !== undefined && r.on" :model-value="level(r)" :min="1" :max="100" :step="1"
-                      density="compact" hide-details color="warning" class="row__slider"
+                      density="compact" hide-details class="row__slider"
                       @update:model-value="(v: number) => drag(r.id, v)" @end="(v: number) => commit(r.id, v)" />
           </div>
         </section>
