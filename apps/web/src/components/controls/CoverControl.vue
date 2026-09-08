@@ -1,37 +1,110 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { CommandInput, DeviceDescriptor, StateFor } from '@kasbah/shared'
+import { fromClosure, toClosure } from '../../lib/cover'
+import { useDevicesStore } from '../../stores/devices'
+import PulseDot from '../ui/PulseDot.vue'
+import StrokeIcon from '../ui/StrokeIcon.vue'
 
+// Contrôle d'un ouvrant dans le panneau appareil. Le pourcentage est une FERMETURE (0 % = ouvert),
+// voir `lib/cover.ts` — le grand nombre en tête du panneau suit la même convention, donc ce
+// contrôle ne le répète pas.
+//
+// Le curseur affiche la POSITION VISÉE tant que le store la tient (`targetPosition`) : un moteur qui
+// ne publie sa position qu'à la fin de la course ferait sinon sauter la poignée en arrière juste
+// après le geste. Si l'ouvrant s'arrête ailleurs, le store abandonne la cible et le curseur revient
+// tout seul à la réalité.
 const props = defineProps<{ descriptor: DeviceDescriptor; state: StateFor<'cover'>; pending?: boolean; disabled?: boolean }>()
 const emit = defineEmits<{ command: [cmd: CommandInput] }>()
-const position = ref(props.state.position)
+
+const devices = useDevicesStore()
+const { t } = useI18n()
 const dragging = ref(false)
-watch(() => props.state.position, (v) => { if (!dragging.value) position.value = v })
+const drag = ref(0)
+
+// la cible n'est qu'une surcouche : sans elle, l'état reçu en prop fait foi
+const target = computed(() => devices.targetPosition(props.descriptor.id))
+const shown = computed(() => toClosure(target.value ?? props.state.position))
+const closure = computed(() => (dragging.value ? drag.value : shown.value))
+watch(shown, (v) => { if (!dragging.value) drag.value = v }, { immediate: true })
+
+const moving = computed(() => props.state.motion !== 'stopped')
+/**
+ * Texte de la ligne d'état : le mouvement quand il y en a un, sinon « Ouvert » / « Fermé » aux
+ * extrêmes, sinon le nom du réglage. Jamais le pourcentage — il est déjà au bout de la ligne.
+ */
+const lineText = computed(() => {
+  if (moving.value) return t(`cover.${props.state.motion}`)
+  if (shown.value <= 0) return t('cover.open')
+  if (shown.value >= 100) return t('cover.closed')
+  return t('cover.closure')
+})
+const hasPosition = props.descriptor.capabilities.includes('position')
 const hasTilt = props.descriptor.capabilities.includes('tilt')
 const hasStop = props.descriptor.capabilities.includes('stop')
+
+function send(cmd: CommandInput) { emit('command', cmd) }
 </script>
 
 <template>
-  <div>
-    <div class="d-flex align-center justify-space-between mb-2">
-      <span class="text-h5 font-weight-medium">{{ Math.round(position) }} %</span>
-      <v-chip size="small" :color="state.motion === 'stopped' ? undefined : 'primary'" variant="tonal">{{ $t(`cover.${state.motion}`) }}</v-chip>
+  <div class="cover">
+    <div class="cover__keys">
+      <button type="button" class="key" :disabled="disabled" @click="send({ type: 'cover.open' })">
+        <StrokeIcon name="collapseUp" :size="16" /><span>{{ $t('common.open') }}</span>
+      </button>
+      <button v-if="hasStop" type="button" class="key" :disabled="disabled" @click="send({ type: 'cover.stop' })">
+        <StrokeIcon name="stop" :size="16" /><span>{{ $t('common.stop') }}</span>
+      </button>
+      <button type="button" class="key" :disabled="disabled" @click="send({ type: 'cover.close' })">
+        <StrokeIcon name="collapseDown" :size="16" /><span>{{ $t('common.closeCover') }}</span>
+      </button>
     </div>
-    <div class="d-flex ga-2 mb-3">
-      <v-btn class="flex-grow-1" height="56" variant="tonal" color="primary" prepend-icon="collapseUp" :disabled="disabled"
-             @click="emit('command', { type: 'cover.open' })">{{ $t('common.open') }}</v-btn>
-      <v-btn v-if="hasStop" class="flex-grow-1" height="56" variant="tonal" prepend-icon="stop" :disabled="disabled"
-             @click="emit('command', { type: 'cover.stop' })">{{ $t('common.stop') }}</v-btn>
-      <v-btn class="flex-grow-1" height="56" variant="tonal" color="primary" prepend-icon="collapseDown" :disabled="disabled"
-             @click="emit('command', { type: 'cover.close' })">{{ $t('common.closeCover') }}</v-btn>
+
+    <!-- UNE seule ligne, de hauteur constante : le point garde sa place même éteint, le texte
+         occupe le milieu et le pourcentage reste collé à droite. Une ligne qui apparaît et
+         disparaît décalerait tout ce qui suit à chaque mouvement. -->
+    <div class="line" :data-moving="moving ? '1' : '0'">
+      <PulseDot :on="moving" />
+      <span class="line__text">{{ lineText }}</span>
+      <span v-if="hasPosition" class="line__pct">{{ Math.round(closure) }} %</span>
     </div>
-    <div class="text-caption text-medium-emphasis">{{ $t('cover.position') }}</div>
-    <v-slider v-model="position" :min="0" :max="100" :step="5" :disabled="disabled" show-ticks
-              @start="dragging = true" @end="(v: number) => { dragging = false; emit('command', { type: 'cover.set_position', position: Math.round(v) }) }" />
+
+    <v-slider v-if="hasPosition" v-model="drag" :min="0" :max="100" :step="5" :disabled="disabled"
+              density="compact" hide-details
+              @start="dragging = true"
+              @end="(v: number) => { dragging = false; send({ type: 'cover.set_position', position: fromClosure(Math.round(v)) }) }" />
+
     <template v-if="hasTilt">
-      <div class="text-caption text-medium-emphasis">{{ $t('cover.tilt') }} · {{ state.tilt ?? 0 }} %</div>
+      <!-- même gabarit que la ligne ci-dessus : les deux pourcentages s'alignent -->
+      <div class="line">
+        <PulseDot :on="false" />
+        <span class="line__text">{{ $t('cover.tilt') }}</span>
+        <span class="line__pct">{{ state.tilt ?? 0 }} %</span>
+      </div>
       <v-slider :model-value="state.tilt ?? 0" :min="0" :max="100" :step="10" :disabled="disabled"
-                @end="(v: number) => emit('command', { type: 'cover.set_tilt', tilt: Math.round(v) })" />
+                density="compact" hide-details
+                @end="(v: number) => send({ type: 'cover.set_tilt', tilt: Math.round(v) })" />
     </template>
   </div>
 </template>
+
+<style scoped>
+.cover { display: grid; gap: 2px; }
+.cover__keys { display: flex; gap: 6px; }
+.line { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin-top: 10px; }
+.line[data-moving='1'] { color: var(--accent); }
+.line__text { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* chiffres a largeur fixe : le pourcentage ne fremit pas quand il change */
+.line__pct { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+/* `min-width: 0` est indispensable : trois boutons à largeur minimale par défaut débordent des
+   340 px du panneau. */
+.key {
+  flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 5px;
+  height: 40px; padding: 0 6px; border-radius: 10px; border: 1px solid var(--line);
+  background: transparent; color: var(--text); font-size: 12px; font-weight: 500;
+  white-space: nowrap; overflow: hidden;
+}
+.key:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.key:disabled { opacity: .4; }
+</style>

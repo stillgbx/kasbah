@@ -16,6 +16,9 @@ export function optimisticPatch(state: DeviceState, cmd: CommandInput): Partial<
         ...(cmd.effect !== undefined ? { effect: cmd.effect } : {}),
       } as Partial<DeviceState>
     case 'cover':
+      // Le mouvement seulement : la POSITION visée ne s'écrit pas dans l'état, elle est tenue à
+      // part par le store (`coverTarget`). Un fabricant qui ne publie sa position qu'à la fin de
+      // la course réémettrait l'ancienne valeur et écraserait aussitôt une position optimiste.
       switch (cmd.type) {
         case 'cover.open': return { motion: state.position >= 100 ? 'stopped' : 'opening' } as Partial<DeviceState>
         case 'cover.close': return { motion: state.position <= 0 ? 'stopped' : 'closing' } as Partial<DeviceState>

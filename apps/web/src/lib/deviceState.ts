@@ -1,4 +1,5 @@
 import type { CommandInput, DeviceDescriptor, DeviceState } from '@kasbah/shared'
+import { toClosure } from './cover'
 import { formatPercent, formatPower, formatSensor, formatTemp } from './format'
 
 // Lecture « métier » d'un état : actif ?, bascule rapide possible ?, libellé court traduit.
@@ -20,11 +21,46 @@ export function isDeviceOn(s: DeviceState): boolean {
   }
 }
 
-/** Commande de bascule rapide (interrupteur des listes), ou null si l'appareil n'en a pas. */
-export function toggleCommand(s: DeviceState): CommandInput | null {
+/**
+ * Valeur AFFICHÉE par l'interrupteur, qui n'est pas toujours « l'appareil est actif ».
+ * Pour un ouvrant, la convention de l'interface est la fermeture (coché = fermé), alignée sur celle
+ * du curseur — voir `cover.ts`. `isDeviceOn` reste inchangé : il sert à la teinte de l'icône, au
+ * comptage des appareils actifs d'une pièce et aux marqueurs 3D, où un volet OUVERT est l'actif.
+ *
+ * `aimed` : position VISÉE quand le store en tient une. L'interrupteur bascule alors tout de suite,
+ * comme le curseur — sinon il resterait dans son ancien état pendant les ~20 s de course avant de
+ * sauter à la fin, alors que le geste a bien été pris en compte.
+ */
+export function toggleChecked(s: DeviceState, aimed?: number): boolean {
+  if (s.kind === 'cover') return s.available && (aimed ?? s.position) <= 0
+  return isDeviceOn(s)
+}
+
+/**
+ * L'appareil est-il OCCUPÉ à exécuter ce qu'on lui a demandé ? À ne pas confondre avec « une
+ * requête est en vol » : un fabricant acquitte en quelques dizaines de millisecondes, et un
+ * indicateur qui ne dure que ça n'est pas lisible. Pour un ouvrant, la commande n'est que le
+ * début — l'occupation court jusqu'à la fin de la course.
+ *
+ * `aiming` : une position est visée mais le moteur n'a pas encore signalé qu'il démarre (le store
+ * tient cette cible, voir `stores/devices.ts`).
+ */
+export function isDeviceBusy(s: DeviceState, aiming = false): boolean {
+  if (s.kind === 'cover') return aiming || s.motion !== 'stopped'
+  return false
+}
+
+/**
+ * Commande de bascule rapide (interrupteur des listes), ou null si l'appareil n'en a pas.
+ *
+ * `aimed` : position visée quand le store en tient une. Sans elle, un ouvrant en pleine fermeture
+ * garde sa position réelle de départ, donc la bascule renverrait ENCORE « fermer » — impossible
+ * d'inverser un mouvement en cours. On raisonne donc sur ce que l'interface montre.
+ */
+export function toggleCommand(s: DeviceState, aimed?: number): CommandInput | null {
   switch (s.kind) {
     case 'light': return { type: 'light.set', on: !s.on }
-    case 'cover': return s.position > 0 ? { type: 'cover.close' } : { type: 'cover.open' }
+    case 'cover': return (aimed ?? s.position) > 0 ? { type: 'cover.close' } : { type: 'cover.open' }
     case 'media_player': return s.playback === 'playing' ? { type: 'media_player.pause' } : { type: 'media_player.play' }
     case 'vacuum': return s.activity === 'cleaning' ? { type: 'vacuum.dock' } : { type: 'vacuum.start' }
     case 'mower': return s.activity === 'mowing' ? { type: 'mower.park', untilNextSchedule: true } : { type: 'mower.start', durationMin: 60 }
@@ -39,7 +75,10 @@ export function statusLabel(descriptor: DeviceDescriptor, s: DeviceState, t: Tra
   if (!s.available) return t('common.unavailable')
   switch (s.kind) {
     case 'light': return s.on ? `${t('common.on')}${s.brightness !== undefined ? ` · ${formatPercent(s.brightness, locale)}` : ''}` : t('common.off')
-    case 'cover': return s.position <= 0 ? t('cover.closed') : s.position >= 100 ? t('cover.open') : formatPercent(s.position, locale)
+    // en mouvement, la position est en train d'être quittée : annoncer le mouvement évite un
+    // « Ouvert » affiché à côté d'un curseur déjà posé sur la fermeture visée
+    case 'cover': return s.motion !== 'stopped' ? t(`cover.${s.motion}`)
+      : s.position <= 0 ? t('cover.closed') : s.position >= 100 ? t('cover.open') : formatPercent(toClosure(s.position), locale)
     case 'media_player': return s.playback === 'playing' ? `${t('media.playing')}${s.nowPlaying ? ` · ${s.nowPlaying.title}` : ''}` : t(`media.${s.playback}`)
     case 'climate': return `${formatTemp(s.currentTempC, locale)} → ${formatTemp(s.targetTempC, locale)}`
     case 'vacuum': return `${t(`vacuum.activities.${s.activity}`)} · ${formatPercent(s.battery, locale)}`
@@ -55,7 +94,7 @@ export function statusLabel(descriptor: DeviceDescriptor, s: DeviceState, t: Tra
 export function headlineValue(descriptor: DeviceDescriptor, s: DeviceState, t: Translate, locale: string): string {
   switch (s.kind) {
     case 'light': return s.on ? (s.brightness !== undefined ? formatPercent(s.brightness, locale) : t('common.on')) : t('common.off')
-    case 'cover': return formatPercent(s.position, locale)
+    case 'cover': return formatPercent(toClosure(s.position), locale)
     case 'media_player': return s.nowPlaying?.title ?? t(`media.${s.playback}`)
     case 'climate': return formatTemp(s.currentTempC, locale)
     case 'vacuum': return t(`vacuum.activities.${s.activity}`)

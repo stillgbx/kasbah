@@ -116,7 +116,7 @@ export const useHouseStore = defineStore('house', () => {
     try { house.value = await getTransport().setRoomOrder(levelId, roomIds) }
     catch (err) {
       house.value = prev
-      useNotificationsStore().error(t('lights.orderError', { message: (err as Error).message }))
+      useNotificationsStore().error(t('rooms.orderError', { message: (err as Error).message }))
     }
   }
 

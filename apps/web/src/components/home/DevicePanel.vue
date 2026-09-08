@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CommandInput } from '@kasbah/shared'
 import { useDeviceResolver } from '../../composables/useDeviceResolver'
-import { headlineValue, isDeviceOn, toggleCommand } from '../../lib/deviceState'
+import { headlineValue, isDeviceBusy, isDeviceOn, toggleChecked, toggleCommand } from '../../lib/deviceState'
 import { kindIcon } from '../../lib/strokeIcons'
 import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
@@ -25,8 +25,29 @@ const crumb = computed(() => {
   return (hd.roomId ? house.index?.roomsById.get(hd.roomId)?.name : hd.zoneId ? house.index?.zonesById.get(hd.zoneId)?.name : null) ?? t('nav.home')
 })
 const on = computed(() => !!resolved.value?.state && isDeviceOn(resolved.value.state))
-const toggle = computed(() => (resolved.value?.state ? toggleCommand(resolved.value.state) : null))
-const headline = computed(() => (resolved.value?.descriptor && resolved.value.state ? headlineValue(resolved.value.descriptor, resolved.value.state, t, locale.value) : ''))
+const pending = computed(() => !!resolved.value?.deviceId && devices.isPending(resolved.value.deviceId))
+/** Position visée quand le store en tient une : elle gouverne TOUT ce qui affiche cet ouvrant. */
+const aimed = computed(() => (resolved.value?.deviceId ? devices.targetPosition(resolved.value.deviceId) : undefined))
+
+/** Requête en vol OU appareil encore occupé (une course de volet dure ~20 s, voir `isDeviceBusy`). */
+const busy = computed(() => pending.value
+  || (!!resolved.value?.state && isDeviceBusy(resolved.value.state, aimed.value !== undefined)))
+/** Valeur de l'interrupteur : pour un ouvrant, coché = FERMÉ (cf. `lib/cover.ts`), cible comprise. */
+const checked = computed(() => !!resolved.value?.state && toggleChecked(resolved.value.state, aimed.value))
+/** Commande d'un clic sur l'interrupteur : dérivée de la cible, donc capable d'INVERSER une course. */
+const toggle = computed(() => (resolved.value?.state ? toggleCommand(resolved.value.state, aimed.value) : null))
+const headline = computed(() => {
+  const r = resolved.value
+  if (!r?.descriptor || !r.state) return ''
+  // pour un ouvrant, la grande valeur suit la POSITION VISÉE, comme le curseur juste en dessous :
+  // les deux se contrediraient sinon pendant toute la course
+  const state = r.state
+  if (state.kind === 'cover' && r.deviceId) {
+    const target = devices.targetPosition(r.deviceId)
+    if (target !== undefined) return headlineValue(r.descriptor, { ...state, position: target }, t, locale.value)
+  }
+  return headlineValue(r.descriptor, state, t, locale.value)
+})
 /** Déplaçable : dans le JSON ou auto-placé, hors volets (ancrés à une ouverture) et tondeuse (position publiée). */
 const placeable = computed(() => {
   const hd = resolved.value?.houseDevice
@@ -52,8 +73,13 @@ function send(cmd: CommandInput) {
           <span v-if="resolved.state && !resolved.state.available" class="text-error"> · {{ $t('common.unavailable') }}</span>
         </div>
       </div>
-      <v-progress-circular v-if="resolved.deviceId && devices.isPending(resolved.deviceId)" indeterminate size="20" width="2" color="primary" />
-      <v-switch v-else-if="toggle" :model-value="on" :disabled="!resolved.state?.available" @update:model-value="send(toggle!)" />
+      <!-- empreinte FIXE : le spinner (20 px) remplace l'interrupteur (52 x 56) le temps de
+           l'aller-retour serveur, et sans cette réserve l'en-tête se retracte et pousse tout
+           le panneau vers le haut -->
+      <div v-if="toggle || busy" class="head__toggle">
+        <v-progress-circular v-if="busy" indeterminate size="20" width="2" color="primary" />
+        <v-switch v-else-if="toggle" :model-value="checked" :disabled="!resolved.state?.available" @update:model-value="send(toggle!)" />
+      </div>
     </div>
     <div v-if="headline" class="big-value">{{ headline }}</div>
     <DeviceControl v-if="resolved.descriptor && resolved.state" :descriptor="resolved.descriptor" :state="resolved.state"
@@ -71,5 +97,6 @@ function send(cmd: CommandInput) {
 .head__name { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
 .head__sub { font-size: 12px; }
 .icon-square--lg { width: 44px; height: 44px; border-radius: 12px; }
+.head__toggle { flex: 0 0 52px; height: 56px; display: grid; place-items: center; }
 .unbound { padding: 12px 14px; font-size: 13px; }
 </style>

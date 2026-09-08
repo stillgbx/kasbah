@@ -2,13 +2,14 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { HouseDevice } from '@kasbah/shared'
-import { isDeviceOn, statusLabel, toggleCommand } from '../../lib/deviceState'
+import { isDeviceBusy, isDeviceOn, statusLabel, toggleChecked, toggleCommand } from '../../lib/deviceState'
 import { kindIcon } from '../../lib/strokeIcons'
 import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
 import { useScenesStore } from '../../stores/scenes'
 import SceneChips from '../scenes/SceneChips.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
+import PulseDot from '../ui/PulseDot.vue'
 
 // Panneau « pièce » (ou zone du jardin) : fil d'Ariane, titre, appareils avec bascule rapide.
 const emit = defineEmits<{ back: [] }>()
@@ -30,10 +31,16 @@ const target = computed(() => {
 function row(d: HouseDevice) {
   const descriptor = d.deviceId ? devices.descriptors[d.deviceId] : undefined
   const state = d.deviceId ? devices.states[d.deviceId] : undefined
-  const toggle = state ? toggleCommand(state) : null
+  const aimed = d.deviceId ? devices.targetPosition(d.deviceId) : undefined
+  const toggle = state ? toggleCommand(state, aimed) : null
   return {
     key: d.id, name: d.name ?? descriptor?.name ?? d.id, icon: kindIcon(descriptor?.kind ?? d.kind, descriptor),
     on: !!state && isDeviceOn(state),
+    // `on` teinte l'icône (un volet OUVERT est l'actif), `checked` est la valeur de
+    // l'interrupteur (un volet FERMÉ est coché) — voir `lib/cover.ts`. La cible tenue par le store
+    // entre dans `checked` : l'interrupteur bascule au geste, pas à la fin de la course.
+    checked: !!state && toggleChecked(state, aimed),
+    busy: !!state && isDeviceBusy(state, aimed !== undefined),
     status: descriptor && state ? statusLabel(descriptor, state, t, locale.value) : t('device.unbound', { id: d.deviceId ?? '—' }),
     toggle, deviceId: d.deviceId, available: state?.available ?? false,
   }
@@ -56,9 +63,9 @@ const roomScenes = computed(() => (target.value ? scenes.forRoom(target.value.na
         <span class="icon-square" :data-on="r.on ? '1' : '0'"><StrokeIcon :name="r.icon" :size="18" /></span>
         <div class="dev-row__main">
           <div class="dev-row__name">{{ r.name }}</div>
-          <div class="dev-row__status">{{ r.status }}</div>
+          <div class="dev-row__status"><PulseDot :on="r.busy" class="dev-row__dot" />{{ r.status }}</div>
         </div>
-        <v-switch v-if="r.toggle && r.deviceId" :model-value="r.on" :disabled="!r.available" class="dev-row__switch"
+        <v-switch v-if="r.toggle && r.deviceId" :model-value="r.checked" :disabled="!r.available" class="dev-row__switch"
                   @click.stop @update:model-value="devices.sendCommand(r.deviceId!, r.toggle!)" />
         <StrokeIcon v-else name="chevron" :size="18" class="muted" />
       </div>
@@ -80,5 +87,6 @@ const roomScenes = computed(() => (target.value ? scenes.forRoom(target.value.na
 .dev-row__main { flex: 1 1 0; min-width: 0; }
 .dev-row__name { font-weight: 500; font-size: 14px; }
 .dev-row__status { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dev-row__dot { margin-right: 6px; color: var(--accent); }
 .dev-row__switch { flex: 0 0 auto; }
 </style>

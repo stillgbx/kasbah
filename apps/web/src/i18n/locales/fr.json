@@ -1,6 +1,6 @@
 {
   "app": { "name": "Kasbah" },
-  "nav": { "main": "Navigation", "home": "Maison", "energy": "Énergie", "vehicles": "Véhicules", "settings": "Réglages", "lights": "Lumières" },
+  "nav": { "main": "Navigation", "home": "Maison", "energy": "Énergie", "vehicles": "Véhicules", "settings": "Réglages", "lights": "Lumières", "covers": "Ouvrants" },
   "common": {
     "close": "Fermer", "back": "Retour", "retry": "Réessayer", "all": "Tout", "none": "Aucun", "unavailable": "Indisponible",
     "loading": "Chargement de la maison…", "on": "Allumé", "off": "Éteint", "open": "Ouvrir", "stop": "Stop", "closeCover": "Fermer",
@@ -44,17 +44,22 @@
     "stopAnimate": "Arrêter l'animation", "turnOff": "Éteindre {name}"
   },
   "lights": {
-    "summary": "{on} allumées sur {total}", "none": "Aucune lampe remontée par les plugins.",
+    "summary": "{on} allumées sur {total}", "none": "Aucune lampe remontée par les plugins."
+  },
+  "covers": {
+    "summary": "{open} ouverts sur {total}", "none": "Aucun ouvrant remonté par les plugins."
+  },
+  "rooms": {
     "noRoom": "Sans pièce", "notInHouse": "Hors maison",
     "reorder": "Réordonner (glisser)", "orderError": "Ordre non enregistré : {message}",
     "dangling": "Liaisons mortes", "danglingHint": "Le JSON pointe vers un id qu'aucun plugin ne remonte",
     "origins": {
-      "json": "Placée", "jsonHint": "Position définie dans house.json",
-      "auto": "Auto", "autoHint": "Rattachée automatiquement à la pièce qui porte le nom de la pièce du plugin",
-      "unplaced": "Non placée", "unplacedHint": "Aucune pièce de la maison ne porte le nom de la pièce du plugin : absente de la scène 3D"
+      "json": "Dans le plan", "jsonHint": "Position définie dans house.json",
+      "auto": "Auto", "autoHint": "Rattachement automatique à la pièce qui porte le nom de la pièce du plugin",
+      "unplaced": "Hors plan", "unplacedHint": "Aucune pièce de la maison ne porte le nom de la pièce du plugin : absente de la scène 3D"
     }
   },
-  "cover": { "position": "Ouverture", "opening": "Ouverture en cours", "closing": "Fermeture en cours", "stopped": "À l'arrêt", "tilt": "Inclinaison", "closed": "Fermé", "open": "Ouvert" },
+  "cover": { "closure": "Fermeture", "opening": "Ouverture en cours", "closing": "Fermeture en cours", "stopped": "À l'arrêt", "tilt": "Inclinaison", "closed": "Fermé", "open": "Ouvert" },
   "media": { "volume": "Volume", "mute": "Muet", "nothing": "Rien en lecture", "playing": "En lecture", "paused": "En pause", "idle": "Inactif", "off": "Éteint" },
   "climate": {
     "target": "Consigne", "current": "Mesuré", "humidity": "Humidité", "mode": "Mode",

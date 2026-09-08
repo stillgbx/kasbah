@@ -7,6 +7,7 @@ export const router = createRouter({
   routes: [
     { path: '/', name: 'home', component: () => import('../views/HomeView.vue') },
     { path: '/lights', name: 'lights', component: () => import('../views/LightsView.vue') },
+    { path: '/covers', name: 'covers', component: () => import('../views/CoversView.vue') },
     { path: '/energy', name: 'energy', component: () => import('../views/EnergyView.vue') },
     { path: '/vehicles', name: 'vehicles', component: () => import('../views/VehiclesView.vue') },
     { path: '/settings', name: 'settings', component: () => import('../views/SettingsView.vue') },

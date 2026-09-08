@@ -1,6 +1,6 @@
 {
   "app": { "name": "Kasbah" },
-  "nav": { "main": "Navigation", "home": "Home", "energy": "Energy", "vehicles": "Vehicles", "settings": "Settings", "lights": "Lights" },
+  "nav": { "main": "Navigation", "home": "Home", "energy": "Energy", "vehicles": "Vehicles", "settings": "Settings", "lights": "Lights", "covers": "Covers" },
   "common": {
     "close": "Close", "back": "Back", "retry": "Retry", "all": "All", "none": "None", "unavailable": "Unavailable",
     "loading": "Loading house…", "on": "On", "off": "Off", "open": "Open", "stop": "Stop", "closeCover": "Close",
@@ -44,7 +44,12 @@
     "stopAnimate": "Stop the animation", "turnOff": "Turn off {name}"
   },
   "lights": {
-    "summary": "{on} on out of {total}", "none": "No light reported by the plugins.",
+    "summary": "{on} on out of {total}", "none": "No light reported by the plugins."
+  },
+  "covers": {
+    "summary": "{open} open out of {total}", "none": "No cover reported by the plugins."
+  },
+  "rooms": {
     "noRoom": "No room", "notInHouse": "Not in the house",
     "reorder": "Reorder (drag)", "orderError": "Order not saved: {message}",
     "dangling": "Dead bindings", "danglingHint": "The JSON points at an id no plugin reports",
@@ -54,7 +59,7 @@
       "unplaced": "Unplaced", "unplacedHint": "No house room is named like the plugin room: absent from the 3D scene"
     }
   },
-  "cover": { "position": "Opening", "opening": "Opening", "closing": "Closing", "stopped": "Stopped", "tilt": "Tilt", "closed": "Closed", "open": "Open" },
+  "cover": { "closure": "Closure", "opening": "Opening", "closing": "Closing", "stopped": "Stopped", "tilt": "Tilt", "closed": "Closed", "open": "Open" },
   "media": { "volume": "Volume", "mute": "Mute", "nothing": "Nothing playing", "playing": "Playing", "paused": "Paused", "idle": "Idle", "off": "Off" },
   "climate": {
     "target": "Target", "current": "Measured", "humidity": "Humidity", "mode": "Mode",
