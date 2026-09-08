@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { DEVICES, GROUPED_LIGHTS, LIGHTS, ROOMS, SCENES, ZIGBEE, ZONES } from './__fixtures__/bridge'
 import {
   connectivityToAvailability, indexResources, sceneStatusToActive, toDescriptor, toGroupDescriptor, toLightPatch,
-  sceneTargetLights, toPutBody, toSceneDescriptor, toSceneRecallBody,
+  sceneTargetLights, toCreatePalette, toCreateSceneBody, toPutBody, toSceneDescriptor, toSceneRecallBody,
 } from './mapping'
 import { hueDeviceSchema, hueGroupedLightSchema, hueLightSchema, hueRoomSchema, hueSceneSchema, hueZigbeeConnectivitySchema } from './types'
 
@@ -84,6 +84,30 @@ describe('hue mapping', () => {
       .toEqual({ recall: { action: 'dynamic_palette', dimming: { brightness: 60 }, duration: 800 } })
     expect(sceneTargetLights(scenes[0]!)).toEqual(['l-color', 'l-white'])
     expect(sceneTargetLights({ ...scenes[0]!, actions: [] })).toEqual([])
+  })
+  it('create body: palette copied as-is, actions distributed over the room lights', () => {
+    const group = { rid: 'r-living', rtype: 'room' }
+    // la source n'a qu'une action, la pièce a trois lampes : on boucle
+    const body = toCreateSceneBody(scenes[1]!, group, [lights[0]!, lights[1]!, lights[2]!])
+    expect(body.metadata).toEqual({ name: 'Crépuscule tropical' })
+    // le pont refuse `effects` ET `effects_v2` ensemble, même vides : on n'en garde aucune
+    expect(body.palette).toEqual({
+      color: scenes[1]!.palette!.color, dimming: [], color_temperature: [],
+    })
+    expect(body.palette).not.toHaveProperty('effects_v2')
+    // une liste d'effets non vide est conservée, seule
+    const withEffects = { ...scenes[1]!, palette: { ...scenes[1]!.palette!, effects_v2: [{ effect: 'candle' }] } }
+    expect(toCreatePalette(withEffects.palette)).toMatchObject({ effects_v2: [{ effect: 'candle' }] })
+    expect(toCreatePalette(withEffects.palette)).not.toHaveProperty('effects')
+    expect(body.actions.map((a) => a.target.rid)).toEqual(['l-color', 'l-white', 'l-plain'])
+    // couleur pour la lampe couleur, rien de coloré pour les autres
+    expect(body.actions[0]!.action).toMatchObject({ color: { xy: { x: 0.4731, y: 0.3723 } } })
+    expect(body.actions[1]!.action).not.toHaveProperty('color')
+    expect(body.actions[2]!.action).toEqual({ on: { on: true } })   // ni intensité ni couleur
+    // source en température : la lampe sans couleur la reçoit, bornée à sa plage
+    const ct = toCreateSceneBody(scenes[0]!, group, [lights[1]!])
+    expect(ct.actions[0]!.action).toMatchObject({ color_temperature: { mirek: 400 } })
+    expect(toCreateSceneBody(scenes[0]!, group, []).actions).toEqual([])
   })
   it('zigbee connectivity → availability per light', () => {
     const z = ZIGBEE.map((x) => hueZigbeeConnectivitySchema.parse(x))

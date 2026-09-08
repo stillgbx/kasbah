@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { PluginHealth } from '@kasbah/shared'
 import PageHeader from '../components/layout/PageHeader.vue'
+import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import HuePairingCard from '../components/HuePairingCard.vue'
 import Segmented from '../components/ui/Segmented.vue'
 import { LOCALE_LABELS } from '../i18n'
@@ -19,6 +20,20 @@ const devices = useDevicesStore()
 const house = useHouseStore()
 const { t } = useI18n()
 onMounted(() => { void devices.refreshHealth(); void scenes.loadPluginSettings() })
+
+// Suppression d'une ambiance : premier appui arme, second confirme, et on désarme tout seul.
+const armed = ref<string | null>(null)
+let armTimer: ReturnType<typeof setTimeout> | null = null
+function arm(sceneId: string) {
+  armed.value = sceneId
+  if (armTimer) clearTimeout(armTimer)
+  armTimer = setTimeout(() => { armed.value = null }, 5000)
+}
+function confirmDelete(sceneId: string) {
+  armed.value = null
+  if (armTimer) clearTimeout(armTimer)
+  void scenes.deleteScene(sceneId)
+}
 
 const appearanceOptions = computed(() => settings.appearances.map((a) => ({ value: a, label: t(`settings.${a}`) })))
 const localeOptions = computed(() => [{ value: '', label: t('settings.auto') }, ...settings.locales.map((l) => ({ value: l as string, label: LOCALE_LABELS[l] }))])
@@ -60,9 +75,9 @@ const houseStats = computed(() => {
             <div class="mono">{{ gps }}</div>
             <div class="muted small">{{ houseStats }}</div>
           </section>
-          <section v-for="g in scenes.animatedByPlugin" :key="g.pluginId" class="card block">
+          <section v-for="g in scenes.scenesByPlugin" :key="g.pluginId" class="card block">
             <div class="block__head">
-              <div class="block__title">{{ $t('settings.sceneAutoDynamic') }}</div>
+              <div class="block__title">{{ $t('settings.scenes') }}</div>
               <div class="muted small plugin-tag">{{ g.pluginId.replace('_', ' ') }}</div>
             </div>
             <div class="auto-row auto-row--default">
@@ -80,8 +95,18 @@ const houseStats = computed(() => {
                   <div class="auto-row__name">{{ e.scene.name }}</div>
                   <div class="muted small">{{ e.scene.group?.name ?? '—' }}</div>
                 </div>
-                <v-switch :model-value="e.scene.autoDynamic" hide-details density="compact"
+                <v-switch :model-value="e.scene.autoDynamic" :disabled="!e.scene.dynamic" hide-details density="compact"
+                          :title="e.scene.dynamic ? $t('settings.sceneAutoDynamic') : $t('settings.sceneNoPalette')"
                           @update:model-value="(v: boolean | null) => scenes.setAutoDynamic(e.scene.id, v === true)" />
+                <!-- destructif et visible depuis l'app du fabricant : deux temps, jamais un seul appui -->
+                <v-btn v-if="armed === e.scene.id" color="error" variant="flat" size="small" class="del-confirm"
+                       @click="confirmDelete(e.scene.id)">
+                  {{ $t('scenes.deleteConfirm') }}
+                </v-btn>
+                <v-btn v-else icon variant="text" size="small" color="error" class="del"
+                       :title="$t('scenes.delete')" :aria-label="$t('scenes.delete')" @click="arm(e.scene.id)">
+                  <StrokeIcon name="trash" :size="16" />
+                </v-btn>
               </div>
             </div>
           </section>
@@ -119,6 +144,9 @@ const houseStats = computed(() => {
 .auto-rows { display: grid; gap: 2px; margin-top: 8px; }
 .auto-row { display: flex; align-items: center; gap: 12px; padding: 4px 0; border-top: 1px solid var(--line); }
 .auto-row--default { border-top: 0; margin-bottom: 4px; }
+.del { flex: 0 0 auto; color: var(--muted); }
+.del:hover { color: rgb(var(--v-theme-error)); }
+.del-confirm { flex: 0 0 auto; }
 .auto-row__name { font-size: 14px; font-weight: 500; }
 .min0 { flex: 1 1 0; min-width: 0; }
 

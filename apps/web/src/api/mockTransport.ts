@@ -69,6 +69,8 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     async getScenes() { return [] },
     async recallScene() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no vendor scenes in mock mode') },
     async updateScene() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no vendor scenes in mock mode') },
+    async createScene() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no vendor scenes in mock mode') },
+    async deleteScene() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no vendor scenes in mock mode') },
     async getPluginSettings() { return {} },
     async setPluginSettings(_pluginId, settings) { return settings },
     connect(h) {

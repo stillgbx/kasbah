@@ -86,7 +86,7 @@ const sceneIcon = (icon?: string): IconName => (icon === 'leave' || icon === 'ni
     </div>
   </section>
 
-  <SceneChips v-for="g in crossRoomGroups" :key="g.key" :scenes="g.scenes" :label="g.label" />
+  <SceneChips v-for="g in crossRoomGroups" :key="g.key" :scenes="g.scenes" :label="g.label" :add-to="g.key || undefined" />
 
   <section class="block">
     <div class="section-label">{{ $t('home.rooms') }}</div>

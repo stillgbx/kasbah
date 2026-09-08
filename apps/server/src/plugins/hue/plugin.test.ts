@@ -8,6 +8,9 @@ import type { FetchLike } from '../../core/sse'
 import { HueClient } from './client'
 import { createHuePlugin, hueConfigSchema } from './index'
 import { DEVICES, GROUPED_LIGHTS, LIGHTS, PAIR_101, PAIR_OK, ROOMS, SCENES, SSE_FRAME, ZIGBEE, ZONES } from './__fixtures__/bridge'
+import { hueSceneSchema } from './types'
+
+const scenes = () => SCENES.map((s) => hueSceneSchema.parse(s))
 
 const flush = () => new Promise((r) => setTimeout(r, 0))
 const json = (data: unknown, status = 200) => ({ ok: status < 400, status, body: null, json: async () => data, text: async () => JSON.stringify(data) })
@@ -15,11 +18,21 @@ const json = (data: unknown, status = 200) => ({ ok: status < 400, status, body:
 /** Faux bridge : sert les fixtures, journalise les PUT, laisse le flux SSE ouvert après une trame. */
 function fakeBridge(opts: { pairResponse?: unknown; lights?: unknown[] } = {}) {
   const puts: { url: string; body: unknown }[] = []
+  const posts: { url: string; body: unknown }[] = []
+  const deletes: string[] = []
   let sseController: ReadableStreamDefaultController<Uint8Array> | null = null
   const fetchImpl = vi.fn<FetchLike>(async (url, init) => {
     const path = url.replace(/^https:\/\/[^/]+/, '')
     if (init?.method === 'PUT') { puts.push({ url: path, body: JSON.parse(String(init.body)) }); return json({ data: [], errors: [] }) }
     if (path === '/api' && init?.method === 'POST') return json(opts.pairResponse ?? PAIR_101)
+    if (path.startsWith('/clip/v2/resource/') && init?.method === 'DELETE') {
+      deletes.push(path)
+      return json({ data: [{ rid: path.split('/').pop(), rtype: 'scene' }], errors: [] })
+    }
+    if (path.startsWith('/clip/v2/resource/') && init?.method === 'POST') {
+      posts.push({ url: path, body: JSON.parse(String(init.body)) })
+      return json({ data: [{ rid: 's-created', rtype: 'scene' }], errors: [] })
+    }
     if (path === '/eventstream/clip/v2') {
       const body = new ReadableStream<Uint8Array>({ start(c) { sseController = c; c.enqueue(new TextEncoder().encode(SSE_FRAME)) } })
       return { ok: true, status: 200, body, json: async () => ({}), text: async () => '' }
@@ -32,7 +45,7 @@ function fakeBridge(opts: { pairResponse?: unknown; lights?: unknown[] } = {}) {
     if (resource in table) return json({ errors: [], data: table[resource] })
     return json({ errors: [{ description: 'not found' }], data: [] }, 404)
   })
-  return { fetchImpl, puts, closeSse: () => sseController?.close() }
+  return { fetchImpl, puts, posts, deletes, closeSse: () => sseController?.close() }
 }
 
 function fakeContext(config: Record<string, unknown>, clock: ManualClock) {
@@ -123,6 +136,30 @@ describe('hue plugin', () => {
     expect(scenePuts).toContainEqual({ recall: { action: 'dynamic_palette' } })
     expect(scenePuts).toContainEqual({ auto_dynamic: false })
     await expect(plugin.updateScene!('nope', { autoDynamic: true })).rejects.toMatchObject({ code: 'DEVICE_UNAVAILABLE' })
+
+    // recopier une ambiance vers une pièce qui ne l'a pas : POST avec la palette de la source
+    await plugin.createScene!('s-tropical', 'Salon')
+    expect(bridge.posts).toHaveLength(1)
+    const created = bridge.posts[0]!.body as { metadata: { name: string }; group: { rid: string }; actions: unknown[]; palette: unknown }
+    expect(bridge.posts[0]!.url).toBe('/clip/v2/resource/scene')
+    expect(created.metadata.name).toBe('Crépuscule tropical')
+    expect(created.group).toEqual({ rid: 'r-living', rtype: 'room' })
+    expect(created.actions).toEqual([
+      { target: { rid: 'l-color', rtype: 'light' }, action: { on: { on: true }, dimming: { brightness: 44 }, color: { xy: { x: 0.4731, y: 0.3723 } } } },
+      // la deuxième lampe de la pièce ne fait pas la couleur : elle retombe sur l'intensité seule
+      { target: { rid: 'l-white', rtype: 'light' }, action: { on: { on: true }, dimming: { brightness: 44 } } },
+    ])
+    // palette recopiée sans les deux listes d'effets vides (le pont les refuse ensemble)
+    expect(created.palette).toEqual({ color: scenes()[1]!.palette!.color, dimming: [], color_temperature: [] })
+    // refus : ambiance déjà présente dans la pièce, pièce inconnue, source inconnue
+    await expect(plugin.createScene!('s-relax', 'Salon')).rejects.toMatchObject({ code: 'UNSUPPORTED_COMMAND' })
+    await expect(plugin.createScene!('s-tropical', 'Cuisine')).rejects.toMatchObject({ code: 'DEVICE_UNAVAILABLE' })
+    await expect(plugin.createScene!('nope', 'Salon')).rejects.toMatchObject({ code: 'DEVICE_UNAVAILABLE' })
+
+    // suppression chez le fabricant
+    await plugin.deleteScene!('s-relax')
+    expect(bridge.deletes).toEqual(['/clip/v2/resource/scene/s-relax'])
+    await expect(plugin.deleteScene!('nope')).rejects.toMatchObject({ code: 'DEVICE_UNAVAILABLE' })
     ctrl.abort()
     await plugin.stop()
   })

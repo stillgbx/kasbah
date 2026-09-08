@@ -80,6 +80,19 @@ export const sceneUpdateSchema = z.object({ autoDynamic: z.boolean() })
 export type SceneUpdate = z.infer<typeof sceneUpdateSchema>
 
 /**
+ * Création d'une ambiance pour un groupe (pièce ou zone) du fabricant, en RECOPIANT une ambiance
+ * déjà présente ailleurs : palette et valeurs viennent de la source, seules les lampes visées
+ * changent. Les fabricants ne publient pas leur galerie de préréglages (vérifié sur un pont Hue :
+ * aucune ressource catalogue), donc la seule matière fiable est ce que le pont porte déjà.
+ * `groupName` est rapproché comme partout ailleurs : par nom normalisé (`roomKey`).
+ */
+export const sceneCreateSchema = z.object({
+  fromSceneId: sceneIdSchema,
+  groupName: z.string().min(1),
+})
+export type SceneCreate = z.infer<typeof sceneCreateSchema>
+
+/**
  * Réglages d'un PLUGIN (pas d'une scène) : le concept de scène est commun, les réglages non — on
  * peut vouloir les palettes animées sur les lampes et pas sur un autre parc d'appareils. Vivent
  * côté serveur : ils gouvernent une réaction du serveur et valent pour toutes les tablettes.

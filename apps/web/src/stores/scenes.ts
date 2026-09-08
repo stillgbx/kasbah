@@ -39,6 +39,8 @@ export const useScenesStore = defineStore('scenes', () => {
   const pending = ref<Record<string, number>>({})
   /** Réglages par plugin, lus au serveur (pas dans la tablette : ils valent pour toutes). */
   const pluginSettings = shallowRef<Record<string, PluginSettings>>({})
+  /** Création d'ambiance en cours, par groupe. */
+  const creating = ref<Record<string, boolean>>({})
 
   const list = computed<PluginSceneEntry[]>(() =>
     Object.values(entries.value).sort((a, b) => a.scene.name.localeCompare(b.scene.name)),
@@ -109,19 +111,86 @@ export const useScenesStore = defineStore('scenes', () => {
   }
 
   /**
-   * Ambiances à palette animée, regroupées PAR PLUGIN : le concept est commun, les réglages non —
-   * on peut vouloir les palettes animées sur les lampes et pas sur un autre parc d'appareils.
+   * Ambiances présentes AILLEURS mais absentes de ce groupe : de quoi en ajouter une. Les
+   * fabricants ne publient pas leur galerie de préréglages (vérifié sur un pont Hue : aucune
+   * ressource catalogue), donc la matière est ce que le pont porte déjà. Une seule source par nom,
+   * en préférant celle qui a une palette animée : elle porte plus d'information à recopier.
    */
-  const animatedByPlugin = computed(() => {
+  const clonableFor = (groupName: string): PluginSceneEntry[] => {
+    const key = roomKey(groupName)
+    const here = new Set(list.value.filter((e) => e.scene.group && roomKey(e.scene.group.name) === key).map((e) => e.scene.name))
+    const byName = new Map<string, PluginSceneEntry>()
+    for (const e of list.value) {
+      if (here.has(e.scene.name)) continue
+      const prev = byName.get(e.scene.name)
+      if (!prev || (e.scene.dynamic && !prev.scene.dynamic)) byName.set(e.scene.name, e)
+    }
+    return [...byName.values()].sort((a, b) => a.scene.name.localeCompare(b.scene.name))
+  }
+
+  /** Crée l'ambiance chez le fabricant ; elle arrive ensuite par le message `scenes`. */
+  async function createScene(fromSceneId: string, groupName: string): Promise<boolean> {
+    const name = entries.value[fromSceneId]?.scene.name ?? fromSceneId
+    creating.value = { ...creating.value, [groupName]: true }
+    try {
+      await getTransport().createScene(fromSceneId, groupName)
+      return true
+    } catch (err) {
+      const n = useNotificationsStore()
+      if (err instanceof ApiRequestError) n.error(t(`errors.${err.code}`, { name, message: err.message }))
+      else n.error(t('errors.UNKNOWN', { name, message: (err as Error).message }))
+      return false
+    } finally {
+      const next = { ...creating.value }
+      delete next[groupName]
+      creating.value = next
+    }
+  }
+
+  const isCreating = (groupName: string) => creating.value[groupName] === true
+
+  /**
+   * Supprime l'ambiance CHEZ le fabricant : elle disparaît donc aussi de son app. On l'enlève tout
+   * de suite de l'affichage et on la remet si le fabricant refuse.
+   */
+  async function deleteScene(sceneId: string): Promise<boolean> {
+    const entry = entries.value[sceneId]
+    if (!entry) return false
+    const before = entries.value
+    const optimistic = { ...before }
+    delete optimistic[sceneId]
+    entries.value = optimistic
+    try {
+      await getTransport().deleteScene(sceneId)
+      return true
+    } catch (err) {
+      if (entries.value === optimistic) entries.value = before
+      const n = useNotificationsStore()
+      const name = entry.scene.name
+      if (err instanceof ApiRequestError) n.error(t(`errors.${err.code}`, { name, message: err.message }))
+      else n.error(t('errors.UNKNOWN', { name, message: (err as Error).message }))
+      return false
+    }
+  }
+
+  /**
+   * TOUTES les ambiances, regroupées PAR PLUGIN et rangées par groupe : c'est l'écran de gestion
+   * (réglage « démarrer animée », suppression). Le concept est commun aux plugins, les réglages non
+   * — on peut vouloir les palettes animées sur les lampes et pas sur un autre parc d'appareils.
+   */
+  const scenesByPlugin = computed(() => {
     const acc = new Map<string, PluginSceneEntry[]>()
     for (const e of list.value) {
-      if (!e.scene.dynamic) continue
       const arr = acc.get(e.scene.pluginId)
       if (arr) arr.push(e)
       else acc.set(e.scene.pluginId, [e])
     }
     return [...acc.entries()]
-      .map(([pluginId, scenes]) => ({ pluginId, scenes }))
+      .map(([pluginId, scenes]) => ({
+        pluginId,
+        scenes: [...scenes].sort((a, b) =>
+          (a.scene.group?.name ?? '').localeCompare(b.scene.group?.name ?? '') || a.scene.name.localeCompare(b.scene.name)),
+      }))
       .sort((a, b) => a.pluginId.localeCompare(b.pluginId))
   })
 
@@ -175,7 +244,8 @@ export const useScenesStore = defineStore('scenes', () => {
   }
 
   return {
-    entries, list, count, animatedByPlugin, pluginSettings, apply, setAll, forRoom, forHouse, recall, isPending,
+    entries, list, count, scenesByPlugin, pluginSettings, apply, setAll, forRoom, forHouse, recall, isPending,
     tapMode, setAutoDynamic, settingsOf, loadPluginSettings, setAutoDynamicForNewScenes,
+    clonableFor, createScene, isCreating, deleteScene,
   }
 })

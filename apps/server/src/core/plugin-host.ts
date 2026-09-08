@@ -138,6 +138,22 @@ export class PluginHost {
     await withTimeout(slot.plugin.updateScene(externalId, update), this.opts.commandTimeoutMs ?? 10_000, this.opts.clock, `update ${sceneId}`)
   }
 
+  async createScene(fromSceneId: string, groupName: string): Promise<void> {
+    const { pluginId, externalId } = parseSceneId(fromSceneId)
+    const slot = this.slots.get(pluginId)
+    if (!slot || !slot.config) throw new PluginError('DEVICE_UNAVAILABLE', `plugin "${pluginId}" is not enabled`)
+    if (!slot.plugin.createScene) throw new PluginError('NOT_IMPLEMENTED', `plugin "${pluginId}" cannot create scenes`)
+    await withTimeout(slot.plugin.createScene(externalId, groupName), this.opts.commandTimeoutMs ?? 10_000, this.opts.clock, `create scene in ${groupName}`)
+  }
+
+  async deleteScene(sceneId: string): Promise<void> {
+    const { pluginId, externalId } = parseSceneId(sceneId)
+    const slot = this.slots.get(pluginId)
+    if (!slot || !slot.config) throw new PluginError('DEVICE_UNAVAILABLE', `plugin "${pluginId}" is not enabled`)
+    if (!slot.plugin.deleteScene) throw new PluginError('NOT_IMPLEMENTED', `plugin "${pluginId}" cannot delete scenes`)
+    await withTimeout(slot.plugin.deleteScene(externalId), this.opts.commandTimeoutMs ?? 10_000, this.opts.clock, `delete ${sceneId}`)
+  }
+
   health(): Record<string, PluginHealth> {
     const out: Record<string, PluginHealth> = {}
     for (const [id, slot] of this.slots) {

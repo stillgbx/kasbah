@@ -74,6 +74,10 @@ export const hueSceneSchema = z.looseObject({
   palette: z.looseObject({
     color: z.array(z.looseObject({ color: z.looseObject({ xy: hueXySchema.optional() }).optional() })).default([]),
     color_temperature: z.array(z.looseObject({ color_temperature: hueMirekSchema.optional() })).default([]),
+    dimming: z.array(z.looseObject({})).default([]),
+    /** `effects` et `effects_v2` sont MUTUELLEMENT EXCLUSIFS, même vides (le pont refuse les deux). */
+    effects: z.array(z.looseObject({})).default([]),
+    effects_v2: z.array(z.looseObject({})).default([]),
   }).optional(),
   status: z.looseObject({ active: z.string().optional() }).optional(),
   /** Réglé dans l'app Hue : la scène démarre-t-elle animée ? */
@@ -146,6 +150,14 @@ export interface HueSceneRecallBody {
 /** Écriture d'un réglage de scène (pas un rappel) : la case « démarrer animée » de l'app Hue. */
 export interface HueSceneSettingsBody {
   auto_dynamic: boolean
+}
+
+/** Corps du POST de création d'une scène (métadonnées + groupe + valeurs par lampe + palette). */
+export interface HueSceneCreateBody {
+  metadata: { name: string }
+  group: HueRef
+  actions: Array<{ target: HueRef; action: Record<string, unknown> }>
+  palette?: Record<string, unknown>
 }
 
 export type HueWriteBody = HuePutBody | HueSceneRecallBody | HueSceneSettingsBody

@@ -29,6 +29,10 @@ export interface Transport {
   recallScene(sceneId: string, recall: SceneRecallInput): Promise<void>
   /** Écrit une préférence de scène chez le fabricant (source de vérité unique). */
   updateScene(sceneId: string, update: SceneUpdate): Promise<void>
+  /** Crée une ambiance pour un groupe, en recopiant une ambiance présente ailleurs. */
+  createScene(fromSceneId: string, groupName: string): Promise<void>
+  /** Supprime une ambiance chez le fabricant (destructif). */
+  deleteScene(sceneId: string): Promise<void>
   /** Réglages par plugin (persistés côté serveur, communs aux tablettes). */
   getPluginSettings(): Promise<Record<string, PluginSettings>>
   setPluginSettings(pluginId: string, settings: PluginSettings): Promise<PluginSettings>

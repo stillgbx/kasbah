@@ -39,6 +39,8 @@
   },
   "scenes": {
     "title": "Light scenes", "group": "Light scenes · {name}", "animate": "Animate the palette",
+    "add": "Add a scene", "copiedFrom": "copied from {group}",
+    "delete": "Delete this scene", "deleteConfirm": "Confirm",
     "stopAnimate": "Stop the animation", "turnOff": "Turn off {name}"
   },
   "lights": {
@@ -86,7 +88,7 @@
     "title": "Settings", "appearance": "Appearance", "system": "System", "light": "Light", "dark": "Dark",
     "accent": "Accent color", "accents": { "teal": "Lagoon", "terracotta": "Terracotta", "indigo": "Indigo", "moss": "Moss" },
     "language": "Language", "auto": "Automatic", "fullscreen": "Full screen",
-    "sceneAutoDynamic": "Animated scenes",
+    "scenes": "Light scenes", "sceneAutoDynamic": "Starts animated", "sceneNoPalette": "No animated palette",
     "sceneAutoDynamicNew": "New animated scenes",
     "sceneAutoDynamicNewHint": "Default behaviour for an animated scene that appears (created at the vendor, or that gains a palette). Never affects the ones already listed below.",
     "sceneAutoDynamicHint": "Start the animation automatically, stored at the vendor: Kasbah and the vendor app read the same value. Unchecked, tapping plays the static version and the animation only starts from the ✨ button.",

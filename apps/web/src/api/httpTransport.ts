@@ -44,6 +44,16 @@ export function createHttpTransport(base = ''): Transport {
       { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(update) },
       () => undefined,
     ),
+    createScene: (fromSceneId, groupName) => request(
+      `${base}/api/scenes`,
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fromSceneId, groupName }) },
+      () => undefined,
+    ),
+    deleteScene: (sceneId) => request(
+      `${base}/api/scenes/${encodeURIComponent(sceneId)}`,
+      { method: 'DELETE' },
+      () => undefined,
+    ),
     getPluginSettings: () => request(`${base}/api/plugins/settings`, undefined, (j) => pluginSettingsResponseSchema.parse(j).settings as Record<string, PluginSettings>),
     setPluginSettings: (pluginId, settings: PluginSettings) => request(
       `${base}/api/plugins/${encodeURIComponent(pluginId)}/settings`,

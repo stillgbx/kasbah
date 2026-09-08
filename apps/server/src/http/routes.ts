@@ -1,4 +1,4 @@
-import { assertCommandAllowed, commandSchema, devicePlacementSchema, placeDeviceInJson, pluginSettingsSchema, sceneRecallSchema, sceneUpdateSchema, type HealthResponse } from '@kasbah/shared'
+import { assertCommandAllowed, commandSchema, devicePlacementSchema, placeDeviceInJson, pluginSettingsSchema, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, type HealthResponse } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { updateHouseFile, type LoadedHouse } from '../config/house'
 import type { PluginHost } from '../core/plugin-host'
@@ -80,6 +80,26 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
       return sendError(reply, 400, 'UNSUPPORTED_COMMAND', `scene "${entry.scene.name}" has no animated palette`)
     }
     await deps.host.recallScene(entry.scene.id, recall)
+    return { ok: true as const }
+  })
+
+  // Crée une ambiance pour une pièce, en recopiant une ambiance présente ailleurs chez le
+  // fabricant (il ne publie pas sa galerie de préréglages). La nouvelle scène arrive par le
+  // message `scenes`, comme si elle avait été créée dans l'app du fabricant.
+  app.post('/api/scenes', async (req, reply) => {
+    const body = sceneCreateSchema.parse(req.body)
+    const source = deps.scenes.get(body.fromSceneId)
+    if (!source) return sendError(reply, 404, 'NOT_FOUND', `unknown scene "${body.fromSceneId}"`)
+    await deps.host.createScene(source.scene.id, body.groupName)
+    return { ok: true as const }
+  })
+
+  // Supprime une ambiance chez le fabricant. Destructif et visible depuis toutes les apps du
+  // fabricant : la confirmation est demandée côté UI, pas ici.
+  app.delete<{ Params: { id: string } }>('/api/scenes/:id', async (req, reply) => {
+    const entry = deps.scenes.get(req.params.id)
+    if (!entry) return sendError(reply, 404, 'NOT_FOUND', `unknown scene "${req.params.id}"`)
+    await deps.host.deleteScene(entry.scene.id)
     return { ok: true as const }
   })
 

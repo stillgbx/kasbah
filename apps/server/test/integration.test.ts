@@ -100,6 +100,18 @@ describe('plugin scenes (GET /api/scenes, POST /api/scenes/:id/recall)', () => {
       expect(notAnimated.json().error.code).toBe('UNSUPPORTED_COMMAND')
       expect((await kasbah.app.inject({ method: 'PATCH', url: '/api/scenes/mock:nope', payload: { autoDynamic: false } })).statusCode).toBe(404)
       expect((await kasbah.app.inject({ method: 'PATCH', url: '/api/scenes/mock:s1', payload: {} })).json().error.code).toBe('INVALID_BODY')
+
+      // POST /api/scenes : source inconnue, corps invalide, plugin incapable de créer
+      expect((await kasbah.app.inject({ method: 'POST', url: '/api/scenes', payload: { fromSceneId: 'mock:nope', groupName: 'Salon' } })).statusCode).toBe(404)
+      expect((await kasbah.app.inject({ method: 'POST', url: '/api/scenes', payload: { fromSceneId: 'mock:s1' } })).json().error.code).toBe('INVALID_BODY')
+      const cannotCreate = await kasbah.app.inject({ method: 'POST', url: '/api/scenes', payload: { fromSceneId: 'mock:s1', groupName: 'Cuisine' } })
+      expect(cannotCreate.statusCode).toBe(501)
+
+      // DELETE /api/scenes/:id : scène inconnue, puis plugin incapable de supprimer
+      expect((await kasbah.app.inject({ method: 'DELETE', url: '/api/scenes/mock:nope' })).statusCode).toBe(404)
+      const cannotDelete = await kasbah.app.inject({ method: 'DELETE', url: '/api/scenes/mock:s1' })
+      expect(cannotDelete.statusCode).toBe(501)
+      expect(cannotDelete.json().error.code).toBe('NOT_IMPLEMENTED')
       const readOnly = await kasbah.app.inject({ method: 'PATCH', url: '/api/scenes/mock:s1', payload: { autoDynamic: false } })
       expect(readOnly.statusCode).toBe(501)
     } finally {

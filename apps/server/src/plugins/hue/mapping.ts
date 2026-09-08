@@ -1,5 +1,8 @@
 import { mirekToRgb, rgbToHex, xyToRgb, type Capability, type CommandOf, type DeviceDescriptor, type PluginScene, type SceneActivation, type SceneGroupKind, type SceneRecall, type StatePatch } from '@kasbah/shared'
-import type { HueDevice, HueGroupedLight, HueLight, HuePutBody, HueRoom, HueScene, HueSceneRecallBody, HueZigbeeConnectivity } from './types'
+import type {
+  HueDevice, HueGroupedLight, HueLight, HuePutBody, HueRef, HueRoom, HueScene, HueSceneCreateBody,
+  HueSceneRecallBody, HueZigbeeConnectivity,
+} from './types'
 
 // Mappage PUR Hue ↔ modèle Kasbah. Aucune I/O : testé sur fixtures.
 
@@ -212,6 +215,58 @@ export function sceneTargetLights(scene: HueScene): string[] {
     if (a.target?.rtype === 'light' && !out.includes(a.target.rid)) out.push(a.target.rid)
   }
   return out
+}
+
+/**
+ * Corps de création d'une ambiance recopiée. La **palette est indépendante du groupe** : on la
+ * reprend telle quelle, c'est elle qui porte l'animation. Les `actions`, elles, visent des lampes
+ * précises : on distribue celles de la source sur les lampes de la pièce (en boucle si la pièce en
+ * a plus), en retombant sur ce que chaque lampe sait faire — une lampe sans couleur reçoit sa
+ * température, une lampe sans rien reçoit juste allumage et intensité.
+ */
+export function toCreateSceneBody(source: HueScene, group: HueRef, lights: HueLight[]): HueSceneCreateBody {
+  const sourceActions = source.actions.filter((a) => a.action)
+  const actions: HueSceneCreateBody['actions'] = lights.map((light, i) => {
+    const from = sourceActions.length ? sourceActions[i % sourceActions.length]!.action! : undefined
+    const action: Record<string, unknown> = { on: { on: from?.on?.on ?? true } }
+    const brightness = from?.dimming?.brightness
+    if (light.dimming && brightness !== undefined) {
+      action.dimming = { brightness: Math.min(100, Math.max(light.dimming.min_dim_level ?? 1, brightness)) }
+    }
+    const xy = from?.color?.xy
+    const mirek = from?.color_temperature?.mirek
+    if (xy && light.color) action.color = { xy: { x: xy.x, y: xy.y } }
+    else if (mirek !== null && mirek !== undefined && light.color_temperature) {
+      const range = light.color_temperature.mirek_schema
+      const [min, max] = range ? [range.mirek_minimum, range.mirek_maximum] : DEFAULT_MIREK_RANGE
+      action.color_temperature = { mirek: Math.round(Math.min(max, Math.max(min, mirek))) }
+    }
+    return { target: { rid: light.id, rtype: 'light' }, action }
+  })
+  return {
+    metadata: { name: source.metadata?.name ?? 'Ambiance' },
+    group,
+    actions,
+    ...(source.palette ? { palette: toCreatePalette(source.palette) } : {}),
+  }
+}
+
+/**
+ * Palette recopiable. Le pont REFUSE une palette qui porte à la fois `effects` et `effects_v2`,
+ * **même vides** (« Both effects and effects_v2 palettes are mutually exclusive », vérifié) : or
+ * c'est exactement ce qu'il renvoie quand on lit une scène. On ne garde donc que la liste d'effets
+ * non vide, et aucune des deux si elles le sont.
+ */
+export function toCreatePalette(palette: NonNullable<HueScene['palette']>): Record<string, unknown> {
+  const effects = palette.effects_v2.length ? { effects_v2: palette.effects_v2 }
+    : palette.effects.length ? { effects: palette.effects }
+    : {}
+  return {
+    color: palette.color,
+    dimming: palette.dimming,
+    color_temperature: palette.color_temperature,
+    ...effects,
+  }
 }
 
 /** Disponibilité des lights portées par chaque appareil Zigbee : `connected` ⇒ disponible. */

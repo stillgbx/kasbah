@@ -6,9 +6,10 @@ import { connectSse, type FetchLike } from '../../core/sse'
 import { describeError, sendError } from '../../http/errors'
 import { HueClient } from './client'
 import { findBridge } from './discovery'
+import { roomKey } from '@kasbah/shared'
 import {
-  connectivityToAvailability, indexResources, sceneStatusToActive, sceneTargetLights, toDescriptor, toGroupDescriptor,
-  toLightPatch, toPutBody, toSceneDescriptor, toSceneRecallBody, type HueIndex,
+  connectivityToAvailability, indexResources, sceneStatusToActive, sceneTargetLights, toCreateSceneBody, toDescriptor,
+  toGroupDescriptor, toLightPatch, toPutBody, toSceneDescriptor, toSceneRecallBody, type HueIndex,
 } from './mapping'
 import {
   hueDeviceSchema, hueEventFrameSchema, hueGroupedLightSchema, hueLightSchema, hueRoomSchema, hueSceneSchema,
@@ -83,6 +84,23 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
     const grouped = config!.HUE_EXPOSE_ROOMS ? await c.getResources('grouped_light', hueGroupedLightSchema, signal) : []
     groups = new Map(grouped.filter((g) => g.owner?.rtype === 'room').map((g) => [g.id, g]))
     return { lights, groups: [...groups.values()], zigbee }
+  }
+
+  /** Pièce OU zone dont le nom correspond (même normalisation que l'auto-placement). */
+  function findGroup(name: string): { ref: { rid: string; rtype: string }; lights: string[] } | undefined {
+    const key = roomKey(name)
+    for (const [rtype, groups] of [['room', index.rooms], ['zone', zones]] as const) {
+      for (const g of groups.values()) {
+        if (!g.metadata?.name || roomKey(g.metadata.name) !== key) continue
+        const lights: string[] = []
+        for (const c of g.children) {
+          if (c.rtype === 'light') lights.push(c.rid)
+          else if (c.rtype === 'device') lights.push(...(index.lightsOfDevice.get(c.rid) ?? []))
+        }
+        return { ref: { rid: g.id, rtype }, lights }
+      }
+    }
+    return undefined
   }
 
   /** Groupe d'une scène : la pièce Hue se rattachera à la pièce homonyme de la maison. */
@@ -284,6 +302,28 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
       if (!scenes.some((s) => s.id === externalId)) throw new PluginError('DEVICE_UNAVAILABLE', `unknown Hue scene ${externalId}`)
       // file distincte (`intent`) : ce réglage ne doit pas supplanter un rappel de la même scène
       await client.putLimited('scene', externalId, { auto_dynamic: update.autoDynamic }, 'settings')
+    },
+
+    async createScene(fromExternalId: string, groupName: string) {
+      if (!client || !appKey) throw new PluginError('NEEDS_PAIRING', 'Hue bridge not paired')
+      const source = scenes.find((s) => s.id === fromExternalId)
+      if (!source) throw new PluginError('DEVICE_UNAVAILABLE', `unknown Hue scene ${fromExternalId}`)
+      const group = findGroup(groupName)
+      if (!group) throw new PluginError('DEVICE_UNAVAILABLE', `no Hue room or zone named "${groupName}"`)
+      const lights = group.lights.map((id) => index.lights.get(id)).filter((l): l is HueLight => !!l)
+      if (lights.length === 0) throw new PluginError('DEVICE_UNAVAILABLE', `"${groupName}" has no Hue light`)
+      const already = scenes.some((s) => s.group?.rid === group.ref.rid && s.metadata?.name === source.metadata?.name)
+      if (already) throw new PluginError('UNSUPPORTED_COMMAND', `"${source.metadata?.name}" already exists in "${groupName}"`)
+      await client.createResource('scene', toCreateSceneBody(source, group.ref, lights))
+      // le pont émet un `add` : la resynchronisation différée republiera les scènes
+      scheduleResync()
+    },
+
+    async deleteScene(externalId: string) {
+      if (!client || !appKey) throw new PluginError('NEEDS_PAIRING', 'Hue bridge not paired')
+      if (!scenes.some((s) => s.id === externalId)) throw new PluginError('DEVICE_UNAVAILABLE', `unknown Hue scene ${externalId}`)
+      await client.deleteResource('scene', externalId)
+      scheduleResync()   // le pont émet aussi un `delete`
     },
 
     async stop() {

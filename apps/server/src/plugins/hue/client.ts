@@ -131,6 +131,19 @@ export class HueClient {
     } finally { this.draining = false }
   }
 
+  /** Création d'une ressource (scène) : réponse `{ data: [{ rid }] }`. Non limité en débit : c'est
+   *  un geste unique, jamais une rafale. */
+  async createResource(type: 'scene', body: unknown): Promise<string | undefined> {
+    const raw = hueResponseSchema.parse(await this.request('POST', `/clip/v2/resource/${type}`, body))
+    if (raw.errors.length) throw new PluginError('UPSTREAM_ERROR', raw.errors[0]?.description ?? `Hue rejected the new ${type}`)
+    return (raw.data[0] as { rid?: string } | undefined)?.rid
+  }
+
+  async deleteResource(type: 'scene', id: string): Promise<void> {
+    const raw = hueResponseSchema.parse(await this.request('DELETE', `/clip/v2/resource/${type}/${id}`))
+    if (raw.errors.length) throw new PluginError('UPSTREAM_ERROR', raw.errors[0]?.description ?? `Hue rejected deleting the ${type}`)
+  }
+
   /** Appairage (API v1) : nécessite un appui sur le bouton du bridge dans les 30 s. */
   async pair(deviceType = 'kasbah#server'): Promise<{ appKey: string; clientKey?: string }> {
     let res: Awaited<ReturnType<FetchLike>>

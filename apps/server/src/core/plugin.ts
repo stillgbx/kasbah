@@ -50,6 +50,10 @@ export interface DevicePlugin {
   recallScene?(externalId: string, recall: SceneRecall): Promise<void>
   /** Écrit une préférence de scène chez le fabricant (la nouvelle valeur revient par ses événements). */
   updateScene?(externalId: string, update: SceneUpdate): Promise<void>
+  /** Crée une ambiance pour un groupe, en recopiant une ambiance existante (`externalId` source). */
+  createScene?(fromExternalId: string, groupName: string): Promise<void>
+  /** Supprime une ambiance CHEZ le fabricant (geste destructif, confirmé côté UI). */
+  deleteScene?(externalId: string): Promise<void>
   stop(): Promise<void>
   /** Routes propres au plugin, montées sous /api/plugins/<id>/. */
   registerRoutes?(app: FastifyInstance): void

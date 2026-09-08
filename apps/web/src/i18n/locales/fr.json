@@ -39,6 +39,8 @@
   },
   "scenes": {
     "title": "Ambiances", "group": "Ambiances · {name}", "animate": "Animer la palette",
+    "add": "Ajouter une ambiance", "copiedFrom": "reprise de {group}",
+    "delete": "Supprimer cette ambiance", "deleteConfirm": "Confirmer",
     "stopAnimate": "Arrêter l'animation", "turnOff": "Éteindre {name}"
   },
   "lights": {
@@ -86,7 +88,7 @@
     "title": "Réglages", "appearance": "Apparence", "system": "Système", "light": "Clair", "dark": "Sombre",
     "accent": "Couleur d'accent", "accents": { "teal": "Lagon", "terracotta": "Terre cuite", "indigo": "Indigo", "moss": "Mousse" },
     "language": "Langue", "auto": "Automatique", "fullscreen": "Plein écran",
-    "sceneAutoDynamic": "Ambiances animées",
+    "scenes": "Ambiances", "sceneAutoDynamic": "Démarrage animé", "sceneNoPalette": "Pas de palette animée",
     "sceneAutoDynamicNew": "Nouvelles ambiances animées",
     "sceneAutoDynamicNewHint": "Comportement par défaut d'une ambiance animée qui apparaît (créée chez le fabricant, ou qui gagne une palette). N'affecte jamais celles déjà listées ci-dessous.",
     "sceneAutoDynamicHint": "Démarrage automatique de l'animation, réglé chez le fabricant : la valeur est la même dans Kasbah et dans son app. Décoché, la pastille joue la version fixe et l'animation ne part qu'au bouton ✨.",

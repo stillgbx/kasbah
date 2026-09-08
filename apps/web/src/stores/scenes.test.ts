@@ -49,10 +49,12 @@ describe('scenes store', () => {
     expect(store.tapMode(of('hue:starlight'))).toBe('dynamic')   // palette animée + réglé « auto »
     expect(store.tapMode(of('hue:evening'))).toBe('static')      // palette animée mais pas « auto »
     expect(store.tapMode(of('hue:relax'))).toBe('static')        // pas de palette animée
-    // les réglages vivent par plugin : le regroupement l'est aussi
-    expect(store.animatedByPlugin).toHaveLength(1)
-    expect(store.animatedByPlugin[0]!.pluginId).toBe('hue')
-    expect(store.animatedByPlugin[0]!.scenes.map((e) => e.scene.externalId).sort()).toEqual(['evening', 'starlight'])
+    // les réglages vivent par plugin : le regroupement l'est aussi, et il liste TOUT (gestion)
+    expect(store.scenesByPlugin).toHaveLength(1)
+    expect(store.scenesByPlugin[0]!.pluginId).toBe('hue')
+    // rangé par groupe puis par nom
+    expect(store.scenesByPlugin[0]!.scenes.map((e) => `${e.scene.group?.name}/${e.scene.name}`))
+      .toEqual(['Salon/Détente', 'Salon/Starlight', 'Véranda/Soirée'])
   })
 
   it('setAutoDynamic writes the vendor setting, optimistically, and rolls back on refusal', async () => {
@@ -97,6 +99,44 @@ describe('scenes store', () => {
     expect(await store.setAutoDynamicForNewScenes('hue', true)).toBe(false)
     expect(store.settingsOf('hue').autoDynamicForNewScenes).toBe(false)   // retour arrière
     expect(useNotificationsStore().queue).toHaveLength(1)
+  })
+
+  it('clonable scenes: what exists elsewhere and not here, one source per name', () => {
+    const store = useScenesStore()
+    store.apply({ type: 'scenes', scenes: [
+      ...SCENES,
+      entry('relax-veranda', 'Détente', { name: 'Véranda', kind: 'zone' }),
+      entry('starlight-hall', 'Starlight', { name: 'Entrée', kind: 'room' }),        // même nom, source fixe
+    ] })
+    // le Salon a déjà Détente et Starlight : reste Soirée (de la Véranda)
+    expect(store.clonableFor('salon').map((e) => e.scene.name)).toEqual(['Soirée'])
+    // l'Entrée n'a que Starlight : Détente et Soirée sont proposables
+    expect(store.clonableFor('Entrée').map((e) => e.scene.name)).toEqual(['Détente', 'Soirée'])
+    // pour Détente, deux sources possibles : aucune n'est animée, la première suffit
+    expect(store.clonableFor('Entrée')[0]!.scene.group?.name).toBe('Salon')
+    // une pièce sans aucune ambiance se voit tout proposer, un nom une seule fois
+    expect(store.clonableFor('Cuisine').map((e) => e.scene.name)).toEqual(['Détente', 'Soirée', 'Starlight'])
+  })
+
+  it('delete removes the scene right away and puts it back if the vendor refuses', async () => {
+    const mock = createMockTransport({ seed: 1 })
+    const ok: Transport = { ...mock, deleteScene: vi.fn(async () => undefined) }
+    setTransport(ok)
+    const store = useScenesStore()
+    store.apply({ type: 'scenes', scenes: SCENES })
+    expect(await store.deleteScene('hue:evening')).toBe(true)
+    expect(ok.deleteScene).toHaveBeenCalledWith('hue:evening')
+    expect(store.entries['hue:evening']).toBeUndefined()
+    expect(store.count).toBe(2)
+
+    const failing: Transport = { ...mock, deleteScene: vi.fn(async () => { throw new ApiRequestError(502, 'UPSTREAM_ERROR', 'boom') }) }
+    setTransport(failing)
+    const before = store.entries
+    expect(await store.deleteScene('hue:relax')).toBe(false)
+    expect(store.entries).toBe(before)                       // remise en place
+    expect(store.entries['hue:relax']).toBeDefined()
+    expect(useNotificationsStore().queue).toHaveLength(1)
+    expect(await store.deleteScene('hue:unknown')).toBe(false)
   })
 
   it('switching scenes: the deactivation of the previous one does not cancel the new one', () => {

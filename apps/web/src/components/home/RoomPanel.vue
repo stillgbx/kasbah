@@ -50,7 +50,7 @@ const roomScenes = computed(() => (target.value ? scenes.forRoom(target.value.na
       <div class="title">{{ target.name }}</div>
       <div class="muted sub">{{ target.where }} · {{ $t('home.devicesCount', { n: rows.length }, rows.length) }}</div>
     </div>
-    <SceneChips :scenes="roomScenes" :label="$t('scenes.title')" />
+    <SceneChips :scenes="roomScenes" :label="$t('scenes.title')" :add-to="target.name" />
     <div class="rows">
       <div v-for="r in rows" :key="r.key" class="dev-row" role="button" tabindex="0" @click="house.selectDevice(r.key)" @keydown.enter="house.selectDevice(r.key)">
         <span class="icon-square" :data-on="r.on ? '1' : '0'"><StrokeIcon :name="r.icon" :size="18" /></span>
