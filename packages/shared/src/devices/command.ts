@@ -64,7 +64,7 @@ export type CommandOf<T extends CommandType> = Extract<Command, { type: T }>
 /** Capacité requise pour accepter chaque commande. */
 export const COMMAND_REQUIRES: Record<CommandType, Capability> = {
   'light.set': 'on_off',
-  'cover.open': 'position', 'cover.close': 'position', 'cover.stop': 'stop',
+  'cover.open': 'open_close', 'cover.close': 'open_close', 'cover.stop': 'stop',
   'cover.set_position': 'position', 'cover.set_tilt': 'tilt',
   'media_player.play': 'playback', 'media_player.pause': 'playback',
   'media_player.next': 'track_skip', 'media_player.previous': 'track_skip',

@@ -6,7 +6,7 @@ export interface CoverOptions { name: string; position?: number; tilt?: boolean;
 
 /** Volet : se déplace vers une cible à vitesse constante (5 %/s par défaut), `stop` fige. */
 export function cover(externalId: string, o: CoverOptions): SimDevice<'cover'> {
-  const caps: Capability[] = ['position', 'stop']
+  const caps: Capability[] = ['open_close', 'position', 'stop']
   if (o.tilt) caps.push('tilt')
   const speed = o.speedPctPerS ?? 5
   let target: number | null = null
