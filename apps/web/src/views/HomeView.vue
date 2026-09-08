@@ -35,9 +35,12 @@ const scene = useHouseScene({
   states: computed(() => devices.states),
 })
 
+// Onglets à contre-courant des listes de l'app (qui vont du haut vers le bas, cf. `levelsSorted`) :
+// ici on monte, Jardin → RDC → étages → Tout. La rangée se lit comme une coupe du bâtiment, terrain
+// à gauche, et l'onglet ne bouge pas quand un niveau s'ajoute au-dessus.
 const floorTabs = computed(() => [
   { value: 'garden' as FloorTab, label: t('floors.garden') },
-  ...house.levels.map((l) => ({ value: l.id as FloorTab, label: l.shortName ?? l.name })),
+  ...[...house.levels].reverse().map((l) => ({ value: l.id as FloorTab, label: l.shortName ?? l.name })),
   { value: 'all' as FloorTab, label: t('floors.all') },
 ])
 

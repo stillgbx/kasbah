@@ -46,6 +46,7 @@
   "lights": {
     "summary": "{on} allumées sur {total}", "none": "Aucune lampe remontée par les plugins.",
     "noRoom": "Sans pièce", "notInHouse": "Hors maison",
+    "reorder": "Réordonner (glisser)", "orderError": "Ordre non enregistré : {message}",
     "dangling": "Liaisons mortes", "danglingHint": "Le JSON pointe vers un id qu'aucun plugin ne remonte",
     "origins": {
       "json": "Placée", "jsonHint": "Position définie dans house.json",

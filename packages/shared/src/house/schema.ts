@@ -59,6 +59,8 @@ export const levelSchema = z.object({
   height: z.number().positive().optional(),
   /** Emprise extérieure (face externe des murs). Sert au toit. */
   outline: polygonSchema.optional(),
+  /** Ordre d'affichage des pièces du niveau (UI). Les pièces absentes suivent, par ordre alphabétique. */
+  roomOrder: z.array(idSchema).optional(),
   meta: metaSchema,
 })
 export type Level = z.infer<typeof levelSchema>

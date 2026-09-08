@@ -9,8 +9,9 @@ export interface HouseIndex {
   zonesById: Map<string, Zone>
   devicesById: Map<string, HouseDevice>
   openingsById: Map<string, { room: Room; opening: Opening }>
-  /** Niveaux triés par élévation croissante. */
+  /** Niveaux dans l'ordre d'affichage : du plus haut au plus bas (on descend dans la maison). */
   levelsSorted: Level[]
+  /** Pièces d'un niveau dans l'ordre d'affichage : `level.roomOrder` d'abord, puis les autres par nom. */
   roomsByLevel: Map<string, Room[]>
   devicesByRoom: Map<string, HouseDevice[]>
   devicesByLevel: Map<string, HouseDevice[]>
@@ -60,7 +61,14 @@ export function indexHouse(house: House): HouseIndex {
     if (d.zoneId) push(devicesByZone, d.zoneId, d)
     if (d.deviceId) devicesByBinding.set(d.deviceId, d)
   }
-  const levelsSorted = [...house.levels].sort((a, b) => a.elevation - b.elevation)
+  // Ordre d'affichage, commun à toutes les listes de l'UI (onglets, panneau maison, vue Lumières) :
+  // niveaux du haut vers le bas, pièces dans l'ordre choisi par l'utilisateur puis alphabétique.
+  const levelsSorted = [...house.levels].sort((a, b) => b.elevation - a.elevation)
+  for (const level of house.levels) {
+    const rank = new Map((level.roomOrder ?? []).map((id, i) => [id, i]))
+    const at = (id: string) => rank.get(id) ?? rank.size
+    roomsByLevel.get(level.id)?.sort((a, b) => at(a.id) - at(b.id) || a.name.localeCompare(b.name))
+  }
   return {
     levelsById, roomsById, zonesById, devicesById, openingsById, levelsSorted,
     roomsByLevel, devicesByRoom, devicesByLevel, devicesByZone, outdoorDevices, devicesByBinding,

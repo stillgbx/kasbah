@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { deviceIdSchema } from '../devices/descriptor'
 import { MOUNTS, vec3Schema } from './schema'
 
-// Placement d'un appareil depuis l'UI : la seule écriture que le serveur fait dans house.json.
+// Écritures de l'UI dans house.json (placement d'un appareil, ordre d'affichage des pièces).
 // On travaille sur le JSON BRUT (pas la maison parsée) pour ne réécrire que ce qui a changé et ne
 // pas injecter les défauts zod (kind: 'room', openings: []…) dans le fichier de l'utilisateur.
 // Le résultat doit ensuite être validé par `parseHouse` avant d'être écrit.
@@ -17,6 +17,12 @@ export const devicePlacementSchema = z.object({
   deviceId: deviceIdSchema.optional(),
 })
 export type DevicePlacement = z.infer<typeof devicePlacementSchema>
+
+export const roomOrderSchema = z.object({
+  /** Ordre voulu, complet ou partiel ; les pièces absentes suivent, par ordre alphabétique. */
+  roomIds: z.array(z.string().min(1)),
+})
+export type RoomOrder = z.infer<typeof roomOrderSchema>
 
 export class PlacementError extends Error {
   readonly statusCode = 400
@@ -60,4 +66,24 @@ export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePla
   if (i >= 0) out[i] = next
   else out.push(next)
   return { ...doc, devices: out }
+}
+
+/**
+ * Renvoie une copie du document JSON avec `roomOrder` posé sur le niveau `levelId`. Les ids qui ne
+ * sont pas des pièces de ce niveau sont refusés (un ordre qui ne correspond plus à la maison serait
+ * silencieusement ignoré à l'affichage).
+ */
+export function setRoomOrderInJson(doc: unknown, levelId: string, roomIds: string[]): JsonObject {
+  if (!isObject(doc)) throw new PlacementError('house document is not an object')
+  const levels = Array.isArray(doc.levels) ? doc.levels.filter(isObject) : []
+  const i = levels.findIndex((l) => l.id === levelId)
+  if (i < 0) throw new PlacementError(`unknown level "${levelId}"`)
+  const rooms = Array.isArray(doc.rooms) ? doc.rooms.filter(isObject) : []
+  const ofLevel = new Set(rooms.filter((r) => r.levelId === levelId).map((r) => r.id))
+  const unknown = roomIds.find((id) => !ofLevel.has(id))
+  if (unknown) throw new PlacementError(`room "${unknown}" is not on level "${levelId}"`)
+  if (new Set(roomIds).size !== roomIds.length) throw new PlacementError('roomIds contains duplicates')
+  const out = [...levels]
+  out[i] = { ...levels[i]!, roomOrder: roomIds }
+  return { ...doc, levels: out }
 }

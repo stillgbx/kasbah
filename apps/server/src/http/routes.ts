@@ -1,4 +1,4 @@
-import { assertCommandAllowed, commandSchema, devicePlacementSchema, placeDeviceInJson, pluginSettingsSchema, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, type HealthResponse } from '@kasbah/shared'
+import { assertCommandAllowed, commandSchema, devicePlacementSchema, placeDeviceInJson, pluginSettingsSchema, roomOrderSchema, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { updateHouseFile, type LoadedHouse } from '../config/house'
 import type { PluginHost } from '../core/plugin-host'
@@ -49,6 +49,15 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
   app.put<{ Params: { id: string } }>('/api/house/devices/:id', async (req) => {
     const placement = devicePlacementSchema.parse(req.body)   // ZodError → 400
     const house = await updateHouseFile(deps.house, (doc) => placeDeviceInJson(doc, req.params.id, placement))
+    deps.hub.broadcast({ type: 'house', house })
+    return { house }
+  })
+
+  // Ordre d'affichage des pièces d'un niveau (glisser-déposer de la vue Lumières) : même mécanique
+  // que le placement — patch du JSON brut, réécriture atomique, diffusion de la maison entière.
+  app.put<{ Params: { id: string } }>('/api/house/levels/:id/room-order', async (req) => {
+    const { roomIds } = roomOrderSchema.parse(req.body)
+    const house = await updateHouseFile(deps.house, (doc) => setRoomOrderInJson(doc, req.params.id, roomIds))
     deps.hub.broadcast({ type: 'house', house })
     return { house }
   })

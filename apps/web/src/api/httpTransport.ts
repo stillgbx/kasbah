@@ -65,6 +65,11 @@ export function createHttpTransport(base = ''): Transport {
       { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(placement) },
       (j) => houseSchema.parse((j as { house: unknown }).house) as House,
     ),
+    setRoomOrder: (levelId, roomIds) => request(
+      `${base}/api/house/levels/${encodeURIComponent(levelId)}/room-order`,
+      { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ roomIds }) },
+      (j) => houseSchema.parse((j as { house: unknown }).house) as House,
+    ),
     pairHue: () => request(`${base}/api/plugins/hue/pair`, { method: 'POST' }, (j) => j as { appKey: string; hint: string }),
     connect: (handlers) => connectWebSocket(base, handlers),
   }

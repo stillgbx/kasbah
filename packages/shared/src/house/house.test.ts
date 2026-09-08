@@ -87,6 +87,14 @@ describe('geometry of the demo house', () => {
 describe('lookup & geo', () => {
   const house = parseHouse(demo)
   const idx = indexHouse(house)
+  it('orders levels top-down, and rooms by `roomOrder` then by name', () => {
+    expect(idx.levelsSorted.map((l) => l.id)).toEqual(['etage', 'rdc'])
+    expect(idx.roomsByLevel.get('etage')!.map((r) => r.id)).toEqual(['chambre1', 'chambre2', 'palier', 'sdb'])
+    const h = clone()
+    h.levels.find((l: { id: string }) => l.id === 'etage').roomOrder = ['sdb', 'palier']
+    const custom = indexHouse(parseHouse(h))
+    expect(custom.roomsByLevel.get('etage')!.map((r) => r.id)).toEqual(['sdb', 'palier', 'chambre1', 'chambre2'])
+  })
   it('indexes rooms by level and devices by room', () => {
     expect(idx.roomsByLevel.get('etage')!.map((r) => r.id)).toContain('sdb')
     expect(idx.devicesByRoom.get('salon')!.length).toBe(3)

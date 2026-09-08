@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import demo from './__fixtures__/demo-house.json'
 import { parseHouse } from './validate'
-import { PlacementError, placeDeviceInJson } from './place'
+import { PlacementError, placeDeviceInJson, setRoomOrderInJson } from './place'
 
 const devices = (doc: Record<string, unknown>) => doc.devices as Record<string, unknown>[]
 
@@ -36,6 +36,31 @@ describe('placeDeviceInJson', () => {
   it('does not mutate the input document', () => {
     const before = JSON.stringify(demo)
     placeDeviceInJson(demo, 'light.salon', { position: [0, 0, 0] })
+    expect(JSON.stringify(demo)).toBe(before)
+  })
+})
+
+describe('setRoomOrderInJson', () => {
+  const levels = (doc: Record<string, unknown>) => doc.levels as Record<string, unknown>[]
+
+  it('writes the order on the level and keeps the rest of it', () => {
+    const out = setRoomOrderInJson(demo, 'etage', ['sdb', 'chambre1'])
+    const l = levels(out).find((x) => x.id === 'etage')!
+    expect(l.roomOrder).toEqual(['sdb', 'chambre1'])
+    expect(l.name).toBe(demo.levels.find((x) => x.id === 'etage')!.name)
+    expect(levels(out).find((x) => x.id === 'rdc')!.roomOrder).toBeUndefined()
+    expect(() => parseHouse(out)).not.toThrow()
+  })
+
+  it('rejects an unknown level, a room of another level and duplicates', () => {
+    expect(() => setRoomOrderInJson(demo, 'cave', ['sdb'])).toThrow(PlacementError)
+    expect(() => setRoomOrderInJson(demo, 'etage', ['salon'])).toThrow(PlacementError)
+    expect(() => setRoomOrderInJson(demo, 'etage', ['sdb', 'sdb'])).toThrow(PlacementError)
+  })
+
+  it('does not mutate the input document', () => {
+    const before = JSON.stringify(demo)
+    setRoomOrderInJson(demo, 'etage', ['sdb'])
     expect(JSON.stringify(demo)).toBe(before)
   })
 })

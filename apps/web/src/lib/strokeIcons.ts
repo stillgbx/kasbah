@@ -83,6 +83,7 @@ export const ICONS = {
   arrowDown: 'M12 4v16M6 14l6 6 6-6',
   unfold: 'M8 9l4-4 4 4M8 15l4 4 4-4',
   eyedropper: 'M19.5 6.5a2.8 2.8 0 0 0-4-4l-2.3 2.3-1-1-1.5 1.5 6 6 1.5-1.5-1-1zM13.2 8.8L5 17v2h2l8.2-8.2',
+  grip: 'M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01',
 } as const
 export type IconName = keyof typeof ICONS
 

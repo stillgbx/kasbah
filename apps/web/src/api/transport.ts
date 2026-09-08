@@ -39,6 +39,8 @@ export interface Transport {
   pairHue(): Promise<{ appKey: string; hint: string }>
   /** (Re)place un appareil dans house.json ; renvoie la maison réécrite. */
   placeDevice(id: string, placement: DevicePlacement): Promise<House>
+  /** Écrit l'ordre d'affichage des pièces d'un niveau ; renvoie la maison réécrite. */
+  setRoomOrder(levelId: string, roomIds: string[]): Promise<House>
   /** Ouvre le canal de push ; retourne la fonction de fermeture. */
   connect(handlers: TransportHandlers): () => void
 }

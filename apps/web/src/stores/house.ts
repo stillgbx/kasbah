@@ -105,6 +105,21 @@ export const useHouseStore = defineStore('house', () => {
   function clearSelection() { selectedKey.value = null }
   function backToHome() { selectedKey.value = null; selectedRoomId.value = null }
 
+  /**
+   * Ordre d'affichage des pièces d'un niveau (glisser-déposer de la vue Lumières). Appliqué tout de
+   * suite (le geste vient de se terminer), confirmé par la maison que le serveur réécrit et diffuse.
+   */
+  async function setRoomOrder(levelId: string, roomIds: string[]): Promise<void> {
+    const prev = house.value
+    if (!prev) return
+    house.value = { ...prev, levels: prev.levels.map((l) => (l.id === levelId ? { ...l, roomOrder: roomIds } : l)) }
+    try { house.value = await getTransport().setRoomOrder(levelId, roomIds) }
+    catch (err) {
+      house.value = prev
+      useNotificationsStore().error(t('lights.orderError', { message: (err as Error).message }))
+    }
+  }
+
   /** Appareil maison lié à un id de plugin. */
   function houseDeviceFor(pluginDeviceId: string): HouseDevice | undefined {
     return index.value?.devicesByBinding.get(pluginDeviceId)
@@ -182,7 +197,7 @@ export const useHouseStore = defineStore('house', () => {
   return {
     house, effective, loading, error, index, levels, zones,
     focusedLevelId, gardenFocus, selectedRoomId, selectedKey, floorTab, selectedRoom, selectedZone, selectedDevice,
-    load, setFloorTab, focusLevel, selectRoom, selectDevice, clearSelection, backToHome, houseDeviceFor,
+    load, setFloorTab, focusLevel, selectRoom, selectDevice, clearSelection, backToHome, houseDeviceFor, setRoomOrder,
     placing, saving, draft, canRevert, startPlacing, stopPlacing, previewPosition, previewHeight, savePlacement, revertPlacement,
   }
 })

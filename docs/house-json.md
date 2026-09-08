@@ -34,6 +34,7 @@ Le fichier décrit la maison et le jardin ; il est validé au démarrage du serv
 - `shortName` (optionnel) : libellé court pour l'onglet de niveau (« RDC »).
 - `height` : hauteur sous plafond (défaut `defaults.levelHeight`).
 - `outline` (optionnel) : emprise extérieure, utilisée par le toit. Sinon la boîte englobante des pièces murées agrandie de l'épaisseur extérieure.
+- `roomOrder` (optionnel) : ordre d'affichage des pièces du niveau (ids). Les pièces absentes de la liste suivent par ordre alphabétique. Écrit par le glisser-déposer de la vue Lumières ; supprimez la clé pour revenir à l'ordre alphabétique. Les niveaux, eux, se lisent du plus haut au plus bas dans les listes (les onglets de niveau, eux, montent).
 
 ### Pièces (`rooms`)
 
