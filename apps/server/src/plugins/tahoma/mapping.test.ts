@@ -21,11 +21,12 @@ describe('tahoma mapping', () => {
   })
 
   it('resolves the command names each family uses', () => {
-    expect(coverCommands(ioShutter)).toEqual({ open: 'open', close: 'close', stop: 'stop', position: 'setClosure' })
+    expect(coverCommands(ioShutter)).toEqual({ open: 'open', close: 'close', stop: 'stop', position: 'setClosure', preset: 'my' })
     expect(coverCommands(ioVenetian)).toMatchObject({ position: 'setClosure', tilt: 'setOrientation' })
     // store banne : déployer = fermer
     expect(coverCommands(ioAwning)).toEqual({ open: 'undeploy', close: 'deploy', stop: 'stop', position: 'setDeployment' })
-    expect(coverCommands(rtsShutter)).toEqual({ open: 'up', close: 'down', stop: 'stop' })
+    // `my` sans `setClosure` : le moteur rejoint sa position favorite sans savoir en viser une autre
+    expect(coverCommands(rtsShutter)).toEqual({ open: 'up', close: 'down', stop: 'stop', preset: 'my' })
     expect(coverCommands(rtsGate)).toEqual({ open: 'open', close: 'close' })
   })
 
@@ -58,20 +59,20 @@ describe('tahoma mapping', () => {
   it('descriptor: capabilities follow the declared commands', () => {
     expect(toDescriptor(ioShutter)).toMatchObject({
       id: 'tahoma:io.1234-5678-9012.11110001', kind: 'cover', name: 'Volet salon',
-      capabilities: ['open_close', 'position', 'stop'],
+      capabilities: ['open_close', 'position', 'stop', 'preset'],
       meta: { manufacturer: 'Somfy', model: 'io:RollerShutterGenericIOComponent' },
     })
     // l'API locale n'expose aucune pièce : le rattachement vient de house.json
     expect(toDescriptor(ioShutter).meta.room).toBeUndefined()
     expect(toDescriptor(ioVenetian).capabilities).toEqual(['open_close', 'position', 'tilt', 'stop'])
     // RTS : pas de `position`, donc pas de curseur côté UI ; pas de `stop` pour le portail
-    expect(toDescriptor(rtsShutter).capabilities).toEqual(['open_close', 'stop'])
+    expect(toDescriptor(rtsShutter).capabilities).toEqual(['open_close', 'stop', 'preset'])
     expect(toDescriptor(rtsGate).capabilities).toEqual(['open_close'])
   })
 
   it('state patch: closure and deployment are inverted into an opening', () => {
     // l'appareil porte aussi un etat a valeur tableau et des etats hors sujet : ignores sans bruit
-    expect(toCoverPatch(readStates(ioShutter.states))).toEqual({ position: 70, motion: 'stopped' })
+    expect(toCoverPatch(readStates(ioShutter.states))).toEqual({ position: 70, presetPosition: 27, motion: 'stopped' })
     expect(toCoverPatch(readStates(ioVenetian.states))).toEqual({ position: 0, tilt: 40, motion: 'stopped' })
     // store rentré (déploiement 0) = ouvert
     expect(toCoverPatch(readStates(ioAwning.states))).toEqual({ position: 100, motion: 'stopped' })
@@ -110,6 +111,14 @@ describe('tahoma mapping', () => {
     expect(toAction(ioVenetian.deviceURL, { type: 'cover.set_tilt', tilt: 25 }, coverCommands(ioVenetian))?.commands)
       .toEqual([{ name: 'setOrientation', parameters: [25] }])
     expect(toAction(rtsShutter.deviceURL, { type: 'cover.up' } as never, coverCommands(rtsShutter))).toBeUndefined()
+    // position favorite : `my`, sans parametre — la valeur vit dans le moteur, pas dans la commande
+    expect(toAction(ioShutter.deviceURL, { type: 'cover.preset' }, io)?.commands)
+      .toEqual([{ name: 'my', parameters: [] }])
+    expect(toAction(rtsShutter.deviceURL, { type: 'cover.preset' }, coverCommands(rtsShutter))?.commands)
+      .toEqual([{ name: 'my', parameters: [] }])
+    // le BSO et le portail ne declarent pas `my` : la commande n'existe pas pour eux
+    expect(toAction(ioVenetian.deviceURL, { type: 'cover.preset' }, coverCommands(ioVenetian))).toBeUndefined()
+    expect(toAction(rtsGate.deviceURL, { type: 'cover.preset' }, coverCommands(rtsGate))).toBeUndefined()
     expect(toAction(rtsShutter.deviceURL, { type: 'cover.set_position', position: 50 }, coverCommands(rtsShutter))).toBeUndefined()
     expect(toAction(rtsGate.deviceURL, { type: 'cover.stop' }, coverCommands(rtsGate))).toBeUndefined()
   })

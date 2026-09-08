@@ -2,17 +2,22 @@ import type { Capability } from '@kasbah/shared'
 import { SimError, type SimDevice } from '../types'
 import { clamp, descriptor } from './common'
 
-export interface CoverOptions { name: string; position?: number; tilt?: boolean; speedPctPerS?: number }
+export interface CoverOptions { name: string; position?: number; tilt?: boolean; speedPctPerS?: number; preset?: number }
 
 /** Volet : se déplace vers une cible à vitesse constante (5 %/s par défaut), `stop` fige. */
 export function cover(externalId: string, o: CoverOptions): SimDevice<'cover'> {
   const caps: Capability[] = ['open_close', 'position', 'stop']
   if (o.tilt) caps.push('tilt')
+  // position favorite mémorisée « dans le moteur » : la simulation la connaît, donc elle la montre
+  if (o.preset !== undefined) caps.push('preset')
   const speed = o.speedPctPerS ?? 5
   let target: number | null = null
   const dev: SimDevice<'cover'> = {
     descriptor: descriptor(externalId, 'cover', o.name, caps, { manufacturer: 'Mock', model: 'Roller shutter' }),
-    state: { kind: 'cover', updatedAt: 0, available: true, position: o.position ?? 100, motion: 'stopped', ...(o.tilt ? { tilt: 50 } : {}) },
+    state: {
+      kind: 'cover', updatedAt: 0, available: true, position: o.position ?? 100, motion: 'stopped',
+      ...(o.tilt ? { tilt: 50 } : {}), ...(o.preset !== undefined ? { presetPosition: o.preset } : {}),
+    },
     // `position` est optionnelle dans le contrat (une radio unidirectionnelle ne la connaît pas),
     // mais la simulation la pose au démarrage et ne l'efface jamais : d'où les `!` ci-dessous.
     tick(ctx) {
@@ -35,6 +40,10 @@ export function cover(externalId: string, o: CoverOptions): SimDevice<'cover'> {
         case 'cover.close': target = 0; break
         case 'cover.stop': target = null; dev.state.motion = 'stopped'; break
         case 'cover.set_position': target = cmd.position; break
+        case 'cover.preset':
+          if (o.preset === undefined) throw new SimError('UNSUPPORTED_COMMAND', 'no preset')
+          target = o.preset
+          break
         case 'cover.set_tilt':
           if (!o.tilt) throw new SimError('UNSUPPORTED_COMMAND', 'no tilt')
           dev.state.tilt = cmd.tilt

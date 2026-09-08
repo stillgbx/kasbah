@@ -30,6 +30,11 @@ const draft = ref<Record<string, number>>({})
 // le curseur n'existe que pour un ouvrant qui sait viser une position, donc qui la publie ; le
 // repli à 100 ne sert qu'à donner un nombre au composant si les deux se désaccordaient
 const shownClosure = (id: string, position?: number) => draft.value[id] ?? toClosure(devices.targetPosition(id) ?? position ?? 100)
+
+// Position favorite du moteur : repère sur la piste du curseur, et valeur dans le libellé
+// accessible de la touche (une ligne de liste n'a pas la place de l'écrire).
+const presetClosure = (s: StateFor<'cover'>) => s.presetPosition === undefined ? undefined : toClosure(s.presetPosition)
+const presetTicks = (s: StateFor<'cover'>) => { const c = presetClosure(s); return c === undefined ? undefined : [c] }
 function drag(id: string, v: number) { draft.value = { ...draft.value, [id]: v } }
 function commit(id: string, v: number) {
   void devices.sendCommand(id, { type: 'cover.set_position', position: fromClosure(Math.round(v)) })
@@ -73,10 +78,22 @@ function commit(id: string, v: number) {
                       @click="devices.sendCommand(entry.descriptor.id, { type: 'cover.close' })">
                 <StrokeIcon name="collapseDown" :size="18" />
               </button>
+              <!-- la valeur ne tient pas dans une touche de 36 px : elle passe par le libellé -->
+              <button v-if="entry.descriptor.capabilities.includes('preset')" type="button" class="key"
+                      :disabled="!entry.state.available"
+                      :title="presetClosure(entry.state as StateFor<'cover'>) !== undefined
+                        ? $t('cover.presetAt', { pct: `${Math.round(presetClosure(entry.state as StateFor<'cover'>)!)} %` })
+                        : $t('cover.preset')"
+                      :aria-label="$t('cover.preset')"
+                      @click="devices.sendCommand(entry.descriptor.id, { type: 'cover.preset' })">
+                <StrokeIcon name="crosshair" :size="18" />
+              </button>
             </div>
             <v-slider v-if="entry.descriptor.capabilities.includes('position')"
                       :model-value="shownClosure(entry.descriptor.id, (entry.state as StateFor<'cover'>).position)"
                       :min="0" :max="100" :step="5" :disabled="!entry.state.available"
+                      :ticks="presetTicks(entry.state as StateFor<'cover'>)"
+                      :show-ticks="presetTicks(entry.state as StateFor<'cover'>) ? 'always' : false"
                       density="compact" hide-details class="controls__slider"
                       @update:model-value="(v: number) => drag(entry.descriptor.id, v)"
                       @end="(v: number) => commit(entry.descriptor.id, v)" />
@@ -94,6 +111,13 @@ function commit(id: string, v: number) {
 .empty { padding: 24px; text-align: center; }
 .controls { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; margin: 2px 4px 0; }
 .controls__slider { flex: 1 1 auto; }
+/* meme repere que dans le panneau appareil */
+.controls__slider :deep(.v-slider-track__tick) { background: var(--accent); opacity: .85; width: 2px; height: 8px; border-radius: 1px; }
+/* accent sur accent serait invisible sur la portion active de la piste */
+.controls__slider :deep(.v-slider-track__tick--filled) { background: var(--on-accent); opacity: 1; }
+/* pas d'etiquette sous la piste : elle ajoute 24 px et la valeur est dans le libelle de la touche */
+.controls__slider :deep(.v-slider-track__tick-label) { display: none; }
+.controls__slider :deep(.v-slider--has-labels) { margin-bottom: 0; }
 .dot { margin-right: 6px; color: var(--accent); }
 .keys { display: flex; gap: 4px; flex: 0 0 auto; }
 .key {

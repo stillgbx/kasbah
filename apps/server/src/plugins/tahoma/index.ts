@@ -16,8 +16,10 @@ import type { OverkizDevice, OverkizEvent } from './types'
 // La box mélange deux radios et le plugin les distingue par ce qu'elle DÉCLARE, pas par le préfixe
 // de l'URL : io-homecontrol est bidirectionnel (position réelle, `setClosure`) alors que RTS est
 // unidirectionnel (ouvrir / fermer / stop, aucun retour). Un appareil sans commande de position
-// n'annonce donc pas la capacité `position` : l'UI n'affiche pas de curseur, et sa position est
-// déduite de la dernière commande (100 après « ouvrir », 0 après « fermer »).
+// n'annonce donc pas la capacité `position` : l'UI n'affiche pas de curseur, et sa position reste
+// INCONNUE jusqu'à la première commande, puis déduite d'elle (100 après « ouvrir », 0 après
+// « fermer »). Rappeler la position favorite du moteur la rend inconnue à nouveau : on ne sait pas
+// où elle est réglée.
 
 const bool = z.enum(['true', 'false', '1', '0']).transform((v) => v === 'true' || v === '1')
 
@@ -99,7 +101,7 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
       const patch = toCoverPatch(entry.states, positions.get(externalId))
       // même vide, le patch marque l'appareil disponible (`emitState` ajoute `available: true`)
       ctx!.emitState(externalId, patch)
-      if (patch.position !== undefined) positions.set(externalId, patch.position)
+      if (typeof patch.position === 'number') positions.set(externalId, patch.position)
       ctx!.setAvailable(externalId, toAvailability(entry.device, entry.states))
     }
   }
@@ -122,7 +124,7 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
           for (const [name, value] of frame) entry.states.set(name, value)
           const patch = toCoverPatch(entry.states, positions.get(externalId))
           if (Object.keys(patch).length > 0) ctx!.emitState(externalId, patch)
-          if (patch.position !== undefined) positions.set(externalId, patch.position)
+          if (typeof patch.position === 'number') positions.set(externalId, patch.position)
           const status = frame.get('core:StatusState')      // seulement si la trame en parlait
           if (status === 'available' || status === 'unavailable') ctx!.setAvailable(externalId, status === 'available')
           break
@@ -226,6 +228,12 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
       if (assumed !== undefined) {
         positions.set(externalId, assumed)
         ctx!.emitState(externalId, { position: assumed, motion: 'stopped' })
+      } else if (command.type === 'cover.preset') {
+        // La position favorite vit dans le moteur, et un appareil sans retour ne dit pas laquelle
+        // c'est : après ce rappel, la position qu'on affichait est devenue fausse. On l'EFFACE
+        // (`null`) plutôt que d'en garder une périmée — c'est à ça que sert l'effacement.
+        positions.delete(externalId)
+        ctx!.emitState(externalId, { position: null, motion: 'stopped' })
       } else if (command.type === 'cover.stop') ctx!.emitState(externalId, { motion: 'stopped' })
     },
 

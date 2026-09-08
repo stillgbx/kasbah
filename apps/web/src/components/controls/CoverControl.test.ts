@@ -84,14 +84,40 @@ describe('CoverControl', () => {
     // deja affiche en grand par le panneau — elle garde juste sa hauteur.
     const unknown: StateFor<'cover'> = { kind: 'cover', updatedAt: 0, available: true, motion: 'stopped' }
     const w = mount(CoverControl, { props: { descriptor: descriptor(ALL, 'awning'), state: unknown } })
-    const line = w.findAll('.line')[0]                          // la 2e ligne est l'inclinaison
+    const line = w.findAll('.line')[0]!                          // la 2e ligne est l'inclinaison
     expect(line.find('.line__text').text()).toBe('—')
     expect(line.find('.line__pct').exists()).toBe(false)
     expect(w.findAll('button')).toHaveLength(3)                 // remonter · stop · baisser
 
     // des qu'un mouvement est annonce, la ligne reprend la parole
     const moving = mount(CoverControl, { props: { descriptor: descriptor(ALL, 'awning'), state: { ...unknown, motion: 'closing' } } })
-    expect(moving.findAll('.line')[0].find('.line__text').text()).toBe(fr.cover.upDown.closing)
+    expect(moving.findAll('.line')[0]!.find('.line__text').text()).toBe(fr.cover.upDown.closing)
+  })
+
+  it('position perso : touche pleine largeur, valeur ecrite, repere sur le curseur', () => {
+    // deux notions distinctes : la CAPACITE dit qu'on peut rappeler la position favorite du moteur,
+    // la VALEUR seulement qu'on peut la montrer. Un moteur RTS a la premiere sans la seconde.
+    const w = mount(CoverControl, {
+      props: { descriptor: descriptor([...ALL, 'preset']), state: state({ position: 30, presetPosition: 27 }) },
+    })
+    const key = w.findAll('button').at(-1)!
+    expect(key.text()).toContain(fr.cover.preset)
+    expect(key.find('.key__pct').text()).toBe('73 %')            // 27 d'ouverture = 73 de fermeture
+    expect(key.classes()).toContain('key--wide')
+    // le repere est place par Vuetify sur la piste, donc a la bonne geometrie
+    expect(w.find('.v-slider-track__tick').exists()).toBe(true)
+
+    // valeur inconnue (RTS) : la touche reste, le chiffre disparait, aucun repere invente
+    const rts = mount(CoverControl, {
+      props: { descriptor: descriptor(['open_close', 'stop', 'preset'], 'awning'), state: state({ position: 0 }) },
+    })
+    expect(rts.findAll('button').at(-1)!.text()).toContain(fr.cover.preset)
+    expect(rts.find('.key__pct').exists()).toBe(false)
+    expect(rts.find('.v-slider-track__tick').exists()).toBe(false)
+
+    // sans la capacite, pas de touche du tout
+    const plain = mount(CoverControl, { props: { descriptor: descriptor(ALL), state: state() } })
+    expect(plain.text()).not.toContain(fr.cover.preset)
   })
 
   it('shows the position the store aims at, not the one the device still reports', () => {

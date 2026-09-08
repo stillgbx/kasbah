@@ -62,7 +62,7 @@
     }
   },
   "cover": {
-    "tilt": "Tilt", "stopped": "Stopped",
+    "tilt": "Tilt", "stopped": "Stopped", "preset": "Preset position", "presetAt": "Preset position — {pct}",
     "openClose": { "open": "Open", "closed": "Closed", "opening": "Opening", "closing": "Closing", "level": "Closure", "actionOpen": "Open", "actionClose": "Close" },
     "upDown": { "open": "Raised", "closed": "Lowered", "opening": "Raising", "closing": "Lowering", "level": "Extension", "actionOpen": "Raise", "actionClose": "Lower" }
   },

@@ -47,6 +47,8 @@ export interface CoverCommands {
   /** `setClosure` / `setDeployment`, paramètre exprimé en FERMETURE (0 = ouvert). */
   position?: string
   tilt?: string
+  /** `my` : rappel de la position favorite mémorisée dans le moteur, sans paramètre. */
+  preset?: string
 }
 
 export function coverCommands(device: OverkizDevice): CoverCommands {
@@ -57,11 +59,13 @@ export function coverCommands(device: OverkizDevice): CoverCommands {
   const stop = pick(names, ['stop'])
   const position = pick(names, ['setClosure', 'setDeployment'])
   const tilt = pick(names, ['setOrientation'])
+  const preset = pick(names, ['my'])
   if (open) out.open = open
   if (close) out.close = close
   if (stop) out.stop = stop
   if (position) out.position = position
   if (tilt) out.tilt = tilt
+  if (preset) out.preset = preset
   return out
 }
 
@@ -133,6 +137,9 @@ export function toDescriptor(device: OverkizDevice): DeviceDescriptor {
   if (cmd.position) capabilities.push('position')
   if (cmd.tilt) capabilities.push('tilt')
   if (cmd.stop) capabilities.push('stop')
+  // `preset` = la box déclare `my`. Indépendant de `position` : un store RTS sait rejoindre sa
+  // position favorite sans savoir en viser une autre, ni dire laquelle c'est.
+  if (cmd.preset) capabilities.push('preset')
   return {
     id: `tahoma:${externalId}`,
     pluginId: 'tahoma',
@@ -170,6 +177,12 @@ export function toCoverPatch(states: Map<string, OverkizValue>, previous?: numbe
   const tilt = pct(states.get('core:SlateOrientationState'))
   if (tilt !== undefined) patch.tilt = tilt
 
+  // Position favorite mémorisée dans le moteur (« my »). Exprimée comme une FERMETURE, de la même
+  // famille que `core:ClosureState`, d'où le `100 - v` : relevé sur 16 volets io, seul celui qui
+  // n'était pas fermé se tenait exactement sur sa valeur mémorisée (fermeture 80, mémoire 80).
+  const memorized = pct(states.get('core:Memorized1PositionState'))
+  if (memorized !== undefined) patch.presetPosition = 100 - memorized
+
   // `core:MovingState` dit SI ça bouge, jamais dans quel sens : le sens vient de la cible
   // annoncée (`core:TargetClosureState`) ou, à défaut, de la position précédente.
   const moving = bool(states.get('core:MovingState'))
@@ -203,6 +216,7 @@ export function toAction(deviceURL: string, cmd: Command, commands: CoverCommand
     case 'cover.stop': return commands.stop ? one(commands.stop) : undefined
     case 'cover.set_position': return commands.position ? one(commands.position, [100 - cmd.position]) : undefined
     case 'cover.set_tilt': return commands.tilt ? one(commands.tilt, [cmd.tilt]) : undefined
+    case 'cover.preset': return commands.preset ? one(commands.preset) : undefined
     default: return undefined
   }
 }

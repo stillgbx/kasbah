@@ -33,6 +33,13 @@ export const coverStateSchema = z.object({
   position: pct.optional(),
   tilt: pct.optional(),
   motion: z.enum(COVER_MOTIONS),
+  /**
+   * Position favorite MÉMORISÉE DANS LE MOTEUR (le « my » de Somfy), même échelle que `position`.
+   * Absente = l'appareil sait y aller mais ne dit pas où elle est — c'est le cas d'une radio
+   * unidirectionnelle. La capacité `preset` dit qu'on peut la rappeler ; cette valeur, seulement
+   * qu'on peut la montrer. Kasbah ne la programme pas, il la lit.
+   */
+  presetPosition: pct.optional(),
 })
 
 export const PLAYBACKS = ['playing', 'paused', 'idle', 'off'] as const
@@ -130,7 +137,16 @@ export const deviceStateSchema = z.discriminatedUnion('kind', [
 export type DeviceState = z.infer<typeof deviceStateSchema>
 export type StateFor<K extends DeviceKind> = Extract<DeviceState, { kind: K }>
 /** Patch émis par un plugin : tout est optionnel ; `kind`/`updatedAt` ne se patchent pas (distributif sur K). */
-export type StatePatch<K extends DeviceKind = DeviceKind> = K extends DeviceKind ? Partial<Omit<StateFor<K>, 'kind' | 'updatedAt'>> : never
+/**
+ * Modification partielle d'un état, côté serveur uniquement (le client reçoit toujours l'état
+ * entier). `undefined` = « je ne parle pas de ce champ » ; **`null` = « efface ce champ »**, et
+ * n'est accepté que sur un champ déjà optionnel — c'est le seul moyen de repasser une valeur à
+ * « inconnue ». Un plugin en a besoin : rappeler la position favorite d'un moteur unidirectionnel
+ * le déplace vers une position qu'on ne connaît pas, donc celle qu'on affichait devient fausse.
+ */
+export type StatePatch<K extends DeviceKind = DeviceKind> = K extends DeviceKind
+  ? { [P in keyof Omit<StateFor<K>, 'kind' | 'updatedAt'>]?: undefined extends StateFor<K>[P] ? StateFor<K>[P] | null : StateFor<K>[P] }
+  : never
 
 const STATE_KEYS = new Map<DeviceKind, ReadonlySet<string>>(
   deviceStateSchema.options.map((o) => [o.shape.kind.value as DeviceKind, new Set(Object.keys(o.shape))]),

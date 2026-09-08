@@ -12,8 +12,10 @@ export const CAPABILITIES = [
   // light
   'on_off', 'brightness', 'color_temp', 'color', 'effect',
   // cover — `open_close` = ouvrir/fermer en tout ou rien (radio RTS unidirectionnelle),
-  // `position` = position arbitraire connue et réglable (io-homecontrol, moteur Hue…)
-  'open_close', 'position', 'tilt', 'stop',
+  // `position` = position arbitraire connue et réglable (io-homecontrol, moteur Hue…),
+  // `preset` = position favorite mémorisée DANS le moteur, qu'on ne peut que rappeler
+  // (le « my » de Somfy) ; sa valeur n'est pas toujours lisible, voir `presetPosition`
+  'open_close', 'position', 'tilt', 'stop', 'preset',
   // media_player
   'playback', 'volume', 'mute', 'now_playing', 'track_skip',
   // climate
@@ -34,7 +36,7 @@ export type Capability = (typeof CAPABILITIES)[number]
 /** Capacités légales par kind — un descripteur qui en déclare d'autres est rejeté. */
 export const KIND_CAPABILITIES: Record<DeviceKind, readonly Capability[]> = {
   light: ['on_off', 'brightness', 'color_temp', 'color', 'effect'],
-  cover: ['open_close', 'position', 'tilt', 'stop'],
+  cover: ['open_close', 'position', 'tilt', 'stop', 'preset'],
   media_player: ['playback', 'volume', 'mute', 'now_playing', 'track_skip'],
   climate: ['hvac_mode', 'target_temp', 'current_temp', 'humidity', 'fan_mode'],
   vacuum: ['clean', 'dock', 'battery', 'locate'],

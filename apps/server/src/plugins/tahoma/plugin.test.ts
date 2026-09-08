@@ -98,7 +98,7 @@ describe('tahoma plugin', () => {
     const box = fakeBox()
     const { plugin, ctx, descriptors } = await started(box)
     expect(descriptors.map((d) => d.name)).toEqual(['Volet salon', 'BSO chambre', 'Store terrasse', 'Volet cuisine', 'Portail'])
-    expect(ctx.emitState).toHaveBeenCalledWith('io.1234-5678-9012.11110001', { position: 70, motion: 'stopped' })
+    expect(ctx.emitState).toHaveBeenCalledWith('io.1234-5678-9012.11110001', { position: 70, presetPosition: 27, motion: 'stopped' })
     // RTS : aucun état à publier, mais l'appareil doit devenir disponible
     expect(ctx.emitState).toHaveBeenCalledWith('rts.1234-5678-9012.22220001', {})
     expect(ctx.setAvailable).toHaveBeenCalledWith('rts.1234-5678-9012.22220001', true)
@@ -114,13 +114,13 @@ describe('tahoma plugin', () => {
     await flush()
     // la cible (fermeture 100) et `MovingState` arrivent dans DEUX trames distinctes : c'est la
     // fusion avec la position connue (70) qui donne le sens du mouvement
-    expect(ctx.emitState).toHaveBeenCalledWith('io.1234-5678-9012.11110001', { position: 70, motion: 'closing' })
+    expect(ctx.emitState).toHaveBeenCalledWith('io.1234-5678-9012.11110001', { position: 70, presetPosition: 27, motion: 'closing' })
     expect(ctx.setAvailable).toHaveBeenCalledWith('io.1234-5678-9012.11110002', false)
     // fin de course : la position réelle n'arrive qu'ici
     vi.mocked(ctx.emitState).mockClear()
     clock.advance(2000)
     await flush()
-    expect(ctx.emitState).toHaveBeenCalledWith('io.1234-5678-9012.11110001', { position: 28, motion: 'stopped' })
+    expect(ctx.emitState).toHaveBeenCalledWith('io.1234-5678-9012.11110001', { position: 28, presetPosition: 27, motion: 'stopped' })
     await plugin.stop()
     expect(box.calls).toContain('POST /events/listener-1/unregister')
   })
@@ -170,6 +170,29 @@ describe('tahoma plugin', () => {
       .rejects.toMatchObject({ code: 'UNSUPPORTED_COMMAND' })
     await expect(plugin.execute('rts.1234-5678-9012.99999999', { type: 'cover.open' }))
       .rejects.toMatchObject({ code: 'DEVICE_UNAVAILABLE' })
+    await plugin.stop()
+  })
+
+  it('rappeler la position favorite d un RTS EFFACE la position supposee', async () => {
+    // La position favorite vit dans le moteur et un RTS ne dit pas laquelle c'est : apres ce
+    // rappel, le 0 suppose par la fermeture precedente est devenu faux. Le garder afficherait
+    // « Baisse » pour un store parti ailleurs — exactement le defaut qu'on a corrige.
+    const box = fakeBox({ events: [] })
+    const { plugin, ctx } = await started(box)
+    await plugin.execute('rts.1234-5678-9012.22220001', { type: 'cover.close' })
+    expect(ctx.emitState).toHaveBeenCalledWith('rts.1234-5678-9012.22220001', { position: 0, motion: 'stopped' })
+
+    vi.mocked(ctx.emitState).mockClear()
+    await plugin.execute('rts.1234-5678-9012.22220001', { type: 'cover.preset' })
+    expect(box.applied.at(-1)!.actions).toEqual([
+      { deviceURL: RTS_SHUTTER.deviceURL, commands: [{ name: 'my', parameters: [] }] },
+    ])
+    expect(ctx.emitState).toHaveBeenCalledWith('rts.1234-5678-9012.22220001', { position: null, motion: 'stopped' })
+
+    // un io positionnable publiera sa vraie position : rien a inventer ni a effacer
+    vi.mocked(ctx.emitState).mockClear()
+    await plugin.execute('io.1234-5678-9012.11110001', { type: 'cover.preset' })
+    expect(ctx.emitState).not.toHaveBeenCalled()
     await plugin.stop()
   })
 

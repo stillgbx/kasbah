@@ -54,6 +54,16 @@ const hasPosition = props.descriptor.capabilities.includes('position')
 const hasTilt = props.descriptor.capabilities.includes('tilt')
 const hasStop = props.descriptor.capabilities.includes('stop')
 
+// Position favorite mémorisée DANS le moteur (le « my » de Somfy). La capacité dit qu'on peut la
+// rappeler ; la valeur, seulement qu'on peut la montrer — un moteur unidirectionnel a la première
+// sans la seconde. D'où deux notions distinctes plutôt qu'une.
+const hasPreset = props.descriptor.capabilities.includes('preset')
+const presetClosure = computed(() =>
+  props.state.presetPosition === undefined ? undefined : toClosure(props.state.presetPosition))
+// Repère sur la piste du curseur : `ticks` en tableau place la marque avec la géométrie de Vuetify
+// (le pouce ne parcourt pas toute la largeur), donc sans calcul de position à la main.
+const presetTicks = computed(() => (presetClosure.value === undefined ? undefined : [presetClosure.value]))
+
 function send(cmd: CommandInput) { emit('command', cmd) }
 </script>
 
@@ -81,9 +91,19 @@ function send(cmd: CommandInput) { emit('command', cmd) }
     </div>
 
     <v-slider v-if="hasPosition" v-model="drag" :min="0" :max="100" :step="5" :disabled="disabled"
-              density="compact" hide-details
+              :ticks="presetTicks" :show-ticks="presetTicks ? 'always' : false"
+              density="compact" hide-details class="cover__slider"
               @start="dragging = true"
               @end="(v: number) => { dragging = false; send({ type: 'cover.set_position', position: fromClosure(Math.round(v)) }) }" />
+
+    <!-- Sur sa propre ligne, pleine largeur : « Position perso » ne tient pas dans un quart des
+         340 px du panneau, et la valeur mérite d'être écrite. Une infobulle serait inutile ici,
+         l'application est tactile — rien ne survole. -->
+    <button v-if="hasPreset" type="button" class="key key--wide" :disabled="disabled" @click="send({ type: 'cover.preset' })">
+      <StrokeIcon name="crosshair" :size="16" />
+      <span>{{ $t('cover.preset') }}</span>
+      <span v-if="presetClosure !== undefined" class="key__pct">{{ Math.round(presetClosure) }} %</span>
+    </button>
 
     <template v-if="hasTilt">
       <!-- même gabarit que la ligne ci-dessus : les deux pourcentages s'alignent -->
@@ -117,4 +137,16 @@ function send(cmd: CommandInput) { emit('command', cmd) }
 }
 .key:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
 .key:disabled { opacity: .4; }
+/* la touche « position perso » prend la ligne entière et pousse sa valeur à droite */
+.key--wide { flex: none; width: 100%; justify-content: flex-start; gap: 8px; margin-top: 6px; }
+.key__pct { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* repère de la position perso : lisible sans concurrencer le pouce du curseur */
+.cover__slider :deep(.v-slider-track__tick) { background: var(--accent); opacity: .85; width: 2px; height: 8px; border-radius: 1px; }
+/* Sur la portion ACTIVE, un repère couleur accent est accent sur accent : invisible. Vuetify
+   marque ces repères `--filled`, et `--on-accent` est le jeton fait pour écrire sur l'accent. */
+.cover__slider :deep(.v-slider-track__tick--filled) { background: var(--on-accent); opacity: 1; }
+/* Vuetify étiquette un repère donné en tableau (« 73 » sous la piste) : 24 px de hauteur en plus,
+   et le chiffre est déjà écrit dans la touche juste en dessous. */
+.cover__slider :deep(.v-slider-track__tick-label) { display: none; }
+.cover__slider :deep(.v-slider--has-labels) { margin-bottom: 0; }
 </style>

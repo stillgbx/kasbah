@@ -69,6 +69,16 @@ describe('mergeState', () => {
     expect(next).not.toBe(prev)
     expect(next).toEqual({ ...prev, on: true, updatedAt: 99 })
   })
+  it('efface un champ optionnel avec `null`, sans bruit inutile', () => {
+    // Seul moyen de repasser une valeur a « inconnue » : rappeler la position favorite d'un moteur
+    // unidirectionnel le deplace vers une position qu'on ne connait pas.
+    const cover: StateFor<'cover'> = { kind: 'cover', updatedAt: 1, available: true, position: 40, motion: 'stopped' }
+    const cleared = mergeState(cover, { position: null }, 99)
+    expect('position' in cleared).toBe(false)
+    expect(cleared).toEqual({ kind: 'cover', updatedAt: 99, available: true, motion: 'stopped' })
+    // effacer ce qui est deja absent ne change rien : meme reference, donc rien sur le WebSocket
+    expect(mergeState(cleared, { position: null }, 123)).toBe(cleared)
+  })
   it('compares nested objects structurally', () => {
     const withColor = { ...prev, color: { x: 0.3, y: 0.3 } }
     expect(mergeState(withColor, { color: { x: 0.3, y: 0.3 } }, 5)).toBe(withColor)

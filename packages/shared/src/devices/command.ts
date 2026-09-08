@@ -25,6 +25,8 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('cover.stop') }),
   z.object({ type: z.literal('cover.set_position'), position: pct }),
   z.object({ type: z.literal('cover.set_tilt'), tilt: pct }),
+  // rappel de la position favorite du moteur : aucun paramètre, la valeur vit dans l'appareil
+  z.object({ type: z.literal('cover.preset') }),
   // media_player
   z.object({ type: z.literal('media_player.play') }),
   z.object({ type: z.literal('media_player.pause') }),
@@ -65,7 +67,7 @@ export type CommandOf<T extends CommandType> = Extract<Command, { type: T }>
 export const COMMAND_REQUIRES: Record<CommandType, Capability> = {
   'light.set': 'on_off',
   'cover.open': 'open_close', 'cover.close': 'open_close', 'cover.stop': 'stop',
-  'cover.set_position': 'position', 'cover.set_tilt': 'tilt',
+  'cover.set_position': 'position', 'cover.set_tilt': 'tilt', 'cover.preset': 'preset',
   'media_player.play': 'playback', 'media_player.pause': 'playback',
   'media_player.next': 'track_skip', 'media_player.previous': 'track_skip',
   'media_player.set_volume': 'volume', 'media_player.set_mute': 'mute',

@@ -52,15 +52,18 @@ export function shallowEqual(a: unknown, b: unknown): boolean {
 export function mergeState<K extends DeviceKind>(prev: StateFor<K>, patch: StatePatch<K>, now: number): StateFor<K> {
   let changed = false
   const prevRec = prev as Record<string, unknown>
+  // `null` demande l'EFFACEMENT du champ (voir `StatePatch`) : il ne change quelque chose que si
+  // le champ était présent, sinon un plugin qui efface à chaque trame réveillerait le WebSocket.
   for (const [k, v] of Object.entries(patch)) {
     if (k === 'kind' || k === 'updatedAt' || v === undefined) continue
-    if (!shallowEqual(prevRec[k], v)) { changed = true; break }
+    if (v === null ? k in prevRec : !shallowEqual(prevRec[k], v)) { changed = true; break }
   }
   if (!changed) return prev
   const next: Record<string, unknown> = { ...prevRec }
   for (const [k, v] of Object.entries(patch)) {
     if (k === 'kind' || k === 'updatedAt' || v === undefined) continue
-    next[k] = v
+    if (v === null) delete next[k]
+    else next[k] = v
   }
   next.updatedAt = now
   return next as StateFor<K>

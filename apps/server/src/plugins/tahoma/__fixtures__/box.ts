@@ -27,6 +27,8 @@ export const IO_SHUTTER = {
   },
   states: [
     { name: 'core:ClosureState', type: 1, value: 30 },
+    // position favorite mémorisée DANS le moteur (le « my ») : une FERMETURE, comme `ClosureState`
+    { name: 'core:Memorized1PositionState', type: 1, value: 73 },
     { name: 'core:MovingState', type: 6, value: false },
     { name: 'core:OpenClosedState', type: 3, value: 'open' },
     { name: 'core:StatusState', type: 3, value: 'available' },
