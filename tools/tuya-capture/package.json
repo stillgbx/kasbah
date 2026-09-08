@@ -1,0 +1,16 @@
+{
+  "name": "kasbah-tuya-capture",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Outil d'exploration : capture les DPS d'un appareil Tuya (ventilateur CREATE) en local, avant d'écrire le plugin.",
+  "scripts": {
+    "capture": "node --env-file-if-exists=.env capture.mjs"
+  },
+  "dependencies": {
+    "tuyapi": "^7.7.1"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
