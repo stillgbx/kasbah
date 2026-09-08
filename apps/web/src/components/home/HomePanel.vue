@@ -7,6 +7,8 @@ import { formatPercent, formatPower } from '../../lib/format'
 import { isDeviceOn } from '../../lib/deviceState'
 import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
+import { useScenesStore } from '../../stores/scenes'
+import SceneChips from '../scenes/SceneChips.vue'
 import StatTile from '../ui/StatTile.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import type { IconName } from '../../lib/strokeIcons'
@@ -14,6 +16,7 @@ import type { IconName } from '../../lib/strokeIcons'
 // Panneau « maison » : 4 tuiles de synthèse, scènes, liste des pièces (puis zones du jardin).
 const house = useHouseStore()
 const devices = useDevicesStore()
+const pluginScenes = useScenesStore()
 const summary = useHomeSummary()
 const { t, locale } = useI18n()
 
@@ -46,6 +49,26 @@ const zones = computed(() => {
   return house.zones.map((z) => ({ id: z.id, name: z.name, sub: counts(idx.devicesByZone.get(z.id) ?? []), where: t('home.garden') })).filter((z) => (idx.devicesByZone.get(z.id) ?? []).length > 0)
 })
 const scenes = computed(() => house.house?.scenes ?? [])
+/**
+ * Ambiances du fabricant qu'aucune pièce ne réclame (zones Hue, pièces hors maison), regroupées
+ * par groupe du fabricant : deux zones portent souvent une ambiance du MÊME nom, l'étiquette lève
+ * l'ambiguïté.
+ */
+const crossRoomGroups = computed(() => {
+  const scenes = pluginScenes.forHouse([
+    ...(house.house?.rooms ?? []).map((r) => r.name),
+    ...house.zones.map((z) => z.name),
+  ])
+  const acc = new Map<string, { key: string; label: string; scenes: typeof scenes }>()
+  for (const e of scenes) {
+    const name = e.scene.group?.name
+    const key = name ?? ''
+    const g = acc.get(key)
+    if (g) g.scenes.push(e)
+    else acc.set(key, { key, label: name ? t('scenes.group', { name }) : t('scenes.title'), scenes: [e] })
+  }
+  return [...acc.values()].sort((a, b) => a.label.localeCompare(b.label))
+})
 const sceneIcon = (icon?: string): IconName => (icon === 'leave' || icon === 'night' || icon === 'movie' ? icon : 'bolt')
 </script>
 
@@ -62,6 +85,8 @@ const sceneIcon = (icon?: string): IconName => (icon === 'leave' || icon === 'ni
       </button>
     </div>
   </section>
+
+  <SceneChips v-for="g in crossRoomGroups" :key="g.key" :scenes="g.scenes" :label="g.label" />
 
   <section class="block">
     <div class="section-label">{{ $t('home.rooms') }}</div>

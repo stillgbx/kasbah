@@ -2,11 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 import Fastify from 'fastify'
 import { ManualClock } from '@kasbah/mock-sim'
 import pino from 'pino'
+import type { PluginScene } from '@kasbah/shared'
 import type { PluginContext } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
 import { HueClient } from './client'
 import { createHuePlugin, hueConfigSchema } from './index'
-import { DEVICES, GROUPED_LIGHTS, LIGHTS, PAIR_101, PAIR_OK, ROOMS, SSE_FRAME, ZIGBEE } from './__fixtures__/bridge'
+import { DEVICES, GROUPED_LIGHTS, LIGHTS, PAIR_101, PAIR_OK, ROOMS, SCENES, SSE_FRAME, ZIGBEE, ZONES } from './__fixtures__/bridge'
 
 const flush = () => new Promise((r) => setTimeout(r, 0))
 const json = (data: unknown, status = 200) => ({ ok: status < 400, status, body: null, json: async () => data, text: async () => JSON.stringify(data) })
@@ -24,7 +25,10 @@ function fakeBridge(opts: { pairResponse?: unknown; lights?: unknown[] } = {}) {
       return { ok: true, status: 200, body, json: async () => ({}), text: async () => '' }
     }
     const resource = path.replace('/clip/v2/resource/', '')
-    const table: Record<string, unknown[]> = { light: opts.lights ?? LIGHTS, device: DEVICES, room: ROOMS, grouped_light: GROUPED_LIGHTS, zigbee_connectivity: ZIGBEE }
+    const table: Record<string, unknown[]> = {
+      light: opts.lights ?? LIGHTS, device: DEVICES, room: ROOMS, grouped_light: GROUPED_LIGHTS,
+      zigbee_connectivity: ZIGBEE, scene: SCENES, zone: ZONES,
+    }
     if (resource in table) return json({ errors: [], data: table[resource] })
     return json({ errors: [{ description: 'not found' }], data: [] }, 404)
   })
@@ -35,7 +39,7 @@ function fakeContext(config: Record<string, unknown>, clock: ManualClock) {
   const ctrl = new AbortController()
   const ctx: PluginContext = {
     pluginId: 'hue', config, logger: pino({ level: 'silent' }), clock, signal: ctrl.signal,
-    emitState: vi.fn(), setAvailable: vi.fn(), emitDevices: vi.fn(),
+    emitState: vi.fn(), setAvailable: vi.fn(), emitDevices: vi.fn(), emitScenes: vi.fn(), emitSceneState: vi.fn(),
   }
   return { ctx, ctrl }
 }
@@ -67,6 +71,58 @@ describe('hue plugin', () => {
     expect(bridge.puts[1]!.url).toBe('/clip/v2/resource/grouped_light/g-living')
     await expect(plugin.execute('l-color', { type: 'cover.open' })).rejects.toMatchObject({ code: 'UNSUPPORTED_COMMAND' })
     await expect(plugin.execute('nope', { type: 'light.set', on: true })).rejects.toMatchObject({ code: 'DEVICE_UNAVAILABLE' })
+    ctrl.abort()
+    await plugin.stop()
+  })
+
+  it('publishes scenes with their group and activation, recalls them, follows SSE status', async () => {
+    const bridge = fakeBridge()
+    const clock = new ManualClock(0)
+    const plugin = createHuePlugin({ fetchImpl: bridge.fetchImpl })
+    const { ctx, ctrl } = fakeContext(hueConfigSchema.parse({ HUE_BRIDGE_HOST: '10.0.0.2', HUE_APP_KEY: 'key' }), clock)
+    await plugin.init(ctx)
+    await plugin.start()
+
+    const published = (ctx.emitScenes as unknown as { mock: { calls: [PluginScene[]][] } }).mock.calls.at(-1)![0]
+    expect(published.map((s) => s.id)).toEqual(['hue:s-relax', 'hue:s-tropical'])
+    expect(published[0]).toMatchObject({ name: 'Détente', dynamic: false, group: { name: 'Salon', kind: 'room' } })
+    expect(published[1]).toMatchObject({ name: 'Crépuscule tropical', dynamic: true, group: { name: 'Soirée', kind: 'zone' } })
+    expect(ctx.emitSceneState).toHaveBeenCalledWith('s-relax', 'inactive')
+    expect(ctx.emitSceneState).toHaveBeenCalledWith('s-tropical', 'dynamic')
+
+    // le pont annonce l'activation dans le flux d'événements
+    await flush(); await flush()
+    expect(ctx.emitSceneState).toHaveBeenCalledWith('s-relax', 'static')
+    // …et le changement de réglage, d'où qu'il vienne : les scènes sont republiées
+    const republished = (ctx.emitScenes as unknown as { mock: { calls: [PluginScene[]][] } }).mock.calls.at(-1)![0]
+    expect(republished.find((sc) => sc.externalId === 's-tropical')!.autoDynamic).toBe(false)
+
+    await plugin.recallScene!('s-tropical', { mode: 'dynamic' })
+    expect(bridge.puts).toEqual([{ url: '/clip/v2/resource/scene/s-tropical', body: { recall: { action: 'dynamic_palette' } } }])
+    clock.advance(1000)
+    await plugin.recallScene!('s-relax', { mode: 'static', brightness: 50 })
+    expect(bridge.puts[1]).toEqual({ url: '/clip/v2/resource/scene/s-relax', body: { recall: { action: 'static', dimming: { brightness: 50 } } } })
+    // éteindre : un seul PUT sur le grouped_light de la pièce
+    clock.advance(1000)
+    await plugin.recallScene!('s-relax', { mode: 'off' })
+    expect(bridge.puts[2]).toEqual({ url: '/clip/v2/resource/grouped_light/g-living', body: { on: { on: false } } })
+    // la zone de la fixture n'a pas de grouped_light : repli lampe par lampe
+    clock.advance(1000)
+    await plugin.recallScene!('s-tropical', { mode: 'off' })
+    expect(bridge.puts[3]).toEqual({ url: '/clip/v2/resource/light/l-color', body: { on: { on: false } } })
+    await expect(plugin.recallScene!('nope', { mode: 'static' })).rejects.toMatchObject({ code: 'DEVICE_UNAVAILABLE' })
+
+    // réglage « démarrer animée » : écrit sur le pont, file distincte du rappel (aucune supplantation)
+    clock.advance(1000)
+    const recall = plugin.recallScene!('s-tropical', { mode: 'dynamic' })
+    const setting = plugin.updateScene!('s-tropical', { autoDynamic: false })
+    clock.advance(1000); await flush(); await flush()
+    clock.advance(1000); await flush(); await flush()
+    await Promise.all([recall, setting])
+    const scenePuts = bridge.puts.filter((p) => p.url === '/clip/v2/resource/scene/s-tropical').map((p) => p.body)
+    expect(scenePuts).toContainEqual({ recall: { action: 'dynamic_palette' } })
+    expect(scenePuts).toContainEqual({ auto_dynamic: false })
+    await expect(plugin.updateScene!('nope', { autoDynamic: true })).rejects.toMatchObject({ code: 'DEVICE_UNAVAILABLE' })
     ctrl.abort()
     await plugin.stop()
   })

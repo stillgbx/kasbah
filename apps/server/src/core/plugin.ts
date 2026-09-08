@@ -1,4 +1,4 @@
-import type { Command, DeviceDescriptor, PluginHealth, StatePatch } from '@kasbah/shared'
+import type { Command, DeviceDescriptor, PluginHealth, PluginScene, SceneActivation, SceneRecall, SceneUpdate, StatePatch } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import type { Logger } from 'pino'
 import type { z } from 'zod'
@@ -32,6 +32,9 @@ export interface PluginContext {
   setAvailable(externalId: string | '*', available: boolean): void
   /** Remplace l'ensemble des appareils du plugin (découverte tardive, ajout/suppression). */
   emitDevices(descriptors: DeviceDescriptor[]): void
+  /** Remplace l'ensemble des scènes du plugin. */
+  emitScenes(scenes: PluginScene[]): void
+  emitSceneState(externalId: string, active: SceneActivation): void
 }
 
 export interface DevicePlugin {
@@ -43,6 +46,10 @@ export interface DevicePlugin {
   start(): Promise<void>
   /** Résout à l'accusé de réception du fabricant ; lève PluginError sinon. */
   execute(externalId: string, command: Command): Promise<void>
+  /** Rappelle une scène du fabricant (les scènes sont publiées par `ctx.emitScenes`). */
+  recallScene?(externalId: string, recall: SceneRecall): Promise<void>
+  /** Écrit une préférence de scène chez le fabricant (la nouvelle valeur revient par ses événements). */
+  updateScene?(externalId: string, update: SceneUpdate): Promise<void>
   stop(): Promise<void>
   /** Routes propres au plugin, montées sous /api/plugins/<id>/. */
   registerRoutes?(app: FastifyInstance): void

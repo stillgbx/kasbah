@@ -65,11 +65,17 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
       return house
     },
     async pairHue() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Hue bridge in mock mode') },
+    // la simulation n'a pas de fabricant, donc pas de scènes de fabricant
+    async getScenes() { return [] },
+    async recallScene() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no vendor scenes in mock mode') },
+    async updateScene() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no vendor scenes in mock mode') },
+    async getPluginSettings() { return {} },
+    async setPluginSettings(_pluginId, settings) { return settings },
     connect(h) {
       handlers = h
       h.onStatus('connecting')
       sim.start(apply, (externalId, available) => apply(externalId, { available }))
-      h.onMessage({ type: 'snapshot', serverTime: Date.now(), devices: entries() })
+      h.onMessage({ type: 'snapshot', serverTime: Date.now(), devices: entries(), scenes: [] })
       h.onStatus('online')
       return () => { sim.stop(); handlers = null }
     },

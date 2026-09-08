@@ -5,11 +5,11 @@ import type { Clock } from '../../core/clock'
 import { PluginError } from '../../core/plugin'
 import { TokenBucket } from '../../core/rate-limit'
 import type { FetchLike } from '../../core/sse'
-import { huePairResponseSchema, hueResponseSchema, type HuePutBody } from './types'
+import { huePairResponseSchema, hueResponseSchema, type HueWriteBody } from './types'
 
 // Client HTTP CLIP v2. Le bridge présente un certificat signé par l'AC Signify (CN = id du bridge) :
 // on désactive la vérification TLS via un Agent undici dédié (jamais globalement).
-// Limites documentées : ~10 PUT/s sur `light`, ~1/s sur `grouped_light` → seau à jetons ; une
+// Limites documentées : ~10 PUT/s sur `light`, ~1/s sur `grouped_light` et sur `scene` → seau à jetons ; une
 // commande en attente pour la même lampe est SUPPLANTÉE par la suivante (glissement de slider).
 
 export interface HueClientOptions {
@@ -21,7 +21,9 @@ export interface HueClientOptions {
   logger?: Logger
 }
 
-interface Pending { body: HuePutBody; resolve: () => void; reject: (e: unknown) => void }
+type HueWriteType = 'light' | 'grouped_light' | 'scene'
+
+interface Pending { type: HueWriteType; id: string; body: HueWriteBody; resolve: () => void; reject: (e: unknown) => void }
 
 export class HueClient {
   readonly host: string
@@ -30,7 +32,7 @@ export class HueClient {
   readonly fetchImpl: FetchLike
   private readonly clock: Clock
   private readonly logger: Logger | undefined
-  private readonly buckets = { light: null as TokenBucket | null, grouped_light: null as TokenBucket | null }
+  private readonly buckets: Record<HueWriteType, TokenBucket>
   private readonly pending = new Map<string, Pending>()
   private draining = false
 
@@ -41,8 +43,11 @@ export class HueClient {
     this.logger = opts.logger
     this.dispatcher = opts.insecureTls === false ? undefined : new Agent({ connect: { rejectUnauthorized: false } })
     this.fetchImpl = opts.fetchImpl ?? ((url, init) => undiciFetch(url, init as Parameters<typeof undiciFetch>[1]) as unknown as ReturnType<FetchLike>)
-    this.buckets.light = new TokenBucket(10, 10, opts.clock)
-    this.buckets.grouped_light = new TokenBucket(1, 1, opts.clock)
+    this.buckets = {
+      light: new TokenBucket(10, 10, opts.clock),
+      grouped_light: new TokenBucket(1, 1, opts.clock),
+      scene: new TokenBucket(1, 1, opts.clock),
+    }
   }
 
   get baseUrl(): string { return `https://${this.host}` }
@@ -86,17 +91,21 @@ export class HueClient {
     return out
   }
 
-  async putResource(type: 'light' | 'grouped_light', id: string, body: HuePutBody): Promise<void> {
+  async putResource(type: HueWriteType, id: string, body: HueWriteBody): Promise<void> {
     await this.request('PUT', `/clip/v2/resource/${type}/${id}`, body)
   }
 
-  /** PUT limité en débit : la dernière commande pour une même ressource remplace la précédente. */
-  putLimited(type: 'light' | 'grouped_light', id: string, body: HuePutBody): Promise<void> {
-    const key = `${type}/${id}`
+  /**
+   * PUT limité en débit : la dernière écriture pour une même ressource remplace la précédente.
+   * `intent` sépare deux écritures de NATURE différente sur la même ressource — un rappel de scène
+   * ne doit pas supplanter un changement de réglage : elles ont alors deux files distinctes.
+   */
+  putLimited(type: HueWriteType, id: string, body: HueWriteBody, intent = 'set'): Promise<void> {
+    const key = `${type}/${id}#${intent}`
     return new Promise<void>((resolve, reject) => {
       const prev = this.pending.get(key)
       if (prev) prev.resolve()                         // supplanté : l'intention finale part quand même
-      this.pending.set(key, { body, resolve, reject })
+      this.pending.set(key, { type, id, body, resolve, reject })
       void this.drain()
     })
   }
@@ -107,8 +116,7 @@ export class HueClient {
     try {
       while (this.pending.size > 0) {
         const [key, p] = this.pending.entries().next().value as [string, Pending]
-        const type = key.split('/')[0] as 'light' | 'grouped_light'
-        const bucket = this.buckets[type]!
+        const bucket = this.buckets[p.type]
         const wait = bucket.waitMs()
         if (wait > 0) await new Promise<void>((r) => { this.clock.setTimeout(r, wait) })
         // la commande a pu être remplacée pendant l'attente → on relit la dernière
@@ -116,7 +124,7 @@ export class HueClient {
         if (!latest) continue
         this.pending.delete(key)
         bucket.tryTake()
-        try { await this.putResource(type, key.slice(type.length + 1), latest.body); latest.resolve() }
+        try { await this.putResource(latest.type, latest.id, latest.body); latest.resolve() }
         catch (err) { latest.reject(err) }
         if (latest !== p) p.resolve()
       }

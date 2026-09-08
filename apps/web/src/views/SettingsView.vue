@@ -9,14 +9,16 @@ import { LOCALE_LABELS } from '../i18n'
 import { accentColor } from '../plugins/vuetify'
 import { useDevicesStore } from '../stores/devices'
 import { useHouseStore } from '../stores/house'
+import { useScenesStore } from '../stores/scenes'
 import { useSettingsStore, type Appearance } from '../stores/settings'
 
 // Réglages : apparence, langue, accent, origine GPS (colonne gauche) ; plugins et clés .env (droite).
 const settings = useSettingsStore()
+const scenes = useScenesStore()
 const devices = useDevicesStore()
 const house = useHouseStore()
 const { t } = useI18n()
-onMounted(() => void devices.refreshHealth())
+onMounted(() => { void devices.refreshHealth(); void scenes.loadPluginSettings() })
 
 const appearanceOptions = computed(() => settings.appearances.map((a) => ({ value: a, label: t(`settings.${a}`) })))
 const localeOptions = computed(() => [{ value: '', label: t('settings.auto') }, ...settings.locales.map((l) => ({ value: l as string, label: LOCALE_LABELS[l] }))])
@@ -58,6 +60,31 @@ const houseStats = computed(() => {
             <div class="mono">{{ gps }}</div>
             <div class="muted small">{{ houseStats }}</div>
           </section>
+          <section v-for="g in scenes.animatedByPlugin" :key="g.pluginId" class="card block">
+            <div class="block__head">
+              <div class="block__title">{{ $t('settings.sceneAutoDynamic') }}</div>
+              <div class="muted small plugin-tag">{{ g.pluginId.replace('_', ' ') }}</div>
+            </div>
+            <div class="auto-row auto-row--default">
+              <div class="min0">
+                <div class="auto-row__name">{{ $t('settings.sceneAutoDynamicNew') }}</div>
+                <div class="muted small">{{ $t('settings.sceneAutoDynamicNewHint') }}</div>
+              </div>
+              <v-switch :model-value="scenes.settingsOf(g.pluginId).autoDynamicForNewScenes" hide-details density="compact"
+                        @update:model-value="(v: boolean | null) => scenes.setAutoDynamicForNewScenes(g.pluginId, v === true)" />
+            </div>
+            <div class="muted small">{{ $t('settings.sceneAutoDynamicHint') }}</div>
+            <div class="auto-rows">
+              <div v-for="e in g.scenes" :key="e.scene.id" class="auto-row">
+                <div class="min0">
+                  <div class="auto-row__name">{{ e.scene.name }}</div>
+                  <div class="muted small">{{ e.scene.group?.name ?? '—' }}</div>
+                </div>
+                <v-switch :model-value="e.scene.autoDynamic" hide-details density="compact"
+                          @update:model-value="(v: boolean | null) => scenes.setAutoDynamic(e.scene.id, v === true)" />
+              </div>
+            </div>
+          </section>
           <section v-if="settings.fullscreen.isSupported" class="card block block--row">
             <div class="block__title">{{ $t('settings.fullscreen') }}</div>
             <v-switch :model-value="settings.fullscreen.isFullscreen" @update:model-value="settings.fullscreen.toggle()" />
@@ -88,6 +115,13 @@ const houseStats = computed(() => {
 </template>
 
 <style scoped>
+.plugin-tag { text-transform: capitalize; }
+.auto-rows { display: grid; gap: 2px; margin-top: 8px; }
+.auto-row { display: flex; align-items: center; gap: 12px; padding: 4px 0; border-top: 1px solid var(--line); }
+.auto-row--default { border-top: 0; margin-bottom: 4px; }
+.auto-row__name { font-size: 14px; font-weight: 500; }
+.min0 { flex: 1 1 0; min-width: 0; }
+
 .settings { height: 100%; display: flex; flex-direction: column; }
 .settings__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 24px calc(var(--safe-bottom) + 24px); }
 .settings__cols { display: grid; grid-template-columns: minmax(280px, 420px) 1fr; gap: 16px; align-items: start; }

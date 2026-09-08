@@ -10,5 +10,6 @@ Thumbs.db
 _design
 _generated-ai-doc
 .gitnexus
+apps/server/.state/
 house/maison.json
 house/*.bak

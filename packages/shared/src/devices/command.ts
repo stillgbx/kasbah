@@ -15,6 +15,8 @@ export const commandSchema = z.discriminatedUnion('type', [
     brightness: pct.optional(),
     colorTempMirek: z.number().optional(),
     color: xySchema.optional(),
+    /** Nom d'effet pris dans `meta.effects` ; `no_effect` l'arrête. */
+    effect: z.string().optional(),
     transitionMs: z.number().int().min(0).optional(),
   }),
   // cover

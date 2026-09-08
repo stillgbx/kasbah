@@ -6,6 +6,7 @@ import { Bus } from './bus'
 import { createPoller, withTimeout } from './poll'
 import { TokenBucket } from './rate-limit'
 import { DeviceRegistry } from './registry'
+import { SceneRegistry } from './scene-registry'
 import { connectSse, parseSse } from './sse'
 import { PluginError } from './plugin'
 
@@ -105,6 +106,46 @@ describe('registry', () => {
     expect(reg.has('p:b')).toBe(false)
     expect(reg.get('p:a')!.state.available).toBe(false)       // état conservé
     expect(reg.countOf('p')).toBe(1)
+  })
+})
+
+describe('scene registry', () => {
+  const scene = (id: string, group?: string, dynamic = false) => ({
+    id: `hue:${id}`, pluginId: 'hue', externalId: id, name: id, dynamic, autoDynamic: false, swatches: [],
+    ...(group ? { group: { name: group, kind: 'room' as const } } : {}),
+  })
+
+  it('keeps the activation of scenes that survive a re-registration, drops the others', () => {
+    const bus = new Bus()
+    const clock = new ManualClock(1000)
+    const reg = new SceneRegistry(bus, clock)
+    const seen: [string, string][] = []
+    bus.on('scene', (id, state) => seen.push([id, state.active]))
+    reg.register('hue', [scene('a', 'Salon'), scene('b', 'Salon')])
+    reg.setActive('hue:a', 'static')
+    expect(reg.get('hue:a')!.state).toEqual({ active: 'static', updatedAt: 1000 })
+    reg.register('hue', [scene('a', 'Salon')])
+    expect(reg.get('hue:a')!.state.active).toBe('static')
+    expect(reg.get('hue:b')).toBeUndefined()
+    expect(seen).toEqual([['hue:a', 'static']])
+  })
+
+  it('one active scene per group: activating a sibling deactivates the previous one', () => {
+    const bus = new Bus()
+    const reg = new SceneRegistry(bus, new ManualClock(0))
+    reg.register('hue', [scene('a', 'Salon'), scene('b', 'Salon', true), scene('c', 'Cuisine')])
+    reg.setActive('hue:a', 'static')
+    reg.setActive('hue:c', 'static')
+    reg.setActive('hue:b', 'dynamic')
+    expect(reg.list().map((e) => [e.scene.externalId, e.state.active])).toEqual([['a', 'inactive'], ['b', 'dynamic'], ['c', 'static']])
+    expect(reg.setActive('hue:unknown', 'static')).toBe(false)
+  })
+
+  it('rejects a scene whose id does not match its plugin and external id', () => {
+    const bus = new Bus()
+    const reg = new SceneRegistry(bus, new ManualClock(0))
+    reg.register('hue', [{ ...scene('a'), id: 'hue:other' }])
+    expect(reg.list()).toEqual([])
   })
 })
 

@@ -16,6 +16,8 @@ export const envSchema = z.object({
   KASBAH_PLUGINS: z.string().default('mock').transform((s) => s.split(',').map((p) => p.trim()).filter(Boolean)),
   KASBAH_HOUSE_FILE: z.string().default(resolve(REPO_ROOT, 'house/demo-house.json')),
   KASBAH_STATIC_DIR: z.string().default(resolve(REPO_ROOT, 'apps/web/dist')),
+  /** Réglages par plugin décidés depuis l'UI (petit JSON écrit par le serveur). */
+  KASBAH_SETTINGS_FILE: z.string().default(resolve(REPO_ROOT, 'apps/server/.state/plugin-settings.json')),
   KASBAH_LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'silent']).default('info'),
   KASBAH_LOG_PRETTY: bool.default(false),
   KASBAH_STRICT_PLUGINS: bool.default(false),

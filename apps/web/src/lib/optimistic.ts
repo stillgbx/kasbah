@@ -13,6 +13,7 @@ export function optimisticPatch(state: DeviceState, cmd: CommandInput): Partial<
         ...(cmd.brightness !== undefined ? (cmd.brightness === 0 ? { on: false } : { on: true, brightness: cmd.brightness }) : {}),
         ...(cmd.colorTempMirek !== undefined ? { colorTempMirek: cmd.colorTempMirek } : {}),
         ...(cmd.color !== undefined ? { color: cmd.color } : {}),
+        ...(cmd.effect !== undefined ? { effect: cmd.effect } : {}),
       } as Partial<DeviceState>
     case 'cover':
       switch (cmd.type) {

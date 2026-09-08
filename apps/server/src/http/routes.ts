@@ -1,14 +1,18 @@
-import { assertCommandAllowed, commandSchema, devicePlacementSchema, placeDeviceInJson, type HealthResponse } from '@kasbah/shared'
+import { assertCommandAllowed, commandSchema, devicePlacementSchema, placeDeviceInJson, pluginSettingsSchema, sceneRecallSchema, sceneUpdateSchema, type HealthResponse } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { updateHouseFile, type LoadedHouse } from '../config/house'
 import type { PluginHost } from '../core/plugin-host'
 import type { DeviceRegistry } from '../core/registry'
 import type { EnergyHistory } from '../core/history'
+import type { PluginSettingsStore } from '../core/plugin-settings'
+import type { SceneRegistry } from '../core/scene-registry'
 import type { WsHub } from '../ws/hub'
 import { describeError, sendError } from './errors'
 
 export interface RoutesDeps {
   registry: DeviceRegistry
+  scenes: SceneRegistry
+  settings: PluginSettingsStore
   host: PluginHost
   house: LoadedHouse
   hub: WsHub
@@ -62,6 +66,43 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
     if (!entry) return sendError(reply, 404, 'NOT_FOUND', `unknown device "${req.params.id}"`)
     const hours = Math.min(48, Math.max(1, Number(req.query.hours ?? 24) || 24))
     return { deviceId: entry.descriptor.id, points: deps.history.points(entry.descriptor.id, hours) }
+  })
+
+  // Scènes des fabricants : lecture, puis rappel. Comme pour les commandes, l'état résultant
+  // (quelle scène est active) arrive par le WebSocket, pas dans la réponse.
+  app.get('/api/scenes', async () => ({ scenes: deps.scenes.list() }))
+
+  app.post<{ Params: { id: string } }>('/api/scenes/:id/recall', async (req, reply) => {
+    const entry = deps.scenes.get(req.params.id)
+    if (!entry) return sendError(reply, 404, 'NOT_FOUND', `unknown scene "${req.params.id}"`)
+    const recall = sceneRecallSchema.parse(req.body ?? {})
+    if (recall.mode === 'dynamic' && !entry.scene.dynamic) {
+      return sendError(reply, 400, 'UNSUPPORTED_COMMAND', `scene "${entry.scene.name}" has no animated palette`)
+    }
+    await deps.host.recallScene(entry.scene.id, recall)
+    return { ok: true as const }
+  })
+
+  // Écrit une préférence de scène CHEZ le fabricant (une seule source de vérité pour toutes les
+  // apps). La nouvelle valeur revient par les événements du fabricant, pas dans la réponse.
+  app.patch<{ Params: { id: string } }>('/api/scenes/:id', async (req, reply) => {
+    const entry = deps.scenes.get(req.params.id)
+    if (!entry) return sendError(reply, 404, 'NOT_FOUND', `unknown scene "${req.params.id}"`)
+    const update = sceneUpdateSchema.parse(req.body)
+    if (update.autoDynamic && !entry.scene.dynamic) {
+      return sendError(reply, 400, 'UNSUPPORTED_COMMAND', `scene "${entry.scene.name}" has no animated palette`)
+    }
+    await deps.host.updateScene(entry.scene.id, update)
+    return { ok: true as const }
+  })
+
+  // Réglages par plugin (persistés côté serveur, valables pour toutes les tablettes).
+  app.get('/api/plugins/settings', async () => ({ settings: deps.settings.all() }))
+
+  app.patch<{ Params: { id: string } }>('/api/plugins/:id/settings', async (req, reply) => {
+    if (!deps.host.ids().includes(req.params.id)) return sendError(reply, 404, 'NOT_FOUND', `unknown plugin "${req.params.id}"`)
+    const settings = pluginSettingsSchema.parse(req.body)
+    return { settings: await deps.settings.set(req.params.id, settings) }
   })
 
   app.post<{ Params: { id: string } }>('/api/devices/:id/command', async (req, reply) => {

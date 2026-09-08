@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { DEVICES, GROUPED_LIGHTS, LIGHTS, ROOMS, ZIGBEE } from './__fixtures__/bridge'
-import { connectivityToAvailability, indexResources, toDescriptor, toGroupDescriptor, toLightPatch, toPutBody } from './mapping'
-import { hueDeviceSchema, hueGroupedLightSchema, hueLightSchema, hueRoomSchema, hueZigbeeConnectivitySchema } from './types'
+import { DEVICES, GROUPED_LIGHTS, LIGHTS, ROOMS, SCENES, ZIGBEE, ZONES } from './__fixtures__/bridge'
+import {
+  connectivityToAvailability, indexResources, sceneStatusToActive, toDescriptor, toGroupDescriptor, toLightPatch,
+  sceneTargetLights, toPutBody, toSceneDescriptor, toSceneRecallBody,
+} from './mapping'
+import { hueDeviceSchema, hueGroupedLightSchema, hueLightSchema, hueRoomSchema, hueSceneSchema, hueZigbeeConnectivitySchema } from './types'
 
 const lights = LIGHTS.map((l) => hueLightSchema.parse(l))
 const devices = DEVICES.map((d) => hueDeviceSchema.parse(d))
 const rooms = ROOMS.map((r) => hueRoomSchema.parse(r))
 const idx = indexResources(lights, devices, rooms)
+const scenes = SCENES.map((s) => hueSceneSchema.parse(s))
+const zones = ZONES.map((z) => hueRoomSchema.parse(z))
 
 describe('hue mapping', () => {
   it('infers capabilities from resource features', () => {
@@ -16,7 +21,8 @@ describe('hue mapping', () => {
     const white = toDescriptor(lights[1]!, idx.devices.get('d-white'), idx.roomOfDevice.get('d-white'))
     expect(white.capabilities).toEqual(['on_off', 'brightness', 'color_temp'])
     const plain = toDescriptor(lights[2]!, idx.devices.get('d-plain'), idx.roomOfDevice.get('d-plain'))
-    expect(plain.capabilities).toEqual(['on_off'])
+    expect(plain.capabilities).toEqual(['on_off', 'effect'])
+    expect(plain.meta.effects).toEqual(['no_effect', 'candle', 'fire'])
     expect(plain.meta.room).toBeUndefined()
   })
   it('maps a room group', () => {
@@ -42,6 +48,42 @@ describe('hue mapping', () => {
     const ignored = toPutBody({ type: 'light.set', color: { x: 0.1, y: 0.2 } }, plain)
     expect(ignored.body).toEqual({})
     expect(ignored.warnings).toHaveLength(1)
+  })
+  it('put body: an effect takes over the colour, an unsupported one is ignored', () => {
+    const plain = toDescriptor(lights[2]!, idx.devices.get('d-plain'))
+    expect(toPutBody({ type: 'light.set', effect: 'candle' }, plain).body).toEqual({ effects: { effect: 'candle' } })
+    const both = toPutBody({ type: 'light.set', effect: 'candle', colorTempMirek: 300 }, plain)
+    expect(both.body).toEqual({ effects: { effect: 'candle' } })
+    expect(both.warnings).toEqual(['effect and color both given: effect wins'])
+    // `no_effect` arrête l'effet : la couleur du même appel reste légitime
+    const color = toDescriptor(lights[0]!, idx.devices.get('d-color'))
+    expect(toPutBody({ type: 'light.set', effect: 'no_effect', color: { x: 0.3, y: 0.3 } }, color).warnings)
+      .toEqual(['effect ignored: capability not supported by this light'])
+    expect(toPutBody({ type: 'light.set', effect: 'candle' }, color).body).toEqual({})
+  })
+  it('scene: swatches from the animated palette, else from the fixed actions', () => {
+    const roomScene = toSceneDescriptor(scenes[0]!, { name: 'Salon', kind: 'room' })
+    expect(roomScene).toMatchObject({ id: 'hue:s-relax', externalId: 's-relax', name: 'Détente', dynamic: false, autoDynamic: false, group: { name: 'Salon', kind: 'room' } })
+    // deux lampes au même blanc → UNE pastille
+    expect(roomScene.swatches).toHaveLength(1)
+    expect(roomScene.swatches[0]).toMatch(/^#[0-9a-f]{6}$/)
+    const zoneScene = toSceneDescriptor(scenes[1]!, { name: zones[0]!.metadata!.name!, kind: 'zone' })
+    // `auto_dynamic` du pont = préférence de l'utilisateur, remontée telle quelle
+    expect(zoneScene).toMatchObject({ id: 'hue:s-tropical', dynamic: true, autoDynamic: true, group: { name: 'Soirée', kind: 'zone' } })
+    expect(toSceneDescriptor({ ...scenes[1]!, auto_dynamic: undefined }).autoDynamic).toBe(false)
+    expect(zoneScene.swatches).toHaveLength(2)
+    expect(toSceneDescriptor(scenes[0]!).group).toBeUndefined()
+  })
+  it('scene: status → activation, recall body', () => {
+    expect(sceneStatusToActive(scenes[0]!)).toBe('inactive')
+    expect(sceneStatusToActive(scenes[1]!)).toBe('dynamic')
+    expect(sceneStatusToActive({ status: undefined })).toBe('inactive')
+    // `static` et NON `active` : `active` démarrerait l'animation des scènes `auto_dynamic`
+    expect(toSceneRecallBody({ mode: 'static' })).toEqual({ recall: { action: 'static' } })
+    expect(toSceneRecallBody({ mode: 'dynamic', brightness: 60, transitionMs: 800 }))
+      .toEqual({ recall: { action: 'dynamic_palette', dimming: { brightness: 60 }, duration: 800 } })
+    expect(sceneTargetLights(scenes[0]!)).toEqual(['l-color', 'l-white'])
+    expect(sceneTargetLights({ ...scenes[0]!, actions: [] })).toEqual([])
   })
   it('zigbee connectivity → availability per light', () => {
     const z = ZIGBEE.map((x) => hueZigbeeConnectivitySchema.parse(x))

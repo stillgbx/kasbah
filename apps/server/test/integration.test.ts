@@ -70,6 +70,69 @@ describe('REST API', () => {
   })
 })
 
+describe('plugin scenes (GET /api/scenes, POST /api/scenes/:id/recall)', () => {
+  it('lists the registered scenes and refuses impossible recalls', async () => {
+    const { kasbah } = await makeApp('default')
+    try {
+      // le plugin mock n'a pas de scènes : on en injecte pour exercer les routes
+      kasbah.scenes.register('mock', [
+        { id: 'mock:s1', pluginId: 'mock', externalId: 's1', name: 'Soirée', group: { name: 'Salon', kind: 'room' }, dynamic: false, autoDynamic: false, swatches: ['#ff8800'] },
+      ])
+      const list = await kasbah.app.inject({ method: 'GET', url: '/api/scenes' })
+      expect(list.statusCode).toBe(200)
+      expect(list.json().scenes).toEqual([
+        { scene: { id: 'mock:s1', pluginId: 'mock', externalId: 's1', name: 'Soirée', group: { name: 'Salon', kind: 'room' }, dynamic: false, autoDynamic: false, swatches: ['#ff8800'] },
+          state: { active: 'inactive', updatedAt: MONDAY } },
+      ])
+
+      expect((await kasbah.app.inject({ method: 'POST', url: '/api/scenes/mock:nope/recall', payload: {} })).statusCode).toBe(404)
+      const notDynamic = await kasbah.app.inject({ method: 'POST', url: '/api/scenes/mock:s1/recall', payload: { mode: 'dynamic' } })
+      expect(notDynamic.statusCode).toBe(400)
+      expect(notDynamic.json().error.code).toBe('UNSUPPORTED_COMMAND')
+      // le plugin mock n'implémente ni recallScene ni updateScene
+      const noRecall = await kasbah.app.inject({ method: 'POST', url: '/api/scenes/mock:s1/recall', payload: {} })
+      expect(noRecall.statusCode).toBe(501)
+      expect(noRecall.json().error.code).toBe('NOT_IMPLEMENTED')
+
+      // PATCH : le réglage « démarrer animée » n'a pas de sens sans palette animée
+      const notAnimated = await kasbah.app.inject({ method: 'PATCH', url: '/api/scenes/mock:s1', payload: { autoDynamic: true } })
+      expect(notAnimated.statusCode).toBe(400)
+      expect(notAnimated.json().error.code).toBe('UNSUPPORTED_COMMAND')
+      expect((await kasbah.app.inject({ method: 'PATCH', url: '/api/scenes/mock:nope', payload: { autoDynamic: false } })).statusCode).toBe(404)
+      expect((await kasbah.app.inject({ method: 'PATCH', url: '/api/scenes/mock:s1', payload: {} })).json().error.code).toBe('INVALID_BODY')
+      const readOnly = await kasbah.app.inject({ method: 'PATCH', url: '/api/scenes/mock:s1', payload: { autoDynamic: false } })
+      expect(readOnly.statusCode).toBe(501)
+    } finally {
+      await kasbah.close()
+    }
+  })
+})
+
+describe('plugin settings (GET /api/plugins/settings, PATCH /api/plugins/:id/settings)', () => {
+  it('persists a per-plugin setting and refuses an unknown plugin', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'kasbah-settings-'))
+    const env = loadEnv({ KASBAH_PLUGINS: 'mock', KASBAH_HOUSE_FILE: HOUSE, KASBAH_LOG_LEVEL: 'silent', KASBAH_SETTINGS_FILE: join(dir, 'plugin-settings.json') })
+    const kasbah = await buildApp({ env, logger: pino({ level: 'silent' }), serveStatic: false })
+    await kasbah.app.ready()
+    try {
+      expect((await kasbah.app.inject({ method: 'GET', url: '/api/plugins/settings' })).json()).toEqual({ settings: {} })
+      const r = await kasbah.app.inject({ method: 'PATCH', url: '/api/plugins/mock/settings', payload: { autoDynamicForNewScenes: true } })
+      expect(r.statusCode).toBe(200)
+      expect(r.json()).toEqual({ settings: { autoDynamicForNewScenes: true } })
+      expect((await kasbah.app.inject({ method: 'GET', url: '/api/plugins/settings' })).json())
+        .toEqual({ settings: { mock: { autoDynamicForNewScenes: true } } })
+      expect((await kasbah.app.inject({ method: 'PATCH', url: '/api/plugins/nope/settings', payload: { autoDynamicForNewScenes: true } })).statusCode).toBe(404)
+      // relu depuis le disque par une nouvelle instance
+      const again = await buildApp({ env, logger: pino({ level: 'silent' }), serveStatic: false })
+      expect(again.settings.get('mock').autoDynamicForNewScenes).toBe(true)
+      await again.close()
+    } finally {
+      await kasbah.close()
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+})
+
 describe('chaos scenario error mapping', () => {
   it('surfaces upstream failures as 502', async () => {
     const { kasbah } = await makeApp('chaos')

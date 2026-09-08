@@ -18,6 +18,8 @@ export const deviceMetaSchema = z.object({
   isGroup: z.boolean().optional(),
   /** Plage [min, max] en mirek supportée par la lampe. */
   colorTempMirek: z.tuple([z.number(), z.number()]).optional(),
+  /** Effets proposés par le fabricant, `no_effect` en premier (capacité `effect`). */
+  effects: z.array(z.string()).optional(),
   /** Plage [min, max] de consigne en °C. */
   targetTempC: z.tuple([z.number(), z.number()]).optional(),
   sensor: z.object({

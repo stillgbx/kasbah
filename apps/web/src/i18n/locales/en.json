@@ -30,7 +30,17 @@
     "pending": "Command in progress…", "lastUpdate": "Updated {time}", "empty": "No known device. Check the plugins in settings."
   },
   "place": {"title": "Placement", "move": "Move", "done": "Done", "hint": "Drag the device in the 3D view to move it. Set the height here.", "height": "Height", "presets": {"ceiling": "Ceiling", "wall": "Wall", "table": "Table", "floor": "Floor"}, "revert": "Revert", "outside": "outside rooms", "saveError": "Position not saved: {message}"},
-  "light": { "brightness": "Brightness", "colorTemp": "Temperature", "color": "Color", "warm": "Warm", "cold": "Cold" },
+  "light": {
+    "brightness": "Brightness", "colorTemp": "Temperature", "color": "Color", "warm": "Warm", "cold": "Cold", "effect": "Effect",
+    "effects": {
+      "no_effect": "None", "candle": "Candle", "fire": "Fire", "prism": "Prism", "sparkle": "Sparkle",
+      "opal": "Opal", "glisten": "Glisten", "underwater": "Underwater", "cosmos": "Cosmos", "sunbeam": "Sunbeam", "enchant": "Enchant"
+    }
+  },
+  "scenes": {
+    "title": "Light scenes", "group": "Light scenes · {name}", "animate": "Animate the palette",
+    "stopAnimate": "Stop the animation", "turnOff": "Turn off {name}"
+  },
   "lights": {
     "summary": "{on} on out of {total}", "none": "No light reported by the plugins.",
     "noRoom": "No room", "notInHouse": "Not in the house",
@@ -76,6 +86,10 @@
     "title": "Settings", "appearance": "Appearance", "system": "System", "light": "Light", "dark": "Dark",
     "accent": "Accent color", "accents": { "teal": "Lagoon", "terracotta": "Terracotta", "indigo": "Indigo", "moss": "Moss" },
     "language": "Language", "auto": "Automatic", "fullscreen": "Full screen",
+    "sceneAutoDynamic": "Animated scenes",
+    "sceneAutoDynamicNew": "New animated scenes",
+    "sceneAutoDynamicNewHint": "Default behaviour for an animated scene that appears (created at the vendor, or that gains a palette). Never affects the ones already listed below.",
+    "sceneAutoDynamicHint": "Start the animation automatically, stored at the vendor: Kasbah and the vendor app read the same value. Unchecked, tapping plays the static version and the animation only starts from the ✨ button.",
     "gps": "GPS origin of the local frame", "gpsHeading": "heading", "houseStats": "{levels} floors · {rooms} rooms · {devices} devices",
     "plugins": "Plugins", "keys": ".env keys", "noKeys": "no key", "pluginStatus": {
       "ok": "Connected", "degraded": "Degraded", "needs_pairing": "Pairing required", "error": "Error",

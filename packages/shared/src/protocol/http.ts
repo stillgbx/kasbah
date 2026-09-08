@@ -1,11 +1,18 @@
 import { z } from 'zod'
 import { deviceEntrySchema } from './ws'
+import { pluginSceneEntrySchema, pluginSettingsSchema } from '../scenes/scene'
 
 export const apiErrorSchema = z.object({ error: z.object({ code: z.string(), message: z.string() }) })
 export type ApiError = z.infer<typeof apiErrorSchema>
 
 export const devicesResponseSchema = z.object({ devices: z.array(deviceEntrySchema) })
 export type DevicesResponse = z.infer<typeof devicesResponseSchema>
+
+export const scenesResponseSchema = z.object({ scenes: z.array(pluginSceneEntrySchema) })
+export type ScenesResponse = z.infer<typeof scenesResponseSchema>
+
+export const pluginSettingsResponseSchema = z.object({ settings: z.record(z.string(), pluginSettingsSchema) })
+export type PluginSettingsResponse = z.infer<typeof pluginSettingsResponseSchema>
 
 export const PLUGIN_HEALTH_STATUSES = ['ok', 'degraded', 'needs_pairing', 'error', 'not_implemented', 'disabled'] as const
 export const pluginHealthSchema = z.object({

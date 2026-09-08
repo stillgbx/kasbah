@@ -6,12 +6,15 @@ import { isDeviceOn, statusLabel, toggleCommand } from '../../lib/deviceState'
 import { kindIcon } from '../../lib/strokeIcons'
 import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
+import { useScenesStore } from '../../stores/scenes'
+import SceneChips from '../scenes/SceneChips.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
 // Panneau « pièce » (ou zone du jardin) : fil d'Ariane, titre, appareils avec bascule rapide.
 const emit = defineEmits<{ back: [] }>()
 const house = useHouseStore()
 const devices = useDevicesStore()
+const scenes = useScenesStore()
 const { t, locale } = useI18n()
 
 const target = computed(() => {
@@ -36,6 +39,8 @@ function row(d: HouseDevice) {
   }
 }
 const rows = computed(() => (target.value?.list ?? []).map(row))
+/** Ambiances du fabricant rattachées à cette pièce (rapprochement par nom). */
+const roomScenes = computed(() => (target.value ? scenes.forRoom(target.value.name) : []))
 </script>
 
 <template>
@@ -45,6 +50,7 @@ const rows = computed(() => (target.value?.list ?? []).map(row))
       <div class="title">{{ target.name }}</div>
       <div class="muted sub">{{ target.where }} · {{ $t('home.devicesCount', { n: rows.length }, rows.length) }}</div>
     </div>
+    <SceneChips :scenes="roomScenes" :label="$t('scenes.title')" />
     <div class="rows">
       <div v-for="r in rows" :key="r.key" class="dev-row" role="button" tabindex="0" @click="house.selectDevice(r.key)" @keydown.enter="house.selectDevice(r.key)">
         <span class="icon-square" :data-on="r.on ? '1' : '0'"><StrokeIcon :name="r.icon" :size="18" /></span>

@@ -1,4 +1,4 @@
-import { apiErrorSchema, devicesResponseSchema, energyHistorySchema, healthResponseSchema, houseSchema, serverMessageSchema, type CommandInput, type DeviceEntry, type DevicePlacement, type EnergyHistory, type HealthResponse, type House } from '@kasbah/shared'
+import { apiErrorSchema, devicesResponseSchema, energyHistorySchema, healthResponseSchema, houseSchema, pluginSettingsResponseSchema, pluginSettingsSchema, scenesResponseSchema, serverMessageSchema, type CommandInput, type DeviceEntry, type DevicePlacement, type EnergyHistory, type HealthResponse, type House, type PluginSceneEntry, type PluginSettings, type SceneRecallInput, type SceneUpdate } from '@kasbah/shared'
 import { ApiRequestError, type ConnectionStatus, type Transport, type TransportHandlers } from './transport'
 
 // URLs relatives : même origine en prod (Fastify sert le build) et via le proxy Vite en dev.
@@ -32,6 +32,23 @@ export function createHttpTransport(base = ''): Transport {
       `${base}/api/devices/${encodeURIComponent(deviceId)}/command`,
       { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(command) },
       () => undefined,
+    ),
+    getScenes: () => request(`${base}/api/scenes`, undefined, (j) => scenesResponseSchema.parse(j).scenes as PluginSceneEntry[]),
+    recallScene: (sceneId, recall: SceneRecallInput) => request(
+      `${base}/api/scenes/${encodeURIComponent(sceneId)}/recall`,
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(recall) },
+      () => undefined,
+    ),
+    updateScene: (sceneId, update: SceneUpdate) => request(
+      `${base}/api/scenes/${encodeURIComponent(sceneId)}`,
+      { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(update) },
+      () => undefined,
+    ),
+    getPluginSettings: () => request(`${base}/api/plugins/settings`, undefined, (j) => pluginSettingsResponseSchema.parse(j).settings as Record<string, PluginSettings>),
+    setPluginSettings: (pluginId, settings: PluginSettings) => request(
+      `${base}/api/plugins/${encodeURIComponent(pluginId)}/settings`,
+      { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(settings) },
+      (j) => pluginSettingsSchema.parse((j as { settings: unknown }).settings) as PluginSettings,
     ),
     placeDevice: (id, placement: DevicePlacement) => request(
       `${base}/api/house/devices/${encodeURIComponent(id)}`,

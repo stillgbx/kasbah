@@ -5,6 +5,7 @@ import { ApiRequestError, getTransport, type ConnectionStatus } from '../api'
 import { t } from '../i18n'
 import { optimisticPatch } from '../lib/optimistic'
 import { useNotificationsStore } from './notifications'
+import { useScenesStore } from './scenes'
 
 // Appareils des plugins : descripteurs + états, connexion push, commandes avec mise à jour
 // optimiste et retour arrière. INVARIANT : l'objet d'état d'un appareil est REMPLACÉ (jamais muté)
@@ -58,8 +59,10 @@ export const useDevicesStore = defineStore('devices', () => {
 
   function start() {
     if (disconnect) return
+    const scenes = useScenesStore()
     disconnect = getTransport().connect({
-      onMessage: applyMessage,
+      // le même flux nourrit les appareils et les scènes des fabricants, chacun son store
+      onMessage: (msg) => { applyMessage(msg); scenes.apply(msg) },
       onStatus: (s) => { connection.value = s },
     })
   }

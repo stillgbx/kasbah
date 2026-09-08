@@ -6,6 +6,7 @@ import type { WebSocket } from 'ws'
 import type { Bus } from '../core/bus'
 import type { Clock } from '../core/clock'
 import type { DeviceRegistry } from '../core/registry'
+import type { SceneRegistry } from '../core/scene-registry'
 
 // Hub WebSocket : snapshot à la connexion, puis push des états ENTIERS coalescés par appareil
 // (une rafale d'événements SSE Hue devient une trame). Ping protocolaire pour purger les morts.
@@ -13,6 +14,8 @@ import type { DeviceRegistry } from '../core/registry'
 export interface WsHubOptions {
   coalesceMs?: number
   heartbeatMs?: number
+  /** Scènes des fabricants (snapshot et push) ; absentes des tests qui n'en ont pas besoin. */
+  scenes?: SceneRegistry
 }
 
 export class WsHub {
@@ -23,6 +26,7 @@ export class WsHub {
   private readonly unsubscribe: (() => void)[] = []
   private readonly coalesceMs: number
   private readonly heartbeatMs: number
+  private readonly scenes: SceneRegistry | undefined
 
   constructor(
     private readonly registry: DeviceRegistry,
@@ -33,6 +37,7 @@ export class WsHub {
   ) {
     this.coalesceMs = opts.coalesceMs ?? 50
     this.heartbeatMs = opts.heartbeatMs ?? 15_000
+    this.scenes = opts.scenes
     this.unsubscribe.push(
       bus.on('state', (id, state) => { this.pending.set(id, state); this.scheduleFlush() }),
       bus.on('availability', (deviceIds, available) => {
@@ -42,6 +47,9 @@ export class WsHub {
         this.scheduleFlush()
       }),
       bus.on('devices', (entries) => this.broadcast({ type: 'devices', devices: entries })),
+      // les scènes changent rarement (rappel manuel, interrupteur mural) : pas de coalescence
+      bus.on('scenes', (entries) => this.broadcast({ type: 'scenes', scenes: entries })),
+      bus.on('scene', (sceneId, state) => this.broadcast({ type: 'scene', sceneId, state })),
     )
   }
 
@@ -59,7 +67,7 @@ export class WsHub {
     socket.on('close', () => this.clients.delete(socket))
     socket.on('error', (err) => { this.logger.debug({ err }, 'ws client error'); this.clients.delete(socket) })
     socket.on('message', () => { /* v1 : le client n'envoie rien d'utile */ })
-    this.send(socket, { type: 'snapshot', serverTime: this.clock.now(), devices: this.registry.list() })
+    this.send(socket, { type: 'snapshot', serverTime: this.clock.now(), devices: this.registry.list(), scenes: this.scenes?.list() ?? [] })
     this.logger.debug({ clients: this.clients.size }, 'ws client connected')
   }
 

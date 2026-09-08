@@ -17,6 +17,8 @@ export const lightStateSchema = z.object({
   brightness: pct.optional(),
   colorTempMirek: z.number().optional(),
   color: xySchema.optional(),
+  /** Effet du fabricant en cours (`no_effect` quand aucun) — voir `meta.effects`. */
+  effect: z.string().optional(),
 })
 
 export const COVER_MOTIONS = ['opening', 'closing', 'stopped'] as const

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
+import { useI18n } from 'vue-i18n'
 import { hexToRgb, mirekToRgb, rgbToHex, rgbToXy, xyToRgb, type CommandInput, type DeviceDescriptor, type StateFor } from '@kasbah/shared'
 import { formatKelvin } from '../../lib/format'
 
@@ -18,6 +19,13 @@ watch(() => props.state.colorTempMirek, (v) => { if (v !== undefined) mirek.valu
 
 const hex = computed(() => (props.state.color ? rgbToHex(xyToRgb(props.state.color.x, props.state.color.y)) : rgbToHex(mirekToRgb(mirek.value))))
 const swatch = computed(() => (props.state.on ? hex.value : 'transparent'))
+
+// Effets du fabricant (bougie, feu, cosmos…) : liste fournie par le descripteur, libellé traduit
+// quand on le connaît, nom brut sinon (les ponts en ajoutent à chaque firmware).
+const { t } = useI18n()
+const effects = computed(() => (props.descriptor.meta.effects ?? []).map((value) => ({
+  value, title: t(`light.effects.${value}`, value),
+})))
 
 const sendColor = useDebounceFn((h: string) => {
   const { x, y } = rgbToXy(hexToRgb(h))
@@ -45,6 +53,13 @@ const sendColor = useDebounceFn((h: string) => {
         <template #prepend><span class="text-caption">{{ $t('light.cold') }}</span></template>
         <template #append><span class="text-caption">{{ $t('light.warm') }}</span></template>
       </v-slider>
+    </template>
+
+    <template v-if="has('effect') && effects.length">
+      <div class="text-caption text-medium-emphasis mb-1">{{ $t('light.effect') }}</div>
+      <v-select :model-value="state.effect ?? 'no_effect'" :items="effects" :disabled="disabled" density="compact"
+                variant="outlined" hide-details class="mb-3"
+                @update:model-value="(e: string) => emit('command', { type: 'light.set', effect: e })" />
     </template>
 
     <template v-if="has('color')">

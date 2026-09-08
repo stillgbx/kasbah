@@ -1,10 +1,11 @@
-import { parseDeviceId, type Command, type PluginHealth } from '@kasbah/shared'
+import { parseDeviceId, parseSceneId, type Command, type PluginHealth, type SceneRecall, type SceneUpdate } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import type { Logger } from 'pino'
 import type { Clock } from './clock'
 import { PluginError, type DevicePlugin, type PluginContext, type PluginFactory } from './plugin'
 import { withTimeout } from './poll'
 import type { DeviceRegistry } from './registry'
+import type { SceneRegistry } from './scene-registry'
 
 // Cycle de vie des plugins : sélection par KASBAH_PLUGINS, validation de leur config, isolation
 // (un fabricant en panne ne fait jamais tomber la maison), arrêt propre.
@@ -14,6 +15,7 @@ export interface PluginHostOptions {
   strict: boolean
   factories: Record<string, PluginFactory>
   registry: DeviceRegistry
+  scenes: SceneRegistry
   clock: Clock
   logger: Logger
   /** Source des variables d'environnement (process.env par défaut). */
@@ -59,7 +61,7 @@ export class PluginHost {
   get(id: string): DevicePlugin | undefined { return this.slots.get(id)?.plugin }
 
   private makeContext(id: string, slot: Slot): PluginContext {
-    const { registry } = this.opts
+    const { registry, scenes } = this.opts
     return {
       pluginId: id,
       config: slot.config ?? {},
@@ -69,6 +71,8 @@ export class PluginHost {
       emitState: (externalId, patch) => { registry.applyPatch(`${id}:${externalId}`, { available: true, ...patch }) },
       setAvailable: (externalId, available) => { registry.setAvailable(id, externalId, available) },
       emitDevices: (descriptors) => { registry.register(id, descriptors) },
+      emitScenes: (list) => { scenes.register(id, list) },
+      emitSceneState: (externalId, active) => { scenes.setActive(`${id}:${externalId}`, active) },
     }
   }
 
@@ -116,6 +120,22 @@ export class PluginHost {
     const slot = this.slots.get(pluginId)
     if (!slot || !slot.config) throw new PluginError('DEVICE_UNAVAILABLE', `plugin "${pluginId}" is not enabled`)
     await withTimeout(slot.plugin.execute(externalId, command), this.opts.commandTimeoutMs ?? 10_000, this.opts.clock, `command ${command.type}`)
+  }
+
+  async recallScene(sceneId: string, recall: SceneRecall): Promise<void> {
+    const { pluginId, externalId } = parseSceneId(sceneId)
+    const slot = this.slots.get(pluginId)
+    if (!slot || !slot.config) throw new PluginError('DEVICE_UNAVAILABLE', `plugin "${pluginId}" is not enabled`)
+    if (!slot.plugin.recallScene) throw new PluginError('NOT_IMPLEMENTED', `plugin "${pluginId}" has no scenes`)
+    await withTimeout(slot.plugin.recallScene(externalId, recall), this.opts.commandTimeoutMs ?? 10_000, this.opts.clock, `recall ${sceneId}`)
+  }
+
+  async updateScene(sceneId: string, update: SceneUpdate): Promise<void> {
+    const { pluginId, externalId } = parseSceneId(sceneId)
+    const slot = this.slots.get(pluginId)
+    if (!slot || !slot.config) throw new PluginError('DEVICE_UNAVAILABLE', `plugin "${pluginId}" is not enabled`)
+    if (!slot.plugin.updateScene) throw new PluginError('NOT_IMPLEMENTED', `plugin "${pluginId}" scenes are read-only`)
+    await withTimeout(slot.plugin.updateScene(externalId, update), this.opts.commandTimeoutMs ?? 10_000, this.opts.clock, `update ${sceneId}`)
   }
 
   health(): Record<string, PluginHealth> {

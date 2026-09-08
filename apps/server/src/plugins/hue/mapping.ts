@@ -1,10 +1,16 @@
-import type { Capability, CommandOf, DeviceDescriptor, StatePatch } from '@kasbah/shared'
-import type { HueDevice, HueGroupedLight, HueLight, HuePutBody, HueRoom, HueZigbeeConnectivity } from './types'
+import { mirekToRgb, rgbToHex, xyToRgb, type Capability, type CommandOf, type DeviceDescriptor, type PluginScene, type SceneActivation, type SceneGroupKind, type SceneRecall, type StatePatch } from '@kasbah/shared'
+import type { HueDevice, HueGroupedLight, HueLight, HuePutBody, HueRoom, HueScene, HueSceneRecallBody, HueZigbeeConnectivity } from './types'
 
 // Mappage PUR Hue ↔ modèle Kasbah. Aucune I/O : testé sur fixtures.
 
 export const HUE_PLUGIN_ID = 'hue'
 const DEFAULT_MIREK_RANGE: [number, number] = [153, 500]
+/** Valeur Hue qui arrête l'effet en cours. */
+export const NO_EFFECT = 'no_effect'
+/** Une palette de moins de 2 couleurs n'a rien à animer. */
+const MIN_PALETTE = 2
+/** Pastilles d'aperçu affichées (les palettes Hue en comptent jusqu'à 5). */
+const MAX_SWATCHES = 6
 
 export interface HueIndex {
   lights: Map<string, HueLight>
@@ -44,7 +50,14 @@ export function lightCapabilities(light: HueLight): Capability[] {
   if (light.dimming) caps.push('brightness')
   if (light.color_temperature) caps.push('color_temp')
   if (light.color) caps.push('color')
+  if (lightEffects(light)) caps.push('effect')
   return caps
+}
+
+/** Effets du modèle, `no_effect` compris (l'ordre du pont est conservé), ou rien s'il n'en a pas. */
+export function lightEffects(light: HueLight): string[] | undefined {
+  const values = light.effects_v2?.status?.effect_values ?? light.effects?.effect_values ?? light.effects?.status_values
+  return values && values.length > 1 ? values : undefined
 }
 
 export function toDescriptor(light: HueLight, device?: HueDevice, room?: HueRoom): DeviceDescriptor {
@@ -61,6 +74,7 @@ export function toDescriptor(light: HueLight, device?: HueDevice, room?: HueRoom
       ...(device?.product_data?.product_name ? { model: device.product_data.product_name } : {}),
       ...(room?.metadata?.name ? { room: room.metadata.name } : {}),
       ...(light.color_temperature ? { colorTempMirek: range ? [range.mirek_minimum, range.mirek_maximum] as [number, number] : DEFAULT_MIREK_RANGE } : {}),
+      ...(lightEffects(light) ? { effects: lightEffects(light) } : {}),
     },
   }
 }
@@ -88,6 +102,9 @@ export function toLightPatch(data: Partial<HueLight> | Partial<HueGroupedLight>)
   if (ct && ct.mirek !== null && ct.mirek !== undefined && ct.mirek_valid !== false) patch.colorTempMirek = ct.mirek
   const color = (data as Partial<HueLight>).color
   if (color?.xy) patch.color = { x: color.xy.x, y: color.xy.y }
+  const light = data as Partial<HueLight>
+  const effect = light.effects_v2?.status?.effect ?? light.effects?.status
+  if (effect) patch.effect = effect
   return patch
 }
 
@@ -106,7 +123,15 @@ export function toPutBody(cmd: CommandOf<'light.set'>, descriptor: DeviceDescrip
       if (cmd.on === undefined) body.on = { on: true }
     }
   }
-  if (cmd.color !== undefined && descriptor.capabilities.includes('color')) {
+  if (cmd.effect !== undefined) {
+    if (descriptor.capabilities.includes('effect')) body.effects = { effect: cmd.effect }
+    else warnings.push('effect ignored: capability not supported by this light')
+  }
+  // Un effet en cours pilote lui-même la couleur : on ne lui en impose pas une dans le même PUT.
+  const effectTakesOver = body.effects !== undefined && cmd.effect !== NO_EFFECT
+  if (effectTakesOver) {
+    if (cmd.color !== undefined || cmd.colorTempMirek !== undefined) warnings.push('effect and color both given: effect wins')
+  } else if (cmd.color !== undefined && descriptor.capabilities.includes('color')) {
     body.color = { xy: { x: cmd.color.x, y: cmd.color.y } }
     if (cmd.colorTempMirek !== undefined) warnings.push('color and colorTempMirek both given: color wins')
   } else if (cmd.colorTempMirek !== undefined && descriptor.capabilities.includes('color_temp')) {
@@ -117,6 +142,76 @@ export function toPutBody(cmd: CommandOf<'light.set'>, descriptor: DeviceDescrip
   }
   if (cmd.transitionMs !== undefined) body.dynamics = { duration: Math.round(cmd.transitionMs) }
   return { body, warnings }
+}
+
+/**
+ * Aperçu d'une scène. La palette animée passe en premier (c'est ce qu'on voit tourner), sinon les
+ * valeurs fixes des actions (fidèles lampe par lampe), sinon la palette de blancs. Doublons ôtés :
+ * une scène de 3 lampes au même blanc doit montrer UNE pastille, pas trois.
+ */
+export function sceneSwatches(scene: HueScene): string[] {
+  const out: string[] = []
+  const push = (hex: string) => { if (!out.includes(hex)) out.push(hex) }
+  for (const p of scene.palette?.color ?? []) {
+    if (p.color?.xy) push(rgbToHex(xyToRgb(p.color.xy.x, p.color.xy.y)))
+  }
+  if (out.length === 0) {
+    for (const a of scene.actions) {
+      const xy = a.action?.color?.xy
+      const mirek = a.action?.color_temperature?.mirek
+      if (xy) push(rgbToHex(xyToRgb(xy.x, xy.y)))
+      else if (mirek !== null && mirek !== undefined) push(rgbToHex(mirekToRgb(mirek)))
+    }
+  }
+  if (out.length === 0) {
+    for (const p of scene.palette?.color_temperature ?? []) {
+      const mirek = p.color_temperature?.mirek
+      if (mirek !== null && mirek !== undefined) push(rgbToHex(mirekToRgb(mirek)))
+    }
+  }
+  return out.slice(0, MAX_SWATCHES)
+}
+
+export function toSceneDescriptor(scene: HueScene, group?: { name: string; kind: SceneGroupKind }): PluginScene {
+  return {
+    id: `${HUE_PLUGIN_ID}:${scene.id}`,
+    pluginId: HUE_PLUGIN_ID,
+    externalId: scene.id,
+    name: scene.metadata?.name ?? `Scène ${scene.id.slice(0, 8)}`,
+    ...(group ? { group } : {}),
+    dynamic: (scene.palette?.color?.length ?? 0) >= MIN_PALETTE,
+    autoDynamic: scene.auto_dynamic === true,
+    swatches: sceneSwatches(scene),
+  }
+}
+
+/** `status.active` du pont → activation Kasbah (tout ce qui n'est pas connu vaut `inactive`). */
+export function sceneStatusToActive(scene: Pick<HueScene, 'status'>): SceneActivation {
+  switch (scene.status?.active) {
+    case 'dynamic_palette': return 'dynamic'
+    case 'static': return 'static'
+    default: return 'inactive'
+  }
+}
+
+/** Corps du rappel. `off` n'en a pas : il s'éteint par le groupe (cf. `index.ts`). */
+export function toSceneRecallBody(recall: SceneRecall): HueSceneRecallBody {
+  return {
+    recall: {
+      action: recall.mode === 'dynamic' ? 'dynamic_palette' : 'static',
+      ...(recall.brightness !== undefined ? { dimming: { brightness: recall.brightness } } : {}),
+      ...(recall.transitionMs !== undefined ? { duration: Math.round(recall.transitionMs) } : {}),
+    },
+  }
+}
+
+/** Lampes visées par les actions fixes d'une scène (repli quand le groupe n'a pas de grouped_light). */
+export function sceneTargetLights(scene: HueScene): string[] {
+  const out: string[] = []
+  for (const a of scene.actions) {
+    if (a.target?.rtype === 'light' && !out.includes(a.target.rid)) out.push(a.target.rid)
+  }
+  return out
 }
 
 /** Disponibilité des lights portées par chaque appareil Zigbee : `connected` ⇒ disponible. */

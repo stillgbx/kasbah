@@ -7,6 +7,9 @@ import { systemClock, type Clock } from './core/clock'
 import type { PluginFactory } from './core/plugin'
 import { PluginHost } from './core/plugin-host'
 import { DeviceRegistry } from './core/registry'
+import { PluginSettingsStore } from './core/plugin-settings'
+import { SceneRegistry } from './core/scene-registry'
+import { SceneSeeder } from './core/scene-seeder'
 import { EnergyHistory } from './core/history'
 import { registerRoutes } from './http/routes'
 import { registerStatic } from './http/static'
@@ -27,6 +30,8 @@ export interface BuildAppOptions {
 export interface KasbahApp {
   app: FastifyInstance
   registry: DeviceRegistry
+  scenes: SceneRegistry
+  settings: PluginSettingsStore
   bus: Bus
   hub: WsHub
   host: PluginHost
@@ -46,19 +51,29 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
 
   const bus = new Bus()
   const registry = new DeviceRegistry(bus, clock, opts.logger.child({ component: 'registry' }))
-  const hub = new WsHub(registry, bus, clock, opts.logger.child({ component: 'ws' }))
+  const scenes = new SceneRegistry(bus, clock, opts.logger.child({ component: 'scenes' }))
+  const settings = new PluginSettingsStore(opts.env.KASBAH_SETTINGS_FILE, opts.logger.child({ component: 'settings' }))
+  await settings.load()
+  const hub = new WsHub(registry, bus, clock, opts.logger.child({ component: 'ws' }), { scenes })
   const history = new EnergyHistory(bus, clock)
   const host = new PluginHost({
     enabled: opts.env.KASBAH_PLUGINS,
     strict: opts.env.KASBAH_STRICT_PLUGINS,
     factories: opts.factories ?? PLUGIN_FACTORIES,
-    registry, clock, logger: opts.logger,
+    registry, scenes, clock, logger: opts.logger,
     ...(opts.envSource ? { envSource: opts.envSource } : {}),
     commandTimeoutMs: opts.env.KASBAH_COMMAND_TIMEOUT_MS,
   })
 
   await hub.attach(app)
-  registerRoutes(app, { registry, host, house, hub, history, startedAt: clock.now() })
+  // initialise le réglage des ambiances qui APPARAISSENT (jamais l'existant) — après `host`,
+  // dont il utilise l'écriture chez le fabricant
+  const seeder = new SceneSeeder({
+    bus, settings, logger: opts.logger.child({ component: 'scenes' }),
+    updateScene: (sceneId, update) => host.updateScene(sceneId, update),
+  })
+
+  registerRoutes(app, { registry, scenes, settings, host, house, hub, history, startedAt: clock.now() })
   host.registerRoutes(app)
   if (opts.serveStatic ?? true) {
     const served = await registerStatic(app, opts.env.KASBAH_STATIC_DIR)
@@ -66,10 +81,11 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
   }
 
   return {
-    app, registry, bus, hub, host, house,
+    app, registry, scenes, settings, bus, hub, host, house,
     startPlugins: () => host.startAll(),
     async close() {
       await host.stopAll()
+      seeder.close()
       hub.close()
       history.close()
       await app.close()
