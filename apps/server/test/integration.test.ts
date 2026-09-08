@@ -12,17 +12,56 @@ import { loadEnv } from '../src/config/env'
 const HOUSE = resolve(import.meta.dirname, '../../../house/demo-house.json')
 const MONDAY = Date.UTC(2026, 8, 7, 12)
 
-async function makeApp(scenario: string) {
+async function makeApp(scenario: string, extraEnv: Record<string, string> = {}) {
   const clock = new ManualClock(MONDAY)
   const env = loadEnv({ KASBAH_PLUGINS: 'mock,tesla', KASBAH_HOUSE_FILE: HOUSE, KASBAH_LOG_LEVEL: 'silent' })
   const kasbah = await buildApp({
     env, logger: pino({ level: 'silent' }), clock, serveStatic: false,
-    envSource: { MOCK_SCENARIO: scenario, MOCK_SEED: '3', MOCK_START_TIME: new Date(MONDAY).toISOString() },
+    envSource: { MOCK_SCENARIO: scenario, MOCK_SEED: '3', MOCK_START_TIME: new Date(MONDAY).toISOString(), ...extraEnv },
   })
   await kasbah.app.ready()
   await kasbah.startPlugins()
   return { kasbah, clock }
 }
+
+// La simulation doit pouvoir COMPLETER un parc reel au lieu de le doubler : des qu'un vrai plugin
+// couvre un kind, ses equivalents simules n'ont plus a encombrer les listes en « hors plan ».
+describe('MOCK_EXCLUDE_KINDS', () => {
+  it('retire les kinds demandes, garde les autres, et le dit dans health', async () => {
+    const { kasbah } = await makeApp('default', { MOCK_EXCLUDE_KINDS: 'light,cover' })
+    try {
+      const devices = (await kasbah.app.inject({ method: 'GET', url: '/api/devices' })).json()
+      const list = devices.devices ?? devices
+      const kinds = new Set<string>(list.map((e: { descriptor: { kind: string } }) => e.descriptor.kind))
+      expect(kinds.has('light')).toBe(false)
+      expect(kinds.has('cover')).toBe(false)
+      expect(kinds.has('vehicle')).toBe(true)          // non traite par un vrai plugin : conserve
+      expect(kinds.has('energy')).toBe(true)
+      const health = (await kasbah.app.inject({ method: 'GET', url: '/api/health' })).json()
+      expect(health.plugins.mock.status).toBe('ok')
+      expect(health.plugins.mock.detail).toContain('sans light/cover')
+    } finally { await kasbah.close() }
+  })
+
+  it('sans le reglage, rien ne change', async () => {
+    const { kasbah } = await makeApp('default')
+    try {
+      const list = (await kasbah.app.inject({ method: 'GET', url: '/api/devices' })).json()
+      const kinds = new Set<string>((list.devices ?? list).map((e: { descriptor: { kind: string } }) => e.descriptor.kind))
+      expect(kinds.has('light')).toBe(true)
+      expect(kinds.has('cover')).toBe(true)
+    } finally { await kasbah.close() }
+  })
+
+  it('un kind inconnu empeche le demarrage du plugin plutot que de passer inapercu', async () => {
+    const { kasbah } = await makeApp('default', { MOCK_EXCLUDE_KINDS: 'lumiere' })
+    try {
+      const health = (await kasbah.app.inject({ method: 'GET', url: '/api/health' })).json()
+      expect(health.plugins.mock.status).toBe('disabled')
+      expect(health.plugins.mock.deviceCount).toBe(0)
+    } finally { await kasbah.close() }
+  })
+})
 
 describe('REST API', () => {
   let kasbah: KasbahApp
