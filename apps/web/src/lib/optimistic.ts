@@ -20,10 +20,16 @@ export function optimisticPatch(state: DeviceState, cmd: CommandInput): Partial<
       // part par le store (`coverTarget`). Un fabricant qui ne publie sa position qu'à la fin de
       // la course réémettrait l'ancienne valeur et écraserait aussitôt une position optimiste.
       switch (cmd.type) {
-        case 'cover.open': return { motion: state.position >= 100 ? 'stopped' : 'opening' } as Partial<DeviceState>
-        case 'cover.close': return { motion: state.position <= 0 ? 'stopped' : 'closing' } as Partial<DeviceState>
+        // position inconnue : on ne sait pas si l'ouvrant est déjà au bout, donc on parie sur le
+        // mouvement — un indicateur qui s'allume pour rien vaut mieux qu'un geste sans écho
+        case 'cover.open': return { motion: state.position !== undefined && state.position >= 100 ? 'stopped' : 'opening' } as Partial<DeviceState>
+        case 'cover.close': return { motion: state.position !== undefined && state.position <= 0 ? 'stopped' : 'closing' } as Partial<DeviceState>
         case 'cover.stop': return { motion: 'stopped' } as Partial<DeviceState>
-        case 'cover.set_position': return { motion: cmd.position > state.position ? 'opening' : cmd.position < state.position ? 'closing' : 'stopped' } as Partial<DeviceState>
+        case 'cover.set_position': {
+          if (state.position === undefined) return { motion: 'opening' } as Partial<DeviceState>
+          const p = state.position
+          return { motion: cmd.position > p ? 'opening' : cmd.position < p ? 'closing' : 'stopped' } as Partial<DeviceState>
+        }
         case 'cover.set_tilt': return { tilt: cmd.tilt } as Partial<DeviceState>
         default: return null
       }

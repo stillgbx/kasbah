@@ -3,7 +3,7 @@
   "nav": { "main": "Navigation", "home": "Home", "energy": "Energy", "vehicles": "Vehicles", "settings": "Settings", "lights": "Lights", "covers": "Covers" },
   "common": {
     "close": "Close", "back": "Back", "retry": "Retry", "all": "All", "none": "None", "unavailable": "Unavailable",
-    "loading": "Loading house…", "on": "On", "off": "Off", "open": "Open", "stop": "Stop", "closeCover": "Close",
+    "loading": "Loading house…", "on": "On", "off": "Off", "stop": "Stop",
     "start": "Start", "pause": "Pause", "dock": "Return to dock", "park": "Park", "locate": "Locate",
     "lock": "Lock", "unlock": "Unlock", "unknown": "Unknown", "status": "Status", "mode": "Mode"
   },
@@ -11,10 +11,12 @@
     "connecting": "Connecting to the server…", "online": "Connected", "stale": "Silent link, reconnecting…",
     "offline": "Server unreachable. Displayed states may be outdated."
   },
-  "summary": { "lightsOn": "{n} light on | {n} light on | {n} lights on", "solar": "Solar" },
+  "summary": { "lightsOn": "{n} light on | {n} light on | {n} lights on",
+    "shuttersOpen": "{n} shutter open | {n} shutter open | {n} shutters open",
+    "awningsDown": "{n} awning lowered | {n} awning lowered | {n} awnings lowered", "solar": "Solar" },
   "floors": { "garden": "Garden", "all": "All", "roof": "Roof" },
   "home": {
-    "lightsOn": "lights on", "shuttersOpen": "shutters open", "solar": "Solar", "battery": "Battery",
+    "lightsOn": "lights on", "shuttersOpen": "shutters open", "awningsDown": "awnings lowered", "solar": "Solar", "battery": "Battery",
     "scenes": "Scenes", "rooms": "Rooms", "garden": "Garden",
     "devicesCount": "{n} device | {n} device | {n} devices", "active": "{n} active | {n} active | {n} active",
     "selectHint": "Tap a room or a device in the 3D view",
@@ -59,12 +61,10 @@
       "unplaced": "Unplaced", "unplacedHint": "No house room is named like the plugin room: absent from the 3D scene"
     }
   },
-  "cover": { "closure": "Closure", "opening": "Opening", "closing": "Closing", "stopped": "Stopped", "tilt": "Tilt", "closed": "Closed", "open": "Open" },
-  "media": { "volume": "Volume", "mute": "Mute", "nothing": "Nothing playing", "playing": "Playing", "paused": "Paused", "idle": "Idle", "off": "Off" },
-  "climate": {
-    "target": "Target", "current": "Measured", "humidity": "Humidity", "mode": "Mode",
-    "modes": { "off": "Off", "heat": "Heating", "cool": "Cooling", "auto": "Auto", "eco": "Eco", "fan_only": "Fan only" },
-    "actions": { "heating": "Heating", "cooling": "Cooling", "idle": "Idle", "off": "Off" }
+  "cover": {
+    "tilt": "Tilt", "stopped": "Stopped",
+    "openClose": { "open": "Open", "closed": "Closed", "opening": "Opening", "closing": "Closing", "level": "Closure", "actionOpen": "Open", "actionClose": "Close" },
+    "upDown": { "open": "Raised", "closed": "Lowered", "opening": "Raising", "closing": "Lowering", "level": "Extension", "actionOpen": "Raise", "actionClose": "Lower" }
   },
   "vacuum": {
     "battery": "Battery", "binFull": "Bin full",

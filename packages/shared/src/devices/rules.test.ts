@@ -89,4 +89,12 @@ describe('defaultState', () => {
       expect(KIND_CAPABILITIES[kind].length).toBeGreaterThan(0)
     }
   })
+
+  it('ne pose AUCUNE position pour un ouvrant', () => {
+    // Un `position: 0` par défaut se lit comme un fait : une radio unidirectionnelle n'en publie
+    // jamais, et l'interface annonçait « fermé » (compteurs du résumé compris) sans rien savoir.
+    const s = defaultState('cover')
+    expect(s.kind === 'cover' && s.position).toBeUndefined()
+    expect(deviceStateSchema.parse(s)).toEqual(s)
+  })
 })

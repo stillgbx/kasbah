@@ -24,8 +24,13 @@ export const lightStateSchema = z.object({
 export const COVER_MOTIONS = ['opening', 'closing', 'stopped'] as const
 export const coverStateSchema = z.object({
   kind: z.literal('cover'), ...base,
-  /** 0 = fermé, 100 = ouvert. */
-  position: pct,
+  /**
+   * 0 = fermé, 100 = ouvert. **Absente = position inconnue**, et c'est un cas courant : une radio
+   * unidirectionnelle (RTS chez Somfy) ne renvoie jamais où elle en est. Tant qu'aucune commande
+   * n'est passée par Kasbah, il n'y a rien à afficher — une valeur par défaut se lirait comme un
+   * fait (« Baissé » pour un store en réalité remonté, et un compteur de résumé faux avec lui).
+   */
+  position: pct.optional(),
   tilt: pct.optional(),
   motion: z.enum(COVER_MOTIONS),
 })

@@ -5,7 +5,7 @@ import PageHeader from '../components/layout/PageHeader.vue'
 import RoomBands from '../components/devices/RoomBands.vue'
 import PulseDot from '../components/ui/PulseDot.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
-import { fromClosure, toClosure } from '../lib/cover'
+import { coverWords, fromClosure, toClosure } from '../lib/cover'
 import { useDevicesStore } from '../stores/devices'
 
 // Vue Ouvrants : volets, stores, portails, fenêtres et portes de garage — tout ce qui est du kind
@@ -22,11 +22,14 @@ import { useDevicesStore } from '../stores/devices'
 const devices = useDevicesStore()
 
 const covers = computed(() => devices.list.filter((e) => e.state.kind === 'cover'))
-const openCount = computed(() => covers.value.filter((e) => (e.state as StateFor<'cover'>).position > 0 && e.state.available).length)
+// position inconnue = pas comptée comme ouverte : on ne sait pas (voir `lib/cover.ts`)
+const openCount = computed(() => covers.value.filter((e) => ((e.state as StateFor<'cover'>).position ?? 0) > 0 && e.state.available).length)
 
 // Valeur locale pendant le glissement seulement ; ensuite c'est la cible du store qui s'affiche.
 const draft = ref<Record<string, number>>({})
-const shownClosure = (id: string, position: number) => draft.value[id] ?? toClosure(devices.targetPosition(id) ?? position)
+// le curseur n'existe que pour un ouvrant qui sait viser une position, donc qui la publie ; le
+// repli à 100 ne sert qu'à donner un nombre au composant si les deux se désaccordaient
+const shownClosure = (id: string, position?: number) => draft.value[id] ?? toClosure(devices.targetPosition(id) ?? position ?? 100)
 function drag(id: string, v: number) { draft.value = { ...draft.value, [id]: v } }
 function commit(id: string, v: number) {
   void devices.sendCommand(id, { type: 'cover.set_position', position: fromClosure(Math.round(v)) })
@@ -53,8 +56,10 @@ function commit(id: string, v: number) {
           <!-- une ligne à part : trois boutons dans la 4e colonne écraseraient le nom de l'ouvrant -->
           <div class="controls">
             <div class="keys">
-              <button type="button" class="key" :disabled="!entry.state.available" :title="$t('common.open')"
-                      :aria-label="$t('common.open')" @click="devices.sendCommand(entry.descriptor.id, { type: 'cover.open' })">
+              <button type="button" class="key" :disabled="!entry.state.available"
+                      :title="$t(`cover.${coverWords(entry.descriptor)}.actionOpen`)"
+                      :aria-label="$t(`cover.${coverWords(entry.descriptor)}.actionOpen`)"
+                      @click="devices.sendCommand(entry.descriptor.id, { type: 'cover.open' })">
                 <StrokeIcon name="collapseUp" :size="18" />
               </button>
               <button v-if="entry.descriptor.capabilities.includes('stop')" type="button" class="key"
@@ -62,8 +67,10 @@ function commit(id: string, v: number) {
                       @click="devices.sendCommand(entry.descriptor.id, { type: 'cover.stop' })">
                 <StrokeIcon name="stop" :size="18" />
               </button>
-              <button type="button" class="key" :disabled="!entry.state.available" :title="$t('common.closeCover')"
-                      :aria-label="$t('common.closeCover')" @click="devices.sendCommand(entry.descriptor.id, { type: 'cover.close' })">
+              <button type="button" class="key" :disabled="!entry.state.available"
+                      :title="$t(`cover.${coverWords(entry.descriptor)}.actionClose`)"
+                      :aria-label="$t(`cover.${coverWords(entry.descriptor)}.actionClose`)"
+                      @click="devices.sendCommand(entry.descriptor.id, { type: 'cover.close' })">
                 <StrokeIcon name="collapseDown" :size="18" />
               </button>
             </div>

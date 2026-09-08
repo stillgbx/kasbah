@@ -48,6 +48,17 @@ export const KIND_CAPABILITIES: Record<DeviceKind, readonly Capability[]> = {
 export const CLIMATE_MODES = ['off', 'heat', 'cool', 'auto', 'eco', 'fan_only'] as const
 export type ClimateMode = (typeof CLIMATE_MODES)[number]
 
+/**
+ * Nature d'un ouvrant. Même rôle que `SENSOR_CLASSES` pour un capteur : le kind dit la FORME de
+ * l'état et des commandes, la classe dit ce que la chose EST — donc comment la nommer et l'annoncer.
+ * Un volet s'ouvre et se ferme, un store se remonte et se baisse : c'est la même commande
+ * `cover.open`, pas le même mot dans l'interface.
+ */
+export const COVER_CLASSES = [
+  'shutter', 'awning', 'blind', 'curtain', 'gate', 'garage', 'window',
+] as const
+export type CoverClass = (typeof COVER_CLASSES)[number]
+
 export const SENSOR_CLASSES = [
   'temperature', 'humidity', 'power', 'energy', 'pressure', 'flow', 'illuminance', 'ph', 'battery', 'generic',
 ] as const

@@ -122,10 +122,11 @@ export class CoverMarker extends DeviceMarker {
     this.slat.visible = f > 0.005
   }
 
-  protected isOn(s: DeviceState): boolean { return s.kind === 'cover' && s.position > 0 }
+  protected isOn(s: DeviceState): boolean { return s.kind === 'cover' && (s.position ?? 0) > 0 }
   protected onState(state: DeviceState | undefined): void {
     if (!state || state.kind !== 'cover') return
-    const target = 1 - state.position / 100
+    // position inconnue : tablier rentré (rien de dessiné) plutôt qu'un volet fermé en trompe-l'œil
+    const target = 1 - (state.position ?? 100) / 100
     if (!this.slat) return
     this.cancelTween?.()
     const from = this.closedFraction

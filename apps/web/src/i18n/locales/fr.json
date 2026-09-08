@@ -3,7 +3,7 @@
   "nav": { "main": "Navigation", "home": "Maison", "energy": "Énergie", "vehicles": "Véhicules", "settings": "Réglages", "lights": "Lumières", "covers": "Ouvrants" },
   "common": {
     "close": "Fermer", "back": "Retour", "retry": "Réessayer", "all": "Tout", "none": "Aucun", "unavailable": "Indisponible",
-    "loading": "Chargement de la maison…", "on": "Allumé", "off": "Éteint", "open": "Ouvrir", "stop": "Stop", "closeCover": "Fermer",
+    "loading": "Chargement de la maison…", "on": "Allumé", "off": "Éteint", "stop": "Stop",
     "start": "Démarrer", "pause": "Pause", "dock": "Retour base", "park": "Rentrer", "locate": "Localiser",
     "lock": "Verrouiller", "unlock": "Déverrouiller", "unknown": "Inconnu", "status": "État", "mode": "Mode"
   },
@@ -11,10 +11,12 @@
     "connecting": "Connexion au serveur…", "online": "Connecté", "stale": "Lien silencieux, reconnexion…",
     "offline": "Serveur injoignable. Les états affichés peuvent être périmés."
   },
-  "summary": { "lightsOn": "{n} lumière allumée | {n} lumière allumée | {n} lumières allumées", "solar": "Solaire" },
+  "summary": { "lightsOn": "{n} lumière allumée | {n} lumière allumée | {n} lumières allumées",
+    "shuttersOpen": "{n} volet ouvert | {n} volet ouvert | {n} volets ouverts",
+    "awningsDown": "{n} store baissé | {n} store baissé | {n} stores baissés", "solar": "Solaire" },
   "floors": { "garden": "Jardin", "all": "Tout", "roof": "Toit" },
   "home": {
-    "lightsOn": "lumières allumées", "shuttersOpen": "volets ouverts", "solar": "Solaire", "battery": "Batterie",
+    "lightsOn": "lumières allumées", "shuttersOpen": "volets ouverts", "awningsDown": "stores baissés", "solar": "Solaire", "battery": "Batterie",
     "scenes": "Scènes", "rooms": "Pièces", "garden": "Jardin",
     "devicesCount": "{n} appareil | {n} appareil | {n} appareils", "active": "{n} actif | {n} actif | {n} actifs",
     "selectHint": "Touchez une pièce ou un appareil dans la vue 3D",
@@ -59,12 +61,10 @@
       "unplaced": "Hors plan", "unplacedHint": "Aucune pièce de la maison ne porte le nom de la pièce du plugin : absente de la scène 3D"
     }
   },
-  "cover": { "closure": "Fermeture", "opening": "Ouverture en cours", "closing": "Fermeture en cours", "stopped": "À l'arrêt", "tilt": "Inclinaison", "closed": "Fermé", "open": "Ouvert" },
-  "media": { "volume": "Volume", "mute": "Muet", "nothing": "Rien en lecture", "playing": "En lecture", "paused": "En pause", "idle": "Inactif", "off": "Éteint" },
-  "climate": {
-    "target": "Consigne", "current": "Mesuré", "humidity": "Humidité", "mode": "Mode",
-    "modes": { "off": "Arrêt", "heat": "Chauffage", "cool": "Rafraîchissement", "auto": "Auto", "eco": "Éco", "fan_only": "Ventilation" },
-    "actions": { "heating": "Chauffe", "cooling": "Refroidit", "idle": "En veille", "off": "Arrêt" }
+  "cover": {
+    "tilt": "Inclinaison", "stopped": "À l'arrêt",
+    "openClose": { "open": "Ouvert", "closed": "Fermé", "opening": "Ouverture en cours", "closing": "Fermeture en cours", "level": "Fermeture", "actionOpen": "Ouvrir", "actionClose": "Fermer" },
+    "upDown": { "open": "Remonté", "closed": "Baissé", "opening": "Remontée en cours", "closing": "Descente en cours", "level": "Descente", "actionOpen": "Remonter", "actionClose": "Baisser" }
   },
   "vacuum": {
     "battery": "Batterie", "binFull": "Bac plein",

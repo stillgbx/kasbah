@@ -1,4 +1,4 @@
-import { type Capability, type Command, type DeviceDescriptor, type StatePatch } from '@kasbah/shared'
+import { type Capability, type Command, type CoverClass, type DeviceDescriptor, type StatePatch } from '@kasbah/shared'
 import type { OverkizAction, OverkizDevice, OverkizState, OverkizValue } from './types'
 
 // Traductions PURES : ressources Overkiz ↔ descripteurs / patchs d'état / corps de commande.
@@ -8,12 +8,27 @@ import type { OverkizAction, OverkizDevice, OverkizState, OverkizValue } from '.
 //  - Kasbah mesure une OUVERTURE (`position`) : 0 = fermé, 100 = ouvert.
 // D'où le `100 - v` systématique dans les deux sens.
 
-/** uiClass de la box qui deviennent des appareils `cover`. Le reste (passerelle, capteurs,
- *  chauffage, sirène…) est ignoré : ce plugin ne couvre que les ouvrants. */
-export const COVER_UI_CLASSES = new Set([
-  'RollerShutter', 'Shutter', 'SwingingShutter', 'ExteriorVenetianBlind', 'VenetianBlind',
-  'ExteriorScreen', 'Screen', 'Curtain', 'Awning', 'Pergola', 'Window', 'Gate', 'GarageDoor',
-])
+/**
+ * uiClass de la box → nature de l'ouvrant. Le reste du parc (passerelle, capteurs, chauffage,
+ * sirène…) est ignoré : ce plugin ne couvre que les ouvrants. La classe voyage dans
+ * `meta.cover.deviceClass` et décide du vocabulaire de l'interface — un store se remonte, il ne
+ * s'ouvre pas (voir `../../../../../packages/shared/src/devices/kinds.ts`).
+ */
+export const COVER_UI_CLASSES: Record<string, CoverClass> = {
+  RollerShutter: 'shutter',
+  Shutter: 'shutter',
+  SwingingShutter: 'shutter',
+  Awning: 'awning',
+  Pergola: 'awning',
+  ExteriorVenetianBlind: 'blind',
+  VenetianBlind: 'blind',
+  ExteriorScreen: 'blind',
+  Screen: 'blind',
+  Curtain: 'curtain',
+  Gate: 'gate',
+  GarageDoor: 'garage',
+  Window: 'window',
+}
 
 /** Première commande présente parmi `names`, dans l'ordre de préférence. */
 function pick(available: Set<string>, names: readonly string[]): string | undefined {
@@ -65,9 +80,14 @@ export function hasPositionFeedback(device: OverkizDevice): boolean {
   return CLOSURE_STATES.some((st) => present.has(st)) || present.has('core:OpenClosedState')
 }
 
-/** Un ouvrant exploitable : bonne uiClass ET au moins ouvrir et fermer. */
+/** Nature de l'ouvrant, `undefined` si la box annonce une uiClass hors sujet. */
+export function coverClass(device: OverkizDevice): CoverClass | undefined {
+  return COVER_UI_CLASSES[device.definition?.uiClass ?? '']
+}
+
+/** Un ouvrant exploitable : uiClass connue ET au moins ouvrir et fermer. */
 export function isCover(device: OverkizDevice): boolean {
-  if (!COVER_UI_CLASSES.has(device.definition?.uiClass ?? '')) return false
+  if (!coverClass(device)) return false
   const cmd = coverCommands(device)
   return !!cmd.open && !!cmd.close
 }
@@ -106,6 +126,7 @@ function bool(value: unknown): boolean | undefined {
 export function toDescriptor(device: OverkizDevice): DeviceDescriptor {
   const externalId = deviceUrlToExternalId(device.deviceURL)
   const cmd = coverCommands(device)
+  const cls = coverClass(device)
   const capabilities: Capability[] = ['open_close']
   // `position` n'est déclarée que si la box sait VISER une position : sans elle, l'UI n'affiche
   // pas de curseur (un volet RTS ne saurait pas l'honorer).
@@ -122,6 +143,7 @@ export function toDescriptor(device: OverkizDevice): DeviceDescriptor {
     meta: {
       manufacturer: 'Somfy',
       ...(device.controllableName ? { model: device.controllableName } : {}),
+      ...(cls ? { cover: { deviceClass: cls } } : {}),
     },
   }
 }

@@ -13,16 +13,18 @@ export function cover(externalId: string, o: CoverOptions): SimDevice<'cover'> {
   const dev: SimDevice<'cover'> = {
     descriptor: descriptor(externalId, 'cover', o.name, caps, { manufacturer: 'Mock', model: 'Roller shutter' }),
     state: { kind: 'cover', updatedAt: 0, available: true, position: o.position ?? 100, motion: 'stopped', ...(o.tilt ? { tilt: 50 } : {}) },
+    // `position` est optionnelle dans le contrat (une radio unidirectionnelle ne la connaît pas),
+    // mais la simulation la pose au démarrage et ne l'efface jamais : d'où les `!` ci-dessous.
     tick(ctx) {
       if (target === null) return
-      const delta = target - dev.state.position
+      const delta = target - dev.state.position!
       const step = speed * ctx.dtS
       if (Math.abs(delta) <= step) {
         dev.state.position = target
         dev.state.motion = 'stopped'
         target = null
       } else {
-        dev.state.position = clamp(Math.round((dev.state.position + Math.sign(delta) * step) * 100) / 100, 0, 100)
+        dev.state.position = clamp(Math.round((dev.state.position! + Math.sign(delta) * step) * 100) / 100, 0, 100)
         dev.state.motion = delta > 0 ? 'opening' : 'closing'
       }
       if (dev.state.motion !== 'stopped') ctx.world.loadsW += 120
@@ -39,8 +41,8 @@ export function cover(externalId: string, o: CoverOptions): SimDevice<'cover'> {
           break
         default: throw new SimError('UNSUPPORTED_COMMAND', `${cmd.type} on cover`)
       }
-      if (target !== null && Math.abs(target - dev.state.position) < 1e-9) { target = null; dev.state.motion = 'stopped' }
-      else if (target !== null) dev.state.motion = target > dev.state.position ? 'opening' : 'closing'
+      if (target !== null && Math.abs(target - dev.state.position!) < 1e-9) { target = null; dev.state.motion = 'stopped' }
+      else if (target !== null) dev.state.motion = target > dev.state.position! ? 'opening' : 'closing'
     },
   }
   return dev

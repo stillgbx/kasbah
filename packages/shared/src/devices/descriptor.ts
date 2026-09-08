@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { CAPABILITIES, DEVICE_KINDS, KIND_CAPABILITIES, SENSOR_CLASSES } from './kinds'
+import { CAPABILITIES, COVER_CLASSES, DEVICE_KINDS, KIND_CAPABILITIES, SENSOR_CLASSES } from './kinds'
 
 // Identité d'un appareil : `${pluginId}:${externalId}`. Une seule chaîne sert de clé de Map,
 // de segment d'URL, de champ WS et de nom de nœud 3D — jamais de couple à joindre côté client.
@@ -27,6 +27,8 @@ export const deviceMetaSchema = z.object({
     deviceClass: z.enum(SENSOR_CLASSES),
     precision: z.number().int().min(0).max(6).optional(),
   }).optional(),
+  /** Nature de l'ouvrant (volet, store, portail…) : décide du vocabulaire affiché. */
+  cover: z.object({ deviceClass: z.enum(COVER_CLASSES) }).optional(),
 })
 export type DeviceMeta = z.infer<typeof deviceMetaSchema>
 

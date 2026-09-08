@@ -17,7 +17,7 @@ export function deviceIcon(descriptor: DeviceDescriptor | undefined, state?: Dev
   if (!descriptor) return 'devices'
   switch (descriptor.kind) {
     case 'light': return state?.kind === 'light' && state.on ? 'lightOn' : 'light'
-    case 'cover': return state?.kind === 'cover' && state.position > 50 ? 'shutterOpen' : 'shutter'
+    case 'cover': return state?.kind === 'cover' && (state.position ?? 0) > 50 ? 'shutterOpen' : 'shutter'
     case 'media_player': return state?.kind === 'media_player' && state.playback === 'playing' ? 'speakerOn' : 'speaker'
     case 'sensor': return SENSOR_ICONS[descriptor.meta.sensor?.deviceClass ?? 'generic']
     case 'vehicle': return state?.kind === 'vehicle' && state.charging ? 'charger' : 'vehicle'

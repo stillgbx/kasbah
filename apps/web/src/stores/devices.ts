@@ -71,7 +71,8 @@ export const useDevicesStore = defineStore('devices', () => {
     const target = targets.value[id]
     if (!target || state.kind !== 'cover') return
     if (target.frozen) { clearTarget(id); return }      // gel levé par la première trame
-    const arrived = Math.abs(state.position - target.position) <= 1
+    // position inconnue : rien ne confirme l'arrivée, la cible reste tenue jusqu'au TTL
+    const arrived = state.position !== undefined && Math.abs(state.position - target.position) <= 1
     const moving = state.motion !== 'stopped'
     const stale = Date.now() - target.at > TARGET_TTL_MS
     // arrêté ailleurs APRÈS avoir bougé = ça ne s'est pas passé comme demandé (obstacle, stop,
@@ -153,8 +154,10 @@ export const useDevicesStore = defineStore('devices', () => {
       // Cible déjà atteinte : rien à tenir, sinon la pastille resterait affichée jusqu'à un
       // prochain état (l'appareil n'en émet aucun, puisque rien ne change).
       if (command.type === 'cover.stop') {
-        targets.value = { ...targets.value, [deviceId]: { position: shownBefore!, moved: true, at: Date.now(), frozen: true } }
-      } else if (aimed === null || Math.abs(aimed - prev.position) <= 1) clearTarget(deviceId)
+        // sans position montrée (ouvrant inconnu jamais commandé), il n'y a rien à geler
+        if (shownBefore !== undefined) targets.value = { ...targets.value, [deviceId]: { position: shownBefore, moved: true, at: Date.now(), frozen: true } }
+        else clearTarget(deviceId)
+      } else if (aimed === null || (prev.position !== undefined && Math.abs(aimed - prev.position) <= 1)) clearTarget(deviceId)
       else setTarget(deviceId, aimed, Date.now())
     }
     pending.value = { ...pending.value, [deviceId]: (pending.value[deviceId] ?? 0) + 1 }

@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CommandInput, DeviceDescriptor, StateFor } from '@kasbah/shared'
-import { fromClosure, toClosure } from '../../lib/cover'
+import { coverWords, fromClosure, toClosure } from '../../lib/cover'
 import { useDevicesStore } from '../../stores/devices'
 import PulseDot from '../ui/PulseDot.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
@@ -25,20 +25,30 @@ const drag = ref(0)
 
 // la cible n'est qu'une surcouche : sans elle, l'état reçu en prop fait foi
 const target = computed(() => devices.targetPosition(props.descriptor.id))
-const shown = computed(() => toClosure(target.value ?? props.state.position))
-const closure = computed(() => (dragging.value ? drag.value : shown.value))
-watch(shown, (v) => { if (!dragging.value) drag.value = v }, { immediate: true })
+// `undefined` = position inconnue (radio unidirectionnelle qui n'a rien reçu) : rien à affirmer,
+// donc pas de pourcentage et un libellé « Inconnu ». Le curseur, lui, a besoin d'un nombre.
+const shown = computed(() => {
+  const p = target.value ?? props.state.position
+  return p === undefined ? undefined : toClosure(p)
+})
+const closure = computed(() => (dragging.value ? drag.value : shown.value ?? 0))
+watch(shown, (v) => { if (!dragging.value) drag.value = v ?? 0 }, { immediate: true })
 
+// préfixe i18n du vocabulaire : un volet s'ouvre, un store se remonte (voir `lib/cover.ts`)
+const w = computed(() => coverWords(props.descriptor))
 const moving = computed(() => props.state.motion !== 'stopped')
 /**
  * Texte de la ligne d'état : le mouvement quand il y en a un, sinon « Ouvert » / « Fermé » aux
  * extrêmes, sinon le nom du réglage. Jamais le pourcentage — il est déjà au bout de la ligne.
  */
 const lineText = computed(() => {
-  if (moving.value) return t(`cover.${props.state.motion}`)
-  if (shown.value <= 0) return t('cover.open')
-  if (shown.value >= 100) return t('cover.closed')
-  return t('cover.closure')
+  if (moving.value) return t(`cover.${w.value}.${props.state.motion}`)
+  // position inconnue : la grande valeur du panneau dit déjà « Inconnu » juste au-dessus, la ligne
+  // garde sa hauteur sans le répéter (elle reprend la parole dès qu'un mouvement commence)
+  if (shown.value === undefined) return '—'
+  if (shown.value <= 0) return t(`cover.${w.value}.open`)
+  if (shown.value >= 100) return t(`cover.${w.value}.closed`)
+  return t(`cover.${w.value}.level`)
 })
 const hasPosition = props.descriptor.capabilities.includes('position')
 const hasTilt = props.descriptor.capabilities.includes('tilt')
@@ -51,13 +61,13 @@ function send(cmd: CommandInput) { emit('command', cmd) }
   <div class="cover">
     <div class="cover__keys">
       <button type="button" class="key" :disabled="disabled" @click="send({ type: 'cover.open' })">
-        <StrokeIcon name="collapseUp" :size="16" /><span>{{ $t('common.open') }}</span>
+        <StrokeIcon name="collapseUp" :size="16" /><span>{{ $t(`cover.${w}.actionOpen`) }}</span>
       </button>
       <button v-if="hasStop" type="button" class="key" :disabled="disabled" @click="send({ type: 'cover.stop' })">
         <StrokeIcon name="stop" :size="16" /><span>{{ $t('common.stop') }}</span>
       </button>
       <button type="button" class="key" :disabled="disabled" @click="send({ type: 'cover.close' })">
-        <StrokeIcon name="collapseDown" :size="16" /><span>{{ $t('common.closeCover') }}</span>
+        <StrokeIcon name="collapseDown" :size="16" /><span>{{ $t(`cover.${w}.actionClose`) }}</span>
       </button>
     </div>
 
@@ -67,7 +77,7 @@ function send(cmd: CommandInput) { emit('command', cmd) }
     <div class="line" :data-moving="moving ? '1' : '0'">
       <PulseDot :on="moving" />
       <span class="line__text">{{ lineText }}</span>
-      <span v-if="hasPosition" class="line__pct">{{ Math.round(closure) }} %</span>
+      <span v-if="hasPosition && shown !== undefined" class="line__pct">{{ Math.round(closure) }} %</span>
     </div>
 
     <v-slider v-if="hasPosition" v-model="drag" :min="0" :max="100" :step="5" :disabled="disabled"

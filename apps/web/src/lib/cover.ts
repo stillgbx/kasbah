@@ -18,3 +18,21 @@ export function toClosure(position: number): number {
 export function fromClosure(closure: number): number {
   return 100 - closure
 }
+
+/**
+ * Vocabulaire d'un ouvrant. La commande est la même (`cover.open` / `cover.close`), les mots ne le
+ * sont pas : un volet s'OUVRE et se FERME, un store se REMONTE et se BAISSE. Le choix vient de
+ * `meta.cover.deviceClass`, posé par le plugin d'après ce que le fabricant déclare — jamais d'une
+ * heuristique sur le nom de l'appareil.
+ *
+ * La valeur sert de préfixe i18n : `cover.openClose.*` ou `cover.upDown.*`.
+ */
+export type CoverWords = 'openClose' | 'upDown'
+
+/** Un store banne, un BSO ou un écran se manœuvrent verticalement ; le reste s'ouvre. */
+const UP_DOWN = new Set<string>(['awning', 'blind'])
+
+export function coverWords(descriptor: { meta: { cover?: { deviceClass: string } } }): CoverWords {
+  return UP_DOWN.has(descriptor.meta.cover?.deviceClass ?? '') ? 'upDown' : 'openClose'
+}
+

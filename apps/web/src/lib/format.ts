@@ -32,7 +32,7 @@ export function formatSensor(descriptor: DeviceDescriptor, value: number, locale
 export function summarize(descriptor: DeviceDescriptor, state: DeviceState, locale = 'fr'): string {
   switch (state.kind) {
     case 'light': return state.on ? (state.brightness !== undefined ? formatPercent(state.brightness, locale) : '●') : '○'
-    case 'cover': return formatPercent(state.position, locale)
+    case 'cover': return state.position === undefined ? '—' : formatPercent(state.position, locale)
     case 'media_player': return state.playback === 'playing' && state.nowPlaying ? state.nowPlaying.title : formatPercent(state.volume, locale)
     case 'climate': return `${formatTemp(state.currentTempC, locale)} → ${formatTemp(state.targetTempC, locale)}`
     case 'vacuum': return formatPercent(state.battery, locale)

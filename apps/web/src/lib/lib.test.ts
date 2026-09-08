@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { DeviceDescriptor, StateFor } from '@kasbah/shared'
 import { optimisticPatch } from './optimistic'
 import { fromClosure, toClosure } from './cover'
-import { isDeviceBusy, statusLabel, toggleChecked, toggleCommand } from './deviceState'
+import { headlineValue, isDeviceBusy, isDeviceOn, statusLabel, toggleChecked, toggleCommand } from './deviceState'
 import { formatPower, formatSensor, summarize } from './format'
 import { deviceColor, deviceIcon } from './deviceIcons'
 import fr from '../i18n/locales/fr.json'
@@ -39,14 +39,14 @@ describe('convention d affichage des ouvrants', () => {
   })
 
   it('le libelle donne un pourcentage de FERMETURE', () => {
-    expect(statusLabel(sensor, at({ position: 100 }), t, 'fr')).toBe('cover.open')
-    expect(statusLabel(sensor, at({ position: 0 }), t, 'fr')).toBe('cover.closed')
+    expect(statusLabel(sensor, at({ position: 100 }), t, 'fr')).toBe('cover.openClose.open')
+    expect(statusLabel(sensor, at({ position: 0 }), t, 'fr')).toBe('cover.openClose.closed')
     expect(statusLabel(sensor, at({ position: 30 }), t, 'fr')).toBe('70 %')
   })
 
   it('en mouvement, le libelle annonce le mouvement et non une position quittee', () => {
-    expect(statusLabel(sensor, at({ position: 100, motion: 'closing' }), t, 'fr')).toBe('cover.closing')
-    expect(statusLabel(sensor, at({ position: 0, motion: 'opening' }), t, 'fr')).toBe('cover.opening')
+    expect(statusLabel(sensor, at({ position: 100, motion: 'closing' }), t, 'fr')).toBe('cover.openClose.closing')
+    expect(statusLabel(sensor, at({ position: 0, motion: 'opening' }), t, 'fr')).toBe('cover.openClose.opening')
   })
 
   it('occupe = pendant toute la course, pas pendant la requete', () => {
@@ -56,6 +56,15 @@ describe('convention d affichage des ouvrants', () => {
     // position visee mais moteur pas encore parti : deja occupe
     expect(isDeviceBusy(at({ motion: 'stopped' }), true)).toBe(true)
     expect(isDeviceBusy(light)).toBe(false)          // une lampe n'a pas de course
+  })
+
+  it('un store bascule sur l autre vocabulaire', () => {
+    const store = { ...sensor, kind: 'cover' as const, meta: { cover: { deviceClass: 'awning' as const } } }
+    expect(statusLabel(store, at({ position: 0 }), t, 'fr')).toBe('cover.upDown.closed')
+    expect(statusLabel(store, at({ position: 100 }), t, 'fr')).toBe('cover.upDown.open')
+    expect(statusLabel(store, at({ position: 40, motion: 'closing' }), t, 'fr')).toBe('cover.upDown.closing')
+    // le pourcentage intermediaire reste un pourcentage, quel que soit le vocabulaire
+    expect(statusLabel(store, at({ position: 40 }), t, 'fr')).toBe('60 %')
   })
 
   it('interrupteur : coche = FERME, alors que isDeviceOn garde ouvert = actif', () => {
@@ -80,6 +89,24 @@ describe('convention d affichage des ouvrants', () => {
     // et dans l'autre sens : ferme, on vise l'ouverture
     expect(toggleChecked(at({ position: 0 }))).toBe(true)
     expect(toggleChecked(at({ position: 0 }), 100)).toBe(false)
+  })
+
+  it('position INCONNUE : rien n est affirme', () => {
+    // radio unidirectionnelle (RTS) qui n'a jamais recu de commande : `position` est absente.
+    // Le piege repare ici : `defaultState` posait 0, et l'interface annoncait « Ferme » / « Baisse »
+    // pour deux stores en realite remontes, compteur du resume compris.
+    const unknown: StateFor<'cover'> = { kind: 'cover', updatedAt: 0, available: true, motion: 'stopped' }
+    expect(statusLabel(sensor, unknown, t, 'fr')).toBe('common.unknown')
+    expect(headlineValue(sensor, unknown, t, 'fr')).toBe('common.unknown')
+    expect(summarize(sensor, unknown, 'fr')).toBe('—')
+    expect(isDeviceOn(unknown)).toBe(false)                             // aucune teinte d'icone
+    expect(toggleChecked(unknown)).toBe(false)                          // « ferme » n'est pas affirmable
+    expect(toggleCommand(unknown)).toEqual({ type: 'cover.close' })     // la bascule reste utile
+    // le mouvement, lui, est connu : c'est la seule chose que la box dise d'un RTS
+    expect(statusLabel(sensor, { ...unknown, motion: 'closing' }, t, 'fr')).toBe('cover.openClose.closing')
+    // le patch optimiste parie sur le mouvement plutot que sur « deja au bout »
+    expect(optimisticPatch(unknown, { type: 'cover.open' })).toEqual({ motion: 'opening' })
+    expect(optimisticPatch(unknown, { type: 'cover.close' })).toEqual({ motion: 'closing' })
   })
 })
 

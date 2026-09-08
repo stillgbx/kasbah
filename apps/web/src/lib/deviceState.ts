@@ -1,5 +1,5 @@
-import type { CommandInput, DeviceDescriptor, DeviceState } from '@kasbah/shared'
-import { toClosure } from './cover'
+import type { CommandInput, DeviceDescriptor, DeviceState, StateFor } from '@kasbah/shared'
+import { coverWords, toClosure } from './cover'
 import { formatPercent, formatPower, formatSensor, formatTemp } from './format'
 
 // Lecture « métier » d'un état : actif ?, bascule rapide possible ?, libellé court traduit.
@@ -9,7 +9,8 @@ export function isDeviceOn(s: DeviceState): boolean {
   if (!s.available) return false
   switch (s.kind) {
     case 'light': return s.on
-    case 'cover': return s.position > 0
+    // position inconnue (RTS sans retour) : ni actif ni inactif, on ne teinte pas l'icône
+    case 'cover': return s.position !== undefined && s.position > 0
     case 'media_player': return s.playback === 'playing'
     case 'climate': return s.mode !== 'off'
     case 'vacuum': return s.activity === 'cleaning'
@@ -32,8 +33,18 @@ export function isDeviceOn(s: DeviceState): boolean {
  * sauter à la fin, alors que le geste a bien été pris en compte.
  */
 export function toggleChecked(s: DeviceState, aimed?: number): boolean {
-  if (s.kind === 'cover') return s.available && (aimed ?? s.position) <= 0
+  if (s.kind === 'cover') return s.available && shownClosed(s, aimed)
   return isDeviceOn(s)
+}
+
+/**
+ * L'ouvrant est-il montré COMME FERMÉ (interrupteur coché) ? Position inconnue = non coché : on ne
+ * peut pas affirmer « fermé », et l'interrupteur reste manœuvrable dans ce sens — c'est aussi la
+ * bascule utile, puisque `toggleCommand` en tire la commande inverse.
+ */
+function shownClosed(s: StateFor<'cover'>, aimed?: number): boolean {
+  const shown = aimed ?? s.position
+  return shown !== undefined && shown <= 0
 }
 
 /**
@@ -60,7 +71,7 @@ export function isDeviceBusy(s: DeviceState, aiming = false): boolean {
 export function toggleCommand(s: DeviceState, aimed?: number): CommandInput | null {
   switch (s.kind) {
     case 'light': return { type: 'light.set', on: !s.on }
-    case 'cover': return (aimed ?? s.position) > 0 ? { type: 'cover.close' } : { type: 'cover.open' }
+    case 'cover': return shownClosed(s, aimed) ? { type: 'cover.open' } : { type: 'cover.close' }
     case 'media_player': return s.playback === 'playing' ? { type: 'media_player.pause' } : { type: 'media_player.play' }
     case 'vacuum': return s.activity === 'cleaning' ? { type: 'vacuum.dock' } : { type: 'vacuum.start' }
     case 'mower': return s.activity === 'mowing' ? { type: 'mower.park', untilNextSchedule: true } : { type: 'mower.start', durationMin: 60 }
@@ -76,9 +87,16 @@ export function statusLabel(descriptor: DeviceDescriptor, s: DeviceState, t: Tra
   switch (s.kind) {
     case 'light': return s.on ? `${t('common.on')}${s.brightness !== undefined ? ` · ${formatPercent(s.brightness, locale)}` : ''}` : t('common.off')
     // en mouvement, la position est en train d'être quittée : annoncer le mouvement évite un
-    // « Ouvert » affiché à côté d'un curseur déjà posé sur la fermeture visée
-    case 'cover': return s.motion !== 'stopped' ? t(`cover.${s.motion}`)
-      : s.position <= 0 ? t('cover.closed') : s.position >= 100 ? t('cover.open') : formatPercent(toClosure(s.position), locale)
+    // « Ouvert » affiché à côté d'un curseur déjà posé sur la fermeture visée. Le vocabulaire
+    // dépend de la nature de l'ouvrant : un store est « baissé », pas « fermé ».
+    case 'cover': {
+      const w = coverWords(descriptor)
+      return s.motion !== 'stopped' ? t(`cover.${w}.${s.motion}`)
+        : s.position === undefined ? t('common.unknown')
+        : s.position <= 0 ? t(`cover.${w}.closed`)
+        : s.position >= 100 ? t(`cover.${w}.open`)
+        : formatPercent(toClosure(s.position), locale)
+    }
     case 'media_player': return s.playback === 'playing' ? `${t('media.playing')}${s.nowPlaying ? ` · ${s.nowPlaying.title}` : ''}` : t(`media.${s.playback}`)
     case 'climate': return `${formatTemp(s.currentTempC, locale)} → ${formatTemp(s.targetTempC, locale)}`
     case 'vacuum': return `${t(`vacuum.activities.${s.activity}`)} · ${formatPercent(s.battery, locale)}`
@@ -94,7 +112,7 @@ export function statusLabel(descriptor: DeviceDescriptor, s: DeviceState, t: Tra
 export function headlineValue(descriptor: DeviceDescriptor, s: DeviceState, t: Translate, locale: string): string {
   switch (s.kind) {
     case 'light': return s.on ? (s.brightness !== undefined ? formatPercent(s.brightness, locale) : t('common.on')) : t('common.off')
-    case 'cover': return formatPercent(toClosure(s.position), locale)
+    case 'cover': return s.position === undefined ? t('common.unknown') : formatPercent(toClosure(s.position), locale)
     case 'media_player': return s.nowPlaying?.title ?? t(`media.${s.playback}`)
     case 'climate': return formatTemp(s.currentTempC, locale)
     case 'vacuum': return t(`vacuum.activities.${s.activity}`)

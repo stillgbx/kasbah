@@ -71,7 +71,8 @@ export function defaultState(kind: DeviceKind, now = 0): DeviceState {
   const base = { updatedAt: now, available: false }
   switch (kind) {
     case 'light': return { kind, ...base, on: false }
-    case 'cover': return { kind, ...base, position: 0, motion: 'stopped' }
+    // sans `position` : un ouvrant dont on n'a rien reçu n'est pas « fermé », il est inconnu
+    case 'cover': return { kind, ...base, motion: 'stopped' }
     case 'media_player': return { kind, ...base, playback: 'off', volume: 0, muted: false }
     case 'climate': return { kind, ...base, mode: 'off', targetTempC: 20, currentTempC: 20 }
     case 'vacuum': return { kind, ...base, activity: 'docked', battery: 0 }

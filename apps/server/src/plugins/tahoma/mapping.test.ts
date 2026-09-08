@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { GATEWAY, IO_AWNING, IO_SHUTTER, IO_VENETIAN, RTS_GATE, RTS_SHUTTER, THERMOSTAT } from './__fixtures__/box'
 import {
-  assumedPosition, coverCommands, deviceUrlToExternalId, hasPositionFeedback, isCover, readStates,
-  toAction, toAvailability, toCoverPatch, toDescriptor,
+  assumedPosition, coverClass, coverCommands, deviceUrlToExternalId, hasPositionFeedback, isCover,
+  readStates, toAction, toAvailability, toCoverPatch, toDescriptor,
 } from './mapping'
 import { overkizDeviceSchema } from './types'
 
@@ -42,6 +42,17 @@ describe('tahoma mapping', () => {
     expect(deviceUrlToExternalId('io://1234-5678-9012/11110001')).toBe('io.1234-5678-9012.11110001')
     expect(deviceUrlToExternalId('io://1234-5678-9012/11110001#2')).toBe('io.1234-5678-9012.11110001.2')
     expect(deviceUrlToExternalId(GATEWAY.deviceURL)).not.toMatch(/[:/#\s]/)
+  })
+
+  it('classe l ouvrant d apres la uiClass de la box', () => {
+    expect(coverClass(ioShutter)).toBe('shutter')
+    expect(coverClass(ioVenetian)).toBe('blind')
+    expect(coverClass(ioAwning)).toBe('awning')
+    expect(coverClass(rtsGate)).toBe('gate')
+    expect(coverClass(dev(THERMOSTAT))).toBeUndefined()
+    // la classe voyage dans le descripteur : c'est elle qui decide du vocabulaire affiche
+    expect(toDescriptor(ioAwning).meta.cover).toEqual({ deviceClass: 'awning' })
+    expect(toDescriptor(rtsGate).meta.cover).toEqual({ deviceClass: 'gate' })
   })
 
   it('descriptor: capabilities follow the declared commands', () => {
