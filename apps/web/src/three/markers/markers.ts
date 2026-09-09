@@ -1,4 +1,4 @@
-import { BoxGeometry, Color, CylinderGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, PointLight, RingGeometry, SphereGeometry } from 'three'
+import { BoxGeometry, Color, CylinderGeometry, DoubleSide, Group, Mesh, MeshStandardMaterial, PointLight, RingGeometry, ShaderMaterial, SphereGeometry } from 'three'
 import type { DeviceState, HouseDevice } from '@kasbah/shared'
 import { mirekToRgb, xyToRgb } from '@kasbah/shared'
 import { yawToRad } from '../../lib/orientation'
@@ -17,11 +17,34 @@ const WAVE_PERIOD_MS = 2600
 const WAVE_R0 = 0.18
 const WAVE_R1 = 1.2
 
+/**
+ * Matériau des anneaux : couleur unie, opacité pilotée par l'animation, et — pour un appareil qui
+ * regarde quelque part — un fondu angulaire : pleine intensité devant (+y local, tourné du yaw),
+ * presque rien dans le dos. Toujours des cercles entiers, seule l'intensité varie le long du tour.
+ */
+function waveMaterial(color: Color, directional: boolean): ShaderMaterial {
+  return new ShaderMaterial({
+    transparent: true, depthWrite: false, side: DoubleSide,
+    uniforms: { uColor: { value: color.clone() }, uOpacity: { value: 0 }, uDirectional: { value: directional ? 1 : 0 } },
+    vertexShader: `
+      varying vec2 vPos;
+      void main() { vPos = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `
+      uniform vec3 uColor; uniform float uOpacity; uniform float uDirectional;
+      varying vec2 vPos;
+      void main() {
+        float front = 0.5 + 0.5 * cos(atan(vPos.x, vPos.y));          // 1 devant (+y), 0 dans le dos
+        float fade = mix(1.0, 0.1 + 0.9 * front * front, uDirectional);
+        gl_FragColor = vec4(uColor, uOpacity * fade);
+      }`,
+  })
+}
+
 /** Petit objet neutre (capteur, PAC, borne, énergie…). */
 export class GenericMarker extends DeviceMarker {
   private mesh: Mesh
   /** Lecteur en lecture : anneaux concentriques qui s'élargissent et s'estompent, comme une onde sonore. */
-  private waves: Mesh<RingGeometry, MeshBasicMaterial>[] = []
+  private waves: Mesh<RingGeometry, ShaderMaterial>[] = []
   private waving = false
   private playing = false
   constructor(device: HouseDevice, ctx: MarkerContext) {
@@ -54,9 +77,11 @@ export class GenericMarker extends DeviceMarker {
     if (kind === 'media_player') {
       // anneaux à plat (le plan XY est le sol en Z-up), un peu au-dessus de la base de l'appareil ;
       // invisibles tant que rien ne joue, animés par `onState`
+      const directional = mediaClass === 'tv' || mediaClass === 'display'
       for (let i = 0; i < WAVE_RINGS; i++) {
-        const ring = new Mesh(new RingGeometry(0.92, 1, 48), new MeshBasicMaterial({ color: ctx.theme.primary, transparent: true, opacity: 0, depthWrite: false, side: DoubleSide }))
+        const ring = new Mesh(new RingGeometry(0.92, 1, 64), waveMaterial(ctx.theme.primary, directional))
         ring.position.z = 0.03
+        ring.rotation.z = yawToRad(device.yaw)                 // le « devant » de l'onde suit l'écran
         ring.visible = false
         this.waves.push(ring)
         this.object.add(ring)
@@ -76,14 +101,14 @@ export class GenericMarker extends DeviceMarker {
   protected onState(state: DeviceState | undefined): void {
     if (this.waves.length === 0) return
     this.playing = !!state && state.available && this.isOn(state)
-    for (const w of this.waves) w.material.color.copy(this.ctx.theme.primary)
+    for (const w of this.waves) (w.material.uniforms.uColor!.value as Color).copy(this.ctx.theme.primary)
     if (this.playing && !this.waving) {
       this.waving = true
       let t0 = -1
       this.stopAnimation = this.ctx.addAnimation({
         step: (now) => {
           if (!this.playing) {                                  // lecture finie : on range les anneaux et on rend la main
-            for (const w of this.waves) { w.visible = false; w.material.opacity = 0 }
+            for (const w of this.waves) { w.visible = false; w.material.uniforms.uOpacity!.value = 0 }
             this.waving = false
             return false
           }
@@ -92,7 +117,7 @@ export class GenericMarker extends DeviceMarker {
             const p = (((now - t0) / WAVE_PERIOD_MS) + i / WAVE_RINGS) % 1   // phase 0 → 1, anneaux décalés d'un tiers
             const r = WAVE_R0 + (WAVE_R1 - WAVE_R0) * p
             w.scale.set(r, r, 1)
-            w.material.opacity = 0.5 * (1 - p) * (1 - p)                     // s'estompe plus vite en fin de course
+            w.material.uniforms.uOpacity!.value = 0.55 * (1 - p) * (1 - p)  // s'estompe plus vite en fin de course
             w.visible = true
           })
           return true

@@ -63,6 +63,15 @@ export function isDeviceBusy(s: DeviceState, aiming = false): boolean {
 }
 
 /**
+ * Point pulsant des listes : quelque chose est EN COURS chez l'appareil — un ouvrant qui bouge, un
+ * lecteur qui joue. Distinct de `isDeviceBusy`, qui remplace l'interrupteur du panneau par un
+ * spinner : une lecture n'empêche pas d'agir, elle ne doit pas cacher la bascule.
+ */
+export function isDevicePulsing(s: DeviceState, aiming = false): boolean {
+  return isDeviceBusy(s, aiming) || (s.kind === 'media_player' && s.playback === 'playing')
+}
+
+/**
  * Commande de bascule rapide (interrupteur des listes), ou null si l'appareil n'en a pas.
  *
  * `aimed` : position visée quand le store en tient une. Sans elle, un ouvrant en pleine fermeture

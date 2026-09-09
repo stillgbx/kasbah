@@ -33,6 +33,11 @@ function commit(id: string, v: number) {
   draft.value = next
 }
 const has = (entry: { descriptor: { capabilities: string[] } }, c: string) => entry.descriptor.capabilities.includes(c)
+// pochette du morceau en fond de ligne (URL relayée par le serveur, voir le plugin Cast), fondue vers la droite
+const art = (entry: { state: { kind: string } }) => {
+  const s = entry.state as StateFor<'media_player'>
+  return s.kind === 'media_player' && s.available && s.nowPlaying?.artUrl ? s.nowPlaying.artUrl : undefined
+}
 const loaded = (s: StateFor<'media_player'>) => s.playback === 'playing' || s.playback === 'paused'
 </script>
 
@@ -44,6 +49,11 @@ const loaded = (s: StateFor<'media_player'>) => s.playback === 'playing' || s.pl
     <div class="page__scroll">
       <div v-if="players.length === 0" class="card card--soft empty muted">{{ $t('media.none') }}</div>
       <RoomBands kind="media_player">
+        <template #backdrop="{ entry }">
+          <Transition name="rowart">
+            <div v-if="art(entry)" :key="art(entry)" class="row-art" :style="{ backgroundImage: `url(${JSON.stringify(art(entry))})` }" aria-hidden="true" />
+          </Transition>
+        </template>
         <template #status-badge="{ entry }">
           <PulseDot :on="(entry.state as StateFor<'media_player'>).playback === 'playing'" class="dot" />
         </template>
@@ -101,6 +111,17 @@ const loaded = (s: StateFor<'media_player'>) => s.playback === 'playing' || s.pl
 .controls__slider { flex: 1 1 auto; }
 .pct { font-size: 12px; width: 4ch; text-align: right; flex: 0 0 auto; }
 .dot { margin-right: 6px; color: var(--accent); }
+/* pochette derrière la ligne : sous l'icône et le nom, fondue avant les touches ; déborde de 4 px de
+   chaque côté pour couvrir la ligne jusqu'aux bords de la carte */
+.row-art {
+  position: absolute; inset: 0 -4px; z-index: -1; pointer-events: none;
+  background-size: auto; background-position: center; opacity: .2;
+  mask-image: linear-gradient(90deg, #000 0, #000 30%, transparent 70%);
+  -webkit-mask-image: linear-gradient(90deg, #000 0, #000 30%, transparent 70%);
+}
+.rowart-enter-active, .rowart-leave-active { transition: opacity .6s ease; }
+.rowart-enter-from, .rowart-leave-to { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .rowart-enter-active, .rowart-leave-active { transition: none; } }
 .keys { display: flex; gap: 4px; flex: 0 0 auto; }
 .key {
   display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px;

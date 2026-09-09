@@ -2,12 +2,13 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { HouseDevice } from '@kasbah/shared'
-import { isDeviceBusy, isDeviceOn, statusLabel, toggleChecked, toggleCommand } from '../../lib/deviceState'
+import { isDeviceOn, isDevicePulsing, statusLabel, toggleChecked, toggleCommand } from '../../lib/deviceState'
 import { kindIcon } from '../../lib/strokeIcons'
 import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
 import { useScenesStore } from '../../stores/scenes'
 import SceneChips from '../scenes/SceneChips.vue'
+import MarqueeText from '../ui/MarqueeText.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import PulseDot from '../ui/PulseDot.vue'
 
@@ -40,11 +41,14 @@ function row(d: HouseDevice) {
     // l'interrupteur (un volet FERMÉ est coché) — voir `lib/cover.ts`. La cible tenue par le store
     // entre dans `checked` : l'interrupteur bascule au geste, pas à la fin de la course.
     checked: !!state && toggleChecked(state, aimed),
-    busy: !!state && isDeviceBusy(state, aimed !== undefined),
+    busy: !!state && isDevicePulsing(state, aimed !== undefined),
     status: descriptor && state ? statusLabel(descriptor, state, t, locale.value) : t('device.unbound', { id: d.deviceId ?? '—' }),
     toggle, deviceId: d.deviceId, available: state?.available ?? false,
+    // pochette du morceau en fond de ligne (lecteur en lecture ; URL relayée par le serveur)
+    art: state?.kind === 'media_player' && state.available ? state.nowPlaying?.artUrl : undefined,
   }
 }
+const artStyle = (url: string) => ({ backgroundImage: `url(${JSON.stringify(url)})` })
 const rows = computed(() => (target.value?.list ?? []).map(row))
 /** Ambiances du fabricant rattachées à cette pièce (rapprochement par nom). */
 const roomScenes = computed(() => (target.value ? scenes.forRoom(target.value.name) : []))
@@ -60,10 +64,15 @@ const roomScenes = computed(() => (target.value ? scenes.forRoom(target.value.na
     <SceneChips :scenes="roomScenes" :label="$t('scenes.title')" :add-to="target.name" />
     <div class="rows">
       <div v-for="r in rows" :key="r.key" class="dev-row" role="button" tabindex="0" @click="house.selectDevice(r.key)" @keydown.enter="house.selectDevice(r.key)">
+        <!-- pochette sous le contenu, fondue vers l'interrupteur ; absolue, elle ne décale rien -->
+        <Transition name="rowart">
+          <div v-if="r.art" :key="r.art" class="dev-row__art" :style="artStyle(r.art)" aria-hidden="true" />
+        </Transition>
         <span class="icon-square" :data-on="r.on ? '1' : '0'"><StrokeIcon :name="r.icon" :size="18" /></span>
         <div class="dev-row__main">
           <div class="dev-row__name">{{ r.name }}</div>
-          <div class="dev-row__status"><PulseDot :on="r.busy" class="dev-row__dot" />{{ r.status }}</div>
+          <!-- statut trop long (titre d'un morceau) : il défile avec un fondu plutôt que d'être coupé -->
+          <div class="dev-row__status"><PulseDot :on="r.busy" class="dev-row__dot" /><MarqueeText class="dev-row__statustext" :text="r.status" /></div>
         </div>
         <v-switch v-if="r.toggle && r.deviceId" :model-value="r.checked" :disabled="!r.available" class="dev-row__switch"
                   @click.stop @update:model-value="devices.sendCommand(r.deviceId!, r.toggle!)" />
@@ -82,11 +91,23 @@ const roomScenes = computed(() => (target.value ? scenes.forRoom(target.value.na
 .dev-row {
   display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--radius);
   background: var(--surface2); cursor: pointer; transition: filter .15s;
+  /* repère, contexte d'empilement et découpe de la pochette de fond */
+  position: relative; isolation: isolate; overflow: hidden;
 }
+.dev-row__art {
+  position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background-size: auto; background-position: center; opacity: .22;
+  mask-image: linear-gradient(90deg, #000 0, #000 35%, transparent 75%);
+  -webkit-mask-image: linear-gradient(90deg, #000 0, #000 35%, transparent 75%);
+}
+.rowart-enter-active, .rowart-leave-active { transition: opacity .6s ease; }
+.rowart-enter-from, .rowart-leave-to { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .rowart-enter-active, .rowart-leave-active { transition: none; } }
 .dev-row:hover { filter: brightness(1.03); }
 .dev-row__main { flex: 1 1 0; min-width: 0; }
 .dev-row__name { font-weight: 500; font-size: 14px; }
-.dev-row__status { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dev-row__status { font-size: 12px; color: var(--muted); display: flex; align-items: center; min-width: 0; }
+.dev-row__statustext { flex: 1 1 auto; min-width: 0; }
 .dev-row__dot { margin-right: 6px; color: var(--accent); }
 .dev-row__switch { flex: 0 0 auto; }
 </style>

@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import type { DeviceEntry, DeviceKind } from '@kasbah/shared'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import { deviceIcon } from '../../lib/deviceIcons'
+import MarqueeText from '../ui/MarqueeText.vue'
 import { isDeviceOn, statusLabel } from '../../lib/deviceState'
 import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
@@ -142,6 +143,8 @@ defineExpose({ count: computed(() => entries.value.length) })
             </button>
           </div>
           <div v-for="r in g.rows" :key="r.entry.descriptor.id" class="row">
+            <!-- fond optionnel de la ligne (pochette d'un lecteur), sous le contenu, hors de la grille -->
+            <slot name="backdrop" :entry="r.entry" />
             <span class="icon-square" :data-on="r.on ? '1' : '0'">
               <StrokeIcon :name="deviceIcon(r.entry.descriptor, r.entry.state)" :size="18" />
             </span>
@@ -150,7 +153,7 @@ defineExpose({ count: computed(() => entries.value.length) })
               <div class="muted row__status">
                 <!-- devant le STATUT et non devant le contrôle : un élément qui apparaît à côté
                      d'un curseur en change la largeur, et le curseur saute sous le doigt -->
-                <slot name="status-badge" :entry="r.entry" /><span class="row__statustext">{{ r.status }}</span><slot name="status-after" :entry="r.entry" />
+                <slot name="status-badge" :entry="r.entry" /><MarqueeText class="row__statustext" :text="r.status" /><slot name="status-after" :entry="r.entry" />
               </div>
             </div>
             <span class="badge" :data-kind="r.origin" role="img"
@@ -203,11 +206,14 @@ defineExpose({ count: computed(() => entries.value.length) })
 .row {
   display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; column-gap: 12px;
   padding: 10px 0; border-top: 1px solid var(--line);
+  /* repère et contexte d'empilement du fond de ligne (slot `backdrop`, en z-index négatif) */
+  position: relative; isolation: isolate;
 }
 .row--dead { opacity: .7; }
 .row__name { font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row__status { font-size: 12px; display: flex; align-items: center; gap: 6px; min-width: 0; }
-.row__statustext { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* le statut défile avec un fondu s'il déborde (MarqueeText) : un titre de morceau n'est plus coupé */
+.row__statustext { flex: 1 1 auto; min-width: 0; }
 .min0 { min-width: 0; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
 .badge {
