@@ -58,3 +58,26 @@ export function readTrait(device: SdmDevice, name: string): Record<string, unkno
   const t = device.traits[`sdm.devices.traits.${name}`]
   return t !== null && typeof t === 'object' && !Array.isArray(t) ? (t as Record<string, unknown>) : undefined
 }
+
+/**
+ * `results` de `CameraLiveStream.GenerateRtspStream` : l'URL `rtsps://…?auth=<streamToken>` vaut
+ * cinq minutes, prolongeables par `ExtendRtspStream` avec `streamExtensionToken`. Forme d'après la
+ * documentation, à confirmer sur la première capture (le plugin journalise la réponse en debug).
+ */
+export const sdmRtspStreamSchema = z.looseObject({
+  streamUrls: z.looseObject({ rtspUrl: z.string() }),
+  streamExtensionToken: z.string(),
+  streamToken: z.string().optional(),
+  expiresAt: z.string().optional(),
+})
+export type SdmRtspStream = z.infer<typeof sdmRtspStreamSchema>
+
+/** `results` de `ExtendRtspStream` : un nouveau jeton de prolongation, l'URL ne change pas. */
+export const sdmExtendStreamSchema = z.looseObject({
+  streamExtensionToken: z.string(),
+  streamToken: z.string().optional(),
+  expiresAt: z.string().optional(),
+})
+
+/** Enveloppe de `:executeCommand` : `results` est absent pour les commandes sans réponse. */
+export const sdmCommandResponseSchema = z.looseObject({ results: z.unknown().optional() })

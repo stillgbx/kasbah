@@ -5,7 +5,8 @@ import { PluginError } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
 import { authorizationUrl } from './mapping'
 import {
-  oauthErrorSchema, oauthTokenResponseSchema, sdmDeviceSchema, sdmDevicesResponseSchema, sdmErrorSchema, type SdmDevice,
+  oauthErrorSchema, oauthTokenResponseSchema, sdmCommandResponseSchema, sdmDeviceSchema, sdmDevicesResponseSchema, sdmErrorSchema,
+  sdmExtendStreamSchema, sdmRtspStreamSchema, type SdmDevice, type SdmRtspStream,
 } from './types'
 
 // Client de l'API Google Smart Device Management. Tout passe par le cloud Google (les appareils
@@ -168,8 +169,36 @@ export class NestClient {
     return r.data
   }
 
-  /** `POST …/devices/<id>:executeCommand`. Résout à l'accusé de Google (200), sans corps utile. */
-  async executeCommand(externalId: string, command: string, params: Record<string, unknown>, signal?: AbortSignal): Promise<void> {
-    await this.request('POST', `${this.devicesPath()}/${encodeURIComponent(externalId)}:executeCommand`, { command, params }, signal)
+  /** `POST …/devices/<id>:executeCommand`. Résout à l'accusé de Google (200) avec ses `results`, s'il y en a. */
+  async executeCommand(externalId: string, command: string, params: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
+    const raw = await this.request('POST', `${this.devicesPath()}/${encodeURIComponent(externalId)}:executeCommand`, { command, params }, signal)
+    const r = sdmCommandResponseSchema.safeParse(raw)
+    return r.success ? r.data.results : undefined
+  }
+
+  // ---- flux RTSP (caméras de 1re génération) -----------------------------------------------
+  // Google ouvre une session RTSP à la demande : l'URL vaut cinq minutes, et c'est le jeton de
+  // prolongation qui la maintient — l'appelant doit prolonger AVANT l'échéance, puis arrêter la
+  // session quand plus personne ne regarde (sinon elle court jusqu'à son expiration).
+
+  async generateRtspStream(externalId: string, signal?: AbortSignal): Promise<SdmRtspStream> {
+    const results = await this.executeCommand(externalId, 'sdm.devices.commands.CameraLiveStream.GenerateRtspStream', {}, signal)
+    const r = sdmRtspStreamSchema.safeParse(results)
+    if (!r.success) {
+      this.opts.logger?.warn({ results }, 'unexpected GenerateRtspStream results')
+      throw new PluginError('UPSTREAM_ERROR', 'unexpected RTSP stream response from Google')
+    }
+    return r.data
+  }
+
+  async extendRtspStream(externalId: string, streamExtensionToken: string, signal?: AbortSignal): Promise<{ streamExtensionToken: string; expiresAt?: string }> {
+    const results = await this.executeCommand(externalId, 'sdm.devices.commands.CameraLiveStream.ExtendRtspStream', { streamExtensionToken }, signal)
+    const r = sdmExtendStreamSchema.safeParse(results)
+    if (!r.success) throw new PluginError('UPSTREAM_ERROR', 'unexpected ExtendRtspStream response from Google')
+    return { streamExtensionToken: r.data.streamExtensionToken, ...(r.data.expiresAt ? { expiresAt: r.data.expiresAt } : {}) }
+  }
+
+  async stopRtspStream(externalId: string, streamExtensionToken: string, signal?: AbortSignal): Promise<void> {
+    await this.executeCommand(externalId, 'sdm.devices.commands.CameraLiveStream.StopRtspStream', { streamExtensionToken }, signal)
   }
 }

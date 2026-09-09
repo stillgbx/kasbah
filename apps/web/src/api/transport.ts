@@ -39,6 +39,11 @@ export interface Transport {
   pairHue(): Promise<{ appKey: string; hint: string }>
   /** URL de consentement Google à ouvrir dans un navigateur pour lier le compte Nest. */
   nestAuthUrl(): Promise<{ url: string; redirectUri: string }>
+  /**
+   * URL WebSocket du flux vidéo d'une caméra (`live_stream`), par convention
+   * `/api/plugins/<plugin>/cameras/<externalId>/stream` ; `null` si ce transport n'en sert pas.
+   */
+  cameraStreamUrl(deviceId: string): string | null
   /** (Re)place un appareil dans house.json ; renvoie la maison réécrite. */
   placeDevice(id: string, placement: DevicePlacement): Promise<House>
   /** Écrit l'ordre d'affichage des pièces d'un niveau ; renvoie la maison réécrite. */

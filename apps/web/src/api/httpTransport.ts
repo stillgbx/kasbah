@@ -1,4 +1,5 @@
 import { apiErrorSchema, devicesResponseSchema, energyHistorySchema, healthResponseSchema, houseSchema, pluginSettingsResponseSchema, pluginSettingsSchema, scenesResponseSchema, serverMessageSchema, type CommandInput, type DeviceEntry, type DevicePlacement, type EnergyHistory, type HealthResponse, type House, type PluginSceneEntry, type PluginSettings, type SceneRecallInput, type SceneUpdate } from '@kasbah/shared'
+import { parseDeviceId } from '@kasbah/shared'
 import { ApiRequestError, type ConnectionStatus, type Transport, type TransportHandlers } from './transport'
 
 // URLs relatives : même origine en prod (Fastify sert le build) et via le proxy Vite en dev.
@@ -72,8 +73,18 @@ export function createHttpTransport(base = ''): Transport {
     ),
     pairHue: () => request(`${base}/api/plugins/hue/pair`, { method: 'POST' }, (j) => j as { appKey: string; hint: string }),
     nestAuthUrl: () => request(`${base}/api/plugins/nest/auth/url`, undefined, (j) => j as { url: string; redirectUri: string }),
+    cameraStreamUrl: (deviceId) => {
+      const { pluginId, externalId } = parseDeviceId(deviceId)
+      return `${wsBase(base)}/api/plugins/${pluginId}/cameras/${encodeURIComponent(externalId)}/stream`
+    },
     connect: (handlers) => connectWebSocket(base, handlers),
   }
+}
+
+/** Origine WebSocket : celle de `base` si elle est donnée, sinon la page elle-même (proxy Vite en dev). */
+function wsBase(base: string): string {
+  if (base) return base.replace(/^http/, 'ws')
+  return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`
 }
 
 /** WebSocket avec reconnexion exponentielle et détection de lien silencieux. */
@@ -86,10 +97,7 @@ function connectWebSocket(base: string, handlers: TransportHandlers): () => void
   let status: ConnectionStatus = 'connecting'
 
   const setStatus = (s: ConnectionStatus) => { if (s !== status) { status = s; handlers.onStatus(s) } }
-  const url = () => {
-    if (base) return `${base.replace(/^http/, 'ws')}/ws`
-    return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`
-  }
+  const url = () => `${wsBase(base)}/ws`
   const armStale = () => {
     if (staleTimer) clearTimeout(staleTimer)
     staleTimer = setTimeout(() => { setStatus('stale'); ws?.close() }, STALE_AFTER_MS)

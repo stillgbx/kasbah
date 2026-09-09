@@ -5,11 +5,12 @@ import { z } from 'zod'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
 import { createPoller } from '../../core/poll'
 import type { FetchLike } from '../../core/sse'
+import { RtspRelay, type RelayMessage } from '../../core/video/rtsp-relay'
 import { describeError, sendError } from '../../http/errors'
 import { NestClient } from './client'
 import {
-  deviceNameToExternalId, isCamera, isThermostat, thermostatAvailable, toClimatePatch, toDescriptor, toThermostatCommands,
-  toThermostatDescriptor,
+  deviceNameToExternalId, isCamera, isThermostat, streamProtocols, thermostatAvailable, toClimatePatch, toDescriptor,
+  toThermostatCommands, toThermostatDescriptor,
 } from './mapping'
 import type { SdmDevice } from './types'
 
@@ -25,11 +26,17 @@ import type { SdmDevice } from './types'
 //     adopté EN MÉMOIRE et rendu à l'utilisateur pour qu'il le colle dans .env : le serveur n'écrit
 //     jamais .env.
 //
-// Les caméras n'ont ni commande (l'API ne sait pas les éteindre) ni état au-delà de leur présence ;
-// leur vidéo et leurs événements viendront plus tard (transcodage RTSP, Pub/Sub). Le thermostat,
-// lui, a un état et deux commandes ; comme l'API ne pousse rien sans Pub/Sub, la liste des
-// appareils est relue à cadence lente (NEST_POLL_MS, une minute par défaut : Google borne les
-// appels à quelques-uns par minute), ce qui suit aussi les ajouts et retraits d'appareils.
+// Les caméras n'ont ni commande (l'API ne sait pas les éteindre) ni état au delà de leur présence ;
+// leurs événements viendront plus tard (Pub/Sub). Le thermostat, lui, a un état et deux commandes ;
+// comme l'API ne pousse rien sans Pub/Sub, la liste des appareils est relue à cadence lente
+// (NEST_POLL_MS, une minute par défaut : Google borne les appels à quelques-uns par minute), ce qui
+// suit aussi les ajouts et retraits d'appareils.
+//
+// Vidéo : tout le parc est en RTSP (caméras de 1re génération), qu'aucun navigateur ne lit. Google
+// ouvre une session RTSP à la demande (`GenerateRtspStream`, cinq minutes, prolongeable), un relais
+// ffmpeg par caméra regardée la recopie en MP4 fragmenté (`core/video/rtsp-relay.ts`), et la route
+// WebSocket `/cameras/<id>/stream` la distribue aux tablettes. Plus personne ne regarde → la
+// session Google est arrêtée : rien ne justifie de la laisser courir.
 
 /**
  * Clé optionnelle dont la valeur VIDE vaut « absente » : `.env.example` liste les clés à remplir, et
@@ -48,8 +55,21 @@ export const nestConfigSchema = z.object({
   NEST_REDIRECT_URI: z.string().url().default('http://localhost:8787/api/plugins/nest/auth/callback'),
   /** Cadence de relecture de la liste des appareils (état du thermostat, ajouts / retraits). */
   NEST_POLL_MS: z.coerce.number().int().min(10_000).max(600_000).default(60_000),
+  /** Binaire ffmpeg du relais vidéo (dans le PATH, ou chemin complet). Clé commune, pas préfixée NEST_. */
+  FFMPEG_PATH: z.string().min(1).default('ffmpeg'),
 })
 export type NestConfig = z.infer<typeof nestConfigSchema>
+
+/** Google fait expirer une session RTSP au bout de cinq minutes : on prolonge avant. */
+const STREAM_EXTEND_MS = 4 * 60_000
+/** Un relais sans abonné attend ce délai avant d'arrêter la session (changement de vue, reconnexion). */
+const STREAM_IDLE_MS = 8000
+/** Au-delà de ce retard d'envoi, une tablette ne suit plus : on saute des fragments plutôt que d'empiler. */
+const WS_MAX_BUFFERED = 8 << 20
+/** Ping du flux vidéo : deux battements sans pong et la tablette est considérée partie. */
+const WS_HEARTBEAT_MS = 30_000
+
+interface StreamSession { relay: RtspRelay; extensionToken: string; extendTimer: unknown }
 
 export interface NestPluginDeps {
   /** Injection pour les tests (fetch simulé). */
@@ -73,10 +93,15 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
   let lastRaw: unknown = undefined
   let lastError: string | null = null
   let poller: { stop(): void } | null = null
+  /** Sessions vidéo ouvertes, par externalId : un relais ffmpeg et le jeton qui prolonge la session Google. */
+  const streams = new Map<string, StreamSession>()
+  /** Ouvertures en cours, pour qu'une seconde demande simultanée rejoigne la première. */
+  const opening = new Map<string, Promise<RtspRelay>>()
   /** `state` émis par /auth/url et attendus au retour : une liaison ne s'accepte que si on l'a lancée. */
   const pendingStates = new Set<string>()
   const randomState = deps.randomState ?? (() => randomBytes(16).toString('hex'))
 
+  const log = () => ctx!.logger
   const ready = (): NestClient => {
     if (!client) throw new PluginError('NEEDS_PAIRING', 'Google Device Access is not configured (NEST_PROJECT_ID, NEST_CLIENT_ID, NEST_CLIENT_SECRET)')
     if (!client.linked) throw new PluginError('NEEDS_PAIRING', 'no Google account linked: open /api/plugins/nest/auth/url')
@@ -137,6 +162,54 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
     })
   }
 
+  /**
+   * Ouvre (ou rejoint) la session vidéo d'une caméra RTSP. Deux tablettes qui arrivent en même
+   * temps (ou une tablette qui se connecte deux fois, vu en réel) doivent partager la MÊME
+   * ouverture : sans `opening`, chacune demandait sa session à Google et la seconde écrasait la
+   * première dans `streams`, dont le ffmpeg et le minuteur de prolongation tournaient alors sans fin.
+   */
+  function openStream(externalId: string): Promise<RtspRelay> {
+    const existing = streams.get(externalId)
+    if (existing && !existing.relay.hasEnded) return Promise.resolve(existing.relay)
+    if (existing) streams.delete(externalId)
+    const pending = opening.get(externalId)
+    if (pending) return pending
+    const p = createStream(externalId).finally(() => opening.delete(externalId))
+    opening.set(externalId, p)
+    return p
+  }
+
+  async function createStream(externalId: string): Promise<RtspRelay> {
+    const c = ready()
+    const started = await c.generateRtspStream(externalId, ctx!.signal)
+    log().info({ externalId, expiresAt: started.expiresAt }, 'rtsp stream opened')
+    const relay = new RtspRelay({
+      ffmpegPath: config!.FFMPEG_PATH, url: started.streamUrls.rtspUrl, clock: ctx!.clock, logger: ctx!.logger,
+      idleGraceMs: STREAM_IDLE_MS, onIdle: () => void closeStream(externalId, 'no viewer left'),
+    })
+    const session: StreamSession = { relay, extensionToken: started.streamExtensionToken, extendTimer: null }
+    session.extendTimer = ctx!.clock.setInterval(() => {
+      c.extendRtspStream(externalId, session.extensionToken, ctx!.signal)
+        .then((r) => { session.extensionToken = r.streamExtensionToken })
+        .catch((err) => void closeStream(externalId, `extension failed: ${(err as Error).message}`))
+    }, STREAM_EXTEND_MS)
+    streams.set(externalId, session)
+    relay.start()
+    return relay
+  }
+
+  /** Ferme la session vidéo : relais arrêté, session Google libérée. */
+  async function closeStream(externalId: string, reason: string): Promise<void> {
+    const session = streams.get(externalId)
+    if (!session) return
+    streams.delete(externalId)
+    ctx!.clock.clearInterval(session.extendTimer)
+    session.relay.stop(reason)
+    log().info({ externalId, reason }, 'rtsp stream closed')
+    try { await client?.stopRtspStream(externalId, session.extensionToken, ctx!.signal) }
+    catch (err) { log().debug({ err }, 'StopRtspStream failed (the session expires by itself)') }
+  }
+
   return {
     id: 'nest',
     configSchema: nestConfigSchema,
@@ -192,6 +265,7 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
     async stop() {
       poller?.stop()
       poller = null
+      await Promise.all([...streams.keys()].map((id) => closeStream(id, 'plugin stopped')))
       client = null
     },
 
@@ -226,6 +300,39 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
         }
       })
 
+      // Flux vidéo d'une caméra : une ligne JSON d'entête (codecs), puis l'entête MP4 et les
+      // fragments en binaire. Chaque fragment commence par une image clé : une tablette qui arrive
+      // en cours de route décode dès le premier, et une tablette trop lente peut en sauter.
+      app.get<{ Params: { id: string } }>('/cameras/:id/stream', { websocket: true }, (socket, req) => {
+        const externalId = req.params.id
+        const fail = (message: string) => { socket.send(JSON.stringify({ type: 'error', message })); socket.close(1008, message.slice(0, 120)) }
+        const device = entries.get(externalId)
+        if (!device || !isCamera(device)) return fail(`unknown Nest camera ${externalId}`)
+        if (!streamProtocols(device).includes('rtsp')) return fail('this camera does not offer an RTSP stream')
+        let relay: RtspRelay | null = null
+        let closed = false
+        const onMessage = (msg: RelayMessage) => {
+          if (socket.readyState !== socket.OPEN) return
+          if (msg.kind === 'init') { socket.send(JSON.stringify({ type: 'init', mime: msg.mime })); socket.send(msg.data, { binary: true }); return }
+          if (msg.kind === 'ended') { socket.send(JSON.stringify({ type: 'ended', reason: msg.reason })); socket.close(1011, msg.reason.slice(0, 120)); return }
+          if (socket.bufferedAmount > WS_MAX_BUFFERED) return
+          socket.send(msg.data, { binary: true })
+        }
+        // une tablette qui disparaît sans fermer (Wi-Fi coupé) laisserait la session Google et ffmpeg
+        // tourner : ping toutes les 30 s, et on coupe si le pong ne revient pas
+        let alive = true
+        socket.on('pong', () => { alive = true })
+        const heartbeat = ctx!.clock.setInterval(() => {
+          if (!alive) { socket.terminate(); return }
+          alive = false
+          socket.ping()
+        }, WS_HEARTBEAT_MS)
+        socket.on('close', () => { closed = true; ctx!.clock.clearInterval(heartbeat); relay?.unsubscribe(onMessage) })
+        openStream(externalId)
+          .then((r) => { if (closed) return; relay = r; r.subscribe(onMessage) })
+          .catch((err) => { if (!closed) fail((err as Error).message) })
+      })
+
       // Dernière liste brute reçue de Google : sert à relever une fixture réelle (voir __fixtures__).
       app.get('/devices/raw', async (_req, reply) => {
         if (lastRaw === undefined) return sendError(reply, 404, 'NOT_FOUND', 'no device list received yet')
@@ -241,7 +348,7 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
       const thermostats = descriptors.length - cameras
       return {
         status: 'ok',
-        detail: `${cameras} camera(s)${thermostats ? `, ${thermostats} thermostat(s)` : ''}${ignored ? `, ${ignored} other device(s) ignored` : ''}`,
+        detail: `${cameras} camera(s)${thermostats ? `, ${thermostats} thermostat(s)` : ''}${ignored ? `, ${ignored} other device(s) ignored` : ''}${streams.size ? `, ${streams.size} live stream(s)` : ''}`,
       }
     },
   }

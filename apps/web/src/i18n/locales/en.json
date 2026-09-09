@@ -87,7 +87,11 @@
     "online": "Online", "classes": { "camera": "Camera", "doorbell": "Doorbell", "display": "Display" },
     "protocols": { "webrtc": "WebRTC", "rtsp": "RTSP" }, "vendorRoom": "Google Home room: {room}", "chime": "Rings",
     "stream": "Video stream: {protocols}", "noStream": "No video stream declared",
-    "videoLater": "Live video comes in a later step; for now the camera is listed and placed in the house."
+    "video": {
+      "connecting": "Connecting to the stream…", "stopped": "Video stopped", "ended": "Stream ended", "error": "Stream unavailable",
+      "unsupported": "This browser cannot play this stream", "play": "Watch video", "stop": "Stop video", "mute": "Mute", "unmute": "Unmute",
+      "webrtcLater": "This camera only offers WebRTC, not supported yet."
+    }
   },
   "climate": {
     "current": "Temperature", "humidity": "Humidity", "target": "Target", "mode": "Mode",
