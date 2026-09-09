@@ -69,4 +69,25 @@ button { font-family: inherit; cursor: pointer; }
 .marker-pill[data-moving='1'] { pointer-events: none; outline: 2px dashed var(--accent); outline-offset: 2px; }
 .marker-pill:hover { transform: translateY(-60%) scale(1.04); }
 
+/* Repère de la POSITION FAVORITE sur un curseur d'ouvrant, partagé par le panneau appareil et la
+   vue Ouvrants (d'où sa place ici plutôt que dupliqué dans les deux composants).
+   Vuetify place le repère en `inset-inline-start: <valeur>%` puis le décale de `translate(-1px,
+   -1px)`, un demi-« tick size » calibré sur SA taille par défaut de 2 px : dès qu'on l'agrandit,
+   ce décalage ne le centre plus. On reprend donc le centrage entièrement.
+   Plus HAUT que le pouce (22 px) pour rester visible quand celui-ci passe dessus, et jamais élevé
+   en z-index : le pouce vient après dans le DOM, donc il passe devant tout seul. */
+.cover-slider .v-slider-track__tick {
+  width: 3px; height: 28px; margin: 0; border-radius: 2px; opacity: 1;
+  top: 50%; transform: translate(-50%, -50%);
+  background: rgb(var(--v-theme-warning));
+}
+/* Vuetify n'écrit `inset-inline-start` en style inline QUE pour les valeurs intermédiaires : les
+   repères extrêmes sont placés par ses propres marges, que le `margin: 0` ci-dessus annule. Sans
+   ces deux règles, un repère à 100 % retombe à gauche de la piste (mesuré). */
+.cover-slider .v-slider-track__tick--first { inset-inline-start: 0; }
+.cover-slider .v-slider-track__tick--last { inset-inline-start: 100%; }
+/* Vuetify étiquette un repère donné en tableau (la valeur, sous la piste) : 24 px de hauteur en
+   plus, alors que le chiffre est déjà écrit dans la touche « Position perso ». */
+.cover-slider .v-slider-track__tick-label { display: none; }
+
 * { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }

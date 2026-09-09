@@ -8,15 +8,18 @@ export interface CoverOptions { name: string; position?: number; tilt?: boolean;
 export function cover(externalId: string, o: CoverOptions): SimDevice<'cover'> {
   const caps: Capability[] = ['open_close', 'position', 'stop']
   if (o.tilt) caps.push('tilt')
-  // position favorite mémorisée « dans le moteur » : la simulation la connaît, donc elle la montre
-  if (o.preset !== undefined) caps.push('preset')
+  // position favorite mémorisée « dans le moteur » : la simulation la connaît, donc elle la montre,
+  // et elle sait la réécrire — d'où les deux capacités, comme un moteur io-homecontrol
+  if (o.preset !== undefined) caps.push('preset', 'preset_set')
+  // la mémoire est MUTABLE : `cover.set_preset` la réécrit, et `cover.preset` suit la nouvelle valeur
+  let preset = o.preset
   const speed = o.speedPctPerS ?? 5
   let target: number | null = null
   const dev: SimDevice<'cover'> = {
     descriptor: descriptor(externalId, 'cover', o.name, caps, { manufacturer: 'Mock', model: 'Roller shutter' }),
     state: {
       kind: 'cover', updatedAt: 0, available: true, position: o.position ?? 100, motion: 'stopped',
-      ...(o.tilt ? { tilt: 50 } : {}), ...(o.preset !== undefined ? { presetPosition: o.preset } : {}),
+      ...(o.tilt ? { tilt: 50 } : {}), ...(preset !== undefined ? { presetPosition: preset } : {}),
     },
     // `position` est optionnelle dans le contrat (une radio unidirectionnelle ne la connaît pas),
     // mais la simulation la pose au démarrage et ne l'efface jamais : d'où les `!` ci-dessous.
@@ -41,9 +44,15 @@ export function cover(externalId: string, o: CoverOptions): SimDevice<'cover'> {
         case 'cover.stop': target = null; dev.state.motion = 'stopped'; break
         case 'cover.set_position': target = cmd.position; break
         case 'cover.preset':
-          if (o.preset === undefined) throw new SimError('UNSUPPORTED_COMMAND', 'no preset')
-          target = o.preset
+          if (preset === undefined) throw new SimError('UNSUPPORTED_COMMAND', 'no preset')
+          target = preset
           break
+        case 'cover.set_preset':
+          if (preset === undefined) throw new SimError('UNSUPPORTED_COMMAND', 'no preset')
+          // réécrire la mémoire ne DÉPLACE pas l'ouvrant : c'est un réglage, pas une manœuvre
+          preset = cmd.position
+          dev.state.presetPosition = cmd.position
+          return
         case 'cover.set_tilt':
           if (!o.tilt) throw new SimError('UNSUPPORTED_COMMAND', 'no tilt')
           dev.state.tilt = cmd.tilt

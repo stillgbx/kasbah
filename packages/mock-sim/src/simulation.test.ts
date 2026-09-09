@@ -48,6 +48,27 @@ describe('Simulation', () => {
     expect(sim.getState('cover-living')).toMatchObject({ motion: 'stopped', position: 35 })
   })
 
+  it('position favorite : rappel, puis reecriture qui ne deplace rien', async () => {
+    const sim = make()
+    // `cover-living` memorise 27 ; le rappel y conduit l'ouvrant
+    expect(sim.getState('cover-living')).toMatchObject({ presetPosition: 27 })
+    await sim.execute('cover-living', { type: 'cover.preset' })
+    for (let i = 0; i < 20; i++) sim.tick(1)
+    expect(sim.getState('cover-living')).toMatchObject({ motion: 'stopped', position: 27 })
+
+    // reecrire la memoire est un REGLAGE : l'etat change, l'ouvrant ne bouge pas
+    await sim.execute('cover-living', { type: 'cover.set_preset', position: 60 })
+    expect(sim.getState('cover-living')).toMatchObject({ presetPosition: 60, position: 27, motion: 'stopped' })
+    // et le rappel suit desormais la NOUVELLE valeur
+    await sim.execute('cover-living', { type: 'cover.preset' })
+    for (let i = 0; i < 20; i++) sim.tick(1)
+    expect(sim.getState('cover-living')).toMatchObject({ position: 60 })
+
+    // un volet sans memoire refuse les deux commandes
+    await expect(sim.execute('cover-kitchen', { type: 'cover.preset' })).rejects.toMatchObject({ code: 'UNSUPPORTED_COMMAND' })
+    await expect(sim.execute('cover-kitchen', { type: 'cover.set_preset', position: 50 })).rejects.toMatchObject({ code: 'UNSUPPORTED_COMMAND' })
+  })
+
   it('light.set applies on/brightness/color and rejects other kinds', async () => {
     const sim = make()
     await sim.execute('light-living', { type: 'light.set', on: true, brightness: 55, color: { x: 0.2, y: 0.3 } })

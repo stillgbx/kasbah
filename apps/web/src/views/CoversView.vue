@@ -94,7 +94,7 @@ function commit(id: string, v: number) {
                       :min="0" :max="100" :step="5" :disabled="!entry.state.available"
                       :ticks="presetTicks(entry.state as StateFor<'cover'>)"
                       :show-ticks="presetTicks(entry.state as StateFor<'cover'>) ? 'always' : false"
-                      density="compact" hide-details class="controls__slider"
+                      density="compact" hide-details class="controls__slider cover-slider"
                       @update:model-value="(v: number) => drag(entry.descriptor.id, v)"
                       @end="(v: number) => commit(entry.descriptor.id, v)" />
           </div>
@@ -111,13 +111,7 @@ function commit(id: string, v: number) {
 .empty { padding: 24px; text-align: center; }
 .controls { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; margin: 2px 4px 0; }
 .controls__slider { flex: 1 1 auto; }
-/* meme repere que dans le panneau appareil */
-.controls__slider :deep(.v-slider-track__tick) { background: var(--accent); opacity: .85; width: 2px; height: 8px; border-radius: 1px; }
-/* accent sur accent serait invisible sur la portion active de la piste */
-.controls__slider :deep(.v-slider-track__tick--filled) { background: var(--on-accent); opacity: 1; }
-/* pas d'etiquette sous la piste : elle ajoute 24 px et la valeur est dans le libelle de la touche */
-.controls__slider :deep(.v-slider-track__tick-label) { display: none; }
-.controls__slider :deep(.v-slider--has-labels) { margin-bottom: 0; }
+/* le repere de position favorite est style globalement, voir `styles/app.css` (`.cover-slider`) */
 .dot { margin-right: 6px; color: var(--accent); }
 .keys { display: flex; gap: 4px; flex: 0 0 auto; }
 .key {

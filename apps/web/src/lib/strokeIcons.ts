@@ -83,6 +83,8 @@ export const ICONS = {
   arrowDown: 'M12 4v16M6 14l6 6 6-6',
   unfold: 'M8 9l4-4 4 4M8 15l4 4 4-4',
   eyedropper: 'M19.5 6.5a2.8 2.8 0 0 0-4-4l-2.3 2.3-1-1-1.5 1.5 6 6 1.5-1.5-1-1zM13.2 8.8L5 17v2h2l8.2-8.2',
+  // « favori / mémorisé » : une pipette ou une coche ne se lisent pas à 16 px (essais rejetés)
+  star: 'M12 3.5L14.1 9.4 20.4 9.6 15.4 13.4 17.2 19.4 12 15.9 6.8 19.4 8.6 13.4 3.6 9.6 9.9 9.4z',
   grip: 'M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01',
 } as const
 export type IconName = keyof typeof ICONS

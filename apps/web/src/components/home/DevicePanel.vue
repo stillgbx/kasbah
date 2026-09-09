@@ -3,10 +3,13 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CommandInput } from '@kasbah/shared'
 import { useDeviceResolver } from '../../composables/useDeviceResolver'
+import { toClosure } from '../../lib/cover'
+import { formatPercent } from '../../lib/format'
 import { headlineValue, isDeviceBusy, isDeviceOn, toggleChecked, toggleCommand } from '../../lib/deviceState'
 import { kindIcon } from '../../lib/strokeIcons'
 import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
+import { useNotificationsStore } from '../../stores/notifications'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import DeviceControl from '../controls/DeviceControl.vue'
 import PlacementControl from './PlacementControl.vue'
@@ -16,6 +19,7 @@ import PlacementControl from './PlacementControl.vue'
 const emit = defineEmits<{ back: [] }>()
 const house = useHouseStore()
 const devices = useDevicesStore()
+const notifications = useNotificationsStore()
 const { t, locale } = useI18n()
 const resolved = useDeviceResolver(computed(() => house.selectedKey))
 
@@ -57,7 +61,16 @@ const brand = computed(() => resolved.value?.descriptor?.meta.manufacturer ?? (r
 
 function send(cmd: CommandInput) {
   const id = resolved.value?.deviceId
-  if (id) void devices.sendCommand(id, cmd)
+  if (!id) return
+  // Réécrire la position favorite d'un moteur ne se voit presque pas — l'ouvrant ne bouge pas, et
+  // seule la petite valeur du bouton change. Or ce réglage vit DANS le moteur et sert aussi aux
+  // télécommandes murales : il mérite un accusé de réception explicite, pas un changement muet.
+  if (cmd.type === 'cover.set_preset') {
+    const pct = formatPercent(toClosure(cmd.position), locale.value)
+    void devices.sendCommand(id, cmd).then((ok) => { if (ok) notifications.success(t('cover.presetSaved', { pct })) })
+    return
+  }
+  void devices.sendCommand(id, cmd)
 }
 </script>
 

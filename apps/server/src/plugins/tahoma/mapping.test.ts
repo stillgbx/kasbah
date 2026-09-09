@@ -21,7 +21,10 @@ describe('tahoma mapping', () => {
   })
 
   it('resolves the command names each family uses', () => {
-    expect(coverCommands(ioShutter)).toEqual({ open: 'open', close: 'close', stop: 'stop', position: 'setClosure', preset: 'my' })
+    expect(coverCommands(ioShutter)).toEqual({
+      open: 'open', close: 'close', stop: 'stop', position: 'setClosure',
+      preset: 'my', presetSet: 'setMemorized1Position',
+    })
     expect(coverCommands(ioVenetian)).toMatchObject({ position: 'setClosure', tilt: 'setOrientation' })
     // store banne : déployer = fermer
     expect(coverCommands(ioAwning)).toEqual({ open: 'undeploy', close: 'deploy', stop: 'stop', position: 'setDeployment' })
@@ -59,7 +62,7 @@ describe('tahoma mapping', () => {
   it('descriptor: capabilities follow the declared commands', () => {
     expect(toDescriptor(ioShutter)).toMatchObject({
       id: 'tahoma:io.1234-5678-9012.11110001', kind: 'cover', name: 'Volet salon',
-      capabilities: ['open_close', 'position', 'stop', 'preset'],
+      capabilities: ['open_close', 'position', 'stop', 'preset', 'preset_set'],
       meta: { manufacturer: 'Somfy', model: 'io:RollerShutterGenericIOComponent' },
     })
     // l'API locale n'expose aucune pièce : le rattachement vient de house.json
@@ -119,6 +122,13 @@ describe('tahoma mapping', () => {
     // le BSO et le portail ne declarent pas `my` : la commande n'existe pas pour eux
     expect(toAction(ioVenetian.deviceURL, { type: 'cover.preset' }, coverCommands(ioVenetian))).toBeUndefined()
     expect(toAction(rtsGate.deviceURL, { type: 'cover.preset' }, coverCommands(rtsGate))).toBeUndefined()
+    // reecrire la memoire : meme inversion que setClosure, la box stocke une FERMETURE
+    expect(toAction(ioShutter.deviceURL, { type: 'cover.set_preset', position: 27 }, io)?.commands)
+      .toEqual([{ name: 'setMemorized1Position', parameters: [73] }])
+    // un RTS rappelle sa position favorite sans savoir la lire ni la reecrire : trois niveaux
+    expect(coverCommands(rtsShutter).presetSet).toBeUndefined()
+    expect(toDescriptor(rtsShutter).capabilities).not.toContain('preset_set')
+    expect(toAction(rtsShutter.deviceURL, { type: 'cover.set_preset', position: 50 }, coverCommands(rtsShutter))).toBeUndefined()
     expect(toAction(rtsShutter.deviceURL, { type: 'cover.set_position', position: 50 }, coverCommands(rtsShutter))).toBeUndefined()
     expect(toAction(rtsGate.deviceURL, { type: 'cover.stop' }, coverCommands(rtsGate))).toBeUndefined()
   })

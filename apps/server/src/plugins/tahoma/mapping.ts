@@ -49,6 +49,8 @@ export interface CoverCommands {
   tilt?: string
   /** `my` : rappel de la position favorite mémorisée dans le moteur, sans paramètre. */
   preset?: string
+  /** `setMemorized1Position` : réécrit cette mémoire, paramètre en FERMETURE comme `setClosure`. */
+  presetSet?: string
 }
 
 export function coverCommands(device: OverkizDevice): CoverCommands {
@@ -60,12 +62,14 @@ export function coverCommands(device: OverkizDevice): CoverCommands {
   const position = pick(names, ['setClosure', 'setDeployment'])
   const tilt = pick(names, ['setOrientation'])
   const preset = pick(names, ['my'])
+  const presetSet = pick(names, ['setMemorized1Position'])
   if (open) out.open = open
   if (close) out.close = close
   if (stop) out.stop = stop
   if (position) out.position = position
   if (tilt) out.tilt = tilt
   if (preset) out.preset = preset
+  if (presetSet) out.presetSet = presetSet
   return out
 }
 
@@ -140,6 +144,9 @@ export function toDescriptor(device: OverkizDevice): DeviceDescriptor {
   // `preset` = la box déclare `my`. Indépendant de `position` : un store RTS sait rejoindre sa
   // position favorite sans savoir en viser une autre, ni dire laquelle c'est.
   if (cmd.preset) capabilities.push('preset')
+  // écrire la mémoire est une capacité de plus : les stores RTS savent la rappeler sans savoir
+  // ni la lire ni la réécrire (relevé : 18 rappels, 16 lectures, 16 écritures sur 19 ouvrants)
+  if (cmd.presetSet) capabilities.push('preset_set')
   return {
     id: `tahoma:${externalId}`,
     pluginId: 'tahoma',
@@ -217,6 +224,8 @@ export function toAction(deviceURL: string, cmd: Command, commands: CoverCommand
     case 'cover.set_position': return commands.position ? one(commands.position, [100 - cmd.position]) : undefined
     case 'cover.set_tilt': return commands.tilt ? one(commands.tilt, [cmd.tilt]) : undefined
     case 'cover.preset': return commands.preset ? one(commands.preset) : undefined
+    // même inversion que `setClosure` : la box mémorise une fermeture (`paramsSig: p1`, relevé)
+    case 'cover.set_preset': return commands.presetSet ? one(commands.presetSet, [100 - cmd.position]) : undefined
     default: return undefined
   }
 }

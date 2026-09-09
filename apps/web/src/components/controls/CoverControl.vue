@@ -63,6 +63,11 @@ const presetClosure = computed(() =>
 // Repère sur la piste du curseur : `ticks` en tableau place la marque avec la géométrie de Vuetify
 // (le pouce ne parcourt pas toute la largeur), donc sans calcul de position à la main.
 const presetTicks = computed(() => (presetClosure.value === undefined ? undefined : [presetClosure.value]))
+// Réécrire la mémoire du moteur : on grave la position ACTUELLE, comme le geste de la télécommande
+// Somfy (amener l'ouvrant au bon endroit, puis mémoriser) — donc on n'enregistre jamais une
+// position qu'on n'a pas vue. Impossible en pleine course : la position y est celle du départ.
+const hasPresetSet = props.descriptor.capabilities.includes('preset_set')
+const canSavePreset = computed(() => !props.disabled && !moving.value && props.state.position !== undefined)
 
 function send(cmd: CommandInput) { emit('command', cmd) }
 </script>
@@ -92,18 +97,28 @@ function send(cmd: CommandInput) { emit('command', cmd) }
 
     <v-slider v-if="hasPosition" v-model="drag" :min="0" :max="100" :step="5" :disabled="disabled"
               :ticks="presetTicks" :show-ticks="presetTicks ? 'always' : false"
-              density="compact" hide-details class="cover__slider"
+              density="compact" hide-details class="cover-slider"
               @start="dragging = true"
               @end="(v: number) => { dragging = false; send({ type: 'cover.set_position', position: fromClosure(Math.round(v)) }) }" />
 
-    <!-- Sur sa propre ligne, pleine largeur : « Position perso » ne tient pas dans un quart des
-         340 px du panneau, et la valeur mérite d'être écrite. Une infobulle serait inutile ici,
-         l'application est tactile — rien ne survole. -->
-    <button v-if="hasPreset" type="button" class="key key--wide" :disabled="disabled" @click="send({ type: 'cover.preset' })">
-      <StrokeIcon name="crosshair" :size="16" />
-      <span>{{ $t('cover.preset') }}</span>
-      <span v-if="presetClosure !== undefined" class="key__pct">{{ Math.round(presetClosure) }} %</span>
-    </button>
+    <!-- Une seule ligne pour les deux : le rappel prend la place (son libellé et sa valeur sont
+         écrits), la mémorisation se réduit à une icône. Cette dernière porte une teinte
+         d'AVERTISSEMENT parce qu'elle réécrit une mémoire qui vit dans le moteur et sert aussi au
+         bouton « my » des télécommandes murales — ce n'est pas une manœuvre de plus. -->
+    <div v-if="hasPreset || hasPresetSet" class="preset">
+      <button v-if="hasPreset" type="button" class="key preset__recall" :disabled="disabled" @click="send({ type: 'cover.preset' })">
+        <StrokeIcon name="crosshair" :size="16" />
+        <span>{{ $t('cover.preset') }}</span>
+        <span v-if="presetClosure !== undefined" class="key__pct">{{ Math.round(presetClosure) }} %</span>
+      </button>
+      <button v-if="hasPresetSet" type="button" class="key preset__save" :disabled="!canSavePreset"
+              :title="$t('cover.presetSave')" :aria-label="$t('cover.presetSave')"
+              @click="send({ type: 'cover.set_preset', position: state.position! })">
+        <!-- Étoile = « favori / mémorisé », le seul glyphe qui se lise à 16 px pour cette idée. Une
+             coche (lue « validé ») puis une pipette (illisible à cette taille) ont été écartées. -->
+        <StrokeIcon name="star" :size="16" />
+      </button>
+    </div>
 
     <template v-if="hasTilt">
       <!-- même gabarit que la ligne ci-dessus : les deux pourcentages s'alignent -->
@@ -137,16 +152,16 @@ function send(cmd: CommandInput) { emit('command', cmd) }
 }
 .key:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
 .key:disabled { opacity: .4; }
-/* la touche « position perso » prend la ligne entière et pousse sa valeur à droite */
-.key--wide { flex: none; width: 100%; justify-content: flex-start; gap: 8px; margin-top: 6px; }
 .key__pct { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
-/* repère de la position perso : lisible sans concurrencer le pouce du curseur */
-.cover__slider :deep(.v-slider-track__tick) { background: var(--accent); opacity: .85; width: 2px; height: 8px; border-radius: 1px; }
-/* Sur la portion ACTIVE, un repère couleur accent est accent sur accent : invisible. Vuetify
-   marque ces repères `--filled`, et `--on-accent` est le jeton fait pour écrire sur l'accent. */
-.cover__slider :deep(.v-slider-track__tick--filled) { background: var(--on-accent); opacity: 1; }
-/* Vuetify étiquette un repère donné en tableau (« 73 » sous la piste) : 24 px de hauteur en plus,
-   et le chiffre est déjà écrit dans la touche juste en dessous. */
-.cover__slider :deep(.v-slider-track__tick-label) { display: none; }
-.cover__slider :deep(.v-slider--has-labels) { margin-bottom: 0; }
+/* Les deux touches de position perso sur UNE ligne : le rappel s'etire (son libelle et sa valeur
+   sont ecrits), la memorisation se reduit a une icone de 40 px. */
+.preset { display: flex; gap: 6px; margin-top: 6px; }
+.preset__recall { flex: 1 1 auto; justify-content: flex-start; gap: 8px; }
+/* Teinte d'AVERTISSEMENT : cette touche reecrit un reglage qui vit dans le moteur et sert aussi au
+   bouton « my » des telecommandes murales. Regles placees APRES `.key:hover`, de meme specificite,
+   donc c'est l'ordre qui les fait gagner. */
+.preset__save { flex: 0 0 40px; color: rgb(var(--v-theme-warning)); border-color: rgba(var(--v-theme-warning), .45); }
+.preset__save:hover:not(:disabled) { background: rgba(var(--v-theme-warning), .14); color: rgb(var(--v-theme-warning)); border-color: transparent; }
+/* Le repere de position favorite est style globalement (`.cover-slider` dans styles/app.css) :
+   le panneau appareil et la vue Ouvrants l'affichent tous les deux. */
 </style>

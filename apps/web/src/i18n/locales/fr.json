@@ -62,7 +62,7 @@
     }
   },
   "cover": {
-    "tilt": "Inclinaison", "stopped": "À l'arrêt", "preset": "Position perso", "presetAt": "Position perso — {pct}",
+    "tilt": "Inclinaison", "stopped": "À l'arrêt", "preset": "Position perso", "presetAt": "Position perso — {pct}", "presetSave": "Mémoriser cette position", "presetSaved": "Position perso mémorisée : {pct}",
     "openClose": { "open": "Ouvert", "closed": "Fermé", "opening": "Ouverture en cours", "closing": "Fermeture en cours", "level": "Fermeture", "actionOpen": "Ouvrir", "actionClose": "Fermer" },
     "upDown": { "open": "Remonté", "closed": "Baissé", "opening": "Remontée en cours", "closing": "Descente en cours", "level": "Descente", "actionOpen": "Remonter", "actionClose": "Baisser" }
   },

@@ -94,7 +94,7 @@ describe('CoverControl', () => {
     expect(moving.findAll('.line')[0]!.find('.line__text').text()).toBe(fr.cover.upDown.closing)
   })
 
-  it('position perso : touche pleine largeur, valeur ecrite, repere sur le curseur', () => {
+  it('position perso : touche de rappel large, valeur ecrite, repere sur le curseur', () => {
     // deux notions distinctes : la CAPACITE dit qu'on peut rappeler la position favorite du moteur,
     // la VALEUR seulement qu'on peut la montrer. Un moteur RTS a la premiere sans la seconde.
     const w = mount(CoverControl, {
@@ -103,7 +103,7 @@ describe('CoverControl', () => {
     const key = w.findAll('button').at(-1)!
     expect(key.text()).toContain(fr.cover.preset)
     expect(key.find('.key__pct').text()).toBe('73 %')            // 27 d'ouverture = 73 de fermeture
-    expect(key.classes()).toContain('key--wide')
+    expect(key.classes()).toContain('preset__recall')
     // le repere est place par Vuetify sur la piste, donc a la bonne geometrie
     expect(w.find('.v-slider-track__tick').exists()).toBe(true)
 
@@ -118,6 +118,28 @@ describe('CoverControl', () => {
     // sans la capacite, pas de touche du tout
     const plain = mount(CoverControl, { props: { descriptor: descriptor(ALL), state: state() } })
     expect(plain.text()).not.toContain(fr.cover.preset)
+  })
+
+  it('memoriser la position : grave l ACTUELLE, et jamais en pleine course', async () => {
+    // le geste de la telecommande Somfy : on amene l'ouvrant au bon endroit, puis on memorise —
+    // donc on n'enregistre jamais une position qu'on n'a pas vue.
+    const d = descriptor([...ALL, 'preset', 'preset_set'])
+    const w = mount(CoverControl, { props: { descriptor: d, state: state({ position: 40, presetPosition: 27 }) } })
+    const save = w.find('.preset__save')
+    // icone seule : le libelle passe par le title et l'aria-label, obligatoires sans texte
+    expect(save.attributes('aria-label')).toBe(fr.cover.presetSave)
+    expect(save.attributes('title')).toBe(fr.cover.presetSave)
+    await save.trigger('click')
+    expect(w.emitted('command')).toEqual([[{ type: 'cover.set_preset', position: 40 }]])
+
+    // en mouvement, la position affichee est celle du depart : la touche est verrouillee
+    const moving = mount(CoverControl, { props: { descriptor: d, state: state({ position: 40, motion: 'closing' }) } })
+    expect(moving.find('.preset__save').attributes('disabled')).toBeDefined()
+
+    // sans la capacite d'ecriture, la touche n'existe pas — un RTS rappelle sans reecrire
+    const recallOnly = mount(CoverControl, { props: { descriptor: descriptor(['open_close', 'stop', 'preset']), state: state() } })
+    expect(recallOnly.find('.preset__save').exists()).toBe(false)
+    expect(recallOnly.text()).toContain(fr.cover.preset)
   })
 
   it('shows the position the store aims at, not the one the device still reports', () => {

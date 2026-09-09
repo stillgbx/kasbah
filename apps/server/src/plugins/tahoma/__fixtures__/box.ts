@@ -23,6 +23,8 @@ export const IO_SHUTTER = {
     commands: [
       { commandName: 'open' }, { commandName: 'close' }, { commandName: 'stop' },
       { commandName: 'my' }, { commandName: 'setClosure' }, { commandName: 'identify' },
+      // la memoire du « my » est reinscriptible sur un moteur io : parametre en FERMETURE (paramsSig p1)
+      { commandName: 'setMemorized1Position' }, { commandName: 'refreshMemorized1Position' },
     ],
   },
   states: [
