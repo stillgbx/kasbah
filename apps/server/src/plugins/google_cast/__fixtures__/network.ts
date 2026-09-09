@@ -61,8 +61,8 @@ export const RECEIVER_STATUS_SOUNDBAR_MUTED = {
 /**
  * Enceinte en lecture depuis l'appli Spotify (RECEIVER_STATUS) puis MEDIA_STATUS de la session.
  * ATTENTION : forme DÉDUITE de la référence Cast (messages MediaStatus / MusicTrackMediaMetadata),
- * pas encore relevée en réel — aucune lecture n'était en cours au moment du relevé. À remplacer par
- * une capture (`GET /api/plugins/google_cast/raw`) dès qu'un appareil joue quelque chose.
+ * aucune lecture Spotify n'ayant été relevée. Une capture RÉELLE existe plus bas (`*_RADIO`) : à
+ * remplacer celle-ci aussi dès qu'un morceau à durée joue (`GET /api/plugins/google_cast/raw`).
  */
 export const RECEIVER_STATUS_PLAYING = {
   applications: [{
@@ -88,6 +88,39 @@ export const MEDIA_STATUS_PLAYING = {
 }
 
 export const MEDIA_STATUS_PAUSED = { ...MEDIA_STATUS_PLAYING, playerState: 'PAUSED', currentTime: 61 }
+
+/**
+ * CAPTURE RÉELLE (2026-09-09, `GET /api/plugins/google_cast/raw`) : le Nest Mini de la cuisine joue une
+ * radio lancée à la voix. À garder tel quel, bizarreries comprises : `duration: null` (direct),
+ * `contentId: ""` (l'URL est dans `contentUrl`), une piste `VIDEO` sur un flux audio, un `items[]`
+ * dont le média est presque vide. Le premier schéma exigeait un nombre pour `duration` : tout le
+ * message était rejeté et l'enceinte restait « au repos ».
+ */
+export const RECEIVER_STATUS_RADIO = {
+  volume: { level: 0.30000001192092896, muted: false, controlType: 'master', stepInterval: 0.019999999552965164 },
+  applications: [{
+    appId: '0A236DD3', appType: 'WEB', displayName: 'Radio France', iconUrl: 'https://lh3.googleusercontent.com/anonymised',
+    isIdleScreen: false, launchedFromCloud: true,
+    namespaces: [{ name: 'urn:x-cast:com.google.cast.debugoverlay' }, { name: 'urn:x-cast:com.google.cast.cac' }, { name: 'urn:x-cast:com.google.cast.media' }],
+    senderConnected: true, sessionId: 'a725691c-0000-4000-8000-000000000003', statusText: 'Diffusion: franceinfo',
+    transportId: 'a725691c-0000-4000-8000-000000000003', universalAppId: '0A236DD3',
+  }],
+  version: 2,
+}
+
+export const MEDIA_STATUS_RADIO = {
+  mediaSessionId: 1, playbackRate: 1, playerState: 'PLAYING', currentTime: 38.243996, supportedMediaCommands: 12495,
+  volume: { level: 1, muted: false }, activeTrackIds: [],
+  media: {
+    contentId: '', contentUrl: 'https://icecast.radiofrance.fr/franceinfo-midfi.mp3', streamType: 'LIVE', mediaCategory: 'AUDIO',
+    contentType: 'audio/mp3',
+    metadata: { metadataType: 3, title: 'franceinfo', images: [{ url: 'https://www.radiofrance.fr/s3/anonymised/1000x1000_sc_rf_omm_l00002_ite.jpg' }] },
+    entity: 'https://icecast.radiofrance.fr/franceinfo-midfi.mp3', duration: null, tracks: [{ trackId: 1, type: 'VIDEO' }], breaks: [], breakClips: [],
+  },
+  currentItemId: 1,
+  items: [{ itemId: 1, media: { contentId: '', streamType: 'NONE', contentType: '', entity: 'https://icecast.radiofrance.fr/franceinfo-midfi.mp3', duration: null }, autoplay: true, orderId: 0 }],
+  repeatMode: 'REPEAT_OFF',
+}
 
 /** Fin de file : la session existe encore mais plus rien à jouer. */
 export const MEDIA_STATUS_IDLE = { mediaSessionId: 1, playbackRate: 1, playerState: 'IDLE', currentTime: 0, idleReason: 'FINISHED', supportedMediaCommands: 0, volume: { level: 1, muted: false } }

@@ -1,8 +1,8 @@
 import { deviceDescriptorSchema } from '@kasbah/shared'
 import { describe, expect, it } from 'vitest'
 import {
-  MEDIA_STATUS_IDLE, MEDIA_STATUS_PAUSED, MEDIA_STATUS_PLAYING, RECEIVER_STATUS_CHROMECAST_FIXED, RECEIVER_STATUS_LENOVO_IDLE,
-  RECEIVER_STATUS_NEST_HUB_IDLE, RECEIVER_STATUS_PLAYING, RECEIVER_STATUS_SOUNDBAR_MUTED, SERVICE_CHROMECAST, SERVICE_LENOVO_CLOCK,
+  MEDIA_STATUS_IDLE, MEDIA_STATUS_PAUSED, MEDIA_STATUS_PLAYING, MEDIA_STATUS_RADIO, RECEIVER_STATUS_CHROMECAST_FIXED, RECEIVER_STATUS_LENOVO_IDLE,
+  RECEIVER_STATUS_NEST_HUB_IDLE, RECEIVER_STATUS_PLAYING, RECEIVER_STATUS_RADIO, RECEIVER_STATUS_SOUNDBAR_MUTED, SERVICE_CHROMECAST, SERVICE_LENOVO_CLOCK,
   SERVICE_NEST_HUB, SERVICE_SOUNDBAR, TXT_CHROMECAST, TXT_LENOVO_CLOCK, TXT_NEST_HUB, TXT_NEST_MINI,
 } from './__fixtures__/network'
 import { toCastService } from './discovery'
@@ -83,6 +83,20 @@ describe('google_cast mapping', () => {
     expect(toMediaPatch(media(MEDIA_STATUS_IDLE), app)).toEqual({ playback: 'idle', nowPlaying: null })
     expect(toMediaPatch(undefined, app)).toEqual({ playback: 'idle', nowPlaying: null })
     expect(toMediaPatch(media(MEDIA_STATUS_PLAYING), undefined)).toEqual({ playback: 'idle', nowPlaying: null })
+  })
+
+  it('accepts the real radio capture: null duration, empty content id, live stream', () => {
+    // capture réelle : `duration: null` faisait rejeter tout le message par le premier schéma
+    expect(mediaStatusSchema.safeParse(MEDIA_STATUS_RADIO).success).toBe(true)
+    const app = activeApplication(receiver(RECEIVER_STATUS_RADIO))
+    expect(app).toMatchObject({ displayName: 'Radio France', statusText: 'Diffusion: franceinfo' })
+    expect(toMediaPatch(media(MEDIA_STATUS_RADIO), app)).toEqual({
+      playback: 'playing',
+      nowPlaying: { title: 'franceinfo', artUrl: expect.stringContaining('radiofrance'), positionS: 38.243996, source: 'Radio France' },
+    })
+    // sans titre ni contentId, le texte d'état de l'appli sert de titre
+    const untitled = media({ ...MEDIA_STATUS_RADIO, media: { ...MEDIA_STATUS_RADIO.media, metadata: null } })
+    expect(toMediaPatch(untitled, app)!.nowPlaying).toMatchObject({ title: 'Diffusion: franceinfo' })
   })
 
   it('falls back on subtitle then content id when the metadata is thin', () => {

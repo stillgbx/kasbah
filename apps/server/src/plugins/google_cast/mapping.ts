@@ -92,12 +92,13 @@ export function toMediaPatch(media: MediaStatus | undefined, app: ReceiverApplic
   const playback = toPlayback(media.playerState)
   const m = media.media?.metadata
   if (playback === 'idle' || !media.media) return { playback, nowPlaying: null }
-  const artist = m?.artist ?? m?.albumArtist ?? m?.subtitle
-  const art = m?.images?.[0]?.url
+  // `||` et non `??` : les champs vides ou `null` du récepteur valent « absent »
+  const artist = m?.artist || m?.albumArtist || m?.subtitle || undefined
+  const art = m?.images?.[0]?.url || undefined
   return {
     playback,
     nowPlaying: {
-      title: m?.title ?? media.media.contentId ?? app.displayName ?? '',
+      title: m?.title || media.media.contentId || app.statusText || app.displayName || '',
       ...(artist ? { artist } : {}),
       ...(m?.albumName ? { album: m.albumName } : {}),
       ...(art ? { artUrl: art } : {}),

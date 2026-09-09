@@ -48,26 +48,32 @@ export const receiverStatusSchema = z.looseObject({
 })
 export type ReceiverStatus = z.infer<typeof receiverStatusSchema>
 
+// Tout ce qu'on ne lit pas strictement est `nullish` : un vrai récepteur envoie `null` là où la
+// référence annonce un nombre (relevé : `duration: null` sur un flux radio en direct), et un seul
+// champ trop strict faisait rejeter le MEDIA_STATUS entier — l'enceinte restait « au repos ».
 export const mediaMetadataSchema = z.looseObject({
-  metadataType: z.number().optional(),
-  title: z.string().optional(),
-  subtitle: z.string().optional(),
-  artist: z.string().optional(),
-  albumArtist: z.string().optional(),
-  albumName: z.string().optional(),
-  images: z.array(z.looseObject({ url: z.string() })).optional(),
+  metadataType: z.number().nullish(),
+  title: z.string().nullish(),
+  subtitle: z.string().nullish(),
+  artist: z.string().nullish(),
+  albumArtist: z.string().nullish(),
+  albumName: z.string().nullish(),
+  images: z.array(z.looseObject({ url: z.string().nullish() })).nullish(),
 })
 
 export const mediaStatusSchema = z.looseObject({
   mediaSessionId: z.number(),
   /** PLAYING, PAUSED, BUFFERING, IDLE. */
   playerState: z.string(),
-  currentTime: z.number().optional(),
+  currentTime: z.number().nullish(),
   media: z.looseObject({
-    contentId: z.string().optional(),
-    duration: z.number().optional(),
-    metadata: mediaMetadataSchema.optional(),
-  }).optional(),
+    /** Vide (`""`) sur un flux lancé par l'Assistant : l'URL est alors dans `contentUrl`. */
+    contentId: z.string().nullish(),
+    contentUrl: z.string().nullish(),
+    /** `null` sur un direct (radio), un nombre sur un morceau. */
+    duration: z.number().nullish(),
+    metadata: mediaMetadataSchema.nullish(),
+  }).nullish(),
 })
 export type MediaStatus = z.infer<typeof mediaStatusSchema>
 
