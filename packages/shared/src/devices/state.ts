@@ -130,9 +130,19 @@ export const vehicleStateSchema = z.object({
   odometerKm: z.number().optional(),
 })
 
+/**
+ * Une caméra n'a pour l'instant pas d'état propre : l'API Google Nest ne dit ni si elle filme ni si
+ * elle est « allumée » (ce réglage n'y est pas exposé). Seule `available` porte une information.
+ * Les événements (sonnerie, mouvement) viendront s'ajouter ici quand le flux Pub/Sub sera branché.
+ */
+export const cameraStateSchema = z.object({
+  kind: z.literal('camera'), ...base,
+})
+
 export const deviceStateSchema = z.discriminatedUnion('kind', [
   lightStateSchema, coverStateSchema, mediaPlayerStateSchema, climateStateSchema, vacuumStateSchema,
   mowerStateSchema, sensorStateSchema, energyStateSchema, evChargerStateSchema, vehicleStateSchema,
+  cameraStateSchema,
 ])
 export type DeviceState = z.infer<typeof deviceStateSchema>
 export type StateFor<K extends DeviceKind> = Extract<DeviceState, { kind: K }>

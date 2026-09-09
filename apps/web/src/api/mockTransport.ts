@@ -70,6 +70,7 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
       return house
     },
     async pairHue() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Hue bridge in mock mode') },
+    async nestAuthUrl() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Google account in mock mode') },
     // la simulation n'a pas de fabricant, donc pas de scènes de fabricant
     async getScenes() { return [] },
     async recallScene() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no vendor scenes in mock mode') },

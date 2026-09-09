@@ -71,6 +71,7 @@ export function createHttpTransport(base = ''): Transport {
       (j) => houseSchema.parse((j as { house: unknown }).house) as House,
     ),
     pairHue: () => request(`${base}/api/plugins/hue/pair`, { method: 'POST' }, (j) => j as { appKey: string; hint: string }),
+    nestAuthUrl: () => request(`${base}/api/plugins/nest/auth/url`, undefined, (j) => j as { url: string; redirectUri: string }),
     connect: (handlers) => connectWebSocket(base, handlers),
   }
 }

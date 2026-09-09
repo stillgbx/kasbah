@@ -25,7 +25,7 @@
   },
   "kinds": {
     "light": "Light", "cover": "Shutter", "media_player": "Speaker", "climate": "Heating", "vacuum": "Vacuum",
-    "mower": "Mower", "sensor": "Sensor", "energy": "Energy", "ev_charger": "EV charger", "vehicle": "Vehicle"
+    "mower": "Mower", "sensor": "Sensor", "energy": "Energy", "ev_charger": "EV charger", "vehicle": "Vehicle", "camera": "Camera"
   },
   "device": {
     "unbound": "This device is not bound to any plugin ({id}).", "notPlaced": "Not placed", "outdoor": "Outdoor",
@@ -80,6 +80,12 @@
     "today": "Today", "selfConsumption": "self-consumption", "productionToday": "Production today", "kWhToday": "kWh produced",
     "charger": "Charger", "noData": "No energy device", "noHistory": "History fills up as the day goes on."
   },
+  "camera": {
+    "online": "Online", "classes": { "camera": "Camera", "doorbell": "Doorbell", "display": "Display" },
+    "protocols": { "webrtc": "WebRTC", "rtsp": "RTSP" }, "vendorRoom": "Google Home room: {room}", "chime": "Rings",
+    "stream": "Video stream: {protocols}", "noStream": "No video stream declared",
+    "videoLater": "Live video comes in a later step; for now the camera is listed and placed in the house."
+  },
   "charger": {
     "status": { "disconnected": "Disconnected", "connected": "Connected", "charging": "Charging", "finished": "Charge finished", "error": "Error" },
     "power": "Power", "session": "Session", "maxCurrent": "Max current"
@@ -109,6 +115,11 @@
       "instructions": "Press the round button on the Hue bridge, then start pairing within 30 seconds.",
       "success": "Bridge paired. Add HUE_APP_KEY={key} to apps/server/.env to keep the pairing.",
       "buttonNotPressed": "The bridge button was not pressed. Press it, then retry."
+    },
+    "nest": {
+      "title": "Google Nest", "link": "Link the Google account", "refresh": "Refresh",
+      "instructions": "The Device Access project is configured. Link your Google account to choose the cameras shared with Kasbah.",
+      "opened": "Google's consent screen opened in a new tab. At the end, the page shows the token to paste into apps/server/.env; cameras show up here after a refresh."
     },
     "about": "Kasbah v{version} · {house}"
   },

@@ -2,6 +2,7 @@ import type { PluginFactory } from '../core/plugin'
 import { makeStubPlugin } from './_stub'
 import { createHuePlugin } from './hue'
 import { createMockPlugin } from './mock'
+import { createNestPlugin } from './nest'
 import { createTahomaPlugin } from './tahoma'
 
 // Table statique des plugins : typée, grep-able, sans import dynamique. `KASBAH_PLUGINS`
@@ -11,7 +12,7 @@ export const PLUGIN_FACTORIES: Record<string, PluginFactory> = {
   mock: createMockPlugin,
   hue: createHuePlugin,
   tahoma: createTahomaPlugin,
-  nest: makeStubPlugin('nest', 'Google Nest'),
+  nest: () => createNestPlugin(),
   google_home: makeStubPlugin('google_home', 'Google Home speakers'),
   sonos: makeStubPlugin('sonos', 'Sonos'),
   irobot: makeStubPlugin('irobot', 'iRobot'),

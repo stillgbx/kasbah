@@ -10,12 +10,13 @@ const SENSOR_ICONS: Record<SensorClass, IconName> = {
 
 export const KIND_ICONS: Record<DeviceKind, IconName> = {
   light: 'light', cover: 'shutter', media_player: 'speaker', climate: 'heatpump', vacuum: 'vacuum',
-  mower: 'mower', sensor: 'thermostat', energy: 'solar', ev_charger: 'charger', vehicle: 'vehicle',
+  mower: 'mower', sensor: 'thermostat', energy: 'solar', ev_charger: 'charger', vehicle: 'vehicle', camera: 'camera',
 }
 
 export function deviceIcon(descriptor: DeviceDescriptor | undefined, state?: DeviceState): IconName {
   if (!descriptor) return 'devices'
   switch (descriptor.kind) {
+    case 'camera': return descriptor.meta.camera?.deviceClass === 'doorbell' ? 'doorbell' : 'camera'
     case 'light': return state?.kind === 'light' && state.on ? 'lightOn' : 'light'
     case 'cover': return state?.kind === 'cover' && (state.position ?? 0) > 50 ? 'shutterOpen' : 'shutter'
     case 'media_player': return state?.kind === 'media_player' && state.playback === 'playing' ? 'speakerOn' : 'speaker'

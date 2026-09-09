@@ -5,6 +5,7 @@ import type { PluginHealth } from '@kasbah/shared'
 import PageHeader from '../components/layout/PageHeader.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import HuePairingCard from '../components/HuePairingCard.vue'
+import NestLinkCard from '../components/NestLinkCard.vue'
 import Segmented from '../components/ui/Segmented.vue'
 import { LOCALE_LABELS } from '../i18n'
 import { accentColor } from '../plugins/vuetify'
@@ -119,6 +120,7 @@ const houseStats = computed(() => {
           <section class="card block">
             <div class="block__head"><div class="block__title">{{ $t('settings.plugins') }}</div><div class="muted small">{{ $t('settings.keys') }}</div></div>
             <HuePairingCard />
+            <NestLinkCard />
             <div class="plugins">
               <div v-for="[id, h] in plugins" :key="id" class="plugin">
                 <div class="min0">

@@ -19,6 +19,7 @@ export function isDeviceOn(s: DeviceState): boolean {
     case 'vehicle': return s.charging
     case 'energy': return s.productionW > 0
     case 'sensor': return false
+    case 'camera': return false
   }
 }
 
@@ -105,6 +106,8 @@ export function statusLabel(descriptor: DeviceDescriptor, s: DeviceState, t: Tra
     case 'energy': return formatPower(s.productionW, locale)
     case 'ev_charger': return s.status === 'charging' ? formatPower(s.powerW, locale) : t(`charger.status.${s.status}`)
     case 'vehicle': return `${formatPercent(s.soc, locale)} · ${Math.round(s.rangeKm)} km`
+    // rien d'autre à dire d'une caméra que sa présence : l'API ne publie ni marche/arrêt ni activité
+    case 'camera': return t('camera.online')
   }
 }
 
@@ -121,5 +124,6 @@ export function headlineValue(descriptor: DeviceDescriptor, s: DeviceState, t: T
     case 'energy': return formatPower(s.productionW, locale)
     case 'ev_charger': return formatPower(s.powerW, locale)
     case 'vehicle': return formatPercent(s.soc, locale)
+    case 'camera': return t(`camera.classes.${descriptor.meta.camera?.deviceClass ?? 'camera'}`)
   }
 }

@@ -86,16 +86,21 @@ export const ICONS = {
   // « favori / mémorisé » : une pipette ou une coche ne se lisent pas à 16 px (essais rejetés)
   star: 'M12 3.5L14.1 9.4 20.4 9.6 15.4 13.4 17.2 19.4 12 15.9 6.8 19.4 8.6 13.4 3.6 9.6 9.9 9.4z',
   grip: 'M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01',
+  // caméra de surveillance : corps incliné, objectif, bras de fixation au mur
+  camera: 'M3.5 7.5l12.5-4 1.5 4.7-12.5 4zM5 12.2l.8 2.3M5.8 14.5h7.7M9.7 14.5V20M6 20h7.4M17.5 8.2l3.5-1.1',
+  // sonnette : boîtier vertical, œil de caméra en haut, bouton en bas
+  doorbell: 'M8 2.5h8v19H8zM12 8m-2.2 0a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0-4.4 0M12 16.5m-1.2 0a1.2 1.2 0 1 0 2.4 0a1.2 1.2 0 1 0-2.4 0',
 } as const
 export type IconName = keyof typeof ICONS
 
 const KIND_ICON: Record<DeviceKind, IconName> = {
   light: 'light', cover: 'shutter', media_player: 'speaker', climate: 'heatpump', vacuum: 'vacuum', mower: 'mower',
-  sensor: 'sensor', energy: 'solar', ev_charger: 'charger', vehicle: 'vehicle',
+  sensor: 'sensor', energy: 'solar', ev_charger: 'charger', vehicle: 'vehicle', camera: 'camera',
 }
 
 export function kindIcon(kind: DeviceKind | undefined, descriptor?: DeviceDescriptor): IconName {
   if (!kind) return 'sensor'
+  if (kind === 'camera' && descriptor?.meta.camera?.deviceClass === 'doorbell') return 'doorbell'
   if (kind === 'sensor' && descriptor?.meta.sensor?.deviceClass === 'temperature') return 'thermostat'
   if (kind === 'sensor' && (descriptor?.meta.sensor?.deviceClass === 'pressure' || descriptor?.meta.sensor?.deviceClass === 'flow')) return 'filtration'
   if (kind === 'energy' && descriptor?.capabilities.includes('storage') && !descriptor.capabilities.includes('production')) return 'battery'

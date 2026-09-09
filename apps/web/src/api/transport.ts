@@ -37,6 +37,8 @@ export interface Transport {
   getPluginSettings(): Promise<Record<string, PluginSettings>>
   setPluginSettings(pluginId: string, settings: PluginSettings): Promise<PluginSettings>
   pairHue(): Promise<{ appKey: string; hint: string }>
+  /** URL de consentement Google à ouvrir dans un navigateur pour lier le compte Nest. */
+  nestAuthUrl(): Promise<{ url: string; redirectUri: string }>
   /** (Re)place un appareil dans house.json ; renvoie la maison réécrite. */
   placeDevice(id: string, placement: DevicePlacement): Promise<House>
   /** Écrit l'ordre d'affichage des pièces d'un niveau ; renvoie la maison réécrite. */

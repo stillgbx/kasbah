@@ -4,7 +4,7 @@
 
 export const DEVICE_KINDS = [
   'light', 'cover', 'media_player', 'climate', 'vacuum', 'mower',
-  'sensor', 'energy', 'ev_charger', 'vehicle',
+  'sensor', 'energy', 'ev_charger', 'vehicle', 'camera',
 ] as const
 export type DeviceKind = (typeof DEVICE_KINDS)[number]
 
@@ -32,6 +32,10 @@ export const CAPABILITIES = [
   'charge_control', 'charge_current',
   // vehicle
   'soc', 'range', 'location', 'lock', 'charging', 'charge_limit', 'climate_precondition',
+  // camera — `live_stream` : un flux vidéo à la demande (protocoles dans `meta.camera.protocols`),
+  // `chime` : l'appareil sonne (sonnette). Pas de `on_off` : l'API Google Nest ne permet pas
+  // d'éteindre une caméra, et déclarer une capacité qu'aucune commande ne peut honorer serait mentir.
+  'live_stream', 'chime',
 ] as const
 export type Capability = (typeof CAPABILITIES)[number]
 
@@ -47,6 +51,7 @@ export const KIND_CAPABILITIES: Record<DeviceKind, readonly Capability[]> = {
   energy: ['production', 'consumption', 'grid', 'storage'],
   ev_charger: ['charge_control', 'charge_current'],
   vehicle: ['soc', 'range', 'location', 'lock', 'charging', 'charge_limit', 'climate_precondition'],
+  camera: ['live_stream', 'chime'],
 }
 
 export const CLIMATE_MODES = ['off', 'heat', 'cool', 'auto', 'eco', 'fan_only'] as const
@@ -62,6 +67,17 @@ export const COVER_CLASSES = [
   'shutter', 'awning', 'blind', 'curtain', 'gate', 'garage', 'window',
 ] as const
 export type CoverClass = (typeof COVER_CLASSES)[number]
+
+/**
+ * Nature d'une caméra : une sonnette est une caméra qui sonne, un écran (Nest Hub Max) une caméra
+ * posée sur un meuble. Même commande de flux pour les trois, pas le même mot ni la même icône.
+ */
+export const CAMERA_CLASSES = ['camera', 'doorbell', 'display'] as const
+export type CameraClass = (typeof CAMERA_CLASSES)[number]
+
+/** Protocoles de flux vidéo qu'une caméra sait servir (décide de la façon de l'afficher). */
+export const STREAM_PROTOCOLS = ['webrtc', 'rtsp'] as const
+export type StreamProtocol = (typeof STREAM_PROTOCOLS)[number]
 
 export const SENSOR_CLASSES = [
   'temperature', 'humidity', 'power', 'energy', 'pressure', 'flow', 'illuminance', 'ph', 'battery', 'generic',

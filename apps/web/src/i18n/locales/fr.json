@@ -25,7 +25,7 @@
   },
   "kinds": {
     "light": "Lumière", "cover": "Volet", "media_player": "Enceinte", "climate": "Chauffage", "vacuum": "Aspirateur",
-    "mower": "Tondeuse", "sensor": "Capteur", "energy": "Énergie", "ev_charger": "Borne de recharge", "vehicle": "Véhicule"
+    "mower": "Tondeuse", "sensor": "Capteur", "energy": "Énergie", "ev_charger": "Borne de recharge", "vehicle": "Véhicule", "camera": "Caméra"
   },
   "device": {
     "unbound": "Cet appareil n'est lié à aucun plugin ({id}).", "notPlaced": "Non placés", "outdoor": "Extérieur",
@@ -80,6 +80,12 @@
     "today": "Aujourd'hui", "selfConsumption": "autoconsommation", "productionToday": "Production du jour", "kWhToday": "kWh produits",
     "charger": "Borne", "noData": "Aucun appareil énergie", "noHistory": "L'historique se remplit au fil de la journée."
   },
+  "camera": {
+    "online": "En ligne", "classes": { "camera": "Caméra", "doorbell": "Sonnette", "display": "Écran" },
+    "protocols": { "webrtc": "WebRTC", "rtsp": "RTSP" }, "vendorRoom": "Pièce Google Home : {room}", "chime": "Sonne",
+    "stream": "Flux vidéo : {protocols}", "noStream": "Pas de flux vidéo déclaré",
+    "videoLater": "La vidéo en direct arrive dans une prochaine étape ; pour l'instant la caméra est inventoriée et placée dans la maison."
+  },
   "charger": {
     "status": { "disconnected": "Débranchée", "connected": "Branchée", "charging": "En charge", "finished": "Charge terminée", "error": "Erreur" },
     "power": "Puissance", "session": "Session", "maxCurrent": "Courant max"
@@ -109,6 +115,11 @@
       "instructions": "Appuyez sur le bouton central du bridge Hue, puis lancez l'appairage dans les 30 secondes.",
       "success": "Bridge appairé. Ajoutez HUE_APP_KEY={key} dans apps/server/.env pour conserver l'appairage.",
       "buttonNotPressed": "Le bouton du bridge n'a pas été pressé. Appuyez dessus puis réessayez."
+    },
+    "nest": {
+      "title": "Google Nest", "link": "Lier le compte Google", "refresh": "Actualiser",
+      "instructions": "Le projet Device Access est configuré. Liez votre compte Google pour choisir les caméras partagées avec Kasbah.",
+      "opened": "Le consentement Google s'est ouvert dans un nouvel onglet. À la fin, la page indique le jeton à coller dans apps/server/.env ; les caméras apparaissent ici après actualisation."
     },
     "about": "Kasbah v{version} · {house}"
   },

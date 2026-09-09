@@ -41,5 +41,6 @@ export function summarize(descriptor: DeviceDescriptor, state: DeviceState, loca
     case 'energy': return `${formatPower(state.productionW, locale)} ☀ · ${formatPower(state.consumptionW, locale)}`
     case 'ev_charger': return state.status === 'charging' ? formatPower(state.powerW, locale) : ''
     case 'vehicle': return `${formatPercent(state.soc, locale)} · ${formatKm(state.rangeKm, locale)}`
+    case 'camera': return ''
   }
 }
