@@ -122,5 +122,27 @@ export const MEDIA_STATUS_RADIO = {
   repeatMode: 'REPEAT_OFF',
 }
 
+/**
+ * CAPTURE RÉELLE (2026-09-09) : Crunchyroll sur un Chromecast (appli native, `appId: AndroidNativeApp`,
+ * `statusText` = nom du paquet Android). Métadonnées GÉNÉRIQUES (`metadataType: 0`) : le titre de
+ * l'épisode seulement, un `artist` fait d'un espace, ni série, ni saison, ni image. L'appli n'envoie
+ * rien de plus : il n'y a rien à afficher d'autre.
+ */
+export const RECEIVER_STATUS_CRUNCHYROLL = {
+  volume: { controlType: 'fixed', level: 1, muted: false, stepInterval: 0.03999999910593033 },
+  applications: [{
+    appId: 'AndroidNativeApp', displayName: 'Crunchyroll', isIdleScreen: false, launchedFromCloud: false,
+    namespaces: [{ name: 'urn:x-cast:com.google.cast.media' }],
+    sessionId: 'c1b2a3d4-0000-4000-8000-000000000004', statusText: 'com.crunchyroll.crunchyroid.CrunchyrollApplication',
+    transportId: 'c1b2a3d4-0000-4000-8000-000000000004',
+  }],
+}
+export const MEDIA_STATUS_CRUNCHYROLL = {
+  mediaSessionId: 1, playerState: 'PLAYING', playbackRate: 1, currentTime: 618.581, supportedMediaCommands: 143,
+  volume: { level: 0, muted: false }, activeTrackIds: [], shuffle: false,
+  media: { contentId: 'GE00000000DEMO', streamType: 'BUFFERED', metadata: { metadataType: 0, title: 'Un épisode de démonstration', artist: ' ' }, duration: 1442.066 },
+  currentItemId: 1, repeatMode: 'REPEAT_OFF',
+}
+
 /** Fin de file : la session existe encore mais plus rien à jouer. */
 export const MEDIA_STATUS_IDLE = { mediaSessionId: 1, playbackRate: 1, playerState: 'IDLE', currentTime: 0, idleReason: 'FINISHED', supportedMediaCommands: 0, volume: { level: 1, muted: false } }

@@ -1,8 +1,8 @@
 import { deviceDescriptorSchema } from '@kasbah/shared'
 import { describe, expect, it } from 'vitest'
 import {
-  MEDIA_STATUS_IDLE, MEDIA_STATUS_PAUSED, MEDIA_STATUS_PLAYING, MEDIA_STATUS_RADIO, RECEIVER_STATUS_CHROMECAST_FIXED, RECEIVER_STATUS_LENOVO_IDLE,
-  RECEIVER_STATUS_NEST_HUB_IDLE, RECEIVER_STATUS_PLAYING, RECEIVER_STATUS_RADIO, RECEIVER_STATUS_SOUNDBAR_MUTED, SERVICE_CHROMECAST, SERVICE_LENOVO_CLOCK,
+  MEDIA_STATUS_CRUNCHYROLL, MEDIA_STATUS_IDLE, MEDIA_STATUS_PAUSED, MEDIA_STATUS_PLAYING, MEDIA_STATUS_RADIO, RECEIVER_STATUS_CHROMECAST_FIXED,
+  RECEIVER_STATUS_CRUNCHYROLL, RECEIVER_STATUS_LENOVO_IDLE, RECEIVER_STATUS_NEST_HUB_IDLE, RECEIVER_STATUS_PLAYING, RECEIVER_STATUS_RADIO, RECEIVER_STATUS_SOUNDBAR_MUTED, SERVICE_CHROMECAST, SERVICE_LENOVO_CLOCK,
   SERVICE_NEST_HUB, SERVICE_SOUNDBAR, TXT_CHROMECAST, TXT_LENOVO_CLOCK, TXT_NEST_HUB, TXT_NEST_MINI,
 } from './__fixtures__/network'
 import { toCastService } from './discovery'
@@ -111,6 +111,15 @@ describe('google_cast mapping', () => {
 
   it('routes artwork through the server, original URL encoded', () => {
     expect(artProxyUrl('https://yt3.googleusercontent.com/a=b&c')).toBe('/api/plugins/google_cast/art?url=https%3A%2F%2Fyt3.googleusercontent.com%2Fa%3Db%26c')
+  })
+
+  it('treats a blank artist as absent (real Crunchyroll capture: episode title only, no image)', () => {
+    const app = activeApplication(receiver(RECEIVER_STATUS_CRUNCHYROLL))
+    expect(app).toMatchObject({ displayName: 'Crunchyroll' })
+    expect(toMediaPatch(media(MEDIA_STATUS_CRUNCHYROLL), app)).toEqual({
+      playback: 'playing',
+      nowPlaying: { title: 'Un épisode de démonstration', durationS: 1442.066, positionS: 618.581, source: 'Crunchyroll' },
+    })
   })
 
   it('accepts the sound bar and the Lenovo clock as plain media players', () => {

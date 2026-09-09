@@ -104,19 +104,22 @@ export function toMediaPatch(media: MediaStatus | undefined, app: ReceiverApplic
   const playback = toPlayback(media.playerState)
   const m = media.media?.metadata
   if (playback === 'idle' || !media.media) return { playback, nowPlaying: null }
-  // `||` et non `??` : les champs vides ou `null` du récepteur valent « absent ».
+  // `||` et non `??`, et `clean` : les champs vides, `null` ou faits d'espaces (Crunchyroll envoie
+  // `artist: " "`) valent « absent » — sinon une ligne blanche prenait la place de la source.
   // Le titre est le titre des métadonnées, ou RIEN (`''`) : ni `contentId` (identifiant — id de vidéo
   // YouTube, URI Spotify — qui arrive AVANT les métadonnées à chaque changement de morceau, on voyait
   // « NxHNlQsUooM » une seconde), ni le nom de l'appli (il est déjà dans `source`, l'UI le répétait
   // trois fois). Titre vide = « en attente » : l'UI affiche un repère discret le temps qu'il arrive.
-  const artist = m?.artist || m?.albumArtist || m?.subtitle || undefined
-  const art = m?.images?.[0]?.url || undefined
+  const clean = (v: string | null | undefined) => v?.trim() || undefined
+  const artist = clean(m?.artist) || clean(m?.albumArtist) || clean(m?.subtitle)
+  const album = clean(m?.albumName)
+  const art = clean(m?.images?.[0]?.url)
   return {
     playback,
     nowPlaying: {
-      title: m?.title || '',
+      title: clean(m?.title) ?? '',
       ...(artist ? { artist } : {}),
-      ...(m?.albumName ? { album: m.albumName } : {}),
+      ...(album ? { album } : {}),
       ...(art ? { artUrl: artProxyUrl(art) } : {}),
       ...(typeof media.media.duration === 'number' ? { durationS: media.media.duration } : {}),
       ...(typeof media.currentTime === 'number' ? { positionS: media.currentTime } : {}),

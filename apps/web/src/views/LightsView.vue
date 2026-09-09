@@ -43,9 +43,12 @@ function commit(id: string, v: number) {
         <template #control="{ entry, on }">
           <v-switch :model-value="on" :disabled="!entry.state.available" density="compact" hide-details class="row__switch"
                     @update:model-value="devices.sendCommand(entry.descriptor.id, { type: 'light.set', on: !on })" />
-          <v-slider v-if="entry.descriptor.capabilities.includes('brightness') && on"
+          <!-- le curseur garde sa place lampe éteinte (invisible, inactif) : allumer une lampe ne
+               fait plus descendre les lignes du dessous — règle « rien ne doit bouger » -->
+          <v-slider v-if="entry.descriptor.capabilities.includes('brightness')"
                     :model-value="draft[entry.descriptor.id] ?? (entry.state as StateFor<'light'>).brightness ?? 100"
                     :min="1" :max="100" :step="1" density="compact" hide-details class="row__slider"
+                    :class="{ 'row__slider--off': !on }" :disabled="!on || !entry.state.available" :aria-hidden="on ? 'false' : 'true'"
                     @update:model-value="(v: number) => drag(entry.descriptor.id, v)"
                     @end="(v: number) => commit(entry.descriptor.id, v)" />
         </template>
@@ -60,7 +63,9 @@ function commit(id: string, v: number) {
 .count { font-size: 13px; }
 .empty { padding: 24px; text-align: center; }
 .row__switch { flex: 0 0 auto; }
-.row__slider { grid-column: 1 / -1; margin: 0 4px; }
+.row__slider { grid-column: 1 / -1; margin: 0 4px; transition: opacity .2s ease; }
+/* place réservée : invisible mais présent, la ligne a la même hauteur allumée ou éteinte */
+.row__slider--off { visibility: hidden; }
 /* teinte de la lampe derriere la ligne : sous l'icone et le nom, fondue avant les touches ; deborde de 4 px pour couvrir jusqu'aux bords */
 .row-tint { position: absolute; inset: 0 -4px; z-index: -1; pointer-events: none; }
 .rowtint-enter-active, .rowtint-leave-active { transition: opacity .4s ease; }
