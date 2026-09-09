@@ -26,6 +26,16 @@ const streamable = (e: DeviceEntry) => e.descriptor.capabilities.includes('live_
 const snapshots = ref<Record<string, { at?: number; inactive?: boolean; paused?: boolean }>>({})
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
+/** Trois directs simultanés au plus : au-delà, le bouton Direct des autres tuiles se désactive. */
+const LIVE_MAX = 3
+const liveIds = ref<Set<string>>(new Set())
+const liveAllowed = (deviceId: string) => liveIds.value.size < LIVE_MAX || liveIds.value.has(deviceId)
+function setLive(deviceId: string, active: boolean) {
+  const next = new Set(liveIds.value)
+  if (active) next.add(deviceId); else next.delete(deviceId)
+  liveIds.value = next
+}
+
 async function poll() {
   const plugins = [...new Set(cameras.value.filter(streamable).map((e) => e.descriptor.pluginId))]
   const next: Record<string, { at?: number; inactive?: boolean; paused?: boolean }> = { ...snapshots.value }
@@ -66,7 +76,8 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
           <!-- la tuile prend sa propre ligne : en 4e colonne elle serait un timbre-poste -->
           <CameraVideo v-if="streamable(entry) && entry.state.available" :device-id="entry.descriptor.id" :autoplay="false"
                        :snapshot-at="snapshots[entry.descriptor.id]?.at ?? null" :inactive="snapshots[entry.descriptor.id]?.inactive ?? false"
-                       :paused="snapshots[entry.descriptor.id]?.paused ?? false" class="tile" @snapshots="(enabled) => setSnapshots(entry.descriptor.id, enabled)" />
+                       :paused="snapshots[entry.descriptor.id]?.paused ?? false" :live-allowed="liveAllowed(entry.descriptor.id)" class="tile"
+                       @snapshots="(enabled) => setSnapshots(entry.descriptor.id, enabled)" @live="(active) => setLive(entry.descriptor.id, active)" />
         </template>
       </RoomBands>
     </div>

@@ -12,8 +12,8 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 // `autoplay` : le direct part tout seul (carte détail). Sinon (vue Caméras) la tuile montre la
 // dernière vignette JPEG que le serveur tient à jour, avec son âge ; là, le bouton stop arrête la
 // vignette (`paused`, émis à la vue qui le dit au serveur) et un bouton lecture lance le direct.
-const props = withDefaults(defineProps<{ deviceId: string; autoplay?: boolean; snapshotAt?: number | null; inactive?: boolean; paused?: boolean }>(), { autoplay: true, snapshotAt: null, inactive: false, paused: false })
-const emit = defineEmits<{ snapshots: [enabled: boolean] }>()
+const props = withDefaults(defineProps<{ deviceId: string; autoplay?: boolean; snapshotAt?: number | null; inactive?: boolean; paused?: boolean; liveAllowed?: boolean }>(), { autoplay: true, snapshotAt: null, inactive: false, paused: false, liveAllowed: true })
+const emit = defineEmits<{ snapshots: [enabled: boolean]; live: [active: boolean] }>()
 
 type Status = 'idle' | 'connecting' | 'playing' | 'unsupported' | 'ended' | 'error'
 const status = ref<Status>('idle')
@@ -142,6 +142,18 @@ function close() {
 
 function stop() { close(); status.value = 'idle' }
 
+// Trois états d'une tuile (vue Caméras) : arrêtée (aucun flux, dernière image figée), aperçu (image
+// rafraîchie toutes les ~10 s côté serveur), direct (vidéo en continu). L'état courant se déduit de
+// la lecture en cours et de `paused` (retenu par le serveur) ; la barre à trois boutons le change.
+type Mode = 'off' | 'preview' | 'live'
+const mode = computed<Mode>(() => (status.value === 'playing' || status.value === 'connecting' ? 'live' : props.paused ? 'off' : 'preview'))
+function setMode(m: Mode) {
+  if (m === mode.value) return
+  if (m === 'live') { if (!props.liveAllowed) return; start(); return }   // aperçu/arrêt : on coupe le direct s'il tournait
+  stop()
+  emit('snapshots', m === 'preview')
+}
+
 /**
  * Chrome met en pause une vidéo MUETTE dès que la page passe en arrière-plan (« video-only
  * background media was paused to save power »), et ne la relance pas seul. Une tablette murale
@@ -174,39 +186,42 @@ onDeactivated(close)
 onActivated(() => { if (props.autoplay) start() })
 // même composant réutilisé pour une autre caméra : on change de flux, ou on revient à la vignette
 watch(() => props.deviceId, () => { if (props.autoplay || status.value === 'playing' || status.value === 'connecting') start(); else stop() })
+// la vue Caméras compte les directs pour n'en autoriser que trois : on la prévient à chaque bascule
+watch(() => mode.value === 'live', (live) => emit('live', live))
 </script>
 
 <template>
-  <div class="cam">
+  <div class="cam" :class="{ 'cam--tile': !autoplay }">
     <video ref="video" class="cam__video" :muted="muted" autoplay playsinline />
     <img v-if="status === 'idle' && snapshotUrl" :src="snapshotUrl" class="cam__snapshot" alt="" />
+    <!-- badge d'état, toujours visible sur une tuile : direct, aperçu ou arrêté -->
+    <div v-if="!autoplay" class="cam__badge" :data-mode="mode">
+      <span v-if="mode === 'live'" class="cam__dot" />{{ $t(`camera.video.mode.${mode}`) }}
+    </div>
     <div v-if="status !== 'playing'" class="cam__overlay">
       <span v-if="status === 'connecting'" class="cam__msg">{{ $t('camera.video.connecting') }}</span>
-      <span v-else-if="status === 'idle' && paused" class="cam__msg" :class="{ 'cam__msg--age': snapshotUrl }">{{ $t('camera.video.snapshotsPaused') }}</span>
       <span v-else-if="status === 'idle' && snapshotUrl" class="cam__msg cam__msg--age">{{ snapshotAgeS >= 90 ? $t('camera.video.agoMin', { m: Math.round(snapshotAgeS / 60) }) : $t('camera.video.ago', { s: snapshotAgeS }) }}</span>
       <span v-else-if="status === 'idle'" class="cam__msg">{{ $t(inactive ? 'camera.video.inactive' : autoplay ? 'camera.video.stopped' : 'camera.video.noSnapshot') }}</span>
       <span v-else class="cam__msg">{{ $t(`camera.video.${status}`) }}<span v-if="detail" class="cam__detail"> · {{ detail }}</span></span>
     </div>
     <div class="cam__bar">
-      <button v-if="status === 'playing' || status === 'connecting'" type="button" class="key" :title="$t('camera.video.stop')" :aria-label="$t('camera.video.stop')" @click="stop">
-        <StrokeIcon name="stop" :size="18" />
-      </button>
-      <template v-else-if="!autoplay">
-        <!-- tuile : stop arrête la vignette (le flux de cette caméra), lecture lance le direct -->
-        <button v-if="paused" type="button" class="key" :title="$t('camera.video.resumeSnapshots')" :aria-label="$t('camera.video.resumeSnapshots')" @click="emit('snapshots', true)">
-          <StrokeIcon name="camera" :size="18" />
-        </button>
-        <button v-else type="button" class="key" :title="$t('camera.video.pauseSnapshots')" :aria-label="$t('camera.video.pauseSnapshots')" @click="emit('snapshots', false)">
+      <!-- carte détail : lecture / arrêt du direct -->
+      <template v-if="autoplay">
+        <button v-if="status === 'playing' || status === 'connecting'" type="button" class="key" :title="$t('camera.video.stop')" :aria-label="$t('camera.video.stop')" @click="stop">
           <StrokeIcon name="stop" :size="18" />
         </button>
-        <button type="button" class="key" :title="$t('camera.video.play')" :aria-label="$t('camera.video.play')" @click="start">
+        <button v-else type="button" class="key" :title="$t('camera.video.play')" :aria-label="$t('camera.video.play')" @click="start">
           <StrokeIcon name="play" :size="18" />
         </button>
       </template>
-      <button v-else type="button" class="key" :title="$t('camera.video.play')" :aria-label="$t('camera.video.play')" @click="start">
-        <StrokeIcon name="play" :size="18" />
-      </button>
-      <button type="button" class="key" :data-on="muted ? '0' : '1'" :title="$t(muted ? 'camera.video.unmute' : 'camera.video.mute')" :aria-label="$t(muted ? 'camera.video.unmute' : 'camera.video.mute')" @click="toggleMute">
+      <!-- tuile : les trois états toujours affichés, l'actif surligné -->
+      <div v-else class="seg" role="group" :aria-label="$t('camera.video.mode.label')">
+        <button type="button" class="seg__btn" :data-active="mode === 'off'" @click="setMode('off')">{{ $t('camera.video.mode.off') }}</button>
+        <button type="button" class="seg__btn" :data-active="mode === 'preview'" @click="setMode('preview')">{{ $t('camera.video.mode.preview') }}</button>
+        <button type="button" class="seg__btn" :data-active="mode === 'live'" :disabled="!liveAllowed && mode !== 'live'"
+                :title="!liveAllowed && mode !== 'live' ? $t('camera.video.liveFull') : ''" @click="setMode('live')">{{ $t('camera.video.mode.live') }}</button>
+      </div>
+      <button v-if="autoplay || mode === 'live'" type="button" class="key" :data-on="muted ? '0' : '1'" :title="$t(muted ? 'camera.video.unmute' : 'camera.video.mute')" :aria-label="$t(muted ? 'camera.video.unmute' : 'camera.video.mute')" @click="toggleMute">
         <StrokeIcon :name="muted ? 'speaker' : 'speakerOn'" :size="18" />
       </button>
     </div>
@@ -228,4 +243,23 @@ watch(() => props.deviceId, () => { if (props.autoplay || status.value === 'play
 }
 .key:hover { background: rgba(255, 255, 255, .18); }
 .key[data-on='1'] { background: var(--accent); border-color: transparent; color: var(--on-accent); }
+.key:disabled { opacity: .4; cursor: not-allowed; }
+.cam__badge {
+  position: absolute; top: 8px; left: 8px; display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 600; letter-spacing: .02em; padding: 3px 8px; border-radius: 999px;
+  background: rgba(0, 0, 0, .55); color: #eee; text-transform: uppercase;
+}
+.cam__badge[data-mode='live'] { background: var(--accent); color: var(--on-accent); }
+.cam__dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: cam-pulse 1.6s ease-in-out infinite; }
+@keyframes cam-pulse { 50% { opacity: .35; } }
+.seg { display: inline-flex; border-radius: 9px; overflow: hidden; border: 1px solid rgba(255, 255, 255, .25); }
+.seg__btn {
+  border: 0; padding: 0 12px; height: 32px; font-size: 12px; font-weight: 600; cursor: pointer;
+  background: rgba(0, 0, 0, .35); color: #fff; transition: background .15s;
+  border-right: 1px solid rgba(255, 255, 255, .18);
+}
+.seg__btn:last-child { border-right: 0; }
+.seg__btn:hover:not(:disabled):not([data-active='true']) { background: rgba(255, 255, 255, .18); }
+.seg__btn[data-active='true'] { background: var(--accent); color: var(--on-accent); }
+.seg__btn:disabled { opacity: .4; cursor: not-allowed; }
 </style>

@@ -91,7 +91,7 @@
       "connecting": "Connexion au flux…", "stopped": "Vidéo arrêtée", "ended": "Flux terminé", "error": "Flux indisponible",
       "ago": "il y a {s} s", "agoMin": "il y a {m} min", "inactive": "Caméra inactive : pas de flux", "noSnapshot": "Pas encore d'image",
       "unsupported": "Ce navigateur ne peut pas lire ce flux", "play": "Voir la vidéo", "stop": "Arrêter la vidéo", "mute": "Couper le son", "unmute": "Activer le son",
-      "pauseSnapshots": "Arrêter les vignettes", "resumeSnapshots": "Reprendre les vignettes", "snapshotsPaused": "Vignettes arrêtées",
+      "mode": { "label": "Mode d'affichage", "off": "Arrêté", "preview": "Aperçu", "live": "Direct" }, "liveFull": "3 directs au maximum",
       "webrtcLater": "Cette caméra ne sert que du WebRTC, pas encore pris en charge."
     }
   },
