@@ -19,11 +19,14 @@ import { useDevicesStore } from '../stores/devices'
 const devices = useDevicesStore()
 
 const cameras = computed(() => devices.list.filter((e) => e.state.kind === 'camera'))
-const onlineCount = computed(() => cameras.value.filter((e) => e.state.available).length)
 const streamable = (e: DeviceEntry) => e.descriptor.capabilities.includes('live_stream') && (e.descriptor.meta.camera?.protocols ?? []).includes('rtsp')
 
 /** Par `deviceId` : date de la dernière vignette, et « inactive » si le flux de la caméra échoue. */
 const snapshots = ref<Record<string, { at?: number; inactive?: boolean; paused?: boolean }>>({})
+// « Active » = caméra dont le flux marche au dernier essai. Google n'expose pas la connectivité des
+// caméras (aucun trait Connectivity, contrairement au thermostat) : seul l'essai du flux le dit, donc
+// une caméra éteinte n'est connue telle (`inactive`) qu'après un passage de la rotation.
+const activeCount = computed(() => cameras.value.filter((e) => !snapshots.value[e.descriptor.id]?.inactive).length)
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
 /** Trois directs simultanés au plus : au-delà, le bouton Direct des autres tuiles se désactive. */
@@ -62,7 +65,7 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
 <template>
   <div class="page">
     <PageHeader>
-      <div class="muted count">{{ $t('cameras.summary', { online: onlineCount, total: cameras.length }) }}</div>
+      <div class="muted count">{{ $t('cameras.summary', { active: activeCount, total: cameras.length }) }}</div>
     </PageHeader>
     <div class="page__scroll">
       <div v-if="cameras.length === 0" class="card card--soft empty muted">{{ $t('cameras.none') }}</div>

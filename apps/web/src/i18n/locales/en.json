@@ -52,7 +52,7 @@
     "summary": "{open} open out of {total}", "none": "No cover reported by the plugins."
   },
   "cameras": {
-    "summary": "{online} online out of {total}", "none": "No camera reported by the plugins."
+    "summary": "{active} active out of {total}", "none": "No camera reported by the plugins."
   },
   "rooms": {
     "noRoom": "No room", "notInHouse": "Not in the house",

@@ -52,7 +52,7 @@
     "summary": "{open} ouverts sur {total}", "none": "Aucun ouvrant remonté par les plugins."
   },
   "cameras": {
-    "summary": "{online} en ligne sur {total}", "none": "Aucune caméra remontée par les plugins."
+    "summary": "{active} actives sur {total}", "none": "Aucune caméra remontée par les plugins."
   },
   "rooms": {
     "noRoom": "Sans pièce", "notInHouse": "Hors maison",
