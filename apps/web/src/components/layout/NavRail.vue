@@ -6,7 +6,7 @@ import { useSettingsStore } from '../../stores/settings'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import type { IconName } from '../../lib/strokeIcons'
 
-// Rail de navigation (72 px) : initiales de la maison, 6 vues, puis apparence et langue en bas.
+// Rail de navigation (72 px) : initiales de la maison, 7 vues, puis apparence et langue en bas.
 const route = useRoute()
 const house = useHouseStore()
 const settings = useSettingsStore()
@@ -19,6 +19,7 @@ const items: { name: string; icon: IconName; label: string }[] = [
   { name: 'home', icon: 'home', label: 'nav.home' },
   { name: 'lights', icon: 'light', label: 'nav.lights' },
   { name: 'covers', icon: 'shutter', label: 'nav.covers' },
+  { name: 'cameras', icon: 'camera', label: 'nav.cameras' },
   { name: 'energy', icon: 'bolt', label: 'nav.energy' },
   { name: 'vehicles', icon: 'vehicle', label: 'nav.vehicles' },
   { name: 'settings', icon: 'gear', label: 'nav.settings' },

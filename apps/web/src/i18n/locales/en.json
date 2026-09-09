@@ -1,6 +1,6 @@
 {
   "app": { "name": "Kasbah" },
-  "nav": { "main": "Navigation", "home": "Home", "energy": "Energy", "vehicles": "Vehicles", "settings": "Settings", "lights": "Lights", "covers": "Covers" },
+  "nav": { "main": "Navigation", "home": "Home", "energy": "Energy", "vehicles": "Vehicles", "settings": "Settings", "lights": "Lights", "covers": "Covers", "cameras": "Cameras" },
   "common": {
     "close": "Close", "back": "Back", "retry": "Retry", "all": "All", "none": "None", "unavailable": "Unavailable",
     "loading": "Loading house…", "on": "On", "off": "Off", "stop": "Stop",
@@ -50,6 +50,9 @@
   },
   "covers": {
     "summary": "{open} open out of {total}", "none": "No cover reported by the plugins."
+  },
+  "cameras": {
+    "summary": "{online} online out of {total}", "none": "No camera reported by the plugins."
   },
   "rooms": {
     "noRoom": "No room", "notInHouse": "Not in the house",
