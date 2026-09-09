@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { ManualClock } from '@kasbah/mock-sim'
 import { describe, expect, it, vi } from 'vitest'
-import { RtspRelay, type RelayMessage } from './rtsp-relay'
+import { RtspRelay, redactStreamUrl, type RelayMessage } from './rtsp-relay'
 
 const box = (type: string, payload: Buffer | Buffer[] = Buffer.alloc(0)): Buffer => {
   const body = Array.isArray(payload) ? Buffer.concat(payload) : payload
@@ -42,6 +42,7 @@ describe('RtspRelay', () => {
     relay.start()
     const args = (spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![1] as string[]
     expect(args).toEqual(expect.arrayContaining(['-rtsp_transport', 'tcp', '-c', 'copy', '-f', 'mp4', 'pipe:1']))
+    expect(args[0]).toBe('-y')                          // la vignette se réécrit en place
     expect(args[args.indexOf('-movflags') + 1]).toContain('frag_keyframe')
     // l'entête arrive en morceaux quelconques
     const head = Buffer.concat([FTYP, MOOV, fragment(1)])
@@ -88,6 +89,19 @@ describe('RtspRelay', () => {
     expect(late.got).toEqual([{ kind: 'ended', reason: 'no viewer left' }])
   })
 
+  it('adds a periodic JPEG snapshot output when asked, without touching the MP4 relay', () => {
+    const ff = fakeFfmpeg()
+    const relay = new RtspRelay({
+      ffmpegPath: 'ffmpeg', url: 'rtsps://cam/x', clock: new ManualClock(0), onIdle: vi.fn(), spawnImpl: ff.spawnImpl,
+      snapshot: { path: '/tmp/cam.jpg', intervalMs: 10_000, width: 480 },
+    })
+    relay.start()
+    const args = (ff.spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![1] as string[]
+    const mp4 = args.indexOf('pipe:1')
+    expect(args.slice(mp4 + 1)).toEqual(['-map', '0:v:0', '-vf', 'fps=1/10,scale=480:-2', '-q:v', '4', '-update', '1', '-atomic_writing', '1', '-f', 'image2', '/tmp/cam.jpg'])
+    expect(args.slice(0, mp4)).toEqual(expect.arrayContaining(['-c', 'copy']))
+  })
+
   it('a relay that never gets a viewer reports itself idle after the grace period', () => {
     const clock = new ManualClock(0)
     const { relay, onIdle } = relayWith(clock)
@@ -112,10 +126,12 @@ describe('RtspRelay', () => {
     const a = collect()
     relay.start()
     relay.subscribe(a.fn)
-    proc.stderr.write('rtsps://cam/x: 401 Unauthorized\n')
+    proc.stderr.write('rtsps://stream.example:443/sdm/abc?auth=g.0.SECRET: 401 Unauthorized\n')
     proc.exitCode = 1
     proc.emit('exit', 1, null)
-    expect(a.got).toEqual([{ kind: 'ended', reason: 'ffmpeg exited (1): rtsps://cam/x: 401 Unauthorized' }])
+    // le jeton de la session ne doit jamais finir dans un journal
+    expect(a.got).toEqual([{ kind: 'ended', reason: 'ffmpeg exited (1): rtsps://stream.example:443/… 401 Unauthorized' }])
+    expect(redactStreamUrl('x rtsps://h/p?auth=t y rtsp://h2/q z')).toBe('x rtsps://h/… y rtsp://h2/… z')
     expect(relay.subscriberCount).toBe(0)
   })
 
@@ -128,5 +144,55 @@ describe('RtspRelay', () => {
     proc.stdout.write(Buffer.concat([FTYP, box('moov', box('trak', box('stsd', box('hvc1', Buffer.alloc(80)))))]))
     expect(a.got).toEqual([{ kind: 'ended', reason: 'unsupported codecs (no avcC in moov)' }])
     expect(proc.kill).toHaveBeenCalled()
+  })
+})
+
+describe('RtspRelay.rotateSource', () => {
+  it('starts a replacement ffmpeg, switches once it delivers an init and a fragment, kills the old one', () => {
+    const clock = new ManualClock(0)
+    const spawned: ReturnType<typeof fakeFfmpeg>['proc'][] = []
+    const spawnImpl = vi.fn(() => { const f = fakeFfmpeg(); spawned.push(f.proc); return f.proc })
+    const relay = new RtspRelay({ ffmpegPath: 'ffmpeg', url: 'rtsps://cam/x?auth=t1', clock, onIdle: vi.fn(), spawnImpl: spawnImpl as unknown as typeof spawn })
+    const a = collect()
+    relay.start()
+    relay.subscribe(a.fn)
+    spawned[0]!.stdout.write(Buffer.concat([FTYP, MOOV, fragment(1)]))
+    expect(a.got.map((m) => m.kind)).toEqual(['init', 'fragment'])
+
+    relay.rotateSource('rtsps://cam/x?auth=t2')
+    expect((spawnImpl.mock.calls[1] as unknown as [string, string[]])[1]).toContain('rtsps://cam/x?auth=t2')
+    // tant que la relève n'a pas livré d'image, l'ancienne source continue d'alimenter les abonnés
+    spawned[0]!.stdout.write(fragment(2))
+    spawned[1]!.stdout.write(Buffer.concat([FTYP, MOOV]))
+    expect(a.got.map((m) => m.kind)).toEqual(['init', 'fragment', 'fragment'])
+    expect(spawned[0]!.kill).not.toHaveBeenCalled()
+    // premier fragment de la relève : nouvelle entête, ce fragment, et l'ancien ffmpeg est arrêté
+    spawned[1]!.stdout.write(fragment(3))
+    expect(a.got.map((m) => m.kind)).toEqual(['init', 'fragment', 'fragment', 'init', 'fragment'])
+    expect((a.got[4] as { data: Buffer }).data.equals(fragment(3))).toBe(true)
+    expect(spawned[0]!.kill).toHaveBeenCalledTimes(1)
+    // la traîne de l'ancienne source est ignorée, la nouvelle alimente seule
+    spawned[0]!.stdout.write(fragment(9))
+    spawned[1]!.stdout.write(fragment(4))
+    expect(a.got).toHaveLength(6)
+    expect((a.got[5] as { data: Buffer }).data.equals(fragment(4))).toBe(true)
+    expect(relay.hasEnded).toBe(false)
+  })
+
+  it('a replacement that dies before delivering leaves the current source alone', () => {
+    const clock = new ManualClock(0)
+    const spawned: ReturnType<typeof fakeFfmpeg>['proc'][] = []
+    const spawnImpl = vi.fn(() => { const f = fakeFfmpeg(); spawned.push(f.proc); return f.proc })
+    const relay = new RtspRelay({ ffmpegPath: 'ffmpeg', url: 'rtsps://cam/x?auth=t1', clock, onIdle: vi.fn(), spawnImpl: spawnImpl as unknown as typeof spawn })
+    const a = collect()
+    relay.start()
+    relay.subscribe(a.fn)
+    spawned[0]!.stdout.write(Buffer.concat([FTYP, MOOV, fragment(1)]))
+    relay.rotateSource('rtsps://cam/x?auth=t2')
+    spawned[1]!.exitCode = 1
+    spawned[1]!.emit('exit', 1, null)
+    spawned[0]!.stdout.write(fragment(2))
+    expect(a.got.map((m) => m.kind)).toEqual(['init', 'fragment', 'fragment'])
+    expect(relay.hasEnded).toBe(false)
   })
 })

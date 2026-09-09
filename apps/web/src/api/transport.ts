@@ -44,6 +44,15 @@ export interface Transport {
    * `/api/plugins/<plugin>/cameras/<externalId>/stream` ; `null` si ce transport n'en sert pas.
    */
   cameraStreamUrl(deviceId: string): string | null
+  /**
+   * Vignettes des caméras d'un plugin (`externalId` → date), et `watch` pour signaler qu'on regarde
+   * la vue Caméras : c'est ce qui fait tenir les sessions de vignettes côté serveur.
+   */
+  cameraSnapshots(pluginId: string, watch: boolean): Promise<Record<string, { at?: number; live: boolean; inactive?: boolean; paused?: boolean }>>
+  /** Arrête (`false`) ou reprend (`true`) la vignette d'une caméra sur la vue Caméras. */
+  setCameraSnapshots(deviceId: string, enabled: boolean): Promise<void>
+  /** URL de la vignette JPEG d'une caméra ; `at` sert à contourner le cache du navigateur. */
+  cameraSnapshotUrl(deviceId: string, at: number): string | null
   /** (Re)place un appareil dans house.json ; renvoie la maison réécrite. */
   placeDevice(id: string, placement: DevicePlacement): Promise<House>
   /** Écrit l'ordre d'affichage des pièces d'un niveau ; renvoie la maison réécrite. */

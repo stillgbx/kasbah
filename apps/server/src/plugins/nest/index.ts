@@ -1,13 +1,18 @@
 import type { Command, DeviceDescriptor, PluginHealth } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { randomBytes } from 'node:crypto'
+import type { spawn } from 'node:child_process'
+import { mkdirSync } from 'node:fs'
+import { readFile, stat } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { z } from 'zod'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
 import { createPoller } from '../../core/poll'
 import type { FetchLike } from '../../core/sse'
-import { RtspRelay, type RelayMessage } from '../../core/video/rtsp-relay'
+import { RtspRelay, type RelayMessage, type RelaySubscriber } from '../../core/video/rtsp-relay'
 import { describeError, sendError } from '../../http/errors'
-import { NestClient } from './client'
+import { NestClient, rtspUrlWithToken } from './client'
 import {
   deviceNameToExternalId, isCamera, isThermostat, streamProtocols, thermostatAvailable, toClimatePatch, toDescriptor,
   toThermostatCommands, toThermostatDescriptor,
@@ -57,6 +62,14 @@ export const nestConfigSchema = z.object({
   NEST_POLL_MS: z.coerce.number().int().min(10_000).max(600_000).default(60_000),
   /** Binaire ffmpeg du relais vidéo (dans le PATH, ou chemin complet). Clé commune, pas préfixée NEST_. */
   FFMPEG_PATH: z.string().min(1).default('ffmpeg'),
+  /**
+   * Sessions RTSP ouvertes en même temps, au plus (directs regardés + vignettes de la vue Caméras).
+   * C'est CE qui coûte — une session Google, un ffmpeg, 1 à 2 Mbit/s par caméra — pas la cadence
+   * des images. En dessous du nombre de caméras, les vignettes tournent en rotation.
+   */
+  NEST_LIVE_BUDGET: z.coerce.number().int().min(1).max(32).default(10),
+  /** Cadence des vignettes de la vue Caméras (une image JPEG par caméra dont la session est ouverte). */
+  NEST_SNAPSHOT_MS: z.coerce.number().int().min(2000).max(120_000).default(10_000),
 })
 export type NestConfig = z.infer<typeof nestConfigSchema>
 
@@ -69,7 +82,34 @@ const WS_MAX_BUFFERED = 8 << 20
 /** Ping du flux vidéo : deux battements sans pong et la tablette est considérée partie. */
 const WS_HEARTBEAT_MS = 30_000
 
-interface StreamSession { relay: RtspRelay; extensionToken: string; extendTimer: unknown }
+/** La vue Caméras se signale toutes les 5 s ; sans nouvelle de personne pendant ce délai, les vignettes s'arrêtent. */
+const GRID_WATCH_TTL_MS = 15_000
+const GRID_TICK_MS = 8000
+/** Rotation (budget < nombre de caméras) : temps de présence d'une caméra avant de céder sa place. */
+const GRID_DWELL_MS = 20_000
+/** Largeur des vignettes JPEG. */
+const SNAPSHOT_WIDTH = 480
+/**
+ * Une caméra dont le flux échoue (éteinte, en veille : Google donne l'URL, son serveur répond 404)
+ * n'est pas retentée tout de suite — sinon la rotation la redemanderait toutes les 5 s et
+ * épuiserait le quota Google. Attente doublée à chaque échec, bornée.
+ */
+const GRID_RETRY_MIN_MS = 3 * 60_000
+const GRID_RETRY_MAX_MS = 15 * 60_000
+/**
+ * Google limite les commandes à une dizaine par minute et par utilisateur (constaté : neuf ouvertures
+ * d'un coup puis des retentatives ont valu un « Rate limited » sur TOUTES les commandes, liste
+ * comprise). Donc UNE ouverture par tick de 8 s — dix caméras en 80 s, puis plus rien que les
+ * prolongations — et une pause globale dès que Google se plaint.
+ */
+const GRID_OPEN_PER_TICK = 1
+const GRID_RATE_LIMIT_PAUSE_MS = 90_000
+
+interface StreamSession { relay: RtspRelay; url: string; extensionToken: string; extendTimer: unknown }
+/** Prise de la vue Caméras sur une session : un abonné muet qui la tient ouverte le temps d'une vignette. */
+interface GridHold { since: number; hold: RelaySubscriber }
+/** Caméra dont le flux a échoué : à partir de quand réessayer, et combien d'échecs de suite. */
+interface GridFailure { retryAt: number; failures: number; reason: string }
 
 export interface NestPluginDeps {
   /** Injection pour les tests (fetch simulé). */
@@ -78,6 +118,8 @@ export interface NestPluginDeps {
   requestTimeoutMs?: number
   /** Injection pour les tests : le `state` anti-CSRF de la liaison OAuth. */
   randomState?: () => string
+  /** Injection pour les tests : remplace le lancement de ffmpeg. */
+  spawnImpl?: typeof spawn
 }
 
 export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
@@ -97,6 +139,20 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
   const streams = new Map<string, StreamSession>()
   /** Ouvertures en cours, pour qu'une seconde demande simultanée rejoigne la première. */
   const opening = new Map<string, Promise<RtspRelay>>()
+  /** Vue Caméras : jusqu'à quand quelqu'un la regarde, et les sessions qu'elle tient pour ses vignettes. */
+  let gridWantedUntil = 0
+  const gridHeld = new Map<string, GridHold>()
+  /** Dernière fois qu'une caméra a rendu sa place : départage la rotation quand aucune vignette ne date. */
+  const gridReleasedAt = new Map<string, number>()
+  const gridFailed = new Map<string, GridFailure>()
+  /** Google a répondu « Rate limited » : aucune ouverture de vignette avant cette date. */
+  let gridCooldownUntil = 0
+  /** Caméras dont l'utilisateur a arrêté la vignette depuis la vue (bouton stop) : hors rotation jusqu'à reprise. */
+  const gridPaused = new Set<string>()
+  let gridTimer: unknown = null
+  /** Dossier des vignettes JPEG (une par caméra, réécrite en place par ffmpeg). */
+  const snapshotDir = join(tmpdir(), 'kasbah-nest-snapshots')
+  const snapshotPath = (externalId: string) => join(snapshotDir, `${externalId}.jpg`)
   /** `state` émis par /auth/url et attendus au retour : une liaison ne s'accepte que si on l'a lancée. */
   const pendingStates = new Set<string>()
   const randomState = deps.randomState ?? (() => randomBytes(16).toString('hex'))
@@ -186,11 +242,22 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
     const relay = new RtspRelay({
       ffmpegPath: config!.FFMPEG_PATH, url: started.streamUrls.rtspUrl, clock: ctx!.clock, logger: ctx!.logger,
       idleGraceMs: STREAM_IDLE_MS, onIdle: () => void closeStream(externalId, 'no viewer left'),
+      onEnded: (reason) => void closeStream(externalId, `relay ended: ${reason}`),
+      snapshot: { path: snapshotPath(externalId), intervalMs: config!.NEST_SNAPSHOT_MS, width: SNAPSHOT_WIDTH },
+      ...(deps.spawnImpl ? { spawnImpl: deps.spawnImpl } : {}),
     })
-    const session: StreamSession = { relay, extensionToken: started.streamExtensionToken, extendTimer: null }
+    const session: StreamSession = { relay, url: started.streamUrls.rtspUrl, extensionToken: started.streamExtensionToken, extendTimer: null }
+    // Prolonger ne suffit pas : Google coupe la connexion RTSP à l'échéance INITIALE (constaté :
+    // vignettes figées puis ffmpeg en fin de flux pile à `expiresAt`, prolongation ou pas). Le nouveau
+    // `streamToken` sert à rouvrir la connexion, et le relais bascule dessus sans coupure.
     session.extendTimer = ctx!.clock.setInterval(() => {
       c.extendRtspStream(externalId, session.extensionToken, ctx!.signal)
-        .then((r) => { session.extensionToken = r.streamExtensionToken })
+        .then((r) => {
+          session.extensionToken = r.streamExtensionToken
+          if (!r.streamToken) { log().warn({ externalId }, 'ExtendRtspStream returned no streamToken: the stream will end at its original expiry'); return }
+          session.url = rtspUrlWithToken(session.url, r.streamToken)
+          session.relay.rotateSource(session.url)
+        })
         .catch((err) => void closeStream(externalId, `extension failed: ${(err as Error).message}`))
     }, STREAM_EXTEND_MS)
     streams.set(externalId, session)
@@ -204,10 +271,119 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
     if (!session) return
     streams.delete(externalId)
     ctx!.clock.clearInterval(session.extendTimer)
+    const started = session.relay.ready
     session.relay.stop(reason)
     log().info({ externalId, reason }, 'rtsp stream closed')
+    // Une session dont le flux n'a jamais démarré (caméra éteinte : Google donne l'URL, son serveur
+    // répond 404) n'a rien à rendre — et chaque commande compte dans le quota par minute de Google,
+    // que sept caméras éteintes relancées ensemble suffisent à épuiser. Elle expire seule en cinq minutes.
+    if (!started) return
     try { await client?.stopRtspStream(externalId, session.extensionToken, ctx!.signal) }
     catch (err) { log().debug({ err }, 'StopRtspStream failed (the session expires by itself)') }
+  }
+
+  // ---- vignettes de la vue Caméras -----------------------------------------------------------
+  // La vue se signale toutes les 5 s (`GET /cameras/snapshots?watch=1`). Tant qu'elle le fait, le
+  // plugin tient ouvertes des sessions pour les caméras RTSP, dans la limite du budget, et chaque
+  // relais écrit sa vignette JPEG. Les directs regardés comptent dans le budget ; s'il ne couvre
+  // pas toutes les caméras, les vignettes tournent : la caméra tenue depuis le plus longtemps cède
+  // sa place à celle dont la vignette est la plus vieille.
+
+  function rtspCameraIds(): string[] {
+    return [...entries].filter(([, d]) => isCamera(d) && streamProtocols(d).includes('rtsp')).map(([id]) => id)
+  }
+
+  /** Date de la vignette d'une caméra (mtime du fichier), ou `undefined` sans vignette. */
+  async function snapshotAt(externalId: string): Promise<number | undefined> {
+    try { return Math.round((await stat(snapshotPath(externalId))).mtimeMs) }
+    catch { return undefined }
+  }
+
+  function gridFailure(externalId: string, reason: string): void {
+    const prev = gridFailed.get(externalId)
+    const failures = (prev?.failures ?? 0) + 1
+    const wait = Math.min(GRID_RETRY_MAX_MS, GRID_RETRY_MIN_MS * 2 ** (failures - 1))
+    gridFailed.set(externalId, { retryAt: ctx!.clock.now() + wait, failures, reason })
+    log().warn({ externalId, reason, retryInMs: wait }, 'snapshot session failed')
+  }
+
+  function acquireGrid(externalId: string): void {
+    let gotInit = false
+    const hold: RelaySubscriber = (msg) => {
+      if (msg.kind === 'init') { gotInit = true; gridFailed.delete(externalId) }
+      // fin AVANT la première image : la caméra ne diffuse pas (éteinte, en veille), on n'insiste pas
+      else if (msg.kind === 'ended' && !gotInit) { gridHeld.delete(externalId); gridFailure(externalId, msg.reason) }
+    }
+    gridHeld.set(externalId, { since: ctx!.clock.now(), hold })
+    openStream(externalId)
+      .then((relay) => { if (gridHeld.get(externalId)?.hold === hold) relay.subscribe(hold) })
+      .catch((err) => {
+        gridHeld.delete(externalId)
+        // un refus de quota n'est pas la faute de la caméra : pause pour tout le monde, pas de compteur d'échec
+        if (err instanceof PluginError && err.code === 'RATE_LIMITED') {
+          gridCooldownUntil = ctx!.clock.now() + GRID_RATE_LIMIT_PAUSE_MS
+          log().warn({ pauseMs: GRID_RATE_LIMIT_PAUSE_MS }, 'Google rate limit: snapshot sessions paused')
+        } else gridFailure(externalId, (err as Error).message)
+      })
+  }
+
+  function releaseGrid(externalId: string): void {
+    const h = gridHeld.get(externalId)
+    if (!h) return
+    gridHeld.delete(externalId)
+    gridReleasedAt.set(externalId, ctx!.clock.now())
+    streams.get(externalId)?.relay.unsubscribe(h.hold)   // sans autre abonné, le relais se ferme après la grâce
+  }
+
+  async function gridTick(): Promise<void> {
+    const now = ctx!.clock.now()
+    if (now > gridWantedUntil) {
+      for (const id of [...gridHeld.keys()]) releaseGrid(id)
+      if (gridTimer !== null) { ctx!.clock.clearInterval(gridTimer); gridTimer = null }
+      return
+    }
+    // une prise dont le relais est mort n'a plus rien à tenir
+    for (const id of [...gridHeld.keys()]) { const s = streams.get(id); if (!s || s.relay.hasEnded) gridHeld.delete(id) }
+    const ids = rtspCameraIds()
+    const budget = config!.NEST_LIVE_BUDGET
+    if (ids.length > budget) {
+      for (const [id, h] of gridHeld) if (now - h.since >= GRID_DWELL_MS) releaseGrid(id)
+    }
+    if (now < gridCooldownUntil) return
+    const free = Math.min(GRID_OPEN_PER_TICK, budget - streams.size - [...gridHeld.keys()].filter((id) => !streams.has(id)).length)
+    if (free <= 0) return
+    const candidates = ids.filter((id) => !streams.has(id) && !gridHeld.has(id) && !gridPaused.has(id) && (gridFailed.get(id)?.retryAt ?? 0) <= now)
+    // Ordre, avec une ouverture par tick (quota Google) :
+    //  0. caméras qui ont une vignette mais n'ont pas encore été rendues par la rotation : ce sont
+    //     celles d'une exécution précédente (redémarrage du serveur) ou dont la session est morte —
+    //     on SAIT qu'elles diffusent. Sans ce rang, après un redémarrage les six caméras éteintes
+    //     (aucune vignette, donc « plus anciennes ») passaient d'abord, et les trois actives
+    //     affichaient une image d'il y a plusieurs minutes pendant qu'on les attendait ;
+    //  1. jamais essayées ;
+    //  2. rendues par la rotation (la plus vieille image en tête) ;
+    //  3. en échec dont le délai vient d'expirer — six caméras éteintes à réessayer feraient sinon
+    //     attendre plus d'une minute la seule qui marche (vu : « il y a 82 s » sur une caméra active).
+    const dated = await Promise.all(candidates.map(async (id) => {
+      const at = await snapshotAt(id), released = gridReleasedAt.get(id)
+      const tier = gridFailed.has(id) ? 3 : released !== undefined ? 2 : at !== undefined ? 0 : 1
+      return [id, tier, Math.max(at ?? 0, released ?? 0)] as const
+    }))
+    dated.sort((a, b) => a[1] - b[1] || a[2] - b[2])
+    for (const [id] of dated.slice(0, free)) acquireGrid(id)
+  }
+
+  function watchGrid(): void {
+    gridWantedUntil = ctx!.clock.now() + GRID_WATCH_TTL_MS
+    if (gridTimer === null) {
+      gridTimer = ctx!.clock.setInterval(() => void gridTick().catch((err) => log().warn({ err }, 'snapshot rotation failed')), GRID_TICK_MS)
+      void gridTick().catch((err) => log().warn({ err }, 'snapshot rotation failed'))
+    }
+  }
+
+  function stopGrid(): void {
+    gridWantedUntil = 0
+    for (const id of [...gridHeld.keys()]) releaseGrid(id)
+    if (gridTimer !== null) { ctx!.clock.clearInterval(gridTimer); gridTimer = null }
   }
 
   return {
@@ -218,6 +394,7 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
       ctx = c
       config = c.config as NestConfig                    // déjà validé/transformé par l'hôte
       if (!config.NEST_PROJECT_ID || !config.NEST_CLIENT_ID || !config.NEST_CLIENT_SECRET) return
+      mkdirSync(snapshotDir, { recursive: true })
       client = new NestClient({
         projectId: config.NEST_PROJECT_ID, clientId: config.NEST_CLIENT_ID, clientSecret: config.NEST_CLIENT_SECRET,
         redirectUri: config.NEST_REDIRECT_URI, clock: c.clock, logger: c.logger,
@@ -229,13 +406,12 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
 
     async discover(): Promise<DeviceDescriptor[]> {
       if (!client?.linked) return []
-      try {
-        await refresh()
-        return descriptors
-      } catch (err) {
-        lastError = (err as Error).message
-        throw err
-      }
+      // Un échec ici (quota Google épuisé, réseau) ne doit pas condamner le plugin jusqu'au prochain
+      // redémarrage : on démarre quand même, `health` dit pourquoi la liste est vide, et le sondage
+      // réessaie — l'inventaire est publié dès qu'il passe.
+      try { await refresh() }
+      catch (err) { lastError = (err as Error).message; log().warn({ err }, 'Nest device list unavailable at start') }
+      return descriptors
     },
 
     async start() {
@@ -265,6 +441,7 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
     async stop() {
       poller?.stop()
       poller = null
+      stopGrid()
       await Promise.all([...streams.keys()].map((id) => closeStream(id, 'plugin stopped')))
       client = null
     },
@@ -331,6 +508,44 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
         openStream(externalId)
           .then((r) => { if (closed) return; relay = r; r.subscribe(onMessage) })
           .catch((err) => { if (!closed) fail((err as Error).message) })
+      })
+
+      // Vignettes de la vue Caméras : la date de chacune, et `watch=1` pour signaler qu'on regarde
+      // (c'est ce qui tient les sessions ouvertes ; sans signal pendant 15 s, elles se ferment).
+      app.get<{ Querystring: { watch?: string } }>('/cameras/snapshots', async (req) => {
+        if (req.query.watch === '1' && client?.linked) watchGrid()
+        const ids = rtspCameraIds()
+        const dates = await Promise.all(ids.map(async (id) => [id, await snapshotAt(id)] as const))
+        const snapshots: Record<string, { at?: number; live: boolean; inactive?: boolean }> = {}
+        for (const [id, at] of dates) {
+          const failed = gridFailed.get(id), paused = gridPaused.has(id)
+          if (at === undefined && !failed && !paused) continue
+          snapshots[id] = { ...(at !== undefined ? { at } : {}), live: streams.has(id), ...(failed ? { inactive: true } : {}), ...(paused ? { paused: true } : {}) }
+        }
+        return { snapshots, budget: config?.NEST_LIVE_BUDGET ?? 0, sessions: streams.size }
+      })
+
+      // Bouton stop d'une tuile : la vignette de CETTE caméra s'arrête (sa session est rendue, l'image
+      // reste figée) jusqu'à reprise. Partagé entre les écrans — une tablette qui arrête une caméra
+      // l'arrête pour la maison, comme elle éteindrait une lampe. Le direct n'est pas concerné.
+      app.put<{ Params: { id: string }; Body: { enabled?: unknown } }>('/cameras/:id/snapshots', async (req, reply) => {
+        const device = entries.get(req.params.id)
+        if (!device || !isCamera(device)) return sendError(reply, 404, 'NOT_FOUND', `unknown Nest camera ${req.params.id}`)
+        if (typeof req.body?.enabled !== 'boolean') return sendError(reply, 400, 'VALIDATION', 'body must be { enabled: boolean }')
+        if (req.body.enabled) gridPaused.delete(req.params.id)
+        else { gridPaused.add(req.params.id); releaseGrid(req.params.id) }
+        return { enabled: req.body.enabled }
+      })
+
+      app.get<{ Params: { id: string } }>('/cameras/:id/snapshot.jpg', async (req, reply) => {
+        const device = entries.get(req.params.id)
+        if (!device || !isCamera(device)) return sendError(reply, 404, 'NOT_FOUND', `unknown Nest camera ${req.params.id}`)
+        try {
+          const [buf, at] = await Promise.all([readFile(snapshotPath(req.params.id)), snapshotAt(req.params.id)])
+          return reply.type('image/jpeg').header('cache-control', 'no-store').header('x-kasbah-snapshot-at', String(at ?? '')).send(buf)
+        } catch {
+          return sendError(reply, 404, 'NOT_FOUND', 'no snapshot yet')
+        }
       })
 
       // Dernière liste brute reçue de Google : sert à relever une fixture réelle (voir __fixtures__).

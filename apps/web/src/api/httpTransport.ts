@@ -77,6 +77,22 @@ export function createHttpTransport(base = ''): Transport {
       const { pluginId, externalId } = parseDeviceId(deviceId)
       return `${wsBase(base)}/api/plugins/${pluginId}/cameras/${encodeURIComponent(externalId)}/stream`
     },
+    cameraSnapshots: (pluginId, watch) => request(
+      `${base}/api/plugins/${encodeURIComponent(pluginId)}/cameras/snapshots${watch ? '?watch=1' : ''}`, undefined,
+      (j) => (j as { snapshots: Record<string, { at?: number; live: boolean; inactive?: boolean; paused?: boolean }> }).snapshots,
+    ),
+    setCameraSnapshots: (deviceId, enabled) => {
+      const { pluginId, externalId } = parseDeviceId(deviceId)
+      return request(
+        `${base}/api/plugins/${encodeURIComponent(pluginId)}/cameras/${encodeURIComponent(externalId)}/snapshots`,
+        { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ enabled }) },
+        () => undefined,
+      )
+    },
+    cameraSnapshotUrl: (deviceId, at) => {
+      const { pluginId, externalId } = parseDeviceId(deviceId)
+      return `${base}/api/plugins/${pluginId}/cameras/${encodeURIComponent(externalId)}/snapshot.jpg?t=${at}`
+    },
     connect: (handlers) => connectWebSocket(base, handlers),
   }
 }

@@ -35,6 +35,13 @@ export interface NestClientOptions {
   requestTimeoutMs?: number
 }
 
+/** La même URL de flux avec un autre jeton `auth` (celui rendu par `ExtendRtspStream`). */
+export function rtspUrlWithToken(rtspUrl: string, streamToken: string): string {
+  const u = new URL(rtspUrl)
+  u.searchParams.set('auth', streamToken)
+  return u.toString()
+}
+
 export class NestClient {
   readonly fetchImpl: FetchLike
   private refreshToken: string | undefined
@@ -191,11 +198,20 @@ export class NestClient {
     return r.data
   }
 
-  async extendRtspStream(externalId: string, streamExtensionToken: string, signal?: AbortSignal): Promise<{ streamExtensionToken: string; expiresAt?: string }> {
+  /**
+   * Prolonge la session : nouveau jeton de prolongation ET nouveau `streamToken`. Ce dernier n'est pas
+   * décoratif — la connexion RTSP en cours est coupée à l'échéance initiale (constaté), il faut se
+   * reconnecter sur l'URL portant le nouveau jeton (`?auth=`), voir `rtspUrlWithToken`.
+   */
+  async extendRtspStream(externalId: string, streamExtensionToken: string, signal?: AbortSignal): Promise<{ streamExtensionToken: string; streamToken?: string; expiresAt?: string }> {
     const results = await this.executeCommand(externalId, 'sdm.devices.commands.CameraLiveStream.ExtendRtspStream', { streamExtensionToken }, signal)
     const r = sdmExtendStreamSchema.safeParse(results)
     if (!r.success) throw new PluginError('UPSTREAM_ERROR', 'unexpected ExtendRtspStream response from Google')
-    return { streamExtensionToken: r.data.streamExtensionToken, ...(r.data.expiresAt ? { expiresAt: r.data.expiresAt } : {}) }
+    return {
+      streamExtensionToken: r.data.streamExtensionToken,
+      ...(r.data.streamToken ? { streamToken: r.data.streamToken } : {}),
+      ...(r.data.expiresAt ? { expiresAt: r.data.expiresAt } : {}),
+    }
   }
 
   async stopRtspStream(externalId: string, streamExtensionToken: string, signal?: AbortSignal): Promise<void> {

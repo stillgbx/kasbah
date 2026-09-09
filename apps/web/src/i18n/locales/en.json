@@ -89,7 +89,9 @@
     "stream": "Video stream: {protocols}", "noStream": "No video stream declared",
     "video": {
       "connecting": "Connecting to the stream…", "stopped": "Video stopped", "ended": "Stream ended", "error": "Stream unavailable",
+      "ago": "{s} s ago", "agoMin": "{m} min ago", "inactive": "Camera inactive: no stream", "noSnapshot": "No image yet",
       "unsupported": "This browser cannot play this stream", "play": "Watch video", "stop": "Stop video", "mute": "Mute", "unmute": "Unmute",
+      "pauseSnapshots": "Stop snapshots", "resumeSnapshots": "Resume snapshots", "snapshotsPaused": "Snapshots stopped",
       "webrtcLater": "This camera only offers WebRTC, not supported yet."
     }
   },

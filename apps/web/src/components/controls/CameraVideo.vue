@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
+import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import { getTransport } from '../../api'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
@@ -9,19 +9,28 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 // premier octet), puis l'entête MP4, puis les fragments — chacun commence par une image clé, donc
 // on peut décoder dès le premier reçu. On se tient au bord du direct : si le tampon prend plus de
 // quelques secondes d'avance (onglet en arrière-plan), on saute au bout plutôt que de traîner.
-const props = defineProps<{ deviceId: string }>()
+// `autoplay` : le direct part tout seul (carte détail). Sinon (vue Caméras) la tuile montre la
+// dernière vignette JPEG que le serveur tient à jour, avec son âge ; là, le bouton stop arrête la
+// vignette (`paused`, émis à la vue qui le dit au serveur) et un bouton lecture lance le direct.
+const props = withDefaults(defineProps<{ deviceId: string; autoplay?: boolean; snapshotAt?: number | null; inactive?: boolean; paused?: boolean }>(), { autoplay: true, snapshotAt: null, inactive: false, paused: false })
+const emit = defineEmits<{ snapshots: [enabled: boolean] }>()
 
 type Status = 'idle' | 'connecting' | 'playing' | 'unsupported' | 'ended' | 'error'
 const status = ref<Status>('idle')
 const detail = ref('')
 const muted = ref(true)
 const video = ref<HTMLVideoElement | null>(null)
+const now = ref(Date.now())
+let ageTimer: ReturnType<typeof setInterval> | null = null
+const snapshotUrl = computed(() => (props.snapshotAt ? getTransport().cameraSnapshotUrl(props.deviceId, props.snapshotAt) : null))
+const snapshotAgeS = computed(() => (props.snapshotAt ? Math.max(0, Math.round((now.value - props.snapshotAt) / 1000)) : 0))
 
 let ws: WebSocket | null = null
 let mediaSource: MediaSource | null = null
 let sourceBuffer: SourceBuffer | null = null
 let objectUrl: string | null = null
-const queue: ArrayBuffer[] = []
+/** Fragments en attente d'ajout ; `init` marque une entête (nouvelle source côté serveur). */
+const queue: { data: ArrayBuffer; init?: boolean }[] = []
 
 const KEEP_BEHIND_S = 30      // tampon conservé derrière la tête de lecture (au-delà, on libère)
 const PRIME_DELAY_MS = 600    // marge avant de lancer la lecture au premier fragment (voir plus bas)
@@ -35,10 +44,16 @@ let fragmentS = 1
 let lastEnd = 0
 
 function flush() {
-  const sb = sourceBuffer
+  const sb = sourceBuffer, v = video.value
   if (!sb || sb.updating || queue.length === 0) return
-  try { sb.appendBuffer(queue.shift()!) }
-  catch (err) { fail((err as Error).message) }
+  const item = queue.shift()!
+  try {
+    // Nouvelle entête en cours de lecture : le serveur a changé de source (chez Google, une session
+    // se rouvre toutes les cinq minutes) et ses horodatages repartent de zéro. On les décale à la
+    // suite de ce qui est déjà en tampon, sinon la lecture reculerait et resterait bloquée.
+    if (item.init && v && v.buffered.length) sb.timestampOffset = v.buffered.end(v.buffered.length - 1)
+    sb.appendBuffer(item.data)
+  } catch (err) { fail((err as Error).message) }
 }
 
 function trimAndCatchUp() {
@@ -72,6 +87,7 @@ function start() {
   objectUrl = URL.createObjectURL(mediaSource)
   v.src = objectUrl
   const ms = mediaSource
+  let nextIsInit = false
   ms.addEventListener('sourceopen', () => {
     // `start` a pu être rappelé entre-temps (montage PUIS activation, sous `<keep-alive>` les deux
     // arrivent) : une MediaSource périmée n'ouvre pas de second WebSocket
@@ -82,11 +98,13 @@ function start() {
       if (typeof ev.data === 'string') {
         const msg = JSON.parse(ev.data) as { type: string; mime?: string; message?: string; reason?: string }
         if (msg.type === 'init' && msg.mime) {
+          if (sourceBuffer) { nextIsInit = true; return }   // changement de source : l'entête binaire qui suit se décale
           if (!MediaSource.isTypeSupported(msg.mime)) { status.value = 'unsupported'; detail.value = msg.mime; close(); return }
           sourceBuffer = ms.addSourceBuffer(msg.mime)
           sourceBuffer.mode = 'segments'
           sourceBuffer.addEventListener('updateend', () => { trimAndCatchUp(); flush() })
           sourceBuffer.addEventListener('error', () => fail('decode error'))
+          nextIsInit = true
           flush()
         } else if (msg.type === 'ended') {
           status.value = 'ended'; detail.value = msg.reason ?? ''; close()
@@ -95,7 +113,8 @@ function start() {
         }
         return
       }
-      queue.push(ev.data as ArrayBuffer)
+      queue.push({ data: ev.data as ArrayBuffer, ...(nextIsInit ? { init: true } : {}) })
+      nextIsInit = false
       flush()
       if (status.value === 'connecting') {
         status.value = 'playing'
@@ -139,34 +158,51 @@ function toggleMute() { muted.value = !muted.value; if (video.value) video.value
 onMounted(() => {
   document.addEventListener('visibilitychange', resume)
   video.value?.addEventListener('pause', onPause)
-  start()
+  ageTimer = setInterval(() => { now.value = Date.now() }, 1000)
+  if (props.autoplay) start()
 })
 onBeforeUnmount(() => {
   document.removeEventListener('visibilitychange', resume)
   video.value?.removeEventListener('pause', onPause)
+  if (ageTimer) clearInterval(ageTimer)
   close()
 })
 // La vue Maison est gardée en vie (`<keep-alive>` dans App.vue) : quitter l'onglet ne démonte PAS
 // ce composant, `onBeforeUnmount` ne vient jamais, et sans ceci le flux continuait dans un
 // composant invisible — ffmpeg et la session Google avec lui (relevé sur la sonnette).
 onDeactivated(close)
-onActivated(start)
-// même composant réutilisé pour une autre caméra : on change de flux
-watch(() => props.deviceId, start)
+onActivated(() => { if (props.autoplay) start() })
+// même composant réutilisé pour une autre caméra : on change de flux, ou on revient à la vignette
+watch(() => props.deviceId, () => { if (props.autoplay || status.value === 'playing' || status.value === 'connecting') start(); else stop() })
 </script>
 
 <template>
   <div class="cam">
     <video ref="video" class="cam__video" :muted="muted" autoplay playsinline />
+    <img v-if="status === 'idle' && snapshotUrl" :src="snapshotUrl" class="cam__snapshot" alt="" />
     <div v-if="status !== 'playing'" class="cam__overlay">
       <span v-if="status === 'connecting'" class="cam__msg">{{ $t('camera.video.connecting') }}</span>
-      <span v-else-if="status === 'idle'" class="cam__msg">{{ $t('camera.video.stopped') }}</span>
+      <span v-else-if="status === 'idle' && paused" class="cam__msg" :class="{ 'cam__msg--age': snapshotUrl }">{{ $t('camera.video.snapshotsPaused') }}</span>
+      <span v-else-if="status === 'idle' && snapshotUrl" class="cam__msg cam__msg--age">{{ snapshotAgeS >= 90 ? $t('camera.video.agoMin', { m: Math.round(snapshotAgeS / 60) }) : $t('camera.video.ago', { s: snapshotAgeS }) }}</span>
+      <span v-else-if="status === 'idle'" class="cam__msg">{{ $t(inactive ? 'camera.video.inactive' : autoplay ? 'camera.video.stopped' : 'camera.video.noSnapshot') }}</span>
       <span v-else class="cam__msg">{{ $t(`camera.video.${status}`) }}<span v-if="detail" class="cam__detail"> · {{ detail }}</span></span>
     </div>
     <div class="cam__bar">
       <button v-if="status === 'playing' || status === 'connecting'" type="button" class="key" :title="$t('camera.video.stop')" :aria-label="$t('camera.video.stop')" @click="stop">
         <StrokeIcon name="stop" :size="18" />
       </button>
+      <template v-else-if="!autoplay">
+        <!-- tuile : stop arrête la vignette (le flux de cette caméra), lecture lance le direct -->
+        <button v-if="paused" type="button" class="key" :title="$t('camera.video.resumeSnapshots')" :aria-label="$t('camera.video.resumeSnapshots')" @click="emit('snapshots', true)">
+          <StrokeIcon name="camera" :size="18" />
+        </button>
+        <button v-else type="button" class="key" :title="$t('camera.video.pauseSnapshots')" :aria-label="$t('camera.video.pauseSnapshots')" @click="emit('snapshots', false)">
+          <StrokeIcon name="stop" :size="18" />
+        </button>
+        <button type="button" class="key" :title="$t('camera.video.play')" :aria-label="$t('camera.video.play')" @click="start">
+          <StrokeIcon name="play" :size="18" />
+        </button>
+      </template>
       <button v-else type="button" class="key" :title="$t('camera.video.play')" :aria-label="$t('camera.video.play')" @click="start">
         <StrokeIcon name="play" :size="18" />
       </button>
@@ -180,7 +216,9 @@ watch(() => props.deviceId, start)
 <style scoped>
 .cam { position: relative; border-radius: 12px; overflow: hidden; background: #000; }
 .cam__video { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: contain; background: #000; }
-.cam__overlay { position: absolute; inset: 0 0 44px 0; display: grid; place-items: center; color: #ddd; font-size: 13px; padding: 12px; text-align: center; }
+.cam__snapshot { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.cam__msg--age { position: absolute; top: 8px; right: 8px; font-size: 11px; padding: 3px 7px; }
+.cam__overlay { position: absolute; inset: 0 0 44px 0; display: grid; place-items: center; color: #ddd; font-size: 13px; padding: 12px; text-align: center; pointer-events: none; }
 .cam__msg { background: rgba(0, 0, 0, .55); padding: 6px 10px; border-radius: 8px; }
 .cam__detail { opacity: .7; }
 .cam__bar { position: absolute; left: 0; right: 0; bottom: 0; display: flex; gap: 6px; padding: 6px 8px; background: linear-gradient(transparent, rgba(0, 0, 0, .6)); }
