@@ -16,7 +16,7 @@ export function mediaPlayer(externalId: string, o: MediaOptions): SimDevice<'med
   let track = 0
   const now = (positionS: number) => ({ ...PLAYLIST[track]!, positionS, source: 'Mock Music' })
   const dev: SimDevice<'media_player'> = {
-    descriptor: descriptor(externalId, 'media_player', o.name, ['playback', 'volume', 'mute', 'now_playing', 'track_skip'], { manufacturer: 'Mock', model: 'Speaker' }),
+    descriptor: descriptor(externalId, 'media_player', o.name, ['playback', 'volume', 'mute', 'now_playing', 'track_skip'], { manufacturer: 'Mock', model: 'Speaker', mediaPlayer: { deviceClass: 'speaker' } }),
     state: {
       kind: 'media_player', updatedAt: 0, available: true,
       playback: o.playing ? 'playing' : 'idle', volume: o.volume ?? 35, muted: false,

@@ -75,6 +75,14 @@ export type CoverClass = (typeof COVER_CLASSES)[number]
 export const CAMERA_CLASSES = ['camera', 'doorbell', 'display'] as const
 export type CameraClass = (typeof CAMERA_CLASSES)[number]
 
+/**
+ * Nature d'un lecteur (kind `media_player`) : enceinte (audio seul), `tv` (téléviseur ou boîtier
+ * branché sur un téléviseur : Chromecast, TV Android), `display` (écran connecté : Nest Hub). Même
+ * contrat de commandes ; ne décide que l'icône et le marqueur 3D.
+ */
+export const MEDIA_PLAYER_CLASSES = ['speaker', 'tv', 'display'] as const
+export type MediaPlayerClass = (typeof MEDIA_PLAYER_CLASSES)[number]
+
 /** Protocoles de flux vidéo qu'une caméra sait servir (décide de la façon de l'afficher). */
 export const STREAM_PROTOCOLS = ['webrtc', 'rtsp'] as const
 export type StreamProtocol = (typeof STREAM_PROTOCOLS)[number]

@@ -1,4 +1,4 @@
-import type { DeviceDescriptor, DeviceKind, DeviceState, SensorClass } from '@kasbah/shared'
+import type { DeviceDescriptor, DeviceKind, DeviceState, MediaPlayerClass, SensorClass } from '@kasbah/shared'
 import type { IconName } from './strokeIcons'
 
 // Icônes (jeu « trait », voir strokeIcons.ts) par kind et état, pour <v-icon> comme pour StrokeIcon.
@@ -7,6 +7,9 @@ const SENSOR_ICONS: Record<SensorClass, IconName> = {
   temperature: 'thermostat', humidity: 'droplet', power: 'bolt', energy: 'bolt', pressure: 'gauge',
   flow: 'waves', illuminance: 'sun', ph: 'flask', battery: 'battery', generic: 'sensor',
 }
+
+/** Un téléviseur et un écran connecté gardent la même icône en lecture : la couleur dit l'état. */
+const MEDIA_ICONS: Record<MediaPlayerClass, IconName> = { speaker: 'speaker', tv: 'tv', display: 'tablet' }
 
 export const KIND_ICONS: Record<DeviceKind, IconName> = {
   light: 'light', cover: 'shutter', media_player: 'speaker', climate: 'heatpump', vacuum: 'vacuum',
@@ -19,7 +22,10 @@ export function deviceIcon(descriptor: DeviceDescriptor | undefined, state?: Dev
     case 'camera': return descriptor.meta.camera?.deviceClass === 'doorbell' ? 'doorbell' : 'camera'
     case 'light': return state?.kind === 'light' && state.on ? 'lightOn' : 'light'
     case 'cover': return state?.kind === 'cover' && (state.position ?? 0) > 50 ? 'shutterOpen' : 'shutter'
-    case 'media_player': return state?.kind === 'media_player' && state.playback === 'playing' ? 'speakerOn' : 'speaker'
+    case 'media_player': {
+      const cls = descriptor.meta.mediaPlayer?.deviceClass ?? 'speaker'
+      return cls === 'speaker' && state?.kind === 'media_player' && state.playback === 'playing' ? 'speakerOn' : MEDIA_ICONS[cls]
+    }
     case 'sensor': return SENSOR_ICONS[descriptor.meta.sensor?.deviceClass ?? 'generic']
     case 'vehicle': return state?.kind === 'vehicle' && state.charging ? 'charger' : 'vehicle'
     default: return KIND_ICONS[descriptor.kind]

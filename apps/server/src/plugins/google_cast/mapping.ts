@@ -1,4 +1,4 @@
-import type { Capability, DeviceDescriptor, StatePatch } from '@kasbah/shared'
+import type { Capability, DeviceDescriptor, MediaPlayerClass, StatePatch } from '@kasbah/shared'
 import { receiverApplicationSchema, type CastService, type MediaStatus, type ReceiverApplication, type ReceiverStatus } from './types'
 
 // Mappage PUR : service mDNS et messages du récepteur ↔ descripteur / patch d'état `media_player`.
@@ -9,6 +9,18 @@ export const PLUGIN_ID = 'google_cast'
 export function hasScreen(txt: { ca?: string }): boolean {
   const ca = Number(txt.ca)
   return Number.isFinite(ca) && (ca & 1) === 1
+}
+
+/**
+ * Nature du lecteur, d'après ce que l'appareil annonce : une sortie vidéo dont l'écran est celui de
+ * l'appareil (Nest Hub, Smart Display) est un `display` ; toute autre sortie vidéo est un téléviseur
+ * ou un boîtier branché dessus (Chromecast, TV Android : `tv`) ; sans vidéo, une enceinte.
+ * Le volume `fixed` d'un Chromecast confirme le branchement HDMI mais n'est connu qu'après
+ * connexion ; le masque mDNS suffit et est disponible dès la découverte.
+ */
+export function mediaPlayerClass(txt: { md?: string; ca?: string }): MediaPlayerClass {
+  if (!hasScreen(txt)) return 'speaker'
+  return /\b(Nest Hub|Home Hub|Smart Display)\b/i.test(txt.md ?? '') ? 'display' : 'tv'
 }
 
 /** Google ne signe que ses propres modèles ; « Chromecast built-in » chez les autres garde leur marque. */
@@ -38,6 +50,7 @@ export function toDescriptor(service: CastService, volume?: { controlType?: stri
     meta: {
       ...(manufacturerOf(model) ? { manufacturer: manufacturerOf(model) } : {}),
       ...(model ? { model } : {}),
+      mediaPlayer: { deviceClass: mediaPlayerClass(service.txt) },
     },
   }
 }

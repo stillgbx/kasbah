@@ -6,7 +6,7 @@ import {
   SERVICE_NEST_HUB, SERVICE_SOUNDBAR, TXT_CHROMECAST, TXT_LENOVO_CLOCK, TXT_NEST_HUB, TXT_NEST_MINI,
 } from './__fixtures__/network'
 import { toCastService } from './discovery'
-import { activeApplication, hasScreen, manufacturerOf, toDescriptor, toMediaPatch, toReceiverPatch } from './mapping'
+import { activeApplication, hasScreen, manufacturerOf, mediaPlayerClass, toDescriptor, toMediaPatch, toReceiverPatch } from './mapping'
 import { mediaStatusSchema, receiverStatusSchema } from './types'
 
 const receiver = (raw: unknown) => receiverStatusSchema.parse(raw)
@@ -25,6 +25,16 @@ describe('google_cast mapping', () => {
     expect(hasScreen(TXT_NEST_MINI)).toBe(false)
     expect(hasScreen(TXT_LENOVO_CLOCK)).toBe(false)
     expect(hasScreen({})).toBe(false)
+  })
+
+  it('classes a Chromecast as a TV, a Nest Hub as a display, the rest as speakers', () => {
+    expect(mediaPlayerClass(TXT_CHROMECAST)).toBe('tv')
+    expect(mediaPlayerClass({ md: 'BRAVIA 4K VH2', ca: '465413' })).toBe('tv')       // TV Android à Chromecast intégré
+    expect(mediaPlayerClass(TXT_NEST_HUB)).toBe('display')
+    expect(mediaPlayerClass(TXT_NEST_MINI)).toBe('speaker')
+    expect(mediaPlayerClass(TXT_LENOVO_CLOCK)).toBe('speaker')
+    expect(toDescriptor(SERVICE_CHROMECAST).meta.mediaPlayer).toEqual({ deviceClass: 'tv' })
+    expect(toDescriptor(SERVICE_SOUNDBAR).meta.mediaPlayer).toEqual({ deviceClass: 'speaker' })
   })
 
   it('attributes Google models to Google and others to their brand', () => {

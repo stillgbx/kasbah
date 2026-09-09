@@ -16,8 +16,14 @@ export class GenericMarker extends DeviceMarker {
     super(device, ctx)
     const kind = ctx.descriptor?.kind ?? device.kind
     let geometry
+    // un lecteur prend la forme de sa nature : enceinte (cylindre), téléviseur (écran plat), écran connecté (petite dalle)
+    const mediaClass = kind === 'media_player' ? ctx.descriptor?.meta.mediaPlayer?.deviceClass ?? 'speaker' : undefined
     switch (kind) {
-      case 'media_player': geometry = new CylinderGeometry(0.13, 0.13, 0.32, 20); this.setLift(0.5); break
+      case 'media_player':
+        if (mediaClass === 'tv') { geometry = new BoxGeometry(1, 0.06, 0.56); this.setLift(0.8) }
+        else if (mediaClass === 'display') { geometry = new BoxGeometry(0.25, 0.08, 0.16); this.setLift(0.35) }
+        else { geometry = new CylinderGeometry(0.13, 0.13, 0.32, 20); this.setLift(0.5) }
+        break
       case 'climate': geometry = new BoxGeometry(0.9, 0.3, 0.7); this.setLift(0.55); break
       case 'ev_charger': geometry = new BoxGeometry(0.3, 0.15, 0.8); this.setLift(0.6); break
       case 'energy': geometry = new BoxGeometry(0.6, 0.15, 1); this.setLift(0.7); break
@@ -26,7 +32,7 @@ export class GenericMarker extends DeviceMarker {
     }
     this.mesh = new Mesh(geometry, devMaterial(ctx))
     if (geometry instanceof CylinderGeometry) this.mesh.rotation.x = Math.PI / 2   // axe Y du cylindre → Z-up local
-    if (kind === 'media_player') this.mesh.position.z = 0.16
+    if (kind === 'media_player') this.mesh.position.z = mediaClass === 'tv' ? 0.28 : mediaClass === 'display' ? 0.08 : 0.16
     if (kind === 'vacuum') this.mesh.position.z = 0.05
     this.mesh.castShadow = true
     this.registerPickable(this.mesh)
