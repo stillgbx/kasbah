@@ -1,6 +1,6 @@
 {
   "app": { "name": "Kasbah" },
-  "nav": { "main": "Navigation", "home": "Maison", "energy": "Énergie", "vehicles": "Véhicules", "settings": "Réglages", "lights": "Lumières", "covers": "Ouvrants", "cameras": "Caméras" },
+  "nav": { "main": "Navigation", "home": "Maison", "energy": "Énergie", "vehicles": "Véhicules", "settings": "Réglages", "lights": "Lumières", "covers": "Ouvrants", "cameras": "Caméras", "media": "Médias" },
   "common": {
     "close": "Fermer", "back": "Retour", "retry": "Réessayer", "all": "Tout", "none": "Aucun", "unavailable": "Indisponible",
     "loading": "Chargement de la maison…", "on": "Allumé", "off": "Éteint", "stop": "Stop",
@@ -53,6 +53,11 @@
   },
   "cameras": {
     "summary": "{active} actives sur {total}", "none": "Aucune caméra remontée par les plugins."
+  },
+  "media": {
+    "summary": "{playing} en lecture sur {total}", "none": "Aucun lecteur remonté par les plugins.",
+    "playing": "Lecture", "paused": "En pause", "idle": "Au repos", "off": "Éteint", "nothing": "Rien en lecture",
+    "play": "Lire", "next": "Piste suivante", "previous": "Piste précédente", "mute": "Couper le son", "unmute": "Rétablir le son", "volume": "Volume"
   },
   "rooms": {
     "noRoom": "Sans pièce", "notInHouse": "Hors maison",

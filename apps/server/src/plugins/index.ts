@@ -1,5 +1,6 @@
 import type { PluginFactory } from '../core/plugin'
 import { makeStubPlugin } from './_stub'
+import { createGoogleCastPlugin } from './google_cast'
 import { createHuePlugin } from './hue'
 import { createMockPlugin } from './mock'
 import { createNestPlugin } from './nest'
@@ -13,7 +14,7 @@ export const PLUGIN_FACTORIES: Record<string, PluginFactory> = {
   hue: createHuePlugin,
   tahoma: createTahomaPlugin,
   nest: () => createNestPlugin(),
-  google_home: makeStubPlugin('google_home', 'Google Home speakers'),
+  google_cast: createGoogleCastPlugin,
   sonos: makeStubPlugin('sonos', 'Sonos'),
   irobot: makeStubPlugin('irobot', 'iRobot'),
   automower: makeStubPlugin('automower', 'Husqvarna Automower'),

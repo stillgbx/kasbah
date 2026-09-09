@@ -1,6 +1,6 @@
 {
   "app": { "name": "Kasbah" },
-  "nav": { "main": "Navigation", "home": "Home", "energy": "Energy", "vehicles": "Vehicles", "settings": "Settings", "lights": "Lights", "covers": "Covers", "cameras": "Cameras" },
+  "nav": { "main": "Navigation", "home": "Home", "energy": "Energy", "vehicles": "Vehicles", "settings": "Settings", "lights": "Lights", "covers": "Covers", "cameras": "Cameras", "media": "Media" },
   "common": {
     "close": "Close", "back": "Back", "retry": "Retry", "all": "All", "none": "None", "unavailable": "Unavailable",
     "loading": "Loading house…", "on": "On", "off": "Off", "stop": "Stop",
@@ -53,6 +53,11 @@
   },
   "cameras": {
     "summary": "{active} active out of {total}", "none": "No camera reported by the plugins."
+  },
+  "media": {
+    "summary": "{playing} playing out of {total}", "none": "No media player reported by the plugins.",
+    "playing": "Playing", "paused": "Paused", "idle": "Idle", "off": "Off", "nothing": "Nothing playing",
+    "play": "Play", "next": "Next track", "previous": "Previous track", "mute": "Mute", "unmute": "Unmute", "volume": "Volume"
   },
   "rooms": {
     "noRoom": "No room", "notInHouse": "Not in the house",
