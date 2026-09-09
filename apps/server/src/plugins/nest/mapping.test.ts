@@ -1,7 +1,10 @@
 import { deviceDescriptorSchema } from '@kasbah/shared'
 import { describe, expect, it } from 'vitest'
 import { DOORBELL, NAMED_CAMERA, THERMOSTAT, UNNAMED_CAMERA, WEBRTC_CAMERA } from './__fixtures__/sdm'
-import { authorizationUrl, deviceNameToExternalId, isCamera, streamProtocols, toDescriptor } from './mapping'
+import {
+  authorizationUrl, deviceNameToExternalId, isCamera, streamProtocols, thermostatAvailable, toClimatePatch, toDescriptor,
+  toThermostatCommands, toThermostatDescriptor,
+} from './mapping'
 import { sdmDeviceSchema } from './types'
 
 const parse = (d: unknown) => sdmDeviceSchema.parse(d)
@@ -61,5 +64,66 @@ describe('nest mapping', () => {
       client_id: 'cid', redirect_uri: 'http://localhost:8787/cb', response_type: 'code', access_type: 'offline', prompt: 'consent', state: 'xyz',
     })
     expect(url.searchParams.get('scope')).toContain('https://www.googleapis.com/auth/sdm.service')
+  })
+})
+
+describe('nest thermostat mapping', () => {
+  const thermostat = () => parse(THERMOSTAT)
+  const withTraits = (patch: Record<string, unknown>) => parse({ ...THERMOSTAT, traits: { ...THERMOSTAT.traits, ...patch } })
+
+  it('maps the real thermostat: climate kind, declared modes only, Google setpoint range', () => {
+    const d = toThermostatDescriptor(thermostat())
+    expect(deviceDescriptorSchema.safeParse(d).success).toBe(true)
+    expect(d).toMatchObject({
+      id: 'nest:DEVICE3', kind: 'climate', name: 'Thermostat Palier',
+      capabilities: ['hvac_mode', 'target_temp', 'current_temp', 'humidity'],
+      meta: { manufacturer: 'Google Nest', model: 'THERMOSTAT', room: 'Palier', targetTempC: [9, 32], climate: { modes: ['heat', 'off', 'eco'] } },
+    })
+  })
+
+  it('reads a full climate state, rounded to a tenth, idle when HEAT but not heating', () => {
+    expect(toClimatePatch(thermostat())).toEqual({ mode: 'heat', action: 'idle', currentTempC: 24.2, targetTempC: 18.8, humidity: 53 })
+    expect(thermostatAvailable(thermostat())).toBe(true)
+    expect(thermostatAvailable(withTraits({ 'sdm.devices.traits.Connectivity': { status: 'OFFLINE' } }))).toBe(false)
+  })
+
+  it('eco overrides the HVAC mode and brings its own setpoint; OFF means off; HEATING means heating', () => {
+    const eco = withTraits({ 'sdm.devices.traits.ThermostatEco': { ...THERMOSTAT.traits['sdm.devices.traits.ThermostatEco'], mode: 'MANUAL_ECO' } })
+    expect(toClimatePatch(eco)).toMatchObject({ mode: 'eco', action: 'idle', targetTempC: 13.9 })
+    const off = withTraits({ 'sdm.devices.traits.ThermostatMode': { mode: 'OFF', availableModes: ['HEAT', 'OFF'] } })
+    expect(toClimatePatch(off)).toMatchObject({ mode: 'off', action: 'off', targetTempC: 18.8 })
+    const heating = withTraits({ 'sdm.devices.traits.ThermostatHvac': { status: 'HEATING' } })
+    expect(toClimatePatch(heating)).toMatchObject({ mode: 'heat', action: 'heating' })
+    // sans température ambiante il n'y a pas d'état à publier (le contrat l'exige)
+    expect(toClimatePatch(withTraits({ 'sdm.devices.traits.Temperature': {} }))).toBeUndefined()
+  })
+
+  it('translates commands, refuses what the thermostat cannot do in its current state', () => {
+    expect(toThermostatCommands(thermostat(), { type: 'climate.set_target_temp', targetTempC: 21.26 }))
+      .toEqual([{ command: 'sdm.devices.commands.ThermostatTemperatureSetpoint.SetHeat', params: { heatCelsius: 21.3 } }])
+    expect(toThermostatCommands(thermostat(), { type: 'climate.set_target_temp', targetTempC: 40 })![0]!.params).toEqual({ heatCelsius: 32 })
+    expect(toThermostatCommands(thermostat(), { type: 'climate.set_mode', mode: 'off' }))
+      .toEqual([{ command: 'sdm.devices.commands.ThermostatMode.SetMode', params: { mode: 'OFF' } }])
+    expect(toThermostatCommands(thermostat(), { type: 'climate.set_mode', mode: 'eco' }))
+      .toEqual([{ command: 'sdm.devices.commands.ThermostatEco.SetMode', params: { mode: 'MANUAL_ECO' } }])
+    // ce thermostat ne refroidit pas
+    expect(toThermostatCommands(thermostat(), { type: 'climate.set_mode', mode: 'cool' })).toBeUndefined()
+    // en éco : pas de consigne, et sortir de l'éco vers HEAT prend deux commandes
+    const eco = withTraits({ 'sdm.devices.traits.ThermostatEco': { ...THERMOSTAT.traits['sdm.devices.traits.ThermostatEco'], mode: 'MANUAL_ECO' } })
+    expect(toThermostatCommands(eco, { type: 'climate.set_target_temp', targetTempC: 20 })).toBeUndefined()
+    expect(toThermostatCommands(eco, { type: 'climate.set_mode', mode: 'heat' })).toEqual([
+      { command: 'sdm.devices.commands.ThermostatEco.SetMode', params: { mode: 'OFF' } },
+      { command: 'sdm.devices.commands.ThermostatMode.SetMode', params: { mode: 'HEAT' } },
+    ])
+    // à l'arrêt : pas de consigne non plus ; en HEATCOOL la consigne de froid garde son écart
+    const off = withTraits({ 'sdm.devices.traits.ThermostatMode': { mode: 'OFF', availableModes: ['HEAT', 'OFF'] } })
+    expect(toThermostatCommands(off, { type: 'climate.set_target_temp', targetTempC: 20 })).toBeUndefined()
+    const range = withTraits({
+      'sdm.devices.traits.ThermostatMode': { mode: 'HEATCOOL', availableModes: ['HEAT', 'COOL', 'HEATCOOL', 'OFF'] },
+      'sdm.devices.traits.ThermostatTemperatureSetpoint': { heatCelsius: 18, coolCelsius: 26 },
+    })
+    expect(toThermostatCommands(range, { type: 'climate.set_target_temp', targetTempC: 25 }))
+      .toEqual([{ command: 'sdm.devices.commands.ThermostatTemperatureSetpoint.SetRange', params: { heatCelsius: 25, coolCelsius: 27 } }])
+    expect(toThermostatCommands(thermostat(), { type: 'light.set', on: true })).toBeUndefined()
   })
 })

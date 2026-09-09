@@ -5,6 +5,9 @@ import { formatPercent, formatTemp } from '../../lib/format'
 const props = defineProps<{ descriptor: DeviceDescriptor; state: StateFor<'climate'>; pending?: boolean; disabled?: boolean }>()
 const emit = defineEmits<{ command: [cmd: CommandInput] }>()
 const [tMin, tMax] = props.descriptor.meta.targetTempC ?? [10, 30]
+// seuls les modes que l'appareil déclare : proposer « Refroidir » à un thermostat qui ne chauffe
+// que promettrait une commande que le fabricant refuserait
+const modes = props.descriptor.meta.climate?.modes ?? CLIMATE_MODES
 const step = (d: number) => emit('command', { type: 'climate.set_target_temp', targetTempC: Math.min(tMax, Math.max(tMin, Math.round((props.state.targetTempC + d) * 2) / 2)) })
 </script>
 
@@ -29,7 +32,7 @@ const step = (d: number) => emit('command', { type: 'climate.set_target_temp', t
     <div class="text-caption text-medium-emphasis mb-1">{{ $t('climate.mode') }}</div>
     <v-chip-group :model-value="state.mode" mandatory selected-class="text-primary" column
                   @update:model-value="(m: unknown) => m && emit('command', { type: 'climate.set_mode', mode: m as typeof state.mode })">
-      <v-chip v-for="m in CLIMATE_MODES" :key="m" :value="m" size="large" variant="tonal" :disabled="disabled">{{ $t(`climate.modes.${m}`) }}</v-chip>
+      <v-chip v-for="m in modes" :key="m" :value="m" size="large" variant="tonal" :disabled="disabled">{{ $t(`climate.modes.${m}`) }}</v-chip>
     </v-chip-group>
   </div>
 </template>

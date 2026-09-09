@@ -89,6 +89,11 @@
     "stream": "Flux vidéo : {protocols}", "noStream": "Pas de flux vidéo déclaré",
     "videoLater": "La vidéo en direct arrive dans une prochaine étape ; pour l'instant la caméra est inventoriée et placée dans la maison."
   },
+  "climate": {
+    "current": "Température", "humidity": "Humidité", "target": "Consigne", "mode": "Mode",
+    "actions": { "heating": "Chauffe", "cooling": "Refroidit", "idle": "Au repos", "off": "Arrêté" },
+    "modes": { "off": "Arrêt", "heat": "Chauffage", "cool": "Refroidissement", "auto": "Auto", "eco": "Éco", "fan_only": "Ventilation" }
+  },
   "charger": {
     "status": { "disconnected": "Débranchée", "connected": "Branchée", "charging": "En charge", "finished": "Charge terminée", "error": "Erreur" },
     "power": "Puissance", "session": "Session", "maxCurrent": "Courant max"

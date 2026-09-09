@@ -89,6 +89,11 @@
     "stream": "Video stream: {protocols}", "noStream": "No video stream declared",
     "videoLater": "Live video comes in a later step; for now the camera is listed and placed in the house."
   },
+  "climate": {
+    "current": "Temperature", "humidity": "Humidity", "target": "Target", "mode": "Mode",
+    "actions": { "heating": "Heating", "cooling": "Cooling", "idle": "Idle", "off": "Off" },
+    "modes": { "off": "Off", "heat": "Heat", "cool": "Cool", "auto": "Auto", "eco": "Eco", "fan_only": "Fan only" }
+  },
   "charger": {
     "status": { "disconnected": "Disconnected", "connected": "Connected", "charging": "Charging", "finished": "Charge finished", "error": "Error" },
     "power": "Power", "session": "Session", "maxCurrent": "Max current"

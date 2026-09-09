@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { CAMERA_CLASSES, CAPABILITIES, COVER_CLASSES, DEVICE_KINDS, KIND_CAPABILITIES, SENSOR_CLASSES, STREAM_PROTOCOLS } from './kinds'
+import { CAMERA_CLASSES, CAPABILITIES, CLIMATE_MODES, COVER_CLASSES, DEVICE_KINDS, KIND_CAPABILITIES, SENSOR_CLASSES, STREAM_PROTOCOLS } from './kinds'
 
 // Identité d'un appareil : `${pluginId}:${externalId}`. Une seule chaîne sert de clé de Map,
 // de segment d'URL, de champ WS et de nom de nœud 3D — jamais de couple à joindre côté client.
@@ -22,6 +22,11 @@ export const deviceMetaSchema = z.object({
   effects: z.array(z.string()).optional(),
   /** Plage [min, max] de consigne en °C. */
   targetTempC: z.tuple([z.number(), z.number()]).optional(),
+  /**
+   * Modes que l'appareil DÉCLARE (capacité `hvac_mode`) : un thermostat qui ne chauffe que ne
+   * doit pas se voir proposer « Refroidir ». Absent = tous les `CLIMATE_MODES` (cas de la simulation).
+   */
+  climate: z.object({ modes: z.array(z.enum(CLIMATE_MODES)) }).optional(),
   sensor: z.object({
     unit: z.string(),
     deviceClass: z.enum(SENSOR_CLASSES),

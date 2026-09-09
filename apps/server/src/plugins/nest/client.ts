@@ -112,22 +112,35 @@ export class NestClient {
     return this.accessToken!
   }
 
-  private async get(path: string, signal?: AbortSignal): Promise<unknown> {
+  /**
+   * Requête SDM authentifiée. Les statuts de Google sont traduits en erreurs de plugin : 400 vient
+   * d'une commande que l'appareil refuse dans son état (`FAILED_PRECONDITION` : consigne en éco…),
+   * 404 d'un appareil qui n'est plus partagé, 403 d'un projet mal configuré — son message est
+   * remonté tel quel, il dit exactement ce qui manque.
+   */
+  private async request(method: 'GET' | 'POST', path: string, body?: unknown, signal?: AbortSignal): Promise<unknown> {
     const token = await this.accessTokenFor(signal)
-    const res = await this.send(`${SDM_BASE_URL}${path}`, { method: 'GET', headers: { authorization: `Bearer ${token}`, accept: 'application/json' } }, signal)
+    const res = await this.send(`${SDM_BASE_URL}${path}`, {
+      method,
+      headers: { authorization: `Bearer ${token}`, accept: 'application/json', ...(body !== undefined ? { 'content-type': 'application/json' } : {}) },
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    }, signal)
     const json = await res.json().catch(() => undefined)
     if (res.ok) return json
     const e = sdmErrorSchema.safeParse(json)
     const message = e.success ? e.data.error?.message : undefined
+    const suffix = message ? ` (${message})` : ''
     if (res.status === 401) {
       this.accessToken = undefined                     // on retentera avec un jeton neuf au prochain appel
-      throw new PluginError('NEEDS_PAIRING', `Google rejected the access token${message ? ` (${message})` : ''}`)
+      throw new PluginError('NEEDS_PAIRING', `Google rejected the access token${suffix}`)
     }
-    if (res.status === 429) throw new PluginError('RATE_LIMITED', `Google SDM rate limit${message ? ` (${message})` : ''}`)
-    // 403 après liaison = API « Smart Device Management » pas activée dans le projet Cloud, ou
-    // projet Device Access non lié au client OAuth : le message de Google le dit, on le remonte.
-    throw new PluginError('UPSTREAM_ERROR', `Google SDM HTTP ${res.status}${message ? ` (${message})` : ''}`)
+    if (res.status === 400) throw new PluginError('UNSUPPORTED_COMMAND', `Google refused the command${suffix}`)
+    if (res.status === 404) throw new PluginError('DEVICE_UNAVAILABLE', `device unknown to Google${suffix}`)
+    if (res.status === 429) throw new PluginError('RATE_LIMITED', `Google SDM rate limit${suffix}`)
+    throw new PluginError('UPSTREAM_ERROR', `Google SDM HTTP ${res.status}${suffix}`)
   }
+
+  private devicesPath(): string { return `/enterprises/${encodeURIComponent(this.opts.projectId)}/devices` }
 
   /**
    * Tous les appareils partagés avec le projet. Validés un par un : un appareil d'une forme
@@ -135,7 +148,7 @@ export class NestClient {
    * relever une fixture réelle (`GET /api/plugins/nest/devices/raw`).
    */
   async listDevices(signal?: AbortSignal): Promise<{ raw: unknown; devices: SdmDevice[] }> {
-    const raw = await this.get(`/enterprises/${encodeURIComponent(this.opts.projectId)}/devices`, signal)
+    const raw = await this.request('GET', this.devicesPath(), undefined, signal)
     const envelope = sdmDevicesResponseSchema.safeParse(raw)
     if (!envelope.success) throw new PluginError('UPSTREAM_ERROR', 'unexpected device list from Google')
     const devices: SdmDevice[] = []
@@ -145,5 +158,18 @@ export class NestClient {
       else this.opts.logger?.debug({ issues: r.error.issues }, 'Nest device skipped')
     }
     return { raw, devices }
+  }
+
+  /** Un appareil, relu après une commande pour publier l'état que Google a réellement retenu. */
+  async getDevice(externalId: string, signal?: AbortSignal): Promise<SdmDevice> {
+    const raw = await this.request('GET', `${this.devicesPath()}/${encodeURIComponent(externalId)}`, undefined, signal)
+    const r = sdmDeviceSchema.safeParse(raw)
+    if (!r.success) throw new PluginError('UPSTREAM_ERROR', 'unexpected device from Google')
+    return r.data
+  }
+
+  /** `POST …/devices/<id>:executeCommand`. Résout à l'accusé de Google (200), sans corps utile. */
+  async executeCommand(externalId: string, command: string, params: Record<string, unknown>, signal?: AbortSignal): Promise<void> {
+    await this.request('POST', `${this.devicesPath()}/${encodeURIComponent(externalId)}:executeCommand`, { command, params }, signal)
   }
 }
