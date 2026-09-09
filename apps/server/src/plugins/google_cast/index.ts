@@ -6,6 +6,7 @@ import { sleep } from '../../core/clock'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
 import { CastConnection, tlsSocketFactory, type SocketFactory } from './channel'
 import { createMdnsDiscovery, type CastDiscovery } from './discovery'
+import { sendError } from '../../http/errors'
 import { toDescriptor, toMediaPatch, toReceiverPatch } from './mapping'
 import type { CastService, MediaStatus, ReceiverApplication, ReceiverStatus } from './types'
 
@@ -34,6 +35,26 @@ export type GoogleCastConfig = z.infer<typeof googleCastConfigSchema>
 const RECONNECT_INITIAL_MS = 5000
 const RECONNECT_MAX_MS = 120_000
 
+/** Pochettes : combien d'URL récemment vues on accepte de servir, durée de cache d'une image, d'un échec. */
+const ART_KNOWN_MAX = 64
+const ART_CACHE_MAX = 32
+const ART_TTL_MS = 6 * 3_600_000
+const ART_FAIL_TTL_MS = 60_000
+const ART_FETCH_TIMEOUT_MS = 8000
+/** Google répond parfois 429 : on réessaie avec un délai croissant avant d'abandonner. */
+const ART_ATTEMPTS = 3
+const ART_RETRY_MS = 800
+
+/** Le strict nécessaire de `fetch` pour télécharger une image (le `fetch` global convient). */
+export type ArtFetch = (url: string, init?: { signal?: AbortSignal }) => Promise<{
+  ok: boolean
+  status: number
+  headers: { get(name: string): string | null }
+  arrayBuffer(): Promise<ArrayBuffer>
+}>
+
+interface ArtEntry { status: number; type: string; body: Buffer; at: number }
+
 interface Entry {
   service: CastService
   connection: CastConnection | null
@@ -44,6 +65,8 @@ interface Entry {
 }
 
 export interface GoogleCastPluginDeps {
+  /** Injection pour les tests : téléchargement des pochettes. */
+  fetchImpl?: ArtFetch
   /** Injection pour les tests : fausse découverte. */
   discovery?: CastDiscovery
   /** Injection pour les tests : fausse socket. */
@@ -58,6 +81,10 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
   let discovery: CastDiscovery | null = null
   let refreshTimer: unknown = null
   let stopping = false
+  /** URL de pochettes vues dans les états média (les seules que la route /art accepte de servir), les plus récentes en dernier. */
+  const knownArt: string[] = []
+  const artCache = new Map<string, ArtEntry>()
+  const fetchArt: ArtFetch = deps.fetchImpl ?? ((url, init) => fetch(url, init))
   /** Faux jusqu'à « start » : un état émis pendant « discover » arriverait AVANT l'enregistrement des appareils et serait perdu. */
   let started = false
   const entries = new Map<string, Entry>()
@@ -119,7 +146,45 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
   }
 
   function onMediaStatus(entry: Entry, media: MediaStatus | undefined, app: ReceiverApplication | undefined): void {
+    const art = media?.media?.metadata?.images?.[0]?.url
+    if (art && !knownArt.includes(art)) {
+      knownArt.push(art)
+      if (knownArt.length > ART_KNOWN_MAX) knownArt.shift()
+    }
     if (started) ctx!.emitState(entry.service.txt.id, toMediaPatch(media, app))
+  }
+
+  /** Télécharge une pochette, avec quelques tentatives espacées quand le serveur d'images se plaint (429, 5xx). */
+  async function downloadArt(url: string): Promise<ArtEntry> {
+    let status = 0
+    for (let attempt = 0; attempt < ART_ATTEMPTS && !stopping; attempt++) {
+      if (attempt > 0) await sleep(ctx!.clock, ART_RETRY_MS * attempt, ctx!.signal)
+      try {
+        const res = await fetchArt(url, { signal: AbortSignal.any([ctx!.signal, AbortSignal.timeout(ART_FETCH_TIMEOUT_MS)]) })
+        status = res.status
+        if (res.ok) {
+          const type = res.headers.get('content-type') ?? 'image/jpeg'
+          if (!type.startsWith('image/')) { status = 415; break }
+          return { status: 200, type, body: Buffer.from(await res.arrayBuffer()), at: ctx!.clock.now() }
+        }
+        if (status !== 429 && status < 500) break
+      } catch (err) {
+        log().debug({ url, err }, 'artwork download failed')
+        status = 0
+      }
+    }
+    return { status, type: '', body: Buffer.alloc(0), at: ctx!.clock.now() }
+  }
+
+  async function artFor(url: string): Promise<ArtEntry> {
+    const hit = artCache.get(url)
+    const now = ctx!.clock.now()
+    if (hit && now - hit.at < (hit.status === 200 ? ART_TTL_MS : ART_FAIL_TTL_MS)) return hit
+    const fresh = await downloadArt(url)
+    artCache.delete(url)
+    artCache.set(url, fresh)
+    while (artCache.size > ART_CACHE_MAX) artCache.delete(artCache.keys().next().value!)
+    return fresh
   }
 
   /** État courant d'un appareil connecté, publié d'un bloc (au « start », après le silence de « discover »). */
@@ -155,7 +220,8 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
       case 'media_player.play': return c.mediaCommand('PLAY')
       case 'media_player.pause': return c.mediaCommand('PAUSE')
       case 'media_player.next': return c.queueJump(1)
-      case 'media_player.previous': return c.queueJump(-1)
+      case 'media_player.previous': return c.previous()                 // début du morceau passé 3 s, sinon le précédent
+      case 'media_player.seek': return c.seek(command.positionS)
       case 'media_player.set_volume':
         if (entry.controlType === 'fixed') throw new PluginError('UNSUPPORTED_COMMAND', 'volume is fixed on this device (set it on the TV)')
         return c.setVolume({ level: Math.min(100, Math.max(0, command.volume)) / 100 })
@@ -215,6 +281,16 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
     },
 
     registerRoutes(app: FastifyInstance) {
+      // Pochette d'un morceau, téléchargée par le serveur et mise en cache (voir `artProxyUrl`). Seules
+      // les URL vues dans un état média sont servies : ce n'est pas un relais ouvert.
+      app.get<{ Querystring: { url?: string } }>('/art', async (req, reply) => {
+        const url = req.query.url
+        if (!url || !knownArt.includes(url)) return sendError(reply, 404, 'NOT_FOUND', 'unknown artwork')
+        const art = await artFor(url)
+        if (art.status !== 200) return sendError(reply, 502, 'UPSTREAM_ERROR', `artwork fetch failed (${art.status || 'network'})`)
+        return reply.header('content-type', art.type).header('cache-control', 'public, max-age=86400').send(art.body)
+      })
+
       // Dernier état brut reçu de chaque appareil : sert à relever des fixtures réelles (voir __fixtures__).
       app.get('/raw', async () => ({
         devices: [...entries.values()].map((e) => ({

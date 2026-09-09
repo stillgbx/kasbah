@@ -98,7 +98,7 @@ export function statusLabel(descriptor: DeviceDescriptor, s: DeviceState, t: Tra
         : s.position >= 100 ? t(`cover.${w}.open`)
         : formatPercent(toClosure(s.position), locale)
     }
-    case 'media_player': return s.playback === 'playing' ? `${t('media.playing')}${s.nowPlaying ? ` · ${s.nowPlaying.title}` : ''}` : t(`media.${s.playback}`)
+    case 'media_player': return s.playback === 'playing' ? `${t('media.playing')}${s.nowPlaying?.title ? ` · ${s.nowPlaying.title}` : ''}` : t(`media.${s.playback}`)
     case 'climate': return `${formatTemp(s.currentTempC, locale)} → ${formatTemp(s.targetTempC, locale)}`
     case 'vacuum': return `${t(`vacuum.activities.${s.activity}`)} · ${formatPercent(s.battery, locale)}`
     case 'mower': return `${t(`mower.activities.${s.activity}`)} · ${formatPercent(s.battery, locale)}`
@@ -116,7 +116,8 @@ export function headlineValue(descriptor: DeviceDescriptor, s: DeviceState, t: T
   switch (s.kind) {
     case 'light': return s.on ? (s.brightness !== undefined ? formatPercent(s.brightness, locale) : t('common.on')) : t('common.off')
     case 'cover': return s.position === undefined ? t('common.unknown') : formatPercent(toClosure(s.position), locale)
-    case 'media_player': return s.nowPlaying?.title ?? t(`media.${s.playback}`)
+    // titre vide = métadonnées pas encore reçues : l'état, plutôt qu'un vide ou un identifiant
+    case 'media_player': return s.nowPlaying?.title || t(`media.${s.playback}`)
     case 'climate': return formatTemp(s.currentTempC, locale)
     case 'vacuum': return t(`vacuum.activities.${s.activity}`)
     case 'mower': return t(`mower.activities.${s.activity}`)

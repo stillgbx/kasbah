@@ -6,7 +6,7 @@ import {
   SERVICE_NEST_HUB, SERVICE_SOUNDBAR, TXT_CHROMECAST, TXT_LENOVO_CLOCK, TXT_NEST_HUB, TXT_NEST_MINI,
 } from './__fixtures__/network'
 import { toCastService } from './discovery'
-import { activeApplication, hasScreen, manufacturerOf, mediaPlayerClass, toDescriptor, toMediaPatch, toReceiverPatch } from './mapping'
+import { activeApplication, artProxyUrl, hasScreen, manufacturerOf, mediaPlayerClass, toDescriptor, toMediaPatch, toReceiverPatch } from './mapping'
 import { mediaStatusSchema, receiverStatusSchema } from './types'
 
 const receiver = (raw: unknown) => receiverStatusSchema.parse(raw)
@@ -49,7 +49,7 @@ describe('google_cast mapping', () => {
     const hub = toDescriptor(SERVICE_NEST_HUB, receiver(RECEIVER_STATUS_NEST_HUB_IDLE).volume)
     expect(deviceDescriptorSchema.safeParse(hub).success).toBe(true)
     expect(hub).toMatchObject({ id: `google_cast:${TXT_NEST_HUB.id}`, kind: 'media_player', name: 'Réveil parents', meta: { manufacturer: 'Google', model: 'Google Nest Hub' } })
-    expect(hub.capabilities).toEqual(expect.arrayContaining(['playback', 'volume', 'mute', 'now_playing', 'track_skip']))
+    expect(hub.capabilities).toEqual(expect.arrayContaining(['playback', 'volume', 'mute', 'now_playing', 'track_skip', 'seek']))
 
     const tv = toDescriptor(SERVICE_CHROMECAST, receiver(RECEIVER_STATUS_CHROMECAST_FIXED).volume)
     expect(tv.capabilities).not.toContain('volume')
@@ -77,7 +77,8 @@ describe('google_cast mapping', () => {
     const app = activeApplication(receiver(RECEIVER_STATUS_PLAYING))
     expect(toMediaPatch(media(MEDIA_STATUS_PLAYING), app)).toEqual({
       playback: 'playing',
-      nowPlaying: { title: 'Terracotta', artist: 'Mira Solano', album: 'Ochre', artUrl: expect.stringContaining('scdn'), durationS: 187.2, positionS: 42.5, source: 'Spotify' },
+      // la pochette passe par le serveur : URL relative de la route, l'originale encodée en paramètre
+      nowPlaying: { title: 'Terracotta', artist: 'Mira Solano', album: 'Ochre', artUrl: artProxyUrl('https://i.scdn.co/image/ab67616d0000b273aaaaaaaaaaaaaaaaaaaaaaaa'), durationS: 187.2, positionS: 42.5, source: 'Spotify' },
     })
     expect(toMediaPatch(media(MEDIA_STATUS_PAUSED), app)).toMatchObject({ playback: 'paused', nowPlaying: { positionS: 61 } })
     expect(toMediaPatch(media(MEDIA_STATUS_IDLE), app)).toEqual({ playback: 'idle', nowPlaying: null })
@@ -94,15 +95,22 @@ describe('google_cast mapping', () => {
       playback: 'playing',
       nowPlaying: { title: 'franceinfo', artUrl: expect.stringContaining('radiofrance'), positionS: 38.243996, source: 'Radio France' },
     })
-    // sans titre ni contentId, le texte d'état de l'appli sert de titre
+    // sans métadonnées, le titre reste vide : la source (« Radio France ») suffit à l'UI
     const untitled = media({ ...MEDIA_STATUS_RADIO, media: { ...MEDIA_STATUS_RADIO.media, metadata: null } })
-    expect(toMediaPatch(untitled, app)!.nowPlaying).toMatchObject({ title: 'Diffusion: franceinfo' })
+    expect(toMediaPatch(untitled, app)!.nowPlaying).toMatchObject({ title: '', source: 'Radio France' })
   })
 
-  it('falls back on subtitle then content id when the metadata is thin', () => {
+  it('leaves the title EMPTY while the metadata are missing: never a content id, never the app name', () => {
     const app = activeApplication(receiver(RECEIVER_STATUS_PLAYING))
+    // changement de morceau : le récepteur envoie l'id de la vidéo avant ses métadonnées
+    const changing = media({ mediaSessionId: 2, playerState: 'BUFFERING', media: { contentId: 'NxHNlQsUooM' } })
+    expect(toMediaPatch(changing, app)!.nowPlaying).toEqual({ title: '', source: 'Spotify' })
     const thin = media({ mediaSessionId: 2, playerState: 'BUFFERING', media: { contentId: 'https://radio.example/stream', metadata: { subtitle: 'Radio Nova' } } })
-    expect(toMediaPatch(thin, app)).toEqual({ playback: 'playing', nowPlaying: { title: 'https://radio.example/stream', artist: 'Radio Nova', source: 'Spotify' } })
+    expect(toMediaPatch(thin, app)).toEqual({ playback: 'playing', nowPlaying: { title: '', artist: 'Radio Nova', source: 'Spotify' } })
+  })
+
+  it('routes artwork through the server, original URL encoded', () => {
+    expect(artProxyUrl('https://yt3.googleusercontent.com/a=b&c')).toBe('/api/plugins/google_cast/art?url=https%3A%2F%2Fyt3.googleusercontent.com%2Fa%3Db%26c')
   })
 
   it('accepts the sound bar and the Lenovo clock as plain media players', () => {

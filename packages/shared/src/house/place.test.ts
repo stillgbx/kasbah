@@ -22,6 +22,17 @@ describe('placeDeviceInJson', () => {
     expect(() => parseHouse(out)).not.toThrow()
   })
 
+  it('writes the orientation when given, and leaves it alone otherwise', () => {
+    const turned = placeDeviceInJson(demo, 'light.salon', { position: [5, 3, 0.75], yaw: 270 })
+    expect(devices(turned).find((x) => x.id === 'light.salon')).toMatchObject({ position: [5, 3, 0.75], yaw: 270 })
+    // un placement sans yaw ne touche pas à l'orientation déjà écrite
+    const moved = placeDeviceInJson(turned, 'light.salon', { position: [5.5, 3, 0.75] })
+    expect(devices(moved).find((x) => x.id === 'light.salon')).toMatchObject({ position: [5.5, 3, 0.75], yaw: 270 })
+    const created = placeDeviceInJson(demo, 'auto.hue-xyz', { position: [1, 1, 1.2], roomId: 'salon', deviceId: 'hue:xyz', yaw: 90 })
+    expect(devices(created).at(-1)).toEqual({ id: 'auto.hue-xyz', deviceId: 'hue:xyz', position: [1, 1, 1.2], roomId: 'salon', yaw: 90 })
+    expect(() => parseHouse(created)).not.toThrow()
+  })
+
   it('creates a minimal entry for a device absent from the JSON', () => {
     const out = placeDeviceInJson(demo, 'auto.hue-abc', { position: [1, 1, 2.4], roomId: 'salon', mount: 'ceiling', deviceId: 'hue:abc' })
     expect(devices(out).at(-1)).toEqual({ id: 'auto.hue-abc', deviceId: 'hue:abc', position: [1, 1, 2.4], roomId: 'salon', mount: 'ceiling' })

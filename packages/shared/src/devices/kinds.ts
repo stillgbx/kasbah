@@ -19,7 +19,7 @@ export const CAPABILITIES = [
   // appareil peut en avoir un sans les suivants (un RTS rappelle sans lire ni écrire)
   'open_close', 'position', 'tilt', 'stop', 'preset', 'preset_set',
   // media_player
-  'playback', 'volume', 'mute', 'now_playing', 'track_skip',
+  'playback', 'volume', 'mute', 'now_playing', 'track_skip', 'seek',
   // climate
   'hvac_mode', 'target_temp', 'current_temp', 'humidity', 'fan_mode',
   // vacuum / mower
@@ -43,7 +43,7 @@ export type Capability = (typeof CAPABILITIES)[number]
 export const KIND_CAPABILITIES: Record<DeviceKind, readonly Capability[]> = {
   light: ['on_off', 'brightness', 'color_temp', 'color', 'effect'],
   cover: ['open_close', 'position', 'tilt', 'stop', 'preset', 'preset_set'],
-  media_player: ['playback', 'volume', 'mute', 'now_playing', 'track_skip'],
+  media_player: ['playback', 'volume', 'mute', 'now_playing', 'track_skip', 'seek'],
   climate: ['hvac_mode', 'target_temp', 'current_temp', 'humidity', 'fan_mode'],
   vacuum: ['clean', 'dock', 'battery', 'locate'],
   mower: ['mow', 'park', 'battery', 'schedule'],

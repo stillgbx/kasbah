@@ -1,6 +1,7 @@
-import { BoxGeometry, Color, CylinderGeometry, Group, Mesh, MeshStandardMaterial, PointLight, SphereGeometry } from 'three'
+import { BoxGeometry, Color, CylinderGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, PointLight, RingGeometry, SphereGeometry } from 'three'
 import type { DeviceState, HouseDevice } from '@kasbah/shared'
 import { mirekToRgb, xyToRgb } from '@kasbah/shared'
+import { yawToRad } from '../../lib/orientation'
 import { createTween, lerp } from '../core/tween'
 import { DeviceMarker, type MarkerContext } from './DeviceMarker'
 
@@ -9,9 +10,20 @@ import { DeviceMarker, type MarkerContext } from './DeviceMarker'
 
 const devMaterial = (ctx: MarkerContext) => ctx.materials.device
 
+/** Nombre d'anneaux de l'onde sonore d'un lecteur, et période d'un anneau (ms). */
+const WAVE_RINGS = 3
+const WAVE_PERIOD_MS = 2600
+/** Rayon (m) de l'anneau à sa naissance et à sa disparition. */
+const WAVE_R0 = 0.18
+const WAVE_R1 = 1.2
+
 /** Petit objet neutre (capteur, PAC, borne, énergie…). */
 export class GenericMarker extends DeviceMarker {
   private mesh: Mesh
+  /** Lecteur en lecture : anneaux concentriques qui s'élargissent et s'estompent, comme une onde sonore. */
+  private waves: Mesh<RingGeometry, MeshBasicMaterial>[] = []
+  private waving = false
+  private playing = false
   constructor(device: HouseDevice, ctx: MarkerContext) {
     super(device, ctx)
     const kind = ctx.descriptor?.kind ?? device.kind
@@ -33,10 +45,23 @@ export class GenericMarker extends DeviceMarker {
     this.mesh = new Mesh(geometry, devMaterial(ctx))
     if (geometry instanceof CylinderGeometry) this.mesh.rotation.x = Math.PI / 2   // axe Y du cylindre → Z-up local
     if (kind === 'media_player') this.mesh.position.z = mediaClass === 'tv' ? 0.28 : mediaClass === 'display' ? 0.08 : 0.16
+    // un écran regarde quelque part : `yaw` (0 = face à +y, comme le véhicule) — un cylindre d'enceinte n'en a pas besoin
+    if (mediaClass === 'tv' || mediaClass === 'display') this.mesh.rotation.z = yawToRad(device.yaw)
     if (kind === 'vacuum') this.mesh.position.z = 0.05
     this.mesh.castShadow = true
     this.registerPickable(this.mesh)
     this.object.add(this.mesh)
+    if (kind === 'media_player') {
+      // anneaux à plat (le plan XY est le sol en Z-up), un peu au-dessus de la base de l'appareil ;
+      // invisibles tant que rien ne joue, animés par `onState`
+      for (let i = 0; i < WAVE_RINGS; i++) {
+        const ring = new Mesh(new RingGeometry(0.92, 1, 48), new MeshBasicMaterial({ color: ctx.theme.primary, transparent: true, opacity: 0, depthWrite: false, side: DoubleSide }))
+        ring.position.z = 0.03
+        ring.visible = false
+        this.waves.push(ring)
+        this.object.add(ring)
+      }
+    }
   }
   protected isOn(s: DeviceState): boolean {
     switch (s.kind) {
@@ -48,8 +73,38 @@ export class GenericMarker extends DeviceMarker {
       default: return false
     }
   }
-  protected onState(): void {}
-  override dispose(): void { this.mesh.geometry.dispose(); super.dispose() }
+  protected onState(state: DeviceState | undefined): void {
+    if (this.waves.length === 0) return
+    this.playing = !!state && state.available && this.isOn(state)
+    for (const w of this.waves) w.material.color.copy(this.ctx.theme.primary)
+    if (this.playing && !this.waving) {
+      this.waving = true
+      let t0 = -1
+      this.stopAnimation = this.ctx.addAnimation({
+        step: (now) => {
+          if (!this.playing) {                                  // lecture finie : on range les anneaux et on rend la main
+            for (const w of this.waves) { w.visible = false; w.material.opacity = 0 }
+            this.waving = false
+            return false
+          }
+          if (t0 < 0) t0 = now
+          this.waves.forEach((w, i) => {
+            const p = (((now - t0) / WAVE_PERIOD_MS) + i / WAVE_RINGS) % 1   // phase 0 → 1, anneaux décalés d'un tiers
+            const r = WAVE_R0 + (WAVE_R1 - WAVE_R0) * p
+            w.scale.set(r, r, 1)
+            w.material.opacity = 0.5 * (1 - p) * (1 - p)                     // s'estompe plus vite en fin de course
+            w.visible = true
+          })
+          return true
+        },
+      })
+    }
+  }
+  override dispose(): void {
+    this.mesh.geometry.dispose()
+    for (const w of this.waves) { w.geometry.dispose(); w.material.dispose() }
+    super.dispose()
+  }
 }
 
 /** Lampe : sphère émissive + PointLight ; intensité selon la luminosité, couleur selon l'état. */

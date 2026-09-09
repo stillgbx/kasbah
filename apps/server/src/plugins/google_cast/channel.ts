@@ -42,6 +42,8 @@ export interface CastConnectionOptions {
 const DEFAULT_HEARTBEAT_MS = 5000
 const DEFAULT_REQUEST_TIMEOUT_MS = 5000
 const DEFAULT_MEDIA_POLL_MS = 10_000
+/** « Précédent » au-delà de ce point dans le morceau revient à son début, comme sur une télécommande. */
+const RESTART_AFTER_S = 3
 
 interface Pending { resolve(msg: Record<string, unknown>): void; reject(err: Error): void }
 
@@ -61,6 +63,8 @@ export class CastConnection {
   media: MediaStatus | undefined = undefined
   lastReceiverStatus: ReceiverStatus | undefined = undefined
   lastMediaRaw: unknown = undefined
+  /** Horloge du dernier état média reçu : la position connue date de là. */
+  private mediaAt = 0
 
   constructor(private readonly opts: CastConnectionOptions) {}
 
@@ -104,6 +108,33 @@ export class CastConnection {
   async queueJump(jump: 1 | -1): Promise<void> {
     const { app, media } = this.requireMedia()
     await this.request(app.transportId, NS_MEDIA, { type: 'QUEUE_UPDATE', mediaSessionId: media.mediaSessionId, jump })
+  }
+
+  /** Se placer dans le morceau (SEEK) ; le récepteur répond par un état média avec la nouvelle position. */
+  async seek(positionS: number): Promise<void> {
+    const { app, media } = this.requireMedia()
+    await this.request(app.transportId, NS_MEDIA, { type: 'SEEK', mediaSessionId: media.mediaSessionId, currentTime: Math.max(0, positionS) })
+  }
+
+  /** Position estimée (s) : dernier relevé, avancé du temps écoulé si ça joue. */
+  estimatedPositionS(): number {
+    const media = this.media
+    if (!media) return 0
+    const base = media.currentTime ?? 0
+    return media.playerState === 'PLAYING' ? base + (this.opts.clock.now() - this.mediaAt) / 1000 : base
+  }
+
+  /**
+   * « Précédent » comme sur une télécommande : passé les premières secondes, on revient au DÉBUT du
+   * morceau (SEEK à 0) ; sinon au morceau précédent de la file.
+   */
+  async previous(): Promise<void> {
+    const { app, media } = this.requireMedia()
+    if (this.estimatedPositionS() > RESTART_AFTER_S) {
+      await this.request(app.transportId, NS_MEDIA, { type: 'SEEK', mediaSessionId: media.mediaSessionId, currentTime: 0 })
+      return
+    }
+    await this.queueJump(-1)
   }
 
   close(reason: string): void {
@@ -209,12 +240,18 @@ export class CastConnection {
     const first = Array.isArray(raw) ? raw[0] : undefined
     const media = first === undefined ? undefined : mediaStatusSchema.safeParse(first)
     if (media && !media.success) { this.opts.logger.warn({ issues: media.error.issues }, 'MEDIA_STATUS with an unexpected shape ignored'); return }
-    this.setMedia(media?.data)
+    let next = media?.data
+    // Le récepteur n'inclut `media` que lorsqu'il CHANGE (référence Cast) : une pause, une reprise ou une
+    // position arrivent sans lui. Même session → on garde le morceau connu, sinon il disparaîtrait à
+    // chaque pause (constaté sur un Nest Hub : « Rien en lecture · En pause »).
+    if (next && next.media == null && this.media && this.media.mediaSessionId === next.mediaSessionId) next = { ...next, media: this.media.media }
+    this.setMedia(next)
     this.resolve(requestId, { status: raw })
   }
 
   private setMedia(media: MediaStatus | undefined): void {
     this.media = media
+    this.mediaAt = this.opts.clock.now()
     this.mediaReported = true
     this.opts.onMediaStatus(media, this.app)
   }

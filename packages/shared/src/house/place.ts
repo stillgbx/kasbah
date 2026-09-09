@@ -13,6 +13,8 @@ export const devicePlacementSchema = z.object({
   /** Nouvelle pièce d'ancrage (déplacement vers une pièce voisine du même niveau). */
   roomId: z.string().min(1).optional(),
   mount: z.enum(MOUNTS).optional(),
+  /** Orientation en degrés, 0 = face à +y (comme `HouseDevice.yaw`) : un écran, une caméra regardent quelque part. */
+  yaw: z.number().min(0).max(360).optional(),
   /** Requis quand l'appareil n'existe pas encore dans le JSON (appareil auto-placé). */
   deviceId: deviceIdSchema.optional(),
 })
@@ -35,7 +37,8 @@ const isObject = (v: unknown): v is JsonObject => typeof v === 'object' && v !==
 
 /**
  * Renvoie une copie du document JSON avec l'appareil `id` (re)placé : entrée existante mise à jour
- * (position, pièce, mount), ou entrée minimale créée `{ id, deviceId, position, roomId, mount }`.
+ * (position, pièce, mount, yaw), ou entrée minimale créée `{ id, deviceId, position, roomId, mount }`
+ * (plus `yaw` s'il est donné).
  */
 export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePlacement): JsonObject {
   if (!isObject(doc)) throw new PlacementError('house document is not an object')
@@ -50,6 +53,7 @@ export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePla
     const prev = devices[i] as JsonObject
     next = { ...prev, position: placement.position }
     if (placement.mount) next.mount = placement.mount
+    if (placement.yaw !== undefined) next.yaw = placement.yaw
     if (room) {
       next.roomId = room.id
       // le JSON de démo porte roomId ET levelId : garder les deux cohérents, sans en ajouter
@@ -61,6 +65,7 @@ export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePla
     next = { id, deviceId: placement.deviceId, position: placement.position }
     if (room) next.roomId = room.id
     if (placement.mount) next.mount = placement.mount
+    if (placement.yaw !== undefined) next.yaw = placement.yaw
   }
   const out = [...devices]
   if (i >= 0) out[i] = next

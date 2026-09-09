@@ -74,7 +74,7 @@ const roomScenes = computed(() => (target.value ? scenes.forRoom(target.value.na
 </template>
 
 <style scoped>
-.crumb { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: var(--muted); font-size: 13px; padding: 0; justify-self: start; }
+.crumb { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: var(--muted); font-size: 13px; padding: 0; align-self: flex-start; }
 .crumb:hover { color: var(--text); }
 .title { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
 .sub { font-size: 13px; margin-top: 2px; }

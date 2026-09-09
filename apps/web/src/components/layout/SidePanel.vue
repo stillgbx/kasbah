@@ -23,7 +23,9 @@ const emit = defineEmits<{ close: [] }>()
 .side-panel--docked { height: 100%; }
 .side-panel--overlay { position: absolute; top: 0; right: 0; bottom: 0; z-index: 30; box-shadow: var(--shadow); max-width: 92vw; padding-top: var(--safe-top); }
 .side-panel__scrim { position: absolute; inset: 0; z-index: 29; background: rgba(0, 0, 0, .25); }
-.side-panel__scroll { flex: 1 1 auto; overflow-y: auto; padding: calc(var(--safe-top) + 20px) 22px calc(var(--safe-bottom) + 20px); display: grid; gap: 20px; align-content: start; }
+/* colonne flex (et non grille) : un enfant peut se caler au FOND avec margin-top: auto, comme la section
+   « Emplacement » du panneau appareil ; les enfants s'étirent en largeur comme avant */
+.side-panel__scroll { flex: 1 1 auto; overflow-y: auto; padding: calc(var(--safe-top) + 20px) 22px calc(var(--safe-bottom) + 20px); display: flex; flex-direction: column; gap: 20px; position: relative; isolation: isolate; }
 .side-panel--overlay .side-panel__scroll { padding-top: 20px; }
 .slide-enter-active, .slide-leave-active { transition: transform .22s ease; }
 .slide-enter-from, .slide-leave-to { transform: translateX(100%); }

@@ -33,7 +33,7 @@ export function summarize(descriptor: DeviceDescriptor, state: DeviceState, loca
   switch (state.kind) {
     case 'light': return state.on ? (state.brightness !== undefined ? formatPercent(state.brightness, locale) : '●') : '○'
     case 'cover': return state.position === undefined ? '—' : formatPercent(state.position, locale)
-    case 'media_player': return state.playback === 'playing' && state.nowPlaying ? state.nowPlaying.title : formatPercent(state.volume, locale)
+    case 'media_player': return state.playback === 'playing' && state.nowPlaying?.title ? state.nowPlaying.title : formatPercent(state.volume, locale)
     case 'climate': return `${formatTemp(state.currentTempC, locale)} → ${formatTemp(state.targetTempC, locale)}`
     case 'vacuum': return formatPercent(state.battery, locale)
     case 'mower': return formatPercent(state.battery, locale)

@@ -39,6 +39,9 @@ export function optimisticPatch(state: DeviceState, cmd: CommandInput): Partial<
         case 'media_player.pause': return { playback: 'paused' } as Partial<DeviceState>
         case 'media_player.set_volume': return { volume: cmd.volume } as Partial<DeviceState>
         case 'media_player.set_mute': return { muted: cmd.muted } as Partial<DeviceState>
+        case 'media_player.seek':
+          // la position visée s'affiche tout de suite ; le récepteur confirme par son état
+          return state.nowPlaying ? { nowPlaying: { ...state.nowPlaying, positionS: cmd.positionS } } as Partial<DeviceState> : null
         default: return null
       }
     case 'climate':

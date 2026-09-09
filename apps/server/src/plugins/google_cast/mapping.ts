@@ -5,6 +5,18 @@ import { receiverApplicationSchema, type CastService, type MediaStatus, type Rec
 
 export const PLUGIN_ID = 'google_cast'
 
+/** Route (montée sous /api/plugins/google_cast) qui sert une pochette téléchargée et mise en cache par le serveur. */
+export const ART_ROUTE = '/api/plugins/google_cast/art'
+/**
+ * La pochette passe par le serveur plutôt que d'être chargée par chaque tablette directement chez
+ * Google : ses serveurs d'images répondent `429 Too Many Requests` au bout de quelques affichages
+ * (constaté), et une image qui échoue laissait le fond vide. Le serveur télécharge UNE fois, garde
+ * en cache et réessaie avec un délai.
+ */
+export function artProxyUrl(url: string): string {
+  return `${ART_ROUTE}?url=${encodeURIComponent(url)}`
+}
+
 /** Bit 0 du masque `ca` : l'appareil a un écran (Nest Hub, Chromecast) ; sinon audio seul. */
 export function hasScreen(txt: { ca?: string }): boolean {
   const ca = Number(txt.ca)
@@ -38,7 +50,7 @@ export function manufacturerOf(model: string | undefined): string | undefined {
  */
 export function toDescriptor(service: CastService, volume?: { controlType?: string }): DeviceDescriptor {
   const fixed = volume?.controlType === 'fixed'
-  const capabilities: Capability[] = ['playback', 'now_playing', 'track_skip', ...(fixed ? [] : ['volume', 'mute'] as Capability[])]
+  const capabilities: Capability[] = ['playback', 'now_playing', 'track_skip', 'seek', ...(fixed ? [] : ['volume', 'mute'] as Capability[])]
   const model = service.txt.md
   return {
     id: `${PLUGIN_ID}:${service.txt.id}`,
@@ -92,16 +104,20 @@ export function toMediaPatch(media: MediaStatus | undefined, app: ReceiverApplic
   const playback = toPlayback(media.playerState)
   const m = media.media?.metadata
   if (playback === 'idle' || !media.media) return { playback, nowPlaying: null }
-  // `||` et non `??` : les champs vides ou `null` du récepteur valent « absent »
+  // `||` et non `??` : les champs vides ou `null` du récepteur valent « absent ».
+  // Le titre est le titre des métadonnées, ou RIEN (`''`) : ni `contentId` (identifiant — id de vidéo
+  // YouTube, URI Spotify — qui arrive AVANT les métadonnées à chaque changement de morceau, on voyait
+  // « NxHNlQsUooM » une seconde), ni le nom de l'appli (il est déjà dans `source`, l'UI le répétait
+  // trois fois). Titre vide = « en attente » : l'UI affiche un repère discret le temps qu'il arrive.
   const artist = m?.artist || m?.albumArtist || m?.subtitle || undefined
   const art = m?.images?.[0]?.url || undefined
   return {
     playback,
     nowPlaying: {
-      title: m?.title || media.media.contentId || app.statusText || app.displayName || '',
+      title: m?.title || '',
       ...(artist ? { artist } : {}),
       ...(m?.albumName ? { album: m.albumName } : {}),
-      ...(art ? { artUrl: art } : {}),
+      ...(art ? { artUrl: artProxyUrl(art) } : {}),
       ...(typeof media.media.duration === 'number' ? { durationS: media.media.duration } : {}),
       ...(typeof media.currentTime === 'number' ? { positionS: media.currentTime } : {}),
       ...(app.displayName ? { source: app.displayName } : {}),

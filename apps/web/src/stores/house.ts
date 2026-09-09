@@ -131,12 +131,12 @@ export const useHouseStore = defineStore('house', () => {
   const saving = ref(false)
   const draft = shallowRef<PlacementDraft | null>(null)
   /** Placement à l'entrée dans le mode, pour « Rétablir ». */
-  const placingOrigin = shallowRef<{ position: Vec3; roomId: string | undefined; mount: Mount | undefined } | null>(null)
+  const placingOrigin = shallowRef<{ position: Vec3; roomId: string | undefined; mount: Mount | undefined; yaw: number | undefined } | null>(null)
 
   function startPlacing() {
     const hd = selectedDevice.value
     if (!hd) return
-    placingOrigin.value = { position: hd.position, roomId: hd.roomId, mount: hd.mount }
+    placingOrigin.value = { position: hd.position, roomId: hd.roomId, mount: hd.mount, yaw: hd.yaw }
     draft.value = null
     placing.value = true
   }
@@ -158,13 +158,14 @@ export const useHouseStore = defineStore('house', () => {
   }
 
   /** Écrit le brouillon (complété par `override`) dans house.json ; un appareil auto-placé y gagne son entrée. */
-  async function savePlacement(override?: { position?: Vec3; mount?: Mount }): Promise<boolean> {
+  async function savePlacement(override?: { position?: Vec3; mount?: Mount; yaw?: number }): Promise<boolean> {
     const hd = selectedDevice.value
     if (!hd) return false
     const base = draft.value ?? { position: hd.position, roomId: hd.roomId }
     const p: DevicePlacement = { position: override?.position ?? base.position }
     if (base.roomId && base.roomId !== hd.roomId) p.roomId = base.roomId
     if (override?.mount) p.mount = override.mount
+    if (override?.yaw !== undefined) p.yaw = override.yaw
     if (hd.meta?.autoPlaced && hd.deviceId) {
       p.deviceId = hd.deviceId
       if (base.roomId) p.roomId = base.roomId
@@ -185,13 +186,14 @@ export const useHouseStore = defineStore('house', () => {
 
   const canRevert = computed(() => {
     const o = placingOrigin.value, hd = selectedDevice.value
-    return !!o && !!hd && (o.position.join() !== hd.position.join() || o.mount !== hd.mount || o.roomId !== hd.roomId)
+    return !!o && !!hd && (o.position.join() !== hd.position.join() || o.mount !== hd.mount || o.roomId !== hd.roomId || o.yaw !== hd.yaw)
   })
   async function revertPlacement() {
-    const o = placingOrigin.value
-    if (!o) return
+    const o = placingOrigin.value, hd = selectedDevice.value
+    if (!o || !hd) return
     draft.value = { position: o.position, roomId: o.roomId }
-    await savePlacement(o.mount ? { mount: o.mount } : undefined)
+    // une orientation absente à l'entrée ne peut pas être effacée du JSON : on la ramène à 0, qui vaut pareil
+    await savePlacement({ ...(o.mount ? { mount: o.mount } : {}), ...(o.yaw !== hd.yaw ? { yaw: o.yaw ?? 0 } : {}) })
   }
 
   return {

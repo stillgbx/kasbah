@@ -31,7 +31,7 @@
     "unbound": "Cet appareil n'est lié à aucun plugin ({id}).", "notPlaced": "Non placés", "outdoor": "Extérieur",
     "pending": "Commande en cours…", "lastUpdate": "Mis à jour {time}", "empty": "Aucun appareil connu. Vérifiez les plugins dans les réglages."
   },
-  "place": {"title": "Emplacement", "move": "Déplacer", "done": "Terminé", "hint": "Faites glisser l'appareil dans la vue 3D pour le déplacer. La hauteur se règle ici.", "height": "Hauteur", "presets": {"ceiling": "Plafond", "wall": "Applique", "table": "Table", "floor": "Sol"}, "revert": "Rétablir", "outside": "hors pièce", "saveError": "Position non enregistrée : {message}"},
+  "place": {"title": "Emplacement", "move": "Déplacer", "done": "Terminé", "hint": "Faites glisser l'appareil dans la vue 3D pour le déplacer. La hauteur se règle ici.", "height": "Hauteur", "presets": {"ceiling": "Plafond", "wall": "Applique", "table": "Table", "floor": "Sol"}, "revert": "Rétablir", "orientation": "Orientation", "rotateLeft": "Tourner vers la gauche", "rotateRight": "Tourner vers la droite", "outside": "hors pièce", "saveError": "Position non enregistrée : {message}"},
   "light": {
     "brightness": "Luminosité", "colorTemp": "Température", "color": "Couleur", "warm": "Chaud", "cold": "Froid", "effect": "Effet",
     "effects": {
@@ -57,7 +57,8 @@
   "media": {
     "summary": "{playing} en lecture sur {total}", "none": "Aucun lecteur remonté par les plugins.",
     "playing": "Lecture", "paused": "En pause", "idle": "Au repos", "off": "Éteint", "nothing": "Rien en lecture",
-    "play": "Lire", "next": "Piste suivante", "previous": "Piste précédente", "mute": "Couper le son", "unmute": "Rétablir le son", "volume": "Volume"
+    "play": "Lire", "next": "Piste suivante", "previous": "Piste précédente", "mute": "Couper le son", "unmute": "Rétablir le son", "volume": "Volume", "volumeUp": "Monter le son", "volumeDown": "Baisser le son", "seek": "Position dans le morceau",
+    "classes": { "speaker": "Enceinte", "tv": "Téléviseur", "display": "Écran connecté" }
   },
   "rooms": {
     "noRoom": "Sans pièce", "notInHouse": "Hors maison",

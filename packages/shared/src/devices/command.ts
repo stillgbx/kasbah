@@ -37,6 +37,8 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('media_player.previous') }),
   z.object({ type: z.literal('media_player.set_volume'), volume: pct }),
   z.object({ type: z.literal('media_player.set_mute'), muted: z.boolean() }),
+  /** Se placer dans le morceau (capacité `seek`) ; sans effet sur un direct, qui n'a pas de durée. */
+  z.object({ type: z.literal('media_player.seek'), positionS: z.number().min(0) }),
   // climate
   z.object({ type: z.literal('climate.set_mode'), mode: z.enum(CLIMATE_MODES) }),
   z.object({ type: z.literal('climate.set_target_temp'), targetTempC: z.number() }),
@@ -74,7 +76,7 @@ export const COMMAND_REQUIRES: Record<CommandType, Capability> = {
   'cover.set_preset': 'preset_set',
   'media_player.play': 'playback', 'media_player.pause': 'playback',
   'media_player.next': 'track_skip', 'media_player.previous': 'track_skip',
-  'media_player.set_volume': 'volume', 'media_player.set_mute': 'mute',
+  'media_player.set_volume': 'volume', 'media_player.set_mute': 'mute', 'media_player.seek': 'seek',
   'climate.set_mode': 'hvac_mode', 'climate.set_target_temp': 'target_temp',
   'vacuum.start': 'clean', 'vacuum.pause': 'clean', 'vacuum.dock': 'dock', 'vacuum.locate': 'locate',
   'mower.start': 'mow', 'mower.pause': 'mow', 'mower.park': 'park',

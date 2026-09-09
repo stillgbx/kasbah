@@ -1,9 +1,10 @@
-import { BufferGeometry, Group, Line, LineBasicMaterial, Mesh, MeshBasicMaterial, RingGeometry, Vector3, type Object3D } from 'three'
+import { BufferGeometry, DoubleSide, Group, Line, LineBasicMaterial, Mesh, MeshBasicMaterial, RingGeometry, Shape, ShapeGeometry, Vector3, type Object3D } from 'three'
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js'
 import type { DeviceDescriptor, DeviceState, HouseDevice, OpeningRect } from '@kasbah/shared'
 import type { SceneTheme } from '../core/theme'
 import type { MaterialSet } from '../builders/materials'
 import type { Animation } from '../core/renderLoop'
+import { isOrientable, yawToRad } from '../../lib/orientation'
 import { iconSvg, kindIcon } from '../../lib/strokeIcons'
 
 // Marqueur d'appareil : une pilule DOM (icône + nom) projetée au-dessus de l'ancre par le
@@ -36,8 +37,12 @@ export abstract class DeviceMarker {
   private pillAllowed = true
   /** Maillages cliquables (userData.key). */
   readonly pickables: Object3D[] = []
-  /** Mode « déplacer » : anneau au sol + fil vertical, pour lire x;y d'un appareil en hauteur. */
-  private guide: { ring: Mesh<RingGeometry, MeshBasicMaterial>; line: Line<BufferGeometry, LineBasicMaterial> } | null = null
+  /**
+   * Mode « déplacer » : anneau au sol + fil vertical, pour lire x;y d'un appareil en hauteur ; et, pour
+   * un appareil qui regarde quelque part (écran, caméra, véhicule), un cône « regarde vers » au sol
+   * dans la direction de son `yaw`, qui suit les touches de rotation du panneau.
+   */
+  private guide: { ring: Mesh<RingGeometry, MeshBasicMaterial>; line: Line<BufferGeometry, LineBasicMaterial>; look: Mesh<ShapeGeometry, MeshBasicMaterial> | null } | null = null
 
   constructor(readonly device: HouseDevice, protected ctx: MarkerContext) {
     this.key = device.id
@@ -96,7 +101,7 @@ export abstract class DeviceMarker {
 
   setTheme(theme: SceneTheme): void {
     this.ctx = { ...this.ctx, theme }
-    if (this.guide) { this.guide.ring.material.color.copy(theme.primary); this.guide.line.material.color.copy(theme.primary) }
+    if (this.guide) { this.guide.ring.material.color.copy(theme.primary); this.guide.line.material.color.copy(theme.primary); this.guide.look?.material.color.copy(theme.primary) }
     this.onState(this.state)
   }
 
@@ -114,7 +119,20 @@ export abstract class DeviceMarker {
         const ring = new Mesh(new RingGeometry(0.22, 0.3, 40), new MeshBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false }))
         const line = new Line(new BufferGeometry(), new LineBasicMaterial({ color, transparent: true, opacity: 0.7 }))
         this.object.add(ring, line)
-        this.guide = { ring, line }
+        let look: Mesh<ShapeGeometry, MeshBasicMaterial> | null = null
+        if (isOrientable(this.device, this.ctx.descriptor)) {
+          // cône plat depuis l'appareil vers +y (le plan XY est le sol en Z-up), tourné du yaw ; les
+          // marqueurs sont reconstruits à chaque écriture du placement, donc il suit la rotation
+          const shape = new Shape()
+          shape.moveTo(0, 0.18)
+          shape.lineTo(-0.42, 1.35)
+          shape.quadraticCurveTo(0, 1.6, 0.42, 1.35)
+          shape.lineTo(0, 0.18)
+          look = new Mesh(new ShapeGeometry(shape, 12), new MeshBasicMaterial({ color, transparent: true, opacity: 0.45, depthWrite: false, side: DoubleSide }))
+          look.rotation.z = yawToRad(this.device.yaw)
+          this.object.add(look)
+        }
+        this.guide = { ring, line, look }
       }
       this.setGuideHeight(height)
     } else if (this.guide) {
@@ -127,6 +145,7 @@ export abstract class DeviceMarker {
     if (!this.guide) return
     const floor = -height + 0.01
     this.guide.ring.position.z = floor
+    if (this.guide.look) this.guide.look.position.z = floor + 0.005
     this.guide.line.geometry.setFromPoints([new Vector3(0, 0, 0), new Vector3(0, 0, floor)])
   }
 
@@ -134,6 +153,7 @@ export abstract class DeviceMarker {
     if (!this.guide) return
     this.guide.ring.geometry.dispose(); this.guide.ring.material.dispose()
     this.guide.line.geometry.dispose(); this.guide.line.material.dispose()
+    if (this.guide.look) { this.guide.look.geometry.dispose(); this.guide.look.material.dispose(); this.object.remove(this.guide.look) }
     this.object.remove(this.guide.ring, this.guide.line)
     this.guide = null
   }

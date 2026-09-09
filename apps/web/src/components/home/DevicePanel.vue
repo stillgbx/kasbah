@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CommandInput } from '@kasbah/shared'
 import { useDeviceResolver } from '../../composables/useDeviceResolver'
@@ -10,6 +10,7 @@ import { kindIcon } from '../../lib/strokeIcons'
 import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
 import { useNotificationsStore } from '../../stores/notifications'
+import MarqueeText from '../ui/MarqueeText.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import DeviceControl from '../controls/DeviceControl.vue'
 import PlacementControl from './PlacementControl.vue'
@@ -57,6 +58,24 @@ const placeable = computed(() => {
   const hd = resolved.value?.houseDevice
   return !!hd && !hd.openingId && (resolved.value?.descriptor?.kind ?? hd.kind) !== 'mower'
 })
+// Pochette du morceau (ou visuel de la radio) en fond du haut du panneau, fondue en haut et en bas.
+// Couche absolue derrière le contenu : rien ne se décale quand elle apparaît, change ou disparaît.
+// L'image est PRÉCHARGÉE : la couche n'est posée qu'une fois l'image décodée (sinon elle apparaissait
+// d'un coup au chargement, ou restait vide si le serveur d'images refusait), et une URL qui échoue ne
+// laisse rien. Une réponse tardive d'une URL déjà remplacée est ignorée.
+const artUrl = computed(() => {
+  const s = resolved.value?.state
+  return s?.kind === 'media_player' && s.available && s.nowPlaying?.artUrl ? s.nowPlaying.artUrl : undefined
+})
+const art = ref<string | undefined>(undefined)
+watch(artUrl, (url) => {
+  if (!url) { art.value = undefined; return }
+  if (url === art.value) return
+  const img = new Image()
+  img.onload = () => { if (artUrl.value === url) art.value = url }
+  img.onerror = () => { if (artUrl.value === url) art.value = undefined }
+  img.src = url
+}, { immediate: true })
 const brand = computed(() => resolved.value?.descriptor?.meta.manufacturer ?? (resolved.value?.deviceId?.split(':')[0] ?? ''))
 
 function send(cmd: CommandInput) {
@@ -76,13 +95,18 @@ function send(cmd: CommandInput) {
 
 <template>
   <template v-if="resolved">
+    <!-- fondu croisé entre deux pochettes : les deux couches coexistent le temps de la transition -->
+    <Transition name="art">
+      <div v-if="art" :key="art" class="art" :style="{ backgroundImage: `url(${JSON.stringify(art)})` }" aria-hidden="true" />
+    </Transition>
     <button type="button" class="crumb" @click="emit('back')"><StrokeIcon name="back" :size="14" /> {{ crumb }}</button>
     <div class="head">
       <span class="icon-square icon-square--lg" :data-on="on ? '1' : '0'"><StrokeIcon :name="kindIcon(resolved.descriptor?.kind ?? resolved.houseDevice?.kind, resolved.descriptor)" :size="22" /></span>
       <div class="head__main">
         <div class="head__name">{{ resolved.name }}</div>
         <div class="muted head__sub">
-          <span v-if="resolved.descriptor">{{ $t(`kinds.${resolved.descriptor.kind}`) }}</span><span v-if="brand"> · {{ brand }}</span>
+          <!-- un lecteur dit sa nature (téléviseur, écran connecté) plutôt que « Enceinte » pour tous -->
+          <span v-if="resolved.descriptor">{{ resolved.descriptor.kind === 'media_player' ? $t(`media.classes.${resolved.descriptor.meta.mediaPlayer?.deviceClass ?? 'speaker'}`) : $t(`kinds.${resolved.descriptor.kind}`) }}</span><span v-if="brand"> · {{ brand }}</span>
           <span v-if="resolved.state && !resolved.state.available" class="text-error"> · {{ $t('common.unavailable') }}</span>
         </div>
       </div>
@@ -94,18 +118,29 @@ function send(cmd: CommandInput) {
         <v-switch v-else-if="toggle" :model-value="checked" :disabled="!resolved.state?.available" @update:model-value="send(toggle!)" />
       </div>
     </div>
-    <div v-if="headline" class="big-value">{{ headline }}</div>
+    <MarqueeText v-if="headline" class="big-value" :text="headline" />
     <DeviceControl v-if="resolved.descriptor && resolved.state" :descriptor="resolved.descriptor" :state="resolved.state"
                    :pending="devices.isPending(resolved.deviceId!)" @command="send" />
     <div v-else class="card card--soft unbound muted">{{ $t('device.unbound', { id: resolved.houseDevice?.deviceId ?? resolved.key }) }}</div>
-    <PlacementControl v-if="placeable" :device="resolved.houseDevice!" />
+    <!-- rarement utilisé : calé au fond du panneau, sous tout le reste -->
+    <PlacementControl v-if="placeable" class="placement" :device="resolved.houseDevice!" />
   </template>
 </template>
 
 <style scoped>
-.crumb { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: var(--muted); font-size: 13px; padding: 0; justify-self: start; }
+.art {
+  position: absolute; top: 60px; left: 0; right: 0; height: 380px; z-index: -1; pointer-events: none;
+  background-size: cover; background-position: center; opacity: .26;
+  mask-image: linear-gradient(180deg, transparent 0, #000 22%, #000 58%, transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 22%, #000 58%, transparent 100%);
+}
+.art-enter-active, .art-leave-active { transition: opacity .9s ease; }
+.art-enter-from, .art-leave-to { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .art-enter-active, .art-leave-active { transition: none; } }
+.crumb { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: var(--muted); font-size: 13px; padding: 0; align-self: flex-start; }
 .crumb:hover { color: var(--text); }
 .head { display: flex; align-items: center; gap: 12px; }
+.placement { margin-top: auto; }
 .head__main { flex: 1 1 0; min-width: 0; }
 .head__name { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
 .head__sub { font-size: 12px; }

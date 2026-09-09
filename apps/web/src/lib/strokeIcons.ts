@@ -7,6 +7,9 @@ export const ICONS = {
   light: 'M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.6.6 1 1.3 1 2.5h6c0-1.2.4-1.9 1-2.5A6 6 0 0 0 12 3z',
   shutter: 'M4 3h16v18H4zM4 8h16M4 13h16M4 18h16',
   speaker: 'M6 3h12v18H6zM12 8.5m-1.5 0a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0M12 15.5m-3 0a3 3 0 1 0 6 0a3 3 0 1 0-6 0',
+  /** Rotation d'un quart de tour, sens horaire / antihoraire (orientation d'un écran). */
+  rotateRight: 'M20 12a8 8 0 1 1-2.6-5.9M20 4v5h-5',
+  rotateLeft: 'M4 12a8 8 0 1 0 2.6-5.9M4 4v5h5',
   /** Téléviseur (ou boîtier branché dessus) : écran sur pied. */
   tv: 'M3 5h18v12H3zM8 21h8M12 17v4',
   /** Écran connecté (Nest Hub) : tablette posée, un trait pour le pied. */
@@ -106,6 +109,8 @@ const KIND_ICON: Record<DeviceKind, IconName> = {
 export function kindIcon(kind: DeviceKind | undefined, descriptor?: DeviceDescriptor): IconName {
   if (!kind) return 'sensor'
   if (kind === 'camera' && descriptor?.meta.camera?.deviceClass === 'doorbell') return 'doorbell'
+  if (kind === 'media_player' && descriptor?.meta.mediaPlayer?.deviceClass === 'tv') return 'tv'
+  if (kind === 'media_player' && descriptor?.meta.mediaPlayer?.deviceClass === 'display') return 'tablet'
   if (kind === 'sensor' && descriptor?.meta.sensor?.deviceClass === 'temperature') return 'thermostat'
   if (kind === 'sensor' && (descriptor?.meta.sensor?.deviceClass === 'pressure' || descriptor?.meta.sensor?.deviceClass === 'flow')) return 'filtration'
   if (kind === 'energy' && descriptor?.capabilities.includes('storage') && !descriptor.capabilities.includes('production')) return 'battery'
