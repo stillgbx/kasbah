@@ -70,17 +70,17 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
     <div class="page__scroll">
       <div v-if="cameras.length === 0" class="card card--soft empty muted">{{ $t('cameras.none') }}</div>
       <RoomBands kind="camera">
+        <!-- le protocole au bout de la ligne d'état plutôt qu'un badge en tête : moins de largeur volée au nom -->
+        <template #status-after="{ entry }">
+          <span v-if="streamable(entry)" class="proto">RTSP</span>
+        </template>
         <template #control="{ entry }">
-          <span v-if="!streamable(entry)" class="chip muted">
-            {{ entry.descriptor.capabilities.includes('chime') ? $t('camera.classes.doorbell') : '' }}
-            {{ entry.descriptor.capabilities.includes('live_stream') ? $t('camera.video.webrtcLater') : $t('camera.noStream') }}
-          </span>
-          <span v-else class="chip muted">{{ entry.descriptor.capabilities.includes('chime') ? $t('camera.classes.doorbell') : '' }} RTSP</span>
           <!-- la tuile prend sa propre ligne : en 4e colonne elle serait un timbre-poste -->
           <CameraVideo v-if="streamable(entry) && entry.state.available" :device-id="entry.descriptor.id" :autoplay="false"
                        :snapshot-at="snapshots[entry.descriptor.id]?.at ?? null" :inactive="snapshots[entry.descriptor.id]?.inactive ?? false"
                        :paused="snapshots[entry.descriptor.id]?.paused ?? false" :live-allowed="liveAllowed(entry.descriptor.id)" class="tile"
                        @snapshots="(enabled) => setSnapshots(entry.descriptor.id, enabled)" @live="(active) => setLive(entry.descriptor.id, active)" />
+          <div v-else-if="!streamable(entry)" class="tile note muted">{{ entry.descriptor.capabilities.includes('live_stream') ? $t('camera.video.webrtcLater') : $t('camera.noStream') }}</div>
         </template>
       </RoomBands>
     </div>
@@ -92,6 +92,7 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
 .page__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 24px calc(var(--safe-bottom) + 24px); }
 .count { font-size: 13px; }
 .empty { padding: 24px; text-align: center; }
-.chip { font-size: 11px; letter-spacing: .03em; white-space: nowrap; }
+.proto { font-size: 11px; letter-spacing: .04em; color: var(--muted); white-space: nowrap; }
+.note { display: grid; place-items: center; min-height: 64px; padding: 16px; text-align: center; font-size: 13px; border-radius: 12px; background: rgba(0, 0, 0, .25); }
 .tile { grid-column: 1 / -1; margin: 4px 0 6px; }
 </style>

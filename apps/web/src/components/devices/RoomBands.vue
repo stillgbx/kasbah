@@ -150,11 +150,12 @@ defineExpose({ count: computed(() => entries.value.length) })
               <div class="muted row__status">
                 <!-- devant le STATUT et non devant le contrôle : un élément qui apparaît à côté
                      d'un curseur en change la largeur, et le curseur saute sous le doigt -->
-                <slot name="status-badge" :entry="r.entry" />{{ r.status }}
+                <slot name="status-badge" :entry="r.entry" /><span class="row__statustext">{{ r.status }}</span><slot name="status-after" :entry="r.entry" />
               </div>
             </div>
-            <span class="badge" :data-kind="r.origin" :title="$t(`rooms.origins.${r.origin}Hint`)">
-              {{ $t(`rooms.origins.${r.origin}`) }}
+            <span class="badge" :data-kind="r.origin" role="img"
+                  :title="$t(`rooms.origins.${r.origin}Hint`)" :aria-label="$t(`rooms.origins.${r.origin}`)">
+              <StrokeIcon name="pin" :size="14" />
             </span>
             <slot name="control" :entry="r.entry" :on="r.on" />
           </div>
@@ -204,14 +205,14 @@ defineExpose({ count: computed(() => entries.value.length) })
   padding: 10px 0; border-top: 1px solid var(--line);
 }
 .row--dead { opacity: .7; }
-.row__name { font-weight: 500; font-size: 14px; }
-.row__status { font-size: 12px; }
+.row__name { font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row__status { font-size: 12px; display: flex; align-items: center; gap: 6px; min-width: 0; }
+.row__statustext { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .min0 { min-width: 0; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
 .badge {
-  font-size: 10px; letter-spacing: .04em; text-transform: uppercase; padding: 3px 7px; border-radius: 999px;
-  border: 1px solid var(--line); color: var(--muted); white-space: nowrap;
+  flex: 0 0 auto; display: grid; place-items: center; width: 22px; height: 22px; color: var(--muted);
 }
-.badge[data-kind='auto'] { border-color: transparent; background: var(--accent-soft); color: var(--accent); }
-.badge[data-kind='unplaced'] { border-color: #d38b22; color: #d38b22; }
+.badge[data-kind='auto'] { color: var(--accent); }
+.badge[data-kind='unplaced'] { color: #d38b22; }
 </style>

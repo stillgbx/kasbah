@@ -59,9 +59,9 @@
     "reorder": "Réordonner (glisser)", "orderError": "Ordre non enregistré : {message}",
     "dangling": "Liaisons mortes", "danglingHint": "Le JSON pointe vers un id qu'aucun plugin ne remonte",
     "origins": {
-      "json": "Dans le plan", "jsonHint": "Position définie dans house.json",
+      "json": "Placé", "jsonHint": "Position définie dans house.json",
       "auto": "Auto", "autoHint": "Rattachement automatique à la pièce qui porte le nom de la pièce du plugin",
-      "unplaced": "Hors plan", "unplacedHint": "Aucune pièce de la maison ne porte le nom de la pièce du plugin : absente de la scène 3D"
+      "unplaced": "Non placé", "unplacedHint": "Aucune pièce de la maison ne porte le nom de la pièce du plugin : absente de la scène 3D"
     }
   },
   "cover": {

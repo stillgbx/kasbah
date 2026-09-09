@@ -61,7 +61,7 @@
     "origins": {
       "json": "Placed", "jsonHint": "Position set in house.json",
       "auto": "Auto", "autoHint": "Matched automatically to the room named like the plugin room",
-      "unplaced": "Unplaced", "unplacedHint": "No house room is named like the plugin room: absent from the 3D scene"
+      "unplaced": "Not placed", "unplacedHint": "No house room is named like the plugin room: absent from the 3D scene"
     }
   },
   "cover": {
