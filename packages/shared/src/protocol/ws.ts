@@ -10,6 +10,13 @@ import { pluginSceneEntrySchema, pluginSceneStateSchema, sceneIdSchema } from '.
 export const deviceEntrySchema = z.object({ descriptor: deviceDescriptorSchema, state: deviceStateSchema })
 export type DeviceEntry = z.infer<typeof deviceEntrySchema>
 
+/**
+ * Événement TRANSITOIRE d'un appareil (pas un état) : coup de sonnette, mouvement… Arrive par Pub/Sub
+ * chez Nest. Le client réagit sur le moment (cadrer la pièce, ouvrir le direct) ; rien n'est conservé.
+ */
+export const DEVICE_EVENT_KINDS = ['chime', 'motion', 'person', 'sound'] as const
+export type DeviceEventKind = (typeof DEVICE_EVENT_KINDS)[number]
+
 export const serverMessageSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('snapshot'), serverTime: z.number(), devices: z.array(deviceEntrySchema),
@@ -25,6 +32,8 @@ export const serverMessageSchema = z.discriminatedUnion('type', [
   /** La maison a été réécrite (placement d'un appareil depuis une tablette). */
   z.object({ type: z.literal('house'), house: houseSchema }),
   z.object({ type: z.literal('error'), code: z.string(), message: z.string() }),
+  /** Un appareil vient de signaler un événement (sonnette, mouvement) ; `at` = horloge serveur. */
+  z.object({ type: z.literal('deviceEvent'), deviceId: deviceIdSchema, event: z.enum(DEVICE_EVENT_KINDS), at: z.number() }),
 ])
 export type ServerMessage = z.infer<typeof serverMessageSchema>
 

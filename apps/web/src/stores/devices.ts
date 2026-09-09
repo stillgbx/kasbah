@@ -1,6 +1,6 @@
 import { computed, ref, shallowRef } from 'vue'
 import { defineStore } from 'pinia'
-import type { CommandInput, DeviceDescriptor, DeviceEntry, DeviceState, HealthResponse, House, ServerMessage } from '@kasbah/shared'
+import type { CommandInput, DeviceDescriptor, DeviceEntry, DeviceEventKind, DeviceState, HealthResponse, House, ServerMessage } from '@kasbah/shared'
 import { ApiRequestError, getTransport, type ConnectionStatus } from '../api'
 import { t } from '../i18n'
 import { optimisticPatch } from '../lib/optimistic'
@@ -99,6 +99,14 @@ export const useDevicesStore = defineStore('devices', () => {
    */
   const targetPosition = (id: string): number | undefined => targets.value[id]?.position
 
+  // Événements transitoires (sonnette, mouvement) : le store ne cadre ni ne route (affaire de la vue),
+  // il relaie à qui s'abonne. La vue Maison écoute pour réagir à un coup de sonnette.
+  const deviceEventHandlers = new Set<(deviceId: string, event: DeviceEventKind, at: number) => void>()
+  function onDeviceEvent(fn: (deviceId: string, event: DeviceEventKind, at: number) => void) {
+    deviceEventHandlers.add(fn)
+    return () => { deviceEventHandlers.delete(fn) }
+  }
+
   function applyMessage(msg: ServerMessage) {
     switch (msg.type) {
       case 'snapshot': setEntries(msg.devices); break
@@ -112,6 +120,7 @@ export const useDevicesStore = defineStore('devices', () => {
         break
       }
       case 'house': serverHouse.value = msg.house; break
+      case 'deviceEvent': for (const fn of deviceEventHandlers) fn(msg.deviceId, msg.event, msg.at); break
       case 'error': useNotificationsStore().error(msg.message); break
     }
   }
@@ -190,7 +199,7 @@ export const useDevicesStore = defineStore('devices', () => {
 
   return {
     descriptors, states, connection, pending, health, serverHouse, list, count, targets,
-    start, stop, applyMessage, sendCommand, runScene, isPending, refreshHealth, setEntries,
+    start, stop, applyMessage, onDeviceEvent, sendCommand, runScene, isPending, refreshHealth, setEntries,
     targetPosition, clearTarget,
   }
 })

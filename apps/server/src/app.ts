@@ -66,7 +66,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
     enabled: opts.env.KASBAH_PLUGINS,
     strict: opts.env.KASBAH_STRICT_PLUGINS,
     factories: opts.factories ?? PLUGIN_FACTORIES,
-    registry, scenes, clock, logger: opts.logger,
+    registry, scenes, bus, clock, logger: opts.logger,
     ...(opts.envSource ? { envSource: opts.envSource } : {}),
     commandTimeoutMs: opts.env.KASBAH_COMMAND_TIMEOUT_MS,
   })

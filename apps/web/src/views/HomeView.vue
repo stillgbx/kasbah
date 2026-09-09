@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMediaQuery } from '@vueuse/core'
@@ -101,6 +101,24 @@ watch(() => house.index, (idx) => {
   if (room && (idx.roomsById.has(room) || idx.zonesById.has(room))) house.selectRoom(room)
   if (device) house.selectDevice(device)
 }, { immediate: true })
+
+// Sonnette : à un coup de sonnette (événement `deviceEvent` du plugin Nest), on ramène sur la maison,
+// on sélectionne la sonnette et on ouvre le panneau — son direct s'affiche alors dans la carte détail,
+// et les watchers ci-dessus cadrent sa pièce (« Sas d'entrée »). La vue est gardée en vie, donc
+// l'abonnement tient à travers les changements d'onglet ; on réagit même en venant d'une autre vue.
+let offDeviceEvent: (() => void) | null = null
+onMounted(() => {
+  offDeviceEvent = devices.onDeviceEvent(async (deviceId, event) => {
+    if (event !== 'chime') return
+    const hd = house.houseDeviceFor(deviceId)
+    // ramener sur la maison AVANT de sélectionner : sinon le watcher qui reflète la sélection dans
+    // l'URL la réécrit sur la vue courante et annule la navigation (course constatée depuis /cameras).
+    await router.push({ name: 'home' }).catch(() => { /* navigation redondante */ })
+    house.selectDevice(hd?.id ?? deviceId)   // placée → cadrage de sa pièce ; sinon au moins le direct
+    panelOpen.value = true
+  })
+})
+onUnmounted(() => { offDeviceEvent?.() })
 
 const panelMode = computed<'device' | 'room' | 'home'>(() => (house.selectedKey ? 'device' : house.selectedRoomId ? 'room' : 'home'))
 </script>

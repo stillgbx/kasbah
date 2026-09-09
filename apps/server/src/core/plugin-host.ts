@@ -1,6 +1,7 @@
 import { parseDeviceId, parseSceneId, type Command, type PluginHealth, type SceneRecall, type SceneUpdate } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import type { Logger } from 'pino'
+import type { Bus } from './bus'
 import type { Clock } from './clock'
 import { PluginError, type DevicePlugin, type PluginContext, type PluginFactory } from './plugin'
 import { withTimeout } from './poll'
@@ -16,6 +17,7 @@ export interface PluginHostOptions {
   factories: Record<string, PluginFactory>
   registry: DeviceRegistry
   scenes: SceneRegistry
+  bus: Bus
   clock: Clock
   logger: Logger
   /** Source des variables d'environnement (process.env par défaut). */
@@ -73,6 +75,7 @@ export class PluginHost {
       emitDevices: (descriptors) => { registry.register(id, descriptors) },
       emitScenes: (list) => { scenes.register(id, list) },
       emitSceneState: (externalId, active) => { scenes.setActive(`${id}:${externalId}`, active) },
+      emitEvent: (externalId, event) => { this.opts.bus.emit('deviceEvent', `${id}:${externalId}`, event, this.opts.clock.now()) },
     }
   }
 

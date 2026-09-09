@@ -81,3 +81,19 @@ export const sdmExtendStreamSchema = z.looseObject({
 
 /** Enveloppe de `:executeCommand` : `results` est absent pour les commandes sans réponse. */
 export const sdmCommandResponseSchema = z.looseObject({ results: z.unknown().optional() })
+
+/** Réponse de `subscriptions:pull` : messages non acquittés (le corps utile est en base64 dans `message.data`). */
+export const pubsubPullResponseSchema = z.looseObject({
+  receivedMessages: z.array(z.looseObject({
+    ackId: z.string(),
+    message: z.looseObject({ data: z.string().optional() }).optional(),
+  })).optional(),
+})
+
+/** Événement SDM (corps décodé d'un message Pub/Sub) : quel appareil, quels événements. */
+export const sdmEventSchema = z.looseObject({
+  resourceUpdate: z.looseObject({
+    name: z.string(),
+    events: z.record(z.string(), z.unknown()).optional(),
+  }).optional(),
+})

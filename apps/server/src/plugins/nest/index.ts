@@ -14,7 +14,7 @@ import { RtspRelay, type RelayMessage, type RelaySubscriber } from '../../core/v
 import { describeError, sendError } from '../../http/errors'
 import { NestClient, rtspUrlWithToken } from './client'
 import {
-  deviceNameToExternalId, isCamera, isThermostat, streamProtocols, thermostatAvailable, toClimatePatch, toDescriptor,
+  deviceNameToExternalId, isCamera, isThermostat, parseSdmEvent, streamProtocols, thermostatAvailable, toClimatePatch, toDescriptor,
   toThermostatCommands, toThermostatDescriptor,
 } from './mapping'
 import type { SdmDevice } from './types'
@@ -70,11 +70,17 @@ export const nestConfigSchema = z.object({
   NEST_LIVE_BUDGET: z.coerce.number().int().min(1).max(32).default(10),
   /** Cadence des vignettes de la vue Caméras (une image JPEG par caméra dont la session est ouverte). */
   NEST_SNAPSHOT_MS: z.coerce.number().int().min(2000).max(120_000).default(10_000),
+  /** Abonnement Pub/Sub « pull » d'où tirer les événements (sonnette…). Absent → aucun événement. */
+  NEST_PUBSUB_SUBSCRIPTION: optionalKey,
+  /** Cadence de tirage de l'abonnement Pub/Sub. Une sonnerie arrive au plus tard au prochain tirage. */
+  NEST_PUBSUB_POLL_MS: z.coerce.number().int().min(1000).max(60_000).default(5000),
 })
 export type NestConfig = z.infer<typeof nestConfigSchema>
 
 /** Google fait expirer une session RTSP au bout de cinq minutes : on prolonge avant. */
 const STREAM_EXTEND_MS = 4 * 60_000
+/** Messages tirés au plus par appel Pub/Sub. */
+const PUBSUB_MAX_MESSAGES = 20
 /** Un relais sans abonné attend ce délai avant d'arrêter la session (changement de vue, reconnexion). */
 const STREAM_IDLE_MS = 8000
 /** Au-delà de ce retard d'envoi, une tablette ne suit plus : on saute des fragments plutôt que d'empiler. */
@@ -135,6 +141,7 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
   let lastRaw: unknown = undefined
   let lastError: string | null = null
   let poller: { stop(): void } | null = null
+  let eventsPoller: { stop(): void } | null = null
   /** Sessions vidéo ouvertes, par externalId : un relais ffmpeg et le jeton qui prolonge la session Google. */
   const streams = new Map<string, StreamSession>()
   /** Ouvertures en cours, pour qu'une seconde demande simultanée rejoigne la première. */
@@ -216,6 +223,34 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
       name: 'nest-devices', intervalMs: config.NEST_POLL_MS, fn: tick,
       clock: ctx!.clock, signal: ctx!.signal, logger: ctx!.logger,
     })
+  }
+
+  /** Boucle Pub/Sub : tire les événements, pousse la sonnette aux clients, acquitte. Optionnelle. */
+  function startEvents(): void {
+    if (eventsPoller || !config?.NEST_PUBSUB_SUBSCRIPTION || !client?.linked) return
+    eventsPoller = createPoller({
+      name: 'nest-events', intervalMs: config.NEST_PUBSUB_POLL_MS, fn: pollEvents,
+      clock: ctx!.clock, signal: ctx!.signal, logger: ctx!.logger,
+    })
+  }
+
+  async function pollEvents(): Promise<void> {
+    const sub = config!.NEST_PUBSUB_SUBSCRIPTION!
+    const msgs = await ready().pullEvents(sub, PUBSUB_MAX_MESSAGES, ctx!.signal)
+    if (msgs.length === 0) return
+    for (const m of msgs) {
+      const parsed = m.data ? parseSdmEvent(m.data) : undefined
+      if (!parsed || !entries.has(parsed.externalId)) continue
+      // Sonnette d'abord : on ne pousse que 'chime'. Mouvement/personne/son sont décodés mais pas
+      // encore exposés (ils spammeraient un client qui n'en fait rien) — un seul `if` à ouvrir plus tard.
+      for (const kind of parsed.kinds) {
+        if (kind !== 'chime') continue
+        log().info({ externalId: parsed.externalId, event: kind }, 'nest event')
+        ctx!.emitEvent(parsed.externalId, kind)
+      }
+    }
+    // acquitter TOUT ce qu'on a tiré (même les événements ignorés), sinon Google les redonne en boucle
+    await ready().acknowledge(sub, msgs.map((m) => m.ackId), ctx!.signal)
   }
 
   /**
@@ -418,6 +453,7 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
       if (!client?.linked) return
       emitAll()                                          // `discover` vient de remplir les entrées
       startPolling()                                     // le premier tick relit la liste tout de suite : c'est le prix d'un poller simple
+      startEvents()                                      // événements Pub/Sub (sonnette) si un abonnement est configuré
     },
 
     async execute(externalId: string, command: Command) {
@@ -441,6 +477,8 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
     async stop() {
       poller?.stop()
       poller = null
+      eventsPoller?.stop()
+      eventsPoller = null
       stopGrid()
       await Promise.all([...streams.keys()].map((id) => closeStream(id, 'plugin stopped')))
       client = null

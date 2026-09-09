@@ -1,4 +1,4 @@
-import type { Command, DeviceDescriptor, PluginHealth, PluginScene, SceneActivation, SceneRecall, SceneUpdate, StatePatch } from '@kasbah/shared'
+import type { Command, DeviceDescriptor, DeviceEventKind, PluginHealth, PluginScene, SceneActivation, SceneRecall, SceneUpdate, StatePatch } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import type { Logger } from 'pino'
 import type { z } from 'zod'
@@ -35,6 +35,8 @@ export interface PluginContext {
   /** Remplace l'ensemble des scènes du plugin. */
   emitScenes(scenes: PluginScene[]): void
   emitSceneState(externalId: string, active: SceneActivation): void
+  /** Événement transitoire (sonnette, mouvement) : poussé aux clients, pas d'état conservé. */
+  emitEvent(externalId: string, event: DeviceEventKind): void
 }
 
 export interface DevicePlugin {

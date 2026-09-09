@@ -50,6 +50,8 @@ export class WsHub {
       // les scènes changent rarement (rappel manuel, interrupteur mural) : pas de coalescence
       bus.on('scenes', (entries) => this.broadcast({ type: 'scenes', scenes: entries })),
       bus.on('scene', (sceneId, state) => this.broadcast({ type: 'scene', sceneId, state })),
+      // événement transitoire (sonnette, mouvement) : poussé tout de suite, jamais coalescé
+      bus.on('deviceEvent', (deviceId, event, at) => this.broadcast({ type: 'deviceEvent', deviceId, event, at })),
     )
   }
 

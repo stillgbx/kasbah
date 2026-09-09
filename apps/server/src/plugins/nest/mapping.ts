@@ -1,5 +1,5 @@
-import type { CameraClass, Capability, ClimateMode, Command, DeviceDescriptor, StatePatch, StreamProtocol } from '@kasbah/shared'
-import { readTrait, type SdmDevice } from './types'
+import type { CameraClass, Capability, ClimateMode, Command, DeviceDescriptor, DeviceEventKind, StatePatch, StreamProtocol } from '@kasbah/shared'
+import { readTrait, sdmEventSchema, type SdmDevice } from './types'
 
 // Traductions PURES : appareils SDM → descripteurs Kasbah, patchs d'état, commandes, URL
 // d'autorisation. Ce plugin couvre les caméras (caméras, sonnettes, écrans à caméra) et les
@@ -239,4 +239,27 @@ export function authorizationUrl(opts: { projectId: string; clientId: string; re
     state: opts.state,
   })
   return `https://nestservices.google.com/partnerconnections/${encodeURIComponent(opts.projectId)}/auth?${q.toString()}`
+}
+
+/** Nom d'événement SDM → notre kind d'événement d'appareil. Les autres sont ignorés. */
+const EVENT_KIND: Record<string, DeviceEventKind> = {
+  'sdm.devices.events.DoorbellChime.Chime': 'chime',
+  'sdm.devices.events.CameraMotion.Motion': 'motion',
+  'sdm.devices.events.CameraPerson.Person': 'person',
+  'sdm.devices.events.CameraSound.Sound': 'sound',
+}
+
+/**
+ * Décode le corps base64 d'un message Pub/Sub SDM en (externalId, kinds d'événements). Rend `undefined`
+ * si le corps est illisible ou ne porte aucun événement connu. Pur : aucune I/O.
+ */
+export function parseSdmEvent(dataBase64: string): { externalId: string; kinds: DeviceEventKind[] } | undefined {
+  let json: unknown
+  try { json = JSON.parse(Buffer.from(dataBase64, 'base64').toString('utf8')) } catch { return undefined }
+  const r = sdmEventSchema.safeParse(json)
+  const name = r.success ? r.data.resourceUpdate?.name : undefined
+  if (!name) return undefined
+  const events = (r.success && r.data.resourceUpdate?.events) || {}
+  const kinds = [...new Set(Object.keys(events).map((k) => EVENT_KIND[k]).filter((v): v is DeviceEventKind => v !== undefined))]
+  return kinds.length ? { externalId: deviceNameToExternalId(name), kinds } : undefined
 }

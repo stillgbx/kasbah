@@ -31,6 +31,8 @@ function fakeGoogle(opts: { devices?: unknown; devicesStatus?: number; refreshSt
   const calls: { url: string; init?: RequestInit & { dispatcher?: unknown } }[] = []
   const tokenBodies: URLSearchParams[] = []
   const commands: { id: string; command: string; params: Record<string, unknown> }[] = []
+  const pubsub: { ackId: string; message: { data: string } }[] = []
+  const acks: string[] = []
   const thermostat = structuredClone(THERMOSTAT) as unknown as { name: string; traits: Traits }
   const devices = () => {
     const base = (opts.devices ?? DEVICES_RESPONSE) as { devices?: { name: string }[] }
@@ -45,6 +47,11 @@ function fakeGoogle(opts: { devices?: unknown; devicesStatus?: number; refreshSt
       if (body.get('grant_type') === 'authorization_code') return json(TOKEN_OK)
       if (opts.refreshStatus) return json(TOKEN_INVALID_GRANT, opts.refreshStatus)
       return json(TOKEN_REFRESHED)
+    }
+    if (url.includes('pubsub.googleapis.com')) {
+      if (url.endsWith(':pull')) return json({ receivedMessages: pubsub.splice(0) })
+      if (url.endsWith(':acknowledge')) { acks.push(...(JSON.parse(String(init?.body)) as { ackIds: string[] }).ackIds); return json({}) }
+      return json({ error: { message: 'not found' } }, 404)
     }
     const m = /\/devices\/([^/:]+)(:executeCommand)?$/.exec(url)
     if (m?.[2]) {
@@ -68,7 +75,11 @@ function fakeGoogle(opts: { devices?: unknown; devicesStatus?: number; refreshSt
     return json({ error: { message: 'not found' } }, 404)
   })
   const listCalls = () => calls.filter((c) => c.url.endsWith('/devices')).length
-  return { fetchImpl, calls, tokenBodies, commands, listCalls }
+  const pushEvent = (externalId: string, event: string) => {
+    const data = Buffer.from(JSON.stringify({ resourceUpdate: { name: `enterprises/PROJECT/devices/${externalId}`, events: { [event]: {} } } })).toString('base64')
+    pubsub.push({ ackId: `ack-${pubsub.length}`, message: { data } })
+  }
+  return { fetchImpl, calls, tokenBodies, commands, listCalls, pushEvent, acks }
 }
 
 /** Faux ffmpeg : on ne fait que compter les lancements et les arrêts. */
@@ -87,7 +98,7 @@ function fakeContext(config: Record<string, unknown>, clock: ManualClock) {
   const ctrl = new AbortController()
   const ctx: PluginContext = {
     pluginId: 'nest', config, logger: pino({ level: 'silent' }), clock, signal: ctrl.signal,
-    emitState: vi.fn(), setAvailable: vi.fn(), emitDevices: vi.fn(), emitScenes: vi.fn(), emitSceneState: vi.fn(),
+    emitState: vi.fn(), setAvailable: vi.fn(), emitDevices: vi.fn(), emitScenes: vi.fn(), emitSceneState: vi.fn(), emitEvent: vi.fn(),
   }
   return { ctx, ctrl }
 }
@@ -278,6 +289,30 @@ describe('nest plugin', () => {
     // une commande Google pour les rendre (elles expirent seules)
     expect(google.commands.filter((c) => rtsp(c) === 'StopRtspStream')).toHaveLength(0)
     expect(plugin.health!().detail).not.toContain('live stream')
+    await plugin.stop()
+  })
+
+  it('pub/sub: a doorbell chime pulled from the subscription is pushed to clients and acknowledged', async () => {
+    const google = fakeGoogle()
+    const { plugin, ctx, clock } = await linked(google, { NEST_PUBSUB_SUBSCRIPTION: 'projects/p/subscriptions/s' })
+    // le premier tirage (au démarrage) ne trouve rien ; on dépose ensuite une sonnerie sur DEVICE2 (la sonnette)
+    google.pushEvent('DEVICE2', 'sdm.devices.events.DoorbellChime.Chime')
+    clock.advance(5000)
+    await settle()
+    expect(ctx.emitEvent).toHaveBeenCalledWith('DEVICE2', 'chime')
+    expect(google.acks).toHaveLength(1)
+    await plugin.stop()
+  })
+
+  it('pub/sub: motion/person events are acknowledged but not pushed yet, unknown devices are skipped', async () => {
+    const google = fakeGoogle()
+    const { plugin, ctx, clock } = await linked(google, { NEST_PUBSUB_SUBSCRIPTION: 'projects/p/subscriptions/s' })
+    google.pushEvent('DEVICE8', 'sdm.devices.events.CameraMotion.Motion')   // caméra connue, mais mouvement non exposé
+    google.pushEvent('GHOST', 'sdm.devices.events.DoorbellChime.Chime')     // appareil inconnu
+    clock.advance(5000)
+    await settle()
+    expect(ctx.emitEvent).not.toHaveBeenCalled()
+    expect(google.acks).toHaveLength(2)                                     // tout est acquitté, sinon Google boucle
     await plugin.stop()
   })
 

@@ -7,6 +7,7 @@ import { authorizationUrl } from './mapping'
 import {
   oauthErrorSchema, oauthTokenResponseSchema, sdmCommandResponseSchema, sdmDeviceSchema, sdmDevicesResponseSchema, sdmErrorSchema,
   sdmExtendStreamSchema, sdmRtspStreamSchema, type SdmDevice, type SdmRtspStream,
+  pubsubPullResponseSchema,
 } from './types'
 
 // Client de l'API Google Smart Device Management. Tout passe par le cloud Google (les appareils
@@ -16,6 +17,7 @@ import {
 // `exchangeCode`, qui le rend à l'utilisateur pour qu'il le colle dans `.env`.
 
 export const SDM_BASE_URL = 'https://smartdevicemanagement.googleapis.com/v1'
+export const PUBSUB_BASE_URL = 'https://pubsub.googleapis.com/v1'
 export const OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 /** Google répond en général sous la seconde ; au-delà de ce délai on abandonne (cf. TaHoma). */
 export const REQUEST_TIMEOUT_MS = 15_000
@@ -216,5 +218,45 @@ export class NestClient {
 
   async stopRtspStream(externalId: string, streamExtensionToken: string, signal?: AbortSignal): Promise<void> {
     await this.executeCommand(externalId, 'sdm.devices.commands.CameraLiveStream.StopRtspStream', { streamExtensionToken }, signal)
+  }
+
+  /**
+   * Tire les événements en attente d'un abonnement Pub/Sub (sonnerie, mouvement…), avec le MÊME jeton
+   * OAuth que SDM (portée `pubsub`). L'abonnement est du type « pull » : c'est le serveur qui va
+   * chercher, aucun endpoint public à exposer. Rend les messages non acquittés ; l'appelant décode et
+   * `acknowledge` ceux qu'il a traités, sinon Google les redonnera.
+   */
+  async pullEvents(subscription: string, maxMessages: number, signal?: AbortSignal): Promise<{ ackId: string; data?: string }[]> {
+    // `returnImmediately` : Google rend tout de suite (liste vide si rien) au lieu de RETENIR la requête
+    // en attendant un message (long-polling) — sans quoi un abonnement vide tient jusqu'à notre délai et
+    // journalise un TIMEOUT en boucle. On repasse toutes les NEST_PUBSUB_POLL_MS, une sonnerie arrive vite.
+    const json = await this.pubsub('POST', `/${subscription}:pull`, { maxMessages, returnImmediately: true }, signal)
+    const r = pubsubPullResponseSchema.safeParse(json)
+    if (!r.success) throw new PluginError('UPSTREAM_ERROR', 'unexpected Pub/Sub pull response from Google')
+    return (r.data.receivedMessages ?? []).map((m) => ({ ackId: m.ackId, ...(m.message?.data !== undefined ? { data: m.message.data } : {}) }))
+  }
+
+  /** Acquitte les messages traités : sans ça, Google les redonne au bout du délai de rétention. */
+  async acknowledge(subscription: string, ackIds: string[], signal?: AbortSignal): Promise<void> {
+    if (ackIds.length === 0) return
+    await this.pubsub('POST', `/${subscription}:acknowledge`, { ackIds }, signal)
+  }
+
+  private async pubsub(method: 'POST', path: string, body: unknown, signal?: AbortSignal): Promise<unknown> {
+    const token = await this.accessTokenFor(signal)
+    const res = await this.send(`${PUBSUB_BASE_URL}${path}`, {
+      method,
+      headers: { authorization: `Bearer ${token}`, accept: 'application/json', 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    }, signal)
+    const json = await res.json().catch(() => undefined)
+    if (res.ok) return json
+    const e = sdmErrorSchema.safeParse(json)
+    const suffix = e.success && e.data.error?.message ? ` (${e.data.error.message})` : ''
+    if (res.status === 401) { this.accessToken = undefined; throw new PluginError('NEEDS_PAIRING', `Google rejected the Pub/Sub token${suffix}`) }
+    if (res.status === 403) throw new PluginError('NEEDS_PAIRING', `Pub/Sub access refused${suffix}: re-link with the pubsub scope, and grant the subscription to this account`)
+    if (res.status === 404) throw new PluginError('UPSTREAM_ERROR', `Pub/Sub subscription unknown${suffix}: check NEST_PUBSUB_SUBSCRIPTION`)
+    if (res.status === 429) throw new PluginError('RATE_LIMITED', `Pub/Sub rate limit${suffix}`)
+    throw new PluginError('UPSTREAM_ERROR', `Pub/Sub HTTP ${res.status}${suffix}`)
   }
 }
