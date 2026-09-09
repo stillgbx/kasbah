@@ -3,7 +3,7 @@
 // anonymisés : UUID du projet, ids d'appareils, de structure et de pièces remplacés ; noms de pièces
 // et noms personnalisés conservés tels quels. La forme est celle de Google, bizarreries comprises :
 //  - `Info.customName` est VIDE sur 7 appareils sur 10 (l'appli Google Home affiche alors
-//    « <pièce> <type> ») ; seuls la sonnette et deux caméras ont un nom ;
+//    « <pièce> <type> », Kasbah « <type> <pièce> ») ; seuls la sonnette et deux caméras ont un nom ;
 //  - `assignee` (non documenté dans ce qu'on lit) double `parentRelations[0].parent` ;
 //  - TOUT le parc est en RTSP 640×480 H264/AAC (caméras et sonnette de 1re génération), avec
 //    `CameraImage` + `CameraEventImage` — aucun `WEB_RTC` ni `CameraClipPreview`. La caméra WebRTC

@@ -26,9 +26,9 @@ describe('nest mapping', () => {
     })
   })
 
-  it('an empty customName (the common case) falls back to "<room> <type>"', () => {
+  it('an empty customName (the common case) falls back to "<type> <room>", type first as the house names its devices', () => {
     const d = toDescriptor(parse(UNNAMED_CAMERA))
-    expect(d.name).toBe('Garage Camera')
+    expect(d.name).toBe('Caméra Garage')
     expect(d.capabilities).toEqual(['live_stream'])
     expect(d.meta.camera).toEqual({ deviceClass: 'camera', protocols: ['rtsp'] })
   })
@@ -40,7 +40,7 @@ describe('nest mapping', () => {
   it('maps WEB_RTC to webrtc, and a display to class display', () => {
     expect(toDescriptor(parse(WEBRTC_CAMERA)).meta.camera).toEqual({ deviceClass: 'camera', protocols: ['webrtc'] })
     const display = parse({ ...UNNAMED_CAMERA, type: 'sdm.devices.types.DISPLAY' })
-    expect(toDescriptor(display)).toMatchObject({ name: 'Garage Display', meta: { camera: { deviceClass: 'display' } } })
+    expect(toDescriptor(display)).toMatchObject({ name: 'Écran Garage', meta: { camera: { deviceClass: 'display' } } })
   })
 
   it('ignores unknown protocols and duplicates, tolerates a missing trait', () => {
@@ -49,7 +49,7 @@ describe('nest mapping', () => {
     const bare = parse({ name: 'enterprises/p/devices/x', type: 'sdm.devices.types.CAMERA' })
     expect(streamProtocols(bare)).toEqual([])
     const bareDescriptor = toDescriptor(bare)
-    expect(bareDescriptor.name).toBe('Camera')
+    expect(bareDescriptor.name).toBe('Caméra')
     expect(bareDescriptor.capabilities).toEqual([])
     expect(bareDescriptor.meta.camera).toEqual({ deviceClass: 'camera' })
   })

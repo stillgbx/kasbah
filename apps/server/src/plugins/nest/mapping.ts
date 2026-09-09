@@ -12,8 +12,14 @@ export const CAMERA_TYPES: Record<string, CameraClass> = {
   'sdm.devices.types.DISPLAY': 'display',
 }
 
-/** Nom de repli par nature quand l'appareil n'a pas de nom (voir `toDescriptor`). */
-const CLASS_LABEL: Record<CameraClass, string> = { camera: 'Camera', doorbell: 'Doorbell', display: 'Display' }
+/**
+ * Nom de repli par nature quand l'appareil n'a pas de nom (voir `toDescriptor`), en PRÉFIXE :
+ * « Caméra Garage », comme on nomme les appareils dans cette maison (« Volet Salon », « Plafonnier
+ * Cuisine »). En français, faute de mieux : le nom d'un descripteur est une seule chaîne, et le
+ * traduire selon la langue d'affichage demanderait au client de reconnaître un nom de repli dans
+ * les six endroits où il lit `descriptor.name` — trop pour ce que ça rapporte, l'utilisateur a tranché.
+ */
+const CLASS_LABEL: Record<CameraClass, string> = { camera: 'Caméra', doorbell: 'Sonnette', display: 'Écran' }
 
 const PROTOCOLS: Record<string, StreamProtocol> = { WEB_RTC: 'webrtc', RTSP: 'rtsp' }
 
@@ -46,8 +52,9 @@ export function streamProtocols(device: SdmDevice): StreamProtocol[] {
 }
 
 /**
- * Descripteur d'une caméra. Le nom vient de `Info.customName` ; Google le laisse souvent VIDE (le
- * nom affiché dans l'appli Google Home est alors « <pièce> <type> »), d'où le même repli ici. La
+ * Descripteur d'une caméra. Le nom vient de `Info.customName` ; Google le laisse souvent VIDE (7
+ * appareils sur 10 sur le compte réel — l'appli Google Home affiche alors « <pièce> <type> »), d'où
+ * un repli « <type> <pièce> » ici, dans l'ordre des noms de cette maison. La
  * pièce part dans `meta.room` : c'est la clé de l'auto-placement dans la maison
  * (`packages/shared/src/house/autoplace.ts`), nommer la pièce de la maison comme celle de Google
  * Home suffit à faire apparaître la caméra dans la scène 3D.
@@ -57,7 +64,7 @@ export function toDescriptor(device: SdmDevice): DeviceDescriptor {
   const externalId = deviceNameToExternalId(device.name)
   const custom = readTrait(device, 'Info')?.customName
   const room = roomOf(device)
-  const name = (typeof custom === 'string' && custom.trim()) || [room, CLASS_LABEL[deviceClass]].filter(Boolean).join(' ')
+  const name = (typeof custom === 'string' && custom.trim()) || [CLASS_LABEL[deviceClass], room].filter(Boolean).join(' ')
   const capabilities: Capability[] = []
   if (readTrait(device, 'CameraLiveStream')) capabilities.push('live_stream')
   if (readTrait(device, 'DoorbellChime')) capabilities.push('chime')

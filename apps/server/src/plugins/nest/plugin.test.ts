@@ -121,7 +121,7 @@ describe('nest plugin', () => {
     const plugin = createNestPlugin({ fetchImpl: google.fetchImpl })
     await plugin.init(ctx)
     const descriptors = await plugin.discover()
-    expect(descriptors.map((d) => d.name)).toEqual(['Garage Camera', "Porte d'entrée", 'Caméra Salon', 'Cuisine Camera'])
+    expect(descriptors.map((d) => d.name)).toEqual(['Caméra Garage', "Porte d'entrée", 'Caméra Salon', 'Caméra Cuisine'])
     expect(google.tokenBodies[0]!.get('grant_type')).toBe('refresh_token')
     expect(google.tokenBodies[0]!.get('refresh_token')).toBe('1//saved')
     await plugin.start()
