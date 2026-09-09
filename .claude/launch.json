@@ -1,26 +1,41 @@
 {
-  "version": "0.0.1",
-  "configurations": [
-    {
-      "name": "kasbah",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "run",
-        "dev"
-      ],
-      "port": 5173
-    },
-    {
-      "name": "kasbah-web",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "run",
-        "dev",
-        "-w",
-        "@kasbah/web"
-      ],
-      "port": 5174,
-      "autoPort": true
-    }
-  ]
+    // Volet navigateur de Claude Code. Il n'accepte que http://localhost:<port>.
+    //
+    // La preview lance sa PROPRE pile complete (Vite + Fastify) sur des ports decales de +1000,
+    // afin que `npm run dev` dans l'IDE (web 5173, serveur 8787) continue de tourner en parallele :
+    //   PORT           -> port de Vite            (apps/web/vite.config.ts)
+    //   KASBAH_PORT    -> port de Fastify         (apps/server/src/config/env.ts)
+    //   KASBAH_SERVER  -> cible du proxy /api,/ws (apps/web/vite.config.ts) = le serveur de la preview
+    // Ces variables gagnent sur apps/server/.env : ni dotenv ni `node --env-file` n'ecrasent
+    // process.env. Garder "port" en phase avec PORT.
+    //
+    // ATTENTION : seuls les PORTS sont dedoubles. Les deux serveurs partagent le fichier de maison
+    // (house/demo-house.json) et les reglages de plugins (apps/server/.state/plugin-settings.json),
+    // tous deux ecrits en `.tmp` + rename : deux ecritures simultanees se marchent dessus. Ils
+    // pilotent aussi le MEME materiel reel (KASBAH_PLUGINS de .env). S'en tenir a la lecture cote
+    // preview, ou VITE_INPROCESS_MOCK=1 qui n'a besoin d'aucun serveur.
+    "version": "0.0.1",
+    "configurations": [
+        {
+            "name": "kasbah",
+            "runtimeExecutable": "npm",
+            "runtimeArgs": ["run", "dev"],
+            "env": {
+                "PORT": "6173",
+                "KASBAH_PORT": "9787",
+                "KASBAH_SERVER": "http://localhost:9787"
+            },
+            "port": 6173,
+            "autoPort": false
+        },
+        {
+            // Le front SEUL, branche sur un serveur deja demarre (8787 par defaut, ou KASBAH_SERVER).
+            // Utile quand une autre session tient deja le serveur Fastify.
+            "name": "kasbah-web",
+            "runtimeExecutable": "npm",
+            "runtimeArgs": ["run", "dev", "-w", "@kasbah/web"],
+            "port": 5174,
+            "autoPort": true
+        }
+    ]
 }

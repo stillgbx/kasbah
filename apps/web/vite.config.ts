@@ -4,10 +4,13 @@ import vue from '@vitejs/plugin-vue'
 import vuetify from 'vite-plugin-vuetify'
 
 // 5173 par défaut, mais `PORT` prend le dessus : un second front (preview d'un agent, deuxième
-// session de travail) doit pouvoir se poser ailleurs. `strictPort` ne vaut alors que pour le port
-// par défaut — sur un port imposé, échouer serait pire que glisser d'un cran.
+// session de travail) doit pouvoir se poser ailleurs. Sur un port imposé, glisser d'un cran vaut
+// mieux qu'échouer — SAUF quand `KASBAH_SERVER` désigne aussi le serveur : c'est la signature d'une
+// pile complète lancée à des adresses fixes (cf. `.claude/launch.json`), et un volet de preview
+// figé sur un port n'affiche rien si le front s'est posé ailleurs. Échouer se voit, glisser non.
 const DEV_PORT = Number(process.env.PORT ?? 5173)
 const SERVER = process.env.KASBAH_SERVER ?? 'http://localhost:8787'
+const FIXED_PORT = process.env.PORT === undefined || process.env.KASBAH_SERVER !== undefined
 
 // `base: './'` : le build est servi par le serveur Fastify sous / (repli SPA), ou depuis un sous-dossier.
 export default defineConfig({
@@ -16,7 +19,7 @@ export default defineConfig({
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   server: {
     port: DEV_PORT,
-    strictPort: process.env.PORT === undefined,
+    strictPort: FIXED_PORT,
     host: true, // accessible depuis la tablette sur le LAN
     proxy: {
       '/api': { target: SERVER },
