@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import type { StateFor } from '@kasbah/shared'
 import PageHeader from '../components/layout/PageHeader.vue'
 import RoomBands from '../components/devices/RoomBands.vue'
+import { lightTintCss } from '../lib/lightTint'
 import { useDevicesStore } from '../stores/devices'
 
 // Vue Lumières : la liste par pièce et son diagnostic de liaison vivent dans `RoomBands`
@@ -32,6 +33,13 @@ function commit(id: string, v: number) {
     <div class="page__scroll">
       <div v-if="lights.length === 0" class="card card--soft empty muted">{{ $t('lights.none') }}</div>
       <RoomBands kind="light">
+        <!-- la couleur de la lampe en fond de ligne, comme la pochette d'un lecteur dans la vue Médias -->
+        <template #backdrop="{ entry }">
+          <Transition name="rowtint">
+            <div v-if="lightTintCss(entry.state as StateFor<'light'>)" class="row-tint"
+                 :style="{ background: lightTintCss(entry.state as StateFor<'light'>) }" aria-hidden="true" />
+          </Transition>
+        </template>
         <template #control="{ entry, on }">
           <v-switch :model-value="on" :disabled="!entry.state.available" density="compact" hide-details class="row__switch"
                     @update:model-value="devices.sendCommand(entry.descriptor.id, { type: 'light.set', on: !on })" />
@@ -53,4 +61,9 @@ function commit(id: string, v: number) {
 .empty { padding: 24px; text-align: center; }
 .row__switch { flex: 0 0 auto; }
 .row__slider { grid-column: 1 / -1; margin: 0 4px; }
+/* teinte de la lampe derriere la ligne : sous l'icone et le nom, fondue avant les touches ; deborde de 4 px pour couvrir jusqu'aux bords */
+.row-tint { position: absolute; inset: 0 -4px; z-index: -1; pointer-events: none; }
+.rowtint-enter-active, .rowtint-leave-active { transition: opacity .4s ease; }
+.rowtint-enter-from, .rowtint-leave-to { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .rowtint-enter-active, .rowtint-leave-active { transition: none; } }
 </style>

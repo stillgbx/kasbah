@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { HouseDevice } from '@kasbah/shared'
+import type { DeviceState, HouseDevice } from '@kasbah/shared'
 import { isDeviceOn, isDevicePulsing, statusLabel, toggleChecked, toggleCommand } from '../../lib/deviceState'
+import { lightTintCss } from '../../lib/lightTint'
 import { kindIcon } from '../../lib/strokeIcons'
 import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
@@ -44,11 +45,17 @@ function row(d: HouseDevice) {
     busy: !!state && isDevicePulsing(state, aimed !== undefined),
     status: descriptor && state ? statusLabel(descriptor, state, t, locale.value) : t('device.unbound', { id: d.deviceId ?? '—' }),
     toggle, deviceId: d.deviceId, available: state?.available ?? false,
-    // pochette du morceau en fond de ligne (lecteur en lecture ; URL relayée par le serveur)
-    art: state?.kind === 'media_player' && state.available ? state.nowPlaying?.artUrl : undefined,
+    // fond de ligne : pochette du morceau (lecteur en lecture) ou teinte de la lampe allumée
+    ...backdrop(state),
   }
 }
-const artStyle = (url: string) => ({ backgroundImage: `url(${JSON.stringify(url)})` })
+/** Style du fond et sa clé (la pochette change au morceau ; la teinte suit la lampe sans fondu croisé). */
+function backdrop(state: DeviceState | undefined): { backdrop?: Record<string, string>; backdropKey?: string } {
+  if (!state || !state.available) return {}
+  if (state.kind === 'media_player' && state.nowPlaying?.artUrl) return { backdrop: { backgroundImage: `url(${JSON.stringify(state.nowPlaying.artUrl)})` }, backdropKey: state.nowPlaying.artUrl }
+  if (state.kind === 'light') { const tint = lightTintCss(state); if (tint) return { backdrop: { background: tint }, backdropKey: 'tint' } }
+  return {}
+}
 const rows = computed(() => (target.value?.list ?? []).map(row))
 /** Ambiances du fabricant rattachées à cette pièce (rapprochement par nom). */
 const roomScenes = computed(() => (target.value ? scenes.forRoom(target.value.name) : []))
@@ -64,9 +71,9 @@ const roomScenes = computed(() => (target.value ? scenes.forRoom(target.value.na
     <SceneChips :scenes="roomScenes" :label="$t('scenes.title')" :add-to="target.name" />
     <div class="rows">
       <div v-for="r in rows" :key="r.key" class="dev-row" role="button" tabindex="0" @click="house.selectDevice(r.key)" @keydown.enter="house.selectDevice(r.key)">
-        <!-- pochette sous le contenu, fondue vers l'interrupteur ; absolue, elle ne décale rien -->
+        <!-- fond sous le contenu (pochette ou teinte), fondu vers l'interrupteur ; absolu, il ne décale rien -->
         <Transition name="rowart">
-          <div v-if="r.art" :key="r.art" class="dev-row__art" :style="artStyle(r.art)" aria-hidden="true" />
+          <div v-if="r.backdrop" :key="r.backdropKey" class="dev-row__art" :style="r.backdrop" aria-hidden="true" />
         </Transition>
         <span class="icon-square" :data-on="r.on ? '1' : '0'"><StrokeIcon :name="r.icon" :size="18" /></span>
         <div class="dev-row__main">
