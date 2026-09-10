@@ -78,6 +78,14 @@ export function createHttpTransport(base = ''): Transport {
     ),
     pairHue: () => request(`${base}/api/plugins/hue/pair`, { method: 'POST' }, (j) => j as { appKey: string; hint: string }),
     nestAuthUrl: () => request(`${base}/api/plugins/nest/auth/url`, undefined, (j) => j as { url: string; redirectUri: string }),
+    forgetDevice: (deviceId) => {
+      const { pluginId, externalId } = parseDeviceId(deviceId)
+      return request(
+        `${base}/api/plugins/${encodeURIComponent(pluginId)}/devices/${encodeURIComponent(externalId)}`,
+        { method: 'DELETE' },
+        () => undefined,
+      )
+    },
     cameraStreamUrl: (deviceId) => {
       const { pluginId, externalId } = parseDeviceId(deviceId)
       return `${wsBase(base)}/api/plugins/${pluginId}/cameras/${encodeURIComponent(externalId)}/stream`

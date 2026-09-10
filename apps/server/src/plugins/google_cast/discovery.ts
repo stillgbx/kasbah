@@ -6,7 +6,12 @@ import { castTxtSchema, type CastService } from './types'
 // stable, leur nom Google Home et leur modèle dans l'enregistrement TXT. Rien d'autre à configurer.
 
 export interface CastDiscovery {
-  /** Lance l'écoute ; `onUp` est appelé pour chaque appareil, une fois par identifiant. */
+  /**
+   * Lance l'écoute ; `onUp` est appelé à CHAQUE annonce, y compris répétée. C'est l'appelant qui
+   * compare : une annonce identique ne dit rien de neuf, mais une adresse ou un nom qui changent
+   * (bail DHCP, renommage dans Google Home) doivent lui parvenir, et une annonce répétée prouve
+   * qu'un appareil qu'on croyait éteint est de retour.
+   */
   start(onUp: (service: CastService) => void): void
   /** Relance une question mDNS (appareils rallumés, annonces perdues). */
   refresh(): void
@@ -30,7 +35,6 @@ export function toCastService(s: Pick<Service, 'txt' | 'addresses' | 'host' | 'p
 export function createMdnsDiscovery(opts: { iface?: string; logger: Logger }): CastDiscovery {
   let bonjour: Bonjour | null = null
   let browser: Browser | null = null
-  const seen = new Set<string>()
   return {
     start(onUp) {
       // les options vont telles quelles à multicast-dns, dont `interface` : le typage de bonjour-service ne la connaît pas
@@ -38,8 +42,6 @@ export function createMdnsDiscovery(opts: { iface?: string; logger: Logger }): C
       browser = bonjour.find({ type: 'googlecast' }, (s) => {
         const service = toCastService(s)
         if (!service) { opts.logger.warn({ name: s.name, txt: s.txt }, 'googlecast service with an unexpected TXT record ignored'); return }
-        if (seen.has(service.txt.id)) return
-        seen.add(service.txt.id)
         onUp(service)
       })
     },

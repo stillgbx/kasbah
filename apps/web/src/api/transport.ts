@@ -40,6 +40,12 @@ export interface Transport {
   /** URL de consentement Google à ouvrir dans un navigateur pour lier le compte Nest. */
   nestAuthUrl(): Promise<{ url: string; redirectUri: string }>
   /**
+   * Fait oublier un appareil au plugin qui le retenait (`meta.forgettable`), par convention
+   * `DELETE /api/plugins/<plugin>/devices/<externalId>` : il quitte l'inventaire jusqu'à ce qu'il
+   * se réannonce. Sert aux appareils découverts sur le réseau et disparus pour de bon.
+   */
+  forgetDevice(deviceId: string): Promise<void>
+  /**
    * URL WebSocket du flux vidéo d'une caméra (`live_stream`), par convention
    * `/api/plugins/<plugin>/cameras/<externalId>/stream` ; `null` si ce transport n'en sert pas.
    */

@@ -5,6 +5,7 @@ import type { DeviceEntry, DeviceKind } from '@kasbah/shared'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import { useRouter } from 'vue-router'
 import { deviceIcon } from '../../lib/deviceIcons'
+import ForgetDeviceButton from './ForgetDeviceButton.vue'
 import MarqueeText from '../ui/MarqueeText.vue'
 import { isDeviceOn, statusLabel } from '../../lib/deviceState'
 import { useDevicesStore } from '../../stores/devices'
@@ -178,6 +179,13 @@ defineExpose({ count: computed(() => entries.value.length) })
               <StrokeIcon name="pin" :size="14" />
             </span>
             <slot name="control" :entry="r.entry" :on="r.on" />
+            <!-- Appareil que son plugin RETIENT alors qu'il ne répond plus, et qui n'est pas dans la
+                 maison : c'est ici qu'un fantôme se voit (« Hors maison »), c'est donc ici qu'on
+                 l'oublie. Sur sa PROPRE ligne, toute la largeur : à côté du nom, la pilule ne
+                 laissait plus rien à lire dans une carte étroite. -->
+            <div v-if="r.origin === 'unplaced' && r.entry.descriptor.meta.forgettable && !r.entry.state.available" class="row__forget">
+              <ForgetDeviceButton :device-id="r.entry.descriptor.id" />
+            </div>
           </div>
         </section>
       </div>
@@ -233,6 +241,8 @@ defineExpose({ count: computed(() => entries.value.length) })
 .row__statustext { flex: 1 1 auto; min-width: 0; }
 .min0 { min-width: 0; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+/* la ligne d'oubli occupe toute la largeur de la ligne, sous le contrôle */
+.row__forget { grid-column: 1 / -1; display: flex; justify-content: flex-end; }
 .badge {
   flex: 0 0 auto; display: grid; place-items: center; width: 22px; height: 22px; color: var(--muted);
 }

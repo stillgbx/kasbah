@@ -12,6 +12,7 @@ import { useHouseStore } from '../../stores/house'
 import { useNotificationsStore } from '../../stores/notifications'
 import MarqueeText from '../ui/MarqueeText.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
+import ForgetDeviceButton from '../devices/ForgetDeviceButton.vue'
 import DeviceControl from '../controls/DeviceControl.vue'
 import PlacementControl from './PlacementControl.vue'
 
@@ -78,6 +79,17 @@ watch(artUrl, (url) => {
 }, { immediate: true })
 const brand = computed(() => resolved.value?.descriptor?.meta.manufacturer ?? (resolved.value?.deviceId?.split(':')[0] ?? ''))
 
+/**
+ * « Oublier l'appareil » : proposé aux appareils que le plugin RETIENT (`meta.forgettable` — un Cast
+ * éteint ne s'annonce plus et resterait listé pour toujours) qui ne répondent pas et ne sont PAS dans
+ * la maison. Un appareil placé se retire d'abord de la maison (« Emplacement »), sinon son entrée
+ * pointerait vers un id que plus aucun plugin ne remonte.
+ */
+const forgettable = computed(() => {
+  const r = resolved.value
+  return !!r?.descriptor?.meta.forgettable && !r.houseDevice && !!r.state && !r.state.available
+})
+
 function send(cmd: CommandInput) {
   const id = resolved.value?.deviceId
   if (!id) return
@@ -103,11 +115,15 @@ function send(cmd: CommandInput) {
     <div class="head">
       <span class="icon-square icon-square--lg" :data-on="on ? '1' : '0'"><StrokeIcon :name="kindIcon(resolved.descriptor?.kind ?? resolved.houseDevice?.kind, resolved.descriptor)" :size="22" /></span>
       <div class="head__main">
-        <div class="head__name">{{ resolved.name }}</div>
+        <!-- nom trop long pour les 340 px du panneau (un id d'appareil non lié fait 50 caractères) :
+             il défile avec un fondu plutôt que de déborder, comme le titre d'un morceau -->
+        <MarqueeText class="head__name" :text="resolved.name" />
         <div class="muted head__sub">
           <!-- un lecteur dit sa nature (téléviseur, écran connecté) plutôt que « Enceinte » pour tous -->
-          <span v-if="resolved.descriptor">{{ resolved.descriptor.kind === 'media_player' ? $t(`media.classes.${resolved.descriptor.meta.mediaPlayer?.deviceClass ?? 'speaker'}`) : $t(`kinds.${resolved.descriptor.kind}`) }}</span><span v-if="brand"> · {{ brand }}</span>
-          <span v-if="resolved.state && !resolved.state.available" class="text-error"> · {{ $t('common.unavailable') }}</span>
+          <span v-if="resolved.descriptor">{{ resolved.descriptor.kind === 'media_player' ? $t(`media.classes.${resolved.descriptor.meta.mediaPlayer?.deviceClass ?? 'speaker'}`) : $t(`kinds.${resolved.descriptor.kind}`) }}</span>
+          <!-- « Indisponible » AVANT le fabricant : la ligne tient sur 340 px, et si elle est coupée
+               c'est la marque qui part, pas l'information qui compte -->
+          <span v-if="resolved.state && !resolved.state.available" class="text-error"> · {{ $t('common.unavailable') }}</span><span v-if="brand"> · {{ brand }}</span>
         </div>
       </div>
       <!-- empreinte FIXE : le spinner (20 px) remplace l'interrupteur (52 x 56) le temps de
@@ -126,10 +142,18 @@ function send(cmd: CommandInput) {
     <PlacementControl v-if="placeable" class="placement" :device="resolved.houseDevice!" />
     <!-- appareil connu du plugin mais absent de la maison : le poser depuis ici, sans repasser par la liste -->
     <div v-else-if="resolved.descriptor && !resolved.houseDevice" class="card card--soft placement place-new">
-      <span class="muted">{{ $t('place.title') }}</span>
-      <button type="button" class="pill place-new__cta" :title="$t('rooms.origins.placeHint')" @click="house.startPlacingNew(resolved.descriptor.id)">
-        <StrokeIcon name="pin" :size="16" /> {{ $t('rooms.origins.place') }}
-      </button>
+      <div class="place-new__row">
+        <span class="muted">{{ $t('place.title') }}</span>
+        <button type="button" class="pill place-new__cta" :title="$t('rooms.origins.placeHint')" @click="house.startPlacingNew(resolved.descriptor.id)">
+          <StrokeIcon name="pin" :size="16" /> {{ $t('rooms.origins.place') }}
+        </button>
+      </div>
+      <!-- appareil retenu par le plugin et qui ne répond plus : s'il a disparu pour de bon, l'oublier
+           (voir `forgettable`) ; il quitte l'inventaire, le panneau n'a plus de sujet -->
+      <div v-if="forgettable" class="place-new__row">
+        <span class="muted place-new__hint">{{ $t('device.gone') }}</span>
+        <ForgetDeviceButton :device-id="resolved.deviceId!" @forgotten="house.clearSelection()" />
+      </div>
     </div>
   </template>
 </template>
@@ -148,12 +172,17 @@ function send(cmd: CommandInput) {
 .crumb:hover { color: var(--text); }
 .head { display: flex; align-items: center; gap: 12px; }
 .placement { margin-top: auto; }
-.place-new { padding: 12px 14px; font-size: 13px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.place-new__cta { min-width: 124px; justify-content: center; }
+.place-new { padding: 12px 14px; font-size: 13px; display: grid; gap: 10px; }
+.place-new__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+/* même largeur que le bouton « Oublier l'appareil » de la ligne d'en dessous : les deux s'alignent */
+.place-new__cta { flex: 0 0 auto; min-width: 150px; justify-content: center; font-size: 12px; }
+.place-new__hint { min-width: 0; font-size: 12px; }
 .head__main { flex: 1 1 0; min-width: 0; }
 .head__name { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
-.head__sub { font-size: 12px; }
+/* nature · fabricant · disponibilité : jamais sur deux lignes, coupé aux points de suspension */
+.head__sub { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .icon-square--lg { width: 44px; height: 44px; border-radius: 12px; }
 .head__toggle { flex: 0 0 52px; height: 56px; display: grid; place-items: center; }
-.unbound { padding: 12px 14px; font-size: 13px; }
+/* la phrase porte un id de plugin, d'un seul tenant : il se coupe n'importe où plutôt que de sortir du panneau */
+.unbound { padding: 12px 14px; font-size: 13px; overflow-wrap: anywhere; }
 </style>

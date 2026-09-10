@@ -1,3 +1,5 @@
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { Command, DeviceDescriptor, PluginHealth } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
@@ -6,6 +8,7 @@ import { sleep } from '../../core/clock'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
 import { CastConnection, tlsSocketFactory, type SocketFactory } from './channel'
 import { createMdnsDiscovery, type CastDiscovery } from './discovery'
+import { createKnownDevicesFile, type KnownDevices } from './known'
 import { sendError } from '../../http/errors'
 import { AppIconResolver, registryAppId, type RegistryFetch } from './enrich/appIcon'
 import { CrunchyrollEnricher, isCrunchyrollApp, type EnrichFetch } from './enrich/crunchyroll'
@@ -24,6 +27,7 @@ import type { StatePatch } from '@kasbah/shared'
 
 const optionalKey = z.string().trim().transform((s) => (s === '' ? undefined : s)).optional()
 const bool = z.enum(['true', 'false', '1', '0']).transform((v) => v === 'true' || v === '1')
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../..')
 
 export const googleCastConfigSchema = z.object({
   /** IPv4 de l'interface réseau qui porte le multicast mDNS (machine à plusieurs cartes : VPN, VM). */
@@ -32,6 +36,11 @@ export const googleCastConfigSchema = z.object({
   CAST_DISCOVERY_WAIT_MS: z.coerce.number().int().min(500).max(15_000).default(3000),
   /** Cadence des questions mDNS suivantes (appareils rallumés, annonces perdues). */
   CAST_MDNS_REFRESH_MS: z.coerce.number().int().min(10_000).max(600_000).default(60_000),
+  /**
+   * Où retenir les appareils déjà vus (voir `known.ts`) : un Cast éteint ne s'annonce plus, il reste
+   * listé grâce à ce fichier. Chaîne vide = ne rien retenir (l'appareil disparaît quand il s'éteint).
+   */
+  CAST_KNOWN_FILE: z.string().trim().default(resolve(REPO_ROOT, 'apps/server/.state/google-cast-devices.json')),
   /**
    * Enrichir les lectures Crunchyroll (série, saison, épisode, vignette) par l'API interne du service,
    * en anonyme, sans compte — NON OFFICIEL (voir `enrich/crunchyroll.ts`). `false` pour s'en passer.
@@ -82,6 +91,8 @@ export interface GoogleCastPluginDeps {
   registryFetch?: RegistryFetch
   /** Injection pour les tests : fausse découverte. */
   discovery?: CastDiscovery
+  /** Injection pour les tests : mémoire des appareils déjà vus (sinon un fichier JSON). */
+  known?: KnownDevices
   /** Injection pour les tests : fausse socket. */
   connect?: SocketFactory
   requestTimeoutMs?: number
@@ -92,6 +103,8 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
   let ctx: PluginContext | null = null
   let config: GoogleCastConfig | null = null
   let discovery: CastDiscovery | null = null
+  /** Mémoire des appareils déjà vus (null si `CAST_KNOWN_FILE` est vide : rien n'est retenu). */
+  let known: KnownDevices | null = null
   /** Enrichissement Crunchyroll (absent si désactivé). */
   let crunchyroll: CrunchyrollEnricher | null = null
   /** Logos des applis, pochette de repli. */
@@ -110,19 +123,63 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
   const descriptors = (): DeviceDescriptor[] =>
     [...entries.values()].map((e) => toDescriptor(e.service, { controlType: e.controlType }))
 
-  /** Un appareil annoncé en mDNS : retenu, connecté ; s'il arrive après `discover`, la liste est republiée. */
-  function onService(service: CastService, late: boolean): void {
-    if (entries.has(service.txt.id)) return
+  /** Écrit la mémoire des appareils vus (voir `known.ts`) ; sans mémoire configurée, ne fait rien. */
+  function remember(): void {
+    void known?.save([...entries.values()].map((e) => e.service))
+  }
+
+  function addEntry(service: CastService): Entry {
     const entry: Entry = {
       service, connection: null, controlType: undefined,
       backoff: createBackoff({ initialMs: RECONNECT_INITIAL_MS, maxMs: RECONNECT_MAX_MS }), reconnectTimer: null,
     }
     entries.set(service.txt.id, entry)
+    return entry
+  }
+
+  const sameService = (a: CastService, b: CastService): boolean =>
+    a.host === b.host && a.port === b.port && a.txt.fn === b.txt.fn && a.txt.md === b.txt.md && a.txt.ca === b.txt.ca
+
+  /**
+   * Un appareil annoncé en mDNS : retenu, connecté ; s'il arrive après `discover`, la liste est
+   * republiée. L'annonce peut concerner un appareil DÉJÀ connu (réannonce périodique, appareil
+   * rallumé, appareil retrouvé dans la mémoire au démarrage) :
+   *  - annonce identique et connexion ouverte : rien à faire ;
+   *  - adresse ou nom changés (bail DHCP, renommage dans Google Home) : on retient la nouvelle
+   *    annonce, on republie les descripteurs et on rouvre la connexion, l'ancienne pointant dans le vide ;
+   *  - pas de connexion : l'annonce prouve qu'il est là, on retente TOUT DE SUITE plutôt que
+   *    d'attendre la fin du délai courant (qui peut aller à deux minutes).
+   */
+  function onService(service: CastService, late: boolean): void {
+    const prev = entries.get(service.txt.id)
+    if (prev) {
+      const changed = !sameService(prev.service, service)
+      if (changed) {
+        log().info({ name: service.txt.fn, host: service.host, was: prev.service.host }, 'cast device announcement changed')
+        prev.service = service
+        remember()
+        if (started) ctx!.emitDevices(descriptors())
+      }
+      if (!late) return                                         // pendant `discover` : la connexion vient juste après
+      if (prev.connection) { if (changed) prev.connection.close('announcement changed') }
+      else reconnectNow(prev)
+      return
+    }
+    const entry = addEntry(service)
+    remember()
     log().info({ name: service.txt.fn, model: service.txt.md, host: service.host }, 'cast device found')
     if (late) {
       ctx!.emitDevices(descriptors())
       void connect(entry)
     }
+  }
+
+  /** Nouvelle tentative immédiate : le délai en cours ne vaut plus rien puisque l'appareil vient de parler. */
+  function reconnectNow(entry: Entry): void {
+    ctx!.clock.clearTimeout(entry.reconnectTimer)
+    entry.reconnectTimer = null
+    entry.backoff.reset()
+    void connect(entry)
   }
 
   /** Ouvre la connexion d'un appareil ; en cas d'échec, programme une nouvelle tentative. */
@@ -279,6 +336,26 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
     entry.reconnectTimer = ctx!.clock.setTimeout(() => { entry.reconnectTimer = null; void connect(entry) }, delay)
   }
 
+  /**
+   * Oublie un appareil : connexion fermée, entrée sortie de la liste ET de la mémoire. Un appareil
+   * encore sur le réseau reviendra à sa prochaine annonce — c'est bien : on n'oublie que ce qui a
+   * disparu (appareil vendu, invité de passage), et l'UI ne le propose qu'aux appareils indisponibles.
+   */
+  function forget(externalId: string): boolean {
+    const entry = entries.get(externalId)
+    if (!entry) return false
+    ctx!.clock.clearTimeout(entry.reconnectTimer)
+    entry.reconnectTimer = null
+    const c = entry.connection
+    entry.connection = null                                     // `onClose` ne doit pas reprogrammer de tentative
+    c?.close('device forgotten')
+    entries.delete(externalId)
+    remember()
+    if (started) ctx!.emitDevices(descriptors())
+    log().info({ externalId, name: entry.service.txt.fn }, 'cast device forgotten')
+    return true
+  }
+
   /** Commande vers un appareil connecté ; résout quand le récepteur a répondu (son état suit par ses messages). */
   async function run(externalId: string, command: Command): Promise<void> {
     const entry = entries.get(externalId)
@@ -315,6 +392,12 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
         ? new CrunchyrollEnricher({ ...(deps.enrichFetch ? { fetchImpl: deps.enrichFetch } : {}), clock: context.clock, logger: context.logger, signal: context.signal })
         : null
       appIcons = new AppIconResolver({ ...(deps.registryFetch ? { fetchImpl: deps.registryFetch } : {}), clock: context.clock, logger: context.logger, signal: context.signal })
+      // Appareils déjà vus : ils entrent dans la liste AVANT la découverte, donc un appareil éteint
+      // (qui ne s'annonce plus) reste là, indisponible. Une annonce mDNS mettra son adresse à jour.
+      known = deps.known ?? (config.CAST_KNOWN_FILE ? createKnownDevicesFile(config.CAST_KNOWN_FILE, context.logger) : null)
+      const remembered = (await known?.load()) ?? []
+      for (const service of remembered) addEntry(service)
+      if (remembered.length) context.logger.info({ devices: remembered.length }, 'cast devices remembered from a previous run')
     },
 
     /**
@@ -363,6 +446,13 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
         const art = await artFor(url)
         if (art.status !== 200) return sendError(reply, 502, 'UPSTREAM_ERROR', `artwork fetch failed (${art.status || 'network'})`)
         return reply.header('content-type', art.type).header('cache-control', 'public, max-age=86400').send(art.body)
+      })
+
+      // Oublier un appareil retenu (voir `forget`) : c'est le pendant de la mémoire, sans quoi un
+      // appareil vu une fois resterait listé pour toujours.
+      app.delete<{ Params: { externalId: string } }>('/devices/:externalId', async (req, reply) => {
+        if (!forget(req.params.externalId)) return sendError(reply, 404, 'NOT_FOUND', `unknown Cast device ${req.params.externalId}`)
+        return { forgotten: req.params.externalId }
       })
 
       // Dernier état brut reçu de chaque appareil : sert à relever des fixtures réelles (voir __fixtures__).

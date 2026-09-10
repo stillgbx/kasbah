@@ -56,6 +56,7 @@ export abstract class DeviceMarker {
       this.pill.className = 'marker-pill'
       this.pill.dataset.key = device.id
       this.pill.appendChild(iconSvg(kindIcon(ctx.descriptor?.kind ?? device.kind, ctx.descriptor), 16, 2))
+      this.pill.title = ctx.label                       // la pilule est bornée : le nom entier reste lisible au survol
       const span = document.createElement('span')
       span.textContent = ctx.label
       this.pill.appendChild(span)

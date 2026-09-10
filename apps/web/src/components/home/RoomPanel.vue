@@ -112,7 +112,8 @@ const roomScenes = computed(() => (target.value ? scenes.forRoom(target.value.na
 @media (prefers-reduced-motion: reduce) { .rowart-enter-active, .rowart-leave-active { transition: none; } }
 .dev-row:hover { filter: brightness(1.03); }
 .dev-row__main { flex: 1 1 0; min-width: 0; }
-.dev-row__name { font-weight: 500; font-size: 14px; }
+/* nom trop long (id d'un appareil non lié) : coupé aux points de suspension, comme dans les vues en bandes */
+.dev-row__name { font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dev-row__status { font-size: 12px; color: var(--muted); display: flex; align-items: center; min-width: 0; }
 .dev-row__statustext { flex: 1 1 auto; min-width: 0; }
 .dev-row__dot { margin-right: 6px; color: var(--accent); }

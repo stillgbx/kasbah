@@ -192,6 +192,23 @@ export const useDevicesStore = defineStore('devices', () => {
 
   const isPending = (id: string) => (pending.value[id] ?? 0) > 0
 
+  /**
+   * Fait oublier au plugin un appareil qu'il retenait alors qu'il a disparu du réseau (appareil
+   * vendu, invité de passage). La liste des appareils revient par le serveur : rien à retirer ici.
+   */
+  async function forget(deviceId: string): Promise<boolean> {
+    const name = descriptors.value[deviceId]?.name ?? deviceId
+    try {
+      await getTransport().forgetDevice(deviceId)
+      return true
+    } catch (err) {
+      const n = useNotificationsStore()
+      if (err instanceof ApiRequestError) n.error(t(`errors.${err.code}`, { name, message: err.message }))
+      else n.error(t('errors.UNKNOWN', { name, message: (err as Error).message }))
+      return false
+    }
+  }
+
   /** Exécute une scène (lot de commandes) ; les appareils inconnus sont ignorés. */
   async function runScene(actions: { deviceId: string; command: CommandInput }[]): Promise<void> {
     await Promise.all(actions.filter((a) => descriptors.value[a.deviceId]).map((a) => sendCommand(a.deviceId, a.command)))
@@ -199,7 +216,7 @@ export const useDevicesStore = defineStore('devices', () => {
 
   return {
     descriptors, states, connection, pending, health, serverHouse, list, count, targets,
-    start, stop, applyMessage, onDeviceEvent, sendCommand, runScene, isPending, refreshHealth, setEntries,
+    start, stop, applyMessage, onDeviceEvent, sendCommand, runScene, isPending, forget, refreshHealth, setEntries,
     targetPosition, clearTarget,
   }
 })

@@ -64,6 +64,9 @@ export function toDescriptor(service: CastService, volume?: { controlType?: stri
       ...(manufacturerOf(model) ? { manufacturer: manufacturerOf(model) } : {}),
       ...(model ? { model } : {}),
       mediaPlayer: { deviceClass: mediaPlayerClass(service.txt) },
+      // le plugin retient les appareils déjà vus (`known.ts`) : celui qui a disparu pour de bon
+      // s'oublie depuis l'UI, sinon il resterait listé pour toujours
+      forgettable: true,
     },
   }
 }

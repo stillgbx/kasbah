@@ -86,7 +86,8 @@ function fakeDiscovery(initial: CastService[]) {
 function fakeContext(clock: ManualClock) {
   const ctrl = new AbortController()
   const ctx: PluginContext = {
-    pluginId: 'google_cast', config: googleCastConfigSchema.parse({ CAST_DISCOVERY_WAIT_MS: '1000' }), logger: pino({ level: 'silent' }), clock, signal: ctrl.signal,
+    // `CAST_KNOWN_FILE` vide : aucun test ne doit lire ni écrire la mémoire réelle du poste de dev
+    pluginId: 'google_cast', config: googleCastConfigSchema.parse({ CAST_DISCOVERY_WAIT_MS: '1000', CAST_KNOWN_FILE: '' }), logger: pino({ level: 'silent' }), clock, signal: ctrl.signal,
     emitState: vi.fn(), setAvailable: vi.fn(), emitDevices: vi.fn(), emitScenes: vi.fn(), emitSceneState: vi.fn(), emitEvent: vi.fn(),
   }
   return { ctx, ctrl }
@@ -106,10 +107,20 @@ function network(receivers: Record<string, ReturnType<typeof fakeReceiver>>) {
 const noRegistry: RegistryFetch = async () => ({ ok: false, status: 404, text: async () => '' })
 const netflixRegistry: RegistryFetch = async (url) => (url.endsWith('CA5E8412') ? { ok: true, status: 200, text: async () => CAST_REGISTRY_NETFLIX } : noRegistry(url))
 
-async function started(discovery: CastDiscovery, connect: SocketFactory, fetchImpl?: ArtFetch, enrichFetch?: EnrichFetch, registryFetch: RegistryFetch = noRegistry) {
+/** Mémoire des appareils vus, en mémoire vive : ce que `known.ts` fait avec un fichier. */
+function fakeKnown(initial: CastService[] = []) {
+  let devices = initial
+  return {
+    async load() { return devices },
+    async save(services: CastService[]) { devices = services },
+    get current() { return devices },
+  }
+}
+
+async function started(discovery: CastDiscovery, connect: SocketFactory, fetchImpl?: ArtFetch, enrichFetch?: EnrichFetch, registryFetch: RegistryFetch = noRegistry, known?: ReturnType<typeof fakeKnown>) {
   const clock = new ManualClock(0)
   const { ctx, ctrl } = fakeContext(clock)
-  const plugin = createGoogleCastPlugin({ discovery, connect, registryFetch, ...(fetchImpl ? { fetchImpl } : {}), ...(enrichFetch ? { enrichFetch } : {}) })
+  const plugin = createGoogleCastPlugin({ discovery, connect, registryFetch, ...(fetchImpl ? { fetchImpl } : {}), ...(enrichFetch ? { enrichFetch } : {}), ...(known ? { known } : {}) })
   await plugin.init(ctx)
   const p = plugin.discover()
   await flush()
@@ -368,6 +379,63 @@ describe('google_cast plugin', () => {
     expect(enrichFetch).not.toHaveBeenCalled()                               // Spotify : rien à enrichir
     await plugin.stop()
     expect(googleCastConfigSchema.parse({ CAST_CRUNCHYROLL_ENRICH: 'false' }).CAST_CRUNCHYROLL_ENRICH).toBe(false)
+  })
+
+  it('remembers a device that stopped announcing itself: listed and unavailable, connected as soon as it speaks again', async () => {
+    // le téléviseur a été vu lors d'un run précédent ; il est éteint, donc absent du mDNS et du réseau
+    const known = fakeKnown([SERVICE_CHROMECAST])
+    const receivers: Record<string, ReturnType<typeof fakeReceiver>> = { [SERVICE_NEST_MINI.host]: fakeReceiver(RECEIVER_STATUS_NEST_HUB_IDLE) }
+    const discovery = fakeDiscovery([SERVICE_NEST_MINI])
+    const { plugin, ctx, descriptors } = await started(discovery, network(receivers), undefined, undefined, undefined, known)
+
+    // il garde son nom, sa nature et ses capacités : l'entrée de house.json qui le vise reste lisible
+    expect(descriptors.map((d) => d.name)).toEqual(['Chambre 3', 'Cuisine'])
+    expect(descriptors[0]!.meta.mediaPlayer).toEqual({ deviceClass: 'tv' })
+    expect(descriptors[0]!.meta.forgettable).toBe(true)
+    expect(ctx.setAvailable).toHaveBeenCalledWith(TXT_CHROMECAST.id, false)
+    expect(plugin.health!()).toMatchObject({ detail: '2 device(s), 1 connected' })
+    // la nouvelle enceinte est entrée dans la mémoire, le téléviseur y reste
+    expect(known.current.map((s) => s.txt.id)).toEqual([TXT_CHROMECAST.id, TXT_NEST_MINI.id])
+
+    // on rallume le téléviseur : son annonce suffit, sans attendre la fin du délai de reconnexion
+    receivers[SERVICE_CHROMECAST.host] = fakeReceiver(RECEIVER_STATUS_CHROMECAST_FIXED)
+    discovery.announce(SERVICE_CHROMECAST)
+    await flush(8)
+    expect(patches(ctx, TXT_CHROMECAST.id).at(-1)).toMatchObject({ playback: 'idle' })
+    expect(plugin.health!()).toMatchObject({ status: 'ok', detail: '2 device(s), 2 connected' })
+    await plugin.stop()
+  })
+
+  it('follows a device that changed address or name, and forgets one on demand', async () => {
+    const known = fakeKnown()
+    const first = fakeReceiver(RECEIVER_STATUS_NEST_HUB_IDLE)
+    const receivers: Record<string, ReturnType<typeof fakeReceiver>> = { [SERVICE_NEST_MINI.host]: first }
+    const discovery = fakeDiscovery([SERVICE_NEST_MINI])
+    const { plugin, ctx, clock } = await started(discovery, network(receivers), undefined, undefined, undefined, known)
+
+    // nouveau bail DHCP et renommage dans Google Home : l'ancienne connexion ne mène plus à rien
+    const moved: CastService = { ...SERVICE_NEST_MINI, host: '192.168.1.207', txt: { ...TXT_NEST_MINI, fn: 'Cuisine bas' } }
+    receivers[moved.host] = fakeReceiver(RECEIVER_STATUS_NEST_HUB_IDLE)
+    discovery.announce(moved)
+    await flush()
+    expect((ctx.emitDevices as ReturnType<typeof vi.fn>).mock.calls.at(-1)![0]).toMatchObject([{ name: 'Cuisine bas' }])
+    expect(known.current[0]!.host).toBe(moved.host)
+    clock.advance(7000)                                                   // nouvelle tentative, sur la nouvelle adresse
+    await flush(8)
+    expect(plugin.health!()).toMatchObject({ detail: '1 device(s), 1 connected' })
+
+    // oublier : l'appareil sort de la liste ET de la mémoire (route pendant de `known.ts`)
+    const app = Fastify()
+    await app.register(async (a) => { plugin.registerRoutes!(a) }, { prefix: '/api/plugins/google_cast' })
+    await app.ready()
+    const res = await app.inject({ method: 'DELETE', url: `/api/plugins/google_cast/devices/${TXT_NEST_MINI.id}` })
+    expect(res.statusCode).toBe(200)
+    expect((ctx.emitDevices as ReturnType<typeof vi.fn>).mock.calls.at(-1)![0]).toEqual([])
+    expect(known.current).toEqual([])
+    // un appareil déjà oublié n'est plus connu
+    expect((await app.inject({ method: 'DELETE', url: `/api/plugins/google_cast/devices/${TXT_NEST_MINI.id}` })).statusCode).toBe(404)
+    await app.close()
+    await plugin.stop()
   })
 
   it('reports no device found as degraded', async () => {

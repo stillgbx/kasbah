@@ -60,6 +60,11 @@ button { font-family: inherit; cursor: pointer; }
   display: inline-flex; align-items: center; gap: 6px; font: 500 12px/1 var(--font); white-space: nowrap;
   transform: translateY(-60%); transition: background .15s, color .15s, transform .15s;
 }
+/* Pilule bornée : un nom trop long (id d'un appareil dont le plugin ne dit rien, 50 caractères)
+   faisait une pilule plus large que la maison. Coupé aux points de suspension, le nom entier
+   reste dans l'infobulle et dans le panneau. */
+.marker-pill { max-width: 210px; }
+.marker-pill span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .marker-anchor { pointer-events: none; }
 .marker-pill svg { width: 16px; height: 16px; flex: 0 0 auto; }
 .marker-pill[data-on='1'] { background: var(--accent-soft); color: var(--accent); border-color: transparent; }

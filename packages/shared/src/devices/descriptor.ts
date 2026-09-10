@@ -41,6 +41,13 @@ export const deviceMetaSchema = z.object({
   }).optional(),
   /** Nature du lecteur (enceinte, téléviseur, écran connecté) : décide l'icône et le marqueur 3D. Absent = enceinte. */
   mediaPlayer: z.object({ deviceClass: z.enum(MEDIA_PLAYER_CLASSES) }).optional(),
+  /**
+   * Le plugin RETIENT cet appareil même absent du réseau (un Cast éteint ne s'annonce plus, et son
+   * entrée dans la maison perdrait son nom et son état). L'UI peut donc proposer de l'oublier —
+   * `DELETE /api/plugins/<plugin>/devices/<externalId>` par convention. Absent = la liste du plugin
+   * fait foi, il n'y a rien à oublier.
+   */
+  forgettable: z.boolean().optional(),
 })
 export type DeviceMeta = z.infer<typeof deviceMetaSchema>
 
