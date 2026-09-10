@@ -128,7 +128,9 @@ export class GenericMarker extends DeviceMarker {
       this.art.set(media?.nowPlaying?.artUrl)
     }
     if (this.waves.length === 0) return
-    this.playing = !!state && state.available && this.isOn(state)
+    // l'onde est du SON : elle suit ce que la scène dit entendre ici (`SoundCue`) — une TV dont le son
+    // part en HDMI vers une barre garde l'image, la barre prend l'onde ; sans indication, l'état seul
+    this.playing = this.sound ? this.sound.emits : !!state && state.available && this.isOn(state)
     for (const w of this.waves) (w.material.uniforms.uColor!.value as Color).copy(this.ctx.theme.media)
     if (this.playing && !this.waving) {
       this.waving = true

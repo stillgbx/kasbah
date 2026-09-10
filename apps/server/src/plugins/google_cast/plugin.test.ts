@@ -6,9 +6,11 @@ import { describe, expect, it, vi } from 'vitest'
 import type { PluginContext } from '../../core/plugin'
 import {
   CAST_REGISTRY_NETFLIX, CAST_REGISTRY_PRIME_VIDEO, CAST_REGISTRY_YOUTUBE, CRUNCHYROLL_OBJECT_EPISODE, DEEZER_SEARCH_BOUNDARY, ITUNES_SEARCH_BOUNDARY, CRUNCHYROLL_OBJECT_SERIES, CRUNCHYROLL_TOKEN, MEDIA_STATUS_CRUNCHYROLL, MEDIA_STATUS_PLAYING, MEDIA_STATUS_PRIME_VIDEO, MEDIA_STATUS_RADIO, MEDIA_STATUS_YOUTUBE_TV, RECEIVER_STATUS_CHROMECAST_FIXED,
-  RECEIVER_STATUS_CRUNCHYROLL, RECEIVER_STATUS_NEST_HUB_IDLE, RECEIVER_STATUS_NETFLIX, RECEIVER_STATUS_PLAYING, RECEIVER_STATUS_PRIME_VIDEO, RECEIVER_STATUS_RADIO, RECEIVER_STATUS_YOUTUBE_TV, SERVICE_CHROMECAST,
-  SERVICE_NEST_HUB, SERVICE_NEST_MINI, TXT_CHROMECAST, TXT_NEST_HUB, TXT_NEST_MINI,
+  RECEIVER_STATUS_CRUNCHYROLL, RECEIVER_STATUS_NEST_HUB_IDLE, RECEIVER_STATUS_NETFLIX, RECEIVER_STATUS_PLAYING, RECEIVER_STATUS_PRIME_VIDEO, RECEIVER_STATUS_RADIO, RECEIVER_STATUS_YOUTUBE_TV, SERVICE_BRAVIA, SERVICE_CHROMECAST,
+  SERVICE_NEST_HUB, SERVICE_NEST_MINI, TXT_BRAVIA, TXT_CHROMECAST, TXT_NEST_HUB, TXT_NEST_MINI,
 } from './__fixtures__/network'
+import { BRAVIA_INPUTS_ARC_SOUNDBAR, BRAVIA_SOUND_AUDIO_SYSTEM, BRAVIA_SOUND_SPEAKER } from './__fixtures__/bravia'
+import type { BraviaFetch } from './bravia'
 import type { SocketFactory } from './channel'
 import type { CastDiscovery } from './discovery'
 import type { RegistryFetch } from './enrich/appIcon'
@@ -123,11 +125,14 @@ function fakeKnown(initial: CastService[] = []) {
   }
 }
 
-async function started(discovery: CastDiscovery, connect: SocketFactory, fetchImpl?: ArtFetch, enrichFetch?: EnrichFetch, registryFetch: RegistryFetch = noRegistry, known?: ReturnType<typeof fakeKnown>, coverFetch?: CoverFetch) {
+/** API d'une TV Sony : muette par défaut (aucun test ne doit sortir sur le réseau). */
+const noBravia: BraviaFetch = async () => { throw new Error('ECONNREFUSED') }
+
+async function started(discovery: CastDiscovery, connect: SocketFactory, fetchImpl?: ArtFetch, enrichFetch?: EnrichFetch, registryFetch: RegistryFetch = noRegistry, known?: ReturnType<typeof fakeKnown>, coverFetch?: CoverFetch, braviaFetch: BraviaFetch = noBravia) {
   const clock = new ManualClock(0)
   // injecter de faux catalogues, c'est vouloir éprouver la recherche de pochette : elle s'allume avec
   const { ctx, ctrl } = fakeContext(clock, coverFetch ? { CAST_COVER_LOOKUP: 'true' } : {})
-  const plugin = createGoogleCastPlugin({ discovery, connect, registryFetch, ...(fetchImpl ? { fetchImpl } : {}), ...(enrichFetch ? { enrichFetch } : {}), ...(known ? { known } : {}), ...(coverFetch ? { coverFetch } : {}) })
+  const plugin = createGoogleCastPlugin({ discovery, connect, registryFetch, braviaFetch, ...(fetchImpl ? { fetchImpl } : {}), ...(enrichFetch ? { enrichFetch } : {}), ...(known ? { known } : {}), ...(coverFetch ? { coverFetch } : {}) })
   await plugin.init(ctx)
   const p = plugin.discover()
   await flush()
@@ -518,6 +523,40 @@ describe('google_cast plugin', () => {
       nowPlaying: { title: 'Horizon', artUrl: `/api/plugins/google_cast/art?url=${encodeURIComponent(cover)}` },
     })
     expect(catalogs).toHaveBeenCalledTimes(1)                            // iTunes a suffi, Deezer n'a pas été appelé
+    await plugin.stop()
+  })
+
+  it('asks a Sony TV where its sound goes and publishes it, but never asks anything else (real captures)', async () => {
+    const tv = fakeReceiver(RECEIVER_STATUS_YOUTUBE_TV, MEDIA_STATUS_YOUTUBE_TV), chromecast = fakeReceiver(RECEIVER_STATUS_CHROMECAST_FIXED)
+    const replies: Record<string, unknown> = { getSoundSettings: BRAVIA_SOUND_AUDIO_SYSTEM, getCurrentExternalInputsStatus: BRAVIA_INPUTS_ARC_SOUNDBAR }
+    const bravia: BraviaFetch = vi.fn(async (url, init) => {
+      const { method } = JSON.parse(init.body) as { method: string }
+      return { ok: true, status: 200, json: async () => replies[method] }
+    })
+    const { plugin, ctx, clock } = await started(fakeDiscovery([SERVICE_BRAVIA, SERVICE_CHROMECAST]), network({ [SERVICE_BRAVIA.host]: tv, [SERVICE_CHROMECAST.host]: chromecast }), undefined, undefined, noRegistry, undefined, undefined, bravia)
+    // relevé fait pendant `discover`, publié d'un bloc au `start` avec le reste de l'état
+    expect(patches(ctx, TXT_BRAVIA.id)[0]).toMatchObject({ playback: 'playing', audioOutput: { terminal: 'external', name: 'Flexus 300' } })
+    // seule la TV Sony est interrogée, et seulement à son adresse
+    for (const call of (bravia as ReturnType<typeof vi.fn>).mock.calls) expect(call[0]).toMatch(`http://${SERVICE_BRAVIA.host}/sony/`)
+    expect(patches(ctx, TXT_CHROMECAST.id).some((p) => 'audioOutput' in p)).toBe(false)
+
+    // même réponse dix secondes plus tard : rien de republié (la relecture de position, elle, continue)
+    const audioPatches = () => patches(ctx, TXT_BRAVIA.id).filter((p) => 'audioOutput' in p)
+    expect(audioPatches()).toHaveLength(1)
+    clock.advance(10_000)
+    await flush(6)
+    expect(audioPatches()).toHaveLength(1)
+    // la TV repasse sur ses haut-parleurs : un patch, sans nom d'appareil (plus rien à nommer)
+    replies.getSoundSettings = BRAVIA_SOUND_SPEAKER
+    clock.advance(10_000)
+    await flush(6)
+    expect(audioPatches()).toHaveLength(2)
+    expect(audioPatches().at(-1)).toEqual({ audioOutput: { terminal: 'internal' } })
+    // la TV ne répond plus (éteinte) : le dernier relevé reste, rien d'inventé
+    replies.getSoundSettings = { error: [403, 'Forbidden'] }
+    clock.advance(10_000)
+    await flush(6)
+    expect(audioPatches()).toHaveLength(2)
     await plugin.stop()
   })
 

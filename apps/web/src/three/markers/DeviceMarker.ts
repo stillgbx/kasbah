@@ -28,12 +28,20 @@ export interface MarkerContext {
   label: string
 }
 
+/**
+ * Ce que l'appareil fait ENTENDRE, décidé par la scène (qui connaît la maison et tous les états) et non
+ * par le marqueur (qui ne voit que le sien) : `emits` — du son sort de lui ; `relayFrom` — l'état du
+ * lecteur dont il joue le son (barre de son d'une TV). Voir `lib/audioRouting.ts`.
+ */
+export interface SoundCue { emits: boolean; relayFrom?: DeviceState }
+
 export abstract class DeviceMarker {
   readonly object = new Group()
   readonly key: string
   /** Hauteur (m) de la pilule au-dessus de l'ancre. */
   protected lift = 0.35
   protected state: DeviceState | undefined
+  protected sound: SoundCue | undefined
   protected selected = false
   protected stopAnimation: (() => void) | null = null
   protected pill: HTMLButtonElement | null = null
@@ -85,11 +93,14 @@ export abstract class DeviceMarker {
   protected abstract onState(state: DeviceState | undefined): void
 
   get currentState(): DeviceState | undefined { return this.state }
+  get currentSound(): SoundCue | undefined { return this.sound }
 
-  update(state: DeviceState | undefined): void {
+  update(state: DeviceState | undefined, sound?: SoundCue): void {
     this.state = state
+    this.sound = sound
     if (this.pill) {
-      this.pill.dataset.on = state && state.available && this.isOn(state) ? '1' : '0'
+      // actif par lui-même, ou parce qu'il joue le son d'un autre (barre de son d'une TV en lecture)
+      this.pill.dataset.on = (state && state.available && this.isOn(state)) || sound?.relayFrom ? '1' : '0'
       this.pill.dataset.unavailable = state && !state.available ? '1' : '0'
     }
     this.onState(state)

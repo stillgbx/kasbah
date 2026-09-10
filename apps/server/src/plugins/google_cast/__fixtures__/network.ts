@@ -31,6 +31,12 @@ export const SERVICE_NEST_MINI: CastService = { host: '192.168.1.93', port: 8009
 export const SERVICE_CHROMECAST: CastService = { host: '192.168.1.43', port: 8009, txt: TXT_CHROMECAST }
 export const SERVICE_LENOVO_CLOCK: CastService = { host: '192.168.1.96', port: 8009, txt: TXT_LENOVO_CLOCK }
 export const SERVICE_SOUNDBAR: CastService = { host: '192.168.1.14', port: 8009, txt: TXT_SOUNDBAR }
+/** TV Sony Android (relevé du 2026-09-10) : ne s'annonce qu'allumée ; son modèle ouvre la sonde `bravia.ts`. */
+export const TXT_BRAVIA = {
+  id: 'abcd1234ffffffffffffffffffffffff', cd: 'C0FFEE', rm: '', ve: '05', md: 'BRAVIA 4K VH22',
+  ic: '/setup/icon.png', fn: 'TV Salon', ca: '264709', st: '0', bs: 'FA8F85000005', nf: '1', ct: 'A266B8',
+}
+export const SERVICE_BRAVIA: CastService = { host: '192.168.1.87', port: 8009, txt: TXT_BRAVIA }
 
 /** Nest Hub au repos : Backdrop (fond d'écran) est déclaré comme appli, `isIdleScreen: true`. */
 export const RECEIVER_STATUS_NEST_HUB_IDLE = {

@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n'
 import type { DeviceEntry, StateFor } from '@kasbah/shared'
 import { formatPower, formatTemp } from '../lib/format'
 import { useDevicesStore } from '../stores/devices'
+import { useHouseStore } from '../stores/house'
 
 // Chiffres de synthèse partagés par l'en-tête et les tuiles : lumières allumées, volets ouverts,
 // stores baissés, lecteurs en lecture, production solaire, batterie, température intérieure.
@@ -14,6 +15,7 @@ import { useDevicesStore } from '../stores/devices'
 
 export function useHomeSummary() {
   const devices = useDevicesStore()
+  const house = useHouseStore()
   const { t, locale } = useI18n()
 
   const lights = computed(() => devices.list.filter((e) => e.state.kind === 'light'))
@@ -41,9 +43,11 @@ export function useHomeSummary() {
     const s = devices.list.find((e) => e.descriptor.kind === 'sensor' && e.descriptor.meta.sensor?.deviceClass === 'temperature' && e.descriptor.name.toLowerCase().indexOf('ext') < 0)
     return s ? (s.state as StateFor<'sensor'>).value : null
   })
-  // lecteurs (enceintes, écrans, téléviseurs) : combien jouent en ce moment
+  // lecteurs (enceintes, écrans, téléviseurs) : combien diffusent en ce moment — une lecture propre, ou le
+  // son d'un autre (barre de son d'une TV en HDMI ARC, `lib/audioRouting.ts`) : les deux appareils comptent
   const players = computed(() => devices.list.filter((e) => e.state.kind === 'media_player'))
-  const playing = computed(() => players.value.filter((e) => (e.state as StateFor<'media_player'>).playback === 'playing' && e.state.available).length)
+  const playing = computed(() => players.value.filter((e) => e.state.available
+    && ((e.state as StateFor<'media_player'>).playback === 'playing' || house.soundRoutes.relays.has(e.descriptor.id))).length)
   const vehicles = computed(() => devices.list.filter((e) => e.state.kind === 'vehicle'))
   const chargers = computed(() => devices.list.filter((e) => e.state.kind === 'ev_charger'))
 

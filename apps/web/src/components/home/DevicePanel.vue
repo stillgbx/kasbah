@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CommandInput } from '@kasbah/shared'
 import { useDeviceResolver } from '../../composables/useDeviceResolver'
+import { relayLabel } from '../../lib/audioRouting'
 import { toClosure } from '../../lib/cover'
 import { formatPercent } from '../../lib/format'
 import { headlineValue, isDeviceBusy, isDeviceOn, toggleChecked, toggleCommand } from '../../lib/deviceState'
@@ -30,7 +31,9 @@ const crumb = computed(() => {
   if (!hd) return t('nav.home')
   return (hd.roomId ? house.index?.roomsById.get(hd.roomId)?.name : hd.zoneId ? house.index?.zonesById.get(hd.zoneId)?.name : null) ?? t('nav.home')
 })
-const on = computed(() => !!resolved.value?.state && isDeviceOn(resolved.value.state))
+/** Lecteur dont cet appareil joue le son (barre de son d'une TV en lecture) — voir `lib/audioRouting.ts`. */
+const relay = computed(() => (resolved.value?.deviceId ? house.relaySource(resolved.value.deviceId) : undefined))
+const on = computed(() => !!resolved.value?.state && (isDeviceOn(resolved.value.state) || !!relay.value))
 const pending = computed(() => !!resolved.value?.deviceId && devices.isPending(resolved.value.deviceId))
 /** Position visée quand le store en tient une : elle gouverne TOUT ce qui affiche cet ouvrant. */
 const aimed = computed(() => (resolved.value?.deviceId ? devices.targetPosition(resolved.value.deviceId) : undefined))
@@ -38,10 +41,14 @@ const aimed = computed(() => (resolved.value?.deviceId ? devices.targetPosition(
 /** Requête en vol OU appareil encore occupé (une course de volet dure ~20 s, voir `isDeviceBusy`). */
 const busy = computed(() => pending.value
   || (!!resolved.value?.state && isDeviceBusy(resolved.value.state, aimed.value !== undefined)))
-/** Valeur de l'interrupteur : pour un ouvrant, coché = FERMÉ (cf. `lib/cover.ts`), cible comprise. */
-const checked = computed(() => !!resolved.value?.state && toggleChecked(resolved.value.state, aimed.value))
-/** Commande d'un clic sur l'interrupteur : dérivée de la cible, donc capable d'INVERSER une course. */
-const toggle = computed(() => (resolved.value?.state ? toggleCommand(resolved.value.state, aimed.value) : null))
+/** Valeur de l'interrupteur : pour un ouvrant, coché = FERMÉ (cf. `lib/cover.ts`), cible comprise ; coché aussi quand l'appareil relaie. */
+const checked = computed(() => !!resolved.value?.state && (toggleChecked(resolved.value.state, aimed.value) || !!relay.value))
+/**
+ * Commande d'un clic sur l'interrupteur : dérivée de la cible, donc capable d'INVERSER une course. Pour une
+ * barre qui relaie, c'est la TV qu'on met en pause (`toggleTarget`) : c'est elle qu'on entend.
+ */
+const toggle = computed(() => (relay.value ? toggleCommand(relay.value.state) : resolved.value?.state ? toggleCommand(resolved.value.state, aimed.value) : null))
+const toggleTarget = computed(() => relay.value?.descriptor.id ?? resolved.value?.deviceId)
 const headline = computed(() => {
   const r = resolved.value
   if (!r?.descriptor || !r.state) return ''
@@ -51,6 +58,12 @@ const headline = computed(() => {
   if (state.kind === 'cover' && r.deviceId) {
     const target = devices.targetPosition(r.deviceId)
     if (target !== undefined) return headlineValue(r.descriptor, { ...state, position: target }, t, locale.value)
+  }
+  // ce qu'on ENTEND chez une barre de son qui relaie : le morceau de la TV, pas « Au repos » — le
+  // contrôle, dessous, dit d'où il vient (« Son de TV Salon »)
+  if (relay.value) {
+    const src = relay.value.state
+    return (src.kind === 'media_player' && src.nowPlaying?.title) || relayLabel(relay.value.name, src, t)
   }
   return headlineValue(r.descriptor, state, t, locale.value)
 })
@@ -65,8 +78,10 @@ const placeable = computed(() => {
 // d'un coup au chargement, ou restait vide si le serveur d'images refusait), et une URL qui échoue ne
 // laisse rien. Une réponse tardive d'une URL déjà remplacée est ignorée.
 const artUrl = computed(() => {
-  const s = resolved.value?.state
-  return s?.kind === 'media_player' && s.available && s.nowPlaying?.artUrl ? s.nowPlaying.artUrl : undefined
+  const own = resolved.value?.state
+  if (!own?.available) return undefined
+  const s = relay.value?.state ?? own                                  // barre qui relaie : la pochette de la TV
+  return s.kind === 'media_player' && s.nowPlaying?.artUrl ? s.nowPlaying.artUrl : undefined
 })
 const art = ref<string | undefined>(undefined)
 watch(artUrl, (url) => {
@@ -131,12 +146,13 @@ function send(cmd: CommandInput) {
            le panneau vers le haut -->
       <div v-if="toggle || busy" class="head__toggle">
         <v-progress-circular v-if="busy" indeterminate size="20" width="2" color="primary" />
-        <v-switch v-else-if="toggle" :model-value="checked" :disabled="!resolved.state?.available" @update:model-value="send(toggle!)" />
+        <v-switch v-else-if="toggle" :model-value="checked" :disabled="!resolved.state?.available" @update:model-value="devices.sendCommand(toggleTarget!, toggle!)" />
       </div>
     </div>
     <MarqueeText v-if="headline" class="big-value" :text="headline" />
+    <!-- `relay-from` traverse l'aiguillage (attribut non déclaré) jusqu'au contrôle du lecteur, seul à le lire -->
     <DeviceControl v-if="resolved.descriptor && resolved.state" :descriptor="resolved.descriptor" :state="resolved.state"
-                   :pending="devices.isPending(resolved.deviceId!)" @command="send" />
+                   :pending="devices.isPending(resolved.deviceId!)" :relay-from="relay?.name" @command="send" />
     <div v-else class="card card--soft unbound muted">{{ $t('device.unbound', { id: resolved.houseDevice?.deviceId ?? resolved.key }) }}</div>
     <!-- rarement utilisé : calé au fond du panneau, sous tout le reste -->
     <PlacementControl v-if="placeable" class="placement" :device="resolved.houseDevice!" />

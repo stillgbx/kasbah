@@ -65,6 +65,14 @@ export const mediaPlayerStateSchema = z.object({
      */
     live: z.boolean().optional(),
   }).optional(),
+  /**
+   * Où SORT le son de l'appareil, quand il sait le dire (une TV Sony par son API locale) : `internal`
+   * (ses haut-parleurs), `external` (un système audio branché — HDMI ARC, optique — c'est LUI qu'on
+   * entend), `both`. `name` : le nom que l'appareil donne à ce système (nom CEC, « Flexus 300 »).
+   * Absent = inconnu. L'UI s'en sert pour poser l'onde sonore sur le bon appareil, avec le lien
+   * `meta.audioOutput` déclaré dans house.json.
+   */
+  audioOutput: z.object({ terminal: z.enum(['internal', 'external', 'both']), name: z.string().optional() }).optional(),
 })
 
 export const CLIMATE_ACTIONS = ['heating', 'cooling', 'idle', 'off'] as const

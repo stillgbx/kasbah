@@ -7,6 +7,7 @@ import { useRouter } from 'vue-router'
 import { deviceIcon } from '../../lib/deviceIcons'
 import ForgetDeviceButton from './ForgetDeviceButton.vue'
 import MarqueeText from '../ui/MarqueeText.vue'
+import { relayLabel } from '../../lib/audioRouting'
 import { isDeviceOn, statusLabel } from '../../lib/deviceState'
 import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
@@ -59,12 +60,14 @@ const bands = computed<Band[]>(() => {
   for (const e of entries.value) {
     const hd = idx?.devicesByBinding.get(e.descriptor.id)
     const room = hd?.roomId ? idx?.roomsById.get(hd.roomId) : undefined
+    // barre de son qui joue le son d'une TV en lecture : active, et le statut nomme la TV et le morceau
+    const relay = house.relaySource(e.descriptor.id)
     const row: Row = {
       entry: e,
       name: hd?.name ?? e.descriptor.name,
       origin: hd ? (hd.meta?.autoPlaced ? 'auto' : 'json') : 'unplaced',
-      on: isDeviceOn(e.state),
-      status: statusLabel(e.descriptor, e.state, t, locale.value),
+      on: isDeviceOn(e.state) || !!relay,
+      status: relay ? relayLabel(relay.name, relay.state, t) : statusLabel(e.descriptor, e.state, t, locale.value),
     }
     const bucket = room ? byRoom : loose
     const key = room ? room.id : e.descriptor.meta.room ?? ''

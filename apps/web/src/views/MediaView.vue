@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { StateFor } from '@kasbah/shared'
+import type { DeviceEntry, StateFor } from '@kasbah/shared'
 import PageHeader from '../components/layout/PageHeader.vue'
 import RoomBands from '../components/devices/RoomBands.vue'
 import PulseDot from '../components/ui/PulseDot.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import { isDevicePulsing } from '../lib/deviceState'
 import { useDevicesStore } from '../stores/devices'
+import { useHouseStore } from '../stores/house'
 
 // Vue Médias : enceintes, réveils, Chromecast, TV — tout ce qui est du kind `media_player`. La
 // liste par pièce vient de `RoomBands` (partagé avec Lumières, Ouvrants, Caméras) ; le statut de la
@@ -18,9 +19,21 @@ import { useDevicesStore } from '../stores/devices'
 // suivante. Lire / pause n'a de sens que si quelque chose est chargé : sur un appareil au repos le
 // plugin refuserait la commande, la touche est donc grisée.
 const devices = useDevicesStore()
+const house = useHouseStore()
 
 const players = computed(() => devices.list.filter((e) => e.state.kind === 'media_player'))
-const playingCount = computed(() => players.value.filter((e) => (e.state as StateFor<'media_player'>).playback === 'playing' && e.state.available).length)
+// Barre de son qui joue le son d'une TV (`lib/audioRouting.ts`) : le point pulse, la pochette de la TV est
+// son fond de ligne, et la touche lire / pause agit sur la TV — c'est elle qu'on entend. Précédent /
+// suivant restent grisés : ils s'adressent à la file de la barre, qui n'en a pas.
+const pulsing = (entry: DeviceEntry) => isDevicePulsing(entry.state) || !!house.relaySource(entry.descriptor.id)
+/** Ce qu'on entend sur cette ligne : la lecture de la TV relayée, sinon la sienne. */
+const heard = (entry: DeviceEntry): { id: string; state: StateFor<'media_player'> } => {
+  const relay = house.relaySource(entry.descriptor.id)
+  return relay && relay.state.kind === 'media_player' ? { id: relay.descriptor.id, state: relay.state } : { id: entry.descriptor.id, state: entry.state as StateFor<'media_player'> }
+}
+// comme l'en-tête : une lecture propre, ou le son d'une TV relayé par une barre — les deux diffusent
+const playingCount = computed(() => players.value.filter((e) => e.state.available
+  && ((e.state as StateFor<'media_player'>).playback === 'playing' || house.soundRoutes.relays.has(e.descriptor.id))).length)
 
 // Valeur locale pendant le glissement seulement ; ensuite c'est l'état publié qui s'affiche
 // (sinon la poignée reviendrait en arrière entre le geste et la réponse de l'appareil).
@@ -35,9 +48,9 @@ function commit(id: string, v: number) {
 }
 const has = (entry: { descriptor: { capabilities: string[] } }, c: string) => entry.descriptor.capabilities.includes(c)
 // pochette du morceau en fond de ligne (URL relayée par le serveur, voir le plugin Cast), fondue vers la droite
-const art = (entry: { state: { kind: string } }) => {
-  const s = entry.state as StateFor<'media_player'>
-  return s.kind === 'media_player' && s.available && s.nowPlaying?.artUrl ? s.nowPlaying.artUrl : undefined
+const art = (entry: DeviceEntry) => {
+  const s = heard(entry).state
+  return entry.state.available && s.nowPlaying?.artUrl ? s.nowPlaying.artUrl : undefined
 }
 const loaded = (s: StateFor<'media_player'>) => s.playback === 'playing' || s.playback === 'paused'
 // un direct n'a ni piste précédente ni suivante : les deux touches sont grisées (voir MediaPlayerControl)
@@ -58,7 +71,7 @@ const skippable = (s: StateFor<'media_player'>) => loaded(s) && s.nowPlaying?.li
           </Transition>
         </template>
         <template #status-badge="{ entry }">
-          <PulseDot :on="isDevicePulsing(entry.state)" class="dot" />
+          <PulseDot :on="pulsing(entry)" class="dot" />
         </template>
         <template #control="{ entry }">
           <div class="controls">
@@ -70,11 +83,11 @@ const skippable = (s: StateFor<'media_player'>) => loaded(s) && s.nowPlaying?.li
                 <StrokeIcon name="skipPrev" :size="18" />
               </button>
               <button type="button" class="key key--main"
-                      :disabled="!entry.state.available || !loaded(entry.state as StateFor<'media_player'>)"
-                      :title="(entry.state as StateFor<'media_player'>).playback === 'playing' ? $t('common.pause') : $t('media.play')"
-                      :aria-label="(entry.state as StateFor<'media_player'>).playback === 'playing' ? $t('common.pause') : $t('media.play')"
-                      @click="devices.sendCommand(entry.descriptor.id, { type: (entry.state as StateFor<'media_player'>).playback === 'playing' ? 'media_player.pause' : 'media_player.play' })">
-                <StrokeIcon :name="(entry.state as StateFor<'media_player'>).playback === 'playing' ? 'pause' : 'play'" :size="18" />
+                      :disabled="!entry.state.available || !loaded(heard(entry).state)"
+                      :title="heard(entry).state.playback === 'playing' ? $t('common.pause') : $t('media.play')"
+                      :aria-label="heard(entry).state.playback === 'playing' ? $t('common.pause') : $t('media.play')"
+                      @click="devices.sendCommand(heard(entry).id, { type: heard(entry).state.playback === 'playing' ? 'media_player.pause' : 'media_player.play' })">
+                <StrokeIcon :name="heard(entry).state.playback === 'playing' ? 'pause' : 'play'" :size="18" />
               </button>
               <button v-if="has(entry, 'track_skip')" type="button" class="key"
                       :disabled="!entry.state.available || !skippable(entry.state as StateFor<'media_player'>)"

@@ -1,8 +1,9 @@
 import { computed, ref, shallowRef, watch } from 'vue'
 import { defineStore } from 'pinia'
-import { autoPlaceDevices, indexHouse, type DevicePlacement, type House, type HouseDevice, type HouseIndex, type Level, type PlaceableDevice, type Room, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
+import { autoPlaceDevices, indexHouse, type DeviceEntry, type DevicePlacement, type House, type HouseDevice, type HouseIndex, type Level, type PlaceableDevice, type Room, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
 import { getTransport } from '../api'
 import { t } from '../i18n'
+import { soundRouting } from '../lib/audioRouting'
 import { useDevicesStore } from './devices'
 import { useNotificationsStore } from './notifications'
 
@@ -50,6 +51,16 @@ export const useHouseStore = defineStore('house', () => {
   })
 
   const index = computed<HouseIndex | null>(() => (effective.value ? indexHouse(effective.value) : null))
+  /** Qui joue le son de qui en ce moment (liens `meta.audioOutput` du JSON × états) — voir `lib/audioRouting.ts`. */
+  const soundRoutes = computed(() => soundRouting(effective.value?.devices ?? [], devices.states))
+  /** Lecteur dont cet appareil RELAIE le son (barre de son d'une TV qui joue), avec son nom d'affichage ; sinon `undefined`. */
+  function relaySource(pluginDeviceId: string): (DeviceEntry & { name: string }) | undefined {
+    const src = soundRoutes.value.relays.get(pluginDeviceId)
+    const descriptor = src ? devices.descriptors[src] : undefined
+    const state = src ? devices.states[src] : undefined
+    if (!descriptor || !state) return undefined
+    return { descriptor, state, name: index.value?.devicesByBinding.get(descriptor.id)?.name ?? descriptor.name }
+  }
   const levels = computed<Level[]>(() => index.value?.levelsSorted ?? [])
   const zones = computed<Zone[]>(() => house.value?.site.zones ?? [])
 
@@ -293,7 +304,7 @@ export const useHouseStore = defineStore('house', () => {
   }
 
   return {
-    house, effective, loading, error, index, levels, zones,
+    house, effective, loading, error, index, levels, zones, soundRoutes, relaySource,
     focusedLevelId, gardenFocus, selectedRoomId, selectedKey, floorTab, selectedRoom, selectedZone, selectedDevice,
     load, setFloorTab, focusLevel, selectRoom, selectDevice, clearSelection, backToHome, houseDeviceFor, setRoomOrder,
     placing, saving, draft, canRevert, isProvisional, startPlacing, startPlacingNew, stopPlacing, previewPosition, previewHeight, savePlacement, revertPlacement, removePlacement,

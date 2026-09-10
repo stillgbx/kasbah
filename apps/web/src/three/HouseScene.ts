@@ -18,8 +18,9 @@ import { createDragDetector, createTapDetector, type DragDetector, type TapEvent
 import { createRenderLoop, type RenderLoop } from './core/renderLoop'
 import { defaultSceneTheme, type SceneTheme } from './core/theme'
 import { createTween, easeInOutCubic } from './core/tween'
+import { emitsSound, soundRouting } from '../lib/audioRouting'
 import { createMarker } from './markers/createMarker'
-import type { DeviceMarker } from './markers/DeviceMarker'
+import type { DeviceMarker, SoundCue } from './markers/DeviceMarker'
 
 // Contrôleur de scène sans Vue. Dépendances injectables (renderer, RAF) → instanciable en Node
 // pour les tests sans WebGL. Le composable useHouseScene est son adaptateur réactif.
@@ -339,16 +340,25 @@ export class HouseScene {
   }
 
   // ---- états --------------------------------------------------------------
-  /** Diff par référence : seuls les appareils dont l'objet d'état a changé sont mis à jour. */
+  /**
+   * Diff par référence : seuls les appareils dont l'objet d'état a changé sont mis à jour — ou dont le
+   * SON a changé : une barre de son relaie l'état de la TV (`lib/audioRouting.ts`), elle bouge donc
+   * quand c'est la TV qui change.
+   */
   updateStates(states: Record<string, DeviceState>, force = false): void {
     const prev = this.states
     this.states = states
+    const routing = soundRouting(this.house?.devices ?? [], states)
     let touched = false
     for (const marker of this.markers.values()) {
       const id = marker.device.deviceId
       if (!id) { if (force) marker.update(undefined); continue }
       const next = states[id]
-      if (force || next !== prev[id] || !marker.currentState) { marker.update(next); touched = true }
+      const relay = routing.relays.get(id)
+      const sound: SoundCue = { emits: emitsSound(id, next, routing), ...(relay && states[relay] ? { relayFrom: states[relay] } : {}) }
+      const was = marker.currentSound
+      const soundChanged = !was || was.emits !== sound.emits || was.relayFrom !== sound.relayFrom
+      if (force || next !== prev[id] || !marker.currentState || soundChanged) { marker.update(next, sound); touched = true }
     }
     if (touched) this.loop.invalidate()
   }

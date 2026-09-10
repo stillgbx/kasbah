@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { DeviceState, HouseDevice } from '@kasbah/shared'
+import { relayLabel } from '../../lib/audioRouting'
 import { isDeviceOn, isDevicePulsing, statusLabel, toggleChecked, toggleCommand } from '../../lib/deviceState'
 import { lightTintCss } from '../../lib/lightTint'
 import { kindIcon } from '../../lib/strokeIcons'
@@ -34,25 +35,32 @@ function row(d: HouseDevice) {
   const descriptor = d.deviceId ? devices.descriptors[d.deviceId] : undefined
   const state = d.deviceId ? devices.states[d.deviceId] : undefined
   const aimed = d.deviceId ? devices.targetPosition(d.deviceId) : undefined
-  const toggle = state ? toggleCommand(state, aimed) : null
+  // Barre de son qui joue le son d'une TV en lecture : active, cochée et pulsante comme elle, le statut le
+  // dit, la pochette de la TV lui sert de fond — et son interrupteur agit sur la TV (mettre en pause ce
+  // qu'on entend), la barre n'ayant pas de lecture propre.
+  const relay = d.deviceId ? house.relaySource(d.deviceId) : undefined
+  const toggle = relay ? toggleCommand(relay.state) : state ? toggleCommand(state, aimed) : null
   return {
     key: d.id, name: d.name ?? descriptor?.name ?? d.id, icon: kindIcon(descriptor?.kind ?? d.kind, descriptor),
-    on: !!state && isDeviceOn(state),
+    on: !!state && (isDeviceOn(state) || !!relay),
     // `on` teinte l'icône (un volet OUVERT est l'actif), `checked` est la valeur de
     // l'interrupteur (un volet FERMÉ est coché) — voir `lib/cover.ts`. La cible tenue par le store
     // entre dans `checked` : l'interrupteur bascule au geste, pas à la fin de la course.
-    checked: !!state && toggleChecked(state, aimed),
-    busy: !!state && isDevicePulsing(state, aimed !== undefined),
-    status: descriptor && state ? statusLabel(descriptor, state, t, locale.value) : t('device.unbound', { id: d.deviceId ?? '—' }),
-    toggle, deviceId: d.deviceId, available: state?.available ?? false,
-    // fond de ligne : pochette du morceau (lecteur en lecture) ou teinte de la lampe allumée
-    ...backdrop(state),
+    checked: !!state && (toggleChecked(state, aimed) || !!relay),
+    busy: !!state && (isDevicePulsing(state, aimed !== undefined) || !!relay),
+    status: relay ? relayLabel(relay.name, relay.state, t)
+      : descriptor && state ? statusLabel(descriptor, state, t, locale.value) : t('device.unbound', { id: d.deviceId ?? '—' }),
+    // `target` : qui reçoit la commande de l'interrupteur (la TV pour une barre qui relaie)
+    toggle, target: relay ? relay.descriptor.id : d.deviceId, available: state?.available ?? false,
+    // fond de ligne : pochette du morceau (lecteur en lecture, ou celui qu'il relaie) ou teinte de la lampe allumée
+    ...backdrop(state, relay?.state),
   }
 }
 /** Style du fond et sa clé (la pochette change au morceau ; la teinte suit la lampe sans fondu croisé). */
-function backdrop(state: DeviceState | undefined): { backdrop?: Record<string, string>; backdropKey?: string } {
+function backdrop(state: DeviceState | undefined, heard?: DeviceState): { backdrop?: Record<string, string>; backdropKey?: string } {
   if (!state || !state.available) return {}
-  if (state.kind === 'media_player' && state.nowPlaying?.artUrl) return { backdrop: { backgroundImage: `url(${JSON.stringify(state.nowPlaying.artUrl)})` }, backdropKey: state.nowPlaying.artUrl }
+  const media = heard ?? state
+  if (media.kind === 'media_player' && media.nowPlaying?.artUrl) return { backdrop: { backgroundImage: `url(${JSON.stringify(media.nowPlaying.artUrl)})` }, backdropKey: media.nowPlaying.artUrl }
   if (state.kind === 'light') { const tint = lightTintCss(state); if (tint) return { backdrop: { background: tint }, backdropKey: 'tint' } }
   return {}
 }
@@ -81,8 +89,8 @@ const roomScenes = computed(() => (target.value ? scenes.forRoom(target.value.na
           <!-- statut trop long (titre d'un morceau) : il défile avec un fondu plutôt que d'être coupé -->
           <div class="dev-row__status"><PulseDot :on="r.busy" class="dev-row__dot" /><MarqueeText class="dev-row__statustext" :text="r.status" /></div>
         </div>
-        <v-switch v-if="r.toggle && r.deviceId" :model-value="r.checked" :disabled="!r.available" class="dev-row__switch"
-                  @click.stop @update:model-value="devices.sendCommand(r.deviceId!, r.toggle!)" />
+        <v-switch v-if="r.toggle && r.target" :model-value="r.checked" :disabled="!r.available" class="dev-row__switch"
+                  @click.stop @update:model-value="devices.sendCommand(r.target!, r.toggle!)" />
         <StrokeIcon v-else name="chevron" :size="18" class="muted" />
       </div>
     </div>

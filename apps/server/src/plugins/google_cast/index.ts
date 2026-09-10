@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { createBackoff, type Backoff } from '../../core/backoff'
 import { sleep } from '../../core/clock'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
+import { isBravia, probeBravia, sameAudioOutput, type AudioOutput, type BraviaFetch } from './bravia'
 import { CastConnection, tlsSocketFactory, type SocketFactory } from './channel'
 import { createMdnsDiscovery, type CastDiscovery } from './discovery'
 import { createKnownDevicesFile, type KnownDevices } from './known'
@@ -54,12 +55,21 @@ export const googleCastConfigSchema = z.object({
    * `false` pour s'en passer : il reste le logo de l'appli.
    */
   CAST_COVER_LOOKUP: bool.default(true),
+  /**
+   * Demander à une TV Sony (modèle `BRAVIA…`) où part son son, par son API REST locale, sans clé
+   * (`bravia.ts`) : une TV en HDMI ARC fait jouer une barre de son que le protocole Cast voit au repos.
+   * Publié dans `audioOutput` ; l'UI y pose l'onde sonore avec le lien `meta.audioOutput` de house.json.
+   * `false` pour s'en passer.
+   */
+  CAST_BRAVIA_PROBE: bool.default(true),
 })
 export type GoogleCastConfig = z.infer<typeof googleCastConfigSchema>
 
 /** Un récepteur qui ne répond plus est retenté à 5 s, 10 s… jusqu'à deux minutes. */
 const RECONNECT_INITIAL_MS = 5000
 const RECONNECT_MAX_MS = 120_000
+/** Cadence de la question « où part ton son ? » à une TV Sony connectée (deux requêtes HTTP locales). */
+const BRAVIA_POLL_MS = 10_000
 
 /** Pochettes : combien d'URL récemment vues on accepte de servir, durée de cache d'une image, d'un échec. */
 const ART_KNOWN_MAX = 64
@@ -88,6 +98,9 @@ interface Entry {
   controlType: string | undefined
   backoff: Backoff
   reconnectTimer: unknown
+  /** Sortie son d'une TV Sony (dernier relevé de `bravia.ts`) ; `undefined` tant qu'elle n'a pas répondu. */
+  audio: AudioOutput | undefined
+  audioTimer: unknown
 }
 
 export interface GoogleCastPluginDeps {
@@ -99,6 +112,8 @@ export interface GoogleCastPluginDeps {
   coverFetch?: CoverFetch
   /** Injection pour les tests : registre public des applis Cast (logos). */
   registryFetch?: RegistryFetch
+  /** Injection pour les tests : API REST locale d'une TV Sony (sortie son). */
+  braviaFetch?: BraviaFetch
   /** Injection pour les tests : fausse découverte. */
   discovery?: CastDiscovery
   /** Injection pour les tests : mémoire des appareils déjà vus (sinon un fichier JSON). */
@@ -127,6 +142,7 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
   const knownArt: string[] = []
   const artCache = new Map<string, ArtEntry>()
   const fetchArt: ArtFetch = deps.fetchImpl ?? ((url, init) => fetch(url, init))
+  const braviaFetch: BraviaFetch = deps.braviaFetch ?? ((url, init) => fetch(url, init))
   /** Faux jusqu'à « start » : un état émis pendant « discover » arriverait AVANT l'enregistrement des appareils et serait perdu. */
   let started = false
   const entries = new Map<string, Entry>()
@@ -144,6 +160,7 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
     const entry: Entry = {
       service, connection: null, controlType: undefined,
       backoff: createBackoff({ initialMs: RECONNECT_INITIAL_MS, maxMs: RECONNECT_MAX_MS }), reconnectTimer: null,
+      audio: undefined, audioTimer: null,
     }
     entries.set(service.txt.id, entry)
     return entry
@@ -212,6 +229,7 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
       await connection.open()
       entry.backoff.reset()
       log().info({ externalId: id, name: entry.service.txt.fn }, 'cast device connected')
+      startAudioProbe(entry)
     } catch (err) {
       // `open` échoué : `onClose` n'est pas forcément passé (connexion jamais établie)
       entry.connection = null
@@ -219,6 +237,32 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
       log().warn({ externalId: id, host: entry.service.host, err }, 'cast connection failed')
       scheduleReconnect(entry)
     }
+  }
+
+  /**
+   * TV Sony connectée : lui demander où part son son, tout de suite puis à cadence lente, tant que la
+   * connexion Cast tient (elle tombe avec la TV). Publié seulement quand ça change ; une TV qui ne
+   * répond pas garde son dernier relevé — rien n'est inventé.
+   */
+  function startAudioProbe(entry: Entry): void {
+    if (!config!.CAST_BRAVIA_PROBE || !isBravia(entry.service.txt.md) || entry.audioTimer) return
+    const probe = async () => {
+      if (!entry.connection?.isOpen) return
+      let audio: AudioOutput | undefined
+      try { audio = await probeBravia(entry.service.host, braviaFetch, ctx!.signal) }
+      catch (err) { log().debug({ externalId: entry.service.txt.id, err }, 'bravia audio probe failed'); return }
+      if (!audio || sameAudioOutput(audio, entry.audio)) return
+      entry.audio = audio
+      log().info({ externalId: entry.service.txt.id, name: entry.service.txt.fn, ...audio }, 'tv audio output')
+      if (started) ctx!.emitState(entry.service.txt.id, { audioOutput: audio })
+    }
+    entry.audioTimer = ctx!.clock.setInterval(() => { void probe() }, BRAVIA_POLL_MS)
+    void probe()
+  }
+
+  function stopAudioProbe(entry: Entry): void {
+    ctx!.clock.clearInterval(entry.audioTimer)
+    entry.audioTimer = null
   }
 
   function onReceiverStatus(entry: Entry, status: ReceiverStatus): void {
@@ -364,13 +408,14 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
   function emitCurrent(entry: Entry): void {
     const c = entry.connection
     if (!c?.isOpen || !c.lastReceiverStatus) { ctx!.setAvailable(entry.service.txt.id, false); return }
-    ctx!.emitState(entry.service.txt.id, { ...toReceiverPatch(c.lastReceiverStatus), ...mediaPatch(entry, c.media, c.app) })
+    ctx!.emitState(entry.service.txt.id, { ...toReceiverPatch(c.lastReceiverStatus), ...mediaPatch(entry, c.media, c.app), ...(entry.audio ? { audioOutput: entry.audio } : {}) })
   }
 
   function onClose(entry: Entry, reason: string): void {
     const id = entry.service.txt.id
     if (!entry.connection) return                                   // échec d'ouverture déjà traité
     entry.connection = null
+    stopAudioProbe(entry)
     ctx!.setAvailable(id, false)
     if (stopping) return
     log().warn({ externalId: id, name: entry.service.txt.fn, reason }, 'cast device disconnected')
@@ -393,6 +438,7 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
     if (!entry) return false
     ctx!.clock.clearTimeout(entry.reconnectTimer)
     entry.reconnectTimer = null
+    stopAudioProbe(entry)
     const c = entry.connection
     entry.connection = null                                     // `onClose` ne doit pas reprogrammer de tentative
     c?.close('device forgotten')
@@ -482,6 +528,7 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
       for (const e of entries.values()) {
         ctx!.clock.clearTimeout(e.reconnectTimer)
         e.reconnectTimer = null
+        stopAudioProbe(e)
         e.connection?.close('plugin stopped')
         e.connection = null
       }

@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { DeviceDescriptor, StateFor } from '@kasbah/shared'
 import { optimisticPatch } from './optimistic'
 import { fromClosure, toClosure } from './cover'
+import type { HouseDevice } from '@kasbah/shared'
+import { emitsSound, relayLabel, soundRouting } from './audioRouting'
 import { headlineValue, isDeviceBusy, isDeviceOn, isDevicePulsing, statusLabel, toggleChecked, toggleCommand } from './deviceState'
 import { formatPower, formatSensor, summarize } from './format'
 import { deviceColor, deviceIcon } from './deviceIcons'
@@ -126,6 +128,51 @@ describe('lecteur : appli a l ecran (`on`)', () => {
     expect(toggleCommand(tv('on'))).toEqual({ type: 'media_player.stop' })
     expect(toggleCommand(tv('playing'))).toEqual({ type: 'media_player.pause' })
     expect(toggleCommand(tv('idle'))).toEqual({ type: 'media_player.play' })
+  })
+})
+
+describe('routage du son : une TV en HDMI ARC fait jouer une barre', () => {
+  // Le cas relevé le 2026-09-10 : la TV du salon joue YouTube Music, son son part en eARC vers la barre
+  // de son, que le protocole Cast voit au repos. Le lien est déclaré dans house.json sur la TV.
+  const t = ((key: string, named?: Record<string, unknown>) => `${key}${named ? `(${String(named.name)})` : ''}`) as never
+  const tvHouse: HouseDevice = { id: 'tv', deviceId: 'cast:tv', position: [0, 0, 0], meta: { audioOutput: 'bar' } }
+  const barHouse: HouseDevice = { id: 'bar', deviceId: 'cast:bar', position: [0, 0, 0] }
+  const player = (over: Partial<StateFor<'media_player'>>): StateFor<'media_player'> =>
+    ({ kind: 'media_player', updatedAt: 0, available: true, playback: 'idle', volume: 6, muted: false, ...over })
+  const tvPlaying = player({ playback: 'playing', nowPlaying: { title: 'Cs60', artist: 'BADBADNOTGOOD' }, audioOutput: { terminal: 'external', name: 'Flexus 300' } })
+  const bar = player({})
+
+  it('la barre relaie et fait du bruit, la TV se tait (son son sort ailleurs)', () => {
+    const r = soundRouting([tvHouse, barHouse], { 'cast:tv': tvPlaying, 'cast:bar': bar })
+    expect(r.relays.get('cast:bar')).toBe('cast:tv')
+    expect(emitsSound('cast:bar', bar, r)).toBe(true)
+    expect(emitsSound('cast:tv', tvPlaying, r)).toBe(false)
+    expect(relayLabel('TV Salon', tvPlaying, t)).toBe('media.relaying(TV Salon) · Cs60')
+  })
+  it('TV réglée sur ses haut-parleurs : le lien ne joue pas ; TV muette là-dessus : on croit la déclaration', () => {
+    const own = { ...tvPlaying, audioOutput: { terminal: 'internal' as const } }
+    const r1 = soundRouting([tvHouse, barHouse], { 'cast:tv': own, 'cast:bar': bar })
+    expect(r1.relays.size).toBe(0)
+    expect(emitsSound('cast:tv', own, r1)).toBe(true)
+    expect(emitsSound('cast:bar', bar, r1)).toBe(false)
+    const { audioOutput: _o, ...unknown } = tvPlaying
+    const r2 = soundRouting([tvHouse, barHouse], { 'cast:tv': unknown, 'cast:bar': bar })
+    expect(r2.relays.get('cast:bar')).toBe('cast:tv')
+    expect(emitsSound('cast:tv', unknown, r2)).toBe(false)
+    // `both` : les deux jouent
+    const both = { ...tvPlaying, audioOutput: { terminal: 'both' as const } }
+    const r3 = soundRouting([tvHouse, barHouse], { 'cast:tv': both, 'cast:bar': bar })
+    expect(emitsSound('cast:tv', both, r3)).toBe(true)
+    expect(emitsSound('cast:bar', bar, r3)).toBe(true)
+  })
+  it('rien ne joue, TV indisponible, ou lien vers un appareil absent : personne ne relaie', () => {
+    expect(soundRouting([tvHouse, barHouse], { 'cast:tv': player({ audioOutput: { terminal: 'external' } }), 'cast:bar': bar }).relays.size).toBe(0)
+    expect(soundRouting([tvHouse, barHouse], { 'cast:tv': { ...tvPlaying, available: false }, 'cast:bar': bar }).relays.size).toBe(0)
+    expect(soundRouting([tvHouse], { 'cast:tv': tvPlaying }).relays.size).toBe(0)
+    // sans lien déclaré, une TV qui envoie son son ailleurs se tait quand même : l'image reste chez elle
+    const r = soundRouting([{ ...tvHouse, meta: {} }, barHouse], { 'cast:tv': tvPlaying, 'cast:bar': bar })
+    expect(emitsSound('cast:tv', tvPlaying, r)).toBe(false)
+    expect(emitsSound('cast:bar', bar, r)).toBe(false)
   })
 })
 

@@ -9,7 +9,8 @@ import MarqueeText from '../ui/MarqueeText.vue'
 // barre, temps — que quelque chose joue ou non. Sans morceau, le titre dit « Rien en diffusion » et le
 // sous-titre l'état ; sans durée (radio en direct), la barre et les temps sont invisibles mais gardent
 // leur place. Avant, la pause faisait disparaître trois lignes et remontait les touches d'autant.
-const props = defineProps<{ descriptor: DeviceDescriptor; state: StateFor<'media_player'>; pending?: boolean; disabled?: boolean }>()
+/** `relayFrom` : nom du lecteur dont cet appareil joue le son (barre de son d'une TV) — voir `lib/audioRouting.ts`. */
+const props = defineProps<{ descriptor: DeviceDescriptor; state: StateFor<'media_player'>; pending?: boolean; disabled?: boolean; relayFrom?: string }>()
 const emit = defineEmits<{ command: [cmd: CommandInput] }>()
 const { t } = useI18n()
 const volume = ref(props.state.volume)
@@ -25,7 +26,8 @@ const fmt = (s?: number) => (s === undefined ? '' : `${Math.floor(s / 60)}:${Str
 // ligne nomme l'appli.
 const details = computed(() => {
   const n = props.state.nowPlaying
-  if (!n) return [t('media.nothing')]
+  // sans lecture propre mais le son d'un autre : on le dit (« Son de TV Salon ») plutôt que « Rien en diffusion »
+  if (!n) return [props.relayFrom ? t('media.relaying', { name: props.relayFrom }) : t('media.nothing')]
   // Sans titre, on nomme l'appli — et rien de plus. Un « … » d'attente y tournait sans fin dès que
   // le titre ne devait jamais venir (appli native d'une TV Android : Prime Video, Netflix), et pour
   // le vrai cas d'attente (changement de morceau, métadonnées en retard d'une seconde) le nom de
