@@ -145,6 +145,32 @@ export const MEDIA_STATUS_CRUNCHYROLL = {
 }
 
 /**
+ * CAPTURE RÉELLE (2026-09-10, `GET /api/plugins/google_cast/raw` sur « TV Salon », BRAVIA 4K VH22) :
+ * Prime Video, appli NATIVE de la TV Android. Elle ouvre bien un canal média (position réelle,
+ * commandes acceptées) mais ne publie AUCUNE métadonnée : titre vide, un identifiant Amazon en
+ * `contentId`, et surtout `duration: -0.001` — sa façon de dire « inconnue », là où une radio en
+ * direct envoie `null`.
+ */
+export const RECEIVER_STATUS_PRIME_VIDEO = {
+  volume: { level: 0, muted: false, controlType: 'master', stepInterval: 0.009999999776482582 },
+  applications: [{
+    appId: 'AndroidNativeApp', appType: 'ANDROID_TV', displayName: 'Prime Video', iconUrl: '', isIdleScreen: false,
+    launchedFromCloud: false, namespaces: [{ name: 'urn:x-cast:com.google.cast.media' }], senderConnected: true,
+    sessionId: 'd9ccd015-0000-4000-8000-000000000005', statusText: 'Prime Video',
+    transportId: 'd9ccd015-0000-4000-8000-000000000005', universalAppId: 'AndroidNativeApp',
+  }],
+  isActiveInput: true, isStandBy: false, userEq: {},
+}
+export const MEDIA_STATUS_PRIME_VIDEO = {
+  mediaSessionId: 8, currentItemId: 1, playerState: 'PLAYING', playbackRate: 1, currentTime: 141.89,
+  supportedMediaCommands: 79, repeatMode: 'REPEAT_OFF',
+  media: {
+    contentId: 'amzn1.dv.gti.cfc7dfaa-0000-4000-8000-000000000006', streamType: 'BUFFERED',
+    duration: -0.001, metadata: { metadataType: 0, title: '' },
+  },
+}
+
+/**
  * CAPTURES RÉELLES (2026-09-10) de l'API interne Crunchyroll, en anonyme (`grant_type=client_id`) : le
  * jeton, puis l'objet de l'épisode ci-dessus. Champs non lus laissés tels quels, jeton et adresses raccourcis.
  */
@@ -207,5 +233,12 @@ export const RECEIVER_STATUS_NETFLIX = {
  */
 export const CAST_REGISTRY_NETFLIX = `)]}'
 {"resolution_height":0,"display_name":"Netflix","app_id":"CA5E8412","promo_assets":[{"icon_url":"https://lh3.googleusercontent.com/anonymised-netflix-icon","description":"Netflix is the leading subscription service for watching TV episodes and movies.","display_name":"Netflix"},{"description":"Accédez à toute l'offre Netflix directement sur votre télévision.","locale":"fr","display_name":"Netflix"}],"url":"https://www.netflix.com/cast"}`
+
+/**
+ * CAPTURE RÉELLE (2026-09-10) du registre pour Prime Video : l'appli native `AndroidNativeApp` y est
+ * connue sous `17608BC8` (la table `NATIVE_APP_IDS` fait le lien par son nom). URL de l'icône raccourcie.
+ */
+export const CAST_REGISTRY_PRIME_VIDEO = `)]}'
+{"resolution_height":0,"whitelisting":{"trusted_cast_app":true},"uses_ipc":true,"background_mode_enabled":true,"display_name":"Prime Video","app_id":"17608BC8","promo_assets":[{"icon_url":"https://lh3.googleusercontent.com/anonymised-prime-video-icon","description":"Enjoy Amazon Originals, popular movies, and hit TV shows.","display_name":"Prime Video"}],"url":"https://cloudfront.xp-assets.aiv-cdn.net/packages/ATVGCastReceiver-1.0/prod/index.html"}`
 
 export const MEDIA_STATUS_IDLE = { mediaSessionId: 1, playbackRate: 1, playerState: 'IDLE', currentTime: 0, idleReason: 'FINISHED', supportedMediaCommands: 0, volume: { level: 1, muted: false } }

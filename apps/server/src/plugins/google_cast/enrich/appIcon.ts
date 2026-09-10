@@ -14,11 +14,15 @@ import type { Clock } from '../../../core/clock'
 // logo — l'affichage garde ce qu'il a.
 
 const REGISTRY = 'https://clients3.google.com/cast/chromecast/device/app?a='
-/** Applis natives → identifiant du registre Cast (vérifiés le 2026-09-10). À compléter au fil des relevés. */
+/**
+ * Applis natives → identifiant du registre Cast (vérifiés le 2026-09-10 : le registre rend bien
+ * `display_name` et une icône pour chacun). À compléter au fil des relevés.
+ */
 const NATIVE_APP_IDS: Record<string, string> = {
   Netflix: 'CA5E8412',
   YouTube: '233637DE',
   Spotify: 'CC32E753',
+  'Prime Video': '17608BC8',
 }
 const HIT_TTL_MS = 24 * 3_600_000
 const MISS_TTL_MS = 3_600_000

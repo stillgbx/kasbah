@@ -20,26 +20,41 @@ const fmt = (s?: number) => (s === undefined ? '' : `${Math.floor(s / 60)}:${Str
 // Le TITRE est déjà la grande valeur du panneau : le bloc ne répète rien de ce qu'on voit déjà. Il
 // dit, dans l'ordre et sans doublon, l'artiste, l'album (s'il diffère du titre — un single porte le
 // nom du morceau) et la source (l'appli). Deux lignes toujours présentes ; une ligne sans contenu
-// garde sa hauteur (espace insécable). Métadonnées pas encore reçues (changement de morceau) : un
-// « … » qui pulse doucement sur la première ligne, la source seule sur la seconde. Appli à l'écran
-// sans canal média (`on`, Netflix natif) : le titre n'arrivera jamais, on nomme l'appli sans attendre.
-const onScreen = computed(() => props.state.playback === 'on')
-const waiting = computed(() => !!props.state.nowPlaying && !props.state.nowPlaying.title && !onScreen.value)
+// garde sa hauteur (espace insécable). Sans titre — métadonnées en retard d'une seconde, ou appli qui
+// n'en publiera jamais (état `on` de Netflix natif, Prime Video sur une TV Android) — la première
+// ligne nomme l'appli.
 const details = computed(() => {
   const n = props.state.nowPlaying
   if (!n) return [t('media.nothing')]
-  if (!n.title) return onScreen.value ? [n.source ?? ''] : ['…', n.source ?? '']
+  // Sans titre, on nomme l'appli — et rien de plus. Un « … » d'attente y tournait sans fin dès que
+  // le titre ne devait jamais venir (appli native d'une TV Android : Prime Video, Netflix), et pour
+  // le vrai cas d'attente (changement de morceau, métadonnées en retard d'une seconde) le nom de
+  // l'appli est déjà ce qu'on aurait montré ensuite sur cette ligne.
+  if (!n.title) return [n.source ?? '']
   const parts = [n.artist, n.album && n.album !== n.title ? n.album : undefined, n.source]
   return parts.filter((p, i, all): p is string => !!p && all.indexOf(p) === i)
 })
 const NBSP = '\u00a0'
 const line1 = computed(() => details.value[0] || NBSP)
 const line2 = computed(() => details.value[1] || NBSP)
-const hasDuration = computed(() => !!props.state.nowPlaying?.durationS)
+// Une durée n'est une durée que POSITIVE : un lecteur peut en annoncer une absurde pour dire
+// « inconnue » (Prime Video : `-0.001`), et elle écrasait alors la position et les deux temps.
+const duration = computed(() => {
+  const d = props.state.nowPlaying?.durationS
+  return d !== undefined && d > 0 ? d : undefined
+})
+const hasDuration = computed(() => duration.value !== undefined)
+/** Position connue : une lecture sans durée (direct, appli native) en a une, et elle vaut d'être lue. */
+const hasPosition = computed(() => props.state.nowPlaying?.positionS !== undefined)
 // Précédent / lecture / suivant n'ont de sens que sur une session chargée (lecture ou pause) : au repos, ou
 // appli à l'écran sans canal média (`on`, Netflix), le plugin refuserait — les touches sont grisées, comme
 // dans la vue Médias. Le volume, lui, reste réglable.
 const loaded = computed(() => props.state.playback === 'playing' || props.state.playback === 'paused')
+// Un DIRECT (radio, chaîne d'info) n'a ni piste voisine ni début où revenir : précédent et suivant y
+// sont grisés. Ils étaient actifs, et « précédent » coupait le flux pour de bon (le plugin envoyait un
+// SEEK à 0 comme sur un morceau) — voir 6_1_pieges-runtime. Lecture / pause et le volume, eux, marchent.
+const live = computed(() => props.state.nowPlaying?.live === true)
+const skippable = computed(() => loaded.value && !live.value)
 
 // Position : l'appareil ne la pousse pas, le plugin la relit toutes les dix secondes. Entre deux
 // relevés, on la fait avancer ICI à la seconde tant que ça joue, à partir du dernier relevé reçu
@@ -56,12 +71,12 @@ const position = computed<number | undefined>(() => {
   const n = props.state.nowPlaying
   if (!n) return undefined
   const p = props.state.playback === 'playing' ? anchor.value.pos + (now.value - anchor.value.at) / 1000 : (n.positionS ?? 0)
-  return n.durationS ? Math.min(p, n.durationS) : p
+  return duration.value ? Math.min(p, duration.value) : p
 })
 // Curseur de position : valeur locale pendant le glissement, puis `media_player.seek` au relâcher.
 // Le curseur n'agit que sur un morceau à durée (un direct n'en a pas) et si l'appareil sait se placer.
 const seekDraft = ref<number | null>(null)
-const canSeek = computed(() => hasDuration.value && has('seek'))
+const canSeek = computed(() => hasDuration.value && has('seek') && !live.value)
 const shownPosition = computed(() => seekDraft.value ?? position.value ?? 0)
 function seekEnd(v: number) {
   seekDraft.value = null
@@ -81,23 +96,25 @@ function nudgeVolume(delta: number) {
   <div>
     <div class="now mb-3">
       <!-- un titre trop long défile doucement plutôt que d'être coupé (MarqueeText) -->
-      <MarqueeText class="text-subtitle-1 font-weight-medium" :class="{ 'now__waiting': waiting }" :text="line1" />
+      <MarqueeText class="text-subtitle-1 font-weight-medium" :text="line1" />
       <MarqueeText class="text-body-2 text-medium-emphasis" :text="line2" />
       <!-- curseur de position et temps : invisibles sans durée (direct), mais l'espace reste réservé -->
       <v-slider class="now__seek" :class="{ 'now--hidden': !hasDuration }"
-                :model-value="shownPosition" :min="0" :max="state.nowPlaying?.durationS || 1" :step="1"
+                :model-value="shownPosition" :min="0" :max="duration ?? 1" :step="1"
                 :disabled="disabled || !canSeek" density="compact" hide-details color="primary" track-size="3" thumb-size="12"
                 :aria-label="$t('media.seek')"
                 @update:model-value="(v: number) => { seekDraft = v }" @end="seekEnd" />
-      <div class="now__times d-flex justify-space-between text-caption text-medium-emphasis" :class="{ 'now--hidden': !hasDuration }">
-        <span>{{ fmt(shownPosition) || '0:00' }}</span><span>{{ fmt(state.nowPlaying?.durationS) || '0:00' }}</span>
+      <!-- les temps s'affichent dès qu'une position est connue, même sans durée (direct, appli native
+           d'une TV) : le total reste vide, l'emplacement des deux nombres ne bouge pas -->
+      <div class="now__times d-flex justify-space-between text-caption text-medium-emphasis" :class="{ 'now--hidden': !hasPosition && !hasDuration }">
+        <span>{{ fmt(shownPosition) || '0:00' }}</span><span>{{ fmt(duration) }}</span>
       </div>
     </div>
     <div class="d-flex align-center justify-center ga-3 mb-3">
-      <v-btn v-if="has('track_skip')" icon="skipPrev" variant="tonal" size="large" :disabled="disabled || !loaded" @click="emit('command', { type: 'media_player.previous' })" />
+      <v-btn v-if="has('track_skip')" icon="skipPrev" variant="tonal" size="large" :disabled="disabled || !skippable" @click="emit('command', { type: 'media_player.previous' })" />
       <v-btn :icon="state.playback === 'playing' ? 'pause' : 'play'" color="primary" size="x-large" :disabled="disabled || !loaded"
              @click="emit('command', { type: state.playback === 'playing' ? 'media_player.pause' : 'media_player.play' })" />
-      <v-btn v-if="has('track_skip')" icon="skipNext" variant="tonal" size="large" :disabled="disabled || !loaded" @click="emit('command', { type: 'media_player.next' })" />
+      <v-btn v-if="has('track_skip')" icon="skipNext" variant="tonal" size="large" :disabled="disabled || !skippable" @click="emit('command', { type: 'media_player.next' })" />
     </div>
     <!-- volume sur UNE ligne qui se lit seule : sourdine, −, curseur, + — le − et le + encadrent le
          curseur qu'ils règlent, la valeur au bout — sans unité, comme les temps du morceau (une bulle sur
@@ -121,10 +138,6 @@ function nudgeVolume(delta: number) {
 .now--hidden { visibility: hidden; }
 /* curseur de position : fin, collé au texte ; la poignée reste petite pour ne pas manger les temps */
 .now__seek { margin-top: 2px; }
-/* repère d'attente : respiration lente de l'opacité, rien ne se déplace */
-.now__waiting { animation: now-waiting 1.6s ease-in-out infinite; }
-@keyframes now-waiting { 0%, 100% { opacity: .35; } 50% { opacity: .9; } }
-@media (prefers-reduced-motion: reduce) { .now__waiting { animation: none; opacity: .6; } }
 /* chiffres à largeur fixe : une valeur qui défile ne fait pas frémir ses voisins */
 .now__times { font-variant-numeric: tabular-nums; }
 .volume__row { display: flex; align-items: center; gap: 4px; }

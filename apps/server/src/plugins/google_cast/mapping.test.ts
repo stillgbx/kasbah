@@ -1,12 +1,12 @@
 import { deviceDescriptorSchema } from '@kasbah/shared'
 import { describe, expect, it } from 'vitest'
 import {
-  MEDIA_STATUS_CRUNCHYROLL, MEDIA_STATUS_IDLE, MEDIA_STATUS_PAUSED, MEDIA_STATUS_PLAYING, MEDIA_STATUS_RADIO, RECEIVER_STATUS_CHROMECAST_FIXED,
-  RECEIVER_STATUS_CRUNCHYROLL, RECEIVER_STATUS_LENOVO_IDLE, RECEIVER_STATUS_NEST_HUB_IDLE, RECEIVER_STATUS_NETFLIX, RECEIVER_STATUS_PLAYING, RECEIVER_STATUS_RADIO, RECEIVER_STATUS_SOUNDBAR_MUTED, SERVICE_CHROMECAST, SERVICE_LENOVO_CLOCK,
+  MEDIA_STATUS_CRUNCHYROLL, MEDIA_STATUS_IDLE, MEDIA_STATUS_PAUSED, MEDIA_STATUS_PLAYING, MEDIA_STATUS_PRIME_VIDEO, MEDIA_STATUS_RADIO, RECEIVER_STATUS_CHROMECAST_FIXED,
+  RECEIVER_STATUS_CRUNCHYROLL, RECEIVER_STATUS_LENOVO_IDLE, RECEIVER_STATUS_NEST_HUB_IDLE, RECEIVER_STATUS_NETFLIX, RECEIVER_STATUS_PLAYING, RECEIVER_STATUS_PRIME_VIDEO, RECEIVER_STATUS_RADIO, RECEIVER_STATUS_SOUNDBAR_MUTED, SERVICE_CHROMECAST, SERVICE_LENOVO_CLOCK,
   SERVICE_NEST_HUB, SERVICE_SOUNDBAR, TXT_CHROMECAST, TXT_LENOVO_CLOCK, TXT_NEST_HUB, TXT_NEST_MINI,
 } from './__fixtures__/network'
 import { toCastService } from './discovery'
-import { activeApplication, artProxyUrl, hasScreen, manufacturerOf, mediaPlayerClass, toDescriptor, toMediaPatch, toReceiverPatch } from './mapping'
+import { activeApplication, artProxyUrl, hasScreen, isLive, manufacturerOf, mediaPlayerClass, toDescriptor, toMediaPatch, toReceiverPatch } from './mapping'
 import { mediaStatusSchema, receiverStatusSchema } from './types'
 
 const receiver = (raw: unknown) => receiverStatusSchema.parse(raw)
@@ -100,8 +100,14 @@ describe('google_cast mapping', () => {
     expect(app).toMatchObject({ displayName: 'Radio France', statusText: 'Diffusion: franceinfo' })
     expect(toMediaPatch(media(MEDIA_STATUS_RADIO), app)).toEqual({
       playback: 'playing',
-      nowPlaying: { title: 'franceinfo', artUrl: expect.stringContaining('radiofrance'), positionS: 38.243996, source: 'Radio France' },
+      // `live` : l'appareil dit `streamType: LIVE` — l'UI grise alors précédent / suivant / se placer
+      nowPlaying: { title: 'franceinfo', artUrl: expect.stringContaining('radiofrance'), positionS: 38.243996, source: 'Radio France', live: true },
     })
+    expect(isLive(media(MEDIA_STATUS_RADIO))).toBe(true)
+    // un morceau ordinaire n'est pas un direct, et une durée absente ne suffit pas à en faire un
+    expect(isLive(media(MEDIA_STATUS_PLAYING))).toBe(false)
+    expect(isLive(media(MEDIA_STATUS_PRIME_VIDEO))).toBe(false)
+    expect(isLive(undefined)).toBe(false)
     // sans métadonnées, le titre reste vide : la source (« Radio France ») suffit à l'UI
     const untitled = media({ ...MEDIA_STATUS_RADIO, media: { ...MEDIA_STATUS_RADIO.media, metadata: null } })
     expect(toMediaPatch(untitled, app)!.nowPlaying).toMatchObject({ title: '', source: 'Radio France' })
@@ -127,6 +133,20 @@ describe('google_cast mapping', () => {
       playback: 'playing',
       nowPlaying: { title: 'Un épisode de démonstration', durationS: 1442.066, positionS: 618.581, source: 'Crunchyroll' },
     })
+  })
+
+  it('accepts the real Prime Video capture: negative duration means unknown, the position stays', () => {
+    // capture réelle sur une TV Android : `duration: -0.001` s'affichait « -1:-1 » de chaque côté du
+    // curseur et écrasait la position (le curseur bornait la position à la durée)
+    const app = activeApplication(receiver(RECEIVER_STATUS_PRIME_VIDEO))
+    expect(app).toMatchObject({ displayName: 'Prime Video', appId: 'AndroidNativeApp' })
+    const patch = toMediaPatch(media(MEDIA_STATUS_PRIME_VIDEO), app)
+    // titre vide (l'appli n'en publie aucun) : c'est l'UI qui nomme l'appli, on n'invente rien ici
+    expect(patch).toEqual({ playback: 'playing', nowPlaying: { title: '', positionS: 141.89, source: 'Prime Video' } })
+    expect(patch!.nowPlaying).not.toHaveProperty('durationS')
+    // une position négative n'existe pas non plus
+    const backwards = media({ ...MEDIA_STATUS_PRIME_VIDEO, currentTime: -1 })
+    expect(toMediaPatch(backwards, app)!.nowPlaying).not.toHaveProperty('positionS')
   })
 
   it('accepts the sound bar and the Lenovo clock as plain media players', () => {

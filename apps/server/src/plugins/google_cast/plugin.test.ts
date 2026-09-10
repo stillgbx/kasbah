@@ -5,8 +5,8 @@ import pino from 'pino'
 import { describe, expect, it, vi } from 'vitest'
 import type { PluginContext } from '../../core/plugin'
 import {
-  CAST_REGISTRY_NETFLIX, CRUNCHYROLL_OBJECT_EPISODE, CRUNCHYROLL_OBJECT_SERIES, CRUNCHYROLL_TOKEN, MEDIA_STATUS_CRUNCHYROLL, MEDIA_STATUS_PLAYING, RECEIVER_STATUS_CHROMECAST_FIXED,
-  RECEIVER_STATUS_CRUNCHYROLL, RECEIVER_STATUS_NEST_HUB_IDLE, RECEIVER_STATUS_NETFLIX, RECEIVER_STATUS_PLAYING, SERVICE_CHROMECAST,
+  CAST_REGISTRY_NETFLIX, CAST_REGISTRY_PRIME_VIDEO, CRUNCHYROLL_OBJECT_EPISODE, CRUNCHYROLL_OBJECT_SERIES, CRUNCHYROLL_TOKEN, MEDIA_STATUS_CRUNCHYROLL, MEDIA_STATUS_PLAYING, MEDIA_STATUS_PRIME_VIDEO, MEDIA_STATUS_RADIO, RECEIVER_STATUS_CHROMECAST_FIXED,
+  RECEIVER_STATUS_CRUNCHYROLL, RECEIVER_STATUS_NEST_HUB_IDLE, RECEIVER_STATUS_NETFLIX, RECEIVER_STATUS_PLAYING, RECEIVER_STATUS_PRIME_VIDEO, RECEIVER_STATUS_RADIO, SERVICE_CHROMECAST,
   SERVICE_NEST_HUB, SERVICE_NEST_MINI, TXT_CHROMECAST, TXT_NEST_HUB, TXT_NEST_MINI,
 } from './__fixtures__/network'
 import type { SocketFactory } from './channel'
@@ -103,9 +103,10 @@ function network(receivers: Record<string, ReturnType<typeof fakeReceiver>>) {
   return connect
 }
 
-/** Registre des applis Cast : muet par défaut (aucun test ne doit sortir sur le réseau), Netflix connu sur demande. */
+/** Registre des applis Cast : muet par défaut (aucun test ne doit sortir sur le réseau), Netflix ou Prime Video connus sur demande. */
 const noRegistry: RegistryFetch = async () => ({ ok: false, status: 404, text: async () => '' })
 const netflixRegistry: RegistryFetch = async (url) => (url.endsWith('CA5E8412') ? { ok: true, status: 200, text: async () => CAST_REGISTRY_NETFLIX } : noRegistry(url))
+const primeVideoRegistry: RegistryFetch = async (url) => (url.endsWith('17608BC8') ? { ok: true, status: 200, text: async () => CAST_REGISTRY_PRIME_VIDEO } : noRegistry(url))
 
 /** Mémoire des appareils vus, en mémoire vive : ce que `known.ts` fait avec un fichier. */
 function fakeKnown(initial: CastService[] = []) {
@@ -217,6 +218,27 @@ describe('google_cast plugin', () => {
     clock.advance(4000)
     await plugin.execute(TXT_NEST_MINI.id, { type: 'media_player.previous' })
     expect(speaker.of('SEEK')).toHaveLength(2)
+    await plugin.stop()
+  })
+
+  it('refuses to skip or seek a LIVE stream, and sends nothing (real franceinfo capture)', async () => {
+    // Relevé en réel : « précédent » sur le direct de franceinfo envoyait un SEEK à 0 (position >
+    // 3 s, comme sur un morceau). Le flux s'arrêtait et l'appli ne repartait plus. Un direct n'a ni
+    // début où revenir, ni piste voisine, quoi qu'annonce `supportedMediaCommands`.
+    const speaker = fakeReceiver(RECEIVER_STATUS_RADIO, MEDIA_STATUS_RADIO)
+    const { plugin, ctx } = await started(fakeDiscovery([SERVICE_NEST_MINI]), network({ [SERVICE_NEST_MINI.host]: speaker }))
+    expect(patches(ctx, TXT_NEST_MINI.id).at(-1)).toMatchObject({ playback: 'playing', nowPlaying: { title: 'franceinfo', live: true } })
+
+    for (const type of ['media_player.previous', 'media_player.next'] as const) {
+      await expect(plugin.execute(TXT_NEST_MINI.id, { type })).rejects.toMatchObject({ code: 'UNSUPPORTED_COMMAND', message: expect.stringContaining('live stream') })
+    }
+    await expect(plugin.execute(TXT_NEST_MINI.id, { type: 'media_player.seek', positionS: 0 })).rejects.toMatchObject({ code: 'UNSUPPORTED_COMMAND' })
+    expect(speaker.of('SEEK')).toHaveLength(0)
+    expect(speaker.of('QUEUE_UPDATE')).toHaveLength(0)
+
+    // pause, reprise et volume, eux, marchent sur un direct : ils ne sont pas grisés
+    await plugin.execute(TXT_NEST_MINI.id, { type: 'media_player.pause' })
+    expect(speaker.of('PAUSE')).toHaveLength(1)
     await plugin.stop()
   })
 
@@ -435,6 +457,22 @@ describe('google_cast plugin', () => {
     // un appareil déjà oublié n'est plus connu
     expect((await app.inject({ method: 'DELETE', url: `/api/plugins/google_cast/devices/${TXT_NEST_MINI.id}` })).statusCode).toBe(404)
     await app.close()
+    await plugin.stop()
+  })
+
+  it('gives a Prime Video playback its position and the app logo, without inventing a title (real capture)', async () => {
+    const tv = fakeReceiver(RECEIVER_STATUS_PRIME_VIDEO, MEDIA_STATUS_PRIME_VIDEO)
+    const { plugin, ctx } = await started(fakeDiscovery([SERVICE_CHROMECAST]), network({ [SERVICE_CHROMECAST.host]: tv }), undefined, undefined, primeVideoRegistry)
+    const all = patches(ctx, TXT_CHROMECAST.id)
+    // `duration: -0.001` veut dire « inconnue » : pas de durée publiée, la position reste
+    expect(all.at(-1)).toMatchObject({ playback: 'playing', nowPlaying: { title: '', positionS: 141.89, source: 'Prime Video' } })
+    expect((all.at(-1) as { nowPlaying: Record<string, unknown> }).nowPlaying).not.toHaveProperty('durationS')
+    await flush(8)
+    // puis le logo de l'appli en pochette de repli (appli native → 17608BC8 dans le registre), relayé par /art
+    const icon = 'https://lh3.googleusercontent.com/anonymised-prime-video-icon'
+    expect(patches(ctx, TXT_CHROMECAST.id).at(-1)).toMatchObject({
+      nowPlaying: { title: '', source: 'Prime Video', artUrl: `/api/plugins/google_cast/art?url=${encodeURIComponent(icon)}` },
+    })
     await plugin.stop()
   })
 

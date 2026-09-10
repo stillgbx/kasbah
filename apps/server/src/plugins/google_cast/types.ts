@@ -76,6 +76,8 @@ export const mediaStatusSchema = z.looseObject({
     /** Vide (`""`) sur un flux lancé par l'Assistant : l'URL est alors dans `contentUrl`. */
     contentId: z.string().nullish(),
     contentUrl: z.string().nullish(),
+    /** `BUFFERED` (morceau), `LIVE` (direct : radio, chaîne d'info), `NONE`. */
+    streamType: z.string().nullish(),
     /** `null` sur un direct (radio), un nombre sur un morceau. */
     duration: z.number().nullish(),
     metadata: mediaMetadataSchema.nullish(),

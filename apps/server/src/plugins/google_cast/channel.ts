@@ -4,7 +4,7 @@ import type { Logger } from 'pino'
 import type { Clock } from '../../core/clock'
 import { PluginError } from '../../core/plugin'
 import { withTimeout } from '../../core/poll'
-import { activeApplication } from './mapping'
+import { activeApplication, isLive } from './mapping'
 import { FrameDecoder, NS_CONNECTION, NS_HEARTBEAT, NS_MEDIA, NS_RECEIVER, RECEIVER_ID, SENDER_ID, encodeFrame, jsonMessage, type CastMessage } from './protocol'
 import { inboundSchema, mediaStatusSchema, receiverStatusSchema, type MediaStatus, type ReceiverApplication, type ReceiverStatus } from './types'
 
@@ -116,12 +116,14 @@ export class CastConnection {
   /** Piste suivante (+1) ou précédente (−1) dans la file de l'appli. */
   async queueJump(jump: 1 | -1): Promise<void> {
     const { transportId, media } = this.requireMedia()
+    this.refuseOnLive('there is no previous or next track')
     await this.request(transportId, NS_MEDIA, { type: 'QUEUE_UPDATE', mediaSessionId: media.mediaSessionId, jump })
   }
 
   /** Se placer dans le morceau (SEEK) ; le récepteur répond par un état média avec la nouvelle position. */
   async seek(positionS: number): Promise<void> {
     const { transportId, media } = this.requireMedia()
+    this.refuseOnLive('there is nothing to seek through')
     await this.request(transportId, NS_MEDIA, { type: 'SEEK', mediaSessionId: media.mediaSessionId, currentTime: Math.max(0, positionS) })
   }
 
@@ -138,12 +140,19 @@ export class CastConnection {
    * morceau (SEEK à 0) ; sinon au morceau précédent de la file.
    */
   async previous(): Promise<void> {
-    const { transportId, media } = this.requireMedia()
-    if (this.estimatedPositionS() > RESTART_AFTER_S) {
-      await this.request(transportId, NS_MEDIA, { type: 'SEEK', mediaSessionId: media.mediaSessionId, currentTime: 0 })
-      return
-    }
+    this.requireMedia()
+    if (this.estimatedPositionS() > RESTART_AFTER_S) return this.seek(0)
     await this.queueJump(-1)
+  }
+
+  /**
+   * Un DIRECT n'a ni début où revenir, ni fin, ni piste voisine : SEEK et QUEUE_UPDATE y coupent le
+   * flux et laissent le récepteur avec une session morte, que l'appli ne sait pas relancer (relevé sur
+   * la radio franceinfo d'un Nest Mini : « précédent » arrêtait le direct pour de bon). L'appli, elle,
+   * annonce ces commandes comme acceptées — on ne la croit pas, on refuse d'envoyer.
+   */
+  private refuseOnLive(what: string): void {
+    if (isLive(this.media)) throw new PluginError('UNSUPPORTED_COMMAND', `${what} on a live stream`)
   }
 
   close(reason: string): void {

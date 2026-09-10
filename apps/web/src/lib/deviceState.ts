@@ -117,8 +117,9 @@ export function statusLabel(descriptor: DeviceDescriptor, s: DeviceState, t: Tra
         : s.position >= 100 ? t(`cover.${w}.open`)
         : formatPercent(toClosure(s.position), locale)
     }
-    // `on` : l'appli est à l'écran sans rien dire de plus — c'est elle qu'on nomme (« À l'écran · Netflix »)
-    case 'media_player': return s.playback === 'playing' ? `${t('media.playing')}${s.nowPlaying?.title ? ` · ${s.nowPlaying.title}` : ''}`
+    // `on` : l'appli est à l'écran sans rien dire de plus — c'est elle qu'on nomme (« À l'écran · Netflix »).
+    // En lecture sans titre (appli native d'une TV : Prime Video), on la nomme aussi : « Lecture · Prime Video ».
+    case 'media_player': return s.playback === 'playing' ? `${t('media.playing')}${s.nowPlaying?.title || s.nowPlaying?.source ? ` · ${s.nowPlaying?.title || s.nowPlaying?.source}` : ''}`
       : s.playback === 'on' && s.nowPlaying?.source ? `${t('media.on')} · ${s.nowPlaying.source}`
       : t(`media.${s.playback}`)
     case 'climate': return `${formatTemp(s.currentTempC, locale)} → ${formatTemp(s.targetTempC, locale)}`

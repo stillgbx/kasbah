@@ -40,6 +40,8 @@ const art = (entry: { state: { kind: string } }) => {
   return s.kind === 'media_player' && s.available && s.nowPlaying?.artUrl ? s.nowPlaying.artUrl : undefined
 }
 const loaded = (s: StateFor<'media_player'>) => s.playback === 'playing' || s.playback === 'paused'
+// un direct n'a ni piste précédente ni suivante : les deux touches sont grisées (voir MediaPlayerControl)
+const skippable = (s: StateFor<'media_player'>) => loaded(s) && s.nowPlaying?.live !== true
 </script>
 
 <template>
@@ -62,7 +64,7 @@ const loaded = (s: StateFor<'media_player'>) => s.playback === 'playing' || s.pl
           <div class="controls">
             <div class="keys">
               <button v-if="has(entry, 'track_skip')" type="button" class="key"
-                      :disabled="!entry.state.available || !loaded(entry.state as StateFor<'media_player'>)"
+                      :disabled="!entry.state.available || !skippable(entry.state as StateFor<'media_player'>)"
                       :title="$t('media.previous')" :aria-label="$t('media.previous')"
                       @click="devices.sendCommand(entry.descriptor.id, { type: 'media_player.previous' })">
                 <StrokeIcon name="skipPrev" :size="18" />
@@ -75,7 +77,7 @@ const loaded = (s: StateFor<'media_player'>) => s.playback === 'playing' || s.pl
                 <StrokeIcon :name="(entry.state as StateFor<'media_player'>).playback === 'playing' ? 'pause' : 'play'" :size="18" />
               </button>
               <button v-if="has(entry, 'track_skip')" type="button" class="key"
-                      :disabled="!entry.state.available || !loaded(entry.state as StateFor<'media_player'>)"
+                      :disabled="!entry.state.available || !skippable(entry.state as StateFor<'media_player'>)"
                       :title="$t('media.next')" :aria-label="$t('media.next')"
                       @click="devices.sendCommand(entry.descriptor.id, { type: 'media_player.next' })">
                 <StrokeIcon name="skipNext" :size="18" />

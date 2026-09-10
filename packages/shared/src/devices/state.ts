@@ -57,6 +57,13 @@ export const mediaPlayerStateSchema = z.object({
     durationS: z.number().optional(),
     positionS: z.number().optional(),
     source: z.string().optional(),
+    /**
+     * Flux EN DIRECT (radio, chaîne d'info) : il n'a ni début où revenir, ni fin, ni piste voisine.
+     * Absent = on ne sait pas, et on suppose un morceau ordinaire. Distinct d'une durée absente,
+     * qui dit seulement « inconnue » : une appli native de TV n'annonce pas de durée sans être un
+     * direct. Ce que l'UI en fait : précédent / suivant / se placer sont refusés.
+     */
+    live: z.boolean().optional(),
   }).optional(),
 })
 

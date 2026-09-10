@@ -119,6 +119,23 @@ export function activeApplication(status: ReceiverStatus): ReceiverApplication |
   return undefined
 }
 
+/**
+ * Une durée n'a de sens que positive. Relevé sur une TV Android : Prime Video envoie `-0.001`, une
+ * radio en direct `null` — deux façons de dire « inconnue », qu'on traite pareil (pas de curseur,
+ * pas de temps total, la position reste affichée).
+ */
+export const isDuration = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0
+
+/**
+ * Flux en DIRECT, tel que l'appareil le déclare (`streamType: LIVE` — relevé sur la radio franceinfo).
+ * C'est le seul signe fiable, et surtout PAS `supportedMediaCommands`, qui se trompe dans les deux
+ * sens : l'appli Radio France annonce SEEK, piste précédente et suivante (12495) sur un direct où
+ * aucune des trois n'a de sens, tandis que Crunchyroll (143) omet « piste suivante » alors qu'elle
+ * marche en réel. S'en servir pour griser une touche casserait donc des commandes qui fonctionnent.
+ * Une durée absente ne dit rien de plus que « inconnue » (Prime Video en dit autant d'un film).
+ */
+export const isLive = (media: MediaStatus | undefined): boolean => media?.media?.streamType === 'LIVE'
+
 export function toPlayback(playerState: string | undefined): 'playing' | 'paused' | 'idle' {
   switch (playerState) {
     case 'PLAYING': case 'BUFFERING': return 'playing'
@@ -153,13 +170,21 @@ export function toMediaPatch(media: MediaStatus | undefined, app: ReceiverApplic
   return {
     playback,
     nowPlaying: {
+      // Titre vide = inconnu, et pour une appli NATIVE de TV Android (Prime Video : `AndroidNativeApp`,
+      // `title: ""` et un identifiant Amazon pour tout contenu) il ne viendra jamais. C'est l'UI qui
+      // décide quoi montrer à sa place (le nom de l'appli), sans inventer de titre ici.
       title: clean(m?.title) ?? '',
       ...(artist ? { artist } : {}),
       ...(album ? { album } : {}),
       ...(art ? { artUrl: artProxyUrl(art) } : {}),
-      ...(typeof media.media.duration === 'number' ? { durationS: media.media.duration } : {}),
-      ...(typeof media.currentTime === 'number' ? { positionS: media.currentTime } : {}),
+      // Durée retenue seulement si POSITIVE : Prime Video annonce `duration: -0.001` pour dire
+      // « inconnue » (là où une radio en direct dit `null`), et une durée négative faisait afficher
+      // « -1:-1 » de chaque côté du curseur en écrasant la position. Idem pour une position négative.
+      ...(isDuration(media.media.duration) ? { durationS: media.media.duration } : {}),
+      ...(typeof media.currentTime === 'number' && media.currentTime >= 0 ? { positionS: media.currentTime } : {}),
       ...(app.displayName ? { source: app.displayName } : {}),
+      // un direct se dit : l'UI grise précédent / suivant / se placer, qui coupaient le flux
+      ...(isLive(media) ? { live: true } : {}),
     },
   }
 }
