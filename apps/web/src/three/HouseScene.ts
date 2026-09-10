@@ -219,6 +219,7 @@ export class HouseScene {
       const marker = createMarker(device, {
         materials: this.materials, theme: this.theme, descriptor, ...(opening ? { opening } : {}),
         addAnimation: (a) => this.loop.addAnimation(a),
+        invalidate: () => this.loop.invalidate(),
         onTap: (key) => this.emit('deviceTap', key),
         label: device.name ?? descriptor?.name ?? device.id,
       }, (state) => this.isAtHome(state))

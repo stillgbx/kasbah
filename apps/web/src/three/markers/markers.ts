@@ -5,6 +5,7 @@ import { isMediaActive } from '../../lib/deviceState'
 import { yawToRad } from '../../lib/orientation'
 import { createTween, lerp } from '../core/tween'
 import { DeviceMarker, type MarkerContext } from './DeviceMarker'
+import { ScreenArt } from './screenArt'
 
 // Représentations 3D par type. Toutes mutent leurs objets dans `onState` ; les animations continues
 // (déplacement du robot, tween du volet) sont enregistrées dans la boucle et retirées quand elles cessent.
@@ -17,6 +18,11 @@ const WAVE_PERIOD_MS = 5750
 /** Rayon (m) de l'anneau à sa naissance et à sa disparition. */
 const WAVE_R0 = 0.18
 const WAVE_R1 = 1.2
+
+/** Écrans d'un lecteur : dalle (m) et demi-profondeur de la boîte, d'où l'image est posée. */
+const SCREENS = { tv: { width: 1, height: 0.56, depth: 0.03 }, display: { width: 0.25, height: 0.16, depth: 0.04 } } as const
+/** L'image occupe TOUTE la dalle : elle est posée 2 mm devant, il n'y a pas de cadre à respecter. */
+const ART_INSET = 1
 
 /**
  * Matériau des anneaux : couleur unie, opacité pilotée par l'animation, et — pour un appareil qui
@@ -48,6 +54,8 @@ export class GenericMarker extends DeviceMarker {
   private waves: Mesh<RingGeometry, ShaderMaterial>[] = []
   private waving = false
   private playing = false
+  /** Pochette affichée sur l'écran (téléviseur et écran connecté seulement). */
+  private art: ScreenArt | null = null
   constructor(device: HouseDevice, ctx: MarkerContext) {
     super(device, ctx)
     const kind = ctx.descriptor?.kind ?? device.kind
@@ -71,6 +79,19 @@ export class GenericMarker extends DeviceMarker {
     if (kind === 'media_player') this.mesh.position.z = mediaClass === 'tv' ? 0.28 : mediaClass === 'display' ? 0.08 : 0.16
     // un écran regarde quelque part : `yaw` (0 = face à +y, comme le véhicule) — un cylindre d'enceinte n'en a pas besoin
     if (mediaClass === 'tv' || mediaClass === 'display') this.mesh.rotation.z = yawToRad(device.yaw)
+    // ce que l'écran diffuse se voit SUR l'écran : la pochette du morceau (ou le logo de l'appli), posée
+    // devant la face avant et enfant du maillage, donc tournée du même `yaw` que lui
+    if (mediaClass === 'tv' || mediaClass === 'display') {
+      const screen = SCREENS[mediaClass]
+      this.art = new ScreenArt({
+        width: screen.width * ART_INSET,
+        height: screen.height * ART_INSET,
+        offsetY: screen.depth + 0.002,
+        onReady: () => ctx.invalidate(),
+        ...(ctx.loadTexture ? { load: ctx.loadTexture } : {}),
+      })
+      this.mesh.add(this.art.mesh)
+    }
     if (kind === 'vacuum') this.mesh.position.z = 0.05
     this.mesh.castShadow = true
     this.registerPickable(this.mesh)
@@ -100,6 +121,12 @@ export class GenericMarker extends DeviceMarker {
     }
   }
   protected onState(state: DeviceState | undefined): void {
+    // l'écran montre ce qui joue tant que l'appareil répond ; il redevient nu s'il ne répond plus,
+    // si rien ne joue, ou si le morceau n'a aucune image (l'état ne porte alors pas d'`artUrl`)
+    if (this.art) {
+      const media = state?.kind === 'media_player' && state.available ? state : undefined
+      this.art.set(media?.nowPlaying?.artUrl)
+    }
     if (this.waves.length === 0) return
     this.playing = !!state && state.available && this.isOn(state)
     for (const w of this.waves) (w.material.uniforms.uColor!.value as Color).copy(this.ctx.theme.media)
@@ -128,6 +155,7 @@ export class GenericMarker extends DeviceMarker {
   }
   override dispose(): void {
     this.mesh.geometry.dispose()
+    this.art?.dispose()
     for (const w of this.waves) { w.geometry.dispose(); w.material.dispose() }
     super.dispose()
   }

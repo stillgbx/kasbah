@@ -4,6 +4,7 @@ import type { DeviceDescriptor, DeviceState, HouseDevice, OpeningRect } from '@k
 import type { SceneTheme } from '../core/theme'
 import type { MaterialSet } from '../builders/materials'
 import type { Animation } from '../core/renderLoop'
+import type { TextureLoad } from './screenArt'
 import { isOrientable, yawToRad } from '../../lib/orientation'
 import { iconSvg, kindIcon } from '../../lib/strokeIcons'
 
@@ -19,6 +20,10 @@ export interface MarkerContext {
   /** Rectangle de l'ouverture liée (volets). */
   opening?: OpeningRect
   addAnimation(a: Animation): () => void
+  /** Redemande un rendu : la scène ne rend qu'à la demande, et une image chargée plus tard n'anime rien. */
+  invalidate(): void
+  /** Chargement des images posées sur un écran ; injecté par les tests, `TextureLoader` sinon. */
+  loadTexture?: TextureLoad
   onTap(key: string): void
   label: string
 }

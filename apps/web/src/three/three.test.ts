@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { Box3, Vector3 } from 'three'
+import { Box3, Vector3, type BufferAttribute, type Texture } from 'three'
 import { computeHouseGeometry, parseHouse } from '@kasbah/shared'
 import demo from '@kasbah/shared/demo-house.json'
 import { buildHouse, buildWallsGeometry, countTriangles } from './builders/buildHouse'
@@ -9,6 +9,7 @@ import { boundsToWorldBox, houseToWorld } from './core/coords'
 import { createRenderLoop } from './core/renderLoop'
 import { defaultSceneTheme, parseCssColor } from './core/theme'
 import { createTween } from './core/tween'
+import { ScreenArt, coverCrop, screenArtGeometry } from './markers/screenArt'
 
 describe('coords', () => {
   it('maps Z-up house frame to Y-up world', () => {
@@ -101,5 +102,107 @@ describe('builders', () => {
     expect(nodes.root.rotation.x).toBeCloseTo(-Math.PI / 2)
     expect(nodes.levels.get('etage')!.group.position.z).toBeCloseTo(3.05)
     expect(countTriangles(nodes.root)).toBeGreaterThan(100)
+  })
+})
+
+
+describe("pochette sur l'écran d'un lecteur 3D", () => {
+  /** Sommet dont l'UV est (u, v) : (0,1) = haut gauche de l'image, (1,1) = haut droit. */
+  const corner = (g: ReturnType<typeof screenArtGeometry>, u: number, v: number) => {
+    const uv = g.getAttribute('uv') as BufferAttribute
+    const pos = g.getAttribute('position') as BufferAttribute
+    for (let i = 0; i < uv.count; i++) {
+      if (uv.getX(i) === u && uv.getY(i) === v) return new Vector3().fromBufferAttribute(pos, i)
+    }
+    throw new Error(`aucun sommet en uv ${u},${v}`)
+  }
+
+  it("regarde vers +y, le haut de l'image en haut, et sans miroir pour qui est devant", () => {
+    const g = screenArtGeometry(1, 1)
+    const normal = g.getAttribute('normal') as BufferAttribute
+    const n = new Vector3().fromBufferAttribute(normal, 0)
+    expect(n.x).toBeCloseTo(0)
+    expect(n.y).toBeCloseTo(1)
+    expect(n.z).toBeCloseTo(0)
+    // haut de l'image vers +z (le repère local d'une boîte d'écran est Z-up)
+    expect(corner(g, 0, 1).z).toBeCloseTo(0.5)
+    expect(corner(g, 0, 0).z).toBeCloseTo(-0.5)
+    // quelqu'un placé devant (en +y, regardant vers -y) a sa droite en -x : le haut DROIT de l'image y est
+    expect(corner(g, 1, 1).x).toBeCloseTo(-0.5)
+    expect(corner(g, 0, 1).x).toBeCloseTo(0.5)
+  })
+
+  it("remplit l'écran en rognant, jamais en déformant (comme object-fit: cover)", () => {
+    // pochette carrée sur une dalle 16:9 : on montre la bande centrale, 56 % de la hauteur
+    const square = coverCrop(1, 16 / 9)
+    expect(square.repeat[0]).toBe(1)
+    expect(square.repeat[1]).toBeCloseTo(0.5625)
+    expect(square.offset[1]).toBeCloseTo(0.21875)
+    // image plus large que l'écran : ce sont les côtés qui sont rognés
+    const wide = coverCrop(2, 16 / 9)
+    expect(wide.repeat[1]).toBe(1)
+    expect(wide.repeat[0]).toBeCloseTo(0.8889)
+    expect(wide.offset[0]).toBeCloseTo(0.0556)
+    // même format : rien à rogner
+    expect(coverCrop(16 / 9, 16 / 9)).toEqual({ repeat: [1, 1], offset: [0, 0] })
+    // format inconnu : supposée carrée — surtout pas étirée pour remplir
+    expect(coverCrop(0, 16 / 9)).toEqual(coverCrop(1, 16 / 9))
+  })
+
+  it('charge, remplace et libère la texture, et ignore une réponse périmée', () => {
+    const loads: { url: string; done: (t: Texture) => void; fail: () => void }[] = []
+    const disposed: string[] = []
+    // une pochette est carrée : 600 × 600, comme celles que servent les catalogues
+    const fakeTexture = (url: string) => ({
+      colorSpace: '', image: { width: 600, height: 600 },
+      repeat: { set: () => {} }, offset: { set: () => {} },
+      dispose: () => disposed.push(url),
+    } as unknown as Texture)
+    let ready = 0
+    const art = new ScreenArt({
+      width: 1, height: 0.56, offsetY: 0.03, onReady: () => ready++,
+      load: (url, done, fail) => loads.push({ url, done, fail }),
+    })
+    expect(art.mesh.visible).toBe(false)
+    expect(art.mesh.position.y).toBeCloseTo(0.03)
+
+    art.set('/art?a')
+    art.set('/art?a')                                     // même image : une seule requête
+    expect(loads).toHaveLength(1)
+    loads[0]!.done(fakeTexture('a'))
+    expect(art.mesh.visible).toBe(true)
+    expect(ready).toBe(1)
+    // le cadrage vit dans les UNIFORMES : un shader écrit à la main ignore `texture.repeat`, et
+    // l'image sortait étirée quand le calcul n'atterrissait que sur la texture
+    const uniforms = art.mesh.material.uniforms
+    expect(uniforms.uCrop!.value.y).toBeCloseTo(0.5625)     // pochette carrée sur une dalle 16:9
+    expect(uniforms.uCropOffset!.value.y).toBeCloseTo(0.21875)
+    expect(uniforms.uCrop!.value.x).toBe(1)
+
+    // le morceau change : l'ancienne texture est libérée quand la nouvelle arrive
+    art.set('/art?b')
+    loads[1]!.done(fakeTexture('b'))
+    expect(disposed).toEqual(['a'])
+
+    // réponse d'une image qu'on n'attend plus (zapping) : jetée, l'écran garde la sienne
+    art.set('/art?c')
+    art.set('/art?b')
+    loads[2]!.done(fakeTexture('c'))
+    expect(disposed).toEqual(['a', 'c'])
+    expect(art.mesh.visible).toBe(true)
+
+    // plus rien ne joue : écran nu, texture libérée
+    art.set(undefined)
+    expect(art.mesh.visible).toBe(false)
+    expect(disposed).toEqual(['a', 'c', 'b'])
+  })
+
+  it("garde l'écran nu quand l'image est illisible", () => {
+    const loads: { fail: () => void }[] = []
+    const art = new ScreenArt({ width: 1, height: 0.56, offsetY: 0.03, load: (_url, _done, fail) => loads.push({ fail }) })
+    art.set('/art?boom')
+    loads[0]!.fail()
+    expect(art.mesh.visible).toBe(false)
+    art.dispose()
   })
 })
