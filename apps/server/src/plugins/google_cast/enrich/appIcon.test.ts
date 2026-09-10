@@ -1,7 +1,7 @@
 import { ManualClock } from '@kasbah/mock-sim'
 import pino from 'pino'
 import { describe, expect, it, vi } from 'vitest'
-import { CAST_REGISTRY_NETFLIX } from '../__fixtures__/network'
+import { CAST_REGISTRY_NETFLIX, CAST_REGISTRY_YOUTUBE_ANDROID_TV } from '../__fixtures__/network'
 import { AppIconResolver, parseRegistry, registryAppId, type RegistryFetch } from './appIcon'
 
 const logger = pino({ level: 'silent' })
@@ -11,6 +11,11 @@ describe('cast app icon (registry)', () => {
     expect(registryAppId({ appId: 'CC32E753', displayName: 'Spotify' })).toBe('CC32E753')
     expect(registryAppId({ appId: 'Netflix', displayName: 'Netflix' })).toBe('CA5E8412')
     expect(registryAppId({ appId: 'AndroidNativeApp', displayName: 'Crunchyroll' })).toBeUndefined()
+    expect(registryAppId({ appId: 'AndroidNativeApp', displayName: 'Prime Video' })).toBe('17608BC8')
+    // TV Android : l'appli tourne sous sa variante maison, ses visuels sont sous l'identifiant canonique
+    expect(registryAppId({ appId: '2C6A6E3D', universalAppId: '233637DE', displayName: 'YouTube' })).toBe('233637DE')
+    // la variante répond bien au registre, mais sans aucun visuel : rien à afficher
+    expect(parseRegistry(CAST_REGISTRY_YOUTUBE_ANDROID_TV)).toBeNull()
   })
 
   it('strips the anti-hijacking guard and picks the first icon (real Netflix capture)', () => {

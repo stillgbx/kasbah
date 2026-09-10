@@ -235,6 +235,40 @@ export const CAST_REGISTRY_NETFLIX = `)]}'
 {"resolution_height":0,"display_name":"Netflix","app_id":"CA5E8412","promo_assets":[{"icon_url":"https://lh3.googleusercontent.com/anonymised-netflix-icon","description":"Netflix is the leading subscription service for watching TV episodes and movies.","display_name":"Netflix"},{"description":"Accédez à toute l'offre Netflix directement sur votre télévision.","locale":"fr","display_name":"Netflix"}],"url":"https://www.netflix.com/cast"}`
 
 /**
+ * CAPTURE RÉELLE (2026-09-10) : YouTube sur la TV Android du salon (une vidéo lancée depuis YouTube
+ * Music). Deux enseignements gardés tels quels : l'appli tourne sous la variante Android TV
+ * (`appId: 2C6A6E3D`) alors que ses visuels sont rangés sous son identifiant canonique
+ * (`universalAppId: 233637DE`) ; et les métadonnées n'ont AUCUNE image — titre et artiste seulement,
+ * donc le logo de l'appli est la seule pochette possible.
+ */
+export const RECEIVER_STATUS_YOUTUBE_TV = {
+  volume: { level: 0, muted: false, controlType: 'master', stepInterval: 0.009999999776482582 },
+  applications: [{
+    appId: '2C6A6E3D', appType: 'ANDROID_TV', displayName: 'YouTube', iconUrl: '', isIdleScreen: false,
+    launchedFromCloud: false,
+    namespaces: [{ name: 'urn:x-cast:com.google.cast.media' }, { name: 'urn:x-cast:com.google.cast.system' }, { name: 'urn:x-cast:com.google.youtube.mdx' }],
+    senderConnected: true, sessionId: 'a4fbcac1-0000-4000-8000-000000000007', statusText: 'Youtube',
+    transportId: 'a4fbcac1-0000-4000-8000-000000000007', universalAppId: '233637DE',
+  }],
+}
+export const MEDIA_STATUS_YOUTUBE_TV = {
+  mediaSessionId: 10, playerState: 'PLAYING', playbackRate: 1, currentTime: 602.781, supportedMediaCommands: 207,
+  volume: { level: 0, muted: false }, activeTrackIds: [], shuffle: false, currentItemId: 1, repeatMode: 'REPEAT_OFF',
+  media: {
+    contentId: '', streamType: 'BUFFERED', duration: 1544.541,
+    metadata: { metadataType: 0, title: 'SLOW RIVERS - Live Performance (Piano Set)', artist: 'SLOW RIVERS' },
+  },
+}
+
+/** CAPTURE RÉELLE (2026-09-10) du registre pour YouTube sous son identifiant canonique (`?a=233637DE`), réduite. */
+export const CAST_REGISTRY_YOUTUBE = `)]}'
+{"resolution_height":0,"display_name":"YouTube","app_id":"233637DE","promo_assets":[{"icon_url":"https://lh3.googleusercontent.com/anonymised-youtube-icon","description":"Watch the videos and playlists you love.","display_name":"YouTube"}],"url":"https://www.youtube.com/tv"}`
+
+/** La variante Android TV existe dans le registre, mais SANS visuel : c'est tout l'intérêt du relevé. */
+export const CAST_REGISTRY_YOUTUBE_ANDROID_TV = `)]}'
+{"resolution_height":0,"display_name":"YouTube","app_id":"2C6A6E3D","android_tv_launch_deep_link":"https://www.youtube.com/tv?c2n=1","url":"https://www.youtube.com/tv"}`
+
+/**
  * CAPTURE RÉELLE (2026-09-10) du registre pour Prime Video : l'appli native `AndroidNativeApp` y est
  * connue sous `17608BC8` (la table `NATIVE_APP_IDS` fait le lien par son nom). URL de l'icône raccourcie.
  */

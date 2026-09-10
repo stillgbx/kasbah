@@ -37,8 +37,12 @@ const registrySchema = z.looseObject({
 export type RegistryFetch = (url: string, init?: { signal?: AbortSignal }) => Promise<{ ok: boolean; status: number; text(): Promise<string> }>
 
 /** Identifiant sous lequel le registre connaît l'appli, ou `undefined` si on ne sait pas la nommer. */
-export function registryAppId(app: { appId: string; displayName?: string | null }): string | undefined {
-  if (/^[0-9A-F]{8}$/.test(app.appId)) return app.appId
+export function registryAppId(app: { appId: string; universalAppId?: string | null; displayName?: string | null }): string | undefined {
+  // `universalAppId` D'ABORD : c'est l'identifiant canonique de l'appli, celui qui porte ses visuels.
+  // Relevé sur une TV Android : YouTube tourne sous `appId: 2C6A6E3D` (variante Android TV, connue du
+  // registre mais SANS aucun `promo_assets`) et `universalAppId: 233637DE`, qui en a dix-sept. Prendre
+  // l'un pour l'autre donne une réponse valide… et un fond vide.
+  for (const id of [app.universalAppId, app.appId]) if (id && /^[0-9A-F]{8}$/.test(id)) return id
   return app.displayName ? NATIVE_APP_IDS[app.displayName] : undefined
 }
 

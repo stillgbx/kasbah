@@ -32,6 +32,12 @@ export const receiverVolumeSchema = z.looseObject({
 
 export const receiverApplicationSchema = z.looseObject({
   appId: z.string(),
+  /**
+   * Identifiant CANONIQUE de l'appli, quand il diffère de `appId` : une TV Android lance la variante
+   * de son écosystème (YouTube : `appId: 2C6A6E3D`, `universalAppId: 233637DE`). C'est lui qui porte
+   * les visuels dans le registre public (voir `enrich/appIcon.ts`).
+   */
+  universalAppId: z.string().nullish(),
   displayName: z.string().optional(),
   sessionId: z.string(),
   /**

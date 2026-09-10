@@ -5,8 +5,8 @@ import pino from 'pino'
 import { describe, expect, it, vi } from 'vitest'
 import type { PluginContext } from '../../core/plugin'
 import {
-  CAST_REGISTRY_NETFLIX, CAST_REGISTRY_PRIME_VIDEO, CRUNCHYROLL_OBJECT_EPISODE, CRUNCHYROLL_OBJECT_SERIES, CRUNCHYROLL_TOKEN, MEDIA_STATUS_CRUNCHYROLL, MEDIA_STATUS_PLAYING, MEDIA_STATUS_PRIME_VIDEO, MEDIA_STATUS_RADIO, RECEIVER_STATUS_CHROMECAST_FIXED,
-  RECEIVER_STATUS_CRUNCHYROLL, RECEIVER_STATUS_NEST_HUB_IDLE, RECEIVER_STATUS_NETFLIX, RECEIVER_STATUS_PLAYING, RECEIVER_STATUS_PRIME_VIDEO, RECEIVER_STATUS_RADIO, SERVICE_CHROMECAST,
+  CAST_REGISTRY_NETFLIX, CAST_REGISTRY_PRIME_VIDEO, CAST_REGISTRY_YOUTUBE, CRUNCHYROLL_OBJECT_EPISODE, CRUNCHYROLL_OBJECT_SERIES, CRUNCHYROLL_TOKEN, MEDIA_STATUS_CRUNCHYROLL, MEDIA_STATUS_PLAYING, MEDIA_STATUS_PRIME_VIDEO, MEDIA_STATUS_RADIO, MEDIA_STATUS_YOUTUBE_TV, RECEIVER_STATUS_CHROMECAST_FIXED,
+  RECEIVER_STATUS_CRUNCHYROLL, RECEIVER_STATUS_NEST_HUB_IDLE, RECEIVER_STATUS_NETFLIX, RECEIVER_STATUS_PLAYING, RECEIVER_STATUS_PRIME_VIDEO, RECEIVER_STATUS_RADIO, RECEIVER_STATUS_YOUTUBE_TV, SERVICE_CHROMECAST,
   SERVICE_NEST_HUB, SERVICE_NEST_MINI, TXT_CHROMECAST, TXT_NEST_HUB, TXT_NEST_MINI,
 } from './__fixtures__/network'
 import type { SocketFactory } from './channel'
@@ -107,6 +107,8 @@ function network(receivers: Record<string, ReturnType<typeof fakeReceiver>>) {
 const noRegistry: RegistryFetch = async () => ({ ok: false, status: 404, text: async () => '' })
 const netflixRegistry: RegistryFetch = async (url) => (url.endsWith('CA5E8412') ? { ok: true, status: 200, text: async () => CAST_REGISTRY_NETFLIX } : noRegistry(url))
 const primeVideoRegistry: RegistryFetch = async (url) => (url.endsWith('17608BC8') ? { ok: true, status: 200, text: async () => CAST_REGISTRY_PRIME_VIDEO } : noRegistry(url))
+/** Comme le vrai registre : la variante Android TV de YouTube (2C6A6E3D) ne rend AUCUN visuel. */
+const youtubeRegistry: RegistryFetch = async (url) => (url.endsWith('233637DE') ? { ok: true, status: 200, text: async () => CAST_REGISTRY_YOUTUBE } : noRegistry(url))
 
 /** Mémoire des appareils vus, en mémoire vive : ce que `known.ts` fait avec un fichier. */
 function fakeKnown(initial: CastService[] = []) {
@@ -472,6 +474,23 @@ describe('google_cast plugin', () => {
     const icon = 'https://lh3.googleusercontent.com/anonymised-prime-video-icon'
     expect(patches(ctx, TXT_CHROMECAST.id).at(-1)).toMatchObject({
       nowPlaying: { title: '', source: 'Prime Video', artUrl: `/api/plugins/google_cast/art?url=${encodeURIComponent(icon)}` },
+    })
+    await plugin.stop()
+  })
+
+  it('takes the app logo from the CANONICAL app id when a TV runs its own variant (real YouTube capture)', async () => {
+    const tv = fakeReceiver(RECEIVER_STATUS_YOUTUBE_TV, MEDIA_STATUS_YOUTUBE_TV)
+    const { plugin, ctx } = await started(fakeDiscovery([SERVICE_CHROMECAST]), network({ [SERVICE_CHROMECAST.host]: tv }), undefined, undefined, youtubeRegistry)
+    // titre et artiste viennent de l'appli, mais elle ne publie aucune image
+    expect(patches(ctx, TXT_CHROMECAST.id).at(-1)).toMatchObject({
+      playback: 'playing',
+      nowPlaying: { title: 'SLOW RIVERS - Live Performance (Piano Set)', artist: 'SLOW RIVERS', durationS: 1544.541, positionS: 602.781, source: 'YouTube' },
+    })
+    await flush(8)
+    // le logo arrive par `universalAppId` (233637DE) : interroger `appId` (2C6A6E3D) ne rendait rien
+    const icon = 'https://lh3.googleusercontent.com/anonymised-youtube-icon'
+    expect(patches(ctx, TXT_CHROMECAST.id).at(-1)).toMatchObject({
+      nowPlaying: { artUrl: `/api/plugins/google_cast/art?url=${encodeURIComponent(icon)}` },
     })
     await plugin.stop()
   })
