@@ -1,4 +1,4 @@
-import { assertCommandAllowed, commandSchema, devicePlacementSchema, placeDeviceInJson, pluginSettingsSchema, roomOrderSchema, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
+import { assertCommandAllowed, commandSchema, devicePlacementSchema, placeDeviceInJson, pluginSettingsSchema, removeDeviceFromJson, roomOrderSchema, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { updateHouseFile, type LoadedHouse } from '../config/house'
 import type { PluginHost } from '../core/plugin-host'
@@ -49,6 +49,14 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
   app.put<{ Params: { id: string } }>('/api/house/devices/:id', async (req) => {
     const placement = devicePlacementSchema.parse(req.body)   // ZodError → 400
     const house = await updateHouseFile(deps.house, (doc) => placeDeviceInJson(doc, req.params.id, placement))
+    deps.hub.broadcast({ type: 'house', house })
+    return { house }
+  })
+
+  // Sortir un appareil de la maison : son entrée est retirée du JSON, il redevient auto-placé ou « non
+  // placé » (le plugin reste la source de l'inventaire, seul le placement disparaît).
+  app.delete<{ Params: { id: string } }>('/api/house/devices/:id', async (req) => {
+    const house = await updateHouseFile(deps.house, (doc) => removeDeviceFromJson(doc, req.params.id))
     deps.hub.broadcast({ type: 'house', house })
     return { house }
   })

@@ -12,6 +12,8 @@ export const devicePlacementSchema = z.object({
   position: vec3Schema,
   /** Nouvelle pièce d'ancrage (déplacement vers une pièce voisine du même niveau). */
   roomId: z.string().min(1).optional(),
+  /** Niveau d'ancrage quand l'appareil n'est dans AUCUNE pièce (couloir non relevé, façade) ; ignoré si `roomId` est donné. */
+  levelId: z.string().min(1).optional(),
   mount: z.enum(MOUNTS).optional(),
   /** Orientation en degrés, 0 = face à +y (comme `HouseDevice.yaw`) : un écran, une caméra regardent quelque part. */
   yaw: z.number().min(0).max(360).optional(),
@@ -46,6 +48,9 @@ export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePla
   const rooms = Array.isArray(doc.rooms) ? doc.rooms.filter(isObject) : []
   const room = placement.roomId ? rooms.find((r) => r.id === placement.roomId) : undefined
   if (placement.roomId && !room) throw new PlacementError(`unknown room "${placement.roomId}"`)
+  const levels = Array.isArray(doc.levels) ? doc.levels.filter(isObject) : []
+  const level = !room && placement.levelId ? levels.find((l) => l.id === placement.levelId) : undefined
+  if (!room && placement.levelId && !level) throw new PlacementError(`unknown level "${placement.levelId}"`)
 
   const i = devices.findIndex((d) => isObject(d) && d.id === id)
   let next: JsonObject
@@ -59,11 +64,17 @@ export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePla
       // le JSON de démo porte roomId ET levelId : garder les deux cohérents, sans en ajouter
       if ('levelId' in prev) next.levelId = room.levelId
       delete next.zoneId
+    } else if (level) {
+      // sorti de toute pièce : le niveau devient l'ancre, la pièce et la zone tombent
+      next.levelId = level.id
+      delete next.roomId
+      delete next.zoneId
     }
   } else {
     if (!placement.deviceId) throw new PlacementError(`device "${id}" is not in house.json: deviceId is required to create it`)
     next = { id, deviceId: placement.deviceId, position: placement.position }
     if (room) next.roomId = room.id
+    else if (level) next.levelId = level.id
     if (placement.mount) next.mount = placement.mount
     if (placement.yaw !== undefined) next.yaw = placement.yaw
   }
@@ -71,6 +82,19 @@ export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePla
   if (i >= 0) out[i] = next
   else out.push(next)
   return { ...doc, devices: out }
+}
+
+/**
+ * Renvoie une copie du document JSON SANS l'appareil `id` : il sort de la maison et redevient ce qu'il
+ * était avant d'être posé — auto-placé si sa pièce de plugin existe, sinon « non placé ». Geste inverse
+ * du placement, confirmé côté UI. Un id inconnu est refusé (rien à retirer).
+ */
+export function removeDeviceFromJson(doc: unknown, id: string): JsonObject {
+  if (!isObject(doc)) throw new PlacementError('house document is not an object')
+  const devices = Array.isArray(doc.devices) ? doc.devices : []
+  const i = devices.findIndex((d) => isObject(d) && d.id === id)
+  if (i < 0) throw new PlacementError(`device "${id}" is not in house.json`)
+  return { ...doc, devices: devices.filter((_, k) => k !== i) }
 }
 
 /**

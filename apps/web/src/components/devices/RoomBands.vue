@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { DeviceEntry, DeviceKind } from '@kasbah/shared'
 import StrokeIcon from '../ui/StrokeIcon.vue'
+import { useRouter } from 'vue-router'
 import { deviceIcon } from '../../lib/deviceIcons'
 import MarqueeText from '../ui/MarqueeText.vue'
 import { isDeviceOn, statusLabel } from '../../lib/deviceState'
@@ -19,6 +20,17 @@ import { useHouseStore } from '../../stores/house'
 // mortes. C'est aussi ce qui garantit qu'une correction profite aux deux vues. Un second slot,
 // `status-badge`, permet d'ajouter une pastille devant le libellé d'état (vide par défaut).
 const props = defineProps<{ kind: DeviceKind }>()
+const router = useRouter()
+
+/** Un appareil sans aucune entrée : on l'emmène dans la maison 3D, provisoire, prêt à être posé. */
+async function place(entry: DeviceEntry) {
+  // NAVIGUER D'ABORD, poser l'état ENSUITE : HomeView reste vivante sous keep-alive et reflète toute
+  // sélection dans l'URL de la route courante — démarrer le placement avant le push faisait réécrire
+  // « ?device=… » sur la liste et annulait la navigation (voir 6_1). Si la maison n'est pas encore
+  // chargée, le store garde la demande et la rejoue à son arrivée.
+  await router.push({ name: 'home' }).catch(() => {})
+  house.startPlacingNew(entry.descriptor.id)
+}
 
 const devices = useDevicesStore()
 const house = useHouseStore()
@@ -156,7 +168,12 @@ defineExpose({ count: computed(() => entries.value.length) })
                 <slot name="status-badge" :entry="r.entry" /><MarqueeText class="row__statustext" :text="r.status" /><slot name="status-after" :entry="r.entry" />
               </div>
             </div>
-            <span class="badge" :data-kind="r.origin" role="img"
+            <!-- non placé : pas un badge mais une action, poser l'appareil dans la maison -->
+            <button v-if="r.origin === 'unplaced'" type="button" class="badge badge--place" :title="$t('rooms.origins.placeHint')"
+                    :aria-label="$t('rooms.origins.place')" @click="place(r.entry)">
+              <StrokeIcon name="pin" :size="14" /><span class="badge__label">{{ $t('rooms.origins.place') }}</span>
+            </button>
+            <span v-else class="badge" :data-kind="r.origin" role="img"
                   :title="$t(`rooms.origins.${r.origin}Hint`)" :aria-label="$t(`rooms.origins.${r.origin}`)">
               <StrokeIcon name="pin" :size="14" />
             </span>
@@ -219,6 +236,14 @@ defineExpose({ count: computed(() => entries.value.length) })
 .badge {
   flex: 0 0 auto; display: grid; place-items: center; width: 22px; height: 22px; color: var(--muted);
 }
+/* le bouton « Placer » : même hauteur que le badge, mais une pilule d'accent qui appelle le geste */
+.badge--place {
+  width: auto; grid-auto-flow: column; gap: 4px; padding: 0 8px; border-radius: 11px;
+  border: 1px solid var(--accent); background: transparent; color: var(--accent); font-size: 11px; font-weight: 600; cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.badge--place:hover { background: var(--accent); color: var(--on-accent); }
+.badge__label { line-height: 1; }
 .badge[data-kind='auto'] { color: var(--accent); }
 .badge[data-kind='unplaced'] { color: #d38b22; }
 </style>

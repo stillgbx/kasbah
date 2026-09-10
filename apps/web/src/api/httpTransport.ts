@@ -66,6 +66,11 @@ export function createHttpTransport(base = ''): Transport {
       { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(placement) },
       (j) => houseSchema.parse((j as { house: unknown }).house) as House,
     ),
+    removeDevice: (id) => request(
+      `${base}/api/house/devices/${encodeURIComponent(id)}`,
+      { method: 'DELETE' },
+      (j) => houseSchema.parse((j as { house: unknown }).house) as House,
+    ),
     setRoomOrder: (levelId, roomIds) => request(
       `${base}/api/house/levels/${encodeURIComponent(levelId)}/room-order`,
       { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ roomIds }) },

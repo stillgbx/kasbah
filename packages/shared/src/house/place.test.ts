@@ -1,9 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import demo from './__fixtures__/demo-house.json'
 import { parseHouse } from './validate'
-import { PlacementError, placeDeviceInJson, setRoomOrderInJson } from './place'
+import { PlacementError, placeDeviceInJson, removeDeviceFromJson, setRoomOrderInJson } from './place'
 
 const devices = (doc: Record<string, unknown>) => doc.devices as Record<string, unknown>[]
+
+describe('removeDeviceFromJson', () => {
+  it('drops the entry and leaves the rest of the house untouched', () => {
+    const out = removeDeviceFromJson(demo, 'light.salon')
+    expect(devices(out).find((x) => x.id === 'light.salon')).toBeUndefined()
+    expect(devices(out)).toHaveLength(demo.devices.length - 1)
+    expect(out.rooms).toBe(demo.rooms)
+    expect(() => parseHouse(out)).not.toThrow()
+    expect(() => removeDeviceFromJson(demo, 'nope')).toThrow(PlacementError)
+  })
+})
 
 describe('placeDeviceInJson', () => {
   it('moves an existing device and keeps the rest of its entry', () => {
@@ -31,6 +42,21 @@ describe('placeDeviceInJson', () => {
     const created = placeDeviceInJson(demo, 'auto.hue-xyz', { position: [1, 1, 1.2], roomId: 'salon', deviceId: 'hue:xyz', yaw: 90 })
     expect(devices(created).at(-1)).toEqual({ id: 'auto.hue-xyz', deviceId: 'hue:xyz', position: [1, 1, 1.2], roomId: 'salon', yaw: 90 })
     expect(() => parseHouse(created)).not.toThrow()
+  })
+
+  it('anchors on a level alone when the device is dropped outside any room', () => {
+    // création hors pièce (appareil découvert tard, posé dans un couloir non relevé)
+    const created = placeDeviceInJson(demo, 'auto.google_cast-tv', { position: [3, 3, 1.2], levelId: 'rdc', deviceId: 'google_cast:tv' })
+    expect(devices(created).at(-1)).toEqual({ id: 'auto.google_cast-tv', deviceId: 'google_cast:tv', position: [3, 3, 1.2], levelId: 'rdc' })
+    expect(() => parseHouse(created)).not.toThrow()
+    // un appareil de pièce qui sort dans le couloir : la pièce tombe, le niveau reste
+    const out = placeDeviceInJson(demo, 'light.salon', { position: [9, 9, 2.4], levelId: 'rdc' })
+    expect(devices(out).find((x) => x.id === 'light.salon')).toMatchObject({ levelId: 'rdc' })
+    expect(devices(out).find((x) => x.id === 'light.salon')!.roomId).toBeUndefined()
+    // la pièce l'emporte sur le niveau quand les deux sont donnés
+    const both = placeDeviceInJson(demo, 'light.salon', { position: [6.6, 6.5, 2.4], roomId: 'cuisine', levelId: 'etage' })
+    expect(devices(both).find((x) => x.id === 'light.salon')).toMatchObject({ roomId: 'cuisine', levelId: 'rdc' })
+    expect(() => placeDeviceInJson(demo, 'light.salon', { position: [0, 0, 0], levelId: 'nope' })).toThrow(PlacementError)
   })
 
   it('creates a minimal entry for a device absent from the JSON', () => {

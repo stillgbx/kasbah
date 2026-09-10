@@ -32,7 +32,7 @@
     "unbound": "Cet appareil n'est lié à aucun plugin ({id}).", "notPlaced": "Non placés", "outdoor": "Extérieur",
     "pending": "Commande en cours…", "lastUpdate": "Mis à jour {time}", "empty": "Aucun appareil connu. Vérifiez les plugins dans les réglages."
   },
-  "place": {"title": "Emplacement", "move": "Déplacer", "done": "Terminé", "hint": "Faites glisser l'appareil dans la vue 3D pour le déplacer. La hauteur se règle ici.", "height": "Hauteur", "presets": {"ceiling": "Plafond", "wall": "Applique", "table": "Table", "floor": "Sol"}, "revert": "Rétablir", "orientation": "Orientation", "rotateLeft": "Tourner vers la gauche", "rotateRight": "Tourner vers la droite", "outside": "hors pièce", "saveError": "Position non enregistrée : {message}"},
+  "place": {"title": "Emplacement", "move": "Déplacer", "done": "Terminé", "hint": "Faites glisser l'appareil dans la vue 3D pour le déplacer. La hauteur se règle ici.", "height": "Hauteur", "presets": {"ceiling": "Plafond", "wall": "Applique", "table": "Table", "floor": "Sol"}, "revert": "Rétablir", "cancel": "Annuler", "remove": "Retirer de la maison", "removeConfirm": "Confirmer le retrait", "removeHint": "Sortir cet appareil de la maison : il redevient « non placé » (ou auto-placé si sa pièce existe) ; il pourra être reposé", "orientation": "Orientation", "rotateLeft": "Tourner vers la gauche", "rotateRight": "Tourner vers la droite", "outside": "hors pièce", "saveError": "Position non enregistrée : {message}"},
   "light": {
     "brightness": "Luminosité", "colorTemp": "Température", "color": "Couleur", "warm": "Chaud", "cold": "Froid", "effect": "Effet",
     "effects": {
@@ -68,7 +68,7 @@
     "origins": {
       "json": "Placé", "jsonHint": "Position définie dans house.json",
       "auto": "Auto", "autoHint": "Rattachement automatique à la pièce qui porte le nom de la pièce du plugin",
-      "unplaced": "Non placé", "unplacedHint": "Aucune pièce de la maison ne porte le nom de la pièce du plugin : absente de la scène 3D"
+      "unplaced": "Non placé", "unplacedHint": "Aucune pièce de la maison ne porte le nom de la pièce du plugin : absente de la scène 3D", "place": "Placer", "placeHint": "Ouvrir la maison en 3D pour poser cet appareil au bon niveau et au bon endroit"
     }
   },
   "cover": {

@@ -68,6 +68,18 @@ const roomName = computed(() => {
   return id ? house.index?.roomsById.get(id)?.name ?? id : t('place.outside')
 })
 
+// Retirer de la maison : geste en deux temps (armer, puis confirmer dans les 4 s) pour ne pas sortir un
+// appareil d'un doigt qui glisse ; l'emplacement est réservé, le libellé seul change.
+const removeArmed = ref(false)
+let disarm: ReturnType<typeof setTimeout> | undefined
+function removeClick() {
+  if (!removeArmed.value) { removeArmed.value = true; disarm = setTimeout(() => { removeArmed.value = false }, 4000); return }
+  clearTimeout(disarm)
+  removeArmed.value = false
+  void house.removePlacement()
+}
+onBeforeUnmount(() => clearTimeout(disarm))
+
 function applyPreset(p: Preset) {
   const def = PRESETS.find((x) => x.value === p)
   if (!def) return
@@ -108,7 +120,15 @@ function applyPreset(p: Preset) {
             </button>
           </span>
         </div>
-        <div class="muted place__coords">x {{ position[0].toFixed(2) }} · y {{ position[1].toFixed(2) }} · {{ roomName }}</div>
+        <div class="place__row place__bottom">
+          <div class="muted place__coords">x {{ position[0].toFixed(2) }} · y {{ position[1].toFixed(2) }} · {{ roomName }}</div>
+          <!-- place réservée : invisible pour un provisoire (« Annuler » suffit), sinon retrait en deux temps -->
+          <button type="button" class="pill place__remove" :class="{ 'place__remove--off': house.isProvisional, 'place__remove--armed': removeArmed }"
+                  :disabled="house.saving || house.isProvisional" :tabindex="house.isProvisional ? -1 : 0"
+                  :title="$t('place.removeHint')" @click="removeClick">
+            {{ removeArmed ? $t('place.removeConfirm') : $t('place.remove') }}
+          </button>
+        </div>
       </div>
     </div>
     <!-- pied : titre à gauche, UN bouton à droite qui garde sa place et sa largeur dans les deux états -->
@@ -117,7 +137,8 @@ function applyPreset(p: Preset) {
       <button v-if="!house.placing" type="button" class="pill place__cta" @click="house.startPlacing()">
         <StrokeIcon name="move" :size="16" /> {{ $t('place.move') }}
       </button>
-      <button v-else type="button" class="pill place__cta" data-on="1" @click="house.stopPlacing()">{{ $t('place.done') }}</button>
+      <!-- un provisoire jamais déposé s'abandonne : le bouton le dit -->
+      <button v-else type="button" class="pill place__cta" data-on="1" @click="house.stopPlacing()">{{ house.isProvisional ? $t('place.cancel') : $t('place.done') }}</button>
     </div>
   </div>
 </template>
@@ -140,7 +161,12 @@ function applyPreset(p: Preset) {
 /* même largeur pour « Déplacer » et « Terminé » : le bouton ne change ni de place ni de taille */
 .place__cta { min-width: 124px; justify-content: center; }
 .place__value { font-variant-numeric: tabular-nums; font-weight: 600; }
-.place__coords { font-size: 12px; font-variant-numeric: tabular-nums; }
+.place__coords { font-size: 12px; font-variant-numeric: tabular-nums; min-width: 0; }
+.place__bottom { align-items: center; }
+/* largeur fixe pour les deux libellés (« Retirer de la maison » / « Confirmer le retrait ») : rien ne bouge */
+.place__remove { flex: 0 0 auto; min-width: 150px; justify-content: center; font-size: 12px; }
+.place__remove--off { visibility: hidden; }
+.place__remove--armed { border-color: var(--error, #e5484d); color: var(--error, #e5484d); }
 .place__turn { display: inline-flex; align-items: center; gap: 6px; }
 /* largeur fixe (« 315° ») : la valeur change sans déplacer les touches */
 .place__deg { width: 4ch; text-align: center; }

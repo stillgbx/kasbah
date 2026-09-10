@@ -32,7 +32,7 @@
     "unbound": "This device is not bound to any plugin ({id}).", "notPlaced": "Not placed", "outdoor": "Outdoor",
     "pending": "Command in progress…", "lastUpdate": "Updated {time}", "empty": "No known device. Check the plugins in settings."
   },
-  "place": {"title": "Placement", "move": "Move", "done": "Done", "hint": "Drag the device in the 3D view to move it. Set the height here.", "height": "Height", "presets": {"ceiling": "Ceiling", "wall": "Wall", "table": "Table", "floor": "Floor"}, "revert": "Revert", "orientation": "Orientation", "rotateLeft": "Rotate left", "rotateRight": "Rotate right", "outside": "outside rooms", "saveError": "Position not saved: {message}"},
+  "place": {"title": "Placement", "move": "Move", "done": "Done", "hint": "Drag the device in the 3D view to move it. Set the height here.", "height": "Height", "presets": {"ceiling": "Ceiling", "wall": "Wall", "table": "Table", "floor": "Floor"}, "revert": "Revert", "cancel": "Cancel", "remove": "Remove from house", "removeConfirm": "Confirm removal", "removeHint": "Take this device out of the house: it becomes unplaced (or auto-placed if its room exists) and can be placed again", "orientation": "Orientation", "rotateLeft": "Rotate left", "rotateRight": "Rotate right", "outside": "outside rooms", "saveError": "Position not saved: {message}"},
   "light": {
     "brightness": "Brightness", "colorTemp": "Temperature", "color": "Color", "warm": "Warm", "cold": "Cold", "effect": "Effect",
     "effects": {
@@ -68,7 +68,7 @@
     "origins": {
       "json": "Placed", "jsonHint": "Position set in house.json",
       "auto": "Auto", "autoHint": "Matched automatically to the room named like the plugin room",
-      "unplaced": "Not placed", "unplacedHint": "No house room is named like the plugin room: absent from the 3D scene"
+      "unplaced": "Not placed", "unplacedHint": "No house room is named like the plugin room: absent from the 3D scene", "place": "Place", "placeHint": "Open the 3D house to put this device on the right level and spot"
     }
   },
   "cover": {

@@ -78,7 +78,7 @@ watch(scene.ready, (ready) => {
 // mode « déplacer » : glissement 3D → brouillon (store) → aperçu 3D ; dépôt → écriture house.json
 scene.onDeviceDrag((_key, xy, roomId) => house.previewPosition(xy, roomId))
 scene.onDeviceDrop(() => { void house.savePlacement() })
-watch(() => house.placing, (p) => scene.setMovable(p ? house.selectedKey : null))
+watch(() => house.placing, (p) => scene.setMovable(p ? house.selectedKey : null), { immediate: true })
 watch(() => house.draft, (d) => {
   const hd = house.selectedDevice
   if (house.placing && hd) scene.moveMarker(hd.id, d?.position ?? hd.position)

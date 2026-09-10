@@ -55,6 +55,8 @@ export interface Transport {
   cameraSnapshotUrl(deviceId: string, at: number): string | null
   /** (Re)place un appareil dans house.json ; renvoie la maison réécrite. */
   placeDevice(id: string, placement: DevicePlacement): Promise<House>
+  /** Retire un appareil de house.json (il redevient non placé ou auto-placé) ; renvoie la maison réécrite. */
+  removeDevice(id: string): Promise<House>
   /** Écrit l'ordre d'affichage des pièces d'un niveau ; renvoie la maison réécrite. */
   setRoomOrder(levelId: string, roomIds: string[]): Promise<House>
   /** Ouvre le canal de push ; retourne la fonction de fermeture. */

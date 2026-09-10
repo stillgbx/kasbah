@@ -124,6 +124,13 @@ function send(cmd: CommandInput) {
     <div v-else class="card card--soft unbound muted">{{ $t('device.unbound', { id: resolved.houseDevice?.deviceId ?? resolved.key }) }}</div>
     <!-- rarement utilisé : calé au fond du panneau, sous tout le reste -->
     <PlacementControl v-if="placeable" class="placement" :device="resolved.houseDevice!" />
+    <!-- appareil connu du plugin mais absent de la maison : le poser depuis ici, sans repasser par la liste -->
+    <div v-else-if="resolved.descriptor && !resolved.houseDevice" class="card card--soft placement place-new">
+      <span class="muted">{{ $t('place.title') }}</span>
+      <button type="button" class="pill place-new__cta" :title="$t('rooms.origins.placeHint')" @click="house.startPlacingNew(resolved.descriptor.id)">
+        <StrokeIcon name="pin" :size="16" /> {{ $t('rooms.origins.place') }}
+      </button>
+    </div>
   </template>
 </template>
 
@@ -141,6 +148,8 @@ function send(cmd: CommandInput) {
 .crumb:hover { color: var(--text); }
 .head { display: flex; align-items: center; gap: 12px; }
 .placement { margin-top: auto; }
+.place-new { padding: 12px 14px; font-size: 13px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.place-new__cta { min-width: 124px; justify-content: center; }
 .head__main { flex: 1 1 0; min-width: 0; }
 .head__name { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
 .head__sub { font-size: 12px; }
