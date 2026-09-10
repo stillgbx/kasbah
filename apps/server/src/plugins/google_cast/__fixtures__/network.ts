@@ -260,6 +260,43 @@ export const MEDIA_STATUS_YOUTUBE_TV = {
   },
 }
 
+/**
+ * CAPTURES RÉELLES (2026-09-10) des catalogues publics interrogés pour la pochette d'un morceau que
+ * l'appareil n'illustre pas — ici « Horizon » de la lecture YouTube ci-dessus. Réduites aux champs lus.
+ * iTunes NOMME les deux artistes (« & ») là où l'appareil dit « et », Deezer ne nomme que le premier :
+ * c'est pour cela que la correspondance des artistes se fait par jeux de mots (`enrich/cover.ts`).
+ */
+export const ITUNES_SEARCH_BOUNDARY = {
+  resultCount: 2,
+  results: [
+    { wrapperType: 'track', kind: 'song', trackName: 'Horizon', artistName: 'Northwind & Lumen', collectionName: 'Meridians', artworkUrl100: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/anonymised/199502092474_cover.jpg/100x100bb.jpg' },
+    { wrapperType: 'track', kind: 'song', trackName: 'Black', artistName: 'Northwind & Lumen', collectionName: 'Meridians', artworkUrl100: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/anonymised/199502092344_cover.jpg/100x100bb.jpg' },
+  ],
+}
+export const DEEZER_SEARCH_BOUNDARY = {
+  data: [{
+    id: 1, title: 'Horizon', artist: { id: 2, name: 'Northwind' },
+    album: {
+      id: 3, title: 'Meridians',
+      cover_big: 'https://cdn-images.dzcdn.net/images/cover/anonymised/500x500-000000-80-0-0.jpg',
+      cover_xl: 'https://cdn-images.dzcdn.net/images/cover/anonymised/1000x1000-000000-80-0-0.jpg',
+    },
+  }],
+  total: 1,
+}
+/**
+ * CAPTURE RÉELLE : ce que iTunes répond pour un titre qui n'est PAS un morceau (« SLOW RIVERS - Live
+ * Performance (Piano Set) »). Il ne rend jamais rien de vide : sans contrôle de correspondance, on
+ * collait Tim McGraw sur un set piano. Deezer, lui, rend `{ data: [] }`.
+ */
+export const ITUNES_SEARCH_NOT_A_TRACK = {
+  resultCount: 2,
+  results: [
+    { wrapperType: 'track', kind: 'song', trackName: "Highway Don't Care (feat. Taylor Swift & Keith Urban)", artistName: 'Tim McGraw', artworkUrl100: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/anonymised/12UMDIM01341.rgb.jpg/100x100bb.jpg' },
+    { wrapperType: 'track', kind: 'song', trackName: 'Thaïs: Meditation (Andante Religioso)', artistName: 'Royal Philharmonic Orchestra & Frank Shipway', artworkUrl100: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/anonymised/dj.pmkorcph.jpg/100x100bb.jpg' },
+  ],
+}
+
 /** CAPTURE RÉELLE (2026-09-10) du registre pour YouTube sous son identifiant canonique (`?a=233637DE`), réduite. */
 export const CAST_REGISTRY_YOUTUBE = `)]}'
 {"resolution_height":0,"display_name":"YouTube","app_id":"233637DE","promo_assets":[{"icon_url":"https://lh3.googleusercontent.com/anonymised-youtube-icon","description":"Watch the videos and playlists you love.","display_name":"YouTube"}],"url":"https://www.youtube.com/tv"}`

@@ -5,13 +5,14 @@ import pino from 'pino'
 import { describe, expect, it, vi } from 'vitest'
 import type { PluginContext } from '../../core/plugin'
 import {
-  CAST_REGISTRY_NETFLIX, CAST_REGISTRY_PRIME_VIDEO, CAST_REGISTRY_YOUTUBE, CRUNCHYROLL_OBJECT_EPISODE, CRUNCHYROLL_OBJECT_SERIES, CRUNCHYROLL_TOKEN, MEDIA_STATUS_CRUNCHYROLL, MEDIA_STATUS_PLAYING, MEDIA_STATUS_PRIME_VIDEO, MEDIA_STATUS_RADIO, MEDIA_STATUS_YOUTUBE_TV, RECEIVER_STATUS_CHROMECAST_FIXED,
+  CAST_REGISTRY_NETFLIX, CAST_REGISTRY_PRIME_VIDEO, CAST_REGISTRY_YOUTUBE, CRUNCHYROLL_OBJECT_EPISODE, DEEZER_SEARCH_BOUNDARY, ITUNES_SEARCH_BOUNDARY, CRUNCHYROLL_OBJECT_SERIES, CRUNCHYROLL_TOKEN, MEDIA_STATUS_CRUNCHYROLL, MEDIA_STATUS_PLAYING, MEDIA_STATUS_PRIME_VIDEO, MEDIA_STATUS_RADIO, MEDIA_STATUS_YOUTUBE_TV, RECEIVER_STATUS_CHROMECAST_FIXED,
   RECEIVER_STATUS_CRUNCHYROLL, RECEIVER_STATUS_NEST_HUB_IDLE, RECEIVER_STATUS_NETFLIX, RECEIVER_STATUS_PLAYING, RECEIVER_STATUS_PRIME_VIDEO, RECEIVER_STATUS_RADIO, RECEIVER_STATUS_YOUTUBE_TV, SERVICE_CHROMECAST,
   SERVICE_NEST_HUB, SERVICE_NEST_MINI, TXT_CHROMECAST, TXT_NEST_HUB, TXT_NEST_MINI,
 } from './__fixtures__/network'
 import type { SocketFactory } from './channel'
 import type { CastDiscovery } from './discovery'
 import type { RegistryFetch } from './enrich/appIcon'
+import type { CoverFetch } from './enrich/cover'
 import type { EnrichFetch } from './enrich/crunchyroll'
 import { createGoogleCastPlugin, googleCastConfigSchema, type ArtFetch } from './index'
 import { FrameDecoder, NS_HEARTBEAT, NS_MEDIA, NS_RECEIVER, encodeFrame, jsonMessage } from './protocol'
@@ -83,11 +84,13 @@ function fakeDiscovery(initial: CastService[]) {
   return d
 }
 
-function fakeContext(clock: ManualClock) {
+function fakeContext(clock: ManualClock, config: Record<string, string> = {}) {
   const ctrl = new AbortController()
   const ctx: PluginContext = {
-    // `CAST_KNOWN_FILE` vide : aucun test ne doit lire ni écrire la mémoire réelle du poste de dev
-    pluginId: 'google_cast', config: googleCastConfigSchema.parse({ CAST_DISCOVERY_WAIT_MS: '1000', CAST_KNOWN_FILE: '' }), logger: pino({ level: 'silent' }), clock, signal: ctrl.signal,
+    // `CAST_KNOWN_FILE` vide : aucun test ne doit lire ni écrire la mémoire réelle du poste de dev.
+    // `CAST_COVER_LOOKUP` faux : aucun test ne doit sortir sur le réseau — le test qui l'éprouve
+    // l'active en injectant de faux catalogues.
+    pluginId: 'google_cast', config: googleCastConfigSchema.parse({ CAST_DISCOVERY_WAIT_MS: '1000', CAST_KNOWN_FILE: '', CAST_COVER_LOOKUP: 'false', ...config }), logger: pino({ level: 'silent' }), clock, signal: ctrl.signal,
     emitState: vi.fn(), setAvailable: vi.fn(), emitDevices: vi.fn(), emitScenes: vi.fn(), emitSceneState: vi.fn(), emitEvent: vi.fn(),
   }
   return { ctx, ctrl }
@@ -120,10 +123,11 @@ function fakeKnown(initial: CastService[] = []) {
   }
 }
 
-async function started(discovery: CastDiscovery, connect: SocketFactory, fetchImpl?: ArtFetch, enrichFetch?: EnrichFetch, registryFetch: RegistryFetch = noRegistry, known?: ReturnType<typeof fakeKnown>) {
+async function started(discovery: CastDiscovery, connect: SocketFactory, fetchImpl?: ArtFetch, enrichFetch?: EnrichFetch, registryFetch: RegistryFetch = noRegistry, known?: ReturnType<typeof fakeKnown>, coverFetch?: CoverFetch) {
   const clock = new ManualClock(0)
-  const { ctx, ctrl } = fakeContext(clock)
-  const plugin = createGoogleCastPlugin({ discovery, connect, registryFetch, ...(fetchImpl ? { fetchImpl } : {}), ...(enrichFetch ? { enrichFetch } : {}), ...(known ? { known } : {}) })
+  // injecter de faux catalogues, c'est vouloir éprouver la recherche de pochette : elle s'allume avec
+  const { ctx, ctrl } = fakeContext(clock, coverFetch ? { CAST_COVER_LOOKUP: 'true' } : {})
+  const plugin = createGoogleCastPlugin({ discovery, connect, registryFetch, ...(fetchImpl ? { fetchImpl } : {}), ...(enrichFetch ? { enrichFetch } : {}), ...(known ? { known } : {}), ...(coverFetch ? { coverFetch } : {}) })
   await plugin.init(ctx)
   const p = plugin.discover()
   await flush()
@@ -492,6 +496,28 @@ describe('google_cast plugin', () => {
     expect(patches(ctx, TXT_CHROMECAST.id).at(-1)).toMatchObject({
       nowPlaying: { artUrl: `/api/plugins/google_cast/art?url=${encodeURIComponent(icon)}` },
     })
+    await plugin.stop()
+  })
+
+  it('prefers the cover of the track being played over the app logo (real YouTube + catalogue captures)', async () => {
+    const tv = fakeReceiver(RECEIVER_STATUS_YOUTUBE_TV, {
+      ...MEDIA_STATUS_YOUTUBE_TV,
+      media: { ...MEDIA_STATUS_YOUTUBE_TV.media, metadata: { metadataType: 0, title: 'Horizon', artist: 'Northwind et Lumen' } },
+    })
+    const catalogs: CoverFetch = vi.fn(async (url) => ({
+      ok: true, status: 200,
+      json: async () => (url.includes('itunes.apple.com') ? ITUNES_SEARCH_BOUNDARY : DEEZER_SEARCH_BOUNDARY),
+    }))
+    const { plugin, ctx } = await started(fakeDiscovery([SERVICE_CHROMECAST]), network({ [SERVICE_CHROMECAST.host]: tv }), undefined, undefined, youtubeRegistry, undefined, catalogs)
+    // d'abord ce que l'appareil dit, sans image : on ne fait pas attendre le catalogue
+    expect(patches(ctx, TXT_CHROMECAST.id)[0]).toMatchObject({ nowPlaying: { title: 'Horizon', artist: 'Northwind et Lumen' } })
+    await flush(8)
+    // puis la pochette de l'album, relayée par /art — et non le logo de YouTube
+    const cover = 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/anonymised/199502092474_cover.jpg/600x600bb.jpg'
+    expect(patches(ctx, TXT_CHROMECAST.id).at(-1)).toMatchObject({
+      nowPlaying: { title: 'Horizon', artUrl: `/api/plugins/google_cast/art?url=${encodeURIComponent(cover)}` },
+    })
+    expect(catalogs).toHaveBeenCalledTimes(1)                            // iTunes a suffi, Deezer n'a pas été appelé
     await plugin.stop()
   })
 

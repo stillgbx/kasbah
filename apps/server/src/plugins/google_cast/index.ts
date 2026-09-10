@@ -11,6 +11,7 @@ import { createMdnsDiscovery, type CastDiscovery } from './discovery'
 import { createKnownDevicesFile, type KnownDevices } from './known'
 import { sendError } from '../../http/errors'
 import { AppIconResolver, registryAppId, type RegistryFetch } from './enrich/appIcon'
+import { CoverFinder, type CoverFetch, type Track } from './enrich/cover'
 import { CrunchyrollEnricher, isCrunchyrollApp, type EnrichFetch } from './enrich/crunchyroll'
 import { applyEnrichment, toDescriptor, toMediaPatch, toReceiverPatch, withFallbackArt } from './mapping'
 import type { CastService, MediaStatus, ReceiverApplication, ReceiverStatus } from './types'
@@ -46,6 +47,13 @@ export const googleCastConfigSchema = z.object({
    * en anonyme, sans compte — NON OFFICIEL (voir `enrich/crunchyroll.ts`). `false` pour s'en passer.
    */
   CAST_CRUNCHYROLL_ENRICH: bool.default(true),
+  /**
+   * Chercher la pochette d'un morceau que l'appareil nomme sans l'illustrer (une appli de TV Android
+   * n'envoie aucune image), dans les catalogues publics iTunes puis Deezer, sans clé ni compte — la
+   * correspondance titre + artiste est vérifiée avant d'accepter une image (`enrich/cover.ts`).
+   * `false` pour s'en passer : il reste le logo de l'appli.
+   */
+  CAST_COVER_LOOKUP: bool.default(true),
 })
 export type GoogleCastConfig = z.infer<typeof googleCastConfigSchema>
 
@@ -87,6 +95,8 @@ export interface GoogleCastPluginDeps {
   fetchImpl?: ArtFetch
   /** Injection pour les tests : appels à l'API Crunchyroll. */
   enrichFetch?: EnrichFetch
+  /** Injection pour les tests : appels aux catalogues de pochettes (iTunes, Deezer). */
+  coverFetch?: CoverFetch
   /** Injection pour les tests : registre public des applis Cast (logos). */
   registryFetch?: RegistryFetch
   /** Injection pour les tests : fausse découverte. */
@@ -107,6 +117,8 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
   let known: KnownDevices | null = null
   /** Enrichissement Crunchyroll (absent si désactivé). */
   let crunchyroll: CrunchyrollEnricher | null = null
+  /** Recherche de pochette par titre + artiste (absente si désactivée). */
+  let covers: CoverFinder | null = null
   /** Logos des applis, pochette de repli. */
   let appIcons: AppIconResolver | null = null
   let refreshTimer: unknown = null
@@ -230,9 +242,44 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
     if (started) ctx!.emitState(entry.service.txt.id, mediaPatch(entry, media, app))
   }
 
-  /** Patch de lecture complet : ce que l'appareil dit, enrichi (Crunchyroll), puis le logo de l'appli s'il manque une image. */
+  /**
+   * Patch de lecture complet, du plus précis au plus général : ce que l'appareil dit, enrichi
+   * (Crunchyroll), puis la pochette du morceau cherchée par son nom, puis le logo de l'appli. Chaque
+   * étage ne parle que si l'image manque encore.
+   */
   function mediaPatch(entry: Entry, media: MediaStatus | undefined, app: ReceiverApplication | undefined): StatePatch<'media_player'> {
-    return withAppIcon(entry, app, enrichedPatch(entry, media, app))
+    return withAppIcon(entry, app, withCover(entry, enrichedPatch(entry, media, app)))
+  }
+
+  /** Le morceau nommé par un patch, s'il a de quoi être cherché (titre ET artiste). */
+  function trackOf(patch: StatePatch<'media_player'>): Track | undefined {
+    const n = patch.nowPlaying
+    return n?.title && n.artist ? { title: n.title, artist: n.artist } : undefined
+  }
+
+  /**
+   * Pochette de l'album d'un morceau que l'appareil n'illustre pas (relevé : l'appli YouTube d'une TV
+   * Android donne titre et artiste, jamais d'image). Cherchée par son nom dans les catalogues publics
+   * (`enrich/cover.ts`), avec correspondance vérifiée. En cache : appliquée tout de suite ; sinon on
+   * publie ce qu'on a et on republie à la réponse — si le MÊME morceau joue encore.
+   */
+  function withCover(entry: Entry, patch: StatePatch<'media_player'>): StatePatch<'media_player'> {
+    if (!covers || !patch.nowPlaying || patch.nowPlaying.artUrl) return patch
+    const track = trackOf(patch)
+    if (!track) return patch
+    const known = covers.cached(track)
+    if (known) { rememberArt(known); return withFallbackArt(patch, known) }
+    if (known === undefined) {
+      void covers.lookup(track).then((url) => {
+        const c = entry.connection
+        if (!url || !started || !c?.isOpen) return
+        const playing = trackOf(toMediaPatch(c.media, c.app))
+        if (!playing || CoverFinder.key(playing) !== CoverFinder.key(track)) return
+        rememberArt(url)
+        ctx!.emitState(entry.service.txt.id, mediaPatch(entry, c.media, c.app))
+      })
+    }
+    return patch
   }
 
   /**
@@ -390,6 +437,9 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
       discovery = deps.discovery ?? createMdnsDiscovery({ ...(config.CAST_MDNS_INTERFACE ? { iface: config.CAST_MDNS_INTERFACE } : {}), logger: context.logger })
       crunchyroll = config.CAST_CRUNCHYROLL_ENRICH
         ? new CrunchyrollEnricher({ ...(deps.enrichFetch ? { fetchImpl: deps.enrichFetch } : {}), clock: context.clock, logger: context.logger, signal: context.signal })
+        : null
+      covers = config.CAST_COVER_LOOKUP
+        ? new CoverFinder({ ...(deps.coverFetch ? { fetchImpl: deps.coverFetch } : {}), clock: context.clock, logger: context.logger, signal: context.signal })
         : null
       appIcons = new AppIconResolver({ ...(deps.registryFetch ? { fetchImpl: deps.registryFetch } : {}), clock: context.clock, logger: context.logger, signal: context.signal })
       // Appareils déjà vus : ils entrent dans la liste AVANT la découverte, donc un appareil éteint
