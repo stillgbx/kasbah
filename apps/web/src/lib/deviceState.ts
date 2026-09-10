@@ -7,7 +7,7 @@ import { formatPercent, formatPower, formatSensor, formatTemp } from './format'
 /**
  * Le lecteur diffuse quelque chose : une lecture, ou une appli à l'écran dont on ne sait rien de plus
  * (`on`, Netflix natif) — l'écran est bien occupé. Sert à l'interrupteur, au point pulsant, à la teinte de
- * l'icône et à l'onde de la scène 3D ; le compteur « en lecture » de l'en-tête, lui, ne compte que `playing`.
+ * l'icône et à l'onde de la scène 3D ; le compteur « en diffusion » de l'en-tête, lui, ne compte que `playing`.
  */
 export function isMediaActive(s: StateFor<'media_player'>): boolean {
   return s.playback === 'playing' || s.playback === 'on'

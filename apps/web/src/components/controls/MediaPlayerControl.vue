@@ -6,7 +6,7 @@ import MarqueeText from '../ui/MarqueeText.vue'
 
 // Contrôle d'un lecteur dans le panneau appareil. Règle « rien ne doit bouger » (voir le wiki,
 // 4_0_langage-visuel) : le bloc « en cours » a toujours les MÊMES quatre lignes — titre, sous-titre,
-// barre, temps — que quelque chose joue ou non. Sans morceau, le titre dit « Rien en lecture » et le
+// barre, temps — que quelque chose joue ou non. Sans morceau, le titre dit « Rien en diffusion » et le
 // sous-titre l'état ; sans durée (radio en direct), la barre et les temps sont invisibles mais gardent
 // leur place. Avant, la pause faisait disparaître trois lignes et remontait les touches d'autant.
 const props = defineProps<{ descriptor: DeviceDescriptor; state: StateFor<'media_player'>; pending?: boolean; disabled?: boolean }>()

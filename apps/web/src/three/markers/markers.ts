@@ -13,7 +13,7 @@ const devMaterial = (ctx: MarkerContext) => ctx.materials.device
 
 /** Nombre d'anneaux de l'onde sonore d'un lecteur, et période d'un anneau (ms). */
 const WAVE_RINGS = 3
-const WAVE_PERIOD_MS = 2600
+const WAVE_PERIOD_MS = 5750
 /** Rayon (m) de l'anneau à sa naissance et à sa disparition. */
 const WAVE_R0 = 0.18
 const WAVE_R1 = 1.2
@@ -80,7 +80,7 @@ export class GenericMarker extends DeviceMarker {
       // invisibles tant que rien ne joue, animés par `onState`
       const directional = mediaClass === 'tv' || mediaClass === 'display'
       for (let i = 0; i < WAVE_RINGS; i++) {
-        const ring = new Mesh(new RingGeometry(0.92, 1, 64), waveMaterial(ctx.theme.primary, directional))
+        const ring = new Mesh(new RingGeometry(0.86, 1, 64), waveMaterial(ctx.theme.media, directional))
         ring.position.z = 0.03
         ring.rotation.z = yawToRad(device.yaw)                 // le « devant » de l'onde suit l'écran
         ring.visible = false
@@ -102,7 +102,7 @@ export class GenericMarker extends DeviceMarker {
   protected onState(state: DeviceState | undefined): void {
     if (this.waves.length === 0) return
     this.playing = !!state && state.available && this.isOn(state)
-    for (const w of this.waves) (w.material.uniforms.uColor!.value as Color).copy(this.ctx.theme.primary)
+    for (const w of this.waves) (w.material.uniforms.uColor!.value as Color).copy(this.ctx.theme.media)
     if (this.playing && !this.waving) {
       this.waving = true
       let t0 = -1
@@ -118,7 +118,7 @@ export class GenericMarker extends DeviceMarker {
             const p = (((now - t0) / WAVE_PERIOD_MS) + i / WAVE_RINGS) % 1   // phase 0 → 1, anneaux décalés d'un tiers
             const r = WAVE_R0 + (WAVE_R1 - WAVE_R0) * p
             w.scale.set(r, r, 1)
-            w.material.uniforms.uOpacity!.value = 0.55 * (1 - p) * (1 - p)  // s'estompe plus vite en fin de course
+            w.material.uniforms.uOpacity!.value = 0.85 * (1 - p)            // fondu linéaire : encore visible quand l'anneau est large
             w.visible = true
           })
           return true

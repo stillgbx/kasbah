@@ -17,11 +17,13 @@ const SCENE_LIGHT = {
   sceneTerrain: '#93bb8c', sceneLawn: '#93bb8c', sceneWater: '#6fb7d6', sceneDriveway: '#b7bbc1', scenePath: '#d9d2c5', sceneBed: '#5f8f5a',
   sceneWall: '#f3f0ea', sceneWallInterior: '#dad4cb', sceneFloor: '#e6e1d8', sceneFloorWood: '#dccbb0', sceneFloorTile: '#e3e4e0',
   sceneFloorCarpet: '#e1d6d6', sceneFloorConcrete: '#d9d8d4', sceneGlass: '#9fd0e8', sceneRoof: '#cbd0d6', sceneTerrace: '#d9d2c5',
+  sceneMedia: '#1a73d8',
 }
 const SCENE_DARK = {
   sceneTerrain: '#2f4a33', sceneLawn: '#2f4a33', sceneWater: '#24607a', sceneDriveway: '#353a44', scenePath: '#474a52', sceneBed: '#24392a',
   sceneWall: '#4a5464', sceneWallInterior: '#3d4656', sceneFloor: '#343b49', sceneFloorWood: '#3f3d44', sceneFloorTile: '#363e4a',
   sceneFloorCarpet: '#3a3a48', sceneFloorConcrete: '#353b45', sceneGlass: '#5aa5c8', sceneRoof: '#272e3b', sceneTerrace: '#474a52',
+  sceneMedia: '#5aaeff',
 }
 
 function light(accent: string): ThemeDefinition {

@@ -14,6 +14,8 @@ export interface SceneTheme {
   roof: Color
   terrain: Color
   zones: Record<ZoneKind, Color>
+  /** Onde du lecteur en diffusion : un bleu propre à la scène, indépendant de l'accent choisi. */
+  media: Color
   primary: Color
   secondary: Color
   onSurface: Color
@@ -33,7 +35,7 @@ export function parseCssColor(raw: string | null | undefined, fallback: string):
 const FALLBACK: Record<string, string> = {
   background: '#f6f3ee', sceneWall: '#efe9df', sceneWallInterior: '#e6e0d6', sceneFloor: '#d9d2c5', sceneFloorWood: '#c9a276',
   sceneFloorTile: '#d6d9d3', sceneFloorCarpet: '#c4b4b8', sceneFloorConcrete: '#bfbdb8', sceneGlass: '#9fd0e8', sceneRoof: '#8b5e4b',
-  sceneTerrain: '#93bb8c', sceneLawn: '#93bb8c', sceneWater: '#6fb7d6', sceneDriveway: '#b7bbc1', scenePath: '#d9d2c5', sceneBed: '#5f8f5a', sceneTerrace: '#d9d2c5',
+  sceneTerrain: '#93bb8c', sceneLawn: '#93bb8c', sceneWater: '#6fb7d6', sceneDriveway: '#b7bbc1', scenePath: '#d9d2c5', sceneBed: '#5f8f5a', sceneTerrace: '#d9d2c5', sceneMedia: '#1a73d8',
   primary: '#1f6f78', secondary: '#66717f', 'on-surface': '#141a22',
 }
 
@@ -50,6 +52,7 @@ export function readVuetifyTheme(el: Element = document.documentElement): SceneT
     floors: { wood: get('sceneFloorWood'), tile: get('sceneFloorTile'), carpet: get('sceneFloorCarpet'), concrete: get('sceneFloorConcrete') },
     glass: get('sceneGlass'), roof: get('sceneRoof'), terrain: get('sceneTerrain'),
     zones: { lawn: get('sceneLawn'), pool: get('sceneWater'), driveway: get('sceneDriveway'), path: get('scenePath'), bed: get('sceneBed'), terrace: get('sceneTerrace'), other: get('sceneDriveway') },
+    media: get('sceneMedia'),
     primary: get('primary'), secondary: get('secondary'), onSurface: get('on-surface'),
   }
 }
@@ -62,6 +65,7 @@ export function defaultSceneTheme(): SceneTheme {
     floors: { wood: c('sceneFloorWood'), tile: c('sceneFloorTile'), carpet: c('sceneFloorCarpet'), concrete: c('sceneFloorConcrete') },
     glass: c('sceneGlass'), roof: c('sceneRoof'), terrain: c('sceneTerrain'),
     zones: { lawn: c('sceneLawn'), pool: c('sceneWater'), driveway: c('sceneDriveway'), path: c('scenePath'), bed: c('sceneBed'), terrace: c('sceneTerrace'), other: c('sceneDriveway') },
+    media: c('sceneMedia'),
     primary: c('primary'), secondary: c('secondary'), onSurface: c('on-surface'),
   }
 }

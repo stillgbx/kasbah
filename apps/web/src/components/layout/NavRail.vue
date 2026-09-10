@@ -20,7 +20,7 @@ const items: { name: string; icon: IconName; label: string }[] = [
   { name: 'lights', icon: 'light', label: 'nav.lights' },
   { name: 'covers', icon: 'shutter', label: 'nav.covers' },
   { name: 'cameras', icon: 'camera', label: 'nav.cameras' },
-  { name: 'media', icon: 'speaker', label: 'nav.media' },
+  { name: 'media', icon: 'cast', label: 'nav.media' },
   { name: 'energy', icon: 'bolt', label: 'nav.energy' },
   { name: 'vehicles', icon: 'vehicle', label: 'nav.vehicles' },
   { name: 'settings', icon: 'gear', label: 'nav.settings' },

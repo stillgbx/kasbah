@@ -12,6 +12,8 @@ export const ICONS = {
   rotateLeft: 'M4 12a8 8 0 1 0 2.6-5.9M4 4v5h5',
   /** Téléviseur (ou boîtier branché dessus) : écran sur pied. */
   tv: 'M3 5h18v12H3zM8 21h8M12 17v4',
+  /** Médias (catégorie) : le glyphe cast — un écran et le flux qui y arrive. */
+  cast: 'M3 8V5.5h18v13h-8M3 11.5a7 7 0 0 1 7 7M3 15.5a3 3 0 0 1 3 3M3.4 18.5m-.5 0a.5.5 0 1 0 1 0a.5.5 0 1 0-1 0',
   /** Écran connecté (Nest Hub) : tablette posée, un trait pour le pied. */
   tablet: 'M4 5.5h16a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5H4A1.5 1.5 0 0 1 2.5 16V7A1.5 1.5 0 0 1 4 5.5zM9 20.5h6',
   thermostat: 'M12 3a2 2 0 0 1 2 2v9.2a4 4 0 1 1-4 0V5a2 2 0 0 1 2-2zM12 9v8',

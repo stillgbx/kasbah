@@ -14,7 +14,7 @@
   "summary": { "lightsOn": "{n} lumière allumée | {n} lumière allumée | {n} lumières allumées",
     "shuttersOpen": "{n} volet ouvert | {n} volet ouvert | {n} volets ouverts",
     "awningsDown": "{n} store baissé | {n} store baissé | {n} stores baissés",
-    "playing": "{n} en lecture", "solar": "Solaire" },
+    "playing": "{n} en diffusion", "solar": "Solaire" },
   "floors": { "garden": "Jardin", "all": "Tout", "roof": "Toit" },
   "home": {
     "lightsOn": "lumières allumées", "shuttersOpen": "volets ouverts", "awningsDown": "stores baissés", "solar": "Solaire", "battery": "Batterie",
@@ -25,7 +25,7 @@
     "resetView": "Vue d'ensemble", "openPanel": "Panneau", "noScenes": "Aucune scène définie dans la maison."
   },
   "kinds": {
-    "light": "Lumière", "cover": "Volet", "media_player": "Enceinte", "climate": "Chauffage", "vacuum": "Aspirateur",
+    "light": "Lumière", "cover": "Volet", "media_player": "Lecteur", "climate": "Chauffage", "vacuum": "Aspirateur",
     "mower": "Tondeuse", "sensor": "Capteur", "energy": "Énergie", "ev_charger": "Borne de recharge", "vehicle": "Véhicule", "camera": "Caméra"
   },
   "device": {
@@ -57,8 +57,8 @@
     "summary": "{active} actives sur {total}", "none": "Aucune caméra remontée par les plugins."
   },
   "media": {
-    "summary": "{playing} en lecture sur {total}", "none": "Aucun lecteur remonté par les plugins.",
-    "playing": "Lecture", "paused": "En pause", "idle": "Au repos", "on": "À l'écran", "off": "Éteint", "nothing": "Rien en lecture",
+    "summary": "{playing} en diffusion sur {total}", "none": "Aucun lecteur remonté par les plugins.",
+    "playing": "Lecture", "paused": "En pause", "idle": "Au repos", "on": "À l'écran", "off": "Éteint", "nothing": "Rien en diffusion",
     "play": "Lire", "next": "Piste suivante", "previous": "Piste précédente", "mute": "Couper le son", "unmute": "Rétablir le son", "volume": "Volume", "volumeUp": "Monter le son", "volumeDown": "Baisser le son", "seek": "Position dans le morceau",
     "classes": { "speaker": "Enceinte", "tv": "Téléviseur", "display": "Écran connecté" }
   },

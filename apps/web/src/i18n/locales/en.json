@@ -25,7 +25,7 @@
     "resetView": "Overview", "openPanel": "Panel", "noScenes": "No scene defined in the house."
   },
   "kinds": {
-    "light": "Light", "cover": "Shutter", "media_player": "Speaker", "climate": "Heating", "vacuum": "Vacuum",
+    "light": "Light", "cover": "Shutter", "media_player": "Player", "climate": "Heating", "vacuum": "Vacuum",
     "mower": "Mower", "sensor": "Sensor", "energy": "Energy", "ev_charger": "EV charger", "vehicle": "Vehicle", "camera": "Camera"
   },
   "device": {
