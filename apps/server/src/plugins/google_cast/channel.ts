@@ -85,7 +85,7 @@ export class CastConnection {
       this.send(jsonMessage(SENDER_ID, RECEIVER_ID, NS_HEARTBEAT, { type: 'PING' }))
     }, hb)
     this.mediaPoll = clock.setInterval(() => {
-      if (this.app && this.media?.playerState === 'PLAYING') this.send(jsonMessage(SENDER_ID, this.app.transportId, NS_MEDIA, { type: 'GET_STATUS', requestId: this.nextId() }))
+      if (this.app?.transportId && this.media?.playerState === 'PLAYING') this.send(jsonMessage(SENDER_ID, this.app.transportId, NS_MEDIA, { type: 'GET_STATUS', requestId: this.nextId() }))
     }, this.opts.mediaPollMs ?? DEFAULT_MEDIA_POLL_MS)
     const reply = await this.request(RECEIVER_ID, NS_RECEIVER, { type: 'GET_STATUS' })
     return receiverStatusSchema.parse(reply.status)
@@ -98,22 +98,31 @@ export class CastConnection {
     await this.request(RECEIVER_ID, NS_RECEIVER, { type: 'SET_VOLUME', volume })
   }
 
+  /**
+   * Ferme l'appli à l'écran (`STOP` de sa session, canal récepteur) : le Chromecast revient à son écran
+   * d'accueil. C'est le seul « arrêt » possible pour une appli sans canal média (Netflix natif).
+   */
+  async stopApp(): Promise<void> {
+    if (!this.app) throw new PluginError('UNSUPPORTED_COMMAND', 'nothing is on screen')
+    await this.request(RECEIVER_ID, NS_RECEIVER, { type: 'STOP', sessionId: this.app.sessionId })
+  }
+
   /** PLAY / PAUSE / STOP sur la session média en cours. */
   async mediaCommand(type: 'PLAY' | 'PAUSE' | 'STOP'): Promise<void> {
-    const { app, media } = this.requireMedia()
-    await this.request(app.transportId, NS_MEDIA, { type, mediaSessionId: media.mediaSessionId })
+    const { transportId, media } = this.requireMedia()
+    await this.request(transportId, NS_MEDIA, { type, mediaSessionId: media.mediaSessionId })
   }
 
   /** Piste suivante (+1) ou précédente (−1) dans la file de l'appli. */
   async queueJump(jump: 1 | -1): Promise<void> {
-    const { app, media } = this.requireMedia()
-    await this.request(app.transportId, NS_MEDIA, { type: 'QUEUE_UPDATE', mediaSessionId: media.mediaSessionId, jump })
+    const { transportId, media } = this.requireMedia()
+    await this.request(transportId, NS_MEDIA, { type: 'QUEUE_UPDATE', mediaSessionId: media.mediaSessionId, jump })
   }
 
   /** Se placer dans le morceau (SEEK) ; le récepteur répond par un état média avec la nouvelle position. */
   async seek(positionS: number): Promise<void> {
-    const { app, media } = this.requireMedia()
-    await this.request(app.transportId, NS_MEDIA, { type: 'SEEK', mediaSessionId: media.mediaSessionId, currentTime: Math.max(0, positionS) })
+    const { transportId, media } = this.requireMedia()
+    await this.request(transportId, NS_MEDIA, { type: 'SEEK', mediaSessionId: media.mediaSessionId, currentTime: Math.max(0, positionS) })
   }
 
   /** Position estimée (s) : dernier relevé, avancé du temps écoulé si ça joue. */
@@ -129,9 +138,9 @@ export class CastConnection {
    * morceau (SEEK à 0) ; sinon au morceau précédent de la file.
    */
   async previous(): Promise<void> {
-    const { app, media } = this.requireMedia()
+    const { transportId, media } = this.requireMedia()
     if (this.estimatedPositionS() > RESTART_AFTER_S) {
-      await this.request(app.transportId, NS_MEDIA, { type: 'SEEK', mediaSessionId: media.mediaSessionId, currentTime: 0 })
+      await this.request(transportId, NS_MEDIA, { type: 'SEEK', mediaSessionId: media.mediaSessionId, currentTime: 0 })
       return
     }
     await this.queueJump(-1)
@@ -156,9 +165,9 @@ export class CastConnection {
 
   private nextId(): number { this.requestId += 1; return this.requestId }
 
-  private requireMedia(): { app: ReceiverApplication; media: MediaStatus } {
-    if (!this.app || !this.media) throw new PluginError('UNSUPPORTED_COMMAND', 'nothing is playing on this device')
-    return { app: this.app, media: this.media }
+  private requireMedia(): { transportId: string; media: MediaStatus } {
+    if (!this.app?.transportId || !this.media) throw new PluginError('UNSUPPORTED_COMMAND', 'nothing is playing on this device')
+    return { transportId: this.app.transportId, media: this.media }
   }
 
   private send(msg: CastMessage): void {
@@ -221,12 +230,14 @@ export class CastConnection {
     this.lastReceiverStatus = status.data
     this.opts.onReceiverStatus(status.data)                 // volume d'abord, lecture ensuite
     const app = activeApplication(status.data)
-    const changed = app?.transportId !== this.app?.transportId
+    // par `sessionId` et non `transportId` : une appli sans canal média (Netflix natif) n'en a pas
+    const changed = app?.sessionId !== this.app?.sessionId
     this.app = app
     if (changed || !this.mediaReported) {
-      // nouvelle appli (ou plus d'appli) : (r)ouvrir le canal média vers elle et lui demander sa session
+      // nouvelle appli (ou plus d'appli) : (r)ouvrir le canal média vers elle et lui demander sa session ;
+      // sans `transportId` il n'y a personne à qui parler, l'état « à l'écran » est publié par `setMedia`
       this.setMedia(undefined)
-      if (app) {
+      if (app?.transportId) {
         this.send(jsonMessage(SENDER_ID, app.transportId, NS_CONNECTION, { type: 'CONNECT' }))
         this.send(jsonMessage(SENDER_ID, app.transportId, NS_MEDIA, { type: 'GET_STATUS', requestId: this.nextId() }))
       }

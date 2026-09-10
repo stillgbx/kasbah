@@ -5,6 +5,7 @@ import PageHeader from '../components/layout/PageHeader.vue'
 import RoomBands from '../components/devices/RoomBands.vue'
 import PulseDot from '../components/ui/PulseDot.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
+import { isDevicePulsing } from '../lib/deviceState'
 import { useDevicesStore } from '../stores/devices'
 
 // Vue Médias : enceintes, réveils, Chromecast, TV — tout ce qui est du kind `media_player`. La
@@ -55,7 +56,7 @@ const loaded = (s: StateFor<'media_player'>) => s.playback === 'playing' || s.pl
           </Transition>
         </template>
         <template #status-badge="{ entry }">
-          <PulseDot :on="(entry.state as StateFor<'media_player'>).playback === 'playing'" class="dot" />
+          <PulseDot :on="isDevicePulsing(entry.state)" class="dot" />
         </template>
         <template #control="{ entry }">
           <div class="controls">

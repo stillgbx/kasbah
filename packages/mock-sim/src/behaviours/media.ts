@@ -36,6 +36,7 @@ export function mediaPlayer(externalId: string, o: MediaOptions): SimDevice<'med
           if (!dev.state.nowPlaying) dev.state.nowPlaying = now(0)
           break
         case 'media_player.pause': dev.state.playback = 'paused'; break
+        case 'media_player.stop': dev.state.playback = 'idle'; delete dev.state.nowPlaying; break
         case 'media_player.next': track = (track + 1) % PLAYLIST.length; dev.state.nowPlaying = now(0); break
         case 'media_player.previous':
           // comme une télécommande : passé 3 s, retour au début du morceau ; sinon le précédent

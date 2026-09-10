@@ -28,7 +28,7 @@ onBeforeUnmount(() => devices.stop())
     <ConnectionBanner />
     <v-snackbar-queue
       :model-value="notifications.queue.map((n) => ({ text: n.text, color: n.color, timeout: n.timeout }))"
-      location="bottom" closable
+      location="bottom" closable :close-text="$t('common.close')"
       @update:model-value="(v: unknown[]) => { if (v.length < notifications.queue.length) notifications.dismiss(notifications.queue[0]!.id) }"
     />
   </v-app>

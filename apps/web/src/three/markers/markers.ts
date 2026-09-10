@@ -1,6 +1,7 @@
 import { BoxGeometry, Color, CylinderGeometry, DoubleSide, Group, Mesh, MeshStandardMaterial, PointLight, RingGeometry, ShaderMaterial, SphereGeometry } from 'three'
 import type { DeviceState, HouseDevice } from '@kasbah/shared'
 import { mirekToRgb, xyToRgb } from '@kasbah/shared'
+import { isMediaActive } from '../../lib/deviceState'
 import { yawToRad } from '../../lib/orientation'
 import { createTween, lerp } from '../core/tween'
 import { DeviceMarker, type MarkerContext } from './DeviceMarker'
@@ -90,7 +91,7 @@ export class GenericMarker extends DeviceMarker {
   }
   protected isOn(s: DeviceState): boolean {
     switch (s.kind) {
-      case 'media_player': return s.playback === 'playing'
+      case 'media_player': return isMediaActive(s)                  // une appli à l'écran diffuse une image : l'onde aussi
       case 'climate': return s.mode !== 'off'
       case 'vacuum': return s.activity === 'cleaning'
       case 'ev_charger': return s.status === 'charging'

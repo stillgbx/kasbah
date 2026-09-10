@@ -5,12 +5,13 @@ import pino from 'pino'
 import { describe, expect, it, vi } from 'vitest'
 import type { PluginContext } from '../../core/plugin'
 import {
-  CRUNCHYROLL_OBJECT_EPISODE, CRUNCHYROLL_OBJECT_SERIES, CRUNCHYROLL_TOKEN, MEDIA_STATUS_CRUNCHYROLL, MEDIA_STATUS_PLAYING, RECEIVER_STATUS_CHROMECAST_FIXED,
-  RECEIVER_STATUS_CRUNCHYROLL, RECEIVER_STATUS_NEST_HUB_IDLE, RECEIVER_STATUS_PLAYING, SERVICE_CHROMECAST,
+  CAST_REGISTRY_NETFLIX, CRUNCHYROLL_OBJECT_EPISODE, CRUNCHYROLL_OBJECT_SERIES, CRUNCHYROLL_TOKEN, MEDIA_STATUS_CRUNCHYROLL, MEDIA_STATUS_PLAYING, RECEIVER_STATUS_CHROMECAST_FIXED,
+  RECEIVER_STATUS_CRUNCHYROLL, RECEIVER_STATUS_NEST_HUB_IDLE, RECEIVER_STATUS_NETFLIX, RECEIVER_STATUS_PLAYING, SERVICE_CHROMECAST,
   SERVICE_NEST_HUB, SERVICE_NEST_MINI, TXT_CHROMECAST, TXT_NEST_HUB, TXT_NEST_MINI,
 } from './__fixtures__/network'
 import type { SocketFactory } from './channel'
 import type { CastDiscovery } from './discovery'
+import type { RegistryFetch } from './enrich/appIcon'
 import type { EnrichFetch } from './enrich/crunchyroll'
 import { createGoogleCastPlugin, googleCastConfigSchema, type ArtFetch } from './index'
 import { FrameDecoder, NS_HEARTBEAT, NS_MEDIA, NS_RECEIVER, encodeFrame, jsonMessage } from './protocol'
@@ -48,6 +49,8 @@ function fakeReceiver(receiver: Record<string, unknown>, media?: Record<string, 
           const v = body.volume as { level?: number; muted?: boolean }
           state.receiver.volume = { ...(state.receiver.volume as object), ...v }
         }
+        // STOP d'une session : l'appli se ferme, le récepteur répond par un état sans appli
+        if (body.type === 'STOP') { state.receiver = { ...state.receiver, applications: [] }; state.media = undefined }
         reply(m.destinationId, NS_RECEIVER, { type: 'RECEIVER_STATUS', requestId, status: state.receiver })
       }
       if (m.namespace === NS_MEDIA) {
@@ -99,10 +102,14 @@ function network(receivers: Record<string, ReturnType<typeof fakeReceiver>>) {
   return connect
 }
 
-async function started(discovery: CastDiscovery, connect: SocketFactory, fetchImpl?: ArtFetch, enrichFetch?: EnrichFetch) {
+/** Registre des applis Cast : muet par défaut (aucun test ne doit sortir sur le réseau), Netflix connu sur demande. */
+const noRegistry: RegistryFetch = async () => ({ ok: false, status: 404, text: async () => '' })
+const netflixRegistry: RegistryFetch = async (url) => (url.endsWith('CA5E8412') ? { ok: true, status: 200, text: async () => CAST_REGISTRY_NETFLIX } : noRegistry(url))
+
+async function started(discovery: CastDiscovery, connect: SocketFactory, fetchImpl?: ArtFetch, enrichFetch?: EnrichFetch, registryFetch: RegistryFetch = noRegistry) {
   const clock = new ManualClock(0)
   const { ctx, ctrl } = fakeContext(clock)
-  const plugin = createGoogleCastPlugin({ discovery, connect, ...(fetchImpl ? { fetchImpl } : {}), ...(enrichFetch ? { enrichFetch } : {}) })
+  const plugin = createGoogleCastPlugin({ discovery, connect, registryFetch, ...(fetchImpl ? { fetchImpl } : {}), ...(enrichFetch ? { enrichFetch } : {}) })
   await plugin.init(ctx)
   const p = plugin.discover()
   await flush()
@@ -209,6 +216,28 @@ describe('google_cast plugin', () => {
     await flush()
     expect(patches(ctx, TXT_NEST_MINI.id).at(-1)).toEqual({ playback: 'idle', nowPlaying: null })
     await expect(plugin.execute(TXT_NEST_MINI.id, { type: 'media_player.play' })).rejects.toMatchObject({ code: 'UNSUPPORTED_COMMAND', message: expect.stringContaining('nothing is playing') })
+    await plugin.stop()
+  })
+
+  it('shows a native app without a media channel as on screen, and never talks to it (real Netflix capture)', async () => {
+    const tv = fakeReceiver(RECEIVER_STATUS_CHROMECAST_FIXED)
+    const { plugin, ctx } = await started(fakeDiscovery([SERVICE_CHROMECAST]), network({ [SERVICE_CHROMECAST.host]: tv }), undefined, undefined, netflixRegistry)
+    tv.push(RECEIVER_STATUS_NETFLIX)                                      // Netflix ouvert sur le Chromecast
+    await flush(8)
+    const onScreen = patches(ctx, TXT_CHROMECAST.id).filter((p) => p.playback === 'on')
+    // d'abord l'état nu, sans attendre le registre ; puis le logo de l'appli (identifiant natif → CA5E8412), relayé par /art, en pochette de repli
+    const icon = 'https://lh3.googleusercontent.com/anonymised-netflix-icon'
+    expect(onScreen[0]).toEqual({ playback: 'on', nowPlaying: { title: '', source: 'Netflix' } })
+    expect(onScreen.at(-1)).toEqual({ playback: 'on', nowPlaying: { title: '', source: 'Netflix', artUrl: `/api/plugins/google_cast/art?url=${encodeURIComponent(icon)}` } })
+    // pas de transportId : ni CONNECT vers l'appli ni GET_STATUS média, seulement ceux du récepteur à l'ouverture
+    expect(tv.sent.filter((s) => s.destination !== 'receiver-0')).toEqual([])
+    await expect(plugin.execute(TXT_CHROMECAST.id, { type: 'media_player.pause' })).rejects.toMatchObject({ code: 'UNSUPPORTED_COMMAND' })
+    // « éteindre » = fermer l'appli : STOP de sa session sur le canal récepteur, acquitté par un état sans appli
+    await plugin.execute(TXT_CHROMECAST.id, { type: 'media_player.stop' })
+    expect(tv.of('STOP')).toEqual([{ namespace: NS_RECEIVER, destination: 'receiver-0', body: { type: 'STOP', sessionId: '0a9d3eeb-0000-4000-8000-000000000005', requestId: expect.any(Number) } }])
+    await flush()
+    expect(patches(ctx, TXT_CHROMECAST.id).at(-1)).toEqual({ playback: 'idle', nowPlaying: null })
+    await expect(plugin.execute(TXT_CHROMECAST.id, { type: 'media_player.stop' })).rejects.toMatchObject({ code: 'UNSUPPORTED_COMMAND', message: expect.stringContaining('nothing is on screen') })
     await plugin.stop()
   })
 

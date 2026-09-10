@@ -37,6 +37,7 @@ export function optimisticPatch(state: DeviceState, cmd: CommandInput): Partial<
       switch (cmd.type) {
         case 'media_player.play': return { playback: 'playing' } as Partial<DeviceState>
         case 'media_player.pause': return { playback: 'paused' } as Partial<DeviceState>
+        case 'media_player.stop': return { playback: 'idle', nowPlaying: undefined } as Partial<DeviceState>
         case 'media_player.set_volume': return { volume: cmd.volume } as Partial<DeviceState>
         case 'media_player.set_mute': return { muted: cmd.muted } as Partial<DeviceState>
         case 'media_player.seek':

@@ -187,4 +187,25 @@ export const CRUNCHYROLL_OBJECT_SERIES = {
 }
 
 /** Fin de file : la session existe encore mais plus rien à jouer. */
+/**
+ * CAPTURE RÉELLE (2026-09-10) : Netflix lancé en appli NATIVE sur un Chromecast (« Suite Parentale »).
+ * L'appli est déclarée (`appType: WEB`, `isIdleScreen: false`) mais SANS `transportId` ni `namespaces` :
+ * elle n'ouvre aucun canal média Cast. On sait qu'elle est à l'écran ; ni titre, ni lecture / pause.
+ */
+export const RECEIVER_STATUS_NETFLIX = {
+  volume: { controlType: 'fixed', level: 1, muted: false, stepInterval: 0.03999999910593033 },
+  applications: [{
+    appId: 'Netflix', appType: 'WEB', displayName: 'Netflix', iconUrl: '', isIdleScreen: false, launchedFromCloud: false,
+    senderConnected: false, sessionId: '0a9d3eeb-0000-4000-8000-000000000005', statusText: 'Netflix', universalAppId: 'Netflix',
+  }],
+  isActiveInput: true, isStandBy: false, userEq: {},
+}
+
+/**
+ * CAPTURE RÉELLE (2026-09-10) du registre public des applis Cast pour Netflix (`?a=CA5E8412`), réduite aux champs
+ * lus, URL d'icône anonymisée. Le garde `)]}'` en tête est gardé tel quel : c'est lui qu'il faut retirer.
+ */
+export const CAST_REGISTRY_NETFLIX = `)]}'
+{"resolution_height":0,"display_name":"Netflix","app_id":"CA5E8412","promo_assets":[{"icon_url":"https://lh3.googleusercontent.com/anonymised-netflix-icon","description":"Netflix is the leading subscription service for watching TV episodes and movies.","display_name":"Netflix"},{"description":"Accédez à toute l'offre Netflix directement sur votre télévision.","locale":"fr","display_name":"Netflix"}],"url":"https://www.netflix.com/cast"}`
+
 export const MEDIA_STATUS_IDLE = { mediaSessionId: 1, playbackRate: 1, playerState: 'IDLE', currentTime: 0, idleReason: 'FINISHED', supportedMediaCommands: 0, volume: { level: 1, muted: false } }

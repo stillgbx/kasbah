@@ -4,6 +4,15 @@ import { formatPercent, formatPower, formatSensor, formatTemp } from './format'
 
 // Lecture « métier » d'un état : actif ?, bascule rapide possible ?, libellé court traduit.
 
+/**
+ * Le lecteur diffuse quelque chose : une lecture, ou une appli à l'écran dont on ne sait rien de plus
+ * (`on`, Netflix natif) — l'écran est bien occupé. Sert à l'interrupteur, au point pulsant, à la teinte de
+ * l'icône et à l'onde de la scène 3D ; le compteur « en lecture » de l'en-tête, lui, ne compte que `playing`.
+ */
+export function isMediaActive(s: StateFor<'media_player'>): boolean {
+  return s.playback === 'playing' || s.playback === 'on'
+}
+
 /** Vrai si l'appareil est « actif » : lampe allumée, volet ouvert, lecture en cours, robot au travail… */
 export function isDeviceOn(s: DeviceState): boolean {
   if (!s.available) return false
@@ -11,7 +20,7 @@ export function isDeviceOn(s: DeviceState): boolean {
     case 'light': return s.on
     // position inconnue (RTS sans retour) : ni actif ni inactif, on ne teinte pas l'icône
     case 'cover': return s.position !== undefined && s.position > 0
-    case 'media_player': return s.playback === 'playing'
+    case 'media_player': return isMediaActive(s)
     case 'climate': return s.mode !== 'off'
     case 'vacuum': return s.activity === 'cleaning'
     case 'mower': return s.activity === 'mowing'
@@ -68,7 +77,7 @@ export function isDeviceBusy(s: DeviceState, aiming = false): boolean {
  * spinner : une lecture n'empêche pas d'agir, elle ne doit pas cacher la bascule.
  */
 export function isDevicePulsing(s: DeviceState, aiming = false): boolean {
-  return isDeviceBusy(s, aiming) || (s.kind === 'media_player' && s.playback === 'playing')
+  return isDeviceBusy(s, aiming) || (s.kind === 'media_player' && isMediaActive(s))
 }
 
 /**
@@ -82,7 +91,8 @@ export function toggleCommand(s: DeviceState, aimed?: number): CommandInput | nu
   switch (s.kind) {
     case 'light': return { type: 'light.set', on: !s.on }
     case 'cover': return shownClosed(s, aimed) ? { type: 'cover.open' } : { type: 'cover.close' }
-    case 'media_player': return s.playback === 'playing' ? { type: 'media_player.pause' } : { type: 'media_player.play' }
+    // `on` : l'interrupteur est coché ; l'éteindre FERME l'appli à l'écran (rien d'autre n'est possible sans session)
+    case 'media_player': return s.playback === 'playing' ? { type: 'media_player.pause' } : s.playback === 'on' ? { type: 'media_player.stop' } : { type: 'media_player.play' }
     case 'vacuum': return s.activity === 'cleaning' ? { type: 'vacuum.dock' } : { type: 'vacuum.start' }
     case 'mower': return s.activity === 'mowing' ? { type: 'mower.park', untilNextSchedule: true } : { type: 'mower.start', durationMin: 60 }
     default: return null
@@ -107,7 +117,10 @@ export function statusLabel(descriptor: DeviceDescriptor, s: DeviceState, t: Tra
         : s.position >= 100 ? t(`cover.${w}.open`)
         : formatPercent(toClosure(s.position), locale)
     }
-    case 'media_player': return s.playback === 'playing' ? `${t('media.playing')}${s.nowPlaying?.title ? ` · ${s.nowPlaying.title}` : ''}` : t(`media.${s.playback}`)
+    // `on` : l'appli est à l'écran sans rien dire de plus — c'est elle qu'on nomme (« À l'écran · Netflix »)
+    case 'media_player': return s.playback === 'playing' ? `${t('media.playing')}${s.nowPlaying?.title ? ` · ${s.nowPlaying.title}` : ''}`
+      : s.playback === 'on' && s.nowPlaying?.source ? `${t('media.on')} · ${s.nowPlaying.source}`
+      : t(`media.${s.playback}`)
     case 'climate': return `${formatTemp(s.currentTempC, locale)} → ${formatTemp(s.targetTempC, locale)}`
     case 'vacuum': return `${t(`vacuum.activities.${s.activity}`)} · ${formatPercent(s.battery, locale)}`
     case 'mower': return `${t(`mower.activities.${s.activity}`)} · ${formatPercent(s.battery, locale)}`

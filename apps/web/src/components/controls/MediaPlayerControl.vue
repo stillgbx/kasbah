@@ -21,12 +21,14 @@ const fmt = (s?: number) => (s === undefined ? '' : `${Math.floor(s / 60)}:${Str
 // dit, dans l'ordre et sans doublon, l'artiste, l'album (s'il diffère du titre — un single porte le
 // nom du morceau) et la source (l'appli). Deux lignes toujours présentes ; une ligne sans contenu
 // garde sa hauteur (espace insécable). Métadonnées pas encore reçues (changement de morceau) : un
-// « … » qui pulse doucement sur la première ligne, la source seule sur la seconde.
-const waiting = computed(() => !!props.state.nowPlaying && !props.state.nowPlaying.title)
+// « … » qui pulse doucement sur la première ligne, la source seule sur la seconde. Appli à l'écran
+// sans canal média (`on`, Netflix natif) : le titre n'arrivera jamais, on nomme l'appli sans attendre.
+const onScreen = computed(() => props.state.playback === 'on')
+const waiting = computed(() => !!props.state.nowPlaying && !props.state.nowPlaying.title && !onScreen.value)
 const details = computed(() => {
   const n = props.state.nowPlaying
   if (!n) return [t('media.nothing')]
-  if (!n.title) return ['…', n.source ?? '']
+  if (!n.title) return onScreen.value ? [n.source ?? ''] : ['…', n.source ?? '']
   const parts = [n.artist, n.album && n.album !== n.title ? n.album : undefined, n.source]
   return parts.filter((p, i, all): p is string => !!p && all.indexOf(p) === i)
 })
@@ -34,6 +36,10 @@ const NBSP = '\u00a0'
 const line1 = computed(() => details.value[0] || NBSP)
 const line2 = computed(() => details.value[1] || NBSP)
 const hasDuration = computed(() => !!props.state.nowPlaying?.durationS)
+// Précédent / lecture / suivant n'ont de sens que sur une session chargée (lecture ou pause) : au repos, ou
+// appli à l'écran sans canal média (`on`, Netflix), le plugin refuserait — les touches sont grisées, comme
+// dans la vue Médias. Le volume, lui, reste réglable.
+const loaded = computed(() => props.state.playback === 'playing' || props.state.playback === 'paused')
 
 // Position : l'appareil ne la pousse pas, le plugin la relit toutes les dix secondes. Entre deux
 // relevés, on la fait avancer ICI à la seconde tant que ça joue, à partir du dernier relevé reçu
@@ -88,10 +94,10 @@ function nudgeVolume(delta: number) {
       </div>
     </div>
     <div class="d-flex align-center justify-center ga-3 mb-3">
-      <v-btn v-if="has('track_skip')" icon="skipPrev" variant="tonal" size="large" :disabled="disabled" @click="emit('command', { type: 'media_player.previous' })" />
-      <v-btn :icon="state.playback === 'playing' ? 'pause' : 'play'" color="primary" size="x-large" :disabled="disabled"
+      <v-btn v-if="has('track_skip')" icon="skipPrev" variant="tonal" size="large" :disabled="disabled || !loaded" @click="emit('command', { type: 'media_player.previous' })" />
+      <v-btn :icon="state.playback === 'playing' ? 'pause' : 'play'" color="primary" size="x-large" :disabled="disabled || !loaded"
              @click="emit('command', { type: state.playback === 'playing' ? 'media_player.pause' : 'media_player.play' })" />
-      <v-btn v-if="has('track_skip')" icon="skipNext" variant="tonal" size="large" :disabled="disabled" @click="emit('command', { type: 'media_player.next' })" />
+      <v-btn v-if="has('track_skip')" icon="skipNext" variant="tonal" size="large" :disabled="disabled || !loaded" @click="emit('command', { type: 'media_player.next' })" />
     </div>
     <!-- volume sur UNE ligne qui se lit seule : sourdine, −, curseur, + — le − et le + encadrent le
          curseur qu'ils règlent, la valeur au bout — sans unité, comme les temps du morceau (une bulle sur

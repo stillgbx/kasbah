@@ -7,8 +7,9 @@ import { PluginError, type DevicePlugin, type PluginContext } from '../../core/p
 import { CastConnection, tlsSocketFactory, type SocketFactory } from './channel'
 import { createMdnsDiscovery, type CastDiscovery } from './discovery'
 import { sendError } from '../../http/errors'
+import { AppIconResolver, registryAppId, type RegistryFetch } from './enrich/appIcon'
 import { CrunchyrollEnricher, isCrunchyrollApp, type EnrichFetch } from './enrich/crunchyroll'
-import { applyEnrichment, toDescriptor, toMediaPatch, toReceiverPatch } from './mapping'
+import { applyEnrichment, toDescriptor, toMediaPatch, toReceiverPatch, withFallbackArt } from './mapping'
 import type { CastService, MediaStatus, ReceiverApplication, ReceiverStatus } from './types'
 import type { StatePatch } from '@kasbah/shared'
 
@@ -77,6 +78,8 @@ export interface GoogleCastPluginDeps {
   fetchImpl?: ArtFetch
   /** Injection pour les tests : appels à l'API Crunchyroll. */
   enrichFetch?: EnrichFetch
+  /** Injection pour les tests : registre public des applis Cast (logos). */
+  registryFetch?: RegistryFetch
   /** Injection pour les tests : fausse découverte. */
   discovery?: CastDiscovery
   /** Injection pour les tests : fausse socket. */
@@ -91,6 +94,8 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
   let discovery: CastDiscovery | null = null
   /** Enrichissement Crunchyroll (absent si désactivé). */
   let crunchyroll: CrunchyrollEnricher | null = null
+  /** Logos des applis, pochette de repli. */
+  let appIcons: AppIconResolver | null = null
   let refreshTimer: unknown = null
   let stopping = false
   /** URL de pochettes vues dans les états média (les seules que la route /art accepte de servir), les plus récentes en dernier. */
@@ -168,12 +173,17 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
     if (started) ctx!.emitState(entry.service.txt.id, mediaPatch(entry, media, app))
   }
 
+  /** Patch de lecture complet : ce que l'appareil dit, enrichi (Crunchyroll), puis le logo de l'appli s'il manque une image. */
+  function mediaPatch(entry: Entry, media: MediaStatus | undefined, app: ReceiverApplication | undefined): StatePatch<'media_player'> {
+    return withAppIcon(entry, app, enrichedPatch(entry, media, app))
+  }
+
   /**
    * Patch de lecture, enrichi si l'appli est pauvre et qu'on sait faire mieux (Crunchyroll). Un résultat
    * déjà en cache s'applique tout de suite ; sinon on publie ce qu'on a et on republie quand la réponse
    * arrive — si le même contenu joue encore (l'utilisateur a pu zapper entre-temps).
    */
-  function mediaPatch(entry: Entry, media: MediaStatus | undefined, app: ReceiverApplication | undefined): StatePatch<'media_player'> {
+  function enrichedPatch(entry: Entry, media: MediaStatus | undefined, app: ReceiverApplication | undefined): StatePatch<'media_player'> {
     const patch = toMediaPatch(media, app)
     const contentId = media?.media?.contentId
     if (!crunchyroll || !app || !contentId || !patch.nowPlaying || !isCrunchyrollApp(app)) return patch
@@ -184,7 +194,30 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
         const c = entry.connection
         if (!e || !started || !c?.isOpen || c.media?.media?.contentId !== contentId) return
         rememberArt(e.artwork)
-        ctx!.emitState(entry.service.txt.id, applyEnrichment(toMediaPatch(c.media, c.app), e))
+        ctx!.emitState(entry.service.txt.id, withAppIcon(entry, c.app, applyEnrichment(toMediaPatch(c.media, c.app), e)))
+      })
+    }
+    return patch
+  }
+
+  /**
+   * Pochette de repli : le logo de l'appli quand le morceau n'a pas d'image (Netflix natif, Crunchyroll avant
+   * enrichissement). L'icône que le récepteur donne lui-même d'abord ; sinon le registre public des applis
+   * Cast — en cache tout de suite, sinon publié après coup si la même appli est encore à l'écran.
+   */
+  function withAppIcon(entry: Entry, app: ReceiverApplication | undefined, patch: StatePatch<'media_player'>): StatePatch<'media_player'> {
+    if (!app || !patch.nowPlaying || patch.nowPlaying.artUrl) return patch
+    const direct = app.iconUrl?.trim()
+    if (direct) { rememberArt(direct); return withFallbackArt(patch, direct) }
+    const registryId = appIcons ? registryAppId(app) : undefined
+    if (!registryId) return patch
+    const known = appIcons!.cached(registryId)
+    if (known) { rememberArt(known); return withFallbackArt(patch, known) }
+    if (known === undefined) {
+      void appIcons!.lookup(registryId).then((url) => {
+        const c = entry.connection
+        if (!url || !started || !c?.isOpen || c.app?.sessionId !== app.sessionId) return
+        ctx!.emitState(entry.service.txt.id, mediaPatch(entry, c.media, c.app))
       })
     }
     return patch
@@ -255,6 +288,7 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
     switch (command.type) {
       case 'media_player.play': return c.mediaCommand('PLAY')
       case 'media_player.pause': return c.mediaCommand('PAUSE')
+      case 'media_player.stop': return c.stopApp()                        // ferme l'appli, pas seulement la lecture
       case 'media_player.next': return c.queueJump(1)
       case 'media_player.previous': return c.previous()                 // début du morceau passé 3 s, sinon le précédent
       case 'media_player.seek': return c.seek(command.positionS)
@@ -280,6 +314,7 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
       crunchyroll = config.CAST_CRUNCHYROLL_ENRICH
         ? new CrunchyrollEnricher({ ...(deps.enrichFetch ? { fetchImpl: deps.enrichFetch } : {}), clock: context.clock, logger: context.logger, signal: context.signal })
         : null
+      appIcons = new AppIconResolver({ ...(deps.registryFetch ? { fetchImpl: deps.registryFetch } : {}), clock: context.clock, logger: context.logger, signal: context.signal })
     },
 
     /**

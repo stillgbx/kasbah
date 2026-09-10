@@ -34,10 +34,16 @@ export const receiverApplicationSchema = z.looseObject({
   appId: z.string(),
   displayName: z.string().optional(),
   sessionId: z.string(),
-  /** Adresse à laquelle parler à l'appli (namespace media). */
-  transportId: z.string(),
+  /**
+   * Adresse à laquelle parler à l'appli (namespace media). ABSENT pour une appli native qui n'ouvre pas de
+   * canal Cast (relevé : Netflix sur un Chromecast, `appType: WEB`, ni `transportId` ni `namespaces`) :
+   * on sait qu'elle est à l'écran, rien de plus.
+   */
+  transportId: z.string().optional(),
   isIdleScreen: z.boolean().optional(),
   statusText: z.string().optional(),
+  /** Icône de l'appli, souvent vide (`""`) ; renseignée par certaines (Radio France). Pochette de repli. */
+  iconUrl: z.string().nullish(),
   namespaces: z.unknown().optional(),
 })
 export type ReceiverApplication = z.infer<typeof receiverApplicationSchema>

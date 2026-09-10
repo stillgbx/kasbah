@@ -33,6 +33,8 @@ export const commandSchema = z.discriminatedUnion('type', [
   // media_player
   z.object({ type: z.literal('media_player.play') }),
   z.object({ type: z.literal('media_player.pause') }),
+  /** Arrêter ce qui occupe le lecteur : fermer l'appli à l'écran (Cast : `STOP` de la session), pas seulement suspendre. */
+  z.object({ type: z.literal('media_player.stop') }),
   z.object({ type: z.literal('media_player.next') }),
   z.object({ type: z.literal('media_player.previous') }),
   z.object({ type: z.literal('media_player.set_volume'), volume: pct }),
@@ -74,7 +76,7 @@ export const COMMAND_REQUIRES: Record<CommandType, Capability> = {
   'cover.open': 'open_close', 'cover.close': 'open_close', 'cover.stop': 'stop',
   'cover.set_position': 'position', 'cover.set_tilt': 'tilt', 'cover.preset': 'preset',
   'cover.set_preset': 'preset_set',
-  'media_player.play': 'playback', 'media_player.pause': 'playback',
+  'media_player.play': 'playback', 'media_player.pause': 'playback', 'media_player.stop': 'playback',
   'media_player.next': 'track_skip', 'media_player.previous': 'track_skip',
   'media_player.set_volume': 'volume', 'media_player.set_mute': 'mute', 'media_player.seek': 'seek',
   'climate.set_mode': 'hvac_mode', 'climate.set_target_temp': 'target_temp',

@@ -42,7 +42,8 @@ export const coverStateSchema = z.object({
   presetPosition: pct.optional(),
 })
 
-export const PLAYBACKS = ['playing', 'paused', 'idle', 'off'] as const
+/** `on` : une appli est à l'écran mais ne dit pas ce qu'elle fait (Netflix natif sur un Chromecast) — ni lecture ni pause connues. */
+export const PLAYBACKS = ['playing', 'paused', 'idle', 'on', 'off'] as const
 export const mediaPlayerStateSchema = z.object({
   kind: z.literal('media_player'), ...base,
   playback: z.enum(PLAYBACKS),

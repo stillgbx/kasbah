@@ -2,7 +2,7 @@ import { deviceDescriptorSchema } from '@kasbah/shared'
 import { describe, expect, it } from 'vitest'
 import {
   MEDIA_STATUS_CRUNCHYROLL, MEDIA_STATUS_IDLE, MEDIA_STATUS_PAUSED, MEDIA_STATUS_PLAYING, MEDIA_STATUS_RADIO, RECEIVER_STATUS_CHROMECAST_FIXED,
-  RECEIVER_STATUS_CRUNCHYROLL, RECEIVER_STATUS_LENOVO_IDLE, RECEIVER_STATUS_NEST_HUB_IDLE, RECEIVER_STATUS_PLAYING, RECEIVER_STATUS_RADIO, RECEIVER_STATUS_SOUNDBAR_MUTED, SERVICE_CHROMECAST, SERVICE_LENOVO_CLOCK,
+  RECEIVER_STATUS_CRUNCHYROLL, RECEIVER_STATUS_LENOVO_IDLE, RECEIVER_STATUS_NEST_HUB_IDLE, RECEIVER_STATUS_NETFLIX, RECEIVER_STATUS_PLAYING, RECEIVER_STATUS_RADIO, RECEIVER_STATUS_SOUNDBAR_MUTED, SERVICE_CHROMECAST, SERVICE_LENOVO_CLOCK,
   SERVICE_NEST_HUB, SERVICE_SOUNDBAR, TXT_CHROMECAST, TXT_LENOVO_CLOCK, TXT_NEST_HUB, TXT_NEST_MINI,
 } from './__fixtures__/network'
 import { toCastService } from './discovery'
@@ -84,6 +84,13 @@ describe('google_cast mapping', () => {
     expect(toMediaPatch(media(MEDIA_STATUS_IDLE), app)).toEqual({ playback: 'idle', nowPlaying: null })
     expect(toMediaPatch(undefined, app)).toEqual({ playback: 'idle', nowPlaying: null })
     expect(toMediaPatch(media(MEDIA_STATUS_PLAYING), undefined)).toEqual({ playback: 'idle', nowPlaying: null })
+  })
+
+  it('reports an app without a media channel as on screen, named, with no title (real Netflix capture)', () => {
+    const app = activeApplication(receiver(RECEIVER_STATUS_NETFLIX))
+    expect(app).toMatchObject({ displayName: 'Netflix' })
+    expect(app?.transportId).toBeUndefined()
+    expect(toMediaPatch(undefined, app)).toEqual({ playback: 'on', nowPlaying: { title: '', source: 'Netflix' } })
   })
 
   it('accepts the real radio capture: null duration, empty content id, live stream', () => {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { DeviceDescriptor, StateFor } from '@kasbah/shared'
 import { optimisticPatch } from './optimistic'
 import { fromClosure, toClosure } from './cover'
-import { headlineValue, isDeviceBusy, isDeviceOn, statusLabel, toggleChecked, toggleCommand } from './deviceState'
+import { headlineValue, isDeviceBusy, isDeviceOn, isDevicePulsing, statusLabel, toggleChecked, toggleCommand } from './deviceState'
 import { formatPower, formatSensor, summarize } from './format'
 import { deviceColor, deviceIcon } from './deviceIcons'
 import fr from '../i18n/locales/fr.json'
@@ -107,6 +107,25 @@ describe('convention d affichage des ouvrants', () => {
     // le patch optimiste parie sur le mouvement plutot que sur « deja au bout »
     expect(optimisticPatch(unknown, { type: 'cover.open' })).toEqual({ motion: 'opening' })
     expect(optimisticPatch(unknown, { type: 'cover.close' })).toEqual({ motion: 'closing' })
+  })
+})
+
+describe('lecteur : appli a l ecran (`on`)', () => {
+  const t = ((key: string) => key) as never
+  const tv = (playback: StateFor<'media_player'>['playback']): StateFor<'media_player'> =>
+    ({ kind: 'media_player', updatedAt: 0, available: true, playback, volume: 100, muted: false, nowPlaying: { title: '', source: 'Netflix' } })
+  it('compte comme actif et pulse, comme une lecture ; au repos non', () => {
+    expect(isDeviceOn(tv('on'))).toBe(true)
+    expect(toggleChecked(tv('on'))).toBe(true)
+    expect(isDevicePulsing(tv('on'))).toBe(true)
+    expect(isDeviceOn(tv('idle'))).toBe(false)
+    expect(isDevicePulsing(tv('idle'))).toBe(false)
+  })
+  it('le libelle nomme l appli ; la bascule FERME l appli (stop), la pause restant a la lecture', () => {
+    expect(statusLabel(sensor, tv('on'), t, 'fr')).toBe('media.on · Netflix')
+    expect(toggleCommand(tv('on'))).toEqual({ type: 'media_player.stop' })
+    expect(toggleCommand(tv('playing'))).toEqual({ type: 'media_player.pause' })
+    expect(toggleCommand(tv('idle'))).toEqual({ type: 'media_player.play' })
   })
 })
 

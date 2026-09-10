@@ -1,4 +1,5 @@
 import type { DeviceDescriptor, DeviceKind, DeviceState, MediaPlayerClass, SensorClass } from '@kasbah/shared'
+import { isMediaActive } from './deviceState'
 import type { IconName } from './strokeIcons'
 
 // Icônes (jeu « trait », voir strokeIcons.ts) par kind et état, pour <v-icon> comme pour StrokeIcon.
@@ -38,7 +39,7 @@ export function deviceColor(state?: DeviceState): string | undefined {
   if (!state.available) return 'on-surface-variant'
   switch (state.kind) {
     case 'light': return state.on ? 'warning' : undefined
-    case 'media_player': return state.playback === 'playing' ? 'primary' : undefined
+    case 'media_player': return isMediaActive(state) ? 'primary' : undefined
     case 'climate': return state.action === 'heating' ? 'error' : state.action === 'cooling' ? 'info' : undefined
     case 'vacuum': return state.activity === 'cleaning' ? 'primary' : state.activity === 'error' ? 'error' : undefined
     case 'mower': return state.activity === 'mowing' ? 'success' : state.activity === 'error' ? 'error' : undefined

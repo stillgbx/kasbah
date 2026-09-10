@@ -90,6 +90,12 @@ export function applyEnrichment(patch: StatePatch<'media_player'>, e: Enrichment
   }
 }
 
+/** Pochette de repli (logo de l'appli, relayé) sur un morceau qui n'en a pas ; sans morceau, rien à décorer. */
+export function withFallbackArt(patch: StatePatch<'media_player'>, url: string): StatePatch<'media_player'> {
+  if (!patch.nowPlaying || patch.nowPlaying.artUrl) return patch
+  return { ...patch, nowPlaying: { ...patch.nowPlaying, artUrl: artProxyUrl(url) } }
+}
+
 /** Volume et muet, tirés d'un RECEIVER_STATUS. */
 export function toReceiverPatch(status: ReceiverStatus): StatePatch<'media_player'> {
   const patch: StatePatch<'media_player'> = {}
@@ -120,10 +126,14 @@ export function toPlayback(playerState: string | undefined): 'playing' | 'paused
 
 /**
  * Lecture et morceau en cours. Sans appli ou sans session média : `idle`, et `nowPlaying: null`
- * pour EFFACER le morceau précédent (un patch sans la clé le laisserait affiché).
+ * pour EFFACER le morceau précédent (un patch sans la clé le laisserait affiché). Une appli sans canal
+ * média (Netflix natif) : `on`, avec l'appli pour seule information — pas de titre, pas de position,
+ * et ni lecture ni pause qu'on puisse affirmer.
  */
 export function toMediaPatch(media: MediaStatus | undefined, app: ReceiverApplication | undefined): StatePatch<'media_player'> {
-  if (!media || !app) return { playback: 'idle', nowPlaying: null }
+  if (!app) return { playback: 'idle', nowPlaying: null }
+  if (!app.transportId) return { playback: 'on', nowPlaying: { title: '', ...(app.displayName ? { source: app.displayName } : {}) } }
+  if (!media) return { playback: 'idle', nowPlaying: null }
   const playback = toPlayback(media.playerState)
   const m = media.media?.metadata
   if (playback === 'idle' || !media.media) return { playback, nowPlaying: null }
