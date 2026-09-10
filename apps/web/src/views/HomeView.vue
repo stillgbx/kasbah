@@ -60,19 +60,25 @@ scene.onRoomTap((roomId) => {
 scene.onZoneTap((zoneId) => { house.selectRoom(zoneId); panelOpen.value = true })
 scene.onBackgroundTap(() => house.clearSelection())
 
-// store → scène
+// store → scène. Le cadrage suit la sélection la PLUS FINE : un appareil se cadre sur lui-même, pas
+// sur sa pièce — sinon un plafonnier de grand séjour restait un point dans un coin de l'écran.
+function frameSelection(roomId: string | null, key: string | null) {
+  const zone = !!roomId && !!house.index?.zonesById.has(roomId)
+  if (key) { scene.highlightRoom(zone ? null : roomId); scene.focusDevice(key); return }
+  if (!roomId) { scene.highlightRoom(null); return }
+  if (zone) scene.focusZone(roomId)
+  else scene.focusRoom(roomId)
+}
 watch(() => house.focusedLevelId, (id) => scene.focusLevel(id))
-watch(() => house.selectedRoomId, (id) => {
-  if (!id) { scene.highlightRoom(null); return }
-  if (house.index?.zonesById.has(id)) scene.focusZone(id)
-  else scene.focusRoom(id)
+watch([() => house.selectedRoomId, () => house.selectedKey], ([roomId, key]) => {
+  scene.setSelected(key)
+  frameSelection(roomId, key)
 })
-watch(() => house.selectedKey, (k) => scene.setSelected(k))
 watch(scene.ready, (ready) => {
   if (!ready) return
   scene.focusLevel(house.focusedLevelId)
-  if (house.selectedRoomId) { if (house.index?.zonesById.has(house.selectedRoomId)) scene.focusZone(house.selectedRoomId); else scene.focusRoom(house.selectedRoomId) }
   scene.setSelected(house.selectedKey)
+  frameSelection(house.selectedRoomId, house.selectedKey)
 }, { immediate: true })
 
 // mode « déplacer » : glissement 3D → brouillon (store) → aperçu 3D ; dépôt → écriture house.json

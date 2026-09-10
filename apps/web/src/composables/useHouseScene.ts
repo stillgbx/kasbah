@@ -84,6 +84,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     focusLevelView: (id: string) => scene?.focusLevelView(id),
     focusRoom: (id: string) => scene?.focusRoom(id),
     focusZone: (id: string) => scene?.focusZone(id),
+    focusDevice: (key: string) => scene?.focusDevice(key),
     focusOutdoor: () => scene?.focusOutdoor(),
     resetView: () => scene?.resetView(),
     highlightRoom: (id: string | null) => scene?.highlightRoom(id),

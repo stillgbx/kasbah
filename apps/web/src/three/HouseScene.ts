@@ -1,11 +1,12 @@
 import {
   AmbientLight, DirectionalLight, HemisphereLight, PCFSoftShadowMap, PerspectiveCamera, Plane, Raycaster, Scene, TOUCH, Vector2, Vector3,
-  WebGLRenderer, type Box3, type Material, type Mesh, type MeshStandardMaterial, type Object3D,
+  WebGLRenderer, Box3, type Material, type Mesh, type MeshStandardMaterial, type Object3D,
 } from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js'
 import {
-  buildingBounds, computeHouseGeometry, deviceFloorZ, geoDistance, indexHouse, pointInPolygon, resolveDefaults, resolveDeviceLevelId, roomBounds, zoneBounds,
+  boundsCenter, buildingBounds, computeHouseGeometry, deviceFloorZ, geoDistance, indexHouse, pointInPolygon, resolveDefaults, resolveDeviceLevelId,
+  roomBounds, zoneBounds,
   type DeviceDescriptor, type DeviceState, type House, type HouseDevice, type HouseGeometry, type HouseIndex, type Vec3,
 } from '@kasbah/shared'
 import { applyTheme, createMaterials, disposeMaterials, type MaterialSet } from './builders/materials'
@@ -53,6 +54,10 @@ export interface SceneEvents {
 }
 
 const HOME_RADIUS_M = 120
+/** Côté de la boîte cadrée autour d'un appareil sélectionné : lui de près, sa pièce autour. */
+const DEVICE_FOCUS_SIZE_M = 3
+/** Inclinaison permise en cadrant un appareil : plongeante, pour voir par-dessus les murs. */
+const DEVICE_FOCUS_POLAR = [(20 * Math.PI) / 180, (40 * Math.PI) / 180] as const
 const DEFAULT_AZIMUTH = -Math.PI / 4     // depuis le sud-est
 const DEFAULT_POLAR = (55 * Math.PI) / 180
 const WORLD_UP = new Vector3(0, 1, 0)
@@ -397,7 +402,7 @@ export class HouseScene {
     if (!b) return
     this.highlightRoom(roomId)
     const { azimuth, polar } = this.currentSpherical()
-    this.flyTo(boundsToWorldBox(b), azimuth, clamp(polar, (35 * Math.PI) / 180, (60 * Math.PI) / 180), animate, 1.6)
+    this.flyTo(boundsToWorldBox(b), azimuth, clamp(polar, (35 * Math.PI) / 180, (60 * Math.PI) / 180), animate, 1.08)
   }
 
   focusZone(zoneId: string, animate = true): void {
@@ -406,7 +411,45 @@ export class HouseScene {
     if (!b) return
     this.highlightRoom(null)
     const { azimuth, polar } = this.currentSpherical()
-    this.flyTo(boundsToWorldBox(b), azimuth, clamp(polar, (35 * Math.PI) / 180, (60 * Math.PI) / 180), animate, 1.3)
+    this.flyTo(boundsToWorldBox(b), azimuth, clamp(polar, (35 * Math.PI) / 180, (60 * Math.PI) / 180), animate, 1.05)
+  }
+
+  /**
+   * Cadre l'appareil lui-même (et non sa pièce) : boîte fixe autour de son ancre, donc la même
+   * distance quelle que soit la taille de la pièce. `controls.minDistance` borne le rapproché.
+   *
+   * Plongée plus forte que pour une pièce (`DEVICE_FOCUS_POLAR`) : de près, un mur extérieur à
+   * moins de deux mètres passe devant l'appareil sous 30° au-dessus de l'horizon. L'azimut, lui,
+   * est choisi (`roomSideAzimuth`) et non conservé.
+   */
+  focusDevice(key: string, animate = true): void {
+    if (!this.house || !this.index) return
+    const device = this.house.devices.find((d) => d.id === key)
+    const marker = this.markers.get(key)
+    if (!device || !marker) return
+    const levelId = resolveDeviceLevelId(device, this.index.roomsById)
+    if (levelId && this.focusedLevelId !== levelId) this.focusLevel(levelId)
+    const size = new Vector3(DEVICE_FOCUS_SIZE_M, DEVICE_FOCUS_SIZE_M, DEVICE_FOCUS_SIZE_M)
+    const box = new Box3().setFromCenterAndSize(marker.worldAnchor(), size)
+    const { azimuth, polar } = this.currentSpherical()
+    const inward = this.roomSideAzimuth(device)
+    this.flyTo(box, inward ?? azimuth, clamp(polar, DEVICE_FOCUS_POLAR[0], DEVICE_FOCUS_POLAR[1]), animate, 1.1)
+  }
+
+  /**
+   * Azimut qui regarde l'appareil DEPUIS le centre de sa pièce. Sans ça, un appareil contre un mur
+   * extérieur (lampe, volet, téléviseur : le cas courant) se cadrait derrière ce mur, et l'on ne
+   * voyait que sa face et la pelouse. `null` s'il est au milieu de la pièce ou hors pièce : on garde
+   * alors l'azimut de l'utilisateur.
+   */
+  private roomSideAzimuth(device: HouseDevice): number | null {
+    if (!device.roomId || !this.house) return null
+    const b = roomBounds(this.house, device.roomId, resolveDefaults(this.house.defaults))
+    if (!b) return null
+    const c = boundsCenter(b)
+    const dx = c[0] - device.position[0], dy = c[1] - device.position[1]
+    if (Math.hypot(dx, dy) < 0.5) return null
+    return Math.atan2(dx, -dy)   // repère monde : x est, z = -y maison
   }
 
   focusOutdoor(animate = true): void {
