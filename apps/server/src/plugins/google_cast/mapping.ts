@@ -1,4 +1,5 @@
 import type { Capability, DeviceDescriptor, MediaPlayerClass, StatePatch } from '@kasbah/shared'
+import type { Enrichment } from './enrich/crunchyroll'
 import { receiverApplicationSchema, type CastService, type MediaStatus, type ReceiverApplication, type ReceiverStatus } from './types'
 
 // Mappage PUR : service mDNS et messages du récepteur ↔ descripteur / patch d'état `media_player`.
@@ -63,6 +64,28 @@ export function toDescriptor(service: CastService, volume?: { controlType?: stri
       ...(manufacturerOf(model) ? { manufacturer: manufacturerOf(model) } : {}),
       ...(model ? { model } : {}),
       mediaPlayer: { deviceClass: mediaPlayerClass(service.txt) },
+    },
+  }
+}
+
+/**
+ * Complète un morceau avec ce que l'API du service a appris (titre, série, saison, numéro, affiche) : la série
+ * prend la place de l'artiste, « S1 · E10 » celle de l'album, l'affiche de la série celle de la pochette (relayée).
+ * Ce que l'appareil a dit reste prioritaire quand il l'a dit.
+ */
+export function applyEnrichment(patch: StatePatch<'media_player'>, e: Enrichment): StatePatch<'media_player'> {
+  const n = patch.nowPlaying
+  if (!n) return patch
+  const se = [typeof e.seasonNumber === 'number' ? `S${e.seasonNumber}` : '', typeof e.episodeNumber === 'number' ? `E${e.episodeNumber}` : ''].filter(Boolean).join(' · ')
+  return {
+    ...patch,
+    nowPlaying: {
+      ...n,
+      // titre absent côté appareil (vu en réel : métadonnées réduites à un artiste vide) → celui de l'API
+      ...(!n.title && e.title ? { title: e.title } : {}),
+      ...(!n.artist && e.series ? { artist: e.series } : {}),
+      ...(!n.album && se ? { album: se } : {}),
+      ...(!n.artUrl && e.artwork ? { artUrl: artProxyUrl(e.artwork) } : {}),
     },
   }
 }

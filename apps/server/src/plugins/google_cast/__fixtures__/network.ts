@@ -144,5 +144,47 @@ export const MEDIA_STATUS_CRUNCHYROLL = {
   currentItemId: 1, repeatMode: 'REPEAT_OFF',
 }
 
+/**
+ * CAPTURES RÉELLES (2026-09-10) de l'API interne Crunchyroll, en anonyme (`grant_type=client_id`) : le
+ * jeton, puis l'objet de l'épisode ci-dessus. Champs non lus laissés tels quels, jeton et adresses raccourcis.
+ */
+export const CRUNCHYROLL_TOKEN = { access_token: 'eyJhbGciOi.anonymised.token', expires_in: 3600, token_type: 'Bearer', scope: 'account content mp offline_access', country: 'FR' }
+export const CRUNCHYROLL_OBJECT_EPISODE = {
+  total: 1,
+  data: [{
+    id: 'GE00000000DEMO', type: 'episode', title: 'Un épisode de démonstration', slug_title: 'demo-episode', channel_id: 'crunchyroll',
+    description: "Un épisode inventé pour les tests.",
+    episode_metadata: {
+      series_id: 'GT00000000', series_title: 'Les Chroniques de démo', series_slug_title: 'les-chroniques-de-demo',
+      season_id: 'GS00000001', season_title: 'Saison 1', season_number: 1, season_display_number: '1', season_sequence_number: 1,
+      episode: '10', episode_number: 10, sequence_number: 10, duration_ms: 1442068, is_premium_only: true, is_subbed: true, is_dubbed: false,
+      audio_locale: 'ja-JP', subtitle_locales: ['fr-FR'], availability_status: 'available', episode_air_date: '2026-09-08T00:00:00+09:00',
+    },
+    images: {
+      thumbnail: [[
+        { width: 320, height: 180, type: 'thumbnail', source: 'https://www.crunchyroll.com/imgsrv/display/thumbnail/320x180/catalog/crunchyroll/anonymised.jpg' },
+        { width: 480, height: 270, type: 'thumbnail', source: 'https://www.crunchyroll.com/imgsrv/display/thumbnail/480x270/catalog/crunchyroll/anonymised.jpg' },
+        { width: 640, height: 360, type: 'thumbnail', source: 'https://www.crunchyroll.com/imgsrv/display/thumbnail/640x360/catalog/crunchyroll/anonymised.jpg' },
+        { width: 1280, height: 720, type: 'thumbnail', source: 'https://www.crunchyroll.com/imgsrv/display/thumbnail/1280x720/catalog/crunchyroll/anonymised.jpg' },
+        { width: 1920, height: 1080, type: 'thumbnail', source: 'https://www.crunchyroll.com/imgsrv/display/thumbnail/1920x1080/catalog/crunchyroll/anonymised.jpg' },
+      ]],
+    },
+  }],
+  meta: {},
+}
+
+/** Fiche de la série (`GET /content/v2/cms/series/GT00000000`, 2026-09-10) : affiche portrait en 9 tailles. */
+export const CRUNCHYROLL_OBJECT_SERIES = {
+  total: 1,
+  data: [{
+    id: 'GT00000000', title: 'Les Chroniques de démo', slug_title: 'les-chroniques-de-demo', season_count: 1, episode_count: 10,
+    images: {
+      poster_tall: [[60, 120, 240, 480, 750, 960, 1125, 1200, 1560].map((w) => ({ width: w, height: Math.round(w * 1.5), type: 'poster_tall', source: `https://www.crunchyroll.com/imgsrv/display/poster_tall/${w}x${Math.round(w * 1.5)}/catalog/crunchyroll/anonymised.jpg` }))],
+      poster_wide: [[320, 600, 640, 800, 1200, 1440, 1600, 1920].map((w) => ({ width: w, height: Math.round(w * 9 / 16), type: 'poster_wide', source: `https://www.crunchyroll.com/imgsrv/display/poster_wide/${w}x${Math.round(w * 9 / 16)}/catalog/crunchyroll/anonymised.jpg` }))],
+    },
+  }],
+  meta: {},
+}
+
 /** Fin de file : la session existe encore mais plus rien à jouer. */
 export const MEDIA_STATUS_IDLE = { mediaSessionId: 1, playbackRate: 1, playerState: 'IDLE', currentTime: 0, idleReason: 'FINISHED', supportedMediaCommands: 0, volume: { level: 1, muted: false } }

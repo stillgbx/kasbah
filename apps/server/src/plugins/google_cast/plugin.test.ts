@@ -5,11 +5,13 @@ import pino from 'pino'
 import { describe, expect, it, vi } from 'vitest'
 import type { PluginContext } from '../../core/plugin'
 import {
-  MEDIA_STATUS_PLAYING, RECEIVER_STATUS_CHROMECAST_FIXED, RECEIVER_STATUS_NEST_HUB_IDLE, RECEIVER_STATUS_PLAYING, SERVICE_CHROMECAST,
+  CRUNCHYROLL_OBJECT_EPISODE, CRUNCHYROLL_OBJECT_SERIES, CRUNCHYROLL_TOKEN, MEDIA_STATUS_CRUNCHYROLL, MEDIA_STATUS_PLAYING, RECEIVER_STATUS_CHROMECAST_FIXED,
+  RECEIVER_STATUS_CRUNCHYROLL, RECEIVER_STATUS_NEST_HUB_IDLE, RECEIVER_STATUS_PLAYING, SERVICE_CHROMECAST,
   SERVICE_NEST_HUB, SERVICE_NEST_MINI, TXT_CHROMECAST, TXT_NEST_HUB, TXT_NEST_MINI,
 } from './__fixtures__/network'
 import type { SocketFactory } from './channel'
 import type { CastDiscovery } from './discovery'
+import type { EnrichFetch } from './enrich/crunchyroll'
 import { createGoogleCastPlugin, googleCastConfigSchema, type ArtFetch } from './index'
 import { FrameDecoder, NS_HEARTBEAT, NS_MEDIA, NS_RECEIVER, encodeFrame, jsonMessage } from './protocol'
 import type { CastService } from './types'
@@ -97,10 +99,10 @@ function network(receivers: Record<string, ReturnType<typeof fakeReceiver>>) {
   return connect
 }
 
-async function started(discovery: CastDiscovery, connect: SocketFactory, fetchImpl?: ArtFetch) {
+async function started(discovery: CastDiscovery, connect: SocketFactory, fetchImpl?: ArtFetch, enrichFetch?: EnrichFetch) {
   const clock = new ManualClock(0)
   const { ctx, ctrl } = fakeContext(clock)
-  const plugin = createGoogleCastPlugin({ discovery, connect, ...(fetchImpl ? { fetchImpl } : {}) })
+  const plugin = createGoogleCastPlugin({ discovery, connect, ...(fetchImpl ? { fetchImpl } : {}), ...(enrichFetch ? { enrichFetch } : {}) })
   await plugin.init(ctx)
   const p = plugin.discover()
   await flush()
@@ -300,6 +302,43 @@ describe('google_cast plugin', () => {
     expect((await app.inject({ method: 'GET', url: '/api/plugins/google_cast/art?url=https%3A%2F%2Fexample.com%2Fx.jpg' })).statusCode).toBe(404)
     await app.close()
     await plugin.stop()
+  })
+
+  it('enriches a Crunchyroll episode: series, S·E and thumbnail arrive in a second patch, then straight from cache', async () => {
+    // vu en réel le 2026-09-10 : l'appareil peut omettre le titre lui-même, l'API le fournit
+    const tv = fakeReceiver(RECEIVER_STATUS_CRUNCHYROLL, { ...MEDIA_STATUS_CRUNCHYROLL, media: { ...MEDIA_STATUS_CRUNCHYROLL.media, metadata: { metadataType: 0, artist: ' ' } } })
+    const enrichFetch: EnrichFetch = vi.fn(async (url) => ({ ok: true, status: 200, json: async () => (url.endsWith('/auth/v1/token') ? CRUNCHYROLL_TOKEN : url.includes('/cms/series/') ? CRUNCHYROLL_OBJECT_SERIES : CRUNCHYROLL_OBJECT_EPISODE) }))
+    const { plugin, ctx } = await started(fakeDiscovery([SERVICE_CHROMECAST]), network({ [SERVICE_CHROMECAST.host]: tv }), undefined, enrichFetch)
+    const all = patches(ctx, TXT_CHROMECAST.id)
+    // d'abord ce que l'appareil a dit (titre seul), sans attendre Crunchyroll
+    expect(all.at(-1)).toMatchObject({ nowPlaying: { title: '', source: 'Crunchyroll' } })
+    expect((all.at(-1) as { nowPlaying: { artist?: string } }).nowPlaying.artist).toBeUndefined()
+    await flush(8)
+    // puis la même lecture, complétée
+    expect(patches(ctx, TXT_CHROMECAST.id).at(-1)).toMatchObject({
+      playback: 'playing',
+      nowPlaying: { title: 'Un épisode de démonstration', artist: 'Les Chroniques de démo', album: 'S1 · E10', source: 'Crunchyroll', artUrl: expect.stringContaining('poster_tall') },
+    })
+    expect(enrichFetch).toHaveBeenCalledTimes(3)                           // jeton + épisode + série
+    // l'affiche enrichie est servie par /art (URL connue), comme les pochettes des métadonnées
+    const poster = CRUNCHYROLL_OBJECT_SERIES.data[0]!.images.poster_tall[0]![3]!.source
+    expect((patches(ctx, TXT_CHROMECAST.id).at(-1) as { nowPlaying: { artUrl: string } }).nowPlaying.artUrl).toBe(`/api/plugins/google_cast/art?url=${encodeURIComponent(poster)}`)
+    // un nouvel état du même contenu (pause) part enrichi d'un coup, depuis le cache
+    await plugin.execute(TXT_CHROMECAST.id, { type: 'media_player.pause' })
+    await flush()
+    expect(patches(ctx, TXT_CHROMECAST.id).at(-1)).toMatchObject({ playback: 'paused', nowPlaying: { artist: 'Les Chroniques de démo', album: 'S1 · E10' } })
+    expect(enrichFetch).toHaveBeenCalledTimes(3)
+    await plugin.stop()
+  })
+
+  it('leaves other apps alone and works without enrichment when disabled', async () => {
+    const speaker = fakeReceiver(RECEIVER_STATUS_PLAYING, MEDIA_STATUS_PLAYING)
+    const enrichFetch: EnrichFetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({}) }))
+    const { plugin } = await started(fakeDiscovery([SERVICE_NEST_MINI]), network({ [SERVICE_NEST_MINI.host]: speaker }), undefined, enrichFetch)
+    await flush(4)
+    expect(enrichFetch).not.toHaveBeenCalled()                               // Spotify : rien à enrichir
+    await plugin.stop()
+    expect(googleCastConfigSchema.parse({ CAST_CRUNCHYROLL_ENRICH: 'false' }).CAST_CRUNCHYROLL_ENRICH).toBe(false)
   })
 
   it('reports no device found as degraded', async () => {

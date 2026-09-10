@@ -7,8 +7,10 @@ import { PluginError, type DevicePlugin, type PluginContext } from '../../core/p
 import { CastConnection, tlsSocketFactory, type SocketFactory } from './channel'
 import { createMdnsDiscovery, type CastDiscovery } from './discovery'
 import { sendError } from '../../http/errors'
-import { toDescriptor, toMediaPatch, toReceiverPatch } from './mapping'
+import { CrunchyrollEnricher, isCrunchyrollApp, type EnrichFetch } from './enrich/crunchyroll'
+import { applyEnrichment, toDescriptor, toMediaPatch, toReceiverPatch } from './mapping'
 import type { CastService, MediaStatus, ReceiverApplication, ReceiverStatus } from './types'
+import type { StatePatch } from '@kasbah/shared'
 
 // Plugin Google Cast : enceintes et réveils Google / Nest, Chromecast, TV et barres de son
 // « Chromecast built-in ». Tout est LOCAL : découverte mDNS, une connexion TLS persistante par
@@ -20,6 +22,7 @@ import type { CastService, MediaStatus, ReceiverApplication, ReceiverStatus } fr
 // (récepteur média par défaut) : ce sera l'étape suivante.
 
 const optionalKey = z.string().trim().transform((s) => (s === '' ? undefined : s)).optional()
+const bool = z.enum(['true', 'false', '1', '0']).transform((v) => v === 'true' || v === '1')
 
 export const googleCastConfigSchema = z.object({
   /** IPv4 de l'interface réseau qui porte le multicast mDNS (machine à plusieurs cartes : VPN, VM). */
@@ -28,6 +31,11 @@ export const googleCastConfigSchema = z.object({
   CAST_DISCOVERY_WAIT_MS: z.coerce.number().int().min(500).max(15_000).default(3000),
   /** Cadence des questions mDNS suivantes (appareils rallumés, annonces perdues). */
   CAST_MDNS_REFRESH_MS: z.coerce.number().int().min(10_000).max(600_000).default(60_000),
+  /**
+   * Enrichir les lectures Crunchyroll (série, saison, épisode, vignette) par l'API interne du service,
+   * en anonyme, sans compte — NON OFFICIEL (voir `enrich/crunchyroll.ts`). `false` pour s'en passer.
+   */
+  CAST_CRUNCHYROLL_ENRICH: bool.default(true),
 })
 export type GoogleCastConfig = z.infer<typeof googleCastConfigSchema>
 
@@ -67,6 +75,8 @@ interface Entry {
 export interface GoogleCastPluginDeps {
   /** Injection pour les tests : téléchargement des pochettes. */
   fetchImpl?: ArtFetch
+  /** Injection pour les tests : appels à l'API Crunchyroll. */
+  enrichFetch?: EnrichFetch
   /** Injection pour les tests : fausse découverte. */
   discovery?: CastDiscovery
   /** Injection pour les tests : fausse socket. */
@@ -79,6 +89,8 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
   let ctx: PluginContext | null = null
   let config: GoogleCastConfig | null = null
   let discovery: CastDiscovery | null = null
+  /** Enrichissement Crunchyroll (absent si désactivé). */
+  let crunchyroll: CrunchyrollEnricher | null = null
   let refreshTimer: unknown = null
   let stopping = false
   /** URL de pochettes vues dans les états média (les seules que la route /art accepte de servir), les plus récentes en dernier. */
@@ -145,13 +157,37 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
     if (started) ctx!.emitState(entry.service.txt.id, toReceiverPatch(status))
   }
 
+  function rememberArt(url: string | null | undefined): void {
+    if (!url || knownArt.includes(url)) return
+    knownArt.push(url)
+    if (knownArt.length > ART_KNOWN_MAX) knownArt.shift()
+  }
+
   function onMediaStatus(entry: Entry, media: MediaStatus | undefined, app: ReceiverApplication | undefined): void {
-    const art = media?.media?.metadata?.images?.[0]?.url
-    if (art && !knownArt.includes(art)) {
-      knownArt.push(art)
-      if (knownArt.length > ART_KNOWN_MAX) knownArt.shift()
+    rememberArt(media?.media?.metadata?.images?.[0]?.url)
+    if (started) ctx!.emitState(entry.service.txt.id, mediaPatch(entry, media, app))
+  }
+
+  /**
+   * Patch de lecture, enrichi si l'appli est pauvre et qu'on sait faire mieux (Crunchyroll). Un résultat
+   * déjà en cache s'applique tout de suite ; sinon on publie ce qu'on a et on republie quand la réponse
+   * arrive — si le même contenu joue encore (l'utilisateur a pu zapper entre-temps).
+   */
+  function mediaPatch(entry: Entry, media: MediaStatus | undefined, app: ReceiverApplication | undefined): StatePatch<'media_player'> {
+    const patch = toMediaPatch(media, app)
+    const contentId = media?.media?.contentId
+    if (!crunchyroll || !app || !contentId || !patch.nowPlaying || !isCrunchyrollApp(app)) return patch
+    const known = crunchyroll.cached(contentId)
+    if (known) { rememberArt(known.artwork); return applyEnrichment(patch, known) }
+    if (known === undefined) {
+      void crunchyroll.lookup(contentId).then((e) => {
+        const c = entry.connection
+        if (!e || !started || !c?.isOpen || c.media?.media?.contentId !== contentId) return
+        rememberArt(e.artwork)
+        ctx!.emitState(entry.service.txt.id, applyEnrichment(toMediaPatch(c.media, c.app), e))
+      })
     }
-    if (started) ctx!.emitState(entry.service.txt.id, toMediaPatch(media, app))
+    return patch
   }
 
   /** Télécharge une pochette, avec quelques tentatives espacées quand le serveur d'images se plaint (429, 5xx). */
@@ -191,7 +227,7 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
   function emitCurrent(entry: Entry): void {
     const c = entry.connection
     if (!c?.isOpen || !c.lastReceiverStatus) { ctx!.setAvailable(entry.service.txt.id, false); return }
-    ctx!.emitState(entry.service.txt.id, { ...toReceiverPatch(c.lastReceiverStatus), ...toMediaPatch(c.media, c.app) })
+    ctx!.emitState(entry.service.txt.id, { ...toReceiverPatch(c.lastReceiverStatus), ...mediaPatch(entry, c.media, c.app) })
   }
 
   function onClose(entry: Entry, reason: string): void {
@@ -241,6 +277,9 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
       ctx = context
       config = context.config as GoogleCastConfig
       discovery = deps.discovery ?? createMdnsDiscovery({ ...(config.CAST_MDNS_INTERFACE ? { iface: config.CAST_MDNS_INTERFACE } : {}), logger: context.logger })
+      crunchyroll = config.CAST_CRUNCHYROLL_ENRICH
+        ? new CrunchyrollEnricher({ ...(deps.enrichFetch ? { fetchImpl: deps.enrichFetch } : {}), clock: context.clock, logger: context.logger, signal: context.signal })
+        : null
     },
 
     /**
