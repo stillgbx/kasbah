@@ -13,7 +13,8 @@
   },
   "summary": { "lightsOn": "{n} light on | {n} light on | {n} lights on",
     "shuttersOpen": "{n} shutter open | {n} shutter open | {n} shutters open",
-    "awningsDown": "{n} awning lowered | {n} awning lowered | {n} awnings lowered", "solar": "Solar" },
+    "awningsDown": "{n} awning lowered | {n} awning lowered | {n} awnings lowered",
+    "playing": "{n} playing", "solar": "Solar" },
   "floors": { "garden": "Garden", "all": "All", "roof": "Roof" },
   "home": {
     "lightsOn": "lights on", "shuttersOpen": "shutters open", "awningsDown": "awnings lowered", "solar": "Solar", "battery": "Battery",

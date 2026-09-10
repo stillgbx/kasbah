@@ -5,7 +5,7 @@ import { formatPower, formatTemp } from '../lib/format'
 import { useDevicesStore } from '../stores/devices'
 
 // Chiffres de synthèse partagés par l'en-tête et les tuiles : lumières allumées, volets ouverts,
-// stores baissés, production solaire, batterie, température intérieure.
+// stores baissés, lecteurs en lecture, production solaire, batterie, température intérieure.
 //
 // Volets et stores sont comptés SÉPARÉMENT : ils ne se disent pas dans les mêmes mots (un volet est
 // ouvert, un store est baissé) et l'utilisateur ne les regarde pas pour la même raison. La nature
@@ -41,6 +41,9 @@ export function useHomeSummary() {
     const s = devices.list.find((e) => e.descriptor.kind === 'sensor' && e.descriptor.meta.sensor?.deviceClass === 'temperature' && e.descriptor.name.toLowerCase().indexOf('ext') < 0)
     return s ? (s.state as StateFor<'sensor'>).value : null
   })
+  // lecteurs (enceintes, écrans, téléviseurs) : combien jouent en ce moment
+  const players = computed(() => devices.list.filter((e) => e.state.kind === 'media_player'))
+  const playing = computed(() => players.value.filter((e) => (e.state as StateFor<'media_player'>).playback === 'playing' && e.state.available).length)
   const vehicles = computed(() => devices.list.filter((e) => e.state.kind === 'vehicle'))
   const chargers = computed(() => devices.list.filter((e) => e.state.kind === 'ev_charger'))
 
@@ -49,6 +52,7 @@ export function useHomeSummary() {
     if (lights.value.length) parts.push(t('summary.lightsOn', { n: lightsOn.value }, lightsOn.value))
     if (shutters.value.length) parts.push(t('summary.shuttersOpen', { n: shuttersOpen.value }, shuttersOpen.value))
     if (awnings.value.length) parts.push(t('summary.awningsDown', { n: awningsDown.value }, awningsDown.value))
+    if (players.value.length) parts.push(t('summary.playing', { n: playing.value }, playing.value))
     if (indoorTemp.value !== null) parts.push(formatTemp(indoorTemp.value, locale.value))
     if (energy.value) parts.push(`${formatPower(energy.value.productionW, locale.value)} ${t('summary.solar').toLowerCase()}`)
     return parts.join(' · ')
@@ -56,6 +60,6 @@ export function useHomeSummary() {
 
   return {
     lights, lightsOn, covers, coversOpen, shutters, shuttersOpen, awnings, awningsDown,
-    energy, climate, indoorTemp, vehicles, chargers, headline,
+    players, playing, energy, climate, indoorTemp, vehicles, chargers, headline,
   }
 }
