@@ -13,16 +13,15 @@ import { Mesh, PlaneGeometry, ShaderMaterial, SRGBColorSpace, TextureLoader, Vec
 // `texture.offset` n'agissent que par le transform d'UV des matériaux STANDARD ; un shader écrit à la
 // main lit `uv` brut et les ignore en silence — l'image sortait étirée alors que le calcul était bon.
 //
-// Les BORDS SONT FONDUS (fondu doux sur les quatre côtés, largeur égale en mètres de tous les côtés,
-// donc corrigée du format de l'écran) : sans lui, l'image collée au ras de la dalle donne un
-// rectangle dur qui appartient mal à l'objet. Fondu et texture sont faits dans un petit shader —
-// l'opacité varie DANS la surface, ce qu'un matériau standard ne sait pas faire.
-//
-// Et l'image porte un VOILE dégradé, transposition de ce que l'utilisateur fait dans ses projets web
+// L'image porte un VOILE dégradé, transposition de ce que l'utilisateur fait dans ses projets web
 // (`.background-shade` : un `linear-gradient(#0000, #00000040)` posé par-dessus) : une pochette pleine
 // de couleurs saturées est moins criarde, et se marie mieux avec une maquette gris-bleu. En CSS c'est
 // un noir semi-transparent EMPILÉ sur l'image ; ici la même chose en une multiplication, avant le
 // mélange alpha — composer du noir d'opacité a sur une couleur c donne `c · (1 − a)`.
+//
+// Essayé et RETIRÉ : un fondu des quatre bords. Le plan épouse exactement la dalle, donc le bord de
+// l'image tombe sur l'arête de l'écran — une arête vraie, qui appartient à l'objet et n'a pas besoin
+// d'être adoucie. Le fondu mangeait de l'image sans rien résoudre.
 //
 // Matériau NON éclairé : un écran émet sa lumière. Éclairé, il serait sombre dans une maison dont
 // les lampes sont éteintes, alors que c'est précisément ce qu'on veut voir.
@@ -30,12 +29,6 @@ import { Mesh, PlaneGeometry, ShaderMaterial, SRGBColorSpace, TextureLoader, Vec
 export type TextureLoad = (url: string, onLoad: (t: Texture) => void, onError: () => void) => void
 
 const defaultLoad: TextureLoad = (url, onLoad, onError) => { new TextureLoader().load(url, onLoad, undefined, () => onError()) }
-
-/**
- * Largeur du fondu, en part de la HAUTEUR de l'écran (même largeur en mètres sur les quatre bords).
- * Assez pour que l'image ne finisse pas sur une arête franche, assez peu pour qu'elle occupe l'écran.
- */
-const FADE = 0.09
 
 /** Voile noir : opacité en HAUT et en BAS de l'image (le `#0000` → `#00000040` du CSS d'origine). */
 const SHADE_TOP = 0
@@ -83,15 +76,14 @@ function aspectOf(texture: Texture): number {
 }
 
 /**
- * Matériau de l'image : la texture, et un fondu doux vers les quatre bords. `uFade` est en unités
- * d'UV, donc plus petit en x qu'en y sur un écran large — c'est ce qui rend le fondu aussi épais
- * en haut qu'à droite.
+ * Matériau de l'image : la texture cadrée, assombrie par le voile dégradé. `transparent` reste vrai
+ * pour les images qui portent de l'alpha (les logos d'applis sont des PNG détourés).
  */
-function artMaterial(fade: Vector2): ShaderMaterial {
+function artMaterial(): ShaderMaterial {
   return new ShaderMaterial({
     transparent: true, depthWrite: false,
     uniforms: {
-      uMap: { value: null }, uFade: { value: fade },
+      uMap: { value: null },
       // cadrage « cover » : part de l'image montrée, et coin d'où on part (voir `coverCrop`)
       uCrop: { value: new Vector2(1, 1) }, uCropOffset: { value: new Vector2(0, 0) },
       // voile noir dégradé : opacité en haut, opacité en bas
@@ -101,16 +93,13 @@ function artMaterial(fade: Vector2): ShaderMaterial {
       varying vec2 vUv;
       void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: `
-      uniform sampler2D uMap; uniform vec2 uFade; uniform vec2 uCrop; uniform vec2 uCropOffset; uniform vec2 uShade;
+      uniform sampler2D uMap; uniform vec2 uCrop; uniform vec2 uCropOffset; uniform vec2 uShade;
       varying vec2 vUv;
       void main() {
         vec4 c = texture2D(uMap, vUv * uCrop + uCropOffset);
         // voile noir : vUv.y vaut 1 en haut de l'image (cf. l'orientation du plan)
         float shade = mix(uShade.y, uShade.x, vUv.y);
-        // distance au bord le plus proche, sur chaque axe : 0 au ras du bord, 0.5 au centre
-        float ax = smoothstep(0.0, uFade.x, min(vUv.x, 1.0 - vUv.x));
-        float ay = smoothstep(0.0, uFade.y, min(vUv.y, 1.0 - vUv.y));
-        gl_FragColor = vec4(c.rgb * (1.0 - shade), c.a * ax * ay);
+        gl_FragColor = vec4(c.rgb * (1.0 - shade), c.a);
       }`,
   })
 }
@@ -143,8 +132,7 @@ export class ScreenArt {
   constructor(private readonly opts: ScreenArtOptions) {
     this.load = opts.load ?? defaultLoad
     this.screenAspect = opts.width / opts.height
-    const fade = new Vector2(FADE / this.screenAspect, FADE)
-    this.mesh = new Mesh(screenArtGeometry(opts.width, opts.height), artMaterial(fade))
+    this.mesh = new Mesh(screenArtGeometry(opts.width, opts.height), artMaterial())
     this.mesh.position.y = opts.offsetY
     this.mesh.visible = false
   }
