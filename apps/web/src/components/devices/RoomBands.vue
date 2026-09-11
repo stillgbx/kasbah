@@ -222,7 +222,9 @@ defineExpose({ count: computed(() => entries.value.length) })
 <style scoped>
 .band + .band { margin-top: 24px; }
 .band__title { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; margin: 0 0 8px 2px; }
-.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; align-items: start; }
+/* `min(340px, 100%)` et non `340px` : un plancher fixe reste un plancher quand le conteneur est plus
+   étroit que lui, et la colonne débordait alors la vue de 37 px sur un écran de 375 px. */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr)); gap: 16px; align-items: start; }
 .group { padding: 16px 20px; display: grid; gap: 2px; align-content: start; }
 .group__head { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
 /* le titre absorbe la place libre : le contenu de `room-action` et la poignée restent collés à droite */

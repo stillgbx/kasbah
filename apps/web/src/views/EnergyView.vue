@@ -67,7 +67,12 @@ const todayWh = computed(() => e.value?.todayProductionWh ?? points.value.reduce
 
         <section class="chart card">
           <div class="chart__head">
-            <div class="chart__title">{{ $t('energy.productionToday') }}</div>
+            <!-- L'échelle de temps suit le titre, comme dans le bloc de flux à côté : ici la
+                 journée, reconstituée par le serveur, et non l'instant. -->
+            <div class="chart__heading">
+              <div class="chart__title">{{ $t('energy.productionToday') }}</div>
+              <div class="muted chart__scale">{{ $t('energy.localHistory') }}</div>
+            </div>
             <div class="muted chart__total">{{ formatEnergy(todayWh, locale) }} · {{ $t('energy.kWhToday') }}</div>
           </div>
           <div class="chart__bars">
@@ -94,18 +99,17 @@ const todayWh = computed(() => e.value?.todayProductionWh ?? points.value.reduce
 .energy__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 24px calc(var(--safe-bottom) + 24px); display: grid; gap: 20px; align-content: start; }
 .empty { padding: 24px; text-align: center; }
 /* `stretch` : les deux blocs de la ligne font la MÊME hauteur, celle du plus haut. */
-.energy__top { display: grid; gap: 20px; align-items: stretch; }
+.energy__top { display: grid; gap: 20px; align-items: stretch; min-width: 0; }
 @media (min-width: 900px) { .energy__top { grid-template-columns: 1fr 1fr; } }
-.energy__grid { display: grid; grid-template-columns: 1fr auto 1fr; grid-template-rows: auto auto; gap: 12px 16px; align-items: stretch; }
-.ring { grid-row: 1 / span 2; grid-column: 2; width: 180px; aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; align-self: center;
-  border: 10px solid var(--accent-soft); box-shadow: inset 0 0 0 1px var(--line); }
-.ring__inner { text-align: center; padding: 8px; }
-.ring__value { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; }
-.ring__label { font-size: 12px; }
 /* colonne flexible : les barres prennent la hauteur que le schéma impose à la ligne */
 .chart { padding: 18px 20px; display: flex; flex-direction: column; }
 .chart__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+/* Échelle SOUS le titre : sur la même ligne, elle poussait le total à la ligne dès que la carte
+   descendait sous ~400 px de large, et la hauteur de l'en-tête suivait alors la longueur du total.
+   Le titre n'a PAS de `min-width: 0` : ce réglage autorise un élément flexible à passer sous la
+   largeur de son plus long mot, et « Production » se faisait couper à 320 px. */
 .chart__title { font-weight: 600; font-size: 14px; }
+.chart__scale { font-size: 12px; }
 .chart__total { font-size: 12px; }
 .chart__bars { display: grid; grid-template-columns: repeat(15, 1fr); gap: 10px; flex: 1 1 auto; min-height: 140px; align-items: end; }
 .bar { height: 100%; display: flex; align-items: flex-end; }
@@ -113,8 +117,11 @@ const todayWh = computed(() => e.value?.todayProductionWh ?? points.value.reduce
 .bar__fill--past { background: var(--accent); }
 .chart__axis { display: flex; justify-content: space-between; font-size: 12px; margin-top: 8px; }
 .chart__hint { font-size: 12px; margin-top: 8px; }
-@media (max-width: 900px) {
-  .energy__grid { grid-template-columns: 1fr 1fr; }
-  .ring { grid-row: auto; grid-column: 1 / span 2; justify-self: center; }
+/* Sous ~432 px de fenêtre, titre et total ne tiennent plus sur la même ligne : le total se repliait
+   en deux lignes ou une SELON la production du jour, et l'en-tête grandissait donc tout seul au fil
+   des heures. Ici il prend sa propre ligne, et la hauteur ne dépend plus de la valeur. */
+@media (max-width: 460px) {
+  .chart__head { display: block; }
+  .chart__total { margin-top: 2px; }
 }
 </style>

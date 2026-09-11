@@ -172,57 +172,67 @@ const flowOf = (key: NodeKey) => flows.value.find((f) => f.key === key)!
 
 <template>
   <section class="flow card" :aria-label="$t('energy.flowTitle')">
-    <div ref="stage" class="flow__stage">
-      <svg v-if="measured" class="flow__links" :viewBox="`0 0 ${Math.round(width)} ${Math.round(height)}`" aria-hidden="true">
-        <template v-for="f in flows" :key="f.key">
-          <path v-if="shown(f.key)" :id="pathId(f.key)" class="flow__wire" :d="path(f.key)" />
-        </template>
-        <!-- un seul point par trajet actif, lent : il part de la source vers la maison, ou l'inverse -->
-        <template v-for="f in flows" :key="`dot-${f.key}`">
-          <g v-if="shown(f.key) && f.direction !== 'idle'" class="flow__dot">
-            <circle class="flow__halo" :r="DOT.halo" />
-            <circle class="flow__core" :r="DOT.core" />
-            <animateMotion v-if="reduced !== 'reduce'" :dur="duration(f.watts)" repeatCount="indefinite"
-                           calcMode="linear" :keyPoints="f.direction === 'out' ? '1;0' : '0;1'" keyTimes="0;1">
-              <mpath :href="`#${pathId(f.key)}`" />
-            </animateMotion>
-          </g>
-        </template>
-      </svg>
-
-      <!-- La maison, au centre, dans l'anneau de l'origine de sa consommation. -->
-      <div class="hub" :style="{ width: `${radius * 2}px`, height: `${radius * 2}px` }">
-        <svg class="hub__ring" viewBox="0 0 100 100" :aria-label="$t('energy.mix')">
-          <circle class="hub__track" cx="50" cy="50" :r="RING.r" :stroke-width="RING.w" />
-          <circle v-for="a in arcs" :key="a.key" class="hub__arc" :data-part="a.key"
-                  cx="50" cy="50" :r="RING.r" :stroke-width="RING.w"
-                  :stroke-dasharray="`${a.len.toFixed(2)} ${(CIRC - a.len).toFixed(2)}`"
-                  :stroke-dashoffset="a.offset.toFixed(2)" />
+    <!-- Ce que le bloc montre, dit en toutes lettres : ici l'instant, à côté la journée. Les deux
+         blocs de la ligne ne parlent pas de la même échelle de temps, et rien ne le disait. -->
+    <div class="flow__head">
+      <div class="flow__title">{{ $t('energy.flowTitle') }}</div>
+      <div class="muted flow__scale">{{ $t('energy.instant') }}</div>
+    </div>
+    <!-- Le cadre découpe, la scène garde sa largeur minimale : en dessous, les quatre nœuds et
+         l'anneau ne peuvent PAS tenir côte à côte, et se chevauchaient au lieu de se lire. -->
+    <div class="flow__viewport">
+      <div ref="stage" class="flow__stage">
+        <svg v-if="measured" class="flow__links" :viewBox="`0 0 ${Math.round(width)} ${Math.round(height)}`" aria-hidden="true">
+          <template v-for="f in flows" :key="f.key">
+            <path v-if="shown(f.key)" :id="pathId(f.key)" class="flow__wire" :d="path(f.key)" />
+          </template>
+          <!-- un seul point par trajet actif, lent : il part de la source vers la maison, ou l'inverse -->
+          <template v-for="f in flows" :key="`dot-${f.key}`">
+            <g v-if="shown(f.key) && f.direction !== 'idle'" class="flow__dot">
+              <circle class="flow__halo" :r="DOT.halo" />
+              <circle class="flow__core" :r="DOT.core" />
+              <animateMotion v-if="reduced !== 'reduce'" :dur="duration(f.watts)" repeatCount="indefinite"
+                             calcMode="linear" :keyPoints="f.direction === 'out' ? '1;0' : '0;1'" keyTimes="0;1">
+                <mpath :href="`#${pathId(f.key)}`" />
+              </animateMotion>
+            </g>
+          </template>
         </svg>
-        <div class="hub__inner">
-          <StrokeIcon class="hub__icon" name="home" :size="18" />
-          <span class="hub__value">{{ formatPower(e.consumptionW, locale) }}</span>
-          <span class="muted hub__label">{{ $t('energy.house') }}</span>
+
+        <!-- La maison, au centre, dans l'anneau de l'origine de sa consommation. -->
+        <div class="hub" :style="{ width: `${radius * 2}px`, height: `${radius * 2}px` }">
+          <svg class="hub__ring" viewBox="0 0 100 100" :aria-label="$t('energy.mix')">
+            <circle class="hub__track" cx="50" cy="50" :r="RING.r" :stroke-width="RING.w" />
+            <circle v-for="a in arcs" :key="a.key" class="hub__arc" :data-part="a.key"
+                    cx="50" cy="50" :r="RING.r" :stroke-width="RING.w"
+                    :stroke-dasharray="`${a.len.toFixed(2)} ${(CIRC - a.len).toFixed(2)}`"
+                    :stroke-dashoffset="a.offset.toFixed(2)" />
+          </svg>
+          <div class="hub__inner">
+            <StrokeIcon class="hub__icon" name="home" :size="18" />
+            <span class="hub__value">{{ formatPower(e.consumptionW, locale) }}</span>
+            <span class="muted hub__label">{{ $t('energy.house') }}</span>
+          </div>
         </div>
-      </div>
 
-      <!-- Les trois parts, TOUJOURS listées, même à zéro : une part qui apparaît ne doit pas
-           décaler ses voisines. -->
-      <div class="legend">
-        <span v-for="m in mix" :key="m.key" class="legend__item" :data-part="m.key" :data-on="m.part > 0 ? '1' : '0'">
-          <span class="legend__dot" />{{ formatPercent(Math.round(m.part * 100), locale) }}
-          <span class="muted legend__label">{{ m.label }}</span>
-        </span>
-      </div>
+        <!-- Les trois parts, TOUJOURS listées, même à zéro : une part qui apparaît ne doit pas
+             décaler ses voisines. -->
+        <div class="legend">
+          <span v-for="m in mix" :key="m.key" class="legend__item" :data-part="m.key" :data-on="m.part > 0 ? '1' : '0'">
+            <span class="legend__dot" />{{ formatPercent(Math.round(m.part * 100), locale) }}
+            <span class="muted legend__label">{{ m.label }}</span>
+          </span>
+        </div>
 
-      <div v-for="n in nodes" v-show="n.shown" :key="n.key" class="node"
-           :data-on="flowOf(n.key).direction !== 'idle' ? '1' : '0'"
-           :style="{ left: `${POS[n.key].x * 100}%`, top: `${POS[n.key].y * 100}%` }">
-        <span class="node__icon"><StrokeIcon :name="n.icon" :size="16" /></span>
-        <span class="node__value">{{ n.value }}</span>
-        <span class="muted node__label">{{ n.label }}</span>
-        <!-- place tenue même vide : un flux qui s'inverse ne doit pas redimensionner son nœud -->
-        <span class="muted node__hint">{{ n.hint || ' ' }}</span>
+        <div v-for="n in nodes" v-show="n.shown" :key="n.key" class="node"
+             :data-on="flowOf(n.key).direction !== 'idle' ? '1' : '0'"
+             :style="{ left: `${POS[n.key].x * 100}%`, top: `${POS[n.key].y * 100}%` }">
+          <span class="node__icon"><StrokeIcon :name="n.icon" :size="16" /></span>
+          <span class="node__value">{{ n.value }}</span>
+          <span class="muted node__label">{{ n.label }}</span>
+          <!-- place tenue même vide : un flux qui s'inverse ne doit pas redimensionner son nœud -->
+          <span class="muted node__hint">{{ n.hint || ' ' }}</span>
+        </div>
       </div>
     </div>
   </section>
@@ -233,9 +243,20 @@ const flowOf = (key: NodeKey) => flows.value.find((f) => f.key === key)!
    la hauteur de sa rangée, et la carte restait haute de 79 px par-dessus le graphique du dessous. La
    découpe vit sur la scène, qui n'est pas une cellule de grille.
    La largeur vient de la colonne qui l'accueille (`energy__top`), pas de la carte. */
-.flow { padding: 0; }
-/* Hauteur DÉFINIE : la seule qui dimensionne vraiment la rangée de grille. */
-.flow__stage { position: relative; width: 100%; height: clamp(320px, 40vh, 420px); overflow: hidden; border-radius: var(--radius); }
+/* `min-width: 0` : sans lui, une cellule de grille prend la largeur MINIMALE de son contenu, et la
+   largeur plancher de la scène remontait jusqu'à faire déborder la page entière. */
+.flow { padding: 0; min-width: 0; }
+/* Le titre est en retrait, le schéma touche les bords : c'est déjà le parti pris de la carte.
+   L'échelle est SOUS le titre, et non à côté : à côté, elle entrait en concurrence avec le total du
+   bloc voisin, dont la longueur varie avec la valeur — l'en-tête changeait alors de hauteur. */
+.flow__head { padding: 18px 20px 0; }
+.flow__title { font-weight: 600; font-size: 14px; }
+.flow__scale { font-size: 12px; }
+/* Le cadre découpe et défile à l'horizontale ; la hauteur DÉFINIE vit sur la scène, seule à
+   dimensionner vraiment la rangée de grille. */
+.flow__viewport { overflow-x: auto; overflow-y: hidden; border-radius: var(--radius); }
+/* 380 px : en dessous, le nœud de gauche mord sur l'anneau (mesuré, pas estimé). */
+.flow__stage { position: relative; width: 100%; min-width: 380px; height: clamp(320px, 40vh, 420px); }
 .flow__links { position: absolute; inset: 0; width: 100%; height: 100%; }
 .flow__wire { fill: none; stroke: var(--line); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
 .flow__halo { fill: var(--accent); opacity: 0.18; }

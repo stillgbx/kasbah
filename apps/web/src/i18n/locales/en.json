@@ -90,7 +90,8 @@
     "title": "Energy", "production": "Production", "consumption": "Consumption", "house": "Home", "grid": "Grid",
     "import": "import", "export": "export", "battery": "Battery", "charging": "Charging", "discharging": "Discharging",
     "today": "Today", "selfConsumption": "self-consumption", "mix": "Where consumption comes from", "flowTitle": "Energy flows", "productionToday": "Production today", "kWhToday": "kWh produced",
-    "charger": "Charger", "noData": "No energy device", "noHistory": "History fills up as the day goes on."
+    "charger": "Charger", "noData": "No energy device", "noHistory": "History fills up as the day goes on.",
+    "instant": "Live", "localHistory": "Local history"
   },
   "camera": {
     "online": "Online", "classes": { "camera": "Camera", "doorbell": "Doorbell", "display": "Display" },
