@@ -159,6 +159,9 @@ export const useDevicesStore = defineStore('devices', () => {
       const aimed = command.type === 'cover.open' ? 100
         : command.type === 'cover.close' ? 0
         : command.type === 'cover.set_position' ? command.position
+        // Rappel de la position favorite : la cible est celle que le moteur publie. Sans elle
+        // (moteur unidirectionnel), on ne sait pas où il va — rien à viser.
+        : command.type === 'cover.preset' ? prev.presetPosition ?? null
         : null                                          // set_tilt : aucune position visée
       // Cible déjà atteinte : rien à tenir, sinon la pastille resterait affichée jusqu'à un
       // prochain état (l'appareil n'en émet aucun, puisque rien ne change).

@@ -25,6 +25,10 @@ describe('optimisticPatch', () => {
     expect(optimisticPatch(cover, { type: 'cover.close' })).toEqual({ motion: 'closing' })
     expect(optimisticPatch(cover, { type: 'cover.open' })).toEqual({ motion: 'stopped' })
     expect(optimisticPatch(cover, { type: 'cover.set_position', position: 20 })).toEqual({ motion: 'closing' })
+    // rappel de la position perso : le sens se lit sur la memoire du moteur, a defaut on parie
+    // sur le mouvement plutot que sur un geste sans echo
+    expect(optimisticPatch({ ...cover, presetPosition: 20 }, { type: 'cover.preset' })).toEqual({ motion: 'closing' })
+    expect(optimisticPatch(cover, { type: 'cover.preset' })).toEqual({ motion: 'opening' })
   })
 })
 

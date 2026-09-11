@@ -144,6 +144,25 @@ describe('devices store', () => {
       expect(store.targetPosition(ID)).toBeUndefined()
     })
 
+    // Signale par l'utilisateur : le curseur ne rejoignait la position perso qu'a la FIN de la
+    // course. Le rappel vise la memoire du moteur comme n'importe quelle position.
+    it('le rappel de la position perso pose la cible tout de suite', async () => {
+      const store = seeded()
+      push(store, { ...cover(100, 'stopped', 1), presetPosition: 35 })
+      await store.sendCommand(ID, { type: 'cover.preset' })
+      expect(store.targetPosition(ID)).toBe(35)
+      push(store, { ...cover(100, 'closing', 2), presetPosition: 35 })   // position encore perimee
+      expect(store.targetPosition(ID)).toBe(35)
+      push(store, { ...cover(35, 'stopped', 3), presetPosition: 35 })
+      expect(store.targetPosition(ID)).toBeUndefined()
+    })
+
+    it('rappel sans valeur publiee : aucune cible a viser', async () => {
+      const store = seeded()
+      await store.sendCommand(ID, { type: 'cover.preset' })
+      expect(store.targetPosition(ID)).toBeUndefined()
+    })
+
     it('une commande refusee efface la cible', async () => {
       const store = seeded(vi.fn(async () => { throw new ApiRequestError(502, 'UPSTREAM_ERROR', 'boom') }))
       expect(await store.sendCommand(ID, { type: 'cover.open' })).toBe(false)

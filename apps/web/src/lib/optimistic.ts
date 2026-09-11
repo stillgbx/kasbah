@@ -30,6 +30,14 @@ export function optimisticPatch(state: DeviceState, cmd: CommandInput): Partial<
           const p = state.position
           return { motion: cmd.position > p ? 'opening' : cmd.position < p ? 'closing' : 'stopped' } as Partial<DeviceState>
         }
+        // même raisonnement que `set_position`, sur la position favorite du moteur : sans elle on
+        // ne connaît pas le sens, donc on parie sur le mouvement
+        case 'cover.preset': {
+          const to = state.presetPosition
+          if (to === undefined || state.position === undefined) return { motion: 'opening' } as Partial<DeviceState>
+          const p = state.position
+          return { motion: to > p ? 'opening' : to < p ? 'closing' : 'stopped' } as Partial<DeviceState>
+        }
         case 'cover.set_tilt': return { tilt: cmd.tilt } as Partial<DeviceState>
         default: return null
       }
