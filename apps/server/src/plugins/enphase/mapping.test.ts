@@ -117,6 +117,14 @@ describe('état du site', () => {
     expect(merged).toMatchObject({ kind: 'energy', productionW: 6472, consumptionW: 725, gridW: -5763, batterySoc: 100 })
   })
 
+  it('ne descend PAS sous zéro : la pince lit la veille des onduleurs à l\'envers la nuit', () => {
+    const night = { ...live, meters: { ...live.meters!, pv: { ...live.meters!.pv!, agg_p_mw: -7000 } } }
+    expect((toSitePatch(night) as Record<string, number>).productionW).toBe(0)
+    // même règle sur le repli `production.json`
+    const negative = { ...report, production: report.production.map((e) => ({ ...e, wNow: -7 })) }
+    expect(productionW(negative)).toBe(0)
+  })
+
   it('sans rien à lire, ne dit rien plutôt que d\'affirmer des zéros', () => {
     expect(toSitePatch(undefined)).toEqual({ kind: 'energy' })
   })

@@ -88,7 +88,7 @@
   },
   "energy": {
     "title": "Énergie", "production": "Production", "consumption": "Consommation", "house": "Maison", "grid": "Réseau",
-    "import": "soutirage", "export": "injection", "battery": "Batterie", "charging": "Charge", "discharging": "Décharge",
+    "import": "soutirage", "export": "injection", "idle": "Inactif", "battery": "Batterie", "charging": "Charge", "discharging": "Décharge",
     "today": "Aujourd'hui", "selfConsumption": "autoconsommation", "mix": "Origine de la consommation", "flowTitle": "Flux d'énergie", "productionToday": "Production du jour", "kWhToday": "kWh produits",
     "charger": "Borne", "noData": "Aucun appareil énergie", "noHistory": "L'historique se remplit au fil de la journée.",
     "instant": "Instantané", "localHistory": "Historique local"

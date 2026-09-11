@@ -36,10 +36,15 @@ function pick(entries: ProductionEntry[], type: string, measurementType?: string
  * Puissance produite : le CT (`eim`) quand il est là, car il mesure en TEMPS RÉEL. La somme des
  * onduleurs (`inverters`) traîne de plusieurs minutes — 4952 W contre 6456 W sur la capture — et ne
  * sert donc que de repli, pour une passerelle sans compteur.
+ *
+ * RAMENÉE À ZÉRO quand elle passe sous zéro : la nuit, la pince de production lit quelques watts à
+ * l'envers (−7 W relevés sur la vraie passerelle), le courant de veille des onduleurs qui remonte la
+ * chaîne. Le contrat compte la production en positif ; « −7 W · Production » n'a pas de sens, et
+ * cette veille est déjà comptée dans la consommation.
  */
 export function productionW(report: ProductionReport): number {
   const entry = pick(report.production, 'eim', 'production') ?? pick(report.production, 'inverters')
-  return Math.round(entry?.wNow ?? 0)
+  return Math.max(0, Math.round(entry?.wNow ?? 0))
 }
 
 /** Batteries IQ de l'inventaire (familles autres que `ENCHARGE` ignorées : Enpower, relais…). */
@@ -99,7 +104,8 @@ export function toSitePatch(live: Livedata | undefined, report?: ProductionRepor
   const m = live?.meters
   const total = report && pick(report.consumption, 'eim', 'total-consumption')
   const net = report && pick(report.consumption, 'eim', 'net-consumption')
-  const production = m?.pv ? mw(m.pv.agg_p_mw) : report ? productionW(report) : undefined
+  // `Math.max(0, …)` pour la même raison que dans `productionW` : la pince passe sous zéro la nuit
+  const production = m?.pv ? Math.max(0, mw(m.pv.agg_p_mw)) : report ? productionW(report) : undefined
   const consumption = m?.load ? mw(m.load.agg_p_mw) : total ? Math.round(total.wNow) : undefined
   const grid = m?.grid ? mw(m.grid.agg_p_mw) : net ? Math.round(net.wNow) : undefined
   return {

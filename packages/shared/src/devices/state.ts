@@ -113,6 +113,7 @@ export const sensorStateSchema = z.object({
 
 export const energyStateSchema = z.object({
   kind: z.literal('energy'), ...base,
+  /** Jamais négatif : un champ photovoltaïque produit ou ne produit pas, il ne consomme pas. */
   productionW: z.number(),
   consumptionW: z.number(),
   /** >0 import réseau, <0 export. */
