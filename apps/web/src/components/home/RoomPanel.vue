@@ -9,6 +9,7 @@ import { kindIcon } from '../../lib/strokeIcons'
 import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
 import { useScenesStore } from '../../stores/scenes'
+import RoomLightsToggle from '../devices/RoomLightsToggle.vue'
 import SceneChips from '../scenes/SceneChips.vue'
 import MarqueeText from '../ui/MarqueeText.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
@@ -65,6 +66,8 @@ function backdrop(state: DeviceState | undefined, heard?: DeviceState): { backdr
   return {}
 }
 const rows = computed(() => (target.value?.list ?? []).map(row))
+/** Appareils liés de la pièce : l'interrupteur maître y cherche les lampes. */
+const deviceIds = computed(() => (target.value?.list ?? []).map((d) => d.deviceId))
 /** Ambiances du fabricant rattachées à cette pièce (rapprochement par nom). */
 const roomScenes = computed(() => (target.value ? scenes.forRoom(target.value.name) : []))
 </script>
@@ -72,9 +75,13 @@ const roomScenes = computed(() => (target.value ? scenes.forRoom(target.value.na
 <template>
   <template v-if="target">
     <button type="button" class="crumb" @click="emit('back')"><StrokeIcon name="back" :size="14" /> {{ $t('nav.home') }}</button>
-    <div>
-      <div class="title">{{ target.name }}</div>
-      <div class="muted sub">{{ target.where }} · {{ $t('home.devicesCount', { n: rows.length }, rows.length) }}</div>
+    <div class="head">
+      <div class="min0">
+        <div class="title">{{ target.name }}</div>
+        <div class="muted sub">{{ target.where }} · {{ $t('home.devicesCount', { n: rows.length }, rows.length) }}</div>
+      </div>
+      <!-- éteindre (ou allumer) la pièce d'un geste, sans parcourir la liste -->
+      <RoomLightsToggle :device-ids="deviceIds" />
     </div>
     <SceneChips :scenes="roomScenes" :label="$t('scenes.title')" :add-to="target.name" />
     <div class="rows">
@@ -100,6 +107,9 @@ const roomScenes = computed(() => (target.value ? scenes.forRoom(target.value.na
 <style scoped>
 .crumb { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: var(--muted); font-size: 13px; padding: 0; align-self: flex-start; }
 .crumb:hover { color: var(--text); }
+/* titre à gauche, interrupteur maître collé à droite (il ne bouge pas quand le nom s'allonge) */
+.head { display: flex; align-items: center; gap: 12px; }
+.min0 { flex: 1 1 0; min-width: 0; }
 .title { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
 .sub { font-size: 13px; margin-top: 2px; }
 .rows { display: grid; gap: 8px; }

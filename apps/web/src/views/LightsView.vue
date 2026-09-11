@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { StateFor } from '@kasbah/shared'
+import type { DeviceEntry, StateFor } from '@kasbah/shared'
 import PageHeader from '../components/layout/PageHeader.vue'
 import RoomBands from '../components/devices/RoomBands.vue'
+import RoomLightsToggle from '../components/devices/RoomLightsToggle.vue'
 import { lightTintCss } from '../lib/lightTint'
 import { useDevicesStore } from '../stores/devices'
 
@@ -33,6 +34,10 @@ function commit(id: string, v: number) {
     <div class="page__scroll">
       <div v-if="lights.length === 0" class="card card--soft empty muted">{{ $t('lights.none') }}</div>
       <RoomBands kind="light">
+        <!-- interrupteur maître de la pièce : tout allumer / tout éteindre sans parcourir les lignes -->
+        <template #room-action="{ entries }">
+          <RoomLightsToggle :device-ids="entries.map((e: DeviceEntry) => e.descriptor.id)" />
+        </template>
         <!-- la couleur de la lampe en fond de ligne, comme la pochette d'un lecteur dans la vue Médias -->
         <template #backdrop="{ entry }">
           <Transition name="rowtint">

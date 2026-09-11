@@ -64,6 +64,7 @@
   },
   "rooms": {
     "noRoom": "No room", "notInHouse": "Not in the house",
+    "allLights": "All lights in the room",
     "reorder": "Reorder (drag)", "orderError": "Order not saved: {message}",
     "dangling": "Dead bindings", "danglingHint": "The JSON points at an id no plugin reports",
     "origins": {

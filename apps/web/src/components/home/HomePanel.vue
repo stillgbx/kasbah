@@ -8,6 +8,7 @@ import { isDeviceOn } from '../../lib/deviceState'
 import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
 import { useScenesStore } from '../../stores/scenes'
+import RoomLightsToggle from '../devices/RoomLightsToggle.vue'
 import SceneChips from '../scenes/SceneChips.vue'
 import StatTile from '../ui/StatTile.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
@@ -44,12 +45,16 @@ const rooms = computed(() => {
   if (!idx) return []
   return idx.levelsSorted.flatMap((level) => (idx.roomsByLevel.get(level.id) ?? []).filter((r) => r.kind !== 'stairs').map((room) => ({
     id: room.id, name: room.name, sub: counts(idx.devicesByRoom.get(room.id) ?? []), where: level.name,
+    deviceIds: (idx.devicesByRoom.get(room.id) ?? []).map((d) => d.deviceId),
   })))
 })
 const zones = computed(() => {
   const idx = house.index
   if (!idx) return []
-  return house.zones.map((z) => ({ id: z.id, name: z.name, sub: counts(idx.devicesByZone.get(z.id) ?? []), where: t('home.garden') })).filter((z) => (idx.devicesByZone.get(z.id) ?? []).length > 0)
+  return house.zones.map((z) => ({
+    id: z.id, name: z.name, sub: counts(idx.devicesByZone.get(z.id) ?? []), where: t('home.garden'),
+    deviceIds: (idx.devicesByZone.get(z.id) ?? []).map((d) => d.deviceId),
+  })).filter((z) => z.deviceIds.length > 0)
 })
 const scenes = computed(() => house.house?.scenes ?? [])
 /**
@@ -93,13 +98,18 @@ const sceneIcon = (icon?: string): IconName => (icon === 'leave' || icon === 'ni
 
   <section class="block">
     <div class="section-label">{{ $t('home.rooms') }}</div>
-    <button v-for="r in [...rooms, ...zones]" :key="r.id" type="button" class="room-row" :data-on="house.selectedRoomId === r.id ? '1' : '0'" @click="house.selectRoom(r.id)">
+    <!-- `div` et non `button` : la ligne porte maintenant un interrupteur, et un bouton dans un
+         bouton n'est pas du HTML valide (l'imbrication casse le clic sur Safari iOS) -->
+    <div v-for="r in [...rooms, ...zones]" :key="r.id" class="room-row" role="button" tabindex="0"
+         :data-on="house.selectedRoomId === r.id ? '1' : '0'" @click="house.selectRoom(r.id)" @keydown.enter="house.selectRoom(r.id)">
       <div class="room-row__main">
         <div class="room-row__name">{{ r.name }}</div>
         <div class="room-row__sub">{{ r.sub }}</div>
       </div>
       <div class="room-row__where">{{ r.where }}</div>
-    </button>
+      <!-- éteindre une pièce sans y entrer : le geste le plus court depuis le panneau maison -->
+      <RoomLightsToggle :device-ids="r.deviceIds" />
+    </div>
   </section>
 
   <div class="muted text-center hint">{{ $t('home.selectHint') }}</div>
@@ -112,12 +122,16 @@ const sceneIcon = (icon?: string): IconName => (icon === 'leave' || icon === 'ni
 .room-row {
   display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--radius); border: 0;
   background: var(--surface2); color: var(--text); text-align: left; width: 100%; transition: background .15s;
+  cursor: pointer;
 }
 .room-row:hover { filter: brightness(1.03); }
 .room-row[data-on='1'] { outline: 2px solid var(--accent); outline-offset: -2px; }
 .room-row__main { flex: 1 1 0; min-width: 0; }
-.room-row__name { font-weight: 500; font-size: 14px; }
-.room-row__sub { font-size: 12px; color: var(--muted); }
+/* une ligne chacun, coupés aux points de suspension comme partout ailleurs : l'interrupteur maître
+   a pris 52 px, et sans cela « Salle de Jeux · Rez-de-chaussée » passait sur deux lignes — la
+   liste n'aurait plus eu des lignes de même hauteur */
+.room-row__name { font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.room-row__sub { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .room-row__where { font-size: 12px; color: var(--muted); white-space: nowrap; }
 .hint { font-size: 12px; }
 </style>

@@ -152,6 +152,8 @@ defineExpose({ count: computed(() => entries.value.length) })
                  :data-dragged="reorder && reorder.roomId === g.roomId ? '1' : '0'">
           <div class="group__head">
             <div class="group__title">{{ g.title }}</div>
+            <!-- contrôle portant sur TOUTE la pièce (vue Lumières : l'interrupteur maître) ; vide par défaut -->
+            <slot name="room-action" :entries="g.rows.map((r) => r.entry)" />
             <button v-if="g.roomId && b.levelId && b.groups.length > 1" type="button" class="grip"
                     :title="$t('rooms.reorder')" :aria-label="$t('rooms.reorder')"
                     @pointerdown="startDrag($event, b, g.roomId)">
@@ -219,8 +221,9 @@ defineExpose({ count: computed(() => entries.value.length) })
 .band__title { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; margin: 0 0 8px 2px; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; align-items: start; }
 .group { padding: 16px 20px; display: grid; gap: 2px; align-content: start; }
-.group__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
-.group__title { font-weight: 600; font-size: 15px; }
+.group__head { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+/* le titre absorbe la place libre : le contenu de `room-action` et la poignée restent collés à droite */
+.group__title { flex: 1 1 0; min-width: 0; font-weight: 600; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .group__sub { font-size: 12px; margin-bottom: 8px; }
 .group[data-dragged='1'] { outline: 2px solid var(--accent); opacity: .65; }
 .grip {

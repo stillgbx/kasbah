@@ -64,6 +64,7 @@
   },
   "rooms": {
     "noRoom": "Sans pièce", "notInHouse": "Hors maison",
+    "allLights": "Toutes les lumières de la pièce",
     "reorder": "Réordonner (glisser)", "orderError": "Ordre non enregistré : {message}",
     "dangling": "Liaisons mortes", "danglingHint": "Le JSON pointe vers un id qu'aucun plugin ne remonte",
     "origins": {
