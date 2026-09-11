@@ -1,5 +1,5 @@
 import { BoxGeometry, Color, CylinderGeometry, DoubleSide, Group, Mesh, MeshStandardMaterial, PointLight, RingGeometry, ShaderMaterial, SphereGeometry } from 'three'
-import type { DeviceState, HouseDevice } from '@kasbah/shared'
+import type { DeviceState, HouseDevice, PanelPlacement } from '@kasbah/shared'
 import { mirekToRgb, xyToRgb } from '@kasbah/shared'
 import { isMediaActive } from '../../lib/deviceState'
 import { yawToRad } from '../../lib/orientation'
@@ -161,6 +161,43 @@ export class GenericMarker extends DeviceMarker {
     for (const w of this.waves) { w.geometry.dispose(); w.material.dispose() }
     super.dispose()
   }
+}
+
+/** Puissance (W) à partir de laquelle un module est dessiné à pleine intensité (crête d'un IQ8 courant). */
+const PANEL_PEAK_W = 450
+/** Verre d'un module au repos : bleu nuit, presque noir. */
+const PANEL_DARK = 0x1c2740
+
+/**
+ * Module photovoltaïque d'un champ : une dalle aux dimensions du module, couchée, inclinée et
+ * orientée comme son champ, qui tire vers l'accent à mesure qu'elle produit. Le kind reste `sensor`
+ * (une puissance en W), c'est `meta.panel` qui dit que ce capteur est un module posé sur un toit.
+ */
+export class PanelMarker extends DeviceMarker {
+  private readonly mesh: Mesh
+  private readonly mat: MeshStandardMaterial
+  constructor(device: HouseDevice, ctx: MarkerContext, panel: PanelPlacement) {
+    super(device, ctx)
+    this.mat = new MeshStandardMaterial({ color: PANEL_DARK, roughness: 0.35, metalness: 0.4 })
+    this.mesh = new Mesh(new BoxGeometry(panel.width, panel.height, 0.04), this.mat)
+    // d'abord l'inclinaison autour de l'axe des colonnes (x local), puis l'orientation du champ (z)
+    this.mesh.rotation.order = 'ZXY'
+    this.mesh.rotation.x = (panel.tilt * Math.PI) / 180
+    this.mesh.rotation.z = yawToRad(device.yaw)
+    this.mesh.position.z = 0.03
+    this.mesh.castShadow = true
+    this.registerPickable(this.mesh)
+    this.object.add(this.mesh)
+    this.setLift(0.35)
+  }
+  protected isOn(s: DeviceState): boolean { return s.kind === 'sensor' && s.value > 0 }
+  protected onState(state: DeviceState | undefined): void {
+    const watts = state?.kind === 'sensor' && state.available ? state.value : 0
+    const k = Math.min(1, Math.max(0, watts / PANEL_PEAK_W))
+    this.mat.color.setHex(PANEL_DARK).lerp(this.ctx.theme.primary, k * 0.7)
+    this.mat.emissive.copy(this.ctx.theme.primary).multiplyScalar(k * 0.3)
+  }
+  override dispose(): void { this.mesh.geometry.dispose(); this.mat.dispose(); super.dispose() }
 }
 
 /** Lampe : sphère émissive + PointLight ; intensité selon la luminosité, couleur selon l'état. */

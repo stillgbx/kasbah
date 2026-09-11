@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CommandInput } from '@kasbah/shared'
+import { panelOf } from '@kasbah/shared'
 import { useDeviceResolver } from '../../composables/useDeviceResolver'
 import { relayLabel } from '../../lib/audioRouting'
 import { toClosure } from '../../lib/cover'
@@ -67,10 +68,13 @@ const headline = computed(() => {
   }
   return headlineValue(r.descriptor, state, t, locale.value)
 })
-/** Déplaçable : dans le JSON ou auto-placé, hors volets (ancrés à une ouverture) et tondeuse (position publiée). */
+/**
+ * Déplaçable : dans le JSON ou auto-placé, hors volets (ancrés à une ouverture), tondeuse (position
+ * publiée) et modules d'un champ de panneaux (ils bougent avec leur champ, pas un par un).
+ */
 const placeable = computed(() => {
   const hd = resolved.value?.houseDevice
-  return !!hd && !hd.openingId && (resolved.value?.descriptor?.kind ?? hd.kind) !== 'mower'
+  return !!hd && !hd.openingId && !panelOf(hd) && (resolved.value?.descriptor?.kind ?? hd.kind) !== 'mower'
 })
 // Pochette du morceau (ou visuel de la radio) en fond du haut du panneau, fondue en haut et en bas.
 // Couche absolue derrière le contenu : rien ne se décale quand elle apparaît, change ou disparaît.

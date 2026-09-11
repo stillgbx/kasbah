@@ -27,6 +27,12 @@
       "elevation": 3.05,
       "height": 2.5,
       "outline": [[-0.3, -0.3], [10.3, -0.3], [10.3, 8.3], [-0.3, 8.3]]
+    },
+    {
+      "id": "toit",
+      "name": "Toit",
+      "elevation": 5.55,
+      "height": 0.3
     }
   ],
   "rooms": [
@@ -558,5 +564,29 @@
     "ridgeAxis": "x",
     "pitch": 35,
     "overhang": 0.4
-  }
+  },
+  "arrays": [
+    {
+      "id": "pv-sud",
+      "name": "Champ sud",
+      "levelId": "toit",
+      "origin": [0.6, -0.7, 0],
+      "yaw": 0,
+      "tilt": 35,
+      "rows": 2,
+      "cols": 5,
+      "panels": ["mock:panel-s01", "mock:panel-s02", "mock:panel-s03", "mock:panel-s04", "mock:panel-s05", "mock:panel-s06", "mock:panel-s07", "mock:panel-s08", "mock:panel-s09", "mock:panel-s10"]
+    },
+    {
+      "id": "pv-nord",
+      "name": "Champ nord",
+      "levelId": "toit",
+      "origin": [9.9, 8.7, 0],
+      "yaw": 180,
+      "tilt": 35,
+      "rows": 2,
+      "cols": 5,
+      "panels": ["mock:panel-n01", "mock:panel-n02", "mock:panel-n03", "mock:panel-n04", "mock:panel-n05", "mock:panel-n06", "mock:panel-n07", "mock:panel-n08", "mock:panel-n09", "mock:panel-n10"]
+    }
+  ]
 }

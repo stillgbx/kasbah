@@ -29,6 +29,13 @@ export interface TickCtx {
 
 export interface SimDevice<K extends DeviceKind = DeviceKind> {
   descriptor: DeviceDescriptor
+  /**
+   * Cet appareil simulé fait partie de l'INSTALLATION d'un autre kind : l'exclure avec elle (voir
+   * `Simulation.hiddenFor`). Un panneau photovoltaïque est un capteur de puissance, mais il
+   * appartient à l'installation solaire ; sans ce lien, se débarrasser d'une production solaire
+   * simulée obligerait à exclure TOUS les capteurs, vrais compteurs de piscine compris.
+   */
+  partOf?: DeviceKind
   /** État courant, MUTÉ par tick/apply ; le moteur calcule le diff et émet les patchs. */
   state: StateFor<K>
   tick(ctx: TickCtx): void

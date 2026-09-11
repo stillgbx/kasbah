@@ -136,6 +136,27 @@ describe('Simulation', () => {
     sim.stop()
   })
 
+  it("hiddenFor emporte ce qui appartient a l'installation du kind exclu", () => {
+    const sim = make()
+    const kinds = (ids: Set<string>) => new Set([...sim.devices()].filter((d) => ids.has(d.externalId)).map((d) => d.kind))
+
+    // rien d'exclu : rien de masque
+    expect(sim.hiddenFor([]).size).toBe(0)
+
+    // un panneau est un `sensor`, mais il appartient a l'installation solaire : exclure `energy`
+    // emporte le site ET les vingt panneaux, sans toucher aux autres capteurs simules
+    const solar = sim.hiddenFor(['energy'])
+    expect(kinds(solar)).toEqual(new Set(['energy', 'sensor']))
+    expect([...solar].filter((id) => id.startsWith('panel-'))).toHaveLength(20)
+    expect(solar.has('energy-site')).toBe(true)
+    expect(solar.has('sensor-pool-temp')).toBe(false)          // la piscine reste simulee
+
+    // exclure `sensor` retire bien tous les capteurs, panneaux compris
+    const sensors = sim.hiddenFor(['sensor'])
+    expect(sensors.has('sensor-pool-temp')).toBe(true)
+    expect(sensors.has('energy-site')).toBe(false)
+  })
+
   it('runs on the injected clock with time scale', () => {
     const clock = new ManualClock(MONDAY)
     const sim = make({ clock, timeScale: 60 })

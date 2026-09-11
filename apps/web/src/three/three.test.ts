@@ -94,7 +94,7 @@ describe('builders', () => {
   it('builds the whole house with levels, floors, panes, zones and roof', () => {
     const mats = createMaterials(defaultSceneTheme())
     const nodes = buildHouse(geometry, mats)
-    expect(nodes.levels.size).toBe(2)
+    expect(nodes.levels.size).toBe(3)                        // rdc, étage, et le toit (niveau sans pièce qui porte les panneaux)
     expect(nodes.levels.get('rdc')!.floors.size).toBe(3)
     expect(nodes.levels.get('rdc')!.panes.length).toBeGreaterThan(0)
     expect(nodes.zones.size).toBe(4)

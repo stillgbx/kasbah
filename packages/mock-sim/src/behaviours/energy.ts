@@ -1,5 +1,33 @@
 import type { SimDevice } from '../types'
 import { clamp, descriptor } from './common'
+import { sensor } from './sensor'
+
+export interface PanelOptions {
+  name: string
+  /** Puissance crête du module (W). */
+  peakW?: number
+  /** Rendement relatif du module (orientation, salissure) : 1 = plein rendement. */
+  factor?: number
+  /** Heure locale à partir de laquelle un obstacle ombre le module (cheminée, arbre). */
+  shadeFrom?: number
+}
+
+/**
+ * Module photovoltaïque avec son micro-onduleur : un capteur de puissance (W) qui suit
+ * l'ensoleillement, module par module, pour qu'un champ de panneaux ait quelque chose à colorer.
+ */
+export function solarPanel(externalId: string, o: PanelOptions): SimDevice<'sensor'> {
+  const peakW = o.peakW ?? 400, factor = o.factor ?? 1
+  // `partOf: 'energy'` : un panneau est un capteur de puissance, mais il appartient à l'installation
+  // solaire — exclure `energy` pour un vrai parc Enphase doit l'emporter avec elle.
+  return Object.assign(sensor(externalId, {
+    name: o.name, unit: 'W', deviceClass: 'power', precision: 0, initial: 0, tauS: 20, noise: 2,
+    target: (ctx) => {
+      const shade = o.shadeFrom !== undefined && ctx.hour >= o.shadeFrom ? 0.25 : 1
+      return Math.max(0, ctx.world.irradiance * peakW * factor * shade)
+    },
+  }), { partOf: 'energy' as const })
+}
 
 export interface EnergyOptions {
   name: string

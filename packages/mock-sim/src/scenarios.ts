@@ -6,7 +6,7 @@ import { mediaPlayer } from './behaviours/media'
 import { climate } from './behaviours/climate'
 import { mower, vacuum } from './behaviours/robots'
 import { sensors } from './behaviours/sensor'
-import { energySite } from './behaviours/energy'
+import { energySite, solarPanel } from './behaviours/energy'
 import { evCharger, vehicle } from './behaviours/ev'
 
 // Scénarios : `default` reproduit la maison démo (ids stables liés dans house/demo-house.json),
@@ -39,6 +39,14 @@ function defaultDevices(opts: { winter?: boolean } = {}) {
     vehicle('vehicle-tesla', { name: 'Tesla', manufacturer: 'Tesla', model: 'Model Y', batteryKwh: 75, rangeKmFull: 450, home: HOME, work: WORK, soc: 68, chargeLimit: 80 }),
     vehicle('vehicle-zoe', { name: 'Zoé', manufacturer: 'Renault', model: 'Zoe', batteryKwh: 52, rangeKmFull: 380, home: HOME, work: WORK, workDays: [], soc: 55, chargeLimit: 80, chargerPowerW: 0 }),
     evCharger('charger-home', { name: 'Borne de recharge', vehicleId: 'vehicle-tesla' }),
+    // deux champs de dix modules (liés dans house/demo-house.json) : le sud plein rendement, le
+    // dernier ombré par la cheminée en fin de journée ; le nord moins exposé
+    ...Array.from({ length: 10 }, (_, i) => solarPanel(`panel-s${String(i + 1).padStart(2, '0')}`, {
+      name: `Panneau sud ${i + 1}`, factor: 0.95 + ((i * 3) % 5) * 0.01, ...(i === 9 ? { shadeFrom: 16 } : {}),
+    })),
+    ...Array.from({ length: 10 }, (_, i) => solarPanel(`panel-n${String(i + 1).padStart(2, '0')}`, {
+      name: `Panneau nord ${i + 1}`, factor: 0.6 + ((i * 3) % 5) * 0.01,
+    })),
     energySite('energy-site', { name: 'Énergie Enphase', peakW: opts.winter ? 6000 : 6000, batteryWh: 5000 }),
   ]
 }

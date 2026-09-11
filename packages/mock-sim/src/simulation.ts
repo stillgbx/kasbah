@@ -1,4 +1,4 @@
-import type { Command, DeviceDescriptor, DeviceState, StatePatch } from '@kasbah/shared'
+import type { Command, DeviceDescriptor, DeviceKind, DeviceState, StatePatch } from '@kasbah/shared'
 import { shallowEqual } from '@kasbah/shared'
 import { systemClock, type Clock } from './clock'
 import { mulberry32, type Rng } from './rng'
@@ -73,6 +73,21 @@ export class Simulation {
   }
 
   devices(): DeviceDescriptor[] { return this.devs.map((d) => d.descriptor) }
+
+  /**
+   * `externalId` des appareils à masquer quand la simulation ne fait que COMPLÉTER un parc réel
+   * (`MOCK_EXCLUDE_KINDS`). Un appareil tombe si son propre kind est exclu, ou si son `partOf`
+   * l'est : exclure `energy` emporte ainsi les panneaux simulés, qui sont des capteurs de puissance
+   * mais appartiennent à l'installation solaire simulée.
+   */
+  hiddenFor(excluded: Iterable<DeviceKind>): Set<string> {
+    const kinds = new Set(excluded)
+    const out = new Set<string>()
+    for (const d of this.devs) {
+      if (kinds.has(d.descriptor.kind) || (d.partOf && kinds.has(d.partOf))) out.add(d.descriptor.externalId)
+    }
+    return out
+  }
 
   simTime(): number { return this.simNow }
 

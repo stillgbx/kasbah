@@ -161,6 +161,36 @@ export const roofSchema = z.object({
 })
 export type Roof = z.infer<typeof roofSchema>
 
+/** Module photovoltaïque courant (m) : `width` le long des colonnes, `height` le long des rangées. */
+export const PANEL_SIZE = { width: 1.13, height: 1.76 } as const
+/**
+ * Champ de panneaux solaires : une grille de `rows × cols` modules posée sur un niveau (le toit,
+ * déclaré comme un niveau sans pièce). Les positions des modules ne sont PAS écrites : elles se
+ * dérivent de l'origine, de l'orientation et du pas (`panelArrayDevices`), donc déplacer ou pivoter
+ * le champ ne touche qu'un objet. `panels` lie chaque emplacement, rangée par rangée, à son
+ * micro-onduleur — c'est le découpage de l'app du fabricant (un champ, puis ses onduleurs).
+ */
+export const panelArraySchema = z.object({
+  id: idSchema,
+  name: z.string().min(1).optional(),
+  levelId: idSchema,
+  /** Coin du champ (bord de la rangée 0, colonne 0) : x, y absolus ; z RELATIF au sol du niveau. */
+  origin: vec3Schema,
+  /** Orientation (degrés, sens trigonométrique) : 0 = colonnes vers +x, rangées vers +y. */
+  yaw: z.number().default(0),
+  /** Inclinaison des modules (degrés) : le champ monte le long de ses rangées. 0 = à plat. */
+  tilt: z.number().min(0).max(90).default(0),
+  rows: z.number().int().positive(),
+  cols: z.number().int().positive(),
+  panel: z.object({ width: z.number().positive(), height: z.number().positive() }).default(PANEL_SIZE),
+  /** Espace entre deux modules (m). */
+  gap: z.number().min(0).default(0.02),
+  /** Appareil de plugin de chaque emplacement, rangée par rangée ; `null` = module sans onduleur suivi. Au plus rows × cols. */
+  panels: z.array(deviceIdSchema.nullable()),
+  meta: metaSchema,
+})
+export type PanelArray = z.infer<typeof panelArraySchema>
+
 /** Scène : lot de commandes envoyées d'un coup (Départ, Nuit, Cinéma…). */
 export const sceneActionSchema = z.object({ deviceId: deviceIdSchema, command: commandSchema })
 export const houseSceneSchema = z.object({
@@ -184,6 +214,7 @@ export const houseSchema = z.object({
   devices: z.array(houseDeviceSchema).default([]),
   scenes: z.array(houseSceneSchema).default([]),
   roof: roofSchema.optional(),
+  arrays: z.array(panelArraySchema).default([]),
   meta: metaSchema,
 })
 export type House = z.infer<typeof houseSchema>

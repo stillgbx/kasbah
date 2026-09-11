@@ -1,6 +1,6 @@
 import { computed, ref, shallowRef, watch } from 'vue'
 import { defineStore } from 'pinia'
-import { autoPlaceDevices, indexHouse, type DeviceEntry, type DevicePlacement, type House, type HouseDevice, type HouseIndex, type Level, type PlaceableDevice, type Room, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
+import { autoPlaceDevices, indexHouse, withPanelArrays, type DeviceEntry, type DevicePlacement, type House, type HouseDevice, type HouseIndex, type Level, type PlaceableDevice, type Room, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
 import { getTransport } from '../api'
 import { t } from '../i18n'
 import { soundRouting } from '../lib/audioRouting'
@@ -30,9 +30,14 @@ export const useHouseStore = defineStore('house', () => {
   const placeable = computed<PlaceableDevice[]>(() =>
     Object.values(devices.descriptors).map((d) => ({ id: d.id, kind: d.kind, room: d.meta.room })),
   )
+  /**
+   * Maison du JSON complétée des modules dérivés de ses champs de panneaux (`arrays`) : c'est sur
+   * elle que se fait l'auto-placement (un onduleur lié à un champ n'est pas à placer) et la scène.
+   */
+  const expanded = computed<House | null>(() => (house.value ? withPanelArrays(house.value) : null))
   const placement = computed(() => {
-    if (!house.value) return null
-    return autoPlaceDevices(house.value, placeable.value, indexHouse(house.value))
+    if (!expanded.value) return null
+    return autoPlaceDevices(expanded.value, placeable.value, indexHouse(expanded.value))
   })
   /**
    * Appareil PROVISOIRE : un appareil de plugin sans aucune entrée (ni JSON, ni auto-placement) que
@@ -43,7 +48,7 @@ export const useHouseStore = defineStore('house', () => {
    */
   const provisional = shallowRef<HouseDevice | null>(null)
   const effective = computed<House | null>(() => {
-    const h = house.value
+    const h = expanded.value
     const placed = placement.value?.placed ?? []
     const extra = provisional.value && !h?.devices.some((d) => d.id === provisional.value!.id) ? [provisional.value] : []
     if (!h || (placed.length === 0 && extra.length === 0)) return h

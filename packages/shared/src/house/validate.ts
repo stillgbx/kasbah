@@ -28,6 +28,7 @@ function crossRefs(house: House, ctx: z.RefinementCtx) {
   house.rooms.forEach((r, i) => unique(r.id, ['rooms', i, 'id']))
   house.site.zones.forEach((zn, i) => unique(zn.id, ['site', 'zones', i, 'id']))
   house.devices.forEach((d, i) => unique(d.id, ['devices', i, 'id']))
+  house.arrays.forEach((a, i) => unique(a.id, ['arrays', i, 'id']))
   house.rooms.forEach((r, ri) => r.openings.forEach((o, oi) => unique(o.id, ['rooms', ri, 'openings', oi, 'id'])))
 
   const levels = new Map(house.levels.map((l) => [l.id, l]))
@@ -82,6 +83,21 @@ function crossRefs(house: House, ctx: z.RefinementCtx) {
       if (!owner) issue([...path, 'openingId'], `unknown opening "${d.openingId}"`)
       else if (d.roomId && owner !== d.roomId) issue([...path, 'openingId'], `opening "${d.openingId}" belongs to room "${owner}"`)
     }
+  })
+
+  // un module lié deux fois (à un appareil posé, ou à deux emplacements) donnerait deux marqueurs pour un onduleur
+  const bound = new Map<string, string>()
+  house.devices.forEach((d, i) => { if (d.deviceId) bound.set(d.deviceId, `devices[${i}]`) })
+  house.arrays.forEach((a, ai) => {
+    const path = ['arrays', ai]
+    if (!levels.has(a.levelId)) issue([...path, 'levelId'], `unknown level "${a.levelId}"`)
+    if (a.panels.length > a.rows * a.cols) issue([...path, 'panels'], `${a.panels.length} panels for ${a.rows} × ${a.cols} slots`)
+    a.panels.forEach((id, pi) => {
+      if (!id) return
+      const prev = bound.get(id)
+      if (prev) issue([...path, 'panels', pi], `device "${id}" is already placed (${prev})`)
+      else bound.set(id, `arrays[${ai}].panels[${pi}]`)
+    })
   })
 
   if (house.roof?.levelId && !levels.has(house.roof.levelId)) issue(['roof', 'levelId'], `unknown level "${house.roof.levelId}"`)

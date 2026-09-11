@@ -1,8 +1,12 @@
 import type { DeviceState, HouseDevice } from '@kasbah/shared'
+import { panelOf } from '@kasbah/shared'
 import type { DeviceMarker, MarkerContext } from './DeviceMarker'
-import { CoverMarker, GenericMarker, LightMarker, MowerMarker, VehicleMarker } from './markers'
+import { CoverMarker, GenericMarker, LightMarker, MowerMarker, PanelMarker, VehicleMarker } from './markers'
 
 export function createMarker(device: HouseDevice, ctx: MarkerContext, atHome: (state: DeviceState) => boolean): DeviceMarker {
+  // un module d'un champ de panneaux est un `sensor` comme un autre : sa forme vient de son champ, pas de son kind
+  const panel = panelOf(device)
+  if (panel) return new PanelMarker(device, ctx, panel)
   const kind = ctx.descriptor?.kind ?? device.kind
   switch (kind) {
     case 'light': return new LightMarker(device, ctx)

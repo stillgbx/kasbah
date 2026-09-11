@@ -7,7 +7,7 @@ import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js'
 import {
   boundsCenter, buildingBounds, computeHouseGeometry, deviceFloorZ, geoDistance, indexHouse, pointInPolygon, resolveDefaults, resolveDeviceLevelId,
   roomBounds, zoneBounds,
-  type DeviceDescriptor, type DeviceState, type House, type HouseDevice, type HouseGeometry, type HouseIndex, type Vec3,
+  type DeviceDescriptor, type DeviceState, type House, type HouseDevice, type HouseGeometry, type HouseIndex, type Level, type Vec3,
 } from '@kasbah/shared'
 import { applyTheme, createMaterials, disposeMaterials, type MaterialSet } from './builders/materials'
 import { buildHouse, type HouseNodes } from './builders/buildHouse'
@@ -405,8 +405,16 @@ export class HouseScene {
       // pilules : seulement le niveau focalisé (lisibilité) ; l'appareil sélectionné reste visible
       for (const m of this.markers.values()) if (m.object.parent === nodes.markers) m.setPillVisible(focused?.id === id)
     }
-    if (this.nodes.roof) this.nodes.roof.visible = !focused
+    // le toit se voit en vue d'ensemble et depuis le niveau qu'il porte (le toit déclaré comme un
+    // niveau, pour ses panneaux) ; depuis un étage, il cacherait les pièces
+    if (this.nodes.roof) this.nodes.roof.visible = !focused || this.isRoofLevel(focused)
     for (const m of this.markers.values()) if (m.object.parent === this.nodes.outdoorMarkers) m.setPillVisible(true)
+  }
+
+  /** Niveau posé au niveau du toit ou au-dessus : le toit lui appartient, il ne le masque pas. */
+  private isRoofLevel(level: Level): boolean {
+    const roof = this.geometry?.roof
+    return !!roof && level.elevation >= roof.zBase - 1e-3
   }
 
   resetView(animate = true): void {
@@ -487,7 +495,10 @@ export class HouseScene {
     if (!this.house || !this.geometry) return
     this.focusLevel(levelId)
     this.highlightRoom(null)
-    const box = boundsToWorldBox(buildingBounds(this.house, resolveDefaults(this.house.defaults), undefined))
+    // le niveau du toit se cadre avec le toit (il n'a ni pièce ni contour à cadrer autrement)
+    const level = this.house.levels.find((l) => l.id === levelId)
+    const roof = level && this.isRoofLevel(level) ? this.geometry.roof : undefined
+    const box = boundsToWorldBox(buildingBounds(this.house, resolveDefaults(this.house.defaults), roof))
     const { azimuth } = this.currentSpherical()
     this.flyTo(box, azimuth, (52 * Math.PI) / 180, animate, 1.15)
   }

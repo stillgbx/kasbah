@@ -11,8 +11,10 @@ export const mockConfigSchema = z.object({
   /**
    * Kinds que la simulation ne doit PAS fournir, séparés par des virgules. Sert à la faire
    * COMPLÉTER un parc réel au lieu de le doubler : dès qu'un vrai plugin couvre un kind (les
-   * lampes par Hue, les ouvrants par TaHoma), ses équivalents simulés n'ont plus de raison
-   * d'encombrer les listes en « hors plan ». Un kind inconnu est refusé au démarrage.
+   * lampes par Hue, les ouvrants par TaHoma, le solaire par Enphase), ses équivalents simulés
+   * n'ont plus de raison d'encombrer les listes en « hors plan ». Un kind inconnu est refusé au
+   * démarrage. L'exclusion emporte aussi ce qui appartient à l'installation du kind exclu : sortir
+   * `energy` retire le site solaire ET ses panneaux, qui sont des capteurs (`Simulation.hiddenFor`).
    */
   MOCK_EXCLUDE_KINDS: z.string().default('')
     .transform((s) => s.split(',').map((k) => k.trim()).filter(Boolean))
@@ -51,10 +53,10 @@ export function createMockPlugin(): DevicePlugin {
       })
     },
     async discover(): Promise<DeviceDescriptor[]> {
-      const all = sim!.devices()
-      const excluded = new Set<string>(config!.MOCK_EXCLUDE_KINDS)
-      hidden = new Set(all.filter((d) => excluded.has(d.kind)).map((d) => d.externalId))
-      return all.filter((d) => !hidden.has(d.externalId))
+      // la simulation décide elle-même ce que masquer : un appareil qui appartient à l'installation
+      // d'un kind exclu tombe avec elle (les panneaux simulés avec `energy`, voir `hiddenFor`)
+      hidden = sim!.hiddenFor(config!.MOCK_EXCLUDE_KINDS)
+      return sim!.devices().filter((d) => !hidden.has(d.externalId))
     },
     async start() {
       // états initiaux complets, puis patchs différentiels au fil des ticks

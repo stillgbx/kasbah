@@ -6,6 +6,8 @@ import { roomBounds, buildingBounds } from './geometry/bounds'
 import { resolveDefaults } from './defaults'
 import { indexHouse, deviceFloorZ } from './lookup'
 import { geoDistance, geoToLocal, localToGeo } from './geo'
+import { panelArrayDevices, panelOf, withPanelArrays } from './panels'
+import { panelArraySchema } from './schema'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const clone = (): any => JSON.parse(JSON.stringify(demo))
@@ -13,7 +15,7 @@ const clone = (): any => JSON.parse(JSON.stringify(demo))
 describe('house schema & validation', () => {
   it('parses the demo house', () => {
     const house = parseHouse(demo)
-    expect(house.levels).toHaveLength(2)
+    expect(house.levels).toHaveLength(3)
     expect(house.rooms).toHaveLength(7)
     expect(house.devices.length).toBeGreaterThan(10)
     expect(house.rooms[0]!.kind).toBe('corridor')
@@ -53,11 +55,58 @@ describe('house schema & validation', () => {
   })
 })
 
+describe('champs de panneaux', () => {
+  const array = (over: Record<string, unknown> = {}) => panelArraySchema.parse({
+    id: 'pv', levelId: 'toit', origin: [10, 20, 0.1], rows: 2, cols: 3, gap: 0, panel: { width: 1, height: 2 },
+    panels: ['mock:p1', null, 'mock:p3'], ...over,
+  })
+
+  it('dérive un module par emplacement, centré, rangée par rangée, lié ou non', () => {
+    const devices = panelArrayDevices(array())
+    expect(devices).toHaveLength(6)
+    expect(devices[0]).toMatchObject({ id: 'pv.r0c0', deviceId: 'mock:p1', kind: 'sensor', levelId: 'toit', position: [10.5, 21, 0.1] })
+    expect(devices[1]!.deviceId).toBeUndefined()                     // emplacement sans onduleur suivi : module quand même
+    expect(devices[2]).toMatchObject({ id: 'pv.r0c2', deviceId: 'mock:p3', position: [12.5, 21, 0.1] })
+    expect(devices[5]!.position).toEqual([12.5, 23, 0.1])            // rangée 1 : +height
+    expect(panelOf(devices[0]!)).toMatchObject({ arrayId: 'pv', row: 0, col: 0, width: 1, height: 2, tilt: 0 })
+  })
+
+  it('tourne le champ autour de son origine (yaw) et le fait monter le long des rangées (tilt)', () => {
+    const [d] = panelArrayDevices(array({ rows: 1, cols: 1, yaw: 90, panels: ['mock:p1'] }))
+    // colonnes vers +y, rangées vers -x : le centre (0,5 ; 1) devient (-1 ; 0,5)
+    expect(d!.position[0]).toBeCloseTo(9)
+    expect(d!.position[1]).toBeCloseTo(20.5)
+    const [t] = panelArrayDevices(array({ rows: 1, cols: 1, tilt: 30, panels: ['mock:p1'] }))
+    expect(t!.position[1]).toBeCloseTo(20 + Math.cos(Math.PI / 6))   // projection au sol de la rangée
+    expect(t!.position[2]).toBeCloseTo(0.1 + Math.sin(Math.PI / 6))  // et sa montée
+  })
+
+  it('la maison démo porte ses deux champs sur le niveau toit, et withPanelArrays les ajoute aux appareils', () => {
+    const house = parseHouse(demo)
+    expect(house.arrays.map((a) => a.id)).toEqual(['pv-sud', 'pv-nord'])
+    const full = withPanelArrays(house)
+    expect(full.devices.length).toBe(house.devices.length + 20)
+    expect(indexHouse(full).devicesByLevel.get('toit')).toHaveLength(20)
+    const bare = { ...house, arrays: [] }
+    expect(withPanelArrays(bare)).toBe(bare)                        // sans champ : la même référence, rien à recalculer
+  })
+
+  it('refuse un champ sur un niveau inconnu, trop de modules, ou un onduleur lié deux fois', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const bad = (patch: (h: any) => void) => { const h = clone(); patch(h); const r = safeParseHouse(h); return r.success ? [] : r.issues.map((i) => i.path) }
+    expect(bad((h) => { h.arrays[0].levelId = 'grenier' })).toContainEqual('arrays[0].levelId')
+    expect(bad((h) => { h.arrays[0].panels.push('mock:extra') })).toContainEqual('arrays[0].panels')
+    expect(bad((h) => { h.arrays[1].panels[0] = 'mock:panel-s01' })).toContainEqual('arrays[1].panels[0]')
+    expect(bad((h) => { h.devices[0].deviceId = 'mock:panel-s01' })).toContainEqual('arrays[0].panels[0]')
+  })
+})
+
 describe('geometry of the demo house', () => {
   const house = parseHouse(demo)
   const geom = computeHouseGeometry(house)
   it('levels are sorted and populated', () => {
-    expect(geom.levels.map((l) => l.levelId)).toEqual(['rdc', 'etage'])
+    expect(geom.levels.map((l) => l.levelId)).toEqual(['rdc', 'etage', 'toit'])
+    expect(geom.levels[2]!.walls).toHaveLength(0)                  // le toit est un niveau sans pièce : ni mur ni sol
     expect(geom.levels[0]!.floors).toHaveLength(3)
     expect(geom.levels[0]!.walls.length).toBeGreaterThan(10)
     expect(geom.levels[0]!.openings.map((o) => o.openingId)).toContain('baie')
@@ -88,7 +137,7 @@ describe('lookup & geo', () => {
   const house = parseHouse(demo)
   const idx = indexHouse(house)
   it('orders levels top-down, and rooms by `roomOrder` then by name', () => {
-    expect(idx.levelsSorted.map((l) => l.id)).toEqual(['etage', 'rdc'])
+    expect(idx.levelsSorted.map((l) => l.id)).toEqual(['toit', 'etage', 'rdc'])
     expect(idx.roomsByLevel.get('etage')!.map((r) => r.id)).toEqual(['chambre1', 'chambre2', 'palier', 'sdb'])
     const h = clone()
     h.levels.find((l: { id: string }) => l.id === 'etage').roomOrder = ['sdb', 'palier']

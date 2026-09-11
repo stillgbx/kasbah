@@ -1,6 +1,7 @@
 import { BufferGeometry, DoubleSide, Group, Line, LineBasicMaterial, Mesh, MeshBasicMaterial, RingGeometry, Shape, ShapeGeometry, Vector3, type Object3D } from 'three'
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js'
 import type { DeviceDescriptor, DeviceState, HouseDevice, OpeningRect } from '@kasbah/shared'
+import { panelOf } from '@kasbah/shared'
 import type { SceneTheme } from '../core/theme'
 import type { MaterialSet } from '../builders/materials'
 import type { Animation } from '../core/renderLoop'
@@ -75,7 +76,8 @@ export abstract class DeviceMarker {
       // et seul survivant quand la distance réduit la pilule à une icône ou à un point (`data-lod`)
       const disc = document.createElement('span')
       disc.className = 'marker-pill__icon'
-      disc.appendChild(iconSvg(kindIcon(kind, ctx.descriptor), 16, 2))
+      // un module de champ de panneaux est un capteur de puissance, mais ce qu'on voit sur le toit est du solaire
+      disc.appendChild(iconSvg(panelOf(device) ? 'solar' : kindIcon(kind, ctx.descriptor), 16, 2))
       this.pill.appendChild(disc)
       this.pill.title = ctx.label                       // la pilule est bornée : le nom entier reste lisible au survol
       const span = document.createElement('span')
