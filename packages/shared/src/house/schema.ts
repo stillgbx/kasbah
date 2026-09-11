@@ -202,6 +202,45 @@ export const houseSceneSchema = z.object({
 })
 export type HouseScene = z.infer<typeof houseSceneSchema>
 
+/**
+ * Réglages d'un PLUGIN, décidés depuis Réglages → Plugins et gardés DANS la maison : quels
+ * fabricants cette maison utilise, et ce qu'on veut de chacun. Aucun secret ici — clés et jetons
+ * restent dans `.env` ; le fichier maison ne porte que des choix.
+ */
+export const pluginSettingsSchema = z.object({
+  enabled: z.boolean().default(false),
+  /** Sous-items du plugin (les kinds simulés par `mock`…), par id. Absent = défaut du plugin. */
+  parts: z.record(z.string(), z.boolean()).default({}),
+  /**
+   * Défaut appliqué aux ambiances animées qui APPARAISSENT (créées chez le fabricant, ou qui
+   * gagnent une palette). Ne touche jamais les ambiances déjà connues.
+   */
+  autoDynamicForNewScenes: z.boolean().default(false),
+})
+export type PluginSettings = z.infer<typeof pluginSettingsSchema>
+
+/**
+ * Modification partielle venue de l'UI (`PATCH /api/plugins/:id`) : seuls les champs présents sont
+ * écrits. Déclaré à la main et NON par `pluginSettingsSchema.partial()` : zod applique quand même
+ * le `.default()` d'un champ rendu optionnel, si bien qu'un patch `{ parts }` arrivait porteur d'un
+ * `enabled: false` fantôme — basculer un sous-item éteignait le plugin.
+ */
+export const pluginSettingsPatchSchema = z.object({
+  enabled: z.boolean().optional(),
+  parts: z.record(z.string(), z.boolean()).optional(),
+  autoDynamicForNewScenes: z.boolean().optional(),
+})
+export type PluginSettingsPatch = z.infer<typeof pluginSettingsPatchSchema>
+
+export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = { enabled: false, parts: {}, autoDynamicForNewScenes: false }
+
+/**
+ * Maison sans section `plugins` : la simulation seule, avec tous ses kinds — la démo tourne sans
+ * rien configurer, le reste s'active dans l'UI. zod 4 ne valide PAS la valeur d'un `.default()`,
+ * elle est donc écrite en entier.
+ */
+export const defaultPlugins = (): Record<string, PluginSettings> => ({ mock: { ...DEFAULT_PLUGIN_SETTINGS, enabled: true } })
+
 export const houseSchema = z.object({
   schemaVersion: z.literal(1),
   id: idSchema,
@@ -215,6 +254,8 @@ export const houseSchema = z.object({
   scenes: z.array(houseSceneSchema).default([]),
   roof: roofSchema.optional(),
   arrays: z.array(panelArraySchema).default([]),
+  /** Plugins de cette maison : lesquels sont actifs, et leurs sous-items. */
+  plugins: z.record(z.string(), pluginSettingsSchema).default(defaultPlugins),
   meta: metaSchema,
 })
 export type House = z.infer<typeof houseSchema>

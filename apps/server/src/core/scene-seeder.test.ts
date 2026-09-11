@@ -1,11 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { DEFAULT_PLUGIN_SETTINGS } from '@kasbah/shared'
 import { ManualClock } from '@kasbah/mock-sim'
 import pino from 'pino'
 import { Bus } from './bus'
-import { PluginSettingsStore } from './plugin-settings'
 import { SceneRegistry } from './scene-registry'
 import { SceneSeeder } from './scene-seeder'
 
@@ -19,14 +16,14 @@ const scene = (id: string, dynamic: boolean, autoDynamic = false) => ({
 /** Règle : le défaut s'applique aux ambiances QUI APPARAISSENT, jamais à celles déjà connues. */
 describe('scene seeder', () => {
   async function harness(autoDynamicForNewScenes: boolean) {
-    const dir = await mkdtemp(join(tmpdir(), 'kasbah-settings-'))
-    const settings = new PluginSettingsStore(join(dir, 'settings.json'), logger)
-    if (autoDynamicForNewScenes) await settings.set('hue', { autoDynamicForNewScenes: true })
+    // le réglage vit dans house.json : ici une valeur qu'on peut changer en cours de test
+    const settings = { ...DEFAULT_PLUGIN_SETTINGS, enabled: true, autoDynamicForNewScenes }
+    const settingsOf = () => settings
     const bus = new Bus()
     const registry = new SceneRegistry(bus, new ManualClock(0))
     const updateScene = vi.fn(async () => undefined)
-    const seeder = new SceneSeeder({ bus, settings, updateScene, logger })
-    return { dir, registry, updateScene, seeder, settings }
+    const seeder = new SceneSeeder({ bus, settingsOf, updateScene, logger })
+    return { registry, updateScene, seeder, settings }
   }
 
   it('takes the first list as a baseline and writes nothing, even with the default on', async () => {
@@ -35,7 +32,7 @@ describe('scene seeder', () => {
       h.registry.register('hue', [scene('a', true), scene('b', true, true), scene('c', false)])
       await flush()
       expect(h.updateScene).not.toHaveBeenCalled()
-    } finally { h.seeder.close(); await rm(h.dir, { recursive: true, force: true }) }
+    } finally { h.seeder.close() }
   })
 
   it('applies the default to a scene that appears, and only to it', async () => {
@@ -47,7 +44,7 @@ describe('scene seeder', () => {
       h.registry.register('hue', [scene('a', true), scene('b', true, true), scene('c', true), scene('d', true, true)])
       await flush()
       expect(h.updateScene.mock.calls).toEqual([['hue:c', { autoDynamic: true }]])
-    } finally { h.seeder.close(); await rm(h.dir, { recursive: true, force: true }) }
+    } finally { h.seeder.close() }
   })
 
   it('writes nothing when the plugin default is off', async () => {
@@ -59,26 +56,11 @@ describe('scene seeder', () => {
       await flush()
       expect(h.updateScene).not.toHaveBeenCalled()
       // …et l'activer plus tard ne rattrape PAS les ambiances déjà connues
-      await h.settings.set('hue', { autoDynamicForNewScenes: true })
+      h.settings.autoDynamicForNewScenes = true
       h.registry.register('hue', [scene('a', true), scene('b', true)])
       await flush()
       expect(h.updateScene).not.toHaveBeenCalled()
-    } finally { h.seeder.close(); await rm(h.dir, { recursive: true, force: true }) }
+    } finally { h.seeder.close() }
   })
 
-  it('settings survive a reload and default to off for an unknown plugin', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'kasbah-settings-'))
-    try {
-      const path = join(dir, 'nested', 'settings.json')
-      const first = new PluginSettingsStore(path, logger)
-      await first.load()
-      expect(first.get('hue').autoDynamicForNewScenes).toBe(false)
-      await first.set('hue', { autoDynamicForNewScenes: true })
-      const second = new PluginSettingsStore(path, logger)
-      await second.load()
-      expect(second.get('hue').autoDynamicForNewScenes).toBe(true)
-      expect(second.get('somfy').autoDynamicForNewScenes).toBe(false)
-      expect(second.all()).toEqual({ hue: { autoDynamicForNewScenes: true } })
-    } finally { await rm(dir, { recursive: true, force: true }) }
-  })
 })

@@ -2,8 +2,9 @@ import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import { z } from 'zod'
 
-// Variables KASBAH_* du serveur. Les clés propres à un plugin (HUE_*, MOCK_*) sont validées par
-// le plugin lui-même (voir DevicePlugin.configSchema).
+// Variables KASBAH_* du serveur. Les clés propres à un plugin (HUE_*, CAST_*) sont validées par
+// le plugin lui-même (voir DevicePlugin.configSchema). Quels plugins sont ACTIFS ne se décide pas
+// ici mais dans la maison (`house.plugins`), depuis Réglages → Plugins.
 
 const here = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = resolve(here, '../../../..')
@@ -13,11 +14,8 @@ const bool = z.enum(['true', 'false', '1', '0']).transform((v) => v === 'true' |
 export const envSchema = z.object({
   KASBAH_PORT: z.coerce.number().int().min(1).max(65535).default(8787),
   KASBAH_HOST: z.string().default('0.0.0.0'),
-  KASBAH_PLUGINS: z.string().default('mock').transform((s) => s.split(',').map((p) => p.trim()).filter(Boolean)),
   KASBAH_HOUSE_FILE: z.string().default(resolve(REPO_ROOT, 'house/demo-house.json')),
   KASBAH_STATIC_DIR: z.string().default(resolve(REPO_ROOT, 'apps/web/dist')),
-  /** Réglages par plugin décidés depuis l'UI (petit JSON écrit par le serveur). */
-  KASBAH_SETTINGS_FILE: z.string().default(resolve(REPO_ROOT, 'apps/server/.state/plugin-settings.json')),
   KASBAH_LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'silent']).default('info'),
   KASBAH_LOG_PRETTY: bool.default(false),
   KASBAH_STRICT_PLUGINS: bool.default(false),

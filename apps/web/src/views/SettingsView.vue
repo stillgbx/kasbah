@@ -13,15 +13,19 @@ import { accentColor } from '../plugins/vuetify'
 import { useDevicesStore } from '../stores/devices'
 import { useHouseStore } from '../stores/house'
 import { useScenesStore } from '../stores/scenes'
+import { usePluginsStore } from '../stores/plugins'
 import { useSettingsStore, type Appearance } from '../stores/settings'
 
-// Réglages : apparence, langue, accent, origine GPS (colonne gauche) ; plugins et clés .env (droite).
+// Réglages : apparence, langue, accent, origine GPS (colonne gauche) ; plugins (droite). Les
+// plugins actifs et leurs sous-items vivent dans house.json : ce sont des choix de LA MAISON, pas
+// de la tablette, et ils prennent effet sans redémarrer le serveur.
 const settings = useSettingsStore()
+const plugins = usePluginsStore()
 const scenes = useScenesStore()
 const devices = useDevicesStore()
 const house = useHouseStore()
 const { t } = useI18n()
-onMounted(() => { void devices.refreshHealth(); void scenes.loadPluginSettings() })
+onMounted(() => { void devices.refreshHealth(); void plugins.load() })
 
 // Suppression d'une ambiance : premier appui arme, second confirme, et on désarme tout seul.
 const armed = ref<string | null>(null)
@@ -39,7 +43,6 @@ function confirmDelete(sceneId: string) {
 
 const appearanceOptions = computed(() => settings.appearances.map((a) => ({ value: a, label: t(`settings.${a}`) })))
 const localeOptions = computed(() => [{ value: '', label: t('settings.auto') }, ...settings.locales.map((l) => ({ value: l as string, label: LOCALE_LABELS[l] }))])
-const plugins = computed(() => Object.entries(devices.health?.plugins ?? {}).sort(([a], [b]) => a.localeCompare(b)))
 const DOT: Record<PluginHealth['status'], string> = { ok: 'var(--accent)', degraded: '#d38b22', needs_pairing: '#d38b22', error: '#d24a43', not_implemented: 'var(--muted)', disabled: 'var(--muted)' }
 const gps = computed(() => {
   const o = house.house?.origin
@@ -87,8 +90,8 @@ const houseStats = computed(() => {
                 <div class="auto-row__name">{{ $t('settings.sceneAutoDynamicNew') }}</div>
                 <div class="muted small">{{ $t('settings.sceneAutoDynamicNewHint') }}</div>
               </div>
-              <v-switch :model-value="scenes.settingsOf(g.pluginId).autoDynamicForNewScenes" hide-details density="compact"
-                        @update:model-value="(v: boolean | null) => scenes.setAutoDynamicForNewScenes(g.pluginId, v === true)" />
+              <v-switch :model-value="plugins.byId[g.pluginId]?.autoDynamicForNewScenes === true" hide-details density="compact"
+                        @update:model-value="(v: boolean | null) => plugins.setAutoDynamicForNewScenes(g.pluginId, v === true)" />
             </div>
             <div class="muted small">{{ $t('settings.sceneAutoDynamicHint') }}</div>
             <div class="auto-rows">
@@ -120,20 +123,39 @@ const houseStats = computed(() => {
         <div class="col">
           <section class="card block">
             <div class="block__head"><div class="block__title">{{ $t('settings.plugins') }}</div><div class="muted small">{{ $t('settings.keys') }}</div></div>
+            <p class="muted small plugins__hint">{{ $t('settings.pluginsHint') }}</p>
             <HuePairingCard />
             <NestLinkCard />
             <EnphasePairingCard />
             <div class="plugins">
-              <div v-for="[id, h] in plugins" :key="id" class="plugin">
-                <div class="min0">
-                  <div class="plugin__name">{{ id.replace('_', ' ') }}</div>
-                  <div class="plugin__keys mono muted">{{ h.keys?.length ? h.keys.join('  ') : $t('settings.noKeys') }}</div>
+              <div v-for="p in plugins.list" :key="p.id" class="plugin">
+                <div class="plugin__row">
+                  <div class="min0">
+                    <div class="plugin__name">{{ p.id.replace('_', ' ') }}</div>
+                    <div class="plugin__keys mono muted">{{ p.health.keys?.length ? p.health.keys.join('  ') : $t('settings.noKeys') }}</div>
+                  </div>
+                  <div class="plugin__status muted">
+                    <span class="dot" :style="{ background: DOT[p.health.status] }" />{{ $t(`settings.pluginStatus.${p.health.status}`) }}<span v-if="p.health.deviceCount"> · {{ $t('settings.devicesCount', { n: p.health.deviceCount }, p.health.deviceCount) }}</span>
+                  </div>
+                  <!-- un squelette n'a rien à démarrer : interrupteur grisé, pas caché -->
+                  <v-switch :model-value="p.enabled" :disabled="!p.implemented || plugins.isBusy(p.id)" hide-details density="compact" class="plugin__switch"
+                            :title="p.implemented ? $t('settings.pluginEnable') : $t('settings.pluginStatus.not_implemented')"
+                            :aria-label="$t('settings.pluginEnable')"
+                            @update:model-value="(v: boolean | null) => plugins.setEnabled(p.id, v === true)" />
                 </div>
-                <div class="plugin__status muted">
-                  <span class="dot" :style="{ background: DOT[h.status] }" />{{ $t(`settings.pluginStatus.${h.status}`) }}<span v-if="h.deviceCount"> · {{ $t('settings.devicesCount', { n: h.deviceCount }, h.deviceCount) }}</span>
+                <!-- sous-items : visibles seulement quand le plugin est allumé, sinon ils ne veulent rien dire -->
+                <div v-if="p.enabled && p.parts.length" class="parts">
+                  <div class="parts__title muted small">{{ $t('settings.pluginParts') }}</div>
+                  <!-- pastille à bascule plutôt qu'une case : le jeu d'icônes maison n'a pas
+                       d'alias $checkboxOn, et une pastille garde la même empreinte allumée ou non -->
+                  <button v-for="part in p.parts" :key="part.id" type="button" class="part" :data-on="part.enabled ? '1' : '0'"
+                          :disabled="plugins.isBusy(p.id)" :aria-pressed="part.enabled"
+                          @click="plugins.setPart(p.id, part.id, !part.enabled)">
+                    {{ $t(part.labelKey) }}
+                  </button>
                 </div>
               </div>
-              <div v-if="plugins.length === 0" class="muted small">{{ $t('common.loading') }}</div>
+              <div v-if="!plugins.loaded" class="muted small">{{ $t('common.loading') }}</div>
             </div>
           </section>
           <p class="muted small about">{{ $t('settings.about', { version: '0.2.0', house: house.house?.name ?? '—' }) }}</p>
@@ -170,8 +192,17 @@ const houseStats = computed(() => {
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
 .small { font-size: 12px; }
 .plugins { display: grid; gap: 4px; }
-.plugin { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.plugins__hint { margin: -4px 0 0; }
+.plugin { padding: 10px 0; border-bottom: 1px solid var(--line); }
 .plugin:last-child { border-bottom: 0; }
+.plugin__row { display: flex; align-items: center; gap: 12px; }
+.plugin__switch { flex: 0 0 auto; }
+.parts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 0 2px; }
+.parts__title { flex: 0 0 100%; margin-bottom: 2px; }
+.part { font-size: 12px; line-height: 1; padding: 6px 10px; border-radius: 999px; cursor: pointer;
+        border: 1px solid var(--line); background: transparent; color: var(--muted); transition: color .15s, border-color .15s, background .15s; }
+.part[data-on='1'] { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.part:disabled { opacity: .5; cursor: default; }
 .min0 { min-width: 0; flex: 1 1 0; }
 .plugin__name { font-weight: 500; font-size: 14px; text-transform: capitalize; }
 .plugin__keys { font-size: 11px; white-space: pre-wrap; }

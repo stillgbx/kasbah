@@ -129,7 +129,10 @@
     "sceneAutoDynamicNewHint": "Default behaviour for an animated scene that appears (created at the vendor, or that gains a palette). Never affects the ones already listed below.",
     "sceneAutoDynamicHint": "Start the animation automatically, stored at the vendor: Kasbah and the vendor app read the same value. Unchecked, tapping plays the static version and the animation only starts from the ✨ button.",
     "gps": "GPS origin of the local frame", "gpsHeading": "heading", "houseStats": "{levels} floors · {rooms} rooms · {devices} devices",
-    "plugins": "Plugins", "keys": ".env keys", "noKeys": "no key", "pluginStatus": {
+    "plugins": "Plugins", "keys": ".env keys", "noKeys": "no key",
+    "pluginsHint": "Turn on the vendors this house uses. The choice is written to the house file and takes effect right away; keys and tokens stay in .env.",
+    "pluginEnable": "Enable this plugin", "pluginParts": "Provides",
+    "pluginStatus": {
       "ok": "Connected", "degraded": "Degraded", "needs_pairing": "Pairing required", "error": "Error",
       "not_implemented": "Not implemented yet", "disabled": "Disabled"
     },

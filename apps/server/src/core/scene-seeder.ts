@@ -1,7 +1,6 @@
-import type { PluginSceneEntry } from '@kasbah/shared'
+import type { PluginSceneEntry, PluginSettings } from '@kasbah/shared'
 import type { Logger } from 'pino'
 import type { Bus } from './bus'
-import type { PluginSettingsStore } from './plugin-settings'
 
 // Initialise le réglage « démarrer animée » des ambiances QUI APPARAISSENT, avec le défaut du
 // plugin. Déclencher sur l'apparition (et non sur un inventaire mémorisé) garantit par construction
@@ -14,7 +13,8 @@ import type { PluginSettingsStore } from './plugin-settings'
 
 export interface SceneSeederDeps {
   bus: Bus
-  settings: PluginSettingsStore
+  /** Réglages du plugin dans la maison (`house.plugins`). */
+  settingsOf: (pluginId: string) => PluginSettings
   /** Écriture chez le fabricant (`PluginHost.updateScene`). */
   updateScene: (sceneId: string, update: { autoDynamic: boolean }) => Promise<void>
   logger: Logger
@@ -42,7 +42,7 @@ export class SceneSeeder {
       const baseline = this.known.get(pluginId)
       this.known.set(pluginId, ids)
       if (!baseline) continue                                   // photo de référence : on n'écrit rien
-      if (!this.deps.settings.get(pluginId).autoDynamicForNewScenes) continue
+      if (!this.deps.settingsOf(pluginId).autoDynamicForNewScenes) continue
       for (const e of animated) {
         if (baseline.has(e.scene.id) || e.scene.autoDynamic) continue
         try {

@@ -9,6 +9,7 @@ export function makeStubPlugin(id: string, vendor: string): () => DevicePlugin {
   return () => ({
     id,
     configSchema: z.object({}),
+    implemented: false,
     async init() {},
     async discover() { return [] },
     async start() {},

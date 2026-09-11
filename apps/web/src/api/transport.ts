@@ -1,4 +1,4 @@
-import type { CommandInput, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, PluginSceneEntry, PluginSettings, SceneRecallInput, SceneUpdate, ServerMessage } from '@kasbah/shared'
+import type { CommandInput, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, PluginInfo, PluginSceneEntry, PluginSettingsPatch, SceneRecallInput, SceneUpdate, ServerMessage } from '@kasbah/shared'
 
 // Abstraction du canal serveur. Deux implémentations : HTTP + WebSocket (réel) et simulation
 // in-process (tests, démo statique sans serveur). Les commandes passent TOUJOURS par une requête
@@ -55,9 +55,10 @@ export interface Transport {
   createScene(fromSceneId: string, groupName: string): Promise<void>
   /** Supprime une ambiance chez le fabricant (destructif). */
   deleteScene(sceneId: string): Promise<void>
-  /** Réglages par plugin (persistés côté serveur, communs aux tablettes). */
-  getPluginSettings(): Promise<Record<string, PluginSettings>>
-  setPluginSettings(pluginId: string, settings: PluginSettings): Promise<PluginSettings>
+  /** Inventaire des plugins : tous ceux que le serveur connaît, actifs ou non. */
+  getPlugins(): Promise<PluginInfo[]>
+  /** Écrit un choix (activation, sous-item, ambiances) dans la maison ; rend l'inventaire à jour. */
+  setPluginSettings(pluginId: string, patch: PluginSettingsPatch): Promise<PluginInfo[]>
   pairHue(): Promise<{ appKey: string; hint: string }>
   /** URL de consentement Google à ouvrir dans un navigateur pour lier le compte Nest. */
   nestAuthUrl(): Promise<{ url: string; redirectUri: string }>

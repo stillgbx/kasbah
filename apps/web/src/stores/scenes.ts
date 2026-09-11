@@ -1,6 +1,6 @@
 import { computed, ref, shallowRef } from 'vue'
 import { defineStore } from 'pinia'
-import { pluginSettingsSchema, roomKey, type PluginSceneEntry, type PluginSettings, type SceneActivation, type SceneRecallMode, type ServerMessage } from '@kasbah/shared'
+import { roomKey, type PluginSceneEntry, type SceneActivation, type SceneRecallMode, type ServerMessage } from '@kasbah/shared'
 import { ApiRequestError, getTransport } from '../api'
 import { t } from '../i18n'
 import { useNotificationsStore } from './notifications'
@@ -37,8 +37,6 @@ const activationFor = (mode: SceneRecallMode): SceneActivation => (mode === 'off
 export const useScenesStore = defineStore('scenes', () => {
   const entries = shallowRef<Entries>({})
   const pending = ref<Record<string, number>>({})
-  /** Réglages par plugin, lus au serveur (pas dans la tablette : ils valent pour toutes). */
-  const pluginSettings = shallowRef<Record<string, PluginSettings>>({})
   /** Création d'ambiance en cours, par groupe. */
   const creating = ref<Record<string, boolean>>({})
 
@@ -77,30 +75,6 @@ export const useScenesStore = defineStore('scenes', () => {
   }
 
   const isPending = (sceneId: string) => (pending.value[sceneId] ?? 0) > 0
-
-  const settingsOf = (pluginId: string): PluginSettings => pluginSettings.value[pluginId] ?? pluginSettingsSchema.parse({})
-
-  async function loadPluginSettings(): Promise<void> {
-    try { pluginSettings.value = await getTransport().getPluginSettings() }
-    catch { /* réglages indisponibles : les défauts s'appliquent */ }
-  }
-
-  /** Défaut du plugin pour les ambiances animées qui apparaîtront (n'affecte pas l'existant). */
-  async function setAutoDynamicForNewScenes(pluginId: string, value: boolean): Promise<boolean> {
-    const before = pluginSettings.value
-    pluginSettings.value = { ...before, [pluginId]: { ...settingsOf(pluginId), autoDynamicForNewScenes: value } }
-    try {
-      const saved = await getTransport().setPluginSettings(pluginId, { autoDynamicForNewScenes: value })
-      pluginSettings.value = { ...pluginSettings.value, [pluginId]: saved }
-      return true
-    } catch (err) {
-      pluginSettings.value = before
-      const n = useNotificationsStore()
-      if (err instanceof ApiRequestError) n.error(t(`errors.${err.code}`, { name: pluginId, message: err.message }))
-      else n.error(t('errors.UNKNOWN', { name: pluginId, message: (err as Error).message }))
-      return false
-    }
-  }
 
   /**
    * Mode joué quand on touche une ambiance éteinte : animé si le fabricant l'a réglée ainsi
@@ -244,8 +218,8 @@ export const useScenesStore = defineStore('scenes', () => {
   }
 
   return {
-    entries, list, count, scenesByPlugin, pluginSettings, apply, setAll, forRoom, forHouse, recall, isPending,
-    tapMode, setAutoDynamic, settingsOf, loadPluginSettings, setAutoDynamicForNewScenes,
+    entries, list, count, scenesByPlugin, apply, setAll, forRoom, forHouse, recall, isPending,
+    tapMode, setAutoDynamic,
     clonableFor, createScene, isCreating, deleteScene,
   }
 })

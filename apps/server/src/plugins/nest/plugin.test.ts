@@ -99,6 +99,7 @@ function fakeContext(config: Record<string, unknown>, clock: ManualClock) {
   const ctx: PluginContext = {
     pluginId: 'nest', config, logger: pino({ level: 'silent' }), clock, signal: ctrl.signal,
     emitState: vi.fn(), setAvailable: vi.fn(), emitDevices: vi.fn(), emitScenes: vi.fn(), emitSceneState: vi.fn(), emitEvent: vi.fn(),
+    parts: {},
   }
   return { ctx, ctrl }
 }

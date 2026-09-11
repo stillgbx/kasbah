@@ -37,12 +37,31 @@ export interface PluginContext {
   emitSceneState(externalId: string, active: SceneActivation): void
   /** Événement transitoire (sonnette, mouvement) : poussé aux clients, pas d'état conservé. */
   emitEvent(externalId: string, event: DeviceEventKind): void
+  /** Sous-items retenus pour cette maison, par id de `DevicePlugin.parts` (défauts déjà appliqués). */
+  parts: Record<string, boolean>
+}
+
+/**
+ * Sous-item activable d'un plugin : une part de ce qu'il fournit, qu'on peut vouloir ou non sans
+ * renoncer au reste (les kinds de la simulation). Déclaré en STATIQUE, sans config ni init : les
+ * Réglages les affichent même quand le plugin est éteint. Le choix vit dans `house.json`.
+ */
+export interface PluginPart {
+  /** Id stable, écrit dans `house.json` (`plugins.<id>.parts`). */
+  readonly id: string
+  /** Clé i18n du libellé côté web (`kinds.light`…) : le serveur ne connaît pas la langue. */
+  readonly labelKey: string
+  readonly enabledByDefault: boolean
 }
 
 export interface DevicePlugin {
   readonly id: string
   /** Sélectionne et valide ses propres clés d'environnement (ex. HUE_*). */
   readonly configSchema: z.ZodType<Record<string, unknown>>
+  /** Squelette déclaré mais pas encore écrit : listé dans les Réglages, pas activable. */
+  readonly implemented?: boolean
+  /** Sous-items activables (voir `PluginPart`) ; aucun pour la plupart des plugins. */
+  readonly parts?: readonly PluginPart[]
   init(ctx: PluginContext): Promise<void>
   discover(): Promise<DeviceDescriptor[]>
   start(): Promise<void>

@@ -1,10 +1,9 @@
-import { assertCommandAllowed, commandSchema, devicePlacementSchema, placeDeviceInJson, pluginSettingsSchema, removeDeviceFromJson, roomOrderSchema, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
+import { assertCommandAllowed, commandSchema, devicePlacementSchema, placeDeviceInJson, pluginSettingsPatchSchema, removeDeviceFromJson, roomOrderSchema, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { updateHouseFile, type LoadedHouse } from '../config/house'
 import type { PluginHost } from '../core/plugin-host'
 import type { DeviceRegistry } from '../core/registry'
 import type { EnergyHistory } from '../core/history'
-import type { PluginSettingsStore } from '../core/plugin-settings'
 import type { SceneRegistry } from '../core/scene-registry'
 import type { WsHub } from '../ws/hub'
 import { describeError, sendError } from './errors'
@@ -12,7 +11,6 @@ import { describeError, sendError } from './errors'
 export interface RoutesDeps {
   registry: DeviceRegistry
   scenes: SceneRegistry
-  settings: PluginSettingsStore
   host: PluginHost
   house: LoadedHouse
   hub: WsHub
@@ -133,13 +131,18 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
     return { ok: true as const }
   })
 
-  // Réglages par plugin (persistés côté serveur, valables pour toutes les tablettes).
-  app.get('/api/plugins/settings', async () => ({ settings: deps.settings.all() }))
+  // Plugins : l'inventaire complet (tous déclarés, actifs ou non) et ce qu'on en choisit. Le choix
+  // vit dans house.json ; l'écrire allume, éteint ou redémarre le plugin sans redémarrer le serveur.
+  app.get('/api/plugins', async () => ({ plugins: deps.host.inventory() }))
 
-  app.patch<{ Params: { id: string } }>('/api/plugins/:id/settings', async (req, reply) => {
-    if (!deps.host.ids().includes(req.params.id)) return sendError(reply, 404, 'NOT_FOUND', `unknown plugin "${req.params.id}"`)
-    const settings = pluginSettingsSchema.parse(req.body)
-    return { settings: await deps.settings.set(req.params.id, settings) }
+  app.patch<{ Params: { id: string } }>('/api/plugins/:id', async (req, reply) => {
+    const id = req.params.id
+    if (!deps.host.ids().includes(id)) return sendError(reply, 404, 'NOT_FOUND', `unknown plugin "${id}"`)
+    const patch = pluginSettingsPatchSchema.parse(req.body)   // ZodError → 400
+    const house = await updateHouseFile(deps.house, (doc) => setPluginInJson(doc, id, patch))
+    await deps.host.apply(id)
+    deps.hub.broadcast({ type: 'house', house })
+    return { plugins: deps.host.inventory() }
   })
 
   app.post<{ Params: { id: string } }>('/api/devices/:id/command', async (req, reply) => {

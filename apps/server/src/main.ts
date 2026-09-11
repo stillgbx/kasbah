@@ -16,7 +16,7 @@ const logger = createLogger(env.KASBAH_LOG_LEVEL, env.KASBAH_LOG_PRETTY || proce
 
 const kasbah = await buildApp({ env, logger })
 await kasbah.app.listen({ port: env.KASBAH_PORT, host: env.KASBAH_HOST })
-logger.info({ port: env.KASBAH_PORT, plugins: env.KASBAH_PLUGINS, house: kasbah.house.house.name }, 'kasbah server listening')
+logger.info({ port: env.KASBAH_PORT, plugins: Object.entries(kasbah.house.house.plugins).filter(([, p]) => p.enabled).map(([id]) => id), house: kasbah.house.house.name }, 'kasbah server listening')
 await kasbah.startPlugins()
 
 let closing = false

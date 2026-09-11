@@ -10,12 +10,12 @@
     // process.env. Garder "port" en phase avec PORT.
     //
     // ATTENTION : seuls les PORTS sont dedoubles. Les deux serveurs partagent le fichier de maison
-    // (house/demo-house.json), les reglages de plugins (apps/server/.state/plugin-settings.json) et la
-    // memoire des appareils Cast deja vus (apps/server/.state/google-cast-devices.json, CAST_KNOWN_FILE),
+    // (house/demo-house.json, qui porte AUSSI les plugins actifs et leurs sous-items) et la memoire
+    // des appareils Cast deja vus (apps/server/.state/google-cast-devices.json, CAST_KNOWN_FILE),
     // tous ecrits en `.tmp` + rename : deux ecritures simultanees se marchent dessus (la memoire Cast
-    // nomme son `.tmp` d'apres le pid, justement pour l'eviter). Ils
-    // pilotent aussi le MEME materiel reel (KASBAH_PLUGINS de .env). S'en tenir a la lecture cote
-    // preview, ou VITE_INPROCESS_MOCK=1 qui n'a besoin d'aucun serveur.
+    // nomme son `.tmp` d'apres le pid, justement pour l'eviter). Ils pilotent aussi le MEME materiel
+    // reel. S'en tenir a la lecture cote preview (cocher un plugin dans Reglages ECRIT la maison des
+    // deux serveurs), ou VITE_INPROCESS_MOCK=1 qui n'a besoin d'aucun serveur.
     "version": "0.0.1",
     "configurations": [
         {

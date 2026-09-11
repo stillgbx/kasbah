@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { deviceEntrySchema } from './ws'
-import { pluginSceneEntrySchema, pluginSettingsSchema } from '../scenes/scene'
+import { pluginSceneEntrySchema } from '../scenes/scene'
 
 export const apiErrorSchema = z.object({ error: z.object({ code: z.string(), message: z.string() }) })
 export type ApiError = z.infer<typeof apiErrorSchema>
@@ -11,8 +11,6 @@ export type DevicesResponse = z.infer<typeof devicesResponseSchema>
 export const scenesResponseSchema = z.object({ scenes: z.array(pluginSceneEntrySchema) })
 export type ScenesResponse = z.infer<typeof scenesResponseSchema>
 
-export const pluginSettingsResponseSchema = z.object({ settings: z.record(z.string(), pluginSettingsSchema) })
-export type PluginSettingsResponse = z.infer<typeof pluginSettingsResponseSchema>
 
 export const PLUGIN_HEALTH_STATUSES = ['ok', 'degraded', 'needs_pairing', 'error', 'not_implemented', 'disabled'] as const
 export const pluginHealthSchema = z.object({
@@ -23,6 +21,31 @@ export const pluginHealthSchema = z.object({
   keys: z.array(z.string()).optional(),
 })
 export type PluginHealth = z.infer<typeof pluginHealthSchema>
+
+/** Sous-item d'un plugin (un kind simulé par `mock`…) : ce que l'UI affiche et bascule. */
+export const pluginPartSchema = z.object({
+  id: z.string(),
+  /** Clé i18n du libellé (`kinds.light`…) : le serveur ne connaît pas la langue de la tablette. */
+  labelKey: z.string(),
+  enabled: z.boolean(),
+})
+export type PluginPartInfo = z.infer<typeof pluginPartSchema>
+
+/** Un plugin tel que le voit l'écran Réglages : ce qu'il est, ce qu'on en a choisi, comment il va. */
+export const pluginInfoSchema = z.object({
+  id: z.string(),
+  /** Un squelette déclaré mais pas encore écrit ne s'active pas (interrupteur grisé). */
+  implemented: z.boolean(),
+  enabled: z.boolean(),
+  /** N'a de sens que pour un plugin à scènes ; absent sinon. */
+  autoDynamicForNewScenes: z.boolean().optional(),
+  parts: z.array(pluginPartSchema),
+  health: pluginHealthSchema,
+})
+export type PluginInfo = z.infer<typeof pluginInfoSchema>
+
+export const pluginsResponseSchema = z.object({ plugins: z.array(pluginInfoSchema) })
+export type PluginsResponse = z.infer<typeof pluginsResponseSchema>
 
 export const healthResponseSchema = z.object({
   ok: z.boolean(),

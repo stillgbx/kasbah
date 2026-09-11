@@ -129,7 +129,10 @@
     "sceneAutoDynamicNewHint": "Comportement par défaut d'une ambiance animée qui apparaît (créée chez le fabricant, ou qui gagne une palette). N'affecte jamais celles déjà listées ci-dessous.",
     "sceneAutoDynamicHint": "Démarrage automatique de l'animation, réglé chez le fabricant : la valeur est la même dans Kasbah et dans son app. Décoché, la pastille joue la version fixe et l'animation ne part qu'au bouton ✨.",
     "gps": "Origine GPS du repère local", "gpsHeading": "cap", "houseStats": "{levels} niveaux · {rooms} pièces · {devices} appareils",
-    "plugins": "Plugins", "keys": "Clés .env", "noKeys": "aucune clé", "pluginStatus": {
+    "plugins": "Plugins", "keys": "Clés .env", "noKeys": "aucune clé",
+    "pluginsHint": "Activez les fabricants que cette maison utilise. Le choix est écrit dans le fichier de la maison et prend effet tout de suite ; les clés et les jetons, eux, restent dans .env.",
+    "pluginEnable": "Activer ce plugin", "pluginParts": "Fournit",
+    "pluginStatus": {
       "ok": "Connecté", "degraded": "Dégradé", "needs_pairing": "Appairage requis", "error": "Erreur",
       "not_implemented": "Pas encore implémenté", "disabled": "Désactivé"
     },

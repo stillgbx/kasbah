@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { deviceIdSchema } from '../devices/descriptor'
-import { MOUNTS, vec3Schema } from './schema'
+import { defaultPlugins, MOUNTS, vec3Schema, type PluginSettingsPatch } from './schema'
 
 // Écritures de l'UI dans house.json (placement d'un appareil, ordre d'affichage des pièces).
 // On travaille sur le JSON BRUT (pas la maison parsée) pour ne réécrire que ce qui a changé et ne
@@ -95,6 +95,25 @@ export function removeDeviceFromJson(doc: unknown, id: string): JsonObject {
   const i = devices.findIndex((d) => isObject(d) && d.id === id)
   if (i < 0) throw new PlacementError(`device "${id}" is not in house.json`)
   return { ...doc, devices: devices.filter((_, k) => k !== i) }
+}
+
+/**
+ * Renvoie une copie du document JSON avec les réglages du plugin `pluginId` modifiés (activation,
+ * sous-items, défaut des ambiances). Une maison qui n'a pas encore de section `plugins` la reçoit
+ * ÉCRITE EN ENTIER à partir du défaut : sans ça, activer Hue dans une maison muette éteindrait la
+ * simulation, que seul le défaut du schéma gardait allumée.
+ */
+export function setPluginInJson(doc: unknown, pluginId: string, patch: PluginSettingsPatch): JsonObject {
+  if (!isObject(doc)) throw new PlacementError('house document is not an object')
+  const plugins: JsonObject = isObject(doc.plugins) ? { ...doc.plugins } : defaultPlugins()
+  const prev = isObject(plugins[pluginId]) ? (plugins[pluginId] as JsonObject) : {}
+  const next: JsonObject = { ...prev }
+  if (patch.enabled !== undefined) next.enabled = patch.enabled
+  if (patch.autoDynamicForNewScenes !== undefined) next.autoDynamicForNewScenes = patch.autoDynamicForNewScenes
+  // les sous-items se fusionnent clé à clé : l'UI n'envoie que celui qu'on vient de basculer
+  if (patch.parts) next.parts = { ...(isObject(prev.parts) ? prev.parts : {}), ...patch.parts }
+  plugins[pluginId] = next
+  return { ...doc, plugins }
 }
 
 /**

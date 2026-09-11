@@ -1,6 +1,4 @@
-import { mkdtempSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { resolve } from 'node:path'
 import pino from 'pino'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { buildApp, type KasbahApp } from './app'
@@ -14,9 +12,8 @@ const DEMO_HOUSE = resolve(import.meta.dirname, '../../../house/demo-house.json'
 describe('app', () => {
   let kasbah: KasbahApp
   beforeAll(async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'kasbah-app-'))
     kasbah = await buildApp({
-      env: loadEnv({ KASBAH_PLUGINS: 'mock', KASBAH_SETTINGS_FILE: join(dir, 'settings.json'), KASBAH_LOG_LEVEL: 'silent' }),
+      env: loadEnv({ KASBAH_LOG_LEVEL: 'silent' }),
       logger: pino({ level: 'silent' }),
       house: await loadHouse(DEMO_HOUSE),
       envSource: {},

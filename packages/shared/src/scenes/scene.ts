@@ -92,20 +92,6 @@ export const sceneCreateSchema = z.object({
 })
 export type SceneCreate = z.infer<typeof sceneCreateSchema>
 
-/**
- * Réglages d'un PLUGIN (pas d'une scène) : le concept de scène est commun, les réglages non — on
- * peut vouloir les palettes animées sur les lampes et pas sur un autre parc d'appareils. Vivent
- * côté serveur : ils gouvernent une réaction du serveur et valent pour toutes les tablettes.
- */
-export const pluginSettingsSchema = z.object({
-  /**
-   * Défaut appliqué aux ambiances animées qui APPARAISSENT (créées chez le fabricant, ou qui
-   * gagnent une palette). Ne touche jamais les ambiances déjà connues : leur réglage vit chez le
-   * fabricant et c'est lui qui fait foi.
-   */
-  autoDynamicForNewScenes: z.boolean().default(false),
-})
-export type PluginSettings = z.infer<typeof pluginSettingsSchema>
 
 export function makeSceneId(pluginId: string, externalId: string): SceneId {
   return `${pluginId}:${externalId}`

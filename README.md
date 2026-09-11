@@ -54,7 +54,6 @@ npm run lint       # eslint (flat config, TypeScript + Vue)
 | Variable | Défaut | Rôle |
 |---|---|---|
 | `KASBAH_PORT` / `KASBAH_HOST` | `8787` / `0.0.0.0` | Écoute HTTP + WS |
-| `KASBAH_PLUGINS` | `mock` | Plugins actifs, séparés par des virgules |
 | `KASBAH_HOUSE_FILE` | `house/demo-house.json` | Fichier de la maison |
 | `KASBAH_STATIC_DIR` | `apps/web/dist` | Build web servi en production |
 | `KASBAH_STRICT_PLUGINS` | `false` | `true` : une config de plugin invalide empêche le démarrage (sinon le plugin est désactivé) |
@@ -64,7 +63,12 @@ npm run lint       # eslint (flat config, TypeScript + Vue)
 | `HUE_BRIDGE_HOST` | découverte | IP du bridge Hue (recommandé de la fixer) |
 | `HUE_APP_KEY` | — | Clé obtenue par appairage (voir ci-dessous) |
 
-Chaque plugin valide ses propres variables (`HUE_*`, `MOCK_*`) : la liste complète est dans [apps/server/.env.example](apps/server/.env.example).
+Chaque plugin valide ses propres variables (`HUE_*`, `CAST_*`) : la liste complète est dans [apps/server/.env.example](apps/server/.env.example).
+
+**Quels plugins sont actifs ne se règle pas ici** : ils sont tous disponibles, et on coche ceux
+qu'on veut dans **Réglages → Plugins**. Le choix (et les sous-items, comme les types d'appareils
+simulés par `mock`) est écrit dans le fichier de la maison, sous `plugins`, et prend effet sans
+redémarrer le serveur. Une maison sans cette section démarre avec la simulation seule.
 
 ## Plugins
 
@@ -76,7 +80,7 @@ Chaque plugin valide ses propres variables (`HUE_*`, `MOCK_*`) : la liste compl�
 
 ### Appairer un bridge Hue
 
-1. Activez le plugin : `KASBAH_PLUGINS=mock,hue`. Sans `HUE_BRIDGE_HOST`, le bridge est cherché via `discovery.meethue.com` (fixez ensuite l'IP dans `.env`).
+1. Activez le plugin dans **Réglages → Plugins**. Sans `HUE_BRIDGE_HOST`, le bridge est cherché via `discovery.meethue.com` (fixez ensuite l'IP dans `.env`).
 2. Lancez le serveur : le plugin est en état `needs_pairing` (visible dans **Réglages → Plugins**).
 3. Appuyez sur le bouton rond du bridge, puis dans les 30 s cliquez **Appairer le bridge** (ou `curl -X POST http://localhost:8787/api/plugins/hue/pair`).
 4. Copiez la clé renvoyée dans `apps/server/.env` (`HUE_APP_KEY=…`) : le serveur ne modifie jamais ce fichier, mais la clé est utilisée immédiatement en mémoire.

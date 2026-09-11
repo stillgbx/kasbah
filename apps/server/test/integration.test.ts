@@ -12,9 +12,11 @@ import { loadEnv } from '../src/config/env'
 const HOUSE = resolve(import.meta.dirname, '../../../house/demo-house.json')
 const MONDAY = Date.UTC(2026, 8, 7, 12)
 
-async function makeApp(scenario: string, extraEnv: Record<string, string> = {}) {
+async function makeApp(scenario: string, extraEnv: Record<string, string> = {}, houseFile = HOUSE) {
   const clock = new ManualClock(MONDAY)
-  const env = loadEnv({ KASBAH_PLUGINS: 'mock,tesla', KASBAH_HOUSE_FILE: HOUSE, KASBAH_LOG_LEVEL: 'silent' })
+  // quels plugins tournent vient de la MAISON : demo-house.json n'a pas de section `plugins`,
+  // donc le defaut du schema s'applique (mock seul, tous ses kinds)
+  const env = loadEnv({ KASBAH_HOUSE_FILE: houseFile, KASBAH_LOG_LEVEL: 'silent' })
   const kasbah = await buildApp({
     env, logger: pino({ level: 'silent' }), clock, serveStatic: false,
     envSource: { MOCK_SCENARIO: scenario, MOCK_SEED: '3', MOCK_START_TIME: new Date(MONDAY).toISOString(), ...extraEnv },
@@ -25,41 +27,94 @@ async function makeApp(scenario: string, extraEnv: Record<string, string> = {}) 
 }
 
 // La simulation doit pouvoir COMPLETER un parc reel au lieu de le doubler : des qu'un vrai plugin
-// couvre un kind, ses equivalents simules n'ont plus a encombrer les listes en « hors plan ».
-describe('MOCK_EXCLUDE_KINDS', () => {
-  it('retire les kinds demandes, garde les autres, et le dit dans health', async () => {
-    const { kasbah } = await makeApp('default', { MOCK_EXCLUDE_KINDS: 'light,cover' })
-    try {
-      const devices = (await kasbah.app.inject({ method: 'GET', url: '/api/devices' })).json()
-      const list = devices.devices ?? devices
-      const kinds = new Set<string>(list.map((e: { descriptor: { kind: string } }) => e.descriptor.kind))
+// couvre un kind, ses equivalents simules n'ont plus a encombrer les listes en « hors plan ». Le
+// choix se fait dans l'UI (sous-items du plugin) et s'ecrit dans house.json.
+describe('sous-items du plugin mock', () => {
+  async function withTempHouse(fn: (kasbah: KasbahApp, file: string) => Promise<void>) {
+    const dir = await mkdtemp(join(tmpdir(), 'kasbah-plugins-'))
+    const file = join(dir, 'house.json')
+    await copyFile(HOUSE, file)
+    const { kasbah } = await makeApp('default', {}, file)
+    try { await fn(kasbah, file) } finally { await kasbah.close(); await rm(dir, { recursive: true, force: true }) }
+  }
+
+  const kindsOf = async (kasbah: KasbahApp) => {
+    const { devices } = (await kasbah.app.inject({ method: 'GET', url: '/api/devices' })).json()
+    return new Set<string>(devices.map((e: { descriptor: { kind: string } }) => e.descriptor.kind))
+  }
+
+  it('decocher un kind le retire a chaud, garde les autres, et l ecrit dans la maison', async () => {
+    await withTempHouse(async (kasbah, file) => {
+      expect(await kindsOf(kasbah)).toContain('light')
+      const r = await kasbah.app.inject({ method: 'PATCH', url: '/api/plugins/mock', payload: { parts: { light: false, cover: false } } })
+      expect(r.statusCode).toBe(200)
+      const mock = r.json().plugins.find((p: { id: string }) => p.id === 'mock')
+      expect(mock.parts.find((p: { id: string }) => p.id === 'light')).toEqual({ id: 'light', labelKey: 'kinds.light', enabled: false })
+      expect(mock.parts.find((p: { id: string }) => p.id === 'vehicle').enabled).toBe(true)
+
+      const kinds = await kindsOf(kasbah)                  // redemarrage du plugin, sans redemarrer le serveur
       expect(kinds.has('light')).toBe(false)
       expect(kinds.has('cover')).toBe(false)
-      expect(kinds.has('vehicle')).toBe(true)          // non traite par un vrai plugin : conserve
+      expect(kinds.has('vehicle')).toBe(true)              // non traite par un vrai plugin : conserve
       expect(kinds.has('energy')).toBe(true)
+
       const health = (await kasbah.app.inject({ method: 'GET', url: '/api/health' })).json()
       expect(health.plugins.mock.status).toBe('ok')
       expect(health.plugins.mock.detail).toContain('sans light/cover')
-    } finally { await kasbah.close() }
+
+      const written = JSON.parse(await readFile(file, 'utf8'))
+      expect(written.plugins.mock).toMatchObject({ enabled: true, parts: { light: false, cover: false } })
+    })
   })
 
-  it('sans le reglage, rien ne change', async () => {
+  it('sans reglage, la maison muette simule tout', async () => {
     const { kasbah } = await makeApp('default')
     try {
-      const list = (await kasbah.app.inject({ method: 'GET', url: '/api/devices' })).json()
-      const kinds = new Set<string>((list.devices ?? list).map((e: { descriptor: { kind: string } }) => e.descriptor.kind))
+      const kinds = await kindsOf(kasbah)
       expect(kinds.has('light')).toBe(true)
       expect(kinds.has('cover')).toBe(true)
     } finally { await kasbah.close() }
   })
+})
 
-  it('un kind inconnu empeche le demarrage du plugin plutot que de passer inapercu', async () => {
-    const { kasbah } = await makeApp('default', { MOCK_EXCLUDE_KINDS: 'lumiere' })
+// Activer / desactiver un fabricant depuis les Reglages : le choix vit dans house.json et prend
+// effet tout de suite, sans redemarrer le serveur.
+describe('activation des plugins (GET /api/plugins, PATCH /api/plugins/:id)', () => {
+  it('liste TOUS les plugins declares, allume et eteint a chaud, refuse un id inconnu', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'kasbah-plugins-'))
+    const file = join(dir, 'house.json')
+    await copyFile(HOUSE, file)
+    const { kasbah } = await makeApp('default', {}, file)
     try {
+      const list = (await kasbah.app.inject({ method: 'GET', url: '/api/plugins' })).json().plugins
+      const byId = Object.fromEntries(list.map((p: { id: string }) => [p.id, p]))
+      expect(Object.keys(byId).length).toBeGreaterThan(5)          // tous disponibles, pas seulement les actifs
+      expect(byId.mock).toMatchObject({ enabled: true, implemented: true })
+      expect(byId.tesla).toMatchObject({ enabled: false, implemented: false })   // squelette : pas activable
+      expect(byId.mock.parts).toHaveLength(10)
+
+      // eteindre la simulation : ses appareils quittent le registre
+      expect((await kasbah.app.inject({ method: 'PATCH', url: '/api/plugins/mock', payload: { enabled: false } })).statusCode).toBe(200)
+      expect((await kasbah.app.inject({ method: 'GET', url: '/api/devices' })).json().devices).toHaveLength(0)
+      const off = (await kasbah.app.inject({ method: 'GET', url: '/api/health' })).json()
+      expect(off.plugins.mock.status).toBe('disabled')
+      expect((await kasbah.app.inject({ method: 'POST', url: '/api/devices/mock:cover-living/command', payload: { type: 'cover.close' } })).statusCode).toBe(404)
+
+      // et la rallumer les fait revenir
+      expect((await kasbah.app.inject({ method: 'PATCH', url: '/api/plugins/mock', payload: { enabled: true } })).statusCode).toBe(200)
+      expect((await kasbah.app.inject({ method: 'GET', url: '/api/devices' })).json().devices.length).toBeGreaterThan(15)
+
+      // un squelette coche reste eteint : il n'y a rien a demarrer
+      await kasbah.app.inject({ method: 'PATCH', url: '/api/plugins/tesla', payload: { enabled: true } })
       const health = (await kasbah.app.inject({ method: 'GET', url: '/api/health' })).json()
-      expect(health.plugins.mock.status).toBe('disabled')
-      expect(health.plugins.mock.deviceCount).toBe(0)
-    } finally { await kasbah.close() }
+      expect(health.plugins.tesla.status).toBe('not_implemented')
+
+      expect((await kasbah.app.inject({ method: 'PATCH', url: '/api/plugins/nope', payload: { enabled: true } })).statusCode).toBe(404)
+      expect((await kasbah.app.inject({ method: 'PATCH', url: '/api/plugins/mock', payload: { enabled: 'oui' } })).json().error.code).toBe('INVALID_BODY')
+    } finally {
+      await kasbah.close()
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 })
 
@@ -155,31 +210,6 @@ describe('plugin scenes (GET /api/scenes, POST /api/scenes/:id/recall)', () => {
       expect(readOnly.statusCode).toBe(501)
     } finally {
       await kasbah.close()
-    }
-  })
-})
-
-describe('plugin settings (GET /api/plugins/settings, PATCH /api/plugins/:id/settings)', () => {
-  it('persists a per-plugin setting and refuses an unknown plugin', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'kasbah-settings-'))
-    const env = loadEnv({ KASBAH_PLUGINS: 'mock', KASBAH_HOUSE_FILE: HOUSE, KASBAH_LOG_LEVEL: 'silent', KASBAH_SETTINGS_FILE: join(dir, 'plugin-settings.json') })
-    const kasbah = await buildApp({ env, logger: pino({ level: 'silent' }), serveStatic: false })
-    await kasbah.app.ready()
-    try {
-      expect((await kasbah.app.inject({ method: 'GET', url: '/api/plugins/settings' })).json()).toEqual({ settings: {} })
-      const r = await kasbah.app.inject({ method: 'PATCH', url: '/api/plugins/mock/settings', payload: { autoDynamicForNewScenes: true } })
-      expect(r.statusCode).toBe(200)
-      expect(r.json()).toEqual({ settings: { autoDynamicForNewScenes: true } })
-      expect((await kasbah.app.inject({ method: 'GET', url: '/api/plugins/settings' })).json())
-        .toEqual({ settings: { mock: { autoDynamicForNewScenes: true } } })
-      expect((await kasbah.app.inject({ method: 'PATCH', url: '/api/plugins/nope/settings', payload: { autoDynamicForNewScenes: true } })).statusCode).toBe(404)
-      // relu depuis le disque par une nouvelle instance
-      const again = await buildApp({ env, logger: pino({ level: 'silent' }), serveStatic: false })
-      expect(again.settings.get('mock').autoDynamicForNewScenes).toBe(true)
-      await again.close()
-    } finally {
-      await kasbah.close()
-      await rm(dir, { recursive: true, force: true })
     }
   })
 })

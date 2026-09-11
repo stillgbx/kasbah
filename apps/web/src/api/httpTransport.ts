@@ -1,4 +1,4 @@
-import { apiErrorSchema, devicesResponseSchema, energyHistorySchema, healthResponseSchema, houseSchema, pluginSettingsResponseSchema, pluginSettingsSchema, scenesResponseSchema, serverMessageSchema, type CommandInput, type DeviceEntry, type DevicePlacement, type EnergyHistory, type HealthResponse, type House, type PluginSceneEntry, type PluginSettings, type SceneRecallInput, type SceneUpdate } from '@kasbah/shared'
+import { apiErrorSchema, devicesResponseSchema, energyHistorySchema, healthResponseSchema, houseSchema, pluginsResponseSchema, scenesResponseSchema, serverMessageSchema, type CommandInput, type DeviceEntry, type DevicePlacement, type EnergyHistory, type HealthResponse, type House, type PluginInfo, type PluginSceneEntry, type PluginSettingsPatch, type SceneRecallInput, type SceneUpdate } from '@kasbah/shared'
 import { parseDeviceId } from '@kasbah/shared'
 import { ApiRequestError, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type Transport, type TransportHandlers } from './transport'
 
@@ -55,11 +55,11 @@ export function createHttpTransport(base = ''): Transport {
       { method: 'DELETE' },
       () => undefined,
     ),
-    getPluginSettings: () => request(`${base}/api/plugins/settings`, undefined, (j) => pluginSettingsResponseSchema.parse(j).settings as Record<string, PluginSettings>),
-    setPluginSettings: (pluginId, settings: PluginSettings) => request(
-      `${base}/api/plugins/${encodeURIComponent(pluginId)}/settings`,
-      { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(settings) },
-      (j) => pluginSettingsSchema.parse((j as { settings: unknown }).settings) as PluginSettings,
+    getPlugins: () => request(`${base}/api/plugins`, undefined, (j) => pluginsResponseSchema.parse(j).plugins as PluginInfo[]),
+    setPluginSettings: (pluginId, patch: PluginSettingsPatch) => request(
+      `${base}/api/plugins/${encodeURIComponent(pluginId)}`,
+      { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) },
+      (j) => pluginsResponseSchema.parse(j).plugins as PluginInfo[],
     ),
     placeDevice: (id, placement: DevicePlacement) => request(
       `${base}/api/house/devices/${encodeURIComponent(id)}`,

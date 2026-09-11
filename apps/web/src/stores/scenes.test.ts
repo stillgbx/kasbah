@@ -77,30 +77,6 @@ describe('scenes store', () => {
     expect(useNotificationsStore().queue).toHaveLength(1)
   })
 
-  it('per-plugin settings come from the server, with a default and a rollback', async () => {
-    const mock = createMockTransport({ seed: 1 })
-    const ok: Transport = {
-      ...mock,
-      getPluginSettings: vi.fn(async () => ({ hue: { autoDynamicForNewScenes: true } })),
-      setPluginSettings: vi.fn(async (_p, s) => s),
-    }
-    setTransport(ok)
-    const store = useScenesStore()
-    expect(store.settingsOf('hue').autoDynamicForNewScenes).toBe(false)   // défaut avant chargement
-    await store.loadPluginSettings()
-    expect(store.settingsOf('hue').autoDynamicForNewScenes).toBe(true)
-    expect(store.settingsOf('somfy').autoDynamicForNewScenes).toBe(false)
-    expect(await store.setAutoDynamicForNewScenes('hue', false)).toBe(true)
-    expect(ok.setPluginSettings).toHaveBeenCalledWith('hue', { autoDynamicForNewScenes: false })
-    expect(store.settingsOf('hue').autoDynamicForNewScenes).toBe(false)
-
-    const failing: Transport = { ...ok, setPluginSettings: vi.fn(async () => { throw new ApiRequestError(502, 'UPSTREAM_ERROR', 'boom') }) }
-    setTransport(failing)
-    expect(await store.setAutoDynamicForNewScenes('hue', true)).toBe(false)
-    expect(store.settingsOf('hue').autoDynamicForNewScenes).toBe(false)   // retour arrière
-    expect(useNotificationsStore().queue).toHaveLength(1)
-  })
-
   it('clonable scenes: what exists elsewhere and not here, one source per name', () => {
     const store = useScenesStore()
     store.apply({ type: 'scenes', scenes: [

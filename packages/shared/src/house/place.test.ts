@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import demo from './__fixtures__/demo-house.json'
 import { parseHouse } from './validate'
-import { PlacementError, placeDeviceInJson, removeDeviceFromJson, setRoomOrderInJson } from './place'
+import { PlacementError, placeDeviceInJson, removeDeviceFromJson, setPluginInJson, setRoomOrderInJson } from './place'
 
 const devices = (doc: Record<string, unknown>) => doc.devices as Record<string, unknown>[]
 
@@ -98,6 +98,33 @@ describe('setRoomOrderInJson', () => {
   it('does not mutate the input document', () => {
     const before = JSON.stringify(demo)
     setRoomOrderInJson(demo, 'etage', ['sdb'])
+    expect(JSON.stringify(demo)).toBe(before)
+  })
+})
+
+describe('setPluginInJson', () => {
+  const plugins = (doc: Record<string, unknown>) => doc.plugins as Record<string, Record<string, unknown>>
+
+  it('writes the default section in full before applying the patch', () => {
+    // sans ca, activer un fabricant dans une maison muette eteindrait la simulation, que seul le
+    // defaut du schema gardait allumee
+    const out = setPluginInJson(demo, 'hue', { enabled: true })
+    expect(plugins(out).hue).toEqual({ enabled: true })
+    expect(plugins(out).mock).toMatchObject({ enabled: true })
+    expect(parseHouse(out).plugins.mock!.enabled).toBe(true)
+  })
+
+  it('merges sub-items key by key and leaves the other plugins alone', () => {
+    const one = setPluginInJson(demo, 'mock', { parts: { energy: false } })
+    const two = setPluginInJson(one, 'mock', { parts: { cover: false } })
+    expect(plugins(two).mock!.parts).toEqual({ energy: false, cover: false })
+    expect(plugins(two).mock!.enabled).toBe(true)
+    expect(() => parseHouse(two)).not.toThrow()
+  })
+
+  it('does not mutate the input document', () => {
+    const before = JSON.stringify(demo)
+    setPluginInJson(demo, 'hue', { enabled: true })
     expect(JSON.stringify(demo)).toBe(before)
   })
 })
