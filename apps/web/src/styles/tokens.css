@@ -12,6 +12,13 @@
   --accent-soft: rgba(31, 111, 120, 0.12);
   --on-accent: #ffffff;
   --shadow: 0 8px 30px rgba(20, 26, 34, 0.08);
+  /* Catégories d'appareils (disque d'icône des marqueurs 3D) : indépendantes des quatre accents,
+     comme `sceneMedia` dont Médias reprend la couleur (l'onde et la pilule disent la même chose). */
+  --cat-light: #d18f0a;
+  --cat-cover: #5b7086;
+  --cat-camera: #7a4fcf;
+  --cat-media: #1a73d8;
+  --cat-other: #66717f;
   --radius: 16px;
   --radius-sm: 12px;
   --font: 'DM Sans Variable', 'DM Sans', system-ui, -apple-system, sans-serif;
@@ -33,4 +40,9 @@
   --accent-soft: rgba(79, 179, 189, 0.16);
   --on-accent: #0b1118;
   --shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+  --cat-light: #f0b429;
+  --cat-cover: #97abbf;
+  --cat-camera: #ab8fff;
+  --cat-media: #5aaeff;
+  --cat-other: #8d9ab0;
 }

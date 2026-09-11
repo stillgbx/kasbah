@@ -54,25 +54,57 @@ button { font-family: inherit; cursor: pointer; }
 /* Couche des marqueurs DOM projetés (CSS2DRenderer) : contexte d'empilement isolé pour que le
    z-index posé par le renderer ne passe jamais au-dessus des surcouches de l'app. */
 .scene-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 1; isolation: isolate; }
+/* Pilule d'un marqueur : trois informations sur trois supports qui ne se marchent pas dessus.
+   - la CATÉGORIE (lumière, ouvrant, caméra, média) teinte le disque d'icône (`data-cat`) ;
+   - l'ÉTAT remplit le disque : cerné et pâle au repos, plein quand l'appareil est actif (`data-on`) ;
+   - la SÉLECTION prend la pilule entière sur l'accent (`data-sel`).
+   Le disque (24 px) est le point FIXE : l'ancre est un point de 0 × 0 et la pilule est décalée de
+   son centre, donc quand la distance retire le nom (`data-lod`) rien ne se déplace, le texte
+   disparaît vers la droite. */
+.marker-anchor { pointer-events: none; width: 0; height: 0; }
 .marker-pill {
-  pointer-events: auto; height: 34px; padding: 0 10px 0 8px; border-radius: 999px; border: 1px solid var(--line);
-  background: var(--surface); color: var(--text); box-shadow: 0 2px 10px rgba(0, 0, 0, .12);
+  --cat: var(--cat-other);
+  pointer-events: auto; position: absolute; left: 0; top: 0; height: 30px; padding: 0 10px 0 3px;
+  border-radius: 999px; border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface) 72%, transparent); backdrop-filter: blur(8px); color: var(--muted);
   display: inline-flex; align-items: center; gap: 6px; font: 500 12px/1 var(--font); white-space: nowrap;
-  transform: translateY(-60%); transition: background .15s, color .15s, transform .15s;
+  transform-origin: 15px 15px; transform: translate(-15px, -15px);
+  transition: background .15s, color .15s, transform .15s, box-shadow .15s;
 }
 /* Pilule bornée : un nom trop long (id d'un appareil dont le plugin ne dit rien, 50 caractères)
    faisait une pilule plus large que la maison. Coupé aux points de suspension, le nom entier
    reste dans l'infobulle et dans le panneau. */
-.marker-pill { max-width: 210px; }
-.marker-pill span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.marker-anchor { pointer-events: none; }
-.marker-pill svg { width: 16px; height: 16px; flex: 0 0 auto; }
-.marker-pill[data-on='1'] { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
-.marker-pill[data-sel='1'] { background: var(--accent); color: var(--on-accent); border-color: transparent; transform: translateY(-60%) scale(1.06); }
-.marker-pill[data-unavailable='1'] { opacity: .55; }
+.marker-pill { width: max-content; max-width: 210px; }
+.marker-pill__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.marker-pill__icon {
+  flex: 0 0 auto; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+  color: var(--cat); background: color-mix(in srgb, var(--cat) 14%, transparent);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--cat) 45%, transparent);
+  transition: background .15s, color .15s, transform .15s, box-shadow .15s;
+}
+.marker-pill svg { width: 16px; height: 16px; }
+.marker-pill[data-cat='light'] { --cat: var(--cat-light); }
+.marker-pill[data-cat='cover'] { --cat: var(--cat-cover); }
+.marker-pill[data-cat='camera'] { --cat: var(--cat-camera); }
+.marker-pill[data-cat='media'] { --cat: var(--cat-media); }
+.marker-pill[data-on='1'] { background: var(--surface); color: var(--text); box-shadow: 0 2px 10px rgba(0, 0, 0, .12); }
+.marker-pill[data-on='1'] .marker-pill__icon { background: var(--cat); color: var(--surface); box-shadow: none; }
+.marker-pill[data-sel='1'] { background: var(--accent); color: var(--on-accent); border-color: transparent; transform: translate(-15px, -15px) scale(1.06); }
+.marker-pill[data-unavailable='1'] { --cat: var(--cat-other); opacity: .6; }
 /* mode « déplacer » : la pilule laisse passer le pointeur vers le canvas (glissement) */
 .marker-pill[data-moving='1'] { pointer-events: none; outline: 2px dashed var(--accent); outline-offset: 2px; }
-.marker-pill:hover { transform: translateY(-60%) scale(1.04); }
+.marker-pill:hover { transform: translate(-15px, -15px) scale(1.04); }
+/* Niveau de détail selon la distance caméra (`HouseScene.updatePillLod`) : de loin l'icône seule
+   dans son disque, en vue d'ensemble un point de la couleur de sa catégorie. La sélection reste
+   entière. Le nom revient en se rapprochant, ou dans le panneau. */
+.scene-labels[data-lod='icon'] .marker-pill:not([data-sel='1']),
+.scene-labels[data-lod='dot'] .marker-pill:not([data-sel='1']) { padding-right: 3px; gap: 0; }
+.scene-labels[data-lod='icon'] .marker-pill:not([data-sel='1']) .marker-pill__label,
+.scene-labels[data-lod='dot'] .marker-pill:not([data-sel='1']) .marker-pill__label { display: none; }
+.scene-labels[data-lod='dot'] .marker-pill:not([data-sel='1']) { background: transparent; border-color: transparent; box-shadow: none; backdrop-filter: none; }
+.scene-labels[data-lod='dot'] .marker-pill:not([data-sel='1']) .marker-pill__icon { transform: scale(.42); box-shadow: none; background: color-mix(in srgb, var(--cat) 55%, transparent); }
+.scene-labels[data-lod='dot'] .marker-pill:not([data-sel='1'])[data-on='1'] .marker-pill__icon { background: var(--cat); }
+.scene-labels[data-lod='dot'] .marker-pill:not([data-sel='1']) svg { visibility: hidden; }
 
 /* Repère de la POSITION FAVORITE sur un curseur d'ouvrant, partagé par le panneau appareil et la
    vue Ouvrants (d'où sa place ici plutôt que dupliqué dans les deux composants).

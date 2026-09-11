@@ -17,6 +17,19 @@ export const KIND_ICONS: Record<DeviceKind, IconName> = {
   mower: 'mower', sensor: 'thermostat', energy: 'solar', ev_charger: 'charger', vehicle: 'vehicle', camera: 'camera',
 }
 
+/**
+ * Catégorie d'un appareil telle que le rail la découpe (Lumières, Ouvrants, Caméras, Médias) : c'est
+ * la teinte du disque d'icône de son marqueur 3D (`--cat-*` dans tokens.css). Les kinds sans vue
+ * dédiée restent neutres.
+ */
+export type DeviceCategory = 'light' | 'cover' | 'camera' | 'media' | 'other'
+
+const KIND_CATEGORY: Partial<Record<DeviceKind, DeviceCategory>> = { light: 'light', cover: 'cover', camera: 'camera', media_player: 'media' }
+
+export function deviceCategory(kind: DeviceKind | undefined): DeviceCategory {
+  return (kind && KIND_CATEGORY[kind]) ?? 'other'
+}
+
 export function deviceIcon(descriptor: DeviceDescriptor | undefined, state?: DeviceState): IconName {
   if (!descriptor) return 'devices'
   switch (descriptor.kind) {

@@ -7,6 +7,7 @@ import type { Animation } from '../core/renderLoop'
 import type { TextureLoad } from './screenArt'
 import { isOrientable, yawToRad } from '../../lib/orientation'
 import { iconSvg, kindIcon } from '../../lib/strokeIcons'
+import { deviceCategory } from '../../lib/deviceIcons'
 
 // Marqueur d'appareil : une pilule DOM (icône + nom) projetée au-dessus de l'ancre par le
 // CSS2DRenderer, cliquable, et une représentation 3D minimale propre au type (sphère lumineuse,
@@ -68,9 +69,17 @@ export abstract class DeviceMarker {
       this.pill.type = 'button'
       this.pill.className = 'marker-pill'
       this.pill.dataset.key = device.id
-      this.pill.appendChild(iconSvg(kindIcon(ctx.descriptor?.kind ?? device.kind, ctx.descriptor), 16, 2))
+      const kind = ctx.descriptor?.kind ?? device.kind
+      this.pill.dataset.cat = deviceCategory(kind)
+      // le disque d'icône est le POINT FIXE de la pilule : teinté par la catégorie, rempli par l'état,
+      // et seul survivant quand la distance réduit la pilule à une icône ou à un point (`data-lod`)
+      const disc = document.createElement('span')
+      disc.className = 'marker-pill__icon'
+      disc.appendChild(iconSvg(kindIcon(kind, ctx.descriptor), 16, 2))
+      this.pill.appendChild(disc)
       this.pill.title = ctx.label                       // la pilule est bornée : le nom entier reste lisible au survol
       const span = document.createElement('span')
+      span.className = 'marker-pill__label'
       span.textContent = ctx.label
       this.pill.appendChild(span)
       this.pill.addEventListener('click', (e) => { e.stopPropagation(); ctx.onTap(this.key) })

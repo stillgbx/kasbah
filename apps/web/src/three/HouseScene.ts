@@ -64,6 +64,18 @@ const DEFAULT_POLAR = (55 * Math.PI) / 180
 const WORLD_UP = new Vector3(0, 1, 0)
 /** Rayon (px) autour de l'ancre ou de la pilule où l'appui saisit l'appareil déplaçable. */
 const GRAB_RADIUS_PX = { touch: 44, mouse: 28 }
+/**
+ * Niveau de détail des pilules selon l'ÉCHELLE à l'écran (pixels par mètre au point visé) : de près
+ * icône et nom, plus loin l'icône seule, en vue d'ensemble un point. En pixels par mètre plutôt qu'en
+ * mètres de distance : à distance égale, une scène étroite (volet ouvert, tablette en portrait) montre
+ * la maison plus petite, et c'est la densité à l'écran qui gêne. Posé en `data-lod` sur la couche des
+ * marqueurs ; la pilule sélectionnée reste toujours entière (CSS).
+ * Repères (scène de 600 px de haut) : appareil cadré 8,8 m ≈ 100 px/m, pièce ≈ 55-70, niveau ≈ 30-40,
+ * vue d'ensemble ≈ 20.
+ */
+type PillLod = 'full' | 'icon' | 'dot'
+const PILL_LOD_FULL_MIN_PX_PER_M = 65
+const PILL_LOD_ICON_MIN_PX_PER_M = 26
 
 export class HouseScene {
   readonly scene = new Scene()
@@ -83,6 +95,7 @@ export class HouseScene {
   private geometry: HouseGeometry | null = null
   private options: HouseSceneOptions = { levelFocusMode: 'hide', shadows: true }
   private focusedLevelId: string | null = null
+  private pillLod: PillLod | null = null
   private highlightedRoom: string | null = null
   private selectedKey: string | null = null
   private listeners: { [K in keyof SceneEvents]: Set<SceneEvents[K]> } = {
@@ -584,7 +597,20 @@ export class HouseScene {
 
   private render(): void {
     this.renderer?.render(this.scene, this.camera)
+    this.updatePillLod()
     this.labelRenderer?.render(this.scene, this.camera)
+  }
+
+  /** Le rendu est à la demande : la distance n'est relue que quand quelque chose a bougé. */
+  private updatePillLod(): void {
+    const layer = this.labelRenderer?.domElement
+    if (!layer || !this.controls) return
+    const d = this.camera.position.distanceTo(this.controls.target)
+    const pxPerM = this.size.height / (2 * d * Math.tan((this.camera.fov * Math.PI) / 360))
+    const lod: PillLod = pxPerM >= PILL_LOD_FULL_MIN_PX_PER_M ? 'full' : pxPerM >= PILL_LOD_ICON_MIN_PX_PER_M ? 'icon' : 'dot'
+    if (lod === this.pillLod) return
+    this.pillLod = lod
+    layer.dataset.lod = lod
   }
 
   setPaused(paused: boolean): void { this.loop.setPaused(paused) }
