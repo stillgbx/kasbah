@@ -28,7 +28,9 @@
                 "KASBAH_SERVER": "http://localhost:9787"
             },
             "port": 6173,
-            "autoPort": false
+            // `true` : une seconde session prend le port libre suivant au lieu d'echouer
+            // quand une autre tient deja 6173 (le proxy /api suit KASBAH_SERVER, inchange).
+            "autoPort": true
         },
         {
             // Le front SEUL, branche sur un serveur deja demarre (8787 par defaut, ou KASBAH_SERVER).
