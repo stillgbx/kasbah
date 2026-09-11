@@ -77,8 +77,12 @@ export class GenericMarker extends DeviceMarker {
     this.mesh = new Mesh(geometry, devMaterial(ctx))
     if (geometry instanceof CylinderGeometry) this.mesh.rotation.x = Math.PI / 2   // axe Y du cylindre → Z-up local
     if (kind === 'media_player') this.mesh.position.z = mediaClass === 'tv' ? 0.28 : mediaClass === 'display' ? 0.08 : 0.16
-    // un écran regarde quelque part : `yaw` (0 = face à +y, comme le véhicule) — un cylindre d'enceinte n'en a pas besoin
-    if (mediaClass === 'tv' || mediaClass === 'display') this.mesh.rotation.z = yawToRad(device.yaw)
+    // ce qui regarde quelque part, et ce qui se pose contre un mur, suivent leur `yaw` (0 = face à
+    // +y) : un écran, mais aussi une borne de recharge, une batterie ou le boîtier d'une passerelle.
+    // Un cylindre d'enceinte, lui, n'en a pas besoin.
+    if (mediaClass === 'tv' || mediaClass === 'display' || kind === 'ev_charger' || kind === 'energy') {
+      this.mesh.rotation.z = yawToRad(device.yaw)
+    }
     // ce que l'écran diffuse se voit SUR l'écran : la pochette du morceau (ou le logo de l'appli), posée
     // devant la face avant et enfant du maillage, donc tournée du même `yaw` que lui
     if (mediaClass === 'tv' || mediaClass === 'display') {

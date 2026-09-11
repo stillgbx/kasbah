@@ -8,6 +8,7 @@ import { headlineValue, isDeviceBusy, isDeviceOn, isDevicePulsing, statusLabel, 
 import { formatPower, formatSensor, summarize } from './format'
 import { deviceColor, deviceIcon } from './deviceIcons'
 import { findBatteries, findEnergySite, isEnergySite } from './energy'
+import { isOrientable } from './orientation'
 import fr from '../i18n/locales/fr.json'
 import en from '../i18n/locales/en.json'
 
@@ -203,6 +204,31 @@ describe("site energie vs batterie", () => {
     const noMeter = entry('sans-compteur', ['production'], { productionW: 12 })
     expect(findEnergySite([noMeter])?.descriptor.externalId).toBe('sans-compteur')
     expect(findEnergySite([])).toBeUndefined()
+  })
+})
+
+describe("ce qui a une orientation reglable", () => {
+  const dev = { id: 'x', position: [0, 0, 0] as [number, number, number] }
+  const desc = (kind: DeviceDescriptor['kind'], meta: DeviceDescriptor['meta'] = {}): DeviceDescriptor =>
+    ({ id: `p:${kind}`, pluginId: 'p', externalId: kind, kind, name: kind, capabilities: [], meta })
+
+  it('ce qui REGARDE quelque part, et ce qui se pose CONTRE UN MUR', () => {
+    // regarde quelque part
+    expect(isOrientable(dev, desc('camera'))).toBe(true)
+    expect(isOrientable(dev, desc('vehicle'))).toBe(true)
+    expect(isOrientable(dev, desc('media_player', { mediaPlayer: { deviceClass: 'tv' } }))).toBe(true)
+    // a une face : borne de recharge, batterie, boitier de passerelle
+    expect(isOrientable(dev, desc('ev_charger'))).toBe(true)
+    expect(isOrientable(dev, desc('energy'))).toBe(true)
+  })
+
+  it("ni une enceinte, ni une lampe, ni un capteur n'ont d'orientation utile", () => {
+    expect(isOrientable(dev, desc('media_player', { mediaPlayer: { deviceClass: 'speaker' } }))).toBe(false)
+    expect(isOrientable(dev, desc('light'))).toBe(false)
+    expect(isOrientable(dev, desc('sensor'))).toBe(false)
+    // sans descripteur, seul un `yaw` deja pose dans le JSON fait foi
+    expect(isOrientable(dev, undefined)).toBe(false)
+    expect(isOrientable({ ...dev, yaw: 90 }, undefined)).toBe(true)
   })
 })
 
