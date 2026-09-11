@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import type { EnergyHistoryPoint, StateFor } from '@kasbah/shared'
 import { getTransport } from '../api'
 import PageHeader from '../components/layout/PageHeader.vue'
+import RoomBands from '../components/devices/RoomBands.vue'
 import StatTile from '../components/ui/StatTile.vue'
 import { useHomeSummary } from '../composables/useHomeSummary'
 import { findEnergySite } from '../lib/energy'
@@ -97,6 +98,11 @@ const todayWh = computed(() => e.value?.todayProductionWh ?? points.value.reduce
           <div v-if="points.length === 0" class="muted chart__hint">{{ $t('energy.noHistory') }}</div>
         </section>
       </template>
+
+      <!-- Les appareils, comme dans les vues Lumières et Ouvrants : c'est ici qu'on place le site,
+           les batteries et la borne. Les panneaux en sont absents volontairement — un module ne se
+           place pas seul, il suit son champ (`arrays` de house.json). -->
+      <RoomBands :kind="['energy', 'ev_charger']" />
     </div>
   </div>
 </template>

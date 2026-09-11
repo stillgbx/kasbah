@@ -16,12 +16,15 @@ import { useHouseStore } from '../../stores/house'
 // BANDES : une par niveau (du haut vers le bas, `levelsSorted`) puis une bande « Hors maison ».
 // Une bande = sa propre grille, donc chaque niveau repart à la ligne.
 //
-// Partagé par les vues Lumières et Ouvrants : d'une vue à l'autre, SEUL le contrôle d'une ligne
+// Partagé par les vues Lumières, Ouvrants, Caméras, Médias et Énergie : d'une vue à l'autre, SEUL le contrôle d'une ligne
 // change — il vient du slot `control`. Tout le reste est commun : le groupement, l'ordre des
 // pièces et son réglage à la poignée, la pastille de liaison au JSON, la carte des liaisons
 // mortes. C'est aussi ce qui garantit qu'une correction profite aux deux vues. Un second slot,
 // `status-badge`, permet d'ajouter une pastille devant le libellé d'état (vide par défaut).
-const props = defineProps<{ kind: DeviceKind }>()
+// `kind` accepte une LISTE : la vue Énergie réunit le site, les batteries et la borne, qui n'ont
+// pas le même kind mais se lisent et se placent au même endroit.
+const props = defineProps<{ kind: DeviceKind | DeviceKind[] }>()
+const kinds = computed<DeviceKind[]>(() => (Array.isArray(props.kind) ? props.kind : [props.kind]))
 const router = useRouter()
 
 /** Un appareil sans aucune entrée : on l'emmène dans la maison 3D, provisoire, prêt à être posé. */
@@ -44,7 +47,7 @@ interface Row { entry: DeviceEntry; name: string; origin: Origin; on: boolean; s
 interface Group { key: string; roomId: string | null; title: string; rows: Row[] }
 interface Band { key: string; levelId: string | null; title: string; groups: Group[] }
 
-const entries = computed(() => devices.list.filter((e) => e.state.kind === props.kind))
+const entries = computed(() => devices.list.filter((e) => kinds.value.includes(e.state.kind)))
 const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name)
 
 // ---- réordonner les pièces d'une bande -------------------------------------------------------
@@ -101,7 +104,7 @@ const dangling = computed(() => {
   if (!h) return []
   // un `kind` absent du JSON vaut `light` (le kind d'origine du format), d'où le second test
   return h.devices.filter((d) => d.deviceId && !devices.descriptors[d.deviceId]
-    && (d.kind === props.kind || (props.kind === 'light' && d.kind === undefined)))
+    && ((d.kind && kinds.value.includes(d.kind)) || (kinds.value.includes('light') && d.kind === undefined)))
 })
 
 function startDrag(ev: PointerEvent, band: Band, roomId: string) {

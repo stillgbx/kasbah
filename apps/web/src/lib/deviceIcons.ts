@@ -1,5 +1,6 @@
 import type { DeviceDescriptor, DeviceKind, DeviceState, MediaPlayerClass, SensorClass } from '@kasbah/shared'
 import { isMediaActive } from './deviceState'
+import { isEnergySite } from './energy'
 import type { IconName } from './strokeIcons'
 
 // Icônes (jeu « trait », voir strokeIcons.ts) par kind et état, pour <v-icon> comme pour StrokeIcon.
@@ -42,6 +43,8 @@ export function deviceIcon(descriptor: DeviceDescriptor | undefined, state?: Dev
     }
     case 'sensor': return SENSOR_ICONS[descriptor.meta.sensor?.deviceClass ?? 'generic']
     case 'vehicle': return state?.kind === 'vehicle' && state.charging ? 'charger' : 'vehicle'
+    // une unité de stockage est un `energy` qui ne mesure pas le réseau (même règle que `strokeIcons`)
+    case 'energy': return isEnergySite(descriptor) ? 'solar' : 'battery'
     default: return KIND_ICONS[descriptor.kind]
   }
 }

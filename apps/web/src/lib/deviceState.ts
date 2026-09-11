@@ -1,5 +1,6 @@
 import type { CommandInput, DeviceDescriptor, DeviceState, StateFor } from '@kasbah/shared'
 import { coverWords, toClosure } from './cover'
+import { isEnergySite } from './energy'
 import { formatPercent, formatPower, formatSensor, formatTemp } from './format'
 
 // Lecture « métier » d'un état : actif ?, bascule rapide possible ?, libellé court traduit.
@@ -126,12 +127,24 @@ export function statusLabel(descriptor: DeviceDescriptor, s: DeviceState, t: Tra
     case 'vacuum': return `${t(`vacuum.activities.${s.activity}`)} · ${formatPercent(s.battery, locale)}`
     case 'mower': return `${t(`mower.activities.${s.activity}`)} · ${formatPercent(s.battery, locale)}`
     case 'sensor': return formatSensor(descriptor, s.value, locale)
-    case 'energy': return formatPower(s.productionW, locale)
+    // une installation publie le SITE et une batterie par unité : le site se lit en production,
+    // une batterie en charge, et « 0 W » pour une batterie pleine ne dirait rien
+    case 'energy': return isEnergySite(descriptor) ? formatPower(s.productionW, locale) : batteryStatus(s, t, locale)
     case 'ev_charger': return s.status === 'charging' ? formatPower(s.powerW, locale) : t(`charger.status.${s.status}`)
     case 'vehicle': return `${formatPercent(s.soc, locale)} · ${Math.round(s.rangeKm)} km`
     // rien d'autre à dire d'une caméra que sa présence : l'API ne publie ni marche/arrêt ni activité
     case 'camera': return t('camera.online')
   }
+}
+
+/**
+ * Ce qu'une batterie dit d'elle : sa charge, et le sens dans lequel elle travaille quand elle
+ * travaille. Le contrat compte `batteryW` positif en CHARGE.
+ */
+function batteryStatus(s: StateFor<'energy'>, t: Translate, locale: string): string {
+  const soc = s.batterySoc !== undefined ? formatPercent(s.batterySoc, locale) : t('common.unknown')
+  if (!s.batteryW) return soc
+  return `${soc} · ${t(s.batteryW > 0 ? 'energy.charging' : 'energy.discharging')} ${formatPower(Math.abs(s.batteryW), locale)}`
 }
 
 /** Grande valeur en tête du panneau appareil. */
@@ -145,7 +158,8 @@ export function headlineValue(descriptor: DeviceDescriptor, s: DeviceState, t: T
     case 'vacuum': return t(`vacuum.activities.${s.activity}`)
     case 'mower': return t(`mower.activities.${s.activity}`)
     case 'sensor': return formatSensor(descriptor, s.value, locale)
-    case 'energy': return formatPower(s.productionW, locale)
+    case 'energy': return isEnergySite(descriptor) ? formatPower(s.productionW, locale)
+      : s.batterySoc !== undefined ? formatPercent(s.batterySoc, locale) : t('common.unknown')
     case 'ev_charger': return formatPower(s.powerW, locale)
     case 'vehicle': return formatPercent(s.soc, locale)
     case 'camera': return t(`camera.classes.${descriptor.meta.camera?.deviceClass ?? 'camera'}`)
