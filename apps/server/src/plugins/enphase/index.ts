@@ -9,8 +9,8 @@ import { sendError } from '../../http/errors'
 import { createPoller } from '../../core/poll'
 import { EnphaseClient } from './client'
 import {
-  batteriesOf, isBatteryAvailable, isPanelStale, toBatteryPatch, toDescriptors, toPanelPatch, toSitePatch,
-  SITE_ID, type Inventory,
+  batteriesOf, isBatteryAvailable, isPanelStale, toBatteryPatch, toDailyPatch, toDescriptors, toPanelPatch,
+  toSitePatch, SITE_ID, type Inventory,
 } from './mapping'
 import {
   ensembleInventorySchema, ensemblePowerSchema, invertersSchema, livedataSchema, productionSchema,
@@ -180,13 +180,14 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
     catch (err) { log().debug({ err }, 'no Enphase storage inventory: assuming no battery'); return [] }
   }
 
-  /** Relit ce qui compose l'installation : c'est de là que sortent les descripteurs. */
+/**
+   * Relit ce qui compose l'installation. Les requêtes s'enchaînent au lieu de partir ensemble : la
+   * passerelle est un petit boîtier, et les lancer en parallèle la faisait dépasser le délai.
+   */
   async function readInventory(): Promise<Inventory> {
-    const [report, inverters, batteries] = await Promise.all([
-      get('/production.json?details=1', (j) => productionSchema.parse(j)),
-      get('/api/v1/production/inverters', (j) => invertersSchema.parse(j)),
-      readBatteries(),
-    ])
+    const report = await get('/production.json?details=1', (j) => productionSchema.parse(j))
+    const inverters = await get('/api/v1/production/inverters', (j) => invertersSchema.parse(j))
+    const batteries = await readBatteries()
     return { report, inverters, batteries }
   }
 
@@ -194,15 +195,13 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
   const deviceIds = (inv: Inventory) =>
     [...inv.inverters.map((i) => i.serialNumber), ...inv.batteries.map((b) => b.serial_num)].sort().join(',')
 
-  /** Compteurs : la mesure temps réel du site, ce que la vue Énergie affiche. */
+/**
+   * Mesure temps réel du site, ce que la vue Énergie affiche. UNE seule requête, à `livedata` :
+   * elle porte les mêmes compteurs que `production.json` et répond en 0,2 s contre 1,5 à 11 s.
+   */
   async function pollMeters(): Promise<void> {
-    const [report, live] = await Promise.all([
-      get('/production.json?details=1', (j) => productionSchema.parse(j)),
-      // `livedata` n'apporte que la batterie : une passerelle qui la refuse garde tout le reste
-      get('/ivp/livedata/status', (j) => livedataSchema.parse(j)).catch(() => undefined),
-    ])
-    if (inventory) inventory.report = report
-    ctx!.emitState(SITE_ID, toSitePatch(report, live))
+    const live = await get('/ivp/livedata/status', (j) => livedataSchema.parse(j))
+    ctx!.emitState(SITE_ID, toSitePatch(live))
     lastError = null
   }
 
@@ -211,11 +210,9 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
    * indisponible plutôt que de se voir attribuer un zéro qu'on n'a pas mesuré.
    */
   async function pollDevices(): Promise<void> {
-    const [inverters, batteries, power] = await Promise.all([
-      get('/api/v1/production/inverters', (j) => invertersSchema.parse(j)),
-      readBatteries(),
-      get('/ivp/ensemble/power', (j) => ensemblePowerSchema.parse(j)).catch(() => undefined),
-    ])
+    const inverters = await get('/api/v1/production/inverters', (j) => invertersSchema.parse(j))
+    const batteries = await readBatteries()
+    const power = await get('/ivp/ensemble/power', (j) => ensemblePowerSchema.parse(j)).catch(() => undefined)
     const now = ctx!.clock.now()
     for (const inv of inverters as Inverter[]) {
       if (isPanelStale(inv, now)) ctx!.setAvailable(inv.serialNumber, false)
@@ -225,9 +222,14 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
       if (!isBatteryAvailable(b)) { ctx!.setAvailable(b.serial_num, false); continue }
       ctx!.emitState(b.serial_num, toBatteryPatch(b, power))
     }
+    // les totaux du jour ne sont QUE dans `production.json`, lent : c'est ici qu'on le paie, une
+    // fois par minute, et non à chaque mesure temps réel
+    const report = await get('/production.json?details=1', (j) => productionSchema.parse(j))
+    ctx!.emitState(SITE_ID, toDailyPatch(report))
+
     // un onduleur ajouté ou déposé change la liste : on republie, sinon son état partirait vers un
     // appareil que le registre ne connaît pas
-    const next: Inventory = { report: inventory?.report ?? (await get('/production.json?details=1', (j) => productionSchema.parse(j))), inverters, batteries }
+    const next: Inventory = { report, inverters, batteries }
     if (!inventory || deviceIds(inventory) !== deviceIds(next)) {
       log().info({ inverters: inverters.length, batteries: batteries.length }, 'Enphase inventory changed')
       inventory = next

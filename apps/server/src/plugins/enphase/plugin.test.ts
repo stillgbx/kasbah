@@ -313,7 +313,7 @@ describe('appareils', () => {
     await plugin.start()
     await settle()
     const site = (ctx.emitState as ReturnType<typeof vi.fn>).mock.calls.find(([id]) => id === 'site')
-    expect(site?.[1]).toMatchObject({ kind: 'energy', productionW: 6456, consumptionW: 691, gridW: -5765, batteryW: -16 })
+    expect(site?.[1]).toMatchObject({ kind: 'energy', productionW: 6472, consumptionW: 725, gridW: -5763, batteryW: -16 })
     await plugin.stop()
   })
 

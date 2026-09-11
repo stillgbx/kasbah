@@ -4,8 +4,8 @@ import {
   ENSEMBLE_INVENTORY, ENSEMBLE_POWER, INVERTERS, LIVEDATA, METERS, PRODUCTION,
 } from './__fixtures__/gateway'
 import {
-  PANEL_STALE_MS, batteriesOf, isBatteryAvailable, isPanelStale, productionW, toBatteryPatch, toDescriptors,
-  toPanelPatch, toSitePatch,
+  PANEL_STALE_MS, batteriesOf, isBatteryAvailable, isPanelStale, productionW, toBatteryPatch, toDailyPatch,
+  toDescriptors, toPanelPatch, toSitePatch,
 } from './mapping'
 import {
   ensembleInventorySchema, ensemblePowerSchema, invertersSchema, livedataSchema, productionSchema,
@@ -74,25 +74,32 @@ describe('descripteurs', () => {
 })
 
 describe('état du site', () => {
-  const patch = toSitePatch(report, live) as Record<string, number>
+  const patch = toSitePatch(live) as Record<string, number>
 
-  it('prend la production du COMPTEUR, pas la somme des onduleurs qui traîne de plusieurs minutes', () => {
+  it('lit les compteurs par `livedata`, mille fois plus rapide que `production.json`', () => {
+    // mêmes compteurs, à quelques secondes d'échantillonnage près : 6472 W contre 6456 W
+    expect(patch.productionW).toBe(6472)
+    expect(patch.consumptionW).toBe(725)
+    expect(patch.gridW).toBe(-5763)                      // négatif = injection, déjà le signe du contrat
+  })
+
+  it('en repli sur `production.json`, prend le COMPTEUR et non la somme des onduleurs', () => {
+    const p = toSitePatch(undefined, report) as Record<string, number>
     expect(productionW(report)).toBe(6456)
     const inverterSum = report.production.find((e) => e.type === 'inverters')!.wNow
     expect(inverterSum).toBe(4952)                       // 1,5 kW de retard sur la capture
-    expect(patch.productionW).toBe(6456)
-  })
-
-  it('consommation totale, et réseau négatif en injection comme le veut le contrat', () => {
-    expect(patch.consumptionW).toBe(691)
-    expect(patch.gridW).toBe(-5765)                      // on injecte 5,7 kW
+    expect(p).toMatchObject({ productionW: 6456, consumptionW: 691, gridW: -5765 })
+    // ce repli ne connaît pas la batterie : elle n'est que dans `livedata`
+    expect(p.batteryW).toBeUndefined()
+    expect(p.batterySoc).toBeUndefined()
   })
 
   it('les Wh du jour viennent du compteur de production et de la consommation TOTALE', () => {
-    expect(patch.todayProductionWh).toBe(47127)
+    const day = toDailyPatch(report) as Record<string, number>
+    expect(day.todayProductionWh).toBe(47127)
     // `net-consumption` publie un whToday à 0 : le lire aurait donné une consommation nulle
     expect(report.consumption.find((e) => e.measurementType === 'net-consumption')!.whToday).toBe(0)
-    expect(patch.todayConsumptionWh).toBe(18516)
+    expect(day.todayConsumptionWh).toBe(18516)
   })
 
   it('INVERSE le signe du stockage : le fabricant compte positif en décharge', () => {
@@ -106,15 +113,12 @@ describe('état du site', () => {
   })
 
   it('produit un état `energy` complet et valide, fusionnable par le registre', () => {
-    const merged = mergeState(defaultState('energy'), toSitePatch(report, live), 1000)
-    expect(merged).toMatchObject({ kind: 'energy', productionW: 6456, consumptionW: 691, gridW: -5765, batterySoc: 100 })
+    const merged = mergeState(defaultState('energy'), toSitePatch(live, report), 1000)
+    expect(merged).toMatchObject({ kind: 'energy', productionW: 6472, consumptionW: 725, gridW: -5763, batterySoc: 100 })
   })
 
-  it('sans `livedata`, le site garde production, consommation et réseau, et se taît sur la batterie', () => {
-    const p = toSitePatch(report, undefined) as Record<string, number>
-    expect(p.productionW).toBe(6456)
-    expect(p.batteryW).toBeUndefined()
-    expect(p.batterySoc).toBeUndefined()
+  it('sans rien à lire, ne dit rien plutôt que d\'affirmer des zéros', () => {
+    expect(toSitePatch(undefined)).toEqual({ kind: 'energy' })
   })
 })
 

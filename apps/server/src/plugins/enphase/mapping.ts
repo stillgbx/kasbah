@@ -82,26 +82,47 @@ export function toDescriptors(inv: Inventory): DeviceDescriptor[] {
   return [site, ...panels, ...batteries]
 }
 
+/** Milliwatts → watts. `livedata` compte en mW, `production.json` en W. */
+const mw = (v: number) => Math.round(v / 1000) || 0
+
 /**
- * État du site. La production, la consommation et le réseau viennent des compteurs
- * (`production.json`) ; la batterie vient de `livedata`, seule route à la donner. `net-consumption`
- * est déjà au signe du contrat : positif en soutirage, négatif en injection.
+ * Instantané du site : production, consommation, réseau, batterie.
+ *
+ * La source est `livedata`, et c'est une décision de PERFORMANCE mesurée sur la vraie passerelle :
+ * elle répond en 0,2 s, là où `production.json` a mis jusqu'à 10,8 s pour les mêmes compteurs. Ce
+ * dernier sert de repli, pour une passerelle qui ne servirait pas `livedata`.
+ *
+ * Signes : `grid` est déjà celui du contrat, négatif en injection ; `storage` est l'INVERSE, le
+ * fabricant le comptant positif en décharge.
  */
-export function toSitePatch(report: ProductionReport, live: Livedata | undefined): StatePatch {
-  const total = pick(report.consumption, 'eim', 'total-consumption')
-  const net = pick(report.consumption, 'eim', 'net-consumption')
-  const eim = pick(report.production, 'eim', 'production')
-  const storage = live?.meters?.storage
-  const soc = live?.meters?.enc_agg_soc
+export function toSitePatch(live: Livedata | undefined, report?: ProductionReport): StatePatch {
+  const m = live?.meters
+  const total = report && pick(report.consumption, 'eim', 'total-consumption')
+  const net = report && pick(report.consumption, 'eim', 'net-consumption')
+  const production = m?.pv ? mw(m.pv.agg_p_mw) : report ? productionW(report) : undefined
+  const consumption = m?.load ? mw(m.load.agg_p_mw) : total ? Math.round(total.wNow) : undefined
+  const grid = m?.grid ? mw(m.grid.agg_p_mw) : net ? Math.round(net.wNow) : undefined
   return {
     kind: 'energy',
-    productionW: productionW(report),
-    consumptionW: Math.round(total?.wNow ?? 0),
-    gridW: Math.round(net?.wNow ?? 0),
-    ...(storage ? { batteryW: batteryW(storage.agg_p_mw) } : {}),
-    ...(soc !== undefined ? { batterySoc: Math.round(soc) } : {}),
+    ...(production !== undefined ? { productionW: production } : {}),
+    ...(consumption !== undefined ? { consumptionW: consumption } : {}),
+    ...(grid !== undefined ? { gridW: grid } : {}),
+    ...(m?.storage ? { batteryW: batteryW(m.storage.agg_p_mw) } : {}),
+    ...(m?.enc_agg_soc !== undefined ? { batterySoc: Math.round(m.enc_agg_soc) } : {}),
+  } as StatePatch
+}
+
+/**
+ * Totaux du jour : seul `production.json` les porte, et il est lent — d'où sa relecture à la
+ * cadence lente. `net-consumption` publie un `whToday` à zéro : c'est la consommation TOTALE qu'il
+ * faut lire, sous peine d'afficher une journée sans consommation.
+ */
+export function toDailyPatch(report: ProductionReport): StatePatch {
+  const eim = pick(report.production, 'eim', 'production')
+  const total = pick(report.consumption, 'eim', 'total-consumption')
+  return {
+    kind: 'energy',
     ...(eim?.whToday !== undefined ? { todayProductionWh: Math.round(eim.whToday) } : {}),
-    // `net-consumption` publie un `whToday` a 0 : c'est la consommation TOTALE qu'il faut lire
     ...(total?.whToday !== undefined ? { todayConsumptionWh: Math.round(total.whToday) } : {}),
   } as StatePatch
 }

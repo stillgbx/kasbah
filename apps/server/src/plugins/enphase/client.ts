@@ -11,8 +11,12 @@ import type { FetchLike } from '../../core/sse'
 //  - un jeton refusé ne rend pas 401 en JSON mais une page HTML de redirection vers /login.html.
 //    On traduit donc le code HTTP, pas le corps.
 
-/** Au-delà, on abandonne : la passerelle est sur le LAN. */
-export const REQUEST_TIMEOUT_MS = 8000
+/**
+ * Au-delà, on abandonne. Généreux pour du LAN, et c'est mesuré : la passerelle répond en 0,2 s sur
+ * presque tout, mais `/production.json?details=1` a mis 1,5 s, 3,2 s, 6,6 s puis 10,8 s sur quatre
+ * appels d'affilée. Huit secondes coupaient donc une lecture sur deux.
+ */
+export const REQUEST_TIMEOUT_MS = 20_000
 
 export interface EnphaseClientOptions {
   host: string
