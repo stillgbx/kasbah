@@ -3,7 +3,6 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { HouseDevice } from '@kasbah/shared'
 import { useHomeSummary } from '../../composables/useHomeSummary'
-import { formatPercent, formatPower } from '../../lib/format'
 import { isDeviceOn } from '../../lib/deviceState'
 import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
@@ -19,7 +18,7 @@ const house = useHouseStore()
 const devices = useDevicesStore()
 const pluginScenes = useScenesStore()
 const summary = useHomeSummary()
-const { t, locale } = useI18n()
+const { t } = useI18n()
 
 const stats = computed(() => {
   const out: { value: string; label: string }[] = []
@@ -27,9 +26,10 @@ const stats = computed(() => {
   // volets et stores ont leur propre tuile : « ouverts » et « baissés » ne sont pas la même mesure
   if (summary.shutters.value.length) out.push({ value: `${summary.shuttersOpen.value}/${summary.shutters.value.length}`, label: t('home.shuttersOpen') })
   if (summary.awnings.value.length) out.push({ value: `${summary.awningsDown.value}/${summary.awnings.value.length}`, label: t('home.awningsDown') })
-  const e = summary.energy.value
-  if (e) out.push({ value: formatPower(e.productionW, locale.value), label: t('home.solar') })
-  if (e?.batterySoc !== undefined) out.push({ value: formatPercent(e.batterySoc, locale.value), label: t('home.battery') })
+  // caméras et lecteurs plutôt que solaire et batterie : l'énergie a sa propre vue, et ces deux
+  // compteurs manquaient d'un endroit où se voir d'un coup d'œil.
+  if (summary.cameras.value.length) out.push({ value: String(summary.cameras.value.length), label: t('home.cameras') })
+  if (summary.players.value.length) out.push({ value: `${summary.playing.value}/${summary.players.value.length}`, label: t('home.players') })
   return out.slice(0, 6)   // grille à 2 colonnes : les tuiles passent à la ligne
 })
 

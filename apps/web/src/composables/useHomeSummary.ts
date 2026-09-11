@@ -6,7 +6,7 @@ import { useDevicesStore } from '../stores/devices'
 import { useHouseStore } from '../stores/house'
 
 // Chiffres de synthèse partagés par l'en-tête et les tuiles : lumières allumées, volets ouverts,
-// stores baissés, lecteurs en lecture, production solaire, batterie, température intérieure.
+// stores baissés, lecteurs en lecture, caméras, production solaire, batterie, température intérieure.
 //
 // Volets et stores sont comptés SÉPARÉMENT : ils ne se disent pas dans les mêmes mots (un volet est
 // ouvert, un store est baissé) et l'utilisateur ne les regarde pas pour la même raison. La nature
@@ -48,6 +48,10 @@ export function useHomeSummary() {
   const players = computed(() => devices.list.filter((e) => e.state.kind === 'media_player'))
   const playing = computed(() => players.value.filter((e) => e.state.available
     && ((e.state as StateFor<'media_player'>).playback === 'playing' || house.soundRoutes.relays.has(e.descriptor.id))).length)
+  // caméras : seul le NOMBRE est connu — l'API Nest ne dit ni si une caméra filme ni si elle est
+  // joignable (voir `cameraStateSchema`), et l'« active » de la vue Caméras vient du sondage des
+  // vignettes, que le panneau maison ne fait pas. Donc pas de fraction ici.
+  const cameras = computed(() => devices.list.filter((e) => e.state.kind === 'camera'))
   const vehicles = computed(() => devices.list.filter((e) => e.state.kind === 'vehicle'))
   const chargers = computed(() => devices.list.filter((e) => e.state.kind === 'ev_charger'))
 
@@ -64,6 +68,6 @@ export function useHomeSummary() {
 
   return {
     lights, lightsOn, covers, coversOpen, shutters, shuttersOpen, awnings, awningsDown,
-    players, playing, energy, climate, indoorTemp, vehicles, chargers, headline,
+    players, playing, cameras, energy, climate, indoorTemp, vehicles, chargers, headline,
   }
 }

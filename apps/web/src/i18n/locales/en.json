@@ -17,7 +17,7 @@
     "playing": "{n} player streaming | {n} player streaming | {n} players streaming", "solar": "Solar" },
   "floors": { "garden": "Garden", "all": "All", "roof": "Roof" },
   "home": {
-    "lightsOn": "lights on", "shuttersOpen": "shutters open", "awningsDown": "awnings lowered", "solar": "Solar", "battery": "Battery",
+    "lightsOn": "lights on", "shuttersOpen": "shutters open", "awningsDown": "awnings lowered", "solar": "Solar", "cameras": "cameras", "players": "players",
     "scenes": "Scenes", "rooms": "Rooms", "garden": "Garden",
     "devicesCount": "{n} device | {n} device | {n} devices", "active": "{n} active | {n} active | {n} active",
     "selectHint": "Tap a room or a device in the 3D view",
