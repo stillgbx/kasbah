@@ -63,9 +63,13 @@ const ceiling = computed(() => {
   return house.house && room && level ? roomHeight(room, level, resolveDefaults(house.house.defaults)) : 4
 })
 const position = computed(() => house.draft?.position ?? props.device.position)
-const roomName = computed(() => {
+// Ce qui ancre l'appareil : sa pièce, ou à défaut son niveau — un niveau sans pièce (le toit) ancre seul,
+// et c'est ce qui confirme à l'écran qu'un changement d'onglet a bien emmené l'appareil.
+const anchorName = computed(() => {
   const id = house.draft?.roomId ?? props.device.roomId
-  return id ? house.index?.roomsById.get(id)?.name ?? id : t('place.outside')
+  if (id) return house.index?.roomsById.get(id)?.name ?? id
+  const level = props.device.levelId ? house.index?.levelsById.get(props.device.levelId) : undefined
+  return level ? level.shortName ?? level.name : t('place.outside')
 })
 
 // Retirer de la maison : geste en deux temps (armer, puis confirmer dans les 4 s) pour ne pas sortir un
@@ -121,7 +125,7 @@ function applyPreset(p: Preset) {
           </span>
         </div>
         <div class="place__row place__bottom">
-          <div class="muted place__coords">x {{ position[0].toFixed(2) }} · y {{ position[1].toFixed(2) }} · {{ roomName }}</div>
+          <div class="muted place__coords">x {{ position[0].toFixed(2) }} · y {{ position[1].toFixed(2) }} · {{ anchorName }}</div>
           <!-- place réservée : invisible pour un provisoire (« Annuler » suffit), sinon retrait en deux temps -->
           <button type="button" class="pill place__remove" :class="{ 'place__remove--off': house.isProvisional, 'place__remove--armed': removeArmed }"
                   :disabled="house.saving || house.isProvisional" :tabindex="house.isProvisional ? -1 : 0"

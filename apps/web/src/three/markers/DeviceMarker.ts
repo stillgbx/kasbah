@@ -37,6 +37,9 @@ export interface MarkerContext {
  */
 export interface SoundCue { emits: boolean; relayFrom?: DeviceState }
 
+/** Guide du mode « déplacer » : dessiné après la maison, donc par-dessus elle. */
+const GUIDE_RENDER_ORDER = 10
+
 export abstract class DeviceMarker {
   readonly object = new Group()
   readonly key: string
@@ -144,8 +147,12 @@ export abstract class DeviceMarker {
     if (on) {
       if (!this.guide) {
         const color = this.ctx.theme.primary
-        const ring = new Mesh(new RingGeometry(0.22, 0.3, 40), new MeshBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false }))
-        const line = new Line(new BufferGeometry(), new LineBasicMaterial({ color, transparent: true, opacity: 0.7 }))
+        // Le guide se dessine PAR-DESSUS la maison (`depthTest: false` + `renderOrder`) : le sol d'un
+        // niveau-toit passe sous la dalle de toiture, qui enterrait l'anneau et le cône ; ailleurs, un
+        // mur au premier plan les mangeait de la même façon. Un seul appareil porte un guide à la fois.
+        const ring = new Mesh(new RingGeometry(0.22, 0.3, 40), new MeshBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false, depthTest: false }))
+        const line = new Line(new BufferGeometry(), new LineBasicMaterial({ color, transparent: true, opacity: 0.7, depthTest: false }))
+        ring.renderOrder = line.renderOrder = GUIDE_RENDER_ORDER
         this.object.add(ring, line)
         let look: Mesh<ShapeGeometry, MeshBasicMaterial> | null = null
         if (isOrientable(this.device, this.ctx.descriptor)) {
@@ -156,7 +163,8 @@ export abstract class DeviceMarker {
           shape.lineTo(-0.42, 1.35)
           shape.quadraticCurveTo(0, 1.6, 0.42, 1.35)
           shape.lineTo(0, 0.18)
-          look = new Mesh(new ShapeGeometry(shape, 12), new MeshBasicMaterial({ color, transparent: true, opacity: 0.45, depthWrite: false, side: DoubleSide }))
+          look = new Mesh(new ShapeGeometry(shape, 12), new MeshBasicMaterial({ color, transparent: true, opacity: 0.45, depthWrite: false, depthTest: false, side: DoubleSide }))
+          look.renderOrder = GUIDE_RENDER_ORDER
           look.rotation.z = yawToRad(this.device.yaw)
           this.object.add(look)
         }

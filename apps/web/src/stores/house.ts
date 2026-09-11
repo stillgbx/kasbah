@@ -1,6 +1,6 @@
 import { computed, ref, shallowRef, watch } from 'vue'
 import { defineStore } from 'pinia'
-import { autoPlaceDevices, indexHouse, withPanelArrays, type DeviceEntry, type DevicePlacement, type House, type HouseDevice, type HouseIndex, type Level, type PlaceableDevice, type Room, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
+import { autoPlaceDevices, indexHouse, pointInPolygon, resolveDeviceLevelId, withPanelArrays, type DeviceEntry, type DevicePlacement, type House, type HouseDevice, type HouseIndex, type Level, type PlaceableDevice, type Room, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
 import { getTransport } from '../api'
 import { t } from '../i18n'
 import { soundRouting } from '../lib/audioRouting'
@@ -156,12 +156,14 @@ export const useHouseStore = defineStore('house', () => {
   const saving = ref(false)
   const draft = shallowRef<PlacementDraft | null>(null)
   /** Placement à l'entrée dans le mode, pour « Rétablir ». */
-  const placingOrigin = shallowRef<{ position: Vec3; roomId: string | undefined; mount: Mount | undefined; yaw: number | undefined } | null>(null)
+  const placingOrigin = shallowRef<{ position: Vec3; roomId: string | undefined; levelId: string | null; mount: Mount | undefined; yaw: number | undefined } | null>(null)
+  /** Niveau qui ancre l'appareil, que ce soit par sa pièce ou directement. */
+  const anchorLevel = (hd: HouseDevice) => (index.value ? resolveDeviceLevelId(hd, index.value.roomsById) : null)
 
   function startPlacing() {
     const hd = selectedDevice.value
     if (!hd) return
-    placingOrigin.value = { position: hd.position, roomId: hd.roomId, mount: hd.mount, yaw: hd.yaw }
+    placingOrigin.value = { position: hd.position, roomId: hd.roomId, levelId: anchorLevel(hd), mount: hd.mount, yaw: hd.yaw }
     draft.value = null
     placing.value = true
   }
@@ -216,14 +218,40 @@ export const useHouseStore = defineStore('house', () => {
     placing.value = true
     return true
   }
-  // tant que le provisoire n'est pas déposé, l'onglet de niveau le déplace au centre du niveau choisi
+  // Mode « déplacer » ouvert : l'onglet de niveau emmène l'appareil sélectionné. Un provisoire jamais
+  // déposé va au centre du niveau choisi ; un appareil déjà placé garde son x;y et sa hauteur DANS
+  // L'ESPACE (voir `moveToLevel`). Hors du mode, l'onglet ne fait que naviguer.
   watch(focusedLevelId, (levelId) => {
+    if (!placing.value || !levelId) return
     const p = provisional.value
-    if (!p || !placing.value || !levelId || levelId === p.levelId) return
-    const [x, y] = levelCentre(levelId)
-    provisional.value = { ...p, levelId, position: [x, y, p.position[2]] }
-    draft.value = null
+    if (p) {
+      if (levelId === p.levelId) return
+      const [x, y] = levelCentre(levelId)
+      provisional.value = { ...p, levelId, position: [x, y, p.position[2]] }
+      draft.value = null
+      return
+    }
+    void moveToLevel(levelId)
   })
+
+  /**
+   * Ré-ancre l'appareil sélectionné sur un autre niveau : x;y gardés, pièce reprise sous le point
+   * (sinon le niveau seul ancre — cas d'un niveau sans pièce comme le toit), et z repris par rapport
+   * au sol du nouveau niveau pour que l'appareil ne bouge pas dans l'espace.
+   */
+  async function moveToLevel(levelId: string): Promise<void> {
+    const hd = selectedDevice.value
+    const idx = index.value
+    if (!hd || !idx) return
+    const from = resolveDeviceLevelId(hd, idx.roomsById)
+    if (!from || from === levelId) return
+    const base = draft.value ?? { position: hd.position, roomId: hd.roomId }
+    const xy: [number, number] = [base.position[0], base.position[1]]
+    const dz = (idx.levelsById.get(from)?.elevation ?? 0) - (idx.levelsById.get(levelId)?.elevation ?? 0)
+    const room = (idx.roomsByLevel.get(levelId) ?? []).find((r) => pointInPolygon(xy, r.polygon))
+    draft.value = { position: [xy[0], xy[1], snap(base.position[2] + dz)], roomId: room?.id }
+    await savePlacement({ levelId })
+  }
 
   /** Aperçu d'une position au sol (glissement 3D) ; `roomId` null = hors de toute pièce → on garde l'ancienne. */
   function previewPosition(xy: [number, number], roomId: string | null) {
@@ -240,7 +268,7 @@ export const useHouseStore = defineStore('house', () => {
   }
 
   /** Écrit le brouillon (complété par `override`) dans house.json ; un appareil auto-placé y gagne son entrée. */
-  async function savePlacement(override?: { position?: Vec3; mount?: Mount; yaw?: number }): Promise<boolean> {
+  async function savePlacement(override?: { position?: Vec3; mount?: Mount; yaw?: number; levelId?: string }): Promise<boolean> {
     const hd = selectedDevice.value
     if (!hd) return false
     const base = draft.value ?? { position: hd.position, roomId: hd.roomId }
@@ -254,6 +282,9 @@ export const useHouseStore = defineStore('house', () => {
       else if (hd.meta.provisional && hd.levelId) p.levelId = hd.levelId   // déposé hors de toute pièce : le niveau ancre
       if (!p.mount && hd.mount) p.mount = hd.mount
     }
+    // changement de niveau : le niveau n'ancre que hors de toute pièce (le serveur ignore `levelId`
+    // quand `roomId` est donné, et efface la pièce quand le niveau ancre seul)
+    if (override?.levelId && !p.roomId) p.levelId = override.levelId
     saving.value = true
     try {
       house.value = await getTransport().placeDevice(hd.id, p)
@@ -298,14 +329,19 @@ export const useHouseStore = defineStore('house', () => {
 
   const canRevert = computed(() => {
     const o = placingOrigin.value, hd = selectedDevice.value
-    return !!o && !!hd && (o.position.join() !== hd.position.join() || o.mount !== hd.mount || o.roomId !== hd.roomId || o.yaw !== hd.yaw)
+    return !!o && !!hd && (o.position.join() !== hd.position.join() || o.mount !== hd.mount || o.roomId !== hd.roomId || o.levelId !== anchorLevel(hd) || o.yaw !== hd.yaw)
   })
   async function revertPlacement() {
     const o = placingOrigin.value, hd = selectedDevice.value
     if (!o || !hd) return
     draft.value = { position: o.position, roomId: o.roomId }
     // une orientation absente à l'entrée ne peut pas être effacée du JSON : on la ramène à 0, qui vaut pareil
-    await savePlacement({ ...(o.mount ? { mount: o.mount } : {}), ...(o.yaw !== hd.yaw ? { yaw: o.yaw ?? 0 } : {}) })
+    await savePlacement({
+      ...(o.mount ? { mount: o.mount } : {}),
+      ...(o.yaw !== hd.yaw ? { yaw: o.yaw ?? 0 } : {}),
+      // niveau d'entrée : seulement s'il n'y a pas de pièce pour l'ancrer, sinon le niveau EFFACERAIT la pièce
+      ...(!o.roomId && o.levelId && o.levelId !== anchorLevel(hd) ? { levelId: o.levelId } : {}),
+    })
   }
 
   return {
