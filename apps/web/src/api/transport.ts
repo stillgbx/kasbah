@@ -18,6 +18,28 @@ export class ApiRequestError extends Error {
   }
 }
 
+/**
+ * Appairage de la passerelle Enphase, tel que l'UI le voit. Le jeton n'y figure jamais : seul le
+ * serveur le détient, et `tokenFile` dit où il le garde — `null` si rien n'est gardé, et l'UI
+ * prévient alors que l'appairage ne survivra pas à un redémarrage.
+ */
+export interface EnphaseTokenStatus {
+  paired: boolean
+  host: string
+  serial?: string
+  software?: string
+  stage: 'ok' | 'expiring' | 'expired' | 'none'
+  daysLeft?: number
+  expiresAt?: number
+  role?: string
+  username?: string
+  source?: 'config' | 'cache' | 'minted'
+  renewUnderDays: number
+  tokenFile: string | null
+}
+
+export type EnphasePairing = { token: string } | { user: string; password: string; force?: boolean }
+
 export interface Transport {
   getHouse(): Promise<House>
   getDevices(): Promise<DeviceEntry[]>
@@ -39,6 +61,13 @@ export interface Transport {
   pairHue(): Promise<{ appKey: string; hint: string }>
   /** URL de consentement Google à ouvrir dans un navigateur pour lier le compte Nest. */
   nestAuthUrl(): Promise<{ url: string; redirectUri: string }>
+  /** État de l'appairage de la passerelle Enphase. Ne porte jamais le jeton lui-même. */
+  enphaseTokenStatus(): Promise<EnphaseTokenStatus>
+  /**
+   * Appaire la passerelle Enphase : un jeton déjà obtenu, ou les identifiants du compte qui servent
+   * une fois à en frapper un et ne sont pas conservés. `force` remplace un jeton encore valable.
+   */
+  pairEnphase(body: EnphasePairing): Promise<EnphaseTokenStatus>
   /**
    * Fait oublier un appareil au plugin qui le retenait (`meta.forgettable`), par convention
    * `DELETE /api/plugins/<plugin>/devices/<externalId>` : il quitte l'inventaire jusqu'à ce qu'il

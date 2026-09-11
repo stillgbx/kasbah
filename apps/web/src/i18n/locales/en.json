@@ -144,6 +144,26 @@
       "instructions": "The Device Access project is configured. Link your Google account to choose the cameras shared with Kasbah.",
       "opened": "Google's consent screen opened in a new tab. At the end, the page shows the token to paste into apps/server/.env; cameras show up here after a refresh."
     },
+    "enphase": {
+      "title": "Enphase gateway",
+      "intro": "The gateway requires a token, valid for one year. Pair it from this tablet: the server keeps the token, there is nothing to copy elsewhere.",
+      "expiring": "The gateway token expires in {left}. Renew it to keep reading solar production.",
+      "leftDays": "{n} day | {n} days", "leftHours": "{n} hour | {n} hours", "leftSoon": "less than an hour",
+      "expired": "The gateway token has expired: solar production is no longer read. Renew it.",
+      "modeAccount": "Enphase account", "modeToken": "Token",
+      "email": "Enphase account e-mail", "emailPlaceholder": "you{'@'}example.com", "password": "Password",
+      "passwordHint": "Used once to obtain the token, then forgotten: never stored, never logged. They only travel across your local network.",
+      "token": "Token created on entrez.enphaseenergy.com",
+      "tokenHint": "Prefer this if you already have a token: no password travels.",
+      "pair": "Pair the gateway", "renew": "Renew the token", "pairing": "Pairing…",
+      "replaceWarn": "The current token is still valid for {left}. Creating another one at Enphase would leave this one unused.",
+      "replaceAnyway": "Create a new token anyway",
+      "success": "Gateway paired. Token valid for {left}, kept by the server.",
+      "serverKept": "Token kept by the server in {file}. Nothing to copy, even from a tablet.",
+      "tokenInfo": "{role} token, expires on {date}.", "roleOwner": "Owner", "roleInstaller": "Installer",
+      "installerNote": "An installer token only lasts 12 hours. Enphase's web form gives nothing else to an account that is also an installer: use the Enphase account above to get the one-year token.",
+      "notStored": "No token file is configured (ENPHASE_TOKEN_FILE is empty): pairing will be lost when the server restarts."
+    },
     "about": "Kasbah v{version} · {house}"
   },
   "errors": {

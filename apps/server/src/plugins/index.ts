@@ -1,5 +1,6 @@
 import type { PluginFactory } from '../core/plugin'
 import { makeStubPlugin } from './_stub'
+import { createEnphasePlugin } from './enphase'
 import { createGoogleCastPlugin } from './google_cast'
 import { createHuePlugin } from './hue'
 import { createMockPlugin } from './mock'
@@ -15,12 +16,12 @@ export const PLUGIN_FACTORIES: Record<string, PluginFactory> = {
   tahoma: createTahomaPlugin,
   nest: () => createNestPlugin(),
   google_cast: createGoogleCastPlugin,
+  enphase: () => createEnphasePlugin(),
   sonos: makeStubPlugin('sonos', 'Sonos'),
   irobot: makeStubPlugin('irobot', 'iRobot'),
   automower: makeStubPlugin('automower', 'Husqvarna Automower'),
   melcloud: makeStubPlugin('melcloud', 'Mitsubishi MELCloud'),
   comap: makeStubPlugin('comap', 'COMAP Proteo'),
-  enphase: makeStubPlugin('enphase', 'Enphase Enlighten'),
   tesla: makeStubPlugin('tesla', 'Tesla Fleet API'),
   renault: makeStubPlugin('renault', 'Renault'),
 }

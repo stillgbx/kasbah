@@ -1,6 +1,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { DeviceEntry, StateFor } from '@kasbah/shared'
+import { findEnergySite } from '../lib/energy'
 import { formatPower, formatTemp } from '../lib/format'
 import { useDevicesStore } from '../stores/devices'
 import { useHouseStore } from '../stores/house'
@@ -36,7 +37,8 @@ export function useHomeSummary() {
   const awnings = computed(() => covers.value.filter((e) => ofClass(e, 'awning', 'blind') && known(e)))
   // un store « baissé » est déployé, donc position basse — l'inverse d'un volet ouvert
   const awningsDown = computed(() => awnings.value.filter((e) => pos(e)! < 100).length)
-  const energy = computed(() => devices.list.find((e) => e.state.kind === 'energy')?.state as StateFor<'energy'> | undefined)
+  // le SITE : une batterie est aussi un `energy`, mais ne mesure ni la production ni le réseau
+  const energy = computed(() => findEnergySite(devices.list)?.state as StateFor<'energy'> | undefined)
   const climate = computed(() => devices.list.find((e) => e.state.kind === 'climate')?.state as StateFor<'climate'> | undefined)
   const indoorTemp = computed<number | null>(() => {
     if (climate.value) return climate.value.currentTempC

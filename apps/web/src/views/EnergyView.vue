@@ -6,6 +6,7 @@ import { getTransport } from '../api'
 import PageHeader from '../components/layout/PageHeader.vue'
 import StatTile from '../components/ui/StatTile.vue'
 import { useHomeSummary } from '../composables/useHomeSummary'
+import { findEnergySite } from '../lib/energy'
 import { formatEnergy, formatPercent, formatPower } from '../lib/format'
 import { useDevicesStore } from '../stores/devices'
 
@@ -15,7 +16,9 @@ const devices = useDevicesStore()
 const summary = useHomeSummary()
 const { locale } = useI18n()
 
-const energyEntry = computed(() => devices.list.find((e) => e.state.kind === 'energy'))
+// le SITE, et non le premier `energy` venu : une installation publie aussi une batterie par unité,
+// dont l'état ne porte ni production ni réseau (voir `lib/energy.ts`)
+const energyEntry = computed(() => findEnergySite(devices.list))
 const e = computed(() => energyEntry.value?.state as StateFor<'energy'> | undefined)
 const charger = computed(() => summary.chargers.value[0]?.state as StateFor<'ev_charger'> | undefined)
 const chargerVehicle = computed(() => summary.vehicles.value.find((v) => (v.state as StateFor<'vehicle'>).charging)?.descriptor.name)

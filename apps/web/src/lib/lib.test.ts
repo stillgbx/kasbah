@@ -7,6 +7,7 @@ import { emitsSound, relayLabel, soundRouting } from './audioRouting'
 import { headlineValue, isDeviceBusy, isDeviceOn, isDevicePulsing, statusLabel, toggleChecked, toggleCommand } from './deviceState'
 import { formatPower, formatSensor, summarize } from './format'
 import { deviceColor, deviceIcon } from './deviceIcons'
+import { findBatteries, findEnergySite, isEnergySite } from './energy'
 import fr from '../i18n/locales/fr.json'
 import en from '../i18n/locales/en.json'
 
@@ -177,6 +178,31 @@ describe('routage du son : une TV en HDMI ARC fait jouer une barre', () => {
     const r = soundRouting([{ ...tvHouse, meta: {} }, barHouse], { 'cast:tv': tvPlaying, 'cast:bar': bar })
     expect(emitsSound('cast:tv', tvPlaying, r)).toBe(false)
     expect(emitsSound('cast:bar', bar, r)).toBe(false)
+  })
+})
+
+describe("site energie vs batterie", () => {
+  const entry = (externalId: string, capabilities: DeviceDescriptor['capabilities'], state: Partial<StateFor<'energy'>>) => ({
+    descriptor: { id: `enphase:${externalId}`, pluginId: 'enphase', externalId, kind: 'energy' as const, name: externalId, capabilities, meta: {} },
+    state: { kind: 'energy' as const, updatedAt: 0, available: true, productionW: 0, consumptionW: 0, gridW: 0, ...state },
+  })
+  // ordre reel d'une installation Enphase : le site, puis les batteries
+  const site = entry('site', ['production', 'consumption', 'grid', 'storage'], { productionW: 6456, consumptionW: 691, gridW: -5765 })
+  const battery = entry('b1', ['storage'], { batterySoc: 100, batteryW: -16 })
+
+  it('reconnait le site par la mesure du RESEAU, pas par son rang dans la liste', () => {
+    expect(isEnergySite(site.descriptor)).toBe(true)
+    expect(isEnergySite(battery.descriptor)).toBe(false)
+    // regression : une batterie placee avant le site donnait 0 W de production et 100 % de charge
+    expect(findEnergySite([battery, site])?.descriptor.externalId).toBe('site')
+    expect(findEnergySite([site, battery])?.descriptor.externalId).toBe('site')
+  })
+
+  it('liste les batteries a part, et se rabat sur le premier `energy` sans compteur reseau', () => {
+    expect(findBatteries([site, battery, battery]).map((e) => e.descriptor.externalId)).toEqual(['b1', 'b1'])
+    const noMeter = entry('sans-compteur', ['production'], { productionW: 12 })
+    expect(findEnergySite([noMeter])?.descriptor.externalId).toBe('sans-compteur')
+    expect(findEnergySite([])).toBeUndefined()
   })
 })
 

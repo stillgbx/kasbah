@@ -1,6 +1,6 @@
 import { apiErrorSchema, devicesResponseSchema, energyHistorySchema, healthResponseSchema, houseSchema, pluginSettingsResponseSchema, pluginSettingsSchema, scenesResponseSchema, serverMessageSchema, type CommandInput, type DeviceEntry, type DevicePlacement, type EnergyHistory, type HealthResponse, type House, type PluginSceneEntry, type PluginSettings, type SceneRecallInput, type SceneUpdate } from '@kasbah/shared'
 import { parseDeviceId } from '@kasbah/shared'
-import { ApiRequestError, type ConnectionStatus, type Transport, type TransportHandlers } from './transport'
+import { ApiRequestError, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type Transport, type TransportHandlers } from './transport'
 
 // URLs relatives : même origine en prod (Fastify sert le build) et via le proxy Vite en dev.
 
@@ -78,6 +78,13 @@ export function createHttpTransport(base = ''): Transport {
     ),
     pairHue: () => request(`${base}/api/plugins/hue/pair`, { method: 'POST' }, (j) => j as { appKey: string; hint: string }),
     nestAuthUrl: () => request(`${base}/api/plugins/nest/auth/url`, undefined, (j) => j as { url: string; redirectUri: string }),
+    enphaseTokenStatus: () => request(`${base}/api/plugins/enphase/token`, undefined, (j) => j as EnphaseTokenStatus),
+    // le corps peut porter un mot de passe : POST, jamais en query (il finirait dans les journaux)
+    pairEnphase: (body: EnphasePairing) => request(
+      `${base}/api/plugins/enphase/token`,
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
+      (j) => j as EnphaseTokenStatus,
+    ),
     forgetDevice: (deviceId) => {
       const { pluginId, externalId } = parseDeviceId(deviceId)
       return request(

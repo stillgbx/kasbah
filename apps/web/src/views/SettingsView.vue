@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import type { PluginHealth } from '@kasbah/shared'
 import PageHeader from '../components/layout/PageHeader.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
+import EnphasePairingCard from '../components/EnphasePairingCard.vue'
 import HuePairingCard from '../components/HuePairingCard.vue'
 import NestLinkCard from '../components/NestLinkCard.vue'
 import Segmented from '../components/ui/Segmented.vue'
@@ -121,6 +122,7 @@ const houseStats = computed(() => {
             <div class="block__head"><div class="block__title">{{ $t('settings.plugins') }}</div><div class="muted small">{{ $t('settings.keys') }}</div></div>
             <HuePairingCard />
             <NestLinkCard />
+            <EnphasePairingCard />
             <div class="plugins">
               <div v-for="[id, h] in plugins" :key="id" class="plugin">
                 <div class="min0">
