@@ -122,7 +122,7 @@
   },
   "settings": {
     "title": "Réglages", "appearance": "Apparence", "system": "Système", "light": "Clair", "dark": "Sombre",
-    "accent": "Couleur d'accent", "accents": { "teal": "Lagon", "terracotta": "Terre cuite", "indigo": "Indigo", "moss": "Mousse" },
+    "theme": "Thème", "themeDarkOnly": "Sombre uniquement",
     "language": "Langue", "auto": "Automatique", "fullscreen": "Plein écran",
     "scenes": "Ambiances", "sceneAutoDynamic": "Démarrage animé", "sceneNoPalette": "Pas de palette animée",
     "sceneAutoDynamicNew": "Nouvelles ambiances animées",

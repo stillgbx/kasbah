@@ -9,14 +9,14 @@ import HuePairingCard from '../components/HuePairingCard.vue'
 import NestLinkCard from '../components/NestLinkCard.vue'
 import Segmented from '../components/ui/Segmented.vue'
 import { LOCALE_LABELS } from '../i18n'
-import { accentColor } from '../plugins/vuetify'
 import { useDevicesStore } from '../stores/devices'
 import { useHouseStore } from '../stores/house'
 import { useScenesStore } from '../stores/scenes'
 import { usePluginsStore } from '../stores/plugins'
 import { useSettingsStore, type Appearance } from '../stores/settings'
+import { resolveVariant, type Theme } from '../themes'
 
-// Réglages : apparence, langue, accent, origine GPS (colonne gauche) ; plugins (droite). Les
+// Réglages : apparence, langue, thème, origine GPS (colonne gauche) ; plugins (droite). Les
 // plugins actifs et leurs sous-items vivent dans house.json : ce sont des choix de LA MAISON, pas
 // de la tablette, et ils prennent effet sans redémarrer le serveur.
 const settings = useSettingsStore()
@@ -43,6 +43,11 @@ function confirmDelete(sceneId: string) {
 
 const appearanceOptions = computed(() => settings.appearances.map((a) => ({ value: a, label: t(`settings.${a}`) })))
 const localeOptions = computed(() => [{ value: '', label: t('settings.auto') }, ...settings.locales.map((l) => ({ value: l as string, label: LOCALE_LABELS[l] }))])
+// Aperçu d'un thème : la variante que l'apparence DEMANDE (un thème sombre-uniquement montre donc
+// sa palette sombre même en apparence claire, ce que dit aussi son badge).
+function preview(theme: Theme) { return resolveVariant(theme.id, settings.wantDark).palette }
+function variantLabel(theme: Theme) { return settings.wantDark ? (theme.darkLabel ?? '') : (theme.lightLabel ?? theme.darkLabel ?? '') }
+
 const DOT: Record<PluginHealth['status'], string> = { ok: 'var(--accent)', degraded: '#d38b22', needs_pairing: '#d38b22', error: '#d24a43', not_implemented: 'var(--muted)', disabled: 'var(--muted)' }
 const gps = computed(() => {
   const o = house.house?.origin
@@ -69,10 +74,20 @@ const houseStats = computed(() => {
             <Segmented :model-value="settings.locale" :options="localeOptions" class="w-100" @update:model-value="(v: string) => settings.setLocale(v)" />
           </section>
           <section class="card block">
-            <div class="block__title">{{ $t('settings.accent') }}</div>
-            <div class="swatches">
-              <button v-for="a in settings.accents" :key="a.id" type="button" class="swatch" :data-on="settings.accentId === a.id ? '1' : '0'"
-                      :style="{ background: accentColor(a.id, settings.isDark) }" :title="$t(`settings.accents.${a.id}`)" :aria-label="$t(`settings.accents.${a.id}`)" @click="settings.setAccent(a.id)" />
+            <div class="block__title">{{ $t('settings.theme') }}</div>
+            <div class="themes">
+              <button v-for="th in settings.themes" :key="th.id" type="button" class="theme" :data-on="settings.themeId === th.id ? '1' : '0'"
+                      :aria-pressed="settings.themeId === th.id" @click="settings.setTheme(th.id)">
+                <span class="preview" :style="{ background: preview(th).bg }">
+                  <span class="preview__card" :style="{ background: preview(th).surface }">
+                    <span class="preview__bar" :style="{ background: preview(th).text }" />
+                    <span class="preview__bar preview__bar--short" :style="{ background: preview(th).muted }" />
+                  </span>
+                  <span class="preview__dot" :style="{ background: preview(th).accent }" />
+                </span>
+                <span class="theme__name">{{ th.label }}</span>
+                <span class="theme__variant">{{ th.light ? variantLabel(th) : $t('settings.themeDarkOnly') }}</span>
+              </button>
             </div>
           </section>
           <section class="card block">
@@ -186,9 +201,19 @@ const houseStats = computed(() => {
 .block__head { display: flex; justify-content: space-between; align-items: baseline; }
 .w-100 { width: 100%; display: flex; }
 .w-100 :deep(.segmented__item) { flex: 1 1 0; }
-.swatches { display: flex; gap: 12px; }
-.swatch { width: 34px; height: 34px; border-radius: 50%; border: 0; outline: 3px solid transparent; outline-offset: 3px; transition: outline-color .15s; }
-.swatch[data-on='1'] { outline-color: var(--accent); }
+/* Sélecteur de thème : chaque tuile montre la palette qu'elle appliquerait (fond, carte, texte,
+   accent). Empreinte fixe — la ligne de variante est toujours là, même vide. */
+.themes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.theme { display: grid; gap: 4px; padding: 8px; border-radius: var(--radius-sm); text-align: left; cursor: pointer;
+         border: 1px solid var(--line); background: transparent; transition: border-color .15s, background .15s; }
+.theme[data-on='1'] { border-color: var(--accent); background: var(--accent-soft); }
+.theme__name { font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.theme__variant { font-size: 11px; color: var(--muted); min-height: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.preview { position: relative; display: block; height: 46px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); }
+.preview__card { position: absolute; inset: 7px; border-radius: 5px; padding: 6px; display: grid; gap: 4px; align-content: start; }
+.preview__bar { height: 4px; width: 66%; border-radius: 2px; }
+.preview__bar--short { width: 38%; }
+.preview__dot { position: absolute; right: 6px; bottom: 6px; width: 13px; height: 13px; border-radius: 50%; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
 .small { font-size: 12px; }
 .plugins { display: grid; gap: 4px; }

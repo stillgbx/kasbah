@@ -1,17 +1,11 @@
 import 'vuetify/styles'
 import { createVuetify, type ThemeDefinition } from 'vuetify'
 import { aliases, strokeIcons } from './icons'
+import { DEFAULT_THEME_ID, onAccent, THEME_LIST, type Palette } from '../themes'
 
-// Thèmes Vuetify dérivés des jetons (styles/tokens.css) : 2 apparences × 4 accents. Les couleurs de
-// la SCÈNE 3D (scene*) vivent ici aussi et sont lues via --v-theme-* par Three.js (readVuetifyTheme).
-
-export const ACCENTS = [
-  { id: 'teal', light: '#1f6f78', dark: '#4fb3bd' },
-  { id: 'terracotta', light: '#c2582d', dark: '#e8865f' },
-  { id: 'indigo', light: '#3f4fbf', dark: '#8b96f0' },
-  { id: 'moss', light: '#4f7a4a', dark: '#8cc27f' },
-] as const
-export type AccentId = (typeof ACCENTS)[number]['id']
+// Thèmes Vuetify dérivés des palettes de `src/themes/` (une par variante clair/sombre d'un thème).
+// Les couleurs de la SCÈNE 3D (scene*) vivent ici : elles ne dépendent PAS du thème choisi (seul
+// `sceneMedia` suit) et sont lues via --v-theme-* par Three.js (readVuetifyTheme).
 
 const SCENE_LIGHT = {
   sceneTerrain: '#93bb8c', sceneLawn: '#93bb8c', sceneWater: '#6fb7d6', sceneDriveway: '#b7bbc1', scenePath: '#d9d2c5', sceneBed: '#5f8f5a',
@@ -26,46 +20,36 @@ const SCENE_DARK = {
   sceneMedia: '#5aaeff',
 }
 
-function light(accent: string): ThemeDefinition {
-  return {
-    dark: false,
-    colors: {
-      primary: accent, 'on-primary': '#ffffff', secondary: '#66717f',
-      background: '#e9edf1', surface: '#ffffff', 'surface-variant': '#f2f5f8', 'on-surface': '#141a22', 'on-surface-variant': '#66717f',
-      'surface-bright': '#ffffff', 'surface-light': '#f2f5f8',
-      error: '#d24a43', warning: '#d38b22', info: '#3f7fbf', success: '#4f7a4a',
-      ...SCENE_LIGHT,
-    },
-  }
+export function themeName(themeId: string, isDark: boolean): string {
+  return `${themeId}${isDark ? 'Dark' : 'Light'}`
 }
-function dark(accent: string): ThemeDefinition {
+
+/** Un thème Vuetify par variante existante : les thèmes sombre-uniquement n'en produisent qu'un. */
+function definition(p: Palette, isDark: boolean): ThemeDefinition {
   return {
-    dark: true,
+    dark: isDark,
     colors: {
-      primary: accent, 'on-primary': '#0b1118', secondary: '#8d9ab0',
-      background: '#0d1420', surface: '#161e2d', 'surface-variant': '#1d2839', 'on-surface': '#e8edf3', 'on-surface-variant': '#8d9ab0',
-      'surface-bright': '#243044', 'surface-light': '#1d2839',
-      error: '#e57373', warning: '#e0a24a', info: '#7fb3e6', success: '#8cc27f',
-      ...SCENE_DARK,
+      primary: p.accent, 'on-primary': onAccent(p), secondary: p.muted,
+      background: p.bg, surface: p.surface, 'surface-variant': p.surface2, 'on-surface': p.text, 'on-surface-variant': p.muted,
+      'surface-bright': p.bright, 'surface-light': p.surface2,
+      error: p.error, warning: p.warning, info: p.info, success: p.success,
+      ...(isDark ? SCENE_DARK : SCENE_LIGHT),
+      // Seule couleur de scène qui suit le thème : l'onde du lecteur dit la même chose que la
+      // pastille Médias, les deux viennent donc de `catMedia`.
+      sceneMedia: p.catMedia,
     },
   }
 }
 
 export const THEMES: Record<string, ThemeDefinition> = Object.fromEntries(
-  ACCENTS.flatMap((a) => [[`${a.id}Light`, light(a.light)], [`${a.id}Dark`, dark(a.dark)]]),
+  THEME_LIST.flatMap((t) => [
+    ...(t.light ? [[themeName(t.id, false), definition(t.light, false)]] : []),
+    ...(t.dark ? [[themeName(t.id, true), definition(t.dark, true)]] : []),
+  ]),
 )
 
-export function themeName(accent: AccentId, isDark: boolean): string {
-  return `${accent}${isDark ? 'Dark' : 'Light'}`
-}
-
-export function accentColor(accent: AccentId, isDark: boolean): string {
-  const a = ACCENTS.find((x) => x.id === accent) ?? ACCENTS[0]
-  return isDark ? a.dark : a.light
-}
-
 export const vuetify = createVuetify({
-  theme: { defaultTheme: 'tealLight', themes: THEMES },
+  theme: { defaultTheme: themeName(DEFAULT_THEME_ID, false), themes: THEMES },
   icons: { defaultSet: 'stroke', aliases, sets: { stroke: strokeIcons } },
   // Les couleurs passent par les props (les jetons CSS sont acceptés tels quels) plutôt que par des
   // surcharges CSS visant les classes internes de Vuetify : voir styles/app.css.
