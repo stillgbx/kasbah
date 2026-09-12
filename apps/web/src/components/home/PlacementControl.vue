@@ -77,6 +77,35 @@ const leavesShown = computed(() => hasLeaves(props.device, descriptor.value))
 const leaves = computed(() => String(coverLeaves(props.device, descriptor.value)))
 const leavesOptions = [{ value: '1', label: '1' }, { value: '2', label: '2' }]
 
+// Saisie DIRECTE d'une valeur, à côté des touches −/+ : régler un portail de 4,10 m au quart de
+// mètre demandait seize appuis. Le champ ne commite qu'à la validation (Entrée ou perte du focus) —
+// écrire house.json à chaque frappe enverrait une maison par caractère. Tant qu'on tape, c'est le
+// brouillon qui s'affiche : sinon la valeur relue du serveur écraserait la saisie en cours.
+type Field = 'yaw' | 'width' | 'height'
+const editing = ref<Field | null>(null)
+const draft = ref('')
+
+function startEdit(field: Field, shown: string) { editing.value = field; draft.value = shown }
+function cancelEdit() { editing.value = null }
+/** Valeur affichée par un champ : le brouillon s'il est en cours d'édition, sinon l'état. */
+const shownValue = (field: Field, value: string) => (editing.value === field ? draft.value : value)
+
+function commitEdit(field: Field) {
+  if (editing.value !== field) return          // sortie par Échap : rien à écrire
+  editing.value = null
+  // virgule décimale acceptée : c'est ce que tape un clavier français
+  const raw = Number(draft.value.replace(',', '.').trim())
+  if (!Number.isFinite(raw)) return            // saisie illisible : on garde ce qui était là
+  if (field === 'yaw') {
+    const next = (((Math.round(raw) % 360) + 360) % 360)
+    if (next !== yaw.value) void house.savePlacement({ yaw: next })
+    return
+  }
+  const { min, max } = SIZE_LIMITS[field]
+  const next = Math.min(max, Math.max(min, Math.round(raw * 100) / 100))
+  if (next !== size.value[field]) void house.savePlacement({ size: { ...size.value, [field]: next } })
+}
+
 type Mount = NonNullable<HouseDevice['mount']>
 type Preset = 'ceiling' | 'wall' | 'table' | 'floor' | ''
 const PRESETS: { value: Exclude<Preset, ''>; mount: Mount; z: (ceiling: number) => number }[] = [
@@ -150,7 +179,17 @@ function applyPreset(p: Preset) {
             <button type="button" class="key" :disabled="house.saving || !house.placing" :title="$t('place.rotateLeft')" :aria-label="$t('place.rotateLeft')" @click="rotate(YAW_STEP)">
               <StrokeIcon name="rotateLeft" :size="16" />
             </button>
-            <span class="place__value place__deg">{{ yaw }}°</span>
+            <span class="place__deg">
+              <input class="place__value place__num" type="text" inputmode="numeric" enterkeyhint="done"
+                     :value="shownValue('yaw', String(yaw))" :disabled="house.saving || !house.placing"
+                     :aria-label="$t('place.orientation')"
+                     @focus="startEdit('yaw', String(yaw))"
+                     @input="draft = ($event.target as HTMLInputElement).value"
+                     @keydown.enter="($event.target as HTMLInputElement).blur()"
+                     @keydown.esc="cancelEdit(); ($event.target as HTMLInputElement).blur()"
+                     @blur="commitEdit('yaw')">
+              <span class="place__unit">°</span>
+            </span>
             <button type="button" class="key" :disabled="house.saving || !house.placing" :title="$t('place.rotateRight')" :aria-label="$t('place.rotateRight')" @click="rotate(-YAW_STEP)">
               <StrokeIcon name="rotateRight" :size="16" />
             </button>
@@ -167,7 +206,14 @@ function applyPreset(p: Preset) {
                       @click="resize(dim, -SIZE_STEP)">
                 <StrokeIcon name="minus" :size="16" />
               </button>
-              <span class="place__value place__deg">{{ size[dim].toFixed(2) }}</span>
+              <input class="place__value place__num place__num--size" type="text" inputmode="decimal" enterkeyhint="done"
+                     :value="shownValue(dim, size[dim].toFixed(2))" :disabled="house.saving || !house.placing"
+                     :aria-label="dimLabel(dim)"
+                     @focus="startEdit(dim, size[dim].toFixed(2))"
+                     @input="draft = ($event.target as HTMLInputElement).value"
+                     @keydown.enter="($event.target as HTMLInputElement).blur()"
+                     @keydown.esc="cancelEdit(); ($event.target as HTMLInputElement).blur()"
+                     @blur="commitEdit(dim)">
               <button type="button" class="key" :disabled="house.saving || !house.placing"
                       :title="`${$t('place.bigger')} — ${dimLabel(dim)}`" :aria-label="`${$t('place.bigger')} — ${dimLabel(dim)}`"
                       @click="resize(dim, SIZE_STEP)">
@@ -236,7 +282,19 @@ function applyPreset(p: Preset) {
 /* deux choix seulement : le segmenté reste au bout de sa ligne plutôt que d'en prendre la largeur */
 .place__leaves { flex: 0 0 auto; }
 /* largeur fixe (« 315° », « 10.25 ») : la valeur change sans déplacer les touches */
-.place__deg { width: 5ch; text-align: center; }
+.place__deg { width: 5ch; display: inline-flex; align-items: center; justify-content: center; }
+.place__unit { flex: 0 0 auto; }
+/* Le champ de saisie occupe exactement la place qu'occupait le texte : même police, même graisse,
+   même largeur, chiffres à chasse fixe — passer en édition ne déplace donc rien. Le soulignement est
+   posé en `box-shadow` et non en bordure, pour la même raison. */
+.place__num {
+  width: 3.5ch; min-width: 0; height: 30px; padding: 0; border: 0; background: transparent;
+  color: inherit; font: inherit; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums;
+  box-shadow: inset 0 -1px 0 var(--line); border-radius: 4px;
+}
+.place__num--size { width: 5ch; }
+.place__num:focus { outline: none; background: var(--accent-soft); box-shadow: inset 0 -1px 0 var(--accent); }
+.place__num:disabled { opacity: .4; box-shadow: none; }
 .key {
   display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px;
   border: 1px solid var(--line); background: transparent; color: var(--text); transition: background .15s, color .15s;
