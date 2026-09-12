@@ -245,9 +245,9 @@ describe('marqueurs 3D', () => {
     m.update(coverState(100)); settle()
     expect(box.scale.y * 3).toBeCloseTo(0.3)
     expect(box.position.y - (box.scale.y * 3) / 2).toBeCloseTo(-1.5)
-    // position inconnue : l'objet déclaré en entier, pas un moignon qui passerait pour un défaut
+    // position inconnue : AU REPOS, comme partout ailleurs — un store au repos est rentré
     m.update(coverState(undefined)); settle()
-    expect(box.scale.y).toBeCloseTo(1)
+    expect(box.scale.y * 3).toBeCloseTo(0.3)
   })
 
   it('un portail ouvre ses battants, un ou deux selon le JSON', () => {
@@ -260,6 +260,9 @@ describe('marqueurs 3D', () => {
     two.update(coverState(100)); settle()        // ouvert : un quart de tour, chacun de son côté
     expect(hinges()[0]!.rotation.z).toBeCloseTo(Math.PI / 2)
     expect(hinges()[1]!.rotation.z).toBeCloseTo(-Math.PI / 2)
+    // position inconnue : au repos, donc clos — un portail muet ne se dessine pas ouvert
+    two.update(coverState(undefined)); settle()
+    expect(hinges()[0]!.rotation.z).toBeCloseTo(0)
     // un seul battant : un seul panneau, de toute la largeur
     const one = marker(device({ size: { width: 4, height: 1.5 }, leaves: 1 }), cover('gate'))
     expect(meshes(one.object)).toHaveLength(1)

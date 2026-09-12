@@ -44,10 +44,12 @@ const moving = computed(() => props.state.motion !== 'stopped')
 const hasPosition = props.descriptor.capabilities.includes('position')
 const lineText = computed(() => {
   if (moving.value) return t(`cover.${w.value}.${props.state.motion}`)
-  // La grande valeur du panneau dit déjà tout quand elle ne montre pas un pourcentage — « Inconnu »
-  // d'une position jamais reçue, « Baissé » d'un moteur sans retour : la ligne garde sa hauteur sans
-  // le répéter (elle reprend la parole dès qu'un mouvement commence).
-  if (shown.value === undefined || !hasPosition) return '—'
+  // Position jamais reçue : la grande valeur montre l'état SUPPOSÉ (« Fermé », « Remonté ») et cette
+  // ligne est l'endroit où on le dit — sans elle, le mot passerait pour une certitude.
+  if (shown.value === undefined) return t('cover.assumedHint')
+  // Moteur sans retour à position déduite : la grande valeur dit déjà le mot, la ligne garde sa
+  // hauteur sans le répéter (elle reprend la parole dès qu'un mouvement commence).
+  if (!hasPosition) return '—'
   if (shown.value <= 0) return t(`cover.${w.value}.open`)
   if (shown.value >= 100) return t(`cover.${w.value}.closed`)
   return t(`cover.${w.value}.level`)

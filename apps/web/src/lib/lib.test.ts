@@ -8,7 +8,7 @@ import { headlineValue, isDeviceBusy, isDeviceOn, isDevicePulsing, statusLabel, 
 import { formatPower, formatSensor, summarize } from './format'
 import { deviceColor, deviceIcon } from './deviceIcons'
 import { findBatteries, findEnergySite, isEnergySite } from './energy'
-import { coverActivity, isFlatCover } from './cover'
+import { coverActivity, coverAtRest, isFlatCover, isPassageCover } from './cover'
 import { coverLeaves, coverSize, hasLeaves, isOrientable, isSizable } from './orientation'
 import fr from '../i18n/locales/fr.json'
 import en from '../i18n/locales/en.json'
@@ -93,6 +93,25 @@ describe('convention d affichage des ouvrants', () => {
     expect(isDeviceOn(at({ position: 100 }))).toBe(true)      // sans descripteur : la regle du volet
   })
 
+  it('AU REPOS : ferme pour ce qui est debout, remonte pour un store, et suppose le repos si on ignore', () => {
+    const shutter = { ...sensor, kind: 'cover' as const, meta: { cover: { deviceClass: 'shutter' as const } } }
+    const gate = { ...sensor, kind: 'cover' as const, meta: { cover: { deviceClass: 'gate' as const } } }
+    const store = { ...sensor, kind: 'cover' as const, meta: { cover: { deviceClass: 'awning' as const } } }
+    expect(coverAtRest(shutter, 0)).toBe(true)
+    expect(coverAtRest(shutter, 100)).toBe(false)
+    // un store au repos est REMONTE (position 100), pas baisse : baisse, c'est de la toile au vent
+    expect(coverAtRest(store, 100)).toBe(true)
+    expect(coverAtRest(store, 0)).toBe(false)
+    // le doute penche du cote sur : un portail muet ne dit pas que la maison est ouverte
+    expect(coverAtRest(gate, undefined)).toBe(true)
+    expect(coverAtRest(store, undefined)).toBe(true)
+    // ce qui donne sur la rue : jamais ouvert par un geste d'ensemble
+    const garage = { ...sensor, kind: 'cover' as const, meta: { cover: { deviceClass: 'garage' as const } } }
+    expect(isPassageCover(gate)).toBe(true)
+    expect(isPassageCover(garage)).toBe(true)
+    expect(isPassageCover(shutter)).toBe(false)
+  })
+
   it('interrupteur : coche = FERME, alors que isDeviceOn garde ouvert = actif', () => {
     expect(toggleChecked(at({ position: 0 }))).toBe(true)
     expect(toggleChecked(at({ position: 100 }))).toBe(false)
@@ -133,8 +152,11 @@ describe('convention d affichage des ouvrants', () => {
     // Le piege repare ici : `defaultState` posait 0, et l'interface annoncait « Ferme » / « Baisse »
     // pour deux stores en realite remontes, compteur du resume compris.
     const unknown: StateFor<'cover'> = { kind: 'cover', updatedAt: 0, available: true, motion: 'stopped' }
-    expect(statusLabel(sensor, unknown, t, 'fr')).toBe('common.unknown')
-    expect(headlineValue(sensor, unknown, t, 'fr')).toBe('common.unknown')
+    // on MONTRE l'etat suppose (le repos) plutot qu'un « Inconnu » muet, mais jamais sans le dire
+    expect(statusLabel(sensor, unknown, t, 'fr')).toBe('cover.assumed')
+    expect(headlineValue(sensor, unknown, t, 'fr')).toBe('cover.openClose.closed')
+    const store = { ...sensor, kind: 'cover' as const, meta: { cover: { deviceClass: 'awning' as const } } }
+    expect(headlineValue(store, unknown, t, 'fr')).toBe('cover.upDown.open')   // un store au repos est REMONTE
     expect(summarize(sensor, unknown, 'fr')).toBe('—')
     expect(isDeviceOn(unknown)).toBe(false)                             // aucune teinte d'icone
     expect(toggleChecked(unknown)).toBe(false)                          // « ferme » n'est pas affirmable

@@ -332,7 +332,8 @@ export class CoverMarker extends DeviceMarker {
         this.free = { kind: 'leaves', hinges }
         this.setLift(height / 2 + 0.15)
       }
-      this.applyFraction(1)   // fermé (store déployé) tant qu'aucun état n'est arrivé : l'objet déclaré, en entier
+      // tant qu'aucun état n'est arrivé : au repos, comme une position inconnue (voir `onState`)
+      this.applyFraction(isFlatCover(ctx.descriptor) ? 0 : 1)
     }
   }
 
@@ -369,11 +370,12 @@ export class CoverMarker extends DeviceMarker {
   protected isOn(s: DeviceState): boolean { return s.kind === 'cover' && coverActivity(this.ctx.descriptor, s.position) > 0 }
   protected onState(state: DeviceState | undefined): void {
     if (!state || state.kind !== 'cover') return
-    // Position inconnue (radio unidirectionnelle qui n'a rien reçu), deux lectures selon ce qui est
-    // dessiné. Un volet lié à une ouverture rentre son tablier : ne RIEN montrer vaut mieux qu'un
-    // volet fermé en trompe-l'œil. Un ouvrant libre, lui, est un objet : on le dessine tel qu'il est
-    // déclaré (store déployé, portail clos) plutôt qu'un moignon qui passerait pour un défaut.
-    const target = 1 - (state.position ?? (this.free ? 0 : 100)) / 100
+    // Position inconnue (radio unidirectionnelle qui n'a rien reçu) : on dessine l'ouvrant AU REPOS,
+    // l'état qu'on suppose partout ailleurs faute de mieux (`coverAtRest`). Le repos n'est pas le même
+    // pour tous : un volet rentre son tablier (ne RIEN montrer vaut mieux qu'un volet fermé en
+    // trompe-l'œil), un store se replie sur son coffre, un portail reste clos.
+    const rest = this.free && !isFlatCover(this.ctx.descriptor) ? 0 : 100
+    const target = 1 - (state.position ?? rest) / 100
     if (!this.slat && !this.free) return
     this.cancelTween?.()
     const from = this.closedFraction

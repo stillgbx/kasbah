@@ -75,7 +75,7 @@
   },
   "cover": {
     "classes": {"shutter": "Shutter", "awning": "Awning", "blind": "Blind", "curtain": "Curtain", "gate": "Gate", "garage": "Garage door", "window": "Window"},
-    "tilt": "Tilt", "stopped": "Stopped", "preset": "Preset position", "presetAt": "Preset position — {pct}", "presetSave": "Save this position", "presetSaved": "Preset position saved: {pct}",
+    "tilt": "Tilt", "assumed": "{state} (assumed)", "assumedHint": "Assumed position, never confirmed", "stopped": "Stopped", "preset": "Preset position", "presetAt": "Preset position — {pct}", "presetSave": "Save this position", "presetSaved": "Preset position saved: {pct}",
     "openClose": { "open": "Open", "closed": "Closed", "opening": "Opening", "closing": "Closing", "level": "Closure", "actionOpen": "Open", "actionClose": "Close" },
     "upDown": { "open": "Raised", "closed": "Lowered", "opening": "Raising", "closing": "Lowering", "level": "Extension", "actionOpen": "Raise", "actionClose": "Lower" }
   },

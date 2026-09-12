@@ -78,14 +78,14 @@ describe('CoverControl', () => {
     expect(volet.find('.line__text').text()).toBe(fr.cover.openClose.closed)       // « Fermé »
   })
 
-  it('position inconnue : aucun pourcentage invente', () => {
+  it('position inconnue : aucun pourcentage invente, et la supposition est dite', () => {
     // store RTS jamais commande : `position` absente. Le curseur reste (la capacite est la), mais
-    // le pourcentage disparait plutot que d'afficher un 0 %. La ligne ne redit pas « Inconnu »,
-    // deja affiche en grand par le panneau — elle garde juste sa hauteur.
+    // le pourcentage disparait plutot que d'afficher un 0 %. Le panneau montre en grand l'etat
+    // SUPPOSE (« Remonte ») : c'est cette ligne qui dit que c'en est un.
     const unknown: StateFor<'cover'> = { kind: 'cover', updatedAt: 0, available: true, motion: 'stopped' }
     const w = mount(CoverControl, { props: { descriptor: descriptor(ALL, 'awning'), state: unknown } })
     const line = w.findAll('.line')[0]!                          // la 2e ligne est l'inclinaison
-    expect(line.find('.line__text').text()).toBe('—')
+    expect(line.find('.line__text').text()).toBe(fr.cover.assumedHint)
     expect(line.find('.line__pct').exists()).toBe(false)
     expect(w.findAll('button')).toHaveLength(3)                 // remonter · stop · baisser
 

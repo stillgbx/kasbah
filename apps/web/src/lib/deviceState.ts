@@ -1,5 +1,5 @@
 import type { CommandInput, DeviceDescriptor, DeviceState, StateFor } from '@kasbah/shared'
-import { coverActivity, coverWords, toClosure } from './cover'
+import { coverActivity, coverRestKey, coverWords, toClosure } from './cover'
 import { isEnergySite } from './energy'
 import { formatPercent, formatPower, formatSensor, formatTemp } from './format'
 
@@ -118,8 +118,11 @@ export function statusLabel(descriptor: DeviceDescriptor, s: DeviceState, t: Tra
     // dépend de la nature de l'ouvrant : un store est « baissé », pas « fermé ».
     case 'cover': {
       const w = coverWords(descriptor)
+      // Position inconnue : on montre l'état qu'on SUPPOSE (le repos, `coverAtRest`) plutôt qu'un
+      // « Inconnu » muet — c'est déjà lui qui décide des gestes d'ensemble et du dessin de la scène.
+      // Le « (supposé) » est ce qui empêche le mot de devenir une affirmation.
       return s.motion !== 'stopped' ? t(`cover.${w}.${s.motion}`)
-        : s.position === undefined ? t('common.unknown')
+        : s.position === undefined ? t('cover.assumed', { state: t(coverRestKey(descriptor)) })
         : s.position <= 0 ? t(`cover.${w}.closed`)
         : s.position >= 100 ? t(`cover.${w}.open`)
         : formatPercent(toClosure(s.position), locale)
@@ -162,7 +165,9 @@ export function headlineValue(descriptor: DeviceDescriptor, s: DeviceState, t: T
     // pleine course. Écrire « 100 % » d'un store arrêté à mi-hauteur est une précision inventée —
     // on ne dit que le mot, qui reste vrai. Les moteurs bidirectionnels gardent leur pourcentage.
     case 'cover': {
-      if (s.position === undefined) return t('common.unknown')
+      // la grande valeur porte le mot supposé ; c'est la ligne d'état juste en dessous qui dit que
+      // c'en est un (`CoverControl`), le « (supposé) » ne tiendrait pas en 32 px
+      if (s.position === undefined) return t(coverRestKey(descriptor))
       if (!descriptor.capabilities.includes('position')) {
         const w = coverWords(descriptor)
         return t(`cover.${w}.${s.position <= 0 ? 'closed' : 'open'}`)

@@ -48,6 +48,37 @@ export function isFlatCover(descriptor: Coverish | undefined): boolean {
   return !!descriptor && coverWords(descriptor) === 'upDown'
 }
 
+/** Un portail, une porte de garage donnent sur la rue : un geste d'ensemble ne les OUVRE jamais. */
+const PASSAGE = new Set<string>(['gate', 'garage'])
+
+export function isPassageCover(descriptor: Coverish | undefined): boolean {
+  return PASSAGE.has(descriptor?.meta.cover?.deviceClass ?? '')
+}
+
+/**
+ * L'ouvrant est-il AU REPOS ? C'est l'état où il ne demande rien à personne : **fermé** pour ce qui
+ * se tient debout (volet, portail), **remonté** pour un store — un store au repos est rentré, pas
+ * déployé (c'est déployé qu'il craint le vent, voir `coverActivity`).
+ *
+ * **Une position inconnue est SUPPOSÉE au repos.** Une radio unidirectionnelle ne dit jamais où elle
+ * en est, et le doute doit pencher du côté sûr : sans cette supposition, un portail muet suffisait à
+ * faire croire que la maison n'était pas sécurisée, et l'appui suivant l'aurait ouvert. Ce n'est pas
+ * une AFFIRMATION — les libellés continuent de dire « Inconnu » — c'est une décision par défaut.
+ */
+export function coverAtRest(descriptor: Coverish | undefined, position: number | undefined): boolean {
+  if (position === undefined) return true
+  return isFlatCover(descriptor) ? position >= 100 : position <= 0
+}
+
+/**
+ * Clé i18n du mot qui décrit le REPOS de cet ouvrant : « Fermé » pour ce qui se tient debout,
+ * « Remonté » pour un store. Sert à MONTRER l'état supposé quand la position est inconnue — le mot
+ * seul serait une affirmation, il est donc toujours accompagné de son « (supposé) ».
+ */
+export function coverRestKey(descriptor: Coverish): string {
+  return `cover.${coverWords(descriptor)}.${isFlatCover(descriptor) ? 'open' : 'closed'}`
+}
+
 /**
  * Part de l'ouvrant qui SE REMARQUE, de 0 (rien à signaler) à 1. C'est l'inverse d'une nature à
  * l'autre, et c'est voulu : d'un volet on retient qu'il est OUVERT, d'un store qu'il est DÉPLOYÉ —

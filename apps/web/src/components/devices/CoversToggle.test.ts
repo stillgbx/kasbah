@@ -18,36 +18,45 @@ function setup(entries: DeviceEntry[]) {
   devices.setEntries(entries)
   const runScene = vi.spyOn(devices, 'runScene').mockResolvedValue()
   const w = mount(CoversToggle, { props: { entries, label: 'Tous les ouvrants' } })
-  return { w, runScene }
+  const input = () => w.find('input').element as HTMLInputElement
+  return { w, runScene, input }
 }
 
 describe('CoversToggle', () => {
   beforeEach(() => { setActivePinia(createPinia()) })
 
-  it('coché seulement quand TOUT ce qu on sait est fermé', () => {
-    expect((setup([cover('a', 0), cover('b', 0)]).w.find('input').element as HTMLInputElement).checked).toBe(true)
-    // un seul ouvert suffit à décocher : « tout fermer » reste à un appui
-    expect((setup([cover('a', 0), cover('b', 100)]).w.find('input').element as HTMLInputElement).checked).toBe(false)
-    // position inconnue (RTS) : elle ne vote pas, et seule elle ne coche rien
-    expect((setup([cover('a', undefined)]).w.find('input').element as HTMLInputElement).checked).toBe(false)
-    expect((setup([cover('a', 0), cover('b', undefined)]).w.find('input').element as HTMLInputElement).checked).toBe(true)
+  it('coché quand tout est AU REPOS : volets et portail fermés, stores remontés', () => {
+    expect(setup([cover('v', 0), cover('p', 0, 'gate'), cover('s', 100, 'awning')]).input().checked).toBe(true)
+    // un volet ouvert décoche
+    expect(setup([cover('v', 100), cover('s', 100, 'awning')]).input().checked).toBe(false)
+    // un store DÉPLOYÉ (position 0 = baissé) n'est pas au repos, même si le contrat le dit « fermé »
+    expect(setup([cover('v', 0), cover('s', 0, 'awning')]).input().checked).toBe(false)
+    // position inconnue : supposée au repos, sinon un portail muet décocherait en permanence
+    expect(setup([cover('v', 0), cover('p', undefined, 'gate')]).input().checked).toBe(true)
   })
 
-  it('ferme ce qui ne l est pas, sans réveiller ce qui l est déjà', async () => {
-    const { w, runScene } = setup([cover('a', 100), cover('b', 0), cover('c', undefined), cover('d', 100, 'shutter', false)])
+  it('sécuriser : ferme ce qui se tient debout et REMONTE les stores', async () => {
+    const { w, runScene } = setup([cover('v', 100), cover('p', undefined, 'gate'), cover('s', 0, 'awning'), cover('deja', 0)])
+    expect((w.find('input').element as HTMLInputElement).checked).toBe(false)
     await w.find('input').setValue(true)
     expect(runScene).toHaveBeenCalledWith([
-      { deviceId: 'a', command: { type: 'cover.close' } },   // ouvert : à fermer
-      { deviceId: 'c', command: { type: 'cover.close' } },   // position inconnue : on envoie
+      { deviceId: 'v', command: { type: 'cover.close' } },   // volet ouvert : on ferme
+      { deviceId: 'p', command: { type: 'cover.close' } },   // portail muet : on ferme quand même, ça ne coûte rien
+      { deviceId: 's', command: { type: 'cover.open' } },    // store baissé : on le REMONTE, on ne le déploie pas
     ])
   })
 
-  it('un store suit le MÊME geste : fermer, c est baisser (le plugin traduit)', async () => {
-    // store déployé (position 0) = fermé : l'interrupteur est coché, et l'appui suivant remonte
-    const { w, runScene } = setup([cover('store', 0, 'awning')])
+  it("ouvrir ne touche QUE les volets : ni le portail, ni le garage, ni les stores", async () => {
+    const { w, runScene } = setup([cover('v', 0), cover('p', 0, 'gate'), cover('g', 0, 'garage'), cover('s', 100, 'awning')])
     expect((w.find('input').element as HTMLInputElement).checked).toBe(true)
     await w.find('input').setValue(false)
-    expect(runScene).toHaveBeenCalledWith([{ deviceId: 'store', command: { type: 'cover.open' } }])
+    expect(runScene).toHaveBeenCalledWith([{ deviceId: 'v', command: { type: 'cover.open' } }])
+  })
+
+  it("ne promet pas un geste qu'il ne ferait pas : une terrasse et un portail au repos, rien à ouvrir", () => {
+    const { input } = setup([cover('p', 0, 'gate'), cover('s', 100, 'awning')])
+    expect(input().checked).toBe(true)
+    expect(input().disabled).toBe(true)
   })
 
   // règle « rien ne doit bouger » : un pont muet ne doit pas faire disparaître l'interrupteur
