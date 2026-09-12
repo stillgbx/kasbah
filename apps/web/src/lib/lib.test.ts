@@ -8,7 +8,8 @@ import { headlineValue, isDeviceBusy, isDeviceOn, isDevicePulsing, statusLabel, 
 import { formatPower, formatSensor, summarize } from './format'
 import { deviceColor, deviceIcon } from './deviceIcons'
 import { findBatteries, findEnergySite, isEnergySite } from './energy'
-import { isOrientable } from './orientation'
+import { coverActivity, isFlatCover } from './cover'
+import { coverLeaves, coverSize, hasLeaves, isOrientable, isSizable } from './orientation'
 import fr from '../i18n/locales/fr.json'
 import en from '../i18n/locales/en.json'
 
@@ -75,6 +76,23 @@ describe('convention d affichage des ouvrants', () => {
     expect(statusLabel(store, at({ position: 40 }), t, 'fr')).toBe('60 %')
   })
 
+  it('ce qui se REMARQUE : un volet ouvert, mais un store DEPLOYE', () => {
+    const shutter = { ...sensor, kind: 'cover' as const, meta: { cover: { deviceClass: 'shutter' as const } } }
+    const store = { ...sensor, kind: 'cover' as const, meta: { cover: { deviceClass: 'awning' as const } } }
+    // un volet grand ouvert se remarque, ferme il ne dit rien
+    expect(coverActivity(shutter, 100)).toBe(1)
+    expect(coverActivity(shutter, 0)).toBe(0)
+    // un store c'est l'inverse : deploye (position 0, « baisse ») il est expose au vent, replie il dort
+    expect(coverActivity(store, 0)).toBe(1)
+    expect(coverActivity(store, 100)).toBe(0)
+    expect(coverActivity(store, undefined)).toBe(0)          // position inconnue : rien a signaler
+    // et la teinte des lignes et des marqueurs suit la meme regle
+    expect(isDeviceOn(at({ position: 100 }), store)).toBe(false)
+    expect(isDeviceOn(at({ position: 30 }), store)).toBe(true)
+    expect(isDeviceOn(at({ position: 100 }), shutter)).toBe(true)
+    expect(isDeviceOn(at({ position: 100 }))).toBe(true)      // sans descripteur : la regle du volet
+  })
+
   it('interrupteur : coche = FERME, alors que isDeviceOn garde ouvert = actif', () => {
     expect(toggleChecked(at({ position: 0 }))).toBe(true)
     expect(toggleChecked(at({ position: 100 }))).toBe(false)
@@ -97,6 +115,17 @@ describe('convention d affichage des ouvrants', () => {
     // et dans l'autre sens : ferme, on vise l'ouverture
     expect(toggleChecked(at({ position: 0 }))).toBe(true)
     expect(toggleChecked(at({ position: 0 }), 100)).toBe(false)
+  })
+
+  it('sans capacite `position`, la grande valeur ne donne pas de pourcentage deduit', () => {
+    // RTS : la position vient de la derniere commande de pleine course, pas d'une mesure. Un store
+    // arrete a mi-hauteur affichait « 100 % » — le mot, lui, reste vrai.
+    const rts = { ...sensor, kind: 'cover' as const, capabilities: [] as never[], meta: { cover: { deviceClass: 'awning' as const } } }
+    expect(headlineValue(rts, at({ position: 0 }), t, 'fr')).toBe('cover.upDown.closed')
+    expect(headlineValue(rts, at({ position: 100 }), t, 'fr')).toBe('cover.upDown.open')
+    // un moteur qui sait viser une position la MESURE : il garde son pourcentage
+    const io = { ...sensor, kind: 'cover' as const, capabilities: ['position'] as never[], meta: {} }
+    expect(headlineValue(io, at({ position: 40 }), t, 'fr')).toBe('60 %')
   })
 
   it('position INCONNUE : rien n est affirme', () => {
@@ -229,6 +258,41 @@ describe("ce qui a une orientation reglable", () => {
     // sans descripteur, seul un `yaw` deja pose dans le JSON fait foi
     expect(isOrientable(dev, undefined)).toBe(false)
     expect(isOrientable({ ...dev, yaw: 90 }, undefined)).toBe(true)
+  })
+
+  it("un ouvrant LIBRE s'oriente et se dimensionne, un ouvrant lie a une ouverture non", () => {
+    const gate = desc('cover', { cover: { deviceClass: 'gate' } })
+    expect(isOrientable(dev, gate)).toBe(true)
+    expect(isSizable(dev, gate)).toBe(true)
+    // volet d'une fenetre : son tablier epouse deja le rectangle de l'ouverture
+    const shutter = desc('cover', { cover: { deviceClass: 'shutter' } })
+    const onWindow = { ...dev, openingId: 'win.salon' }
+    expect(isOrientable(onWindow, shutter)).toBe(false)
+    expect(isSizable(onWindow, shutter)).toBe(false)
+  })
+
+  it('un store se deploie A PLAT, avec sa propre taille par defaut', () => {
+    const awning = desc('cover', { cover: { deviceClass: 'awning' } })
+    const gate = desc('cover', { cover: { deviceClass: 'gate' } })
+    expect(isFlatCover(awning)).toBe(true)
+    expect(isFlatCover(gate)).toBe(false)
+    // le store banne est large et avance ; le portail reste le petit panneau debout
+    expect(coverSize(dev, awning)).toEqual({ width: 3, height: 2 })
+    expect(coverSize(dev, gate)).toEqual({ width: 0.6, height: 0.5 })
+    // le JSON l'emporte toujours sur le defaut
+    expect(coverSize({ ...dev, size: { width: 4, height: 2.5 } }, awning)).toEqual({ width: 4, height: 2.5 })
+  })
+
+  it("un portail compte ses battants, un store n'en a pas", () => {
+    const gate = desc('cover', { cover: { deviceClass: 'gate' } })
+    const garage = desc('cover', { cover: { deviceClass: 'garage' } })
+    const awning = desc('cover', { cover: { deviceClass: 'awning' } })
+    expect(hasLeaves(dev, gate)).toBe(true)
+    expect(hasLeaves(dev, awning)).toBe(false)
+    // deux vantaux pour un portail, une piece pour une porte de garage
+    expect(coverLeaves(dev, gate)).toBe(2)
+    expect(coverLeaves(dev, garage)).toBe(1)
+    expect(coverLeaves({ ...dev, leaves: 1 }, gate)).toBe(1)
   })
 })
 

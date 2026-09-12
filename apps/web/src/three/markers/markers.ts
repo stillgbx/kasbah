@@ -1,8 +1,9 @@
-import { BoxGeometry, Color, CylinderGeometry, DoubleSide, Group, Mesh, MeshStandardMaterial, PointLight, RingGeometry, ShaderMaterial, SphereGeometry } from 'three'
+import { BoxGeometry, type BufferGeometry, Color, CylinderGeometry, DoubleSide, Group, Mesh, MeshStandardMaterial, PointLight, RingGeometry, ShaderMaterial, SphereGeometry } from 'three'
 import type { DeviceState, HouseDevice, PanelPlacement } from '@kasbah/shared'
 import { mirekToRgb, xyToRgb } from '@kasbah/shared'
 import { isMediaActive } from '../../lib/deviceState'
-import { yawToRad } from '../../lib/orientation'
+import { coverActivity, isFlatCover } from '../../lib/cover'
+import { coverLeaves, coverSize, yawToRad } from '../../lib/orientation'
 import { createTween, lerp } from '../core/tween'
 import { DeviceMarker, type MarkerContext } from './DeviceMarker'
 import { ScreenArt } from './screenArt'
@@ -68,19 +69,24 @@ export class GenericMarker extends DeviceMarker {
         else if (mediaClass === 'display') { geometry = new BoxGeometry(0.25, 0.08, 0.16); this.setLift(0.35) }
         else { geometry = new CylinderGeometry(0.13, 0.13, 0.32, 20); this.setLift(0.5) }
         break
-      case 'climate': geometry = new BoxGeometry(0.9, 0.3, 0.7); this.setLift(0.55); break
+      // Thermostat : une PASTILLE contre le mur (12 cm), pas un coffre — celui-ci écrasait le palier
+      // où il est posé. Le cylindre garde son axe +y (couché) : ses deux disques sont donc verticaux,
+      // et le cadran regarde la pièce dans la direction du `yaw`.
+      case 'climate': geometry = new CylinderGeometry(0.06, 0.06, 0.04, 28); this.setLift(0.18); break
       case 'ev_charger': geometry = new BoxGeometry(0.3, 0.15, 0.8); this.setLift(0.6); break
       case 'energy': geometry = new BoxGeometry(0.6, 0.15, 1); this.setLift(0.7); break
       case 'vacuum': geometry = new CylinderGeometry(0.18, 0.18, 0.09, 24); this.setLift(0.25); break
       default: geometry = new SphereGeometry(0.1, 16, 12); this.setLift(0.3)
     }
     this.mesh = new Mesh(geometry, devMaterial(ctx))
-    if (geometry instanceof CylinderGeometry) this.mesh.rotation.x = Math.PI / 2   // axe Y du cylindre → Z-up local
+    // Enceinte, robot : cylindre DEBOUT, donc l'axe Y du cylindre passe en Z-up local. Le thermostat,
+    // lui, est une pastille couchée contre son mur : il garde l'axe du cylindre à l'horizontale.
+    if (geometry instanceof CylinderGeometry && kind !== 'climate') this.mesh.rotation.x = Math.PI / 2
     if (kind === 'media_player') this.mesh.position.z = mediaClass === 'tv' ? 0.28 : mediaClass === 'display' ? 0.08 : 0.16
     // ce qui regarde quelque part, et ce qui se pose contre un mur, suivent leur `yaw` (0 = face à
     // +y) : un écran, mais aussi une borne de recharge, une batterie ou le boîtier d'une passerelle.
     // Un cylindre d'enceinte, lui, n'en a pas besoin.
-    if (mediaClass === 'tv' || mediaClass === 'display' || kind === 'ev_charger' || kind === 'energy') {
+    if (mediaClass === 'tv' || mediaClass === 'display' || kind === 'ev_charger' || kind === 'energy' || kind === 'climate') {
       this.mesh.rotation.z = yawToRad(device.yaw)
     }
     // ce que l'écran diffuse se voit SUR l'écran : la pochette du morceau (ou le logo de l'appli), posée
@@ -238,10 +244,33 @@ export class LightMarker extends DeviceMarker {
   override dispose(): void { this.sphere.geometry.dispose(); this.mat.dispose(); super.dispose() }
 }
 
-/** Volet : lame ajustée dans l'embrasure, hauteur = part fermée, tweenée ; icône seule sans ouverture. */
+/** Épaisseur (m) du panneau d'un ouvrant libre : elle ne se règle pas, un portail se voit de face. */
+const COVER_THICKNESS = 0.06
+/** Avancée (m) qui reste visible d'un store replié : son coffre et la toile enroulée dedans. */
+const AWNING_ROLLED = 0.3
+/** Quart de tour : l'ouverture d'un battant de portail grand ouvert. */
+const LEAF_SWING = Math.PI / 2
+
+/** Ce qui est dessiné pour un ouvrant LIBRE, et que la part fermée anime. */
+type FreeCover =
+  /** Store : une dalle horizontale dont l'AVANCÉE suit le déploiement, bord côté mur fixe. */
+  | { kind: 'flat'; box: Mesh; depth: number }
+  /** Portail : un ou deux battants qui pivotent sur leur charnière, du plat au quart de tour. */
+  | { kind: 'leaves'; hinges: Group[] }
+
+/**
+ * Volet : lame ajustée dans l'embrasure, hauteur = part fermée, tweenée.
+ *
+ * Sans ouverture liée, l'ouvrant est un objet LIBRE (portail, store banne) : le JSON seul le
+ * dimensionne (`size`) et l'oriente (`yaw`), et c'est la même part fermée qui l'anime — un store
+ * rentre son avancée, un portail ouvre ses battants.
+ */
+
 export class CoverMarker extends DeviceMarker {
   private slat: Mesh | null = null
   private slatMat: MeshStandardMaterial | null = null
+  private free: FreeCover | null = null
+  private geometries: BufferGeometry[] = []
   private closedFraction = 0
   private cancelTween: (() => void) | null = null
 
@@ -263,29 +292,89 @@ export class CoverMarker extends DeviceMarker {
       this.applyFraction(0)
       this.setLift(o.origin[2] + o.height - device.position[2] + 0.2)
     } else {
-      const box = new Mesh(new BoxGeometry(0.6, 0.06, 0.5), devMaterial(ctx))
-      this.object.add(box)
-      this.registerPickable(box)
-      this.setLift(0.4)
+      // Ouvrant LIBRE : aucune ouverture ne le dimensionne ni ne l'oriente, c'est donc le JSON qui le
+      // fait — `size` mètres, tourné du `yaw`, centré sur le point posé dans la scène. Tout est monté
+      // dans un pivot qui porte le `yaw` : ce qui bouge ensuite (avancée, battants) se calcule dans
+      // un repère où l'ouvrant regarde toujours +y.
+      const { width, height } = coverSize(device, ctx.descriptor)
+      const pivot = new Group()
+      pivot.rotation.z = yawToRad(device.yaw)
+      this.object.add(pivot)
+      if (isFlatCover(ctx.descriptor)) {
+        // Store banne : une dalle HORIZONTALE (son épaisseur est verticale — un panneau dressé à sa
+        // place ne ressemblait à rien), qui s'avance depuis le mur. `height` est son avancée.
+        const box = new Mesh(new BoxGeometry(width, height, COVER_THICKNESS), devMaterial(ctx))
+        box.castShadow = true
+        pivot.add(box)
+        this.geometries.push(box.geometry)
+        this.registerPickable(box)
+        this.free = { kind: 'flat', box, depth: height }
+        this.setLift(COVER_THICKNESS / 2 + 0.15)
+      } else {
+        // Portail, porte de garage : un panneau DEBOUT en travers du passage, en un ou deux battants.
+        // Chaque battant pend à une charnière posée au bord extérieur et s'ouvre vers l'avant (+y).
+        const hinges: Group[] = []
+        const count = coverLeaves(device, ctx.descriptor)
+        const leafWidth = width / count
+        for (let i = 0; i < count; i += 1) {
+          const side = i === 0 ? -1 : 1
+          const hinge = new Group()
+          hinge.position.x = (side * width) / 2
+          const leaf = new Mesh(new BoxGeometry(leafWidth, COVER_THICKNESS, height), devMaterial(ctx))
+          leaf.position.x = (-side * leafWidth) / 2      // le battant part de sa charnière vers le milieu
+          leaf.castShadow = true
+          hinge.add(leaf)
+          pivot.add(hinge)
+          hinges.push(hinge)
+          this.geometries.push(leaf.geometry)
+          this.registerPickable(leaf)
+        }
+        this.free = { kind: 'leaves', hinges }
+        this.setLift(height / 2 + 0.15)
+      }
+      this.applyFraction(1)   // fermé (store déployé) tant qu'aucun état n'est arrivé : l'objet déclaré, en entier
     }
   }
 
+  /** `f` = part FERMÉE : 1 = volet baissé, store déployé, portail clos ; 0 = ouvert. */
   private applyFraction(f: number): void {
-    const o = this.ctx.opening
-    if (!o || !this.slat) return
     this.closedFraction = f
-    const h = Math.max(0.001, o.height * f)
-    this.slat.scale.z = h
-    this.slat.position.z = o.origin[2] + o.height - h / 2 - this.device.position[2]
-    this.slat.visible = f > 0.005
+    const o = this.ctx.opening
+    if (o && this.slat) {
+      const h = Math.max(0.001, o.height * f)
+      this.slat.scale.z = h
+      this.slat.position.z = o.origin[2] + o.height - h / 2 - this.device.position[2]
+      this.slat.visible = f > 0.005
+      return
+    }
+    if (!this.free) return
+    if (this.free.kind === 'flat') {
+      // Replié, il ne reste que le coffre : l'avancée va de `AWNING_ROLLED` à celle du JSON. Le bord
+      // CÔTÉ MUR (local -y) ne bouge pas — c'est lui qui est fixé à la façade, la toile rentre vers lui.
+      const { box, depth } = this.free
+      const shown = Math.min(depth, AWNING_ROLLED + (depth - AWNING_ROLLED) * f)
+      box.scale.y = shown / depth
+      box.position.y = (shown - depth) / 2
+      return
+    }
+    // Portail : du panneau plat (fermé) au quart de tour (ouvert). Les deux battants s'écartent vers
+    // l'avant, chacun dans son sens — un seul battant ouvre du même geste.
+    for (const [i, hinge] of this.free.hinges.entries()) {
+      const side = i === 0 ? -1 : 1
+      hinge.rotation.z = -side * (1 - f) * LEAF_SWING
+    }
   }
 
-  protected isOn(s: DeviceState): boolean { return s.kind === 'cover' && (s.position ?? 0) > 0 }
+  // ce qui se remarque : un volet ouvert, un store DÉPLOYÉ (c'est déployé qu'il craint le vent)
+  protected isOn(s: DeviceState): boolean { return s.kind === 'cover' && coverActivity(this.ctx.descriptor, s.position) > 0 }
   protected onState(state: DeviceState | undefined): void {
     if (!state || state.kind !== 'cover') return
-    // position inconnue : tablier rentré (rien de dessiné) plutôt qu'un volet fermé en trompe-l'œil
-    const target = 1 - (state.position ?? 100) / 100
-    if (!this.slat) return
+    // Position inconnue (radio unidirectionnelle qui n'a rien reçu), deux lectures selon ce qui est
+    // dessiné. Un volet lié à une ouverture rentre son tablier : ne RIEN montrer vaut mieux qu'un
+    // volet fermé en trompe-l'œil. Un ouvrant libre, lui, est un objet : on le dessine tel qu'il est
+    // déclaré (store déployé, portail clos) plutôt qu'un moignon qui passerait pour un défaut.
+    const target = 1 - (state.position ?? (this.free ? 0 : 100)) / 100
+    if (!this.slat && !this.free) return
     this.cancelTween?.()
     const from = this.closedFraction
     if (Math.abs(target - from) < 0.002) this.applyFraction(target)
@@ -295,7 +384,13 @@ export class CoverMarker extends DeviceMarker {
       this.ctx.addAnimation({ step: (now) => tw.step(now) })
     }
   }
-  override dispose(): void { this.cancelTween?.(); this.slat?.geometry.dispose(); this.slatMat?.dispose(); super.dispose() }
+  override dispose(): void {
+    this.cancelTween?.()
+    this.slat?.geometry.dispose()
+    this.slatMat?.dispose()
+    for (const g of this.geometries) g.dispose()   // le matériau, lui, est partagé par la scène
+    super.dispose()
+  }
 }
 
 /** Véhicule : carrosserie + habitacle orientés par `yaw`, masqués quand le véhicule est absent. */

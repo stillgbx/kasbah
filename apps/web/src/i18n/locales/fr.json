@@ -25,7 +25,7 @@
     "resetView": "Vue d'ensemble", "openPanel": "Panneau", "noScenes": "Aucune scène définie dans la maison."
   },
   "kinds": {
-    "light": "Lumière", "cover": "Volet", "media_player": "Lecteur", "climate": "Chauffage", "vacuum": "Aspirateur",
+    "light": "Lumière", "cover": "Ouvrant", "media_player": "Lecteur", "climate": "Chauffage", "vacuum": "Aspirateur",
     "mower": "Tondeuse", "sensor": "Capteur", "energy": "Énergie", "ev_charger": "Borne de recharge", "vehicle": "Véhicule", "camera": "Caméra"
   },
   "device": {
@@ -33,7 +33,7 @@
     "gone": "Cet appareil ne répond plus", "forget": "Oublier l'appareil", "forgetConfirm": "Confirmer l'oubli", "forgetHint": "Cet appareil ne répond plus : le plugin le retient pour garder son nom. S'il a disparu pour de bon, faites-le oublier.",
     "pending": "Commande en cours…", "lastUpdate": "Mis à jour {time}", "empty": "Aucun appareil connu. Vérifiez les plugins dans les réglages."
   },
-  "place": {"title": "Emplacement", "move": "Déplacer", "done": "Terminé", "hint": "Faites glisser l'appareil dans la vue 3D pour le déplacer, ou changez d'onglet de niveau pour l'y emmener. La hauteur se règle ici.", "height": "Hauteur", "presets": {"ceiling": "Plafond", "wall": "Applique", "table": "Table", "floor": "Sol"}, "revert": "Rétablir", "cancel": "Annuler", "remove": "Retirer de la maison", "removeConfirm": "Confirmer le retrait", "removeHint": "Sortir cet appareil de la maison : il redevient « non placé » (ou auto-placé si sa pièce existe) ; il pourra être reposé", "orientation": "Orientation", "rotateLeft": "Tourner vers la gauche", "rotateRight": "Tourner vers la droite", "outside": "hors pièce", "saveError": "Position non enregistrée : {message}"},
+  "place": {"title": "Emplacement", "move": "Déplacer", "done": "Terminé", "hint": "Faites glisser l'appareil dans la vue 3D pour le déplacer, ou changez d'onglet de niveau pour l'y emmener. La hauteur se règle ici.", "height": "Hauteur de pose", "presets": {"ceiling": "Plafond", "wall": "Applique", "table": "Table", "floor": "Sol"}, "revert": "Rétablir", "cancel": "Annuler", "remove": "Retirer de la maison", "removeConfirm": "Confirmer le retrait", "removeHint": "Sortir cet appareil de la maison : il redevient « non placé » (ou auto-placé si sa pièce existe) ; il pourra être reposé", "orientation": "Orientation", "leaves": "Battants", "rotateLeft": "Tourner vers la gauche", "rotateRight": "Tourner vers la droite", "size": {"width": "Largeur", "height": "Hauteur", "projection": "Avancée"}, "smaller": "Réduire", "bigger": "Agrandir", "outside": "hors pièce", "saveError": "Position non enregistrée : {message}"},
   "light": {
     "brightness": "Luminosité", "colorTemp": "Température", "color": "Couleur", "warm": "Chaud", "cold": "Froid", "effect": "Effet",
     "effects": {
@@ -48,10 +48,10 @@
     "stopAnimate": "Arrêter l'animation", "turnOff": "Éteindre {name}"
   },
   "lights": {
-    "summary": "{on} allumées sur {total}", "none": "Aucune lampe remontée par les plugins."
+    "all": "Toutes les lumières de la maison", "summary": "{on} allumées sur {total}", "none": "Aucune lampe remontée par les plugins."
   },
   "covers": {
-    "summary": "{open} ouverts sur {total}", "none": "Aucun ouvrant remonté par les plugins."
+    "all": "Tous les ouvrants de la maison", "summary": "{open} ouverts sur {total}", "none": "Aucun ouvrant remonté par les plugins."
   },
   "cameras": {
     "summary": "{active} actives sur {total}", "none": "Aucune caméra remontée par les plugins."
@@ -64,7 +64,7 @@
   },
   "rooms": {
     "noRoom": "Sans pièce", "notInHouse": "Hors maison",
-    "allLights": "Toutes les lumières de la pièce",
+    "allLights": "Toutes les lumières de la pièce", "brightness": "Luminosité de la pièce",
     "reorder": "Réordonner (glisser)", "orderError": "Ordre non enregistré : {message}",
     "dangling": "Liaisons mortes", "danglingHint": "Le JSON pointe vers un id qu'aucun plugin ne remonte",
     "origins": {
@@ -74,6 +74,7 @@
     }
   },
   "cover": {
+    "classes": {"shutter": "Volet", "awning": "Store banne", "blind": "Store", "curtain": "Rideau", "gate": "Portail", "garage": "Porte de garage", "window": "Fenêtre"},
     "tilt": "Inclinaison", "stopped": "À l'arrêt", "preset": "Position perso", "presetAt": "Position perso — {pct}", "presetSave": "Mémoriser cette position", "presetSaved": "Position perso mémorisée : {pct}",
     "openClose": { "open": "Ouvert", "closed": "Fermé", "opening": "Ouverture en cours", "closing": "Fermeture en cours", "level": "Fermeture", "actionOpen": "Ouvrir", "actionClose": "Fermer" },
     "upDown": { "open": "Remonté", "closed": "Baissé", "opening": "Remontée en cours", "closing": "Descente en cours", "level": "Descente", "actionOpen": "Remonter", "actionClose": "Baisser" }

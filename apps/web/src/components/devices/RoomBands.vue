@@ -69,7 +69,7 @@ const bands = computed<Band[]>(() => {
       entry: e,
       name: hd?.name ?? e.descriptor.name,
       origin: hd ? (hd.meta?.autoPlaced ? 'auto' : 'json') : 'unplaced',
-      on: isDeviceOn(e.state) || !!relay,
+      on: isDeviceOn(e.state, e.descriptor) || !!relay,
       status: relay ? relayLabel(relay.name, relay.state, t) : statusLabel(e.descriptor, e.state, t, locale.value),
     }
     const bucket = room ? byRoom : loose
@@ -163,6 +163,9 @@ defineExpose({ count: computed(() => entries.value.length) })
               <StrokeIcon name="grip" :size="16" />
             </button>
           </div>
+          <!-- contrôle de pièce qui a besoin de TOUTE la largeur (vue Lumières : la luminosité
+               d'ensemble) : une ligne à lui, sous l'en-tête, et non à côté du titre qu'il écraserait -->
+          <slot name="room-under" :entries="g.rows.map((r) => r.entry)" />
           <div v-for="r in g.rows" :key="r.entry.descriptor.id" class="row">
             <!-- fond optionnel de la ligne (pochette d'un lecteur), sous le contenu, hors de la grille -->
             <slot name="backdrop" :entry="r.entry" />

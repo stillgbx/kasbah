@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { StateFor } from '@kasbah/shared'
+import type { DeviceEntry, StateFor } from '@kasbah/shared'
 import PageHeader from '../components/layout/PageHeader.vue'
+import CoversToggle from '../components/devices/CoversToggle.vue'
 import RoomBands from '../components/devices/RoomBands.vue'
 import PulseDot from '../components/ui/PulseDot.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
-import { coverWords, fromClosure, toClosure } from '../lib/cover'
+import { coverActivity, coverWords, fromClosure, toClosure } from '../lib/cover'
 import { useDevicesStore } from '../stores/devices'
 
 // Vue Ouvrants : volets, stores, portails, fenêtres et portes de garage — tout ce qui est du kind
@@ -31,6 +32,17 @@ const draft = ref<Record<string, number>>({})
 // repli à 100 ne sert qu'à donner un nombre au composant si les deux se désaccordaient
 const shownClosure = (id: string, position?: number) => draft.value[id] ?? toClosure(devices.targetPosition(id) ?? position ?? 100)
 
+// Jauge peinte en fond de ligne (slot `backdrop` de `RoomBands`, comme la teinte d'une lampe allumée
+// ou la pochette d'un lecteur) : la part de l'ouvrant qui SE REMARQUE, de 0 (rien) à 1 (toute la
+// ligne). Un volet se remarque ouvert, un store DÉPLOYÉ — c'est l'inverse, et c'est voulu (voir
+// `coverActivity`). Position inconnue = pas de jauge : on n'affirme rien d'un moteur muet.
+// On lit la position VISÉE quand le store en tient une : la jauge suit le geste, comme le curseur.
+const openFraction = (e: DeviceEntry) => {
+  const s = e.state as StateFor<'cover'>
+  if (!s.available) return 0
+  return coverActivity(e.descriptor, devices.targetPosition(e.descriptor.id) ?? s.position)
+}
+
 // Position favorite du moteur : repère sur la piste du curseur, et valeur dans le libellé
 // accessible de la touche (une ligne de liste n'a pas la place de l'écrire).
 const presetClosure = (s: StateFor<'cover'>) => s.presetPosition === undefined ? undefined : toClosure(s.presetPosition)
@@ -47,11 +59,20 @@ function commit(id: string, v: number) {
 <template>
   <div class="page">
     <PageHeader>
-      <div class="muted count">{{ $t('covers.summary', { open: openCount, total: covers.length }) }}</div>
+      <!-- tout fermer (ou tout ouvrir) d'un geste ; « fermer » baisse un store, le plugin traduit -->
+      <div class="head">
+        <div class="muted count">{{ $t('covers.summary', { open: openCount, total: covers.length }) }}</div>
+        <CoversToggle :entries="covers" :label="$t('covers.all')" />
+      </div>
     </PageHeader>
     <div class="page__scroll">
       <div v-if="covers.length === 0" class="card card--soft empty muted">{{ $t('covers.none') }}</div>
       <RoomBands kind="cover">
+        <!-- ce qui manquait le plus dans cette vue : voir OUVERT sans lire chaque ligne -->
+        <template #backdrop="{ entry }">
+          <div class="row-open" aria-hidden="true"
+               :style="{ '--open': openFraction(entry) }" />
+        </template>
         <!-- le point pulsant accompagne le libellé (« Fermeture en cours »), qui est déjà dans le
              statut : posé avant le curseur, il en changerait la largeur à chaque mouvement -->
         <template #status-badge="{ entry }">
@@ -89,9 +110,11 @@ function commit(id: string, v: number) {
                 <StrokeIcon name="crosshair" :size="18" />
               </button>
             </div>
+            <!-- pas de 1 % : Vuetify aligne le pouce sur le pas, et à 5 % il ne pouvait pas se
+                 poser sur le repère de position favorite du moteur (voir `CoverControl.vue`) -->
             <v-slider v-if="entry.descriptor.capabilities.includes('position')"
                       :model-value="shownClosure(entry.descriptor.id, (entry.state as StateFor<'cover'>).position)"
-                      :min="0" :max="100" :step="5" :disabled="!entry.state.available"
+                      :min="0" :max="100" :step="1" :disabled="!entry.state.available"
                       :ticks="presetTicks(entry.state as StateFor<'cover'>)"
                       :show-ticks="presetTicks(entry.state as StateFor<'cover'>) ? 'always' : false"
                       density="compact" hide-details class="controls__slider cover-slider"
@@ -107,12 +130,26 @@ function commit(id: string, v: number) {
 <style scoped>
 .page { height: 100%; display: flex; flex-direction: column; }
 .page__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 24px calc(var(--safe-bottom) + 24px); }
+.head { display: flex; align-items: center; gap: 14px; }
 .count { font-size: 13px; }
 .empty { padding: 24px; text-align: center; }
 .controls { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; margin: 2px 4px 0; }
 .controls__slider { flex: 1 1 auto; }
 /* le repere de position favorite est style globalement, voir `styles/app.css` (`.cover-slider`) */
 .dot { margin-right: 6px; color: var(--accent); }
+/* Jauge d'ouverture : une bande d'accent doux qui part du bord gauche et s'étire avec l'ouverture,
+   fondue sur sa fin pour qu'elle ne se lise pas comme une seconde piste de curseur. Absolue et en
+   z-index négatif (contexte posé par `.row`) : elle ne décale rien, et une ligne fermée n'a
+   simplement rien à montrer. Déborde de 4 px de chaque côté, comme la teinte des lampes. */
+.row-open {
+  position: absolute; left: -4px; top: 0; bottom: 0; z-index: -1; pointer-events: none;
+  width: calc(var(--open) * (100% + 8px));
+  background: var(--accent-soft);
+  -webkit-mask-image: linear-gradient(90deg, #000 0, #000 60%, transparent 100%);
+  mask-image: linear-gradient(90deg, #000 0, #000 60%, transparent 100%);
+  transition: width .4s ease;
+}
+@media (prefers-reduced-motion: reduce) { .row-open { transition: none; } }
 .keys { display: flex; gap: 4px; flex: 0 0 auto; }
 .key {
   display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px;

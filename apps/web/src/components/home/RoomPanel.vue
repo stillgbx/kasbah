@@ -9,6 +9,7 @@ import { kindIcon } from '../../lib/strokeIcons'
 import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
 import { useScenesStore } from '../../stores/scenes'
+import RoomBrightness from '../devices/RoomBrightness.vue'
 import RoomLightsToggle from '../devices/RoomLightsToggle.vue'
 import SceneChips from '../scenes/SceneChips.vue'
 import MarqueeText from '../ui/MarqueeText.vue'
@@ -43,7 +44,7 @@ function row(d: HouseDevice) {
   const toggle = relay ? toggleCommand(relay.state) : state ? toggleCommand(state, aimed) : null
   return {
     key: d.id, name: d.name ?? descriptor?.name ?? d.id, icon: kindIcon(descriptor?.kind ?? d.kind, descriptor),
-    on: !!state && (isDeviceOn(state) || !!relay),
+    on: !!state && (isDeviceOn(state, descriptor) || !!relay),
     // `on` teinte l'icône (un volet OUVERT est l'actif), `checked` est la valeur de
     // l'interrupteur (un volet FERMÉ est coché) — voir `lib/cover.ts`. La cible tenue par le store
     // entre dans `checked` : l'interrupteur bascule au geste, pas à la fin de la course.
@@ -83,6 +84,8 @@ const roomScenes = computed(() => (target.value ? scenes.forRoom(target.value.na
       <!-- éteindre (ou allumer) la pièce d'un geste, sans parcourir la liste -->
       <RoomLightsToggle :device-ids="deviceIds" />
     </div>
+    <!-- luminosité de toute la pièce : sur sa propre ligne, sous l'interrupteur qu'elle prolonge -->
+    <RoomBrightness :device-ids="deviceIds" />
     <SceneChips :scenes="roomScenes" :label="$t('scenes.title')" :add-to="target.name" />
     <div class="rows">
       <div v-for="r in rows" :key="r.key" class="dev-row" role="button" tabindex="0" @click="house.selectDevice(r.key)" @keydown.enter="house.selectDevice(r.key)">

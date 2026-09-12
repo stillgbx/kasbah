@@ -228,13 +228,18 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
       if (assumed !== undefined) {
         positions.set(externalId, assumed)
         ctx!.emitState(externalId, { position: assumed, motion: 'stopped' })
-      } else if (command.type === 'cover.preset') {
-        // La position favorite vit dans le moteur, et un appareil sans retour ne dit pas laquelle
-        // c'est : après ce rappel, la position qu'on affichait est devenue fausse. On l'EFFACE
-        // (`null`) plutôt que d'en garder une périmée — c'est à ça que sert l'effacement.
+      } else if (command.type === 'cover.preset' || command.type === 'cover.stop') {
+        // Deux commandes qui laissent l'ouvrant SANS POSITION CONNUE sur une radio unidirectionnelle.
+        // Le rappel : la position favorite vit dans le moteur, qui ne dit pas laquelle c'est. L'arrêt :
+        // il coupe une course au milieu, et personne ne sait où. Dans les deux cas ce qu'on affichait
+        // (la fin de course déduite de la commande précédente) est devenu faux — on l'EFFACE (`null`)
+        // plutôt que d'en garder une périmée. C'est à ça que sert l'effacement.
+        //
+        // Un arrêt sur un ouvrant déjà immobile efface donc une position juste : assumé, c'est le
+        // prix à payer pour ne jamais AFFIRMER « baissé » d'un store arrêté à mi-course.
         positions.delete(externalId)
         ctx!.emitState(externalId, { position: null, motion: 'stopped' })
-      } else if (command.type === 'cover.stop') ctx!.emitState(externalId, { motion: 'stopped' })
+      }
     },
 
     async stop() {

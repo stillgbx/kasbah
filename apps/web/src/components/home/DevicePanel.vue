@@ -32,9 +32,23 @@ const crumb = computed(() => {
   if (!hd) return t('nav.home')
   return (hd.roomId ? house.index?.roomsById.get(hd.roomId)?.name : hd.zoneId ? house.index?.zonesById.get(hd.zoneId)?.name : null) ?? t('nav.home')
 })
+/**
+ * Ce que l'appareil EST, dit au plus près : la nature déclarée par le fabricant quand il y en a une
+ * (« Portail », « Store banne », « Téléviseur »), le kind sinon. Un portail annoncé « Volet » se
+ * lisait comme une erreur de liaison — et le mot générique du kind (« Ouvrant ») ne sert plus que de
+ * repli, pour un ouvrant dont le fabricant ne dit pas la nature.
+ */
+const kindLabel = computed(() => {
+  const d = resolved.value?.descriptor
+  if (!d) return ''
+  if (d.kind === 'media_player') return t(`media.classes.${d.meta.mediaPlayer?.deviceClass ?? 'speaker'}`)
+  if (d.kind === 'cover' && d.meta.cover?.deviceClass) return t(`cover.classes.${d.meta.cover.deviceClass}`)
+  return t(`kinds.${d.kind}`)
+})
+
 /** Lecteur dont cet appareil joue le son (barre de son d'une TV en lecture) — voir `lib/audioRouting.ts`. */
 const relay = computed(() => (resolved.value?.deviceId ? house.relaySource(resolved.value.deviceId) : undefined))
-const on = computed(() => !!resolved.value?.state && (isDeviceOn(resolved.value.state) || !!relay.value))
+const on = computed(() => !!resolved.value?.state && (isDeviceOn(resolved.value.state, resolved.value.descriptor) || !!relay.value))
 const pending = computed(() => !!resolved.value?.deviceId && devices.isPending(resolved.value.deviceId))
 /** Position visée quand le store en tient une : elle gouverne TOUT ce qui affiche cet ouvrant. */
 const aimed = computed(() => (resolved.value?.deviceId ? devices.targetPosition(resolved.value.deviceId) : undefined))
@@ -138,8 +152,8 @@ function send(cmd: CommandInput) {
              il défile avec un fondu plutôt que de déborder, comme le titre d'un morceau -->
         <MarqueeText class="head__name" :text="resolved.name" />
         <div class="muted head__sub">
-          <!-- un lecteur dit sa nature (téléviseur, écran connecté) plutôt que « Enceinte » pour tous -->
-          <span v-if="resolved.descriptor">{{ resolved.descriptor.kind === 'media_player' ? $t(`media.classes.${resolved.descriptor.meta.mediaPlayer?.deviceClass ?? 'speaker'}`) : $t(`kinds.${resolved.descriptor.kind}`) }}</span>
+          <!-- chacun dit SA nature (téléviseur, portail, store banne) plutôt que le mot du kind -->
+          <span v-if="resolved.descriptor">{{ kindLabel }}</span>
           <!-- « Indisponible » AVANT le fabricant : la ligne tient sur 340 px, et si elle est coupée
                c'est la marque qui part, pas l'information qui compte -->
           <span v-if="resolved.state && !resolved.state.available" class="text-error"> · {{ $t('common.unavailable') }}</span><span v-if="brand"> · {{ brand }}</span>

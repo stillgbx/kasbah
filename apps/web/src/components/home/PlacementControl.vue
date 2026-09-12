@@ -2,7 +2,8 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { resolveDefaults, roomHeight, type HouseDevice } from '@kasbah/shared'
-import { isOrientable } from '../../lib/orientation'
+import { isFlatCover } from '../../lib/cover'
+import { coverLeaves, coverSize, hasLeaves, isOrientable, isSizable } from '../../lib/orientation'
 import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
 import Segmented from '../ui/Segmented.vue'
@@ -38,12 +39,43 @@ onBeforeUnmount(() => observer?.disconnect())
 
 // Orientation (`yaw`, 0 = face à +y) : proposée aux appareils qui REGARDENT quelque part (règle
 // partagée avec la scène 3D : `lib/orientation.ts`). Deux touches, pas de 45°, écrit à chaque pression.
+//
+// Le `yaw` du JSON tourne dans le sens TRIGONOMÉTRIQUE (l'axe Z monte), donc l'AUGMENTER fait pivoter
+// l'objet vers la gauche vu de dessus. C'est la touche de gauche qui l'augmente, et celle de droite
+// qui le diminue : ce qu'on voit tourner suit la touche qu'on appuie, pas la convention du fichier.
 const YAW_STEP = 45
-const orientable = computed(() => isOrientable(props.device, props.device.deviceId ? devices.descriptors[props.device.deviceId] : undefined))
+const descriptor = computed(() => (props.device.deviceId ? devices.descriptors[props.device.deviceId] : undefined))
+const orientable = computed(() => isOrientable(props.device, descriptor.value))
 const yaw = computed(() => props.device.yaw ?? 0)
 function rotate(delta: number) {
   void house.savePlacement({ yaw: (((yaw.value + delta) % 360) + 360) % 360 })
 }
+
+// Taille de ce qui est DESSINÉ : proposée aux ouvrants qu'aucune ouverture ne dimensionne (portail,
+// porte de garage posés dehors, voir `lib/orientation.ts`). Mêmes touches que l'orientation, pas de
+// 25 cm, écrit à chaque pression. Bornes larges mais finies : un portail de 12 m n'existe pas, et
+// un panneau de 0 m disparaîtrait de la scène sans qu'on sache pourquoi.
+const SIZE_STEP = 0.25
+const SIZE_LIMITS = { width: { min: 0.25, max: 12 }, height: { min: 0.25, max: 4 } } as const
+const sizable = computed(() => isSizable(props.device, descriptor.value))
+const size = computed(() => coverSize(props.device, descriptor.value))
+// La seconde dimension n'est pas la même chose selon la nature : la HAUTEUR d'un portail debout,
+// l'AVANCÉE d'un store déployé à plat. Même champ dans le JSON, deux mots à l'écran.
+const dimLabel = (dim: 'width' | 'height') =>
+  t(dim === 'width' ? 'place.size.width' : isFlatCover(descriptor.value) ? 'place.size.projection' : 'place.size.height')
+function resize(dim: 'width' | 'height', delta: number) {
+  const { min, max } = SIZE_LIMITS[dim]
+  const next = Math.min(max, Math.max(min, Math.round((size.value[dim] + delta) * 100) / 100))
+  if (next === size.value[dim]) return
+  void house.savePlacement({ size: { ...size.value, [dim]: next } })
+}
+
+// Battants d'un portail : ce qui s'écarte quand il s'ouvre, donc ce que la scène anime. Un store se
+// déploie d'une pièce, la question ne se pose que pour ce qui se tient debout.
+const leavesShown = computed(() => hasLeaves(props.device, descriptor.value))
+// `Segmented` parle en chaînes (sa clé de segment) ; le JSON, lui, compte des battants.
+const leaves = computed(() => String(coverLeaves(props.device, descriptor.value)))
+const leavesOptions = [{ value: '1', label: '1' }, { value: '2', label: '2' }]
 
 type Mount = NonNullable<HouseDevice['mount']>
 type Preset = 'ceiling' | 'wall' | 'table' | 'floor' | ''
@@ -115,14 +147,39 @@ function applyPreset(p: Preset) {
         <div v-if="orientable" class="place__row">
           <span class="muted">{{ $t('place.orientation') }}</span>
           <span class="place__turn">
-            <button type="button" class="key" :disabled="house.saving || !house.placing" :title="$t('place.rotateLeft')" :aria-label="$t('place.rotateLeft')" @click="rotate(-YAW_STEP)">
+            <button type="button" class="key" :disabled="house.saving || !house.placing" :title="$t('place.rotateLeft')" :aria-label="$t('place.rotateLeft')" @click="rotate(YAW_STEP)">
               <StrokeIcon name="rotateLeft" :size="16" />
             </button>
             <span class="place__value place__deg">{{ yaw }}°</span>
-            <button type="button" class="key" :disabled="house.saving || !house.placing" :title="$t('place.rotateRight')" :aria-label="$t('place.rotateRight')" @click="rotate(YAW_STEP)">
+            <button type="button" class="key" :disabled="house.saving || !house.placing" :title="$t('place.rotateRight')" :aria-label="$t('place.rotateRight')" @click="rotate(-YAW_STEP)">
               <StrokeIcon name="rotateRight" :size="16" />
             </button>
           </span>
+        </div>
+        <!-- une ligne par dimension : deux séries de touches sur la même ligne ne laisseraient plus
+             de place au libellé dans un panneau de 340 px -->
+        <template v-if="sizable">
+          <div v-for="dim in (['width', 'height'] as const)" :key="dim" class="place__row">
+            <span class="muted">{{ dimLabel(dim) }}</span>
+            <span class="place__turn">
+              <button type="button" class="key" :disabled="house.saving || !house.placing"
+                      :title="`${$t('place.smaller')} — ${dimLabel(dim)}`" :aria-label="`${$t('place.smaller')} — ${dimLabel(dim)}`"
+                      @click="resize(dim, -SIZE_STEP)">
+                <StrokeIcon name="minus" :size="16" />
+              </button>
+              <span class="place__value place__deg">{{ size[dim].toFixed(2) }}</span>
+              <button type="button" class="key" :disabled="house.saving || !house.placing"
+                      :title="`${$t('place.bigger')} — ${dimLabel(dim)}`" :aria-label="`${$t('place.bigger')} — ${dimLabel(dim)}`"
+                      @click="resize(dim, SIZE_STEP)">
+                <StrokeIcon name="plus" :size="16" />
+              </button>
+            </span>
+          </div>
+        </template>
+        <div v-if="leavesShown" class="place__row">
+          <span class="muted">{{ $t('place.leaves') }}</span>
+          <Segmented dense class="place__leaves" :model-value="leaves" :options="leavesOptions"
+                     @update:model-value="(v: string) => house.savePlacement({ leaves: v === '2' ? 2 : 1 })" />
         </div>
         <div class="place__row place__bottom">
           <div class="muted place__coords">x {{ position[0].toFixed(2) }} · y {{ position[1].toFixed(2) }} · {{ anchorName }}</div>
@@ -155,8 +212,12 @@ function applyPreset(p: Preset) {
   transition: max-height .3s ease, opacity .25s ease, visibility 0s linear .3s;   /* invisible seulement une fois replié */
 }
 .place[data-open="1"] .place__body { max-height: var(--place-h, 400px); opacity: 1; visibility: visible; transition: max-height .3s ease, opacity .25s ease, visibility 0s; }
-/* l'espace entre le corps et le pied fait partie du corps : il se replie avec lui */
-.place__inner { display: grid; gap: 10px; align-content: start; padding-bottom: 12px; }
+/* L'espace entre le corps et le pied fait partie du corps : il se replie avec lui.
+   `minmax(0, 1fr)` et non la colonne `auto` par défaut : une colonne auto ne descend jamais sous le
+   min-content de ses lignes (les quatre préréglages de hauteur, la pilule « Retirer de la maison »),
+   et le corps, en `overflow: hidden`, coupait alors les 3 px qui dépassaient — le « m » de la hauteur
+   de pose y passait. Les lignes se serrent maintenant à la largeur du panneau. */
+.place__inner { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-content: start; padding-bottom: 12px; }
 .place__foot, .place__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .place__top { align-items: flex-start; }
 .place__hint { margin: 0; font-size: 12px; flex: 1 1 auto; }
@@ -172,8 +233,10 @@ function applyPreset(p: Preset) {
 .place__remove--off { visibility: hidden; }
 .place__remove--armed { border-color: var(--error, #e5484d); color: var(--error, #e5484d); }
 .place__turn { display: inline-flex; align-items: center; gap: 6px; }
-/* largeur fixe (« 315° ») : la valeur change sans déplacer les touches */
-.place__deg { width: 4ch; text-align: center; }
+/* deux choix seulement : le segmenté reste au bout de sa ligne plutôt que d'en prendre la largeur */
+.place__leaves { flex: 0 0 auto; }
+/* largeur fixe (« 315° », « 10.25 ») : la valeur change sans déplacer les touches */
+.place__deg { width: 5ch; text-align: center; }
 .key {
   display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px;
   border: 1px solid var(--line); background: transparent; color: var(--text); transition: background .15s, color .15s;

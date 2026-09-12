@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { StateFor } from '@kasbah/shared'
+import { useRoomLights } from '../../composables/useRoomLights'
 import { useDevicesStore } from '../../stores/devices'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
@@ -13,19 +13,14 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 // le chauffage. Les ambiances du fabricant (`SceneChips.vue`) éteignent déjà la pièce en re-tapant
 // celle qui tourne, mais seulement là où il y en a ; cet interrupteur marche partout.
 // Pas de libellé à côté : l'ampoule du pouce le dit déjà, et le mot « Lumières » répétait la vue.
-const props = defineProps<{ deviceIds: (string | undefined)[] }>()
+// `label` : ce que l'interrupteur commande, pour l'infobulle et les lecteurs d'écran — une pièce
+// depuis le panneau, toute la maison depuis l'en-tête de la vue Lumières.
+const props = defineProps<{ deviceIds: (string | undefined)[]; label?: string }>()
 const devices = useDevicesStore()
 
-/**
- * Lampes de la pièce, joignables ou non : c'est l'inventaire qui décide de la PRÉSENCE de
- * l'interrupteur. Le retirer parce qu'un pont ne répond plus le ferait apparaître et disparaître
- * sous le doigt — règle « rien ne doit bouger ».
- */
-const lights = computed(() => props.deviceIds
-  .map((id) => (id ? { id, state: devices.states[id] } : null))
-  .filter((l): l is { id: string; state: StateFor<'light'> } => l?.state?.kind === 'light'))
-const reachable = computed(() => lights.value.filter((l) => l.state.available))
-const on = computed(() => reachable.value.filter((l) => l.state.on))
+// Lampes de la pièce : lecture partagée avec le curseur de luminosité (`useRoomLights`), pour que
+// les deux contrôles d'ensemble voient toujours la même pièce.
+const { lights, reachable, on } = useRoomLights(() => props.deviceIds)
 /**
  * Coché dès qu'UNE lampe est allumée : l'interrupteur répond alors à « éteindre la pièce », le
  * geste qu'on vient chercher ici. Rallumer une pièce à moitié allumée demande donc deux appuis —
@@ -44,7 +39,7 @@ function toggle() {
 <template>
   <div v-if="lights.length" class="master">
     <v-switch :model-value="checked" :disabled="reachable.length === 0" density="compact"
-              :aria-label="$t('rooms.allLights')" :title="$t('rooms.allLights')"
+              :aria-label="label ?? $t('rooms.allLights')" :title="label ?? $t('rooms.allLights')"
               @click.stop @update:model-value="toggle">
       <!-- ampoule DANS le pouce : c'est le seul interrupteur de l'app qui n'a pas d'appareil
            nommé à côté de lui, le glyphe dit sur quoi il agit. Pas soleil/lune, déjà le

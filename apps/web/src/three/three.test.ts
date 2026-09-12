@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { Box3, Vector3, type BufferAttribute, type Texture } from 'three'
-import { computeHouseGeometry, parseHouse } from '@kasbah/shared'
+import { Box3, CylinderGeometry, Mesh, Vector3, type BufferAttribute, type Texture } from 'three'
+import { computeHouseGeometry, parseHouse, type DeviceDescriptor, type DeviceState, type HouseDevice } from '@kasbah/shared'
 import demo from '@kasbah/shared/demo-house.json'
 import { buildHouse, buildWallsGeometry, countTriangles } from './builders/buildHouse'
 import { createMaterials } from './builders/materials'
@@ -10,6 +10,8 @@ import { createRenderLoop } from './core/renderLoop'
 import { defaultSceneTheme, parseCssColor } from './core/theme'
 import { createTween } from './core/tween'
 import { ScreenArt, coverCrop, screenArtGeometry } from './markers/screenArt'
+import { createMarker } from './markers/createMarker'
+import type { Animation } from './core/renderLoop'
 
 describe('coords', () => {
   it('maps Z-up house frame to Y-up world', () => {
@@ -204,5 +206,74 @@ describe("pochette sur l'écran d'un lecteur 3D", () => {
     loads[0]!.fail()
     expect(art.mesh.visible).toBe(false)
     art.dispose()
+  })
+})
+
+describe('marqueurs 3D', () => {
+  // Un marqueur a besoin d'un contexte de scène ; on garde les animations sous la main pour les
+  // dérouler jusqu'au bout (les ouvrants tweenent leur course sur 400 ms).
+  const animations: Animation[] = []
+  const marker = (device: HouseDevice, descriptor: DeviceDescriptor) => {
+    animations.length = 0
+    return createMarker(device, {
+      materials: createMaterials(defaultSceneTheme()), theme: defaultSceneTheme(), descriptor,
+      addAnimation: (a) => { animations.push(a); return () => {} },
+      invalidate: () => {}, onTap: () => {}, label: descriptor.name,
+    }, () => true)
+  }
+  /** Déroule les tweens en cours : une seule étape très tard suffit à les terminer. */
+  const settle = () => { for (const a of animations) a.step(performance.now() + 10_000, 10) }
+  const meshes = (o: { traverse(cb: (x: unknown) => void): void }) => {
+    const out: Mesh[] = []
+    o.traverse((x) => { if (x instanceof Mesh) out.push(x) })
+    return out
+  }
+  const device = (extra: Partial<HouseDevice> = {}): HouseDevice => ({ id: 'x', position: [0, 0, 2], ...extra })
+  const cover = (deviceClass: string): DeviceDescriptor =>
+    ({ id: 'p:c', pluginId: 'p', externalId: 'c', kind: 'cover', name: deviceClass, capabilities: ['open_close'], meta: { cover: { deviceClass } } } as DeviceDescriptor)
+  const coverState = (position: number | undefined): DeviceState =>
+    ({ kind: 'cover', updatedAt: 0, available: true, motion: 'stopped', ...(position === undefined ? {} : { position }) } as DeviceState)
+
+  it("un store rentre son avancée en se repliant, sans décoller du mur", () => {
+    const m = marker(device({ size: { width: 4, height: 3 } }), cover('awning'))
+    const box = meshes(m.object)[0]!
+    // déployé (position 0 = « baissé ») : l'avancée déclarée, centrée sur le point posé
+    m.update(coverState(0)); settle()
+    expect(box.scale.y).toBeCloseTo(1)
+    expect(box.position.y).toBeCloseTo(0)
+    // replié (position 100 = « remonté ») : il ne reste que le coffre, et le bord CÔTÉ MUR n'a pas bougé
+    m.update(coverState(100)); settle()
+    expect(box.scale.y * 3).toBeCloseTo(0.3)
+    expect(box.position.y - (box.scale.y * 3) / 2).toBeCloseTo(-1.5)
+    // position inconnue : l'objet déclaré en entier, pas un moignon qui passerait pour un défaut
+    m.update(coverState(undefined)); settle()
+    expect(box.scale.y).toBeCloseTo(1)
+  })
+
+  it('un portail ouvre ses battants, un ou deux selon le JSON', () => {
+    const two = marker(device({ size: { width: 4, height: 1.5 } }), cover('gate'))
+    const hinges = () => meshes(two.object).map((x) => x.parent!)
+    expect(hinges()).toHaveLength(2)
+    two.update(coverState(0)); settle()          // fermé : les deux battants dans le plan du portail
+    expect(hinges()[0]!.rotation.z).toBeCloseTo(0)
+    expect(hinges()[1]!.rotation.z).toBeCloseTo(0)
+    two.update(coverState(100)); settle()        // ouvert : un quart de tour, chacun de son côté
+    expect(hinges()[0]!.rotation.z).toBeCloseTo(Math.PI / 2)
+    expect(hinges()[1]!.rotation.z).toBeCloseTo(-Math.PI / 2)
+    // un seul battant : un seul panneau, de toute la largeur
+    const one = marker(device({ size: { width: 4, height: 1.5 }, leaves: 1 }), cover('gate'))
+    expect(meshes(one.object)).toHaveLength(1)
+  })
+
+  it('un thermostat est une pastille couchée contre son mur, tournée du yaw', () => {
+    const desc = { id: 'p:t', pluginId: 'p', externalId: 't', kind: 'climate', name: 'Thermostat', capabilities: [], meta: {} } as unknown as DeviceDescriptor
+    const m = marker(device({ yaw: 90 }), desc)
+    const puck = meshes(m.object)[0]!
+    expect(puck.geometry).toBeInstanceOf(CylinderGeometry)
+    // l'axe du cylindre reste horizontal (pas de bascule en Z-up) : ses disques sont verticaux
+    expect(puck.rotation.x).toBe(0)
+    expect(puck.rotation.z).toBeCloseTo(Math.PI / 2)
+    const params = (puck.geometry as CylinderGeometry).parameters
+    expect(params.radiusTop).toBeLessThan(0.1)
   })
 })

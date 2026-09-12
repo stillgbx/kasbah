@@ -17,6 +17,10 @@ export const devicePlacementSchema = z.object({
   mount: z.enum(MOUNTS).optional(),
   /** Orientation en degrés, 0 = face à +y (comme `HouseDevice.yaw`) : un écran, une caméra regardent quelque part. */
   yaw: z.number().min(0).max(360).optional(),
+  /** Encombrement dessiné (m, comme `HouseDevice.size`) : un portail posé dehors n'a pas d'ouverture pour le dimensionner. */
+  size: z.object({ width: z.number().positive().max(50), height: z.number().positive().max(50) }).optional(),
+  /** Battants d'un portail (comme `HouseDevice.leaves`) : un panneau, ou deux qui s'écartent. */
+  leaves: z.union([z.literal(1), z.literal(2)]).optional(),
   /** Requis quand l'appareil n'existe pas encore dans le JSON (appareil auto-placé). */
   deviceId: deviceIdSchema.optional(),
 })
@@ -39,8 +43,8 @@ const isObject = (v: unknown): v is JsonObject => typeof v === 'object' && v !==
 
 /**
  * Renvoie une copie du document JSON avec l'appareil `id` (re)placé : entrée existante mise à jour
- * (position, pièce, mount, yaw), ou entrée minimale créée `{ id, deviceId, position, roomId, mount }`
- * (plus `yaw` s'il est donné).
+ * (position, pièce, mount, yaw, size, leaves), ou entrée minimale créée
+ * `{ id, deviceId, position, roomId, mount }` (plus `yaw`, `size` et `leaves` s'ils sont donnés).
  */
 export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePlacement): JsonObject {
   if (!isObject(doc)) throw new PlacementError('house document is not an object')
@@ -59,6 +63,8 @@ export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePla
     next = { ...prev, position: placement.position }
     if (placement.mount) next.mount = placement.mount
     if (placement.yaw !== undefined) next.yaw = placement.yaw
+    if (placement.size) next.size = placement.size
+    if (placement.leaves !== undefined) next.leaves = placement.leaves
     if (room) {
       next.roomId = room.id
       // le JSON de démo porte roomId ET levelId : garder les deux cohérents, sans en ajouter
@@ -77,6 +83,8 @@ export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePla
     else if (level) next.levelId = level.id
     if (placement.mount) next.mount = placement.mount
     if (placement.yaw !== undefined) next.yaw = placement.yaw
+    if (placement.size) next.size = placement.size
+    if (placement.leaves !== undefined) next.leaves = placement.leaves
   }
   const out = [...devices]
   if (i >= 0) out[i] = next

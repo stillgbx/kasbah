@@ -25,7 +25,7 @@
     "resetView": "Overview", "openPanel": "Panel", "noScenes": "No scene defined in the house."
   },
   "kinds": {
-    "light": "Light", "cover": "Shutter", "media_player": "Player", "climate": "Heating", "vacuum": "Vacuum",
+    "light": "Light", "cover": "Cover", "media_player": "Player", "climate": "Heating", "vacuum": "Vacuum",
     "mower": "Mower", "sensor": "Sensor", "energy": "Energy", "ev_charger": "EV charger", "vehicle": "Vehicle", "camera": "Camera"
   },
   "device": {
@@ -33,7 +33,7 @@
     "gone": "This device no longer answers", "forget": "Forget device", "forgetConfirm": "Confirm removal", "forgetHint": "This device no longer answers: the plugin keeps it so its name survives. If it is gone for good, forget it.",
     "pending": "Command in progress…", "lastUpdate": "Updated {time}", "empty": "No known device. Check the plugins in settings."
   },
-  "place": {"title": "Placement", "move": "Move", "done": "Done", "hint": "Drag the device in the 3D view to move it, or pick another level tab to send it there. Set the height here.", "height": "Height", "presets": {"ceiling": "Ceiling", "wall": "Wall", "table": "Table", "floor": "Floor"}, "revert": "Revert", "cancel": "Cancel", "remove": "Remove from house", "removeConfirm": "Confirm removal", "removeHint": "Take this device out of the house: it becomes unplaced (or auto-placed if its room exists) and can be placed again", "orientation": "Orientation", "rotateLeft": "Rotate left", "rotateRight": "Rotate right", "outside": "outside rooms", "saveError": "Position not saved: {message}"},
+  "place": {"title": "Placement", "move": "Move", "done": "Done", "hint": "Drag the device in the 3D view to move it, or pick another level tab to send it there. Set the height here.", "height": "Mounting height", "presets": {"ceiling": "Ceiling", "wall": "Wall", "table": "Table", "floor": "Floor"}, "revert": "Revert", "cancel": "Cancel", "remove": "Remove from house", "removeConfirm": "Confirm removal", "removeHint": "Take this device out of the house: it becomes unplaced (or auto-placed if its room exists) and can be placed again", "orientation": "Orientation", "leaves": "Leaves", "rotateLeft": "Rotate left", "rotateRight": "Rotate right", "size": {"width": "Width", "height": "Height", "projection": "Projection"}, "smaller": "Smaller", "bigger": "Bigger", "outside": "outside rooms", "saveError": "Position not saved: {message}"},
   "light": {
     "brightness": "Brightness", "colorTemp": "Temperature", "color": "Color", "warm": "Warm", "cold": "Cold", "effect": "Effect",
     "effects": {
@@ -48,10 +48,10 @@
     "stopAnimate": "Stop the animation", "turnOff": "Turn off {name}"
   },
   "lights": {
-    "summary": "{on} on out of {total}", "none": "No light reported by the plugins."
+    "all": "All lights in the house", "summary": "{on} on out of {total}", "none": "No light reported by the plugins."
   },
   "covers": {
-    "summary": "{open} open out of {total}", "none": "No cover reported by the plugins."
+    "all": "All covers in the house", "summary": "{open} open out of {total}", "none": "No cover reported by the plugins."
   },
   "cameras": {
     "summary": "{active} active out of {total}", "none": "No camera reported by the plugins."
@@ -64,7 +64,7 @@
   },
   "rooms": {
     "noRoom": "No room", "notInHouse": "Not in the house",
-    "allLights": "All lights in the room",
+    "allLights": "All lights in the room", "brightness": "Room brightness",
     "reorder": "Reorder (drag)", "orderError": "Order not saved: {message}",
     "dangling": "Dead bindings", "danglingHint": "The JSON points at an id no plugin reports",
     "origins": {
@@ -74,6 +74,7 @@
     }
   },
   "cover": {
+    "classes": {"shutter": "Shutter", "awning": "Awning", "blind": "Blind", "curtain": "Curtain", "gate": "Gate", "garage": "Garage door", "window": "Window"},
     "tilt": "Tilt", "stopped": "Stopped", "preset": "Preset position", "presetAt": "Preset position — {pct}", "presetSave": "Save this position", "presetSaved": "Preset position saved: {pct}",
     "openClose": { "open": "Open", "closed": "Closed", "opening": "Opening", "closing": "Closing", "level": "Closure", "actionOpen": "Open", "actionClose": "Close" },
     "upDown": { "open": "Raised", "closed": "Lowered", "opening": "Raising", "closing": "Lowering", "level": "Extension", "actionOpen": "Raise", "actionClose": "Lower" }

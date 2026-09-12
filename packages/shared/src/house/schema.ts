@@ -146,6 +146,15 @@ export const houseDeviceSchema = z.object({
   mount: z.enum(MOUNTS).optional(),
   /** Orientation (degrés), 0 = face à +y. */
   yaw: z.number().optional(),
+  /**
+   * Encombrement (m) de ce qui est DESSINÉ pour l'appareil, quand la scène n'a rien d'autre pour le
+   * dimensionner : un portail ou une porte de garage posés dehors sont des objets libres, alors qu'un
+   * volet lié à une ouverture épouse déjà son rectangle. `width` en travers, `height` en hauteur ;
+   * absent = la taille par défaut du marqueur.
+   */
+  size: z.object({ width: z.number().positive(), height: z.number().positive() }).optional(),
+  /** Battants d'un portail ou d'une porte : ce qui s'écarte quand il s'ouvre. Absent = un seul. */
+  leaves: z.union([z.literal(1), z.literal(2)]).optional(),
   style: z.object({ icon: z.string().optional(), color: z.string().optional() }).optional(),
   meta: metaSchema,
 })

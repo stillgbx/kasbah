@@ -197,6 +197,24 @@ describe('tahoma plugin', () => {
     await plugin.stop()
   })
 
+  it('ARRETER un RTS en pleine course efface aussi la position supposee', async () => {
+    // Meme raison que le rappel de position favorite : l arret coupe la course au milieu, et une
+    // radio unidirectionnelle ne dit pas ou. Le store realement a mi-hauteur ne doit pas etre
+    // affiche « Baisse » a 100 %.
+    const box = fakeBox({ events: [] })
+    const { plugin, ctx } = await started(box)
+    await plugin.execute('rts.1234-5678-9012.22220001', { type: 'cover.close' })
+    vi.mocked(ctx.emitState).mockClear()
+    await plugin.execute('rts.1234-5678-9012.22220001', { type: 'cover.stop' })
+    expect(ctx.emitState).toHaveBeenCalledWith('rts.1234-5678-9012.22220001', { position: null, motion: 'stopped' })
+
+    // un io dit sa vraie position : son arret n'efface rien
+    vi.mocked(ctx.emitState).mockClear()
+    await plugin.execute('io.1234-5678-9012.11110001', { type: 'cover.stop' })
+    expect(ctx.emitState).not.toHaveBeenCalled()
+    await plugin.stop()
+  })
+
   it('gives up on a hung box request instead of hanging forever', async () => {
     // une box qui ne repond jamais : sans delai propre, le sondage d'evenements gelerait
     const fetchImpl = vi.fn<FetchLike>((_url, init) => new Promise((_resolve, reject) => {

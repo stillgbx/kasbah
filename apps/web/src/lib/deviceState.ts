@@ -1,5 +1,5 @@
 import type { CommandInput, DeviceDescriptor, DeviceState, StateFor } from '@kasbah/shared'
-import { coverWords, toClosure } from './cover'
+import { coverActivity, coverWords, toClosure } from './cover'
 import { isEnergySite } from './energy'
 import { formatPercent, formatPower, formatSensor, formatTemp } from './format'
 
@@ -14,13 +14,18 @@ export function isMediaActive(s: StateFor<'media_player'>): boolean {
   return s.playback === 'playing' || s.playback === 'on'
 }
 
-/** Vrai si l'appareil est « actif » : lampe allumée, volet ouvert, lecture en cours, robot au travail… */
-export function isDeviceOn(s: DeviceState): boolean {
+/**
+ * Vrai si l'appareil est « actif » : lampe allumée, volet ouvert, lecture en cours, robot au travail…
+ *
+ * `descriptor` : seul un OUVRANT en a besoin, et seulement pour sa nature — un volet se remarque
+ * ouvert, un store déployé (voir `coverActivity`). Sans descripteur, c'est la règle du volet.
+ */
+export function isDeviceOn(s: DeviceState, descriptor?: DeviceDescriptor): boolean {
   if (!s.available) return false
   switch (s.kind) {
     case 'light': return s.on
     // position inconnue (RTS sans retour) : ni actif ni inactif, on ne teinte pas l'icône
-    case 'cover': return s.position !== undefined && s.position > 0
+    case 'cover': return coverActivity(descriptor, s.position) > 0
     case 'media_player': return isMediaActive(s)
     case 'climate': return s.mode !== 'off'
     case 'vacuum': return s.activity === 'cleaning'
@@ -36,8 +41,9 @@ export function isDeviceOn(s: DeviceState): boolean {
 /**
  * Valeur AFFICHÉE par l'interrupteur, qui n'est pas toujours « l'appareil est actif ».
  * Pour un ouvrant, la convention de l'interface est la fermeture (coché = fermé), alignée sur celle
- * du curseur — voir `cover.ts`. `isDeviceOn` reste inchangé : il sert à la teinte de l'icône, au
- * comptage des appareils actifs d'une pièce et aux marqueurs 3D, où un volet OUVERT est l'actif.
+ * du curseur — voir `cover.ts`. `isDeviceOn` répond à une autre question : il sert à la teinte de
+ * l'icône, au comptage des appareils actifs d'une pièce et aux marqueurs 3D, où ce qui se remarque
+ * est un volet OUVERT — mais un store DÉPLOYÉ (`coverActivity`).
  *
  * `aimed` : position VISÉE quand le store en tient une. L'interrupteur bascule alors tout de suite,
  * comme le curseur — sinon il resterait dans son ancien état pendant les ~20 s de course avant de
@@ -151,7 +157,18 @@ function batteryStatus(s: StateFor<'energy'>, t: Translate, locale: string): str
 export function headlineValue(descriptor: DeviceDescriptor, s: DeviceState, t: Translate, locale: string): string {
   switch (s.kind) {
     case 'light': return s.on ? (s.brightness !== undefined ? formatPercent(s.brightness, locale) : t('common.on')) : t('common.off')
-    case 'cover': return s.position === undefined ? t('common.unknown') : formatPercent(toClosure(s.position), locale)
+    // Un ouvrant qui ne sait pas VISER une position ne sait pas non plus la mesurer : sur une radio
+    // unidirectionnelle (RTS), le pourcentage n'est qu'une déduction de la dernière commande de
+    // pleine course. Écrire « 100 % » d'un store arrêté à mi-hauteur est une précision inventée —
+    // on ne dit que le mot, qui reste vrai. Les moteurs bidirectionnels gardent leur pourcentage.
+    case 'cover': {
+      if (s.position === undefined) return t('common.unknown')
+      if (!descriptor.capabilities.includes('position')) {
+        const w = coverWords(descriptor)
+        return t(`cover.${w}.${s.position <= 0 ? 'closed' : 'open'}`)
+      }
+      return formatPercent(toClosure(s.position), locale)
+    }
     // titre vide = métadonnées pas encore reçues : l'état, plutôt qu'un vide ou un identifiant
     case 'media_player': return s.nowPlaying?.title || t(`media.${s.playback}`)
     case 'climate': return formatTemp(s.currentTempC, locale)

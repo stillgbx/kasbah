@@ -4,6 +4,7 @@ import { autoPlaceDevices, indexHouse, pointInPolygon, resolveDeviceLevelId, wit
 import { getTransport } from '../api'
 import { t } from '../i18n'
 import { soundRouting } from '../lib/audioRouting'
+import { coverLeaves, defaultCoverSize } from '../lib/orientation'
 import { useDevicesStore } from './devices'
 import { useNotificationsStore } from './notifications'
 
@@ -14,8 +15,13 @@ import { useNotificationsStore } from './notifications'
 
 export type FloorTab = 'garden' | 'all' | string
 type Mount = NonNullable<HouseDevice['mount']>
+type Size = NonNullable<HouseDevice['size']>
+type Leaves = NonNullable<HouseDevice['leaves']>
 /** Placement en cours d'édition (aperçu 3D), pas encore écrit dans house.json. */
 export interface PlacementDraft { position: Vec3; roomId: string | undefined }
+
+/** Deux encombrements identiques (absents des deux côtés compris) : sert au bouton « Rétablir ». */
+const sameSize = (a: Size | undefined, b: Size | undefined) => a?.width === b?.width && a?.height === b?.height
 
 /** Arrondi au 5 cm : garde un JSON lisible. */
 const snap = (v: number) => Math.round(v * 20) / 20
@@ -156,14 +162,14 @@ export const useHouseStore = defineStore('house', () => {
   const saving = ref(false)
   const draft = shallowRef<PlacementDraft | null>(null)
   /** Placement à l'entrée dans le mode, pour « Rétablir ». */
-  const placingOrigin = shallowRef<{ position: Vec3; roomId: string | undefined; levelId: string | null; mount: Mount | undefined; yaw: number | undefined } | null>(null)
+  const placingOrigin = shallowRef<{ position: Vec3; roomId: string | undefined; levelId: string | null; mount: Mount | undefined; yaw: number | undefined; size: Size | undefined; leaves: Leaves | undefined } | null>(null)
   /** Niveau qui ancre l'appareil, que ce soit par sa pièce ou directement. */
   const anchorLevel = (hd: HouseDevice) => (index.value ? resolveDeviceLevelId(hd, index.value.roomsById) : null)
 
   function startPlacing() {
     const hd = selectedDevice.value
     if (!hd) return
-    placingOrigin.value = { position: hd.position, roomId: hd.roomId, levelId: anchorLevel(hd), mount: hd.mount, yaw: hd.yaw }
+    placingOrigin.value = { position: hd.position, roomId: hd.roomId, levelId: anchorLevel(hd), mount: hd.mount, yaw: hd.yaw, size: hd.size, leaves: hd.leaves }
     draft.value = null
     placing.value = true
   }
@@ -268,7 +274,7 @@ export const useHouseStore = defineStore('house', () => {
   }
 
   /** Écrit le brouillon (complété par `override`) dans house.json ; un appareil auto-placé y gagne son entrée. */
-  async function savePlacement(override?: { position?: Vec3; mount?: Mount; yaw?: number; levelId?: string }): Promise<boolean> {
+  async function savePlacement(override?: { position?: Vec3; mount?: Mount; yaw?: number; size?: Size; leaves?: Leaves; levelId?: string }): Promise<boolean> {
     const hd = selectedDevice.value
     if (!hd) return false
     const base = draft.value ?? { position: hd.position, roomId: hd.roomId }
@@ -276,6 +282,8 @@ export const useHouseStore = defineStore('house', () => {
     if (base.roomId && base.roomId !== hd.roomId) p.roomId = base.roomId
     if (override?.mount) p.mount = override.mount
     if (override?.yaw !== undefined) p.yaw = override.yaw
+    if (override?.size) p.size = override.size
+    if (override?.leaves) p.leaves = override.leaves
     if (hd.meta?.autoPlaced && hd.deviceId) {
       p.deviceId = hd.deviceId
       if (base.roomId) p.roomId = base.roomId
@@ -329,16 +337,21 @@ export const useHouseStore = defineStore('house', () => {
 
   const canRevert = computed(() => {
     const o = placingOrigin.value, hd = selectedDevice.value
-    return !!o && !!hd && (o.position.join() !== hd.position.join() || o.mount !== hd.mount || o.roomId !== hd.roomId || o.levelId !== anchorLevel(hd) || o.yaw !== hd.yaw)
+    return !!o && !!hd && (o.position.join() !== hd.position.join() || o.mount !== hd.mount || o.roomId !== hd.roomId
+      || o.levelId !== anchorLevel(hd) || o.yaw !== hd.yaw || !sameSize(o.size, hd.size) || o.leaves !== hd.leaves)
   })
   async function revertPlacement() {
     const o = placingOrigin.value, hd = selectedDevice.value
     if (!o || !hd) return
     draft.value = { position: o.position, roomId: o.roomId }
     // une orientation absente à l'entrée ne peut pas être effacée du JSON : on la ramène à 0, qui vaut pareil
+    // (même raisonnement pour la taille : on réécrit celle par défaut, qui donne le même dessin)
     await savePlacement({
       ...(o.mount ? { mount: o.mount } : {}),
       ...(o.yaw !== hd.yaw ? { yaw: o.yaw ?? 0 } : {}),
+      ...(!sameSize(o.size, hd.size) ? { size: o.size ?? { ...defaultCoverSize(hd.deviceId ? devices.descriptors[hd.deviceId] : undefined) } } : {}),
+      // même raisonnement : un nombre de battants absent à l'entrée se rétablit par son défaut
+      ...(o.leaves !== hd.leaves ? { leaves: o.leaves ?? coverLeaves({ ...hd, leaves: undefined }, hd.deviceId ? devices.descriptors[hd.deviceId] : undefined) } : {}),
       // niveau d'entrée : seulement s'il n'y a pas de pièce pour l'ancrer, sinon le niveau EFFACERAIT la pièce
       ...(!o.roomId && o.levelId && o.levelId !== anchorLevel(hd) ? { levelId: o.levelId } : {}),
     })

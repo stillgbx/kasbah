@@ -41,16 +41,17 @@ const moving = computed(() => props.state.motion !== 'stopped')
  * Texte de la ligne d'état : le mouvement quand il y en a un, sinon « Ouvert » / « Fermé » aux
  * extrêmes, sinon le nom du réglage. Jamais le pourcentage — il est déjà au bout de la ligne.
  */
+const hasPosition = props.descriptor.capabilities.includes('position')
 const lineText = computed(() => {
   if (moving.value) return t(`cover.${w.value}.${props.state.motion}`)
-  // position inconnue : la grande valeur du panneau dit déjà « Inconnu » juste au-dessus, la ligne
-  // garde sa hauteur sans le répéter (elle reprend la parole dès qu'un mouvement commence)
-  if (shown.value === undefined) return '—'
+  // La grande valeur du panneau dit déjà tout quand elle ne montre pas un pourcentage — « Inconnu »
+  // d'une position jamais reçue, « Baissé » d'un moteur sans retour : la ligne garde sa hauteur sans
+  // le répéter (elle reprend la parole dès qu'un mouvement commence).
+  if (shown.value === undefined || !hasPosition) return '—'
   if (shown.value <= 0) return t(`cover.${w.value}.open`)
   if (shown.value >= 100) return t(`cover.${w.value}.closed`)
   return t(`cover.${w.value}.level`)
 })
-const hasPosition = props.descriptor.capabilities.includes('position')
 const hasTilt = props.descriptor.capabilities.includes('tilt')
 const hasStop = props.descriptor.capabilities.includes('stop')
 
@@ -95,7 +96,10 @@ function send(cmd: CommandInput) { emit('command', cmd) }
       <span v-if="hasPosition && shown !== undefined" class="line__pct">{{ Math.round(closure) }} %</span>
     </div>
 
-    <v-slider v-if="hasPosition" v-model="drag" :min="0" :max="100" :step="5" :disabled="disabled"
+    <!-- Pas de 1 % et non de 5 : le repère de position favorite tombe où le moteur l'a mémorisé
+         (37 %, 63 %…), et Vuetify aligne le POUCE sur le pas. À 5 %, rappeler la position perso
+         posait le pouce jusqu'à 2 points à côté de son propre repère — mesuré, et visible. -->
+    <v-slider v-if="hasPosition" v-model="drag" :min="0" :max="100" :step="1" :disabled="disabled"
               :ticks="presetTicks" :show-ticks="presetTicks ? 'always' : false"
               density="compact" hide-details class="cover-slider"
               @start="dragging = true"

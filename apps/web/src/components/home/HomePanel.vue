@@ -36,7 +36,7 @@ const stats = computed(() => {
 function counts(list: HouseDevice[]) {
   const bound = list.filter((d) => d.deviceId && devices.states[d.deviceId])
   // actif par lui-même, ou parce qu'il joue le son d'un autre (barre de son d'une TV, `lib/audioRouting.ts`)
-  const on = bound.filter((d) => isDeviceOn(devices.states[d.deviceId!]!) || house.soundRoutes.relays.has(d.deviceId!)).length
+  const on = bound.filter((d) => isDeviceOn(devices.states[d.deviceId!]!, devices.descriptors[d.deviceId!]) || house.soundRoutes.relays.has(d.deviceId!)).length
   return `${t('home.devicesCount', { n: list.length }, list.length)} · ${t('home.active', { n: on }, on)}`
 }
 

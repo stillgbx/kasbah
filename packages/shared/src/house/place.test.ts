@@ -44,6 +44,22 @@ describe('placeDeviceInJson', () => {
     expect(() => parseHouse(created)).not.toThrow()
   })
 
+  it('writes the drawn size when given (a gate has no opening to measure it)', () => {
+    const sized = placeDeviceInJson(demo, 'light.salon', { position: [5, 3, 0.75], size: { width: 3.5, height: 1.5 } })
+    expect(devices(sized).find((x) => x.id === 'light.salon')).toMatchObject({ size: { width: 3.5, height: 1.5 } })
+    // un placement sans taille ne touche pas à celle déjà écrite
+    const moved = placeDeviceInJson(sized, 'light.salon', { position: [5.5, 3, 0.75] })
+    expect(devices(moved).find((x) => x.id === 'light.salon')).toMatchObject({ size: { width: 3.5, height: 1.5 } })
+    expect(() => parseHouse(moved)).not.toThrow()
+    const created = placeDeviceInJson(demo, 'auto.tahoma-portail', { position: [1, 1, 1], roomId: 'salon', deviceId: 'tahoma:portail', size: { width: 3, height: 1.6 }, leaves: 2 })
+    expect(devices(created).at(-1)).toMatchObject({ size: { width: 3, height: 1.6 }, leaves: 2 })
+    expect(() => parseHouse(created)).not.toThrow()
+    // les battants s'écrivent seuls, et un placement sans eux n'y touche pas
+    const oneLeaf = placeDeviceInJson(sized, 'light.salon', { position: [5, 3, 0.75], leaves: 1 })
+    expect(devices(oneLeaf).find((x) => x.id === 'light.salon')).toMatchObject({ leaves: 1 })
+    expect(devices(placeDeviceInJson(oneLeaf, 'light.salon', { position: [5, 3, 0.8] })).find((x) => x.id === 'light.salon')).toMatchObject({ leaves: 1 })
+  })
+
   it('anchors on a level alone when the device is dropped outside any room', () => {
     // création hors pièce (appareil découvert tard, posé dans un couloir non relevé)
     const created = placeDeviceInJson(demo, 'auto.google_cast-tv', { position: [3, 3, 1.2], levelId: 'rdc', deviceId: 'google_cast:tv' })

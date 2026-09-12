@@ -32,7 +32,32 @@ export type CoverWords = 'openClose' | 'upDown'
 /** Un store banne, un BSO ou un écran se manœuvrent verticalement ; le reste s'ouvre. */
 const UP_DOWN = new Set<string>(['awning', 'blind'])
 
-export function coverWords(descriptor: { meta: { cover?: { deviceClass: string } } }): CoverWords {
+type Coverish = { meta: { cover?: { deviceClass: string } } }
+
+export function coverWords(descriptor: Coverish): CoverWords {
   return UP_DOWN.has(descriptor.meta.cover?.deviceClass ?? '') ? 'upDown' : 'openClose'
+}
+
+/**
+ * Ouvrant qui se déploie À PLAT : un store banne, un BSO s'avancent au-dessus d'une terrasse, là où
+ * un volet, un portail se tiennent debout dans leur passage. Même liste que le vocabulaire (« se
+ * baisse » plutôt que « se ferme ») : une seule source, pour que la forme dessinée, les mots dits et
+ * l'état mis en valeur ne se contredisent jamais.
+ */
+export function isFlatCover(descriptor: Coverish | undefined): boolean {
+  return !!descriptor && coverWords(descriptor) === 'upDown'
+}
+
+/**
+ * Part de l'ouvrant qui SE REMARQUE, de 0 (rien à signaler) à 1. C'est l'inverse d'une nature à
+ * l'autre, et c'est voulu : d'un volet on retient qu'il est OUVERT, d'un store qu'il est DÉPLOYÉ —
+ * c'est déployé qu'il craint le vent, et replié qu'il n'y a rien à surveiller.
+ *
+ * Sert à tout ce qui met un ouvrant en valeur : teinte de l'icône, jauge de la vue Ouvrants, pilule
+ * du marqueur 3D. Position inconnue = 0 : on n'affirme rien d'un moteur qui n'a rien dit.
+ */
+export function coverActivity(descriptor: Coverish | undefined, position: number | undefined): number {
+  if (position === undefined) return 0
+  return isFlatCover(descriptor) ? 1 - position / 100 : position / 100
 }
 
