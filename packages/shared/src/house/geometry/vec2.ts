@@ -58,6 +58,42 @@ export function pointInPolygon(p: Vec2, poly: readonly Vec2[]): boolean {
   return inside
 }
 
+/** Convexité d'un polygone : tous les tournants dans le même sens (colinéaires ignorés). */
+export function isConvex(poly: readonly Vec2[]): boolean {
+  let sign = 0
+  const n = poly.length
+  for (let i = 0; i < n; i++) {
+    const a = poly[i]!, b = poly[(i + 1) % n]!, c = poly[(i + 2) % n]!
+    const z = cross(sub(b, a), sub(c, b))
+    if (Math.abs(z) < EPS) continue
+    if (sign === 0) sign = Math.sign(z)
+    else if (Math.sign(z) !== sign) return false
+  }
+  return true
+}
+
+/**
+ * Intersection de `subject` avec le CONVEXE `clip` (Sutherland–Hodgman : on coupe le sujet
+ * par le demi-plan intérieur de chaque arête du clip). Renvoie [] si les deux sont disjoints.
+ */
+export function clipConvex(subject: readonly Vec2[], clip: readonly Vec2[]): Vec2[] {
+  let out: Vec2[] = ensureCCW(subject)
+  const c = ensureCCW(clip)
+  for (let i = 0; i < c.length && out.length > 0; i++) {
+    const a = c[i]!, b = c[(i + 1) % c.length]!
+    const side = (q: Vec2) => cross(sub(b, a), sub(q, a))
+    const input = out
+    out = []
+    for (let j = 0; j < input.length; j++) {
+      const cur = input[j]!, prev = input[(j - 1 + input.length) % input.length]!
+      const sc = side(cur), sp = side(prev)
+      if ((sc >= 0) !== (sp >= 0)) out.push(lerp(prev, cur, sp / (sp - sc)))
+      if (sc >= 0) out.push(cur)
+    }
+  }
+  return out
+}
+
 export interface BBox2 { min: Vec2; max: Vec2 }
 
 export function bbox(points: readonly Vec2[]): BBox2 {

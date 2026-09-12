@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { HOUSE_DEFAULTS } from '../defaults'
 import { houseSchema, type Level, type Room } from '../schema'
-import { signedArea } from './vec2'
+import { clipConvex, signedArea, type Vec2 } from './vec2'
 import { classifySegments, computeWalls, miterCorners, splitWall } from './walls'
 
 const level: Level = { id: 'l', name: 'L', elevation: 0 }
@@ -109,6 +109,29 @@ describe('computeWalls', () => {
   it('terrace rooms have no walls', () => {
     const t = room({ id: 't', polygon: [[0, 0], [4, 0], [4, 4], [0, 4]], kind: 'terrace' })
     expect(computeWalls(level, [t], HOUSE_DEFAULTS).prisms).toHaveLength(0)
+  })
+  it('building corner: the wall whose stub the neighbour covers is trimmed back', () => {
+    // `a` pousse son mur est de 0.3 vers +x (bande x ∈ [2, 2.3]) ; `b` pousse son mur sud de
+    // 0.3 vers -y (bande y ∈ [1.7, 2]) et arrive en x = 2.1, donc DANS la bande de `a`.
+    // Le bout de `b` est entièrement repris par le mur de `a` : c'est `b` qui recule.
+    const a = room({ id: 'a', polygon: [[0, 0], [2, 0], [2, 2], [0, 2]] })
+    const b = room({ id: 'b', polygon: [[2.1, 2], [5, 2], [5, 4], [2.1, 4]], walls: [{ segment: 3, kind: 'none' }] })
+    const { prisms } = computeWalls(level, [a, b], HOUSE_DEFAULTS)
+    const bSouth = prisms.filter((p) => p.roomId === 'b' && p.segment === 0)
+    const aEast = prisms.find((p) => p.roomId === 'a' && p.segment === 1)!
+    expect(bSouth).toHaveLength(1)
+    expect(Math.min(...bSouth[0]!.footprint.map((v) => v[0]))).toBeCloseTo(2.3)
+    const overlap = clipConvex(bSouth[0]!.footprint as Vec2[], aEast.footprint as Vec2[])
+    expect(Math.abs(signedArea(overlap))).toBeLessThan(1e-9)
+  })
+  it('building corner: nothing is trimmed when neither wall covers the other', () => {
+    // Ici le mitre de `b` sort de la bande de `a` : reculer `b` ouvrirait une fente, on garde
+    // donc le recouvrement (moins laid qu'un trou).
+    const a = room({ id: 'a', polygon: [[0, 0], [2, 0], [2, 2], [0, 2]] })
+    const b = room({ id: 'b', polygon: [[2.1, 2], [5, 2], [5, 4], [2.1, 4]] })
+    const { prisms } = computeWalls(level, [a, b], HOUSE_DEFAULTS)
+    const bSouth = prisms.find((p) => p.roomId === 'b' && p.segment === 0)!
+    expect(Math.min(...bSouth.footprint.map((v) => v[0]))).toBeCloseTo(1.8)
   })
   it('L-shaped room: reflex corner still yields convex quads', () => {
     const l = room({ id: 'l', polygon: [[0, 0], [6, 0], [6, 3], [3, 3], [3, 6], [0, 6]] })

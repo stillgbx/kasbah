@@ -1,5 +1,5 @@
 import {
-  AmbientLight, DirectionalLight, HemisphereLight, PCFSoftShadowMap, PerspectiveCamera, Plane, Raycaster, Scene, TOUCH, Vector2, Vector3,
+  AmbientLight, DirectionalLight, HemisphereLight, PerspectiveCamera, Plane, Raycaster, Scene, TOUCH, Vector2, Vector3, VSMShadowMap,
   WebGLRenderer, Box3, type Material, type Mesh, type MeshStandardMaterial, type Object3D,
 } from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
@@ -126,7 +126,10 @@ export class HouseScene {
     const create = deps.createRenderer ?? defaultCreateRenderer
     this.renderer = deps.headless ? null : create(canvas)
     this.supported = deps.headless ? true : this.renderer !== null
-    if (this.renderer) { this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = PCFSoftShadowMap }
+    // VSM (Variance Shadow Maps) et non PCFSoftShadowMap : depuis three 0.184 ce dernier est
+    // déprécié et retombe sur du PCF DUR (bords crénelés) avec un avertissement en console.
+    // VSM floute nativement, piloté par `shadow.radius` / `shadow.blurSamples`.
+    if (this.renderer) { this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = VSMShadowMap }
     this.labelRenderer = deps.labelLayer ? (deps.createLabelRenderer ?? ((el) => new CSS2DRenderer({ element: el })))(deps.labelLayer) : null
 
     this.hemi = new HemisphereLight(0xffffff, 0x8899aa, this.theme.isDark ? 0.55 : 1.1)
@@ -137,6 +140,11 @@ export class HouseScene {
     this.sun.castShadow = true
     this.sun.shadow.mapSize.set(2048, 2048)
     this.sun.shadow.bias = -0.0005
+    // `normalBias` décale le point testé le long de la normale : c'est lui qui tue l'acné des
+    // murs rasants, là où `bias` seul décollait l'ombre de son objet (peter-panning).
+    this.sun.shadow.normalBias = 0.02
+    this.sun.shadow.radius = 3
+    this.sun.shadow.blurSamples = 16
     this.scene.add(this.sun)
 
     if (!deps.headless && this.renderer) {
@@ -193,15 +201,38 @@ export class HouseScene {
   }
 
   private fitSunShadow(): void {
-    if (!this.geometry) return
-    const b = boundsToWorldBox(this.geometry.bounds)
+    if (!this.geometry || !this.house) return
+    // Cadrer la carte d'ombre sur le BÂTI, pas sur les bornes de la maison (qui incluent le
+    // terrain) : sur une parcelle large, la même carte 2048 passait l'essentiel de ses texels
+    // sur de la pelouse vide. Les ombres portées restent couvertes : dans le repère de la
+    // lumière, l'ombre d'une boîte tient exactement dans l'emprise de cette boîte.
+    const b = boundsToWorldBox(buildingBounds(this.house, resolveDefaults(this.house.defaults), this.geometry.roof))
     const center = b.getCenter(new Vector3())
     const r = b.getSize(new Vector3()).length() / 2
     this.sun.position.set(center.x + r * 0.6, center.y + r * 1.2, center.z + r * 0.4)
     this.sun.target.position.copy(center)
     this.scene.add(this.sun.target)
+    // Frustum ajusté aux huit coins du bâti exprimés dans le repère de la lumière.
+    const zAxis = new Vector3().subVectors(this.sun.position, center).normalize()
+    const xAxis = new Vector3().crossVectors(new Vector3(0, 1, 0), zAxis).normalize()
+    const yAxis = new Vector3().crossVectors(zAxis, xAxis)
+    const corner = new Vector3()
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minD = Infinity, maxD = -Infinity
+    for (let i = 0; i < 8; i++) {
+      corner.set(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z).sub(this.sun.position)
+      const x = corner.dot(xAxis), y = corner.dot(yAxis), d = -corner.dot(zAxis)
+      if (x < minX) minX = x
+      if (x > maxX) maxX = x
+      if (y < minY) minY = y
+      if (y > maxY) maxY = y
+      if (d < minD) minD = d
+      if (d > maxD) maxD = d
+    }
+    const margin = Math.max(0.5, r * 0.08)      // le flou VSM déborde du frustum : marge
     const cam = this.sun.shadow.camera
-    cam.left = -r; cam.right = r; cam.top = r; cam.bottom = -r; cam.near = 0.5; cam.far = r * 4
+    cam.left = minX - margin; cam.right = maxX + margin
+    cam.bottom = minY - margin; cam.top = maxY + margin
+    cam.near = Math.max(0.1, minD - margin); cam.far = maxD + margin + r
     cam.updateProjectionMatrix()
   }
 

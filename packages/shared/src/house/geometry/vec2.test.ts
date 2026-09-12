@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { centroid, isCCW, lineIntersect, offsetPolygon, perpRight, pointInPolygon, signedArea, type Vec2 } from './vec2'
+import { centroid, clipConvex, isCCW, isConvex, lineIntersect, offsetPolygon, perpRight, pointInPolygon, signedArea, type Vec2 } from './vec2'
 
 const square: Vec2[] = [[0, 0], [2, 0], [2, 2], [0, 2]]
 
@@ -22,6 +22,15 @@ describe('vec2', () => {
   })
   it('centroid', () => {
     expect(centroid(square)).toEqual([1, 1])
+  })
+  it('isConvex distinguishes a square from a dart', () => {
+    expect(isConvex(square)).toBe(true)
+    expect(isConvex([[0, 0], [2, 0], [1, 1], [2, 2], [0, 2]])).toBe(false)
+  })
+  it('clipConvex intersects two overlapping squares, and returns nothing when disjoint', () => {
+    const shifted: Vec2[] = [[1, 1], [3, 1], [3, 3], [1, 3]]
+    expect(signedArea(clipConvex(square, shifted))).toBeCloseTo(1)
+    expect(clipConvex(square, [[5, 5], [7, 5], [7, 7], [5, 7]])).toEqual([])
   })
   it('offsetPolygon grows a square by the distance on each side', () => {
     const grown = offsetPolygon(square, 0.5)

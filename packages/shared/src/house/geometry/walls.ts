@@ -1,7 +1,7 @@
 import type { HouseDefaults } from '../defaults'
 import type { Level, Opening, Room, WallKind } from '../schema'
 import type { OpeningRect, WallPrism } from './types'
-import { add, cross, dot, lineIntersect, normalize, perpRight, pointInPolygon, scale, sub, type Vec2 } from './vec2'
+import { add, clipConvex, cross, dot, isConvex, lineIntersect, normalize, perpRight, pointInPolygon, scale, signedArea, sub, type Vec2 } from './vec2'
 
 // Murs : chaque pièce porte ses propres murs vers l'EXTÉRIEUR de sa face intérieure.
 // Deux pièces adjacentes s'écrivent avec un écart = t + t' ; chaque côté remplit sa moitié.
@@ -12,6 +12,8 @@ const EPS = 1e-6
 const MIRROR_TOL = 0.02          // tolérance (m) sur l'écart t + t' entre faces en vis-à-vis
 const PROBE_MARGIN = 0.05
 const MAX_MITER_FACTOR = 3
+const OVERLAP_MIN_AREA = 1e-4    // m² de recouvrement sous lesquels rien ne se voit
+const TRIM_EPS = 1e-4
 
 export interface WallSegment {
   index: number
@@ -170,37 +172,118 @@ export function pieceFootprint(seg: WallSegment, corners: SegmentCorners, u0: nu
   return [P(u0), Q(u0), Q(u1), P(u1)]
 }
 
+/** Une arête de pièce prête à être extrudée, avec la portion `u` qui lui reste après arbitrage. */
+interface SegmentPlan {
+  room: Room
+  seg: WallSegment
+  kind: WallPrism['kind']
+  corners: SegmentCorners
+  height: number
+  u0: number
+  u1: number
+}
+
+interface TrimCandidate { plan: SegmentPlan; u0: number; u1: number; lost: number }
+
+const planFootprint = (p: SegmentPlan, u0 = p.u0, u1 = p.u1) => pieceFootprint(p.seg, p.corners, u0, u1)
+
+/**
+ * Bout à retirer de `p` pour libérer `other`, ou null s'il n'y a rien à retirer, si l'autre
+ * mur est plus BAS (on découvrirait un cran), si le recouvrement tombe au MILIEU de l'arête
+ * (un rognage en bout n'y peut rien) ou si `other` ne reprend pas toute la part retirée en
+ * plan (on ouvrirait une fente).
+ */
+function trimCandidate(p: SegmentPlan, other: readonly Vec2[], otherHeight: number): TrimCandidate | null {
+  if (otherHeight < p.height - 1e-3) return null
+  const inter = clipConvex(planFootprint(p), other)
+  if (inter.length < 3) return null
+  let lo = Infinity, hi = -Infinity
+  for (const v of inter) {
+    const u = dot(sub(v, p.seg.a), p.seg.d)
+    if (u < lo) lo = u
+    if (u > hi) hi = u
+  }
+  lo = Math.max(lo, p.u0); hi = Math.min(hi, p.u1)
+  if (hi - lo < TRIM_EPS) return null
+  let u0 = p.u0, u1 = p.u1
+  if (hi >= p.u1 - TRIM_EPS) u1 = lo
+  else if (lo <= p.u0 + TRIM_EPS) u0 = hi
+  else return null
+  if (u1 - u0 < TRIM_EPS) return null
+  const lost = u0 > p.u0 ? planFootprint(p, p.u0, u0) : planFootprint(p, u1, p.u1)
+  const lostArea = Math.abs(signedArea(lost))
+  const covered = Math.abs(signedArea(clipConvex(lost, other)))
+  if (lostArea - covered > 1e-6) return null
+  return { plan: p, u0, u1, lost: lostArea }
+}
+
+/**
+ * Chaque pièce écrit ses propres murs : à un ANGLE DE BÂTIMENT, deux pièces voisines
+ * portent les deux faces perpendiculaires et leurs prismes se traversent — faces
+ * coplanaires (z-fighting) et lame qui dépasse, bien visibles en plongée. Le mitre de
+ * `miterCorners` ne joue qu'à l'intérieur d'une pièce ; ici on arbitre entre pièces.
+ *
+ * Règle : on rogne en bout celui des deux dont la part retirée est INTÉGRALEMENT reprise
+ * par l'autre mur. Impossible d'ouvrir une fente par construction, et quand aucun des deux
+ * ne couvre l'autre on garde le recouvrement (moins laid qu'un trou).
+ */
+function trimCrossRoomOverlaps(plans: readonly SegmentPlan[]): void {
+  for (let i = 0; i < plans.length; i++) {
+    for (let j = i + 1; j < plans.length; j++) {
+      const A = plans[i]!, B = plans[j]!
+      if (A.room.id === B.room.id) continue
+      if (Math.abs(cross(A.seg.d, B.seg.d)) < 0.05) continue  // quasi parallèles : c'est un vis-à-vis, pas un angle
+      const fa = planFootprint(A), fb = planFootprint(B)
+      if (!isConvex(fa) || !isConvex(fb)) continue
+      if (Math.abs(signedArea(clipConvex(fa, fb))) < OVERLAP_MIN_AREA) continue
+      const a = trimCandidate(A, fb, B.height), b = trimCandidate(B, fa, A.height)
+      const pick = a && b ? (a.lost <= b.lost ? a : b) : a ?? b
+      if (!pick) continue
+      pick.plan.u0 = pick.u0
+      pick.plan.u1 = pick.u1
+    }
+  }
+}
+
 export interface WallsResult { prisms: WallPrism[]; openings: OpeningRect[] }
 
 /** Murs et rectangles d'ouverture d'un niveau (z locaux au niveau). */
 export function computeWalls(level: Level, roomsOnLevel: readonly Room[], defaults: HouseDefaults): WallsResult {
   const prisms: WallPrism[] = []
   const openings: OpeningRect[] = []
+  const plans: SegmentPlan[] = []
   for (const room of roomsOnLevel) {
     if (!isWalled(room)) continue
-    const H = roomHeight(room, level, defaults)
+    const height = roomHeight(room, level, defaults)
     const segs = classifySegments(room, roomsOnLevel, defaults)
     const corners = miterCorners(segs)
     for (const seg of segs) {
       if (seg.kind === 'none') continue
-      const holes = collectHoles(room, seg, roomsOnLevel, level, defaults)
-      for (const piece of splitWall(seg.L, H, holes)) {
-        prisms.push({
-          roomId: room.id, levelId: level.id, segment: seg.index, kind: seg.kind,
-          footprint: pieceFootprint(seg, corners[seg.index]!, piece.u0, piece.u1),
-          z0: piece.z0, z1: piece.z1,
-          ...(piece.openingId ? { openingId: piece.openingId } : {}),
-        })
-      }
-      for (const o of room.openings) {
-        if (o.segment !== seg.index) continue
-        const p = add(seg.a, scale(seg.d, o.offset))
-        openings.push({
-          openingId: o.id, roomId: room.id, levelId: level.id, type: o.type,
-          origin: [p[0], p[1], openingSill(o, defaults)], u: seg.d, normal: seg.n,
-          width: o.width, height: o.height, depth: seg.thickness,
-        })
-      }
+      plans.push({ room, seg, kind: seg.kind, corners: corners[seg.index]!, height, u0: 0, u1: seg.L })
+    }
+  }
+  trimCrossRoomOverlaps(plans)
+  for (const plan of plans) {
+    const { room, seg, kind, corners, height: H } = plan
+    const holes = collectHoles(room, seg, roomsOnLevel, level, defaults)
+    for (const piece of splitWall(seg.L, H, holes)) {
+      const u0 = Math.max(piece.u0, plan.u0), u1 = Math.min(piece.u1, plan.u1)
+      if (u1 - u0 < TRIM_EPS) continue
+      prisms.push({
+        roomId: room.id, levelId: level.id, segment: seg.index, kind,
+        footprint: pieceFootprint(seg, corners, u0, u1),
+        z0: piece.z0, z1: piece.z1,
+        ...(piece.openingId ? { openingId: piece.openingId } : {}),
+      })
+    }
+    for (const o of room.openings) {
+      if (o.segment !== seg.index) continue
+      const p = add(seg.a, scale(seg.d, o.offset))
+      openings.push({
+        openingId: o.id, roomId: room.id, levelId: level.id, type: o.type,
+        origin: [p[0], p[1], openingSill(o, defaults)], u: seg.d, normal: seg.n,
+        width: o.width, height: o.height, depth: seg.thickness,
+      })
     }
   }
   return { prisms, openings }
