@@ -42,6 +42,20 @@ export function roomHeight(room: Room, level: Level, defaults: HouseDefaults): n
   return room.height ?? level.height ?? defaults.levelHeight
 }
 
+/**
+ * Hauteur d'un MUR, qui n'est pas celle de la pièce. `room.height` décrit le PLAFOND : c'est
+ * lui qu'`autoplace` utilise pour accrocher un plafonnier, lui que `validate` compare à une
+ * ouverture. Une cloison le suit. Une FAÇADE, elle, appartient à l'enveloppe du bâtiment : un
+ * plafond plus bas ne la fait pas redescendre, sinon le mur extérieur marche d'une pièce à
+ * l'autre (relevé de la remise à 2,20 m au milieu d'un niveau à 2,60 m).
+ *
+ * `max` et non la hauteur du niveau : une pièce plus HAUTE que son niveau garde sa façade haute.
+ */
+export function wallHeight(room: Room, level: Level, defaults: HouseDefaults, kind: WallKind): number {
+  const h = roomHeight(room, level, defaults)
+  return kind === 'exterior' ? Math.max(h, level.height ?? defaults.levelHeight) : h
+}
+
 export function openingSill(o: Opening, defaults: HouseDefaults): number {
   return o.sill ?? (o.type === 'window' ? defaults.windowSill : 0)
 }
@@ -73,21 +87,33 @@ export function classifySegments(room: Room, roomsOnLevel: readonly Room[], defa
   return segs
 }
 
-export interface SegmentCorners { outerStart: Vec2; outerEnd: Vec2 }
+export interface SegmentCorners {
+  outerStart: Vec2
+  outerEnd: Vec2
+  /** Débord (m) au-delà de `u = 0` : une façade passe DEVANT la cloison qui la rejoint. */
+  startExt: number
+  /** Débord (m) au-delà de `u = L`, même raison. */
+  endExt: number
+}
 
 /**
  * Points extérieurs aux deux bouts de chaque arête : intersection des lignes décalées des
  * arêtes voisines (miter). Bout droit si voisin `none`, colinéaire ou angle trop aigu.
+ *
+ * Exception au T façade / cloison (`extendAcross`) : la FAÇADE passe devant, la cloison s'arrête.
  */
 export function miterCorners(segs: readonly WallSegment[]): SegmentCorners[] {
   const n = segs.length
   const butt = (s: WallSegment, at: 'start' | 'end'): Vec2 =>
     add(at === 'start' ? s.a : s.b, scale(s.n, s.thickness))
-  const out: SegmentCorners[] = segs.map((s) => ({ outerStart: butt(s, 'start'), outerEnd: butt(s, 'end') }))
+  const out: SegmentCorners[] = segs.map((s) => ({
+    outerStart: butt(s, 'start'), outerEnd: butt(s, 'end'), startExt: 0, endExt: 0,
+  }))
   for (let i = 0; i < n; i++) {
     const A = segs[(i - 1 + n) % n]!, B = segs[i]!
     if (A.kind === 'none' || B.kind === 'none') continue
     if (Math.abs(cross(A.d, B.d)) < EPS) continue
+    if (A.kind !== B.kind) { extendAcross(A, B, out[(i - 1 + n) % n]!, out[i]!); continue }
     const x = lineIntersect(add(A.a, scale(A.n, A.thickness)), A.d, add(B.a, scale(B.n, B.thickness)), B.d)
     if (!x) continue
     const maxT = Math.max(A.thickness, B.thickness)
@@ -99,11 +125,32 @@ export function miterCorners(segs: readonly WallSegment[]): SegmentCorners[] {
   return out
 }
 
+/**
+ * Coin entre une FAÇADE et une CLOISON. Mitrer les deux vers un point commun laisse, entre les
+ * deux façades des pièces voisines, un triangle que seules les pointes des cloisons remplissent
+ * — et la scène 3D ABAISSE les cloisons à 1,05 m, donc le triangle se creuse au-dessus.
+ *
+ * La façade passe donc **devant** : son bout, perpendiculaire à elle, avance de l'épaisseur de
+ * la cloison, c'est-à-dire jusqu'au milieu de l'écart entre les deux pièces, là où la façade
+ * voisine arrive en reculant de sa propre demi-épaisseur. Les deux plans coïncident (l'écart
+ * VAUT la somme des deux demi-épaisseurs, cf. `MIRROR_TOL`). La cloison, elle, s'arrête net à la
+ * face intérieure de la façade au lieu de la traverser.
+ */
+function extendAcross(A: WallSegment, B: WallSegment, cornersA: SegmentCorners, cornersB: SegmentCorners): void {
+  if (A.kind === 'exterior') {
+    cornersA.outerEnd = add(add(A.b, scale(A.d, B.thickness)), scale(A.n, A.thickness))
+    cornersA.endExt = B.thickness
+  } else {
+    cornersB.outerStart = add(sub(B.a, scale(B.d, A.thickness)), scale(B.n, B.thickness))
+    cornersB.startExt = A.thickness
+  }
+}
+
 /** Trous de l'arête : ses ouvertures + celles des pièces en vis-à-vis (miroir), fusionnées. */
 export function collectHoles(
   room: Room, seg: WallSegment, roomsOnLevel: readonly Room[], level: Level, defaults: HouseDefaults,
 ): Hole[] {
-  const H = roomHeight(room, level, defaults)
+  const H = wallHeight(room, level, defaults, seg.kind)
   const holes: Hole[] = []
   for (const o of room.openings) {
     if (o.segment !== seg.index) continue
@@ -254,12 +301,13 @@ export function computeWalls(level: Level, roomsOnLevel: readonly Room[], defaul
   const plans: SegmentPlan[] = []
   for (const room of roomsOnLevel) {
     if (!isWalled(room)) continue
-    const height = roomHeight(room, level, defaults)
     const segs = classifySegments(room, roomsOnLevel, defaults)
     const corners = miterCorners(segs)
     for (const seg of segs) {
       if (seg.kind === 'none') continue
-      plans.push({ room, seg, kind: seg.kind, corners: corners[seg.index]!, height, u0: 0, u1: seg.L })
+      const c = corners[seg.index]!
+      const height = wallHeight(room, level, defaults, seg.kind)
+      plans.push({ room, seg, kind: seg.kind, corners: c, height, u0: -c.startExt, u1: seg.L + c.endExt })
     }
   }
   trimCrossRoomOverlaps(plans)
@@ -267,7 +315,9 @@ export function computeWalls(level: Level, roomsOnLevel: readonly Room[], defaul
     const { room, seg, kind, corners, height: H } = plan
     const holes = collectHoles(room, seg, roomsOnLevel, level, defaults)
     for (const piece of splitWall(seg.L, H, holes)) {
-      const u0 = Math.max(piece.u0, plan.u0), u1 = Math.min(piece.u1, plan.u1)
+      // le morceau de bout prend la borne du plan (débord de façade, ou rognage d'angle)
+      const u0 = piece.u0 <= EPS ? plan.u0 : Math.max(piece.u0, plan.u0)
+      const u1 = piece.u1 >= seg.L - EPS ? plan.u1 : Math.min(piece.u1, plan.u1)
       if (u1 - u0 < TRIM_EPS) continue
       prisms.push({
         roomId: room.id, levelId: level.id, segment: seg.index, kind,

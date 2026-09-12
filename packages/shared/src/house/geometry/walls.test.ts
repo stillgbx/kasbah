@@ -44,14 +44,20 @@ describe('miterCorners', () => {
     expect(corners[0]!.outerEnd[0]).toBeCloseTo(4.3)
     expect(corners[0]!.outerEnd[1]).toBeCloseTo(-0.3)
   })
-  it('mixed thickness corner lands on both offset lines', () => {
+  it('T façade / cloison : la façade avance devant la cloison, qui bute sur sa face intérieure', () => {
     const a = room({ id: 'a', polygon: [[0, 0], [3, 0], [3, 4], [0, 4]] })
     const b = room({ id: 'b', polygon: [[3.2, 0], [6, 0], [6, 4], [3.2, 4]] })
     const corners = miterCorners(classifySegments(a, [a, b], HOUSE_DEFAULTS))
-    // fin du mur sud (ext 0.3) = début du mur est (int 0.1) → (3.1, -0.3)
+    // mur sud (ext 0.3) : son bout avance de 0.1 (la cloison est) → (3.1, -0.3), débord 0.1
     expect(corners[0]!.outerEnd[0]).toBeCloseTo(3.1)
     expect(corners[0]!.outerEnd[1]).toBeCloseTo(-0.3)
-    expect(corners[1]!.outerStart).toEqual(corners[0]!.outerEnd)
+    expect(corners[0]!.endExt).toBeCloseTo(0.1)
+    // mur est (int 0.1) : bout DROIT à la face intérieure de la façade, il ne la traverse plus
+    // (avant le 2026-09-12 il partageait le point mitré du mur sud, laissant au-dessus de 1,05 m
+    //  un triangle que seule la cloison remplissait)
+    expect(corners[1]!.outerStart[0]).toBeCloseTo(3.1)
+    expect(corners[1]!.outerStart[1]).toBeCloseTo(0)
+    expect(corners[1]!.startExt).toBe(0)
   })
 })
 
@@ -132,6 +138,24 @@ describe('computeWalls', () => {
     const { prisms } = computeWalls(level, [a, b], HOUSE_DEFAULTS)
     const bSouth = prisms.find((p) => p.roomId === 'b' && p.segment === 0)!
     expect(Math.min(...bSouth.footprint.map((v) => v[0]))).toBeCloseTo(1.8)
+  })
+  it('un plafond plus bas ne fait pas redescendre la façade', () => {
+    // La remise du relevé : 2,20 m de plafond dans un niveau à 2,60 m. Les cloisons suivent le
+    // plafond, les façades suivent le bâtiment — sinon le mur extérieur marche entre deux pièces.
+    const a = room({ id: 'a', polygon: [[0, 0], [3, 0], [3, 4], [0, 4]], height: 2.2 })
+    const b = room({ id: 'b', polygon: [[3.2, 0], [6, 0], [6, 4], [3.2, 4]] })
+    const { prisms } = computeWalls(level, [a, b], HOUSE_DEFAULTS)
+    const of = (roomId: string, segment: number) => prisms.find((p) => p.roomId === roomId && p.segment === segment)!
+    expect(of('a', 0).kind).toBe('exterior')
+    expect(of('a', 0).z1).toBeCloseTo(HOUSE_DEFAULTS.levelHeight)  // façade : hauteur du niveau
+    expect(of('a', 1).kind).toBe('interior')
+    expect(of('a', 1).z1).toBeCloseTo(2.2)                          // cloison : plafond de la pièce
+    expect(of('b', 0).z1).toBeCloseTo(HOUSE_DEFAULTS.levelHeight)   // la voisine ne marche pas
+  })
+  it('une pièce plus haute que son niveau garde sa façade haute', () => {
+    const a = room({ id: 'a', polygon: [[0, 0], [3, 0], [3, 4], [0, 4]], height: 3.2 })
+    const { prisms } = computeWalls(level, [a], HOUSE_DEFAULTS)
+    expect(prisms[0]!.z1).toBeCloseTo(3.2)
   })
   it('L-shaped room: reflex corner still yields convex quads', () => {
     const l = room({ id: 'l', polygon: [[0, 0], [6, 0], [6, 3], [3, 3], [3, 6], [0, 6]] })
