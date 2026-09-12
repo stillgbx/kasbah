@@ -19,6 +19,7 @@
   "home": {
     "lightsOn": "lumières allumées", "shuttersOpen": "volets ouverts", "awningsDown": "stores baissés", "solar": "Solaire", "cameras": "caméras", "players": "lecteurs",
     "scenes": "Scènes", "rooms": "Pièces", "garden": "Jardin",
+    "roomsCount": "{n} pièce | {n} pièce | {n} pièces",
     "devicesCount": "{n} appareil | {n} appareil | {n} appareils", "active": "{n} actif | {n} actif | {n} actifs",
     "selectHint": "Touchez une pièce ou un appareil dans la vue 3D",
     "hint3d": "1 doigt : orbiter · 2 doigts : zoom et déplacement · molette : zoom",

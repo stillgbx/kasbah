@@ -18,7 +18,7 @@ import ForgetDeviceButton from '../devices/ForgetDeviceButton.vue'
 import DeviceControl from '../controls/DeviceControl.vue'
 import PlacementControl from './PlacementControl.vue'
 
-// Panneau « appareil » : fil d'Ariane vers la pièce, en-tête (icône, nom, fabricant, bascule),
+// Panneau « appareil » : fil d'Ariane vers son parent, en-tête (icône, nom, fabricant, bascule),
 // grande valeur, puis le contrôle propre au type.
 const emit = defineEmits<{ back: [] }>()
 const house = useHouseStore()
@@ -27,10 +27,18 @@ const notifications = useNotificationsStore()
 const { t, locale } = useI18n()
 const resolved = useDeviceResolver(computed(() => house.selectedKey))
 
+/**
+ * Le PARENT dont on est descendu, et où le retour ramène : la pièce, la zone du jardin, ou à défaut
+ * le niveau qui porte l'appareil (une caméra posée sur le toit, hors de toute pièce). « Maison »
+ * ne reste que pour un appareil qui n'est nulle part.
+ */
 const crumb = computed(() => {
   const hd = resolved.value?.houseDevice
   if (!hd) return t('nav.home')
-  return (hd.roomId ? house.index?.roomsById.get(hd.roomId)?.name : hd.zoneId ? house.index?.zonesById.get(hd.zoneId)?.name : null) ?? t('nav.home')
+  const idx = house.index
+  return (hd.roomId ? idx?.roomsById.get(hd.roomId)?.name
+    : hd.zoneId ? idx?.zonesById.get(hd.zoneId)?.name
+    : hd.levelId ? idx?.levelsById.get(hd.levelId)?.name : null) ?? t('nav.home')
 })
 /**
  * Ce que l'appareil EST, dit au plus près : la nature déclarée par le fabricant quand il y en a une

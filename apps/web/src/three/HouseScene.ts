@@ -6,7 +6,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js'
 import {
   boundsCenter, buildingBounds, computeHouseGeometry, deviceFloorZ, geoDistance, indexHouse, pointInPolygon, resolveDefaults, resolveDeviceLevelId,
-  roomBounds, zoneBounds,
+  roofBounds, roomBounds, zoneBounds,
   type DeviceDescriptor, type DeviceState, type House, type HouseDevice, type HouseGeometry, type HouseIndex, type Level, type Vec3,
 } from '@kasbah/shared'
 import { applyTheme, createMaterials, disposeMaterials, type MaterialSet } from './builders/materials'
@@ -48,6 +48,8 @@ export interface SceneEvents {
   deviceTap: (key: string) => void
   roomTap: (roomId: string) => void
   zoneTap: (zoneId: string) => void
+  /** Tap sur le toit : le niveau qui le porte (il n'a ni pièce ni sol à toucher). */
+  levelTap: (levelId: string) => void
   backgroundTap: () => void
   /** Glissement de l'appareil déplaçable : position au sol (repère maison) et pièce survolée (même niveau) ou null. */
   deviceDrag: (key: string, xy: [number, number], roomId: string | null) => void
@@ -61,6 +63,8 @@ const DEVICE_FOCUS_SIZE_M = 3
 const DEVICE_FOCUS_POLAR = [(20 * Math.PI) / 180, (40 * Math.PI) / 180] as const
 const DEFAULT_AZIMUTH = -Math.PI / 4     // depuis le sud-est
 const DEFAULT_POLAR = (55 * Math.PI) / 180
+/** Cadrage d'un niveau-toit : plus plongeant que les autres, on vient regarder la dalle elle-même. */
+const ROOF_POLAR = (35 * Math.PI) / 180
 const WORLD_UP = new Vector3(0, 1, 0)
 /** Rayon (px) autour de l'ancre ou de la pilule où l'appui saisit l'appareil déplaçable. */
 const GRAB_RADIUS_PX = { touch: 44, mouse: 28 }
@@ -99,7 +103,8 @@ export class HouseScene {
   private highlightedRoom: string | null = null
   private selectedKey: string | null = null
   private listeners: { [K in keyof SceneEvents]: Set<SceneEvents[K]> } = {
-    deviceTap: new Set(), roomTap: new Set(), zoneTap: new Set(), backgroundTap: new Set(), deviceDrag: new Set(), deviceDrop: new Set(),
+    deviceTap: new Set(), roomTap: new Set(), zoneTap: new Set(), levelTap: new Set(), backgroundTap: new Set(),
+    deviceDrag: new Set(), deviceDrop: new Set(),
   }
   private detachInput: (() => void) | null = null
   private movableKey: string | null = null
@@ -448,6 +453,11 @@ export class HouseScene {
     return !!roof && level.elevation >= roof.zBase - 1e-3
   }
 
+  /** Le niveau que porte le toit, s'il est déclaré (pour ses panneaux, sa caméra…). */
+  private roofLevel(): Level | undefined {
+    return this.house?.levels.find((l) => this.isRoofLevel(l))
+  }
+
   resetView(animate = true): void {
     if (!this.house || !this.geometry) return
     const box = boundsToWorldBox(buildingBounds(this.house, resolveDefaults(this.house.defaults), this.geometry.roof))
@@ -526,12 +536,13 @@ export class HouseScene {
     if (!this.house || !this.geometry) return
     this.focusLevel(levelId)
     this.highlightRoom(null)
-    // le niveau du toit se cadre avec le toit (il n'a ni pièce ni contour à cadrer autrement)
+    // le niveau du toit se cadre SUR le toit (il n'a ni pièce ni contour à cadrer autrement) : cadrer
+    // le bâti entier le laissait petit et lointain, alors que c'est lui qu'on vient voir
     const level = this.house.levels.find((l) => l.id === levelId)
     const roof = level && this.isRoofLevel(level) ? this.geometry.roof : undefined
-    const box = boundsToWorldBox(buildingBounds(this.house, resolveDefaults(this.house.defaults), roof))
+    const box = boundsToWorldBox(roof ? roofBounds(roof) : buildingBounds(this.house, resolveDefaults(this.house.defaults)))
     const { azimuth } = this.currentSpherical()
-    this.flyTo(box, azimuth, (52 * Math.PI) / 180, animate, 1.15)
+    this.flyTo(box, azimuth, roof ? ROOF_POLAR : (52 * Math.PI) / 180, animate, 1.15)
   }
 
   private currentSpherical() {
@@ -588,8 +599,8 @@ export class HouseScene {
     this.loop.invalidate()
   }
 
-  /** Sélection au point NDC par lancer de rayon : objet d'appareil, sol de pièce, zone. */
-  pick(ndc: { x: number; y: number }): { kind: 'device'; key: string } | { kind: 'room'; roomId: string } | { kind: 'zone'; zoneId: string } | null {
+  /** Sélection au point NDC par lancer de rayon : objet d'appareil, sol de pièce, toit, zone. */
+  pick(ndc: { x: number; y: number }): { kind: 'device'; key: string } | { kind: 'room'; roomId: string } | { kind: 'level'; levelId: string } | { kind: 'zone'; zoneId: string } | null {
     if (!this.nodes) return null
     this.raycaster.setFromCamera(new Vector2(ndc.x, ndc.y), this.camera)
     const pickables: Object3D[] = []
@@ -599,6 +610,14 @@ export class HouseScene {
     const floors: Mesh[] = []
     for (const nodes of this.nodes.levels.values()) if (nodes.group.visible && nodes.markers.visible) floors.push(...nodes.floors.values())
     const hitFloor = this.raycaster.intersectObjects(floors, false)[0]
+    // Le toit cache ce qu'il couvre : un tap dessus va au niveau qui le porte, jamais à la pièce
+    // qu'on ne voit pas dessous (sans quoi le toit disparaissait au profit de l'étage).
+    const roofNode = this.nodes.roof
+    const roofLevel = roofNode?.visible ? this.roofLevel() : undefined
+    if (roofNode && roofLevel) {
+      const hitRoof = this.raycaster.intersectObject(roofNode, false)[0]
+      if (hitRoof && (!hitFloor || hitRoof.distance <= hitFloor.distance)) return { kind: 'level', levelId: roofLevel.id }
+    }
     if (hitFloor) return { kind: 'room', roomId: hitFloor.object.userData.roomId as string }
     // les zones du jardin ne se sélectionnent qu'en vue d'ensemble / jardin
     if (this.focusedLevelId === null) {
@@ -614,6 +633,7 @@ export class HouseScene {
     if (!hit) { this.emit('backgroundTap'); return }
     if (hit.kind === 'device') this.emit('deviceTap', hit.key)
     else if (hit.kind === 'room') this.emit('roomTap', hit.roomId)
+    else if (hit.kind === 'level') this.emit('levelTap', hit.levelId)
     else this.emit('zoneTap', hit.zoneId)
   }
 

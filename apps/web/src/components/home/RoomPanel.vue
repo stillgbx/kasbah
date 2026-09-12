@@ -11,27 +11,44 @@ import { useHouseStore } from '../../stores/house'
 import { useScenesStore } from '../../stores/scenes'
 import RoomBrightness from '../devices/RoomBrightness.vue'
 import RoomLightsToggle from '../devices/RoomLightsToggle.vue'
+import RoomRows from './RoomRows.vue'
 import SceneChips from '../scenes/SceneChips.vue'
 import MarqueeText from '../ui/MarqueeText.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import PulseDot from '../ui/PulseDot.vue'
 
-// Panneau « pièce » (ou zone du jardin) : fil d'Ariane, titre, appareils avec bascule rapide.
+// Panneau « pièce » (ou zone du jardin, ou NIVEAU) : fil d'Ariane, titre, appareils avec bascule
+// rapide. Un niveau n'y entre que par ce qu'il porte lui-même, hors de toute pièce — un toit et sa
+// caméra ; ses pièces, elles, se listent dans le panneau maison.
 const emit = defineEmits<{ back: [] }>()
 const house = useHouseStore()
 const devices = useDevicesStore()
 const scenes = useScenesStore()
 const { t, locale } = useI18n()
 
-const target = computed(() => {
+const roomTarget = computed(() => {
   const idx = house.index
   if (!idx || !house.selectedRoomId) return null
   const room = idx.roomsById.get(house.selectedRoomId)
-  if (room) return { name: room.name, where: idx.levelsById.get(room.levelId)?.name ?? '', list: idx.devicesByRoom.get(room.id) ?? [] }
+  if (room) return { name: room.name, where: idx.levelsById.get(room.levelId)?.name ?? '', list: idx.devicesByRoom.get(room.id) ?? [], rooms: [] }
   const zone = idx.zonesById.get(house.selectedRoomId)
-  if (zone) return { name: zone.name, where: t('home.garden'), list: idx.devicesByZone.get(zone.id) ?? [] }
+  if (zone) return { name: zone.name, where: t('home.garden'), list: idx.devicesByZone.get(zone.id) ?? [], rooms: [] }
   return null
 })
+const levelTarget = computed(() => {
+  const idx = house.index
+  const level = idx && house.selectedLevelId ? idx.levelsById.get(house.selectedLevelId) : undefined
+  if (!level) return null
+  const rooms = (idx!.roomsByLevel.get(level.id) ?? []).filter((r) => r.kind !== 'stairs')
+  return {
+    name: level.name,
+    where: rooms.length ? t('home.roomsCount', { n: rooms.length }, rooms.length) : house.house?.name ?? '',
+    list: (idx!.devicesByLevel.get(level.id) ?? []).filter((d) => !d.roomId),
+    rooms: rooms.map((r) => ({ id: r.id, name: r.name, deviceIds: (idx!.devicesByRoom.get(r.id) ?? []).map((d) => d.deviceId) })),
+  }
+})
+/** Le parent où le retour ramène : le NIVEAU d'une pièce ; la maison pour une zone ou un niveau. */
+const crumb = computed(() => (house.selectedRoom ? house.index?.levelsById.get(house.selectedRoom.levelId)?.name ?? t('nav.home') : t('nav.home')))
 
 function row(d: HouseDevice) {
   const descriptor = d.deviceId ? devices.descriptors[d.deviceId] : undefined
@@ -66,16 +83,17 @@ function backdrop(state: DeviceState | undefined, heard?: DeviceState): { backdr
   if (state.kind === 'light') { const tint = lightTintCss(state); if (tint) return { backdrop: { background: tint }, backdropKey: 'tint' } }
   return {}
 }
+const target = computed(() => roomTarget.value ?? levelTarget.value)
 const rows = computed(() => (target.value?.list ?? []).map(row))
 /** Appareils liés de la pièce : l'interrupteur maître y cherche les lampes. */
 const deviceIds = computed(() => (target.value?.list ?? []).map((d) => d.deviceId))
-/** Ambiances du fabricant rattachées à cette pièce (rapprochement par nom). */
-const roomScenes = computed(() => (target.value ? scenes.forRoom(target.value.name) : []))
+/** Ambiances du fabricant rattachées à cette pièce (rapprochement par nom) — un niveau n'en a pas. */
+const roomScenes = computed(() => (roomTarget.value ? scenes.forRoom(roomTarget.value.name) : []))
 </script>
 
 <template>
   <template v-if="target">
-    <button type="button" class="crumb" @click="emit('back')"><StrokeIcon name="back" :size="14" /> {{ $t('nav.home') }}</button>
+    <button type="button" class="crumb" @click="emit('back')"><StrokeIcon name="back" :size="14" /> {{ crumb }}</button>
     <div class="head">
       <div class="min0">
         <div class="title">{{ target.name }}</div>
@@ -86,7 +104,12 @@ const roomScenes = computed(() => (target.value ? scenes.forRoom(target.value.na
     </div>
     <!-- luminosité de toute la pièce : sur sa propre ligne, sous l'interrupteur qu'elle prolonge -->
     <RoomBrightness :device-ids="deviceIds" />
-    <SceneChips :scenes="roomScenes" :label="$t('scenes.title')" :add-to="target.name" />
+    <SceneChips v-if="roomTarget" :scenes="roomScenes" :label="$t('scenes.title')" :add-to="target.name" />
+    <!-- un niveau porte d'abord ses pièces, puis ce qui est posé dessus hors de toute pièce -->
+    <section v-if="target.rooms.length" class="block">
+      <div class="section-label">{{ $t('home.rooms') }}</div>
+      <RoomRows :rows="target.rooms" />
+    </section>
     <div class="rows">
       <div v-for="r in rows" :key="r.key" class="dev-row" role="button" tabindex="0" @click="house.selectDevice(r.key)" @keydown.enter="house.selectDevice(r.key)">
         <!-- fond sous le contenu (pochette ou teinte), fondu vers l'interrupteur ; absolu, il ne décale rien -->
@@ -115,6 +138,7 @@ const roomScenes = computed(() => (target.value ? scenes.forRoom(target.value.na
 .min0 { flex: 1 1 0; min-width: 0; }
 .title { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
 .sub { font-size: 13px; margin-top: 2px; }
+.block { display: grid; gap: 8px; }
 .rows { display: grid; gap: 8px; }
 .dev-row {
   display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--radius);

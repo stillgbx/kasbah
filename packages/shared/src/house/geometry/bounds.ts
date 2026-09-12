@@ -56,6 +56,11 @@ export function zoneBounds(house: House, zoneId: string): AABB3 | null {
   return fromPolygon(zone.polygon, house.site.elevation, house.site.elevation + 0.1)
 }
 
+/** Emprise de la seule dalle de toiture : le niveau-toit se cadre sur elle, pas sur le bâti entier. */
+export function roofBounds(roof: RoofDescriptor): AABB3 {
+  return fromPolygon(roof.outline, roof.zBase, roof.zRidge)
+}
+
 export function siteBounds(house: House): AABB3 {
   return fromPolygon(house.site.terrain, house.site.elevation, house.site.elevation)
 }

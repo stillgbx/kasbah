@@ -19,6 +19,7 @@
   "home": {
     "lightsOn": "lights on", "shuttersOpen": "shutters open", "awningsDown": "awnings lowered", "solar": "Solar", "cameras": "cameras", "players": "players",
     "scenes": "Scenes", "rooms": "Rooms", "garden": "Garden",
+    "roomsCount": "{n} room | {n} room | {n} rooms",
     "devicesCount": "{n} device | {n} device | {n} devices", "active": "{n} active | {n} active | {n} active",
     "selectHint": "Tap a room or a device in the 3D view",
     "hint3d": "1 finger: orbit · 2 fingers: zoom & pan · wheel: zoom",

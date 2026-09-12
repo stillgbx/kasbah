@@ -58,7 +58,22 @@ scene.onRoomTap((roomId) => {
   else { house.selectRoom(roomId); panelOpen.value = true }
 })
 scene.onZoneTap((zoneId) => { house.selectRoom(zoneId); panelOpen.value = true })
+// Tap sur le toit : il porte un niveau (caméra, panneaux) mais aucune pièce. On SÉLECTIONNE ce
+// niveau — onglet, panneau de ses appareils et cadrage sur la dalle — au lieu de laisser le rayon
+// traverser jusqu'à la pièce cachée dessous, ce qui faisait disparaître le toit au profit de
+// l'étage. Déjà dessus, le tap ressort, comme un second tap sur une pièce.
+scene.onLevelTap((levelId) => {
+  if (house.selectedLevelId === levelId) house.backToHome()
+  else { house.selectLevel(levelId); panelOpen.value = true }
+})
 scene.onBackgroundTap(() => house.clearSelection())
+
+// Le fil d'Ariane remonte d'un cran (appareil → pièce → niveau → maison) ; arrivé à « Maison », il
+// fait ce que fait l'onglet « Tout » : le mot promet la maison entière, pas le niveau qu'on
+// regardait encore. Sans cela, revenir à « Maison » depuis le 1er laissait la vue sur le 1er.
+function backToAll() { if (!house.selectedRoomId && !house.selectedLevelId) onTab('all') }
+function onDeviceBack() { house.backFromDevice(); backToAll() }
+function onRoomBack() { house.backFromRoom(); backToAll() }
 
 // store → scène. Le cadrage suit la sélection la PLUS FINE : un appareil se cadre sur lui-même, pas
 // sur sa pièce — sinon un plafonnier de grand séjour restait un point dans un coin de l'écran.
@@ -70,6 +85,8 @@ function frameSelection(roomId: string | null, key: string | null) {
   else scene.focusRoom(roomId)
 }
 watch(() => house.focusedLevelId, (id) => scene.focusLevel(id))
+// un niveau sélectionné se cadre comme une pièce sélectionnée : c'est lui qu'on est venu voir
+watch(() => house.selectedLevelId, (id) => { if (id) scene.focusLevelView(id) })
 watch([() => house.selectedRoomId, () => house.selectedKey], ([roomId, key]) => {
   scene.setSelected(key)
   frameSelection(roomId, key)
@@ -126,7 +143,8 @@ onMounted(() => {
 })
 onUnmounted(() => { offDeviceEvent?.() })
 
-const panelMode = computed<'device' | 'room' | 'home'>(() => (house.selectedKey ? 'device' : house.selectedRoomId ? 'room' : 'home'))
+const panelMode = computed<'device' | 'room' | 'level' | 'home'>(() =>
+  (house.selectedKey ? 'device' : house.selectedRoomId ? 'room' : house.selectedLevelId ? 'level' : 'home'))
 </script>
 
 <template>
@@ -150,8 +168,8 @@ const panelMode = computed<'device' | 'room' | 'home'>(() => (house.selectedKey 
       </div>
     </div>
     <SidePanel :open="panelOpen" :docked="wide" @close="panelOpen = false">
-      <DevicePanel v-if="panelMode === 'device'" @back="house.clearSelection()" />
-      <RoomPanel v-else-if="panelMode === 'room'" @back="house.backToHome()" />
+      <DevicePanel v-if="panelMode === 'device'" @back="onDeviceBack()" />
+      <RoomPanel v-else-if="panelMode === 'room' || panelMode === 'level'" @back="onRoomBack()" />
       <HomePanel v-else />
     </SidePanel>
   </div>

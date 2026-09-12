@@ -30,6 +30,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   const deviceTap = new Set<Handler<[string]>>()
   const roomTap = new Set<Handler<[string]>>()
   const zoneTap = new Set<Handler<[string]>>()
+  const levelTap = new Set<Handler<[string]>>()
   const backgroundTap = new Set<Handler<[]>>()
   const deviceDrag = new Set<Handler<[string, [number, number], string | null]>>()
   const deviceDrop = new Set<Handler<[string, [number, number], string | null]>>()
@@ -43,6 +44,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     scene.on('deviceTap', (key) => deviceTap.forEach((f) => f(key)))
     scene.on('roomTap', (id) => roomTap.forEach((f) => f(id)))
     scene.on('zoneTap', (id) => zoneTap.forEach((f) => f(id)))
+    scene.on('levelTap', (id) => levelTap.forEach((f) => f(id)))
     scene.on('backgroundTap', () => backgroundTap.forEach((f) => f()))
     scene.on('deviceDrag', (k, xy, r) => deviceDrag.forEach((f) => f(k, xy, r)))
     scene.on('deviceDrop', (k, xy, r) => deviceDrop.forEach((f) => f(k, xy, r)))
@@ -79,6 +81,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     onDeviceTap: (f: Handler<[string]>) => { deviceTap.add(f) },
     onRoomTap: (f: Handler<[string]>) => { roomTap.add(f) },
     onZoneTap: (f: Handler<[string]>) => { zoneTap.add(f) },
+    onLevelTap: (f: Handler<[string]>) => { levelTap.add(f) },
     onBackgroundTap: (f: Handler<[]>) => { backgroundTap.add(f) },
     focusLevel: (id: string | null) => scene?.focusLevel(id),
     focusLevelView: (id: string) => scene?.focusLevelView(id),

@@ -11,6 +11,7 @@ import { defaultSceneTheme, parseCssColor } from './core/theme'
 import { createTween } from './core/tween'
 import { ScreenArt, coverCrop, screenArtGeometry } from './markers/screenArt'
 import { createMarker } from './markers/createMarker'
+import { HouseScene } from './HouseScene'
 import type { Animation } from './core/renderLoop'
 
 describe('coords', () => {
@@ -278,5 +279,32 @@ describe('marqueurs 3D', () => {
     expect(puck.rotation.z).toBeCloseTo(Math.PI / 2)
     const params = (puck.geometry as CylinderGeometry).parameters
     expect(params.radiusTop).toBeLessThan(0.1)
+  })
+})
+
+describe('tap sur le toit', () => {
+  // Le toit est déclaré comme un NIVEAU (il porte panneaux et caméra) mais n'a ni pièce ni sol :
+  // sans lui, le rayon traversait jusqu'à la pièce cachée dessous et le toit disparaissait.
+  const scene = new HouseScene(document.createElement('canvas'), { headless: true })
+  scene.load(parseHouse(demo))
+  scene.resize(600, 600)
+  // au-dessus de la chambre1 (2,5 ; 2,5), regard presque vertical
+  const lookDown = () => {
+    scene.camera.position.set(2.5, 40, -2.4)
+    scene.camera.lookAt(2.5, 5, -2.5)
+    scene.camera.updateMatrixWorld(true)
+    scene.scene.updateMatrixWorld(true)   // sans rendu (headless), les matrices monde ne sont pas à jour
+  }
+
+  it('emmène au niveau que le toit porte', () => {
+    lookDown()
+    scene.focusLevel(null)
+    expect(scene.pick({ x: 0, y: 0 })).toEqual({ kind: 'level', levelId: 'toit' })
+  })
+
+  it('laisse toucher la pièce quand le toit est masqué', () => {
+    lookDown()
+    scene.focusLevel('etage')
+    expect(scene.pick({ x: 0, y: 0 })).toEqual({ kind: 'room', roomId: 'chambre1' })
   })
 })

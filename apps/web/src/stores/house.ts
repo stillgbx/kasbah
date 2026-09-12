@@ -80,6 +80,8 @@ export const useHouseStore = defineStore('house', () => {
   const gardenFocus = ref(false)
   /** Pièce ou zone sélectionnée. */
   const selectedRoomId = ref<string | null>(null)
+  /** Niveau sélectionné : le parent d'un appareil posé HORS pièce (le toit et les siens). */
+  const selectedLevelId = ref<string | null>(null)
   /** Id d'appareil de la MAISON (HouseDevice.id), ou id de plugin pour un appareil non placé. */
   const selectedKey = ref<string | null>(null)
 
@@ -107,12 +109,14 @@ export const useHouseStore = defineStore('house', () => {
       if ((room && room.levelId !== focusedLevelId.value) || (zone && tab !== 'garden')) selectedRoomId.value = null
     }
     if (tab === 'garden' || tab === 'all') selectedKey.value = null
+    if (selectedLevelId.value !== focusedLevelId.value) selectedLevelId.value = null
   }
 
   function focusLevel(levelId: string | null) { setFloorTab(levelId ?? 'all') }
 
   function selectRoom(roomId: string | null) {
     selectedKey.value = null
+    selectedLevelId.value = null
     if (!roomId) { selectedRoomId.value = null; return }
     const room = index.value?.roomsById.get(roomId)
     if (room) { gardenFocus.value = false; focusedLevelId.value = room.levelId }
@@ -120,7 +124,20 @@ export const useHouseStore = defineStore('house', () => {
     selectedRoomId.value = roomId
   }
 
+  /**
+   * Sélectionne un NIVEAU : son panneau liste les appareils posés dessus hors de toute pièce (le toit
+   * et sa caméra, ses panneaux). C'est le parent d'un tel appareil dans le fil d'Ariane.
+   */
+  function selectLevel(levelId: string) {
+    selectedKey.value = null
+    selectedRoomId.value = null
+    gardenFocus.value = false
+    focusedLevelId.value = levelId
+    selectedLevelId.value = levelId
+  }
+
   function selectDevice(key: string | null) {
+    selectedLevelId.value = null
     selectedKey.value = key
     if (!key) return
     const hd = index.value?.devicesById.get(key)
@@ -134,7 +151,20 @@ export const useHouseStore = defineStore('house', () => {
   }
 
   function clearSelection() { selectedKey.value = null }
-  function backToHome() { selectedKey.value = null; selectedRoomId.value = null }
+  function backToHome() { selectedKey.value = null; selectedRoomId.value = null; selectedLevelId.value = null }
+  /** Retour depuis une pièce : le NIVEAU qui la porte ; une zone ou un niveau ramènent à la maison. */
+  function backFromRoom() {
+    const room = selectedRoom.value
+    selectedKey.value = null
+    selectedRoomId.value = null
+    selectedLevelId.value = room ? room.levelId : null
+  }
+  /** Retour depuis un appareil : sa pièce ou sa zone si elle l'ancre, sinon le NIVEAU qui le porte. */
+  function backFromDevice() {
+    const hd = selectedDevice.value
+    selectedKey.value = null
+    if (hd && !hd.roomId && !hd.zoneId && hd.levelId) selectedLevelId.value = hd.levelId
+  }
 
   /**
    * Ordre d'affichage des pièces d'un niveau (glisser-déposer de la vue Lumières). Appliqué tout de
@@ -218,6 +248,7 @@ export const useHouseStore = defineStore('house', () => {
     focusedLevelId.value = levelId
     gardenFocus.value = false
     selectedRoomId.value = null
+    selectedLevelId.value = null
     selectedKey.value = id
     placingOrigin.value = null
     draft.value = null
@@ -359,8 +390,8 @@ export const useHouseStore = defineStore('house', () => {
 
   return {
     house, effective, loading, error, index, levels, zones, soundRoutes, relaySource,
-    focusedLevelId, gardenFocus, selectedRoomId, selectedKey, floorTab, selectedRoom, selectedZone, selectedDevice,
-    load, setFloorTab, focusLevel, selectRoom, selectDevice, clearSelection, backToHome, houseDeviceFor, setRoomOrder,
+    focusedLevelId, gardenFocus, selectedRoomId, selectedLevelId, selectedKey, floorTab, selectedRoom, selectedZone, selectedDevice,
+    load, setFloorTab, focusLevel, selectRoom, selectLevel, selectDevice, clearSelection, backToHome, backFromRoom, backFromDevice, houseDeviceFor, setRoomOrder,
     placing, saving, draft, canRevert, isProvisional, startPlacing, startPlacingNew, stopPlacing, previewPosition, previewHeight, savePlacement, revertPlacement, removePlacement,
   }
 })
