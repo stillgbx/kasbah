@@ -34,7 +34,21 @@
     "gone": "This device no longer answers", "forget": "Forget device", "forgetConfirm": "Confirm removal", "forgetHint": "This device no longer answers: the plugin keeps it so its name survives. If it is gone for good, forget it.",
     "pending": "Command in progress…", "lastUpdate": "Updated {time}", "empty": "No known device. Check the plugins in settings."
   },
-  "place": {"title": "Placement", "move": "Move", "done": "Done", "hint": "Drag the device in the 3D view to move it, or pick another level tab to send it there. Set the height here.", "height": "Mounting height", "presets": {"ceiling": "Ceiling", "wall": "Wall", "table": "Table", "floor": "Floor"}, "revert": "Revert", "cancel": "Cancel", "remove": "Remove from house", "removeConfirm": "Confirm removal", "removeHint": "Take this device out of the house: it becomes unplaced (or auto-placed if its room exists) and can be placed again", "orientation": "Orientation", "leaves": "Leaves", "rotateLeft": "Rotate left", "rotateRight": "Rotate right", "size": {"width": "Width", "height": "Height", "projection": "Projection"}, "smaller": "Smaller", "bigger": "Bigger", "outside": "outside rooms", "saveError": "Position not saved: {message}"},
+  "place": {"title": "Placement", "move": "Move", "done": "Done", "hint": "Drag the device in the 3D view to move it, or pick another level tab to send it there. Set the height here.", "height": "Mounting height", "presets": {"ceiling": "Ceiling", "wall": "Wall", "table": "Table", "floor": "Floor"}, "revert": "Revert", "cancel": "Cancel", "remove": "Remove from house", "removeConfirm": "Confirm removal", "removeWithArrays": "Confirm · {n} array | Confirm · {n} array | Confirm · {n} arrays", "removeHint": "Take this device out of the house: it becomes unplaced (or auto-placed if its room exists) and can be placed again", "orientation": "Orientation", "leaves": "Leaves", "rotateLeft": "Rotate left", "rotateRight": "Rotate right", "size": {"width": "Width", "height": "Height", "projection": "Projection"}, "smaller": "Smaller", "bigger": "Bigger", "outside": "outside rooms", "saveError": "Position not saved: {message}"},
+  "arrays": {
+    "title": "Panel arrays", "add": "Add", "addHint": "Add a panel array", "edit": "Adjust", "done": "Done",
+    "none": "No array declared yet. Add one: its modules are drawn on the roof, and each slot gets its inverter.",
+    "field": "Array {n}", "single": "Panel array", "slot": "Slot {r}-{c}", "cell": "row {r}, column {c}", "count": "{rows} × {cols} · {n} inverters",
+    "hint": "Drag any module in the 3D view: the whole array follows.",
+    "rows": "Rows", "cols": "Columns", "height": "Height", "module": "Modules",
+    "heightHint": "Height of the array above the level floor. A flat roof is a thick slab: at 0 the array is buried in it.",
+    "azimuthHint": "The direction the modules face: the cone drawn on the array shows it.", "slope": "Support slope", "slopeHint": "The slope the array sits on: the roof's. 0 on a flat roof, on the ground or on a terrace.",
+    "tilt": "Tilt", "tiltHint": "Each module's angle on its support: the rack that lifts it. 0 = flush with the roof.",
+    "portrait": "Portrait", "landscape": "Landscape",
+    "inverters": "Inverters", "freeCount": "{n} free", "slotNone": "None",
+    "remove": "Remove the array", "removeConfirm": "Confirm removal",
+    "removeHint": "Remove this array from the house: its modules leave the scene and its inverters become devices to place again"
+  },
   "light": {
     "brightness": "Brightness", "colorTemp": "Temperature", "color": "Color", "warm": "Warm", "cold": "Cold", "effect": "Effect",
     "effects": {

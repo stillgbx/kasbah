@@ -3,6 +3,7 @@ import type { DeviceState, HouseDevice, PanelPlacement } from '@kasbah/shared'
 import { mirekToRgb, xyToRgb } from '@kasbah/shared'
 import { isMediaActive } from '../../lib/deviceState'
 import { coverActivity, isFlatCover } from '../../lib/cover'
+import { isEnergySite } from '../../lib/energy'
 import { coverLeaves, coverSize, yawToRad } from '../../lib/orientation'
 import { createTween, lerp } from '../core/tween'
 import { DeviceMarker, type MarkerContext } from './DeviceMarker'
@@ -74,7 +75,13 @@ export class GenericMarker extends DeviceMarker {
       // et le cadran regarde la pièce dans la direction du `yaw`.
       case 'climate': geometry = new CylinderGeometry(0.06, 0.06, 0.04, 28); this.setLift(0.18); break
       case 'ev_charger': geometry = new BoxGeometry(0.3, 0.15, 0.8); this.setLift(0.6); break
-      case 'energy': geometry = new BoxGeometry(0.6, 0.15, 1); this.setLift(0.7); break
+      // Deux objets sous le même kind : le SITE d'une installation est une passerelle, un boîtier de
+      // la taille d'une grosse boîte de dérivation ; une batterie, elle, est un coffret qui monte du
+      // sol. Le coffret d'un mètre donné aux deux faisait de la passerelle solaire un meuble.
+      case 'energy':
+        if (ctx.descriptor && isEnergySite(ctx.descriptor)) { geometry = new BoxGeometry(0.28, 0.12, 0.32); this.setLift(0.3) }
+        else { geometry = new BoxGeometry(0.6, 0.15, 1); this.setLift(0.7) }
+        break
       case 'vacuum': geometry = new CylinderGeometry(0.18, 0.18, 0.09, 24); this.setLift(0.25); break
       default: geometry = new SphereGeometry(0.1, 16, 12); this.setLift(0.3)
     }
@@ -190,9 +197,11 @@ export class PanelMarker extends DeviceMarker {
     super(device, ctx)
     this.mat = new MeshStandardMaterial({ color: PANEL_DARK, roughness: 0.35, metalness: 0.4 })
     this.mesh = new Mesh(new BoxGeometry(panel.width, panel.height, 0.04), this.mat)
-    // d'abord l'inclinaison autour de l'axe des colonnes (x local), puis l'orientation du champ (z)
+    // d'abord l'inclinaison autour de l'axe des colonnes (x local), puis l'orientation du champ (z).
+    // Le signe : tourner autour de +x penche la normale vers −y, or le verre regarde vers +y (l'azimut
+    // du champ, celui qu'on met au sud) — d'où le moins.
     this.mesh.rotation.order = 'ZXY'
-    this.mesh.rotation.x = (panel.tilt * Math.PI) / 180
+    this.mesh.rotation.x = -(panel.tilt * Math.PI) / 180
     this.mesh.rotation.z = yawToRad(device.yaw)
     this.mesh.position.z = 0.03
     this.mesh.castShadow = true
@@ -273,6 +282,13 @@ export class CoverMarker extends DeviceMarker {
   private geometries: BufferGeometry[] = []
   private closedFraction = 0
   private cancelTween: (() => void) | null = null
+  /**
+   * Première position reçue ? Elle se POSE, elle ne se joue pas. Un marqueur naît ouvert (la lame est
+   * montée à 0) et toute écriture dans la maison reconstruit les marqueurs : sans ce garde-fou, chaque
+   * placement enregistré faisait rouvrir puis refermer tous les volets fermés de la maison — on le
+   * voyait à chaque dépôt d'un champ de panneaux. Une VRAIE course, elle, s'anime comme avant.
+   */
+  private posed = false
 
   constructor(device: HouseDevice, ctx: MarkerContext) {
     super(device, ctx)
@@ -379,7 +395,9 @@ export class CoverMarker extends DeviceMarker {
     if (!this.slat && !this.free) return
     this.cancelTween?.()
     const from = this.closedFraction
-    if (Math.abs(target - from) < 0.002) this.applyFraction(target)
+    const first = !this.posed
+    this.posed = true
+    if (first || Math.abs(target - from) < 0.002) this.applyFraction(target)
     else {
       const tw = createTween({ durationMs: 400, now: performance.now(), onUpdate: (k) => this.applyFraction(lerp(from, target, k)) })
       this.cancelTween = () => tw.cancel()

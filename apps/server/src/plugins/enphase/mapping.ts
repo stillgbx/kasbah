@@ -20,8 +20,14 @@ export const PLUGIN_ID = 'enphase'
 export const SITE_ID = 'site'
 
 const id = (externalId: string) => `${PLUGIN_ID}:${externalId}`
-/** Un numéro de série entier est illisible dans une liste : on garde la fin, qui suffit à distinguer. */
-const shortSerial = (serial: string) => serial.slice(-6)
+/**
+ * Un numéro de série entier est illisible dans une liste : on garde la fin, qui suffit à distinguer.
+ * CINQ caractères, la même longueur que celle affichée dans les cases d'un champ de panneaux
+ * (`apps/web/src/components/home/PanelArraysCard.vue`) — une liste et une grille qui ne coupent pas
+ * au même endroit ne se rapprochent pas à l'œil.
+ */
+const SHORT_SERIAL = 5
+const shortSerial = (serial: string) => serial.slice(-SHORT_SERIAL)
 
 function descriptor(externalId: string, kind: DeviceDescriptor['kind'], name: string, capabilities: Capability[], meta: DeviceDescriptor['meta'] = {}): DeviceDescriptor {
   return { id: id(externalId), pluginId: PLUGIN_ID, externalId, kind, name, capabilities, meta }

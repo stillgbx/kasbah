@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import demo from './__fixtures__/demo-house.json'
 import { parseHouse } from './validate'
-import { PlacementError, placeDeviceInJson, removeDeviceFromJson, setPluginInJson, setRoomOrderInJson } from './place'
+import { PlacementError, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, setPluginInJson, setRoomOrderInJson } from './place'
 
 const devices = (doc: Record<string, unknown>) => doc.devices as Record<string, unknown>[]
 
@@ -13,6 +13,22 @@ describe('removeDeviceFromJson', () => {
     expect(out.rooms).toBe(demo.rooms)
     expect(() => parseHouse(out)).not.toThrow()
     expect(() => removeDeviceFromJson(demo, 'nope')).toThrow(PlacementError)
+  })
+})
+
+describe('removeDeviceFromJson et les champs de panneaux', () => {
+  const arrays = (doc: Record<string, unknown>) => doc.arrays as Record<string, unknown>[]
+
+  it('emporte les champs qui nomment cet appareil, et laisse les autres', () => {
+    const owned = putArrayInJson(demo, 'pv-sud', { siteId: 'mock:energy-site' })
+    const out = removeDeviceFromJson(owned, 'energy.site')                     // deviceId: mock:energy-site
+    expect(arrays(out).map((a) => a.id)).toEqual(['pv-nord'])                  // le champ sans siteId reste
+    expect(() => parseHouse(out)).not.toThrow()
+  })
+
+  it('ne touche pas aux champs quand l appareil retire n en porte aucun', () => {
+    const out = removeDeviceFromJson(demo, 'light.salon')
+    expect(out.arrays).toBe(demo.arrays)
   })
 })
 
@@ -142,5 +158,54 @@ describe('setPluginInJson', () => {
     const before = JSON.stringify(demo)
     setPluginInJson(demo, 'hue', { enabled: true })
     expect(JSON.stringify(demo)).toBe(before)
+  })
+})
+
+describe('putArrayInJson', () => {
+  const arrays = (doc: Record<string, unknown>) => doc.arrays as Record<string, unknown>[]
+  const first = (doc: Record<string, unknown>) => arrays(doc).find((a) => a.id === 'pv-sud')!
+
+  it('creates a field on a known level and keeps only what it was given', () => {
+    const out = putArrayInJson(demo, 'pv-est', { levelId: 'toit', origin: [3, 4, 0], rows: 2, cols: 5, slope: 35, panels: ['mock:p1', null] })
+    const made = arrays(out).find((a) => a.id === 'pv-est')!
+    expect(made).toEqual({ id: 'pv-est', levelId: 'toit', origin: [3, 4, 0], rows: 2, cols: 5, slope: 35, panels: ['mock:p1'] })
+    expect(arrays(out)).toHaveLength(demo.arrays.length + 1)
+    expect(() => putArrayInJson(demo, 'pv-est', { levelId: 'grenier', origin: [0, 0, 0] })).toThrow(PlacementError)
+    expect(() => putArrayInJson(demo, 'pv-est', { rows: 2 })).toThrow(PlacementError)          // ni niveau ni origine
+    expect(() => putArrayInJson(demo, 'pv-est', { levelId: 'toit', rows: 2 })).toThrow(PlacementError)
+  })
+
+  it('updates a field in place and leaves its other settings alone', () => {
+    const out = putArrayInJson(demo, 'pv-sud', { yaw: 90 })
+    expect(first(out)).toMatchObject({ yaw: 90, slope: 35, rows: 2, cols: 5, name: 'Champ sud' })
+    expect(first(out).panels).toEqual(demo.arrays[0]!.panels)
+    expect(() => parseHouse(out)).not.toThrow()
+  })
+
+  it('fits the inverters to the grid when it shrinks, and drops the empty tail', () => {
+    // sans ca, reduire 2 x 5 en 2 x 3 laisserait dix onduleurs pour six emplacements : la validation
+    // refuserait le champ en plein geste
+    const out = putArrayInJson(demo, 'pv-sud', { rows: 2, cols: 3 })
+    expect(first(out).panels).toHaveLength(6)
+    expect(() => parseHouse(out)).not.toThrow()
+    const tail = putArrayInJson(demo, 'pv-sud', { panels: ['mock:panel-s01', null, null] })
+    expect(tail.arrays as unknown[]).toBeDefined()
+    expect(first(tail).panels).toEqual(['mock:panel-s01'])
+  })
+
+  it('does not mutate the input document', () => {
+    const before = JSON.stringify(demo)
+    putArrayInJson(demo, 'pv-sud', { yaw: 90 })
+    removeArrayFromJson(demo, 'pv-sud')
+    expect(JSON.stringify(demo)).toBe(before)
+  })
+})
+
+describe('removeArrayFromJson', () => {
+  it('drops the field and frees its inverters', () => {
+    const out = removeArrayFromJson(demo, 'pv-sud')
+    expect((out.arrays as Record<string, unknown>[]).map((a) => a.id)).toEqual(['pv-nord'])
+    expect(() => parseHouse(out)).not.toThrow()
+    expect(() => removeArrayFromJson(demo, 'nope')).toThrow(PlacementError)
   })
 })

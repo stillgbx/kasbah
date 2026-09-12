@@ -58,7 +58,7 @@ describe('descripteurs', () => {
   it('un panneau est un capteur de puissance en watts, nommé par la fin de son numéro de série', () => {
     const panel = descriptors.find((d) => d.kind === 'sensor')!
     expect(panel.externalId).toBe(inverters[0]!.serialNumber)
-    expect(panel.name).toBe(`Onduleur ${inverters[0]!.serialNumber.slice(-6)}`)
+    expect(panel.name).toBe(`Onduleur ${inverters[0]!.serialNumber.slice(-5)}`)
     expect(panel.meta.sensor).toEqual({ unit: 'W', deviceClass: 'power', precision: 0 })
     // les 20 identifiants sont distincts : c'est ce qui permet de lier un champ de panneaux
     expect(new Set(descriptors.filter((d) => d.kind === 'sensor').map((d) => d.id)).size).toBe(20)
@@ -68,7 +68,7 @@ describe('descripteurs', () => {
     const battery = descriptors.filter((d) => d.kind === 'energy').slice(1)
     expect(battery).toHaveLength(2)
     expect(battery[0]!.capabilities).toEqual(['storage'])
-    expect(battery[0]!.name).toBe(`Batterie ${batteries[0]!.serial_num.slice(-6)}`)
+    expect(battery[0]!.name).toBe(`Batterie ${batteries[0]!.serial_num.slice(-5)}`)
     expect(battery[0]!.meta.model).toBe(batteries[0]!.part_num)
   })
 })

@@ -71,14 +71,30 @@ describe('champs de panneaux', () => {
     expect(panelOf(devices[0]!)).toMatchObject({ arrayId: 'pv', row: 0, col: 0, width: 1, height: 2, tilt: 0 })
   })
 
-  it('tourne le champ autour de son origine (yaw) et le fait monter le long des rangées (tilt)', () => {
+  it('tourne le champ autour de son origine (yaw) et le fait monter le long des rangées (slope)', () => {
     const [d] = panelArrayDevices(array({ rows: 1, cols: 1, yaw: 90, panels: ['mock:p1'] }))
     // colonnes vers +y, rangées vers -x : le centre (0,5 ; 1) devient (-1 ; 0,5)
     expect(d!.position[0]).toBeCloseTo(9)
     expect(d!.position[1]).toBeCloseTo(20.5)
-    const [t] = panelArrayDevices(array({ rows: 1, cols: 1, tilt: 30, panels: ['mock:p1'] }))
+    const [t] = panelArrayDevices(array({ rows: 1, cols: 1, slope: 30, panels: ['mock:p1'] }))
     expect(t!.position[1]).toBeCloseTo(20 + Math.cos(Math.PI / 6))   // projection au sol de la rangée
-    expect(t!.position[2]).toBeCloseTo(0.1 + Math.sin(Math.PI / 6))  // et sa montée
+    expect(t!.position[2]).toBeCloseTo(0.1 - Math.sin(Math.PI / 6))  // et sa DESCENTE vers l'azimut
+  })
+
+  it('redresse les modules SANS les déplacer : sur un toit plat, le châssis n incline que le verre', () => {
+    const flat = panelArrayDevices(array({ rows: 2, cols: 1, tilt: 20, panels: ['mock:p1', 'mock:p3'] }))
+    expect(flat[0]!.position[2]).toBe(0.1)                           // deux rangées, une seule hauteur
+    expect(flat[1]!.position[2]).toBe(0.1)
+    expect(flat[1]!.position[1]).toBeCloseTo(23)                     // le pas des rangées ne change pas
+    expect(panelOf(flat[0]!)!.tilt).toBe(20)                         // mais le verre, lui, est incliné
+    // les deux angles s'ajoutent, du même côté : une terrasse en pente avec des châssis
+    const both = panelArrayDevices(array({ rows: 1, cols: 1, slope: 30, tilt: 20, panels: ['mock:p1'] }))
+    expect(panelOf(both[0]!)!.tilt).toBe(50)
+    expect(both[0]!.position[2]).toBeCloseTo(0.1 - Math.sin(Math.PI / 6))   // la descente ne suit QUE la pente
+    // un châssis négatif bascule le verre en arrière sans rien déplacer non plus
+    const back = panelArrayDevices(array({ rows: 1, cols: 1, tilt: -15, panels: ['mock:p1'] }))
+    expect(panelOf(back[0]!)!.tilt).toBe(-15)
+    expect(back[0]!.position[2]).toBe(0.1)
   })
 
   it('la maison démo porte ses deux champs sur le niveau toit, et withPanelArrays les ajoute aux appareils', () => {
@@ -97,7 +113,9 @@ describe('champs de panneaux', () => {
     expect(bad((h) => { h.arrays[0].levelId = 'grenier' })).toContainEqual('arrays[0].levelId')
     expect(bad((h) => { h.arrays[0].panels.push('mock:extra') })).toContainEqual('arrays[0].panels')
     expect(bad((h) => { h.arrays[1].panels[0] = 'mock:panel-s01' })).toContainEqual('arrays[1].panels[0]')
-    expect(bad((h) => { h.devices[0].deviceId = 'mock:panel-s01' })).toContainEqual('arrays[0].panels[0]')
+    // panel-s01 est le DERNIER de la liste : l'origine d'un champ est son coin haut, et la grille
+    // s'en va vers l'azimut (le module 1 du plan est donc en bas du champ)
+    expect(bad((h) => { h.devices[0].deviceId = 'mock:panel-s01' })).toContainEqual('arrays[0].panels[9]')
   })
 })
 

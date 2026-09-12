@@ -1,4 +1,4 @@
-import { assertCommandAllowed, commandSchema, devicePlacementSchema, placeDeviceInJson, pluginSettingsPatchSchema, removeDeviceFromJson, roomOrderSchema, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
+import { assertCommandAllowed, commandSchema, devicePlacementSchema, panelArrayPatchSchema, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, roomOrderSchema, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { updateHouseFile, type LoadedHouse } from '../config/house'
 import type { PluginHost } from '../core/plugin-host'
@@ -64,6 +64,22 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
   app.put<{ Params: { id: string } }>('/api/house/levels/:id/room-order', async (req) => {
     const { roomIds } = roomOrderSchema.parse(req.body)
     const house = await updateHouseFile(deps.house, (doc) => setRoomOrderInJson(doc, req.params.id, roomIds))
+    deps.hub.broadcast({ type: 'house', house })
+    return { house }
+  })
+
+  // Champs de panneaux (`house.arrays`) : créés et réglés depuis le panneau de l'installation
+  // solaire. Même mécanique que le placement d'un appareil — patch du JSON brut, réécriture atomique,
+  // diffusion de la maison entière (les modules, eux, sont dérivés : ils n'ont rien à écrire).
+  app.put<{ Params: { id: string } }>('/api/house/arrays/:id', async (req) => {
+    const patch = panelArrayPatchSchema.parse(req.body)   // ZodError → 400
+    const house = await updateHouseFile(deps.house, (doc) => putArrayInJson(doc, req.params.id, patch))
+    deps.hub.broadcast({ type: 'house', house })
+    return { house }
+  })
+
+  app.delete<{ Params: { id: string } }>('/api/house/arrays/:id', async (req) => {
+    const house = await updateHouseFile(deps.house, (doc) => removeArrayFromJson(doc, req.params.id))
     deps.hub.broadcast({ type: 'house', house })
     return { house }
   })

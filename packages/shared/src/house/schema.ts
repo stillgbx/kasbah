@@ -176,19 +176,47 @@ export const PANEL_SIZE = { width: 1.13, height: 1.76 } as const
  * Champ de panneaux solaires : une grille de `rows × cols` modules posée sur un niveau (le toit,
  * déclaré comme un niveau sans pièce). Les positions des modules ne sont PAS écrites : elles se
  * dérivent de l'origine, de l'orientation et du pas (`panelArrayDevices`), donc déplacer ou pivoter
- * le champ ne touche qu'un objet. `panels` lie chaque emplacement, rangée par rangée, à son
+ * le champ ne touche qu'un objet.
+ *
+ * DEUX inclinaisons, et c'est ce qui évite de traiter à part le toit plat et le toit pentu : `slope`
+ * est la pente du support (le champ épouse le toit), `tilt` l'angle de chaque module sur ce support
+ * (les châssis). Un toit pentu, c'est `slope` seul ; un toit plat, `tilt` seul ; une terrasse en
+ * pente, les deux. Les deux penchent le verre du MÊME côté : vers l'azimut, donc vers le soleil. `panels` lie chaque emplacement, rangée par rangée, à son
  * micro-onduleur — c'est le découpage de l'app du fabricant (un champ, puis ses onduleurs).
  */
 export const panelArraySchema = z.object({
   id: idSchema,
   name: z.string().min(1).optional(),
+  /**
+   * L'INSTALLATION dont ce champ fait partie (`deviceId` du site, `enphase:site`…). C'est ce qui lie
+   * les panneaux à leur passerelle : retirer l'installation de la maison emporte ses champs. Absent
+   * dans un fichier écrit à la main : le champ est alors rattaché à la seule installation affichée.
+   */
+  siteId: deviceIdSchema.optional(),
   levelId: idSchema,
   /** Coin du champ (bord de la rangée 0, colonne 0) : x, y absolus ; z RELATIF au sol du niveau. */
   origin: vec3Schema,
-  /** Orientation (degrés, sens trigonométrique) : 0 = colonnes vers +x, rangées vers +y. */
+  /**
+   * AZIMUT du champ (degrés, sens trigonométrique, 0 = vers +y) : la direction vers laquelle les
+   * modules regardent, celle qu'on tourne vers le soleil. C'est aussi celle dans laquelle les rangées
+   * s'éloignent de l'origine et DESCENDENT la pente — un toit descend vers le soleil, pas l'inverse.
+   * Même convention que le `yaw` d'un appareil : ce qui regarde quelque part regarde vers +y à 0.
+   */
   yaw: z.number().default(0),
-  /** Inclinaison des modules (degrés) : le champ monte le long de ses rangées. 0 = à plat. */
-  tilt: z.number().min(0).max(90).default(0),
+  /**
+   * Pente du SUPPORT (degrés) : le plan sur lequel le champ est posé. C'est la pente du toit sous
+   * lui — 0 sur un toit plat, au sol ou sur une terrasse. Le champ DESCEND le long de ses rangées,
+   * dans la direction de son azimut.
+   */
+  slope: z.number().min(0).max(90).default(0),
+  /**
+   * Inclinaison de chaque MODULE sur son support (degrés) : l'angle des châssis. 0 = posé à même le
+   * toit, ce qu'on fait sur un toit pentu. POSITIF, le module se redresse face au soleil : son bord
+   * bas du côté de l'azimut, son bord haut à l'opposé — c'est le montage courant d'un toit plat.
+   * Négatif, il bascule dans l'autre sens (un châssis qui regarde derrière le champ).
+   * Les deux angles s'ajoutent pour l'inclinaison réelle du verre.
+   */
+  tilt: z.number().min(-90).max(90).default(0),
   rows: z.number().int().positive(),
   cols: z.number().int().positive(),
   panel: z.object({ width: z.number().positive(), height: z.number().positive() }).default(PANEL_SIZE),

@@ -107,7 +107,9 @@ export class HouseScene {
     deviceDrag: new Set(), deviceDrop: new Set(),
   }
   private detachInput: (() => void) | null = null
-  private movableKey: string | null = null
+  private movableKeys: string[] = []
+  /** Marqueur effectivement attrapé parmi les déplaçables (les modules d'un champ bougent ensemble). */
+  private grabbedKey: string | null = null
   private drag: DragDetector | null = null
   private readonly dragPlane = new Plane()
   private readonly dragOffset = new Vector3()
@@ -281,7 +283,9 @@ export class HouseScene {
       marker.object.position.set(device.position[0], device.position[1], this.localZ(device, device.position[2]))
       parent.add(marker.object)
       marker.setSelected(this.selectedKey === device.id)
-      if (this.movableKey === device.id) marker.setMoving(true, device.position[2])
+      // le guide (anneau, fil, cône) ne se dessine que sur le PREMIER déplaçable — dix modules d'un
+      // champ donneraient dix anneaux pour un seul objet qui bouge — mais TOUS se glissent
+      if (this.movableKeys.includes(device.id)) marker.setMoving(true, device.position[2], this.movableKeys[0] === device.id)
       this.markers.set(device.id, marker)
     }
   }
@@ -304,18 +308,27 @@ export class HouseScene {
   }
 
   // ---- mode « déplacer » ---------------------------------------------------
-  /** Rend un appareil déplaçable au doigt (un seul à la fois) ; null pour sortir du mode. */
-  setMovable(key: string | null): void {
-    this.movableKey = key
-    for (const m of this.markers.values()) m.setMoving(m.key === key, m.device.position[2])
+  /**
+   * Rend déplaçable au doigt un appareil — ou un GROUPE de marqueurs qui bougent ensemble : les
+   * modules d'un champ de panneaux, dont on attrape n'importe lequel pour emmener le champ entier.
+   * `null` sort du mode. Les événements de glissement nomment le marqueur ATTRAPÉ ; à l'appelant d'en
+   * déduire ce que devient le groupe.
+   */
+  setMovable(key: string | string[] | null): void {
+    this.movableKeys = key === null ? [] : Array.isArray(key) ? key : [key]
+    this.grabbedKey = null
+    for (const m of this.markers.values()) m.setMoving(this.movableKeys.includes(m.key), m.device.position[2], m.key === this.movableKeys[0])
     this.drag?.detach()
     this.drag = null
-    if (key && !this.deps.headless) {
+    if (this.movableKeys.length > 0 && !this.deps.headless) {
       this.drag = createDragDetector(this.canvas, {
-        hitTest: (ev) => this.grabs(key, ev),
-        onStart: () => this.startDrag(key),
-        onMove: (ev) => this.moveDrag(key, ev),
-        onEnd: (_ev, moved) => this.endDrag(key, moved),
+        hitTest: (ev) => {
+          this.grabbedKey = this.movableKeys.find((k) => this.grabs(k, ev)) ?? null
+          return this.grabbedKey !== null
+        },
+        onStart: () => { if (this.grabbedKey) this.startDrag(this.grabbedKey) },
+        onMove: (ev) => { if (this.grabbedKey) this.moveDrag(this.grabbedKey, ev) },
+        onEnd: (_ev, moved) => { if (this.grabbedKey) this.endDrag(this.grabbedKey, moved) },
       })
     }
     this.loop.invalidate()

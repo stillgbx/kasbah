@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMediaQuery } from '@vueuse/core'
+import { panelOf } from '@kasbah/shared'
 import PageHeader from '../components/layout/PageHeader.vue'
 import SidePanel from '../components/layout/SidePanel.vue'
 import Segmented from '../components/ui/Segmented.vue'
@@ -52,7 +53,18 @@ function onTab(tab: FloorTab) {
 }
 
 // scène → store
-scene.onDeviceTap((key) => { house.selectDevice(key); panelOpen.value = true })
+//
+// Pendant le réglage d'un CHAMP de panneaux, la scène ne change plus de sujet : un tap sur l'un de
+// ses modules, sur le toit qui le porte ou sur le fond refermait le réglage (la sélection changeait,
+// et avec elle le panneau qui l'ouvrait). On est venu déplacer le champ, pas sélectionner autre chose.
+const editingModule = (key: string) => {
+  const hd = house.index?.devicesById.get(key)
+  return !!house.editingArrayId && !!hd && panelOf(hd)?.arrayId === house.editingArrayId
+}
+scene.onDeviceTap((key) => {
+  if (editingModule(key)) return
+  house.selectDevice(key); panelOpen.value = true
+})
 scene.onRoomTap((roomId) => {
   if (house.selectedRoomId === roomId && !house.selectedKey) { house.selectRoom(null); scene.highlightRoom(null) }
   else { house.selectRoom(roomId); panelOpen.value = true }
@@ -63,16 +75,19 @@ scene.onZoneTap((zoneId) => { house.selectRoom(zoneId); panelOpen.value = true }
 // traverser jusqu'à la pièce cachée dessous, ce qui faisait disparaître le toit au profit de
 // l'étage. Déjà dessus, le tap ressort, comme un second tap sur une pièce.
 scene.onLevelTap((levelId) => {
+  if (house.editingArrayId) return
   if (house.selectedLevelId === levelId) house.backToHome()
   else { house.selectLevel(levelId); panelOpen.value = true }
 })
-scene.onBackgroundTap(() => house.clearSelection())
+scene.onBackgroundTap(() => { if (!house.editingArrayId) house.clearSelection() })
 
 // Le fil d'Ariane remonte d'un cran (appareil → pièce → niveau → maison) ; arrivé à « Maison », il
 // fait ce que fait l'onglet « Tout » : le mot promet la maison entière, pas le niveau qu'on
 // regardait encore. Sans cela, revenir à « Maison » depuis le 1er laissait la vue sur le 1er.
 function backToAll() { if (!house.selectedRoomId && !house.selectedLevelId) onTab('all') }
-function onDeviceBack() { house.backFromDevice(); backToAll() }
+// Le retour d'un module de champ atterrit sur son INSTALLATION : il y a donc encore un appareil
+// sélectionné, et « Tout » ne doit pas l'effacer — c'est ce qui renvoyait à « Maison » d'un coup.
+function onDeviceBack() { house.backFromDevice(); if (!house.selectedKey) backToAll() }
 function onRoomBack() { house.backFromRoom(); backToAll() }
 
 // store → scène. Le cadrage suit la sélection la PLUS FINE : un appareil se cadre sur lui-même, pas
@@ -98,13 +113,30 @@ watch(scene.ready, (ready) => {
   frameSelection(house.selectedRoomId, house.selectedKey)
 }, { immediate: true })
 
-// mode « déplacer » : glissement 3D → brouillon (store) → aperçu 3D ; dépôt → écriture house.json
-scene.onDeviceDrag((_key, xy, roomId) => house.previewPosition(xy, roomId))
-scene.onDeviceDrop(() => { void house.savePlacement() })
-watch(() => house.placing, (p) => scene.setMovable(p ? house.selectedKey : null), { immediate: true })
+// mode « déplacer » : glissement 3D → brouillon (store) → aperçu 3D ; dépôt → écriture house.json.
+// Un champ de panneaux se règle de la même façon, sauf qu'on attrape n'importe lequel de ses modules
+// et que c'est le champ entier qui suit (`previewArrayOrigin`).
+scene.onDeviceDrag((key, xy, roomId) => {
+  if (house.editingArrayId) house.previewArrayOrigin(key, xy)
+  else house.previewPosition(xy, roomId)
+})
+scene.onDeviceDrop(() => { void (house.editingArrayId ? house.dropArray() : house.savePlacement()) })
+watch([() => house.placing, () => house.selectedKey, () => house.editingArrayId, () => house.editingArrayModules.length], () => {
+  if (house.editingArrayId) scene.setMovable(house.editingArrayModules.map((m) => m.id))
+  else scene.setMovable(house.placing ? house.selectedKey : null)
+}, { immediate: true })
 watch(() => house.draft, (d) => {
   const hd = house.selectedDevice
   if (house.placing && hd) scene.moveMarker(hd.id, d?.position ?? hd.position)
+})
+// régler un champ, c'est venir voir le niveau qui le porte : on le cadre comme le ferait son onglet,
+// sinon la caméra restait sur la pièce qu'on regardait et le toit s'affichait hors champ
+watch(() => house.editingArray?.levelId, (id) => { if (id) scene.focusLevelView(id) })
+// case de la grille survolée : son module s'allume dans la scène, et rend la main à la sélection
+watch(() => house.hoveredKey, (key) => scene.setSelected(key ?? house.selectedKey))
+// aperçu du champ glissé : tous ses modules suivent l'origine du brouillon
+watch(() => house.arrayDraft, () => {
+  for (const m of house.editingArrayModules) scene.moveMarker(m.id, m.position)
 })
 
 // URL ↔ sélection

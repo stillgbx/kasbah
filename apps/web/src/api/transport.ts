@@ -1,4 +1,4 @@
-import type { CommandInput, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, PluginInfo, PluginSceneEntry, PluginSettingsPatch, SceneRecallInput, SceneUpdate, ServerMessage } from '@kasbah/shared'
+import type { CommandInput, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, PanelArrayPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, SceneRecallInput, SceneUpdate, ServerMessage } from '@kasbah/shared'
 
 // Abstraction du canal serveur. Deux implémentations : HTTP + WebSocket (réel) et simulation
 // in-process (tests, démo statique sans serveur). Les commandes passent TOUJOURS par une requête
@@ -93,6 +93,10 @@ export interface Transport {
   placeDevice(id: string, placement: DevicePlacement): Promise<House>
   /** Retire un appareil de house.json (il redevient non placé ou auto-placé) ; renvoie la maison réécrite. */
   removeDevice(id: string): Promise<House>
+  /** Crée ou règle un champ de panneaux (`house.arrays`) ; renvoie la maison réécrite. */
+  saveArray(id: string, patch: PanelArrayPatch): Promise<House>
+  /** Retire un champ de panneaux : ses modules disparaissent, ses onduleurs redeviennent à placer. */
+  removeArray(id: string): Promise<House>
   /** Écrit l'ordre d'affichage des pièces d'un niveau ; renvoie la maison réécrite. */
   setRoomOrder(levelId: string, roomIds: string[]): Promise<House>
   /** Ouvre le canal de push ; retourne la fonction de fermeture. */

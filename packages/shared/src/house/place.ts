@@ -96,13 +96,24 @@ export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePla
  * Renvoie une copie du document JSON SANS l'appareil `id` : il sort de la maison et redevient ce qu'il
  * était avant d'être posé — auto-placé si sa pièce de plugin existe, sinon « non placé ». Geste inverse
  * du placement, confirmé côté UI. Un id inconnu est refusé (rien à retirer).
+ *
+ * Les CHAMPS DE PANNEAUX qui nomment cet appareil (`siteId`) partent avec lui : une installation
+ * solaire retirée de la maison n'y laisse pas vingt modules orphelins, que plus aucun panneau ne
+ * permettrait de régler. Les champs d'un autre site, ou ceux qui ne nomment personne, restent.
  */
 export function removeDeviceFromJson(doc: unknown, id: string): JsonObject {
   if (!isObject(doc)) throw new PlacementError('house document is not an object')
   const devices = Array.isArray(doc.devices) ? doc.devices : []
   const i = devices.findIndex((d) => isObject(d) && d.id === id)
   if (i < 0) throw new PlacementError(`device "${id}" is not in house.json`)
-  return { ...doc, devices: devices.filter((_, k) => k !== i) }
+  const deviceId = (devices[i] as JsonObject).deviceId
+  const arrays = Array.isArray(doc.arrays) ? doc.arrays : []
+  const kept = deviceId ? arrays.filter((a) => !(isObject(a) && a.siteId === deviceId)) : arrays
+  return {
+    ...doc,
+    devices: devices.filter((_, k) => k !== i),
+    ...(kept.length === arrays.length ? {} : { arrays: kept }),
+  }
 }
 
 /**
@@ -142,4 +153,79 @@ export function setRoomOrderInJson(doc: unknown, levelId: string, roomIds: strin
   const out = [...levels]
   out[i] = { ...levels[i]!, roomOrder: roomIds }
   return { ...doc, levels: out }
+}
+
+/**
+ * Champ de panneaux (`house.arrays`) écrit depuis l'UI : seuls les champs présents sont posés, comme
+ * pour un placement d'appareil. `levelId` et `origin` sont requis à la CRÉATION — un champ sans
+ * niveau ni coin n'a nulle part où se dessiner.
+ */
+export const panelArrayPatchSchema = z.object({
+  name: z.string().min(1).optional(),
+  /** Installation dont le champ fait partie (`deviceId` du site) : elle l'emporte quand elle se retire. */
+  siteId: deviceIdSchema.optional(),
+  levelId: z.string().min(1).optional(),
+  /** Coin du champ : x, y absolus ; z relatif au sol du niveau (comme `PanelArray.origin`). */
+  origin: vec3Schema.optional(),
+  yaw: z.number().min(0).max(360).optional(),
+  /** Pente du support (le toit sous le champ) ; `tilt` est l'angle des modules SUR ce support. */
+  slope: z.number().min(0).max(90).optional(),
+  /** Inclinaison des modules : positive, ils se redressent face à l'azimut (voir `panelArraySchema`). */
+  tilt: z.number().min(-90).max(90).optional(),
+  rows: z.number().int().min(1).max(20).optional(),
+  cols: z.number().int().min(1).max(20).optional(),
+  /** Module : `width` le long des colonnes, `height` le long des rangées (portrait ↔ paysage = les deux échangées). */
+  panel: z.object({ width: z.number().positive().max(5), height: z.number().positive().max(5) }).optional(),
+  gap: z.number().min(0).max(1).optional(),
+  /** Onduleur de chaque emplacement, rangée par rangée ; `null` = emplacement non suivi. */
+  panels: z.array(deviceIdSchema.nullable()).optional(),
+})
+export type PanelArrayPatch = z.infer<typeof panelArrayPatchSchema>
+
+/**
+ * Renvoie une copie du document JSON avec le champ `id` créé ou modifié. La liste des onduleurs est
+ * RAMENÉE à la grille : rétrécir un champ de 2 × 5 à 2 × 3 laisserait sinon plus de modules que
+ * d'emplacements, ce que la validation refuse — l'UI ne peut pas se le voir refuser en plein geste.
+ * Les emplacements vides de la fin ne sont pas écrits (un champ à demi équipé garde un JSON court).
+ */
+export function putArrayInJson(doc: unknown, id: string, patch: PanelArrayPatch): JsonObject {
+  if (!isObject(doc)) throw new PlacementError('house document is not an object')
+  const arrays = Array.isArray(doc.arrays) ? doc.arrays : []
+  const i = arrays.findIndex((a) => isObject(a) && a.id === id)
+  const prev = i >= 0 ? (arrays[i] as JsonObject) : null
+  const levelId = patch.levelId ?? (prev?.levelId as string | undefined)
+  if (!levelId) throw new PlacementError(`panel array "${id}": levelId is required to create it`)
+  const levels = Array.isArray(doc.levels) ? doc.levels.filter(isObject) : []
+  if (!levels.some((l) => l.id === levelId)) throw new PlacementError(`unknown level "${levelId}"`)
+  if (!prev && !patch.origin) throw new PlacementError(`panel array "${id}": origin is required to create it`)
+
+  const next: JsonObject = { ...(prev ?? { id }), levelId }
+  for (const key of ['name', 'siteId', 'origin', 'yaw', 'slope', 'tilt', 'rows', 'cols', 'panel', 'gap'] as const) {
+    if (patch[key] !== undefined) next[key] = patch[key]
+  }
+  const rows = Number(next.rows ?? 1), cols = Number(next.cols ?? 1)
+  next.rows = rows
+  next.cols = cols
+  const panels = patch.panels ?? (Array.isArray(prev?.panels) ? (prev.panels as unknown[]) : [])
+  const fitted = panels.slice(0, rows * cols)
+  while (fitted.length > 0 && fitted[fitted.length - 1] == null) fitted.pop()
+  next.panels = fitted
+
+  const out = [...arrays]
+  if (i >= 0) out[i] = next
+  else out.push(next)
+  return { ...doc, arrays: out }
+}
+
+/**
+ * Renvoie une copie du document JSON SANS le champ `id` : ses modules disparaissent de la maison
+ * (ils n'existaient que dérivés) et ses onduleurs redeviennent des appareils à placer. Un id inconnu
+ * est refusé.
+ */
+export function removeArrayFromJson(doc: unknown, id: string): JsonObject {
+  if (!isObject(doc)) throw new PlacementError('house document is not an object')
+  const arrays = Array.isArray(doc.arrays) ? doc.arrays : []
+  const i = arrays.findIndex((a) => isObject(a) && a.id === id)
+  if (i < 0) throw new PlacementError(`panel array "${id}" is not in house.json`)
+  return { ...doc, arrays: arrays.filter((_, k) => k !== i) }
 }

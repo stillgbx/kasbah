@@ -1,4 +1,4 @@
-import { commandSchema, defaultState, mergeState, parseHouse, placeDeviceInJson, removeDeviceFromJson, setRoomOrderInJson, type CommandInput, type DeviceEntry, type DeviceState, type House, type StatePatch } from '@kasbah/shared'
+import { commandSchema, defaultState, mergeState, parseHouse, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, setRoomOrderInJson, type CommandInput, type DeviceEntry, type DeviceState, type House, type StatePatch } from '@kasbah/shared'
 import { SimError, Simulation, solarGeometry, type ScenarioName } from '@kasbah/mock-sim'
 import demoHouse from '@kasbah/shared/demo-house.json'
 import { ApiRequestError, type Transport, type TransportHandlers } from './transport'
@@ -66,6 +66,16 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     },
     async removeDevice(id) {
       house = parseHouse(removeDeviceFromJson(house, id))
+      handlers?.onMessage({ type: 'house', house })
+      return house
+    },
+    async saveArray(id, patch) {
+      house = parseHouse(putArrayInJson(house, id, patch))
+      handlers?.onMessage({ type: 'house', house })
+      return house
+    },
+    async removeArray(id) {
+      house = parseHouse(removeArrayFromJson(house, id))
       handlers?.onMessage({ type: 'house', house })
       return house
     },

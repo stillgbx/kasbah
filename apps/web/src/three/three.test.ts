@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { Box3, CylinderGeometry, Mesh, Vector3, type BufferAttribute, type Texture } from 'three'
+import { Box3, CylinderGeometry, Mesh, ShapeGeometry, Vector3, type BufferAttribute, type Texture } from 'three'
 import { computeHouseGeometry, parseHouse, type DeviceDescriptor, type DeviceState, type HouseDevice } from '@kasbah/shared'
 import demo from '@kasbah/shared/demo-house.json'
 import { buildHouse, buildWallsGeometry, countTriangles } from './builders/buildHouse'
@@ -11,6 +11,7 @@ import { defaultSceneTheme, parseCssColor } from './core/theme'
 import { createTween } from './core/tween'
 import { ScreenArt, coverCrop, screenArtGeometry } from './markers/screenArt'
 import { createMarker } from './markers/createMarker'
+import { yawToRad } from '../lib/orientation'
 import { HouseScene } from './HouseScene'
 import type { Animation } from './core/renderLoop'
 
@@ -251,6 +252,19 @@ describe('marqueurs 3D', () => {
     expect(box.scale.y * 3).toBeCloseTo(0.3)
   })
 
+  it("un ouvrant reconstruit se POSE dans sa position, sans rejouer sa course", () => {
+    // toute écriture dans la maison reconstruit les marqueurs : un volet fermé rouvrait puis se
+    // refermait à chaque placement enregistré, le temps du tween
+    const m = marker(device({ size: { width: 4, height: 3 } }), cover('awning'))
+    const box = meshes(m.object)[0]!
+    m.update(coverState(100))                       // premier état, SANS dérouler les animations
+    expect(box.scale.y * 3).toBeCloseTo(0.3)        // déjà replié : rien ne s'est joué à l'écran
+    m.update(coverState(0))                         // une vraie course, elle, s'anime
+    expect(box.scale.y * 3).toBeCloseTo(0.3)
+    settle()
+    expect(box.scale.y).toBeCloseTo(1)
+  })
+
   it('un portail ouvre ses battants, un ou deux selon le JSON', () => {
     const two = marker(device({ size: { width: 4, height: 1.5 } }), cover('gate'))
     const hinges = () => meshes(two.object).map((x) => x.parent!)
@@ -267,6 +281,26 @@ describe('marqueurs 3D', () => {
     // un seul battant : un seul panneau, de toute la largeur
     const one = marker(device({ size: { width: 4, height: 1.5 }, leaves: 1 }), cover('gate'))
     expect(meshes(one.object)).toHaveLength(1)
+  })
+
+  it("le cône d'un module montre où regarde son verre, châssis négatif compris", () => {
+    const sensor = { id: 'p:s', pluginId: 'p', externalId: 's', kind: 'sensor', name: 'Onduleur', capabilities: ['measure'], meta: { sensor: { unit: 'W', deviceClass: 'power', precision: 0 } } } as unknown as DeviceDescriptor
+    const panel = { arrayId: 'pv', row: 0, col: 0, width: 1.13, height: 1.76, tilt: 35 }
+    const cone = (m: { object: { traverse(cb: (x: unknown) => void): void } }) => meshes(m.object).find((x) => x.geometry instanceof ShapeGeometry)
+    const tilted = marker(device({ yaw: 90, meta: { panel } }), sensor)
+    // le verre penche VERS +y local (l'azimut) : tourner autour de +x le pencherait vers −y, d'où le moins
+    expect(meshes(tilted.object)[0]!.rotation.x).toBeCloseTo(-(35 * Math.PI) / 180)
+    tilted.setMoving(true, 0)
+    // le verre regarde dans l'azimut du champ : le cône le suit, sans détour
+    expect(cone(tilted)!.rotation.z).toBeCloseTo(yawToRad(90))
+    // châssis négatif : le verre bascule en arrière, le cône fait demi-tour
+    const back = marker(device({ yaw: 90, meta: { panel: { ...panel, tilt: -20 } } }), sensor)
+    back.setMoving(true, 0)
+    expect(cone(back)!.rotation.z).toBeCloseTo(yawToRad(90) + Math.PI)
+    // posé à plat, un module ne regarde NULLE PART : pas de cône plutôt qu'une flèche inventée
+    const flat = marker(device({ yaw: 90, meta: { panel: { ...panel, tilt: 0 } } }), sensor)
+    flat.setMoving(true, 0)
+    expect(cone(flat)).toBeUndefined()
   })
 
   it('un thermostat est une pastille couchée contre son mur, tournée du yaw', () => {

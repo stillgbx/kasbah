@@ -1,9 +1,10 @@
 import { computed, ref, shallowRef, watch } from 'vue'
 import { defineStore } from 'pinia'
-import { autoPlaceDevices, indexHouse, pointInPolygon, resolveDeviceLevelId, withPanelArrays, type DeviceEntry, type DevicePlacement, type House, type HouseDevice, type HouseIndex, type Level, type PlaceableDevice, type Room, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
+import { autoPlaceDevices, computeRoof, indexHouse, panelArrayDevices, panelOf, pointInPolygon, resolveDefaults, resolveDeviceLevelId, withPanelArrays, type DeviceDescriptor, type DeviceEntry, type DevicePlacement, type House, type HouseDevice, type HouseIndex, type Level, type PanelArray, type PanelArrayPatch, type PlaceableDevice, type Room, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
 import { getTransport } from '../api'
-import { t } from '../i18n'
+import { i18n, t } from '../i18n'
 import { soundRouting } from '../lib/audioRouting'
+import { findEnergySite } from '../lib/energy'
 import { coverLeaves, defaultCoverSize } from '../lib/orientation'
 import { useDevicesStore } from './devices'
 import { useNotificationsStore } from './notifications'
@@ -39,8 +40,16 @@ export const useHouseStore = defineStore('house', () => {
   /**
    * Maison du JSON complétée des modules dérivés de ses champs de panneaux (`arrays`) : c'est sur
    * elle que se fait l'auto-placement (un onduleur lié à un champ n'est pas à placer) et la scène.
+   *
+   * Un emplacement sans onduleur porte sa PLACE dans la grille (« Emplacement 1-2 ») : c'est le repère
+   * qu'on lit sur un plan de calepinage, là où le nom du champ donnait dix pilules identiques. Le mot
+   * dit qu'il est VIDE — nommé « Onduleur 1-2 », il ne se distinguait plus d'un onduleur affecté,
+   * dont le module porte, lui, la référence du fabricant (« Onduleur 035730 »).
    */
-  const expanded = computed<House | null>(() => (house.value ? withPanelArrays(house.value) : null))
+  const expanded = computed<House | null>(() => {
+    void i18n.global.locale.value                    // le nom des emplacements suit la langue choisie
+    return house.value ? withPanelArrays(house.value, (row, col) => t('arrays.slot', { r: row + 1, c: col + 1 })) : null
+  })
   const placement = computed(() => {
     if (!expanded.value) return null
     return autoPlaceDevices(expanded.value, placeable.value, indexHouse(expanded.value))
@@ -159,11 +168,34 @@ export const useHouseStore = defineStore('house', () => {
     selectedRoomId.value = null
     selectedLevelId.value = room ? room.levelId : null
   }
-  /** Retour depuis un appareil : sa pièce ou sa zone si elle l'ancre, sinon le NIVEAU qui le porte. */
+  /**
+   * Retour depuis un appareil : sa pièce ou sa zone si elle l'ancre, sinon le NIVEAU qui le porte.
+   * Sauf pour un MODULE de champ de panneaux : son parent est l'installation solaire qui porte son
+   * champ, pas le toit — c'est par elle qu'on est descendu, et c'est elle qui sait le régler.
+   */
   function backFromDevice() {
     const hd = selectedDevice.value
+    const site = hd ? siteOfDevice(hd) : null
+    if (site) { selectDevice(site); return }
     selectedKey.value = null
     if (hd && !hd.roomId && !hd.zoneId && hd.levelId) selectedLevelId.value = hd.levelId
+  }
+
+  /**
+   * L'installation à laquelle un champ se rattache : celle qu'il NOMME, ou, s'il ne nomme personne
+   * (JSON écrit à la main), la seule installation de la maison. Même règle que la liste de la carte
+   * (`arraysOf`) — un champ anonyme appartient à l'installation qu'on regarde.
+   */
+  function siteOf(array: PanelArray): string | undefined {
+    return array.siteId ?? findEnergySite(devices.list)?.descriptor.id
+  }
+  /** Clé de sélection de l'installation qui porte le champ d'un module (`null` si ce n'en est pas un). */
+  function siteOfDevice(device: HouseDevice): string | null {
+    const p = panelOf(device)
+    const array = p ? house.value?.arrays.find((a) => a.id === p.arrayId) : undefined
+    const siteId = array ? siteOf(array) : undefined
+    if (!siteId) return null
+    return index.value?.devicesByBinding.get(siteId)?.id ?? siteId
   }
 
   /**
@@ -216,12 +248,17 @@ export const useHouseStore = defineStore('house', () => {
   }
   watch(selectedKey, (key) => { if (key !== provisional.value?.id) stopPlacing() })
 
-  /** Centre approximatif d'un niveau : milieu de la boîte englobante de ses pièces (ou de son contour). */
+  /**
+   * Centre approximatif d'un niveau : milieu de la boîte englobante de ses pièces (ou de son contour).
+   * Un niveau SANS pièce ni contour — c'est ainsi qu'un toit se déclare — retombe sur l'emprise du
+   * bâti entier : sans ça, tout ce qu'on y pose atterrissait à l'origine de la maison, dans un coin.
+   */
   function levelCentre(levelId: string): [number, number] {
     const idx = index.value
     const pts: Vec2[] = (idx?.roomsByLevel.get(levelId) ?? []).flatMap((r) => r.polygon)
     const outline = idx?.levelsById.get(levelId)?.outline
-    const all = pts.length ? pts : outline ?? []
+    const footprint: Vec2[] = house.value?.rooms.flatMap((r) => r.polygon) ?? []
+    const all = pts.length ? pts : outline ?? (footprint.length ? footprint : [])
     if (!all.length) return [0, 0]
     const xs = all.map((p) => p[0]), ys = all.map((p) => p[1])
     return [snap((Math.min(...xs) + Math.max(...xs)) / 2), snap((Math.min(...ys) + Math.max(...ys)) / 2)]
@@ -366,6 +403,209 @@ export const useHouseStore = defineStore('house', () => {
     }
   }
 
+  // ---- champs de panneaux : un champ se crée, se règle et se glisse depuis le panneau de
+  // l'installation solaire. Les modules, eux, sont dérivés du champ (`panelArrayDevices`) : il n'y a
+  // qu'un objet à écrire, quel que soit le nombre de panneaux. -------------------------------------
+  const editingArrayId = ref<string | null>(null)
+  /** Origine en cours de GLISSEMENT (aperçu 3D), pas encore écrite dans house.json. */
+  const arrayDraft = shallowRef<Vec3 | null>(null)
+  /**
+   * Emplacement mis en avant depuis la grille des onduleurs (survol d'une case) : la scène allume le
+   * module correspondant. C'est le fil qui relie les deux — sans lui, on garnit une grille sans
+   * savoir quel panneau du toit on est en train de nommer.
+   */
+  const hoveredKey = ref<string | null>(null)
+  const hoverSlot = (key: string | null) => { hoveredKey.value = key }
+  const arrays = computed<PanelArray[]>(() => house.value?.arrays ?? [])
+  /**
+   * Les champs d'une installation : ceux qui la nomment (`siteId`), plus ceux qui ne nomment personne
+   * — un fichier écrit à la main n'a pas de raison de le dire, et une maison n'a qu'une installation
+   * solaire. C'est ce lien que le retrait de l'installation suit pour emporter ses champs.
+   */
+  const arraysOf = (siteDeviceId: string) => arrays.value.filter((a) => !a.siteId || a.siteId === siteDeviceId)
+  const editingArray = computed<PanelArray | null>(() => arrays.value.find((a) => a.id === editingArrayId.value) ?? null)
+  /** Modules du champ en cours d'édition, origine du brouillon comprise : ce que la scène doit montrer. */
+  const editingArrayModules = computed<HouseDevice[]>(() => {
+    const a = editingArray.value
+    if (!a) return []
+    return panelArrayDevices(arrayDraft.value ? { ...a, origin: arrayDraft.value } : a)
+  })
+
+  /**
+   * Le niveau qui porte les panneaux : celui affiché s'il n'a AUCUNE pièce (c'est ainsi qu'un toit se
+   * déclare, cf. le wiki), sinon le dernier niveau sans pièce, sinon le plus haut. Un champ posé par
+   * défaut sur le séjour se verrait tout de suite ; un champ sans niveau ne s'écrirait pas du tout.
+   */
+  function panelLevelId(): string | null {
+    const idx = index.value
+    if (!idx) return null
+    const bare = levels.value.filter((l) => (idx.roomsByLevel.get(l.id) ?? []).length === 0)
+    const focused = focusedLevelId.value
+    if (focused && bare.some((l) => l.id === focused)) return focused
+    return bare[0]?.id ?? levels.value[0]?.id ?? null
+  }
+
+  /**
+   * Onduleurs de cette installation qu'aucun champ ne porte et qu'aucune entrée de la maison ne pose :
+   * ce sont eux qu'on peut affecter à un emplacement. Un onduleur est un capteur de PUISSANCE du même
+   * plugin que le site (Enphase en publie un par module, la simulation aussi).
+   *
+   * TRIÉS par nom, chiffres compris (`numeric`) : la passerelle les annonce dans son ordre à elle, et
+   * retrouver un numéro de série dans vingt lignes en désordre, plan d'installation à la main, est
+   * un jeu de piste. C'est aussi l'ordre dans lequel un champ neuf se garnit.
+   */
+  function freeInverters(siteDeviceId: string): DeviceDescriptor[] {
+    const prefix = `${siteDeviceId.split(':')[0]}:`
+    const taken = new Set<string>()
+    for (const a of arrays.value) for (const p of a.panels) if (p) taken.add(p)
+    for (const d of house.value?.devices ?? []) if (d.deviceId) taken.add(d.deviceId)
+    return Object.values(devices.descriptors)
+      .filter((d) => d.kind === 'sensor' && d.meta.sensor?.deviceClass === 'power' && d.id.startsWith(prefix) && !taken.has(d.id))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }) || a.id.localeCompare(b.id))
+  }
+
+  /**
+   * Installation depuis laquelle on règle le champ : un champ qui ne disait pas d'où il venait (écrit
+   * à la main, ou avant que `siteId` existe) l'ADOPTE au premier réglage. Sans quoi il resterait
+   * anonyme pour toujours, et ne partirait pas avec son installation.
+   */
+  const editingArraySite = ref<string | null>(null)
+
+  /**
+   * Hauteur à laquelle un champ se pose, mesurée depuis le sol du niveau des panneaux : le DESSUS du
+   * toit. Un toit plat est une dalle de 20 cm posée sur les murs, et le niveau-toit est déclaré à sa
+   * base : un champ à 0 était noyé dedans, invisible et impossible à attraper à l'œil. Un toit à deux
+   * pans part, lui, du plan des égouts (0) et monte avec son inclinaison.
+   */
+  function panelBaseZ(levelId: string): number {
+    const h = house.value
+    if (!h) return 0
+    const roof = computeRoof(h, resolveDefaults(h.defaults))
+    if (!roof) return 0
+    const elevation = index.value?.levelsById.get(levelId)?.elevation ?? 0
+    const top = roof.type === 'flat' ? roof.zRidge : roof.zBase
+    return Math.max(0, Math.round((top - elevation) * 100) / 100)
+  }
+
+  function startEditingArray(id: string, siteDeviceId?: string) {
+    const a = arrays.value.find((x) => x.id === id)
+    if (!a) return
+    stopPlacing()
+    arrayDraft.value = null
+    editingArraySite.value = siteDeviceId ?? null
+    editingArrayId.value = id
+    // le champ vit sur le toit : on l'affiche, sinon on réglerait un champ qu'on ne voit pas
+    gardenFocus.value = false
+    focusedLevelId.value = a.levelId
+  }
+  function stopEditingArray() { editingArrayId.value = null; editingArraySite.value = null; arrayDraft.value = null; hoveredKey.value = null }
+
+  /**
+   * Règle un champ depuis AILLEURS que la carte de l'installation (le panneau d'un module) : on saute
+   * sur l'installation qui le porte — son panneau porte la carte — puis on ouvre le réglage.
+   *
+   * Cet ordre est le bon : `selectDevice` cadre le niveau de l'INSTALLATION (elle peut être au
+   * rez-de-chaussée), et c'est `startEditingArray`, ensuite, qui ramène sur le niveau du CHAMP. Le
+   * garde-fou de sélection, lui, ne s'exécute qu'après les deux et voit un réglage cohérent.
+   */
+  function editArray(arrayId: string) {
+    const a = arrays.value.find((x) => x.id === arrayId)
+    if (!a) return
+    const siteId = siteOf(a)
+    if (siteId) selectDevice(index.value?.devicesByBinding.get(siteId)?.id ?? siteId)
+    startEditingArray(arrayId, siteId)
+  }
+  // Quitter l'installation solaire referme le réglage : la carte qui le portait n'est plus là. Y
+  // ARRIVER, en revanche, ne le referme pas — c'est ce qui permet d'ouvrir un champ depuis le panneau
+  // d'un de ses modules (on saute sur l'installation, le réglage suit).
+  watch(selectedKey, (key) => {
+    const site = editingArraySite.value
+    const hd = key ? index.value?.devicesById.get(key) : undefined
+    if (!site || (key !== site && hd?.deviceId !== site)) stopEditingArray()
+  })
+
+  /**
+   * Nouveau champ : deux rangées de cinq, posé au centre du niveau des panneaux, incliné comme le
+   * toit, et VIDE. Vide, parce que l'ordre des numéros de série n'a aucune raison de suivre le
+   * calepinage du toit : un garnissage automatique se trompait presque à coup sûr, et il fallait
+   * tout défaire à la main avant de pouvoir placer chaque onduleur à sa vraie place.
+   *
+   * Il naît NOMMÉ et rattaché à son installation : le nom sert de repère à l'écran (jusque sur les
+   * modules sans onduleur), et `siteId` le fait partir avec elle si on la retire de la maison.
+   */
+  async function addArray(siteDeviceId: string): Promise<boolean> {
+    const levelId = panelLevelId()
+    if (!levelId) return false
+    const used = new Set(arrays.value.map((a) => a.id))
+    let id = 'pv'
+    for (let n = 1; used.has(id); n++) id = `pv-${n}`
+    const [x, y] = levelCentre(levelId)
+    // Le champ regarde là où regarde son INSTALLATION : on oriente la passerelle vers le sud comme on
+    // oriente ses panneaux, et le champ n'a plus de raison de partir dans une autre direction.
+    const yaw = index.value?.devicesByBinding.get(siteDeviceId)?.yaw ?? 0
+    const ok = await writeArray(id, {
+      name: t('arrays.field', { n: arraysOf(siteDeviceId).length + 1 }),
+      siteId: siteDeviceId,
+      levelId, origin: [x, y, panelBaseZ(levelId)], rows: 2, cols: 5, yaw,
+      // Le champ ÉPOUSE le toit : la pente du support vient de la toiture — 0 sur un toit plat (le
+      // schéma donne quand même une pente par défaut à `roof`, qui n'y veut rien dire). L'inclinaison
+      // des MODULES, elle, ne s'invente pas : c'est le châssis, et on ne sait pas ce qui est monté.
+      slope: house.value?.roof?.type === 'gable' ? house.value.roof.pitch : 0,
+    })
+    if (ok) startEditingArray(id, siteDeviceId)
+    return ok
+  }
+
+  /** Écrit un champ (création ou réglage) ; la maison réécrite revient du serveur. */
+  async function writeArray(id: string, patch: PanelArrayPatch): Promise<boolean> {
+    saving.value = true
+    try {
+      house.value = await getTransport().saveArray(id, patch)
+      return true
+    } catch (err) {
+      useNotificationsStore().error(t('place.saveError', { message: (err as Error).message }))
+      return false
+    } finally { saving.value = false }
+  }
+
+  /** Règle le champ en cours d'édition (et le rattache à son installation s'il ne l'était pas). */
+  async function saveArray(patch: PanelArrayPatch): Promise<boolean> {
+    const id = editingArrayId.value
+    if (!id) return false
+    const site = editingArraySite.value
+    const ok = await writeArray(id, site && !editingArray.value?.siteId ? { ...patch, siteId: site } : patch)
+    if (ok && patch.origin) arrayDraft.value = null
+    return ok
+  }
+
+  async function removeArray(id: string): Promise<boolean> {
+    saving.value = true
+    try {
+      house.value = await getTransport().removeArray(id)
+      if (editingArrayId.value === id) stopEditingArray()
+      return true
+    } catch (err) {
+      useNotificationsStore().error(t('place.saveError', { message: (err as Error).message }))
+      return false
+    } finally { saving.value = false }
+  }
+
+  /**
+   * Aperçu du glissement : on attrape N'IMPORTE QUEL module et c'est le champ entier qui suit, donc
+   * l'origine se déplace du même écart que le module attrapé. L'écart se mesure toujours depuis la
+   * position ÉCRITE du module (la maison ne bouge qu'au dépôt) : rien ne s'accumule.
+   */
+  function previewArrayOrigin(key: string, xy: [number, number]) {
+    const a = editingArray.value
+    const hd = index.value?.devicesById.get(key)
+    if (!a || !hd) return
+    arrayDraft.value = [snap(a.origin[0] + xy[0] - hd.position[0]), snap(a.origin[1] + xy[1] - hd.position[1]), a.origin[2]]
+  }
+  /** Dépôt : l'origine du brouillon devient celle du champ. */
+  async function dropArray(): Promise<void> {
+    if (arrayDraft.value) await saveArray({ origin: arrayDraft.value })
+  }
+
   const canRevert = computed(() => {
     const o = placingOrigin.value, hd = selectedDevice.value
     return !!o && !!hd && (o.position.join() !== hd.position.join() || o.mount !== hd.mount || o.roomId !== hd.roomId
@@ -393,5 +633,7 @@ export const useHouseStore = defineStore('house', () => {
     focusedLevelId, gardenFocus, selectedRoomId, selectedLevelId, selectedKey, floorTab, selectedRoom, selectedZone, selectedDevice,
     load, setFloorTab, focusLevel, selectRoom, selectLevel, selectDevice, clearSelection, backToHome, backFromRoom, backFromDevice, houseDeviceFor, setRoomOrder,
     placing, saving, draft, canRevert, isProvisional, startPlacing, startPlacingNew, stopPlacing, previewPosition, previewHeight, savePlacement, revertPlacement, removePlacement,
+    arrays, arraysOf, editingArrayId, editingArray, editingArrayModules, arrayDraft, hoveredKey, hoverSlot, freeInverters,
+    startEditingArray, stopEditingArray, editArray, siteOf, siteOfDevice, addArray, saveArray, removeArray, previewArrayOrigin, dropArray,
   }
 })

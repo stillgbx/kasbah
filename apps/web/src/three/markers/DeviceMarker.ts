@@ -123,6 +123,9 @@ export abstract class DeviceMarker {
   setSelected(s: boolean): void {
     this.selected = s
     if (this.pill) this.pill.dataset.sel = s ? '1' : '0'
+    // un marqueur allumé se MONTRE, même de loin, là où la distance avait effacé sa pilule
+    // (`setPillVisible`) : c'est ce qui fait ressortir le module d'une case survolée dans la grille
+    if (this.css) this.css.visible = this.pillAllowed || s
   }
 
   setPillVisible(v: boolean): void {
@@ -141,10 +144,16 @@ export abstract class DeviceMarker {
   /** Position monde de la pilule (ancre + lift). */
   worldPill(out = new Vector3()): Vector3 { return this.css ? this.css.getWorldPosition(out) : this.worldAnchor(out) }
 
-  /** Mode « déplacer » : la pilule laisse passer le pointeur (CSS) et un guide relie l'appareil au sol. */
-  setMoving(on: boolean, height: number): void {
+  /**
+   * Mode « déplacer » : la pilule laisse passer le pointeur (CSS) et un guide relie l'appareil au sol.
+   *
+   * `guide` sépare les deux : les dix modules d'un champ de panneaux se glissent tous (leur pilule
+   * doit laisser passer le doigt, sinon le tap sélectionne le module au lieu de déplacer le champ),
+   * mais un seul porte le guide — dix anneaux pour un seul objet qui bouge.
+   */
+  setMoving(on: boolean, height: number, guide = on): void {
     if (this.pill) this.pill.dataset.moving = on ? '1' : '0'
-    if (on) {
+    if (on && guide) {
       if (!this.guide) {
         const color = this.ctx.theme.primary
         // Le guide se dessine PAR-DESSUS la maison (`depthTest: false` + `renderOrder`) : le sol d'un
@@ -155,7 +164,11 @@ export abstract class DeviceMarker {
         ring.renderOrder = line.renderOrder = GUIDE_RENDER_ORDER
         this.object.add(ring, line)
         let look: Mesh<ShapeGeometry, MeshBasicMaterial> | null = null
-        if (isOrientable(this.device, this.ctx.descriptor)) {
+        // Un module regarde dans l'azimut de son champ (+y local) comme n'importe quel appareil
+        // orienté. Posé à plat (aucune inclinaison), il ne regarde nulle part : pas de cône du tout,
+        // plutôt qu'une flèche qui invente une direction.
+        const panel = panelOf(this.device)
+        if (panel ? panel.tilt !== 0 : isOrientable(this.device, this.ctx.descriptor)) {
           // cône plat depuis l'appareil vers +y (le plan XY est le sol en Z-up), tourné du yaw ; les
           // marqueurs sont reconstruits à chaque écriture du placement, donc il suit la rotation
           const shape = new Shape()
@@ -165,7 +178,8 @@ export abstract class DeviceMarker {
           shape.lineTo(0, 0.18)
           look = new Mesh(new ShapeGeometry(shape, 12), new MeshBasicMaterial({ color, transparent: true, opacity: 0.45, depthWrite: false, depthTest: false, side: DoubleSide }))
           look.renderOrder = GUIDE_RENDER_ORDER
-          look.rotation.z = yawToRad(this.device.yaw)
+          // un châssis NÉGATIF bascule le verre en arrière : le cône fait alors demi-tour
+          look.rotation.z = yawToRad(this.device.yaw) + (panel && panel.tilt < 0 ? Math.PI : 0)
           this.object.add(look)
         }
         this.guide = { ring, line, look }

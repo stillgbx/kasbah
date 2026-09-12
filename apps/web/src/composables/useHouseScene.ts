@@ -94,7 +94,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     setSelected: (key: string | null) => scene?.setSelected(key),
     onDeviceDrag: (f: Handler<[string, [number, number], string | null]>) => { deviceDrag.add(f) },
     onDeviceDrop: (f: Handler<[string, [number, number], string | null]>) => { deviceDrop.add(f) },
-    setMovable: (key: string | null) => scene?.setMovable(key),
+    setMovable: (key: string | string[] | null) => scene?.setMovable(key),
     moveMarker: (key: string, position: Vec3) => scene?.moveMarker(key, position),
     controller: () => scene,
   }

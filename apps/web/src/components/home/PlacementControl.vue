@@ -135,7 +135,16 @@ const anchorName = computed(() => {
 
 // Retirer de la maison : geste en deux temps (armer, puis confirmer dans les 4 s) pour ne pas sortir un
 // appareil d'un doigt qui glisse ; l'emplacement est réservé, le libellé seul change.
+//
+// Une installation solaire emporte ses CHAMPS DE PANNEAUX (`siteId`, voir `house/place.ts`) : la
+// confirmation le dit, parce que c'est le moment où l'on décide — vingt modules disparaissent avec elle.
 const removeArmed = ref(false)
+const ownedArrays = computed(() => (props.device.deviceId
+  ? house.arrays.filter((a) => a.siteId === props.device.deviceId).length
+  : 0))
+const removeLabel = computed(() => (!removeArmed.value ? t('place.remove')
+  : ownedArrays.value > 0 ? t('place.removeWithArrays', { n: ownedArrays.value }, ownedArrays.value)
+  : t('place.removeConfirm')))
 let disarm: ReturnType<typeof setTimeout> | undefined
 function removeClick() {
   if (!removeArmed.value) { removeArmed.value = true; disarm = setTimeout(() => { removeArmed.value = false }, 4000); return }
@@ -166,7 +175,7 @@ function applyPreset(p: Preset) {
             {{ $t('place.revert') }}
           </button>
         </div>
-        <Segmented dense :model-value="preset" :options="presetOptions" @update:model-value="applyPreset" />
+        <Segmented dense class="place__presets" :model-value="preset" :options="presetOptions" @update:model-value="applyPreset" />
         <div class="place__row">
           <span class="muted">{{ $t('place.height') }}</span>
           <span class="place__value">{{ position[2].toFixed(2) }} m</span>
@@ -233,7 +242,7 @@ function applyPreset(p: Preset) {
           <button type="button" class="pill place__remove" :class="{ 'place__remove--off': house.isProvisional, 'place__remove--armed': removeArmed }"
                   :disabled="house.saving || house.isProvisional" :tabindex="house.isProvisional ? -1 : 0"
                   :title="$t('place.removeHint')" @click="removeClick">
-            {{ removeArmed ? $t('place.removeConfirm') : $t('place.remove') }}
+            {{ removeLabel }}
           </button>
         </div>
       </div>
@@ -281,6 +290,11 @@ function applyPreset(p: Preset) {
 .place__turn { display: inline-flex; align-items: center; gap: 6px; }
 /* deux choix seulement : le segmenté reste au bout de sa ligne plutôt que d'en prendre la largeur */
 .place__leaves { flex: 0 0 auto; }
+/* Les quatre préréglages de hauteur demandaient 264 px pour 257 : dès que le panneau prend sa barre
+   de défilement, la dernière pilule débordait de la carte. Un segmenté ne se serre pas tout seul (ses
+   mots ne se coupent pas), on lui reprend donc quelques pixels sur les côtés de chaque segment. */
+.place__presets { max-width: 100%; }
+.place__presets :deep(.segmented__item) { padding: 0 8px; }
 /* largeur fixe (« 315° », « 10.25 ») : la valeur change sans déplacer les touches */
 .place__deg { width: 5ch; display: inline-flex; align-items: center; justify-content: center; }
 .place__unit { flex: 0 0 auto; }

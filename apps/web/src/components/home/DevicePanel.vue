@@ -5,6 +5,7 @@ import type { CommandInput } from '@kasbah/shared'
 import { panelOf } from '@kasbah/shared'
 import { useDeviceResolver } from '../../composables/useDeviceResolver'
 import { relayLabel } from '../../lib/audioRouting'
+import { isEnergySite } from '../../lib/energy'
 import { toClosure } from '../../lib/cover'
 import { formatPercent } from '../../lib/format'
 import { headlineValue, isDeviceBusy, isDeviceOn, toggleChecked, toggleCommand } from '../../lib/deviceState'
@@ -16,6 +17,7 @@ import MarqueeText from '../ui/MarqueeText.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import ForgetDeviceButton from '../devices/ForgetDeviceButton.vue'
 import DeviceControl from '../controls/DeviceControl.vue'
+import PanelArraysCard from './PanelArraysCard.vue'
 import PlacementControl from './PlacementControl.vue'
 
 // Panneau « appareil » : fil d'Ariane vers son parent, en-tête (icône, nom, fabricant, bascule),
@@ -35,6 +37,8 @@ const resolved = useDeviceResolver(computed(() => house.selectedKey))
 const crumb = computed(() => {
   const hd = resolved.value?.houseDevice
   if (!hd) return t('nav.home')
+  // un module de champ appartient à son INSTALLATION : c'est elle qu'on nomme, et où le retour ramène
+  if (site.value) return site.value.name
   const idx = house.index
   return (hd.roomId ? idx?.roomsById.get(hd.roomId)?.name
     : hd.zoneId ? idx?.zonesById.get(hd.zoneId)?.name
@@ -97,6 +101,29 @@ const headline = computed(() => {
 const placeable = computed(() => {
   const hd = resolved.value?.houseDevice
   return !!hd && !hd.openingId && !panelOf(hd) && (resolved.value?.descriptor?.kind ?? hd.kind) !== 'mower'
+})
+/** Le champ dont cet appareil est un module, quand il en est un (il suit son champ, cf. `panels.ts`). */
+const panelCell = computed(() => (resolved.value?.houseDevice ? panelOf(resolved.value.houseDevice) : undefined))
+const array = computed(() => (panelCell.value ? house.arrays.find((a) => a.id === panelCell.value!.arrayId) : undefined))
+/**
+ * L'installation qui porte ce champ : le parent du module dans le fil d'Ariane, et le panneau où son
+ * réglage vit. Nommée par son entrée de maison si elle est posée, par le fabricant sinon.
+ */
+const site = computed(() => {
+  const id = array.value ? house.siteOf(array.value) : undefined
+  if (!id) return undefined
+  const hd = house.index?.devicesByBinding.get(id)
+  return { key: hd?.id ?? id, name: hd?.name ?? devices.descriptors[id]?.name ?? id }
+})
+
+/**
+ * Installation solaire : le site d'une installation qui PRODUIT (et non une batterie, ni un simple
+ * compteur). C'est sur son panneau que se déclarent les champs de panneaux — les modules, eux, sont
+ * dérivés de leur champ et n'ont rien à régler.
+ */
+const solarSite = computed(() => {
+  const d = resolved.value?.descriptor
+  return d && isEnergySite(d) && d.capabilities.includes('production') ? d.id : null
 })
 // Pochette du morceau (ou visuel de la radio) en fond du haut du panneau, fondue en haut et en bas.
 // Couche absolue derrière le contenu : rien ne se décale quand elle apparaît, change ou disparaît.
@@ -180,8 +207,20 @@ function send(cmd: CommandInput) {
     <DeviceControl v-if="resolved.descriptor && resolved.state" :descriptor="resolved.descriptor" :state="resolved.state"
                    :pending="devices.isPending(resolved.deviceId!)" :relay-from="relay?.name" @command="send" />
     <div v-else class="card card--soft unbound muted">{{ $t('device.unbound', { id: resolved.houseDevice?.deviceId ?? resolved.key }) }}</div>
+    <!-- les champs de panneaux se déclarent ici, juste au-dessus de l'emplacement de l'installation -->
+    <PanelArraysCard v-if="solarSite" class="arrays" :site-device-id="solarSite" />
     <!-- rarement utilisé : calé au fond du panneau, sous tout le reste -->
     <PlacementControl v-if="placeable" class="placement" :device="resolved.houseDevice!" />
+    <!-- module d'un champ : il ne se place pas seul, mais il mène au réglage de son champ -->
+    <div v-else-if="array" class="card card--soft placement place-new">
+      <div class="place-new__row">
+        <span class="muted">{{ $t('arrays.single') }}</span>
+        <button type="button" class="pill place-new__cta" @click="house.editArray(array.id)">
+          <StrokeIcon name="move" :size="16" /> {{ $t('arrays.edit') }}
+        </button>
+      </div>
+      <div class="muted place-new__hint">{{ array.name ?? array.id }} · {{ $t('arrays.cell', { r: panelCell!.row + 1, c: panelCell!.col + 1 }) }}</div>
+    </div>
     <!-- appareil connu du plugin mais absent de la maison : le poser depuis ici, sans repasser par la liste -->
     <div v-else-if="resolved.descriptor && !resolved.houseDevice" class="card card--soft placement place-new">
       <div class="place-new__row">
@@ -214,6 +253,9 @@ function send(cmd: CommandInput) {
 .crumb:hover { color: var(--text); }
 .head { display: flex; align-items: center; gap: 12px; }
 .placement { margin-top: auto; }
+/* la carte des champs se colle au bloc « Emplacement » qui ferme le panneau */
+.arrays { margin-top: auto; }
+.arrays + .placement { margin-top: 0; }
 .place-new { padding: 12px 14px; font-size: 13px; display: grid; gap: 10px; }
 .place-new__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 /* même largeur que le bouton « Oublier l'appareil » de la ligne d'en dessous : les deux s'alignent */
