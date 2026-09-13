@@ -1,6 +1,6 @@
 import { apiErrorSchema, devicesResponseSchema, energyHistorySchema, healthResponseSchema, houseSchema, pluginsResponseSchema, scenesResponseSchema, serverMessageSchema, type CommandInput, type DeviceEntry, type DevicePlacement, type EnergyHistory, type HealthResponse, type House, type PluginInfo, type PluginSceneEntry, type PluginSettingsPatch, type SceneRecallInput, type SceneUpdate } from '@kasbah/shared'
 import { parseDeviceId } from '@kasbah/shared'
-import { ApiRequestError, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type Transport, type TransportHandlers } from './transport'
+import { ApiRequestError, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type TeslaStatus, type Transport, type TransportHandlers } from './transport'
 
 // URLs relatives : même origine en prod (Fastify sert le build) et via le proxy Vite en dev.
 
@@ -95,6 +95,10 @@ export function createHttpTransport(base = ''): Transport {
       { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
       (j) => j as EnphaseTokenStatus,
     ),
+    teslaStatus: () => request(`${base}/api/plugins/tesla/status`, undefined, (j) => j as TeslaStatus),
+    teslaRegister: () => request(`${base}/api/plugins/tesla/register`, { method: 'POST' }, (j) => j as TeslaStatus),
+    teslaAuthUrl: () => request(`${base}/api/plugins/tesla/auth/url`, undefined, (j) => j as { url: string; redirectUri: string }),
+    teslaRotateKey: () => request(`${base}/api/plugins/tesla/public-key/rotate`, { method: 'POST' }, (j) => j as TeslaStatus),
     forgetDevice: (deviceId) => {
       const { pluginId, externalId } = parseDeviceId(deviceId)
       return request(

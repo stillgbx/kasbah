@@ -40,6 +40,27 @@ export interface EnphaseTokenStatus {
 
 export type EnphasePairing = { token: string } | { user: string; password: string; force?: boolean }
 
+/**
+ * Mise en route du plugin Tesla, telle que l'UI la voit. Ni secret ni clé privée : la clé PUBLIQUE
+ * y est, parce que c'est l'utilisateur qui doit la poser sur son domaine.
+ */
+export interface TeslaStatus {
+  configured: boolean
+  domain: string | null
+  region: 'eu' | 'na'
+  redirectUri: string
+  publicKeyPem: string | null
+  publicKeyUrl: string | null
+  registered?: boolean
+  linked: boolean
+  vehicles: { vin: string; name: string; sleepState: 'online' | 'asleep' | 'offline' }[]
+  budget: { used: number; limit: number }
+  pollMs: number
+  restMs: number
+  tokenFile: string | null
+  lastError: string | null
+}
+
 export interface Transport {
   getHouse(): Promise<House>
   getDevices(): Promise<DeviceEntry[]>
@@ -69,6 +90,14 @@ export interface Transport {
    * une fois à en frapper un et ne sont pas conservés. `force` remplace un jeton encore valable.
    */
   pairEnphase(body: EnphasePairing): Promise<EnphaseTokenStatus>
+  /** Où en est la mise en route Tesla (clé publique à poser, domaine enregistré, compte lié). */
+  teslaStatus(): Promise<TeslaStatus>
+  /** Enregistre le domaine auprès de Tesla, une fois la clé publique posée dessus. */
+  teslaRegister(): Promise<TeslaStatus>
+  /** URL de consentement Tesla à ouvrir dans un navigateur pour lier le compte. */
+  teslaAuthUrl(): Promise<{ url: string; redirectUri: string }>
+  /** Nouvelle paire de clés (l'ancienne clé publique cesse de valoir : à reposer sur le domaine). */
+  teslaRotateKey(): Promise<TeslaStatus>
   /**
    * Fait oublier un appareil au plugin qui le retenait (`meta.forgettable`), par convention
    * `DELETE /api/plugins/<plugin>/devices/<externalId>` : il quitte l'inventaire jusqu'à ce qu'il

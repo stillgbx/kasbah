@@ -40,6 +40,9 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
       kind: 'vehicle', updatedAt: 0, available: true,
       soc: o.soc ?? 72, rangeKm: Math.round(((o.soc ?? 72) / 100) * rangeFull), pluggedIn: true, charging: false,
       locked: true, chargeLimit: o.chargeLimit ?? 80, location: { lat: o.home.lat, lon: o.home.lon, at: 0 }, odometerKm: 24_310,
+      // ce qu'un vrai véhicule connecté dit aussi : la simulation le fournit pour que l'UI s'essaie dessus
+      sleepState: 'asleep', gear: 'P', speedKmh: 0,
+      tirePressureBar: { fl: 2.9, fr: 2.9, rl: 2.95, rr: 2.95 }, insideTempC: 21.5, outsideTempC: 17,
     },
     tick(ctx) {
       const s = dev.state
@@ -69,6 +72,11 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
       } else s.chargePowerW = 0
       s.soc = Math.round(s.soc * 10) / 10
       s.rangeKm = Math.round((s.soc / 100) * rangeFull)
+      // en route : rapport D et vitesse moyenne du trajet ; garé : P, 0 — et il s'endort dès qu'il ne fait rien
+      const driving = phase === 'toWork' || phase === 'toHome'
+      s.gear = driving ? 'D' : 'P'
+      s.speedKmh = driving ? Math.round((32 / tripMin) * 60) : 0
+      s.sleepState = driving || s.charging ? 'online' : 'asleep'
     },
     apply(cmd) {
       const s = dev.state
@@ -78,7 +86,7 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
         case 'vehicle.start_charge': if (!s.pluggedIn) throw new SimError('DEVICE_UNAVAILABLE', 'vehicle not plugged in'); s.chargeLimit = Math.max(s.chargeLimit ?? 80, Math.min(100, s.soc + 10)); break
         case 'vehicle.stop_charge': s.chargeLimit = Math.floor(s.soc); break
         case 'vehicle.set_charge_limit': s.chargeLimit = clamp(Math.round(cmd.percent), 50, 100); break
-        case 'vehicle.wake': break
+        case 'vehicle.wake': s.sleepState = 'online'; break
         default: throw new SimError('UNSUPPORTED_COMMAND', `${cmd.type} on vehicle`)
       }
     },

@@ -1,0 +1,415 @@
+import Fastify from 'fastify'
+import pino from 'pino'
+import { describe, expect, it, vi } from 'vitest'
+import { ManualClock } from '@kasbah/mock-sim'
+import type { PluginContext } from '../../core/plugin'
+import type { FetchLike } from '../../core/sse'
+import {
+  ASLEEP_408, PARTNER_TOKEN, TOKEN_REFRESHED, TOKEN_RESPONSE, VEHICLES_ASLEEP, VEHICLES_ONLINE, VEHICLE_DATA_CHARGING,
+  VEHICLE_DATA_DRIVING, VEHICLE_DATA_PARKED,
+} from './__fixtures__/fleet'
+import { REGION_BASE_URLS, TOKEN_URL, generateKeyPair, publicKeyOf, publicKeyPointHex, samePublicKey, type KeyStore, type StoredTokens, type TokenStore } from './auth'
+import { createTeslaPlugin, teslaConfigSchema } from './index'
+
+// Ce que le plugin doit tenir face au fabricant : ne JAMAIS lire un véhicule endormi, le laisser
+// s'endormir une fois vu au repos, ne pas dépasser le budget de lectures du jour, et survivre à la
+// rotation du refresh token (à usage unique chez Tesla). Aucun compte ni véhicule réel n'est touché.
+
+const NOW = Date.UTC(2026, 8, 13, 10)
+const MIN = 60_000
+const VIN = '5YJSA7E20HF000001'
+const BASE = REGION_BASE_URLS.eu
+const ENV = { TESLA_CLIENT_ID: 'app-id', TESLA_CLIENT_SECRET: 'app-secret', TESLA_DOMAIN: 'nas.exemple.fr', TESLA_POLL_MS: String(10 * MIN), TESLA_REST_MS: String(15 * MIN) }
+
+const response = (body: unknown, status = 200) => ({
+  ok: status < 400, status, body: null,
+  json: async () => body,
+  text: async () => JSON.stringify(body),
+})
+
+/** Faux Tesla : serveur d'authentification et API, pilotés par un état mutable. */
+function fakeTesla(over: { registeredKey?: string; servedKey?: string; publicKeyForbidden?: boolean } = {}) {
+  const world = {
+    list: VEHICLES_ASLEEP as unknown,
+    data: VEHICLE_DATA_PARKED as unknown,
+    /** `vehicle_data` répond 408 tant que vrai. */
+    asleep: false,
+    /** Le jeton d'accès que l'API accepte ; un autre → 401. */
+    accepts: TOKEN_RESPONSE.access_token,
+    /** Ce que Tesla a DÉJÀ enregistré pour le domaine ; `servedKey` est ce qu'il lirait en s'enregistrant. */
+    registeredKey: over.registeredKey,
+    servedKey: over.servedKey,
+    /** L'API du compte répond 412 tant que vrai (application pas enregistrée pour ce compte). */
+    unregistered: false,
+  }
+  const calls: { method: string; path: string; body?: string; auth?: string }[] = []
+  const fetchImpl = vi.fn<FetchLike>(async (url, init) => {
+    const method = init?.method ?? 'GET'
+    const headers = (init?.headers ?? {}) as Record<string, string>
+    const body = init?.body === undefined ? undefined : String(init.body)
+    if (url === TOKEN_URL) {
+      const params = new URLSearchParams(body)
+      calls.push({ method, path: `token:${params.get('grant_type')}`, body })
+      if (params.get('grant_type') === 'client_credentials') return response(PARTNER_TOKEN)
+      if (params.get('grant_type') === 'authorization_code') return response(TOKEN_RESPONSE)
+      // rotation : seul le refresh token courant est accepté, et il en rend un autre
+      if (params.get('refresh_token') === TOKEN_RESPONSE.refresh_token) { world.accepts = TOKEN_REFRESHED.access_token; return response(TOKEN_REFRESHED) }
+      return response({ error: 'invalid_grant' }, 400)
+    }
+    const path = url.replace(BASE, '')
+    calls.push({ method, path, body, auth: headers.authorization })
+    if (path.startsWith('/api/1/partner_accounts')) {
+      if (headers.authorization !== `Bearer ${PARTNER_TOKEN.access_token}`) return response({ error: 'unauthorized' }, 401)
+      if (method === 'POST') {
+        // constaté sur le vrai compte : un domaine déjà enregistré ne se réenregistre pas
+        if (world.registeredKey) return response({ error: 'Validation failed: Public key hash has already been taken' }, 422)
+        world.registeredKey = world.servedKey
+        return response({ response: { domain: 'nas.exemple.fr' } })
+      }
+      // constaté sur le vrai compte : la vérification peut être refusée alors que l'API répond
+      if (over.publicKeyForbidden) return response({ error: 'This account does not have access to nas.exemple.fr' }, 403)
+      // Tesla rend le POINT hexadécimal, pas le PEM (constaté sur le vrai compte)
+      return response({ response: { public_key: world.registeredKey ? publicKeyPointHex(world.registeredKey) : null } })
+    }
+    if (headers.authorization !== `Bearer ${world.accepts}`) return response({ error: 'unauthorized' }, 401)
+    if (path === '/api/1/vehicles') {
+      // constaté : application non enregistrée dans la région → 412, pas une liste vide
+      if (world.unregistered) return response({ error: `Account 592035a8 must be registered in the current region ${BASE}` }, 412)
+      return response(world.list)
+    }
+    if (path.includes('/vehicle_data')) return world.asleep ? response(ASLEEP_408, 408) : response(world.data)
+    if (path.endsWith('/wake_up')) return response({ response: { ...(VEHICLES_ONLINE.response[0] as object), state: 'online' } })
+    return response({ error: 'not found' }, 404)
+  })
+  return { fetchImpl, calls, world }
+}
+
+function memoryTokens(initial: StoredTokens | null = null): TokenStore & { value: StoredTokens | null } {
+  const s = { value: initial, load: async () => s.value, save: async (t: StoredTokens) => { s.value = t } }
+  return s
+}
+function memoryKey(pem: string | null = null): KeyStore & { value: string | null } {
+  const s = { value: pem, load: async () => s.value, save: async (p: string) => { s.value = p } }
+  return s
+}
+const linkedTokens = (): StoredTokens => ({ refreshToken: TOKEN_RESPONSE.refresh_token, accessToken: TOKEN_RESPONSE.access_token, accessExpiresAt: NOW + 8 * 3600_000 })
+
+async function started(over: { env?: Record<string, string>; tesla?: ReturnType<typeof fakeTesla>; tokens?: StoredTokens | null; key?: string | null } = {}) {
+  const tesla = over.tesla ?? fakeTesla()
+  const tokenStore = memoryTokens(over.tokens ?? null)
+  const keyStore = memoryKey(over.key ?? null)
+  const plugin = createTeslaPlugin({ fetchImpl: tesla.fetchImpl, tokenStore, keyStore })
+  const clock = new ManualClock(NOW)
+  const ctx: PluginContext = {
+    pluginId: 'tesla',
+    config: teslaConfigSchema.parse({ ...ENV, ...over.env }),
+    logger: pino({ level: 'silent' }), clock, signal: new AbortController().signal,
+    emitState: vi.fn(), setAvailable: vi.fn(), emitDevices: vi.fn(), emitScenes: vi.fn(), emitSceneState: vi.fn(), emitEvent: vi.fn(),
+    parts: {},
+  }
+  await plugin.init(ctx)
+  const app = Fastify()
+  app.register(async (sub) => plugin.registerRoutes!(sub), { prefix: '/api/plugins/tesla' })
+  await app.ready()
+  return { plugin, app, tesla, tokenStore, keyStore, ctx, clock }
+}
+
+/** Laisse les promesses en vol se résoudre (le sondage tourne sur l'horloge injectée). */
+const settle = () => new Promise((r) => setTimeout(r, 0))
+/**
+ * Avance de `n` tours de sondage. Un tour par avance : le poller ne repose son timer qu'après
+ * avoir fini son travail (asynchrone), donc une seule grande avance ne déclencherait qu'un tour.
+ */
+async function ticks(clock: ManualClock, n: number, ms = 10 * MIN) {
+  for (let i = 0; i < n; i++) { clock.advance(ms); await settle() }
+}
+const dataCalls = (t: ReturnType<typeof fakeTesla>) => t.calls.filter((c) => c.path.includes('/vehicle_data')).length
+const listCalls = (t: ReturnType<typeof fakeTesla>) => t.calls.filter((c) => c.path === '/api/1/vehicles').length
+const patches = (ctx: PluginContext) => (ctx.emitState as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[1] as Record<string, unknown>)
+
+describe('mise en route', () => {
+  it('sans identifiants d’application : needs_pairing, mais la paire de clés existe déjà et la clé publique se sert', async () => {
+    const { plugin, app, keyStore } = await started({ env: { TESLA_CLIENT_ID: '', TESLA_CLIENT_SECRET: '' } })
+    expect(plugin.health!()).toMatchObject({ status: 'needs_pairing' })
+    expect(keyStore.value).toMatch(/BEGIN PRIVATE KEY/)
+    const status = await app.inject({ method: 'GET', url: '/api/plugins/tesla/status' }).then((r) => r.json())
+    expect(status).toMatchObject({ configured: false, linked: false, publicKeyUrl: 'https://nas.exemple.fr/.well-known/appspecific/com.tesla.3p.public-key.pem' })
+    expect(status.publicKeyPem).toMatch(/BEGIN PUBLIC KEY/)
+    expect(status.publicKeyPem).toBe(publicKeyOf(keyStore.value!))
+    const pem = await app.inject({ method: 'GET', url: '/api/plugins/tesla/public-key' })
+    expect(pem.headers['content-type']).toContain('application/x-pem-file')
+    expect(pem.body).toBe(status.publicKeyPem)
+  })
+
+  it('une clé privée déjà en cache est reprise : la clé publique posée sur le domaine reste la bonne', async () => {
+    const pair = generateKeyPair()
+    const { keyStore, app } = await started({ key: pair.privatePem })
+    expect(keyStore.value).toBe(pair.privatePem)
+    expect((await app.inject({ method: 'GET', url: '/api/plugins/tesla/status' }).then((r) => r.json())).publicKeyPem).toBe(pair.publicPem)
+  })
+
+  it('l’enregistrement du domaine passe par un jeton partenaire, puis vérifie ce que Tesla a lu de la clé', async () => {
+    const pair = generateKeyPair()
+    const tesla = fakeTesla({ servedKey: pair.publicPem })
+    const { app, tesla: t } = await started({ tesla, key: pair.privatePem })
+    const r = await app.inject({ method: 'POST', url: '/api/plugins/tesla/register' })
+    expect(r.statusCode).toBe(200)
+    expect(r.json()).toMatchObject({ registered: true, lastError: null })
+    const check = '/api/1/partner_accounts/public_key?domain=nas.exemple.fr'
+    // vérifié AVANT (rien d'enregistré), enregistré, vérifié APRÈS
+    expect(t.calls.map((c) => c.path)).toEqual(['token:client_credentials', check, '/api/1/partner_accounts', check])
+    expect(JSON.parse(t.calls[2]!.body!)).toEqual({ domain: 'nas.exemple.fr' })
+  })
+
+  it('un domaine déjà enregistré n’est pas réenregistré ; et si Tesla refuse quand même (422), ce n’est pas une erreur', async () => {
+    const pair = generateKeyPair()
+    const done = await started({ tesla: fakeTesla({ registeredKey: pair.publicPem }), key: pair.privatePem })
+    expect((await done.app.inject({ method: 'POST', url: '/api/plugins/tesla/register' })).json()).toMatchObject({ registered: true })
+    expect(done.tesla.calls.map((c) => c.path)).toEqual(['token:client_credentials', '/api/1/partner_accounts/public_key?domain=nas.exemple.fr'])
+    // Tesla connaît une AUTRE clé : on tente l'enregistrement, il répond 422, on revérifie et on le dit
+    const other = await started({ tesla: fakeTesla({ registeredKey: generateKeyPair().publicPem, servedKey: pair.publicPem }), key: pair.privatePem })
+    const r = await other.app.inject({ method: 'POST', url: '/api/plugins/tesla/register' })
+    expect(r.statusCode).toBe(200)
+    expect(r.json()).toMatchObject({ registered: false })
+    expect(other.tesla.calls.filter((c) => c.method === 'POST' && c.path === '/api/1/partner_accounts')).toHaveLength(1)
+  })
+
+  it('clé prise par une AUTRE application : le 412 qui suit dit « pas enregistré », et la rotation donne une clé neuve', async () => {
+    const pair = generateKeyPair()
+    const tesla = fakeTesla({ registeredKey: pair.publicPem, publicKeyForbidden: true })
+    tesla.world.unregistered = true
+    const { app, keyStore } = await started({ tesla, key: pair.privatePem, tokens: linkedTokens() })
+    const r = await app.inject({ method: 'POST', url: '/api/plugins/tesla/register' }).then((x) => x.json())
+    expect(r.registered).toBe(false)
+    expect(r.lastError).toMatch(/registered by another application/)
+    const rotated = await app.inject({ method: 'POST', url: '/api/plugins/tesla/public-key/rotate' }).then((x) => x.json())
+    expect(rotated.publicKeyPem).toMatch(/BEGIN PUBLIC KEY/)
+    expect(rotated.publicKeyPem).not.toBe(pair.publicPem)
+    expect(rotated.registered).toBeUndefined()
+    expect(publicKeyOf(keyStore.value!)).toBe(rotated.publicKeyPem)     // la clé privée neuve est gardée
+  })
+
+  it('vérification refusée (403) mais clé déjà connue de Tesla (422) : on le croit, enregistré', async () => {
+    const pair = generateKeyPair()
+    const { app, plugin } = await started({ tesla: fakeTesla({ registeredKey: pair.publicPem, publicKeyForbidden: true }), key: pair.privatePem, tokens: linkedTokens() })
+    const r = await app.inject({ method: 'POST', url: '/api/plugins/tesla/register' })
+    expect(r.statusCode).toBe(200)
+    expect(r.json()).toMatchObject({ registered: true, lastError: null })
+    expect(plugin.health!()).toMatchObject({ status: 'ok' })
+  })
+
+  it('une clé lue par Tesla qui n’est pas la nôtre : enregistré mais pas reconnu, le plugin le dit', async () => {
+    const other = generateKeyPair()
+    const { app, plugin } = await started({ tesla: fakeTesla({ registeredKey: other.publicPem }), tokens: linkedTokens() })
+    const r = await app.inject({ method: 'POST', url: '/api/plugins/tesla/register' })
+    expect(r.json()).toMatchObject({ registered: false })
+    expect(r.json().lastError).toMatch(/did not read our public key/)
+    expect(plugin.health!()).toMatchObject({ status: 'degraded' })
+  })
+})
+
+describe('forme de la clé chez Tesla', () => {
+  it('le point EC hexadécimal (04 ‖ X ‖ Y) et le PEM désignent la même clé', () => {
+    const pair = generateKeyPair()
+    const hex = publicKeyPointHex(pair.publicPem)
+    expect(hex).toMatch(/^04[0-9a-f]{128}$/)
+    expect(samePublicKey(hex, pair.publicPem)).toBe(true)
+    expect(samePublicKey(hex.toUpperCase(), pair.publicPem)).toBe(true)
+    expect(samePublicKey(pair.publicPem, pair.publicPem)).toBe(true)
+    expect(samePublicKey(publicKeyPointHex(generateKeyPair().publicPem), pair.publicPem)).toBe(false)
+  })
+})
+
+describe('liaison du compte', () => {
+  it('sans compte : needs_pairing, aucun appel à l’API, /auth/url porte le client et la redirection', async () => {
+    const { plugin, app, tesla } = await started()
+    expect(plugin.health!()).toMatchObject({ status: 'needs_pairing' })
+    expect(await plugin.discover()).toEqual([])
+    await plugin.start()
+    await settle()
+    expect(tesla.calls).toEqual([])
+    const { url, redirectUri } = await app.inject({ method: 'GET', url: '/api/plugins/tesla/auth/url' }).then((r) => r.json())
+    const u = new URL(url)
+    expect(u.origin + u.pathname).toBe('https://auth.tesla.com/oauth2/v3/authorize')
+    expect(u.searchParams.get('client_id')).toBe('app-id')
+    expect(u.searchParams.get('redirect_uri')).toBe(redirectUri)
+    expect(u.searchParams.get('scope')).toContain('offline_access')
+    expect(u.searchParams.get('scope')).toContain('vehicle_location')
+  })
+
+  it('le retour n’est accepté qu’avec le `state` qu’on a émis ; le code devient des jetons GARDÉS, et le sondage part', async () => {
+    const { plugin, app, tesla, tokenStore, ctx } = await started()
+    expect((await app.inject({ method: 'GET', url: '/api/plugins/tesla/auth/callback?code=abc&state=forged' })).statusCode).toBe(400)
+    const { url } = await app.inject({ method: 'GET', url: '/api/plugins/tesla/auth/url' }).then((r) => r.json())
+    const state = new URL(url).searchParams.get('state')!
+    const r = await app.inject({ method: 'GET', url: `/api/plugins/tesla/auth/callback?code=abc&state=${state}` })
+    expect(r.statusCode).toBe(200)
+    expect(r.headers['content-type']).toContain('text/html')
+    expect(r.body).toContain('Kasbah S')
+    // l'échange porte le code, la redirection et l'`audience` de la région
+    const exchange = new URLSearchParams(tesla.calls[0]!.body)
+    expect(exchange.get('grant_type')).toBe('authorization_code')
+    expect(exchange.get('code')).toBe('abc')
+    expect(exchange.get('audience')).toBe(BASE)
+    expect(tokenStore.value).toMatchObject({ refreshToken: TOKEN_RESPONSE.refresh_token, accessToken: TOKEN_RESPONSE.access_token })
+    expect(ctx.emitDevices).toHaveBeenCalledWith([expect.objectContaining({ id: `tesla:${VIN}` })])
+    await settle()
+    expect(plugin.health!()).toMatchObject({ status: 'ok', deviceCount: 1 })
+    // le sondage a démarré : la liste a été relue par le poller, et le véhicule dort → pas de vehicle_data
+    expect(listCalls(tesla)).toBeGreaterThanOrEqual(2)
+    expect(dataCalls(tesla)).toBe(0)
+  })
+
+  it('le refresh token est à usage unique : rafraîchir le remplace dans le cache, et un 401 déclenche un rafraîchissement puis rejoue', async () => {
+    const tesla = fakeTesla()
+    tesla.world.accepts = TOKEN_REFRESHED.access_token          // l'access token du cache n'est plus accepté
+    const { plugin, tesla: t, tokenStore } = await started({ tesla, tokens: linkedTokens() })
+    const devices = await plugin.discover()
+    expect(devices).toHaveLength(1)
+    expect(t.calls.map((c) => c.path)).toEqual(['/api/1/vehicles', 'token:refresh_token', '/api/1/vehicles'])
+    expect(tokenStore.value?.refreshToken).toBe(TOKEN_REFRESHED.refresh_token)
+    expect(tokenStore.value?.accessToken).toBe(TOKEN_REFRESHED.access_token)
+  })
+
+  it('un access token proche de l’échéance est rafraîchi d’avance, sans attendre le 401', async () => {
+    const { plugin, tesla } = await started({ tokens: { ...linkedTokens(), accessExpiresAt: NOW + MIN } })
+    await plugin.discover()
+    expect(tesla.calls.map((c) => c.path)).toEqual(['token:refresh_token', '/api/1/vehicles'])
+  })
+
+  it('un refresh token refusé (brûlé, compte révoqué) ramène en needs_pairing au lieu d’un incident réseau', async () => {
+    const { plugin, tesla } = await started({ tokens: { ...linkedTokens(), refreshToken: 'burnt', accessExpiresAt: NOW } })
+    await plugin.discover()
+    expect(tesla.calls.map((c) => c.path)).toEqual(['token:refresh_token'])
+    expect(plugin.health!()).toMatchObject({ status: 'needs_pairing' })
+  })
+})
+
+describe('sondage respectueux de la veille', () => {
+  it('véhicule endormi : la liste seule, JAMAIS vehicle_data, et l’état dit `asleep`', async () => {
+    const { plugin, tesla, ctx, clock } = await started({ tokens: linkedTokens() })
+    await plugin.discover()
+    await plugin.start()
+    await settle()
+    await ticks(clock, 3)
+    expect(listCalls(tesla)).toBe(1 + 4)                          // discover + 4 tours (t0, +10, +20, +30)
+    expect(dataCalls(tesla)).toBe(0)
+    expect(patches(ctx)).toContainEqual({ sleepState: 'asleep' })
+    expect(ctx.setAvailable).not.toHaveBeenCalled()               // dormir n'est pas être indisponible
+  })
+
+  it('éveillé et au repos : UNE lecture, puis on le laisse s’endormir pendant TESLA_REST_MS', async () => {
+    const tesla = fakeTesla()
+    tesla.world.list = VEHICLES_ONLINE
+    const { plugin, ctx, clock } = await started({ tesla, tokens: linkedTokens() })
+    await plugin.start()
+    await settle()
+    expect(dataCalls(tesla)).toBe(1)
+    expect(patches(ctx).at(-1)).toMatchObject({ soc: 54, gear: 'P', speedKmh: 0, sleepState: 'online', tirePressureBar: { fl: 3.18 } })
+    // +10 min : toujours éveillé d'après la liste, mais au repos depuis 10 min < 15 → pas de relecture
+    clock.advance(10 * MIN)
+    await settle()
+    expect(listCalls(tesla)).toBe(2)
+    expect(dataCalls(tesla)).toBe(1)
+    // +20 min : le repos est écoulé, on relit
+    clock.advance(10 * MIN)
+    await settle()
+    expect(dataCalls(tesla)).toBe(2)
+  })
+
+  it('en train de rouler ou de charger : relu à chaque tour, ce n’est pas le moment de dormir', async () => {
+    const tesla = fakeTesla()
+    tesla.world.list = VEHICLES_ONLINE
+    tesla.world.data = VEHICLE_DATA_DRIVING
+    const { plugin, clock, ctx } = await started({ tesla, tokens: linkedTokens() })
+    await plugin.start()
+    await settle()
+    clock.advance(10 * MIN)
+    await settle()
+    expect(dataCalls(tesla)).toBe(2)
+    expect(patches(ctx).at(-1)).toMatchObject({ gear: 'D', pluggedIn: false, locked: false })
+    tesla.world.data = VEHICLE_DATA_CHARGING
+    clock.advance(10 * MIN)
+    await settle()
+    expect(dataCalls(tesla)).toBe(3)
+    expect(patches(ctx).at(-1)).toMatchObject({ charging: true, chargePowerW: 7000 })
+  })
+
+  it('endormi entre la liste et la lecture (408) : l’état passe à `asleep`, sans erreur ni backoff', async () => {
+    const tesla = fakeTesla()
+    tesla.world.list = VEHICLES_ONLINE
+    tesla.world.asleep = true
+    const { plugin, ctx, clock } = await started({ tesla, tokens: linkedTokens() })
+    await plugin.start()
+    await settle()
+    expect(dataCalls(tesla)).toBe(1)
+    expect(patches(ctx).at(-1)).toEqual({ sleepState: 'asleep' })
+    expect(plugin.health!()).toMatchObject({ status: 'ok' })
+    // le tour suivant arrive à l'heure prévue (pas de backoff d'erreur) et retente puisque la liste le dit éveillé
+    clock.advance(10 * MIN)
+    await settle()
+    expect(dataCalls(tesla)).toBe(2)
+  })
+
+  it('le budget du jour borne les lectures complètes, jamais la liste ; il repart le lendemain', async () => {
+    const tesla = fakeTesla()
+    tesla.world.list = VEHICLES_ONLINE
+    tesla.world.data = VEHICLE_DATA_DRIVING
+    const { plugin, clock, app } = await started({ tesla, tokens: linkedTokens(), env: { TESLA_DAILY_DATA_BUDGET: '2' } })
+    await plugin.start()
+    await settle()
+    await ticks(clock, 4)
+    expect(listCalls(tesla)).toBe(5)
+    expect(dataCalls(tesla)).toBe(2)
+    expect((await app.inject({ method: 'GET', url: '/api/plugins/tesla/status' }).then((r) => r.json())).budget).toEqual({ used: 2, limit: 2 })
+    expect(plugin.health!().detail).toContain('2/2')
+    // le lendemain : un seul tour suffit à voir le budget repartir
+    await ticks(clock, 1, 24 * 60 * MIN)
+    expect(dataCalls(tesla)).toBe(3)
+  })
+
+  it('un véhicule qui apparaît ou disparaît de la liste republie les descripteurs', async () => {
+    const tesla = fakeTesla()
+    const { plugin, ctx, clock } = await started({ tesla, tokens: linkedTokens() })
+    await plugin.discover()
+    await plugin.start()
+    await settle()
+    expect(ctx.emitDevices).not.toHaveBeenCalled()
+    tesla.world.list = { response: [], count: 0 }
+    clock.advance(10 * MIN)
+    await settle()
+    expect(ctx.emitDevices).toHaveBeenCalledWith([])
+    expect(plugin.health!()).toMatchObject({ deviceCount: 0 })
+  })
+})
+
+describe('commandes', () => {
+  it('le réveil est le seul geste : POST wake_up, puis une relecture différée ; le reste est refusé', async () => {
+    const tesla = fakeTesla()
+    const { plugin, clock, tesla: t } = await started({ tesla, tokens: linkedTokens() })
+    await plugin.discover()
+    await expect(plugin.execute(VIN, { type: 'vehicle.lock' })).rejects.toMatchObject({ code: 'UNSUPPORTED_COMMAND' })
+    await expect(plugin.execute('unknown', { type: 'vehicle.wake' })).rejects.toMatchObject({ code: 'DEVICE_UNAVAILABLE' })
+    await plugin.execute(VIN, { type: 'vehicle.wake' })
+    expect(t.calls.at(-1)).toMatchObject({ method: 'POST', path: `/api/1/vehicles/${VIN}/wake_up` })
+    expect(dataCalls(t)).toBe(0)
+    tesla.world.list = VEHICLES_ONLINE
+    clock.advance(15_000)
+    await settle()
+    expect(dataCalls(t)).toBe(1)
+  })
+})
+
+describe('relevé brut', () => {
+  it('liste puis vehicle_data des seuls véhicules éveillés, sans réveiller les autres', async () => {
+    const { app, tesla } = await started({ tokens: linkedTokens() })
+    const asleep = await app.inject({ method: 'GET', url: '/api/plugins/tesla/raw' }).then((r) => r.json())
+    // la région d'abord : c'est ce qui explique une liste vide
+    expect(Object.keys(asleep)).toEqual(['/api/1/users/region', '/api/1/vehicles'])
+    expect(dataCalls(tesla)).toBe(0)
+    tesla.world.list = VEHICLES_ONLINE
+    const awake = await app.inject({ method: 'GET', url: '/api/plugins/tesla/raw' }).then((r) => r.json())
+    expect(Object.keys(awake)).toHaveLength(3)
+    expect(dataCalls(tesla)).toBe(1)
+  })
+})

@@ -140,6 +140,19 @@ export const evChargerStateSchema = z.object({
   maxCurrentA: z.number().optional(),
 })
 
+/**
+ * Veille d'un véhicule connecté. `asleep` est un état NORMAL, pas une panne : une Tesla à l'arrêt
+ * coupe son ordinateur au bout d'un quart d'heure pour ne pas vider sa batterie, et ne répond plus
+ * à rien tant qu'on ne la réveille pas. Les autres valeurs de l'état sont alors les DERNIÈRES
+ * connues, toujours affichées ; `available` reste vrai. `offline` = injoignable par le fabricant
+ * (parking souterrain, sans réseau).
+ */
+export const VEHICLE_SLEEP_STATES = ['online', 'asleep', 'offline'] as const
+export type VehicleSleepState = (typeof VEHICLE_SLEEP_STATES)[number]
+/** Rapport engagé : `P` = à l'arrêt. Absent = inconnu (véhicule endormi, jamais lu). */
+export const VEHICLE_GEARS = ['P', 'R', 'N', 'D'] as const
+export type VehicleGear = (typeof VEHICLE_GEARS)[number]
+
 export const vehicleStateSchema = z.object({
   kind: z.literal('vehicle'), ...base,
   soc: pct,
@@ -151,6 +164,20 @@ export const vehicleStateSchema = z.object({
   locked: z.boolean(),
   location: z.object({ lat: z.number(), lon: z.number(), at: z.number() }).optional(),
   odometerKm: z.number().optional(),
+  sleepState: z.enum(VEHICLE_SLEEP_STATES).optional(),
+  /** Vitesse instantanée ; 0 à l'arrêt. Absente = inconnue. */
+  speedKmh: z.number().min(0).optional(),
+  gear: z.enum(VEHICLE_GEARS).optional(),
+  /**
+   * Pression des quatre pneus (avant gauche, avant droit, arrière gauche, arrière droit), en bar.
+   * Chaque roue est optionnelle : les capteurs ne rapportent qu'en roulant, un véhicule qui n'a pas
+   * bougé depuis longtemps n'en donne aucune.
+   */
+  tirePressureBar: z.object({
+    fl: z.number().optional(), fr: z.number().optional(), rl: z.number().optional(), rr: z.number().optional(),
+  }).optional(),
+  insideTempC: z.number().optional(),
+  outsideTempC: z.number().optional(),
 })
 
 /**

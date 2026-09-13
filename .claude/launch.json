@@ -33,6 +33,17 @@
             "autoPort": true
         },
         {
+            // Le front SEUL sur la simulation IN-PROCESS (VITE_INPROCESS_MOCK=1) : aucun serveur, aucun
+            // materiel, aucune ecriture dans la maison. Pour verifier une vue sur le parc simule complet
+            // (vehicules, borne, tondeuse...) sans toucher a la maison reelle ni a ses plugins.
+            "name": "kasbah-mock",
+            "runtimeExecutable": "npm",
+            "runtimeArgs": ["run", "dev", "-w", "@kasbah/web"],
+            "env": { "PORT": "6175", "VITE_INPROCESS_MOCK": "1" },
+            "port": 6175,
+            "autoPort": true
+        },
+        {
             // Le front SEUL, branche sur un serveur deja demarre (8787 par defaut, ou KASBAH_SERVER).
             // Utile quand une autre session tient deja le serveur Fastify.
             "name": "kasbah-web",

@@ -6,6 +6,7 @@ import { createHuePlugin } from './hue'
 import { createMockPlugin } from './mock'
 import { createNestPlugin } from './nest'
 import { createTahomaPlugin } from './tahoma'
+import { createTeslaPlugin } from './tesla'
 
 // Table statique des plugins : typée, grep-able, sans import dynamique. `KASBAH_PLUGINS`
 // sélectionne parmi ces ids.
@@ -22,6 +23,6 @@ export const PLUGIN_FACTORIES: Record<string, PluginFactory> = {
   automower: makeStubPlugin('automower', 'Husqvarna Automower'),
   melcloud: makeStubPlugin('melcloud', 'Mitsubishi MELCloud'),
   comap: makeStubPlugin('comap', 'COMAP Proteo'),
-  tesla: makeStubPlugin('tesla', 'Tesla Fleet API'),
+  tesla: () => createTeslaPlugin(),
   renault: makeStubPlugin('renault', 'Renault'),
 }
