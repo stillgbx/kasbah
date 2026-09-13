@@ -193,7 +193,6 @@ const panelMode = computed<'device' | 'room' | 'level' | 'home'>(() =>
         <div ref="labelLayer" class="scene-labels" />
         <div v-if="!scene.supported.value" class="home__fallback card">{{ $t('scene.webglUnavailable') }}</div>
         <div v-if="house.loading" class="home__loading muted">{{ $t('common.loading') }}</div>
-        <div class="home__hint muted">{{ $t('home.hint3d') }}</div>
         <button type="button" class="home__reset pill" :title="$t('home.resetView')" @click="onTab('all')">
           <StrokeIcon name="home" :size="18" />
         </button>
@@ -213,6 +212,5 @@ const panelMode = computed<'device' | 'room' | 'level' | 'home'>(() =>
 .home__stage { position: relative; flex: 1 1 0; min-height: 0; }
 .home__fallback { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 16px 20px; }
 .home__loading { position: absolute; left: 24px; top: 12px; font-size: 13px; }
-.home__hint { position: absolute; left: 24px; bottom: calc(var(--safe-bottom) + 18px); font-size: 12px; pointer-events: none; }
 .home__reset { position: absolute; right: 18px; bottom: calc(var(--safe-bottom) + 14px); width: 40px; padding: 0; justify-content: center; z-index: 2; }
 </style>
