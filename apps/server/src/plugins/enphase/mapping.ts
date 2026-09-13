@@ -145,9 +145,17 @@ export function toDailyPatch(report: ProductionReport): StatePatch {
  */
 export const PANEL_STALE_MS = 30 * 60_000
 
-/** État d'un panneau : la puissance de son dernier rapport, telle quelle. */
+/**
+ * État d'un panneau : la puissance de son dernier rapport, telle quelle, et le record que la
+ * passerelle tient pour lui (`maxReportWatts`). Ce record n'est PAS la puissance de sortie maximale
+ * de l'onduleur : relevé sur un vrai parc, il va de 418 à 440 W d'un onduleur à l'autre, sans
+ * plateau — c'est le meilleur moment de l'année, pas la fiche technique.
+ */
 export function toPanelPatch(inverter: Inverter): StatePatch {
-  return { kind: 'sensor', value: Math.round(inverter.lastReportWatts) } as StatePatch
+  const patch = { kind: 'sensor', value: Math.round(inverter.lastReportWatts) } as StatePatch & { maxValue?: number }
+  // `maxReportWatts` est optionnel dans la réponse : sans lui, pas de record inventé
+  if (inverter.maxReportWatts !== undefined) patch.maxValue = Math.round(inverter.maxReportWatts)
+  return patch
 }
 
 /**

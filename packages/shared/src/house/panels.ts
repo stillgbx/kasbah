@@ -11,6 +11,10 @@ export interface PanelPlacement {
   col: number
   width: number
   height: number
+  /** Puissance crête du module (Wc) : l'échelle à laquelle sa dalle et sa ligne se colorent. */
+  peakW: number
+  /** Puissance de sortie max de l'onduleur du champ (W, 0 = inconnue) : le plafond de sa jauge. */
+  maxOutputW: number
   /**
    * Inclinaison RÉELLE du verre (degrés) : la pente du support plus l'angle du châssis, car c'est
    * l'angle que la scène doit dessiner. Positive, le verre penche vers +y local — l'azimut du champ,
@@ -38,7 +42,7 @@ export function panelDeviceId(arrayId: string, row: number, col: number): string
  * séparation, incliner les modules d'un toit PLAT les faisait monter en escalier.
  */
 export function panelArrayDevices(array: PanelArray, nameSlot?: (row: number, col: number) => string): HouseDevice[] {
-  const { width, height } = array.panel
+  const { width, height, peakW } = array.panel
   const cy = Math.cos(rad(array.yaw)), sy = Math.sin(rad(array.yaw))
   const ct = Math.cos(rad(array.slope)), st = Math.sin(rad(array.slope))
   const out: HouseDevice[] = []
@@ -54,7 +58,7 @@ export function panelArrayDevices(array: PanelArray, nameSlot?: (row: number, co
         array.origin[2] - ly * st,                           // …et ce qu'elle descend en chemin
       ]
       // le verre regarde la somme des deux : la pente qu'il épouse, plus le châssis qui le redresse
-      const panel: PanelPlacement = { arrayId: array.id, row, col, width, height, tilt: Math.min(90, array.slope + array.tilt) }
+      const panel: PanelPlacement = { arrayId: array.id, row, col, width, height, peakW, maxOutputW: array.maxOutputW, tilt: Math.min(90, array.slope + array.tilt) }
       out.push({
         id: panelDeviceId(array.id, row, col),
         ...(deviceId ? { deviceId } : {}),

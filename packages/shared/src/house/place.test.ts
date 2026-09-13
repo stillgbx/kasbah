@@ -182,6 +182,22 @@ describe('putArrayInJson', () => {
     expect(() => parseHouse(out)).not.toThrow()
   })
 
+  it('ecrit la puissance de sortie max des onduleurs du champ, et 0 quand on ne la sait pas', () => {
+    const out = putArrayInJson(demo, 'pv-sud', { maxOutputW: 480 })
+    expect(first(out).maxOutputW).toBe(480)
+    expect(parseHouse(out).arrays[0]!.maxOutputW).toBe(480)
+    // un champ qui n'en dit rien : pas de plafond invente (la vue Energie ne marque alors rien)
+    expect(parseHouse(demo).arrays[0]!.maxOutputW).toBe(0)
+  })
+
+  it('patche le MODULE champ par champ : coucher un panneau ne perd pas sa puissance crete', () => {
+    const wp = putArrayInJson(demo, 'pv-sud', { panel: { width: 1.13, height: 1.76, peakW: 500 } })
+    const laid = putArrayInJson(wp, 'pv-sud', { panel: { width: 1.76, height: 1.13 } })
+    // sans la fusion, `panel` etait remplace en entier et la crete retombait sur la valeur par defaut
+    expect(first(laid).panel).toEqual({ width: 1.76, height: 1.13, peakW: 500 })
+    expect(parseHouse(laid).arrays[0]!.panel.peakW).toBe(500)
+  })
+
   it('fits the inverters to the grid when it shrinks, and drops the empty tail', () => {
     // sans ca, reduire 2 x 5 en 2 x 3 laisserait dix onduleurs pour six emplacements : la validation
     // refuserait le champ en plein geste

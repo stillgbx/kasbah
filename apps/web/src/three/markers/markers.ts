@@ -1,4 +1,4 @@
-import { BoxGeometry, type BufferGeometry, Color, CylinderGeometry, DoubleSide, Group, Mesh, MeshStandardMaterial, PointLight, RingGeometry, ShaderMaterial, SphereGeometry } from 'three'
+import { BoxGeometry, type BufferGeometry, Color, CylinderGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry, PointLight, RingGeometry, ShaderMaterial, SphereGeometry } from 'three'
 import type { DeviceState, HouseDevice, PanelPlacement } from '@kasbah/shared'
 import { mirekToRgb, xyToRgb } from '@kasbah/shared'
 import { isMediaActive } from '../../lib/deviceState'
@@ -180,10 +180,15 @@ export class GenericMarker extends DeviceMarker {
   }
 }
 
-/** Puissance (W) à partir de laquelle un module est dessiné à pleine intensité (crête d'un IQ8 courant). */
-const PANEL_PEAK_W = 450
 /** Verre d'un module au repos : bleu nuit, presque noir. */
 const PANEL_DARK = 0x1c2740
+/** Jauge de bord d'un module : largeur (m), part de la hauteur, et retrait depuis le bord du verre. */
+const GAUGE_W = 0.045
+const GAUGE_H = 0.88
+const GAUGE_INSET = 0.05
+/** Repère posé en travers de la jauge : il déborde d'un peu, pour se voir contre le verre. */
+const MARK_W = GAUGE_W * 2
+const MARK_H = 0.025
 
 /**
  * Module photovoltaïque d'un champ : une dalle aux dimensions du module, couchée, inclinée et
@@ -193,8 +198,31 @@ const PANEL_DARK = 0x1c2740
 export class PanelMarker extends DeviceMarker {
   private readonly mesh: Mesh
   private readonly mat: MeshStandardMaterial
+  /**
+   * Jauge de bord : un trait de 4,5 cm le long du côté du module, qui monte avec la production. Le
+   * verre entier dit déjà le niveau par sa teinte — se lit à toute distance, mais deux modules
+   * voisins à 60 % et 75 % se ressemblent ; le trait, lui, se compare au millimètre. Discret : sur
+   * un côté, pas au milieu, et invisible quand le module ne produit pas.
+   */
+  private readonly gauge: Mesh<PlaneGeometry, MeshBasicMaterial>
+  private readonly track: Mesh<PlaneGeometry, MeshBasicMaterial>
+  /**
+   * Les deux repères de la jauge, TOUJOURS visibles qu'elle les atteigne ou non : `output` = la
+   * puissance de sortie max de l'onduleur (sa fiche technique, déclarée sur le champ), `record` = sa
+   * plus haute valeur jamais rapportée. Mêmes couleurs que dans la vue Énergie, et le plafond passe
+   * DEVANT le record quand les deux coïncident.
+   */
+  private readonly marks: { output: Mesh<PlaneGeometry, MeshBasicMaterial>; record: Mesh<PlaneGeometry, MeshBasicMaterial> }
+  /** Hauteur du trait à plein (m) : ce qui l'ancre sur le bord bas quand il redescend. */
+  private readonly gaugeH: number
+  /** Puissance crête du module de CE champ : c'est elle qui dit ce qu'« à fond » veut dire ici. */
+  private readonly peakW: number
+  /** Puissance de sortie de l'onduleur (0 = inconnue) : le second repère de la jauge. */
+  private readonly maxOutputW: number
   constructor(device: HouseDevice, ctx: MarkerContext, panel: PanelPlacement) {
     super(device, ctx)
+    this.peakW = panel.peakW
+    this.maxOutputW = panel.maxOutputW
     this.mat = new MeshStandardMaterial({ color: PANEL_DARK, roughness: 0.35, metalness: 0.4 })
     this.mesh = new Mesh(new BoxGeometry(panel.width, panel.height, 0.04), this.mat)
     // d'abord l'inclinaison autour de l'axe des colonnes (x local), puis l'orientation du champ (z).
@@ -207,16 +235,68 @@ export class PanelMarker extends DeviceMarker {
     this.mesh.castShadow = true
     this.registerPickable(this.mesh)
     this.object.add(this.mesh)
+    // ENFANTS de la dalle : le trait épouse d'office son inclinaison et l'azimut du champ, et le
+    // repère local a son bord bas en +y (là où le verre penche, vers le soleil).
+    this.gaugeH = panel.height * GAUGE_H
+    const geo = () => new PlaneGeometry(GAUGE_W, this.gaugeH)
+    const x = -(panel.width / 2 - GAUGE_INSET - GAUGE_W / 2)
+    // `MeshBasicMaterial` : une mesure qu'on lit ne s'éteint pas avec la lumière de la scène.
+    // Sans `depthWrite`, le trait ne creuse pas le verre sur lequel il est posé.
+    this.track = new Mesh(geo(), new MeshBasicMaterial({ color: ctx.theme.primary, transparent: true, opacity: 0.16, depthWrite: false }))
+    this.gauge = new Mesh(geo(), new MeshBasicMaterial({ color: ctx.theme.primary, transparent: true, opacity: 0.95, depthWrite: false }))
+    for (const m of [this.track, this.gauge]) { m.position.set(x, 0, 0.021); m.renderOrder = 1; this.mesh.add(m) }
+    const mark = (color: Color, order: number) => {
+      const m = new Mesh(new PlaneGeometry(MARK_W, MARK_H), new MeshBasicMaterial({ color, transparent: true, opacity: 0.95, depthWrite: false }))
+      m.position.set(x, 0, 0.022)
+      m.renderOrder = order
+      m.visible = false
+      this.mesh.add(m)
+      return m
+    }
+    this.marks = { record: mark(ctx.theme.success, 2), output: mark(ctx.theme.warning, 3) }
+    this.setGauge(0)
     this.setLift(0.35)
+  }
+
+  /** Monte le trait à `k` (0 → 1) depuis le bord BAS du module, celui qui penche vers l'azimut. */
+  private setGauge(k: number): void {
+    this.gauge.visible = k > 0.004
+    this.gauge.scale.y = Math.max(0.001, k)
+    this.gauge.position.y = (this.gaugeH / 2) * (1 - k)
+  }
+
+  /** Pose un repère à `watts` sur la jauge, à l'échelle donnée ; rien à montrer si on ne le sait pas. */
+  private setMark(which: 'output' | 'record', watts: number, scaleW: number): void {
+    const m = this.marks[which]
+    m.visible = watts > 0
+    if (m.visible) m.position.y = (this.gaugeH / 2) * (1 - 2 * Math.min(1, watts / scaleW))
   }
   protected isOn(s: DeviceState): boolean { return s.kind === 'sensor' && s.value > 0 }
   protected onState(state: DeviceState | undefined): void {
     const watts = state?.kind === 'sensor' && state.available ? state.value : 0
-    const k = Math.min(1, Math.max(0, watts / PANEL_PEAK_W))
+    // Le VERRE ENTIER porte la mesure — il tire vers l'accent et s'allume à mesure que le module
+    // approche de la crête déclarée par son champ —, et le trait de bord la chiffre : remplir le
+    // verre d'une jauge avait été essayé, mais un module coupé en deux n'est plus un module.
+    // L'échelle contient les trois valeurs en jeu : la crête du verre, ce que l'onduleur sait sortir
+    // et son record. Sans ça, un repère plus haut que la crête du module se perdait hors du trait.
+    const record = state?.kind === 'sensor' ? state.maxValue ?? 0 : 0
+    const scaleW = Math.max(this.peakW, this.maxOutputW, record)
+    const k = Math.min(1, Math.max(0, watts / scaleW))
     this.mat.color.setHex(PANEL_DARK).lerp(this.ctx.theme.primary, k * 0.7)
     this.mat.emissive.copy(this.ctx.theme.primary).multiplyScalar(k * 0.3)
+    this.track.material.color.copy(this.ctx.theme.primary)
+    this.gauge.material.color.copy(this.ctx.theme.primary)
+    this.marks.record.material.color.copy(this.ctx.theme.success)
+    this.marks.output.material.color.copy(this.ctx.theme.warning)
+    this.setGauge(k)
+    this.setMark('output', this.maxOutputW, scaleW)
+    // le record survit à l'indisponibilité : il ne décrit pas l'instant, et la nuit ne l'efface pas
+    this.setMark('record', record, scaleW)
   }
-  override dispose(): void { this.mesh.geometry.dispose(); this.mat.dispose(); super.dispose() }
+  override dispose(): void {
+    for (const m of [this.track, this.gauge, this.marks.record, this.marks.output]) { m.geometry.dispose(); m.material.dispose() }
+    this.mesh.geometry.dispose(); this.mat.dispose(); super.dispose()
+  }
 }
 
 /** Lampe : sphère émissive + PointLight ; intensité selon la luminosité, couleur selon l'état. */

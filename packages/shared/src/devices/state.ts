@@ -109,6 +109,12 @@ export const mowerStateSchema = z.object({
 export const sensorStateSchema = z.object({
   kind: z.literal('sensor'), ...base,
   value: z.number(),
+  /**
+   * Plus haute valeur jamais rapportée par l'appareil, quand c'est LUI qui la tient (un micro-onduleur
+   * Enphase publie son `maxReportWatts`). Un record, pas une caractéristique : il dit ce qui s'est
+   * produit, jamais ce que l'appareil sait faire. Absent = l'appareil ne le dit pas.
+   */
+  maxValue: z.number().optional(),
 })
 
 export const energyStateSchema = z.object({

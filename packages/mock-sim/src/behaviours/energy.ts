@@ -20,13 +20,20 @@ export function solarPanel(externalId: string, o: PanelOptions): SimDevice<'sens
   const peakW = o.peakW ?? 400, factor = o.factor ?? 1
   // `partOf: 'energy'` : un panneau est un capteur de puissance, mais il appartient à l'installation
   // solaire — exclure `energy` pour un vrai parc Enphase doit l'emporter avec elle.
-  return Object.assign(sensor(externalId, {
+  const dev = sensor(externalId, {
     name: o.name, unit: 'W', deviceClass: 'power', precision: 0, initial: 0, tauS: 20, noise: 2,
     target: (ctx) => {
       const shade = o.shadeFrom !== undefined && ctx.hour >= o.shadeFrom ? 0.25 : 1
       return Math.max(0, ctx.world.irradiance * peakW * factor * shade)
     },
-  }), { partOf: 'energy' as const })
+  })
+  // le RECORD du panneau, comme une passerelle Enphase le tient pour chacun de ses onduleurs
+  const tick = dev.tick!.bind(dev)
+  dev.tick = (ctx) => {
+    tick(ctx)
+    dev.state.maxValue = Math.max(dev.state.maxValue ?? 0, dev.state.value)
+  }
+  return Object.assign(dev, { partOf: 'energy' as const })
 }
 
 export interface EnergyOptions {

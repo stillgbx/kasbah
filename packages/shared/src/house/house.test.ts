@@ -7,7 +7,7 @@ import { resolveDefaults } from './defaults'
 import { indexHouse, deviceFloorZ } from './lookup'
 import { geoDistance, geoToLocal, localToGeo } from './geo'
 import { panelArrayDevices, panelOf, withPanelArrays } from './panels'
-import { panelArraySchema } from './schema'
+import { PANEL_PEAK_W, panelArraySchema } from './schema'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const clone = (): any => JSON.parse(JSON.stringify(demo))
@@ -69,6 +69,13 @@ describe('champs de panneaux', () => {
     expect(devices[2]).toMatchObject({ id: 'pv.r0c2', deviceId: 'mock:p3', position: [12.5, 21, 0.1] })
     expect(devices[5]!.position).toEqual([12.5, 23, 0.1])            // rangée 1 : +height
     expect(panelOf(devices[0]!)).toMatchObject({ arrayId: 'pv', row: 0, col: 0, width: 1, height: 2, tilt: 0 })
+  })
+
+  it('donne au module la puissance crête de son champ, et une valeur courante à qui ne la dit pas', () => {
+    // c'est l'échelle de couleur d'un module : sa dalle en 3D, la jauge de sa ligne dans la vue Énergie
+    expect(panelOf(panelArrayDevices(array())[0]!)!.peakW).toBe(PANEL_PEAK_W)
+    const wp = array({ panel: { width: 1, height: 2, peakW: 500 } })
+    expect(panelOf(panelArrayDevices(wp)[0]!)!.peakW).toBe(500)
   })
 
   it('tourne le champ autour de son origine (yaw) et le fait monter le long des rangées (slope)', () => {

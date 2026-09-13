@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { PANEL_SIZE, panelDeviceId, type PanelArray, type Vec3 } from '@kasbah/shared'
+import { PANEL_PEAK_W, PANEL_SIZE, panelDeviceId, type PanelArray, type Vec3 } from '@kasbah/shared'
+import { shortInverterId } from '../../lib/energy'
 import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
 import Segmented from '../ui/Segmented.vue'
@@ -27,9 +28,9 @@ const arrayName = (a: PanelArray, i: number) => a.name ?? t('arrays.field', { n:
 const boundCount = (a: PanelArray) => a.panels.filter(Boolean).length
 
 // --- réglages numériques : mêmes touches que le mode « Déplacer », valeur saisissable au clavier.
-const LIMITS = { rows: { min: 1, max: 20 }, cols: { min: 1, max: 20 }, slope: { min: 0, max: 90 }, tilt: { min: -90, max: 90 }, z: { min: 0, max: 5 } } as const
+const LIMITS = { rows: { min: 1, max: 20 }, cols: { min: 1, max: 20 }, slope: { min: 0, max: 90 }, tilt: { min: -90, max: 90 }, z: { min: 0, max: 5 }, peak: { min: 50, max: 1000 }, out: { min: 0, max: 1000 } } as const
 type Field = keyof typeof LIMITS | 'yaw'
-const STEP: Record<Field, number> = { rows: 1, cols: 1, slope: 5, tilt: 5, z: 0.05, yaw: 45 }
+const STEP: Record<Field, number> = { rows: 1, cols: 1, slope: 5, tilt: 5, z: 0.05, yaw: 45, peak: 10, out: 10 }
 
 /**
  * Hauteur du champ au-dessus du sol du niveau. Elle existe parce qu'un toit est ÉPAIS : posé à 0 sur
@@ -42,6 +43,36 @@ function setZ(next: number) {
   if (!a) return
   const v = Math.min(LIMITS.z.max, Math.max(LIMITS.z.min, Math.round(next * 100) / 100))
   if (v !== a.origin[2]) void house.saveArray({ origin: [a.origin[0], a.origin[1], v] })
+}
+
+/**
+ * Puissance crête d'un module (Wc), celle inscrite au dos du panneau. Elle ne mesure rien : elle sert
+ * d'ÉCHELLE à la couleur — la dalle du module dans la 3D, la jauge de sa ligne dans la vue Énergie.
+ * Un micro-onduleur écrête souvent en deçà, si bien qu'un champ de 500 Wc ne remplit jamais tout à
+ * fait ses jauges : c'est justement pour ça que la valeur se règle ici, champ par champ.
+ */
+const peak = computed(() => editing.value?.panel.peakW ?? PANEL_PEAK_W)
+function setPeak(next: number) {
+  const a = editing.value
+  if (!a) return
+  const v = Math.min(LIMITS.peak.max, Math.max(LIMITS.peak.min, Math.round(next)))
+  // patch PARTIEL du module : sa taille reste celle qu'elle était (voir `putArrayInJson`)
+  if (v !== a.panel.peakW) void house.saveArray({ panel: { peakW: v } })
+}
+
+/**
+ * Puissance de sortie MAX des onduleurs du champ, le terme des fiches techniques : ce qu'un
+ * micro-onduleur sait sortir au mieux (480 W pour un IQ8P), quelle que soit la crête du verre
+ * au-dessus. Elle se saisit parce que la passerelle ne la publie pas : elle ne donne que le maximum
+ * jamais RAPPORTÉ par chaque onduleur, qui raconte la météo passée et non l'appareil. 0 = inconnue,
+ * et la vue Énergie ne marque alors aucun plafond.
+ */
+const maxOut = computed(() => editing.value?.maxOutputW ?? 0)
+function setMaxOut(next: number) {
+  const a = editing.value
+  if (!a) return
+  const v = Math.min(LIMITS.out.max, Math.max(LIMITS.out.min, Math.round(next)))
+  if (v !== a.maxOutputW) void house.saveArray({ maxOutputW: v })
 }
 
 const steppers = computed(() => {
@@ -61,10 +92,12 @@ const steppers = computed(() => {
  * Rétrécir la grille LIBÈRE les onduleurs qui n'ont plus d'emplacement (le serveur les coupe), et
  * l'agrandir laisse les nouveaux emplacements vides : c'est à l'utilisateur de dire qui va où.
  */
-function bump(field: 'rows' | 'cols' | 'slope' | 'tilt' | 'z', delta: number) {
+function bump(field: 'rows' | 'cols' | 'slope' | 'tilt' | 'z' | 'peak' | 'out', delta: number) {
   const a = editing.value
   if (!a) return
   if (field === 'z') { setZ(z.value + delta); return }
+  if (field === 'peak') { setPeak(peak.value + delta); return }
+  if (field === 'out') { setMaxOut(maxOut.value + delta); return }
   const { min, max } = LIMITS[field]
   const next = Math.min(max, Math.max(min, a[field] + delta))
   if (next !== a[field]) void house.saveArray({ [field]: next })
@@ -79,7 +112,20 @@ function rotate(delta: number) {
 // tant qu'on tape c'est le brouillon qui s'affiche (sinon la maison relue écraserait la frappe).
 const editingField = ref<Field | null>(null)
 const draft = ref('')
-function startEdit(field: Field, shown: string) { editingField.value = field; draft.value = shown }
+/**
+ * Le contenu se SÉLECTIONNE à la prise de focus : sans ça, taper 500 dans un champ à 450 donnait
+ * « 450500 » — le curseur se posait là où on avait cliqué et la frappe s'ajoutait à la valeur. Le
+ * `@mouseup.prevent` des champs va avec : le RELÂCHEMENT de la souris replace le curseur et défait
+ * la sélection faite au focus, si bien que `select()` seul ne tient pas sur un clic.
+ */
+function startEdit(field: Field, shown: string, ev?: FocusEvent) {
+  editingField.value = field
+  draft.value = shown
+  // APRÈS le rendu : poser le brouillon change la valeur liée du champ, et Vue en réécrivant
+  // `value` efface toute sélection — sélectionner avant ne tenait donc pas une image.
+  const el = ev?.target as HTMLInputElement | undefined
+  if (el) void nextTick(() => el.select())
+}
 const shownValue = (field: Field, value: string) => (editingField.value === field ? draft.value : value)
 function commitEdit(field: Field) {
   const a = editing.value
@@ -93,6 +139,8 @@ function commitEdit(field: Field) {
     return
   }
   if (field === 'z') { setZ(raw); return }
+  if (field === 'peak') { setPeak(raw); return }
+  if (field === 'out') { setMaxOut(raw); return }
   const { min, max } = LIMITS[field]
   const next = Math.min(max, Math.max(min, Math.round(raw)))
   if (next !== a[field]) void house.saveArray({ [field]: next })
@@ -124,24 +172,11 @@ const slots = computed(() => {
     // (« Emplacement 2-5 ») : c'est ce qui relie la grille du panneau à ce qu'on voit sur le toit.
     return {
       i, deviceId, key: panelDeviceId(a.id, row, col),
-      label: deviceId ? shortId(deviceId) : `${row + 1}-${col + 1}`,
+      label: deviceId ? shortInverterId(deviceId) : `${row + 1}-${col + 1}`,
       name: deviceId ? devices.descriptors[deviceId]?.name ?? deviceId : t('arrays.cell', { r: row + 1, c: col + 1 }),
     }
   })
 })
-/**
- * Fin de l'identifiant du fabricant : de quoi reconnaître un onduleur dans une case. CINQ caractères,
- * la même longueur que celle des noms publiés par le plugin (« Onduleur 09158 ») — une liste et une
- * grille qui coupent le numéro de série au même endroit se lisent l'une avec l'autre.
- */
-const SHORT_SERIAL = 5
-function shortId(deviceId: string): string {
-  const ext = deviceId.split(':')[1] ?? deviceId
-  // la FIN DES CHIFFRES quand il y en a (un numéro de série se retrouve par ses derniers chiffres) ;
-  // à défaut la fin de l'identifiant, sans ponctuation
-  const digits = /\d+$/.exec(ext)?.[0]
-  return (digits ?? ext.replace(/[^a-z0-9]/gi, '')).slice(-SHORT_SERIAL).toUpperCase()
-}
 function setSlot(i: number, deviceId: string | null) {
   const a = editing.value
   if (!a) return
@@ -218,7 +253,8 @@ const moduleSize = computed(() => {
           </button>
           <input class="arrays__num" type="text" :inputmode="s.key === 'z' ? 'decimal' : 'numeric'" enterkeyhint="done"
                  :value="shownValue(s.key, s.text)" :disabled="house.saving" :aria-label="s.label"
-                 @focus="startEdit(s.key, String(s.value))"
+                 @focus="startEdit(s.key, String(s.value), $event)"
+                 @mouseup.prevent
                  @input="draft = ($event.target as HTMLInputElement).value"
                  @keydown.enter="($event.target as HTMLInputElement).blur()"
                  @keydown.esc="editingField = null; ($event.target as HTMLInputElement).blur()"
@@ -237,7 +273,8 @@ const moduleSize = computed(() => {
           </button>
           <input class="arrays__num" type="text" inputmode="numeric" enterkeyhint="done"
                  :value="shownValue('yaw', `${editing.yaw}°`)" :disabled="house.saving" :aria-label="$t('place.orientation')"
-                 @focus="startEdit('yaw', String(editing!.yaw))"
+                 @focus="startEdit('yaw', String(editing!.yaw), $event)"
+                 @mouseup.prevent
                  @input="draft = ($event.target as HTMLInputElement).value"
                  @keydown.enter="($event.target as HTMLInputElement).blur()"
                  @keydown.esc="editingField = null; ($event.target as HTMLInputElement).blur()"
@@ -250,6 +287,48 @@ const moduleSize = computed(() => {
       <div class="arrays__row">
         <span class="muted">{{ $t('arrays.module') }}<span class="arrays__size"> · {{ moduleSize }}</span></span>
         <Segmented dense class="arrays__layout" :model-value="layout" :options="layoutOptions" @update:model-value="setLayout" />
+      </div>
+      <!-- Sous le module, parce que c'est une propriété du module : ce qu'il donne au mieux ; puis
+           ce que l'onduleur sous lui sait en sortir, qui est souvent plus bas. -->
+      <div class="arrays__row">
+        <span class="muted" :title="$t('arrays.peakHint')">{{ $t('arrays.peak') }}</span>
+        <span class="arrays__turn">
+          <button type="button" class="key" :disabled="house.saving" :title="`${$t('place.smaller')} — ${$t('arrays.peak')}`" :aria-label="`${$t('place.smaller')} — ${$t('arrays.peak')}`" @click="bump('peak', -STEP.peak)">
+            <StrokeIcon name="minus" :size="16" />
+          </button>
+          <input class="arrays__num" type="text" inputmode="numeric" enterkeyhint="done"
+                 :value="shownValue('peak', `${peak} Wc`)" :disabled="house.saving" :aria-label="$t('arrays.peak')"
+                 @focus="startEdit('peak', String(peak), $event)"
+                 @mouseup.prevent
+                 @input="draft = ($event.target as HTMLInputElement).value"
+                 @keydown.enter="($event.target as HTMLInputElement).blur()"
+                 @keydown.esc="editingField = null; ($event.target as HTMLInputElement).blur()"
+                 @blur="commitEdit('peak')">
+          <button type="button" class="key" :disabled="house.saving" :title="`${$t('place.bigger')} — ${$t('arrays.peak')}`" :aria-label="`${$t('place.bigger')} — ${$t('arrays.peak')}`" @click="bump('peak', STEP.peak)">
+            <StrokeIcon name="plus" :size="16" />
+          </button>
+        </span>
+      </div>
+
+      <div class="arrays__row">
+        <span class="muted" :title="$t('arrays.maxOutputHint')">{{ $t('arrays.maxOutput') }}</span>
+        <span class="arrays__turn">
+          <button type="button" class="key" :disabled="house.saving" :title="`${$t('place.smaller')} — ${$t('arrays.maxOutput')}`" :aria-label="`${$t('place.smaller')} — ${$t('arrays.maxOutput')}`" @click="bump('out', -STEP.out)">
+            <StrokeIcon name="minus" :size="16" />
+          </button>
+          <!-- 0 = inconnue, et ça se dit par un tiret : « 0 W » affirmerait qu'aucun onduleur ne sort rien -->
+          <input class="arrays__num" type="text" inputmode="numeric" enterkeyhint="done"
+                 :value="shownValue('out', maxOut > 0 ? `${maxOut} W` : '—')" :disabled="house.saving" :aria-label="$t('arrays.maxOutput')"
+                 @focus="startEdit('out', maxOut > 0 ? String(maxOut) : '', $event)"
+                 @mouseup.prevent
+                 @input="draft = ($event.target as HTMLInputElement).value"
+                 @keydown.enter="($event.target as HTMLInputElement).blur()"
+                 @keydown.esc="editingField = null; ($event.target as HTMLInputElement).blur()"
+                 @blur="commitEdit('out')">
+          <button type="button" class="key" :disabled="house.saving" :title="`${$t('place.bigger')} — ${$t('arrays.maxOutput')}`" :aria-label="`${$t('place.bigger')} — ${$t('arrays.maxOutput')}`" @click="bump('out', STEP.out)">
+            <StrokeIcon name="plus" :size="16" />
+          </button>
+        </span>
       </div>
 
       <!-- la grille des emplacements, rangée par rangée : c'est le calepinage du champ. Une case porte

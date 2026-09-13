@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { DeviceDescriptor, StateFor } from '@kasbah/shared'
+import { PANEL_PEAK_W, type DeviceDescriptor, type DeviceEntry, type PanelArray, type StateFor } from '@kasbah/shared'
 import { optimisticPatch } from './optimistic'
 import { fromClosure, toClosure } from './cover'
 import type { HouseDevice } from '@kasbah/shared'
@@ -7,7 +7,7 @@ import { emitsSound, relayLabel, soundRouting } from './audioRouting'
 import { headlineValue, isDeviceBusy, isDeviceOn, isDevicePulsing, statusLabel, toggleChecked, toggleCommand } from './deviceState'
 import { formatPower, formatSensor, summarize } from './format'
 import { deviceColor, deviceIcon } from './deviceIcons'
-import { findBatteries, findEnergySite, isEnergySite } from './energy'
+import { findBatteries, findEnergySite, inverterGroups, isEnergySite, isInverter, shortInverterId } from './energy'
 import { coverActivity, coverAtRest, isFlatCover, isPassageCover } from './cover'
 import { coverLeaves, coverSize, hasLeaves, isOrientable, isSizable } from './orientation'
 import fr from '../i18n/locales/fr.json'
@@ -255,6 +255,94 @@ describe("site energie vs batterie", () => {
     const noMeter = entry('sans-compteur', ['production'], { productionW: 12 })
     expect(findEnergySite([noMeter])?.descriptor.externalId).toBe('sans-compteur')
     expect(findEnergySite([])).toBeUndefined()
+  })
+})
+
+describe("onduleurs ranges par champ", () => {
+  const inv = (id: string, watts: number, available = true, maxValue?: number): DeviceEntry => ({
+    descriptor: { id: `enphase:${id}`, pluginId: 'enphase', externalId: id, kind: 'sensor', name: `Onduleur ${id}`, capabilities: ['measure'], meta: { sensor: { unit: 'W', deviceClass: 'power' } } } as DeviceDescriptor,
+    state: { kind: 'sensor', updatedAt: 0, available, value: watts, ...(maxValue === undefined ? {} : { maxValue }) } as StateFor<'sensor'>,
+  })
+  const array = (id: string, cols: number, rows: number, panels: (string | null)[]): PanelArray => ({
+    id, levelId: 'toit', origin: [0, 0, 0], yaw: 180, slope: 0, tilt: 15, rows, cols, gap: 0.02,
+    panel: { width: 1.13, height: 1.76, peakW: 500 }, maxOutputW: 480, panels,
+  } as PanelArray)
+  const grid = (g: { cells: { label: string }[]; cols: number }) =>
+    Array.from({ length: g.cells.length / g.cols }, (_, r) => g.cells.slice(r * g.cols, (r + 1) * g.cols).map((c) => c.label).join(' '))
+
+  it('rend la GRILLE du champ, rangee par rangee, comme la scene 3d', () => {
+    // le champ est garni a l envers : c est `panels` qui dit la place, et elle seule
+    const field = array('pv', 2, 2, ['enphase:d', 'enphase:c', 'enphase:b', 'enphase:a'])
+    const [g] = inverterGroups([field], [inv('a', 10), inv('b', 20), inv('c', 30), inv('d', 40)])
+    expect([g!.rows, g!.cols]).toEqual([2, 2])
+    expect(grid(g!)).toEqual(['D C', 'B A'])
+    expect(g!.cells.map((c) => [c.row, c.col])).toEqual([[1, 1], [1, 2], [2, 1], [2, 2]])
+    expect(g!.totalW).toBe(100)
+    expect(g!.index).toBe(0)
+  })
+
+  it('garde la case d un emplacement vide : sans elle, la grille ne ressemble plus au toit', () => {
+    const field = array('pv', 3, 1, ['enphase:a', null, 'enphase:c'])
+    const [g] = inverterGroups([field], [inv('a', 100), inv('c', 120)])
+    expect(grid(g!)).toEqual(['A 1-2 C'])                  // la case vide porte sa place
+    expect(g!.cells[1]).toMatchObject({ id: null, watts: 0 })
+    expect(g!.totalW).toBe(220)
+  })
+
+  it('un onduleur muet ne vaut pas zero watt', () => {
+    const [g] = inverterGroups([array('pv', 1, 1, ['enphase:a'])], [inv('a', 250, false)])
+    expect(g!.cells[0]).toMatchObject({ available: false, watts: 0 })
+    expect(g!.totalW).toBe(0)
+  })
+
+  it('porte la crete et la puissance de sortie max du champ, et une echelle qui contient les deux', () => {
+    const [g] = inverterGroups([array('pv', 1, 1, ['enphase:a'])], [inv('a', 250)])
+    expect([g!.peakW, g!.maxOutputW, g!.scaleW]).toEqual([500, 480, 500])
+    // hors champ, personne ne declare ni module ni onduleur : la crete courante, et aucun plafond
+    const [loose] = inverterGroups([], [inv('b', 250)])
+    expect([loose!.peakW, loose!.maxOutputW, loose!.scaleW]).toEqual([PANEL_PEAK_W, 0, PANEL_PEAK_W])
+  })
+
+  it('ouvre l echelle plutot que d ecarter un repere qui depasse la crete du module', () => {
+    // un IQ8P (480 W) sous un module de 450 Wc : le plafond etait plus haut que la crete, et
+    // disparaissait sans rien dire. Idem pour un record au-dessus des deux.
+    const small = { ...array('pv', 1, 1, ['enphase:a']), panel: { width: 1.13, height: 1.76, peakW: 450 } } as PanelArray
+    expect(inverterGroups([small], [inv('a', 200)])[0]!.scaleW).toBe(480)
+    expect(inverterGroups([small], [inv('a', 200, true, 495)])[0]!.scaleW).toBe(495)
+  })
+
+  it('garde le RECORD de chaque onduleur, celui que la passerelle tient, meme quand il se tait', () => {
+    const [g] = inverterGroups([array('pv', 2, 1, ['enphase:a', 'enphase:b'])], [inv('a', 250, true, 431), inv('b', 0, false, 438)])
+    expect(g!.cells.map((c) => c.maxW)).toEqual([431, 438])
+    // un onduleur qui n'en publie pas : 0, et la vue Energie ne marque alors aucun record
+    const [none] = inverterGroups([array('pv', 1, 1, ['enphase:c'])], [inv('c', 100)])
+    expect(none!.cells[0]!.maxW).toBe(0)
+  })
+
+  it('un champ sans onduleur ne fait pas de carte, et un id que le plugin ne publie plus laisse une case vide', () => {
+    const vide = array('vide', 2, 1, [null, null])
+    const fantome = array('fantome', 1, 1, ['enphase:parti'])
+    expect(inverterGroups([vide, fantome], [])).toEqual([])
+  })
+
+  it('met les onduleurs qu aucun champ ne porte dans un dernier groupe d une colonne, tries par numero', () => {
+    const field = array('pv', 1, 1, ['enphase:1'])
+    const groups = inverterGroups([field], [inv('10', 5), inv('2', 7), inv('1', 100)])
+    expect(groups.map((g) => g.index)).toEqual([0, null])
+    expect(groups[1]!.cols).toBe(1)
+    expect(groups[1]!.cells.map((c) => c.name)).toEqual(['Onduleur 2', 'Onduleur 10'])
+    expect(groups[1]!.totalW).toBe(12)
+  })
+
+  it('reconnait un onduleur : un capteur de puissance du plugin de l installation', () => {
+    expect(isInverter(inv('a', 1).descriptor, 'enphase')).toBe(true)
+    expect(isInverter(inv('a', 1).descriptor, 'mock')).toBe(false)
+    expect(isInverter(sensor, 'mock')).toBe(false)
+  })
+
+  it('coupe le numero de serie a cinq caracteres, la longueur des noms publies', () => {
+    expect(shortInverterId('enphase:482409158')).toBe('09158')
+    expect(shortInverterId('mock:panel-s10')).toBe('10')
   })
 })
 

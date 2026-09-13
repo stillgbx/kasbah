@@ -175,7 +175,14 @@ export const panelArrayPatchSchema = z.object({
   rows: z.number().int().min(1).max(20).optional(),
   cols: z.number().int().min(1).max(20).optional(),
   /** Module : `width` le long des colonnes, `height` le long des rangées (portrait ↔ paysage = les deux échangées). */
-  panel: z.object({ width: z.number().positive().max(5), height: z.number().positive().max(5) }).optional(),
+  panel: z.object({
+    width: z.number().positive().max(5).optional(),
+    height: z.number().positive().max(5).optional(),
+    /** Puissance crête du module (Wc) : l'échelle de couleur du champ, cf. `panelArraySchema`. */
+    peakW: z.number().positive().max(2000).optional(),
+  }).optional(),
+  /** Puissance de sortie max des onduleurs du champ (W, 0 = inconnue) : voir `panelArraySchema`. */
+  maxOutputW: z.number().min(0).max(2000).optional(),
   gap: z.number().min(0).max(1).optional(),
   /** Onduleur de chaque emplacement, rangée par rangée ; `null` = emplacement non suivi. */
   panels: z.array(deviceIdSchema.nullable()).optional(),
@@ -200,9 +207,12 @@ export function putArrayInJson(doc: unknown, id: string, patch: PanelArrayPatch)
   if (!prev && !patch.origin) throw new PlacementError(`panel array "${id}": origin is required to create it`)
 
   const next: JsonObject = { ...(prev ?? { id }), levelId }
-  for (const key of ['name', 'siteId', 'origin', 'yaw', 'slope', 'tilt', 'rows', 'cols', 'panel', 'gap'] as const) {
+  for (const key of ['name', 'siteId', 'origin', 'yaw', 'slope', 'tilt', 'rows', 'cols', 'maxOutputW', 'gap'] as const) {
     if (patch[key] !== undefined) next[key] = patch[key]
   }
+  // Le module se patche champ par champ, lui : coucher un module (`width`/`height` échangées) ne
+  // doit pas effacer sa puissance crête, qui retomberait alors sur la valeur par défaut.
+  if (patch.panel) next.panel = { ...(isObject(prev?.panel) ? prev.panel : {}), ...patch.panel }
   const rows = Number(next.rows ?? 1), cols = Number(next.cols ?? 1)
   next.rows = rows
   next.cols = cols

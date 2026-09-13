@@ -22,7 +22,6 @@
     "roomsCount": "{n} room | {n} room | {n} rooms",
     "devicesCount": "{n} device | {n} device | {n} devices", "active": "{n} active | {n} active | {n} active",
     "selectHint": "Tap a room or a device in the 3D view",
-    "hint3d": "1 finger: orbit · 2 fingers: zoom & pan · wheel: zoom",
     "resetView": "Overview", "openPanel": "Panel", "noScenes": "No scene defined in the house."
   },
   "kinds": {
@@ -44,6 +43,8 @@
     "heightHint": "Height of the array above the level floor. A flat roof is a thick slab: at 0 the array is buried in it.",
     "azimuthHint": "The direction the modules face: the cone drawn on the array shows it.", "slope": "Support slope", "slopeHint": "The slope the array sits on: the roof's. 0 on a flat roof, on the ground or on a terrace.",
     "tilt": "Tilt", "tiltHint": "Each module's angle on its support: the rack that lifts it. 0 = flush with the roof.",
+    "maxOutput": "Inverter power", "maxOutputHint": "Maximum output power of a micro-inverter in this field, from its datasheet (480 W on an IQ8P): above that it clips, and the reading stops there rather than at the module's peak. A mark shows it at the foot of the Energy view gauges, a second one shows each inverter's own record. Leave at 0 when unknown.",
+    "peak": "Peak power", "peakHint": "Peak power of one module (Wp), as printed on the back of the panel. It is the colour scale: the module's slab in the house, the gauge behind its row in the Energy view. A micro-inverter often clips below it.",
     "portrait": "Portrait", "landscape": "Landscape",
     "inverters": "Inverters", "freeCount": "{n} free", "slotNone": "None",
     "remove": "Remove the array", "removeConfirm": "Confirm removal",
@@ -107,7 +108,8 @@
     "import": "import", "export": "export", "idle": "Idle", "battery": "Battery", "charging": "Charging", "discharging": "Discharging",
     "today": "Today", "selfConsumption": "self-consumption", "mix": "Where consumption comes from", "flowTitle": "Energy flows", "productionToday": "Production today", "kWhToday": "kWh produced",
     "charger": "Charger", "noData": "No energy device", "noHistory": "History fills up as the day goes on.",
-    "instant": "Live", "localHistory": "Local history"
+    "instant": "Live", "localHistory": "Local history",
+    "maxReported": "Record", "invertersLoose": "Unassigned", "noSlot": "No slot"
   },
   "camera": {
     "online": "Online", "classes": { "camera": "Camera", "doorbell": "Doorbell", "display": "Display" },

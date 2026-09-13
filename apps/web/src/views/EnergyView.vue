@@ -6,6 +6,7 @@ import { getTransport } from '../api'
 import PageHeader from '../components/layout/PageHeader.vue'
 import RoomBands from '../components/devices/RoomBands.vue'
 import EnergyFlow from '../components/energy/EnergyFlow.vue'
+import InverterFields from '../components/energy/InverterFields.vue'
 import { useHomeSummary } from '../composables/useHomeSummary'
 import { findEnergySite } from '../lib/energy'
 import { formatEnergy, formatPower } from '../lib/format'
@@ -85,6 +86,10 @@ const todayWh = computed(() => e.value?.todayProductionWh ?? points.value.reduce
         </section>
         </div>
       </template>
+
+      <!-- Ce que produit chaque onduleur, champ par champ : la vue disait la production de la
+           maison, pas celle d'un module. -->
+      <InverterFields v-if="energyEntry" :site="energyEntry" />
 
       <!-- Les appareils, comme dans les vues Lumières et Ouvrants : c'est ici qu'on place le site,
            les batteries et la borne. Les panneaux en sont absents volontairement — un module ne se

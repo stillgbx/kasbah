@@ -132,7 +132,13 @@ describe('état du site', () => {
 
 describe('état d\'un panneau', () => {
   it('rend la puissance du dernier rapport', () => {
-    expect(toPanelPatch(inverters[0]!)).toEqual({ kind: 'sensor', value: inverters[0]!.lastReportWatts })
+    // …et le RECORD que la passerelle tient pour lui : ce qu'il a déjà sorti, jamais sa fiche technique
+    expect(toPanelPatch(inverters[0]!)).toEqual({ kind: 'sensor', value: inverters[0]!.lastReportWatts, maxValue: inverters[0]!.maxReportWatts })
+    // les records du parc réel vont de 418 à 440 W : aucun plateau, donc aucun écrêtage à en déduire
+    const records = inverters.map((i) => i.maxReportWatts!)
+    expect(new Set(records).size).toBeGreaterThan(1)
+    // un onduleur qui ne publie pas de record n'en reçoit pas un inventé
+    expect(toPanelPatch({ ...inverters[0]!, maxReportWatts: undefined })).toEqual({ kind: 'sensor', value: inverters[0]!.lastReportWatts })
   })
 
   it('un onduleur muet depuis plus d\'une demi-heure devient indisponible, sans zéro inventé', () => {

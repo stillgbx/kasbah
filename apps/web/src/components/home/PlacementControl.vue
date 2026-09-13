@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { resolveDefaults, roomHeight, type HouseDevice } from '@kasbah/shared'
 import { isFlatCover } from '../../lib/cover'
@@ -85,7 +85,14 @@ type Field = 'yaw' | 'width' | 'height'
 const editing = ref<Field | null>(null)
 const draft = ref('')
 
-function startEdit(field: Field, shown: string) { editing.value = field; draft.value = shown }
+/** Le contenu se SÉLECTIONNE à la prise de focus : taper remplace la valeur au lieu de s'y ajouter. */
+function startEdit(field: Field, shown: string, ev?: FocusEvent) {
+  editing.value = field
+  draft.value = shown
+  // APRÈS le rendu : Vue réécrit `value` quand le brouillon se pose, ce qui efface la sélection
+  const el = ev?.target as HTMLInputElement | undefined
+  if (el) void nextTick(() => el.select())
+}
 function cancelEdit() { editing.value = null }
 /** Valeur affichée par un champ : le brouillon s'il est en cours d'édition, sinon l'état. */
 const shownValue = (field: Field, value: string) => (editing.value === field ? draft.value : value)
@@ -192,7 +199,8 @@ function applyPreset(p: Preset) {
               <input class="place__value place__num" type="text" inputmode="numeric" enterkeyhint="done"
                      :value="shownValue('yaw', String(yaw))" :disabled="house.saving || !house.placing"
                      :aria-label="$t('place.orientation')"
-                     @focus="startEdit('yaw', String(yaw))"
+                     @focus="startEdit('yaw', String(yaw), $event)"
+                     @mouseup.prevent
                      @input="draft = ($event.target as HTMLInputElement).value"
                      @keydown.enter="($event.target as HTMLInputElement).blur()"
                      @keydown.esc="cancelEdit(); ($event.target as HTMLInputElement).blur()"
@@ -218,7 +226,8 @@ function applyPreset(p: Preset) {
               <input class="place__value place__num place__num--size" type="text" inputmode="decimal" enterkeyhint="done"
                      :value="shownValue(dim, size[dim].toFixed(2))" :disabled="house.saving || !house.placing"
                      :aria-label="dimLabel(dim)"
-                     @focus="startEdit(dim, size[dim].toFixed(2))"
+                     @focus="startEdit(dim, size[dim].toFixed(2), $event)"
+                     @mouseup.prevent
                      @input="draft = ($event.target as HTMLInputElement).value"
                      @keydown.enter="($event.target as HTMLInputElement).blur()"
                      @keydown.esc="cancelEdit(); ($event.target as HTMLInputElement).blur()"

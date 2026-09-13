@@ -173,6 +173,12 @@ export type Roof = z.infer<typeof roofSchema>
 /** Module photovoltaïque courant (m) : `width` le long des colonnes, `height` le long des rangées. */
 export const PANEL_SIZE = { width: 1.13, height: 1.76 } as const
 /**
+ * Puissance crête (Wc) d'un module quand le champ ne la dit pas : celle d'un panneau courant. C'est
+ * l'ÉCHELLE de couleur d'un module — sa dalle en 3D, sa ligne dans la vue Énergie — et non une
+ * mesure : un micro-onduleur écrête souvent en deçà, un champ neuf produit un peu au-delà.
+ */
+export const PANEL_PEAK_W = 450
+/**
  * Champ de panneaux solaires : une grille de `rows × cols` modules posée sur un niveau (le toit,
  * déclaré comme un niveau sans pièce). Les positions des modules ne sont PAS écrites : elles se
  * dérivent de l'origine, de l'orientation et du pas (`panelArrayDevices`), donc déplacer ou pivoter
@@ -219,7 +225,21 @@ export const panelArraySchema = z.object({
   tilt: z.number().min(-90).max(90).default(0),
   rows: z.number().int().positive(),
   cols: z.number().int().positive(),
-  panel: z.object({ width: z.number().positive(), height: z.number().positive() }).default(PANEL_SIZE),
+  /** Le MODULE de ce champ : sa taille, et sa puissance crête (Wc) qui dit à quoi « à fond » ressemble. */
+  panel: z.object({
+    width: z.number().positive(),
+    height: z.number().positive(),
+    peakW: z.number().positive().max(2000).default(PANEL_PEAK_W),
+  }).default({ ...PANEL_SIZE, peakW: PANEL_PEAK_W }),
+  /**
+   * PUISSANCE DE SORTIE MAXIMALE des micro-onduleurs de ce champ (W, 0 = inconnue) — le terme des
+   * fiches techniques. Un onduleur ne sort pas plus : un IQ8P plafonne à 480 W sous un module de
+   * 500 Wc, et la mesure bute là, pas à la crête du verre. Ça se SAISIT, parce que la passerelle ne
+   * publie nulle part la fiche technique : elle ne donne que `maxReportWatts`, le record de chaque
+   * onduleur (418 à 440 W sur un parc réel relevé), qui dit ce qui s'est produit — voir
+   * `SensorState.maxValue`, que la vue Énergie marque à côté de celle-ci.
+   */
+  maxOutputW: z.number().min(0).max(2000).default(0),
   /** Espace entre deux modules (m). */
   gap: z.number().min(0).default(0.02),
   /** Appareil de plugin de chaque emplacement, rangée par rangée ; `null` = module sans onduleur suivi. Au plus rows × cols. */

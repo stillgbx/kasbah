@@ -22,7 +22,6 @@
     "roomsCount": "{n} pièce | {n} pièce | {n} pièces",
     "devicesCount": "{n} appareil | {n} appareil | {n} appareils", "active": "{n} actif | {n} actif | {n} actifs",
     "selectHint": "Touchez une pièce ou un appareil dans la vue 3D",
-    "hint3d": "1 doigt : orbiter · 2 doigts : zoom et déplacement · molette : zoom",
     "resetView": "Vue d'ensemble", "openPanel": "Panneau", "noScenes": "Aucune scène définie dans la maison."
   },
   "kinds": {
@@ -44,6 +43,8 @@
     "heightHint": "Hauteur du champ au-dessus du sol du niveau. Un toit plat est une dalle épaisse : posé à 0, le champ y est noyé.",
     "azimuthHint": "La direction vers laquelle regardent les modules : le cône posé sur le champ la montre.", "slope": "Pente du support", "slopeHint": "La pente sur laquelle le champ est posé : celle du toit. 0 sur un toit plat, au sol ou sur une terrasse.",
     "tilt": "Inclinaison", "tiltHint": "L'angle de chaque module sur son support : le châssis qui le redresse. 0 = posé à même le toit.",
+    "maxOutput": "Puissance onduleur", "maxOutputHint": "Puissance de sortie maximale d'un micro-onduleur de ce champ, celle de sa fiche technique (480 W pour un IQ8P) : au-delà il écrête, et la mesure bute là plutôt qu'à la crête du module. Un repère la marque au pied des jauges de la vue Énergie, un second marque le record déjà rapporté par chaque onduleur. Laisser à 0 si on ne la connaît pas.",
+    "peak": "Puissance crête", "peakHint": "Puissance crête d'un module (Wc), celle inscrite au dos du panneau. Elle sert d'échelle à la couleur : la dalle du module dans la maison, la jauge de sa ligne dans la vue Énergie. Un micro-onduleur écrête souvent en deçà.",
     "portrait": "Portrait", "landscape": "Paysage",
     "inverters": "Onduleurs", "freeCount": "{n} libres", "slotNone": "Aucun",
     "remove": "Retirer le champ", "removeConfirm": "Confirmer le retrait",
@@ -107,7 +108,8 @@
     "import": "soutirage", "export": "injection", "idle": "Inactif", "battery": "Batterie", "charging": "Charge", "discharging": "Décharge",
     "today": "Aujourd'hui", "selfConsumption": "autoconsommation", "mix": "Origine de la consommation", "flowTitle": "Flux d'énergie", "productionToday": "Production du jour", "kWhToday": "kWh produits",
     "charger": "Borne", "noData": "Aucun appareil énergie", "noHistory": "L'historique se remplit au fil de la journée.",
-    "instant": "Instantané", "localHistory": "Historique local"
+    "instant": "Instantané", "localHistory": "Historique local",
+    "maxReported": "Record", "invertersLoose": "Hors champ", "noSlot": "Aucun emplacement"
   },
   "camera": {
     "online": "En ligne", "classes": { "camera": "Caméra", "doorbell": "Sonnette", "display": "Écran" },

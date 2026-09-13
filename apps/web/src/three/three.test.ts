@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { Box3, CylinderGeometry, Mesh, ShapeGeometry, Vector3, type BufferAttribute, type Texture } from 'three'
+import { Box3, CylinderGeometry, Mesh, type MeshStandardMaterial, ShapeGeometry, Vector3, type BufferAttribute, type Texture } from 'three'
 import { computeHouseGeometry, parseHouse, type DeviceDescriptor, type DeviceState, type HouseDevice } from '@kasbah/shared'
 import demo from '@kasbah/shared/demo-house.json'
 import { buildHouse, buildWallsGeometry, countTriangles } from './builders/buildHouse'
@@ -285,7 +285,7 @@ describe('marqueurs 3D', () => {
 
   it("le cône d'un module montre où regarde son verre, châssis négatif compris", () => {
     const sensor = { id: 'p:s', pluginId: 'p', externalId: 's', kind: 'sensor', name: 'Onduleur', capabilities: ['measure'], meta: { sensor: { unit: 'W', deviceClass: 'power', precision: 0 } } } as unknown as DeviceDescriptor
-    const panel = { arrayId: 'pv', row: 0, col: 0, width: 1.13, height: 1.76, tilt: 35 }
+    const panel = { arrayId: 'pv', row: 0, col: 0, width: 1.13, height: 1.76, peakW: 500, maxOutputW: 480, tilt: 35 }
     const cone = (m: { object: { traverse(cb: (x: unknown) => void): void } }) => meshes(m.object).find((x) => x.geometry instanceof ShapeGeometry)
     const tilted = marker(device({ yaw: 90, meta: { panel } }), sensor)
     // le verre penche VERS +y local (l'azimut) : tourner autour de +x le pencherait vers −y, d'où le moins
@@ -301,6 +301,65 @@ describe('marqueurs 3D', () => {
     const flat = marker(device({ yaw: 90, meta: { panel: { ...panel, tilt: 0 } } }), sensor)
     flat.setMoving(true, 0)
     expect(cone(flat)).toBeUndefined()
+  })
+
+  it("un module se teinte de sa part de crête, et son trait de bord la chiffre", () => {
+    const sensor = { id: 'p:s', pluginId: 'p', externalId: 's', kind: 'sensor', name: 'Onduleur', capabilities: ['measure'], meta: { sensor: { unit: 'W', deviceClass: 'power', precision: 0 } } } as unknown as DeviceDescriptor
+    const panel = { arrayId: 'pv', row: 0, col: 0, width: 1.13, height: 1.76, peakW: 500, maxOutputW: 480, tilt: 35 }
+    const glassOf = (m: { object: { traverse(cb: (x: unknown) => void): void } }) => meshes(m.object)[0]!
+    // le trait est le dernier enfant de la dalle (piste, puis jauge)
+    const gaugeOf = (m: { object: { traverse(cb: (x: unknown) => void): void } }) => glassOf(m).children[1] as Mesh
+    const lit = (m: { object: { traverse(cb: (x: unknown) => void): void } }) => {
+      const e = (glassOf(m).material as MeshStandardMaterial).emissive
+      return e.r + e.g + e.b
+    }
+    const m = marker(device({ meta: { panel } }), sensor)
+    m.update({ kind: 'sensor', updatedAt: 0, available: true, value: 0 } as DeviceState)
+    expect(lit(m)).toBe(0)                                        // au repos : bleu nuit, éteint
+    expect(gaugeOf(m).visible).toBe(false)
+    m.update({ kind: 'sensor', updatedAt: 0, available: true, value: 250 } as DeviceState)
+    const half = lit(m)
+    expect(half).toBeGreaterThan(0)
+    expect(gaugeOf(m).scale.y).toBeCloseTo(0.5)
+    // ancré sur le bord BAS (+y local, là où le verre penche) : à mi-hauteur, son centre remonte
+    expect(gaugeOf(m).position.y).toBeCloseTo((1.76 * 0.88) / 4)
+    // la crête est celle du CHAMP : le même onduleur sous un module de 250 Wc est déjà à fond
+    const small = marker(device({ meta: { panel: { ...panel, peakW: 250, maxOutputW: 0 } } }), sensor)
+    small.update({ kind: 'sensor', updatedAt: 0, available: true, value: 250 } as DeviceState)
+    expect(lit(small)).toBeGreaterThan(half)
+    expect(gaugeOf(small).scale.y).toBeCloseTo(1)
+    expect(gaugeOf(small).position.y).toBeCloseTo(0)
+    // un onduleur muet ne vaut pas sa dernière valeur : le verre s'éteint, le trait disparaît
+    m.update({ kind: 'sensor', updatedAt: 0, available: false, value: 250 } as DeviceState)
+    expect(lit(m)).toBe(0)
+    expect(gaugeOf(m).visible).toBe(false)
+  })
+
+  it("les deux repères de la jauge d'un module restent visibles, plafond par-dessus record", () => {
+    const sensor = { id: 'p:s', pluginId: 'p', externalId: 's', kind: 'sensor', name: 'Onduleur', capabilities: ['measure'], meta: { sensor: { unit: 'W', deviceClass: 'power', precision: 0 } } } as unknown as DeviceDescriptor
+    const panel = { arrayId: 'pv', row: 0, col: 0, width: 1.13, height: 1.76, peakW: 500, maxOutputW: 480, tilt: 35 }
+    const h = 1.76 * 0.88
+    const m = marker(device({ meta: { panel } }), sensor)
+    const slab = meshes(m.object)[0]!
+    const [record, output] = [slab.children[2] as Mesh, slab.children[3] as Mesh]
+    // un onduleur qui ne publie pas de record : le plafond du champ est seul sur la jauge
+    m.update({ kind: 'sensor', updatedAt: 0, available: true, value: 300 } as DeviceState)
+    expect([output.visible, record.visible]).toEqual([true, false])
+    expect(output.position.y).toBeCloseTo((h / 2) * (1 - 2 * 0.96))
+    expect(output.renderOrder).toBeGreaterThan(record.renderOrder)   // à valeur égale, il le cache
+    // le record vient de l'appareil, et survit à son silence : la nuit ne l'efface pas
+    m.update({ kind: 'sensor', updatedAt: 0, available: true, value: 300, maxValue: 431 } as DeviceState)
+    expect(record.visible).toBe(true)
+    expect(record.position.y).toBeCloseTo((h / 2) * (1 - 2 * (431 / 500)))
+    m.update({ kind: 'sensor', updatedAt: 0, available: false, value: 300, maxValue: 431 } as DeviceState)
+    expect(record.visible).toBe(true)
+    // un plafond plus haut que la crête du module (un IQ8P sous un 450 Wc) ne disparaît pas :
+    // c'est l'ÉCHELLE qui s'ouvre, et le repère se pose alors au bout de la jauge
+    const over = marker(device({ meta: { panel: { ...panel, peakW: 450, maxOutputW: 480 } } }), sensor)
+    over.update({ kind: 'sensor', updatedAt: 0, available: true, value: 200 } as DeviceState)
+    const mark = meshes(over.object)[0]!.children[3] as Mesh
+    expect(mark.visible).toBe(true)
+    expect(mark.position.y).toBeCloseTo(-h / 2)
   })
 
   it('un thermostat est une pastille couchée contre son mur, tournée du yaw', () => {
