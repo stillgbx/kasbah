@@ -370,10 +370,11 @@ describe('sondage respectueux de la veille', () => {
     expect((await app.inject({ method: 'GET', url: '/api/plugins/tesla/status' }).then((r) => r.json())).budget).toEqual({ used: 2, limit: 2 })
     expect(plugin.health!().detail).toContain('2/2')
     // la jauge de l'UI montre le CRÉDIT MENSUEL du fabricant, pas ce budget journalier : une estimation
-    // en dollars, comptée sur TOUS les appels facturables (la liste des véhicules comprise)
+    // en dollars. Les LISTES n'y entrent pas — le fabricant ne les facture pas (constaté sur sa console)
     const q = plugin.health!().quota!
     expect(q).toMatchObject({ limit: 10, labelKey: 'vehicle.quotaCredit', unit: 'usd' })
-    expect(q.used).toBeCloseTo((listCalls(tesla) + dataCalls(tesla)) * (1 / 500), 5)
+    expect(listCalls(tesla)).toBeGreaterThan(dataCalls(tesla))
+    expect(q.used).toBeCloseTo(dataCalls(tesla) * (1 / 500), 5)
     expect(q.since).toBe(NOW)
     // le lendemain : un seul tour suffit à voir le budget repartir
     await ticks(clock, 1, 24 * 60 * MIN)
@@ -418,19 +419,42 @@ describe('ce qui survit à un redémarrage', () => {
 
   it('la consommation du mois se poursuit après un redémarrage, et repart au mois suivant', async () => {
     const state = memoryState()
-    const first = await started({ tesla: fakeTesla(), tokens: linkedTokens(), state })
-    await first.plugin.discover()                        // un appel de liste, facturable
-    const afterFirst = first.plugin.health!().quota!.used
-    expect(afterFirst).toBeCloseTo(1 / 500, 5)
+    const one = fakeTesla()
+    one.world.list = VEHICLES_ONLINE
+    const first = await started({ tesla: one, tokens: linkedTokens(), state })
+    await first.plugin.start()
+    await settle()
+    expect(first.plugin.health!().quota!.used).toBeCloseTo(1 / 500, 5)      // une lecture complète
+    // le tour suivant tombe avant la fin du repos : il ne fait que LISTER, et lister ne coûte rien
+    await ticks(first.clock, 1)
+    expect(listCalls(one)).toBeGreaterThan(1)
+    expect(first.plugin.health!().quota!.used).toBeCloseTo(1 / 500, 5)
 
-    const second = await started({ tesla: fakeTesla(), tokens: linkedTokens(), state })
+    // redémarrage : le compteur reprend où il en était (sondage non démarré, pour ne compter que
+    // les appels demandés ici)
+    const two = fakeTesla()
+    two.world.list = VEHICLES_ONLINE
+    const second = await started({ tesla: two, tokens: linkedTokens(), state })
     await second.plugin.discover()
+    await second.plugin.execute(VIN, { type: 'vehicle.refresh' })
     expect(second.plugin.health!().quota!.used).toBeCloseTo(2 / 500, 5)
 
     // le mois suivant, le compteur repart de zéro (cycle calendaire, comme la facturation du fabricant)
     second.clock.advance(31 * 24 * 60 * MIN)
-    await second.plugin.discover()
+    await second.plugin.execute(VIN, { type: 'vehicle.refresh' })
     expect(second.plugin.health!().quota!.used).toBeCloseTo(1 / 500, 5)
+  })
+
+  it('le compteur se recale sur la console du fabricant, qui seule facture', async () => {
+    const state = memoryState()
+    const { app, plugin } = await started({ tesla: fakeTesla(), tokens: linkedTokens(), state })
+    const r = await app.inject({ method: 'POST', url: '/api/plugins/tesla/usage', payload: { data: 6, wakes: 2, commands: 0 } })
+    expect(r.statusCode).toBe(200)
+    // 6 lectures a 0,2 c + 2 reveils a 2 c
+    expect(r.json().estimatedUsd).toBeCloseTo(6 / 500 + 2 / 50, 5)
+    expect(plugin.health!().quota!.used).toBeCloseTo(0.052, 5)
+    expect(state.value?.cycle).toMatchObject({ data: 6, wakes: 2, commands: 0 })
+    expect((await app.inject({ method: 'POST', url: '/api/plugins/tesla/usage', payload: { data: -1 } })).statusCode).toBe(400)
   })
 })
 

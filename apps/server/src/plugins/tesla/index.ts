@@ -553,6 +553,25 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
       })
 
       /**
+       * Recale le compteur du mois sur la CONSOLE du fabricant, qui seule facture. L'estimation dérive
+       * forcément : catégories tarifaires non publiées, arrondis, et appels faits hors de Kasbah (une
+       * autre application tierce partage le même crédit). Corps : `{ data, wakes, commands, since? }`.
+       */
+      app.post('/usage', async (req, reply) => {
+        if (!ctx) return sendError(reply, 409, 'NEEDS_PAIRING', 'plugin not started')
+        const body = z.object({
+          data: z.number().int().min(0), wakes: z.number().int().min(0), commands: z.number().int().min(0),
+          since: z.number().int().optional(),
+        }).safeParse(req.body)
+        if (!body.success) return sendError(reply, 400, 'INVALID_BODY', 'send { data, wakes, commands, since? }')
+        const cycle = currentCycle(saved, ctx.clock.now())
+        saved.cycle = { ...cycle, ...body.data, since: body.data.since ?? cycle.since }
+        persist()
+        log().info({ cycle: saved.cycle, usd: cycleCostUsd(saved.cycle) }, 'Tesla usage realigned on the vendor console')
+        return { cycle: saved.cycle, estimatedUsd: cycleCostUsd(saved.cycle) }
+      })
+
+      /**
        * Relevé BRUT : la liste, puis `vehicle_data` de chaque véhicule ÉVEILLÉ. Pour écrire les
        * fixtures d'après de vraies réponses. Chaque lecture est facturée et comptée au budget ; un
        * véhicule endormi n'est PAS réveillé, il figure avec son 408.

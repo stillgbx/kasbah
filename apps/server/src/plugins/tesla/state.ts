@@ -18,7 +18,7 @@ import { z } from 'zod'
 
 /** Prix unitaires de la Fleet API, en dollars (relevé le 2026-09-13, tarifs en vigueur depuis 2025-01-01). */
 export const PRICE_USD = {
-  /** Lecture de données : 1 $ pour 500 (`vehicle_data`, et la liste des véhicules — voir `billableKind`). */
+  /** Lecture de données : 1 $ pour 500 (`vehicle_data` ; la LISTE des véhicules, elle, ne coûte rien). */
   data: 1 / 500,
   /** Réveil : 1 $ pour 50. Dix fois le prix d'une lecture, d'où le geste explicite dans l'UI. */
   wake: 1 / 50,
@@ -31,19 +31,18 @@ export type BillableKind = keyof typeof PRICE_USD
 export const MONTHLY_CREDIT_USD = 10
 
 /**
- * Ce qu'un appel COÛTE, d'après son chemin. `null` = hors facturation vérifiable (les routes
- * partenaires, qui ne touchent aucun véhicule).
+ * Ce qu'un appel COÛTE, d'après son chemin. `null` = rien à compter.
  *
- * La liste des véhicules est comptée comme une LECTURE, faute de mieux : la documentation range
- * chaque route dans une catégorie tarifaire, mais ne publie pas celle de `GET /api/1/vehicles`.
- * La compter cher plutôt que gratuite donne une jauge pessimiste — le bon sens quand il s'agit de ne
- * pas dépasser un crédit. À corriger dès que la console de facturation du fabricant tranche.
+ * **La LISTE des véhicules (`GET /api/1/vehicles`) ne coûte rien** : la documentation ne publie pas sa
+ * catégorie tarifaire, mais la console du fabricant l'a tranché le 2026-09-14 — elle relevait 3
+ * requêtes « Données » par jour là où le plugin en faisait 144 rien qu'en listant. Seules la lecture
+ * complète, le réveil et les commandes sont facturés. Le chemin d'une lecture commence par celui de
+ * la liste : c'est `vehicle_data` qu'il faut reconnaître, pas le préfixe.
  */
 export function billableKind(path: string): BillableKind | null {
-  if (path.startsWith('/api/1/partner_accounts')) return null
   if (path.includes('/wake_up')) return 'wake'
   if (path.includes('/command/')) return 'command'
-  if (path.startsWith('/api/1/vehicles')) return 'data'
+  if (path.includes('/vehicle_data')) return 'data'
   return null
 }
 

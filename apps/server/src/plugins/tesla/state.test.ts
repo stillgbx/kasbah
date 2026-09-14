@@ -55,8 +55,13 @@ describe('coût estimé', () => {
 })
 
 describe('ce qui est facturable', () => {
-  it('la liste des véhicules compte comme une LECTURE : le fabricant ne publie pas sa catégorie', () => {
-    expect(billableKind('/api/1/vehicles')).toBe('data')
+  it('la LISTE des véhicules ne coûte rien : constaté sur la console du fabricant', () => {
+    // 144 listes par jour ne laissaient que 3 requêtes « Données » dans sa facturation : le sondage
+    // de la veille est gratuit, et c'est ce qui rend la cadence de dix minutes tenable
+    expect(billableKind('/api/1/vehicles')).toBeNull()
+    expect(billableKind('/api/1/vehicles?page=2')).toBeNull()
+  })
+  it('la lecture complète est facturée, et son chemin commence comme celui de la liste', () => {
     expect(billableKind('/api/1/vehicles/5YJ/vehicle_data?endpoints=charge_state')).toBe('data')
   })
   it('réveil et commandes ont leur propre tarif ; les routes partenaires ne touchent aucun véhicule', () => {
