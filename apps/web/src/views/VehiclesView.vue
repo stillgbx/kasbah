@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { geoDistance, type Capability, type CommandInput, type DeviceEntry, type StateFor } from '@kasbah/shared'
 import PageHeader from '../components/layout/PageHeader.vue'
@@ -58,6 +58,33 @@ const tire = (s: StateFor<'vehicle'>, k: (typeof TIRES)[number]) => {
   return v === undefined ? EMPTY : `${new Intl.NumberFormat(locale.value, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v)} bar`
 }
 const send = (id: string, cmd: CommandInput) => devices.sendCommand(id, cmd)
+
+/**
+ * Réveil DEMANDÉ, pas encore constaté. Tesla accuse la demande en une seconde, mais la voiture met
+ * une dizaine de secondes à ouvrir les yeux (le plugin la relit 15 s plus tard) : `isPending`, qui ne
+ * couvre que l'aller-retour avec le serveur, rendrait le bouton inerte alors que rien n'a encore
+ * changé à l'écran. Levé dès que le véhicule se déclare éveillé — ou au bout de `WAKE_MAX_MS` s'il ne
+ * répond pas, pour ne pas laisser un bouton bloqué sur une voiture hors de portée.
+ */
+const WAKE_MAX_MS = 90_000
+const waking = ref<Record<string, true>>({})
+function stopWaking(id: string): void {
+  if (!(id in waking.value)) return
+  const next = { ...waking.value }
+  delete next[id]
+  waking.value = next
+}
+/** Une commande est en vol pour ce véhicule : le bouton le montre et refuse d'être rejoué. */
+const busy = (v: VehicleEntry) => devices.isPending(v.descriptor.id) || v.descriptor.id in waking.value
+
+async function wake(v: VehicleEntry): Promise<void> {
+  const id = v.descriptor.id
+  waking.value = { ...waking.value, [id]: true }
+  if (await send(id, { type: 'vehicle.wake' })) setTimeout(() => stopWaking(id), WAKE_MAX_MS)
+  else stopWaking(id)                                  // demande refusée : le bouton revient tout de suite
+}
+// le véhicule a ouvert les yeux : le bouton a fini son travail (et cède la place à « Actualiser »)
+watch(vehicles, (list) => { for (const v of list) if (v.state.sleepState === 'online') stopWaking(v.descriptor.id) })
 /** Sous la carte : où est la voiture par rapport à la maison, et son kilométrage. */
 const caption = (s: StateFor<'vehicle'>) =>
   `${location(s)}${s.odometerKm ? ` · ${t('vehicle.odometer')} ${formatKm(s.odometerKm, locale.value)}` : ''}`
@@ -118,14 +145,17 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
               {{ v.state.charging ? $t('vehicle.stopCharge') : $t('vehicle.startCharge') }}
             </button>
             <!-- réveiller est un geste explicite (Tesla le facture) : jamais automatique, proposé seulement quand ça dort -->
-            <button v-if="asleep(v.state)" type="button" class="pill" :disabled="!v.state.available" :title="$t('vehicle.wakeHint')"
-                    @click="send(v.descriptor.id, { type: 'vehicle.wake' })">
-              <StrokeIcon name="sun" :size="16" />{{ $t('vehicle.wake') }}
+            <button v-if="asleep(v.state)" type="button" class="pill" :disabled="!v.state.available || busy(v)"
+                    :aria-busy="busy(v)" :title="$t('vehicle.wakeHint')" @click="wake(v)">
+              <!-- le spinner prend la PLACE de l'icône, même taille : le bouton ne change pas de largeur -->
+              <v-progress-circular v-if="busy(v)" indeterminate size="16" width="2" />
+              <StrokeIcon v-else name="sun" :size="16" />{{ $t('vehicle.wake') }}
             </button>
             <!-- relire maintenant (lecture facturée, pas de réveil) ; le sondage repart de cette lecture -->
-            <button v-else-if="has(v, 'soc')" type="button" class="pill" :disabled="!v.state.available || devices.isPending(v.descriptor.id)"
-                    :title="$t('vehicle.refreshHint')" @click="send(v.descriptor.id, { type: 'vehicle.refresh' })">
-              <StrokeIcon name="rotateRight" :size="16" />{{ devices.isPending(v.descriptor.id) ? $t('vehicle.refreshing') : $t('vehicle.refresh') }}
+            <button v-else-if="has(v, 'soc')" type="button" class="pill" :disabled="!v.state.available || busy(v)"
+                    :aria-busy="busy(v)" :title="$t('vehicle.refreshHint')" @click="send(v.descriptor.id, { type: 'vehicle.refresh' })">
+              <v-progress-circular v-if="busy(v)" indeterminate size="16" width="2" />
+              <StrokeIcon v-else name="rotateRight" :size="16" />{{ $t('vehicle.refresh') }}
             </button>
           </div>
           <!-- l'âge des valeurs, toujours affiché : sur une API facturée et une voiture qui dort, elles en ont un -->
@@ -162,5 +192,8 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
 .tire__v { font-weight: 500; font-size: 13px; white-space: nowrap; }
 .vcard__map { height: 220px; }
 .vcard__actions { display: flex; gap: 8px; flex-wrap: wrap; min-height: 40px; }
+/* un bouton qui ATTEND n'est pas un bouton indisponible : l'opacité des boutons désactivés (.45)
+   rendait le spinner à peine visible, or c'est lui qui porte l'information */
+.vcard__actions .pill[aria-busy='true']:disabled { opacity: .7; }
 .vcard__hint { margin: 0; font-size: 12px; }
 </style>

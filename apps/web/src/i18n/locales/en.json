@@ -152,7 +152,6 @@
     "readAt": "Read {ago}",
     "neverRead": "Never read",
     "refresh": "Refresh",
-    "refreshing": "Refreshing…",
     "refreshHint": "Reads the vehicle now (one read billed by Tesla); polling restarts from this read.",
     "map": {"plan": "Map", "satellite": "Satellite", "fullscreen": "Full screen", "close": "Close", "recenter": "Recenter", "noPosition": "Unknown position"}
   },
