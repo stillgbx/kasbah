@@ -49,6 +49,8 @@ function commit(v: number) {
 </template>
 
 <style scoped>
-.room-bright { margin: 0 4px; transition: opacity .2s ease; }
+/* `flex: 0 0 auto` : le panneau latéral est une colonne flex, et Vuetify pose `flex: 1 1 auto` sur
+   `.v-input` — sans cela le curseur s'étire sur toute la hauteur libre et pousse les appareils au fond. */
+.room-bright { flex: 0 0 auto; margin: 0 4px; transition: opacity .2s ease; }
 .room-bright--off { visibility: hidden; }
 </style>
