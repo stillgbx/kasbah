@@ -151,6 +151,13 @@ export const houseDeviceSchema = z.object({
    */
   gpsOffset: vec2Schema.optional(),
   /**
+   * Correction (degrés) appliquée à l'orientation CALCULÉE d'un appareil placé par son GPS — un
+   * véhicule. Elle s'ajoute à ce que la scène a déduit (cap du fabricant, axe de la pièce) : ni un
+   * cap mesuré ni l'axe d'un garage ne disent de quel côté la voiture s'est garée, et un demi-tour
+   * se saisit ici une fois pour toutes. Sans effet sur un appareil qui a un `yaw` : il fait déjà foi.
+   */
+  yawOffset: z.number().optional(),
+  /**
    * Capacité utile de la batterie (kWh) d'un véhicule. **Aucun fabricant ne la donne** — ni Tesla,
    * ni Renault, pas même dans la fiche technique du véhicule, et un code batterie ne se traduit pas.
    * C'est donc une valeur SAISIE, et elle n'a qu'un usage : estimer une puissance de charge que le

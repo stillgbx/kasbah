@@ -414,11 +414,12 @@ describe('véhicule placé par son GPS', () => {
   } as DeviceDescriptor
 
   /** La maison de démo, mais la R5 n'y est plus PLACÉE : son GPS fait foi. */
-  function unplaced(gpsOffset?: [number, number]) {
+  function unplaced(gpsOffset?: [number, number], yawOffset?: number) {
     const doc = JSON.parse(JSON.stringify(demo)) as typeof demo
     const car = doc.devices.find((d) => d.deviceId === VEHICLE) as Record<string, unknown>
     delete car.position; delete car.yaw; delete car.zoneId
     if (gpsOffset) car.gpsOffset = gpsOffset
+    if (yawOffset !== undefined) car.yawOffset = yawOffset
     return parseHouse(doc)
   }
 
@@ -476,5 +477,23 @@ describe('véhicule placé par son GPS', () => {
     // dehors, rien à quoi s'aligner : le marqueur garde son défaut
     scene.updateStates({ [VEHICLE]: stateAt(house, [-3.5, -6]) })
     expect(bodyYaw(scene)).toBe(0)
+  })
+
+  /**
+   * Ni un cap mesuré ni l'axe d'un garage ne disent de quel côté la voiture s'est garée : la
+   * correction du JSON s'AJOUTE au cap déduit, elle ne le remplace pas.
+   */
+  it('ajoute la correction du JSON au cap déduit, quelle qu en soit la source', () => {
+    const plain = unplaced()
+    const turned = unplaced(undefined, 30)
+    const base = sceneWith(plain)
+    const corrected = sceneWith(turned)
+    for (const xy of [[-3.5, -6], [6, 2]] as [number, number][]) {                    // dehors (rien) puis dans le salon (axe)
+      for (const heading of [undefined, 90]) {                           // sans cap, puis avec le cap du fabricant
+        base.updateStates({ [VEHICLE]: stateAt(plain, xy, heading) })
+        corrected.updateStates({ [VEHICLE]: stateAt(turned, xy, heading) })
+        expect(bodyYaw(corrected) - bodyYaw(base)).toBeCloseTo(yawToRad(30), 4)
+      }
+    }
   })
 })

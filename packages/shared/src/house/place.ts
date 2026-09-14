@@ -37,6 +37,12 @@ export const devicePlacementSchema = z.object({
    */
   gpsOffset: vec2Schema.optional(),
   /**
+   * Correction (degrés, ±180) de l'orientation calculée d'un appareil placé par son GPS — un
+   * véhicule (comme `HouseDevice.yawOffset`). `0` EFFACE la correction, comme `[0, 0]` pour le
+   * décalage : on revient à ce que la scène déduit toute seule.
+   */
+  yawOffset: z.number().min(-180).max(180).optional(),
+  /**
    * Capacité de la batterie d'un véhicule (kWh, comme `HouseDevice.batteryKwh`), saisie faute que
    * les fabricants la donnent. `0` EFFACE la valeur, comme `[0, 0]` pour le décalage.
    */
@@ -63,7 +69,7 @@ const isObject = (v: unknown): v is JsonObject => typeof v === 'object' && v !==
 
 /**
  * Renvoie une copie du document JSON avec l'appareil `id` (re)placé ou renommé : entrée existante
- * mise à jour (position, nom, pièce, mount, yaw, size, leaves, gpsOffset, batteryKwh), ou entrée créée
+ * mise à jour (position, nom, pièce, mount, yaw, size, leaves, gpsOffset, yawOffset, batteryKwh), ou entrée créée
  * `{ id, deviceId, … }` avec ce qui a été donné.
  *
  * Tout est facultatif, position comprise : renommer un appareil qui n'a PAS de place dans la scène
@@ -97,6 +103,10 @@ export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePla
       if (placement.gpsOffset[0] === 0 && placement.gpsOffset[1] === 0) delete next.gpsOffset
       else next.gpsOffset = placement.gpsOffset
     }
+    if (placement.yawOffset !== undefined) {
+      if (placement.yawOffset === 0) delete next.yawOffset
+      else next.yawOffset = placement.yawOffset
+    }
     if (placement.batteryKwh !== undefined) {
       if (placement.batteryKwh === 0) delete next.batteryKwh
       else next.batteryKwh = placement.batteryKwh
@@ -124,6 +134,7 @@ export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePla
     if (placement.size) next.size = placement.size
     if (placement.leaves !== undefined) next.leaves = placement.leaves
     if (placement.gpsOffset && (placement.gpsOffset[0] !== 0 || placement.gpsOffset[1] !== 0)) next.gpsOffset = placement.gpsOffset
+    if (placement.yawOffset) next.yawOffset = placement.yawOffset
     if (placement.batteryKwh) next.batteryKwh = placement.batteryKwh
   }
   const out = [...devices]

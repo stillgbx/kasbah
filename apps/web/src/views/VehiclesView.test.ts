@@ -147,8 +147,9 @@ describe('VehiclesView — détail de la charge', () => {
     const e = vehicle('online')
     const says = { ...e, descriptor: { ...e.descriptor, capabilities: [...e.descriptor.capabilities, 'charge_power'] } } as DeviceEntry
     const { w, button } = setup(says)
-    await button('Régler')!.trigger('click')                 // placé par son GPS : le décalage reste à régler
-    expect(w.findAll('.tune__row')).toHaveLength(1)
+    await button('Régler')!.trigger('click')                 // placé par son GPS : décalage et rotation restent à régler
+    expect(w.findAll('.tune__row')).toHaveLength(2)
+    expect(w.find('.tune').text()).toContain('Rotation')
     expect(w.find('.tune').text()).not.toContain('Capacité')
 
     // placé à la main ET bavard sur sa puissance : plus rien à régler, plus de bouton

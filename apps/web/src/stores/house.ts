@@ -353,11 +353,11 @@ export const useHouseStore = defineStore('house', () => {
 
   /**
    * Réglages d'un appareil que seul l'utilisateur peut connaître : le décalage de sa place calculée
-   * par GPS, la capacité de sa batterie (aucun fabricant ne la donne). Même chemin que le renommage :
-   * l'entrée de maison est créée au besoin, SANS position — un véhicule n'a pas de place écrite.
-   * `[0, 0]` et `0` effacent, comme la chaîne vide efface un nom.
+   * par GPS, la correction de son orientation, la capacité de sa batterie (aucun fabricant ne la
+   * donne). Même chemin que le renommage : l'entrée de maison est créée au besoin, SANS position —
+   * un véhicule n'a pas de place écrite. `[0, 0]` et `0` effacent, comme la chaîne vide efface un nom.
    */
-  async function setDeviceTuning(pluginDeviceId: string, tuning: { gpsOffset?: Vec2; batteryKwh?: number }): Promise<boolean> {
+  async function setDeviceTuning(pluginDeviceId: string, tuning: { gpsOffset?: Vec2; yawOffset?: number; batteryKwh?: number }): Promise<boolean> {
     const hd = houseDeviceFor(pluginDeviceId)
     const placement: DevicePlacement = { ...tuning }
     if (!hd) placement.deviceId = pluginDeviceId

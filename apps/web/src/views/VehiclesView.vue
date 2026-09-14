@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { estimateChargePowerW, geoDistance, type Capability, type CommandInput, type DeviceEntry, type StateFor, type Vec2 } from '@kasbah/shared'
+import { estimateChargePowerW, geoDistance, type Capability, type CommandInput, type DeviceEntry, type StateFor } from '@kasbah/shared'
 import PageHeader from '../components/layout/PageHeader.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import VehicleMap from '../components/vehicles/VehicleMap.vue'
+import VehicleTuning from '../components/vehicles/VehicleTuning.vue'
 import { formatAgo, formatDistance, formatKm, formatMinutes, formatPercent, formatPower, formatTemp } from '../lib/format'
 import { QUOTA_TENSE_PCT, quotaPercent } from '../lib/map'
+import { tunableVehicle } from '../lib/vehicleTuning'
 import { useDevicesStore } from '../stores/devices'
 import { useHouseStore } from '../stores/house'
 
@@ -115,40 +117,13 @@ const tire = (s: StateFor<'vehicle'>, k: (typeof TIRES)[number]) => {
   return v === undefined ? EMPTY : `${new Intl.NumberFormat(locale.value, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v)} bar`
 }
 /**
- * Ce que seul l'utilisateur peut savoir, replié derrière « Régler » : le décalage 3D et la capacité
- * de la batterie. Ces valeurs vivent dans la MAISON (`house.devices[]`) et non dans l'état, qui est
- * la vérité du fabricant, réécrite à chaque lecture.
- *
- * Le décalage (m, repère maison) : ni le GPS de la voiture ni l'origine de la maison ne sont exacts
- * au mètre, et l'écart qu'on mesure à l'œil dans la scène se saisit ici une fois pour toutes.
- * La capacité (kWh) : AUCUN fabricant ne la donne — ni Tesla, ni Renault — et sans elle on ne peut
- * pas estimer la puissance de charge d'un véhicule qui ne la dit pas.
+ * Ce que seul l'utilisateur peut savoir, replié derrière « Régler » : le décalage 3D, la rotation et
+ * la capacité de la batterie (cf. `VehicleTuning`). Un véhicule qui n'a rien à régler — placé à la
+ * main ET bavard sur sa puissance de charge — ne se voit pas proposer le bouton.
  */
 const tuning = ref<string | null>(null)
-const offsetOf = (v: VehicleEntry, axis: 0 | 1) => house.houseDeviceFor(v.descriptor.id)?.gpsOffset?.[axis] ?? 0
+const tunable = (v: VehicleEntry) => tunableVehicle(v.descriptor, house.houseDeviceFor(v.descriptor.id))
 const capacityOf = (v: VehicleEntry) => house.houseDeviceFor(v.descriptor.id)?.batteryKwh ?? 0
-/** Rien à corriger pour un véhicule qu'on a PLACÉ à la main dans la maison : sa place fait déjà foi. */
-const gpsPlaced = (v: VehicleEntry) => house.houseDeviceFor(v.descriptor.id)?.position === undefined
-/**
- * La capacité ne se demande qu'à qui en a besoin : un véhicule qui DIT sa puissance de charge
- * (capacité `charge_power`) n'a rien à faire estimer, et un champ qui ne sert à rien est un champ
- * de trop. Sans aucun réglage à offrir, « Régler » lui-même disparaît.
- */
-const needsCapacity = (v: VehicleEntry) => !has(v, 'charge_power')
-const tunable = (v: VehicleEntry) => gpsPlaced(v) || needsCapacity(v)
-/** Un champ vidé vaut 0, et 0 EFFACE le réglage — c'est ce que dit le contrat d'écriture. */
-const typed = (raw: string) => (raw.trim() === '' ? 0 : Number(raw.replace(',', '.')))
-function setOffset(v: VehicleEntry, axis: 0 | 1, raw: string): void {
-  const value = typed(raw)
-  if (!Number.isFinite(value) || value === offsetOf(v, axis)) return
-  const next: Vec2 = axis === 0 ? [value, offsetOf(v, 1)] : [offsetOf(v, 0), value]
-  void house.setDeviceTuning(v.descriptor.id, { gpsOffset: next })
-}
-function setCapacity(v: VehicleEntry, raw: string): void {
-  const value = typed(raw)
-  if (!Number.isFinite(value) || value < 0 || value === capacityOf(v)) return
-  void house.setDeviceTuning(v.descriptor.id, { batteryKwh: value })
-}
 
 /**
  * La LIMITE DE CHARGE, seul réglage de la voiture que la carte laisse changer. Deux gestes pour une
@@ -360,28 +335,7 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
               <StrokeIcon name="gear" :size="16" />{{ $t('vehicle.tune') }}
             </button>
           </div>
-          <div v-if="tuning === v.descriptor.id" class="card card--soft tune">
-            <!-- le décalage ne concerne qu'une voiture posée par son GPS : celle qu'on a placée à la
-                 main dans la maison tient déjà sa place du JSON -->
-            <label v-if="gpsPlaced(v)" class="tune__row">
-              <span class="muted tune__k">{{ $t('vehicle.offset') }}</span>
-              <span class="tune__fields">
-                <span v-for="(axis, i) in (['x', 'y'] as const)" :key="axis" class="tune__axis">
-                  <span class="muted">{{ $t(`vehicle.offset${axis.toUpperCase()}`) }}</span>
-                  <input type="number" step="0.5" inputmode="decimal" :value="offsetOf(v, i as 0 | 1)"
-                         @change="setOffset(v, i as 0 | 1, ($event.target as HTMLInputElement).value)" />
-                </span>
-              </span>
-            </label>
-            <label v-if="needsCapacity(v)" class="tune__row">
-              <span class="muted tune__k">{{ $t('vehicle.capacity') }}</span>
-              <span class="tune__fields">
-                <input type="number" step="1" min="0" inputmode="decimal" :value="capacityOf(v) || ''"
-                       :placeholder="EMPTY" @change="setCapacity(v, ($event.target as HTMLInputElement).value)" />
-              </span>
-            </label>
-            <p v-if="needsCapacity(v)" class="muted tune__hint">{{ $t('vehicle.capacityHint') }}</p>
-          </div>
+          <VehicleTuning v-if="tuning === v.descriptor.id" :descriptor="v.descriptor" />
           <!-- l'âge des valeurs, toujours affiché : sur une API facturée et une voiture qui dort, elles en ont un -->
           <p class="muted vcard__hint">{{ readAgo(v.state) }}<template v-if="asleep(v.state)"> · {{ $t('vehicle.wakeHint') }}</template></p>
           <!-- ce qu'il reste du quota que le plugin s'impose (API du fabricant facturée) : rien pour
@@ -463,18 +417,6 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
 .vcard__map { height: 220px; }
 /* la ligne de charge tient sa hauteur même vide : la carte ne bouge pas quand la charge démarre */
 .vcard__charge { margin: -8px 0 0; font-size: 12px; min-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* le dépliant « Régler » : ce que seul l'utilisateur sait, et qu'il pose une fois */
-.tune { padding: 10px 12px; display: grid; gap: 10px; }
-.tune__row { display: flex; align-items: center; gap: 10px; font-size: 12px; }
-.tune__k { flex: 1 1 auto; min-width: 0; }
-.tune__fields { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; }
-.tune__axis { display: flex; align-items: center; gap: 6px; }
-.tune input {
-  width: 72px; padding: 4px 8px;
-  border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text);
-  font: inherit; font-size: 13px; font-variant-numeric: tabular-nums;
-}
-.tune__hint { margin: 0; font-size: 11px; }
 .vcard__actions { display: flex; gap: 8px; flex-wrap: wrap; min-height: 40px; }
 /* un bouton qui ATTEND n'est pas un bouton indisponible : l'opacité des boutons désactivés (.45)
    rendait le spinner à peine visible, or c'est lui qui porte l'information */

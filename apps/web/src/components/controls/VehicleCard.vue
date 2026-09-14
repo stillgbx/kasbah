@@ -43,7 +43,16 @@ watch(() => [props.state.chargeLimit, props.pending], () => { dragged.value = nu
         <div class="text-caption text-medium-emphasis">{{ $t('vehicle.range') }}</div>
       </div>
     </div>
-    <v-progress-linear :model-value="state.soc" rounded height="10" :color="state.charging ? 'success' : state.soc < 20 ? 'error' : 'primary'" class="mb-3" />
+    <!-- la jauge et ses repères, comme sur la carte de la vue Véhicules : la cible de charge — qui
+         suit le curseur d'en dessous pendant qu'on le glisse — et le plancher voulu quand le
+         fabricant a cette notion (la R5 ; Tesla ne l'a pas, et un seul repère se dessine alors) -->
+    <div class="soc mb-3">
+      <v-progress-linear :model-value="state.soc" rounded height="10" :color="state.charging ? 'success' : state.soc < 20 ? 'error' : 'primary'" />
+      <span v-if="state.socMin !== undefined" class="soc__tick" :style="{ left: `${state.socMin}%` }"
+            :title="$t('vehicle.floorMark', { percent: formatPercent(state.socMin, $i18n.locale) })" />
+      <span v-if="state.chargeLimit !== undefined" class="soc__tick" :style="{ left: `${limit}%` }"
+            :title="$t('vehicle.targetMark', { percent: formatPercent(limit, $i18n.locale) })" />
+    </div>
     <div class="d-flex flex-wrap ga-2 mb-3">
       <v-chip variant="tonal" size="small" :prepend-icon="state.pluggedIn ? 'plug' : 'plugOff'">{{ state.pluggedIn ? $t('vehicle.pluggedIn') : $t('vehicle.unplugged') }}</v-chip>
       <v-chip v-if="state.charging" variant="tonal" size="small" color="success">{{ $t('vehicle.charging') }} · {{ formatPower(state.chargePowerW ?? 0, $i18n.locale) }}</v-chip>
@@ -75,3 +84,13 @@ watch(() => [props.state.chargeLimit, props.pending], () => { dragged.value = nu
     <div v-if="state.odometerKm" class="text-caption text-medium-emphasis">{{ $t('vehicle.odometer') }} · {{ formatKm(state.odometerKm, $i18n.locale) }}</div>
   </div>
 </template>
+
+<style scoped>
+/* Repères de limites : le trait de la vue Véhicules, posé PAR-DESSUS la jauge (qui n'a pas de pouce
+   pour le cacher) — donc pas d'`overflow: hidden` sur l'enveloppe, ils la débordent exprès. */
+.soc { position: relative; }
+.soc__tick {
+  position: absolute; top: 50%; width: 3px; height: 16px; border-radius: 2px;
+  transform: translate(-50%, -50%); background: rgb(var(--v-theme-warning));
+}
+</style>

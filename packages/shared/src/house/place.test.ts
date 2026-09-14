@@ -62,6 +62,15 @@ describe('placeDeviceInJson', () => {
     expect(entry(renamed)).toMatchObject({ gpsOffset: [2.5, -1], name: 'Voiture 1' })
   })
 
+  it('écrit la rotation d un véhicule, et 0 l efface', () => {
+    const entry = (doc: Record<string, unknown>) => devices(doc).find((x) => x.id === 'vehicle.model-s')
+    const created = placeDeviceInJson(demo, 'vehicle.model-s', { deviceId: 'tesla:5YJ', yawOffset: 180 })
+    expect(entry(created)).toEqual({ id: 'vehicle.model-s', deviceId: 'tesla:5YJ', yawOffset: 180 })
+    expect(() => parseHouse(created)).not.toThrow()
+    const cleared = placeDeviceInJson(created, 'vehicle.model-s', { yawOffset: 0 })
+    expect(entry(cleared)).toEqual({ id: 'vehicle.model-s', deviceId: 'tesla:5YJ' })
+  })
+
   it('writes the orientation when given, and leaves it alone otherwise', () => {
     const turned = placeDeviceInJson(demo, 'light.salon', { position: [5, 3, 0.75], yaw: 270 })
     expect(devices(turned).find((x) => x.id === 'light.salon')).toMatchObject({ position: [5, 3, 0.75], yaw: 270 })

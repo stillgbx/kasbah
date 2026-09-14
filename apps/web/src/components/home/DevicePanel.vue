@@ -17,6 +17,7 @@ import MarqueeText from '../ui/MarqueeText.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import ForgetDeviceButton from '../devices/ForgetDeviceButton.vue'
 import DeviceControl from '../controls/DeviceControl.vue'
+import VehicleTuning from '../vehicles/VehicleTuning.vue'
 import PanelArraysCard from './PanelArraysCard.vue'
 import PlacementControl from './PlacementControl.vue'
 
@@ -212,6 +213,9 @@ function send(cmd: CommandInput) {
     <DeviceControl v-if="resolved.descriptor && resolved.state" :descriptor="resolved.descriptor" :state="resolved.state"
                    :pending="devices.isPending(resolved.deviceId!)" :relay-from="relay?.name" @command="send" />
     <div v-else class="card card--soft unbound muted">{{ $t('device.unbound', { id: resolved.houseDevice?.deviceId ?? resolved.key }) }}</div>
+    <!-- un véhicule ne se place pas (son GPS le fait) : ce qu'il a à régler, c'est la correction de
+         cette place et de son cap — et on les voit s'appliquer dans la scène, voiture sous les yeux -->
+    <VehicleTuning v-if="resolved.descriptor?.kind === 'vehicle'" class="tuning" :descriptor="resolved.descriptor" />
     <!-- les champs de panneaux se déclarent ici, juste au-dessus de l'emplacement de l'installation -->
     <PanelArraysCard v-if="solarSite" class="arrays" :site-device-id="solarSite" />
     <!-- rarement utilisé : calé au fond du panneau, sous tout le reste -->
@@ -259,6 +263,8 @@ function send(cmd: CommandInput) {
 .crumb:hover { color: var(--text); }
 .head { display: flex; align-items: center; gap: 12px; }
 .placement { margin-top: auto; }
+/* le réglage d'un véhicule ferme son panneau, comme « Emplacement » ferme celui d'un appareil posé */
+.tuning { margin-top: auto; }
 /* la carte des champs se colle au bloc « Emplacement » qui ferme le panneau */
 .arrays { margin-top: auto; }
 .arrays + .placement { margin-top: 0; }

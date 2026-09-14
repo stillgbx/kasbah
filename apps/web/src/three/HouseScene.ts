@@ -285,12 +285,19 @@ export class HouseScene {
    *   4. rien : le marqueur reste face à +y.
    *
    * `undefined` plutôt que `0` au bout : le marqueur garde son défaut, personne n'affirme un cap.
+   *
+   * La correction `yawOffset` s'AJOUTE au cap ainsi déduit (2, 3 et 4) : un cap mesuré reste une
+   * mesure — la voiture qui tourne tourne encore —, mais ni lui ni l'axe d'un garage ne disent de
+   * quel côté elle s'est garée. Elle ne touche pas au `yaw` posé à la main, qui fait déjà foi.
    */
   private vehicleYaw(device: HouseDevice, state: DeviceState | undefined, position: Vec3): number | undefined {
     if (device.yaw !== undefined) return device.yaw
     if (state?.kind !== 'vehicle' || !this.house) return undefined
-    if (state.headingDeg !== undefined) return this.house.origin.heading - state.headingDeg
-    return this.enclosingRoomYaw([position[0], position[1]])
+    const base = state.headingDeg !== undefined
+      ? this.house.origin.heading - state.headingDeg
+      : this.enclosingRoomYaw([position[0], position[1]])
+    if (device.yawOffset === undefined) return base
+    return (base ?? 0) + device.yawOffset
   }
 
   /**
