@@ -148,7 +148,12 @@
     "tire": {"fl": "AV G", "fr": "AV D", "rl": "AR G", "rr": "AR D"},
     "temps": "Températures",
     "inside": "Intérieur",
-    "outside": "Extérieur"
+    "outside": "Extérieur",
+    "readAt": "Lu {ago}",
+    "neverRead": "Jamais lu",
+    "refresh": "Actualiser",
+    "refreshing": "Actualisation…",
+    "refreshHint": "Relit le véhicule maintenant (une lecture facturée par Tesla) ; le sondage repart de cette lecture."
   },
   "settings": {
     "title": "Réglages", "appearance": "Apparence", "system": "Système", "light": "Clair", "dark": "Sombre",

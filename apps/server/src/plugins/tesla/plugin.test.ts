@@ -384,6 +384,47 @@ describe('sondage respectueux de la veille', () => {
 })
 
 describe('commandes', () => {
+  it('rafraîchir relit maintenant, et le sondage REPART de cette lecture (pas du calendrier initial)', async () => {
+    const tesla = fakeTesla()
+    tesla.world.list = VEHICLES_ONLINE
+    tesla.world.data = VEHICLE_DATA_DRIVING          // en route : pas de repos, chaque tour relit
+    const { plugin, clock, ctx } = await started({ tesla, tokens: linkedTokens() })
+    await plugin.start()
+    await settle()
+    expect(dataCalls(tesla)).toBe(1)
+    expect(patches(ctx).at(-1)).toMatchObject({ readAt: NOW })
+    // t+3 min : lecture manuelle
+    clock.advance(3 * MIN); await settle()
+    await plugin.execute(VIN, { type: 'vehicle.refresh' })
+    expect(dataCalls(tesla)).toBe(2)
+    expect(patches(ctx).at(-1)).toMatchObject({ readAt: NOW + 3 * MIN })
+    // t+10 : le tour du calendrier initial ne tombe PAS ; t+13 : dix minutes après la lecture manuelle, si
+    clock.advance(7 * MIN); await settle()
+    expect(dataCalls(tesla)).toBe(2)
+    clock.advance(3 * MIN); await settle()
+    expect(dataCalls(tesla)).toBe(3)
+  })
+
+  it('rafraîchir un véhicule endormi ne le réveille pas : la veille seule est relue', async () => {
+    const tesla = fakeTesla()
+    const { plugin, ctx } = await started({ tesla, tokens: linkedTokens() })
+    await plugin.discover()
+    await plugin.execute(VIN, { type: 'vehicle.refresh' })
+    expect(dataCalls(tesla)).toBe(0)
+    expect(tesla.calls.some((c) => c.path.endsWith('/wake_up'))).toBe(false)
+    expect(patches(ctx).at(-1)).toEqual({ sleepState: 'asleep' })
+  })
+
+  it('rafraîchir quand le budget du jour est épuisé est refusé plutôt que dépensé', async () => {
+    const tesla = fakeTesla()
+    tesla.world.list = VEHICLES_ONLINE
+    const { plugin } = await started({ tesla, tokens: linkedTokens(), env: { TESLA_DAILY_DATA_BUDGET: '1' } })
+    await plugin.start()
+    await settle()
+    await expect(plugin.execute(VIN, { type: 'vehicle.refresh' })).rejects.toMatchObject({ code: 'RATE_LIMITED' })
+    expect(dataCalls(tesla)).toBe(1)
+  })
+
   it('le réveil est le seul geste : POST wake_up, puis une relecture différée ; le reste est refusé', async () => {
     const tesla = fakeTesla()
     const { plugin, clock, tesla: t } = await started({ tesla, tokens: linkedTokens() })

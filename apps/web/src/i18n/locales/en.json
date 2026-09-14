@@ -148,7 +148,12 @@
     "tire": {"fl": "FL", "fr": "FR", "rl": "RL", "rr": "RR"},
     "temps": "Temperatures",
     "inside": "Inside",
-    "outside": "Outside"
+    "outside": "Outside",
+    "readAt": "Read {ago}",
+    "neverRead": "Never read",
+    "refresh": "Refresh",
+    "refreshing": "Refreshing…",
+    "refreshHint": "Reads the vehicle now (one read billed by Tesla); polling restarts from this read."
   },
   "settings": {
     "title": "Settings", "appearance": "Appearance", "system": "System", "light": "Light", "dark": "Dark",

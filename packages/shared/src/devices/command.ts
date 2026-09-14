@@ -64,6 +64,8 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('vehicle.stop_charge') }),
   z.object({ type: z.literal('vehicle.set_charge_limit'), percent: pct }),
   z.object({ type: z.literal('vehicle.wake') }),
+  /** Relire le véhicule MAINTENANT (lecture facturée) ; le sondage repart de ce moment. */
+  z.object({ type: z.literal('vehicle.refresh') }),
 ])
 export type Command = z.infer<typeof commandSchema>
 export type CommandInput = z.input<typeof commandSchema>
@@ -85,7 +87,7 @@ export const COMMAND_REQUIRES: Record<CommandType, Capability> = {
   'ev_charger.start': 'charge_control', 'ev_charger.stop': 'charge_control', 'ev_charger.set_current': 'charge_current',
   'vehicle.lock': 'lock', 'vehicle.unlock': 'lock',
   'vehicle.start_charge': 'charging', 'vehicle.stop_charge': 'charging',
-  'vehicle.set_charge_limit': 'charge_limit', 'vehicle.wake': 'soc',
+  'vehicle.set_charge_limit': 'charge_limit', 'vehicle.wake': 'soc', 'vehicle.refresh': 'soc',
 }
 
 export function commandKind(cmd: Command | CommandType): DeviceKind {

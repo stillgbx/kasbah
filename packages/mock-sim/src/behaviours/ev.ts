@@ -77,6 +77,7 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
       s.gear = driving ? 'D' : 'P'
       s.speedKmh = driving ? Math.round((32 / tripMin) * 60) : 0
       s.sleepState = driving || s.charging ? 'online' : 'asleep'
+      s.readAt = ctx.simTime
     },
     apply(cmd) {
       const s = dev.state
@@ -87,6 +88,7 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
         case 'vehicle.stop_charge': s.chargeLimit = Math.floor(s.soc); break
         case 'vehicle.set_charge_limit': s.chargeLimit = clamp(Math.round(cmd.percent), 50, 100); break
         case 'vehicle.wake': s.sleepState = 'online'; break
+        case 'vehicle.refresh': break
         default: throw new SimError('UNSUPPORTED_COMMAND', `${cmd.type} on vehicle`)
       }
     },

@@ -6,7 +6,6 @@ import type { FastifyInstance } from 'fastify'
 import { fetch as undiciFetch } from 'undici'
 import { z } from 'zod'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
-import { createPoller } from '../../core/poll'
 import { sleep } from '../../core/clock'
 import type { FetchLike } from '../../core/sse'
 import { describeError, sendError } from '../../http/errors'
@@ -118,7 +117,9 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
   let keyStore: KeyStore | null = null
   let registered: boolean | undefined
   let lastError: string | null = null
-  let poller: { stop(): void } | null = null
+  /** Sondage : un timer reposé après chaque tour, et après chaque lecture manuelle (le délai repart). */
+  let polling = false
+  let timer: unknown = null
   const vehicles = new Map<string, VehicleTrack>()
   /** `state` émis par /auth/url et attendus au retour : une liaison ne s'accepte que si on l'a lancée. */
   const pendingStates = new Set<string>()
@@ -216,10 +217,13 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     if (!track) throw new PluginError('DEVICE_UNAVAILABLE', `unknown Tesla vehicle ${vin}`)
     const path = `/api/1/vehicles/${encodeURIComponent(vin)}/vehicle_data?endpoints=${encodeURIComponent(DATA_ENDPOINTS)}`
     const data = vehicleDataSchema.parse(await client!.request('GET', path, { signal: ctx!.signal })).response
-    ctx!.emitState(vin, toDataPatch(data))
+    ctx!.emitState(vin, { ...toDataPatch(data), readAt: ctx!.clock.now() })
     track.sleepState = toSleepState(data.state)
     // au repos : on le laisse s'endormir, la prochaine lecture attendra
     track.restUntil = isResting(data) && config!.TESLA_REST_MS > 0 ? ctx!.clock.now() + config!.TESLA_REST_MS : 0
+    // une lecture, d'où qu'elle vienne (sondage, réveil, rafraîchissement demandé), remet le compteur
+    // du sondage à zéro : relire dix minutes après la dernière lecture, pas selon un calendrier fixe
+    if (polling) scheduleNext(config!.TESLA_POLL_MS)
   }
 
   async function poll(): Promise<void> {
@@ -247,12 +251,33 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     lastError = null
   }
 
+  /**
+   * Sondage maison plutôt que `createPoller` : il faut pouvoir REPOSER le timer après une lecture
+   * manuelle. Un échec ne fait pas de backoff serré — l'API est facturée, dix minutes plus tard suffit.
+   */
+  function scheduleNext(ms: number): void {
+    if (timer !== null) ctx!.clock.clearTimeout(timer)
+    timer = ctx!.clock.setTimeout(() => { timer = null; void runPoll() }, ms)
+  }
+  let failing = false
+  async function runPoll(): Promise<void> {
+    if (!polling || ctx!.signal.aborted) return
+    try {
+      await poll()
+      if (failing) log().info('Tesla polling recovered')
+      failing = false
+    } catch (err) {
+      lastError = (err as Error).message
+      const l = failing ? log().debug.bind(log()) : log().warn.bind(log())
+      l({ err }, 'Tesla poll failed')
+      failing = true
+    }
+    if (polling) scheduleNext(config!.TESLA_POLL_MS)
+  }
   function startPolling(): void {
-    if (poller || !auth?.linked) return
-    poller = createPoller({
-      name: 'tesla:vehicles', intervalMs: config!.TESLA_POLL_MS, fn: poll,
-      clock: ctx!.clock, signal: ctx!.signal, logger: ctx!.logger,
-    })
+    if (polling || !auth?.linked) return
+    polling = true
+    void runPoll()
   }
 
   // ---- enregistrement du domaine ------------------------------------------------------------
@@ -313,6 +338,23 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     async execute(externalId, command: Command) {
       if (!client) throw new PluginError('NEEDS_PAIRING', 'Tesla plugin not configured')
       if (!vehicles.has(externalId)) throw new PluginError('DEVICE_UNAVAILABLE', `unknown Tesla vehicle ${externalId}`)
+      if (command.type === 'vehicle.refresh') {
+        // relire MAINTENANT : la liste d'abord (le véhicule a pu s'endormir depuis l'affichage), puis la
+        // lecture complète s'il est éveillé, comptée au budget. Endormi, on ne le réveille pas : c'est
+        // l'autre bouton, et il coûte dix fois plus
+        adoptList(await listVehicles())
+        const track = vehicles.get(externalId)!
+        track.sleepState = toSleepState(track.summary.state)
+        ctx!.emitState(externalId, toSleepPatch(track.summary))
+        if (track.sleepState !== 'online') return
+        if (!takeBudget()) throw new PluginError('RATE_LIMITED', `Tesla daily vehicle_data budget spent (${config!.TESLA_DAILY_DATA_BUDGET}): try again tomorrow`)
+        try { await readVehicle(externalId) }
+        catch (err) {
+          if (err instanceof PluginError && err.code === 'DEVICE_UNAVAILABLE') { track.sleepState = 'asleep'; ctx!.emitState(externalId, { sleepState: 'asleep' }); return }
+          throw err
+        }
+        return
+      }
       if (command.type !== 'vehicle.wake') {
         throw new PluginError('UNSUPPORTED_COMMAND', `Tesla plugin is read-only for now (${command.type})`)
       }
@@ -331,8 +373,9 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     },
 
     async stop() {
-      poller?.stop()
-      poller = null
+      polling = false
+      if (timer !== null && ctx) ctx.clock.clearTimeout(timer)
+      timer = null
       client = null
       auth = null
       vehicles.clear()

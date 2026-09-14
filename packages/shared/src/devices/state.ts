@@ -178,6 +178,12 @@ export const vehicleStateSchema = z.object({
   }).optional(),
   insideTempC: z.number().optional(),
   outsideTempC: z.number().optional(),
+  /**
+   * Date (ms epoch) de la dernière LECTURE COMPLÈTE du véhicule — pas `updatedAt`, que la seule veille
+   * fait bouger. C'est ce que l'UI affiche (« lu il y a 12 min ») : sur une API facturée et un
+   * véhicule qui dort, les valeurs ont un âge, et l'utilisateur doit le voir. Absente = jamais lu.
+   */
+  readAt: z.number().int().optional(),
 })
 
 /**

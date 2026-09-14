@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { geoDistance, type Capability, type CommandInput, type DeviceEntry, type StateFor } from '@kasbah/shared'
 import PageHeader from '../components/layout/PageHeader.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
-import { formatDistance, formatKm, formatPercent, formatPower, formatTemp } from '../lib/format'
+import { formatAgo, formatDistance, formatKm, formatPercent, formatPower, formatTemp } from '../lib/format'
 import { useDevicesStore } from '../stores/devices'
 import { useHouseStore } from '../stores/house'
 
@@ -57,6 +57,13 @@ const tire = (s: StateFor<'vehicle'>, k: (typeof TIRES)[number]) => {
   return v === undefined ? EMPTY : `${new Intl.NumberFormat(locale.value, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v)} bar`
 }
 const send = (id: string, cmd: CommandInput) => devices.sendCommand(id, cmd)
+
+// « lu il y a 12 min » vieillit tout seul : une horloge de la vue, rafraîchie chaque demi-minute
+const now = ref(Date.now())
+let clockTimer: ReturnType<typeof setInterval> | null = null
+onMounted(() => { clockTimer = setInterval(() => { now.value = Date.now() }, 30_000) })
+onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
+const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ago: formatAgo(s.readAt, now.value, locale.value) }) : t('vehicle.neverRead'))
 </script>
 
 <template>
@@ -110,8 +117,14 @@ const send = (id: string, cmd: CommandInput) => devices.sendCommand(id, cmd)
                     @click="send(v.descriptor.id, { type: 'vehicle.wake' })">
               <StrokeIcon name="sun" :size="16" />{{ $t('vehicle.wake') }}
             </button>
+            <!-- relire maintenant (lecture facturée, pas de réveil) ; le sondage repart de cette lecture -->
+            <button v-else-if="has(v, 'soc')" type="button" class="pill" :disabled="!v.state.available || devices.isPending(v.descriptor.id)"
+                    :title="$t('vehicle.refreshHint')" @click="send(v.descriptor.id, { type: 'vehicle.refresh' })">
+              <StrokeIcon name="rotateRight" :size="16" />{{ devices.isPending(v.descriptor.id) ? $t('vehicle.refreshing') : $t('vehicle.refresh') }}
+            </button>
           </div>
-          <p v-if="asleep(v.state)" class="muted vcard__hint">{{ $t('vehicle.wakeHint') }}</p>
+          <!-- l'âge des valeurs, toujours affiché : sur une API facturée et une voiture qui dort, elles en ont un -->
+          <p class="muted vcard__hint">{{ readAgo(v.state) }}<template v-if="asleep(v.state)"> · {{ $t('vehicle.wakeHint') }}</template></p>
         </article>
       </div>
     </div>
