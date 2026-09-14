@@ -40,6 +40,13 @@ describe('RoomBrightness', () => {
     expect(runScene).toHaveBeenCalledWith([{ deviceId: 'a', command: { type: 'light.set', brightness: 25 } }])
   })
 
+  it('writes the value next to the slider, and follows the drag', async () => {
+    const { w } = setup([light('a', true, 40), light('b', true, 60)])
+    expect(w.find('.room-bright__pct').text()).toBe('50 %')
+    await w.findComponent({ name: 'VSlider' }).vm.$emit('update:modelValue', 25)
+    expect(w.find('.room-bright__pct').text()).toBe('25 %')
+  })
+
   // règle « rien ne doit bouger » : la place du curseur est réservée même pièce éteinte
   it('keeps the slider in place, disabled, when the room is dark', () => {
     const { w } = setup([light('a', false, 30)])

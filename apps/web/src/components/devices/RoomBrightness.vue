@@ -45,7 +45,13 @@ function commit(v: number) {
             :disabled="lit.length === 0" :class="{ 'room-bright--off': lit.length === 0 }"
             :aria-hidden="lit.length === 0 ? 'true' : 'false'" :aria-label="$t('rooms.brightness')"
             density="compact" hide-details class="room-bright"
-            @update:model-value="(v: number) => { draft = v }" @end="commit" />
+            @update:model-value="(v: number) => { draft = v }" @end="commit">
+    <!-- La valeur au bout de la piste : sans elle on vise 50 % à l'oeil, et la moyenne d'une pièce
+         ne se devine pas depuis la poignée. Elle suit le glissement (`shown` porte le brouillon).
+         Largeur FIXE et chiffres tabulaires : la piste ne doit pas se raccourcir en passant de
+         « 9 % » à « 100 % », sinon la poignée bougerait sous le doigt. -->
+    <template #append><span class="room-bright__pct">{{ shown }} %</span></template>
+  </v-slider>
 </template>
 
 <style scoped>
@@ -53,4 +59,6 @@ function commit(v: number) {
    `.v-input` — sans cela le curseur s'étire sur toute la hauteur libre et pousse les appareils au fond. */
 .room-bright { flex: 0 0 auto; margin: 0 4px; transition: opacity .2s ease; }
 .room-bright--off { visibility: hidden; }
+/* `min-width` plutôt que `width` : à gros zoom le texte ne doit pas se faire couper. */
+.room-bright__pct { min-width: 5ch; text-align: right; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 </style>
