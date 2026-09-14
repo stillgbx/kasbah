@@ -153,7 +153,9 @@
     "neverRead": "Jamais lu",
     "refresh": "Actualiser",
     "refreshing": "Actualisation…",
-    "refreshHint": "Relit le véhicule maintenant (une lecture facturée par Tesla) ; le sondage repart de cette lecture."
+    "refreshHint": "Relit le véhicule maintenant (une lecture facturée par Tesla) ; le sondage repart de cette lecture.",
+    "map": {"plan": "Plan", "satellite": "Satellite", "fullscreen": "Plein écran", "close": "Fermer", "recenter": "Recentrer", "noPosition": "Position inconnue"},
+    "map": {"plan": "Plan", "satellite": "Satellite", "fullscreen": "Plein écran", "close": "Fermer", "recenter": "Recentrer", "noPosition": "Position inconnue"}
   },
   "settings": {
     "title": "Réglages", "appearance": "Apparence", "system": "Système", "light": "Clair", "dark": "Sombre",

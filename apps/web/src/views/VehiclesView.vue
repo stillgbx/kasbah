@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { geoDistance, type Capability, type CommandInput, type DeviceEntry, type StateFor } from '@kasbah/shared'
 import PageHeader from '../components/layout/PageHeader.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
+import VehicleMap from '../components/vehicles/VehicleMap.vue'
 import { formatAgo, formatDistance, formatKm, formatPercent, formatPower, formatTemp } from '../lib/format'
 import { useDevicesStore } from '../stores/devices'
 import { useHouseStore } from '../stores/house'
@@ -57,6 +58,9 @@ const tire = (s: StateFor<'vehicle'>, k: (typeof TIRES)[number]) => {
   return v === undefined ? EMPTY : `${new Intl.NumberFormat(locale.value, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v)} bar`
 }
 const send = (id: string, cmd: CommandInput) => devices.sendCommand(id, cmd)
+/** Sous la carte : où est la voiture par rapport à la maison, et son kilométrage. */
+const caption = (s: StateFor<'vehicle'>) =>
+  `${location(s)}${s.odometerKm ? ` · ${t('vehicle.odometer')} ${formatKm(s.odometerKm, locale.value)}` : ''}`
 
 // « lu il y a 12 min » vieillit tout seul : une horloge de la vue, rafraîchie chaque demi-minute
 const now = ref(Date.now())
@@ -103,7 +107,8 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
               <div v-for="k in TIRES" :key="k" class="tire"><span class="muted tire__k">{{ $t(`vehicle.tire.${k}`) }}</span><span class="tire__v">{{ tire(v.state, k) }}</span></div>
             </div>
           </div>
-          <div class="card card--soft vcard__map muted">{{ $t('vehicle.mapPlaceholder') }} · {{ location(v.state) }}<template v-if="v.state.odometerKm"> · {{ $t('vehicle.odometer') }} {{ formatKm(v.state.odometerKm, locale) }}</template></div>
+          <!-- la carte : voiture (avec son cap) et maison, plan ou satellite, plein écran -->
+          <VehicleMap class="vcard__map" :location="v.state.location" :heading-deg="v.state.headingDeg" :home="house.house?.origin" :caption="caption(v.state)" />
           <div class="vcard__actions">
             <button v-if="has(v, 'lock')" type="button" class="pill" :disabled="!v.state.available" @click="send(v.descriptor.id, { type: v.state.locked ? 'vehicle.unlock' : 'vehicle.lock' })">
               {{ v.state.locked ? $t('common.unlock') : $t('common.lock') }}
@@ -155,7 +160,7 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
 .tire { display: grid; gap: 2px; font-variant-numeric: tabular-nums; }
 .tire__k { font-size: 11px; }
 .tire__v { font-weight: 500; font-size: 13px; white-space: nowrap; }
-.vcard__map { height: 90px; display: grid; place-items: center; font-size: 12px; text-align: center; padding: 0 12px; }
+.vcard__map { height: 220px; }
 .vcard__actions { display: flex; gap: 8px; flex-wrap: wrap; min-height: 40px; }
 .vcard__hint { margin: 0; font-size: 12px; }
 </style>

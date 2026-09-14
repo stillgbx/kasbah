@@ -84,6 +84,12 @@ describe('lecture complète (`vehicle_data`)', () => {
     expect(toDataPatch(none).tirePressureBar).toBeUndefined()
   })
 
+  it('le cap est repris tel quel (0 = nord), normalisé dans [0, 360[', () => {
+    expect(toDataPatch(parked).headingDeg).toBe(112)
+    expect(toDataPatch({ ...parked, drive_state: { ...parked.drive_state, heading: 372 } }).headingDeg).toBe(12)
+    expect(toDataPatch({ ...parked, drive_state: { ...parked.drive_state, heading: null } }).headingDeg).toBeUndefined()
+  })
+
   it('la position est datée par `gps_as_of` (secondes) ramené en millisecondes', () => {
     expect(toDataPatch(parked).location).toEqual({ lat: 45.188529, lon: 5.724524, at: 1789329492_000 })
     const noGps = { ...parked, drive_state: { ...parked.drive_state, gps_as_of: null } }

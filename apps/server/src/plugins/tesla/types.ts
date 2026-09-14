@@ -49,6 +49,8 @@ export const driveStateSchema = z.looseObject({
   latitude: num,
   longitude: num,
   speed: num,
+  /** Cap, degrés, 0 = nord. */
+  heading: num,
   /** `P`, `R`, `N`, `D`, ou `null` à l'arrêt moteur coupé. */
   shift_state: str,
   timestamp: num,

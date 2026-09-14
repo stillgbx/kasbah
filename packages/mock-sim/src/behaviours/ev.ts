@@ -29,6 +29,11 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
   let phase: 'home' | 'toWork' | 'work' | 'toHome' = 'home'
   let tripProgress = 0
   const lerp = (a: number, b: number, t: number) => a + (b - a) * t
+  /** Cap (0 = nord, horaire) de `a` vers `b`, en plan : assez pour orienter le marqueur d'une simulation. */
+  const bearing = (a: { lat: number; lon: number }, b: { lat: number; lon: number }) => {
+    const dx = (b.lon - a.lon) * Math.cos((a.lat * Math.PI) / 180), dy = b.lat - a.lat
+    return Math.round(((Math.atan2(dx, dy) * 180) / Math.PI + 360) % 360)
+  }
   const setLocation = (t: number, at: number, s: SimDevice<'vehicle'>['state']) => {
     s.location = { lat: lerp(o.home.lat, o.work.lat, t), lon: lerp(o.home.lon, o.work.lon, t), at }
   }
@@ -41,7 +46,7 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
       soc: o.soc ?? 72, rangeKm: Math.round(((o.soc ?? 72) / 100) * rangeFull), pluggedIn: true, charging: false,
       locked: true, chargeLimit: o.chargeLimit ?? 80, location: { lat: o.home.lat, lon: o.home.lon, at: 0 }, odometerKm: 24_310,
       // ce qu'un vrai véhicule connecté dit aussi : la simulation le fournit pour que l'UI s'essaie dessus
-      sleepState: 'asleep', gear: 'P', speedKmh: 0,
+      sleepState: 'asleep', gear: 'P', speedKmh: 0, headingDeg: bearing(o.home, o.work),
       tirePressureBar: { fl: 2.9, fr: 2.9, rl: 2.95, rr: 2.95 }, insideTempC: 21.5, outsideTempC: 17,
     },
     tick(ctx) {
@@ -75,6 +80,7 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
       // en route : rapport D et vitesse moyenne du trajet ; garé : P, 0 — et il s'endort dès qu'il ne fait rien
       const driving = phase === 'toWork' || phase === 'toHome'
       s.gear = driving ? 'D' : 'P'
+      if (driving) s.headingDeg = phase === 'toWork' ? bearing(o.home, o.work) : bearing(o.work, o.home)
       s.speedKmh = driving ? Math.round((32 / tripMin) * 60) : 0
       s.sleepState = driving || s.charging ? 'online' : 'asleep'
       s.readAt = ctx.simTime

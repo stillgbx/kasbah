@@ -10,6 +10,7 @@ import { deviceColor, deviceIcon } from './deviceIcons'
 import { findBatteries, findEnergySite, inverterGroups, isEnergySite, isInverter, shortInverterId } from './energy'
 import { coverActivity, coverAtRest, isFlatCover, isPassageCover } from './cover'
 import { coverLeaves, coverSize, hasLeaves, isOrientable, isSizable } from './orientation'
+import { BOTH_MAX_M, CAR_ZOOM, IGN_ORTHO_TILE_URL, initialView, normalizeHeading, planStyleUrl, satelliteStyle } from './map'
 import fr from '../i18n/locales/fr.json'
 import en from '../i18n/locales/en.json'
 
@@ -427,5 +428,35 @@ describe('i18n locales', () => {
   it('fr and en expose the same keys', () => {
     const a = keys(fr).sort(), b = keys(en).sort()
     expect(a).toEqual(b)
+  })
+})
+
+describe('carte du véhicule (lib/map)', () => {
+  const home = { lat: 45.1885, lon: 5.7245 }
+  it('voiture près de la maison : les deux dans le cadre ; loin : la voiture seule au zoom du quartier', () => {
+    const near = { lat: 45.19, lon: 5.726 }
+    expect(initialView(near, home)).toEqual({ kind: 'bounds', sw: { lat: 45.1885, lon: 5.7245 }, ne: { lat: 45.19, lon: 5.726 } })
+    const far = { lat: 45.171, lon: 5.7211 }                 // ~2 km
+    expect(initialView(far, home).kind).toBe('bounds')
+    const away = { lat: 45.0, lon: 5.0 }                     // ~60 km
+    expect(initialView(away, home)).toEqual({ kind: 'center', center: away, zoom: CAR_ZOOM })
+    expect(BOTH_MAX_M).toBeGreaterThan(2000)
+  })
+  it('sans voiture : la maison ; sans rien : rien', () => {
+    expect(initialView(undefined, home)).toEqual({ kind: 'center', center: home, zoom: CAR_ZOOM })
+    expect(initialView(undefined, undefined)).toEqual({ kind: 'none' })
+  })
+  it('le plan suit le thème, le satellite est une source raster IGN sans clé', () => {
+    expect(planStyleUrl(false)).toContain('/liberty')
+    expect(planStyleUrl(true)).toContain('/dark')
+    expect(IGN_ORTHO_TILE_URL).toContain('HR.ORTHOIMAGERY.ORTHOPHOTOS')
+    expect(IGN_ORTHO_TILE_URL).not.toMatch(/apikey|key=/i)
+    const st = satelliteStyle()
+    expect(st.layers[0]).toMatchObject({ type: 'raster', source: 'ign' })
+  })
+  it('le cap se normalise dans [0, 360[', () => {
+    expect(normalizeHeading(372)).toBe(12)
+    expect(normalizeHeading(-90)).toBe(270)
+    expect(normalizeHeading(360)).toBe(0)
   })
 })

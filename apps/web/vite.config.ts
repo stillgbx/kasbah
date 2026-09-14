@@ -17,6 +17,12 @@ export default defineConfig({
   plugins: [vue(), vuetify({ autoImport: true })],
   base: './',
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
+  // MapLibre charge son worker par `new URL('./maplibre-gl-worker.mjs', import.meta.url)` : une fois
+  // pré-empaqueté dans `.vite/deps`, cette URL ne pointe plus sur rien, le worker ne démarre pas et
+  // les tuiles VECTORIELLES ne sont jamais décodées (le satellite, raster, marchait ; le plan restait
+  // vide, sans erreur). Servi tel quel depuis node_modules, le worker se trouve. Le build, lui, sait
+  // empaqueter un worker désigné ainsi.
+  optimizeDeps: { exclude: ['maplibre-gl'] },
   server: {
     port: DEV_PORT,
     strictPort: FIXED_PORT,

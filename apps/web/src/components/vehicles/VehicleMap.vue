@@ -1,0 +1,178 @@
+<script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { Map as MlMap, Marker, NavigationControl } from 'maplibre-gl'
+import 'maplibre-gl/dist/maplibre-gl.css'
+import { IGN_MAX_ZOOM, initialView, normalizeHeading, planStyleUrl, satelliteStyle, type LatLon, type MapMode } from '../../lib/map'
+import { useSettingsStore } from '../../stores/settings'
+import StrokeIcon from '../ui/StrokeIcon.vue'
+
+// Carte d'un véhicule : sa position (et son cap), la maison, plan ou satellite, plein écran.
+//
+// Le plein écran est un état du COMPOSANT (position fixe sur toute la fenêtre), pas l'API
+// Fullscreen du navigateur : l'app a déjà son propre plein écran, iOS ne l'offre pas aux
+// éléments, et un même canvas MapLibre suit sans se reconstruire — il suffit de le redimensionner.
+//
+// Le style change avec le mode (plan ↔ satellite) et avec le thème (plan clair ↔ sombre) ; les
+// marqueurs sont des éléments DOM, ils survivent au changement de style.
+
+const props = defineProps<{
+  location?: LatLon | undefined
+  headingDeg?: number | undefined
+  home?: LatLon | undefined
+  /** Ligne posée en bas de la carte (distance, kilométrage). */
+  caption?: string | undefined
+}>()
+
+const settings = useSettingsStore()
+const MODE_KEY = 'kasbah.mapMode'
+
+const container = ref<HTMLDivElement | null>(null)
+const full = ref(false)
+const mode = ref<MapMode>((() => { try { return localStorage.getItem(MODE_KEY) === 'satellite' ? 'satellite' : 'plan' } catch { return 'plan' } })())
+/** L'utilisateur a bougé la carte : on ne la recadre plus sous ses doigts, un bouton le propose. */
+const moved = ref(false)
+
+let map: MlMap | null = null
+let carMarker: Marker | null = null
+let homeMarker: Marker | null = null
+let observer: ResizeObserver | null = null
+
+const hasPosition = computed(() => !!props.location)
+const style = () => (mode.value === 'satellite' ? satelliteStyle() : planStyleUrl(settings.isDark))
+
+function markerEl(kind: 'car' | 'home'): HTMLElement {
+  const el = document.createElement('div')
+  el.className = `vmap__marker vmap__marker--${kind}`
+  // flèche de cap pour la voiture (tourne avec `setRotation`), maison fixe
+  el.innerHTML = kind === 'car'
+    ? '<svg viewBox="0 0 24 24" width="30" height="30"><path d="M12 2 L19 20 L12 16 L5 20 Z" fill="currentColor" stroke="var(--surface)" stroke-width="1.5" stroke-linejoin="round"/></svg>'
+    : '<svg viewBox="0 0 24 24" width="26" height="26"><path d="M3 11l9-7 9 7v9H3zM9 20v-6h6v6" fill="var(--surface)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>'
+  return el
+}
+
+function fit(animate: boolean): void {
+  if (!map) return
+  const view = initialView(props.location, props.home)
+  if (view.kind === 'bounds') {
+    map.fitBounds([[view.sw.lon, view.sw.lat], [view.ne.lon, view.ne.lat]], { padding: 36, maxZoom: 17, duration: animate ? 600 : 0 })
+  } else if (view.kind === 'center') {
+    map.jumpTo({ center: [view.center.lon, view.center.lat], zoom: view.zoom })
+  }
+  moved.value = false
+}
+
+function placeMarkers(): void {
+  if (!map) return
+  // la position AVANT `addTo` : MapLibre projette le marqueur en l'ajoutant, sans position il plante
+  if (props.location) {
+    const at: [number, number] = [props.location.lon, props.location.lat]
+    carMarker ??= new Marker({ element: markerEl('car'), rotationAlignment: 'map', pitchAlignment: 'map' }).setLngLat(at).addTo(map)
+    carMarker.setLngLat(at)
+    carMarker.setRotation(props.headingDeg === undefined ? 0 : normalizeHeading(props.headingDeg))
+  } else if (carMarker) { carMarker.remove(); carMarker = null }
+  if (props.home) {
+    const at: [number, number] = [props.home.lon, props.home.lat]
+    homeMarker ??= new Marker({ element: markerEl('home') }).setLngLat(at).addTo(map)
+    homeMarker.setLngLat(at)
+  } else if (homeMarker) { homeMarker.remove(); homeMarker = null }
+}
+
+onMounted(() => {
+  if (!container.value) return
+  const m = new MlMap({
+    container: container.value, style: style(), attributionControl: { compact: true },
+    maxZoom: IGN_MAX_ZOOM + 1, dragRotate: true, pitchWithRotate: true,
+  })
+  map = m
+  // en développement seulement : la carte est interrogeable depuis la console (`el.__map`), ce qui
+  // permet de vérifier qu'elle rend bien des entités quand rien ne se voit à l'écran
+  if (import.meta.env.DEV) (container.value as HTMLDivElement & { __map?: MlMap }).__map = m
+  m.addControl(new NavigationControl({ showCompass: true, visualizePitch: true }), 'top-left')
+  // un geste de l'utilisateur (pas un `jumpTo` du composant) : la carte est à lui
+  for (const ev of ['dragstart', 'zoomstart', 'rotatestart', 'pitchstart'] as const) {
+    m.on(ev, (e: { originalEvent?: unknown }) => { if (e.originalEvent) moved.value = true })
+  }
+  placeMarkers()
+  fit(false)
+  // la carte du véhicule vit dans une grille qui se redimensionne : MapLibre ne suit que la fenêtre
+  observer = new ResizeObserver(() => m.resize())
+  observer.observe(container.value)
+})
+
+onBeforeUnmount(() => {
+  observer?.disconnect()
+  map?.remove()
+  map = null
+})
+
+// position ou cap qui changent : les marqueurs suivent ; la vue aussi, tant que l'utilisateur n'y a pas touché
+watch(() => [props.location?.lat, props.location?.lon, props.headingDeg, props.home?.lat, props.home?.lon], () => {
+  placeMarkers()
+  if (!moved.value) fit(true)
+})
+watch([mode, () => settings.isDark], () => {
+  map?.setStyle(style())
+  try { localStorage.setItem(MODE_KEY, mode.value) } catch { /* stockage indisponible : le choix ne survit pas, sans plus */ }
+})
+
+function toggleFull(): void {
+  full.value = !full.value
+  // le conteneur change de taille au prochain rendu : redimensionner après, et recadrer si
+  // l'utilisateur n'avait pas pris la main (la vignette et le plein écran n'ont pas le même cadre)
+  requestAnimationFrame(() => { map?.resize(); if (!moved.value) fit(false) })
+}
+function onKey(e: KeyboardEvent): void { if (e.key === 'Escape' && full.value) toggleFull() }
+watch(full, (f) => { if (f) window.addEventListener('keydown', onKey); else window.removeEventListener('keydown', onKey) })
+</script>
+
+<template>
+  <div class="vmap" :class="{ 'vmap--full': full }">
+    <div ref="container" class="vmap__canvas" />
+    <!-- nos boutons à droite ; les boutons natifs de MapLibre (zoom, boussole) sont à gauche -->
+    <div class="vmap__tools">
+      <button type="button" class="vmap__btn" :data-on="mode === 'satellite' ? '1' : '0'" :title="$t(mode === 'plan' ? 'vehicle.map.satellite' : 'vehicle.map.plan')"
+              @click="mode = mode === 'plan' ? 'satellite' : 'plan'">
+        {{ $t(mode === 'plan' ? 'vehicle.map.satellite' : 'vehicle.map.plan') }}
+      </button>
+      <button v-if="moved" type="button" class="vmap__btn" :title="$t('vehicle.map.recenter')" @click="fit(true)">
+        <StrokeIcon name="crosshair" :size="16" />
+      </button>
+      <button type="button" class="vmap__btn" :title="$t(full ? 'vehicle.map.close' : 'vehicle.map.fullscreen')" @click="toggleFull">
+        <StrokeIcon :name="full ? 'close' : 'fullscreen'" :size="16" />
+      </button>
+    </div>
+    <!-- sans position : la carte reste (la maison s'y voit), un voile le dit -->
+    <div v-if="!hasPosition" class="vmap__empty muted">{{ $t('vehicle.map.noPosition') }}</div>
+    <div v-if="caption" class="vmap__caption">{{ caption }}</div>
+  </div>
+</template>
+
+<style scoped>
+.vmap { position: relative; border-radius: var(--radius); overflow: hidden; background: var(--surface2); min-height: 220px; }
+/* `!important` : le parent pose la hauteur de la vignette par sa propre classe (`.vcard__map`), et en
+   plein écran c'est la fenêtre qui doit la donner — sans quoi la carte s'étirait en largeur sur 220 px */
+.vmap--full { position: fixed; inset: 0; z-index: 2000; border-radius: 0; min-height: 0; width: auto !important; height: auto !important; }
+.vmap__canvas { position: absolute; inset: 0; }
+.vmap__tools { position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; z-index: 2; }
+.vmap__btn {
+  height: 32px; min-width: 32px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--text); font: 500 12px/1 var(--font); display: inline-flex; align-items: center; gap: 6px;
+  box-shadow: 0 1px 4px rgb(0 0 0 / .15);
+}
+.vmap__btn[data-on='1'] { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+.vmap__caption {
+  position: absolute; left: 10px; bottom: 10px; max-width: calc(100% - 20px); padding: 4px 10px; border-radius: 999px; z-index: 2;
+  background: var(--surface); color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  box-shadow: 0 1px 4px rgb(0 0 0 / .15);
+}
+.vmap__empty { position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; z-index: 1; pointer-events: none; }
+/* marqueurs : couleur de l'accent pour la voiture, du texte pour la maison ; l'ombre les détache du satellite */
+:global(.vmap__marker) { display: grid; place-items: center; filter: drop-shadow(0 1px 2px rgb(0 0 0 / .4)); }
+:global(.vmap__marker--car) { color: var(--accent); }
+:global(.vmap__marker--home) { color: var(--text); }
+/* les boutons natifs de MapLibre suivent les jetons du thème */
+:global(.vmap .maplibregl-ctrl-group) { background: var(--surface); border-radius: 10px; box-shadow: 0 1px 4px rgb(0 0 0 / .15); }
+:global(.vmap .maplibregl-ctrl-group button) { width: 32px; height: 32px; }
+:global(.vmap .maplibregl-ctrl-group button + button) { border-top-color: var(--line); }
+:global(.vmap .maplibregl-ctrl-attrib) { font-size: 10px; }
+</style>

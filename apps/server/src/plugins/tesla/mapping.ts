@@ -79,6 +79,7 @@ export function toDataPatch(d: VehicleData): StatePatch<'vehicle'> {
     const at = defined(dr.gps_as_of) ? dr.gps_as_of * 1000 : defined(dr.timestamp) ? dr.timestamp : undefined
     if (at !== undefined) patch.location = { lat: dr.latitude, lon: dr.longitude, at }
   }
+  if (defined(dr?.heading)) patch.headingDeg = ((dr.heading % 360) + 360) % 360
   if (dr) {
     // vitesse `null` = à l'arrêt (le fabricant ne met un nombre que quand ça roule)
     patch.speedKmh = defined(dr.speed) ? milesToKm(dr.speed) : 0

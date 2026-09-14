@@ -163,6 +163,8 @@ export const vehicleStateSchema = z.object({
   chargeLimit: pct.optional(),
   locked: z.boolean(),
   location: z.object({ lat: z.number(), lon: z.number(), at: z.number() }).optional(),
+  /** Cap du véhicule (degrés, 0 = nord, sens horaire) : oriente son marqueur sur la carte. Absent = inconnu. */
+  headingDeg: z.number().min(0).max(360).optional(),
   odometerKm: z.number().optional(),
   sleepState: z.enum(VEHICLE_SLEEP_STATES).optional(),
   /** Vitesse instantanée ; 0 à l'arrêt. Absente = inconnue. */
