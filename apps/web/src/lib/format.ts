@@ -15,6 +15,12 @@ export const formatTemp = (c: number, locale = 'fr') => `${nf(locale, 1).format(
 export const formatPercent = (p: number, locale = 'fr') => `${nf(locale, 0).format(p)} %`
 export const formatKelvin = (mirek: number) => `${Math.round(mirekToKelvin(mirek) / 100) * 100} K`
 export const formatKm = (km: number, locale = 'fr') => `${nf(locale, 0).format(km)} km`
+/** Durée courte, à la minute : « 45 min », « 1 h 20 ». Une charge qui reste ne se compte pas en heures décimales. */
+export function formatMinutes(min: number, locale = 'fr'): string {
+  const total = Math.max(0, Math.round(min))
+  const h = Math.floor(total / 60)
+  return h === 0 ? `${nf(locale, 0).format(total)} min` : `${h} h ${String(total % 60).padStart(2, '0')}`
+}
 
 /**
  * Âge relatif court (« il y a 12 min », « il y a 3 h », « hier »), pour dater une lecture. En dessous

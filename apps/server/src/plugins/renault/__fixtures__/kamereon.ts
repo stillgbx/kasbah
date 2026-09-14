@@ -12,6 +12,9 @@
 //     `pressure` et `res-state`. Traiter seulement le 403 laisserait trois lectures se répéter.
 //  4. `hvac-status` donne la température INTÉRIEURE (`internalTemperature`), pas l'extérieure.
 //  5. Pas de puissance de charge instantanée, pas de cap, pas de pression de pneus, pas de vitesse.
+//     La puissance a été REVÉRIFIÉE le 14/09 à 12:58, voiture EN CHARGE (`BATTERY_CHARGING`) : la
+//     réponse ne porte toujours aucun `chargingInstantaneousPower`. Ce n'est donc pas un effet de la
+//     première capture, prise câble branché sans courant — la R5 ne dit pas sa puissance, point.
 
 export const VIN = 'VYSP0100000000001'
 export const ACCOUNT_ID = '00000000-1111-2222-3333-444444444444'
@@ -75,11 +78,25 @@ export const BATTERY_WAITING = {
   },
 }
 
-/** La même en charge (`chargingStatus: 1.0`), pour distinguer les deux dans les tests. */
+/**
+ * La même EN CHARGE, capture du 14/09 à 12:58 : `chargingStatus: 1.0`, et un `chargingRemainingTime`
+ * cette fois FRAIS (son `lastUpdateDateTime` vaut le `timestamp` de la lecture, là où la capture à
+ * l'arrêt le datait de l'avant-veille). C'est ce qui justifie de n'afficher le temps restant que
+ * pendant la charge. Toujours pas de puissance instantanée : voir la bizarrerie 5 en tête de fichier.
+ */
 export const BATTERY_CHARGING = {
   data: {
     id: VIN,
-    attributes: { ...BATTERY_WAITING.data.attributes, batteryLevel: 61, batteryAutonomy: 229, chargingStatus: 1.0 },
+    attributes: {
+      timestamp: '2026-09-14T12:58:27Z',
+      batteryLevel: 74,
+      batteryAutonomy: 276,
+      V2L_SystemStatusDisplay: 0,
+      plugStatus: 1,
+      chargingStatus: 1.0,
+      chargingRemainingTime: 43,
+      chargingRemainingTimeLastUpdateDateTime: '2026-09-14T12:58:27Z',
+    },
   },
 }
 

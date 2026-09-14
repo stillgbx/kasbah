@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { deviceIdSchema } from '../devices/descriptor'
-import { defaultPlugins, MOUNTS, vec3Schema, type PluginSettingsPatch } from './schema'
+import { defaultPlugins, MOUNTS, vec2Schema, vec3Schema, type PluginSettingsPatch } from './schema'
 
 // Écritures de l'UI dans house.json (placement d'un appareil, ordre d'affichage des pièces).
 // On travaille sur le JSON BRUT (pas la maison parsée) pour ne réécrire que ce qui a changé et ne
@@ -30,6 +30,17 @@ export const devicePlacementSchema = z.object({
   size: z.object({ width: z.number().positive().max(50), height: z.number().positive().max(50) }).optional(),
   /** Battants d'un portail (comme `HouseDevice.leaves`) : un panneau, ou deux qui s'écartent. */
   leaves: z.union([z.literal(1), z.literal(2)]).optional(),
+  /**
+   * Correction (m, repère maison) de la place calculée d'un appareil placé par son GPS — un
+   * véhicule (comme `HouseDevice.gpsOffset`). `[0, 0]` EFFACE la correction : c'est le seul moyen
+   * de revenir au relevé brut, comme la chaîne vide pour le nom.
+   */
+  gpsOffset: vec2Schema.optional(),
+  /**
+   * Capacité de la batterie d'un véhicule (kWh, comme `HouseDevice.batteryKwh`), saisie faute que
+   * les fabricants la donnent. `0` EFFACE la valeur, comme `[0, 0]` pour le décalage.
+   */
+  batteryKwh: z.number().min(0).max(500).optional(),
   /** Requis quand l'appareil n'existe pas encore dans le JSON (appareil auto-placé). */
   deviceId: deviceIdSchema.optional(),
 })
@@ -52,7 +63,7 @@ const isObject = (v: unknown): v is JsonObject => typeof v === 'object' && v !==
 
 /**
  * Renvoie une copie du document JSON avec l'appareil `id` (re)placé ou renommé : entrée existante
- * mise à jour (position, nom, pièce, mount, yaw, size, leaves), ou entrée créée
+ * mise à jour (position, nom, pièce, mount, yaw, size, leaves, gpsOffset, batteryKwh), ou entrée créée
  * `{ id, deviceId, … }` avec ce qui a été donné.
  *
  * Tout est facultatif, position comprise : renommer un appareil qui n'a PAS de place dans la scène
@@ -82,6 +93,14 @@ export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePla
     if (placement.yaw !== undefined) next.yaw = placement.yaw
     if (placement.size) next.size = placement.size
     if (placement.leaves !== undefined) next.leaves = placement.leaves
+    if (placement.gpsOffset) {
+      if (placement.gpsOffset[0] === 0 && placement.gpsOffset[1] === 0) delete next.gpsOffset
+      else next.gpsOffset = placement.gpsOffset
+    }
+    if (placement.batteryKwh !== undefined) {
+      if (placement.batteryKwh === 0) delete next.batteryKwh
+      else next.batteryKwh = placement.batteryKwh
+    }
     if (room) {
       next.roomId = room.id
       // le JSON de démo porte roomId ET levelId : garder les deux cohérents, sans en ajouter
@@ -104,6 +123,8 @@ export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePla
     if (placement.yaw !== undefined) next.yaw = placement.yaw
     if (placement.size) next.size = placement.size
     if (placement.leaves !== undefined) next.leaves = placement.leaves
+    if (placement.gpsOffset && (placement.gpsOffset[0] !== 0 || placement.gpsOffset[1] !== 0)) next.gpsOffset = placement.gpsOffset
+    if (placement.batteryKwh) next.batteryKwh = placement.batteryKwh
   }
   const out = [...devices]
   if (i >= 0) out[i] = next

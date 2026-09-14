@@ -58,6 +58,9 @@ describe('lectures → état', () => {
       location: { lat: 47.32, lon: 5.04, at: Date.parse('2026-09-14T08:18:31Z') },
       insideTempC: 37,
       chargeLimit: 80,
+      socMin: 20,
+      // la voiture n'est pas en charge : le temps restant qu'elle traîne depuis l'avant-veille est EFFACÉ
+      chargeMinutesRemaining: null,
     })
   })
 
@@ -70,6 +73,11 @@ describe('lectures → état', () => {
   it('reconnaît la charge en cours (chargingStatus 1.0, et elle seule)', () => {
     expect(toStatePatch({ battery: BATTERY_CHARGING }, NOW).charging).toBe(true)
     expect(toStatePatch({ battery: BATTERY_UNPLUGGED }, NOW)).toMatchObject({ pluggedIn: false, charging: false })
+  })
+
+  it('ne retient le temps de charge restant QUE pendant la charge', () => {
+    expect(toStatePatch({ battery: BATTERY_CHARGING }, NOW).chargeMinutesRemaining).toBe(43)
+    expect(toStatePatch({ battery: BATTERY_UNPLUGGED }, NOW).chargeMinutesRemaining).toBeNull()
   })
 
   it('survit au cockpit v2 farceur : pas de kilométrage plutôt qu’un zéro', () => {

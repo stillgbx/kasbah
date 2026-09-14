@@ -49,6 +49,19 @@ describe('placeDeviceInJson', () => {
     expect(() => parseHouse(out)).not.toThrow()
   })
 
+  it('écrit le décalage GPS d un véhicule, et [0, 0] l efface', () => {
+    // un véhicule n'a pas de position : son entrée se crée par son deviceId, comme au renommage
+    const entry = (doc: Record<string, unknown>) => devices(doc).find((x) => x.id === 'vehicle.model-s')
+    const created = placeDeviceInJson(demo, 'vehicle.model-s', { deviceId: 'tesla:5YJ', gpsOffset: [2.5, -1] })
+    expect(entry(created)).toEqual({ id: 'vehicle.model-s', deviceId: 'tesla:5YJ', gpsOffset: [2.5, -1] })
+    expect(() => parseHouse(created)).not.toThrow()
+    const cleared = placeDeviceInJson(created, 'vehicle.model-s', { gpsOffset: [0, 0] })
+    expect(entry(cleared)).toEqual({ id: 'vehicle.model-s', deviceId: 'tesla:5YJ' })
+    // un placement muet sur le décalage n'y touche pas
+    const renamed = placeDeviceInJson(created, 'vehicle.model-s', { name: 'Voiture 1' })
+    expect(entry(renamed)).toMatchObject({ gpsOffset: [2.5, -1], name: 'Voiture 1' })
+  })
+
   it('writes the orientation when given, and leaves it alone otherwise', () => {
     const turned = placeDeviceInJson(demo, 'light.salon', { position: [5, 3, 0.75], yaw: 270 })
     expect(devices(turned).find((x) => x.id === 'light.salon')).toMatchObject({ position: [5, 3, 0.75], yaw: 270 })

@@ -41,7 +41,7 @@ function defaultDevices(opts: { winter?: boolean } = {}) {
     sensors.poolTemp('sensor-pool-temp', 'Température piscine'),
     sensors.filtrationPressure('sensor-filtration-pressure', 'Pression filtration'),
     vehicle('vehicle-tesla', { name: 'Tesla', manufacturer: 'Tesla', model: 'Model Y', batteryKwh: 75, rangeKmFull: 450, home: HOME, work: WORK, soc: 68, chargeLimit: 80 }),
-    vehicle('vehicle-zoe', { name: 'Zoé', manufacturer: 'Renault', model: 'Zoe', batteryKwh: 52, rangeKmFull: 380, home: HOME, work: WORK, workDays: [], soc: 55, chargeLimit: 80, chargerPowerW: 0 }),
+    vehicle('vehicle-r5', { name: 'R5', manufacturer: 'Renault', model: 'Renault 5 E-Tech', batteryKwh: 52, rangeKmFull: 410, home: HOME, work: WORK, workDays: [], soc: 55, chargeLimit: 80, socMin: 20, chargerPowerW: 0 }),
     evCharger('charger-home', { name: 'Borne de recharge', vehicleId: 'vehicle-tesla' }),
     // deux champs de dix modules (liés dans house/demo-house.json) : le sud plein rendement, le
     // dernier ombré par la cheminée en fin de journée ; le nord moins exposé

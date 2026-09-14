@@ -2,7 +2,7 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import type { Command, DeviceDescriptor, PluginHealth } from '@kasbah/shared'
+import type { Command, DeviceDescriptor, PluginHealth, StatePatch } from '@kasbah/shared'
 import { createBackoff } from '../../core/backoff'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
 import { createPoller } from '../../core/poll'
@@ -215,15 +215,26 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
    * corrigé depuis plus d'un an. Le geste manuel équivalent est de la verrouiller/déverrouiller à
    * la télécommande ; par l'API, ce qui la réveille est de RÉÉCRIRE ses réglages VE.
    *
-   * Quatre conditions, toutes nécessaires : le sous-item est coché, on SAIT qu'elle est branchée
-   * et qu'elle ne charge pas (un champ manquant n'autorise rien), l'heure est dans la fenêtre, et
-   * le dernier réveil est assez ancien. Le plugin ne voit PAS le surplus solaire — aucun moteur
-   * d'automatisation ne relie encore deux plugins — mais il n'en a pas besoin : « branchée et pas
-   * en charge » est exactement ce que l'utilisateur constate avant d'aller secouer la voiture.
+   * Cinq conditions, toutes nécessaires : le sous-item est coché, on SAIT qu'elle est branchée et
+   * qu'elle ne charge pas (un champ manquant n'autorise rien), **la limite de charge n'est pas
+   * atteinte**, l'heure est dans la fenêtre, et le dernier réveil est assez ancien. Le plugin ne
+   * voit PAS le surplus solaire — aucun moteur d'automatisation ne relie encore deux plugins — mais
+   * il n'en a pas besoin : « branchée et pas en charge » est exactement ce que l'utilisateur
+   * constate avant d'aller secouer la voiture.
+   *
+   * La limite atteinte est le cas ORDINAIRE d'une voiture branchée qui ne charge pas : la nuit
+   * suivant une charge terminée, elle ne charge plus parce qu'elle est PLEINE. La secouer n'y
+   * changerait rien, et ce réveil ÉCRIT dans la voiture — le faire tous les quarts d'heure toute la
+   * journée serait la déranger pour rien.
    */
-  async function maybeWake(vin: string, patch: { pluggedIn?: boolean; charging?: boolean }, signal?: AbortSignal): Promise<void> {
+  async function maybeWake(vin: string, patch: StatePatch<'vehicle'>, signal?: AbortSignal): Promise<void> {
     if (!ctx!.parts[CHARGE_WAKE]) return
     if (patch.pluggedIn !== true || patch.charging !== false) return
+    // niveau ou cible inconnus : on ne peut pas PROUVER que la charge est finie, et une voiture
+    // branchée qui ne charge pas reste le signe qu'on cherche — on réveille (contrairement à
+    // `pluggedIn` / `charging`, dont l'absence interdit tout)
+    const target = patch.chargeLimit
+    if (patch.soc !== undefined && target != null && patch.soc >= target) return
     const now = ctx!.clock.now()
     if (!inWindow(new Date(now), config!.RENAULT_WAKE_FROM, config!.RENAULT_WAKE_TO)) return
     const since = now - (lastWake.get(vin) ?? 0)
@@ -235,7 +246,7 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
     if (!body) return
     await client!.writeEvSettings({ accountId: id, vin, body, signal })
     lastWake.set(vin, now)
-    log().info({ vin }, 'Renault charge wake-up sent (plugged in, not charging)')
+    log().info({ vin, soc: patch.soc, target: patch.chargeLimit }, 'Renault charge wake-up sent (plugged in, not charging, below target)')
   }
 
   /** Un tour : tous les véhicules connus. Une erreur remonte au poller, qui la journalise. */

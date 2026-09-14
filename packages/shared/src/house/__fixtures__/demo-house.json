@@ -391,9 +391,9 @@
       "yaw": 0
     },
     {
-      "id": "vehicle.zoe",
-      "name": "Zoé",
-      "deviceId": "mock:vehicle-zoe",
+      "id": "vehicle.r5",
+      "name": "R5",
+      "deviceId": "mock:vehicle-r5",
       "zoneId": "allee",
       "position": [-3.5, -6.0, 0.7],
       "yaw": 0

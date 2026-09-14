@@ -13,8 +13,12 @@ import type { VehicleData, VehicleSummary } from './types'
 export const PLUGIN_ID = 'tesla'
 const MILE_KM = 1.609344
 
-/** Phase 1 : lecture seule. `soc` porte aussi la commande `vehicle.wake` (voir `COMMAND_REQUIRES`). */
-export const READ_CAPABILITIES = ['soc', 'range', 'location'] as const
+/**
+ * Phase 1 : lecture seule. `soc` porte aussi la commande `vehicle.wake` (voir `COMMAND_REQUIRES`).
+ * `charge_power` dit que la voiture DONNE sa puissance de charge (`charger_power`) : l'UI n'a donc
+ * ni à l'estimer, ni à demander la capacité de la batterie.
+ */
+export const READ_CAPABILITIES = ['soc', 'range', 'location', 'charge_power'] as const
 
 /** Le 4e caractère d'un VIN Tesla est la gamme : S, 3, X, Y (et C pour le Cybertruck). */
 export function modelFromVin(vin: string): string | undefined {
@@ -64,6 +68,12 @@ export function toDataPatch(d: VehicleData): StatePatch<'vehicle'> {
     patch.charging = c.charging_state === 'Charging' || c.charging_state === 'Starting'
     // le fabricant donne des kW ENTIERS : c'est grossier, et c'est ce qu'on a
     patch.chargePowerW = patch.charging && defined(c.charger_power) ? Math.round(c.charger_power * 1000) : 0
+    // `time_to_full_charge` est en HEURES décimales, et reste à sa dernière valeur une fois la
+    // charge finie : hors charge on EFFACE (`null`), sans quoi la carte annoncerait une fin de
+    // charge pour une voiture débranchée
+    patch.chargeMinutesRemaining = patch.charging && defined(c.time_to_full_charge) && c.time_to_full_charge > 0
+      ? Math.round(c.time_to_full_charge * 60)
+      : null
   }
   if (defined(c?.charge_limit_soc)) patch.chargeLimit = Math.max(0, Math.min(100, c.charge_limit_soc))
 

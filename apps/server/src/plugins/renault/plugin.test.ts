@@ -188,7 +188,7 @@ describe('Renault — inventaire', () => {
     const devices = await plugin.discover()
     expect(devices).toEqual([{
       id: `renault:${VIN}`, pluginId: 'renault', externalId: VIN, kind: 'vehicle',
-      name: 'GA-123-BX', capabilities: ['soc', 'range', 'location'], meta: {},
+      name: 'GA-123-BX', capabilities: ['soc', 'range', 'location'], meta: { manufacturer: 'Renault' },
     }])
   })
 
@@ -375,6 +375,18 @@ describe('Renault — réveil de charge', () => {
     const b = await running({ battery: BATTERY_UNPLUGGED })
     expect(wakes(b.renault)).toHaveLength(0)
     await b.plugin.stop()
+  })
+
+  /**
+   * Le cas ORDINAIRE d'une voiture branchée qui ne charge pas : elle est pleine. C'est l'état de la
+   * R5 chaque nuit après sa charge — la secouer n'y changerait rien, et ce réveil ÉCRIT dans la
+   * voiture.
+   */
+  it('ne réveille pas une voiture déjà à sa limite de charge', async () => {
+    const atTarget = { data: { id: VIN, attributes: { ...BATTERY_WAITING.data.attributes, batteryLevel: 80 } } }
+    const { plugin, renault } = await running({ battery: atTarget })   // socTarget = 80 (SOC_LEVELS)
+    expect(wakes(renault)).toHaveLength(0)
+    await plugin.stop()
   })
 
   it('ne réveille pas hors de la fenêtre horaire', async () => {

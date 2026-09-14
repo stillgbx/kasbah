@@ -57,7 +57,9 @@ export function toDescriptor(link: VehicleLink, capabilities: readonly Capabilit
     kind: 'vehicle',
     name: vehicleName(link),
     capabilities: [...capabilities],
-    meta: {},
+    // le fabricant, écrit comme il s'écrit : l'UI affiche sinon l'id du plugin (« renault »), et le
+    // constructeur, lui, CRIE ses libellés (`brand.label` = « RENAULT »)
+    meta: { manufacturer: 'Renault' },
   }
 }
 
@@ -157,8 +159,10 @@ function at(v: unknown): number | undefined {
  * patch — JAMAIS un zéro : sur ce contrat, `soc: 0` se lirait « batterie vide » et `rangeKm: 0`
  * « plus d'autonomie ». `readAt` date la lecture, c'est ce que l'UI affiche.
  *
- * Ce que la R5 ne donne PAS, et qui reste donc absent : verrouillage, puissance de charge
- * instantanée, cap, pression des pneus, vitesse et rapport, température extérieure.
+ * Ce que la R5 ne donne PAS, et qui reste donc absent : verrouillage, cap, pression des pneus,
+ * vitesse et rapport, température extérieure, et la PUISSANCE de charge (revérifié voiture en
+ * charge, cf. `BATTERY_CHARGING`) — l'UI l'estime à l'affichage, à partir de la capacité saisie
+ * dans la maison ; rien d'estimé n'entre dans l'état.
  */
 export function toStatePatch(r: VehicleReadings, now: number): StatePatch<'vehicle'> {
   const patch: StatePatch<'vehicle'> = { readAt: now }
@@ -173,6 +177,12 @@ export function toStatePatch(r: VehicleReadings, now: number): StatePatch<'vehic
     if (plug !== undefined) patch.pluggedIn = plug === PLUGGED
     const charge = num(battery.chargingStatus)
     if (charge !== undefined) patch.charging = charge === CHARGE_IN_PROGRESS
+    // `chargingRemainingTime` (minutes) TRAÎNE : la capture réelle le donne daté de l'avant-veille
+    // sur une voiture débranchée. Il ne vaut que pendant la charge ; sinon on l'efface.
+    if (patch.charging) {
+      const eta = num(battery.chargingRemainingTime)
+      patch.chargeMinutesRemaining = eta !== undefined && eta > 0 ? eta : null
+    } else if (charge !== undefined) patch.chargeMinutesRemaining = null
   }
 
   const odometer = num(attributes(r.cockpit)?.totalMileage)
@@ -190,8 +200,12 @@ export function toStatePatch(r: VehicleReadings, now: number): StatePatch<'vehic
   if (inside !== undefined) patch.insideTempC = inside
 
   // `ev/soc-levels` (kcm) n'a pas d'enveloppe `data` : les champs sont à la racine
-  const target = num((r.socLevels as { socTarget?: unknown } | null | undefined)?.socTarget)
+  const levels = r.socLevels as { socTarget?: unknown; socMin?: unknown } | null | undefined
+  const target = num(levels?.socTarget)
   if (target !== undefined) patch.chargeLimit = target
+  // le plancher que l'utilisateur a réglé dans sa voiture : Tesla n'a pas cette notion, la R5 si
+  const floor = num(levels?.socMin)
+  if (floor !== undefined) patch.socMin = floor
 
   return patch
 }

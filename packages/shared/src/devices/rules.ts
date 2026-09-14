@@ -36,6 +36,39 @@ export function assertCommandAllowed(descriptor: DeviceDescriptor, cmd: Command)
   }
 }
 
+/** Sous ces seuils, l'arrondi du fabricant et l'effondrement du courant en fin de charge faussent tout. */
+const MIN_POINTS_TO_ESTIMATE = 2
+const MIN_MINUTES_TO_ESTIMATE = 5
+const MIN_PLAUSIBLE_CHARGE_W = 200
+const MAX_PLAUSIBLE_CHARGE_W = 150_000
+
+/**
+ * Puissance de charge ESTIMÉE, pour un véhicule qui ne la dit pas (la Renault 5 E-Tech ; Tesla, si).
+ *
+ * Elle ne se déduit PAS d'une pente de `soc` : un point de charge vaut un demi-kWh, le sondage est à
+ * dix minutes, le bruit d'arrondi dépasserait le signal. Elle se déduit de ce que la VOITURE annonce
+ * — l'énergie qu'il reste à mettre (cible − niveau, sur la capacité de la batterie) divisée par le
+ * temps qu'elle se donne. C'est donc la voiture qui estime ; Kasbah ne fait qu'une règle de trois.
+ *
+ * `batteryKwh` vient de la maison (`HouseDevice.batteryKwh`), saisi par l'utilisateur : AUCUN
+ * fabricant ne donne la capacité de la batterie — ni Tesla, ni Renault, pas même dans la fiche du
+ * véhicule. Sans elle, pas d'estimation.
+ *
+ * `undefined` dès qu'un morceau manque, quand le véhicule donne déjà sa puissance (il n'y a rien à
+ * estimer), quand la charge touche à sa fin, ou quand le résultat sort des puissances qu'une voiture
+ * sait avaler — mieux vaut se taire qu'annoncer un chiffre absurde.
+ */
+export function estimateChargePowerW(state: StateFor<'vehicle'>, batteryKwh: number | undefined): number | undefined {
+  if (!state.charging || state.chargePowerW || !batteryKwh || batteryKwh <= 0) return undefined
+  const { soc, chargeLimit: target, chargeMinutesRemaining: minutes } = state
+  if (target === undefined || !minutes) return undefined
+  const points = target - soc
+  if (points < MIN_POINTS_TO_ESTIMATE || minutes < MIN_MINUTES_TO_ESTIMATE) return undefined
+  const watts = ((points / 100) * batteryKwh * 1000 * 60) / minutes
+  if (watts < MIN_PLAUSIBLE_CHARGE_W || watts > MAX_PLAUSIBLE_CHARGE_W) return undefined
+  return Math.round(watts / 100) * 100                   // à la centaine de watts : le calcul n'en dit pas plus
+}
+
 export function shallowEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true
   if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false

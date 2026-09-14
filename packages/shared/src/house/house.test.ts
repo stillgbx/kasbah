@@ -197,6 +197,12 @@ describe('lookup & geo', () => {
     // un kilomètre plus loin : la voiture est ailleurs, elle n'a pas à apparaître dans le jardin
     expect(sitePosition(house, localToGeo(house.origin, [1000, 1000, 0]))).toBeNull()
   })
+  it('un décalage de correction déplace la place calculée, en mètres du repère maison', () => {
+    const here = localToGeo(house.origin, [0, 0, 0])
+    const at = sitePosition(house, here, [3, -2])
+    expect(at![0]).toBeCloseTo(3, 3)
+    expect(at![1]).toBeCloseTo(-2, 3)
+  })
   it('heading rotates the local frame', () => {
     const north = localToGeo({ lat: 45, lon: 5, alt: 0, heading: 0 }, [0, 100, 0])
     const east = localToGeo({ lat: 45, lon: 5, alt: 0, heading: 90 }, [0, 100, 0])

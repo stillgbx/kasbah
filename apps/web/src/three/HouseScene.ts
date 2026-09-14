@@ -5,7 +5,7 @@ import {
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js'
 import {
-  boundsCenter, buildingBounds, computeHouseGeometry, deviceFloorZ, geoDistance, indexHouse, pointInPolygon, resolveDefaults, resolveDeviceLevelId, sitePosition,
+  boundsCenter, buildingBounds, computeHouseGeometry, deviceFloorZ, geoDistance, indexHouse, longestEdgeYawDeg, pointInPolygon, resolveDefaults, resolveDeviceLevelId, sitePosition,
   roofBounds, roomBounds, zoneBounds,
   type DeviceDescriptor, type DeviceState, type House, type HouseDevice, type HouseGeometry, type HouseIndex, type Level, type PlacedHouseDevice, type Vec3,
 } from '@kasbah/shared'
@@ -273,12 +273,46 @@ export class HouseScene {
     if (device.position) return device.position
     const state = device.deviceId ? this.states[device.deviceId] : undefined
     if (state?.kind !== 'vehicle' || !state.location || !this.house) return null
-    return sitePosition(this.house, state.location)
+    return sitePosition(this.house, state.location, device.gpsOffset)
   }
 
-  /** La position GPS d'un véhicule, pour savoir si elle a bougé d'un relevé à l'autre. */
+  /**
+   * Orientation d'un véhicule placé par son GPS, du plus sûr au plus supposé :
+   *   1. le `yaw` du JSON, s'il a été posé à la main — l'utilisateur a tranché ;
+   *   2. le CAP du fabricant (`headingDeg`), quand il le donne (Tesla) : c'est une mesure ;
+   *   3. l'axe de la pièce où la voiture se trouve — un garage range une voiture dans son sens, et
+   *      c'est mieux que le nord ;
+   *   4. rien : le marqueur reste face à +y.
+   *
+   * `undefined` plutôt que `0` au bout : le marqueur garde son défaut, personne n'affirme un cap.
+   */
+  private vehicleYaw(device: HouseDevice, state: DeviceState | undefined, position: Vec3): number | undefined {
+    if (device.yaw !== undefined) return device.yaw
+    if (state?.kind !== 'vehicle' || !this.house) return undefined
+    if (state.headingDeg !== undefined) return this.house.origin.heading - state.headingDeg
+    return this.enclosingRoomYaw([position[0], position[1]])
+  }
+
+  /**
+   * Axe de la pièce FERMÉE qui contient ce point, s'il y en a une. Les pièces sont essayées du
+   * niveau le plus bas au plus haut : une voiture est au rez-de-chaussée, pas dans la chambre qui
+   * le surplombe.
+   */
+  private enclosingRoomYaw(xy: [number, number]): number | undefined {
+    const index = this.index
+    if (!this.house || !index) return undefined
+    const elevation = (levelId: string) => index.levelsById.get(levelId)?.elevation ?? 0
+    const rooms = [...index.roomsById.values()].sort((a, b) => elevation(a.levelId) - elevation(b.levelId))
+    const room = rooms.find((r) => pointInPolygon(xy, r.polygon))
+    return room ? (longestEdgeYawDeg(room.polygon) ?? undefined) : undefined
+  }
+
+  /**
+   * La position GPS d'un véhicule ET son cap : refaire les marqueurs est ce qui les applique, et une
+   * voiture qui se gare tourne parfois sans changer de place au mètre près.
+   */
   private vehicleFix(state: DeviceState | undefined): string {
-    return state?.kind === 'vehicle' && state.location ? `${state.location.lat},${state.location.lon}` : ''
+    return state?.kind === 'vehicle' && state.location ? `${state.location.lat},${state.location.lon},${state.headingDeg ?? ''}` : ''
   }
 
   /**
@@ -313,7 +347,9 @@ export class HouseScene {
     for (const d of this.drawable()) {
       const position = this.effectivePosition(d)
       if (!position) continue
-      const device: PlacedHouseDevice = { ...d, position }
+      const state = d.deviceId ? this.states[d.deviceId] : undefined
+      const yaw = d.position ? d.yaw : this.vehicleYaw(d, state, position)
+      const device: PlacedHouseDevice = { ...d, position, ...(yaw === undefined ? {} : { yaw }) }
       const descriptor = device.deviceId ? this.descriptors.get(device.deviceId) : undefined
       const levelId = resolveDeviceLevelId(device, this.index.roomsById)
       const levelNodes = levelId ? this.nodes.levels.get(levelId) : undefined

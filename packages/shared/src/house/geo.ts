@@ -1,5 +1,5 @@
 import type { GeoOrigin, Site } from './schema'
-import { pointInPolygon } from './geometry/vec2'
+import { pointInPolygon, type Vec2 } from './geometry/vec2'
 import type { Vec3 } from './geometry/types'
 
 // Conversion repère local (mètres, x est, y nord, tourné du cap `heading`) ↔ WGS84.
@@ -45,9 +45,18 @@ export function geoDistance(a: { lat: number; lon: number }, b: { lat: number; l
  * voiture au bureau ou en vadrouille n'a rien à faire dans le jardin, et ne doit donc pas y
  * apparaître, fût-ce au bord.
  *
+ * `offset` (mètres, repère maison) corrige un décalage CONSTANT entre le relevé et la réalité : le
+ * GPS d'un véhicule a son biais, l'origine de la maison son approximation, et les deux s'ajoutent.
+ * Il s'applique AVANT le test du terrain — la place corrigée est la vraie.
+ *
  * `z = 0` : posé sur le terrain, comme tout marqueur d'extérieur.
  */
-export function sitePosition(house: { origin: GeoOrigin; site: Site }, p: { lat: number; lon: number }): Vec3 | null {
-  const [x, y] = geoToLocal(house.origin, p)
+export function sitePosition(
+  house: { origin: GeoOrigin; site: Site },
+  p: { lat: number; lon: number },
+  offset?: Vec2,
+): Vec3 | null {
+  const [x0, y0] = geoToLocal(house.origin, p)
+  const x = x0 + (offset?.[0] ?? 0), y = y0 + (offset?.[1] ?? 0)
   return pointInPolygon([x, y], house.site.terrain) ? [x, y, 0] : null
 }

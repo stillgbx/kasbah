@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Box3, CylinderGeometry, Mesh, type MeshStandardMaterial, ShapeGeometry, Vector3, type BufferAttribute, type Texture } from 'three'
-import { computeHouseGeometry, parseHouse, type DeviceDescriptor, type DeviceState, type PlacedHouseDevice } from '@kasbah/shared'
+import { computeHouseGeometry, localToGeo, parseHouse, type DeviceDescriptor, type DeviceState, type PlacedHouseDevice } from '@kasbah/shared'
 import demo from '@kasbah/shared/demo-house.json'
 import { buildHouse, buildWallsGeometry, countTriangles } from './builders/buildHouse'
 import { createMaterials } from './builders/materials'
@@ -399,5 +399,82 @@ describe('tap sur le toit', () => {
     lookDown()
     scene.focusLevel('etage')
     expect(scene.pick({ x: 0, y: 0 })).toEqual({ kind: 'room', roomId: 'chambre1' })
+  })
+})
+
+/**
+ * Une voiture n'a pas de place écrite dans la maison : c'est son GPS qui la pose, corrigé du
+ * décalage que l'utilisateur a mesuré à l'œil, et orientée par ce qu'on sait d'elle.
+ */
+describe('véhicule placé par son GPS', () => {
+  const VEHICLE = 'mock:vehicle-r5'
+  const descriptor = {
+    id: VEHICLE, pluginId: 'mock', externalId: 'r5', kind: 'vehicle', name: 'R5',
+    capabilities: ['soc', 'range', 'location'], meta: {},
+  } as DeviceDescriptor
+
+  /** La maison de démo, mais la R5 n'y est plus PLACÉE : son GPS fait foi. */
+  function unplaced(gpsOffset?: [number, number]) {
+    const doc = JSON.parse(JSON.stringify(demo)) as typeof demo
+    const car = doc.devices.find((d) => d.deviceId === VEHICLE) as Record<string, unknown>
+    delete car.position; delete car.yaw; delete car.zoneId
+    if (gpsOffset) car.gpsOffset = gpsOffset
+    return parseHouse(doc)
+  }
+
+  /** L'état du véhicule, posé au point LOCAL demandé (le GPS est calculé à l'envers). */
+  const stateAt = (house: ReturnType<typeof parseHouse>, xy: [number, number], headingDeg?: number): DeviceState => {
+    const g = localToGeo(house.origin, [xy[0], xy[1], 0])
+    return {
+      kind: 'vehicle', updatedAt: 1, available: true, soc: 55, rangeKm: 200, pluggedIn: false, charging: false,
+      location: { lat: g.lat, lon: g.lon, at: 1 }, ...(headingDeg === undefined ? {} : { headingDeg }),
+    } as DeviceState
+  }
+
+  /** Le corps de la voiture tourne dans son propre groupe : c'est LUI qui porte l'orientation. */
+  const bodyYaw = (scene: HouseScene): number => {
+    let body: Mesh | null = null
+    scene.markers.get('vehicle.r5')!.object.traverse((x) => { if (!body && x instanceof Mesh) body = x as Mesh })
+    return (body! as Mesh).parent!.rotation.z
+  }
+
+  const sceneWith = (house: ReturnType<typeof parseHouse>) => {
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true })
+    scene.load(house)
+    scene.setDescriptors({ [VEHICLE]: descriptor })
+    return scene
+  }
+
+  it('se pose à son relevé, décalé de la correction du JSON', () => {
+    const plain = unplaced()
+    const scene = sceneWith(plain)
+    scene.updateStates({ [VEHICLE]: stateAt(plain, [-3.5, -6]) })
+    const marker = scene.markers.get('vehicle.r5')!
+    expect(marker.object.position.x).toBeCloseTo(-3.5, 2)
+    expect(marker.object.position.y).toBeCloseTo(-6, 2)
+
+    const shifted = unplaced([3, -2])
+    scene.updateDevices(shifted)
+    const moved = scene.markers.get('vehicle.r5')!
+    expect(moved.object.position.x).toBeCloseTo(-0.5, 2)
+    expect(moved.object.position.y).toBeCloseTo(-8, 2)
+  })
+
+  it('suit le cap du fabricant quand il le donne, ramené dans le repère de la maison', () => {
+    const house = unplaced()                       // demo : origin.heading = 15
+    const scene = sceneWith(house)
+    scene.updateStates({ [VEHICLE]: stateAt(house, [-3.5, -6], 90) })
+    expect(bodyYaw(scene)).toBeCloseTo(yawToRad(15 - 90), 4)
+  })
+
+  it('sans cap, prend l’axe de la pièce qui l’entoure — le garage range la voiture dans son sens', () => {
+    const house = unplaced()
+    const scene = sceneWith(house)
+    // (6 ; 2) tombe dans le salon (rdc, allongé selon x) ET dans la chambre 2 (étage) : le bas gagne
+    scene.updateStates({ [VEHICLE]: stateAt(house, [6, 2]) })
+    expect(Math.abs(bodyYaw(scene))).toBeCloseTo(Math.PI / 2, 4)
+    // dehors, rien à quoi s'aligner : le marqueur garde son défaut
+    scene.updateStates({ [VEHICLE]: stateAt(house, [-3.5, -6]) })
+    expect(bodyYaw(scene)).toBe(0)
   })
 })

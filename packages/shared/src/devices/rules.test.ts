@@ -4,7 +4,7 @@ import { deviceDescriptorSchema, type DeviceDescriptor } from './descriptor'
 import { deviceStateSchema, type StateFor } from './state'
 import { commandSchema, commandKind } from './command'
 import type { CommandNotAllowedError} from './rules';
-import { assertCommandAllowed, defaultState, makeDeviceId, mergeState, parseDeviceId } from './rules'
+import { assertCommandAllowed, defaultState, estimateChargePowerW, makeDeviceId, mergeState, parseDeviceId } from './rules'
 
 const light: DeviceDescriptor = {
   id: 'mock:light-1', pluginId: 'mock', externalId: 'light-1', kind: 'light', name: 'Lampe',
@@ -106,5 +106,38 @@ describe('defaultState', () => {
     const s = defaultState('cover')
     expect(s.kind === 'cover' && s.position).toBeUndefined()
     expect(deviceStateSchema.parse(s)).toEqual(s)
+  })
+})
+
+/**
+ * Aucun fabricant ne donne la capacité de la batterie, et certains (la R5) ne donnent pas non plus
+ * la puissance de charge : elle se déduit de ce que la voiture annonce — 6 points à mettre sur
+ * 52 kWh en 43 min ≈ 4,4 kW — ou pas du tout.
+ */
+describe('estimateChargePowerW', () => {
+  const charging = (extra: Partial<StateFor<'vehicle'>> = {}): StateFor<'vehicle'> => ({
+    kind: 'vehicle', updatedAt: 1, available: true, soc: 74, rangeKm: 276, pluggedIn: true, charging: true,
+    chargeLimit: 80, chargeMinutesRemaining: 43, ...extra,
+  })
+
+  it('déduit la puissance du temps que la voiture se donne', () => {
+    expect(estimateChargePowerW(charging(), 52)).toBe(4400)
+    expect(estimateChargePowerW(charging(), 40)).toBe(3300)
+  })
+
+  it('se tait quand il n’y a rien à estimer', () => {
+    expect(estimateChargePowerW(charging(), undefined)).toBeUndefined()          // capacité jamais saisie
+    expect(estimateChargePowerW(charging({ chargePowerW: 7000 }), 52)).toBeUndefined()  // le véhicule la DIT
+    expect(estimateChargePowerW(charging({ charging: false }), 52)).toBeUndefined()
+    expect(estimateChargePowerW(charging({ chargeLimit: undefined }), 52)).toBeUndefined()
+    expect(estimateChargePowerW(charging({ chargeMinutesRemaining: undefined }), 52)).toBeUndefined()
+  })
+
+  it('se tait aussi quand le calcul mentirait', () => {
+    // fin de charge : le courant s'effondre sur les derniers pourcents, une minute d'erreur y pèse trop
+    expect(estimateChargePowerW(charging({ soc: 79 }), 52)).toBeUndefined()
+    expect(estimateChargePowerW(charging({ chargeMinutesRemaining: 3 }), 52)).toBeUndefined()
+    // 60 points en 5 min feraient 374 kW sur une voiture branchée au garage : invraisemblable
+    expect(estimateChargePowerW(charging({ soc: 20, chargeMinutesRemaining: 5 }), 52)).toBeUndefined()
   })
 })

@@ -352,6 +352,25 @@ export const useHouseStore = defineStore('house', () => {
   }
 
   /**
+   * Réglages d'un appareil que seul l'utilisateur peut connaître : le décalage de sa place calculée
+   * par GPS, la capacité de sa batterie (aucun fabricant ne la donne). Même chemin que le renommage :
+   * l'entrée de maison est créée au besoin, SANS position — un véhicule n'a pas de place écrite.
+   * `[0, 0]` et `0` effacent, comme la chaîne vide efface un nom.
+   */
+  async function setDeviceTuning(pluginDeviceId: string, tuning: { gpsOffset?: Vec2; batteryKwh?: number }): Promise<boolean> {
+    const hd = houseDeviceFor(pluginDeviceId)
+    const placement: DevicePlacement = { ...tuning }
+    if (!hd) placement.deviceId = pluginDeviceId
+    try {
+      house.value = await getTransport().placeDevice(hd?.id ?? houseIdForDevice(pluginDeviceId), placement)
+      return true
+    } catch (err) {
+      useNotificationsStore().error(t('place.saveError', { message: (err as Error).message }))
+      return false
+    }
+  }
+
+  /**
    * Renomme un appareil dans la maison — SANS le placer. C'est le seul chemin possible pour un
    * appareil qui n'a pas de place dans la scène (un véhicule) : son entrée est créée au besoin, et
    * elle n'a pas de position. Un nom vide EFFACE le nom choisi, et celui du fabricant reprend la main.
@@ -660,7 +679,7 @@ export const useHouseStore = defineStore('house', () => {
   return {
     house, effective, loading, error, index, levels, zones, soundRoutes, relaySource,
     focusedLevelId, gardenFocus, selectedRoomId, selectedLevelId, selectedKey, floorTab, selectedRoom, selectedZone, selectedDevice,
-    load, setFloorTab, focusLevel, selectRoom, selectLevel, selectDevice, clearSelection, backToHome, backFromRoom, backFromDevice, houseDeviceFor, renameDevice, setRoomOrder,
+    load, setFloorTab, focusLevel, selectRoom, selectLevel, selectDevice, clearSelection, backToHome, backFromRoom, backFromDevice, houseDeviceFor, renameDevice, setDeviceTuning, setRoomOrder,
     placing, saving, draft, canRevert, isProvisional, startPlacing, startPlacingNew, stopPlacing, previewPosition, previewHeight, savePlacement, revertPlacement, removePlacement,
     arrays, arraysOf, editingArrayId, editingArray, editingArrayModules, arrayDraft, hoveredKey, hoverSlot, freeInverters,
     startEditingArray, stopEditingArray, editArray, siteOf, siteOfDevice, addArray, saveArray, removeArray, previewArrayOrigin, dropArray,

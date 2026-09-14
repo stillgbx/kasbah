@@ -148,3 +148,22 @@ export function offsetPolygon(poly: readonly Vec2[], distance: number): Vec2[] {
   }
   return out
 }
+
+/**
+ * Orientation de la plus longue arête d'un polygone, en degrés dans la convention `yaw` des
+ * appareils (0 = face à +y, sens trigonométrique). `null` si le polygone est dégénéré.
+ *
+ * C'est l'axe d'une pièce : dans un garage rectangulaire, la grande arête est le sens dans lequel
+ * une voiture s'y range. Sert à orienter ce que le fabricant ne sait pas orienter.
+ */
+export function longestEdgeYawDeg(poly: readonly Vec2[]): number | null {
+  let best: Vec2 | null = null
+  let bestLen = EPS
+  for (let i = 0; i < poly.length; i++) {
+    const d = sub(poly[(i + 1) % poly.length]!, poly[i]!)
+    const l = length(d)
+    if (l > bestLen) { bestLen = l; best = d }
+  }
+  // +y tourné de `yaw` donne (-sin yaw, cos yaw) : l'aligner sur l'arête, c'est atan2(-dx, dy)
+  return best ? (Math.atan2(-best[0], best[1]) * 180) / Math.PI : null
+}

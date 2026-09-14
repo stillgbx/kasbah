@@ -160,6 +160,25 @@ export const vehicleStateSchema = z.object({
   pluggedIn: z.boolean(),
   charging: z.boolean(),
   chargePowerW: z.number().optional(),
+  /**
+   * Puissance de charge TELLE QUE LE VÉHICULE LA DIT. Absente = il ne la dit pas (la Renault 5
+   * E-Tech, vérifié voiture en charge) : Kasbah l'ESTIME alors à l'affichage (`estimateChargePowerW`)
+   * à partir de la capacité saisie dans la maison, et l'annonce comme une estimation. Rien de déduit
+   * n'entre ici : cet état est ce que le fabricant a répondu.
+   */
+  /**
+   * Plancher de charge voulu par l'utilisateur (%) : le niveau sous lequel il ne veut pas que la
+   * voiture descende (`socMin` de Renault, seuil de la décharge V2L comprise). Tesla n'a pas cette
+   * notion — le champ reste absent, et la jauge ne montre alors qu'un repère.
+   */
+  socMin: pct.optional(),
+  /**
+   * Minutes restantes avant la fin de la charge, telles que le VÉHICULE les estime (Tesla
+   * `time_to_full_charge`, Renault `chargingRemainingTime`) — jamais un calcul de Kasbah, qui ne
+   * connaît ni la courbe de charge ni le chauffage de la batterie. Absent = pas d'estimation ; ne
+   * vaut que pendant la charge (un véhicule à l'arrêt garde parfois la dernière valeur, périmée).
+   */
+  chargeMinutesRemaining: z.number().min(0).optional(),
   chargeLimit: pct.optional(),
   /**
    * Verrouillage. **Optionnel = inconnu** : tous les constructeurs ne le disent pas (la R5 E-Tech

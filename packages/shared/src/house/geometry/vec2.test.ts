@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { centroid, clipConvex, isCCW, isConvex, lineIntersect, offsetPolygon, perpRight, pointInPolygon, signedArea, type Vec2 } from './vec2'
+import { centroid, clipConvex, isCCW, isConvex, lineIntersect, longestEdgeYawDeg, offsetPolygon, perpRight, pointInPolygon, signedArea, type Vec2 } from './vec2'
 
 const square: Vec2[] = [[0, 0], [2, 0], [2, 2], [0, 2]]
 
@@ -39,5 +39,18 @@ describe('vec2', () => {
       expect(Math.abs(p[0] - 1)).toBeCloseTo(1.5)
       expect(Math.abs(p[1] - 1)).toBeCloseTo(1.5)
     }
+  })
+})
+
+describe('longestEdgeYawDeg', () => {
+  it('donne le sens de la plus longue arête, dans la convention yaw (0 = +y)', () => {
+    // garage 3 × 6 allongé selon y : une voiture s'y range face à +y, yaw 0
+    expect(longestEdgeYawDeg([[0, 0], [3, 0], [3, 6], [0, 6]])).toBeCloseTo(0, 6)
+    // le même couché selon x : un quart de tour
+    expect(Math.abs(longestEdgeYawDeg([[0, 0], [6, 0], [6, 3], [0, 3]])!)).toBeCloseTo(90, 6)
+  })
+  it('rend null sur un polygone dégénéré', () => {
+    expect(longestEdgeYawDeg([])).toBeNull()
+    expect(longestEdgeYawDeg([[1, 1], [1, 1], [1, 1]])).toBeNull()
   })
 })

@@ -27,8 +27,10 @@ describe('descripteur', () => {
     expect(deviceDescriptorSchema.safeParse(d).success).toBe(true)
     expect(d).toMatchObject({ id: 'tesla:5YJSA7E20HF000001', externalId: '5YJSA7E20HF000001', kind: 'vehicle', name: 'Kasbah S' })
     expect(d.meta).toEqual({ manufacturer: 'Tesla', model: 'Model S' })
-    // phase 1 : lecture seule — ni `lock` ni `charging`, l'UI n'a donc pas à proposer ces boutons
-    expect(d.capabilities).toEqual(['soc', 'range', 'location'])
+    // phase 1 : lecture seule — ni `lock` ni `charging`, l'UI n'a donc pas à proposer ces boutons.
+    // `charge_power` n'est pas une commande : elle dit que la voiture DONNE sa puissance de charge,
+    // et dispense l'UI de la faire estimer (donc de demander la capacité de la batterie).
+    expect(d.capabilities).toEqual(['soc', 'range', 'location', 'charge_power'])
   })
 
   it('la gamme se lit au 4e caractère du VIN, et sert de nom à défaut', () => {
@@ -113,6 +115,12 @@ describe('lecture complète (`vehicle_data`)', () => {
     const p = toDataPatch(charging)
     accepted(p)
     expect(p).toMatchObject({ pluggedIn: true, charging: true, chargePowerW: 7000, soc: 61 })
+  })
+
+  it('temps restant : les heures décimales du fabricant en minutes, et rien hors charge', () => {
+    expect(toDataPatch(charging).chargeMinutesRemaining).toBe(105)   // 1,75 h
+    // débranchée, `time_to_full_charge` reste à sa dernière valeur : on l'efface plutôt que de l'afficher
+    expect(toDataPatch(parked).chargeMinutesRemaining).toBeNull()
   })
 
   it('une section manquante ne fait rien échouer : le patch se réduit à ce qu’on a', () => {

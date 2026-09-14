@@ -143,6 +143,20 @@ export const houseDeviceSchema = z.object({
    * bâtiment ; sa place, le jour où on la dessinera, viendra de son GPS et non de ce champ.
    */
   position: vec3Schema.optional(),
+  /**
+   * Correction (m, repère maison) appliquée à la place CALCULÉE d'un appareil placé par son GPS —
+   * un véhicule. Ni le relevé du véhicule ni l'origine de la maison ne sont exacts au mètre : ce
+   * décalage constant, saisi une fois depuis la carte du véhicule, remet la voiture sur sa place de
+   * parking. Sans effet sur un appareil qui a une `position`, elle fait déjà foi.
+   */
+  gpsOffset: vec2Schema.optional(),
+  /**
+   * Capacité utile de la batterie (kWh) d'un véhicule. **Aucun fabricant ne la donne** — ni Tesla,
+   * ni Renault, pas même dans la fiche technique du véhicule, et un code batterie ne se traduit pas.
+   * C'est donc une valeur SAISIE, et elle n'a qu'un usage : estimer une puissance de charge que le
+   * véhicule ne dit pas (`estimateChargePowerW`). Absente = on n'estime rien.
+   */
+  batteryKwh: z.number().positive().max(500).optional(),
   levelId: idSchema.optional(),
   roomId: idSchema.optional(),
   zoneId: idSchema.optional(),

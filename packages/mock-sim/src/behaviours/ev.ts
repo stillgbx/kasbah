@@ -18,6 +18,8 @@ export interface VehicleOptions {
   returnHour?: number
   soc?: number
   chargeLimit?: number
+  /** Plancher de charge voulu, quand le fabricant a cette notion (Renault ; Tesla ne l'a pas). */
+  socMin?: number
   /** Puissance de la borne qui le charge quand branché (W) ; 0 = jamais chargé par cette sim. */
   chargerPowerW?: number
 }
@@ -38,13 +40,18 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
     s.location = { lat: lerp(o.home.lat, o.work.lat, t), lon: lerp(o.home.lon, o.work.lon, t), at }
   }
   const dev: SimDevice<'vehicle'> = {
-    descriptor: descriptor(externalId, 'vehicle', o.name, ['soc', 'range', 'location', 'lock', 'charging', 'charge_limit'], {
+    descriptor: descriptor(externalId, 'vehicle', o.name, [
+      'soc', 'range', 'location', 'lock', 'charging', 'charge_limit',
+      // pas de borne, pas de puissance à dire : ce véhicule-là se fait estimer comme une vraie R5
+      ...((o.chargerPowerW ?? 7400) > 0 ? ['charge_power' as const] : []),
+    ], {
       manufacturer: o.manufacturer ?? 'Mock', model: o.model ?? 'EV',
     }),
     state: {
       kind: 'vehicle', updatedAt: 0, available: true,
       soc: o.soc ?? 72, rangeKm: Math.round(((o.soc ?? 72) / 100) * rangeFull), pluggedIn: true, charging: false,
-      locked: true, chargeLimit: o.chargeLimit ?? 80, location: { lat: o.home.lat, lon: o.home.lon, at: 0 }, odometerKm: 24_310,
+      locked: true, chargeLimit: o.chargeLimit ?? 80, ...(o.socMin === undefined ? {} : { socMin: o.socMin }),
+      location: { lat: o.home.lat, lon: o.home.lon, at: 0 }, odometerKm: 24_310,
       // ce qu'un vrai véhicule connecté dit aussi : la simulation le fournit pour que l'UI s'essaie dessus
       sleepState: 'asleep', gear: 'P', speedKmh: 0, headingDeg: bearing(o.home, o.work),
       tirePressureBar: { fl: 2.9, fr: 2.9, rl: 2.95, rr: 2.95 }, insideTempC: 21.5, outsideTempC: 17,
@@ -73,8 +80,10 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
       if (s.charging) {
         s.soc = clamp(s.soc + ((power * ctx.dtS) / 3600 / (batteryKwh * 1000)) * 100, 0, s.chargeLimit ?? 80)
         s.chargePowerW = power
+        // ce qu'un vrai véhicule estime lui-même : le temps qu'il reste à la puissance du moment
+        s.chargeMinutesRemaining = Math.round((((s.chargeLimit ?? 80) - s.soc) / 100 * batteryKwh * 1000 * 60) / power)
         ctx.world.loadsW += power
-      } else s.chargePowerW = 0
+      } else { s.chargePowerW = 0; delete s.chargeMinutesRemaining }
       s.soc = Math.round(s.soc * 10) / 10
       s.rangeKm = Math.round((s.soc / 100) * rangeFull)
       // en route : rapport D et vitesse moyenne du trajet ; garé : P, 0 — et il s'endort dès qu'il ne fait rien

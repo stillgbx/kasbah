@@ -30,8 +30,10 @@ export const CAPABILITIES = [
   'production', 'consumption', 'grid', 'storage',
   // ev_charger
   'charge_control', 'charge_current',
-  // vehicle
-  'soc', 'range', 'location', 'lock', 'charging', 'charge_limit', 'climate_precondition',
+  // vehicle — `charge_power` est une capacité de LECTURE, comme `soc` : le véhicule DIT sa puissance
+  // de charge instantanée (Tesla). Sans elle, personne ne la connaît (la Renault 5 E-Tech, vérifié
+  // voiture en charge) et l'UI l'estime, ce qui lui demande une capacité de batterie saisie à la main.
+  'soc', 'range', 'location', 'lock', 'charging', 'charge_limit', 'charge_power', 'climate_precondition',
   // camera — `live_stream` : un flux vidéo à la demande (protocoles dans `meta.camera.protocols`),
   // `chime` : l'appareil sonne (sonnette). Pas de `on_off` : l'API Google Nest ne permet pas
   // d'éteindre une caméra, et déclarer une capacité qu'aucune commande ne peut honorer serait mentir.
@@ -50,7 +52,7 @@ export const KIND_CAPABILITIES: Record<DeviceKind, readonly Capability[]> = {
   sensor: ['measure'],
   energy: ['production', 'consumption', 'grid', 'storage'],
   ev_charger: ['charge_control', 'charge_current'],
-  vehicle: ['soc', 'range', 'location', 'lock', 'charging', 'charge_limit', 'climate_precondition'],
+  vehicle: ['soc', 'range', 'location', 'lock', 'charging', 'charge_limit', 'charge_power', 'climate_precondition'],
   camera: ['live_stream', 'chime'],
 }
 
