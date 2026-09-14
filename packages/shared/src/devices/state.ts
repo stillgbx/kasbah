@@ -161,7 +161,12 @@ export const vehicleStateSchema = z.object({
   charging: z.boolean(),
   chargePowerW: z.number().optional(),
   chargeLimit: pct.optional(),
-  locked: z.boolean(),
+  /**
+   * Verrouillage. **Optionnel = inconnu** : tous les constructeurs ne le disent pas (la R5 E-Tech
+   * repond 403 sur son endpoint `lock-status`). Meme arbitrage que la `position` d'un ouvrant :
+   * afficher Â« â Â» plutot qu'un cadenas qui mentirait.
+   */
+  locked: z.boolean().optional(),
   location: z.object({ lat: z.number(), lon: z.number(), at: z.number() }).optional(),
   /** Cap du véhicule (degrés, 0 = nord, sens horaire) : oriente son marqueur sur la carte. Absent = inconnu. */
   headingDeg: z.number().min(0).max(360).optional(),

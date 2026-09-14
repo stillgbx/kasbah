@@ -7,6 +7,7 @@ import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import EnphasePairingCard from '../components/EnphasePairingCard.vue'
 import HuePairingCard from '../components/HuePairingCard.vue'
 import NestLinkCard from '../components/NestLinkCard.vue'
+import RenaultLinkCard from '../components/RenaultLinkCard.vue'
 import TeslaLinkCard from '../components/TeslaLinkCard.vue'
 import Segmented from '../components/ui/Segmented.vue'
 import { LOCALE_LABELS } from '../i18n'
@@ -144,6 +145,7 @@ const houseStats = computed(() => {
             <NestLinkCard />
             <EnphasePairingCard />
             <TeslaLinkCard />
+            <RenaultLinkCard />
             <div class="plugins">
               <div v-for="p in plugins.list" :key="p.id" class="plugin">
                 <div class="plugin__row">

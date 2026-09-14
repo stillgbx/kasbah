@@ -1,6 +1,6 @@
 import { computed, ref, shallowRef, watch } from 'vue'
 import { defineStore } from 'pinia'
-import { autoPlaceDevices, computeRoof, indexHouse, panelArrayDevices, panelOf, pointInPolygon, resolveDefaults, resolveDeviceLevelId, withPanelArrays, type DeviceDescriptor, type DeviceEntry, type DevicePlacement, type House, type HouseDevice, type HouseIndex, type Level, type PanelArray, type PanelArrayPatch, type PlaceableDevice, type Room, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
+import { autoPlaceDevices, computeRoof, houseIdForDevice, indexHouse, isPlaced, panelArrayDevices, panelOf, pointInPolygon, resolveDefaults, resolveDeviceLevelId, withPanelArrays, type DeviceDescriptor, type DeviceEntry, type DevicePlacement, type House, type HouseDevice, type HouseIndex, type Level, type PanelArray, type PanelArrayPatch, type PlaceableDevice, type PlacedHouseDevice, type Room, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
 import { getTransport } from '../api'
 import { i18n, t } from '../i18n'
 import { soundRouting } from '../lib/audioRouting'
@@ -225,11 +225,21 @@ export const useHouseStore = defineStore('house', () => {
   const draft = shallowRef<PlacementDraft | null>(null)
   /** Placement à l'entrée dans le mode, pour « Rétablir ». */
   const placingOrigin = shallowRef<{ position: Vec3; roomId: string | undefined; levelId: string | null; mount: Mount | undefined; yaw: number | undefined; size: Size | undefined; leaves: Leaves | undefined } | null>(null)
+  /**
+   * L'appareil sélectionné, à condition qu'il soit PLACÉ. Tous les gestes de placement partent d'un
+   * marqueur de la scène, et un appareil sans position n'en a pas : ils ne peuvent donc pas le viser.
+   * Ce garde-fou remplace une douzaine de `!` disséminés.
+   */
+  const placedSelection = (): PlacedHouseDevice | null => {
+    const hd = selectedDevice.value
+    return hd && isPlaced(hd) ? hd : null
+  }
+
   /** Niveau qui ancre l'appareil, que ce soit par sa pièce ou directement. */
   const anchorLevel = (hd: HouseDevice) => (index.value ? resolveDeviceLevelId(hd, index.value.roomsById) : null)
 
   function startPlacing() {
-    const hd = selectedDevice.value
+    const hd = placedSelection()
     if (!hd) return
     placingOrigin.value = { position: hd.position, roomId: hd.roomId, levelId: anchorLevel(hd), mount: hd.mount, yaw: hd.yaw, size: hd.size, leaves: hd.leaves }
     draft.value = null
@@ -301,7 +311,7 @@ export const useHouseStore = defineStore('house', () => {
     if (p) {
       if (levelId === p.levelId) return
       const [x, y] = levelCentre(levelId)
-      provisional.value = { ...p, levelId, position: [x, y, p.position[2]] }
+      provisional.value = { ...p, levelId, position: [x, y, p.position?.[2] ?? 0] }
       draft.value = null
       return
     }
@@ -314,7 +324,7 @@ export const useHouseStore = defineStore('house', () => {
    * au sol du nouveau niveau pour que l'appareil ne bouge pas dans l'espace.
    */
   async function moveToLevel(levelId: string): Promise<void> {
-    const hd = selectedDevice.value
+    const hd = placedSelection()
     const idx = index.value
     if (!hd || !idx) return
     const from = resolveDeviceLevelId(hd, idx.roomsById)
@@ -329,21 +339,40 @@ export const useHouseStore = defineStore('house', () => {
 
   /** Aperçu d'une position au sol (glissement 3D) ; `roomId` null = hors de toute pièce → on garde l'ancienne. */
   function previewPosition(xy: [number, number], roomId: string | null) {
-    const hd = selectedDevice.value
+    const hd = placedSelection()
     if (!hd || !placing.value) return
     const z = draft.value?.position[2] ?? hd.position[2]
     draft.value = { position: [snap(xy[0]), snap(xy[1]), z], roomId: roomId ?? draft.value?.roomId ?? hd.roomId }
   }
   function previewHeight(z: number) {
-    const hd = selectedDevice.value
+    const hd = placedSelection()
     if (!hd || !placing.value) return
     const base = draft.value ?? { position: hd.position, roomId: hd.roomId }
     draft.value = { position: [base.position[0], base.position[1], snap(z)], roomId: base.roomId }
   }
 
+  /**
+   * Renomme un appareil dans la maison — SANS le placer. C'est le seul chemin possible pour un
+   * appareil qui n'a pas de place dans la scène (un véhicule) : son entrée est créée au besoin, et
+   * elle n'a pas de position. Un nom vide EFFACE le nom choisi, et celui du fabricant reprend la main.
+   */
+  async function renameDevice(pluginDeviceId: string, name: string): Promise<boolean> {
+    const hd = houseDeviceFor(pluginDeviceId)
+    const placement: DevicePlacement = { name }
+    // absent du JSON : son `deviceId` est ce qui lui donne une entrée
+    if (!hd) placement.deviceId = pluginDeviceId
+    try {
+      house.value = await getTransport().placeDevice(hd?.id ?? houseIdForDevice(pluginDeviceId), placement)
+      return true
+    } catch (err) {
+      useNotificationsStore().error(t('place.saveError', { message: (err as Error).message }))
+      return false
+    }
+  }
+
   /** Écrit le brouillon (complété par `override`) dans house.json ; un appareil auto-placé y gagne son entrée. */
   async function savePlacement(override?: { position?: Vec3; mount?: Mount; yaw?: number; size?: Size; leaves?: Leaves; levelId?: string }): Promise<boolean> {
-    const hd = selectedDevice.value
+    const hd = placedSelection()
     if (!hd) return false
     const base = draft.value ?? { position: hd.position, roomId: hd.roomId }
     const p: DevicePlacement = { position: override?.position ?? base.position }
@@ -598,7 +627,7 @@ export const useHouseStore = defineStore('house', () => {
   function previewArrayOrigin(key: string, xy: [number, number]) {
     const a = editingArray.value
     const hd = index.value?.devicesById.get(key)
-    if (!a || !hd) return
+    if (!a || !hd || !isPlaced(hd)) return
     arrayDraft.value = [snap(a.origin[0] + xy[0] - hd.position[0]), snap(a.origin[1] + xy[1] - hd.position[1]), a.origin[2]]
   }
   /** Dépôt : l'origine du brouillon devient celle du champ. */
@@ -607,7 +636,7 @@ export const useHouseStore = defineStore('house', () => {
   }
 
   const canRevert = computed(() => {
-    const o = placingOrigin.value, hd = selectedDevice.value
+    const o = placingOrigin.value, hd = placedSelection()
     return !!o && !!hd && (o.position.join() !== hd.position.join() || o.mount !== hd.mount || o.roomId !== hd.roomId
       || o.levelId !== anchorLevel(hd) || o.yaw !== hd.yaw || !sameSize(o.size, hd.size) || o.leaves !== hd.leaves)
   })
@@ -631,7 +660,7 @@ export const useHouseStore = defineStore('house', () => {
   return {
     house, effective, loading, error, index, levels, zones, soundRoutes, relaySource,
     focusedLevelId, gardenFocus, selectedRoomId, selectedLevelId, selectedKey, floorTab, selectedRoom, selectedZone, selectedDevice,
-    load, setFloorTab, focusLevel, selectRoom, selectLevel, selectDevice, clearSelection, backToHome, backFromRoom, backFromDevice, houseDeviceFor, setRoomOrder,
+    load, setFloorTab, focusLevel, selectRoom, selectLevel, selectDevice, clearSelection, backToHome, backFromRoom, backFromDevice, houseDeviceFor, renameDevice, setRoomOrder,
     placing, saving, draft, canRevert, isProvisional, startPlacing, startPlacingNew, stopPlacing, previewPosition, previewHeight, savePlacement, revertPlacement, removePlacement,
     arrays, arraysOf, editingArrayId, editingArray, editingArrayModules, arrayDraft, hoveredKey, hoverSlot, freeInverters,
     startEditingArray, stopEditingArray, editArray, siteOf, siteOfDevice, addArray, saveArray, removeArray, previewArrayOrigin, dropArray,

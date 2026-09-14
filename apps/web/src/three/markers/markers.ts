@@ -1,5 +1,5 @@
 import { BoxGeometry, type BufferGeometry, Color, CylinderGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry, PointLight, RingGeometry, ShaderMaterial, SphereGeometry } from 'three'
-import type { DeviceState, HouseDevice, PanelPlacement } from '@kasbah/shared'
+import type { DeviceState, PlacedHouseDevice, PanelPlacement } from '@kasbah/shared'
 import { mirekToRgb, xyToRgb } from '@kasbah/shared'
 import { isMediaActive } from '../../lib/deviceState'
 import { coverActivity, isFlatCover } from '../../lib/cover'
@@ -58,7 +58,7 @@ export class GenericMarker extends DeviceMarker {
   private playing = false
   /** Pochette affichée sur l'écran (téléviseur et écran connecté seulement). */
   private art: ScreenArt | null = null
-  constructor(device: HouseDevice, ctx: MarkerContext) {
+  constructor(device: PlacedHouseDevice, ctx: MarkerContext) {
     super(device, ctx)
     const kind = ctx.descriptor?.kind ?? device.kind
     let geometry
@@ -219,7 +219,7 @@ export class PanelMarker extends DeviceMarker {
   private readonly peakW: number
   /** Puissance de sortie de l'onduleur (0 = inconnue) : le second repère de la jauge. */
   private readonly maxOutputW: number
-  constructor(device: HouseDevice, ctx: MarkerContext, panel: PanelPlacement) {
+  constructor(device: PlacedHouseDevice, ctx: MarkerContext, panel: PanelPlacement) {
     super(device, ctx)
     this.peakW = panel.peakW
     this.maxOutputW = panel.maxOutputW
@@ -304,7 +304,7 @@ export class LightMarker extends DeviceMarker {
   private readonly mat: MeshStandardMaterial
   private readonly sphere: Mesh
   private readonly light: PointLight
-  constructor(device: HouseDevice, ctx: MarkerContext) {
+  constructor(device: PlacedHouseDevice, ctx: MarkerContext) {
     super(device, ctx)
     this.mat = new MeshStandardMaterial({ color: 0xfff2d0, emissive: 0xffc46b, emissiveIntensity: 0, roughness: 0.4 })
     this.sphere = new Mesh(new SphereGeometry(0.13, 20, 14), this.mat)
@@ -370,7 +370,7 @@ export class CoverMarker extends DeviceMarker {
    */
   private posed = false
 
-  constructor(device: HouseDevice, ctx: MarkerContext) {
+  constructor(device: PlacedHouseDevice, ctx: MarkerContext) {
     super(device, ctx)
     const o = ctx.opening
     if (o) {
@@ -498,7 +498,7 @@ export class VehicleMarker extends DeviceMarker {
   private readonly group = new Group()
   private readonly bodyMat: MeshStandardMaterial
   private readonly cabMat: MeshStandardMaterial
-  constructor(device: HouseDevice, ctx: MarkerContext, private atHome: (state: DeviceState) => boolean) {
+  constructor(device: PlacedHouseDevice, ctx: MarkerContext, private atHome: (state: DeviceState) => boolean) {
     super(device, ctx)
     const brand = (ctx.descriptor?.meta.manufacturer ?? '').toLowerCase()
     this.bodyMat = new MeshStandardMaterial({ color: brand.includes('tesla') ? 0xe4e8ec : 0x8a2b2b, roughness: 0.35, metalness: 0.3 })
@@ -529,7 +529,7 @@ export class MowerMarker extends DeviceMarker {
   private readonly mat: MeshStandardMaterial
   private targetXY: [number, number] | null = null
   private moving = false
-  constructor(device: HouseDevice, ctx: MarkerContext) {
+  constructor(device: PlacedHouseDevice, ctx: MarkerContext) {
     super(device, ctx)
     this.mat = new MeshStandardMaterial({ color: 0xff7a1a, roughness: 0.5 })
     this.mesh = new Mesh(new BoxGeometry(0.5, 0.7, 0.28), this.mat)

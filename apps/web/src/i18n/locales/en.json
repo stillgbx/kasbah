@@ -134,7 +134,7 @@
   },
   "vehicle": {
     "soc": "Charge", "range": "Range", "chargeLimit": "Charge limit", "pluggedIn": "Plugged in", "unplugged": "Unplugged",
-    "charging": "Charging", "locked": "Locked", "unlocked": "Unlocked", "atHome": "At home", "away": "{distance} away",
+    "rename": "Rename", "charging": "Charging", "locked": "Locked", "unlocked": "Unlocked", "atHome": "At home", "away": "{distance} away",
     "startCharge": "Start charging", "stopCharge": "Stop charging", "odometer": "Odometer", "location": "Location",
     "mapPlaceholder": "Map — vehicle location", "none": "No known vehicle",
     "sleep": {"online": "Awake", "asleep": "Asleep", "offline": "Offline"},
@@ -205,6 +205,18 @@
       "tokenInfo": "{role} token, expires on {date}.", "roleOwner": "Owner", "roleInstaller": "Installer",
       "installerNote": "An installer token only lasts 12 hours. Enphase's web form gives nothing else to an account that is also an installer: use the Enphase account above to get the one-year token.",
       "notStored": "No token file is configured (ENPHASE_TOKEN_FILE is empty): pairing will be lost when the server restarts."
+    },
+    "renault": {
+      "title": "Renault",
+      "intro": "Renault offers no delegated sign-in for third parties: your MY Renault e-mail and password are required. The password crosses the server once and is never stored — only a session token is. An account protected by two-factor authentication cannot be linked.",
+      "email": "MY Renault e-mail",
+      "password": "Password",
+      "link": "Link the account",
+      "linking": "Linking…",
+      "linked": "Account linked · {n} vehicle | Account linked · {n} vehicle | Account linked · {n} vehicles",
+      "unlink": "Unlink the account",
+      "poll": "One reading every {min} min, within the {rate} calls per hour Renault tolerates.",
+      "notStored": "No session file is configured (RENAULT_SESSION_FILE is empty): the link will be lost when the server restarts."
     },
     "tesla": {
       "title": "Tesla",

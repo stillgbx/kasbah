@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { geoDistance, type Capability, type CommandInput, type DeviceEntry, type StateFor } from '@kasbah/shared'
 import PageHeader from '../components/layout/PageHeader.vue'
@@ -23,6 +23,32 @@ const { t, locale } = useI18n()
 const HOME_RADIUS_M = 120
 const EMPTY = '—'
 const TIRES = ['fl', 'fr', 'rl', 'rr'] as const
+
+/**
+ * Renommage d'un véhicule. Le nom choisi vit dans la MAISON (`house.devices[].name`), pas dans
+ * l'état : l'état est la vérité du fabricant, réécrite à chaque lecture. Une voiture n'étant pas
+ * placée dans la scène 3D, son entrée de maison n'a pas de position — d'où `position` facultative
+ * dans le placement. Vider le champ efface le nom choisi et rend la main au fabricant.
+ */
+/** Le nom choisi dans la maison l'emporte sur celui du fabricant ; à défaut, le fabricant fait foi. */
+const displayName = (v: VehicleEntry) => house.houseDeviceFor(v.descriptor.id)?.name ?? v.descriptor.name
+
+const renaming = ref<string | null>(null)
+const renameText = ref('')
+/** Le champ monté, s'il y en a un. Ref de FONCTION : un `ref` nommé dans un `v-for` rend un tableau. */
+const renameInput = ref<HTMLInputElement | null>(null)
+
+function startRename(v: VehicleEntry) {
+  renaming.value = v.descriptor.id
+  renameText.value = displayName(v)
+  void nextTick(() => renameInput.value?.select())
+}
+async function commitRename(v: VehicleEntry) {
+  const wanted = renameText.value.trim()
+  renaming.value = null
+  if (wanted === displayName(v)) return
+  await house.renameDevice(v.descriptor.id, wanted)
+}
 
 type VehicleEntry = DeviceEntry & { state: StateFor<'vehicle'> }
 const vehicles = computed(() => devices.list.filter((e): e is VehicleEntry => e.state.kind === 'vehicle'))
@@ -50,6 +76,9 @@ function movement(s: StateFor<'vehicle'>): string {
   }
   return t('vehicle.parked')
 }
+/** Verrouillage : « — » tant qu'on ne sait pas (tous les constructeurs ne le disent pas). */
+const locked = (s: StateFor<'vehicle'>) =>
+  s.locked === undefined ? EMPTY : s.locked ? t('vehicle.locked') : t('vehicle.unlocked')
 const temps = (s: StateFor<'vehicle'>) =>
   s.insideTempC === undefined && s.outsideTempC === undefined
     ? EMPTY
@@ -137,12 +166,25 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
           <div class="vcard__head">
             <span class="icon-square" :data-on="v.state.charging ? '1' : '0'"><StrokeIcon name="vehicle" :size="18" /></span>
             <div class="min0">
-              <div class="vcard__name">{{ v.descriptor.name }}</div>
+              <!-- nom, ou saisie : le champ occupe la MÊME boîte que le titre, rien ne se décale -->
+              <div class="vcard__name-row">
+                <input v-if="renaming === v.descriptor.id" :ref="(el) => (renameInput = el as HTMLInputElement | null)"
+                       v-model="renameText" class="vcard__name vcard__name-input"
+                       :aria-label="$t('vehicle.rename')" :placeholder="v.descriptor.name" @keyup.enter="commitRename(v)"
+                       @keyup.escape="renaming = null" @blur="commitRename(v)" />
+                <template v-else>
+                  <div class="vcard__name">{{ displayName(v) }}</div>
+                  <button type="button" class="vcard__pencil" :title="$t('vehicle.rename')" :aria-label="$t('vehicle.rename')" @click="startRename(v)">
+                    <StrokeIcon name="pencil" :size="14" />
+                  </button>
+                </template>
+              </div>
               <div class="muted vcard__sub">{{ v.descriptor.meta.manufacturer ?? v.descriptor.pluginId }} · {{ location(v.state) }}</div>
             </div>
-            <!-- veille : toujours une pastille, même quand le plugin ne la connaît pas (« — ») -->
-            <span class="vcard__sleep muted" :data-asleep="asleep(v.state) ? '1' : '0'">
-              <StrokeIcon :name="asleep(v.state) ? 'moon' : 'sun'" :size="14" />{{ v.state.sleepState ? $t(`vehicle.sleep.${v.state.sleepState}`) : EMPTY }}
+            <!-- pas de pastille quand le fabricant n'a pas de veille (Renault) : un soleil suivi d'un
+                 tiret se lirait « éveillée : inconnu ». Rien ne bouge pour autant, l'absence est stable -->
+            <span v-if="v.state.sleepState !== undefined" class="vcard__sleep muted" :data-asleep="asleep(v.state) ? '1' : '0'">
+              <StrokeIcon :name="asleep(v.state) ? 'moon' : 'sun'" :size="14" />{{ $t(`vehicle.sleep.${v.state.sleepState}`) }}
             </span>
           </div>
           <div class="vcard__soc">
@@ -151,7 +193,7 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
           </div>
           <div class="vcard__bar"><div class="vcard__bar-fill" :style="{ width: `${v.state.soc}%` }" /></div>
           <div class="vcard__stats">
-            <div class="card card--soft stat"><div class="muted stat__k">{{ $t('common.status') }}</div><div class="stat__v">{{ v.state.locked ? $t('vehicle.locked') : $t('vehicle.unlocked') }}</div></div>
+            <div class="card card--soft stat"><div class="muted stat__k">{{ $t('common.status') }}</div><div class="stat__v">{{ locked(v.state) }}</div></div>
             <div class="card card--soft stat"><div class="muted stat__k">{{ $t('vehicle.charging') }}</div>
               <div class="stat__v">{{ v.state.charging ? `${$t('vehicle.charging')} · ${formatPower(v.state.chargePowerW ?? 0, locale)}` : v.state.pluggedIn ? $t('vehicle.pluggedIn') : $t('vehicle.unplugged') }}</div></div>
             <div class="card card--soft stat"><div class="muted stat__k">{{ $t('vehicle.movement') }}</div><div class="stat__v">{{ movement(v.state) }}</div></div>
@@ -213,6 +255,18 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
 .vcard { padding: 18px 20px; display: grid; gap: 14px; align-content: start; }
 .vcard__head { display: flex; align-items: center; gap: 12px; }
+.vcard__name-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+/* le crayon ne prend pas de place tant qu'on ne le survole pas : il est là, discret, toujours au même point */
+.vcard__pencil {
+  flex: none; display: grid; place-items: center; width: 22px; height: 22px; padding: 0;
+  border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; opacity: 0.55;
+}
+.vcard__pencil:hover, .vcard__pencil:focus-visible { opacity: 1; background: var(--surface); color: var(--text); }
+.vcard__name-input {
+  flex: 1 1 auto; min-width: 0; padding: 0 6px; margin: 0 -6px;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--text);
+  font: inherit; font-size: inherit; font-weight: inherit;
+}
 .vcard__name { font-weight: 600; font-size: 16px; }
 .vcard__sub { font-size: 12px; }
 .min0 { min-width: 0; flex: 1 1 auto; }

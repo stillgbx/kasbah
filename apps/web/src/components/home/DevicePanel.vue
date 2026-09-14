@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CommandInput } from '@kasbah/shared'
-import { panelOf } from '@kasbah/shared'
+import { isPlaced, panelOf, type PlacedHouseDevice } from '@kasbah/shared'
 import { useDeviceResolver } from '../../composables/useDeviceResolver'
 import { relayLabel } from '../../lib/audioRouting'
 import { isEnergySite } from '../../lib/energy'
@@ -98,9 +98,11 @@ const headline = computed(() => {
  * Déplaçable : dans le JSON ou auto-placé, hors volets (ancrés à une ouverture), tondeuse (position
  * publiée) et modules d'un champ de panneaux (ils bougent avec leur champ, pas un par un).
  */
-const placeable = computed(() => {
+/** L'appareil à placer, ou `null` : un appareil NON PLACÉ (un véhicule) n'a pas de poignée dans la scène. */
+const placeable = computed<PlacedHouseDevice | null>(() => {
   const hd = resolved.value?.houseDevice
-  return !!hd && !hd.openingId && !panelOf(hd) && (resolved.value?.descriptor?.kind ?? hd.kind) !== 'mower'
+  if (!hd || !isPlaced(hd) || hd.openingId || panelOf(hd)) return null
+  return (resolved.value?.descriptor?.kind ?? hd.kind) !== 'mower' ? hd : null
 })
 /** Le champ dont cet appareil est un module, quand il en est un (il suit son champ, cf. `panels.ts`). */
 const panelCell = computed(() => (resolved.value?.houseDevice ? panelOf(resolved.value.houseDevice) : undefined))
@@ -210,7 +212,7 @@ function send(cmd: CommandInput) {
     <!-- les champs de panneaux se déclarent ici, juste au-dessus de l'emplacement de l'installation -->
     <PanelArraysCard v-if="solarSite" class="arrays" :site-device-id="solarSite" />
     <!-- rarement utilisé : calé au fond du panneau, sous tout le reste -->
-    <PlacementControl v-if="placeable" class="placement" :device="resolved.houseDevice!" />
+    <PlacementControl v-if="placeable" class="placement" :device="placeable" />
     <!-- module d'un champ : il ne se place pas seul, mais il mène au réglage de son champ -->
     <div v-else-if="array" class="card card--soft placement place-new">
       <div class="place-new__row">

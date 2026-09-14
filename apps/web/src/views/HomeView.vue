@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMediaQuery } from '@vueuse/core'
-import { panelOf } from '@kasbah/shared'
+import { isPlaced, panelOf } from '@kasbah/shared'
 import PageHeader from '../components/layout/PageHeader.vue'
 import SidePanel from '../components/layout/SidePanel.vue'
 import Segmented from '../components/ui/Segmented.vue'
@@ -127,7 +127,9 @@ watch([() => house.placing, () => house.selectedKey, () => house.editingArrayId,
 }, { immediate: true })
 watch(() => house.draft, (d) => {
   const hd = house.selectedDevice
-  if (house.placing && hd) scene.moveMarker(hd.id, d?.position ?? hd.position)
+  // un appareil non placé n'a pas de marqueur à déplacer
+  const to = d?.position ?? (hd && isPlaced(hd) ? hd.position : undefined)
+  if (house.placing && hd && to) scene.moveMarker(hd.id, to)
 })
 // régler un champ, c'est venir voir le niveau qui le porte : on le cadre comme le ferait son onglet,
 // sinon la caméra restait sur la pièce qu'on regardait et le toit s'affichait hors champ
@@ -136,7 +138,7 @@ watch(() => house.editingArray?.levelId, (id) => { if (id) scene.focusLevelView(
 watch(() => house.hoveredKey, (key) => scene.setSelected(key ?? house.selectedKey))
 // aperçu du champ glissé : tous ses modules suivent l'origine du brouillon
 watch(() => house.arrayDraft, () => {
-  for (const m of house.editingArrayModules) scene.moveMarker(m.id, m.position)
+  for (const m of house.editingArrayModules) if (isPlaced(m)) scene.moveMarker(m.id, m.position)
 })
 
 // URL ↔ sélection

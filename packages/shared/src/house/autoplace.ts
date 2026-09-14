@@ -92,8 +92,13 @@ export function autoPlaceDevices(house: House, devices: readonly PlaceableDevice
 const round = (v: number) => Math.round(v * 100) / 100
 
 /** Id d'appareil maison dérivé du `deviceId` (les caractères hors `[a-z0-9_.-]` sont remplacés). */
+export function houseIdForDevice(deviceId: string): string {
+  return `auto.${deviceId.replace(/[^a-z0-9_.-]+/gi, '-')}`
+}
+
+/** Le même, rendu unique dans la maison courante. */
 function autoId(deviceId: string, index: HouseIndex): string {
-  const base = `auto.${deviceId.replace(/[^a-z0-9_.-]+/gi, '-')}`
+  const base = houseIdForDevice(deviceId)
   if (!index.devicesById.has(base)) return base
   let n = 2
   while (index.devicesById.has(`${base}.${n}`)) n++

@@ -5,9 +5,9 @@ import {
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js'
 import {
-  boundsCenter, buildingBounds, computeHouseGeometry, deviceFloorZ, geoDistance, indexHouse, pointInPolygon, resolveDefaults, resolveDeviceLevelId,
+  boundsCenter, buildingBounds, computeHouseGeometry, deviceFloorZ, geoDistance, indexHouse, isPlaced, pointInPolygon, resolveDefaults, resolveDeviceLevelId,
   roofBounds, roomBounds, zoneBounds,
-  type DeviceDescriptor, type DeviceState, type House, type HouseDevice, type HouseGeometry, type HouseIndex, type Level, type Vec3,
+  type DeviceDescriptor, type DeviceState, type House, type HouseDevice, type HouseGeometry, type HouseIndex, type Level, type PlacedHouseDevice, type Vec3,
 } from '@kasbah/shared'
 import { applyTheme, createMaterials, disposeMaterials, type MaterialSet } from './builders/materials'
 import { buildHouse, type HouseNodes } from './builders/buildHouse'
@@ -267,7 +267,9 @@ export class HouseScene {
     for (const m of this.markers.values()) m.dispose()
     this.markers.clear()
     const openings = new Map(this.geometry.levels.flatMap((l) => l.openings.map((o) => [o.openingId, o] as const)))
-    for (const device of this.house.devices) {
+    // un appareil NON PLACÉ (un véhicule : la maison le nomme, la scène ne lui donne pas de point)
+    // n'a pas de marqueur — `isPlaced` le dit au type, et la boucle n'a plus à s'en soucier
+    for (const device of this.house.devices.filter(isPlaced)) {
       const descriptor = device.deviceId ? this.descriptors.get(device.deviceId) : undefined
       const levelId = resolveDeviceLevelId(device, this.index.roomsById)
       const levelNodes = levelId ? this.nodes.levels.get(levelId) : undefined
@@ -511,7 +513,8 @@ export class HouseScene {
     if (!this.house || !this.index) return
     const device = this.house.devices.find((d) => d.id === key)
     const marker = this.markers.get(key)
-    if (!device || !marker) return
+    // un marqueur existe : l'appareil est donc placé (`buildMarkers` n'en fait pas pour les autres)
+    if (!device || !isPlaced(device) || !marker) return
     const levelId = resolveDeviceLevelId(device, this.index.roomsById)
     if (levelId && this.focusedLevelId !== levelId) this.focusLevel(levelId)
     const size = new Vector3(DEVICE_FOCUS_SIZE_M, DEVICE_FOCUS_SIZE_M, DEVICE_FOCUS_SIZE_M)
@@ -527,7 +530,7 @@ export class HouseScene {
    * voyait que sa face et la pelouse. `null` s'il est au milieu de la pièce ou hors pièce : on garde
    * alors l'azimut de l'utilisateur.
    */
-  private roomSideAzimuth(device: HouseDevice): number | null {
+  private roomSideAzimuth(device: PlacedHouseDevice): number | null {
     if (!device.roomId || !this.house) return null
     const b = roomBounds(this.house, device.roomId, resolveDefaults(this.house.defaults))
     if (!b) return null

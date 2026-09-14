@@ -134,7 +134,7 @@
   },
   "vehicle": {
     "soc": "Charge", "range": "Autonomie", "chargeLimit": "Limite de charge", "pluggedIn": "Branché", "unplugged": "Débranché",
-    "charging": "En charge", "locked": "Verrouillé", "unlocked": "Déverrouillé", "atHome": "À la maison", "away": "À {distance}",
+    "rename": "Renommer", "charging": "En charge", "locked": "Verrouillé", "unlocked": "Déverrouillé", "atHome": "À la maison", "away": "À {distance}",
     "startCharge": "Lancer la charge", "stopCharge": "Arrêter la charge", "odometer": "Kilométrage", "location": "Position",
     "mapPlaceholder": "Carte — position du véhicule", "none": "Aucun véhicule connu",
     "sleep": {"online": "Éveillé", "asleep": "En veille", "offline": "Hors ligne"},
@@ -205,6 +205,18 @@
       "tokenInfo": "Jeton {role}, expire le {date}.", "roleOwner": "de propriétaire", "roleInstaller": "d'installateur",
       "installerNote": "Un jeton d'installateur ne vaut que 12 heures. Le formulaire web d'Enphase n'en donne pas d'autre à un compte qui est aussi installateur : passez par le compte Enphase ci-dessus pour obtenir celui d'un an.",
       "notStored": "Aucun fichier de jeton n'est configuré (ENPHASE_TOKEN_FILE est vide) : l'appairage sera perdu au redémarrage du serveur."
+    },
+    "renault": {
+      "title": "Renault",
+      "intro": "Renault n'offre aucune connexion déléguée à un tiers : il faut l'identifiant et le mot de passe de votre compte MY Renault. Le mot de passe ne traverse le serveur qu'une fois et n'est jamais enregistré — seul un jeton de session l'est. Un compte protégé par double authentification ne peut pas être relié.",
+      "email": "Adresse e-mail MY Renault",
+      "password": "Mot de passe",
+      "link": "Lier le compte",
+      "linking": "Liaison…",
+      "linked": "Compte lié · {n} véhicule | Compte lié · {n} véhicule | Compte lié · {n} véhicules",
+      "unlink": "Délier le compte",
+      "poll": "Une lecture toutes les {min} min, dans la limite de {rate} appels par heure que Renault tolère.",
+      "notStored": "Aucun fichier de session n'est configuré (RENAULT_SESSION_FILE est vide) : la liaison sera perdue au redémarrage du serveur."
     },
     "tesla": {
       "title": "Tesla",

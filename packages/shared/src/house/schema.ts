@@ -136,8 +136,13 @@ export const houseDeviceSchema = z.object({
   deviceId: deviceIdSchema.optional(),
   /** Indice de kind quand l'appareil n'est pas (encore) lié ; sinon le descripteur fait foi. */
   kind: z.enum(DEVICE_KINDS).optional(),
-  /** x, y absolus ; z RELATIF au sol de l'ancre (niveau, ou terrain pour l'extérieur). */
-  position: vec3Schema,
+  /**
+   * x, y absolus ; z RELATIF au sol de l'ancre (niveau, ou terrain pour l'extérieur).
+   * **Absente = appareil NON PLACÉ** : la maison le connaît (et peut lui donner un `name`) sans
+   * qu'il occupe un point de la scène 3D. C'est le cas d'un véhicule, qui n'est pas un objet du
+   * bâtiment ; sa place, le jour où on la dessinera, viendra de son GPS et non de ce champ.
+   */
+  position: vec3Schema.optional(),
   levelId: idSchema.optional(),
   roomId: idSchema.optional(),
   zoneId: idSchema.optional(),
@@ -159,6 +164,13 @@ export const houseDeviceSchema = z.object({
   meta: metaSchema,
 })
 export type HouseDevice = z.infer<typeof houseDeviceSchema>
+/**
+ * Un appareil de la maison qui OCCUPE un point de la scène. Les autres — un véhicule, par exemple —
+ * sont connus de la maison (nom, liaison) sans y avoir de place. Ce type le dit une fois, au seuil
+ * de la 3D, plutôt que de forcer chaque accès à `position` à se reposer la question.
+ */
+export type PlacedHouseDevice = HouseDevice & { position: z.infer<typeof vec3Schema> }
+export const isPlaced = (d: HouseDevice): d is PlacedHouseDevice => d.position !== undefined
 
 export const roofSchema = z.object({
   type: z.enum(['flat', 'gable']),

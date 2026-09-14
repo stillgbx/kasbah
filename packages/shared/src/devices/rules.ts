@@ -83,7 +83,8 @@ export function defaultState(kind: DeviceKind, now = 0): DeviceState {
     case 'sensor': return { kind, ...base, value: 0 }
     case 'energy': return { kind, ...base, productionW: 0, consumptionW: 0, gridW: 0 }
     case 'ev_charger': return { kind, ...base, status: 'disconnected', powerW: 0, sessionWh: 0 }
-    case 'vehicle': return { kind, ...base, soc: 0, rangeKm: 0, pluggedIn: false, charging: false, locked: true }
+    // sans `locked` : tous les constructeurs ne le disent pas, inconnu n'est pas Â« verrouille Â»
+    case 'vehicle': return { kind, ...base, soc: 0, rangeKm: 0, pluggedIn: false, charging: false }
     case 'camera': return { kind, ...base }
   }
 }

@@ -33,7 +33,7 @@ const has = (c: string) => props.descriptor.capabilities.includes(c as never)
       <v-chip v-if="distance !== null" variant="tonal" size="small" :color="atHome ? 'primary' : undefined">
         {{ atHome ? $t('vehicle.atHome') : $t('vehicle.away', { distance: formatDistance(distance, $i18n.locale) }) }}
       </v-chip>
-      <v-chip variant="tonal" size="small" :prepend-icon="state.locked ? 'lock' : 'lockOpen'">{{ state.locked ? $t('vehicle.locked') : $t('vehicle.unlocked') }}</v-chip>
+      <v-chip v-if="state.locked !== undefined" variant="tonal" size="small" :prepend-icon="state.locked ? 'lock' : 'lockOpen'">{{ state.locked ? $t('vehicle.locked') : $t('vehicle.unlocked') }}</v-chip>
     </div>
     <div class="d-flex ga-2 mb-3">
       <v-btn v-if="has('lock')" class="flex-grow-1" height="56" variant="tonal" :prepend-icon="state.locked ? 'lockOpen' : 'lock'" :disabled="disabled"

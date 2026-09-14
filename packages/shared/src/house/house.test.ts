@@ -81,27 +81,27 @@ describe('champs de panneaux', () => {
   it('tourne le champ autour de son origine (yaw) et le fait monter le long des rangées (slope)', () => {
     const [d] = panelArrayDevices(array({ rows: 1, cols: 1, yaw: 90, panels: ['mock:p1'] }))
     // colonnes vers +y, rangées vers -x : le centre (0,5 ; 1) devient (-1 ; 0,5)
-    expect(d!.position[0]).toBeCloseTo(9)
-    expect(d!.position[1]).toBeCloseTo(20.5)
+    expect(d!.position![0]).toBeCloseTo(9)
+    expect(d!.position![1]).toBeCloseTo(20.5)
     const [t] = panelArrayDevices(array({ rows: 1, cols: 1, slope: 30, panels: ['mock:p1'] }))
-    expect(t!.position[1]).toBeCloseTo(20 + Math.cos(Math.PI / 6))   // projection au sol de la rangée
-    expect(t!.position[2]).toBeCloseTo(0.1 - Math.sin(Math.PI / 6))  // et sa DESCENTE vers l'azimut
+    expect(t!.position![1]).toBeCloseTo(20 + Math.cos(Math.PI / 6))   // projection au sol de la rangée
+    expect(t!.position![2]).toBeCloseTo(0.1 - Math.sin(Math.PI / 6))  // et sa DESCENTE vers l'azimut
   })
 
   it('redresse les modules SANS les déplacer : sur un toit plat, le châssis n incline que le verre', () => {
     const flat = panelArrayDevices(array({ rows: 2, cols: 1, tilt: 20, panels: ['mock:p1', 'mock:p3'] }))
-    expect(flat[0]!.position[2]).toBe(0.1)                           // deux rangées, une seule hauteur
-    expect(flat[1]!.position[2]).toBe(0.1)
-    expect(flat[1]!.position[1]).toBeCloseTo(23)                     // le pas des rangées ne change pas
+    expect(flat[0]!.position![2]).toBe(0.1)                           // deux rangées, une seule hauteur
+    expect(flat[1]!.position![2]).toBe(0.1)
+    expect(flat[1]!.position![1]).toBeCloseTo(23)                     // le pas des rangées ne change pas
     expect(panelOf(flat[0]!)!.tilt).toBe(20)                         // mais le verre, lui, est incliné
     // les deux angles s'ajoutent, du même côté : une terrasse en pente avec des châssis
     const both = panelArrayDevices(array({ rows: 1, cols: 1, slope: 30, tilt: 20, panels: ['mock:p1'] }))
     expect(panelOf(both[0]!)!.tilt).toBe(50)
-    expect(both[0]!.position[2]).toBeCloseTo(0.1 - Math.sin(Math.PI / 6))   // la descente ne suit QUE la pente
+    expect(both[0]!.position![2]).toBeCloseTo(0.1 - Math.sin(Math.PI / 6))   // la descente ne suit QUE la pente
     // un châssis négatif bascule le verre en arrière sans rien déplacer non plus
     const back = panelArrayDevices(array({ rows: 1, cols: 1, tilt: -15, panels: ['mock:p1'] }))
     expect(panelOf(back[0]!)!.tilt).toBe(-15)
-    expect(back[0]!.position[2]).toBe(0.1)
+    expect(back[0]!.position![2]).toBe(0.1)
   })
 
   it('la maison démo porte ses deux champs sur le niveau toit, et withPanelArrays les ajoute aux appareils', () => {

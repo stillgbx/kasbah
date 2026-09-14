@@ -61,6 +61,23 @@ export interface TeslaStatus {
   lastError: string | null
 }
 
+/**
+ * Mise en route du plugin Renault, telle que l'UI la voit. Le mot de passe n'y figure JAMAIS : il
+ * ne fait que traverser `renaultLogin`, et ce qui en reste côté serveur est un jeton de session.
+ */
+export interface RenaultStatus {
+  linked: boolean
+  country: string
+  accountId: string | null
+  accounts: { accountId: string; accountType: string | null }[]
+  vehicles: { vin: string; name: string }[]
+  pollMs: number
+  ratePerHour: number
+  rateWaitS: number
+  sessionFile: string | null
+  lastError: string | null
+}
+
 export interface Transport {
   getHouse(): Promise<House>
   getDevices(): Promise<DeviceEntry[]>
@@ -98,6 +115,15 @@ export interface Transport {
   teslaAuthUrl(): Promise<{ url: string; redirectUri: string }>
   /** Nouvelle paire de clés (l'ancienne clé publique cesse de valoir : à reposer sur le domaine). */
   teslaRotateKey(): Promise<TeslaStatus>
+  /** Où en est la liaison du compte MY Renault (compte Kamereon retenu, véhicules). */
+  renaultStatus(): Promise<RenaultStatus>
+  /**
+   * Relie le compte MY Renault. Gigya n'offre pas d'OAuth : le mot de passe traverse le serveur une
+   * fois et n'y est ni gardé ni journalisé — seul le jeton de session Gigya survit.
+   */
+  renaultLogin(body: { email: string; password: string }): Promise<RenaultStatus>
+  /** Délie le compte : le jeton de session est effacé. */
+  renaultLogout(): Promise<RenaultStatus>
   /**
    * Fait oublier un appareil au plugin qui le retenait (`meta.forgettable`), par convention
    * `DELETE /api/plugins/<plugin>/devices/<externalId>` : il quitte l'inventaire jusqu'à ce qu'il

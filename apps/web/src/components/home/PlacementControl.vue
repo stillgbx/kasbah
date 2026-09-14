@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { resolveDefaults, roomHeight, type HouseDevice } from '@kasbah/shared'
+import { resolveDefaults, roomHeight, type HouseDevice, type PlacedHouseDevice } from '@kasbah/shared'
 import { isFlatCover } from '../../lib/cover'
 import { coverLeaves, coverSize, hasLeaves, isOrientable, isSizable } from '../../lib/orientation'
 import { useDevicesStore } from '../../stores/devices'
@@ -19,7 +19,7 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 // « Terminé » occupent exactement la même place (même largeur, même coin) : on referme là où on a
 // ouvert. « Rétablir » a une place réservée dans le corps, invisible tant qu'il n'y a rien à rétablir —
 // rien ne se décale quand il apparaît.
-const props = defineProps<{ device: HouseDevice }>()
+const props = defineProps<{ device: PlacedHouseDevice }>()
 const house = useHouseStore()
 const devices = useDevicesStore()
 const { t } = useI18n()

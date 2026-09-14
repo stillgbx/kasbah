@@ -7,6 +7,8 @@ export const ICONS = {
   light: 'M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.6.6 1 1.3 1 2.5h6c0-1.2.4-1.9 1-2.5A6 6 0 0 0 12 3z',
   shutter: 'M4 3h16v18H4zM4 8h16M4 13h16M4 18h16',
   speaker: 'M6 3h12v18H6zM12 8.5m-1.5 0a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0M12 15.5m-3 0a3 3 0 1 0 6 0a3 3 0 1 0-6 0',
+  /** Renommer : crayon posé sur une ligne. */
+  pencil: 'M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17v3zM14.5 7.5l2 2',
   /** Rotation d'un quart de tour, sens horaire / antihoraire (orientation d'un écran). */
   rotateRight: 'M20 12a8 8 0 1 1-2.6-5.9M20 4v5h-5',
   rotateLeft: 'M4 12a8 8 0 1 0 2.6-5.9M4 4v5h5',

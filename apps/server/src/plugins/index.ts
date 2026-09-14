@@ -5,6 +5,7 @@ import { createGoogleCastPlugin } from './google_cast'
 import { createHuePlugin } from './hue'
 import { createMockPlugin } from './mock'
 import { createNestPlugin } from './nest'
+import { createRenaultPlugin } from './renault'
 import { createTahomaPlugin } from './tahoma'
 import { createTeslaPlugin } from './tesla'
 
@@ -24,5 +25,5 @@ export const PLUGIN_FACTORIES: Record<string, PluginFactory> = {
   melcloud: makeStubPlugin('melcloud', 'Mitsubishi MELCloud'),
   comap: makeStubPlugin('comap', 'COMAP Proteo'),
   tesla: () => createTeslaPlugin(),
-  renault: makeStubPlugin('renault', 'Renault'),
+  renault: () => createRenaultPlugin(),
 }

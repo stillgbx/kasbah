@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Box3, CylinderGeometry, Mesh, type MeshStandardMaterial, ShapeGeometry, Vector3, type BufferAttribute, type Texture } from 'three'
-import { computeHouseGeometry, parseHouse, type DeviceDescriptor, type DeviceState, type HouseDevice } from '@kasbah/shared'
+import { computeHouseGeometry, parseHouse, type DeviceDescriptor, type DeviceState, type PlacedHouseDevice } from '@kasbah/shared'
 import demo from '@kasbah/shared/demo-house.json'
 import { buildHouse, buildWallsGeometry, countTriangles } from './builders/buildHouse'
 import { createMaterials } from './builders/materials'
@@ -215,7 +215,7 @@ describe('marqueurs 3D', () => {
   // Un marqueur a besoin d'un contexte de scène ; on garde les animations sous la main pour les
   // dérouler jusqu'au bout (les ouvrants tweenent leur course sur 400 ms).
   const animations: Animation[] = []
-  const marker = (device: HouseDevice, descriptor: DeviceDescriptor) => {
+  const marker = (device: PlacedHouseDevice, descriptor: DeviceDescriptor) => {
     animations.length = 0
     return createMarker(device, {
       materials: createMaterials(defaultSceneTheme()), theme: defaultSceneTheme(), descriptor,
@@ -230,7 +230,7 @@ describe('marqueurs 3D', () => {
     o.traverse((x) => { if (x instanceof Mesh) out.push(x) })
     return out
   }
-  const device = (extra: Partial<HouseDevice> = {}): HouseDevice => ({ id: 'x', position: [0, 0, 2], ...extra })
+  const device = (extra: Partial<PlacedHouseDevice> = {}): PlacedHouseDevice => ({ id: 'x', position: [0, 0, 2], ...extra })
   const cover = (deviceClass: string): DeviceDescriptor =>
     ({ id: 'p:c', pluginId: 'p', externalId: 'c', kind: 'cover', name: deviceClass, capabilities: ['open_close'], meta: { cover: { deviceClass } } } as DeviceDescriptor)
   const coverState = (position: number | undefined): DeviceState =>

@@ -8,8 +8,17 @@ import { defaultPlugins, MOUNTS, vec3Schema, type PluginSettingsPatch } from './
 // Le résultat doit ensuite être validé par `parseHouse` avant d'être écrit.
 
 export const devicePlacementSchema = z.object({
-  /** x, y absolus ; z relatif au sol de l'ancre (comme `HouseDevice.position`). */
-  position: vec3Schema,
+  /**
+   * x, y absolus ; z relatif au sol de l'ancre (comme `HouseDevice.position`). **Absente = on ne
+   * touche pas à la place** : une entrée existante garde la sienne, une entrée créée n'en reçoit
+   * aucune (appareil connu de la maison mais non placé — un véhicule qu'on ne fait que renommer).
+   */
+  position: vec3Schema.optional(),
+  /**
+   * Nom choisi par l'utilisateur, qui l'emporte sur celui du descripteur de plugin. **Chaîne vide =
+   * effacer** et revenir au nom du fabricant — c'est le seul moyen de défaire un renommage.
+   */
+  name: z.string().trim().max(60).optional(),
   /** Nouvelle pièce d'ancrage (déplacement vers une pièce voisine du même niveau). */
   roomId: z.string().min(1).optional(),
   /** Niveau d'ancrage quand l'appareil n'est dans AUCUNE pièce (couloir non relevé, façade) ; ignoré si `roomId` est donné. */
@@ -42,9 +51,12 @@ type JsonObject = Record<string, unknown>
 const isObject = (v: unknown): v is JsonObject => typeof v === 'object' && v !== null && !Array.isArray(v)
 
 /**
- * Renvoie une copie du document JSON avec l'appareil `id` (re)placé : entrée existante mise à jour
- * (position, pièce, mount, yaw, size, leaves), ou entrée minimale créée
- * `{ id, deviceId, position, roomId, mount }` (plus `yaw`, `size` et `leaves` s'ils sont donnés).
+ * Renvoie une copie du document JSON avec l'appareil `id` (re)placé ou renommé : entrée existante
+ * mise à jour (position, nom, pièce, mount, yaw, size, leaves), ou entrée créée
+ * `{ id, deviceId, … }` avec ce qui a été donné.
+ *
+ * Tout est facultatif, position comprise : renommer un appareil qui n'a PAS de place dans la scène
+ * (un véhicule) est un usage à part entière, et c'est ce qui lui donne son entrée dans la maison.
  */
 export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePlacement): JsonObject {
   if (!isObject(doc)) throw new PlacementError('house document is not an object')
@@ -60,7 +72,12 @@ export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePla
   let next: JsonObject
   if (i >= 0) {
     const prev = devices[i] as JsonObject
-    next = { ...prev, position: placement.position }
+    next = { ...prev }
+    if (placement.position) next.position = placement.position
+    if (placement.name !== undefined) {
+      if (placement.name) next.name = placement.name
+      else delete next.name
+    }
     if (placement.mount) next.mount = placement.mount
     if (placement.yaw !== undefined) next.yaw = placement.yaw
     if (placement.size) next.size = placement.size
@@ -78,7 +95,9 @@ export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePla
     }
   } else {
     if (!placement.deviceId) throw new PlacementError(`device "${id}" is not in house.json: deviceId is required to create it`)
-    next = { id, deviceId: placement.deviceId, position: placement.position }
+    next = { id, deviceId: placement.deviceId }
+    if (placement.position) next.position = placement.position
+    if (placement.name) next.name = placement.name
     if (room) next.roomId = room.id
     else if (level) next.levelId = level.id
     if (placement.mount) next.mount = placement.mount

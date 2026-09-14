@@ -1,6 +1,6 @@
 import { BufferGeometry, DoubleSide, Group, Line, LineBasicMaterial, Mesh, MeshBasicMaterial, RingGeometry, Shape, ShapeGeometry, Vector3, type Object3D } from 'three'
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js'
-import type { DeviceDescriptor, DeviceState, HouseDevice, OpeningRect } from '@kasbah/shared'
+import type { DeviceDescriptor, DeviceState, OpeningRect, PlacedHouseDevice } from '@kasbah/shared'
 import { panelOf } from '@kasbah/shared'
 import type { SceneTheme } from '../core/theme'
 import type { MaterialSet } from '../builders/materials'
@@ -62,7 +62,7 @@ export abstract class DeviceMarker {
    */
   private guide: { ring: Mesh<RingGeometry, MeshBasicMaterial>; line: Line<BufferGeometry, LineBasicMaterial>; look: Mesh<ShapeGeometry, MeshBasicMaterial> | null } | null = null
 
-  constructor(readonly device: HouseDevice, protected ctx: MarkerContext) {
+  constructor(readonly device: PlacedHouseDevice, protected ctx: MarkerContext) {
     this.key = device.id
     this.object.name = `marker:${device.id}`
     this.object.userData = { role: 'marker', key: device.id }

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import type { DeviceDescriptor, DeviceEntry, HouseDevice, StateFor } from '@kasbah/shared'
+import type { DeviceDescriptor, DeviceEntry, PlacedHouseDevice, StateFor } from '@kasbah/shared'
 import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
 import PlacementControl from './PlacementControl.vue'
@@ -16,7 +16,7 @@ const gate: DeviceEntry = {
   } as DeviceDescriptor,
   state: { kind: 'cover', updatedAt: 0, available: true, motion: 'stopped', position: 0 } as StateFor<'cover'>,
 }
-const device: HouseDevice = {
+const device: PlacedHouseDevice = {
   id: 'cover.portail', deviceId: 'tahoma:portail', position: [1, 2, 0.75],
   size: { width: 4, height: 1.5 }, yaw: 90, meta: {},
 }

@@ -29,8 +29,8 @@ describe('autoPlaceDevices', () => {
     expect(d.mount).toBe('ceiling')
     expect(d.name).toBeUndefined()
     expect(d.meta).toEqual({ autoPlaced: true })
-    expect(pointInPolygon([d.position[0], d.position[1]], index.roomsById.get('salon')!.polygon)).toBe(true)
-    expect(d.position[2]).toBeCloseTo(2.45, 2) // plafond du niveau (2.6) moins le retrait
+    expect(pointInPolygon([d.position![0], d.position![1]], index.roomsById.get('salon')!.polygon)).toBe(true)
+    expect(d.position![2]).toBeCloseTo(2.45, 2) // plafond du niveau (2.6) moins le retrait
   })
 
   it('matches the room id as well as the room name', () => {
@@ -55,14 +55,14 @@ describe('autoPlaceDevices', () => {
     const { placed } = autoPlaceDevices(house, [light('hue:a', 'Salon'), light('hue:b', 'Salon'), light('hue:c', 'Salon')], index)
     expect(placed).toHaveLength(3)
     expect(new Set(placed.map((d) => d.id)).size).toBe(3)
-    const xy = new Set(placed.map((d) => `${d.position[0]},${d.position[1]}`))
+    const xy = new Set(placed.map((d) => `${d.position![0]},${d.position![1]}`))
     expect(xy.size).toBe(3)
   })
 
   it('places a non-light at hand height, not at the ceiling', () => {
     const { placed } = autoPlaceDevices(house, [{ id: 'hue:a', kind: 'sensor', room: 'Salon' }], index)
     expect(placed[0]!.mount).toBe('free')
-    expect(placed[0]!.position[2]).toBe(1.2)
+    expect(placed[0]!.position![2]).toBe(1.2)
   })
 
   it('keeps the result parseable as a house', () => {
