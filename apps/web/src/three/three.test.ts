@@ -11,6 +11,7 @@ import { defaultSceneTheme, parseCssColor } from './core/theme'
 import { createTween } from './core/tween'
 import { ScreenArt, coverCrop, screenArtGeometry } from './markers/screenArt'
 import { createMarker } from './markers/createMarker'
+import type { DeviceMarker } from './markers/DeviceMarker'
 import { yawToRad } from '../lib/orientation'
 import { HouseScene } from './HouseScene'
 import type { Animation } from './core/renderLoop'
@@ -360,6 +361,56 @@ describe('marqueurs 3D', () => {
     const mark = meshes(over.object)[0]!.children[3] as Mesh
     expect(mark.visible).toBe(true)
     expect(mark.position.y).toBeCloseTo(-h / 2)
+  })
+
+  it("un coffret de batterie souffle sa couleur : vert en charge, bleu en décharge, rouge s'il se tait", () => {
+    const theme = defaultSceneTheme()
+    const stored = { id: 'p:b', pluginId: 'p', externalId: 'b', kind: 'energy', name: 'Batterie', capabilities: ['storage'], meta: {} } as unknown as DeviceDescriptor
+    const site = { ...stored, id: 'p:site', capabilities: ['production', 'consumption', 'grid', 'storage'] } as unknown as DeviceDescriptor
+    const energy = (extra: Record<string, unknown>) =>
+      ({ kind: 'energy', updatedAt: 0, available: true, productionW: 0, consumptionW: 0, gridW: 0, ...extra }) as DeviceState
+    const matOf = (m: { object: { traverse(cb: (x: unknown) => void): void } }) => meshes(m.object)[0]!.material as MeshStandardMaterial
+    const pillOn = (m: DeviceMarker) => {
+      const css = m.object.children.find((c) => 'element' in c) as unknown as { element: HTMLElement }
+      return (css.element.firstElementChild as HTMLElement).dataset.on
+    }
+
+    const m = marker(device(), stored)
+    // au repos (sous le seuil des compteurs) : rien ne souffle, et la boucle n'est pas réveillée
+    m.update(energy({ batteryW: 3, batterySoc: 74 }))
+    expect(matOf(m).emissiveIntensity).toBe(0)
+    expect(animations.length).toBe(0)
+    expect(pillOn(m)).toBe('0')
+    // charge : vert. La pilule s'allume aussi — une batterie ne produit jamais rien, et « actif »
+    // pour elle, c'est déplacer de l'énergie
+    m.update(energy({ batteryW: 1200 }))
+    expect(matOf(m).emissive.getHex()).toBe(theme.success.getHex())
+    expect(animations.length).toBe(1)
+    expect(pillOn(m)).toBe('1')
+    // décharge : bleu, et le souffle en cours continue — seule la couleur change
+    m.update(energy({ batteryW: -246 }))
+    expect(matOf(m).emissive.getHex()).toBe(theme.info.getHex())
+    expect(animations.length).toBe(1)
+    // plus de réponse : rouge. C'est la seule panne que le contrat porte pour un `energy`
+    m.update(energy({ batteryW: -246, available: false }))
+    expect(matOf(m).emissive.getHex()).toBe(theme.error.getHex())
+
+    // le souffle monte et redescend en cosinus, sans jamais s'éteindre ni saturer
+    const at = (ms: number) => { animations[0]!.step(ms, 0); return matOf(m).emissiveIntensity }
+    expect(at(1000)).toBeCloseTo(0.06)
+    expect(at(1000 + 1300)).toBeCloseTo(0.6)
+    expect(at(1000 + 2600)).toBeCloseTo(0.06)
+
+    // retour au repos : le coffret s'éteint franchement et rend la main (le rendu est à la demande)
+    m.update(energy({ batteryW: 0 }))
+    expect(matOf(m).emissiveIntensity).toBe(0)
+    expect(animations[0]!.step(4000, 0)).toBe(false)
+
+    // la passerelle de l'installation porte les mêmes chiffres, mais ce n'est pas une batterie
+    const gateway = marker(device(), site)
+    gateway.update(energy({ batteryW: -246 }))
+    expect(matOf(gateway).emissive.getHex()).toBe(0x000000)
+    expect(animations.length).toBe(0)
   })
 
   it('un thermostat est une pastille couchée contre son mur, tournée du yaw', () => {

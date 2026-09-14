@@ -21,6 +21,9 @@ export interface SceneTheme {
   /** Repères posés sur une mesure : `warning` pour une limite (position favorite d'un ouvrant, plafond d'un onduleur), `success` pour un record. */
   warning: Color
   success: Color
+  /** États d'un appareil qui se signale : `info` pour un flux qui sort (batterie qui rend), `error` pour un appareil muet. */
+  info: Color
+  error: Color
   onSurface: Color
   isDark: boolean
 }
@@ -39,7 +42,7 @@ const FALLBACK: Record<string, string> = {
   background: '#f6f3ee', sceneWall: '#efe9df', sceneWallInterior: '#e6e0d6', sceneFloor: '#d9d2c5', sceneFloorWood: '#c9a276',
   sceneFloorTile: '#d6d9d3', sceneFloorCarpet: '#c4b4b8', sceneFloorConcrete: '#bfbdb8', sceneGlass: '#9fd0e8', sceneRoof: '#8b5e4b',
   sceneTerrain: '#93bb8c', sceneLawn: '#93bb8c', sceneWater: '#6fb7d6', sceneDriveway: '#b7bbc1', scenePath: '#d9d2c5', sceneBed: '#5f8f5a', sceneTerrace: '#d9d2c5', sceneMedia: '#1a73d8',
-  primary: '#1f6f78', secondary: '#66717f', 'on-surface': '#141a22', warning: '#d38b22', success: '#4f7a4a',
+  primary: '#1f6f78', secondary: '#66717f', 'on-surface': '#141a22', warning: '#d38b22', success: '#4f7a4a', info: '#3f7fbf', error: '#d24a43',
 }
 
 /** Lit le thème courant depuis les variables CSS (appelé au mount et à chaque changement de thème). */
@@ -57,7 +60,7 @@ export function readVuetifyTheme(el: Element = document.documentElement): SceneT
     zones: { lawn: get('sceneLawn'), pool: get('sceneWater'), driveway: get('sceneDriveway'), path: get('scenePath'), bed: get('sceneBed'), terrace: get('sceneTerrace'), other: get('sceneDriveway') },
     media: get('sceneMedia'),
     primary: get('primary'), secondary: get('secondary'), onSurface: get('on-surface'),
-    warning: get('warning'), success: get('success'),
+    warning: get('warning'), success: get('success'), info: get('info'), error: get('error'),
   }
 }
 
@@ -71,6 +74,6 @@ export function defaultSceneTheme(): SceneTheme {
     zones: { lawn: c('sceneLawn'), pool: c('sceneWater'), driveway: c('sceneDriveway'), path: c('scenePath'), bed: c('sceneBed'), terrace: c('sceneTerrace'), other: c('sceneDriveway') },
     media: c('sceneMedia'),
     primary: c('primary'), secondary: c('secondary'), onSurface: c('on-surface'),
-    warning: c('warning'), success: c('success'),
+    warning: c('warning'), success: c('success'), info: c('info'), error: c('error'),
   }
 }

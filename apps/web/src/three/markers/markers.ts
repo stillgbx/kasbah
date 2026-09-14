@@ -3,7 +3,7 @@ import type { DeviceState, PlacedHouseDevice, PanelPlacement } from '@kasbah/sha
 import { mirekToRgb, xyToRgb } from '@kasbah/shared'
 import { isMediaActive } from '../../lib/deviceState'
 import { coverActivity, isFlatCover } from '../../lib/cover'
-import { isEnergySite } from '../../lib/energy'
+import { IDLE_W, isEnergySite } from '../../lib/energy'
 import { coverLeaves, coverSize, yawToRad } from '../../lib/orientation'
 import { createTween, lerp } from '../core/tween'
 import { DeviceMarker, type MarkerContext } from './DeviceMarker'
@@ -20,6 +20,15 @@ const WAVE_PERIOD_MS = 5750
 /** Rayon (m) de l'anneau à sa naissance et à sa disparition. */
 const WAVE_R0 = 0.18
 const WAVE_R1 = 1.2
+
+/**
+ * Pulsation d'un coffret de batterie : période d'un souffle (ms) et bornes de son émissif. Lente —
+ * c'est un état, pas une alerte —, et bien plus longue que l'onde d'un lecteur, qui est un rythme.
+ */
+const BATTERY_PULSE_MS = 2600
+const BATTERY_GLOW = { min: 0.06, max: 0.6 }
+/** Part de la couleur d'état versée dans la teinte du coffret : il reste gris, même au creux du souffle. */
+const BATTERY_TINT = 0.3
 
 /** Écrans d'un lecteur : dalle (m) et demi-profondeur de la boîte, d'où l'image est posée. */
 const SCREENS = { tv: { width: 1, height: 0.56, depth: 0.03 }, display: { width: 0.25, height: 0.16, depth: 0.04 } } as const
@@ -58,12 +67,20 @@ export class GenericMarker extends DeviceMarker {
   private playing = false
   /** Pochette affichée sur l'écran (téléviseur et écran connecté seulement). */
   private art: ScreenArt | null = null
+  /**
+   * Matériau PROPRE au coffret d'une batterie : il pulse, il ne peut donc pas partager celui des
+   * autres objets neutres. `null` pour tout le reste, qui garde le matériau commun.
+   */
+  private readonly batteryMat: MeshStandardMaterial | null = null
+  /** Couleur de ce que la batterie fait en ce moment, `null` si elle n'a rien à dire (au repos). */
+  private cue: Color | null = null
   constructor(device: PlacedHouseDevice, ctx: MarkerContext) {
     super(device, ctx)
     const kind = ctx.descriptor?.kind ?? device.kind
     let geometry
     // un lecteur prend la forme de sa nature : enceinte (cylindre), téléviseur (écran plat), écran connecté (petite dalle)
     const mediaClass = kind === 'media_player' ? ctx.descriptor?.meta.mediaPlayer?.deviceClass ?? 'speaker' : undefined
+    let battery = false
     switch (kind) {
       case 'media_player':
         if (mediaClass === 'tv') { geometry = new BoxGeometry(1, 0.06, 0.56); this.setLift(0.8) }
@@ -80,12 +97,13 @@ export class GenericMarker extends DeviceMarker {
       // sol. Le coffret d'un mètre donné aux deux faisait de la passerelle solaire un meuble.
       case 'energy':
         if (ctx.descriptor && isEnergySite(ctx.descriptor)) { geometry = new BoxGeometry(0.28, 0.12, 0.32); this.setLift(0.3) }
-        else { geometry = new BoxGeometry(0.6, 0.15, 1); this.setLift(0.7) }
+        else { geometry = new BoxGeometry(0.6, 0.15, 1); this.setLift(0.7); battery = true }
         break
       case 'vacuum': geometry = new CylinderGeometry(0.18, 0.18, 0.09, 24); this.setLift(0.25); break
       default: geometry = new SphereGeometry(0.1, 16, 12); this.setLift(0.3)
     }
-    this.mesh = new Mesh(geometry, devMaterial(ctx))
+    if (battery) this.batteryMat = devMaterial(ctx).clone()
+    this.mesh = new Mesh(geometry, this.batteryMat ?? devMaterial(ctx))
     // Enceinte, robot : cylindre DEBOUT, donc l'axe Y du cylindre passe en Z-up local. Le thermostat,
     // lui, est une pastille couchée contre son mur : il garde l'axe du cylindre à l'horizontale.
     if (geometry instanceof CylinderGeometry && kind !== 'climate') this.mesh.rotation.x = Math.PI / 2
@@ -133,7 +151,9 @@ export class GenericMarker extends DeviceMarker {
       case 'climate': return s.mode !== 'off'
       case 'vacuum': return s.activity === 'cleaning'
       case 'ev_charger': return s.status === 'charging'
-      case 'energy': return s.productionW > 0
+      // une batterie est active quand elle DÉPLACE de l'énergie (elle ne produit jamais rien, et sa
+      // pilule serait restée éteinte en pleine charge) ; le site, lui, quand il produit
+      case 'energy': return this.batteryMat ? Math.abs(s.batteryW ?? 0) >= IDLE_W : s.productionW > 0
       default: return false
     }
   }
@@ -144,6 +164,7 @@ export class GenericMarker extends DeviceMarker {
       const media = state?.kind === 'media_player' && state.available ? state : undefined
       this.art.set(media?.nowPlaying?.artUrl)
     }
+    if (this.batteryMat) this.pulse(state)
     if (this.waves.length === 0) return
     // l'onde est du SON : elle suit ce que la scène dit entendre ici (`SoundCue`) — une TV dont le son
     // part en HDMI vers une barre garde l'image, la barre prend l'onde ; sans indication, l'état seul
@@ -172,8 +193,59 @@ export class GenericMarker extends DeviceMarker {
       })
     }
   }
+  /**
+   * Ce qu'un coffret de batterie doit dire, et rien de plus : VERT quand il se remplit, BLEU quand il
+   * rend ce qu'il a, ROUGE quand il ne répond plus (la seule panne que le contrat porte — un `energy`
+   * n'a pas de champ de défaut, et une batterie muette garde ses dernières valeurs, gelées).
+   * `null` au repos : sous le seuil des compteurs, une batterie à l'arrêt n'a rien à signaler.
+   */
+  private batteryCue(state: DeviceState | undefined): Color | null {
+    if (!state || state.kind !== 'energy') return null
+    if (!state.available) return this.ctx.theme.error
+    const w = state.batteryW ?? 0
+    if (w >= IDLE_W) return this.ctx.theme.success
+    if (w <= -IDLE_W) return this.ctx.theme.info
+    return null
+  }
+  /**
+   * Souffle du coffret : sa teinte tire vers la couleur de ce qu'il fait, et son émissif monte et
+   * redescend en cosinus — aucune cassure, ni au creux ni à la crête. Au repos il s'éteint
+   * franchement et rend la main à la boucle : la scène ne rend qu'à la demande, un coffret qui ne
+   * fait rien ne doit pas réveiller le rendu.
+   */
+  private pulse(state: DeviceState | undefined): void {
+    const mat = this.batteryMat
+    if (!mat) return
+    this.cue = this.batteryCue(state)
+    const base = this.ctx.materials.device.color
+    if (!this.cue) {
+      this.stopAnimation?.()
+      this.stopAnimation = null
+      mat.color.copy(base)
+      mat.emissive.setRGB(0, 0, 0)
+      mat.emissiveIntensity = 0
+      this.ctx.invalidate()
+      return
+    }
+    mat.color.copy(base).lerp(this.cue, BATTERY_TINT)
+    mat.emissive.copy(this.cue)
+    if (this.stopAnimation) return                        // déjà en train de souffler : seule la couleur a changé
+    let t0 = -1
+    // le marqueur n'a qu'un créneau d'animation, et une batterie n'a pas d'onde sonore : les deux ne
+    // se rencontrent jamais
+    this.stopAnimation = this.ctx.addAnimation({
+      step: (now) => {
+        if (!this.cue) return false
+        if (t0 < 0) t0 = now
+        const k = 0.5 - 0.5 * Math.cos((2 * Math.PI * (now - t0)) / BATTERY_PULSE_MS)
+        mat.emissiveIntensity = BATTERY_GLOW.min + (BATTERY_GLOW.max - BATTERY_GLOW.min) * k
+        return true
+      },
+    })
+  }
   override dispose(): void {
     this.mesh.geometry.dispose()
+    this.batteryMat?.dispose()
     this.art?.dispose()
     for (const w of this.waves) { w.geometry.dispose(); w.material.dispose() }
     super.dispose()

@@ -3,6 +3,7 @@ import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useElementSize, usePreferredReducedMotion } from '@vueuse/core'
 import type { StateFor } from '@kasbah/shared'
+import { IDLE_W } from '../../lib/energy'
 import { formatPercent, formatPower } from '../../lib/format'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import type { IconName } from '../../lib/strokeIcons'
@@ -44,24 +45,6 @@ type NodeKey = keyof typeof POS
 const radius = computed(() => Math.max(44, Math.min(width.value, height.value) * 0.22))
 const centre = computed(() => ({ x: width.value / 2, y: height.value / 2 }))
 
-/**
- * En dessous, il ne passe rien : un fil au repos ne doit pas scintiller. Le seuil est BAS, et c'est
- * une mesure, pas un confort de lecture. Deux relevés sur la vraie passerelle le fixent :
- *
- *   - les pinces mesurent FIN : `prod 25 − réseau 5 + batterie 1089 = conso 1109` se ferme au watt.
- *     Un « −5 W » peut donc être 5 W d'injection réels, et rien n'oblige à un gros seuil ;
- *   - mais elles ne s'accordent pas toujours : sur huit relevés d'affilée, le bilan laisse un reste
- *     de 0 à 11 W. À quoi s'ajoutait une production à −7 W la nuit (la veille des onduleurs lue à
- *     l'envers), désormais ramenée à 0 par le plugin lui-même.
- *
- * 10 W est donc posé au niveau de ce DÉSACCORD entre compteurs, pas en dessous : plus bas, c'est le
- * désaccord lui-même qu'on dessinerait comme un flux. Et c'est encore sous une ampoule LED, donc
- * rien que le foyer appellerait une charge n'est masqué — 17 W de soutirage, relevés, s'affichent.
- * Ce qui reste est une zone morte autour de zéro, juste assez large pour que « soutirage » et
- * « injection » ne s'échangent pas d'une lecture à l'autre. Ne PAS caler ce seuil sur l'appli
- * Enphase (0,1 kW) : elle arrondit, elle ne mesure pas.
- */
-const IDLE_W = 10
 /** Puissance à laquelle le point file le plus vite. */
 const FULL_W = 6000
 /** Rayons du point, en pixels puisque le repère l'est aussi. */
