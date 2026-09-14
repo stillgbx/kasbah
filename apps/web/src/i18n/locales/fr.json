@@ -154,7 +154,9 @@
     "refresh": "Actualiser",
     "refreshHint": "Relit le véhicule maintenant (une lecture facturée par Tesla) ; le sondage repart de cette lecture.",
     "map": {"plan": "Plan", "satellite": "Satellite", "fullscreen": "Plein écran", "close": "Fermer", "recenter": "Recentrer", "noPosition": "Position inconnue"},
-    "map": {"plan": "Plan", "satellite": "Satellite", "fullscreen": "Plein écran", "close": "Fermer", "recenter": "Recentrer", "noPosition": "Position inconnue"}
+    "quota": "{used}/{limit} {what}",
+    "quotaCredit": "de crédit Tesla",
+    "quotaSince": "depuis le {date}"
   },
   "settings": {
     "title": "Réglages", "appearance": "Apparence", "system": "Système", "light": "Clair", "dark": "Sombre",

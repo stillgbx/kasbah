@@ -19,6 +19,21 @@ export const pluginHealthSchema = z.object({
   deviceCount: z.number().int().optional(),
   /** Noms des variables d'environnement lues par le plugin (jamais leurs valeurs). */
   keys: z.array(z.string()).optional(),
+  /**
+   * Consommation d'un quota, quand l'API du fabricant est FACTURÉE ou bornée et que le plugin se
+   * rationne (Tesla : les lectures du jour). `labelKey` est une clé i18n de l'app web — même
+   * convention que `PluginPart.labelKey`, le serveur ne connaît pas la langue de la tablette.
+   * Absent = ce plugin ne compte rien, et l'UI n'a rien à montrer.
+   */
+  quota: z.object({
+    used: z.number().min(0),
+    limit: z.number().positive(),
+    labelKey: z.string(),
+    /** `usd` : `used` et `limit` sont des DOLLARS, à formater comme une somme. Absent = un décompte. */
+    unit: z.literal('usd').optional(),
+    /** Début de la période comptée (ms epoch), quand elle en a une : l'UI peut la dater. */
+    since: z.number().optional(),
+  }).optional(),
 })
 export type PluginHealth = z.infer<typeof pluginHealthSchema>
 

@@ -16,8 +16,12 @@ import { evCharger, vehicle } from './behaviours/ev'
 export const SCENARIO_NAMES = ['default', 'empty', 'chaos', 'winter'] as const
 export type ScenarioName = (typeof SCENARIO_NAMES)[number]
 
-const HOME = { lat: 45.764, lon: 4.8357 }
-const WORK = { lat: 45.7485, lon: 4.8612 }
+// Maison et destination de la simulation : deux endroits qui comptent pour l'utilisateur, et non
+// des coordonnées au hasard. Séparées de 2,3 km, donc la carte du véhicule cadre les deux (la règle
+// des 3 km de `lib/map.ts`) : la démo montre la voiture PAR RAPPORT à la maison, ce qui est tout
+// l'intérêt. `HOME` vaut l'origine de `house/demo-house.json` : la voiture garée se pose sur la maison.
+const HOME = { lat: 47.309343, lon: 5.045591 }
+const WORK = { lat: 47.3216, lon: 5.0415 }
 
 function defaultDevices(opts: { winter?: boolean } = {}) {
   return [

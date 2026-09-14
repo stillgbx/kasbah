@@ -10,6 +10,7 @@ import {
 } from './__fixtures__/fleet'
 import { REGION_BASE_URLS, TOKEN_URL, generateKeyPair, publicKeyOf, publicKeyPointHex, samePublicKey, type KeyStore, type StoredTokens, type TokenStore } from './auth'
 import { createTeslaPlugin, teslaConfigSchema } from './index'
+import type { TeslaState, TeslaStateStore } from './state'
 
 // Ce que le plugin doit tenir face au fabricant : ne JAMAIS lire un véhicule endormi, le laisser
 // s'endormir une fois vu au repos, ne pas dépasser le budget de lectures du jour, et survivre à la
@@ -88,17 +89,22 @@ function memoryTokens(initial: StoredTokens | null = null): TokenStore & { value
   const s = { value: initial, load: async () => s.value, save: async (t: StoredTokens) => { s.value = t } }
   return s
 }
+function memoryState(initial: TeslaState | null = null): TeslaStateStore & { value: TeslaState | null } {
+  const s = { value: initial, load: async () => s.value, save: async (v: TeslaState) => { s.value = JSON.parse(JSON.stringify(v)) as TeslaState } }
+  return s
+}
 function memoryKey(pem: string | null = null): KeyStore & { value: string | null } {
   const s = { value: pem, load: async () => s.value, save: async (p: string) => { s.value = p } }
   return s
 }
 const linkedTokens = (): StoredTokens => ({ refreshToken: TOKEN_RESPONSE.refresh_token, accessToken: TOKEN_RESPONSE.access_token, accessExpiresAt: NOW + 8 * 3600_000 })
 
-async function started(over: { env?: Record<string, string>; tesla?: ReturnType<typeof fakeTesla>; tokens?: StoredTokens | null; key?: string | null } = {}) {
+async function started(over: { env?: Record<string, string>; tesla?: ReturnType<typeof fakeTesla>; tokens?: StoredTokens | null; key?: string | null; state?: ReturnType<typeof memoryState> } = {}) {
   const tesla = over.tesla ?? fakeTesla()
   const tokenStore = memoryTokens(over.tokens ?? null)
   const keyStore = memoryKey(over.key ?? null)
-  const plugin = createTeslaPlugin({ fetchImpl: tesla.fetchImpl, tokenStore, keyStore })
+  const stateStore = over.state ?? memoryState()
+  const plugin = createTeslaPlugin({ fetchImpl: tesla.fetchImpl, tokenStore, keyStore, stateStore })
   const clock = new ManualClock(NOW)
   const ctx: PluginContext = {
     pluginId: 'tesla',
@@ -111,7 +117,7 @@ async function started(over: { env?: Record<string, string>; tesla?: ReturnType<
   const app = Fastify()
   app.register(async (sub) => plugin.registerRoutes!(sub), { prefix: '/api/plugins/tesla' })
   await app.ready()
-  return { plugin, app, tesla, tokenStore, keyStore, ctx, clock }
+  return { plugin, app, tesla, tokenStore, keyStore, stateStore, ctx, clock }
 }
 
 /** Laisse les promesses en vol se résoudre (le sondage tourne sur l'horloge injectée). */
@@ -363,6 +369,12 @@ describe('sondage respectueux de la veille', () => {
     expect(dataCalls(tesla)).toBe(2)
     expect((await app.inject({ method: 'GET', url: '/api/plugins/tesla/status' }).then((r) => r.json())).budget).toEqual({ used: 2, limit: 2 })
     expect(plugin.health!().detail).toContain('2/2')
+    // la jauge de l'UI montre le CRÉDIT MENSUEL du fabricant, pas ce budget journalier : une estimation
+    // en dollars, comptée sur TOUS les appels facturables (la liste des véhicules comprise)
+    const q = plugin.health!().quota!
+    expect(q).toMatchObject({ limit: 10, labelKey: 'vehicle.quotaCredit', unit: 'usd' })
+    expect(q.used).toBeCloseTo((listCalls(tesla) + dataCalls(tesla)) * (1 / 500), 5)
+    expect(q.since).toBe(NOW)
     // le lendemain : un seul tour suffit à voir le budget repartir
     await ticks(clock, 1, 24 * 60 * MIN)
     expect(dataCalls(tesla)).toBe(3)
@@ -380,6 +392,45 @@ describe('sondage respectueux de la veille', () => {
     await settle()
     expect(ctx.emitDevices).toHaveBeenCalledWith([])
     expect(plugin.health!()).toMatchObject({ deviceCount: 0 })
+  })
+})
+
+describe('ce qui survit à un redémarrage', () => {
+  it('le dernier état de chaque véhicule est gardé, et RÉÉMIS au démarrage suivant sans rien relire', async () => {
+    const tesla = fakeTesla()
+    tesla.world.list = VEHICLES_ONLINE
+    const state = memoryState()
+    const first = await started({ tesla, tokens: linkedTokens(), state })
+    await first.plugin.start()
+    await settle()
+    expect(state.value?.vehicles[VIN]).toMatchObject({ soc: 54, readAt: NOW })
+
+    // second démarrage : la voiture s'est rendormie, aucune lecture n'est possible
+    const asleep = fakeTesla()
+    const second = await started({ tesla: asleep, tokens: linkedTokens(), state })
+    await second.plugin.discover()
+    await second.plugin.start()
+    await settle()
+    expect(dataCalls(asleep)).toBe(0)
+    // la carte retrouve les valeurs de la veille au lieu de repartir vide
+    expect(patches(second.ctx)).toContainEqual(expect.objectContaining({ soc: 54, readAt: NOW }))
+  })
+
+  it('la consommation du mois se poursuit après un redémarrage, et repart au mois suivant', async () => {
+    const state = memoryState()
+    const first = await started({ tesla: fakeTesla(), tokens: linkedTokens(), state })
+    await first.plugin.discover()                        // un appel de liste, facturable
+    const afterFirst = first.plugin.health!().quota!.used
+    expect(afterFirst).toBeCloseTo(1 / 500, 5)
+
+    const second = await started({ tesla: fakeTesla(), tokens: linkedTokens(), state })
+    await second.plugin.discover()
+    expect(second.plugin.health!().quota!.used).toBeCloseTo(2 / 500, 5)
+
+    // le mois suivant, le compteur repart de zéro (cycle calendaire, comme la facturation du fabricant)
+    second.clock.advance(31 * 24 * 60 * MIN)
+    await second.plugin.discover()
+    expect(second.plugin.health!().quota!.used).toBeCloseTo(1 / 500, 5)
   })
 })
 

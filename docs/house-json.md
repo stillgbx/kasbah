@@ -14,7 +14,7 @@ Le fichier décrit la maison et le jardin ; il est validé au démarrage du serv
 {
   "schemaVersion": 1,
   "id": "maison", "name": "Ma maison",
-  "origin": { "lat": 45.764, "lon": 4.8357, "alt": 180, "heading": 15 },
+  "origin": { "lat": 47.309343, "lon": 5.045591, "alt": 180, "heading": 15 },
   "defaults": {                       // tous optionnels
     "levelHeight": 2.6, "slabThickness": 0.25,
     "interiorWallThickness": 0.10, "exteriorWallThickness": 0.30,

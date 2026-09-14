@@ -50,6 +50,23 @@ function markerEl(kind: 'car' | 'home'): HTMLElement {
   return el
 }
 
+/**
+ * MapLibre DÉPLIE l'attribution une demi-seconde après le montage (au premier calcul des mentions),
+ * même en mode `compact` : 300 px de large sur une carte de 320, par-dessus la légende. On la referme,
+ * en touchant aux DEUX choses qui la commandent, sans quoi il faut deux taps sur le ⓘ pour la rouvrir :
+ * `open` du `<details>` (le repli natif) ET la classe `maplibregl-compact-show` (l'affichage du texte,
+ * que MapLibre bascule de son côté au clic). Une seule fois : passé là, le panneau est à l'utilisateur.
+ */
+let attributionClosed = false
+function collapseAttribution(): void {
+  if (attributionClosed) return
+  const el = container.value?.querySelector<HTMLDetailsElement>('details.maplibregl-ctrl-attrib')
+  if (!el || (!el.open && !el.classList.contains('maplibregl-compact-show'))) return
+  el.open = false
+  el.classList.remove('maplibregl-compact-show')
+  attributionClosed = true
+}
+
 function fit(animate: boolean): void {
   if (!map) return
   const view = initialView(props.location, props.home)
@@ -84,6 +101,8 @@ onMounted(() => {
     maxZoom: IGN_MAX_ZOOM + 1, dragRotate: true, pitchWithRotate: true,
   })
   map = m
+  // le panneau n'est déplié qu'après le premier calcul des mentions : on guette les trois moments
+  for (const ev of ['load', 'styledata', 'idle'] as const) m.on(ev, collapseAttribution)
   // en développement seulement : la carte est interrogeable depuis la console (`el.__map`), ce qui
   // permet de vérifier qu'elle rend bien des entités quand rien ne se voit à l'écran
   if (import.meta.env.DEV) (container.value as HTMLDivElement & { __map?: MlMap }).__map = m
@@ -161,7 +180,8 @@ watch(full, (f) => { if (f) window.addEventListener('keydown', onKey); else wind
 }
 .vmap__btn[data-on='1'] { background: var(--accent); color: var(--on-accent); border-color: transparent; }
 .vmap__caption {
-  position: absolute; left: 10px; bottom: 10px; max-width: calc(100% - 20px); padding: 4px 10px; border-radius: 999px; z-index: 2;
+  /* s'arrête avant le ⓘ de l'attribution (26 px + ses marges), qui occupe le coin bas droit */
+  position: absolute; left: 10px; bottom: 10px; max-width: calc(100% - 66px); padding: 4px 10px; border-radius: 999px; z-index: 2;
   background: var(--surface); color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   box-shadow: 0 1px 4px rgb(0 0 0 / .15);
 }
@@ -174,5 +194,25 @@ watch(full, (f) => { if (f) window.addEventListener('keydown', onKey); else wind
 :global(.vmap .maplibregl-ctrl-group) { background: var(--surface); border-radius: 10px; box-shadow: 0 1px 4px rgb(0 0 0 / .15); }
 :global(.vmap .maplibregl-ctrl-group button) { width: 32px; height: 32px; }
 :global(.vmap .maplibregl-ctrl-group button + button) { border-top-color: var(--line); }
-:global(.vmap .maplibregl-ctrl-attrib) { font-size: 10px; }
+/* Attribution : repliée elle tient dans une pastille ⓘ comme les autres boutons ; dépliée, elle
+   s'ouvre en petit panneau lisible, borné à la largeur de la carte. */
+:global(.vmap .maplibregl-ctrl-attrib.maplibregl-compact) {
+  box-sizing: border-box; min-height: 26px; padding: 3px 26px 3px 0; margin: 10px;
+  background: var(--surface); color: var(--muted); border-radius: 999px; box-shadow: 0 1px 4px rgb(0 0 0 / .15);
+}
+/* déplié, le panneau MONTE d'une ligne : il passerait sinon derrière la pilule de distance, qui
+   occupe le bas de la carte (10 px de fond + 26 px de haut, plus un jour de 8 px) */
+:global(.vmap .maplibregl-ctrl-attrib.maplibregl-compact-show) { padding: 3px 30px 3px 12px; max-width: calc(100% - 20px); }
+:global(.vmap:has(.vmap__caption) .maplibregl-ctrl-attrib.maplibregl-compact-show) { margin-bottom: 44px; }
+:global(.vmap .maplibregl-ctrl-attrib-inner) { font-size: 10px; line-height: 1.5; }
+:global(.vmap .maplibregl-ctrl-attrib a) { color: var(--text); }
+/* `background-position: center` : le ⓘ de MapLibre est calé en haut à gauche par défaut, et se
+   retrouvait décentré dès qu'on change la taille du bouton ou de l'image */
+:global(.vmap .maplibregl-ctrl-attrib-button),
+:global(.vmap .maplibregl-ctrl-attrib.maplibregl-compact-show .maplibregl-ctrl-attrib-button) {
+  width: 26px; height: 26px; border-radius: 999px; background-color: transparent;
+  background-size: 18px 18px; background-position: center; background-repeat: no-repeat;
+}
+/* le ⓘ de MapLibre est une image SOMBRE : sur une surface sombre il disparaîtrait */
+:global(html[data-theme='dark'] .vmap .maplibregl-ctrl-attrib-button) { filter: invert(1); }
 </style>

@@ -6,6 +6,7 @@ import PageHeader from '../components/layout/PageHeader.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import VehicleMap from '../components/vehicles/VehicleMap.vue'
 import { formatAgo, formatDistance, formatKm, formatPercent, formatPower, formatTemp } from '../lib/format'
+import { QUOTA_TENSE_PCT, quotaPercent } from '../lib/map'
 import { useDevicesStore } from '../stores/devices'
 import { useHouseStore } from '../stores/house'
 
@@ -57,7 +58,11 @@ const tire = (s: StateFor<'vehicle'>, k: (typeof TIRES)[number]) => {
   const v = s.tirePressureBar?.[k]
   return v === undefined ? EMPTY : `${new Intl.NumberFormat(locale.value, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v)} bar`
 }
-const send = (id: string, cmd: CommandInput) => devices.sendCommand(id, cmd)
+async function send(id: string, cmd: CommandInput): Promise<boolean> {
+  const ok = await devices.sendCommand(id, cmd)
+  void devices.refreshHealth()                         // une lecture consommée : la jauge de quota suit
+  return ok
+}
 
 /**
  * Réveil DEMANDÉ, pas encore constaté. Tesla accuse la demande en une seconde, mais la voiture met
@@ -92,7 +97,32 @@ const caption = (s: StateFor<'vehicle'>) =>
 // « lu il y a 12 min » vieillit tout seul : une horloge de la vue, rafraîchie chaque demi-minute
 const now = ref(Date.now())
 let clockTimer: ReturnType<typeof setInterval> | null = null
-onMounted(() => { clockTimer = setInterval(() => { now.value = Date.now() }, 30_000) })
+/**
+ * Quota de l'API du fabricant (`PluginHealth.quota`), montré en jauge au bas de la carte. La santé
+ * des plugins ne se pousse pas : on la redemande au serveur (requête locale) en arrivant, à chaque
+ * battement d'horloge, et après une commande — un réveil ou une relecture consomme le budget.
+ */
+const quotaOf = (v: VehicleEntry) => devices.health?.plugins[v.descriptor.pluginId]?.quota
+type Quota = NonNullable<ReturnType<typeof quotaOf>>
+/**
+ * « 0,42 $/10,00 $ de crédit Tesla · depuis le 13 sept. » — le plugin dit CE qu'il compte (`labelKey`),
+ * dans quelle unité (`unit`) et depuis quand (`since`) ; la vue ne fait que mettre en forme, dans la
+ * langue et le format de la tablette.
+ */
+const quotaLabel = (q: Quota) => {
+  const fmt = (n: number) => (q.unit === 'usd'
+    // `narrowSymbol` : « 3,42 $ » et non « 3,42 $US », qui alourdit une ligne déjà dense
+    ? new Intl.NumberFormat(locale.value, { style: 'currency', currency: 'USD', currencyDisplay: 'narrowSymbol' }).format(n)
+    : new Intl.NumberFormat(locale.value).format(n))
+  const line = t('vehicle.quota', { used: fmt(q.used), limit: fmt(q.limit), what: t(q.labelKey) })
+  if (!q.since) return line
+  const date = new Date(q.since).toLocaleDateString(locale.value, { day: 'numeric', month: 'short' })
+  return `${line} · ${t('vehicle.quotaSince', { date })}`
+}
+onMounted(() => {
+  void devices.refreshHealth()
+  clockTimer = setInterval(() => { now.value = Date.now(); void devices.refreshHealth() }, 30_000)
+})
 onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
 const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ago: formatAgo(s.readAt, now.value, locale.value) }) : t('vehicle.neverRead'))
 </script>
@@ -135,7 +165,8 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
             </div>
           </div>
           <!-- la carte : voiture (avec son cap) et maison, plan ou satellite, plein écran -->
-          <VehicleMap class="vcard__map" :location="v.state.location" :heading-deg="v.state.headingDeg" :home="house.house?.origin" :caption="caption(v.state)" />
+          <VehicleMap class="vcard__map" :location="v.state.location" :heading-deg="v.state.headingDeg" :home="house.house?.origin"
+                      :caption="caption(v.state)" />
           <div class="vcard__actions">
             <button v-if="has(v, 'lock')" type="button" class="pill" :disabled="!v.state.available" @click="send(v.descriptor.id, { type: v.state.locked ? 'vehicle.unlock' : 'vehicle.lock' })">
               {{ v.state.locked ? $t('common.unlock') : $t('common.lock') }}
@@ -160,6 +191,15 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
           </div>
           <!-- l'âge des valeurs, toujours affiché : sur une API facturée et une voiture qui dort, elles en ont un -->
           <p class="muted vcard__hint">{{ readAgo(v.state) }}<template v-if="asleep(v.state)"> · {{ $t('vehicle.wakeHint') }}</template></p>
+          <!-- ce qu'il reste du quota que le plugin s'impose (API du fabricant facturée) : rien pour
+               un plugin qui ne compte pas, la simulation par exemple -->
+          <div v-if="quotaOf(v)" class="vcard__quota">
+            <span class="muted vcard__quota-text">{{ quotaLabel(quotaOf(v)!) }}</span>
+            <div class="vcard__quota-track">
+              <div class="vcard__quota-fill" :data-tense="quotaPercent(quotaOf(v)!.used, quotaOf(v)!.limit) >= QUOTA_TENSE_PCT ? '1' : '0'"
+                   :style="{ width: `${quotaPercent(quotaOf(v)!.used, quotaOf(v)!.limit)}%` }" />
+            </div>
+          </div>
         </article>
       </div>
     </div>
@@ -196,4 +236,11 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
    rendait le spinner à peine visible, or c'est lui qui porte l'information */
 .vcard__actions .pill[aria-busy='true']:disabled { opacity: .7; }
 .vcard__hint { margin: 0; font-size: 12px; }
+/* quota du fabricant : même langage que la jauge de charge en haut de carte, en plus discret */
+.vcard__quota { display: grid; gap: 6px; }
+.vcard__quota-text { font-size: 11px; }
+.vcard__quota-track { height: 4px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.vcard__quota-fill { height: 100%; border-radius: 999px; background: var(--accent); transition: width .4s; }
+/* le quota touche à sa fin : le même orangé que les avertissements des cartes de Réglages */
+.vcard__quota-fill[data-tense='1'] { background: #d38b22; }
 </style>

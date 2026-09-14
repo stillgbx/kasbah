@@ -70,6 +70,18 @@ export function initialView(car: LatLon | undefined, home: LatLon | undefined): 
   return { kind: 'none' }
 }
 
+/**
+ * Part consommée d'un quota, en pourcentage entier borné à 100 : ce que la jauge du bas de carte
+ * remplit. Un quota dépassé (le plugin a compté plus que sa limite) reste plein, il ne déborde pas.
+ */
+export function quotaPercent(used: number, limit: number): number {
+  if (limit <= 0) return 0
+  return Math.max(0, Math.min(100, Math.round((used / limit) * 100)))
+}
+
+/** Au-delà, la jauge passe en teinte d'alerte : le quota du jour touche à sa fin. */
+export const QUOTA_TENSE_PCT = 80
+
 /** Cap normalisé dans [0, 360[ ; Tesla donne 0 = nord, sens horaire, comme MapLibre. */
 export function normalizeHeading(deg: number): number {
   return ((deg % 360) + 360) % 360

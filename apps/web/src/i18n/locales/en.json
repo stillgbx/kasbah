@@ -153,7 +153,10 @@
     "neverRead": "Never read",
     "refresh": "Refresh",
     "refreshHint": "Reads the vehicle now (one read billed by Tesla); polling restarts from this read.",
-    "map": {"plan": "Map", "satellite": "Satellite", "fullscreen": "Full screen", "close": "Close", "recenter": "Recenter", "noPosition": "Unknown position"}
+    "map": {"plan": "Map", "satellite": "Satellite", "fullscreen": "Full screen", "close": "Close", "recenter": "Recenter", "noPosition": "Unknown position"},
+    "quota": "{used}/{limit} {what}",
+    "quotaCredit": "of Tesla credit",
+    "quotaSince": "since {date}"
   },
   "settings": {
     "title": "Settings", "appearance": "Appearance", "system": "System", "light": "Light", "dark": "Dark",

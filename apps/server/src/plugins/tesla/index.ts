@@ -15,6 +15,10 @@ import {
 } from './auth'
 import { TeslaClient } from './client'
 import { isResting, toDataPatch, toDescriptor, toSleepPatch, toSleepState } from './mapping'
+import {
+  MONTHLY_CREDIT_USD, billableKind, countCall, createStateFile, currentCycle, cycleCostUsd, emptyState,
+  type TeslaState, type TeslaStateStore,
+} from './state'
 import { partnerPublicKeySchema, vehicleDataSchema, vehicleSummarySchema, vehiclesListSchema, type VehicleSummary } from './types'
 
 // Plugin Tesla : véhicules lus par la Fleet API (cloud du fabricant, il n'existe rien en local).
@@ -59,6 +63,12 @@ export const teslaConfigSchema = z.object({
   TESLA_TOKEN_FILE: z.string().trim().default(resolve(REPO_ROOT, 'apps/server/.state/tesla-token.json')),
   /** Où garder la clé privée de l'application (sa clé publique est celle qu'on pose sur le domaine). */
   TESLA_KEY_FILE: z.string().trim().default(resolve(REPO_ROOT, 'apps/server/.state/tesla-key.json')),
+  /**
+   * Où garder le DERNIER ÉTAT de chaque véhicule et la consommation du mois (voir `state.ts`). Sans
+   * lui, un redémarrage repart d'une carte vide jusqu'à la prochaine lecture — qui peut attendre des
+   * heures — et la jauge de quota perd le compte. Chaîne vide = ne rien garder.
+   */
+  TESLA_STATE_FILE: z.string().trim().default(resolve(REPO_ROOT, 'apps/server/.state/tesla-state.json')),
   /** Cadence de la liste des véhicules (veille) et, quand un véhicule est éveillé, de sa lecture complète. */
   TESLA_POLL_MS: z.coerce.number().int().min(60_000).max(3_600_000).default(600_000),
   /** Après une lecture au repos, durée sans relecture : c'est le temps que le véhicule s'endorme. 0 = jamais de repos. */
@@ -99,6 +109,7 @@ export interface TeslaPluginDeps {
   fetchImpl?: FetchLike
   tokenStore?: TokenStore
   keyStore?: KeyStore
+  stateStore?: TeslaStateStore
 }
 
 interface VehicleTrack {
@@ -126,8 +137,13 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
   /** Lectures complètes du jour (date locale du serveur) : c'est ce que le budget borne. */
   let budget = { day: '', used: 0 }
   let budgetWarned = false
+  /** Ce qui survit à un redémarrage : dernier état par véhicule, consommation du mois (`state.ts`). */
+  let store: TeslaStateStore | null = null
+  let saved: TeslaState = emptyState()
 
   const log = () => ctx!.logger
+  /** Écrit le fichier d'état sans faire attendre l'appelant : le perdre n'empêche jamais de lire. */
+  const persist = () => { void store?.save(saved) }
   const fetchImpl: FetchLike = deps.fetchImpl
     ?? ((url, init) => undiciFetch(url, init as Parameters<typeof undiciFetch>[1]) as unknown as ReturnType<FetchLike>)
   const configured = () => !!(config?.TESLA_CLIENT_ID && config.TESLA_CLIENT_SECRET)
@@ -217,7 +233,11 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     if (!track) throw new PluginError('DEVICE_UNAVAILABLE', `unknown Tesla vehicle ${vin}`)
     const path = `/api/1/vehicles/${encodeURIComponent(vin)}/vehicle_data?endpoints=${encodeURIComponent(DATA_ENDPOINTS)}`
     const data = vehicleDataSchema.parse(await client!.request('GET', path, { signal: ctx!.signal })).response
-    ctx!.emitState(vin, { ...toDataPatch(data), readAt: ctx!.clock.now() })
+    const patch = { ...toDataPatch(data), readAt: ctx!.clock.now() }
+    ctx!.emitState(vin, patch)
+    // gardé pour le prochain démarrage : la carte retrouve ces valeurs au lieu de repartir vide
+    saved.vehicles[vin] = { ...saved.vehicles[vin], ...patch } as Record<string, unknown>
+    persist()
     track.sleepState = toSleepState(data.state)
     // au repos : on le laisse s'endormir, la prochaine lecture attendra
     track.restUntil = isResting(data) && config!.TESLA_REST_MS > 0 ? ctx!.clock.now() + config!.TESLA_REST_MS : 0
@@ -310,12 +330,24 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
         log().warn('Tesla application not configured: set TESLA_CLIENT_ID, TESLA_CLIENT_SECRET and TESLA_DOMAIN')
         return
       }
-      const store = deps.tokenStore ?? (config.TESLA_TOKEN_FILE ? createTokenFile(config.TESLA_TOKEN_FILE, context.logger) : null)
+      store = deps.stateStore ?? (config.TESLA_STATE_FILE ? createStateFile(config.TESLA_STATE_FILE, context.logger) : null)
+      saved = (await store?.load()) ?? emptyState()
+      if (saved.cycle) log().info({ month: saved.cycle.month, usd: cycleCostUsd(saved.cycle) }, 'Tesla usage of the current billing cycle restored')
+
+      const tokens = deps.tokenStore ?? (config.TESLA_TOKEN_FILE ? createTokenFile(config.TESLA_TOKEN_FILE, context.logger) : null)
       auth = new TeslaAuth({
         clientId: config.TESLA_CLIENT_ID!, clientSecret: config.TESLA_CLIENT_SECRET!, redirectUri: config.TESLA_REDIRECT_URI,
-        region: config.TESLA_REGION, fetchImpl, store, now: () => context.clock.now(), logger: context.logger,
+        region: config.TESLA_REGION, fetchImpl, store: tokens, now: () => context.clock.now(), logger: context.logger,
       })
-      client = new TeslaClient({ baseUrl: REGION_BASE_URLS[config.TESLA_REGION], auth, fetchImpl, logger: context.logger })
+      client = new TeslaClient({
+        baseUrl: REGION_BASE_URLS[config.TESLA_REGION], auth, fetchImpl, logger: context.logger,
+        onCall: (path) => {
+          const kind = billableKind(path)
+          if (!kind) return
+          countCall(saved, kind, context.clock.now())
+          persist()
+        },
+      })
       if (await auth.restore()) log().info('Tesla account tokens restored from cache')
       else log().warn('no Tesla account linked: open the Settings card (GET /api/plugins/tesla/auth/url)')
     },
@@ -333,7 +365,14 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
       return descriptors()
     },
 
-    async start() { startPolling() },
+    async start() {
+      // les dernières valeurs connues AVANT toute lecture : sinon la carte reste vide (« Jamais lu »)
+      // jusqu'à ce que la voiture se réveille, ce qui peut prendre des heures
+      for (const [vin, patch] of Object.entries(saved.vehicles)) {
+        if (vehicles.has(vin)) ctx!.emitState(vin, patch as never)
+      }
+      startPolling()
+    },
 
     async execute(externalId, command: Command) {
       if (!client) throw new PluginError('NEEDS_PAIRING', 'Tesla plugin not configured')
@@ -373,6 +412,7 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     },
 
     async stop() {
+      persist()
       polling = false
       if (timer !== null && ctx) ctx.clock.clearTimeout(timer)
       timer = null
@@ -544,16 +584,28 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     },
 
     health(): PluginHealth {
-      const keysList = ['TESLA_CLIENT_ID', 'TESLA_CLIENT_SECRET', 'TESLA_DOMAIN', 'TESLA_REGION', 'TESLA_REDIRECT_URI', 'TESLA_TOKEN_FILE', 'TESLA_KEY_FILE', 'TESLA_POLL_MS', 'TESLA_REST_MS', 'TESLA_DAILY_DATA_BUDGET']
+      const keysList = ['TESLA_CLIENT_ID', 'TESLA_CLIENT_SECRET', 'TESLA_DOMAIN', 'TESLA_REGION', 'TESLA_REDIRECT_URI', 'TESLA_TOKEN_FILE', 'TESLA_KEY_FILE', 'TESLA_STATE_FILE', 'TESLA_POLL_MS', 'TESLA_REST_MS', 'TESLA_DAILY_DATA_BUDGET']
       if (!configured()) return { status: 'needs_pairing', detail: 'set TESLA_CLIENT_ID, TESLA_CLIENT_SECRET and TESLA_DOMAIN, then follow the Settings card', keys: keysList }
       if (!auth?.linked) return { status: 'needs_pairing', detail: lastError ?? 'link the Tesla account from Settings', keys: keysList }
       const deviceCount = vehicles.size
       const asleep = [...vehicles.values()].filter((v) => v.sleepState !== 'online').length
       const used = budgetUsedToday()
-      const parc = `${deviceCount} véhicule(s), ${asleep} en veille · ${used}/${config!.TESLA_DAILY_DATA_BUDGET} lectures aujourd'hui`
-      if (registered === false) return { status: 'degraded', detail: `domain ${config!.TESLA_DOMAIN} not registered with Tesla · ${parc}`, keys: keysList, deviceCount }
-      if (lastError) return { status: 'degraded', detail: lastError, keys: keysList, deviceCount }
-      return { status: 'ok', detail: parc, keys: keysList, deviceCount }
+      const limit = config!.TESLA_DAILY_DATA_BUDGET
+      const parc = `${deviceCount} véhicule(s), ${asleep} en veille · ${used}/${limit} lectures aujourd'hui`
+      // Le quota publié pour l'UI est le CRÉDIT MENSUEL du fabricant (10 $, cycle calendaire), pas le
+      // budget journalier que le plugin s'impose : c'est celui-là qu'on ne veut pas dépasser, et c'est
+      // ce que l'utilisateur veut voir. Une ESTIMATION, calculée sur les prix affichés : seul Tesla
+      // facture, et sa console reste la référence.
+      const cycle = currentCycle(saved, ctx!.clock.now())
+      const quota = {
+        quota: {
+          used: cycleCostUsd(cycle), limit: MONTHLY_CREDIT_USD,
+          labelKey: 'vehicle.quotaCredit', unit: 'usd' as const, since: cycle.since,
+        },
+      }
+      if (registered === false) return { status: 'degraded', detail: `domain ${config!.TESLA_DOMAIN} not registered with Tesla · ${parc}`, keys: keysList, deviceCount, ...quota }
+      if (lastError) return { status: 'degraded', detail: lastError, keys: keysList, deviceCount, ...quota }
+      return { status: 'ok', detail: parc, keys: keysList, deviceCount, ...quota }
     },
   }
 }

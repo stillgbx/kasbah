@@ -24,6 +24,12 @@ export interface TeslaClientOptions {
   fetchImpl: FetchLike
   logger?: Logger
   requestTimeoutMs?: number
+  /**
+   * Appelé pour chaque requête du COMPTE qui a reçu une réponse, avec son chemin. Tesla facture tout
+   * ce qui répond en dessous de 500 — un 408 « voiture endormie » compris —, et c'est par là que le
+   * plugin tient sa consommation du mois. Les requêtes partenaires n'en font pas partie.
+   */
+  onCall?: (path: string, status: number) => void
 }
 
 export class TeslaClient {
@@ -42,6 +48,8 @@ export class TeslaClient {
       token = await this.opts.auth.refresh(o.signal)
       res = await this.send(method, path, token, o)
     }
+    // avant d'interpréter : un 408 ou un 4xx a bel et bien été facturé, et doit compter
+    if (res.status < 500) this.opts.onCall?.(path, res.status)
     return this.interpret(res, path)
   }
 
