@@ -16,14 +16,15 @@ import {
 import { TeslaClient } from './client'
 import { isResting, toDataPatch, toDescriptor, toSleepPatch, toSleepState } from './mapping'
 import {
-  MONTHLY_CREDIT_USD, billableKind, countCall, createStateFile, currentCycle, cycleCostUsd, emptyState,
+  MONTHLY_CREDIT_USD, billableKind, countCall, createStateFile, currentCycle, cycleCostUsd, cycleStart, emptyState,
   type TeslaState, type TeslaStateStore,
 } from './state'
-import { partnerPublicKeySchema, vehicleDataSchema, vehicleSummarySchema, vehiclesListSchema, type VehicleSummary } from './types'
+import { commandResultSchema, partnerPublicKeySchema, vehicleDataSchema, vehicleSummarySchema, vehiclesListSchema, type VehicleSummary } from './types'
 
 // Plugin Tesla : véhicules lus par la Fleet API (cloud du fabricant, il n'existe rien en local).
-// Phase 1 : LECTURE SEULE, plus le réveil à la demande. Charge, autonomie, câble, verrouillage,
-// position, kilométrage, vitesse et rapport, pression des pneus, températures, et la VEILLE.
+// Lu : charge, autonomie, câble, verrouillage, position, kilométrage, vitesse et rapport, pression
+// des pneus, températures, et la VEILLE. Écrit : la limite de charge, seul réglage accepté pour
+// l'instant — plus le réveil et la relecture, à la demande.
 //
 // Trois contraintes du fabricant dictent la forme du plugin :
 //
@@ -394,8 +395,29 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
         }
         return
       }
+      /**
+       * Régler la limite de charge. Une COMMANDE coûte 0,001 $ — dix fois moins qu'une lecture — mais
+       * exige la voiture ÉVEILLÉE : endormie, Tesla répond 408, et c'est le bouton « Réveiller »,
+       * payant et explicite, qui la ramène. Jamais de réveil implicite pour un réglage.
+       *
+       * La cible est publiée TOUT DE SUITE : sans relecture (facturée, et la voiture peut se rendormir
+       * dans la minute), c'est notre écho qui tient la carte à jour jusqu'au prochain tour.
+       */
+      if (command.type === 'vehicle.set_charge_limit') {
+        const body = commandResultSchema.parse(await client.request(
+          'POST', `/api/1/vehicles/${encodeURIComponent(externalId)}/command/set_charge_limit`,
+          { body: { percent: command.percent }, signal: ctx!.signal },
+        ))
+        if (body.response?.result !== true) {
+          const reason = body.response?.reason
+          throw new PluginError('UPSTREAM_ERROR', `Tesla refused the charge limit${reason ? `: ${reason}` : ''}`)
+        }
+        ctx!.emitState(externalId, { chargeLimit: command.percent })
+        log().info({ vin: externalId, percent: command.percent }, 'Tesla charge limit set')
+        return
+      }
       if (command.type !== 'vehicle.wake') {
-        throw new PluginError('UNSUPPORTED_COMMAND', `Tesla plugin is read-only for now (${command.type})`)
+        throw new PluginError('UNSUPPORTED_COMMAND', `Tesla plugin does not support ${command.type} yet`)
       }
       // un réveil coûte dix lectures chez Tesla, et c'est un GESTE de l'utilisateur : jamais automatique
       await client.request('POST', `/api/1/vehicles/${encodeURIComponent(externalId)}/wake_up`, { signal: ctx!.signal })
@@ -555,17 +577,17 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
       /**
        * Recale le compteur du mois sur la CONSOLE du fabricant, qui seule facture. L'estimation dérive
        * forcément : catégories tarifaires non publiées, arrondis, et appels faits hors de Kasbah (une
-       * autre application tierce partage le même crédit). Corps : `{ data, wakes, commands, since? }`.
+       * autre application tierce partage le même crédit). Corps : `{ data, wakes, commands }` — la
+       * DATE ne se recale pas : le cycle commence le 1er du mois, la console le dit aussi.
        */
       app.post('/usage', async (req, reply) => {
         if (!ctx) return sendError(reply, 409, 'NEEDS_PAIRING', 'plugin not started')
         const body = z.object({
           data: z.number().int().min(0), wakes: z.number().int().min(0), commands: z.number().int().min(0),
-          since: z.number().int().optional(),
         }).safeParse(req.body)
-        if (!body.success) return sendError(reply, 400, 'INVALID_BODY', 'send { data, wakes, commands, since? }')
+        if (!body.success) return sendError(reply, 400, 'INVALID_BODY', 'send { data, wakes, commands }')
         const cycle = currentCycle(saved, ctx.clock.now())
-        saved.cycle = { ...cycle, ...body.data, since: body.data.since ?? cycle.since }
+        saved.cycle = { ...cycle, ...body.data }
         persist()
         log().info({ cycle: saved.cycle, usd: cycleCostUsd(saved.cycle) }, 'Tesla usage realigned on the vendor console')
         return { cycle: saved.cycle, estimatedUsd: cycleCostUsd(saved.cycle) }
@@ -619,7 +641,7 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
       const quota = {
         quota: {
           used: cycleCostUsd(cycle), limit: MONTHLY_CREDIT_USD,
-          labelKey: 'vehicle.quotaCredit', unit: 'usd' as const, since: cycle.since,
+          labelKey: 'vehicle.quotaCredit', unit: 'usd' as const, since: cycleStart(cycle.month),
         },
       }
       if (registered === false) return { status: 'degraded', detail: `domain ${config!.TESLA_DOMAIN} not registered with Tesla · ${parc}`, keys: keysList, deviceCount, ...quota }

@@ -121,6 +121,16 @@ export class RenaultClient {
     return this.request('POST', path, { body: o.body, signal: o.signal })
   }
 
+  /**
+   * Écrit les NIVEAUX VE (`ev/soc-levels`, kcm) : c'est là que vit la cible de charge, à côté du
+   * plancher que l'utilisateur a réglé dans la voiture. Même précaution que `writeEvSettings` : le
+   * corps est celui qu'on vient de lire, seule la cible change.
+   */
+  writeSocLevels(o: { accountId: string; vin: string; body: unknown; signal?: AbortSignal }): Promise<unknown> {
+    const path = carDataPath({ accountId: o.accountId, vin: o.vin, endpoint: 'ev/soc-levels', version: 1, adapter: 'kcm' })
+    return this.request('POST', path, { body: o.body, signal: o.signal })
+  }
+
   /** Une lecture véhicule (cf. `carDataPath`). */
   carData(o: { accountId: string; vin: string; endpoint: string; version?: number; adapter?: Adapter; signal?: AbortSignal }): Promise<unknown> {
     return this.request('GET', carDataPath(o), { signal: o.signal })

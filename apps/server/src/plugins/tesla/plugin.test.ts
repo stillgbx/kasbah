@@ -42,6 +42,8 @@ function fakeTesla(over: { registeredKey?: string; servedKey?: string; publicKey
     servedKey: over.servedKey,
     /** L'API du compte répond 412 tant que vrai (application pas enregistrée pour ce compte). */
     unregistered: false,
+    /** Ce qu'une commande accuse. Tesla REFUSE en HTTP 200 : `result: false` et une raison. */
+    commandResult: { result: true } as { result: boolean; reason?: string },
   }
   const calls: { method: string; path: string; body?: string; auth?: string }[] = []
   const fetchImpl = vi.fn<FetchLike>(async (url, init) => {
@@ -80,6 +82,8 @@ function fakeTesla(over: { registeredKey?: string; servedKey?: string; publicKey
     }
     if (path.includes('/vehicle_data')) return world.asleep ? response(ASLEEP_408, 408) : response(world.data)
     if (path.endsWith('/wake_up')) return response({ response: { ...(VEHICLES_ONLINE.response[0] as object), state: 'online' } })
+    // une commande sur un véhicule endormi répond 408, comme une lecture
+    if (path.includes('/command/')) return world.asleep ? response(ASLEEP_408, 408) : response({ response: world.commandResult })
     return response({ error: 'not found' }, 404)
   })
   return { fetchImpl, calls, world }
@@ -375,7 +379,8 @@ describe('sondage respectueux de la veille', () => {
     expect(q).toMatchObject({ limit: 10, labelKey: 'vehicle.quotaCredit', unit: 'usd' })
     expect(listCalls(tesla)).toBeGreaterThan(dataCalls(tesla))
     expect(q.used).toBeCloseTo(dataCalls(tesla) * (1 / 500), 5)
-    expect(q.since).toBe(NOW)
+    // le cycle commence le 1er du mois (la console du fabricant le dit), pas le jour de la liaison
+    expect(q.since).toBe(Date.UTC(new Date(NOW).getUTCFullYear(), new Date(NOW).getUTCMonth(), 1))
     // le lendemain : un seul tour suffit à voir le budget repartir
     await ticks(clock, 1, 24 * 60 * MIN)
     expect(dataCalls(tesla)).toBe(3)
@@ -498,6 +503,41 @@ describe('commandes', () => {
     await settle()
     await expect(plugin.execute(VIN, { type: 'vehicle.refresh' })).rejects.toMatchObject({ code: 'RATE_LIMITED' })
     expect(dataCalls(tesla)).toBe(1)
+  })
+
+  it('régler la limite de charge : une commande, la cible publiée sans relecture facturée', async () => {
+    const tesla = fakeTesla()
+    tesla.world.list = VEHICLES_ONLINE
+    const { plugin, ctx, tesla: t } = await started({ tesla, tokens: linkedTokens() })
+    await plugin.discover()
+    await plugin.execute(VIN, { type: 'vehicle.set_charge_limit', percent: 70 })
+    expect(t.calls.at(-1)).toMatchObject({ method: 'POST', path: `/api/1/vehicles/${VIN}/command/set_charge_limit`, body: '{"percent":70}' })
+    expect(dataCalls(t)).toBe(0)                     // la cible vient de NOUS : pas de lecture derrière
+    expect(patches(ctx).at(-1)).toMatchObject({ chargeLimit: 70 })
+    // une commande coûte dix fois moins qu'une lecture, mais elle COMPTE
+    expect(plugin.health!().quota!.used).toBeCloseTo(1 / 1000, 5)
+  })
+
+  it('un REFUS de Tesla arrive en HTTP 200 : la cible n’est alors pas publiée', async () => {
+    const tesla = fakeTesla()
+    tesla.world.list = VEHICLES_ONLINE
+    tesla.world.commandResult = { result: false, reason: 'charge_limit_not_supported' }
+    const { plugin, ctx } = await started({ tesla, tokens: linkedTokens() })
+    await plugin.discover()
+    await expect(plugin.execute(VIN, { type: 'vehicle.set_charge_limit', percent: 70 }))
+      .rejects.toMatchObject({ code: 'UPSTREAM_ERROR', message: expect.stringContaining('charge_limit_not_supported') })
+    expect(patches(ctx).some((p) => 'chargeLimit' in p)).toBe(false)
+  })
+
+  it('régler la limite d’un véhicule ENDORMI est refusé : c’est au réveil, payant, de le ramener', async () => {
+    const tesla = fakeTesla()
+    tesla.world.list = VEHICLES_ONLINE
+    tesla.world.asleep = true
+    const { plugin, tesla: t } = await started({ tesla, tokens: linkedTokens() })
+    await plugin.discover()
+    await expect(plugin.execute(VIN, { type: 'vehicle.set_charge_limit', percent: 70 }))
+      .rejects.toMatchObject({ code: 'DEVICE_UNAVAILABLE' })
+    expect(t.calls.some((c) => c.path.endsWith('/wake_up'))).toBe(false)
   })
 
   it('le réveil est le seul geste : POST wake_up, puis une relecture différée ; le reste est refusé', async () => {

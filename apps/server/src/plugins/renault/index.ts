@@ -12,7 +12,7 @@ import {
   RenaultAuth, createSessionFile, type SessionStore,
 } from './auth'
 import { DEFAULT_RATE_PER_HOUR, RenaultClient, carDataPath, isEndpointUnavailable } from './client'
-import { inWindow, toAccounts, toDescriptor, toStatePatch, toVehicleLinks, wakePayload, type VehicleReadings } from './mapping'
+import { inWindow, socTargetPayload, toAccounts, toDescriptor, toStatePatch, toVehicleLinks, wakePayload, type VehicleReadings } from './mapping'
 import type { VehicleLink } from './types'
 
 // Plugin Renault (véhicules) — API privée Gigya + Kamereon, celle de l'appli MY Renault.
@@ -330,13 +330,26 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
     },
 
     /**
-     * Phase 1 : la seule commande acceptée est `vehicle.refresh` — relire MAINTENANT. Elle vient
-     * avec la capacité `soc`, que le plugin déclare ; ne pas l'honorer ferait proposer par l'UI un
-     * bouton que le plugin refuserait. Tout le reste attend la phase 2.
+     * Deux commandes : `vehicle.refresh` (relire MAINTENANT) et la CIBLE de charge, le seul réglage
+     * que cette plateforme laisse écrire. Chacune vient avec une capacité que le plugin déclare ; ne
+     * pas l'honorer ferait proposer par l'UI un bouton que le plugin refuserait.
      */
     async execute(externalId: string, command: Command): Promise<void> {
+      if (command.type === 'vehicle.set_charge_limit') {
+        const id = accountId
+        if (!id) throw new PluginError('NEEDS_PAIRING', 'no Kamereon account for this person')
+        // les niveaux se LISENT d'abord : le plancher est le réglage de l'utilisateur, on le rejoue tel quel
+        const levels = await client!.carData({ accountId: id, vin: externalId, endpoint: 'ev/soc-levels', version: 1, adapter: 'kcm', signal: ctx?.signal })
+        const body = socTargetPayload(levels, command.percent, ctx!.clock.now())
+        if (!body) throw new PluginError('UPSTREAM_ERROR', 'Renault gave no EV levels back to rewrite')
+        await client!.writeSocLevels({ accountId: id, vin: externalId, body, signal: ctx?.signal })
+        // la cible est publiée tout de suite : le prochain tour de sondage la confirmera
+        ctx!.emitState(externalId, { chargeLimit: command.percent })
+        log().info({ vin: externalId, percent: command.percent }, 'Renault charge target set')
+        return
+      }
       if (command.type !== 'vehicle.refresh') {
-        throw new PluginError('UNSUPPORTED_COMMAND', `Renault plugin is read-only for now (${command.type})`)
+        throw new PluginError('UNSUPPORTED_COMMAND', `Renault plugin does not support ${command.type} yet`)
       }
       await readVehicle(externalId, ctx?.signal)
     },

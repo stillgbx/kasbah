@@ -46,6 +46,17 @@ export function billableKind(path: string): BillableKind | null {
   return null
 }
 
+/**
+ * Début du cycle, en millisecondes : le **1er du mois à 00:00 UTC**. La console du fabricant le dit
+ * sans ambiguïté (« les cycles de facturation commencent le 1er de chaque mois ») : la date de
+ * liaison du compte ne compte pour rien, et l'afficher laisserait croire à un cycle glissant.
+ * DÉDUIT du mois, jamais gardé — un champ qui se recalcule ne peut pas mentir après un redémarrage.
+ */
+export function cycleStart(month: string): number {
+  const [y, m] = month.split('-').map(Number)
+  return Date.UTC(y ?? 1970, (m ?? 1) - 1, 1)
+}
+
 /** Mois calendaire d'une date, en UTC (`2026-09`) : la clé du cycle de facturation. */
 export function cycleKey(now: number): string {
   const d = new Date(now)
@@ -58,12 +69,6 @@ export const cycleSchema = z.object({
   data: z.number().min(0).default(0),
   wakes: z.number().min(0).default(0),
   commands: z.number().min(0).default(0),
-  /**
-   * Premier appel compté dans ce cycle. Le cycle de Tesla commence le 1er du mois ; le tout premier
-   * commence en pratique le jour de la liaison du compte, et c'est cette date-là qui a du sens à
-   * afficher (avant, il n'y avait rien à compter).
-   */
-  since: z.number(),
 })
 export type Cycle = z.infer<typeof cycleSchema>
 
@@ -84,7 +89,7 @@ export const emptyState = (): TeslaState => ({ vehicles: {} })
 export function currentCycle(state: TeslaState, now: number): Cycle {
   const month = cycleKey(now)
   if (state.cycle?.month === month) return state.cycle
-  return { month, data: 0, wakes: 0, commands: 0, since: now }
+  return { month, data: 0, wakes: 0, commands: 0 }
 }
 
 /** Compte un appel facturable dans le cycle courant (en le faisant rouler si le mois a changé). */

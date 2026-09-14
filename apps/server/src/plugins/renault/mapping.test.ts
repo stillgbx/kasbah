@@ -3,7 +3,7 @@ import {
   ACCOUNT_ID, BATTERY_CHARGING, BATTERY_UNPLUGGED, BATTERY_WAITING, COCKPIT_V1, COCKPIT_V2_EASTER_EGG,
   EV_SETTINGS, HVAC_STATUS, LOCATION, PERSON, SOC_LEVELS, VEHICLES, VIN,
 } from './__fixtures__/kamereon'
-import { inWindow, toAccounts, toDescriptor, toStatePatch, toVehicleLinks, vehicleName, wakePayload } from './mapping'
+import { inWindow, socTargetPayload, toAccounts, toDescriptor, toStatePatch, toVehicleLinks, vehicleName, wakePayload } from './mapping'
 
 // Tout ce fichier travaille sur la CAPTURE du 2026-09-14, pas sur la documentation. Trois pièges
 // que seule la capture révèle sont testés nommément : le `cockpit` v2 farceur, le flottant de
@@ -26,7 +26,7 @@ describe('comptes et véhicules', () => {
     const d = toDescriptor(links[0]!)
     expect(d).toMatchObject({ id: `renault:${VIN}`, externalId: VIN, kind: 'vehicle', name: 'AA123BB' })
     // aucune capacité de commande en phase 1 : l'UI ne propose rien que le plugin refuserait
-    expect(d.capabilities).toEqual(['soc', 'range', 'location'])
+    expect(d.capabilities).toEqual(['soc', 'range', 'location', 'charge_limit'])
   })
 
   it('retombe sur le modèle puis le VIN quand la plaque manque', () => {
@@ -107,6 +107,20 @@ describe('lectures → état', () => {
   it('date la position de la lecture quand Renault ne la date pas', () => {
     const patch = toStatePatch({ location: { data: { attributes: { gpsLatitude: 47.32, gpsLongitude: 5.04 } } } }, NOW)
     expect(patch.location).toEqual({ lat: 47.32, lon: 5.04, at: NOW })
+  })
+})
+
+describe('cible de charge', () => {
+  it('ne change QUE la cible : le plancher est le réglage de l’utilisateur', () => {
+    const body = socTargetPayload(SOC_LEVELS, 70, NOW)!
+    expect(body.socTarget).toBe(70)
+    expect(body.socMin).toBe(SOC_LEVELS.socMin)
+    expect(body.lastEnergyUpdateTimestamp).toBe(new Date(NOW).toISOString())
+  })
+
+  it('n’invente rien quand les niveaux ne sont pas un objet', () => {
+    expect(socTargetPayload(null, 70, NOW)).toBeNull()
+    expect(socTargetPayload([80], 70, NOW)).toBeNull()
   })
 })
 

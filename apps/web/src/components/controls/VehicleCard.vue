@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { geoDistance, type CommandInput, type DeviceDescriptor, type StateFor } from '@kasbah/shared'
 import { formatDistance, formatKm, formatPercent, formatPower } from '../../lib/format'
 import { useHouseStore } from '../../stores/house'
@@ -15,6 +15,23 @@ const distance = computed(() => {
 })
 const atHome = computed(() => distance.value !== null && distance.value < HOME_RADIUS_M)
 const has = (c: string) => props.descriptor.capabilities.includes(c as never)
+
+/**
+ * La limite de charge, comme sur la vue Véhicules : des paliers qui se touchent sans viser, et un
+ * curseur au pour cent près pour qui veut 73. Jamais moins de 50 % — aucun constructeur n'accepte
+ * plus bas (Tesla annonce `charge_limit_soc_min` à 50).
+ */
+const LIMIT_STEPS = [50, 60, 70, 80, 90, 100] as const
+/** La valeur qu'on TIENT le temps du va-et-vient : sans elle, le curseur reviendrait en arrière. */
+const dragged = ref<number | null>(null)
+const limit = computed(() => dragged.value ?? props.state.chargeLimit ?? 80)
+function setLimit(percent: number): void {
+  dragged.value = percent
+  emit('command', { type: 'vehicle.set_charge_limit', percent })
+}
+// la main rendue à l'état dès que la commande a fini : acceptée il porte la cible, refusée il a
+// repris l'ancienne
+watch(() => [props.state.chargeLimit, props.pending], () => { dragged.value = null })
 </script>
 
 <template>
@@ -44,9 +61,16 @@ const has = (c: string) => props.descriptor.capabilities.includes(c as never)
       </v-btn>
     </div>
     <template v-if="has('charge_limit')">
-      <div class="text-caption text-medium-emphasis">{{ $t('vehicle.chargeLimit') }} · {{ state.chargeLimit ?? 80 }} %</div>
-      <v-slider :model-value="state.chargeLimit ?? 80" :min="50" :max="100" :step="5" :disabled="disabled" show-ticks
-                @end="(v: number) => emit('command', { type: 'vehicle.set_charge_limit', percent: Math.round(v) })" />
+      <div class="text-caption text-medium-emphasis">{{ $t('vehicle.chargeLimit') }} · {{ limit }} %</div>
+      <div class="d-flex ga-1 my-1">
+        <!-- `px-0` : sans lui, les 32 px de marge intérieure d'un bouton Vuetify débordent le panneau à six -->
+        <v-btn v-for="p in LIMIT_STEPS" :key="p" class="flex-grow-1 px-0" height="40" min-width="0"
+               :variant="limit === p ? 'flat' : 'tonal'" :color="limit === p ? 'primary' : undefined"
+               :disabled="disabled" @click="setLimit(p)">{{ p }}</v-btn>
+      </div>
+      <v-slider :model-value="limit" :min="50" :max="100" :step="1" :disabled="disabled" hide-details
+                @update:model-value="(v: number) => (dragged = Math.round(v))"
+                @end="(v: number) => setLimit(Math.round(v))" />
     </template>
     <div v-if="state.odometerKm" class="text-caption text-medium-emphasis">{{ $t('vehicle.odometer') }} · {{ formatKm(state.odometerKm, $i18n.locale) }}</div>
   </div>

@@ -105,7 +105,7 @@ function fakeRenault(over: { gigyaError?: number } = {}) {
     if (path.endsWith('/cockpit')) return response(path.includes('/v2/') ? COCKPIT_V2_EASTER_EGG : COCKPIT_V1)
     if (path.endsWith('/location')) return response(LOCATION)
     if (path.endsWith('/hvac-status')) return world.hvacForbidden ? response(FORBIDDEN, 403) : response(HVAC_STATUS)
-    if (path.endsWith('/ev/soc-levels')) return response(SOC_LEVELS)
+    if (path.endsWith('/ev/soc-levels')) return response(method === 'POST' ? { ok: true } : SOC_LEVELS)
     if (path.endsWith('/ev/settings')) return response(method === 'POST' ? { ok: true } : EV_SETTINGS)
     // les deux saveurs de refus : 403 « interdit » et 404 « inconnu »
     if (path.endsWith('/lock-status') || path.endsWith('/pressure')) return response(NOT_FOUND, 404)
@@ -188,7 +188,7 @@ describe('Renault — inventaire', () => {
     const devices = await plugin.discover()
     expect(devices).toEqual([{
       id: `renault:${VIN}`, pluginId: 'renault', externalId: VIN, kind: 'vehicle',
-      name: 'GA-123-BX', capabilities: ['soc', 'range', 'location'], meta: { manufacturer: 'Renault' },
+      name: 'GA-123-BX', capabilities: ['soc', 'range', 'location', 'charge_limit'], meta: { manufacturer: 'Renault' },
     }])
   })
 
@@ -312,6 +312,17 @@ describe('Renault — sondage', () => {
     await plugin.execute(VIN, { type: 'vehicle.refresh' })
     expect(dataCalls(renault, '/battery-status')).toBe(before + 1)
     expect(patches(ctx).at(-1)).toMatchObject({ soc: 58 })
+    await plugin.stop()
+  })
+
+  it('vehicle.set_charge_limit RELIT les niveaux, puis ne change QUE la cible', async () => {
+    const { plugin, renault, ctx } = await running()
+    await plugin.execute(VIN, { type: 'vehicle.set_charge_limit', percent: 70 })
+    const write = renault.calls.filter((c) => c.method === 'POST' && c.path.endsWith('/ev/soc-levels')).at(-1)!
+    // le plancher est le réglage de l'utilisateur DANS la voiture : il est rejoué tel quel
+    expect(JSON.parse(write.body!)).toMatchObject({ socTarget: 70, socMin: SOC_LEVELS.socMin })
+    // la cible est publiée tout de suite : Kamereon relit l'ANCIENNE valeur pendant quelques secondes
+    expect(patches(ctx).at(-1)).toMatchObject({ chargeLimit: 70 })
     await plugin.stop()
   })
 

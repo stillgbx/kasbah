@@ -8,8 +8,12 @@ import { personAccountSchema, vehicleLinkSchema, vehiclesSchema, type PersonAcco
 // qui se serait trompée sur au moins trois points (version de `cockpit`, sens de la température,
 // nature de `chargingStatus`).
 
-/** Phase 1 : lecture seule. Aucune commande n'est déclarée, donc l'UI n'en propose aucune. */
-export const PHASE_1_CAPABILITIES: readonly Capability[] = ['soc', 'range', 'location']
+/**
+ * Ce que la R5 dit, et la seule chose qu'elle laisse changer : sa CIBLE de charge (`ev/soc-levels`).
+ * Verrouillage, pression, démarrage à distance : la voiture répond 404 ; charge en pause/reprise :
+ * 403. Rien d'autre n'est donc déclaré, et l'UI ne propose que ce que le plugin honore.
+ */
+export const CAPABILITIES: readonly Capability[] = ['soc', 'range', 'location', 'charge_limit']
 
 /**
  * Comptes Kamereon lisibles de la personne. Un foyer en a souvent plusieurs (`MYRENAULT`,
@@ -49,7 +53,7 @@ export function toVehicleLinks(body: unknown): VehicleLink[] {
  * `externalId` valable. Le nom suit ce que le compte sait en dire, du plus parlant au plus brut :
  * la plaque, puis le modèle, puis le VIN.
  */
-export function toDescriptor(link: VehicleLink, capabilities: readonly Capability[] = PHASE_1_CAPABILITIES): DeviceDescriptor {
+export function toDescriptor(link: VehicleLink, capabilities: readonly Capability[] = CAPABILITIES): DeviceDescriptor {
   return {
     id: makeDeviceId('renault', link.vin),
     pluginId: 'renault',
@@ -85,6 +89,20 @@ export function vehicleName(link: VehicleLink): string {
 export function wakePayload(settings: unknown, now: number): Record<string, unknown> | null {
   if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return null
   return { ...(settings as Record<string, unknown>), lastSettingsUpdateTimestamp: new Date(now).toISOString() }
+}
+
+/**
+ * Les niveaux VE avec une nouvelle CIBLE de charge. Même règle que `wakePayload` : on rejoue ce que
+ * la voiture vient de donner — le plancher `socMin` est SON réglage, pas le nôtre — et on ne change
+ * que la cible, horodatage rafraîchi comme le fait l'application du fabricant.
+ */
+export function socTargetPayload(levels: unknown, percent: number, now: number): Record<string, unknown> | null {
+  if (!levels || typeof levels !== 'object' || Array.isArray(levels)) return null
+  return {
+    ...(levels as Record<string, unknown>),
+    socTarget: percent,
+    lastEnergyUpdateTimestamp: new Date(now).toISOString(),
+  }
 }
 
 /**

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  MONTHLY_CREDIT_USD, billableKind, countCall, currentCycle, cycleCostUsd, cycleKey, emptyState, teslaStateSchema,
+  MONTHLY_CREDIT_USD, billableKind, countCall, currentCycle, cycleCostUsd, cycleKey, cycleStart, emptyState, teslaStateSchema,
 } from './state'
 
 // Ce que le plugin garde entre deux démarrages : le dernier état des véhicules, et la consommation
@@ -16,11 +16,17 @@ describe('cycle de facturation', () => {
     expect(cycleKey(Date.UTC(2026, 11, 31, 23, 59))).toBe('2026-12')
   })
 
-  it('un cycle neuf date son PREMIER appel : avant la liaison du compte, il n’y avait rien à compter', () => {
+  it('un cycle neuf ne compte rien', () => {
     const s = emptyState()
-    expect(currentCycle(s, SEPT)).toEqual({ month: '2026-09', data: 0, wakes: 0, commands: 0, since: SEPT })
+    expect(currentCycle(s, SEPT)).toEqual({ month: '2026-09', data: 0, wakes: 0, commands: 0 })
     countCall(s, 'data', SEPT)
-    expect(s.cycle).toMatchObject({ month: '2026-09', data: 1, since: SEPT })
+    expect(s.cycle).toMatchObject({ month: '2026-09', data: 1 })
+  })
+
+  it('le cycle commence le 1er du mois, pas le jour de la liaison du compte', () => {
+    expect(cycleStart('2026-09')).toBe(Date.UTC(2026, 8, 1))
+    expect(cycleStart(cycleKey(SEPT))).toBe(Date.UTC(2026, 8, 1))
+    expect(cycleStart(cycleKey(OCT))).toBe(Date.UTC(2026, 9, 1))
   })
 
   it('le mois change : on repart de zéro, sans toucher au mois écoulé', () => {
@@ -29,7 +35,7 @@ describe('cycle de facturation', () => {
     countCall(s, 'wake', SEPT)
     expect(s.cycle).toMatchObject({ data: 1, wakes: 1 })
     countCall(s, 'data', OCT)
-    expect(s.cycle).toEqual({ month: '2026-10', data: 1, wakes: 0, commands: 0, since: OCT })
+    expect(s.cycle).toEqual({ month: '2026-10', data: 1, wakes: 0, commands: 0 })
   })
 })
 
@@ -49,7 +55,7 @@ describe('coût estimé', () => {
     expect(MONTHLY_CREDIT_USD).toBe(10)
     // 5000 lectures épuisent exactement le crédit : c'est l'ordre de grandeur à garder en tête
     const s = emptyState()
-    s.cycle = { month: '2026-09', data: 5000, wakes: 0, commands: 0, since: SEPT }
+    s.cycle = { month: '2026-09', data: 5000, wakes: 0, commands: 0 }
     expect(cycleCostUsd(s.cycle)).toBe(MONTHLY_CREDIT_USD)
   })
 })
@@ -75,7 +81,7 @@ describe('ce qui est facturable', () => {
 describe('fichier d’état', () => {
   it('un fichier écrit par une version PRÉCÉDENTE se relit : les états de véhicule sont larges', () => {
     const parsed = teslaStateSchema.safeParse({
-      cycle: { month: '2026-09', data: 3, since: SEPT },              // `wakes`/`commands` absents
+      cycle: { month: '2026-09', data: 3, since: SEPT },              // `wakes`/`commands` absents, `since` d'une version précédente
       vehicles: { '5YJ': { soc: 54, champInconnu: 'venu du futur' } },
     })
     expect(parsed.success).toBe(true)

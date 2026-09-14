@@ -14,11 +14,18 @@ export const PLUGIN_ID = 'tesla'
 const MILE_KM = 1.609344
 
 /**
- * Phase 1 : lecture seule. `soc` porte aussi la commande `vehicle.wake` (voir `COMMAND_REQUIRES`).
- * `charge_power` dit que la voiture DONNE sa puissance de charge (`charger_power`) : l'UI n'a donc
- * ni à l'estimer, ni à demander la capacité de la batterie.
+ * Ce que le véhicule DIT. `soc` porte aussi les commandes `vehicle.wake` et `vehicle.refresh` (voir
+ * `COMMAND_REQUIRES`). `charge_power` dit que la voiture DONNE sa puissance de charge
+ * (`charger_power`) : l'UI n'a donc ni à l'estimer, ni à demander la capacité de la batterie.
  */
 export const READ_CAPABILITIES = ['soc', 'range', 'location', 'charge_power'] as const
+
+/**
+ * Ce que le véhicule ACCEPTE qu'on change. Seule la limite de charge pour l'instant : c'est un
+ * réglage, pas un geste — la voiture ne bouge pas, ne s'ouvre pas, et la valeur est bornée par le
+ * contrat (50-100 %). Verrouiller et lancer la charge restent à faire.
+ */
+export const WRITE_CAPABILITIES = ['charge_limit'] as const
 
 /** Le 4e caractère d'un VIN Tesla est la gamme : S, 3, X, Y (et C pour le Cybertruck). */
 export function modelFromVin(vin: string): string | undefined {
@@ -32,7 +39,7 @@ export function toDescriptor(v: VehicleSummary): DeviceDescriptor {
   const name = v.display_name?.trim() || model || 'Tesla'
   return {
     id: `${PLUGIN_ID}:${v.vin}`, pluginId: PLUGIN_ID, externalId: v.vin, kind: 'vehicle', name,
-    capabilities: [...READ_CAPABILITIES],
+    capabilities: [...READ_CAPABILITIES, ...WRITE_CAPABILITIES],
     meta: { manufacturer: 'Tesla', ...(model ? { model } : {}) },
   }
 }
