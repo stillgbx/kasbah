@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   ACCOUNT_ID, BATTERY_CHARGING, BATTERY_UNPLUGGED, BATTERY_WAITING, COCKPIT_V1, COCKPIT_V2_EASTER_EGG,
-  HVAC_STATUS, LOCATION, PERSON, SOC_LEVELS, VEHICLES, VIN,
+  EV_SETTINGS, HVAC_STATUS, LOCATION, PERSON, SOC_LEVELS, VEHICLES, VIN,
 } from './__fixtures__/kamereon'
-import { toAccounts, toDescriptor, toStatePatch, toVehicleLinks, vehicleName } from './mapping'
+import { inWindow, toAccounts, toDescriptor, toStatePatch, toVehicleLinks, vehicleName, wakePayload } from './mapping'
 
 // Tout ce fichier travaille sur la CAPTURE du 2026-09-14, pas sur la documentation. Trois pièges
 // que seule la capture révèle sont testés nommément : le `cockpit` v2 farceur, le flottant de
@@ -99,5 +99,42 @@ describe('lectures → état', () => {
   it('date la position de la lecture quand Renault ne la date pas', () => {
     const patch = toStatePatch({ location: { data: { attributes: { gpsLatitude: 47.32, gpsLongitude: 5.04 } } } }, NOW)
     expect(patch.location).toEqual({ lat: 47.32, lon: 5.04, at: NOW })
+  })
+})
+
+describe('réveil de charge', () => {
+  it('rejoue les réglages de la voiture À L’IDENTIQUE, horodatage neuf', () => {
+    const body = wakePayload(EV_SETTINGS, NOW)!
+    // tout est conservé : l'heure de départ, la durée et la température sont des CHOIX de
+    // l'utilisateur, faits dans sa voiture — les écraser serait le prix caché du réveil
+    expect(body.chargeTimeStart).toBe('12:00')
+    expect(body.chargeDuration).toBe(420)
+    expect(body.preconditioningTemperature).toBe(21)
+    expect(body.chargeModeRq).toBe('SCHEDULED')
+    expect(body.programs).toEqual(EV_SETTINGS.programs)
+    // seul l'horodatage change : c'est l'ÉCRITURE qui réveille, pas son contenu
+    expect(body.lastSettingsUpdateTimestamp).toBe(new Date(NOW).toISOString())
+    expect(body.lastSettingsUpdateTimestamp).not.toBe(EV_SETTINGS.lastSettingsUpdateTimestamp)
+  })
+
+  it('n’invente rien quand les réglages ne sont pas un objet', () => {
+    expect(wakePayload(null, NOW)).toBeNull()
+    expect(wakePayload('nope', NOW)).toBeNull()
+    expect(wakePayload([1, 2], NOW)).toBeNull()
+  })
+
+  it('la fenêtre horaire borne le réveil à la journée', () => {
+    const at = (h: number, m = 0) => new Date(2026, 8, 14, h, m)
+    expect(inWindow(at(12), '08:00', '20:00')).toBe(true)
+    expect(inWindow(at(8), '08:00', '20:00')).toBe(true)      // borne basse incluse
+    expect(inWindow(at(20), '08:00', '20:00')).toBe(false)    // borne haute exclue
+    expect(inWindow(at(3), '08:00', '20:00')).toBe(false)
+    // une fenêtre à cheval sur minuit se lit des deux côtés
+    expect(inWindow(at(23), '22:00', '06:00')).toBe(true)
+    expect(inWindow(at(2), '22:00', '06:00')).toBe(true)
+    expect(inWindow(at(12), '22:00', '06:00')).toBe(false)
+    // bornes égales ou illisibles = jamais : c'est le moyen de couper la fonction
+    expect(inWindow(at(12), '08:00', '08:00')).toBe(false)
+    expect(inWindow(at(12), 'midi', '20:00')).toBe(false)
   })
 })

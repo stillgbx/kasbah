@@ -110,6 +110,17 @@ export class RenaultClient {
     return this.request('GET', `/commerce/v1/accounts/${encodeURIComponent(accountId)}/vehicles/${encodeURIComponent(vin)}/details`, { signal })
   }
 
+  /**
+   * Réécrit les réglages VE. **C'est l'écriture qui réveille la voiture**, pas son contenu : sur la
+   * plateforme récente (R5, Scenic), `charge/pause-resume` répond 403 et seul ce POST fait réagir le
+   * boîtier télématique. Le corps est celui qu'on vient de LIRE, horodatage rafraîchi — surtout pas
+   * des valeurs inventées, qui écraseraient l'heure de départ et la température choisies.
+   */
+  writeEvSettings(o: { accountId: string; vin: string; body: unknown; signal?: AbortSignal }): Promise<unknown> {
+    const path = carDataPath({ accountId: o.accountId, vin: o.vin, endpoint: 'ev/settings', version: 1, adapter: 'kcm' })
+    return this.request('POST', path, { body: o.body, signal: o.signal })
+  }
+
   /** Une lecture véhicule (cf. `carDataPath`). */
   carData(o: { accountId: string; vin: string; endpoint: string; version?: number; adapter?: Adapter; signal?: AbortSignal }): Promise<unknown> {
     return this.request('GET', carDataPath(o), { signal: o.signal })

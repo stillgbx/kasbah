@@ -70,6 +70,42 @@ export function vehicleName(link: VehicleLink): string {
   return model || link.vin
 }
 
+// ---- Réveil de charge --------------------------------------------------------------------------
+
+/**
+ * La charge utile du réveil : les réglages TELS QU'ILS SONT, avec un horodatage neuf. Rien d'autre
+ * ne change — c'est l'écriture qui réveille la voiture, pas son contenu. Rejouer des valeurs codées
+ * en dur (ce que font d'autres outils) écraserait l'heure de départ, la durée et la température que
+ * l'utilisateur a choisies dans sa voiture.
+ *
+ * `null` si les réglages lus ne sont pas un objet : mieux vaut ne rien envoyer que n'importe quoi.
+ */
+export function wakePayload(settings: unknown, now: number): Record<string, unknown> | null {
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return null
+  return { ...(settings as Record<string, unknown>), lastSettingsUpdateTimestamp: new Date(now).toISOString() }
+}
+
+/**
+ * L'heure locale tombe-t-elle dans la fenêtre `HH:MM`–`HH:MM` ? Le réveil n'a de sens qu'en journée :
+ * la nuit, une voiture branchée qui ne charge pas attend souvent SA charge programmée, et la secouer
+ * serait se battre contre le réglage de l'utilisateur.
+ *
+ * Une fenêtre qui passe minuit (`22:00`–`06:00`) est acceptée : elle se lit alors à cheval.
+ * Bornes égales = fenêtre vide (jamais), ce qui est le moyen de couper la fonction par la configuration.
+ */
+export function inWindow(date: Date, from: string, to: string): boolean {
+  const min = (hhmm: string): number | null => {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm.trim())
+    if (!m) return null
+    const h = Number(m[1]), mm = Number(m[2])
+    return h < 24 && mm < 60 ? h * 60 + mm : null
+  }
+  const a = min(from), b = min(to)
+  if (a === null || b === null || a === b) return false
+  const t = date.getHours() * 60 + date.getMinutes()
+  return a < b ? t >= a && t < b : t >= a || t < b
+}
+
 // ---- Des lectures à l'état ---------------------------------------------------------------------
 
 /**

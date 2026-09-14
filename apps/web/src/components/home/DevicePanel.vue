@@ -102,7 +102,10 @@ const headline = computed(() => {
 const placeable = computed<PlacedHouseDevice | null>(() => {
   const hd = resolved.value?.houseDevice
   if (!hd || !isPlaced(hd) || hd.openingId || panelOf(hd)) return null
-  return (resolved.value?.descriptor?.kind ?? hd.kind) !== 'mower' ? hd : null
+  // ni une tondeuse (elle se gare a sa base), ni un vehicule : la place d'une voiture vient de son
+  // GPS, pas d'un geste — la proposer a placer serait un bouton sans effet
+  const kind = resolved.value?.descriptor?.kind ?? hd.kind
+  return kind !== 'mower' && kind !== 'vehicle' ? hd : null
 })
 /** Le champ dont cet appareil est un module, quand il en est un (il suit son champ, cf. `panels.ts`). */
 const panelCell = computed(() => (resolved.value?.houseDevice ? panelOf(resolved.value.houseDevice) : undefined))
@@ -223,8 +226,9 @@ function send(cmd: CommandInput) {
       </div>
       <div class="muted place-new__hint">{{ array.name ?? array.id }} · {{ $t('arrays.cell', { r: panelCell!.row + 1, c: panelCell!.col + 1 }) }}</div>
     </div>
-    <!-- appareil connu du plugin mais absent de la maison : le poser depuis ici, sans repasser par la liste -->
-    <div v-else-if="resolved.descriptor && !resolved.houseDevice" class="card card--soft placement place-new">
+    <!-- appareil connu du plugin mais absent de la maison : le poser depuis ici, sans repasser par la
+         liste. Sauf un VEHICULE : sa place vient de son GPS, la poser a la main n'aurait pas de sens -->
+    <div v-else-if="resolved.descriptor && !resolved.houseDevice && resolved.descriptor.kind !== 'vehicle'" class="card card--soft placement place-new">
       <div class="place-new__row">
         <span class="muted">{{ $t('place.title') }}</span>
         <button type="button" class="pill place-new__cta" :title="$t('rooms.origins.placeHint')" @click="house.startPlacingNew(resolved.descriptor.id)">

@@ -76,6 +76,18 @@ function movement(s: StateFor<'vehicle'>): string {
   }
   return t('vehicle.parked')
 }
+/**
+ * « En charge · 7,4 kW », ou « En charge » tout court quand le fabricant ne donne PAS la puissance
+ * (Renault n'a pas ce champ) : afficher « 0 W » se lirait « branchée mais rien ne passe », soit le
+ * contraire de ce qui se passe.
+ */
+function charge(s: StateFor<'vehicle'>): string {
+  if (!s.charging) return s.pluggedIn ? t('vehicle.pluggedIn') : t('vehicle.unplugged')
+  return s.chargePowerW === undefined
+    ? t('vehicle.charging')
+    : `${t('vehicle.charging')} · ${formatPower(s.chargePowerW, locale.value)}`
+}
+
 /** Verrouillage : « — » tant qu'on ne sait pas (tous les constructeurs ne le disent pas). */
 const locked = (s: StateFor<'vehicle'>) =>
   s.locked === undefined ? EMPTY : s.locked ? t('vehicle.locked') : t('vehicle.unlocked')
@@ -195,7 +207,7 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
           <div class="vcard__stats">
             <div class="card card--soft stat"><div class="muted stat__k">{{ $t('common.status') }}</div><div class="stat__v">{{ locked(v.state) }}</div></div>
             <div class="card card--soft stat"><div class="muted stat__k">{{ $t('vehicle.charging') }}</div>
-              <div class="stat__v">{{ v.state.charging ? `${$t('vehicle.charging')} · ${formatPower(v.state.chargePowerW ?? 0, locale)}` : v.state.pluggedIn ? $t('vehicle.pluggedIn') : $t('vehicle.unplugged') }}</div></div>
+              <div class="stat__v">{{ charge(v.state) }}</div></div>
             <div class="card card--soft stat"><div class="muted stat__k">{{ $t('vehicle.movement') }}</div><div class="stat__v">{{ movement(v.state) }}</div></div>
             <div class="card card--soft stat"><div class="muted stat__k">{{ $t('vehicle.temps') }}</div><div class="stat__v">{{ temps(v.state) }}</div></div>
           </div>

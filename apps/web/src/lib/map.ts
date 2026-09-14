@@ -1,4 +1,4 @@
-import type { StyleSpecification } from 'maplibre-gl'
+import type { LayerSpecification, StyleSpecification } from 'maplibre-gl'
 import { geoDistance } from '@kasbah/shared'
 
 // La carte du véhicule : ce qui se décide SANS le moteur de rendu (testable), le composant
@@ -30,7 +30,10 @@ export const IGN_ORTHO_TILE_URL =
 export const IGN_ATTRIBUTION = '© IGN — Géoplateforme'
 export const IGN_MAX_ZOOM = 19
 
-/** Style « satellite » : une seule source raster, l'IGN. Pas d'étiquettes : la photo parle. */
+/**
+ * Style « satellite » NU : la photo seule. Sert de repli quand les étiquettes ne peuvent pas être
+ * chargées — une photo sans nom vaut mieux qu'une carte vide.
+ */
 export function satelliteStyle(): StyleSpecification {
   return {
     version: 8,
@@ -38,6 +41,46 @@ export function satelliteStyle(): StyleSpecification {
       ign: { type: 'raster', tiles: [IGN_ORTHO_TILE_URL], tileSize: 256, maxzoom: IGN_MAX_ZOOM, attribution: IGN_ATTRIBUTION },
     },
     layers: [{ id: 'ign', type: 'raster', source: 'ign' }],
+  }
+}
+
+/**
+ * Style « satellite » COMPLET : la photo IGN surmontée des ÉTIQUETTES du plan (villes, rues).
+ * Une orthophoto ne dit pas où l'on est ; sans les noms, reconnaître sa rue demande un effort.
+ *
+ * On reprend le style vectoriel du plan et on n'en garde que les couches `symbol` : ce sont
+ * exactement les libellés, et rien de leur géométrie ne viendra masquer la photo. Les `sources`,
+ * `glyphs` et `sprite` du plan suivent — ce sont eux qui portent les polices et les icônes.
+ */
+export function satelliteStyleWithLabels(plan: StyleSpecification): StyleSpecification {
+  const labels = (plan.layers ?? []).filter((l) => l.type === 'symbol').map(labelOverImagery)
+  return {
+    ...plan,
+    sources: {
+      ...plan.sources,
+      ign: { type: 'raster', tiles: [IGN_ORTHO_TILE_URL], tileSize: 256, maxzoom: IGN_MAX_ZOOM, attribution: IGN_ATTRIBUTION },
+    },
+    layers: [{ id: 'ign', type: 'raster', source: 'ign' }, ...labels],
+  }
+}
+
+/**
+ * Une étiquette lisible SUR UNE PHOTO. Les couleurs du plan sont calculées pour un fond uni et
+ * clair (ou uni et sombre) ; sur une orthophoto — champs, toitures, arbres, ombres — elles se
+ * noient. On impose donc partout le même traitement, indépendant du thème : texte blanc, contour
+ * noir franc. Le reste de la couche (police, taille, placement, filtres) vient du plan, intact.
+ */
+function labelOverImagery(layer: LayerSpecification): LayerSpecification {
+  if (layer.type !== 'symbol') return layer
+  return {
+    ...layer,
+    paint: {
+      ...layer.paint,
+      'text-color': '#ffffff',
+      'text-halo-color': 'rgba(0, 0, 0, 0.85)',
+      'text-halo-width': 1.6,
+      'text-halo-blur': 0.4,
+    },
   }
 }
 

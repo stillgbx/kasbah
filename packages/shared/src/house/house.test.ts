@@ -5,7 +5,7 @@ import { computeHouseGeometry } from './geometry'
 import { roomBounds, buildingBounds } from './geometry/bounds'
 import { resolveDefaults } from './defaults'
 import { indexHouse, deviceFloorZ } from './lookup'
-import { geoDistance, geoToLocal, localToGeo } from './geo'
+import { geoDistance, geoToLocal, localToGeo, sitePosition } from './geo'
 import { panelArrayDevices, panelOf, withPanelArrays } from './panels'
 import { PANEL_PEAK_W, panelArraySchema } from './schema'
 
@@ -185,6 +185,17 @@ describe('lookup & geo', () => {
     expect(back[1]).toBeCloseTo(p[1], 3)
     expect(back[2]).toBeCloseTo(p[2], 6)
     expect(geoDistance(house.origin, g)).toBeCloseTo(Math.hypot(12.5, 7.25), 1)
+  })
+  it('une position GPS se place sur le terrain, et RIEN hors du terrain', () => {
+    // le centre de la maison tombe forcément dans son propre terrain
+    const here = localToGeo(house.origin, [0, 0, 0])
+    const at = sitePosition(house, here)
+    expect(at).not.toBeNull()
+    expect(at![0]).toBeCloseTo(0, 3)
+    expect(at![1]).toBeCloseTo(0, 3)
+    expect(at![2]).toBe(0)                       // posé sur le terrain
+    // un kilomètre plus loin : la voiture est ailleurs, elle n'a pas à apparaître dans le jardin
+    expect(sitePosition(house, localToGeo(house.origin, [1000, 1000, 0]))).toBeNull()
   })
   it('heading rotates the local frame', () => {
     const north = localToGeo({ lat: 45, lon: 5, alt: 0, heading: 0 }, [0, 100, 0])

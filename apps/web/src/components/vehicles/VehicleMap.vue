@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Map as MlMap, Marker, NavigationControl } from 'maplibre-gl'
+import { Map as MlMap, Marker, NavigationControl, type StyleSpecification } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import { IGN_MAX_ZOOM, initialView, normalizeHeading, planStyleUrl, satelliteStyle, type LatLon, type MapMode } from '../../lib/map'
+import { IGN_MAX_ZOOM, initialView, normalizeHeading, planStyleUrl, satelliteStyle, satelliteStyleWithLabels, type LatLon, type MapMode } from '../../lib/map'
 import { useSettingsStore } from '../../stores/settings'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
@@ -24,11 +24,17 @@ const props = defineProps<{
 }>()
 
 const settings = useSettingsStore()
-const MODE_KEY = 'kasbah.mapMode'
+// Clé VOLONTAIREMENT nouvelle : sous l'ancien nom traînent des valeurs écrites par un watcher trop
+// large (cf. plus bas), que l'utilisateur n'a jamais choisies. Les ignorer est le seul moyen que le
+// défaut « satellite » s'applique vraiment.
+const MODE_KEY = 'kasbah.mapMode.v2'
 
 const container = ref<HTMLDivElement | null>(null)
 const full = ref(false)
-const mode = ref<MapMode>((() => { try { return localStorage.getItem(MODE_KEY) === 'satellite' ? 'satellite' : 'plan' } catch { return 'plan' } })())
+// Satellite PAR DÉFAUT : sur une carte de véhicule, reconnaître son allée, son parking ou le
+// bâtiment devant lequel la voiture est garée se fait d'un coup d'œil sur la photo, pas sur un plan.
+// Le choix de l'utilisateur, lui, prime et survit (`localStorage`).
+const mode = ref<MapMode>((() => { try { return localStorage.getItem(MODE_KEY) === 'plan' ? 'plan' : 'satellite' } catch { return 'satellite' } })())
 /** L'utilisateur a bougé la carte : on ne la recadre plus sous ses doigts, un bouton le propose. */
 const moved = ref(false)
 
@@ -38,7 +44,38 @@ let homeMarker: Marker | null = null
 let observer: ResizeObserver | null = null
 
 const hasPosition = computed(() => !!props.location)
-const style = () => (mode.value === 'satellite' ? satelliteStyle() : planStyleUrl(settings.isDark))
+
+/**
+ * Le style du plan, en cache par thème : c'est lui qui fournit les étiquettes du satellite, et il
+ * ne sert à rien de le retélécharger à chaque bascule.
+ */
+const planStyles = new Map<string, Promise<StyleSpecification>>()
+function planStyle(dark: boolean): Promise<StyleSpecification> {
+  const url = planStyleUrl(dark)
+  let p = planStyles.get(url)
+  if (!p) {
+    p = fetch(url).then((r) => r.json() as Promise<StyleSpecification>)
+    planStyles.set(url, p)
+  }
+  return p
+}
+
+/**
+ * Applique le style courant. Le satellite attend les étiquettes du plan ; si elles ne viennent pas
+ * (réseau, service indisponible), la photo NUE est posée quand même — mieux qu'une carte vide.
+ * La garde sur `mode` évite qu'une réponse en retard écrase une bascule entre-temps.
+ */
+async function applyStyle(): Promise<void> {
+  if (!map) return
+  if (mode.value !== 'satellite') { map.setStyle(planStyleUrl(settings.isDark)); return }
+  const dark = settings.isDark
+  try {
+    const plan = await planStyle(dark)
+    if (map && mode.value === 'satellite') map.setStyle(satelliteStyleWithLabels(plan))
+  } catch {
+    if (map && mode.value === 'satellite') map.setStyle(satelliteStyle())
+  }
+}
 
 function markerEl(kind: 'car' | 'home'): HTMLElement {
   const el = document.createElement('div')
@@ -97,7 +134,9 @@ function placeMarkers(): void {
 onMounted(() => {
   if (!container.value) return
   const m = new MlMap({
-    container: container.value, style: style(), attributionControl: { compact: true },
+    // style de départ : la photo nue, remplacée dès que les étiquettes du plan sont là
+    container: container.value, style: mode.value === 'satellite' ? satelliteStyle() : planStyleUrl(settings.isDark),
+    attributionControl: { compact: true },
     maxZoom: IGN_MAX_ZOOM + 1, dragRotate: true, pitchWithRotate: true,
   })
   map = m
@@ -111,6 +150,7 @@ onMounted(() => {
   for (const ev of ['dragstart', 'zoomstart', 'rotatestart', 'pitchstart'] as const) {
     m.on(ev, (e: { originalEvent?: unknown }) => { if (e.originalEvent) moved.value = true })
   }
+  void applyStyle()
   placeMarkers()
   fit(false)
   // la carte du véhicule vit dans une grille qui se redimensionne : MapLibre ne suit que la fenêtre
@@ -129,9 +169,12 @@ watch(() => [props.location?.lat, props.location?.lon, props.headingDeg, props.h
   placeMarkers()
   if (!moved.value) fit(true)
 })
-watch([mode, () => settings.isDark], () => {
-  map?.setStyle(style())
-  try { localStorage.setItem(MODE_KEY, mode.value) } catch { /* stockage indisponible : le choix ne survit pas, sans plus */ }
+watch([mode, () => settings.isDark], () => { void applyStyle() })
+// Le choix n'est écrit QUE lorsque le mode change. Il était auparavant réécrit à chaque changement
+// de thème, ce qui rangeait comme « choix de l'utilisateur » un mode qu'il n'avait jamais touché —
+// et le défaut n'avait alors plus jamais l'occasion de s'appliquer.
+watch(mode, (m) => {
+  try { localStorage.setItem(MODE_KEY, m) } catch { /* stockage indisponible : le choix ne survit pas, sans plus */ }
 })
 
 function toggleFull(): void {

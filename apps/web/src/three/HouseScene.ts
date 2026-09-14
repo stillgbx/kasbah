@@ -5,7 +5,7 @@ import {
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js'
 import {
-  boundsCenter, buildingBounds, computeHouseGeometry, deviceFloorZ, geoDistance, indexHouse, isPlaced, pointInPolygon, resolveDefaults, resolveDeviceLevelId,
+  boundsCenter, buildingBounds, computeHouseGeometry, deviceFloorZ, geoDistance, indexHouse, pointInPolygon, resolveDefaults, resolveDeviceLevelId, sitePosition,
   roofBounds, roomBounds, zoneBounds,
   type DeviceDescriptor, type DeviceState, type House, type HouseDevice, type HouseGeometry, type HouseIndex, type Level, type PlacedHouseDevice, type Vec3,
 } from '@kasbah/shared'
@@ -262,14 +262,58 @@ export class HouseScene {
     if (this.house) { this.buildMarkers(); this.updateStates(this.states, true); this.applyLevelFocus(); this.loop.invalidate() }
   }
 
+  /**
+   * Où poser un appareil : sa `position` du JSON, ou — pour un VÉHICULE, qui n'en a pas — celle
+   * que son GPS lui donne, à condition qu'il soit sur le terrain. `null` = pas de marqueur.
+   *
+   * Une voiture n'est pas un objet du bâtiment : sa place n'est pas une donnée qu'on écrit, c'est
+   * un calcul qui suit le relevé. Garée ailleurs, elle disparaît simplement de la scène.
+   */
+  private effectivePosition(device: HouseDevice): Vec3 | null {
+    if (device.position) return device.position
+    const state = device.deviceId ? this.states[device.deviceId] : undefined
+    if (state?.kind !== 'vehicle' || !state.location || !this.house) return null
+    return sitePosition(this.house, state.location)
+  }
+
+  /** La position GPS d'un véhicule, pour savoir si elle a bougé d'un relevé à l'autre. */
+  private vehicleFix(state: DeviceState | undefined): string {
+    return state?.kind === 'vehicle' && state.location ? `${state.location.lat},${state.location.lon}` : ''
+  }
+
+  /**
+   * Les appareils à dessiner : ceux de la maison, plus les VÉHICULES qu'elle ne connaît pas.
+   *
+   * Une voiture n'a pas à être déclarée dans `house.json` pour apparaître : ce qui la met dans la
+   * scène est son GPS, pas une ligne de configuration.
+   *
+   * Un véhicule non déclaré est identifié par son **deviceId de plugin** (`tesla:5YJ…`) et non par
+   * un id de maison inventé : c'est l'autre espace de clés que l'app sait déjà résoudre (cf.
+   * `useDeviceResolver`), et un id fabriqué de toutes pièces ne résolvait ni le nom, ni le kind, ni
+   * les commandes — le panneau affirmait alors « cet appareil n'est lié à aucun plugin ».
+   */
+  private drawable(): HouseDevice[] {
+    const devices = this.house?.devices ?? []
+    const known = new Set(devices.map((d) => d.deviceId).filter((id): id is string => !!id))
+    const strays: HouseDevice[] = []
+    for (const [deviceId, descriptor] of this.descriptors) {
+      if (descriptor.kind !== 'vehicle' || known.has(deviceId)) continue
+      strays.push({ id: deviceId, deviceId, kind: 'vehicle', meta: {} })
+    }
+    return [...devices, ...strays]
+  }
+
   private buildMarkers(): void {
     if (!this.house || !this.index || !this.nodes || !this.geometry) return
     for (const m of this.markers.values()) m.dispose()
     this.markers.clear()
     const openings = new Map(this.geometry.levels.flatMap((l) => l.openings.map((o) => [o.openingId, o] as const)))
-    // un appareil NON PLACÉ (un véhicule : la maison le nomme, la scène ne lui donne pas de point)
-    // n'a pas de marqueur — `isPlaced` le dit au type, et la boucle n'a plus à s'en soucier
-    for (const device of this.house.devices.filter(isPlaced)) {
+    // Un appareil sans position EFFECTIVE n'a pas de marqueur. Pour la plupart c'est la `position`
+    // du JSON ; pour un véhicule, c'est son GPS projeté sur le terrain (`effectivePosition`).
+    for (const d of this.drawable()) {
+      const position = this.effectivePosition(d)
+      if (!position) continue
+      const device: PlacedHouseDevice = { ...d, position }
       const descriptor = device.deviceId ? this.descriptors.get(device.deviceId) : undefined
       const levelId = resolveDeviceLevelId(device, this.index.roomsById)
       const levelNodes = levelId ? this.nodes.levels.get(levelId) : undefined
@@ -412,6 +456,17 @@ export class HouseScene {
   updateStates(states: Record<string, DeviceState>, force = false): void {
     const prev = this.states
     this.states = states
+    // Un véhicule qui a bougé change de PLACE, pas seulement d'état : son marqueur n'existe
+    // peut-être pas encore (il vient de rentrer) ou n'a plus lieu d'être (il est parti). Rare —
+    // une lecture toutes les dix minutes — donc refaire les marqueurs coûte moins cher que de
+    // maintenir un cas particulier dans la boucle d'états.
+    if (!force && this.house) {
+      const moved = this.drawable().some((d) => {
+        if (d.position || !d.deviceId) return false
+        return this.vehicleFix(states[d.deviceId]) !== this.vehicleFix(prev[d.deviceId])
+      })
+      if (moved) { this.buildMarkers(); this.applyLevelFocus() }
+    }
     const routing = soundRouting(this.house?.devices ?? [], states)
     let touched = false
     for (const marker of this.markers.values()) {
@@ -511,10 +566,12 @@ export class HouseScene {
    */
   focusDevice(key: string, animate = true): void {
     if (!this.house || !this.index) return
-    const device = this.house.devices.find((d) => d.id === key)
+    const found = this.drawable().find((d) => d.id === key)
     const marker = this.markers.get(key)
-    // un marqueur existe : l'appareil est donc placé (`buildMarkers` n'en fait pas pour les autres)
-    if (!device || !isPlaced(device) || !marker) return
+    // un marqueur existe : l'appareil a donc une place (`buildMarkers` n'en fait pas pour les autres)
+    const position = found ? this.effectivePosition(found) : null
+    if (!found || !position || !marker) return
+    const device: PlacedHouseDevice = { ...found, position }
     const levelId = resolveDeviceLevelId(device, this.index.roomsById)
     if (levelId && this.focusedLevelId !== levelId) this.focusLevel(levelId)
     const size = new Vector3(DEVICE_FOCUS_SIZE_M, DEVICE_FOCUS_SIZE_M, DEVICE_FOCUS_SIZE_M)

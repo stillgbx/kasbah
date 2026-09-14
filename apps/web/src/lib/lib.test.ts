@@ -10,7 +10,7 @@ import { deviceColor, deviceIcon } from './deviceIcons'
 import { findBatteries, findEnergySite, inverterGroups, isEnergySite, isInverter, shortInverterId } from './energy'
 import { coverActivity, coverAtRest, isFlatCover, isPassageCover } from './cover'
 import { coverLeaves, coverSize, hasLeaves, isOrientable, isSizable } from './orientation'
-import { BOTH_MAX_M, CAR_ZOOM, IGN_ORTHO_TILE_URL, initialView, normalizeHeading, planStyleUrl, satelliteStyle } from './map'
+import { BOTH_MAX_M, CAR_ZOOM, IGN_ORTHO_TILE_URL, initialView, normalizeHeading, planStyleUrl, satelliteStyle, satelliteStyleWithLabels } from './map'
 import fr from '../i18n/locales/fr.json'
 import en from '../i18n/locales/en.json'
 
@@ -453,6 +453,31 @@ describe('carte du véhicule (lib/map)', () => {
     expect(IGN_ORTHO_TILE_URL).not.toMatch(/apikey|key=/i)
     const st = satelliteStyle()
     expect(st.layers[0]).toMatchObject({ type: 'raster', source: 'ign' })
+  })
+  it('le satellite garde les ÉTIQUETTES du plan, et rien de sa géométrie', () => {
+    // un style de plan réduit à l'essentiel : une source vectorielle, du fond, des routes, des noms
+    const plan = {
+      version: 8 as const,
+      glyphs: 'https://exemple/{fontstack}/{range}.pbf',
+      sprite: 'https://exemple/sprite',
+      sources: { openmaptiles: { type: 'vector' as const, url: 'https://exemple/tiles.json' } },
+      layers: [
+        { id: 'fond', type: 'background' as const, paint: {} },
+        { id: 'routes', type: 'line' as const, source: 'openmaptiles', 'source-layer': 'transportation' },
+        { id: 'nom-ville', type: 'symbol' as const, source: 'openmaptiles', 'source-layer': 'place' },
+        { id: 'nom-rue', type: 'symbol' as const, source: 'openmaptiles', 'source-layer': 'transportation_name' },
+      ],
+    }
+    const st = satelliteStyleWithLabels(plan)
+    // la photo d'abord, les noms par-dessus : l'ordre des couches EST l'empilement
+    expect(st.layers[0]).toMatchObject({ type: 'raster', source: 'ign' })
+    expect(st.layers.map((l) => l.id)).toEqual(['ign', 'nom-ville', 'nom-rue'])
+    // ni fond ni routes : ils masqueraient l'orthophoto
+    expect(st.layers.some((l) => l.type === 'background' || l.type === 'line')).toBe(false)
+    // polices, icônes et source vectorielle suivent, sinon aucune étiquette ne se dessine
+    expect(st.glyphs).toBe(plan.glyphs)
+    expect(st.sprite).toBe(plan.sprite)
+    expect(st.sources).toHaveProperty('openmaptiles')
   })
   it('le cap se normalise dans [0, 360[', () => {
     expect(normalizeHeading(372)).toBe(12)

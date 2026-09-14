@@ -12,7 +12,7 @@ import {
   RenaultAuth, createSessionFile, type SessionStore,
 } from './auth'
 import { DEFAULT_RATE_PER_HOUR, RenaultClient, carDataPath, isEndpointUnavailable } from './client'
-import { toAccounts, toDescriptor, toStatePatch, toVehicleLinks, type VehicleReadings } from './mapping'
+import { inWindow, toAccounts, toDescriptor, toStatePatch, toVehicleLinks, wakePayload, type VehicleReadings } from './mapping'
 import type { VehicleLink } from './types'
 
 // Plugin Renault (véhicules) — API privée Gigya + Kamereon, celle de l'appli MY Renault.
@@ -62,6 +62,15 @@ export const renaultConfigSchema = z.object({
   RENAULT_POLL_MS: z.coerce.number().int().min(120_000).max(3_600_000).default(600_000),
   /** Plafond d'appels par heure que le plugin s'impose, avant que Renault ne réponde 429. */
   RENAULT_RATE_PER_HOUR: z.coerce.number().int().min(1).max(600).default(DEFAULT_RATE_PER_HOUR),
+  /**
+   * Fenêtre horaire du réveil de charge (heure LOCALE du serveur). Hors de cette plage, une
+   * voiture branchée qui ne charge pas attend le plus souvent sa charge programmée : la secouer
+   * serait se battre contre son propre réglage. Bornes égales = jamais.
+   */
+  RENAULT_WAKE_FROM: z.string().trim().default('08:00'),
+  RENAULT_WAKE_TO: z.string().trim().default('20:00'),
+  /** Délai minimal entre deux réveils du MÊME véhicule. */
+  RENAULT_WAKE_EVERY_MS: z.coerce.number().int().min(300_000).max(21_600_000).default(900_000),
 })
 export type RenaultConfig = z.infer<typeof renaultConfigSchema>
 
@@ -102,6 +111,13 @@ export const READ_ENDPOINTS = [
   { key: 'socLevels', endpoint: 'ev/soc-levels', version: 1, adapter: 'kcm' },
 ] as const satisfies readonly { key: keyof VehicleReadings; endpoint: string; version: number; adapter: 'kca' | 'kcm' }[]
 
+/**
+ * Le réveil de charge est un SOUS-ITEM cochable, pas une variable d'environnement : il écrit dans
+ * la voiture, et l'utilisateur doit pouvoir le couper depuis la tablette sans toucher au serveur.
+ */
+export const CHARGE_WAKE = 'charge_wake'
+const CHARGE_WAKE_PART = [{ id: CHARGE_WAKE, labelKey: 'vehicle.chargeWake', enabledByDefault: true }] as const
+
 /** Ce que la carte des Réglages affiche. Ne porte jamais le mot de passe ni un jeton. */
 export interface RenaultStatus {
   linked: boolean
@@ -140,6 +156,8 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
    * réponse. Vidé au redémarrage — un modèle peut gagner un endpoint par mise à jour logicielle.
    */
   const unavailable = new Set<string>()
+  /** Dernier réveil envoyé par VIN : un véhicule ne se secoue pas en boucle. */
+  const lastWake = new Map<string, number>()
 
   const log = () => ctx!.logger
 
@@ -184,7 +202,40 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
         throw err
       }
     }
-    ctx!.emitState(vin, toStatePatch(readings, ctx!.clock.now()))
+    const patch = toStatePatch(readings, ctx!.clock.now())
+    ctx!.emitState(vin, patch)
+    // un réveil raté ne doit pas faire échouer la lecture : l'état est déjà publié
+    try { await maybeWake(vin, patch, signal) }
+    catch (err) { log().warn({ err, vin }, 'Renault charge wake-up failed') }
+  }
+
+  /**
+   * Le réveil de charge. La R5 NE REPREND PAS la charge d'elle-même après une coupure de courant
+   * (borne pilotée par le surplus solaire, nuage qui passe) : c'est un défaut du véhicule, non
+   * corrigé depuis plus d'un an. Le geste manuel équivalent est de la verrouiller/déverrouiller à
+   * la télécommande ; par l'API, ce qui la réveille est de RÉÉCRIRE ses réglages VE.
+   *
+   * Quatre conditions, toutes nécessaires : le sous-item est coché, on SAIT qu'elle est branchée
+   * et qu'elle ne charge pas (un champ manquant n'autorise rien), l'heure est dans la fenêtre, et
+   * le dernier réveil est assez ancien. Le plugin ne voit PAS le surplus solaire — aucun moteur
+   * d'automatisation ne relie encore deux plugins — mais il n'en a pas besoin : « branchée et pas
+   * en charge » est exactement ce que l'utilisateur constate avant d'aller secouer la voiture.
+   */
+  async function maybeWake(vin: string, patch: { pluggedIn?: boolean; charging?: boolean }, signal?: AbortSignal): Promise<void> {
+    if (!ctx!.parts[CHARGE_WAKE]) return
+    if (patch.pluggedIn !== true || patch.charging !== false) return
+    const now = ctx!.clock.now()
+    if (!inWindow(new Date(now), config!.RENAULT_WAKE_FROM, config!.RENAULT_WAKE_TO)) return
+    const since = now - (lastWake.get(vin) ?? 0)
+    if (since < config!.RENAULT_WAKE_EVERY_MS) return
+    const id = accountId
+    if (!id) return
+    // les réglages à rejouer se LISENT d'abord : on ne réécrit que ce que la voiture nous a donné
+    const body = wakePayload(await client!.carData({ accountId: id, vin, endpoint: 'ev/settings', version: 1, adapter: 'kcm', signal }), now)
+    if (!body) return
+    await client!.writeEvSettings({ accountId: id, vin, body, signal })
+    lastWake.set(vin, now)
+    log().info({ vin }, 'Renault charge wake-up sent (plugged in, not charging)')
   }
 
   /** Un tour : tous les véhicules connus. Une erreur remonte au poller, qui la journalise. */
@@ -211,6 +262,7 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
   return {
     id: 'renault',
     configSchema: renaultConfigSchema,
+    parts: CHARGE_WAKE_PART,
 
     async init(context: PluginContext): Promise<void> {
       ctx = context
@@ -355,7 +407,12 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
       const keys = ['RENAULT_COUNTRY', 'RENAULT_ACCOUNT_ID', 'RENAULT_SESSION_FILE', 'RENAULT_POLL_MS', 'RENAULT_RATE_PER_HOUR']
       if (!auth?.linked) return { status: 'needs_pairing', detail: 'no MY Renault account linked', keys, deviceCount: 0 }
       if (lastError) return { status: 'degraded', detail: lastError, keys, deviceCount: links.length }
-      return { status: 'ok', detail: `${links.length} vehicle(s), read-only`, keys, deviceCount: links.length }
+      // « lecture seule » n'est plus vrai quand le reveil de charge est coche : il ECRIT dans la
+      // voiture. La sante doit le dire, c'est la seule ligne ou l'utilisateur peut s'en apercevoir.
+      const wake = ctx?.parts[CHARGE_WAKE]
+        ? `charge wake-up ${config!.RENAULT_WAKE_FROM}-${config!.RENAULT_WAKE_TO}`
+        : 'read-only'
+      return { status: 'ok', detail: `${links.length} vehicle(s) · ${wake}`, keys, deviceCount: links.length }
     },
   }
 }

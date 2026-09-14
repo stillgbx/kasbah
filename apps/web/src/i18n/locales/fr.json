@@ -134,7 +134,7 @@
   },
   "vehicle": {
     "soc": "Charge", "range": "Autonomie", "chargeLimit": "Limite de charge", "pluggedIn": "Branché", "unplugged": "Débranché",
-    "rename": "Renommer", "charging": "En charge", "locked": "Verrouillé", "unlocked": "Déverrouillé", "atHome": "À la maison", "away": "À {distance}",
+    "rename": "Renommer", "chargeWake": "Réveil de charge", "charging": "En charge", "locked": "Verrouillé", "unlocked": "Déverrouillé", "atHome": "À la maison", "away": "À {distance}",
     "startCharge": "Lancer la charge", "stopCharge": "Arrêter la charge", "odometer": "Kilométrage", "location": "Position",
     "mapPlaceholder": "Carte — position du véhicule", "none": "Aucun véhicule connu",
     "sleep": {"online": "Éveillé", "asleep": "En veille", "offline": "Hors ligne"},

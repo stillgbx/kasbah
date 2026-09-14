@@ -5,7 +5,8 @@ import { ManualClock } from '@kasbah/mock-sim'
 import type { PluginContext } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
 import {
-  BATTERY_WAITING, COCKPIT_V1, COCKPIT_V2_EASTER_EGG, FORBIDDEN, HVAC_STATUS, LOCATION, NOT_FOUND, SOC_LEVELS,
+  BATTERY_CHARGING, BATTERY_UNPLUGGED, BATTERY_WAITING, COCKPIT_V1, COCKPIT_V2_EASTER_EGG, EV_SETTINGS,
+  FORBIDDEN, HVAC_STATUS, LOCATION, NOT_FOUND, SOC_LEVELS,
 } from './__fixtures__/kamereon'
 import { JWT_TTL_S, type SessionStore, type StoredSession } from './auth'
 import { createRenaultPlugin, renaultConfigSchema } from './index'
@@ -62,8 +63,10 @@ function fakeRenault(over: { gigyaError?: number } = {}) {
     revokeOnce: false,
     /** `hvac-status` répond 403 tant que vrai : une lecture que ce véhicule ne sert pas. */
     hvacForbidden: false,
+    /** Ce que `battery-status` renvoie : branchée en attente par défaut. */
+    battery: BATTERY_WAITING as unknown,
   }
-  const calls: { method: string; path: string }[] = []
+  const calls: { method: string; path: string; body?: string }[] = []
   const fetchImpl = vi.fn<FetchLike>(async (url, init) => {
     const method = init?.method ?? 'GET'
     const headers = (init?.headers ?? {}) as Record<string, string>
@@ -89,7 +92,7 @@ function fakeRenault(over: { gigyaError?: number } = {}) {
     }
 
     const path = url.slice(KAMEREON.length).split('?')[0]!
-    calls.push({ method, path })
+    calls.push({ method, path, ...(body === undefined ? {} : { body }) })
     if (headers.apikey !== 'YjkKtHmGfaceeuExUDKGxrLZGGvtVS0J') return response({ errors: [{ errorCode: 'err.tech.500' }] }, 500)
     if (world.revokeOnce) { world.revokeOnce = false; return response({ errors: [{ errorCode: 'err.func.wired.unauthorized' }] }, 401) }
     if (headers['x-gigya-id_token'] !== world.jwt) return response({ errors: [{ errorCode: 'err.func.wired.unauthorized' }] }, 401)
@@ -98,11 +101,12 @@ function fakeRenault(over: { gigyaError?: number } = {}) {
     }
     if (path === `/commerce/v1/accounts/${ACCOUNT}/vehicles`) return response(VEHICLES)
     // ce que la R5 a répondu à la capture, refus compris
-    if (path.endsWith('/battery-status')) return response(BATTERY_WAITING)
+    if (path.endsWith('/battery-status')) return response(world.battery)
     if (path.endsWith('/cockpit')) return response(path.includes('/v2/') ? COCKPIT_V2_EASTER_EGG : COCKPIT_V1)
     if (path.endsWith('/location')) return response(LOCATION)
     if (path.endsWith('/hvac-status')) return world.hvacForbidden ? response(FORBIDDEN, 403) : response(HVAC_STATUS)
     if (path.endsWith('/ev/soc-levels')) return response(SOC_LEVELS)
+    if (path.endsWith('/ev/settings')) return response(method === 'POST' ? { ok: true } : EV_SETTINGS)
     // les deux saveurs de refus : 403 « interdit » et 404 « inconnu »
     if (path.endsWith('/lock-status') || path.endsWith('/pressure')) return response(NOT_FOUND, 404)
     return response({ data: { attributes: {} } })
@@ -120,7 +124,7 @@ function memoryStore(initial: StoredSession | null = null): SessionStore & { val
   return store
 }
 
-async function setup(over: { env?: Record<string, string>; session?: StoredSession | null; gigyaError?: number } = {}) {
+async function setup(over: { env?: Record<string, string>; session?: StoredSession | null; gigyaError?: number; parts?: Record<string, boolean> } = {}) {
   const renault = fakeRenault(over.gigyaError !== undefined ? { gigyaError: over.gigyaError } : {})
   const sessionStore = memoryStore(over.session ?? null)
   const clock = new ManualClock(NOW)
@@ -130,7 +134,8 @@ async function setup(over: { env?: Record<string, string>; session?: StoredSessi
     config: renaultConfigSchema.parse({ ...over.env }),
     logger: pino({ level: 'silent' }), clock, signal: new AbortController().signal,
     emitState: vi.fn(), setAvailable: vi.fn(), emitDevices: vi.fn(), emitScenes: vi.fn(), emitSceneState: vi.fn(), emitEvent: vi.fn(),
-    parts: {},
+    // l'hôte applique les défauts des `parts` ; ici on les donne, le réveil étant coché par défaut
+    parts: over.parts ?? { charge_wake: true },
   }
   await plugin.init(ctx)
   const app = Fastify()
@@ -255,7 +260,10 @@ describe('Renault — sondage', () => {
   /** Cadence de ces tests, indépendante du défaut du plugin. */
   const POLL_MS = 5 * 60_000
   /** Le poller enchaîne des promesses : quelques tours de boucle d'événements suffisent à les vider. */
-  const flush = async () => { for (let i = 0; i < 30; i++) await Promise.resolve() }
+  // On rend la main a la boucle d'evenements, pas seulement aux microtaches : un tour de sondage
+  // enchaine plusieurs requetes (lectures, puis eventuellement le reveil), et un simple vidage de
+  // microtaches laissait la suite en plan.
+  const flush = async () => { for (let i = 0; i < 8; i++) await new Promise((r) => setTimeout(r, 0)) }
   const patches = (ctx: PluginContext) => (ctx.emitState as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[1])
   const dataCalls = (renault: ReturnType<typeof fakeRenault>, endpoint: string) =>
     renault.calls.filter((c) => c.path.endsWith(endpoint)).length
@@ -320,5 +328,82 @@ describe('Renault — sondage', () => {
     clock.advance(6 * POLL_MS)
     await flush()
     expect(dataCalls(renault, '/battery-status')).toBe(before)
+  })
+})
+
+describe('Renault — réveil de charge', () => {
+  const flush = async () => { for (let i = 0; i < 8; i++) await new Promise((r) => setTimeout(r, 0)) }
+  const wakes = (renault: ReturnType<typeof fakeRenault>) =>
+    renault.calls.filter((c) => c.method === 'POST' && c.path.endsWith('/ev/settings'))
+
+  /** Une fenêtre qui CONTIENT l'heure locale de l'horloge de test, et une qui l'exclut à coup sûr. */
+  const hour = new Date(NOW).getHours()
+  const pad = (h: number) => String((h + 24) % 24).padStart(2, '0')
+  const DEDANS = { RENAULT_WAKE_FROM: `${pad(hour)}:00`, RENAULT_WAKE_TO: `${pad(hour + 1)}:00` }
+  const DEHORS = { RENAULT_WAKE_FROM: `${pad(hour + 2)}:00`, RENAULT_WAKE_TO: `${pad(hour + 3)}:00` }
+
+  async function running(over: { env?: Record<string, string>; parts?: Record<string, boolean>; battery?: unknown } = {}) {
+    const s = await setup({
+      session: { loginToken: LOGIN_TOKEN, personId: PERSON },
+      env: { RENAULT_RATE_PER_HOUR: '600', RENAULT_POLL_MS: String(5 * 60_000), ...DEDANS, ...over.env },
+      ...(over.parts ? { parts: over.parts } : {}),
+    })
+    if (over.battery !== undefined) s.renault.world.battery = over.battery
+    await s.plugin.discover()
+    await s.plugin.start()
+    await flush()
+    return s
+  }
+
+  it('réveille une voiture BRANCHÉE qui ne charge pas, en rejouant ses propres réglages', async () => {
+    const { plugin, renault } = await running()
+    const sent = wakes(renault)
+    expect(sent).toHaveLength(1)
+    const body = JSON.parse(sent[0]!.body!) as Record<string, unknown>
+    // ses réglages, intacts — seul l'horodatage est neuf
+    expect(body.chargeTimeStart).toBe(EV_SETTINGS.chargeTimeStart)
+    expect(body.chargeDuration).toBe(EV_SETTINGS.chargeDuration)
+    expect(body.programs).toEqual(EV_SETTINGS.programs)
+    expect(body.lastSettingsUpdateTimestamp).not.toBe(EV_SETTINGS.lastSettingsUpdateTimestamp)
+    await plugin.stop()
+  })
+
+  it('ne réveille PAS une voiture qui charge déjà, ni une voiture débranchée', async () => {
+    const a = await running({ battery: BATTERY_CHARGING })
+    expect(wakes(a.renault)).toHaveLength(0)
+    await a.plugin.stop()
+    const b = await running({ battery: BATTERY_UNPLUGGED })
+    expect(wakes(b.renault)).toHaveLength(0)
+    await b.plugin.stop()
+  })
+
+  it('ne réveille pas hors de la fenêtre horaire', async () => {
+    const { plugin, renault } = await running({ env: DEHORS })
+    expect(wakes(renault)).toHaveLength(0)
+    await plugin.stop()
+  })
+
+  it('ne réveille pas quand le sous-item est décoché', async () => {
+    const { plugin, renault } = await running({ parts: { charge_wake: false } })
+    expect(wakes(renault)).toHaveLength(0)
+    await plugin.stop()
+  })
+
+  it('ne secoue pas la voiture en boucle : un réveil, puis le délai', async () => {
+    const { plugin, renault, clock } = await running({ env: { RENAULT_WAKE_EVERY_MS: String(30 * 60_000) } })
+    expect(wakes(renault)).toHaveLength(1)
+    clock.advance(6 * 60_000)            // un tour de sondage de plus, toujours branchée et à l'arrêt
+    await flush()
+    expect(wakes(renault)).toHaveLength(1)
+    await plugin.stop()
+  })
+
+  it('un réveil qui échoue ne fait pas perdre la lecture', async () => {
+    const { plugin, ctx, renault } = await running()
+    renault.world.battery = BATTERY_WAITING
+    // Kamereon refuse l'écriture : l'état doit tout de même avoir été publié
+    const patches = (ctx.emitState as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[1])
+    expect(patches.at(-1)).toMatchObject({ soc: 58, pluggedIn: true, charging: false })
+    await plugin.stop()
   })
 })
