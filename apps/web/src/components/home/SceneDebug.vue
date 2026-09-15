@@ -75,8 +75,8 @@ function toggleLabels() { labels.value = !labels.value; props.scene()?.setLabels
       <div class="dbg__row"><span>triangles</span><b>{{ n(stats.triangles) }}</b></div>
       <div class="dbg__row"><span>passes</span><b>{{ stats.passes }}</b></div>
       <div class="dbg__row"><span>ombres</span><b>{{ stats.shadowsRebuilt ? '✓' : '✗' }} · {{ stats.pointShadows }} pt</b></div>
-      <button type="button" class="dbg__row dbg__row--tap" @click="toggleLabels">
-        <span>pilules</span><b>{{ labels ? 'on' : 'off' }} · {{ stats.markers }}</b>
+      <button type="button" class="dbg__row dbg__row--tap" title="Couper les étiquettes des appareils, pour mesurer ce qu’elles coûtent" @click="toggleLabels">
+        <span>pilules ⏻</span><b :data-on="labels ? '1' : '0'">{{ labels ? 'on' : 'off' }} · {{ stats.markers }}</b>
       </button>
       <div class="dbg__row"><span>qualité</span><b>{{ stats.quality }} · ×{{ stats.pixelRatio }}</b></div>
       <div class="dbg__row dbg__row--dim"><span>mémoire</span><b>{{ stats.geometries }}g · {{ stats.textures }}t · {{ stats.programs }}p</b></div>
@@ -98,6 +98,12 @@ function toggleLabels() { labels.value = !labels.value; props.scene()?.setLabels
 .dbg__row span { color: var(--muted); }
 .dbg__row--dim { opacity: .7; }
 /* la seule ligne cliquable : couper les pilules pour chiffrer ce qu'elles coûtent hors du rendu */
-.dbg__row--tap { pointer-events: auto; cursor: pointer; background: none; border: 0; padding: 0; color: inherit; font: inherit; width: 100%; }
-.dbg__row--tap:hover span { color: var(--text); }
+.dbg__row--tap {
+  pointer-events: auto; cursor: pointer; border: 0; padding: 2px 4px; margin: 2px -4px;
+  color: inherit; font: inherit; width: calc(100% + 8px); border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.dbg__row--tap:hover { background: color-mix(in srgb, var(--accent) 24%, transparent); }
+.dbg__row--tap span { color: var(--text); }
+.dbg__row--tap b[data-on='0'] { color: var(--accent); }
 </style>
