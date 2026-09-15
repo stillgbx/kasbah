@@ -179,7 +179,7 @@ export class HouseScene {
    * moment après un changement de scène — le temps qu'une course de volet s'achève.
    */
   private shadowsDirtyUntil = 0
-  private perf = { fps: 0, cpuMs: 0, outsideMs: 0, lastStart: 0, frames: 0, since: 0, passes: 1, shadowsRebuilt: false }
+  private perf = { fps: 0, cpuMs: 0, outsideMs: 0, lastStart: 0, wasInteractive: false, frames: 0, since: 0, passes: 1, shadowsRebuilt: false }
   /**
    * Niveaux qui MÉRITENT leur passe : ceux qui portent une lampe allumée (à relire sous sa lumière)
    * ou un décor visible (onde, jauge, guide — que la passe globale n'a pas dessiné). Sur une maison
@@ -281,7 +281,7 @@ export class HouseScene {
     } else this.controls = null
 
     this.loop = createRenderLoop({
-      render: () => this.render(),
+      render: (interactive) => this.render(interactive),
       updateControls: () => (this.controls ? this.controls.update() : false),
       ...(deps.requestFrame ? { requestFrame: deps.requestFrame } : {}),
       ...(deps.cancelFrame ? { cancelFrame: deps.cancelFrame } : {}),
@@ -1123,7 +1123,7 @@ export class HouseScene {
     return { position, target }
   }
 
-  private render(): void {
+  private render(interactive = true): void {
     this.probe?.begin()
     const t0 = this.deps.now?.() ?? performance.now()
     // Les matrices monde, UNE fois par image. Three les recalcule au début de CHAQUE `render()` —
@@ -1140,7 +1140,7 @@ export class HouseScene {
     // sans elle, on dessine droit à l'écran.
     if (this.post) this.post.render()
     else if (this.renderer) { this.renderer.setRenderTarget(null); this.renderPasses(this.renderer) }
-    this.measure(t0)
+    this.measure(t0, interactive)
     this.updatePillLod()
     if (this.labelsVisible) { this.labelRenderer?.render(this.scene, this.camera); this.markLabelsMoving() }
     this.probe?.end()
@@ -1243,15 +1243,18 @@ export class HouseScene {
   }
 
   /** Temps passé dans `render()`, temps passé AILLEURS, et cadence. Lu par le voile de débogage. */
-  private measure(t0: number): void {
+  private measure(t0: number, interactive: boolean): void {
     const t1 = this.deps.now?.() ?? performance.now()
     this.perf.cpuMs = this.perf.cpuMs ? this.perf.cpuMs * 0.85 + (t1 - t0) * 0.15 : t1 - t0
     // Ce qui sépare deux images et qu'on n'a pas passé à dessiner : c'est le navigateur, pas nous.
-    if (this.perf.lastStart) {
+    // Seulement sur les images ENCHAÎNÉES par un geste : entre deux réveils d'animation décorative,
+    // l'écart est celui qu'on a nous-mêmes imposé (20 Hz = 50 ms), et le compter serait se mentir.
+    if (this.perf.lastStart && interactive && this.perf.wasInteractive) {
       const outside = Math.max(0, t0 - this.perf.lastStart - (t1 - t0))
       this.perf.outsideMs = this.perf.outsideMs ? this.perf.outsideMs * 0.85 + outside * 0.15 : outside
     }
     this.perf.lastStart = t0
+    this.perf.wasInteractive = interactive
     this.perf.frames++
     if (!this.perf.since) this.perf.since = t0
     const span = t1 - this.perf.since

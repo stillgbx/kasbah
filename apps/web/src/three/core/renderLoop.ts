@@ -18,7 +18,12 @@ import type { Tween } from './tween'
 export interface Animation { step(now: number, dtS: number): boolean }
 
 export interface RenderLoopOptions {
-  render(): void
+  /**
+   * `interactive` : cette image suit un GESTE (orbite, vol de caméra, demande explicite) et non le
+   * simple réveil d'une animation décorative. Seules celles-là s'enchaînent à la cadence de l'écran,
+   * donc seules celles-là disent quelque chose du temps passé HORS du dessin.
+   */
+  render(interactive: boolean): void
   /** Retourne true si les contrôles ont encore bougé (amortissement). */
   updateControls(): boolean
   requestFrame?: (cb: (now: number) => void) => number
@@ -72,7 +77,7 @@ export function createRenderLoop(opts: RenderLoopOptions): RenderLoop {
       lastAnimation = t
       for (const a of animations) { if (!a.step(t, dtS)) animations.delete(a) }
     }
-    opts.render()
+    opts.render(interactive)
     dirty = false
     if (moving || animations.size > 0) schedule()
   }
