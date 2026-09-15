@@ -1287,9 +1287,22 @@ export class HouseScene {
 
 function defaultCreateRenderer(canvas: HTMLCanvasElement): WebGLRenderer | null {
   try {
-    const r = new WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' })
+    // Le canvas est OPAQUE. Depuis que la scène peint son propre fond (la couleur d'horizon du ciel
+    // du style, `core/sky.ts`), plus rien n'a à transparaître — et un canvas transparent oblige le
+    // compositeur à le MÉLANGER à la page à chaque image, alors qu'un canvas opaque se pose
+    // simplement par-dessus et lui permet d'ignorer ce qu'il y a dessous.
+    //
+    // Piège : depuis three r140, `new WebGLRenderer({ alpha: false })` ne fait plus ça. Le renderer
+    // demande TOUJOURS un contexte avec alpha, et ce paramètre ne règle plus que sa couleur
+    // d'effacement (`getContextAttributes().alpha` restait à `true`, vérifié). Pour obtenir un vrai
+    // tampon opaque, il faut créer le contexte soi-même et le lui passer.
+    const context = canvas.getContext('webgl2', {
+      alpha: false, antialias: true, depth: true, stencil: false, powerPreference: 'high-performance',
+    })
+    const r = context
+      ? new WebGLRenderer({ canvas, context })
+      : new WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' })
     r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
-    r.setClearColor(0x000000, 0)
     return r
   } catch {
     return null
