@@ -8,6 +8,7 @@ import { createMaterials } from './builders/materials'
 import { fitBox, fitDistance } from './core/cameraFit'
 import { boundsToWorldBox, houseToWorld } from './core/coords'
 import { createRenderLoop } from './core/renderLoop'
+import { createCostGuard, detectQuality } from './core/post'
 import { parseCssColor } from './core/theme'
 import { defaultLook, defaultSceneTheme, RENDER_STYLES, rolesOf, styleById } from './styles'
 import { applyLook } from './builders/materials'
@@ -856,5 +857,39 @@ describe('styles de rendu', () => {
     expect(wallMesh.material).toBe(before.material)       // le maillage pointe toujours le même matériau
     expect(mats.wall.map).not.toBe(before.map)            // mais la matière, elle, a changé
     expect(mats.wall.metalness).toBeGreaterThan(0.5)      // le cyberpunk a des murs de métal
+  })
+})
+
+describe('qualité de rendu', () => {
+  /**
+   * Mesuré sur un portable hybride : Chrome dessinait sur la Radeon intégrée, 93 ms de GPU par
+   * image en « high », alors que ses seize cœurs disaient « high ». Le nom du GPU tranche.
+   */
+  it('un GPU intégré part en medium, un rendu logiciel en low, une carte dédiée reste high', () => {
+    expect(detectQuality('ANGLE (AMD, AMD Radeon(TM) Graphics (0x00001638) Direct3D11 vs_5_0 ps_5_0, D3D11)')).toBe('medium')
+    expect(detectQuality('ANGLE (Intel, Intel(R) Iris(R) Xe Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)')).toBe('medium')
+    expect(detectQuality('ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)')).toBe('low')
+    expect(detectQuality('ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Laptop GPU (0x00002560) Direct3D11 vs_5_0 ps_5_0, D3D11)')).toBe('high')
+    expect(detectQuality('ANGLE (AMD, AMD Radeon RX 6800 XT Direct3D11 vs_5_0 ps_5_0, D3D11)')).toBe('high')
+    expect(detectQuality('')).toBe('high')
+  })
+
+  it('le garde-fou ignore la chauffe et les pointes isolées, puis ne descend qu une fois, sur la médiane', () => {
+    let over = 0
+    const guard = createCostGuard(() => over++, 40, 8, 2)
+    // deux images de chauffe hors de prix : ignorées
+    guard.sample(500); guard.sample(500)
+    // six images observées, médiane 50 ms > 40 : une seule descente, puis plus rien
+    for (const ms of [30, 50, 50, 50, 50, 60]) guard.sample(ms)
+    expect(over).toBe(1)
+    for (let i = 0; i < 20; i++) guard.sample(500)
+    expect(over).toBe(1)
+
+    // deux pointes (une texture envoyée, une carte d'environnement) sur des images à 30 ms :
+    // la moyenne dirait 87 ms, la médiane dit 30 — la machine tient.
+    let spiky = 0
+    const calm = createCostGuard(() => spiky++, 40, 8, 2)
+    for (const ms of [30, 30, 30, 30, 30, 30, 200, 200]) calm.sample(ms)
+    expect(spiky).toBe(0)
   })
 })

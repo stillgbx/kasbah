@@ -12,7 +12,7 @@ import {
 import { applyLook, backdropColor, createMaterials, disposeMaterials, type MaterialSet } from './builders/materials'
 import { createSkyEnvironment } from './core/sky'
 import { DECOR_LAYER, LAMP_LAYER, SITE_DECOR_LAYER } from './core/layers'
-import { createPostPipeline, detectQuality, PIXEL_RATIO, toneMappingOf, type EffectiveQuality, type PostPipeline, type RenderQuality } from './core/post'
+import { createPostPipeline, detectQuality, gpuName, PIXEL_RATIO, toneMappingOf, type EffectiveQuality, type PostPipeline, type RenderQuality } from './core/post'
 import { sunDirection, type SceneAmbience } from './core/ambience'
 import { defaultAmbience, defaultSceneTheme, styleById, type RenderStyle, type StyleLook } from './styles'
 import { buildHouse, type HouseNodes, type LevelNodes } from './builders/buildHouse'
@@ -1051,7 +1051,7 @@ export class HouseScene {
   private applyQuality(): void {
     this.post?.dispose()
     this.post = null
-    const wanted = this.options.quality === 'auto' ? detectQuality() : this.options.quality
+    const wanted = this.options.quality === 'auto' ? detectQuality(this.renderer ? gpuName(this.renderer) : '') : this.options.quality
     this.quality = wanted
     if (!this.renderer) return
     const pixelRatio = Math.min(window.devicePixelRatio || 1, PIXEL_RATIO[wanted])
@@ -1138,7 +1138,8 @@ export class HouseScene {
     if (this.renderer) { this.renderer.info.autoReset = false; this.renderer.info.reset() }
     // Avec une chaîne d'effets, c'est elle qui appelle notre rendu (par `draw`) puis ses passes ;
     // sans elle, on dessine droit à l'écran.
-    if (this.post) this.post.render()
+    // Seules les images d'un geste SANS relevé d'ombres disent quelque chose de la machine au garde-fou.
+    if (this.post) this.post.render(interactive && t0 > this.shadowsDirtyUntil)
     else if (this.renderer) { this.renderer.setRenderTarget(null); this.renderPasses(this.renderer) }
     this.measure(t0, interactive)
     this.updatePillLod()
