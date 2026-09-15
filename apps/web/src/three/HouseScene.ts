@@ -11,7 +11,7 @@ import {
 } from '@kasbah/shared'
 import { applyLook, backdropColor, createMaterials, disposeMaterials, type MaterialSet } from './builders/materials'
 import { createSkyEnvironment } from './core/sky'
-import { DECOR_LAYER, LAMP_LAYER } from './core/layers'
+import { DECOR_LAYER, LAMP_LAYER, SITE_DECOR_LAYER } from './core/layers'
 import { createPostPipeline, detectQuality, PIXEL_RATIO, toneMappingOf, type EffectiveQuality, type PostPipeline, type RenderQuality } from './core/post'
 import { sunDirection, type SceneAmbience } from './core/ambience'
 import { defaultAmbience, defaultSceneTheme, styleById, type RenderStyle, type StyleLook } from './styles'
@@ -165,8 +165,8 @@ export class HouseScene {
     this.materials = createMaterials(this.theme, this.look)
     this.camera = new PerspectiveCamera(38, 1, 0.1, 500)
     this.camera.position.set(20, 18, 20)
-    this.camera.layers.enable(DECOR_LAYER)      // halos, ondes, jauges (`core/layers.ts`)
-    this.camera.layers.enable(LAMP_LAYER)       // et les lampes des appareils
+    // halos, ondes, jauges — d'un niveau et du jardin — et les lampes d'intérieur (`core/layers.ts`)
+    for (const l of [DECOR_LAYER, SITE_DECOR_LAYER, LAMP_LAYER]) this.camera.layers.enable(l)
 
     const create = deps.createRenderer ?? defaultCreateRenderer
     this.renderer = deps.headless ? null : create(canvas)
@@ -406,7 +406,7 @@ export class HouseScene {
       const parent = levelNodes ? levelNodes.markers : this.nodes.outdoorMarkers
       const opening = device.openingId ? openings.get(device.openingId) : undefined
       const marker = createMarker(device, {
-        materials: this.materials, theme: this.theme, glow: this.look.glow, descriptor, ...(opening ? { opening } : {}),
+        materials: this.materials, theme: this.theme, glow: this.look.glow, outdoor: !levelNodes, descriptor, ...(opening ? { opening } : {}),
         addAnimation: (a) => this.loop.addAnimation(a),
         invalidate: () => this.loop.invalidate(),
         onTap: (key) => this.emit('deviceTap', key),
@@ -1000,14 +1000,16 @@ export class HouseScene {
     if (!nodes) { r.render(this.scene, this.camera); return }
     const levels = [...nodes.levels.values()].filter((n) => n.group.visible)
     const lit = levels.filter((n) => n.markers.visible)      // un niveau fantôme ne porte pas de lampes
-    const siteShown = nodes.site.visible
     const roofShown = nodes.roof?.visible ?? false
+    // Ce que le JARDIN dessine : son sol et ses zones. Ses appareils, eux, restent visibles dans
+    // toutes les passes — leurs lampes portent une ombre et doivent éclairer la façade partout.
+    const siteSurfaces = [nodes.ground, nodes.terrain, ...nodes.zones.values()]
 
-    // 1) LA MATIÈRE, tout entière, sous le seul éclairage global — et c'est cette passe qui refait la
-    //    carte d'ombre. Les appareils y sont VISIBLES : un volet fermé doit barrer le soleil, et une
-    //    voiture poser son ombre sur l'allée. Ce qui en sort, ce sont leurs LAMPES (elles n'éclaireraient
-    //    pas que leur groupe) et leurs DÉCORS (ils seraient mélangés deux fois) — deux couches, pas
-    //    une visibilité : voir `core/layers.ts`.
+    // 1) LA MATIÈRE, tout entière, sous l'éclairage global ET les lampes du jardin (qui portent une
+    //    vraie ombre, donc n'entrent pas par les murs). C'est cette passe qui refait la carte d'ombre,
+    //    et les appareils y sont VISIBLES : un volet fermé doit barrer le soleil, une voiture poser son
+    //    ombre sur l'allée. Ce qui en sort, ce sont les lampes d'INTÉRIEUR et les décors des niveaux —
+    //    par leur couche, jamais par leur visibilité (`core/layers.ts`).
     this.camera.layers.disable(DECOR_LAYER)
     this.camera.layers.disable(LAMP_LAYER)
     r.autoClear = true
@@ -1017,21 +1019,23 @@ export class HouseScene {
     r.autoClear = false
     this.camera.layers.enable(DECOR_LAYER)
     this.camera.layers.enable(LAMP_LAYER)
+    this.camera.layers.disable(SITE_DECOR_LAYER)   // le jardin a déjà posé ses halos
 
-    // 2) un passage par GROUPE QUI PORTE DES LAMPES : chaque niveau visible, puis le jardin. Le groupe
-    //    est seul à l'écran, ses surfaces se redessinent éclairées par SES lampes, par-dessus la
-    //    première passe (même tampon de profondeur, pas d'effacement), et rien d'autre ne les voit.
-    const only = (target: LevelNodes | 'site') => {
-      for (const n of levels) n.group.visible = target === n
-      nodes.site.visible = target === 'site'
-      if (nodes.roof) nodes.roof.visible = false
+    // 2) un passage par NIVEAU qui porte des lampes : il est seul à l'écran, ses surfaces se
+    //    redessinent éclairées par SES lampes (plus le global et le jardin, toujours là), par-dessus
+    //    la première passe — même tampon de profondeur, pas d'effacement. Le sol du jardin, lui, est
+    //    retiré : sinon une lampe d'intérieur viendrait le tacher à travers la façade.
+    for (const m of siteSurfaces) m.visible = false
+    if (nodes.roof) nodes.roof.visible = false
+    for (const n of lit) {
+      for (const o of levels) o.group.visible = o === n
+      r.render(this.scene, this.camera)
     }
-    for (const n of lit) { only(n); r.render(this.scene, this.camera) }
-    if (siteShown) { only('site'); r.render(this.scene, this.camera) }
 
     for (const n of levels) n.group.visible = true
-    nodes.site.visible = siteShown
+    for (const m of siteSurfaces) m.visible = true
     if (nodes.roof) nodes.roof.visible = roofShown
+    this.camera.layers.enable(SITE_DECOR_LAYER)
     r.autoClear = true
   }
 

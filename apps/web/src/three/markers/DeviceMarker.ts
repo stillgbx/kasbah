@@ -3,7 +3,7 @@ import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js'
 import type { DeviceDescriptor, DeviceState, OpeningRect, PlacedHouseDevice } from '@kasbah/shared'
 import { panelOf } from '@kasbah/shared'
 import type { SceneTheme } from '../core/theme'
-import { DECOR_LAYER } from '../core/layers'
+import { DECOR_LAYER, SITE_DECOR_LAYER } from '../core/layers'
 import type { GlowLook } from '../styles/types'
 import type { MaterialSet } from '../builders/materials'
 import type { Animation } from '../core/renderLoop'
@@ -23,6 +23,11 @@ export interface MarkerContext {
   theme: SceneTheme
   /** Ce que le style dit d'une lampe allumée : taille du halo, opacité, portée. */
   glow: GlowLook
+  /**
+   * L'appareil est au JARDIN (hors niveau). Il n'est pas dessiné au même moment qu'un appareil de
+   * niveau, et sa lampe n'éclaire pas la même chose — voir `core/layers.ts`.
+   */
+  outdoor?: boolean
   descriptor: DeviceDescriptor | undefined
   /** Rectangle de l'ouverture liée (volets). */
   opening?: OpeningRect
@@ -159,7 +164,10 @@ export abstract class DeviceMarker {
    * du relevé d'occlusion et de la passe globale (voir `core/layers.ts`) — ce qui vaut pour tout ce
    * qui est translucide ou additif, et pour rien d'autre.
    */
-  protected asDecor<T extends Object3D>(o: T): T { o.layers.set(DECOR_LAYER); return o }
+  protected asDecor<T extends Object3D>(o: T): T {
+    o.layers.set(this.ctx.outdoor ? SITE_DECOR_LAYER : DECOR_LAYER)
+    return o
+  }
 
   /** Position monde de l'ancre. */
   worldAnchor(out = new Vector3()): Vector3 { return this.object.getWorldPosition(out) }

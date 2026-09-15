@@ -459,6 +459,9 @@ function glowMap(): DataTexture {
   glowTexture.needsUpdate = true
   return glowTexture
 }
+/** Portée (m) d'une lampe. Sert aussi de `far` au cône d'ombre d'une lampe de jardin. */
+const LIGHT_RANGE = 7
+
 export class LightMarker extends DeviceMarker {
   private readonly mat: MeshStandardMaterial
   private readonly sphere: Mesh
@@ -469,8 +472,19 @@ export class LightMarker extends DeviceMarker {
     super(device, ctx)
     this.mat = new MeshStandardMaterial({ color: 0xfff2d0, emissive: 0xffc46b, emissiveIntensity: 0, roughness: 0.4 })
     this.sphere = new Mesh(new SphereGeometry(0.13, 20, 14), this.mat)
-    this.light = new PointLight(0xffd9a0, 0, 7, 1.6)
-    this.light.layers.set(LAMP_LAYER)   // n'éclaire que son groupe : voir `core/layers.ts`
+    this.light = new PointLight(0xffd9a0, 0, LIGHT_RANGE, 1.6)
+    if (ctx.outdoor) {
+      // Une lampe de JARDIN doit éclairer la façade sans traverser le mur. Aucune couche ne sait
+      // faire ça : la seule chose qui arrête vraiment la lumière est une OMBRE. Six faces de 512 px,
+      // et seulement tant que la lampe est allumée (`onState`) — c'est ce qui rend la dépense tenable.
+      this.light.shadow.mapSize.set(512, 512)
+      this.light.shadow.bias = -0.004
+      this.light.shadow.normalBias = 0.04
+      this.light.shadow.camera.near = 0.15
+      this.light.shadow.camera.far = LIGHT_RANGE + 1
+    } else {
+      this.light.layers.set(LAMP_LAYER)   // n'éclaire que son niveau : voir `core/layers.ts`
+    }
     this.glowMat = new SpriteMaterial({ map: glowMap(), color: 0xffd9a0, transparent: true, opacity: 0, blending: AdditiveBlending, depthWrite: false })
     this.glow = new Sprite(this.glowMat)
     this.asDecor(this.glow)
@@ -499,6 +513,8 @@ export class LightMarker extends DeviceMarker {
     this.light.color.copy(c)
     // la lumière n'atteint que les surfaces de SON niveau : voir le rendu en passes de `HouseScene`
     this.light.intensity = k * g.lightIntensity
+    // Une lampe éteinte n'a pas à coûter six rendus de profondeur.
+    this.light.castShadow = !!this.ctx.outdoor && k > 0
     this.glowMat.color.copy(c)
     this.glowMat.opacity = k * g.opacity
     this.glow.scale.setScalar(g.scale)

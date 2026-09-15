@@ -12,7 +12,7 @@ import { parseCssColor } from './core/theme'
 import { defaultLook, defaultSceneTheme, RENDER_STYLES, rolesOf, styleById } from './styles'
 import { applyLook } from './builders/materials'
 import { dayFactor, resolveAmbience, sunDirection, type AmbienceMode } from './core/ambience'
-import { DECOR_LAYER, LAMP_LAYER } from './core/layers'
+import { DECOR_LAYER, LAMP_LAYER, SITE_DECOR_LAYER } from './core/layers'
 import { sunPosition } from './core/sun'
 import { createTween } from './core/tween'
 import { ScreenArt, coverCrop, screenArtGeometry } from './markers/screenArt'
@@ -312,6 +312,27 @@ describe('marqueurs 3D', () => {
     })
     expect(parts.light).toEqual([1 << LAMP_LAYER])
     expect(parts.sprite).toEqual([1 << DECOR_LAYER])
+  })
+
+  /**
+   * Une lampe de JARDIN, elle, doit éclairer la façade sans traverser le mur. Aucune couche ne sait
+   * faire ça : il lui faut une vraie ombre portée — et seulement tant qu'elle est allumée.
+   */
+  it('une lampe de jardin éclaire partout, mais porte son ombre', () => {
+    const lamp = createMarker(device(), {
+      materials: createMaterials(defaultSceneTheme(), defaultLook()), theme: defaultSceneTheme(), glow: defaultLook().glow,
+      outdoor: true,
+      descriptor: { id: 'p:l', pluginId: 'p', externalId: 'l', kind: 'light', name: 'Borne', capabilities: ['on_off'], meta: {} } as DeviceDescriptor,
+      addAnimation: () => () => {}, invalidate: () => {}, onTap: () => {}, label: 'Borne',
+    }, () => true)
+    const light = (() => { let f: { layers: { mask: number }; castShadow: boolean } | null = null; lamp.object.traverse((o) => { if ((o as { isLight?: boolean }).isLight) f = o as never }); return f! })()
+    expect(light.layers.mask).toBe(1)                // couche commune : elle éclaire toutes les passes
+    expect(light.castShadow).toBe(false)             // éteinte : pas six rendus de profondeur pour rien
+    lamp.update({ kind: 'light', updatedAt: 0, available: true, on: true, brightness: 100 } as DeviceState)
+    expect(light.castShadow).toBe(true)
+    const sprites: number[] = []
+    lamp.object.traverse((o) => { if ((o as { isSprite?: boolean }).isSprite) sprites.push(o.layers.mask) })
+    expect(sprites).toEqual([1 << SITE_DECOR_LAYER])  // son halo se dessine avec le jardin
   })
 
   // La carrosserie 3D arrive APRÈS le marqueur (le .glb se télécharge). Ce qui se vérifie ici, c'est

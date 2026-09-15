@@ -5,7 +5,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
 import { Pass } from 'three/addons/postprocessing/Pass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
-import { DECOR_LAYER } from './layers'
+import { DECOR_LAYER, SITE_DECOR_LAYER } from './layers'
 import type { PostLook } from '../styles/types'
 
 // Le POST-TRAITEMENT : ce qui sépare un rendu direct d'une image. Trois choses, dans cet ordre.
@@ -109,6 +109,7 @@ class ArchitectureGTAOPass extends GTAOPass {
   override render(renderer: WebGLRenderer, write: WebGLRenderTarget, read: WebGLRenderTarget, deltaTime = 0, maskActive = false): void {
     const mask = this.camera.layers.mask
     this.camera.layers.disable(DECOR_LAYER)
+    this.camera.layers.disable(SITE_DECOR_LAYER)
     super.render(renderer, write, read, deltaTime, maskActive)
     this.camera.layers.mask = mask
   }
