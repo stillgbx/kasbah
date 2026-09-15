@@ -71,13 +71,20 @@ describe('couleur de carrosserie (`vehicle_config`)', () => {
     expect(bodyColor({})).toBeUndefined()
   })
 
-  it('classe l aspect d après les deux nombres qui suivent le RGB', () => {
-    // Relevé réel : l'écran de bord était sur « Mate », et le couple vaut 0,9 / 0,3.
-    expect(bodyFinish(parked)).toBe('matte')
-    expect(bodyFinish({ vehicle_config: { paint_color_override: '10,20,30,0.2,0.8' } })).toBe('metallic')
-    expect(bodyFinish({ vehicle_config: { paint_color_override: '10,20,30,0.3,0.1' } })).toBe('solid')
-    // La couleur seule, sans les deux nombres : rien à dire de l'aspect.
-    expect(bodyFinish({ vehicle_config: { paint_color_override: '10,20,30' } })).toBeUndefined()
+  it('classe les trois aspects, chacun relevé sur la vraie voiture', () => {
+    // Trois basculements de l'écran de bord, trois relevés du 2026-09-15. Aucun aspect inventé.
+    expect(bodyFinish(parked)).toBe('matte')                                                        // 0.9 / 0.30
+    expect(bodyFinish({ vehicle_config: { paint_color_override: '40,90,200,0.9,0.01' } })).toBe('metallic')
+    expect(bodyFinish({ vehicle_config: { paint_color_override: '40,90,200,0.7,0.04' } })).toBe('solid')
+
+    // Les deux axes sont INDÉPENDANTS : la rugosité décide du mat, la métallicité départage les
+    // deux brillants. Une première version ne lisait que le quatrième nombre et répondait « mate »
+    // quoi qu'il arrive ; une seconde ne lisait que le cinquième et ne savait pas dire « unie ».
+    expect(bodyFinish({ vehicle_config: { paint_color_override: '0,0,0,0.7,0.30' } })).toBe('matte')
+    expect(bodyFinish({ vehicle_config: { paint_color_override: '0,0,0,0.9,0.04' } })).toBe('metallic')
+
+    // Pas de cinquième nombre, ou pas de section : rien à dire de l'aspect.
+    expect(bodyFinish({ vehicle_config: { paint_color_override: '10,20,30,0.9' } })).toBeUndefined()
     expect(bodyFinish({})).toBeUndefined()
   })
 })

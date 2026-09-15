@@ -71,23 +71,38 @@ const PAINT: Record<string, string> = {
 const hex2 = (n: number) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0')
 
 /**
- * L'ASPECT de la peinture, tiré des deux nombres qui suivent le RGB de `paint_color_override` —
- * « 40,90,200,0.9,0.3 ». Le « Coloriseur » de l'écran de bord propose « Unie / Métallique / Mate »,
- * et la voiture relevée le 2026-09-15 était sur **Mate** avec ce couple : 0,9 se lit donc comme la
- * RUGOSITÉ (un mat diffuse) et 0,3 comme la métallicité. L'ordre inverse décrirait un chrome
- * brillant, ce que l'écran contredit.
+ * L'ASPECT de la peinture, tiré des deux nombres qui suivent le RGB de `paint_color_override`.
  *
- * On classe plutôt que de reprendre les nombres bruts : trois aspects nommés se règlent à la main
- * depuis la fiche, et se comparent d'un véhicule à l'autre. Un seuil large, donc, pas une lecture
- * au dixième — c'est une seule voiture qui l'a dicté.
+ * MESURÉ, aspect par aspect : le même véhicule, basculé sur son écran de bord entre trois relevés
+ * du 2026-09-15.
+ *
+ *     Mate        40,90,200,0.9,0.30
+ *     Métallique  40,90,200,0.9,0.01
+ *     Unie        40,90,200,0.7,0.04
+ *
+ * Deux axes, et il a fallu les trois relevés pour les voir. Le CINQUIÈME se comporte comme une
+ * RUGOSITÉ : il s'effondre quand la peinture brille, il monte pour le mat. Le QUATRIÈME comme une
+ * MÉTALLICITÉ : identique (0,9) pour les deux peintures à paillettes, plus bas (0,7) pour la teinte
+ * unie, qui n'en a pas. Avec les deux premiers relevés seulement, le quatrième semblait constant et
+ * ne rien dire — c'est le troisième qui l'a démenti.
+ *
+ * Les seuils sont posés ENTRE des valeurs mesurées, pas lus au centième : aucun des trois aspects
+ * n'est inventé, et un véhicule qui sortirait de ces plages retombe sur le plus proche.
  */
+const ROUGHNESS = 4
+const METALNESS = 3
+/** Entre 0,04 (unie, mesuré) et 0,30 (mate, mesuré) : au-dessus, la peinture diffuse. */
+const MATTE_ABOVE = 0.15
+/** Entre 0,7 (unie, mesuré) et 0,9 (à paillettes, mesuré). */
+const METALLIC_FROM = 0.8
+
 export function bodyFinish(data: Pick<VehicleData, 'vehicle_config'>): VehicleFinish | undefined {
   const parts = data.vehicle_config?.paint_color_override?.split(',').map(Number)
-  if (!parts || parts.length < 5) return undefined
-  const [roughness, metalness] = [parts[3]!, parts[4]!]
-  if (!Number.isFinite(roughness) || !Number.isFinite(metalness)) return undefined
-  if (roughness >= 0.6) return 'matte'
-  return metalness >= 0.5 ? 'metallic' : 'solid'
+  const roughness = parts?.[ROUGHNESS]
+  const metalness = parts?.[METALNESS]
+  if (roughness === undefined || !Number.isFinite(roughness)) return undefined
+  if (roughness > MATTE_ABOVE) return 'matte'
+  return Number.isFinite(metalness!) && metalness! >= METALLIC_FROM ? 'metallic' : 'solid'
 }
 
 /**
