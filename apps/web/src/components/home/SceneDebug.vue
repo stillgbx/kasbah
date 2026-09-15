@@ -29,20 +29,28 @@ const stats = ref<SceneDebugStats | null>(null)
 const graphs = useTemplateRef<HTMLDivElement>('graphs')
 let timer: ReturnType<typeof setInterval> | null = null
 let probe: InstanceType<typeof Stats> | null = null
+let attached = false
 
 onMounted(() => {
-  timer = setInterval(() => { stats.value = props.scene()?.debugStats() ?? null }, 500)
   // `stats.module.js` est une fabrique qui rend son objet ; `new` la satisfait comme son appel nu,
   // et c'est la forme que ses types déclarent.
   probe = new Stats()
   probe.dom.style.cssText = 'position:static;display:flex;gap:2px;cursor:default'
   for (const child of probe.dom.children) (child as HTMLElement).style.display = 'block'
   graphs.value?.append(probe.dom)
-  props.scene()?.setProbe(probe)
+  // La sonde se pose au PREMIER relevé où la scène existe, pas au montage : Vue monte les enfants
+  // avant d'exécuter le `onMounted` du parent, et c'est là que `useHouseScene` construit la scène.
+  // Posée au montage, elle l'était sur `null` — les courbes restaient figées pendant que les
+  // chiffres, eux, se mettaient à jour (ils relisent la scène à chaque fois).
+  timer = setInterval(() => {
+    const scene = props.scene()
+    if (scene && !attached) { scene.setProbe(probe); attached = true }
+    stats.value = scene?.debugStats() ?? null
+  }, 500)
 })
 onBeforeUnmount(() => {
   if (timer) clearInterval(timer)
-  props.scene()?.setProbe(null)
+  if (attached) props.scene()?.setProbe(null)
   probe?.dom.remove()
 })
 
