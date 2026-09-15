@@ -9,15 +9,19 @@ import {
   roofBounds, roomBounds, zoneBounds,
   type DeviceDescriptor, type DeviceState, type House, type HouseDevice, type HouseGeometry, type HouseIndex, type Level, type PlacedHouseDevice, type Vec3,
 } from '@kasbah/shared'
-import { applyTheme, createMaterials, disposeMaterials, type MaterialSet } from './builders/materials'
-import { createVehicleEnvironment } from './core/environment'
+import { applyLook, backdropColor, createMaterials, disposeMaterials, type MaterialSet } from './builders/materials'
+import { createSkyEnvironment } from './core/sky'
+import { DECOR_LAYER } from './core/layers'
+import { createPostPipeline, detectQuality, PIXEL_RATIO, toneMappingOf, type EffectiveQuality, type PostPipeline, type RenderQuality } from './core/post'
+import { sunDirection, type SceneAmbience } from './core/ambience'
+import { defaultAmbience, defaultSceneTheme, styleById, type RenderStyle, type StyleLook } from './styles'
 import { buildHouse, type HouseNodes, type LevelNodes } from './builders/buildHouse'
 import { clamp, fitBox, sphericalOf, type CameraPose } from './core/cameraFit'
 import { boundsToWorldBox } from './core/coords'
 import { disposeObject3D } from './core/dispose'
 import { createDragDetector, createTapDetector, type DragDetector, type TapEvent } from './core/input'
 import { createRenderLoop, type RenderLoop } from './core/renderLoop'
-import { defaultSceneTheme, type SceneTheme } from './core/theme'
+import { resolveSceneTheme, type SceneTheme, type UiTheme } from './core/theme'
 import { createTween, easeInOutCubic } from './core/tween'
 import { emitsSound, soundRouting } from '../lib/audioRouting'
 import { createMarker } from './markers/createMarker'
@@ -31,6 +35,19 @@ export type LevelFocusMode = 'hide' | 'ghost'
 export interface HouseSceneOptions {
   levelFocusMode: LevelFocusMode
   shadows: boolean
+  /** Budget du post-traitement. `auto` mesure la machine puis se corrige (`core/post.ts`). */
+  quality: RenderQuality
+}
+
+/**
+ * Ce qui décide de l'APPARENCE de la scène, en trois axes indépendants : le style de rendu (le
+ * goût), l'ambiance (l'heure qu'il fait au-dessus de la maison) et le thème de l'application (les
+ * repères posés dessus). Aucun des trois n'impose les deux autres.
+ */
+export interface SceneAppearance {
+  ui: UiTheme
+  style: RenderStyle
+  ambience: SceneAmbience
 }
 
 export interface HouseSceneDeps {
@@ -40,6 +57,8 @@ export interface HouseSceneDeps {
   cancelFrame?: (h: number) => void
   now?: () => number
   theme?: SceneTheme
+  style?: RenderStyle
+  ambience?: SceneAmbience
   labelLayer?: HTMLElement | null
   /** Désactive OrbitControls/tap (tests Node). */
   headless?: boolean
@@ -94,11 +113,18 @@ export class HouseScene {
 
   private materials: MaterialSet
   private theme: SceneTheme
+  private style: RenderStyle
+  private ambience: SceneAmbience
+  private look: StyleLook
+  private post: PostPipeline | null = null
+  private quality: EffectiveQuality = 'high'
+  /** Direction d'où vient la lumière du jour, monde three. Relue à chaque changement d'ambiance. */
+  private sunDir = new Vector3(0.45, 0.82, 0.35)
   private nodes: HouseNodes | null = null
   private house: House | null = null
   private index: HouseIndex | null = null
   private geometry: HouseGeometry | null = null
-  private options: HouseSceneOptions = { levelFocusMode: 'hide', shadows: true }
+  private options: HouseSceneOptions = { levelFocusMode: 'hide', shadows: true, quality: 'auto' }
   private focusedLevelId: string | null = null
   private pillLod: PillLod | null = null
   private highlightedRoom: string | null = null
@@ -125,16 +151,21 @@ export class HouseScene {
   /** Largeur (px) du bord droit du canvas couverte par le panneau flottant : le cadrage vise la partie libre. */
   private viewInsetRight = 0
   /** Ce que reflète une carrosserie. Propre aux véhicules : la maison, elle, n'a pas d'environnement. */
-  private vehicleEnv: Texture | null = null
+  private skyEnv: Texture | null = null
   private descriptors = new Map<string, DeviceDescriptor>()
   private states: Record<string, DeviceState> = {}
 
   constructor(readonly canvas: HTMLCanvasElement, deps: HouseSceneDeps = {}) {
     this.deps = deps
+    this.style = deps.style ?? styleById(null)
+    this.ambience = deps.ambience ?? defaultAmbience()
+    this.look = this.style.look(this.ambience)
     this.theme = deps.theme ?? defaultSceneTheme()
-    this.materials = createMaterials(this.theme)
+    this.sunDir = sunDirection(this.ambience)
+    this.materials = createMaterials(this.theme, this.look)
     this.camera = new PerspectiveCamera(38, 1, 0.1, 500)
     this.camera.position.set(20, 18, 20)
+    this.camera.layers.enable(DECOR_LAYER)      // les halos de lampe (`core/layers.ts`)
 
     const create = deps.createRenderer ?? defaultCreateRenderer
     this.renderer = deps.headless ? null : create(canvas)
@@ -143,7 +174,8 @@ export class HouseScene {
     // déprécié et retombe sur du PCF DUR (bords crénelés) avec un avertissement en console.
     // VSM floute nativement, piloté par `shadow.radius` / `shadow.blurSamples`.
     if (this.renderer) { this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = VSMShadowMap }
-    this.applyVehicleEnvironment()
+    this.applySky()
+    this.applyQuality()
     this.labelRenderer = deps.labelLayer ? (deps.createLabelRenderer ?? ((el) => new CSS2DRenderer({ element: el })))(deps.labelLayer) : null
 
     this.hemi = new HemisphereLight(0xffffff, 0x8899aa, 1)
@@ -151,7 +183,6 @@ export class HouseScene {
     this.sun = new DirectionalLight(0xffffff, 2)
     this.scene.add(this.hemi, this.ambient, this.sun)
     this.applyLighting()
-    this.sun.position.set(14, 24, 10)
     this.sun.castShadow = true
     this.sun.shadow.mapSize.set(2048, 2048)
     this.sun.shadow.bias = -0.0005
@@ -224,7 +255,10 @@ export class HouseScene {
     const b = boundsToWorldBox(buildingBounds(this.house, resolveDefaults(this.house.defaults), this.geometry.roof))
     const center = b.getCenter(new Vector3())
     const r = b.getSize(new Vector3()).length() / 2
-    this.sun.position.set(center.x + r * 0.6, center.y + r * 1.2, center.z + r * 0.4)
+    // La lumière vient d'où vient le soleil de l'heure courante (`core/ambience.ts`), à une distance
+    // qui dégage le bâti — une `DirectionalLight` n'a pas de position au sens physique, seule compte
+    // la DIRECTION, mais le frustum d'ombre, lui, part bien de ce point.
+    this.sun.position.copy(center).addScaledVector(this.sunDir, Math.max(r * 1.6, 12))
     this.sun.target.position.copy(center)
     this.scene.add(this.sun.target)
     // Frustum ajusté aux huit coins du bâti exprimés dans le repère de la lumière.
@@ -371,7 +405,7 @@ export class HouseScene {
       const parent = levelNodes ? levelNodes.markers : this.nodes.outdoorMarkers
       const opening = device.openingId ? openings.get(device.openingId) : undefined
       const marker = createMarker(device, {
-        materials: this.materials, theme: this.theme, descriptor, ...(opening ? { opening } : {}),
+        materials: this.materials, theme: this.theme, glow: this.look.glow, descriptor, ...(opening ? { opening } : {}),
         addAnimation: (a) => this.loop.addAnimation(a),
         invalidate: () => this.loop.invalidate(),
         onTap: (key) => this.emit('deviceTap', key),
@@ -535,8 +569,10 @@ export class HouseScene {
 
   // ---- focus / caméra -----------------------------------------------------
   setOptions(opts: Partial<HouseSceneOptions>): void {
+    const before = this.options.quality
     this.options = { ...this.options, ...opts }
     if (this.renderer) this.renderer.shadowMap.enabled = this.options.shadows
+    if (this.options.quality !== before) this.applyQuality()
     this.applyLevelFocus()
     this.loop.invalidate()
   }
@@ -714,12 +750,12 @@ export class HouseScene {
         const m = mesh.userData.material as MeshStandardMaterial
         const base = mesh.userData.baseMaterial as MeshStandardMaterial
         m.color.copy(base.color)
-        // le sol choisi tire vers l'accent, et la nuit il en ÉMET un peu : sous un ciel sombre la
-        // seule teinte ne se voyait plus
-        m.emissive.set(0)
+        // le sol choisi tire vers l'accent, et la NUIT il en émet un peu : sous un ciel sombre la
+        // seule teinte ne se voyait plus. La part émise suit l'heure, pas le thème de l'app.
+        m.emissive.copy(base.emissive)
         if (id === roomId) {
           m.color.lerp(this.theme.primary, 0.45)
-          if (this.theme.isDark) m.emissive.copy(this.theme.primary).multiplyScalar(0.15)
+          m.emissive.add(this.theme.primary.clone().multiplyScalar(0.18 * this.theme.night))
         }
       }
     }
@@ -774,41 +810,114 @@ export class HouseScene {
     else this.emit('zoneTap', hit.zoneId)
   }
 
-  // ---- thème / taille / rendu --------------------------------------------
+  // ---- apparence / taille / rendu ----------------------------------------
   /**
-   * (Re)construit le reflet des carrosseries et le pose sur leur matériau. Le dégradé suit le thème,
-   * il se refait donc à chaque bascule — et l'ancien se libère, une carte PMREM tient en mémoire GPU.
+   * (Re)construit le ciel et le pose sur `scene.environment` : c'est la seule source de reflets de
+   * la scène, et sans elle tout matériau un peu métallique ou lisse rend de l'argile. Il se refait à
+   * chaque changement de style ou d'heure — et l'ancien se libère, une carte PMREM tient en mémoire
+   * vidéo. Le ciel n'est jamais affiché : le fond du canvas est sa couleur d'horizon, à plat.
    */
-  private applyVehicleEnvironment(): void {
-    this.vehicleEnv?.dispose()
-    this.vehicleEnv = createVehicleEnvironment(this.renderer, this.theme)
-    this.materials.vehicle.envMap = this.vehicleEnv
-    this.materials.vehicle.envMapIntensity = 1
-    this.materials.vehicle.needsUpdate = true
+  private applySky(): void {
+    this.skyEnv?.dispose()
+    this.skyEnv = createSkyEnvironment(this.renderer, this.look.sky, this.sunDir)
+    this.scene.environment = this.skyEnv
+    this.scene.environmentIntensity = this.look.sky.intensity
+    this.renderer?.setClearColor(backdropColor(this.look.sky), 1)
   }
 
-  setTheme(theme: SceneTheme): void {
-    this.theme = theme
-    applyTheme(this.materials, theme)
-    this.applyVehicleEnvironment()
+  /**
+   * Le seul point d'entrée de l'apparence. Les trois axes sont indépendants : on peut changer
+   * l'heure sans changer de style, et le thème de l'app sans toucher ni l'un ni l'autre.
+   *
+   * Changer de STYLE repasse des cartes aux matériaux (donc recompile leurs shaders) ; changer
+   * d'HEURE ne fait que muter des couleurs et des intensités. C'est pour cette différence de prix
+   * que `applyLook` compare les cartes avant de demander une recompilation.
+   */
+  setAppearance(next: Partial<SceneAppearance>): void {
+    if (next.style) this.style = next.style
+    if (next.ambience) { this.ambience = next.ambience; this.sunDir = sunDirection(this.ambience) }
+    if (next.style || next.ambience) this.look = this.style.look(this.ambience)
+    this.theme = resolveSceneTheme(next.ui ?? this.theme, this.look.palette, this.ambience)
+    applyLook(this.materials, this.theme, this.look)
+    this.syncFloorClones()
+    this.applySky()
     this.applyLighting()
-    for (const m of this.markers.values()) m.setTheme(theme)
+    if (this.post) this.post.setLook(this.look.post)
+    else if (this.renderer) {
+      this.renderer.toneMapping = toneMappingOf(this.look.post)
+      this.renderer.toneMappingExposure = this.look.post.exposure
+    }
+    for (const m of this.markers.values()) m.setTheme(this.theme, this.look.glow)
     this.highlightRoom(this.highlightedRoom)
     this.loop.invalidate()
   }
 
   /**
-   * Jour en clair, NUIT en sombre : ciel bleuté faible, soleil ramené à un clair de lune froid. Ce
-   * qui éclaire alors la maison, ce sont ses lampes (`LightMarker`) — c'est bien ce qu'on vient voir.
+   * Les sols portent un CLONE du matériau de leur nature, pour que la surbrillance d'une pièce ne
+   * teinte pas toutes les autres. Un changement de style change les cartes du matériau d'origine :
+   * sans cette recopie, un clone garderait la matière du style précédent.
+   */
+  private syncFloorClones(): void {
+    if (!this.nodes) return
+    for (const nodes of this.nodes.levels.values()) {
+      for (const mesh of nodes.floors.values()) {
+        const m = mesh.userData.material as MeshStandardMaterial
+        const base = mesh.userData.baseMaterial as MeshStandardMaterial
+        if (m.map === base.map && m.roughness === base.roughness) continue
+        m.map = base.map; m.normalMap = base.normalMap
+        m.roughnessMap = base.roughnessMap; m.metalnessMap = base.metalnessMap
+        m.normalScale.copy(base.normalScale)
+        m.roughness = base.roughness; m.metalness = base.metalness
+        m.emissive.copy(base.emissive)
+        m.needsUpdate = true
+      }
+    }
+  }
+
+  /**
+   * L'éclairage vient du STYLE, la direction du soleil de l'AMBIANCE. Il n'y a plus de « jour en
+   * thème clair, nuit en thème sombre » : la maison a sa propre heure (`core/ambience.ts`), et c'est
+   * elle qui décide si ce qui l'éclaire est le soleil ou ses propres lampes.
    */
   private applyLighting(): void {
-    const night = this.theme.isDark
-    this.hemi.color.set(night ? 0x8fa3c7 : 0xffffff)
-    this.hemi.groundColor.set(night ? 0x1a1f2a : 0x8899aa)
-    this.hemi.intensity = night ? 0.45 : 1.1
-    this.ambient.intensity = night ? 0.12 : 0.25
-    this.sun.color.set(night ? 0xc4d2f2 : 0xffffff)
-    this.sun.intensity = night ? 0.7 : 2
+    const l = this.look.lighting
+    this.hemi.color.copy(l.hemiSky)
+    this.hemi.groundColor.copy(l.hemiGround)
+    this.hemi.intensity = l.hemiIntensity
+    this.ambient.intensity = l.ambientIntensity
+    this.sun.color.copy(l.sunColor)
+    this.sun.intensity = l.sunIntensity
+    // Sous un ciel couvert ou une lune basse, une ombre portée franche est un mensonge : on la coupe
+    // plutôt que de la laisser trancher une scène qui n'a plus de source ponctuelle.
+    this.sun.castShadow = l.shadowOpacity > 0.15
+    this.fitSunShadow()
+  }
+
+  /** Le budget de rendu : (re)construit la chaîne de post-traitement et le rapport de pixels. */
+  private applyQuality(): void {
+    this.post?.dispose()
+    this.post = null
+    const wanted = this.options.quality === 'auto' ? detectQuality() : this.options.quality
+    this.quality = wanted
+    if (!this.renderer) return
+    const pixelRatio = Math.min(window.devicePixelRatio || 1, PIXEL_RATIO[wanted])
+    this.renderer.setPixelRatio(pixelRatio)
+    this.renderer.setSize(this.size.width, this.size.height, false)
+    if (wanted === 'low') {
+      // Pas de chaîne : le tone mapping revient au renderer, et l'image part droit à l'écran.
+      this.renderer.toneMapping = toneMappingOf(this.look.post)
+      this.renderer.toneMappingExposure = this.look.post.exposure
+      return
+    }
+    this.post = createPostPipeline({
+      renderer: this.renderer, scene: this.scene, camera: this.camera, quality: wanted,
+      draw: (target) => { this.renderer!.setRenderTarget(target); this.renderPasses(this.renderer!) },
+      // La machine ne suit pas : on descend d'un cran, une seule fois, sans rien demander à personne.
+      onDowngrade: (to) => { this.options = { ...this.options, quality: to }; this.applyQuality(); this.loop.invalidate() },
+      ...(this.deps.now ? { now: this.deps.now } : {}),
+    })
+    this.post.setLook(this.look.post)
+    this.post.setSize(this.size.width, this.size.height, pixelRatio)
   }
 
   /**
@@ -836,6 +945,7 @@ export class HouseScene {
     this.size = { width: Math.max(1, width), height: Math.max(1, height) }
     this.applyProjection()
     this.renderer?.setSize(this.size.width, this.size.height, false)
+    this.post?.setSize(this.size.width, this.size.height, this.renderer?.getPixelRatio() ?? 1)
     this.labelRenderer?.setSize(this.size.width, this.size.height)
     this.loop.invalidate()
   }
@@ -860,7 +970,10 @@ export class HouseScene {
   }
 
   private render(): void {
-    if (this.renderer) this.renderPasses(this.renderer)
+    // Avec une chaîne d'effets, c'est elle qui appelle notre rendu (par `draw`) puis ses passes ;
+    // sans elle, on dessine droit à l'écran.
+    if (this.post) this.post.render()
+    else if (this.renderer) { this.renderer.setRenderTarget(null); this.renderPasses(this.renderer) }
     this.updatePillLod()
     this.labelRenderer?.render(this.scene, this.camera)
   }
@@ -927,8 +1040,9 @@ export class HouseScene {
     this.loop.dispose()
     this.controls?.dispose()
     this.clear()
+    this.post?.dispose()
     disposeMaterials(this.materials)
-    this.vehicleEnv?.dispose()
+    this.skyEnv?.dispose()
     this.renderer?.dispose()
     if (this.labelRenderer) this.labelRenderer.domElement.replaceChildren()
   }

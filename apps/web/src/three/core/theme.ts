@@ -1,31 +1,44 @@
 import { Color } from 'three'
-import type { FloorStyle, ZoneKind } from '@kasbah/shared'
+import { dayFactor, type SceneAmbience } from './ambience'
+import type { ScenePalette } from '../styles/types'
 
-// La scène lit ses couleurs dans les variables CSS de Vuetify (--v-theme-*) : un seul endroit
-// définit clair/sombre et palettes. Le parseur accepte "r,g,b" (Vuetify 3), "r g b", "rgb(…)" et "#hex".
+// Les couleurs que la scène emploie viennent de DEUX sources, et c'est voulu :
+//
+//  - la MATIÈRE (murs, sols, verre, toit, pelouse…) vient du STYLE DE RENDU choisi
+//    (`three/styles/`) — elle ne dépend ni du thème de l'app, ni de son mode clair/sombre ;
+//  - les REPÈRES posés sur la maison (accent de sélection, onde d'un lecteur, jauges) viennent du
+//    thème Vuetify, lus dans les variables CSS `--v-theme-*`. C'est l'arbitrage de l'utilisateur du
+//    2026-09-12 : « thémer les points, pastilles, bulles, labels, ondes… les éléments 3d restent ».
+//
+// `SceneTheme` est le résultat de la fusion des deux, plus l'heure qu'il fait (`night`). Aucun
+// consommateur — matériaux, marqueurs, scène — n'a à savoir d'où vient quelle couleur.
+//
+// Le parseur accepte "r,g,b" (Vuetify 3), "r g b", "rgb(…)" et "#hex".
 
-export interface SceneTheme {
+/** Ce que la scène lit du thème de l'APPLICATION : des repères, jamais de la matière. */
+export interface UiTheme {
+  /** Fond de l'app : le sol infini s'y fond exactement, la parcelle ne flotte pas. */
   background: Color
-  wall: Color
-  wallInterior: Color
-  floor: Color
-  floors: Record<FloorStyle, Color>
-  glass: Color
-  roof: Color
-  terrain: Color
-  zones: Record<ZoneKind, Color>
-  /** Onde du lecteur en diffusion : un bleu propre à la scène, indépendant de l'accent choisi. */
+  /** Onde du lecteur en diffusion : un bleu propre à la scène, égal au `catMedia` du thème. */
   media: Color
   primary: Color
   secondary: Color
-  /** Repères posés sur une mesure : `warning` pour une limite (position favorite d'un ouvrant, plafond d'un onduleur), `success` pour un record. */
+  /** Repères posés sur une mesure : `warning` pour une limite, `success` pour un record. */
   warning: Color
   success: Color
-  /** États d'un appareil qui se signale : `info` pour un flux qui sort (batterie qui rend), `error` pour un appareil muet. */
+  /** États d'un appareil qui se signale : `info` pour un flux qui sort, `error` pour un appareil muet. */
   info: Color
   error: Color
   onSurface: Color
-  isDark: boolean
+}
+
+export interface SceneTheme extends UiTheme, ScenePalette {
+  /**
+   * 0 = plein jour, 1 = nuit noire. À NE PAS confondre avec le mode clair/sombre de l'app : la
+   * tablette peut être en thème sombre devant une maison en plein soleil. Ce qui se lit ici, c'est
+   * la position du soleil au-dessus de la maison (`core/ambience.ts`).
+   */
+  night: number
 }
 
 export function parseCssColor(raw: string | null | undefined, fallback: string): Color {
@@ -39,41 +52,33 @@ export function parseCssColor(raw: string | null | undefined, fallback: string):
 }
 
 const FALLBACK: Record<string, string> = {
-  background: '#f6f3ee', sceneWall: '#efe9df', sceneWallInterior: '#e6e0d6', sceneFloor: '#d9d2c5', sceneFloorWood: '#c9a276',
-  sceneFloorTile: '#d6d9d3', sceneFloorCarpet: '#c4b4b8', sceneFloorConcrete: '#bfbdb8', sceneGlass: '#9fd0e8', sceneRoof: '#8b5e4b',
-  sceneTerrain: '#93bb8c', sceneLawn: '#93bb8c', sceneWater: '#6fb7d6', sceneDriveway: '#b7bbc1', scenePath: '#d9d2c5', sceneBed: '#5f8f5a', sceneTerrace: '#d9d2c5', sceneMedia: '#1a73d8',
-  primary: '#1f6f78', secondary: '#66717f', 'on-surface': '#141a22', warning: '#d38b22', success: '#4f7a4a', info: '#3f7fbf', error: '#d24a43',
+  background: '#f6f3ee', sceneMedia: '#1a73d8',
+  primary: '#1f6f78', secondary: '#66717f', 'on-surface': '#141a22',
+  warning: '#d38b22', success: '#4f7a4a', info: '#3f7fbf', error: '#d24a43',
 }
 
-/** Lit le thème courant depuis les variables CSS (appelé au mount et à chaque changement de thème). */
-export function readVuetifyTheme(el: Element = document.documentElement): SceneTheme {
+/** Lit le thème de l'app dans les variables CSS (au mount et à chaque changement de thème). */
+export function readUiTheme(el: Element = document.documentElement): UiTheme {
   const cs = getComputedStyle(el)
   const get = (name: string) => parseCssColor(cs.getPropertyValue(`--v-theme-${name}`), FALLBACK[name] ?? '#888888')
-  const background = get('background')
-  const isDark = background.getHSL({ h: 0, s: 0, l: 0 }).l < 0.5
   return {
-    background, isDark,
-    wall: get('sceneWall'), wallInterior: get('sceneWallInterior'),
-    floor: get('sceneFloor'),
-    floors: { wood: get('sceneFloorWood'), tile: get('sceneFloorTile'), carpet: get('sceneFloorCarpet'), concrete: get('sceneFloorConcrete') },
-    glass: get('sceneGlass'), roof: get('sceneRoof'), terrain: get('sceneTerrain'),
-    zones: { lawn: get('sceneLawn'), pool: get('sceneWater'), driveway: get('sceneDriveway'), path: get('scenePath'), bed: get('sceneBed'), terrace: get('sceneTerrace'), other: get('sceneDriveway') },
-    media: get('sceneMedia'),
+    background: get('background'), media: get('sceneMedia'),
     primary: get('primary'), secondary: get('secondary'), onSurface: get('on-surface'),
     warning: get('warning'), success: get('success'), info: get('info'), error: get('error'),
   }
 }
 
-/** Thème par défaut (tests, ou avant le premier rendu). */
-export function defaultSceneTheme(): SceneTheme {
+/** Thème d'app par défaut (tests, ou avant le premier rendu). */
+export function defaultUiTheme(): UiTheme {
   const c = (k: string) => new Color(FALLBACK[k] ?? '#888888')
   return {
-    background: c('background'), isDark: false, wall: c('sceneWall'), wallInterior: c('sceneWallInterior'), floor: c('sceneFloor'),
-    floors: { wood: c('sceneFloorWood'), tile: c('sceneFloorTile'), carpet: c('sceneFloorCarpet'), concrete: c('sceneFloorConcrete') },
-    glass: c('sceneGlass'), roof: c('sceneRoof'), terrain: c('sceneTerrain'),
-    zones: { lawn: c('sceneLawn'), pool: c('sceneWater'), driveway: c('sceneDriveway'), path: c('scenePath'), bed: c('sceneBed'), terrace: c('sceneTerrace'), other: c('sceneDriveway') },
-    media: c('sceneMedia'),
+    background: c('background'), media: c('sceneMedia'),
     primary: c('primary'), secondary: c('secondary'), onSurface: c('on-surface'),
     warning: c('warning'), success: c('success'), info: c('info'), error: c('error'),
   }
+}
+
+/** La fusion : matière du style, repères du thème, heure de l'ambiance. */
+export function resolveSceneTheme(ui: UiTheme, palette: ScenePalette, ambience: SceneAmbience): SceneTheme {
+  return { ...ui, ...palette, night: 1 - dayFactor(ambience) }
 }

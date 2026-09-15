@@ -178,6 +178,16 @@
     "quotaCredit": "de crédit Tesla",
     "quotaSince": "depuis le {date}"
   },
+  "render": {
+    "title": "Rendu 3D", "style": "Style",
+    "styles": { "realistic": "Réaliste", "nature": "Nature", "cyberpunk": "Cyberpunk", "candy": "Candy" },
+    "ambience": "Heure de la maison",
+    "ambienceHint": "Indépendante du thème clair/sombre de l'application : « Automatique » suit le soleil réel au-dessus de la maison, d'après son origine GPS et l'heure.",
+    "ambiences": { "auto": "Automatique", "day": "Jour", "dusk": "Crépuscule", "night": "Nuit" },
+    "quality": "Qualité",
+    "qualityHint": "Halo des lampes, occlusion des angles et anticrénelage. « Automatique » choisit d'après la machine, puis descend d'un cran si les images coûtent trop cher.",
+    "qualities": { "auto": "Automatique", "high": "Haute", "medium": "Moyenne", "low": "Basse" }
+  },
   "settings": {
     "title": "Réglages", "appearance": "Apparence", "system": "Système", "light": "Clair", "dark": "Sombre",
     "theme": "Thème", "themeDarkOnly": "Sombre uniquement",

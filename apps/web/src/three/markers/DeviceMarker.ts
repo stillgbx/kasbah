@@ -3,6 +3,7 @@ import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js'
 import type { DeviceDescriptor, DeviceState, OpeningRect, PlacedHouseDevice } from '@kasbah/shared'
 import { panelOf } from '@kasbah/shared'
 import type { SceneTheme } from '../core/theme'
+import type { GlowLook } from '../styles/types'
 import type { MaterialSet } from '../builders/materials'
 import type { Animation } from '../core/renderLoop'
 import type { TextureLoad } from './screenArt'
@@ -19,6 +20,8 @@ import { deviceCategory } from '../../lib/deviceIcons'
 export interface MarkerContext {
   materials: MaterialSet
   theme: SceneTheme
+  /** Ce que le style dit d'une lampe allumée : taille du halo, opacité, portée. */
+  glow: GlowLook
   descriptor: DeviceDescriptor | undefined
   /** Rectangle de l'ouverture liée (volets). */
   opening?: OpeningRect
@@ -144,8 +147,8 @@ export abstract class DeviceMarker {
     if (this.css) this.css.visible = v || this.selected
   }
 
-  setTheme(theme: SceneTheme): void {
-    this.ctx = { ...this.ctx, theme }
+  setTheme(theme: SceneTheme, glow: GlowLook): void {
+    this.ctx = { ...this.ctx, theme, glow }
     if (this.guide) { this.guide.ring.material.color.copy(theme.primary); this.guide.line.material.color.copy(theme.primary); this.guide.look?.material.color.copy(theme.primary) }
     this.onState(this.state)
   }

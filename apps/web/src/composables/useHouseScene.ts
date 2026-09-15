@@ -1,13 +1,16 @@
-import { nextTick, onBeforeUnmount, onMounted, ref, watch, type ComputedRef, type Ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComputedRef, type Ref } from 'vue'
 import { useTheme } from 'vuetify'
-import { useDocumentVisibility, useResizeObserver } from '@vueuse/core'
+import { useDocumentVisibility, useIntervalFn, useResizeObserver } from '@vueuse/core'
 import type { DeviceState, House, Vec3 } from '@kasbah/shared'
-import { readVuetifyTheme } from '../three/core/theme'
+import { readUiTheme } from '../three/core/theme'
+import { resolveAmbience } from '../three/core/ambience'
+import { styleById } from '../three/styles'
 import { HouseScene, type HouseSceneOptions } from '../three/HouseScene'
 import { useDevicesStore } from '../stores/devices'
+import { useSettingsStore } from '../stores/settings'
 
-// Adaptateur Vue du contrôleur de scène : cycle de vie, taille, thème Vuetify → scène,
-// maison/états → scène (diff par référence), événements de tap → callbacks.
+// Adaptateur Vue du contrôleur de scène : cycle de vie, taille, apparence (style de rendu, heure,
+// thème Vuetify) → scène, maison/états → scène (diff par référence), événements de tap → callbacks.
 
 export interface UseHouseSceneArgs {
   canvas: Ref<HTMLCanvasElement | null>
@@ -26,6 +29,16 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   const theme = useTheme()
   const visibility = useDocumentVisibility()
   const devices = useDevicesStore()
+  const settings = useSettingsStore()
+
+  const style = computed(() => styleById(settings.sceneStyle))
+  /** Le soleil bouge : en mode `auto`, l'heure de la scène est relue régulièrement, pas une seule fois. */
+  const clock = ref(new Date())
+  const geo = computed(() => {
+    const o = args.house.value?.origin
+    return o ? { lat: o.lat, lon: o.lon } : null
+  })
+  const ambience = computed(() => resolveAmbience({ mode: settings.sceneAmbience, date: clock.value, geo: geo.value }))
 
   const deviceTap = new Set<Handler<[string]>>()
   const roomTap = new Set<Handler<[string]>>()
@@ -38,8 +51,13 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   onMounted(() => {
     const canvas = args.canvas.value
     if (!canvas) return
-    scene = new HouseScene(canvas, { labelLayer: args.labelLayer.value, theme: readVuetifyTheme() })
+    scene = new HouseScene(canvas, { labelLayer: args.labelLayer.value, style: style.value, ambience: ambience.value })
+    scene.setAppearance({ ui: readUiTheme(), style: style.value, ambience: ambience.value })
     supported.value = scene.supported
+    // Une scène 3D ne se débogue qu'en la regardant : en développement seulement, le contrôleur est
+    // posé sur `window` pour qu'une console (ou un pilote de navigateur) puisse lire ses lumières,
+    // ses matériaux et sa caméra sans instrumenter le code à chaque fois.
+    if (import.meta.env.DEV) (window as unknown as { kasbahScene?: HouseScene }).kasbahScene = scene
     if (!scene.supported) return
     scene.on('deviceTap', (key) => deviceTap.forEach((f) => f(key)))
     scene.on('roomTap', (id) => roomTap.forEach((f) => f(id)))
@@ -71,7 +89,11 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   watch(args.states, (s) => scene?.updateStates(s))
   if (args.options) watch(args.options, (o) => scene?.setOptions(o), { deep: true })
   // nextTick : les variables CSS du nouveau thème doivent être appliquées avant lecture
-  watch(() => theme.global.name.value, () => { void nextTick(() => scene?.setTheme(readVuetifyTheme())) })
+  watch(() => theme.global.name.value, () => { void nextTick(() => scene?.setAppearance({ ui: readUiTheme() })) })
+  watch(style, (s) => scene?.setAppearance({ style: s }))
+  watch(ambience, (a) => scene?.setAppearance({ ambience: a }))
+  // Un quart d'heure : le soleil se déplace de moins de 4°, et la scène ne rend qu'à la demande.
+  useIntervalFn(() => { clock.value = new Date() }, 15 * 60 * 1000)
   watch(visibility, (v) => scene?.setPaused(v === 'hidden'))
 
   onBeforeUnmount(() => { scene?.dispose(); scene = null })

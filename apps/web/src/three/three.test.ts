@@ -3,12 +3,16 @@ import { Box3, BoxGeometry, type BufferGeometry, CylinderGeometry, Mesh, type Me
 import { computeHouseGeometry, localToGeo, parseHouse, type DeviceDescriptor, type DeviceState, type PlacedHouseDevice } from '@kasbah/shared'
 import demo from '@kasbah/shared/demo-house.json'
 import { buildHouse, buildWallsGeometry, countTriangles } from './builders/buildHouse'
-import { createSurfaceTextures } from './textures/procedural'
+import { createSurfaceTextures, type SurfaceTexture } from './textures/procedural'
 import { createMaterials } from './builders/materials'
 import { fitBox, fitDistance } from './core/cameraFit'
 import { boundsToWorldBox, houseToWorld } from './core/coords'
 import { createRenderLoop } from './core/renderLoop'
-import { defaultSceneTheme, parseCssColor } from './core/theme'
+import { parseCssColor } from './core/theme'
+import { defaultLook, defaultSceneTheme, RENDER_STYLES, rolesOf, styleById } from './styles'
+import { applyLook } from './builders/materials'
+import { dayFactor, resolveAmbience, sunDirection, type AmbienceMode } from './core/ambience'
+import { sunPosition } from './core/sun'
 import { createTween } from './core/tween'
 import { ScreenArt, coverCrop, screenArtGeometry } from './markers/screenArt'
 import { createMarker } from './markers/createMarker'
@@ -98,7 +102,7 @@ describe('builders', () => {
     expect(buildWallsGeometry([])).toBeNull()
   })
   it('builds the whole house with levels, floors, panes, zones and roof', () => {
-    const mats = createMaterials(defaultSceneTheme())
+    const mats = createMaterials(defaultSceneTheme(), defaultLook())
     const nodes = buildHouse(geometry, mats)
     expect(nodes.levels.size).toBe(3)                        // rdc, étage, et le toit (niveau sans pièce qui porte les panneaux)
     expect(nodes.levels.get('rdc')!.floors.size).toBe(3)
@@ -114,26 +118,32 @@ describe('builders', () => {
     const interior = buildWallsGeometry(level.walls.filter((w) => w.kind === 'interior'))!
     interior.computeBoundingBox()
     expect(interior.boundingBox!.max.z).toBeCloseTo(level.height)
-    const nodes = buildHouse(geometry, createMaterials(defaultSceneTheme()))
+    const nodes = buildHouse(geometry, createMaterials(defaultSceneTheme(), defaultLook()))
     expect(nodes.ground.position.z).toBeLessThan(geometry.terrain.z)
   })
-  it('habille chaque surface d’une matière répétée à l’échelle du mètre', () => {
-    const tex = createSurfaceTextures()
+  it('habille chaque surface d’une matière répétée à l’échelle du mètre, avec sa normale et sa rugosité', () => {
+    const tex = createSurfaceTextures(['tile', 'water', 'plaster'])
     for (const t of Object.values(tex)) {
       expect((t.map.image as { width: number }).width).toBeGreaterThanOrEqual(256)
       expect(t.map.repeat.x).toBeGreaterThan(0)
       expect(t.map.repeat.x).toBeLessThanOrEqual(1)   // un motif d'au moins un mètre
     }
-    // les carreaux : un joint sombre entre deux carreaux clairs
-    const px = (t: { map: Texture }, u: number, v: number) => {
+    const px = (t: SurfaceTexture, u: number, v: number) => {
       const img = t.map.image as { data: Uint8Array; width: number }
       return img.data[(Math.floor(v * img.width) * img.width + Math.floor(u * img.width)) * 4]!
     }
-    expect(px(tex.tile, 0.125, 0.125)).toBeGreaterThan(px(tex.tile, 0.25, 0.125) + 40)
-    const mats = createMaterials(defaultSceneTheme(), tex)
-    expect(mats.floors.tile.map).toBe(tex.tile.map)
-    expect(mats.zones.pool.map).toBe(tex.water.map)
-    expect(mats.wall.bumpMap).toBe(tex.plaster.bumpMap)
+    // les carreaux : le joint (le plus sombre de la rangée) tranche sur le carreau (son centre)
+    const row = Array.from({ length: 512 }, (_, x) => px(tex.tile!, (x + 0.5) / 512, 0.125))
+    expect(Math.min(...row)).toBeLessThan(px(tex.tile!, 0.125, 0.125) - 40)
+    // une matière presque plane a sa normale vers le haut : le canal bleu au maximum
+    expect((tex.plaster!.normalMap.image as { data: Uint8Array }).data[2]!).toBeGreaterThan(200)
+    const mats = createMaterials(defaultSceneTheme(), defaultLook(), tex)
+    expect(mats.floors.tile.map).toBe(tex.tile!.map)
+    expect(mats.zones.pool.map).toBe(tex.water!.map)
+    expect(mats.wall.normalMap).toBe(tex.plaster!.normalMap)
+    // la même carte sert de rugosité ET de métallicité : three lit le canal qu'il lui faut
+    expect(mats.wall.roughnessMap).toBe(tex.plaster!.ormMap)
+    expect(mats.wall.metalnessMap).toBe(tex.plaster!.ormMap)
   })
 })
 
@@ -262,7 +272,7 @@ describe('marqueurs 3D', () => {
   const marker = (device: PlacedHouseDevice, descriptor: DeviceDescriptor) => {
     animations.length = 0
     return createMarker(device, {
-      materials: createMaterials(defaultSceneTheme()), theme: defaultSceneTheme(), descriptor,
+      materials: createMaterials(defaultSceneTheme(), defaultLook()), theme: defaultSceneTheme(), glow: defaultLook().glow, descriptor,
       addAnimation: (a) => { animations.push(a); return () => {} },
       invalidate: () => {}, onTap: () => {}, label: descriptor.name,
     }, () => true)
@@ -289,7 +299,7 @@ describe('marqueurs 3D', () => {
     const fakeShell = () => new BoxGeometry(2.32, 4.98, 1.52).translate(0, 0, 0.76)
     const vehicleMarker = (extra: Partial<PlacedHouseDevice>, load?: (url: string, ok: (g: BufferGeometry) => void, ko: () => void) => void) =>
       createMarker({ id: 'vehicle.s', position: [0, 0, 0], ...extra }, {
-        materials: createMaterials(defaultSceneTheme()), theme: defaultSceneTheme(), descriptor: tesla,
+        materials: createMaterials(defaultSceneTheme(), defaultLook()), theme: defaultSceneTheme(), glow: defaultLook().glow, descriptor: tesla,
         addAnimation: () => () => {}, invalidate: () => {}, onTap: () => {}, label: 'Model S',
         ...(load ? { loadModel: load } : {}),
       }, () => true)
@@ -678,5 +688,83 @@ describe('véhicule placé par son GPS', () => {
         expect(bodyYaw(corrected) - bodyYaw(base)).toBeCloseTo(yawToRad(30), 4)
       }
     }
+  })
+})
+
+describe('heure de la maison', () => {
+  // Le soleil se calcule, il ne se devine pas : la maison est géoréférencée et l'horloge fait le
+  // reste. Repère pris à Dijon (la maison de démo), au solstice d'été — le soleil y culmine autour
+  // de 66° (90 − 47,3 + 23,4) et passe au sud peu avant midi UTC.
+  const DIJON = { lat: 47.32, lon: 5.04 }
+
+  it('place le soleil au-dessus de la maison, à l’heure et au bon azimut', () => {
+    const noon = sunPosition(new Date('2026-06-21T12:00:00Z'), DIJON.lat, DIJON.lon)
+    expect(noon.altitudeDeg).toBeGreaterThan(60)
+    expect(noon.altitudeDeg).toBeLessThan(68)
+    expect(noon.azimuthDeg).toBeGreaterThan(170)          // plein sud, à peine passé
+    expect(noon.azimuthDeg).toBeLessThan(210)
+    const midnight = sunPosition(new Date('2026-12-21T00:00:00Z'), DIJON.lat, DIJON.lon)
+    expect(midnight.altitudeDeg).toBeLessThan(-40)        // sous l'horizon, et franchement
+    // le matin, le soleil est à l'EST : c'est le signe de l'angle horaire qui le décide
+    const morning = sunPosition(new Date('2026-06-21T05:00:00Z'), DIJON.lat, DIJON.lon)
+    expect(morning.azimuthDeg).toBeGreaterThan(50)
+    expect(morning.azimuthDeg).toBeLessThan(110)
+  })
+
+  it('passe de la nuit au jour SANS marche d’escalier', () => {
+    expect(dayFactor({ sunAltitudeDeg: -20, sunAzimuthDeg: 0, cloudiness: 0 })).toBe(0)
+    expect(dayFactor({ sunAltitudeDeg: 20, sunAzimuthDeg: 0, cloudiness: 0 })).toBe(1)
+    const dusk = dayFactor({ sunAltitudeDeg: 1, sunAzimuthDeg: 0, cloudiness: 0 })
+    expect(dusk).toBeGreaterThan(0.1)
+    expect(dusk).toBeLessThan(0.9)
+  })
+
+  it('ne rend JAMAIS une ambiance NaN : un mode inconnu retombe sur le soleil réel', () => {
+    // Vécu : un réglage écrit à la main donnait une exposition NaN, et toute l'image devenait noire
+    // sans la moindre erreur en console.
+    const a = resolveAmbience({ mode: '"night"' as AmbienceMode, date: new Date('2026-06-21T12:00:00Z'), geo: DIJON })
+    expect(Number.isFinite(a.sunAltitudeDeg)).toBe(true)
+    expect(Number.isFinite(dayFactor(a))).toBe(true)
+  })
+
+  it('relève la source sous l’horizon sans changer d’où elle vient', () => {
+    const night = resolveAmbience({ mode: 'night' })
+    expect(night.sunAltitudeDeg).toBeLessThan(0)
+    const dir = sunDirection(night)
+    expect(dir.y).toBeGreaterThan(0.2)                    // une lumière enterrée n'éclaire rien
+    // azimut 215° (sud-ouest) : x négatif (ouest), z positif (sud, car le nord de la maison est en −z)
+    expect(dir.x).toBeLessThan(0)
+    expect(dir.z).toBeGreaterThan(0)
+  })
+})
+
+describe('styles de rendu', () => {
+  const HOURS: AmbienceMode[] = ['day', 'dusk', 'night']
+  const house = computeHouseGeometry(parseHouse(demo))
+
+  it('chaque style rend des valeurs finies à toute heure, et ne cite que des matières du catalogue', () => {
+    for (const style of RENDER_STYLES) {
+      for (const mode of HOURS) {
+        const look = style.look(resolveAmbience({ mode }))
+        expect(Number.isFinite(look.post.exposure)).toBe(true)
+        expect(look.post.exposure).toBeGreaterThan(0)
+        expect(Number.isFinite(look.lighting.sunIntensity)).toBe(true)
+        for (const v of [...look.sky.zenith, ...look.sky.horizon, ...look.sky.ground]) expect(Number.isFinite(v)).toBe(true)
+        // le catalogue est la seule source de matières : un rôle inconnu ne se cuit pas
+        for (const role of rolesOf(look.surfaces)) expect(typeof role).toBe('string')
+      }
+    }
+  })
+
+  it('changer de style repasse d’autres matières aux MÊMES matériaux (aucune géométrie touchée)', () => {
+    const theme = defaultSceneTheme()
+    const mats = createMaterials(theme, defaultLook())
+    const nodes = buildHouse(house, mats)
+    const wallMesh = nodes.levels.get('rdc')!.walls[0]!
+    const before = { material: wallMesh.material, map: mats.wall.map }
+    applyLook(mats, theme, styleById('cyberpunk').look(resolveAmbience({ mode: 'night' })))
+    expect(wallMesh.material).toBe(before.material)       // le maillage pointe toujours le même matériau
+    expect(mats.wall.map).not.toBe(before.map)            // mais la matière, elle, a changé
+    expect(mats.wall.metalness).toBeGreaterThan(0.5)      // le cyberpunk a des murs de métal
   })
 })

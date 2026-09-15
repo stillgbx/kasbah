@@ -178,6 +178,16 @@
     "quotaCredit": "of Tesla credit",
     "quotaSince": "since {date}"
   },
+  "render": {
+    "title": "3D rendering", "style": "Style",
+    "styles": { "realistic": "Realistic", "nature": "Nature", "cyberpunk": "Cyberpunk", "candy": "Candy" },
+    "ambience": "Time at the house",
+    "ambienceHint": "Independent from the app's light/dark theme: « Automatic » follows the real sun above the house, from its GPS origin and the clock.",
+    "ambiences": { "auto": "Automatic", "day": "Day", "dusk": "Dusk", "night": "Night" },
+    "quality": "Quality",
+    "qualityHint": "Lamp glow, corner occlusion and anti-aliasing. « Automatic » picks from the machine, then steps down if frames cost too much.",
+    "qualities": { "auto": "Automatic", "high": "High", "medium": "Medium", "low": "Low" }
+  },
   "settings": {
     "title": "Settings", "appearance": "Appearance", "system": "System", "light": "Light", "dark": "Dark",
     "theme": "Theme", "themeDarkOnly": "Dark only",

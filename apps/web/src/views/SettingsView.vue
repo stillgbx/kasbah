@@ -17,6 +17,10 @@ import { useScenesStore } from '../stores/scenes'
 import { usePluginsStore } from '../stores/plugins'
 import { useSettingsStore, type Appearance } from '../stores/settings'
 import { resolveVariant, type Theme } from '../themes'
+import { resolveAmbience, type AmbienceMode } from '../three/core/ambience'
+import { backdropColor, groundColor } from '../three/builders/materials'
+import type { RenderQuality } from '../three/core/post'
+import type { RenderStyle } from '../three/styles'
 
 // Réglages : apparence, langue, thème, origine GPS (colonne gauche) ; plugins (droite). Les
 // plugins actifs et leurs sous-items vivent dans house.json : ce sont des choix de LA MAISON, pas
@@ -49,6 +53,24 @@ const localeOptions = computed(() => [{ value: '', label: t('settings.auto') }, 
 // sa palette sombre même en apparence claire, ce que dit aussi son badge).
 function preview(theme: Theme) { return resolveVariant(theme.id, settings.wantDark).palette }
 function variantLabel(theme: Theme) { return settings.wantDark ? (theme.darkLabel ?? '') : (theme.lightLabel ?? theme.darkLabel ?? '') }
+
+// Aperçu d'un style : ses couleurs À L'HEURE CHOISIE, pour que le jeu de tuiles montre bien ce que
+// la scène va rendre — un style de nuit ne se juge pas sur sa palette de midi.
+const renderAmbience = computed(() => resolveAmbience({
+  mode: settings.sceneAmbience,
+  geo: house.house ? { lat: house.house.origin.lat, lon: house.house.origin.lon } : null,
+}))
+function stylePreview(style: RenderStyle) {
+  const look = style.look(renderAmbience.value)
+  return {
+    sky: backdropColor(look.sky).getStyle(),
+    ground: groundColor(look.sky).getStyle(),
+    wall: look.palette.wall.getStyle(),
+    glass: look.palette.glass.getStyle(),
+  }
+}
+const ambienceOptions = computed(() => settings.ambiences.map((a) => ({ value: a, label: t(`render.ambiences.${a}`) })))
+const qualityOptions = computed(() => settings.qualities.map((q) => ({ value: q, label: t(`render.qualities.${q}`) })))
 
 const DOT: Record<PluginHealth['status'], string> = { ok: 'var(--accent)', degraded: '#d38b22', needs_pairing: '#d38b22', error: '#d24a43', not_implemented: 'var(--muted)', disabled: 'var(--muted)' }
 const gps = computed(() => {
@@ -91,6 +113,26 @@ const houseStats = computed(() => {
                 <span class="theme__variant">{{ th.light ? variantLabel(th) : $t('settings.themeDarkOnly') }}</span>
               </button>
             </div>
+          </section>
+          <section class="card block">
+            <div class="block__title">{{ $t('render.title') }}</div>
+            <div class="themes">
+              <button v-for="st in settings.styles" :key="st.id" type="button" class="theme" :data-on="settings.sceneStyle === st.id ? '1' : '0'"
+                      :aria-pressed="settings.sceneStyle === st.id" @click="settings.setSceneStyle(st.id)">
+                <span class="preview" :style="{ background: stylePreview(st).sky }">
+                  <span class="preview__ground" :style="{ background: stylePreview(st).ground }" />
+                  <span class="preview__wall" :style="{ background: stylePreview(st).wall }" />
+                  <span class="preview__dot" :style="{ background: stylePreview(st).glass }" />
+                </span>
+                <span class="theme__name">{{ $t(st.labelKey) }}</span>
+              </button>
+            </div>
+            <div class="block__sub">{{ $t('render.ambience') }}</div>
+            <Segmented :model-value="settings.sceneAmbience" :options="ambienceOptions" class="w-100" @update:model-value="(v: AmbienceMode) => settings.setSceneAmbience(v)" />
+            <div class="muted small">{{ $t('render.ambienceHint') }}</div>
+            <div class="block__sub">{{ $t('render.quality') }}</div>
+            <Segmented :model-value="settings.sceneQuality" :options="qualityOptions" class="w-100" @update:model-value="(v: RenderQuality) => settings.setSceneQuality(v)" />
+            <div class="muted small">{{ $t('render.qualityHint') }}</div>
           </section>
           <section class="card block">
             <div class="block__title">{{ $t('settings.gps') }}</div>
@@ -218,6 +260,10 @@ const houseStats = computed(() => {
 .preview__bar { height: 4px; width: 66%; border-radius: 2px; }
 .preview__bar--short { width: 38%; }
 .preview__dot { position: absolute; right: 6px; bottom: 6px; width: 13px; height: 13px; border-radius: 50%; }
+/* Aperçu d'un style de rendu : le ciel en fond, le sol en bas, un pan de mur posé dessus. */
+.preview__ground { position: absolute; inset: auto 0 0 0; height: 40%; }
+.preview__wall { position: absolute; left: 22%; right: 34%; bottom: 22%; height: 55%; border-radius: 2px; }
+.block__sub { margin-top: 4px; font-size: 12px; color: var(--muted); }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
 .small { font-size: 12px; }
 .plugins { display: grid; gap: 4px; }

@@ -6,9 +6,9 @@ import { coverActivity, isFlatCover } from '../../lib/cover'
 import { IDLE_W, isEnergySite } from '../../lib/energy'
 import { coverLeaves, coverSize, yawToRad } from '../../lib/orientation'
 import { bodyColorOf, bodyFinishOf, FINISH_MATERIAL, SCENE_FINISH } from '../../lib/vehicleTuning'
+import { DECOR_LAYER } from '../core/layers'
 import { createTween, lerp } from '../core/tween'
 import { DeviceMarker, type MarkerContext } from './DeviceMarker'
-import type { SceneTheme } from '../core/theme'
 import { ScreenArt } from './screenArt'
 import { modelUrl, resolveModel } from '../models/catalog'
 import { loadModel } from '../models/loadModel'
@@ -459,10 +459,6 @@ function glowMap(): DataTexture {
   glowTexture.needsUpdate = true
   return glowTexture
 }
-/** Diamètre (m) du halo, et son opacité pleine luminosité : fort la nuit, discret le jour. */
-const GLOW_SCALE = 1.1
-const GLOW_OPACITY = { dark: 0.9, light: 0.3 }
-
 export class LightMarker extends DeviceMarker {
   private readonly mat: MeshStandardMaterial
   private readonly sphere: Mesh
@@ -476,7 +472,7 @@ export class LightMarker extends DeviceMarker {
     this.light = new PointLight(0xffd9a0, 0, 7, 1.6)
     this.glowMat = new SpriteMaterial({ map: glowMap(), color: 0xffd9a0, transparent: true, opacity: 0, blending: AdditiveBlending, depthWrite: false })
     this.glow = new Sprite(this.glowMat)
-    this.glow.scale.setScalar(GLOW_SCALE)
+    this.glow.layers.set(DECOR_LAYER)   // invisible à la passe d'occlusion : voir `core/layers.ts`
     this.glow.visible = false
     this.object.add(this.sphere, this.light, this.glow)
     this.registerPickable(this.sphere)
@@ -494,13 +490,17 @@ export class LightMarker extends DeviceMarker {
     const on = !!state && state.kind === 'light' && state.available && state.on
     const k = on && state.kind === 'light' ? (state.brightness ?? 100) / 100 : 0
     const c = this.color()
+    // Tout ce qu'une lampe allumée fait — l'éclat du globe, la portée, le halo — vient du STYLE, qui
+    // le tient de l'heure : la même lampe brûle la nuit et se devine à peine en plein jour.
+    const g = this.ctx.glow
     this.mat.emissive.copy(c)
-    this.mat.emissiveIntensity = k * 1.6
+    this.mat.emissiveIntensity = k * g.emissive
     this.light.color.copy(c)
     // la lumière n'atteint que les surfaces de SON niveau : voir le rendu en passes de `HouseScene`
-    this.light.intensity = k * (this.ctx.theme.isDark ? 14 : 6)
+    this.light.intensity = k * g.lightIntensity
     this.glowMat.color.copy(c)
-    this.glowMat.opacity = k * (this.ctx.theme.isDark ? GLOW_OPACITY.dark : GLOW_OPACITY.light)
+    this.glowMat.opacity = k * g.opacity
+    this.glow.scale.setScalar(g.scale)
     this.glow.visible = k > 0
   }
   override dispose(): void { this.sphere.geometry.dispose(); this.mat.dispose(); this.glowMat.dispose(); super.dispose() }
@@ -701,13 +701,9 @@ export class VehicleMarker extends DeviceMarker {
     // l'aspect. Sans ça, une carrosserie mate sans couleur réglée resterait vernie.
     this.ownsBodyMat = color !== undefined || finishName !== SCENE_FINISH
     this.bodyMat = this.ownsBodyMat
-      // Le reflet vient de la scène (elle seule a le renderer qui le fabrique) : une carrosserie
-      // colorée le reprend, sinon elle redeviendrait le bloc d'argile que les autres ne sont plus.
-      // La carte est PARTAGÉE — on la copie, on ne la libère pas avec ce matériau.
-      ? new MeshStandardMaterial({
-          color, ...finish,
-          envMap: ctx.materials.vehicle.envMap, envMapIntensity: ctx.materials.vehicle.envMapIntensity,
-        })
+      // Le reflet vient de `scene.environment`, que three applique à tout matériau standard sans
+      // carte propre : une carrosserie colorée le reçoit comme celle de la scène, sans rien recopier.
+      ? new MeshStandardMaterial({ color, ...finish })
       : ctx.materials.vehicle
     this.cabMat = new MeshStandardMaterial({ color: 0x2a3240, roughness: 0.2, metalness: 0.5 })
 
@@ -755,19 +751,6 @@ export class VehicleMarker extends DeviceMarker {
   protected onState(state: DeviceState | undefined): void {
     const present = !state || state.kind !== 'vehicle' || !state.location || this.atHome(state)
     this.group.visible = present
-  }
-  /**
-   * Le reflet se refait à chaque bascule de thème, et la scène LIBÈRE l'ancienne carte. Un matériau
-   * propre au marqueur pointerait alors dans le vide : il faut reprendre celle qui vient d'être
-   * posée sur le matériau de la scène, que `HouseScene.setTheme` a déjà renouvelé à ce stade.
-   */
-  override setTheme(theme: SceneTheme): void {
-    super.setTheme(theme)
-    if (this.ownsBodyMat) {
-      this.bodyMat.envMap = this.ctx.materials.vehicle.envMap
-      this.bodyMat.envMapIntensity = this.ctx.materials.vehicle.envMapIntensity
-      this.bodyMat.needsUpdate = true
-    }
   }
   override dispose(): void {
     for (const mesh of this.placeholder) mesh.geometry.dispose()

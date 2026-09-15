@@ -1,36 +1,65 @@
-import { DataTexture, RepeatWrapping, SRGBColorSpace, type Texture } from 'three'
+import { DataTexture, LinearSRGBColorSpace, RepeatWrapping, SRGBColorSpace, type Texture } from 'three'
 
-// Textures PAR DÉFAUT des surfaces de la maison, calculées ici plutôt que chargées : l'app tourne en
-// LAN sans CDN, et aucune image n'est à héberger ni à verser au dépôt. Chaque texture est une carte
-// de LUMINANCE (gris autour de 1) que le matériau multiplie par sa couleur de thème : la teinte
-// reste celle des thèmes (`plugins/vuetify.ts`), la texture n'apporte que la matière. Les UV des
-// builders sont en MÈTRES (les caps d'`ExtrudeGeometry` et `ShapeGeometry` reprennent les
-// positions), donc `repeat = 1 / taille du motif` pose un motif à l'échelle du monde.
+// Matières PROCÉDURALES des surfaces, calculées ici plutôt que chargées : l'app tourne en LAN sans
+// CDN, et aucune image n'est à héberger ni à verser au dépôt (arbitrage de l'utilisateur :
+// « on va au max de ce qu'on peut faire en procédural, si ça n'est toujours pas satisfaisant alors
+// on ajoutera des assets »).
 //
-// Le catalogue est la couture prévue pour laisser l'utilisateur, plus tard, remplacer une entrée par
-// une image à lui : un rôle de surface → une texture, et rien d'autre ne connaît la façon dont elle
-// est faite.
+// Une matière est un RÔLE (`SurfaceRole`) : du bois, du carrelage, du gravillon. Ce sont les STYLES
+// de rendu (`three/styles/`) qui disent quel rôle habille quelle surface et avec quels réglages PBR
+// — le même `wood` sert de parquet réaliste et de plancher pastel, seules la couleur et la rugosité
+// changent. Ajouter une matière = ajouter une entrée à `SPECS`, rien d'autre.
+//
+// Chaque rôle produit TROIS cartes, parce qu'une seule ne suffit pas à faire exister une surface :
+//  - `map`, la couleur (luminance × teinte), que le matériau multiplie par sa couleur de style ;
+//  - `normalMap`, la pente de la matière, dérivée du même relief : c'est elle qui fait accrocher la
+//    lumière rasante, là où l'ancien `bumpMap` ne donnait qu'un tremblement approximatif ;
+//  - `ormMap`, une carte packée (R occlusion inutilisée = 1, G rugosité, B métallicité) lue par
+//    `roughnessMap` et `metalnessMap` du MÊME objet Texture — three lit le canal qu'il lui faut.
+//    Le matériau multiplie : `roughness` du style = la rugosité là où la carte vaut 1.
+//
+// Les UV des builders sont en MÈTRES (les caps d'`ExtrudeGeometry` et `ShapeGeometry` reprennent les
+// positions), donc `repeat = 1 / tileM` pose un motif à l'échelle du monde, sans couture (bruit de
+// valeur périodique, hachage déterministe : la texture est la même à chaque lancement et en test).
 
-/** Une surface de la maison qui a une matière. */
+/** Une matière disponible. Les styles y puisent ; ajouter une entrée ici suffit à en offrir une de plus. */
 export type SurfaceRole =
   | 'plaster' | 'wood' | 'tile' | 'carpet' | 'concrete'
   | 'grass' | 'water' | 'pavers' | 'soil' | 'roof'
+  | 'metal' | 'grid' | 'gloss' | 'stone'
 
 export interface SurfaceTexture {
+  /** Couleur (sRGB) : luminance et teinte de la matière, à multiplier par la couleur du style. */
   map: Texture
-  /** Relief tiré de la même carte (la matière se lit aussi en lumière rasante). */
-  bumpMap: Texture
-  bumpScale: number
+  /** Pente de la matière (espace tangent, linéaire). */
+  normalMap: Texture
+  /** Échelle de la normale, en unités three (x, y). */
+  normalScale: number
+  /** R = 1, G = rugosité, B = métallicité — le même objet sert de `roughnessMap` et de `metalnessMap`. */
+  ormMap: Texture
+  /** Côté (m) du motif avant répétition. */
+  tileM: number
 }
 
+// Règle tenue par tous les motifs : la luminance reste SOUS 1. Une matière qui sature écrête ses
+// variations et rend un aplat de la couleur du style — exactement ce que la texture est censée éviter.
 interface Spec {
-  /** Côté (px) de la carte. */
+  /** Côté (px) des cartes. */
   size: number
-  /** Taille (m) du motif avant répétition. */
+  /** Côté (m) du motif avant répétition. */
   tileM: number
-  bumpScale: number
+  /** Amplitude (m) du relief : c'est elle, rapportée à `tileM`, qui donne la pente des normales. */
+  relief: number
   /** Luminance en [0, 1] du point (u, v) ∈ [0, 1[². */
   shade(u: number, v: number): number
+  /** Relief en [0, 1]. Par défaut la luminance : une matière claire est en saillie. */
+  height?(u: number, v: number): number
+  /** Rugosité en [0, 1], MULTIPLICATEUR de celle du style. Par défaut 1 (uniforme). */
+  rough?(u: number, v: number): number
+  /** Métallicité en [0, 1], multiplicateur de celle du style. Par défaut 1. */
+  metal?(u: number, v: number): number
+  /** Teinte : multiplicateurs RVB autour de 1 (une matière qui n'est pas grise sous sa couleur). */
+  tint?(u: number, v: number): readonly [number, number, number]
 }
 
 // ---- bruit --------------------------------------------------------------------------------------
@@ -43,6 +72,7 @@ function hash(x: number, y: number, seed = 0): number {
 }
 
 const smooth = (t: number) => t * t * (3 - 2 * t)
+const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x)
 
 /** Bruit de valeur lissé, périodique sur `period` cellules (donc la texture se répète sans couture). */
 function noise(u: number, v: number, period: number, seed = 0): number {
@@ -62,94 +92,256 @@ function fbm(u: number, v: number, period: number, octaves: number, seed = 0): n
   return sum / total
 }
 
-// ---- motifs --------------------------------------------------------------------------------------
+/**
+ * Distance au joint le plus proche d'une grille de `n × n` cases, en fraction de case, et l'indice de
+ * la case. Un joint DOUX (et non un seuil binaire) est ce qui distingue un carrelage d'un damier :
+ * le chanfrein du bord accroche la lumière.
+ */
+function cell(u: number, v: number, n: number): { ix: number; iy: number; edge: number } {
+  const cx = u * n, cy = v * n
+  const ix = Math.floor(cx), iy = Math.floor(cy)
+  const dx = Math.abs(cx - ix - 0.5), dy = Math.abs(cy - iy - 0.5)
+  return { ix, iy, edge: Math.max(dx, dy) * 2 }         // 0 au centre, 1 sur le joint
+}
+
+/** Appareil à joints décalés (une assise sur deux glisse d'un demi-bloc), comme un mur de pierre. */
+function brick(u: number, v: number, rows: number, cols: number, seed: number): { ix: number; iy: number; edge: number } {
+  const iy = Math.floor(v * rows)
+  const uu = (u + hash(0, iy, seed) * 0.5) % 1
+  const ix = Math.floor(uu * cols)
+  const dx = Math.abs(uu * cols - ix - 0.5) * 2
+  const dy = Math.abs(v * rows - iy - 0.5) * 2
+  return { ix, iy, edge: Math.max(dx, dy) }
+}
+
+/** Creux de joint : 0 loin du bord, 1 dans le joint, avec un chanfrein de `w` (fraction de case). */
+const grout = (edge: number, w: number) => clamp01((edge - (1 - w)) / w)
+
+// ---- catalogue des matières ---------------------------------------------------------------------
 
 const SPECS: Record<SurfaceRole, Spec> = {
   // enduit fin : à peine grenu, c'est le relief qui le fait exister
-  plaster: { size: 256, tileM: 2, bumpScale: 0.004, shade: (u, v) => 0.94 + 0.08 * fbm(u, v, 16, 3, 1) },
+  plaster: {
+    size: 256, tileM: 2, relief: 0.0015,
+    shade: (u, v) => 0.92 + 0.08 * fbm(u, v, 16, 3, 1),
+    height: (u, v) => 0.4 * fbm(u, v, 48, 3, 1) + 0.6 * fbm(u, v, 12, 2, 21),
+    rough: (u, v) => 0.92 + 0.08 * fbm(u, v, 12, 2, 22),
+  },
   // lames de 12 cm sur 1,2 m, décalées d'une demi-lame par rangée, veinées dans la longueur
   wood: {
-    size: 512, tileM: 2.4, bumpScale: 0.01,
+    size: 512, tileM: 2.4, relief: 0.004,
     shade: (u, v) => {
       const row = Math.floor(v * 20)                       // 20 lames de 12 cm sur 2,4 m
       const uu = (u + (row % 2) * 0.25) % 1
       const plank = Math.floor(uu * 2)                     // 2 lames de 1,2 m dans la longueur
-      const tone = 0.82 + 0.28 * hash(plank, row, 7)       // chaque lame a sa teinte
+      const tone = 0.76 + 0.22 * hash(plank, row, 7)       // chaque lame a sa teinte
       const grain = 0.9 + 0.2 * fbm(u * 6, v * 0.5 + hash(plank, row, 9), 24, 3, 2)
       const gapV = Math.abs(v * 20 - row - 0.5) > 0.47 ? 0.6 : 1   // joint entre lames
       const gapU = Math.abs(uu * 2 - plank - 0.5) > 0.49 ? 0.6 : 1
       return Math.min(1, tone * grain) * gapV * gapU
     },
+    // le VEINAGE est en creux, le joint entre lames l'est franchement : deux échelles de relief
+    height: (u, v) => {
+      const row = Math.floor(v * 20)
+      const uu = (u + (row % 2) * 0.25) % 1
+      const joint = Math.abs(v * 20 - row - 0.5) > 0.45 || Math.abs(uu * 2 - Math.floor(uu * 2) - 0.5) > 0.47
+      return joint ? 0 : 0.6 + 0.4 * fbm(u * 6, v * 0.5, 24, 3, 2)
+    },
+    // le vernis suit la lame : chaque planche s'use un peu différemment
+    rough: (u, v) => 0.78 + 0.22 * hash(Math.floor((u + (Math.floor(v * 20) % 2) * 0.25) % 1 * 2), Math.floor(v * 20), 31),
+    tint: (u, v) => { const w = 0.06 * (fbm(u * 6, v * 0.5, 24, 2, 33) - 0.5); return [1 + w, 1, 1 - w] as const },
   },
   // carreaux de 60 cm, joint de 6 mm, léger nuage par carreau
   tile: {
-    size: 512, tileM: 2.4, bumpScale: 0.008,
+    size: 512, tileM: 2.4, relief: 0.003,
     shade: (u, v) => {
-      const n = 4, cx = u * n, cy = v * n
-      const ix = Math.floor(cx), iy = Math.floor(cy)
-      const grout = Math.abs(cx - ix - 0.5) > 0.495 || Math.abs(cy - iy - 0.5) > 0.495
-      if (grout) return 0.55
-      return 0.9 + 0.1 * hash(ix, iy, 3) + 0.08 * (fbm(u, v, 8, 2, 4) - 0.5)
+      const { ix, iy, edge } = cell(u, v, 4)
+      const g = grout(edge, 0.02)
+      const face = 0.86 + 0.1 * hash(ix, iy, 3) + 0.08 * (fbm(u, v, 8, 2, 4) - 0.5)
+      return face * (1 - 0.42 * g)
     },
+    height: (u, v) => 1 - grout(cell(u, v, 4).edge, 0.035),
+    // la faïence est lisse, le joint est mat : c'est ce contraste qui fait lire un carrelage
+    rough: (u, v) => 0.35 + 0.65 * grout(cell(u, v, 4).edge, 0.04),
   },
   // moquette : grain serré et uniforme
-  carpet: { size: 256, tileM: 1, bumpScale: 0.006, shade: (u, v) => 0.85 + 0.25 * fbm(u, v, 64, 2, 5) },
+  carpet: {
+    size: 256, tileM: 1, relief: 0.003,
+    shade: (u, v) => 0.8 + 0.2 * fbm(u, v, 64, 2, 5),
+    rough: () => 1,
+  },
   // béton : nuages larges et piqûres fines
-  concrete: { size: 256, tileM: 2, bumpScale: 0.006, shade: (u, v) => 0.86 + 0.2 * fbm(u, v, 6, 4, 6) - (hash(Math.floor(u * 256), Math.floor(v * 256), 8) > 0.985 ? 0.15 : 0) },
+  concrete: {
+    size: 256, tileM: 2, relief: 0.002,
+    shade: (u, v) => 0.82 + 0.18 * fbm(u, v, 6, 4, 6) - (hash(Math.floor(u * 256), Math.floor(v * 256), 8) > 0.985 ? 0.15 : 0),
+    height: (u, v) => 0.5 * fbm(u, v, 40, 3, 6) + 0.5 * fbm(u, v, 6, 3, 61),
+    rough: (u, v) => 0.85 + 0.15 * fbm(u, v, 8, 2, 62),
+  },
   // pelouse : deux échelles, la touffe et la plaque
-  grass: { size: 256, tileM: 3, bumpScale: 0.01, shade: (u, v) => 0.8 + 0.3 * fbm(u, v, 48, 3, 10) * (0.8 + 0.4 * fbm(u, v, 4, 2, 11)) },
+  grass: {
+    size: 256, tileM: 3, relief: 0.012,
+    shade: (u, v) => 0.7 + 0.25 * fbm(u, v, 48, 3, 10) * (0.8 + 0.4 * fbm(u, v, 4, 2, 11)),
+    rough: () => 1,
+    // l'herbe n'est pas d'un seul vert : les creux tirent au jaune, les touffes au bleu
+    tint: (u, v) => { const w = 0.1 * (fbm(u, v, 12, 2, 12) - 0.5); return [1 + w, 1, 1 - 1.4 * w] as const },
+  },
   // eau : réseau clair de « caustiques » — les crêtes d'un bruit replié
   water: {
-    size: 256, tileM: 4, bumpScale: 0.02,
-    shade: (u, v) => { const n = fbm(u, v, 6, 3, 12); return 0.85 + 0.35 * Math.pow(1 - Math.abs(n * 2 - 1), 4) },
+    size: 256, tileM: 4, relief: 0.01,
+    shade: (u, v) => { const n = fbm(u, v, 6, 3, 12); return 0.8 + 0.2 * Math.pow(1 - Math.abs(n * 2 - 1), 4) },
+    height: (u, v) => 0.5 + 0.5 * (fbm(u, v, 8, 3, 13) - 0.5),
+    rough: () => 0.25,
   },
   // dalles de 40 cm posées droites, joint marqué
   pavers: {
-    size: 512, tileM: 2, bumpScale: 0.012,
+    size: 512, tileM: 2, relief: 0.005,
     shade: (u, v) => {
-      const n = 5, cx = u * n, cy = v * n
-      const ix = Math.floor(cx), iy = Math.floor(cy)
-      const grout = Math.abs(cx - ix - 0.5) > 0.485 || Math.abs(cy - iy - 0.5) > 0.485
-      if (grout) return 0.5
-      return 0.82 + 0.18 * hash(ix, iy, 13) + 0.12 * (fbm(u, v, 20, 2, 14) - 0.5)
+      const { ix, iy, edge } = cell(u, v, 5)
+      const face = 0.78 + 0.16 * hash(ix, iy, 13) + 0.12 * (fbm(u, v, 20, 2, 14) - 0.5)
+      return face * (1 - 0.4 * grout(edge, 0.05))
     },
+    height: (u, v) => (1 - grout(cell(u, v, 5).edge, 0.08)) * (0.85 + 0.15 * fbm(u, v, 24, 2, 15)),
+    rough: (u, v) => 0.8 + 0.2 * hash(cell(u, v, 5).ix, cell(u, v, 5).iy, 16),
   },
   // terre de massif : sombre, grumeleuse
-  soil: { size: 256, tileM: 2, bumpScale: 0.01, shade: (u, v) => 0.7 + 0.4 * fbm(u, v, 32, 3, 15) },
+  soil: {
+    size: 256, tileM: 2, relief: 0.01,
+    shade: (u, v) => 0.62 + 0.36 * fbm(u, v, 32, 3, 15),
+    rough: () => 1,
+  },
   // toiture : gravillon / membrane, plus uniforme que le béton
-  roof: { size: 256, tileM: 3, bumpScale: 0.004, shade: (u, v) => 0.9 + 0.14 * fbm(u, v, 40, 2, 16) },
+  roof: {
+    size: 256, tileM: 3, relief: 0.004,
+    shade: (u, v) => 0.88 + 0.12 * fbm(u, v, 40, 2, 16),
+    height: (u, v) => fbm(u, v, 64, 3, 16),
+    rough: (u, v) => 0.88 + 0.12 * fbm(u, v, 30, 2, 17),
+  },
+  // métal brossé : stries fines dans une direction, la lumière y glisse en traînée
+  metal: {
+    size: 256, tileM: 1, relief: 0.0008,
+    shade: (u, v) => 0.88 + 0.12 * noise(u * 40, v, 128, 40),
+    height: (u, v) => noise(u * 40, v, 128, 40),
+    rough: (u, v) => 0.25 + 0.15 * noise(u * 40, v, 128, 41),
+    metal: () => 1,
+  },
+  // dalle technique : cases de 1 m creusées d'une rainure, le lisse entre deux arêtes
+  grid: {
+    size: 512, tileM: 2, relief: 0.006,
+    shade: (u, v) => {
+      const g = grout(cell(u, v, 2).edge, 0.035)
+      return (0.86 + 0.1 * fbm(u, v, 16, 2, 50)) * (1 - 0.55 * g)
+    },
+    height: (u, v) => 1 - grout(cell(u, v, 2).edge, 0.05),
+    rough: (u, v) => 0.3 + 0.55 * grout(cell(u, v, 2).edge, 0.06),
+    metal: (u, v) => 1 - 0.7 * grout(cell(u, v, 2).edge, 0.06),
+  },
+  // laque : presque lisse, juste assez de grain pour que le reflet ne soit pas un miroir
+  gloss: {
+    size: 256, tileM: 2, relief: 0.0004,
+    shade: (u, v) => 0.97 + 0.03 * fbm(u, v, 24, 2, 55),
+    rough: (u, v) => 0.45 + 0.1 * fbm(u, v, 24, 2, 56),
+  },
+  // pierre : blocs irréguliers, joints creusés, grain sableux
+  stone: {
+    size: 512, tileM: 2.5, relief: 0.008,
+    shade: (u, v) => {
+      const { ix, iy, edge } = brick(u, v, 6, 3, 60)
+      const face = 0.76 + 0.16 * hash(ix, iy, 61) + 0.16 * (fbm(u, v, 40, 3, 62) - 0.5)
+      return face * (1 - 0.35 * grout(edge, 0.06))
+    },
+    height: (u, v) => (1 - grout(brick(u, v, 6, 3, 60).edge, 0.09)) * (0.8 + 0.2 * fbm(u, v, 40, 3, 63)),
+    rough: () => 1,
+  },
+}
+
+// ---- cuisson ------------------------------------------------------------------------------------
+
+function texture(data: Uint8Array, size: number, tileM: number, srgb: boolean): Texture {
+  const t = new DataTexture(data, size, size)
+  t.wrapS = t.wrapT = RepeatWrapping
+  t.repeat.set(1 / tileM, 1 / tileM)
+  t.colorSpace = srgb ? SRGBColorSpace : LinearSRGBColorSpace
+  t.anisotropy = 4
+  t.generateMipmaps = true
+  t.needsUpdate = true
+  return t
 }
 
 function bake(spec: Spec): SurfaceTexture {
-  const { size } = spec
-  const data = new Uint8Array(size * size * 4)
+  const { size, tileM } = spec
+  const height = spec.height ?? spec.shade
+  // Le relief est échantillonné une fois pour toutes : la normale se lit sur ses voisins, et
+  // recalculer `height` quatre fois par pixel coûterait quatre fois le prix de la matière.
+  const h = new Float32Array(size * size)
   for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-    const l = Math.round(Math.max(0, Math.min(1, spec.shade((x + 0.5) / size, (y + 0.5) / size))) * 255)
+    h[y * size + x] = clamp01(height((x + 0.5) / size, (y + 0.5) / size))
+  }
+
+  const color = new Uint8Array(size * size * 4)
+  const normal = new Uint8Array(size * size * 4)
+  const orm = new Uint8Array(size * size * 4)
+  // Pente : une hauteur de `relief` mètres sur un texel de `tileM / size` mètres. C'est ce rapport,
+  // et non l'amplitude seule, qui décide de l'inclinaison des normales — doubler la résolution d'une
+  // matière sans ce facteur la rendrait deux fois plus pentue.
+  const slope = spec.relief / (tileM / size)
+  const wrap = (i: number) => (i + size) % size
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const u = (x + 0.5) / size, v = (y + 0.5) / size
     const i = (y * size + x) * 4
-    data[i] = data[i + 1] = data[i + 2] = l
-    data[i + 3] = 255
+    const l = clamp01(spec.shade(u, v))
+    const [tr, tg, tb] = spec.tint?.(u, v) ?? [1, 1, 1]
+    color[i] = Math.round(clamp01(l * tr) * 255)
+    color[i + 1] = Math.round(clamp01(l * tg) * 255)
+    color[i + 2] = Math.round(clamp01(l * tb) * 255)
+    color[i + 3] = 255
+
+    // différences centrées : la pente en x et en y, puis la normale unitaire (z vers l'extérieur)
+    const dx = (h[y * size + wrap(x + 1)]! - h[y * size + wrap(x - 1)]!) * 0.5 * slope
+    const dy = (h[wrap(y + 1) * size + x]! - h[wrap(y - 1) * size + x]!) * 0.5 * slope
+    const inv = 1 / Math.hypot(dx, dy, 1)
+    normal[i] = Math.round((-dx * inv * 0.5 + 0.5) * 255)
+    normal[i + 1] = Math.round((-dy * inv * 0.5 + 0.5) * 255)
+    normal[i + 2] = Math.round((inv * 0.5 + 0.5) * 255)
+    normal[i + 3] = 255
+
+    orm[i] = 255
+    orm[i + 1] = Math.round(clamp01(spec.rough?.(u, v) ?? 1) * 255)
+    orm[i + 2] = Math.round(clamp01(spec.metal?.(u, v) ?? 1) * 255)
+    orm[i + 3] = 255
   }
-  const make = (srgb: boolean) => {
-    const t = new DataTexture(data, size, size)
-    t.wrapS = t.wrapT = RepeatWrapping
-    t.repeat.set(1 / spec.tileM, 1 / spec.tileM)
-    if (srgb) t.colorSpace = SRGBColorSpace
-    t.anisotropy = 4
-    t.generateMipmaps = true
-    t.needsUpdate = true
-    return t
+  return {
+    map: texture(color, size, tileM, true),
+    normalMap: texture(normal, size, tileM, false),
+    normalScale: 1,
+    ormMap: texture(orm, size, tileM, false),
+    tileM,
   }
-  // deux objets Texture pour un même tampon : la couleur se lit en sRGB, le relief en linéaire
-  return { map: make(true), bumpMap: make(false), bumpScale: spec.bumpScale }
 }
 
-export type SurfaceTextures = Record<SurfaceRole, SurfaceTexture>
+export type SurfaceTextures = Partial<Record<SurfaceRole, SurfaceTexture>>
 
-/** Le jeu complet, calculé une fois par scène (quelques millisecondes ; ~3 Mo de textures). */
-export function createSurfaceTextures(): SurfaceTextures {
-  return Object.fromEntries((Object.keys(SPECS) as SurfaceRole[]).map((r) => [r, bake(SPECS[r])])) as SurfaceTextures
-}
+/**
+ * Le catalogue cuit, GARDÉ d'une scène à l'autre et d'un style à l'autre. Une matière est
+ * déterministe et immuable : la recuire donnerait exactement les mêmes octets. La cuisson n'est pas
+ * gratuite (une carte de 512 px, c'est un quart de million de fois trois fonctions de bruit), et
+ * elle se payait à chaque construction de scène — visible dès les tests.
+ *
+ * Même politique que le cache des carrosseries (`models/loadModel.ts`) : rien n'est libéré, parce
+ * que le catalogue est BORNÉ (quatorze rôles) et partagé. Une scène qui se détruit n'emporte donc
+ * pas les matières de celle qui la remplace.
+ */
+const BAKED = new Map<SurfaceRole, SurfaceTexture>()
 
-export function disposeSurfaceTextures(t: SurfaceTextures): void {
-  for (const s of Object.values(t)) { s.map.dispose(); s.bumpMap.dispose() }
+/**
+ * Les matières demandées. Un style ne se sert que de quelques rôles : cuire les quatorze coûterait
+ * des millisecondes et des méga-octets pour rien.
+ */
+export function createSurfaceTextures(roles: Iterable<SurfaceRole>): SurfaceTextures {
+  const out: SurfaceTextures = {}
+  for (const r of new Set(roles)) {
+    let t = BAKED.get(r)
+    if (!t) { t = bake(SPECS[r]); BAKED.set(r, t) }
+    out[r] = t
+  }
+  return out
 }

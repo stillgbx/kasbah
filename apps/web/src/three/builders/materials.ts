@@ -1,12 +1,15 @@
-import { Color, DoubleSide, Material, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial } from 'three'
+import { Color, DoubleSide, LinearSRGBColorSpace, Material, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial } from 'three'
 import type { FloorStyle, ZoneKind } from '@kasbah/shared'
 import type { SceneTheme } from '../core/theme'
-import { createSurfaceTextures, disposeSurfaceTextures, type SurfaceRole, type SurfaceTexture, type SurfaceTextures } from '../textures/procedural'
+import { createSurfaceTextures, type SurfaceRole, type SurfaceTexture, type SurfaceTextures } from '../textures/procedural'
+import { rolesOf, type SkyLook, type StyleLook, type SurfaceLook } from '../styles/types'
 
-// Matériaux PARTAGÉS par rôle : un changement de thème mute ~15 matériaux, pas N maillages.
+// Matériaux PARTAGÉS par rôle : un changement d'heure ou de thème mute ~15 matériaux, pas N maillages.
 // Les sols reçoivent un clone par pièce (surbrillance individuelle) rattaché à son rôle.
-// Chaque surface porte une matière par défaut (`textures/procedural.ts`) que sa couleur de thème
-// teinte : la texture dit le grain, le thème dit la couleur.
+//
+// C'est le STYLE DE RENDU (`three/styles/`) qui dit, pour chaque surface, quelle matière procédurale
+// l'habille et comment elle répond à la lumière ; la couleur vient de sa palette. Changer de style ne
+// touche aucune géométrie : on mute les mêmes matériaux et on leur repasse d'autres cartes.
 
 export interface MaterialSet {
   wall: MeshStandardMaterial
@@ -16,7 +19,7 @@ export interface MaterialSet {
   glass: MeshPhysicalMaterial
   roof: MeshStandardMaterial
   terrain: MeshStandardMaterial
-  /** Sol infini sous la parcelle : NON éclairé, exactement la couleur du fond de l'app. */
+  /** Sol infini sous la parcelle : NON éclairé, de la couleur du sol du ciel — il prolonge l'horizon. */
   ground: MeshBasicMaterial
   zones: Record<ZoneKind, MeshStandardMaterial>
   ghost: MeshStandardMaterial
@@ -24,59 +27,61 @@ export interface MaterialSet {
   vehicle: MeshStandardMaterial
   /** Petits objets connectés neutres. */
   device: MeshStandardMaterial
-  /** Les matières partagées par les matériaux ci-dessus (libérées avec eux). */
+  /** Les matières employées par le style courant. Elles appartiennent au CATALOGUE, pas à ce jeu de matériaux. */
   textures: SurfaceTextures
   all: Set<Material>
 }
 
-const std = (color: Color, extra: ConstructorParameters<typeof MeshStandardMaterial>[0] = {}) =>
-  new MeshStandardMaterial({ color, roughness: 0.9, metalness: 0, ...extra })
+/**
+ * Une couleur LINÉAIRE du ciel, telle quelle. `new Color(hex)` convertirait depuis le sRGB ; ici les
+ * valeurs sont déjà celles de la lumière, il ne faut surtout pas les recourber une seconde fois.
+ */
+const linear = (rgb: readonly [number, number, number], k = 1) =>
+  new Color().setRGB(rgb[0] * k, rgb[1] * k, rgb[2] * k, LinearSRGBColorSpace)
 
-/** Un matériau standard habillé d'une matière : couleur × carte, relief tiré de la même carte. */
-const surfaced = (color: Color, t: SurfaceTexture, extra: ConstructorParameters<typeof MeshStandardMaterial>[0] = {}) =>
-  std(color, { map: t.map, bumpMap: t.bumpMap, bumpScale: t.bumpScale, ...extra })
+/** Ce qu'on voit sous la ligne d'horizon : entre le sol du ciel et l'horizon lui-même. */
+export const groundColor = (sky: SkyLook) => linear(sky.ground).lerp(linear(sky.horizon), 0.35)
+/** Ce qu'on voit au-dessus : le fond du canvas, qui se raccorde au disque sans couture. */
+export const backdropColor = (sky: SkyLook) => linear(sky.horizon).lerp(linear(sky.zenith), 0.35)
 
-/** Quelle matière pour quelle surface : la seule table à changer pour en remplacer une. */
-export const SURFACE_OF = {
-  wall: 'plaster', wallInterior: 'plaster', floor: 'concrete', roof: 'roof', terrain: 'grass',
-  floors: { wood: 'wood', tile: 'tile', carpet: 'carpet', concrete: 'concrete' },
-  zones: { lawn: 'grass', pool: 'water', driveway: 'concrete', path: 'pavers', bed: 'soil', terrace: 'pavers', other: 'concrete' },
-} as const satisfies { wall: SurfaceRole; wallInterior: SurfaceRole; floor: SurfaceRole; roof: SurfaceRole; terrain: SurfaceRole; floors: Record<FloorStyle, SurfaceRole>; zones: Record<ZoneKind, SurfaceRole> }
+/** Pose une matière et ses réglages PBR sur un matériau existant. */
+function surface(m: MeshStandardMaterial, color: Color, look: SurfaceLook, tex: SurfaceTexture | undefined): void {
+  m.color.copy(color)
+  // Recompiler un shader coûte ; on ne le demande que si les CARTES changent (donc à un changement
+  // de style), pas à chaque heure qui passe.
+  const changed = m.map !== (tex?.map ?? null)
+  m.map = tex?.map ?? null
+  m.normalMap = tex?.normalMap ?? null
+  m.roughnessMap = tex?.ormMap ?? null
+  m.metalnessMap = tex?.ormMap ?? null
+  const relief = (look.relief ?? 1) * (tex?.normalScale ?? 1)
+  m.normalScale.set(relief, relief)
+  m.roughness = look.roughness
+  m.metalness = look.metalness ?? 0
+  m.emissive.copy(color).multiplyScalar(look.emissive ?? 0)
+  if (changed) m.needsUpdate = true
+}
 
-export function createMaterials(theme: SceneTheme, textures: SurfaceTextures = createSurfaceTextures()): MaterialSet {
-  const tex = (role: SurfaceRole) => textures[role]
+const std = (extra: ConstructorParameters<typeof MeshStandardMaterial>[0] = {}) =>
+  new MeshStandardMaterial({ roughness: 0.9, metalness: 0, ...extra })
+
+export function createMaterials(theme: SceneTheme, look: StyleLook, textures: SurfaceTextures = {}): MaterialSet {
   const set: Omit<MaterialSet, 'all'> = {
-    wall: surfaced(theme.wall, tex(SURFACE_OF.wall)),
-    wallInterior: surfaced(theme.wallInterior, tex(SURFACE_OF.wallInterior)),
-    floor: surfaced(theme.floor, tex(SURFACE_OF.floor)),
-    floors: {
-      wood: surfaced(theme.floors.wood, tex(SURFACE_OF.floors.wood), { roughness: 0.6 }),
-      tile: surfaced(theme.floors.tile, tex(SURFACE_OF.floors.tile), { roughness: 0.35 }),
-      carpet: surfaced(theme.floors.carpet, tex(SURFACE_OF.floors.carpet)),
-      concrete: surfaced(theme.floors.concrete, tex(SURFACE_OF.floors.concrete)),
-    },
-    glass: new MeshPhysicalMaterial({ color: theme.glass, transparent: true, opacity: 0.35, roughness: 0.1, metalness: 0, side: DoubleSide, depthWrite: false }),
-    roof: surfaced(theme.roof, tex(SURFACE_OF.roof), { side: DoubleSide, roughness: 0.85 }),
-    terrain: surfaced(theme.terrain, tex(SURFACE_OF.terrain), { roughness: 1 }),
-    ground: new MeshBasicMaterial({ color: theme.background }),
-    zones: {
-      lawn: surfaced(theme.zones.lawn, tex(SURFACE_OF.zones.lawn), { roughness: 1 }),
-      // l'eau : lisse, un peu de métal pour que le ciel s'y pose
-      pool: surfaced(theme.zones.pool, tex(SURFACE_OF.zones.pool), { roughness: 0.15, metalness: 0.15 }),
-      driveway: surfaced(theme.zones.driveway, tex(SURFACE_OF.zones.driveway)),
-      path: surfaced(theme.zones.path, tex(SURFACE_OF.zones.path), { roughness: 0.7 }),
-      bed: surfaced(theme.zones.bed, tex(SURFACE_OF.zones.bed)),
-      terrace: surfaced(theme.zones.terrace, tex(SURFACE_OF.zones.terrace), { roughness: 0.65 }),
-      other: surfaced(theme.zones.other, tex(SURFACE_OF.zones.other)),
-    },
+    wall: std(), wallInterior: std(), floor: std(),
+    floors: { wood: std(), tile: std(), carpet: std(), concrete: std() },
+    glass: new MeshPhysicalMaterial({ transparent: true, side: DoubleSide, depthWrite: false }),
+    roof: std({ side: DoubleSide }),
+    terrain: std(),
+    ground: new MeshBasicMaterial(),
+    zones: { lawn: std(), pool: std(), driveway: std(), path: std(), bed: std(), terrace: std(), other: std() },
     textures,
-    ghost: std(theme.wall, { transparent: true, opacity: 0.12, depthWrite: false }),
-    slat: std(theme.isDark ? new Color('#8a8f94') : new Color('#c9ced2'), { roughness: 0.5, metalness: 0.2 }),
+    ghost: std({ transparent: true, opacity: 0.12, depthWrite: false }),
+    slat: std({ roughness: 0.5, metalness: 0.2 }),
     // Peinture de carrosserie : lisse et assez métallique pour RÉFLÉCHIR. Ces valeurs n'ont de sens
-    // qu'avec la carte d'environnement que `HouseScene` vient y poser — sans elle, la part
-    // métallique n'a rien à renvoyer et la voiture s'assombrit au lieu de briller.
-    vehicle: std(theme.secondary, { roughness: 0.28, metalness: 0.55 }),
-    device: std(theme.isDark ? new Color('#9aa4b2') : new Color('#5b6470'), { roughness: 0.6, metalness: 0.1 }),
+    // qu'avec `scene.environment` — sans carte d'environnement, la part métallique n'a rien à
+    // renvoyer et la voiture s'assombrit au lieu de briller.
+    vehicle: std({ roughness: 0.28, metalness: 0.55 }),
+    device: std({ roughness: 0.6, metalness: 0.1 }),
   }
   const all = new Set<Material>()
   for (const [k, v] of Object.entries(set)) {
@@ -84,27 +89,48 @@ export function createMaterials(theme: SceneTheme, textures: SurfaceTextures = c
     if (v instanceof Material) all.add(v)
     else for (const m of Object.values(v as Record<string, Material>)) all.add(m)
   }
-  return { ...set, all }
+  const mats = { ...set, all }
+  applyLook(mats, theme, look)
+  return mats
 }
 
-/** Applique un nouveau thème aux matériaux existants (aucune géométrie touchée). */
-export function applyTheme(mats: MaterialSet, theme: SceneTheme): void {
-  mats.wall.color.copy(theme.wall)
-  mats.wallInterior.color.copy(theme.wallInterior)
-  mats.floor.color.copy(theme.floor)
-  for (const k of Object.keys(mats.floors) as FloorStyle[]) mats.floors[k].color.copy(theme.floors[k])
+/** Cuit les matières qui manquent au style demandé, garde celles déjà là. */
+function ensureTextures(textures: SurfaceTextures, roles: readonly SurfaceRole[]): void {
+  const missing = roles.filter((r) => !textures[r])
+  if (missing.length) Object.assign(textures, createSurfaceTextures(missing))
+}
+
+/**
+ * Applique un style et une heure aux matériaux existants (aucune géométrie touchée). C'est l'unique
+ * chemin : création comprise, qui n'est qu'une première application.
+ */
+export function applyLook(mats: MaterialSet, theme: SceneTheme, look: StyleLook): void {
+  const s = look.surfaces
+  ensureTextures(mats.textures, rolesOf(s))
+  const tex = (l: SurfaceLook) => mats.textures[l.texture]
+
+  surface(mats.wall, theme.wall, s.wall, tex(s.wall))
+  surface(mats.wallInterior, theme.wallInterior, s.wallInterior, tex(s.wallInterior))
+  surface(mats.floor, theme.floor, s.floor, tex(s.floor))
+  for (const k of Object.keys(mats.floors) as FloorStyle[]) surface(mats.floors[k], theme.floors[k], s.floors[k], tex(s.floors[k]))
+  surface(mats.roof, theme.roof, s.roof, tex(s.roof))
+  surface(mats.terrain, theme.terrain, s.terrain, tex(s.terrain))
+  for (const k of Object.keys(mats.zones) as ZoneKind[]) surface(mats.zones[k], theme.zones[k], s.zones[k], tex(s.zones[k]))
+
   mats.glass.color.copy(theme.glass)
-  mats.roof.color.copy(theme.roof)
-  mats.terrain.color.copy(theme.terrain)
-  mats.ground.color.copy(theme.background)
-  for (const k of Object.keys(mats.zones) as ZoneKind[]) mats.zones[k].color.copy(theme.zones[k])
+  mats.glass.opacity = look.glass.opacity
+  mats.glass.roughness = look.glass.roughness
+  mats.glass.metalness = look.glass.metalness
+  mats.glass.emissive.copy(theme.glass).multiplyScalar(look.glass.emissive)
+
+  mats.ground.color.copy(groundColor(look.sky))
   mats.ghost.color.copy(theme.wall)
-  mats.slat.color.set(theme.isDark ? '#8a8f94' : '#c9ced2')
+  mats.slat.color.copy(theme.slat)
   mats.vehicle.color.copy(theme.secondary)
-  mats.device.color.set(theme.isDark ? '#9aa4b2' : '#5b6470')
+  mats.device.color.copy(theme.device)
 }
 
+/** Les matières ne sont PAS libérées : elles appartiennent au catalogue partagé (`textures/procedural.ts`). */
 export function disposeMaterials(mats: MaterialSet): void {
   for (const m of mats.all) m.dispose()
-  disposeSurfaceTextures(mats.textures)
 }
