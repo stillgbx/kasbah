@@ -26,7 +26,7 @@ import { DataTexture, LinearSRGBColorSpace, RepeatWrapping, SRGBColorSpace, type
 export type SurfaceRole =
   | 'plaster' | 'wood' | 'tile' | 'carpet' | 'concrete'
   | 'grass' | 'water' | 'pavers' | 'soil' | 'roof'
-  | 'metal' | 'grid' | 'gloss' | 'stone'
+  | 'metal' | 'grid' | 'gloss' | 'stone' | 'gravel'
 
 export interface SurfaceTexture {
   /** Couleur (sRGB) : luminance et teinte de la matière, à multiplier par la couleur du style. */
@@ -219,6 +219,13 @@ const SPECS: Record<SurfaceRole, Spec> = {
     shade: (u, v) => 0.88 + 0.12 * fbm(u, v, 40, 2, 16),
     height: (u, v) => fbm(u, v, 64, 3, 16),
     rough: (u, v) => 0.88 + 0.12 * fbm(u, v, 30, 2, 17),
+  },
+  // gravillon d'un toit plat : grain gris serré, plus grossier que la membrane `roof`
+  gravel: {
+    size: 256, tileM: 1.6, relief: 0.006,
+    shade: (u, v) => 0.6 + 0.3 * fbm(u, v, 56, 3, 18) + 0.1 * (hash(Math.floor(u * 256), Math.floor(v * 256), 19) - 0.5),
+    height: (u, v) => fbm(u, v, 56, 3, 18),
+    rough: () => 1,
   },
   // métal brossé : stries fines dans une direction, la lumière y glisse en traînée
   metal: {

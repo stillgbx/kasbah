@@ -15,3 +15,4 @@ Textures PBR d'[ambientCG](https://ambientcg.com), licence **CC0 1.0** (domaine 
 | `soil` | Ground048 | https://ambientcg.com/view?id=Ground048 |
 | `roof` | RoofingTiles013A | https://ambientcg.com/view?id=RoofingTiles013A |
 | `stone` | Bricks100 | https://ambientcg.com/view?id=Bricks100 |
+| `gravel` | Gravel043 | https://ambientcg.com/view?id=Gravel043 |

@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { Box3, BoxGeometry, type BufferGeometry, CylinderGeometry, Mesh, type MeshStandardMaterial, ShapeGeometry, Vector3, type BufferAttribute, type Texture } from 'three'
+import { BackSide, Box3, BoxGeometry, type BufferGeometry, CylinderGeometry, Mesh, type MeshBasicMaterial, type MeshStandardMaterial, ShapeGeometry, Vector3, type BufferAttribute, type Texture } from 'three'
 import { computeHouseGeometry, localToGeo, parseHouse, type DeviceDescriptor, type DeviceState, type PlacedHouseDevice } from '@kasbah/shared'
 import demo from '@kasbah/shared/demo-house.json'
 import { buildHouse, buildWallsGeometry, countTriangles } from './builders/buildHouse'
-import { buildDetails } from './builders/details'
+import { buildDetails, buildRoofDetails } from './builders/details'
+import { alignedToLongestEdge, extrudePolygon } from './builders/shapes'
 import { createSurfaceTextures, type SurfaceTexture } from './textures/procedural'
 import { createMaterials } from './builders/materials'
 import { fitBox, fitDistance } from './core/cameraFit'
@@ -952,5 +953,87 @@ describe('détail architectural', () => {
     expect(mats.trim.color.getHSL({ h: 0, s: 0, l: 0 }).l).toBeGreaterThan(wall)
     expect(mats.frame.color.getHSL({ h: 0, s: 0, l: 0 }).l).toBeLessThan(wall)
     expect(mats.plinth.color.getHSL({ h: 0, s: 0, l: 0 }).l).toBeLessThan(wall)
+  })
+})
+
+describe('toit et piscine', () => {
+  const geometry = computeHouseGeometry(parseHouse(demo))
+  const mats = createMaterials(defaultSceneTheme(), defaultLook())
+
+  it('un toit à deux pentes reçoit des planches de rive sous ses égouts et ses pignons, jamais au faîte', () => {
+    const [fascia] = buildRoofDetails(geometry.roof!, mats)
+    expect(fascia!.name).toBe('roof:fascia')
+    expect(fascia!.material).toBe(mats.frame)
+    fascia!.geometry.computeBoundingBox()
+    expect(fascia!.geometry.boundingBox!.max.z).toBeLessThanOrEqual(geometry.roof!.zRidge + 1e-6) // les rives montent au faîte, rien au-dessus
+    expect(fascia!.geometry.boundingBox!.min.z).toBeCloseTo(geometry.roof!.zBase - 0.18, 3)  // pendu sous l'égout
+  })
+
+  it('un toit plat reçoit un acrotère dans le matériau des murs, couronné, et une dalle qui n’est pas en tuiles', () => {
+    const flat = { ...geometry.roof!, type: 'flat' as const, zRidge: geometry.roof!.zBase + 0.2, faces: [] }
+    const meshes = buildRoofDetails(flat, mats)
+    expect(meshes.map((m) => m.name)).toEqual(['roof:parapet', 'roof:parapet-cap'])
+    expect(meshes[0]!.material).toBe(mats.wall)
+    meshes[1]!.geometry.computeBoundingBox()
+    expect(meshes[1]!.geometry.boundingBox!.max.z).toBeCloseTo(flat.zRidge + 0.35 + 0.005, 3)
+    const nodes = buildHouse({ ...geometry, roof: flat }, mats)
+    expect(nodes.roof!.material).toBe(mats.roofFlat)
+    expect(mats.roofFlat.map).not.toBe(mats.roof.map)
+  })
+
+  it('une piscine est un bassin : margelle, parois vues de l’intérieur, eau translucide en retrait', () => {
+    const nodes = buildHouse(geometry, mats)
+    const water = nodes.zones.get('piscine')!
+    expect(water.name).toBe('zone:piscine')
+    expect((water.material as MeshStandardMaterial).transparent).toBe(true)
+    water.geometry.computeBoundingBox()
+    expect(water.geometry.boundingBox!.max.z).toBeCloseTo(geometry.terrain.z - 0.12, 3)
+    const names = nodes.site.children.map((c) => c.name)
+    expect(names).toContain('pool:coping:piscine')
+    expect(names).toContain('pool:basin:piscine')
+    const basin = nodes.site.children.find((c) => c.name === 'pool:basin:piscine') as Mesh
+    expect(basin.material).toBe(mats.poolBasin)
+    expect(mats.poolBasin.side).toBe(BackSide)
+  })
+})
+
+describe('bassin aligné sur ses bords', () => {
+  it('les carreaux du fond suivent les côtés d’une piscine tournée, pas les axes du monde', () => {
+    // un rectangle 8 × 4 tourné de 30° : en UV monde, sa boîte englobante serait bien plus grande que 32 m²
+    const c = Math.cos(Math.PI / 6), s = Math.sin(Math.PI / 6)
+    const rot = ([x, y]: [number, number]): [number, number] => [x * c - y * s, x * s + y * c]
+    const poly = ([[-4, -2], [4, -2], [4, 2], [-4, 2]] as [number, number][]).map(rot)
+    const g = alignedToLongestEdge(poly, (p) => extrudePolygon(p, -1.5, 0))
+    const nrm = g.getAttribute('normal'), uv = g.getAttribute('uv')
+    let minU = Infinity, maxU = -Infinity, minV = Infinity, maxV = -Infinity
+    for (let i = 0; i < nrm.count; i++) {
+      if (nrm.getZ(i) > -0.999) continue                                  // le fond seulement (normale vers le bas)
+      minU = Math.min(minU, uv.getX(i)); maxU = Math.max(maxU, uv.getX(i))
+      minV = Math.min(minV, uv.getY(i)); maxV = Math.max(maxV, uv.getY(i))
+    }
+    expect((maxU - minU) * (maxV - minV)).toBeCloseTo(32, 1)
+    g.computeBoundingBox()                                               // et la géométrie est bien revenue à sa place
+    expect(g.boundingBox!.max.x).toBeCloseTo(4 * c + 2 * s, 3)
+  })
+})
+
+describe('mise en évidence d’une pièce', () => {
+  it('pose un trait et un voile non éclairés, sans toucher la couleur du sol', () => {
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true })
+    scene.load(parseHouse(demo))
+    const geometry = computeHouseGeometry(parseHouse(demo))
+    const roomId = geometry.levels[0]!.floors[0]!.roomId
+    const nodes = (scene as unknown as { nodes: { levels: Map<string, { group: { children: Mesh[] }; floors: Map<string, Mesh> }> } }).nodes
+    const level = nodes.levels.get(geometry.levels[0]!.levelId)!
+    const floor = level.floors.get(roomId)!
+    const before = (floor.userData.material as MeshStandardMaterial).color.getHex()
+    scene.highlightRoom(roomId)
+    const marks = level.group.children.filter((c) => c.name === 'highlight')
+    expect(marks).toHaveLength(2)
+    for (const m of marks) expect((m.material as MeshBasicMaterial).isMeshBasicMaterial).toBe(true)
+    expect((floor.userData.material as MeshStandardMaterial).color.getHex()).toBe(before)
+    scene.highlightRoom(null)
+    expect(level.group.children.filter((c) => c.name === 'highlight')).toHaveLength(0)
+    scene.dispose()
   })
 })

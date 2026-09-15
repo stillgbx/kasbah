@@ -1,10 +1,11 @@
 import type { BufferGeometry, Object3D } from 'three';
-import { BoxGeometry, CircleGeometry, Group, Mesh } from 'three'
+import { BoxGeometry, Group, Mesh } from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import type { HouseGeometry, LevelGeometry, OpeningRect, WallPrism } from '@kasbah/shared'
-import { buildDetails } from './details'
+import { buildDetails, buildRoofDetails } from './details'
 import type { MaterialSet } from './materials'
-import { extrudePolygon, flatPolygon, planarFaces } from './shapes'
+import { alignedToLongestEdge, discWithHoles, extrudePolygon, flatPolygon, flatRing, flatWithHoles, insetPolygon, planarFaces } from './shapes'
+import { offsetPolygon } from '@kasbah/shared'
 
 // Builders : descripteurs purs → maillages. Tous les objets vivent dans le repère maison (Z-up) ;
 // la racine porte la rotation vers le monde Three. Un maillage de murs par niveau et par matériau.
@@ -12,6 +13,10 @@ import { extrudePolygon, flatPolygon, planarFaces } from './shapes'
 export const ROOT_ROTATION_X = -Math.PI / 2
 /** Rayon (m) du sol infini sous la parcelle : couleur du fond de l'app, donc sans bord visible. */
 export const GROUND_RADIUS = 400
+/** Largeur (m) de la margelle d'une piscine, profondeur du bassin, et retrait de l'eau sous la margelle. */
+const POOL_COPING_W = 0.4
+const POOL_DEPTH = 1.5
+const POOL_WATER_DROP = 0.12
 
 export interface LevelNodes {
   group: Group
@@ -117,12 +122,15 @@ export function buildHouse(geometry: HouseGeometry, mats: MaterialSet): HouseNod
   site.name = 'site'
   // Sol infini : la parcelle ne flotte plus sur le fond de l'app, l'horizon n'a plus de bord. Non
   // éclairé et de la couleur du fond, il s'y fond exactement ; il ne porte aucune ombre.
-  const ground = new Mesh(new CircleGeometry(GROUND_RADIUS, 72), mats.ground)
+  // Les bassins sont CREUSÉS : terrain et sol infini sont percés à leur emprise, sinon la surface du
+  // terrain (ou le disque, deux centimètres plus bas) fermerait le trou et cacherait parois et eau.
+  const basins = geometry.zones.filter((z) => z.kind === 'pool').map((z) => z.polygon)
+  const ground = new Mesh(discWithHoles(GROUND_RADIUS, basins, 0), mats.ground)
   ground.name = 'ground'
   ground.position.z = geometry.terrain.z - 0.02
   ground.userData = { role: 'ground' }
   site.add(ground)
-  const terrain = new Mesh(flatPolygon(geometry.terrain.polygon, geometry.terrain.z), mats.terrain)
+  const terrain = new Mesh(flatWithHoles(geometry.terrain.polygon, basins, geometry.terrain.z), mats.terrain)
   terrain.name = 'terrain'
   terrain.userData = { role: 'terrain' }
   terrain.receiveShadow = true
@@ -130,6 +138,25 @@ export function buildHouse(geometry: HouseGeometry, mats: MaterialSet): HouseNod
   const zones = new Map<string, Mesh>()
   for (const z of geometry.zones) {
     const mat = mats.zones[z.kind]
+    if (z.kind === 'pool') {
+      // Une piscine est un BASSIN, pas une tache bleue : une margelle qui déborde et affleure, un
+      // bassin carrelé vu de l'intérieur (une extrusion rendue sur ses faces ARRIÈRE : parois et
+      // fond, le dessus reste ouvert), et l'eau douze centimètres sous la margelle, translucide —
+      // c'est le fond qui lui donne sa couleur et sa profondeur.
+      const coping = new Mesh(flatRing(offsetPolygon(z.polygon, POOL_COPING_W), z.polygon, z.z + 0.012), mats.trim)
+      coping.name = `pool:coping:${z.zoneId}`
+      coping.receiveShadow = true
+      // bassin et eau sont construits dans le repère de la piscine : les carreaux du fond et des
+      // parois suivent ses bords, pas les axes du monde (une piscine tournée les avait en biais)
+      const basin = new Mesh(alignedToLongestEdge(z.polygon, (p) => extrudePolygon(p, z.z - POOL_DEPTH, z.z + 0.012)), mats.poolBasin)
+      basin.name = `pool:basin:${z.zoneId}`
+      const water = new Mesh(alignedToLongestEdge(insetPolygon(z.polygon, 0.005), (p) => flatPolygon(p, z.z - POOL_WATER_DROP)), mat)
+      water.name = `zone:${z.zoneId}`
+      water.userData = { role: 'zone', zoneId: z.zoneId, material: mat }
+      zones.set(z.zoneId, water)
+      site.add(coping, basin, water)
+      continue
+    }
     const mesh = new Mesh(flatPolygon(z.polygon, z.z + 0.01), mat)
     mesh.name = `zone:${z.zoneId}`
     mesh.userData = { role: 'zone', zoneId: z.zoneId, material: mat }
@@ -153,11 +180,15 @@ export function buildHouse(geometry: HouseGeometry, mats: MaterialSet): HouseNod
     const g = geometry.roof.type === 'flat'
       ? extrudePolygon(geometry.roof.outline, geometry.roof.zBase, geometry.roof.zRidge)
       : planarFaces(geometry.roof.faces)
-    roof = new Mesh(g, mats.roof)
+    // un toit plat n'est pas couvert de tuiles : sa dalle a sa propre matière (gravillon par défaut)
+    const roofMat = geometry.roof.type === 'flat' ? mats.roofFlat : mats.roof
+    roof = new Mesh(g, roofMat)
     roof.name = 'roof'
     roof.castShadow = true
-    roof.userData = { role: 'roof', material: mats.roof }
+    roof.userData = { role: 'roof', material: roofMat }
     root.add(roof)
+    // rives d'un toit à deux pentes, acrotère d'un toit plat : ils se montrent et se cachent avec lui
+    for (const d of buildRoofDetails(geometry.roof, mats)) roof.add(d)
   }
   return { root, levels, site, zones, terrain, ground, roof, outdoorMarkers }
 }

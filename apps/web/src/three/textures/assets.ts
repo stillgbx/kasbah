@@ -40,6 +40,7 @@ export const PHOTO_PACK: TexturePack = {
     soil: { tileM: 1.4 },
     roof: { tileM: 2.9 },
     stone: { tileM: 2.5 },
+    gravel: { tileM: 1.6 },
   },
 }
 

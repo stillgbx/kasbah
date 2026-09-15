@@ -1,4 +1,4 @@
-import { Color, DoubleSide, LinearSRGBColorSpace, Material, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial } from 'three'
+import { BackSide, Color, DoubleSide, LinearSRGBColorSpace, Material, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial } from 'three'
 import type { FloorStyle, ZoneKind } from '@kasbah/shared'
 import type { SceneTheme } from '../core/theme'
 import { createSurfaceTextures, type SurfaceRole, type SurfaceTexture, type SurfaceTextures } from '../textures/procedural'
@@ -18,6 +18,8 @@ export interface MaterialSet {
   floors: Record<FloorStyle, MeshStandardMaterial>
   glass: MeshPhysicalMaterial
   roof: MeshStandardMaterial
+  /** Dalle d'un toit plat : du gravillon, pas des tuiles — un style peut dire autrement (`SurfaceLooks.roofFlat`). */
+  roofFlat: MeshStandardMaterial
   terrain: MeshStandardMaterial
   /** Sol infini sous la parcelle : NON éclairé, de la couleur du sol du ciel — il prolonge l'horizon. */
   ground: MeshBasicMaterial
@@ -35,6 +37,8 @@ export interface MaterialSet {
   plinth: MeshStandardMaterial
   /** …et vantaux des portes. Leurs couleurs se DÉDUISENT de la palette, aucun style n'a à les donner. */
   door: MeshStandardMaterial
+  /** Parois et fond d'une piscine, vus de l'intérieur (faces arrière) : carrelage clair sous l'eau. */
+  poolBasin: MeshStandardMaterial
   /** Les matières employées par le style courant. Elles appartiennent au CATALOGUE, pas à ce jeu de matériaux. */
   textures: SurfaceTextures
   all: Set<Material>
@@ -83,9 +87,11 @@ export function createMaterials(theme: SceneTheme, look: StyleLook, textures: Su
     floors: { wood: std(), tile: std(), carpet: std(), concrete: std() },
     glass: new MeshPhysicalMaterial({ transparent: true, side: DoubleSide, depthWrite: false }),
     roof: std({ side: DoubleSide }),
+    roofFlat: std(),
     terrain: std(),
     ground: new MeshBasicMaterial(),
-    zones: { lawn: std(), pool: std(), driveway: std(), path: std(), bed: std(), terrace: std(), other: std() },
+    // l'eau est TRANSLUCIDE : c'est le fond carrelé qui lui donne sa couleur et sa profondeur
+    zones: { lawn: std(), pool: std({ transparent: true, opacity: 0.72 }), driveway: std(), path: std(), bed: std(), terrace: std(), other: std() },
     textures,
     ghost: std({ transparent: true, opacity: 0.12, depthWrite: false }),
     slat: std({ roughness: 0.5, metalness: 0.2 }),
@@ -98,6 +104,7 @@ export function createMaterials(theme: SceneTheme, look: StyleLook, textures: Su
     frame: std({ roughness: 0.45, metalness: 0.1 }),
     plinth: std({ roughness: 0.95 }),
     door: std({ roughness: 0.5 }),
+    poolBasin: std({ roughness: 0.35, side: BackSide }),
   }
   const all = new Set<Material>()
   for (const [k, v] of Object.entries(set)) {
@@ -122,7 +129,8 @@ function ensureTextures(textures: SurfaceTextures, roles: readonly SurfaceRole[]
  */
 export function applyLook(mats: MaterialSet, theme: SceneTheme, look: StyleLook, photos?: SurfaceTextures): void {
   const s = look.surfaces
-  ensureTextures(mats.textures, rolesOf(s))
+  const roofFlat: SurfaceLook = s.roofFlat ?? { texture: 'gravel', roughness: 1 }
+  ensureTextures(mats.textures, [...rolesOf(s), 'tile', roofFlat.texture])   // le bassin est carrelé quel que soit le style
   // une matière en images (`textures/assets.ts`) passe devant la procédurale du même rôle
   const tex = (l: SurfaceLook) => photos?.[l.texture] ?? mats.textures[l.texture]
 
@@ -131,6 +139,7 @@ export function applyLook(mats: MaterialSet, theme: SceneTheme, look: StyleLook,
   surface(mats.floor, theme.floor, s.floor, tex(s.floor))
   for (const k of Object.keys(mats.floors) as FloorStyle[]) surface(mats.floors[k], theme.floors[k], s.floors[k], tex(s.floors[k]))
   surface(mats.roof, theme.roof, s.roof, tex(s.roof))
+  surface(mats.roofFlat, theme.roof, roofFlat, tex(roofFlat))
   surface(mats.terrain, theme.terrain, s.terrain, tex(s.terrain))
   for (const k of Object.keys(mats.zones) as ZoneKind[]) surface(mats.zones[k], theme.zones[k], s.zones[k], tex(s.zones[k]))
 
@@ -152,6 +161,9 @@ export function applyLook(mats: MaterialSet, theme: SceneTheme, look: StyleLook,
   mats.frame.color.copy(theme.wall).lerp(BLACK, 0.55)
   mats.plinth.color.copy(theme.wall).lerp(BLACK, 0.4)
   mats.door.color.copy(theme.floors.wood)
+  // le bassin : la couleur de l'eau du style, très éclaircie — l'eau translucide par-dessus la rend
+  const basin: SurfaceLook = { texture: 'tile', roughness: 0.35 }
+  surface(mats.poolBasin, theme.zones.pool.clone().lerp(WHITE, 0.55), basin, tex(basin))
 }
 
 /** Les matières ne sont PAS libérées : elles appartiennent au catalogue partagé (`textures/procedural.ts`). */

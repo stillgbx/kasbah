@@ -1,8 +1,8 @@
-import { BoxGeometry, Mesh, type BufferGeometry } from 'three'
+import { BoxGeometry, Matrix4, Mesh, Vector3, type BufferGeometry } from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
-import type { LevelGeometry, OpeningRect, Vec2, WallPrism } from '@kasbah/shared'
+import type { LevelGeometry, OpeningRect, RoofDescriptor, Vec2, Vec3, WallPrism } from '@kasbah/shared'
 import type { MaterialSet } from './materials'
-import { extrudePolygon } from './shapes'
+import { extrudePolygon, extrudeRing, insetPolygon } from './shapes'
 
 // Détail ARCHITECTURAL procédural : ce qui fait qu'une boîte extrudée devient un bâtiment. Aucun
 // asset, aucune donnée de plus dans house.json — tout se déduit des prismes de murs et des
@@ -160,4 +160,74 @@ export function buildDetails(level: LevelGeometry, mats: MaterialSet): Mesh[] {
     meshOf(plinth, mats.plinth, 'details:plinth'),
     meshOf(doors, mats.door, 'details:doors'),
   ].filter((m): m is Mesh => m !== null)
+}
+
+// ---- le toit ------------------------------------------------------------------------------------
+
+const FASCIA_DROP = 0.18      // hauteur d'une planche de rive (m)
+const FASCIA_T = 0.04         // son épaisseur
+const FASCIA_GAP = 0.01       // décollée du pignon : deux faces coplanaires scintilleraient
+const PARAPET_H = 0.35        // acrotère d'un toit plat, au-dessus de la dalle
+const PARAPET_T = 0.2
+
+/**
+ * Une planche le long d'une arête 3D, pendue sous elle et poussée vers `out` : un parallélépipède
+ * (une boîte unitaire à laquelle on donne une base oblique), pour que la planche d'une rive en pente
+ * suive la pente en gardant ses faces verticales.
+ */
+function board(a: Vec3, b: Vec3, out: Vec2): BufferGeometry {
+  const g = new BoxGeometry(1, 1, 1)
+  const e = new Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2])
+  const m = new Matrix4().makeBasis(e, new Vector3(out[0] * FASCIA_T, out[1] * FASCIA_T, 0), new Vector3(0, 0, FASCIA_DROP))
+  const k = FASCIA_GAP + FASCIA_T / 2
+  m.setPosition((a[0] + b[0]) / 2 + out[0] * k, (a[1] + b[1]) / 2 + out[1] * k, (a[2] + b[2]) / 2 - FASCIA_DROP / 2)
+  g.applyMatrix4(m)
+  return g
+}
+
+/**
+ * Le détail du toit. Toit à deux pentes : une planche de RIVE sous chaque arête de versant qui n'est
+ * pas le faîte (égouts et rives de pignon) — c'est l'épaisseur visible d'un toit qui n'en a pas
+ * (`faces` est un jeu de plans, `thickness` 0). Toit plat : un ACROTÈRE, muret dans le matériau des
+ * murs qui court sur le pourtour de la dalle, couronné comme les murs.
+ */
+export function buildRoofDetails(roof: RoofDescriptor, mats: MaterialSet): Mesh[] {
+  const out: Mesh[] = []
+  if (roof.type === 'flat') {
+    const inner = insetPolygon(roof.outline, PARAPET_T)
+    const z0 = roof.zRidge, z1 = roof.zRidge + PARAPET_H
+    const wall = new Mesh(extrudeRing(roof.outline, inner, z0, z1), mats.wall)
+    wall.name = 'roof:parapet'
+    wall.userData = { role: 'roof', material: mats.wall }
+    const cap = new Mesh(extrudeRing(insetPolygon(roof.outline, -CAP_OUT), insetPolygon(inner, CAP_OUT), z1 - CAP_H, z1 + CAP_UP), mats.trim)
+    cap.name = 'roof:parapet-cap'
+    cap.userData = { role: 'roof', material: mats.trim }
+    out.push(wall, cap)
+  } else {
+    const parts: BufferGeometry[] = []
+    for (const face of roof.faces) {
+      // un pignon est vertical : son emprise au sol n'a pas d'aire
+      let area = 0
+      for (let i = 0; i < face.length; i++) {
+        const p = face[i]!, q = face[(i + 1) % face.length]!
+        area += p[0] * q[1] - q[0] * p[1]
+      }
+      if (Math.abs(area) < EPS) continue
+      const cx = face.reduce((s, p) => s + p[0], 0) / face.length
+      const cy = face.reduce((s, p) => s + p[1], 0) / face.length
+      for (let i = 0; i < face.length; i++) {
+        const a = face[i]!, b = face[(i + 1) % face.length]!
+        if (a[2] >= roof.zRidge - EPS && b[2] >= roof.zRidge - EPS) continue   // le faîte n'a pas de rive
+        const L = Math.hypot(b[0] - a[0], b[1] - a[1])
+        if (L < EPS) continue
+        let out2: Vec2 = [(b[1] - a[1]) / L, -(b[0] - a[0]) / L]
+        if (out2[0] * ((a[0] + b[0]) / 2 - cx) + out2[1] * ((a[1] + b[1]) / 2 - cy) < 0) out2 = [-out2[0], -out2[1]]
+        parts.push(board(a, b, out2))
+      }
+    }
+    const fascia = meshOf(parts, mats.frame, 'roof:fascia')
+    if (fascia) { fascia.userData = { role: 'roof', material: mats.frame }; out.push(fascia) }
+  }
+  for (const m of out) { m.castShadow = true; m.receiveShadow = true }
+  return out
 }

@@ -1,6 +1,6 @@
 import {
-  AmbientLight, DirectionalLight, HemisphereLight, PerspectiveCamera, Plane, Raycaster, Scene, Spherical, type Texture, TOUCH, Vector2, Vector3, VSMShadowMap,
-  WebGLRenderer, Box3, type Material, type Mesh, type MeshStandardMaterial, type Object3D,
+  AmbientLight, Color, DirectionalLight, HemisphereLight, PerspectiveCamera, Plane, Raycaster, Scene, Spherical, type Texture, TOUCH, Vector2, Vector3, VSMShadowMap,
+  WebGLRenderer, Box3, Mesh, MeshBasicMaterial, type Material, type MeshStandardMaterial, type Object3D,
 } from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js'
@@ -17,6 +17,7 @@ import { createPostPipeline, detectQuality, gpuName, PIXEL_RATIO, toneMappingOf,
 import { sunDirection, type SceneAmbience } from './core/ambience'
 import { defaultAmbience, defaultSceneTheme, rolesOf, styleById, type RenderStyle, type StyleLook } from './styles'
 import { buildHouse, type HouseNodes, type LevelNodes } from './builders/buildHouse'
+import { flatPolygon, flatRing, insetPolygon } from './builders/shapes'
 import { clamp, fitBox, sphericalOf, type CameraPose } from './core/cameraFit'
 import { boundsToWorldBox } from './core/coords'
 import { disposeObject3D } from './core/dispose'
@@ -135,6 +136,9 @@ const DEFAULT_POLAR = (55 * Math.PI) / 180
 /** Cadrage d'un niveau-toit : plus plongeant que les autres, on vient regarder la dalle elle-même. */
 const ROOF_POLAR = (35 * Math.PI) / 180
 const WORLD_UP = new Vector3(0, 1, 0)
+const WHITE = new Color(0xffffff)
+/** Largeur (m) du trait qui souligne la pièce sélectionnée : un pixel de loin, une bande de près. */
+const HIGHLIGHT_RING_M = 0.14
 /** Rayon (px) autour de l'ancre ou de la pilule où l'appui saisit l'appareil déplaçable. */
 const GRAB_RADIUS_PX = { touch: 44, mouse: 28 }
 /**
@@ -205,6 +209,8 @@ export class HouseScene {
   private focusedLevelId: string | null = null
   private pillLod: PillLod | null = null
   private highlightedRoom: string | null = null
+  /** Le trait et le voile posés sur la pièce sélectionnée (`highlightRoom`), dans le groupe de son niveau. */
+  private highlightMeshes: Mesh[] = []
   private selectedKey: string | null = null
   private listeners: { [K in keyof SceneEvents]: Set<SceneEvents[K]> } = {
     deviceTap: new Set(), roomTap: new Set(), zoneTap: new Set(), levelTap: new Set(), backgroundTap: new Set(),
@@ -378,6 +384,7 @@ export class HouseScene {
     this.index = null
     this.geometry = null
     this.highlightedRoom = null
+    this.highlightMeshes = []                // libérés avec la racine
   }
 
   /** Descripteurs de plugin (type de marqueur, icône). Reconstruit les marqueurs. */
@@ -838,21 +845,46 @@ export class HouseScene {
   }
 
   /** Surbrillance d'une pièce : le sol tire vers l'accent (comme un onglet actif). */
+  /**
+   * La pièce sélectionnée porte un TRAIT d'accent le long de ses murs et un voile léger sur son sol,
+   * tous deux NON éclairés : ils ne réagissent pas aux lampes et n'altèrent pas le sol dessous.
+   * Auparavant (jusqu'au 2026-09-15) le sol lui-même tirait vers l'accent (`color.lerp` 0,45 et une
+   * part émise la nuit) : les flaques colorées des lampes en étaient faussées, et la teinte se
+   * perdait sur un parquet sombre ou sous un ciel noir. Le trait est plus clair que le blanc
+   * (couleur × 1,6) : la nuit, le bloom en fait un néon, comme la maquette.
+   */
   highlightRoom(roomId: string | null): void {
     if (!this.nodes) return
+    // les clones de sol reprennent la couleur de leur nature (après un changement de style ou d'heure)
     for (const nodes of this.nodes.levels.values()) {
-      for (const [id, mesh] of nodes.floors) {
+      for (const mesh of nodes.floors.values()) {
         const m = mesh.userData.material as MeshStandardMaterial
         const base = mesh.userData.baseMaterial as MeshStandardMaterial
         m.color.copy(base.color)
-        // le sol choisi tire vers l'accent, et la NUIT il en émet un peu : sous un ciel sombre la
-        // seule teinte ne se voyait plus. La part émise suit l'heure, pas le thème de l'app.
         m.emissive.copy(base.emissive)
-        if (id === roomId) {
-          m.color.lerp(this.theme.primary, 0.45)
-          m.emissive.add(this.theme.primary.clone().multiplyScalar(0.18 * this.theme.night))
-        }
       }
+    }
+    for (const m of this.highlightMeshes) { m.removeFromParent(); m.geometry.dispose(); (m.material as Material).dispose() }
+    this.highlightMeshes = []
+    const floor = roomId && this.geometry ? this.geometry.levels.flatMap((l) => l.floors).find((f) => f.roomId === roomId) : undefined
+    const level = floor ? this.nodes.levels.get(floor.levelId) : undefined
+    if (floor && level) {
+      const accent = this.theme.primary
+      // Le trait est éclairci (un accent sombre, le sarcelle du thème Kasbah, resterait un filet
+      // terne) et poussé JUSTE au-dessus de 1 : c'est ce dépassement que le bloom accroche la nuit.
+      // Réglé à l'œil avec l'utilisateur : × 1,8 brûlait en blanc, × 1 « ne glow plus assez ».
+      // Le voile est léger, il ne teinte qu'à peine.
+      // Dessiné PAR-DESSUS les murs (`depthTest: false`, comme le guide du mode déplacer) : en vue
+      // oblique, le pied d'un mur cachait le trait qui le longe.
+      const ring = new Mesh(
+        flatRing(floor.polygon, insetPolygon(floor.polygon, HIGHLIGHT_RING_M), floor.z1 + 0.012),
+        new MeshBasicMaterial({ color: accent.clone().lerp(WHITE, 0.2).multiplyScalar(1.15), transparent: true, opacity: 0.92, depthWrite: false, depthTest: false }),
+      )
+      const fill = new Mesh(
+        flatPolygon(floor.polygon, floor.z1 + 0.008),
+        new MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.1, depthWrite: false }),
+      )
+      for (const m of [fill, ring]) { m.name = 'highlight'; level.group.add(m); this.highlightMeshes.push(m) }
     }
     this.highlightedRoom = roomId
     this.loop.invalidate()

@@ -32,6 +32,7 @@ const ROLES = {
   soil: 'Ground048',
   roof: 'RoofingTiles013A',
   stone: 'Bricks100',
+  gravel: 'Gravel043',
 }
 /** fichier de sortie → suffixe ambientCG. NormalGL : convention OpenGL (Y vers le haut), celle de three. */
 const MAPS = { color: 'Color', normal: 'NormalGL', roughness: 'Roughness' }

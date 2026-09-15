@@ -51,6 +51,8 @@ export interface SurfaceLooks {
   floor: SurfaceLook
   floors: Record<FloorStyle, SurfaceLook>
   roof: SurfaceLook
+  /** La dalle d'un toit PLAT, si le style la distingue du versant : à défaut, du gravillon (`materials.ts`). */
+  roofFlat?: SurfaceLook
   terrain: SurfaceLook
   zones: Record<ZoneKind, SurfaceLook>
 }
@@ -192,6 +194,7 @@ export function mixRgb(a: readonly [number, number, number], b: readonly [number
 export function rolesOf(s: SurfaceLooks): SurfaceRole[] {
   return [
     s.wall.texture, s.wallInterior.texture, s.floor.texture, s.roof.texture, s.terrain.texture,
+    ...(s.roofFlat ? [s.roofFlat.texture] : []),
     ...Object.values<SurfaceLook>(s.floors).map((l) => l.texture),
     ...Object.values<SurfaceLook>(s.zones).map((l) => l.texture),
   ]
