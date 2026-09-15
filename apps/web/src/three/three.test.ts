@@ -12,6 +12,7 @@ import { parseCssColor } from './core/theme'
 import { defaultLook, defaultSceneTheme, RENDER_STYLES, rolesOf, styleById } from './styles'
 import { applyLook } from './builders/materials'
 import { dayFactor, resolveAmbience, sunDirection, type AmbienceMode } from './core/ambience'
+import { DECOR_LAYER, LAMP_LAYER } from './core/layers'
 import { sunPosition } from './core/sun'
 import { createTween } from './core/tween'
 import { ScreenArt, coverCrop, screenArtGeometry } from './markers/screenArt'
@@ -289,6 +290,29 @@ describe('marqueurs 3D', () => {
     ({ id: 'p:c', pluginId: 'p', externalId: 'c', kind: 'cover', name: deviceClass, capabilities: ['open_close'], meta: { cover: { deviceClass } } } as DeviceDescriptor)
   const coverState = (position: number | undefined): DeviceState =>
     ({ kind: 'cover', updatedAt: 0, available: true, motion: 'stopped', ...(position === undefined ? {} : { position }) } as DeviceState)
+
+  /**
+   * Un volet fermé doit BARRER la lumière. Ce qui l'en empêchait n'était pas le maillage (il porte
+   * `castShadow` depuis toujours) mais le rendu en passes : les marqueurs étaient masqués pendant la
+   * passe qui refait la carte d'ombre, donc aucun appareil ne portait d'ombre. Ce qui doit sortir de
+   * cette passe, ce sont les LAMPES (elles n'éclaireraient pas que leur groupe) et les DÉCORS
+   * translucides (ils se mélangeraient deux fois) — par leur couche, jamais par leur visibilité.
+   */
+  it('un appareil porte son ombre ; ses lampes et ses décors sortent de la passe globale', () => {
+    const shutter = marker(device({ size: { width: 2, height: 1.2 } }), cover('shutter'))
+    for (const mesh of meshes(shutter.object)) {
+      expect(mesh.castShadow).toBe(true)
+      expect(mesh.layers.mask).toBe(1)               // couche commune : la passe globale la voit
+    }
+    const lamp = marker(device(), { id: 'p:l', pluginId: 'p', externalId: 'l', kind: 'light', name: 'Lampe', capabilities: ['on_off'], meta: {} } as DeviceDescriptor)
+    const parts: { light: number[]; sprite: number[] } = { light: [], sprite: [] }
+    lamp.object.traverse((o) => {
+      if ((o as { isLight?: boolean }).isLight) parts.light.push(o.layers.mask)
+      if ((o as { isSprite?: boolean }).isSprite) parts.sprite.push(o.layers.mask)
+    })
+    expect(parts.light).toEqual([1 << LAMP_LAYER])
+    expect(parts.sprite).toEqual([1 << DECOR_LAYER])
+  })
 
   // La carrosserie 3D arrive APRÈS le marqueur (le .glb se télécharge). Ce qui se vérifie ici, c'est
   // que la substitution ne déplace rien : la silhouette générique est dessinée aux cotes du modèle

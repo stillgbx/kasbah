@@ -3,6 +3,7 @@ import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js'
 import type { DeviceDescriptor, DeviceState, OpeningRect, PlacedHouseDevice } from '@kasbah/shared'
 import { panelOf } from '@kasbah/shared'
 import type { SceneTheme } from '../core/theme'
+import { DECOR_LAYER } from '../core/layers'
 import type { GlowLook } from '../styles/types'
 import type { MaterialSet } from '../builders/materials'
 import type { Animation } from '../core/renderLoop'
@@ -153,6 +154,13 @@ export abstract class DeviceMarker {
     this.onState(this.state)
   }
 
+  /**
+   * Marque un objet comme DÉCOR : il est posé sur la scène, il n'en est pas la matière. Il sort donc
+   * du relevé d'occlusion et de la passe globale (voir `core/layers.ts`) — ce qui vaut pour tout ce
+   * qui est translucide ou additif, et pour rien d'autre.
+   */
+  protected asDecor<T extends Object3D>(o: T): T { o.layers.set(DECOR_LAYER); return o }
+
   /** Position monde de l'ancre. */
   worldAnchor(out = new Vector3()): Vector3 { return this.object.getWorldPosition(out) }
   /** Position monde de la pilule (ancre + lift). */
@@ -173,8 +181,8 @@ export abstract class DeviceMarker {
         // Le guide se dessine PAR-DESSUS la maison (`depthTest: false` + `renderOrder`) : le sol d'un
         // niveau-toit passe sous la dalle de toiture, qui enterrait l'anneau et le cône ; ailleurs, un
         // mur au premier plan les mangeait de la même façon. Un seul appareil porte un guide à la fois.
-        const ring = new Mesh(new RingGeometry(0.22, 0.3, 40), new MeshBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false, depthTest: false }))
-        const line = new Line(new BufferGeometry(), new LineBasicMaterial({ color, transparent: true, opacity: 0.7, depthTest: false }))
+        const ring = this.asDecor(new Mesh(new RingGeometry(0.22, 0.3, 40), new MeshBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false, depthTest: false })))
+        const line = this.asDecor(new Line(new BufferGeometry(), new LineBasicMaterial({ color, transparent: true, opacity: 0.7, depthTest: false })))
         ring.renderOrder = line.renderOrder = GUIDE_RENDER_ORDER
         this.object.add(ring, line)
         let look: Mesh<ShapeGeometry, MeshBasicMaterial> | null = null
@@ -190,7 +198,7 @@ export abstract class DeviceMarker {
           shape.lineTo(-0.42, 1.35)
           shape.quadraticCurveTo(0, 1.6, 0.42, 1.35)
           shape.lineTo(0, 0.18)
-          look = new Mesh(new ShapeGeometry(shape, 12), new MeshBasicMaterial({ color, transparent: true, opacity: 0.45, depthWrite: false, depthTest: false, side: DoubleSide }))
+          look = this.asDecor(new Mesh(new ShapeGeometry(shape, 12), new MeshBasicMaterial({ color, transparent: true, opacity: 0.45, depthWrite: false, depthTest: false, side: DoubleSide })))
           look.renderOrder = GUIDE_RENDER_ORDER
           // un châssis NÉGATIF bascule le verre en arrière : le cône fait alors demi-tour
           look.rotation.z = yawToRad(this.device.yaw) + (panel && panel.tilt < 0 ? Math.PI : 0)

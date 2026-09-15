@@ -6,7 +6,7 @@ import { coverActivity, isFlatCover } from '../../lib/cover'
 import { IDLE_W, isEnergySite } from '../../lib/energy'
 import { coverLeaves, coverSize, yawToRad } from '../../lib/orientation'
 import { bodyColorOf, bodyFinishOf, FINISH_MATERIAL, SCENE_FINISH } from '../../lib/vehicleTuning'
-import { DECOR_LAYER } from '../core/layers'
+import { LAMP_LAYER } from '../core/layers'
 import { createTween, lerp } from '../core/tween'
 import { DeviceMarker, type MarkerContext } from './DeviceMarker'
 import { ScreenArt } from './screenArt'
@@ -138,7 +138,7 @@ export class GenericMarker extends DeviceMarker {
         onReady: () => ctx.invalidate(),
         ...(ctx.loadTexture ? { load: ctx.loadTexture } : {}),
       })
-      this.mesh.add(this.art.mesh)
+      this.mesh.add(this.asDecor(this.art.mesh))
     }
     if (battery) this.buildCharge(ctx)
     if (kind === 'vacuum') this.mesh.position.z = 0.05
@@ -150,7 +150,7 @@ export class GenericMarker extends DeviceMarker {
       // invisibles tant que rien ne joue, animés par `onState`
       const directional = mediaClass === 'tv' || mediaClass === 'display'
       for (let i = 0; i < WAVE_RINGS; i++) {
-        const ring = new Mesh(new RingGeometry(0.86, 1, 64), waveMaterial(ctx.theme.media, directional))
+        const ring = this.asDecor(new Mesh(new RingGeometry(0.86, 1, 64), waveMaterial(ctx.theme.media, directional)))
         ring.position.z = 0.03
         ring.rotation.z = yawToRad(device.yaw)                 // le « devant » de l'onde suit l'écran
         ring.visible = false
@@ -180,7 +180,7 @@ export class GenericMarker extends DeviceMarker {
         m.rotation.set((side * -Math.PI) / 2, 0, side > 0 ? Math.PI : 0)
         m.position.set(x, side * (BATTERY_BOX.d / 2 + 0.003), 0)
         m.renderOrder = 1
-        this.mesh.add(m)
+        this.mesh.add(this.asDecor(m))
         return m
       }
       this.charge.push({ track: face(0.16), fill: face(0.95) })
@@ -380,13 +380,13 @@ export class PanelMarker extends DeviceMarker {
     // Sans `depthWrite`, le trait ne creuse pas le verre sur lequel il est posé.
     this.track = new Mesh(geo(), new MeshBasicMaterial({ color: ctx.theme.primary, transparent: true, opacity: 0.16, depthWrite: false }))
     this.gauge = new Mesh(geo(), new MeshBasicMaterial({ color: ctx.theme.primary, transparent: true, opacity: 0.95, depthWrite: false }))
-    for (const m of [this.track, this.gauge]) { m.position.set(x, 0, 0.021); m.renderOrder = 1; this.mesh.add(m) }
+    for (const m of [this.track, this.gauge]) { m.position.set(x, 0, 0.021); m.renderOrder = 1; this.mesh.add(this.asDecor(m)) }
     const mark = (color: Color, order: number) => {
       const m = new Mesh(new PlaneGeometry(MARK_W, MARK_H), new MeshBasicMaterial({ color, transparent: true, opacity: 0.95, depthWrite: false }))
       m.position.set(x, 0, 0.022)
       m.renderOrder = order
       m.visible = false
-      this.mesh.add(m)
+      this.mesh.add(this.asDecor(m))
       return m
     }
     this.marks = { record: mark(ctx.theme.success, 2), output: mark(ctx.theme.warning, 3) }
@@ -470,9 +470,10 @@ export class LightMarker extends DeviceMarker {
     this.mat = new MeshStandardMaterial({ color: 0xfff2d0, emissive: 0xffc46b, emissiveIntensity: 0, roughness: 0.4 })
     this.sphere = new Mesh(new SphereGeometry(0.13, 20, 14), this.mat)
     this.light = new PointLight(0xffd9a0, 0, 7, 1.6)
+    this.light.layers.set(LAMP_LAYER)   // n'éclaire que son groupe : voir `core/layers.ts`
     this.glowMat = new SpriteMaterial({ map: glowMap(), color: 0xffd9a0, transparent: true, opacity: 0, blending: AdditiveBlending, depthWrite: false })
     this.glow = new Sprite(this.glowMat)
-    this.glow.layers.set(DECOR_LAYER)   // invisible à la passe d'occlusion : voir `core/layers.ts`
+    this.asDecor(this.glow)
     this.glow.visible = false
     this.object.add(this.sphere, this.light, this.glow)
     this.registerPickable(this.sphere)
