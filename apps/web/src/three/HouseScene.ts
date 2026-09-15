@@ -68,7 +68,10 @@ export interface HouseSceneDeps {
 export interface SceneDebugStats {
   /** Images rendues par seconde. Le rendu étant à la demande, c'est 0 au repos — et c'est normal. */
   fps: number
-  /** Coût CPU d'une image, moyenne glissante (ms). Le GPU, lui, ne se mesure pas d'ici. */
+  /**
+   * Temps passé DANS `render()`, moyenne glissante (ms). Pas du CPU pur : quand la file de commandes
+   * du GPU est pleine, le pilote bloque à l'envoi et cette attente s'y retrouve.
+   */
   cpuMs: number
   /** Appels de dessin et triangles d'UNE image, toutes passes comprises. */
   calls: number
@@ -215,6 +218,8 @@ export class HouseScene {
     this.theme = deps.theme ?? defaultSceneTheme()
     this.sunDir = sunDirection(this.ambience)
     this.materials = createMaterials(this.theme, this.look)
+    // Voir `render()` : les matrices monde se mettent à jour une fois par image, pas une fois par passe.
+    this.scene.matrixWorldAutoUpdate = false
     this.camera = new PerspectiveCamera(38, 1, 0.1, 500)
     this.camera.position.set(20, 18, 20)
     // halos, ondes, jauges — d'un niveau et du jardin — et les lampes d'intérieur (`core/layers.ts`)
@@ -1077,6 +1082,13 @@ export class HouseScene {
   private render(): void {
     this.probe?.begin()
     const t0 = this.deps.now?.() ?? performance.now()
+    // Les matrices monde, UNE fois par image. Three les recalcule au début de CHAQUE `render()` —
+    // or une image en compte plusieurs (la passe globale, une par niveau éclairé, celles de
+    // l'occlusion ambiante) plus celle du `CSS2DRenderer`, et rien ne bouge entre elles. Sur une
+    // maison de trente pièces et quatre-vingts marqueurs, c'était le même arbre reparcouru quatre
+    // fois pour le même résultat. `matrixWorldAutoUpdate = false` coupe le recalcul automatique ;
+    // c'est nous qui le demandons, ici, avant la première passe.
+    this.scene.updateMatrixWorld()
     // Les compteurs de three se remettent à zéro à chaque `render()` : avec plusieurs passes par
     // image, il faut les tenir nous-mêmes pour lire un total d'IMAGE et non de dernière passe.
     if (this.renderer) { this.renderer.info.autoReset = false; this.renderer.info.reset() }
@@ -1178,7 +1190,7 @@ export class HouseScene {
     }
   }
 
-  /** Coût d'une image et cadence, en moyenne glissante. Lu par le voile de débogage. */
+  /** Temps passé dans `render()` et cadence, en moyenne glissante. Lu par le voile de débogage. */
   private measure(t0: number): void {
     const t1 = this.deps.now?.() ?? performance.now()
     this.perf.cpuMs = this.perf.cpuMs ? this.perf.cpuMs * 0.85 + (t1 - t0) * 0.15 : t1 - t0

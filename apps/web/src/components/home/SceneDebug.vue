@@ -15,8 +15,10 @@ import type { HouseScene, SceneDebugStats } from '../../three/HouseScene'
 // Ce qu'il faut savoir lire :
 //  - « img/s » (et la courbe FPS) à 0 au repos est NORMAL : le rendu est à la demande
 //    (`three/core/renderLoop.ts`). Le chiffre qui compte se lit pendant qu'on tourne autour de la maison.
-//  - « cpu » est le coût CPU d'une image, pas le coût GPU — qui ne se mesure pas depuis JavaScript.
-//    Un chiffre bas avec une image qui saccade désigne le GPU (pixels, ombres, post-traitement).
+//  - « rendu » est le temps passé DANS `render()`. Ce n'est pas du CPU pur : quand la file de
+//    commandes du GPU est pleine, le pilote bloque à l'envoi et cette attente s'y retrouve. À lire
+//    avec « img/s » : à 60 Hz, une image qui dépasse 16,7 ms tombe mécaniquement à 30 — autrement
+//    dit, entre 28 et 30 images par seconde, il ne manque souvent que deux ou trois millisecondes.
 //  - « appels » et « triangles » sont des totaux d'IMAGE, toutes passes comprises.
 //  - « passes » : 1 (la matière) + une par niveau qui a quelque chose de plus à montrer (une lampe
 //    allumée, un décor). Sur une maison de trente pièces, chaque passe redessine tout le bâti.
@@ -62,7 +64,7 @@ const n = (v: number) => (v >= 10000 ? `${Math.round(v / 1000)}k` : String(v))
     <div ref="graphs" class="dbg__graphs" />
     <template v-if="stats">
       <div class="dbg__row"><span>img/s</span><b>{{ stats.fps }}</b></div>
-      <div class="dbg__row"><span>cpu</span><b>{{ stats.cpuMs }} ms</b></div>
+      <div class="dbg__row"><span>rendu</span><b>{{ stats.cpuMs }} ms</b></div>
       <div class="dbg__row"><span>appels</span><b>{{ n(stats.calls) }}</b></div>
       <div class="dbg__row"><span>triangles</span><b>{{ n(stats.triangles) }}</b></div>
       <div class="dbg__row"><span>passes</span><b>{{ stats.passes }}</b></div>
