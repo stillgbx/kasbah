@@ -17,8 +17,10 @@ import { useHouseStore, type FloorTab } from '../stores/house'
 
 defineOptions({ name: 'HomeView' })
 
-// Vue Maison : en-tête (nom, résumé, onglets de niveau), scène 3D avec marqueurs, panneau latéral
-// contextuel (maison → pièce → appareil). La sélection vit dans le store ; l'URL la reflète.
+// Vue Maison : la scène 3D prend TOUT l'espace (jusque sous le rail), et le reste flotte dessus :
+// en-tête (nom, résumé, onglets de niveau) en haut, boutons de vue (rotation, zoom, vue d'ensemble)
+// en bas à droite, panneau contextuel (maison → pièce → appareil) en carte à droite. La sélection
+// vit dans le store ; l'URL la reflète.
 const house = useHouseStore()
 const devices = useDevicesStore()
 const route = useRoute()
@@ -179,26 +181,46 @@ onUnmounted(() => { offDeviceEvent?.() })
 
 const panelMode = computed<'device' | 'room' | 'level' | 'home'>(() =>
   (house.selectedKey ? 'device' : house.selectedRoomId ? 'room' : house.selectedLevelId ? 'level' : 'home'))
+
+// Le panneau ancré couvre le bord droit de la scène : le cadrage vise la partie libre (largeur du
+// panneau et ses deux marges, lues dans les jetons).
+const cssPx = (name: string) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name)) || 0
+const asideInset = () => cssPx('--aside-w') + 2 * cssPx('--panel-gap')
+watch([wide, scene.ready], ([w, ready]) => { if (ready) scene.setViewInset(w ? asideInset() : 0) }, { immediate: true })
+
+/** Un cran de rotation des boutons de vue : un huitième de tour. */
+const ORBIT_STEP = Math.PI / 4
+/** Un cran de zoom des boutons de vue. */
+const DOLLY_STEP = 1.35
 </script>
 
 <template>
-  <div class="home">
-    <div class="home__main">
+  <div class="home" :data-wide="wide ? '1' : '0'">
+    <div class="home__stage">
+      <canvas ref="canvas" class="scene-canvas" tabindex="0" />
+      <div ref="labelLayer" class="scene-labels" />
+      <div class="home__vignette" />
+    </div>
+    <div class="home__header">
       <PageHeader>
         <Segmented :model-value="house.floorTab" :options="floorTabs" @update:model-value="onTab" />
         <button v-if="!wide" type="button" class="pill" :data-on="panelOpen ? '1' : '0'" :aria-label="$t('home.openPanel')" @click="panelOpen = !panelOpen">
           <StrokeIcon name="list" :size="18" />
         </button>
       </PageHeader>
-      <div class="home__stage">
-        <canvas ref="canvas" class="scene-canvas" tabindex="0" />
-        <div ref="labelLayer" class="scene-labels" />
-        <div v-if="!scene.supported.value" class="home__fallback card">{{ $t('scene.webglUnavailable') }}</div>
-        <div v-if="house.loading" class="home__loading muted">{{ $t('common.loading') }}</div>
-        <button type="button" class="home__reset pill" :title="$t('home.resetView')" @click="onTab('all')">
-          <StrokeIcon name="home" :size="18" />
-        </button>
+    </div>
+    <div v-if="!scene.supported.value" class="home__fallback card">{{ $t('scene.webglUnavailable') }}</div>
+    <div v-if="house.loading" class="home__loading muted">{{ $t('common.loading') }}</div>
+    <div class="home__controls">
+      <div class="home__cluster">
+        <button type="button" class="home__ctl" :title="$t('home.rotateLeft')" :aria-label="$t('home.rotateLeft')" @click="scene.orbitBy(-ORBIT_STEP)"><StrokeIcon name="rotateLeft" :size="18" /></button>
+        <button type="button" class="home__ctl" :title="$t('home.rotateRight')" :aria-label="$t('home.rotateRight')" @click="scene.orbitBy(ORBIT_STEP)"><StrokeIcon name="rotateRight" :size="18" /></button>
       </div>
+      <div class="home__cluster">
+        <button type="button" class="home__ctl" :title="$t('home.zoomIn')" :aria-label="$t('home.zoomIn')" @click="scene.dollyBy(1 / DOLLY_STEP)"><StrokeIcon name="plus" :size="18" /></button>
+        <button type="button" class="home__ctl" :title="$t('home.zoomOut')" :aria-label="$t('home.zoomOut')" @click="scene.dollyBy(DOLLY_STEP)"><StrokeIcon name="minus" :size="18" /></button>
+      </div>
+      <button type="button" class="home__ctl home__ctl--solo" :title="$t('home.resetView')" :aria-label="$t('home.resetView')" @click="onTab('all')"><StrokeIcon name="home" :size="18" /></button>
     </div>
     <SidePanel :open="panelOpen" :docked="wide" @close="panelOpen = false">
       <DevicePanel v-if="panelMode === 'device'" @back="onDeviceBack()" />
@@ -209,10 +231,24 @@ const panelMode = computed<'device' | 'room' | 'level' | 'home'>(() =>
 </template>
 
 <style scoped>
-.home { position: relative; height: 100%; display: grid; grid-template-columns: 1fr auto; min-height: 0; }
-.home__main { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-.home__stage { position: relative; flex: 1 1 0; min-height: 0; }
-.home__fallback { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 16px 20px; }
-.home__loading { position: absolute; left: 24px; top: 12px; font-size: 13px; }
-.home__reset { position: absolute; right: 18px; bottom: calc(var(--safe-bottom) + 14px); width: 40px; padding: 0; justify-content: center; z-index: 2; }
+/* La vue déborde sous le rail (marge négative de sa largeur, que `.app-main` réserve en padding) :
+   la scène couvre toute la fenêtre, et ce qui flotte dessus se décale du rail à gauche. */
+.home { position: relative; height: 100%; margin-left: calc(-1 * var(--rail-w)); min-height: 0; }
+.home__stage { position: absolute; inset: 0; }
+/* assombrit les bords la nuit, comme une vignette : le regard va au centre, où la maison est */
+.home__vignette { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+:global(html[data-theme='dark']) .home__vignette { background: radial-gradient(ellipse 70% 65% at 50% 45%, transparent 55%, rgba(0, 0, 0, .45) 100%); }
+.home__header { position: absolute; top: 0; left: var(--rail-w); right: 0; z-index: 2; pointer-events: none; }
+.home__header > * { pointer-events: auto; }
+.home[data-wide='1'] .home__header { right: calc(var(--safe-right) + var(--aside-w) + 2 * var(--panel-gap)); }
+.home__fallback { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 16px 20px; z-index: 2; }
+.home__loading { position: absolute; left: calc(var(--rail-w) + 24px); bottom: calc(var(--safe-bottom) + 20px); font-size: 13px; z-index: 2; }
+/* boutons de vue : rotation, zoom, vue d'ensemble — en bas à droite, avant le panneau quand il est ancré */
+.home__controls { position: absolute; right: calc(var(--safe-right) + var(--panel-gap)); bottom: calc(var(--safe-bottom) + var(--panel-gap)); z-index: 2; display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
+.home[data-wide='1'] .home__controls { right: calc(var(--safe-right) + var(--aside-w) + 2 * var(--panel-gap) + 26px); }
+.home__cluster { display: flex; flex-direction: column; border-radius: 999px; border: 1px solid var(--line); overflow: hidden; background: color-mix(in srgb, var(--surface) 86%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: var(--shadow); }
+.home__ctl { width: 44px; height: 44px; border: 0; background: transparent; color: var(--muted); display: grid; place-items: center; transition: background .15s, color .15s; }
+.home__ctl:hover { color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); }
+.home__cluster .home__ctl + .home__ctl { border-top: 1px solid var(--line); }
+.home__ctl--solo { border-radius: 999px; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 86%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: var(--shadow); color: var(--text); }
 </style>

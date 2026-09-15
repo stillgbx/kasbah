@@ -3,6 +3,7 @@ import { Box3, BoxGeometry, type BufferGeometry, CylinderGeometry, Mesh, type Me
 import { computeHouseGeometry, localToGeo, parseHouse, type DeviceDescriptor, type DeviceState, type PlacedHouseDevice } from '@kasbah/shared'
 import demo from '@kasbah/shared/demo-house.json'
 import { buildHouse, buildWallsGeometry, countTriangles } from './builders/buildHouse'
+import { createSurfaceTextures } from './textures/procedural'
 import { createMaterials } from './builders/materials'
 import { fitBox, fitDistance } from './core/cameraFit'
 import { boundsToWorldBox, houseToWorld } from './core/coords'
@@ -107,6 +108,48 @@ describe('builders', () => {
     expect(nodes.root.rotation.x).toBeCloseTo(-Math.PI / 2)
     expect(nodes.levels.get('etage')!.group.position.z).toBeCloseTo(3.05)
     expect(countTriangles(nodes.root)).toBeGreaterThan(100)
+  })
+  it('les murs vont du sol au plafond, cloisons comprises, et le sol infini est sous la parcelle', () => {
+    const level = geometry.levels[0]!
+    const interior = buildWallsGeometry(level.walls.filter((w) => w.kind === 'interior'))!
+    interior.computeBoundingBox()
+    expect(interior.boundingBox!.max.z).toBeCloseTo(level.height)
+    const nodes = buildHouse(geometry, createMaterials(defaultSceneTheme()))
+    expect(nodes.ground.position.z).toBeLessThan(geometry.terrain.z)
+  })
+  it('habille chaque surface d’une matière répétée à l’échelle du mètre', () => {
+    const tex = createSurfaceTextures()
+    for (const t of Object.values(tex)) {
+      expect((t.map.image as { width: number }).width).toBeGreaterThanOrEqual(256)
+      expect(t.map.repeat.x).toBeGreaterThan(0)
+      expect(t.map.repeat.x).toBeLessThanOrEqual(1)   // un motif d'au moins un mètre
+    }
+    // les carreaux : un joint sombre entre deux carreaux clairs
+    const px = (t: { map: Texture }, u: number, v: number) => {
+      const img = t.map.image as { data: Uint8Array; width: number }
+      return img.data[(Math.floor(v * img.width) * img.width + Math.floor(u * img.width)) * 4]!
+    }
+    expect(px(tex.tile, 0.125, 0.125)).toBeGreaterThan(px(tex.tile, 0.25, 0.125) + 40)
+    const mats = createMaterials(defaultSceneTheme(), tex)
+    expect(mats.floors.tile.map).toBe(tex.tile.map)
+    expect(mats.zones.pool.map).toBe(tex.water.map)
+    expect(mats.wall.bumpMap).toBe(tex.plaster.bumpMap)
+  })
+})
+
+describe('caméra et niveaux', () => {
+  const scene = new HouseScene(document.createElement('canvas'), { headless: true })
+  scene.load(parseHouse(demo))
+
+  it('cadre la partie libre du canvas quand un panneau couvre le bord droit', () => {
+    scene.resize(1000, 500)
+    expect(scene.camera.aspect).toBeCloseTo(2)
+    scene.setViewInset(400)
+    expect(scene.camera.aspect).toBeCloseTo(600 / 500)
+    expect(scene.camera.view?.enabled).toBe(true)
+    scene.setViewInset(0)
+    expect(scene.camera.aspect).toBeCloseTo(2)
+    expect(scene.camera.view?.enabled ?? false).toBe(false)
   })
 })
 

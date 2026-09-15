@@ -1,5 +1,5 @@
 import {
-  AmbientLight, DirectionalLight, HemisphereLight, PerspectiveCamera, Plane, Raycaster, Scene, type Texture, TOUCH, Vector2, Vector3, VSMShadowMap,
+  AmbientLight, DirectionalLight, HemisphereLight, PerspectiveCamera, Plane, Raycaster, Scene, Spherical, type Texture, TOUCH, Vector2, Vector3, VSMShadowMap,
   WebGLRenderer, Box3, type Material, type Mesh, type MeshStandardMaterial, type Object3D,
 } from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
@@ -11,8 +11,8 @@ import {
 } from '@kasbah/shared'
 import { applyTheme, createMaterials, disposeMaterials, type MaterialSet } from './builders/materials'
 import { createVehicleEnvironment } from './core/environment'
-import { buildHouse, type HouseNodes } from './builders/buildHouse'
-import { clamp, fitBox, sphericalOf } from './core/cameraFit'
+import { buildHouse, type HouseNodes, type LevelNodes } from './builders/buildHouse'
+import { clamp, fitBox, sphericalOf, type CameraPose } from './core/cameraFit'
 import { boundsToWorldBox } from './core/coords'
 import { disposeObject3D } from './core/dispose'
 import { createDragDetector, createTapDetector, type DragDetector, type TapEvent } from './core/input'
@@ -121,6 +121,9 @@ export class HouseScene {
   private readonly deps: HouseSceneDeps
   private readonly sun: DirectionalLight
   private readonly hemi: HemisphereLight
+  private readonly ambient: AmbientLight
+  /** Largeur (px) du bord droit du canvas couverte par le panneau flottant : le cadrage vise la partie libre. */
+  private viewInsetRight = 0
   /** Ce que reflète une carrosserie. Propre aux véhicules : la maison, elle, n'a pas d'environnement. */
   private vehicleEnv: Texture | null = null
   private descriptors = new Map<string, DeviceDescriptor>()
@@ -143,10 +146,11 @@ export class HouseScene {
     this.applyVehicleEnvironment()
     this.labelRenderer = deps.labelLayer ? (deps.createLabelRenderer ?? ((el) => new CSS2DRenderer({ element: el })))(deps.labelLayer) : null
 
-    this.hemi = new HemisphereLight(0xffffff, 0x8899aa, this.theme.isDark ? 0.55 : 1.1)
-    this.scene.add(this.hemi)
-    this.scene.add(new AmbientLight(0xffffff, 0.25))
-    this.sun = new DirectionalLight(0xffffff, this.theme.isDark ? 1.1 : 2)
+    this.hemi = new HemisphereLight(0xffffff, 0x8899aa, 1)
+    this.ambient = new AmbientLight(0xffffff, 0.25)
+    this.sun = new DirectionalLight(0xffffff, 2)
+    this.scene.add(this.hemi, this.ambient, this.sun)
+    this.applyLighting()
     this.sun.position.set(14, 24, 10)
     this.sun.castShadow = true
     this.sun.shadow.mapSize.set(2048, 2048)
@@ -564,6 +568,9 @@ export class HouseScene {
     for (const m of this.markers.values()) if (m.object.parent === this.nodes.outdoorMarkers) m.setPillVisible(true)
   }
 
+  /** Les nœuds Three d'un niveau (tests, diagnostic). */
+  nodesOf(levelId: string): LevelNodes | undefined { return this.nodes?.levels.get(levelId) }
+
   /** Niveau posé au niveau du toit ou au-dessus : le toit lui appartient, il ne le masque pas. */
   private isRoofLevel(level: Level): boolean {
     const roof = this.geometry?.roof
@@ -673,6 +680,10 @@ export class HouseScene {
   private flyTo(box: Box3, azimuth: number, polar: number, animate: boolean, padding: number): void {
     const pose = fitBox(box, this.camera.fov, this.camera.aspect, { azimuth, polar, padding })
     pose.position.y = Math.max(pose.position.y, 0.5)
+    this.moveCamera(pose, animate)
+  }
+
+  private moveCamera(pose: CameraPose, animate: boolean): void {
     const target = this.controls?.target ?? new Vector3()
     this.cameraTween?.cancel()
     if (!animate || !this.controls) {
@@ -703,7 +714,13 @@ export class HouseScene {
         const m = mesh.userData.material as MeshStandardMaterial
         const base = mesh.userData.baseMaterial as MeshStandardMaterial
         m.color.copy(base.color)
-        if (id === roomId) m.color.lerp(this.theme.primary, 0.45)
+        // le sol choisi tire vers l'accent, et la nuit il en ÉMET un peu : sous un ciel sombre la
+        // seule teinte ne se voyait plus
+        m.emissive.set(0)
+        if (id === roomId) {
+          m.color.lerp(this.theme.primary, 0.45)
+          if (this.theme.isDark) m.emissive.copy(this.theme.primary).multiplyScalar(0.15)
+        }
       }
     }
     this.highlightedRoom = roomId
@@ -774,26 +791,120 @@ export class HouseScene {
     this.theme = theme
     applyTheme(this.materials, theme)
     this.applyVehicleEnvironment()
-    this.hemi.intensity = theme.isDark ? 0.55 : 1.1
-    this.sun.intensity = theme.isDark ? 1.1 : 2
+    this.applyLighting()
     for (const m of this.markers.values()) m.setTheme(theme)
     this.highlightRoom(this.highlightedRoom)
     this.loop.invalidate()
   }
 
+  /**
+   * Jour en clair, NUIT en sombre : ciel bleuté faible, soleil ramené à un clair de lune froid. Ce
+   * qui éclaire alors la maison, ce sont ses lampes (`LightMarker`) — c'est bien ce qu'on vient voir.
+   */
+  private applyLighting(): void {
+    const night = this.theme.isDark
+    this.hemi.color.set(night ? 0x8fa3c7 : 0xffffff)
+    this.hemi.groundColor.set(night ? 0x1a1f2a : 0x8899aa)
+    this.hemi.intensity = night ? 0.45 : 1.1
+    this.ambient.intensity = night ? 0.12 : 0.25
+    this.sun.color.set(night ? 0xc4d2f2 : 0xffffff)
+    this.sun.intensity = night ? 0.7 : 2
+  }
+
+  /**
+   * Le panneau flottant couvre le bord droit du canvas : le cadrage (`fitBox`) et le centre de la vue
+   * visent la partie LIBRE. `setViewOffset` élargit le tronc de projection vers la droite au lieu de
+   * le recentrer, donc tout ce qui se calcule sur le canvas entier (NDC du lancer de rayon, pilules
+   * du CSS2DRenderer) reste juste sans rien changer.
+   */
+  setViewInset(rightPx: number): void {
+    this.viewInsetRight = Math.max(0, rightPx)
+    this.applyProjection()
+    this.loop.invalidate()
+  }
+
+  private applyProjection(): void {
+    const { width, height } = this.size
+    const free = Math.max(1, width - Math.min(this.viewInsetRight, width * 0.6))
+    this.camera.aspect = free / height
+    if (free < width) this.camera.setViewOffset(free, height, 0, 0, width, height)
+    else this.camera.clearViewOffset()
+    this.camera.updateProjectionMatrix()
+  }
+
   resize(width: number, height: number): void {
     this.size = { width: Math.max(1, width), height: Math.max(1, height) }
-    this.camera.aspect = this.size.width / this.size.height
-    this.camera.updateProjectionMatrix()
+    this.applyProjection()
     this.renderer?.setSize(this.size.width, this.size.height, false)
     this.labelRenderer?.setSize(this.size.width, this.size.height)
     this.loop.invalidate()
   }
 
+  /** Tourne la vue autour de la cible de `delta` radians (boutons de la vue), sans changer la plongée. */
+  orbitBy(delta: number): void {
+    const { azimuth, polar, distance } = this.currentSpherical()
+    this.moveCamera(this.poseAt(azimuth + delta, polar, distance), true)
+  }
+
+  /** Rapproche (`factor` < 1) ou éloigne la caméra, dans les bornes des contrôles. */
+  dollyBy(factor: number): void {
+    const { azimuth, polar, distance } = this.currentSpherical()
+    const lo = this.controls?.minDistance ?? 1, hi = this.controls?.maxDistance ?? Infinity
+    this.moveCamera(this.poseAt(azimuth, polar, clamp(distance * factor, lo, hi)), true)
+  }
+
+  private poseAt(azimuth: number, polar: number, distance: number): CameraPose {
+    const target = (this.controls?.target ?? new Vector3()).clone()
+    const position = new Vector3().setFromSpherical(new Spherical(distance, polar, azimuth)).add(target)
+    return { position, target }
+  }
+
   private render(): void {
-    this.renderer?.render(this.scene, this.camera)
+    if (this.renderer) this.renderPasses(this.renderer)
     this.updatePillLod()
     this.labelRenderer?.render(this.scene, this.camera)
+  }
+
+  /**
+   * Rendu en PASSES : les lampes d'un niveau n'éclairent que ce niveau.
+   *
+   * Une lumière ponctuelle ignore la géométrie : le plafonnier du salon éclairait le sas d'entrée
+   * en dessous à travers la dalle, et ceux du rez-de-chaussée l'étage par en dessous. Des ombres par
+   * lampe (six cartes chacune) sont hors de prix sur tablette. Three ne collecte que les lumières
+   * VISIBLES de la scène au moment du `render` : on rend donc
+   *   - d'abord tout — site, toit, niveaux — sans aucun marqueur de niveau, donc sans leurs lampes,
+   *     sous le seul éclairage global (soleil, ciel) ; c'est cette passe qui refait la carte d'ombre ;
+   *   - puis chaque niveau visible SEUL, avec ses marqueurs et donc ses lampes : ses surfaces sont
+   *     redessinées éclairées par elles, par-dessus la première passe (même profondeur, pas
+   *     d'effacement), et rien d'autre ne les voit.
+   * Les murs et sols d'un niveau se dessinent deux fois ; les marqueurs une seule (un halo additif
+   * dessiné deux fois doublerait). Reste : dans un même niveau, une lampe éclaire encore à travers
+   * une cloison.
+   */
+  private renderPasses(r: WebGLRenderer): void {
+    const nodes = this.nodes
+    if (!nodes) { r.render(this.scene, this.camera); return }
+    const levels = [...nodes.levels.values()].filter((n) => n.group.visible)
+    const markersShown = levels.map((n) => n.markers.visible)
+    for (const n of levels) n.markers.visible = false
+    r.autoClear = true
+    r.shadowMap.autoUpdate = true
+    r.render(this.scene, this.camera)
+    r.shadowMap.autoUpdate = false
+    r.autoClear = false
+    const siteShown = nodes.site.visible, roofShown = nodes.roof?.visible ?? false
+    nodes.site.visible = false
+    if (nodes.roof) nodes.roof.visible = false
+    levels.forEach((n, i) => {
+      if (!markersShown[i]) return               // niveau fantôme : rien de plus à dessiner
+      for (const o of levels) o.group.visible = o === n
+      n.markers.visible = true
+      r.render(this.scene, this.camera)
+    })
+    levels.forEach((n, i) => { n.group.visible = true; n.markers.visible = markersShown[i]! })
+    nodes.site.visible = siteShown
+    if (nodes.roof) nodes.roof.visible = roofShown
+    r.autoClear = true
   }
 
   /** Le rendu est à la demande : la distance n'est relue que quand quelque chose a bougé. */

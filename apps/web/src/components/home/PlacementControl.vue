@@ -131,8 +131,10 @@ const ceiling = computed(() => {
   return house.house && room && level ? roomHeight(room, level, resolveDefaults(house.house.defaults)) : 4
 })
 const position = computed(() => house.draft?.position ?? props.device.position)
-// Ce qui ancre l'appareil : sa pièce, ou à défaut son niveau — un niveau sans pièce (le toit) ancre seul,
-// et c'est ce qui confirme à l'écran qu'un changement d'onglet a bien emmené l'appareil.
+// Changer de niveau se fait ICI, par un sélecteur, jamais par les onglets de niveau (un clic pour aller
+// regarder ailleurs ré-ancrait l'appareil sans le dire). Du haut vers le bas, comme les listes de l'app.
+const levelOptions = computed(() => house.levels.map((l) => ({ value: l.id, title: l.shortName ?? l.name })))
+// Ce qui ancre l'appareil : sa pièce, ou à défaut son niveau — un niveau sans pièce (le toit) ancre seul.
 const anchorName = computed(() => {
   const id = house.draft?.roomId ?? props.device.roomId
   if (id) return house.index?.roomsById.get(id)?.name ?? id
@@ -181,6 +183,12 @@ function applyPreset(p: Preset) {
                   :disabled="house.saving || !house.canRevert" :tabindex="house.canRevert ? 0 : -1" @click="house.revertPlacement()">
             {{ $t('place.revert') }}
           </button>
+        </div>
+        <div class="place__row">
+          <span class="muted">{{ $t('place.level') }}</span>
+          <v-select class="place__level" :model-value="house.placementLevelId" :items="levelOptions" item-title="title" item-value="value"
+                    density="compact" variant="outlined" hide-details :disabled="house.saving || !house.placing"
+                    :aria-label="$t('place.level')" @update:model-value="(id: string) => house.setPlacementLevel(id)" />
         </div>
         <Segmented dense class="place__presets" :model-value="preset" :options="presetOptions" @update:model-value="applyPreset" />
         <div class="place__row">
@@ -297,6 +305,8 @@ function applyPreset(p: Preset) {
 .place__remove--off { visibility: hidden; }
 .place__remove--armed { border-color: var(--error, #e5484d); color: var(--error, #e5484d); }
 .place__turn { display: inline-flex; align-items: center; gap: 6px; }
+/* le sélecteur de niveau reste au bout de sa ligne, à largeur fixe : changer de niveau ne déplace rien */
+.place__level { flex: 0 0 auto; width: 150px; }
 /* deux choix seulement : le segmenté reste au bout de sa ligne plutôt que d'en prendre la largeur */
 .place__leaves { flex: 0 0 auto; }
 /* Les quatre préréglages de hauteur demandaient 264 px pour 257 : dès que le panneau prend sa barre

@@ -25,6 +25,8 @@
   --font: 'DM Sans Variable', 'DM Sans', system-ui, -apple-system, sans-serif;
   --rail-w: 72px;
   --aside-w: 340px;
+  /* marge du panneau flottant de la vue Maison autour de la scène */
+  --panel-gap: 16px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);

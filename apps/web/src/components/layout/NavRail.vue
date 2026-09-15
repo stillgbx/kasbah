@@ -45,10 +45,20 @@ const themeIcon = computed<IconName>(() => (settings.appearance === 'light' ? 's
 </template>
 
 <style scoped>
+/* Posé sur la vue, sans fond ni bord : la scène 3D de la vue Maison passe dessous. */
 .rail {
+  position: absolute; top: 0; left: 0; bottom: 0; width: var(--rail-w); z-index: 5;
   display: flex; flex-direction: column; align-items: center; gap: 8px;
   padding: calc(var(--safe-top) + 18px) 0 calc(var(--safe-bottom) + 14px) var(--safe-left);
-  border-right: 1px solid var(--line); background: var(--surface); height: 100%;
+}
+/* Un voile du fond vers le transparent, plus large que le rail : les icônes se lisent par-dessus les
+   murs et les pilules de la scène, sans qu'un bord ne coupe la vue. Sur les autres vues, il a la
+   couleur de leur fond et ne se voit pas. Derrière les boutons (z-index -1 dans le rail), au-dessus
+   de la scène. */
+.rail::before {
+  content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: calc(var(--rail-w) + 110px); z-index: -1; pointer-events: none;
+  /* discret et large : un assombrissement qui s'étale, pas une barre — on reste immergé */
+  background: linear-gradient(to right, color-mix(in srgb, var(--bg) 55%, transparent) 0, color-mix(in srgb, var(--bg) 30%, transparent) var(--rail-w), transparent 100%);
 }
 .rail__avatar {
   width: 38px; height: 38px; border-radius: 12px; background: var(--accent); color: var(--on-accent);
@@ -58,7 +68,7 @@ const themeIcon = computed<IconName>(() => (settings.appearance === 'light' ? 's
   width: 52px; height: 52px; border-radius: 16px; border: 0; background: transparent; color: var(--muted);
   display: grid; place-items: center; transition: background .15s, color .15s;
 }
-.rail__btn:hover { color: var(--text); }
+.rail__btn:hover { color: var(--text); background: color-mix(in srgb, var(--surface) 55%, transparent); }
 .rail__btn[data-on='1'] { background: var(--accent-soft); color: var(--accent); }
 .rail__spacer { flex: 1 1 0; }
 .rail__lang {

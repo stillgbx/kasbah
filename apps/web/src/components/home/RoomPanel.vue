@@ -93,14 +93,17 @@ const roomScenes = computed(() => (roomTarget.value ? scenes.forRoom(roomTarget.
 
 <template>
   <template v-if="target">
-    <button type="button" class="crumb" @click="emit('back')"><StrokeIcon name="back" :size="14" /> {{ crumb }}</button>
-    <div class="head">
-      <div class="min0">
-        <div class="title">{{ target.name }}</div>
-        <div class="muted sub">{{ target.where }} · {{ $t('home.devicesCount', { n: rows.length }, rows.length) }}</div>
+    <!-- collant : le fil d'Ariane et le titre restent en vue quand la liste défile (styles/app.css) -->
+    <div class="panel-head">
+      <button type="button" class="crumb" @click="emit('back')"><StrokeIcon name="back" :size="14" /> {{ crumb }}</button>
+      <div class="head">
+        <div class="min0">
+          <div class="title">{{ target.name }}</div>
+          <div class="muted sub">{{ target.where }} · {{ $t('home.devicesCount', { n: rows.length }, rows.length) }}</div>
+        </div>
+        <!-- éteindre (ou allumer) la pièce d'un geste, sans parcourir la liste -->
+        <RoomLightsToggle :device-ids="deviceIds" />
       </div>
-      <!-- éteindre (ou allumer) la pièce d'un geste, sans parcourir la liste -->
-      <RoomLightsToggle :device-ids="deviceIds" />
     </div>
     <!-- luminosité de toute la pièce : sur sa propre ligne, sous l'interrupteur qu'elle prolonge -->
     <RoomBrightness :device-ids="deviceIds" />

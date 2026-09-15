@@ -1,4 +1,4 @@
-import { BoxGeometry, type BufferGeometry, Color, CylinderGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry, PointLight, RingGeometry, ShaderMaterial, SphereGeometry } from 'three'
+import { AdditiveBlending, BoxGeometry, type BufferGeometry, Color, CylinderGeometry, DataTexture, DoubleSide, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry, PointLight, RingGeometry, ShaderMaterial, SphereGeometry, Sprite, SpriteMaterial } from 'three'
 import type { DeviceState, PlacedHouseDevice, PanelPlacement } from '@kasbah/shared'
 import { mirekToRgb, xyToRgb } from '@kasbah/shared'
 import { isMediaActive } from '../../lib/deviceState'
@@ -436,16 +436,49 @@ export class PanelMarker extends DeviceMarker {
 }
 
 /** Lampe : sphère émissive + PointLight ; intensité selon la luminosité, couleur selon l'état. */
+/**
+ * Halo d'une lampe allumée : un dégradé radial en additif, tourné vers la caméra. C'est ce qui donne
+ * le « bloom » de la maquette sans post-traitement — une passe de flou sur un canvas transparent
+ * coûterait cher sur tablette et se marierait mal avec les pilules DOM. Texture partagée, procédurale
+ * (aucun `<canvas>` : elle se construit aussi en Node pour les tests).
+ */
+const GLOW_SIZE = 48
+let glowTexture: DataTexture | null = null
+function glowMap(): DataTexture {
+  if (glowTexture) return glowTexture
+  const data = new Uint8Array(GLOW_SIZE * GLOW_SIZE * 4)
+  const c = (GLOW_SIZE - 1) / 2
+  for (let y = 0; y < GLOW_SIZE; y++) for (let x = 0; x < GLOW_SIZE; x++) {
+    const d = Math.min(1, Math.hypot(x - c, y - c) / c)
+    const a = Math.pow(1 - d, 2.2)          // cœur franc, bord qui s'évanouit
+    const i = (y * GLOW_SIZE + x) * 4
+    data[i] = data[i + 1] = data[i + 2] = 255
+    data[i + 3] = Math.round(a * 255)
+  }
+  glowTexture = new DataTexture(data, GLOW_SIZE, GLOW_SIZE)
+  glowTexture.needsUpdate = true
+  return glowTexture
+}
+/** Diamètre (m) du halo, et son opacité pleine luminosité : fort la nuit, discret le jour. */
+const GLOW_SCALE = 1.1
+const GLOW_OPACITY = { dark: 0.9, light: 0.3 }
+
 export class LightMarker extends DeviceMarker {
   private readonly mat: MeshStandardMaterial
   private readonly sphere: Mesh
   private readonly light: PointLight
+  private readonly glow: Sprite
+  private readonly glowMat: SpriteMaterial
   constructor(device: PlacedHouseDevice, ctx: MarkerContext) {
     super(device, ctx)
     this.mat = new MeshStandardMaterial({ color: 0xfff2d0, emissive: 0xffc46b, emissiveIntensity: 0, roughness: 0.4 })
     this.sphere = new Mesh(new SphereGeometry(0.13, 20, 14), this.mat)
     this.light = new PointLight(0xffd9a0, 0, 7, 1.6)
-    this.object.add(this.sphere, this.light)
+    this.glowMat = new SpriteMaterial({ map: glowMap(), color: 0xffd9a0, transparent: true, opacity: 0, blending: AdditiveBlending, depthWrite: false })
+    this.glow = new Sprite(this.glowMat)
+    this.glow.scale.setScalar(GLOW_SCALE)
+    this.glow.visible = false
+    this.object.add(this.sphere, this.light, this.glow)
     this.registerPickable(this.sphere)
     this.setLift(0.3)
   }
@@ -464,9 +497,13 @@ export class LightMarker extends DeviceMarker {
     this.mat.emissive.copy(c)
     this.mat.emissiveIntensity = k * 1.6
     this.light.color.copy(c)
+    // la lumière n'atteint que les surfaces de SON niveau : voir le rendu en passes de `HouseScene`
     this.light.intensity = k * (this.ctx.theme.isDark ? 14 : 6)
+    this.glowMat.color.copy(c)
+    this.glowMat.opacity = k * (this.ctx.theme.isDark ? GLOW_OPACITY.dark : GLOW_OPACITY.light)
+    this.glow.visible = k > 0
   }
-  override dispose(): void { this.sphere.geometry.dispose(); this.mat.dispose(); super.dispose() }
+  override dispose(): void { this.sphere.geometry.dispose(); this.mat.dispose(); this.glowMat.dispose(); super.dispose() }
 }
 
 /** Épaisseur (m) du panneau d'un ouvrant libre : elle ne se règle pas, un portail se voit de face. */

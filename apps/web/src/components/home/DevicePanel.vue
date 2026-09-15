@@ -185,6 +185,8 @@ function send(cmd: CommandInput) {
     <Transition name="art">
       <div v-if="art" :key="art" class="art" :style="{ backgroundImage: `url(${JSON.stringify(art)})` }" aria-hidden="true" />
     </Transition>
+    <!-- collant : fil d'Ariane et en-tête restent en vue quand le contrôle défile (styles/app.css) -->
+    <div class="panel-head">
     <button type="button" class="crumb" @click="emit('back')"><StrokeIcon name="back" :size="14" /> {{ crumb }}</button>
     <div class="head">
       <span class="icon-square icon-square--lg" :data-on="on ? '1' : '0'"><StrokeIcon :name="kindIcon(resolved.descriptor?.kind ?? resolved.houseDevice?.kind, resolved.descriptor)" :size="22" /></span>
@@ -207,6 +209,7 @@ function send(cmd: CommandInput) {
         <v-progress-circular v-if="busy" indeterminate size="20" width="2" color="primary" />
         <v-switch v-else-if="toggle" :model-value="checked" :disabled="!resolved.state?.available" @update:model-value="devices.sendCommand(toggleTarget!, toggle!)" />
       </div>
+    </div>
     </div>
     <MarqueeText v-if="headline" class="big-value" :text="headline" />
     <!-- `relay-from` traverse l'aiguillage (attribut non déclaré) jusqu'au contrôle du lecteur, seul à le lire -->

@@ -13,10 +13,12 @@ const SCENE_LIGHT = {
   sceneFloorCarpet: '#e1d6d6', sceneFloorConcrete: '#d9d8d4', sceneGlass: '#9fd0e8', sceneRoof: '#cbd0d6', sceneTerrace: '#d9d2c5',
   sceneMedia: '#1a73d8',
 }
+// Sombre = NUIT : parcelle et sols très sombres pour que les lampes portent, murs plus clairs pour
+// que la coupe se lise (la face supérieure des murs coupés prend le clair de lune).
 const SCENE_DARK = {
-  sceneTerrain: '#2f4a33', sceneLawn: '#2f4a33', sceneWater: '#24607a', sceneDriveway: '#353a44', scenePath: '#474a52', sceneBed: '#24392a',
-  sceneWall: '#4a5464', sceneWallInterior: '#3d4656', sceneFloor: '#343b49', sceneFloorWood: '#3f3d44', sceneFloorTile: '#363e4a',
-  sceneFloorCarpet: '#3a3a48', sceneFloorConcrete: '#353b45', sceneGlass: '#5aa5c8', sceneRoof: '#272e3b', sceneTerrace: '#474a52',
+  sceneTerrain: '#1f3326', sceneLawn: '#1f3326', sceneWater: '#1d6f8c', sceneDriveway: '#2a2f3a', scenePath: '#3a3e47', sceneBed: '#18291d',
+  sceneWall: '#6c7686', sceneWallInterior: '#5a6474', sceneFloor: '#262d3a', sceneFloorWood: '#332d31', sceneFloorTile: '#283039',
+  sceneFloorCarpet: '#2c2a38', sceneFloorConcrete: '#272c35', sceneGlass: '#5aa5c8', sceneRoof: '#232936', sceneTerrace: '#3a3e47',
   sceneMedia: '#5aaeff',
 }
 

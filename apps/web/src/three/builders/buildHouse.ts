@@ -1,5 +1,5 @@
 import type { BufferGeometry, Object3D } from 'three';
-import { BoxGeometry, Group, Mesh } from 'three'
+import { BoxGeometry, CircleGeometry, Group, Mesh } from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import type { HouseGeometry, LevelGeometry, OpeningRect, WallPrism } from '@kasbah/shared'
 import type { MaterialSet } from './materials'
@@ -9,11 +9,12 @@ import { extrudePolygon, flatPolygon, planarFaces } from './shapes'
 // la racine porte la rotation vers le monde Three. Un maillage de murs par niveau et par matériau.
 
 export const ROOT_ROTATION_X = -Math.PI / 2
-/** Cloisons intérieures abaissées : l'intérieur reste lisible en vue plongeante. */
-export const LOW_INTERIOR_WALL = 1.05
+/** Rayon (m) du sol infini sous la parcelle : couleur du fond de l'app, donc sans bord visible. */
+export const GROUND_RADIUS = 400
 
 export interface LevelNodes {
   group: Group
+  /** Murs pleine hauteur, cloisons comprises : un niveau focalisé se regarde par le dessus, sans plafond. */
   walls: Mesh[]
   floors: Map<string, Mesh>
   panes: Mesh[]
@@ -30,6 +31,8 @@ export interface HouseNodes {
   site: Group
   zones: Map<string, Mesh>
   terrain: Mesh
+  /** Sol infini sous la parcelle (non éclairé, couleur du fond). */
+  ground: Mesh
   roof: Mesh | null
   /** Marqueurs extérieurs (jardin). */
   outdoorMarkers: Group
@@ -64,9 +67,7 @@ export function buildLevel(level: LevelGeometry, mats: MaterialSet): LevelNodes 
   group.position.z = level.elevation
   const walls: Mesh[] = []
   for (const kind of ['exterior', 'interior'] as const) {
-    let prisms = level.walls.filter((w) => w.kind === kind)
-    if (kind === 'interior') prisms = prisms.filter((p) => p.z0 < LOW_INTERIOR_WALL).map((p) => ({ ...p, z1: Math.min(p.z1, LOW_INTERIOR_WALL) }))
-    const g = buildWallsGeometry(prisms)
+    const g = buildWallsGeometry(level.walls.filter((w) => w.kind === kind))
     if (!g) continue
     const mesh = new Mesh(g, kind === 'exterior' ? mats.wall : mats.wallInterior)
     mesh.castShadow = true
@@ -110,6 +111,13 @@ export function buildHouse(geometry: HouseGeometry, mats: MaterialSet): HouseNod
 
   const site = new Group()
   site.name = 'site'
+  // Sol infini : la parcelle ne flotte plus sur le fond de l'app, l'horizon n'a plus de bord. Non
+  // éclairé et de la couleur du fond, il s'y fond exactement ; il ne porte aucune ombre.
+  const ground = new Mesh(new CircleGeometry(GROUND_RADIUS, 72), mats.ground)
+  ground.name = 'ground'
+  ground.position.z = geometry.terrain.z - 0.02
+  ground.userData = { role: 'ground' }
+  site.add(ground)
   const terrain = new Mesh(flatPolygon(geometry.terrain.polygon, geometry.terrain.z), mats.terrain)
   terrain.name = 'terrain'
   terrain.userData = { role: 'terrain' }
@@ -147,7 +155,7 @@ export function buildHouse(geometry: HouseGeometry, mats: MaterialSet): HouseNod
     roof.userData = { role: 'roof', material: mats.roof }
     root.add(roof)
   }
-  return { root, levels, site, zones, terrain, roof, outdoorMarkers }
+  return { root, levels, site, zones, terrain, ground, roof, outdoorMarkers }
 }
 
 /** Nombre de triangles d'un sous-arbre (diagnostic / tests). */

@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { parseHouse } from '@kasbah/shared'
 import demo from '@kasbah/shared/demo-house.json'
 import { setTransport } from '../api'
+import { createMockTransport } from '../api/mockTransport'
 import { useHouseStore } from './house'
 
 // Fil d'Ariane de la maison : appareil → son parent → maison. Le parent d'un appareil posé hors de
@@ -19,6 +20,28 @@ function houseWithRoofDevice() {
 
 describe('house store', () => {
   beforeEach(() => { setActivePinia(createPinia()); setTransport(null) })
+
+  it("en mode « Déplacer », l'onglet ne fait que naviguer ; le sélecteur de niveau emmène l'appareil", async () => {
+    setTransport(createMockTransport())
+    const store = useHouseStore()
+    store.house = parseHouse(demo)
+    store.selectDevice('light.salon')                 // plafonnier du salon : rdc (0,2), z 2,5
+    store.startPlacing()
+    expect(store.placementLevelId).toBe('rdc')
+
+    // aller regarder l'étage ne déplace RIEN (c'est ce qui avait ancré une lampe au toit)
+    store.focusLevel('etage')
+    expect(store.placementLevelId).toBe('rdc')
+    expect(store.house.devices.find((d) => d.id === 'light.salon')!.position).toEqual([6.6, 2.5, 2.5])
+
+    // le sélecteur, lui, ré-ancre : pièce sous le point, même hauteur DANS L'ESPACE, et la vue suit
+    await store.setPlacementLevel('etage')
+    const moved = store.house!.devices.find((d) => d.id === 'light.salon')!
+    expect(moved.roomId).toBe('chambre2')            // (6,6 ; 2,5) tombe dans la chambre 2
+    expect(moved.position?.[2]).toBeCloseTo(2.5 + 0.2 - 3.05)
+    expect(store.placementLevelId).toBe('etage')
+    expect(store.focusedLevelId).toBe('etage')
+  })
 
   it("remonte au niveau pour un appareil hors pièce, à la pièce sinon", () => {
     const store = useHouseStore()

@@ -277,7 +277,7 @@ export const useHouseStore = defineStore('house', () => {
   /**
    * Pose un appareil de plugin qui n'a encore aucune entrée : provisoire au centre du niveau affiché
    * (ou du premier), à hauteur de table, sélectionné, mode « déplacer » ouvert. Le niveau se change
-   * ensuite par les onglets, tant que rien n'est déposé.
+   * ensuite par le sélecteur de la section « Emplacement » (`setPlacementLevel`).
    */
   /** Placement demandé avant que la maison ou l'inventaire soient là : rejoué dès qu'ils arrivent. */
   const pendingNew = ref<string | null>(null)
@@ -302,21 +302,36 @@ export const useHouseStore = defineStore('house', () => {
     placing.value = true
     return true
   }
-  // Mode « déplacer » ouvert : l'onglet de niveau emmène l'appareil sélectionné. Un provisoire jamais
-  // déposé va au centre du niveau choisi ; un appareil déjà placé garde son x;y et sa hauteur DANS
-  // L'ESPACE (voir `moveToLevel`). Hors du mode, l'onglet ne fait que naviguer.
-  watch(focusedLevelId, (levelId) => {
-    if (!placing.value || !levelId) return
+  /** Niveau qui ancre l'appareil en cours de placement (pièce ou niveau seul), pour le sélecteur du panneau. */
+  const placementLevelId = computed<string | null>(() => {
+    const p = provisional.value
+    if (p) return p.levelId ?? null
+    const hd = placedSelection()
+    return hd ? anchorLevel(hd) : null
+  })
+
+  /**
+   * Emmène l'appareil en cours de placement sur un autre niveau — depuis le SÉLECTEUR de la section
+   * « Emplacement », et seulement lui. Jusqu'au 2026-09-15 c'était l'onglet de niveau qui le faisait :
+   * un clic pour aller regarder ailleurs ré-ancrait l'appareil sans le dire (une lampe du salon s'est
+   * retrouvée ancrée au toit). L'onglet ne fait plus que naviguer.
+   *
+   * Un provisoire jamais déposé va au centre du niveau choisi ; un appareil déjà placé garde son x;y et
+   * sa hauteur DANS L'ESPACE (voir `moveToLevel`). La vue suit : c'est là que l'appareil est maintenant.
+   */
+  async function setPlacementLevel(levelId: string): Promise<void> {
+    if (!placing.value) return
     const p = provisional.value
     if (p) {
-      if (levelId === p.levelId) return
-      const [x, y] = levelCentre(levelId)
-      provisional.value = { ...p, levelId, position: [x, y, p.position?.[2] ?? 0] }
-      draft.value = null
-      return
-    }
-    void moveToLevel(levelId)
-  })
+      if (levelId !== p.levelId) {
+        const [x, y] = levelCentre(levelId)
+        provisional.value = { ...p, levelId, position: [x, y, p.position?.[2] ?? 0] }
+        draft.value = null
+      }
+    } else await moveToLevel(levelId)
+    focusedLevelId.value = levelId
+    gardenFocus.value = false
+  }
 
   /**
    * Ré-ancre l'appareil sélectionné sur un autre niveau : x;y gardés, pièce reprise sous le point
@@ -681,6 +696,7 @@ export const useHouseStore = defineStore('house', () => {
     focusedLevelId, gardenFocus, selectedRoomId, selectedLevelId, selectedKey, floorTab, selectedRoom, selectedZone, selectedDevice,
     load, setFloorTab, focusLevel, selectRoom, selectLevel, selectDevice, clearSelection, backToHome, backFromRoom, backFromDevice, houseDeviceFor, renameDevice, setDeviceTuning, setRoomOrder,
     placing, saving, draft, canRevert, isProvisional, startPlacing, startPlacingNew, stopPlacing, previewPosition, previewHeight, savePlacement, revertPlacement, removePlacement,
+    placementLevelId, setPlacementLevel,
     arrays, arraysOf, editingArrayId, editingArray, editingArrayModules, arrayDraft, hoveredKey, hoverSlot, freeInverters,
     startEditingArray, stopEditingArray, editArray, siteOf, siteOfDevice, addArray, saveArray, removeArray, previewArrayOrigin, dropArray,
   }

@@ -128,3 +128,21 @@ button { font-family: inherit; cursor: pointer; }
 .cover-slider .v-slider-track__tick-label { display: none; }
 
 * { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+
+/* En-tête COLLANT d'un panneau (fil d'Ariane + titre) : il reste en vue quand la liste défile.
+   Il reprend le verre du panneau (même teinte, flou de ce qui passe dessous) et déborde des marges du
+   conteneur de défilement pour couvrir toute sa largeur ; sous lui, un fondu de 18 px sur lequel les
+   lignes s'effacent au lieu d'être tranchées. Ses enfants gardent leur mise en page (colonne, 20 px).
+   Piège : Chrome cale la BOÎTE DE MARGE d'un élément collant, pas sa bordure. Avec une marge haute
+   négative de P et `top: 0`, la bordure se calait donc P px SOUS le haut du conteneur et le contenu
+   défilé passait au-dessus de l'en-tête. `top: -P` compense exactement : la bordure se cale au bord. */
+.panel-head {
+  position: sticky; top: calc(-1 * var(--panel-pad-top, 20px)); z-index: 2;
+  display: flex; flex-direction: column; gap: 20px;
+  margin: calc(-1 * var(--panel-pad-top, 20px)) -22px 0; padding: var(--panel-pad-top, 20px) 22px 12px;
+  background: color-mix(in srgb, var(--surface) 90%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+.panel-head::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -18px; height: 18px; pointer-events: none;
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--surface) 90%, transparent), transparent);
+}
