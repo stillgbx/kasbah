@@ -129,6 +129,12 @@ export interface RenderStyle {
   readonly id: string
   /** Clé i18n du nom affiché (`scene.styles.<id>`). */
   readonly labelKey: string
+  /**
+   * Pack de matières en images (`textures/assets.ts`) que ce style sait porter, rôle pour rôle, à
+   * la place de ses matières procédurales. Absent = style entièrement calculé (le switch des
+   * Réglages est alors grisé).
+   */
+  readonly assets?: string
   look(ambience: SceneAmbience): StyleLook
 }
 

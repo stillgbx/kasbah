@@ -52,7 +52,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     const canvas = args.canvas.value
     if (!canvas) return
     scene = new HouseScene(canvas, { labelLayer: args.labelLayer.value, style: style.value, ambience: ambience.value })
-    scene.setAppearance({ ui: readUiTheme(), style: style.value, ambience: ambience.value })
+    scene.setAppearance({ ui: readUiTheme(), style: style.value, ambience: ambience.value, assets: settings.sceneAssets })
     supported.value = scene.supported
     // Une scène 3D ne se débogue qu'en la regardant : en développement seulement, le contrôleur est
     // posé sur `window` pour qu'une console (ou un pilote de navigateur) puisse lire ses lumières,
@@ -92,6 +92,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   watch(() => theme.global.name.value, () => { void nextTick(() => scene?.setAppearance({ ui: readUiTheme() })) })
   watch(style, (s) => scene?.setAppearance({ style: s }))
   watch(ambience, (a) => scene?.setAppearance({ ambience: a }))
+  watch(() => settings.sceneAssets, (v) => scene?.setAppearance({ assets: v }))
   // Un quart d'heure : le soleil se déplace de moins de 4°, et la scène ne rend qu'à la demande.
   useIntervalFn(() => { clock.value = new Date() }, 15 * 60 * 1000)
   watch(visibility, (v) => scene?.setPaused(v === 'hidden'))

@@ -45,15 +45,18 @@ export const groundColor = (sky: SkyLook) => linear(sky.ground).lerp(linear(sky.
 export const backdropColor = (sky: SkyLook) => linear(sky.horizon).lerp(linear(sky.zenith), 0.35)
 
 /** Pose une matière et ses réglages PBR sur un matériau existant. */
+const WHITE = new Color(0xffffff)
+
 function surface(m: MeshStandardMaterial, color: Color, look: SurfaceLook, tex: SurfaceTexture | undefined): void {
-  m.color.copy(color)
+  // une matière photo porte sa couleur : la palette du style ne la teinte pas
+  m.color.copy(tex?.colored ? WHITE : color)
   // Recompiler un shader coûte ; on ne le demande que si les CARTES changent (donc à un changement
   // de style), pas à chaque heure qui passe.
   const changed = m.map !== (tex?.map ?? null)
   m.map = tex?.map ?? null
   m.normalMap = tex?.normalMap ?? null
-  m.roughnessMap = tex?.ormMap ?? null
-  m.metalnessMap = tex?.ormMap ?? null
+  m.roughnessMap = tex?.roughnessMap ?? null
+  m.metalnessMap = tex?.metalnessMap ?? null
   const relief = (look.relief ?? 1) * (tex?.normalScale ?? 1)
   m.normalScale.set(relief, relief)
   m.roughness = look.roughness
@@ -104,10 +107,11 @@ function ensureTextures(textures: SurfaceTextures, roles: readonly SurfaceRole[]
  * Applique un style et une heure aux matériaux existants (aucune géométrie touchée). C'est l'unique
  * chemin : création comprise, qui n'est qu'une première application.
  */
-export function applyLook(mats: MaterialSet, theme: SceneTheme, look: StyleLook): void {
+export function applyLook(mats: MaterialSet, theme: SceneTheme, look: StyleLook, photos?: SurfaceTextures): void {
   const s = look.surfaces
   ensureTextures(mats.textures, rolesOf(s))
-  const tex = (l: SurfaceLook) => mats.textures[l.texture]
+  // une matière en images (`textures/assets.ts`) passe devant la procédurale du même rôle
+  const tex = (l: SurfaceLook) => photos?.[l.texture] ?? mats.textures[l.texture]
 
   surface(mats.wall, theme.wall, s.wall, tex(s.wall))
   surface(mats.wallInterior, theme.wallInterior, s.wallInterior, tex(s.wallInterior))

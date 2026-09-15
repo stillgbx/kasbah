@@ -180,7 +180,10 @@
   },
   "render": {
     "title": "Rendu 3D", "style": "Style",
-    "styles": { "realistic": "Réaliste", "nature": "Nature", "cyberpunk": "Cyberpunk", "candy": "Candy" },
+    "styles": { "realistic": "Réaliste", "nature": "Nature", "cyberpunk": "Cyberpunk", "candy": "Candy", "indigo": "Indigo", "maquette": "Maquette" },
+    "assets": "Matières en images",
+    "assetsHint": "Textures photo libres (ambientCG, CC0) à la place des matières calculées : plâtre, parquet, gazon, pavés… Le style garde ses couleurs pour le reste.",
+    "assetsNone": "Ce style est entièrement calculé : il n'a pas de matières en images.",
     "ambience": "Heure de la maison",
     "ambienceHint": "Indépendante du thème clair/sombre de l'application : « Automatique » suit le soleil réel au-dessus de la maison, d'après son origine GPS et l'heure.",
     "ambiences": { "auto": "Automatique", "day": "Jour", "dusk": "Crépuscule", "night": "Nuit" },

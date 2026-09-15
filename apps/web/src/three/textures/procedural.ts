@@ -35,10 +35,14 @@ export interface SurfaceTexture {
   normalMap: Texture
   /** Échelle de la normale, en unités three (x, y). */
   normalScale: number
-  /** R = 1, G = rugosité, B = métallicité — le même objet sert de `roughnessMap` et de `metalnessMap`. */
-  ormMap: Texture
+  /** Rugosité dans le canal G, multiplicateur de celle du style. */
+  roughnessMap: Texture
+  /** Métallicité dans le canal B ; `null` = uniforme, celle du style (une photo n'en a pas). */
+  metalnessMap: Texture | null
   /** Côté (m) du motif avant répétition. */
   tileM: number
+  /** La carte porte SA couleur (une photo) : le matériau ne la teinte pas par la palette du style. */
+  colored?: boolean
 }
 
 // Règle tenue par tous les motifs : la luminance reste SOUS 1. Une matière qui sature écrête ses
@@ -309,11 +313,14 @@ function bake(spec: Spec): SurfaceTexture {
     orm[i + 2] = Math.round(clamp01(spec.metal?.(u, v) ?? 1) * 255)
     orm[i + 3] = 255
   }
+  // la même carte packée sert de rugosité ET de métallicité : three lit le canal qu'il lui faut
+  const ormMap = texture(orm, size, tileM, false)
   return {
     map: texture(color, size, tileM, true),
     normalMap: texture(normal, size, tileM, false),
     normalScale: 1,
-    ormMap: texture(orm, size, tileM, false),
+    roughnessMap: ormMap,
+    metalnessMap: ormMap,
     tileM,
   }
 }

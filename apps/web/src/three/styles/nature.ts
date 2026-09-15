@@ -51,6 +51,7 @@ const SKY_DAY = { zenith: [0.2, 0.34, 0.58], horizon: [0.85, 0.86, 0.8], ground:
 export const natureStyle: RenderStyle = {
   id: 'nature',
   labelKey: 'render.styles.nature',
+  assets: 'photo',
   look(a: SceneAmbience): StyleLook {
     const day = dayFactor(a)
     const dusk = duskFactor(a)

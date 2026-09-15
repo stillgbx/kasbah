@@ -20,7 +20,7 @@ import { resolveVariant, type Theme } from '../themes'
 import { resolveAmbience, type AmbienceMode } from '../three/core/ambience'
 import { backdropColor, groundColor } from '../three/builders/materials'
 import type { RenderQuality } from '../three/core/post'
-import type { RenderStyle } from '../three/styles'
+import { styleById, type RenderStyle } from '../three/styles'
 
 // Réglages : apparence, langue, thème, origine GPS (colonne gauche) ; plugins (droite). Les
 // plugins actifs et leurs sous-items vivent dans house.json : ce sont des choix de LA MAISON, pas
@@ -69,6 +69,8 @@ function stylePreview(style: RenderStyle) {
     glass: look.palette.glass.getStyle(),
   }
 }
+/** Le switch des matières en images n'a de sens que pour un style qui porte un pack. */
+const styleHasAssets = computed(() => !!styleById(settings.sceneStyle).assets)
 const ambienceOptions = computed(() => settings.ambiences.map((a) => ({ value: a, label: t(`render.ambiences.${a}`) })))
 const qualityOptions = computed(() => settings.qualities.map((q) => ({ value: q, label: t(`render.qualities.${q}`) })))
 
@@ -126,6 +128,14 @@ const houseStats = computed(() => {
                 </span>
                 <span class="theme__name">{{ $t(st.labelKey) }}</span>
               </button>
+            </div>
+            <div class="auto-row auto-row--default">
+              <div class="min0">
+                <div class="auto-row__name">{{ $t('render.assets') }}</div>
+                <div class="muted small">{{ $t(styleHasAssets ? 'render.assetsHint' : 'render.assetsNone') }}</div>
+              </div>
+              <v-switch :model-value="settings.sceneAssets && styleHasAssets" :disabled="!styleHasAssets" hide-details density="compact"
+                        @update:model-value="(v: boolean | null) => settings.setSceneAssets(v === true)" />
             </div>
             <div class="block__sub">{{ $t('render.ambience') }}</div>
             <Segmented :model-value="settings.sceneAmbience" :options="ambienceOptions" class="w-100" @update:model-value="(v: AmbienceMode) => settings.setSceneAmbience(v)" />

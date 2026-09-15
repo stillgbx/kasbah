@@ -167,9 +167,9 @@ describe('builders', () => {
     expect(mats.floors.tile.map).toBe(tex.tile!.map)
     expect(mats.zones.pool.map).toBe(tex.water!.map)
     expect(mats.wall.normalMap).toBe(tex.plaster!.normalMap)
-    // la même carte sert de rugosité ET de métallicité : three lit le canal qu'il lui faut
-    expect(mats.wall.roughnessMap).toBe(tex.plaster!.ormMap)
-    expect(mats.wall.metalnessMap).toBe(tex.plaster!.ormMap)
+    // la même carte packée sert de rugosité ET de métallicité : three lit le canal qu'il lui faut
+    expect(mats.wall.roughnessMap).toBe(tex.plaster!.roughnessMap)
+    expect(mats.wall.metalnessMap).toBe(tex.plaster!.roughnessMap)
   })
 })
 

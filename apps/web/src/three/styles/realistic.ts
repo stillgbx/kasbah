@@ -65,6 +65,7 @@ const DUSK_HORIZON = [0.85, 0.42, 0.20] as const
 export const realisticStyle: RenderStyle = {
   id: 'realistic',
   labelKey: 'render.styles.realistic',
+  assets: 'photo',
   look(a: SceneAmbience): StyleLook {
     const day = dayFactor(a)
     const dusk = duskFactor(a)

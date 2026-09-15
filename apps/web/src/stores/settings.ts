@@ -27,6 +27,8 @@ export const useSettingsStore = defineStore('settings', () => {
   const sceneStyle = useLocalStorage<string>('kasbah.sceneStyle', DEFAULT_STYLE_ID)
   const sceneAmbience = useLocalStorage<AmbienceMode>('kasbah.sceneAmbience', 'auto')
   const sceneQuality = useLocalStorage<RenderQuality>('kasbah.sceneQuality', 'auto')
+  /** Matières en images (pack photo du style) plutôt que procédurales, pour les styles qui en ont. */
+  const sceneAssets = useLocalStorage<boolean>('kasbah.sceneAssets', true)
   /** Voile de mesure posé sur la scène (images/s, appels de dessin, passes, ombres). */
   const sceneDebug = useLocalStorage<boolean>('kasbah.sceneDebug', false)
   const preferredDark = usePreferredDark()
@@ -47,6 +49,7 @@ export const useSettingsStore = defineStore('settings', () => {
   function setSceneStyle(v: string) { if (RENDER_STYLES.some((st) => st.id === v)) sceneStyle.value = v }
   function setSceneAmbience(v: AmbienceMode) { if (AMBIENCE_MODES.includes(v)) sceneAmbience.value = v }
   function setSceneQuality(v: RenderQuality) { if (RENDER_QUALITIES.includes(v)) sceneQuality.value = v }
+  function setSceneAssets(v: boolean) { sceneAssets.value = v }
   function setSceneDebug(v: boolean) { sceneDebug.value = v }
   function toggleLocale() { locale.value = resolvedLocale.value === 'fr' ? 'en' : 'fr' }
 
@@ -74,9 +77,9 @@ export const useSettingsStore = defineStore('settings', () => {
 
   return {
     appearance, theme, locale, isDark, wantDark, themeId, currentTheme, resolvedLocale, fullscreen,
-    sceneStyle, sceneAmbience, sceneQuality, sceneDebug,
+    sceneStyle, sceneAmbience, sceneQuality, sceneAssets, sceneDebug,
     setAppearance, cycleAppearance, setTheme, setLocale, toggleLocale, applyToVuetify, applyLocale,
-    setSceneStyle, setSceneAmbience, setSceneQuality, setSceneDebug,
+    setSceneStyle, setSceneAmbience, setSceneQuality, setSceneAssets, setSceneDebug,
     appearances: APPEARANCES, themes: THEME_LIST, locales: LOCALES,
     styles: RENDER_STYLES, ambiences: AMBIENCE_MODES, qualities: RENDER_QUALITIES,
   }

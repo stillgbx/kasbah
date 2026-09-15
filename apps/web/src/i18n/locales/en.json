@@ -180,7 +180,10 @@
   },
   "render": {
     "title": "3D rendering", "style": "Style",
-    "styles": { "realistic": "Realistic", "nature": "Nature", "cyberpunk": "Cyberpunk", "candy": "Candy" },
+    "styles": { "realistic": "Realistic", "nature": "Nature", "cyberpunk": "Cyberpunk", "candy": "Candy", "indigo": "Indigo", "maquette": "Model" },
+    "assets": "Photo materials",
+    "assetsHint": "Free photo textures (ambientCG, CC0) instead of the computed materials: plaster, parquet, grass, pavers… The style keeps its colours for the rest.",
+    "assetsNone": "This style is fully computed: it has no photo materials.",
     "ambience": "Time at the house",
     "ambienceHint": "Independent from the app's light/dark theme: « Automatic » follows the real sun above the house, from its GPS origin and the clock.",
     "ambiences": { "auto": "Automatic", "day": "Day", "dusk": "Dusk", "night": "Night" },

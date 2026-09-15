@@ -10,11 +10,12 @@ import {
   type DeviceDescriptor, type DeviceState, type House, type HouseDevice, type HouseGeometry, type HouseIndex, type Level, type PlacedHouseDevice, type Vec3,
 } from '@kasbah/shared'
 import { applyLook, backdropColor, createMaterials, disposeMaterials, type MaterialSet } from './builders/materials'
+import { loadPackTextures, packById } from './textures/assets'
 import { createSkyEnvironment } from './core/sky'
 import { DECOR_LAYER, LAMP_LAYER, SITE_DECOR_LAYER } from './core/layers'
 import { createPostPipeline, detectQuality, gpuName, PIXEL_RATIO, toneMappingOf, type EffectiveQuality, type PostPipeline, type RenderQuality } from './core/post'
 import { sunDirection, type SceneAmbience } from './core/ambience'
-import { defaultAmbience, defaultSceneTheme, styleById, type RenderStyle, type StyleLook } from './styles'
+import { defaultAmbience, defaultSceneTheme, rolesOf, styleById, type RenderStyle, type StyleLook } from './styles'
 import { buildHouse, type HouseNodes, type LevelNodes } from './builders/buildHouse'
 import { clamp, fitBox, sphericalOf, type CameraPose } from './core/cameraFit'
 import { boundsToWorldBox } from './core/coords'
@@ -48,6 +49,8 @@ export interface SceneAppearance {
   ui: UiTheme
   style: RenderStyle
   ambience: SceneAmbience
+  /** Matières en images à la place des procédurales, si le style porte un pack (`textures/assets.ts`). */
+  assets: boolean
 }
 
 export interface HouseSceneDeps {
@@ -169,6 +172,10 @@ export class HouseScene {
   private style: RenderStyle
   private ambience: SceneAmbience
   private look: StyleLook
+  /** Matières en images demandées (Réglages). Elles ne s'appliquent que si le style porte un pack. */
+  private assets = false
+  /** Jeton des chargements de matières : un rôle qui arrive pour un style qu'on a quitté est ignoré. */
+  private photoGen = 0
   private post: PostPipeline | null = null
   private quality: EffectiveQuality = 'high'
   /** Direction d'où vient la lumière du jour, monde three. Relue à chaque changement d'ambiance. */
@@ -988,10 +995,11 @@ export class HouseScene {
   setAppearance(next: Partial<SceneAppearance>): void {
     if (next.style) this.style = next.style
     if (next.ambience) { this.ambience = next.ambience; this.sunDir = sunDirection(this.ambience) }
+    if (next.assets !== undefined) this.assets = next.assets
     if (next.style || next.ambience) this.look = this.style.look(this.ambience)
     this.theme = resolveSceneTheme(next.ui ?? this.theme, this.look.palette, this.ambience)
-    applyLook(this.materials, this.theme, this.look)
-    this.syncFloorClones()
+    this.photoGen++                        // les images d'un style ou d'un réglage quittés n'ont plus preneur
+    this.applyMaterials()
     this.applySky()
     this.applyLighting()
     if (this.post) this.post.setLook(this.look.post)
@@ -1004,6 +1012,26 @@ export class HouseScene {
     this.refreshLevelPasses()              // l'heure change ce qu'une lampe allumée vaut
     this.invalidateShadows()               // le soleil a pu bouger
     this.loop.invalidate()
+  }
+
+  /**
+   * Les matériaux, avec les matières en images si le style porte un pack et que l'utilisateur les
+   * veut. Les images arrivent APRÈS : en attendant, le procédural tient la place, et chaque rôle
+   * chargé repasse par ici avec une carte de plus. Le jeton écarte les arrivées pour un style ou un
+   * réglage qu'on a quitté depuis — et une scène détruite, qui l'incrémente en partant.
+   */
+  private applyMaterials(): void {
+    const pack = this.assets ? packById(this.style.assets) : undefined
+    const gen = this.photoGen
+    const photos = pack
+      ? loadPackTextures(pack, rolesOf(this.look.surfaces), () => {
+        if (gen !== this.photoGen) return
+        this.applyMaterials()
+        this.highlightRoom(this.highlightedRoom)   // recopie les couleurs des clones, et redessine
+      })
+      : undefined
+    applyLook(this.materials, this.theme, this.look, photos)
+    this.syncFloorClones()
   }
 
   /**
@@ -1281,6 +1309,7 @@ export class HouseScene {
   setPaused(paused: boolean): void { this.loop.setPaused(paused) }
 
   dispose(): void {
+    this.photoGen++                        // une matière qui arrive après n'a plus de scène à habiller
     this.detachInput?.()
     if (this.labelsIdle !== null) clearTimeout(this.labelsIdle)
     this.drag?.detach()
