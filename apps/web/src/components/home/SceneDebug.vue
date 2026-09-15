@@ -48,6 +48,7 @@ onMounted(() => {
     const scene = props.scene()
     if (scene && !attached) { scene.setProbe(probe); attached = true }
     stats.value = scene?.debugStats() ?? null
+    moving.value = labels.value ? countMoving() : 0
   }, 500)
 })
 onBeforeUnmount(() => {
@@ -63,6 +64,18 @@ const n = (v: number) => (v >= 10000 ? `${Math.round(v / 1000)}k` : String(v))
 // de le chiffrer — sur la machine qui a le problème, pas sur une autre.
 const labels = ref(true)
 function toggleLabels() { labels.value = !labels.value; props.scene()?.setLabelsVisible(labels.value) }
+
+// Combien d'étiquettes BOUGENT vraiment. Ce n'est pas le nombre d'appareils : le `CSS2DRenderer`
+// saute celles qui sont cachées (niveau non focalisé, hors champ) et ne touche au style que des
+// autres. C'est ce nombre-là, pas le total, qui décide du coût.
+const moving = ref(0)
+function countMoving(): number {
+  const layer = document.querySelector('.scene-labels')
+  if (!layer) return 0
+  let n = 0
+  for (const el of layer.children) if ((el as HTMLElement).style.display !== 'none') n++
+  return n
+}
 </script>
 
 <template>
@@ -76,7 +89,7 @@ function toggleLabels() { labels.value = !labels.value; props.scene()?.setLabels
       <div class="dbg__row"><span>passes</span><b>{{ stats.passes }}</b></div>
       <div class="dbg__row"><span>ombres</span><b>{{ stats.shadowsRebuilt ? '✓' : '✗' }} · {{ stats.pointShadows }} pt</b></div>
       <button type="button" class="dbg__row dbg__row--tap" title="Couper les étiquettes des appareils, pour mesurer ce qu’elles coûtent" @click="toggleLabels">
-        <span>pilules ⏻</span><b :data-on="labels ? '1' : '0'">{{ labels ? 'on' : 'off' }} · {{ stats.markers }}</b>
+        <span>pilules ⏻</span><b :data-on="labels ? '1' : '0'">{{ labels ? 'on' : 'off' }} · {{ moving }}/{{ stats.markers }}</b>
       </button>
       <div class="dbg__row"><span>qualité</span><b>{{ stats.quality }} · ×{{ stats.pixelRatio }}</b></div>
       <div class="dbg__row dbg__row--dim"><span>mémoire</span><b>{{ stats.geometries }}g · {{ stats.textures }}t · {{ stats.programs }}p</b></div>

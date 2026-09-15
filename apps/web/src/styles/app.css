@@ -61,7 +61,18 @@ button { font-family: inherit; cursor: pointer; }
    Le disque (24 px) est le point FIXE : l'ancre est un point de 0 × 0 et la pilule est décalée de
    son centre, donc quand la distance retire le nom (`data-lod`) rien ne se déplace, le texte
    disparaît vers la droite. */
-.marker-anchor { pointer-events: none; width: 0; height: 0; }
+.marker-anchor {
+  pointer-events: none; width: 0; height: 0;
+  /* Une étiquette se DÉPLACE à chaque image, au-dessus d'un canvas qui se redessine. Sans promotion,
+     chaque déplacement fait REPEINDRE la pilule entière — bordure, arrondi, ombre, disque de
+     catégorie, SVG de l'icône — plus la zone qu'elle libère. Promue en couche de composition, elle
+     n'est plus qu'une texture que le compositeur repose ailleurs : le déplacement ne coûte plus de
+     peinture. Sur une maison de quatre-vingts appareils, c'est ce poste qui plafonnait la vue Maison,
+     et il est invisible aux compteurs de three comme au temps passé dans `render()`.
+     `contain` borne en plus l'invalidation à la pilule : ce qu'elle fait ne concerne qu'elle. */
+  will-change: transform;
+  contain: layout style;
+}
 .marker-pill {
   --cat: var(--cat-other);
   pointer-events: auto; position: absolute; left: 0; top: 0; height: 30px; padding: 0 10px 0 3px;
