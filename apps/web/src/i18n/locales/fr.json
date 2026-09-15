@@ -17,7 +17,7 @@
     "playing": "{n} lecteur en diffusion | {n} lecteur en diffusion | {n} lecteurs en diffusion", "solar": "Solaire" },
   "floors": { "garden": "Jardin", "all": "Tout", "roof": "Toit" },
   "home": {
-    "lightsOn": "lumières allumées", "shuttersOpen": "volets ouverts", "awningsDown": "stores baissés", "solar": "Solaire", "cameras": "caméras", "players": "lecteurs",
+    "lightsOn": "lumières allumées", "shuttersOpen": "volets ouverts", "awningsDown": "stores baissés", "solar": "Solaire", "solarNow": "solaire", "battery": "batterie", "cameras": "caméras", "players": "lecteurs",
     "scenes": "Scènes", "rooms": "Pièces", "garden": "Jardin",
     "roomsCount": "{n} pièce | {n} pièce | {n} pièces",
     "devicesCount": "{n} appareil | {n} appareil | {n} appareils", "active": "{n} actif | {n} actif | {n} actifs",

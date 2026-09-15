@@ -1,34 +1,59 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import type { StateFor } from '@kasbah/shared'
 import { useHomeSummary } from '../../composables/useHomeSummary'
 import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
 import { useScenesStore } from '../../stores/scenes'
+import { formatPercent, formatPower } from '../../lib/format'
 import RoomRows from './RoomRows.vue'
 import SceneChips from '../scenes/SceneChips.vue'
 import StatTile from '../ui/StatTile.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import type { IconName } from '../../lib/strokeIcons'
 
-// Panneau « maison » : 4 tuiles de synthèse, scènes, liste des pièces (puis zones du jardin).
+// Panneau « maison » : les tuiles de synthèse, scènes, liste des pièces (puis zones du jardin).
 const house = useHouseStore()
 const devices = useDevicesStore()
 const pluginScenes = useScenesStore()
 const summary = useHomeSummary()
-const { t } = useI18n()
+const { t, locale } = useI18n()
+
+/**
+ * Jamais lu : un véhicule découvert ENDORMI porte les défauts du contrat (0 %, 0 km), qui se
+ * liraient ici comme une batterie vide. Même arbitrage que la vue Véhicules : « — » dit vrai.
+ */
+const unreadVehicle = (s: StateFor<'vehicle'>) =>
+  s.soc === 0 && s.rangeKm === 0 && s.odometerKm === undefined && s.location === undefined
 
 const stats = computed(() => {
-  const out: { value: string; label: string }[] = []
-  if (summary.lights.value.length) out.push({ value: String(summary.lightsOn.value), label: t('home.lightsOn') })
+  const out: { key: string; value: string; label: string }[] = []
+  if (summary.lights.value.length) out.push({ key: 'lights', value: String(summary.lightsOn.value), label: t('home.lightsOn') })
   // volets et stores ont leur propre tuile : « ouverts » et « baissés » ne sont pas la même mesure
-  if (summary.shutters.value.length) out.push({ value: `${summary.shuttersOpen.value}/${summary.shutters.value.length}`, label: t('home.shuttersOpen') })
-  if (summary.awnings.value.length) out.push({ value: `${summary.awningsDown.value}/${summary.awnings.value.length}`, label: t('home.awningsDown') })
-  // caméras et lecteurs plutôt que solaire et batterie : l'énergie a sa propre vue, et ces deux
-  // compteurs manquaient d'un endroit où se voir d'un coup d'œil.
-  if (summary.cameras.value.length) out.push({ value: String(summary.cameras.value.length), label: t('home.cameras') })
-  if (summary.players.value.length) out.push({ value: `${summary.playing.value}/${summary.players.value.length}`, label: t('home.players') })
-  return out.slice(0, 6)   // grille à 2 colonnes : les tuiles passent à la ligne
+  if (summary.shutters.value.length) out.push({ key: 'shutters', value: `${summary.shuttersOpen.value}/${summary.shutters.value.length}`, label: t('home.shuttersOpen') })
+  if (summary.awnings.value.length) out.push({ key: 'awnings', value: `${summary.awningsDown.value}/${summary.awnings.value.length}`, label: t('home.awningsDown') })
+  // caméras et lecteurs : ces deux compteurs manquaient d'un endroit où se voir d'un coup d'œil.
+  if (summary.cameras.value.length) out.push({ key: 'cameras', value: String(summary.cameras.value.length), label: t('home.cameras') })
+  if (summary.players.value.length) out.push({ key: 'players', value: `${summary.playing.value}/${summary.players.value.length}`, label: t('home.players') })
+  // énergie : la production de l'instant, et la charge de la batterie du site quand il y en a une —
+  // deux mesures distinctes, donc deux tuiles. Le détail reste dans la vue Énergie.
+  const site = summary.energy.value
+  if (site) out.push({ key: 'solar', value: formatPower(site.productionW, locale.value), label: t('home.solarNow') })
+  if (site?.batterySoc !== undefined) out.push({ key: 'battery', value: formatPercent(site.batterySoc, locale.value), label: t('home.battery') })
+  // une tuile PAR voiture : deux voitures ne se résument pas en un chiffre, et c'est leur charge
+  // qu'on vient regarder. Le nom sert d'étiquette ; `devices.list` est trié par nom, l'ordre tient.
+  for (const v of summary.vehicles.value) {
+    const s = v.state as StateFor<'vehicle'>
+    out.push({
+      key: v.descriptor.id,
+      value: unreadVehicle(s) ? '—' : formatPercent(s.soc, locale.value),
+      label: house.houseDeviceFor(v.descriptor.id)?.name ?? v.descriptor.name,
+    })
+  }
+  // grille à 2 colonnes : les tuiles passent à la ligne. Le plafond laisse la place aux 5 compteurs
+  // de la maison, aux 2 tuiles d'énergie et à trois voitures — aucune n'est jamais tronquée ici.
+  return out.slice(0, 10)
 })
 
 const rooms = computed(() => {
@@ -73,7 +98,7 @@ const sceneIcon = (icon?: string): IconName => (icon === 'leave' || icon === 'ni
 
 <template>
   <div v-if="stats.length" class="tiles">
-    <StatTile v-for="s in stats" :key="s.label" :value="s.value" :label="s.label" />
+    <StatTile v-for="s in stats" :key="s.key" :value="s.value" :label="s.label" />
   </div>
 
   <section v-if="scenes.length" class="block">

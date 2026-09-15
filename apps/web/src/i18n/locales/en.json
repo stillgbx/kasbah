@@ -17,7 +17,7 @@
     "playing": "{n} player streaming | {n} player streaming | {n} players streaming", "solar": "Solar" },
   "floors": { "garden": "Garden", "all": "All", "roof": "Roof" },
   "home": {
-    "lightsOn": "lights on", "shuttersOpen": "shutters open", "awningsDown": "awnings lowered", "solar": "Solar", "cameras": "cameras", "players": "players",
+    "lightsOn": "lights on", "shuttersOpen": "shutters open", "awningsDown": "awnings lowered", "solar": "Solar", "solarNow": "solar", "battery": "battery", "cameras": "cameras", "players": "players",
     "scenes": "Scenes", "rooms": "Rooms", "garden": "Garden",
     "roomsCount": "{n} room | {n} room | {n} rooms",
     "devicesCount": "{n} device | {n} device | {n} devices", "active": "{n} active | {n} active | {n} active",
