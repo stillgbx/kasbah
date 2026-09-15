@@ -58,7 +58,7 @@ const themeIcon = computed<IconName>(() => (settings.appearance === 'light' ? 's
 .rail::before {
   content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: calc(var(--rail-w) + 110px); z-index: -1; pointer-events: none;
   /* discret et large : un assombrissement qui s'étale, pas une barre — on reste immergé */
-  background: linear-gradient(to right, color-mix(in srgb, var(--bg) 55%, transparent) 0, color-mix(in srgb, var(--bg) 30%, transparent) var(--rail-w), transparent 100%);
+  background: linear-gradient(to right, color-mix(in srgb, var(--bg) 80%, transparent) 0, color-mix(in srgb, var(--bg) 40%, transparent) var(--rail-w), transparent 100%);
 }
 .rail__avatar {
   width: 38px; height: 38px; border-radius: 12px; background: var(--accent); color: var(--on-accent);
