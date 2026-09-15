@@ -133,6 +133,14 @@ const houseStats = computed(() => {
             <div class="block__sub">{{ $t('render.quality') }}</div>
             <Segmented :model-value="settings.sceneQuality" :options="qualityOptions" class="w-100" @update:model-value="(v: RenderQuality) => settings.setSceneQuality(v)" />
             <div class="muted small">{{ $t('render.qualityHint') }}</div>
+            <div class="auto-row auto-row--default">
+              <div class="min0">
+                <div class="auto-row__name">{{ $t('render.debug') }}</div>
+                <div class="muted small">{{ $t('render.debugHint') }}</div>
+              </div>
+              <v-switch :model-value="settings.sceneDebug" hide-details density="compact"
+                        @update:model-value="(v: boolean | null) => settings.setSceneDebug(v === true)" />
+            </div>
           </section>
           <section class="card block">
             <div class="block__title">{{ $t('settings.gps') }}</div>

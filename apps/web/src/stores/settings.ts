@@ -27,6 +27,8 @@ export const useSettingsStore = defineStore('settings', () => {
   const sceneStyle = useLocalStorage<string>('kasbah.sceneStyle', DEFAULT_STYLE_ID)
   const sceneAmbience = useLocalStorage<AmbienceMode>('kasbah.sceneAmbience', 'auto')
   const sceneQuality = useLocalStorage<RenderQuality>('kasbah.sceneQuality', 'auto')
+  /** Voile de mesure posé sur la scène (images/s, appels de dessin, passes, ombres). */
+  const sceneDebug = useLocalStorage<boolean>('kasbah.sceneDebug', false)
   const preferredDark = usePreferredDark()
 
   const themeId = computed<ThemeId>(() => (THEME_LIST.some((t) => t.id === theme.value) ? (theme.value as ThemeId) : DEFAULT_THEME_ID))
@@ -45,6 +47,7 @@ export const useSettingsStore = defineStore('settings', () => {
   function setSceneStyle(v: string) { if (RENDER_STYLES.some((st) => st.id === v)) sceneStyle.value = v }
   function setSceneAmbience(v: AmbienceMode) { if (AMBIENCE_MODES.includes(v)) sceneAmbience.value = v }
   function setSceneQuality(v: RenderQuality) { if (RENDER_QUALITIES.includes(v)) sceneQuality.value = v }
+  function setSceneDebug(v: boolean) { sceneDebug.value = v }
   function toggleLocale() { locale.value = resolvedLocale.value === 'fr' ? 'en' : 'fr' }
 
   /** Applique le thème Vuetify + les jetons CSS de la palette (data-theme, --bg, --accent…) sur <html>. */
@@ -71,9 +74,9 @@ export const useSettingsStore = defineStore('settings', () => {
 
   return {
     appearance, theme, locale, isDark, wantDark, themeId, currentTheme, resolvedLocale, fullscreen,
-    sceneStyle, sceneAmbience, sceneQuality,
+    sceneStyle, sceneAmbience, sceneQuality, sceneDebug,
     setAppearance, cycleAppearance, setTheme, setLocale, toggleLocale, applyToVuetify, applyLocale,
-    setSceneStyle, setSceneAmbience, setSceneQuality,
+    setSceneStyle, setSceneAmbience, setSceneQuality, setSceneDebug,
     appearances: APPEARANCES, themes: THEME_LIST, locales: LOCALES,
     styles: RENDER_STYLES, ambiences: AMBIENCE_MODES, qualities: RENDER_QUALITIES,
   }

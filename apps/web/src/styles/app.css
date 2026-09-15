@@ -66,7 +66,12 @@ button { font-family: inherit; cursor: pointer; }
   --cat: var(--cat-other);
   pointer-events: auto; position: absolute; left: 0; top: 0; height: 30px; padding: 0 10px 0 3px;
   border-radius: 999px; border: 1px solid var(--line);
-  background: color-mix(in srgb, var(--surface) 72%, transparent); backdrop-filter: blur(8px); color: var(--muted);
+  /* PAS de `backdrop-filter` ici. Une pilule est posée sur un canvas qui se redessine à chaque image,
+     et un filtre de fond se recalcule dès que son fond change : soixante pilules sur la maison réelle,
+     c'était soixante floutages par image, payés par le compositeur — invisibles pour `renderer.info`
+     comme pour le coût CPU, et c'est ce qui plafonnait la fréquence de la vue Maison. Le fond passe
+     donc opaque : à cette taille, la différence ne se voit pas ; le prix, si. */
+  background: color-mix(in srgb, var(--surface) 92%, transparent); color: var(--muted);
   display: inline-flex; align-items: center; gap: 6px; font: 500 12px/1 var(--font); white-space: nowrap;
   transform-origin: 15px 15px; transform: translate(-15px, -15px);
   transition: background .15s, color .15s, transform .15s, box-shadow .15s;

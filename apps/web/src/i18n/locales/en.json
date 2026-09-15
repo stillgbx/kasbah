@@ -186,7 +186,8 @@
     "ambiences": { "auto": "Automatic", "day": "Day", "dusk": "Dusk", "night": "Night" },
     "quality": "Quality",
     "qualityHint": "Lamp glow, corner occlusion and anti-aliasing. « Automatic » picks from the machine, then steps down if frames cost too much.",
-    "qualities": { "auto": "Automatic", "high": "High", "medium": "Medium", "low": "Low" }
+    "qualities": { "auto": "Automatic", "high": "High", "medium": "Medium", "low": "Low" },
+    "debug": "Debug", "debugHint": "Puts a measurement overlay on the scene: frames per second, CPU cost of a frame, draw calls, passes and shadow rebuilds. « img/s » at 0 when idle is normal — rendering is on demand."
   },
   "settings": {
     "title": "Settings", "appearance": "Appearance", "system": "System", "light": "Light", "dark": "Dark",

@@ -736,6 +736,27 @@ describe('véhicule placé par son GPS', () => {
   })
 })
 
+describe('coût du rendu', () => {
+  /**
+   * Chaque passe de niveau REDESSINE tout le bâti : sur une maison de trente pièces, c'est le prix
+   * d'une image entière. Un niveau ne la mérite que s'il a quelque chose de plus à montrer que la
+   * passe globale — une lampe allumée, ou un décor. En plein jour, lampes éteintes, il n'y en a aucune.
+   */
+  it('un niveau sans lampe allumée ne coûte pas une passe de plus', () => {
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true })
+    // Sans descripteur, un appareil n'est qu'une forme neutre : c'est le KIND qui donne une vraie
+    // lampe, avec sa lumière ponctuelle — et c'est elle qu'on compte ici.
+    scene.setDescriptors({ 'mock:light-living': { id: 'mock:light-living', pluginId: 'mock', externalId: 'light-living', kind: 'light', name: 'Plafonnier salon', capabilities: ['on_off'], meta: {} } as DeviceDescriptor })
+    scene.load(parseHouse(demo))
+    expect(scene.debugStats().levelPasses).toBe(0)
+    scene.updateStates({ 'mock:light-living': { kind: 'light', updatedAt: 0, available: true, on: true, brightness: 100 } as DeviceState })
+    expect(scene.debugStats().levelPasses).toBe(1)
+    scene.updateStates({ 'mock:light-living': { kind: 'light', updatedAt: 1, available: true, on: false } as DeviceState })
+    expect(scene.debugStats().levelPasses).toBe(0)
+    scene.dispose()
+  })
+})
+
 describe('heure de la maison', () => {
   // Le soleil se calcule, il ne se devine pas : la maison est géoréférencée et l'horloge fait le
   // reste. Repère pris à Dijon (la maison de démo), au solstice d'été — le soleil y culmine autour

@@ -64,6 +64,38 @@ export interface HouseSceneDeps {
   headless?: boolean
 }
 
+/** Ce que le voile de débogage affiche (Réglages → Rendu 3D → Débogage). */
+export interface SceneDebugStats {
+  /** Images rendues par seconde. Le rendu étant à la demande, c'est 0 au repos — et c'est normal. */
+  fps: number
+  /** Coût CPU d'une image, moyenne glissante (ms). Le GPU, lui, ne se mesure pas d'ici. */
+  cpuMs: number
+  /** Appels de dessin et triangles d'UNE image, toutes passes comprises. */
+  calls: number
+  triangles: number
+  programs: number
+  geometries: number
+  textures: number
+  /** Passes de rendu de la dernière image (1 globale + une par niveau qui a de quoi la mériter). */
+  passes: number
+  /** Niveaux qui méritent leur passe, indépendamment de ce que la dernière image a dessiné. */
+  levelPasses: number
+  /** La carte d'ombre du soleil a-t-elle été refaite à la dernière image ? */
+  shadowsRebuilt: boolean
+  /** Lampes qui portent une ombre cubique (six rendus de profondeur chacune). */
+  pointShadows: number
+  markers: number
+  quality: EffectiveQuality
+  pixelRatio: number
+}
+
+/**
+ * Sonde posée autour d'une image RENDUE. Le voile de débogage y branche `stats.js` : c'est la seule
+ * façon d'obtenir sa courbe, puisque la scène ne rend qu'à la demande — un `stats.update()` appelé
+ * depuis une boucle à part compterait des images qui n'existent pas.
+ */
+export interface FrameProbe { begin(): void; end(): void }
+
 export interface SceneEvents {
   deviceTap: (key: string) => void
   roomTap: (roomId: string) => void
@@ -100,6 +132,11 @@ const GRAB_RADIUS_PX = { touch: 44, mouse: 28 }
 type PillLod = 'full' | 'icon' | 'dot'
 const PILL_LOD_FULL_MIN_PX_PER_M = 65
 const PILL_LOD_ICON_MIN_PX_PER_M = 26
+/**
+ * Fenêtre pendant laquelle les ombres se refont après un changement de scène. Elle couvre la course
+ * animée la plus longue (un volet met 400 ms) : au-delà, rien de ce qui porte une ombre ne bouge plus.
+ */
+const SHADOW_SETTLE_MS = 700
 
 export class HouseScene {
   readonly scene = new Scene()
@@ -120,6 +157,21 @@ export class HouseScene {
   private quality: EffectiveQuality = 'high'
   /** Direction d'où vient la lumière du jour, monde three. Relue à chaque changement d'ambiance. */
   private sunDir = new Vector3(0.45, 0.82, 0.35)
+  /**
+   * Les ombres ne dépendent PAS de la caméra : les refaire à chaque image pendant qu'on tourne
+   * autour de la maison, c'est redessiner tout le bâti pour rien. Elles se refont pendant un court
+   * moment après un changement de scène — le temps qu'une course de volet s'achève.
+   */
+  private shadowsDirtyUntil = 0
+  private perf = { fps: 0, cpuMs: 0, frames: 0, since: 0, passes: 1, shadowsRebuilt: false }
+  /**
+   * Niveaux qui MÉRITENT leur passe : ceux qui portent une lampe allumée (à relire sous sa lumière)
+   * ou un décor visible (onde, jauge, guide — que la passe globale n'a pas dessiné). Sur une maison
+   * de trente pièces, une passe de plus, c'est tout le bâti redessiné ; en plein jour, lampes
+   * éteintes, il n'y en a aucune à faire.
+   */
+  private levelsNeedingPass = new Set<string>()
+  private probe: FrameProbe | null = null
   private nodes: HouseNodes | null = null
   private house: House | null = null
   private index: HouseIndex | null = null
@@ -236,10 +288,12 @@ export class HouseScene {
     this.index = indexHouse(house)
     this.geometry = computeHouseGeometry(house)
     this.nodes = buildHouse(this.geometry, this.materials)
+    this.invalidateShadows()
     this.nodes.terrain.receiveShadow = true
     this.scene.add(this.nodes.root)
     this.fitSunShadow()
     this.buildMarkers()
+    this.refreshLevelPasses()
     const c = this.geometry.bounds
     this.controls?.target.set((c.min[0] + c.max[0]) / 2, 0, -(c.min[1] + c.max[1]) / 2)
     this.applyLevelFocus()
@@ -436,6 +490,8 @@ export class HouseScene {
     this.buildMarkers()
     this.updateStates(this.states, true)
     this.applyLevelFocus()
+    this.refreshLevelPasses()
+    this.invalidateShadows()
     this.loop.invalidate()
   }
 
@@ -446,10 +502,12 @@ export class HouseScene {
    * `null` sort du mode. Les événements de glissement nomment le marqueur ATTRAPÉ ; à l'appelant d'en
    * déduire ce que devient le groupe.
    */
+  /** Le guide du mode « déplacer » est un décor : le niveau qui le porte a besoin de sa passe. */
   setMovable(key: string | string[] | null): void {
     this.movableKeys = key === null ? [] : Array.isArray(key) ? key : [key]
     this.grabbedKey = null
     for (const m of this.markers.values()) m.setMoving(this.movableKeys.includes(m.key), m.device.position[2], m.key === this.movableKeys[0])
+    this.refreshLevelPasses()
     this.drag?.detach()
     this.drag = null
     if (this.movableKeys.length > 0 && !this.deps.headless) {
@@ -472,6 +530,7 @@ export class HouseScene {
     if (!marker || !this.house || !this.index) return
     marker.object.position.set(position[0], position[1], this.localZ(marker.device, position[2]))
     marker.setGuideHeight(position[2])
+    this.invalidateShadows()               // l'appareil déplacé emmène son ombre
     this.loop.invalidate()
   }
 
@@ -563,13 +622,21 @@ export class HouseScene {
       const sound: SoundCue = { emits: emitsSound(id, next, routing), ...(relay && states[relay] ? { relayFrom: states[relay] } : {}) }
       const was = marker.currentSound
       const soundChanged = !was || was.emits !== sound.emits || was.relayFrom !== sound.relayFrom
-      if (force || next !== prev[id] || !marker.currentState || soundChanged) { marker.update(next, sound); touched = true }
+      if (force || next !== prev[id] || !marker.currentState || soundChanged) {
+        marker.update(next, sound)
+        touched = true
+        // Seuls ces trois-là DÉPLACENT quelque chose qui porte une ombre (un tablier, une voiture) ou
+        // en allument une (une lampe de jardin). Un capteur qui publie sa mesure toutes les secondes
+        // ne doit pas relancer un relevé d'ombres.
+        if (next && (next.kind === 'cover' || next.kind === 'vehicle' || next.kind === 'light')) this.invalidateShadows()
+      }
     }
-    if (touched) this.loop.invalidate()
+    if (touched) { this.refreshLevelPasses(); this.loop.invalidate() }
   }
 
   // ---- focus / caméra -----------------------------------------------------
   setOptions(opts: Partial<HouseSceneOptions>): void {
+    this.invalidateShadows()
     const before = this.options.quality
     this.options = { ...this.options, ...opts }
     if (this.renderer) this.renderer.shadowMap.enabled = this.options.shadows
@@ -834,6 +901,41 @@ export class HouseScene {
    * d'HEURE ne fait que muter des couleurs et des intensités. C'est pour cette différence de prix
    * que `applyLook` compare les cartes avant de demander une recompilation.
    */
+  /**
+   * Redemande un relevé des ombres : après un changement de géométrie, d'appareil ou de soleil. La
+   * fenêtre couvre les courses animées (un volet met 400 ms à descendre) sans quoi l'ombre resterait
+   * celle d'avant. Une caméra qui tourne n'appelle JAMAIS ceci — c'est tout l'intérêt.
+   */
+  invalidateShadows(ms = SHADOW_SETTLE_MS): void {
+    this.shadowsDirtyUntil = (this.deps.now?.() ?? performance.now()) + ms
+  }
+
+  /** Branche (ou débranche) une sonde autour de chaque image rendue — `stats.js` du voile de débogage. */
+  setProbe(probe: FrameProbe | null): void { this.probe = probe }
+
+  /** Relevé pour le voile de débogage (Réglages → Rendu 3D). Lu à la demande, jamais pendant le rendu. */
+  debugStats(): SceneDebugStats {
+    const info = this.renderer?.info
+    let pointShadows = 0
+    for (const m of this.markers.values()) m.object.traverse((o) => { if ((o as { isPointLight?: boolean }).isPointLight && (o as { castShadow?: boolean }).castShadow) pointShadows++ })
+    return {
+      fps: Math.round(this.perf.fps),
+      cpuMs: Math.round(this.perf.cpuMs * 10) / 10,
+      calls: info?.render.calls ?? 0,
+      triangles: info?.render.triangles ?? 0,
+      programs: info?.programs?.length ?? 0,
+      geometries: info?.memory.geometries ?? 0,
+      textures: info?.memory.textures ?? 0,
+      passes: this.perf.passes,
+      levelPasses: this.levelsNeedingPass.size,
+      shadowsRebuilt: this.perf.shadowsRebuilt,
+      pointShadows,
+      markers: this.markers.size,
+      quality: this.quality,
+      pixelRatio: this.renderer?.getPixelRatio() ?? 1,
+    }
+  }
+
   setAppearance(next: Partial<SceneAppearance>): void {
     if (next.style) this.style = next.style
     if (next.ambience) { this.ambience = next.ambience; this.sunDir = sunDirection(this.ambience) }
@@ -850,6 +952,8 @@ export class HouseScene {
     }
     for (const m of this.markers.values()) m.setTheme(this.theme, this.look.glow)
     this.highlightRoom(this.highlightedRoom)
+    this.refreshLevelPasses()              // l'heure change ce qu'une lampe allumée vaut
+    this.invalidateShadows()               // le soleil a pu bouger
     this.loop.invalidate()
   }
 
@@ -971,12 +1075,19 @@ export class HouseScene {
   }
 
   private render(): void {
+    this.probe?.begin()
+    const t0 = this.deps.now?.() ?? performance.now()
+    // Les compteurs de three se remettent à zéro à chaque `render()` : avec plusieurs passes par
+    // image, il faut les tenir nous-mêmes pour lire un total d'IMAGE et non de dernière passe.
+    if (this.renderer) { this.renderer.info.autoReset = false; this.renderer.info.reset() }
     // Avec une chaîne d'effets, c'est elle qui appelle notre rendu (par `draw`) puis ses passes ;
     // sans elle, on dessine droit à l'écran.
     if (this.post) this.post.render()
     else if (this.renderer) { this.renderer.setRenderTarget(null); this.renderPasses(this.renderer) }
+    this.measure(t0)
     this.updatePillLod()
     this.labelRenderer?.render(this.scene, this.camera)
+    this.probe?.end()
   }
 
   /**
@@ -999,7 +1110,11 @@ export class HouseScene {
     const nodes = this.nodes
     if (!nodes) { r.render(this.scene, this.camera); return }
     const levels = [...nodes.levels.values()].filter((n) => n.group.visible)
-    const lit = levels.filter((n) => n.markers.visible)      // un niveau fantôme ne porte pas de lampes
+    // Un niveau ne se redessine que s'il a quelque chose à montrer de plus que la passe globale :
+    // une lampe allumée, ou un décor. Un niveau fantôme n'a même pas de marqueurs.
+    const lit = [...nodes.levels.entries()]
+      .filter(([id, n]) => n.group.visible && n.markers.visible && this.levelsNeedingPass.has(id))
+      .map(([, n]) => n)
     const roofShown = nodes.roof?.visible ?? false
     // Ce que le JARDIN dessine : son sol et ses zones. Ses appareils, eux, restent visibles dans
     // toutes les passes — leurs lampes portent une ombre et doivent éclairer la façade partout.
@@ -1010,10 +1125,14 @@ export class HouseScene {
     //    et les appareils y sont VISIBLES : un volet fermé doit barrer le soleil, une voiture poser son
     //    ombre sur l'allée. Ce qui en sort, ce sont les lampes d'INTÉRIEUR et les décors des niveaux —
     //    par leur couche, jamais par leur visibilité (`core/layers.ts`).
+    // Les ombres ne se refont qu'après un changement de scène, pas parce que la caméra a tourné :
+    // le relevé redessine tout le bâti depuis le soleil, et six faces de plus par lampe de jardin.
+    const rebuildShadows = (this.deps.now?.() ?? performance.now()) <= this.shadowsDirtyUntil
+    this.perf.shadowsRebuilt = rebuildShadows
     this.camera.layers.disable(DECOR_LAYER)
     this.camera.layers.disable(LAMP_LAYER)
     r.autoClear = true
-    r.shadowMap.autoUpdate = true
+    r.shadowMap.autoUpdate = rebuildShadows
     r.render(this.scene, this.camera)
     r.shadowMap.autoUpdate = false
     r.autoClear = false
@@ -1031,12 +1150,46 @@ export class HouseScene {
       for (const o of levels) o.group.visible = o === n
       r.render(this.scene, this.camera)
     }
+    this.perf.passes = 1 + lit.length
 
     for (const n of levels) n.group.visible = true
     for (const m of siteSurfaces) m.visible = true
     if (nodes.roof) nodes.roof.visible = roofShown
     this.camera.layers.enable(SITE_DECOR_LAYER)
     r.autoClear = true
+  }
+
+  /**
+   * Recalcule quels niveaux méritent leur passe. Appelé quand un état, un appareil ou l'apparence
+   * change — jamais pendant le rendu : la caméra ne change rien à cette réponse.
+   */
+  private refreshLevelPasses(): void {
+    this.levelsNeedingPass.clear()
+    if (!this.nodes) return
+    for (const [id, n] of this.nodes.levels) {
+      let needs = false
+      n.markers.traverse((o) => {
+        if (needs || !o.visible) return
+        const light = o as unknown as { isPointLight?: boolean; intensity?: number }
+        if (light.isPointLight) { if ((light.intensity ?? 0) > 0) needs = true; return }
+        if (o.layers.mask === 1 << DECOR_LAYER) needs = true
+      })
+      if (needs) this.levelsNeedingPass.add(id)
+    }
+  }
+
+  /** Coût d'une image et cadence, en moyenne glissante. Lu par le voile de débogage. */
+  private measure(t0: number): void {
+    const t1 = this.deps.now?.() ?? performance.now()
+    this.perf.cpuMs = this.perf.cpuMs ? this.perf.cpuMs * 0.85 + (t1 - t0) * 0.15 : t1 - t0
+    this.perf.frames++
+    if (!this.perf.since) this.perf.since = t0
+    const span = t1 - this.perf.since
+    if (span >= 500) {
+      this.perf.fps = (this.perf.frames * 1000) / span
+      this.perf.frames = 0
+      this.perf.since = t1
+    }
   }
 
   /** Le rendu est à la demande : la distance n'est relue que quand quelque chose a bougé. */

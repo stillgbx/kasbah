@@ -11,9 +11,11 @@ import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import HomePanel from '../components/home/HomePanel.vue'
 import RoomPanel from '../components/home/RoomPanel.vue'
 import DevicePanel from '../components/home/DevicePanel.vue'
+import SceneDebug from '../components/home/SceneDebug.vue'
 import { useHouseScene } from '../composables/useHouseScene'
 import { useDevicesStore } from '../stores/devices'
 import { useHouseStore, type FloorTab } from '../stores/house'
+import { useSettingsStore } from '../stores/settings'
 
 defineOptions({ name: 'HomeView' })
 
@@ -23,6 +25,7 @@ defineOptions({ name: 'HomeView' })
 // vit dans le store ; l'URL la reflète.
 const house = useHouseStore()
 const devices = useDevicesStore()
+const settings = useSettingsStore()
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
@@ -200,6 +203,7 @@ const DOLLY_STEP = 1.35
       <canvas ref="canvas" class="scene-canvas" tabindex="0" />
       <div ref="labelLayer" class="scene-labels" />
       <div class="home__vignette" />
+      <SceneDebug v-if="settings.sceneDebug" :scene="scene.controller" />
     </div>
     <div class="home__header">
       <PageHeader>
