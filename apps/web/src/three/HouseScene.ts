@@ -94,6 +94,11 @@ export interface SceneDebugStats {
   /** Lampes qui portent une ombre cubique (six rendus de profondeur chacune). */
   pointShadows: number
   markers: number
+  /**
+   * Animations de marqueur en cours (onde d'un lecteur, souffle d'une batterie). Tant qu'il y en a
+   * une, la boucle tourne SANS qu'on touche à rien — bridée à `ANIMATION_HZ` (`core/renderLoop.ts`).
+   */
+  animations: number
   quality: EffectiveQuality
   pixelRatio: number
 }
@@ -974,6 +979,7 @@ export class HouseScene {
       shadowsRebuilt: this.perf.shadowsRebuilt,
       pointShadows,
       markers: this.markers.size,
+      animations: this.loop.animationCount,
       quality: this.quality,
       pixelRatio: this.renderer?.getPixelRatio() ?? 1,
     }

@@ -25,6 +25,9 @@ import type { HouseScene, SceneDebugStats } from '../../three/HouseScene'
 //  - « appels » et « triangles » sont des totaux d'IMAGE, toutes passes comprises.
 //  - « passes » : 1 (la matière) + une par niveau qui a quelque chose de plus à montrer (une lampe
 //    allumée, un décor). Sur une maison de trente pièces, chaque passe redessine tout le bâti.
+//  - « animations » : tant qu'il y en a une (l'onde d'un lecteur, le souffle d'une batterie), la
+//    boucle tourne SANS qu'on touche à rien. Elle est alors bridée à 20 images par seconde : le
+//    « img/s » au repos n'est donc ni 0 ni 60, et c'est voulu.
 //  - « ombres ✓ » signifie que la carte d'ombre vient d'être refaite. Pendant une orbite, elle doit
 //    rester à ✗ : rien de ce qui porte une ombre n'a bougé.
 
@@ -91,6 +94,7 @@ function countMoving(): number {
       <div class="dbg__row"><span>appels</span><b>{{ n(stats.calls) }}</b></div>
       <div class="dbg__row"><span>triangles</span><b>{{ n(stats.triangles) }}</b></div>
       <div class="dbg__row"><span>passes</span><b>{{ stats.passes }}</b></div>
+      <div class="dbg__row"><span>animations</span><b>{{ stats.animations }}</b></div>
       <div class="dbg__row"><span>ombres</span><b>{{ stats.shadowsRebuilt ? '✓' : '✗' }} · {{ stats.pointShadows }} pt</b></div>
       <button type="button" class="dbg__row dbg__row--tap" title="Couper les étiquettes des appareils, pour mesurer ce qu’elles coûtent" @click="toggleLabels">
         <span>pilules ⏻</span><b :data-on="labels ? '1' : '0'">{{ labels ? 'on' : 'off' }} · {{ moving }}/{{ stats.markers }}</b>

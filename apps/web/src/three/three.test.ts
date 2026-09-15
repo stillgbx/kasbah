@@ -56,6 +56,30 @@ describe('camera fit', () => {
 })
 
 describe('render loop', () => {
+  /**
+   * Une onde de lecteur dure 5,75 s et une respiration de batterie 2,6 s : les animer à la cadence de
+   * l'écran redessinait TOUTE la scène soixante fois par seconde pour une fraction de pixel. Une
+   * maison où une enceinte joue ne doit pas charger le navigateur en permanence.
+   */
+  it('une animation décorative ne redessine pas à la cadence de l’écran', () => {
+    const frames: ((now: number) => void)[] = []
+    let renders = 0, now = 0
+    const loop = createRenderLoop({
+      render: () => { renders++ },
+      updateControls: () => false,
+      requestFrame: (cb) => { frames.push(cb); return frames.length },
+      cancelFrame: () => {},
+      now: () => now,
+    })
+    const tick = () => { const cb = frames.shift(); if (cb) { now += 16; cb(now) } }
+    loop.addAnimation({ step: () => true })          // une onde qui ne s'arrête jamais
+    for (let i = 0; i < 12; i++) tick()              // ~192 ms d'images à 60 Hz
+    expect(loop.running).toBe(true)                  // la boucle reste vivante…
+    expect(renders).toBeLessThanOrEqual(5)           // …mais elle dessine à ~20 Hz, pas à 60
+    expect(renders).toBeGreaterThanOrEqual(2)
+    loop.dispose()
+  })
+
   it('renders on invalidate and stops when nothing moves; tweens keep it alive', () => {
     const frames: ((now: number) => void)[] = []
     let renders = 0, controlsBusy = false, now = 0
