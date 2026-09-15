@@ -73,6 +73,12 @@ export interface SceneDebugStats {
    * du GPU est pleine, le pilote bloque à l'envoi et cette attente s'y retrouve.
    */
   cpuMs: number
+  /**
+   * Temps écoulé ENTRE deux images, moins celui passé à dessiner. C'est ce que le navigateur fait de
+   * son côté : style, disposition, peinture, composition, présentation à l'écran. Un « hors rendu »
+   * qui gonfle pendant qu'on tourne désigne tout sauf notre dessin.
+   */
+  outsideMs: number
   /** Appels de dessin et triangles d'UNE image, toutes passes comprises. */
   calls: number
   triangles: number
@@ -140,6 +146,8 @@ const PILL_LOD_ICON_MIN_PX_PER_M = 26
  * animée la plus longue (un volet met 400 ms) : au-delà, rien de ce qui porte une ombre ne bouge plus.
  */
 const SHADOW_SETTLE_MS = 700
+/** Délai après lequel les étiquettes sont considérées immobiles (et leur promotion relâchée). */
+const LABELS_IDLE_MS = 500
 
 export class HouseScene {
   readonly scene = new Scene()
@@ -166,7 +174,7 @@ export class HouseScene {
    * moment après un changement de scène — le temps qu'une course de volet s'achève.
    */
   private shadowsDirtyUntil = 0
-  private perf = { fps: 0, cpuMs: 0, frames: 0, since: 0, passes: 1, shadowsRebuilt: false }
+  private perf = { fps: 0, cpuMs: 0, outsideMs: 0, lastStart: 0, frames: 0, since: 0, passes: 1, shadowsRebuilt: false }
   /**
    * Niveaux qui MÉRITENT leur passe : ceux qui portent une lampe allumée (à relire sous sa lumière)
    * ou un décor visible (onde, jauge, guide — que la passe globale n'a pas dessiné). Sur une maison
@@ -176,6 +184,7 @@ export class HouseScene {
   private levelsNeedingPass = new Set<string>()
   private probe: FrameProbe | null = null
   private labelsVisible = true
+  private labelsIdle: ReturnType<typeof setTimeout> | null = null
   private nodes: HouseNodes | null = null
   private house: House | null = null
   private index: HouseIndex | null = null
@@ -922,6 +931,21 @@ export class HouseScene {
    * `render()` ne montrent entièrement — le reste est payé par le style et le compositeur du
    * navigateur. Les éteindre le chiffre, sur la machine qui a le problème.
    */
+  /**
+   * Marque la couche des étiquettes comme EN MOUVEMENT. C'est ce qui autorise leur promotion en
+   * couche de composition (`will-change`, `styles/app.css`) — et seulement à ce moment-là : une
+   * promotion permanente sur quarante éléments garde autant de textures vivantes pour rien, et c'est
+   * précisément ce que la spécification déconseille. Le drapeau retombe une demi-seconde après la
+   * dernière image.
+   */
+  private markLabelsMoving(): void {
+    const layer = this.labelRenderer?.domElement
+    if (!layer) return
+    if (layer.dataset.moving !== '1') layer.dataset.moving = '1'
+    if (this.labelsIdle !== null) clearTimeout(this.labelsIdle)
+    this.labelsIdle = setTimeout(() => { layer.dataset.moving = '0'; this.labelsIdle = null }, LABELS_IDLE_MS)
+  }
+
   setLabelsVisible(visible: boolean): void {
     this.labelsVisible = visible
     if (this.labelRenderer) this.labelRenderer.domElement.style.display = visible ? '' : 'none'
@@ -939,6 +963,7 @@ export class HouseScene {
     return {
       fps: Math.round(this.perf.fps),
       cpuMs: Math.round(this.perf.cpuMs * 10) / 10,
+      outsideMs: Math.round(this.perf.outsideMs * 10) / 10,
       calls: info?.render.calls ?? 0,
       triangles: info?.render.triangles ?? 0,
       programs: info?.programs?.length ?? 0,
@@ -1111,7 +1136,7 @@ export class HouseScene {
     else if (this.renderer) { this.renderer.setRenderTarget(null); this.renderPasses(this.renderer) }
     this.measure(t0)
     this.updatePillLod()
-    if (this.labelsVisible) this.labelRenderer?.render(this.scene, this.camera)
+    if (this.labelsVisible) { this.labelRenderer?.render(this.scene, this.camera); this.markLabelsMoving() }
     this.probe?.end()
   }
 
@@ -1211,10 +1236,16 @@ export class HouseScene {
     }
   }
 
-  /** Temps passé dans `render()` et cadence, en moyenne glissante. Lu par le voile de débogage. */
+  /** Temps passé dans `render()`, temps passé AILLEURS, et cadence. Lu par le voile de débogage. */
   private measure(t0: number): void {
     const t1 = this.deps.now?.() ?? performance.now()
     this.perf.cpuMs = this.perf.cpuMs ? this.perf.cpuMs * 0.85 + (t1 - t0) * 0.15 : t1 - t0
+    // Ce qui sépare deux images et qu'on n'a pas passé à dessiner : c'est le navigateur, pas nous.
+    if (this.perf.lastStart) {
+      const outside = Math.max(0, t0 - this.perf.lastStart - (t1 - t0))
+      this.perf.outsideMs = this.perf.outsideMs ? this.perf.outsideMs * 0.85 + outside * 0.15 : outside
+    }
+    this.perf.lastStart = t0
     this.perf.frames++
     if (!this.perf.since) this.perf.since = t0
     const span = t1 - this.perf.since
@@ -1241,6 +1272,7 @@ export class HouseScene {
 
   dispose(): void {
     this.detachInput?.()
+    if (this.labelsIdle !== null) clearTimeout(this.labelsIdle)
     this.drag?.detach()
     this.loop.dispose()
     this.controls?.dispose()

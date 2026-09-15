@@ -15,6 +15,9 @@ import type { HouseScene, SceneDebugStats } from '../../three/HouseScene'
 // Ce qu'il faut savoir lire :
 //  - « img/s » (et la courbe FPS) à 0 au repos est NORMAL : le rendu est à la demande
 //    (`three/core/renderLoop.ts`). Le chiffre qui compte se lit pendant qu'on tourne autour de la maison.
+//  - « hors rendu » est ce qui sépare deux images SANS être passé à dessiner : style, disposition,
+//    peinture, composition, présentation. S'il gonfle pendant qu'on tourne alors que « rendu » reste
+//    stable, le retard ne vient pas de notre dessin — c'est là qu'il faut chercher.
 //  - « rendu » est le temps passé DANS `render()`. Ce n'est pas du CPU pur : quand la file de
 //    commandes du GPU est pleine, le pilote bloque à l'envoi et cette attente s'y retrouve. À lire
 //    avec « img/s » : à 60 Hz, une image qui dépasse 16,7 ms tombe mécaniquement à 30 — autrement
@@ -84,6 +87,7 @@ function countMoving(): number {
     <template v-if="stats">
       <div class="dbg__row"><span>img/s</span><b>{{ stats.fps }}</b></div>
       <div class="dbg__row"><span>rendu</span><b>{{ stats.cpuMs }} ms</b></div>
+      <div class="dbg__row"><span>hors rendu</span><b>{{ stats.outsideMs }} ms</b></div>
       <div class="dbg__row"><span>appels</span><b>{{ n(stats.calls) }}</b></div>
       <div class="dbg__row"><span>triangles</span><b>{{ n(stats.triangles) }}</b></div>
       <div class="dbg__row"><span>passes</span><b>{{ stats.passes }}</b></div>

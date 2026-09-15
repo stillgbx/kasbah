@@ -70,9 +70,13 @@ button { font-family: inherit; cursor: pointer; }
      peinture. Sur une maison de quatre-vingts appareils, c'est ce poste qui plafonnait la vue Maison,
      et il est invisible aux compteurs de three comme au temps passé dans `render()`.
      `contain` borne en plus l'invalidation à la pilule : ce qu'elle fait ne concerne qu'elle. */
-  will-change: transform;
   contain: layout style;
 }
+/* La promotion n'est posée que PENDANT le mouvement (`data-moving`, `HouseScene.markLabelsMoving`).
+   Permanente, elle garderait quarante textures vivantes en permanence — la spécification le
+   déconseille explicitement, et c'est le genre de chose qui se paie en pression mémoire du
+   compositeur, donc en dégradation progressive plutôt qu'en coût fixe. */
+.scene-labels[data-moving='1'] .marker-anchor { will-change: transform; }
 .marker-pill {
   --cat: var(--cat-other);
   pointer-events: auto; position: absolute; left: 0; top: 0; height: 30px; padding: 0 10px 0 3px;
