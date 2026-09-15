@@ -175,6 +175,7 @@ export class HouseScene {
    */
   private levelsNeedingPass = new Set<string>()
   private probe: FrameProbe | null = null
+  private labelsVisible = true
   private nodes: HouseNodes | null = null
   private house: House | null = null
   private index: HouseIndex | null = null
@@ -915,6 +916,18 @@ export class HouseScene {
     this.shadowsDirtyUntil = (this.deps.now?.() ?? performance.now()) + ms
   }
 
+  /**
+   * Montre ou cache la couche des pilules (DOM). Outil de DIAGNOSTIC du voile de débogage : soixante
+   * pilules déplacées à chaque image ont un coût que ni `renderer.info` ni le temps passé dans
+   * `render()` ne montrent entièrement — le reste est payé par le style et le compositeur du
+   * navigateur. Les éteindre le chiffre, sur la machine qui a le problème.
+   */
+  setLabelsVisible(visible: boolean): void {
+    this.labelsVisible = visible
+    if (this.labelRenderer) this.labelRenderer.domElement.style.display = visible ? '' : 'none'
+    this.loop.invalidate()
+  }
+
   /** Branche (ou débranche) une sonde autour de chaque image rendue — `stats.js` du voile de débogage. */
   setProbe(probe: FrameProbe | null): void { this.probe = probe }
 
@@ -1098,7 +1111,7 @@ export class HouseScene {
     else if (this.renderer) { this.renderer.setRenderTarget(null); this.renderPasses(this.renderer) }
     this.measure(t0)
     this.updatePillLod()
-    this.labelRenderer?.render(this.scene, this.camera)
+    if (this.labelsVisible) this.labelRenderer?.render(this.scene, this.camera)
     this.probe?.end()
   }
 
@@ -1141,6 +1154,13 @@ export class HouseScene {
     // le relevé redessine tout le bâti depuis le soleil, et six faces de plus par lampe de jardin.
     const rebuildShadows = (this.deps.now?.() ?? performance.now()) <= this.shadowsDirtyUntil
     this.perf.shadowsRebuilt = rebuildShadows
+    // Un appareil dessiné dans la passe globale PUIS dans celle de son niveau l'est deux fois pour
+    // rien : le second passage réécrit le premier, au même endroit, en mieux éclairé. Sur la maison
+    // réelle les marqueurs pèsent la moitié des appels de dessin — c'est la moitié qu'on ne paie
+    // plus. Ils restent dans la passe globale quand elle relève les OMBRES (il faut alors qu'ils
+    // soient là pour les porter) et quand leur niveau n'a pas de passe à lui.
+    const duplicated = rebuildShadows ? [] : lit
+    for (const n of duplicated) n.markers.visible = false
     this.camera.layers.disable(DECOR_LAYER)
     this.camera.layers.disable(LAMP_LAYER)
     r.autoClear = true
@@ -1148,6 +1168,7 @@ export class HouseScene {
     r.render(this.scene, this.camera)
     r.shadowMap.autoUpdate = false
     r.autoClear = false
+    for (const n of duplicated) n.markers.visible = true
     this.camera.layers.enable(DECOR_LAYER)
     this.camera.layers.enable(LAMP_LAYER)
     this.camera.layers.disable(SITE_DECOR_LAYER)   // le jardin a déjà posé ses halos

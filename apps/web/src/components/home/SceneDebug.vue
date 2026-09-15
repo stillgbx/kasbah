@@ -57,6 +57,12 @@ onBeforeUnmount(() => {
 })
 
 const n = (v: number) => (v >= 10000 ? `${Math.round(v / 1000)}k` : String(v))
+
+// Les pilules s'éteignent d'un clic : leur coût se paie en partie hors de `render()`, dans le style
+// et le compositeur, là où aucun compteur ne va. Les couper et regarder « img/s » est la seule façon
+// de le chiffrer — sur la machine qui a le problème, pas sur une autre.
+const labels = ref(true)
+function toggleLabels() { labels.value = !labels.value; props.scene()?.setLabelsVisible(labels.value) }
 </script>
 
 <template>
@@ -69,7 +75,9 @@ const n = (v: number) => (v >= 10000 ? `${Math.round(v / 1000)}k` : String(v))
       <div class="dbg__row"><span>triangles</span><b>{{ n(stats.triangles) }}</b></div>
       <div class="dbg__row"><span>passes</span><b>{{ stats.passes }}</b></div>
       <div class="dbg__row"><span>ombres</span><b>{{ stats.shadowsRebuilt ? '✓' : '✗' }} · {{ stats.pointShadows }} pt</b></div>
-      <div class="dbg__row"><span>marqueurs</span><b>{{ stats.markers }}</b></div>
+      <button type="button" class="dbg__row dbg__row--tap" @click="toggleLabels">
+        <span>pilules</span><b>{{ labels ? 'on' : 'off' }} · {{ stats.markers }}</b>
+      </button>
       <div class="dbg__row"><span>qualité</span><b>{{ stats.quality }} · ×{{ stats.pixelRatio }}</b></div>
       <div class="dbg__row dbg__row--dim"><span>mémoire</span><b>{{ stats.geometries }}g · {{ stats.textures }}t · {{ stats.programs }}p</b></div>
     </template>
@@ -89,4 +97,7 @@ const n = (v: number) => (v >= 10000 ? `${Math.round(v / 1000)}k` : String(v))
 .dbg__row { display: flex; justify-content: space-between; gap: 12px; }
 .dbg__row span { color: var(--muted); }
 .dbg__row--dim { opacity: .7; }
+/* la seule ligne cliquable : couper les pilules pour chiffrer ce qu'elles coûtent hors du rendu */
+.dbg__row--tap { pointer-events: auto; cursor: pointer; background: none; border: 0; padding: 0; color: inherit; font: inherit; width: 100%; }
+.dbg__row--tap:hover span { color: var(--text); }
 </style>
