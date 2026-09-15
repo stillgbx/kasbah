@@ -413,6 +413,51 @@ describe('marqueurs 3D', () => {
     expect(animations.length).toBe(0)
   })
 
+  it("la jauge d'un coffret de batterie monte avec sa charge, sur ses deux faces", () => {
+    const stored = { id: 'p:b', pluginId: 'p', externalId: 'b', kind: 'energy', name: 'Batterie', capabilities: ['storage'], meta: {} } as unknown as DeviceDescriptor
+    const site = { ...stored, id: 'p:site', capabilities: ['production', 'consumption', 'grid', 'storage'] } as unknown as DeviceDescriptor
+    const energy = (extra: Record<string, unknown>) =>
+      ({ kind: 'energy', updatedAt: 0, available: true, productionW: 0, consumptionW: 0, gridW: 0, ...extra }) as DeviceState
+    const h = 1 * 0.86                                          // le trait fait 86 % de la hauteur du coffret
+    const m = marker(device(), stored)
+    const box = meshes(m.object)[0]!
+    // une piste et un trait PAR grande face : le coffret se lit de devant comme de derrière
+    expect(box.children).toHaveLength(4)
+    const [frontTrack, frontFill, , backFill] = box.children as Mesh[]
+    expect(frontTrack!.position.y).toBeCloseTo(0.078)           // posé sur la tôle, 3 mm devant
+    expect(backFill!.position.y).toBeCloseTo(-0.078)
+    for (const f of [frontFill!, backFill!]) {
+      // le trait monte vers le HAUT du coffret, quelle que soit la face qui le porte
+      expect(new Vector3(0, 1, 0).applyEuler(f.rotation).z).toBeCloseTo(1)
+    }
+    // et chaque face regarde vers le dehors du coffret
+    expect(new Vector3(0, 0, 1).applyEuler(frontFill!.rotation).y).toBeCloseTo(1)
+    expect(new Vector3(0, 0, 1).applyEuler(backFill!.rotation).y).toBeCloseTo(-1)
+
+    m.update(energy({ batterySoc: 50 }))
+    for (const f of [frontFill!, backFill!]) {
+      expect(f.visible).toBe(true)
+      expect(f.scale.y).toBeCloseTo(0.5)
+      expect(f.position.z).toBeCloseTo(-h / 4)                  // ancré sur le bord BAS : son centre descend
+    }
+    m.update(energy({ batterySoc: 100 }))
+    expect(frontFill!.scale.y).toBeCloseTo(1)
+    expect(frontFill!.position.z).toBeCloseTo(0)
+    // à plat : la piste reste, le trait s'efface — un coffret vide le DIT
+    m.update(energy({ batterySoc: 0 }))
+    expect([frontTrack!.visible, frontFill!.visible]).toEqual([true, false])
+    // muet : le dernier niveau connu tient. Une charge ne s'évapore pas avec la liaison, et le
+    // souffle rouge dit déjà que le chiffre est gelé
+    m.update(energy({ batterySoc: 62, available: false }))
+    expect(frontFill!.visible).toBe(true)
+    expect(frontFill!.scale.y).toBeCloseTo(0.62)
+    // charge inconnue : rien, pas même la piste — une jauge vide se lirait comme une batterie à plat
+    m.update(energy({}))
+    expect([frontTrack!.visible, frontFill!.visible]).toEqual([false, false])
+    // la passerelle de l'installation n'est pas un coffret : elle n'a aucune jauge à porter
+    expect(meshes(marker(device(), site).object)[0]!.children).toHaveLength(0)
+  })
+
   it('un thermostat est une pastille couchée contre son mur, tournée du yaw', () => {
     const desc = { id: 'p:t', pluginId: 'p', externalId: 't', kind: 'climate', name: 'Thermostat', capabilities: [], meta: {} } as unknown as DeviceDescriptor
     const m = marker(device({ yaw: 90 }), desc)

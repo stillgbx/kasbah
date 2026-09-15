@@ -29,6 +29,10 @@ const BATTERY_PULSE_MS = 2600
 const BATTERY_GLOW = { min: 0.06, max: 0.6 }
 /** Part de la couleur d'état versée dans la teinte du coffret : il reste gris, même au creux du souffle. */
 const BATTERY_TINT = 0.3
+/** Coffret d'une batterie (m) : largeur, profondeur, hauteur. Ses deux grandes faces portent la jauge. */
+const BATTERY_BOX = { w: 0.6, d: 0.15, h: 1 }
+/** Jauge de charge du coffret : largeur du trait (m), part de la hauteur de la face, retrait du bord. */
+const BATTERY_GAUGE = { w: 0.06, h: 0.86, inset: 0.06 }
 
 /** Écrans d'un lecteur : dalle (m) et demi-profondeur de la boîte, d'où l'image est posée. */
 const SCREENS = { tv: { width: 1, height: 0.56, depth: 0.03 }, display: { width: 0.25, height: 0.16, depth: 0.04 } } as const
@@ -74,6 +78,11 @@ export class GenericMarker extends DeviceMarker {
   private readonly batteryMat: MeshStandardMaterial | null = null
   /** Couleur de ce que la batterie fait en ce moment, `null` si elle n'a rien à dire (au repos). */
   private cue: Color | null = null
+  /**
+   * Jauge de charge du coffret, une paire piste + trait PAR GRANDE FACE : la vue d'ensemble regarde
+   * la maison depuis le sud-est, et un coffret posé `yaw` 0 lui tournerait sa seule face lisible.
+   */
+  private readonly charge: { track: Mesh<PlaneGeometry, MeshBasicMaterial>; fill: Mesh<PlaneGeometry, MeshBasicMaterial> }[] = []
   constructor(device: PlacedHouseDevice, ctx: MarkerContext) {
     super(device, ctx)
     const kind = ctx.descriptor?.kind ?? device.kind
@@ -97,7 +106,7 @@ export class GenericMarker extends DeviceMarker {
       // sol. Le coffret d'un mètre donné aux deux faisait de la passerelle solaire un meuble.
       case 'energy':
         if (ctx.descriptor && isEnergySite(ctx.descriptor)) { geometry = new BoxGeometry(0.28, 0.12, 0.32); this.setLift(0.3) }
-        else { geometry = new BoxGeometry(0.6, 0.15, 1); this.setLift(0.7); battery = true }
+        else { geometry = new BoxGeometry(BATTERY_BOX.w, BATTERY_BOX.d, BATTERY_BOX.h); this.setLift(0.7); battery = true }
         break
       case 'vacuum': geometry = new CylinderGeometry(0.18, 0.18, 0.09, 24); this.setLift(0.25); break
       default: geometry = new SphereGeometry(0.1, 16, 12); this.setLift(0.3)
@@ -127,6 +136,7 @@ export class GenericMarker extends DeviceMarker {
       })
       this.mesh.add(this.art.mesh)
     }
+    if (battery) this.buildCharge(ctx)
     if (kind === 'vacuum') this.mesh.position.z = 0.05
     this.mesh.castShadow = true
     this.registerPickable(this.mesh)
@@ -143,6 +153,55 @@ export class GenericMarker extends DeviceMarker {
         this.waves.push(ring)
         this.object.add(ring)
       }
+    }
+  }
+  /**
+   * Trait de charge le long des deux grandes faces du coffret, dans la langue de la jauge d'un
+   * module : une piste à peine visible, et un trait plein qui monte depuis le BAS. Enfants du
+   * coffret, donc tournés de son `yaw` avec lui.
+   */
+  private buildCharge(ctx: MarkerContext): void {
+    const h = BATTERY_BOX.h * BATTERY_GAUGE.h
+    const x = -(BATTERY_BOX.w / 2 - BATTERY_GAUGE.inset - BATTERY_GAUGE.w / 2)
+    for (const side of [1, -1]) {
+      // Debout CONTRE la face : la normale du plan sort du coffret (±y local) et son haut est le haut
+      // du coffret (+z). Le demi-tour de la face avant remet son axe vertical à l'endroit.
+      const face = (opacity: number) => {
+        // `MeshBasicMaterial` : une charge qu'on lit ne s'éteint pas avec la lumière de la scène ;
+        // sans `depthWrite`, le trait ne creuse pas la tôle sur laquelle il est posé.
+        const m = new Mesh(
+          new PlaneGeometry(BATTERY_GAUGE.w, h),
+          new MeshBasicMaterial({ color: ctx.theme.primary, transparent: true, opacity, depthWrite: false }),
+        )
+        m.rotation.set((side * -Math.PI) / 2, 0, side > 0 ? Math.PI : 0)
+        m.position.set(x, side * (BATTERY_BOX.d / 2 + 0.003), 0)
+        m.renderOrder = 1
+        this.mesh.add(m)
+        return m
+      }
+      this.charge.push({ track: face(0.16), fill: face(0.95) })
+    }
+  }
+  /**
+   * Monte le trait à la charge du coffret. La HAUTEUR dit ce qu'il reste dedans, le souffle dit ce
+   * qu'il est en train de faire : deux langues qui ne se marchent pas dessus, d'où un trait à
+   * l'accent et non à la couleur d'état. `batterySoc` absent = le coffret ne dit pas sa charge, et
+   * la jauge disparaît ENTIÈREMENT — une piste vide se lirait comme une batterie à plat.
+   *
+   * Un coffret qui ne répond plus garde son dernier niveau : une charge ne s'évapore pas avec la
+   * liaison, et le souffle rouge dit déjà que le chiffre est gelé.
+   */
+  private setCharge(state: DeviceState | undefined): void {
+    const soc = state?.kind === 'energy' ? state.batterySoc : undefined
+    const k = Math.min(1, Math.max(0, (soc ?? 0) / 100))
+    const h = BATTERY_BOX.h * BATTERY_GAUGE.h
+    for (const { track, fill } of this.charge) {
+      track.visible = soc !== undefined
+      fill.visible = soc !== undefined && k > 0.004
+      track.material.color.copy(this.ctx.theme.primary)
+      fill.material.color.copy(this.ctx.theme.primary)
+      fill.scale.y = Math.max(0.001, k)
+      fill.position.z = -(h / 2) * (1 - k)
     }
   }
   protected isOn(s: DeviceState): boolean {
@@ -164,7 +223,7 @@ export class GenericMarker extends DeviceMarker {
       const media = state?.kind === 'media_player' && state.available ? state : undefined
       this.art.set(media?.nowPlaying?.artUrl)
     }
-    if (this.batteryMat) this.pulse(state)
+    if (this.batteryMat) { this.pulse(state); this.setCharge(state) }
     if (this.waves.length === 0) return
     // l'onde est du SON : elle suit ce que la scène dit entendre ici (`SoundCue`) — une TV dont le son
     // part en HDMI vers une barre garde l'image, la barre prend l'onde ; sans indication, l'état seul
@@ -246,6 +305,7 @@ export class GenericMarker extends DeviceMarker {
   override dispose(): void {
     this.mesh.geometry.dispose()
     this.batteryMat?.dispose()
+    for (const { track, fill } of this.charge) { track.geometry.dispose(); track.material.dispose(); fill.geometry.dispose(); fill.material.dispose() }
     this.art?.dispose()
     for (const w of this.waves) { w.geometry.dispose(); w.material.dispose() }
     super.dispose()
