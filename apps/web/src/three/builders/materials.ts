@@ -27,6 +27,14 @@ export interface MaterialSet {
   vehicle: MeshStandardMaterial
   /** Petits objets connectés neutres. */
   device: MeshStandardMaterial
+  /** Détail architectural (`builders/details.ts`) : lisses claires (appuis, couronnements)… */
+  trim: MeshStandardMaterial
+  /** …menuiseries sombres (encadrements des baies)… */
+  frame: MeshStandardMaterial
+  /** …soubassement des murs extérieurs… */
+  plinth: MeshStandardMaterial
+  /** …et vantaux des portes. Leurs couleurs se DÉDUISENT de la palette, aucun style n'a à les donner. */
+  door: MeshStandardMaterial
   /** Les matières employées par le style courant. Elles appartiennent au CATALOGUE, pas à ce jeu de matériaux. */
   textures: SurfaceTextures
   all: Set<Material>
@@ -46,6 +54,7 @@ export const backdropColor = (sky: SkyLook) => linear(sky.horizon).lerp(linear(s
 
 /** Pose une matière et ses réglages PBR sur un matériau existant. */
 const WHITE = new Color(0xffffff)
+const BLACK = new Color(0x000000)
 
 function surface(m: MeshStandardMaterial, color: Color, look: SurfaceLook, tex: SurfaceTexture | undefined): void {
   // une matière photo porte sa couleur : la palette du style ne la teinte pas
@@ -85,6 +94,10 @@ export function createMaterials(theme: SceneTheme, look: StyleLook, textures: Su
     // renvoyer et la voiture s'assombrit au lieu de briller.
     vehicle: std({ roughness: 0.28, metalness: 0.55 }),
     device: std({ roughness: 0.6, metalness: 0.1 }),
+    trim: std({ roughness: 0.55 }),
+    frame: std({ roughness: 0.45, metalness: 0.1 }),
+    plinth: std({ roughness: 0.95 }),
+    door: std({ roughness: 0.5 }),
   }
   const all = new Set<Material>()
   for (const [k, v] of Object.entries(set)) {
@@ -132,6 +145,13 @@ export function applyLook(mats: MaterialSet, theme: SceneTheme, look: StyleLook,
   mats.slat.color.copy(theme.slat)
   mats.vehicle.color.copy(theme.secondary)
   mats.device.color.copy(theme.device)
+  // le détail architectural se déduit de la palette : une lisse plus claire que le mur, des
+  // menuiseries et un soubassement plus sombres, un vantail de la couleur du parquet — un style
+  // monochrome le reste. Première lisse à 0,55 vers le blanc : elle brûlait en plein soleil.
+  mats.trim.color.copy(theme.wall).lerp(WHITE, 0.4)
+  mats.frame.color.copy(theme.wall).lerp(BLACK, 0.55)
+  mats.plinth.color.copy(theme.wall).lerp(BLACK, 0.4)
+  mats.door.color.copy(theme.floors.wood)
 }
 
 /** Les matières ne sont PAS libérées : elles appartiennent au catalogue partagé (`textures/procedural.ts`). */

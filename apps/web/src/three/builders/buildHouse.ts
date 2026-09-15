@@ -2,6 +2,7 @@ import type { BufferGeometry, Object3D } from 'three';
 import { BoxGeometry, CircleGeometry, Group, Mesh } from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import type { HouseGeometry, LevelGeometry, OpeningRect, WallPrism } from '@kasbah/shared'
+import { buildDetails } from './details'
 import type { MaterialSet } from './materials'
 import { extrudePolygon, flatPolygon, planarFaces } from './shapes'
 
@@ -77,6 +78,9 @@ export function buildLevel(level: LevelGeometry, mats: MaterialSet): LevelNodes 
     walls.push(mesh)
     group.add(mesh)
   }
+  // le détail architectural vit avec les murs : même fantôme, même retour de matériau ; APRÈS eux,
+  // pour que `walls[0]` reste le mur extérieur
+  for (const mesh of buildDetails(level, mats)) { walls.push(mesh); group.add(mesh) }
   const floors = new Map<string, Mesh>()
   for (const f of level.floors) {
     const base = f.floorStyle ? mats.floors[f.floorStyle] : mats.floor

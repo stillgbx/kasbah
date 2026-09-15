@@ -3,6 +3,7 @@ import { Box3, BoxGeometry, type BufferGeometry, CylinderGeometry, Mesh, type Me
 import { computeHouseGeometry, localToGeo, parseHouse, type DeviceDescriptor, type DeviceState, type PlacedHouseDevice } from '@kasbah/shared'
 import demo from '@kasbah/shared/demo-house.json'
 import { buildHouse, buildWallsGeometry, countTriangles } from './builders/buildHouse'
+import { buildDetails } from './builders/details'
 import { createSurfaceTextures, type SurfaceTexture } from './textures/procedural'
 import { createMaterials } from './builders/materials'
 import { fitBox, fitDistance } from './core/cameraFit'
@@ -891,5 +892,65 @@ describe('qualité de rendu', () => {
     const calm = createCostGuard(() => spiky++, 40, 8, 2)
     for (const ms of [30, 30, 30, 30, 30, 30, 200, 200]) calm.sample(ms)
     expect(spiky).toBe(0)
+  })
+})
+
+describe('détail architectural', () => {
+  const house = computeHouseGeometry(parseHouse(demo))
+  const rdc = house.levels.find((l) => l.levelId === 'rdc')!
+  const mats = createMaterials(defaultSceneTheme(), defaultLook())
+  const meshes = buildDetails(rdc, mats)
+  const byName = (n: string) => meshes.find((m) => m.name === n)!
+
+  it('fabrique au plus quatre maillages fusionnés : lisses, encadrements, soubassement, vantaux', () => {
+    expect(meshes.map((m) => m.name).sort()).toEqual(['details:doors', 'details:frames', 'details:plinth', 'details:trim'])
+    expect(byName('details:trim').material).toBe(mats.trim)
+    expect(byName('details:frames').material).toBe(mats.frame)
+    expect(byName('details:plinth').material).toBe(mats.plinth)
+    expect(byName('details:doors').material).toBe(mats.door)
+    for (const m of meshes) expect(countTriangles(m)).toBeGreaterThan(0)
+  })
+
+  it('le couronnement dépasse le haut des murs de cinq millimètres, jamais plus', () => {
+    const g = byName('details:trim').geometry
+    g.computeBoundingBox()
+    const top = Math.max(...rdc.walls.map((w) => w.z1))
+    expect(g.boundingBox!.max.z).toBeCloseTo(top + 0.005, 3)
+  })
+
+  it('le soubassement reste au ras du sol fini et s’arrête à hauteur de plinthe', () => {
+    const g = byName('details:plinth').geometry
+    g.computeBoundingBox()
+    expect(g.boundingBox!.min.z).toBeCloseTo(0.002, 3)
+    expect(g.boundingBox!.max.z).toBeCloseTo(0.28, 3)
+  })
+
+  it('cadres dans l’épaisseur du mur, appuis côté FAÇADE : rien ne dépasse dans la pièce', () => {
+    // un niveau réduit à la seule baie : chaque sommet se projette sur SA normale extérieure
+    const baie = rdc.openings.find((o) => o.openingId === 'baie')!
+    const only = buildDetails({ ...rdc, walls: [], openings: [baie] }, mats)
+    const along = (mesh: Mesh) => {
+      const pos = mesh.geometry.getAttribute('position')
+      return Array.from({ length: pos.count }, (_, i) =>
+        (pos.getX(i) - baie.origin[0]) * baie.normal[0] + (pos.getY(i) - baie.origin[1]) * baie.normal[1])
+    }
+    const s = along(only.find((m) => m.name === 'details:trim')!)      // l'appui seul, sans mur donc sans couronnement
+    const f = along(only.find((m) => m.name === 'details:frames')!)
+    expect(Math.min(...s)).toBeGreaterThan(baie.depth / 2)          // l'appui est du côté extérieur…
+    expect(Math.max(...s)).toBeGreaterThan(baie.depth)              // …et déborde de la façade
+    expect(Math.min(...f)).toBeGreaterThanOrEqual(-1e-6)            // le cadre ne sort pas côté pièce
+    expect(Math.max(...f)).toBeLessThanOrEqual(baie.depth + 1e-6)   // ni côté façade
+  })
+
+  it('un passage n’a ni cadre ni vantail', () => {
+    const level = { ...rdc, walls: [], openings: rdc.openings.map((o) => ({ ...o, type: 'passage' as const })) }
+    expect(buildDetails(level, mats)).toEqual([])
+  })
+
+  it('les couleurs du détail se déduisent de la palette : lisse plus claire, menuiseries et soubassement plus sombres', () => {
+    const wall = mats.wall.color.getHSL({ h: 0, s: 0, l: 0 }).l
+    expect(mats.trim.color.getHSL({ h: 0, s: 0, l: 0 }).l).toBeGreaterThan(wall)
+    expect(mats.frame.color.getHSL({ h: 0, s: 0, l: 0 }).l).toBeLessThan(wall)
+    expect(mats.plinth.color.getHSL({ h: 0, s: 0, l: 0 }).l).toBeLessThan(wall)
   })
 })
