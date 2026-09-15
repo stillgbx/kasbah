@@ -1,4 +1,5 @@
 import { resolve } from 'node:path'
+import { gunzipSync } from 'node:zlib'
 import pino from 'pino'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { buildApp, type KasbahApp } from './app'
@@ -22,6 +23,23 @@ describe('app', () => {
     await kasbah.app.ready()
   })
   afterAll(async () => { await kasbah.close() })
+
+  it('compresse ce qui est compressible, et seulement quand le client le demande', async () => {
+    // La maison de démo pèse largement plus que le seuil de 1 Ko sous lequel compresser ne vaut
+    // pas le coût. Ce que ce test garde, c'est l'ORDRE d'enregistrement : le crochet `onSend` de
+    // la compression ne s'applique qu'aux routes déclarées APRÈS lui, et rien ne le signale.
+    // Un client qui ne l'annonce pas reçoit le JSON tel quel : la compression ne s'impose jamais.
+    const plain = await kasbah.app.inject({ method: 'GET', url: '/api/house' })
+    expect(plain.statusCode).toBe(200)
+    expect(plain.headers['content-encoding']).toBeUndefined()
+    expect(plain.rawPayload.length).toBeGreaterThan(1024)
+
+    const sent = await kasbah.app.inject({ method: 'GET', url: '/api/house', headers: { 'accept-encoding': 'gzip' } })
+    expect(sent.statusCode).toBe(200)
+    expect(sent.headers['content-encoding']).toBe('gzip')
+    expect(sent.rawPayload.length).toBeLessThan(plain.rawPayload.length)
+    expect(gunzipSync(sent.rawPayload).toString()).toBe(plain.rawPayload.toString())
+  })
 
   it('accepts device ids longer than Fastify’s default 100-character parameter limit', async () => {
     // id maison dérivé par l'auto-placement d'une caméra Nest : `auto.nest-` + 96 caractères = 104.

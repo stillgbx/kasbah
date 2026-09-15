@@ -5,9 +5,13 @@ import { isMediaActive } from '../../lib/deviceState'
 import { coverActivity, isFlatCover } from '../../lib/cover'
 import { IDLE_W, isEnergySite } from '../../lib/energy'
 import { coverLeaves, coverSize, yawToRad } from '../../lib/orientation'
+import { bodyColorOf, bodyFinishOf, FINISH_MATERIAL, SCENE_FINISH } from '../../lib/vehicleTuning'
 import { createTween, lerp } from '../core/tween'
 import { DeviceMarker, type MarkerContext } from './DeviceMarker'
+import type { SceneTheme } from '../core/theme'
 import { ScreenArt } from './screenArt'
+import { modelUrl, resolveModel } from '../models/catalog'
+import { loadModel } from '../models/loadModel'
 
 // Représentations 3D par type. Toutes mutent leurs objets dans `onState` ; les animations continues
 // (déplacement du robot, tween du volet) sont enregistrées dans la boucle et retirées quand elles cessent.
@@ -625,34 +629,116 @@ export class CoverMarker extends DeviceMarker {
   }
 }
 
-/** Véhicule : carrosserie + habitacle orientés par `yaw`, masqués quand le véhicule est absent. */
+/**
+ * Véhicule : carrosserie orientée par `yaw`, masquée quand le véhicule est absent.
+ *
+ * Deux représentations pour une seule empreinte. La silhouette générique (deux boîtes) est dessinée
+ * TOUT DE SUITE, aux cotes de la carrosserie attendue ; le .glb, qui arrive plus tard, s'y substitue
+ * sans rien déplacer — même origine, même encombrement, et donc même cadrage de caméra avant et
+ * après. Un véhicule dont la carrosserie ne se charge pas garde sa silhouette : on voit toujours la
+ * place qu'il occupe.
+ *
+ * La couleur ne vient JAMAIS du fichier (les .glb sont livrés en blanc neutre) : celle que
+ * l'utilisateur a réglée, ou celle de la scène, qui suit le thème.
+ */
 export class VehicleMarker extends DeviceMarker {
   private readonly group = new Group()
   private readonly bodyMat: MeshStandardMaterial
+  /** Le matériau n'est à nous QUE si l'utilisateur a réglé une couleur ; sinon la scène le partage. */
+  private readonly ownsBodyMat: boolean
   private readonly cabMat: MeshStandardMaterial
+  /** Silhouette générique, retirée le jour où la vraie carrosserie arrive. */
+  private placeholder: Mesh[] = []
+  private shell: Mesh | null = null
   constructor(device: PlacedHouseDevice, ctx: MarkerContext, private atHome: (state: DeviceState) => boolean) {
     super(device, ctx)
-    const brand = (ctx.descriptor?.meta.manufacturer ?? '').toLowerCase()
-    this.bodyMat = new MeshStandardMaterial({ color: brand.includes('tesla') ? 0xe4e8ec : 0x8a2b2b, roughness: 0.35, metalness: 0.3 })
+    const model = resolveModel(device.model3d, ctx.descriptor?.pluginId, ctx.descriptor?.meta.manufacturer)
+    const [width, length, height] = model?.size ?? [1.9, 4.5, 1.4]
+    // Sans couleur choisie, on prend le matériau de véhicule de la scène : lui suit le thème, et un
+    // matériau propre au marqueur resterait figé sur la teinte du thème en cours à sa création.
+    // Réglée à la main, sinon déduite par le plugin, sinon celle de la scène : voir `bodyColorOf`.
+    const color = bodyColorOf(ctx.descriptor, device)
+    const finishName = bodyFinishOf(ctx.descriptor, device)
+    const finish = FINISH_MATERIAL[finishName]
+    // Un matériau propre dès qu'on s'écarte du matériau de la scène — par la couleur OU par
+    // l'aspect. Sans ça, une carrosserie mate sans couleur réglée resterait vernie.
+    this.ownsBodyMat = color !== undefined || finishName !== SCENE_FINISH
+    this.bodyMat = this.ownsBodyMat
+      // Le reflet vient de la scène (elle seule a le renderer qui le fabrique) : une carrosserie
+      // colorée le reprend, sinon elle redeviendrait le bloc d'argile que les autres ne sont plus.
+      // La carte est PARTAGÉE — on la copie, on ne la libère pas avec ce matériau.
+      ? new MeshStandardMaterial({
+          color, ...finish,
+          envMap: ctx.materials.vehicle.envMap, envMapIntensity: ctx.materials.vehicle.envMapIntensity,
+        })
+      : ctx.materials.vehicle
     this.cabMat = new MeshStandardMaterial({ color: 0x2a3240, roughness: 0.2, metalness: 0.5 })
-    const body = new Mesh(new BoxGeometry(1.9, 4.5, 0.6), this.bodyMat)
-    body.position.z = 0.3
-    const cab = new Mesh(new BoxGeometry(1.7, 2.4, 0.55), this.cabMat)
-    cab.position.set(0, -0.2, 0.85)
+
+    // Boîtes proportionnelles aux cotes visées : la caisse occupe le bas sur toute l'empreinte,
+    // l'habitacle monte jusqu'au toit. L'ensemble remplit EXACTEMENT width × length × height, sans
+    // quoi la carrosserie qui s'y substitue déborderait de la place réservée.
+    const body = new Mesh(new BoxGeometry(width, length, height * 0.5), this.bodyMat)
+    body.position.z = height * 0.25
+    const cab = new Mesh(new BoxGeometry(width * 0.89, length * 0.53, height * 0.55), this.cabMat)
+    cab.position.set(0, -length * 0.04, height * 0.725)
     body.castShadow = cab.castShadow = true
+    this.placeholder = [body, cab]
     this.group.add(body, cab)
+
     this.group.rotation.z = ((device.yaw ?? 0) * Math.PI) / 180
     this.object.add(this.group)
     this.registerPickable(body)
     this.registerPickable(cab)
-    this.setLift(1.4)
+    this.setLift(height)
+    if (model) this.loadShell(modelUrl(model.id), ctx)
+  }
+  /**
+   * La géométrie chargée est PARTAGÉE (une par URL, clonée nulle part) : c'est le maillage qui est
+   * propre au marqueur, pas ses sommets. Elle ne se libère donc pas avec lui.
+   */
+  private loadShell(url: string, ctx: MarkerContext): void {
+    const load = ctx.loadModel ?? loadModel
+    load(url, (geometry) => {
+      if (this.disposed) return
+      const shell = new Mesh(geometry, this.bodyMat)
+      shell.castShadow = true
+      this.shell = shell
+      this.group.add(shell)
+      this.registerPickable(shell)
+      for (const mesh of this.placeholder) {
+        this.group.remove(mesh)
+        this.unregisterPickable(mesh)
+        mesh.geometry.dispose()
+      }
+      this.placeholder = []
+      ctx.invalidate()   // la scène ne rend qu'à la demande : sans ça, la carrosserie n'apparaît qu'au prochain geste
+    }, () => {})         // échec : la silhouette générique reste en place, elle dit déjà l'encombrement
   }
   protected isOn(s: DeviceState): boolean { return s.kind === 'vehicle' && s.charging }
   protected onState(state: DeviceState | undefined): void {
     const present = !state || state.kind !== 'vehicle' || !state.location || this.atHome(state)
     this.group.visible = present
   }
-  override dispose(): void { this.group.children.forEach((c) => (c as Mesh).geometry.dispose()); this.bodyMat.dispose(); this.cabMat.dispose(); super.dispose() }
+  /**
+   * Le reflet se refait à chaque bascule de thème, et la scène LIBÈRE l'ancienne carte. Un matériau
+   * propre au marqueur pointerait alors dans le vide : il faut reprendre celle qui vient d'être
+   * posée sur le matériau de la scène, que `HouseScene.setTheme` a déjà renouvelé à ce stade.
+   */
+  override setTheme(theme: SceneTheme): void {
+    super.setTheme(theme)
+    if (this.ownsBodyMat) {
+      this.bodyMat.envMap = this.ctx.materials.vehicle.envMap
+      this.bodyMat.envMapIntensity = this.ctx.materials.vehicle.envMapIntensity
+      this.bodyMat.needsUpdate = true
+    }
+  }
+  override dispose(): void {
+    for (const mesh of this.placeholder) mesh.geometry.dispose()
+    this.shell = null   // géométrie partagée par le cache du chargeur : elle survit au marqueur
+    if (this.ownsBodyMat) this.bodyMat.dispose()
+    this.cabMat.dispose()
+    super.dispose()
+  }
 }
 
 /** Tondeuse : petit corps orange qui suit la position publiée (lissée). */

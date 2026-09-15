@@ -29,6 +29,19 @@ describe('comptes et véhicules', () => {
     expect(d.capabilities).toEqual(['soc', 'range', 'location', 'charge_limit'])
   })
 
+  it('lit la teinte dans la référence de configuration, et ne devine jamais', () => {
+    const links = toVehicleLinks(VEHICLES)
+    expect(toDescriptor(links[0]!).meta.vehicle?.color).toBe('#14171a')       // TEGNE = Noir Étoilé
+
+    // Un code de peinture qu'aucune voiture réelle n'a confirmé ne publie RIEN : la scène retombe
+    // sur sa couleur de thème, et l'utilisateur tranche. Mieux vaut rien qu'une couleur inventée.
+    const inconnu = { vin: VIN, vehicleDetails: { assets: [{ assetType: 'PICTURE', renditions: [{ url: 'https://3dv.renault.com/x?configuration=PAVEH%2FTEZZZ%2FMET05' }] }] } }
+    expect(toDescriptor(inconnu).meta.vehicle).toBeUndefined()
+
+    // Contrat de services expiré : ni `vehicleDetails`, ni images, ni couleur — et surtout pas de plantage.
+    expect(toDescriptor({ vin: VIN }).meta.vehicle).toBeUndefined()
+  })
+
   it('retombe sur le modèle puis le VIN quand la plaque manque', () => {
     expect(vehicleName({ vin: VIN, vehicleDetails: { brand: { label: 'RENAULT' }, model: { label: 'RENAULT 5' } } }))
       .toBe('RENAULT RENAULT 5')

@@ -1,5 +1,5 @@
 import {
-  AmbientLight, DirectionalLight, HemisphereLight, PerspectiveCamera, Plane, Raycaster, Scene, TOUCH, Vector2, Vector3, VSMShadowMap,
+  AmbientLight, DirectionalLight, HemisphereLight, PerspectiveCamera, Plane, Raycaster, Scene, type Texture, TOUCH, Vector2, Vector3, VSMShadowMap,
   WebGLRenderer, Box3, type Material, type Mesh, type MeshStandardMaterial, type Object3D,
 } from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
@@ -10,6 +10,7 @@ import {
   type DeviceDescriptor, type DeviceState, type House, type HouseDevice, type HouseGeometry, type HouseIndex, type Level, type PlacedHouseDevice, type Vec3,
 } from '@kasbah/shared'
 import { applyTheme, createMaterials, disposeMaterials, type MaterialSet } from './builders/materials'
+import { createVehicleEnvironment } from './core/environment'
 import { buildHouse, type HouseNodes } from './builders/buildHouse'
 import { clamp, fitBox, sphericalOf } from './core/cameraFit'
 import { boundsToWorldBox } from './core/coords'
@@ -120,6 +121,8 @@ export class HouseScene {
   private readonly deps: HouseSceneDeps
   private readonly sun: DirectionalLight
   private readonly hemi: HemisphereLight
+  /** Ce que reflète une carrosserie. Propre aux véhicules : la maison, elle, n'a pas d'environnement. */
+  private vehicleEnv: Texture | null = null
   private descriptors = new Map<string, DeviceDescriptor>()
   private states: Record<string, DeviceState> = {}
 
@@ -137,6 +140,7 @@ export class HouseScene {
     // déprécié et retombe sur du PCF DUR (bords crénelés) avec un avertissement en console.
     // VSM floute nativement, piloté par `shadow.radius` / `shadow.blurSamples`.
     if (this.renderer) { this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = VSMShadowMap }
+    this.applyVehicleEnvironment()
     this.labelRenderer = deps.labelLayer ? (deps.createLabelRenderer ?? ((el) => new CSS2DRenderer({ element: el })))(deps.labelLayer) : null
 
     this.hemi = new HemisphereLight(0xffffff, 0x8899aa, this.theme.isDark ? 0.55 : 1.1)
@@ -754,9 +758,22 @@ export class HouseScene {
   }
 
   // ---- thème / taille / rendu --------------------------------------------
+  /**
+   * (Re)construit le reflet des carrosseries et le pose sur leur matériau. Le dégradé suit le thème,
+   * il se refait donc à chaque bascule — et l'ancien se libère, une carte PMREM tient en mémoire GPU.
+   */
+  private applyVehicleEnvironment(): void {
+    this.vehicleEnv?.dispose()
+    this.vehicleEnv = createVehicleEnvironment(this.renderer, this.theme)
+    this.materials.vehicle.envMap = this.vehicleEnv
+    this.materials.vehicle.envMapIntensity = 1
+    this.materials.vehicle.needsUpdate = true
+  }
+
   setTheme(theme: SceneTheme): void {
     this.theme = theme
     applyTheme(this.materials, theme)
+    this.applyVehicleEnvironment()
     this.hemi.intensity = theme.isDark ? 0.55 : 1.1
     this.sun.intensity = theme.isDark ? 1.1 : 2
     for (const m of this.markers.values()) m.setTheme(theme)
@@ -800,6 +817,7 @@ export class HouseScene {
     this.controls?.dispose()
     this.clear()
     disposeMaterials(this.materials)
+    this.vehicleEnv?.dispose()
     this.renderer?.dispose()
     if (this.labelRenderer) this.labelRenderer.domElement.replaceChildren()
   }

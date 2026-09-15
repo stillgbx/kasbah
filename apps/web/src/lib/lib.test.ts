@@ -10,6 +10,7 @@ import { deviceColor, deviceIcon } from './deviceIcons'
 import { findBatteries, findEnergySite, inverterGroups, isEnergySite, isInverter, shortInverterId } from './energy'
 import { coverActivity, coverAtRest, isFlatCover, isPassageCover } from './cover'
 import { coverLeaves, coverSize, hasLeaves, isOrientable, isSizable } from './orientation'
+import { bodyColorOf, bodyFinishOf, FINISH_MATERIAL, SCENE_FINISH } from './vehicleTuning'
 import { BOTH_MAX_M, CAR_ZOOM, IGN_ORTHO_TILE_URL, initialView, normalizeHeading, planStyleUrl, satelliteStyle, satelliteStyleWithLabels } from './map'
 import fr from '../i18n/locales/fr.json'
 import en from '../i18n/locales/en.json'
@@ -483,5 +484,33 @@ describe('carte du véhicule (lib/map)', () => {
     expect(normalizeHeading(372)).toBe(12)
     expect(normalizeHeading(-90)).toBe(270)
     expect(normalizeHeading(360)).toBe(0)
+  })
+})
+
+describe('couleur de carrosserie', () => {
+  const car = (color?: string) => ({ meta: color ? { vehicle: { color } } : {} } as DeviceDescriptor)
+
+  it('le réglage manuel l’emporte, et l’effacer retombe sur ce que le plugin a déduit', () => {
+    // Le plugin sait, l'utilisateur n'a rien dit : on peint ce qu'on sait.
+    expect(bodyColorOf(car('#14171a'), {})).toBe('#14171a')
+    // L'utilisateur a tranché : un covering ou une repeinte contredisent l'usine, il gagne.
+    expect(bodyColorOf(car('#14171a'), { bodyColor: '#c8102e' })).toBe('#c8102e')
+    // Effacé — et on RETOMBE sur l'info du plugin, pas sur le gris de la scène.
+    expect(bodyColorOf(car('#14171a'), { bodyColor: undefined })).toBe('#14171a')
+    // Personne ne sait : la scène applique sa couleur de véhicule, qui suit le thème.
+    expect(bodyColorOf(car(), {})).toBeUndefined()
+    expect(bodyColorOf(undefined, undefined)).toBeUndefined()
+  })
+
+  it('l aspect suit la même règle, et décide du rendu du matériau', () => {
+    const matte = { meta: { vehicle: { finish: 'matte' } } } as DeviceDescriptor
+    expect(bodyFinishOf(matte, {})).toBe('matte')
+    expect(bodyFinishOf(matte, { bodyFinish: 'solid' })).toBe('solid')
+    expect(bodyFinishOf(matte, { bodyFinish: undefined })).toBe('matte')
+    // Rien de connu : l'aspect que porte déjà le matériau de la scène, donc rien ne change.
+    expect(bodyFinishOf(undefined, undefined)).toBe(SCENE_FINISH)
+    // Une peinture mate DIFFUSE : c'est la rugosité qui la distingue, et l'écart doit être franc.
+    expect(FINISH_MATERIAL.matte.roughness).toBeGreaterThan(FINISH_MATERIAL.metallic.roughness + 0.4)
+    expect(FINISH_MATERIAL.solid.metalness).toBeLessThan(FINISH_MATERIAL.metallic.metalness)
   })
 })

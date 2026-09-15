@@ -54,6 +54,7 @@ export function toVehicleLinks(body: unknown): VehicleLink[] {
  * la plaque, puis le modèle, puis le VIN.
  */
 export function toDescriptor(link: VehicleLink, capabilities: readonly Capability[] = CAPABILITIES): DeviceDescriptor {
+  const color = bodyColor(link)
   return {
     id: makeDeviceId('renault', link.vin),
     pluginId: 'renault',
@@ -63,8 +64,37 @@ export function toDescriptor(link: VehicleLink, capabilities: readonly Capabilit
     capabilities: [...capabilities],
     // le fabricant, écrit comme il s'écrit : l'UI affiche sinon l'id du plugin (« renault »), et le
     // constructeur, lui, CRIE ses libellés (`brand.label` = « RENAULT »)
-    meta: { manufacturer: 'Renault' },
+    meta: { manufacturer: 'Renault', ...(color ? { vehicle: { color } } : {}) },
   }
+}
+
+/**
+ * La teinte réelle du véhicule, déduite de sa configuration d'usine.
+ *
+ * Renault ne publie NULLE PART le nom de la couleur : ni `vehicleDetails`, ni `/details` — qui
+ * pourtant étiquette en clair la batterie, l'autoradio ou la boîte. Ce qu'on a, c'est la référence
+ * de configuration passée au moteur de rendu de ses images (`3dv.renault.com/ImageFromBookmark`,
+ * paramètre `configuration`), une suite de codes dont `TE<teinte>` porte la peinture de caisse
+ * (relevé du 2026-09-15 : `TEGNE`, doublé de `TPGNE` pour les boucliers et `TSGNE` pour les
+ * rétroviseurs — même code, donc bien la teinte).
+ *
+ * La table ne contient QUE des codes vérifiés sur une voiture réelle. Un code inconnu ne rend
+ * rien : la scène retombe sur sa couleur de thème et l'utilisateur tranche à la main, ce qui vaut
+ * mieux que d'afficher une couleur inventée.
+ */
+const PAINT: Record<string, string> = {
+  // Noir Étoilé, vérifié sur le rendu Renault de la R5 E-Tech du 2026-09-15.
+  GNE: '#14171a',
+}
+
+export function bodyColor(link: VehicleLink): string | undefined {
+  const url = link.vehicleDetails?.assets?.find((a) => a?.assetType === 'PICTURE')?.renditions?.find((r) => r?.url)?.url
+  if (!url) return undefined
+  const raw = /[?&]configuration=([^&]+)/.exec(url)?.[1]
+  if (!raw) return undefined
+  // Les codes sont séparés par des `/`, encodés `%2F` dans l'URL — on décode avant de découper.
+  const code = decodeURIComponent(raw).split('/').find((c) => /^TE[A-Z0-9]{2,4}$/i.test(c))?.slice(2)
+  return code ? PAINT[code.toUpperCase()] : undefined
 }
 
 /** « ZE-123-AB », sinon « Renault 5 E-Tech », sinon le VIN. Jamais vide : le contrat l'exige. */

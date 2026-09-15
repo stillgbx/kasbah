@@ -1,4 +1,5 @@
 import { DEFAULT_PLUGIN_SETTINGS } from '@kasbah/shared'
+import fastifyCompress from '@fastify/compress'
 import Fastify, { type FastifyInstance } from 'fastify'
 import type { Logger } from 'pino'
 import type { Env } from './config/env'
@@ -78,6 +79,13 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
     bus, settingsOf, logger: opts.logger.child({ component: 'scenes' }),
     updateScene: (sceneId, update) => host.updateScene(sceneId, update),
   })
+
+  // Compression des réponses, AVANT les routes : le crochet `onSend` ne vaut que pour ce qui est
+  // enregistré après lui. Le gros du gain est sur le bundle web et les carrosseries 3D
+  // (`model/gltf-binary`, que mime-db donne déjà pour compressible) — 815 Ko de modèles tombent à
+  // environ 550 Ko. Les types non compressibles (JPEG d'un instantané de caméra, flux vidéo) sont
+  // laissés tranquilles par défaut, et le WebSocket ne passe pas par ce crochet.
+  await app.register(fastifyCompress, { global: true })
 
   registerRoutes(app, { registry, scenes, host, house, hub, history, startedAt: clock.now() })
   host.registerRoutes(app)

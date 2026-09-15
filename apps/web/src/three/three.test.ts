@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { Box3, CylinderGeometry, Mesh, type MeshStandardMaterial, ShapeGeometry, Vector3, type BufferAttribute, type Texture } from 'three'
+import { Box3, BoxGeometry, type BufferGeometry, CylinderGeometry, Mesh, type MeshStandardMaterial, ShapeGeometry, Vector3, type BufferAttribute, type Texture } from 'three'
 import { computeHouseGeometry, localToGeo, parseHouse, type DeviceDescriptor, type DeviceState, type PlacedHouseDevice } from '@kasbah/shared'
 import demo from '@kasbah/shared/demo-house.json'
 import { buildHouse, buildWallsGeometry, countTriangles } from './builders/buildHouse'
@@ -236,6 +236,50 @@ describe('marqueurs 3D', () => {
     ({ id: 'p:c', pluginId: 'p', externalId: 'c', kind: 'cover', name: deviceClass, capabilities: ['open_close'], meta: { cover: { deviceClass } } } as DeviceDescriptor)
   const coverState = (position: number | undefined): DeviceState =>
     ({ kind: 'cover', updatedAt: 0, available: true, motion: 'stopped', ...(position === undefined ? {} : { position }) } as DeviceState)
+
+  // La carrosserie 3D arrive APRÈS le marqueur (le .glb se télécharge). Ce qui se vérifie ici, c'est
+  // que la substitution ne déplace rien : la silhouette générique est dessinée aux cotes du modèle
+  // attendu, et la vraie carrosserie prend exactement sa place.
+  describe('carrosserie 3D d un véhicule', () => {
+    const tesla = { id: 'tesla:5YJ', pluginId: 'tesla', externalId: '5YJ', kind: 'vehicle', name: 'Model S', capabilities: [], meta: {} } as unknown as DeviceDescriptor
+    /** Faux .glb : une boîte aux cotes du catalogue, déjà passée dans le repère de la maison. */
+    const fakeShell = () => new BoxGeometry(2.32, 4.98, 1.52).translate(0, 0, 0.76)
+    const vehicleMarker = (extra: Partial<PlacedHouseDevice>, load?: (url: string, ok: (g: BufferGeometry) => void, ko: () => void) => void) =>
+      createMarker({ id: 'vehicle.s', position: [0, 0, 0], ...extra }, {
+        materials: createMaterials(defaultSceneTheme()), theme: defaultSceneTheme(), descriptor: tesla,
+        addAnimation: () => () => {}, invalidate: () => {}, onTap: () => {}, label: 'Model S',
+        ...(load ? { loadModel: load } : {}),
+      }, () => true)
+
+    it('dessine la silhouette aux cotes du modèle attendu, puis lui substitue la carrosserie sans rien déplacer', () => {
+      let deliver: ((g: BufferGeometry) => void) | undefined
+      const marker = vehicleMarker({}, (url, ok) => { expect(url).toContain('models/tesla/model-s.glb'); deliver = ok })
+
+      const before = new Box3().setFromObject(marker.object)
+      expect(meshes(marker.object).length).toBe(2)          // caisse + habitacle
+      expect(marker.pickables.length).toBe(2)
+
+      deliver!(fakeShell())
+      const after = new Box3().setFromObject(marker.object)
+      expect(meshes(marker.object).length).toBe(1)          // la silhouette a cédé la place
+      expect(marker.pickables.length).toBe(1)               // et cessé d'être cliquable
+      expect(after.min.distanceTo(before.min)).toBeLessThan(0.02)
+      expect(after.max.distanceTo(before.max)).toBeLessThan(0.02)
+    })
+
+    it('garde la silhouette quand la carrosserie ne se charge pas', () => {
+      const marker = vehicleMarker({}, (_url, _ok, ko) => ko())
+      expect(meshes(marker.object).length).toBe(2)
+      expect(marker.pickables.length).toBe(2)
+    })
+
+    it("ne charge rien quand l'utilisateur a demandé la silhouette générique", () => {
+      let asked = false
+      const marker = vehicleMarker({ model3d: 'none' }, () => { asked = true })
+      expect(asked).toBe(false)
+      expect(meshes(marker.object).length).toBe(2)
+    })
+  })
 
   it("un store rentre son avancée en se repliant, sans décoller du mur", () => {
     const m = marker(device({ size: { width: 4, height: 3 } }), cover('awning'))

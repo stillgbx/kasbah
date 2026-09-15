@@ -143,18 +143,52 @@ describe('VehiclesView — détail de la charge', () => {
    * (capacité `charge_power`, Tesla), on ne la demande pas — et s'il ne reste RIEN à régler, le
    * bouton lui-même s'en va.
    */
+  /**
+   * Couleur et peinture se SURCHARGENT : il faut donc, pour chacune, pouvoir revenir à ce que le
+   * plugin a déduit. La croix n'apparaît que s'il y a un choix manuel à effacer — sinon elle
+   * promettrait d'annuler quelque chose qui n'existe pas.
+   */
+  it('une croix rend la main au fabricant, et seulement quand un choix manuel existe', async () => {
+    const e = vehicle('online')
+    const known = {
+      ...e,
+      descriptor: { ...e.descriptor, meta: { manufacturer: 'Tesla', vehicle: { color: '#285ac8', finish: 'matte' } } },
+    } as DeviceEntry
+
+    // rien de réglé à la main : les deux lignes montrent ce que la voiture dit, sans croix
+    const { w, button } = setup(known)
+    await button('Régler')!.trigger('click')
+    expect(w.find('.tune').text()).toContain('Mate')
+    expect(w.findAll('.tune__reset')).toHaveLength(0)
+
+    // peinture choisie à la main : une croix, et une seule (la couleur, elle, reste au fabricant)
+    const { w: tuned, button: b2 } = setup(known, { bodyFinish: 'solid' })
+    await b2('Régler')!.trigger('click')
+    expect(tuned.findAll('.tune__reset')).toHaveLength(1)
+
+    // les deux surchargées : deux croix
+    const { w: both, button: b3 } = setup(known, { bodyFinish: 'solid', bodyColor: '#112233' })
+    await b3('Régler')!.trigger('click')
+    expect(both.findAll('.tune__reset')).toHaveLength(2)
+  })
+
   it('un véhicule qui dit sa puissance ne se fait pas demander sa capacité', async () => {
     const e = vehicle('online')
     const says = { ...e, descriptor: { ...e.descriptor, capabilities: [...e.descriptor.capabilities, 'charge_power'] } } as DeviceEntry
     const { w, button } = setup(says)
-    await button('Régler')!.trigger('click')                 // placé par son GPS : décalage et rotation restent à régler
-    expect(w.findAll('.tune__row')).toHaveLength(2)
+    // placé par son GPS : décalage et rotation restent à régler, plus carrosserie 3D, peinture et couleur
+    await button('Régler')!.trigger('click')
+    expect(w.findAll('.tune__row')).toHaveLength(5)
     expect(w.find('.tune').text()).toContain('Rotation')
     expect(w.find('.tune').text()).not.toContain('Capacité')
 
-    // placé à la main ET bavard sur sa puissance : plus rien à régler, plus de bouton
-    const { button: quiet } = setup(says, { position: [1, 2, 0] })
-    expect(quiet('Régler')).toBeUndefined()
+    // placé à la main ET bavard sur sa puissance : ne reste que le choix d'apparence, qui ne dépend
+    // ni de la place ni de la batterie — le plugin tesla livre une carrosserie
+    const { w: manual, button: quiet } = setup(says, { position: [1, 2, 0] })
+    await quiet('Régler')!.trigger('click')
+    expect(manual.findAll('.tune__row')).toHaveLength(3)
+    expect(manual.find('.tune').text()).toContain('Carrosserie 3D')
+    expect(manual.find('.tune').text()).not.toContain('Rotation')
   })
 
   it('hors charge, la ligne reste en place et se tait', () => {

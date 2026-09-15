@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { Command, DeviceDescriptor, PluginHealth, VehicleSleepState } from '@kasbah/shared'
+import type { Command, DeviceDescriptor, PluginHealth, VehicleFinish, VehicleSleepState } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { fetch as undiciFetch } from 'undici'
 import { z } from 'zod'
@@ -14,7 +14,7 @@ import {
   samePublicKey, type KeyPair, type KeyStore, type TeslaRegion, type TokenStore,
 } from './auth'
 import { TeslaClient } from './client'
-import { isResting, toDataPatch, toDescriptor, toSleepPatch, toSleepState } from './mapping'
+import { bodyColor, bodyFinish, isResting, toDataPatch, toDescriptor, toSleepPatch, toSleepState } from './mapping'
 import {
   MONTHLY_CREDIT_USD, billableKind, countCall, createStateFile, currentCycle, cycleCostUsd, cycleStart, emptyState,
   type TeslaState, type TeslaStateStore,
@@ -82,7 +82,8 @@ export type TeslaConfig = z.infer<typeof teslaConfigSchema>
 /** Après un réveil demandé, délai avant de relire : le véhicule met quelques secondes à répondre. */
 const WAKE_FOLLOW_UP_MS = 15_000
 /** Sections de `vehicle_data` lues. `location_data` est OBLIGATOIRE pour la position depuis le logiciel 2023.38. */
-const DATA_ENDPOINTS = ['charge_state', 'drive_state', 'vehicle_state', 'climate_state', 'location_data'].join(';')
+const DATA_ENDPOINTS = ['charge_state', 'drive_state', 'vehicle_state', 'climate_state', 'location_data', 'vehicle_config'].join(';')
+
 
 /** Ce que la carte des Réglages affiche. Ne porte jamais un secret, ni la clé privée. */
 export interface TeslaStatus {
@@ -118,6 +119,12 @@ interface VehicleTrack {
   sleepState: VehicleSleepState
   /** Ne pas relire avant (véhicule vu au repos). */
   restUntil: number
+  /**
+   * Peinture lue dans `vehicle_config` : teinte et aspect. Elle n'est PAS dans la liste des
+   * véhicules — elle n'arrive qu'avec une lecture complète, donc le descripteur naît sans peinture
+   * et la gagne ensuite.
+   */
+  paint?: { color?: string; finish?: VehicleFinish }
 }
 
 export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
@@ -193,7 +200,7 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
 
   // ---- lectures -----------------------------------------------------------------------------
 
-  const descriptors = (): DeviceDescriptor[] => [...vehicles.values()].map((v) => toDescriptor(v.summary))
+  const descriptors = (): DeviceDescriptor[] => [...vehicles.values()].map((v) => toDescriptor(v.summary, v.paint))
   const vins = () => [...vehicles.keys()].sort().join(',')
 
   /** Liste des véhicules : la veille de chacun, sans le réveiller. Valide véhicule par véhicule. */
@@ -240,6 +247,14 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     saved.vehicles[vin] = { ...saved.vehicles[vin], ...patch } as Record<string, unknown>
     persist()
     track.sleepState = toSleepState(data.state)
+    // La peinture n'arrive qu'ici, et elle peut CHANGER sans qu'on y soit pour rien : le « Coloriseur »
+    // de l'écran de bord choisit couleur ET aspect. On republie alors le descripteur —
+    // c'est le seul moment où il bouge sans que la liste des véhicules ait bougé.
+    const paint = { color: bodyColor(data), finish: bodyFinish(data) }
+    if (paint.color !== track.paint?.color || paint.finish !== track.paint?.finish) {
+      track.paint = paint
+      ctx!.emitDevices(descriptors())
+    }
     // au repos : on le laisse s'endormir, la prochaine lecture attendra
     track.restUntil = isResting(data) && config!.TESLA_REST_MS > 0 ? ctx!.clock.now() + config!.TESLA_REST_MS : 0
     // une lecture, d'où qu'elle vienne (sondage, réveil, rafraîchissement demandé), remet le compteur
@@ -594,8 +609,7 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
       })
 
       /**
-       * Relevé BRUT : la liste, puis `vehicle_data` de chaque véhicule ÉVEILLÉ. Pour écrire les
-       * fixtures d'après de vraies réponses. Chaque lecture est facturée et comptée au budget ; un
+       * Relevé BRUT : la liste, puis `vehicle_data` de chaque véhicule ÉVEILLÉ. Pour écrire les fixtures d'après de vraies réponses. Chaque lecture est facturée et comptée au budget ; un
        * véhicule endormi n'est PAS réveillé, il figure avec son 408.
        */
       app.get('/raw', async (_req, reply) => {

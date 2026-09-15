@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { deviceIdSchema } from '../devices/descriptor'
-import { defaultPlugins, MOUNTS, vec2Schema, vec3Schema, type PluginSettingsPatch } from './schema'
+import { defaultPlugins, hexColorSchema, model3dSchema, MOUNTS, vec2Schema, vec3Schema, type PluginSettingsPatch } from './schema'
+import { VEHICLE_FINISHES } from '../devices/kinds'
 
 // Écritures de l'UI dans house.json (placement d'un appareil, ordre d'affichage des pièces).
 // On travaille sur le JSON BRUT (pas la maison parsée) pour ne réécrire que ce qui a changé et ne
@@ -47,6 +48,22 @@ export const devicePlacementSchema = z.object({
    * les fabricants la donnent. `0` EFFACE la valeur, comme `[0, 0]` pour le décalage.
    */
   batteryKwh: z.number().min(0).max(500).optional(),
+  /**
+   * Carrosserie 3D d'un véhicule (comme `HouseDevice.model3d`) : un identifiant du catalogue, ou
+   * `'none'` pour la silhouette générique. **Chaîne vide = effacer** et revenir au choix
+   * automatique, comme pour le nom — `'none'` est un choix, pas une absence de choix.
+   */
+  model3d: z.union([z.literal(''), model3dSchema]).optional(),
+  /**
+   * Couleur de carrosserie (comme `HouseDevice.bodyColor`). **Chaîne vide = effacer** et rendre la
+   * main à la couleur de véhicule de la scène, qui suit le thème.
+   */
+  bodyColor: z.union([z.literal(''), hexColorSchema]).optional(),
+  /**
+   * Aspect de la peinture (comme `HouseDevice.bodyFinish`). **Chaîne vide = effacer** et rendre la
+   * main à ce que le fabricant dit, comme pour la couleur.
+   */
+  bodyFinish: z.union([z.literal(''), z.enum(VEHICLE_FINISHES)]).optional(),
   /** Requis quand l'appareil n'existe pas encore dans le JSON (appareil auto-placé). */
   deviceId: deviceIdSchema.optional(),
 })
@@ -69,7 +86,8 @@ const isObject = (v: unknown): v is JsonObject => typeof v === 'object' && v !==
 
 /**
  * Renvoie une copie du document JSON avec l'appareil `id` (re)placé ou renommé : entrée existante
- * mise à jour (position, nom, pièce, mount, yaw, size, leaves, gpsOffset, yawOffset, batteryKwh), ou entrée créée
+ * mise à jour (position, nom, pièce, mount, yaw, size, leaves, gpsOffset, yawOffset, batteryKwh,
+ * model3d, bodyColor, bodyFinish), ou entrée créée
  * `{ id, deviceId, … }` avec ce qui a été donné.
  *
  * Tout est facultatif, position comprise : renommer un appareil qui n'a PAS de place dans la scène
@@ -111,6 +129,18 @@ export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePla
       if (placement.batteryKwh === 0) delete next.batteryKwh
       else next.batteryKwh = placement.batteryKwh
     }
+    if (placement.model3d !== undefined) {
+      if (placement.model3d) next.model3d = placement.model3d
+      else delete next.model3d
+    }
+    if (placement.bodyColor !== undefined) {
+      if (placement.bodyColor) next.bodyColor = placement.bodyColor
+      else delete next.bodyColor
+    }
+    if (placement.bodyFinish !== undefined) {
+      if (placement.bodyFinish) next.bodyFinish = placement.bodyFinish
+      else delete next.bodyFinish
+    }
     if (room) {
       next.roomId = room.id
       // le JSON de démo porte roomId ET levelId : garder les deux cohérents, sans en ajouter
@@ -136,6 +166,9 @@ export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePla
     if (placement.gpsOffset && (placement.gpsOffset[0] !== 0 || placement.gpsOffset[1] !== 0)) next.gpsOffset = placement.gpsOffset
     if (placement.yawOffset) next.yawOffset = placement.yawOffset
     if (placement.batteryKwh) next.batteryKwh = placement.batteryKwh
+    if (placement.model3d) next.model3d = placement.model3d
+    if (placement.bodyColor) next.bodyColor = placement.bodyColor
+    if (placement.bodyFinish) next.bodyFinish = placement.bodyFinish
   }
   const out = [...devices]
   if (i >= 0) out[i] = next

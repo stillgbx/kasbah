@@ -6,6 +6,7 @@ import type { SceneTheme } from '../core/theme'
 import type { MaterialSet } from '../builders/materials'
 import type { Animation } from '../core/renderLoop'
 import type { TextureLoad } from './screenArt'
+import type { ModelLoad } from '../models/loadModel'
 import { isOrientable, yawToRad } from '../../lib/orientation'
 import { iconSvg, kindIcon } from '../../lib/strokeIcons'
 import { deviceCategory } from '../../lib/deviceIcons'
@@ -26,6 +27,8 @@ export interface MarkerContext {
   invalidate(): void
   /** Chargement des images posées sur un écran ; injecté par les tests, `TextureLoader` sinon. */
   loadTexture?: TextureLoad
+  /** Chargement des carrosseries 3D d'un véhicule ; injecté par les tests, `GLTFLoader` sinon. */
+  loadModel?: ModelLoad
   onTap(key: string): void
   label: string
 }
@@ -53,6 +56,8 @@ export abstract class DeviceMarker {
   protected css: CSS2DObject | null = null
   /** Visibilité imposée par le niveau focalisé (indépendante de l'état). */
   private pillAllowed = true
+  /** Vrai dès que le marqueur est jeté : un chargement encore en vol ne doit pas réveiller un mort. */
+  protected disposed = false
   /** Maillages cliquables (userData.key). */
   readonly pickables: Object3D[] = []
   /**
@@ -97,6 +102,12 @@ export abstract class DeviceMarker {
   protected registerPickable(o: Object3D): void {
     o.userData = { ...o.userData, key: this.key }
     this.pickables.push(o)
+  }
+
+  /** Un maillage retiré de la scène doit aussi cesser d'être cliquable, sans quoi on tape dans le vide. */
+  protected unregisterPickable(o: Object3D): void {
+    const i = this.pickables.indexOf(o)
+    if (i >= 0) this.pickables.splice(i, 1)
   }
 
   protected setLift(z: number): void { this.lift = z; this.css?.position.set(0, 0, z) }
@@ -215,6 +226,7 @@ export abstract class DeviceMarker {
   }
 
   dispose(): void {
+    this.disposed = true
     this.disposeGuide()
     this.stopAnimation?.()
     this.stopAnimation = null

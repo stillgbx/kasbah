@@ -52,6 +52,16 @@ export const VEHICLES = {
       radioType: { code: 'NA498', label: 'IVI2 FULL10 PREM DAB', group: '425' },
       registrationCountry: { code: 'FR' },
       navigationAssistanceLevel: {},
+      // Les rendus du véhicule dans sa configuration. Tronqué à ce qui compte : `TEGNE` est le seul
+      // endroit de TOUT le relevé qui dit la couleur (Noir Étoilé). Capture du 2026-09-15.
+      assets: [{
+        assetType: 'PICTURE',
+        viewpoint: 'mybrand_2',
+        renditions: [{
+          resolutionType: 'ONE_MYRENAULT_SMALL',
+          url: 'https://3dv.renault.com/ImageFromBookmark?configuration=PAVEH%2FX1316%2FHTB%2FEA3%2FLHDG%2FRVX09%2FRAL18%2FTEGNE%2FMET05%2FRRCAM%2FCHRGI&bookmarkSet=RSITE&bookmark=EXT_34_DESSUS',
+        }],
+      }],
     },
     connectedDriver: { role: 'MAIN_DRIVER', createdDate: '2024-06-20T08:00:00.000000Z' },
   }],

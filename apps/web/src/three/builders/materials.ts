@@ -50,7 +50,10 @@ export function createMaterials(theme: SceneTheme): MaterialSet {
     },
     ghost: std(theme.wall, { transparent: true, opacity: 0.12, depthWrite: false }),
     slat: std(theme.isDark ? new Color('#8a8f94') : new Color('#c9ced2'), { roughness: 0.5, metalness: 0.2 }),
-    vehicle: std(theme.secondary, { roughness: 0.4, metalness: 0.3 }),
+    // Peinture de carrosserie : lisse et assez métallique pour RÉFLÉCHIR. Ces valeurs n'ont de sens
+    // qu'avec la carte d'environnement que `HouseScene` vient y poser — sans elle, la part
+    // métallique n'a rien à renvoyer et la voiture s'assombrit au lieu de briller.
+    vehicle: std(theme.secondary, { roughness: 0.28, metalness: 0.55 }),
     device: std(theme.isDark ? new Color('#9aa4b2') : new Color('#5b6470'), { roughness: 0.6, metalness: 0.1 }),
   }
   const all = new Set<Material>()

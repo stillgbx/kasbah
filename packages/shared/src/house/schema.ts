@@ -1,6 +1,7 @@
 import { z } from 'zod'
-import { DEVICE_KINDS } from '../devices/kinds'
-import { deviceIdSchema } from '../devices/descriptor'
+import { DEVICE_KINDS, VEHICLE_FINISHES } from '../devices/kinds'
+import { deviceIdSchema, hexColorSchema } from '../devices/descriptor'
+export { hexColorSchema }
 import { commandSchema } from '../devices/command'
 import { signedArea } from './geometry/vec2'
 
@@ -17,6 +18,13 @@ import type { Vec2 } from './geometry/vec2'
 
 const idSchema = z.string().min(1).regex(/^[a-z0-9_.-]+$/i, 'id: [a-z0-9_.-]+')
 const metaSchema = z.record(z.string(), z.unknown()).optional()
+
+/**
+ * Identifiant d'une carrosserie 3D : `<pluginId>/<modèle>`, qui est AUSSI le chemin du fichier
+ * sous `public/models/`. Le catalogue vit côté web (lui seul sait ce qui est livré) ; le contrat
+ * partagé ne valide donc que la forme, pas l'existence du modèle.
+ */
+export const model3dSchema = z.string().regex(/^(none|[a-z0-9_]+\/[a-z0-9-]+)$/, "model3d: 'none' ou <pluginId>/<modèle>")
 
 function noConsecutiveDuplicates(poly: Vec2[]): boolean {
   for (let i = 0; i < poly.length; i++) {
@@ -164,6 +172,25 @@ export const houseDeviceSchema = z.object({
    * véhicule ne dit pas (`estimateChargePowerW`). Absente = on n'estime rien.
    */
   batteryKwh: z.number().positive().max(500).optional(),
+  /**
+   * Carrosserie dessinée dans la scène 3D pour un véhicule : `<pluginId>/<modèle>`, l'identifiant
+   * d'un modèle du catalogue web (`three/models/catalog`). `'none'` = la silhouette générique, que
+   * l'on choisit pour retrouver le repère d'encombrement plutôt que la vraie forme. **Absent =
+   * automatique** : le catalogue tranche d'après le plugin du véhicule, ce qui est juste dans le
+   * cas courant — une seule voiture par plugin.
+   */
+  model3d: model3dSchema.optional(),
+  /**
+   * Couleur de la carrosserie (`#rrggbb`). Les modèles 3D sont livrés SANS couleur — aucun
+   * fabricant ne publie la teinte d'un véhicule, et la deviner à partir du VIN n'est pas possible.
+   * Absente = la scène applique sa couleur de véhicule, qui suit le thème.
+   */
+  bodyColor: hexColorSchema.optional(),
+  /**
+   * Aspect de la peinture d'un véhicule (`solid` / `metallic` / `matte`). Même règle que la couleur :
+   * ce que l'utilisateur choisit l'emporte sur ce que le fabricant dit, et l'absence rend la main.
+   */
+  bodyFinish: z.enum(VEHICLE_FINISHES).optional(),
   levelId: idSchema.optional(),
   roomId: idSchema.optional(),
   zoneId: idSchema.optional(),

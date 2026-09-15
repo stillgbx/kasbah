@@ -82,6 +82,16 @@ export const vehicleDataSchema = z.looseObject({
     drive_state: driveStateSchema.optional(),
     vehicle_state: vehicleStateSchema.optional(),
     climate_state: climateStateSchema.optional(),
+    /**
+     * Configuration d'usine. On n'en lit que la peinture : `exterior_color` nomme la teinte sortie
+     * d'usine (« SteelGrey », « PearlWhite »…), et `paint_color_override` porte la couleur que le
+     * propriétaire a choisie DANS SA VOITURE — « 40,90,200,0.9,0.3 » : rouge, vert, bleu, puis ce
+     * qui ressemble fort au couple métallicité / rugosité du rendu de Tesla.
+     */
+    vehicle_config: z.looseObject({
+      exterior_color: str,
+      paint_color_override: str,
+    }).optional(),
   }),
 })
 export type VehicleData = z.infer<typeof vehicleDataSchema>['response']

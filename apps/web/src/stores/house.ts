@@ -357,7 +357,7 @@ export const useHouseStore = defineStore('house', () => {
    * donne). Même chemin que le renommage : l'entrée de maison est créée au besoin, SANS position —
    * un véhicule n'a pas de place écrite. `[0, 0]` et `0` effacent, comme la chaîne vide efface un nom.
    */
-  async function setDeviceTuning(pluginDeviceId: string, tuning: { gpsOffset?: Vec2; yawOffset?: number; batteryKwh?: number }): Promise<boolean> {
+  async function setDeviceTuning(pluginDeviceId: string, tuning: Pick<DevicePlacement, 'gpsOffset' | 'yawOffset' | 'batteryKwh' | 'model3d' | 'bodyColor' | 'bodyFinish'>): Promise<boolean> {
     const hd = houseDeviceFor(pluginDeviceId)
     const placement: DevicePlacement = { ...tuning }
     if (!hd) placement.deviceId = pluginDeviceId

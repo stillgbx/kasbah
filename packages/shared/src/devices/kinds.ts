@@ -85,6 +85,15 @@ export type CameraClass = (typeof CAMERA_CLASSES)[number]
 export const MEDIA_PLAYER_CLASSES = ['speaker', 'tv', 'display'] as const
 export type MediaPlayerClass = (typeof MEDIA_PLAYER_CLASSES)[number]
 
+/**
+ * Aspect de la peinture d'une carrosserie, dans le vocabulaire que le fabricant emploie lui-même :
+ * l'écran de bord d'une Tesla propose « Unie / Métallique / Mate ». Ce n'est pas une coquetterie —
+ * c'est ce qui décide si la voiture renvoie le ciel ou l'absorbe, et l'écart se voit au premier
+ * coup d'œil dans la scène.
+ */
+export const VEHICLE_FINISHES = ['solid', 'metallic', 'matte'] as const
+export type VehicleFinish = (typeof VEHICLE_FINISHES)[number]
+
 /** Protocoles de flux vidéo qu'une caméra sait servir (décide de la façon de l'afficher). */
 export const STREAM_PROTOCOLS = ['webrtc', 'rtsp'] as const
 export type StreamProtocol = (typeof STREAM_PROTOCOLS)[number]

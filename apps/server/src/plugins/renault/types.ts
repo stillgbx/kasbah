@@ -73,6 +73,15 @@ export const vehicleLinkSchema = z.looseObject({
     brand: z.looseObject({ label: z.string().optional() }).optional(),
     model: z.looseObject({ code: z.string().optional(), label: z.string().optional() }).optional(),
     energy: z.looseObject({ code: z.string().optional(), label: z.string().optional() }).optional(),
+    /**
+     * Les rendus du véhicule DANS SA CONFIGURATION (`3dv.renault.com`), sept points de vue. Seule
+     * source de la teinte : l'URL porte la référence d'usine, et Renault ne la nomme nulle part
+     * ailleurs. Voir `bodyColor`.
+     */
+    assets: z.array(z.looseObject({
+      assetType: z.string().optional(),
+      renditions: z.array(z.looseObject({ url: z.string().optional() })).default([]),
+    })).optional(),
   }).optional(),
 })
 export type VehicleLink = z.infer<typeof vehicleLinkSchema>

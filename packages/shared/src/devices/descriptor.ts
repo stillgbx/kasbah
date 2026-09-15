@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { CAMERA_CLASSES, CAPABILITIES, CLIMATE_MODES, COVER_CLASSES, DEVICE_KINDS, KIND_CAPABILITIES, MEDIA_PLAYER_CLASSES, SENSOR_CLASSES, STREAM_PROTOCOLS } from './kinds'
+import { CAMERA_CLASSES, CAPABILITIES, CLIMATE_MODES, COVER_CLASSES, DEVICE_KINDS, KIND_CAPABILITIES, MEDIA_PLAYER_CLASSES, SENSOR_CLASSES, STREAM_PROTOCOLS, VEHICLE_FINISHES } from './kinds'
 
 // Identité d'un appareil : `${pluginId}:${externalId}`. Une seule chaîne sert de clé de Map,
 // de segment d'URL, de champ WS et de nom de nœud 3D — jamais de couple à joindre côté client.
@@ -9,6 +9,9 @@ export const DEVICE_ID_RE = /^[a-z0-9_]+:[^:\s]+$/
 export const pluginIdSchema = z.string().regex(PLUGIN_ID_RE, 'pluginId: [a-z0-9_]+')
 export const deviceIdSchema = z.string().regex(DEVICE_ID_RE, 'deviceId: <pluginId>:<externalId>')
 export type DeviceId = z.infer<typeof deviceIdSchema>
+
+/** Couleur `#rrggbb`, la forme que produisent et attendent `rgbToHex` / `hexToRgb`. */
+export const hexColorSchema = z.string().regex(/^#[0-9a-f]{6}$/i, 'couleur: #rrggbb')
 
 export const deviceMetaSchema = z.object({
   manufacturer: z.string().optional(),
@@ -41,6 +44,17 @@ export const deviceMetaSchema = z.object({
   }).optional(),
   /** Nature du lecteur (enceinte, téléviseur, écran connecté) : décide l'icône et le marqueur 3D. Absent = enceinte. */
   mediaPlayer: z.object({ deviceClass: z.enum(MEDIA_PLAYER_CLASSES) }).optional(),
+  /**
+   * Ce que le fabricant laisse deviner de la CARROSSERIE. `color` : la teinte réelle du véhicule,
+   * quand le relevé permet de la déduire — Renault l'encode dans la référence de sa configuration,
+   * Tesla la nomme dans `vehicle_config`. `finish` : l'aspect de la peinture, que Tesla laisse
+   * choisir depuis l'écran de bord. Absents = on n'a rien trouvé, et ce n'est pas une panne : la
+   * plupart des plugins ne disent rien de la peinture.
+   *
+   * C'est un DÉFAUT, jamais une vérité : le réglage manuel de la maison (`HouseDevice.bodyColor`)
+   * l'emporte toujours, parce qu'un covering, une repeinte ou simplement un goût le contredisent.
+   */
+  vehicle: z.object({ color: hexColorSchema.optional(), finish: z.enum(VEHICLE_FINISHES).optional() }).optional(),
   /**
    * Le plugin RETIENT cet appareil même absent du réseau (un Cast éteint ne s'annonce plus, et son
    * entrée dans la maison perdrait son nom et son état). L'UI peut donc proposer de l'oublier —

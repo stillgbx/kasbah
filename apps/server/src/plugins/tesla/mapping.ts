@@ -1,4 +1,4 @@
-import type { DeviceDescriptor, StatePatch, VehicleGear, VehicleSleepState } from '@kasbah/shared'
+import type { DeviceDescriptor, StatePatch, VehicleFinish, VehicleGear, VehicleSleepState } from '@kasbah/shared'
 import { VEHICLE_GEARS, VEHICLE_SLEEP_STATES } from '@kasbah/shared'
 import type { VehicleData, VehicleSummary } from './types'
 
@@ -34,14 +34,76 @@ export function modelFromVin(vin: string): string | undefined {
   return model
 }
 
-export function toDescriptor(v: VehicleSummary): DeviceDescriptor {
+export function toDescriptor(v: VehicleSummary, paint?: { color?: string; finish?: VehicleFinish }): DeviceDescriptor {
   const model = modelFromVin(v.vin)
   const name = v.display_name?.trim() || model || 'Tesla'
   return {
     id: `${PLUGIN_ID}:${v.vin}`, pluginId: PLUGIN_ID, externalId: v.vin, kind: 'vehicle', name,
     capabilities: [...READ_CAPABILITIES, ...WRITE_CAPABILITIES],
-    meta: { manufacturer: 'Tesla', ...(model ? { model } : {}) },
+    meta: { manufacturer: 'Tesla', ...(model ? { model } : {}), ...(paint?.color || paint?.finish ? { vehicle: paint } : {}) },
   }
+}
+
+/**
+ * Teintes d'usine de Tesla. APPROXIMATIONS : le fabricant nomme ses couleurs mais n'en publie pas
+ * les valeurs. C'est acceptable ici — un nom lisible dit de quelle couleur il s'agit, là où un code
+ * opaque (le cas de Renault) ne dirait rien —, et l'utilisateur corrige d'un clic si l'œil proteste.
+ */
+const PAINT: Record<string, string> = {
+  solidblack: '#171a1c',
+  obsidianblack: '#1b1c1e',
+  midnightsilver: '#35383c',
+  steelgrey: '#5c6063',
+  stealthgrey: '#4a4c4f',
+  titaniummetallic: '#4a4d52',
+  silvermetallic: '#b6b8ba',
+  quicksilver: '#a9adb2',
+  pearlwhite: '#f2f3f5',
+  white: '#f2f3f5',
+  deepblue: '#1f3a63',
+  deepbluemetallic: '#1f3a63',
+  redmulti: '#a81c24',
+  ultrared: '#b5121b',
+  red: '#a81c24',
+  metallicbrown: '#5b4436',
+}
+
+const hex2 = (n: number) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0')
+
+/**
+ * L'ASPECT de la peinture, tiré des deux nombres qui suivent le RGB de `paint_color_override` —
+ * « 40,90,200,0.9,0.3 ». Le « Coloriseur » de l'écran de bord propose « Unie / Métallique / Mate »,
+ * et la voiture relevée le 2026-09-15 était sur **Mate** avec ce couple : 0,9 se lit donc comme la
+ * RUGOSITÉ (un mat diffuse) et 0,3 comme la métallicité. L'ordre inverse décrirait un chrome
+ * brillant, ce que l'écran contredit.
+ *
+ * On classe plutôt que de reprendre les nombres bruts : trois aspects nommés se règlent à la main
+ * depuis la fiche, et se comparent d'un véhicule à l'autre. Un seuil large, donc, pas une lecture
+ * au dixième — c'est une seule voiture qui l'a dicté.
+ */
+export function bodyFinish(data: Pick<VehicleData, 'vehicle_config'>): VehicleFinish | undefined {
+  const parts = data.vehicle_config?.paint_color_override?.split(',').map(Number)
+  if (!parts || parts.length < 5) return undefined
+  const [roughness, metalness] = [parts[3]!, parts[4]!]
+  if (!Number.isFinite(roughness) || !Number.isFinite(metalness)) return undefined
+  if (roughness >= 0.6) return 'matte'
+  return metalness >= 0.5 ? 'metallic' : 'solid'
+}
+
+/**
+ * La couleur de la carrosserie, du plus vrai au plus approché :
+ *  1. `paint_color_override` — la teinte que le propriétaire a choisie DANS SA VOITURE, en RGB
+ *     exact. Elle prime : c'est celle que son écran de bord affiche, donc celle qu'il a en tête.
+ *  2. `exterior_color` — le nom de la peinture d'usine, approché par la table ci-dessus.
+ *  3. rien, si le nom est inconnu : mieux vaut la couleur de thème qu'une couleur inventée.
+ */
+export function bodyColor(data: Pick<VehicleData, 'vehicle_config'>): string | undefined {
+  const cfg = data.vehicle_config
+  if (!cfg) return undefined
+  const rgb = cfg.paint_color_override?.split(',').slice(0, 3).map(Number)
+  if (rgb?.length === 3 && rgb.every((n) => Number.isFinite(n))) return `#${rgb.map(hex2).join('')}`
+  const name = cfg.exterior_color?.trim().toLowerCase()
+  return name ? PAINT[name] : undefined
 }
 
 /** Veille normalisée ; une valeur inconnue de Tesla (`waking`…) est lue comme éveillé, sans erreur. */

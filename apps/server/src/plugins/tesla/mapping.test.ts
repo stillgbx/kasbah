@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { defaultState, deviceDescriptorSchema, deviceStateSchema, mergeState, stateKeys, type StateFor } from '@kasbah/shared'
 import { VEHICLES_ASLEEP, VEHICLES_ONLINE, VEHICLE_DATA_CHARGING, VEHICLE_DATA_DRIVING, VEHICLE_DATA_PARKED } from './__fixtures__/fleet'
-import { isResting, modelFromVin, toDataPatch, toDescriptor, toSleepPatch, toSleepState } from './mapping'
+import { bodyColor, bodyFinish, isResting, modelFromVin, toDataPatch, toDescriptor, toSleepPatch, toSleepState } from './mapping'
 import { vehicleDataSchema, vehicleSummarySchema, vehiclesListSchema } from './types'
 
 // Mappage de la Fleet API, éprouvé sur une réponse CAPTURÉE sur le vrai compte (Model S 2017, MCU2) :
@@ -51,6 +51,34 @@ describe('veille', () => {
     expect(toSleepState('waking')).toBe('online')
     expect(toSleepState(undefined)).toBe('online')
     expect(toSleepState('offline')).toBe('offline')
+  })
+})
+
+describe('couleur de carrosserie (`vehicle_config`)', () => {
+  it('la couleur choisie DANS la voiture prime sur la peinture d usine', () => {
+    // Relevé réel du 2026-09-15 : sortie d'usine en PearlWhite, mais l'écran de bord affiche un
+    // bleu que le propriétaire a choisi. C'est celui-là qu'il a en tête, donc celui qu'on peint.
+    expect(bodyColor(parked)).toBe('#285ac8')
+
+    // Sans surcharge, le nom de la peinture d'usine, approché par la table.
+    expect(bodyColor({ vehicle_config: { exterior_color: 'SteelGrey' } })).toBe('#5c6063')
+    expect(bodyColor({ vehicle_config: { exterior_color: 'pearlwhite' } })).toBe('#f2f3f5')
+
+    // Un nom hors table, une surcharge illisible, ou pas de section du tout : rien. La scène garde
+    // sa couleur de thème et l'utilisateur tranche — jamais de couleur inventée.
+    expect(bodyColor({ vehicle_config: { exterior_color: 'ChartreuseSparkle' } })).toBeUndefined()
+    expect(bodyColor({ vehicle_config: { paint_color_override: 'bleu' } })).toBeUndefined()
+    expect(bodyColor({})).toBeUndefined()
+  })
+
+  it('classe l aspect d après les deux nombres qui suivent le RGB', () => {
+    // Relevé réel : l'écran de bord était sur « Mate », et le couple vaut 0,9 / 0,3.
+    expect(bodyFinish(parked)).toBe('matte')
+    expect(bodyFinish({ vehicle_config: { paint_color_override: '10,20,30,0.2,0.8' } })).toBe('metallic')
+    expect(bodyFinish({ vehicle_config: { paint_color_override: '10,20,30,0.3,0.1' } })).toBe('solid')
+    // La couleur seule, sans les deux nombres : rien à dire de l'aspect.
+    expect(bodyFinish({ vehicle_config: { paint_color_override: '10,20,30' } })).toBeUndefined()
+    expect(bodyFinish({})).toBeUndefined()
   })
 })
 

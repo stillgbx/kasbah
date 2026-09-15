@@ -162,6 +162,14 @@ export const VEHICLE_DATA_PARKED = {
       "usable_battery_level": 54,
       "user_charge_enable_request": null
     },
+    "vehicle_config": {
+      "car_type": "models2",
+      "exterior_color": "PearlWhite",
+      "paint_color_override": "40,90,200,0.9,0.3",
+      "roof_color": "Glass",
+      "trim_badging": "100d",
+      "wheel_type": "AeroTurbine19"
+    },
     "climate_state": {
       "allow_cabin_overheat_protection": false,
       "battery_heater": false,
@@ -381,6 +389,14 @@ export const VEHICLE_DATA_DRIVING = {
       "usable_battery_level": 54,
       "user_charge_enable_request": null
     },
+    "vehicle_config": {
+      "car_type": "models2",
+      "exterior_color": "PearlWhite",
+      "paint_color_override": "40,90,200,0.9,0.3",
+      "roof_color": "Glass",
+      "trim_badging": "100d",
+      "wheel_type": "AeroTurbine19"
+    },
     "climate_state": {
       "allow_cabin_overheat_protection": false,
       "battery_heater": false,
@@ -599,6 +615,14 @@ export const VEHICLE_DATA_CHARGING = {
       "trip_charging": false,
       "usable_battery_level": 54,
       "user_charge_enable_request": null
+    },
+    "vehicle_config": {
+      "car_type": "models2",
+      "exterior_color": "PearlWhite",
+      "paint_color_override": "40,90,200,0.9,0.3",
+      "roof_color": "Glass",
+      "trim_badging": "100d",
+      "wheel_type": "AeroTurbine19"
     },
     "climate_state": {
       "allow_cabin_overheat_protection": false,
