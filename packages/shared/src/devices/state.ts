@@ -298,10 +298,61 @@ export const weatherStateSchema = z.object({
   observedAt: z.number().int(),
 })
 
+/**
+ * Une station qui traite l'eau de toute la maison (COMAP Proteo) : elle filtre, passe aux
+ * ultraviolets, et tient les compteurs de ce qu'elle a laissé passer. En lecture seule comme la
+ * météo — ses réglages (dureté de l'eau, créneaux de la lampe, horloge) se font sur son écran
+ * tactile. Son protocole sait pourtant écrire : c'est un choix, pas une limite, parce qu'une fausse
+ * manœuvre à distance sur l'eau potable coûterait plus cher que le confort gagné.
+ *
+ * TOUS les champs de mesure sont optionnels, et c'est délibéré : avant la première lecture réussie,
+ * « absent » se lit « inconnu ». Un `0 %` d'usure ou un `0 L` de consommation affirmerait une
+ * mesure qu'on n'a pas — même règle que `cover.position`.
+ */
+export const waterStateSchema = z.object({
+  kind: z.literal('water'), ...base,
+  /**
+   * Ce qu'il RESTE de chaque consommable, 100 = neuf. Le préfiltre retient les sédiments (il se
+   * lave, une fois par an), les deux cartouches de charbon actif le goût de chlore et les
+   * pesticides, la lampe UVc les bactéries et les virus.
+   */
+  prefilterPct: pct.optional(),
+  carbon1Pct: pct.optional(),
+  carbon2Pct: pct.optional(),
+  uvLampPct: pct.optional(),
+  /**
+   * La lampe UVc éclaire EN CE MOMENT. Elle s'économise d'elle-même : la station accepte trois
+   * créneaux quotidiens de « mode économie » pendant lesquels elle s'éteint au bout d'une heure
+   * sans tirage d'eau — une lampe éteinte la nuit n'est donc pas une panne.
+   */
+  uvOn: z.boolean().optional(),
+  /**
+   * Débit instantané, en litres par heure — CONFIRMÉ au robinet le 2026-09-16 : un mitigeur
+   * ouvert à fond a fait monter la station à 900, soit 15 L/min, l'ordre de grandeur exact d'un
+   * robinet (en litres par minute, il aurait fallu croire à 54 m³/h).
+   *
+   * Le débitmètre compte par pas de 36 L/h — toutes les valeurs relevées en sont des multiples —
+   * donc la mesure est BEAUCOUP plus grossière que ses trois chiffres ne le laissent croire : à
+   * montrer comme un ordre de grandeur, jamais comme une précision au litre.
+   */
+  flowLph: z.number().min(0).optional(),
+  /** Eau consommée (litres), sur les fenêtres que la station compte elle-même. */
+  todayL: z.number().min(0).optional(),
+  weekL: z.number().min(0).optional(),
+  monthL: z.number().min(0).optional(),
+  /**
+   * La station signale un avertissement, ou un défaut. Elle tient par ailleurs un historique
+   * d'alertes codées que sa notice ne documente pas (elle renvoie au SAV) : Kasbah n'en publie donc
+   * que ces deux résumés-là, les seuls dont le sens soit établi.
+   */
+  warning: z.boolean().optional(),
+  defect: z.boolean().optional(),
+})
+
 export const deviceStateSchema = z.discriminatedUnion('kind', [
   lightStateSchema, coverStateSchema, mediaPlayerStateSchema, climateStateSchema, vacuumStateSchema,
   mowerStateSchema, sensorStateSchema, energyStateSchema, evChargerStateSchema, vehicleStateSchema,
-  cameraStateSchema, weatherStateSchema,
+  cameraStateSchema, weatherStateSchema, waterStateSchema,
 ])
 export type DeviceState = z.infer<typeof deviceStateSchema>
 export type StateFor<K extends DeviceKind> = Extract<DeviceState, { kind: K }>

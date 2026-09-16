@@ -1,7 +1,7 @@
 import type { CommandInput, DeviceDescriptor, DeviceState, StateFor } from '@kasbah/shared'
 import { coverActivity, coverRestKey, coverWords, toClosure } from './cover'
 import { isEnergySite } from './energy'
-import { formatPercent, formatPower, formatSensor, formatTemp } from './format'
+import { formatPercent, formatPower, formatSensor, formatTemp, waterAlertState, waterLowestPct } from './format'
 
 // Lecture « métier » d'un état : actif ?, bascule rapide possible ?, libellé court traduit.
 
@@ -36,6 +36,7 @@ export function isDeviceOn(s: DeviceState, descriptor?: DeviceDescriptor): boole
     case 'sensor': return false
     case 'camera': return false
     case 'weather': return false
+    case 'water': return false
   }
 }
 
@@ -145,7 +146,14 @@ export function statusLabel(descriptor: DeviceDescriptor, s: DeviceState, t: Tra
     // rien d'autre à dire d'une caméra que sa présence : l'API ne publie ni marche/arrêt ni activité
     case 'camera': return t('camera.online')
     case 'weather': return t(`weather.conditions.${s.condition}`)
+    case 'water': return waterAlertLabel(s, t)
   }
+}
+
+/** Mot d'alerte d'une station d'eau (voir `waterAlertState`) : le fait le plus digne d'attention, comme l'activité d'un robot. */
+function waterAlertLabel(s: StateFor<'water'>, t: Translate): string {
+  const a = waterAlertState(s)
+  return a === 'ok' ? t('water.noAlert') : a === 'warning' ? t('water.warning') : a === 'defect' ? t('water.defect') : t('common.unknown')
 }
 
 /**
@@ -188,5 +196,14 @@ export function headlineValue(descriptor: DeviceDescriptor, s: DeviceState, t: T
     case 'vehicle': return formatPercent(s.soc, locale)
     case 'camera': return t(`camera.classes.${descriptor.meta.camera?.deviceClass ?? 'camera'}`)
     case 'weather': return formatTemp(s.tempC, locale)
+    // La ligne du bas de la carte dit déjà l'alerte : la grande valeur répéterait le même mot. Sauf
+    // si une alerte est active — le fait le plus urgent doit primer — elle dit plutôt le plus bas
+    // des consommables (`waterLowestPct`), ce que rien d'autre à l'écran ne résume.
+    case 'water': {
+      const a = waterAlertState(s)
+      if (a === 'warning' || a === 'defect') return waterAlertLabel(s, t)
+      const p = waterLowestPct(s)
+      return p !== undefined ? formatPercent(p, locale) : t('common.unknown')
+    }
   }
 }

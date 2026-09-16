@@ -4,7 +4,7 @@
 
 export const DEVICE_KINDS = [
   'light', 'cover', 'media_player', 'climate', 'vacuum', 'mower',
-  'sensor', 'energy', 'ev_charger', 'vehicle', 'camera', 'weather',
+  'sensor', 'energy', 'ev_charger', 'vehicle', 'camera', 'weather', 'water',
 ] as const
 export type DeviceKind = (typeof DEVICE_KINDS)[number]
 
@@ -44,6 +44,11 @@ export const CAPABILITIES = [
   // l'air, les pollens. Un fournisseur qui n'a pas les pollens ne déclare pas `pollen`, et la vue
   // n'affiche pas une section vide. Aucune commande : la météo se lit, elle ne se pilote pas.
   'forecast', 'air_quality', 'pollen',
+  // water — ce qu'une station de traitement SAIT dire, et qui change d'un modèle à l'autre dans une
+  // même gamme (toutes n'ont pas de lampe UVc) : sans la capacité, la carte omet la section au lieu
+  // d'en afficher une vide. Aucune commande — les réglages restent sur l'écran de la station, une
+  // fausse manœuvre à distance sur de l'eau potable coûterait plus cher que le confort gagné.
+  'consumables', 'water_flow', 'water_usage', 'uv_lamp',
 ] as const
 export type Capability = (typeof CAPABILITIES)[number]
 
@@ -61,6 +66,7 @@ export const KIND_CAPABILITIES: Record<DeviceKind, readonly Capability[]> = {
   vehicle: ['soc', 'range', 'location', 'lock', 'charging', 'charge_limit', 'charge_power', 'climate_precondition'],
   camera: ['live_stream', 'chime'],
   weather: ['forecast', 'air_quality', 'pollen'],
+  water: ['consumables', 'water_flow', 'water_usage', 'uv_lamp'],
 }
 
 export const CLIMATE_MODES = ['off', 'heat', 'cool', 'auto', 'eco', 'fan_only'] as const

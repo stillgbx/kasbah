@@ -1,6 +1,7 @@
 import type { PluginFactory } from '../core/plugin'
 import { makeStubPlugin } from './_stub'
 import { createAutomowerPlugin } from './automower'
+import { createComapPlugin } from './comap'
 import { createEnphasePlugin } from './enphase'
 import { createGoogleCastPlugin } from './google_cast'
 import { createHuePlugin } from './hue'
@@ -25,7 +26,7 @@ export const PLUGIN_FACTORIES: Record<string, PluginFactory> = {
   irobot: makeStubPlugin('irobot', 'iRobot'),
   automower: () => createAutomowerPlugin(),
   melcloud: makeStubPlugin('melcloud', 'Mitsubishi MELCloud'),
-  comap: makeStubPlugin('comap', 'COMAP Proteo'),
+  comap: () => createComapPlugin(),
   tesla: () => createTeslaPlugin(),
   renault: () => createRenaultPlugin(),
   open_meteo: () => createOpenMeteoPlugin(),

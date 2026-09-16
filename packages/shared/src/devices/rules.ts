@@ -121,5 +121,7 @@ export function defaultState(kind: DeviceKind, now = 0): DeviceState {
     case 'camera': return { kind, ...base }
     // indisponible ET vide de sens : ces valeurs ne s'affichent jamais, `available: false` les grise
     case 'weather': return { kind, ...base, condition: 'clear', tempC: 0, humidity: 0, windKmh: 0, windDirDeg: 0, cloudCover: 0, isDay: true, sunrise: 0, sunset: 0, observedAt: 0 }
+    // aucune mesure : tant que la station n'a pas répondu, chaque grandeur est inconnue, pas nulle
+    case 'water': return { kind, ...base }
   }
 }

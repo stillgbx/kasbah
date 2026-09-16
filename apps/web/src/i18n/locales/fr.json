@@ -26,7 +26,7 @@
   },
   "kinds": {
     "light": "Lumière", "cover": "Ouvrant", "media_player": "Lecteur", "climate": "Chauffage", "vacuum": "Aspirateur",
-    "mower": "Tondeuse", "sensor": "Capteur", "energy": "Énergie", "ev_charger": "Borne de recharge", "vehicle": "Véhicule", "camera": "Caméra", "weather": "Météo"
+    "mower": "Tondeuse", "sensor": "Capteur", "energy": "Énergie", "ev_charger": "Borne de recharge", "vehicle": "Véhicule", "camera": "Caméra", "weather": "Météo", "water": "Traitement de l'eau"
   },
   "device": {
     "unbound": "Cet appareil n'est lié à aucun plugin ({id}).", "notPlaced": "Non placés", "outdoor": "Extérieur",
@@ -330,5 +330,10 @@
     "observed": "Observé à {time}", "attribution": "Données {source}", "model": "Modèle {model}",
     "radarHint": "Radar observé (2 h), puis prévision AROME (6 h)", "radarUnavailable": "Radar indisponible", "radarSource": "Radar RainViewer", "nowcastSource": "Prévision immédiate", "aromeSource": "Prévision AROME · Météo-France",
     "play": "Lecture", "pause": "Pause", "today": "Aujourd'hui", "min": "min", "max": "max", "noForecast": "Prévisions indisponibles"
+  },
+  "water": {
+    "prefilter": "Préfiltre", "carbon1": "Charbon 1", "carbon2": "Charbon 2", "uvLamp": "Lampe UVc",
+    "uvOn": "allumée", "uvOff": "éteinte", "flow": "Débit", "today": "Aujourd'hui", "month": "Ce mois",
+    "noAlert": "Aucune alerte", "warning": "Avertissement", "defect": "Défaut"
   }
 }

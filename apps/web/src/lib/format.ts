@@ -1,4 +1,4 @@
-import type { DeviceDescriptor, DeviceState } from '@kasbah/shared'
+import type { DeviceDescriptor, DeviceState, StateFor } from '@kasbah/shared'
 import { mirekToKelvin } from '@kasbah/shared'
 
 // Formats d'affichage. Les libellés traduits passent par `t` ; ici uniquement les nombres/unités.
@@ -43,6 +43,29 @@ export function formatDistance(m: number, locale = 'fr'): string {
   return m >= 1000 ? `${nf(locale, 1).format(m / 1000)} km` : `${nf(locale, 0).format(m)} m`
 }
 
+export const formatFlow = (lph: number, locale = 'fr') => `${nf(locale, 0).format(lph)} L/h`
+export const formatVolume = (l: number, locale = 'fr') => `${nf(locale, 0).format(l)} L`
+
+/**
+ * Le plus bas des consommables d'une station d'eau (COMAP) : plus il descend, plus il faut s'en
+ * inquiéter — même lecture que `battery` pour un robot. Absent si aucun n'est encore connu.
+ */
+export function waterLowestPct(s: StateFor<'water'>): number | undefined {
+  const known = [s.prefilterPct, s.carbon1Pct, s.carbon2Pct, s.uvLampPct].filter((v): v is number => v !== undefined)
+  return known.length ? Math.min(...known) : undefined
+}
+
+/**
+ * Résumé d'alerte d'une station d'eau : `ok` seulement si les DEUX résumés sont connus et faux — un
+ * seul connu ne suffit pas à affirmer « aucune alerte » (voir `waterStateSchema`).
+ */
+export function waterAlertState(s: StateFor<'water'>): 'ok' | 'warning' | 'defect' | 'unknown' {
+  if (s.defect === true) return 'defect'
+  if (s.warning === true) return 'warning'
+  if (s.warning === false && s.defect === false) return 'ok'
+  return 'unknown'
+}
+
 /** Valeur d'un capteur avec son unité et sa précision déclarées. */
 export function formatSensor(descriptor: DeviceDescriptor, value: number, locale = 'fr'): string {
   const meta = descriptor.meta.sensor
@@ -66,5 +89,6 @@ export function summarize(descriptor: DeviceDescriptor, state: DeviceState, loca
     case 'vehicle': return `${formatPercent(state.soc, locale)} · ${formatKm(state.rangeKm, locale)}`
     case 'camera': return ''
     case 'weather': return formatTemp(state.tempC, locale)
+    case 'water': { const p = waterLowestPct(state); return p !== undefined ? formatPercent(p, locale) : '—' }
   }
 }

@@ -120,7 +120,7 @@ export type IconName = keyof typeof ICONS
 
 const KIND_ICON: Record<DeviceKind, IconName> = {
   light: 'light', cover: 'shutter', media_player: 'speaker', climate: 'heatpump', vacuum: 'vacuum', mower: 'mower',
-  sensor: 'sensor', energy: 'solar', ev_charger: 'charger', vehicle: 'vehicle', camera: 'camera', weather: 'cloud',
+  sensor: 'sensor', energy: 'solar', ev_charger: 'charger', vehicle: 'vehicle', camera: 'camera', weather: 'cloud', water: 'droplet',
 }
 
 export function kindIcon(kind: DeviceKind | undefined, descriptor?: DeviceDescriptor): IconName {

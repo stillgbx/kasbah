@@ -26,7 +26,7 @@
   },
   "kinds": {
     "light": "Light", "cover": "Cover", "media_player": "Player", "climate": "Heating", "vacuum": "Vacuum",
-    "mower": "Mower", "sensor": "Sensor", "energy": "Energy", "ev_charger": "EV charger", "vehicle": "Vehicle", "camera": "Camera", "weather": "Weather"
+    "mower": "Mower", "sensor": "Sensor", "energy": "Energy", "ev_charger": "EV charger", "vehicle": "Vehicle", "camera": "Camera", "weather": "Weather", "water": "Water treatment"
   },
   "device": {
     "unbound": "This device is not bound to any plugin ({id}).", "notPlaced": "Not placed", "outdoor": "Outdoor",
@@ -330,5 +330,10 @@
     "observed": "Observed at {time}", "attribution": "Data {source}", "model": "Model {model}",
     "radarHint": "Observed radar (2 h), then AROME forecast (6 h)", "radarUnavailable": "Radar unavailable", "radarSource": "RainViewer radar", "nowcastSource": "Nowcast", "aromeSource": "AROME forecast · Météo-France",
     "play": "Play", "pause": "Pause", "today": "Today", "min": "min", "max": "max", "noForecast": "Forecast unavailable"
+  },
+  "water": {
+    "prefilter": "Prefilter", "carbon1": "Carbon 1", "carbon2": "Carbon 2", "uvLamp": "UV lamp",
+    "uvOn": "on", "uvOff": "off", "flow": "Flow", "today": "Today", "month": "This month",
+    "noAlert": "No alert", "warning": "Warning", "defect": "Fault"
   }
 }
