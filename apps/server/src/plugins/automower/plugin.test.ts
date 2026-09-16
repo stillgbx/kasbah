@@ -8,7 +8,7 @@ import { MESSAGES, MOWERS_ERROR, MOWERS_MOWING, MOWERS_PARKED, MOWER_ID, WS_MESS
 import { TOKEN_URL } from './auth'
 import { API_BASE_URL } from './client'
 import { automowerConfigSchema, createAutomowerPlugin, type AutomowerStatus } from './index'
-import type { AutomowerUsage, UsageStore } from './state'
+import { currentUsage, type AutomowerUsage, type UsageStore } from './state'
 import type { WsFactory, WsLike } from './ws'
 
 // Ce que le plugin doit tenir face au fabricant : lire l'état complet au démarrage et le publier,
@@ -223,6 +223,30 @@ describe('automower — jeton et quota', () => {
     expect((await statusOf()).requestsInWindow).toBe(43)
     expect((await statusOf()).windowResetAt).toBe(NOW + 4 * 86_400_000)
     expect(plugin.health!().quota).toMatchObject({ used: 43, limit: 21_000, since: NOW - 3 * 86_400_000 })
+  })
+
+  it('POST /usage recale le compte et l’instant de remise à zéro du portail, qui survit au fichier', async () => {
+    const usage = memoryUsage()
+    const { app, plugin, hq, clock } = await started({ usage })
+    const resetAt = '2026-09-23T17:00:00+02:00'
+    const res = await app.inject({ method: 'POST', url: '/usage', payload: { requests: 33, resetAt } })
+    expect(res.statusCode).toBe(200)
+    // la grille est celle du portail (remise à zéro le 23 à 17 h de Paris) ; l'horloge du test est le
+    // 16 à 12 h UTC, AVANT la remise à zéro du 16 à 15 h UTC : la fenêtre courante a commencé le 9
+    const start = Date.parse(resetAt) - 14 * 86_400_000
+    expect(plugin.health!().quota).toMatchObject({ used: 33, since: start })
+    expect(usage.value).toEqual({ windowStart: start, requests: 33, anchor: Date.parse(resetAt) })
+    // une requête de plus s'ajoute au compte recalé
+    hq.world.list = MOWERS_MOWING
+    clock.advance(10 * MIN + 1)
+    await flush()
+    expect(plugin.health!().quota).toMatchObject({ used: 34 })
+    // un corps invalide est refusé
+    expect((await app.inject({ method: 'POST', url: '/usage', payload: { requests: -1 } })).statusCode).toBe(400)
+    // l'ancrage gardé dans le fichier cale la fenêtre suivante sans configuration
+    const later = memoryUsage(usage.value)
+    const clock2 = NOW + 8 * 86_400_000
+    expect(currentUsage(later.value, clock2)).toEqual({ windowStart: Date.parse(resetAt), requests: 0, anchor: Date.parse(resetAt) })
   })
 
   it('une fenêtre de sept jours écoulée repart de zéro, sur la même grille', async () => {

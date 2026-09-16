@@ -20,6 +20,8 @@ export const usageSchema = z.object({
   /** Début de la fenêtre courante (ms epoch). */
   windowStart: z.number().int(),
   requests: z.number().int().min(0),
+  /** L'instant de remise à zéro recalé sur le portail (`POST /usage`), gardé pour caler les fenêtres suivantes. */
+  anchor: z.number().int().optional(),
 })
 export type AutomowerUsage = z.infer<typeof usageSchema>
 
@@ -42,8 +44,10 @@ export function windowStartOf(anchor: number, now: number): number {
  * suit de peu la création de l'application. Une fenêtre écoulée repart de zéro sur la même grille.
  */
 export function currentUsage(saved: AutomowerUsage | null, now: number, anchor?: number): AutomowerUsage {
-  const start = windowStartOf(anchor ?? saved?.windowStart ?? now, now)
-  return saved && saved.windowStart === start ? saved : { windowStart: start, requests: 0 }
+  const kept = anchor ?? saved?.anchor
+  const start = windowStartOf(kept ?? saved?.windowStart ?? now, now)
+  if (saved && saved.windowStart === start) return saved
+  return { windowStart: start, requests: 0, ...(kept === undefined ? {} : { anchor: kept }) }
 }
 
 /** Écriture atomique (fichier temporaire puis renommage) ; une lecture illisible vaut « rien ». */

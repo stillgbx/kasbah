@@ -314,6 +314,27 @@ export function createAutomowerPlugin(deps: AutomowerPluginDeps = {}): DevicePlu
       /** Les derniers messages du flux, bruts et datés : la capture des fixtures d'événements. */
       app.get('/raw/events', async () => ({ live: socket?.connected ?? false, events: recentEvents }))
 
+      /**
+       * Recale le compteur sur le PORTAIL développeur (« n of 21000 requests · Resets at … ») : le
+       * compte de la fenêtre, et l'instant de remise à zéro, gardé dans le fichier d'usage pour caler
+       * les fenêtres suivantes. L'estimation dérive forcément (appels faits hors de Kasbah, fichier
+       * repris de zéro) ; le portail reste la seule vérité — comme la console de Tesla.
+       */
+      app.post('/usage', async (req, reply) => {
+        if (!ctx) return reply.code(409).send({ error: 'plugin not started' })
+        const body = z.object({
+          requests: z.number().int().min(0),
+          resetAt: z.union([z.string().refine((v) => Number.isFinite(Date.parse(v)), 'ISO 8601'), z.number().int()]).optional(),
+        }).safeParse(req.body)
+        if (!body.success) return reply.code(400).send({ error: 'send { requests, resetAt? } (resetAt: ISO 8601 or ms epoch)' })
+        const now = ctx.clock.now()
+        if (body.data.resetAt !== undefined) quotaAnchor = typeof body.data.resetAt === 'number' ? body.data.resetAt : Date.parse(body.data.resetAt)
+        usage = { ...currentUsage(usage, now, quotaAnchor), requests: body.data.requests, ...(quotaAnchor === undefined ? {} : { anchor: quotaAnchor }) }
+        await usageStore?.save(usage)
+        log().info({ usage }, 'Automower usage realigned on the developer portal')
+        return status()
+      })
+
       /** Le journal d'un robot tel que le fabricant le rend (une requête, comptée). */
       app.get<{ Params: { id: string } }>('/raw/messages/:id', async (req, reply) => {
         if (!configured() || !client) return reply.code(409).send({ error: 'Automower: no application key or secret' })
