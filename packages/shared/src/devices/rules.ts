@@ -119,5 +119,7 @@ export function defaultState(kind: DeviceKind, now = 0): DeviceState {
     // sans `locked` : tous les constructeurs ne le disent pas, inconnu n'est pas Â« verrouille Â»
     case 'vehicle': return { kind, ...base, soc: 0, rangeKm: 0, pluggedIn: false, charging: false }
     case 'camera': return { kind, ...base }
+    // indisponible ET vide de sens : ces valeurs ne s'affichent jamais, `available: false` les grise
+    case 'weather': return { kind, ...base, condition: 'clear', tempC: 0, humidity: 0, windKmh: 0, windDirDeg: 0, cloudCover: 0, isDay: true, sunrise: 0, sunset: 0, observedAt: 0 }
   }
 }

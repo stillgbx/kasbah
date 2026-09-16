@@ -1,9 +1,9 @@
-import { DEFAULT_PLUGIN_SETTINGS, parseDeviceId, parseSceneId, type Command, type PluginHealth, type PluginInfo, type PluginSettings, type SceneRecall, type SceneUpdate } from '@kasbah/shared'
+import { DEFAULT_PLUGIN_SETTINGS, parseDeviceId, parseSceneId, type Command, type PluginHealth, type PluginInfo, type PluginSettings, type SceneRecall, type SceneUpdate, type WeatherForecast } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import type { Logger } from 'pino'
 import type { Bus } from './bus'
 import type { Clock } from './clock'
-import { PluginError, type DevicePlugin, type PluginContext, type PluginFactory } from './plugin'
+import { PluginError, type DevicePlugin, type PluginContext, type PluginFactory, type PluginSite } from './plugin'
 import { withTimeout } from './poll'
 import type { DeviceRegistry } from './registry'
 import type { SceneRegistry } from './scene-registry'
@@ -13,6 +13,8 @@ import type { SceneRegistry } from './scene-registry'
 // panne ne fait jamais tomber la maison), arrêt propre.
 
 export interface PluginHostOptions {
+  /** Position de la maison (`house.origin`), donnée aux plugins par `ctx.site`. Relue à chaque démarrage de plugin. */
+  site: () => PluginSite
   /** Réglages du plugin dans la maison courante. Relu à chaque fois : house.json peut changer. */
   settingsOf: (pluginId: string) => PluginSettings
   strict: boolean
@@ -93,6 +95,7 @@ export class PluginHost {
       emitSceneState: (externalId, active) => { scenes.setActive(`${id}:${externalId}`, active) },
       emitEvent: (externalId, event) => { this.opts.bus.emit('deviceEvent', `${id}:${externalId}`, event, this.opts.clock.now()) },
       parts: this.resolveParts(id, slot),
+      site: this.opts.site(),
     }
   }
 
@@ -172,6 +175,16 @@ export class PluginHost {
     const slot = this.slots.get(pluginId)
     if (!slot || !slot.ctx) throw new PluginError('DEVICE_UNAVAILABLE', `plugin "${pluginId}" is not running`)
     await withTimeout(slot.plugin.execute(externalId, command), this.opts.commandTimeoutMs ?? 10_000, this.opts.clock, `command ${command.type}`)
+  }
+
+  /** Prévisions d'un appareil `weather` ; `NOT_IMPLEMENTED` si son plugin n'en sert pas. */
+  async forecast(deviceId: string): Promise<WeatherForecast> {
+    const { pluginId, externalId } = parseDeviceId(deviceId)
+    const slot = this.slots.get(pluginId)
+    if (!slot || !slot.ctx) throw new PluginError('DEVICE_UNAVAILABLE', `plugin "${pluginId}" is not running`)
+    if (!slot.plugin.forecast) throw new PluginError('NOT_IMPLEMENTED', `plugin "${pluginId}" has no forecast`)
+    const f = await withTimeout(slot.plugin.forecast(externalId), this.opts.commandTimeoutMs ?? 10_000, this.opts.clock, `forecast ${deviceId}`)
+    return { deviceId, ...f }
   }
 
   async recallScene(sceneId: string, recall: SceneRecall): Promise<void> {

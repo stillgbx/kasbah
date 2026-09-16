@@ -101,7 +101,7 @@ async function started(over: {
     config: enphaseConfigSchema.parse({ ENPHASE_HOST: HOST, ...over.env }),
     logger: pino({ level: 'silent' }), clock, signal: new AbortController().signal,
     emitState: vi.fn(), setAvailable: vi.fn(), emitDevices: vi.fn(), emitScenes: vi.fn(), emitSceneState: vi.fn(), emitEvent: vi.fn(),
-    parts: {},
+    parts: {}, site: { lat: 47.3, lon: 5.05, alt: 180 },
   }
   await plugin.init(ctx)
   const app = Fastify()

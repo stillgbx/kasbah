@@ -135,7 +135,7 @@ async function setup(over: { env?: Record<string, string>; session?: StoredSessi
     logger: pino({ level: 'silent' }), clock, signal: new AbortController().signal,
     emitState: vi.fn(), setAvailable: vi.fn(), emitDevices: vi.fn(), emitScenes: vi.fn(), emitSceneState: vi.fn(), emitEvent: vi.fn(),
     // l'hôte applique les défauts des `parts` ; ici on les donne, le réveil étant coché par défaut
-    parts: over.parts ?? { charge_wake: true },
+    parts: over.parts ?? { charge_wake: true }, site: { lat: 47.3, lon: 5.05, alt: 180 },
   }
   await plugin.init(ctx)
   const app = Fastify()

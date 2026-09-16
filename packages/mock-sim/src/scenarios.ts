@@ -8,6 +8,7 @@ import { mower, vacuum } from './behaviours/robots'
 import { sensors } from './behaviours/sensor'
 import { energySite, solarPanel } from './behaviours/energy'
 import { evCharger, vehicle } from './behaviours/ev'
+import { weather } from './behaviours/weather'
 
 // Scénarios : `default` reproduit la maison démo (ids stables liés dans house/demo-house.json),
 // `empty` teste le rendu sans appareil, `chaos` exerce les erreurs/indisponibilités, `winter`
@@ -38,6 +39,7 @@ function defaultDevices(opts: { winter?: boolean } = {}) {
     mower('mower-automower', { name: 'Tondeuse', area: [-1, 12, 26, 22], dock: [12, 16], schedule: opts.winter ? null : undefined }),
     sensors.indoorTemp('sensor-bedroom1-temp', 'Température chambre 1', opts.winter ? 18.5 : 21),
     sensors.outdoorTemp('sensor-outdoor-temp', 'Température extérieure'),
+    weather('weather', { name: 'Météo' }),
     sensors.poolTemp('sensor-pool-temp', 'Température piscine'),
     sensors.filtrationPressure('sensor-filtration-pressure', 'Pression filtration'),
     vehicle('vehicle-tesla', { name: 'Tesla', manufacturer: 'Tesla', model: 'Model Y', batteryKwh: 75, rangeKmFull: 450, home: HOME, work: WORK, soc: 68, chargeLimit: 80 }),

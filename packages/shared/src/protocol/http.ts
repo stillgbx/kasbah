@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { WEATHER_CONDITIONS } from '../devices/kinds'
 import { deviceEntrySchema } from './ws'
 import { pluginSceneEntrySchema } from '../scenes/scene'
 
@@ -84,3 +85,43 @@ export const energyHistoryPointSchema = z.object({
 export const energyHistorySchema = z.object({ deviceId: z.string(), points: z.array(energyHistoryPointSchema) })
 export type EnergyHistoryPoint = z.infer<typeof energyHistoryPointSchema>
 export type EnergyHistory = z.infer<typeof energyHistorySchema>
+
+/**
+ * Prévisions d'un appareil `weather`, servies À LA DEMANDE (`GET /api/devices/:id/forecast`) et non
+ * poussées : plusieurs Ko qui changent à chaque sondage n'ont rien à faire sur le WebSocket d'une
+ * tablette qui n'a pas la vue Météo ouverte — même arbitrage que l'historique énergie. Deux
+ * granularités, chacune bornée : l'horaire pour la journée qui vient, le quotidien pour la semaine.
+ * Les pourcentages sont sur 100, comme dans l'état.
+ */
+export const weatherHourlyPointSchema = z.object({
+  /** Début de l'heure (ms epoch). */
+  t: z.number(),
+  condition: z.enum(WEATHER_CONDITIONS),
+  tempC: z.number(),
+  precipMm: z.number().min(0),
+  precipProbability: z.number().min(0).max(100).optional(),
+  windKmh: z.number().min(0),
+  isDay: z.boolean(),
+})
+export const weatherDailyPointSchema = z.object({
+  /** Minuit local du jour (ms epoch). */
+  t: z.number(),
+  condition: z.enum(WEATHER_CONDITIONS),
+  minC: z.number(),
+  maxC: z.number(),
+  precipMm: z.number().min(0),
+  precipProbability: z.number().min(0).max(100).optional(),
+  uvIndexMax: z.number().min(0).optional(),
+  sunrise: z.number().int(),
+  sunset: z.number().int(),
+})
+export const weatherForecastSchema = z.object({
+  deviceId: z.string(),
+  /** Heure du run ou du sondage dont ces prévisions sortent (ms epoch). */
+  issuedAt: z.number(),
+  hourly: z.array(weatherHourlyPointSchema),
+  daily: z.array(weatherDailyPointSchema),
+})
+export type WeatherHourlyPoint = z.infer<typeof weatherHourlyPointSchema>
+export type WeatherDailyPoint = z.infer<typeof weatherDailyPointSchema>
+export type WeatherForecast = z.infer<typeof weatherForecastSchema>

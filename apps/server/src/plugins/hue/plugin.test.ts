@@ -53,7 +53,7 @@ function fakeContext(config: Record<string, unknown>, clock: ManualClock) {
   const ctx: PluginContext = {
     pluginId: 'hue', config, logger: pino({ level: 'silent' }), clock, signal: ctrl.signal,
     emitState: vi.fn(), setAvailable: vi.fn(), emitDevices: vi.fn(), emitScenes: vi.fn(), emitSceneState: vi.fn(), emitEvent: vi.fn(),
-    parts: {},
+    parts: {}, site: { lat: 47.3, lon: 5.05, alt: 180 },
   }
   return { ctx, ctrl }
 }

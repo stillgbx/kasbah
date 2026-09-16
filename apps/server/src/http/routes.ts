@@ -99,6 +99,14 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
     return { deviceId: entry.descriptor.id, points: deps.history.points(entry.descriptor.id, hours) }
   })
 
+  // Prévisions météo : à la demande, comme l'historique — le plugin rend sa dernière lecture.
+  app.get<{ Params: { id: string } }>('/api/devices/:id/forecast', async (req, reply) => {
+    const entry = deps.registry.get(req.params.id)
+    if (!entry) return sendError(reply, 404, 'NOT_FOUND', `unknown device "${req.params.id}"`)
+    if (entry.descriptor.kind !== 'weather') return sendError(reply, 400, 'KIND_MISMATCH', `device "${req.params.id}" is not a weather device`)
+    return deps.host.forecast(entry.descriptor.id)
+  })
+
   // Scènes des fabricants : lecture, puis rappel. Comme pour les commandes, l'état résultant
   // (quelle scène est active) arrive par le WebSocket, pas dans la réponse.
   app.get('/api/scenes', async () => ({ scenes: deps.scenes.list() }))

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { CLIMATE_MODES, type DeviceKind } from './kinds'
+import { AQI_LEVELS, CLIMATE_MODES, POLLEN_TYPES, WEATHER_CONDITIONS, type DeviceKind } from './kinds'
 
 // État courant d'un appareil, discriminé par `kind`. `updatedAt` est posé par le serveur
 // (jamais par un plugin) ; `available:false` conserve les dernières valeurs connues
@@ -221,10 +221,51 @@ export const cameraStateSchema = z.object({
   kind: z.literal('camera'), ...base,
 })
 
+/**
+ * La météo AU-DESSUS de la maison, maintenant. Un seul appareil par plugin (sa position est
+ * `house.origin`), en lecture seule comme une caméra. Ce qui est ici est ce que le widget, la scène
+ * 3D et une future routine ont besoin de savoir SANS rien demander : les prévisions, plus lourdes et
+ * qui changent à chaque sondage, se lisent à la demande (`GET /api/devices/:id/forecast`).
+ *
+ * Les champs OPTIONNELS sont ceux qu'un fournisseur peut ne pas avoir ; absent = il ne le dit pas,
+ * jamais un zéro. Les pourcentages sont sur 100 comme partout ailleurs dans le contrat
+ * (`climate.humidity`) — la scène 3D, qui pense en 0-1, convertit.
+ */
+export const weatherStateSchema = z.object({
+  kind: z.literal('weather'), ...base,
+  condition: z.enum(WEATHER_CONDITIONS),
+  tempC: z.number(),
+  feelsLikeC: z.number().optional(),
+  dewPointC: z.number().optional(),
+  humidity: pct,
+  pressureHpa: z.number().optional(),
+  windKmh: z.number().min(0),
+  windGustKmh: z.number().min(0).optional(),
+  /** D'où vient le vent (degrés, 0 = nord, sens horaire). */
+  windDirDeg: z.number().min(0).max(360),
+  cloudCover: pct,
+  /** Précipitations de l'heure écoulée (mm). */
+  precipMm: z.number().min(0).optional(),
+  precipProbability: pct.optional(),
+  visibilityM: z.number().min(0).optional(),
+  uvIndex: z.number().min(0).optional(),
+  isDay: z.boolean(),
+  /** Lever et coucher du JOUR COURANT (ms epoch) : ce qu'une routine « avant le coucher » attend. */
+  sunrise: z.number().int(),
+  sunset: z.number().int(),
+  /** Indice européen de qualité de l'air (0-20 bon … >100 extrêmement mauvais) et son palier. */
+  aqi: z.number().min(0).optional(),
+  aqiLevel: z.enum(AQI_LEVELS).optional(),
+  /** Niveau par pollen, 0 (nul) à 4 (très élevé). Absent = ce fournisseur ne suit pas les pollens. */
+  pollen: z.partialRecord(z.enum(POLLEN_TYPES), z.number().int().min(0).max(4)).optional(),
+  /** Heure de l'observation ou du pas de modèle (ms epoch), distincte d'`updatedAt` (heure du sondage). */
+  observedAt: z.number().int(),
+})
+
 export const deviceStateSchema = z.discriminatedUnion('kind', [
   lightStateSchema, coverStateSchema, mediaPlayerStateSchema, climateStateSchema, vacuumStateSchema,
   mowerStateSchema, sensorStateSchema, energyStateSchema, evChargerStateSchema, vehicleStateSchema,
-  cameraStateSchema,
+  cameraStateSchema, weatherStateSchema,
 ])
 export type DeviceState = z.infer<typeof deviceStateSchema>
 export type StateFor<K extends DeviceKind> = Extract<DeviceState, { kind: K }>

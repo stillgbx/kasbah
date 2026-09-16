@@ -141,3 +141,24 @@ describe('estimateChargePowerW', () => {
     expect(estimateChargePowerW(charging({ soc: 20, chargeMinutesRemaining: 5 }), 52)).toBeUndefined()
   })
 })
+
+describe('weather kind', () => {
+  it('has a complete default state that the schema accepts', () => {
+    expect(deviceStateSchema.safeParse(defaultState('weather', 1)).success).toBe(true)
+  })
+  it('accepts a full observation and rejects a foreign condition', () => {
+    const state: StateFor<'weather'> = {
+      kind: 'weather', updatedAt: 1, available: true, condition: 'rain', tempC: 12.4, feelsLikeC: 10.1, humidity: 88,
+      pressureHpa: 1008, windKmh: 22, windGustKmh: 41, windDirDeg: 250, cloudCover: 95, precipMm: 1.2, precipProbability: 80,
+      visibilityM: 6000, uvIndex: 1, isDay: true, sunrise: 1, sunset: 2, aqi: 32, aqiLevel: 'fair', pollen: { grass: 2 }, observedAt: 1,
+    }
+    expect(deviceStateSchema.safeParse(state).success).toBe(true)
+    expect(deviceStateSchema.safeParse({ ...state, condition: 'hail' }).success).toBe(false)
+  })
+  it('only allows its own capabilities', () => {
+    const d: DeviceDescriptor = { id: 'open_meteo:home', pluginId: 'open_meteo', externalId: 'home', kind: 'weather', name: 'Météo',
+      capabilities: ['forecast', 'air_quality', 'pollen'], meta: { weather: { attribution: 'Open-Meteo' } } }
+    expect(deviceDescriptorSchema.safeParse(d).success).toBe(true)
+    expect(deviceDescriptorSchema.safeParse({ ...d, capabilities: ['measure'] }).success).toBe(false)
+  })
+})

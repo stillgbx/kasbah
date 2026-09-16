@@ -94,7 +94,7 @@ function fakeContext(clock: ManualClock, config: Record<string, string> = {}) {
     // l'active en injectant de faux catalogues.
     pluginId: 'google_cast', config: googleCastConfigSchema.parse({ CAST_DISCOVERY_WAIT_MS: '1000', CAST_KNOWN_FILE: '', CAST_COVER_LOOKUP: 'false', ...config }), logger: pino({ level: 'silent' }), clock, signal: ctrl.signal,
     emitState: vi.fn(), setAvailable: vi.fn(), emitDevices: vi.fn(), emitScenes: vi.fn(), emitSceneState: vi.fn(), emitEvent: vi.fn(),
-    parts: {},
+    parts: {}, site: { lat: 47.3, lon: 5.05, alt: 180 },
   }
   return { ctx, ctrl }
 }

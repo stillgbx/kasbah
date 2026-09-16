@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deviceStateSchema, type StateFor, type StatePatch } from '@kasbah/shared'
+import { deviceStateSchema, weatherForecastSchema, type StateFor, type StatePatch } from '@kasbah/shared'
 import { ManualClock } from './clock'
 import { Simulation } from './simulation'
 import { SimError } from './types'
@@ -164,5 +164,35 @@ describe('Simulation', () => {
     clock.advance(60_000)                                   // 1 min réelle = 1 h simulée
     expect(sim.simTime()).toBeCloseTo(MONDAY + 3_600_000, -2)
     sim.stop()
+  })
+})
+
+describe('simulated weather', () => {
+  it('publishes a valid weather state that follows the world', () => {
+    const sim = make()
+    const s = sim.getState('weather') as StateFor<'weather'>
+    expect(s.kind).toBe('weather')
+    expect(deviceStateSchema.parse(s)).toEqual(s)
+    // lundi 7 septembre, minuit locale : nuit, et le lever/coucher du monde simulé encadrent la journée
+    expect(s.isDay).toBe(false)
+    expect(s.sunrise).toBe(MONDAY + 6 * 3_600_000)
+    expect(s.sunset).toBe(MONDAY + 20 * 3_600_000)
+    expect(s.pollen).toMatchObject({ ragweed: 3 })          // septembre : l'ambroisie
+    sim.tick(13 * 3600)
+    const noon = sim.getState('weather') as StateFor<'weather'>
+    expect(noon.isDay).toBe(true)
+    expect(noon.tempC).toBeGreaterThan(s.tempC)
+    expect(deviceStateSchema.parse(noon)).toEqual(noon)
+  })
+
+  it('derives a forecast that the shared schema accepts, and refuses one for other kinds', () => {
+    const sim = make()
+    const f = sim.forecast('weather')
+    expect(f.hourly).toHaveLength(24)
+    expect(f.daily).toHaveLength(7)
+    expect(f.hourly[0]!.t).toBeGreaterThanOrEqual(MONDAY)
+    expect(f.daily[0]!.t).toBe(MONDAY)
+    expect(weatherForecastSchema.parse({ deviceId: 'mock:weather', ...f })).toBeTruthy()
+    expect(() => sim.forecast('light-living')).toThrow(SimError)
   })
 })

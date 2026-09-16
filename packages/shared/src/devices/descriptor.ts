@@ -62,6 +62,12 @@ export const deviceMetaSchema = z.object({
    * fait foi, il n'y a rien à oublier.
    */
   forgettable: z.boolean().optional(),
+  /**
+   * D'où vient la météo (kind `weather`). `attribution` est OBLIGATOIRE : les données libres
+   * (Open-Meteo, CC BY 4.0) exigent d'être créditées, et c'est l'UI qui l'affiche — le plugin ne
+   * fait que le dire. `model` : le modèle numérique derrière les chiffres (« AROME France HD »).
+   */
+  weather: z.object({ attribution: z.string().min(1), model: z.string().optional() }).optional(),
 })
 export type DeviceMeta = z.infer<typeof deviceMetaSchema>
 

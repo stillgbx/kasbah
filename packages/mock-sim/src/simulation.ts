@@ -3,7 +3,7 @@ import { shallowEqual } from '@kasbah/shared'
 import { systemClock, type Clock } from './clock'
 import { mulberry32, type Rng } from './rng'
 import { resolveScenario, type ScenarioName } from './scenarios'
-import { SimError, type AnySimDevice, type Scenario, type TickCtx } from './types'
+import { SimError, type AnySimDevice, type Scenario, type SimForecast, type TickCtx } from './types'
 import { createWorld, tickWorld, type World } from './world'
 
 export interface SimulationOptions {
@@ -146,6 +146,14 @@ export class Simulation {
     if (!apply) throw new SimError('UNSUPPORTED_COMMAND', `${dev.descriptor.kind} accepts no command`)
     apply(cmd, this.ctx(0))
     this.emitDiff(dev)
+  }
+
+  /** Prévisions d'un appareil météo simulé, à l'heure simulée courante. */
+  forecast(externalId: string): SimForecast {
+    const dev = this.byId.get(externalId)
+    if (!dev) throw new SimError('DEVICE_UNAVAILABLE', `unknown mock device "${externalId}"`)
+    if (!dev.forecast) throw new SimError('UNSUPPORTED_COMMAND', `${dev.descriptor.kind} has no forecast`)
+    return dev.forecast(this.ctx(0))
   }
 
   private delay(ms: number): Promise<void> {

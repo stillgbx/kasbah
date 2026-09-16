@@ -1,4 +1,4 @@
-import type { Command, DeviceDescriptor, DeviceEventKind, PluginHealth, PluginScene, SceneActivation, SceneRecall, SceneUpdate, StatePatch } from '@kasbah/shared'
+import type { Command, DeviceDescriptor, DeviceEventKind, PluginHealth, PluginScene, SceneActivation, SceneRecall, SceneUpdate, StatePatch, WeatherForecast } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import type { Logger } from 'pino'
 import type { z } from 'zod'
@@ -39,7 +39,23 @@ export interface PluginContext {
   emitEvent(externalId: string, event: DeviceEventKind): void
   /** Sous-items retenus pour cette maison, par id de `DevicePlugin.parts` (défauts déjà appliqués). */
   parts: Record<string, boolean>
+  /**
+   * Où EST la maison (`house.origin`), pour ce qui dépend du lieu : la météo au-dessus du toit. Un
+   * plugin ne va jamais chercher la maison lui-même, comme pour `parts` — c'est l'hôte qui lui donne
+   * la seule source de vérité, celle dont la scène 3D tire déjà son soleil.
+   */
+  site: PluginSite
 }
+
+export interface PluginSite {
+  lat: number
+  lon: number
+  /** Altitude (m), 0 si la maison ne la dit pas. */
+  alt: number
+}
+
+/** Prévisions telles qu'un plugin les rend : l'hôte y ajoute le `deviceId` (voir `weatherForecastSchema`). */
+export type PluginForecast = Omit<WeatherForecast, 'deviceId'>
 
 /**
  * Sous-item activable d'un plugin : une part de ce qu'il fournit, qu'on peut vouloir ou non sans
@@ -75,6 +91,12 @@ export interface DevicePlugin {
   createScene?(fromExternalId: string, groupName: string): Promise<void>
   /** Supprime une ambiance CHEZ le fabricant (geste destructif, confirmé côté UI). */
   deleteScene?(externalId: string): Promise<void>
+  /**
+   * Prévisions d'un appareil `weather`, servies À LA DEMANDE (`GET /api/devices/:id/forecast`) et
+   * jamais poussées — même arbitrage que l'historique énergie. Absent = ce plugin n'en a pas
+   * (l'hôte répond `NOT_IMPLEMENTED`). Rendre la dernière réponse du sondage, pas refaire un appel.
+   */
+  forecast?(externalId: string): Promise<PluginForecast>
   stop(): Promise<void>
   /** Routes propres au plugin, montées sous /api/plugins/<id>/. */
   registerRoutes?(app: FastifyInstance): void

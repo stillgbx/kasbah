@@ -91,7 +91,7 @@ describe('activation des plugins (GET /api/plugins, PATCH /api/plugins/:id)', ()
       expect(Object.keys(byId).length).toBeGreaterThan(5)          // tous disponibles, pas seulement les actifs
       expect(byId.mock).toMatchObject({ enabled: true, implemented: true })
       expect(byId.melcloud).toMatchObject({ enabled: false, implemented: false }) // squelette : pas activable
-      expect(byId.mock.parts).toHaveLength(10)
+      expect(byId.mock.parts).toHaveLength(11)
 
       // eteindre la simulation : ses appareils quittent le registre
       expect((await kasbah.app.inject({ method: 'PATCH', url: '/api/plugins/mock', payload: { enabled: false } })).statusCode).toBe(200)
@@ -304,5 +304,23 @@ describe('device placement (PUT /api/house/devices/:id)', () => {
       await kasbah.close()
       await rm(dir, { recursive: true, force: true })
     }
+  })
+})
+
+// Les prévisions se lisent À LA DEMANDE, comme l'historique : le plugin rend sa dernière lecture,
+// l'hôte y met le deviceId, et un appareil qui n'est pas une météo n'en a pas.
+describe('GET /api/devices/:id/forecast', () => {
+  it('serves the simulated forecast for the weather device and refuses other kinds', async () => {
+    const { kasbah } = await makeApp('default')
+    try {
+      const ok = await kasbah.app.inject({ method: 'GET', url: '/api/devices/mock:weather/forecast' })
+      expect(ok.statusCode).toBe(200)
+      const body = ok.json()
+      expect(body.deviceId).toBe('mock:weather')
+      expect(body.hourly).toHaveLength(24)
+      expect(body.daily).toHaveLength(7)
+      expect((await kasbah.app.inject({ method: 'GET', url: '/api/devices/mock:light-living/forecast' })).json().error.code).toBe('KIND_MISMATCH')
+      expect((await kasbah.app.inject({ method: 'GET', url: '/api/devices/mock:nope/forecast' })).statusCode).toBe(404)
+    } finally { await kasbah.close() }
   })
 })

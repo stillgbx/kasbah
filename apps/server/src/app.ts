@@ -65,6 +65,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
   const history = new EnergyHistory(bus, clock)
   const host = new PluginHost({
     settingsOf,
+    site: () => house.house.origin,
     strict: opts.env.KASBAH_STRICT_PLUGINS,
     factories: opts.factories ?? PLUGIN_FACTORIES,
     registry, scenes, bus, clock, logger: opts.logger,
