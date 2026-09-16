@@ -65,7 +65,6 @@ const pollens = computed(() => POLLEN_TYPES.map((type) => ({ type, level: live.v
 const tiles = computed<{ key: string; icon: IconName; value: string; label: string }[]>(() => {
   const s = live.value
   return [
-    { key: 'feels', icon: 'thermostat', value: deg(s?.feelsLikeC), label: t('weather.feelsLike') },
     { key: 'humidity', icon: 'droplet', value: opt(s?.humidity, ' %'), label: t('weather.humidity') },
     { key: 'pressure', icon: 'gauge', value: opt(s?.pressureHpa, ' hPa'), label: t('weather.pressure') },
     { key: 'uv', icon: 'sun', value: opt(s?.uvIndex, '', 'decimal1'), label: t('weather.uv') },
@@ -162,16 +161,21 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
           </div>
         </section>
 
-        <!-- Tuiles : le reste des grandeurs, à taille fixe -->
-        <section class="wx-tiles">
-          <div v-for="tile in tiles" :key="tile.key" class="card card--soft wx-tile">
-            <span class="icon-square" data-on="1"><StrokeIcon :name="tile.icon" :size="18" /></span>
-            <div class="wx-tile__value">{{ tile.value }}</div>
-            <div class="muted small">{{ tile.label }}</div>
+        <!-- Détails : le reste des grandeurs, en liste sobre — une ligne par mesure, hauteur fixe -->
+        <div class="wx-bottom">
+        <section class="card wx-details">
+          <div class="section-label">{{ $t('weather.details') }}</div>
+          <div class="wx-details__rows">
+            <div v-for="tile in tiles" :key="tile.key" class="wx-detail">
+              <StrokeIcon :name="tile.icon" :size="18" class="wx-detail__icon" />
+              <span class="muted wx-detail__label">{{ tile.label }}</span>
+              <span class="wx-detail__value">{{ tile.value }}</span>
+            </div>
           </div>
         </section>
 
         <!-- Air et pollens : seulement si le fournisseur les donne (capacités) -->
+        <div class="wx-side">
         <section v-if="caps.has('air_quality')" class="card wx-air">
           <div class="section-label">{{ $t('weather.airQuality') }}</div>
           <div class="wx-air__body">
@@ -195,16 +199,19 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
             </div>
           </div>
         </section>
+        </div>
+
+        <div class="muted small wx-credit">
+          <template v-if="weather.descriptor.value?.meta.weather">{{ $t('weather.attribution', { source: weather.descriptor.value.meta.weather.attribution }) }}<template v-if="weather.descriptor.value.meta.weather.model"> · {{ $t('weather.model', { model: weather.descriptor.value.meta.weather.model }) }}</template> · </template>
+          {{ $t('weather.radarHint') }} · {{ $t('weather.radarSource') }}
+        </div>
+        </div>
 
         <!-- Radar des précipitations, centré sur la maison -->
         <section class="wx-radar">
           <RainRadar v-if="home" :home="home" />
         </section>
 
-        <div class="muted small wx-credit">
-          <template v-if="weather.descriptor.value?.meta.weather">{{ $t('weather.attribution', { source: weather.descriptor.value.meta.weather.attribution }) }}<template v-if="weather.descriptor.value.meta.weather.model"> · {{ $t('weather.model', { model: weather.descriptor.value.meta.weather.model }) }}</template> · </template>
-          {{ $t('weather.radarHint') }} · {{ $t('weather.radarSource') }}
-        </div>
       </div>
     </div>
   </div>
@@ -216,14 +223,15 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
 .empty { padding: 24px; text-align: center; }
 .small { font-size: 12px; }
 .weather__grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 20px; }
-.weather__grid > section { grid-column: span 12; padding: 18px 20px; min-width: 0; }
+/* les sections de la grille, directes ou dans un bloc transparent (`.wx-side`, `.wx-bottom`) : mêmes marges, même largeur par défaut */
+.weather__grid > section, .wx-side > section, .wx-bottom > section { grid-column: span 12; padding: 18px 20px; min-width: 0; }
 @media (min-width: 760px) {
   .wx-now { grid-column: span 6 !important; } .wx-sun { grid-column: span 6 !important; }
-  .wx-daily, .wx-tiles, .wx-air, .wx-pollen { grid-column: span 6 !important; }
+  .wx-daily, .wx-details, .wx-air, .wx-pollen { grid-column: span 6 !important; }
 }
 @media (min-width: 1100px) {
   .wx-now { grid-column: span 5 !important; } .wx-sun { grid-column: span 4 !important; } .wx-wind { grid-column: span 3 !important; }
-  .wx-daily { grid-column: span 5 !important; } .wx-tiles { grid-column: span 7 !important; }
+  .wx-daily { grid-column: span 7 !important; } .wx-details { grid-column: span 5 !important; }
   .wx-air { grid-column: span 5 !important; } .wx-pollen { grid-column: span 7 !important; }
 }
 /* indisponible : tout reste en place, en grisé */
@@ -264,9 +272,11 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
 .wx-day__track { position: relative; height: 6px; border-radius: 3px; background: var(--line); }
 .wx-day__bar { position: absolute; top: 0; bottom: 0; border-radius: 3px; background: linear-gradient(90deg, var(--cat-media), var(--cat-light)); }
 
-.wx-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px; padding: 0 !important; }
-.wx-tile { padding: 14px; display: grid; gap: 6px; min-height: 104px; align-content: start; }
-.wx-tile__value { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wx-details__rows { display: grid; gap: 4px; margin-top: 10px; }
+.wx-detail { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 10px; height: 32px; }
+.wx-detail__icon { color: var(--muted); }
+.wx-detail__label { font-size: 13px; }
+.wx-detail__value { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 .wx-air { display: flex; flex-direction: column; gap: 14px; }
 .wx-air__body { display: flex; align-items: center; gap: 16px; }
@@ -286,5 +296,43 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
 
 .wx-radar { padding: 0 !important; height: 400px; }
 .wx-radar > * { height: 100%; }
-.wx-credit { grid-column: span 12; text-align: center; }
+/* en flux, le crédit ferme la page (l'`order` le passe derrière le radar malgré sa place dans le DOM) */
+.wx-credit { grid-column: span 12; text-align: center; order: 99; }
+/* en flux, le bloc « bas gauche » est transparent : détails, air, pollens et crédit gardent leur place dans la grille */
+.wx-bottom { display: contents; }
+/* en flux, la colonne air/pollens est transparente : ses deux cartes gardent leur place dans la grille */
+.wx-side { display: contents; }
+
+/* TOUT TIENT SANS DÉFILER : sur un écran large et assez haut (1920 × 945 est le cas visé), la
+   SEMAINE prend le haut à droite, à côté de l'instant et des 24 heures ; la troisième rangée aligne
+   détails, air et pollens à gauche, et le radar ferme la page en bas à droite, dans la hauteur qui
+   reste. Les blocs gardent leurs tailles ; seule la disposition change. Le crédit monte dans
+   l'en-tête pour ne pas coûter une rangée. */
+@media (min-width: 1400px) and (min-height: 820px) {
+  .weather__scroll { display: flex; flex-direction: column; overflow: hidden; gap: 0; }
+  .weather__grid { flex: 1 1 auto; min-height: 0; grid-template-rows: auto auto minmax(0, 1fr); gap: 16px; align-content: start; }
+  .wx-now { grid-column: 1 / 4 !important; grid-row: 1; }
+  .wx-sun { grid-column: 4 / 6 !important; grid-row: 1; }
+  .wx-wind { grid-column: 6 / 8 !important; grid-row: 1; }
+  .wx-hourly { grid-column: 1 / 8 !important; grid-row: 2; }
+  .wx-hourly__strip { grid-template-columns: repeat(24, minmax(36px, 1fr)); gap: 2px; overflow: hidden; padding-bottom: 0; }
+  .wx-hour { min-width: 36px; }
+  .wx-hour__rain { font-size: 11px; }
+  /* la semaine en haut à droite, sur la hauteur des deux premières rangées : ses lignes s'espacent pour la remplir */
+  .wx-daily { grid-column: 8 / 13 !important; grid-row: 1 / 3; min-height: 0; }
+  .wx-daily__rows { gap: 6px; margin-top: 12px; }
+  .wx-day { height: 38px; }
+  /* détails resserrés sur deux colonnes ; air et pollens à leur droite ; les deux blocs de DROITE
+     (semaine, radar) partagent les mêmes colonnes, donc le même bord gauche */
+  .wx-bottom { display: grid; grid-column: 1 / 8; grid-row: 3; grid-template-columns: 2fr 5fr; grid-template-rows: auto minmax(0, 1fr); gap: 16px; align-items: start; min-height: 0; }
+  .wx-details { grid-column: 1 !important; grid-row: 1; }
+  .wx-side { display: grid; grid-column: 2; grid-row: 1; grid-template-columns: 2fr 3fr; gap: 16px; }
+  /* les attributions en bas à gauche, sous les détails : la place y est */
+  .wx-credit { grid-column: 1 / 3; grid-row: 2; align-self: end; text-align: left; order: 0; }
+  .wx-pollen__row { grid-template-columns: 84px auto 1fr; }
+  /* la carte ferme la page : en bas à droite, dans la hauteur qui reste, alignée sur la semaine */
+  .wx-radar { grid-column: 8 / 13 !important; grid-row: 3; height: auto; min-height: 0; }
+  .wx-air { grid-column: auto !important; }
+  .wx-pollen { grid-column: auto !important; }
+}
 </style>

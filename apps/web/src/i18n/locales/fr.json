@@ -305,7 +305,7 @@
     "now": "Maintenant", "feelsLike": "Ressenti", "wind": "Vent", "gusts": "Rafales", "humidity": "Humidité", "pressure": "Pression",
     "uv": "Indice UV", "visibility": "Visibilité", "dewPoint": "Point de rosée", "precip": "Précipitations", "precipProbability": "Risque de pluie",
     "cloudCover": "Nébulosité", "sun": "Soleil", "sunrise": "Lever", "sunset": "Coucher", "dayLength": "Durée du jour",
-    "hourly": "Prochaines 24 heures", "daily": "7 jours", "airQuality": "Qualité de l'air", "pollen": "Pollens", "radar": "Précipitations",
+    "hourly": "Prochaines 24 heures", "daily": "7 jours", "details": "Détails", "airQuality": "Qualité de l'air", "pollen": "Pollens", "radar": "Précipitations",
     "aqi": { "good": "Bon", "fair": "Correct", "moderate": "Moyen", "poor": "Mauvais", "very_poor": "Très mauvais", "extremely_poor": "Extrêmement mauvais" },
     "pollens": { "alder": "Aulne", "birch": "Bouleau", "grass": "Graminées", "mugwort": "Armoise", "olive": "Olivier", "ragweed": "Ambroisie" },
     "pollenLevels": ["Nul", "Faible", "Modéré", "Élevé", "Très élevé"],

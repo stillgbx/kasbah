@@ -12,7 +12,8 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 // prévision de modèle (Open-Meteo, AROME) viendra en seconde passe sur la même carte.
 //
 // Une seule source raster : changer d'image, c'est remplacer ses tuiles (`setTiles`), pas empiler
-// des couches. La frise de temps a une taille fixe quel que soit le nombre d'images.
+// des couches. La frise de temps a une taille fixe quel que soit le nombre d'images. La lecture
+// démarre d'elle-même à l'arrivée sur la vue : une carte de pluie se lit en mouvement.
 
 const props = defineProps<{ home: LatLon }>()
 const { d, t } = useI18n()
@@ -34,6 +35,8 @@ const container = ref<HTMLDivElement | null>(null)
 let map: MlMap | null = null
 let ticker: ReturnType<typeof setInterval> | null = null
 let refresher: ReturnType<typeof setInterval> | null = null
+/** La lecture part toute seule au premier chargement des images ; ensuite, c'est l'utilisateur qui décide. */
+let started = false
 
 const current = computed(() => frames.value[index.value])
 const lastObserved = computed(() => frames.value.reduce((n, f, i) => (f.nowcast ? n : i), 0))
@@ -45,8 +48,9 @@ async function loadFrames(): Promise<void> {
     const j = (await r.json()) as { host: string; radar: { past: { time: number; path: string }[]; nowcast: { time: number; path: string }[] } }
     host.value = j.host
     frames.value = [...j.radar.past.map((f) => ({ ...f, nowcast: false })), ...j.radar.nowcast.map((f) => ({ ...f, nowcast: true }))]
-    if (!playing.value) index.value = lastObserved.value
     failed.value = false
+    if (!started) { started = true; index.value = lastObserved.value; togglePlay() }
+    else if (!playing.value) index.value = lastObserved.value
   } catch { failed.value = true }
 }
 

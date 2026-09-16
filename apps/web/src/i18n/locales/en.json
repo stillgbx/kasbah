@@ -305,7 +305,7 @@
     "now": "Now", "feelsLike": "Feels like", "wind": "Wind", "gusts": "Gusts", "humidity": "Humidity", "pressure": "Pressure",
     "uv": "UV index", "visibility": "Visibility", "dewPoint": "Dew point", "precip": "Precipitation", "precipProbability": "Chance of rain",
     "cloudCover": "Cloud cover", "sun": "Sun", "sunrise": "Sunrise", "sunset": "Sunset", "dayLength": "Day length",
-    "hourly": "Next 24 hours", "daily": "7 days", "airQuality": "Air quality", "pollen": "Pollen", "radar": "Precipitation",
+    "hourly": "Next 24 hours", "daily": "7 days", "details": "Details", "airQuality": "Air quality", "pollen": "Pollen", "radar": "Precipitation",
     "aqi": { "good": "Good", "fair": "Fair", "moderate": "Moderate", "poor": "Poor", "very_poor": "Very poor", "extremely_poor": "Extremely poor" },
     "pollens": { "alder": "Alder", "birch": "Birch", "grass": "Grass", "mugwort": "Mugwort", "olive": "Olive", "ragweed": "Ragweed" },
     "pollenLevels": ["None", "Low", "Moderate", "High", "Very high"],
