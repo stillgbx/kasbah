@@ -36,7 +36,7 @@ function defaultDevices(opts: { winter?: boolean } = {}) {
     mediaPlayer('speaker-kitchen', { name: 'Enceinte cuisine', volume: 45, playing: true }),
     climate('climate-heatpump', { name: 'Pompe à chaleur', mode: opts.winter ? 'heat' : 'auto', targetTempC: opts.winter ? 20.5 : 21, currentTempC: opts.winter ? 19 : 22 }),
     vacuum('vacuum-roomba', { name: 'Aspirateur' }),
-    mower('mower-automower', { name: 'Tondeuse', area: [-1, 12, 26, 22], dock: [12, 16], schedule: opts.winter ? null : undefined }),
+    mower('mower-automower', { name: 'Tondeuse', area: [-1, 12, 26, 22], dock: [12, 16], schedule: opts.winter ? null : undefined, home: HOME }),
     sensors.indoorTemp('sensor-bedroom1-temp', 'Température chambre 1', opts.winter ? 18.5 : 21),
     sensors.outdoorTemp('sensor-outdoor-temp', 'Température extérieure'),
     weather('weather', { name: 'Météo' }),

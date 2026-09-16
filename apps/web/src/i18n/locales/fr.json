@@ -1,6 +1,6 @@
 {
   "app": { "name": "Kasbah" },
-  "nav": { "main": "Navigation", "home": "Maison", "energy": "Énergie", "vehicles": "Véhicules", "weather": "Météo", "settings": "Réglages", "lights": "Lumières", "covers": "Ouvrants", "cameras": "Caméras", "media": "Médias" },
+  "nav": { "main": "Navigation", "home": "Maison", "energy": "Énergie", "vehicles": "Véhicules", "robots": "Robots", "weather": "Météo", "settings": "Réglages", "lights": "Lumières", "covers": "Ouvrants", "cameras": "Caméras", "media": "Médias" },
   "common": {
     "close": "Fermer", "back": "Retour", "retry": "Réessayer", "all": "Tout", "none": "Aucun", "unavailable": "Indisponible",
     "loading": "Chargement de la maison…", "on": "Allumé", "off": "Éteint", "stop": "Stop",
@@ -101,7 +101,20 @@
   },
   "mower": {
     "battery": "Batterie", "nextStart": "Prochain départ {time}", "startFor": "Tondre 1 h",
-    "activities": { "parked": "Au garage", "mowing": "Tonte en cours", "charging": "En charge", "returning": "Rentre", "paused": "En pause", "error": "Erreur" }
+    "activities": { "parked": "À la station", "mowing": "Tonte en cours", "charging": "En charge", "returning": "Rentre", "paused": "En pause", "stopped": "Arrêtée", "error": "Erreur" },
+    "none": "Aucun robot connu",
+    "error": "Erreur {code}",
+    "restrictions": {
+      "none": "Prête", "week_schedule": "Attend son planning", "park_override": "Garée sur consigne", "sensor": "Arrêtée par un capteur (pluie)",
+      "daily_limit": "Limite du jour atteinte", "fota": "Mise à jour en cours", "frost": "Gel : reste au garage", "all_work_areas_completed": "Toutes les zones tondues",
+      "external": "Consigne d'un service externe", "not_applicable": ""
+    },
+    "nextStartLabel": "Prochain départ", "cuttingHeight": "Hauteur de coupe", "cuttingHeightValue": "{h} cm",
+    "connection": "Connexion", "connected": "Connectée", "offline": "Hors ligne", "statusAgo": "statut {ago}",
+    "statistics": "Compteurs", "cuttingTime": "Tonte", "chargingCycles": "Recharges", "collisions": "Collisions", "driveDistance": "Distance",
+    "positionAgo": "Position {ago}", "updatedAgo": "Mis à jour {ago}",
+    "quota": "{used}/{limit} {what}", "quotaRequests": "requêtes Husqvarna ce mois-ci",
+    "offsetHint": "En mètres, dans le repère de la maison (X vers la droite du plan, Y vers le haut). Le robot se déplace sur la carte et dans la scène 3D."
   },
   "energy": {
     "title": "Énergie", "production": "Production", "consumption": "Consommation", "house": "Maison", "grid": "Réseau",

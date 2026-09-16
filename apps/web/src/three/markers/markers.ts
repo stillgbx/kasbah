@@ -805,7 +805,11 @@ export class VehicleMarker extends DeviceMarker {
   }
 }
 
-/** Tondeuse : petit corps orange qui suit la position publiée (lissée). */
+/**
+ * Tondeuse : petit corps orange qui suit la position publiée (lissée). Publiée en LOCAL par la
+ * simulation, en GPS par un vrai robot (Husqvarna) : dans ce cas la scène projette (`ctx.toLocal`),
+ * et un relevé hors du terrain laisse le marqueur où il était.
+ */
 export class MowerMarker extends DeviceMarker {
   private readonly mesh: Mesh
   private readonly mat: MeshStandardMaterial
@@ -823,7 +827,10 @@ export class MowerMarker extends DeviceMarker {
   }
   protected isOn(s: DeviceState): boolean { return s.kind === 'mower' && s.activity === 'mowing' }
   protected onState(state: DeviceState | undefined): void {
-    if (state?.kind === 'mower' && state.position) this.targetXY = state.position
+    if (state?.kind === 'mower') {
+      const xy = state.position ?? (state.location ? this.ctx.toLocal?.(state.location) ?? null : null)
+      if (xy) this.targetXY = xy
+    }
     const active = !!state && state.kind === 'mower' && state.activity === 'mowing'
     if (this.targetXY && !this.moving) {
       this.moving = true

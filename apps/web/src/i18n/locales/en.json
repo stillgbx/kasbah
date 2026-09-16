@@ -1,6 +1,6 @@
 {
   "app": { "name": "Kasbah" },
-  "nav": { "main": "Navigation", "home": "Home", "energy": "Energy", "vehicles": "Vehicles", "weather": "Weather", "settings": "Settings", "lights": "Lights", "covers": "Covers", "cameras": "Cameras", "media": "Media" },
+  "nav": { "main": "Navigation", "home": "Home", "energy": "Energy", "vehicles": "Vehicles", "robots": "Robots", "weather": "Weather", "settings": "Settings", "lights": "Lights", "covers": "Covers", "cameras": "Cameras", "media": "Media" },
   "common": {
     "close": "Close", "back": "Back", "retry": "Retry", "all": "All", "none": "None", "unavailable": "Unavailable",
     "loading": "Loading house…", "on": "On", "off": "Off", "stop": "Stop",
@@ -101,7 +101,20 @@
   },
   "mower": {
     "battery": "Battery", "nextStart": "Next start {time}", "startFor": "Mow for 1 h",
-    "activities": { "parked": "Parked", "mowing": "Mowing", "charging": "Charging", "returning": "Returning", "paused": "Paused", "error": "Error" }
+    "activities": { "parked": "At the station", "mowing": "Mowing", "charging": "Charging", "returning": "Returning", "paused": "Paused", "stopped": "Stopped", "error": "Error" },
+    "none": "No known robot",
+    "error": "Error {code}",
+    "restrictions": {
+      "none": "Ready", "week_schedule": "Waiting for its schedule", "park_override": "Parked on request", "sensor": "Stopped by a sensor (rain)",
+      "daily_limit": "Daily limit reached", "fota": "Updating", "frost": "Frost: staying home", "all_work_areas_completed": "All work areas done",
+      "external": "External service request", "not_applicable": ""
+    },
+    "nextStartLabel": "Next start", "cuttingHeight": "Cutting height", "cuttingHeightValue": "{h} cm",
+    "connection": "Connection", "connected": "Connected", "offline": "Offline", "statusAgo": "status {ago}",
+    "statistics": "Counters", "cuttingTime": "Mowing", "chargingCycles": "Charges", "collisions": "Collisions", "driveDistance": "Distance",
+    "positionAgo": "Position {ago}", "updatedAgo": "Updated {ago}",
+    "quota": "{used}/{limit} {what}", "quotaRequests": "Husqvarna requests this month",
+    "offsetHint": "In metres, in the house frame (X to the right of the plan, Y up). The robot moves on the map and in the 3D scene."
   },
   "energy": {
     "title": "Energy", "production": "Production", "consumption": "Consumption", "house": "Home", "grid": "Grid",

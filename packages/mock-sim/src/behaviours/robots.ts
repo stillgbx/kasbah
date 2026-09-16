@@ -1,3 +1,4 @@
+import { localToGeo } from '@kasbah/shared'
 import { SimError, type SimDevice } from '../types'
 import { clamp, descriptor, inWindow, nextOccurrence, round1 } from './common'
 
@@ -60,6 +61,12 @@ export interface MowerOptions {
   /** Position de la station de charge. */
   dock: [number, number]
   schedule?: { days: number[]; startHour: number; endHour: number } | null
+  /**
+   * Origine GPS de la maison : la simulation publie alors AUSSI une `location`, comme un vrai robot
+   * (Husqvarna), pour que la carte de la vue Robots ait quelque chose à montrer. Repère supposé
+   * plein nord : c'est une simulation, pas un relevé.
+   */
+  home?: { lat: number; lon: number }
 }
 
 export function mower(externalId: string, o: MowerOptions): SimDevice<'mower'> {
@@ -68,9 +75,18 @@ export function mower(externalId: string, o: MowerOptions): SimDevice<'mower'> {
   const [x0, y0, x1, y1] = o.area
   const dev: SimDevice<'mower'> = {
     descriptor: descriptor(externalId, 'mower', o.name, ['mow', 'park', 'battery', 'schedule'], { manufacturer: 'Mock', model: 'Robotic mower' }),
-    state: { kind: 'mower', updatedAt: 0, available: true, activity: 'parked', battery: 100, position: [...o.dock] },
+    state: {
+      kind: 'mower', updatedAt: 0, available: true, activity: 'parked', battery: 100, position: [...o.dock], cuttingHeight: 5,
+      statistics: { cuttingTimeS: 2_694_600, chargingCycles: 412, collisions: 5836, driveDistanceM: 1_638_400 },
+    },
     tick(ctx) {
       const s = dev.state
+      const geo = (xy: [number, number]) => {
+        if (!o.home) return
+        const g = localToGeo({ lat: o.home.lat, lon: o.home.lon, alt: 0, heading: 0 }, [xy[0], xy[1], 0])
+        s.location = { lat: g.lat, lon: g.lon, at: ctx.simTime }
+      }
+      if (!s.location && s.position) geo(s.position)
       const scheduled = !!schedule && schedule.days.includes(ctx.dow) && inWindow(ctx.hour, schedule.startHour, schedule.endHour)
       const wantsMow = (scheduled && !parkedUntilNext) || ctx.simTime < manualUntil
       if (!scheduled) parkedUntilNext = false
@@ -95,6 +111,7 @@ export function mower(externalId: string, o: MowerOptions): SimDevice<'mower'> {
           if (px < x0 || px > x1) { heading = Math.PI - heading; px = clamp(px, x0, x1) }
           if (py < y0 || py > y1) { heading = -heading; py = clamp(py, y0, y1) }
           s.position = [Math.round(px * 100) / 100, Math.round(py * 100) / 100]
+          geo(s.position)
           if (!wantsMow || s.battery <= 20) { s.activity = 'returning'; returningLeftS = 90 }
           break
         }
@@ -103,6 +120,7 @@ export function mower(externalId: string, o: MowerOptions): SimDevice<'mower'> {
           const k = clamp(1 - returningLeftS / 90, 0, 1)
           const [px, py] = s.position ?? o.dock
           s.position = [px + (o.dock[0] - px) * k, py + (o.dock[1] - py) * k]
+          geo(s.position)
           if (returningLeftS <= 0) { s.activity = 'charging'; s.position = [...o.dock] }
           break
         }

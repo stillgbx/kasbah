@@ -764,6 +764,43 @@ describe('véhicule placé par son GPS', () => {
   })
 })
 
+/**
+ * Une tondeuse Husqvarna publie sa position en GPS, pas dans le repère de la maison : elle se pose
+ * comme une voiture (projetée sur le terrain), mais son marqueur SUIT ensuite chaque relevé sans
+ * être reconstruit — en tonte, il en arrive toutes les quelques secondes.
+ */
+describe('tondeuse placée par son GPS', () => {
+  const MOWER = 'automower:c7233734'
+  const descriptor = {
+    id: MOWER, pluginId: 'automower', externalId: 'c7233734', kind: 'mower', name: 'Tondeuse',
+    capabilities: ['mow', 'park', 'battery', 'schedule'], meta: {},
+  } as DeviceDescriptor
+  const house = parseHouse(demo)
+  const stateAt = (xy: [number, number]): DeviceState => {
+    const g = localToGeo(house.origin, [xy[0], xy[1], 0])
+    return { kind: 'mower', updatedAt: 1, available: true, activity: 'mowing', battery: 80, location: { lat: g.lat, lon: g.lon, at: 1 } } as DeviceState
+  }
+
+  it('non déclarée dans la maison, elle apparaît à son relevé ; un relevé suivant ne la reconstruit pas ; hors terrain, elle disparaît', () => {
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true })
+    scene.load(house)
+    scene.setDescriptors({ [MOWER]: descriptor })
+    expect(scene.markers.get(MOWER)).toBeUndefined()
+    scene.updateStates({ [MOWER]: stateAt([12, 16]) })
+    const marker = scene.markers.get(MOWER)!
+    expect(marker).toBeDefined()
+    expect(marker.object.position.x).toBeCloseTo(12, 2)
+    expect(marker.object.position.y).toBeCloseTo(16, 2)
+    // un pas de plus dans le jardin : même marqueur, il suivra par animation
+    scene.updateStates({ [MOWER]: stateAt([14, 17]) })
+    expect(scene.markers.get(MOWER)).toBe(marker)
+    // emportée hors du terrain (au bureau…) : plus rien à dessiner
+    scene.updateStates({ [MOWER]: stateAt([900, 900]) })
+    expect(scene.markers.get(MOWER)).toBeUndefined()
+    scene.dispose()
+  })
+})
+
 describe('coût du rendu', () => {
   /**
    * Chaque passe de niveau REDESSINE tout le bâti : sur une maison de trente pièces, c'est le prix

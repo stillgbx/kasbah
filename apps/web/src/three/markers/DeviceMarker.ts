@@ -38,6 +38,12 @@ export interface MarkerContext {
   loadTexture?: TextureLoad
   /** Chargement des carrosseries 3D d'un véhicule ; injecté par les tests, `GLTFLoader` sinon. */
   loadModel?: ModelLoad
+  /**
+   * Projette un point GPS dans le repère de la maison (x, y en mètres), `null` hors du terrain. C'est
+   * la scène qui sait le faire (origine, cap, décalage de l'appareil) ; un marqueur qui suit une
+   * position publiée en GPS — la tondeuse — s'en sert à chaque relevé, sans reconstruction.
+   */
+  toLocal?: (p: { lat: number; lon: number }) => [number, number] | null
   onTap(key: string): void
   label: string
 }

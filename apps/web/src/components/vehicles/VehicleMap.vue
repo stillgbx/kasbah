@@ -21,6 +21,8 @@ const props = defineProps<{
   home?: LatLon | undefined
   /** Ligne posée en bas de la carte (distance, kilométrage). */
   caption?: string | undefined
+  /** Ce qu'on suit : une voiture (flèche tournée selon son cap) ou une tondeuse (disque, pas de cap). */
+  subject?: 'car' | 'mower' | undefined
 }>()
 
 const settings = useSettingsStore()
@@ -77,13 +79,16 @@ async function applyStyle(): Promise<void> {
   }
 }
 
-function markerEl(kind: 'car' | 'home'): HTMLElement {
+function markerEl(kind: 'car' | 'mower' | 'home'): HTMLElement {
   const el = document.createElement('div')
   el.className = `vmap__marker vmap__marker--${kind}`
-  // flèche de cap pour la voiture (tourne avec `setRotation`), maison fixe
+  // flèche de cap pour la voiture (tourne avec `setRotation`), disque pour la tondeuse (elle ne dit
+  // pas son cap), maison fixe
   el.innerHTML = kind === 'car'
     ? '<svg viewBox="0 0 24 24" width="30" height="30"><path d="M12 2 L19 20 L12 16 L5 20 Z" fill="currentColor" stroke="var(--surface)" stroke-width="1.5" stroke-linejoin="round"/></svg>'
-    : '<svg viewBox="0 0 24 24" width="26" height="26"><path d="M3 11l9-7 9 7v9H3zM9 20v-6h6v6" fill="var(--surface)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>'
+    : kind === 'mower'
+      ? '<svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="7" fill="currentColor" stroke="var(--surface)" stroke-width="2.5"/></svg>'
+      : '<svg viewBox="0 0 24 24" width="26" height="26"><path d="M3 11l9-7 9 7v9H3zM9 20v-6h6v6" fill="var(--surface)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>'
   return el
 }
 
@@ -120,7 +125,7 @@ function placeMarkers(): void {
   // la position AVANT `addTo` : MapLibre projette le marqueur en l'ajoutant, sans position il plante
   if (props.location) {
     const at: [number, number] = [props.location.lon, props.location.lat]
-    carMarker ??= new Marker({ element: markerEl('car'), rotationAlignment: 'map', pitchAlignment: 'map' }).setLngLat(at).addTo(map)
+    carMarker ??= new Marker({ element: markerEl(props.subject ?? 'car'), rotationAlignment: 'map', pitchAlignment: 'map' }).setLngLat(at).addTo(map)
     carMarker.setLngLat(at)
     carMarker.setRotation(props.headingDeg === undefined ? 0 : normalizeHeading(props.headingDeg))
   } else if (carMarker) { carMarker.remove(); carMarker = null }
@@ -231,7 +236,7 @@ watch(full, (f) => { if (f) window.addEventListener('keydown', onKey); else wind
 .vmap__empty { position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; z-index: 1; pointer-events: none; }
 /* marqueurs : couleur de l'accent pour la voiture, du texte pour la maison ; l'ombre les détache du satellite */
 :global(.vmap__marker) { display: grid; place-items: center; filter: drop-shadow(0 1px 2px rgb(0 0 0 / .4)); }
-:global(.vmap__marker--car) { color: var(--accent); }
+:global(.vmap__marker--car), :global(.vmap__marker--mower) { color: var(--accent); }
 :global(.vmap__marker--home) { color: var(--text); }
 /* les boutons natifs de MapLibre suivent les jetons du thème */
 :global(.vmap .maplibregl-ctrl-group) { background: var(--surface); border-radius: 10px; box-shadow: 0 1px 4px rgb(0 0 0 / .15); }

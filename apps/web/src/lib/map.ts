@@ -1,5 +1,5 @@
 import type { LayerSpecification, StyleSpecification } from 'maplibre-gl'
-import { geoDistance } from '@kasbah/shared'
+import { geoDistance, geoToLocal, localToGeo } from '@kasbah/shared'
 
 // La carte du véhicule : ce qui se décide SANS le moteur de rendu (testable), le composant
 // `VehicleMap.vue` ne faisant qu'appliquer. Assemblage entièrement libre, sans compte ni clé :
@@ -124,6 +124,17 @@ export function quotaPercent(used: number, limit: number): number {
 
 /** Au-delà, la jauge passe en teinte d'alerte : le quota du jour touche à sa fin. */
 export const QUOTA_TENSE_PCT = 80
+
+/**
+ * Le point GPS d'un appareil CORRIGÉ du décalage réglé dans la maison (`gpsOffset`, en mètres dans le
+ * repère de la maison, donc tourné de son cap). La scène 3D l'applique déjà (`sitePosition`) ; la
+ * carte doit montrer la même place, sinon on règle l'un en regardant l'autre.
+ */
+export function offsetLocation(origin: { lat: number; lon: number; alt: number; heading: number }, p: LatLon, offset: [number, number]): LatLon {
+  const [x, y] = geoToLocal(origin, p)
+  const g = localToGeo(origin, [x + offset[0], y + offset[1], 0])
+  return { lat: g.lat, lon: g.lon }
+}
 
 /** Cap normalisé dans [0, 360[ ; Tesla donne 0 = nord, sens horaire, comme MapLibre. */
 export function normalizeHeading(deg: number): number {

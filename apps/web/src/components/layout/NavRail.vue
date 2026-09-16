@@ -25,6 +25,7 @@ const items: { name: string; icon: IconName; label: string }[] = [
   { name: 'cameras', icon: 'camera', label: 'nav.cameras' },
   { name: 'energy', icon: 'bolt', label: 'nav.energy' },
   { name: 'vehicles', icon: 'vehicle', label: 'nav.vehicles' },
+  { name: 'robots', icon: 'mower', label: 'nav.robots' },
   { name: 'settings', icon: 'gear', label: 'nav.settings' },
 ]
 const APPEARANCE_ICON: Record<string, IconName> = { light: 'sun', dark: 'moon', system: 'auto', auto: 'sunHorizon' }

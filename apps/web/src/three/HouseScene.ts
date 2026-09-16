@@ -418,7 +418,8 @@ export class HouseScene {
   private effectivePosition(device: HouseDevice): Vec3 | null {
     if (device.position) return device.position
     const state = device.deviceId ? this.states[device.deviceId] : undefined
-    if (state?.kind !== 'vehicle' || !state.location || !this.house) return null
+    // un véhicule, ou une tondeuse qui publie sa position en GPS (Husqvarna) : même projection
+    if ((state?.kind !== 'vehicle' && state?.kind !== 'mower') || !state.location || !this.house) return null
     return sitePosition(this.house, state.location, device.gpsOffset)
   }
 
@@ -465,7 +466,12 @@ export class HouseScene {
    * voiture qui se gare tourne parfois sans changer de place au mètre près.
    */
   private vehicleFix(state: DeviceState | undefined): string {
-    return state?.kind === 'vehicle' && state.location ? `${state.location.lat},${state.location.lon},${state.headingDeg ?? ''}` : ''
+    if (state?.kind === 'vehicle' && state.location) return `${state.location.lat},${state.location.lon},${state.headingDeg ?? ''}`
+    // une tondeuse publie sa position toutes les quelques secondes en tonte : reconstruire à chaque
+    // relevé serait trop cher, et inutile — son marqueur SUIT la position (`MowerMarker`). Ce qui
+    // compte ici, c'est seulement qu'elle entre sur le terrain ou en sorte
+    if (state?.kind === 'mower' && state.location && this.house) return sitePosition(this.house, state.location) ? 'in' : 'out'
+    return ''
   }
 
   /**
@@ -484,8 +490,9 @@ export class HouseScene {
     const known = new Set(devices.map((d) => d.deviceId).filter((id): id is string => !!id))
     const strays: HouseDevice[] = []
     for (const [deviceId, descriptor] of this.descriptors) {
-      if (descriptor.kind !== 'vehicle' || known.has(deviceId)) continue
-      strays.push({ id: deviceId, deviceId, kind: 'vehicle', meta: {} })
+      // une tondeuse non déclarée apparaît de même, si elle publie un GPS (`effectivePosition` tranche)
+      if ((descriptor.kind !== 'vehicle' && descriptor.kind !== 'mower') || known.has(deviceId)) continue
+      strays.push({ id: deviceId, deviceId, kind: descriptor.kind, meta: {} })
     }
     return [...devices, ...strays]
   }
@@ -508,12 +515,14 @@ export class HouseScene {
       const levelNodes = levelId ? this.nodes.levels.get(levelId) : undefined
       const parent = levelNodes ? levelNodes.markers : this.nodes.outdoorMarkers
       const opening = device.openingId ? openings.get(device.openingId) : undefined
+      const house = this.house
       const marker = createMarker(device, {
         materials: this.materials, theme: this.theme, glow: this.look.glow, outdoor: !levelNodes, descriptor, ...(opening ? { opening } : {}),
         addAnimation: (a) => this.loop.addAnimation(a),
         invalidate: () => this.loop.invalidate(),
         onTap: (key) => this.emit('deviceTap', key),
         label: device.name ?? descriptor?.name ?? device.id,
+        toLocal: (p) => { const xyz = sitePosition(house, p, d.gpsOffset); return xyz ? [xyz[0], xyz[1]] : null },
       }, (state) => this.isAtHome(state))
       marker.object.position.set(device.position[0], device.position[1], this.localZ(device, device.position[2]))
       parent.add(marker.object)

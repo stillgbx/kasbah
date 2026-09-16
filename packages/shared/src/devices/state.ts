@@ -95,15 +95,51 @@ export const vacuumStateSchema = z.object({
   errorMessage: z.string().optional(),
 })
 
-export const MOWER_ACTIVITIES = ['parked', 'mowing', 'charging', 'returning', 'paused', 'error'] as const
+/** `stopped` : arrêté là où il est (bouton STOP, arrêt dans le jardin, robot éteint) — ni garé, ni en pause. */
+export const MOWER_ACTIVITIES = ['parked', 'mowing', 'charging', 'returning', 'paused', 'stopped', 'error'] as const
+/**
+ * Pourquoi la tondeuse ne tond pas alors qu'elle pourrait (Husqvarna `restrictedReason`) : le
+ * planning, une consigne de parquer, un capteur (pluie), la limite journalière, une mise à jour, le
+ * gel, toutes les zones faites, une consigne externe. Absent = le fabricant ne le dit pas.
+ */
+export const MOWER_RESTRICTIONS = [
+  'none', 'week_schedule', 'park_override', 'sensor', 'daily_limit', 'fota', 'frost', 'all_work_areas_completed', 'external', 'not_applicable',
+] as const
+export type MowerRestriction = (typeof MOWER_RESTRICTIONS)[number]
 export const mowerStateSchema = z.object({
   kind: z.literal('mower'), ...base,
   activity: z.enum(MOWER_ACTIVITIES),
   battery: pct,
   nextStartAt: z.number().optional(),
   errorMessage: z.string().optional(),
+  /** Code d'erreur du fabricant (Husqvarna en a 160) : ce que le support demande, à côté du texte. */
+  errorCode: z.number().int().optional(),
+  /** Quand l'erreur est survenue. */
+  errorAt: z.number().optional(),
+  restrictedReason: z.enum(MOWER_RESTRICTIONS).optional(),
   /** Position locale (repère maison, mètres) si le robot la publie. */
   position: z.tuple([z.number(), z.number()]).optional(),
+  /**
+   * Position GPS, pour un robot qui la publie ainsi (Husqvarna) : c'est la scène qui la projette sur
+   * le terrain, comme pour un véhicule — le plugin ne connaît pas le repère de la maison. `position`
+   * (locale) prime si les deux sont là.
+   */
+  location: z.object({ lat: z.number(), lon: z.number(), at: z.number() }).optional(),
+  /** Hauteur de coupe en centimètres (1 à 9 chez Husqvarna : c'est ainsi que son appli la nomme). */
+  cuttingHeight: z.number().int().min(1).max(9).optional(),
+  /** Dernier statut REÇU du robot par le fabricant : plus vieux qu'`updatedAt` quand le robot ne parle plus. */
+  statusAt: z.number().optional(),
+  /** Compteurs de vie du robot, tels que le fabricant les tient (secondes, mètres, nombres). */
+  statistics: z.object({
+    cuttingTimeS: z.number().optional(),
+    chargingTimeS: z.number().optional(),
+    runningTimeS: z.number().optional(),
+    searchingTimeS: z.number().optional(),
+    bladeUsageTimeS: z.number().optional(),
+    chargingCycles: z.number().optional(),
+    collisions: z.number().optional(),
+    driveDistanceM: z.number().optional(),
+  }).optional(),
 })
 
 export const sensorStateSchema = z.object({
