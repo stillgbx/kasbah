@@ -23,6 +23,7 @@ const items: { name: string; icon: IconName; label: string }[] = [
   { name: 'media', icon: 'cast', label: 'nav.media' },
   { name: 'energy', icon: 'bolt', label: 'nav.energy' },
   { name: 'vehicles', icon: 'vehicle', label: 'nav.vehicles' },
+  { name: 'weather', icon: 'cloudSun', label: 'nav.weather' },
   { name: 'settings', icon: 'gear', label: 'nav.settings' },
 ]
 const themeIcon = computed<IconName>(() => (settings.appearance === 'light' ? 'sun' : settings.appearance === 'dark' ? 'moon' : 'auto'))

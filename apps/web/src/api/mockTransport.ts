@@ -58,6 +58,13 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
       }
       return { deviceId, points }
     },
+    async getForecast(deviceId) {
+      try { return { deviceId, ...sim.forecast(deviceId.replace(/^mock:/, '')) } }
+      catch (err) {
+        if (err instanceof SimError) throw new ApiRequestError(STATUS[err.code] ?? 500, err.code, err.message)
+        throw err
+      }
+    },
     async placeDevice(id, placement) {
       // même logique que le serveur, en mémoire (rien n'est écrit) ; le message `house` suit comme en réel
       house = parseHouse(placeDeviceInJson(house, id, placement))

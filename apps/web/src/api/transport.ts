@@ -1,4 +1,4 @@
-import type { CommandInput, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, PanelArrayPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, SceneRecallInput, SceneUpdate, ServerMessage } from '@kasbah/shared'
+import type { CommandInput, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, PanelArrayPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast } from '@kasbah/shared'
 
 // Abstraction du canal serveur. Deux implémentations : HTTP + WebSocket (réel) et simulation
 // in-process (tests, démo statique sans serveur). Les commandes passent TOUJOURS par une requête
@@ -83,6 +83,8 @@ export interface Transport {
   getDevices(): Promise<DeviceEntry[]>
   getHealth(): Promise<HealthResponse>
   getHistory(deviceId: string, hours?: number): Promise<EnergyHistory>
+  /** Prévisions d'un appareil `weather`, à la demande (le serveur rend la dernière lecture de son plugin). */
+  getForecast(deviceId: string): Promise<WeatherForecast>
   sendCommand(deviceId: string, command: CommandInput): Promise<void>
   getScenes(): Promise<PluginSceneEntry[]>
   /** Rappelle une scène du fabricant (fixe ou palette animée). */

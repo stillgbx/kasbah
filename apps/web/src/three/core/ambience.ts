@@ -26,6 +26,11 @@ export interface SceneAmbience {
   sunAzimuthDeg: number
   /** Couverture nuageuse, 0 (ciel dégagé) à 1 (couvert). Diffuse la lumière et éteint les ombres. */
   cloudiness: number
+  /**
+   * Visibilité (m) annoncée par la météo. Absente = dégagée. En dessous de quelques kilomètres
+   * (brouillard, forte pluie), la scène pose un brouillard à l'échelle de la maison.
+   */
+  visibilityM?: number
 }
 
 /** Heures figées des modes manuels : une journée franche, un crépuscule bas, une nuit. */
@@ -44,16 +49,29 @@ export interface AmbienceInput {
   /** Origine géographique de la maison (`site.origin`), ou `null` si elle n'est pas géoréférencée. */
   geo?: { lat: number; lon: number } | null
   cloudiness?: number
+  visibilityM?: number
 }
 
-export function resolveAmbience({ mode, date = new Date(), geo = null, cloudiness = 0 }: AmbienceInput): SceneAmbience {
+export function resolveAmbience({ mode, date = new Date(), geo = null, cloudiness = 0, visibilityM }: AmbienceInput): SceneAmbience {
   // Un mode inconnu (réglage écrit à la main, valeur d'une version précédente) ne doit PAS produire
   // une ambiance `NaN` : tout le rendu en dépend — exposition comprise — et une exposition NaN rend
   // une image entièrement noire, sans la moindre erreur en console.
+  const weather = visibilityM === undefined ? { cloudiness } : { cloudiness, visibilityM }
   const fixed = mode === 'auto' ? undefined : FIXED[mode]
-  if (fixed) return { ...fixed, cloudiness }
+  if (fixed) return { ...fixed, ...weather }
   const p = geo ? sunPosition(date, geo.lat, geo.lon) : approximateSunPosition(date)
-  return { sunAltitudeDeg: p.altitudeDeg, sunAzimuthDeg: p.azimuthDeg, cloudiness }
+  return { sunAltitudeDeg: p.altitudeDeg, sunAzimuthDeg: p.azimuthDeg, ...weather }
+}
+
+/**
+ * Portée du brouillard de scène (m), ou `null` s'il n'y a pas lieu d'en poser. La visibilité
+ * météo se compte en kilomètres, la maison en mètres : on la ramène à l'échelle de la scène pour
+ * que 400 m de brouillard réel noient la maison à une trentaine de mètres, et qu'une pluie à 6 km
+ * ne fasse rien — le seuil est celui où l'œil commence à voir l'air.
+ */
+export function fogDistance(a: SceneAmbience): number | null {
+  if (a.visibilityM === undefined || a.visibilityM >= 5000) return null
+  return Math.min(300, Math.max(18, a.visibilityM / 12))
 }
 
 /**

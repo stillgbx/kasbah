@@ -12,6 +12,7 @@ import HomePanel from '../components/home/HomePanel.vue'
 import RoomPanel from '../components/home/RoomPanel.vue'
 import DevicePanel from '../components/home/DevicePanel.vue'
 import SceneDebug from '../components/home/SceneDebug.vue'
+import WeatherWidget from '../components/home/WeatherWidget.vue'
 import { useHouseScene } from '../composables/useHouseScene'
 import { useDevicesStore } from '../stores/devices'
 import { useHouseStore, type FloorTab } from '../stores/house'
@@ -217,6 +218,7 @@ const DOLLY_STEP = 1.35
     </div>
     <div v-if="!scene.supported.value" class="home__fallback card">{{ $t('scene.webglUnavailable') }}</div>
     <div v-if="house.loading" class="home__loading muted">{{ $t('common.loading') }}</div>
+    <WeatherWidget class="home__weather" />
     <div class="home__controls">
       <div class="home__cluster">
         <button type="button" class="home__ctl" :title="$t('home.rotateLeft')" :aria-label="$t('home.rotateLeft')" @click="scene.orbitBy(-ORBIT_STEP)"><StrokeIcon name="rotateLeft" :size="18" /></button>
@@ -248,7 +250,9 @@ const DOLLY_STEP = 1.35
 .home__header > * { pointer-events: auto; }
 .home[data-wide='1'] .home__header { right: calc(var(--safe-right) + var(--aside-w) + 2 * var(--panel-gap)); }
 .home__fallback { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 16px 20px; z-index: 2; }
-.home__loading { position: absolute; left: calc(var(--rail-w) + 24px); bottom: calc(var(--safe-bottom) + 20px); font-size: 13px; z-index: 2; }
+/* au-dessus du widget météo, qui tient le coin bas gauche */
+.home__loading { position: absolute; left: calc(var(--rail-w) + 24px); bottom: calc(var(--safe-bottom) + var(--panel-gap) + 144px); font-size: 13px; z-index: 2; }
+.home__weather { position: absolute; left: calc(var(--rail-w) + var(--panel-gap)); bottom: calc(var(--safe-bottom) + var(--panel-gap)); z-index: 2; }
 /* boutons de vue : rotation, zoom, vue d'ensemble — en bas à droite, avant le panneau quand il est ancré */
 .home__controls { position: absolute; right: calc(var(--safe-right) + var(--panel-gap)); bottom: calc(var(--safe-bottom) + var(--panel-gap)); z-index: 2; display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
 .home[data-wide='1'] .home__controls { right: calc(var(--safe-right) + var(--aside-w) + 2 * var(--panel-gap) + 26px); }

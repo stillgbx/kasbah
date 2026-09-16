@@ -12,11 +12,13 @@ import EnergyCard from './EnergyCard.vue'
 import EvChargerControl from './EvChargerControl.vue'
 import VehicleCard from './VehicleCard.vue'
 import CameraCard from './CameraCard.vue'
+import WeatherCard from './WeatherCard.vue'
 
 // Aiguillage par kind : chaque contrôle reçoit (descriptor, state, pending) et émet `command`.
 const CONTROLS: Record<DeviceKind, Component> = {
   light: LightControl, cover: CoverControl, media_player: MediaPlayerControl, climate: ClimateControl, vacuum: VacuumControl,
   mower: MowerControl, sensor: SensorCard, energy: EnergyCard, ev_charger: EvChargerControl, vehicle: VehicleCard, camera: CameraCard,
+  weather: WeatherCard,
 }
 
 const props = defineProps<{ descriptor: DeviceDescriptor; state: DeviceState; pending?: boolean }>()

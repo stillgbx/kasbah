@@ -74,3 +74,24 @@ export function createSkyEnvironment(renderer: WebGLRenderer | null, look: SkyLo
   source.dispose()
   return target.texture
 }
+
+/**
+ * Le même ciel sous les nuages : les couleurs perdent leur saturation et le zénith s'assombrit à
+ * mesure que la couverture monte, le disque solaire s'éteint. Central — chaque style garde son
+ * ciel dégagé, la météo le grise pareil pour tous ; c'est ce que la caméra voit dans les reflets et
+ * dans le fond du canvas.
+ */
+export function overcastSky(look: SkyLook, cloudiness: number): SkyLook {
+  const c = Math.min(1, Math.max(0, cloudiness))
+  if (c <= 0) return look
+  const grey = (rgb: readonly [number, number, number], darken: number, amount: number): [number, number, number] => {
+    const lum = (0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]) * darken
+    return [rgb[0] + (lum - rgb[0]) * amount, rgb[1] + (lum - rgb[1]) * amount, rgb[2] + (lum - rgb[2]) * amount]
+  }
+  return {
+    ...look,
+    zenith: grey(look.zenith, 1 - 0.35 * c, 0.85 * c),
+    horizon: grey(look.horizon, 1 - 0.15 * c, 0.7 * c),
+    sunGlare: look.sunGlare * (1 - c),
+  }
+}

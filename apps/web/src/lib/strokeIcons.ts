@@ -102,12 +102,22 @@ export const ICONS = {
   camera: 'M3.5 7.5l12.5-4 1.5 4.7-12.5 4zM5 12.2l.8 2.3M5.8 14.5h7.7M9.7 14.5V20M6 20h7.4M17.5 8.2l3.5-1.1',
   // sonnette : boîtier vertical, œil de caméra en haut, bouton en bas
   doorbell: 'M8 2.5h8v19H8zM12 8m-2.2 0a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0-4.4 0M12 16.5m-1.2 0a1.2 1.2 0 1 0 2.4 0a1.2 1.2 0 1 0-2.4 0',
+  // météo : un nuage commun à toute la famille, et ce qui en tombe ou ce qui l'accompagne
+  cloud: 'M7 19h10.5a4.5 4.5 0 0 0 .4-8.98A7 7 0 0 0 4.6 12.6 4 4 0 0 0 7 19z',
+  cloudSun: 'M8 2.5V4M2.5 8H4M4.6 4.6l1 1M11.4 4.6l-1 1M5.4 9.6A3 3 0 0 1 10.6 7M9 20h9a3.5 3.5 0 0 0 .3-7A5.5 5.5 0 0 0 7.8 14.6 3 3 0 0 0 9 20z',
+  cloudMoon: 'M14 2.5a4 4 0 0 0 5.6 5.1 4.5 4.5 0 0 1-6.9-2.2M9 20h9a3.5 3.5 0 0 0 .3-7A5.5 5.5 0 0 0 7.8 14.6 3 3 0 0 0 9 20z',
+  drizzle: 'M7 15h10.5a4.5 4.5 0 0 0 .4-8.98A7 7 0 0 0 4.6 8.6 4 4 0 0 0 7 15zM8 18v1.5M12 18v1.5M16 18v1.5M10 21v1.5M14 21v1.5',
+  rain: 'M7 15h10.5a4.5 4.5 0 0 0 .4-8.98A7 7 0 0 0 4.6 8.6 4 4 0 0 0 7 15zM8.5 18l-1 3.5M12.5 18l-1 3.5M16.5 18l-1 3.5',
+  snow: 'M7 15h10.5a4.5 4.5 0 0 0 .4-8.98A7 7 0 0 0 4.6 8.6 4 4 0 0 0 7 15zM8 18.5h.01M12 18.5h.01M16 18.5h.01M10 21.5h.01M14 21.5h.01',
+  fog: 'M7 13h10.5a4.5 4.5 0 0 0 .4-8.98A7 7 0 0 0 4.6 6.6 4 4 0 0 0 7 13zM5 17h14M7 21h10',
+  thunder: 'M7 14h10.5a4.5 4.5 0 0 0 .4-8.98A7 7 0 0 0 4.6 7.6 4 4 0 0 0 7 14zM13 15l-2.5 4h3L11 23',
+  wind: 'M3 8h11a2.5 2.5 0 1 0-2.5-2.5M3 12h15a2.5 2.5 0 1 1-2.5 2.5M3 16h9a2 2 0 1 1-2 2',
 } as const
 export type IconName = keyof typeof ICONS
 
 const KIND_ICON: Record<DeviceKind, IconName> = {
   light: 'light', cover: 'shutter', media_player: 'speaker', climate: 'heatpump', vacuum: 'vacuum', mower: 'mower',
-  sensor: 'sensor', energy: 'solar', ev_charger: 'charger', vehicle: 'vehicle', camera: 'camera',
+  sensor: 'sensor', energy: 'solar', ev_charger: 'charger', vehicle: 'vehicle', camera: 'camera', weather: 'cloud',
 }
 
 export function kindIcon(kind: DeviceKind | undefined, descriptor?: DeviceDescriptor): IconName {

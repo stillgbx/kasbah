@@ -1,6 +1,6 @@
 {
   "app": { "name": "Kasbah" },
-  "nav": { "main": "Navigation", "home": "Home", "energy": "Energy", "vehicles": "Vehicles", "settings": "Settings", "lights": "Lights", "covers": "Covers", "cameras": "Cameras", "media": "Media" },
+  "nav": { "main": "Navigation", "home": "Home", "energy": "Energy", "vehicles": "Vehicles", "weather": "Weather", "settings": "Settings", "lights": "Lights", "covers": "Covers", "cameras": "Cameras", "media": "Media" },
   "common": {
     "close": "Close", "back": "Back", "retry": "Retry", "all": "All", "none": "None", "unavailable": "Unavailable",
     "loading": "Loading house…", "on": "On", "off": "Off", "stop": "Stop",
@@ -26,7 +26,7 @@
   },
   "kinds": {
     "light": "Light", "cover": "Cover", "media_player": "Player", "climate": "Heating", "vacuum": "Vacuum",
-    "mower": "Mower", "sensor": "Sensor", "energy": "Energy", "ev_charger": "EV charger", "vehicle": "Vehicle", "camera": "Camera"
+    "mower": "Mower", "sensor": "Sensor", "energy": "Energy", "ev_charger": "EV charger", "vehicle": "Vehicle", "camera": "Camera", "weather": "Weather"
   },
   "device": {
     "unbound": "This device is not bound to any plugin ({id}).", "notPlaced": "Not placed", "outdoor": "Outdoor",
@@ -294,5 +294,22 @@
     "NEEDS_PAIRING": "{name}: pairing required.", "TIMEOUT": "{name}: no response.", "NOT_IMPLEMENTED": "{name}: plugin not implemented.",
     "INTERNAL": "{name}: server error.", "UNKNOWN": "{name}: {message}", "houseLoad": "Could not load the house: {message}"
   },
-  "scene": { "webglUnavailable": "3D is not available on this device." }
+  "scene": { "webglUnavailable": "3D is not available on this device." },
+  "weather": {
+    "title": "Weather", "noDevice": "No weather service is active. Enable one in Settings → Plugins.",
+    "conditions": {
+      "clear": "Clear", "partly_cloudy": "Partly cloudy", "cloudy": "Overcast", "fog": "Fog", "drizzle": "Drizzle",
+      "rain": "Rain", "snow": "Snow", "sleet": "Sleet", "thunderstorm": "Thunderstorm"
+    },
+    "now": "Now", "feelsLike": "Feels like", "wind": "Wind", "gusts": "Gusts", "humidity": "Humidity", "pressure": "Pressure",
+    "uv": "UV index", "visibility": "Visibility", "dewPoint": "Dew point", "precip": "Precipitation", "precipProbability": "Chance of rain",
+    "cloudCover": "Cloud cover", "sun": "Sun", "sunrise": "Sunrise", "sunset": "Sunset", "dayLength": "Day length",
+    "hourly": "Next 24 hours", "daily": "7 days", "airQuality": "Air quality", "pollen": "Pollen", "radar": "Precipitation",
+    "aqi": { "good": "Good", "fair": "Fair", "moderate": "Moderate", "poor": "Poor", "very_poor": "Very poor", "extremely_poor": "Extremely poor" },
+    "pollens": { "alder": "Alder", "birch": "Birch", "grass": "Grass", "mugwort": "Mugwort", "olive": "Olive", "ragweed": "Ragweed" },
+    "pollenLevels": ["None", "Low", "Moderate", "High", "Very high"],
+    "observed": "Observed at {time}", "attribution": "Data {source}", "model": "Model {model}",
+    "radarHint": "Observed radar (2 h), then 30 min nowcast", "radarUnavailable": "Radar unavailable", "radarSource": "RainViewer radar",
+    "play": "Play", "pause": "Pause", "today": "Today", "min": "min", "max": "max", "noForecast": "Forecast unavailable"
+  }
 }

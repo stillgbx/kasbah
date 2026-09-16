@@ -1,6 +1,6 @@
 {
   "app": { "name": "Kasbah" },
-  "nav": { "main": "Navigation", "home": "Maison", "energy": "Énergie", "vehicles": "Véhicules", "settings": "Réglages", "lights": "Lumières", "covers": "Ouvrants", "cameras": "Caméras", "media": "Médias" },
+  "nav": { "main": "Navigation", "home": "Maison", "energy": "Énergie", "vehicles": "Véhicules", "weather": "Météo", "settings": "Réglages", "lights": "Lumières", "covers": "Ouvrants", "cameras": "Caméras", "media": "Médias" },
   "common": {
     "close": "Fermer", "back": "Retour", "retry": "Réessayer", "all": "Tout", "none": "Aucun", "unavailable": "Indisponible",
     "loading": "Chargement de la maison…", "on": "Allumé", "off": "Éteint", "stop": "Stop",
@@ -26,7 +26,7 @@
   },
   "kinds": {
     "light": "Lumière", "cover": "Ouvrant", "media_player": "Lecteur", "climate": "Chauffage", "vacuum": "Aspirateur",
-    "mower": "Tondeuse", "sensor": "Capteur", "energy": "Énergie", "ev_charger": "Borne de recharge", "vehicle": "Véhicule", "camera": "Caméra"
+    "mower": "Tondeuse", "sensor": "Capteur", "energy": "Énergie", "ev_charger": "Borne de recharge", "vehicle": "Véhicule", "camera": "Caméra", "weather": "Météo"
   },
   "device": {
     "unbound": "Cet appareil n'est lié à aucun plugin ({id}).", "notPlaced": "Non placés", "outdoor": "Extérieur",
@@ -294,5 +294,22 @@
     "NEEDS_PAIRING": "{name} : appairage requis.", "TIMEOUT": "{name} : pas de réponse.", "NOT_IMPLEMENTED": "{name} : plugin non implémenté.",
     "INTERNAL": "{name} : erreur serveur.", "UNKNOWN": "{name} : {message}", "houseLoad": "Impossible de charger la maison : {message}"
   },
-  "scene": { "webglUnavailable": "La 3D n'est pas disponible sur cet appareil." }
+  "scene": { "webglUnavailable": "La 3D n'est pas disponible sur cet appareil." },
+  "weather": {
+    "title": "Météo", "noDevice": "Aucun service météo actif. Activez-en un dans Réglages → Plugins.",
+    "conditions": {
+      "clear": "Dégagé", "partly_cloudy": "Éclaircies", "cloudy": "Couvert", "fog": "Brouillard", "drizzle": "Bruine",
+      "rain": "Pluie", "snow": "Neige", "sleet": "Neige fondue", "thunderstorm": "Orage"
+    },
+    "now": "Maintenant", "feelsLike": "Ressenti", "wind": "Vent", "gusts": "Rafales", "humidity": "Humidité", "pressure": "Pression",
+    "uv": "Indice UV", "visibility": "Visibilité", "dewPoint": "Point de rosée", "precip": "Précipitations", "precipProbability": "Risque de pluie",
+    "cloudCover": "Nébulosité", "sun": "Soleil", "sunrise": "Lever", "sunset": "Coucher", "dayLength": "Durée du jour",
+    "hourly": "Prochaines 24 heures", "daily": "7 jours", "airQuality": "Qualité de l'air", "pollen": "Pollens", "radar": "Précipitations",
+    "aqi": { "good": "Bon", "fair": "Correct", "moderate": "Moyen", "poor": "Mauvais", "very_poor": "Très mauvais", "extremely_poor": "Extrêmement mauvais" },
+    "pollens": { "alder": "Aulne", "birch": "Bouleau", "grass": "Graminées", "mugwort": "Armoise", "olive": "Olivier", "ragweed": "Ambroisie" },
+    "pollenLevels": ["Nul", "Faible", "Modéré", "Élevé", "Très élevé"],
+    "observed": "Observé à {time}", "attribution": "Données {source}", "model": "Modèle {model}",
+    "radarHint": "Radar observé (2 h), puis prévision à 30 min", "radarUnavailable": "Radar indisponible", "radarSource": "Radar RainViewer",
+    "play": "Lecture", "pause": "Pause", "today": "Aujourd'hui", "min": "min", "max": "max", "noForecast": "Prévisions indisponibles"
+  }
 }

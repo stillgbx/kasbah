@@ -1,6 +1,6 @@
 import {
   AmbientLight, Color, DirectionalLight, HemisphereLight, PerspectiveCamera, Plane, Raycaster, Scene, Spherical, type Texture, TOUCH, Vector2, Vector3, VSMShadowMap,
-  WebGLRenderer, Box3, Mesh, MeshBasicMaterial, type Material, type MeshStandardMaterial, type Object3D,
+  WebGLRenderer, Box3, Fog, Mesh, MeshBasicMaterial, type Material, type MeshStandardMaterial, type Object3D,
 } from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js'
@@ -11,10 +11,10 @@ import {
 } from '@kasbah/shared'
 import { applyLook, backdropColor, createMaterials, disposeMaterials, type MaterialSet } from './builders/materials'
 import { loadPackTextures, packById } from './textures/assets'
-import { createSkyEnvironment } from './core/sky'
+import { createSkyEnvironment, overcastSky } from './core/sky'
 import { DECOR_LAYER, LAMP_LAYER, SITE_DECOR_LAYER } from './core/layers'
 import { createPostPipeline, detectQuality, gpuName, PIXEL_RATIO, toneMappingOf, type EffectiveQuality, type PostPipeline, type RenderQuality } from './core/post'
-import { sunDirection, type SceneAmbience } from './core/ambience'
+import { fogDistance, sunDirection, type SceneAmbience } from './core/ambience'
 import { defaultAmbience, defaultSceneTheme, rolesOf, styleById, type RenderStyle, type StyleLook } from './styles'
 import { buildHouse, type HouseNodes, type LevelNodes } from './builders/buildHouse'
 import { flatPolygon, flatRing, insetPolygon } from './builders/shapes'
@@ -953,11 +953,16 @@ export class HouseScene {
    * vidéo. Le ciel n'est jamais affiché : le fond du canvas est sa couleur d'horizon, à plat.
    */
   private applySky(): void {
+    // la météo grise le ciel du style (nuages) et, quand l'air se voit, noie le lointain dans le fond
+    const sky = overcastSky(this.look.sky, this.ambience.cloudiness)
     this.skyEnv?.dispose()
-    this.skyEnv = createSkyEnvironment(this.renderer, this.look.sky, this.sunDir)
+    this.skyEnv = createSkyEnvironment(this.renderer, sky, this.sunDir)
     this.scene.environment = this.skyEnv
-    this.scene.environmentIntensity = this.look.sky.intensity
-    this.renderer?.setClearColor(backdropColor(this.look.sky), 1)
+    this.scene.environmentIntensity = sky.intensity
+    const backdrop = backdropColor(sky)
+    this.renderer?.setClearColor(backdrop, 1)
+    const far = fogDistance(this.ambience)
+    this.scene.fog = far === null ? null : new Fog(backdrop, far * 0.35, far)
   }
 
   /**

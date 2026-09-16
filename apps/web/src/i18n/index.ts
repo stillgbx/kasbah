@@ -34,8 +34,14 @@ const numberFormats = {
 } as const
 
 const datetimeFormats = {
-  fr: { time: { hour: '2-digit', minute: '2-digit' }, short: { weekday: 'short', hour: '2-digit', minute: '2-digit' } },
-  en: { time: { hour: '2-digit', minute: '2-digit' }, short: { weekday: 'short', hour: '2-digit', minute: '2-digit' } },
+  fr: {
+    time: { hour: '2-digit', minute: '2-digit' }, short: { weekday: 'short', hour: '2-digit', minute: '2-digit' },
+    date: { weekday: 'short', day: 'numeric', month: 'short' }, weekday: { weekday: 'short' }, hour: { hour: 'numeric' },
+  },
+  en: {
+    time: { hour: '2-digit', minute: '2-digit' }, short: { weekday: 'short', hour: '2-digit', minute: '2-digit' },
+    date: { weekday: 'short', day: 'numeric', month: 'short' }, weekday: { weekday: 'short' }, hour: { hour: 'numeric' },
+  },
 } as const
 
 export const i18n: I18n<{ fr: typeof fr; en: typeof en }, typeof datetimeFormats, typeof numberFormats, Locale, false> = createI18n({

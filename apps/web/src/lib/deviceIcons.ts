@@ -15,7 +15,7 @@ const MEDIA_ICONS: Record<MediaPlayerClass, IconName> = { speaker: 'speaker', tv
 
 export const KIND_ICONS: Record<DeviceKind, IconName> = {
   light: 'light', cover: 'shutter', media_player: 'speaker', climate: 'heatpump', vacuum: 'vacuum',
-  mower: 'mower', sensor: 'thermostat', energy: 'solar', ev_charger: 'charger', vehicle: 'vehicle', camera: 'camera',
+  mower: 'mower', sensor: 'thermostat', energy: 'solar', ev_charger: 'charger', vehicle: 'vehicle', camera: 'camera', weather: 'cloud',
 }
 
 /**

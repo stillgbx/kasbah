@@ -8,6 +8,7 @@ import { styleById } from '../three/styles'
 import { HouseScene, type HouseSceneOptions } from '../three/HouseScene'
 import { useDevicesStore } from '../stores/devices'
 import { useSettingsStore } from '../stores/settings'
+import { useWeather } from './useWeather'
 
 // Adaptateur Vue du contrôleur de scène : cycle de vie, taille, apparence (style de rendu, heure,
 // thème Vuetify) → scène, maison/états → scène (diff par référence), événements de tap → callbacks.
@@ -38,7 +39,13 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     const o = args.house.value?.origin
     return o ? { lat: o.lat, lon: o.lon } : null
   })
-  const ambience = computed(() => resolveAmbience({ mode: settings.sceneAmbience, date: clock.value, geo: geo.value }))
+  // la nébulosité vient de l'appareil météo quand il y en a un : c'est elle qui efface les ombres
+  // et grise le ciel (`three/core/ambience.ts`) ; sans météo, ciel dégagé
+  const weather = useWeather()
+  const ambience = computed(() => resolveAmbience({
+    mode: settings.sceneAmbience, date: clock.value, geo: geo.value,
+    cloudiness: weather.cloudiness.value, ...(weather.live.value?.visibilityM !== undefined ? { visibilityM: weather.live.value.visibilityM } : {}),
+  }))
 
   const deviceTap = new Set<Handler<[string]>>()
   const roomTap = new Set<Handler<[string]>>()
