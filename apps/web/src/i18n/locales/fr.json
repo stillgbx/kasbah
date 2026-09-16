@@ -201,9 +201,10 @@
     "sceneAutoDynamicNewHint": "Comportement par défaut d'une ambiance animée qui apparaît (créée chez le fabricant, ou qui gagne une palette). N'affecte jamais celles déjà listées ci-dessous.",
     "sceneAutoDynamicHint": "Démarrage automatique de l'animation, réglé chez le fabricant : la valeur est la même dans Kasbah et dans son app. Décoché, la pastille joue la version fixe et l'animation ne part qu'au bouton ✨.",
     "gps": "Origine GPS du repère local", "gpsHeading": "cap", "houseStats": "{levels} niveaux · {rooms} pièces · {devices} appareils",
-    "plugins": "Plugins", "keys": "Clés .env", "noKeys": "aucune clé",
+    "plugins": "Plugins", "keys": "Clés .env",
     "pluginsHint": "Activez les fabricants que cette maison utilise. Le choix est écrit dans le fichier de la maison et prend effet tout de suite ; les clés et les jetons, eux, restent dans .env.",
     "pluginEnable": "Activer ce plugin", "pluginParts": "Fournit",
+    "pluginDetails": "Afficher les infos et réglages de ce plugin",
     "pluginStatus": {
       "ok": "Connecté", "degraded": "Dégradé", "needs_pairing": "Appairage requis", "error": "Erreur",
       "not_implemented": "Pas encore implémenté", "disabled": "Désactivé"
@@ -213,10 +214,14 @@
       "title": "Philips Hue", "pair": "Appairer le bridge", "pairing": "Appairage…",
       "instructions": "Appuyez sur le bouton central du bridge Hue, puis lancez l'appairage dans les 30 secondes.",
       "success": "Bridge appairé. Ajoutez HUE_APP_KEY={key} dans apps/server/.env pour conserver l'appairage.",
-      "buttonNotPressed": "Le bouton du bridge n'a pas été pressé. Appuyez dessus puis réessayez."
+      "buttonNotPressed": "Le bouton du bridge n'a pas été pressé. Appuyez dessus puis réessayez.",
+      "paired": "Le pont est apparié.", "repair": "Réappairer le bridge",
+      "repairHint": "À refaire seulement si la clé a été perdue : appuyez sur le bouton central du bridge, puis lancez l'appairage dans les 30 secondes. La nouvelle clé est à recopier dans apps/server/.env."
     },
     "nest": {
       "title": "Google Nest", "link": "Lier le compte Google", "refresh": "Actualiser",
+      "linked": "Compte Google lié.", "relink": "Relier le compte à nouveau",
+      "relinkHint": "À refaire pour changer les caméras partagées avec Kasbah : le choix se fait dans l'écran de consentement Google.",
       "instructions": "Le projet Device Access est configuré. Liez votre compte Google pour choisir les caméras partagées avec Kasbah.",
       "opened": "Le consentement Google s'est ouvert dans un nouvel onglet. À la fin, la page indique le jeton à coller dans apps/server/.env ; les caméras apparaissent ici après actualisation."
     },
@@ -226,6 +231,7 @@
       "expiring": "Le jeton de la passerelle expire dans {left}. Renouvelez-le pour ne pas perdre la lecture de la production solaire.",
       "leftDays": "{n} jour | {n} jours", "leftHours": "{n} heure | {n} heures", "leftSoon": "moins d'une heure",
       "expired": "Le jeton de la passerelle a expiré : la production solaire n'est plus lue. Renouvelez-le.",
+      "paired": "La passerelle est appairée. Le serveur garde le jeton ; il n'y a rien à faire ici tant qu'il est valable.",
       "modeAccount": "Compte Enphase", "modeToken": "Jeton",
       "email": "Adresse du compte Enphase", "emailPlaceholder": "vous{'@'}exemple.fr", "password": "Mot de passe",
       "passwordHint": "Servent une seule fois à obtenir le jeton, puis sont oubliés : ni enregistrés, ni journalisés. Ils ne passent que par votre réseau local.",

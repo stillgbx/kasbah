@@ -15,6 +15,10 @@ import StrokeIcon from './ui/StrokeIcon.vue'
 //
 // Les trois pas sont TOUJOURS rendus, avec leur état : un pas fait n'est pas retiré, il est coché.
 // Un utilisateur qui revient sur la carte doit voir où il en est, pas deviner ce qui a disparu.
+//
+// La carte ne décide plus de son apparition : elle vit DANS la section du plugin Tesla, que
+// l'utilisateur déplie — et qui s'ouvre seule tant que le serveur signale un pas à faire (domaine
+// non enregistré, compte non lié : il le dit par son statut).
 
 const devices = useDevicesStore()
 const notifications = useNotificationsStore()
@@ -44,14 +48,6 @@ async function refresh() {
 onMounted(refresh)
 // l'inventaire liste le plugin même éteint : c'est son STATUT qui change quand on l'allume
 watch(() => health.value?.status, (s, prev) => { if (s && s !== prev && s !== 'disabled') void refresh() })
-
-/**
- * Visible tant que la mise en route demande quelque chose, et juste après une liaison pour la
- * montrer. Jamais pour un plugin ÉTEINT : /api/health liste aussi ceux-là, et un fabricant qu'on
- * n'a pas coché n'a pas à réclamer ses clés.
- */
-const visible = computed(() => !!health.value && health.value.status !== 'disabled' && !!status.value
-  && (!status.value.linked || status.value.registered === false || opened.value))
 
 const registration = computed(() => {
   const s = status.value
@@ -111,9 +107,7 @@ async function link() {
 </script>
 
 <template>
-  <div v-if="visible && status" class="tsl card card--soft">
-    <div class="tsl__title"><StrokeIcon name="link" :size="18" />{{ $t('settings.tesla.title') }}</div>
-
+  <div v-if="status" class="tsl card card--soft">
     <p v-if="!status.configured" class="muted tsl__text">{{ $t('settings.tesla.notConfigured', { redirect: status.redirectUri }) }}</p>
 
     <template v-else>
@@ -165,7 +159,6 @@ async function link() {
 
 <style scoped>
 .tsl { padding: 14px 16px; display: grid; gap: 12px; justify-items: start; }
-.tsl__title { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; }
 .tsl__text { margin: 0; font-size: 13px; }
 .tsl__step { width: 100%; display: grid; gap: 8px; }
 .tsl__step-head { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; }

@@ -12,6 +12,10 @@ import StrokeIcon from './ui/StrokeIcon.vue'
 // connaît que l'identifiant et le mot de passe. D'où un vrai formulaire ici — et la seule façon
 // honnête de le présenter est de dire ce qu'il advient du mot de passe, ce que fait `intro`.
 //
+// La carte ne décide plus de son apparition : elle vit DANS la section du plugin, que l'utilisateur
+// déplie (ou qui s'ouvre seule quand le serveur signale une action à faire). Compte lié, elle n'a
+// donc plus à s'imposer en haut des Réglages — c'est ce qu'elle faisait, sans rien à demander.
+//
 // Le mot de passe ne vit que le temps de la requête : il n'est pas gardé dans ce composant après
 // l'envoi, et le serveur ne l'écrit nulle part (seul le jeton de session Gigya est conservé).
 
@@ -35,9 +39,6 @@ async function refresh() {
 }
 onMounted(refresh)
 watch(() => health.value?.status, (s, prev) => { if (s && s !== prev && s !== 'disabled') void refresh() })
-
-/** Jamais pour un plugin ÉTEINT : /api/health liste aussi ceux-là. */
-const visible = computed(() => !!health.value && health.value.status !== 'disabled' && !!status.value)
 
 async function link() {
   if (!email.value.trim() || !password.value) return
@@ -65,9 +66,7 @@ async function unlink() {
 </script>
 
 <template>
-  <div v-if="visible && status" class="rnl card card--soft">
-    <div class="rnl__title"><StrokeIcon name="link" :size="18" />{{ $t('settings.renault.title') }}</div>
-
+  <div v-if="status" class="rnl card card--soft">
     <!-- compte lié : on ne redemande rien, on montre où on en est -->
     <template v-if="status.linked">
       <div class="rnl__done">
@@ -110,7 +109,6 @@ async function unlink() {
 
 <style scoped>
 .rnl { padding: 14px 16px; display: grid; gap: 12px; justify-items: start; }
-.rnl__title { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; }
 .rnl__text { margin: 0; font-size: 13px; }
 .rnl__done { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--accent); }
 .rnl__cars { margin: 0; padding-left: 18px; font-size: 13px; }

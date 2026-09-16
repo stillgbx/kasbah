@@ -201,9 +201,10 @@
     "sceneAutoDynamicNewHint": "Default behaviour for an animated scene that appears (created at the vendor, or that gains a palette). Never affects the ones already listed below.",
     "sceneAutoDynamicHint": "Start the animation automatically, stored at the vendor: Kasbah and the vendor app read the same value. Unchecked, tapping plays the static version and the animation only starts from the ✨ button.",
     "gps": "GPS origin of the local frame", "gpsHeading": "heading", "houseStats": "{levels} floors · {rooms} rooms · {devices} devices",
-    "plugins": "Plugins", "keys": ".env keys", "noKeys": "no key",
+    "plugins": "Plugins", "keys": ".env keys",
     "pluginsHint": "Turn on the vendors this house uses. The choice is written to the house file and takes effect right away; keys and tokens stay in .env.",
     "pluginEnable": "Enable this plugin", "pluginParts": "Provides",
+    "pluginDetails": "Show this plugin's info and settings",
     "pluginStatus": {
       "ok": "Connected", "degraded": "Degraded", "needs_pairing": "Pairing required", "error": "Error",
       "not_implemented": "Not implemented yet", "disabled": "Disabled"
@@ -213,10 +214,14 @@
       "title": "Philips Hue", "pair": "Pair the bridge", "pairing": "Pairing…",
       "instructions": "Press the round button on the Hue bridge, then start pairing within 30 seconds.",
       "success": "Bridge paired. Add HUE_APP_KEY={key} to apps/server/.env to keep the pairing.",
-      "buttonNotPressed": "The bridge button was not pressed. Press it, then retry."
+      "buttonNotPressed": "The bridge button was not pressed. Press it, then retry.",
+      "paired": "The bridge is paired.", "repair": "Pair the bridge again",
+      "repairHint": "Only needed if the key was lost: press the round button on the bridge, then start pairing within 30 seconds. The new key must be copied into apps/server/.env."
     },
     "nest": {
       "title": "Google Nest", "link": "Link the Google account", "refresh": "Refresh",
+      "linked": "Google account linked.", "relink": "Link the account again",
+      "relinkHint": "Do this to change which cameras are shared with Kasbah: the choice is made on Google's consent screen.",
       "instructions": "The Device Access project is configured. Link your Google account to choose the cameras shared with Kasbah.",
       "opened": "Google's consent screen opened in a new tab. At the end, the page shows the token to paste into apps/server/.env; cameras show up here after a refresh."
     },
@@ -226,6 +231,7 @@
       "expiring": "The gateway token expires in {left}. Renew it to keep reading solar production.",
       "leftDays": "{n} day | {n} days", "leftHours": "{n} hour | {n} hours", "leftSoon": "less than an hour",
       "expired": "The gateway token has expired: solar production is no longer read. Renew it.",
+      "paired": "The gateway is paired. The server keeps the token; nothing to do here while it is valid.",
       "modeAccount": "Enphase account", "modeToken": "Token",
       "email": "Enphase account e-mail", "emailPlaceholder": "you{'@'}example.com", "password": "Password",
       "passwordHint": "Used once to obtain the token, then forgotten: never stored, never logged. They only travel across your local network.",

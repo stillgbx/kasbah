@@ -6,7 +6,6 @@ import type { EnphasePairing, EnphaseTokenStatus } from '../api/transport'
 import { useDevicesStore } from '../stores/devices'
 import { useNotificationsStore } from '../stores/notifications'
 import Segmented from './ui/Segmented.vue'
-import StrokeIcon from './ui/StrokeIcon.vue'
 
 // Appairage de la passerelle IQ (plugin Enphase). Deux voies pour la même route : coller un jeton
 // obtenu sur le site du fabricant, ou taper les identifiants du compte, qui servent UNE fois à
@@ -15,6 +14,9 @@ import StrokeIcon from './ui/StrokeIcon.vue'
 // Le jeton, lui, est gardé par le SERVEUR : contrairement à Hue et Nest, il n'y a rien à recopier
 // dans `.env`, donc appairer depuis une tablette suffit et tient un an. La carte le dit, et prévient
 // dans le cas contraire (cache désactivé).
+//
+// La carte ne décide plus de son apparition : elle vit DANS la section du plugin Enphase, que
+// l'utilisateur déplie — et qui s'ouvre seule quand le serveur dit que le jeton expire ou a expiré.
 //
 // Deux temps avant de frapper un jeton quand celui en place est encore bon : le serveur répond
 // `TOKEN_STILL_VALID`, la carte l'explique et le bouton demande confirmation. Chaque frappe crée un
@@ -47,12 +49,6 @@ onMounted(refresh)
 watch(health, (h, prev) => { if (h && !prev) void refresh() })
 
 /**
- * Visible tant que l'appairage demande quelque chose : pas de jeton, jeton expiré, ou échéance
- * proche. Reste affichée juste après une réussite, pour montrer la nouvelle échéance.
- */
-const visible = computed(() => !!health.value && (!!done.value || (!!status.value && status.value.stage !== 'ok')))
-
-/**
  * Temps restant, en JOURS ou en HEURES. Un jeton d'installateur ne vaut que douze heures : « expire
  * dans 0 jours » ne veut rien dire, alors que « dans 11 heures » dit quoi faire. Le serveur, lui,
  * ne compte qu'en jours pleins, donc l'heure se recalcule ici depuis l'échéance.
@@ -70,7 +66,7 @@ const headline = computed(() => {
   if (!s) return ''
   if (s.stage === 'expiring') return t('settings.enphase.expiring', { left: remaining(s.expiresAt, s.daysLeft) })
   if (s.stage === 'expired') return t('settings.enphase.expired')
-  return t('settings.enphase.intro')
+  return s.paired ? t('settings.enphase.paired') : t('settings.enphase.intro')
 })
 
 /** Ce que le bouton fait : appairer, renouveler, ou confirmer le remplacement d'un jeton valable. */
@@ -128,8 +124,7 @@ async function submit() {
 </script>
 
 <template>
-  <div v-if="visible" class="enp card card--soft">
-    <div class="enp__title"><StrokeIcon name="link" :size="18" />{{ $t('settings.enphase.title') }}</div>
+  <div v-if="status" class="enp card card--soft">
     <p class="muted enp__text">{{ headline }}</p>
 
     <template v-if="!done">
@@ -181,7 +176,6 @@ async function submit() {
 
 <style scoped>
 .enp { padding: 14px 16px; display: grid; gap: 10px; justify-items: start; }
-.enp__title { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; }
 .enp__text { margin: 0; font-size: 13px; }
 /* les deux voies occupent la MEME cellule : la hauteur est celle de la plus haute */
 .enp__body { width: 100%; display: grid; }

@@ -6,7 +6,10 @@ import { useDevicesStore } from '../stores/devices'
 import { useNotificationsStore } from '../stores/notifications'
 import StrokeIcon from './ui/StrokeIcon.vue'
 
-// Appairage du bridge Hue : visible uniquement quand le plugin est en `needs_pairing`.
+// Appairage du bridge Hue, dans la section du plugin. Elle ne se montrait qu'en `needs_pairing` ;
+// maintenant qu'elle vit dans un panneau qu'on déplie, elle dit AUSSI où en est un pont déjà
+// apparié, et laisse le refaire — la clé est dans .env, et c'est la seule façon d'en obtenir une
+// nouvelle si celle-là est perdue.
 const devices = useDevicesStore()
 const notifications = useNotificationsStore()
 const { t } = useI18n()
@@ -30,17 +33,24 @@ async function pair() {
 </script>
 
 <template>
-  <div v-if="status === 'needs_pairing' || result" class="hue card card--soft">
-    <div class="hue__title"><StrokeIcon name="link" :size="18" />{{ $t('settings.hue.title') }}</div>
-    <p v-if="!result" class="muted hue__text">{{ $t('settings.hue.instructions') }}</p>
-    <p v-else class="hue__text hue__key">{{ result }}</p>
-    <button v-if="!result" type="button" class="pill" data-on="1" :disabled="busy" @click="pair">{{ busy ? $t('settings.hue.pairing') : $t('settings.hue.pair') }}</button>
+  <div class="hue card card--soft">
+    <!-- une clé fraîche est à recopier dans .env : elle passe avant tout le reste -->
+    <p v-if="result" class="hue__text hue__key">{{ result }}</p>
+    <template v-else-if="status === 'needs_pairing'">
+      <p class="muted hue__text">{{ $t('settings.hue.instructions') }}</p>
+      <button type="button" class="pill" data-on="1" :disabled="busy" @click="pair">{{ busy ? $t('settings.hue.pairing') : $t('settings.hue.pair') }}</button>
+    </template>
+    <template v-else>
+      <div class="hue__done"><StrokeIcon name="checkCircle" :size="16" /><span>{{ $t('settings.hue.paired') }}</span></div>
+      <p class="muted hue__text">{{ $t('settings.hue.repairHint') }}</p>
+      <button type="button" class="pill" :disabled="busy" @click="pair">{{ busy ? $t('settings.hue.pairing') : $t('settings.hue.repair') }}</button>
+    </template>
   </div>
 </template>
 
 <style scoped>
 .hue { padding: 14px 16px; display: grid; gap: 10px; justify-items: start; }
-.hue__title { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; }
 .hue__text { margin: 0; font-size: 13px; }
+.hue__done { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--accent); }
 .hue__key { word-break: break-all; font-weight: 500; }
 </style>

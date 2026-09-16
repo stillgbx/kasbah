@@ -1,14 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { PluginHealth } from '@kasbah/shared'
 import PageHeader from '../components/layout/PageHeader.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
-import EnphasePairingCard from '../components/EnphasePairingCard.vue'
-import HuePairingCard from '../components/HuePairingCard.vue'
-import NestLinkCard from '../components/NestLinkCard.vue'
-import RenaultLinkCard from '../components/RenaultLinkCard.vue'
-import TeslaLinkCard from '../components/TeslaLinkCard.vue'
+import PluginSection from '../components/settings/PluginSection.vue'
 import Segmented from '../components/ui/Segmented.vue'
 import { LOCALE_LABELS } from '../i18n'
 import { useDevicesStore } from '../stores/devices'
@@ -74,7 +69,6 @@ const styleHasAssets = computed(() => !!styleById(settings.sceneStyle).assets)
 const ambienceOptions = computed(() => settings.ambiences.map((a) => ({ value: a, label: t(`render.ambiences.${a}`) })))
 const qualityOptions = computed(() => settings.qualities.map((q) => ({ value: q, label: t(`render.qualities.${q}`) })))
 
-const DOT: Record<PluginHealth['status'], string> = { ok: 'var(--accent)', degraded: '#d38b22', needs_pairing: '#d38b22', error: '#d24a43', not_implemented: 'var(--muted)', disabled: 'var(--muted)' }
 const gps = computed(() => {
   const o = house.house?.origin
   return o ? `${o.lat.toFixed(5)}, ${o.lon.toFixed(5)} · alt ${o.alt} m · ${t('settings.gpsHeading')} ${o.heading}°` : ''
@@ -199,41 +193,10 @@ const houseStats = computed(() => {
         </div>
         <div class="col">
           <section class="card block">
-            <div class="block__head"><div class="block__title">{{ $t('settings.plugins') }}</div><div class="muted small">{{ $t('settings.keys') }}</div></div>
+            <div class="block__title">{{ $t('settings.plugins') }}</div>
             <p class="muted small plugins__hint">{{ $t('settings.pluginsHint') }}</p>
-            <HuePairingCard />
-            <NestLinkCard />
-            <EnphasePairingCard />
-            <TeslaLinkCard />
-            <RenaultLinkCard />
             <div class="plugins">
-              <div v-for="p in plugins.list" :key="p.id" class="plugin">
-                <div class="plugin__row">
-                  <div class="min0">
-                    <div class="plugin__name">{{ p.id.replace('_', ' ') }}</div>
-                    <div class="plugin__keys mono muted">{{ p.health.keys?.length ? p.health.keys.join('  ') : $t('settings.noKeys') }}</div>
-                  </div>
-                  <div class="plugin__status muted">
-                    <span class="dot" :style="{ background: DOT[p.health.status] }" />{{ $t(`settings.pluginStatus.${p.health.status}`) }}<span v-if="p.health.deviceCount"> · {{ $t('settings.devicesCount', { n: p.health.deviceCount }, p.health.deviceCount) }}</span>
-                  </div>
-                  <!-- un squelette n'a rien à démarrer : interrupteur grisé, pas caché -->
-                  <v-switch :model-value="p.enabled" :disabled="!p.implemented || plugins.isBusy(p.id)" hide-details density="compact" class="plugin__switch"
-                            :title="p.implemented ? $t('settings.pluginEnable') : $t('settings.pluginStatus.not_implemented')"
-                            :aria-label="$t('settings.pluginEnable')"
-                            @update:model-value="(v: boolean | null) => plugins.setEnabled(p.id, v === true)" />
-                </div>
-                <!-- sous-items : visibles seulement quand le plugin est allumé, sinon ils ne veulent rien dire -->
-                <div v-if="p.enabled && p.parts.length" class="parts">
-                  <div class="parts__title muted small">{{ $t('settings.pluginParts') }}</div>
-                  <!-- pastille à bascule plutôt qu'une case : le jeu d'icônes maison n'a pas
-                       d'alias $checkboxOn, et une pastille garde la même empreinte allumée ou non -->
-                  <button v-for="part in p.parts" :key="part.id" type="button" class="part" :data-on="part.enabled ? '1' : '0'"
-                          :disabled="plugins.isBusy(p.id)" :aria-pressed="part.enabled"
-                          @click="plugins.setPart(p.id, part.id, !part.enabled)">
-                    {{ $t(part.labelKey) }}
-                  </button>
-                </div>
-              </div>
+              <PluginSection v-for="p in plugins.list" :key="p.id" :plugin="p" />
               <div v-if="!plugins.loaded" class="muted small">{{ $t('common.loading') }}</div>
             </div>
           </section>
@@ -286,21 +249,7 @@ const houseStats = computed(() => {
 .small { font-size: 12px; }
 .plugins { display: grid; gap: 4px; }
 .plugins__hint { margin: -4px 0 0; }
-.plugin { padding: 10px 0; border-bottom: 1px solid var(--line); }
-.plugin:last-child { border-bottom: 0; }
-.plugin__row { display: flex; align-items: center; gap: 12px; }
-.plugin__switch { flex: 0 0 auto; }
-.parts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 0 2px; }
-.parts__title { flex: 0 0 100%; margin-bottom: 2px; }
-.part { font-size: 12px; line-height: 1; padding: 6px 10px; border-radius: 999px; cursor: pointer;
-        border: 1px solid var(--line); background: transparent; color: var(--muted); transition: color .15s, border-color .15s, background .15s; }
-.part[data-on='1'] { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
-.part:disabled { opacity: .5; cursor: default; }
 .min0 { min-width: 0; flex: 1 1 0; }
-.plugin__name { font-weight: 500; font-size: 14px; text-transform: capitalize; }
-.plugin__keys { font-size: 11px; white-space: pre-wrap; }
-.plugin__status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap; }
-.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 .about { margin: 0 4px; }
 @media (max-width: 900px) { .settings__cols { grid-template-columns: 1fr; } }
 </style>
