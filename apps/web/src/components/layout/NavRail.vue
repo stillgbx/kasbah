@@ -56,9 +56,23 @@ const themeIcon = computed<IconName>(() => (settings.appearance === 'light' ? 's
    couleur de leur fond et ne se voit pas. Derrière les boutons (z-index -1 dans le rail), au-dessus
    de la scène. */
 .rail::before {
-  content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: calc(var(--rail-w) + 110px); z-index: -1; pointer-events: none;
-  /* discret et large : un assombrissement qui s'étale, pas une barre — on reste immergé */
-  background: linear-gradient(to right, color-mix(in srgb, var(--bg) 80%, transparent) 0, color-mix(in srgb, var(--bg) 40%, transparent) var(--rail-w), transparent 100%);
+  content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: calc(var(--rail-w) + 150px); z-index: -1; pointer-events: none;
+  /* discret et large : un assombrissement qui s'étale, pas une barre — on reste immergé. La rampe
+     est adoucie (opacité 0,8 → 0 par une courbe dont la pente s'annule à la fin) : une rampe
+     LINÉAIRE laisse une cassure de pente là où elle atteint zéro, et l'œil la lit comme un trait
+     vertical sur les aplats de la scène. Les paliers suivent a = .8 (1-t)² (1 + .345 t). */
+  background: linear-gradient(to right,
+    color-mix(in srgb, var(--bg) 80%, transparent) 0,
+    color-mix(in srgb, var(--bg) 67%, transparent) 10%,
+    color-mix(in srgb, var(--bg) 55%, transparent) 20%,
+    color-mix(in srgb, var(--bg) 43%, transparent) 30%,
+    color-mix(in srgb, var(--bg) 33%, transparent) 40%,
+    color-mix(in srgb, var(--bg) 23%, transparent) 50%,
+    color-mix(in srgb, var(--bg) 15%, transparent) 60%,
+    color-mix(in srgb, var(--bg) 9%, transparent) 70%,
+    color-mix(in srgb, var(--bg) 4%, transparent) 80%,
+    color-mix(in srgb, var(--bg) 1%, transparent) 90%,
+    transparent 100%);
 }
 .rail__avatar {
   width: 38px; height: 38px; border-radius: 12px; background: var(--accent); color: var(--on-accent);
