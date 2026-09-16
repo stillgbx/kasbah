@@ -91,6 +91,12 @@ export function createAutomowerPlugin(deps: AutomowerPluginDeps = {}): DevicePlu
   let lastResync = 0
   /** Dernière lecture complète de chaque robot, par id fabricant. */
   const mowers = new Map<string, MowerData>()
+  /**
+   * Les derniers messages BRUTS du flux, tels que reçus : c'est par là qu'on capture les fixtures
+   * d'événements (`GET /raw/events`), les seules qu'on n'ait pas encore prises sur le vrai compte.
+   */
+  const recentEvents: { at: number; message: unknown }[] = []
+  const RECENT_EVENTS_MAX = 200
   let published: DeviceDescriptor[] = []
 
   const log = () => ctx!.logger
@@ -143,6 +149,8 @@ export function createAutomowerPlugin(deps: AutomowerPluginDeps = {}): DevicePlu
   }
 
   function onEvent(message: unknown): void {
+    recentEvents.push({ at: ctx!.clock.now(), message })
+    if (recentEvents.length > RECENT_EVENTS_MAX) recentEvents.splice(0, recentEvents.length - RECENT_EVENTS_MAX)
     const ready = wsReadySchema.safeParse(message)
     if (ready.success && !('type' in (message as object))) {
       log().debug({ connectionId: ready.data.connectionId }, 'Automower websocket ready')
@@ -151,9 +159,13 @@ export function createAutomowerPlugin(deps: AutomowerPluginDeps = {}): DevicePlu
     const ev = wsEventSchema.safeParse(message)
     if (!ev.success) { log().debug({ message }, 'Automower websocket: unknown message'); return }
     // un robot que la liste ne connaît pas : il vient d'être ajouté au compte, on relit tout
-    if (!mowers.has(ev.data.id)) { resync(`event for unknown mower ${ev.data.id}`); return }
-    const patch = applyEvent(ev.data, mapOptions())
-    if (patch) ctx!.emitState(ev.data.id, patch)
+    const current = mowers.get(ev.data.id)
+    if (!current) { resync(`event for unknown mower ${ev.data.id}`); return }
+    // un delta se fond dans le robot connu, et c'est le robot fondu qu'on garde pour le suivant
+    const applied = applyEvent(ev.data, current, mapOptions())
+    if (!applied) return
+    mowers.set(ev.data.id, applied.next)
+    ctx!.emitState(ev.data.id, applied.patch)
   }
 
   function status(): AutomowerStatus {
@@ -251,6 +263,9 @@ export function createAutomowerPlugin(deps: AutomowerPluginDeps = {}): DevicePlu
 
     registerRoutes(app: FastifyInstance) {
       app.get('/status', async () => status())
+
+      /** Les derniers messages du flux, bruts et datés : la capture des fixtures d'événements. */
+      app.get('/raw/events', async () => ({ live: socket?.connected ?? false, events: recentEvents }))
 
       /**
        * Relevé brut, à capturer dès les clés posées : c'est lui qui remplacera les fixtures. Une

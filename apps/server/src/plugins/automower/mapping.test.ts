@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { MOWERS_ERROR, MOWERS_MOWING, MOWERS_OFFLINE, MOWERS_PARKED, MOWER_ID, WS_BATTERY, WS_CUTTING_HEIGHT, WS_MOWER, WS_PLANNER, WS_POSITION } from './__fixtures__/automower'
+import {
+  MOWERS_ERROR, MOWERS_MOWING, MOWERS_OFFLINE, MOWERS_PARKED, MOWER_ID, WS_BATTERY, WS_CUTTING_HEIGHT, WS_MOWER_HOME, WS_MOWER_HOME_PARKED, WS_MOWER_INACTIVE,
+  WS_MOWER_MAIN_PARKED, WS_MOWER_NOT_APPLICABLE, WS_MOWER_STOPPED, WS_MOWER_STOPPED_FULL, WS_PLANNER, WS_POSITION,
+} from './__fixtures__/automower'
 import { actionBody, applyEvent, connectedOf, localTimestamp, parseMowers, toActivity, toDescriptor, toStatePatch } from './mapping'
 import { wsEventSchema } from './types'
 
@@ -111,21 +114,53 @@ describe('automower mapping — état complet', () => {
   })
 })
 
-describe('automower mapping — événements du flux', () => {
+describe('automower mapping — événements du flux (des DELTAS, fondus dans le robot connu)', () => {
   const ev = (raw: unknown) => wsEventSchema.parse(raw)
   const o = { tz: TZ, now: NOW }
-  it('position → location datée de maintenant', () => {
-    expect(applyEvent(ev(WS_POSITION), o)).toEqual({ location: { lat: 47.309601, lon: 5.045802, at: NOW } })
+  const parked = first(MOWERS_PARKED)
+  const NEXT = Date.UTC(2026, 8, 17, 8)
+
+  it('position → location datée de maintenant, et le relevé gagne le point en tête', () => {
+    const r = applyEvent(ev(WS_POSITION), parked, o)!
+    expect(r.patch).toEqual({ location: { lat: 47.309601, lon: 5.045802, at: NOW } })
+    expect((r.next.attributes.positions as unknown[])[0]).toEqual({ latitude: 47.309601, longitude: 5.045802 })
+    expect(r.next.attributes.positions).toHaveLength(50)
   })
-  it('batterie, activité (avec l’erreur réécrite), planning, hauteur de coupe', () => {
-    expect(applyEvent(ev(WS_BATTERY), o)).toEqual({ battery: 77 })
-    expect(applyEvent(ev(WS_MOWER), o)).toEqual({ activity: 'returning', errorCode: null, errorMessage: null, errorAt: null })
-    expect(applyEvent(ev(WS_PLANNER), o)).toEqual({ nextStartAt: Date.UTC(2026, 8, 17, 8), restrictedReason: 'park_override' })
-    expect(applyEvent(ev(WS_CUTTING_HEIGHT), o)).toEqual({ cuttingHeight: 4 })
+
+  it('batterie et hauteur de coupe : le fragment suffit', () => {
+    expect(applyEvent(ev(WS_BATTERY), parked, o)!.patch).toEqual({ battery: 77 })
+    expect(applyEvent(ev(WS_CUTTING_HEIGHT), parked, o)!.patch).toEqual({ cuttingHeight: 7 })
   })
+
+  it('un planificateur SANS prochain départ garde celui qu’on connaît (il était effacé)', () => {
+    const r = applyEvent(ev(WS_PLANNER), parked, o)!
+    expect(r.patch).toEqual({ nextStartAt: NEXT, restrictedReason: 'week_schedule' })
+  })
+
+  it('la séquence capturée après ParkUntilFurtherNotice : un champ à la fois, l’activité se déduit du robot fondu', () => {
+    let m = parked
+    const step = (raw: unknown) => { const r = applyEvent(ev(raw), m, o)!; m = r.next; return r.patch }
+    // `inactiveReason` seul : rien ne change à l'écran, le robot est toujours garé, sans erreur
+    expect(step(WS_MOWER_INACTIVE)).toMatchObject({ activity: 'parked', errorCode: null, restrictedReason: 'week_schedule' })
+    expect(step(WS_MOWER_STOPPED).activity).toBe('stopped')
+    expect(step(WS_MOWER_NOT_APPLICABLE).activity).toBe('stopped')
+    expect(step(WS_MOWER_STOPPED_FULL).activity).toBe('stopped')
+    // mode HOME = garé jusqu'à nouvel ordre : c'est la restriction qui le dit, le planificateur ne le sait pas
+    expect(step(WS_MOWER_HOME)).toMatchObject({ activity: 'stopped', restrictedReason: 'park_override' })
+    expect(step(WS_MOWER_HOME_PARKED)).toMatchObject({ activity: 'parked', restrictedReason: 'park_override', nextStartAt: NEXT })
+    // ResumeSchedule : retour au planning
+    expect(step(WS_MOWER_MAIN_PARKED)).toMatchObject({ activity: 'parked', restrictedReason: 'week_schedule' })
+    expect(step(WS_PLANNER)).toEqual({ nextStartAt: NEXT, restrictedReason: 'week_schedule' })
+  })
+
+  it('un fragment `mower` sans code d’erreur ne lève PAS l’erreur connue', () => {
+    const r = applyEvent(ev(WS_MOWER_INACTIVE), first(MOWERS_ERROR), o)!
+    expect(r.patch).toMatchObject({ activity: 'error', errorCode: 2, errorMessage: 'No loop signal' })
+  })
+
   it('un événement qui ne nous concerne pas ne produit rien', () => {
-    expect(applyEvent(ev({ id: MOWER_ID, type: 'headlights-event-v2', attributes: { headlight: { mode: 'ALWAYS_ON' } } }), o)).toBeNull()
-    expect(applyEvent(ev({ id: MOWER_ID, type: 'battery-event-v2', attributes: {} }), o)).toBeNull()
+    expect(applyEvent(ev({ id: MOWER_ID, type: 'headlights-event-v2', attributes: { headlight: { mode: 'ALWAYS_ON' } } }), parked, o)).toBeNull()
+    expect(applyEvent(ev({ id: MOWER_ID, type: 'battery-event-v2', attributes: {} }), parked, o)).toBeNull()
   })
 })
 

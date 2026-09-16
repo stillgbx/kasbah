@@ -159,19 +159,44 @@ export const MOWERS_OFFLINE = {
   ],
 }
 
-// ---- WebSocket (format V2) — d'après la bibliothèque de référence, pas encore capturés -----------
+// ---- WebSocket (format V2) — CAPTURÉS le 2026-09-16 (`GET /api/plugins/automower/raw/events`) ------
+//
+// Provoqués sans faire bouger le robot : un `ParkUntilFurtherNotice` puis un `ResumeSchedule`, robot à
+// la station. Ce que la capture a appris, et que la documentation ne disait pas :
+//  - les événements sont des DELTAS : `mower` peut ne porter QU'un champ (`state`, `activity`,
+//    `inactiveReason`), et `planner` ne redit jamais `nextStartTimestamp` ;
+//  - « garé jusqu'à nouvel ordre » = `mode: HOME` (le planificateur reste sur `WEEK_SCHEDULE`) ;
+//  - `WAIT_POWER_UP` / `NOT_APPLICABLE` passent quelques secondes au changement de mode ;
+//  - `ready.connectionId` est un base64, pas un UUID ; aucun événement ne porte d'horodatage.
+// Position et batterie n'ont PAS été capturés (robot immobile, plein) : formes d'après la référence.
 
-export const WS_READY = { ready: true, connectionId: 'b8a1c0d2-6f3e-4c1a-9b7d-1e2f3a4b5c6d' }
+export const WS_READY = { ready: true, connectionId: 'gapGVu7XmHQIKEhUIA==' }
 
+/** Le premier événement après `ParkUntilFurtherNotice` : UN champ, rien d'autre. */
+export const WS_MOWER_INACTIVE = { id: MOWER_ID, type: 'mower-event-v2', attributes: { mower: { inactiveReason: 'PLANNING' } } }
+export const WS_MOWER_STOPPED = { id: MOWER_ID, type: 'mower-event-v2', attributes: { mower: { state: 'STOPPED' } } }
+export const WS_MOWER_NOT_APPLICABLE = { id: MOWER_ID, type: 'mower-event-v2', attributes: { mower: { activity: 'NOT_APPLICABLE' } } }
+/** La forme la plus complète vue : ni `errorCodeTimestamp`, ni `workAreaId`, ni `inactiveReason`. */
+export const WS_MOWER_STOPPED_FULL = {
+  id: MOWER_ID, type: 'mower-event-v2',
+  attributes: { mower: { mode: 'MAIN_AREA', activity: 'NOT_APPLICABLE', state: 'STOPPED', errorCode: 0, isErrorConfirmable: false } },
+}
+/** Garé jusqu'à nouvel ordre : c'est le MODE qui le dit. */
+export const WS_MOWER_HOME = { id: MOWER_ID, type: 'mower-event-v2', attributes: { mower: { mode: 'HOME', state: 'WAIT_POWER_UP' } } }
+export const WS_MOWER_HOME_PARKED = {
+  id: MOWER_ID, type: 'mower-event-v2',
+  attributes: { mower: { mode: 'HOME', activity: 'PARKED_IN_CS', state: 'RESTRICTED', errorCode: 0, isErrorConfirmable: false } },
+}
+/** Retour au planning (`ResumeSchedule`). */
+export const WS_MOWER_MAIN_PARKED = {
+  id: MOWER_ID, type: 'mower-event-v2',
+  attributes: { mower: { mode: 'MAIN_AREA', activity: 'PARKED_IN_CS', state: 'RESTRICTED', errorCode: 0, isErrorConfirmable: false } },
+}
+/** Le planificateur, tel qu'il arrive TOUJOURS : sans `nextStartTimestamp`. */
+export const WS_PLANNER = { id: MOWER_ID, type: 'planner-event-v2', attributes: { planner: { override: { action: 'NOT_ACTIVE' }, restrictedReason: 'WEEK_SCHEDULE' } } }
+export const WS_CUTTING_HEIGHT = { id: MOWER_ID, type: 'cuttingHeight-event-v2', attributes: { cuttingHeight: { height: 7 } } }
+
+// d'après la bibliothèque de référence, pas encore capturés
 export const WS_POSITION = { id: MOWER_ID, type: 'position-event-v2', attributes: { position: { latitude: 47.309601, longitude: 5.045802 } } }
 export const WS_BATTERY = { id: MOWER_ID, type: 'battery-event-v2', attributes: { battery: { batteryPercent: 77 } } }
-export const WS_MOWER = {
-  id: MOWER_ID, type: 'mower-event-v2',
-  attributes: { mower: { mode: 'MAIN_AREA', activity: 'GOING_HOME', inactiveReason: 'NONE', state: 'IN_OPERATION', errorCode: 0, errorCodeTimestamp: 0, isErrorConfirmable: false, workAreaId: 0 } },
-}
-export const WS_PLANNER = {
-  id: MOWER_ID, type: 'planner-event-v2',
-  attributes: { planner: { nextStartTimestamp: 1789639200000, override: { action: 'FORCE_PARK' }, restrictedReason: 'PARK_OVERRIDE', externalReason: null } },
-}
-export const WS_CUTTING_HEIGHT = { id: MOWER_ID, type: 'cuttingHeight-event-v2', attributes: { cuttingHeight: { height: 4 } } }
 export const WS_UNKNOWN_MOWER = { id: '00000000-0000-0000-0000-000000000000', type: 'battery-event-v2', attributes: { battery: { batteryPercent: 10 } } }

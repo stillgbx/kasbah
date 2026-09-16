@@ -7,8 +7,11 @@ import { mowerDataSchema, mowerSectionSchema, plannerSchema, positionSchema, typ
 // Un robot = un appareil `mower`, identifié par l'UUID que le fabricant lui donne (stable, sans `:`
 // ni espace : c'est ce que house.json liera). Deux sources qui disent la même chose sous deux formes :
 //   - `toStatePatch` : la LISTE (`GET /mowers`) rend l'état complet de chaque robot ;
-//   - `applyEvent` : le WebSocket pousse la SECTION qui a changé (batterie, activité, planning,
-//     position, hauteur de coupe), et rien d'autre — un delta, pas un état.
+//   - `applyEvent` : le WebSocket pousse un DELTA — capturé le 2026-09-16 : `{ mower: { state:
+//     "STOPPED" } }` seul, `{ mower: { inactiveReason: "PLANNING" } }` seul, un `planner` SANS
+//     `nextStartTimestamp`. Un delta ne se mappe pas seul (le piège Overkiz du wiki) : il se FOND
+//     dans la dernière lecture complète du robot, et c'est l'état fondu qui se mappe. D'où la
+//     signature : l'événement ET le robot tel qu'on le connaît, en sortie le robot mis à jour ET le patch.
 
 export const PLUGIN_ID = 'automower'
 
@@ -47,15 +50,18 @@ export type MowerActivity = StateFor<'mower'>['activity']
 const lower = (s: string | null | undefined) => (s ?? '').trim().toLowerCase()
 
 /**
- * Deux champs du fabricant pour une activité Kasbah. `state` prime quand il dit une ERREUR ou une
- * PAUSE — le robot peut être « en tonte » de son point de vue et arrêté sur une faute ; puis
- * `activity` dit ce qu'il fait. `stopped` couvre le bouton STOP, l'arrêt dans le jardin et le
- * robot éteint : ni garé, ni en pause, arrêté là où il est.
+ * Deux champs du fabricant pour une activité Kasbah. `state` prime quand il dit une ERREUR, une
+ * PAUSE ou un ARRÊT — le robot peut être « garé » de son point de vue et arrêté (capturé : un
+ * `ParkUntilFurtherNotice` fait passer `state: STOPPED` avant que `activity` ne suive) ; puis
+ * `activity` dit ce qu'il fait. `stopped` couvre le bouton STOP, l'arrêt dans le jardin, le robot
+ * éteint et celui qui attend de se rallumer sans activité connue : ni garé, ni en pause, arrêté là
+ * où il est.
  */
 export function toActivity(mower: { activity?: string | null; state?: string | null } | null | undefined): MowerActivity {
   const state = lower(mower?.state), activity = lower(mower?.activity)
   if (state === 'error' || state === 'fatal_error' || state === 'error_at_power_up') return 'error'
   if (state === 'paused') return 'paused'
+  if (state === 'stopped' || state === 'off') return 'stopped'
   switch (activity) {
     case 'mowing': case 'leaving': return 'mowing'
     case 'going_home': return 'returning'
@@ -63,8 +69,8 @@ export function toActivity(mower: { activity?: string | null; state?: string | n
     case 'parked_in_cs': return 'parked'
     case 'stopped_in_garden': return 'stopped'
   }
-  if (state === 'stopped' || state === 'off') return 'stopped'
   if (state === 'in_operation') return 'mowing'
+  if (state === 'wait_power_up' || state === 'wait_updating') return 'stopped'
   return 'parked'
 }
 
@@ -126,9 +132,19 @@ function errorFields(mower: { errorCode?: number | null; errorCodeTimestamp?: nu
   return { errorCode: code, errorMessage: errorText(code), errorAt: at === undefined ? null : localTimestamp(at, tz) }
 }
 
-function plannerFields(planner: { nextStartTimestamp?: number | null; restrictedReason?: string | null } | null | undefined, tz: string): Pick<StatePatch<'mower'>, 'nextStartAt' | 'restrictedReason'> {
+/**
+ * Pourquoi le robot reste à la station. Le `restrictedReason` du planificateur, SAUF quand le robot
+ * est en mode `HOME` : c'est ainsi que le fabricant encode « garé jusqu'à nouvel ordre » (capturé
+ * le 2026-09-16 après un `ParkUntilFurtherNotice` : `mode: HOME`, et le planificateur disait
+ * toujours `WEEK_SCHEDULE`). Le mode prime : il dit que le robot ne partira pas tout seul.
+ */
+function plannerFields(
+  planner: { nextStartTimestamp?: number | null; restrictedReason?: string | null } | null | undefined,
+  mower: { mode?: string | null } | null | undefined,
+  tz: string,
+): Pick<StatePatch<'mower'>, 'nextStartAt' | 'restrictedReason'> {
   const next = pos(planner?.nextStartTimestamp)
-  const restriction = toRestriction(planner?.restrictedReason)
+  const restriction = lower(mower?.mode) === 'home' ? 'park_override' : toRestriction(planner?.restrictedReason)
   return { nextStartAt: next === undefined ? null : localTimestamp(next, tz), ...(restriction ? { restrictedReason: restriction } : {}) }
 }
 
@@ -155,7 +171,7 @@ export function toStatePatch(m: MowerData, o: MapOptions): StatePatch<'mower'> {
     activity: toActivity(a.mower),
     battery: clampPct(a.battery?.batteryPercent),
     ...errorFields(a.mower, o.tz),
-    ...plannerFields(a.planner, o.tz),
+    ...plannerFields(a.planner, a.mower, o.tz),
     ...(typeof height === 'number' && height >= 1 && height <= 9 ? { cuttingHeight: Math.round(height) } : {}),
     ...(statusAt === undefined ? {} : { statusAt }),
     // la liste ne date pas ses positions : le dernier statut reçu est ce qui s'en approche le plus
@@ -164,34 +180,66 @@ export function toStatePatch(m: MowerData, o: MapOptions): StatePatch<'mower'> {
   }
 }
 
+/** Les clés PRÉSENTES d'un delta, sans celles qu'il ne nomme pas : c'est ce qu'on fond dans l'état connu. */
+function defined<T extends object>(o: T): Partial<T> {
+  return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<T>
+}
+
+/** Le relevé garde au plus autant de positions que le fabricant en rend dans la liste. */
+const POSITIONS_MAX = 50
+
+export interface AppliedEvent {
+  /** Le robot tel qu'on le connaît APRÈS l'événement : c'est lui qu'on garde pour le suivant. */
+  next: MowerData
+  /** Ce que l'événement change dans l'état publié. */
+  patch: StatePatch<'mower'>
+}
+
 /**
- * Un événement du WebSocket → le patch de la section qu'il porte. `null` = rien pour nous
- * (calendrier, phares, messages). Un événement `mower` réécrit l'activité ET l'erreur : la section
- * arrive entière, ce n'est pas un champ isolé.
+ * Un événement du WebSocket, fondu dans le robot tel qu'on le connaît → le robot mis à jour et le
+ * patch à publier. `null` = rien pour nous (calendrier, phares, messages, forme inattendue).
+ *
+ * Les événements sont des DELTAS (capture du 2026-09-16) : `{ mower: { state: "STOPPED" } }` ne dit
+ * rien de l'activité ni de l'erreur, `{ planner: { override, restrictedReason } }` ne redit pas le
+ * prochain départ. Mapper le fragment seul effaçait l'erreur (`errorCode` absent lu comme « plus
+ * d'erreur ») et le prochain départ (`nextStartTimestamp` absent lu comme « aucun »). On fond donc le
+ * fragment dans la section connue, puis on mappe la section entière — comme si la liste l'avait rendue.
  */
-export function applyEvent(ev: WsEvent, o: MapOptions): StatePatch<'mower'> | null {
+export function applyEvent(ev: WsEvent, current: MowerData, o: MapOptions): AppliedEvent | null {
   const at = ev.attributes ?? {}
+  const a = current.attributes
+  const withAttributes = (patch: Partial<MowerData['attributes']>): MowerData => ({ ...current, attributes: { ...a, ...patch } })
   switch (ev.type) {
     case 'battery-event-v2': {
       const pct = (at.battery as { batteryPercent?: unknown } | undefined)?.batteryPercent
-      return typeof pct === 'number' ? { battery: clampPct(pct) } : null
+      if (typeof pct !== 'number') return null
+      return { next: withAttributes({ battery: { ...(a.battery ?? {}), batteryPercent: pct } }), patch: { battery: clampPct(pct) } }
     }
     case 'mower-event-v2': {
-      const mower = mowerSectionSchema.safeParse(at.mower)
-      if (!mower.success) return null
-      return { activity: toActivity(mower.data), ...errorFields(mower.data, o.tz) }
+      const delta = mowerSectionSchema.safeParse(at.mower)
+      if (!delta.success) return null
+      const mower = { ...(a.mower ?? {}), ...defined(delta.data) }
+      return {
+        next: withAttributes({ mower }),
+        patch: { activity: toActivity(mower), ...errorFields(mower, o.tz), ...plannerFields(a.planner, mower, o.tz) },
+      }
     }
     case 'planner-event-v2': {
-      const planner = plannerSchema.safeParse(at.planner)
-      return planner.success ? plannerFields(planner.data, o.tz) : null
+      const delta = plannerSchema.safeParse(at.planner)
+      if (!delta.success) return null
+      const planner = { ...(a.planner ?? {}), ...defined(delta.data) }
+      return { next: withAttributes({ planner }), patch: plannerFields(planner, a.mower, o.tz) }
     }
     case 'position-event-v2': {
       const p = positionSchema.safeParse(at.position)
-      return p.success ? { location: { lat: p.data.latitude, lon: p.data.longitude, at: o.now } } : null
+      if (!p.success) return null
+      const positions = [p.data, ...(a.positions ?? [])].slice(0, POSITIONS_MAX)
+      return { next: withAttributes({ positions }), patch: { location: { lat: p.data.latitude, lon: p.data.longitude, at: o.now } } }
     }
     case 'cuttingHeight-event-v2': {
       const h = (at.cuttingHeight as { height?: unknown } | undefined)?.height
-      return typeof h === 'number' && h >= 1 && h <= 9 ? { cuttingHeight: Math.round(h) } : null
+      if (typeof h !== 'number' || h < 1 || h > 9) return null
+      return { next: withAttributes({ settings: { ...(a.settings ?? {}), cuttingHeight: h } }), patch: { cuttingHeight: Math.round(h) } }
     }
     default:
       return null

@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { ManualClock } from '@kasbah/mock-sim'
 import type { PluginContext } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
-import { MOWERS_ERROR, MOWERS_MOWING, MOWER_ID, TOKEN_INVALID_CLIENT, TOKEN_RESPONSE, TOKEN_RESPONSE_2, WS_POSITION, WS_READY, WS_UNKNOWN_MOWER } from './__fixtures__/automower'
+import { MOWERS_ERROR, MOWERS_MOWING, MOWERS_PARKED, MOWER_ID, TOKEN_INVALID_CLIENT, TOKEN_RESPONSE, TOKEN_RESPONSE_2, WS_MOWER_HOME, WS_MOWER_STOPPED, WS_PLANNER, WS_POSITION, WS_READY, WS_UNKNOWN_MOWER } from './__fixtures__/automower'
 import { TOKEN_URL } from './auth'
 import { API_BASE_URL } from './client'
 import { automowerConfigSchema, createAutomowerPlugin, type AutomowerStatus } from './index'
@@ -157,6 +157,20 @@ describe('automower — le flux porte le vivant', () => {
     // le ping tient la connexion
     clock.advance(61_000)
     expect(ws.sockets[0]!.pings).toBe(1)
+  })
+
+  it('des deltas successifs : chacun se fond dans le robot connu, le prochain départ survit au planificateur', async () => {
+    const hq = fakeHusqvarna()
+    hq.world.list = MOWERS_PARKED
+    const { ctx, ws } = await started({ hq })
+    ws.emit(0, 'open')
+    ws.emit(0, 'message', JSON.stringify(WS_MOWER_STOPPED))
+    expect(ctx.emitState).toHaveBeenLastCalledWith(MOWER_ID, expect.objectContaining({ activity: 'stopped', errorCode: null }))
+    ws.emit(0, 'message', JSON.stringify(WS_MOWER_HOME))
+    expect(ctx.emitState).toHaveBeenLastCalledWith(MOWER_ID, expect.objectContaining({ restrictedReason: 'park_override' }))
+    ws.emit(0, 'message', JSON.stringify(WS_PLANNER))
+    // le planificateur du flux ne redit pas le prochain départ : celui de la liste tient
+    expect(ctx.emitState).toHaveBeenLastCalledWith(MOWER_ID, { nextStartAt: Date.UTC(2026, 8, 17, 8), restrictedReason: 'park_override' })
   })
 
   it('un événement pour un robot inconnu relit la liste (une fois par minute au plus)', async () => {
