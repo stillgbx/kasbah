@@ -60,6 +60,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   }))
 
   const deviceTap = new Set<Handler<[string]>>()
+  const journalTap = new Set<Handler<[number]>>()
   const roomTap = new Set<Handler<[string]>>()
   const zoneTap = new Set<Handler<[string]>>()
   const levelTap = new Set<Handler<[string]>>()
@@ -82,6 +83,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     scene.on('roomTap', (id) => roomTap.forEach((f) => f(id)))
     scene.on('zoneTap', (id) => zoneTap.forEach((f) => f(id)))
     scene.on('levelTap', (id) => levelTap.forEach((f) => f(id)))
+    scene.on('journalTap', (at) => journalTap.forEach((f) => f(at)))
     scene.on('backgroundTap', () => backgroundTap.forEach((f) => f()))
     scene.on('deviceDrag', (k, xy, r) => deviceDrag.forEach((f) => f(k, xy, r)))
     scene.on('deviceDrop', (k, xy, r) => deviceDrop.forEach((f) => f(k, xy, r)))
@@ -121,6 +123,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   return {
     supported, ready,
     onDeviceTap: (f: Handler<[string]>) => { deviceTap.add(f) },
+    onJournalTap: (f: Handler<[number]>) => { journalTap.add(f) },
     onRoomTap: (f: Handler<[string]>) => { roomTap.add(f) },
     onZoneTap: (f: Handler<[string]>) => { zoneTap.add(f) },
     onLevelTap: (f: Handler<[string]>) => { levelTap.add(f) },
@@ -144,6 +147,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     previewBodyColor: (key: string, color: string | null) => scene?.previewBodyColor(key, color),
     setJournalPoints: (key: string | null, points: readonly JournalPoint[]) => scene?.setJournalPoints(key, points),
     focusJournalPoint: (at: number) => scene?.focusJournalPoint(at),
+    setActiveJournalPoint: (at: number | null) => scene?.setActiveJournalPoint(at),
     controller: () => scene,
   }
 }

@@ -105,9 +105,20 @@ const { journals } = useJournals(journalIds)
 const journalOf = (m: MowerEntry): JournalEntry[] => journals.value[m.descriptor.id] ?? []
 const journalOpen = ref<string | null>(null)
 const journalFocus = ref<Record<string, JournalEntry | undefined>>({})
-const mapPoints = (m: MowerEntry) => (journalOpen.value === m.descriptor.id ? journalPoints(journalOf(m)) : [])
+/**
+ * Les points MÉMORISÉS par robot : la carte refait ses pastilles quand la liste change d'identité,
+ * et recalculer un tableau neuf à chaque rendu les refaisait à chaque battement d'horloge.
+ */
+const pointsByMower = computed(() => Object.fromEntries(mowers.value.map((m) => [m.descriptor.id, journalPoints(journalOf(m))])))
+const NO_POINTS: never[] = []
+const mapPoints = (m: MowerEntry) => (journalOpen.value === m.descriptor.id ? pointsByMower.value[m.descriptor.id] ?? NO_POINTS : NO_POINTS)
 function pickEntry(m: MowerEntry, e: JournalEntry): void {
   journalFocus.value = { ...journalFocus.value, [m.descriptor.id]: e }
+}
+/** Une pastille touchée sur la carte : la ligne correspondante devient l'active (et défile à portée de vue). */
+function pickAt(m: MowerEntry, at: number): void {
+  const e = journalOf(m).find((x) => x.at === at)
+  if (e) pickEntry(m, e)
 }
 const updatedAgo = (s: StateFor<'mower'>) => t('mower.updatedAgo', { ago: formatAgo(s.updatedAt, now.value, locale.value) })
 
@@ -174,7 +185,8 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
           </div>
           <!-- la carte : le robot (disque, il ne dit pas son cap), la maison, et — journal déplié — ses incidents -->
           <VehicleMap class="rcard__map" subject="mower" :location="mapLocation(m)" :home="house.house?.origin" :caption="caption(m.state)"
-                      :points="mapPoints(m)" :focus="journalFocus[m.descriptor.id]?.location" />
+                      :points="mapPoints(m)" :focus="journalFocus[m.descriptor.id]?.location" :active-at="journalFocus[m.descriptor.id]?.at"
+                      @point-tap="pickAt(m, $event)" />
           <div class="rcard__actions">
             <button v-if="has(m, 'mow')" type="button" class="pill" :data-on="m.state.activity === 'mowing' ? '1' : '0'" :disabled="!m.state.available || busy(m)" :aria-busy="busy(m)"
                     @click="send(m.descriptor.id, m.state.activity === 'mowing' ? { type: 'mower.pause' } : { type: 'mower.start', durationMin: 60 })">

@@ -4,7 +4,7 @@ import {
   Group, SphereGeometry, CylinderGeometry,
 } from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js'
+import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js'
 import {
   boundsCenter, buildingBounds, computeHouseGeometry, deviceFloorZ, geoDistance, indexHouse, longestEdgeYawDeg, pointInPolygon, resolveDefaults, resolveDeviceLevelId, sitePosition,
   roofBounds, roomBounds, zoneBounds,
@@ -122,6 +122,8 @@ export interface SceneEvents {
   zoneTap: (zoneId: string) => void
   /** Tap sur le toit : le niveau qui le porte (il n'a ni pièce ni sol à toucher). */
   levelTap: (levelId: string) => void
+  /** Tap sur une épingle du journal (un incident posé sur le terrain) : sa date, qui l'identifie. */
+  journalTap: (at: number) => void
   backgroundTap: () => void
   /** Glissement de l'appareil déplaçable : position au sol (repère maison) et pièce survolée (même niveau) ou null. */
   deviceDrag: (key: string, xy: [number, number], roomId: string | null) => void
@@ -179,8 +181,12 @@ export class HouseScene {
   readonly controls: OrbitControls | null
   readonly loop: RenderLoop
   readonly markers = new Map<string, DeviceMarker>()
-  /** Les incidents du journal d'un appareil, posés sur le terrain le temps que le panneau les montre. */
-  private journal: { group: Group; points: { at: number; anchor: Object3D }[] } | null = null
+  /**
+   * Les incidents du journal d'un appareil, posés sur le terrain le temps que le panneau les montre :
+   * chaque épingle avec sa tête (touchable), son étiquette (visible seulement quand elle est ACTIVE)
+   * et sa date, qui l'identifie.
+   */
+  private journal: { group: Group; points: { at: number; anchor: Object3D; head: Mesh; label: CSS2DObject | null }[]; pickables: Object3D[]; active: number | null } | null = null
   readonly supported: boolean
 
   private materials: MaterialSet
@@ -232,7 +238,7 @@ export class HouseScene {
   private selectedKey: string | null = null
   private listeners: { [K in keyof SceneEvents]: Set<SceneEvents[K]> } = {
     deviceTap: new Set(), roomTap: new Set(), zoneTap: new Set(), levelTap: new Set(), backgroundTap: new Set(),
-    deviceDrag: new Set(), deviceDrop: new Set(),
+    deviceDrag: new Set(), deviceDrop: new Set(), journalTap: new Set(),
   }
   private detachInput: (() => void) | null = null
   private movableKeys: string[] = []
@@ -601,7 +607,7 @@ export class HouseScene {
    * lui-même (`sitePosition`, avec son `gpsOffset`) — un point hors du terrain n'est pas dessiné.
    * `null` retire tout. C'est ainsi qu'on LOCALISE une panne : « No loop signal » a une place.
    */
-  setJournalPoints(key: string | null, points: readonly { at: number; lat: number; lon: number; severity: string }[]): void {
+  setJournalPoints(key: string | null, points: readonly { at: number; lat: number; lon: number; severity: string; label?: string }[]): void {
     if (this.journal) {
       this.journal.group.removeFromParent()
       disposeObject3D(this.journal.group)
@@ -611,7 +617,8 @@ export class HouseScene {
     const device = this.house.devices.find((d) => d.id === key || d.deviceId === key)
     const group = new Group()
     group.name = `journal:${key}`
-    const anchors: { at: number; anchor: Object3D }[] = []
+    const anchors: { at: number; anchor: Object3D; head: Mesh; label: CSS2DObject | null }[] = []
+    const pickables: Object3D[] = []
     const stem = new CylinderGeometry(0.025, 0.025, 0.7, 8)
     stem.rotateX(Math.PI / 2)                      // l'axe du cylindre est Y chez Three, la tige monte en Z
     const head = new SphereGeometry(0.16, 16, 12)
@@ -626,12 +633,43 @@ export class HouseScene {
       rod.position.z = 0.35
       const top = new Mesh(p.severity === 'fatal' ? bigHead : head, new MeshBasicMaterial({ color: JOURNAL_PIN_COLORS[p.severity] ?? JOURNAL_PIN_COLORS.info }))
       top.position.z = 0.7
+      // la tête se touche : c'est par là qu'on lit l'incident depuis la scène
+      top.userData = { role: 'journal', at: p.at }
+      pickables.push(top)
       pin.add(rod, top)
+      // l'étiquette (texte du fabricant et code) n'apparaît que sur l'épingle ACTIVE : dix-neuf
+      // étiquettes ouvertes se couvriraient l'une l'autre
+      let label: CSS2DObject | null = null
+      if (typeof document !== 'undefined') {
+        const el = document.createElement('div')
+        el.className = 'journal-pin'
+        el.textContent = p.label ?? ''
+        label = new CSS2DObject(el)
+        label.position.z = 1.0
+        label.visible = false
+        pin.add(label)
+      }
       group.add(pin)
-      anchors.push({ at: p.at, anchor: pin })
+      anchors.push({ at: p.at, anchor: pin, head: top, label })
     }
     this.nodes.outdoorMarkers.add(group)
-    this.journal = { group, points: anchors }
+    this.journal = { group, points: anchors, pickables, active: null }
+    this.loop.invalidate()
+  }
+
+  /**
+   * L'épingle ACTIVE : celle de la ligne choisie dans le panneau, ou celle qu'on vient de toucher.
+   * Tête grossie, étiquette visible ; `null` éteint tout. C'est ainsi qu'on lit l'incident depuis la
+   * scène sans avoir à retrouver sa ligne.
+   */
+  setActiveJournalPoint(at: number | null): void {
+    if (!this.journal) return
+    this.journal.active = at
+    for (const p of this.journal.points) {
+      const active = p.at === at
+      p.head.scale.setScalar(active ? 1.6 : 1)
+      if (p.label) p.label.visible = active
+    }
     this.loop.invalidate()
   }
 
@@ -639,6 +677,7 @@ export class HouseScene {
   focusJournalPoint(at: number, animate = true): void {
     const hit = this.journal?.points.find((p) => p.at === at)
     if (!hit) return
+    this.setActiveJournalPoint(at)
     hit.anchor.updateWorldMatrix(true, false)
     const center = new Vector3()
     hit.anchor.getWorldPosition(center)
@@ -989,9 +1028,14 @@ export class HouseScene {
   }
 
   /** Sélection au point NDC par lancer de rayon : objet d'appareil, sol de pièce, toit, zone. */
-  pick(ndc: { x: number; y: number }): { kind: 'device'; key: string } | { kind: 'room'; roomId: string } | { kind: 'level'; levelId: string } | { kind: 'zone'; zoneId: string } | null {
+  pick(ndc: { x: number; y: number }): { kind: 'device'; key: string } | { kind: 'room'; roomId: string } | { kind: 'level'; levelId: string } | { kind: 'zone'; zoneId: string } | { kind: 'journal'; at: number } | null {
     if (!this.nodes) return null
     this.raycaster.setFromCamera(new Vector2(ndc.x, ndc.y), this.camera)
+    // une épingle du journal d'abord : petite, posée au sol, elle perdrait contre le sol de la pièce
+    if (this.journal) {
+      const hitPin = this.raycaster.intersectObjects(this.journal.pickables, false)[0]
+      if (hitPin) return { kind: 'journal', at: hitPin.object.userData.at as number }
+    }
     const pickables: Object3D[] = []
     for (const m of this.markers.values()) if (m.visibleInScene) pickables.push(...m.pickables)
     const hitDevice = this.raycaster.intersectObjects(pickables, false)[0]
@@ -1021,6 +1065,7 @@ export class HouseScene {
     const hit = this.pick(ev.ndc)
     if (!hit) { this.emit('backgroundTap'); return }
     if (hit.kind === 'device') this.emit('deviceTap', hit.key)
+    else if (hit.kind === 'journal') this.emit('journalTap', hit.at)
     else if (hit.kind === 'room') this.emit('roomTap', hit.roomId)
     else if (hit.kind === 'level') this.emit('levelTap', hit.levelId)
     else this.emit('zoneTap', hit.zoneId)

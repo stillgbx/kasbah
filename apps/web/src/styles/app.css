@@ -97,6 +97,15 @@ button { font-family: inherit; cursor: pointer; }
    reste dans l'infobulle et dans le panneau. */
 .marker-pill { width: max-content; max-width: 210px; }
 .marker-pill__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* L'étiquette d'un incident du journal, au-dessus de son épingle : posée par la scène quand l'épingle
+   est ACTIVE seulement (dix-neuf étiquettes ouvertes se couvriraient). Même fond opaque que la pilule,
+   même raison : pas de flou de fond sur un canvas qui se redessine. */
+.journal-pin {
+  pointer-events: none; position: absolute; left: 0; top: 0; transform: translate(-50%, -100%);
+  max-width: 240px; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface) 92%, transparent); color: var(--text);
+  font: 500 11px/1.25 var(--font); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .marker-pill__icon {
   flex: 0 0 auto; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
   color: var(--cat); background: color-mix(in srgb, var(--cat) 14%, transparent);

@@ -65,17 +65,16 @@ const journalIds = computed(() => (journalable.value ? [journalable.value.id] : 
 const { journals } = useJournals(journalIds)
 const journalEntries = computed(() => (journalable.value ? journals.value[journalable.value.id] ?? [] : []))
 const journalOpen = ref(false)
-const journalActive = ref<number | undefined>(undefined)
+/** L'incident actif est PARTAGÉ avec la scène : une épingle touchée surligne sa ligne ici, et fait défiler la liste jusqu'à elle. */
+const journalActive = computed(() => house.journalActive ?? undefined)
 function toggleJournal(): void {
   journalOpen.value = !journalOpen.value
-  journalActive.value = undefined
   if (journalOpen.value && journalable.value) house.showJournal(journalable.value.id, journalPoints(journalEntries.value))
   else house.hideJournal()
 }
 // le journal se rafraîchit pendant qu'il est ouvert : les épingles suivent
 watch(journalEntries, (entries) => { if (journalOpen.value && journalable.value) house.showJournal(journalable.value.id, journalPoints(entries)) })
 function pickEntry(e: { at: number }): void {
-  journalActive.value = e.at
   if (journalable.value) house.focusJournalPoint(journalable.value.id, e.at)
 }
 // changé d'appareil, les réglages et le journal se referment : le panneau suivant s'ouvre sur ses commandes

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { nextTick, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { JournalEntry } from '@kasbah/shared'
 import { journalLabel, journalWhen } from '../../lib/journal'
@@ -12,19 +13,30 @@ import { journalLabel, journalWhen } from '../../lib/journal'
  * pas au gré du journal — c'est ce qui la faisait sauter avant. Elle est en MONOSPACE, date à
  * largeur constante : un journal se lit en colonnes, comme un terminal (demande de l'utilisateur).
  */
-defineProps<{ entries: readonly JournalEntry[]; active?: number | undefined }>()
+const props = defineProps<{ entries: readonly JournalEntry[]; active?: number | undefined }>()
 const emit = defineEmits<{ pick: [entry: JournalEntry] }>()
-const { locale } = useI18n()
+const { t, locale } = useI18n()
+
+/** L'infobulle dit TOUT : le texte que la ligne coupe, et ce qu'un clic fera (ou pourquoi il ne fera rien). */
+const titleOf = (e: JournalEntry) => `${journalLabel(e)}\n${t(e.location ? 'mower.journalLocate' : 'mower.journalNoLocation')}`
+
+/** La ligne active — choisie ici, ou par une épingle touchée dans la scène — se met à portée de vue. */
+const rows: Record<number, HTMLElement | null> = {}
+watch(() => props.active, (at) => {
+  if (at === undefined) return
+  void nextTick(() => rows[at]?.scrollIntoView({ block: 'nearest' }))
+})
 </script>
 
 <template>
   <div class="jl">
     <ul v-if="entries.length" class="jl__list">
-      <li v-for="e in entries" :key="`${e.at}-${e.code}`" class="jl__row" :data-active="e.at === active ? '1' : '0'">
+      <li v-for="e in entries" :key="`${e.at}-${e.code}`" :ref="(el) => { rows[e.at] = el as HTMLElement | null }"
+          class="jl__row" :data-active="e.at === active ? '1' : '0'" :title="titleOf(e)">
         <span class="jl__dot" :data-severity="e.severity" :title="$t(`mower.severity.${e.severity}`)" />
         <span class="muted jl__when">{{ journalWhen(e.at, locale) }}</span>
-        <button v-if="e.location" type="button" class="jl__text jl__pick" :title="$t('mower.journalLocate')" @click="emit('pick', e)">{{ journalLabel(e) }}</button>
-        <span v-else class="jl__text" :title="$t('mower.journalNoLocation')">{{ journalLabel(e) }}</span>
+        <button v-if="e.location" type="button" class="jl__text jl__pick" @click="emit('pick', e)">{{ journalLabel(e) }}</button>
+        <span v-else class="jl__text">{{ journalLabel(e) }}</span>
       </li>
     </ul>
     <p v-else class="muted jl__empty">{{ $t('mower.journalEmpty') }}</p>

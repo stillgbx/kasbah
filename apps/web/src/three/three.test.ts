@@ -788,7 +788,15 @@ describe('incidents du journal posés sur le terrain', () => {
       { at: 3, ...geo([900, 900]), severity: 'warning' },
     ])
     expect(pins()).toBe(2)
+    // l'épingle active grossit et montre son étiquette ; les autres non ; `null` éteint tout
+    const journal = () => (scene as unknown as { journal: { points: { at: number; head: { scale: { x: number } }; label: { visible: boolean } | null }[] } }).journal
     scene.focusJournalPoint(2, false)
+    expect(journal().points.find((p) => p.at === 2)!.head.scale.x).toBeCloseTo(1.6)
+    expect(journal().points.find((p) => p.at === 2)!.label?.visible).toBe(true)
+    expect(journal().points.find((p) => p.at === 1)!.head.scale.x).toBe(1)
+    expect(journal().points.find((p) => p.at === 1)!.label?.visible).toBe(false)
+    scene.setActiveJournalPoint(null)
+    expect(journal().points.find((p) => p.at === 2)!.label?.visible).toBe(false)
     scene.focusJournalPoint(999, false)
     scene.setJournalPoints(null, [])
     expect(pins()).toBe(0)

@@ -86,6 +86,8 @@ scene.onLevelTap((levelId) => {
   else { house.selectLevel(levelId); panelOpen.value = true }
 })
 scene.onBackgroundTap(() => { if (!house.editingArrayId) house.clearSelection() })
+// une épingle du journal touchée : elle devient l'incident actif (étiquette dans la scène, ligne surlignée dans le panneau)
+scene.onJournalTap((at) => house.markJournalPoint(at))
 
 // Le fil d'Ariane remonte d'un cran (appareil → pièce → niveau → maison) ; arrivé à « Maison », il
 // fait ce que fait l'onglet « Tout » : le mot promet la maison entière, pas le niveau qu'on
@@ -147,6 +149,7 @@ watch(() => house.bodyColorPreview, (p) => { if (p) scene.previewBodyColor(p.key
 // le journal déplié dans le panneau pose ses incidents sur le terrain ; une ligne choisie cadre la caméra dessus
 watch(() => house.journalOverlay, (j) => scene.setJournalPoints(j?.key ?? null, j?.points ?? []))
 watch(() => house.journalFocus, (f) => { if (f) scene.focusJournalPoint(f.at) })
+watch(() => house.journalActive, (at) => scene.setActiveJournalPoint(at))
 // aperçu du champ glissé : tous ses modules suivent l'origine du brouillon
 watch(() => house.arrayDraft, () => {
   for (const m of house.editingArrayModules) if (isPlaced(m)) scene.moveMarker(m.id, m.position)

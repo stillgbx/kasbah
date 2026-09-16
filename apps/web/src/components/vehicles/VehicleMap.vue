@@ -28,7 +28,10 @@ const props = defineProps<{
   points?: readonly JournalPoint[] | undefined
   /** Un point à AMENER au centre (une ligne du journal choisie) : la carte y va, et cesse de se recadrer seule. */
   focus?: LatLon | undefined
+  /** L'incident ACTIF (sa date) : sa pastille grossit et passe devant. */
+  activeAt?: number | undefined
 }>()
+const emit = defineEmits<{ pointTap: [at: number] }>()
 
 const settings = useSettingsStore()
 // Clé VOLONTAIREMENT nouvelle : sous l'ancien nom traînent des valeurs écrites par un watcher trop
@@ -49,6 +52,7 @@ let map: MlMap | null = null
 let carMarker: Marker | null = null
 let homeMarker: Marker | null = null
 let pointMarkers: Marker[] = []
+const pointEls = new Map<number, HTMLElement>()
 let observer: ResizeObserver | null = null
 
 const hasPosition = computed(() => !!props.location)
@@ -131,11 +135,16 @@ function placePoints(): void {
   if (!map) return
   for (const m of pointMarkers) m.remove()
   pointMarkers = []
+  pointEls.clear()
   for (const p of props.points ?? []) {
     const el = document.createElement('div')
     el.className = 'vmap__marker vmap__marker--point'
     el.title = p.label
+    el.dataset.active = p.at === props.activeAt ? '1' : '0'
     el.innerHTML = `<svg viewBox="0 0 16 16" width="14" height="14"><circle cx="8" cy="8" r="5" fill="${JOURNAL_COLORS[p.severity]}" stroke="var(--surface)" stroke-width="2"/></svg>`
+    // toucher une pastille désigne l'incident : la liste le surligne et le raconte
+    el.addEventListener('click', (ev) => { ev.stopPropagation(); emit('pointTap', p.at) })
+    pointEls.set(p.at, el)
     pointMarkers.push(new Marker({ element: el }).setLngLat([p.lon, p.lat]).addTo(map))
   }
 }
@@ -196,6 +205,8 @@ watch(() => [props.location?.lat, props.location?.lon, props.headingDeg, props.h
   if (!moved.value) fit(true)
 })
 watch(() => props.points, placePoints)
+// l'actif change : seules deux pastilles changent d'état, rien n'est refait
+watch(() => props.activeAt, (at) => { for (const [k, el] of pointEls) el.dataset.active = k === at ? '1' : '0' })
 // un point choisi : la carte y va (assez près pour lire le jardin), et c'est comme si l'utilisateur
 // l'avait déplacée — elle ne se recadre plus seule, « Recentrer » le propose
 watch(() => props.focus, (f) => {
@@ -266,8 +277,12 @@ watch(full, (f) => { if (f) window.addEventListener('keydown', onKey); else wind
 /* marqueurs : couleur de l'accent pour la voiture, du texte pour la maison ; l'ombre les détache du satellite */
 :global(.vmap__marker) { display: grid; place-items: center; filter: drop-shadow(0 1px 2px rgb(0 0 0 / .4)); }
 :global(.vmap__marker--car), :global(.vmap__marker--mower) { color: var(--accent); }
-/* les incidents passent SOUS le robot et la maison : ce sont eux qu'on cherche, pas eux qu'on suit */
-:global(.vmap__marker--point) { z-index: 0; }
+/* les incidents passent SOUS le robot et la maison : ce sont eux qu'on cherche, pas eux qu'on suit ;
+   l'ACTIF grossit et passe devant — c'est lui qu'on regarde */
+:global(.vmap__marker--point) { z-index: 0; cursor: pointer; }
+:global(.vmap__marker--point svg) { transition: transform .15s; }
+:global(.vmap__marker--point[data-active='1']) { z-index: 1; }
+:global(.vmap__marker--point[data-active='1'] svg) { transform: scale(1.7); }
 :global(.vmap__marker--home) { color: var(--text); }
 /* les boutons natifs de MapLibre suivent les jetons du thème */
 :global(.vmap .maplibregl-ctrl-group) { background: var(--surface); border-radius: 10px; box-shadow: 0 1px 4px rgb(0 0 0 / .15); }

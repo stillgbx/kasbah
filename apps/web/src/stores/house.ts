@@ -405,13 +405,19 @@ export const useHouseStore = defineStore('house', () => {
    */
   const journalOverlay = shallowRef<{ key: string; points: JournalPoint[] } | null>(null)
   const journalFocus = shallowRef<{ key: string; at: number } | null>(null)
+  /** L'incident ACTIF (date) : ligne choisie dans le panneau, ou épingle touchée dans la scène — les deux le partagent. */
+  const journalActive = shallowRef<number | null>(null)
   function showJournal(pluginDeviceId: string, points: JournalPoint[]): void {
     journalOverlay.value = { key: houseDeviceFor(pluginDeviceId)?.id ?? pluginDeviceId, points }
   }
-  function hideJournal(): void { journalOverlay.value = null; journalFocus.value = null }
+  function hideJournal(): void { journalOverlay.value = null; journalFocus.value = null; journalActive.value = null }
+  /** Une ligne choisie : la caméra s'y cadre, et elle devient l'incident actif. */
   function focusJournalPoint(pluginDeviceId: string, at: number): void {
     journalFocus.value = { key: houseDeviceFor(pluginDeviceId)?.id ?? pluginDeviceId, at }
+    journalActive.value = at
   }
+  /** Une épingle touchée dans la scène : l'incident actif change, la caméra reste où elle est. */
+  function markJournalPoint(at: number | null): void { journalActive.value = at }
 
   /**
    * Renomme un appareil dans la maison — SANS le placer. C'est le seul chemin possible pour un
@@ -723,7 +729,7 @@ export const useHouseStore = defineStore('house', () => {
     house, effective, loading, error, index, levels, zones, soundRoutes, relaySource,
     focusedLevelId, gardenFocus, selectedRoomId, selectedLevelId, selectedKey, floorTab, selectedRoom, selectedZone, selectedDevice,
     load, setFloorTab, focusLevel, selectRoom, selectLevel, selectDevice, clearSelection, backToHome, backFromRoom, backFromDevice, houseDeviceFor, renameDevice, setDeviceTuning, bodyColorPreview, previewBodyColor, setRoomOrder,
-    journalOverlay, journalFocus, showJournal, hideJournal, focusJournalPoint,
+    journalOverlay, journalFocus, journalActive, showJournal, hideJournal, focusJournalPoint, markJournalPoint,
     placing, saving, draft, canRevert, isProvisional, startPlacing, startPlacingNew, stopPlacing, previewPosition, previewHeight, savePlacement, revertPlacement, removePlacement,
     placementLevelId, setPlacementLevel,
     arrays, arraysOf, editingArrayId, editingArray, editingArrayModules, arrayDraft, hoveredKey, hoverSlot, freeInverters,

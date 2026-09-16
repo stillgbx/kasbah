@@ -81,9 +81,12 @@ describe('RobotsView', () => {
     expect(rows[0]!.text()).toContain('2')
     expect(rows[0]!.find('.jl__dot').attributes('data-severity')).toBe('error')
     expect(rows[1]!.find('.jl__dot').attributes('data-severity')).toBe('warning')
-    // la ligne qui sait où elle s'est produite mène à la carte ; l'autre non
+    // la ligne qui sait où elle s'est produite mène à la carte ; l'autre non — et l'infobulle dit tout
     expect(rows[0]!.find('button.jl__pick').exists()).toBe(true)
     expect(rows[1]!.find('button.jl__pick').exists()).toBe(false)
+    expect(rows[0]!.attributes('title')).toContain('No loop signal · 2')
+    expect(rows[0]!.attributes('title')).toContain('Voir où c’est arrivé'.replace('’', "'"))
+    expect(rows[1]!.attributes('title')).toContain('Sans position')
     await rows[0]!.find('button.jl__pick').trigger('click')
     expect(rows[0]!.attributes('data-active')).toBe('1')
   })
