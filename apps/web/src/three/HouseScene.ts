@@ -15,6 +15,7 @@ import { createSkyEnvironment, overcastSky } from './core/sky'
 import { DECOR_LAYER, LAMP_LAYER, SITE_DECOR_LAYER } from './core/layers'
 import { createPostPipeline, detectQuality, gpuName, PIXEL_RATIO, toneMappingOf, type EffectiveQuality, type PostPipeline, type RenderQuality } from './core/post'
 import { fogDistance, sunDirection, type SceneAmbience } from './core/ambience'
+import { Precipitation } from './effects/precipitation'
 import { defaultAmbience, defaultSceneTheme, rolesOf, styleById, type RenderStyle, type StyleLook } from './styles'
 import { buildHouse, type HouseNodes, type LevelNodes } from './builders/buildHouse'
 import { flatPolygon, flatRing, insetPolygon } from './builders/shapes'
@@ -139,6 +140,8 @@ const ROOF_POLAR = (35 * Math.PI) / 180
 const FLASH: readonly (readonly [number, number])[] = [[2.6, 70], [1, 90], [1.9, 120]]
 /** Entre deux éclairs, au hasard dans cette fourchette (ms). */
 const FLASH_EVERY_MS: readonly [number, number] = [6000, 16000]
+/** Plafond du volume où il pleut, au-dessus du sol de la maison (m) : au-dessus des toits, sous la caméra d'ensemble. */
+const PRECIP_HEIGHT_M = 14
 const WORLD_UP = new Vector3(0, 1, 0)
 const WHITE = new Color(0xffffff)
 /** Largeur (m) du trait qui souligne la pièce sélectionnée : un pixel de loin, une bande de près. */
@@ -188,6 +191,10 @@ export class HouseScene {
   private quality: EffectiveQuality = 'high'
   /** Minuterie de l'orage en cours (prochain éclat, ou éclat en train de s'éteindre) ; `null` = pas d'orage. */
   private stormTimer: ReturnType<typeof setTimeout> | null = null
+  /** Pluie ou neige en cours (`effects/precipitation.ts`), de quoi retirer son animation, et l'intensité avec laquelle elle a été bâtie. */
+  private precip: Precipitation | null = null
+  private stopPrecip: (() => void) | null = null
+  private precipIntensity = 0
   /** Direction d'où vient la lumière du jour, monde three. Relue à chaque changement d'ambiance. */
   private sunDir = new Vector3(0.45, 0.82, 0.35)
   /**
@@ -330,6 +337,7 @@ export class HouseScene {
     this.invalidateShadows()
     this.nodes.terrain.receiveShadow = true
     this.scene.add(this.nodes.root)
+    this.syncPrecipitation()               // la racine est neuve : ce qui tombe se repose dessus
     this.fitSunShadow()
     this.buildMarkers()
     this.refreshLevelPasses()
@@ -382,6 +390,7 @@ export class HouseScene {
   clear(): void {
     for (const m of this.markers.values()) m.dispose()
     this.markers.clear()
+    this.removePrecipitation()
     if (this.nodes) {
       disposeObject3D(this.nodes.root, new Set<Material>(this.materials.all))
       this.nodes = null
@@ -1063,6 +1072,7 @@ export class HouseScene {
     this.refreshLevelPasses()              // l'heure change ce qu'une lampe allumée vaut
     this.invalidateShadows()               // le soleil a pu bouger
     this.syncStorm()
+    this.syncPrecipitation()
     this.loop.invalidate()
   }
 
@@ -1095,6 +1105,38 @@ export class HouseScene {
     if (this.post) this.post.setLook(post)
     else if (this.renderer) this.renderer.toneMappingExposure = post.exposure
     this.loop.invalidate()
+  }
+
+  /**
+   * Pluie ou neige selon l'ambiance — le seul effet météo qui fait tourner la boucle (à 20 Hz, comme
+   * toute animation décorative). Coupé en qualité BASSE : sur une tablette qui peine déjà, une averse
+   * de deux mille traits n'est pas ce qu'on lui demande. Le vent vient de l'ambiance aussi ; sans
+   * météo réelle, une brise d'ouest.
+   */
+  private syncPrecipitation(): void {
+    const p = this.ambience.precipitation
+    if (!p || this.quality === 'low' || !this.nodes || !this.geometry) { this.removePrecipitation(); return }
+    const params = { kind: p.kind, intensity: p.intensity, windKmh: this.ambience.windKmh ?? 10, windDirDeg: this.ambience.windDirDeg ?? 250 }
+    // même nature et intensité voisine : on règle sans reconstruire ; sinon on repart (le nombre
+    // de particules est fixé à la création)
+    if (this.precip && this.precip.kind === p.kind && this.precip.object.parent === this.nodes.root && Math.abs(this.precipIntensity - p.intensity) < 0.25) {
+      this.precip.setParams(params)
+      return
+    }
+    this.removePrecipitation()
+    const b = this.geometry.bounds
+    this.precip = new Precipitation({ min: [b.min[0], b.min[1]], max: [b.max[0], b.max[1]], height: PRECIP_HEIGHT_M }, params)
+    this.precipIntensity = p.intensity
+    this.nodes.root.add(this.precip.object)
+    const effect = this.precip
+    this.stopPrecip = this.loop.addAnimation({ step: (_now, dtS) => { if (this.precip !== effect) return false; effect.step(dtS); return true } })
+  }
+
+  private removePrecipitation(): void {
+    this.stopPrecip?.()
+    this.stopPrecip = null
+    this.precip?.dispose()
+    this.precip = null
   }
 
   /**
@@ -1164,6 +1206,7 @@ export class HouseScene {
     this.post = null
     const wanted = this.options.quality === 'auto' ? detectQuality(this.renderer ? gpuName(this.renderer) : '') : this.options.quality
     this.quality = wanted
+    this.syncPrecipitation()               // la qualité basse coupe la pluie
     if (!this.renderer) return
     const pixelRatio = Math.min(window.devicePixelRatio || 1, PIXEL_RATIO[wanted])
     this.renderer.setPixelRatio(pixelRatio)
@@ -1396,6 +1439,7 @@ export class HouseScene {
     this.detachInput?.()
     if (this.labelsIdle !== null) clearTimeout(this.labelsIdle)
     if (this.stormTimer !== null) { clearTimeout(this.stormTimer); this.stormTimer = null }
+    this.removePrecipitation()
     this.drag?.detach()
     this.loop.dispose()
     this.controls?.dispose()

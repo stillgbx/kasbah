@@ -24,6 +24,7 @@ import type { DeviceMarker } from './markers/DeviceMarker'
 import { yawToRad } from '../lib/orientation'
 import { HouseScene } from './HouseScene'
 import type { Animation } from './core/renderLoop'
+import { Precipitation } from './effects/precipitation'
 
 describe('coords', () => {
   it('maps Z-up house frame to Y-up world', () => {
@@ -1040,9 +1041,10 @@ describe('mise en évidence d’une pièce', () => {
 
 describe('météo dans la scène', () => {
   it('traduit une condition en ce que les surfaces en gardent', () => {
-    expect(weatherEffects('rain')).toEqual({ wetness: 1 })
-    expect(weatherEffects('thunderstorm')).toEqual({ wetness: 1, storm: true })
-    expect(weatherEffects('snow')).toEqual({ snow: 1 })
+    expect(weatherEffects('rain')).toEqual({ wetness: 1, precipitation: { kind: 'rain', intensity: 0.8 } })
+    expect(weatherEffects('thunderstorm')).toMatchObject({ wetness: 1, storm: true, precipitation: { kind: 'rain', intensity: 1 } })
+    expect(weatherEffects('snow')).toEqual({ snow: 1, precipitation: { kind: 'snow', intensity: 0.8 } })
+    expect(weatherEffects('fog')).not.toHaveProperty('precipitation')
     expect(weatherEffects('sleet')).toMatchObject({ snow: 0.5 })
     expect(weatherEffects('clear')).toEqual({})
     expect(weatherEffects(undefined)).toEqual({})
@@ -1087,5 +1089,57 @@ describe('météo dans la scène', () => {
     scene.setAppearance({ ambience: { ...resolveAmbience({ mode: 'day' }), storm: true } })
     scene.dispose()
     expect((scene as unknown as { stormTimer: unknown }).stormTimer).toBeNull()
+  })
+})
+
+describe('précipitations (palier C)', () => {
+  const box = { min: [0, 0] as const, max: [10, 8] as const, height: 14 }
+
+  it('garde chaque goutte dans le volume, la fait retomber en haut, et l’incline avec le vent', () => {
+    const rain = new Precipitation(box, { kind: 'rain', intensity: 1, windKmh: 36, windDirDeg: 270 })   // vent d'OUEST : pousse vers +x
+    expect(rain.count).toBe(2600)
+    const pos = (rain.object as unknown as { geometry: { getAttribute(n: string): { array: Float32Array } } }).geometry.getAttribute('position').array
+    // le trait d'une goutte penche vers d'où elle vient : la queue est à l'ouest (x plus petit) et plus haut
+    expect(pos[3]!).toBeLessThan(pos[0]!)
+    expect(pos[5]!).toBeGreaterThan(pos[2]!)
+    for (let f = 0; f < 60; f++) rain.step(0.05)                   // trois secondes : tout est retombé au moins une fois
+    for (let i = 0; i < rain.count; i++) {
+      const x = pos[i * 6]!, y = pos[i * 6 + 1]!, z = pos[i * 6 + 2]!
+      expect(x).toBeGreaterThanOrEqual(-3); expect(x).toBeLessThanOrEqual(13)
+      expect(y).toBeGreaterThanOrEqual(-3); expect(y).toBeLessThanOrEqual(11)
+      expect(z).toBeGreaterThanOrEqual(0); expect(z).toBeLessThanOrEqual(14)
+    }
+    rain.dispose()
+    const snow = new Precipitation(box, { kind: 'snow', intensity: 0, windKmh: 0, windDirDeg: 0 })
+    expect(snow.count).toBe(500)
+    expect(snow.object.name).toBe('precipitation:snow')
+    snow.dispose()
+  })
+
+  it('la scène pose la pluie sur sa racine et anime la boucle, puis la retire quand il ne pleut plus ou en qualité basse', () => {
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true })
+    scene.load(parseHouse(demo))
+    const priv = scene as unknown as { loop: { animationCount: number }; nodes: { root: { children: { name: string }[] } } }
+    const falling = (): string[] => priv.nodes.root.children.filter((c) => c.name.startsWith('precipitation:')).map((c) => c.name)
+    const rainy = { ...resolveAmbience({ mode: 'day' }), precipitation: { kind: 'rain' as const, intensity: 0.8 }, windKmh: 20, windDirDeg: 200 }
+    scene.setAppearance({ ambience: rainy })
+    expect(priv.loop.animationCount).toBe(1)
+    expect(falling()).toEqual(['precipitation:rain'])
+    // même pluie un peu plus forte : réglée, pas reconstruite
+    scene.setAppearance({ ambience: { ...rainy, precipitation: { kind: 'rain', intensity: 0.9 } } })
+    expect(priv.loop.animationCount).toBe(1)
+    // la neige remplace la pluie
+    scene.setAppearance({ ambience: { ...rainy, precipitation: { kind: 'snow', intensity: 0.8 } } })
+    expect(falling()).toEqual(['precipitation:snow'])
+    expect(priv.loop.animationCount).toBe(1)
+    // qualité basse : plus rien ne tombe ; haute : ça reprend
+    scene.setOptions({ quality: 'low' })
+    expect(priv.loop.animationCount).toBe(0)
+    expect(falling()).toEqual([])
+    scene.setOptions({ quality: 'high' })
+    expect(priv.loop.animationCount).toBe(1)
+    scene.setAppearance({ ambience: resolveAmbience({ mode: 'day' }) })
+    expect(priv.loop.animationCount).toBe(0)
+    scene.dispose()
   })
 })

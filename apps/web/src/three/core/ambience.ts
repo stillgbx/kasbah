@@ -39,20 +39,25 @@ export interface SceneAmbience {
   snow?: number
   /** Orage : la scène s'éclaire d'un éclair de temps en temps. */
   storm?: boolean
+  /** Ce qui TOMBE : pluie ou neige en particules (`effects/precipitation.ts`), et combien. */
+  precipitation?: { kind: 'rain' | 'snow'; intensity: number }
+  /** Le vent, pour incliner ce qui tombe : vitesse et provenance (degrés depuis le nord, sens horaire). */
+  windKmh?: number
+  windDirDeg?: number
 }
 
 /**
  * Ce qu'une condition météo fait aux surfaces. La bruine et le brouillard mouillent moins qu'une
  * averse ; la neige fondue est à moitié neige, à moitié flaque ; seul l'orage fait des éclairs.
  */
-export function weatherEffects(condition: WeatherCondition | undefined): Pick<SceneAmbience, 'wetness' | 'snow' | 'storm'> {
+export function weatherEffects(condition: WeatherCondition | undefined): Pick<SceneAmbience, 'wetness' | 'snow' | 'storm' | 'precipitation'> {
   switch (condition) {
-    case 'rain': return { wetness: 1 }
-    case 'thunderstorm': return { wetness: 1, storm: true }
-    case 'drizzle': return { wetness: 0.7 }
+    case 'rain': return { wetness: 1, precipitation: { kind: 'rain', intensity: 0.8 } }
+    case 'thunderstorm': return { wetness: 1, storm: true, precipitation: { kind: 'rain', intensity: 1 } }
+    case 'drizzle': return { wetness: 0.7, precipitation: { kind: 'rain', intensity: 0.3 } }
     case 'fog': return { wetness: 0.35 }
-    case 'sleet': return { wetness: 0.6, snow: 0.5 }
-    case 'snow': return { snow: 1 }
+    case 'sleet': return { wetness: 0.6, snow: 0.5, precipitation: { kind: 'rain', intensity: 0.6 } }
+    case 'snow': return { snow: 1, precipitation: { kind: 'snow', intensity: 0.8 } }
     default: return {}
   }
 }
@@ -76,14 +81,18 @@ export interface AmbienceInput {
   visibilityM?: number
   /** La condition annoncée par la météo : pluie, neige, orage… (`weatherEffects`). */
   condition?: WeatherCondition
+  windKmh?: number
+  windDirDeg?: number
 }
 
-export function resolveAmbience({ mode, date = new Date(), geo = null, cloudiness = 0, visibilityM, condition }: AmbienceInput): SceneAmbience {
+export function resolveAmbience({ mode, date = new Date(), geo = null, cloudiness = 0, visibilityM, condition, windKmh, windDirDeg }: AmbienceInput): SceneAmbience {
   // Un mode inconnu (réglage écrit à la main, valeur d'une version précédente) ne doit PAS produire
   // une ambiance `NaN` : tout le rendu en dépend — exposition comprise — et une exposition NaN rend
   // une image entièrement noire, sans la moindre erreur en console.
   const weather: Omit<SceneAmbience, 'sunAltitudeDeg' | 'sunAzimuthDeg'> = { cloudiness, ...weatherEffects(condition) }
   if (visibilityM !== undefined) weather.visibilityM = visibilityM
+  if (windKmh !== undefined) weather.windKmh = windKmh
+  if (windDirDeg !== undefined) weather.windDirDeg = windDirDeg
   const fixed = mode === 'auto' ? undefined : FIXED[mode]
   if (fixed) return { ...fixed, ...weather }
   const p = geo ? sunPosition(date, geo.lat, geo.lon) : approximateSunPosition(date)

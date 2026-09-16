@@ -47,6 +47,8 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   const forced = computed(() => (settings.sceneDebug && settings.sceneWeather !== 'real' ? settings.sceneWeather : null))
   const ambience = computed(() => resolveAmbience({
     mode: settings.sceneAmbience, date: clock.value, geo: geo.value,
+    // le vent, lui, est toujours le vrai : la météo forcée n'en a pas de curseur
+    ...(weather.live.value ? { windKmh: weather.live.value.windKmh, windDirDeg: weather.live.value.windDirDeg } : {}),
     ...(forced.value
       ? { cloudiness: settings.sceneCloudCover / 100, visibilityM: settings.sceneVisibilityM, condition: forced.value }
       : {
