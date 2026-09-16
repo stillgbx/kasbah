@@ -17,13 +17,14 @@ const initials = computed(() => {
 })
 const items: { name: string; icon: IconName; label: string }[] = [
   { name: 'home', icon: 'home', label: 'nav.home' },
+  // la météo juste après la maison : ce qu'on regarde en arrivant, avant de piloter quoi que ce soit
+  { name: 'weather', icon: 'cloudSun', label: 'nav.weather' },
   { name: 'lights', icon: 'light', label: 'nav.lights' },
   { name: 'covers', icon: 'shutter', label: 'nav.covers' },
-  { name: 'cameras', icon: 'camera', label: 'nav.cameras' },
   { name: 'media', icon: 'cast', label: 'nav.media' },
+  { name: 'cameras', icon: 'camera', label: 'nav.cameras' },
   { name: 'energy', icon: 'bolt', label: 'nav.energy' },
   { name: 'vehicles', icon: 'vehicle', label: 'nav.vehicles' },
-  { name: 'weather', icon: 'cloudSun', label: 'nav.weather' },
   { name: 'settings', icon: 'gear', label: 'nav.settings' },
 ]
 const themeIcon = computed<IconName>(() => (settings.appearance === 'light' ? 'sun' : settings.appearance === 'dark' ? 'moon' : 'auto'))
