@@ -310,7 +310,7 @@
     "pollens": { "alder": "Alder", "birch": "Birch", "grass": "Grass", "mugwort": "Mugwort", "olive": "Olive", "ragweed": "Ragweed" },
     "pollenLevels": ["None", "Low", "Moderate", "High", "Very high"],
     "observed": "Observed at {time}", "attribution": "Data {source}", "model": "Model {model}",
-    "radarHint": "Observed radar (2 h), then 30 min nowcast", "radarUnavailable": "Radar unavailable", "radarSource": "RainViewer radar",
+    "radarHint": "Observed radar (2 h), then AROME forecast (6 h)", "radarUnavailable": "Radar unavailable", "radarSource": "RainViewer radar", "nowcastSource": "Nowcast", "aromeSource": "AROME forecast · Météo-France",
     "play": "Play", "pause": "Pause", "today": "Today", "min": "min", "max": "max", "noForecast": "Forecast unavailable"
   }
 }

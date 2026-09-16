@@ -22,7 +22,9 @@ export default defineConfig({
   // les tuiles VECTORIELLES ne sont jamais décodées (le satellite, raster, marchait ; le plan restait
   // vide, sans erreur). Servi tel quel depuis node_modules, le worker se trouve. Le build, lui, sait
   // empaqueter un worker désigné ainsi.
-  optimizeDeps: { exclude: ['maplibre-gl'] },
+  // Même piège pour le lecteur de fichiers `.om` d'Open-Meteo (couche AROME du radar) : son WASM est
+  // trouvé par `new URL('om_reader_wasm.web.wasm', import.meta.url)`.
+  optimizeDeps: { exclude: ['maplibre-gl', '@openmeteo/weather-map-layer', '@openmeteo/file-reader', '@openmeteo/file-format-wasm'] },
   server: {
     port: DEV_PORT,
     strictPort: FIXED_PORT,
