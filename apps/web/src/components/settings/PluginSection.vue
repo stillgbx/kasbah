@@ -8,12 +8,13 @@ import RenaultLinkCard from '../RenaultLinkCard.vue'
 import TeslaLinkCard from '../TeslaLinkCard.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import { usePluginsStore } from '../../stores/plugins'
+import { useScenesStore } from '../../stores/scenes'
 
 // Un plugin dans les Réglages : une ligne toujours lisible (nom, santé, interrupteur) et, sous
 // elle, TOUT ce qui le concerne — ce que le serveur en dit, sa carte de mise en route (lier,
-// délier, appairer), ses sous-items, ses clés .env. Avant, les cartes vivaient au-dessus de la
-// liste et décidaient seules de s'afficher : celle de Renault restait donc là, à annoncer un compte
-// lié dont personne n'avait rien à faire.
+// délier, appairer), ses ambiances, ses sous-items, ses clés .env. Avant, les cartes vivaient
+// au-dessus de la liste et décidaient seules de s'afficher : celle de Renault restait donc là, à
+// annoncer un compte lié dont personne n'avait rien à faire.
 //
 // Le panneau s'ouvre TOUT SEUL quand le serveur RÉCLAME quelque chose : `needs_pairing` (à
 // appairer, à lier) et `error`. Pas `degraded` : un fabricant qui répond mal se plaint souvent sans
@@ -22,6 +23,26 @@ import { usePluginsStore } from '../../stores/plugins'
 
 const props = defineProps<{ plugin: PluginInfo }>()
 const plugins = usePluginsStore()
+const scenes = useScenesStore()
+
+// Les ambiances d'un fabricant sont un réglage DE CE FABRICANT : le concept est commun, les
+// réglages non. Elles vivaient dans une carte à part des Réglages, une par plugin ; elles sont
+// maintenant dans le panneau du plugin, avec le reste de ce qui le concerne.
+const pluginScenes = computed(() => scenes.scenesByPlugin.find((g) => g.pluginId === props.plugin.id)?.scenes ?? [])
+
+// Suppression d'une ambiance : premier appui arme, second confirme, et on désarme tout seul.
+const armed = ref<string | null>(null)
+let armTimer: ReturnType<typeof setTimeout> | null = null
+function arm(sceneId: string) {
+  armed.value = sceneId
+  if (armTimer) clearTimeout(armTimer)
+  armTimer = setTimeout(() => { armed.value = null }, 5000)
+}
+function confirmDelete(sceneId: string) {
+  armed.value = null
+  if (armTimer) clearTimeout(armTimer)
+  void scenes.deleteScene(sceneId)
+}
 
 /** La carte de mise en route du fabricant, pour ceux qui en ont une. */
 const SETUP_CARDS = {
@@ -44,7 +65,7 @@ const open = computed(() => manual.value ?? needsAction.value)
 const envKeys = computed(() => props.plugin.health.keys ?? [])
 /** Un squelette non implémenté n'a ni clé, ni détail, ni carte : rien à déplier. */
 const expandable = computed(() => !!setupCard.value || props.plugin.parts.length > 0
-  || !!props.plugin.health.detail || envKeys.value.length > 0)
+  || !!props.plugin.health.detail || envKeys.value.length > 0 || pluginScenes.value.length > 0)
 </script>
 
 <template>
@@ -72,6 +93,41 @@ const expandable = computed(() => !!setupCard.value || props.plugin.parts.length
       <p v-if="plugin.health.detail" class="muted small plugin__detail">{{ plugin.health.detail }}</p>
 
       <component :is="setupCard" v-if="setupCard && plugin.enabled" />
+
+      <!-- ambiances du fabricant : l'écran de GESTION (le geste courant reste la pastille du
+           panneau pièce). Comme les sous-items, seulement quand le plugin est allumé. -->
+      <div v-if="plugin.enabled && pluginScenes.length" class="scenes">
+        <div class="scenes__title muted small">{{ $t('settings.scenes') }}</div>
+        <div class="auto-row auto-row--default">
+          <div class="min0">
+            <div class="auto-row__name">{{ $t('settings.sceneAutoDynamicNew') }}</div>
+            <div class="muted small">{{ $t('settings.sceneAutoDynamicNewHint') }}</div>
+          </div>
+          <v-switch :model-value="plugin.autoDynamicForNewScenes === true" hide-details density="compact"
+                    @update:model-value="(v: boolean | null) => plugins.setAutoDynamicForNewScenes(plugin.id, v === true)" />
+        </div>
+        <div class="muted small">{{ $t('settings.sceneAutoDynamicHint') }}</div>
+        <div class="auto-rows">
+          <div v-for="e in pluginScenes" :key="e.scene.id" class="auto-row">
+            <div class="min0">
+              <div class="auto-row__name">{{ e.scene.name }}</div>
+              <div class="muted small">{{ e.scene.group?.name ?? '—' }}</div>
+            </div>
+            <v-switch :model-value="e.scene.autoDynamic" :disabled="!e.scene.dynamic" hide-details density="compact"
+                      :title="e.scene.dynamic ? $t('settings.sceneAutoDynamic') : $t('settings.sceneNoPalette')"
+                      @update:model-value="(v: boolean | null) => scenes.setAutoDynamic(e.scene.id, v === true)" />
+            <!-- destructif et visible depuis l'app du fabricant : deux temps, jamais un seul appui -->
+            <v-btn v-if="armed === e.scene.id" color="error" variant="flat" size="small" class="del-confirm"
+                   @click="confirmDelete(e.scene.id)">
+              {{ $t('scenes.deleteConfirm') }}
+            </v-btn>
+            <v-btn v-else icon variant="text" size="small" color="error" class="del"
+                   :title="$t('scenes.delete')" :aria-label="$t('scenes.delete')" @click="arm(e.scene.id)">
+              <StrokeIcon name="trash" :size="16" />
+            </v-btn>
+          </div>
+        </div>
+      </div>
 
       <!-- sous-items : visibles seulement quand le plugin est allumé, sinon ils ne veulent rien dire -->
       <div v-if="plugin.enabled && plugin.parts.length" class="parts">
@@ -105,6 +161,16 @@ const expandable = computed(() => !!setupCard.value || props.plugin.parts.length
 .plugin__body { display: grid; gap: 10px; justify-items: start; padding: 8px 0 4px 24px; }
 .plugin__detail { margin: 0; }
 .plugin__body > :deep(.card) { width: 100%; }
+/* la liste des ambiances prend toute la largeur du panneau (qui aligne ses enfants à gauche) */
+.scenes { width: 100%; display: grid; gap: 4px; }
+.scenes__title { margin-bottom: 2px; }
+.auto-rows { display: grid; gap: 2px; margin-top: 4px; }
+.auto-row { display: flex; align-items: center; gap: 12px; padding: 4px 0; border-top: 1px solid var(--line); }
+.auto-row--default { border-top: 0; }
+.auto-row__name { font-size: 14px; font-weight: 500; }
+.del { flex: 0 0 auto; color: var(--muted); }
+.del:hover { color: rgb(var(--v-theme-error)); }
+.del-confirm { flex: 0 0 auto; }
 .parts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .parts__title { flex: 0 0 100%; margin-bottom: 2px; }
 .part { font-size: 12px; line-height: 1; padding: 6px 10px; border-radius: 999px; cursor: pointer;
