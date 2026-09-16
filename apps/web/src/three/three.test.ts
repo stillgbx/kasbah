@@ -798,8 +798,12 @@ describe('incidents du journal posés sur le terrain', () => {
     scene.setActiveJournalPoint(null)
     expect(journal().points.find((p) => p.at === 2)!.label?.visible).toBe(false)
     scene.focusJournalPoint(999, false)
+    // le rendu 2D pose les étiquettes dans le DOM : refermer le journal doit les en retirer
+    const el = journal().points[0]!.label as unknown as { element: HTMLElement } | null
+    if (el) document.body.appendChild(el.element)
     scene.setJournalPoints(null, [])
     expect(pins()).toBe(0)
+    expect(el?.element.isConnected ?? false).toBe(false)
     scene.dispose()
   })
 })

@@ -609,6 +609,9 @@ export class HouseScene {
    */
   setJournalPoints(key: string | null, points: readonly { at: number; lat: number; lon: number; severity: string; label?: string }[]): void {
     if (this.journal) {
+      // les étiquettes sont des éléments DOM que le rendu 2D a posés : retirer le groupe de la scène
+      // ne les enlève pas, elles resteraient dans le vide (constaté) — même geste que `DeviceMarker.dispose`
+      for (const p of this.journal.points) p.label?.element.remove()
       this.journal.group.removeFromParent()
       disposeObject3D(this.journal.group)
       this.journal = null
