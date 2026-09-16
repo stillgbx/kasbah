@@ -135,6 +135,10 @@ const DEFAULT_AZIMUTH = -Math.PI / 4     // depuis le sud-est
 const DEFAULT_POLAR = (55 * Math.PI) / 180
 /** Cadrage d'un niveau-toit : plus plongeant que les autres, on vient regarder la dalle elle-même. */
 const ROOF_POLAR = (35 * Math.PI) / 180
+/** Un éclair : facteur d'exposition et durée (ms) de chaque éclat — deux éclats, le second plus long. */
+const FLASH: readonly (readonly [number, number])[] = [[2.6, 70], [1, 90], [1.9, 120]]
+/** Entre deux éclairs, au hasard dans cette fourchette (ms). */
+const FLASH_EVERY_MS: readonly [number, number] = [6000, 16000]
 const WORLD_UP = new Vector3(0, 1, 0)
 const WHITE = new Color(0xffffff)
 /** Largeur (m) du trait qui souligne la pièce sélectionnée : un pixel de loin, une bande de près. */
@@ -182,6 +186,8 @@ export class HouseScene {
   private photoGen = 0
   private post: PostPipeline | null = null
   private quality: EffectiveQuality = 'high'
+  /** Minuterie de l'orage en cours (prochain éclat, ou éclat en train de s'éteindre) ; `null` = pas d'orage. */
+  private stormTimer: ReturnType<typeof setTimeout> | null = null
   /** Direction d'où vient la lumière du jour, monde three. Relue à chaque changement d'ambiance. */
   private sunDir = new Vector3(0.45, 0.82, 0.35)
   /**
@@ -1056,6 +1062,38 @@ export class HouseScene {
     this.highlightRoom(this.highlightedRoom)
     this.refreshLevelPasses()              // l'heure change ce qu'une lampe allumée vaut
     this.invalidateShadows()               // le soleil a pu bouger
+    this.syncStorm()
+    this.loop.invalidate()
+  }
+
+  /**
+   * Orage : un éclair de temps en temps — deux éclats, un court et un plus long, comme un vrai. Ce
+   * n'est PAS une animation de la boucle (qui tournerait à 20 Hz tout l'orage pour rien) : des
+   * minuteries qui ne demandent qu'une image par éclat, par l'exposition. Le seul état est la
+   * minuterie en cours, arrêtée dès que l'orage passe ou que la scène est détruite.
+   */
+  private syncStorm(): void {
+    const on = !!this.ambience.storm
+    if (on && this.stormTimer === null) this.stormStep(FLASH.length)
+    if (!on && this.stormTimer !== null) { clearTimeout(this.stormTimer); this.stormTimer = null }
+  }
+
+  private stormStep(i: number): void {
+    const step = FLASH[i]
+    if (!step) {
+      this.setExposureFactor(1)
+      this.stormTimer = setTimeout(() => this.stormStep(0), FLASH_EVERY_MS[0] + Math.random() * (FLASH_EVERY_MS[1] - FLASH_EVERY_MS[0]))
+      return
+    }
+    this.setExposureFactor(step[0])
+    this.stormTimer = setTimeout(() => this.stormStep(i + 1), step[1])
+  }
+
+  /** Multiplie l'exposition du style, le temps d'un éclat ; 1 la rend au style. */
+  private setExposureFactor(k: number): void {
+    const post = { ...this.look.post, exposure: this.look.post.exposure * k }
+    if (this.post) this.post.setLook(post)
+    else if (this.renderer) this.renderer.toneMappingExposure = post.exposure
     this.loop.invalidate()
   }
 
@@ -1075,7 +1113,7 @@ export class HouseScene {
         this.highlightRoom(this.highlightedRoom)   // recopie les couleurs des clones, et redessine
       })
       : undefined
-    applyLook(this.materials, this.theme, this.look, photos)
+    applyLook(this.materials, this.theme, this.look, photos, { wetness: this.ambience.wetness ?? 0, snow: this.ambience.snow ?? 0 })
     this.syncFloorClones()
   }
 
@@ -1357,6 +1395,7 @@ export class HouseScene {
     this.photoGen++                        // une matière qui arrive après n'a plus de scène à habiller
     this.detachInput?.()
     if (this.labelsIdle !== null) clearTimeout(this.labelsIdle)
+    if (this.stormTimer !== null) { clearTimeout(this.stormTimer); this.stormTimer = null }
     this.drag?.detach()
     this.loop.dispose()
     this.controls?.dispose()

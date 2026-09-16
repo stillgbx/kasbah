@@ -127,21 +127,52 @@ function ensureTextures(textures: SurfaceTextures, roles: readonly SurfaceRole[]
  * Applique un style et une heure aux matériaux existants (aucune géométrie touchée). C'est l'unique
  * chemin : création comprise, qui n'est qu'une première application.
  */
-export function applyLook(mats: MaterialSet, theme: SceneTheme, look: StyleLook, photos?: SurfaceTextures): void {
+/** Ce que la météo fait aux surfaces DEHORS (`core/ambience.ts` : `wetness`, `snow`). */
+export interface SurfaceWeather { wetness: number; snow: number }
+export const DRY: SurfaceWeather = { wetness: 0, snow: 0 }
+
+/** Blanc de neige, en sRGB : pas un blanc pur, qui brûlerait au soleil. */
+const SNOW = new Color(0xe9edf2)
+
+/**
+ * Mouille ou enneige une surface déjà habillée par `surface()`. La pluie la fonce et la lisse (le
+ * reflet du ciel dans une flaque, c'est une rugosité qui tombe) ; la neige la blanchit et la
+ * matifie. Une matière photo porte sa couleur en carte : la blanchir par sa couleur ne peut rien
+ * (elle est déjà à blanc), c'est l'émissif qui pose la neige dessus.
+ */
+function weathered(m: MeshStandardMaterial, look: SurfaceLook, tex: SurfaceTexture | undefined, w: SurfaceWeather): void {
+  if (w.wetness <= 0 && w.snow <= 0) return
+  const wet = Math.min(1, Math.max(0, w.wetness))
+  const snow = Math.min(1, Math.max(0, w.snow))
+  m.roughness = look.roughness + (0.18 - look.roughness) * wet * 0.85
+  m.color.multiplyScalar(1 - 0.3 * wet)
+  if (snow > 0) {
+    m.roughness = m.roughness + (0.95 - m.roughness) * snow
+    if (!tex?.colored) m.color.lerp(SNOW, 0.85 * snow)
+    m.emissive.lerp(SNOW, tex?.colored ? 0.45 * snow : 0.12 * snow)
+  }
+}
+
+export function applyLook(mats: MaterialSet, theme: SceneTheme, look: StyleLook, photos?: SurfaceTextures, weather: SurfaceWeather = DRY): void {
   const s = look.surfaces
   const roofFlat: SurfaceLook = s.roofFlat ?? { texture: 'gravel', roughness: 1 }
   ensureTextures(mats.textures, [...rolesOf(s), 'tile', roofFlat.texture])   // le bassin est carrelé quel que soit le style
   // une matière en images (`textures/assets.ts`) passe devant la procédurale du même rôle
   const tex = (l: SurfaceLook) => photos?.[l.texture] ?? mats.textures[l.texture]
+  // dehors, la météo passe après la matière ; dedans et sur l'eau, elle ne passe pas
+  const outdoor = (m: MeshStandardMaterial, color: Color, l: SurfaceLook) => { surface(m, color, l, tex(l)); weathered(m, l, tex(l), weather) }
 
   surface(mats.wall, theme.wall, s.wall, tex(s.wall))
   surface(mats.wallInterior, theme.wallInterior, s.wallInterior, tex(s.wallInterior))
   surface(mats.floor, theme.floor, s.floor, tex(s.floor))
   for (const k of Object.keys(mats.floors) as FloorStyle[]) surface(mats.floors[k], theme.floors[k], s.floors[k], tex(s.floors[k]))
-  surface(mats.roof, theme.roof, s.roof, tex(s.roof))
-  surface(mats.roofFlat, theme.roof, roofFlat, tex(roofFlat))
-  surface(mats.terrain, theme.terrain, s.terrain, tex(s.terrain))
-  for (const k of Object.keys(mats.zones) as ZoneKind[]) surface(mats.zones[k], theme.zones[k], s.zones[k], tex(s.zones[k]))
+  outdoor(mats.roof, theme.roof, s.roof)
+  outdoor(mats.roofFlat, theme.roof, roofFlat)
+  outdoor(mats.terrain, theme.terrain, s.terrain)
+  for (const k of Object.keys(mats.zones) as ZoneKind[]) {
+    if (k === 'pool') surface(mats.zones[k], theme.zones[k], s.zones[k], tex(s.zones[k]))
+    else outdoor(mats.zones[k], theme.zones[k], s.zones[k])
+  }
 
   mats.glass.color.copy(theme.glass)
   mats.glass.opacity = look.glass.opacity

@@ -14,7 +14,7 @@ import { createCostGuard, detectQuality } from './core/post'
 import { parseCssColor } from './core/theme'
 import { defaultLook, defaultSceneTheme, RENDER_STYLES, rolesOf, styleById } from './styles'
 import { applyLook } from './builders/materials'
-import { dayFactor, resolveAmbience, sunDirection, type AmbienceMode } from './core/ambience'
+import { dayFactor, fogDistance, resolveAmbience, sunDirection, weatherEffects, type AmbienceMode } from './core/ambience'
 import { DECOR_LAYER, LAMP_LAYER, SITE_DECOR_LAYER } from './core/layers'
 import { sunPosition } from './core/sun'
 import { createTween } from './core/tween'
@@ -1035,5 +1035,57 @@ describe('mise en évidence d’une pièce', () => {
     scene.highlightRoom(null)
     expect(level.group.children.filter((c) => c.name === 'highlight')).toHaveLength(0)
     scene.dispose()
+  })
+})
+
+describe('météo dans la scène', () => {
+  it('traduit une condition en ce que les surfaces en gardent', () => {
+    expect(weatherEffects('rain')).toEqual({ wetness: 1 })
+    expect(weatherEffects('thunderstorm')).toEqual({ wetness: 1, storm: true })
+    expect(weatherEffects('snow')).toEqual({ snow: 1 })
+    expect(weatherEffects('sleet')).toMatchObject({ snow: 0.5 })
+    expect(weatherEffects('clear')).toEqual({})
+    expect(weatherEffects(undefined)).toEqual({})
+    expect(resolveAmbience({ mode: 'day', condition: 'thunderstorm', cloudiness: 0.9, visibilityM: 3000 })).toMatchObject({ cloudiness: 0.9, wetness: 1, storm: true, visibilityM: 3000 })
+  })
+
+  it('ne pose un brouillard qu’en dessous de 5 km, à l’échelle de la maison', () => {
+    expect(fogDistance({ sunAltitudeDeg: 30, sunAzimuthDeg: 0, cloudiness: 0 })).toBeNull()
+    expect(fogDistance({ sunAltitudeDeg: 30, sunAzimuthDeg: 0, cloudiness: 0, visibilityM: 25_000 })).toBeNull()
+    expect(fogDistance({ sunAltitudeDeg: 30, sunAzimuthDeg: 0, cloudiness: 0, visibilityM: 400 })).toBeCloseTo(33.3, 1)
+    expect(fogDistance({ sunAltitudeDeg: 30, sunAzimuthDeg: 0, cloudiness: 0, visibilityM: 50 })).toBe(18)
+  })
+
+  it('la pluie fonce et lisse ce qui est dehors, la neige le blanchit, l’intérieur ne bouge pas', () => {
+    const theme = defaultSceneTheme()
+    const look = defaultLook()
+    const dry = createMaterials(theme, look)
+    const wet = createMaterials(theme, look)
+    applyLook(wet, theme, look, undefined, { wetness: 1, snow: 0 })
+    expect(wet.terrain.roughness).toBeLessThan(dry.terrain.roughness)
+    expect(wet.roof.roughness).toBeLessThan(dry.roof.roughness)
+    expect(wet.terrain.color.r).toBeLessThan(dry.terrain.color.r)
+    expect(wet.floor.roughness).toBe(dry.floor.roughness)              // dedans, il ne pleut pas
+    expect(wet.zones.pool.roughness).toBe(dry.zones.pool.roughness)    // l'eau est déjà de l'eau
+    const snowy = createMaterials(theme, look)
+    applyLook(snowy, theme, look, undefined, { wetness: 0, snow: 1 })
+    const lum = (c: { r: number; g: number; b: number }) => c.r + c.g + c.b
+    expect(lum(snowy.terrain.color)).toBeGreaterThan(lum(dry.terrain.color))
+    expect(snowy.terrain.roughness).toBeGreaterThan(0.9)
+    // remettre le beau temps rend les valeurs du style
+    applyLook(snowy, theme, look)
+    expect(snowy.terrain.roughness).toBe(dry.terrain.roughness)
+    expect(snowy.terrain.color.getHex()).toBe(dry.terrain.color.getHex())
+  })
+
+  it('un orage allume une minuterie d’éclairs, que la fin de l’orage ou la destruction éteint', () => {
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true })
+    scene.setAppearance({ ambience: { ...resolveAmbience({ mode: 'day' }), storm: true } })
+    expect((scene as unknown as { stormTimer: unknown }).stormTimer).not.toBeNull()
+    scene.setAppearance({ ambience: resolveAmbience({ mode: 'day' }) })
+    expect((scene as unknown as { stormTimer: unknown }).stormTimer).toBeNull()
+    scene.setAppearance({ ambience: { ...resolveAmbience({ mode: 'day' }), storm: true } })
+    scene.dispose()
+    expect((scene as unknown as { stormTimer: unknown }).stormTimer).toBeNull()
   })
 })

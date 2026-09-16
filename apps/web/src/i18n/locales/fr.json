@@ -191,7 +191,8 @@
     "quality": "Qualité",
     "qualityHint": "Halo des lampes, occlusion des angles et anticrénelage. « Automatique » choisit d'après la machine, puis descend d'un cran si les images coûtent trop cher.",
     "qualities": { "auto": "Automatique", "high": "Haute", "medium": "Moyenne", "low": "Basse" },
-    "debug": "Débogage", "debugHint": "Pose un voile de mesure sur la scène : images par seconde, coût CPU d'une image, appels de dessin, passes et relevés d'ombre. « img/s » à 0 au repos est normal — le rendu est à la demande."
+    "debug": "Débogage", "weather": "Météo forcée", "weatherReal": "Réelle", "weatherHint": "Débogage seulement : impose une météo à la scène 3D pour la regarder sous la pluie ou la neige. Le widget et la vue Météo continuent de dire le vrai temps.",
+  "debugHint": "Pose un voile de mesure sur la scène : images par seconde, coût CPU d'une image, appels de dessin, passes et relevés d'ombre. « img/s » à 0 au repos est normal — le rendu est à la demande."
   },
   "settings": {
     "title": "Réglages", "appearance": "Apparence", "system": "Système", "light": "Clair", "dark": "Sombre",

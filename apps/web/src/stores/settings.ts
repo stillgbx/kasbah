@@ -8,6 +8,10 @@ import { detectLocale, isLocale, LOCALES, type Locale } from '../i18n'
 import { AMBIENCE_MODES, type AmbienceMode } from '../three/core/ambience'
 import { RENDER_QUALITIES, type RenderQuality } from '../three/core/post'
 import { DEFAULT_STYLE_ID, RENDER_STYLES } from '../three/styles'
+import { WEATHER_CONDITIONS, type WeatherCondition } from '@kasbah/shared'
+
+/** Une condition forcée dans la scène, ou `real` : la météo telle qu'elle est. */
+export type SceneWeatherChoice = WeatherCondition | 'real'
 
 // Préférences persistées (localStorage, préfixe kasbah.) : apparence clair/sombre/système, thème,
 // langue. `applyToVuetify`/`applyLocale` sont appelées AVANT le mount (aucun flash de thème/langue).
@@ -31,6 +35,14 @@ export const useSettingsStore = defineStore('settings', () => {
   const sceneAssets = useLocalStorage<boolean>('kasbah.sceneAssets', true)
   /** Voile de mesure posé sur la scène (images/s, appels de dessin, passes, ombres). */
   const sceneDebug = useLocalStorage<boolean>('kasbah.sceneDebug', false)
+  /**
+   * Météo FORCÉE dans la scène, pour la regarder sous la pluie sans attendre qu'il pleuve. Ne vaut
+   * qu'en débogage (`sceneDebug`) et ne touche que la scène : widget et vue Météo restent sur la
+   * vraie météo. `real` = suivre la météo.
+   */
+  const sceneWeather = useLocalStorage<SceneWeatherChoice>('kasbah.sceneWeather', 'real')
+  const sceneCloudCover = useLocalStorage<number>('kasbah.sceneCloudCover', 60)
+  const sceneVisibilityM = useLocalStorage<number>('kasbah.sceneVisibilityM', 25_000)
   const preferredDark = usePreferredDark()
 
   const themeId = computed<ThemeId>(() => (THEME_LIST.some((t) => t.id === theme.value) ? (theme.value as ThemeId) : DEFAULT_THEME_ID))
@@ -51,6 +63,9 @@ export const useSettingsStore = defineStore('settings', () => {
   function setSceneQuality(v: RenderQuality) { if (RENDER_QUALITIES.includes(v)) sceneQuality.value = v }
   function setSceneAssets(v: boolean) { sceneAssets.value = v }
   function setSceneDebug(v: boolean) { sceneDebug.value = v }
+  function setSceneWeather(v: SceneWeatherChoice) { if (v === 'real' || WEATHER_CONDITIONS.includes(v)) sceneWeather.value = v }
+  function setSceneCloudCover(v: number) { if (Number.isFinite(v)) sceneCloudCover.value = Math.min(100, Math.max(0, Math.round(v))) }
+  function setSceneVisibilityM(v: number) { if (Number.isFinite(v)) sceneVisibilityM.value = Math.min(50_000, Math.max(50, Math.round(v))) }
   function toggleLocale() { locale.value = resolvedLocale.value === 'fr' ? 'en' : 'fr' }
 
   /** Applique le thème Vuetify + les jetons CSS de la palette (data-theme, --bg, --accent…) sur <html>. */
@@ -77,9 +92,9 @@ export const useSettingsStore = defineStore('settings', () => {
 
   return {
     appearance, theme, locale, isDark, wantDark, themeId, currentTheme, resolvedLocale, fullscreen,
-    sceneStyle, sceneAmbience, sceneQuality, sceneAssets, sceneDebug,
+    sceneStyle, sceneAmbience, sceneQuality, sceneAssets, sceneDebug, sceneWeather, sceneCloudCover, sceneVisibilityM,
     setAppearance, cycleAppearance, setTheme, setLocale, toggleLocale, applyToVuetify, applyLocale,
-    setSceneStyle, setSceneAmbience, setSceneQuality, setSceneAssets, setSceneDebug,
+    setSceneStyle, setSceneAmbience, setSceneQuality, setSceneAssets, setSceneDebug, setSceneWeather, setSceneCloudCover, setSceneVisibilityM,
     appearances: APPEARANCES, themes: THEME_LIST, locales: LOCALES,
     styles: RENDER_STYLES, ambiences: AMBIENCE_MODES, qualities: RENDER_QUALITIES,
   }

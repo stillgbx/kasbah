@@ -42,9 +42,18 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   // la nébulosité vient de l'appareil météo quand il y en a un : c'est elle qui efface les ombres
   // et grise le ciel (`three/core/ambience.ts`) ; sans météo, ciel dégagé
   const weather = useWeather()
+  // En débogage, les Réglages peuvent FORCER une météo dans la scène (pour la regarder sous la
+  // neige sans attendre janvier) : elle remplace alors la vraie ici, et seulement ici.
+  const forced = computed(() => (settings.sceneDebug && settings.sceneWeather !== 'real' ? settings.sceneWeather : null))
   const ambience = computed(() => resolveAmbience({
     mode: settings.sceneAmbience, date: clock.value, geo: geo.value,
-    cloudiness: weather.cloudiness.value, ...(weather.live.value?.visibilityM !== undefined ? { visibilityM: weather.live.value.visibilityM } : {}),
+    ...(forced.value
+      ? { cloudiness: settings.sceneCloudCover / 100, visibilityM: settings.sceneVisibilityM, condition: forced.value }
+      : {
+        cloudiness: weather.cloudiness.value,
+        ...(weather.live.value?.visibilityM !== undefined ? { visibilityM: weather.live.value.visibilityM } : {}),
+        ...(weather.live.value ? { condition: weather.live.value.condition } : {}),
+      }),
   }))
 
   const deviceTap = new Set<Handler<[string]>>()

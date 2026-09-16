@@ -107,7 +107,8 @@ function countMoving(): number {
 
 <style scoped>
 .dbg {
-  position: absolute; left: calc(var(--rail-w) + 12px); bottom: 12px; z-index: 3;
+  /* au-dessus du widget météo, qui tient le coin bas gauche (`HomeView.vue`) */
+  position: absolute; left: calc(var(--rail-w) + 12px); bottom: calc(var(--safe-bottom) + var(--panel-gap) + 148px); z-index: 3;
   display: grid; gap: 1px; padding: 8px 10px; border-radius: var(--radius-sm);
   /* Opaque et sans filtre de fond : un instrument de mesure ne doit rien coûter à ce qu'il mesure. */
   background: var(--surface); border: 1px solid var(--line);

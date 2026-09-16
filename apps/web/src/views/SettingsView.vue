@@ -10,7 +10,10 @@ import { useDevicesStore } from '../stores/devices'
 import { useHouseStore } from '../stores/house'
 import { useScenesStore } from '../stores/scenes'
 import { usePluginsStore } from '../stores/plugins'
-import { useSettingsStore, type Appearance } from '../stores/settings'
+import { WEATHER_CONDITIONS } from '@kasbah/shared'
+import { conditionIcon } from '../lib/weather'
+import type { IconName } from '../lib/strokeIcons'
+import { useSettingsStore, type Appearance, type SceneWeatherChoice } from '../stores/settings'
 import { resolveVariant, type Theme } from '../themes'
 import { resolveAmbience, type AmbienceMode } from '../three/core/ambience'
 import { backdropColor, groundColor } from '../three/builders/materials'
@@ -68,6 +71,21 @@ function stylePreview(style: RenderStyle) {
 const styleHasAssets = computed(() => !!styleById(settings.sceneStyle).assets)
 const ambienceOptions = computed(() => settings.ambiences.map((a) => ({ value: a, label: t(`render.ambiences.${a}`) })))
 const qualityOptions = computed(() => settings.qualities.map((q) => ({ value: q, label: t(`render.qualities.${q}`) })))
+// Météo forcée (débogage) : « Réelle » puis les neuf conditions du contrat, avec l'icône du widget.
+const weatherChoices = computed<{ value: SceneWeatherChoice; label: string; icon: IconName | null }[]>(() => [
+  { value: 'real', label: t('render.weatherReal'), icon: null },
+  ...WEATHER_CONDITIONS.map((c) => ({ value: c, label: t(`weather.conditions.${c}`), icon: conditionIcon(c) })),
+])
+// La visibilité se règle par paliers qui veulent dire quelque chose (du brouillard épais au grand
+// beau), pas au mètre : un curseur linéaire de 50 à 50 000 mettrait tout le brouillard sur un pixel.
+const VISIBILITY_STEPS = [100, 200, 400, 800, 1500, 3000, 6000, 12_000, 25_000, 50_000] as const
+const visibilityStep = computed(() => {
+  const v = settings.sceneVisibilityM
+  let best = 0
+  VISIBILITY_STEPS.forEach((s, i) => { if (Math.abs(s - v) < Math.abs(VISIBILITY_STEPS[best]! - v)) best = i })
+  return best
+})
+const visibilityLabel = computed(() => (settings.sceneVisibilityM >= 1000 ? `${settings.sceneVisibilityM / 1000} km` : `${settings.sceneVisibilityM} m`))
 
 const gps = computed(() => {
   const o = house.house?.origin
@@ -145,6 +163,29 @@ const houseStats = computed(() => {
               <v-switch :model-value="settings.sceneDebug" hide-details density="compact"
                         @update:model-value="(v: boolean | null) => settings.setSceneDebug(v === true)" />
             </div>
+            <!-- météo forcée : débogage seulement, et scène seulement (le widget dit toujours le vrai temps) -->
+            <template v-if="settings.sceneDebug">
+              <div class="block__sub">{{ $t('render.weather') }}</div>
+              <div class="chips">
+                <button v-for="w in weatherChoices" :key="w.value" type="button" class="pill pill--sm" :data-on="settings.sceneWeather === w.value ? '1' : '0'"
+                        @click="settings.setSceneWeather(w.value)">
+                  <StrokeIcon v-if="w.icon" :name="w.icon" :size="16" />{{ w.label }}
+                </button>
+              </div>
+              <div class="slider-row" :data-off="settings.sceneWeather === 'real' ? '1' : '0'">
+                <div class="slider-row__label">{{ $t('weather.cloudCover') }}</div>
+                <v-slider :model-value="settings.sceneCloudCover" :min="0" :max="100" :step="5" :disabled="settings.sceneWeather === 'real'" hide-details density="compact"
+                          @update:model-value="(v: number) => settings.setSceneCloudCover(v)" />
+                <div class="slider-row__value">{{ settings.sceneCloudCover }} %</div>
+              </div>
+              <div class="slider-row" :data-off="settings.sceneWeather === 'real' ? '1' : '0'">
+                <div class="slider-row__label">{{ $t('weather.visibility') }}</div>
+                <v-slider :model-value="visibilityStep" :min="0" :max="VISIBILITY_STEPS.length - 1" :step="1" :disabled="settings.sceneWeather === 'real'" hide-details density="compact"
+                          @update:model-value="(v: number) => settings.setSceneVisibilityM(VISIBILITY_STEPS[v] ?? 25_000)" />
+                <div class="slider-row__value">{{ visibilityLabel }}</div>
+              </div>
+              <div class="muted small">{{ $t('render.weatherHint') }}</div>
+            </template>
           </section>
           <section class="card block">
             <div class="block__title">{{ $t('settings.gps') }}</div>
@@ -245,6 +286,13 @@ const houseStats = computed(() => {
 .preview__ground { position: absolute; inset: auto 0 0 0; height: 40%; }
 .preview__wall { position: absolute; left: 22%; right: 34%; bottom: 22%; height: 55%; border-radius: 2px; }
 .block__sub { margin-top: 4px; font-size: 12px; color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.pill--sm { height: 32px; padding: 0 12px; font-size: 13px; gap: 6px; }
+/* libellé et valeur à largeur fixe : le curseur ne bouge pas quand le chiffre change */
+.slider-row { display: grid; grid-template-columns: 88px 1fr 56px; align-items: center; gap: 10px; }
+.slider-row__label { font-size: 12px; color: var(--muted); }
+.slider-row__value { font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.slider-row[data-off='1'] { opacity: .5; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
 .small { font-size: 12px; }
 .plugins { display: grid; gap: 4px; }

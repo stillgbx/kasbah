@@ -1,4 +1,5 @@
 import { Vector3 } from 'three'
+import type { WeatherCondition } from '@kasbah/shared'
 import { approximateSunPosition, sunPosition } from './sun'
 
 // L'AMBIANCE, c'est l'heure qu'il fait dans la scène — pas le goût du rendu. Les deux axes sont
@@ -12,8 +13,9 @@ import { approximateSunPosition, sunPosition } from './sun'
 // gps, du soleil, de la météo ». Une tablette en thème sombre devant une maison en plein soleil est
 // donc un état normal.
 //
-// La météo n'est pas encore branchée : `cloudiness` existe, reste à 0, et attend un plugin qui la
-// publie. C'est la seule entrée qui demandera du réseau.
+// La météo est branchée depuis le 2026-09-16 : `useHouseScene` lit l'appareil `weather` (nébulosité,
+// visibilité, condition) et le reste vient d'ici — ce que la pluie mouille, ce que la neige blanchit,
+// quand l'orage éclaire (`weatherEffects`). Sans météo, tout vaut « dégagé ».
 
 /** Ce que l'utilisateur choisit dans les réglages. `auto` suit le soleil réel au-dessus de la maison. */
 export type AmbienceMode = 'auto' | 'day' | 'dusk' | 'night'
@@ -31,6 +33,28 @@ export interface SceneAmbience {
    * (brouillard, forte pluie), la scène pose un brouillard à l'échelle de la maison.
    */
   visibilityM?: number
+  /** Ce que la pluie laisse : sols et toits sombres et luisants, 0 (sec) à 1 (trempé). */
+  wetness?: number
+  /** Ce que la neige pose : un blanc mat sur tout ce qui est dehors, 0 à 1. */
+  snow?: number
+  /** Orage : la scène s'éclaire d'un éclair de temps en temps. */
+  storm?: boolean
+}
+
+/**
+ * Ce qu'une condition météo fait aux surfaces. La bruine et le brouillard mouillent moins qu'une
+ * averse ; la neige fondue est à moitié neige, à moitié flaque ; seul l'orage fait des éclairs.
+ */
+export function weatherEffects(condition: WeatherCondition | undefined): Pick<SceneAmbience, 'wetness' | 'snow' | 'storm'> {
+  switch (condition) {
+    case 'rain': return { wetness: 1 }
+    case 'thunderstorm': return { wetness: 1, storm: true }
+    case 'drizzle': return { wetness: 0.7 }
+    case 'fog': return { wetness: 0.35 }
+    case 'sleet': return { wetness: 0.6, snow: 0.5 }
+    case 'snow': return { snow: 1 }
+    default: return {}
+  }
 }
 
 /** Heures figées des modes manuels : une journée franche, un crépuscule bas, une nuit. */
@@ -50,13 +74,16 @@ export interface AmbienceInput {
   geo?: { lat: number; lon: number } | null
   cloudiness?: number
   visibilityM?: number
+  /** La condition annoncée par la météo : pluie, neige, orage… (`weatherEffects`). */
+  condition?: WeatherCondition
 }
 
-export function resolveAmbience({ mode, date = new Date(), geo = null, cloudiness = 0, visibilityM }: AmbienceInput): SceneAmbience {
+export function resolveAmbience({ mode, date = new Date(), geo = null, cloudiness = 0, visibilityM, condition }: AmbienceInput): SceneAmbience {
   // Un mode inconnu (réglage écrit à la main, valeur d'une version précédente) ne doit PAS produire
   // une ambiance `NaN` : tout le rendu en dépend — exposition comprise — et une exposition NaN rend
   // une image entièrement noire, sans la moindre erreur en console.
-  const weather = visibilityM === undefined ? { cloudiness } : { cloudiness, visibilityM }
+  const weather: Omit<SceneAmbience, 'sunAltitudeDeg' | 'sunAzimuthDeg'> = { cloudiness, ...weatherEffects(condition) }
+  if (visibilityM !== undefined) weather.visibilityM = visibilityM
   const fixed = mode === 'auto' ? undefined : FIXED[mode]
   if (fixed) return { ...fixed, ...weather }
   const p = geo ? sunPosition(date, geo.lat, geo.lon) : approximateSunPosition(date)
