@@ -151,7 +151,7 @@ describe('automower — le flux porte le vivant', () => {
     ws.emit(0, 'open')
     ws.emit(0, 'message', JSON.stringify(WS_READY))
     ws.emit(0, 'message', JSON.stringify(WS_POSITION))
-    expect(ctx.emitState).toHaveBeenLastCalledWith(MOWER_ID, { location: { lat: 47.309601, lon: 5.045802, at: NOW } })
+    expect(ctx.emitState).toHaveBeenLastCalledWith(MOWER_ID, { location: { lat: WS_POSITION.attributes.position.latitude, lon: WS_POSITION.attributes.position.longitude, at: NOW } })
     expect(hq.calls).toHaveLength(2)
     expect(plugin.health!().detail).toContain('live events')
     // le ping tient la connexion

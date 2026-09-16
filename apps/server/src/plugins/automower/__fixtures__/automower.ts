@@ -196,7 +196,36 @@ export const WS_MOWER_MAIN_PARKED = {
 export const WS_PLANNER = { id: MOWER_ID, type: 'planner-event-v2', attributes: { planner: { override: { action: 'NOT_ACTIVE' }, restrictedReason: 'WEEK_SCHEDULE' } } }
 export const WS_CUTTING_HEIGHT = { id: MOWER_ID, type: 'cuttingHeight-event-v2', attributes: { cuttingHeight: { height: 7 } } }
 
-// d'après la bibliothèque de référence, pas encore capturés
-export const WS_POSITION = { id: MOWER_ID, type: 'position-event-v2', attributes: { position: { latitude: 47.309601, longitude: 5.045802 } } }
+// ---- Un `Start` de 60 min sur un robot dont le signal de boucle est en panne (CAPTURÉ, même soir) ----
+//
+// Le robot annonce « en route » (`LEAVING`) sans bouger — le GPS dérive d'un mètre ou deux, une
+// position toutes les 30 s — puis déclare l'erreur au bout de trois minutes. Appris :
+//  - en tonte forcée le planificateur porte `nextStartTimestamp: 0` et `override: FORCE_MOW` ;
+//  - l'erreur arrive en TROIS deltas : le code seul, puis `state: ERROR`, puis `errorCodeTimestamp`
+//    à part — en SECONDES par le flux (millisecondes dans la liste) ;
+//  - un `message-event-v2` l'accompagne : code, gravité, position, `time` en secondes.
+
+/** Tonte forcée : le prochain départ du planning n'a plus cours. */
+export const WS_PLANNER_FORCE_MOW = { id: MOWER_ID, type: 'planner-event-v2', attributes: { planner: { nextStartTimestamp: 0, override: { action: 'FORCE_MOW' }, restrictedReason: 'NONE' } } }
+export const WS_MOWER_IN_OPERATION = { id: MOWER_ID, type: 'mower-event-v2', attributes: { mower: { state: 'IN_OPERATION' } } }
+export const WS_MOWER_LEAVING = {
+  id: MOWER_ID, type: 'mower-event-v2',
+  attributes: { mower: { mode: 'MAIN_AREA', activity: 'LEAVING', state: 'IN_OPERATION', errorCode: 0, isErrorConfirmable: false } },
+}
+export const WS_POSITION = { id: MOWER_ID, type: 'position-event-v2', attributes: { position: { latitude: 47.3092845, longitude: 5.0459418 } } }
+export const WS_POSITION_2 = { id: MOWER_ID, type: 'position-event-v2', attributes: { position: { latitude: 47.3092954, longitude: 5.0459351 } } }
+/** L'erreur, premier delta : le code seul, l'état dit encore `IN_OPERATION`. */
+export const WS_MOWER_ERROR_CODE = { id: MOWER_ID, type: 'mower-event-v2', attributes: { mower: { errorCode: 2, isErrorConfirmable: false } } }
+export const WS_MOWER_ERROR_STATE = { id: MOWER_ID, type: 'mower-event-v2', attributes: { mower: { activity: 'NOT_APPLICABLE', state: 'ERROR' } } }
+export const WS_MOWER_ERROR_FULL = {
+  id: MOWER_ID, type: 'mower-event-v2',
+  attributes: { mower: { mode: 'MAIN_AREA', activity: 'NOT_APPLICABLE', state: 'ERROR', errorCode: 2, isErrorConfirmable: false } },
+}
+/** `time` en SECONDES, heure locale écrite comme UTC : 2026-09-16 18:22:15 à Paris. */
+export const WS_MESSAGE_ERROR = { id: MOWER_ID, type: 'message-event-v2', attributes: { message: { time: 1789582935, code: 2, severity: 'ERROR', latitude: 47.309301, longitude: 5.0459219 } } }
+/** La date de l'erreur, seule, trois secondes après le code — en secondes. */
+export const WS_MOWER_ERROR_AT = { id: MOWER_ID, type: 'mower-event-v2', attributes: { mower: { errorCodeTimestamp: 1789582935 } } }
+
+// d'après la bibliothèque de référence, pas encore capturé (le robot était plein)
 export const WS_BATTERY = { id: MOWER_ID, type: 'battery-event-v2', attributes: { battery: { batteryPercent: 77 } } }
 export const WS_UNKNOWN_MOWER = { id: '00000000-0000-0000-0000-000000000000', type: 'battery-event-v2', attributes: { battery: { batteryPercent: 10 } } }

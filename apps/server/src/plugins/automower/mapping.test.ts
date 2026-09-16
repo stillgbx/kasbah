@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   MOWERS_ERROR, MOWERS_MOWING, MOWERS_OFFLINE, MOWERS_PARKED, MOWER_ID, WS_BATTERY, WS_CUTTING_HEIGHT, WS_MOWER_HOME, WS_MOWER_HOME_PARKED, WS_MOWER_INACTIVE,
   WS_MOWER_MAIN_PARKED, WS_MOWER_NOT_APPLICABLE, WS_MOWER_STOPPED, WS_MOWER_STOPPED_FULL, WS_PLANNER, WS_POSITION,
+  WS_MESSAGE_ERROR, WS_MOWER_ERROR_AT, WS_MOWER_ERROR_CODE, WS_MOWER_ERROR_FULL, WS_MOWER_ERROR_STATE, WS_MOWER_IN_OPERATION, WS_MOWER_LEAVING, WS_PLANNER_FORCE_MOW, WS_POSITION_2,
 } from './__fixtures__/automower'
 import { actionBody, applyEvent, connectedOf, localTimestamp, parseMowers, toActivity, toDescriptor, toStatePatch } from './mapping'
 import { wsEventSchema } from './types'
@@ -122,8 +123,9 @@ describe('automower mapping — événements du flux (des DELTAS, fondus dans le
 
   it('position → location datée de maintenant, et le relevé gagne le point en tête', () => {
     const r = applyEvent(ev(WS_POSITION), parked, o)!
-    expect(r.patch).toEqual({ location: { lat: 47.309601, lon: 5.045802, at: NOW } })
-    expect((r.next.attributes.positions as unknown[])[0]).toEqual({ latitude: 47.309601, longitude: 5.045802 })
+    const { latitude, longitude } = WS_POSITION.attributes.position
+    expect(r.patch).toEqual({ location: { lat: latitude, lon: longitude, at: NOW } })
+    expect((r.next.attributes.positions as unknown[])[0]).toEqual({ latitude, longitude })
     expect(r.next.attributes.positions).toHaveLength(50)
   })
 
@@ -151,6 +153,25 @@ describe('automower mapping — événements du flux (des DELTAS, fondus dans le
     // ResumeSchedule : retour au planning
     expect(step(WS_MOWER_MAIN_PARKED)).toMatchObject({ activity: 'parked', restrictedReason: 'week_schedule' })
     expect(step(WS_PLANNER)).toEqual({ nextStartAt: NEXT, restrictedReason: 'week_schedule' })
+  })
+
+  it('la séquence capturée d’un Start qui échoue : tonte forcée, « en route » sans bouger, puis l’erreur en trois deltas', () => {
+    let m = parked
+    const step = (raw: unknown) => { const r = applyEvent(ev(raw), m, o); if (r) m = r.next; return r?.patch ?? null }
+    // tonte forcée : le prochain départ n'a plus cours (0 → effacé), plus rien ne retient le robot
+    expect(step(WS_PLANNER_FORCE_MOW)).toEqual({ nextStartAt: null, restrictedReason: 'none' })
+    // `state: IN_OPERATION` seul, l'activité dit encore PARKED_IN_CS : garé (deux secondes) — puis en route
+    expect(step(WS_MOWER_IN_OPERATION)!.activity).toBe('parked')
+    expect(step(WS_MOWER_LEAVING)).toMatchObject({ activity: 'mowing', errorCode: null })
+    expect(step(WS_POSITION)).toEqual({ location: { lat: WS_POSITION.attributes.position.latitude, lon: WS_POSITION.attributes.position.longitude, at: NOW } })
+    expect(step(WS_POSITION_2)!.location).toMatchObject({ lat: WS_POSITION_2.attributes.position.latitude })
+    // l'erreur : le code d'abord (l'état dit encore en route), puis l'état, puis la date — en SECONDES
+    expect(step(WS_MOWER_ERROR_CODE)).toMatchObject({ activity: 'mowing', errorCode: 2, errorMessage: 'No loop signal', errorAt: null })
+    expect(step(WS_MOWER_ERROR_STATE)).toMatchObject({ activity: 'error', errorCode: 2 })
+    expect(step(WS_MOWER_ERROR_FULL)).toMatchObject({ activity: 'error', errorCode: 2 })
+    expect(step(WS_MESSAGE_ERROR)).toBeNull()             // le journal des messages : pas encore lu
+    // 1789582935 s se lit 2026-09-16 18:22:15 « UTC » = 18:22:15 à Paris = 16:22:15 UTC
+    expect(step(WS_MOWER_ERROR_AT)).toMatchObject({ activity: 'error', errorCode: 2, errorAt: Date.UTC(2026, 8, 16, 16, 22, 15) })
   })
 
   it('un fragment `mower` sans code d’erreur ne lève PAS l’erreur connue', () => {
