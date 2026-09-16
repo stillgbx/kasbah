@@ -11,6 +11,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font);
+  user-select: none;
 }
 .v-application { font-family: var(--font) !important; min-height: 100dvh !important; }
 .v-application__wrap { min-height: 100dvh !important; }
