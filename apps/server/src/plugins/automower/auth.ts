@@ -20,8 +20,6 @@ export interface AutomowerAuthOptions {
   appSecret: string
   fetchImpl: FetchLike
   now: () => number
-  /** Un appel de plus au fabricant : compté au quota, par prudence (sa catégorie n'est pas publiée). */
-  onCall?: (path: string, status: number) => void
 }
 
 export class AutomowerAuth {
@@ -56,7 +54,7 @@ export class AutomowerAuth {
       const aborted = (err as Error)?.name === 'TimeoutError' || (err as Error)?.name === 'AbortError'
       throw new PluginError(aborted ? 'TIMEOUT' : 'UPSTREAM_ERROR', 'Husqvarna authentication API unreachable', { cause: err })
     }
-    this.opts.onCall?.('/oauth2/token', res.status)
+    // pas compté au quota : le portail développeur ne compte que les appels à l'API Automower Connect
     const text = await res.text()
     // 400 `invalid_client` ou 401 : la clé ou le secret sont faux. Ce n'est pas une panne réseau,
     // c'est la configuration à revoir — `NEEDS_PAIRING`, comme un compte à relier ailleurs

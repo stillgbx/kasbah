@@ -10,7 +10,7 @@ import type { FetchLike } from '../../core/sse'
 import { AutomowerAuth } from './auth'
 import { AutomowerClient } from './client'
 import { actionBody, applyEvent, connectedOf, isTimeZone, parseMowers, toDescriptor, toJournal, toJournalEntry, toStatePatch } from './mapping'
-import { MONTHLY_REQUESTS, createUsageFile, currentUsage, monthStart, type AutomowerUsage, type UsageStore } from './state'
+import { WINDOW_MS, WINDOW_REQUESTS, createUsageFile, currentUsage, type AutomowerUsage, type UsageStore } from './state'
 import { AutomowerSocket, type WsFactory } from './ws'
 import { mowerListSchema, wsEventSchema, wsReadySchema, type MowerData } from './types'
 
@@ -22,11 +22,12 @@ import { mowerListSchema, wsEventSchema, wsReadySchema, type MowerData } from '.
 //     « Automower Connect » : sa clé et son secret suffisent (`client_credentials`), le jeton
 //     représente le compte qui l'a créée — donc le propriétaire du robot. Pas de consentement dans un
 //     navigateur, pas de jeton à garder : il se redemande, et vaut une journée.
-//  2. Un QUOTA de 10 000 requêtes par mois et par clé, et une par seconde. D'où le WebSocket : le
-//     fabricant y pousse batterie, activité, planning, position et hauteur de coupe dès qu'ils
-//     changent, gratuitement ; le REST ne sert qu'à lire l'état complet au démarrage, à chaque
-//     reconnexion du flux, puis à cadence lente pour resynchroniser (`AUTOMOWER_POLL_MS`). Le
-//     compteur du mois survit au redémarrage (`state.ts`) et se lit dans la jauge de la vue.
+//  2. Un QUOTA de 21 000 requêtes par fenêtre de sept jours et par clé (portail développeur, relevé
+//     du 2026-09-16 ; la documentation tierce disait 10 000 par mois), et une par seconde. D'où le
+//     WebSocket : le fabricant y pousse batterie, activité, planning, position et hauteur de coupe
+//     dès qu'ils changent, gratuitement ; le REST ne sert qu'à lire l'état complet au démarrage, à
+//     chaque reconnexion du flux, puis à cadence lente pour resynchroniser (`AUTOMOWER_POLL_MS`).
+//     Le compteur de la fenêtre survit au redémarrage (`state.ts`) et se lit dans la jauge de la vue.
 //  3. Des HORODATAGES en heure locale écrite comme si c'était de l'UTC (prochain départ, erreur) :
 //     le fuseau de la maison les ramène à de vrais instants (`mapping.ts`).
 //
@@ -51,8 +52,13 @@ export const automowerConfigSchema = z.object({
   AUTOMOWER_POLL_MS: z.coerce.number().int().min(60_000).max(3_600_000).default(600_000),
   /** Fuseau des horodatages « locaux » du robot. Défaut : celui du serveur. */
   AUTOMOWER_TIMEZONE: optionalKey.refine((tz) => tz === undefined || isTimeZone(tz), 'AUTOMOWER_TIMEZONE: fuseau IANA inconnu'),
-  /** Où garder le compte de requêtes du mois. Chaîne vide = ne rien garder. */
+  /** Où garder le compte de requêtes de la fenêtre. Chaîne vide = ne rien garder. */
   AUTOMOWER_USAGE_FILE: z.string().trim().default(resolve(REPO_ROOT, 'apps/server/.state/automower-usage.json')),
+  /**
+   * Un instant de remise à zéro du quota tel que le portail développeur l'affiche (« Resets at … »),
+   * en ISO 8601 : cale la fenêtre de sept jours exactement. Absent = la première requête fait foi.
+   */
+  AUTOMOWER_QUOTA_RESET_AT: optionalKey.refine((v) => v === undefined || Number.isFinite(Date.parse(v)), 'AUTOMOWER_QUOTA_RESET_AT: date ISO 8601 attendue'),
 })
 export type AutomowerConfig = z.infer<typeof automowerConfigSchema>
 
@@ -63,8 +69,10 @@ export interface AutomowerStatus {
   live: boolean
   pollMs: number
   timezone: string
-  requestsThisMonth: number
-  monthlyLimit: number
+  /** Requêtes à l'API depuis le début de la fenêtre de sept jours, et quand elle se remet à zéro. */
+  requestsInWindow: number
+  windowLimit: number
+  windowResetAt: number
   lastError: string | null
 }
 
@@ -85,7 +93,8 @@ export function createAutomowerPlugin(deps: AutomowerPluginDeps = {}): DevicePlu
   let socket: AutomowerSocket | null = null
   let poller: { stop(): void } | null = null
   let usageStore: UsageStore | null = null
-  let usage: AutomowerUsage = { month: '', requests: 0 }
+  let usage: AutomowerUsage = { windowStart: 0, requests: 0 }
+  let quotaAnchor: number | undefined
   let tz = 'UTC'
   let lastError: string | null = null
   let lastResync = 0
@@ -110,12 +119,13 @@ export function createAutomowerPlugin(deps: AutomowerPluginDeps = {}): DevicePlu
   const configured = () => !!(config?.AUTOMOWER_APP_KEY && config?.AUTOMOWER_APP_SECRET)
   const mapOptions = () => ({ tz, now: ctx!.clock.now() })
 
-  /** Chaque requête au fabricant compte, et le compte survit au redémarrage. */
+  /** Chaque requête à l'API compte (pas les jetons), et le compte survit au redémarrage. */
   function countCall(): void {
-    usage = currentUsage(usage, ctx!.clock.now())
+    usage = currentUsage(usage, ctx!.clock.now(), quotaAnchor)
     usage.requests += 1
     void usageStore?.save(usage)
   }
+  const usageNow = () => currentUsage(usage, ctx?.clock.now() ?? Date.now(), quotaAnchor)
 
   /** Publie les descripteurs si l'inventaire a changé (robot ajouté, retiré, renommé). */
   function publishDescriptors(): void {
@@ -191,8 +201,9 @@ export function createAutomowerPlugin(deps: AutomowerPluginDeps = {}): DevicePlu
       live: socket?.connected ?? false,
       pollMs: config?.AUTOMOWER_POLL_MS ?? 0,
       timezone: tz,
-      requestsThisMonth: ctx ? currentUsage(usage, ctx.clock.now()).requests : usage.requests,
-      monthlyLimit: MONTHLY_REQUESTS,
+      requestsInWindow: usageNow().requests,
+      windowLimit: WINDOW_REQUESTS,
+      windowResetAt: usageNow().windowStart + WINDOW_MS,
       lastError,
     }
   }
@@ -214,10 +225,11 @@ export function createAutomowerPlugin(deps: AutomowerPluginDeps = {}): DevicePlu
       journals.clear()
       tz = config.AUTOMOWER_TIMEZONE ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC'
       usageStore = deps.usageStore ?? (config.AUTOMOWER_USAGE_FILE ? createUsageFile(config.AUTOMOWER_USAGE_FILE, context.logger) : null)
-      usage = currentUsage(await usageStore?.load() ?? null, context.clock.now())
+      quotaAnchor = config.AUTOMOWER_QUOTA_RESET_AT ? Date.parse(config.AUTOMOWER_QUOTA_RESET_AT) : undefined
+      usage = currentUsage(await usageStore?.load() ?? null, context.clock.now(), quotaAnchor)
       if (!configured()) { log().info('Automower: no application key or secret, plugin idle (AUTOMOWER_APP_KEY / AUTOMOWER_APP_SECRET)'); return }
       const fetchImpl = deps.fetchImpl ?? fetch
-      auth = new AutomowerAuth({ appKey: config.AUTOMOWER_APP_KEY!, appSecret: config.AUTOMOWER_APP_SECRET!, fetchImpl, now: () => context.clock.now(), onCall: countCall })
+      auth = new AutomowerAuth({ appKey: config.AUTOMOWER_APP_KEY!, appSecret: config.AUTOMOWER_APP_SECRET!, fetchImpl, now: () => context.clock.now() })
       client = new AutomowerClient({ auth, appKey: config.AUTOMOWER_APP_KEY!, fetchImpl, logger: context.logger, onCall: countCall })
       socket = new AutomowerSocket({
         token: (signal) => auth!.accessToken(signal),
@@ -328,13 +340,12 @@ export function createAutomowerPlugin(deps: AutomowerPluginDeps = {}): DevicePlu
     health(): PluginHealth {
       const deviceCount = mowers.size
       if (!configured()) return { status: 'needs_pairing', detail: 'AUTOMOWER_APP_KEY and AUTOMOWER_APP_SECRET missing', deviceCount: 0 }
-      const now = ctx?.clock.now() ?? Date.now()
-      const u = currentUsage(usage, now)
-      const quota = { used: u.requests, limit: MONTHLY_REQUESTS, labelKey: 'mower.quotaRequests', since: monthStart(u.month) }
+      const u = usageNow()
+      const quota = { used: u.requests, limit: WINDOW_REQUESTS, labelKey: 'mower.quotaRequests', since: u.windowStart }
       if (lastError) return { status: 'degraded', detail: lastError, deviceCount, quota }
       const connected = [...mowers.values()].filter(connectedOf).length
       const flow = socket?.connected ? 'live events' : 'polling only'
-      return { status: 'ok', detail: `${deviceCount} mower(s), ${connected} connected · ${flow} · ${u.requests}/${MONTHLY_REQUESTS} requests this month`, deviceCount, quota }
+      return { status: 'ok', detail: `${deviceCount} mower(s), ${connected} connected · ${flow} · ${u.requests}/${WINDOW_REQUESTS} requests this week`, deviceCount, quota }
     },
   }
 }

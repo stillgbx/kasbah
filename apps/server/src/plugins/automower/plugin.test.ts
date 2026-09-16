@@ -131,7 +131,8 @@ describe('automower — démarrage', () => {
     expect(ctx.setAvailable).toHaveBeenCalledWith(MOWER_ID, true)
     expect(ws.sockets).toHaveLength(1)
     expect(ws.sockets[0]!.headers).toEqual({ Authorization: `Bearer ${TOKEN_RESPONSE.access_token}` })
-    expect(plugin.health!()).toMatchObject({ status: 'ok', deviceCount: 1, quota: { used: 2, limit: 10_000, labelKey: 'mower.quotaRequests' } })
+    // une seule requête comptée : la LISTE ; le jeton ne compte pas (le portail ne le compte pas)
+    expect(plugin.health!()).toMatchObject({ status: 'ok', deviceCount: 1, quota: { used: 1, limit: 21_000, labelKey: 'mower.quotaRequests', since: NOW } })
     expect(plugin.health!().detail).toContain('polling only')
   })
 
@@ -208,8 +209,8 @@ describe('automower — le flux porte le vivant', () => {
 })
 
 describe('automower — jeton et quota', () => {
-  it('un 401 fait redemander UN jeton et rejouer ; le compteur du mois compte tout et survit', async () => {
-    const usage = memoryUsage({ month: '2026-09', requests: 40 })
+  it('un 401 fait redemander UN jeton et rejouer ; le compteur de la fenêtre compte les appels à l’API, pas les jetons, et survit', async () => {
+    const usage = memoryUsage({ windowStart: NOW - 3 * 86_400_000, requests: 40 })
     const { hq, clock, plugin, statusOf } = await started({ usage })
     // le jeton devient périmé côté fabricant
     hq.world.accepts = TOKEN_RESPONSE_2.access_token
@@ -217,16 +218,22 @@ describe('automower — jeton et quota', () => {
     clock.advance(10 * MIN + 1)
     await flush()
     expect(hq.calls.map((c) => c.path)).toEqual(['token', '/mowers', '/mowers', 'token', '/mowers'])
-    // 40 + jeton + liste + (liste 401 + jeton + liste) = 45, écrits au fur et à mesure
-    expect(usage.value).toEqual({ month: '2026-09', requests: 45 })
-    expect((await statusOf()).requestsThisMonth).toBe(45)
-    expect(plugin.health!().quota).toMatchObject({ used: 45, since: Date.UTC(2026, 8, 1) })
+    // 40 + liste + (liste refusée + liste rejouée) = 43, écrits au fur et à mesure ; les deux jetons ne comptent pas
+    expect(usage.value).toEqual({ windowStart: NOW - 3 * 86_400_000, requests: 43 })
+    expect((await statusOf()).requestsInWindow).toBe(43)
+    expect((await statusOf()).windowResetAt).toBe(NOW + 4 * 86_400_000)
+    expect(plugin.health!().quota).toMatchObject({ used: 43, limit: 21_000, since: NOW - 3 * 86_400_000 })
   })
 
-  it('un fichier d’un autre mois repart de zéro', async () => {
-    const usage = memoryUsage({ month: '2026-08', requests: 9_000 })
+  it('une fenêtre de sept jours écoulée repart de zéro, sur la même grille', async () => {
+    const usage = memoryUsage({ windowStart: NOW - 10 * 86_400_000, requests: 9_000 })
     const { plugin } = await started({ usage })
-    expect(plugin.health!().quota).toMatchObject({ used: 2 })
+    expect(plugin.health!().quota).toMatchObject({ used: 1, since: NOW - 3 * 86_400_000 })
+  })
+
+  it('un instant de remise à zéro configuré (celui du portail) cale la grille, même dans le futur', async () => {
+    const { plugin } = await started({ env: { AUTOMOWER_QUOTA_RESET_AT: new Date(NOW + 2 * 86_400_000).toISOString() } })
+    expect(plugin.health!().quota).toMatchObject({ used: 1, since: NOW - 5 * 86_400_000 })
   })
 })
 
@@ -327,12 +334,12 @@ describe('automower — routes et arrêt', () => {
   it('/status ne porte ni clé ni secret ; /raw relit la liste et la compte', async () => {
     const { app, statusOf, plugin } = await started()
     const s = await statusOf()
-    expect(s).toMatchObject({ configured: true, live: false, timezone: 'Europe/Paris', monthlyLimit: 10_000, mowers: [{ id: MOWER_ID, name: 'Tondeuse', connected: true }] })
+    expect(s).toMatchObject({ configured: true, live: false, timezone: 'Europe/Paris', windowLimit: 21_000, mowers: [{ id: MOWER_ID, name: 'Tondeuse', connected: true }] })
     expect(JSON.stringify(s)).not.toContain('app-secret')
     const raw = await app.inject({ method: 'GET', url: '/raw' })
     expect(raw.statusCode).toBe(200)
     expect(raw.json()).toEqual({ mowers: MOWERS_ERROR })
-    expect(plugin.health!().quota?.used).toBe(3)
+    expect(plugin.health!().quota?.used).toBe(2)
   })
 
   it('stop ferme le flux et arrête le sondage', async () => {

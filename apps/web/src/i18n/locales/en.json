@@ -113,7 +113,7 @@
     "connection": "Connection", "connected": "Connected", "offline": "Offline", "statusAgo": "status {ago}",
     "statistics": "Counters", "cuttingTime": "Mowing", "chargingCycles": "Charges", "collisions": "Collisions", "driveDistance": "Distance",
     "positionAgo": "Position {ago}", "updatedAgo": "Updated {ago}",
-    "quota": "{used}/{limit} {what}", "quotaRequests": "Husqvarna requests this month",
+    "quota": "{used}/{limit} {what}", "quotaRequests": "Husqvarna requests this week",
     "journal": "Log", "journalTitle": "Robot log", "journalEmpty": "Nothing logged", "journalCode": "code {code}", "journalLocate": "Show where it happened", "journalNoLocation": "No position",
     "severity": { "info": "Information", "warning": "Warning", "error": "Error", "fatal": "Fatal error" },
     "offsetHint": "In metres, in the house frame (X to the right of the plan, Y up). The robot moves on the map and in the 3D scene."
