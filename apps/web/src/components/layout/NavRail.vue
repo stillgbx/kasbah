@@ -27,7 +27,8 @@ const items: { name: string; icon: IconName; label: string }[] = [
   { name: 'vehicles', icon: 'vehicle', label: 'nav.vehicles' },
   { name: 'settings', icon: 'gear', label: 'nav.settings' },
 ]
-const themeIcon = computed<IconName>(() => (settings.appearance === 'light' ? 'sun' : settings.appearance === 'dark' ? 'moon' : 'auto'))
+const APPEARANCE_ICON: Record<string, IconName> = { light: 'sun', dark: 'moon', system: 'auto', auto: 'sunHorizon' }
+const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] ?? 'auto')
 </script>
 
 <template>

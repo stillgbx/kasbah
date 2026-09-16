@@ -1,10 +1,13 @@
-import { computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
-import { useFullscreen, useLocalStorage, usePreferredDark } from '@vueuse/core'
+import { useFullscreen, useIntervalFn, useLocalStorage, usePreferredDark } from '@vueuse/core'
 import type { ThemeInstance } from 'vuetify'
 import { themeName } from '../plugins/vuetify'
 import { cssVars, DEFAULT_THEME_ID, resolveVariant, THEME_LIST, type ThemeId } from '../themes'
 import { detectLocale, isLocale, LOCALES, type Locale } from '../i18n'
+import { isDaylight } from '../lib/daylight'
+import { useWeather } from '../composables/useWeather'
+import { useHouseStore } from './house'
 import { AMBIENCE_MODES, type AmbienceMode } from '../three/core/ambience'
 import { RENDER_QUALITIES, type RenderQuality } from '../three/core/post'
 import { DEFAULT_STYLE_ID, RENDER_STYLES } from '../three/styles'
@@ -13,14 +16,16 @@ import { WEATHER_CONDITIONS, type WeatherCondition } from '@kasbah/shared'
 /** Une condition forcée dans la scène, ou `real` : la météo telle qu'elle est. */
 export type SceneWeatherChoice = WeatherCondition | 'real'
 
-// Préférences persistées (localStorage, préfixe kasbah.) : apparence clair/sombre/système, thème,
-// langue. `applyToVuetify`/`applyLocale` sont appelées AVANT le mount (aucun flash de thème/langue).
+// Préférences persistées (localStorage, préfixe kasbah.) : apparence clair/sombre/système/auto,
+// thème, langue. `applyToVuetify`/`applyLocale` sont appelées AVANT le mount (aucun flash de thème/langue).
 //
 // Les trois réglages de la SCÈNE 3D sont délibérément séparés du thème de l'app : le style dit le
 // goût du rendu, l'ambiance l'heure qu'il fait au-dessus de la maison, la qualité le budget de la
 // tablette. Aucun des trois ne suit clair/sombre (voir `three/core/ambience.ts`).
 
-export const APPEARANCES = ['light', 'dark', 'system'] as const
+// `system` suit L'APPAREIL qui regarde (`prefers-color-scheme`), `auto` suit le SOLEIL au-dessus de la maison
+// (`lib/daylight.ts`) : deux automatismes, deux sources, d'où deux entrées dans la liste.
+export const APPEARANCES = ['light', 'dark', 'system', 'auto'] as const
 export type Appearance = (typeof APPEARANCES)[number]
 
 export const useSettingsStore = defineStore('settings', () => {
@@ -44,10 +49,25 @@ export const useSettingsStore = defineStore('settings', () => {
   const sceneCloudCover = useLocalStorage<number>('kasbah.sceneCloudCover', 60)
   const sceneVisibilityM = useLocalStorage<number>('kasbah.sceneVisibilityM', 25_000)
   const preferredDark = usePreferredDark()
+  const weather = useWeather()
+  const house = useHouseStore()
+  /** Horloge de l'apparence « Auto ». Les autres modes ne la lisent pas : rien ne recalcule. */
+  const clock = ref(new Date())
+  useIntervalFn(() => { clock.value = new Date() }, 60_000)
 
   const themeId = computed<ThemeId>(() => (THEME_LIST.some((t) => t.id === theme.value) ? (theme.value as ThemeId) : DEFAULT_THEME_ID))
   /** Apparence demandée par la tablette ; un thème qui n'a pas cette variante impose la sienne. */
-  const wantDark = computed(() => appearance.value === 'dark' || (appearance.value === 'system' && preferredDark.value))
+  const wantDark = computed(() => {
+    if (appearance.value === 'light' || appearance.value === 'dark') return appearance.value === 'dark'
+    if (appearance.value === 'system') return preferredDark.value
+    const origin = house.house?.origin
+    return !isDaylight({
+      now: clock.value,
+      sunrise: weather.live.value?.sunrise,
+      sunset: weather.live.value?.sunset,
+      geo: origin ? { lat: origin.lat, lon: origin.lon } : null,
+    })
+  })
   const variant = computed(() => resolveVariant(themeId.value, wantDark.value))
   const isDark = computed(() => variant.value.isDark)
   const currentTheme = computed(() => themeName(themeId.value, isDark.value))
@@ -55,7 +75,8 @@ export const useSettingsStore = defineStore('settings', () => {
   const fullscreen = useFullscreen()
 
   function setAppearance(v: Appearance) { appearance.value = v }
-  function cycleAppearance() { appearance.value = appearance.value === 'system' ? 'light' : appearance.value === 'light' ? 'dark' : 'system' }
+  /** Le bouton du rail parcourt la liste dans l'ordre des Réglages : clair → sombre → système → auto. */
+  function cycleAppearance() { appearance.value = APPEARANCES[(APPEARANCES.indexOf(appearance.value) + 1) % APPEARANCES.length]! }
   function setTheme(v: string) { theme.value = v }
   function setLocale(v: string) { if (v === '' || isLocale(v)) locale.value = v }
   function setSceneStyle(v: string) { if (RENDER_STYLES.some((st) => st.id === v)) sceneStyle.value = v }

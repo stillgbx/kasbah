@@ -196,6 +196,7 @@
   },
   "settings": {
     "title": "Réglages", "appearance": "Apparence", "system": "Système", "light": "Clair", "dark": "Sombre",
+    "appearanceAuto": "Auto", "appearanceHint": "Auto passe en sombre une demi-heure avant le coucher du soleil ; Système suit le réglage clair/sombre de l'appareil.",
     "theme": "Thème", "themeDarkOnly": "Sombre uniquement",
     "language": "Langue", "auto": "Automatique", "fullscreen": "Plein écran",
     "scenes": "Ambiances", "sceneAutoDynamic": "Démarrage animé", "sceneNoPalette": "Pas de palette animée",

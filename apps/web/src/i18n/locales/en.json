@@ -196,6 +196,7 @@
   },
   "settings": {
     "title": "Settings", "appearance": "Appearance", "system": "System", "light": "Light", "dark": "Dark",
+    "appearanceAuto": "Auto", "appearanceHint": "Auto goes dark half an hour before sunset; System follows the device's light/dark setting.",
     "theme": "Theme", "themeDarkOnly": "Dark only",
     "language": "Language", "auto": "Automatic", "fullscreen": "Full screen",
     "scenes": "Light scenes", "sceneAutoDynamic": "Starts animated", "sceneNoPalette": "No animated palette",

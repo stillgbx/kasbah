@@ -12,6 +12,7 @@ import { coverActivity, coverAtRest, isFlatCover, isPassageCover } from './cover
 import { coverLeaves, coverSize, hasLeaves, isOrientable, isSizable } from './orientation'
 import { bodyColorOf, bodyFinishOf, FINISH_MATERIAL, SCENE_FINISH } from './vehicleTuning'
 import { BOTH_MAX_M, CAR_ZOOM, IGN_ORTHO_TILE_URL, initialView, normalizeHeading, planStyleUrl, satelliteStyle, satelliteStyleWithLabels } from './map'
+import { isDaylight, TWILIGHT_MS } from './daylight'
 import fr from '../i18n/locales/fr.json'
 import en from '../i18n/locales/en.json'
 
@@ -512,5 +513,41 @@ describe('couleur de carrosserie', () => {
     // Une peinture mate DIFFUSE : c'est la rugosité qui la distingue, et l'écart doit être franc.
     expect(FINISH_MATERIAL.matte.roughness).toBeGreaterThan(FINISH_MATERIAL.metallic.roughness + 0.4)
     expect(FINISH_MATERIAL.solid.metalness).toBeLessThan(FINISH_MATERIAL.metallic.metalness)
+  })
+})
+
+describe('isDaylight', () => {
+  const geo = { lat: 47.3, lon: 5.04 }                 // la maison de référence, en Bourgogne
+  const sunrise = Date.parse('2026-06-21T03:47:00Z')
+  const sunset = Date.parse('2026-06-21T19:37:00Z')
+  const at = (iso: string) => new Date(Date.parse(iso))
+
+  it('les heures de la météo gagnent, avec la demi-heure de crépuscule de chaque côté', () => {
+    // On reste SOMBRE une demi-heure après le lever, et on y repasse une demi-heure avant le coucher.
+    expect(isDaylight({ now: new Date(sunrise + TWILIGHT_MS - 60_000), sunrise, sunset, geo })).toBe(false)
+    expect(isDaylight({ now: new Date(sunrise + TWILIGHT_MS + 60_000), sunrise, sunset, geo })).toBe(true)
+    expect(isDaylight({ now: new Date(sunset - TWILIGHT_MS - 60_000), sunrise, sunset, geo })).toBe(true)
+    expect(isDaylight({ now: new Date(sunset - TWILIGHT_MS + 60_000), sunrise, sunset, geo })).toBe(false)
+  })
+
+  it('sans météo, le soleil calculé sur place — et la même marge, exprimée en hauteur', () => {
+    expect(isDaylight({ now: at('2026-06-21T10:00:00Z'), geo })).toBe(true)     // 58° : plein jour
+    expect(isDaylight({ now: at('2026-06-21T22:00:00Z'), geo })).toBe(false)    // sous l'horizon
+    // Le soleil est LEVÉ (4,3°) mais on garde le sombre : c'est la demi-heure de marge.
+    expect(isDaylight({ now: at('2026-06-21T04:20:00Z'), geo })).toBe(false)
+    // …et on repasse en sombre alors qu'il est encore à 4,8°, une demi-heure avant de se coucher.
+    expect(isDaylight({ now: at('2026-06-21T19:00:00Z'), geo })).toBe(false)
+    expect(isDaylight({ now: at('2026-12-21T12:00:00Z'), geo })).toBe(true)     // 19° en plein hiver
+  })
+
+  it('une météo muette (heures à zéro) ne prend pas le pas sur le calcul', () => {
+    expect(isDaylight({ now: at('2026-06-21T10:00:00Z'), sunrise: 0, sunset: 0, geo })).toBe(true)
+  })
+
+  it('maison sans origine GPS : la journée type 7 h - 21 h, heure de la tablette', () => {
+    expect(isDaylight({ now: new Date(2026, 5, 21, 12, 0) })).toBe(true)
+    expect(isDaylight({ now: new Date(2026, 5, 21, 8, 0) })).toBe(true)
+    expect(isDaylight({ now: new Date(2026, 5, 21, 7, 10) })).toBe(false)       // tout juste levé
+    expect(isDaylight({ now: new Date(2026, 5, 21, 23, 0) })).toBe(false)
   })
 })

@@ -32,7 +32,9 @@ const house = useHouseStore()
 const { t } = useI18n()
 onMounted(() => { void devices.refreshHealth(); void plugins.load() })
 
-const appearanceOptions = computed(() => settings.appearances.map((a) => ({ value: a, label: t(`settings.${a}`) })))
+// `auto` a sa propre clé : « Automatique » (le libellé de la langue) allongeait la colonne de 73 px
+// — une piste `fr` ne descend jamais sous le min-content de ce qu'elle porte (voir le style plus bas).
+const appearanceOptions = computed(() => settings.appearances.map((a) => ({ value: a, label: t(a === 'auto' ? 'settings.appearanceAuto' : `settings.${a}`) })))
 const localeOptions = computed(() => [{ value: '', label: t('settings.auto') }, ...settings.locales.map((l) => ({ value: l as string, label: LOCALE_LABELS[l] }))])
 // Aperçu d'un thème : la variante que l'apparence DEMANDE (un thème sombre-uniquement montre donc
 // sa palette sombre même en apparence claire, ce que dit aussi son badge).
@@ -94,6 +96,9 @@ const houseStats = computed(() => {
           <section class="card block">
             <div class="block__title">{{ $t('settings.appearance') }}</div>
             <Segmented :model-value="settings.appearance" :options="appearanceOptions" class="w-100" @update:model-value="(v: Appearance) => settings.setAppearance(v)" />
+            <!-- Deux modes automatiques côte à côte (« Système » et « Auto ») : la ligne dit lequel suit
+                 quoi. Toujours affichée (elle ne dépend pas du mode choisi), donc rien ne bouge. -->
+            <div class="muted small">{{ $t('settings.appearanceHint') }}</div>
           </section>
           <section class="card block">
             <div class="block__title">{{ $t('settings.language') }}</div>
