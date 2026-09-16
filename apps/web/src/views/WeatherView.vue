@@ -60,6 +60,8 @@ const isToday = (tMs: number) => new Date(tMs).toDateString() === new Date(now.v
 const aqiIndex = computed(() => (live.value?.aqiLevel ? AQI_LEVELS.indexOf(live.value.aqiLevel) : -1))
 /** Couleurs du palier européen, du bon au très mauvais (échelle officielle EAQI). */
 const AQI_COLORS = ['#50f0e6', '#50ccaa', '#f0e641', '#ff5050', '#960032', '#7d2181']
+/** Plages de l'indice européen, palier par palier (0-20 bon … au-delà de 100 extrêmement mauvais). */
+const AQI_RANGES = ['0 – 20', '20 – 40', '40 – 60', '60 – 80', '80 – 100', '> 100']
 const pollens = computed(() => POLLEN_TYPES.map((type) => ({ type, level: live.value?.pollen?.[type] })))
 
 const tiles = computed<{ key: string; icon: IconName; value: string; label: string }[]>(() => {
@@ -188,6 +190,17 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
           <div class="wx-air__scale">
             <span v-for="(c, i) in AQI_COLORS" :key="i" :style="{ background: c }" :data-on="i === aqiIndex ? '1' : '0'" />
           </div>
+          <!-- légende, poussée au bas de la carte et discrète : les six paliers et leurs plages, celui du moment en évidence -->
+          <div class="wx-legend">
+            <div class="wx-air__legend">
+              <div v-for="(lvl, i) in AQI_LEVELS" :key="lvl" class="wx-air__row" :data-on="i === aqiIndex ? '1' : '0'">
+                <span class="wx-air__dot" :style="{ background: AQI_COLORS[i] }" />
+                <span class="wx-air__name">{{ $t(`weather.aqi.${lvl}`) }}</span>
+                <span class="wx-air__range">{{ AQI_RANGES[i] }}</span>
+              </div>
+            </div>
+            <div>{{ $t('weather.aqiExplain') }}</div>
+          </div>
         </section>
         <section v-if="caps.has('pollen')" class="card wx-pollen">
           <div class="section-label">{{ $t('weather.pollen') }}</div>
@@ -197,6 +210,15 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
               <div class="wx-pollen__dots"><span v-for="k in 4" :key="k" :data-on="p.level !== undefined && k <= p.level ? '1' : '0'" /></div>
               <div class="muted small wx-pollen__level">{{ p.level === undefined ? '—' : $t(`weather.pollenLevels[${p.level}]`) }}</div>
             </div>
+          </div>
+          <!-- légende, poussée au bas de la carte : un point par cran, et ce que mesure l'indice -->
+          <div class="wx-legend">
+            <div class="wx-pollen__legend">
+              <span v-for="k in 4" :key="k" class="wx-pollen__key">
+                <span class="wx-pollen__dots"><span v-for="j in k" :key="j" data-on="1" /></span>{{ $t(`weather.pollenLevels[${k}]`) }}
+              </span>
+            </div>
+            <div>{{ $t('weather.pollenExplain') }}</div>
           </div>
         </section>
         </div>
@@ -285,6 +307,13 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
 .wx-air__scale { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; height: 10px; }
 .wx-air__scale span { border-radius: 3px; opacity: .35; transition: opacity .2s; }
 .wx-air__scale span[data-on='1'] { opacity: 1; outline: 2px solid var(--text); outline-offset: 1px; }
+/* légendes : au bas de la carte (la marge automatique les y pousse), sous un filet, en petit et en retrait */
+.wx-legend { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--line); display: grid; gap: 8px; font-size: 11px; line-height: 1.35; color: var(--muted); opacity: .85; }
+.wx-air__legend { display: grid; gap: 0; }
+.wx-air__row { display: grid; grid-template-columns: 10px 1fr auto; align-items: center; gap: 8px; height: 18px; }
+.wx-air__row[data-on='1'] { color: var(--text); font-weight: 600; }
+.wx-air__dot { width: 8px; height: 8px; border-radius: 50%; opacity: .8; }
+.wx-air__range { font-variant-numeric: tabular-nums; }
 
 .wx-pollen__rows { display: grid; gap: 8px; margin-top: 8px; }
 .wx-pollen__row { display: grid; grid-template-columns: 96px 1fr 84px; align-items: center; gap: 10px; height: 22px; }
@@ -293,6 +322,11 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
 .wx-pollen__dots span { width: 12px; height: 12px; border-radius: 50%; background: var(--line); }
 .wx-pollen__dots span[data-on='1'] { background: var(--cat-light); }
 .wx-pollen__level { text-align: right; }
+.wx-pollen { display: flex; flex-direction: column; }
+.wx-pollen__legend { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.wx-pollen__key { display: inline-flex; align-items: center; gap: 5px; }
+.wx-pollen__key .wx-pollen__dots span { width: 7px; height: 7px; opacity: .8; }
+.wx-pollen__key .wx-pollen__dots { gap: 3px; }
 
 .wx-radar { padding: 0 !important; height: 400px; }
 .wx-radar > * { height: 100%; }
@@ -324,7 +358,8 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
   .wx-day { height: 38px; }
   /* détails resserrés sur deux colonnes ; air et pollens à leur droite ; les deux blocs de DROITE
      (semaine, radar) partagent les mêmes colonnes, donc le même bord gauche */
-  .wx-bottom { display: grid; grid-column: 1 / 8; grid-row: 3; grid-template-columns: 2fr 5fr; grid-template-rows: auto minmax(0, 1fr); gap: 16px; align-items: start; min-height: 0; }
+  .wx-bottom { display: grid; grid-column: 1 / 8; grid-row: 3; grid-template-columns: 2fr 5fr; grid-template-rows: auto minmax(0, 1fr); gap: 16px; align-items: stretch; min-height: 0; }
+  /* la carte Détails s'aligne sur la hauteur de ses voisines (air, pollens) plutôt que de s'arrêter à sa dernière ligne */
   .wx-details { grid-column: 1 !important; grid-row: 1; }
   .wx-side { display: grid; grid-column: 2; grid-row: 1; grid-template-columns: 2fr 3fr; gap: 16px; }
   /* les attributions en bas à gauche, sous les détails : la place y est */
