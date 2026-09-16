@@ -1,6 +1,6 @@
-import type { Command, DeviceDescriptor, MowerRestriction, StateFor, StatePatch } from '@kasbah/shared'
+import type { Command, DeviceDescriptor, JournalEntry, JournalSeverity, MowerRestriction, StateFor, StatePatch } from '@kasbah/shared'
 import { MOWER_RESTRICTIONS } from '@kasbah/shared'
-import { mowerDataSchema, mowerSectionSchema, plannerSchema, positionSchema, type MowerData, type WsEvent } from './types'
+import { messageSchema, messagesResponseSchema, mowerDataSchema, mowerSectionSchema, plannerSchema, positionSchema, type MowerData, type WsEvent } from './types'
 
 // Automower Connect API → contrat Kasbah. Fonctions PURES, testées sur les fixtures.
 //
@@ -15,8 +15,8 @@ import { mowerDataSchema, mowerSectionSchema, plannerSchema, positionSchema, typ
 
 export const PLUGIN_ID = 'automower'
 
-/** Ce que le robot sait faire : partir, se garer, dire sa batterie, suivre un planning. */
-export const CAPABILITIES = ['mow', 'park', 'battery', 'schedule'] as const
+/** Ce que le robot sait faire : partir, se garer, dire sa batterie, suivre un planning, tenir son journal. */
+export const CAPABILITIES = ['mow', 'park', 'battery', 'schedule', 'journal'] as const
 
 /** Valide ressource par ressource : un robot à la forme inattendue ne prive pas la maison des autres. */
 export function parseMowers(list: unknown, onReject?: (issue: string) => void): MowerData[] {
@@ -244,6 +244,43 @@ export function applyEvent(ev: WsEvent, current: MowerData, o: MapOptions): Appl
     default:
       return null
   }
+}
+
+// ---- Journal ------------------------------------------------------------------------------------
+
+/** Gravités du fabricant (majuscules) → contrat. Inconnue = information. */
+function toSeverity(raw: string | null | undefined): JournalSeverity {
+  switch (lower(raw)) {
+    case 'fatal': case 'fatal_error': return 'fatal'
+    case 'error': return 'error'
+    case 'warning': return 'warning'
+    default: return 'info'
+  }
+}
+
+/**
+ * Une ligne du journal, ou `null` si elle n'a ni date ni code. Position gardée seulement si elle en
+ * est une : le journal capturé porte des `(2e-7 ; 6.2e-6)` — un GPS sans fix écrit presque zéro,
+ * et ce n'est pas un point du jardin.
+ */
+export function toJournalEntry(raw: unknown, tz: string): JournalEntry | null {
+  const m = messageSchema.safeParse(raw)
+  if (!m.success) return null
+  const time = pos(m.data.time), code = m.data.code
+  if (time === undefined || typeof code !== 'number') return null
+  const lat = m.data.latitude, lon = m.data.longitude
+  const located = typeof lat === 'number' && typeof lon === 'number' && (Math.abs(lat) > 0.01 || Math.abs(lon) > 0.01)
+  return {
+    at: localTimestamp(time, tz), severity: toSeverity(m.data.severity), code, message: errorText(code),
+    ...(located ? { location: { lat, lon } } : {}),
+  }
+}
+
+/** `GET /mowers/{id}/messages` → entrées du plus récent au plus ancien ; une ligne illisible est sautée. */
+export function toJournal(raw: unknown, tz: string): JournalEntry[] {
+  const parsed = messagesResponseSchema.safeParse(raw)
+  const list = parsed.success ? parsed.data.data.attributes?.messages ?? [] : []
+  return list.map((m) => toJournalEntry(m, tz)).filter((e): e is JournalEntry => e !== null).sort((a, b) => b.at - a.at)
 }
 
 /**

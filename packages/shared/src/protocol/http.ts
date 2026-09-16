@@ -125,3 +125,30 @@ export const weatherForecastSchema = z.object({
 export type WeatherHourlyPoint = z.infer<typeof weatherHourlyPointSchema>
 export type WeatherDailyPoint = z.infer<typeof weatherDailyPointSchema>
 export type WeatherForecast = z.infer<typeof weatherForecastSchema>
+
+/**
+ * Journal d'un appareil : ce qu'il a CONSIGNÉ lui-même — erreurs, avertissements —, daté et parfois
+ * positionné. Servi à la demande (`GET /api/devices/:id/journal`) par un plugin qui déclare la
+ * capacité `journal`, comme les prévisions d'un appareil météo : c'est un historique, pas un état.
+ * Le premier robot à le publier est la tondeuse Husqvarna (`GET /mowers/{id}/messages`).
+ */
+export const JOURNAL_SEVERITIES = ['info', 'warning', 'error', 'fatal'] as const
+export type JournalSeverity = (typeof JOURNAL_SEVERITIES)[number]
+export const journalEntrySchema = z.object({
+  /** Quand (ms epoch, vrai instant). */
+  at: z.number(),
+  severity: z.enum(JOURNAL_SEVERITIES),
+  /** Code du fabricant, quand il en a un : c'est ce que le support demande. */
+  code: z.number().int().optional(),
+  /** Texte du fabricant, tel qu'il le publie (pas traduit). */
+  message: z.string().min(1),
+  /** Où c'est arrivé, quand l'appareil le sait — un GPS sans fix ne donne rien. */
+  location: z.object({ lat: z.number(), lon: z.number() }).optional(),
+})
+export const deviceJournalSchema = z.object({
+  deviceId: z.string(),
+  /** Du plus récent au plus ancien. */
+  entries: z.array(journalEntrySchema),
+})
+export type JournalEntry = z.infer<typeof journalEntrySchema>
+export type DeviceJournal = z.infer<typeof deviceJournalSchema>

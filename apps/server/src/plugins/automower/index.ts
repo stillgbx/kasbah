@@ -2,14 +2,14 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import type { Command, DeviceDescriptor, PluginHealth, StatePatch } from '@kasbah/shared'
+import type { Command, DeviceDescriptor, JournalEntry, PluginHealth, StatePatch } from '@kasbah/shared'
 import { createBackoff } from '../../core/backoff'
-import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
+import { PluginError, type DevicePlugin, type PluginContext, type PluginJournal } from '../../core/plugin'
 import { createPoller } from '../../core/poll'
 import type { FetchLike } from '../../core/sse'
 import { AutomowerAuth } from './auth'
 import { AutomowerClient } from './client'
-import { actionBody, applyEvent, connectedOf, isTimeZone, parseMowers, toDescriptor, toStatePatch } from './mapping'
+import { actionBody, applyEvent, connectedOf, isTimeZone, parseMowers, toDescriptor, toJournal, toJournalEntry, toStatePatch } from './mapping'
 import { MONTHLY_REQUESTS, createUsageFile, currentUsage, monthStart, type AutomowerUsage, type UsageStore } from './state'
 import { AutomowerSocket, type WsFactory } from './ws'
 import { mowerListSchema, wsEventSchema, wsReadySchema, type MowerData } from './types'
@@ -97,6 +97,13 @@ export function createAutomowerPlugin(deps: AutomowerPluginDeps = {}): DevicePlu
    */
   const recentEvents: { at: number; message: unknown }[] = []
   const RECENT_EVENTS_MAX = 200
+  /**
+   * Le JOURNAL de chaque robot, lu au fabricant à la première demande (une requête, comptée), puis
+   * tenu à jour par les `message-event-v2` du flux — sans relire. `stale` après une coupure du flux :
+   * des messages ont pu passer, la prochaine demande relit.
+   */
+  const journals = new Map<string, { entries: JournalEntry[]; stale: boolean }>()
+  const JOURNAL_MAX = 100
   let published: DeviceDescriptor[] = []
 
   const log = () => ctx!.logger
@@ -158,6 +165,15 @@ export function createAutomowerPlugin(deps: AutomowerPluginDeps = {}): DevicePlu
     }
     const ev = wsEventSchema.safeParse(message)
     if (!ev.success) { log().debug({ message }, 'Automower websocket: unknown message'); return }
+    // une ligne de journal : elle rejoint le journal qu'on tient, s'il a déjà été lu
+    if (ev.data.type === 'message-event-v2') {
+      const entry = toJournalEntry(ev.data.attributes?.message, tz)
+      const j = journals.get(ev.data.id)
+      if (entry && j && !j.entries.some((e) => e.at === entry.at && e.code === entry.code)) {
+        j.entries = [entry, ...j.entries].sort((a, b) => b.at - a.at).slice(0, JOURNAL_MAX)
+      }
+      return
+    }
     // un robot que la liste ne connaît pas : il vient d'être ajouté au compte, on relit tout
     const current = mowers.get(ev.data.id)
     if (!current) { resync(`event for unknown mower ${ev.data.id}`); return }
@@ -195,6 +211,7 @@ export function createAutomowerPlugin(deps: AutomowerPluginDeps = {}): DevicePlu
       published = []
       lastError = null
       lastResync = 0
+      journals.clear()
       tz = config.AUTOMOWER_TIMEZONE ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC'
       usageStore = deps.usageStore ?? (config.AUTOMOWER_USAGE_FILE ? createUsageFile(config.AUTOMOWER_USAGE_FILE, context.logger) : null)
       usage = currentUsage(await usageStore?.load() ?? null, context.clock.now())
@@ -206,8 +223,13 @@ export function createAutomowerPlugin(deps: AutomowerPluginDeps = {}): DevicePlu
         token: (signal) => auth!.accessToken(signal),
         clock: context.clock, signal: context.signal, logger: context.logger,
         onEvent,
-        // une reconnexion a pu manquer des événements : l'état complet remet tout d'accord
-        onOpen: (reconnected) => { if (reconnected) resync('websocket reconnected') },
+        // une reconnexion a pu manquer des événements : l'état complet remet tout d'accord, et le
+        // journal se relira à la prochaine demande
+        onOpen: (reconnected) => {
+          if (!reconnected) return
+          for (const j of journals.values()) j.stale = true
+          resync('websocket reconnected')
+        },
         ...(deps.wsFactory ? { factory: deps.wsFactory } : {}),
       })
     },
@@ -254,6 +276,19 @@ export function createAutomowerPlugin(deps: AutomowerPluginDeps = {}): DevicePlu
       log().info({ mower: externalId, action: body.data.type }, 'Automower action accepted')
     },
 
+    /** Le journal du robot : lu une fois au fabricant, puis tenu par le flux. */
+    async journal(externalId: string): Promise<PluginJournal> {
+      if (!configured()) throw new PluginError('NEEDS_PAIRING', 'Automower: no application key or secret')
+      if (!mowers.has(externalId)) throw new PluginError('DEVICE_UNAVAILABLE', `unknown mower ${externalId}`)
+      let j = journals.get(externalId)
+      if (!j || j.stale) {
+        const entries = toJournal(await client!.messages(externalId, ctx?.signal), tz).slice(0, JOURNAL_MAX)
+        j = { entries, stale: false }
+        journals.set(externalId, j)
+      }
+      return { entries: j.entries }
+    },
+
     async stop(): Promise<void> {
       poller?.stop()
       poller = null
@@ -266,6 +301,13 @@ export function createAutomowerPlugin(deps: AutomowerPluginDeps = {}): DevicePlu
 
       /** Les derniers messages du flux, bruts et datés : la capture des fixtures d'événements. */
       app.get('/raw/events', async () => ({ live: socket?.connected ?? false, events: recentEvents }))
+
+      /** Le journal d'un robot tel que le fabricant le rend (une requête, comptée). */
+      app.get<{ Params: { id: string } }>('/raw/messages/:id', async (req, reply) => {
+        if (!configured() || !client) return reply.code(409).send({ error: 'Automower: no application key or secret' })
+        try { return { messages: await client.messages(req.params.id, ctx?.signal) } }
+        catch (err) { lastError = (err as Error).message; return reply.code(502).send({ error: lastError }) }
+      })
 
       /**
        * Relevé brut, à capturer dès les clés posées : c'est lui qui remplacera les fixtures. Une

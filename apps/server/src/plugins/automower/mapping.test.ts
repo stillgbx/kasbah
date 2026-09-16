@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   MOWERS_ERROR, MOWERS_MOWING, MOWERS_OFFLINE, MOWERS_PARKED, MOWER_ID, WS_BATTERY, WS_CUTTING_HEIGHT, WS_MOWER_HOME, WS_MOWER_HOME_PARKED, WS_MOWER_INACTIVE,
   WS_MOWER_MAIN_PARKED, WS_MOWER_NOT_APPLICABLE, WS_MOWER_STOPPED, WS_MOWER_STOPPED_FULL, WS_PLANNER, WS_POSITION,
-  WS_MESSAGE_ERROR, WS_MOWER_ERROR_AT, WS_MOWER_ERROR_CODE, WS_MOWER_ERROR_FULL, WS_MOWER_ERROR_STATE, WS_MOWER_IN_OPERATION, WS_MOWER_LEAVING, WS_PLANNER_FORCE_MOW, WS_POSITION_2,
+  MESSAGES, WS_MESSAGE_ERROR, WS_MOWER_ERROR_AT, WS_MOWER_ERROR_CODE, WS_MOWER_ERROR_FULL, WS_MOWER_ERROR_STATE, WS_MOWER_IN_OPERATION, WS_MOWER_LEAVING, WS_PLANNER_FORCE_MOW, WS_POSITION_2,
 } from './__fixtures__/automower'
-import { actionBody, applyEvent, connectedOf, localTimestamp, parseMowers, toActivity, toDescriptor, toStatePatch } from './mapping'
+import { actionBody, applyEvent, connectedOf, localTimestamp, parseMowers, toActivity, toDescriptor, toJournal, toJournalEntry, toStatePatch } from './mapping'
 import { wsEventSchema } from './types'
 
 // Le mappage est pur : les fixtures (provisoires, d'après la documentation) suffisent à le tenir.
@@ -17,7 +17,7 @@ describe('automower mapping — descripteur', () => {
   it('un robot = un appareil mower, nommé par le fabricant, identifié par son UUID', () => {
     const d = toDescriptor(first(MOWERS_ERROR))
     expect(d).toMatchObject({ id: `automower:${MOWER_ID}`, pluginId: 'automower', externalId: MOWER_ID, kind: 'mower', name: 'Tondeuse' })
-    expect(d.capabilities).toEqual(['mow', 'park', 'battery', 'schedule'])
+    expect(d.capabilities).toEqual(['mow', 'park', 'battery', 'schedule', 'journal'])
     expect(d.meta).toEqual({ manufacturer: 'Husqvarna', model: 'Husqvarna Automower® 435X AWD' })
   })
 
@@ -182,6 +182,33 @@ describe('automower mapping — événements du flux (des DELTAS, fondus dans le
   it('un événement qui ne nous concerne pas ne produit rien', () => {
     expect(applyEvent(ev({ id: MOWER_ID, type: 'headlights-event-v2', attributes: { headlight: { mode: 'ALWAYS_ON' } } }), parked, o)).toBeNull()
     expect(applyEvent(ev({ id: MOWER_ID, type: 'battery-event-v2', attributes: {} }), parked, o)).toBeNull()
+  })
+})
+
+describe('automower mapping — journal', () => {
+  it('la capture : 22 lignes du plus récent au plus ancien, gravités traduites, dates locales ramenées en UTC', () => {
+    const j = toJournal(MESSAGES, TZ)
+    expect(j).toHaveLength(22)
+    expect(j.map((e) => e.at)).toEqual([...j.map((e) => e.at)].sort((a, b) => b - a))
+    // 1789582935 s = 2026-09-16 18:22:15 mur à Paris → 16:22:15 UTC
+    expect(j[0]).toMatchObject({ at: Date.UTC(2026, 8, 16, 16, 22, 15), severity: 'error', code: 2, message: 'No loop signal' })
+    expect(j[0]!.location).toBeDefined()
+    expect(j.find((e) => e.code === 1)).toMatchObject({ severity: 'fatal', message: 'Outside working area' })
+    expect(new Set(j.map((e) => e.severity))).toEqual(new Set(['error', 'fatal', 'warning']))
+  })
+
+  it('une position quasi nulle (pas de fix GPS) ne fait pas une position', () => {
+    const j = toJournal(MESSAGES, TZ)
+    const blind = j.filter((e) => e.location === undefined)
+    expect(blind.length).toBeGreaterThan(0)
+    for (const e of blind) expect(e.code).toBe(62)
+  })
+
+  it('une ligne du flux (message-event-v2) devient une entrée ; une ligne sans date ni code est sautée', () => {
+    expect(toJournalEntry(WS_MESSAGE_ERROR.attributes.message, TZ)).toMatchObject({ at: Date.UTC(2026, 8, 16, 16, 22, 15), severity: 'error', code: 2, message: 'No loop signal' })
+    expect(toJournalEntry({ severity: 'INFO' }, TZ)).toBeNull()
+    expect(toJournalEntry({ time: 1789582935, code: 999, severity: 'WHATEVER' }, TZ)).toMatchObject({ severity: 'info', message: 'Error 999' })
+    expect(toJournal({ data: {} }, TZ)).toEqual([])
   })
 })
 

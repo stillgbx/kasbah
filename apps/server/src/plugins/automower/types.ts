@@ -82,6 +82,22 @@ export type MowerData = z.infer<typeof mowerDataSchema>
 export const mowerListSchema = z.looseObject({ data: z.array(z.unknown()) })
 
 /**
+ * Une ligne du journal (`GET /mowers/{id}/messages`, `data.attributes.messages[]`, et la même forme
+ * dans `message-event-v2`). `time` en SECONDES, heure locale écrite comme UTC ; `severity` en
+ * majuscules (`ERROR`, `FATAL`, `WARNING` vus) ; une position quasi nulle = pas de fix GPS.
+ */
+export const messageSchema = z.looseObject({
+  time: num,
+  code: num,
+  severity: str,
+  latitude: num,
+  longitude: num,
+})
+export const messagesResponseSchema = z.looseObject({
+  data: z.looseObject({ attributes: z.looseObject({ messages: z.array(z.unknown()).nullable().optional() }).nullable().optional() }),
+})
+
+/**
  * Un événement du WebSocket (format V2, le seul servi depuis mars 2025) : `{ id, type, attributes }`,
  * le `type` nommant la section qui a changé (`battery-event-v2`, `mower-event-v2`,
  * `planner-event-v2`, `position-event-v2`, `cuttingHeight-event-v2`, `headlights-event-v2`,

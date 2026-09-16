@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { Capability, CommandInput, DeviceEntry, StateFor } from '@kasbah/shared'
+import type { Capability, CommandInput, DeviceEntry, JournalEntry, StateFor } from '@kasbah/shared'
+import { getTransport } from '../api'
 import PageHeader from '../components/layout/PageHeader.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import MowerTuning from '../components/robots/MowerTuning.vue'
@@ -89,6 +90,26 @@ async function send(id: string, cmd: CommandInput): Promise<void> {
 // « il y a 12 min » vieillit tout seul : une horloge de la vue, rafraîchie chaque demi-minute
 const now = ref(Date.now())
 let clockTimer: ReturnType<typeof setInterval> | null = null
+
+/**
+ * Le JOURNAL du robot (capacité `journal`) : ce qu'il a consigné lui-même, du plus récent au plus
+ * ancien. Servi à la demande par le serveur, qui le tient à jour par le flux du fabricant : le
+ * redemander à chaque battement ne coûte qu'une requête locale. Huit lignes fixes ; un échec garde
+ * les lignes d'avant.
+ */
+const JOURNAL_ROWS = 8
+const journals = ref<Record<string, JournalEntry[]>>({})
+async function loadJournals(): Promise<void> {
+  for (const m of mowers.value) {
+    if (!has(m, 'journal')) continue
+    try { journals.value = { ...journals.value, [m.descriptor.id]: (await getTransport().getJournal(m.descriptor.id)).entries } }
+    catch { /* le journal d'avant reste affiché */ }
+  }
+}
+const journalOf = (m: MowerEntry) => (journals.value[m.descriptor.id] ?? []).slice(0, JOURNAL_ROWS)
+/** « 24 août 16:42 » : le journal court sur des semaines, un jour de la semaine seul ne dirait pas laquelle. */
+const journalWhen = (at: number) => new Intl.DateTimeFormat(locale.value, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(at))
+const journalLine = (e: JournalEntry) => `${e.message} · ${t('mower.journalCode', { code: e.code ?? '—' })}`
 const updatedAgo = (s: StateFor<'mower'>) => t('mower.updatedAgo', { ago: formatAgo(s.updatedAt, now.value, locale.value) })
 
 /**
@@ -106,7 +127,8 @@ const quotaLabel = (q: Quota) => {
 }
 onMounted(() => {
   void devices.refreshHealth()
-  clockTimer = setInterval(() => { now.value = Date.now(); void devices.refreshHealth() }, 30_000)
+  void loadJournals()
+  clockTimer = setInterval(() => { now.value = Date.now(); void devices.refreshHealth(); void loadJournals() }, 30_000)
 })
 onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
 </script>
@@ -151,6 +173,18 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
               <div class="counter"><span class="muted counter__k">{{ $t('mower.collisions') }}</span><span class="counter__v">{{ count(m.state.statistics?.collisions) }}</span></div>
               <div class="counter"><span class="muted counter__k">{{ $t('mower.driveDistance') }}</span><span class="counter__v">{{ distance(m.state.statistics?.driveDistanceM) }}</span></div>
             </div>
+          </div>
+          <!-- le journal du robot : ce qu'il a consigné lui-même, huit lignes du plus récent au plus ancien -->
+          <div v-if="has(m, 'journal')" class="card card--soft journal">
+            <div class="muted stat__k">{{ $t('mower.journal') }}</div>
+            <ul v-if="journalOf(m).length" class="journal__list">
+              <li v-for="e in journalOf(m)" :key="`${e.at}-${e.code}`" class="journal__row">
+                <span class="journal__dot" :data-severity="e.severity" :title="$t(`mower.severity.${e.severity}`)" />
+                <span class="muted journal__when">{{ journalWhen(e.at) }}</span>
+                <span class="journal__text">{{ journalLine(e) }}</span>
+              </li>
+            </ul>
+            <p v-else class="muted journal__empty">{{ $t('mower.journalEmpty') }}</p>
           </div>
           <!-- la carte : le robot (disque, il ne dit pas son cap) et la maison, plan ou satellite -->
           <VehicleMap class="rcard__map" subject="mower" :location="mapLocation(m)" :home="house.house?.origin" :caption="caption(m.state)" />
@@ -224,6 +258,17 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
 .counter__k { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .counter__v { font-weight: 500; font-size: 13px; white-space: nowrap; }
 .rcard__map { height: 220px; }
+.journal { padding: 10px 12px; display: grid; gap: 6px; }
+.journal__list { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.journal__row { display: grid; grid-template-columns: 10px auto 1fr; align-items: center; gap: 8px; font-size: 12px; min-width: 0; }
+/* la gravité en pastille : neutre, orangé d'avertissement, rouge d'erreur, rouge plein pour une erreur grave */
+.journal__dot { width: 8px; height: 8px; border-radius: 999px; background: var(--muted); }
+.journal__dot[data-severity='warning'] { background: #d38b22; }
+.journal__dot[data-severity='error'] { background: #d24a43; }
+.journal__dot[data-severity='fatal'] { background: #d24a43; box-shadow: 0 0 0 2px rgb(210 74 67 / .35); }
+.journal__when { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.journal__text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.journal__empty { margin: 0; font-size: 12px; }
 .rcard__actions { display: flex; gap: 8px; flex-wrap: wrap; min-height: 40px; }
 .rcard__actions .pill[aria-busy='true']:disabled { opacity: .7; }
 .rcard__hint { margin: 0; font-size: 12px; }

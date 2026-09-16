@@ -107,6 +107,14 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
     return deps.host.forecast(entry.descriptor.id)
   })
 
+  // Journal d'un appareil (erreurs, avertissements consignés) : à la demande, pour qui déclare la capacité.
+  app.get<{ Params: { id: string } }>('/api/devices/:id/journal', async (req, reply) => {
+    const entry = deps.registry.get(req.params.id)
+    if (!entry) return sendError(reply, 404, 'NOT_FOUND', `unknown device "${req.params.id}"`)
+    if (!entry.descriptor.capabilities.includes('journal')) return sendError(reply, 400, 'KIND_MISMATCH', `device "${req.params.id}" keeps no journal`)
+    return deps.host.journal(entry.descriptor.id)
+  })
+
   // Scènes des fabricants : lecture, puis rappel. Comme pour les commandes, l'état résultant
   // (quelle scène est active) arrive par le WebSocket, pas dans la réponse.
   app.get('/api/scenes', async () => ({ scenes: deps.scenes.list() }))

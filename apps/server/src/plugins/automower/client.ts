@@ -37,6 +37,11 @@ export class AutomowerClient {
   /** `GET /mowers` : tous les robots du compte, état complet compris. */
   mowers(signal?: AbortSignal): Promise<unknown> { return this.request('GET', '/mowers', { signal }) }
 
+  /** `GET /mowers/{id}/messages` : le journal du robot (erreurs et avertissements, datés et positionnés). */
+  messages(mowerId: string, signal?: AbortSignal): Promise<unknown> {
+    return this.request('GET', `/mowers/${encodeURIComponent(mowerId)}/messages`, { signal })
+  }
+
   /** `POST /mowers/{id}/actions` : Start, Pause, Park… Le fabricant accuse en 202 sans corps. */
   action(mowerId: string, body: unknown, signal?: AbortSignal): Promise<unknown> {
     return this.request('POST', `/mowers/${encodeURIComponent(mowerId)}/actions`, { body, signal })

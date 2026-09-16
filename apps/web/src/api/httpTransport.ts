@@ -1,4 +1,4 @@
-import { apiErrorSchema, devicesResponseSchema, energyHistorySchema, healthResponseSchema, houseSchema, pluginsResponseSchema, scenesResponseSchema, serverMessageSchema, weatherForecastSchema, type CommandInput, type DeviceEntry, type DevicePlacement, type EnergyHistory, type HealthResponse, type House, type PluginInfo, type PluginSceneEntry, type PluginSettingsPatch, type SceneRecallInput, type SceneUpdate, type WeatherForecast } from '@kasbah/shared'
+import { apiErrorSchema, devicesResponseSchema, energyHistorySchema, healthResponseSchema, houseSchema, pluginsResponseSchema, scenesResponseSchema, serverMessageSchema, weatherForecastSchema, deviceJournalSchema, type CommandInput, type DeviceJournal, type DeviceEntry, type DevicePlacement, type EnergyHistory, type HealthResponse, type House, type PluginInfo, type PluginSceneEntry, type PluginSettingsPatch, type SceneRecallInput, type SceneUpdate, type WeatherForecast } from '@kasbah/shared'
 import { parseDeviceId } from '@kasbah/shared'
 import { ApiRequestError, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type RenaultStatus, type TeslaStatus, type Transport, type TransportHandlers } from './transport'
 
@@ -30,6 +30,7 @@ export function createHttpTransport(base = ''): Transport {
     getHealth: () => request(`${base}/api/health`, undefined, (j) => healthResponseSchema.parse(j) as HealthResponse),
     getHistory: (deviceId, hours = 24) => request(`${base}/api/devices/${encodeURIComponent(deviceId)}/history?hours=${hours}`, undefined, (j) => energyHistorySchema.parse(j) as EnergyHistory),
     getForecast: (deviceId) => request(`${base}/api/devices/${encodeURIComponent(deviceId)}/forecast`, undefined, (j) => weatherForecastSchema.parse(j) as WeatherForecast),
+    getJournal: (deviceId) => request(`${base}/api/devices/${encodeURIComponent(deviceId)}/journal`, undefined, (j) => deviceJournalSchema.parse(j) as DeviceJournal),
     sendCommand: (deviceId, command: CommandInput) => request(
       `${base}/api/devices/${encodeURIComponent(deviceId)}/command`,
       { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(command) },

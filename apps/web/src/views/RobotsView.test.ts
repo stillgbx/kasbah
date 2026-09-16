@@ -1,9 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises } from '@vue/test-utils'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import type { DeviceDescriptor, DeviceEntry, StateFor } from '@kasbah/shared'
 import { useDevicesStore } from '../stores/devices'
 import RobotsView from './RobotsView.vue'
+
+// le journal vient du serveur, à la demande : ici deux lignes, une erreur et un avertissement
+const getJournal = vi.fn().mockResolvedValue({ deviceId: 'automower:c7233734', entries: [
+  { at: Date.UTC(2026, 8, 16, 16, 22, 15), severity: 'error', code: 2, message: 'No loop signal', location: { lat: 47.3, lon: 5.04 } },
+  { at: Date.UTC(2026, 8, 10, 8), severity: 'warning', code: 62, message: 'Battery restriction due to ambient temperature' },
+] })
+vi.mock('../api', () => ({ getTransport: () => ({ getJournal }) }))
 
 // Ce que la vue doit tenir : rendre lisible l'ERREUR du fabricant (code et texte, tels que le
 // support les connaît), garder chaque case en place quand une valeur manque, et ne proposer que les
@@ -55,6 +63,26 @@ describe('RobotsView', () => {
     expect(sent).toHaveBeenCalledWith(ID, { type: 'mower.start', durationMin: 60 })
     await button('Rentrer')!.trigger('click')
     expect(sent).toHaveBeenCalledWith(ID, { type: 'mower.park', untilNextSchedule: true })
+  })
+
+  it('le journal : demandé pour qui déclare la capacité, huit lignes au plus, la gravité en pastille', async () => {
+    const { w } = setup(mower({}, ['mow', 'park', 'battery', 'schedule', 'journal']))
+    await flushPromises()
+    expect(getJournal).toHaveBeenCalledWith(ID)
+    const rows = w.findAll('.journal__row')
+    expect(rows).toHaveLength(2)
+    expect(rows[0]!.text()).toContain('No loop signal')
+    expect(rows[0]!.text()).toContain('code 2')
+    expect(rows[0]!.find('.journal__dot').attributes('data-severity')).toBe('error')
+    expect(rows[1]!.find('.journal__dot').attributes('data-severity')).toBe('warning')
+  })
+
+  it('sans la capacité, pas de section journal ni de demande', async () => {
+    getJournal.mockClear()
+    const { w } = setup(mower({}, ['mow', 'park', 'battery', 'schedule']))
+    await flushPromises()
+    expect(w.find('.journal').exists()).toBe(false)
+    expect(getJournal).not.toHaveBeenCalled()
   })
 
   it('en tonte, le premier bouton devient « Pause » ; sans capacité, pas de bouton', () => {

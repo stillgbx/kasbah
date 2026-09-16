@@ -114,6 +114,8 @@
     "statistics": "Counters", "cuttingTime": "Mowing", "chargingCycles": "Charges", "collisions": "Collisions", "driveDistance": "Distance",
     "positionAgo": "Position {ago}", "updatedAgo": "Updated {ago}",
     "quota": "{used}/{limit} {what}", "quotaRequests": "Husqvarna requests this month",
+    "journal": "Log", "journalEmpty": "Nothing logged", "journalCode": "code {code}",
+    "severity": { "info": "Information", "warning": "Warning", "error": "Error", "fatal": "Fatal error" },
     "offsetHint": "In metres, in the house frame (X to the right of the plan, Y up). The robot moves on the map and in the 3D scene."
   },
   "energy": {

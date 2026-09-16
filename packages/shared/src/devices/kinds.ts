@@ -22,8 +22,9 @@ export const CAPABILITIES = [
   'playback', 'volume', 'mute', 'now_playing', 'track_skip', 'seek',
   // climate
   'hvac_mode', 'target_temp', 'current_temp', 'humidity', 'fan_mode',
-  // vacuum / mower
-  'clean', 'dock', 'battery', 'locate', 'mow', 'park', 'schedule',
+  // vacuum / mower — `journal` : l'appareil tient un journal de ce qui lui arrive (erreurs,
+  // avertissements), servi à la demande par `GET /api/devices/:id/journal` ; sans lui, rien à lire
+  'clean', 'dock', 'battery', 'locate', 'mow', 'park', 'schedule', 'journal',
   // sensor
   'measure',
   // energy
@@ -53,7 +54,7 @@ export const KIND_CAPABILITIES: Record<DeviceKind, readonly Capability[]> = {
   media_player: ['playback', 'volume', 'mute', 'now_playing', 'track_skip', 'seek'],
   climate: ['hvac_mode', 'target_temp', 'current_temp', 'humidity', 'fan_mode'],
   vacuum: ['clean', 'dock', 'battery', 'locate'],
-  mower: ['mow', 'park', 'battery', 'schedule'],
+  mower: ['mow', 'park', 'battery', 'schedule', 'journal'],
   sensor: ['measure'],
   energy: ['production', 'consumption', 'grid', 'storage'],
   ev_charger: ['charge_control', 'charge_current'],

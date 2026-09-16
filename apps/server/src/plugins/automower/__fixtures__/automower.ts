@@ -229,3 +229,41 @@ export const WS_MOWER_ERROR_AT = { id: MOWER_ID, type: 'mower-event-v2', attribu
 // d'après la bibliothèque de référence, pas encore capturé (le robot était plein)
 export const WS_BATTERY = { id: MOWER_ID, type: 'battery-event-v2', attributes: { battery: { batteryPercent: 77 } } }
 export const WS_UNKNOWN_MOWER = { id: '00000000-0000-0000-0000-000000000000', type: 'battery-event-v2', attributes: { battery: { batteryPercent: 10 } } }
+
+// ---- `GET /mowers/{id}/messages` — CAPTURÉ le 2026-09-16 (22 lignes, positions décalées comme la liste) ----
+//
+// Du plus récent au plus ancien. `time` en secondes (heure locale écrite comme UTC), `severity` en
+// majuscules — `ERROR`, `FATAL` (code 1, hors zone) et `WARNING` vus —, et des positions QUASI NULLES
+// (`2e-7 ; 6.2e-6`) sur plusieurs lignes : le robot a consigné sans fix GPS. Gardées telles quelles.
+export const MESSAGES = {
+  data: {
+    type: 'messages',
+    id: 'messages',
+    attributes: {
+      messages: [
+        {"time": 1789582935, "code": 2, "severity": "ERROR", "latitude": 47.309301, "longitude": 5.0459219},
+        {"time": 1787589749, "code": 2, "severity": "ERROR", "latitude": 47.3092032, "longitude": 5.0458427},
+        {"time": 1787580847, "code": 2, "severity": "ERROR", "latitude": 47.3092395, "longitude": 5.0457526},
+        {"time": 1786715411, "code": 1, "severity": "FATAL", "latitude": 47.3093416, "longitude": 5.0458487},
+        {"time": 1786637513, "code": 62, "severity": "ERROR", "latitude": 47.3092251, "longitude": 5.0457936},
+        {"time": 1786631647, "code": 62, "severity": "ERROR", "latitude": 2e-07, "longitude": 6.2e-06},
+        {"time": 1786546022, "code": 62, "severity": "ERROR", "latitude": 2e-07, "longitude": 6.2e-06},
+        {"time": 1786458998, "code": 62, "severity": "ERROR", "latitude": 2e-07, "longitude": 6.2e-06},
+        {"time": 1786365016, "code": 19, "severity": "FATAL", "latitude": 47.3092273, "longitude": 5.0456309},
+        {"time": 1786206626, "code": 51, "severity": "WARNING", "latitude": 47.3092851, "longitude": 5.0458548},
+        {"time": 1785944902, "code": 12, "severity": "ERROR", "latitude": 47.3093209, "longitude": 5.0459323},
+        {"time": 1785677639, "code": 17, "severity": "ERROR", "latitude": 47.3092968, "longitude": 5.0458332},
+        {"time": 1785356161, "code": 2, "severity": "ERROR", "latitude": 47.3092927, "longitude": 5.0458245},
+        {"time": 1785335697, "code": 62, "severity": "ERROR", "latitude": 47.3092522, "longitude": 5.0459458},
+        {"time": 1785250008, "code": 1, "severity": "FATAL", "latitude": 47.3093582, "longitude": 5.0458965},
+        {"time": 1785083886, "code": 9, "severity": "ERROR", "latitude": 47.3093115, "longitude": 5.045876},
+        {"time": 1784552771, "code": 18, "severity": "FATAL", "latitude": 47.3096861, "longitude": 5.0454237},
+        {"time": 1784298847, "code": 9, "severity": "ERROR", "latitude": 47.3093822, "longitude": 5.0459006},
+        {"time": 1784129232, "code": 12, "severity": "ERROR", "latitude": 47.3095779, "longitude": 5.0457182},
+        {"time": 1783691828, "code": 62, "severity": "ERROR", "latitude": 47.3093458, "longitude": 5.0458659},
+        {"time": 1783444897, "code": 62, "severity": "ERROR", "latitude": 47.3092664, "longitude": 5.0459133},
+        {"time": 1782404012, "code": 78, "severity": "ERROR", "latitude": 47.3096825, "longitude": 5.045402},
+      ],
+    },
+  },
+}

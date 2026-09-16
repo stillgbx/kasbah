@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { ManualClock } from '@kasbah/mock-sim'
 import type { PluginContext } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
-import { MOWERS_ERROR, MOWERS_MOWING, MOWERS_PARKED, MOWER_ID, TOKEN_INVALID_CLIENT, TOKEN_RESPONSE, TOKEN_RESPONSE_2, WS_MOWER_HOME, WS_MOWER_STOPPED, WS_PLANNER, WS_POSITION, WS_READY, WS_UNKNOWN_MOWER } from './__fixtures__/automower'
+import { MESSAGES, MOWERS_ERROR, MOWERS_MOWING, MOWERS_PARKED, MOWER_ID, WS_MESSAGE_ERROR, TOKEN_INVALID_CLIENT, TOKEN_RESPONSE, TOKEN_RESPONSE_2, WS_MOWER_HOME, WS_MOWER_STOPPED, WS_PLANNER, WS_POSITION, WS_READY, WS_UNKNOWN_MOWER } from './__fixtures__/automower'
 import { TOKEN_URL } from './auth'
 import { API_BASE_URL } from './client'
 import { automowerConfigSchema, createAutomowerPlugin, type AutomowerStatus } from './index'
@@ -50,6 +50,7 @@ function fakeHusqvarna() {
     if (headers.authorization !== `Bearer ${world.accepts}`) return response({ errors: [{ title: 'Unauthorized' }] }, 401)
     if (headers['x-api-key'] !== 'app-key' || headers['authorization-provider'] !== 'husqvarna') return response({ errors: [{ title: 'Forbidden' }] }, 403)
     if (path === '/mowers') return response(world.list)
+    if (path.endsWith('/messages')) return response(MESSAGES)
     if (path.endsWith('/actions')) return response(null, 202)
     return response({ errors: [{ title: 'Not found' }] }, 404)
   })
@@ -277,6 +278,48 @@ describe('automower — redémarrage', () => {
     // la liste n'a pas changé : ce que `discover` a déclaré tient, pas de republication inutile
     expect(ctx2.emitDevices).not.toHaveBeenCalled()
     await plugin.stop()
+  })
+})
+
+describe('automower — journal', () => {
+  it('lu au fabricant une fois, tenu par le flux ensuite, relu après une coupure', async () => {
+    const hq = fakeHusqvarna()
+    hq.world.list = MOWERS_PARKED
+    const { plugin, hq: h, ws, ctx } = await started({ hq })
+    const before = h.calls.length
+    const j1 = await plugin.journal!(MOWER_ID)
+    expect(j1.entries).toHaveLength(22)
+    expect(j1.entries[0]).toMatchObject({ code: 2, severity: 'error' })
+    expect(h.calls.length).toBe(before + 1)
+    expect(h.calls.at(-1)!.path).toBe(`/mowers/${MOWER_ID}/messages`)
+    // seconde demande : rien de plus au fabricant
+    await plugin.journal!(MOWER_ID)
+    expect(h.calls.length).toBe(before + 1)
+    // une ligne arrive par le flux : elle rejoint le journal, sans doublon
+    ws.emit(0, 'open')
+    const fresh = { ...WS_MESSAGE_ERROR, attributes: { message: { ...WS_MESSAGE_ERROR.attributes.message, time: 1789586535, code: 9 } } }
+    ws.emit(0, 'message', JSON.stringify(fresh))
+    ws.emit(0, 'message', JSON.stringify(fresh))
+    const j2 = await plugin.journal!(MOWER_ID)
+    expect(j2.entries).toHaveLength(23)
+    expect(j2.entries[0]).toMatchObject({ code: 9, message: 'Trapped' })
+    expect(ctx.emitState).not.toHaveBeenCalledWith(MOWER_ID, expect.objectContaining({ errorCode: 9 }))
+    // le flux se coupe puis revient : des lignes ont pu passer, la prochaine demande relit
+    ws.emit(0, 'close', 1006)
+    const { clock } = { clock: (ctx.clock as unknown as { advance(ms: number): void }) }
+    clock.advance(6_500)
+    await flush()
+    ws.emit(1, 'open')
+    await flush()
+    const calls = h.calls.length
+    await plugin.journal!(MOWER_ID)
+    expect(h.calls.length).toBe(calls + 1)
+    expect(h.calls.at(-1)!.path).toBe(`/mowers/${MOWER_ID}/messages`)
+  })
+
+  it('refuse un robot inconnu', async () => {
+    const { plugin } = await started()
+    await expect(plugin.journal!('nope')).rejects.toMatchObject({ code: 'DEVICE_UNAVAILABLE' })
   })
 })
 
