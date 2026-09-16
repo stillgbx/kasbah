@@ -34,7 +34,7 @@ describe('VehicleCard — repères de la jauge', () => {
   /** Le repère est la CIBLE, pas l'état : il suit le palier qu'on vient de toucher, sans attendre la voiture. */
   it('le repère de cible suit le réglage en cours', async () => {
     const w = mount(VehicleCard, { props: { descriptor: descriptor(), state: state({ chargeLimit: 80 }) } })
-    await w.findAll('.v-btn').find((b) => b.text() === '90')!.trigger('click')
+    await w.findAll('.limit__step').find((b) => b.text() === '90')!.trigger('click')
     expect(ticks(w)).toEqual([['left: 90%;', 'Cible de charge 90 %']])
   })
 })

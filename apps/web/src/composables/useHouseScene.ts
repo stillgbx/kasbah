@@ -122,6 +122,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     onDeviceDrop: (f: Handler<[string, [number, number], string | null]>) => { deviceDrop.add(f) },
     setMovable: (key: string | string[] | null) => scene?.setMovable(key),
     moveMarker: (key: string, position: Vec3) => scene?.moveMarker(key, position),
+    previewBodyColor: (key: string, color: string | null) => scene?.previewBodyColor(key, color),
     controller: () => scene,
   }
 }

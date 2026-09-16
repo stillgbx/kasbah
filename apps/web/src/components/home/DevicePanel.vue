@@ -6,6 +6,7 @@ import { isPlaced, panelOf, type PlacedHouseDevice } from '@kasbah/shared'
 import { useDeviceResolver } from '../../composables/useDeviceResolver'
 import { relayLabel } from '../../lib/audioRouting'
 import { isEnergySite } from '../../lib/energy'
+import { tunableVehicle } from '../../lib/vehicleTuning'
 import { toClosure } from '../../lib/cover'
 import { formatPercent } from '../../lib/format'
 import { headlineValue, isDeviceBusy, isDeviceOn, toggleChecked, toggleCommand } from '../../lib/deviceState'
@@ -29,6 +30,20 @@ const devices = useDevicesStore()
 const notifications = useNotificationsStore()
 const { t, locale } = useI18n()
 const resolved = useDeviceResolver(computed(() => house.selectedKey))
+
+/**
+ * Les RÉGLAGES d'un véhicule, repliés derrière leur bouton comme « Emplacement » l'est derrière
+ * « Déplacer » : ce qu'on vient faire ici, c'est piloter la voiture, pas la régler. Ouverts, ils
+ * s'écrivent au fil de la saisie et chaque choix manuel se rend par sa croix (cf. `VehicleTuning`).
+ * Un véhicule qui n'a rien à régler ne montre même pas le bouton.
+ */
+const tuningOpen = ref(false)
+const tunableCar = computed(() => {
+  const d = resolved.value?.descriptor
+  return d?.kind === 'vehicle' && tunableVehicle(d, resolved.value?.houseDevice) ? d : null
+})
+// changé d'appareil, les réglages se referment : le panneau suivant s'ouvre sur ses commandes
+watch(() => house.selectedKey, () => { tuningOpen.value = false })
 
 /**
  * Le PARENT dont on est descendu, et où le retour ramène : la pièce, la zone du jardin, ou à défaut
@@ -217,8 +232,18 @@ function send(cmd: CommandInput) {
                    :pending="devices.isPending(resolved.deviceId!)" :relay-from="relay?.name" @command="send" />
     <div v-else class="card card--soft unbound muted">{{ $t('device.unbound', { id: resolved.houseDevice?.deviceId ?? resolved.key }) }}</div>
     <!-- un véhicule ne se place pas (son GPS le fait) : ce qu'il a à régler, c'est la correction de
-         cette place et de son cap — et on les voit s'appliquer dans la scène, voiture sous les yeux -->
-    <VehicleTuning v-if="resolved.descriptor?.kind === 'vehicle'" class="tuning" :descriptor="resolved.descriptor" />
+         cette place et de son cap — et on les voit s'appliquer dans la scène, voiture sous les yeux.
+         Replié derrière « Régler », pied en bas comme « Emplacement ». -->
+    <div v-if="tunableCar" class="card card--soft tuning">
+      <div v-if="tuningOpen" class="tuning__body"><VehicleTuning :descriptor="tunableCar" /></div>
+      <div class="tuning__foot">
+        <span class="muted">{{ $t('vehicle.tuneTitle') }}</span>
+        <button type="button" class="pill tuning__cta" :data-on="tuningOpen ? '1' : '0'"
+                :aria-expanded="tuningOpen" @click="tuningOpen = !tuningOpen">
+          <StrokeIcon name="gear" :size="16" /> {{ tuningOpen ? $t('place.done') : $t('vehicle.tune') }}
+        </button>
+      </div>
+    </div>
     <!-- les champs de panneaux se déclarent ici, juste au-dessus de l'emplacement de l'installation -->
     <PanelArraysCard v-if="solarSite" class="arrays" :site-device-id="solarSite" />
     <!-- rarement utilisé : calé au fond du panneau, sous tout le reste -->
@@ -267,7 +292,13 @@ function send(cmd: CommandInput) {
 .head { display: flex; align-items: center; gap: 12px; }
 .placement { margin-top: auto; }
 /* le réglage d'un véhicule ferme son panneau, comme « Emplacement » ferme celui d'un appareil posé */
-.tuning { margin-top: auto; }
+.tuning { margin-top: auto; padding: 12px 14px; font-size: 13px; }
+/* le pied porte le titre et l'unique bouton, qui garde sa place et sa largeur dans les deux états */
+.tuning__foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.tuning__cta { min-width: 124px; justify-content: center; }
+.tuning__body { padding-bottom: 12px; }
+/* la carte des réglages vit DANS celle-ci : sans ça, deux fonds et deux marges intérieures */
+.tuning__body :deep(.tune) { padding: 0; background: none; }
 /* la carte des champs se colle au bloc « Emplacement » qui ferme le panneau */
 .arrays { margin-top: auto; }
 .arrays + .placement { margin-top: 0; }

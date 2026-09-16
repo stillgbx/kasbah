@@ -141,6 +141,8 @@ watch(() => house.draft, (d) => {
 watch(() => house.editingArray?.levelId, (id) => { if (id) scene.focusLevelView(id) })
 // case de la grille survolée : son module s'allume dans la scène, et rend la main à la sélection
 watch(() => house.hoveredKey, (key) => scene.setSelected(key ?? house.selectedKey))
+// aperçu de la teinte choisie : la carrosserie suit le sélecteur, sans rien écrire (cf. `VehicleTuning`)
+watch(() => house.bodyColorPreview, (p) => { if (p) scene.previewBodyColor(p.key, p.color) })
 // aperçu du champ glissé : tous ses modules suivent l'origine du brouillon
 watch(() => house.arrayDraft, () => {
   for (const m of house.editingArrayModules) if (isPlaced(m)) scene.moveMarker(m.id, m.position)

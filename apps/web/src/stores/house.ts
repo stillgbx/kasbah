@@ -386,6 +386,17 @@ export const useHouseStore = defineStore('house', () => {
   }
 
   /**
+   * La teinte de carrosserie MONTRÉE le temps qu'on la choisit, sans rien écrire : la scène la peint
+   * à chaque mouvement du sélecteur, et `setDeviceTuning` ne part qu'au choix validé — autrement
+   * chaque nuance survolée réécrirait le fichier de la maison. `null` rend la teinte d'avant, pour
+   * un choix abandonné.
+   */
+  const bodyColorPreview = shallowRef<{ key: string; color: string | null } | null>(null)
+  function previewBodyColor(pluginDeviceId: string, color: string | null): void {
+    bodyColorPreview.value = { key: houseDeviceFor(pluginDeviceId)?.id ?? pluginDeviceId, color }
+  }
+
+  /**
    * Renomme un appareil dans la maison — SANS le placer. C'est le seul chemin possible pour un
    * appareil qui n'a pas de place dans la scène (un véhicule) : son entrée est créée au besoin, et
    * elle n'a pas de position. Un nom vide EFFACE le nom choisi, et celui du fabricant reprend la main.
@@ -694,7 +705,7 @@ export const useHouseStore = defineStore('house', () => {
   return {
     house, effective, loading, error, index, levels, zones, soundRoutes, relaySource,
     focusedLevelId, gardenFocus, selectedRoomId, selectedLevelId, selectedKey, floorTab, selectedRoom, selectedZone, selectedDevice,
-    load, setFloorTab, focusLevel, selectRoom, selectLevel, selectDevice, clearSelection, backToHome, backFromRoom, backFromDevice, houseDeviceFor, renameDevice, setDeviceTuning, setRoomOrder,
+    load, setFloorTab, focusLevel, selectRoom, selectLevel, selectDevice, clearSelection, backToHome, backFromRoom, backFromDevice, houseDeviceFor, renameDevice, setDeviceTuning, bodyColorPreview, previewBodyColor, setRoomOrder,
     placing, saving, draft, canRevert, isProvisional, startPlacing, startPlacingNew, stopPlacing, previewPosition, previewHeight, savePlacement, revertPlacement, removePlacement,
     placementLevelId, setPlacementLevel,
     arrays, arraysOf, editingArrayId, editingArray, editingArrayModules, arrayDraft, hoveredKey, hoverSlot, freeInverters,

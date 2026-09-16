@@ -558,6 +558,14 @@ export class HouseScene {
     this.loop.invalidate()
   }
 
+  /**
+   * Teinte d'une carrosserie MONTRÉE le temps qu'on la choisit (aperçu) : rien n'est écrit, et la
+   * maison reprend la main dès que le choix est validé. `null` rend la teinte d'avant.
+   */
+  previewBodyColor(key: string, color: string | null): void {
+    this.markers.get(key)?.previewColor(color)
+  }
+
   /** Déplace un marqueur (aperçu) ; `position` dans le repère maison (z relatif au sol de l'ancre). */
   moveMarker(key: string, position: Vec3): void {
     const marker = this.markers.get(key)

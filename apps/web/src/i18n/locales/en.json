@@ -161,6 +161,7 @@
     "offset": "3D offset (m)",
     "rotation": "Rotation (°)",
     "tune": "Adjust",
+    "tuneTitle": "Settings",
     "capacity": "Capacity (kWh)",
     "capacityHint": "The carmaker does not report the battery capacity. It is only used to estimate charging power.",
     "model3d": "3D body",

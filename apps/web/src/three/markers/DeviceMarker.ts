@@ -229,6 +229,14 @@ export abstract class DeviceMarker {
     this.guide.line.geometry.setFromPoints([new Vector3(0, 0, 0), new Vector3(0, 0, floor)])
   }
 
+  /**
+   * Teinte de carrosserie montrée le temps qu'on la CHOISIT, sans rien écrire — `null` rend celle
+   * d'avant. Seul un véhicule a une caisse à peindre : c'est `VehicleMarker` qui fait le travail,
+   * et ce point d'entrée vit sur la classe de base pour que la scène n'ait pas à importer la
+   * sous-classe (un import de valeur de plus dans son graphe, pour une méthode à un appel).
+   */
+  previewColor(_color: string | null): void {}
+
   private disposeGuide(): void {
     if (!this.guide) return
     this.guide.ring.geometry.dispose(); this.guide.ring.material.dispose()

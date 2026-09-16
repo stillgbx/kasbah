@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { estimateChargePowerW, geoDistance, type Capability, type CommandInput, type DeviceEntry, type StateFor } from '@kasbah/shared'
 import PageHeader from '../components/layout/PageHeader.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
+import ChargeLimitCard from '../components/vehicles/ChargeLimitCard.vue'
 import VehicleMap from '../components/vehicles/VehicleMap.vue'
 import VehicleTuning from '../components/vehicles/VehicleTuning.vue'
 import { formatAgo, formatDistance, formatKm, formatMinutes, formatPercent, formatPower, formatTemp } from '../lib/format'
@@ -126,29 +127,23 @@ const tunable = (v: VehicleEntry) => tunableVehicle(v.descriptor, house.houseDev
 const capacityOf = (v: VehicleEntry) => house.houseDeviceFor(v.descriptor.id)?.batteryKwh ?? 0
 
 /**
- * La LIMITE DE CHARGE, seul réglage de la voiture que la carte laisse changer. Deux gestes pour une
- * même valeur : les paliers, qui se touchent sans viser (80 % est le réglage de tous les jours), et
- * le curseur, qui va au pour cent près pour qui veut 73.
+ * La LIMITE DE CHARGE, seul réglage de la voiture que la carte laisse changer (cf.
+ * `ChargeLimitCard`, partagée avec le panneau de la vue Maison).
  *
- * Bornée à 50 % : aucun constructeur n'accepte moins (Tesla annonce `charge_limit_soc_min` à 50), et
- * une cible plus basse que la charge courante ne ferait rien de bon. Le contrat, lui, accepte 0-100.
- */
-const LIMIT_MIN = 50
-const LIMIT_MAX = 100
-const LIMIT_STEPS = [50, 60, 70, 80, 90, 100] as const
-/**
- * La valeur qu'on TIENT pendant qu'on glisse. Sans elle, le curseur reviendrait à la valeur du
- * véhicule à chaque image : l'état ne bouge qu'au relâché, quand la commande part.
+ * La valeur qu'on TIENT pendant qu'on glisse vit ici : sans elle, le curseur reviendrait à la valeur
+ * du véhicule à chaque image : l'état ne bouge qu'au relâché, quand la commande part.
  */
 const dragged = ref<Record<string, number>>({})
 const limitOf = (v: VehicleEntry) => dragged.value[v.descriptor.id] ?? v.state.chargeLimit ?? 80
+const preview = (v: VehicleEntry, percent: number) => {
+  dragged.value = { ...dragged.value, [v.descriptor.id]: percent }
+}
 /** Endormie, la voiture refuse ses commandes (408 chez Tesla) : mieux vaut ne pas les proposer. */
 const limitLocked = (v: VehicleEntry) => !v.state.available || asleep(v.state)
 async function setLimit(v: VehicleEntry, percent: number): Promise<void> {
-  const wanted = Math.min(LIMIT_MAX, Math.max(LIMIT_MIN, Math.round(percent)))
   const id = v.descriptor.id
-  dragged.value = { ...dragged.value, [id]: wanted }
-  await send(id, { type: 'vehicle.set_charge_limit', percent: wanted })
+  preview(v, percent)
+  await send(id, { type: 'vehicle.set_charge_limit', percent })
   // la main rendue à l'état : accepté, il porte déjà la cible ; refusé, il a repris l'ancienne
   const next = { ...dragged.value }
   delete next[id]
@@ -271,21 +266,9 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
           <!-- détail de la charge en cours : place TOUJOURS réservée, rien ne se décale quand elle démarre -->
           <p class="muted vcard__charge">{{ chargeDetail(v) }}</p>
           <!-- la cible de charge, quand le véhicule la laisse écrire : paliers au doigt, curseur au pour cent -->
-          <div v-if="has(v, 'charge_limit')" class="card card--soft limit">
-            <div class="limit__head">
-              <span class="muted stat__k">{{ $t('vehicle.chargeLimit') }}</span>
-              <span class="limit__v">{{ formatPercent(limitOf(v), locale) }}</span>
-            </div>
-            <div class="limit__steps">
-              <button v-for="p in LIMIT_STEPS" :key="p" type="button" class="limit__step"
-                      :data-on="limitOf(v) === p ? '1' : '0'" :disabled="limitLocked(v)"
-                      :title="asleep(v.state) ? $t('vehicle.wakeHint') : undefined" @click="setLimit(v, p)">{{ p }}</button>
-            </div>
-            <input class="limit__range" type="range" :min="LIMIT_MIN" :max="LIMIT_MAX" step="1" :value="limitOf(v)"
-                   :disabled="limitLocked(v)" :aria-label="$t('vehicle.chargeLimit')"
-                   @input="dragged = { ...dragged, [v.descriptor.id]: Number(($event.target as HTMLInputElement).value) }"
-                   @change="setLimit(v, Number(($event.target as HTMLInputElement).value))" />
-          </div>
+          <ChargeLimitCard v-if="has(v, 'charge_limit')" :value="limitOf(v)" :disabled="limitLocked(v)"
+                           :hint="asleep(v.state) ? $t('vehicle.wakeHint') : undefined"
+                           @preview="preview(v, $event)" @change="setLimit(v, $event)" />
           <div class="vcard__stats">
             <div class="card card--soft stat"><div class="muted stat__k">{{ $t('common.status') }}</div><div class="stat__v">{{ locked(v.state) }}</div></div>
             <div class="card card--soft stat"><div class="muted stat__k">{{ $t('vehicle.charge') }}</div>
@@ -388,23 +371,6 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
   position: absolute; top: 50%; width: 3px; height: 14px; border-radius: 2px;
   transform: translate(-50%, -50%); background: rgb(var(--v-theme-warning));
 }
-/* La cible de charge : une seule valeur, deux gestes. Hauteurs FIXES — la ligne ne bouge pas
-   quand la voiture change d'avis, et les six paliers gardent leur place quel que soit le chiffre. */
-.limit { padding: 10px 12px; display: grid; gap: 8px; }
-.limit__head { display: flex; align-items: baseline; justify-content: space-between; }
-.limit__v { font-weight: 500; font-size: 14px; font-variant-numeric: tabular-nums; }
-.limit__steps { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
-.limit__step {
-  height: 34px; padding: 0; border: 1px solid var(--line); border-radius: 8px;
-  background: var(--surface); color: var(--text); cursor: pointer;
-  font: inherit; font-size: 13px; font-variant-numeric: tabular-nums;
-}
-.limit__step:hover:not(:disabled) { border-color: var(--accent); }
-.limit__step[data-on='1'] { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
-.limit__step:disabled { opacity: .45; cursor: default; }
-/* le curseur : même piste que la jauge du haut, pouce accrochable au doigt */
-.limit__range { width: 100%; height: 24px; margin: 0; accent-color: var(--accent); cursor: pointer; }
-.limit__range:disabled { opacity: .45; cursor: default; }
 .vcard__stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .stat { padding: 10px 12px; }
 .stat__k { font-size: 11px; }

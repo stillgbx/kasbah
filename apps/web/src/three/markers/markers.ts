@@ -697,9 +697,11 @@ export class CoverMarker extends DeviceMarker {
  */
 export class VehicleMarker extends DeviceMarker {
   private readonly group = new Group()
-  private readonly bodyMat: MeshStandardMaterial
+  private bodyMat: MeshStandardMaterial
   /** Le matériau n'est à nous QUE si l'utilisateur a réglé une couleur ; sinon la scène le partage. */
-  private readonly ownsBodyMat: boolean
+  private ownsBodyMat: boolean
+  /** La teinte d'avant l'aperçu, gardée à la première retouche pour la rendre si le choix est abandonné. */
+  private paintBase: Color | null = null
   private readonly cabMat: MeshStandardMaterial
   /** Silhouette générique, retirée le jour où la vraie carrosserie arrive. */
   private placeholder: Mesh[] = []
@@ -763,6 +765,31 @@ export class VehicleMarker extends DeviceMarker {
       this.placeholder = []
       ctx.invalidate()   // la scène ne rend qu'à la demande : sans ça, la carrosserie n'apparaît qu'au prochain geste
     }, () => {})         // échec : la silhouette générique reste en place, elle dit déjà l'encombrement
+  }
+  /**
+   * La teinte MONTRÉE le temps qu'on la choisit, sans rien écrire : le sélecteur du panneau peint
+   * ici à chaque mouvement, et c'est la maison qui fait foi dès que le choix est validé (les
+   * marqueurs sont alors refaits). `null` rend la teinte d'avant, pour un choix abandonné.
+   *
+   * Une voiture qui partageait le matériau de la scène s'en détache ici : le peindre tacherait
+   * toutes les autres.
+   */
+  override previewColor(color: string | null): void {
+    if (color === null) {
+      if (!this.paintBase) return
+      this.bodyMat.color.copy(this.paintBase)
+    } else {
+      if (!this.ownsBodyMat) {
+        this.bodyMat = this.bodyMat.clone()
+        this.ownsBodyMat = true
+        // la carrosserie chargée l'a remplacée, mais tant qu'elle n'est pas là c'est la boîte qui porte la peinture
+        if (this.shell) this.shell.material = this.bodyMat
+        if (this.placeholder[0]) this.placeholder[0].material = this.bodyMat
+      }
+      this.paintBase ??= this.bodyMat.color.clone()
+      this.bodyMat.color.set(color)
+    }
+    this.ctx.invalidate()
   }
   protected isOn(s: DeviceState): boolean { return s.kind === 'vehicle' && s.charging }
   protected onState(state: DeviceState | undefined): void {

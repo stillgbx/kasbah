@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount } from 'vue'
 import type { DeviceDescriptor } from '@kasbah/shared'
 import { useHouseStore } from '../../stores/house'
 import { bodyColorOf, bodyFinishOf, needsCapacity, tunableVehicle } from '../../lib/vehicleTuning'
@@ -98,10 +98,49 @@ function setBodyColor(value: string): void {
   if (value === bodyColor.value) return
   void house.setDeviceTuning(props.descriptor.id, { bodyColor: value })
 }
+/**
+ * La teinte se voit PENDANT qu'on la choisit : le sélecteur natif annonce chaque nuance survolée, et
+ * la scène la peint tout de suite — c'est comme ça qu'on juge une couleur, sur la voiture. Seul le
+ * choix validé (`change`) est écrit ; un choix abandonné rend la teinte d'avant, comme la fermeture
+ * du panneau.
+ */
+const preview = (value: string | null) => house.previewBodyColor(props.descriptor.id, value)
+onBeforeUnmount(() => preview(null))
+
+/**
+ * « RÉTABLIR » : les réglages tels qu'ils étaient à l'OUVERTURE de la section — le composant naît
+ * avec elle (les deux surfaces le montent en `v-if`), d'où l'instantané pris ici. Chaque champ
+ * s'écrit au fil de la saisie, sans bouton « Enregistrer » : c'est ce retour en arrière qui tient
+ * lieu d'annulation, comme « Rétablir » le fait pour l'emplacement d'un appareil.
+ *
+ * Un seul appel rend les six d'un coup, y compris ceux qu'on vient d'ajouter : `[0, 0]`, `0` et la
+ * chaîne vide EFFACENT, c'est ce que dit le contrat d'écriture.
+ */
+const tuned = () => {
+  const hd = houseDevice.value
+  return {
+    gpsOffset: hd?.gpsOffset ? ([...hd.gpsOffset] as [number, number]) : undefined,
+    yawOffset: hd?.yawOffset, batteryKwh: hd?.batteryKwh,
+    model3d: hd?.model3d, bodyColor: hd?.bodyColor, bodyFinish: hd?.bodyFinish,
+  }
+}
+const opened = tuned()
+const changed = computed(() => JSON.stringify(tuned()) !== JSON.stringify(opened))
+function revert(): void {
+  void house.setDeviceTuning(props.descriptor.id, {
+    gpsOffset: opened.gpsOffset ?? [0, 0], yawOffset: opened.yawOffset ?? 0, batteryKwh: opened.batteryKwh ?? 0,
+    model3d: opened.model3d ?? '', bodyColor: opened.bodyColor ?? '', bodyFinish: opened.bodyFinish ?? '',
+  })
+}
 </script>
 
 <template>
   <div v-if="tunable" class="card card--soft tune">
+    <!-- place RÉSERVÉE : invisible tant qu'il n'y a rien à rétablir, la ligne ne bouge pas -->
+    <div class="tune__top">
+      <button type="button" class="pill tune__revert" :class="{ 'tune__revert--off': !changed }"
+              :disabled="!changed" :tabindex="changed ? 0 : -1" @click="revert">{{ $t('place.revert') }}</button>
+    </div>
     <!-- décalage et rotation ne concernent qu'une voiture posée par son GPS : celle qu'on a placée à
          la main dans la maison tient déjà sa place et son cap du JSON -->
     <label v-if="gpsPlaced" class="tune__row">
@@ -139,25 +178,29 @@ function setBodyColor(value: string): void {
         </select>
       </span>
     </label>
-    <label v-if="models.length" class="tune__row">
+    <!-- `for` EXPLICITE sur les deux lignes qui portent une croix : un label sans `for` active son
+         premier descendant étiquetable, et la croix vient avant le champ — cliquer la ligne pour
+         sortir du sélecteur de couleur effaçait donc le choix qu'on venait de faire. -->
+    <label v-if="models.length" class="tune__row" :for="`tune-finish-${descriptor.id}`">
       <span class="muted tune__k">{{ $t('vehicle.bodyFinish') }}</span>
       <span class="tune__fields">
         <!-- même règle que la couleur : la croix n'efface QUE le choix manuel, et rend la main à
              ce que le plugin a déduit — pas à un défaut arbitraire -->
         <button v-if="chosenFinish" type="button" class="tune__reset" :title="$t('vehicle.bodyFinishReset')"
                 @click="setBodyFinish('')">×</button>
-        <select :value="bodyFinish" @change="setBodyFinish(($event.target as HTMLSelectElement).value)">
+        <select :id="`tune-finish-${descriptor.id}`" :value="bodyFinish" @change="setBodyFinish(($event.target as HTMLSelectElement).value)">
           <option v-for="f in VEHICLE_FINISHES" :key="f" :value="f">{{ $t(`vehicle.finish.${f}`) }}</option>
         </select>
       </span>
     </label>
-    <label v-if="models.length" class="tune__row">
+    <label v-if="models.length" class="tune__row" :for="`tune-color-${descriptor.id}`">
       <span class="muted tune__k">{{ $t('vehicle.bodyColor') }}</span>
       <span class="tune__fields">
         <!-- sans couleur choisie, la scène applique la sienne, qui suit le thème : le bouton rend la main -->
         <button v-if="bodyColor" type="button" class="tune__reset" :title="$t('vehicle.bodyColorReset')"
                 @click="setBodyColor('')">×</button>
-        <input type="color" :value="painted"
+        <input :id="`tune-color-${descriptor.id}`" type="color" :value="painted"
+               @input="preview(($event.target as HTMLInputElement).value)"
                @change="setBodyColor(($event.target as HTMLInputElement).value)" />
       </span>
     </label>
@@ -176,6 +219,10 @@ function setBodyColor(value: string): void {
   font: inherit; font-size: 13px; font-variant-numeric: tabular-nums;
 }
 .tune__hint { margin: 0; font-size: 11px; }
+.tune__top { display: flex; justify-content: flex-end; }
+/* à l'échelle de la carte (champs de 28 px), et non des 40 px d'une pilule de pleine taille */
+.tune__revert { height: 28px; padding: 0 12px; font-size: 12px; }
+.tune__revert--off { visibility: hidden; }
 .tune select {
   padding: 4px 8px;
   border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text);
