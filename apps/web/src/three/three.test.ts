@@ -769,6 +769,33 @@ describe('véhicule placé par son GPS', () => {
  * comme une voiture (projetée sur le terrain), mais son marqueur SUIT ensuite chaque relevé sans
  * être reconstruit — en tonte, il en arrive toutes les quelques secondes.
  */
+/**
+ * Les incidents du journal d'un robot se posent sur le terrain quand le panneau les montre : une
+ * épingle par point DANS le terrain, rien pour un point au large, et tout s'en va avec `null`.
+ */
+describe('incidents du journal posés sur le terrain', () => {
+  const MOWER = 'automower:c7233734'
+  const house = parseHouse(demo)
+  const geo = (xy: [number, number]) => { const g = localToGeo(house.origin, [xy[0], xy[1], 0]); return { lat: g.lat, lon: g.lon } }
+
+  it('une épingle par point du terrain, pas pour un point au large ; `null` retire tout ; le cadrage ne plante pas', () => {
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true })
+    scene.load(house)
+    const pins = () => (scene as unknown as { journal: { group: { children: unknown[] } } | null }).journal?.group.children.length ?? 0
+    scene.setJournalPoints(MOWER, [
+      { at: 1, ...geo([12, 16]), severity: 'error' },
+      { at: 2, ...geo([14, 17]), severity: 'fatal' },
+      { at: 3, ...geo([900, 900]), severity: 'warning' },
+    ])
+    expect(pins()).toBe(2)
+    scene.focusJournalPoint(2, false)
+    scene.focusJournalPoint(999, false)
+    scene.setJournalPoints(null, [])
+    expect(pins()).toBe(0)
+    scene.dispose()
+  })
+})
+
 describe('tondeuse placée par son GPS', () => {
   const MOWER = 'automower:c7233734'
   const descriptor = {

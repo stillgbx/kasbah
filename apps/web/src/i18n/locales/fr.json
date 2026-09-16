@@ -114,7 +114,7 @@
     "statistics": "Compteurs", "cuttingTime": "Tonte", "chargingCycles": "Recharges", "collisions": "Collisions", "driveDistance": "Distance",
     "positionAgo": "Position {ago}", "updatedAgo": "Mis à jour {ago}",
     "quota": "{used}/{limit} {what}", "quotaRequests": "requêtes Husqvarna ce mois-ci",
-    "journal": "Journal", "journalEmpty": "Aucun message consigné", "journalCode": "code {code}",
+    "journal": "Journal", "journalTitle": "Journal du robot", "journalEmpty": "Aucun message consigné", "journalCode": "code {code}", "journalLocate": "Voir où c'est arrivé", "journalNoLocation": "Sans position",
     "severity": { "info": "Information", "warning": "Avertissement", "error": "Erreur", "fatal": "Erreur grave" },
     "offsetHint": "En mètres, dans le repère de la maison (X vers la droite du plan, Y vers le haut). Le robot se déplace sur la carte et dans la scène 3D."
   },

@@ -65,23 +65,35 @@ describe('RobotsView', () => {
     expect(sent).toHaveBeenCalledWith(ID, { type: 'mower.park', untilNextSchedule: true })
   })
 
-  it('le journal : demandé pour qui déclare la capacité, huit lignes au plus, la gravité en pastille', async () => {
-    const { w } = setup(mower({}, ['mow', 'park', 'battery', 'schedule', 'journal']))
+  it('le journal se SIGNALE (compte et gravité sur la pilule), se déplie au clic, et une ligne positionnée est un bouton', async () => {
+    const { w, button } = setup(mower({}, ['mow', 'park', 'battery', 'schedule', 'journal']))
     await flushPromises()
     expect(getJournal).toHaveBeenCalledWith(ID)
-    const rows = w.findAll('.journal__row')
+    // replié : rien de plus que la pilule, la carte garde sa hauteur
+    expect(w.find('.jl').exists()).toBe(false)
+    const pill = button('Journal')!
+    expect(pill.find('.rcard__count').text()).toBe('2')
+    expect(pill.find('.rcard__count').attributes('data-severity')).toBe('error')
+    await pill.trigger('click')
+    const rows = w.findAll('.jl__row')
     expect(rows).toHaveLength(2)
     expect(rows[0]!.text()).toContain('No loop signal')
-    expect(rows[0]!.text()).toContain('code 2')
-    expect(rows[0]!.find('.journal__dot').attributes('data-severity')).toBe('error')
-    expect(rows[1]!.find('.journal__dot').attributes('data-severity')).toBe('warning')
+    expect(rows[0]!.text()).toContain('2')
+    expect(rows[0]!.find('.jl__dot').attributes('data-severity')).toBe('error')
+    expect(rows[1]!.find('.jl__dot').attributes('data-severity')).toBe('warning')
+    // la ligne qui sait où elle s'est produite mène à la carte ; l'autre non
+    expect(rows[0]!.find('button.jl__pick').exists()).toBe(true)
+    expect(rows[1]!.find('button.jl__pick').exists()).toBe(false)
+    await rows[0]!.find('button.jl__pick').trigger('click')
+    expect(rows[0]!.attributes('data-active')).toBe('1')
   })
 
   it('sans la capacité, pas de section journal ni de demande', async () => {
     getJournal.mockClear()
     const { w } = setup(mower({}, ['mow', 'park', 'battery', 'schedule']))
     await flushPromises()
-    expect(w.find('.journal').exists()).toBe(false)
+    expect(w.find('.jl').exists()).toBe(false)
+    expect(w.findAll('button').some((b) => b.text().includes('Journal'))).toBe(false)
     expect(getJournal).not.toHaveBeenCalled()
   })
 

@@ -1,6 +1,7 @@
 import {
   AmbientLight, Color, DirectionalLight, HemisphereLight, PerspectiveCamera, Plane, Raycaster, Scene, Spherical, type Texture, TOUCH, Vector2, Vector3, VSMShadowMap,
   WebGLRenderer, Box3, Fog, Mesh, MeshBasicMaterial, type Material, type MeshStandardMaterial, type Object3D,
+  Group, SphereGeometry, CylinderGeometry,
 } from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js'
@@ -130,6 +131,8 @@ export interface SceneEvents {
 const HOME_RADIUS_M = 120
 /** Côté de la boîte cadrée autour d'un appareil sélectionné : lui de près, sa pièce autour. */
 const DEVICE_FOCUS_SIZE_M = 3
+/** Têtes d'épingle du journal : les teintes de gravité de l'UI (`lib/journal.ts`), en nombres pour Three. */
+const JOURNAL_PIN_COLORS: Record<string, number> = { info: 0x8a94a6, warning: 0xd38b22, error: 0xd24a43, fatal: 0xd24a43 }
 /** Inclinaison permise en cadrant un appareil : plongeante, pour voir par-dessus les murs. */
 const DEVICE_FOCUS_POLAR = [(20 * Math.PI) / 180, (40 * Math.PI) / 180] as const
 const DEFAULT_AZIMUTH = -Math.PI / 4     // depuis le sud-est
@@ -176,6 +179,8 @@ export class HouseScene {
   readonly controls: OrbitControls | null
   readonly loop: RenderLoop
   readonly markers = new Map<string, DeviceMarker>()
+  /** Les incidents du journal d'un appareil, posés sur le terrain le temps que le panneau les montre. */
+  private journal: { group: Group; points: { at: number; anchor: Object3D }[] } | null = null
   readonly supported: boolean
 
   private materials: MaterialSet
@@ -588,6 +593,58 @@ export class HouseScene {
    */
   previewBodyColor(key: string, color: string | null): void {
     this.markers.get(key)?.previewColor(color)
+  }
+
+  /**
+   * Pose les INCIDENTS du journal d'un appareil sur le terrain : une épingle par point (tige fine,
+   * tête teintée de la gravité, plus grosse pour une erreur grave), projetée comme l'appareil
+   * lui-même (`sitePosition`, avec son `gpsOffset`) — un point hors du terrain n'est pas dessiné.
+   * `null` retire tout. C'est ainsi qu'on LOCALISE une panne : « No loop signal » a une place.
+   */
+  setJournalPoints(key: string | null, points: readonly { at: number; lat: number; lon: number; severity: string }[]): void {
+    if (this.journal) {
+      this.journal.group.removeFromParent()
+      disposeObject3D(this.journal.group)
+      this.journal = null
+    }
+    if (!key || !this.house || !this.index || !this.nodes || points.length === 0) { this.loop.invalidate(); return }
+    const device = this.house.devices.find((d) => d.id === key || d.deviceId === key)
+    const group = new Group()
+    group.name = `journal:${key}`
+    const anchors: { at: number; anchor: Object3D }[] = []
+    const stem = new CylinderGeometry(0.025, 0.025, 0.7, 8)
+    stem.rotateX(Math.PI / 2)                      // l'axe du cylindre est Y chez Three, la tige monte en Z
+    const head = new SphereGeometry(0.16, 16, 12)
+    const bigHead = new SphereGeometry(0.22, 16, 12)
+    const stemMat = new MeshBasicMaterial({ color: 0xf2f3f5 })
+    for (const p of points) {
+      const xyz = sitePosition(this.house, p, device?.gpsOffset)
+      if (!xyz) continue
+      const pin = new Group()
+      pin.position.set(xyz[0], xyz[1], deviceFloorZ(this.house, { id: `journal-${p.at}`, position: [xyz[0], xyz[1], 0], meta: {} }, this.index))
+      const rod = new Mesh(stem, stemMat)
+      rod.position.z = 0.35
+      const top = new Mesh(p.severity === 'fatal' ? bigHead : head, new MeshBasicMaterial({ color: JOURNAL_PIN_COLORS[p.severity] ?? JOURNAL_PIN_COLORS.info }))
+      top.position.z = 0.7
+      pin.add(rod, top)
+      group.add(pin)
+      anchors.push({ at: p.at, anchor: pin })
+    }
+    this.nodes.outdoorMarkers.add(group)
+    this.journal = { group, points: anchors }
+    this.loop.invalidate()
+  }
+
+  /** Cadre la caméra sur un incident du journal (même boîte de 3 m que sur un appareil). */
+  focusJournalPoint(at: number, animate = true): void {
+    const hit = this.journal?.points.find((p) => p.at === at)
+    if (!hit) return
+    hit.anchor.updateWorldMatrix(true, false)
+    const center = new Vector3()
+    hit.anchor.getWorldPosition(center)
+    const size = new Vector3(DEVICE_FOCUS_SIZE_M, DEVICE_FOCUS_SIZE_M, DEVICE_FOCUS_SIZE_M)
+    const { azimuth, polar } = this.currentSpherical()
+    this.flyTo(new Box3().setFromCenterAndSize(center, size), azimuth, clamp(polar, DEVICE_FOCUS_POLAR[0], DEVICE_FOCUS_POLAR[1]), animate, 1.1)
   }
 
   /** Déplace un marqueur (aperçu) ; `position` dans le repère maison (z relatif au sol de l'ancre). */

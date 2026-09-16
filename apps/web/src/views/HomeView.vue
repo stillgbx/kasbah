@@ -144,6 +144,9 @@ watch(() => house.editingArray?.levelId, (id) => { if (id) scene.focusLevelView(
 watch(() => house.hoveredKey, (key) => scene.setSelected(key ?? house.selectedKey))
 // aperçu de la teinte choisie : la carrosserie suit le sélecteur, sans rien écrire (cf. `VehicleTuning`)
 watch(() => house.bodyColorPreview, (p) => { if (p) scene.previewBodyColor(p.key, p.color) })
+// le journal déplié dans le panneau pose ses incidents sur le terrain ; une ligne choisie cadre la caméra dessus
+watch(() => house.journalOverlay, (j) => scene.setJournalPoints(j?.key ?? null, j?.points ?? []))
+watch(() => house.journalFocus, (f) => { if (f) scene.focusJournalPoint(f.at) })
 // aperçu du champ glissé : tous ses modules suivent l'origine du brouillon
 watch(() => house.arrayDraft, () => {
   for (const m of house.editingArrayModules) if (isPlaced(m)) scene.moveMarker(m.id, m.position)

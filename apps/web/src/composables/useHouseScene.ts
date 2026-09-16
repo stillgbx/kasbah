@@ -1,4 +1,5 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComputedRef, type Ref } from 'vue'
+import type { JournalPoint } from '../lib/journal'
 import { useTheme } from 'vuetify'
 import { useDocumentVisibility, useIntervalFn, useResizeObserver } from '@vueuse/core'
 import type { DeviceState, House, Vec3 } from '@kasbah/shared'
@@ -141,6 +142,8 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     setMovable: (key: string | string[] | null) => scene?.setMovable(key),
     moveMarker: (key: string, position: Vec3) => scene?.moveMarker(key, position),
     previewBodyColor: (key: string, color: string | null) => scene?.previewBodyColor(key, color),
+    setJournalPoints: (key: string | null, points: readonly JournalPoint[]) => scene?.setJournalPoints(key, points),
+    focusJournalPoint: (at: number) => scene?.focusJournalPoint(at),
     controller: () => scene,
   }
 }

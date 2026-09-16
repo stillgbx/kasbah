@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CommandInput } from '@kasbah/shared'
 import { isPlaced, panelOf, type PlacedHouseDevice } from '@kasbah/shared'
@@ -19,6 +19,10 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 import ForgetDeviceButton from '../devices/ForgetDeviceButton.vue'
 import DeviceControl from '../controls/DeviceControl.vue'
 import VehicleTuning from '../vehicles/VehicleTuning.vue'
+import JournalList from '../robots/JournalList.vue'
+import MowerTuning from '../robots/MowerTuning.vue'
+import { useJournals } from '../../composables/useJournals'
+import { journalPoints } from '../../lib/journal'
 import PanelArraysCard from './PanelArraysCard.vue'
 import PlacementControl from './PlacementControl.vue'
 
@@ -42,8 +46,41 @@ const tunableCar = computed(() => {
   const d = resolved.value?.descriptor
   return d?.kind === 'vehicle' && tunableVehicle(d, resolved.value?.houseDevice) ? d : null
 })
-// changé d'appareil, les réglages se referment : le panneau suivant s'ouvre sur ses commandes
-watch(() => house.selectedKey, () => { tuningOpen.value = false })
+/**
+ * Le robot tondeuse a les siens : le DÉCALAGE de sa place GPS (`MowerTuning`, le même bloc que sur
+ * la vue Robots — ici on le voit s'appliquer dans la scène) et son JOURNAL. Le journal se déplie
+ * derrière son bouton et, déplié, pose ses incidents positionnés SUR LE TERRAIN de la scène ; une
+ * ligne choisie cadre la caméra dessus. C'est ainsi qu'on localise une panne depuis la maison.
+ */
+const tunableMower = computed(() => {
+  const d = resolved.value?.descriptor
+  const s = resolved.value?.state
+  return d?.kind === 'mower' && s?.kind === 'mower' && !!s.location && resolved.value?.houseDevice?.position === undefined ? d : null
+})
+const journalable = computed(() => {
+  const d = resolved.value?.descriptor
+  return d?.kind === 'mower' && d.capabilities.includes('journal') ? d : null
+})
+const journalIds = computed(() => (journalable.value ? [journalable.value.id] : []))
+const { journals } = useJournals(journalIds)
+const journalEntries = computed(() => (journalable.value ? journals.value[journalable.value.id] ?? [] : []))
+const journalOpen = ref(false)
+const journalActive = ref<number | undefined>(undefined)
+function toggleJournal(): void {
+  journalOpen.value = !journalOpen.value
+  journalActive.value = undefined
+  if (journalOpen.value && journalable.value) house.showJournal(journalable.value.id, journalPoints(journalEntries.value))
+  else house.hideJournal()
+}
+// le journal se rafraîchit pendant qu'il est ouvert : les épingles suivent
+watch(journalEntries, (entries) => { if (journalOpen.value && journalable.value) house.showJournal(journalable.value.id, journalPoints(entries)) })
+function pickEntry(e: { at: number }): void {
+  journalActive.value = e.at
+  if (journalable.value) house.focusJournalPoint(journalable.value.id, e.at)
+}
+// changé d'appareil, les réglages et le journal se referment : le panneau suivant s'ouvre sur ses commandes
+watch(() => house.selectedKey, () => { tuningOpen.value = false; journalOpen.value = false; house.hideJournal() })
+onBeforeUnmount(() => house.hideJournal())
 
 /**
  * Le PARENT dont on est descendu, et où le retour ramène : la pièce, la zone du jardin, ou à défaut
@@ -244,6 +281,29 @@ function send(cmd: CommandInput) {
         </button>
       </div>
     </div>
+    <!-- le journal du robot : replié derrière son bouton (le nombre de lignes le signale), déplié il
+         pose ses incidents sur le terrain de la scène, et une ligne choisie cadre la caméra dessus -->
+    <div v-if="journalable" class="card card--soft tuning">
+      <div v-if="journalOpen" class="tuning__body"><JournalList :entries="journalEntries" :active="journalActive" @pick="pickEntry" /></div>
+      <div class="tuning__foot">
+        <span class="muted">{{ $t('mower.journalTitle') }}</span>
+        <button type="button" class="pill tuning__cta" :data-on="journalOpen ? '1' : '0'" :aria-expanded="journalOpen" @click="toggleJournal">
+          <StrokeIcon name="list" :size="16" /> {{ journalOpen ? $t('place.done') : $t('mower.journal') }}
+          <span v-if="!journalOpen" class="tuning__count">{{ journalEntries.length }}</span>
+        </button>
+      </div>
+    </div>
+    <!-- le décalage GPS de la tondeuse : le même bloc que sur la vue Robots, robot sous les yeux -->
+    <div v-if="tunableMower" class="card card--soft tuning">
+      <div v-if="tuningOpen" class="tuning__body"><MowerTuning :descriptor="tunableMower" /></div>
+      <div class="tuning__foot">
+        <span class="muted">{{ $t('vehicle.tuneTitle') }}</span>
+        <button type="button" class="pill tuning__cta" :data-on="tuningOpen ? '1' : '0'"
+                :aria-expanded="tuningOpen" @click="tuningOpen = !tuningOpen">
+          <StrokeIcon name="gear" :size="16" /> {{ tuningOpen ? $t('place.done') : $t('vehicle.tune') }}
+        </button>
+      </div>
+    </div>
     <!-- les champs de panneaux se déclarent ici, juste au-dessus de l'emplacement de l'installation -->
     <PanelArraysCard v-if="solarSite" class="arrays" :site-device-id="solarSite" />
     <!-- rarement utilisé : calé au fond du panneau, sous tout le reste -->
@@ -299,6 +359,7 @@ function send(cmd: CommandInput) {
 .tuning__body { padding-bottom: 12px; }
 /* la carte des réglages vit DANS celle-ci : sans ça, deux fonds et deux marges intérieures */
 .tuning__body :deep(.tune) { padding: 0; background: none; }
+.tuning__count { min-width: 20px; padding: 0 6px; border-radius: 999px; font-size: 11px; font-weight: 600; background: var(--surface2); color: var(--text); }
 /* la carte des champs se colle au bloc « Emplacement » qui ferme le panneau */
 .arrays { margin-top: auto; }
 .arrays + .placement { margin-top: 0; }

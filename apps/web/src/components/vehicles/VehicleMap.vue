@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Map as MlMap, Marker, NavigationControl, type StyleSpecification } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { IGN_MAX_ZOOM, initialView, normalizeHeading, planStyleUrl, satelliteStyle, satelliteStyleWithLabels, type LatLon, type MapMode } from '../../lib/map'
+import { JOURNAL_COLORS, type JournalPoint } from '../../lib/journal'
 import { useSettingsStore } from '../../stores/settings'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
@@ -23,6 +24,10 @@ const props = defineProps<{
   caption?: string | undefined
   /** Ce qu'on suit : une voiture (flèche tournée selon son cap) ou une tondeuse (disque, pas de cap). */
   subject?: 'car' | 'mower' | undefined
+  /** Les incidents du journal qui savent où ils se sont produits : petites pastilles de gravité. */
+  points?: readonly JournalPoint[] | undefined
+  /** Un point à AMENER au centre (une ligne du journal choisie) : la carte y va, et cesse de se recadrer seule. */
+  focus?: LatLon | undefined
 }>()
 
 const settings = useSettingsStore()
@@ -43,6 +48,7 @@ const moved = ref(false)
 let map: MlMap | null = null
 let carMarker: Marker | null = null
 let homeMarker: Marker | null = null
+let pointMarkers: Marker[] = []
 let observer: ResizeObserver | null = null
 
 const hasPosition = computed(() => !!props.location)
@@ -120,6 +126,20 @@ function fit(animate: boolean): void {
   moved.value = false
 }
 
+/** Les incidents : une pastille par point, teintée de sa gravité, refaite à chaque changement de liste. */
+function placePoints(): void {
+  if (!map) return
+  for (const m of pointMarkers) m.remove()
+  pointMarkers = []
+  for (const p of props.points ?? []) {
+    const el = document.createElement('div')
+    el.className = 'vmap__marker vmap__marker--point'
+    el.title = p.label
+    el.innerHTML = `<svg viewBox="0 0 16 16" width="14" height="14"><circle cx="8" cy="8" r="5" fill="${JOURNAL_COLORS[p.severity]}" stroke="var(--surface)" stroke-width="2"/></svg>`
+    pointMarkers.push(new Marker({ element: el }).setLngLat([p.lon, p.lat]).addTo(map))
+  }
+}
+
 function placeMarkers(): void {
   if (!map) return
   // la position AVANT `addTo` : MapLibre projette le marqueur en l'ajoutant, sans position il plante
@@ -157,6 +177,7 @@ onMounted(() => {
   }
   void applyStyle()
   placeMarkers()
+  placePoints()
   fit(false)
   // la carte du véhicule vit dans une grille qui se redimensionne : MapLibre ne suit que la fenêtre
   observer = new ResizeObserver(() => m.resize())
@@ -173,6 +194,14 @@ onBeforeUnmount(() => {
 watch(() => [props.location?.lat, props.location?.lon, props.headingDeg, props.home?.lat, props.home?.lon], () => {
   placeMarkers()
   if (!moved.value) fit(true)
+})
+watch(() => props.points, placePoints)
+// un point choisi : la carte y va (assez près pour lire le jardin), et c'est comme si l'utilisateur
+// l'avait déplacée — elle ne se recadre plus seule, « Recentrer » le propose
+watch(() => props.focus, (f) => {
+  if (!f || !map) return
+  map.easeTo({ center: [f.lon, f.lat], zoom: Math.max(map.getZoom(), 18), duration: 500 })
+  moved.value = true
 })
 watch([mode, () => settings.isDark], () => { void applyStyle() })
 // Le choix n'est écrit QUE lorsque le mode change. Il était auparavant réécrit à chaque changement
@@ -237,6 +266,8 @@ watch(full, (f) => { if (f) window.addEventListener('keydown', onKey); else wind
 /* marqueurs : couleur de l'accent pour la voiture, du texte pour la maison ; l'ombre les détache du satellite */
 :global(.vmap__marker) { display: grid; place-items: center; filter: drop-shadow(0 1px 2px rgb(0 0 0 / .4)); }
 :global(.vmap__marker--car), :global(.vmap__marker--mower) { color: var(--accent); }
+/* les incidents passent SOUS le robot et la maison : ce sont eux qu'on cherche, pas eux qu'on suit */
+:global(.vmap__marker--point) { z-index: 0; }
 :global(.vmap__marker--home) { color: var(--text); }
 /* les boutons natifs de MapLibre suivent les jetons du thème */
 :global(.vmap .maplibregl-ctrl-group) { background: var(--surface); border-radius: 10px; box-shadow: 0 1px 4px rgb(0 0 0 / .15); }

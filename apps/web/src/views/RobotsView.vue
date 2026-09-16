@@ -2,7 +2,9 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Capability, CommandInput, DeviceEntry, JournalEntry, StateFor } from '@kasbah/shared'
-import { getTransport } from '../api'
+import { useJournals } from '../composables/useJournals'
+import JournalList from '../components/robots/JournalList.vue'
+import { journalPoints } from '../lib/journal'
 import PageHeader from '../components/layout/PageHeader.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import MowerTuning from '../components/robots/MowerTuning.vue'
@@ -93,23 +95,20 @@ let clockTimer: ReturnType<typeof setInterval> | null = null
 
 /**
  * Le JOURNAL du robot (capacité `journal`) : ce qu'il a consigné lui-même, du plus récent au plus
- * ancien. Servi à la demande par le serveur, qui le tient à jour par le flux du fabricant : le
- * redemander à chaque battement ne coûte qu'une requête locale. Huit lignes fixes ; un échec garde
- * les lignes d'avant.
+ * ancien. Il se SIGNALE (une pilule « Journal » avec le nombre de lignes et la gravité de la
+ * dernière) et se déplie au clic — la carte garde sa hauteur tant qu'on ne le demande pas, c'est ce
+ * qui la faisait sauter avant. Déplié, ses incidents positionnés se posent sur la carte satellite,
+ * et une ligne choisie y amène la carte : c'est ainsi qu'on localise une panne.
  */
-const JOURNAL_ROWS = 8
-const journals = ref<Record<string, JournalEntry[]>>({})
-async function loadJournals(): Promise<void> {
-  for (const m of mowers.value) {
-    if (!has(m, 'journal')) continue
-    try { journals.value = { ...journals.value, [m.descriptor.id]: (await getTransport().getJournal(m.descriptor.id)).entries } }
-    catch { /* le journal d'avant reste affiché */ }
-  }
+const journalIds = computed(() => mowers.value.filter((m) => has(m, 'journal')).map((m) => m.descriptor.id))
+const { journals } = useJournals(journalIds)
+const journalOf = (m: MowerEntry): JournalEntry[] => journals.value[m.descriptor.id] ?? []
+const journalOpen = ref<string | null>(null)
+const journalFocus = ref<Record<string, JournalEntry | undefined>>({})
+const mapPoints = (m: MowerEntry) => (journalOpen.value === m.descriptor.id ? journalPoints(journalOf(m)) : [])
+function pickEntry(m: MowerEntry, e: JournalEntry): void {
+  journalFocus.value = { ...journalFocus.value, [m.descriptor.id]: e }
 }
-const journalOf = (m: MowerEntry) => (journals.value[m.descriptor.id] ?? []).slice(0, JOURNAL_ROWS)
-/** « 24 août 16:42 » : le journal court sur des semaines, un jour de la semaine seul ne dirait pas laquelle. */
-const journalWhen = (at: number) => new Intl.DateTimeFormat(locale.value, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(at))
-const journalLine = (e: JournalEntry) => `${e.message} · ${t('mower.journalCode', { code: e.code ?? '—' })}`
 const updatedAgo = (s: StateFor<'mower'>) => t('mower.updatedAgo', { ago: formatAgo(s.updatedAt, now.value, locale.value) })
 
 /**
@@ -127,8 +126,7 @@ const quotaLabel = (q: Quota) => {
 }
 onMounted(() => {
   void devices.refreshHealth()
-  void loadJournals()
-  clockTimer = setInterval(() => { now.value = Date.now(); void devices.refreshHealth(); void loadJournals() }, 30_000)
+  clockTimer = setInterval(() => { now.value = Date.now(); void devices.refreshHealth() }, 30_000)
 })
 onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
 </script>
@@ -174,20 +172,9 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
               <div class="counter"><span class="muted counter__k">{{ $t('mower.driveDistance') }}</span><span class="counter__v">{{ distance(m.state.statistics?.driveDistanceM) }}</span></div>
             </div>
           </div>
-          <!-- le journal du robot : ce qu'il a consigné lui-même, huit lignes du plus récent au plus ancien -->
-          <div v-if="has(m, 'journal')" class="card card--soft journal">
-            <div class="muted stat__k">{{ $t('mower.journal') }}</div>
-            <ul v-if="journalOf(m).length" class="journal__list">
-              <li v-for="e in journalOf(m)" :key="`${e.at}-${e.code}`" class="journal__row">
-                <span class="journal__dot" :data-severity="e.severity" :title="$t(`mower.severity.${e.severity}`)" />
-                <span class="muted journal__when">{{ journalWhen(e.at) }}</span>
-                <span class="journal__text">{{ journalLine(e) }}</span>
-              </li>
-            </ul>
-            <p v-else class="muted journal__empty">{{ $t('mower.journalEmpty') }}</p>
-          </div>
-          <!-- la carte : le robot (disque, il ne dit pas son cap) et la maison, plan ou satellite -->
-          <VehicleMap class="rcard__map" subject="mower" :location="mapLocation(m)" :home="house.house?.origin" :caption="caption(m.state)" />
+          <!-- la carte : le robot (disque, il ne dit pas son cap), la maison, et — journal déplié — ses incidents -->
+          <VehicleMap class="rcard__map" subject="mower" :location="mapLocation(m)" :home="house.house?.origin" :caption="caption(m.state)"
+                      :points="mapPoints(m)" :focus="journalFocus[m.descriptor.id]?.location" />
           <div class="rcard__actions">
             <button v-if="has(m, 'mow')" type="button" class="pill" :data-on="m.state.activity === 'mowing' ? '1' : '0'" :disabled="!m.state.available || busy(m)" :aria-busy="busy(m)"
                     @click="send(m.descriptor.id, m.state.activity === 'mowing' ? { type: 'mower.pause' } : { type: 'mower.start', durationMin: 60 })">
@@ -199,12 +186,22 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
                     @click="send(m.descriptor.id, { type: 'mower.park', untilNextSchedule: true })">
               <StrokeIcon name="parking" :size="16" />{{ $t('common.park') }}
             </button>
+            <!-- le journal se signale : combien de lignes, et la gravité de la dernière en pastille -->
+            <button v-if="has(m, 'journal')" type="button" class="pill" :data-on="journalOpen === m.descriptor.id ? '1' : '0'"
+                    :aria-expanded="journalOpen === m.descriptor.id"
+                    @click="journalOpen = journalOpen === m.descriptor.id ? null : m.descriptor.id">
+              <StrokeIcon name="list" :size="16" />{{ $t('mower.journal') }}
+              <span class="rcard__count" :data-severity="journalOf(m)[0]?.severity ?? 'none'">{{ journalOf(m).length }}</span>
+            </button>
             <!-- ce que le robot ne dira jamais : où il est VRAIMENT, à quelques mètres près -->
             <button v-if="tunable(m)" type="button" class="pill" :data-on="tuning === m.descriptor.id ? '1' : '0'"
                     :aria-expanded="tuning === m.descriptor.id"
                     @click="tuning = tuning === m.descriptor.id ? null : m.descriptor.id">
               <StrokeIcon name="gear" :size="16" />{{ $t('vehicle.tune') }}
             </button>
+          </div>
+          <div v-if="journalOpen === m.descriptor.id" class="card card--soft journal">
+            <JournalList :entries="journalOf(m)" :active="journalFocus[m.descriptor.id]?.at" @pick="pickEntry(m, $event)" />
           </div>
           <MowerTuning v-if="tuning === m.descriptor.id" :descriptor="m.descriptor" />
           <p class="muted rcard__hint">{{ updatedAgo(m.state) }}</p>
@@ -258,17 +255,12 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
 .counter__k { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .counter__v { font-weight: 500; font-size: 13px; white-space: nowrap; }
 .rcard__map { height: 220px; }
-.journal { padding: 10px 12px; display: grid; gap: 6px; }
-.journal__list { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
-.journal__row { display: grid; grid-template-columns: 10px auto 1fr; align-items: center; gap: 8px; font-size: 12px; min-width: 0; }
-/* la gravité en pastille : neutre, orangé d'avertissement, rouge d'erreur, rouge plein pour une erreur grave */
-.journal__dot { width: 8px; height: 8px; border-radius: 999px; background: var(--muted); }
-.journal__dot[data-severity='warning'] { background: #d38b22; }
-.journal__dot[data-severity='error'] { background: #d24a43; }
-.journal__dot[data-severity='fatal'] { background: #d24a43; box-shadow: 0 0 0 2px rgb(210 74 67 / .35); }
-.journal__when { white-space: nowrap; font-variant-numeric: tabular-nums; }
-.journal__text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.journal__empty { margin: 0; font-size: 12px; }
+.journal { padding: 8px 10px; }
+/* le compte du journal, teinté de la gravité de la dernière ligne ; largeur minimale fixe : 9 ou 22, même pilule */
+.rcard__count { min-width: 22px; padding: 1px 6px; border-radius: 999px; font-size: 11px; font-weight: 600; text-align: center; background: var(--surface2); color: var(--text); }
+.rcard__count[data-severity='warning'] { background: #d38b22; color: #fff; }
+.rcard__count[data-severity='error'], .rcard__count[data-severity='fatal'] { background: #d24a43; color: #fff; }
+.pill[data-on='1'] .rcard__count { background: rgb(255 255 255 / .25); color: inherit; }
 .rcard__actions { display: flex; gap: 8px; flex-wrap: wrap; min-height: 40px; }
 .rcard__actions .pill[aria-busy='true']:disabled { opacity: .7; }
 .rcard__hint { margin: 0; font-size: 12px; }

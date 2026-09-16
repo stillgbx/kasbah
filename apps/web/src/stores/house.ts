@@ -2,6 +2,7 @@ import { computed, ref, shallowRef, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { autoPlaceDevices, computeRoof, houseIdForDevice, indexHouse, isPlaced, panelArrayDevices, panelOf, pointInPolygon, resolveDefaults, resolveDeviceLevelId, withPanelArrays, type DeviceDescriptor, type DeviceEntry, type DevicePlacement, type House, type HouseDevice, type HouseIndex, type Level, type PanelArray, type PanelArrayPatch, type PlaceableDevice, type PlacedHouseDevice, type Room, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
 import { getTransport } from '../api'
+import type { JournalPoint } from '../lib/journal'
 import { i18n, t } from '../i18n'
 import { soundRouting } from '../lib/audioRouting'
 import { findEnergySite } from '../lib/energy'
@@ -397,6 +398,22 @@ export const useHouseStore = defineStore('house', () => {
   }
 
   /**
+   * Le JOURNAL d'un appareil montré DANS la scène : ses incidents positionnés, posés sur le terrain
+   * le temps que le panneau le déplie — c'est ainsi qu'on localise une panne. `null` retire tout.
+   * `journalFocus` : la ligne que l'utilisateur vient de choisir, sur laquelle la caméra se cadre.
+   * Même couture que l'aperçu de teinte : le store dit, `HomeView` transmet à la scène.
+   */
+  const journalOverlay = shallowRef<{ key: string; points: JournalPoint[] } | null>(null)
+  const journalFocus = shallowRef<{ key: string; at: number } | null>(null)
+  function showJournal(pluginDeviceId: string, points: JournalPoint[]): void {
+    journalOverlay.value = { key: houseDeviceFor(pluginDeviceId)?.id ?? pluginDeviceId, points }
+  }
+  function hideJournal(): void { journalOverlay.value = null; journalFocus.value = null }
+  function focusJournalPoint(pluginDeviceId: string, at: number): void {
+    journalFocus.value = { key: houseDeviceFor(pluginDeviceId)?.id ?? pluginDeviceId, at }
+  }
+
+  /**
    * Renomme un appareil dans la maison — SANS le placer. C'est le seul chemin possible pour un
    * appareil qui n'a pas de place dans la scène (un véhicule) : son entrée est créée au besoin, et
    * elle n'a pas de position. Un nom vide EFFACE le nom choisi, et celui du fabricant reprend la main.
@@ -706,6 +723,7 @@ export const useHouseStore = defineStore('house', () => {
     house, effective, loading, error, index, levels, zones, soundRoutes, relaySource,
     focusedLevelId, gardenFocus, selectedRoomId, selectedLevelId, selectedKey, floorTab, selectedRoom, selectedZone, selectedDevice,
     load, setFloorTab, focusLevel, selectRoom, selectLevel, selectDevice, clearSelection, backToHome, backFromRoom, backFromDevice, houseDeviceFor, renameDevice, setDeviceTuning, bodyColorPreview, previewBodyColor, setRoomOrder,
+    journalOverlay, journalFocus, showJournal, hideJournal, focusJournalPoint,
     placing, saving, draft, canRevert, isProvisional, startPlacing, startPlacingNew, stopPlacing, previewPosition, previewHeight, savePlacement, revertPlacement, removePlacement,
     placementLevelId, setPlacementLevel,
     arrays, arraysOf, editingArrayId, editingArray, editingArrayModules, arrayDraft, hoveredKey, hoverSlot, freeInverters,
