@@ -9,7 +9,8 @@ import { journalLabel, journalWhen } from '../../lib/journal'
  * y emmène la carte ou la scène ; une ligne sans position ne mène nulle part et le dit.
  *
  * La liste a une hauteur BORNÉE (huit lignes) et défile au-delà : la carte qui la porte ne s'étire
- * pas au gré du journal — c'est ce qui la faisait sauter avant.
+ * pas au gré du journal — c'est ce qui la faisait sauter avant. Elle est en MONOSPACE, date à
+ * largeur constante : un journal se lit en colonnes, comme un terminal (demande de l'utilisateur).
  */
 defineProps<{ entries: readonly JournalEntry[]; active?: number | undefined }>()
 const emit = defineEmits<{ pick: [entry: JournalEntry] }>()
@@ -31,8 +32,8 @@ const { locale } = useI18n()
 </template>
 
 <style scoped>
-/* huit lignes de 24 px, puis défilement : la hauteur ne dépend pas du journal */
-.jl { max-height: 192px; overflow-y: auto; }
+/* huit lignes de 24 px, puis défilement : la hauteur ne dépend pas du journal ; monospace, comme un terminal */
+.jl { max-height: 192px; overflow-y: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .jl__list { margin: 0; padding: 0; list-style: none; display: grid; }
 .jl__row { display: grid; grid-template-columns: 10px auto 1fr; align-items: center; gap: 8px; height: 24px; font-size: 12px; min-width: 0; padding: 0 4px; border-radius: 6px; }
 .jl__row[data-active='1'] { background: var(--surface2); }

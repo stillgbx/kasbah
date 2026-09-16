@@ -36,7 +36,12 @@ export const JOURNAL_COLORS: Record<JournalSeverity, string> = {
   fatal: '#d24a43',
 }
 
-/** « 24 août, 16:42 » : le journal court sur des semaines, un jour de la semaine seul ne dirait pas laquelle. */
+/**
+ * « 16/09 18:22 » : le journal court sur des semaines (un jour de la semaine seul ne dirait pas
+ * laquelle), et la date doit faire TOUJOURS la même largeur pour que les lignes s'alignent en
+ * monospace — jour et mois à deux chiffres, heure sur 24 h ; « 7 juil. » et « 16 sept. » ne
+ * faisaient pas la même longueur.
+ */
 export function journalWhen(at: number, locale: string): string {
-  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(at))
+  return new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(at))
 }
