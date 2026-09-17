@@ -55,10 +55,10 @@ const alertText = computed(() => {
       <div v-if="showUvLamp" class="line">
         <StrokeIcon name="sun" :size="16" />
         <span class="line__text">{{ $t('water.uvLamp') }}</span>
-        <span class="line__pct" :class="{ 'text-error': isLow(state.uvLampPct) }">{{ pctText(state.uvLampPct) }}</span>
         <span class="uv" :data-on="state.uvOn === undefined ? 'unknown' : state.uvOn ? '1' : '0'">
           <span class="uv__dot" />{{ state.uvOn === undefined ? '—' : state.uvOn ? $t('water.uvOn') : $t('water.uvOff') }}
         </span>
+        <span class="line__pct" :class="{ 'text-error': isLow(state.uvLampPct) }">{{ pctText(state.uvLampPct) }}</span>
       </div>
     </template>
 
@@ -98,10 +98,18 @@ const alertText = computed(() => {
 .sep { height: 1px; margin: 8px 0; background: var(--line); }
 .line { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); height: 28px; }
 .line__text { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--muted); }
-/* largeur fixe : le pourcentage ou le nombre ne fait pas trembler la colonne quand il change.
-   9ch couvre le pire cas réel (volume mensuel à 7 chiffres, « 1 234 567 L » / « 2 556 L/h »),
-   pas seulement le pourcentage (qui tiendrait dans moins). */
-.line__pct, .line__num { flex: 0 0 auto; min-width: 9ch; text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
+/* largeur fixe : le pourcentage ou le nombre ne fait pas trembler la colonne quand il change. */
+.line__pct, .line__num { flex: 0 0 auto; text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
+/* 9ch : les pourcentages ne dépassent jamais « 100 % ». */
+.line__pct { min-width: 9ch; }
+/* 17ch : débit et volumes affichent désormais litres ET m³ côte à côte (« 612 L/h · 0,61 m³/h »),
+   et le complément m³ du volume n'apparaît qu'au-delà d'1 000 L (voir formatVolume) — la réserve
+   couvre le pire cas mesuré (volume mensuel à 7 chiffres : « 1 234 567 L · 1 234,57 m³ » ≈ 15,9ch
+   rendus, EN un peu plus large que FR) pour qu'apparition/disparition du complément ne fasse
+   jamais bouger la colonne. Mesuré au pixel (pas un chiffre rond) : le panneau étroit de la scène
+   3D (294px de large) ne laisse que 262px à label+valeur une fois l'icône et les deux espacements
+   retirés — une réserve plus large (essayé 24ch) tronque « Aujourd'hui »/« Ce mois ». */
+.line__num { min-width: 17ch; }
 .line[data-alert='warning'] { color: rgb(var(--v-theme-warning)); }
 .line[data-alert='warning'] .line__text { color: inherit; }
 .line[data-alert='defect'] { color: rgb(var(--v-theme-error)); }

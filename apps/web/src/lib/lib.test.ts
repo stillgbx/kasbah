@@ -5,7 +5,7 @@ import { fromClosure, toClosure } from './cover'
 import type { HouseDevice } from '@kasbah/shared'
 import { emitsSound, relayLabel, soundRouting } from './audioRouting'
 import { headlineValue, isDeviceBusy, isDeviceOn, isDevicePulsing, statusLabel, toggleChecked, toggleCommand } from './deviceState'
-import { formatPower, formatSensor, summarize } from './format'
+import { formatFlow, formatPower, formatSensor, formatVolume, formatVolumeAxisTick, summarize, volumeAxisUnit } from './format'
 import { deviceColor, deviceIcon } from './deviceIcons'
 import { findBatteries, findEnergySite, inverterGroups, isEnergySite, isInverter, shortInverterId } from './energy'
 import { coverActivity, coverAtRest, isFlatCover, isPassageCover } from './cover'
@@ -13,6 +13,8 @@ import { coverLeaves, coverSize, hasLeaves, isOrientable, isSizable } from './or
 import { bodyColorOf, bodyFinishOf, FINISH_MATERIAL, SCENE_FINISH } from './vehicleTuning'
 import { BOTH_MAX_M, CAR_ZOOM, IGN_ORTHO_TILE_URL, initialView, normalizeHeading, planStyleUrl, satelliteStyle, satelliteStyleWithLabels } from './map'
 import { isDaylight, TWILIGHT_MS } from './daylight'
+import { bucketSlots, niceAxisTicks, seriesFor, slotsMax, slotsTotal } from './consumption'
+import type { ConsumptionPoint, DeviceConsumption } from '@kasbah/shared'
 import fr from '../i18n/locales/fr.json'
 import en from '../i18n/locales/en.json'
 
@@ -362,6 +364,8 @@ describe("ce qui a une orientation reglable", () => {
     // a une face : borne de recharge, batterie, boitier de passerelle
     expect(isOrientable(dev, desc('ev_charger'))).toBe(true)
     expect(isOrientable(dev, desc('energy'))).toBe(true)
+    // une centrale de traitement d'eau se visse AU MUR : son dos le touche, sa face regarde la piece
+    expect(isOrientable(dev, desc('water'))).toBe(true)
   })
 
   it("ni une enceinte, ni une lampe, ni un capteur n'ont d'orientation utile", () => {
@@ -415,6 +419,33 @@ describe('format & icons', () => {
     expect(formatPower(2400, 'en')).toBe('2.4 kW')
     expect(formatSensor(sensor, 21.44, 'en')).toBe('21.4 °C')
     expect(summarize(sensor, { kind: 'sensor', updatedAt: 0, available: true, value: 3 }, 'en')).toBe('3.0 °C')
+  })
+  it('debit et volume : litres ET m3 cote a cote, TOUJOURS (plus de seuil qui cache le m3)', () => {
+    // le debit porte toujours les deux unites, a 3 decimales (pas du debitmetre : 36 L/h = 0,036 m3/h,
+    // constant sur toute sa plage : 2 decimales perdraient deja l'information, pas seulement pres de 0)
+    expect(formatFlow(612, 'fr')).toBe('612 L/h · 0,612 m³/h')
+    expect(formatFlow(2556, 'en')).toBe('2,556 L/h · 2.556 m³/h')
+    // un debit EXACTEMENT nul est une mesure, pas une approximation : pas de "0,000 m3/h" bavard
+    expect(formatFlow(0, 'fr')).toBe('0 L/h')
+    // le volume affiche desormais le m3 a toute valeur non nulle ; sous 1 m3, 3 decimales pour ne
+    // JAMAIS ecrire "0,00 m3" sur une mesure reelle (3 L, 93 L) - la regle "absent n'est pas zero"
+    // appliquee a l'arrondi. Au-dela d'1 m3, 2 decimales suffisent (un litre ne s'y lit plus).
+    expect(formatVolume(3, 'fr')).toBe('3 L · 0,003 m³')
+    expect(formatVolume(93, 'fr')).toBe('93 L · 0,093 m³')
+    expect(formatVolume(999, 'fr')).toBe('999 L · 0,999 m³')
+    expect(formatVolume(1000, 'fr')).toBe('1 000 L · 1,00 m³')
+    expect(formatVolume(7545, 'fr')).toBe('7 545 L · 7,55 m³')
+    expect(formatVolume(1234567, 'en')).toBe('1,234,567 L · 1,234.57 m³')
+    // un volume EXACTEMENT nul reste "0 L" seul : le m3 n'y apprend rien
+    expect(formatVolume(0, 'fr')).toBe('0 L')
+  })
+  it('axe de volumes : une seule unité pour tout l’axe, jamais collée à la graduation', () => {
+    // même seuil que formatVolume (1000 L) : sous ce seuil l'axe reste en L, au-delà il bascule en m³
+    expect(volumeAxisUnit(999)).toBe('L')
+    expect(volumeAxisUnit(1000)).toBe('m³')
+    expect(formatVolumeAxisTick(120, 'L', 'fr')).toBe('120')
+    expect(formatVolumeAxisTick(5000, 'm³', 'fr')).toBe('5')
+    expect(formatVolumeAxisTick(1500, 'm³', 'fr')).toBe('1,5')
   })
   it('picks icons and colors from state', () => {
     const d: DeviceDescriptor = { ...sensor, kind: 'light', capabilities: ['on_off'], meta: {} }
@@ -549,5 +580,72 @@ describe('isDaylight', () => {
     expect(isDaylight({ now: new Date(2026, 5, 21, 8, 0) })).toBe(true)
     expect(isDaylight({ now: new Date(2026, 5, 21, 7, 10) })).toBe(false)       // tout juste levé
     expect(isDaylight({ now: new Date(2026, 5, 21, 23, 0) })).toBe(false)
+  })
+})
+
+describe('historique de consommation (lib/consumption)', () => {
+  const NOW = Date.now()
+  const hourStart = (offsetH: number) => { const d = new Date(NOW); d.setMinutes(0, 0, 0); d.setHours(d.getHours() - offsetH); return d.getTime() }
+  const dayStart = (offsetD: number) => { const d = new Date(NOW); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - offsetD); return d.getTime() }
+  const monthStart = (offsetM: number) => { const d = new Date(NOW); d.setDate(1); d.setHours(0, 0, 0, 0); d.setMonth(d.getMonth() - offsetM); return d.getTime() }
+  const consumption = (over: Partial<DeviceConsumption> = {}): DeviceConsumption => ({ deviceId: 'comap:station', hourly: [], daily: [], monthly: [], ...over })
+
+  it('chaque période lit sa série du contrat ; semaine et mois partagent daily', () => {
+    const c = consumption({ hourly: [{ t: 1, litres: 2 }], daily: [{ t: 3, litres: 4 }], monthly: [{ t: 5, litres: 6 }] })
+    expect(seriesFor(c, 'day')).toBe(c.hourly)
+    expect(seriesFor(c, 'week')).toBe(c.daily)
+    expect(seriesFor(c, 'month')).toBe(c.daily)
+    expect(seriesFor(c, 'year')).toBe(c.monthly)
+    expect(seriesFor(null, 'day')).toEqual([])
+  })
+
+  it('24 colonnes toujours ; un pas jamais mesuré reste null, distinct d’un pas mesuré à zéro', () => {
+    const points: ConsumptionPoint[] = [
+      { t: hourStart(23), litres: 10 },
+      // -22 h volontairement absente : silence serveur, pas une consommation nulle
+      { t: hourStart(21), litres: 0 },
+      { t: hourStart(0), litres: 5 },
+    ]
+    const slots = bucketSlots(points, 'day', NOW)
+    expect(slots).toHaveLength(24)
+    expect(slots[0]).toMatchObject({ litres: 10 })
+    expect(slots[1]!.litres).toBeNull()
+    expect(slots[2]).toMatchObject({ litres: 0 })     // mesuré à zéro : PAS pareil que l'absence
+    expect(slots[23]).toMatchObject({ litres: 5 })
+    expect(slots[0]!.t).toBeLessThan(slots[23]!.t)    // du plus ancien au plus récent
+  })
+
+  it('semaine = 7 colonnes, mois = 31 : les deux lisent daily, seul le nombre de colonnes change', () => {
+    const daily: ConsumptionPoint[] = [{ t: dayStart(0), litres: 120 }, { t: dayStart(2), litres: 90 }]
+    expect(bucketSlots(daily, 'week', NOW)).toHaveLength(7)
+    expect(bucketSlots(daily, 'month', NOW)).toHaveLength(31)
+    const week = bucketSlots(daily, 'week', NOW)
+    expect(week[6]).toMatchObject({ litres: 120 })    // aujourd'hui
+    expect(week[5]!.litres).toBeNull()                // hier : rien de mesuré
+    expect(week[4]).toMatchObject({ litres: 90 })     // avant-hier
+  })
+
+  it('année = 12 colonnes de MOIS CIVILS, pas des tranches de 30 jours', () => {
+    const monthly: ConsumptionPoint[] = [{ t: monthStart(0), litres: 7500 }, { t: monthStart(1), litres: 7000 }]
+    const slots = bucketSlots(monthly, 'year', NOW)
+    expect(slots).toHaveLength(12)
+    expect(slots[11]).toMatchObject({ litres: 7500 })
+    expect(slots[10]).toMatchObject({ litres: 7000 })
+    expect(slots[9]!.litres).toBeNull()
+  })
+
+  it('total et maximum ignorent les pas absents ; le maximum plancher à 1 pour ne jamais diviser par zéro', () => {
+    const slots = bucketSlots([{ t: hourStart(0), litres: 40 }], 'day', NOW)
+    expect(slotsTotal(slots)).toBe(40)
+    expect(slotsMax(slots)).toBe(40)
+    expect(slotsTotal(bucketSlots([], 'day', NOW))).toBe(0)
+    expect(slotsMax(bucketSlots([], 'day', NOW))).toBe(1)
+  })
+
+  it('graduation d’axe : des valeurs rondes, jamais le maximum brut, jamais au-delà de lui', () => {
+    // l'exemple du langage visuel : 12 396 de maximum réel -> repères 5 000 / 10 000, pas 12 396
+    expect(niceAxisTicks(12396)).toEqual([5000, 10000])
+    expect(niceAxisTicks(40)).toEqual([10, 20, 30, 40])
+    expect(niceAxisTicks(0)).toEqual([])
   })
 })

@@ -6,6 +6,7 @@ import type { PluginContext } from '../../core/plugin'
 import { STATION_READ } from './__fixtures__/station'
 import { comapConfigSchema, createComapPlugin } from './index'
 import type { SocketFactory } from './socket'
+import type { ComapHistoryState } from './state'
 
 const flush = async (n = 8) => { for (let i = 0; i < n; i++) await new Promise((r) => setImmediate(r)) }
 
@@ -164,6 +165,59 @@ describe('comap plugin', () => {
 
   it('defaults to the station address and a read-only poll on the LAN, no auth key', () => {
     const config = comapConfigSchema.parse({})
-    expect(config).toEqual({ COMAP_HOST: '192.168.1.92', COMAP_PORT: 23, COMAP_POLL_MS: 30_000, COMAP_TIMEOUT_MS: 5000 })
+    expect(config).toEqual({
+      COMAP_HOST: '192.168.1.92', COMAP_PORT: 23, COMAP_POLL_MS: 30_000, COMAP_TIMEOUT_MS: 5000,
+      COMAP_HISTORY_FILE: expect.stringContaining('comap-consumption.json'),
+    })
+  })
+
+  it('serves the consumption history it has already built, never a fresh read', async () => {
+    const clock = new ManualClock(0)
+    const { ctx } = fakeContext(clock)
+    const plugin = createComapPlugin({ connect: fakeStation().connect, historyStore: { load: async () => null, save: async () => {} } })
+    await plugin.init(ctx)
+    await plugin.discover()
+    await plugin.start()
+    await flush()
+
+    const consumption = await plugin.consumption!('station')
+    // premier sondage : pose la référence, un seul point journalier (`day` est déjà un cumul), pas d'horaire
+    expect(consumption.hourly).toEqual([])
+    expect(consumption.daily).toEqual([{ t: new Date(2026, 8, 16).getTime(), litres: 412 }])
+    // mensuel : dérivé de `year`/`month` de la fixture, jamais un nouvel appel à la station
+    expect(consumption.monthly).toHaveLength(9) // janvier à septembre (rtc.date = [16, 9, 2026])
+    expect(consumption.monthly.at(-1)).toEqual({ t: new Date(2026, 8, 1).getTime(), litres: 6980 })
+    await plugin.stop()
+  })
+
+  it('refuses an unknown external id', async () => {
+    const clock = new ManualClock(0)
+    const { ctx } = fakeContext(clock)
+    const plugin = createComapPlugin({ connect: fakeStation().connect })
+    await plugin.init(ctx)
+    await expect(plugin.consumption!('not-the-station')).rejects.toMatchObject({ code: 'DEVICE_UNAVAILABLE' })
+  })
+
+  it('the consumption history survives a restart (read back from its file), unlike the delta cursor', async () => {
+    const clock = new ManualClock(0)
+    let saved: ComapHistoryState | null = null
+    const historyStore = { load: async () => saved, save: async (h: ComapHistoryState) => { saved = h } }
+
+    const ctx1 = fakeContext(clock).ctx
+    const station = fakeStation()
+    const plugin = createComapPlugin({ connect: station.connect, historyStore })
+    await plugin.init(ctx1)
+    await plugin.discover()
+    await plugin.start()
+    await flush()
+    expect((await plugin.consumption!('station')).daily).toEqual([{ t: new Date(2026, 8, 16).getTime(), litres: 412 }])
+    await plugin.stop()
+
+    // redémarrage : nouveau contexte, MÊME fichier d'historique (simulé par `historyStore`)
+    const ctx2 = fakeContext(clock).ctx
+    await plugin.init(ctx2)
+    // l'historique déjà connu revient immédiatement, sans attendre un nouveau sondage
+    expect((await plugin.consumption!('station')).daily).toEqual([{ t: new Date(2026, 8, 16).getTime(), litres: 412 }])
+    await plugin.stop()
   })
 })

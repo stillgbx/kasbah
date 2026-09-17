@@ -1,4 +1,4 @@
-import { DEFAULT_PLUGIN_SETTINGS, parseDeviceId, parseSceneId, type Command, type PluginHealth, type PluginInfo, type PluginSettings, type SceneRecall, type SceneUpdate, type DeviceJournal, type WeatherForecast } from '@kasbah/shared'
+import { DEFAULT_PLUGIN_SETTINGS, parseDeviceId, parseSceneId, type Command, type PluginHealth, type PluginInfo, type PluginSettings, type SceneRecall, type SceneUpdate, type DeviceConsumption, type DeviceJournal, type WeatherForecast } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import type { Logger } from 'pino'
 import type { Bus } from './bus'
@@ -195,6 +195,16 @@ export class PluginHost {
     if (!slot.plugin.journal) throw new PluginError('NOT_IMPLEMENTED', `plugin "${pluginId}" has no journal`)
     const j = await withTimeout(slot.plugin.journal(externalId), this.opts.commandTimeoutMs ?? 10_000, this.opts.clock, `journal ${deviceId}`)
     return { deviceId, ...j }
+  }
+
+  /** Consommation d'un appareil ; `NOT_IMPLEMENTED` si son plugin n'en tient pas. */
+  async consumption(deviceId: string): Promise<DeviceConsumption> {
+    const { pluginId, externalId } = parseDeviceId(deviceId)
+    const slot = this.slots.get(pluginId)
+    if (!slot || !slot.ctx) throw new PluginError('DEVICE_UNAVAILABLE', `plugin "${pluginId}" is not running`)
+    if (!slot.plugin.consumption) throw new PluginError('NOT_IMPLEMENTED', `plugin "${pluginId}" has no consumption history`)
+    const c = await withTimeout(slot.plugin.consumption(externalId), this.opts.commandTimeoutMs ?? 10_000, this.opts.clock, `consumption ${deviceId}`)
+    return { deviceId, ...c }
   }
 
   async recallScene(sceneId: string, recall: SceneRecall): Promise<void> {

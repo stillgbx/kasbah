@@ -67,10 +67,22 @@ export function readOnce(opts: ReadOnceOptions): Promise<unknown> {
       socket = s
       s.on('data', (chunk: Buffer) => {
         buffer += chunk.toString('utf8')
+        // La vraie station ne termine PAS ses réponses par un saut de ligne (relevé le 2026-09-16 :
+        // `}}}}` sans rien derrière, contre `}}\r\n` côté requête) — seul le patron
+        // `google_cast/channel.ts` dont ce fichier s'inspire en attendait un. Une réponse complète se
+        // reconnaît donc au JSON valide qu'elle forme, `\n` ou pas. Le `\n` reste tenté en premier
+        // (gratuit, protège d'une variante de firmware qui en ajouterait un) ; sans lui, on retente le
+        // buffer entier — une fois par chunk, jamais par octet — et un JSON encore tronqué (chunk coupé
+        // en plein milieu) ne fait qu'attendre la suite au lieu de résoudre sur du partiel.
         const nl = buffer.indexOf('\n')
-        if (nl === -1) return
-        const line = buffer.slice(0, nl).replace(/\r$/, '')
-        finish(() => { try { resolve(JSON.parse(line)) } catch (err) { reject(err as Error) } })
+        const candidate = nl === -1 ? buffer : buffer.slice(0, nl).replace(/\r$/, '')
+        let parsed: unknown
+        try { parsed = JSON.parse(candidate) } catch (err) {
+          if (nl === -1) return // pas de saut de ligne : trame potentiellement encore incomplète, on attend
+          finish(() => reject(err as Error))
+          return
+        }
+        finish(() => resolve(parsed))
       })
       s.on('error', (err: Error) => finish(() => reject(err)))
       s.on('close', () => finish(() => reject(new PluginError('DEVICE_UNAVAILABLE', 'connection closed before an answer'))))

@@ -1,11 +1,17 @@
-import type { Command, DeviceDescriptor, PluginHealth } from '@kasbah/shared'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import type { Command, ConsumptionPoint, DeviceDescriptor, PluginHealth } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
+import { PluginError, type DevicePlugin, type PluginConsumption, type PluginContext } from '../../core/plugin'
 import { createPoller } from '../../core/poll'
 import { sendError } from '../../http/errors'
+import { applyReading, monthlyOf, readingAt, type ComapHistoryCursor } from './history'
 import { modelOf, parseRead, readRequest, toDescriptor, toStatePatch, STATION_ID } from './mapping'
 import { netSocketFactory, readOnce, type SocketFactory } from './socket'
+import { createHistoryFile, EMPTY_HISTORY, type ComapHistoryState, type HistoryStore } from './state'
+
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../..')
 
 // Plugin COMAP Proteo 2 : station de filtration d'eau lue en JSON clair sur TCP/23, sans
 // authentification, LAN pur (192.168.1.92 par défaut). UN SEUL appareil `water` publié — la station
@@ -35,12 +41,16 @@ export const comapConfigSchema = z.object({
   COMAP_POLL_MS: z.coerce.number().int().min(5_000).max(600_000).default(30_000),
   /** La station accepte la connexion même quand elle est déjà occupée, et ne répond alors jamais. */
   COMAP_TIMEOUT_MS: z.coerce.number().int().min(500).max(30_000).default(5_000),
+  /** Où garder l'historique de consommation déjà calculé (voir `history.ts`). Chaîne vide = ne rien garder. */
+  COMAP_HISTORY_FILE: z.string().trim().default(resolve(REPO_ROOT, 'apps/server/.state/comap-consumption.json')),
 })
 export type ComapConfig = z.infer<typeof comapConfigSchema>
 
 export interface ComapPluginDeps {
   /** Injectée par les tests : fabrique de socket TCP (voir `socket.ts`). */
   connect?: SocketFactory
+  /** Injecté par les tests : fichier de l'historique de consommation (voir `state.ts`). */
+  historyStore?: HistoryStore
 }
 
 /**
@@ -60,6 +70,16 @@ export function createComapPlugin(deps: ComapPluginDeps = {}): DevicePlugin {
   let failures = 0
   let lastError: string | null = null
   let poller: { stop(): void } | null = null
+  let historyStore: HistoryStore | null = null
+  /** Historique déjà calculé : SURVIT au redémarrage (relu du fichier dans `init`). */
+  let history: ComapHistoryState = EMPTY_HISTORY
+  /**
+   * Ce qu'il faut pour dater et chiffrer le PROCHAIN delta. Contrairement à `history`, ne survit PAS
+   * au redémarrage : un sondage qui suit un redémarrage n'a pas de précédent (voir `history.ts`).
+   */
+  let cursor: ComapHistoryCursor | undefined
+  /** Mensuel : jamais persisté, dérivé de la dernière lecture réussie (`year` + `month`). */
+  let monthly: ConsumptionPoint[] = []
 
   async function read(): Promise<unknown> {
     msgId += 1
@@ -76,6 +96,16 @@ export function createComapPlugin(deps: ComapPluginDeps = {}): DevicePlugin {
     ctx!.emitState(STATION_ID, toStatePatch(parsed))                 // `available: true` implicite
     const next = modelOf(parsed)
     if (next && next !== model) { model = next; ctx!.emitDevices([toDescriptor(model)]) }
+    // `day`/`rtc` datent et chiffrent l'historique ; sans l'un des deux, rien à en tirer cette fois.
+    if (parsed.consumption?.day !== undefined && parsed.rtc) {
+      const applied = applyReading(history, cursor, { day: parsed.consumption.day, at: readingAt(parsed.rtc) })
+      history = applied.state
+      cursor = applied.cursor
+      void historyStore?.save(history)
+      if (parsed.consumption.month !== undefined && parsed.consumption.year) {
+        monthly = monthlyOf(parsed.rtc, parsed.consumption.month, parsed.consumption.year)
+      }
+    }
   }
 
   return {
@@ -92,6 +122,12 @@ export function createComapPlugin(deps: ComapPluginDeps = {}): DevicePlugin {
       msgId = 0
       failures = 0
       lastError = null
+      // `history`, lui, ne se remet PAS à zéro ici : c'est justement ce qui doit survivre au
+      // redémarrage (voir `state.ts`). Seul `cursor` (le précédent du prochain delta) repart de rien.
+      cursor = undefined
+      monthly = []
+      historyStore = deps.historyStore ?? (config.COMAP_HISTORY_FILE ? createHistoryFile(config.COMAP_HISTORY_FILE, context.logger) : null)
+      history = await historyStore?.load() ?? EMPTY_HISTORY
     },
 
     /** Aucun appel réseau ici : l'appareil se déclare avec ses capacités, la première lecture du poller le remplit. */
@@ -119,6 +155,12 @@ export function createComapPlugin(deps: ComapPluginDeps = {}): DevicePlugin {
 
     async execute(_externalId: string, command: Command) {
       throw new PluginError('UNSUPPORTED_COMMAND', `COMAP station is read-only (${command.type})`)
+    },
+
+    /** L'historique tenu au fil des sondages (`history.ts`) : jamais un nouveau relevé à la demande. */
+    async consumption(externalId: string): Promise<PluginConsumption> {
+      if (externalId !== STATION_ID) throw new PluginError('DEVICE_UNAVAILABLE', `unknown water device "${externalId}"`)
+      return { hourly: history.hourly, daily: history.daily, monthly }
     },
 
     async stop() {

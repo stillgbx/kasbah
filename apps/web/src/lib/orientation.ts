@@ -21,6 +21,7 @@ export function isOrientable(device: HouseDevice, descriptor: DeviceDescriptor |
   if (descriptor.kind === 'cover') return isFreeCover(device)
   return descriptor.kind === 'camera' || descriptor.kind === 'vehicle'
     || descriptor.kind === 'ev_charger' || descriptor.kind === 'energy' || descriptor.kind === 'climate'
+    || descriptor.kind === 'water'
 }
 
 /**

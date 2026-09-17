@@ -1,4 +1,4 @@
-import { commandSchema, defaultState, mergeState, parseHouse, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, setRoomOrderInJson, type CommandInput, type DeviceEntry, type DeviceState, type House, type StatePatch } from '@kasbah/shared'
+import { commandSchema, defaultState, mergeState, parseHouse, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, setRoomOrderInJson, type CommandInput, type DeviceConsumption, type DeviceEntry, type DeviceState, type House, type StatePatch } from '@kasbah/shared'
 import { SimError, Simulation, solarGeometry, type ScenarioName } from '@kasbah/mock-sim'
 import demoHouse from '@kasbah/shared/demo-house.json'
 import { ApiRequestError, type Transport, type TransportHandlers } from './transport'
@@ -9,6 +9,51 @@ import { ApiRequestError, type Transport, type TransportHandlers } from './trans
 const STATUS: Record<string, number> = { UNSUPPORTED_COMMAND: 400, DEVICE_UNAVAILABLE: 503, UPSTREAM_ERROR: 502, TIMEOUT: 504 }
 
 export interface MockTransportOptions { scenario?: ScenarioName; seed?: number; timeScale?: number; house?: House }
+
+const HOUR_MS = 3_600_000
+const DAY_MS = 86_400_000
+
+/**
+ * Débit domestique plausible, 24 valeurs (L/heure) : nuit à zéro, pointes petit-déjeuner et soir —
+ * mêmes ordres de grandeur que la vraie station COMAP (`journal.md` du 2026-09-16 : 90-400 L/jour).
+ */
+const HOURLY_PROFILE_L = [0, 0, 0, 0, 0, 0, 4, 18, 26, 10, 3, 2, 8, 4, 0, 0, 2, 4, 10, 22, 30, 14, 4, 0]
+
+/** Fait varier le total du jour entre ~90 et ~400 L sans casser le profil horaire. */
+const dayMultiplier = (dayIndex: number): number => 1.5 + 0.9 * Math.sin(dayIndex * 0.9)
+
+const hourlyLitres = (hourStart: number): number =>
+  Math.round(HOURLY_PROFILE_L[new Date(hourStart).getHours()]! * dayMultiplier(Math.floor(hourStart / DAY_MS)))
+
+const dailyLitres = (dayStart: number): number => {
+  let sum = 0
+  for (let h = 0; h < 24; h++) sum += hourlyLitres(dayStart + h * HOUR_MS)
+  return sum
+}
+
+/**
+ * Historique de consommation plausible, fabriqué à la volée (pas de vraie mémoire côté mock
+ * in-process, comme `getHistory`) : 72 heures, 60 jours, 15 mois, tous mesurés — sert à voir le
+ * graphique plein ; le cas « historique qui démarre » se vérifie côté composant (aucun point).
+ */
+function mockConsumption(deviceId: string, now = Date.now()): DeviceConsumption {
+  const hourStart0 = Math.floor(now / HOUR_MS) * HOUR_MS
+  const hourly = Array.from({ length: 72 }, (_, i) => { const t = hourStart0 - (71 - i) * HOUR_MS; return { t, litres: hourlyLitres(t) } })
+
+  const dayStart0 = new Date(now); dayStart0.setHours(0, 0, 0, 0)
+  const daily = Array.from({ length: 60 }, (_, i) => { const t = dayStart0.getTime() - (59 - i) * DAY_MS; return { t, litres: dailyLitres(t) } })
+
+  const monthStart0 = new Date(now); monthStart0.setDate(1); monthStart0.setHours(0, 0, 0, 0)
+  const monthly = Array.from({ length: 15 }, (_, i) => {
+    const d = new Date(monthStart0); d.setMonth(d.getMonth() - (14 - i))
+    const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
+    let litres = 0
+    for (let day = 0; day < daysInMonth; day++) litres += dailyLitres(new Date(d.getFullYear(), d.getMonth(), 1 + day).getTime())
+    return { t: d.getTime(), litres }
+  })
+
+  return { deviceId, hourly, daily, monthly }
+}
 
 export function createMockTransport(opts: MockTransportOptions = {}): Transport & { sim: Simulation } {
   const sim = new Simulation({ scenario: opts.scenario ?? 'default', seed: opts.seed ?? 42, timeScale: opts.timeScale ?? 1 })
@@ -67,6 +112,7 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     },
     // la simulation ne tient aucun journal : ses appareils ne déclarent pas la capacité, la vue ne demande rien
     async getJournal(deviceId) { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', `no journal in mock mode for ${deviceId}`) },
+    async getConsumption(deviceId) { return mockConsumption(deviceId) },
     async placeDevice(id, placement) {
       // même logique que le serveur, en mémoire (rien n'est écrit) ; le message `house` suit comme en réel
       house = parseHouse(placeDeviceInJson(house, id, placement))

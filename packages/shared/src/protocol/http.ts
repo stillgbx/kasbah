@@ -151,4 +151,35 @@ export const deviceJournalSchema = z.object({
   entries: z.array(journalEntrySchema),
 })
 export type JournalEntry = z.infer<typeof journalEntrySchema>
+
+/**
+ * Ce qu'un appareil a CONSOMMÉ, par pas de temps — servi à la demande
+ * (`GET /api/devices/:id/consumption`) comme les prévisions et le journal : c'est un historique,
+ * pas un état, et il n'a rien à faire dans les messages poussés à chaque sondage.
+ *
+ * Trois séries, parce qu'un compteur d'eau se lit à trois échelles et qu'aucune ne se déduit des
+ * autres : `hourly` dit à quelle heure on tire, `daily` couvre la semaine ET le mois (la même
+ * série sert les deux vues, inutile de la stocker deux fois), `monthly` donne les douze mois.
+ *
+ * Chaque point porte ce qui a été consommé PENDANT son pas, jamais un cumul : un graphique
+ * additionne des barres, il ne dérive pas un compteur. C'est au plugin de faire cette
+ * soustraction, parce que lui seul sait quand son compteur est reparti de zéro.
+ */
+export const consumptionPointSchema = z.object({
+  /** Début du pas (ms epoch) : heure pleine, minuit, ou premier jour du mois selon la série. */
+  t: z.number().int(),
+  /** Volume consommé pendant CE pas, en litres. */
+  litres: z.number().min(0),
+})
+export const deviceConsumptionSchema = z.object({
+  deviceId: z.string(),
+  /** Du plus ancien au plus récent, un point par heure. Un pas jamais mesuré est absent, pas à zéro. */
+  hourly: z.array(consumptionPointSchema),
+  /** Un point par jour. */
+  daily: z.array(consumptionPointSchema),
+  /** Un point par mois. */
+  monthly: z.array(consumptionPointSchema),
+})
+export type ConsumptionPoint = z.infer<typeof consumptionPointSchema>
+export type DeviceConsumption = z.infer<typeof deviceConsumptionSchema>
 export type DeviceJournal = z.infer<typeof deviceJournalSchema>

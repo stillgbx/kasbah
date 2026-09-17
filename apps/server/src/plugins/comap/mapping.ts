@@ -22,8 +22,10 @@ export function readRequest(msgId: number): Record<string, unknown> {
   return { [ROOT_ID]: { msgId, read: READ_KEYS } }
 }
 
-// Seuls les champs dont le sens est établi sont déclarés : `alert` (D001-D021), `config`, `lamp` et
-// `rtc` sont ignorés par zod (extra keys silencieusement écartées), pas décodés au hasard.
+// Seuls les champs dont le sens est établi sont déclarés : `alert` (D001-D021), `config` et `lamp`
+// sont ignorés par zod (extra keys silencieusement écartées), pas décodés au hasard. `rtc` fait
+// exception : l'horloge de la station date l'historique de consommation (`history.ts`), qui a
+// besoin d'un instant fiable, pas de celui — potentiellement décalé — du serveur qui la lit.
 const readSchema = z.object({
   status: z.object({
     warning: z.number().optional(),
@@ -35,6 +37,8 @@ const readSchema = z.object({
     day: z.number().optional(),
     week: z.number().optional(),
     month: z.number().optional(),
+    /** Historique mensuel de l'année civile, index 0 = janvier — voir `history.ts:monthlyOf`. */
+    year: z.array(z.number()).length(12).optional(),
   }).optional(),
   flow: z.object({ inst: z.number().optional() }).optional(),
   wear: z.object({
@@ -42,6 +46,11 @@ const readSchema = z.object({
     filt1: z.number().optional(),
     filt2: z.number().optional(),
     lamp: z.number().optional(),
+  }).optional(),
+  /** `date`: [jour, mois, année] ; `time`: [heure, minute] — confirmé sur la vraie station. */
+  rtc: z.object({
+    date: z.tuple([z.number(), z.number(), z.number()]),
+    time: z.tuple([z.number(), z.number()]),
   }).optional(),
 })
 export type Read = z.infer<typeof readSchema>

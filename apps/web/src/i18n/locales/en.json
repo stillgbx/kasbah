@@ -1,6 +1,6 @@
 {
   "app": { "name": "Kasbah" },
-  "nav": { "main": "Navigation", "home": "Home", "energy": "Energy", "vehicles": "Vehicles", "robots": "Robots", "weather": "Weather", "settings": "Settings", "lights": "Lights", "covers": "Covers", "cameras": "Cameras", "media": "Media" },
+  "nav": { "main": "Navigation", "home": "Home", "energy": "Energy", "water": "Water", "vehicles": "Vehicles", "robots": "Robots", "weather": "Weather", "settings": "Settings", "lights": "Lights", "covers": "Covers", "cameras": "Cameras", "media": "Media" },
   "common": {
     "close": "Close", "back": "Back", "retry": "Retry", "all": "All", "none": "None", "unavailable": "Unavailable",
     "loading": "Loading house…", "on": "On", "off": "Off", "stop": "Stop",
@@ -332,8 +332,29 @@
     "play": "Play", "pause": "Pause", "today": "Today", "min": "min", "max": "max", "noForecast": "Forecast unavailable"
   },
   "water": {
-    "prefilter": "Prefilter", "carbon1": "Carbon 1", "carbon2": "Carbon 2", "uvLamp": "UV lamp",
-    "uvOn": "on", "uvOff": "off", "flow": "Flow", "today": "Today", "month": "This month",
-    "noAlert": "No alert", "warning": "Warning", "defect": "Fault"
+    "noDevice": "No water treatment station is active. Enable a plugin in Settings → Plugins.",
+    "prefilter": "Prefilter", "carbon1": "Carbon filter 1", "carbon2": "Carbon filter 2", "uvLamp": "UV lamp",
+    "uvOn": "on", "uvOff": "off", "flow": "Instant flow", "today": "Today", "month": "This month",
+    "noAlert": "No alert", "warning": "Warning", "defect": "Fault",
+    "consumption": "Water consumption",
+    "period": { "day": "Day", "week": "Week", "month": "Month", "year": "Year" },
+    "consumptionTotal": "{period} total: {value}",
+    "noReading": "No reading",
+    "consumptionEmpty": {
+      "hourly": "Hourly tracking has just started: check back in a few hours to see the day take shape.",
+      "daily": "Daily tracking has just started: check back in a few days to see the history fill in.",
+      "monthly": "Monthly tracking has just started: check back in a few months to see the year take shape."
+    },
+    "chartSummary": "Water consumption, {period}: total {total}, {fragment}.",
+    "measuredFragment": {
+      "hours": "{measured} hour measured out of {steps} | {measured} hour measured out of {steps} | {measured} hours measured out of {steps}",
+      "days": "{measured} day measured out of {steps} | {measured} day measured out of {steps} | {measured} days measured out of {steps}",
+      "months": "{measured} month measured out of {steps} | {measured} month measured out of {steps} | {measured} months measured out of {steps}"
+    },
+    "measuredNote": "Chart: {fragment}",
+    "household": "Household", "householdInc": "One more person", "householdDec": "One fewer person",
+    "referenceLegend": "Reference: French average, {value}/day for {n} people (SISPEA 2023)",
+    "referenceHint": "An order of magnitude, not a verdict: per-person consumption drops in larger households (about 148 L/person for two, 101 L/person for four) and varies a lot by region. On the Year view, the reference is a monthly average: February is compared to an average month, so it looks a bit more frugal than it really is.",
+    "referenceMark": "Household reference: {value}"
   }
 }

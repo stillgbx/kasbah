@@ -43,8 +43,56 @@ export function formatDistance(m: number, locale = 'fr'): string {
   return m >= 1000 ? `${nf(locale, 1).format(m / 1000)} km` : `${nf(locale, 0).format(m)} m`
 }
 
-export const formatFlow = (lph: number, locale = 'fr') => `${nf(locale, 0).format(lph)} L/h`
-export const formatVolume = (l: number, locale = 'fr') => `${nf(locale, 0).format(l)} L`
+/**
+ * Seuil d'1 m³ plein : sous ce volume, deux décimales de m³ perdraient de la précision (93 L, par
+ * exemple, a besoin de trois décimales pour s'écrire « 0,093 m³ » sans arrondi) ; au-delà, deux
+ * décimales suffisent et trois n'apprendraient rien (7 545 L → « 7,55 m³ »). Sert aussi à choisir
+ * l'unité d'un AXE de volumes (`volumeAxisUnit`), où le litre resterait lisible en dessous.
+ */
+const VOLUME_M3_THRESHOLD_L = 1000
+
+/**
+ * Débit : toujours les deux unités — le m³/h est celui de la fiche technique du fabricant (2 m³/h
+ * maxi). Trois décimales, pas deux : le débitmètre compte par pas EXACTS de 36 L/h (0,036 m³/h), un
+ * pas constant sur toute sa plage (contrairement au volume, sa résolution ne dépend pas de la
+ * grandeur mesurée) — deux décimales arrondiraient déjà ce pas et perdraient l'information à toute
+ * valeur, pas seulement les petites. Un débit EXACTEMENT nul est une mesure, pas une approximation :
+ * le m³/h n'y ajoute rien, « 0 L/h » se suffit.
+ */
+export function formatFlow(lph: number, locale = 'fr'): string {
+  if (lph === 0) return `${nf(locale, 0).format(0)} L/h`
+  return `${nf(locale, 0).format(lph)} L/h · ${nf(locale, 3).format(lph / 1000)} m³/h`
+}
+
+/**
+ * Le complément m³ s'affiche désormais TOUJOURS pour un volume mesuré non nul (plus de seuil qui le
+ * cache) : seule la PRÉCISION s'adapte, pour ne jamais écrire « 0,00 m³ » sur une valeur réelle — la
+ * règle « absent n'est pas zéro », appliquée à l'arrondi. Trois décimales sous le seuil d'1 m³ (tout
+ * volume en litres entiers s'y écrit alors EXACTEMENT, sans le moindre arrondi : 3 L → 0,003 m³),
+ * deux au-delà, où un litre de plus ou de moins ne se lit plus. Un volume EXACTEMENT nul reste
+ * « 0 L » seul : le m³ n'y apprend rien.
+ */
+export function formatVolume(l: number, locale = 'fr'): string {
+  const liters = `${nf(locale, 0).format(l)} L`
+  if (l === 0) return liters
+  const decimals = Math.abs(l) < VOLUME_M3_THRESHOLD_L ? 3 : 2
+  return `${liters} · ${nf(locale, decimals).format(l / 1000)} m³`
+}
+
+/**
+ * Unité d'un AXE de volumes (jamais les deux à la fois, contrairement à `formatVolume`) : même seuil
+ * qu'un volume isolé — en dessous, le litre reste lisible ; au-delà, des graduations en litres
+ * afficheraient cinq chiffres (vue Année) là où le m³ tient sur deux ou trois.
+ */
+export type VolumeAxisUnit = 'L' | 'm³'
+export function volumeAxisUnit(maxL: number): VolumeAxisUnit {
+  return Math.abs(maxL) >= VOLUME_M3_THRESHOLD_L ? 'm³' : 'L'
+}
+
+/** Une graduation d'axe dans l'unité choisie par `volumeAxisUnit`, sans l'unité répétée à chaque valeur. */
+export function formatVolumeAxisTick(l: number, unit: VolumeAxisUnit, locale = 'fr'): string {
+  return unit === 'm³' ? new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(l / 1000) : nf(locale, 0).format(l)
+}
 
 /**
  * Le plus bas des consommables d'une station d'eau (COMAP) : plus il descend, plus il faut s'en

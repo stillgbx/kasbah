@@ -24,6 +24,8 @@ const items: { name: string; icon: IconName; label: string }[] = [
   { name: 'media', icon: 'cast', label: 'nav.media' },
   { name: 'cameras', icon: 'camera', label: 'nav.cameras' },
   { name: 'energy', icon: 'bolt', label: 'nav.energy' },
+  // équipement technique de la maison, comme l'énergie — pas un média, pas un véhicule
+  { name: 'water', icon: 'droplet', label: 'nav.water' },
   { name: 'vehicles', icon: 'vehicle', label: 'nav.vehicles' },
   { name: 'robots', icon: 'mower', label: 'nav.robots' },
   { name: 'settings', icon: 'gear', label: 'nav.settings' },

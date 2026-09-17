@@ -1,4 +1,4 @@
-import type { Command, DeviceDescriptor, DeviceEventKind, DeviceJournal, PluginHealth, PluginScene, SceneActivation, SceneRecall, SceneUpdate, StatePatch, WeatherForecast } from '@kasbah/shared'
+import type { Command, DeviceConsumption, DeviceDescriptor, DeviceEventKind, DeviceJournal, PluginHealth, PluginScene, SceneActivation, SceneRecall, SceneUpdate, StatePatch, WeatherForecast } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import type { Logger } from 'pino'
 import type { z } from 'zod'
@@ -58,6 +58,8 @@ export interface PluginSite {
 export type PluginForecast = Omit<WeatherForecast, 'deviceId'>
 /** Journal tel qu'un plugin le rend : l'hôte y ajoute le `deviceId` (voir `deviceJournalSchema`). */
 export type PluginJournal = Omit<DeviceJournal, 'deviceId'>
+/** Consommation telle qu'un plugin la rend : l'hôte y ajoute le `deviceId` (voir `deviceConsumptionSchema`). */
+export type PluginConsumption = Omit<DeviceConsumption, 'deviceId'>
 
 /**
  * Sous-item activable d'un plugin : une part de ce qu'il fournit, qu'on peut vouloir ou non sans
@@ -106,6 +108,13 @@ export interface DevicePlugin {
    * chaque affichage, surtout sur une API à quota.
    */
   journal?(externalId: string): Promise<PluginJournal>
+  /**
+   * Ce qu'un appareil a consommé, par pas de temps, servi À LA DEMANDE
+   * (`GET /api/devices/:id/consumption`). Même règle que les prévisions et le journal : rendre un
+   * historique tenu au fil des sondages, jamais refaire un relevé. Absent = ce plugin n'en tient pas
+   * (l'hôte répond `NOT_IMPLEMENTED`).
+   */
+  consumption?(externalId: string): Promise<PluginConsumption>
   stop(): Promise<void>
   /** Routes propres au plugin, montées sous /api/plugins/<id>/. */
   registerRoutes?(app: FastifyInstance): void

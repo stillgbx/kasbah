@@ -38,6 +38,13 @@ const BATTERY_BOX = { w: 0.6, d: 0.15, h: 1 }
 /** Jauge de charge du coffret : largeur du trait (m), part de la hauteur de la face, retrait du bord. */
 const BATTERY_GAUGE = { w: 0.06, h: 0.86, inset: 0.06 }
 
+/**
+ * Caisson d'une station de traitement d'eau (m) : largeur, profondeur, hauteur — les cotes exactes
+ * de la notice COMAP Proteo 2. Plat et large : il se pose CONTRE un mur, comme un thermostat, pas
+ * au sol comme une borne.
+ */
+const WATER_BOX = { w: 0.59, d: 0.17, h: 0.59 }
+
 /** Écrans d'un lecteur : dalle (m) et demi-profondeur de la boîte, d'où l'image est posée. */
 const SCREENS = { tv: { width: 1, height: 0.56, depth: 0.03 }, display: { width: 0.25, height: 0.16, depth: 0.04 } } as const
 /** L'image occupe TOUTE la dalle : elle est posée 2 mm devant, il n'y a pas de cadre à respecter. */
@@ -112,6 +119,11 @@ export class GenericMarker extends DeviceMarker {
         if (ctx.descriptor && isEnergySite(ctx.descriptor)) { geometry = new BoxGeometry(0.28, 0.12, 0.32); this.setLift(0.3) }
         else { geometry = new BoxGeometry(BATTERY_BOX.w, BATTERY_BOX.d, BATTERY_BOX.h); this.setLift(0.7); battery = true }
         break
+      // Station de traitement d'eau : une centrale MURALE aux cotes du constructeur (COMAP Proteo 2,
+      // 59 × 59 × 17 cm) — un caisson plat et large, bien plus grand qu'un thermostat et bien plus
+      // plat qu'un coffret de batterie. Le caisson est centré sur l'ancre, comme la borne et le
+      // coffret ; la pilule se pose juste au-dessus de son arête haute.
+      case 'water': geometry = new BoxGeometry(WATER_BOX.w, WATER_BOX.d, WATER_BOX.h); this.setLift(WATER_BOX.h / 2 + 0.2); break
       case 'vacuum': geometry = new CylinderGeometry(0.18, 0.18, 0.09, 24); this.setLift(0.25); break
       default: geometry = new SphereGeometry(0.1, 16, 12); this.setLift(0.3)
     }
@@ -124,7 +136,7 @@ export class GenericMarker extends DeviceMarker {
     // ce qui regarde quelque part, et ce qui se pose contre un mur, suivent leur `yaw` (0 = face à
     // +y) : un écran, mais aussi une borne de recharge, une batterie ou le boîtier d'une passerelle.
     // Un cylindre d'enceinte, lui, n'en a pas besoin.
-    if (mediaClass === 'tv' || mediaClass === 'display' || kind === 'ev_charger' || kind === 'energy' || kind === 'climate') {
+    if (mediaClass === 'tv' || mediaClass === 'display' || kind === 'ev_charger' || kind === 'energy' || kind === 'climate' || kind === 'water') {
       this.mesh.rotation.z = yawToRad(device.yaw)
     }
     // ce que l'écran diffuse se voit SUR l'écran : la pochette du morceau (ou le logo de l'appli), posée

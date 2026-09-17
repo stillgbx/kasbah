@@ -639,6 +639,17 @@ describe('marqueurs 3D', () => {
     const params = (puck.geometry as CylinderGeometry).parameters
     expect(params.radiusTop).toBeLessThan(0.1)
   })
+
+  it("une station de traitement d'eau est un caisson mural aux cotes du constructeur, tourné du yaw", () => {
+    const desc = { id: 'p:w', pluginId: 'p', externalId: 'w', kind: 'water', name: 'Station', capabilities: [], meta: {} } as unknown as DeviceDescriptor
+    const m = marker(device({ yaw: 90 }), desc)
+    const box = meshes(m.object)[0]!
+    // 59 × 59 × 17 cm (COMAP Proteo 2) : large et PLAT, l'épaisseur est l'axe y, celui du mur
+    // (les paramètres de three sont x, y, z : `height` est l'axe y, donc l'épaisseur en repère Z-up)
+    const p = (box.geometry as BoxGeometry).parameters
+    expect([p.width, p.height, p.depth]).toEqual([0.59, 0.17, 0.59])
+    expect(box.rotation.z).toBeCloseTo(Math.PI / 2)      // il se pose contre son mur, comme le thermostat
+  })
 })
 
 describe('tap sur le toit', () => {

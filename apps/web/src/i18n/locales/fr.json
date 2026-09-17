@@ -1,6 +1,6 @@
 {
   "app": { "name": "Kasbah" },
-  "nav": { "main": "Navigation", "home": "Maison", "energy": "Énergie", "vehicles": "Véhicules", "robots": "Robots", "weather": "Météo", "settings": "Réglages", "lights": "Lumières", "covers": "Ouvrants", "cameras": "Caméras", "media": "Médias" },
+  "nav": { "main": "Navigation", "home": "Maison", "energy": "Énergie", "water": "Eau", "vehicles": "Véhicules", "robots": "Robots", "weather": "Météo", "settings": "Réglages", "lights": "Lumières", "covers": "Ouvrants", "cameras": "Caméras", "media": "Médias" },
   "common": {
     "close": "Fermer", "back": "Retour", "retry": "Réessayer", "all": "Tout", "none": "Aucun", "unavailable": "Indisponible",
     "loading": "Chargement de la maison…", "on": "Allumé", "off": "Éteint", "stop": "Stop",
@@ -332,8 +332,29 @@
     "play": "Lecture", "pause": "Pause", "today": "Aujourd'hui", "min": "min", "max": "max", "noForecast": "Prévisions indisponibles"
   },
   "water": {
-    "prefilter": "Préfiltre", "carbon1": "Charbon 1", "carbon2": "Charbon 2", "uvLamp": "Lampe UVc",
-    "uvOn": "allumée", "uvOff": "éteinte", "flow": "Débit", "today": "Aujourd'hui", "month": "Ce mois",
-    "noAlert": "Aucune alerte", "warning": "Avertissement", "defect": "Défaut"
+    "noDevice": "Aucune station de traitement de l'eau active. Activez un plugin dans Réglages → Plugins.",
+    "prefilter": "Préfiltre", "carbon1": "Filtre à charbon 1", "carbon2": "Filtre à charbon 2", "uvLamp": "Lampe UVc",
+    "uvOn": "allumée", "uvOff": "éteinte", "flow": "Débit instantané", "today": "Aujourd'hui", "month": "Ce mois",
+    "noAlert": "Aucune alerte", "warning": "Avertissement", "defect": "Défaut",
+    "consumption": "Consommation d'eau",
+    "period": { "day": "Jour", "week": "Semaine", "month": "Mois", "year": "Année" },
+    "consumptionTotal": "Total {period} : {value}",
+    "noReading": "Pas de mesure",
+    "consumptionEmpty": {
+      "hourly": "Le suivi horaire démarre tout juste : revenez dans quelques heures pour voir la journée se dessiner.",
+      "daily": "Le suivi quotidien démarre tout juste : revenez dans quelques jours pour voir l'historique se remplir.",
+      "monthly": "Le suivi mensuel démarre tout juste : revenez dans quelques mois pour voir l'année se dessiner."
+    },
+    "chartSummary": "Consommation d'eau, {period} : total {total}, {fragment}.",
+    "measuredFragment": {
+      "hours": "{measured} heure sur {steps} mesurée | {measured} heure sur {steps} mesurée | {measured} heures sur {steps} mesurées",
+      "days": "{measured} jour sur {steps} mesuré | {measured} jour sur {steps} mesuré | {measured} jours sur {steps} mesurés",
+      "months": "{measured} mois sur {steps} mesuré | {measured} mois sur {steps} mesuré | {measured} mois sur {steps} mesurés"
+    },
+    "measuredNote": "Graphique : {fragment}",
+    "household": "Foyer", "householdInc": "Une personne de plus", "householdDec": "Une personne de moins",
+    "referenceLegend": "Repère : moyenne française, {value}/jour pour {n} pers. (SISPEA 2023)",
+    "referenceHint": "Ordre de grandeur, pas un verdict : la consommation par personne baisse dans les grands foyers (environ 148 L/pers. à deux, 101 L/pers. à quatre) et varie fortement d'une région à l'autre. Sur la vue Année, le repère est une moyenne mensuelle : février s'y compare à un mois moyen et paraît donc un peu plus économe qu'il ne l'est.",
+    "referenceMark": "Repère du foyer : {value}"
   }
 }
