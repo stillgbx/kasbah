@@ -5,6 +5,7 @@ import { createComapPlugin } from './comap'
 import { createEnphasePlugin } from './enphase'
 import { createGoogleCastPlugin } from './google_cast'
 import { createHuePlugin } from './hue'
+import { createMelcloudPlugin } from './melcloud'
 import { createMockPlugin } from './mock'
 import { createNestPlugin } from './nest'
 import { createOpenMeteoPlugin } from './open_meteo'
@@ -25,7 +26,7 @@ export const PLUGIN_FACTORIES: Record<string, PluginFactory> = {
   sonos: makeStubPlugin('sonos', 'Sonos'),
   irobot: makeStubPlugin('irobot', 'iRobot'),
   automower: () => createAutomowerPlugin(),
-  melcloud: makeStubPlugin('melcloud', 'Mitsubishi MELCloud'),
+  melcloud: () => createMelcloudPlugin(),
   comap: () => createComapPlugin(),
   tesla: () => createTeslaPlugin(),
   renault: () => createRenaultPlugin(),

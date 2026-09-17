@@ -16,6 +16,9 @@ export const NAV_ITEMS: NavItem[] = [
   { name: 'energy', icon: 'bolt', label: 'nav.energy' },
   // équipement technique de la maison, comme l'énergie — pas un média, pas un véhicule
   { name: 'water', icon: 'droplet', label: 'nav.water' },
+  // le chauffage suit l'eau : deux installations techniques qu'on consulte, voisines dans la tête
+  // comme dans la chaufferie
+  { name: 'heating', icon: 'radiator', label: 'nav.heating' },
   { name: 'vehicles', icon: 'vehicle', label: 'nav.vehicles' },
   { name: 'robots', icon: 'mower', label: 'nav.robots' },
   { name: 'settings', icon: 'gear', label: 'nav.settings' },

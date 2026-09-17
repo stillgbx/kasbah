@@ -44,6 +44,11 @@ const BATTERY_GAUGE = { w: 0.06, h: 0.86, inset: 0.06 }
  * au sol comme une borne.
  */
 const WATER_BOX = { w: 0.59, d: 0.17, h: 0.59 }
+/**
+ * Module intérieur d'une pompe à chaleur air-eau (hydrobox Ecodan) : une MACHINE posée au sol dans
+ * un local technique, pas un boîtier mural. Cotes du constructeur arrondies, 60 × 36 × 120 cm.
+ */
+const HEATPUMP_BOX = { w: 0.6, d: 0.36, h: 1.2 }
 
 /** Écrans d'un lecteur : dalle (m) et demi-profondeur de la boîte, d'où l'image est posée. */
 const SCREENS = { tv: { width: 1, height: 0.56, depth: 0.03 }, display: { width: 0.25, height: 0.16, depth: 0.04 } } as const
@@ -100,6 +105,9 @@ export class GenericMarker extends DeviceMarker {
     let geometry
     // un lecteur prend la forme de sa nature : enceinte (cylindre), téléviseur (écran plat), écran connecté (petite dalle)
     const mediaClass = kind === 'media_player' ? ctx.descriptor?.meta.mediaPlayer?.deviceClass ?? 'speaker' : undefined
+    // un appareil de chauffage prend la forme de ce qu'il EST : pastille murale pour un thermostat,
+    // bloc au sol pour une pompe à chaleur (absent = thermostat, le cas d'avant)
+    const climateClass = kind === 'climate' ? ctx.descriptor?.meta.climate?.deviceClass ?? 'thermostat' : undefined
     let battery = false
     switch (kind) {
       case 'media_player':
@@ -107,10 +115,16 @@ export class GenericMarker extends DeviceMarker {
         else if (mediaClass === 'display') { geometry = new BoxGeometry(0.25, 0.08, 0.16); this.setLift(0.35) }
         else { geometry = new CylinderGeometry(0.13, 0.13, 0.32, 20); this.setLift(0.5) }
         break
-      // Thermostat : une PASTILLE contre le mur (12 cm), pas un coffre — celui-ci écrasait le palier
-      // où il est posé. Le cylindre garde son axe +y (couché) : ses deux disques sont donc verticaux,
-      // et le cadran regarde la pièce dans la direction du `yaw`.
-      case 'climate': geometry = new CylinderGeometry(0.06, 0.06, 0.04, 28); this.setLift(0.18); break
+      // Deux objets sous le même kind, comme pour `energy`. Un THERMOSTAT est une pastille contre le
+      // mur (12 cm), pas un coffre — celui-ci écrasait le palier où il est posé ; le cylindre garde
+      // son axe +y (couché), ses deux disques sont donc verticaux et le cadran regarde la pièce dans
+      // la direction du `yaw`. Une POMPE À CHALEUR est l'inverse : une machine debout dans un local
+      // technique, et la dessiner en pastille faisait passer toute une installation pour un boîtier
+      // de salon.
+      case 'climate':
+        if (climateClass === 'heat_pump') { geometry = new BoxGeometry(HEATPUMP_BOX.w, HEATPUMP_BOX.d, HEATPUMP_BOX.h); this.setLift(HEATPUMP_BOX.h / 2 + 0.25) }
+        else { geometry = new CylinderGeometry(0.06, 0.06, 0.04, 28); this.setLift(0.18) }
+        break
       case 'ev_charger': geometry = new BoxGeometry(0.3, 0.15, 0.8); this.setLift(0.6); break
       // Deux objets sous le même kind : le SITE d'une installation est une passerelle, un boîtier de
       // la taille d'une grosse boîte de dérivation ; une batterie, elle, est un coffret qui monte du

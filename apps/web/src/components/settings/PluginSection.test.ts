@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import type { PluginHealth, PluginInfo } from '@kasbah/shared'
+import MelcloudLinkCard from '../MelcloudLinkCard.vue'
 import PluginSection from './PluginSection.vue'
 
 const plugin = (over: Partial<PluginInfo> = {}, health: Partial<PluginHealth> = {}): PluginInfo => ({
@@ -44,6 +45,16 @@ describe('PluginSection — ce qui s’ouvre tout seul', () => {
     const closed = mount(PluginSection, { props: { plugin: plugin() } })
     await closed.find('.plugin__toggle').trigger('click')
     expect(body(closed)).toBe(true)
+  })
+
+  /**
+   * Un fabricant qu'on relie par mot de passe apporte SA carte de mise en route : l'oublier dans
+   * `SETUP_CARDS` laisserait un panneau qui s'ouvre sur rien, sans que rien ne le signale.
+   */
+  it('monte la carte de liaison du fabricant qui en a une', () => {
+    const w = mount(PluginSection, { props: { plugin: plugin({ id: 'melcloud' }, { status: 'needs_pairing', detail: 'no MELCloud account linked' }) } })
+    expect(body(w)).toBe(true)
+    expect(w.findComponent(MelcloudLinkCard).exists()).toBe(true)
   })
 
   /** Un squelette n'a ni détail, ni clé, ni carte : le chevron reste là pour l'alignement, inerte. */

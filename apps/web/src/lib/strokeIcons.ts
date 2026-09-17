@@ -22,6 +22,13 @@ export const ICONS = {
   vacuum: 'M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0-18 0M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0-6 0M12 3v3',
   mower: 'M3 13h9l3-6h4v6h2M5 17m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0M17 17m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0M7 17h8',
   heatpump: 'M3 6h18v12H3zM3 10h18M7 14h2M12 14h5',
+  /**
+   * Chauffage (rubrique du rail) : un RADIATEUR — corps, quatre ailettes verticales, deux pieds.
+   * `heatpump` y servait et ne se lisait pas à 18 px : un rectangle barré d'un trait ressemble à
+   * n'importe quel boîtier. Les ailettes sont VERTICALES et les pieds dépassent, pour ne pas se
+   * confondre avec `shutter`, qui est le seul autre cadre à lignes du rail et les a horizontales.
+   */
+  radiator: 'M4.5 5.5h15v10h-15zM8.5 5.5v10M12 5.5v10M15.5 5.5v10M7 15.5v3M17 15.5v3',
   filtration: 'M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11zM9 14a3 3 0 0 0 3 3',
   battery: 'M3 8h15v8H3zM18 10h3v4h-3M6 11h5v2H6',
   solar: 'M3 4h18l2 12H1zM8 4l-1 12M16 4l1 12M2 10h20M12 16v4M8 20h8',

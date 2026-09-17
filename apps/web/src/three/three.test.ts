@@ -640,6 +640,25 @@ describe('marqueurs 3D', () => {
     expect(params.radiusTop).toBeLessThan(0.1)
   })
 
+  /**
+   * Le MÊME kind porte deux objets qui n'ont rien à voir : le thermostat ci-dessus, et le module
+   * d'une pompe à chaleur. Dessiner la seconde en pastille faisait passer toute une installation de
+   * chauffage pour un boîtier de salon posé dans la chaufferie.
+   */
+  it('une pompe à chaleur est un BLOC au sol, pas une pastille de thermostat', () => {
+    const desc = {
+      id: 'p:hp', pluginId: 'p', externalId: 'hp', kind: 'climate', name: 'Chauffage', capabilities: [],
+      meta: { climate: { modes: ['heat'], deviceClass: 'heat_pump' } },
+    } as unknown as DeviceDescriptor
+    const box = meshes(marker(device({ yaw: 90 }), desc).object)[0]!
+    expect(box.geometry).toBeInstanceOf(BoxGeometry)
+    // 60 × 36 × 120 cm : une machine qui monte du sol, comme un coffret de batterie
+    const p = (box.geometry as BoxGeometry).parameters
+    expect([p.width, p.height, p.depth]).toEqual([0.6, 0.36, 1.2])
+    expect(p.depth).toBeGreaterThan(1)                   // bien plus haute que large : elle se voit
+    expect(box.rotation.z).toBeCloseTo(Math.PI / 2)      // elle suit son yaw, comme le reste du mobilier
+  })
+
   it("une station de traitement d'eau est un caisson mural aux cotes du constructeur, tourné du yaw", () => {
     const desc = { id: 'p:w', pluginId: 'p', externalId: 'w', kind: 'water', name: 'Station', capabilities: [], meta: {} } as unknown as DeviceDescriptor
     const m = marker(device({ yaw: 90 }), desc)

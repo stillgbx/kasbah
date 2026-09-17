@@ -1,6 +1,6 @@
 {
   "app": { "name": "Kasbah" },
-  "nav": { "main": "Navigation", "home": "Maison", "energy": "Énergie", "water": "Eau", "vehicles": "Véhicules", "robots": "Robots", "weather": "Météo", "settings": "Réglages", "lights": "Lumières", "covers": "Ouvrants", "cameras": "Caméras", "media": "Médias" },
+  "nav": { "main": "Navigation", "home": "Maison", "energy": "Énergie", "water": "Eau", "heating": "Chauffage", "vehicles": "Véhicules", "robots": "Robots", "weather": "Météo", "settings": "Réglages", "lights": "Lumières", "covers": "Ouvrants", "cameras": "Caméras", "media": "Médias" },
   "common": {
     "close": "Fermer", "back": "Retour", "retry": "Réessayer", "all": "Tout", "none": "Aucun", "unavailable": "Indisponible",
     "loading": "Chargement de la maison…", "on": "Allumé", "off": "Éteint", "stop": "Stop",
@@ -141,8 +141,30 @@
   },
   "climate": {
     "current": "Température", "humidity": "Humidité", "target": "Consigne", "mode": "Mode",
+    "flowCurrent": "Eau de départ", "flowTarget": "Consigne de départ",
     "actions": { "heating": "Chauffe", "cooling": "Refroidit", "idle": "Au repos", "off": "Arrêté" },
     "modes": { "off": "Arrêt", "heat": "Chauffage", "cool": "Refroidissement", "auto": "Auto", "eco": "Éco", "fan_only": "Ventilation" }
+  },
+  "heating": {
+    "noDevice": "Aucun appareil de chauffage. Vérifiez les plugins dans les réglages.",
+    "readOnly": "lecture seule",
+    "lower": "Baisser la consigne",
+    "raise": "Monter la consigne",
+    "unit": {
+      "on": "En marche", "standby": "En veille", "offline": "Injoignable",
+      "outdoor": "Extérieur", "flow": "Départ", "return": "Retour", "delta": "Écart", "demand": "Demande",
+      "condensing": "Condensation", "active": "Actif", "pumpsOf": "{n} sur {total}",
+      "lamps": { "defrost": "Dégivrage", "booster": "Appoint électrique", "immersion": "Résistance ballon", "pump": "Circulateurs", "valve": "Vanne 3 voies" },
+      "errorCode": "Erreur {code} signalée par la machine",
+      "lastSeen": "Dernière remontée à {time}", "neverSeen": "Aucune remontée connue",
+      "noMeter": "pas de compteur d'énergie sur cette machine"
+    },
+    "history": {
+      "title": "Fonctionnement", "window": "48 dernières heures",
+      "run": "de marche", "runHours": "{h} h",
+      "filling": "L'historique se construit au fil des lectures, une toutes les {min} min.",
+      "legendRun": "Chauffe", "legendOutdoor": "Extérieur", "legendDefrost": "Dégivrage", "legendBooster": "Appoint"
+    }
   },
   "charger": {
     "status": { "disconnected": "Débranchée", "connected": "Branchée", "charging": "En charge", "finished": "Charge terminée", "error": "Erreur" },
@@ -276,6 +298,19 @@
       "unlink": "Délier le compte",
       "poll": "Une lecture toutes les {min} min, dans la limite de {rate} appels par heure que Renault tolère.",
       "notStored": "Aucun fichier de session n'est configuré (RENAULT_SESSION_FILE est vide) : la liaison sera perdue au redémarrage du serveur."
+    },
+    "melcloud": {
+      "intro": "Mitsubishi n'offre aucune connexion déléguée à un tiers : il faut l'identifiant et le mot de passe de votre compte MELCloud. Le mot de passe ne traverse le serveur qu'une fois et n'est jamais enregistré — seule une clé de session l'est.",
+      "email": "Adresse e-mail MELCloud",
+      "password": "Mot de passe",
+      "link": "Lier le compte",
+      "linking": "Liaison…",
+      "linked": "Compte lié · {n} machine | Compte lié · {n} machine | Compte lié · {n} machines",
+      "unlink": "Délier le compte",
+      "zones": "Aucune zone de chauffage publiée | {n} zone de chauffage publiée dans la maison | {n} zones de chauffage publiées dans la maison",
+      "poll": "Une lecture toutes les {min} min, en un seul appel pour tout le compte.",
+      "readOnly": "Lecture seule : les consignes s'affichent, elles ne se règlent pas encore depuis la tablette.",
+      "notStored": "Aucun fichier de session n'est configuré (MELCLOUD_SESSION_FILE est vide) : la liaison sera perdue au redémarrage du serveur."
     },
     "tesla": {
       "title": "Tesla",

@@ -78,6 +78,75 @@ export interface RenaultStatus {
   lastError: string | null
 }
 
+/**
+ * Mise en route du plugin MELCloud, telle que l'UI la voit. Même règle que Renault : le mot de
+ * passe n'y figure JAMAIS, il ne fait que traverser `melcloudLogin` et ce qui en reste côté serveur
+ * est une clé de session.
+ *
+ * `devices` sont les MACHINES vues sur le compte ; `zoneCount` compte ce que la maison reçoit, une
+ * zone de chauffage par appareil. Les deux nombres diffèrent, et c'est normal : une machine porte
+ * une ou deux zones, et plusieurs pompes à chaleur en cascade n'apparaissent que comme une seule
+ * machine (l'installation de référence : trois Zubadan, un appareil, deux zones).
+ */
+export interface MelcloudStatus {
+  linked: boolean
+  accountName: string | null
+  devices: { deviceId: string; name: string; family: string | null; buildingName: string | null }[]
+  /** Appareils publiés à la maison : une ZONE de chauffage chacun, jamais une machine. */
+  zoneCount: number
+  pollMs: number
+  sessionFile: string | null
+  lastError: string | null
+}
+
+/**
+ * L'état d'une MACHINE de chauffage, servi par son plugin et non par le registre d'appareils : ce
+ * sont une douzaine de mesures qu'on ne consulte que sur la page Chauffage, et qui n'avaient pas à
+ * devenir autant de capteurs dans la maison et dans la scène 3D.
+ */
+export interface MelcloudUnit {
+  deviceId: string
+  name: string
+  power: boolean
+  /** Ce que le fabricant prétend — il se dit hors ligne en parlant. Gardé pour le diagnostic seul. */
+  offline: boolean
+  /** La dernière remontée est-elle trop vieille ? C'est CE champ qui dit « injoignable ». */
+  stale: boolean
+  outdoorTempC: number | null
+  flowTempC: number | null
+  returnTempC: number | null
+  condensingTempC: number | null
+  demandPercent: number | null
+  defrosting: boolean
+  boosterHeater: boolean
+  immersionHeater: boolean
+  pumps: boolean[]
+  valve3Way: boolean
+  /** `code` vaut 8000 quand tout va bien : c'est `hasError` qui tranche, jamais le code. */
+  error: { hasError: boolean; code: number | null; message: string | null }
+  /** Ms epoch : le serveur a déjà ramené les deux bases de temps du fabricant au même instant. */
+  lastSeen: number | null
+  wifi: string | null
+  /** Faux = la machine n'a pas de compteur : la page omet la consommation au lieu d'afficher des zéros. */
+  energyMeter: boolean
+}
+
+/**
+ * Une heure d'historique de fonctionnement. Les compteurs sont des NOMBRES D'ÉCHANTILLONS, pas des
+ * minutes : `n` donne l'échelle, et une heure mal sondée se lit pour ce qu'elle est au lieu de
+ * passer pour une heure sans chauffage.
+ */
+export interface HeatingPoint {
+  t: number
+  n: number
+  heating: number
+  defrost: number
+  booster: number
+  outdoorC: number | null
+  flowC: number | null
+  returnC: number | null
+}
+
 export interface Transport {
   getHouse(): Promise<House>
   getDevices(): Promise<DeviceEntry[]>
@@ -130,6 +199,19 @@ export interface Transport {
   renaultLogin(body: { email: string; password: string }): Promise<RenaultStatus>
   /** Délie le compte : le jeton de session est effacé. */
   renaultLogout(): Promise<RenaultStatus>
+  /** Où en est la liaison du compte MELCloud (machines vues sur le compte). */
+  melcloudStatus(): Promise<MelcloudStatus>
+  /**
+   * Relie le compte MELCloud. Le fabricant n'offre pas d'OAuth : le mot de passe traverse le
+   * serveur une fois et n'y est ni gardé ni journalisé — seule la clé de session survit.
+   */
+  melcloudLogin(body: { email: string; password: string }): Promise<MelcloudStatus>
+  /** Délie le compte : la clé de session est effacée. */
+  melcloudLogout(): Promise<MelcloudStatus>
+  /** L'état des machines de chauffage (dernière lecture du sondage, jamais un nouvel appel au fabricant). */
+  melcloudSystem(): Promise<{ units: MelcloudUnit[]; pollMs: number }>
+  /** L'historique de fonctionnement, construit par le serveur au fil des sondages. */
+  melcloudHistory(): Promise<{ hourly: HeatingPoint[]; pollMs: number }>
   /**
    * Fait oublier un appareil au plugin qui le retenait (`meta.forgettable`), par convention
    * `DELETE /api/plugins/<plugin>/devices/<externalId>` : il quitte l'inventaire jusqu'à ce qu'il

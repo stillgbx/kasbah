@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { CAMERA_CLASSES, CAPABILITIES, CLIMATE_MODES, COVER_CLASSES, DEVICE_KINDS, KIND_CAPABILITIES, MEDIA_PLAYER_CLASSES, SENSOR_CLASSES, STREAM_PROTOCOLS, VEHICLE_FINISHES } from './kinds'
+import { CAMERA_CLASSES, CAPABILITIES, CLIMATE_CLASSES, CLIMATE_MODES, COVER_CLASSES, DEVICE_KINDS, KIND_CAPABILITIES, MEDIA_PLAYER_CLASSES, SENSOR_CLASSES, STREAM_PROTOCOLS, VEHICLE_FINISHES } from './kinds'
 
 // Identité d'un appareil : `${pluginId}:${externalId}`. Une seule chaîne sert de clé de Map,
 // de segment d'URL, de champ WS et de nom de nœud 3D — jamais de couple à joindre côté client.
@@ -29,7 +29,27 @@ export const deviceMetaSchema = z.object({
    * Modes que l'appareil DÉCLARE (capacité `hvac_mode`) : un thermostat qui ne chauffe que ne
    * doit pas se voir proposer « Refroidir ». Absent = tous les `CLIMATE_MODES` (cas de la simulation).
    */
-  climate: z.object({ modes: z.array(z.enum(CLIMATE_MODES)) }).optional(),
+  climate: z.object({
+    modes: z.array(z.enum(CLIMATE_MODES)),
+    /**
+     * SUR QUOI la zone se règle, quand ce n'est pas l'air de la pièce. Une pompe à chaleur air-eau
+     * pilote certaines zones sur la température de l'EAU DE DÉPART (loi d'eau) : la consigne y vaut
+     * 45 °C et le « mesuré » est celui du circuit, pas d'un salon. Les afficher sous le vocabulaire
+     * d'un thermostat d'ambiance ferait lire 45 °C comme une consigne de pièce.
+     *
+     * `room` (défaut, absent = celui-ci) : ambiante, le cas de tout thermostat.
+     * `flow` : température de départ du circuit.
+     *
+     * Ne change RIEN à la forme de l'état — `currentTempC` et `targetTempC` restent les deux mêmes
+     * champs ; ce champ dit seulement de quoi ils parlent, donc comment les nommer.
+     */
+    control: z.enum(['room', 'flow']).optional(),
+    /**
+     * Ce que l'appareil EST physiquement : un thermostat au mur, ou une pompe à chaleur au sol.
+     * Décide le marqueur 3D et rien d'autre. Absent = `thermostat`.
+     */
+    deviceClass: z.enum(CLIMATE_CLASSES).optional(),
+  }).optional(),
   sensor: z.object({
     unit: z.string(),
     deviceClass: z.enum(SENSOR_CLASSES),

@@ -99,6 +99,17 @@ export const MEDIA_PLAYER_CLASSES = ['speaker', 'tv', 'display'] as const
 export type MediaPlayerClass = (typeof MEDIA_PLAYER_CLASSES)[number]
 
 /**
+ * Nature d'un appareil de chauffage. Même rôle que `MEDIA_PLAYER_CLASSES` pour un lecteur : le kind
+ * dit la FORME de l'état, la classe dit ce que la chose EST — donc à quoi elle ressemble dans la
+ * maison. Un thermostat est une pastille au mur ; une pompe à chaleur est une machine au sol, et la
+ * dessiner en pastille faisait passer une installation entière pour un boîtier de salon.
+ *
+ * Absent = `thermostat`, le cas de tous les appareils `climate` qui existaient avant.
+ */
+export const CLIMATE_CLASSES = ['thermostat', 'heat_pump'] as const
+export type ClimateClass = (typeof CLIMATE_CLASSES)[number]
+
+/**
  * Aspect de la peinture d'une carrosserie, dans le vocabulaire que le fabricant emploie lui-même :
  * l'écran de bord d'une Tesla propose « Unie / Métallique / Mate ». Ce n'est pas une coquetterie —
  * c'est ce qui décide si la voiture renvoie le ciel ou l'absorbe, et l'écart se voit au premier

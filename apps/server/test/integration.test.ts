@@ -90,7 +90,7 @@ describe('activation des plugins (GET /api/plugins, PATCH /api/plugins/:id)', ()
       const byId = Object.fromEntries(list.map((p: { id: string }) => [p.id, p]))
       expect(Object.keys(byId).length).toBeGreaterThan(5)          // tous disponibles, pas seulement les actifs
       expect(byId.mock).toMatchObject({ enabled: true, implemented: true })
-      expect(byId.melcloud).toMatchObject({ enabled: false, implemented: false }) // squelette : pas activable
+      expect(byId.sonos).toMatchObject({ enabled: false, implemented: false })    // squelette : pas activable
       expect(byId.mock.parts).toHaveLength(12)              // un par kind simulé (tous sauf `camera`)
 
       // eteindre la simulation : ses appareils quittent le registre
@@ -105,9 +105,9 @@ describe('activation des plugins (GET /api/plugins, PATCH /api/plugins/:id)', ()
       expect((await kasbah.app.inject({ method: 'GET', url: '/api/devices' })).json().devices.length).toBeGreaterThan(15)
 
       // un squelette coche reste eteint : il n'y a rien a demarrer
-      await kasbah.app.inject({ method: 'PATCH', url: '/api/plugins/melcloud', payload: { enabled: true } })
+      await kasbah.app.inject({ method: 'PATCH', url: '/api/plugins/sonos', payload: { enabled: true } })
       const health = (await kasbah.app.inject({ method: 'GET', url: '/api/health' })).json()
-      expect(health.plugins.melcloud.status).toBe('not_implemented')
+      expect(health.plugins.sonos.status).toBe('not_implemented')
 
       expect((await kasbah.app.inject({ method: 'PATCH', url: '/api/plugins/nope', payload: { enabled: true } })).statusCode).toBe(404)
       expect((await kasbah.app.inject({ method: 'PATCH', url: '/api/plugins/mock', payload: { enabled: 'oui' } })).json().error.code).toBe('INVALID_BODY')
@@ -129,7 +129,7 @@ describe('REST API', () => {
     const body = r.json()
     expect(body.plugins.mock.status).toBe('ok')
     expect(body.plugins.mock.deviceCount).toBeGreaterThan(15)
-    expect(body.plugins.melcloud.status).toBe('not_implemented')
+    expect(body.plugins.sonos.status).toBe('not_implemented')
   })
   it('serves the validated house', async () => {
     const r = await kasbah.app.inject({ method: 'GET', url: '/api/house' })

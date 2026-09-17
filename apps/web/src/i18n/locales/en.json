@@ -1,6 +1,6 @@
 {
   "app": { "name": "Kasbah" },
-  "nav": { "main": "Navigation", "home": "Home", "energy": "Energy", "water": "Water", "vehicles": "Vehicles", "robots": "Robots", "weather": "Weather", "settings": "Settings", "lights": "Lights", "covers": "Covers", "cameras": "Cameras", "media": "Media" },
+  "nav": { "main": "Navigation", "home": "Home", "energy": "Energy", "water": "Water", "heating": "Heating", "vehicles": "Vehicles", "robots": "Robots", "weather": "Weather", "settings": "Settings", "lights": "Lights", "covers": "Covers", "cameras": "Cameras", "media": "Media" },
   "common": {
     "close": "Close", "back": "Back", "retry": "Retry", "all": "All", "none": "None", "unavailable": "Unavailable",
     "loading": "Loading house…", "on": "On", "off": "Off", "stop": "Stop",
@@ -141,8 +141,30 @@
   },
   "climate": {
     "current": "Temperature", "humidity": "Humidity", "target": "Target", "mode": "Mode",
+    "flowCurrent": "Flow temperature", "flowTarget": "Flow target",
     "actions": { "heating": "Heating", "cooling": "Cooling", "idle": "Idle", "off": "Off" },
     "modes": { "off": "Off", "heat": "Heat", "cool": "Cool", "auto": "Auto", "eco": "Eco", "fan_only": "Fan only" }
+  },
+  "heating": {
+    "noDevice": "No heating device. Check the plugins in settings.",
+    "readOnly": "read-only",
+    "lower": "Lower the setpoint",
+    "raise": "Raise the setpoint",
+    "unit": {
+      "on": "Running", "standby": "Standby", "offline": "Unreachable",
+      "outdoor": "Outdoor", "flow": "Flow", "return": "Return", "delta": "Delta", "demand": "Demand",
+      "condensing": "Condensing", "active": "Active", "pumpsOf": "{n} of {total}",
+      "lamps": { "defrost": "Defrost", "booster": "Electric backup", "immersion": "Immersion heater", "pump": "Pumps", "valve": "3-way valve" },
+      "errorCode": "Error {code} reported by the unit",
+      "lastSeen": "Last reported at {time}", "neverSeen": "Never reported",
+      "noMeter": "no energy meter on this unit"
+    },
+    "history": {
+      "title": "Operation", "window": "Last 48 hours",
+      "run": "running", "runHours": "{h} h",
+      "filling": "The history builds up as readings come in, one every {min} min.",
+      "legendRun": "Heating", "legendOutdoor": "Outdoor", "legendDefrost": "Defrost", "legendBooster": "Backup"
+    }
   },
   "charger": {
     "status": { "disconnected": "Disconnected", "connected": "Connected", "charging": "Charging", "finished": "Charge finished", "error": "Error" },
@@ -276,6 +298,19 @@
       "unlink": "Unlink the account",
       "poll": "One reading every {min} min, within the {rate} calls per hour Renault tolerates.",
       "notStored": "No session file is configured (RENAULT_SESSION_FILE is empty): the link will be lost when the server restarts."
+    },
+    "melcloud": {
+      "intro": "Mitsubishi offers no delegated sign-in for third parties: your MELCloud e-mail and password are required. The password crosses the server once and is never stored — only a session key is.",
+      "email": "MELCloud e-mail",
+      "password": "Password",
+      "link": "Link the account",
+      "linking": "Linking…",
+      "linked": "Account linked · {n} unit | Account linked · {n} unit | Account linked · {n} units",
+      "unlink": "Unlink the account",
+      "zones": "No heating zone published | {n} heating zone published in the home | {n} heating zones published in the home",
+      "poll": "One reading every {min} min, in a single call for the whole account.",
+      "readOnly": "Read-only: setpoints are shown, they cannot be changed from the tablet yet.",
+      "notStored": "No session file is configured (MELCLOUD_SESSION_FILE is empty): the link will be lost when the server restarts."
     },
     "tesla": {
       "title": "Tesla",
