@@ -12,8 +12,10 @@ import HomePanel from '../components/home/HomePanel.vue'
 import RoomPanel from '../components/home/RoomPanel.vue'
 import DevicePanel from '../components/home/DevicePanel.vue'
 import SceneDebug from '../components/home/SceneDebug.vue'
+import SearchBar from '../components/home/SearchBar.vue'
 import WeatherWidget from '../components/home/WeatherWidget.vue'
 import { useHouseScene } from '../composables/useHouseScene'
+import type { SearchHit } from '../composables/useSearch'
 import { useDevicesStore } from '../stores/devices'
 import { useHouseStore, type FloorTab } from '../stores/house'
 import { useSettingsStore } from '../stores/settings'
@@ -200,6 +202,11 @@ const cssPx = (name: string) => parseFloat(getComputedStyle(document.documentEle
 const asideInset = () => cssPx('--aside-w') + 2 * cssPx('--panel-gap')
 watch([wide, scene.ready], ([w, ready]) => { if (ready) scene.setViewInset(w ? asideInset() : 0) }, { immediate: true })
 
+// Un résultat de recherche a déjà déplacé la sélection ; reste à montrer le panneau qui la porte,
+// que le tiroir cache tant qu'on n'est pas en fenêtre large. Une PAGE, elle, quitte la vue : lui
+// ouvrir le tiroir le ferait trouver ouvert au retour, sans qu'on l'ait demandé.
+function onSearchPicked(hit: SearchHit) { if (hit.family !== 'page') panelOpen.value = true }
+
 /** Un cran de rotation des boutons de vue : un huitième de tour. */
 const ORBIT_STEP = Math.PI / 4
 /** Un cran de zoom des boutons de vue. */
@@ -236,6 +243,9 @@ const DOLLY_STEP = 1.35
       </div>
       <button type="button" class="home__ctl home__ctl--solo" :title="$t('home.resetView')" :aria-label="$t('home.resetView')" @click="onTab('all')"><StrokeIcon name="home" :size="18" /></button>
     </div>
+    <div class="home__search">
+      <SearchBar @picked="onSearchPicked" />
+    </div>
     <SidePanel :open="panelOpen" :docked="wide" @close="panelOpen = false">
       <DevicePanel v-if="panelMode === 'device'" @back="onDeviceBack()" />
       <RoomPanel v-else-if="panelMode === 'room' || panelMode === 'level'" @back="onRoomBack()" />
@@ -259,11 +269,21 @@ const DOLLY_STEP = 1.35
 /* au-dessus du widget météo, qui tient le coin bas gauche */
 .home__loading { position: absolute; left: calc(var(--rail-w) + 24px); bottom: calc(var(--safe-bottom) + var(--panel-gap) + 144px); font-size: 13px; z-index: 2; }
 .home__weather { position: absolute; left: calc(var(--rail-w) + var(--panel-gap)); bottom: calc(var(--safe-bottom) + var(--panel-gap)); z-index: 2; }
+/* Recherche : en bas, dans la bande laissée libre ENTRE la carte météo et les boutons de vue, et
+   centrée dedans. Ses résultats s'ouvrent vers le haut (voir SearchBar), donc rien ici ne bouge. */
+.home__search {
+  position: absolute; z-index: 3; bottom: calc(var(--safe-bottom) + var(--panel-gap));
+  left: calc(var(--rail-w) + var(--panel-gap) + var(--wx-w) + var(--panel-gap));
+  right: calc(var(--safe-right) + var(--panel-gap) + var(--ctl-w) + var(--panel-gap));
+  display: flex; justify-content: center; pointer-events: none;
+}
+.home__search > * { pointer-events: auto; }
+.home[data-wide='1'] .home__search { right: calc(var(--safe-right) + var(--aside-w) + 2 * var(--panel-gap) + 26px + var(--ctl-w) + var(--panel-gap)); }
 /* boutons de vue : rotation, zoom, vue d'ensemble — en bas à droite, avant le panneau quand il est ancré */
 .home__controls { position: absolute; right: calc(var(--safe-right) + var(--panel-gap)); bottom: calc(var(--safe-bottom) + var(--panel-gap)); z-index: 2; display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
 .home[data-wide='1'] .home__controls { right: calc(var(--safe-right) + var(--aside-w) + 2 * var(--panel-gap) + 26px); }
 .home__cluster { display: flex; flex-direction: column; border-radius: 999px; border: 1px solid var(--line); overflow: hidden; background: color-mix(in srgb, var(--surface) 86%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: var(--shadow); }
-.home__ctl { width: 44px; height: 44px; border: 0; background: transparent; color: var(--muted); display: grid; place-items: center; transition: background .15s, color .15s; }
+.home__ctl { width: var(--ctl-w); height: var(--ctl-w); border: 0; background: transparent; color: var(--muted); display: grid; place-items: center; transition: background .15s, color .15s; }
 .home__ctl:hover { color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); }
 .home__cluster .home__ctl + .home__ctl { border-top: 1px solid var(--line); }
 .home__ctl--solo { border-radius: 999px; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 86%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: var(--shadow); color: var(--text); }

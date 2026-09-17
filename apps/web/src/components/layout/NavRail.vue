@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { useHouseStore } from '../../stores/house'
 import { useSettingsStore } from '../../stores/settings'
 import StrokeIcon from '../ui/StrokeIcon.vue'
+import { NAV_ITEMS } from '../../lib/navItems'
 import type { IconName } from '../../lib/strokeIcons'
 
 // Rail de navigation (72 px) : initiales de la maison, 8 vues, puis apparence et langue en bas.
@@ -15,21 +16,7 @@ const initials = computed(() => {
   const words = (house.house?.name ?? 'Kasbah').split(/\s+/).filter((w) => w.length > 2 || /^[A-Z0-9]/.test(w))
   return words.slice(0, 2).map((w) => w[0]!.toUpperCase()).join('') || 'K'
 })
-const items: { name: string; icon: IconName; label: string }[] = [
-  { name: 'home', icon: 'home', label: 'nav.home' },
-  // la météo juste après la maison : ce qu'on regarde en arrivant, avant de piloter quoi que ce soit
-  { name: 'weather', icon: 'cloudSun', label: 'nav.weather' },
-  { name: 'lights', icon: 'light', label: 'nav.lights' },
-  { name: 'covers', icon: 'shutter', label: 'nav.covers' },
-  { name: 'media', icon: 'cast', label: 'nav.media' },
-  { name: 'cameras', icon: 'camera', label: 'nav.cameras' },
-  { name: 'energy', icon: 'bolt', label: 'nav.energy' },
-  // équipement technique de la maison, comme l'énergie — pas un média, pas un véhicule
-  { name: 'water', icon: 'droplet', label: 'nav.water' },
-  { name: 'vehicles', icon: 'vehicle', label: 'nav.vehicles' },
-  { name: 'robots', icon: 'mower', label: 'nav.robots' },
-  { name: 'settings', icon: 'gear', label: 'nav.settings' },
-]
+const items = NAV_ITEMS
 const APPEARANCE_ICON: Record<string, IconName> = { light: 'sun', dark: 'moon', system: 'auto', auto: 'sunHorizon' }
 const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] ?? 'auto')
 </script>

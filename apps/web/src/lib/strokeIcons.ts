@@ -84,6 +84,12 @@ export const ICONS = {
   lockOpen: 'M6 10h12v11H6zM8.5 10V7a3.5 3.5 0 0 1 6.8-1.2M12 14v3',
   linkOff: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1M3 3l18 18',
   wrench: 'M20.5 6.5a4.5 4.5 0 0 1-5.9 5.9L6.4 20.6a2 2 0 0 1-2.8-2.8l8.2-8.2a4.5 4.5 0 0 1 5.9-5.9l-3 3 2.8 2.8z',
+  /** Recherche : la loupe. */
+  search: 'M11 11m-7 0a7 7 0 1 0 14 0a7 7 0 1 0-14 0M16 16l4.5 4.5',
+  /** Une pièce, vue en plan : quatre murs et une ouverture. */
+  room: 'M4 4h16v16H4zM4 10h5M15 4v6',
+  /** Un niveau : des plans empilés. */
+  layers: 'M12 3l9 4.5-9 4.5-9-4.5zM3 12.5l9 4.5 9-4.5M3 17l9 4.5 9-4.5',
 
   // états et alias Vuetify (voir plugins/icons.ts)
   check: 'M5 12.5l5 5L19 6.5',

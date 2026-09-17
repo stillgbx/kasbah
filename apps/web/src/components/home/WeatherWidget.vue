@@ -38,7 +38,7 @@ const condition = computed(() => (live.value ? t(`weather.conditions.${live.valu
 <style scoped>
 /* même verre que les boutons de vue : la scène passe dessous */
 .wx {
-  width: 152px; height: 132px; padding: 12px 14px; text-align: left; border-radius: var(--radius); border: 1px solid var(--line);
+  width: var(--wx-w); height: 132px; padding: 12px 14px; text-align: left; border-radius: var(--radius); border: 1px solid var(--line);
   background: color-mix(in srgb, var(--surface) 86%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   box-shadow: var(--shadow); color: var(--text); display: grid; grid-template-rows: 34px 18px 1fr 16px; align-content: start; row-gap: 2px;
 }

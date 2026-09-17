@@ -27,6 +27,11 @@
   --aside-w: 340px;
   /* marge du panneau flottant de la vue Maison autour de la scène */
   --panel-gap: 16px;
+  /* ce qui flotte en bas de la vue Maison : la carte météo à gauche, les boutons de vue à droite.
+     Leurs largeurs sont ici parce que la barre de recherche se loge ENTRE les deux et s'ancre
+     dessus — un 152 px recopié dans HomeView se serait décalé au premier changement. */
+  --wx-w: 152px;
+  --ctl-w: 44px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
