@@ -14,7 +14,7 @@ import { applyLook, backdropColor, createMaterials, disposeMaterials, type Mater
 import { loadPackTextures, packById } from './textures/assets'
 import { createSkyEnvironment, overcastSky } from './core/sky'
 import { DECOR_LAYER, LAMP_LAYER, SITE_DECOR_LAYER } from './core/layers'
-import { createPostPipeline, detectQuality, gpuName, PIXEL_RATIO, toneMappingOf, type EffectiveQuality, type PostPipeline, type RenderQuality } from './core/post'
+import { createPostPipeline, detectQuality, gpuName, PIXEL_RATIO, tiltBlurFactor, toneMappingOf, type EffectiveQuality, type PostPipeline, type RenderQuality } from './core/post'
 import { fogDistance, sunDirection, type SceneAmbience } from './core/ambience'
 import { Precipitation } from './effects/precipitation'
 import { defaultAmbience, defaultSceneTheme, rolesOf, styleById, type GlowLook, type PostLook, type RenderStyle, type StyleLook } from './styles'
@@ -290,6 +290,8 @@ export class HouseScene {
     openingTap: new Set(), openingDrag: new Set(), openingDrop: new Set(), placeTap: new Set(),
   }
   private detachInput: (() => void) | null = null
+  /** Retire le relais de molette posé sur la couche des étiquettes (`forwardWheelFromLabels`). */
+  private detachWheel: (() => void) | null = null
   private movableKeys: string[] = []
   /** Marqueur effectivement attrapé parmi les déplaçables (les modules d'un champ bougent ensemble). */
   private grabbedKey: string | null = null
@@ -337,6 +339,10 @@ export class HouseScene {
   private viewInsetRight = 0
   /** Ce que reflète une carrosserie. Propre aux véhicules : la maison, elle, n'a pas d'environnement. */
   private skyEnv: Texture | null = null
+  /** Vrai tant qu'une pilule au moins porte une opacité du tilt-shift, donc qu'il y a à défaire. */
+  private pillsFaded = false
+  /** Réutilisé à chaque image par `updatePillFocus` : un vecteur par marqueur et par image, non. */
+  private readonly pillFocusAt = new Vector3()
   /** Banc de réglage : neutre tant que les Réglages n'ont rien posé (`styles/tuning.ts`). */
   private tuning: SceneTuning = NEUTRAL_TUNING
   private descriptors = new Map<string, DeviceDescriptor>()
@@ -411,6 +417,31 @@ export class HouseScene {
     })
 
     if (!deps.headless) this.detachInput = createTapDetector(canvas, { onTap: (ev) => this.handleTap(ev) })
+    this.detachWheel = this.forwardWheelFromLabels(deps.labelLayer ?? null)
+  }
+
+  /**
+   * La molette posée SUR une pilule ne zoomait pas. Une pilule est cliquable, donc
+   * `pointer-events: auto` (`styles/app.css`), donc elle reçoit aussi la molette — et
+   * `OrbitControls`, qui écoute le CANVAS, ne la voit jamais. Sur une maison de quarante appareils,
+   * l'écran en est constellé : le zoom devenait intermittent sans raison visible.
+   *
+   * L'événement est donc repassé au canvas tel quel, position comprise (le zoom vise le curseur).
+   * Seule la MOLETTE : un glissement parti d'une pilule reste ambigu — c'est peut-être un appui sur
+   * la pilule — alors qu'une molette sur une étiquette n'a aucun autre sens que « zoomer ».
+   */
+  private forwardWheelFromLabels(layer: HTMLElement | null): (() => void) | null {
+    if (!layer || typeof WheelEvent === 'undefined') return null
+    const onWheel = (e: WheelEvent) => {
+      if (e.target === layer) return            // le vide entre les pilules : le canvas l'a déjà eu
+      e.preventDefault()
+      this.canvas.dispatchEvent(new WheelEvent('wheel', {
+        deltaX: e.deltaX, deltaY: e.deltaY, deltaZ: e.deltaZ, deltaMode: e.deltaMode,
+        clientX: e.clientX, clientY: e.clientY, bubbles: false, cancelable: true,
+      }))
+    }
+    layer.addEventListener('wheel', onWheel, { passive: false })
+    return () => layer.removeEventListener('wheel', onWheel)
   }
 
   // ---- événements ---------------------------------------------------------
@@ -2106,6 +2137,7 @@ export class HouseScene {
     else if (this.renderer) { this.renderer.setRenderTarget(null); this.renderPasses(this.renderer) }
     this.measure(t0, interactive)
     this.updatePillLod()
+    this.updatePillFocus()
     if (this.labelsVisible) { this.labelRenderer?.render(this.scene, this.camera); this.markLabelsMoving() }
     this.probe?.end()
   }
@@ -2241,11 +2273,34 @@ export class HouseScene {
     layer.dataset.lod = lod
   }
 
+  /**
+   * Les pilules suivent la bande nette du tilt-shift. Elles sont en DOM et le flou de la chaîne
+   * d'image ne les atteint pas : nettes au-dessus d'une maison floutée, elles cassent la maquette.
+   *
+   * La courbe est celle du shader (`tiltBlurFactor`), lue à la place de la pilule PROJETÉE plutôt
+   * qu'en fouillant le `transform` que `CSS2DRenderer` vient d'écrire — une chaîne à re-parser à
+   * chaque image, et un détail d'implémentation de three. Rien n'est fait quand l'effet est éteint,
+   * sauf l'image qui l'éteint : celle-là rend leur netteté à toutes.
+   */
+  private updatePillFocus(): void {
+    const ts = this.look.post.tiltShift
+    const band = ts && ts.strength > 0 && ts.pills > 0 ? ts : null
+    if (!band && !this.pillsFaded) return
+    for (const m of this.markers.values()) {
+      if (!band) { m.setPillFocus(1); continue }
+      // NDC → UV : +1 en haut vaut 1, comme le `vUv.y` du shader
+      const uvY = (m.worldAnchor(this.pillFocusAt).project(this.camera).y + 1) * 0.5
+      m.setPillFocus(1 - band.pills * tiltBlurFactor(uvY, band))
+    }
+    this.pillsFaded = !!band
+  }
+
   setPaused(paused: boolean): void { this.loop.setPaused(paused) }
 
   dispose(): void {
     this.photoGen++                        // une matière qui arrive après n'a plus de scène à habiller
     this.detachInput?.()
+    this.detachWheel?.()
     if (this.labelsIdle !== null) clearTimeout(this.labelsIdle)
     if (this.stormTimer !== null) { clearTimeout(this.stormTimer); this.stormTimer = null }
     this.removePrecipitation()

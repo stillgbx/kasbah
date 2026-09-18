@@ -102,6 +102,24 @@ export interface PostLook {
   ao: { intensity: number; radius: number } | null
   /** Assombrissement des bords de l'image, 0 à 1. */
   vignette: number
+  /**
+   * TILT-SHIFT : une bande nette, le reste flou — ce qui fait lire une vraie maison comme une
+   * maquette. Absent (le cas de tous les styles), l'effet n'existe pas : il ne se règle QUE depuis
+   * le banc (`styles/tuning.ts`), parce que c'est un goût et non une propriété de la lumière.
+   */
+  tiltShift?: TiltShiftLook | null
+}
+
+/** Voir `PostLook.tiltShift`. Les valeurs sont en fraction de l'image, l'origine en BAS (comme les UV). */
+export interface TiltShiftLook {
+  /** Force du flou hors de la bande nette. */
+  strength: number
+  /** Position de la bande nette, 0 = bas de l'image, 1 = haut. */
+  center: number
+  /** Demi-hauteur de la bande nette. */
+  width: number
+  /** Combien les pilules DOM suivent le flou (elles ne sont pas dans le canvas). */
+  pills: number
 }
 
 /** Le halo posé sur une lampe allumée, et ce qu'elle éclaire autour d'elle. */

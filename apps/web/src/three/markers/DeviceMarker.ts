@@ -159,6 +159,19 @@ export abstract class DeviceMarker {
     if (this.css) this.css.visible = v || this.selected
   }
 
+  /**
+   * Netteté de la pilule, de 1 (intacte) à 0 (effacée) : elle suit la bande nette du tilt-shift.
+   * Une pilule vit dans le DOM, hors du canvas — le flou de la chaîne d'image ne l'atteint pas, et
+   * laissée intacte au-dessus d'une maison floutée elle casse l'illusion de maquette.
+   */
+  setPillFocus(k: number): void {
+    const el = this.css?.element
+    if (!el) return
+    // `''` et non `'1'` : à pleine netteté la pilule redevient un élément SANS style d'opacité
+    const v = k >= 0.995 ? '' : k.toFixed(2)
+    if (el.style.opacity !== v) el.style.opacity = v
+  }
+
   setTheme(theme: SceneTheme, glow: GlowLook): void {
     this.ctx = { ...this.ctx, theme, glow }
     if (this.guide) { this.guide.ring.material.color.copy(theme.primary); this.guide.line.material.color.copy(theme.primary); this.guide.look?.material.color.copy(theme.primary) }

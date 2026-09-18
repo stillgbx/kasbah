@@ -262,6 +262,7 @@
       "image": "Image",
       "lamps": "Lamps",
       "room": "Selected room",
+      "tilt": "Tilt-shift (miniature)",
       "reset": "Reset",
       "presets": "Presets",
       "presetNames": {
@@ -294,7 +295,11 @@
         "ringWhite": "Outline white",
         "ringOpacity": "Outline opacity",
         "fillOpacity": "Floor veil",
-        "ringThrough": "Outline visible through walls"
+        "ringThrough": "Outline visible through walls",
+        "tiltShift": "Blur",
+        "tiltCenter": "Band — height",
+        "tiltWidth": "Band — width",
+        "tiltPills": "Pills blurred"
       }
     },
   "houseEditing": "Adjust openings", "houseEditingHint": "The Home view then lets you adjust and drag windows and doors on the walls. The survey is approximate: this is where it gets corrected, and nothing is written until something is actually adjusted."

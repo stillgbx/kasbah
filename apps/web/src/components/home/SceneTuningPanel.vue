@@ -28,13 +28,15 @@ const GROUPS: readonly { titleKey: string; keys: readonly SliderKey[] }[] = [
   { titleKey: 'render.tuning.image', keys: ['exposure', 'bloomStrength', 'bloomThreshold', 'bloomRadius', 'vignette'] },
   { titleKey: 'render.tuning.lamps', keys: ['glowOpacity', 'glowScale', 'lightIntensity', 'emissive'] },
   { titleKey: 'render.tuning.room', keys: ['ringWidth', 'ringBoost', 'ringWhite', 'ringOpacity', 'fillOpacity'] },
+  { titleKey: 'render.tuning.tilt', keys: ['tiltShift', 'tiltCenter', 'tiltWidth', 'tiltPills'] },
 ]
 const CURVES: readonly SceneTuning['toneMapping'][] = ['style', 'aces', 'agx', 'neutral', 'linear']
 
 /** Un multiplicateur se lit « × 0,60 » ; les cinq réglages du trait sont des grandeurs, pas des facteurs. */
+const PERCENT: readonly SliderKey[] = ['ringWhite', 'ringOpacity', 'fillOpacity', 'tiltShift', 'tiltCenter', 'tiltWidth', 'tiltPills']
 function format(key: SliderKey, v: number): string {
   if (key === 'ringWidth') return `${Math.round(v * 100)} cm`
-  if (key === 'ringWhite' || key === 'ringOpacity' || key === 'fillOpacity') return `${Math.round(v * 100)} %`
+  if (PERCENT.includes(key)) return `${Math.round(v * 100)} %`
   return `× ${v.toFixed(2)}`
 }
 

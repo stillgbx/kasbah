@@ -442,6 +442,19 @@ export const sceneTuningSchema = z.object({
   fillOpacity: z.number().min(0).max(1).default(0.1),
   /** Le trait passe par-dessus les murs au lieu d'être caché par eux. */
   ringThrough: z.boolean().default(true),
+  // ---- tilt-shift : l'effet de maquette (valeurs ABSOLUES, aucun style n'en calcule) ----
+  /** Force du flou hors de la bande nette. `0` = effet éteint, et la passe n'est pas payée. */
+  tiltShift: z.number().min(0).max(1).default(0),
+  /** Hauteur de la bande nette dans l'image (0 = un trait, 1 = toute l'image). */
+  tiltCenter: z.number().min(0).max(1).default(0.5),
+  /** Demi-hauteur de la bande nette, en fraction de l'image. */
+  tiltWidth: z.number().min(0.02).max(1).default(0.18),
+  /**
+   * Combien les pilules des appareils suivent le flou. Elles sont en DOM, hors du canvas : nettes
+   * au-dessus d'une maison floutée, elles cassent la maquette ; effacées, la scène perd ses noms.
+   * `0` les laisse intactes, `1` les efface autant que le flou efface la maison.
+   */
+  tiltPills: z.number().min(0).max(1).default(0.6),
 })
 export type SceneTuning = z.infer<typeof sceneTuningSchema>
 

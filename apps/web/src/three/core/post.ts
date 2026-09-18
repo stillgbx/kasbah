@@ -120,6 +120,75 @@ const VIGNETTE_SHADER = {
   `,
 }
 
+/** Largeur de la transition net → flou, en fraction de l'image. */
+const TILT_FALLOFF = 0.35
+/** Rayon (px) du flou à pleine force. */
+const TILT_MAX_PX = 14
+
+/**
+ * TILT-SHIFT : une bande nette au milieu de l'image, le flou qui monte vers le haut et vers le bas.
+ *
+ * Ce n'est PAS une profondeur de champ : rien ici ne lit la profondeur. Et c'est fidèle — une photo
+ * tilt-shift est faite avec un plan de netteté INCLINÉ, qui vu d'une caméra plongeante se lit
+ * précisément comme une bande horizontale. Un vrai flou de profondeur (`BokehPass`) demanderait un
+ * rendu de la scène en profondeur, alors qu'elle est déjà rendue en plusieurs passes par niveau.
+ *
+ * Deux passes séparables (horizontale puis verticale) plutôt qu'un noyau 2D : neuf échantillons
+ * chacune au lieu de quatre-vingt-un, pour le même flou. Le rayon varie par pixel, ce qui n'est pas
+ * exactement séparable — l'écart ne se voit pas, et c'est l'approximation de tous les flous d'écran.
+ *
+ * Appliqué APRÈS le tone mapping (comme la vignette) : c'est un défaut d'objectif, pas une lumière.
+ */
+const TILT_SHIFT_SHADER = {
+  uniforms: {
+    tDiffuse: { value: null as unknown },
+    /** Un pixel, en UV, dans la direction de la passe : (1/l, 0) puis (0, 1/h). */
+    direction: { value: new Vector2(0, 0) },
+    strength: { value: 0 },
+    center: { value: 0.5 },
+    width: { value: 0.18 },
+  },
+  vertexShader: /* glsl */`
+    varying vec2 vUv;
+    void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+  `,
+  // Les deux constantes sont INTERPOLÉES depuis le JS : `tiltBlurFactor` doit rendre exactement la
+  // même courbe pour les pilules, et deux nombres recopiés à la main finissent toujours par diverger.
+  fragmentShader: /* glsl */`
+    uniform sampler2D tDiffuse;
+    uniform vec2 direction;
+    uniform float strength;
+    uniform float center;
+    uniform float width;
+    varying vec2 vUv;
+    void main() {
+      float k = smoothstep(width, width + ${TILT_FALLOFF.toFixed(2)}, abs(vUv.y - center));
+      float r = k * strength * ${TILT_MAX_PX.toFixed(1)};
+      if (r < 0.15) { gl_FragColor = texture2D(tDiffuse, vUv); return; }
+      vec4 sum = vec4(0.0);
+      float wsum = 0.0;
+      for (int i = -4; i <= 4; i++) {
+        float fi = float(i);
+        float w = exp(-fi * fi / 8.0);
+        sum += texture2D(tDiffuse, vUv + direction * (fi * r)) * w;
+        wsum += w;
+      }
+      gl_FragColor = sum / wsum;
+    }
+  `,
+}
+
+/**
+ * Combien un point de l'image est flouté, de 0 (net) à 1. `uvY` a son origine en BAS, comme le
+ * shader. Sert AUSSI aux pilules des appareils, qui vivent dans le DOM et non dans le canvas : sans
+ * ça, elles resteraient parfaitement nettes au-dessus d'une maison floutée (voir `HouseScene`).
+ */
+export function tiltBlurFactor(uvY: number, look: { center: number; width: number }): number {
+  const d = Math.abs(uvY - look.center)
+  const t = Math.min(1, Math.max(0, (d - look.width) / TILT_FALLOFF))
+  return t * t * (3 - 2 * t)              // smoothstep, celui du shader
+}
+
 /** Dessine la scène (toutes passes de niveaux comprises) dans la cible donnée, `null` = l'écran. */
 export type DrawScene = (target: WebGLRenderTarget | null) => void
 
@@ -207,6 +276,11 @@ export function createPostPipeline(deps: PostPipelineDeps): PostPipeline {
   const vignette = new ShaderPass(VIGNETTE_SHADER)
   composer.addPass(vignette)
 
+  // Le tilt-shift ferme la marche : il floute l'image FINIE, vignette comprise. Éteint en qualité
+  // basse, comme le bloom — deux passes plein écran de plus sur une machine qui peine déjà, non.
+  const tilt = quality === 'low' ? null : [new ShaderPass(TILT_SHIFT_SHADER), new ShaderPass(TILT_SHIFT_SHADER)] as const
+  if (tilt) for (const pass of tilt) { pass.enabled = false; composer.addPass(pass) }
+
   // LE GARDE-FOU MESURE LE GPU, PAS LE FIL PRINCIPAL. `composer.render()` ne fait que SOUMETTRE des
   // commandes : 7 ms sur une machine dont le GPU met 93 ms à les exécuter — et c'est l'exécution qui
   // bride la cadence. Chronométré côté CPU, le garde-fou restait aveugle et « auto » restait « high »
@@ -240,6 +314,13 @@ export function createPostPipeline(deps: PostPipelineDeps): PostPipeline {
       // `setPixelRatio` redimensionne déjà tampons ET passes : inutile de les toucher un à un.
       composer.setPixelRatio(pixelRatio)
       composer.setSize(width, height)
+      if (tilt) {
+        // Le pas d'échantillonnage est UN PIXEL RENDU : il suit donc la taille ET le rapport de
+        // pixels, sans quoi le flou serait deux fois plus étroit sur un écran dense.
+        const w = Math.max(1, width * pixelRatio), h = Math.max(1, height * pixelRatio)
+        ;(tilt[0].uniforms.direction as { value: Vector2 }).value.set(1 / w, 0)
+        ;(tilt[1].uniforms.direction as { value: Vector2 }).value.set(0, 1 / h)
+      }
     },
     setLook(look) {
       renderer.toneMapping = TONE_MAPPING[look.toneMapping]
@@ -263,6 +344,16 @@ export function createPostPipeline(deps: PostPipelineDeps): PostPipeline {
       }
       vignette.enabled = look.vignette > 0
       vignetteAmount.value = look.vignette
+      if (tilt) {
+        const ts = look.tiltShift
+        for (const pass of tilt) {
+          pass.enabled = !!ts && ts.strength > 0
+          if (!ts) continue
+          ;(pass.uniforms.strength as { value: number }).value = ts.strength
+          ;(pass.uniforms.center as { value: number }).value = ts.center
+          ;(pass.uniforms.width as { value: number }).value = ts.width
+        }
+      }
     },
     render(measurable) {
       if (timer) {

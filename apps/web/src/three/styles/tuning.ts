@@ -30,6 +30,10 @@ export const TUNING_RANGES: Record<Exclude<keyof SceneTuning, 'toneMapping' | 'r
   ringWhite: { min: 0, max: 1, step: 0.05 },
   ringOpacity: { min: 0, max: 1, step: 0.02 },
   fillOpacity: { min: 0, max: 0.5, step: 0.01 },
+  tiltShift: { min: 0, max: 1, step: 0.05 },
+  tiltCenter: { min: 0, max: 1, step: 0.02 },
+  tiltWidth: { min: 0.02, max: 1, step: 0.02 },
+  tiltPills: { min: 0, max: 1, step: 0.05 },
 }
 
 /**
@@ -75,6 +79,9 @@ export const TUNING_PRESETS: readonly TuningPreset[] = [
     exposure: 1.35, bloomStrength: 0.7, bloomThreshold: 1.25, bloomRadius: 1.15, vignette: 1.35,
     glowOpacity: 0.6, lightIntensity: 0.95, emissive: 0.9,
     ringWidth: 0.08, ringBoost: 1.05, ringWhite: 0.05, ringOpacity: 0.8, fillOpacity: 0.06,
+    // un tilt-shift DISCRET : la bande nette couvre la maison, seuls le ciel et le premier plan
+    // partent — c'est le flou d'un objectif ouvert, pas encore la maquette
+    tiltShift: 0.45, tiltCenter: 0.52, tiltWidth: 0.3, tiltPills: 0.5,
   }),
   // Pour la tablette de l'entrée, en plein jour, à un mètre : presque pas de bloom, pas de vignette,
   // un trait net et opaque qu'on lit d'un coup d'œil. Ici la maison est un TABLEAU DE BORD, et ce
@@ -90,6 +97,9 @@ export const TUNING_PRESETS: readonly TuningPreset[] = [
     bloomStrength: 0.9, bloomThreshold: 1.3, bloomRadius: 1.1,
     glowOpacity: 0.7, glowScale: 1.1,
     ringWidth: 0.12, ringBoost: 1.1, ringWhite: 0.15, ringOpacity: 0.9, fillOpacity: 0.12,
+    // et là, la MAQUETTE assumée : bande étroite, flou franc, pilules qui suivent — une maison
+    // photographiée de près au lieu d'une maison vue de loin
+    tiltShift: 0.85, tiltCenter: 0.5, tiltWidth: 0.16, tiltPills: 0.75,
   }),
 ]
 
@@ -105,6 +115,9 @@ export function applyTuning(look: StyleLook, t: SceneTuning): StyleLook {
     },
     ao: look.post.ao,
     vignette: look.post.vignette * t.vignette,
+    // Le tilt-shift ne vient d'aucun style : il naît ici. Éteint, la clé est ABSENTE et non `null` —
+    // c'est ce qui garde vraie la promesse du réglage neutre : le look du style, à l'identique.
+    ...(t.tiltShift > 0 ? { tiltShift: { strength: t.tiltShift, center: t.tiltCenter, width: t.tiltWidth, pills: t.tiltPills } } : {}),
   }
   return {
     ...look,

@@ -262,6 +262,7 @@
       "image": "Image",
       "lamps": "Lampes",
       "room": "Pièce sélectionnée",
+      "tilt": "Tilt-shift (maquette)",
       "reset": "Réinitialiser",
       "presets": "Préréglages",
       "presetNames": {
@@ -294,7 +295,11 @@
         "ringWhite": "Trait blanc",
         "ringOpacity": "Trait opacité",
         "fillOpacity": "Voile du sol",
-        "ringThrough": "Trait visible à travers les murs"
+        "ringThrough": "Trait visible à travers les murs",
+        "tiltShift": "Flou",
+        "tiltCenter": "Bande — hauteur",
+        "tiltWidth": "Bande — largeur",
+        "tiltPills": "Pilules floutées"
       }
     },
   "houseEditing": "Régler les ouvertures", "houseEditingHint": "La vue Maison permet alors de régler et de glisser les fenêtres et les portes sur les murs. Le relevé est approximatif : c'est ici qu'on l'ajuste, rien n'est écrit tant qu'on n'a pas réglé quelque chose."

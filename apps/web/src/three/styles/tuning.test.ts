@@ -30,6 +30,13 @@ describe('banc de réglage de la lumière', () => {
     expect(resolveTuning({ ringWidth: 12 })).toEqual(NEUTRAL_TUNING)
   })
 
+  it('n’ajoute la passe de tilt-shift que si elle a quelque chose à faire', () => {
+    const look = defaultLook()
+    expect(applyTuning(look, NEUTRAL_TUNING).post.tiltShift).toBeUndefined()
+    const on = applyTuning(look, { ...NEUTRAL_TUNING, tiltShift: 0.8, tiltWidth: 0.2, tiltPills: 0.5 })
+    expect(on.post.tiltShift).toEqual({ strength: 0.8, center: 0.5, width: 0.2, pills: 0.5 })
+  })
+
   it('les préréglages sont complets, distincts, et dans les bornes des curseurs', () => {
     expect(new Set(TUNING_PRESETS.map((p) => p.id)).size).toBe(TUNING_PRESETS.length)
     for (const p of TUNING_PRESETS) {
