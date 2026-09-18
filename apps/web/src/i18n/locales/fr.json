@@ -433,7 +433,7 @@
     "removeFrees": "{name} perdra sa place.",
     "types": { "door": "Porte", "window": "Fenêtre", "passage": "Passage/Ouverture", "garage": "Porte de garage", "bay": "Baie vitrée", "glass-door": "Porte vitrée" },
     "leaves": "Vantaux", "material": "Matière", "color": "Couleur", "colorReset": "Effacer la couleur choisie",
-    "materials": { "auto": "Auto", "wood": "Bois", "metal": "Métal", "glass": "Verre" },
+    "materials": { "auto": "Auto", "wood": "Bois", "metal": "Métal", "glass": "Verre", "fabric": "Tissu" },
     "width": "Largeur", "height": "Hauteur", "sill": "Hauteur d'allège", "rename": "Renommer l'ouverture",
     "gapRight": "Droite", "gapLeft": "Gauche",
     "wall": "Mur {segment}", "whereHint": "Se règle ici, ou en glissant l'ouverture sur les murs de la pièce dans la vue 3D.",

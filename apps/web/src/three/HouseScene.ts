@@ -7,7 +7,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js'
 import {
   boundsCenter, buildingBounds, computeHouseGeometry, deviceFloorZ, geoDistance, indexHouse, longestEdgeYawDeg, pointInPolygon, resolveDefaults, resolveDeviceLevelId, sitePosition,
-  roofBounds, roomBounds, zoneBounds, openingGaps, openingLabel,
+  roofBounds, roomBounds, zoneBounds, openingCentre, openingGaps, openingLabel,
   type DeviceDescriptor, type DeviceState, type House, type HouseDevice, type HouseGeometry, type HouseIndex, type Level, type OpeningRect, type PlacedHouseDevice, type Vec2, type Vec3,
 } from '@kasbah/shared'
 import { applyLook, backdropColor, createMaterials, disposeMaterials, type MaterialSet } from './builders/materials'
@@ -322,6 +322,8 @@ export class HouseScene {
   private selectedOpeningId: string | null = null
   /** Pièce dont on attend qu'on tape un mur pour y poser une ouverture neuve (mode « poser »). */
   private placingRoomId: string | null = null
+  /** Ouvertures dont un ouvrant porte le vantail (`dressedOpenings`), telles que les murs ont été bâtis. */
+  private dressed: ReadonlySet<string> = new Set<string>()
   private openingHandles = new Map<string, { group: Group; fill: Mesh; ring: Mesh; ringOn: Mesh; rect: OpeningRect }>()
   /** Cinq matériaux pour toutes les poignées : la sélection n'est qu'un échange de matériau. */
   private openingMats: {
@@ -475,7 +477,8 @@ export class HouseScene {
     this.house = house
     this.index = indexHouse(house)
     this.geometry = computeHouseGeometry(house)
-    this.nodes = buildHouse(this.geometry, this.materials)
+    this.dressed = this.dressedOpenings()
+    this.nodes = buildHouse(this.geometry, this.materials, this.dressed)
     this.invalidateShadows()
     this.nodes.terrain.receiveShadow = true
     this.scene.add(this.nodes.root)
@@ -553,7 +556,35 @@ export class HouseScene {
   /** Descripteurs de plugin (type de marqueur, icône). Reconstruit les marqueurs. */
   setDescriptors(descriptors: Record<string, DeviceDescriptor>): void {
     this.descriptors = new Map(Object.entries(descriptors))
-    if (this.house) { this.buildMarkers(); this.updateStates(this.states, true); this.applyLevelFocus(); this.loop.invalidate() }
+    // le KIND d'un appareil vient de son descripteur, qui arrive parfois après la maison : une porte
+    // de garage reconnue à ce moment-là doit faire retirer le vantail que le bâti avait dessiné
+    if (this.house) { this.refreshDressedOpenings(); this.buildMarkers(); this.updateStates(this.states, true); this.applyLevelFocus(); this.loop.invalidate() }
+  }
+
+  /**
+   * Les ouvertures HABILLÉES par un ouvrant : celles dont le vantail appartient à un appareil, qui le
+   * dessine à ses cotes et l'ouvre. Le bâti n'en pose alors aucun — sans quoi une porte de garage
+   * remontée laissait derrière elle le panneau fixe que `details.ts` avait dessiné.
+   *
+   * Un ouvrant, et lui seul : un capteur d'ouverture épouse lui aussi le rectangle de sa fenêtre,
+   * mais il ne la ferme pas.
+   */
+  private dressedOpenings(): Set<string> {
+    const out = new Set<string>()
+    for (const d of this.house?.devices ?? []) {
+      if (!d.openingId) continue
+      const kind = (d.deviceId ? this.descriptors.get(d.deviceId)?.kind : undefined) ?? d.kind
+      if (kind === 'cover') out.add(d.openingId)
+    }
+    return out
+  }
+
+  /** Refait les murs des niveaux quand cet ensemble a changé, et rien sinon (le cas de tous les gestes). */
+  private refreshDressedOpenings(): void {
+    const next = this.dressedOpenings()
+    if (next.size === this.dressed.size && [...next].every((id) => this.dressed.has(id))) return
+    this.dressed = next
+    for (const l of this.geometry?.levels ?? []) this.rebuildLevelNodes(l.levelId)
   }
 
   /**
@@ -564,6 +595,12 @@ export class HouseScene {
    * un calcul qui suit le relevé. Garée ailleurs, elle disparaît simplement de la scène.
    */
   private effectivePosition(device: HouseDevice): Vec3 | null {
+    // Un ouvrant lié à une ouverture ÉPOUSE son rectangle : son tablier y était déjà dessiné, mais sa
+    // pilule restait sur la `position` du JSON — posée une fois par l'auto-placement, puis figée
+    // pendant qu'on affinait la baie au doigt (2,11 m d'écart mesurés sur le volet du bureau). Ce
+    // qu'on voit et ce qu'on touche viennent maintenant du même point.
+    const rect = device.openingId ? this.openingRect(device.openingId) : undefined
+    if (rect) return openingCentre(rect)
     if (device.position) return device.position
     const state = device.deviceId ? this.states[device.deviceId] : undefined
     // un véhicule, ou une tondeuse qui publie sa position en GPS (Husqvarna) : même projection
@@ -764,7 +801,7 @@ export class HouseScene {
     const old = nodes?.levels.get(levelId)
     const lg = this.geometry?.levels.find((l) => l.levelId === levelId)
     if (!nodes || !old || !lg) return
-    const fresh = buildLevel(lg, this.materials)
+    const fresh = buildLevel(lg, this.materials, this.dressed)
     fresh.group.remove(fresh.markers, fresh.labels)   // les neufs sont vides : ce sont les anciens qu'on garde
     old.markers.removeFromParent()
     old.labels.removeFromParent()
@@ -786,6 +823,7 @@ export class HouseScene {
     if (!this.nodes) { this.load(house); return }
     this.house = house
     this.index = indexHouse(house)
+    this.refreshDressedOpenings()          // lier (ou délier) un ouvrant retire (ou repose) le vantail du bâti
     this.buildMarkers()
     this.updateStates(this.states, true)
     this.applyLevelFocus()

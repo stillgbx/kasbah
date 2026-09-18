@@ -67,7 +67,11 @@ export function buildPane(o: OpeningRect, mats: MaterialSet): Mesh {
   return m
 }
 
-export function buildLevel(level: LevelGeometry, mats: MaterialSet): LevelNodes {
+/**
+ * `dressed` : les ouvertures HABILLÉES par un ouvrant (`HouseDevice.openingId`). Leur vantail est
+ * dessiné par le marqueur de l'appareil, qui l'ouvre — le bâti n'en pose pas un second.
+ */
+export function buildLevel(level: LevelGeometry, mats: MaterialSet, dressed?: ReadonlySet<string>): LevelNodes {
   const group = new Group()
   group.name = `level:${level.levelId}`
   group.position.z = level.elevation
@@ -85,7 +89,7 @@ export function buildLevel(level: LevelGeometry, mats: MaterialSet): LevelNodes 
   }
   // le détail architectural vit avec les murs : même fantôme, même retour de matériau ; APRÈS eux,
   // pour que `walls[0]` reste le mur extérieur
-  for (const mesh of buildDetails(level, mats)) { walls.push(mesh); group.add(mesh) }
+  for (const mesh of buildDetails(level, mats, dressed)) { walls.push(mesh); group.add(mesh) }
   const floors = new Map<string, Mesh>()
   for (const f of level.floors) {
     const base = f.floorStyle ? mats.floors[f.floorStyle] : mats.floor
@@ -113,7 +117,7 @@ export function buildLevel(level: LevelGeometry, mats: MaterialSet): LevelNodes 
   return { group, walls, floors, panes, markers, labels, elevation: level.elevation, height: level.height }
 }
 
-export function buildHouse(geometry: HouseGeometry, mats: MaterialSet): HouseNodes {
+export function buildHouse(geometry: HouseGeometry, mats: MaterialSet, dressed?: ReadonlySet<string>): HouseNodes {
   const root = new Group()
   root.name = 'house'
   root.rotation.x = ROOT_ROTATION_X
@@ -170,7 +174,7 @@ export function buildHouse(geometry: HouseGeometry, mats: MaterialSet): HouseNod
 
   const levels = new Map<string, LevelNodes>()
   for (const lg of geometry.levels) {
-    const nodes = buildLevel(lg, mats)
+    const nodes = buildLevel(lg, mats, dressed)
     levels.set(lg.levelId, nodes)
     root.add(nodes.group)
   }

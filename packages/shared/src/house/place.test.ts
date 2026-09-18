@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import demo from './__fixtures__/demo-house.json'
 import { parseHouse } from './validate'
 import { NEUTRAL_TUNING } from './schema'
-import { addOpeningToJson, PlacementError, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, setPluginInJson, setRenderTuningInJson, setRoomOrderInJson } from './place'
+import { addOpeningToJson, patchOpeningInJson, PlacementError, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, setPluginInJson, setRenderTuningInJson, setRoomOrderInJson } from './place'
 
 const devices = (doc: Record<string, unknown>) => doc.devices as Record<string, unknown>[]
 
@@ -84,6 +84,42 @@ describe('placeDeviceInJson', () => {
 
     const cleared = placeDeviceInJson(generic, 'vehicle.model-s', { model3d: '', bodyColor: '' })
     expect(entry(cleared)).toEqual({ id: 'vehicle.model-s', deviceId: 'tesla:5YJ' })
+  })
+
+  it("écrit les vantaux, la matière et la couleur d'un ouvrant, et la chaîne vide les efface", () => {
+    // Ce que le fabricant ne dit pas d'un volet : combien de vantaux, en quoi, de quelle couleur.
+    const entry = (doc: Record<string, unknown>) => devices(doc).find((x) => x.id === 'cover.baie')
+    const dressed = placeDeviceInJson(demo, 'cover.baie', { leaves: 2, coverMaterial: 'wood', coverColor: '#f2efe6' })
+    expect(entry(dressed)).toMatchObject({ leaves: 2, coverMaterial: 'wood', coverColor: '#f2efe6' })
+    expect(() => parseHouse(dressed)).not.toThrow()
+    // la place et l'ouverture liée ne bougent pas : on n'a réglé que ce qui est DESSINÉ
+    expect(entry(dressed)).toMatchObject({ position: entry(demo as Record<string, unknown>)!.position, openingId: 'baie' })
+
+    const bare = placeDeviceInJson(dressed, 'cover.baie', { coverMaterial: '', coverColor: '' })
+    expect(entry(bare)).not.toHaveProperty('coverMaterial')
+    expect(entry(bare)).not.toHaveProperty('coverColor')
+    expect(entry(bare)).toMatchObject({ leaves: 2 })      // les vantaux, eux, n'ont pas d'« automatique »
+    expect(() => parseHouse(bare)).not.toThrow()
+  })
+
+  it("recale sur sa baie l'ouvrant qui l'habille, quand elle bouge et quand on la lie", () => {
+    const place = (doc: Record<string, unknown>, id: string) => devices(doc).find((x) => x.id === id)!.position
+    // le fichier de démo porte la même dérive que la vraie maison : le volet est posé 1,7 m à côté
+    expect(place(demo as unknown as Record<string, unknown>, 'cover.baie')).toEqual([4.2, 0.05, 1.3])
+
+    // la baie du salon glisse de 50 cm le long de son mur (y = 0, de x = 3,2 à 10) : le volet suit,
+    // au centre de la baie — 3,2 + 2 + 2,4 / 2 — et à mi-hauteur (allège 0,2 + 2,15 / 2)
+    const moved = patchOpeningInJson(demo, 'salon', 'baie', { offset: 2 })
+    expect(place(moved, 'cover.baie')).toEqual([6.4, 0, 1.275])
+    expect(() => parseHouse(moved)).not.toThrow()
+    // les autres ouvrants n'ont pas bougé : seule la baie touchée compte
+    expect(place(moved, 'cover.cuisine')).toEqual([9.95, 5.8, 1.6])
+
+    // LIER un ouvrant lui donne aussi la place de sa baie, dans la même écriture
+    const linked = placeDeviceInJson(demo, 'cover.terrasse', { openingId: 'fen-salon-est' })
+    // fenêtre du mur est du salon (segment 1, de [10, 0] à [10, 5]), à 1,5 m du coin, large de 1,2
+    expect(place(linked, 'cover.terrasse')).toEqual([10, 2.1, 1.55])
+    expect(() => parseHouse(linked)).not.toThrow()
   })
 
   it('writes the orientation when given, and leaves it alone otherwise', () => {

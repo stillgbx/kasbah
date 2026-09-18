@@ -89,13 +89,18 @@ function surface(m: MeshStandardMaterial, color: Color, look: SurfaceLook, tex: 
 const std = (extra: ConstructorParameters<typeof MeshStandardMaterial>[0] = {}) =>
   new MeshStandardMaterial({ roughness: 0.9, metalness: 0, ...extra })
 
-/** Les deux rôles d'une menuiserie : le dormant d'une baie, et le vantail d'une porte. */
-export type JoineryRole = 'frame' | 'door'
+/**
+ * Les trois rôles d'une menuiserie : le dormant d'une baie, le vantail d'une porte, et le TABLIER
+ * d'un ouvrant (volet, portail) — celui-là appartient à un appareil et non au bâti, mais il se
+ * teinte de la même façon, matière comprise (`HouseDevice.coverMaterial`).
+ */
+export type JoineryRole = 'frame' | 'door' | 'slat'
 interface Pbr { roughness: number; metalness: number }
 /** Le réglage PBR de chaque rôle, déclaré ICI pour que les variantes teintées partent du même. */
 const ROLE_PBR: Record<JoineryRole, Pbr> = {
   frame: { roughness: 0.45, metalness: 0.1 },
   door: { roughness: 0.5, metalness: 0 },
+  slat: { roughness: 0.5, metalness: 0.2 },
 }
 /**
  * Ce que chaque matière fait à la lumière. Le VERRE n'a pas de ligne : il ne change pas la
@@ -105,7 +110,11 @@ const ROLE_PBR: Record<JoineryRole, Pbr> = {
 const MATERIAL_PBR: Partial<Record<OpeningMaterial, Pbr>> = {
   wood: { roughness: 0.6, metalness: 0 },
   metal: { roughness: 0.3, metalness: 0.85 },
+  // une toile ne réfléchit RIEN : c'est la matière la plus mate du jeu, plus qu'un bois huilé
+  fabric: { roughness: 1, metalness: 0 },
 }
+/** Un tablier de VERRE : lisse, et assez opaque pour qu'on voie qu'il est là (porte de garage vitrée). */
+const GLASS_SLAT = { roughness: 0.15, metalness: 0, opacity: 0.45 }
 
 export function createMaterials(theme: SceneTheme, look: StyleLook, textures: SurfaceTextures = {}): MaterialSet {
   const set: Omit<MaterialSet, 'all'> = {
@@ -231,6 +240,7 @@ export function applyLook(mats: MaterialSet, theme: SceneTheme, look: StyleLook,
 
 /** La couleur d'un rôle de menuiserie quand le relevé n'en impose pas : déduite de la palette. */
 function roleColor(theme: SceneTheme, role: JoineryRole): Color {
+  if (role === 'slat') return theme.slat.clone()
   return role === 'frame' ? theme.wall.clone().lerp(BLACK, 0.55) : theme.floors.wood.clone()
 }
 
@@ -240,19 +250,29 @@ const joineryKey = (role: JoineryRole, material?: OpeningMaterial, color?: strin
 
 function applyJoinery(m: MeshStandardMaterial, key: string, theme: SceneTheme): void {
   const [role, material, color] = key.split('|') as [JoineryRole, OpeningMaterial | '', string]
-  const pbr = (material ? MATERIAL_PBR[material] : undefined) ?? ROLE_PBR[role]
+  // Le VERRE d'un TABLIER : là où une ouverture se fait vitrer (`isGlazed`), un ouvrant, lui, devient
+  // translucide — c'est ce qu'est une porte de garage vitrée. Il n'a de sens que pour ce rôle-là.
+  const glazed = role === 'slat' && material === 'glass'
+  const pbr = glazed ? GLASS_SLAT : (material ? MATERIAL_PBR[material] : undefined) ?? ROLE_PBR[role]
   m.roughness = pbr.roughness
   m.metalness = pbr.metalness
+  // `transparent` décide du passage de rendu : three veut être prévenu quand il change
+  if (m.transparent !== glazed) { m.transparent = glazed; m.needsUpdate = true }
+  m.opacity = glazed ? GLASS_SLAT.opacity : 1
   // la couleur du fichier passe devant la matière, qui passe devant le rôle : le bois d'une
   // menuiserie est celui du parquet du style, sauf si le relevé a dit lequel
   if (color) m.color.set(color)
+  else if (glazed) m.color.copy(theme.glass)
   else if (material === 'wood') m.color.copy(theme.floors.wood)
   else if (material === 'metal') m.color.copy(theme.wall).lerp(BLACK, 0.65)
+  // une toile écrue : le mur du style, éclairci — un store banne sans teinte choisie doit se lire
+  // comme de la toile, pas comme un pan de façade
+  else if (material === 'fabric') m.color.copy(theme.wall).lerp(WHITE, 0.3)
   else m.color.copy(roleColor(theme, role))
 }
 
 /**
- * Le matériau d'une menuiserie d'ouverture. Sans matière NI couleur voulue, c'est le matériau
+ * Le matériau d'une menuiserie — d'ouverture, ou d'ouvrant. Sans matière NI couleur voulue, c'est le matériau
  * partagé du rôle qu'on rend tel quel : une maison ordinaire garde ses deux appels de dessin, et
  * seules les ouvertures qui demandent autre chose en coûtent un de plus.
  *

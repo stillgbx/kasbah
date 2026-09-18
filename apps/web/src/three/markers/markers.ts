@@ -8,6 +8,7 @@ import { coverLeaves, coverSize, yawToRad } from '../../lib/orientation'
 import { bodyColorOf, bodyFinishOf, FINISH_MATERIAL, SCENE_FINISH } from '../../lib/vehicleTuning'
 import { LAMP_LAYER } from '../core/layers'
 import { createTween, lerp } from '../core/tween'
+import { joineryMaterial } from '../builders/materials'
 import { DeviceMarker, type MarkerContext } from './DeviceMarker'
 import { ScreenArt } from './screenArt'
 import { modelUrl, resolveModel } from '../models/catalog'
@@ -551,6 +552,20 @@ export class LightMarker extends DeviceMarker {
 
 /** Épaisseur (m) du panneau d'un ouvrant libre : elle ne se règle pas, un portail se voit de face. */
 const COVER_THICKNESS = 0.06
+/** Part de la largeur de la baie qu'occupe le tablier : il coulisse DANS l'embrasure, pas dessus. */
+const SLAT_INSET = 0.98
+/** Jeu (m) entre deux vantaux d'un tablier — même trait que celui des vantaux d'une porte. */
+const SLAT_GAP = 0.02
+
+/**
+ * Le matériau d'un panneau d'ouvrant : celui de la scène tant que rien n'est demandé (il suit le
+ * thème), la variante teintée du relevé sinon. Même mécanique que les menuiseries d'une baie, donc
+ * même cache : dix volets blancs partagent un matériau, et changer de style les rattrape tous.
+ */
+function coverPanelMaterial(device: PlacedHouseDevice, ctx: MarkerContext, fallback: MeshStandardMaterial): MeshStandardMaterial {
+  if (!device.coverMaterial && !device.coverColor) return fallback
+  return joineryMaterial(ctx.materials, 'slat', device.coverMaterial, device.coverColor)
+}
 /** Avancée (m) qui reste visible d'un store replié : son coffre et la toile enroulée dedans. */
 const AWNING_ROLLED = 0.3
 /** Quart de tour : l'ouverture d'un battant de portail grand ouvert. */
@@ -572,9 +587,16 @@ type FreeCover =
  */
 
 export class CoverMarker extends DeviceMarker {
-  private slat: Mesh | null = null
-  private slatMat: MeshStandardMaterial | null = null
+  /** Les vantaux du tablier, de gauche à droite : un seul pour un volet roulant, deux pour un battant. */
+  private slats: Mesh[] = []
   private free: FreeCover | null = null
+  /** Tout ce qui porte la teinte de l'ouvrant — tablier, dalle de store, battants de portail. */
+  private panels: Mesh[] = []
+  private mat: MeshStandardMaterial
+  /** Le matériau n'est à nous QUE si l'aperçu de couleur l'a détaché ; sinon la scène le partage. */
+  private ownsMat = false
+  /** La teinte d'avant l'aperçu, gardée à la première retouche pour la rendre si le choix est abandonné. */
+  private paintBase: Color | null = null
   private geometries: BufferGeometry[] = []
   private closedFraction = 0
   private cancelTween: (() => void) | null = null
@@ -589,18 +611,35 @@ export class CoverMarker extends DeviceMarker {
   constructor(device: PlacedHouseDevice, ctx: MarkerContext) {
     super(device, ctx)
     const o = ctx.opening
+    this.mat = coverPanelMaterial(device, ctx, o ? ctx.materials.slat : devMaterial(ctx))
+    // un panneau de VERRE ne porte pas d'ombre pleine, pas plus que le vitrage d'une baie
+    const shadowing = device.coverMaterial !== 'glass'
     if (o) {
-      this.slatMat = ctx.materials.slat.clone()
-      this.slat = new Mesh(new BoxGeometry(o.width * 0.98, Math.max(0.03, o.depth * 0.25), 1), this.slatMat)
-      this.slat.rotation.z = Math.atan2(o.u[1], o.u[0])
-      this.slat.castShadow = true
-      this.object.add(this.slat)
-      this.slat.position.set(
-        o.origin[0] + (o.u[0] * o.width) / 2 + o.normal[0] * o.depth * 0.8 - device.position[0],
-        o.origin[1] + (o.u[1] * o.width) / 2 + o.normal[1] * o.depth * 0.8 - device.position[1],
-        0,
-      )
-      this.registerPickable(this.slat)
+      // Le tablier en UN OU DEUX VANTAUX (`leaves`) : un volet roulant descend d'une pièce, un
+      // battant se lit à son refend. C'est la seule chose que les vantaux font ici — la course
+      // reste verticale, c'est elle que l'état publie.
+      const count = coverLeaves(device, ctx.descriptor)
+      const inner = o.width * SLAT_INSET
+      const gap = count > 1 ? SLAT_GAP : 0
+      const leafWidth = (inner - gap * (count - 1)) / count
+      const angle = Math.atan2(o.u[1], o.u[0])
+      for (let i = 0; i < count; i += 1) {
+        // abscisse du centre du vantail le long du mur, depuis le bord de la baie
+        const t = (o.width - inner) / 2 + i * (leafWidth + gap) + leafWidth / 2
+        const slat = new Mesh(new BoxGeometry(leafWidth, Math.max(0.03, o.depth * 0.25), 1), this.mat)
+        slat.rotation.z = angle
+        slat.castShadow = shadowing
+        this.object.add(slat)
+        slat.position.set(
+          o.origin[0] + o.u[0] * t + o.normal[0] * o.depth * 0.8 - device.position[0],
+          o.origin[1] + o.u[1] * t + o.normal[1] * o.depth * 0.8 - device.position[1],
+          0,
+        )
+        this.registerPickable(slat)
+        this.geometries.push(slat.geometry)
+        this.slats.push(slat)
+      }
+      this.panels = [...this.slats]
       this.applyFraction(0)
       this.setLift(o.origin[2] + o.height - device.position[2] + 0.2)
     } else {
@@ -615,10 +654,11 @@ export class CoverMarker extends DeviceMarker {
       if (isFlatCover(ctx.descriptor)) {
         // Store banne : une dalle HORIZONTALE (son épaisseur est verticale — un panneau dressé à sa
         // place ne ressemblait à rien), qui s'avance depuis le mur. `height` est son avancée.
-        const box = new Mesh(new BoxGeometry(width, height, COVER_THICKNESS), devMaterial(ctx))
-        box.castShadow = true
+        const box = new Mesh(new BoxGeometry(width, height, COVER_THICKNESS), this.mat)
+        box.castShadow = shadowing
         pivot.add(box)
         this.geometries.push(box.geometry)
+        this.panels.push(box)
         this.registerPickable(box)
         this.free = { kind: 'flat', box, depth: height }
         this.setLift(COVER_THICKNESS / 2 + 0.15)
@@ -632,13 +672,14 @@ export class CoverMarker extends DeviceMarker {
           const side = i === 0 ? -1 : 1
           const hinge = new Group()
           hinge.position.x = (side * width) / 2
-          const leaf = new Mesh(new BoxGeometry(leafWidth, COVER_THICKNESS, height), devMaterial(ctx))
+          const leaf = new Mesh(new BoxGeometry(leafWidth, COVER_THICKNESS, height), this.mat)
           leaf.position.x = (-side * leafWidth) / 2      // le battant part de sa charnière vers le milieu
-          leaf.castShadow = true
+          leaf.castShadow = shadowing
           hinge.add(leaf)
           pivot.add(hinge)
           hinges.push(hinge)
           this.geometries.push(leaf.geometry)
+          this.panels.push(leaf)
           this.registerPickable(leaf)
         }
         this.free = { kind: 'leaves', hinges }
@@ -653,11 +694,13 @@ export class CoverMarker extends DeviceMarker {
   private applyFraction(f: number): void {
     this.closedFraction = f
     const o = this.ctx.opening
-    if (o && this.slat) {
+    if (o && this.slats.length) {
       const h = Math.max(0.001, o.height * f)
-      this.slat.scale.z = h
-      this.slat.position.z = o.origin[2] + o.height - h / 2 - this.device.position[2]
-      this.slat.visible = f > 0.005
+      for (const slat of this.slats) {
+        slat.scale.z = h
+        slat.position.z = o.origin[2] + o.height - h / 2 - this.device.position[2]
+        slat.visible = f > 0.005
+      }
       return
     }
     if (!this.free) return
@@ -688,7 +731,7 @@ export class CoverMarker extends DeviceMarker {
     // trompe-l'œil), un store se replie sur son coffre, un portail reste clos.
     const rest = this.free && !isFlatCover(this.ctx.descriptor) ? 0 : 100
     const target = 1 - (state.position ?? rest) / 100
-    if (!this.slat && !this.free) return
+    if (!this.slats.length && !this.free) return
     this.cancelTween?.()
     const from = this.closedFraction
     const first = !this.posed
@@ -700,11 +743,33 @@ export class CoverMarker extends DeviceMarker {
       this.ctx.addAnimation({ step: (now) => tw.step(now) })
     }
   }
+  /**
+   * La teinte MONTRÉE le temps qu'on la choisit, sans rien écrire : le sélecteur du panneau peint ici
+   * à chaque mouvement, et c'est la maison qui fait foi dès que le choix est validé (les marqueurs
+   * sont alors refaits). `null` rend la teinte d'avant, pour un choix abandonné.
+   *
+   * Un ouvrant qui partageait le matériau de la scène s'en détache ici : le peindre tacherait tous
+   * les autres volets de la maison.
+   */
+  override previewColor(color: string | null): void {
+    if (color === null) {
+      if (!this.paintBase) return
+      this.mat.color.copy(this.paintBase)
+    } else {
+      if (!this.ownsMat) {
+        this.mat = this.mat.clone()
+        this.ownsMat = true
+        for (const panel of this.panels) panel.material = this.mat
+      }
+      this.paintBase ??= this.mat.color.clone()
+      this.mat.color.set(color)
+    }
+    this.ctx.invalidate()
+  }
   override dispose(): void {
     this.cancelTween?.()
-    this.slat?.geometry.dispose()
-    this.slatMat?.dispose()
-    for (const g of this.geometries) g.dispose()   // le matériau, lui, est partagé par la scène
+    for (const g of this.geometries) g.dispose()   // le matériau, lui, est partagé par la scène…
+    if (this.ownsMat) this.mat.dispose()           // …sauf celui que l'aperçu de teinte a détaché
     super.dispose()
   }
 }

@@ -39,6 +39,8 @@ const SILL_OUT = 0.05       // débord de l'appui devant la façade
 const SILL_SIDE = 0.04      // et de chaque côté de la baie
 const LEAF = 0.04           // épaisseur d'un vantail
 const EPS = 1e-6
+/** Aucune ouverture habillée : le cas de toutes les maisons qui n'ont pas d'ouvrant lié. */
+const EMPTY_SET: ReadonlySet<string> = new Set<string>()
 /** Jeu (m) entre deux vantaux pleins : c'est ce trait qui fait lire une porte à deux battants. */
 const LEAF_GAP = 0.02
 
@@ -231,12 +233,19 @@ function meshesOf(buckets: Buckets, mats: MaterialSet, role: JoineryRole, name: 
 }
 
 /** Le détail d'un niveau : lisses, encadrements, soubassement, vantaux — les deux derniers par teinte. */
-export function buildDetails(level: LevelGeometry, mats: MaterialSet): Mesh[] {
+export function buildDetails(level: LevelGeometry, mats: MaterialSet, dressed: ReadonlySet<string> = EMPTY_SET): Mesh[] {
   const trim: BufferGeometry[] = []
   const plinth: BufferGeometry[] = []
   const frames: Buckets = new Map()
   const doors: Buckets = new Map()
-  for (const o of level.openings) { frameOfOpening(o, bucket(frames, o), trim); leafOfOpening(o, bucket(doors, o), bucket(frames, o)) }
+  for (const o of level.openings) {
+    frameOfOpening(o, bucket(frames, o), trim)
+    // Le vantail d'une baie HABILLÉE par un ouvrant appartient à l'appareil : c'est lui qui le
+    // dessine, à ses cotes et à ses couleurs, et qui l'ouvre. En dessiner un second ici laissait une
+    // porte de garage fermée derrière le tablier qui vient de remonter. Le DORMANT et le VITRAGE,
+    // eux, restent au bâti : un volet ne retire ni le cadre ni la vitre de la fenêtre qu'il couvre.
+    if (!dressed.has(o.openingId)) leafOfOpening(o, bucket(doors, o), bucket(frames, o))
+  }
   capsOfWalls(level.walls, trim)
   plinthsOfWalls(level.walls, plinth)
   return [

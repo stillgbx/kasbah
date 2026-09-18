@@ -72,12 +72,17 @@ export function expectsOpening(descriptor: Coverish | undefined): boolean {
 }
 
 /**
- * Ouvrant qu'on a le DROIT d'affecter à une ouverture — tout sauf ce qui donne sur la rue. Plus large
+ * Ouvrant qu'on a le DROIT d'affecter à une ouverture — tout sauf un PORTAIL. Plus large
  * qu'`expectsOpening` à dessein : un store banne posé au-dessus d'une baie est un cas réel, on ne
  * l'interdit pas ; on ne le réclame simplement pas.
+ *
+ * Une porte de GARAGE en fait partie, bien qu'elle donne sur la rue : quand le garage est relevé,
+ * elle EST le panneau d'une ouverture de la façade — la lier lui donne les cotes de la baie, et le
+ * bâti cesse alors d'y dessiner son propre vantail (`dressedOpenings`). Un portail, lui, se tient
+ * dans le jardin : aucun mur ne le porte.
  */
 export function canTakeOpening(descriptor: Coverish | undefined): boolean {
-  return !!descriptor && !isPassageCover(descriptor)
+  return !!descriptor && descriptor.meta.cover?.deviceClass !== 'gate'
 }
 
 /**

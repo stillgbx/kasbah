@@ -26,6 +26,13 @@ import { HouseScene } from './HouseScene'
 import type { Animation } from './core/renderLoop'
 import { Precipitation } from './effects/precipitation'
 
+/** Tous les maillages d'un objet, à plat. */
+const meshesOf = (o: Object3D): Mesh[] => {
+  const out: Mesh[] = []
+  o.traverse((x) => { if (x instanceof Mesh) out.push(x) })
+  return out
+}
+
 describe('coords', () => {
   it('maps Z-up house frame to Y-up world', () => {
     expect(houseToWorld([1, 2, 3]).toArray()).toEqual([1, 3, -2])
@@ -504,6 +511,87 @@ describe('marqueurs 3D', () => {
     expect(meshes(one.object)).toHaveLength(1)
   })
 
+  /**
+   * Le TABLIER d'un volet lié à une ouverture : il épouse la baie, et ses vantaux ne font que le
+   * découper — la course reste verticale, c'est elle que l'état publie.
+   */
+  describe('tablier de volet', () => {
+    const rect = (extra: Partial<OpeningRect> = {}): OpeningRect => ({
+      openingId: 'win', roomId: 'salon', levelId: 'rdc', type: 'window',
+      origin: [2, 0, 1], u: [1, 0], normal: [0, -1], width: 2, height: 1.2, depth: 0.3, leaves: 1, ...extra,
+    })
+    /** Même contexte que `marker`, plus l'ouverture que l'ouvrant habille (et le jeu de matériaux, qu'on inspecte). */
+    const dressed = (device: PlacedHouseDevice, opening = rect()) => {
+      animations.length = 0
+      const materials = createMaterials(defaultSceneTheme(), defaultLook())
+      const m = createMarker(device, {
+        materials, theme: defaultSceneTheme(), glow: defaultLook().glow, descriptor: cover('shutter'), opening,
+        addAnimation: (a) => { animations.push(a); return () => {} },
+        invalidate: () => {}, onTap: () => {}, label: 'Volet',
+      }, () => true)
+      return { m, materials }
+    }
+    const width = (x: Mesh) => (x.geometry as BoxGeometry).parameters.width
+
+    it("est d'un seul tenant par défaut, et se refend au nombre de vantaux", () => {
+      const one = meshes(dressed(device({ position: [3, 0, 1.5] })).m.object)
+      expect(one).toHaveLength(1)
+      expect(width(one[0]!)).toBeCloseTo(2 * 0.98)      // il coulisse DANS l'embrasure, pas dessus
+
+      const two = meshes(dressed(device({ position: [3, 0, 1.5], leaves: 2 })).m.object)
+      expect(two).toHaveLength(2)
+      expect(width(two[0]!)).toBeCloseTo(width(two[1]!))
+      // le jeu entre les deux panneaux : 2 cm, le même trait que les vantaux d'une porte
+      expect(two[1]!.position.x - two[0]!.position.x - width(two[0]!)).toBeCloseTo(0.02)
+      // les deux couvrent la baie, jeu compris, et restent centrés sur elle (origine 2, largeur 2)
+      expect((two[0]!.position.x + two[1]!.position.x) / 2 + 3).toBeCloseTo(3)
+    })
+
+    it('descend ses deux vantaux ensemble', () => {
+      const { m } = dressed(device({ position: [3, 0, 1.5], leaves: 2 }))
+      m.update(coverState(0)); settle()                 // fermé : toute la hauteur de la baie
+      for (const slat of meshes(m.object)) {
+        expect(slat.scale.z).toBeCloseTo(1.2)
+        expect(slat.visible).toBe(true)
+      }
+      m.update(coverState(100)); settle()               // ouvert : le tablier est rentré, on ne le voit plus
+      for (const slat of meshes(m.object)) expect(slat.visible).toBe(false)
+    })
+
+    it('garde le matériau de la scène, sauf matière ou couleur voulue', () => {
+      const plain = dressed(device({ position: [3, 0, 1.5] }))
+      expect(meshes(plain.m.object)[0]!.material).toBe(plain.materials.slat)
+
+      const painted = dressed(device({ position: [3, 0, 1.5], leaves: 2, coverMaterial: 'metal', coverColor: '#ffffff' }))
+      const mats = meshes(painted.m.object).map((x) => x.material as MeshStandardMaterial)
+      expect(mats[0]).not.toBe(painted.materials.slat)
+      expect(mats[1]).toBe(mats[0])                     // les deux vantaux d'un même volet partagent leur matériau
+      expect(mats[0]!.color.getHexString()).toBe('ffffff')
+      expect(mats[0]!.metalness).toBeCloseTo(0.85)      // le métal réfléchit, le bois non
+      expect(mats[0]!.roughness).toBeCloseTo(0.3)
+    })
+
+    it('devient translucide en VERRE, et cesse alors de porter son ombre', () => {
+      // une porte de garage vitrée : le verre ne vitre pas la baie ici, il rend le panneau translucide
+      const { m } = dressed(device({ position: [3, 0, 1.5], coverMaterial: 'glass' }))
+      const slat = meshes(m.object)[0]!
+      const mat = slat.material as MeshStandardMaterial
+      expect(mat.transparent).toBe(true)
+      expect(mat.opacity).toBeCloseTo(0.45)
+      expect(slat.castShadow).toBe(false)
+    })
+
+    it("montre la teinte qu'on survole sans tacher les autres volets", () => {
+      const { m, materials } = dressed(device({ position: [3, 0, 1.5] }))
+      const shared = materials.slat.color.getHexString()
+      m.previewColor('#ff0000')
+      expect(materials.slat.color.getHexString()).toBe(shared)   // le matériau partagé n'a pas bougé
+      expect((meshes(m.object)[0]!.material as MeshStandardMaterial).color.getHexString()).toBe('ff0000')
+      m.previewColor(null)                                       // choix abandonné : la teinte d'avant revient
+      expect((meshes(m.object)[0]!.material as MeshStandardMaterial).color.getHexString()).toBe(shared)
+    })
+  })
+
   it("le cône d'un module montre où regarde son verre, châssis négatif compris", () => {
     const sensor = { id: 'p:s', pluginId: 'p', externalId: 's', kind: 'sensor', name: 'Onduleur', capabilities: ['measure'], meta: { sensor: { unit: 'W', deviceClass: 'power', precision: 0 } } } as unknown as DeviceDescriptor
     const panel = { arrayId: 'pv', row: 0, col: 0, width: 1.13, height: 1.76, peakW: 500, maxOutputW: 480, tilt: 35 }
@@ -745,6 +833,68 @@ describe('tap sur le toit', () => {
     lookDown()
     scene.focusLevel('etage')
     expect(scene.pick({ x: 0, y: 0 })).toEqual({ kind: 'room', roomId: 'chambre1' })
+  })
+})
+
+/**
+ * Une porte de garage LIÉE à son ouverture : c'est l'appareil qui porte le panneau, à ses cotes et à
+ * ses couleurs. Le bâti cesse d'en dessiner un — sinon la porte remontée laisse un vantail fixe
+ * derrière elle.
+ */
+describe('ouverture habillée par un ouvrant', () => {
+  /** La maison de démo, dont la porte de la terrasse devient un garage que le volet de la cuisine ferme. */
+  const garaged = () => {
+    const doc = JSON.parse(JSON.stringify(demo)) as typeof demo
+    const cuisine = doc.rooms.find((r) => r.id === 'cuisine')!
+    const porte = cuisine.openings.find((o) => o.id === 'porte-terrasse') as Record<string, unknown>
+    porte.type = 'garage'
+    const cover = doc.devices.find((d) => d.id === 'cover.cuisine') as Record<string, unknown>
+    cover.openingId = 'porte-terrasse'
+    return parseHouse(doc)
+  }
+  const leafTriangles = (scene: HouseScene) => {
+    let n = 0
+    scene.scene.traverse((o) => { if (o instanceof Mesh && o.name === 'details:doors') n += countTriangles(o) })
+    return n
+  }
+  const shutter = {
+    id: 'mock:cover-kitchen', pluginId: 'mock', externalId: 'k', kind: 'cover', name: 'Volet cuisine',
+    capabilities: ['open_close'], meta: { cover: { deviceClass: 'garage' } },
+  } as DeviceDescriptor
+
+  it("laisse son panneau à l'appareil, même quand le descripteur arrive après la maison", () => {
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true })
+    scene.load(garaged())
+    // le KIND vient du descripteur : tant qu'il manque, le bâti dessine son vantail comme avant
+    const before = leafTriangles(scene)
+    expect(before).toBeGreaterThan(0)
+    scene.setDescriptors({ 'mock:cover-kitchen': shutter })
+    expect(leafTriangles(scene)).toBeLessThan(before)
+    // et le volet, lui, est bien là : c'est lui qu'on voit maintenant dans la baie
+    expect(meshesOf(scene.markers.get('cover.cuisine')!.object).length).toBeGreaterThan(0)
+  })
+})
+
+/**
+ * Un ouvrant lié à une ouverture n'occupe pas un point : il HABILLE une baie. Son tablier y était
+ * déjà dessiné, mais sa pilule restait sur la `position` du JSON — posée une fois par l'auto-placement,
+ * puis figée pendant qu'on affinait la baie au doigt.
+ */
+describe('ouvrant lié à une ouverture', () => {
+  it('épouse le rectangle de sa baie, pilule comprise', () => {
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true })
+    scene.load(parseHouse(demo))
+    const marker = scene.markers.get('cover.baie')!
+    // la baie du salon : mur y = 0 à partir de x = 3,2 ; à 1,5 m du coin, large de 2,4 → centre 5,9
+    expect(marker.object.position.x).toBeCloseTo(5.9)
+    // la `position` du JSON, elle, est restée à 4,2 : 1,7 m à côté de ce qui est dessiné
+    const written = demo.devices.find((d) => d.id === 'cover.baie')!.position as [number, number, number]
+    expect(written[0]).toBeCloseTo(4.2)
+    // et en hauteur : le milieu de la baie (allège 0,2 + 2,15 / 2), non le 1,3 du fichier
+    expect(marker.object.position.z).toBeCloseTo(0.2 + 2.15 / 2)
+    // le tablier, lui, n'a pas bougé d'un pouce : il était déjà sur la baie
+    const slat = meshesOf(marker.object)[0]!
+    expect(marker.object.position.x + slat.position.x).toBeCloseTo(5.9)
   })
 })
 
@@ -1495,6 +1645,24 @@ describe('détail architectural', () => {
     for (const m of meshes) expect(countTriangles(m)).toBeGreaterThan(0)
   })
 
+  /**
+   * Une baie HABILLÉE par un ouvrant : son vantail appartient à l'appareil, qui le dessine et
+   * l'ouvre. Le bâti n'en pose pas un second — sinon une porte de garage remontée laisse derrière
+   * elle le panneau fixe, et la baie n'est jamais vide.
+   */
+  it("laisse son vantail à l'ouvrant qui habille la baie, et garde le reste du bâti", () => {
+    const dressed = buildDetails(rdc, mats, new Set(['porte-entree']))
+    const doorsOf = (list: Mesh[]) => list.find((m) => m.name === 'details:doors')
+    expect(countTriangles(doorsOf(dressed)!)).toBeLessThan(countTriangles(byName('details:doors')))
+    // le dormant, les lisses et le soubassement restent au mur : un volet ne retire pas le cadre
+    for (const name of ['details:frames', 'details:trim', 'details:plinth']) {
+      expect(countTriangles(dressed.find((m) => m.name === name)!)).toBe(countTriangles(byName(name)))
+    }
+    // toutes les portes habillées : plus un seul vantail à dessiner
+    const all = new Set(rdc.openings.map((o) => o.openingId))
+    expect(buildDetails(rdc, mats, all).map((m) => m.name)).not.toContain('details:doors')
+  })
+
   it('le couronnement dépasse le haut des murs de cinq millimètres, jamais plus', () => {
     const g = byName('details:trim').geometry
     g.computeBoundingBox()
@@ -1569,12 +1737,17 @@ describe('détail architectural', () => {
     expect(only({ color: '#c0c4c8' }).find((m) => m.name.startsWith('details:frames'))!.material).toBe(frame.material)
   })
 
-  it('le métal d’une menuiserie réfléchit, le bois non', () => {
+  it('le métal d’une menuiserie réfléchit, le bois non, le tissu encore moins', () => {
     const metal = only({ material: 'metal' }).find((m) => m.name.startsWith('details:frames'))!.material as MeshStandardMaterial
     const wood = only({ material: 'wood' }).find((m) => m.name.startsWith('details:frames'))!.material as MeshStandardMaterial
     expect(metal.metalness).toBeGreaterThan(0.5)
     expect(wood.metalness).toBe(0)
     expect(wood.color.getHexString()).toBe(mats.floors.wood.color.getHexString())
+    // une TOILE : aucun reflet, et plus mate que le bois — c'est ce qui la distingue à l'œil
+    const fabric = only({ material: 'fabric' }).find((m) => m.name.startsWith('details:frames'))!.material as MeshStandardMaterial
+    expect(fabric.metalness).toBe(0)
+    expect(fabric.roughness).toBeGreaterThan(wood.roughness)
+    expect(fabric.transparent).toBe(false)              // le tissu ne fait rien à la géométrie, lui
   })
 
   it('les couleurs du détail se déduisent de la palette : lisse plus claire, menuiseries et soubassement plus sombres', () => {

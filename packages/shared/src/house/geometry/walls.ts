@@ -1,6 +1,6 @@
 import type { HouseDefaults } from '../defaults'
 import type { Level, Opening, Room, WallKind } from '../schema'
-import type { OpeningRect, WallPrism } from './types'
+import type { OpeningRect, Vec3, WallPrism } from './types'
 import { add, clipConvex, cross, dot, isConvex, lineIntersect, normalize, perpRight, pointInPolygon, scale, signedArea, sub, type Vec2 } from './vec2'
 
 // Murs : chaque pièce porte ses propres murs vers l'EXTÉRIEUR de sa face intérieure.
@@ -308,6 +308,16 @@ function trimCrossRoomOverlaps(plans: readonly SegmentPlan[]): void {
       pick.plan.u1 = pick.u1
     }
   }
+}
+
+/**
+ * Le CENTRE d'un rectangle d'ouverture (z local au niveau, comme l'origine). C'est le point d'ancrage
+ * de tout ce qui habille l'ouverture — le tablier d'un volet, la pilule de son marqueur — plutôt que
+ * la `position` du JSON : une ouverture affinée après coup laisserait l'appareil à l'écart (mesuré à
+ * 2,11 m sur `cover.volet-bureau`), alors que ce qui est dessiné, lui, épouse déjà la baie.
+ */
+export function openingCentre(o: OpeningRect): Vec3 {
+  return [o.origin[0] + (o.u[0] * o.width) / 2, o.origin[1] + (o.u[1] * o.width) / 2, o.origin[2] + o.height / 2]
 }
 
 export interface WallsResult { prisms: WallPrism[]; openings: OpeningRect[] }

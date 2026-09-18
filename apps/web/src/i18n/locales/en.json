@@ -433,7 +433,7 @@
     "removeFrees": "{name} will lose its place.",
     "types": { "door": "Door", "window": "Window", "passage": "Passage/Opening", "garage": "Garage door", "bay": "Bay window", "glass-door": "Glass door" },
     "leaves": "Leaves", "material": "Material", "color": "Colour", "colorReset": "Clear the chosen colour",
-    "materials": { "auto": "Automatic", "wood": "Wood", "metal": "Metal", "glass": "Glass" },
+    "materials": { "auto": "Automatic", "wood": "Wood", "metal": "Metal", "glass": "Glass", "fabric": "Fabric" },
     "width": "Width", "height": "Height", "sill": "Sill height", "rename": "Rename the opening",
     "gapRight": "Right", "gapLeft": "Left",
     "wall": "Wall {segment}", "whereHint": "Adjust here, or by dragging the opening on the room's walls in the 3D view.",

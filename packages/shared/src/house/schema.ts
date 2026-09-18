@@ -90,9 +90,11 @@ export type OpeningType = (typeof OPENING_TYPES)[number]
  * relevé au mètre ruban n'a pas à décrire la matière de chaque fenêtre pour être juste.
  *
  * `glass` VITRE l'ouverture en plus de la teinter : une porte pleine déclarée en verre reçoit son
- * vitrage et perd son panneau opaque, exactement comme une porte vitrée.
+ * vitrage et perd son panneau opaque, exactement comme une porte vitrée. `fabric` est la seule qui
+ * ne dise rien de plus qu'une lumière : une TOILE, mate et sans reflet — la banne d'un store, le
+ * tissu d'un rideau, une porte de garage à rideau souple.
  */
-export const OPENING_MATERIALS = ['wood', 'metal', 'glass'] as const
+export const OPENING_MATERIALS = ['wood', 'metal', 'glass', 'fabric'] as const
 export type OpeningMaterial = (typeof OPENING_MATERIALS)[number]
 
 /** Bornes du nombre de vantaux. Dix : au-delà, ce n'est plus une ouverture, c'est une façade. */
@@ -241,8 +243,23 @@ export const houseDeviceSchema = z.object({
    * absent = la taille par défaut du marqueur.
    */
   size: z.object({ width: z.number().positive(), height: z.number().positive() }).optional(),
-  /** Battants d'un portail ou d'une porte : ce qui s'écarte quand il s'ouvre. Absent = un seul. */
+  /**
+   * Vantaux d'un ouvrant : ce qui s'écarte quand un portail s'ouvre, et ce qui DÉCOUPE le tablier
+   * d'un volet lié à une ouverture (deux vantaux = volet battant, un = tablier d'un seul tenant).
+   * Absent = un seul, sauf un portail, qui en a deux.
+   */
   leaves: z.union([z.literal(1), z.literal(2)]).optional(),
+  /**
+   * Matière d'un ouvrant (`OPENING_MATERIALS`), comme `Opening.material` l'est d'une menuiserie.
+   * Absente, la scène garde la matière d'ouvrant du style de rendu. Préfixée `cover` — `style.color`
+   * occupe déjà le mot « couleur » sur un appareil, et deux champs homonymes se confondraient.
+   *
+   * Le VERRE ne fait pas ici ce qu'il fait sur une ouverture (où il la vitre, cf. `isGlazed`) : il
+   * rend le panneau translucide, et c'est ce qu'est une porte de garage vitrée.
+   */
+  coverMaterial: z.enum(OPENING_MATERIALS).optional(),
+  /** Couleur d'un ouvrant (#rrggbb). Absente, c'est la palette du style de rendu qui la donne. */
+  coverColor: hexColorSchema.optional(),
   style: z.object({ icon: z.string().optional(), color: z.string().optional() }).optional(),
   meta: metaSchema,
 })

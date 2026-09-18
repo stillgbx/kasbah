@@ -59,9 +59,13 @@ export function coverLeaves(device: HouseDevice, descriptor: DeviceDescriptor | 
   return descriptor?.meta.cover?.deviceClass === 'gate' ? 2 : 1
 }
 
-/** Ouvrant dont les battants se comptent : debout et libre (un store se déploie, il n'en a pas). */
+/**
+ * Ouvrant dont les vantaux se comptent : tout ce qui se tient DEBOUT — un store se déploie, il n'en
+ * a pas. Les battants d'un portail s'écartent, les panneaux d'un volet ne font que découper son
+ * tablier : deux dessins pour un même nombre, et la même question à poser à l'utilisateur.
+ */
 export function hasLeaves(device: HouseDevice, descriptor: DeviceDescriptor | undefined): boolean {
-  return isSizable(device, descriptor) && !isFlatCover(descriptor)
+  return (descriptor?.kind ?? device.kind) === 'cover' && !isFlatCover(descriptor)
 }
 
 /** Encombrement d'un ouvrant libre : celui du JSON, sinon le défaut de sa nature. */

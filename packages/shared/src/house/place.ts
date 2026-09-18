@@ -2,6 +2,9 @@ import { z } from 'zod'
 import { deviceIdSchema } from '../devices/descriptor'
 import { defaultPlugins, hexColorSchema, MAX_OPENING_LEAVES, MIN_OPENING_LEAVES, model3dSchema, MOUNTS, NEUTRAL_TUNING, OPENING_MATERIALS, OPENING_TYPES, vec2Schema, vec3Schema, type PluginSettingsPatch, type SceneTuning } from './schema'
 import { VEHICLE_FINISHES } from '../devices/kinds'
+import { computeHouseGeometry, openingCentre } from './geometry'
+import { parseHouse } from './validate'
+import type { Vec3 } from './geometry/types'
 
 // Écritures de l'UI dans house.json (placement d'un appareil, ordre d'affichage des pièces).
 // On travaille sur le JSON BRUT (pas la maison parsée) pour ne réécrire que ce qui a changé et ne
@@ -29,8 +32,15 @@ export const devicePlacementSchema = z.object({
   yaw: z.number().min(0).max(360).optional(),
   /** Encombrement dessiné (m, comme `HouseDevice.size`) : un portail posé dehors n'a pas d'ouverture pour le dimensionner. */
   size: z.object({ width: z.number().positive().max(50), height: z.number().positive().max(50) }).optional(),
-  /** Battants d'un portail (comme `HouseDevice.leaves`) : un panneau, ou deux qui s'écartent. */
+  /** Vantaux d'un ouvrant (comme `HouseDevice.leaves`) : les battants d'un portail, les panneaux d'un volet. */
   leaves: z.union([z.literal(1), z.literal(2)]).optional(),
+  /**
+   * Matière d'un ouvrant (comme `HouseDevice.coverMaterial`). **Chaîne vide = effacer** et rendre la
+   * main à la matière d'ouvrant du style de rendu, comme pour la couleur de carrosserie.
+   */
+  coverMaterial: z.union([z.literal(''), z.enum(OPENING_MATERIALS)]).optional(),
+  /** Couleur d'un ouvrant (comme `HouseDevice.coverColor`). **Chaîne vide = effacer**, même règle. */
+  coverColor: z.union([z.literal(''), hexColorSchema]).optional(),
   /**
    * Correction (m, repère maison) de la place calculée d'un appareil placé par son GPS — un
    * véhicule (comme `HouseDevice.gpsOffset`). `[0, 0]` EFFACE la correction : c'est le seul moyen
@@ -100,10 +110,59 @@ function openingOwner(rooms: readonly JsonObject[], openingId: string): JsonObje
   return owner
 }
 
+/** Deux places identiques au millimètre : inutile de réécrire le fichier pour du bruit de virgule. */
+const samePlace = (a: readonly unknown[], b: Vec3) =>
+  a.length === 3 && a.every((v, i) => typeof v === 'number' && Math.abs(v - b[i]!) < 1e-6)
+
+/** Au millimètre : un relevé se lit à la main, il n'a pas à porter quinze décimales. */
+const roundPlace = (p: Vec3): Vec3 => [
+  Math.round(p[0] * 1000) / 1000, Math.round(p[1] * 1000) / 1000, Math.round(p[2] * 1000) / 1000,
+]
+
+/**
+ * Recale sur le centre de leur baie les appareils LIÉS aux ouvertures données.
+ *
+ * Un volet, un capteur de fenêtre n'occupent pas un point : ils habillent un rectangle, et c'est ce
+ * rectangle que la scène dessine — leur `position` n'est plus ce qui les place. Mais elle se LIT,
+ * dans un fichier qu'on ouvre à la main, et une ouverture affinée après coup la laissait mentir
+ * (2,11 m d'écart mesurés sur le volet du bureau). Elle suit donc la baie, dans la même écriture que
+ * l'ouverture qui vient de bouger.
+ *
+ * Seuls les appareils qui ont DÉJÀ une place sont recalés : lier un appareil jamais posé ne lui en
+ * invente pas une, la scène sait s'en passer.
+ *
+ * Le document est relu pour en tirer la géométrie : c'est le seul moyen d'avoir le MÊME centre que
+ * la scène, plutôt qu'un second calcul qui divergerait. Un document que `parseHouse` refuse est
+ * rendu tel quel — c'est l'appelant qui valide, et son erreur sera plus claire que la nôtre.
+ */
+function alignDevicesOnOpenings(doc: JsonObject, openingIds: readonly string[]): JsonObject {
+  const devices = Array.isArray(doc.devices) ? doc.devices : []
+  const wanted = new Set(openingIds)
+  const concerns = (d: unknown): d is JsonObject =>
+    isObject(d) && typeof d.openingId === 'string' && wanted.has(d.openingId) && Array.isArray(d.position)
+  if (!devices.some(concerns)) return doc
+  let centres: Map<string, Vec3>
+  try {
+    centres = new Map(computeHouseGeometry(parseHouse(doc)).levels
+      .flatMap((l) => l.openings)
+      .filter((rect) => wanted.has(rect.openingId))
+      .map((rect) => [rect.openingId, roundPlace(openingCentre(rect))]))
+  } catch { return doc }
+  let changed = false
+  const next = devices.map((d) => {
+    if (!concerns(d)) return d
+    const centre = centres.get(d.openingId as string)
+    if (!centre || samePlace(d.position as unknown[], centre)) return d
+    changed = true
+    return { ...d, position: centre }
+  })
+  return changed ? { ...doc, devices: next } : doc
+}
+
 /**
  * Renvoie une copie du document JSON avec l'appareil `id` (re)placé ou renommé : entrée existante
- * mise à jour (position, nom, pièce, mount, yaw, size, leaves, gpsOffset, yawOffset, batteryKwh,
- * model3d, bodyColor, bodyFinish), ou entrée créée
+ * mise à jour (position, nom, pièce, mount, yaw, size, leaves, coverMaterial, coverColor, gpsOffset,
+ * yawOffset, batteryKwh, model3d, bodyColor, bodyFinish), ou entrée créée
  * `{ id, deviceId, … }` avec ce qui a été donné.
  *
  * Tout est facultatif, position comprise : renommer un appareil qui n'a PAS de place dans la scène
@@ -157,6 +216,14 @@ export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePla
       if (placement.bodyFinish) next.bodyFinish = placement.bodyFinish
       else delete next.bodyFinish
     }
+    if (placement.coverMaterial !== undefined) {
+      if (placement.coverMaterial) next.coverMaterial = placement.coverMaterial
+      else delete next.coverMaterial
+    }
+    if (placement.coverColor !== undefined) {
+      if (placement.coverColor) next.coverColor = placement.coverColor
+      else delete next.coverColor
+    }
     if (room) {
       next.roomId = room.id
       // le JSON de démo porte roomId ET levelId : garder les deux cohérents, sans en ajouter
@@ -195,6 +262,8 @@ export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePla
     if (placement.model3d) next.model3d = placement.model3d
     if (placement.bodyColor) next.bodyColor = placement.bodyColor
     if (placement.bodyFinish) next.bodyFinish = placement.bodyFinish
+    if (placement.coverMaterial) next.coverMaterial = placement.coverMaterial
+    if (placement.coverColor) next.coverColor = placement.coverColor
     if (placement.openingId) {
       const owner = openingOwner(rooms, placement.openingId)
       next.openingId = placement.openingId
@@ -204,7 +273,10 @@ export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePla
   const out = [...devices]
   if (i >= 0) out[i] = next
   else out.push(next)
-  return { ...doc, devices: out }
+  // lier un appareil à une ouverture lui donne la place de la baie : il l'habille désormais
+  return placement.openingId
+    ? alignDevicesOnOpenings({ ...doc, devices: out }, [placement.openingId])
+    : { ...doc, devices: out }
 }
 
 /**
@@ -441,7 +513,8 @@ export function patchOpeningInJson(doc: unknown, roomId: string, openingId: stri
   nextOpenings[oi] = next
   const nextRooms = [...rooms]
   nextRooms[ri] = { ...room, openings: nextOpenings }
-  return { ...doc, rooms: nextRooms }
+  // l'ouverture a bougé (ou changé de cotes) : ce qui l'habille la suit, dans la même écriture
+  return alignDevicesOnOpenings({ ...doc, rooms: nextRooms }, [openingId])
 }
 
 /**

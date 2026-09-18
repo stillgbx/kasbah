@@ -19,6 +19,7 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 import ForgetDeviceButton from '../devices/ForgetDeviceButton.vue'
 import DeviceControl from '../controls/DeviceControl.vue'
 import VehicleTuning from '../vehicles/VehicleTuning.vue'
+import CoverTuning from '../covers/CoverTuning.vue'
 import JournalList from '../robots/JournalList.vue'
 import MowerTuning from '../robots/MowerTuning.vue'
 import { useJournals } from '../../composables/useJournals'
@@ -56,6 +57,15 @@ const tunableMower = computed(() => {
   const d = resolved.value?.descriptor
   const s = resolved.value?.state
   return d?.kind === 'mower' && s?.kind === 'mower' && !!s.location && resolved.value?.houseDevice?.position === undefined ? d : null
+})
+/**
+ * L'ouvrant a les siens : vantaux, matière, couleur (`CoverTuning`). Ils ne concernent que ce qui est
+ * DESSINÉ, et un ouvrant absent de la maison n'est dessiné nulle part — rien à régler tant qu'il
+ * n'est pas posé (ou lié à une ouverture, ce qui le pose aussi).
+ */
+const tunableCover = computed(() => {
+  const d = resolved.value?.descriptor
+  return d?.kind === 'cover' && resolved.value?.houseDevice ? d : null
 })
 const journalable = computed(() => {
   const d = resolved.value?.descriptor
@@ -272,6 +282,19 @@ function send(cmd: CommandInput) {
          Replié derrière « Régler », pied en bas comme « Emplacement ». -->
     <div v-if="tunableCar" class="card card--soft tuning">
       <div v-if="tuningOpen" class="tuning__body"><VehicleTuning :descriptor="tunableCar" /></div>
+      <div class="tuning__foot">
+        <span class="muted">{{ $t('vehicle.tuneTitle') }}</span>
+        <button type="button" class="pill tuning__cta" :data-on="tuningOpen ? '1' : '0'"
+                :aria-expanded="tuningOpen" @click="tuningOpen = !tuningOpen">
+          <StrokeIcon name="gear" :size="16" /> {{ tuningOpen ? $t('place.done') : $t('vehicle.tune') }}
+        </button>
+      </div>
+    </div>
+    <!-- l'ouvrant : ce que la maison sait de lui et que le fabricant ignore — ses vantaux, sa
+         matière, sa couleur. Replié derrière « Régler », comme les réglages d'un véhicule : ce qu'on
+         vient faire ici, c'est manœuvrer le volet, pas le décrire. -->
+    <div v-if="tunableCover" class="card card--soft tuning">
+      <div v-if="tuningOpen" class="tuning__body"><CoverTuning :descriptor="tunableCover" /></div>
       <div class="tuning__foot">
         <span class="muted">{{ $t('vehicle.tuneTitle') }}</span>
         <button type="button" class="pill tuning__cta" :data-on="tuningOpen ? '1' : '0'"
