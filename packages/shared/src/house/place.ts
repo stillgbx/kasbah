@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { deviceIdSchema } from '../devices/descriptor'
-import { defaultPlugins, hexColorSchema, MAX_OPENING_LEAVES, MIN_OPENING_LEAVES, model3dSchema, MOUNTS, OPENING_MATERIALS, OPENING_TYPES, vec2Schema, vec3Schema, type PluginSettingsPatch } from './schema'
+import { defaultPlugins, hexColorSchema, MAX_OPENING_LEAVES, MIN_OPENING_LEAVES, model3dSchema, MOUNTS, NEUTRAL_TUNING, OPENING_MATERIALS, OPENING_TYPES, vec2Schema, vec3Schema, type PluginSettingsPatch, type SceneTuning } from './schema'
 import { VEHICLE_FINISHES } from '../devices/kinds'
 
 // Écritures de l'UI dans house.json (placement d'un appareil, ordre d'affichage des pièces).
@@ -229,6 +229,22 @@ export function removeDeviceFromJson(doc: unknown, id: string): JsonObject {
     devices: devices.filter((_, k) => k !== i),
     ...(kept.length === arrays.length ? {} : { arrays: kept }),
   }
+}
+
+/**
+ * Renvoie une copie du document JSON avec le réglage de lumière de la scène 3D posé
+ * (`render.tuning`), tel qu'il sort du banc de la vue Maison. Un réglage NEUTRE n'est pas écrit :
+ * il est retiré du fichier, pour qu'une maison sans retouche reste une maison sans section
+ * `render` — le style redevient alors la seule source, ce qui est bien ce qu'on veut dire.
+ */
+export function setRenderTuningInJson(doc: unknown, tuning: SceneTuning): JsonObject {
+  if (!isObject(doc)) throw new PlacementError('house document is not an object')
+  const render: JsonObject = isObject(doc.render) ? { ...doc.render } : {}
+  const neutral = (Object.keys(NEUTRAL_TUNING) as (keyof SceneTuning)[]).every((k) => tuning[k] === NEUTRAL_TUNING[k])
+  if (neutral) delete render.tuning
+  else render.tuning = { ...tuning }
+  const { render: _dropped, ...rest } = doc
+  return Object.keys(render).length ? { ...rest, render } : rest
 }
 
 /**

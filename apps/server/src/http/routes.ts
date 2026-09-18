@@ -1,4 +1,4 @@
-import { addOpeningToJson, assertCommandAllowed, commandSchema, devicePlacementSchema, newOpeningSchema, openingPatchSchema, panelArrayPatchSchema, patchOpeningInJson, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, roomOrderSchema, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
+import { addOpeningToJson, assertCommandAllowed, commandSchema, devicePlacementSchema, newOpeningSchema, openingPatchSchema, panelArrayPatchSchema, patchOpeningInJson, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, roomOrderSchema, sceneTuningSchema, setRenderTuningInJson, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { updateHouseFile, type LoadedHouse } from '../config/house'
 import type { PluginHost } from '../core/plugin-host'
@@ -102,6 +102,16 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
   // écriture (voir `removeOpeningFromJson`) — sans quoi il nommerait une ouverture disparue.
   app.delete<{ Params: { roomId: string; openingId: string } }>('/api/house/rooms/:roomId/openings/:openingId', async (req) => {
     const house = await updateHouseFile(deps.house, (doc) => removeOpeningFromJson(doc, req.params.roomId, req.params.openingId))
+    deps.hub.broadcast({ type: 'house', house })
+    return { house }
+  })
+
+  // Réglage de la lumière de la scène 3D (`render.tuning`), posé depuis le banc de la vue Maison :
+  // c'est un choix de LA MAISON, pas de la tablette qui regarde — toutes les tablettes en héritent.
+  // Même mécanique que le reste : patch du JSON brut, réécriture atomique, diffusion de la maison.
+  app.put('/api/house/render', async (req) => {
+    const tuning = sceneTuningSchema.parse(req.body)   // ZodError → 400
+    const house = await updateHouseFile(deps.house, (doc) => setRenderTuningInJson(doc, tuning))
     deps.hub.broadcast({ type: 'house', house })
     return { house }
   })

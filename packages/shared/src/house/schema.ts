@@ -393,6 +393,67 @@ export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = { enabled: false, parts: 
  */
 export const defaultPlugins = (): Record<string, PluginSettings> => ({ mock: { ...DEFAULT_PLUGIN_SETTINGS, enabled: true } })
 
+/**
+ * RÉGLAGE DE LA LUMIÈRE de la scène 3D, enregistré dans la maison (`render.tuning`). Ce sont des
+ * MULTIPLICATEURS posés sur ce que le style de rendu calcule pour l'heure qu'il est : × 1 partout
+ * rend le style tel quel, et la courbe jour/nuit du style survit au réglage. Les cinq derniers,
+ * eux, sont les grandeurs mêmes du trait qui souligne la pièce sélectionnée — il vient du thème de
+ * l'application, aucun style ne le calcule.
+ *
+ * Pourquoi dans la MAISON et non dans les préférences de la tablette (comme le style ou la
+ * qualité) : une lumière se règle une fois, devant la maison, et vaut ensuite pour toutes les
+ * tablettes qui la regardent. La qualité, elle, dépend de la machine qui dessine.
+ *
+ * Les bornes sont larges et strictes à la fois : larges parce qu'un goût ne se discute pas, strictes
+ * parce qu'une valeur folle doit être REFUSÉE à l'écriture (400) plutôt qu'écrite puis subie. Un
+ * fichier de maison abîmé à la main se refuse comme n'importe quel autre champ de la maison.
+ */
+const factor = (max: number) => z.number().min(0).max(max).default(1)
+export const sceneTuningSchema = z.object({
+  /** × sur l'exposition du style (le diaphragme). */
+  exposure: factor(3),
+  /** Courbe de tone mapping ; `style` laisse celle du style. */
+  toneMapping: z.enum(['style', 'aces', 'agx', 'neutral', 'linear']).default('style'),
+  /** × sur la force du bloom. */
+  bloomStrength: factor(3),
+  /** × sur le SEUIL du bloom : au-dessus de 1, seules les vraies sources bavent. */
+  bloomThreshold: factor(4),
+  /** × sur le rayon du bloom. */
+  bloomRadius: factor(3),
+  /** × sur la vignette. */
+  vignette: factor(3),
+  /** × sur l'opacité du halo additif posé sur une lampe allumée. */
+  glowOpacity: factor(3),
+  /** × sur le diamètre de ce halo. */
+  glowScale: factor(3),
+  /** × sur l'intensité de la lumière ponctuelle d'une lampe. */
+  lightIntensity: factor(3),
+  /** × sur la part émissive du globe d'une lampe. */
+  emissive: factor(3),
+  /** Largeur (m) du trait posé le long des murs de la pièce sélectionnée. */
+  ringWidth: z.number().min(0.01).max(1).default(0.14),
+  /** Éclat du trait : l'accent multiplié par ce nombre. Au-dessus de 1, le bloom l'accroche. */
+  ringBoost: z.number().min(0).max(4).default(1.15),
+  /** Part de blanc mêlée à l'accent avant l'éclat. */
+  ringWhite: z.number().min(0).max(1).default(0.2),
+  /** Opacité du trait. */
+  ringOpacity: z.number().min(0).max(1).default(0.92),
+  /** Opacité du voile posé sur le sol de la pièce. */
+  fillOpacity: z.number().min(0).max(1).default(0.1),
+  /** Le trait passe par-dessus les murs au lieu d'être caché par eux. */
+  ringThrough: z.boolean().default(true),
+})
+export type SceneTuning = z.infer<typeof sceneTuningSchema>
+
+/** Le réglage qui ne change rien : ce que le style calcule, sans retouche. */
+export const NEUTRAL_TUNING: SceneTuning = sceneTuningSchema.parse({})
+
+/** Ce que la maison dit du RENDU de sa scène 3D. Absent = les styles tels qu'ils sont écrits. */
+export const renderSettingsSchema = z.object({
+  tuning: sceneTuningSchema.optional(),
+})
+export type RenderSettings = z.infer<typeof renderSettingsSchema>
+
 export const houseSchema = z.object({
   schemaVersion: z.literal(1),
   id: idSchema,
@@ -408,6 +469,8 @@ export const houseSchema = z.object({
   arrays: z.array(panelArraySchema).default([]),
   /** Plugins de cette maison : lesquels sont actifs, et leurs sous-items. */
   plugins: z.record(z.string(), pluginSettingsSchema).default(defaultPlugins),
+  /** Réglage de la lumière de la scène 3D, posé depuis la vue Maison. */
+  render: renderSettingsSchema.optional(),
   meta: metaSchema,
 })
 export type House = z.infer<typeof houseSchema>

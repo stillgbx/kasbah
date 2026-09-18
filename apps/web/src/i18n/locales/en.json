@@ -247,6 +247,56 @@
     "qualities": { "auto": "Automatic", "high": "High", "medium": "Medium", "low": "Low" },
     "debug": "Debug", "weather": "Forced weather", "weatherReal": "Real", "weatherHint": "Debug only: forces a weather onto the 3D scene to see it under rain or snow. The widget and the Weather view keep showing the real weather.",
   "debugHint": "Puts a measurement overlay on the scene: frames per second, CPU cost of a frame, draw calls, passes and shadow rebuilds. « img/s » at 0 when idle is normal — rendering is on demand.",
+  "tuning": {
+      "title": "Tune the light",
+      "open": "Open",
+      "hint": "Tuning bench: presets, exposure, bloom, lamp glow and the selected room's outline, adjusted live in front of the house. The sliders multiply what the style computes — the day/night curve is kept. What you save is written to the house file and applies to every tablet.",
+      "curve": "Curve",
+      "curves": {
+        "style": "From style",
+        "aces": "ACES",
+        "agx": "AgX",
+        "neutral": "Neutral",
+        "linear": "None"
+      },
+      "image": "Image",
+      "lamps": "Lamps",
+      "room": "Selected room",
+      "reset": "Reset",
+      "presets": "Presets",
+      "presetNames": {
+        "soft": "Soft",
+        "cinema": "Cinema",
+        "plain": "Plain",
+        "model": "Model"
+      },
+      "presetHints": {
+        "soft": "The same picture without the glare: only real sources bloom, the lamp halo is halved, the outline underlines instead of shouting.",
+        "cinema": "AgX curve: an overexposed lamp keeps its hue instead of turning white. Wider aperture, deeper vignette — a photograph.",
+        "plain": "For the hallway tablet: almost no bloom, no vignette, a crisp opaque outline readable at a glance.",
+        "model": "The model-house spirit: still glowing, but lit walls stop bleeding."
+      },
+      "save": "Save",
+      "saved": "Saved",
+      "saveError": "Could not save the tuning: {message}",
+      "fields": {
+        "exposure": "Exposure",
+        "bloomStrength": "Bloom strength",
+        "bloomThreshold": "Bloom threshold",
+        "bloomRadius": "Bloom radius",
+        "vignette": "Vignette",
+        "glowOpacity": "Glow opacity",
+        "glowScale": "Glow size",
+        "lightIntensity": "Lamp light",
+        "emissive": "Bulb",
+        "ringWidth": "Outline width",
+        "ringBoost": "Outline boost",
+        "ringWhite": "Outline white",
+        "ringOpacity": "Outline opacity",
+        "fillOpacity": "Floor veil",
+        "ringThrough": "Outline visible through walls"
+      }
+    },
   "houseEditing": "Adjust openings", "houseEditingHint": "The Home view then lets you adjust and drag windows and doors on the walls. The survey is approximate: this is where it gets corrected, and nothing is written until something is actually adjusted."
   },
   "settings": {

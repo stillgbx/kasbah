@@ -247,6 +247,56 @@
     "qualities": { "auto": "Automatique", "high": "Haute", "medium": "Moyenne", "low": "Basse" },
     "debug": "Débogage", "weather": "Météo forcée", "weatherReal": "Réelle", "weatherHint": "Débogage seulement : impose une météo à la scène 3D pour la regarder sous la pluie ou la neige. Le widget et la vue Météo continuent de dire le vrai temps.",
   "debugHint": "Pose un voile de mesure sur la scène : images par seconde, coût CPU d'une image, appels de dessin, passes et relevés d'ombre. « img/s » à 0 au repos est normal — le rendu est à la demande.",
+  "tuning": {
+      "title": "Régler la lumière",
+      "open": "Ouvrir",
+      "hint": "Banc de réglage : préréglages, exposition, bloom, halo des lampes et trait de la pièce sélectionnée, réglés en direct devant la maison. Les curseurs multiplient ce que le style calcule — la courbe jour/nuit est conservée. Ce qu'on enregistre est écrit dans le fichier de la maison, et vaut pour toutes les tablettes.",
+      "curve": "Courbe",
+      "curves": {
+        "style": "Du style",
+        "aces": "ACES",
+        "agx": "AgX",
+        "neutral": "Neutre",
+        "linear": "Aucune"
+      },
+      "image": "Image",
+      "lamps": "Lampes",
+      "room": "Pièce sélectionnée",
+      "reset": "Réinitialiser",
+      "presets": "Préréglages",
+      "presetNames": {
+        "soft": "Douce",
+        "cinema": "Cinéma",
+        "plain": "Sobre",
+        "model": "Maquette"
+      },
+      "presetHints": {
+        "soft": "La même image, sans l'éblouissement : seules les vraies sources bavent, le halo des lampes est divisé par deux, le trait souligne au lieu de crier.",
+        "cinema": "Courbe AgX : une lampe surexposée garde sa teinte au lieu de virer au blanc. Diaphragme plus ouvert, vignette creusée — c'est une photo.",
+        "plain": "Pour la tablette de l'entrée : presque pas de bloom, pas de vignette, un trait net et opaque qu'on lit d'un pas.",
+        "model": "L'esprit de la maquette : ça brille toujours, mais les murs éclairés cessent de baver."
+      },
+      "save": "Enregistrer",
+      "saved": "Enregistré",
+      "saveError": "Enregistrement du réglage impossible : {message}",
+      "fields": {
+        "exposure": "Exposition",
+        "bloomStrength": "Bloom force",
+        "bloomThreshold": "Bloom seuil",
+        "bloomRadius": "Bloom rayon",
+        "vignette": "Vignette",
+        "glowOpacity": "Halo opacité",
+        "glowScale": "Halo taille",
+        "lightIntensity": "Lumière",
+        "emissive": "Globe",
+        "ringWidth": "Trait largeur",
+        "ringBoost": "Trait éclat",
+        "ringWhite": "Trait blanc",
+        "ringOpacity": "Trait opacité",
+        "fillOpacity": "Voile du sol",
+        "ringThrough": "Trait visible à travers les murs"
+      }
+    },
   "houseEditing": "Régler les ouvertures", "houseEditingHint": "La vue Maison permet alors de régler et de glisser les fenêtres et les portes sur les murs. Le relevé est approximatif : c'est ici qu'on l'ajuste, rien n'est écrit tant qu'on n'a pas réglé quelque chose."
   },
   "settings": {

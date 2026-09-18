@@ -14,6 +14,7 @@ import RoomEditPanel from '../components/home/RoomEditPanel.vue'
 import DevicePanel from '../components/home/DevicePanel.vue'
 import OpeningPanel from '../components/home/OpeningPanel.vue'
 import SceneDebug from '../components/home/SceneDebug.vue'
+import SceneTuningPanel from '../components/home/SceneTuningPanel.vue'
 import SearchBar from '../components/home/SearchBar.vue'
 import WeatherWidget from '../components/home/WeatherWidget.vue'
 import { useHouseScene } from '../composables/useHouseScene'
@@ -283,6 +284,7 @@ const DOLLY_STEP = 1.35
       <div ref="labelLayer" class="scene-labels" />
       <div class="home__vignette" />
       <SceneDebug v-if="settings.sceneDebug" :scene="scene.controller" />
+      <SceneTuningPanel v-if="settings.sceneTuningOpen" :scene="scene.controller" />
     </div>
     <div class="home__header">
       <PageHeader>

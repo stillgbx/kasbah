@@ -1,0 +1,46 @@
+import { describe, expect, it } from 'vitest'
+import { defaultLook } from './index'
+import { applyTuning, NEUTRAL_TUNING, resolveTuning, sameTuning, TUNING_PRESETS, TUNING_RANGES } from './tuning'
+
+describe('banc de réglage de la lumière', () => {
+  it('ne change rien au réglage neutre', () => {
+    const look = defaultLook()
+    expect(applyTuning(look, NEUTRAL_TUNING)).toEqual(look)
+  })
+
+  it('multiplie la chaîne d’image et le halo, sans toucher au reste du look', () => {
+    const look = defaultLook()
+    const out = applyTuning(look, { ...NEUTRAL_TUNING, exposure: 0.5, bloomThreshold: 1.4, glowOpacity: 0.5, toneMapping: 'agx' })
+    expect(out.post.exposure).toBeCloseTo(look.post.exposure * 0.5)
+    expect(out.post.bloom!.threshold).toBeCloseTo(look.post.bloom!.threshold * 1.4)
+    expect(out.post.bloom!.strength).toBe(look.post.bloom!.strength)
+    expect(out.glow.opacity).toBeCloseTo(look.glow.opacity * 0.5)
+    expect(out.post.toneMapping).toBe('agx')
+    // la palette, les matières et l'éclairage ne sont pas du ressort du banc
+    expect(out.palette).toBe(look.palette)
+    expect(out.lighting).toBe(look.lighting)
+    expect(look.post.exposure).toBe(defaultLook().post.exposure)   // le look du style n'est pas modifié
+  })
+
+  it('complète un réglage partiel, et rend le neutre d’un brouillon abîmé', () => {
+    expect(resolveTuning(null)).toEqual(NEUTRAL_TUNING)
+    expect(resolveTuning({ exposure: 0.8 })).toEqual({ ...NEUTRAL_TUNING, exposure: 0.8 })
+    // hors bornes : le brouillon entier est jeté plutôt que de faire tomber la vue
+    expect(resolveTuning({ exposure: Number.NaN, ringThrough: false })).toEqual(NEUTRAL_TUNING)
+    expect(resolveTuning({ ringWidth: 12 })).toEqual(NEUTRAL_TUNING)
+  })
+
+  it('les préréglages sont complets, distincts, et dans les bornes des curseurs', () => {
+    expect(new Set(TUNING_PRESETS.map((p) => p.id)).size).toBe(TUNING_PRESETS.length)
+    for (const p of TUNING_PRESETS) {
+      // un préréglage n'est jamais le neutre : il aurait alors le même effet que « Réinitialiser »
+      expect(sameTuning(p.tuning, NEUTRAL_TUNING)).toBe(false)
+      expect(resolveTuning(p.tuning)).toEqual(p.tuning)
+      for (const [key, range] of Object.entries(TUNING_RANGES)) {
+        const v = p.tuning[key as keyof typeof TUNING_RANGES]
+        expect(v, `${p.id}.${key}`).toBeGreaterThanOrEqual(range.min)
+        expect(v, `${p.id}.${key}`).toBeLessThanOrEqual(range.max)
+      }
+    }
+  })
+})

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import demo from './__fixtures__/demo-house.json'
 import { parseHouse } from './validate'
-import { addOpeningToJson, PlacementError, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, setPluginInJson, setRoomOrderInJson } from './place'
+import { NEUTRAL_TUNING } from './schema'
+import { addOpeningToJson, PlacementError, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, setPluginInJson, setRenderTuningInJson, setRoomOrderInJson } from './place'
 
 const devices = (doc: Record<string, unknown>) => doc.devices as Record<string, unknown>[]
 
@@ -313,5 +314,28 @@ describe('removeOpeningFromJson', () => {
   it('refuse une piece inconnue ou une ouverture qui n y est pas', () => {
     expect(() => removeOpeningFromJson(demo, 'nope', 'baie')).toThrow(PlacementError)
     expect(() => removeOpeningFromJson(demo, 'cuisine', 'baie')).toThrow(PlacementError)
+  })
+})
+
+describe('setRenderTuningInJson', () => {
+  const render = (doc: Record<string, unknown>) => doc.render as { tuning?: Record<string, number> } | undefined
+
+  it('écrit le réglage et le relit tel quel', () => {
+    const out = setRenderTuningInJson(demo, { ...NEUTRAL_TUNING, bloomThreshold: 1.45, toneMapping: 'agx' })
+    expect(render(out)!.tuning!.bloomThreshold).toBe(1.45)
+    expect(parseHouse(out).render!.tuning!.toneMapping).toBe('agx')
+  })
+
+  it('efface la section quand le réglage est neutre : une maison sans retouche n’en porte pas', () => {
+    const tuned = setRenderTuningInJson(demo, { ...NEUTRAL_TUNING, exposure: 0.8 })
+    const back = setRenderTuningInJson(tuned, NEUTRAL_TUNING)
+    expect(back.render).toBeUndefined()
+    expect(parseHouse(back).render).toBeUndefined()
+  })
+
+  it('ne modifie pas le document d’entrée', () => {
+    const before = JSON.stringify(demo)
+    setRenderTuningInJson(demo, { ...NEUTRAL_TUNING, vignette: 1.5 })
+    expect(JSON.stringify(demo)).toBe(before)
   })
 })

@@ -17,7 +17,8 @@ import { DECOR_LAYER, LAMP_LAYER, SITE_DECOR_LAYER } from './core/layers'
 import { createPostPipeline, detectQuality, gpuName, PIXEL_RATIO, toneMappingOf, type EffectiveQuality, type PostPipeline, type RenderQuality } from './core/post'
 import { fogDistance, sunDirection, type SceneAmbience } from './core/ambience'
 import { Precipitation } from './effects/precipitation'
-import { defaultAmbience, defaultSceneTheme, rolesOf, styleById, type RenderStyle, type StyleLook } from './styles'
+import { defaultAmbience, defaultSceneTheme, rolesOf, styleById, type GlowLook, type PostLook, type RenderStyle, type StyleLook } from './styles'
+import { applyTuning, NEUTRAL_TUNING, type SceneTuning } from './styles/tuning'
 import { buildHouse, buildLevel, type HouseNodes, type LevelNodes } from './builders/buildHouse'
 import { extrudeRing, flatPolygon, flatRing, insetPolygon } from './builders/shapes'
 import { clamp, fitBox, sphericalOf, type CameraPose } from './core/cameraFit'
@@ -54,6 +55,8 @@ export interface SceneAppearance {
   ambience: SceneAmbience
   /** Matières en images à la place des procédurales, si le style porte un pack (`textures/assets.ts`). */
   assets: boolean
+  /** Banc de réglage de la lumière (`styles/tuning.ts`) : multiplicateurs posés sur le look du style. */
+  tuning: SceneTuning
 }
 
 export interface HouseSceneDeps {
@@ -164,8 +167,6 @@ const FLASH_EVERY_MS: readonly [number, number] = [6000, 16000]
 const PRECIP_HEIGHT_M = 14
 const WORLD_UP = new Vector3(0, 1, 0)
 const WHITE = new Color(0xffffff)
-/** Largeur (m) du trait qui souligne la pièce sélectionnée : un pixel de loin, une bande de près. */
-const HIGHLIGHT_RING_M = 0.14
 /**
  * Poignée d'une ouverture en mode édition : une dalle qui remplit son rectangle et déborde de
  * l'épaisseur du mur, et un cadre qui la cerne (voir `OPENING_RING` pour sa largeur).
@@ -336,6 +337,8 @@ export class HouseScene {
   private viewInsetRight = 0
   /** Ce que reflète une carrosserie. Propre aux véhicules : la maison, elle, n'a pas d'environnement. */
   private skyEnv: Texture | null = null
+  /** Banc de réglage : neutre tant que les Réglages n'ont rien posé (`styles/tuning.ts`). */
+  private tuning: SceneTuning = NEUTRAL_TUNING
   private descriptors = new Map<string, DeviceDescriptor>()
   private states: Record<string, DeviceState> = {}
 
@@ -343,7 +346,7 @@ export class HouseScene {
     this.deps = deps
     this.style = deps.style ?? styleById(null)
     this.ambience = deps.ambience ?? defaultAmbience()
-    this.look = this.style.look(this.ambience)
+    this.look = applyTuning(this.style.look(this.ambience), this.tuning)
     this.theme = deps.theme ?? defaultSceneTheme()
     this.sunDir = sunDirection(this.ambience)
     this.materials = createMaterials(this.theme, this.look)
@@ -1650,15 +1653,17 @@ export class HouseScene {
       // terne) et poussé JUSTE au-dessus de 1 : c'est ce dépassement que le bloom accroche la nuit.
       // Réglé à l'œil avec l'utilisateur : × 1,8 brûlait en blanc, × 1 « ne glow plus assez ».
       // Le voile est léger, il ne teinte qu'à peine.
-      // Dessiné PAR-DESSUS les murs (`depthTest: false`, comme le guide du mode déplacer) : en vue
+      // Dessiné PAR-DESSUS les murs (`ringThrough`, comme le guide du mode déplacer) : en vue
       // oblique, le pied d'un mur cachait le trait qui le longe.
+      // Ces cinq nombres sont ceux que le banc de réglage (`styles/tuning.ts`) met sous curseur.
+      const tn = this.tuning
       const ring = new Mesh(
-        flatRing(floor.polygon, insetPolygon(floor.polygon, HIGHLIGHT_RING_M), floor.z1 + 0.012),
-        new MeshBasicMaterial({ color: accent.clone().lerp(WHITE, 0.2).multiplyScalar(1.15), transparent: true, opacity: 0.92, depthWrite: false, depthTest: false }),
+        flatRing(floor.polygon, insetPolygon(floor.polygon, tn.ringWidth), floor.z1 + 0.012),
+        new MeshBasicMaterial({ color: accent.clone().lerp(WHITE, tn.ringWhite).multiplyScalar(tn.ringBoost), transparent: true, opacity: tn.ringOpacity, depthWrite: false, depthTest: !tn.ringThrough }),
       )
       const fill = new Mesh(
         flatPolygon(floor.polygon, floor.z1 + 0.008),
-        new MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.1, depthWrite: false }),
+        new MeshBasicMaterial({ color: accent, transparent: true, opacity: tn.fillOpacity, depthWrite: false }),
       )
       for (const m of [fill, ring]) { m.name = 'highlight'; level.group.add(m); this.highlightMeshes.push(m) }
     }
@@ -1833,7 +1838,8 @@ export class HouseScene {
     if (next.style) this.style = next.style
     if (next.ambience) { this.ambience = next.ambience; this.sunDir = sunDirection(this.ambience) }
     if (next.assets !== undefined) this.assets = next.assets
-    if (next.style || next.ambience) this.look = this.style.look(this.ambience)
+    if (next.tuning) this.tuning = next.tuning
+    if (next.style || next.ambience || next.tuning) this.look = applyTuning(this.style.look(this.ambience), this.tuning)
     this.theme = resolveSceneTheme(next.ui ?? this.theme, this.look.palette, this.ambience)
     this.photoGen++                        // les images d'un style ou d'un réglage quittés n'ont plus preneur
     this.applyMaterials()
@@ -1853,6 +1859,30 @@ export class HouseScene {
     this.syncStorm()
     this.syncPrecipitation()
     this.loop.invalidate()
+  }
+
+  /**
+   * Le banc de réglage, pendant qu'on tire un curseur. `setAppearance` referait les matières, le
+   * ciel, les ombres et les textures à chaque image du glissement — or un multiplicateur du banc ne
+   * touche QUE la chaîne d'image, le halo des lampes et le trait de la pièce. C'est le même look
+   * recalculé, mais seulement ce qui en dépend est réappliqué.
+   */
+  setTuning(tuning: SceneTuning): void {
+    this.tuning = tuning
+    this.look = applyTuning(this.style.look(this.ambience), this.tuning)
+    if (this.post) this.post.setLook(this.look.post)
+    else if (this.renderer) {
+      this.renderer.toneMapping = toneMappingOf(this.look.post)
+      this.renderer.toneMappingExposure = this.look.post.exposure
+    }
+    for (const m of this.markers.values()) m.setTheme(this.theme, this.look.glow)
+    this.highlightRoom(this.highlightedRoom)
+    this.loop.invalidate()
+  }
+
+  /** Ce que la chaîne d'image applique VRAIMENT, réglage compris : de quoi en déduire un défaut. */
+  tunedLook(): { post: PostLook; glow: GlowLook } {
+    return { post: this.look.post, glow: this.look.glow }
   }
 
   /**

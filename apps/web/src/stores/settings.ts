@@ -1,6 +1,6 @@
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
-import { useFullscreen, useIntervalFn, useLocalStorage, usePreferredDark } from '@vueuse/core'
+import { StorageSerializers, useFullscreen, useIntervalFn, useLocalStorage, usePreferredDark } from '@vueuse/core'
 import type { ThemeInstance } from 'vuetify'
 import { themeName } from '../plugins/vuetify'
 import { cssVars, DEFAULT_THEME_ID, resolveVariant, THEME_LIST, type ThemeId } from '../themes'
@@ -11,6 +11,7 @@ import { useHouseStore } from './house'
 import { AMBIENCE_MODES, type AmbienceMode } from '../three/core/ambience'
 import { RENDER_QUALITIES, type RenderQuality } from '../three/core/post'
 import { DEFAULT_STYLE_ID, RENDER_STYLES } from '../three/styles'
+import { NEUTRAL_TUNING, resolveTuning, sameTuning, TUNING_PRESETS, type SceneTuning } from '../three/styles/tuning'
 import { WEATHER_CONDITIONS, type WeatherCondition } from '@kasbah/shared'
 
 /** Une condition forcée dans la scène, ou `real` : la météo telle qu'elle est. */
@@ -63,6 +64,30 @@ export const useSettingsStore = defineStore('settings', () => {
   const preferredDark = usePreferredDark()
   const weather = useWeather()
   const house = useHouseStore()
+  /**
+   * Banc de réglage de la lumière. Deux étages, et c'est voulu :
+   *  - ce qui est ENREGISTRÉ vit dans la maison (`house.render.tuning`), parce qu'une lumière se
+   *    règle une fois pour toutes les tablettes qui regardent cette maison ;
+   *  - ce qui est EN COURS de réglage vit ici, dans un brouillon local, pour qu'on puisse tirer les
+   *    curseurs une soirée entière sans rien écrire dans le fichier de la maison.
+   * `null` = aucun brouillon, la maison fait foi. C'est ce que rend « Réinitialiser » une fois
+   * enregistré, et c'est l'état d'une tablette qui n'a jamais ouvert le banc.
+   */
+  // Le sérialiseur est DIT : `useLocalStorage` le devine de la valeur par défaut, et une valeur par
+  // défaut `null` ne dit rien — le brouillon partait en `[object Object]` et ne survivait pas au
+  // rechargement (constaté). `null` reste ici le seul moyen de distinguer « pas de brouillon » d'un
+  // brouillon neutre, qui lui est un choix.
+  const sceneTuningDraft = useLocalStorage<Partial<SceneTuning> | null>('kasbah.sceneTuning', null, { serializer: StorageSerializers.object })
+  /** Ce que la maison porte, ou le neutre : le réglage auquel « Réinitialiser » ne touche pas. */
+  const savedSceneTuning = computed(() => resolveTuning(house.house?.render?.tuning))
+  /** Ce que la scène applique : le brouillon s'il y en a un, sinon la maison. */
+  const sceneTuning = computed(() => (sceneTuningDraft.value ? resolveTuning(sceneTuningDraft.value) : savedSceneTuning.value))
+  /** Le brouillon diffère-t-il de ce qui est enregistré (le bouton « Enregistrer » a-t-il quelque chose à dire). */
+  const sceneTuningDirty = computed(() => !sameTuning(sceneTuning.value, savedSceneTuning.value))
+  /** Le préréglage dont le réglage courant est la copie conforme, s'il y en a un. */
+  const sceneTuningPreset = computed(() => TUNING_PRESETS.find((p) => sameTuning(p.tuning, sceneTuning.value))?.id ?? null)
+  /** Le banc est-il ouvert sur la vue Maison. Jamais persisté : il s'ouvre depuis les Réglages. */
+  const sceneTuningOpen = ref(false)
   /** Horloge de l'apparence « Auto ». Les autres modes ne la lisent pas : rien ne recalcule. */
   const clock = ref(new Date())
   useIntervalFn(() => { clock.value = new Date() }, 60_000)
@@ -96,6 +121,20 @@ export const useSettingsStore = defineStore('settings', () => {
   function setSceneQuality(v: RenderQuality) { if (RENDER_QUALITIES.includes(v)) sceneQuality.value = v }
   function setSceneAssets(v: boolean) { sceneAssets.value = v }
   function setSceneDebug(v: boolean) { sceneDebug.value = v }
+  function setSceneTuning(patch: Partial<SceneTuning>) { sceneTuningDraft.value = resolveTuning({ ...sceneTuning.value, ...patch }) }
+  /** « Réinitialiser » : retour à ce que le style calcule, sans retouche. Ce qui est enregistré dans la maison reste, jusqu'à un « Enregistrer ». */
+  function resetSceneTuning() { sceneTuningDraft.value = { ...NEUTRAL_TUNING } }
+  function applySceneTuningPreset(id: string) {
+    const p = TUNING_PRESETS.find((x) => x.id === id)
+    if (p) sceneTuningDraft.value = { ...p.tuning }
+  }
+  /** Écrit le réglage courant dans la maison ; le brouillon s'efface, la maison devient la source. */
+  async function saveSceneTuning(): Promise<boolean> {
+    const ok = await house.saveRenderTuning(sceneTuning.value)
+    if (ok) sceneTuningDraft.value = null
+    return ok
+  }
+  function setSceneTuningOpen(v: boolean) { sceneTuningOpen.value = v }
   function setHouseEditing(v: boolean) { houseEditing.value = v }
   function setSceneWeather(v: SceneWeatherChoice) { if (v === 'real' || WEATHER_CONDITIONS.includes(v)) sceneWeather.value = v }
   function setSceneCloudCover(v: number) { if (Number.isFinite(v)) sceneCloudCover.value = Math.min(100, Math.max(0, Math.round(v))) }
@@ -127,9 +166,9 @@ export const useSettingsStore = defineStore('settings', () => {
 
   return {
     appearance, theme, locale, isDark, wantDark, themeId, currentTheme, resolvedLocale, fullscreen,
-    sceneStyle, sceneAmbience, sceneQuality, sceneAssets, sceneDebug, houseEditing, sceneWeather, sceneCloudCover, sceneVisibilityM, householdSize,
+    sceneStyle, sceneAmbience, sceneQuality, sceneAssets, sceneDebug, sceneTuning, savedSceneTuning, sceneTuningDirty, sceneTuningPreset, sceneTuningOpen, houseEditing, sceneWeather, sceneCloudCover, sceneVisibilityM, householdSize,
     setAppearance, cycleAppearance, setTheme, setLocale, toggleLocale, applyToVuetify, applyLocale,
-    setSceneStyle, setSceneAmbience, setSceneQuality, setSceneAssets, setSceneDebug, setHouseEditing, setSceneWeather, setSceneCloudCover, setSceneVisibilityM, setHouseholdSize,
+    setSceneStyle, setSceneAmbience, setSceneQuality, setSceneAssets, setSceneDebug, setSceneTuning, resetSceneTuning, applySceneTuningPreset, saveSceneTuning, setSceneTuningOpen, setHouseEditing, setSceneWeather, setSceneCloudCover, setSceneVisibilityM, setHouseholdSize,
     appearances: APPEARANCES, themes: THEME_LIST, locales: LOCALES,
     styles: RENDER_STYLES, ambiences: AMBIENCE_MODES, qualities: RENDER_QUALITIES,
   }

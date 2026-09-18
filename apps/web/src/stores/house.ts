@@ -1,6 +1,6 @@
 import { computed, ref, shallowRef, watch } from 'vue'
 import { defineStore } from 'pinia'
-import { autoPlaceDevices, computeRoof, fitHeight, houseIdForDevice, indexHouse, isPlaced, newOpeningDims, openingLimits, openingSill, panelArrayDevices, panelOf, pointInPolygon, resolveDefaults, resolveDeviceLevelId, roomHeight, slotFromPoint, withPanelArrays, type DeviceDescriptor, type DeviceEntry, type DevicePlacement, type House, type HouseDevice, type HouseIndex, type Level, type Opening, type OpeningPatch, type OpeningType, type PanelArray, type PanelArrayPatch, type PlaceableDevice, type PlacedHouseDevice, type Room, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
+import { autoPlaceDevices, computeRoof, fitHeight, houseIdForDevice, indexHouse, isPlaced, newOpeningDims, openingLimits, openingSill, panelArrayDevices, panelOf, pointInPolygon, resolveDefaults, resolveDeviceLevelId, roomHeight, slotFromPoint, withPanelArrays, type DeviceDescriptor, type DeviceEntry, type DevicePlacement, type House, type HouseDevice, type HouseIndex, type Level, type Opening, type OpeningPatch, type OpeningType, type PanelArray, type PanelArrayPatch, type PlaceableDevice, type PlacedHouseDevice, type Room, type SceneTuning, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
 import { getTransport } from '../api'
 import type { JournalPoint } from '../lib/journal'
 import { i18n, t } from '../i18n'
@@ -266,6 +266,21 @@ export const useHouseStore = defineStore('house', () => {
     catch (err) {
       house.value = prev
       useNotificationsStore().error(t('rooms.orderError', { message: (err as Error).message }))
+    }
+  }
+
+  /**
+   * Réglage de la lumière de la scène 3D enregistré dans la maison (banc de la vue Maison). Pas
+   * d'application optimiste : la maison ne change pas d'aspect à l'enregistrement — la scène montre
+   * déjà le réglage en cours, l'écriture ne fait que le rendre durable et commun aux tablettes.
+   */
+  async function saveRenderTuning(tuning: SceneTuning): Promise<boolean> {
+    try {
+      house.value = await getTransport().saveRenderTuning(tuning)
+      return true
+    } catch (err) {
+      useNotificationsStore().error(t('render.tuning.saveError', { message: (err as Error).message }))
+      return false
     }
   }
 
@@ -1057,7 +1072,7 @@ export const useHouseStore = defineStore('house', () => {
   return {
     house, effective, loading, error, index, levels, zones, soundRoutes, relaySource,
     focusedLevelId, gardenFocus, selectedRoomId, selectedLevelId, selectedKey, floorTab, selectedRoom, selectedZone, selectedDevice,
-    load, setFloorTab, focusLevel, selectRoom, selectLevel, selectDevice, clearSelection, backToHome, backFromRoom, backFromDevice, houseDeviceFor, renameDevice, setDeviceTuning, bodyColorPreview, previewBodyColor, setRoomOrder,
+    load, setFloorTab, focusLevel, selectRoom, selectLevel, selectDevice, clearSelection, backToHome, backFromRoom, backFromDevice, houseDeviceFor, renameDevice, setDeviceTuning, bodyColorPreview, previewBodyColor, setRoomOrder, saveRenderTuning,
     journalOverlay, journalFocus, journalActive, showJournal, hideJournal, focusJournalPoint, markJournalPoint,
     placing, saving, draft, canRevert, isProvisional, startPlacing, startPlacingNew, stopPlacing, previewPosition, previewHeight, savePlacement, revertPlacement, removePlacement,
     placementLevelId, setPlacementLevel,

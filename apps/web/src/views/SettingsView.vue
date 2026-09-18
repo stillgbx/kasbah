@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import PageHeader from '../components/layout/PageHeader.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
@@ -31,6 +32,12 @@ const devices = useDevicesStore()
 const house = useHouseStore()
 const { t } = useI18n()
 onMounted(() => { void devices.refreshHealth(); void plugins.load() })
+const router = useRouter()
+
+// Le banc de réglage de la lumière ne s'ouvre pas ICI : une lumière ne se juge que devant la maison,
+// à l'heure qu'elle a. Le bouton arme le panneau et emmène sur la vue Maison, où les curseurs
+// changent l'image sous les doigts.
+function openTuning() { settings.setSceneTuningOpen(true); void router.push({ name: 'home' }) }
 
 // `auto` a sa propre clé : « Automatique » (le libellé de la langue) allongeait la colonne de 73 px
 // — une piste `fr` ne descend jamais sous le min-content de ce qu'elle porte (voir le style plus bas).
@@ -154,6 +161,13 @@ const houseStats = computed(() => {
                 </div>
                 <v-switch :model-value="settings.sceneDebug" hide-details density="compact"
                           @update:model-value="(v: boolean | null) => settings.setSceneDebug(v === true)" />
+              </div>
+              <div class="auto-row auto-row--default">
+                <div class="min0">
+                  <div class="auto-row__name">{{ $t('render.tuning.title') }}</div>
+                  <div class="muted small">{{ $t('render.tuning.hint') }}</div>
+                </div>
+                <button type="button" class="pill pill--sm" @click="openTuning()">{{ $t('render.tuning.open') }}</button>
               </div>
             </div>
             <!-- les deux segmentés reprennent TOUTE la largeur du bloc : leurs quatre libellés ne
