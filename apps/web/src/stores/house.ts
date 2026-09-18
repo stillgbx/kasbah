@@ -51,8 +51,24 @@ function withOpeningDraft(h: House | null, id: string | null, patch: OpeningPatc
   if (!h || !id || !patch) return h
   if (!h.rooms.some((r) => r.openings.some((o) => o.id === id))) return h
   return { ...h, rooms: h.rooms.map((r) => (r.openings.some((o) => o.id === id)
-    ? { ...r, openings: r.openings.map((o) => (o.id === id ? { ...o, ...patch } : o)) }
+    ? { ...r, openings: r.openings.map((o) => (o.id === id ? mergeOpening(o, patch) : o)) }
     : r)) }
+}
+
+/**
+ * Le brouillon posé sur une ouverture. Les trois champs EFFAÇABLES suivent ici exactement la règle
+ * du serveur (`patchOpeningInJson`) : une chaîne vide RETIRE la clé au lieu de l'écrire. Sans ce
+ * détour, rendre la main au défaut (la nature, la palette) aurait montré dans la scène une
+ * menuiserie de matière `''`, que le fichier ne portera jamais.
+ */
+function mergeOpening(o: Opening, patch: OpeningPatch): Opening {
+  const { name, leaves, material, color, ...rest } = patch
+  const next: Opening = { ...o, ...rest }
+  if (name !== undefined) { if (name) next.name = name; else delete next.name }
+  if (leaves !== undefined) { if (leaves) next.leaves = leaves; else delete next.leaves }
+  if (material !== undefined) { if (material) next.material = material; else delete next.material }
+  if (color !== undefined) { if (color) next.color = color; else delete next.color }
+  return next
 }
 
 export const useHouseStore = defineStore('house', () => {
@@ -789,6 +805,9 @@ export const useHouseStore = defineStore('house', () => {
         type: sel.opening.type, segment: sel.opening.segment, offset: sel.opening.offset,
         width: sel.opening.width, height: sel.opening.height,
         sill: openingSill(sel.opening, resolveDefaults(house.value?.defaults)),
+        // la menuiserie se rétablit comme les cotes ; absente à la sélection, elle se RETIRE (chaîne
+        // vide) plutôt que de se figer sur la valeur déduite
+        leaves: sel.opening.leaves ?? '', material: sel.opening.material ?? '', color: sel.opening.color ?? '',
       }
       : null
     if (!sel) return
@@ -865,6 +884,7 @@ export const useHouseStore = defineStore('house', () => {
     return o.type !== s.type || o.segment !== s.segment || o.offset !== s.offset
       || o.width !== s.width || o.height !== s.height
       || o.sill !== openingSill(s, resolveDefaults(house.value.defaults))
+      || o.leaves !== (s.leaves ?? '') || o.material !== (s.material ?? '') || o.color !== (s.color ?? '')
   })
   /** Rétablit les cotes trouvées à la sélection ; l'allège absente du JSON se rétablit par sa valeur, qui donne le même mur. */
   async function revertOpening(): Promise<void> {

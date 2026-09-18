@@ -83,6 +83,21 @@ export type WallKind = (typeof WALL_KINDS)[number]
  */
 export const OPENING_TYPES = ['door', 'window', 'passage', 'garage', 'bay', 'glass-door'] as const
 export type OpeningType = (typeof OPENING_TYPES)[number]
+
+/**
+ * Matière de la MENUISERIE d'une ouverture — son dormant et ses vantaux, pas le mur qui la porte.
+ * Absente, la scène garde ce qu'elle déduit de la nature (dormant anthracite, vantail bois) : un
+ * relevé au mètre ruban n'a pas à décrire la matière de chaque fenêtre pour être juste.
+ *
+ * `glass` VITRE l'ouverture en plus de la teinter : une porte pleine déclarée en verre reçoit son
+ * vitrage et perd son panneau opaque, exactement comme une porte vitrée.
+ */
+export const OPENING_MATERIALS = ['wood', 'metal', 'glass'] as const
+export type OpeningMaterial = (typeof OPENING_MATERIALS)[number]
+
+/** Bornes du nombre de vantaux. Dix : au-delà, ce n'est plus une ouverture, c'est une façade. */
+export const MIN_OPENING_LEAVES = 1
+export const MAX_OPENING_LEAVES = 10
 export const openingSchema = z.object({
   id: idSchema,
   /**
@@ -99,6 +114,16 @@ export const openingSchema = z.object({
   height: z.number().positive(),
   /** Hauteur d'allège depuis le sol fini. Défaut : 0 (porte/passage/garage) ou defaults.windowSill (fenêtre). */
   sill: z.number().min(0).optional(),
+  /**
+   * Nombre de vantaux. Absent, il se DÉDUIT de la nature et de la largeur (`openingLeaves`) : une
+   * baie de trois mètres est une coulissante à deux ou trois vantaux, tout le reste n'en a qu'un.
+   * Le nombre dessine les refends d'une ouverture vitrée et découpe le panneau d'une porte pleine.
+   */
+  leaves: z.number().int().min(MIN_OPENING_LEAVES).max(MAX_OPENING_LEAVES).optional(),
+  /** Matière de la menuiserie. Absente, la scène décide d'après la nature (`OPENING_MATERIALS`). */
+  material: z.enum(OPENING_MATERIALS).optional(),
+  /** Couleur de la menuiserie (#rrggbb). Absente, c'est la palette du style de rendu qui la donne. */
+  color: hexColorSchema.optional(),
   style: metaSchema,
   meta: metaSchema,
 })

@@ -1,7 +1,7 @@
 import { BoxGeometry, Matrix4, Mesh, Vector3, type BufferGeometry } from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
-import type { LevelGeometry, OpeningRect, OpeningType, RoofDescriptor, Vec2, Vec3, WallPrism } from '@kasbah/shared'
-import type { MaterialSet } from './materials'
+import type { LevelGeometry, OpeningMaterial, OpeningRect, OpeningType, RoofDescriptor, Vec2, Vec3, WallPrism } from '@kasbah/shared'
+import { joineryMaterial, type JoineryRole, type MaterialSet } from './materials'
 import { extrudePolygon, extrudeRing, insetPolygon } from './shapes'
 
 // Détail ARCHITECTURAL procédural : ce qui fait qu'une boîte extrudée devient un bâtiment. Aucun
@@ -39,9 +39,8 @@ const SILL_OUT = 0.05       // débord de l'appui devant la façade
 const SILL_SIDE = 0.04      // et de chaque côté de la baie
 const LEAF = 0.04           // épaisseur d'un vantail
 const EPS = 1e-6
-/** Largeur (m) de vantail au-delà de laquelle une baie prend un refend de plus : une coulissante. */
-const BAY_VANE_W = 1.6
-const BAY_VANES_MAX = 3
+/** Jeu (m) entre deux vantaux pleins : c'est ce trait qui fait lire une porte à deux battants. */
+const LEAF_GAP = 0.02
 
 /**
  * Ce qui est VITRÉ : une fenêtre, une baie, une porte vitrée. Ces trois-là reçoivent un vitrage dans
@@ -52,6 +51,13 @@ const BAY_VANES_MAX = 3
  * (cf. `6_faq/6_0_pieges-outillage.md`).
  */
 export const GLAZED_OPENINGS: ReadonlySet<OpeningType> = new Set<OpeningType>(['window', 'bay', 'glass-door'])
+
+/**
+ * Vitrée pour de bon : par sa NATURE, ou parce que le relevé lui donne le verre pour matière. Une
+ * porte pleine déclarée en verre reçoit alors son vitrage et perd son panneau opaque — c'est tout
+ * ce que « matière : verre » veut dire, et c'est la seule matière qui touche la géométrie.
+ */
+export const isGlazed = (o: OpeningRect): boolean => o.material === 'glass' || GLAZED_OPENINGS.has(o.type)
 
 /**
  * Une boîte dans le repère d'une baie : x le long du mur depuis le bord gauche, y dans l'épaisseur
@@ -98,10 +104,19 @@ function frameOfOpening(o: OpeningRect, frames: BufferGeometry[], trim: BufferGe
     const sy = 0.06 + SILL_OUT
     trim.push(boxAt(o, [w + 2 * SILL_SIDE, sy, SILL_H], [w / 2, d - 0.06 + sy / 2, -SILL_H / 2]))
   }
-  if (o.type === 'bay') {
-    const vanes = Math.min(BAY_VANES_MAX, Math.max(2, Math.round(w / BAY_VANE_W)))
-    for (let i = 1; i < vanes; i++) frames.push(boxAt(o, [f, fd, h - 2 * f], [(i * w) / vanes, d / 2, h / 2]))
+  // Un REFEND par joint entre vantaux, sur tout ce qui est vitré : sans eux, trois mètres de verre
+  // d'un seul tenant ne ressemblent à rien. La baie en prenait déjà d'office ; c'est maintenant le
+  // nombre de vantaux qui décide (`openingLeaves` rend la même chose quand le fichier se tait).
+  if (isGlazed(o)) {
+    for (let i = 1; i < o.leaves; i++) frames.push(boxAt(o, [f, fd, h - 2 * f], [(i * w) / o.leaves, d / 2, h / 2]))
   }
+}
+
+/** Les `n` vantaux d'une baie large de `inner`, avec leur jeu : largeur d'un vantail, et son bord gauche. */
+function leafSpans(inner: number, n: number): { width: number; x0: (i: number) => number } | null {
+  const gap = n > 1 ? LEAF_GAP : 0
+  const width = (inner - gap * (n - 1)) / n
+  return width > EPS ? { width, x0: (i: number) => i * (width + gap) } : null
 }
 
 /**
@@ -114,19 +129,30 @@ function leafOfOpening(o: OpeningRect, out: BufferGeometry[], frames: BufferGeom
   const f = DOOR_FRAME
   const { width: w, height: h, depth: d } = o
   if (w <= 2 * f + EPS || h <= f + EPS) return
-  if (o.type === 'glass-door') {
-    const lw = w - 2 * f, lh = h - f, r = f * 0.8   // le battant est un peu plus fin que le dormant
+  const span = leafSpans(w - 2 * f, o.leaves)
+  if (!span) return
+  if (isGlazed(o)) {
+    const lh = h - f, r = f * 0.8                   // le battant est un peu plus fin que le dormant
     const y = d * 0.35
-    frames.push(
-      boxAt(o, [r, LEAF, lh], [f + r / 2, y, lh / 2]),
-      boxAt(o, [r, LEAF, lh], [w - f - r / 2, y, lh / 2]),
-      boxAt(o, [lw - 2 * r, LEAF, r], [w / 2, y, lh - r / 2]),
-      boxAt(o, [lw - 2 * r, LEAF, r], [w / 2, y, r / 2]),
-    )
+    for (let i = 0; i < o.leaves; i++) {
+      const x = f + span.x0(i), lw = span.width
+      if (lw <= 2 * r + EPS) continue
+      frames.push(
+        boxAt(o, [r, LEAF, lh], [x + r / 2, y, lh / 2]),
+        boxAt(o, [r, LEAF, lh], [x + lw - r / 2, y, lh / 2]),
+        boxAt(o, [lw - 2 * r, LEAF, r], [x + lw / 2, y, lh - r / 2]),
+        boxAt(o, [lw - 2 * r, LEAF, r], [x + lw / 2, y, r / 2]),
+      )
+    }
     return
   }
+  // vantaux PLEINS : un panneau par vantail, séparés par leur jeu — une porte à deux battants se
+  // reconnaît à ce trait vertical, pas à un panneau deux fois plus large
   const thick = o.type === 'garage' ? 0.05 : LEAF
-  out.push(boxAt(o, [w - 2 * f, thick, h - f], [w / 2, o.type === 'garage' ? d / 2 : d * 0.35, (h - f) / 2]))
+  const y = o.type === 'garage' ? d / 2 : d * 0.35
+  for (let i = 0; i < o.leaves; i++) {
+    out.push(boxAt(o, [span.width, thick, h - f], [f + span.x0(i) + span.width / 2, y, (h - f) / 2]))
+  }
 }
 
 /**
@@ -186,20 +212,38 @@ function meshOf(parts: BufferGeometry[], material: MaterialSet['trim'], name: st
   return mesh
 }
 
-/** Le détail d'un niveau : au plus quatre maillages (lisses, encadrements, soubassement, vantaux). */
+/**
+ * La MENUISERIE se fusionne par teinte, pas en bloc : une ouverture qui ne demande ni matière ni
+ * couleur retombe sur le matériau partagé de son rôle, et n'ajoute donc aucun appel de dessin. Une
+ * maison ordinaire garde ses deux maillages ; seules les ouvertures qui veulent autre chose en
+ * coûtent un de plus, et deux fenêtres de la même teinte le partagent.
+ */
+type Buckets = Map<string, { parts: BufferGeometry[]; material?: OpeningMaterial; color?: string }>
+function bucket(buckets: Buckets, o: OpeningRect): BufferGeometry[] {
+  // la clé VIDE est celle du réglage par défaut : c'est elle qui garde son maillage sans suffixe
+  const key = o.material || o.color ? `${o.material ?? ''}|${o.color ?? ''}` : ''
+  let b = buckets.get(key)
+  if (!b) { b = { parts: [], ...(o.material ? { material: o.material } : {}), ...(o.color ? { color: o.color } : {}) }; buckets.set(key, b) }
+  return b.parts
+}
+function meshesOf(buckets: Buckets, mats: MaterialSet, role: JoineryRole, name: string): (Mesh | null)[] {
+  return [...buckets].map(([key, b]) => meshOf(b.parts, joineryMaterial(mats, role, b.material, b.color), key ? `${name}#${key}` : name))
+}
+
+/** Le détail d'un niveau : lisses, encadrements, soubassement, vantaux — les deux derniers par teinte. */
 export function buildDetails(level: LevelGeometry, mats: MaterialSet): Mesh[] {
   const trim: BufferGeometry[] = []
-  const frames: BufferGeometry[] = []
   const plinth: BufferGeometry[] = []
-  const doors: BufferGeometry[] = []
-  for (const o of level.openings) { frameOfOpening(o, frames, trim); leafOfOpening(o, doors, frames) }
+  const frames: Buckets = new Map()
+  const doors: Buckets = new Map()
+  for (const o of level.openings) { frameOfOpening(o, bucket(frames, o), trim); leafOfOpening(o, bucket(doors, o), bucket(frames, o)) }
   capsOfWalls(level.walls, trim)
   plinthsOfWalls(level.walls, plinth)
   return [
     meshOf(trim, mats.trim, 'details:trim'),
-    meshOf(frames, mats.frame, 'details:frames'),
+    ...meshesOf(frames, mats, 'frame', 'details:frames'),
     meshOf(plinth, mats.plinth, 'details:plinth'),
-    meshOf(doors, mats.door, 'details:doors'),
+    ...meshesOf(doors, mats, 'door', 'details:doors'),
   ].filter((m): m is Mesh => m !== null)
 }
 

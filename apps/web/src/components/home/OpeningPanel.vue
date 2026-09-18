@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { MIN_OPENING_DIM, OPENING_TYPES, fitGap, fitHeight, fitWidth, openingGaps, openingLabel, openingSill, resolveDefaults, type OpeningType, type Room } from '@kasbah/shared'
+import { MAX_OPENING_LEAVES, MIN_OPENING_DIM, MIN_OPENING_LEAVES, OPENING_MATERIALS, OPENING_TYPES, fitGap, fitHeight, fitWidth, openingGaps, openingLabel, openingLeaves, openingSill, resolveDefaults, type OpeningType, type Room } from '@kasbah/shared'
 import { canTakeOpening } from '../../lib/cover'
 import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
@@ -48,6 +48,39 @@ function setType(v: OpeningType) {
   if (v === opening.value?.type) return
   void house.saveOpening(v === 'window' ? { type: v } : { type: v, sill: 0 })
 }
+
+// --- menuiserie : ce que le relevé ne sait pas mesurer au mètre ruban. Les trois réglages sont
+// FACULTATIFS dans le fichier, et le panneau le montre — « Automatique » pour la matière, une
+// couleur qu'on peut rendre. L'ouverture qui n'en dit rien garde ce que la scène en déduit, et une
+// maison relevée hier ne change pas d'aspect parce que ces réglages existent.
+const leafOptions = Array.from(
+  { length: MAX_OPENING_LEAVES - MIN_OPENING_LEAVES + 1 },
+  (_, i) => ({ value: MIN_OPENING_LEAVES + i, label: String(MIN_OPENING_LEAVES + i) }),
+)
+/** Les vantaux EFFECTIFS : le nombre du fichier, sinon celui que la scène déduit (une baie large). */
+const leaves = computed(() => (opening.value ? openingLeaves(opening.value) : 1))
+function setLeaves(v: number) { if (v !== leaves.value) void house.saveOpening({ leaves: v }) }
+
+/** `''` = automatique : la clé quitte le fichier et la nature de l'ouverture reprend la main. */
+const materialOptions = computed(() => [
+  { value: '', label: t('opening.materials.auto') },
+  ...OPENING_MATERIALS.map((v) => ({ value: v, label: t(`opening.materials.${v}`) })),
+])
+function setMaterial(v: string) {
+  // `find` plutôt qu'une conversion : ce que le sélecteur rend est une chaîne, et une valeur
+  // inconnue retombe sur l'automatique au lieu d'entrer dans le fichier
+  const next = OPENING_MATERIALS.find((m) => m === v) ?? ''
+  if (next !== (opening.value?.material ?? '')) void house.saveOpening({ material: next })
+}
+
+const color = computed(() => opening.value?.color ?? '')
+/**
+ * Ce que le sélecteur natif montre quand rien n'est choisi : un anthracite de menuiserie, pas un
+ * noir. On ne peut pas afficher la vraie teinte du style ici — elle vit dans la palette de la
+ * scène — mais on peut partir d'une valeur qui ressemble à ce qu'on voit.
+ */
+const DEFAULT_SWATCH = '#3a3f45'
+function setColor(v: string) { if (v !== color.value) void house.saveOpening({ color: v }) }
 
 /** Hauteur d'allège EFFECTIVE (le défaut de la maison si le JSON n'en donne pas). */
 const sill = computed(() => {
@@ -277,6 +310,32 @@ const freedName = computed(() => {
 
       <p class="muted opening__hint">{{ $t('opening.whereHint') }}</p>
 
+      <!-- la menuiserie : ce qu'on ne relève pas au mètre ruban. Trois lignes au même gabarit que
+           la nature, pour qu'on lise la carte d'un trait. -->
+      <div class="opening__row">
+        <span class="muted">{{ $t('opening.leaves') }}</span>
+        <v-select class="opening__select" :model-value="leaves" :items="leafOptions" item-title="label" item-value="value"
+                  density="compact" variant="outlined" hide-details :disabled="house.savingOpening"
+                  :aria-label="$t('opening.leaves')" @update:model-value="setLeaves" />
+      </div>
+      <div class="opening__row">
+        <span class="muted">{{ $t('opening.material') }}</span>
+        <v-select class="opening__select" :model-value="opening.material ?? ''" :items="materialOptions" item-title="label" item-value="value"
+                  density="compact" variant="outlined" hide-details :disabled="house.savingOpening"
+                  :aria-label="$t('opening.material')" @update:model-value="setMaterial" />
+      </div>
+      <div class="opening__row">
+        <span class="muted">{{ $t('opening.color') }}</span>
+        <span class="opening__turn">
+          <!-- place RÉSERVÉE : le bouton s'efface sans que le sélecteur bouge, il n'apparaît pas -->
+          <button type="button" class="opening__reset" :class="{ 'opening__reset--off': !color }"
+                  :disabled="house.savingOpening || !color" :tabindex="color ? 0 : -1"
+                  :title="$t('opening.colorReset')" :aria-label="$t('opening.colorReset')" @click="setColor('')">×</button>
+          <input class="opening__color" type="color" :value="color || DEFAULT_SWATCH" :disabled="house.savingOpening"
+                 :aria-label="$t('opening.color')" @change="setColor(($event.target as HTMLInputElement).value)">
+        </span>
+      </div>
+
       <div class="opening__row">
         <span class="muted">{{ $t('opening.device') }}</span>
         <v-select class="opening__device" :model-value="linkedDeviceId" :items="deviceOptions" item-title="title" item-value="value"
@@ -351,6 +410,16 @@ const freedName = computed(() => {
 }
 /* place réservée pour « Rétablir » : rien ne bouge quand elle apparaît */
 .opening__revert--off { visibility: hidden; }
+/* le sélecteur de couleur au gabarit des touches −/+ : la ligne garde la hauteur des autres */
+.opening__color { width: 72px; height: 30px; padding: 2px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer; }
+.opening__color:disabled { opacity: .4; cursor: default; }
+.opening__reset {
+  width: 30px; height: 30px; padding: 0; line-height: 1;
+  border: 1px solid var(--line); border-radius: 9px; background: transparent; color: var(--text);
+  font: inherit; font-size: 15px; cursor: pointer;
+}
+.opening__reset:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.opening__reset--off { visibility: hidden; }
 /* largeur fixe (« 1.20 ») : la valeur change sans déplacer les touches */
 .opening__num {
   width: 5ch; min-width: 0; height: 30px; padding: 0; border: 0; background: transparent;

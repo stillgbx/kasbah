@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { HOUSE_DEFAULTS } from './defaults'
-import { classifySegments } from './geometry/walls'
+import { classifySegments, openingLeaves } from './geometry/walls'
 import { fitGap, fitHeight, fitWidth, freeSpan, hostSegments, newOpeningDims, openingGaps, openingLabel, openingLimits, slotFromPoint } from './openings'
 import { openingPatchSchema, patchOpeningInJson, PlacementError, placeDeviceInJson } from './place'
 import { houseSchema, openingSchema, type Opening, type Room } from './schema'
@@ -183,6 +183,7 @@ describe('openingLabel', () => {
   })
 })
 
+type JsonLike = Record<string, unknown>
 describe('patchOpeningInJson', () => {
   const doc = () => ({
     rooms: [
@@ -213,6 +214,38 @@ describe('patchOpeningInJson', () => {
   })
   it('an empty patch changes nothing', () => {
     expect(patchOpeningInJson(doc(), 'a', 'o1', openingPatchSchema.parse({}))).toEqual(doc())
+  })
+  it('ecrit la menuiserie, et la chaine vide rend la main au defaut', () => {
+    const at = (d: JsonLike) => (d.rooms as { openings: Record<string, unknown>[] }[])[0]!.openings[0]!
+    const set = patchOpeningInJson(doc(), 'a', 'o1', { leaves: 2, material: 'metal', color: '#c0c4c8' })
+    expect(at(set)).toMatchObject({ leaves: 2, material: 'metal', color: '#c0c4c8' })
+    // la chaine vide RETIRE la cle : rendre la main au defaut, ce n'est pas ecrire la valeur deduite
+    const cleared = patchOpeningInJson(set, 'a', 'o1', { leaves: '', material: '', color: '' })
+    for (const key of ['leaves', 'material', 'color']) expect(at(cleared)).not.toHaveProperty(key)
+  })
+  it('refuse une couleur qui n est pas un #rrggbb et un nombre de vantaux hors bornes', () => {
+    expect(openingPatchSchema.safeParse({ color: 'rouge' }).success).toBe(false)
+    expect(openingPatchSchema.safeParse({ leaves: 0 }).success).toBe(false)
+    expect(openingPatchSchema.safeParse({ leaves: 11 }).success).toBe(false)
+    expect(openingPatchSchema.safeParse({ leaves: 10 }).success).toBe(true)
+    expect(openingPatchSchema.safeParse({ leaves: '' }).success).toBe(true)
+  })
+})
+
+describe('openingLeaves', () => {
+  it('un seul vantail par defaut, quelle que soit la largeur', () => {
+    for (const type of ['door', 'window', 'passage', 'garage', 'glass-door'] as const) {
+      expect(openingLeaves(opening({ id: 'o', type, width: 3 }))).toBe(1)
+    }
+  })
+  it('la baie vitree se deduit de sa largeur : une coulissante, deux a trois vantaux', () => {
+    expect(openingLeaves(opening({ id: 'o', type: 'bay', width: 1.2 }))).toBe(2)
+    expect(openingLeaves(opening({ id: 'o', type: 'bay', width: 3.2 }))).toBe(2)
+    expect(openingLeaves(opening({ id: 'o', type: 'bay', width: 6 }))).toBe(3)
+  })
+  it('le nombre du fichier passe devant ce qui se deduit', () => {
+    expect(openingLeaves(opening({ id: 'o', type: 'bay', width: 6, leaves: 1 }))).toBe(1)
+    expect(openingLeaves(opening({ id: 'o', type: 'window', width: 1, leaves: 4 }))).toBe(4)
   })
 })
 

@@ -1,5 +1,5 @@
 import type { Vec2 } from './vec2'
-import type { FloorStyle, OpeningType, RoomKind, ZoneKind } from '../schema'
+import type { FloorStyle, OpeningMaterial, OpeningType, RoomKind, ZoneKind } from '../schema'
 
 // Descripteurs géométriques PURS (aucune dépendance three) : c'est le contrat testé.
 // Les builders côté web les transforment en BufferGeometry sans réfléchir.
@@ -37,6 +37,12 @@ export interface OpeningRect {
   height: number
   /** Épaisseur du mur porteur. */
   depth: number
+  /** Nombre de vantaux EFFECTIF (`openingLeaves`) : jamais l'optionnel du fichier. */
+  leaves: number
+  /** Matière de la menuiserie, si le fichier en impose une. */
+  material?: OpeningMaterial
+  /** Couleur de la menuiserie (#rrggbb), si le fichier en impose une. */
+  color?: string
 }
 
 export interface FloorDescriptor {

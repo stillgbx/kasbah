@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { deviceIdSchema } from '../devices/descriptor'
-import { defaultPlugins, hexColorSchema, model3dSchema, MOUNTS, OPENING_TYPES, vec2Schema, vec3Schema, type PluginSettingsPatch } from './schema'
+import { defaultPlugins, hexColorSchema, MAX_OPENING_LEAVES, MIN_OPENING_LEAVES, model3dSchema, MOUNTS, OPENING_MATERIALS, OPENING_TYPES, vec2Schema, vec3Schema, type PluginSettingsPatch } from './schema'
 import { VEHICLE_FINISHES } from '../devices/kinds'
 
 // Écritures de l'UI dans house.json (placement d'un appareil, ordre d'affichage des pièces).
@@ -378,6 +378,16 @@ export const openingPatchSchema = z.object({
    * de la maison (`defaults.windowSill`), c'est `openingSill` qui tranche.
    */
   sill: z.number().min(0).max(10).optional(),
+  /**
+   * Nombre de vantaux. **Chaîne vide = effacer** et rendre la main à ce qui se déduit
+   * (`openingLeaves`) : écrire le nombre déduit au lieu de retirer la clé FIGERAIT une baie qui
+   * suivait sa largeur.
+   */
+  leaves: z.union([z.number().int().min(MIN_OPENING_LEAVES).max(MAX_OPENING_LEAVES), z.literal('')]).optional(),
+  /** Matière de la menuiserie. **Chaîne vide = effacer** et rendre la main à la nature de l'ouverture. */
+  material: z.union([z.enum(OPENING_MATERIALS), z.literal('')]).optional(),
+  /** Couleur de la menuiserie. **Chaîne vide = effacer** et rendre la main à la palette du style. */
+  color: z.union([hexColorSchema, z.literal('')]).optional(),
 })
 export type OpeningPatch = z.infer<typeof openingPatchSchema>
 
@@ -402,9 +412,14 @@ export function patchOpeningInJson(doc: unknown, roomId: string, openingId: stri
   for (const key of ['type', 'segment', 'offset', 'width', 'height', 'sill'] as const) {
     if (patch[key] !== undefined) next[key] = patch[key]
   }
-  if (patch.name !== undefined) {
-    if (patch.name) next.name = patch.name
-    else delete next.name                      // chaîne vide : on revient à l'id, comme pour un appareil
+  // les quatre champs EFFAÇABLES : une chaîne vide retire la clé du fichier, et ce qui la remplace
+  // est le défaut déduit — l'id du relevé pour le nom, la largeur pour les vantaux, la nature pour
+  // la matière, le style pour la couleur. Écrire un `null` laisserait une clé morte dans un relevé
+  // qu'on relit à la main.
+  for (const key of ['name', 'leaves', 'material', 'color'] as const) {
+    if (patch[key] === undefined) continue
+    if (patch[key]) next[key] = patch[key]
+    else delete next[key]
   }
   const nextOpenings = [...openings]
   nextOpenings[oi] = next

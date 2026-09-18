@@ -1,5 +1,5 @@
 import { BackSide, Color, DoubleSide, LinearSRGBColorSpace, Material, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial } from 'three'
-import type { FloorStyle, ZoneKind } from '@kasbah/shared'
+import type { FloorStyle, OpeningMaterial, ZoneKind } from '@kasbah/shared'
 import type { SceneTheme } from '../core/theme'
 import { createSurfaceTextures, type SurfaceRole, type SurfaceTexture, type SurfaceTextures } from '../textures/procedural'
 import { rolesOf, type SkyLook, type StyleLook, type SurfaceLook } from '../styles/types'
@@ -39,6 +39,14 @@ export interface MaterialSet {
   door: MeshStandardMaterial
   /** Parois et fond d'une piscine, vus de l'intérieur (faces arrière) : carrelage clair sous l'eau. */
   poolBasin: MeshStandardMaterial
+  /**
+   * Menuiseries d'ouvertures qui ne se contentent pas du réglage par nature : une entrée par
+   * combinaison `rôle|matière|couleur` demandée par le relevé (`joineryMaterial`). Une maison qui
+   * n'en déclare aucune n'en a aucune, et garde ses deux appels de dessin.
+   */
+  joinery: Map<string, MeshStandardMaterial>
+  /** Dernier style appliqué : une menuiserie créée après coup doit pouvoir se teindre tout de suite. */
+  applied: { theme: SceneTheme; look: StyleLook } | null
   /** Les matières employées par le style courant. Elles appartiennent au CATALOGUE, pas à ce jeu de matériaux. */
   textures: SurfaceTextures
   all: Set<Material>
@@ -81,6 +89,24 @@ function surface(m: MeshStandardMaterial, color: Color, look: SurfaceLook, tex: 
 const std = (extra: ConstructorParameters<typeof MeshStandardMaterial>[0] = {}) =>
   new MeshStandardMaterial({ roughness: 0.9, metalness: 0, ...extra })
 
+/** Les deux rôles d'une menuiserie : le dormant d'une baie, et le vantail d'une porte. */
+export type JoineryRole = 'frame' | 'door'
+interface Pbr { roughness: number; metalness: number }
+/** Le réglage PBR de chaque rôle, déclaré ICI pour que les variantes teintées partent du même. */
+const ROLE_PBR: Record<JoineryRole, Pbr> = {
+  frame: { roughness: 0.45, metalness: 0.1 },
+  door: { roughness: 0.5, metalness: 0 },
+}
+/**
+ * Ce que chaque matière fait à la lumière. Le VERRE n'a pas de ligne : il ne change pas la
+ * menuiserie, il vitre l'ouverture (`details.ts`) — le dormant d'une baie est déjà celui d'une
+ * fenêtre. Le métal est lisse et réfléchit ; le bois est mat et ne réfléchit rien.
+ */
+const MATERIAL_PBR: Partial<Record<OpeningMaterial, Pbr>> = {
+  wood: { roughness: 0.6, metalness: 0 },
+  metal: { roughness: 0.3, metalness: 0.85 },
+}
+
 export function createMaterials(theme: SceneTheme, look: StyleLook, textures: SurfaceTextures = {}): MaterialSet {
   const set: Omit<MaterialSet, 'all'> = {
     wall: std(), wallInterior: std(), floor: std(),
@@ -101,14 +127,16 @@ export function createMaterials(theme: SceneTheme, look: StyleLook, textures: Su
     vehicle: std({ roughness: 0.28, metalness: 0.55 }),
     device: std({ roughness: 0.6, metalness: 0.1 }),
     trim: std({ roughness: 0.55 }),
-    frame: std({ roughness: 0.45, metalness: 0.1 }),
+    frame: std(ROLE_PBR.frame),
     plinth: std({ roughness: 0.95 }),
-    door: std({ roughness: 0.5 }),
+    door: std(ROLE_PBR.door),
     poolBasin: std({ roughness: 0.35, side: BackSide }),
+    joinery: new Map(),
+    applied: null,
   }
   const all = new Set<Material>()
   for (const [k, v] of Object.entries(set)) {
-    if (k === 'textures') continue
+    if (k === 'textures' || k === 'joinery' || k === 'applied') continue
     if (v instanceof Material) all.add(v)
     else for (const m of Object.values(v as Record<string, Material>)) all.add(m)
   }
@@ -189,15 +217,64 @@ export function applyLook(mats: MaterialSet, theme: SceneTheme, look: StyleLook,
   // menuiseries et un soubassement plus sombres, un vantail de la couleur du parquet — un style
   // monochrome le reste. Première lisse à 0,55 vers le blanc : elle brûlait en plein soleil.
   mats.trim.color.copy(theme.wall).lerp(WHITE, 0.4)
-  mats.frame.color.copy(theme.wall).lerp(BLACK, 0.55)
+  mats.frame.color.copy(roleColor(theme, 'frame'))
   mats.plinth.color.copy(theme.wall).lerp(BLACK, 0.4)
-  mats.door.color.copy(theme.floors.wood)
+  mats.door.color.copy(roleColor(theme, 'door'))
+  // les menuiseries teintées suivent : elles se recalculent ENTIÈREMENT depuis leur clé, donc un
+  // changement de style ou d'heure les rattrape même si elles sont nées entre deux applications
+  mats.applied = { theme, look }
+  for (const [key, m] of mats.joinery) applyJoinery(m, key, theme)
   // le bassin : la couleur de l'eau du style, très éclaircie — l'eau translucide par-dessus la rend
   const basin: SurfaceLook = { texture: 'tile', roughness: 0.35 }
   surface(mats.poolBasin, theme.zones.pool.clone().lerp(WHITE, 0.55), basin, tex(basin))
 }
 
+/** La couleur d'un rôle de menuiserie quand le relevé n'en impose pas : déduite de la palette. */
+function roleColor(theme: SceneTheme, role: JoineryRole): Color {
+  return role === 'frame' ? theme.wall.clone().lerp(BLACK, 0.55) : theme.floors.wood.clone()
+}
+
+/** `rôle|matière|couleur` — la clé PORTE tout ce qu'il faut pour recalculer le matériau. */
+const joineryKey = (role: JoineryRole, material?: OpeningMaterial, color?: string) =>
+  `${role}|${material ?? ''}|${color ?? ''}`
+
+function applyJoinery(m: MeshStandardMaterial, key: string, theme: SceneTheme): void {
+  const [role, material, color] = key.split('|') as [JoineryRole, OpeningMaterial | '', string]
+  const pbr = (material ? MATERIAL_PBR[material] : undefined) ?? ROLE_PBR[role]
+  m.roughness = pbr.roughness
+  m.metalness = pbr.metalness
+  // la couleur du fichier passe devant la matière, qui passe devant le rôle : le bois d'une
+  // menuiserie est celui du parquet du style, sauf si le relevé a dit lequel
+  if (color) m.color.set(color)
+  else if (material === 'wood') m.color.copy(theme.floors.wood)
+  else if (material === 'metal') m.color.copy(theme.wall).lerp(BLACK, 0.65)
+  else m.color.copy(roleColor(theme, role))
+}
+
+/**
+ * Le matériau d'une menuiserie d'ouverture. Sans matière NI couleur voulue, c'est le matériau
+ * partagé du rôle qu'on rend tel quel : une maison ordinaire garde ses deux appels de dessin, et
+ * seules les ouvertures qui demandent autre chose en coûtent un de plus.
+ *
+ * La variante naît teinte comprise : la géométrie se rebâtit à chaque changement de maison, donc
+ * bien après la dernière application de style, et un matériau créé noir se serait vu.
+ */
+export function joineryMaterial(
+  mats: MaterialSet, role: JoineryRole, material?: OpeningMaterial, color?: string,
+): MeshStandardMaterial {
+  if (!material && !color) return mats[role]
+  const key = joineryKey(role, material, color)
+  const known = mats.joinery.get(key)
+  if (known) return known
+  const m = mats[role].clone()
+  mats.joinery.set(key, m)
+  mats.all.add(m)
+  if (mats.applied) applyJoinery(m, key, mats.applied.theme)
+  return m
+}
+
 /** Les matières ne sont PAS libérées : elles appartiennent au catalogue partagé (`textures/procedural.ts`). */
 export function disposeMaterials(mats: MaterialSet): void {
   for (const m of mats.all) m.dispose()
+  mats.joinery.clear()
 }

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { BackSide, Box3, BoxGeometry, type BufferGeometry, CylinderGeometry, Mesh, type MeshBasicMaterial, type MeshStandardMaterial, type Object3D, ShapeGeometry, Vector3, type BufferAttribute, type Texture } from 'three'
-import { computeHouseGeometry, localToGeo, openingGaps, parseHouse, type DeviceDescriptor, type DeviceState, type PlacedHouseDevice } from '@kasbah/shared'
+import { computeHouseGeometry, localToGeo, openingGaps, parseHouse, type DeviceDescriptor, type DeviceState, type OpeningRect, type PlacedHouseDevice } from '@kasbah/shared'
 import demo from '@kasbah/shared/demo-house.json'
 import { buildHouse, buildLevel, buildWallsGeometry, countTriangles } from './builders/buildHouse'
-import { buildDetails, buildRoofDetails } from './builders/details'
+import { buildDetails, buildRoofDetails, isGlazed } from './builders/details'
 import { alignedToLongestEdge, extrudePolygon } from './builders/shapes'
 import { createSurfaceTextures, type SurfaceTexture } from './textures/procedural'
 import { createMaterials } from './builders/materials'
@@ -1479,6 +1479,52 @@ describe('détail architectural', () => {
   it('un passage n’a ni cadre ni vantail', () => {
     const level = { ...rdc, walls: [], openings: rdc.openings.map((o) => ({ ...o, type: 'passage' as const })) }
     expect(buildDetails(level, mats)).toEqual([])
+  })
+
+  /** Le même niveau, réduit à UNE ouverture à laquelle on impose ce qu'on veut éprouver. */
+  const only = (o: Partial<OpeningRect>) => {
+    const porte = rdc.openings.find((x) => x.type === 'door')!
+    return buildDetails({ ...rdc, walls: [], openings: [{ ...porte, ...o }] }, mats)
+  }
+
+  it('deux vantaux découpent le panneau d’une porte pleine, et refendent une baie vitrée', () => {
+    const one = only({ leaves: 1 })
+    const two = only({ leaves: 2 })
+    // un panneau de plus, donc une boîte de plus : le trait vertical qui fait la porte à deux battants
+    expect(countTriangles(two.find((m) => m.name === 'details:doors')!))
+      .toBe(2 * countTriangles(one.find((m) => m.name === 'details:doors')!))
+    // vitrée, ce ne sont plus des panneaux mais des refends, comptés dans les encadrements
+    const bay1 = only({ type: 'bay', leaves: 1 }), bay3 = only({ type: 'bay', leaves: 3 })
+    expect(countTriangles(bay3.find((m) => m.name === 'details:frames')!))
+      .toBeGreaterThan(countTriangles(bay1.find((m) => m.name === 'details:frames')!))
+  })
+
+  it('la matière verre vitre l’ouverture : une porte pleine perd son panneau opaque', () => {
+    expect(only({}).some((m) => m.name.startsWith('details:doors'))).toBe(true)
+    const glazed = only({ material: 'glass' })
+    expect(isGlazed({ ...rdc.openings[0]!, type: 'door', material: 'glass' })).toBe(true)
+    // le vantail plein a laissé place à un cadre de battant, rangé avec les encadrements
+    expect(glazed.some((m) => m.name.startsWith('details:doors'))).toBe(false)
+    expect(glazed.some((m) => m.name.startsWith('details:frames'))).toBe(true)
+  })
+
+  it('une menuiserie teintée prend son propre maillage ; sans réglage, rien ne se dédouble', () => {
+    expect(meshes.filter((m) => m.name.startsWith('details:frames'))).toHaveLength(1)
+    const tinted = only({ color: '#c0c4c8' })
+    const frame = tinted.find((m) => m.name.startsWith('details:frames'))!
+    expect(frame.name).toBe('details:frames#|#c0c4c8')
+    expect(frame.material).not.toBe(mats.frame)
+    expect((frame.material as MeshStandardMaterial).color.getHexString()).toBe('c0c4c8')
+    // deux ouvertures de la MÊME teinte partagent leur matériau : une teinte, un appel de dessin
+    expect(only({ color: '#c0c4c8' }).find((m) => m.name.startsWith('details:frames'))!.material).toBe(frame.material)
+  })
+
+  it('le métal d’une menuiserie réfléchit, le bois non', () => {
+    const metal = only({ material: 'metal' }).find((m) => m.name.startsWith('details:frames'))!.material as MeshStandardMaterial
+    const wood = only({ material: 'wood' }).find((m) => m.name.startsWith('details:frames'))!.material as MeshStandardMaterial
+    expect(metal.metalness).toBeGreaterThan(0.5)
+    expect(wood.metalness).toBe(0)
+    expect(wood.color.getHexString()).toBe(mats.floors.wood.color.getHexString())
   })
 
   it('les couleurs du détail se déduisent de la palette : lisse plus claire, menuiseries et soubassement plus sombres', () => {

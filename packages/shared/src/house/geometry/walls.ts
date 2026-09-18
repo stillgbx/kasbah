@@ -60,6 +60,24 @@ export function openingSill(o: Opening, defaults: HouseDefaults): number {
   return o.sill ?? (o.type === 'window' ? defaults.windowSill : 0)
 }
 
+/** Largeur (m) de vantail au-delà de laquelle une baie en prend un de plus : une coulissante. */
+const BAY_LEAF_W = 1.6
+const BAY_LEAVES_AUTO_MAX = 3
+
+/**
+ * Nombre de vantaux EFFECTIF : celui du fichier, sinon celui qui se déduit. Seule la baie vitrée
+ * en déduit plus d'un — trois mètres de verre d'un seul tenant ne ressemblent à rien, et personne
+ * ne va renseigner ce nombre sur un relevé pour que la scène soit juste.
+ *
+ * Ici et non dans `openings.ts` : `computeWalls` en a besoin, et `openings.ts` importe déjà ce
+ * module — le placer là-bas ferait un cycle.
+ */
+export function openingLeaves(o: Opening): number {
+  if (o.leaves !== undefined) return o.leaves
+  if (o.type === 'bay') return Math.min(BAY_LEAVES_AUTO_MAX, Math.max(2, Math.round(o.width / BAY_LEAF_W)))
+  return 1
+}
+
 /** Classe chaque arête de la pièce (intérieur / extérieur / none) et fixe son épaisseur. */
 export function classifySegments(room: Room, roomsOnLevel: readonly Room[], defaults: HouseDefaults): WallSegment[] {
   const poly = room.polygon
@@ -332,7 +350,9 @@ export function computeWalls(level: Level, roomsOnLevel: readonly Room[], defaul
       openings.push({
         openingId: o.id, roomId: room.id, levelId: level.id, type: o.type,
         origin: [p[0], p[1], openingSill(o, defaults)], u: seg.d, normal: seg.n,
-        width: o.width, height: o.height, depth: seg.thickness,
+        width: o.width, height: o.height, depth: seg.thickness, leaves: openingLeaves(o),
+        ...(o.material ? { material: o.material } : {}),
+        ...(o.color ? { color: o.color } : {}),
       })
     }
   }
