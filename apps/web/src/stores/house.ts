@@ -1,6 +1,6 @@
 import { computed, ref, shallowRef, watch } from 'vue'
 import { defineStore } from 'pinia'
-import { autoPlaceDevices, computeRoof, houseIdForDevice, indexHouse, isPlaced, openingLimits, openingSill, panelArrayDevices, panelOf, pointInPolygon, resolveDefaults, resolveDeviceLevelId, roomHeight, slotFromPoint, withPanelArrays, type DeviceDescriptor, type DeviceEntry, type DevicePlacement, type House, type HouseDevice, type HouseIndex, type Level, type Opening, type OpeningPatch, type PanelArray, type PanelArrayPatch, type PlaceableDevice, type PlacedHouseDevice, type Room, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
+import { autoPlaceDevices, computeRoof, fitHeight, houseIdForDevice, indexHouse, isPlaced, newOpeningDims, openingLimits, openingSill, panelArrayDevices, panelOf, pointInPolygon, resolveDefaults, resolveDeviceLevelId, roomHeight, slotFromPoint, withPanelArrays, type DeviceDescriptor, type DeviceEntry, type DevicePlacement, type House, type HouseDevice, type HouseIndex, type Level, type Opening, type OpeningPatch, type OpeningType, type PanelArray, type PanelArrayPatch, type PlaceableDevice, type PlacedHouseDevice, type Room, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
 import { getTransport } from '../api'
 import type { JournalPoint } from '../lib/journal'
 import { i18n, t } from '../i18n'
@@ -871,6 +871,95 @@ export const useHouseStore = defineStore('house', () => {
     if (openingOrigin.value) await saveOpening(openingOrigin.value)
   }
 
+  // --- poser et retirer une ouverture --------------------------------------
+  //
+  // POSER se fait en deux temps : on choisit une nature dans le panneau de la pièce (l'ouverture est
+  // alors ARMÉE, rien n'est écrit), puis on tape le mur dans la 3D. Le point touché décide du mur ET
+  // de la place par la même règle que le glissement (`slotFromPoint`), donc ce qui naît est toujours
+  // à un endroit que le serveur accepte — jamais une ouverture posée à l'aveugle qu'il faudrait
+  // ensuite aller chercher.
+  const placingOpening = shallowRef<{ roomId: string; type: OpeningType } | null>(null)
+
+  /** Arme une nature sur la pièce sélectionnée. Le réglage en cours se referme : on pose, on ne règle plus. */
+  function startPlacingOpening(type: OpeningType) {
+    const room = selectedRoom.value
+    if (!room) return
+    selectOpening(null)
+    placingOpening.value = { roomId: room.id, type }
+  }
+  function cancelPlacingOpening() { placingOpening.value = null }
+  // quitter la pièce désarme : le mur qu'on taperait ne serait plus celui qu'on visait
+  watch(selectedRoomId, (id) => { if (placingOpening.value && placingOpening.value.roomId !== id) placingOpening.value = null })
+
+  /** Id libre pour une ouverture neuve : sa nature, numérotée s'il le faut (comme `addArray`). */
+  function freeOpeningId(type: OpeningType): string {
+    const used = new Set((house.value?.rooms ?? []).flatMap((r) => r.openings.map((o) => o.id)))
+    let id: string = type
+    for (let n = 2; used.has(id); n++) id = `${type}-${n}`
+    return id
+  }
+
+  /**
+   * Le mur tapé : l'ouverture naît là, aux cotes de sa nature (`newOpeningDims`), et devient la
+   * sélection — on l'a posée pour la régler. Une hauteur de catalogue qui ne tient pas sous CE
+   * plafond fait descendre l'allège, comme dans le panneau (`fitHeight`).
+   */
+  async function placeOpeningAt(xy: Vec2): Promise<void> {
+    const armed = placingOpening.value
+    const room = armed ? index.value?.roomsById.get(armed.roomId) : undefined
+    const level = room ? index.value?.levelsById.get(room.levelId) : undefined
+    if (!armed || !room || !level || !house.value) return
+    const defaults = resolveDefaults(house.value.defaults)
+    const dims = newOpeningDims(armed.type, defaults)
+    const siblings = index.value?.roomsByLevel.get(room.levelId) ?? [room]
+    const slot = slotFromPoint(room, siblings, defaults, xy, dims.width, '')
+    if (!slot) {
+      // aucun mur de la pièce n'a de vide assez large : le dire, plutôt que de poser ailleurs
+      useNotificationsStore().error(t('opening.addNoSpace', { width: dims.width.toFixed(2) }))
+      placingOpening.value = null
+      return
+    }
+    const fitted = fitHeight(dims.sill, dims.height, roomHeight(room, level, defaults), dims.height)
+    const id = freeOpeningId(armed.type)
+    savingOpening.value = true
+    try {
+      const next = await getTransport().addOpening(room.id, {
+        id, type: armed.type, segment: slot.segment, offset: snapCm(slot.offset),
+        width: dims.width, height: fitted.height, sill: fitted.sill,
+      })
+      placingOpening.value = null
+      house.value = next
+      selectOpening(id)
+    } catch (err) {
+      useNotificationsStore().error(t('opening.saveError', { message: (err as Error).message }))
+    } finally {
+      savingOpening.value = false
+    }
+  }
+
+  /**
+   * Retire l'ouverture sélectionnée. On revient à sa PIÈCE : c'est de là qu'on l'a posée, et c'est
+   * là qu'on voit le mur se refermer. L'ouvrant qui l'habillait est libéré par le serveur, dans la
+   * même écriture (`removeOpeningFromJson`).
+   */
+  async function removeOpening(): Promise<boolean> {
+    const sel = savedOpening.value
+    if (!sel) return false
+    savingOpening.value = true
+    try {
+      const next = await getTransport().removeOpening(sel.room.id, sel.opening.id)
+      selectOpening(null)
+      selectedRoomId.value = sel.room.id
+      house.value = next
+      return true
+    } catch (err) {
+      useNotificationsStore().error(t('opening.saveError', { message: (err as Error).message }))
+      return false
+    } finally {
+      savingOpening.value = false
+    }
+  }
+
   /** Descripteur de plugin d'un appareil de la maison (la nature d'un ouvrant en dépend). */
   const descriptorOf = (d: HouseDevice) => (d.deviceId ? devices.descriptors[d.deviceId] : undefined)
 
@@ -953,6 +1042,7 @@ export const useHouseStore = defineStore('house', () => {
     placing, saving, draft, canRevert, isProvisional, startPlacing, startPlacingNew, stopPlacing, previewPosition, previewHeight, savePlacement, revertPlacement, removePlacement,
     placementLevelId, setPlacementLevel,
     selectedOpeningId, selectedOpening, savedOpening, openingDraft, openingBounds, openingCeiling, openingDevices, savingOpening, canRevertOpening,
+    placingOpening, startPlacingOpening, cancelPlacingOpening, placeOpeningAt, removeOpening,
     selectOpening, previewOpeningAt, saveOpening, dropOpening, revertOpening, setOpeningDevice, setCoverOpening, coversWithoutOpening,
     arrays, arraysOf, editingArrayId, editingArray, editingArrayModules, arrayDraft, hoveredKey, hoverSlot, freeInverters,
     startEditingArray, stopEditingArray, editArray, siteOf, siteOfDevice, addArray, saveArray, removeArray, previewArrayOrigin, dropArray,

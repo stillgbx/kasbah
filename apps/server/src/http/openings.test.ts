@@ -70,3 +70,65 @@ describe('PUT /api/house/rooms/:roomId/openings/:openingId', () => {
     expect((await put('entree', 'porte-entree', { width: 0 })).statusCode).toBe(400)
   })
 })
+
+// Poser et retirer une ouverture, depuis le panneau de la pièce. Même mécanique que le réglage —
+// copie de la maison de démo, écriture réelle du fichier, `parseHouse` en garde-fou.
+describe('POST et DELETE /api/house/rooms/:roomId/openings', () => {
+  let kasbah: KasbahApp
+  let file: string
+  beforeAll(async () => {
+    file = join(await mkdtemp(join(tmpdir(), 'kasbah-openings-add-')), 'house.json')
+    await copyFile(DEMO_HOUSE, file)
+    kasbah = await buildApp({
+      env: loadEnv({ KASBAH_LOG_LEVEL: 'silent' }),
+      logger: pino({ level: 'silent' }),
+      house: await loadHouse(file),
+      envSource: {},
+      serveStatic: false,
+    })
+    await kasbah.app.ready()
+  })
+  afterAll(async () => { await kasbah.close() })
+
+  const post = (roomId: string, payload: object): Promise<LightMyRequestResponse> =>
+    kasbah.app.inject({ method: 'POST', url: `/api/house/rooms/${roomId}/openings`, payload })
+  const del = (roomId: string, openingId: string): Promise<LightMyRequestResponse> =>
+    kasbah.app.inject({ method: 'DELETE', url: `/api/house/rooms/${roomId}/openings/${openingId}` })
+  const openingsOf = (res: LightMyRequestResponse, roomId: string) =>
+    res.json().house.rooms.find((r: { id: string }) => r.id === roomId).openings as { id: string }[]
+
+  it('adds the opening to the room and writes it to the file', async () => {
+    const res = await post('chambre1', { id: 'window-1', type: 'window', segment: 1, offset: 0.6, width: 1, height: 1.2, sill: 0.9 })
+    expect(res.statusCode).toBe(200)
+    expect(openingsOf(res, 'chambre1').map((o) => o.id)).toContain('window-1')
+    const written = JSON.parse(await readFile(file, 'utf8'))
+    expect(written.rooms.find((r: { id: string }) => r.id === 'chambre1').openings.at(-1)).toMatchObject({ id: 'window-1', width: 1 })
+  })
+
+  it('refuses an opening that overlaps a neighbour, and leaves the file alone', async () => {
+    const before = await readFile(file, 'utf8')
+    const res = await post('chambre1', { id: 'window-2', type: 'window', segment: 1, offset: 0.6, width: 1, height: 1.2, sill: 0.9 })
+    expect(res.statusCode).toBe(400)
+    expect(await readFile(file, 'utf8')).toBe(before)
+  })
+
+  it('refuses an id already taken and an unknown room', async () => {
+    expect((await post('chambre1', { id: 'window-1', type: 'window', segment: 3, offset: 0.2, width: 0.8, height: 1, sill: 0.9 })).statusCode).toBe(400)
+    expect((await post('nulle-part', { id: 'window-3', type: 'window', segment: 0, offset: 0.2, width: 0.8, height: 1 })).statusCode).toBe(400)
+  })
+
+  it('removes the opening and frees the cover that was on it', async () => {
+    const res = await del('chambre1', 'fen-ch1')                    // cover.chambre1 y est posé
+    expect(res.statusCode).toBe(200)
+    expect(openingsOf(res, 'chambre1').map((o) => o.id)).not.toContain('fen-ch1')
+    const cover = res.json().house.devices.find((d: { id: string }) => d.id === 'cover.chambre1')
+    expect(cover.openingId).toBeUndefined()
+    const written = JSON.parse(await readFile(file, 'utf8'))
+    expect(written.devices.find((d: { id: string }) => d.id === 'cover.chambre1').openingId).toBeUndefined()
+  })
+
+  it('refuses to remove what is not there', async () => {
+    expect((await del('chambre1', 'fen-ch1')).statusCode).toBe(400)
+    expect((await del('nulle-part', 'window-1')).statusCode).toBe(400)
+  })
+})

@@ -70,6 +70,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   const openingTap = new Set<Handler<[string]>>()
   const openingDrag = new Set<Handler<[string, [number, number]]>>()
   const openingDrop = new Set<Handler<[string]>>()
+  const placeTap = new Set<Handler<[[number, number]]>>()
 
   onMounted(() => {
     const canvas = args.canvas.value
@@ -93,6 +94,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     scene.on('openingTap', (id) => openingTap.forEach((f) => f(id)))
     scene.on('openingDrag', (id, xy) => openingDrag.forEach((f) => f(id, xy)))
     scene.on('openingDrop', (id) => openingDrop.forEach((f) => f(id)))
+    scene.on('placeTap', (xy) => placeTap.forEach((f) => f(xy)))
 
     const parent = canvas.parentElement ?? canvas
     const fit = () => { const r = parent.getBoundingClientRect(); scene?.resize(r.width, r.height) }
@@ -157,6 +159,8 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     onOpeningTap: (f: Handler<[string]>) => { openingTap.add(f) },
     onOpeningDrag: (f: Handler<[string, [number, number]]>) => { openingDrag.add(f) },
     onOpeningDrop: (f: Handler<[string]>) => { openingDrop.add(f) },
+    setPlacingOpening: (roomId: string | null) => scene?.setPlacingOpening(roomId),
+    onPlaceTap: (f: Handler<[[number, number]]>) => { placeTap.add(f) },
     moveMarker: (key: string, position: Vec3) => scene?.moveMarker(key, position),
     previewBodyColor: (key: string, color: string | null) => scene?.previewBodyColor(key, color),
     setJournalPoints: (key: string | null, points: readonly JournalPoint[]) => scene?.setJournalPoints(key, points),

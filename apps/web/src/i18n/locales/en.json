@@ -367,6 +367,11 @@
   "scene": { "webglUnavailable": "3D is not available on this device." },
   "opening": {
     "list": "Openings", "type": "Type",
+    "add": "Add an opening", "cancel": "Cancel", "placeHint": "Tap the wall that will carry it in the 3D view.",
+    "count": "{n} opening | {n} opening | {n} openings", "none": "No opening surveyed in this room.",
+    "addNoSpace": "No wall in this room has {width} m free.",
+    "remove": "Delete the opening", "removeConfirm": "Confirm deletion",
+    "removeFrees": "{name} will lose its place.",
     "types": { "door": "Door", "window": "Window", "passage": "Passage", "garage": "Garage door", "bay": "Bay window", "glass-door": "Glass door" },
     "width": "Width", "height": "Height", "sill": "Sill height", "rename": "Rename the opening",
     "gapRight": "Right", "gapLeft": "Left",

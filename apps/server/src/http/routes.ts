@@ -1,4 +1,4 @@
-import { assertCommandAllowed, commandSchema, devicePlacementSchema, openingPatchSchema, panelArrayPatchSchema, patchOpeningInJson, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, roomOrderSchema, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
+import { addOpeningToJson, assertCommandAllowed, commandSchema, devicePlacementSchema, newOpeningSchema, openingPatchSchema, panelArrayPatchSchema, patchOpeningInJson, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, roomOrderSchema, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { updateHouseFile, type LoadedHouse } from '../config/house'
 import type { PluginHost } from '../core/plugin-host'
@@ -85,6 +85,23 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
   app.put<{ Params: { roomId: string; openingId: string } }>('/api/house/rooms/:roomId/openings/:openingId', async (req) => {
     const patch = openingPatchSchema.parse(req.body)   // ZodError → 400
     const house = await updateHouseFile(deps.house, (doc) => patchOpeningInJson(doc, req.params.roomId, req.params.openingId, patch))
+    deps.hub.broadcast({ type: 'house', house })
+    return { house }
+  })
+
+  // Ajouter une ouverture : l'UI donne l'ouverture ENTIÈRE (nature, mur, place, cotes), calculée là
+  // où le doigt s'est posé sur le mur. Le serveur ne devine rien — c'est la 3D qui sait où on a tapé.
+  app.post<{ Params: { roomId: string } }>('/api/house/rooms/:roomId/openings', async (req) => {
+    const opening = newOpeningSchema.parse(req.body)   // ZodError → 400
+    const house = await updateHouseFile(deps.house, (doc) => addOpeningToJson(doc, req.params.roomId, opening))
+    deps.hub.broadcast({ type: 'house', house })
+    return { house }
+  })
+
+  // Retirer une ouverture : le mur se referme, et l'ouvrant qui l'habillait est libéré dans la même
+  // écriture (voir `removeOpeningFromJson`) — sans quoi il nommerait une ouverture disparue.
+  app.delete<{ Params: { roomId: string; openingId: string } }>('/api/house/rooms/:roomId/openings/:openingId', async (req) => {
+    const house = await updateHouseFile(deps.house, (doc) => removeOpeningFromJson(doc, req.params.roomId, req.params.openingId))
     deps.hub.broadcast({ type: 'house', house })
     return { house }
   })

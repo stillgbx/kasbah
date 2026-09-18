@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import demo from './__fixtures__/demo-house.json'
 import { parseHouse } from './validate'
-import { PlacementError, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, setPluginInJson, setRoomOrderInJson } from './place'
+import { addOpeningToJson, PlacementError, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, setPluginInJson, setRoomOrderInJson } from './place'
 
 const devices = (doc: Record<string, unknown>) => doc.devices as Record<string, unknown>[]
 
@@ -259,5 +259,59 @@ describe('removeArrayFromJson', () => {
     expect((out.arrays as Record<string, unknown>[]).map((a) => a.id)).toEqual(['pv-nord'])
     expect(() => parseHouse(out)).not.toThrow()
     expect(() => removeArrayFromJson(demo, 'nope')).toThrow(PlacementError)
+  })
+})
+
+describe('addOpeningToJson', () => {
+  const openingsOf = (doc: Record<string, unknown>, roomId: string) =>
+    ((doc.rooms as Record<string, unknown>[]).find((r) => r.id === roomId)!.openings as Record<string, unknown>[])
+
+  it('pose l ouverture dans sa piece et laisse les autres tranquilles', () => {
+    const out = addOpeningToJson(demo, 'salon', { id: 'window-1', type: 'window', segment: 3, offset: 1, width: 1.2, height: 1.2, sill: 0.9 })
+    expect(openingsOf(out, 'salon').map((o) => o.id)).toEqual(['baie', 'fen-salon-est', 'window-1'])
+    expect(openingsOf(out, 'cuisine')).toEqual(openingsOf(demo as unknown as Record<string, unknown>, 'cuisine'))
+    expect(() => parseHouse(out)).not.toThrow()
+  })
+
+  it('n ecrit l allege que si elle dit quelque chose — sauf pour une fenetre, ou 0 est un choix', () => {
+    const door = addOpeningToJson(demo, 'salon', { id: 'door-1', type: 'door', segment: 3, offset: 1, width: 0.9, height: 2.1, sill: 0 })
+    expect(openingsOf(door, 'salon').at(-1)).not.toHaveProperty('sill')
+    const flat = addOpeningToJson(demo, 'salon', { id: 'window-1', type: 'window', segment: 3, offset: 1, width: 1.2, height: 2.1, sill: 0 })
+    expect(openingsOf(flat, 'salon').at(-1)).toMatchObject({ sill: 0 })
+  })
+
+  it('refuse un id deja pris, meme dans une AUTRE piece (un ouvrant le nommerait sans savoir ou)', () => {
+    expect(() => addOpeningToJson(demo, 'salon', { id: 'fen-cuisine', type: 'window', segment: 3, offset: 1, width: 1, height: 1 })).toThrow(PlacementError)
+    expect(() => addOpeningToJson(demo, 'nope', { id: 'x', type: 'window', segment: 0, offset: 1, width: 1, height: 1 })).toThrow(PlacementError)
+  })
+
+  it('does not mutate the input document', () => {
+    const before = JSON.stringify(demo)
+    addOpeningToJson(demo, 'salon', { id: 'window-1', type: 'window', segment: 3, offset: 1, width: 1.2, height: 1.2, sill: 0.9 })
+    removeOpeningFromJson(demo, 'salon', 'baie')
+    expect(JSON.stringify(demo)).toBe(before)
+  })
+})
+
+describe('removeOpeningFromJson', () => {
+  it('libere l ouvrant qui l habillait, dans la meme ecriture', () => {
+    const out = removeOpeningFromJson(demo, 'salon', 'baie')                    // cover.baie y est posé
+    const room = (out.rooms as Record<string, unknown>[]).find((r) => r.id === 'salon')!
+    expect((room.openings as Record<string, unknown>[]).map((o) => o.id)).toEqual(['fen-salon-est'])
+    expect(devices(out).find((d) => d.id === 'cover.baie')).not.toHaveProperty('openingId')
+    expect(devices(out).find((d) => d.id === 'cover.cuisine')).toMatchObject({ openingId: 'fen-cuisine' })
+    // sans cette libération, la maison entière serait refusée : l'ouvrant nommerait une ouverture disparue
+    expect(() => parseHouse(out)).not.toThrow()
+  })
+
+  it('ne touche pas aux appareils quand rien n etait pose dessus', () => {
+    const out = removeOpeningFromJson(demo, 'salon', 'fen-salon-est')
+    expect(out.devices).toBe(demo.devices)
+    expect(() => parseHouse(out)).not.toThrow()
+  })
+
+  it('refuse une piece inconnue ou une ouverture qui n y est pas', () => {
+    expect(() => removeOpeningFromJson(demo, 'nope', 'baie')).toThrow(PlacementError)
+    expect(() => removeOpeningFromJson(demo, 'cuisine', 'baie')).toThrow(PlacementError)
   })
 })

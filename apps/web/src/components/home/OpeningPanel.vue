@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { MIN_OPENING_DIM, OPENING_TYPES, fitGap, fitHeight, fitWidth, openingGaps, openingLabel, openingSill, resolveDefaults, type OpeningType, type Room } from '@kasbah/shared'
 import { canTakeOpening } from '../../lib/cover'
@@ -195,6 +195,24 @@ const deviceOptions = computed(() => {
 })
 const linkedDeviceId = computed(() => house.openingDevices[0]?.id ?? '')
 function setDevice(id: string) { void house.setOpeningDevice(id || null) }
+
+// --- supprimer : geste en DEUX TEMPS (armer, puis confirmer dans les 4 s), comme « Oublier
+// l'appareil » et « Retirer de la maison ». Une ouverture relevée au mètre ruban ne doit pas partir
+// d'un doigt posé de travers sur une tablette, et il n'y a rien à rétablir après coup.
+const removeArmed = ref(false)
+let disarm: ReturnType<typeof setTimeout> | undefined
+function clickRemove() {
+  if (!removeArmed.value) { removeArmed.value = true; disarm = setTimeout(() => { removeArmed.value = false }, 4000); return }
+  clearTimeout(disarm)
+  removeArmed.value = false
+  void house.removeOpening()
+}
+onBeforeUnmount(() => clearTimeout(disarm))
+/** L'ouvrant que la suppression libérerait : on le DIT avant, c'est le moment où l'on décide. */
+const freedName = computed(() => {
+  const d = house.openingDevices[0]
+  return d ? d.name ?? (d.deviceId ? devices.descriptors[d.deviceId]?.name : undefined) ?? d.id : null
+})
 </script>
 
 <template>
@@ -267,7 +285,10 @@ function setDevice(id: string) { void house.setOpeningDevice(id || null) }
       </div>
 
       <div class="opening__row opening__bottom">
-        <span />
+        <button type="button" class="pill opening__remove" :class="{ 'opening__remove--armed': removeArmed }"
+                :disabled="house.savingOpening" @click="clickRemove">
+          {{ removeArmed ? $t('opening.removeConfirm') : $t('opening.remove') }}
+        </button>
         <!-- place réservée : invisible tant qu'il n'y a rien à rétablir, la ligne ne bouge pas -->
         <button type="button" class="pill opening__revert" :class="{ 'opening__revert--off': !house.canRevertOpening }"
                 :disabled="house.savingOpening || !house.canRevertOpening" :tabindex="house.canRevertOpening ? 0 : -1"
@@ -275,6 +296,8 @@ function setDevice(id: string) { void house.setOpeningDevice(id || null) }
           {{ $t('opening.revert') }}
         </button>
       </div>
+      <!-- place réservée : ce que la suppression emporterait, dit une fois armée, sans rien décaler -->
+      <p class="muted opening__frees">{{ removeArmed && freedName ? $t('opening.removeFrees', { name: freedName }) : '' }}</p>
     </div>
   </template>
 </template>
@@ -316,6 +339,16 @@ function setDevice(id: string) { void house.setOpeningDevice(id || null) }
    et faisait déborder toute la carte, un `v-select` se serre à la largeur qu'on lui donne */
 .opening__select, .opening__device { flex: 0 0 auto; width: 150px; }
 .opening__bottom { min-height: 34px; }
+/* largeur commune aux deux libellés : rien ne bouge en s'armant. 175 px et non 150 comme « Oublier
+   l'appareil » — « Confirmer la suppression » mesure 170 px, et le bouton grandissait sous le doigt. */
+.opening__remove { flex: 0 0 auto; min-width: 175px; justify-content: center; font-size: 12px; }
+.opening__remove--armed { border-color: var(--error, #e5484d); color: var(--error, #e5484d); }
+/* Deux lignes, réservées et jamais dépassées : la carte garde sa hauteur que l'avertissement soit
+   là ou non, et un nom d'ouvrant long (60 signes permis) est coupé plutôt que de la faire grandir. */
+.opening__frees {
+  margin: 0; font-size: 12px; min-height: 36px; line-height: 18px;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
 /* place réservée pour « Rétablir » : rien ne bouge quand elle apparaît */
 .opening__revert--off { visibility: hidden; }
 /* largeur fixe (« 1.20 ») : la valeur change sans déplacer les touches */

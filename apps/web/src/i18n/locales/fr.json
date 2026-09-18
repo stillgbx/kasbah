@@ -367,6 +367,11 @@
   "scene": { "webglUnavailable": "La 3D n'est pas disponible sur cet appareil." },
   "opening": {
     "list": "Ouvertures", "type": "Nature",
+    "add": "Ajouter une ouverture", "cancel": "Annuler", "placeHint": "Touchez dans la vue 3D le mur qui la portera.",
+    "count": "{n} ouverture | {n} ouverture | {n} ouvertures", "none": "Aucune ouverture relevée dans cette pièce.",
+    "addNoSpace": "Aucun mur de cette pièce n'a {width} m de libre.",
+    "remove": "Supprimer l'ouverture", "removeConfirm": "Confirmer la suppression",
+    "removeFrees": "{name} perdra sa place.",
     "types": { "door": "Porte", "window": "Fenêtre", "passage": "Passage", "garage": "Porte de garage", "bay": "Baie vitrée", "glass-door": "Porte vitrée" },
     "width": "Largeur", "height": "Hauteur", "sill": "Hauteur d'allège", "rename": "Renommer l'ouverture",
     "gapRight": "Droite", "gapLeft": "Gauche",

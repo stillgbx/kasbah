@@ -137,6 +137,12 @@ export interface SceneEvents {
    */
   openingDrag: (openingId: string, xy: [number, number]) => void
   openingDrop: (openingId: string) => void
+  /**
+   * Mur tapé pendant qu'une ouverture est armée (mode « poser ») : le point touché sur le bâti, en
+   * repère maison. Comme pour le glissement, c'est l'appelant qui en déduit un mur et une distance
+   * depuis le coin — la scène dit OÙ ON A TAPÉ, pas où l'ouverture a le droit d'aller.
+   */
+  placeTap: (xy: [number, number]) => void
 }
 
 const HOME_RADIUS_M = 120
@@ -280,7 +286,7 @@ export class HouseScene {
   private listeners: { [K in keyof SceneEvents]: Set<SceneEvents[K]> } = {
     deviceTap: new Set(), roomTap: new Set(), zoneTap: new Set(), levelTap: new Set(), backgroundTap: new Set(),
     deviceDrag: new Set(), deviceDrop: new Set(), journalTap: new Set(),
-    openingTap: new Set(), openingDrag: new Set(), openingDrop: new Set(),
+    openingTap: new Set(), openingDrag: new Set(), openingDrop: new Set(), placeTap: new Set(),
   }
   private detachInput: (() => void) | null = null
   private movableKeys: string[] = []
@@ -297,6 +303,8 @@ export class HouseScene {
    */
   private editingOpenings = false
   private selectedOpeningId: string | null = null
+  /** Pièce dont on attend qu'on tape un mur pour y poser une ouverture neuve (mode « poser »). */
+  private placingRoomId: string | null = null
   private openingHandles = new Map<string, { group: Group; fill: Mesh; ring: Mesh; ringOn: Mesh; rect: OpeningRect }>()
   /** Cinq matériaux pour toutes les poignées : la sélection n'est qu'un échange de matériau. */
   private openingMats: {
@@ -806,6 +814,31 @@ export class HouseScene {
       })
     }
     this.loop.invalidate()
+  }
+
+  /**
+   * Arme (ou désarme) la pose d'une ouverture dans une pièce : le prochain tap sur le bâti de son
+   * niveau rapporte le point touché (`placeTap`) au lieu de changer la sélection. Rien n'est dessiné
+   * ici — c'est le panneau qui dit ce qu'on attend, la scène ne fait que router le tap.
+   */
+  setPlacingOpening(roomId: string | null): void {
+    this.placingRoomId = roomId
+  }
+
+  /**
+   * Point du bâti sous le doigt, en repère maison : sols ET murs du niveau de la pièce visée. On
+   * lance le rayon sur les vraies surfaces plutôt que sur le plan du sol (comme le fait le
+   * glissement) parce qu'ici on vise un MUR : tapé à mi-hauteur, il donne un point sur le mur, là
+   * où le plan du sol aurait rendu un point situé bien au-delà, derrière la maison.
+   */
+  private buildingPoint(roomId: string, ndc: { x: number; y: number }): [number, number] | null {
+    const levelId = this.house?.rooms.find((r) => r.id === roomId)?.levelId
+    const level = levelId ? this.nodes?.levels.get(levelId) : undefined
+    if (!level) return null
+    this.raycaster.setFromCamera(new Vector2(ndc.x, ndc.y), this.camera)
+    const targets: Object3D[] = [...level.walls, ...level.floors.values()]
+    const hit = this.raycaster.intersectObjects(targets, false)[0]
+    return hit ? [hit.point.x, -hit.point.z] : null       // monde (x, y, z) → maison (x, z, -y)
   }
 
   /**
@@ -1685,6 +1718,15 @@ export class HouseScene {
 
   private handleTap(ev: TapEvent): void {
     if (this.drag?.active() || this.openingDragger?.active()) return   // fin d'un glissement, pas un tap
+    // Une ouverture armée prend le tap AVANT toute sélection : on est venu désigner un mur, pas
+    // ouvrir la pièce ou l'appareil qui se trouve devant. Tapé à côté du bâti, c'est un tap de fond
+    // — l'appelant y lit un renoncement, comme partout ailleurs dans la vue.
+    if (this.placingRoomId) {
+      const xy = this.buildingPoint(this.placingRoomId, ev.ndc)
+      if (xy) this.emit('placeTap', xy)
+      else this.emit('backgroundTap')
+      return
+    }
     const hit = this.pick(ev.ndc)
     if (!hit) { this.emit('backgroundTap'); return }
     if (hit.kind === 'device') this.emit('deviceTap', hit.key)

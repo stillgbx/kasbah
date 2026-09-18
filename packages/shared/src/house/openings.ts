@@ -1,7 +1,7 @@
 import type { HouseDefaults } from './defaults'
 import { dist, type Vec2 } from './geometry/vec2'
 import { classifySegments, isWalled, type WallSegment } from './geometry/walls'
-import type { Opening, Room } from './schema'
+import type { Opening, OpeningType, Room } from './schema'
 
 // Où une ouverture a le DROIT de se poser sur le contour de sa pièce, et ce que devient un point
 // attrapé à la souris. La règle est celle de `validate.ts` — segment mur (jamais « none »), tenant
@@ -242,4 +242,21 @@ export function openingLimits(
     maxHeight: Math.max(MIN_OPENING_DIM, ceiling),
     maxSill: Math.max(0, ceiling - opening.height),
   }
+}
+
+/**
+ * Cotes d'une ouverture qu'on vient de poser, par nature. Ce sont des valeurs de CATALOGUE — une
+ * porte fait 90 cm, une baie 2,40 m — que le relevé corrigera au centimètre dans le panneau : elles
+ * n'ont pas à être justes, elles ont à être plausibles pour qu'on reconnaisse ce qu'on vient de
+ * poser dans la scène.
+ *
+ * La hauteur vient de la maison (`doorHeight`) pour tout ce qui descend au sol, l'allège aussi
+ * (`windowSill`) : régler ces défauts une fois doit valoir pour ce qu'on pose ensuite. Une fenêtre
+ * de 1,20 m sur une allège de 0,90 m arrive pile à la hauteur d'une porte — c'est ce qu'on voit sur
+ * une façade, et c'est pourquoi les deux nombres vont ensemble.
+ */
+export function newOpeningDims(type: OpeningType, defaults: HouseDefaults): { width: number; height: number; sill: number } {
+  if (type === 'window') return { width: 1.2, height: 1.2, sill: defaults.windowSill }
+  const width = type === 'garage' || type === 'bay' ? 2.4 : 0.9
+  return { width, height: defaults.doorHeight, sill: 0 }
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { HOUSE_DEFAULTS } from './defaults'
 import { classifySegments } from './geometry/walls'
-import { fitGap, fitHeight, fitWidth, freeSpan, hostSegments, openingGaps, openingLabel, openingLimits, slotFromPoint } from './openings'
+import { fitGap, fitHeight, fitWidth, freeSpan, hostSegments, newOpeningDims, openingGaps, openingLabel, openingLimits, slotFromPoint } from './openings'
 import { openingPatchSchema, patchOpeningInJson, PlacementError, placeDeviceInJson } from './place'
 import { houseSchema, openingSchema, type Opening, type Room } from './schema'
 
@@ -233,5 +233,23 @@ describe('placeDeviceInJson — opening link', () => {
   })
   it('refuses an opening no room carries', () => {
     expect(() => placeDeviceInJson(doc(), 'd1', { openingId: 'nope' })).toThrow(PlacementError)
+  })
+})
+
+describe('newOpeningDims', () => {
+  it('pose tout ce qui descend au sol a la hauteur de porte de la maison, allege nulle', () => {
+    for (const type of ['door', 'passage', 'garage', 'bay', 'glass-door'] as const) {
+      expect(newOpeningDims(type, HOUSE_DEFAULTS)).toMatchObject({ height: HOUSE_DEFAULTS.doorHeight, sill: 0 })
+    }
+    expect(newOpeningDims('garage', HOUSE_DEFAULTS).width).toBe(2.4)
+    expect(newOpeningDims('door', HOUSE_DEFAULTS).width).toBe(0.9)
+  })
+  it('la fenetre arrive en haut a la hauteur d une porte : c est ce qu on voit sur une facade', () => {
+    const w = newOpeningDims('window', { ...HOUSE_DEFAULTS, windowSill: 0.9, doorHeight: 2.1 })
+    expect(w.sill + w.height).toBe(HOUSE_DEFAULTS.doorHeight)
+  })
+  it('suit les defauts de LA maison : regler l allege une fois vaut pour ce qu on pose ensuite', () => {
+    expect(newOpeningDims('window', { ...HOUSE_DEFAULTS, windowSill: 1.1 }).sill).toBe(1.1)
+    expect(newOpeningDims('door', { ...HOUSE_DEFAULTS, doorHeight: 2.4 }).height).toBe(2.4)
   })
 })

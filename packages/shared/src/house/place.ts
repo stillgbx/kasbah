@@ -412,3 +412,82 @@ export function patchOpeningInJson(doc: unknown, roomId: string, openingId: stri
   nextRooms[ri] = { ...room, openings: nextOpenings }
   return { ...doc, rooms: nextRooms }
 }
+
+/**
+ * Ouverture AJOUTÉE à une pièce depuis le mode édition. Complète, contrairement au patch : une
+ * ouverture qui naît doit dire où elle se pose et ce qu'elle mesure, sinon elle n'existe nulle part.
+ * L'id est choisi par l'UI, comme celui d'un champ de panneaux.
+ */
+export const newOpeningSchema = z.object({
+  id: z.string().min(1).max(60),
+  name: z.string().trim().max(60).optional(),
+  type: z.enum(OPENING_TYPES),
+  segment: z.number().int().min(0),
+  offset: z.number().min(0).max(100),
+  width: z.number().positive().max(20),
+  height: z.number().positive().max(10),
+  sill: z.number().min(0).max(10).optional(),
+})
+export type NewOpening = z.infer<typeof newOpeningSchema>
+
+/**
+ * Renvoie une copie du document JSON avec une ouverture de PLUS dans la pièce `roomId`. L'id doit
+ * être libre dans TOUTE la maison, pas seulement dans la pièce : un ouvrant nomme son ouverture sans
+ * dire où elle est (`devices[].openingId`), et `parseHouse` refuserait le doublon.
+ *
+ * L'allège n'est écrite que si elle dit quelque chose : `0` est le défaut implicite de tout ce qui
+ * descend au sol, et l'omettre garde le fichier lisible pour qui relit son relevé. La FENÊTRE fait
+ * exception — sans `sill`, elle retomberait sur `defaults.windowSill`, donc un 0 voulu s'écrit.
+ */
+export function addOpeningToJson(doc: unknown, roomId: string, opening: NewOpening): JsonObject {
+  if (!isObject(doc)) throw new PlacementError('house document is not an object')
+  const rooms = Array.isArray(doc.rooms) ? doc.rooms : []
+  const ri = rooms.findIndex((r) => isObject(r) && r.id === roomId)
+  if (ri < 0) throw new PlacementError(`unknown room "${roomId}"`)
+  for (const r of rooms) {
+    if (!isObject(r) || !Array.isArray(r.openings)) continue
+    if (r.openings.some((o) => isObject(o) && o.id === opening.id)) throw new PlacementError(`opening "${opening.id}" already exists`)
+  }
+  const room = rooms[ri] as JsonObject
+  const openings = Array.isArray(room.openings) ? room.openings : []
+  const next: JsonObject = {
+    id: opening.id, type: opening.type, segment: opening.segment,
+    offset: opening.offset, width: opening.width, height: opening.height,
+  }
+  if (opening.name) next.name = opening.name
+  if (opening.sill !== undefined && (opening.sill > 0 || opening.type === 'window')) next.sill = opening.sill
+  const nextRooms = [...rooms]
+  nextRooms[ri] = { ...room, openings: [...openings, next] }
+  return { ...doc, rooms: nextRooms }
+}
+
+/**
+ * Renvoie une copie du document JSON SANS l'ouverture `openingId` de la pièce `roomId`.
+ *
+ * L'ouvrant qui l'habillait est LIBÉRÉ dans la même écriture (`openingId` effacé) : un volet qui
+ * nomme une ouverture disparue fait rejeter la maison entière par `parseHouse`, et la suppression
+ * échouerait sans rien dire de la vraie raison. Le volet reste dans la maison, sans ouverture — la
+ * vue Ouvrants le compte alors parmi ceux qui attendent une place.
+ */
+export function removeOpeningFromJson(doc: unknown, roomId: string, openingId: string): JsonObject {
+  if (!isObject(doc)) throw new PlacementError('house document is not an object')
+  const rooms = Array.isArray(doc.rooms) ? doc.rooms : []
+  const ri = rooms.findIndex((r) => isObject(r) && r.id === roomId)
+  if (ri < 0) throw new PlacementError(`unknown room "${roomId}"`)
+  const room = rooms[ri] as JsonObject
+  const openings = Array.isArray(room.openings) ? room.openings : []
+  if (!openings.some((o) => isObject(o) && o.id === openingId)) throw new PlacementError(`room "${roomId}" has no opening "${openingId}"`)
+  const nextRooms = [...rooms]
+  nextRooms[ri] = { ...room, openings: openings.filter((o) => !(isObject(o) && o.id === openingId)) }
+
+  const devices = Array.isArray(doc.devices) ? doc.devices : []
+  let bound = false
+  const freed = devices.map((d) => {
+    if (!isObject(d) || d.openingId !== openingId) return d
+    bound = true
+    const { openingId: _gone, ...rest } = d
+    return rest
+  })
+  // pas de clé `devices` posée dans une maison qui n'en avait pas : on ne réécrit que ce qui change
+  return { ...doc, rooms: nextRooms, ...(bound ? { devices: freed } : {}) }
+}
