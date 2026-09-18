@@ -299,6 +299,23 @@
       "openingId": "fen-ch1"
     },
     {
+      "id": "cover.terrasse",
+      "name": "Store terrasse",
+      "deviceId": "mock:cover-terrace",
+      "zoneId": "terrasse",
+      "position": [6.6, 9.25, 2.6],
+      "size": { "width": 4, "height": 2.5 }
+    },
+    {
+      "id": "cover.portail",
+      "name": "Portail",
+      "deviceId": "mock:cover-gate",
+      "zoneId": "allee",
+      "position": [-3.5, -7.8, 0.8],
+      "yaw": 0,
+      "size": { "width": 4.4, "height": 1.6 }
+    },
+    {
       "id": "speaker.salon",
       "name": "Enceinte salon",
       "deviceId": "mock:speaker-living",

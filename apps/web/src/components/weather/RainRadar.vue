@@ -140,6 +140,12 @@ onMounted(() => {
     center: [props.home.lon, props.home.lat], zoom: 6.2, minZoom: 4, maxZoom: 10, dragRotate: false, pitchWithRotate: false,
   })
   map = m
+  // Les crédits démarrent REPLIÉS (le bouton ⓘ les ouvre). MapLibre les déplie d'office : quand les
+  // premières attributions arrivent, il pose `maplibregl-compact` ET `maplibregl-compact-show` — mais
+  // seulement si la première manque. En la posant nous-mêmes tout de suite, la seconde ne vient jamais,
+  // et la bascule au clic continue de fonctionner. (Retirer `compact-show` ici ne servirait à rien :
+  // à cet instant l'attribution est encore vide, donc la classe n'est pas encore posée.)
+  container.value.querySelector('.maplibregl-ctrl-attrib')?.classList.add('maplibregl-compact')
   // en développement seulement : la carte est interrogeable depuis la console (`el.__map`), pour vérifier
   // qu'une source dessine bien quand rien ne se voit à l'écran
   if (import.meta.env.DEV) (container.value as HTMLDivElement & { __map?: MlMap }).__map = m

@@ -30,9 +30,15 @@ function defaultDevices(opts: { winter?: boolean } = {}) {
     light('light-living', { name: 'Plafonnier salon', colorTemp: true, color: true, on: !!opts.winter, brightness: 70, powerW: 12 }),
     light('light-kitchen', { name: 'Spots cuisine', colorTemp: true, brightness: 90, powerW: 30 }),
     light('light-bedroom1', { name: 'Lampe chambre 1', brightness: 40, powerW: 9 }),
-    cover('cover-living', { name: 'Volet baie', position: 100, preset: 27 }),
-    cover('cover-kitchen', { name: 'Volet cuisine', position: 100 }),
-    cover('cover-bedroom1', { name: 'Volet chambre 1', position: opts.winter ? 30 : 100, tilt: true }),
+    cover('cover-living', { name: 'Volet baie', deviceClass: 'shutter', position: 100, preset: 27 }),
+    cover('cover-kitchen', { name: 'Volet cuisine', deviceClass: 'shutter', position: 100 }),
+    cover('cover-bedroom1', { name: 'Volet chambre 1', deviceClass: 'shutter', position: opts.winter ? 30 : 100, tilt: true }),
+    // Trois natures d'ouvrant, parce qu'elles ne se comportent pas pareil dans l'interface : le volet
+    // s'ouvre, le STORE se remonte (et se déploie à plat, donc au repos à 100), le PORTAIL donne sur
+    // la rue (aucun geste d'ensemble ne l'ouvre, et il n'attend aucune ouverture). L'été le store est
+    // déployé — c'est déployé qu'il se remarque ; l'hiver il est rentré.
+    cover('cover-terrace', { name: 'Store terrasse', deviceClass: 'awning', position: opts.winter ? 100 : 40 }),
+    cover('cover-gate', { name: 'Portail', deviceClass: 'gate', position: 0 }),
     mediaPlayer('speaker-living', { name: 'Enceinte salon', volume: 30 }),
     mediaPlayer('speaker-kitchen', { name: 'Enceinte cuisine', volume: 45, playing: true }),
     climate('climate-heatpump', { name: 'Pompe à chaleur', mode: opts.winter ? 'heat' : 'auto', targetTempC: opts.winter ? 20.5 : 21, currentTempC: opts.winter ? 19 : 22 }),
