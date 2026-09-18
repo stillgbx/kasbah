@@ -1,6 +1,6 @@
 import { BoxGeometry, Matrix4, Mesh, Vector3, type BufferGeometry } from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
-import type { LevelGeometry, OpeningRect, RoofDescriptor, Vec2, Vec3, WallPrism } from '@kasbah/shared'
+import type { LevelGeometry, OpeningRect, OpeningType, RoofDescriptor, Vec2, Vec3, WallPrism } from '@kasbah/shared'
 import type { MaterialSet } from './materials'
 import { extrudePolygon, extrudeRing, insetPolygon } from './shapes'
 
@@ -39,6 +39,19 @@ const SILL_OUT = 0.05       // débord de l'appui devant la façade
 const SILL_SIDE = 0.04      // et de chaque côté de la baie
 const LEAF = 0.04           // épaisseur d'un vantail
 const EPS = 1e-6
+/** Largeur (m) de vantail au-delà de laquelle une baie prend un refend de plus : une coulissante. */
+const BAY_VANE_W = 1.6
+const BAY_VANES_MAX = 3
+
+/**
+ * Ce qui est VITRÉ : une fenêtre, une baie, une porte vitrée. Ces trois-là reçoivent un vitrage dans
+ * leur embrasure (`buildPane`) ; une porte pleine, un passage et une porte de garage, non.
+ *
+ * Déclaré ici, dans un module FEUILLE : `buildHouse` importe déjà `buildDetails` d'ici, et l'inverse
+ * ferait un cycle — Vite réévalue un module à chaud, et un cycle le laisse à moitié initialisé
+ * (cf. `6_faq/6_0_pieges-outillage.md`).
+ */
+export const GLAZED_OPENINGS: ReadonlySet<OpeningType> = new Set<OpeningType>(['window', 'bay', 'glass-door'])
 
 /**
  * Une boîte dans le repère d'une baie : x le long du mur depuis le bord gauche, y dans l'épaisseur
@@ -59,6 +72,14 @@ function boxAt(o: OpeningRect, size: readonly [number, number, number], at: read
 /**
  * Encadrement d'une baie (montants SOMBRES : sur un mur clair, c'est le cadre qui dessine la
  * fenêtre — la maquette a des menuiseries anthracite) et appui d'une fenêtre (CLAIR, avec les lisses).
+ *
+ * Trois familles se distinguent au premier coup d'œil, et c'est voulu — l'utilisateur corrige un
+ * relevé, il doit voir qu'il a désigné la bonne ouverture :
+ *  - une FENÊTRE : cadre sur ses quatre côtés, plus un appui qui déborde de la façade ;
+ *  - une BAIE VITRÉE : cadre sur quatre côtés aussi (elle a une traverse basse, c'est son rail),
+ *    mais AUCUN appui — elle descend au sol — et un refend vertical par vantail, sans quoi trois
+ *    mètres de verre d'un seul tenant ne ressemblent à rien ;
+ *  - une PORTE, vitrée ou pleine : trois côtés, pas de traverse basse (c'est le seuil), pas d'appui.
  */
 function frameOfOpening(o: OpeningRect, frames: BufferGeometry[], trim: BufferGeometry[]): void {
   if (o.type === 'passage') return
@@ -71,19 +92,39 @@ function frameOfOpening(o: OpeningRect, frames: BufferGeometry[], trim: BufferGe
     boxAt(o, [f, fd, h], [w - f / 2, d / 2, h / 2]),
     boxAt(o, [w - 2 * f, fd, f], [w / 2, d / 2, h - f / 2]),
   )
+  // traverse basse : l'allège d'une fenêtre, le rail d'une baie ; une porte a un seuil, pas une traverse
+  if (o.type === 'window' || o.type === 'bay') frames.push(boxAt(o, [w - 2 * f, fd, f], [w / 2, d / 2, f / 2]))
   if (o.type === 'window') {
-    frames.push(boxAt(o, [w - 2 * f, fd, f], [w / 2, d / 2, f / 2]))
     const sy = 0.06 + SILL_OUT
     trim.push(boxAt(o, [w + 2 * SILL_SIDE, sy, SILL_H], [w / 2, d - 0.06 + sy / 2, -SILL_H / 2]))
   }
+  if (o.type === 'bay') {
+    const vanes = Math.min(BAY_VANES_MAX, Math.max(2, Math.round(w / BAY_VANE_W)))
+    for (let i = 1; i < vanes; i++) frames.push(boxAt(o, [f, fd, h - 2 * f], [(i * w) / vanes, d / 2, h / 2]))
+  }
 }
 
-/** Le vantail fermé d'une porte, côté intérieur ; une porte de garage remplit sa baie. */
-function leafOfOpening(o: OpeningRect, out: BufferGeometry[]): void {
-  if (o.type !== 'door' && o.type !== 'garage') return
+/**
+ * Ce qui REMPLIT la baie : le vantail plein d'une porte (côté intérieur), le tablier d'une porte de
+ * garage — et, pour une porte VITRÉE, un simple cadre de vantail, sombre, autour du verre déjà posé
+ * par `buildPane`. Un panneau opaque y cacherait précisément ce qui la définit.
+ */
+function leafOfOpening(o: OpeningRect, out: BufferGeometry[], frames: BufferGeometry[]): void {
+  if (o.type !== 'door' && o.type !== 'garage' && o.type !== 'glass-door') return
   const f = DOOR_FRAME
   const { width: w, height: h, depth: d } = o
   if (w <= 2 * f + EPS || h <= f + EPS) return
+  if (o.type === 'glass-door') {
+    const lw = w - 2 * f, lh = h - f, r = f * 0.8   // le battant est un peu plus fin que le dormant
+    const y = d * 0.35
+    frames.push(
+      boxAt(o, [r, LEAF, lh], [f + r / 2, y, lh / 2]),
+      boxAt(o, [r, LEAF, lh], [w - f - r / 2, y, lh / 2]),
+      boxAt(o, [lw - 2 * r, LEAF, r], [w / 2, y, lh - r / 2]),
+      boxAt(o, [lw - 2 * r, LEAF, r], [w / 2, y, r / 2]),
+    )
+    return
+  }
   const thick = o.type === 'garage' ? 0.05 : LEAF
   out.push(boxAt(o, [w - 2 * f, thick, h - f], [w / 2, o.type === 'garage' ? d / 2 : d * 0.35, (h - f) / 2]))
 }
@@ -151,7 +192,7 @@ export function buildDetails(level: LevelGeometry, mats: MaterialSet): Mesh[] {
   const frames: BufferGeometry[] = []
   const plinth: BufferGeometry[] = []
   const doors: BufferGeometry[] = []
-  for (const o of level.openings) { frameOfOpening(o, frames, trim); leafOfOpening(o, doors) }
+  for (const o of level.openings) { frameOfOpening(o, frames, trim); leafOfOpening(o, doors, frames) }
   capsOfWalls(level.walls, trim)
   plinthsOfWalls(level.walls, plinth)
   return [

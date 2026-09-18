@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { BackSide, Box3, BoxGeometry, type BufferGeometry, CylinderGeometry, Mesh, type MeshBasicMaterial, type MeshStandardMaterial, ShapeGeometry, Vector3, type BufferAttribute, type Texture } from 'three'
-import { computeHouseGeometry, localToGeo, parseHouse, type DeviceDescriptor, type DeviceState, type PlacedHouseDevice } from '@kasbah/shared'
+import { BackSide, Box3, BoxGeometry, type BufferGeometry, CylinderGeometry, Mesh, type MeshBasicMaterial, type MeshStandardMaterial, type Object3D, ShapeGeometry, Vector3, type BufferAttribute, type Texture } from 'three'
+import { computeHouseGeometry, localToGeo, openingGaps, parseHouse, type DeviceDescriptor, type DeviceState, type PlacedHouseDevice } from '@kasbah/shared'
 import demo from '@kasbah/shared/demo-house.json'
-import { buildHouse, buildWallsGeometry, countTriangles } from './builders/buildHouse'
+import { buildHouse, buildLevel, buildWallsGeometry, countTriangles } from './builders/buildHouse'
 import { buildDetails, buildRoofDetails } from './builders/details'
 import { alignedToLongestEdge, extrudePolygon } from './builders/shapes'
 import { createSurfaceTextures, type SurfaceTexture } from './textures/procedural'
@@ -887,6 +887,395 @@ describe('coût du rendu', () => {
     expect(scene.debugStats().levelPasses).toBe(1)
     scene.updateStates({ 'mock:light-living': { kind: 'light', updatedAt: 1, available: true, on: false } as DeviceState })
     expect(scene.debugStats().levelPasses).toBe(0)
+    scene.dispose()
+  })
+})
+
+describe('régler les ouvertures', () => {
+  const house = parseHouse(demo)
+  const openingCount = computeHouseGeometry(house).levels.reduce((n, l) => n + l.openings.length, 0)
+  const handles = (scene: HouseScene) => {
+    let n = 0
+    scene.scene.traverse((o) => { if (o.name.startsWith('opening:')) n++ })
+    return n
+  }
+
+  /**
+   * Les poignées vivent et meurent avec le mode : hors édition, la scène doit être exactement celle
+   * d'avant, au triangle près. Et elles ne coûtent aucune passe de niveau (elles sont dessinées dans
+   * la passe globale) — c'est ce qui rend le mode gratuit sur l'iGPU.
+   */
+  it('pose une poignée par ouverture, sans passe de plus, et ne laisse rien en sortant', () => {
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true })
+    scene.load(house)
+    const before = countTriangles(scene.scene)
+    expect(handles(scene)).toBe(0)
+    scene.setEditingOpenings(true)
+    expect(handles(scene)).toBe(openingCount)
+    expect(openingCount).toBeGreaterThan(0)
+    expect(scene.debugStats().levelPasses).toBe(0)
+    expect(countTriangles(scene.scene)).toBeGreaterThan(before)
+    scene.setEditingOpenings(false)
+    expect(handles(scene)).toBe(0)
+    expect(countTriangles(scene.scene)).toBe(before)
+    scene.dispose()
+  })
+
+  /**
+   * PIÈGE À MÉMORISER. La `Scene` tourne avec `matrixWorldAutoUpdate = false` (une seule mise à jour
+   * par image, `render()`). Un objet neuf garde donc une matrice monde à l'IDENTITÉ jusqu'à la
+   * prochaine image : le lancer de rayon le teste à l'origine du monde, et un tap sur une poignée
+   * traversait jusqu'au sol de la pièce. Onze poignées sur onze étaient périmées, jusqu'à douze
+   * mètres d'écart. Ce qui doit être touchable doit entrer dans le monde avec sa matrice.
+   */
+  it('entre dans le monde avec une matrice juste, sans attendre une image', () => {
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true })
+    scene.load(house)
+    scene.setEditingOpenings(true)
+    const groups: Object3D[] = []
+    scene.scene.traverse((o) => { if (o.name.startsWith('opening:')) groups.push(o) })
+    expect(groups).toHaveLength(openingCount)
+    const posOf = (o: Object3D) => new Vector3().setFromMatrixPosition(o.matrixWorld)
+    const asBuilt = groups.map((g) => [posOf(g), ...g.children.map(posOf)])
+    scene.scene.updateMatrixWorld(true)          // ce que la première image aurait fait
+    groups.forEach((g, i) => {
+      const after = [posOf(g), ...g.children.map(posOf)]
+      after.forEach((p, k) => expect(p.distanceTo(asBuilt[i]![k]!)).toBeLessThan(1e-9))
+      expect(after[0]!.length()).toBeGreaterThan(0.2)   // et ce n'est pas l'origine du monde
+    })
+    scene.dispose()
+  })
+
+  /** Le bout du chemin : un tap sur une poignée est vu comme tel, et pas comme un tap sur le sol. */
+  it('se laisse piquer là où elle est dessinée', () => {
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true })
+    scene.load(house)
+    scene.resize(1200, 800)
+    scene.setEditingOpenings(true)
+    let handle: Object3D | null = null
+    scene.scene.traverse((o) => { if (!handle && o.name === 'opening:baie') handle = o })
+    const target = new Vector3().setFromMatrixPosition(handle!.matrixWorld)
+    // `focusOpening` pose la caméra, mais en headless il n'y a pas d'`OrbitControls` pour l'ORIENTER
+    // (c'est `controls.update()` qui le fait) : on la fait regarder la poignée nous-mêmes, et le
+    // centre de l'image est alors exactement sur elle.
+    scene.focusOpening('baie', false)
+    scene.camera.lookAt(target)
+    scene.camera.updateMatrixWorld(true)
+    expect(scene.pick({ x: 0, y: 0 })).toEqual({ kind: 'opening', openingId: 'baie' })
+    scene.dispose()
+  })
+
+  /**
+   * Trois états à distinguer : rien, une ouverture, celle qu'on règle. TOUTES portent un cadre fin —
+   * sans lui, les autres ouvertures devenaient introuvables (retour de l'utilisateur) —, et une seule
+   * porte le cadre ÉPAIS. Ce qui s'éteint est un MATÉRIAU, jamais l'objet : `Object3D.visible` dit
+   * « mon niveau est masqué », et c'est lui qui décide si une poignée est touchable.
+   */
+  it('cerne toutes les ouvertures d’un trait fin, une seule d’un trait épais, et garde les deux touchables', () => {
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true })
+    scene.load(house)
+    scene.resize(1200, 800)
+    scene.setEditingOpenings(true)
+    /** Pour chaque poignée : [cadre fin dessiné ?, cadre épais dessiné ?]. */
+    const rings = () => {
+      const drawn: [boolean, boolean][] = []
+      scene.scene.traverse((o) => {
+        if (!o.name.startsWith('opening:')) return
+        const [, thin, bold] = o.children as Mesh[]
+        drawn.push([(thin!.material as MeshBasicMaterial).visible, (bold!.material as MeshBasicMaterial).visible])
+      })
+      return drawn
+    }
+    expect(rings().filter(([thin]) => thin)).toHaveLength(openingCount)   // toutes cernées, finement
+    expect(rings().filter(([, bold]) => bold)).toHaveLength(0)            // aucune n'est « celle-ci »
+    scene.setSelectedOpening('fen-ch1')
+    expect(rings().filter(([, bold]) => bold)).toHaveLength(1)
+    expect(rings().filter(([thin]) => thin)).toHaveLength(openingCount - 1)
+    // le cadre épais est le SEUL à traverser les murs ; le fin reste soumis à la profondeur, sinon
+    // dix-neuf cadres transparaissent à travers le toit
+    const matOf = (id: string, child: number) => {
+      let found: MeshBasicMaterial | null = null
+      scene.scene.traverse((o) => { if (o.name === `opening:${id}`) found = (o.children[child] as Mesh).material as MeshBasicMaterial })
+      return found!
+    }
+    expect(matOf('baie', 1).depthTest).toBe(true)          // le cadre fin d'une poignée au repos
+    expect(matOf('fen-ch1', 2).depthTest).toBe(false)      // le cadre épais de la sélectionnée
+    // la poignée NON sélectionnée est toujours visible en tant qu'objet (donc toujours piquable)
+    let other: Object3D | null = null
+    scene.scene.traverse((o) => { if (!other && o.name === 'opening:baie') other = o })
+    expect((other! as Object3D).visible).toBe(true)
+    const target = new Vector3().setFromMatrixPosition((other! as Object3D).matrixWorld)
+    scene.focusOpening('baie', false)
+    scene.camera.lookAt(target)
+    scene.camera.updateMatrixWorld(true)
+    expect(scene.pick({ x: 0, y: 0 })).toEqual({ kind: 'opening', openingId: 'baie' })
+    scene.dispose()
+  })
+
+  /**
+   * Le repère d'origine : le (0, 0, 0) du fichier, ses deux axes et le nord vrai. Il naît et meurt
+   * avec le mode édition, et il est posé à l'origine du REPÈRE — pas au centre du bâti.
+   */
+  it('pose un repère à l’origine du fichier, en mode édition seulement', () => {
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true })
+    scene.load(house)
+    const mark = () => {
+      let found: Object3D | null = null
+      scene.scene.traverse((o) => { if (!found && o.name === 'origin-mark') found = o })
+      return found as Object3D | null
+    }
+    expect(mark()).toBeNull()
+    scene.setEditingOpenings(true)
+    const group = mark()!
+    expect(group).not.toBeNull()
+    expect(new Vector3().setFromMatrixPosition(group.matrixWorld).length()).toBeCloseTo(0, 6)
+    // deux axes et le nord : trois bras, plus l'anneau
+    const bars = group.children.filter((o) => o instanceof Mesh)
+    expect(bars).toHaveLength(4)
+    // le nord suit le cap de +y : à cap 0, il est confondu avec l'axe des y
+    const letters: string[] = []
+    group.traverse((o) => { const el = (o as unknown as { element?: HTMLElement }).element; if (el) letters.push(el.textContent ?? '') })
+    expect(letters.sort()).toEqual(['N', 'x', 'y'])
+    scene.setEditingOpenings(false)
+    expect(mark()).toBeNull()
+    scene.dispose()
+  })
+
+  /**
+   * Le chemin du temps réel : `rooms` porte `openings[]`, donc régler une fenêtre passait par un
+   * `load()` complet — toute la maison reconstruite ET la caméra recentrée, à chaque mouvement de
+   * doigt. Ici : les maillages du seul niveau touché, et les seuls marqueurs qui épousent une
+   * ouverture qui a bougé (un volet taille sa lame sur le rectangle de sa fenêtre).
+   */
+  it('ne refait que le niveau touché : caméra, marqueurs et poignées survivent', () => {
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true })
+    scene.load(house)
+    scene.setEditingOpenings(true)
+    const room = house.rooms.find((r) => r.openings.length > 0)!
+    const opening = room.openings[0]!
+    const other = house.levels.find((l) => l.id !== room.levelId && scene.nodesOf(l.id))!
+    const bound = house.devices.find((d) => d.openingId === opening.id)
+    const was = {
+      camera: scene.camera.position.toArray(),
+      touched: scene.nodesOf(room.levelId)!.group.uuid,
+      untouched: scene.nodesOf(other.id)!.group.uuid,
+      markers: new Map([...scene.markers].map(([k, m]) => [k, m.object.uuid])),
+    }
+    scene.updateOpenings({
+      ...house,
+      rooms: house.rooms.map((r) => (r.id === room.id
+        ? { ...r, openings: r.openings.map((o) => (o.id === opening.id ? { ...o, offset: o.offset + 0.3 } : o)) }
+        : r)),
+    })
+    expect(scene.camera.position.toArray()).toEqual(was.camera)
+    expect(scene.nodesOf(room.levelId)!.group.uuid).not.toBe(was.touched)
+    expect(scene.nodesOf(other.id)!.group.uuid).toBe(was.untouched)
+    expect(handles(scene)).toBe(openingCount)
+    // seul l'ouvrant de CETTE ouverture est refait ; les autres marqueurs sont les mêmes objets
+    const rebuilt = [...scene.markers].filter(([k, m]) => was.markers.get(k) !== m.object.uuid).map(([k]) => k)
+    expect(rebuilt).toEqual(bound ? [bound.id] : [])
+    expect(scene.markers.size).toBe(was.markers.size)
+    scene.dispose()
+  })
+})
+
+describe('natures d’ouverture vitrées et posées au sol', () => {
+  /** La maison de démo, dont la grande fenêtre du salon devient une BAIE et la porte de la terrasse une PORTE VITRÉE. */
+  const retyped = () => {
+    const raw = JSON.parse(JSON.stringify(demo)) as typeof demo & { rooms: { id: string; openings: { id: string; type: string }[] }[] }
+    for (const room of raw.rooms) {
+      for (const o of room.openings ?? []) {
+        if (o.id === 'baie') o.type = 'bay'
+        if (o.id === 'porte-terrasse') o.type = 'glass-door'
+      }
+    }
+    return parseHouse(raw)
+  }
+  const mats = () => createMaterials(defaultSceneTheme(), defaultLook())
+  const rdcOf = (house: ReturnType<typeof parseHouse>) => computeHouseGeometry(house).levels.find((l) => l.levelId === 'rdc')!
+
+  it('vitre une baie et une porte vitrée, jamais une porte pleine ni un passage', () => {
+    const before = buildLevel(rdcOf(parseHouse(demo)), mats())
+    const after = buildLevel(rdcOf(retyped()), mats())
+    const glazed = (nodes: typeof after) => new Set(nodes.panes.map((p) => p.userData.openingId as string))
+    // la baie était déjà une fenêtre : elle garde son vitrage ; la porte de terrasse en gagne un
+    expect(glazed(before).has('baie')).toBe(true)
+    expect(glazed(before).has('porte-terrasse')).toBe(false)
+    expect(glazed(after).has('baie')).toBe(true)
+    expect(glazed(after).has('porte-terrasse')).toBe(true)
+    // les portes pleines et les passages n'ont toujours rien de vitré
+    expect(glazed(after).has('porte-entree')).toBe(false)
+    expect(glazed(after).has('porte-salon')).toBe(false)
+  })
+
+  /**
+   * Une porte VITRÉE n'a pas de vantail plein : ce serait cacher ce qui la définit. Son battant est
+   * un cadre autour du verre, donc il pèse sur le maillage des menuiseries, pas sur celui des portes.
+   */
+  it('remplace le vantail plein d’une porte vitrée par un cadre de battant', () => {
+    const mesh = (nodes: ReturnType<typeof buildLevel>, name: string) => nodes.walls.find((m) => m.name === name)
+    const before = buildLevel(rdcOf(parseHouse(demo)), mats())
+    const after = buildLevel(rdcOf(retyped()), mats())
+    const doorsBefore = countTriangles(mesh(before, 'details:doors')!)
+    const doorsAfter = countTriangles(mesh(after, 'details:doors')!)
+    expect(doorsAfter).toBeLessThan(doorsBefore)          // un tablier de moins
+    expect(countTriangles(mesh(after, 'details:frames')!)).toBeGreaterThan(countTriangles(mesh(before, 'details:frames')!))
+  })
+
+  /**
+   * Une baie descend au sol : pas d'appui de fenêtre qui déborde de la façade (il pendrait dans le
+   * vide), mais un rail bas et un refend par vantail — trois mètres de verre d'un seul tenant ne
+   * ressemblent à rien.
+   */
+  it('retire l’appui d’une baie et lui donne ses refends', () => {
+    const only = (house: ReturnType<typeof parseHouse>, id: string) => {
+      const level = rdcOf(house)
+      return buildLevel({ ...level, openings: level.openings.filter((o) => o.openingId === id), walls: [] }, mats())
+    }
+    const asWindow = only(parseHouse(demo), 'baie')
+    const asBay = only(retyped(), 'baie')
+    // sans murs, il ne reste dans les lisses que l'appui : une baie n'en a aucun
+    expect(asWindow.walls.some((m) => m.name === 'details:trim')).toBe(true)
+    expect(asBay.walls.some((m) => m.name === 'details:trim')).toBe(false)
+    // et elle porte un montant de plus que la fenêtre qu'elle remplace (2,4 m → deux vantaux)
+    const frames = (n: typeof asBay) => countTriangles(n.walls.find((m) => m.name === 'details:frames')!)
+    expect(frames(asBay)).toBeGreaterThan(frames(asWindow))
+  })
+})
+
+describe('cotes et nom de l’ouverture réglée', () => {
+  const notes = (scene: HouseScene) => {
+    const found: { kind: string; text: string; position: [number, number, number] }[] = []
+    scene.scene.traverse((o) => {
+      const el = (o as unknown as { element?: HTMLElement }).element
+      // les lettres d'axe du repère d'origine portent la même classe de base : on ne veut ici que
+      // ce qui annote l'ouverture réglée
+      if (el?.classList.contains('scene-note--name') || el?.classList.contains('scene-note--gap')) {
+        found.push({ kind: el.className.includes('--name') ? 'name' : 'gap', text: el.textContent ?? '', position: o.position.toArray() as [number, number, number] })
+      }
+    })
+    return found
+  }
+
+  /**
+   * Les deux cotes sont celles du panneau, au centimètre : mêmes fonctions partagées
+   * (`openingGaps`, `openingLabel`), même format. Une fenêtre nommée s'annonce par son nom, une
+   * fenêtre sans nom par son identifiant de relevé.
+   */
+  it('annote le nom et les deux distances aux bouts du mur, et n’annote que la sélection', () => {
+    const raw = JSON.parse(JSON.stringify(demo)) as typeof demo & { rooms: { id: string; openings: { id: string; name?: string }[] }[] }
+    for (const room of raw.rooms) for (const o of room.openings ?? []) if (o.id === 'fen-ch1') o.name = 'Fenêtre de Paul'
+    const house = parseHouse(raw)
+    const room = house.rooms.find((r) => r.id === 'chambre1')!
+    const opening = room.openings.find((o) => o.id === 'fen-ch1')!
+    const gaps = openingGaps(room, opening)
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true })
+    scene.load(house)
+    expect(notes(scene)).toHaveLength(0)              // hors édition, aucune étiquette
+    scene.setEditingOpenings(true)
+    expect(notes(scene)).toHaveLength(0)              // en édition mais sans sélection, non plus
+    scene.setSelectedOpening('fen-ch1')
+    const shown = notes(scene)
+    expect(shown.filter((n) => n.kind === 'name').map((n) => n.text)).toEqual(['Fenêtre de Paul'])
+    expect(shown.filter((n) => n.kind === 'gap').map((n) => n.text).sort())
+      .toEqual([`${gaps.left.toFixed(2)} m`, `${gaps.right.toFixed(2)} m`].sort())
+    // le nom flotte au-dessus du linteau, les cotes à mi-hauteur et de part et d'autre
+    const name = shown.find((n) => n.kind === 'name')!
+    expect(name.position[2]).toBeGreaterThan(opening.height)
+    // les cotes sont à mi-hauteur de l'ouverture, un peu au-dessus de leur trait, et sous son nom
+    const mid = opening.height / 2 + (opening.sill ?? 0.95)
+    for (const gap of shown.filter((n) => n.kind === 'gap')) {
+      expect(gap.position[2]).toBeGreaterThan(mid)
+      expect(gap.position[2]).toBeLessThan(name.position[2])
+    }
+    scene.setSelectedOpening(null)
+    expect(notes(scene)).toHaveLength(0)
+    scene.dispose()
+  })
+
+  /**
+   * Une ligne de cote ne vaut que si son trait matérialise EXACTEMENT l'intervalle annoncé : du bord
+   * de l'ouverture au coin du mur. Le trait est une boîte unitaire étirée (`scale.x`), fermée par deux
+   * tirets posés à ses deux bouts, dans le repère de l'ouverture — donc x est la distance le long du
+   * mur depuis son bord gauche.
+   */
+  it('trace les deux cotes sur exactement l’intervalle qu’elles annoncent, tirets aux deux bouts', () => {
+    const house = parseHouse(demo)
+    const room = house.rooms.find((r) => r.id === 'chambre1')!
+    const opening = room.openings.find((o) => o.id === 'fen-ch1')!
+    const gaps = openingGaps(room, opening)
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true })
+    scene.load(house)
+    scene.setEditingOpenings(true)
+    scene.setSelectedOpening('fen-ch1')
+    let cotes: Object3D | null = null
+    scene.scene.traverse((o) => { if (!cotes && o.name === 'opening-cotes') cotes = o })
+    const meshes = (cotes! as Object3D).children as Mesh[]
+    expect(meshes).toHaveLength(6)                 // deux cotes : un trait et deux tirets chacune
+    const [line, a, b, line2, a2, b2] = meshes
+    // côté droit (vu de la pièce) : de -right à 0 ; côté gauche : de width à width + left
+    expect(line!.scale.x).toBeCloseTo(gaps.right, 6)
+    expect(a!.position.x).toBeCloseTo(-gaps.right, 6)
+    expect(b!.position.x).toBeCloseTo(0, 6)
+    expect(line2!.scale.x).toBeCloseTo(gaps.left, 6)
+    expect(a2!.position.x).toBeCloseTo(opening.width, 6)
+    expect(b2!.position.x).toBeCloseTo(opening.width + gaps.left, 6)
+    // le trait est au milieu de son intervalle, et le nombre AU-DESSUS de lui (jamais dessus)
+    expect(line!.position.x).toBeCloseTo(-gaps.right / 2, 6)
+    const gapNote = notes(scene).find((n) => n.kind === 'gap')!
+    expect(gapNote.position[2]).toBeGreaterThan(line!.position.z)
+    scene.dispose()
+  })
+
+  /** Une cote NULLE n'a pas d'intervalle : le trait s'efface, les deux tirets se confondent. */
+  it('efface le trait d’une cote nulle et garde ses tirets', () => {
+    const house = parseHouse(demo)
+    const room = house.rooms.find((r) => r.id === 'chambre1')!
+    const flush = {
+      ...house,
+      rooms: house.rooms.map((r) => (r.id === room.id
+        ? { ...r, openings: r.openings.map((o) => (o.id === 'fen-ch1' ? { ...o, offset: 0 } : o)) }
+        : r)),
+    }
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true })
+    scene.load(flush)
+    scene.setEditingOpenings(true)
+    scene.setSelectedOpening('fen-ch1')
+    let cotes: Object3D | null = null
+    scene.scene.traverse((o) => { if (!cotes && o.name === 'opening-cotes') cotes = o })
+    const [line, a, b] = (cotes! as Object3D).children as Mesh[]
+    expect(line!.visible).toBe(false)
+    expect(a!.visible).toBe(true)
+    expect(a!.position.x).toBeCloseTo(0, 6)
+    expect(b!.position.x).toBeCloseTo(0, 6)
+    scene.dispose()
+  })
+
+  it('suit le brouillon : la cote change avec l’ouverture qui glisse, et l’autre avec elle', () => {
+    const house = parseHouse(demo)
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true })
+    scene.load(house)
+    scene.setEditingOpenings(true)
+    scene.setSelectedOpening('fen-ch1')
+    const read = () => notes(scene).filter((n) => n.kind === 'gap').map((n) => n.text)
+    const was = read()
+    scene.updateOpenings({
+      ...house,
+      rooms: house.rooms.map((r) => (r.id === 'chambre1'
+        ? { ...r, openings: r.openings.map((o) => (o.id === 'fen-ch1' ? { ...o, offset: o.offset + 0.4 } : o)) }
+        : r)),
+    })
+    const now = read()
+    expect(now).not.toEqual(was)
+    // et le TRACÉ suit : il vit dans le groupe des étiquettes, qui survit à la reconstruction du
+    // niveau — posé dans le groupe du niveau, il se retrouvait orphelin au premier mouvement de doigt
+    let cotes: Object3D | null = null
+    scene.scene.traverse((o) => { if (!cotes && o.name === 'opening-cotes') cotes = o })
+    expect(cotes).not.toBeNull()
+    expect(((cotes! as Object3D).children[0] as Mesh).scale.x).toBeCloseTo(parseFloat(now[0]!), 2)
+    // ce que l'une gagne, l'autre le perd : la longueur du mur ne change pas
+    const sum = (xs: string[]) => xs.reduce((n, t) => n + parseFloat(t), 0)
+    expect(sum(now)).toBeCloseTo(sum(was), 2)
     scene.dispose()
   })
 })

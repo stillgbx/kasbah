@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { DeviceState, HouseDevice } from '@kasbah/shared'
+import type { DeviceState, HouseDevice, Opening } from '@kasbah/shared'
+import { openingLabel } from '@kasbah/shared'
 import { relayLabel } from '../../lib/audioRouting'
 import { isDeviceOn, isDevicePulsing, statusLabel, toggleChecked, toggleCommand } from '../../lib/deviceState'
 import { lightTintCss } from '../../lib/lightTint'
@@ -9,6 +10,7 @@ import { kindIcon } from '../../lib/strokeIcons'
 import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
 import { useScenesStore } from '../../stores/scenes'
+import { useSettingsStore } from '../../stores/settings'
 import RoomBrightness from '../devices/RoomBrightness.vue'
 import RoomLightsToggle from '../devices/RoomLightsToggle.vue'
 import RoomRows from './RoomRows.vue'
@@ -24,7 +26,19 @@ const emit = defineEmits<{ back: [] }>()
 const house = useHouseStore()
 const devices = useDevicesStore()
 const scenes = useScenesStore()
+const settings = useSettingsStore()
 const { t, locale } = useI18n()
+
+// Mode édition seulement : la liste des ouvertures de LA PIÈCE (une zone de jardin n'en a pas), chemin
+// de secours pour en atteindre une qu'on ne voit pas sous l'angle courant — le geste principal reste
+// de la glisser dans la 3D.
+const roomOpenings = computed(() => (settings.houseEditing ? house.selectedRoom?.openings ?? [] : []))
+// `openingLabel` est LA règle d'affichage d'une ouverture (nom si elle en a un, sinon son id de
+// relevé) : la même que le titre du panneau de réglage et que l'étiquette 3D, jamais trois noms
+// différents pour la même fenêtre. La nature et les cotes restent en sous-ligne.
+function openingRow(o: Opening) {
+  return { id: o.id, label: openingLabel(o), sub: `${t(`opening.types.${o.type}`)} · ${o.width.toFixed(2)} × ${o.height.toFixed(2)} m` }
+}
 
 const roomTarget = computed(() => {
   const idx = house.index
@@ -130,6 +144,21 @@ const roomScenes = computed(() => (roomTarget.value ? scenes.forRoom(roomTarget.
         <StrokeIcon v-else name="chevron" :size="18" class="muted" />
       </div>
     </div>
+    <!-- mode édition : chemin de secours vers une ouverture qu'on ne voit pas sous l'angle courant —
+         le geste principal reste de la glisser dans la 3D une fois sélectionnée -->
+    <section v-if="roomOpenings.length" class="block">
+      <div class="section-label">{{ $t('opening.list') }}</div>
+      <div class="rows">
+        <button v-for="o in roomOpenings.map(openingRow)" :key="o.id" type="button" class="dev-row opening-row" @click="house.selectOpening(o.id)">
+          <span class="icon-square"><StrokeIcon name="room" :size="18" /></span>
+          <div class="dev-row__main">
+            <div class="dev-row__name">{{ o.label }}</div>
+            <div class="muted dev-row__status">{{ o.sub }}</div>
+          </div>
+          <StrokeIcon name="chevron" :size="18" class="muted" />
+        </button>
+      </div>
+    </section>
   </template>
 </template>
 
@@ -159,6 +188,8 @@ const roomScenes = computed(() => (roomTarget.value ? scenes.forRoom(roomTarget.
 .rowart-enter-from, .rowart-leave-to { opacity: 0; }
 @media (prefers-reduced-motion: reduce) { .rowart-enter-active, .rowart-leave-active { transition: none; } }
 .dev-row:hover { filter: brightness(1.03); }
+/* la ligne d'ouverture est un <button> (pas de bascule à sa place) : on lui reprend les styles par défaut */
+.opening-row { border: 0; width: 100%; text-align: left; font: inherit; color: inherit; }
 .dev-row__main { flex: 1 1 0; min-width: 0; }
 /* nom trop long (id d'un appareil non lié) : coupé aux points de suspension, comme dans les vues en bandes */
 .dev-row__name { font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

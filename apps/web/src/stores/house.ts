@@ -1,12 +1,13 @@
 import { computed, ref, shallowRef, watch } from 'vue'
 import { defineStore } from 'pinia'
-import { autoPlaceDevices, computeRoof, houseIdForDevice, indexHouse, isPlaced, panelArrayDevices, panelOf, pointInPolygon, resolveDefaults, resolveDeviceLevelId, withPanelArrays, type DeviceDescriptor, type DeviceEntry, type DevicePlacement, type House, type HouseDevice, type HouseIndex, type Level, type PanelArray, type PanelArrayPatch, type PlaceableDevice, type PlacedHouseDevice, type Room, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
+import { autoPlaceDevices, computeRoof, houseIdForDevice, indexHouse, isPlaced, openingLimits, openingSill, panelArrayDevices, panelOf, pointInPolygon, resolveDefaults, resolveDeviceLevelId, roomHeight, slotFromPoint, withPanelArrays, type DeviceDescriptor, type DeviceEntry, type DevicePlacement, type House, type HouseDevice, type HouseIndex, type Level, type Opening, type OpeningPatch, type PanelArray, type PanelArrayPatch, type PlaceableDevice, type PlacedHouseDevice, type Room, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
 import { getTransport } from '../api'
 import type { JournalPoint } from '../lib/journal'
 import { i18n, t } from '../i18n'
 import { soundRouting } from '../lib/audioRouting'
 import { findEnergySite } from '../lib/energy'
 import { coverLeaves, defaultCoverSize } from '../lib/orientation'
+import { expectsOpening } from '../lib/cover'
 import { useDevicesStore } from './devices'
 import { useNotificationsStore } from './notifications'
 
@@ -27,6 +28,32 @@ const sameSize = (a: Size | undefined, b: Size | undefined) => a?.width === b?.w
 
 /** Arrondi au 5 cm : garde un JSON lisible. */
 const snap = (v: number) => Math.round(v * 20) / 20
+/** Arrondi au centimètre : la cote d'une ouverture se relève au mètre ruban, pas au pas de 5 cm. */
+const snapCm = (v: number) => Math.round(v * 100) / 100
+
+/** L'ouverture `id` et la pièce qui la porte, dans une maison donnée. */
+function findOpening(h: House | null, id: string | null): { room: Room; opening: Opening } | null {
+  if (!h || !id) return null
+  for (const room of h.rooms) {
+    const opening = room.openings.find((o) => o.id === id)
+    if (opening) return { room, opening }
+  }
+  return null
+}
+
+/**
+ * Maison recouverte du brouillon d'ouverture en cours de réglage. Le brouillon n'est pas un calque
+ * posé sur la scène : il entre dans la maison que la scène reçoit, donc l'allège, le linteau et le
+ * vitrage se refont comme si le JSON était déjà écrit. Ce qu'on voit pendant le geste est
+ * exactement ce qu'on gardera.
+ */
+function withOpeningDraft(h: House | null, id: string | null, patch: OpeningPatch | null): House | null {
+  if (!h || !id || !patch) return h
+  if (!h.rooms.some((r) => r.openings.some((o) => o.id === id))) return h
+  return { ...h, rooms: h.rooms.map((r) => (r.openings.some((o) => o.id === id)
+    ? { ...r, openings: r.openings.map((o) => (o.id === id ? { ...o, ...patch } : o)) }
+    : r)) }
+}
 
 export const useHouseStore = defineStore('house', () => {
   const devices = useDevicesStore()
@@ -39,6 +66,14 @@ export const useHouseStore = defineStore('house', () => {
     Object.values(devices.descriptors).map((d) => ({ id: d.id, kind: d.kind, room: d.meta.room })),
   )
   /**
+   * Ouverture en cours de réglage (mode édition) et son brouillon non encore écrit. Déclarés ICI,
+   * au-dessus de `expanded`, parce que c'est lui qui les recouvre sur la maison — le reste de leur
+   * mécanique vit plus bas, avec le mode édition.
+   */
+  const selectedOpeningId = ref<string | null>(null)
+  const openingDraft = shallowRef<OpeningPatch | null>(null)
+
+  /**
    * Maison du JSON complétée des modules dérivés de ses champs de panneaux (`arrays`) : c'est sur
    * elle que se fait l'auto-placement (un onduleur lié à un champ n'est pas à placer) et la scène.
    *
@@ -49,7 +84,8 @@ export const useHouseStore = defineStore('house', () => {
    */
   const expanded = computed<House | null>(() => {
     void i18n.global.locale.value                    // le nom des emplacements suit la langue choisie
-    return house.value ? withPanelArrays(house.value, (row, col) => t('arrays.slot', { r: row + 1, c: col + 1 })) : null
+    const base = withOpeningDraft(house.value, selectedOpeningId.value, openingDraft.value)
+    return base ? withPanelArrays(base, (row, col) => t('arrays.slot', { r: row + 1, c: col + 1 })) : null
   })
   const placement = computed(() => {
     if (!expanded.value) return null
@@ -125,6 +161,7 @@ export const useHouseStore = defineStore('house', () => {
   function focusLevel(levelId: string | null) { setFloorTab(levelId ?? 'all') }
 
   function selectRoom(roomId: string | null) {
+    selectedOpeningId.value = null
     selectedKey.value = null
     selectedLevelId.value = null
     if (!roomId) { selectedRoomId.value = null; return }
@@ -139,6 +176,7 @@ export const useHouseStore = defineStore('house', () => {
    * et sa caméra, ses panneaux). C'est le parent d'un tel appareil dans le fil d'Ariane.
    */
   function selectLevel(levelId: string) {
+    selectedOpeningId.value = null
     selectedKey.value = null
     selectedRoomId.value = null
     gardenFocus.value = false
@@ -147,6 +185,7 @@ export const useHouseStore = defineStore('house', () => {
   }
 
   function selectDevice(key: string | null) {
+    selectedOpeningId.value = null
     selectedLevelId.value = null
     selectedKey.value = key
     if (!key) return
@@ -160,8 +199,8 @@ export const useHouseStore = defineStore('house', () => {
     else if (hd.zoneId) { selectedRoomId.value = hd.zoneId; gardenFocus.value = true; focusedLevelId.value = null }
   }
 
-  function clearSelection() { selectedKey.value = null }
-  function backToHome() { selectedKey.value = null; selectedRoomId.value = null; selectedLevelId.value = null }
+  function clearSelection() { selectedOpeningId.value = null; selectedKey.value = null }
+  function backToHome() { selectedOpeningId.value = null; selectedKey.value = null; selectedRoomId.value = null; selectedLevelId.value = null }
   /** Retour depuis une pièce : le NIVEAU qui la porte ; une zone ou un niveau ramènent à la maison. */
   function backFromRoom() {
     const room = selectedRoom.value
@@ -725,6 +764,187 @@ export const useHouseStore = defineStore('house', () => {
     })
   }
 
+  // ---- mode édition : réglage d'une OUVERTURE ---------------------------------------------------
+  //
+  // Le relevé d'une maison réelle est approximatif : les fenêtres et les portes s'ajustent ici, en
+  // regardant la 3D. Les cotes se saisissent dans le panneau, la place se glisse le long des murs de
+  // la pièce. Chaque geste terminé est écrit dans house.json par le serveur, comme un placement.
+  //
+  // Une ouverture n'est ni créée ni retirée d'ici : elle naît du relevé, l'UI ne fait que la régler.
+  const savingOpening = ref(false)
+  /** Cotes à la sélection, pour « Rétablir » — l'ouverture telle qu'on l'a trouvée. */
+  const openingOrigin = shallowRef<OpeningPatch | null>(null)
+
+  /** L'ouverture sélectionnée, brouillon compris : c'est elle que le panneau AFFICHE. */
+  const selectedOpening = computed(() => findOpening(effective.value, selectedOpeningId.value))
+  /** La même, telle qu'elle est ÉCRITE : c'est elle qu'on compare pour savoir s'il y a de quoi rétablir. */
+  const savedOpening = computed(() => findOpening(house.value, selectedOpeningId.value))
+
+  function selectOpening(id: string | null) {
+    openingDraft.value = null
+    selectedOpeningId.value = id
+    const sel = findOpening(house.value, id)
+    openingOrigin.value = sel
+      ? {
+        type: sel.opening.type, segment: sel.opening.segment, offset: sel.opening.offset,
+        width: sel.opening.width, height: sel.opening.height,
+        sill: openingSill(sel.opening, resolveDefaults(house.value?.defaults)),
+      }
+      : null
+    if (!sel) return
+    // le panneau d'une ouverture se lit sous sa pièce ; c'est elle qui donne le fil d'Ariane et le cadrage
+    selectedKey.value = null
+    selectedLevelId.value = null
+    selectedRoomId.value = sel.room.id
+    gardenFocus.value = false
+    focusedLevelId.value = sel.room.levelId
+  }
+
+  /** Hauteur sous plafond de la pièce qui porte l'ouverture : la borne haute de ses cotes. */
+  const openingCeiling = computed(() => {
+    const sel = savedOpening.value
+    const level = sel ? index.value?.levelsById.get(sel.room.levelId) : undefined
+    return sel && level && house.value ? roomHeight(sel.room, level, resolveDefaults(house.value.defaults)) : 0
+  })
+
+  /** Bornes des champs du panneau, à la place actuelle de l'ouverture (voisines, plafond). */
+  const openingBounds = computed(() => {
+    const sel = selectedOpening.value
+    if (!sel || !house.value) return null
+    const siblings = index.value?.roomsByLevel.get(sel.room.levelId) ?? [sel.room]
+    return openingLimits(sel.room, siblings, resolveDefaults(house.value.defaults), sel.opening, openingCeiling.value)
+  })
+
+  /**
+   * Glissement : le point attrapé dans la 3D devient la place admissible la plus proche sur le
+   * CONTOUR de la pièce — l'ouverture court sur son mur et passe au suivant au coin. Un point
+   * qu'aucun mur ne peut recevoir ne bouge rien : l'ouverture bute au lieu de sauter.
+   */
+  function previewOpeningAt(xy: Vec2) {
+    const sel = selectedOpening.value
+    if (!sel || !house.value) return
+    const siblings = index.value?.roomsByLevel.get(sel.room.levelId) ?? [sel.room]
+    // `from` = là où elle est en ce moment : c'est ce qui la fait BUTER sur une voisine au lieu de
+    // sauter par-dessus. Passer de l'autre côté se fait en faisant le tour de la pièce.
+    const here = { segment: sel.opening.segment, offset: sel.opening.offset }
+    const slot = slotFromPoint(sel.room, siblings, resolveDefaults(house.value.defaults), xy, sel.opening.width, sel.opening.id, here)
+    if (!slot) return
+    if (slot.segment === sel.opening.segment && Math.abs(slot.offset - sel.opening.offset) < 0.005) return
+    openingDraft.value = { ...openingDraft.value, segment: slot.segment, offset: snapCm(slot.offset) }
+  }
+
+  /**
+   * Écrit le brouillon (complété par `patch`) dans house.json. Les cotes du panneau passent par ici
+   * directement — une touche « + » est un geste terminé, elle n'a pas de brouillon à porter.
+   */
+  async function saveOpening(patch?: OpeningPatch): Promise<boolean> {
+    const sel = savedOpening.value
+    if (!sel) return false
+    const body: OpeningPatch = { ...openingDraft.value, ...patch }
+    if (Object.keys(body).length === 0) return true
+    savingOpening.value = true
+    try {
+      house.value = await getTransport().saveOpening(sel.room.id, sel.opening.id, body)
+      return true
+    } catch (err) {
+      useNotificationsStore().error(t('opening.saveError', { message: (err as Error).message }))
+      return false
+    } finally {
+      openingDraft.value = null
+      savingOpening.value = false
+    }
+  }
+
+  /** Fin du glissement : le brouillon devient la place de l'ouverture. */
+  async function dropOpening(): Promise<void> { if (openingDraft.value) await saveOpening() }
+
+  const canRevertOpening = computed(() => {
+    const o = openingOrigin.value, sel = savedOpening.value
+    if (!o || !sel || !house.value) return false
+    const s = sel.opening
+    return o.type !== s.type || o.segment !== s.segment || o.offset !== s.offset
+      || o.width !== s.width || o.height !== s.height
+      || o.sill !== openingSill(s, resolveDefaults(house.value.defaults))
+  })
+  /** Rétablit les cotes trouvées à la sélection ; l'allège absente du JSON se rétablit par sa valeur, qui donne le même mur. */
+  async function revertOpening(): Promise<void> {
+    if (openingOrigin.value) await saveOpening(openingOrigin.value)
+  }
+
+  /** Descripteur de plugin d'un appareil de la maison (la nature d'un ouvrant en dépend). */
+  const descriptorOf = (d: HouseDevice) => (d.deviceId ? devices.descriptors[d.deviceId] : undefined)
+
+  /** Les ouvrants posés sur une ouverture donnée. Une ouverture n'en porte qu'un ; la liste sert à libérer l'ancien. */
+  const coversOn = (openingId: string) => (effective.value?.devices ?? [])
+    .filter((d) => d.openingId === openingId && (descriptorOf(d)?.kind ?? d.kind) === 'cover')
+
+  /** Appareils de la maison (volet, capteur) qui habillent l'ouverture sélectionnée. */
+  const openingDevices = computed<HouseDevice[]>(() => {
+    const id = selectedOpeningId.value
+    return id ? (effective.value?.devices ?? []).filter((d) => d.openingId === id) : []
+  })
+
+  /**
+   * Ouvrants qui ATTENDENT une ouverture : ceux dont la nature n'a pas de sens sans la fenêtre
+   * qu'ils habillent (`expectsOpening`) et qu'aucune ouverture ne porte encore.
+   *
+   * C'est une liste de travail, pas une anomalie : on dessine la maison, on active le plugin Somfy
+   * des mois plus tard, et six volets arrivent d'un coup sans savoir où ils vont. Elle se vide à
+   * mesure qu'on les affecte.
+   *
+   * À ne pas confondre avec un appareil « non lié », qui, lui, n'a pas de liaison vers un appareil de
+   * PLUGIN (`deviceId` absent, affiché grisé) : ici la liaison au fabricant existe, c'est la place
+   * dans la maison qui manque.
+   */
+  const coversWithoutOpening = computed<HouseDevice[]>(() => (effective.value?.devices ?? [])
+    .filter((d) => !d.openingId && (descriptorOf(d)?.kind ?? d.kind) === 'cover' && expectsOpening(descriptorOf(d))))
+
+  /**
+   * Affecte une ouverture à un ouvrant, ou l'en retire (`null`). **Seule écriture de la liaison** :
+   * le panneau d'une ouverture et la vue Ouvrants y passent tous les deux, chacun dans son sens,
+   * pour que la règle ne vive qu'à un endroit.
+   *
+   * Une ouverture ne porte qu'un ouvrant : celui qui s'y trouvait est libéré d'abord. Le serveur, lui,
+   * ré-ancre l'appareil sur la pièce qui porte l'ouverture (voir `placeDeviceInJson`).
+   */
+  async function setCoverOpening(houseDeviceId: string, openingId: string | null): Promise<boolean> {
+    savingOpening.value = true
+    try {
+      if (openingId) {
+        for (const d of coversOn(openingId)) {
+          if (d.id !== houseDeviceId) house.value = await getTransport().placeDevice(d.id, { openingId: '' })
+        }
+      }
+      house.value = await getTransport().placeDevice(houseDeviceId, { openingId: openingId ?? '' })
+      return true
+    } catch (err) {
+      useNotificationsStore().error(t('opening.saveError', { message: (err as Error).message }))
+      return false
+    } finally {
+      savingOpening.value = false
+    }
+  }
+
+  /**
+   * Même liaison, vue depuis l'OUVERTURE sélectionnée : on choisit son ouvrant, ou « aucun », ce qui
+   * libère celui qui s'y trouvait.
+   */
+  async function setOpeningDevice(houseDeviceId: string | null): Promise<boolean> {
+    const openingId = selectedOpeningId.value
+    if (!openingId) return false
+    if (houseDeviceId) return setCoverOpening(houseDeviceId, openingId)
+    savingOpening.value = true
+    try {
+      for (const d of coversOn(openingId)) house.value = await getTransport().placeDevice(d.id, { openingId: '' })
+      return true
+    } catch (err) {
+      useNotificationsStore().error(t('opening.saveError', { message: (err as Error).message }))
+      return false
+    } finally {
+      savingOpening.value = false
+    }
+  }
+
   return {
     house, effective, loading, error, index, levels, zones, soundRoutes, relaySource,
     focusedLevelId, gardenFocus, selectedRoomId, selectedLevelId, selectedKey, floorTab, selectedRoom, selectedZone, selectedDevice,
@@ -732,6 +952,8 @@ export const useHouseStore = defineStore('house', () => {
     journalOverlay, journalFocus, journalActive, showJournal, hideJournal, focusJournalPoint, markJournalPoint,
     placing, saving, draft, canRevert, isProvisional, startPlacing, startPlacingNew, stopPlacing, previewPosition, previewHeight, savePlacement, revertPlacement, removePlacement,
     placementLevelId, setPlacementLevel,
+    selectedOpeningId, selectedOpening, savedOpening, openingDraft, openingBounds, openingCeiling, openingDevices, savingOpening, canRevertOpening,
+    selectOpening, previewOpeningAt, saveOpening, dropOpening, revertOpening, setOpeningDevice, setCoverOpening, coversWithoutOpening,
     arrays, arraysOf, editingArrayId, editingArray, editingArrayModules, arrayDraft, hoveredKey, hoverSlot, freeInverters,
     startEditingArray, stopEditingArray, editArray, siteOf, siteOfDevice, addArray, saveArray, removeArray, previewArrayOrigin, dropArray,
   }

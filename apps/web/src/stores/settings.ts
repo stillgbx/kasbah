@@ -45,6 +45,12 @@ export const useSettingsStore = defineStore('settings', () => {
   /** Voile de mesure posé sur la scène (images/s, appels de dessin, passes, ombres). */
   const sceneDebug = useLocalStorage<boolean>('kasbah.sceneDebug', false)
   /**
+   * Mode ÉDITION de la maison : la vue Maison montre les ouvertures, qu'on peut alors régler et
+   * glisser sur les murs. Armé ici et non par un bouton de la scène — sur une tablette posée dans
+   * l'entrée, un doigt qui glisse ne doit pas pouvoir déplacer une fenêtre.
+   */
+  const houseEditing = useLocalStorage<boolean>('kasbah.houseEditing', false)
+  /**
    * Météo FORCÉE dans la scène, pour la regarder sous la pluie sans attendre qu'il pleuve. Ne vaut
    * qu'en débogage (`sceneDebug`) et ne touche que la scène : widget et vue Météo restent sur la
    * vraie météo. `real` = suivre la météo.
@@ -90,6 +96,7 @@ export const useSettingsStore = defineStore('settings', () => {
   function setSceneQuality(v: RenderQuality) { if (RENDER_QUALITIES.includes(v)) sceneQuality.value = v }
   function setSceneAssets(v: boolean) { sceneAssets.value = v }
   function setSceneDebug(v: boolean) { sceneDebug.value = v }
+  function setHouseEditing(v: boolean) { houseEditing.value = v }
   function setSceneWeather(v: SceneWeatherChoice) { if (v === 'real' || WEATHER_CONDITIONS.includes(v)) sceneWeather.value = v }
   function setSceneCloudCover(v: number) { if (Number.isFinite(v)) sceneCloudCover.value = Math.min(100, Math.max(0, Math.round(v))) }
   function setSceneVisibilityM(v: number) { if (Number.isFinite(v)) sceneVisibilityM.value = Math.min(50_000, Math.max(50, Math.round(v))) }
@@ -120,9 +127,9 @@ export const useSettingsStore = defineStore('settings', () => {
 
   return {
     appearance, theme, locale, isDark, wantDark, themeId, currentTheme, resolvedLocale, fullscreen,
-    sceneStyle, sceneAmbience, sceneQuality, sceneAssets, sceneDebug, sceneWeather, sceneCloudCover, sceneVisibilityM, householdSize,
+    sceneStyle, sceneAmbience, sceneQuality, sceneAssets, sceneDebug, houseEditing, sceneWeather, sceneCloudCover, sceneVisibilityM, householdSize,
     setAppearance, cycleAppearance, setTheme, setLocale, toggleLocale, applyToVuetify, applyLocale,
-    setSceneStyle, setSceneAmbience, setSceneQuality, setSceneAssets, setSceneDebug, setSceneWeather, setSceneCloudCover, setSceneVisibilityM, setHouseholdSize,
+    setSceneStyle, setSceneAmbience, setSceneQuality, setSceneAssets, setSceneDebug, setHouseEditing, setSceneWeather, setSceneCloudCover, setSceneVisibilityM, setHouseholdSize,
     appearances: APPEARANCES, themes: THEME_LIST, locales: LOCALES,
     styles: RENDER_STYLES, ambiences: AMBIENCE_MODES, qualities: RENDER_QUALITIES,
   }

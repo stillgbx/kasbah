@@ -2,7 +2,7 @@ import type { BufferGeometry, Object3D } from 'three';
 import { BoxGeometry, Group, Mesh } from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import type { HouseGeometry, LevelGeometry, OpeningRect, WallPrism } from '@kasbah/shared'
-import { buildDetails, buildRoofDetails } from './details'
+import { buildDetails, buildRoofDetails, GLAZED_OPENINGS } from './details'
 import type { MaterialSet } from './materials'
 import { alignedToLongestEdge, discWithHoles, extrudePolygon, flatPolygon, flatRing, flatWithHoles, insetPolygon, planarFaces } from './shapes'
 import { offsetPolygon } from '@kasbah/shared'
@@ -52,7 +52,7 @@ export function buildWallsGeometry(prisms: readonly WallPrism[]): BufferGeometry
   return merged
 }
 
-/** Vitrage translucide dans l'embrasure d'une fenêtre (au milieu de l'épaisseur du mur). */
+/** Vitrage translucide dans l'embrasure d'une ouverture vitrée (au milieu de l'épaisseur du mur). */
 export function buildPane(o: OpeningRect, mats: MaterialSet): Mesh {
   const g = new BoxGeometry(o.width, Math.max(0.02, o.depth * 0.15), o.height)
   const m = new Mesh(g, mats.glass)
@@ -99,7 +99,7 @@ export function buildLevel(level: LevelGeometry, mats: MaterialSet): LevelNodes 
   }
   const panes: Mesh[] = []
   for (const o of level.openings) {
-    if (o.type !== 'window') continue
+    if (!GLAZED_OPENINGS.has(o.type)) continue
     const pane = buildPane(o, mats)
     pane.userData.material = pane.material
     panes.push(pane)

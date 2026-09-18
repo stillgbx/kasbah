@@ -1,4 +1,4 @@
-import { assertCommandAllowed, commandSchema, devicePlacementSchema, panelArrayPatchSchema, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, roomOrderSchema, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
+import { assertCommandAllowed, commandSchema, devicePlacementSchema, openingPatchSchema, panelArrayPatchSchema, patchOpeningInJson, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, roomOrderSchema, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { updateHouseFile, type LoadedHouse } from '../config/house'
 import type { PluginHost } from '../core/plugin-host'
@@ -74,6 +74,17 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
   app.put<{ Params: { id: string } }>('/api/house/arrays/:id', async (req) => {
     const patch = panelArrayPatchSchema.parse(req.body)   // ZodError → 400
     const house = await updateHouseFile(deps.house, (doc) => putArrayInJson(doc, req.params.id, patch))
+    deps.hub.broadcast({ type: 'house', house })
+    return { house }
+  })
+
+  // Ouvertures (`rooms[i].openings[j]`) réglées depuis le mode édition de la vue Maison : le relevé
+  // d'une maison réelle est approximatif, on ajuste les cotes et la place sur le mur en regardant la
+  // 3D. Même mécanique que le reste — patch du JSON brut, `parseHouse` avant écriture (c'est lui qui
+  // refuse une ouverture qui déborde son mur ou en chevauche une autre), diffusion de la maison.
+  app.put<{ Params: { roomId: string; openingId: string } }>('/api/house/rooms/:roomId/openings/:openingId', async (req) => {
+    const patch = openingPatchSchema.parse(req.body)   // ZodError → 400
+    const house = await updateHouseFile(deps.house, (doc) => patchOpeningInJson(doc, req.params.roomId, req.params.openingId, patch))
     deps.hub.broadcast({ type: 'house', house })
     return { house }
   })

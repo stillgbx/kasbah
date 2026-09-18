@@ -68,7 +68,11 @@
     "all": "Toutes les lumières de la maison", "summary": "{on} allumées sur {total}", "none": "Aucune lampe remontée par les plugins."
   },
   "covers": {
-    "all": "Tous les ouvrants de la maison", "summary": "{open} ouverts sur {total}", "none": "Aucun ouvrant remonté par les plugins."
+    "all": "Tous les ouvrants de la maison", "summary": "{open} ouverts sur {total}", "none": "Aucun ouvrant remonté par les plugins.",
+    "waitingCount": "{n} à affecter | {n} à affecter | {n} à affecter",
+    "waitingBadge": "Sans ouverture", "waitingHint": "Cet ouvrant n'habille encore aucune fenêtre ni porte de la maison — la découverte d'un plugin en amène parfois d'un coup.",
+    "assign": "Affecter à", "assignNone": "Aucune",
+    "assignFree": "{room} · {opening}", "assignTaken": "{room} · {opening} (pris par {name})"
   },
   "cameras": {
     "summary": "{active} actives sur {total}", "none": "Aucune caméra remontée par les plugins."
@@ -230,7 +234,8 @@
     "qualityHint": "Halo des lampes, occlusion des angles et anticrénelage. « Automatique » choisit d'après la machine, puis descend d'un cran si les images coûtent trop cher.",
     "qualities": { "auto": "Automatique", "high": "Haute", "medium": "Moyenne", "low": "Basse" },
     "debug": "Débogage", "weather": "Météo forcée", "weatherReal": "Réelle", "weatherHint": "Débogage seulement : impose une météo à la scène 3D pour la regarder sous la pluie ou la neige. Le widget et la vue Météo continuent de dire le vrai temps.",
-  "debugHint": "Pose un voile de mesure sur la scène : images par seconde, coût CPU d'une image, appels de dessin, passes et relevés d'ombre. « img/s » à 0 au repos est normal — le rendu est à la demande."
+  "debugHint": "Pose un voile de mesure sur la scène : images par seconde, coût CPU d'une image, appels de dessin, passes et relevés d'ombre. « img/s » à 0 au repos est normal — le rendu est à la demande.",
+  "houseEditing": "Régler les ouvertures", "houseEditingHint": "La vue Maison permet alors de régler et de glisser les fenêtres et les portes sur les murs. Le relevé est approximatif : c'est ici qu'on l'ajuste, rien n'est écrit tant qu'on n'a pas réglé quelque chose."
   },
   "settings": {
     "title": "Réglages", "appearance": "Apparence", "system": "Système", "light": "Clair", "dark": "Sombre",
@@ -348,6 +353,16 @@
     "INTERNAL": "{name} : erreur serveur.", "UNKNOWN": "{name} : {message}", "houseLoad": "Impossible de charger la maison : {message}"
   },
   "scene": { "webglUnavailable": "La 3D n'est pas disponible sur cet appareil." },
+  "opening": {
+    "list": "Ouvertures", "type": "Nature",
+    "types": { "door": "Porte", "window": "Fenêtre", "passage": "Passage", "garage": "Porte de garage", "bay": "Baie vitrée", "glass-door": "Porte vitrée" },
+    "width": "Largeur", "height": "Hauteur", "sill": "Hauteur d'allège", "rename": "Renommer l'ouverture",
+    "gapRight": "Droite", "gapLeft": "Gauche",
+    "wall": "Mur {segment}", "whereHint": "Se règle ici, ou en glissant l'ouverture sur les murs de la pièce dans la vue 3D.",
+    "device": "Ouvrant lié", "deviceNone": "Aucun", "deviceTaken": "{name} (déjà posé sur {opening})",
+    "revert": "Rétablir", "smaller": "Réduire", "bigger": "Agrandir",
+    "saveError": "Ouverture non enregistrée : {message}"
+  },
   "weather": {
     "title": "Météo", "noDevice": "Aucun service météo actif. Activez-en un dans Réglages → Plugins.",
     "conditions": {

@@ -68,7 +68,11 @@
     "all": "All lights in the house", "summary": "{on} on out of {total}", "none": "No light reported by the plugins."
   },
   "covers": {
-    "all": "All covers in the house", "summary": "{open} open out of {total}", "none": "No cover reported by the plugins."
+    "all": "All covers in the house", "summary": "{open} open out of {total}", "none": "No cover reported by the plugins.",
+    "waitingCount": "{n} to assign | {n} to assign | {n} to assign",
+    "waitingBadge": "No opening", "waitingHint": "This cover does not dress any window or door in the house yet — discovering a plugin sometimes brings several at once.",
+    "assign": "Assign to", "assignNone": "None",
+    "assignFree": "{room} · {opening}", "assignTaken": "{room} · {opening} (taken by {name})"
   },
   "cameras": {
     "summary": "{active} active out of {total}", "none": "No camera reported by the plugins."
@@ -230,7 +234,8 @@
     "qualityHint": "Lamp glow, corner occlusion and anti-aliasing. « Automatic » picks from the machine, then steps down if frames cost too much.",
     "qualities": { "auto": "Automatic", "high": "High", "medium": "Medium", "low": "Low" },
     "debug": "Debug", "weather": "Forced weather", "weatherReal": "Real", "weatherHint": "Debug only: forces a weather onto the 3D scene to see it under rain or snow. The widget and the Weather view keep showing the real weather.",
-  "debugHint": "Puts a measurement overlay on the scene: frames per second, CPU cost of a frame, draw calls, passes and shadow rebuilds. « img/s » at 0 when idle is normal — rendering is on demand."
+  "debugHint": "Puts a measurement overlay on the scene: frames per second, CPU cost of a frame, draw calls, passes and shadow rebuilds. « img/s » at 0 when idle is normal — rendering is on demand.",
+  "houseEditing": "Adjust openings", "houseEditingHint": "The Home view then lets you adjust and drag windows and doors on the walls. The survey is approximate: this is where it gets corrected, and nothing is written until something is actually adjusted."
   },
   "settings": {
     "title": "Settings", "appearance": "Appearance", "system": "System", "light": "Light", "dark": "Dark",
@@ -348,6 +353,16 @@
     "INTERNAL": "{name}: server error.", "UNKNOWN": "{name}: {message}", "houseLoad": "Could not load the house: {message}"
   },
   "scene": { "webglUnavailable": "3D is not available on this device." },
+  "opening": {
+    "list": "Openings", "type": "Type",
+    "types": { "door": "Door", "window": "Window", "passage": "Passage", "garage": "Garage door", "bay": "Bay window", "glass-door": "Glass door" },
+    "width": "Width", "height": "Height", "sill": "Sill height", "rename": "Rename the opening",
+    "gapRight": "Right", "gapLeft": "Left",
+    "wall": "Wall {segment}", "whereHint": "Adjust here, or by dragging the opening on the room's walls in the 3D view.",
+    "device": "Linked cover", "deviceNone": "None", "deviceTaken": "{name} (already on {opening})",
+    "revert": "Revert", "smaller": "Smaller", "bigger": "Bigger",
+    "saveError": "Opening not saved: {message}"
+  },
   "weather": {
     "title": "Weather", "noDevice": "No weather service is active. Enable one in Settings → Plugins.",
     "conditions": {

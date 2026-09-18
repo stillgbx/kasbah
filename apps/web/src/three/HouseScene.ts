@@ -1,14 +1,14 @@
 import {
-  AmbientLight, Color, DirectionalLight, HemisphereLight, PerspectiveCamera, Plane, Raycaster, Scene, Spherical, type Texture, TOUCH, Vector2, Vector3, VSMShadowMap,
-  WebGLRenderer, Box3, Fog, Mesh, MeshBasicMaterial, type Material, type MeshStandardMaterial, type Object3D,
-  Group, SphereGeometry, CylinderGeometry,
+  AmbientLight, Color, DirectionalLight, DoubleSide, HemisphereLight, PerspectiveCamera, Plane, Raycaster, Scene, Spherical, type Texture, TOUCH, Vector2, Vector3, VSMShadowMap,
+  WebGLRenderer, Box3, BoxGeometry, Fog, Mesh, MeshBasicMaterial, type Material, type MeshStandardMaterial, type Object3D,
+  Group, SphereGeometry, CylinderGeometry, RingGeometry,
 } from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js'
 import {
   boundsCenter, buildingBounds, computeHouseGeometry, deviceFloorZ, geoDistance, indexHouse, longestEdgeYawDeg, pointInPolygon, resolveDefaults, resolveDeviceLevelId, sitePosition,
-  roofBounds, roomBounds, zoneBounds,
-  type DeviceDescriptor, type DeviceState, type House, type HouseDevice, type HouseGeometry, type HouseIndex, type Level, type PlacedHouseDevice, type Vec3,
+  roofBounds, roomBounds, zoneBounds, openingGaps, openingLabel,
+  type DeviceDescriptor, type DeviceState, type House, type HouseDevice, type HouseGeometry, type HouseIndex, type Level, type OpeningRect, type PlacedHouseDevice, type Vec2, type Vec3,
 } from '@kasbah/shared'
 import { applyLook, backdropColor, createMaterials, disposeMaterials, type MaterialSet } from './builders/materials'
 import { loadPackTextures, packById } from './textures/assets'
@@ -18,10 +18,10 @@ import { createPostPipeline, detectQuality, gpuName, PIXEL_RATIO, toneMappingOf,
 import { fogDistance, sunDirection, type SceneAmbience } from './core/ambience'
 import { Precipitation } from './effects/precipitation'
 import { defaultAmbience, defaultSceneTheme, rolesOf, styleById, type RenderStyle, type StyleLook } from './styles'
-import { buildHouse, type HouseNodes, type LevelNodes } from './builders/buildHouse'
-import { flatPolygon, flatRing, insetPolygon } from './builders/shapes'
+import { buildHouse, buildLevel, type HouseNodes, type LevelNodes } from './builders/buildHouse'
+import { extrudeRing, flatPolygon, flatRing, insetPolygon } from './builders/shapes'
 import { clamp, fitBox, sphericalOf, type CameraPose } from './core/cameraFit'
-import { boundsToWorldBox } from './core/coords'
+import { boundsToWorldBox, houseToWorld } from './core/coords'
 import { disposeObject3D } from './core/dispose'
 import { createDragDetector, createTapDetector, type DragDetector, type TapEvent } from './core/input'
 import { createRenderLoop, type RenderLoop } from './core/renderLoop'
@@ -128,6 +128,15 @@ export interface SceneEvents {
   /** Glissement de l'appareil déplaçable : position au sol (repère maison) et pièce survolée (même niveau) ou null. */
   deviceDrag: (key: string, xy: [number, number], roomId: string | null) => void
   deviceDrop: (key: string, xy: [number, number], roomId: string | null) => void
+  /** Tap sur la poignée d'une ouverture (mode édition seulement). */
+  openingTap: (openingId: string) => void
+  /**
+   * Glissement de l'ouverture SÉLECTIONNÉE : le point du doigt projeté sur le plan du SOL de son
+   * niveau, en repère maison. C'est l'appelant qui en déduit un mur et une distance depuis le coin
+   * (`slotFromPoint`) — la scène ne connaît pas les places admissibles.
+   */
+  openingDrag: (openingId: string, xy: [number, number]) => void
+  openingDrop: (openingId: string) => void
 }
 
 const HOME_RADIUS_M = 120
@@ -151,6 +160,34 @@ const WORLD_UP = new Vector3(0, 1, 0)
 const WHITE = new Color(0xffffff)
 /** Largeur (m) du trait qui souligne la pièce sélectionnée : un pixel de loin, une bande de près. */
 const HIGHLIGHT_RING_M = 0.14
+/**
+ * Poignée d'une ouverture en mode édition : une dalle qui remplit son rectangle, DÉBORDANT
+ * l'épaisseur du mur (0,30 m contre 0,20 m de mur), pour qu'un doigt l'attrape de l'intérieur comme
+ * de l'extérieur sans viser ; et un trait qui la cerne, large de 6 cm — celui de la pièce fait 14 cm,
+ * mais une fenêtre est vingt fois plus petite qu'un sol.
+ */
+const OPENING_HANDLE_DEPTH_M = 0.3
+/**
+ * Largeur vue du cadre d'une poignée : FIN au repos, épais pour celle qu'on règle. C'est l'épaisseur
+ * qui porte l'écart entre les deux — une nuance d'intensité ne suffisait pas à les distinguer, et
+ * retirer le cadre au repos rendait les autres ouvertures introuvables.
+ */
+const OPENING_RING = { rest: 0.035, on: 0.075 } as const
+/** De combien le nom de l'ouverture réglée flotte au-dessus d'elle (m) : dégagé du linteau. */
+const OPENING_NOTE_LIFT_M = 0.18
+/**
+ * Le repère d'origine du fichier (mode édition) : rayon de l'anneau, épaisseur des barres, longueur
+ * des deux axes et de la flèche du nord — en mètres. À l'échelle d'une pièce, pas d'un bâtiment : un
+ * trièdre de logiciel de CAO au milieu d'une maquette n'aurait rien à y faire.
+ */
+const ORIGIN_MARK = { ring: 0.24, bar: 0.05, axis: 1.1, north: 0.7 } as const
+/**
+ * Ligne de cote d'une ouverture : épaisseur du trait, hauteur des tirets qui la ferment à chaque
+ * bout, et de combien le nombre flotte au-dessus d'elle (m).
+ */
+const COTE = { bar: 0.022, tick: 0.2, lift: 0.14 } as const
+/** Jusqu'où le cadrage d'une ouverture suit ses cotes (m) : au-delà, le bout du trait n'apprend rien. */
+const OPENING_FOCUS_REACH_M = 2
 /** Rayon (px) autour de l'ancre ou de la pilule où l'appui saisit l'appareil déplaçable. */
 const GRAB_RADIUS_PX = { touch: 44, mouse: 28 }
 /**
@@ -239,6 +276,7 @@ export class HouseScene {
   private listeners: { [K in keyof SceneEvents]: Set<SceneEvents[K]> } = {
     deviceTap: new Set(), roomTap: new Set(), zoneTap: new Set(), levelTap: new Set(), backgroundTap: new Set(),
     deviceDrag: new Set(), deviceDrop: new Set(), journalTap: new Set(),
+    openingTap: new Set(), openingDrag: new Set(), openingDrop: new Set(),
   }
   private detachInput: (() => void) | null = null
   private movableKeys: string[] = []
@@ -248,6 +286,33 @@ export class HouseScene {
   private readonly dragPlane = new Plane()
   private readonly dragOffset = new Vector3()
   private lastDrag: { xy: [number, number]; roomId: string | null } | null = null
+  /**
+   * Mode « régler les ouvertures » : une poignée par ouverture, vivante seulement dans ce mode —
+   * hors édition la scène est exactement celle d'avant. Seule la SÉLECTIONNÉE se glisse, comme un
+   * seul appareil se déplace à la fois.
+   */
+  private editingOpenings = false
+  private selectedOpeningId: string | null = null
+  private openingHandles = new Map<string, { group: Group; fill: Mesh; ring: Mesh; ringOn: Mesh; rect: OpeningRect }>()
+  /** Cinq matériaux pour toutes les poignées : la sélection n'est qu'un échange de matériau. */
+  private openingMats: {
+    fill: MeshBasicMaterial; fillOn: MeshBasicMaterial
+    ring: MeshBasicMaterial; ringOn: MeshBasicMaterial
+    /** Ce qui ÉTEINT un cadre : un matériau invisible, jamais `Object3D.visible` (voir `styleOpeningHandles`). */
+    off: MeshBasicMaterial
+  } | null = null
+  private openingDragger: DragDetector | null = null
+  /** Le repère d'origine du fichier (`buildOriginMark`), vivant avec le mode édition. */
+  private originMark: { group: Group; labels: CSS2DObject[] } | null = null
+  /** Nom et cotes de l'ouverture réglée (`refreshOpeningNotes`), et le groupe d'étiquettes qui les porte. */
+  private openingNotes: {
+    name: CSS2DObject; right: CSS2DObject; left: CSS2DObject; parent: Group
+    /** Le tracé des deux cotes : un trait et deux tirets chacune. */
+    cotes: Group; lines: { line: Mesh; a: Mesh; b: Mesh }[]
+  } | null = null
+  /** Dernière position du doigt pas encore rapportée, et l'image où elle le sera (0 = aucune en attente). */
+  private pendingOpeningXY: [number, number] | null = null
+  private openingFrame = 0
   private readonly raycaster = new Raycaster()
   private size = { width: 1, height: 1 }
   private cameraTween: { cancel(): void } | null = null
@@ -276,6 +341,11 @@ export class HouseScene {
     this.camera.position.set(20, 18, 20)
     // halos, ondes, jauges — d'un niveau et du jardin — et les lampes d'intérieur (`core/layers.ts`)
     for (const l of [DECOR_LAYER, SITE_DECOR_LAYER, LAMP_LAYER]) this.camera.layers.enable(l)
+    // Le lancer de rayon ne teste QUE des listes explicites (jamais l'arbre) : lui ouvrir la couche
+    // des décors du jardin ne rend donc rien de plus touchable, mais c'est ce qui permet d'attraper
+    // la poignée d'une ouverture, qui y vit pour être dessinée dans la passe globale. Sans cette
+    // ligne, `Raycaster` ne voit que la couche 0 et le glissement ne démarre jamais (constaté).
+    this.raycaster.layers.enable(SITE_DECOR_LAYER)
 
     const create = deps.createRenderer ?? defaultCreateRenderer
     this.renderer = deps.headless ? null : create(canvas)
@@ -351,6 +421,9 @@ export class HouseScene {
     this.syncPrecipitation()               // la racine est neuve : ce qui tombe se repose dessus
     this.fitSunShadow()
     this.buildMarkers()
+    this.buildOpeningHandles()             // la racine est neuve : le mode édition repose ses poignées
+    this.buildOriginMark()                 // …son repère d'origine…
+    this.refreshOpeningNotes()             // …et ses étiquettes, qui vivent dans un groupe jeté avec elle
     this.refreshLevelPasses()
     const c = this.geometry.bounds
     this.controls?.target.set((c.min[0] + c.max[0]) / 2, 0, -(c.min[1] + c.max[1]) / 2)
@@ -401,6 +474,9 @@ export class HouseScene {
   clear(): void {
     for (const m of this.markers.values()) m.dispose()
     this.markers.clear()
+    this.clearOpeningHandles()
+    this.clearOpeningNotes()
+    this.clearOriginMark()
     this.removePrecipitation()
     if (this.nodes) {
       disposeObject3D(this.nodes.root, new Set<Material>(this.materials.all))
@@ -512,43 +588,136 @@ export class HouseScene {
     if (!this.house || !this.index || !this.nodes || !this.geometry) return
     for (const m of this.markers.values()) m.dispose()
     this.markers.clear()
-    const openings = new Map(this.geometry.levels.flatMap((l) => l.openings.map((o) => [o.openingId, o] as const)))
-    // Un appareil sans position EFFECTIVE n'a pas de marqueur. Pour la plupart c'est la `position`
-    // du JSON ; pour un véhicule, c'est son GPS projeté sur le terrain (`effectivePosition`).
     for (const d of this.drawable()) {
-      const position = this.effectivePosition(d)
-      if (!position) continue
-      const state = d.deviceId ? this.states[d.deviceId] : undefined
-      const yaw = d.position ? d.yaw : this.vehicleYaw(d, state, position)
-      const device: PlacedHouseDevice = { ...d, position, ...(yaw === undefined ? {} : { yaw }) }
-      const descriptor = device.deviceId ? this.descriptors.get(device.deviceId) : undefined
-      const levelId = resolveDeviceLevelId(device, this.index.roomsById)
-      const levelNodes = levelId ? this.nodes.levels.get(levelId) : undefined
-      const parent = levelNodes ? levelNodes.markers : this.nodes.outdoorMarkers
-      const opening = device.openingId ? openings.get(device.openingId) : undefined
-      const house = this.house
-      const marker = createMarker(device, {
-        materials: this.materials, theme: this.theme, glow: this.look.glow, outdoor: !levelNodes, descriptor, ...(opening ? { opening } : {}),
-        addAnimation: (a) => this.loop.addAnimation(a),
-        invalidate: () => this.loop.invalidate(),
-        onTap: (key) => this.emit('deviceTap', key),
-        label: device.name ?? descriptor?.name ?? device.id,
-        toLocal: (p) => { const xyz = sitePosition(house, p, d.gpsOffset); return xyz ? [xyz[0], xyz[1]] : null },
-      }, (state) => this.isAtHome(state))
-      marker.object.position.set(device.position[0], device.position[1], this.localZ(device, device.position[2]))
-      parent.add(marker.object)
-      marker.setSelected(this.selectedKey === device.id)
-      // le guide (anneau, fil, cône) ne se dessine que sur le PREMIER déplaçable — dix modules d'un
-      // champ donneraient dix anneaux pour un seul objet qui bouge — mais TOUS se glissent
-      if (this.movableKeys.includes(device.id)) marker.setMoving(true, device.position[2], this.movableKeys[0] === device.id)
-      this.markers.set(device.id, marker)
+      const marker = this.makeMarker(d)
+      if (marker) this.markers.set(d.id, marker)
     }
+  }
+
+  /**
+   * Un marqueur, posé dans le groupe de son niveau. `null` quand l'appareil n'a pas de position
+   * EFFECTIVE : pour la plupart c'est la `position` du JSON ; pour un véhicule, c'est son GPS projeté
+   * sur le terrain (`effectivePosition`).
+   */
+  private makeMarker(d: HouseDevice): DeviceMarker | null {
+    if (!this.house || !this.index || !this.nodes || !this.geometry) return null
+    const position = this.effectivePosition(d)
+    if (!position) return null
+    const state = d.deviceId ? this.states[d.deviceId] : undefined
+    const yaw = d.position ? d.yaw : this.vehicleYaw(d, state, position)
+    const device: PlacedHouseDevice = { ...d, position, ...(yaw === undefined ? {} : { yaw }) }
+    const descriptor = device.deviceId ? this.descriptors.get(device.deviceId) : undefined
+    const levelId = resolveDeviceLevelId(device, this.index.roomsById)
+    const levelNodes = levelId ? this.nodes.levels.get(levelId) : undefined
+    const parent = levelNodes ? levelNodes.markers : this.nodes.outdoorMarkers
+    const opening = device.openingId ? this.openingRect(device.openingId) : undefined
+    const house = this.house
+    const marker = createMarker(device, {
+      materials: this.materials, theme: this.theme, glow: this.look.glow, outdoor: !levelNodes, descriptor, ...(opening ? { opening } : {}),
+      addAnimation: (a) => this.loop.addAnimation(a),
+      invalidate: () => this.loop.invalidate(),
+      onTap: (key) => this.emit('deviceTap', key),
+      label: device.name ?? descriptor?.name ?? device.id,
+      toLocal: (p) => { const xyz = sitePosition(house, p, d.gpsOffset); return xyz ? [xyz[0], xyz[1]] : null },
+    }, (state) => this.isAtHome(state))
+    marker.object.position.set(device.position[0], device.position[1], this.localZ(device, device.position[2]))
+    parent.add(marker.object)
+    marker.setSelected(this.selectedKey === device.id)
+    // le guide (anneau, fil, cône) ne se dessine que sur le PREMIER déplaçable — dix modules d'un
+    // champ donneraient dix anneaux pour un seul objet qui bouge — mais TOUS se glissent
+    if (this.movableKeys.includes(device.id)) marker.setMoving(true, device.position[2], this.movableKeys[0] === device.id)
+    return marker
+  }
+
+  /** Le rectangle d'une ouverture, tous niveaux confondus (un ouvrant l'épouse, une poignée aussi). */
+  private openingRect(openingId: string): OpeningRect | undefined {
+    for (const l of this.geometry?.levels ?? []) {
+      const found = l.openings.find((o) => o.openingId === openingId)
+      if (found) return found
+    }
+    return undefined
   }
 
   /** z local au groupe parent : tel quel sous un niveau, décalé du terrain pour un appareil extérieur. */
   private localZ(device: HouseDevice, z: number): number {
     const levelId = resolveDeviceLevelId(device, this.index!.roomsById)
     return levelId && this.nodes!.levels.has(levelId) ? z : z + deviceFloorZ(this.house!, device, this.index!)
+  }
+
+  /**
+   * Seules des OUVERTURES ont changé (on en règle une au doigt). Le chemin complet (`load`) refait
+   * tout — la géométrie de tous les niveaux, tous les marqueurs, la carte d'ombre — et RECENTRE la
+   * caméra : intenable à chaque mouvement de doigt. Ici : la géométrie descriptive entière (elle est
+   * pure et bon marché), mais seuls les MAILLAGES des niveaux touchés, et seuls les marqueurs qui
+   * épousent une ouverture qui a bougé — un volet taille sa lame sur le rectangle de sa fenêtre.
+   * Caméra, niveau focalisé, sélection et tous les autres marqueurs restent en place.
+   *
+   * (Des relevés ont été pris pendant l'écriture de ce chemin, mais sur batterie donc en mode
+   * économie : ils ne disent rien de la machine et ne sont pas reportés ici.)
+   */
+  updateOpenings(house: House): void {
+    if (!this.nodes || !this.house || !this.geometry) { this.load(house); return }
+    const before = this.house
+    const openingsOf = (h: House, levelId: string) => JSON.stringify(h.rooms.filter((r) => r.levelId === levelId).map((r) => r.openings))
+    const levels = house.levels.filter((l) => openingsOf(before, l.id) !== openingsOf(house, l.id)).map((l) => l.id)
+    const was = new Map(before.rooms.flatMap((r) => r.openings.map((o) => [o.id, JSON.stringify(o)] as const)))
+    const moved = new Set(house.rooms.flatMap((r) => r.openings).filter((o) => was.get(o.id) !== JSON.stringify(o)).map((o) => o.id))
+    this.house = house
+    this.index = indexHouse(house)
+    this.geometry = computeHouseGeometry(house)
+    for (const levelId of levels) this.rebuildLevelNodes(levelId)
+    const routing = soundRouting(house.devices, this.states)
+    for (const d of this.drawable()) {
+      if (!d.openingId || !moved.has(d.openingId)) continue
+      this.markers.get(d.id)?.dispose()
+      this.markers.delete(d.id)
+      const marker = this.makeMarker(d)
+      if (!marker) continue
+      this.markers.set(d.id, marker)
+      const deviceId = marker.device.deviceId
+      const relay = deviceId ? routing.relays.get(deviceId) : undefined
+      const state = deviceId ? this.states[deviceId] : undefined
+      marker.update(state, deviceId
+        ? { emits: emitsSound(deviceId, state, routing), ...(relay && this.states[relay] ? { relayFrom: this.states[relay] } : {}) }
+        : undefined)
+    }
+    if (this.editingOpenings) this.buildOpeningHandles()
+    this.refreshOpeningNotes()             // les deux cotes suivent l'ouverture qui glisse
+    this.highlightRoom(this.highlightedRoom)   // le trait de la pièce vivait dans un groupe qu'on vient de jeter
+    this.applyLevelFocus()
+    this.refreshLevelPasses()
+    // PENDANT le geste, la carte d'ombre ne se refait pas : elle redessine tout le bâti depuis le
+    // soleil, et l'ombre d'un trou de mur qui glisse n'est pas ce qu'on regarde. Elle se refait au
+    // relâché (`endOpeningDrag`).
+    if (!this.openingDragger?.active()) this.invalidateShadows()
+    this.loop.invalidate()
+  }
+
+  /**
+   * Refait les MAILLAGES d'un niveau (murs, sols, vitrages, détails) d'après la géométrie courante.
+   * Ses marqueurs, eux, sont repris tels quels : les reconstruire est précisément ce qui les fait
+   * clignoter — et ce qui rouvrait tous les volets fermés de la maison (cf. `CoverMarker.posed`).
+   */
+  private rebuildLevelNodes(levelId: string): void {
+    const nodes = this.nodes
+    const old = nodes?.levels.get(levelId)
+    const lg = this.geometry?.levels.find((l) => l.levelId === levelId)
+    if (!nodes || !old || !lg) return
+    const fresh = buildLevel(lg, this.materials)
+    fresh.group.remove(fresh.markers, fresh.labels)   // les neufs sont vides : ce sont les anciens qu'on garde
+    old.markers.removeFromParent()
+    old.labels.removeFromParent()
+    fresh.group.add(old.markers, old.labels)
+    // Le trait de la pièce sélectionnée et les poignées d'ouverture sont rebâtis après coup : ils
+    // échappent ici à la libération de l'ancien groupe. Les poignées surtout : leurs quatre matériaux
+    // sont PARTAGÉS par tous les niveaux, et les libérer avec ce groupe-ci laisserait les poignées
+    // des autres niveaux tenir un matériau mort.
+    for (const m of this.highlightMeshes) if (m.parent === old.group) m.removeFromParent()
+    for (const h of this.openingHandles.values()) if (h.group.parent === old.group) h.group.removeFromParent()
+    disposeObject3D(old.group, new Set<Material>(this.materials.all))
+    const next: LevelNodes = { ...fresh, markers: old.markers, labels: old.labels }
+    nodes.levels.set(levelId, next)
+    nodes.root.add(next.group)
   }
 
   /** Seuls les appareils ont changé (placement) : on refait les marqueurs sans toucher aux murs ni à la caméra. */
@@ -591,6 +760,423 @@ export class HouseScene {
       })
     }
     this.loop.invalidate()
+  }
+
+  // ---- mode « régler les ouvertures » --------------------------------------
+  /**
+   * Entre (ou sort) du mode édition : une poignée apparaît sur CHAQUE ouverture — portes, passages et
+   * portes de garage comprises, qui n'ont aucun objet dans la scène et n'offraient donc rien à
+   * attraper. Elles vivent et meurent avec le mode.
+   */
+  setEditingOpenings(on: boolean): void {
+    if (this.editingOpenings === on) return
+    this.editingOpenings = on
+    if (!on) this.setSelectedOpening(null)
+    this.buildOpeningHandles()
+    this.buildOriginMark()
+    this.refreshOpeningNotes()
+    this.applyLevelFocus()                 // les poignées d'un niveau masqué n'ont pas à se montrer
+    this.loop.invalidate()
+  }
+
+  /**
+   * L'ouverture en cours de réglage : elle se distingue des autres, et c'est la SEULE qui se glisse —
+   * comme un seul appareil se déplace à la fois (`setMovable`).
+   */
+  setSelectedOpening(id: string | null): void {
+    this.selectedOpeningId = id
+    this.styleOpeningHandles()
+    this.refreshOpeningNotes()
+    this.openingDragger?.detach()
+    this.openingDragger = null
+    if (id && this.editingOpenings && !this.deps.headless) {
+      this.openingDragger = createDragDetector(this.canvas, {
+        hitTest: (ev) => this.grabsOpening(id, ev),
+        onStart: () => this.startOpeningDrag(id),
+        onMove: (ev) => this.moveOpeningDrag(id, ev),
+        onEnd: (_ev, moved) => this.endOpeningDrag(id, moved),
+      })
+    }
+    this.loop.invalidate()
+  }
+
+  /**
+   * Cadre une ouverture : même boîte de 3 m qu'un appareil, vue DEPUIS l'intérieur de sa pièce (le
+   * calcul de `roomSideAzimuth` pour un appareil contre un mur) — sans quoi on regarde la fenêtre
+   * depuis la pelouse, à travers la façade.
+   */
+  focusOpening(openingId: string, animate = true): void {
+    const rect = this.openingRect(openingId)
+    if (!rect || !this.house) return
+    if (this.focusedLevelId !== rect.levelId) this.focusLevel(rect.levelId)
+    const elevation = this.geometry?.levels.find((l) => l.levelId === rect.levelId)?.elevation ?? 0
+    const cx = rect.origin[0] + (rect.u[0] * rect.width) / 2
+    const cy = rect.origin[1] + (rect.u[1] * rect.width) / 2
+    const z = elevation + rect.origin[2] + rect.height / 2
+    // Cadrer l'ouverture ET SES COTES, pas seulement elle : une boîte fixe autour de l'ouverture
+    // laissait la cote de droite hors de l'image (ou sous le champ de recherche) dès que le vide de
+    // ce côté dépassait un mètre et demi. On borne la portée — sur un mur de dix mètres, le bout de
+    // la cote n'a plus d'intérêt et reculer d'autant ne montrerait plus rien de l'ouverture.
+    const room = this.house.rooms.find((r) => r.id === rect.roomId)
+    const opening = room?.openings.find((o) => o.id === openingId)
+    const gaps = room && opening ? openingGaps(room, opening) : { left: 0, right: 0 }
+    const box = new Box3()
+    for (const t of [-Math.min(gaps.right, OPENING_FOCUS_REACH_M), rect.width + Math.min(gaps.left, OPENING_FOCUS_REACH_M)]) {
+      box.expandByPoint(houseToWorld([rect.origin[0] + rect.u[0] * t, rect.origin[1] + rect.u[1] * t, z]))
+    }
+    box.expandByScalar(DEVICE_FOCUS_SIZE_M / 2)     // la hauteur de l'ouverture, l'épaisseur du mur, et de l'air
+    const b = roomBounds(this.house, rect.roomId, resolveDefaults(this.house.defaults))
+    const c = b ? boundsCenter(b) : null
+    const { azimuth, polar } = this.currentSpherical()
+    const inward = c && Math.hypot(c[0] - cx, c[1] - cy) > 0.5 ? Math.atan2(c[0] - cx, -(c[1] - cy)) : null
+    this.flyTo(box, inward ?? azimuth, clamp(polar, DEVICE_FOCUS_POLAR[0], DEVICE_FOCUS_POLAR[1]), animate, 1.1)
+  }
+
+  /**
+   * Une poignée par ouverture, dans le groupe de son niveau : une dalle qui remplit le rectangle —
+   * c'est elle qu'on attrape, et elle déborde l'épaisseur du mur pour s'attraper des deux côtés — et
+   * un trait qui le cerne. Tous deux NON ÉCLAIRÉS, dans le langage de la surbrillance de pièce.
+   *
+   * **Trois états à lire sans hésiter** : rien, une ouverture, celle qu'on règle. Ce sont
+   * l'ÉPAISSEUR du cadre et son rapport à la profondeur qui les séparent, pas une nuance d'opacité
+   * (essayée d'abord, illisible) ni la présence du cadre (essayée ensuite : les dix-huit autres
+   * ouvertures devenaient introuvables).
+   *
+   *  - au repos : un cadre FIN, calme, et surtout un TUBE — une bague extrudée dans toute l'épaisseur
+   *    de la poignée, qui dépasse donc des deux faces du mur. C'est ce qui lui permet d'être soumise
+   *    au test de profondeur : le toit et les façades la masquent comme n'importe quel objet, alors
+   *    qu'un cadre PLAT posé à mi-épaisseur serait enterré dans la menuiserie qui l'entoure ;
+   *  - sélectionnée : un cadre deux fois plus ÉPAIS, éclairci, plat, et dessiné par-dessus les murs
+   *    (`depthTest: false`, comme le trait d'une pièce) — sinon la façade cache la poignée de la
+   *    fenêtre qu'on regarde depuis la chambre. C'est la seule qui traverse.
+   *
+   * Les deux cadres existent en permanence sur chaque poignée ; la sélection n'éteint que des
+   * MATÉRIAUX. Rien ne se construit ni ne se détruit en sélectionnant.
+   *
+   * Elles vivent sur `SITE_DECOR_LAYER` et non `DECOR_LAYER` : ce sont deux façons de dire « décor »,
+   * qui diffèrent par le MOMENT du dessin (`core/layers.ts`). Un décor de NIVEAU force une passe de
+   * plus pour chaque niveau qui en porte — et une passe, c'est tout le bâti redessiné. Or une poignée
+   * est en `MeshBasicMaterial` : les lampes du niveau n'ont rien à lui apprendre, et la passe globale
+   * la dessine aussi bien. Le mode édition ne change donc pas le nombre de passes.
+   */
+  private buildOpeningHandles(): void {
+    this.clearOpeningHandles()
+    if (!this.editingOpenings || !this.nodes || !this.geometry) return
+    const accent = this.theme.primary
+    const trait = accent.clone().lerp(WHITE, 0.2).multiplyScalar(1.15)
+    const mats = {
+      // le voile porte « il y a quelque chose ici », le cadre porte « c'est une ouverture » : au repos
+      // le voile s'efface derrière le cadre, qui dit la même chose en plus lisible
+      fill: new MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.08, depthWrite: false, side: DoubleSide }),
+      fillOn: new MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.3, depthWrite: false, side: DoubleSide }),
+      ring: new MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.62, depthWrite: false, side: DoubleSide }),
+      ringOn: new MeshBasicMaterial({ color: trait, transparent: true, opacity: 0.95, depthWrite: false, depthTest: false, side: DoubleSide }),
+      // Ce qui éteint un cadre est SON MATÉRIAU et non `Object3D.visible` : cette propriété-là dit
+      // « mon niveau est masqué » (`shownInScene`), et c'est elle qui décide si une poignée est
+      // touchable — l'éteindre ici rendrait la poignée injoignable au doigt.
+      off: new MeshBasicMaterial({ visible: false }),
+    }
+    this.openingMats = mats
+    for (const level of this.geometry.levels) {
+      const parent = this.nodes.levels.get(level.levelId)?.group
+      if (!parent) continue
+      for (const o of level.openings) {
+        const group = new Group()
+        group.name = `opening:${o.openingId}`
+        group.position.set(
+          o.origin[0] + (o.u[0] * o.width) / 2 + (o.normal[0] * o.depth) / 2,
+          o.origin[1] + (o.u[1] * o.width) / 2 + (o.normal[1] * o.depth) / 2,
+          o.origin[2] + o.height / 2,
+        )
+        group.rotation.z = Math.atan2(o.u[1], o.u[0])
+        const fill = new Mesh(new BoxGeometry(o.width, OPENING_HANDLE_DEPTH_M, o.height), mats.fill)
+        fill.userData = { role: 'opening', openingId: o.openingId }
+        // Les deux cadres sont bâtis dans le plan XY puis REDRESSÉS (le y local devient le z du mur) :
+        // celui du repos extrudé dans l'épaisseur de la poignée (un tube, donc jamais coplanaire avec
+        // la menuiserie qui l'entoure), celui de la sélection plat, puisqu'il se dessine par-dessus
+        // tout et n'a personne avec qui se disputer la profondeur.
+        const d = OPENING_HANDLE_DEPTH_M / 2
+        const rest = extrudeRing(...frameRect(o.width, o.height, OPENING_RING.rest), -d, d)
+        rest.rotateX(Math.PI / 2)
+        const ring = new Mesh(rest, mats.ring)
+        const bold = flatRing(...frameRect(o.width, o.height, OPENING_RING.on), 0)
+        bold.rotateX(Math.PI / 2)
+        const ringOn = new Mesh(bold, mats.ringOn)
+        group.add(fill, ring, ringOn)
+        group.traverse((n) => n.layers.set(SITE_DECOR_LAYER))
+        parent.add(group)
+        // La `Scene` tourne avec `matrixWorldAutoUpdate = false` : sans cet appel, la matrice monde
+        // d'une poignée neuve reste l'IDENTITÉ jusqu'à la prochaine image, le lancer de rayon la teste
+        // à l'origine du monde, et un tap la traverse jusqu'au sol de la pièce (mesuré : onze poignées
+        // sur onze, jusqu'à douze mètres d'écart). `true` pour les enfants : c'est la dalle, pas le
+        // groupe, que le rayon touche. Même geste que `focusJournalPoint` et `openingFoot`, qui lisent
+        // une position monde sans attendre une image.
+        group.updateWorldMatrix(true, true)
+        this.openingHandles.set(o.openingId, { group, fill, ring, ringOn, rect: o })
+      }
+    }
+    this.styleOpeningHandles()
+  }
+
+  /**
+   * Ce que la scène écrit sur l'ouverture en cours de réglage : son NOM au-dessus d'elle, et ses deux
+   * COTES de part et d'autre — ce qui la sépare de chaque bout de son mur. C'est ainsi qu'on relève
+   * une maison au mètre ruban, et c'est ce que l'utilisateur regarde en la déplaçant.
+   *
+   * Les nombres viennent d'`openingGaps` et le nom d'`openingLabel`, tous deux partagés avec le
+   * panneau : la même fenêtre ne peut pas se nommer de deux façons ni se coter de deux manières.
+   * Le format (`toFixed(2)` et « m ») est celui du panneau, au centimètre près.
+   *
+   * Les étiquettes se posent à la SÉLECTION, pas au premier mouvement du doigt : apparaître au
+   * moment où le geste commence les ferait surgir sous la main, et elles servent aussi à relire ce
+   * que les champs du panneau viennent d'écrire.
+   *
+   * Chaque nombre est posé sur une vraie LIGNE DE COTE, comme sur un plan : un trait qui va du bord
+   * de l'ouverture au coin du mur — exactement l'intervalle que le nombre annonce, ni plus ni moins,
+   * sans quoi on ne sait pas si « 0,25 m » se mesure jusqu'au coin ou jusqu'au tableau — fermé à
+   * chaque bout par un tiret vertical. C'est de la GÉOMÉTRIE de scène et non un tracé dans la couche
+   * DOM : le tracé vit dans le repère du niveau, donc il suit l'ouverture qui glisse sans un temps de
+   * retard, et il se cache avec son niveau.
+   *
+   * **Le cas difficile est la cote courte.** Le nombre est du DOM, large de 66 px quelle que soit la
+   * distance ; l'intervalle, lui, est en mètres. Aucun seuil en mètres ne peut donc décider « le
+   * nombre est plus large que sa cote ». Il est pour cette raison posé AU-DESSUS du trait et non
+   * dessus : il ne le coupe jamais, à aucune échelle, et reste au milieu de son intervalle donc
+   * attaché à lui. À zéro, il n'y a pas d'intervalle : le trait disparaît et les deux tirets se
+   * confondent en un seul — ce qui est exactement ce qu'il y a à lire, l'ouverture touche le coin.
+   */
+  private refreshOpeningNotes(): void {
+    const id = this.selectedOpeningId
+    const rect = id && this.editingOpenings ? this.openingRect(id) : undefined
+    const room = rect ? this.house?.rooms.find((r) => r.id === rect.roomId) : undefined
+    const opening = room?.openings.find((o) => o.id === id)
+    const level = rect ? this.nodes?.levels.get(rect.levelId) : undefined
+    if (!rect || !room || !opening || !level || typeof document === 'undefined') { this.clearOpeningNotes(); return }
+    if (!this.openingNotes || this.openingNotes.parent !== level.labels) {
+      // les éléments sont GARDÉS d'une image à l'autre : les refaire à chaque mouvement de doigt
+      // ferait clignoter du DOM, et le navigateur repaindrait trois boîtes pour deux chiffres
+      this.clearOpeningNotes()
+      const name = sceneNote('name')
+      const right = sceneNote('gap')
+      const left = sceneNote('gap')
+      level.labels.add(name, right, left)
+      // un trait et deux tirets par cote, dessinés PAR-DESSUS les murs comme le guide du mode
+      // déplacer : une cote que le tableau d'une fenêtre coupe en deux ne se lit plus
+      const mat = new MeshBasicMaterial({
+        color: this.theme.primary.clone().lerp(WHITE, 0.2).multiplyScalar(1.15),
+        transparent: true, opacity: 0.9, depthWrite: false, depthTest: false,
+      })
+      const cotes = new Group()
+      cotes.name = 'opening-cotes'
+      const lines = [0, 1].map(() => {
+        const line = new Mesh(new BoxGeometry(1, COTE.bar, COTE.bar), mat)      // longueur donnée par `scale.x`
+        const a = new Mesh(new BoxGeometry(COTE.bar, COTE.bar, COTE.tick), mat)
+        const b = new Mesh(new BoxGeometry(COTE.bar, COTE.bar, COTE.tick), mat)
+        cotes.add(line, a, b)
+        return { line, a, b }
+      })
+      cotes.traverse((n) => n.layers.set(SITE_DECOR_LAYER))
+      // Dans le groupe des ÉTIQUETTES du niveau et non dans celui du niveau, même si c'est de la
+      // géométrie : ce groupe-là SURVIT à la reconstruction d'un niveau (`rebuildLevelNodes` le
+      // reparente, comme les marqueurs), alors que le groupe du niveau est jeté. Posé à côté des
+      // murs, le tracé se retrouvait orphelin au premier mouvement de doigt — constaté. Il annote la
+      // même chose que les trois étiquettes, il vit et meurt avec elles, il vit donc avec elles.
+      level.labels.add(cotes)
+      this.openingNotes = { name, right, left, parent: level.labels, cotes, lines }
+    }
+    const notes = this.openingNotes
+    const gaps = openingGaps(room, opening)
+    // un point de la face du mur, à `t` mètres du bord gauche de l'ouverture, à la hauteur `z`
+    const at = (t: number, z: number): [number, number, number] => [
+      rect.origin[0] + rect.u[0] * t + (rect.normal[0] * rect.depth) / 2,
+      rect.origin[1] + rect.u[1] * t + (rect.normal[1] * rect.depth) / 2,
+      z,
+    ]
+    const mid = rect.origin[2] + rect.height / 2
+    notes.name.element.textContent = openingLabel(opening)
+    notes.name.position.set(...at(rect.width / 2, rect.origin[2] + rect.height + OPENING_NOTE_LIFT_M))
+    notes.right.element.textContent = `${gaps.right.toFixed(2)} m`
+    notes.right.position.set(...at(-gaps.right / 2, mid + COTE.lift))
+    notes.left.element.textContent = `${gaps.left.toFixed(2)} m`
+    notes.left.position.set(...at(rect.width + gaps.left / 2, mid + COTE.lift))
+    // Le tracé est posé dans le repère de l'OUVERTURE — origine au bord gauche, x le long du mur : les
+    // deux cotes ne sont plus alors que deux intervalles [x0, x1] de cet axe.
+    notes.cotes.position.set(...at(0, 0))
+    notes.cotes.rotation.z = Math.atan2(rect.u[1], rect.u[0])
+    const spans: [number, number][] = [[-gaps.right, 0], [rect.width, rect.width + gaps.left]]
+    notes.lines.forEach((part, i) => {
+      const [x0, x1] = spans[i]!
+      const length = x1 - x0
+      part.line.visible = length > 1e-3        // à zéro, il n'y a pas d'intervalle à tracer
+      part.line.scale.x = Math.max(length, 1e-4)
+      part.line.position.set((x0 + x1) / 2, 0, mid)
+      part.a.position.set(x0, 0, mid)
+      part.b.position.set(x1, 0, mid)
+    })
+    // même piège que pour les poignées : le rendu 2D comme le lancer de rayon lisent `matrixWorld`, et
+    // celle d'un objet qu'on vient de poser (ou de déplacer) est périmée jusqu'à la prochaine image
+    for (const note of [notes.name, notes.right, notes.left]) note.updateWorldMatrix(true, false)
+    notes.cotes.updateWorldMatrix(true, true)
+    this.loop.invalidate()
+  }
+
+  private clearOpeningNotes(): void {
+    if (!this.openingNotes) return
+    disposeObject3D(this.openingNotes.cotes)     // le matériau du tracé est le sien, il part avec lui
+    // un `CSS2DObject` a posé son élément dans la couche du rendu 2D : retirer l'objet de la scène ne
+    // l'enlève pas, il resterait dans le vide (même geste que `DeviceMarker.dispose`)
+    for (const note of [this.openingNotes.name, this.openingNotes.right, this.openingNotes.left]) {
+      note.element.remove()
+      note.removeFromParent()
+    }
+    this.openingNotes = null
+    this.loop.invalidate()
+  }
+
+  /**
+   * Le repère d'ORIGINE du fichier, en mode édition seulement : le (0, 0, 0) local depuis lequel
+   * toutes les coordonnées de `house.json` sont mesurées — polygones de pièce, positions d'appareils,
+   * `offset` d'ouverture. C'est ce que `house.origin` ancre sur le globe.
+   *
+   * Un point seul ne dirait pas dans quel SENS on compte : il porte donc ses deux axes, +x et +y,
+   * distingués par leur longueur et par une étiquette, plus une flèche plus courte vers le NORD VRAI
+   * — `heading` est le cap de +y, donc le nord est en (−sin h, cos h) dans le repère local. C'est ce
+   * qui permet de rapprocher un relevé du terrain.
+   *
+   * Tout est dessiné PAR-DESSUS la maison (`depthTest: false`) : l'origine peut tomber dans un mur,
+   * sous une dalle ou loin du bâti, et un repère qu'on ne voit pas ne repère rien. Il n'est ni
+   * touchable (aucun `role` dans `userData`, jamais présenté à `pick`) ni déplaçable : l'origine du
+   * fichier n'est pas un réglage.
+   */
+  private buildOriginMark(): void {
+    this.clearOriginMark()
+    if (!this.editingOpenings || !this.nodes || !this.house) return
+    const accent = this.theme.primary
+    const trait = accent.clone().lerp(WHITE, 0.2).multiplyScalar(1.15)
+    const group = new Group()
+    group.name = 'origin-mark'
+    const mat = (color: Color, opacity: number) =>
+      new MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, depthTest: false, side: DoubleSide })
+    // L'anneau posé à plat sur le (0, 0) du fichier : c'est LUI le repère, les axes ne font que dire
+    // dans quel sens on compte. `RingGeometry` est dans le plan XY, qui est le SOL en Z-up local —
+    // comme l'anneau du guide de déplacement (`DeviceMarker.setMoving`).
+    const disc = new Mesh(new RingGeometry(ORIGIN_MARK.ring - ORIGIN_MARK.bar, ORIGIN_MARK.ring, 36), mat(trait, 0.95))
+    group.add(disc)
+    const labels: CSS2DObject[] = []
+    const arm = (dir: readonly [number, number], length: number, color: Color, opacity: number, text: string) => {
+      const box = new Mesh(new BoxGeometry(length, ORIGIN_MARK.bar, ORIGIN_MARK.bar), mat(color, opacity))
+      box.rotation.z = Math.atan2(dir[1], dir[0])
+      box.position.set((dir[0] * length) / 2, (dir[1] * length) / 2, 0)
+      group.add(box)
+      if (typeof document === 'undefined') return
+      const label = sceneNote('axis')
+      label.element.textContent = text
+      label.position.set(dir[0] * (length + ORIGIN_MARK.ring), dir[1] * (length + ORIGIN_MARK.ring), 0)
+      group.add(label)
+      labels.push(label)
+    }
+    arm([1, 0], ORIGIN_MARK.axis, trait, 0.95, 'x')
+    arm([0, 1], ORIGIN_MARK.axis, trait, 0.95, 'y')
+    // Le nord est plus court et plus pâle que les axes du fichier : c'est un renseignement sur le
+    // terrain, pas une direction dans laquelle on compte quelque chose.
+    const h = (this.house.origin.heading * Math.PI) / 180
+    arm([-Math.sin(h), Math.cos(h)], ORIGIN_MARK.north, WHITE, 0.55, 'N')
+    group.traverse((n) => n.layers.set(SITE_DECOR_LAYER))
+    this.nodes.root.add(group)
+    group.updateWorldMatrix(true, true)     // même piège de matrice périmée que les poignées
+    this.originMark = { group, labels }
+    this.loop.invalidate()
+  }
+
+  private clearOriginMark(): void {
+    if (!this.originMark) return
+    // les étiquettes des axes sont des éléments DOM posés par le rendu 2D : le groupe s'en va, elles non
+    for (const l of this.originMark.labels) l.element.remove()
+    disposeObject3D(this.originMark.group)
+    this.originMark = null
+  }
+
+  private clearOpeningHandles(): void {
+    const keep = new Set<Material>(this.openingMats ? Object.values(this.openingMats) : [])
+    for (const h of this.openingHandles.values()) disposeObject3D(h.group, keep)
+    this.openingHandles.clear()
+    for (const m of keep) m.dispose()
+    this.openingMats = null
+  }
+
+  private styleOpeningHandles(): void {
+    const mats = this.openingMats
+    if (!mats) return
+    for (const [id, h] of this.openingHandles) {
+      const on = id === this.selectedOpeningId
+      h.fill.material = on ? mats.fillOn : mats.fill
+      h.ring.material = on ? mats.off : mats.ring          // le cadre fin s'efface sous l'épais
+      h.ringOn.material = on ? mats.ringOn : mats.off
+    }
+  }
+
+  /** La poignée est-elle sous le doigt ? Masquée avec son niveau, elle ne s'attrape pas. */
+  private grabsOpening(id: string, ev: TapEvent): boolean {
+    const handle = this.openingHandles.get(id)
+    if (!handle || !shownInScene(handle.group)) return false
+    this.raycaster.setFromCamera(new Vector2(ev.ndc.x, ev.ndc.y), this.camera)
+    return this.raycaster.intersectObject(handle.fill, false).length > 0
+  }
+
+  private startOpeningDrag(id: string): void {
+    const handle = this.openingHandles.get(id)
+    if (!handle) return
+    if (this.controls) this.controls.enabled = false
+    this.cameraTween?.cancel()
+    // Plan HORIZONTAL au sol du niveau : ce qu'on rapporte est le point du doigt sur ce sol, à charge
+    // de l'appelant d'y chercher la place admissible la plus proche. L'écart initial doigt–ouverture
+    // est conservé (comme pour un appareil) : sans lui, l'ouverture sauterait au premier appui, la
+    // poignée étant à hauteur d'allège et le plan à ses pieds. Les deux glissements partagent plan et
+    // écart : on ne déplace jamais un appareil et une ouverture en même temps.
+    const foot = this.openingFoot(handle.group, handle.rect.levelId)
+    this.dragPlane.setFromNormalAndCoplanarPoint(WORLD_UP, foot)
+    const hit = this.raycaster.ray.intersectPlane(this.dragPlane, new Vector3())
+    this.dragOffset.copy(hit ? hit.sub(foot) : new Vector3())
+  }
+
+  /**
+   * UNE position par image, pas une par événement. Le pointeur en émet plusieurs fois par image, et
+   * chacune reconstruit les murs d'un niveau : tout ce travail-là finissait à la poubelle avant
+   * d'être vu. On retient la dernière position et on la rapporte à l'image suivante.
+   */
+  private moveOpeningDrag(id: string, ev: TapEvent): void {
+    this.raycaster.setFromCamera(new Vector2(ev.ndc.x, ev.ndc.y), this.camera)
+    const hit = this.raycaster.ray.intersectPlane(this.dragPlane, new Vector3())
+    if (!hit) return
+    hit.sub(this.dragOffset)
+    this.pendingOpeningXY = [hit.x, -hit.z]         // monde (x, y, z) ← maison (x, z, -y)
+    if (this.openingFrame !== 0) return
+    this.openingFrame = requestAnimationFrame(() => {
+      this.openingFrame = 0
+      this.flushOpeningDrag(id)
+    })
+  }
+
+  private flushOpeningDrag(id: string): void {
+    const xy = this.pendingOpeningXY
+    this.pendingOpeningXY = null
+    if (xy) this.emit('openingDrag', id, xy)
+  }
+
+  private endOpeningDrag(id: string, moved: boolean): void {
+    if (this.controls) this.controls.enabled = true
+    if (this.openingFrame !== 0) { cancelAnimationFrame(this.openingFrame); this.openingFrame = 0 }
+    this.flushOpeningDrag(id)                       // la dernière position, celle qu'on garde
+    if (moved) this.emit('openingDrop', id)
+    this.invalidateShadows()                        // le geste est fini : les ombres reprennent la main
+  }
+
+  /** Le pied de l'ouverture dans le monde : son milieu horizontal, ramené au sol de son niveau. */
+  private openingFoot(group: Group, levelId: string): Vector3 {
+    group.updateWorldMatrix(true, false)
+    const p = group.getWorldPosition(new Vector3())
+    p.y = this.nodes?.levels.get(levelId)?.elevation ?? 0
+    return p
   }
 
   /**
@@ -825,6 +1411,9 @@ export class HouseScene {
       const ghost = above && this.options.levelFocusMode === 'ghost'
       nodes.group.visible = !above || ghost
       nodes.markers.visible = !above
+      // les poignées d'ouverture vivent dans le groupe du niveau, pas dans ses marqueurs : un niveau
+      // FANTÔME garde son groupe visible, elles s'éteignent donc avec les marqueurs, pas avec lui
+      for (const h of this.openingHandles.values()) if (h.rect.levelId === id) h.group.visible = !above
       for (const mesh of [...nodes.walls, ...nodes.floors.values(), ...nodes.panes]) {
         mesh.material = ghost ? this.materials.ghost : (mesh.userData.material as Material)
       }
@@ -1031,9 +1620,17 @@ export class HouseScene {
   }
 
   /** Sélection au point NDC par lancer de rayon : objet d'appareil, sol de pièce, toit, zone. */
-  pick(ndc: { x: number; y: number }): { kind: 'device'; key: string } | { kind: 'room'; roomId: string } | { kind: 'level'; levelId: string } | { kind: 'zone'; zoneId: string } | { kind: 'journal'; at: number } | null {
+  pick(ndc: { x: number; y: number }): { kind: 'device'; key: string } | { kind: 'room'; roomId: string } | { kind: 'level'; levelId: string } | { kind: 'zone'; zoneId: string } | { kind: 'journal'; at: number } | { kind: 'opening'; openingId: string } | null {
     if (!this.nodes) return null
     this.raycaster.setFromCamera(new Vector2(ndc.x, ndc.y), this.camera)
+    // En mode édition, la poignée d'une ouverture passe AVANT l'appareil : c'est elle qu'on vient
+    // chercher, et le tablier d'un volet couvre justement sa fenêtre.
+    if (this.editingOpenings) {
+      const fills: Mesh[] = []
+      for (const h of this.openingHandles.values()) if (shownInScene(h.group)) fills.push(h.fill)
+      const hitHandle = this.raycaster.intersectObjects(fills, false)[0]
+      if (hitHandle) return { kind: 'opening', openingId: hitHandle.object.userData.openingId as string }
+    }
     // une épingle du journal d'abord : petite, posée au sol, elle perdrait contre le sol de la pièce
     if (this.journal) {
       const hitPin = this.raycaster.intersectObjects(this.journal.pickables, false)[0]
@@ -1064,10 +1661,11 @@ export class HouseScene {
   }
 
   private handleTap(ev: TapEvent): void {
-    if (this.drag?.active()) return   // fin d'un glissement, pas un tap
+    if (this.drag?.active() || this.openingDragger?.active()) return   // fin d'un glissement, pas un tap
     const hit = this.pick(ev.ndc)
     if (!hit) { this.emit('backgroundTap'); return }
     if (hit.kind === 'device') this.emit('deviceTap', hit.key)
+    else if (hit.kind === 'opening') this.emit('openingTap', hit.openingId)
     else if (hit.kind === 'journal') this.emit('journalTap', hit.at)
     else if (hit.kind === 'room') this.emit('roomTap', hit.roomId)
     else if (hit.kind === 'level') this.emit('levelTap', hit.levelId)
@@ -1182,6 +1780,8 @@ export class HouseScene {
       this.renderer.toneMappingExposure = this.look.post.exposure
     }
     for (const m of this.markers.values()) m.setTheme(this.theme, this.look.glow)
+    this.buildOpeningHandles()             // les poignées sont teintées de l'accent, qui vient de changer
+    this.buildOriginMark()                 // le repère d'origine aussi
     this.highlightRoom(this.highlightedRoom)
     this.refreshLevelPasses()              // l'heure change ce qu'une lampe allumée vaut
     this.invalidateShadows()               // le soleil a pu bouger
@@ -1555,6 +2155,8 @@ export class HouseScene {
     if (this.stormTimer !== null) { clearTimeout(this.stormTimer); this.stormTimer = null }
     this.removePrecipitation()
     this.drag?.detach()
+    this.openingDragger?.detach()
+    if (this.openingFrame !== 0) cancelAnimationFrame(this.openingFrame)
     this.loop.dispose()
     this.controls?.dispose()
     this.clear()
@@ -1564,6 +2166,56 @@ export class HouseScene {
     this.renderer?.dispose()
     if (this.labelRenderer) this.labelRenderer.domElement.replaceChildren()
   }
+}
+
+/**
+ * Le contour et l'intérieur d'un cadre rectangulaire de `w` × `h`, large de `b` : les deux polygones
+ * que `flatRing` et `extrudeRing` attendent. La largeur est bornée au cinquième de la plus petite
+ * cote — sur une fenêtre de salle de bain de 80 cm, un cadre de 7,5 cm mange déjà le verre.
+ */
+function frameRect(w: number, h: number, b: number): [Vec2[], Vec2[]] {
+  const x = w / 2, y = h / 2, t = Math.min(b, w * 0.2, h * 0.2)
+  return [
+    [[-x, -y], [x, -y], [x, y], [-x, y]],
+    [[-x + t, -y + t], [x - t, -y + t], [x - t, y - t], [-x + t, y - t]],
+  ]
+}
+
+/**
+ * Une étiquette que la scène écrit elle-même : le nom d'une ouverture, l'une de ses deux cotes, ou la
+ * lettre d'un axe du repère d'origine.
+ *
+ * Styles EN LIGNE et non une classe de `styles/app.css` : la feuille de l'application appartient à
+ * l'interface, et la scène sait déjà s'habiller seule (`core/theme.ts`). Les couleurs sont prises aux
+ * variables du thème, donc les deux thèmes marchent sans rien de plus.
+ *
+ * Une cote a des chiffres à CHASSE FIXE et une largeur minimale : « 0.35 m » puis « 1.40 m » ne
+ * doivent pas faire danser l'étiquette sous le doigt, alors que c'est précisément le moment où sa
+ * valeur change dix fois par seconde.
+ */
+function sceneNote(kind: 'name' | 'gap' | 'axis'): CSS2DObject {
+  const el = document.createElement('div')
+  el.className = `scene-note scene-note--${kind}`
+  el.style.cssText = [
+    'pointer-events:none;position:absolute;left:0;top:0;transform:translate(-50%,-50%)',
+    'padding:3px 8px;border-radius:8px;white-space:nowrap;font:600 11px/1.25 var(--font)',
+    kind === 'axis'
+      // un axe se nomme d'une lettre : pas de cartouche autour, juste la lettre lisible sur ciel
+      // comme sur pelouse (une ombre portée, pas un fond)
+      ? 'color:var(--accent);font:700 12px/1 var(--font);text-shadow:0 1px 3px rgba(0,0,0,.55),0 0 2px rgba(0,0,0,.4)'
+      : kind === 'name'
+      ? 'background:var(--accent);color:var(--on-accent);border:1px solid transparent;max-width:220px;overflow:hidden;text-overflow:ellipsis'
+      // 66 px : la largeur de « 12.34 m » à cette fonte, chiffres à chasse fixe — au-delà de dix
+      // mètres, un mur de maison n'existe plus. La boîte ne bouge donc pas d'un pixel pendant le geste.
+      : 'background:color-mix(in srgb, var(--surface) 92%, transparent);color:var(--text);border:1px solid var(--line);font-variant-numeric:tabular-nums;min-width:66px;text-align:center',
+  ].join(';')
+  return new CSS2DObject(el)
+}
+
+/** Visible POUR DE BON : un objet visible dans un groupe masqué (un niveau au-dessus) ne l'est pas. */
+function shownInScene(object: Object3D): boolean {
+  for (let o: Object3D | null = object; o; o = o.parent) if (!o.visible) return false
+  return true
 }
 
 function defaultCreateRenderer(canvas: HTMLCanvasElement): WebGLRenderer | null {

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { deviceIdSchema } from '../devices/descriptor'
-import { defaultPlugins, hexColorSchema, model3dSchema, MOUNTS, vec2Schema, vec3Schema, type PluginSettingsPatch } from './schema'
+import { defaultPlugins, hexColorSchema, model3dSchema, MOUNTS, OPENING_TYPES, vec2Schema, vec3Schema, type PluginSettingsPatch } from './schema'
 import { VEHICLE_FINISHES } from '../devices/kinds'
 
 // Écritures de l'UI dans house.json (placement d'un appareil, ordre d'affichage des pièces).
@@ -64,6 +64,15 @@ export const devicePlacementSchema = z.object({
    * main à ce que le fabricant dit, comme pour la couleur.
    */
   bodyFinish: z.union([z.literal(''), z.enum(VEHICLE_FINISHES)]).optional(),
+  /**
+   * Ouverture que l'appareil habille (comme `HouseDevice.openingId`) : un volet, un capteur de
+   * fenêtre épousent son rectangle au lieu d'occuper un point. **Chaîne vide = délier**, comme la
+   * chaîne vide pour le nom — c'est le seul moyen de rendre l'appareil à la pièce.
+   *
+   * Lier RE-ANCRE l'appareil sur la pièce qui porte l'ouverture : la validation croisée l'exige, et
+   * le geste vient de la 3D, où l'on montre une fenêtre sans penser à la pièce derrière.
+   */
+  openingId: z.union([z.literal(''), z.string().min(1)]).optional(),
   /** Requis quand l'appareil n'existe pas encore dans le JSON (appareil auto-placé). */
   deviceId: deviceIdSchema.optional(),
 })
@@ -83,6 +92,13 @@ export class PlacementError extends Error {
 
 type JsonObject = Record<string, unknown>
 const isObject = (v: unknown): v is JsonObject => typeof v === 'object' && v !== null && !Array.isArray(v)
+
+/** Pièce qui porte l'ouverture `openingId` dans le JSON brut. */
+function openingOwner(rooms: readonly JsonObject[], openingId: string): JsonObject {
+  const owner = rooms.find((r) => Array.isArray(r.openings) && r.openings.some((o) => isObject(o) && o.id === openingId))
+  if (!owner) throw new PlacementError(`unknown opening "${openingId}"`)
+  return owner
+}
 
 /**
  * Renvoie une copie du document JSON avec l'appareil `id` (re)placé ou renommé : entrée existante
@@ -152,6 +168,16 @@ export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePla
       delete next.roomId
       delete next.zoneId
     }
+    // APRÈS l'ancrage : lier une ouverture emporte la pièce qui la porte, quoi qu'ait dit le patch
+    if (placement.openingId !== undefined) {
+      if (placement.openingId) {
+        const owner = openingOwner(rooms, placement.openingId)
+        next.openingId = placement.openingId
+        next.roomId = owner.id
+        if ('levelId' in next) next.levelId = owner.levelId
+        delete next.zoneId
+      } else delete next.openingId
+    }
   } else {
     if (!placement.deviceId) throw new PlacementError(`device "${id}" is not in house.json: deviceId is required to create it`)
     next = { id, deviceId: placement.deviceId }
@@ -169,6 +195,11 @@ export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePla
     if (placement.model3d) next.model3d = placement.model3d
     if (placement.bodyColor) next.bodyColor = placement.bodyColor
     if (placement.bodyFinish) next.bodyFinish = placement.bodyFinish
+    if (placement.openingId) {
+      const owner = openingOwner(rooms, placement.openingId)
+      next.openingId = placement.openingId
+      next.roomId = owner.id
+    }
   }
   const out = [...devices]
   if (i >= 0) out[i] = next
@@ -322,4 +353,62 @@ export function removeArrayFromJson(doc: unknown, id: string): JsonObject {
   const i = arrays.findIndex((a) => isObject(a) && a.id === id)
   if (i < 0) throw new PlacementError(`panel array "${id}" is not in house.json`)
   return { ...doc, arrays: arrays.filter((_, k) => k !== i) }
+}
+
+/**
+ * Ouverture (`rooms[i].openings[j]`) réglée depuis l'UI : cotes et place sur le contour de la pièce.
+ * Seuls les champs présents sont posés, comme pour un placement d'appareil — régler l'allège ne doit
+ * pas redéposer la largeur qu'on était en train de saisir ailleurs.
+ *
+ * Le patch ne CRÉE pas : une ouverture naît du relevé, l'UI ne fait que l'ajuster.
+ */
+export const openingPatchSchema = z.object({
+  /** Nom en clair (comme `Opening.name`). **Chaîne vide = effacer** et revenir à l'`id` du relevé. */
+  name: z.string().trim().max(60).optional(),
+  type: z.enum(OPENING_TYPES).optional(),
+  /** Arête de la pièce qui porte l'ouverture (index dans `room.polygon`). */
+  segment: z.number().int().min(0).optional(),
+  /** Distance (m) depuis le coin `polygon[segment]` jusqu'au bord proche. */
+  offset: z.number().min(0).max(100).optional(),
+  width: z.number().positive().max(20).optional(),
+  height: z.number().positive().max(10).optional(),
+  /**
+   * Hauteur d'allège depuis le sol fini. **Absente = on n'y touche pas** ; `0` est une valeur, pas
+   * un effacement — une porte est à 0 et le reste. L'ouverture qui n'en a jamais eu suit le défaut
+   * de la maison (`defaults.windowSill`), c'est `openingSill` qui tranche.
+   */
+  sill: z.number().min(0).max(10).optional(),
+})
+export type OpeningPatch = z.infer<typeof openingPatchSchema>
+
+/**
+ * Renvoie une copie du document JSON avec l'ouverture `openingId` de la pièce `roomId` modifiée.
+ *
+ * Contrairement aux autres patches, la cible est IMBRIQUÉE : on recopie la pièce et son tableau
+ * d'ouvertures, sans toucher aux autres pièces. Le reste des règles (ouverture dans son segment,
+ * sous le plafond, sans chevauchement) est vérifié par `parseHouse` avant écriture, comme partout.
+ */
+export function patchOpeningInJson(doc: unknown, roomId: string, openingId: string, patch: OpeningPatch): JsonObject {
+  if (!isObject(doc)) throw new PlacementError('house document is not an object')
+  const rooms = Array.isArray(doc.rooms) ? doc.rooms : []
+  const ri = rooms.findIndex((r) => isObject(r) && r.id === roomId)
+  if (ri < 0) throw new PlacementError(`unknown room "${roomId}"`)
+  const room = rooms[ri] as JsonObject
+  const openings = Array.isArray(room.openings) ? room.openings : []
+  const oi = openings.findIndex((o) => isObject(o) && o.id === openingId)
+  if (oi < 0) throw new PlacementError(`room "${roomId}" has no opening "${openingId}"`)
+
+  const next: JsonObject = { ...(openings[oi] as JsonObject) }
+  for (const key of ['type', 'segment', 'offset', 'width', 'height', 'sill'] as const) {
+    if (patch[key] !== undefined) next[key] = patch[key]
+  }
+  if (patch.name !== undefined) {
+    if (patch.name) next.name = patch.name
+    else delete next.name                      // chaîne vide : on revient à l'id, comme pour un appareil
+  }
+  const nextOpenings = [...openings]
+  nextOpenings[oi] = next
+  const nextRooms = [...rooms]
+  nextRooms[ri] = { ...room, openings: nextOpenings }
+  return { ...doc, rooms: nextRooms }
 }

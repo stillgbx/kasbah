@@ -1,4 +1,4 @@
-import type { CommandInput, DeviceConsumption, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, PanelArrayPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal } from '@kasbah/shared'
+import type { CommandInput, DeviceConsumption, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, OpeningPatch, PanelArrayPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal } from '@kasbah/shared'
 
 // Abstraction du canal serveur. Deux implémentations : HTTP + WebSocket (réel) et simulation
 // in-process (tests, démo statique sans serveur). Les commandes passent TOUJOURS par une requête
@@ -240,6 +240,8 @@ export interface Transport {
   saveArray(id: string, patch: PanelArrayPatch): Promise<House>
   /** Retire un champ de panneaux : ses modules disparaissent, ses onduleurs redeviennent à placer. */
   removeArray(id: string): Promise<House>
+  /** Règle une ouverture (cotes, place sur le mur) ; renvoie la maison réécrite. */
+  saveOpening(roomId: string, openingId: string, patch: OpeningPatch): Promise<House>
   /** Écrit l'ordre d'affichage des pièces d'un niveau ; renvoie la maison réécrite. */
   setRoomOrder(levelId: string, roomIds: string[]): Promise<House>
   /** Ouvre le canal de push ; retourne la fonction de fermeture. */

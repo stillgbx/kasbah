@@ -76,10 +76,20 @@ export type Level = z.infer<typeof levelSchema>
 export const WALL_KINDS = ['interior', 'exterior', 'none'] as const
 export type WallKind = (typeof WALL_KINDS)[number]
 
-export const OPENING_TYPES = ['door', 'window', 'passage', 'garage'] as const
+/**
+ * `bay` = baie vitrée (grande ouverture vitrée descendant au sol), `glass-door` = porte vitrée.
+ * Toutes deux sont VITRÉES comme une fenêtre et posées au sol comme une porte : c'est justement ce
+ * qu'aucune des quatre premières ne savait dire, et pourquoi elles existent à part.
+ */
+export const OPENING_TYPES = ['door', 'window', 'passage', 'garage', 'bay', 'glass-door'] as const
 export type OpeningType = (typeof OPENING_TYPES)[number]
 export const openingSchema = z.object({
   id: idSchema,
+  /**
+   * Nom en clair, donné depuis le mode édition (« Baie du salon »). Absent, c'est l'`id` du relevé
+   * qui s'affiche : un identifiant reste lisible, il n'est simplement pas toujours un nom.
+   */
+  name: z.string().min(1).max(60).optional(),
   type: z.enum(OPENING_TYPES),
   /** Arête polygon[segment] → polygon[(segment+1) % n]. */
   segment: z.number().int().min(0),

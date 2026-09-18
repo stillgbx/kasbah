@@ -155,6 +155,17 @@ const houseStats = computed(() => {
                 <v-switch :model-value="settings.sceneDebug" hide-details density="compact"
                           @update:model-value="(v: boolean | null) => settings.setSceneDebug(v === true)" />
               </div>
+              <!-- relevé approximatif : les ouvertures se règlent depuis la vue Maison une fois armé ici,
+                   jamais par un bouton flottant sur une tablette murale où un doigt qui glisse ne doit
+                   rien déplacer par mégarde -->
+              <div class="auto-row auto-row--default">
+                <div class="min0">
+                  <div class="auto-row__name">{{ $t('render.houseEditing') }}</div>
+                  <div class="muted small">{{ $t('render.houseEditingHint') }}</div>
+                </div>
+                <v-switch :model-value="settings.houseEditing" hide-details density="compact"
+                          @update:model-value="(v: boolean | null) => settings.setHouseEditing(v === true)" />
+              </div>
             </div>
             <!-- les deux segmentés reprennent TOUTE la largeur du bloc : leurs quatre libellés ne
                  se coupent pas et ne s'abrègent pas, ils demandent plus qu'une demi-colonne -->

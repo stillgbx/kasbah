@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { DeviceEntry, StateFor } from '@kasbah/shared'
+import { useI18n } from 'vue-i18n'
+import { openingLabel, type DeviceEntry, type HouseDevice, type StateFor } from '@kasbah/shared'
 import PageHeader from '../components/layout/PageHeader.vue'
 import CoversToggle from '../components/devices/CoversToggle.vue'
 import RoomBands from '../components/devices/RoomBands.vue'
@@ -8,6 +9,7 @@ import PulseDot from '../components/ui/PulseDot.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import { coverActivity, coverWords, fromClosure, toClosure } from '../lib/cover'
 import { useDevicesStore } from '../stores/devices'
+import { useHouseStore } from '../stores/house'
 
 // Vue Ouvrants : volets, stores, portails, fenêtres et portes de garage — tout ce qui est du kind
 // `cover`. La liste par pièce et son diagnostic de liaison viennent de `RoomBands` (partagé avec
@@ -21,10 +23,56 @@ import { useDevicesStore } from '../stores/devices'
 // position VISÉE tant que le store la tient : un moteur qui ne publie sa position qu'en fin de
 // course ferait sinon revenir la poignée en arrière juste après le geste.
 const devices = useDevicesStore()
+const house = useHouseStore()
+const { t } = useI18n()
 
 const covers = computed(() => devices.list.filter((e) => e.state.kind === 'cover'))
 // position inconnue = pas comptée comme ouverte : on ne sait pas (voir `lib/cover.ts`)
 const openCount = computed(() => covers.value.filter((e) => ((e.state as StateFor<'cover'>).position ?? 0) > 0 && e.state.available).length)
+
+// ---- ouvrants SANS OUVERTURE : la liste de travail qui apparaît après la découverte d'un plugin
+// (Somfy des mois après avoir dessiné la maison, six volets d'un coup sans savoir où ils vont).
+// `house.coversWithoutOpening` porte la règle (attend une ouverture, natures gate/garage exclues) ;
+// ici on l'affiche et on affecte, ligne par ligne. À ne pas confondre avec un appareil « non lié »
+// (sans `deviceId`) : la liaison au fabricant existe déjà, seule la place dans la maison manque.
+const waitingIds = computed(() => new Set(house.coversWithoutOpening.map((d) => d.id)))
+const waiting = (hd: HouseDevice | undefined) => !!hd && waitingIds.value.has(hd.id)
+
+/** Chaque ouverture de la maison, avec sa pièce et l'ouvrant qui l'occupe déjà (s'il y en a un). */
+interface OpeningOption { id: string; label: string; roomId: string; roomName: string; occupantId: string | null; occupantName: string }
+const openingIndex = computed<OpeningOption[]>(() => {
+  const h = house.effective
+  if (!h) return []
+  const occupants = new Map<string, HouseDevice>()
+  for (const d of h.devices) if (d.openingId) occupants.set(d.openingId, d)
+  return h.rooms.flatMap((r) => r.openings.map((o) => {
+    const occ = occupants.get(o.id)
+    return {
+      id: o.id, label: openingLabel(o), roomId: r.id, roomName: r.name,
+      occupantId: occ?.id ?? null,
+      occupantName: occ ? occ.name ?? (occ.deviceId ? devices.descriptors[occ.deviceId]?.name : undefined) ?? occ.id : '',
+    }
+  }))
+})
+/**
+ * Options du sélecteur, pour l'ouvrant `hd` : les ouvertures de SA PIÈCE d'abord (c'est là qu'il
+ * habite, donc le geste le plus probable), puis le reste de la maison — jamais masquées, seulement
+ * reléguées, parce que la liste complète reste parfois nécessaire (un volet posé au mauvais endroit
+ * par le plugin). Une ouverture déjà prise se distingue (« pris par … ») sans disparaître : la
+ * reprendre est un geste voulu (`setCoverOpening` libère l'ancien).
+ */
+function assignOptions(hd: HouseDevice) {
+  const sorted = [...openingIndex.value].sort((a, b) => Number(b.roomId === hd.roomId) - Number(a.roomId === hd.roomId))
+  return [
+    { value: '', title: t('covers.assignNone') },
+    ...sorted.map((o) => ({
+      value: o.id,
+      title: o.occupantId && o.occupantId !== hd.id
+        ? t('covers.assignTaken', { room: o.roomName, opening: o.label, name: o.occupantName })
+        : t('covers.assignFree', { room: o.roomName, opening: o.label }),
+    })),
+  ]
+}
 
 // Valeur locale pendant le glissement seulement ; ensuite c'est la cible du store qui s'affiche.
 const draft = ref<Record<string, number>>({})
@@ -62,6 +110,11 @@ function commit(id: string, v: number) {
       <!-- tout fermer (ou tout ouvrir) d'un geste ; « fermer » baisse un store, le plugin traduit -->
       <div class="head">
         <div class="muted count">{{ $t('covers.summary', { open: openCount, total: covers.length }) }}</div>
+        <!-- place réservée : toujours affiché, même à 0, pour que rien ne saute d'apparence quand
+             la découverte d'un plugin fait passer le compte de 0 à six -->
+        <div class="muted count count--waiting" :data-zero="house.coversWithoutOpening.length === 0 ? '1' : '0'">
+          {{ $t('covers.waitingCount', { n: house.coversWithoutOpening.length }, house.coversWithoutOpening.length) }}
+        </div>
         <CoversToggle :entries="covers" :label="$t('covers.all')" />
       </div>
     </PageHeader>
@@ -76,11 +129,25 @@ function commit(id: string, v: number) {
         <!-- le point pulsant accompagne le libellé (« Fermeture en cours »), qui est déjà dans le
              statut : posé avant le curseur, il en changerait la largeur à chaque mouvement -->
         <template #status-badge="{ entry }">
+          <!-- ouvrant sans ouverture : le mot avant le statut, pour qu'il se voie sans lire chaque
+               ligne (c'est la liste de travail qui suit la découverte d'un plugin) -->
+          <span v-if="waiting(house.houseDeviceFor(entry.descriptor.id))" class="waiting-badge" :title="$t('covers.waitingHint')">
+            <StrokeIcon name="linkOff" :size="12" />{{ $t('covers.waitingBadge') }}
+          </span>
           <PulseDot :on="(entry.state as StateFor<'cover'>).motion !== 'stopped'" class="dot" />
         </template>
         <template #control="{ entry }">
+          <!-- ouvrant sans ouverture : c'est ICI qu'on l'affecte — pas de sens à montrer Ouvrir/Fermer
+               tant qu'on ne sait pas quelle fenêtre il habille -->
+          <div v-if="waiting(house.houseDeviceFor(entry.descriptor.id))" class="assign">
+            <span class="muted assign__label">{{ $t('covers.assign') }}</span>
+            <v-select class="assign__select" :model-value="''" :items="assignOptions(house.houseDeviceFor(entry.descriptor.id)!)"
+                      item-title="title" item-value="value" density="compact" variant="outlined" hide-details
+                      :disabled="house.savingOpening" :aria-label="$t('covers.assign')"
+                      @update:model-value="(id: string) => house.setCoverOpening(house.houseDeviceFor(entry.descriptor.id)!.id, id || null)" />
+          </div>
           <!-- une ligne à part : trois boutons dans la 4e colonne écraseraient le nom de l'ouvrant -->
-          <div class="controls">
+          <div v-else class="controls">
             <div class="keys">
               <button type="button" class="key" :disabled="!entry.state.available"
                       :title="$t(`cover.${coverWords(entry.descriptor)}.actionOpen`)"
@@ -132,9 +199,21 @@ function commit(id: string, v: number) {
 .page__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 24px calc(var(--safe-bottom) + 24px); }
 .head { display: flex; align-items: center; gap: 14px; }
 .count { font-size: 13px; }
+/* estompé à 0 plutôt que masqué : le compteur ne saute pas d'apparence à la découverte d'un plugin */
+.count--waiting[data-zero='1'] { opacity: .55; }
 .empty { padding: 24px; text-align: center; }
 .controls { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; margin: 2px 4px 0; }
 .controls__slider { flex: 1 1 auto; }
+/* même empreinte que `.controls` : une ligne à part, pour ne pas écraser le nom de l'ouvrant */
+.assign { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; margin: 2px 4px 0; }
+.assign__label { font-size: 12px; flex: 0 0 auto; }
+.assign__select { flex: 1 1 auto; min-width: 0; }
+/* pastille « sans ouverture » : même couleur que le badge « non placé » de `RoomBands` — un ouvrant
+   qui n'habille encore rien est le même genre d'inachevé */
+.waiting-badge {
+  display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; margin-right: 6px;
+  font-size: 11px; font-weight: 600; color: #d38b22;
+}
 /* le repere de position favorite est style globalement, voir `styles/app.css` (`.cover-slider`) */
 .dot { margin-right: 6px; color: var(--accent); }
 /* Jauge d'ouverture : une bande d'accent doux qui part du bord gauche et s'étire avec l'ouverture,

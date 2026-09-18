@@ -11,6 +11,7 @@ import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import HomePanel from '../components/home/HomePanel.vue'
 import RoomPanel from '../components/home/RoomPanel.vue'
 import DevicePanel from '../components/home/DevicePanel.vue'
+import OpeningPanel from '../components/home/OpeningPanel.vue'
 import SceneDebug from '../components/home/SceneDebug.vue'
 import SearchBar from '../components/home/SearchBar.vue'
 import WeatherWidget from '../components/home/WeatherWidget.vue'
@@ -43,7 +44,6 @@ const scene = useHouseScene({
   house: computed(() => house.effective),
   states: computed(() => devices.states),
 })
-
 // Onglets à contre-courant des listes de l'app (qui vont du haut vers le bas, cf. `levelsSorted`) :
 // ici on monte, Jardin → RDC → étages → Tout. La rangée se lit comme une coupe du bâtiment, terrain
 // à gauche, et l'onglet ne bouge pas quand un niveau s'ajoute au-dessus.
@@ -71,9 +71,20 @@ const editingModule = (key: string) => {
 }
 scene.onDeviceTap((key) => {
   if (editingModule(key)) return
+  // même garde-fou que le fond et les pièces : un appareil tapé pendant le réglage d'une ouverture
+  // (un volet, un capteur posé juste à côté) ne doit pas fermer le panneau par surprise
+  if (house.selectedOpeningId) return
   house.selectDevice(key); panelOpen.value = true
 })
+// mode édition : une ouverture touchée s'ouvre comme un appareil ; le glissement pose le brouillon
+// (aperçu 3D immédiat, cf. `withOpeningDraft`), le dépôt l'écrit dans house.json.
+scene.onOpeningTap((openingId) => { house.selectOpening(openingId); panelOpen.value = true })
+scene.onOpeningDrag((_openingId, xy) => house.previewOpeningAt(xy))
+scene.onOpeningDrop(() => { void house.dropOpening() })
 scene.onRoomTap((roomId) => {
+  // pendant le réglage d'une ouverture, un tap sur une pièce ne referme pas le panneau par surprise
+  // (même garde-fou que le réglage d'un champ de panneaux, juste au-dessus)
+  if (house.selectedOpeningId) return
   if (house.selectedRoomId === roomId && !house.selectedKey) { house.selectRoom(null); scene.highlightRoom(null) }
   else { house.selectRoom(roomId); panelOpen.value = true }
 })
@@ -87,7 +98,7 @@ scene.onLevelTap((levelId) => {
   if (house.selectedLevelId === levelId) house.backToHome()
   else { house.selectLevel(levelId); panelOpen.value = true }
 })
-scene.onBackgroundTap(() => { if (!house.editingArrayId) house.clearSelection() })
+scene.onBackgroundTap(() => { if (!house.editingArrayId && !house.selectedOpeningId) house.clearSelection() })
 // une épingle du journal touchée : elle devient l'incident actif (étiquette dans la scène, ligne surlignée dans le panneau)
 scene.onJournalTap((at) => house.markJournalPoint(at))
 
@@ -99,6 +110,8 @@ function backToAll() { if (!house.selectedRoomId && !house.selectedLevelId) onTa
 // sélectionné, et « Tout » ne doit pas l'effacer — c'est ce qui renvoyait à « Maison » d'un coup.
 function onDeviceBack() { house.backFromDevice(); if (!house.selectedKey) backToAll() }
 function onRoomBack() { house.backFromRoom(); backToAll() }
+/** Retour depuis une ouverture : sa PIÈCE, jamais la maison — c'est elle qui la porte. */
+function onOpeningBack() { house.selectOpening(null) }
 
 // store → scène. Le cadrage suit la sélection la PLUS FINE : un appareil se cadre sur lui-même, pas
 // sur sa pièce — sinon un plafonnier de grand séjour restait un point dans un coin de l'écran.
@@ -108,7 +121,39 @@ function frameSelection(roomId: string | null, key: string | null) {
   if (!roomId) { scene.highlightRoom(null); return }
   if (zone) scene.focusZone(roomId)
   else scene.focusRoom(roomId)
+  // Le réglage d'une ouverture cadre sa PIÈCE (fil d'Ariane, `house.selectOpening`) mais ne doit pas
+  // mettre son sol en évidence : à côté du voile d'accent et du trait sur tout le contour, la
+  // poignée de l'ouverture ne pèse rien. `focusRoom`, ci-dessus, allume la surbrillance en interne
+  // (`HouseScene.focusRoom`) — on l'éteint tout de suite après, sans repasser par la caméra.
+  if (house.selectedOpeningId) scene.highlightRoom(null)
 }
+// mode édition des ouvertures : armé depuis Réglages (jamais un bouton flottant dans la scène), suivi
+// par la sélection d'ouverture — sélectionner l'ouvre dans la scène, revenir à la pièce la referme.
+// PAS `immediate` ici : au premier rendu la scène n'existe pas encore (elle se construit dans le
+// `onMounted` de `useHouseScene`), et l'appel serait un no-op — c'est le watcher de `scene.ready`,
+// plus bas, qui rejoue l'état au bon moment (mode armé au chargement, tablette qui redémarre).
+watch(() => settings.houseEditing, (on) => {
+  scene.setEditingOpenings(on)
+  // désarmer ferme aussi le réglage en cours : sinon le panneau reste ouvert et ACTIF (« + » écrit
+  // encore dans house.json) alors que la scène, elle, n'a plus rien de sélectionné — l'interrupteur
+  // ne fermerait pas la porte qu'il prétend fermer
+  if (!on && house.selectedOpeningId) house.selectOpening(null)
+})
+watch(() => house.selectedOpeningId, (id) => {
+  scene.setSelectedOpening(id)
+  if (id) {
+    scene.focusOpening(id)
+    // pas de surbrillance de pièce pendant le réglage — voir `frameSelection`. Nécessaire même ici,
+    // en plus du garde-fou de `frameSelection` : si la pièce était DÉJÀ sélectionnée (on touche une
+    // ouverture de la pièce qu'on regarde déjà), `selectedRoomId` ne change pas et le watcher
+    // roomId/key ne se redéclenche pas — sans cette ligne le sol resterait allumé.
+    scene.highlightRoom(null)
+  } else if (house.selectedRoomId && !house.selectedKey && !house.index?.zonesById.has(house.selectedRoomId)) {
+    // sortie : la piège symétrique — revenir à la pièce (même id, donc même silence du watcher
+    // roomId/key) doit RALLUMER la surbrillance qu'on vient d'éteindre.
+    scene.highlightRoom(house.selectedRoomId)
+  }
+})
 watch(() => house.focusedLevelId, (id) => scene.focusLevel(id))
 // un niveau sélectionné se cadre comme une pièce sélectionnée : c'est lui qu'on est venu voir
 watch(() => house.selectedLevelId, (id) => { if (id) scene.focusLevelView(id) })
@@ -118,6 +163,7 @@ watch([() => house.selectedRoomId, () => house.selectedKey], ([roomId, key]) => 
 })
 watch(scene.ready, (ready) => {
   if (!ready) return
+  scene.setEditingOpenings(settings.houseEditing)
   scene.focusLevel(house.focusedLevelId)
   scene.setSelected(house.selectedKey)
   frameSelection(house.selectedRoomId, house.selectedKey)
@@ -193,8 +239,8 @@ onMounted(() => {
 })
 onUnmounted(() => { offDeviceEvent?.() })
 
-const panelMode = computed<'device' | 'room' | 'level' | 'home'>(() =>
-  (house.selectedKey ? 'device' : house.selectedRoomId ? 'room' : house.selectedLevelId ? 'level' : 'home'))
+const panelMode = computed<'opening' | 'device' | 'room' | 'level' | 'home'>(() =>
+  (house.selectedOpeningId ? 'opening' : house.selectedKey ? 'device' : house.selectedRoomId ? 'room' : house.selectedLevelId ? 'level' : 'home'))
 
 // Le panneau ancré couvre le bord droit de la scène : le cadrage vise la partie libre (largeur du
 // panneau et ses deux marges, lues dans les jetons).
@@ -247,7 +293,8 @@ const DOLLY_STEP = 1.35
       <SearchBar @picked="onSearchPicked" />
     </div>
     <SidePanel :open="panelOpen" :docked="wide" @close="panelOpen = false">
-      <DevicePanel v-if="panelMode === 'device'" @back="onDeviceBack()" />
+      <OpeningPanel v-if="panelMode === 'opening'" @back="onOpeningBack()" />
+      <DevicePanel v-else-if="panelMode === 'device'" @back="onDeviceBack()" />
       <RoomPanel v-else-if="panelMode === 'room' || panelMode === 'level'" @back="onRoomBack()" />
       <HomePanel v-else />
     </SidePanel>

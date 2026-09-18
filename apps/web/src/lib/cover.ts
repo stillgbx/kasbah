@@ -56,6 +56,31 @@ export function isPassageCover(descriptor: Coverish | undefined): boolean {
 }
 
 /**
+ * Ouvrant qui ATTEND une ouverture : un volet, un store intérieur, un rideau, une fenêtre motorisée
+ * n'ont aucun sens sans la fenêtre ou la porte qu'ils habillent. Tant qu'aucune ouverture ne leur est
+ * affectée, ils sont à poser — c'est le cas de tous ceux que la découverte d'un plugin vient
+ * d'apporter, quand la maison a été dessinée avant qu'on active ce plugin.
+ *
+ * Un store BANNE en est exclu, bien qu'il se manœuvre comme un store intérieur : il se déploie
+ * au-dessus d'une terrasse, pas dans une baie. Il PEUT être affecté à une ouverture si l'installation
+ * le veut (`canTakeOpening` l'accepte), mais son absence d'ouverture n'est pas un travail en retard.
+ */
+const EXPECTS_OPENING = new Set<string>(['shutter', 'blind', 'curtain', 'window'])
+
+export function expectsOpening(descriptor: Coverish | undefined): boolean {
+  return EXPECTS_OPENING.has(descriptor?.meta.cover?.deviceClass ?? '')
+}
+
+/**
+ * Ouvrant qu'on a le DROIT d'affecter à une ouverture — tout sauf ce qui donne sur la rue. Plus large
+ * qu'`expectsOpening` à dessein : un store banne posé au-dessus d'une baie est un cas réel, on ne
+ * l'interdit pas ; on ne le réclame simplement pas.
+ */
+export function canTakeOpening(descriptor: Coverish | undefined): boolean {
+  return !!descriptor && !isPassageCover(descriptor)
+}
+
+/**
  * L'ouvrant est-il AU REPOS ? C'est l'état où il ne demande rien à personne : **fermé** pour ce qui
  * se tient debout (volet, portail), **remonté** pour un store — un store au repos est rentré, pas
  * déployé (c'est déployé qu'il craint le vent, voir `coverActivity`).

@@ -67,6 +67,9 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   const backgroundTap = new Set<Handler<[]>>()
   const deviceDrag = new Set<Handler<[string, [number, number], string | null]>>()
   const deviceDrop = new Set<Handler<[string, [number, number], string | null]>>()
+  const openingTap = new Set<Handler<[string]>>()
+  const openingDrag = new Set<Handler<[string, [number, number]]>>()
+  const openingDrop = new Set<Handler<[string]>>()
 
   onMounted(() => {
     const canvas = args.canvas.value
@@ -87,6 +90,9 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     scene.on('backgroundTap', () => backgroundTap.forEach((f) => f()))
     scene.on('deviceDrag', (k, xy, r) => deviceDrag.forEach((f) => f(k, xy, r)))
     scene.on('deviceDrop', (k, xy, r) => deviceDrop.forEach((f) => f(k, xy, r)))
+    scene.on('openingTap', (id) => openingTap.forEach((f) => f(id)))
+    scene.on('openingDrag', (id, xy) => openingDrag.forEach((f) => f(id, xy)))
+    scene.on('openingDrop', (id) => openingDrop.forEach((f) => f(id)))
 
     const parent = canvas.parentElement ?? canvas
     const fit = () => { const r = parent.getBoundingClientRect(); scene?.resize(r.width, r.height) }
@@ -104,6 +110,8 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   watch(args.house, (h, prev) => {
     if (!scene || !h) return
     if (prev && sameShell(prev, h)) { scene.updateDevices(h); return }
+    // seules des ouvertures ont bougé (on en règle une au doigt) → murs du seul niveau touché
+    if (prev && sameShellButOpenings(prev, h)) { scene.updateOpenings(h); return }
     scene.load(h); scene.setDescriptors(devices.descriptors); scene.updateStates(args.states.value, true)
   })
   watch(() => devices.descriptors, (d) => scene?.setDescriptors(d))
@@ -143,6 +151,12 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     onDeviceDrag: (f: Handler<[string, [number, number], string | null]>) => { deviceDrag.add(f) },
     onDeviceDrop: (f: Handler<[string, [number, number], string | null]>) => { deviceDrop.add(f) },
     setMovable: (key: string | string[] | null) => scene?.setMovable(key),
+    setEditingOpenings: (on: boolean) => scene?.setEditingOpenings(on),
+    setSelectedOpening: (id: string | null) => scene?.setSelectedOpening(id),
+    focusOpening: (id: string) => scene?.focusOpening(id),
+    onOpeningTap: (f: Handler<[string]>) => { openingTap.add(f) },
+    onOpeningDrag: (f: Handler<[string, [number, number]]>) => { openingDrag.add(f) },
+    onOpeningDrop: (f: Handler<[string]>) => { openingDrop.add(f) },
     moveMarker: (key: string, position: Vec3) => scene?.moveMarker(key, position),
     previewBodyColor: (key: string, color: string | null) => scene?.previewBodyColor(key, color),
     setJournalPoints: (key: string | null, points: readonly JournalPoint[]) => scene?.setJournalPoints(key, points),
@@ -155,5 +169,15 @@ export function useHouseScene(args: UseHouseSceneArgs) {
 /** Même bâti (niveaux, pièces, site, toit, défauts) : seul `devices` peut différer. */
 function sameShell(a: House, b: House): boolean {
   const shell = (h: House) => JSON.stringify([h.levels, h.rooms, h.site, h.roof, h.defaults])
+  return shell(a) === shell(b)
+}
+
+/**
+ * Même bâti aux OUVERTURES près. `rooms` porte `openings[]` : régler une fenêtre sortait donc de
+ * `sameShell` et passait par `load()` complet — toute la maison reconstruite, caméra recentrée, à
+ * chaque mouvement de doigt. Ce cas-là a son chemin (`updateOpenings`).
+ */
+function sameShellButOpenings(a: House, b: House): boolean {
+  const shell = (h: House) => JSON.stringify([h.levels, h.rooms.map((r) => ({ ...r, openings: [] })), h.site, h.roof, h.defaults])
   return shell(a) === shell(b)
 }
