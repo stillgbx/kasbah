@@ -102,7 +102,9 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     useResizeObserver(parent, fit)
 
     scene.setDescriptors(devices.descriptors)
-    if (args.options) scene.setOptions(args.options.value)
+    // Les deux réglages de la scène que les Réglages tiennent (budget de rendu, projection) passent
+    // d'abord ; ce que l'appelant impose par `options` gagne ensuite.
+    scene.setOptions({ quality: settings.sceneQuality, projection: settings.sceneProjection, ...(args.options ? args.options.value : {}) })
     if (args.house.value) scene.load(args.house.value)
     scene.updateStates(args.states.value)
     ready.value = true
@@ -119,6 +121,8 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   watch(() => devices.descriptors, (d) => scene?.setDescriptors(d))
   watch(args.states, (s) => scene?.updateStates(s))
   if (args.options) watch(args.options, (o) => scene?.setOptions(o), { deep: true })
+  watch(() => settings.sceneQuality, (q) => scene?.setOptions({ quality: q }))
+  watch(() => settings.sceneProjection, (p) => scene?.setOptions({ projection: p }))
   // nextTick : les variables CSS du nouveau thème doivent être appliquées avant lecture
   watch(() => theme.global.name.value, () => { void nextTick(() => scene?.setAppearance({ ui: readUiTheme() })) })
   watch(style, (s) => scene?.setAppearance({ style: s }))

@@ -10,6 +10,7 @@ import { useWeather } from '../composables/useWeather'
 import { useHouseStore } from './house'
 import { AMBIENCE_MODES, type AmbienceMode } from '../three/core/ambience'
 import { RENDER_QUALITIES, type RenderQuality } from '../three/core/post'
+import { SCENE_PROJECTIONS, type SceneProjection } from '../three/core/cameraFit'
 import { DEFAULT_STYLE_ID, RENDER_STYLES } from '../three/styles'
 import { NEUTRAL_TUNING, resolveTuning, sameTuning, TUNING_PRESETS, type SceneTuning } from '../three/styles/tuning'
 import { WEATHER_CONDITIONS, type WeatherCondition } from '@kasbah/shared'
@@ -41,6 +42,12 @@ export const useSettingsStore = defineStore('settings', () => {
   const sceneStyle = useLocalStorage<string>('kasbah.sceneStyle', DEFAULT_STYLE_ID)
   const sceneAmbience = useLocalStorage<AmbienceMode>('kasbah.sceneAmbience', 'auto')
   const sceneQuality = useLocalStorage<RenderQuality>('kasbah.sceneQuality', 'auto')
+  /**
+   * Comment la maison est PROJETÉE : en perspective, à plat (orthographique, on tourne encore), ou
+   * en isométrie (à plat, angles verrouillés, quarts de tour). Un réglage de goût comme le style,
+   * pas un budget : il ne suit ni le thème ni la machine.
+   */
+  const sceneProjection = useLocalStorage<SceneProjection>('kasbah.sceneProjection', 'perspective')
   /** Matières en images (pack photo du style) plutôt que procédurales, pour les styles qui en ont. */
   const sceneAssets = useLocalStorage<boolean>('kasbah.sceneAssets', true)
   /** Voile de mesure posé sur la scène (images/s, appels de dessin, passes, ombres). */
@@ -119,6 +126,7 @@ export const useSettingsStore = defineStore('settings', () => {
   function setSceneStyle(v: string) { if (RENDER_STYLES.some((st) => st.id === v)) sceneStyle.value = v }
   function setSceneAmbience(v: AmbienceMode) { if (AMBIENCE_MODES.includes(v)) sceneAmbience.value = v }
   function setSceneQuality(v: RenderQuality) { if (RENDER_QUALITIES.includes(v)) sceneQuality.value = v }
+  function setSceneProjection(v: SceneProjection) { if (SCENE_PROJECTIONS.includes(v)) sceneProjection.value = v }
   function setSceneAssets(v: boolean) { sceneAssets.value = v }
   function setSceneDebug(v: boolean) { sceneDebug.value = v }
   function setSceneTuning(patch: Partial<SceneTuning>) { sceneTuningDraft.value = resolveTuning({ ...sceneTuning.value, ...patch }) }
@@ -166,10 +174,10 @@ export const useSettingsStore = defineStore('settings', () => {
 
   return {
     appearance, theme, locale, isDark, wantDark, themeId, currentTheme, resolvedLocale, fullscreen,
-    sceneStyle, sceneAmbience, sceneQuality, sceneAssets, sceneDebug, sceneTuning, savedSceneTuning, sceneTuningDirty, sceneTuningPreset, sceneTuningOpen, houseEditing, sceneWeather, sceneCloudCover, sceneVisibilityM, householdSize,
+    sceneStyle, sceneAmbience, sceneQuality, sceneProjection, sceneAssets, sceneDebug, sceneTuning, savedSceneTuning, sceneTuningDirty, sceneTuningPreset, sceneTuningOpen, houseEditing, sceneWeather, sceneCloudCover, sceneVisibilityM, householdSize,
     setAppearance, cycleAppearance, setTheme, setLocale, toggleLocale, applyToVuetify, applyLocale,
-    setSceneStyle, setSceneAmbience, setSceneQuality, setSceneAssets, setSceneDebug, setSceneTuning, resetSceneTuning, applySceneTuningPreset, saveSceneTuning, setSceneTuningOpen, setHouseEditing, setSceneWeather, setSceneCloudCover, setSceneVisibilityM, setHouseholdSize,
+    setSceneStyle, setSceneAmbience, setSceneQuality, setSceneProjection, setSceneAssets, setSceneDebug, setSceneTuning, resetSceneTuning, applySceneTuningPreset, saveSceneTuning, setSceneTuningOpen, setHouseEditing, setSceneWeather, setSceneCloudCover, setSceneVisibilityM, setHouseholdSize,
     appearances: APPEARANCES, themes: THEME_LIST, locales: LOCALES,
-    styles: RENDER_STYLES, ambiences: AMBIENCE_MODES, qualities: RENDER_QUALITIES,
+    styles: RENDER_STYLES, ambiences: AMBIENCE_MODES, qualities: RENDER_QUALITIES, projections: SCENE_PROJECTIONS,
   }
 })

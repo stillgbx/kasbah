@@ -1,5 +1,5 @@
 import {
-  AmbientLight, Color, DirectionalLight, DoubleSide, HemisphereLight, PerspectiveCamera, Plane, Raycaster, Scene, Spherical, type Texture, TOUCH, Vector2, Vector3, VSMShadowMap,
+  AmbientLight, Color, DirectionalLight, DoubleSide, HemisphereLight, MOUSE, OrthographicCamera, PerspectiveCamera, Plane, Raycaster, Scene, Spherical, type Texture, TOUCH, Vector2, Vector3, VSMShadowMap,
   WebGLRenderer, Box3, BoxGeometry, Fog, Mesh, MeshBasicMaterial, type Material, type MeshStandardMaterial, type Object3D,
   Group, SphereGeometry, CylinderGeometry, RingGeometry,
 } from 'three'
@@ -21,7 +21,10 @@ import { defaultAmbience, defaultSceneTheme, rolesOf, styleById, type GlowLook, 
 import { applyTuning, NEUTRAL_TUNING, type SceneTuning } from './styles/tuning'
 import { buildHouse, buildLevel, type HouseNodes, type LevelNodes } from './builders/buildHouse'
 import { extrudeRing, flatPolygon, flatRing, insetPolygon } from './builders/shapes'
-import { clamp, fitBox, sphericalOf, type CameraPose } from './core/cameraFit'
+import {
+  boxRadius, clamp, distanceForHeight, fitBox, fitZoom, ISO_POLAR, ORTHO_BASE_M, snapIsoAzimuth, sphericalOf, visibleHeight,
+  type CameraPose, type SceneProjection,
+} from './core/cameraFit'
 import { boundsToWorldBox, houseToWorld } from './core/coords'
 import { disposeObject3D } from './core/dispose'
 import { createDragDetector, createTapDetector, type DragDetector, type TapEvent } from './core/input'
@@ -42,6 +45,8 @@ export interface HouseSceneOptions {
   shadows: boolean
   /** Budget du post-traitement. `auto` mesure la machine puis se corrige (`core/post.ts`). */
   quality: RenderQuality
+  /** Perspective, orthographique libre, ou isométrie verrouillée (`core/cameraFit.ts`). */
+  projection: SceneProjection
 }
 
 /**
@@ -223,7 +228,16 @@ const LABELS_IDLE_MS = 500
 
 export class HouseScene {
   readonly scene = new Scene()
-  readonly camera: PerspectiveCamera
+  /**
+   * La caméra ACTIVE. Elle change d'espèce avec la projection (`setOptions({ projection })`) : les
+   * deux gardent la même pose, seul le tronc diffère. Ce qui la lit à chaque image — lancer de
+   * rayon, étiquettes, chaîne d'image — n'a pas à savoir laquelle des deux elle est.
+   */
+  camera: PerspectiveCamera | OrthographicCamera
+  /** Celle qui porte le champ de vision de référence : même en orthographique, c'est lui qui pose les distances. */
+  private readonly perspectiveCamera: PerspectiveCamera
+  /** Bâtie au premier passage en orthographique, gardée ensuite (l'aller-retour est un réglage, pas une animation). */
+  private orthoCamera: OrthographicCamera | null = null
   readonly renderer: WebGLRenderer | null
   readonly labelRenderer: CSS2DRenderer | null
   readonly controls: OrbitControls | null
@@ -277,7 +291,7 @@ export class HouseScene {
   private house: House | null = null
   private index: HouseIndex | null = null
   private geometry: HouseGeometry | null = null
-  private options: HouseSceneOptions = { levelFocusMode: 'hide', shadows: true, quality: 'auto' }
+  private options: HouseSceneOptions = { levelFocusMode: 'hide', shadows: true, quality: 'auto', projection: 'perspective' }
   private focusedLevelId: string | null = null
   private pillLod: PillLod | null = null
   private highlightedRoom: string | null = null
@@ -358,7 +372,8 @@ export class HouseScene {
     this.materials = createMaterials(this.theme, this.look)
     // Voir `render()` : les matrices monde se mettent à jour une fois par image, pas une fois par passe.
     this.scene.matrixWorldAutoUpdate = false
-    this.camera = new PerspectiveCamera(38, 1, 0.1, 500)
+    this.perspectiveCamera = new PerspectiveCamera(38, 1, 0.1, 500)
+    this.camera = this.perspectiveCamera
     this.camera.position.set(20, 18, 20)
     // halos, ondes, jauges — d'un niveau et du jardin — et les lampes d'intérieur (`core/layers.ts`)
     for (const l of [DECOR_LAYER, SITE_DECOR_LAYER, LAMP_LAYER]) this.camera.layers.enable(l)
@@ -402,8 +417,8 @@ export class HouseScene {
       this.controls.screenSpacePanning = false
       this.controls.minDistance = 4
       this.controls.maxDistance = 120
-      this.controls.maxPolarAngle = Math.PI / 2 - 0.08
-      this.controls.touches = { ONE: TOUCH.ROTATE, TWO: TOUCH.DOLLY_PAN }
+      // plongée, rotation, molette et doigts dépendent de la projection : un seul endroit les pose
+      this.applyControlLimits()
       this.controls.addEventListener('change', () => this.loop.invalidate())
       this.controls.addEventListener('start', () => { this.cameraTween?.cancel(); this.cameraTween = null })
     } else this.controls = null
@@ -1482,11 +1497,80 @@ export class HouseScene {
   setOptions(opts: Partial<HouseSceneOptions>): void {
     this.invalidateShadows()
     const before = this.options.quality
+    const projectionBefore = this.options.projection
     this.options = { ...this.options, ...opts }
     if (this.renderer) this.renderer.shadowMap.enabled = this.options.shadows
     if (this.options.quality !== before) this.applyQuality()
+    if (this.options.projection !== projectionBefore) this.applyProjectionMode()
     this.applyLevelFocus()
     this.loop.invalidate()
+  }
+
+  /**
+   * Change de projection. La pose ne bouge PAS : c'est le tronc qui change. Le zoom orthographique
+   * est choisi pour montrer la même hauteur de monde au point visé, et le retour en perspective
+   * retrouve la distance qui montrait cette hauteur — sinon la maison sauterait d'un facteur dix au
+   * moment où l'on coche la case.
+   */
+  private applyProjectionMode(): void {
+    const mode = this.options.projection
+    const fov = this.perspectiveCamera.fov
+    if (mode === 'perspective') {
+      if (this.camera !== this.perspectiveCamera) {
+        const height = ORTHO_BASE_M / (this.orthoCamera?.zoom ?? 1)
+        const lo = this.controls?.minDistance ?? 1, hi = this.controls?.maxDistance ?? Infinity
+        const distance = clamp(distanceForHeight(height, fov), lo, hi)
+        this.swapCamera(this.perspectiveCamera)
+        const { azimuth, polar } = this.currentSpherical()
+        this.camera.position.copy(this.poseAt(azimuth, polar, distance).position)
+      }
+    } else {
+      const target = this.controls?.target ?? new Vector3()
+      const ortho = (this.orthoCamera ??= new OrthographicCamera(-1, 1, 1, -1, 0.1, 500))
+      ortho.zoom = ORTHO_BASE_M / visibleHeight(this.camera.position.distanceTo(target), fov)
+      this.swapCamera(ortho)
+    }
+    this.applyControlLimits()
+    // l'isométrie ne se contente pas d'un tronc : elle impose ses angles, et la vue s'y range
+    if (mode === 'iso') {
+      const { azimuth, distance } = this.currentSpherical()
+      this.moveCamera(this.poseAt(snapIsoAzimuth(azimuth, DEFAULT_AZIMUTH), ISO_POLAR, distance), true)
+    }
+    this.controls?.update()
+  }
+
+  /** Échange la caméra active en lui passant pose, couches et cadrage ; la chaîne d'image la suit. */
+  private swapCamera(next: PerspectiveCamera | OrthographicCamera): void {
+    const from = this.camera
+    if (next === from) return
+    next.position.copy(from.position)
+    next.quaternion.copy(from.quaternion)
+    next.layers.mask = from.layers.mask
+    this.camera = next
+    if (this.controls) this.controls.object = next
+    this.applyProjection()
+    // l'occlusion ambiante tient une référence sur la caméra : la chaîne se refait avec la neuve
+    this.applyQuality()
+  }
+
+  /**
+   * Ce que les contrôles autorisent, selon la projection. En orthographique la molette ne change
+   * plus la distance mais le ZOOM : les bornes de l'une se traduisent dans l'autre. En isométrie la
+   * rotation libre est coupée — doigt et bouton gauche déplacent la vue, et les boutons de la vue
+   * tournent par quarts de tour (`orbitBy`).
+   */
+  private applyControlLimits(): void {
+    const c = this.controls
+    if (!c) return
+    const fov = this.perspectiveCamera.fov
+    c.minZoom = ORTHO_BASE_M / visibleHeight(c.maxDistance, fov)
+    c.maxZoom = ORTHO_BASE_M / visibleHeight(c.minDistance, fov)
+    const iso = this.options.projection === 'iso'
+    c.enableRotate = !iso
+    c.minPolarAngle = iso ? ISO_POLAR : 0
+    c.maxPolarAngle = iso ? ISO_POLAR : Math.PI / 2 - 0.08
+    c.touches = { ONE: iso ? TOUCH.PAN : TOUCH.ROTATE, TWO: TOUCH.DOLLY_PAN }
+    c.mouseButtons = { LEFT: iso ? MOUSE.PAN : MOUSE.ROTATE, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN }
   }
 
   focusLevel(levelId: string | null): void {
@@ -1625,18 +1709,34 @@ export class HouseScene {
     return sphericalOf(this.camera.position, target)
   }
 
+  /**
+   * La POSE est la même dans les deux projections — c'est le champ de vision de référence qui la
+   * calcule, même quand la caméra n'en a plus. L'orthographique y ajoute son zoom : les deux cadrent
+   * alors la même chose, et basculer de l'une à l'autre ne déplace rien. L'isométrie, elle, ramène
+   * l'angle demandé sur ses rails avant de cadrer.
+   */
   private flyTo(box: Box3, azimuth: number, polar: number, animate: boolean, padding: number): void {
-    const pose = fitBox(box, this.camera.fov, this.camera.aspect, { azimuth, polar, padding })
+    const iso = this.options.projection === 'iso'
+    const aim = iso ? snapIsoAzimuth(azimuth, DEFAULT_AZIMUTH) : azimuth
+    const dive = iso ? ISO_POLAR : polar
+    const aspect = this.viewAspect
+    const pose = fitBox(box, this.perspectiveCamera.fov, aspect, { azimuth: aim, polar: dive, padding })
     pose.position.y = Math.max(pose.position.y, 0.5)
+    if (this.camera instanceof OrthographicCamera) pose.zoom = fitZoom(boxRadius(box), aspect, ORTHO_BASE_M, padding)
     this.moveCamera(pose, animate)
   }
 
   private moveCamera(pose: CameraPose, animate: boolean): void {
     const target = this.controls?.target ?? new Vector3()
+    const ortho = this.camera instanceof OrthographicCamera ? this.camera : null
+    const fromZoom = ortho?.zoom ?? 1
+    const toZoom = pose.zoom ?? fromZoom
+    const setZoom = (z: number) => { if (ortho) { ortho.zoom = z; ortho.updateProjectionMatrix() } }
     this.cameraTween?.cancel()
     if (!animate || !this.controls) {
       this.camera.position.copy(pose.position)
       target.copy(pose.target)
+      setZoom(toZoom)
       this.controls?.update()
       this.loop.invalidate()
       return
@@ -1647,6 +1747,7 @@ export class HouseScene {
       onUpdate: (k) => {
         this.camera.position.lerpVectors(fromPos, pose.position, k)
         target.lerpVectors(fromTarget, pose.target, k)
+        setZoom(fromZoom + (toZoom - fromZoom) * k)
         this.controls!.update()
       },
     })
@@ -2080,13 +2181,27 @@ export class HouseScene {
     this.loop.invalidate()
   }
 
+  /** Rapport largeur/hauteur de la partie LIBRE du canvas : ce que les deux projections cadrent. */
+  private get viewAspect(): number {
+    const { width, height } = this.size
+    return Math.max(1, width - Math.min(this.viewInsetRight, width * 0.6)) / height
+  }
+
   private applyProjection(): void {
     const { width, height } = this.size
     const free = Math.max(1, width - Math.min(this.viewInsetRight, width * 0.6))
-    this.camera.aspect = free / height
-    if (free < width) this.camera.setViewOffset(free, height, 0, 0, width, height)
-    else this.camera.clearViewOffset()
-    this.camera.updateProjectionMatrix()
+    const cam = this.camera
+    if (cam instanceof OrthographicCamera) {
+      // le tronc porte la FORME (hauteur de base, rapport de l'écran) ; la taille, c'est le zoom
+      const half = ORTHO_BASE_M / 2
+      cam.top = half
+      cam.bottom = -half
+      cam.left = -half * this.viewAspect
+      cam.right = half * this.viewAspect
+    } else cam.aspect = this.viewAspect
+    if (free < width) cam.setViewOffset(free, height, 0, 0, width, height)
+    else cam.clearViewOffset()
+    cam.updateProjectionMatrix()
   }
 
   resize(width: number, height: number): void {
@@ -2098,15 +2213,34 @@ export class HouseScene {
     this.loop.invalidate()
   }
 
-  /** Tourne la vue autour de la cible de `delta` radians (boutons de la vue), sans changer la plongée. */
+  /**
+   * Tourne la vue autour de la cible de `delta` radians (boutons de la vue), sans changer la
+   * plongée. En isométrie, les angles sont verrouillés : le bouton fait un QUART de tour, quelle
+   * que soit l'amplitude demandée, et ramène la vue sur le coin le plus proche si elle l'avait quitté.
+   */
   orbitBy(delta: number): void {
     const { azimuth, polar, distance } = this.currentSpherical()
+    if (this.options.projection === 'iso') {
+      const quarter = (delta < 0 ? -1 : 1) * (Math.PI / 2)
+      this.moveCamera(this.poseAt(snapIsoAzimuth(azimuth, DEFAULT_AZIMUTH) + quarter, ISO_POLAR, distance), true)
+      return
+    }
     this.moveCamera(this.poseAt(azimuth + delta, polar, distance), true)
   }
 
-  /** Rapproche (`factor` < 1) ou éloigne la caméra, dans les bornes des contrôles. */
+  /**
+   * Rapproche (`factor` < 1) ou éloigne la caméra, dans les bornes des contrôles. En orthographique
+   * la caméra ne bouge pas : c'est le zoom qui s'ouvre ou se ferme, comme le fait la molette.
+   */
   dollyBy(factor: number): void {
     const { azimuth, polar, distance } = this.currentSpherical()
+    const ortho = this.camera instanceof OrthographicCamera ? this.camera : null
+    if (ortho) {
+      const pose = this.poseAt(azimuth, polar, distance)
+      pose.zoom = clamp(ortho.zoom / factor, this.controls?.minZoom ?? 0, this.controls?.maxZoom ?? Infinity)
+      this.moveCamera(pose, true)
+      return
+    }
     const lo = this.controls?.minDistance ?? 1, hi = this.controls?.maxDistance ?? Infinity
     this.moveCamera(this.poseAt(azimuth, polar, clamp(distance * factor, lo, hi)), true)
   }
@@ -2266,7 +2400,10 @@ export class HouseScene {
     const layer = this.labelRenderer?.domElement
     if (!layer || !this.controls) return
     const d = this.camera.position.distanceTo(this.controls.target)
-    const pxPerM = this.size.height / (2 * d * Math.tan((this.camera.fov * Math.PI) / 360))
+    // en orthographique la distance ne dit plus rien de l'échelle : c'est le zoom qui la porte
+    const pxPerM = this.camera instanceof OrthographicCamera
+      ? (this.size.height * this.camera.zoom) / ORTHO_BASE_M
+      : this.size.height / (2 * d * Math.tan((this.perspectiveCamera.fov * Math.PI) / 360))
     const lod: PillLod = pxPerM >= PILL_LOD_FULL_MIN_PX_PER_M ? 'full' : pxPerM >= PILL_LOD_ICON_MIN_PX_PER_M ? 'icon' : 'dot'
     if (lod === this.pillLod) return
     this.pillLod = lod

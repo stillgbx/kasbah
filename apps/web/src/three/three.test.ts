@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BackSide, Box3, BoxGeometry, type BufferGeometry, CylinderGeometry, Mesh, type MeshBasicMaterial, type MeshStandardMaterial, type Object3D, ShapeGeometry, Vector3, type BufferAttribute, type Texture } from 'three'
+import { BackSide, Box3, BoxGeometry, type OrthographicCamera, type PerspectiveCamera, type BufferGeometry, CylinderGeometry, Mesh, type MeshBasicMaterial, type MeshStandardMaterial, type Object3D, ShapeGeometry, Vector3, type BufferAttribute, type Texture } from 'three'
 import { computeHouseGeometry, localToGeo, openingGaps, parseHouse, type DeviceDescriptor, type DeviceState, type OpeningRect, type PlacedHouseDevice } from '@kasbah/shared'
 import demo from '@kasbah/shared/demo-house.json'
 import { buildHouse, buildLevel, buildWallsGeometry, countTriangles } from './builders/buildHouse'
@@ -7,7 +7,7 @@ import { buildDetails, buildRoofDetails, isGlazed } from './builders/details'
 import { alignedToLongestEdge, extrudePolygon } from './builders/shapes'
 import { createSurfaceTextures, type SurfaceTexture } from './textures/procedural'
 import { createMaterials } from './builders/materials'
-import { fitBox, fitDistance } from './core/cameraFit'
+import { fitBox, fitDistance, ISO_POLAR, ORTHO_BASE_M, snapIsoAzimuth, sphericalOf, visibleHeight } from './core/cameraFit'
 import { boundsToWorldBox, houseToWorld } from './core/coords'
 import { createRenderLoop } from './core/renderLoop'
 import { createCostGuard, detectQuality } from './core/post'
@@ -179,16 +179,66 @@ describe('builders', () => {
 describe('caméra et niveaux', () => {
   const scene = new HouseScene(document.createElement('canvas'), { headless: true })
   scene.load(parseHouse(demo))
+  /** La caméra active est d'une espèce ou de l'autre selon la projection ; ici on la sait perspective. */
+  const persp = () => scene.camera as PerspectiveCamera
 
   it('cadre la partie libre du canvas quand un panneau couvre le bord droit', () => {
     scene.resize(1000, 500)
-    expect(scene.camera.aspect).toBeCloseTo(2)
+    expect(persp().aspect).toBeCloseTo(2)
     scene.setViewInset(400)
-    expect(scene.camera.aspect).toBeCloseTo(600 / 500)
+    expect(persp().aspect).toBeCloseTo(600 / 500)
     expect(scene.camera.view?.enabled).toBe(true)
     scene.setViewInset(0)
-    expect(scene.camera.aspect).toBeCloseTo(2)
+    expect(persp().aspect).toBeCloseTo(2)
     expect(scene.camera.view?.enabled ?? false).toBe(false)
+  })
+})
+
+describe('projection de la vue', () => {
+  it('cadre la même hauteur de monde des deux côtés de la bascule', () => {
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true })
+    scene.load(parseHouse(demo))
+    scene.resize(1000, 500)
+    const before = scene.camera.position.clone()
+    const distance = before.distanceTo(new Vector3())
+
+    scene.setOptions({ projection: 'ortho' })
+    const ortho = scene.camera as OrthographicCamera
+    expect(ortho.isOrthographicCamera).toBe(true)
+    // la pose ne bouge pas : seul le tronc change
+    expect(scene.camera.position.distanceTo(before)).toBeCloseTo(0)
+    // et le zoom montre la hauteur de monde que le champ de vision montrait à cette distance
+    expect(ORTHO_BASE_M / ortho.zoom).toBeCloseTo(visibleHeight(distance, 38), 3)
+    // le tronc suit le rapport de l'écran, comme `aspect` en perspective
+    expect((ortho.right - ortho.left) / (ortho.top - ortho.bottom)).toBeCloseTo(2)
+
+    scene.setOptions({ projection: 'perspective' })
+    expect((scene.camera as PerspectiveCamera).isPerspectiveCamera).toBe(true)
+    expect(scene.camera.position.distanceTo(before)).toBeCloseTo(0, 2)
+  })
+
+  it('l’isométrie verrouille la plongée et tourne par quarts de tour', () => {
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true })
+    scene.load(parseHouse(demo))
+    scene.resize(1000, 500)
+    scene.setOptions({ projection: 'iso' })
+    // headless : pas de contrôles, donc pas d'animation — la pose est posée d'un coup
+    const poseOf = () => sphericalOf(scene.camera.position, new Vector3())
+    expect(poseOf().polar).toBeCloseTo(ISO_POLAR, 5)
+    const quarters = [poseOf().azimuth]
+    for (let i = 0; i < 3; i++) { scene.orbitBy(Math.PI / 6); quarters.push(poseOf().azimuth) }
+    // l'amplitude demandée ne compte pas : chaque appui fait un quart de tour, et la plongée tient
+    // (l'écart est ramené dans ]-π, π] : `Spherical` repart de -π après un tour complet)
+    const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a))
+    for (let i = 1; i < quarters.length; i++) expect(wrap(quarters[i]! - quarters[i - 1]!)).toBeCloseTo(Math.PI / 2, 5)
+    expect(poseOf().polar).toBeCloseTo(ISO_POLAR, 5)
+  })
+
+  it('ramène un azimut quelconque sur le coin isométrique le plus proche', () => {
+    const origin = -Math.PI / 4
+    expect(snapIsoAzimuth(origin + 0.2, origin)).toBeCloseTo(origin, 5)
+    expect(snapIsoAzimuth(origin + 1.4, origin)).toBeCloseTo(origin + Math.PI / 2, 5)
+    expect(snapIsoAzimuth(origin - 1.4, origin)).toBeCloseTo(origin - Math.PI / 2, 5)
   })
 })
 

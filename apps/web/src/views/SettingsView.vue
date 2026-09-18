@@ -18,6 +18,7 @@ import { resolveVariant, type Theme } from '../themes'
 import { resolveAmbience, type AmbienceMode } from '../three/core/ambience'
 import { backdropColor, groundColor } from '../three/builders/materials'
 import type { RenderQuality } from '../three/core/post'
+import type { SceneProjection } from '../three/core/cameraFit'
 import { styleById, type RenderStyle } from '../three/styles'
 
 // Réglages, en deux temps : D'ABORD les réglages, ENSUITE la liste des plugins, pleine largeur
@@ -67,6 +68,7 @@ function stylePreview(style: RenderStyle) {
 const styleHasAssets = computed(() => !!styleById(settings.sceneStyle).assets)
 const ambienceOptions = computed(() => settings.ambiences.map((a) => ({ value: a, label: t(`render.ambiences.${a}`) })))
 const qualityOptions = computed(() => settings.qualities.map((q) => ({ value: q, label: t(`render.qualities.${q}`) })))
+const projectionOptions = computed(() => settings.projections.map((p) => ({ value: p, label: t(`render.projections.${p}`) })))
 // Météo forcée (débogage) : « Réelle » puis les neuf conditions du contrat, avec l'icône du widget.
 const weatherChoices = computed<{ value: SceneWeatherChoice; label: string; icon: IconName | null }[]>(() => [
   { value: 'real', label: t('render.weatherReal'), icon: null },
@@ -176,6 +178,9 @@ const houseStats = computed(() => {
               <div class="block__sub">{{ $t('render.ambience') }}</div>
               <Segmented dense :model-value="settings.sceneAmbience" :options="ambienceOptions" class="w-100" @update:model-value="(v: AmbienceMode) => settings.setSceneAmbience(v)" />
               <div class="muted small">{{ $t('render.ambienceHint') }}</div>
+              <div class="block__sub">{{ $t('render.projection') }}</div>
+              <Segmented dense :model-value="settings.sceneProjection" :options="projectionOptions" class="w-100" @update:model-value="(v: SceneProjection) => settings.setSceneProjection(v)" />
+              <div class="muted small">{{ $t('render.projectionHint') }}</div>
               <div class="block__sub">{{ $t('render.quality') }}</div>
               <Segmented dense :model-value="settings.sceneQuality" :options="qualityOptions" class="w-100" @update:model-value="(v: RenderQuality) => settings.setSceneQuality(v)" />
               <div class="muted small">{{ $t('render.qualityHint') }}</div>
