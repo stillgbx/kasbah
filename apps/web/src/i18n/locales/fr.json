@@ -305,7 +305,7 @@
         "tiltPills": "Pilules floutées"
       }
     },
-  "houseEditing": "Régler les ouvertures", "houseEditingHint": "La vue Maison permet alors de régler et de glisser les fenêtres et les portes sur les murs. Le relevé est approximatif : c'est ici qu'on l'ajuste, rien n'est écrit tant qu'on n'a pas réglé quelque chose."
+  "houseEditing": "Régler la maison", "houseEditingHint": "La vue Maison permet alors de régler et de glisser les fenêtres et les portes sur les murs, et de poser les places de stationnement au sol. Le relevé est approximatif : c'est ici qu'on l'ajuste, rien n'est écrit tant qu'on n'a pas réglé quelque chose."
   },
   "settings": {
     "title": "Réglages", "appearance": "Apparence", "system": "Système", "light": "Clair", "dark": "Sombre",
@@ -440,6 +440,24 @@
     "device": "Ouvrant lié", "deviceNone": "Aucun", "deviceTaken": "{name} (déjà posé sur {opening})",
     "revert": "Rétablir", "smaller": "Réduire", "bigger": "Agrandir",
     "saveError": "Ouverture non enregistrée : {message}"
+  },
+  "parking": {
+    "list": "Places de stationnement",
+    "add": "Ajouter une place", "cancel": "Annuler",
+    "placeHint": "Touchez dans la vue 3D l'endroit où elle se trouve.",
+    "addBay": "Place de voiture", "addDock": "Base : {name}",
+    "count": "{n} place | {n} place | {n} places", "none": "Aucune place définie.",
+    "bay": "Place de voiture", "dock": "Base de robot",
+    "shared": "Partagée", "reserved": "Réservée à {name}",
+    "width": "Largeur", "length": "Longueur", "yaw": "Orientation",
+    "front": "Avant", "back": "Arrière", "left": "Gauche", "right": "Droite",
+    "gaps": "Cotes depuis {host}", "noHost": "Posée hors de toute pièce ou zone : ses cotes ne se mesurent nulle part.",
+    "whereHint": "Se règle ici, ou en glissant la place au sol dans la vue 3D.",
+    "margin": "Rayon d'accroche", "marginHint": "Un engin au repos à moins de cette distance de la place s'y range. Vide = {default} m.",
+    "occupied": "{name} s'y range", "free": "Libre",
+    "rename": "Renommer la place", "remove": "Supprimer la place", "removeConfirm": "Confirmer la suppression",
+    "smaller": "Réduire", "bigger": "Agrandir", "turnLeft": "Tourner à gauche", "turnRight": "Tourner à droite",
+    "saveError": "Place non enregistrée : {message}"
   },
   "weather": {
     "title": "Météo", "noDevice": "Aucun service météo actif. Activez-en un dans Réglages → Plugins.",

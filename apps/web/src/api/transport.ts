@@ -1,4 +1,4 @@
-import type { SceneTuning, CommandInput, DeviceConsumption, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, OpeningPatch, PanelArrayPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal } from '@kasbah/shared'
+import type { SceneTuning, CommandInput, DeviceConsumption, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal } from '@kasbah/shared'
 
 // Abstraction du canal serveur. Deux implémentations : HTTP + WebSocket (réel) et simulation
 // in-process (tests, démo statique sans serveur). Les commandes passent TOUJOURS par une requête
@@ -246,6 +246,12 @@ export interface Transport {
   addOpening(roomId: string, opening: NewOpening): Promise<House>
   /** Retire une ouverture ; l'ouvrant qui l'habillait est libéré. Renvoie la maison réécrite. */
   removeOpening(roomId: string, openingId: string): Promise<House>
+  /** Ajoute une place de stationnement (ce qui s'y range, où, dans quel sens) ; renvoie la maison réécrite. */
+  addParking(parking: NewParking): Promise<House>
+  /** Règle une place (cotes, centre, cap) ; renvoie la maison réécrite. */
+  saveParking(id: string, patch: ParkingPatch): Promise<House>
+  /** Retire une place : l'engin qui s'y rangeait retourne à son point GPS. Renvoie la maison réécrite. */
+  removeParking(id: string): Promise<House>
   /** Écrit l'ordre d'affichage des pièces d'un niveau ; renvoie la maison réécrite. */
   setRoomOrder(levelId: string, roomIds: string[]): Promise<House>
   /** Enregistre le réglage de lumière de la scène 3D dans la maison ; renvoie la maison réécrite. */

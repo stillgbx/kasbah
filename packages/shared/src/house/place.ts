@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { deviceIdSchema } from '../devices/descriptor'
-import { defaultPlugins, hexColorSchema, MAX_OPENING_LEAVES, MIN_OPENING_LEAVES, model3dSchema, MOUNTS, NEUTRAL_TUNING, OPENING_MATERIALS, OPENING_TYPES, vec2Schema, vec3Schema, type PluginSettingsPatch, type SceneTuning } from './schema'
-import { VEHICLE_FINISHES } from '../devices/kinds'
+import { defaultPlugins, hexColorSchema, MAX_OPENING_LEAVES, MIN_OPENING_LEAVES, MIN_PARKING_DIM, model3dSchema, MOUNTS, NEUTRAL_TUNING, OPENING_MATERIALS, OPENING_TYPES, vec2Schema, vec3Schema, type PluginSettingsPatch, type SceneTuning } from './schema'
+import { DEVICE_KINDS, VEHICLE_FINISHES } from '../devices/kinds'
 import { computeHouseGeometry, openingCentre } from './geometry'
 import { parseHouse } from './validate'
 import type { Vec3 } from './geometry/types'
@@ -594,4 +594,89 @@ export function removeOpeningFromJson(doc: unknown, roomId: string, openingId: s
   })
   // pas de clé `devices` posée dans une maison qui n'en avait pas : on ne réécrit que ce qui change
   return { ...doc, rooms: nextRooms, ...(bound ? { devices: freed } : {}) }
+}
+
+/**
+ * Place de stationnement réglée depuis le mode édition : ses cotes, son centre, son cap.
+ * Seuls les champs présents sont posés — régler la cote avant ne redépose pas la largeur.
+ *
+ * Deux champs suivent la règle du nom vide qui efface (comme `openingPatchSchema`) : `name` rend la
+ * main à l'id, et `margin` à la marge commune (`PARKING_SNAP_MARGIN`). Le `deviceId` d'une base,
+ * lui, ne se patche pas : une base qui change de robot est une autre place.
+ */
+export const parkingPatchSchema = z.object({
+  name: z.string().trim().max(60).optional(),
+  center: vec2Schema.optional(),
+  size: z.tuple([z.number().min(MIN_PARKING_DIM).max(30), z.number().min(MIN_PARKING_DIM).max(30)]).optional(),
+  /** Ramené dans `[-180, 180[` par l'UI avant l'envoi, comme le `yawOffset` d'un véhicule. */
+  yaw: z.number().min(-180).max(180).optional(),
+  /** `0` EFFACE et rend la main à la marge commune — une place sans marge propre n'accrocherait rien. */
+  margin: z.number().min(0).max(20).optional(),
+})
+export type ParkingPatch = z.infer<typeof parkingPatchSchema>
+
+/** Les places du document, telles qu'elles y sont écrites (tableau absent = maison sans place). */
+function parkingsOf(doc: JsonObject): { site: JsonObject; list: unknown[] } {
+  const site = isObject(doc.site) ? doc.site : null
+  if (!site) throw new PlacementError('house document has no site')
+  return { site, list: Array.isArray(site.parkings) ? site.parkings : [] }
+}
+
+/** Renvoie une copie du document JSON avec la place `id` modifiée. */
+export function patchParkingInJson(doc: unknown, id: string, patch: ParkingPatch): JsonObject {
+  if (!isObject(doc)) throw new PlacementError('house document is not an object')
+  const { site, list } = parkingsOf(doc)
+  const i = list.findIndex((p) => isObject(p) && p.id === id)
+  if (i < 0) throw new PlacementError(`unknown parking "${id}"`)
+  const next: JsonObject = { ...(list[i] as JsonObject) }
+  for (const key of ['center', 'size', 'yaw'] as const) if (patch[key] !== undefined) next[key] = patch[key]
+  for (const key of ['name', 'margin'] as const) {
+    if (patch[key] === undefined) continue
+    if (patch[key]) next[key] = patch[key]
+    else delete next[key]
+  }
+  const nextList = [...list]
+  nextList[i] = next
+  return { ...doc, site: { ...site, parkings: nextList } }
+}
+
+/**
+ * Place AJOUTÉE depuis le mode édition. Complète, comme une ouverture qui naît : une place doit dire
+ * ce qui s'y range et où elle est, sinon elle n'existe nulle part. L'id est choisi par l'UI.
+ */
+export const newParkingSchema = z.object({
+  id: z.string().min(1).max(60),
+  name: z.string().trim().max(60).optional(),
+  accepts: z.enum(DEVICE_KINDS),
+  /** Base réservée à cet appareil. Absent = place partagée par tous les appareils du kind. */
+  deviceId: deviceIdSchema.optional(),
+  center: vec2Schema,
+  size: z.tuple([z.number().min(MIN_PARKING_DIM).max(30), z.number().min(MIN_PARKING_DIM).max(30)]),
+  yaw: z.number().min(-180).max(180),
+})
+export type NewParking = z.infer<typeof newParkingSchema>
+
+/** Renvoie une copie du document JSON avec une place de PLUS. L'id doit être libre dans la maison. */
+export function addParkingToJson(doc: unknown, parking: NewParking): JsonObject {
+  if (!isObject(doc)) throw new PlacementError('house document is not an object')
+  const { site, list } = parkingsOf(doc)
+  if (list.some((p) => isObject(p) && p.id === parking.id)) throw new PlacementError(`parking "${parking.id}" already exists`)
+  const next: JsonObject = {
+    id: parking.id, accepts: parking.accepts, center: parking.center, size: parking.size, yaw: parking.yaw,
+  }
+  if (parking.name) next.name = parking.name
+  if (parking.deviceId) next.deviceId = parking.deviceId
+  return { ...doc, site: { ...site, parkings: [...list, next] } }
+}
+
+/**
+ * Renvoie une copie du document JSON SANS la place `id`. Rien à libérer ailleurs : une place n'est
+ * nommée par aucun appareil — c'est elle qui nomme le sien (l'inverse d'une ouverture et de son
+ * ouvrant). L'engin qui s'y rangeait retourne simplement à son point GPS.
+ */
+export function removeParkingFromJson(doc: unknown, id: string): JsonObject {
+  if (!isObject(doc)) throw new PlacementError('house document is not an object')
+  const { site, list } = parkingsOf(doc)
+  if (!list.some((p) => isObject(p) && p.id === id)) throw new PlacementError(`unknown parking "${id}"`)
+  return { ...doc, site: { ...site, parkings: list.filter((p) => !(isObject(p) && p.id === id)) } }
 }

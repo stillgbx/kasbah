@@ -44,6 +44,13 @@ export interface MarkerContext {
    * position publiée en GPS — la tondeuse — s'en sert à chaque relevé, sans reconstruction.
    */
   toLocal?: (p: { lat: number; lon: number }) => [number, number] | null
+  /**
+   * La place où cet engin se RANGE quand il est au repos (centre en repère maison, et cap), `null`
+   * s'il n'y en a pas ou s'il est en mouvement. C'est la scène qui tranche (elle connaît les places
+   * de la maison et tous les engins) ; le marqueur d'une tondeuse s'en sert à chaque relevé, sans
+   * reconstruction — sinon le robot dériverait de sa base au fil des points GPS reçus à l'arrêt.
+   */
+  parkedAt?: (state: DeviceState) => { xy: [number, number]; yaw: number } | null
   onTap(key: string): void
   label: string
 }

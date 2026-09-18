@@ -1,4 +1,4 @@
-import { addOpeningToJson, commandSchema, defaultState, mergeState, parseHouse, patchOpeningInJson, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, setRenderTuningInJson, setRoomOrderInJson, type CommandInput, type DeviceConsumption, type DeviceEntry, type DeviceState, type House, type StatePatch } from '@kasbah/shared'
+import { addOpeningToJson, addParkingToJson, commandSchema, defaultState, mergeState, parseHouse, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, setRenderTuningInJson, setRoomOrderInJson, type CommandInput, type DeviceConsumption, type DeviceEntry, type DeviceState, type House, type StatePatch } from '@kasbah/shared'
 import { SimError, Simulation, solarGeometry, type ScenarioName } from '@kasbah/mock-sim'
 import demoHouse from '@kasbah/shared/demo-house.json'
 import { ApiRequestError, type Transport, type TransportHandlers } from './transport'
@@ -141,6 +141,21 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     },
     async addOpening(roomId, opening) {
       house = parseHouse(addOpeningToJson(house, roomId, opening))
+      handlers?.onMessage({ type: 'house', house })
+      return house
+    },
+    async addParking(parking) {
+      house = parseHouse(addParkingToJson(house, parking))
+      handlers?.onMessage({ type: 'house', house })
+      return house
+    },
+    async saveParking(id, patch) {
+      house = parseHouse(patchParkingInJson(house, id, patch))
+      handlers?.onMessage({ type: 'house', house })
+      return house
+    },
+    async removeParking(id) {
+      house = parseHouse(removeParkingFromJson(house, id))
       handlers?.onMessage({ type: 'house', house })
       return house
     },

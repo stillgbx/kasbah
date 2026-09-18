@@ -1,6 +1,6 @@
 import { computed, ref, shallowRef, watch } from 'vue'
 import { defineStore } from 'pinia'
-import { autoPlaceDevices, computeRoof, fitHeight, houseIdForDevice, indexHouse, isPlaced, newOpeningDims, openingLimits, openingSill, panelArrayDevices, panelOf, pointInPolygon, resolveDefaults, resolveDeviceLevelId, roomHeight, slotFromPoint, withPanelArrays, type DeviceDescriptor, type DeviceEntry, type DevicePlacement, type House, type HouseDevice, type HouseIndex, type Level, type Opening, type OpeningPatch, type OpeningType, type PanelArray, type PanelArrayPatch, type PlaceableDevice, type PlacedHouseDevice, type Room, type SceneTuning, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
+import { autoPlaceDevices, computeRoof, fitHeight, fitParkingGap, houseIdForDevice, longestEdgeYawDeg, indexHouse, isPlaced, newOpeningDims, newParkingSize, openingLimits, openingSill, panelArrayDevices, panelOf, parkingGaps, parkingHost, pointInPolygon, resolveDefaults, resolveDeviceLevelId, roomHeight, slotFromPoint, withPanelArrays, type DeviceDescriptor, type DeviceEntry, type DeviceKind, type DevicePlacement, type House, type HouseDevice, type HouseIndex, type Level, type Opening, type OpeningPatch, type OpeningType, type PanelArray, type PanelArrayPatch, type Parking, type ParkingPatch, type ParkingSide, type PlaceableDevice, type PlacedHouseDevice, type Room, type SceneTuning, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
 import { getTransport } from '../api'
 import type { JournalPoint } from '../lib/journal'
 import { i18n, t } from '../i18n'
@@ -47,6 +47,20 @@ function findOpening(h: House | null, id: string | null): { room: Room; opening:
  * vitrage se refont comme si le JSON était déjà écrit. Ce qu'on voit pendant le geste est
  * exactement ce qu'on gardera.
  */
+/**
+ * La maison avec la place `id` telle qu'on est en train de la déplacer. Même rôle que
+ * `withOpeningDraft` : la scène montre le geste AVANT l'écriture, et c'est la même maison qui nourrit
+ * le panneau — les quatre cotes suivent donc le doigt.
+ */
+function withParkingDraft(h: House | null, id: string | null, patch: ParkingPatch | null): House | null {
+  if (!h || !id || !patch) return h
+  if (!h.site.parkings.some((p) => p.id === id)) return h
+  return {
+    ...h,
+    site: { ...h.site, parkings: h.site.parkings.map((p) => (p.id === id ? { ...p, ...patch } : p)) },
+  }
+}
+
 function withOpeningDraft(h: House | null, id: string | null, patch: OpeningPatch | null): House | null {
   if (!h || !id || !patch) return h
   if (!h.rooms.some((r) => r.openings.some((o) => o.id === id))) return h
@@ -88,6 +102,9 @@ export const useHouseStore = defineStore('house', () => {
    */
   const selectedOpeningId = ref<string | null>(null)
   const openingDraft = shallowRef<OpeningPatch | null>(null)
+  /** Place en cours de réglage et son brouillon : même mécanique, et même raison d'être déclarés ici. */
+  const selectedParkingId = ref<string | null>(null)
+  const parkingDraft = shallowRef<ParkingPatch | null>(null)
 
   /**
    * Maison du JSON complétée des modules dérivés de ses champs de panneaux (`arrays`) : c'est sur
@@ -100,7 +117,8 @@ export const useHouseStore = defineStore('house', () => {
    */
   const expanded = computed<House | null>(() => {
     void i18n.global.locale.value                    // le nom des emplacements suit la langue choisie
-    const base = withOpeningDraft(house.value, selectedOpeningId.value, openingDraft.value)
+    const drafted = withOpeningDraft(house.value, selectedOpeningId.value, openingDraft.value)
+    const base = withParkingDraft(drafted, selectedParkingId.value, parkingDraft.value)
     return base ? withPanelArrays(base, (row, col) => t('arrays.slot', { r: row + 1, c: col + 1 })) : null
   })
   const placement = computed(() => {
@@ -136,6 +154,8 @@ export const useHouseStore = defineStore('house', () => {
   }
   const levels = computed<Level[]>(() => index.value?.levelsSorted ?? [])
   const zones = computed<Zone[]>(() => house.value?.site.zones ?? [])
+  /** Les places de stationnement, brouillon compris : la liste du panneau de la maison en mode édition. */
+  const parkings = computed<Parking[]>(() => effective.value?.site.parkings ?? [])
 
   /** null = toute la maison (ou le jardin si `gardenFocus`). */
   const focusedLevelId = ref<string | null>(null)
@@ -996,6 +1016,157 @@ export const useHouseStore = defineStore('house', () => {
     }
   }
 
+  // --- places de stationnement ---------------------------------------------
+  //
+  // Une voiture et un robot se placent d'après leur GPS, qui est bon à quelques mètres près : c'est
+  // assez pour dire « il est rentré », pas pour le poser dans son garage. Une PLACE dit où l'engin se
+  // range quand il est au repos à côté (`assignParkings`, partagé avec la scène).
+  //
+  // Le geste est celui des ouvertures, au sol : on arme une nature dans le panneau de la maison, on
+  // tape l'endroit dans la 3D, puis on règle les quatre cotes — ce qui sépare la place du contour de
+  // son hôte (le garage, l'allée) — ou on la glisse au doigt.
+  const savingParking = ref(false)
+  /** Place armée, en attente du point qu'on va taper dans la 3D. */
+  const placingParking = shallowRef<{ accepts: DeviceKind; deviceId?: string } | null>(null)
+
+  /** La place sélectionnée, brouillon compris : c'est elle que le panneau AFFICHE. */
+  const selectedParking = computed<Parking | null>(
+    () => effective.value?.site.parkings.find((p) => p.id === selectedParkingId.value) ?? null)
+  /** La même, telle qu'elle est ÉCRITE. */
+  const savedParking = computed<Parking | null>(
+    () => house.value?.site.parkings.find((p) => p.id === selectedParkingId.value) ?? null)
+
+  /** Ce qui PORTE la place sélectionnée (pièce, zone ou terrain) : les quatre cotes s'y mesurent. */
+  const parkingHostOf = computed(() => {
+    const p = selectedParking.value
+    return p && effective.value ? parkingHost(effective.value, p) : null
+  })
+  /** Les quatre cotes de la place sélectionnée, telles que le panneau et la scène les montrent. */
+  const parkingGapsOf = computed<Record<ParkingSide, number | null> | null>(() => {
+    const p = selectedParking.value, host = parkingHostOf.value
+    return p && host ? parkingGaps(host.polygon, p) : null
+  })
+
+  function selectParking(id: string | null) {
+    parkingDraft.value = null
+    selectedParkingId.value = id
+    if (!id) return
+    // une place se règle depuis la maison : ni pièce ni appareil sélectionnés, le fil d'Ariane y revient
+    selectedKey.value = null
+    selectedOpeningId.value = null
+    // Posée dans une pièce (un garage), c'est son NIVEAU qu'on regarde : sinon on règle le marquage
+    // d'un garage à travers le toit. C'est le magasin qui le dit, comme pour une ouverture, pour que
+    // l'onglet de niveau (`floorTab`) le montre au lieu de contredire la scène.
+    const p = house.value?.site.parkings.find((x) => x.id === id)
+    const host = p && house.value ? parkingHost(house.value, p) : null
+    const room = host?.kind === 'room' ? index.value?.roomsById.get(host.id) : undefined
+    if (room) { focusedLevelId.value = room.levelId; gardenFocus.value = false }
+  }
+
+  /** Glissement : le point attrapé devient le CENTRE de la place. Au sol, rien ne la contraint. */
+  function previewParkingAt(xy: Vec2) {
+    const p = savedParking.value
+    if (!p) return
+    parkingDraft.value = { ...parkingDraft.value, center: [snapCm(xy[0]), snapCm(xy[1])] }
+  }
+
+  /** Écrit le brouillon (complété par `patch`) dans house.json. */
+  async function saveParking(patch?: ParkingPatch): Promise<boolean> {
+    const p = savedParking.value
+    if (!p) return false
+    const body: ParkingPatch = { ...parkingDraft.value, ...patch }
+    if (Object.keys(body).length === 0) return true
+    savingParking.value = true
+    try {
+      house.value = await getTransport().saveParking(p.id, body)
+      return true
+    } catch (err) {
+      useNotificationsStore().error(t('parking.saveError', { message: (err as Error).message }))
+      return false
+    } finally {
+      parkingDraft.value = null
+      savingParking.value = false
+    }
+  }
+
+  /** Fin du glissement : le brouillon devient la place de la place. */
+  async function dropParking(): Promise<void> { if (parkingDraft.value) await saveParking() }
+
+  /**
+   * Cote voulue sur un côté → la place GLISSE de ce qui manque (`fitParkingGap`), les autres cotes
+   * suivent. C'est la règle des cotes d'ouverture : on garde ce qui a été tapé, on déplace ce qui
+   * peut l'être, plutôt que de rogner en silence.
+   */
+  async function setParkingGap(side: ParkingSide, wanted: number): Promise<boolean> {
+    const p = savedParking.value, host = parkingHostOf.value
+    if (!p || !host) return false
+    const center = fitParkingGap(host.polygon, p, side, wanted)
+    return center ? saveParking({ center }) : false
+  }
+
+  /** Arme une place : on choisit ce qui s'y range, puis on tape l'endroit dans la 3D. */
+  function startPlacingParking(accepts: DeviceKind, deviceId?: string) {
+    selectParking(null)
+    placingParking.value = deviceId ? { accepts, deviceId } : { accepts }
+  }
+  function cancelPlacingParking() { placingParking.value = null }
+
+  /** Id libre pour une place neuve : ce qui s'y range, numéroté s'il le faut (comme `freeOpeningId`). */
+  function freeParkingId(accepts: DeviceKind): string {
+    const used = new Set((house.value?.site.parkings ?? []).map((p) => p.id))
+    let id = `park.${accepts}`
+    for (let n = 2; used.has(id); n++) id = `park.${accepts}-${n}`
+    return id
+  }
+
+  /**
+   * L'endroit tapé : la place naît là, aux cotes de catalogue de ce qui s'y range
+   * (`newParkingSize`), orientée comme la pièce qui la porte quand il y en a une — un garage range
+   * une voiture dans son sens, et c'est mieux que le nord. Elle devient la sélection : on l'a posée
+   * pour la régler.
+   */
+  async function placeParkingAt(xy: Vec2): Promise<void> {
+    const armed = placingParking.value
+    if (!armed || !house.value) return
+    const size = newParkingSize(armed.accepts)
+    const probe = { id: '', accepts: armed.accepts, center: [snapCm(xy[0]), snapCm(xy[1])] as Vec2, size, yaw: 0 }
+    const host = parkingHost(house.value, probe)
+    const yaw = host?.kind === 'room' ? longestEdgeYawDeg(host.polygon) ?? 0 : 0
+    const id = freeParkingId(armed.accepts)
+    savingParking.value = true
+    try {
+      const next = await getTransport().addParking({
+        id, accepts: armed.accepts, ...(armed.deviceId ? { deviceId: armed.deviceId } : {}),
+        center: probe.center, size, yaw: snapCm(yaw),
+      })
+      placingParking.value = null
+      house.value = next
+      selectParking(id)
+    } catch (err) {
+      useNotificationsStore().error(t('parking.saveError', { message: (err as Error).message }))
+    } finally {
+      savingParking.value = false
+    }
+  }
+
+  /** Retire la place sélectionnée : l'engin qui s'y rangeait retourne à son point GPS. */
+  async function removeParking(): Promise<boolean> {
+    const p = savedParking.value
+    if (!p) return false
+    savingParking.value = true
+    try {
+      const next = await getTransport().removeParking(p.id)
+      selectParking(null)
+      house.value = next
+      return true
+    } catch (err) {
+      useNotificationsStore().error(t('parking.saveError', { message: (err as Error).message }))
+      return false
+    } finally {
+      savingParking.value = false
+    }
+  }
+
   /** Descripteur de plugin d'un appareil de la maison (la nature d'un ouvrant en dépend). */
   const descriptorOf = (d: HouseDevice) => (d.deviceId ? devices.descriptors[d.deviceId] : undefined)
 
@@ -1080,6 +1251,9 @@ export const useHouseStore = defineStore('house', () => {
     selectedOpeningId, selectedOpening, savedOpening, openingDraft, openingBounds, openingCeiling, openingDevices, savingOpening, canRevertOpening,
     placingOpening, startPlacingOpening, cancelPlacingOpening, placeOpeningAt, removeOpening,
     selectOpening, previewOpeningAt, saveOpening, dropOpening, revertOpening, setOpeningDevice, setCoverOpening, coversWithoutOpening,
+    parkings, selectedParkingId, selectedParking, savedParking, parkingHostOf, parkingGapsOf, savingParking, placingParking,
+    selectParking, previewParkingAt, saveParking, dropParking, setParkingGap,
+    startPlacingParking, cancelPlacingParking, placeParkingAt, removeParking,
     arrays, arraysOf, editingArrayId, editingArray, editingArrayModules, arrayDraft, hoveredKey, hoverSlot, freeInverters,
     startEditingArray, stopEditingArray, editArray, siteOf, siteOfDevice, addArray, saveArray, removeArray, previewArrayOrigin, dropArray,
   }

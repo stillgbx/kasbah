@@ -8,7 +8,8 @@ import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer
 import {
   boundsCenter, buildingBounds, computeHouseGeometry, deviceFloorZ, geoDistance, indexHouse, longestEdgeYawDeg, pointInPolygon, resolveDefaults, resolveDeviceLevelId, sitePosition,
   roofBounds, roomBounds, zoneBounds, openingCentre, openingGaps, openingLabel,
-  type DeviceDescriptor, type DeviceState, type House, type HouseDevice, type HouseGeometry, type HouseIndex, type Level, type OpeningRect, type PlacedHouseDevice, type Vec2, type Vec3,
+  assignParkings, atRest, parkingGaps, parkingHost, parkingLabel, PARKING_SIDES,
+  type DeviceDescriptor, type DeviceState, type House, type HouseDevice, type HouseGeometry, type HouseIndex, type Level, type OpeningRect, type Parking, type ParkingFix, type ParkingSide, type PlacedHouseDevice, type Vec2, type Vec3,
 } from '@kasbah/shared'
 import { applyLook, backdropColor, createMaterials, disposeMaterials, type MaterialSet } from './builders/materials'
 import { loadPackTextures, packById } from './textures/assets'
@@ -21,6 +22,7 @@ import { makeWaterAlive, type WaterStrength } from './effects/water'
 import { defaultAmbience, defaultSceneTheme, rolesOf, styleById, type GlowLook, type PostLook, type RenderStyle, type StyleLook } from './styles'
 import { applyTuning, NEUTRAL_TUNING, type SceneTuning } from './styles/tuning'
 import { buildHouse, buildLevel, type HouseNodes, type LevelNodes } from './builders/buildHouse'
+import { buildParking, parkingGlyphTexture, parkingMaterials, type ParkingMaterials, type ParkingNodes } from './builders/parking'
 import { extrudeRing, flatPolygon, flatRing, insetPolygon } from './builders/shapes'
 import {
   boxRadius, clamp, distanceForHeight, fitBox, fitZoom, ISO_POLAR, ORTHO_BASE_M, snapIsoAzimuth, sphericalOf, visibleHeight,
@@ -152,9 +154,27 @@ export interface SceneEvents {
    * depuis le coin — la scène dit OÙ ON A TAPÉ, pas où l'ouverture a le droit d'aller.
    */
   placeTap: (xy: [number, number]) => void
+  /**
+   * Point du SOL touché pendant qu'une place de stationnement est armée : le sol d'une pièce, le
+   * terrain ou une zone, en repère maison. Une place se pose à plat — il n'y a pas de mur à viser,
+   * donc pas de règle d'admissibilité à appliquer, contrairement à une ouverture.
+   */
+  groundTap: (xy: [number, number]) => void
+  /** Tap sur une place de stationnement (mode édition seulement). */
+  parkingTap: (parkingId: string) => void
+  /**
+   * Glissement de la place SÉLECTIONNÉE : le point du doigt projeté sur le sol, en repère maison.
+   * C'est le centre voulu — une place au sol n'a pas de contrainte d'accueil, contrairement à une
+   * ouverture qui doit trouver un mur.
+   */
+  parkingDrag: (parkingId: string, xy: [number, number]) => void
+  parkingDrop: (parkingId: string) => void
 }
 
 const HOME_RADIUS_M = 120
+/** Hauteur (m) de l'étiquette d'une place au-dessus du sol, et celle de ses quatre cotes. */
+const PARKING_NOTE_LIFT_M = 0.9
+const PARKING_COTE_LIFT_M = 0.12
 /** Côté de la boîte cadrée autour d'un appareil sélectionné : lui de près, sa pièce autour. */
 const DEVICE_FOCUS_SIZE_M = 3
 /** Têtes d'épingle du journal : les teintes de gravité de l'UI (`lib/journal.ts`), en nombres pour Three. */
@@ -321,6 +341,7 @@ export class HouseScene {
     deviceTap: new Set(), roomTap: new Set(), zoneTap: new Set(), levelTap: new Set(), backgroundTap: new Set(),
     deviceDrag: new Set(), deviceDrop: new Set(), journalTap: new Set(),
     openingTap: new Set(), openingDrag: new Set(), openingDrop: new Set(), placeTap: new Set(),
+    parkingTap: new Set(), parkingDrag: new Set(), parkingDrop: new Set(), groundTap: new Set(),
   }
   private detachInput: (() => void) | null = null
   /** Retire le relais de molette posé sur la couche des étiquettes (`forwardWheelFromLabels`). */
@@ -363,6 +384,28 @@ export class HouseScene {
   /** Dernière position du doigt pas encore rapportée, et l'image où elle le sera (0 = aucune en attente). */
   private pendingOpeningXY: [number, number] | null = null
   private openingFrame = 0
+  /**
+   * Places de stationnement : leur dessin au sol vit TOUJOURS (c'est du marquage, pas une poignée),
+   * mais seul le mode édition les rend touchables et glissables — comme les ouvertures.
+   */
+  private editingParkings = false
+  private selectedParkingId: string | null = null
+  /** Une place est ARMÉE : le prochain tap au sol dit où elle se pose (mode « poser »). */
+  private placingParking = false
+  private parkingNodes = new Map<string, ParkingNodes>()
+  private parkingMats: ParkingMaterials | null = null
+  /** Le « P » du marquage : une texture pour toutes les places, refaite avec le thème. */
+  private parkingGlyph: Texture | null = null
+  private parkingDragger: DragDetector | null = null
+  private pendingParkingXY: [number, number] | null = null
+  private parkingFrame = 0
+  /** Nom et quatre cotes de la place réglée, en DOM : gardées d'une image à l'autre (`refreshParkingNotes`). */
+  private parkingNotes: { name: CSS2DObject; sides: Record<ParkingSide, CSS2DObject>; parent: Group } | null = null
+  /**
+   * Où chaque engin placé par son GPS se RANGE, quand il est au repos près d'une place compatible
+   * (`assignParkings`). Recalculé avec les marqueurs — c'est lui qui remplace le point du relevé.
+   */
+  private parkingFixes = new Map<string, ParkingFix>()
   private readonly raycaster = new Raycaster()
   private size = { width: 1, height: 1 }
   private cameraTween: { cancel(): void } | null = null
@@ -507,6 +550,7 @@ export class HouseScene {
     this.scene.add(this.nodes.root)
     this.syncPrecipitation()               // la racine est neuve : ce qui tombe se repose dessus
     this.fitSunShadow()
+    this.buildParkings()                   // le marquage au sol vit avec le terrain, avant les marqueurs
     this.buildMarkers()
     this.buildOpeningHandles()             // la racine est neuve : le mode édition repose ses poignées
     this.buildOriginMark()                 // …son repère d'origine…
@@ -564,6 +608,8 @@ export class HouseScene {
     this.markers.clear()
     this.clearOpeningHandles()
     this.clearOpeningNotes()
+    this.clearParkings()
+    this.clearParkingNotes()
     this.clearOriginMark()
     this.removePrecipitation()
     if (this.nodes) {
@@ -627,6 +673,17 @@ export class HouseScene {
     const rect = device.openingId ? this.openingRect(device.openingId) : undefined
     if (rect) return openingCentre(rect)
     if (device.position) return device.position
+    const raw = this.gpsPoint(device)
+    if (!raw) return null
+    // L'engin au repos près d'une place compatible s'y RANGE : le relevé dit « il est rentré », la
+    // place dit où il se met (`computeParkingFixes`). Le z reste celui du relevé — une place ne
+    // décolle pas du sol.
+    const fix = this.parkingFixes.get(device.id)
+    return fix ? [fix.position[0], fix.position[1], raw[2]] : raw
+  }
+
+  /** Le point du RELEVÉ, projeté sur le terrain et corrigé du décalage saisi — avant toute place. */
+  private gpsPoint(device: HouseDevice): Vec3 | null {
     const state = device.deviceId ? this.states[device.deviceId] : undefined
     // un véhicule, ou une tondeuse qui publie sa position en GPS (Husqvarna) : même projection
     if ((state?.kind !== 'vehicle' && state?.kind !== 'mower') || !state.location || !this.house) return null
@@ -649,6 +706,11 @@ export class HouseScene {
    */
   private vehicleYaw(device: HouseDevice, state: DeviceState | undefined, position: Vec3): number | undefined {
     if (device.yaw !== undefined) return device.yaw
+    // Rangé sur une place, c'est ELLE qui donne le cap, et elle passe avant tout ce qui se déduit :
+    // le sens d'une place a été posé à la main en regardant la scène. Le `yawOffset` ne s'y ajoute
+    // pas — il corrige une déduction, or il n'y a plus rien à corriger.
+    const fix = this.parkingFixes.get(device.id)
+    if (fix) return fix.yaw
     if (state?.kind !== 'vehicle' || !this.house) return undefined
     const base = state.headingDeg !== undefined
       ? this.house.origin.heading - state.headingDeg
@@ -676,11 +738,15 @@ export class HouseScene {
    * voiture qui se gare tourne parfois sans changer de place au mètre près.
    */
   private vehicleFix(state: DeviceState | undefined): string {
-    if (state?.kind === 'vehicle' && state.location) return `${state.location.lat},${state.location.lon},${state.headingDeg ?? ''}`
+    if (state?.kind === 'vehicle' && state.location) return `${state.location.lat},${state.location.lon},${state.headingDeg ?? ''},${atRest(state)}`
     // une tondeuse publie sa position toutes les quelques secondes en tonte : reconstruire à chaque
     // relevé serait trop cher, et inutile — son marqueur SUIT la position (`MowerMarker`). Ce qui
     // compte ici, c'est seulement qu'elle entre sur le terrain ou en sorte
-    if (state?.kind === 'mower' && state.location && this.house) return sitePosition(this.house, state.location) ? 'in' : 'out'
+    // …et qu'elle se RANGE ou non : une tondeuse qui rentre à sa base doit s'y poser, et c'est la
+    // reconstruction qui applique la place (`computeParkingFixes`)
+    if (state?.kind === 'mower' && state.location && this.house) {
+      return `${sitePosition(this.house, state.location) ? 'in' : 'out'}:${atRest(state)}`
+    }
     return ''
   }
 
@@ -709,6 +775,7 @@ export class HouseScene {
 
   private buildMarkers(): void {
     if (!this.house || !this.index || !this.nodes || !this.geometry) return
+    this.computeParkingFixes()             // où chacun se range : les marqueurs en dépendent
     for (const m of this.markers.values()) m.dispose()
     this.markers.clear()
     for (const d of this.drawable()) {
@@ -742,6 +809,13 @@ export class HouseScene {
       onTap: (key) => this.emit('deviceTap', key),
       label: device.name ?? descriptor?.name ?? device.id,
       toLocal: (p) => { const xyz = sitePosition(house, p, d.gpsOffset); return xyz ? [xyz[0], xyz[1]] : null },
+      // Une tondeuse SUIT sa position publiée sans reconstruction (`MowerMarker`) : c'est donc au
+      // marqueur, et non à la scène, de savoir qu'elle est rentrée à sa base — sinon elle dériverait
+      // de quelques mètres au relevé suivant, alors même qu'elle est à l'arrêt dessus.
+      parkedAt: (state) => {
+        const fix = this.parkingFixes.get(d.id)
+        return fix && atRest(state) ? { xy: fix.position, yaw: fix.yaw } : null
+      },
     }, (state) => this.isAtHome(state))
     marker.object.position.set(device.position[0], device.position[1], this.localZ(device, device.position[2]))
     parent.add(marker.object)
@@ -983,6 +1057,313 @@ export class HouseScene {
     const { azimuth, polar } = this.currentSpherical()
     const inward = c && Math.hypot(c[0] - cx, c[1] - cy) > 0.5 ? Math.atan2(c[0] - cx, -(c[1] - cy)) : null
     this.flyTo(box, inward ?? azimuth, clamp(polar, DEVICE_FOCUS_POLAR[0], DEVICE_FOCUS_POLAR[1]), animate, 1.1)
+  }
+
+  // ---- places de stationnement -------------------------------------------
+
+  /**
+   * Qui se RANGE où, pour tous les engins d'un coup (`assignParkings`, partagé et testé sans scène).
+   *
+   * Recalculé avec les marqueurs, parce que c'est leur construction qui l'applique : une voiture
+   * rentrée depuis le dernier relevé n'avait pas de marqueur, une voiture repartie n'en a plus, et
+   * une voiture qui se gare change de place sans changer d'état.
+   *
+   * Un appareil qui a une `position` écrite n'est pas candidat : sa place fait foi (même règle que
+   * partout ailleurs), et une place de stationnement ne déplace que ce qui vient d'un GPS.
+   */
+  private computeParkingFixes(): void {
+    const parkings = this.house?.site.parkings ?? []
+    if (!parkings.length) { this.parkingFixes = new Map(); return }
+    const candidates = []
+    for (const d of this.drawable()) {
+      if (d.position) continue
+      const state = d.deviceId ? this.states[d.deviceId] : undefined
+      const kind = state?.kind ?? d.kind
+      const point = this.gpsPoint(d)
+      if (!kind || !point) continue
+      candidates.push({
+        key: d.id, kind, ...(d.deviceId ? { deviceId: d.deviceId } : {}),
+        point: [point[0], point[1]] as Vec2, atRest: atRest(state),
+      })
+    }
+    this.parkingFixes = assignParkings(parkings, candidates)
+  }
+
+  /**
+   * Le MARQUAGE des places, qui vit en permanence — ce n'est pas une poignée d'édition mais de la
+   * peinture au sol (voir `builders/parking.ts` pour les deux dessins). Le mode édition n'y ajoute
+   * que le voile touchable et le cadre, par simple échange de matériau (`styleParkingHandles`).
+   *
+   * Où le poser : dans les MARQUEURS du niveau de la pièce qui la porte (un garage), sur
+   * `DECOR_LAYER`, faute de quoi la passe de ce niveau redessinerait son sol par-dessus et le
+   * marquage disparaîtrait — le piège déjà rencontré avec les poignées d'ouverture. Dehors, c'est
+   * du sol comme un autre : dans le groupe du site, dessiné par la passe globale avec le terrain.
+   */
+  private buildParkings(): void {
+    this.clearParkings()
+    if (!this.house || !this.nodes || !this.index) return
+    const parkings = this.house.site.parkings
+    if (!parkings.length) return
+    const mats = parkingMaterials(this.theme.primary)
+    this.parkingMats = mats
+    this.parkingGlyph = parkingGlyphTexture(mats.paint.color)
+    for (const p of parkings) {
+      const { parent, z, levelled } = this.parkingParent(p)
+      const gaps = this.editingParkings && p.id === this.selectedParkingId ? this.parkingGaps(p) : undefined
+      const nodes = buildParking(p, z, mats, this.parkingGlyph, gaps ?? undefined)
+      if (levelled) nodes.group.traverse((n) => n.layers.set(DECOR_LAYER))
+      parent.add(nodes.group)
+      // même piège de matrice périmée que les poignées : le rayon lit `matrixWorld`
+      nodes.group.updateWorldMatrix(true, true)
+      this.parkingNodes.set(p.id, nodes)
+    }
+    this.styleParkingHandles()
+    this.refreshLevelPasses()              // un niveau qui porte du marquage a besoin de sa passe
+    this.loop.invalidate()
+  }
+
+  /** Le groupe qui porte une place, et son z LOCAL : les marqueurs de son niveau, ou le site. */
+  private parkingParent(p: Parking): { parent: Group; z: number; levelled: boolean } {
+    const site = this.nodes!.site
+    const host = this.house ? parkingHost(this.house, p) : null
+    const room = host?.kind === 'room' ? this.index?.roomsById.get(host.id) : undefined
+    const levelNodes = room ? this.nodes!.levels.get(room.levelId) : undefined
+    return levelNodes
+      ? { parent: levelNodes.markers, z: 0, levelled: true }
+      : { parent: site, z: this.house?.site.elevation ?? 0, levelled: false }
+  }
+
+  /** Les quatre cotes d'une place dans son hôte, `null` si elle n'est posée sur rien de connu. */
+  private parkingGaps(p: Parking): Record<ParkingSide, number | null> | null {
+    const host = this.house ? parkingHost(this.house, p) : null
+    return host ? parkingGaps(host.polygon, p) : null
+  }
+
+  private clearParkings(): void {
+    for (const n of this.parkingNodes.values()) disposeObject3D(n.group)
+    this.parkingNodes.clear()
+    if (this.parkingMats) for (const m of Object.values(this.parkingMats)) m.dispose()
+    this.parkingMats = null
+    this.parkingGlyph?.dispose()
+    this.parkingGlyph = null
+  }
+
+  /**
+   * Trois états, comme les poignées d'ouverture : hors édition rien ne se voit du réglage (le
+   * marquage seul) ; en édition chaque place porte un cadre fin ; celle qu'on règle porte un cadre
+   * épais, dessiné par-dessus les murs, et un voile teinté. Rien ne se construit ni ne se détruit —
+   * seuls des MATÉRIAUX changent.
+   */
+  private styleParkingHandles(): void {
+    const mats = this.parkingMats
+    if (!mats) return
+    for (const [id, n] of this.parkingNodes) {
+      const on = this.editingParkings && id === this.selectedParkingId
+      n.fill.material = on ? mats.fillOn : mats.off
+      n.ring.material = this.editingParkings && !on ? mats.ring : mats.off
+      n.ringOn.material = on ? mats.ringOn : mats.off
+    }
+    this.loop.invalidate()
+  }
+
+  /**
+   * Mode « poser une place » : le tap suivant ne sélectionne rien, il rapporte le point du SOL
+   * touché (`groundTap`). Tapé hors de tout sol, c'est un renoncement, comme pour une ouverture.
+   */
+  setPlacingParking(on: boolean): void {
+    if (this.placingParking === on) return
+    this.placingParking = on
+    this.loop.invalidate()
+  }
+
+  /** Le point du sol sous le doigt : sol de pièce, terrain ou zone — le premier rencontré. */
+  private groundPoint(ndc: { x: number; y: number }): [number, number] | null {
+    if (!this.nodes) return null
+    this.raycaster.setFromCamera(new Vector2(ndc.x, ndc.y), this.camera)
+    const targets: Object3D[] = [this.nodes.terrain, ...this.nodes.zones.values()]
+    for (const level of this.nodes.levels.values()) if (level.group.visible) targets.push(...level.floors.values())
+    const hit = this.raycaster.intersectObjects(targets, false)[0]
+    return hit ? [hit.point.x, -hit.point.z] : null       // monde (x, y, z) → maison (x, z, -y)
+  }
+
+  /** Mode « régler les places » : armé depuis les Réglages, comme celui des ouvertures. */
+  setEditingParkings(on: boolean): void {
+    if (this.editingParkings === on) return
+    this.editingParkings = on
+    if (!on) this.setSelectedParking(null)
+    else this.styleParkingHandles()
+  }
+
+  /**
+   * La place qu'on règle. Comme pour une ouverture, c'est la sélection qui arme le glissement : une
+   * seule place se déplace à la fois, et on ne l'attrape que par elle-même.
+   */
+  setSelectedParking(id: string | null): void {
+    this.selectedParkingId = id
+    this.buildParkings()                   // les lignes de cote naissent et meurent avec la sélection
+    this.refreshParkingNotes()
+    this.parkingDragger?.detach()
+    this.parkingDragger = null
+    if (id && this.editingParkings && !this.deps.headless) {
+      this.parkingDragger = createDragDetector(this.canvas, {
+        hitTest: (ev) => this.grabsParking(id, ev),
+        onStart: () => this.startParkingDrag(id),
+        onMove: (ev) => this.moveParkingDrag(id, ev),
+        onEnd: (_ev, moved) => this.endParkingDrag(id, moved),
+      })
+    }
+  }
+
+  /**
+   * Seules des PLACES ont changé (on en règle une au doigt). Ni la géométrie ni les niveaux n'en
+   * dépendent : on refait le marquage, on recalcule qui se range où, et on ne reconstruit que les
+   * marqueurs dont la place a changé — c'est ce qui fait suivre la voiture pendant le geste sans
+   * refaire les quarante autres marqueurs à chaque image.
+   */
+  updateParkings(house: House): void {
+    if (!this.nodes || !this.house) { this.load(house); return }
+    const before = this.parkingFixes
+    this.house = house
+    this.index = indexHouse(house)
+    this.buildParkings()
+    this.computeParkingFixes()
+    for (const key of new Set([...before.keys(), ...this.parkingFixes.keys()])) {
+      if (JSON.stringify(before.get(key) ?? null) === JSON.stringify(this.parkingFixes.get(key) ?? null)) continue
+      const device = this.drawable().find((d) => d.id === key)
+      this.markers.get(key)?.dispose()
+      this.markers.delete(key)
+      const marker = device ? this.makeMarker(device) : null
+      if (marker) this.markers.set(key, marker)
+    }
+    this.updateStates(this.states, true)
+    this.applyLevelFocus()
+    this.refreshParkingNotes()
+    this.loop.invalidate()
+  }
+
+  /**
+   * Cadre une place : sa boîte, plus de l'air autour, vue d'où on la regardait. Le NIVEAU, lui, est
+   * focalisé par le magasin quand la place est dans une pièce (`selectParking`) — sans quoi on
+   * regarderait le marquage d'un garage à travers le toit, et l'onglet de niveau dirait autre chose
+   * que la scène.
+   */
+  focusParking(parkingId: string, animate = true): void {
+    const p = this.house?.site.parkings.find((x) => x.id === parkingId)
+    const nodes = this.parkingNodes.get(parkingId)
+    if (!p || !nodes) return
+    const box = new Box3()
+    nodes.group.updateWorldMatrix(true, true)
+    box.setFromObject(nodes.group)
+    box.expandByScalar(Math.max(1, Math.max(...p.size) * 0.35))
+    const { azimuth, polar } = this.currentSpherical()
+    this.flyTo(box, azimuth, clamp(polar, DEVICE_FOCUS_POLAR[0], DEVICE_FOCUS_POLAR[1]), animate, 1.1)
+  }
+
+  private grabsParking(id: string, ev: TapEvent): boolean {
+    const nodes = this.parkingNodes.get(id)
+    if (!nodes || !shownInScene(nodes.group)) return false
+    this.raycaster.setFromCamera(new Vector2(ev.ndc.x, ev.ndc.y), this.camera)
+    return this.raycaster.intersectObject(nodes.fill, false).length > 0
+  }
+
+  private startParkingDrag(id: string): void {
+    const nodes = this.parkingNodes.get(id)
+    if (!nodes) return
+    if (this.controls) this.controls.enabled = false
+    this.cameraTween?.cancel()
+    // Plan horizontal AU SOL DE LA PLACE, et écart doigt–centre conservé : une place attrapée par un
+    // coin ne saute pas sous le doigt au premier appui.
+    nodes.group.updateWorldMatrix(true, false)
+    const foot = nodes.group.getWorldPosition(new Vector3())
+    this.dragPlane.setFromNormalAndCoplanarPoint(WORLD_UP, foot)
+    const hit = this.raycaster.ray.intersectPlane(this.dragPlane, new Vector3())
+    this.dragOffset.copy(hit ? hit.sub(foot) : new Vector3())
+  }
+
+  /** Une position par IMAGE, pas une par événement (même raison que le glissement d'une ouverture). */
+  private moveParkingDrag(id: string, ev: TapEvent): void {
+    this.raycaster.setFromCamera(new Vector2(ev.ndc.x, ev.ndc.y), this.camera)
+    const hit = this.raycaster.ray.intersectPlane(this.dragPlane, new Vector3())
+    if (!hit) return
+    hit.sub(this.dragOffset)
+    this.pendingParkingXY = [hit.x, -hit.z]         // monde (x, y, z) ← maison (x, z, -y)
+    if (this.parkingFrame !== 0) return
+    this.parkingFrame = requestAnimationFrame(() => {
+      this.parkingFrame = 0
+      this.flushParkingDrag(id)
+    })
+  }
+
+  private flushParkingDrag(id: string): void {
+    const xy = this.pendingParkingXY
+    this.pendingParkingXY = null
+    if (xy) this.emit('parkingDrag', id, xy)
+  }
+
+  private endParkingDrag(id: string, moved: boolean): void {
+    if (this.controls) this.controls.enabled = true
+    if (this.parkingFrame !== 0) { cancelAnimationFrame(this.parkingFrame); this.parkingFrame = 0 }
+    this.flushParkingDrag(id)                       // la dernière position, celle qu'on garde
+    if (moved) this.emit('parkingDrop', id)
+    this.invalidateShadows()
+  }
+
+  /**
+   * Ce que la scène écrit sur la place en cours de réglage : son NOM au-dessus d'elle, et ses QUATRE
+   * cotes — ce qui la sépare du contour de son hôte devant, derrière et de chaque côté. C'est ainsi
+   * qu'on pose une place de garage au mètre ruban, et c'est ce que le panneau règle.
+   *
+   * Les nombres viennent de `parkingGaps`, partagé avec le panneau : la même place ne peut pas se
+   * coter de deux manières. Le trait de chaque cote, lui, est de la géométrie posée dans le groupe de
+   * la place (`buildParking`) : il tourne et glisse avec elle, sans un temps de retard.
+   *
+   * Les étiquettes sont GARDÉES d'une image à l'autre : les refaire à chaque mouvement de doigt
+   * ferait clignoter du DOM — c'est la leçon des cotes d'ouverture.
+   */
+  private refreshParkingNotes(): void {
+    const id = this.selectedParkingId
+    const p = id && this.editingParkings ? this.house?.site.parkings.find((x) => x.id === id) : undefined
+    if (!p || !this.nodes || typeof document === 'undefined') { this.clearParkingNotes(); return }
+    const { parent, z } = this.parkingParent(p)
+    if (!this.parkingNotes || this.parkingNotes.parent !== parent) {
+      this.clearParkingNotes()
+      const name = sceneNote('name')
+      const sides = { front: sceneNote('gap'), back: sceneNote('gap'), left: sceneNote('gap'), right: sceneNote('gap') }
+      parent.add(name, ...Object.values(sides))
+      this.parkingNotes = { name, sides, parent }
+    }
+    const notes = this.parkingNotes
+    const gaps = this.parkingGaps(p)
+    const a = (p.yaw * Math.PI) / 180
+    const fwd: Vec2 = [-Math.sin(a), Math.cos(a)]
+    const right: Vec2 = [Math.cos(a), Math.sin(a)]
+    const [width, length] = p.size
+    notes.name.element.textContent = parkingLabel(p)
+    notes.name.position.set(p.center[0], p.center[1], z + PARKING_NOTE_LIFT_M)
+    for (const side of PARKING_SIDES) {
+      const d = gaps?.[side] ?? null
+      const note = notes.sides[side]
+      note.element.textContent = d === null ? '—' : `${d.toFixed(2)} m`
+      const dir = side === 'front' ? fwd : side === 'back' ? [-fwd[0], -fwd[1]] as Vec2 : side === 'right' ? right : [-right[0], -right[1]] as Vec2
+      const start = (side === 'front' || side === 'back' ? length : width) / 2
+      const at = start + (d ?? 0) / 2
+      note.position.set(p.center[0] + dir[0] * at, p.center[1] + dir[1] * at, z + PARKING_COTE_LIFT_M)
+      note.updateWorldMatrix(true, false)
+    }
+    notes.name.updateWorldMatrix(true, false)
+    this.loop.invalidate()
+  }
+
+  private clearParkingNotes(): void {
+    if (!this.parkingNotes) return
+    // un `CSS2DObject` a posé son élément dans la couche du rendu 2D : le retirer de la scène ne
+    // l'enlève pas (même geste que les cotes d'ouverture)
+    for (const note of [this.parkingNotes.name, ...Object.values(this.parkingNotes.sides)]) {
+      note.element.remove()
+      note.removeFromParent()
+    }
+    this.parkingNotes = null
+    this.loop.invalidate()
   }
 
   /**
@@ -1876,9 +2257,22 @@ export class HouseScene {
   }
 
   /** Sélection au point NDC par lancer de rayon : objet d'appareil, sol de pièce, toit, zone. */
-  pick(ndc: { x: number; y: number }): { kind: 'device'; key: string } | { kind: 'room'; roomId: string } | { kind: 'level'; levelId: string } | { kind: 'zone'; zoneId: string } | { kind: 'journal'; at: number } | { kind: 'opening'; openingId: string } | null {
+  pick(ndc: { x: number; y: number }): { kind: 'device'; key: string } | { kind: 'room'; roomId: string } | { kind: 'level'; levelId: string } | { kind: 'zone'; zoneId: string } | { kind: 'journal'; at: number } | { kind: 'opening'; openingId: string } | { kind: 'parking'; parkingId: string } | null {
     if (!this.nodes) return null
     this.raycaster.setFromCamera(new Vector2(ndc.x, ndc.y), this.camera)
+    // En mode édition, une place passe avant le sol qui la porte — mais APRÈS les appareils : la
+    // voiture garée dessus reste ce qu'on touche en premier, c'est elle qu'on vient piloter.
+    if (this.editingParkings) {
+      const fills: Mesh[] = []
+      for (const n of this.parkingNodes.values()) if (shownInScene(n.group)) fills.push(n.fill)
+      const pickables: Object3D[] = []
+      for (const m of this.markers.values()) if (m.visibleInScene) pickables.push(...m.pickables)
+      const hitParking = this.raycaster.intersectObjects(fills, false)[0]
+      const hitOnIt = this.raycaster.intersectObjects(pickables, false)[0]
+      if (hitParking && (!hitOnIt || hitParking.distance < hitOnIt.distance)) {
+        return { kind: 'parking', parkingId: hitParking.object.userData.parkingId as string }
+      }
+    }
     // En mode édition, la poignée d'une ouverture passe AVANT l'appareil : c'est elle qu'on vient
     // chercher, et le tablier d'un volet couvre justement sa fenêtre.
     if (this.editingOpenings) {
@@ -1917,7 +2311,7 @@ export class HouseScene {
   }
 
   private handleTap(ev: TapEvent): void {
-    if (this.drag?.active() || this.openingDragger?.active()) return   // fin d'un glissement, pas un tap
+    if (this.drag?.active() || this.openingDragger?.active() || this.parkingDragger?.active()) return   // fin d'un glissement, pas un tap
     // Une ouverture armée prend le tap AVANT toute sélection : on est venu désigner un mur, pas
     // ouvrir la pièce ou l'appareil qui se trouve devant. Tapé à côté du bâti, c'est un tap de fond
     // — l'appelant y lit un renoncement, comme partout ailleurs dans la vue.
@@ -1927,9 +2321,17 @@ export class HouseScene {
       else this.emit('backgroundTap')
       return
     }
+    // Une place armée prend le tap de la même façon, mais au SOL : c'est là qu'on la pose.
+    if (this.placingParking) {
+      const xy = this.groundPoint(ev.ndc)
+      if (xy) this.emit('groundTap', xy)
+      else this.emit('backgroundTap')
+      return
+    }
     const hit = this.pick(ev.ndc)
     if (!hit) { this.emit('backgroundTap'); return }
     if (hit.kind === 'device') this.emit('deviceTap', hit.key)
+    else if (hit.kind === 'parking') this.emit('parkingTap', hit.parkingId)
     else if (hit.kind === 'opening') this.emit('openingTap', hit.openingId)
     else if (hit.kind === 'journal') this.emit('journalTap', hit.at)
     else if (hit.kind === 'room') this.emit('roomTap', hit.roomId)
@@ -2047,6 +2449,7 @@ export class HouseScene {
     }
     for (const m of this.markers.values()) m.setTheme(this.theme, this.look.glow)
     this.buildOpeningHandles()             // les poignées sont teintées de l'accent, qui vient de changer
+    this.buildParkings()                   // le marquage au sol suit le thème, comme le reste
     this.buildOriginMark()                 // le repère d'origine aussi
     this.highlightRoom(this.highlightedRoom)
     this.refreshLevelPasses()              // l'heure change ce qu'une lampe allumée vaut

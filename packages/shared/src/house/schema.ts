@@ -165,10 +165,52 @@ export const zoneSchema = z.object({
 })
 export type Zone = z.infer<typeof zoneSchema>
 
+/** Plus petite cote d'une place (m) : une place de zéro disparaîtrait du sol sans qu'on sache pourquoi. */
+export const MIN_PARKING_DIM = 0.2
+const parkingDimSchema = z.number().min(MIN_PARKING_DIM).max(30)
+
+/**
+ * Place de stationnement : le rectangle au sol où un engin mobile se RANGE, orienté (il a un avant).
+ *
+ * C'est la réponse au seul défaut des appareils placés par leur GPS (véhicule, robot) : le relevé
+ * est bon à quelques mètres près, ce qui suffit à dire « la voiture est à la maison » et pas à la
+ * poser dans son garage — elle finissait en travers d'un mur, et dans le mauvais sens. Un engin AU
+ * REPOS près d'une place compatible s'y range donc exactement (`assignParkings`, `parking.ts`).
+ *
+ * Deux champs, et deux seulement, disent qui a le droit d'une place :
+ * - **`accepts`** — le kind qui s'y range. Une voiture n'a rien à faire sur la base d'une tondeuse,
+ *   et c'est ce champ qui l'interdit. Il commande AUSSI le dessin : une place de voiture se trace
+ *   au sol (tirets et « P »), la base d'un robot est un objet (plaque et bloc de tête).
+ * - **`deviceId`** — place RÉSERVÉE à cet appareil. Une base ne se partage pas : celle de la
+ *   tondeuse n'est pas celle de l'aspirateur. Absent = place PARTAGÉE par tous les appareils du
+ *   kind, ce qui est le cas des voitures : n'importe laquelle se gare dans n'importe quel garage.
+ */
+export const parkingSchema = z.object({
+  id: idSchema,
+  name: z.string().min(1).optional(),
+  accepts: z.enum(DEVICE_KINDS),
+  deviceId: deviceIdSchema.optional(),
+  /** Centre du rectangle (m, repère maison). */
+  center: vec2Schema,
+  /** `[largeur, longueur]` (m) : la longueur est l'axe avant-arrière, celui qu'oriente `yaw`. */
+  size: z.tuple([parkingDimSchema, parkingDimSchema]),
+  /** Cap de l'AVANT (degrés, 0 = vers +y), même convention que le `yaw` d'un appareil. */
+  yaw: z.number(),
+  /**
+   * Distance (m) au-delà du rectangle où l'engin s'accroche encore. Absente = `PARKING_SNAP_MARGIN`.
+   * Se règle place par place parce que le biais résiduel d'un GPS n'est pas le même dans un garage
+   * fermé et au milieu d'une allée.
+   */
+  margin: z.number().min(0).max(20).optional(),
+  meta: metaSchema,
+})
+export type Parking = z.infer<typeof parkingSchema>
+
 export const siteSchema = z.object({
   elevation: z.number().default(0),
   terrain: polygonSchema,
   zones: z.array(zoneSchema).default([]),
+  parkings: z.array(parkingSchema).default([]),
 })
 export type Site = z.infer<typeof siteSchema>
 

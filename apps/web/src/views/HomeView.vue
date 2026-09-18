@@ -13,6 +13,7 @@ import RoomPanel from '../components/home/RoomPanel.vue'
 import RoomEditPanel from '../components/home/RoomEditPanel.vue'
 import DevicePanel from '../components/home/DevicePanel.vue'
 import OpeningPanel from '../components/home/OpeningPanel.vue'
+import ParkingPanel from '../components/home/ParkingPanel.vue'
 import SceneDebug from '../components/home/SceneDebug.vue'
 import SceneTuningPanel from '../components/home/SceneTuningPanel.vue'
 import SearchBar from '../components/home/SearchBar.vue'
@@ -83,14 +84,23 @@ scene.onDeviceTap((key) => {
 scene.onOpeningTap((openingId) => { house.selectOpening(openingId); panelOpen.value = true })
 scene.onOpeningDrag((_openingId, xy) => house.previewOpeningAt(xy))
 scene.onOpeningDrop(() => { void house.dropOpening() })
+// mode édition : une place de stationnement se touche, se glisse et s'écrit exactement comme une
+// ouverture — le geste est le même, au sol.
+scene.onParkingTap((parkingId) => { house.selectParking(parkingId); panelOpen.value = true })
+scene.onParkingDrag((_parkingId, xy) => house.previewParkingAt(xy))
+scene.onParkingDrop(() => { void house.dropParking() })
 // mode « poser » : une nature armée dans le panneau de la pièce attend le mur. Le tap rapporte le
 // point touché ; c'est le store qui en déduit le mur et la place, comme pour un glissement.
 scene.onPlaceTap((xy) => { void house.placeOpeningAt(xy) })
 watch(() => house.placingOpening, (armed) => scene.setPlacingOpening(armed?.roomId ?? null))
+// mode « poser une place » : le tap au sol donne le centre ; le reste (cotes de catalogue, sens du
+// garage) est décidé par le magasin, comme pour une ouverture posée sur un mur.
+scene.onGroundTap((xy) => { void house.placeParkingAt(xy) })
+watch(() => house.placingParking, (armed) => scene.setPlacingParking(!!armed))
 scene.onRoomTap((roomId) => {
-  // pendant le réglage d'une ouverture, un tap sur une pièce ne referme pas le panneau par surprise
-  // (même garde-fou que le réglage d'un champ de panneaux, juste au-dessus)
-  if (house.selectedOpeningId) return
+  // pendant le réglage d'une ouverture OU d'une place, un tap sur une pièce ne referme pas le
+  // panneau par surprise (même garde-fou que le réglage d'un champ de panneaux, juste au-dessus)
+  if (house.selectedOpeningId || house.selectedParkingId) return
   if (house.selectedRoomId === roomId && !house.selectedKey) { house.selectRoom(null); scene.highlightRoom(null) }
   else { house.selectRoom(roomId); panelOpen.value = true }
 })
@@ -108,7 +118,8 @@ scene.onBackgroundTap(() => {
   // armé pour poser une ouverture, taper à côté du bâti est un renoncement : on désarme, sans toucher
   // à la sélection — la pièce reste ouverte, prête pour un autre essai
   if (house.placingOpening) { house.cancelPlacingOpening(); return }
-  if (!house.editingArrayId && !house.selectedOpeningId) house.clearSelection()
+  if (house.placingParking) { house.cancelPlacingParking(); return }
+  if (!house.editingArrayId && !house.selectedOpeningId && !house.selectedParkingId) house.clearSelection()
 })
 // une épingle du journal touchée : elle devient l'incident actif (étiquette dans la scène, ligne surlignée dans le panneau)
 scene.onJournalTap((at) => house.markJournalPoint(at))
@@ -145,7 +156,9 @@ function frameSelection(roomId: string | null, key: string | null) {
 // plus bas, qui rejoue l'état au bon moment (mode armé au chargement, tablette qui redémarre).
 watch(() => settings.houseEditing, (on) => {
   scene.setEditingOpenings(on)
-  if (!on) house.cancelPlacingOpening()
+  scene.setEditingParkings(on)
+  if (!on) { house.cancelPlacingOpening(); house.cancelPlacingParking() }
+  if (!on && house.selectedParkingId) house.selectParking(null)
   // désarmer ferme aussi le réglage en cours : sinon le panneau reste ouvert et ACTIF (« + » écrit
   // encore dans house.json) alors que la scène, elle, n'a plus rien de sélectionné — l'interrupteur
   // ne fermerait pas la porte qu'il prétend fermer
@@ -166,6 +179,10 @@ watch(() => house.selectedOpeningId, (id) => {
     scene.highlightRoom(house.selectedRoomId)
   }
 })
+watch(() => house.selectedParkingId, (id) => {
+  scene.setSelectedParking(id)
+  if (id) scene.focusParking(id)
+})
 watch(() => house.focusedLevelId, (id) => scene.focusLevel(id))
 // un niveau sélectionné se cadre comme une pièce sélectionnée : c'est lui qu'on est venu voir
 watch(() => house.selectedLevelId, (id) => { if (id) scene.focusLevelView(id) })
@@ -176,6 +193,7 @@ watch([() => house.selectedRoomId, () => house.selectedKey], ([roomId, key]) => 
 watch(scene.ready, (ready) => {
   if (!ready) return
   scene.setEditingOpenings(settings.houseEditing)
+  scene.setEditingParkings(settings.houseEditing)
   scene.focusLevel(house.focusedLevelId)
   scene.setSelected(house.selectedKey)
   frameSelection(house.selectedRoomId, house.selectedKey)
@@ -253,8 +271,10 @@ onUnmounted(() => { offDeviceEvent?.() })
 
 // En mode édition, une PIÈCE (pas une zone du jardin, qui n'a pas de mur) montre ce qu'on peut
 // modifier d'elle à la place de ses appareils : on relève la maison, on ne l'allume pas.
-const panelMode = computed<'opening' | 'device' | 'roomEdit' | 'room' | 'level' | 'home'>(() => {
+const panelMode = computed<'opening' | 'parking' | 'device' | 'roomEdit' | 'room' | 'level' | 'home'>(() => {
   if (house.selectedOpeningId) return 'opening'
+  // une place se règle depuis la maison : elle n'appartient ni à une pièce ni à un appareil
+  if (house.selectedParkingId) return 'parking'
   if (house.selectedKey) return 'device'
   if (house.selectedRoomId) return settings.houseEditing && house.selectedRoom ? 'roomEdit' : 'room'
   return house.selectedLevelId ? 'level' : 'home'
@@ -313,6 +333,7 @@ const DOLLY_STEP = 1.35
     </div>
     <SidePanel :open="panelOpen" :docked="wide" @close="panelOpen = false">
       <OpeningPanel v-if="panelMode === 'opening'" @back="onOpeningBack()" />
+      <ParkingPanel v-else-if="panelMode === 'parking'" @back="house.selectParking(null)" />
       <DevicePanel v-else-if="panelMode === 'device'" @back="onDeviceBack()" />
       <RoomEditPanel v-else-if="panelMode === 'roomEdit'" @back="onRoomBack()" />
       <RoomPanel v-else-if="panelMode === 'room' || panelMode === 'level'" @back="onRoomBack()" />

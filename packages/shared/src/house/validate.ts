@@ -27,6 +27,7 @@ function crossRefs(house: House, ctx: z.RefinementCtx) {
   house.levels.forEach((l, i) => unique(l.id, ['levels', i, 'id']))
   house.rooms.forEach((r, i) => unique(r.id, ['rooms', i, 'id']))
   house.site.zones.forEach((zn, i) => unique(zn.id, ['site', 'zones', i, 'id']))
+  house.site.parkings.forEach((pk, i) => unique(pk.id, ['site', 'parkings', i, 'id']))
   house.devices.forEach((d, i) => unique(d.id, ['devices', i, 'id']))
   house.arrays.forEach((a, i) => unique(a.id, ['arrays', i, 'id']))
   house.rooms.forEach((r, ri) => r.openings.forEach((o, oi) => unique(o.id, ['rooms', ri, 'openings', oi, 'id'])))

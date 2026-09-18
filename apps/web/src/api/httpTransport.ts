@@ -99,6 +99,21 @@ export function createHttpTransport(base = ''): Transport {
       { method: 'DELETE' },
       (j) => houseSchema.parse((j as { house: unknown }).house) as House,
     ),
+    addParking: (parking) => request(
+      `${base}/api/house/parkings`,
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(parking) },
+      (j) => houseSchema.parse((j as { house: unknown }).house) as House,
+    ),
+    saveParking: (id, patch) => request(
+      `${base}/api/house/parkings/${encodeURIComponent(id)}`,
+      { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) },
+      (j) => houseSchema.parse((j as { house: unknown }).house) as House,
+    ),
+    removeParking: (id) => request(
+      `${base}/api/house/parkings/${encodeURIComponent(id)}`,
+      { method: 'DELETE' },
+      (j) => houseSchema.parse((j as { house: unknown }).house) as House,
+    ),
     setRoomOrder: (levelId, roomIds) => request(
       `${base}/api/house/levels/${encodeURIComponent(levelId)}/room-order`,
       { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ roomIds }) },

@@ -1021,6 +1021,97 @@ describe('véhicule placé par son GPS', () => {
 })
 
 /**
+ * Le relevé d'un véhicule est bon à quelques mètres près : assez pour dire « il est rentré », pas
+ * pour le poser dans son garage. Une PLACE de stationnement le range exactement, quand il est au
+ * repos à côté d'elle — et lui donne son sens, que ni son GPS ni un garage ne disent.
+ */
+describe('places de stationnement', () => {
+  const VEHICLE = 'mock:vehicle-r5'
+  const descriptor = {
+    id: VEHICLE, pluginId: 'mock', externalId: 'r5', kind: 'vehicle', name: 'R5',
+    capabilities: ['soc', 'range', 'location'], meta: {},
+  } as DeviceDescriptor
+
+  /** La maison de démo, R5 dé-placée (son GPS fait foi), avec les places données. */
+  function withParkings(parkings: Record<string, unknown>[]) {
+    const doc = JSON.parse(JSON.stringify(demo)) as typeof demo
+    const car = doc.devices.find((d) => d.deviceId === VEHICLE) as Record<string, unknown>
+    delete car.position; delete car.yaw; delete car.zoneId
+    ;(doc.site as Record<string, unknown>).parkings = parkings
+    return parseHouse(doc)
+  }
+
+  const stateAt = (house: ReturnType<typeof parseHouse>, xy: [number, number], over: Record<string, unknown> = {}): DeviceState => {
+    const g = localToGeo(house.origin, [xy[0], xy[1], 0])
+    return {
+      kind: 'vehicle', updatedAt: 1, available: true, soc: 55, rangeKm: 200, pluggedIn: false, charging: false,
+      location: { lat: g.lat, lon: g.lon, at: 1 }, ...over,
+    } as DeviceState
+  }
+
+  const bodyYaw = (scene: HouseScene, key = 'vehicle.r5'): number => {
+    let body: Mesh | null = null
+    scene.markers.get(key)!.object.traverse((x) => { if (!body && x instanceof Mesh) body = x as Mesh })
+    return (body! as Mesh).parent!.rotation.z
+  }
+
+  const sceneWith = (house: ReturnType<typeof parseHouse>) => {
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true })
+    scene.load(house)
+    scene.setDescriptors({ [VEHICLE]: descriptor })
+    return scene
+  }
+
+  const BAY = { id: 'park.garage', accepts: 'vehicle', center: [-3.5, -6], size: [2.5, 5], yaw: 40 }
+
+  it('range la voiture au repos sur la place proche, et lui donne le cap de la place', () => {
+    const house = withParkings([BAY])
+    const scene = sceneWith(house)
+    scene.updateStates({ [VEHICLE]: stateAt(house, [-2, -7]) })       // à 1,5 m du centre : dans la place
+    const marker = scene.markers.get('vehicle.r5')!
+    expect(marker.object.position.x).toBeCloseTo(-3.5, 2)
+    expect(marker.object.position.y).toBeCloseTo(-6, 2)
+    expect(bodyYaw(scene)).toBeCloseTo(yawToRad(40), 4)
+  })
+
+  it('laisse où elle est la voiture trop loin, et celle qui ROULE', () => {
+    const house = withParkings([BAY])
+    const scene = sceneWith(house)
+    scene.updateStates({ [VEHICLE]: stateAt(house, [6, 2]) })         // sur le terrain, loin de la place
+    expect(scene.markers.get('vehicle.r5')!.object.position.x).toBeCloseTo(6, 2)
+    // au même point qu'au test précédent, mais en mouvement : le relevé reprend la main
+    scene.updateStates({ [VEHICLE]: stateAt(house, [-2, -7], { speedKmh: 30, gear: 'D' }) })
+    expect(scene.markers.get('vehicle.r5')!.object.position.x).toBeCloseTo(-2, 2)
+  })
+
+  it('dessine le marquage au sol, en édition comme hors édition', () => {
+    const scene = sceneWith(withParkings([BAY]))
+    const find = (): Object3D | undefined => {
+      let found: Object3D | undefined
+      scene.scene.traverse((o) => { if (!found && o.name === 'parking:park.garage') found = o })
+      return found
+    }
+    expect(find()).toBeDefined()
+    scene.setEditingParkings(true)
+    expect(find()).toBeDefined()
+  })
+
+  /**
+   * La place ne suit pas le geste sans que rien ne bouge d'autre : `updateParkings` est le chemin
+   * court (pas de `load`, donc pas de caméra recentrée) et il refait la place de la voiture.
+   */
+  it('la voiture suit la place qu on déplace', () => {
+    const house = withParkings([BAY])
+    const scene = sceneWith(house)
+    scene.updateStates({ [VEHICLE]: stateAt(house, [-2, -7]) })
+    scene.updateParkings(withParkings([{ ...BAY, center: [-1, -8] }]))
+    const marker = scene.markers.get('vehicle.r5')!
+    expect(marker.object.position.x).toBeCloseTo(-1, 2)
+    expect(marker.object.position.y).toBeCloseTo(-8, 2)
+  })
+})
+
+/**
  * Une tondeuse Husqvarna publie sa position en GPS, pas dans le repère de la maison : elle se pose
  * comme une voiture (projetée sur le terrain), mais son marqueur SUIT ensuite chaque relevé sans
  * être reconstruit — en tonte, il en arrive toutes les quelques secondes.

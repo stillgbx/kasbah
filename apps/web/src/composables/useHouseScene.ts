@@ -71,6 +71,10 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   const openingDrag = new Set<Handler<[string, [number, number]]>>()
   const openingDrop = new Set<Handler<[string]>>()
   const placeTap = new Set<Handler<[[number, number]]>>()
+  const groundTap = new Set<Handler<[[number, number]]>>()
+  const parkingTap = new Set<Handler<[string]>>()
+  const parkingDrag = new Set<Handler<[string, [number, number]]>>()
+  const parkingDrop = new Set<Handler<[string]>>()
 
   onMounted(() => {
     const canvas = args.canvas.value
@@ -95,6 +99,10 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     scene.on('openingDrag', (id, xy) => openingDrag.forEach((f) => f(id, xy)))
     scene.on('openingDrop', (id) => openingDrop.forEach((f) => f(id)))
     scene.on('placeTap', (xy) => placeTap.forEach((f) => f(xy)))
+    scene.on('groundTap', (xy) => groundTap.forEach((f) => f(xy)))
+    scene.on('parkingTap', (id) => parkingTap.forEach((f) => f(id)))
+    scene.on('parkingDrag', (id, xy) => parkingDrag.forEach((f) => f(id, xy)))
+    scene.on('parkingDrop', (id) => parkingDrop.forEach((f) => f(id)))
 
     const parent = canvas.parentElement ?? canvas
     const fit = () => { const r = parent.getBoundingClientRect(); scene?.resize(r.width, r.height) }
@@ -116,6 +124,8 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     if (prev && sameShell(prev, h)) { scene.updateDevices(h); return }
     // seules des ouvertures ont bougé (on en règle une au doigt) → murs du seul niveau touché
     if (prev && sameShellButOpenings(prev, h)) { scene.updateOpenings(h); return }
+    // seules des PLACES ont bougé → marquage au sol et engins qui s'y rangent, rien d'autre
+    if (prev && sameShellButParkings(prev, h)) { scene.updateParkings(h); return }
     scene.load(h); scene.setDescriptors(devices.descriptors); scene.updateStates(args.states.value, true)
   })
   watch(() => devices.descriptors, (d) => scene?.setDescriptors(d))
@@ -167,6 +177,14 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     onOpeningDrag: (f: Handler<[string, [number, number]]>) => { openingDrag.add(f) },
     onOpeningDrop: (f: Handler<[string]>) => { openingDrop.add(f) },
     setPlacingOpening: (roomId: string | null) => scene?.setPlacingOpening(roomId),
+    setEditingParkings: (on: boolean) => scene?.setEditingParkings(on),
+    setPlacingParking: (on: boolean) => scene?.setPlacingParking(on),
+    onGroundTap: (f: Handler<[[number, number]]>) => { groundTap.add(f) },
+    setSelectedParking: (id: string | null) => scene?.setSelectedParking(id),
+    focusParking: (id: string) => scene?.focusParking(id),
+    onParkingTap: (f: Handler<[string]>) => { parkingTap.add(f) },
+    onParkingDrag: (f: Handler<[string, [number, number]]>) => { parkingDrag.add(f) },
+    onParkingDrop: (f: Handler<[string]>) => { parkingDrop.add(f) },
     onPlaceTap: (f: Handler<[[number, number]]>) => { placeTap.add(f) },
     moveMarker: (key: string, position: Vec3) => scene?.moveMarker(key, position),
     previewBodyColor: (key: string, color: string | null) => scene?.previewBodyColor(key, color),
@@ -190,5 +208,15 @@ function sameShell(a: House, b: House): boolean {
  */
 function sameShellButOpenings(a: House, b: House): boolean {
   const shell = (h: House) => JSON.stringify([h.levels, h.rooms.map((r) => ({ ...r, openings: [] })), h.site, h.roof, h.defaults])
+  return shell(a) === shell(b)
+}
+
+/**
+ * Même bâti aux PLACES DE STATIONNEMENT près. Elles vivent dans `site`, donc régler une place
+ * sortait de `sameShell` et rechargeait la maison entière — caméra recentrée à chaque mouvement de
+ * doigt, le même piège que les ouvertures. Ce cas-là a son chemin (`updateParkings`).
+ */
+function sameShellButParkings(a: House, b: House): boolean {
+  const shell = (h: House) => JSON.stringify([h.levels, h.rooms, { ...h.site, parkings: [] }, h.roof, h.defaults])
   return shell(a) === shell(b)
 }

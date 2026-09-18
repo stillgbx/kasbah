@@ -906,6 +906,8 @@ export class MowerMarker extends DeviceMarker {
   private readonly mat: MeshStandardMaterial
   private targetXY: [number, number] | null = null
   private moving = false
+  /** Rangée à sa base : son cap vient de la base, pas de sa direction de déplacement. */
+  private parked = false
   constructor(device: PlacedHouseDevice, ctx: MarkerContext) {
     super(device, ctx)
     this.mat = new MeshStandardMaterial({ color: 0xff7a1a, roughness: 0.5 })
@@ -919,8 +921,13 @@ export class MowerMarker extends DeviceMarker {
   protected isOn(s: DeviceState): boolean { return s.kind === 'mower' && s.activity === 'mowing' }
   protected onState(state: DeviceState | undefined): void {
     if (state?.kind === 'mower') {
-      const xy = state.position ?? (state.location ? this.ctx.toLocal?.(state.location) ?? null : null)
+      // Rangée à sa base, c'est la BASE qui dit où elle est et dans quel sens : le relevé, lui, est
+      // bon à quelques mètres près, et le robot finissait en travers à côté de sa station.
+      const parked = this.ctx.parkedAt?.(state) ?? null
+      const xy = parked?.xy ?? state.position ?? (state.location ? this.ctx.toLocal?.(state.location) ?? null : null)
       if (xy) this.targetXY = xy
+      if (parked) this.mesh.rotation.z = (parked.yaw * Math.PI) / 180
+      this.parked = !!parked
     }
     const active = !!state && state.kind === 'mower' && state.activity === 'mowing'
     if (this.targetXY && !this.moving) {
@@ -932,7 +939,7 @@ export class MowerMarker extends DeviceMarker {
           const dx = this.targetXY[0] - this.object.position.x, dy = this.targetXY[1] - this.object.position.y
           this.object.position.x = lerp(this.object.position.x, this.targetXY[0], k)
           this.object.position.y = lerp(this.object.position.y, this.targetXY[1], k)
-          if (Math.hypot(dx, dy) > 0.05) this.mesh.rotation.z = Math.atan2(dy, dx) - Math.PI / 2
+          if (!this.parked && Math.hypot(dx, dy) > 0.05) this.mesh.rotation.z = Math.atan2(dy, dx) - Math.PI / 2
           if (Math.hypot(dx, dy) < 0.01 && !active) { this.moving = false; return false }
           return true
         },

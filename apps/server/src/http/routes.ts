@@ -1,4 +1,4 @@
-import { addOpeningToJson, assertCommandAllowed, commandSchema, devicePlacementSchema, newOpeningSchema, openingPatchSchema, panelArrayPatchSchema, patchOpeningInJson, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, roomOrderSchema, sceneTuningSchema, setRenderTuningInJson, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
+import { addOpeningToJson, addParkingToJson, assertCommandAllowed, commandSchema, devicePlacementSchema, newOpeningSchema, newParkingSchema, openingPatchSchema, panelArrayPatchSchema, parkingPatchSchema, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, roomOrderSchema, sceneTuningSchema, setRenderTuningInJson, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { updateHouseFile, type LoadedHouse } from '../config/house'
 import type { PluginHost } from '../core/plugin-host'
@@ -102,6 +102,29 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
   // écriture (voir `removeOpeningFromJson`) — sans quoi il nommerait une ouverture disparue.
   app.delete<{ Params: { roomId: string; openingId: string } }>('/api/house/rooms/:roomId/openings/:openingId', async (req) => {
     const house = await updateHouseFile(deps.house, (doc) => removeOpeningFromJson(doc, req.params.roomId, req.params.openingId))
+    deps.hub.broadcast({ type: 'house', house })
+    return { house }
+  })
+
+  // Places de stationnement (`site.parkings[]`) : où un engin placé par son GPS se RANGE quand il
+  // est au repos. Même mécanique que les ouvertures — poser, régler au centimètre, retirer — parce
+  // que c'est le même geste : on relève au sol ce que le fabricant ne sait pas donner.
+  app.post('/api/house/parkings', async (req) => {
+    const parking = newParkingSchema.parse(req.body)   // ZodError → 400
+    const house = await updateHouseFile(deps.house, (doc) => addParkingToJson(doc, parking))
+    deps.hub.broadcast({ type: 'house', house })
+    return { house }
+  })
+
+  app.put<{ Params: { id: string } }>('/api/house/parkings/:id', async (req) => {
+    const patch = parkingPatchSchema.parse(req.body)   // ZodError → 400
+    const house = await updateHouseFile(deps.house, (doc) => patchParkingInJson(doc, req.params.id, patch))
+    deps.hub.broadcast({ type: 'house', house })
+    return { house }
+  })
+
+  app.delete<{ Params: { id: string } }>('/api/house/parkings/:id', async (req) => {
+    const house = await updateHouseFile(deps.house, (doc) => removeParkingFromJson(doc, req.params.id))
     deps.hub.broadcast({ type: 'house', house })
     return { house }
   })

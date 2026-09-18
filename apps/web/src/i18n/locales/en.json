@@ -305,7 +305,7 @@
         "tiltPills": "Pills blurred"
       }
     },
-  "houseEditing": "Adjust openings", "houseEditingHint": "The Home view then lets you adjust and drag windows and doors on the walls. The survey is approximate: this is where it gets corrected, and nothing is written until something is actually adjusted."
+  "houseEditing": "Adjust the house", "houseEditingHint": "The Home view then lets you adjust and drag windows and doors on the walls, and lay out parking spots on the ground. The survey is approximate: this is where it gets corrected, and nothing is written until something is actually adjusted."
   },
   "settings": {
     "title": "Settings", "appearance": "Appearance", "system": "System", "light": "Light", "dark": "Dark",
@@ -440,6 +440,24 @@
     "device": "Linked cover", "deviceNone": "None", "deviceTaken": "{name} (already on {opening})",
     "revert": "Revert", "smaller": "Smaller", "bigger": "Bigger",
     "saveError": "Opening not saved: {message}"
+  },
+  "parking": {
+    "list": "Parking spots",
+    "add": "Add a spot", "cancel": "Cancel",
+    "placeHint": "Tap where it is in the 3D view.",
+    "addBay": "Car spot", "addDock": "{name}'s base",
+    "count": "{n} spot | {n} spot | {n} spots", "none": "No spot defined.",
+    "bay": "Car spot", "dock": "Robot base",
+    "shared": "Shared", "reserved": "Reserved for {name}",
+    "width": "Width", "length": "Length", "yaw": "Heading",
+    "front": "Front", "back": "Back", "left": "Left", "right": "Right",
+    "gaps": "Distances from {host}", "noHost": "Placed outside any room or zone: its distances cannot be measured.",
+    "whereHint": "Adjust here, or by dragging the spot on the ground in the 3D view.",
+    "margin": "Snap radius", "marginHint": "A resting device closer than this to the spot parks on it. Empty = {default} m.",
+    "occupied": "{name} parks here", "free": "Free",
+    "rename": "Rename the spot", "remove": "Delete the spot", "removeConfirm": "Confirm deletion",
+    "smaller": "Smaller", "bigger": "Bigger", "turnLeft": "Turn left", "turnRight": "Turn right",
+    "saveError": "Spot not saved: {message}"
   },
   "weather": {
     "title": "Weather", "noDevice": "No weather service is active. Enable one in Settings → Plugins.",
