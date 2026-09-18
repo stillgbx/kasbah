@@ -69,6 +69,18 @@ describe('Simulation', () => {
     await expect(sim.execute('cover-kitchen', { type: 'cover.set_preset', position: 50 })).rejects.toMatchObject({ code: 'UNSUPPORTED_COMMAND' })
   })
 
+  it('chaque ouvrant DECLARE sa nature, et le parc couvre les trois cas qui divergent', () => {
+    const covers = make().devices().filter((d) => d.kind === 'cover')
+    // Aucun ouvrant muet : sans `meta.cover.deviceClass`, tout ce qui se decide sur la nature d'un
+    // ouvrant cote interface (mots, forme dessinee, geste d'ensemble, liste a affecter) retombe sur
+    // le cas du volet, et devient invérifiable en simulation.
+    for (const d of covers) expect(d.meta.cover?.deviceClass, d.externalId).toBeDefined()
+    // Les trois cas qui ne se comportent PAS pareil : le volet, le store (autres mots, forme a plat,
+    // repos inverse) et le portail (aucun geste d'ensemble, n'attend aucune ouverture).
+    const classes = covers.map((d) => d.meta.cover?.deviceClass)
+    expect(classes).toEqual(expect.arrayContaining(['shutter', 'awning', 'gate']))
+  })
+
   it('light.set applies on/brightness/color and rejects other kinds', async () => {
     const sim = make()
     await sim.execute('light-living', { type: 'light.set', on: true, brightness: 55, color: { x: 0.2, y: 0.3 } })

@@ -1,10 +1,27 @@
-import type { Capability } from '@kasbah/shared'
+import type { Capability, CoverClass } from '@kasbah/shared'
 import { SimError, type SimDevice } from '../types'
 import { clamp, descriptor } from './common'
 
-export interface CoverOptions { name: string; position?: number; tilt?: boolean; speedPctPerS?: number; preset?: number }
+export interface CoverOptions { name: string; deviceClass: CoverClass; position?: number; tilt?: boolean; speedPctPerS?: number; preset?: number }
 
-/** Volet : se déplace vers une cible à vitesse constante (5 %/s par défaut), `stop` fige. */
+/**
+ * Modèle annoncé pour chaque nature. Un vrai plugin lit ce que le fabricant déclare (`uiClass` chez
+ * Overkiz) ; la simulation ne peut que le décider, mais elle le décide DEVICE PAR DEVICE, jamais
+ * d'après le nom : un coffret de portail ne s'annonce pas « Roller shutter ».
+ */
+const MODELS: Record<CoverClass, string> = {
+  shutter: 'Roller shutter', awning: 'Awning', blind: 'Venetian blind', curtain: 'Curtain rail',
+  gate: 'Gate operator', garage: 'Garage door opener', window: 'Window opener',
+}
+
+/**
+ * Ouvrant : se déplace vers une cible à vitesse constante (5 %/s par défaut), `stop` fige.
+ *
+ * `deviceClass` est OBLIGATOIRE, comme chez un vrai plugin : c'est elle qui voyage dans
+ * `meta.cover.deviceClass` et décide du vocabulaire, de la forme dessinée et de l'état au repos
+ * (`apps/web/src/lib/cover.ts`). Sans elle, toutes ces règles retomberaient sur le cas du volet et
+ * seraient invérifiables en simulation.
+ */
 export function cover(externalId: string, o: CoverOptions): SimDevice<'cover'> {
   const caps: Capability[] = ['open_close', 'position', 'stop']
   if (o.tilt) caps.push('tilt')
@@ -16,7 +33,9 @@ export function cover(externalId: string, o: CoverOptions): SimDevice<'cover'> {
   const speed = o.speedPctPerS ?? 5
   let target: number | null = null
   const dev: SimDevice<'cover'> = {
-    descriptor: descriptor(externalId, 'cover', o.name, caps, { manufacturer: 'Mock', model: 'Roller shutter' }),
+    descriptor: descriptor(externalId, 'cover', o.name, caps, {
+      manufacturer: 'Mock', model: MODELS[o.deviceClass], cover: { deviceClass: o.deviceClass },
+    }),
     state: {
       kind: 'cover', updatedAt: 0, available: true, position: o.position ?? 100, motion: 'stopped',
       ...(o.tilt ? { tilt: 50 } : {}), ...(preset !== undefined ? { presetPosition: preset } : {}),
