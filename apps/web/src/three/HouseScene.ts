@@ -161,12 +161,16 @@ const WHITE = new Color(0xffffff)
 /** Largeur (m) du trait qui souligne la pièce sélectionnée : un pixel de loin, une bande de près. */
 const HIGHLIGHT_RING_M = 0.14
 /**
- * Poignée d'une ouverture en mode édition : une dalle qui remplit son rectangle, DÉBORDANT
- * l'épaisseur du mur (0,30 m contre 0,20 m de mur), pour qu'un doigt l'attrape de l'intérieur comme
- * de l'extérieur sans viser ; et un trait qui la cerne, large de 6 cm — celui de la pièce fait 14 cm,
- * mais une fenêtre est vingt fois plus petite qu'un sol.
+ * Poignée d'une ouverture en mode édition : une dalle qui remplit son rectangle et déborde de
+ * l'épaisseur du mur, et un cadre qui la cerne (voir `OPENING_RING` pour sa largeur).
  */
-const OPENING_HANDLE_DEPTH_M = 0.3
+/**
+ * De combien la poignée d'une ouverture DÉBORDE de chaque face du mur (m). Elle s'attrape ainsi de
+ * l'intérieur comme de l'extérieur sans viser, et surtout son cadre au repos, qui est soumis à la
+ * profondeur, reste visible quand on regarde la façade de biais : à ras du mur, la face extérieure le
+ * masquait (constaté sur un mur de 30 cm, là où la poignée en faisait autant).
+ */
+const OPENING_HANDLE_PROUD_M = 0.09
 /**
  * Largeur vue du cadre d'une poignée : FIN au repos, épais pour celle qu'on règle. C'est l'épaisseur
  * qui porte l'écart entre les deux — une nuance d'intensité ne suffisait pas à les distinguer, et
@@ -185,7 +189,7 @@ const ORIGIN_MARK = { ring: 0.24, bar: 0.05, axis: 1.1, north: 0.7 } as const
  * Ligne de cote d'une ouverture : épaisseur du trait, hauteur des tirets qui la ferment à chaque
  * bout, et de combien le nombre flotte au-dessus d'elle (m).
  */
-const COTE = { bar: 0.022, tick: 0.2, lift: 0.14 } as const
+const COTE = { bar: 0.035, tick: 0.2, lift: 0.14 } as const
 /** Jusqu'où le cadrage d'une ouverture suit ses cotes (m) : au-delà, le bout du trait n'apprend rien. */
 const OPENING_FOCUS_REACH_M = 2
 /** Rayon (px) autour de l'ancre ou de la pilule où l'appui saisit l'appareil déplaçable. */
@@ -342,10 +346,10 @@ export class HouseScene {
     // halos, ondes, jauges — d'un niveau et du jardin — et les lampes d'intérieur (`core/layers.ts`)
     for (const l of [DECOR_LAYER, SITE_DECOR_LAYER, LAMP_LAYER]) this.camera.layers.enable(l)
     // Le lancer de rayon ne teste QUE des listes explicites (jamais l'arbre) : lui ouvrir la couche
-    // des décors du jardin ne rend donc rien de plus touchable, mais c'est ce qui permet d'attraper
-    // la poignée d'une ouverture, qui y vit pour être dessinée dans la passe globale. Sans cette
-    // ligne, `Raycaster` ne voit que la couche 0 et le glissement ne démarre jamais (constaté).
-    this.raycaster.layers.enable(SITE_DECOR_LAYER)
+    // des décors ne rend donc rien de plus touchable, mais c'est ce qui permet d'attraper la poignée
+    // d'une ouverture, qui y vit pour être dessinée APRÈS les murs de son niveau. Sans cette ligne,
+    // `Raycaster` ne voit que la couche 0 et le glissement ne démarre jamais (constaté).
+    this.raycaster.layers.enable(DECOR_LAYER)
 
     const create = deps.createRenderer ?? defaultCreateRenderer
     this.renderer = deps.headless ? null : create(canvas)
@@ -775,6 +779,9 @@ export class HouseScene {
     this.buildOpeningHandles()
     this.buildOriginMark()
     this.refreshOpeningNotes()
+    // poignées, repère et cotes sont des décors de niveau : c'est leur présence qui vaut sa passe à
+    // un niveau, et leur départ qui la lui retire
+    this.refreshLevelPasses()
     this.applyLevelFocus()                 // les poignées d'un niveau masqué n'ont pas à se montrer
     this.loop.invalidate()
   }
@@ -787,6 +794,7 @@ export class HouseScene {
     this.selectedOpeningId = id
     this.styleOpeningHandles()
     this.refreshOpeningNotes()
+    this.refreshLevelPasses()              // le tracé des cotes naît et meurt avec la sélection
     this.openingDragger?.detach()
     this.openingDragger = null
     if (id && this.editingOpenings && !this.deps.headless) {
@@ -853,11 +861,21 @@ export class HouseScene {
    * Les deux cadres existent en permanence sur chaque poignée ; la sélection n'éteint que des
    * MATÉRIAUX. Rien ne se construit ni ne se détruit en sélectionnant.
    *
-   * Elles vivent sur `SITE_DECOR_LAYER` et non `DECOR_LAYER` : ce sont deux façons de dire « décor »,
-   * qui diffèrent par le MOMENT du dessin (`core/layers.ts`). Un décor de NIVEAU force une passe de
-   * plus pour chaque niveau qui en porte — et une passe, c'est tout le bâti redessiné. Or une poignée
-   * est en `MeshBasicMaterial` : les lampes du niveau n'ont rien à lui apprendre, et la passe globale
-   * la dessine aussi bien. Le mode édition ne change donc pas le nombre de passes.
+   * **Elles vivent sur `DECOR_LAYER`, dans le groupe des MARQUEURS de leur niveau** — le chemin du
+   * guide du mode « déplacer », et il n'y en a pas d'autre pour quelque chose qui doit se voir
+   * PAR-DESSUS un mur. Essayé d'abord : `SITE_DECOR_LAYER`, dessiné dans la passe globale, pour
+   * économiser la passe qu'un décor de niveau coûte. Le trait se voyait dans l'embrasure et nulle
+   * part ailleurs, et les lignes de cote n'apparaissaient jamais — pour cette raison :
+   *
+   *   la passe d'un niveau REDESSINE ses murs et ses sols par-dessus l'image de la passe globale,
+   *   sans effacer et sans que la profondeur l'arrête (`depthWrite: false` laisse le tampon à la
+   *   valeur du mur, que le mur repasse à égalité). Tout ce que la passe globale a posé SUR une
+   *   surface de niveau est donc recouvert dès que ce niveau a une passe à lui.
+   *
+   * Un trou de mur n'a pas de surface à redessiner : c'est pourquoi le cadre d'une poignée survivait
+   * dans l'embrasure alors que la cote posée sur le mur, elle, disparaissait. Sur `DECOR_LAYER` le
+   * décor est dessiné DANS la passe du niveau, donc après ses murs ; et `refreshLevelPasses` donne sa
+   * passe au niveau justement parce qu'il porte ce décor.
    */
   private buildOpeningHandles(): void {
     this.clearOpeningHandles()
@@ -878,7 +896,7 @@ export class HouseScene {
     }
     this.openingMats = mats
     for (const level of this.geometry.levels) {
-      const parent = this.nodes.levels.get(level.levelId)?.group
+      const parent = this.nodes.levels.get(level.levelId)?.markers
       if (!parent) continue
       for (const o of level.openings) {
         const group = new Group()
@@ -889,21 +907,21 @@ export class HouseScene {
           o.origin[2] + o.height / 2,
         )
         group.rotation.z = Math.atan2(o.u[1], o.u[0])
-        const fill = new Mesh(new BoxGeometry(o.width, OPENING_HANDLE_DEPTH_M, o.height), mats.fill)
+        const thick = o.depth + 2 * OPENING_HANDLE_PROUD_M
+        const fill = new Mesh(new BoxGeometry(o.width, thick, o.height), mats.fill)
         fill.userData = { role: 'opening', openingId: o.openingId }
         // Les deux cadres sont bâtis dans le plan XY puis REDRESSÉS (le y local devient le z du mur) :
         // celui du repos extrudé dans l'épaisseur de la poignée (un tube, donc jamais coplanaire avec
         // la menuiserie qui l'entoure), celui de la sélection plat, puisqu'il se dessine par-dessus
         // tout et n'a personne avec qui se disputer la profondeur.
-        const d = OPENING_HANDLE_DEPTH_M / 2
-        const rest = extrudeRing(...frameRect(o.width, o.height, OPENING_RING.rest), -d, d)
+        const rest = extrudeRing(...frameRect(o.width, o.height, OPENING_RING.rest), -thick / 2, thick / 2)
         rest.rotateX(Math.PI / 2)
         const ring = new Mesh(rest, mats.ring)
         const bold = flatRing(...frameRect(o.width, o.height, OPENING_RING.on), 0)
         bold.rotateX(Math.PI / 2)
         const ringOn = new Mesh(bold, mats.ringOn)
         group.add(fill, ring, ringOn)
-        group.traverse((n) => n.layers.set(SITE_DECOR_LAYER))
+        group.traverse((n) => n.layers.set(DECOR_LAYER))
         parent.add(group)
         // La `Scene` tourne avec `matrixWorldAutoUpdate = false` : sans cet appel, la matrice monde
         // d'une poignée neuve reste l'IDENTITÉ jusqu'à la prochaine image, le lancer de rayon la teste
@@ -938,6 +956,10 @@ export class HouseScene {
    * DOM : le tracé vit dans le repère du niveau, donc il suit l'ouverture qui glisse sans un temps de
    * retard, et il se cache avec son niveau.
    *
+   * Il vit avec les MARQUEURS du niveau, sur `DECOR_LAYER` — c'est ce qui le fait dessiner après les
+   * murs (voir `buildOpeningHandles` : posé ailleurs, le mur le recouvrait), et c'est aussi un groupe
+   * qui SURVIT à la reconstruction d'un niveau, comme les étiquettes.
+   *
    * **Le cas difficile est la cote courte.** Le nombre est du DOM, large de 66 px quelle que soit la
    * distance ; l'intervalle, lui, est en mètres. Aucun seuil en mètres ne peut donc décider « le
    * nombre est plus large que sa cote ». Il est pour cette raison posé AU-DESSUS du trait et non
@@ -952,7 +974,7 @@ export class HouseScene {
     const opening = room?.openings.find((o) => o.id === id)
     const level = rect ? this.nodes?.levels.get(rect.levelId) : undefined
     if (!rect || !room || !opening || !level || typeof document === 'undefined') { this.clearOpeningNotes(); return }
-    if (!this.openingNotes || this.openingNotes.parent !== level.labels) {
+    if (!this.openingNotes || this.openingNotes.parent !== level.labels || this.openingNotes.cotes.parent !== level.markers) {
       // les éléments sont GARDÉS d'une image à l'autre : les refaire à chaque mouvement de doigt
       // ferait clignoter du DOM, et le navigateur repaindrait trois boîtes pour deux chiffres
       this.clearOpeningNotes()
@@ -975,13 +997,8 @@ export class HouseScene {
         cotes.add(line, a, b)
         return { line, a, b }
       })
-      cotes.traverse((n) => n.layers.set(SITE_DECOR_LAYER))
-      // Dans le groupe des ÉTIQUETTES du niveau et non dans celui du niveau, même si c'est de la
-      // géométrie : ce groupe-là SURVIT à la reconstruction d'un niveau (`rebuildLevelNodes` le
-      // reparente, comme les marqueurs), alors que le groupe du niveau est jeté. Posé à côté des
-      // murs, le tracé se retrouvait orphelin au premier mouvement de doigt — constaté. Il annote la
-      // même chose que les trois étiquettes, il vit et meurt avec elles, il vit donc avec elles.
-      level.labels.add(cotes)
+      cotes.traverse((n) => n.layers.set(DECOR_LAYER))
+      level.markers.add(cotes)
       this.openingNotes = { name, right, left, parent: level.labels, cotes, lines }
     }
     const notes = this.openingNotes
@@ -1047,6 +1064,9 @@ export class HouseScene {
    * sous une dalle ou loin du bâti, et un repère qu'on ne voit pas ne repère rien. Il n'est ni
    * touchable (aucun `role` dans `userData`, jamais présenté à `pick`) ni déplaçable : l'origine du
    * fichier n'est pas un réglage.
+   *
+   * Il est posé dans les marqueurs du niveau qui porte le z = 0 du fichier, et sur `DECOR_LAYER`,
+   * pour la même raison que les poignées : ailleurs, le sol de ce niveau le recouvrirait à sa passe.
    */
   private buildOriginMark(): void {
     this.clearOriginMark()
@@ -1081,8 +1101,14 @@ export class HouseScene {
     // terrain, pas une direction dans laquelle on compte quelque chose.
     const h = (this.house.origin.heading * Math.PI) / 180
     arm([-Math.sin(h), Math.cos(h)], ORIGIN_MARK.north, WHITE, 0.55, 'N')
-    group.traverse((n) => n.layers.set(SITE_DECOR_LAYER))
-    this.nodes.root.add(group)
+    group.traverse((n) => n.layers.set(DECOR_LAYER))
+    // le niveau dont le sol est le plus proche du z = 0 du fichier ; le repère se replace dans son
+    // repère à lui (un niveau est posé à son élévation) pour retomber exactement sur l'origine
+    const host = [...this.nodes.levels.entries()]
+      .sort((a, b) => Math.abs(a[1].elevation) - Math.abs(b[1].elevation))[0]
+    if (!host) return
+    group.position.z = -host[1].elevation
+    host[1].markers.add(group)
     group.updateWorldMatrix(true, true)     // même piège de matrice périmée que les poignées
     this.originMark = { group, labels }
     this.loop.invalidate()
@@ -1410,10 +1436,7 @@ export class HouseScene {
       const above = !!focused && level.elevation > focused.elevation
       const ghost = above && this.options.levelFocusMode === 'ghost'
       nodes.group.visible = !above || ghost
-      nodes.markers.visible = !above
-      // les poignées d'ouverture vivent dans le groupe du niveau, pas dans ses marqueurs : un niveau
-      // FANTÔME garde son groupe visible, elles s'éteignent donc avec les marqueurs, pas avec lui
-      for (const h of this.openingHandles.values()) if (h.rect.levelId === id) h.group.visible = !above
+      nodes.markers.visible = !above         // …et avec eux les poignées d'ouverture et les cotes
       for (const mesh of [...nodes.walls, ...nodes.floors.values(), ...nodes.panes]) {
         mesh.material = ghost ? this.materials.ghost : (mesh.userData.material as Material)
       }

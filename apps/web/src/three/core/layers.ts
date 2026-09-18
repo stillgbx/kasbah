@@ -6,7 +6,16 @@
 //
 // `DECOR_LAYER` — ce qui est POSÉ sur la scène sans en être la matière, pour les appareils d'un
 // NIVEAU : halo d'une lampe, onde d'un lecteur, jauges d'un coffret ou d'un module, pochette sur un
-// écran, guide du mode « déplacer ». Deux passes l'éteignent :
+// écran, guide du mode « déplacer », et le décor du mode ÉDITION (poignées d'ouverture, lignes de
+// cote, repère d'origine).
+//
+// C'est ici que se joue une règle qu'on n'apprend qu'en se trompant : **ce qui doit se voir
+// par-dessus un mur passe par cette couche ET par le groupe `markers` de son niveau**. La passe d'un
+// niveau redessine ses murs et ses sols par-dessus l'image de la passe globale, sans effacer ; tout
+// ce que la passe globale a posé sur une surface de niveau est donc recouvert. Un décor rangé sur
+// `SITE_DECOR_LAYER` « pour économiser une passe » devient invisible — et il le devient
+// SILENCIEUSEMENT sur le plein d'un mur tout en survivant dans un trou, qui n'a pas de surface à
+// redessiner. Deux passes l'éteignent :
 //   - l'OCCLUSION ambiante, qui redessine la scène en profondeur et en normales. Un halo est un
 //     sprite additif, sans volume ; vue par cette passe, l'image devenait un panneau plein face à la
 //     caméra, donc un obstacle, donc un carré NOIR sous chaque lampe allumée ;

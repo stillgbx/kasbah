@@ -22,7 +22,15 @@
   --cat-other: #66717f;
   --radius: 16px;
   --radius-sm: 12px;
-  --font: 'DM Sans Variable', 'DM Sans', system-ui, -apple-system, sans-serif;
+  /*
+   * Plus Jakarta Sans et non DM Sans (changée le 2026-09-18) : DM Sans n'a AUCUN chiffre tabulaire,
+   * et `font-variant-numeric: tabular-nums` y reste donc sans effet — mesuré, son « 0 » fait 9,08 px
+   * quand son « 1 » en fait 4,53, si bien que « 00.00 » et « 11.11 » diffèrent de 17,55 px. Toute
+   * l'app s'appuie sur cette propriété pour la règle « rien ne bouge » : cinquante-trois
+   * déclarations ne faisaient rien. Jakarta a les mêmes métriques de texte à 0,2 % près — le reste
+   * de la mise en page n'a donc pas bougé — et de vrais chiffres tabulaires : l'écart tombe à 0.
+   */
+  --font: 'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   --rail-w: 72px;
   --aside-w: 340px;
   /* marge du panneau flottant de la vue Maison autour de la scène */

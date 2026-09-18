@@ -902,10 +902,16 @@ describe('régler les ouvertures', () => {
 
   /**
    * Les poignées vivent et meurent avec le mode : hors édition, la scène doit être exactement celle
-   * d'avant, au triangle près. Et elles ne coûtent aucune passe de niveau (elles sont dessinées dans
-   * la passe globale) — c'est ce qui rend le mode gratuit sur l'iGPU.
+   * d'avant, au triangle près — y compris ses passes de niveau, qu'un mode refermé ne doit pas
+   * laisser derrière lui.
+   *
+   * Ce commentaire disait l'inverse jusqu'au 2026-09-18 (« aucune passe de niveau, dessinées dans la
+   * passe globale, donc un mode gratuit ») : c'est précisément ce qui rendait les lignes de cote
+   * invisibles, la passe d'un niveau repeignant ses murs par-dessus la passe globale. Le décor du
+   * mode édition coûte désormais une passe par niveau qui en porte, et c'est le prix de la
+   * visibilité — voir `doc/1_architecture/1_5_scene-3d.md`.
    */
-  it('pose une poignée par ouverture, sans passe de plus, et ne laisse rien en sortant', () => {
+  it('pose une poignée par ouverture et ne laisse rien en sortant', () => {
     const scene = new HouseScene(document.createElement('canvas'), { headless: true })
     scene.load(house)
     const before = countTriangles(scene.scene)
@@ -913,11 +919,41 @@ describe('régler les ouvertures', () => {
     scene.setEditingOpenings(true)
     expect(handles(scene)).toBe(openingCount)
     expect(openingCount).toBeGreaterThan(0)
-    expect(scene.debugStats().levelPasses).toBe(0)
     expect(countTriangles(scene.scene)).toBeGreaterThan(before)
     scene.setEditingOpenings(false)
     expect(handles(scene)).toBe(0)
     expect(countTriangles(scene.scene)).toBe(before)
+    expect(scene.debugStats().levelPasses).toBe(0)
+    scene.dispose()
+  })
+
+  /**
+   * CE QUI MANQUAIT, et ce qui a laissé passer un mode édition dont les traits n'étaient JAMAIS
+   * dessinés : vérifier la structure ne dit rien du rendu. La passe d'un niveau redessine ses murs
+   * et ses sols par-dessus l'image de la passe globale ; tout ce qui est posé SUR une surface de
+   * niveau depuis la passe globale est donc recouvert. Le seul chemin qui se voit par-dessus un mur
+   * est celui du guide du mode « déplacer » : `DECOR_LAYER`, dans le groupe des MARQUEURS du niveau —
+   * et c'est ce que `refreshLevelPasses` inspecte pour donner sa passe au niveau. Un décor qui n'est
+   * ni sur cette couche ni dans ce groupe n'est dessiné nulle part.
+   */
+  it('dessine poignées et cotes dans la passe de leur niveau, seul endroit d’où l’on se voit par-dessus un mur', () => {
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true })
+    scene.load(house)
+    scene.setEditingOpenings(true)
+    scene.setSelectedOpening('fen-ch1')
+    const decors: { name: string; inMarkers: boolean; layer: boolean }[] = []
+    scene.scene.traverse((o) => {
+      if (!o.name.startsWith('opening:') && o.name !== 'opening-cotes' && o.name !== 'origin-mark') return
+      let inMarkers = false
+      for (let n: Object3D | null = o.parent; n; n = n.parent) if (n.name === 'markers') { inMarkers = true; break }
+      const mesh = o.children.find((c) => c instanceof Mesh)!
+      decors.push({ name: o.name, inMarkers, layer: mesh.layers.mask === 1 << DECOR_LAYER })
+    })
+    expect(decors).toHaveLength(openingCount + 2)          // les poignées, le tracé, le repère d'origine
+    expect(decors.filter((d) => !d.inMarkers)).toEqual([])
+    expect(decors.filter((d) => !d.layer)).toEqual([])
+    // et c'est bien ce qui vaut sa passe au niveau : sans elle, rien de tout ça ne serait dessiné
+    expect(scene.debugStats().levelPasses).toBeGreaterThan(0)
     scene.dispose()
   })
 
@@ -1267,11 +1303,12 @@ describe('cotes et nom de l’ouverture réglée', () => {
     })
     const now = read()
     expect(now).not.toEqual(was)
-    // et le TRACÉ suit : il vit dans le groupe des étiquettes, qui survit à la reconstruction du
-    // niveau — posé dans le groupe du niveau, il se retrouvait orphelin au premier mouvement de doigt
+    // et le TRACÉ suit : il vit dans les marqueurs du niveau, qui survivent à sa reconstruction —
+    // posé dans le groupe du niveau, il se retrouvait orphelin au premier mouvement de doigt
     let cotes: Object3D | null = null
     scene.scene.traverse((o) => { if (!cotes && o.name === 'opening-cotes') cotes = o })
     expect(cotes).not.toBeNull()
+    expect((cotes! as Object3D).parent!.name).toBe('markers')
     expect(((cotes! as Object3D).children[0] as Mesh).scale.x).toBeCloseTo(parseFloat(now[0]!), 2)
     // ce que l'une gagne, l'autre le perd : la longueur du mur ne change pas
     const sum = (xs: string[]) => xs.reduce((n, t) => n + parseFloat(t), 0)

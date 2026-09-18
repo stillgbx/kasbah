@@ -11,11 +11,11 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@fontsource-variable/dm-sans": "^5.3.0",
+    "@fontsource-variable/plus-jakarta-sans": "^5.3.0",
     "@kasbah/mock-sim": "*",
     "@kasbah/shared": "*",
-    "@vueuse/core": "^14.0.0",
     "@openmeteo/weather-map-layer": "^0.1.0",
+    "@vueuse/core": "^14.0.0",
     "maplibre-gl": "^6.9.0",
     "pinia": "^4.0.0",
     "three": "^0.185.0",
