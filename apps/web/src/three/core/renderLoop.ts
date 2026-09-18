@@ -15,7 +15,15 @@ import type { Tween } from './tween'
 // GESTE — une orbite, un vol de caméra, une demande explicite par `invalidate` — garde la cadence
 // pleine : c'est là que l'œil voit la saccade, pas sur une onde de cinq secondes.
 
-export interface Animation { step(now: number, dtS: number): boolean }
+export interface Animation {
+  step(now: number, dtS: number): boolean
+  /**
+   * Cadence PROPRE de cette animation, en images par seconde (défaut `ANIMATION_HZ`). Une eau qui
+   * ondule se contente de 10 Hz là où une averse en demande 20. C'est la plus rapide des animations
+   * en cours qui donne le tempo — une image redessinée les sert toutes.
+   */
+  readonly hz?: number
+}
 
 export interface RenderLoopOptions {
   /**
@@ -41,9 +49,8 @@ export interface RenderLoop {
   dispose(): void
 }
 
-/** Cadence des animations décoratives, en images par seconde. Une onde de 5,75 s y est lisse. */
+/** Cadence par défaut des animations décoratives, en images par seconde. Une onde de 5,75 s y est lisse. */
 const ANIMATION_HZ = 20
-const ANIMATION_FRAME_MS = 1000 / ANIMATION_HZ
 
 export function createRenderLoop(opts: RenderLoopOptions): RenderLoop {
   const raf = opts.requestFrame ?? ((cb) => requestAnimationFrame(cb))
@@ -69,7 +76,9 @@ export function createRenderLoop(opts: RenderLoopOptions): RenderLoop {
     const interactive = moving || dirty
 
     // Rien que du décor à animer, et pas encore l'heure : on rend la main sans rien redessiner.
-    const due = t - lastAnimation >= ANIMATION_FRAME_MS
+    let hz = 0
+    for (const a of animations) hz = Math.max(hz, a.hz ?? ANIMATION_HZ)
+    const due = hz > 0 && t - lastAnimation >= 1000 / hz
     if (!interactive && animations.size > 0 && !due) { schedule(); return }
 
     if (animations.size > 0) {

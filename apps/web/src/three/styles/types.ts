@@ -43,6 +43,11 @@ export interface SurfaceLook {
   emissive?: number
   /** Multiplicateur du relief de la matière : 0 l'aplatit, 2 le creuse. */
   relief?: number
+  /**
+   * Eau VIVANTE (`effects/water.ts`), lu pour la seule piscine : 1 = elle ondule et projette ses
+   * caustiques, 0 = elle reste figée. Une maquette a de l'eau en résine coulée, pas de la houle.
+   */
+  flow?: number
 }
 
 export interface SurfaceLooks {

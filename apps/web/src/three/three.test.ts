@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BackSide, Box3, BoxGeometry, type OrthographicCamera, type PerspectiveCamera, type BufferGeometry, CylinderGeometry, Mesh, type MeshBasicMaterial, type MeshStandardMaterial, type Object3D, ShapeGeometry, Vector3, type BufferAttribute, type Texture } from 'three'
+import { BackSide, Box3, BoxGeometry, type OrthographicCamera, type PerspectiveCamera, type BufferGeometry, CylinderGeometry, Mesh, type MeshBasicMaterial, type MeshStandardMaterial, type Object3D, ShaderLib, ShapeGeometry, Vector3, type BufferAttribute, type Texture } from 'three'
 import { computeHouseGeometry, localToGeo, openingGaps, parseHouse, type DeviceDescriptor, type DeviceState, type OpeningRect, type PlacedHouseDevice } from '@kasbah/shared'
 import demo from '@kasbah/shared/demo-house.json'
 import { buildHouse, buildLevel, buildWallsGeometry, countTriangles } from './builders/buildHouse'
@@ -25,6 +25,10 @@ import { yawToRad } from '../lib/orientation'
 import { HouseScene } from './HouseScene'
 import type { Animation } from './core/renderLoop'
 import { Precipitation } from './effects/precipitation'
+import { makeWaterAlive } from './effects/water'
+
+/** La cadence que `HouseScene` demande pour l'eau (`WATER_HZ`) — répétée ici, le test la vérifie. */
+const WATER_HZ_TEST = 10
 
 /** Tous les maillages d'un objet, à plat. */
 const meshesOf = (o: Object3D): Mesh[] => {
@@ -89,6 +93,28 @@ describe('render loop', () => {
     expect(renders).toBeLessThanOrEqual(5)           // …mais elle dessine à ~20 Hz, pas à 60
     expect(renders).toBeGreaterThanOrEqual(2)
     loop.dispose()
+  })
+
+  it('une animation qui demande 10 Hz dessine deux fois moins qu’une qui en demande 20', () => {
+    const run = (hz: number | undefined) => {
+      const frames: ((now: number) => void)[] = []
+      let renders = 0, now = 0
+      const loop = createRenderLoop({
+        render: () => { renders++ },
+        updateControls: () => false,
+        requestFrame: (cb) => { frames.push(cb); return frames.length },
+        cancelFrame: () => {},
+        now: () => now,
+      })
+      loop.addAnimation(hz === undefined ? { step: () => true } : { hz, step: () => true })
+      for (let i = 0; i < 30; i++) { const cb = frames.shift(); if (cb) { now += 16; cb(now) } }
+      loop.dispose()
+      return renders
+    }
+    const fast = run(undefined)                      // 20 Hz par défaut
+    const slow = run(WATER_HZ_TEST)                  // l'eau : 10 Hz
+    expect(slow).toBeLessThan(fast)
+    expect(slow).toBeGreaterThanOrEqual(fast / 2 - 1)
   })
 
   it('renders on invalidate and stops when nothing moves; tweens keep it alive', () => {
@@ -1942,5 +1968,57 @@ describe('précipitations (palier C)', () => {
     scene.setAppearance({ ambience: resolveAmbience({ mode: 'day' }) })
     expect(priv.loop.animationCount).toBe(0)
     scene.dispose()
+  })
+})
+
+/** Centre (monde) de la piscine de la maison de démonstration. */
+const POOL_CENTER = new Vector3(18, 0, -4)
+
+describe('eau vivante', () => {
+  it('injecte ses ondes et ses caustiques aux points que three lui laisse', () => {
+    const mats = createMaterials(defaultSceneTheme(), defaultLook())
+    const time = { value: 0 }
+    const patch = (mat: MeshStandardMaterial, role: 'surface' | 'basin') => {
+      const strength = makeWaterAlive(mat, role, time)
+      const shader = { uniforms: {} as Record<string, unknown>, vertexShader: ShaderLib.physical.vertexShader, fragmentShader: ShaderLib.physical.fragmentShader }
+      mat.onBeforeCompile(shader as never, null as never)
+      return { shader, strength }
+    }
+    const surface = patch(mats.zones.pool, 'surface')
+    const basin = patch(mats.poolBasin, 'basin')
+    // le temps est PARTAGÉ, la force ne l'est pas : le fond suit le jour, la houle non
+    expect(surface.shader.uniforms.uWaterTime).toBe(time)
+    expect(basin.shader.uniforms.uWaterTime).toBe(time)
+    expect(basin.shader.uniforms.uWaterStrength).not.toBe(surface.shader.uniforms.uWaterStrength)
+    // les points d'injection existent encore dans le shader de three : c'est CE test qui le dit le
+    // jour où une version en déplace un (le patch échouerait sinon en silence, eau figée)
+    expect(surface.shader.vertexShader).toContain('vWaterPos = (modelMatrix')
+    expect(surface.shader.fragmentShader).toContain('kasbahWaveGrad(vWaterPos.xz')
+    expect(surface.shader.fragmentShader).not.toContain('totalEmissiveRadiance += diffuseColor')
+    expect(basin.shader.fragmentShader).toContain('totalEmissiveRadiance += diffuseColor')
+    // deux programmes distincts, et distincts de tout matériau standard aux mêmes réglages
+    expect(mats.zones.pool.customProgramCacheKey!()).not.toBe(mats.poolBasin.customProgramCacheKey!())
+  })
+
+  it('ne fait tourner la boucle que si le style, la qualité ET le champ de la caméra le veulent', () => {
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true })
+    scene.resize(1000, 600)
+    scene.load(parseHouse(demo))
+    // headless : pas de contrôles, donc personne n'a tourné la caméra vers la maison — on la vise
+    // à la main sur la piscine de la maison de démonstration, puis on repasse par `syncWater`.
+    const aim = (at: Vector3, quality: 'high' | 'medium') => { scene.camera.lookAt(at); scene.setOptions({ quality }) }
+    aim(POOL_CENTER, 'high')
+    expect(scene.debugStats().animations).toBe(1)
+    scene.setOptions({ quality: 'low' })
+    expect(scene.debugStats().animations).toBe(0)      // même règle que la pluie
+    scene.setOptions({ quality: 'high' })
+    expect(scene.debugStats().animations).toBe(1)
+    scene.setAppearance({ style: styleById('maquette') })
+    expect(scene.debugStats().animations).toBe(0)      // une maquette a de l'eau en résine
+    scene.setAppearance({ style: styleById(null) })
+    expect(scene.debugStats().animations).toBe(1)
+    // et le jardin qu'on ne regarde plus ne coûte plus rien
+    aim(new Vector3(-40, 0, 40), 'medium')
+    expect(scene.debugStats().animations).toBe(0)
   })
 })

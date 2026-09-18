@@ -40,7 +40,8 @@ const SURFACES: SurfaceLooks = {
   terrain: board('plaster', 0.2),
   zones: {
     lawn: board('plaster', 0.2),
-    pool: { texture: 'water', roughness: 0.15, metalness: 0.1, relief: 0.5 },
+    // de la résine coulée dans un plateau de carton : elle ne bouge pas, et c'est voulu
+    pool: { texture: 'water', roughness: 0.15, metalness: 0.1, relief: 0.5, flow: 0 },
     driveway: board('concrete', 0.2),
     path: board('pavers', 0.3),
     bed: board('soil', 0.3),

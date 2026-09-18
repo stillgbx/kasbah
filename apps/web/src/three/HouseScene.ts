@@ -1,7 +1,7 @@
 import {
   AmbientLight, Color, DirectionalLight, DoubleSide, HemisphereLight, MOUSE, OrthographicCamera, PerspectiveCamera, Plane, Raycaster, Scene, Spherical, type Texture, TOUCH, Vector2, Vector3, VSMShadowMap,
   WebGLRenderer, Box3, BoxGeometry, Fog, Mesh, MeshBasicMaterial, type Material, type MeshStandardMaterial, type Object3D,
-  Group, SphereGeometry, CylinderGeometry, RingGeometry,
+  Group, SphereGeometry, CylinderGeometry, RingGeometry, Frustum, Matrix4, Sphere,
 } from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js'
@@ -15,8 +15,9 @@ import { loadPackTextures, packById } from './textures/assets'
 import { createSkyEnvironment, overcastSky } from './core/sky'
 import { DECOR_LAYER, LAMP_LAYER, SITE_DECOR_LAYER } from './core/layers'
 import { createPostPipeline, detectQuality, gpuName, PIXEL_RATIO, tiltBlurFactor, toneMappingOf, type EffectiveQuality, type PostPipeline, type RenderQuality } from './core/post'
-import { fogDistance, sunDirection, type SceneAmbience } from './core/ambience'
+import { dayFactor, fogDistance, sunDirection, type SceneAmbience } from './core/ambience'
 import { Precipitation } from './effects/precipitation'
+import { makeWaterAlive, type WaterStrength } from './effects/water'
 import { defaultAmbience, defaultSceneTheme, rolesOf, styleById, type GlowLook, type PostLook, type RenderStyle, type StyleLook } from './styles'
 import { applyTuning, NEUTRAL_TUNING, type SceneTuning } from './styles/tuning'
 import { buildHouse, buildLevel, type HouseNodes, type LevelNodes } from './builders/buildHouse'
@@ -170,7 +171,17 @@ const FLASH: readonly (readonly [number, number])[] = [[2.6, 70], [1, 90], [1.9,
 const FLASH_EVERY_MS: readonly [number, number] = [6000, 16000]
 /** Plafond du volume où il pleut, au-dessus du sol de la maison (m) : au-dessus des toits, sous la caméra d'ensemble. */
 const PRECIP_HEIGHT_M = 14
+/**
+ * Cadence de l'eau vivante (`effects/water.ts`), en images par seconde. Une houle de piscine avance
+ * lentement : à 10 Hz l'œil ne voit pas la marche, et c'est deux fois moins d'images COMPLÈTES à
+ * dessiner qu'une averse.
+ */
+const WATER_HZ = 10
 const WORLD_UP = new Vector3(0, 1, 0)
+/** De quoi tester la piscine contre le champ de la caméra sans rien allouer par mouvement. */
+const waterFrustum = new Frustum()
+const waterMatrix = new Matrix4()
+const waterSphere = new Sphere()
 const WHITE = new Color(0xffffff)
 /**
  * Poignée d'une ouverture en mode édition : une dalle qui remplit son rectangle et déborde de
@@ -268,6 +279,14 @@ export class HouseScene {
   private precip: Precipitation | null = null
   private stopPrecip: (() => void) | null = null
   private precipIntensity = 0
+  /**
+   * L'eau vivante (`effects/water.ts`) : un temps PARTAGÉ par la surface et le fond — crêtes et
+   * caustiques battent ensemble —, la force de chacun, et de quoi retirer l'animation. Les deux
+   * matériaux sont patchés une fois pour toutes ; c'est la force qui dit si l'eau bouge.
+   */
+  private waterTime = { value: 0 }
+  private readonly waterStrength: { surface: WaterStrength; basin: WaterStrength }
+  private stopWater: (() => void) | null = null
   /** Direction d'où vient la lumière du jour, monde three. Relue à chaque changement d'ambiance. */
   private sunDir = new Vector3(0.45, 0.82, 0.35)
   /**
@@ -372,6 +391,10 @@ export class HouseScene {
     this.theme = deps.theme ?? defaultSceneTheme()
     this.sunDir = sunDirection(this.ambience)
     this.materials = createMaterials(this.theme, this.look)
+    this.waterStrength = {
+      surface: makeWaterAlive(this.materials.zones.pool, 'surface', this.waterTime),
+      basin: makeWaterAlive(this.materials.poolBasin, 'basin', this.waterTime),
+    }
     // Voir `render()` : les matrices monde se mettent à jour une fois par image, pas une fois par passe.
     this.scene.matrixWorldAutoUpdate = false
     this.perspectiveCamera = new PerspectiveCamera(38, 1, 0.1, 500)
@@ -421,7 +444,7 @@ export class HouseScene {
       this.controls.maxDistance = 120
       // plongée, rotation, molette et doigts dépendent de la projection : un seul endroit les pose
       this.applyControlLimits()
-      this.controls.addEventListener('change', () => this.loop.invalidate())
+      this.controls.addEventListener('change', () => { this.loop.invalidate(); this.syncWater() })
       this.controls.addEventListener('start', () => { this.cameraTween?.cancel(); this.cameraTween = null })
     } else this.controls = null
 
@@ -493,6 +516,7 @@ export class HouseScene {
     this.controls?.target.set((c.min[0] + c.max[0]) / 2, 0, -(c.min[1] + c.max[1]) / 2)
     this.applyLevelFocus()
     if (firstLoad) this.resetView(false)
+    this.syncWater()                       // après le cadrage : la piscine est-elle DANS le champ ?
     this.loop.invalidate()
   }
 
@@ -549,6 +573,7 @@ export class HouseScene {
     this.house = null
     this.index = null
     this.geometry = null
+    this.syncWater()                       // plus de maison, donc plus de piscine à animer
     this.highlightedRoom = null
     this.highlightMeshes = []                // libérés avec la racine
   }
@@ -2028,6 +2053,7 @@ export class HouseScene {
     this.invalidateShadows()               // le soleil a pu bouger
     this.syncStorm()
     this.syncPrecipitation()
+    this.syncWater()                       // le style dit si l'eau bouge, l'heure ce que le fond reçoit
     this.loop.invalidate()
   }
 
@@ -2119,6 +2145,51 @@ export class HouseScene {
   }
 
   /**
+   * L'eau qui bouge (`effects/water.ts`). Le shader ne coûte que les pixels de la piscine ; ce qui
+   * coûte, c'est la BOUCLE — une eau animée redessine toute la scène, dix fois par seconde. D'où
+   * trois conditions, dans cet ordre de gratuité : le style veut de l'eau vivante (la maquette non),
+   * la qualité n'est pas basse (même règle que la pluie), et une piscine est DANS LE CHAMP. Le
+   * dernier point se réévalue à chaque mouvement de caméra : une maison qu'on regarde côté rue ne
+   * paie pas la piscine du jardin.
+   *
+   * Les caustiques du fond suivent le jour : un bassin qui s'allume tout seul à minuit ne trompe
+   * personne. La houle, elle, ondule aussi sous la lune.
+   */
+  private syncWater(): void {
+    const flow = this.look.surfaces.zones.pool.flow ?? 1
+    this.waterStrength.surface.value = flow
+    this.waterStrength.basin.value = flow * (0.25 + 0.75 * dayFactor(this.ambience))
+    const wanted = flow > 0 && this.quality !== 'low' && this.poolInView()
+    if (wanted === (this.stopWater !== null)) return
+    if (!wanted) { this.stopWater?.(); this.stopWater = null; return }
+    this.stopWater = this.loop.addAnimation({
+      hz: WATER_HZ,
+      step: (_now, dtS) => { this.waterTime.value += dtS; return true },
+    })
+  }
+
+  /** Une piscine est-elle dans le tronc de projection ? Sans piscine, la réponse est non. */
+  private poolInView(): boolean {
+    if (!this.nodes || !this.geometry) return false
+    this.camera.updateMatrixWorld()
+    waterFrustum.setFromProjectionMatrix(waterMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse))
+    // La racine pend à l'origine de la scène, et `matrixWorldAutoUpdate` est coupé (les matrices
+    // monde ne se refont qu'à l'image) : sa matrice LOCALE est donc sa matrice monde, et c'est la
+    // seule qui sépare un maillage de zone du repère du monde.
+    this.nodes.root.updateMatrix()
+    for (const z of this.geometry.zones) {
+      if (z.kind !== 'pool') continue
+      const mesh = this.nodes.zones.get(z.zoneId)
+      if (!mesh) continue
+      if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere()
+      const sphere = mesh.geometry.boundingSphere
+      if (!sphere) continue
+      if (waterFrustum.intersectsSphere(waterSphere.copy(sphere).applyMatrix4(this.nodes.root.matrix))) return true
+    }
+    return false
+  }
+
+  /**
    * Les matériaux, avec les matières en images si le style porte un pack et que l'utilisateur les
    * veut. Les images arrivent APRÈS : en attendant, le procédural tient la place, et chaque rôle
    * chargé repasse par ici avec une carte de plus. Le jeton écarte les arrivées pour un style ou un
@@ -2186,6 +2257,7 @@ export class HouseScene {
     const wanted = this.options.quality === 'auto' ? detectQuality(this.renderer ? gpuName(this.renderer) : '') : this.options.quality
     this.quality = wanted
     this.syncPrecipitation()               // la qualité basse coupe la pluie
+    this.syncWater()                       // …et fige l'eau
     if (!this.renderer) return
     const pixelRatio = Math.min(window.devicePixelRatio || 1, PIXEL_RATIO[wanted])
     this.renderer.setPixelRatio(pixelRatio)
