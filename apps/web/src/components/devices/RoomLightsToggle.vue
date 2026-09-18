@@ -13,9 +13,9 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 // le chauffage. Les ambiances du fabricant (`SceneChips.vue`) éteignent déjà la pièce en re-tapant
 // celle qui tourne, mais seulement là où il y en a ; cet interrupteur marche partout.
 // Pas de libellé à côté : l'ampoule du pouce le dit déjà, et le mot « Lumières » répétait la vue.
-// `label` : ce que l'interrupteur commande, pour l'infobulle et les lecteurs d'écran — une pièce
-// depuis le panneau, toute la maison depuis l'en-tête de la vue Lumières.
-const props = defineProps<{ deviceIds: (string | undefined)[]; label?: string }>()
+// Il ne commande jamais qu'une PIÈCE : en haut de la vue Lumières, toute la maison se commande par
+// deux gestes nommés (`LightsMaster`), parce qu'un parc entier est rarement d'un seul état.
+const props = defineProps<{ deviceIds: (string | undefined)[] }>()
 const devices = useDevicesStore()
 
 // Lampes de la pièce : lecture partagée avec le curseur de luminosité (`useRoomLights`), pour que
@@ -39,7 +39,7 @@ function toggle() {
 <template>
   <div v-if="lights.length" class="master">
     <v-switch :model-value="checked" :disabled="reachable.length === 0" density="compact"
-              :aria-label="label ?? $t('rooms.allLights')" :title="label ?? $t('rooms.allLights')"
+              :aria-label="$t('rooms.allLights')" :title="$t('rooms.allLights')"
               @click.stop @update:model-value="toggle">
       <!-- ampoule DANS le pouce : c'est le seul interrupteur de l'app qui n'a pas d'appareil
            nommé à côté de lui, le glyphe dit sur quoi il agit. Pas soleil/lune, déjà le

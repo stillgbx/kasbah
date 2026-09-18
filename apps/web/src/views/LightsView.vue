@@ -4,6 +4,7 @@ import type { DeviceEntry, StateFor } from '@kasbah/shared'
 import PageHeader from '../components/layout/PageHeader.vue'
 import RoomBands from '../components/devices/RoomBands.vue'
 import RoomBrightness from '../components/devices/RoomBrightness.vue'
+import LightsMaster from '../components/devices/LightsMaster.vue'
 import RoomLightsToggle from '../components/devices/RoomLightsToggle.vue'
 import { lightTintCss } from '../lib/lightTint'
 import { useDevicesStore } from '../stores/devices'
@@ -30,11 +31,11 @@ function commit(id: string, v: number) {
 <template>
   <div class="page">
     <PageHeader>
-      <!-- tout éteindre (ou tout allumer) sans parcourir les pièces : le même interrupteur que
-           celui d'une carte, sur toutes les lampes de la maison -->
+      <!-- tout éteindre ou tout allumer sans parcourir les pièces : deux gestes nommés plutôt qu'un
+           interrupteur, parce que la maison est rarement toute allumée ou toute éteinte -->
       <div class="head">
         <div class="muted count">{{ $t('lights.summary', { on: onCount, total: lights.length }) }}</div>
-        <RoomLightsToggle :device-ids="lights.map((e) => e.descriptor.id)" :label="$t('lights.all')" />
+        <LightsMaster :device-ids="lights.map((e) => e.descriptor.id)" :label="$t('lights.all')" />
       </div>
     </PageHeader>
     <div class="page__scroll">

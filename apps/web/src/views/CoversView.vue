@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { openingLabel, type DeviceEntry, type HouseDevice, type StateFor } from '@kasbah/shared'
 import PageHeader from '../components/layout/PageHeader.vue'
-import CoversToggle from '../components/devices/CoversToggle.vue'
+import CoversMaster from '../components/devices/CoversMaster.vue'
 import RoomBands from '../components/devices/RoomBands.vue'
 import PulseDot from '../components/ui/PulseDot.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
@@ -27,8 +27,33 @@ const house = useHouseStore()
 const { t } = useI18n()
 
 const covers = computed(() => devices.list.filter((e) => e.state.kind === 'cover'))
-// position inconnue = pas comptée comme ouverte : on ne sait pas (voir `lib/cover.ts`)
-const openCount = computed(() => covers.value.filter((e) => ((e.state as StateFor<'cover'>).position ?? 0) > 0 && e.state.available).length)
+
+// ---- résumé de l'en-tête : une NATURE à la fois, décrite par l'état qui se remarque — « 16 volets
+// ouverts · 2 stores déployés · 1 portail ouvert ». Un seul compte « ouverts » mélangeait des choses
+// qui ne se lisent pas dans le même sens : d'un volet on retient qu'il est OUVERT, d'un store qu'il
+// est DÉPLOYÉ (`coverActivity`, la même règle que les jauges de ligne et les marqueurs 3D).
+//
+// Une nature absente de la maison n'a pas de groupe ; une nature présente garde le sien même à zéro,
+// sinon le libellé sauterait dès qu'un volet s'ouvre (règle « rien ne bouge »). L'ordre est fixe, et
+// jamais celui des comptes, pour la même raison. Position inconnue = pas comptée : on n'affirme rien
+// d'un moteur muet.
+const SUMMARY_ORDER = ['shutter', 'blind', 'awning', 'curtain', 'window', 'gate', 'garage', 'other']
+const summary = computed(() => {
+  const counts = new Map<string, number>()
+  for (const e of covers.value) {
+    const cls = e.descriptor.meta.cover?.deviceClass ?? ''
+    const key = SUMMARY_ORDER.includes(cls) ? cls : 'other'
+    // la position VISÉE quand le store en tient une, comme les jauges : le compte suit le geste
+    const active = e.state.available
+      && coverActivity(e.descriptor, devices.targetPosition(e.descriptor.id) ?? (e.state as StateFor<'cover'>).position) > 0
+    counts.set(key, (counts.get(key) ?? 0) + (active ? 1 : 0))
+  }
+  return [...counts.entries()]
+    .sort((a, b) => SUMMARY_ORDER.indexOf(a[0]) - SUMMARY_ORDER.indexOf(b[0]))
+    // le nombre passe en 3e argument et rien d'autre : `n` interpolé écraserait l'accord du pluriel
+    .map(([key, n]) => t(`covers.counts.${key}`, n))
+    .join(' · ')
+})
 
 // ---- ouvrants SANS OUVERTURE : la liste de travail qui apparaît après la découverte d'un plugin
 // (Somfy des mois après avoir dessiné la maison, six volets d'un coup sans savoir où ils vont).
@@ -107,15 +132,16 @@ function commit(id: string, v: number) {
 <template>
   <div class="page">
     <PageHeader>
-      <!-- tout fermer (ou tout ouvrir) d'un geste ; « fermer » baisse un store, le plugin traduit -->
+      <!-- tout fermer ou tout ouvrir : deux gestes nommés plutôt qu'un interrupteur, parce que le
+           parc est rarement tout ouvert ou tout fermé ; « fermer » remonte un store (`CoversMaster`) -->
       <div class="head">
-        <div class="muted count">{{ $t('covers.summary', { open: openCount, total: covers.length }) }}</div>
+        <div class="muted count">{{ summary }}</div>
         <!-- place réservée : toujours affiché, même à 0, pour que rien ne saute d'apparence quand
              la découverte d'un plugin fait passer le compte de 0 à six -->
         <div class="muted count count--waiting" :data-zero="house.coversWithoutOpening.length === 0 ? '1' : '0'">
           {{ $t('covers.waitingCount', { n: house.coversWithoutOpening.length }, house.coversWithoutOpening.length) }}
         </div>
-        <CoversToggle :entries="covers" :label="$t('covers.all')" />
+        <CoversMaster :entries="covers" :label="$t('covers.all')" />
       </div>
     </PageHeader>
     <div class="page__scroll">

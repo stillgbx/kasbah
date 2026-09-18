@@ -65,10 +65,22 @@
     "stopAnimate": "Stop the animation", "turnOff": "Turn off {name}"
   },
   "lights": {
-    "all": "All lights in the house", "summary": "{on} on out of {total}", "none": "No light reported by the plugins."
+    "all": "All lights in the house", "allOff": "Turn all off", "allOn": "Turn all on",
+    "summary": "{on} on out of {total}", "none": "No light reported by the plugins."
   },
   "covers": {
-    "all": "All covers in the house", "summary": "{open} open out of {total}", "none": "No cover reported by the plugins.",
+    "all": "All covers in the house", "allClose": "Close all", "allOpen": "Open all",
+    "none": "No cover reported by the plugins.",
+    "counts": {
+      "shutter": "{n} shutter open | {n} shutter open | {n} shutters open",
+      "blind": "{n} blind down | {n} blind down | {n} blinds down",
+      "awning": "{n} awning out | {n} awning out | {n} awnings out",
+      "curtain": "{n} curtain open | {n} curtain open | {n} curtains open",
+      "window": "{n} window open | {n} window open | {n} windows open",
+      "gate": "{n} gate open | {n} gate open | {n} gates open",
+      "garage": "{n} garage door open | {n} garage door open | {n} garage doors open",
+      "other": "{n} cover open | {n} cover open | {n} covers open"
+    },
     "waitingCount": "{n} to assign | {n} to assign | {n} to assign",
     "waitingBadge": "No opening", "waitingHint": "This cover does not dress any window or door in the house yet — discovering a plugin sometimes brings several at once.",
     "assign": "Assign to", "assignNone": "None",

@@ -65,10 +65,22 @@
     "stopAnimate": "Arrêter l'animation", "turnOff": "Éteindre {name}"
   },
   "lights": {
-    "all": "Toutes les lumières de la maison", "summary": "{on} allumées sur {total}", "none": "Aucune lampe remontée par les plugins."
+    "all": "Toutes les lumières de la maison", "allOff": "Tout éteindre", "allOn": "Tout allumer",
+    "summary": "{on} allumées sur {total}", "none": "Aucune lampe remontée par les plugins."
   },
   "covers": {
-    "all": "Tous les ouvrants de la maison", "summary": "{open} ouverts sur {total}", "none": "Aucun ouvrant remonté par les plugins.",
+    "all": "Tous les ouvrants de la maison", "allClose": "Tout fermer", "allOpen": "Tout ouvrir",
+    "none": "Aucun ouvrant remonté par les plugins.",
+    "counts": {
+      "shutter": "{n} volet ouvert | {n} volet ouvert | {n} volets ouverts",
+      "blind": "{n} store déployé | {n} store déployé | {n} stores déployés",
+      "awning": "{n} store banne déployé | {n} store banne déployé | {n} stores bannes déployés",
+      "curtain": "{n} rideau ouvert | {n} rideau ouvert | {n} rideaux ouverts",
+      "window": "{n} fenêtre ouverte | {n} fenêtre ouverte | {n} fenêtres ouvertes",
+      "gate": "{n} portail ouvert | {n} portail ouvert | {n} portails ouverts",
+      "garage": "{n} porte de garage ouverte | {n} porte de garage ouverte | {n} portes de garage ouvertes",
+      "other": "{n} ouvrant ouvert | {n} ouvrant ouvert | {n} ouvrants ouverts"
+    },
     "waitingCount": "{n} à affecter | {n} à affecter | {n} à affecter",
     "waitingBadge": "Sans ouverture", "waitingHint": "Cet ouvrant n'habille encore aucune fenêtre ni porte de la maison — la découverte d'un plugin en amène parfois d'un coup.",
     "assign": "Affecter à", "assignNone": "Aucune",
