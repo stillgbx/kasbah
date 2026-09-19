@@ -100,6 +100,21 @@ export interface MelcloudStatus {
 }
 
 /**
+ * Mise en route du plugin iRobot, telle que l'UI la voit. Aucun mot de passe n'y figure : ni celui
+ * du compte (il ne fait que traverser `irobotLogin`), ni celui, local, de chaque robot.
+ *
+ * `ip` et `connected` disent ce que le compte ne sait pas : où le robot est sur le réseau, et si le
+ * lien MQTT est ouvert. Un robot du compte éteint reste listé, sans adresse et non connecté.
+ */
+export interface IrobotStatus {
+  linked: boolean
+  linkedAt: number | null
+  robots: { blid: string; name: string | null; sku: string | null; ip: string | null; connected: boolean }[]
+  sessionFile: string | null
+  lastError: string | null
+}
+
+/**
  * L'état d'une MACHINE de chauffage, servi par son plugin et non par le registre d'appareils : ce
  * sont une douzaine de mesures qu'on ne consulte que sur la page Chauffage, et qui n'avaient pas à
  * devenir autant de capteurs dans la maison et dans la scène 3D.
@@ -212,6 +227,15 @@ export interface Transport {
   melcloudSystem(): Promise<{ units: MelcloudUnit[]; pollMs: number }>
   /** L'historique de fonctionnement, construit par le serveur au fil des sondages. */
   melcloudHistory(): Promise<{ hourly: HeatingPoint[]; pollMs: number }>
+  /** Où en est la liaison du compte iRobot (robots connus, et lesquels répondent sur le réseau). */
+  irobotStatus(): Promise<IrobotStatus>
+  /**
+   * Relie le compte iRobot. Le mot de passe traverse le serveur une fois : il en ressort le mot de
+   * passe LOCAL de chaque robot, et plus rien ne sort ensuite du réseau de la maison.
+   */
+  irobotLogin(body: { email: string; password: string }): Promise<IrobotStatus>
+  /** Délie le compte : les mots de passe locaux sont effacés et les liens fermés. */
+  irobotLogout(): Promise<IrobotStatus>
   /**
    * Fait oublier un appareil au plugin qui le retenait (`meta.forgettable`), par convention
    * `DELETE /api/plugins/<plugin>/devices/<externalId>` : il quitte l'inventaire jusqu'à ce qu'il

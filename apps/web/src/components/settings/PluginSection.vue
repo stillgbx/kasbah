@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import type { PluginHealth, PluginInfo } from '@kasbah/shared'
 import EnphasePairingCard from '../EnphasePairingCard.vue'
 import HuePairingCard from '../HuePairingCard.vue'
+import IrobotLinkCard from '../IrobotLinkCard.vue'
 import MelcloudLinkCard from '../MelcloudLinkCard.vue'
 import NestLinkCard from '../NestLinkCard.vue'
 import RenaultLinkCard from '../RenaultLinkCard.vue'
@@ -53,6 +54,7 @@ const SETUP_CARDS = {
   tesla: TeslaLinkCard,
   renault: RenaultLinkCard,
   melcloud: MelcloudLinkCard,
+  irobot: IrobotLinkCard,
 } as const
 const setupCard = computed(() => SETUP_CARDS[props.plugin.id as keyof typeof SETUP_CARDS] ?? null)
 

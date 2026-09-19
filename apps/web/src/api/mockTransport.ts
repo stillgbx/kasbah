@@ -190,6 +190,9 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     async melcloudLogout() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no MELCloud account in mock mode') },
     async melcloudSystem() { return { units: [], pollMs: 0 } },
     async melcloudHistory() { return { hourly: [], pollMs: 0 } },
+    async irobotStatus() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no iRobot account in mock mode') },
+    async irobotLogin() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no iRobot account in mock mode') },
+    async irobotLogout() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no iRobot account in mock mode') },
     // la simulation déclare ses appareils, elle n'en découvre aucun : il n'y a rien à oublier
     async forgetDevice() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'nothing to forget in mock mode') },
     cameraStreamUrl() { return null },

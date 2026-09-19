@@ -15,7 +15,14 @@ import { QUOTA_TENSE_PCT, offsetLocation, quotaPercent } from '../lib/map'
 import { useDevicesStore } from '../stores/devices'
 import { useHouseStore } from '../stores/house'
 
-// Vue Robots : une carte par robot tondeuse. Activité, batterie, ce qui la retient au garage,
+// Vue Robots : une carte par robot — tondeuse ou aspirateur, les deux kinds que la maison range ici.
+//
+// La carte d'un ASPIRATEUR est plus courte, et volontairement : le contrat `vacuum` ne porte que
+// l'activité, la batterie, le bac et l'erreur. Pas de carte satellite (il ne dit pas où il est), pas
+// de journal (il ne déclare pas la capacité), pas de compteurs de vie. Afficher ces sections vides
+// pour faire pareil que la tondeuse mentirait sur ce qu'on sait de lui.
+//
+// Pour la tondeuse : une carte par robot tondeuse. Activité, batterie, ce qui la retient au garage,
 // l'erreur du fabricant (code et texte, comme le support les connaît), le prochain départ, la
 // hauteur de coupe, les compteurs de vie, et sa position sur la carte — la même carte que les
 // véhicules, la maison dessous. Tout est optionnel dans le contrat (la simulation ne dit pas tout) :
@@ -32,11 +39,16 @@ const EMPTY = '—'
 type MowerEntry = DeviceEntry & { state: StateFor<'mower'> }
 const mowers = computed(() => devices.list.filter((e): e is MowerEntry => e.state.kind === 'mower'))
 
+type VacuumEntry = DeviceEntry & { state: StateFor<'vacuum'> }
+const vacuums = computed(() => devices.list.filter((e): e is VacuumEntry => e.state.kind === 'vacuum'))
+/** Le bac : plein, vide, ou inconnu — tous les robots ne le disent pas. */
+const binState = (s: StateFor<'vacuum'>) => (s.binFull === undefined ? EMPTY : s.binFull ? t('vacuum.binFull') : t('vacuum.binOk'))
+
 /** Le nom choisi dans la maison l'emporte sur celui du fabricant ; à défaut, le fabricant fait foi. */
-const displayName = (m: MowerEntry) => house.houseDeviceFor(m.descriptor.id)?.name ?? m.descriptor.name
-const has = (m: MowerEntry, c: Capability) => m.descriptor.capabilities.includes(c)
+const displayName = (m: DeviceEntry) => house.houseDeviceFor(m.descriptor.id)?.name ?? m.descriptor.name
+const has = (m: DeviceEntry, c: Capability) => m.descriptor.capabilities.includes(c)
 /** « Husqvarna · Husqvarna Automower® 435X AWD » disait deux fois la marque : le modèle qui la porte déjà suffit. */
-function makeAndModel(m: MowerEntry): string {
+function makeAndModel(m: DeviceEntry): string {
   const brand = m.descriptor.meta.manufacturer ?? m.descriptor.pluginId
   const model = m.descriptor.meta.model
   if (!model) return brand
@@ -107,7 +119,7 @@ const distance = (m: number | undefined) => (m === undefined ? EMPTY : formatDis
 /** Sous la carte : de quand date la position. */
 const caption = (s: StateFor<'mower'>) => (s.location ? t('mower.positionAgo', { ago: formatAgo(s.location.at, now.value, locale.value) }) : undefined)
 
-const busy = (m: MowerEntry) => devices.isPending(m.descriptor.id)
+const busy = (m: DeviceEntry) => devices.isPending(m.descriptor.id)
 async function send(id: string, cmd: CommandInput): Promise<void> {
   await devices.sendCommand(id, cmd)
   void devices.refreshHealth()                         // une requête de plus : la jauge suit
@@ -170,8 +182,52 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
   <div class="robots">
     <PageHeader />
     <div class="robots__scroll">
-      <div v-if="mowers.length === 0" class="card card--soft empty muted">{{ $t('mower.none') }}</div>
+      <div v-if="mowers.length === 0 && vacuums.length === 0" class="card card--soft empty muted">{{ $t('mower.none') }}</div>
       <div class="cards">
+        <!-- L'ASPIRATEUR. Quatre champs au contrat, donc quatre champs à l'écran : l'activité, la
+             batterie, le bac, l'erreur. La ligne d'erreur garde sa place même vide (`min-height`),
+             comme sur la tondeuse : rien ne se décale quand une panne tombe. -->
+        <article v-for="v in vacuums" :key="v.descriptor.id" class="card rcard" :data-unavailable="v.state.available ? '0' : '1'">
+          <div class="rcard__head">
+            <span class="icon-square" :data-on="v.state.activity === 'cleaning' ? '1' : '0'"><StrokeIcon name="vacuum" :size="18" /></span>
+            <div class="min0">
+              <div class="rcard__name">{{ displayName(v) }}</div>
+              <div class="muted rcard__sub">{{ makeAndModel(v) }}</div>
+            </div>
+            <span class="rcard__activity" :data-tone="v.state.activity === 'error' ? 'error' : v.state.activity === 'cleaning' ? 'on' : 'off'">
+              {{ $t(`vacuum.activities.${v.state.activity}`) }}
+            </span>
+          </div>
+          <div class="rcard__soc">
+            <div class="big-value">{{ formatPercent(v.state.battery, locale) }}</div>
+            <div class="muted">{{ $t('vacuum.battery') }}</div>
+          </div>
+          <div class="rcard__bar">
+            <div class="rcard__bar-fill" :data-low="v.state.battery < 20 ? '1' : '0'" :style="{ width: `${v.state.battery}%` }" />
+          </div>
+          <p class="rcard__status" :data-error="v.state.activity === 'error' ? '1' : '0'">{{ v.state.errorMessage ?? '' }}</p>
+          <div class="rcard__stats">
+            <div class="card card--soft stat"><div class="muted stat__k">{{ $t('vacuum.bin') }}</div><div class="stat__v">{{ binState(v.state) }}</div></div>
+            <div class="card card--soft stat"><div class="muted stat__k">{{ $t('vacuum.connection') }}</div><div class="stat__v">{{ v.state.available ? $t('vacuum.connected') : $t('vacuum.offline') }}</div></div>
+          </div>
+          <div class="rcard__actions">
+            <button v-if="has(v, 'clean')" type="button" class="pill" :data-on="v.state.activity === 'cleaning' ? '1' : '0'" :disabled="!v.state.available || busy(v)" :aria-busy="busy(v)"
+                    @click="send(v.descriptor.id, v.state.activity === 'cleaning' ? { type: 'vacuum.pause' } : { type: 'vacuum.start' })">
+              <v-progress-circular v-if="busy(v)" indeterminate size="16" width="2" />
+              <StrokeIcon v-else :name="v.state.activity === 'cleaning' ? 'pause' : 'play'" :size="16" />
+              {{ v.state.activity === 'cleaning' ? $t('common.pause') : $t('common.start') }}
+            </button>
+            <button v-if="has(v, 'dock')" type="button" class="pill" :disabled="!v.state.available || busy(v) || v.state.activity === 'docked'"
+                    @click="send(v.descriptor.id, { type: 'vacuum.dock' })">
+              <StrokeIcon name="home" :size="16" />{{ $t('common.dock') }}
+            </button>
+            <button v-if="has(v, 'locate')" type="button" class="pill" :disabled="!v.state.available || busy(v)"
+                    @click="send(v.descriptor.id, { type: 'vacuum.locate' })">
+              <StrokeIcon name="crosshair" :size="16" />{{ $t('common.locate') }}
+            </button>
+          </div>
+        </article>
+
         <article v-for="m in mowers" :key="m.descriptor.id" class="card rcard" :data-unavailable="m.state.available ? '0' : '1'">
           <div class="rcard__head">
             <span class="icon-square" :data-on="m.state.activity === 'mowing' ? '1' : '0'"><StrokeIcon name="mower" :size="18" /></span>

@@ -1,6 +1,6 @@
 import { apiErrorSchema, devicesResponseSchema, energyHistorySchema, healthResponseSchema, houseSchema, pluginsResponseSchema, scenesResponseSchema, serverMessageSchema, weatherForecastSchema, deviceJournalSchema, deviceConsumptionSchema, type CommandInput, type DeviceConsumption, type DeviceJournal, type DeviceEntry, type DevicePlacement, type EnergyHistory, type HealthResponse, type House, type PluginInfo, type PluginSceneEntry, type PluginSettingsPatch, type SceneRecallInput, type SceneUpdate, type WeatherForecast } from '@kasbah/shared'
 import { parseDeviceId } from '@kasbah/shared'
-import { ApiRequestError, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type MelcloudStatus, type MelcloudUnit, type RenaultStatus, type TeslaStatus, type Transport, type TransportHandlers } from './transport'
+import { ApiRequestError, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type MelcloudStatus, type MelcloudUnit, type RenaultStatus, type TeslaStatus, type Transport, type TransportHandlers } from './transport'
 
 // URLs relatives : même origine en prod (Fastify sert le build) et via le proxy Vite en dev.
 
@@ -153,6 +153,13 @@ export function createHttpTransport(base = ''): Transport {
     melcloudLogout: () => request(`${base}/api/plugins/melcloud/logout`, { method: 'POST' }, (j) => j as MelcloudStatus),
     melcloudSystem: () => request(`${base}/api/plugins/melcloud/system`, undefined, (j) => j as { units: MelcloudUnit[]; pollMs: number }),
     melcloudHistory: () => request(`${base}/api/plugins/melcloud/history`, undefined, (j) => j as { hourly: HeatingPoint[]; pollMs: number }),
+    irobotStatus: () => request(`${base}/api/plugins/irobot/status`, undefined, (j) => j as IrobotStatus),
+    irobotLogin: (body) => request(
+      `${base}/api/plugins/irobot/login`,
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
+      (j) => j as IrobotStatus,
+    ),
+    irobotLogout: () => request(`${base}/api/plugins/irobot/logout`, { method: 'POST' }, (j) => j as IrobotStatus),
     forgetDevice: (deviceId) => {
       const { pluginId, externalId } = parseDeviceId(deviceId)
       return request(
