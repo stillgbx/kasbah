@@ -113,7 +113,7 @@ export function createIrobotPlugin(deps: IrobotPluginDeps = {}): DevicePlugin {
     return auth.robots.map((stored) => {
       const found = onNetwork.get(stored.blid)
       const shadow = links.get(stored.blid)?.shadow()
-      return toDescriptor({ blid: stored.blid, name: found?.name ?? stored.name, sku: found?.sku ?? stored.sku }, shadow)
+      return toDescriptor({ blid: stored.blid, name: found?.name ?? stored.name, sku: found?.sku ?? stored.sku, cap: found?.cap }, shadow)
     })
   }
 

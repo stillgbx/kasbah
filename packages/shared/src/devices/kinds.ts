@@ -23,8 +23,11 @@ export const CAPABILITIES = [
   // climate
   'hvac_mode', 'target_temp', 'current_temp', 'humidity', 'fan_mode',
   // vacuum / mower — `journal` : l'appareil tient un journal de ce qui lui arrive (erreurs,
-  // avertissements), servi à la demande par `GET /api/devices/:id/journal` ; sans lui, rien à lire
-  'clean', 'dock', 'battery', 'locate', 'mow', 'park', 'schedule', 'journal',
+  // avertissements), servi à la demande par `GET /api/devices/:id/journal` ; sans lui, rien à lire.
+  // `mop` : l'appareil LAVE en plus d'aspirer, et dit ce qu'il faut pour savoir s'il le peut —
+  // son patin est-il posé, lui reste-t-il de l'eau. Un aspirateur sec ne la déclare pas, et la
+  // section n'apparaît pas plutôt que de s'afficher vide.
+  'clean', 'dock', 'battery', 'locate', 'mop', 'mow', 'park', 'schedule', 'journal',
   // sensor
   'measure',
   // energy
@@ -58,7 +61,7 @@ export const KIND_CAPABILITIES: Record<DeviceKind, readonly Capability[]> = {
   cover: ['open_close', 'position', 'tilt', 'stop', 'preset', 'preset_set'],
   media_player: ['playback', 'volume', 'mute', 'now_playing', 'track_skip', 'seek'],
   climate: ['hvac_mode', 'target_temp', 'current_temp', 'humidity', 'fan_mode'],
-  vacuum: ['clean', 'dock', 'battery', 'locate'],
+  vacuum: ['clean', 'dock', 'battery', 'locate', 'mop'],
   mower: ['mow', 'park', 'battery', 'schedule', 'journal'],
   sensor: ['measure'],
   energy: ['production', 'consumption', 'grid', 'storage'],

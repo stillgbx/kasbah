@@ -18,8 +18,16 @@ import type { StoredRobot } from './types'
 
 export const PLUGIN_ID = 'irobot'
 
-/** Ce qu'un Roomba sait faire, dans le vocabulaire du contrat. */
+/** Ce que TOUT Roomba sait faire, dans le vocabulaire du contrat. */
 export const CAPABILITIES = ['clean', 'dock', 'battery', 'locate'] as const
+
+/**
+ * Valeur de `detectedPad` quand AUCUN patin n'est posé. Mesurée sur le robot le 19/09 : `"invalid"`
+ * patin retiré, `"reusableWet"` une fois la lingette réutilisable en place. Les autres valeurs
+ * (patin sec, patin jetable) n'ont pas été vues — d'où la règle « tout ce qui n'est pas `invalid`
+ * est un patin » plutôt qu'une liste blanche qu'on devinerait.
+ */
+const NO_PAD = 'invalid'
 
 export type VacuumActivity = StateFor<'vacuum'>['activity']
 
@@ -85,6 +93,18 @@ function readNumber(v: unknown): number | undefined {
   return typeof v === 'number' && Number.isFinite(v) ? v : undefined
 }
 
+const asPercent = (n: number): number => Math.max(0, Math.min(100, Math.round(n)))
+
+/**
+ * Le robot LAVE-t-il, et non pas seulement aspire ? Le fabricant le dit dans sa table de capacités,
+ * `cap.scrub`, présente aussi bien dans l'annonce réseau que dans l'ombre. Sans elle on déclarerait
+ * `mop` à un Roomba sec, dont la carte afficherait une section qu'il ne peut pas remplir.
+ */
+export function canMop(cap: Record<string, unknown> | undefined): boolean {
+  const scrub = cap?.scrub
+  return typeof scrub === 'number' ? scrub > 0 : scrub === true
+}
+
 /** `bin.full` du robot réel : `{present, full, type}`. Seul `full` entre au contrat. */
 function readBinFull(shadow: RobotShadow): boolean | undefined {
   const bin = shadow.bin
@@ -102,11 +122,20 @@ export function toStatePatch(shadow: RobotShadow): StatePatch<'vacuum'> {
   const cms = readMissionStatus(shadow)
   const patch: StatePatch<'vacuum'> = { activity: toActivity(cms) }
   const bat = readNumber(shadow.batPct)
-  if (bat !== undefined) patch.battery = Math.max(0, Math.min(100, Math.round(bat)))
+  if (bat !== undefined) patch.battery = asPercent(bat)
   const binFull = readBinFull(shadow)
   if (binFull !== undefined) patch.binFull = binFull
   const code = cms.error ?? 0
   patch.errorMessage = code > 0 ? errorText(code) : null
+
+  // serpillière — publiée même si le descripteur ne déclare pas `mop` : le registre filtre sur les
+  // clés du kind, pas sur les capacités, et un robot sec n'a de toute façon aucun de ces champs
+  const pad = shadow.detectedPad
+  if (typeof pad === 'string') patch.mopAttached = pad !== NO_PAD
+  const tank = readNumber(shadow.tankLvl)
+  // réservoir retiré : le niveau qui traîne dans l'ombre ne veut plus rien dire, on l'efface
+  if (shadow.tankPresent === false) patch.tankLevel = null
+  else if (tank !== undefined) patch.tankLevel = asPercent(tank)
   return patch
 }
 
@@ -114,17 +143,22 @@ export function toStatePatch(shadow: RobotShadow): StatePatch<'vacuum'> {
  * Le descripteur. Le nom vient du robot lui-même (`name` dans l'ombre) ou, avant toute connexion,
  * de ce que le compte en disait — un robot éteint doit rester nommé dans l'inventaire.
  */
-export function toDescriptor(robot: { blid: string; name?: string | null; sku?: string | null }, shadow?: RobotShadow): DeviceDescriptor {
+export function toDescriptor(
+  robot: { blid: string; name?: string | null; sku?: string | null; cap?: Record<string, unknown> },
+  shadow?: RobotShadow,
+): DeviceDescriptor {
   const fromShadow = typeof shadow?.name === 'string' ? shadow.name.trim() : ''
   const name = fromShadow || robot.name?.trim() || 'Roomba'
   const model = (typeof shadow?.sku === 'string' ? shadow.sku : robot.sku ?? undefined)?.trim() || undefined
+  // la table de capacités vient de l'annonce réseau, ou de l'ombre une fois le robot connecté
+  const cap = (shadow?.cap as Record<string, unknown> | undefined) ?? robot.cap
   return {
     id: `${PLUGIN_ID}:${robot.blid}`,
     pluginId: PLUGIN_ID,
     externalId: robot.blid,
     kind: 'vacuum',
     name,
-    capabilities: [...CAPABILITIES],
+    capabilities: canMop(cap) ? [...CAPABILITIES, 'mop'] : [...CAPABILITIES],
     meta: { manufacturer: 'iRobot', ...(model ? { model } : {}) },
   }
 }

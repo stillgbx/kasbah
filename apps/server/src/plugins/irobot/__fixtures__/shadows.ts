@@ -38,6 +38,8 @@ const BASE: RobotShadow = {
   evacAllowed: true,
   schedHold: false,
   dock: { known: true, state: 300, cap: { evac: 1, fr: 0, pw: 0, pd: 0 } },
+  // `scrub: 1` = ce robot LAVE (c'est un Combo) ; `pw: 0` = il ne rend plus son mot de passe local
+  cap: { scrub: 1, pw: 0, pmaps: 9, maps: 3 },
   signal: { rssi: -41, snr: 55, noise: -96 },
 }
 
@@ -108,4 +110,27 @@ export const BIN_FULL: RobotShadow = {
 export const STUCK: RobotShadow = {
   ...BASE,
   cleanMissionStatus: mission({ cycle: 'clean', phase: 'stuck', error: 17 }),
+}
+
+/**
+ * Patin de serpillière POSÉ, relevé le 19/09 à 16:02 : `detectedPad` passe de `"invalid"` à
+ * `"reusableWet"` dans la seconde qui suit la pose. Ce sont les deux seules valeurs observées sur ce
+ * robot ; d'autres existent sûrement (patin sec, patin jetable), d'où la règle de lecture « tout ce
+ * qui n'est pas `invalid` est un patin », plutôt qu'une liste blanche devinée.
+ *
+ * Le réservoir, lui, est resté à 10 — et l'appli du fabricant affichait au même moment sa goutte
+ * quasi vide avec « Remplissez le réservoir de Robby » : c'est ce qui établit que `tankLvl` est un
+ * POUR CENT et non une échelle maison.
+ */
+export const MOP_ATTACHED: RobotShadow = {
+  ...DOCKED,
+  detectedPad: 'reusableWet',
+  tankLvl: 10,
+  tankPresent: true,
+}
+
+/** Réservoir retiré : le niveau qui traîne dans l'ombre ne veut plus rien dire. CONSTRUITE. */
+export const TANK_REMOVED: RobotShadow = {
+  ...MOP_ATTACHED,
+  tankPresent: false,
 }

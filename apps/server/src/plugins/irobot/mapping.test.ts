@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { errorText, readMissionStatus, toActivity, toDescriptor, toRobotCommands, toStatePatch } from './mapping'
-import { BIN_FULL, CLEANING, DOCKED, DOCKED_MISSION_OPEN, PAUSED, RETURNING, STUCK } from './__fixtures__/shadows'
+import { BIN_FULL, CLEANING, DOCKED, DOCKED_MISSION_OPEN, MOP_ATTACHED, PAUSED, RETURNING, STUCK, TANK_REMOVED } from './__fixtures__/shadows'
 
 const BLID = '1111111111111111111111111111AAAA'
 
@@ -52,7 +52,10 @@ describe('readMissionStatus', () => {
 
 describe('toStatePatch', () => {
   it('publie exactement ce que le contrat `vacuum` porte, et rien de plus', () => {
-    expect(toStatePatch(DOCKED)).toEqual({ activity: 'docked', battery: 100, binFull: false, errorMessage: null })
+    expect(toStatePatch(DOCKED)).toEqual({
+      activity: 'docked', battery: 100, binFull: false, errorMessage: null,
+      mopAttached: false, tankLevel: 10,
+    })
   })
 
   it('remonte le bac plein', () => {
@@ -75,6 +78,50 @@ describe('toStatePatch', () => {
   })
 })
 
+describe('serpillière', () => {
+  it('lit le patin sur les DEUX valeurs observées du vrai robot', () => {
+    expect(toStatePatch(DOCKED).mopAttached).toBe(false)          // detectedPad: "invalid"
+    expect(toStatePatch(MOP_ATTACHED).mopAttached).toBe(true)     // detectedPad: "reusableWet"
+  })
+
+  /**
+   * Règle de lecture volontairement permissive : seul `invalid` signifie « pas de patin ». Les
+   * valeurs de patin sec ou jetable n'ont pas été observées, et une liste blanche devinée
+   * refuserait un patin bien présent.
+   */
+  it('tient pour un patin toute valeur qui n est pas `invalid`', () => {
+    expect(toStatePatch({ detectedPad: 'dispDry' }).mopAttached).toBe(true)
+    expect(toStatePatch({ detectedPad: 'une-valeur-que-le-firmware-inventera' }).mopAttached).toBe(true)
+  })
+
+  it('rend le niveau d eau en pour cent', () => {
+    expect(toStatePatch(MOP_ATTACHED).tankLevel).toBe(10)
+    expect(toStatePatch({ tankLvl: 140 }).tankLevel).toBe(100)
+    expect(toStatePatch({ tankLvl: 63.4 }).tankLevel).toBe(63)
+  })
+
+  it('EFFACE le niveau quand le réservoir est retiré, au lieu de garder une valeur périmée', () => {
+    expect(toStatePatch(TANK_REMOVED).tankLevel).toBeNull()
+  })
+
+  it('ne dit rien de la serpillière quand le robot n en parle pas', () => {
+    const patch = toStatePatch({ batPct: 50 })
+    expect(patch.mopAttached).toBeUndefined()
+    expect(patch.tankLevel).toBeUndefined()
+  })
+})
+
+describe('canMop', () => {
+  it('déclare `mop` au robot qui annonce savoir laver', () => {
+    expect(toDescriptor({ blid: BLID }, MOP_ATTACHED).capabilities).toEqual(['clean', 'dock', 'battery', 'locate', 'mop'])
+  })
+
+  it('ne la déclare pas à un Roomba sec — sa carte n aurait rien à y mettre', () => {
+    expect(toDescriptor({ blid: BLID, cap: { scrub: 0 } }).capabilities).toEqual(['clean', 'dock', 'battery', 'locate'])
+    expect(toDescriptor({ blid: BLID }).capabilities).toEqual(['clean', 'dock', 'battery', 'locate'])
+  })
+})
+
 describe('toDescriptor', () => {
   it('nomme le robot comme lui-même se nomme, et déclare ses quatre capacités', () => {
     expect(toDescriptor({ blid: BLID, name: 'nom du compte', sku: null }, DOCKED)).toEqual({
@@ -83,7 +130,7 @@ describe('toDescriptor', () => {
       externalId: BLID,
       kind: 'vacuum',
       name: 'Robby',
-      capabilities: ['clean', 'dock', 'battery', 'locate'],
+      capabilities: ['clean', 'dock', 'battery', 'locate', 'mop'],
       meta: { manufacturer: 'iRobot', model: 'c755840' },
     })
   })

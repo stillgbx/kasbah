@@ -204,7 +204,7 @@ describe('plugin iRobot — état et gestes', () => {
   it('publie l état à chaque ombre reçue', async () => {
     const h = await linked()
     h.link.push(DOCKED)
-    expect(h.emitted.at(-1)).toEqual({ id: BLID, patch: { activity: 'docked', battery: 100, binFull: false, errorMessage: null } })
+    expect(h.emitted.at(-1)).toEqual({ id: BLID, patch: { activity: 'docked', battery: 100, binFull: false, errorMessage: null, mopAttached: false, tankLevel: 10 } })
     h.link.push(PAUSED)
     expect(h.emitted.at(-1)!.patch).toMatchObject({ activity: 'paused' })
   })

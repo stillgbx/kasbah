@@ -43,6 +43,10 @@ type VacuumEntry = DeviceEntry & { state: StateFor<'vacuum'> }
 const vacuums = computed(() => devices.list.filter((e): e is VacuumEntry => e.state.kind === 'vacuum'))
 /** Le bac : plein, vide, ou inconnu — tous les robots ne le disent pas. */
 const binState = (s: StateFor<'vacuum'>) => (s.binFull === undefined ? EMPTY : s.binFull ? t('vacuum.binFull') : t('vacuum.binOk'))
+/** Le patin de serpillière (capacité `mop`). */
+const padState = (s: StateFor<'vacuum'>) => (s.mopAttached === undefined ? EMPTY : s.mopAttached ? t('vacuum.mopOn') : t('vacuum.mopOff'))
+/** L'eau restante. Absente aussi quand le réservoir est retiré — même geste dans les deux cas. */
+const tankState = (s: StateFor<'vacuum'>) => (s.tankLevel === undefined || s.tankLevel === null ? EMPTY : formatPercent(s.tankLevel, locale.value))
 
 /** Le nom choisi dans la maison l'emporte sur celui du fabricant ; à défaut, le fabricant fait foi. */
 const displayName = (m: DeviceEntry) => house.houseDeviceFor(m.descriptor.id)?.name ?? m.descriptor.name
@@ -209,6 +213,12 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
           <div class="rcard__stats">
             <div class="card card--soft stat"><div class="muted stat__k">{{ $t('vacuum.bin') }}</div><div class="stat__v">{{ binState(v.state) }}</div></div>
             <div class="card card--soft stat"><div class="muted stat__k">{{ $t('vacuum.connection') }}</div><div class="stat__v">{{ v.state.available ? $t('vacuum.connected') : $t('vacuum.offline') }}</div></div>
+            <!-- serpillière : deux cases de plus, et seulement pour un robot qui LAVE. Un Roomba sec
+                 n'a pas de patin ni de réservoir, et deux cases à « — » vaudraient moins que rien. -->
+            <template v-if="has(v, 'mop')">
+              <div class="card card--soft stat"><div class="muted stat__k">{{ $t('vacuum.mopPad') }}</div><div class="stat__v">{{ padState(v.state) }}</div></div>
+              <div class="card card--soft stat"><div class="muted stat__k">{{ $t('vacuum.tank') }}</div><div class="stat__v">{{ tankState(v.state) }}</div></div>
+            </template>
           </div>
           <div class="rcard__actions">
             <button v-if="has(v, 'clean')" type="button" class="pill" :data-on="v.state.activity === 'cleaning' ? '1' : '0'" :disabled="!v.state.available || busy(v)" :aria-busy="busy(v)"

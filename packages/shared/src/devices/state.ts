@@ -93,6 +93,18 @@ export const vacuumStateSchema = z.object({
   battery: pct,
   binFull: z.boolean().optional(),
   errorMessage: z.string().optional(),
+  /**
+   * Le patin de serpillière est-il posé (capacité `mop`). Sans lui le robot aspire mais ne lave
+   * pas, et son appli le dit avant de proposer un lavage. Absent = le robot ne le rapporte pas.
+   */
+  mopAttached: z.boolean().optional(),
+  /**
+   * Eau restante, en pour cent (capacité `mop`). Absent aussi quand le RÉSERVOIR n'est pas en
+   * place : les deux se confondent ici volontairement, parce qu'un réservoir retiré et un niveau
+   * inconnu appellent le même geste — aller voir la machine. Ne pas confondre avec `binFull`, qui
+   * parle du bac à poussière.
+   */
+  tankLevel: pct.optional(),
 })
 
 /** `stopped` : arrêté là où il est (bouton STOP, arrêt dans le jardin, robot éteint) — ni garé, ni en pause. */

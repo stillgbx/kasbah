@@ -10,8 +10,10 @@ export function vacuum(externalId: string, o: VacuumOptions): SimDevice<'vacuum'
   const startHour = o.startHour ?? 11, durationMin = o.durationMin ?? 45
   let cleaningLeftS = 0, returningLeftS = 0, lastDay = -1, manual = false
   const dev: SimDevice<'vacuum'> = {
-    descriptor: descriptor(externalId, 'vacuum', o.name, ['clean', 'dock', 'battery', 'locate'], { manufacturer: 'Mock', model: 'Robot vacuum' }),
-    state: { kind: 'vacuum', updatedAt: 0, available: true, activity: 'docked', battery: 100, binFull: false },
+    // l'aspirateur simulé LAVE aussi : sans la capacité `mop`, les contrôles de serpillière ne
+    // seraient vérifiables qu'avec un vrai Combo sous la main
+    descriptor: descriptor(externalId, 'vacuum', o.name, ['clean', 'dock', 'battery', 'locate', 'mop'], { manufacturer: 'Mock', model: 'Robot vacuum' }),
+    state: { kind: 'vacuum', updatedAt: 0, available: true, activity: 'docked', battery: 100, binFull: false, mopAttached: true, tankLevel: 80 },
     tick(ctx) {
       const s = dev.state
       const day = Math.floor(ctx.simTime / 86_400_000)
@@ -22,6 +24,10 @@ export function vacuum(externalId: string, o: VacuumOptions): SimDevice<'vacuum'
         case 'cleaning':
           cleaningLeftS -= ctx.dtS
           s.battery = round1(clamp(s.battery - (65 / (durationMin * 60)) * ctx.dtS, 0, 100))
+          // le réservoir se vide en lavant, et personne ne le remplit tout seul
+          if (s.mopAttached && s.tankLevel !== undefined && s.tankLevel !== null) {
+            s.tankLevel = round1(clamp(s.tankLevel - (70 / (durationMin * 60)) * ctx.dtS, 0, 100))
+          }
           if (cleaningLeftS <= 0 || s.battery <= 15) { s.activity = 'returning'; returningLeftS = 180; manual = false }
           break
         case 'returning':

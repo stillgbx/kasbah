@@ -14,6 +14,12 @@ const emit = defineEmits<{ command: [cmd: CommandInput] }>()
     </div>
     <div class="text-caption text-medium-emphasis">{{ $t('vacuum.battery') }} · {{ formatPercent(state.battery, $i18n.locale) }}</div>
     <v-progress-linear :model-value="state.battery" rounded height="8" :color="state.battery < 20 ? 'error' : 'success'" class="mb-4" />
+    <!-- Serpillière, pour un robot qui lave : le patin est-il posé, et reste-t-il de l'eau. Une
+         seule ligne, à place fixe, plutôt qu'une section — c'est un renseignement, pas un réglage. -->
+    <div v-if="descriptor.capabilities.includes('mop')" class="d-flex ga-4 mb-4 text-caption text-medium-emphasis">
+      <span>{{ $t('vacuum.mopPad') }} · {{ state.mopAttached === undefined ? '—' : state.mopAttached ? $t('vacuum.mopOn') : $t('vacuum.mopOff') }}</span>
+      <span>{{ $t('vacuum.tank') }} · {{ state.tankLevel === undefined || state.tankLevel === null ? '—' : formatPercent(state.tankLevel, $i18n.locale) }}</span>
+    </div>
     <div class="d-flex ga-2">
       <v-btn class="flex-grow-1 vac__wide" height="56" color="primary" variant="tonal" :prepend-icon="state.activity === 'cleaning' ? 'pause' : 'play'" :disabled="disabled"
              @click="emit('command', { type: state.activity === 'cleaning' ? 'vacuum.pause' : 'vacuum.start' })">

@@ -115,6 +115,7 @@
   "vacuum": {
     "battery": "Battery", "binFull": "Bin full", "bin": "Bin", "binOk": "Empty",
     "connection": "Connection", "connected": "Connected", "offline": "Off network",
+    "mopPad": "Pad", "mopOn": "Fitted", "mopOff": "Removed", "tank": "Water",
     "activities": { "docked": "Docked", "cleaning": "Cleaning", "paused": "Paused", "returning": "Returning to dock", "error": "Error" }
   },
   "mower": {
