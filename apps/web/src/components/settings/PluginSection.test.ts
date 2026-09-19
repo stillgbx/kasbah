@@ -59,7 +59,7 @@ describe('PluginSection — ce qui s’ouvre tout seul', () => {
 
   /** Un squelette n'a ni détail, ni clé, ni carte : le chevron reste là pour l'alignement, inerte. */
   it('ne se déplie pas quand il n’y a rien dessous', () => {
-    const w = mount(PluginSection, { props: { plugin: plugin({ id: 'sonos', implemented: false, enabled: false }, { status: 'not_implemented', detail: undefined, keys: [] }) } })
+    const w = mount(PluginSection, { props: { plugin: plugin({ id: 'unobtanium', implemented: false, enabled: false }, { status: 'not_implemented', detail: undefined, keys: [] }) } })
     expect(w.find('.plugin__toggle').attributes('disabled')).toBeDefined()
     expect(w.find('.plugin__chev').attributes('data-on')).toBe('0')
   })
