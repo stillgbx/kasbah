@@ -16,9 +16,17 @@ import { PluginError } from '../../core/plugin'
 // pas décider d'un état qui dépend de deux champs (l'activité tient à `phase` ET `cycle`). D'où
 // l'accumulation d'une ombre complète par robot, et le mappage appliqué à ELLE.
 //
-// UNE SEULE SESSION À LA FOIS : le courtier du robot n'accepte qu'un client par BLID. Si l'appli
-// iRobot se connecte en local, elle nous chasse ; mqtt.js se reconnecte alors en boucle, ce qui est
-// le comportement voulu — le dernier arrivé gagne, et on reprend la main dès qu'elle raccroche.
+// UNE SEULE SESSION À LA FOIS, ET C'EST LE PREMIER ARRIVÉ QUI LA GARDE. Mesuré le 19/09 : un second
+// client présenté pendant qu'un premier tenait le lien reçoit `ECONNREFUSED` — au niveau TCP, avant
+// même MQTT — tandis que le premier continue de recevoir sans être inquiété.
+//
+// Ce que cela implique, et qui dépasse ce fichier : tant que le serveur Kasbah tient le lien, un
+// AUTRE client local ne peut pas parler au robot. L'appli du fabricant passe normalement par le
+// cloud, donc elle n'en souffre pas ; mais si elle bascule en local (même réseau), elle se heurtera
+// à nous. Non vérifié avec l'appli elle-même — il faudrait l'ouvrir pendant qu'un lien est établi.
+//
+// `reconnectPeriod` reste utile pour l'inverse : si quelqu'un nous précède, ou si le robot coupe,
+// on retente jusqu'à reprendre la main.
 
 const PORT = 8883
 /** Le courtier du robot coupe au-delà ; en deçà, on le réveille pour rien. */
@@ -140,7 +148,7 @@ export function connectRobot(opts: RobotConnectionOptions): RobotConnection {
     opts.onDisconnected?.('closed')
   })
   client.on('error', (err) => {
-    // le courtier du robot claque la porte quand l'appli iRobot prend la main : c'est attendu
+    // robot éteint, réseau coupé, ou quelqu'un tient déjà la session : rien d'anormal, on retentera
     opts.logger?.debug({ err: err.message, blid: opts.blid }, 'iRobot link error')
   })
 

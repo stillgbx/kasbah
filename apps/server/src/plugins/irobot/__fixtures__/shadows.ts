@@ -11,7 +11,7 @@ import type { RobotShadow } from '../mqtt'
 // `bin.type: "std"`, `dock.state: 300`.
 //
 // LES QUATRE ÉTATS viennent d'une séquence réellement jouée, horodatée dans le journal de session :
-//   14:26:43  cycle=clean  phase=stop       mission en pause depuis 18 min      → PAUSED
+//   14:26:43  cycle=clean  phase=stop       en pause depuis 14 min (cf. epochs)  → PAUSED
 //   14:28:59  cycle=clean  phase=hmUsrDock  « rentre », demandé par l'appli     → RETURNING
 //   14:30:33  cycle=clean  phase=charge     ARRIVÉ, mission encore ouverte      → DOCKED_MISSION_OPEN
 //   14:30:37  cycle=none   phase=charge     mission refermée, 4 s plus tard     → DOCKED
@@ -46,7 +46,13 @@ const mission = (over: Record<string, unknown>): RobotShadow['cleanMissionStatus
   mssnM: 0, operatingMode: 0, initiator: 'manual', nMssn: 100, ...over,
 })
 
-/** 14:26 — mission ouverte mais robot immobile : EN PAUSE. `lastCommand` le confirme. */
+/**
+ * 14:26:43 — mission ouverte mais robot immobile : EN PAUSE. `lastCommand` le confirme.
+ *
+ * Les epochs sont ceux de la capture et ne valent pas l'heure de celle-ci : la mission a démarré à
+ * 14:11:37 (`mssnStrtTm`) et la pause a été demandée à 14:12:41 (`lastCommand.time`) — c'est donc un
+ * robot arrêté depuis quatorze minutes qu'on a relevé.
+ */
 export const PAUSED: RobotShadow = {
   ...BASE,
   cleanMissionStatus: mission({ cycle: 'clean', phase: 'stop', mssnStrtTm: 1789819897, expireTm: 1789825305 }),
