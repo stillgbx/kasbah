@@ -104,7 +104,7 @@ describe('demo house surface openings', () => {
 
   it('allows a roof-window stacked above a skylight in the same room (different hosts)', async () => {
     const { default: raw } = await import('./__fixtures__/demo-house.json')
-    const house = structuredClone(raw) as House
+    const house = JSON.parse(JSON.stringify(raw)) as House
     const room = house.rooms.find((r) => r.id === 'chambre2')!
     room.openings.push(
       { id: 'puits-ch2', type: 'skylight', x: 7.5, y: 2.5, yaw: 0, width: 1, height: 1 },

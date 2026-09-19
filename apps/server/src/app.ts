@@ -50,7 +50,8 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
     // Le défaut de Fastify (100 caractères par paramètre d'URL, sinon 414) est trop court pour les
     // ids Google Nest : `nest:<id>` fait 99 caractères et l'id maison dérivé par l'auto-placement
     // (`auto.nest-<id>`) 104 — le mode Déplacer échouait en 414 sur toute caméra auto-placée.
-    maxParamLength: 512,
+    // Fastify 5 : les options du routeur vivent dans `routerOptions` (FSTDEP022 sinon).
+    routerOptions: { maxParamLength: 512 },
   }) as unknown as FastifyInstance
   const house = opts.house ?? (await loadHouse(opts.env.KASBAH_HOUSE_FILE))
   for (const w of house.warnings) opts.logger.warn({ path: w.path, code: w.code }, w.message)

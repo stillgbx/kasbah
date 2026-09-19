@@ -1,4 +1,4 @@
-import { BufferGeometry, Mesh } from 'three'
+import type { BufferGeometry, Mesh } from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
 // Chargement des carrosseries 3D. Même contrat que `TextureLoad` (screenArt) : un type de fonction

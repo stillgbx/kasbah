@@ -24,7 +24,7 @@ const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] 
 <template>
   <nav class="rail" :aria-label="$t('nav.main')">
     <div class="rail__avatar" :title="house.house?.name">{{ initials }}</div>
-    <router-link v-for="it in items" :key="it.name" :to="{ name: it.name }" custom v-slot="{ navigate }">
+    <router-link v-for="it in items" :key="it.name" v-slot="{ navigate }" :to="{ name: it.name }" custom>
       <button type="button" class="rail__btn" :data-on="route.name === it.name ? '1' : '0'" :title="$t(it.label)" :aria-label="$t(it.label)" @click="navigate">
         <StrokeIcon :name="it.icon" :size="24" />
       </button>
