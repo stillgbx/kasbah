@@ -1,4 +1,5 @@
-import { BufferAttribute, BufferGeometry, ExtrudeGeometry, Path, Shape, ShapeGeometry, Vector2 } from 'three'
+import { BufferAttribute, BufferGeometry, ExtrudeGeometry, Path, Shape, ShapeGeometry, Vector2, Vector3 } from 'three'
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { add, centroid, ensureCCW, lineIntersect, longestEdgeYawDeg, normalize, perpLeft, scale, sub, type Vec2, type Vec3 } from '@kasbah/shared'
 
 export function toShape(polygon: readonly Vec2[]): Shape {
@@ -8,6 +9,17 @@ export function toShape(polygon: readonly Vec2[]): Shape {
 /** Extrusion d'un polygone du plan XY de z0 à z1 (repère maison, Z-up). */
 export function extrudePolygon(polygon: readonly Vec2[], z0: number, z1: number): ExtrudeGeometry {
   const g = new ExtrudeGeometry(toShape(polygon), { depth: z1 - z0, bevelEnabled: false })
+  g.translate(0, 0, z0)
+  return g
+}
+
+/** Extrusion percée de trous (dalle de pièce avec puits de lumière, toit plat avec Velux). */
+export function extrudePolygonWithHoles(
+  outer: readonly Vec2[], holes: readonly (readonly Vec2[])[], z0: number, z1: number,
+): ExtrudeGeometry {
+  const shape = toShape(outer)
+  for (const h of holes) shape.holes.push(new Path(h.map(([x, y]) => new Vector2(x, y))))
+  const g = new ExtrudeGeometry(shape, { depth: z1 - z0, bevelEnabled: false })
   g.translate(0, 0, z0)
   return g
 }
@@ -30,6 +42,61 @@ export function planarFaces(faces: readonly Vec3[][]): BufferGeometry {
   g.setAttribute('position', new BufferAttribute(new Float32Array(positions), 3))
   g.computeVertexNormals()
   return g
+}
+
+/**
+ * Faces de toit gable percées de trous. Chaque trou dont `faceIndex` désigne la face est projeté
+ * dans le plan de la face (repère local 2D) puis découpé via un Shape à trous, remis en 3D.
+ */
+export function planarFacesWithHoles(
+  faces: readonly Vec3[][],
+  holes: readonly { faceIndex?: number; corners?: readonly Vec3[] }[],
+): BufferGeometry {
+  const parts: BufferGeometry[] = []
+  for (let fi = 0; fi < faces.length; fi++) {
+    const face = faces[fi]!
+    if (face.length < 3) continue
+    const faceHoles = holes.filter((h) => h.faceIndex === fi && h.corners && h.corners.length >= 3)
+    if (faceHoles.length === 0) {
+      parts.push(planarFaces([face]))
+      continue
+    }
+    const a = face[0]!, b = face[1]!, c = face[2]!
+    const e1 = new Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]).normalize()
+    const n = new Vector3().crossVectors(
+      e1, new Vector3(c[0] - a[0], c[1] - a[1], c[2] - a[2]),
+    ).normalize()
+    const e2 = new Vector3().crossVectors(n, e1).normalize()
+    const to2 = (p: Vec3): [number, number] => {
+      const d = new Vector3(p[0] - a[0], p[1] - a[1], p[2] - a[2])
+      return [d.dot(e1), d.dot(e2)]
+    }
+    const from2 = (u: number, v: number): Vec3 => [
+      a[0] + e1.x * u + e2.x * v,
+      a[1] + e1.y * u + e2.y * v,
+      a[2] + e1.z * u + e2.z * v,
+    ]
+    const outline = face.map(to2)
+    const shape = new Shape(outline.map(([u, v]) => new Vector2(u, v)))
+    for (const h of faceHoles) {
+      const hole2 = h.corners!.map(to2)
+      shape.holes.push(new Path(hole2.map(([u, v]) => new Vector2(u, v))))
+    }
+    const g = new ShapeGeometry(shape)
+    const pos = g.getAttribute('position')
+    for (let i = 0; i < pos.count; i++) {
+      const [x, y, z] = from2(pos.getX(i), pos.getY(i))
+      pos.setXYZ(i, x, y, z)
+    }
+    pos.needsUpdate = true
+    g.computeVertexNormals()
+    parts.push(g)
+  }
+  if (parts.length === 0) return planarFaces(faces)
+  if (parts.length === 1) return parts[0]!
+  const merged = mergeGeometries(parts, false)
+  for (const p of parts) p.dispose()
+  return merged ?? planarFaces(faces)
 }
 
 /**

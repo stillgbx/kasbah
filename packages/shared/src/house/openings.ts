@@ -1,7 +1,11 @@
 import type { HouseDefaults } from './defaults'
-import { dist, type Vec2 } from './geometry/vec2'
+import { dist, pointInPolygon, type Vec2 } from './geometry/vec2'
 import { classifySegments, isWalled, type WallSegment } from './geometry/walls'
-import type { Opening, OpeningType, Room } from './schema'
+import { fitParkingGap, parkingGaps, type ParkingSide } from './parking'
+import { isSurfaceOpening, type Opening, type OpeningType, type Room } from './schema'
+
+export type { ParkingSide as SurfaceSide }
+export { PARKING_SIDES as SURFACE_SIDES } from './parking'
 
 // Où une ouverture a le DROIT de se poser sur le contour de sa pièce, et ce que devient un point
 // attrapé à la souris. La règle est celle de `validate.ts` — segment mur (jamais « none »), tenant
@@ -25,6 +29,86 @@ const cm = (v: number) => Math.round(v * 100) / 100
 /** Place d'une ouverture sur le contour : l'arête qui la porte, et la distance depuis son coin. */
 export interface OpeningSlot { segment: number; offset: number }
 
+/** Place d'une ouverture de SURFACE : centre en plan et cap. */
+export interface SurfaceSlot { x: number; y: number; yaw: number }
+
+/**
+ * Axes d'une ouverture de surface (même convention que les places : 0 = face à +y).
+ * `fwd` = sens du cap (hauteur du rectangle), `right` = travers (largeur).
+ */
+export function surfaceAxes(yaw: number): { fwd: Vec2; right: Vec2 } {
+  const a = (yaw * Math.PI) / 180
+  const s = Math.sin(a), c = Math.cos(a)
+  return { fwd: [-s, c], right: [c, s] }
+}
+
+/** Les quatre coins du rectangle de surface, CCW depuis l'avant-droit. */
+export function surfaceCorners(center: Vec2, yaw: number, width: number, height: number): [Vec2, Vec2, Vec2, Vec2] {
+  const { fwd, right } = surfaceAxes(yaw)
+  const at = (u: number, v: number): Vec2 => [
+    center[0] + fwd[0] * u + right[0] * v,
+    center[1] + fwd[1] * u + right[1] * v,
+  ]
+  return [at(height / 2, width / 2), at(height / 2, -width / 2), at(-height / 2, -width / 2), at(-height / 2, width / 2)]
+}
+
+/** Tous les coins du rectangle sont-ils dans le polygone ? */
+export function surfaceFitsInPolygon(center: Vec2, yaw: number, width: number, height: number, poly: readonly Vec2[]): boolean {
+  return surfaceCorners(center, yaw, width, height).every((p) => pointInPolygon(p, poly))
+}
+
+/**
+ * Point → emplacement admissible pour une ouverture de SURFACE dans la pièce. On garde le centre
+ * tapé s'il passe, sinon on le ramène vers le centroïde jusqu'à ce que le rectangle tienne (ou on
+ * abandonne).
+ */
+export function slotFromSurfacePoint(
+  room: Room, point: Vec2, yaw: number, width: number, height: number,
+): SurfaceSlot | null {
+  const poly = room.polygon
+  if (surfaceFitsInPolygon(point, yaw, width, height, poly)) {
+    return { x: cm(point[0]), y: cm(point[1]), yaw: cm(yaw) }
+  }
+  // ramener vers le centre de la pièce : une série de pas le long du segment [point → centroïde]
+  let cx = 0, cy = 0
+  for (const [x, y] of poly) { cx += x; cy += y }
+  cx /= poly.length
+  cy /= poly.length
+  for (let t = 0.1; t <= 1; t += 0.1) {
+    const p: Vec2 = [point[0] + (cx - point[0]) * t, point[1] + (cy - point[1]) * t]
+    if (surfaceFitsInPolygon(p, yaw, width, height, poly)) {
+      return { x: cm(p[0]), y: cm(p[1]), yaw: cm(yaw) }
+    }
+  }
+  return null
+}
+
+/** Deux rectangles de surface se chevauchent-ils (AABB en plan, approx rapide) ? */
+export function surfaceRectsOverlap(
+  a: { x: number; y: number; yaw: number; width: number; height: number },
+  b: { x: number; y: number; yaw: number; width: number; height: number },
+): boolean {
+  // test séparé d'axes (SAT) sur les deux orientations
+  const ca = surfaceCorners([a.x, a.y], a.yaw, a.width, a.height)
+  const cb = surfaceCorners([b.x, b.y], b.yaw, b.width, b.height)
+  const axes = [surfaceAxes(a.yaw).fwd, surfaceAxes(a.yaw).right, surfaceAxes(b.yaw).fwd, surfaceAxes(b.yaw).right]
+  for (const axis of axes) {
+    let minA = Infinity, maxA = -Infinity, minB = Infinity, maxB = -Infinity
+    for (const p of ca) {
+      const t = p[0] * axis[0] + p[1] * axis[1]
+      if (t < minA) minA = t
+      if (t > maxA) maxA = t
+    }
+    for (const p of cb) {
+      const t = p[0] * axis[0] + p[1] * axis[1]
+      if (t < minB) minB = t
+      if (t > maxB) maxB = t
+    }
+    if (maxA < minB - 1e-6 || maxB < minA - 1e-6) return false
+  }
+  return true
+}
+
 /** Intervalle de `offset` admissible : une ouverture large de `width` peut commencer entre min et max. */
 interface Range { min: number; max: number }
 
@@ -47,8 +131,8 @@ function freeRanges(L: number, width: number, taken: readonly [number, number][]
 /** Les ouvertures d'un segment, sauf celle qu'on déplace. */
 function neighbours(room: Room, segment: number, exceptId: string): [number, number][] {
   return room.openings
-    .filter((o) => o.id !== exceptId && o.segment === segment)
-    .map((o) => [o.offset, o.offset + o.width] as [number, number])
+    .filter((o) => o.id !== exceptId && o.segment === segment && o.offset !== undefined)
+    .map((o) => [o.offset!, o.offset! + o.width] as [number, number])
 }
 
 /**
@@ -154,9 +238,46 @@ export const openingLabel = (o: Opening): string => o.name ?? o.id
  * placé dedans et tourné vers le mur a donc `polygon[segment]` — l'origine d'`offset` — à sa DROITE.
  */
 export function openingGaps(room: Room, opening: Opening): { left: number; right: number } {
+  if (isSurfaceOpening(opening.type) || opening.segment === undefined || opening.offset === undefined) {
+    return { left: 0, right: 0 }
+  }
   const right = opening.offset
   const left = Math.max(0, segmentLength(room, opening.segment) - opening.offset - opening.width)
   return { left, right }
+}
+
+/**
+ * Les quatre cotes d'une ouverture de SURFACE dans sa pièce — devant / derrière / gauche / droite
+ * dans le sens du cap (`yaw`), comme une place de stationnement. Absent ou hors pièce : `null`.
+ */
+export function surfaceGaps(room: Room, opening: Opening): Record<ParkingSide, number | null> {
+  if (!isSurfaceOpening(opening.type) || opening.x === undefined || opening.y === undefined || opening.yaw === undefined) {
+    return { front: null, back: null, left: null, right: null }
+  }
+  return parkingGaps(room.polygon, {
+    id: opening.id,
+    center: [opening.x, opening.y],
+    size: [opening.width, opening.height],
+    yaw: opening.yaw,
+    accepts: 'vehicle',
+  })
+}
+
+/**
+ * Cote voulue sur un côté → nouveau centre (l'ouverture GLISSE). Même règle que `fitParkingGap`.
+ */
+export function fitSurfaceGap(
+  room: Room, opening: Opening, side: ParkingSide, wanted: number,
+): { x: number; y: number } | null {
+  if (opening.x === undefined || opening.y === undefined || opening.yaw === undefined) return null
+  const next = fitParkingGap(room.polygon, {
+    id: opening.id,
+    center: [opening.x, opening.y],
+    size: [opening.width, opening.height],
+    yaw: opening.yaw,
+    accepts: 'vehicle',
+  }, side, wanted)
+  return next ? { x: next[0], y: next[1] } : null
 }
 
 /**
@@ -170,6 +291,7 @@ export function openingGaps(room: Room, opening: Opening): { left: number; right
 export function freeSpan(
   room: Room, roomsOnLevel: readonly Room[], defaults: HouseDefaults, opening: Opening,
 ): { u0: number; u1: number } | null {
+  if (isSurfaceOpening(opening.type) || opening.segment === undefined || opening.offset === undefined) return null
   if (!isWalled(room)) return null
   const seg = classifySegments(room, roomsOnLevel, defaults)[opening.segment]
   if (!seg || seg.kind === 'none') return null
@@ -195,6 +317,7 @@ export function freeSpan(
 export function fitWidth(
   room: Room, roomsOnLevel: readonly Room[], defaults: HouseDefaults, opening: Opening, wanted: number,
 ): { width: number; offset: number } | null {
+  if (opening.offset === undefined) return null
   const span = freeSpan(room, roomsOnLevel, defaults, opening)
   if (!span) return null
   const width = cm(Math.min(Math.max(wanted, MIN_OPENING_DIM), span.u1 - span.u0))
@@ -220,6 +343,7 @@ export function fitGap(
   room: Room, roomsOnLevel: readonly Room[], defaults: HouseDefaults, opening: Opening,
   side: 'left' | 'right', wanted: number,
 ): number | null {
+  if (opening.segment === undefined || opening.offset === undefined) return null
   const span = freeSpan(room, roomsOnLevel, defaults, opening)
   if (!span) return null
   const L = segmentLength(room, opening.segment)
@@ -256,6 +380,7 @@ export function openingLimits(
  * une façade, et c'est pourquoi les deux nombres vont ensemble.
  */
 export function newOpeningDims(type: OpeningType, defaults: HouseDefaults): { width: number; height: number; sill: number } {
+  if (isSurfaceOpening(type)) return { width: 1.2, height: 1.2, sill: 0 }
   if (type === 'window') return { width: 1.2, height: 1.2, sill: defaults.windowSill }
   const width = type === 'garage' || type === 'bay' ? 2.4 : 0.9
   return { width, height: defaults.doorHeight, sill: 0 }

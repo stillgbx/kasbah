@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { MAX_OPENING_LEAVES, MIN_OPENING_DIM, MIN_OPENING_LEAVES, OPENING_MATERIALS, OPENING_TYPES, fitGap, fitHeight, fitWidth, openingGaps, openingLabel, openingLeaves, openingSill, resolveDefaults, type OpeningType, type Room } from '@kasbah/shared'
+import { MAX_OPENING_LEAVES, MIN_OPENING_DIM, MIN_OPENING_LEAVES, OPENING_MATERIALS, OPENING_TYPES, fitGap, fitHeight, fitSurfaceGap, fitWidth, isSurfaceOpening, openingGaps, openingLabel, openingLeaves, openingSill, resolveDefaults, surfaceGaps, type OpeningType, type ParkingSide, type Room } from '@kasbah/shared'
 import { canTakeOpening } from '../../lib/cover'
 import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
@@ -35,17 +35,24 @@ const roomsOnLevel = computed<Room[]>(() => {
   return r ? house.index?.roomsByLevel.get(r.levelId) ?? [r] : []
 })
 
-const typeOptions = computed(() => OPENING_TYPES.map((v) => ({ value: v, label: t(`opening.types.${v}`) })))
+const typeOptions = computed(() => {
+  const o = opening.value
+  const surface = o ? isSurfaceOpening(o.type) : false
+  return OPENING_TYPES
+    .filter((v) => isSurfaceOpening(v) === surface)
+    .map((v) => ({ value: v, label: t(`opening.types.${v}`) }))
+})
 /**
  * Changer de nature écrit aussi l'allège, DANS LA MÊME requête, pour tout ce qui touche le sol
  * (porte, passage, porte de garage, baie vitrée, porte vitrée) : `openingSill` ne rend 0 par défaut
  * que si `sill` est ABSENT du JSON, donc une fenêtre retypée en baie sans ce geste gardait son muret
  * (mesuré : 20 cm). Un seul geste pour l'utilisateur (choisir « Baie vitrée »), une seule écriture.
  * `window`, seule à prendre une allège par défaut, ne devine rien : la valeur existante reste,
- * l'utilisateur la règle lui-même.
+ * l'utilisateur la règle lui-même. Les natures de surface restent entre elles (pas de mur ↔ sol).
  */
 function setType(v: OpeningType) {
   if (v === opening.value?.type) return
+  if (isSurfaceOpening(v)) { void house.saveOpening({ type: v }); return }
   void house.saveOpening(v === 'window' ? { type: v } : { type: v, sill: 0 })
 }
 
@@ -87,20 +94,37 @@ const sill = computed(() => {
   const o = opening.value
   return o && house.house ? openingSill(o, resolveDefaults(house.house.defaults)) : 0
 })
-/** Les deux cotes de position, au mètre ruban depuis chaque coin du mur (`openingGaps`). */
+/** Les deux cotes murales, ou les quatre cotes de surface. */
 const gaps = computed(() => (opening.value && room.value ? openingGaps(room.value, opening.value) : { left: 0, right: 0 }))
+const surfaceGapMap = computed(() => (
+  opening.value && room.value && isSurfaceOpening(opening.value.type)
+    ? surfaceGaps(room.value, opening.value)
+    : { front: null, back: null, left: null, right: null }
+))
 
-type Field = 'width' | 'height' | 'sill' | 'left' | 'right'
+type Field = 'width' | 'height' | 'sill' | 'left' | 'right' | 'yaw' | ParkingSide
 const STEP = 0.05
+const YAW_STEP = 5
+const isSurface = computed(() => !!(opening.value && isSurfaceOpening(opening.value.type)))
 const fields = computed(() => {
   const o = opening.value
   if (!o) return []
+  if (isSurfaceOpening(o.type)) {
+    return [
+      // Longueur = axe du cap (`height` JSON), largeur = travers (`width` JSON) — comme une place.
+      { key: 'height' as const, label: t('opening.length') },
+      { key: 'width' as const, label: t('opening.width') },
+      { key: 'yaw' as const, label: t('opening.yaw') },
+      { key: 'front' as const, label: t('opening.gapFront') },
+      { key: 'back' as const, label: t('opening.gapBack') },
+      { key: 'left' as const, label: t('opening.gapLeft') },
+      { key: 'right' as const, label: t('opening.gapRight') },
+    ]
+  }
   return [
     { key: 'width' as const, label: t('opening.width') },
     { key: 'height' as const, label: t('opening.height') },
     { key: 'sill' as const, label: t('opening.sill') },
-    // lues de gauche à droite comme on les lirait dans la pièce, même si c'est la cote de DROITE
-    // qui porte `offset` dans le fichier
     { key: 'left' as const, label: t('opening.gapLeft') },
     { key: 'right' as const, label: t('opening.gapRight') },
   ]
@@ -112,8 +136,11 @@ function fieldValue(field: Field): number {
     case 'width': return o.width
     case 'height': return o.height
     case 'sill': return sill.value
-    case 'right': return gaps.value.right
-    case 'left': return gaps.value.left
+    case 'right': return isSurface.value ? (surfaceGapMap.value.right ?? 0) : gaps.value.right
+    case 'left': return isSurface.value ? (surfaceGapMap.value.left ?? 0) : gaps.value.left
+    case 'front': return surfaceGapMap.value.front ?? 0
+    case 'back': return surfaceGapMap.value.back ?? 0
+    case 'yaw': return o.yaw ?? 0
   }
 }
 
@@ -137,13 +164,28 @@ function apply(field: Field, wanted: number) {
   const o = opening.value
   if (!o || !house.house) return
   const defaults = resolveDefaults(house.house.defaults)
+  if (field === 'yaw') {
+    const next = Math.round((((wanted % 360) + 360) % 360) * 10) / 10
+    if (next !== (o.yaw ?? 0)) void house.saveOpening({ yaw: next })
+    return
+  }
   if (field === 'width') {
+    if (isSurfaceOpening(o.type)) {
+      const next = Math.max(MIN_OPENING_DIM, Math.round(wanted * 100) / 100)
+      if (next !== o.width) void house.saveOpening({ width: next })
+      return
+    }
     if (!room.value) return
     const r = fitWidth(room.value, roomsOnLevel.value, defaults, o, wanted)
     if (r && (r.width !== o.width || r.offset !== o.offset)) void house.saveOpening({ width: r.width, offset: r.offset })
     return
   }
   if (field === 'height') {
+    if (isSurfaceOpening(o.type)) {
+      const next = Math.max(MIN_OPENING_DIM, Math.round(wanted * 100) / 100)
+      if (next !== o.height) void house.saveOpening({ height: next })
+      return
+    }
     const r = fitHeight(sill.value, o.height, house.openingCeiling, wanted)
     if (r.height !== o.height || r.sill !== sill.value) void house.saveOpening({ height: r.height, sill: r.sill })
     return
@@ -154,14 +196,22 @@ function apply(field: Field, wanted: number) {
     if (next !== sill.value) void house.saveOpening({ sill: next })
     return
   }
-  // 'right' / 'left' : les deux cotes de position, vues DE L'INTÉRIEUR de la pièce (c'est de là
-  // qu'on relève au mètre ruban, cf. `openingGaps`). L'une déplace l'ouverture et l'AUTRE SUIT —
-  // c'est ce qui les rend compréhensibles en paire (voir `fitGap`).
   if (!room.value) return
+  // Surface : les quatre cotes font GLISSER le centre (`fitSurfaceGap`), comme une place.
+  if (isSurfaceOpening(o.type) && (field === 'front' || field === 'back' || field === 'left' || field === 'right')) {
+    if (surfaceGapMap.value[field] === null) return
+    const next = fitSurfaceGap(room.value, o, field, wanted)
+    if (next && (next.x !== o.x || next.y !== o.y)) void house.saveOpening({ x: next.x, y: next.y })
+    return
+  }
+  // Mur : 'right' / 'left' — cotes depuis les coins, vues DE L'INTÉRIEUR (`fitGap`).
+  if (field !== 'left' && field !== 'right') return
   const next = fitGap(room.value, roomsOnLevel.value, defaults, o, field, wanted)
   if (next !== null && next !== o.offset) void house.saveOpening({ offset: next })
 }
-function bump(field: Field, delta: number) { apply(field, fieldValue(field) + delta) }
+function bump(field: Field, delta: number) {
+  apply(field, fieldValue(field) + (field === 'yaw' ? (delta > 0 ? YAW_STEP : -YAW_STEP) : delta))
+}
 function commitEdit(field: Field) {
   if (editing.value !== field) return
   editing.value = null
@@ -173,7 +223,12 @@ function commitEdit(field: Field) {
 }
 
 /** Lecture seule : le mur qui porte l'ouverture — sa place, elle, se règle juste en dessous. */
-const wallLabel = computed(() => (opening.value ? t('opening.wall', { segment: opening.value.segment + 1 }) : ''))
+const wallLabel = computed(() => {
+  const o = opening.value
+  if (!o) return ''
+  if (isSurfaceOpening(o.type)) return t(`opening.hosts.${o.type === 'skylight' ? 'floor' : 'roof'}`)
+  return t('opening.wall', { segment: (o.segment ?? 0) + 1 })
+})
 
 // --- nom : facultatif, saisi ici. Vide = effacer et revenir à l'id du relevé (même convention que
 // `house.renameDevice`). `openingLabel` est LA règle d'affichage, partagée avec la liste de la pièce
@@ -308,7 +363,7 @@ const freedName = computed(() => {
         </span>
       </div>
 
-      <p class="muted opening__hint">{{ $t('opening.whereHint') }}</p>
+      <p class="muted opening__hint">{{ isSurface ? $t('opening.whereHintSurface') : $t('opening.whereHint') }}</p>
 
       <!-- la menuiserie : ce qu'on ne relève pas au mètre ruban. Trois lignes au même gabarit que
            la nature, pour qu'on lise la carte d'un trait. -->

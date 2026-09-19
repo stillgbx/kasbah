@@ -458,6 +458,11 @@ export const openingPatchSchema = z.object({
   segment: z.number().int().min(0).optional(),
   /** Distance (m) depuis le coin `polygon[segment]` jusqu'au bord proche. */
   offset: z.number().min(0).max(100).optional(),
+  /** Centre en plan d'une ouverture de surface. */
+  x: z.number().optional(),
+  y: z.number().optional(),
+  /** Cap (azimut) d'une ouverture de surface. */
+  yaw: z.number().min(-360).max(360).optional(),
   width: z.number().positive().max(20).optional(),
   height: z.number().positive().max(10).optional(),
   /**
@@ -497,7 +502,7 @@ export function patchOpeningInJson(doc: unknown, roomId: string, openingId: stri
   if (oi < 0) throw new PlacementError(`room "${roomId}" has no opening "${openingId}"`)
 
   const next: JsonObject = { ...(openings[oi] as JsonObject) }
-  for (const key of ['type', 'segment', 'offset', 'width', 'height', 'sill'] as const) {
+  for (const key of ['type', 'segment', 'offset', 'x', 'y', 'yaw', 'width', 'height', 'sill'] as const) {
     if (patch[key] !== undefined) next[key] = patch[key]
   }
   // les quatre champs EFFAÇABLES : une chaîne vide retire la clé du fichier, et ce qui la remplace
@@ -526,11 +531,24 @@ export const newOpeningSchema = z.object({
   id: z.string().min(1).max(60),
   name: z.string().trim().max(60).optional(),
   type: z.enum(OPENING_TYPES),
-  segment: z.number().int().min(0),
-  offset: z.number().min(0).max(100),
+  segment: z.number().int().min(0).optional(),
+  offset: z.number().min(0).max(100).optional(),
+  x: z.number().optional(),
+  y: z.number().optional(),
+  yaw: z.number().min(-360).max(360).optional(),
   width: z.number().positive().max(20),
   height: z.number().positive().max(10),
   sill: z.number().min(0).max(10).optional(),
+}).superRefine((o, ctx) => {
+  const surface = o.type === 'roof-window' || o.type === 'skylight'
+  if (surface) {
+    if (o.x === undefined) ctx.addIssue({ code: 'custom', path: ['x'], message: 'surface opening requires x' })
+    if (o.y === undefined) ctx.addIssue({ code: 'custom', path: ['y'], message: 'surface opening requires y' })
+    if (o.yaw === undefined) ctx.addIssue({ code: 'custom', path: ['yaw'], message: 'surface opening requires yaw' })
+  } else {
+    if (o.segment === undefined) ctx.addIssue({ code: 'custom', path: ['segment'], message: 'wall opening requires segment' })
+    if (o.offset === undefined) ctx.addIssue({ code: 'custom', path: ['offset'], message: 'wall opening requires offset' })
+  }
 })
 export type NewOpening = z.infer<typeof newOpeningSchema>
 
@@ -555,8 +573,15 @@ export function addOpeningToJson(doc: unknown, roomId: string, opening: NewOpeni
   const room = rooms[ri] as JsonObject
   const openings = Array.isArray(room.openings) ? room.openings : []
   const next: JsonObject = {
-    id: opening.id, type: opening.type, segment: opening.segment,
-    offset: opening.offset, width: opening.width, height: opening.height,
+    id: opening.id, type: opening.type, width: opening.width, height: opening.height,
+  }
+  if (opening.type === 'roof-window' || opening.type === 'skylight') {
+    next.x = opening.x
+    next.y = opening.y
+    next.yaw = opening.yaw
+  } else {
+    next.segment = opening.segment
+    next.offset = opening.offset
   }
   if (opening.name) next.name = opening.name
   if (opening.sill !== undefined && (opening.sill > 0 || opening.type === 'window')) next.sill = opening.sill

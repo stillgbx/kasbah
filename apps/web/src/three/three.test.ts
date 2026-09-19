@@ -543,7 +543,7 @@ describe('marqueurs 3D', () => {
    */
   describe('tablier de volet', () => {
     const rect = (extra: Partial<OpeningRect> = {}): OpeningRect => ({
-      openingId: 'win', roomId: 'salon', levelId: 'rdc', type: 'window',
+      openingId: 'win', roomId: 'salon', levelId: 'rdc', type: 'window', host: 'wall',
       origin: [2, 0, 1], u: [1, 0], normal: [0, -1], width: 2, height: 1.2, depth: 0.3, leaves: 1, ...extra,
     })
     /** Même contexte que `marker`, plus l'ouverture que l'ouvrant habille (et le jeu de matériaux, qu'on inspecte). */
@@ -1417,7 +1417,7 @@ describe('régler les ouvertures', () => {
     scene.updateOpenings({
       ...house,
       rooms: house.rooms.map((r) => (r.id === room.id
-        ? { ...r, openings: r.openings.map((o) => (o.id === opening.id ? { ...o, offset: o.offset + 0.3 } : o)) }
+        ? { ...r, openings: r.openings.map((o) => (o.id === opening.id ? { ...o, offset: (o.offset ?? 0) + 0.3 } : o)) }
         : r)),
     })
     expect(scene.camera.position.toArray()).toEqual(was.camera)
@@ -1615,7 +1615,7 @@ describe('cotes et nom de l’ouverture réglée', () => {
     scene.updateOpenings({
       ...house,
       rooms: house.rooms.map((r) => (r.id === 'chambre1'
-        ? { ...r, openings: r.openings.map((o) => (o.id === 'fen-ch1' ? { ...o, offset: o.offset + 0.4 } : o)) }
+        ? { ...r, openings: r.openings.map((o) => (o.id === 'fen-ch1' ? { ...o, offset: (o.offset ?? 0) + 0.4 } : o)) }
         : r)),
     })
     const now = read()

@@ -27,22 +27,34 @@ export interface OpeningRect {
   roomId: string
   levelId: string
   type: OpeningType
-  /** Coin bas-gauche de l'ouverture sur la face intérieure (z local = allège). */
+  /** Surface qui porte l'ouverture : mur, sol (puits de lumière) ou toit (Velux). */
+  host: 'wall' | 'floor' | 'roof'
+  /** Coin bas-gauche de l'ouverture (z local = allège pour un mur ; face basse de la dalle / du toit pour une surface). */
   origin: Vec3
-  /** Direction unitaire le long du mur (dans le plan). */
+  /** Direction unitaire le long de la largeur (dans le plan). */
   u: Vec2
-  /** Normale extérieure unitaire du mur (dans le plan). */
+  /** Normale extérieure unitaire du mur (dans le plan) ; `[0, 0]` pour une surface horizontale. */
   normal: Vec2
   width: number
   height: number
-  /** Épaisseur du mur porteur. */
+  /** Épaisseur du porteur (mur, dalle ou toit). */
   depth: number
   /** Nombre de vantaux EFFECTIF (`openingLeaves`) : jamais l'optionnel du fichier. */
   leaves: number
+  /** Cap (azimut) d'une ouverture de surface. */
+  yaw?: number
+  /** Pente (degrés depuis l'horizontal) d'une fenêtre de toit ; 0 = plat / sol. */
+  slope?: number
   /** Matière de la menuiserie, si le fichier en impose une. */
   material?: OpeningMaterial
   /** Couleur de la menuiserie (#rrggbb), si le fichier en impose une. */
   color?: string
+}
+
+export interface FloorHole {
+  openingId: string
+  /** Quad CCW du trou dans le plan de la pièce. */
+  polygon: [Vec2, Vec2, Vec2, Vec2]
 }
 
 export interface FloorDescriptor {
@@ -53,10 +65,23 @@ export interface FloorDescriptor {
   z1: number
   kind: RoomKind
   floorStyle?: FloorStyle
+  /** Trous des puits de lumière (`skylight`) de la pièce. */
+  holes?: FloorHole[]
 }
 
 export interface TerrainDescriptor { polygon: Vec2[]; z: number }
 export interface ZoneDescriptor { zoneId: string; kind: ZoneKind; polygon: Vec2[]; z: number }
+
+export interface RoofHole {
+  openingId: string
+  roomId: string
+  /** Quad CCW en plan (projection) — suffit pour un toit plat ; pour un gable, aussi projeté sur la face. */
+  polygon: [Vec2, Vec2, Vec2, Vec2]
+  /** Index de la face gable touchée ; absent pour un toit plat. */
+  faceIndex?: number
+  /** Quatre coins 3D sur la face (absolu) quand `faceIndex` est posé. */
+  corners?: [Vec3, Vec3, Vec3, Vec3]
+}
 
 export interface RoofDescriptor {
   type: 'flat' | 'gable'
@@ -69,6 +94,8 @@ export interface RoofDescriptor {
   thickness: number
   /** Faces planes convexes (coordonnées ABSOLUES), vides pour un toit plat (le builder extrude `outline`). */
   faces: Vec3[][]
+  /** Trous des fenêtres de toit. */
+  holes?: RoofHole[]
 }
 
 export interface LabelAnchor { roomId: string; position: Vec2 }

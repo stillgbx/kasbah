@@ -305,7 +305,7 @@ describe('addOpeningToJson', () => {
 
   it('pose l ouverture dans sa piece et laisse les autres tranquilles', () => {
     const out = addOpeningToJson(demo, 'salon', { id: 'window-1', type: 'window', segment: 3, offset: 1, width: 1.2, height: 1.2, sill: 0.9 })
-    expect(openingsOf(out, 'salon').map((o) => o.id)).toEqual(['baie', 'fen-salon-est', 'window-1'])
+    expect(openingsOf(out, 'salon').map((o) => o.id)).toEqual(['baie', 'fen-salon-est', 'puits-salon', 'window-1'])
     expect(openingsOf(out, 'cuisine')).toEqual(openingsOf(demo as unknown as Record<string, unknown>, 'cuisine'))
     expect(() => parseHouse(out)).not.toThrow()
   })
@@ -334,7 +334,7 @@ describe('removeOpeningFromJson', () => {
   it('libere l ouvrant qui l habillait, dans la meme ecriture', () => {
     const out = removeOpeningFromJson(demo, 'salon', 'baie')                    // cover.baie y est posé
     const room = (out.rooms as Record<string, unknown>[]).find((r) => r.id === 'salon')!
-    expect((room.openings as Record<string, unknown>[]).map((o) => o.id)).toEqual(['fen-salon-est'])
+    expect((room.openings as Record<string, unknown>[]).map((o) => o.id)).toEqual(['fen-salon-est', 'puits-salon'])
     expect(devices(out).find((d) => d.id === 'cover.baie')).not.toHaveProperty('openingId')
     expect(devices(out).find((d) => d.id === 'cover.cuisine')).toMatchObject({ openingId: 'fen-cuisine' })
     // sans cette libération, la maison entière serait refusée : l'ouvrant nommerait une ouverture disparue

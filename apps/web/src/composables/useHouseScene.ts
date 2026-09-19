@@ -176,7 +176,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     onOpeningTap: (f: Handler<[string]>) => { openingTap.add(f) },
     onOpeningDrag: (f: Handler<[string, [number, number]]>) => { openingDrag.add(f) },
     onOpeningDrop: (f: Handler<[string]>) => { openingDrop.add(f) },
-    setPlacingOpening: (roomId: string | null) => scene?.setPlacingOpening(roomId),
+    setPlacingOpening: (armed: { roomId: string; type: string } | null) => scene?.setPlacingOpening(armed),
     setEditingParkings: (on: boolean) => scene?.setEditingParkings(on),
     setPlacingParking: (on: boolean) => scene?.setPlacingParking(on),
     onGroundTap: (f: Handler<[[number, number], string | null]>) => { groundTap.add(f) },

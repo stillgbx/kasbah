@@ -93,7 +93,7 @@ scene.onParkingDrop(() => { void house.dropParking() })
 // mode « poser » : une nature armée dans le panneau de la pièce attend le mur. Le tap rapporte le
 // point touché ; c'est le store qui en déduit le mur et la place, comme pour un glissement.
 scene.onPlaceTap((xy) => { void house.placeOpeningAt(xy) })
-watch(() => house.placingOpening, (armed) => scene.setPlacingOpening(armed?.roomId ?? null))
+watch(() => house.placingOpening, (armed) => scene.setPlacingOpening(armed))
 // mode « poser une place » : le tap au sol donne le centre ; le reste (cotes de catalogue, sens du
 // garage) est décidé par le magasin, comme pour une ouverture posée sur un mur.
 scene.onGroundTap((xy, levelId) => { void house.placeParkingAt(xy, levelId) })

@@ -171,7 +171,7 @@ export function collectHoles(
   const H = wallHeight(room, level, defaults, seg.kind)
   const holes: Hole[] = []
   for (const o of room.openings) {
-    if (o.segment !== seg.index) continue
+    if (o.segment === undefined || o.offset === undefined || o.segment !== seg.index) continue
     const z0 = openingSill(o, defaults)
     holes.push({ u0: o.offset, u1: o.offset + o.width, z0, z1: Math.min(H, z0 + o.height), openingId: o.id, mirrored: false })
   }
@@ -180,6 +180,7 @@ export function collectHoles(
       if (other.id === room.id || !isWalled(other) || other.openings.length === 0) continue
       const oSegs = classifySegments(other, roomsOnLevel, defaults)
       for (const o of other.openings) {
+        if (o.segment === undefined || o.offset === undefined) continue
         const os = oSegs[o.segment]
         if (!os || os.kind === 'none') continue
         if (dot(seg.d, os.d) > -0.99) continue                                   // pas antiparallèle
@@ -315,9 +316,25 @@ function trimCrossRoomOverlaps(plans: readonly SegmentPlan[]): void {
  * de tout ce qui habille l'ouverture — le tablier d'un volet, la pilule de son marqueur — plutôt que
  * la `position` du JSON : une ouverture affinée après coup laisserait l'appareil à l'écart (mesuré à
  * 2,11 m sur `cover.volet-bureau`), alors que ce qui est dessiné, lui, épouse déjà la baie.
+ *
+ * Pour une surface (sol / toit), le centre est au milieu du rectangle, à mi-épaisseur du porteur.
  */
 export function openingCentre(o: OpeningRect): Vec3 {
-  return [o.origin[0] + (o.u[0] * o.width) / 2, o.origin[1] + (o.u[1] * o.width) / 2, o.origin[2] + o.height / 2]
+  if (o.host === 'wall') {
+    return [o.origin[0] + (o.u[0] * o.width) / 2, o.origin[1] + (o.u[1] * o.width) / 2, o.origin[2] + o.height / 2]
+  }
+  // surface : origin est le coin « bas-gauche » ; le centre en plan suit u × width et la direction
+  // perpendiculaire (sens du cap) × height ; z à mi-épaisseur
+  const { fwd } = (() => {
+    const yaw = o.yaw ?? 0
+    const a = (yaw * Math.PI) / 180
+    return { fwd: [-Math.sin(a), Math.cos(a)] as const }
+  })()
+  return [
+    o.origin[0] + (o.u[0] * o.width) / 2 + (fwd[0] * o.height) / 2,
+    o.origin[1] + (o.u[1] * o.width) / 2 + (fwd[1] * o.height) / 2,
+    o.origin[2] + o.depth / 2,
+  ]
 }
 
 export interface WallsResult { prisms: WallPrism[]; openings: OpeningRect[] }
@@ -355,10 +372,10 @@ export function computeWalls(level: Level, roomsOnLevel: readonly Room[], defaul
       })
     }
     for (const o of room.openings) {
-      if (o.segment !== seg.index) continue
+      if (o.segment === undefined || o.offset === undefined || o.segment !== seg.index) continue
       const p = add(seg.a, scale(seg.d, o.offset))
       openings.push({
-        openingId: o.id, roomId: room.id, levelId: level.id, type: o.type,
+        openingId: o.id, roomId: room.id, levelId: level.id, type: o.type, host: 'wall',
         origin: [p[0], p[1], openingSill(o, defaults)], u: seg.d, normal: seg.n,
         width: o.width, height: o.height, depth: seg.thickness, leaves: openingLeaves(o),
         ...(o.material ? { material: o.material } : {}),

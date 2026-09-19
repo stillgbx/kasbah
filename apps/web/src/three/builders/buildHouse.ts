@@ -4,7 +4,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import type { HouseGeometry, LevelGeometry, OpeningRect, WallPrism } from '@kasbah/shared'
 import { buildDetails, buildRoofDetails, isGlazed } from './details'
 import type { MaterialSet } from './materials'
-import { alignedToLongestEdge, discWithHoles, extrudePolygon, flatPolygon, flatRing, flatWithHoles, insetPolygon, planarFaces } from './shapes'
+import { alignedToLongestEdge, discWithHoles, extrudePolygon, extrudePolygonWithHoles, flatPolygon, flatRing, flatWithHoles, insetPolygon, planarFaces, planarFacesWithHoles } from './shapes'
 import { offsetPolygon } from '@kasbah/shared'
 
 // Builders : descripteurs purs → maillages. Tous les objets vivent dans le repère maison (Z-up) ;
@@ -54,6 +54,22 @@ export function buildWallsGeometry(prisms: readonly WallPrism[]): BufferGeometry
 
 /** Vitrage translucide dans l'embrasure d'une ouverture vitrée (au milieu de l'épaisseur du mur). */
 export function buildPane(o: OpeningRect, mats: MaterialSet): Mesh {
+  if (o.host === 'floor' || o.host === 'roof') {
+    // rectangle horizontal (sol) ou penché (toit) : width × height dans le plan, épaisseur fine
+    const thick = Math.max(0.02, o.depth * 0.4)
+    const g = new BoxGeometry(o.width, o.height, thick)
+    const m = new Mesh(g, mats.glass)
+    const yaw = ((o.yaw ?? 0) * Math.PI) / 180
+    const slope = ((o.slope ?? 0) * Math.PI) / 180
+    // cap : 0 = +y → rotation Z ; pente : inclinaison autour de l'axe local X (largeur)
+    m.rotation.z = yaw
+    m.rotation.x = -slope
+    const cx = o.origin[0] + (o.u[0] * o.width) / 2 + (-Math.sin(yaw) * o.height) / 2
+    const cy = o.origin[1] + (o.u[1] * o.width) / 2 + (Math.cos(yaw) * o.height) / 2
+    m.position.set(cx, cy, o.origin[2] + o.depth / 2)
+    m.userData = { openingId: o.openingId }
+    return m
+  }
   const g = new BoxGeometry(o.width, Math.max(0.02, o.depth * 0.15), o.height)
   const m = new Mesh(g, mats.glass)
   const angle = Math.atan2(o.u[1], o.u[0])
@@ -94,7 +110,11 @@ export function buildLevel(level: LevelGeometry, mats: MaterialSet, dressed?: Re
   for (const f of level.floors) {
     const base = f.floorStyle ? mats.floors[f.floorStyle] : mats.floor
     const mat = base.clone()            // clone par pièce → surbrillance individuelle
-    const mesh = new Mesh(extrudePolygon(f.polygon, f.z0, f.z1), mat)
+    const holePolys = f.holes?.map((h) => h.polygon) ?? []
+    const geom = holePolys.length > 0
+      ? extrudePolygonWithHoles(f.polygon, holePolys, f.z0, f.z1)
+      : extrudePolygon(f.polygon, f.z0, f.z1)
+    const mesh = new Mesh(geom, mat)
     mesh.name = `floor:${f.roomId}`
     mesh.receiveShadow = true
     mesh.userData = { role: 'floor', roomId: f.roomId, baseMaterial: base, material: mat }
@@ -181,20 +201,31 @@ export function buildHouse(geometry: HouseGeometry, mats: MaterialSet, dressed?:
 
   let roof: Mesh | null = null
   if (geometry.roof) {
-    const g = geometry.roof.type === 'flat'
-      ? extrudePolygon(geometry.roof.outline, geometry.roof.zBase, geometry.roof.zRidge)
-      : planarFaces(geometry.roof.faces)
-    // un toit plat n'est pas couvert de tuiles : sa dalle a sa propre matière (gravillon par défaut)
-    const roofMat = geometry.roof.type === 'flat' ? mats.roofFlat : mats.roof
-    roof = new Mesh(g, roofMat)
-    roof.name = 'roof'
-    roof.castShadow = true
-    roof.userData = { role: 'roof', material: roofMat }
+    roof = buildRoofMesh(geometry.roof, mats)
     root.add(roof)
-    // rives d'un toit à deux pentes, acrotère d'un toit plat : ils se montrent et se cachent avec lui
-    for (const d of buildRoofDetails(geometry.roof, mats)) roof.add(d)
   }
   return { root, levels, site, zones, terrain, ground, roof, outdoorMarkers }
+}
+
+/** Maillage du toit (plat ou à pentes), trous de Velux compris. */
+export function buildRoofMesh(
+  roof: NonNullable<HouseGeometry['roof']>, mats: MaterialSet,
+): Mesh {
+  const holes = roof.holes ?? []
+  const g = roof.type === 'flat'
+    ? (holes.length > 0
+      ? extrudePolygonWithHoles(roof.outline, holes.map((h) => h.polygon), roof.zBase, roof.zRidge)
+      : extrudePolygon(roof.outline, roof.zBase, roof.zRidge))
+    : (holes.some((h) => h.faceIndex !== undefined)
+      ? planarFacesWithHoles(roof.faces, holes)
+      : planarFaces(roof.faces))
+  const roofMat = roof.type === 'flat' ? mats.roofFlat : mats.roof
+  const mesh = new Mesh(g, roofMat)
+  mesh.name = 'roof'
+  mesh.castShadow = true
+  mesh.userData = { role: 'roof', material: roofMat }
+  for (const d of buildRoofDetails(roof, mats)) mesh.add(d)
+  return mesh
 }
 
 /** Nombre de triangles d'un sous-arbre (diagnostic / tests). */

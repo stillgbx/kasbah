@@ -1,5 +1,5 @@
 import {
-  AmbientLight, Color, DirectionalLight, DoubleSide, HemisphereLight, MOUSE, OrthographicCamera, PerspectiveCamera, Plane, Raycaster, Scene, Spherical, type Texture, TOUCH, Vector2, Vector3, VSMShadowMap,
+  AmbientLight, Color, DirectionalLight, DoubleSide, HemisphereLight, MOUSE, OrthographicCamera, PerspectiveCamera, Plane, Raycaster, Scene, Shape, ShapeGeometry, Spherical, type Texture, TOUCH, Vector2, Vector3, VSMShadowMap,
   WebGLRenderer, Box3, BoxGeometry, Fog, Mesh, MeshBasicMaterial, type Material, type MeshStandardMaterial, type Object3D,
   Group, SphereGeometry, CylinderGeometry, RingGeometry, Frustum, Matrix4, Sphere,
 } from 'three'
@@ -7,7 +7,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js'
 import {
   boundsCenter, buildingBounds, computeHouseGeometry, deviceFloorZ, geoDistance, indexHouse, longestEdgeYawDeg, pointInPolygon, resolveDefaults, resolveDeviceLevelId, sitePosition,
-  roofBounds, roomBounds, zoneBounds, openingCentre, openingGaps, openingLabel,
+  roofBounds, roomBounds, zoneBounds, openingCentre, openingGaps, openingLabel, surfaceAxes, surfaceGaps,
   assignParkings, atRest, parkingGaps, parkingHost, parkingLabel, PARKING_SIDES,
   type DeviceDescriptor, type DeviceState, type House, type HouseDevice, type HouseGeometry, type HouseIndex, type Level, type OpeningRect, type Parking, type ParkingFix, type ParkingSide, type PlacedHouseDevice, type Vec2, type Vec3,
 } from '@kasbah/shared'
@@ -21,7 +21,7 @@ import { Precipitation } from './effects/precipitation'
 import { makeWaterAlive, type WaterStrength } from './effects/water'
 import { defaultAmbience, defaultSceneTheme, rolesOf, styleById, type GlowLook, type PostLook, type RenderStyle, type StyleLook } from './styles'
 import { applyTuning, NEUTRAL_TUNING, type SceneTuning } from './styles/tuning'
-import { buildHouse, buildLevel, type HouseNodes, type LevelNodes } from './builders/buildHouse'
+import { buildHouse, buildLevel, buildRoofMesh, type HouseNodes, type LevelNodes } from './builders/buildHouse'
 import { buildParking, parkingGlyphTexture, parkingMaterials, type ParkingMaterials, type ParkingNodes } from './builders/parking'
 import { extrudeRing, flatPolygon, flatRing, insetPolygon } from './builders/shapes'
 import {
@@ -361,7 +361,9 @@ export class HouseScene {
   private editingOpenings = false
   private selectedOpeningId: string | null = null
   /** Pièce dont on attend qu'on tape un mur pour y poser une ouverture neuve (mode « poser »). */
-  private placingRoomId: string | null = null
+  private placingOpening: { roomId: string; type: string } | null = null
+  /** Cône de cap pendant la pose d'une fenêtre de toit / puits de lumière. */
+  private placingYawGuide: Mesh | null = null
   /** Ouvertures dont un ouvrant porte le vantail (`dressedOpenings`), telles que les murs ont été bâtis. */
   private dressed: ReadonlySet<string> = new Set<string>()
   private openingHandles = new Map<string, { group: Group; fill: Mesh; ring: Mesh; ringOn: Mesh; rect: OpeningRect }>()
@@ -377,9 +379,14 @@ export class HouseScene {
   private originMark: { group: Group; labels: CSS2DObject[] } | null = null
   /** Nom et cotes de l'ouverture réglée (`refreshOpeningNotes`), et le groupe d'étiquettes qui les porte. */
   private openingNotes: {
-    name: CSS2DObject; right: CSS2DObject; left: CSS2DObject; parent: Group
-    /** Le tracé des deux cotes : un trait et deux tirets chacune. */
-    cotes: Group; lines: { line: Mesh; a: Mesh; b: Mesh }[]
+    name: CSS2DObject
+    /** Mur : [droite, gauche]. Surface : front, back, left, right. */
+    gaps: CSS2DObject[]
+    parent: Group
+    /** Le tracé des cotes : un trait et deux tirets chacune. */
+    cotes: Group
+    lines: { line: Mesh; a: Mesh; b: Mesh }[]
+    host: 'wall' | 'surface'
   } | null = null
   /** Dernière position du doigt pas encore rapportée, et l'image où elle le sera (0 = aucune en attente). */
   private pendingOpeningXY: [number, number] | null = null
@@ -859,10 +866,15 @@ export class HouseScene {
     const levels = house.levels.filter((l) => openingsOf(before, l.id) !== openingsOf(house, l.id)).map((l) => l.id)
     const was = new Map(before.rooms.flatMap((r) => r.openings.map((o) => [o.id, JSON.stringify(o)] as const)))
     const moved = new Set(house.rooms.flatMap((r) => r.openings).filter((o) => was.get(o.id) !== JSON.stringify(o)).map((o) => o.id))
+    const roofWindowsOf = (h: House) => JSON.stringify(
+      h.rooms.flatMap((r) => r.openings.filter((o) => o.type === 'roof-window')),
+    )
+    const roofDirty = roofWindowsOf(before) !== roofWindowsOf(house)
     this.house = house
     this.index = indexHouse(house)
     this.geometry = computeHouseGeometry(house)
     for (const levelId of levels) this.rebuildLevelNodes(levelId)
+    if (roofDirty) this.rebuildRoof()
     const routing = soundRouting(house.devices, this.states)
     for (const d of this.drawable()) {
       if (!d.openingId || !moved.has(d.openingId)) continue
@@ -879,15 +891,27 @@ export class HouseScene {
         : undefined)
     }
     if (this.editingOpenings) this.buildOpeningHandles()
-    this.refreshOpeningNotes()             // les deux cotes suivent l'ouverture qui glisse
-    this.highlightRoom(this.highlightedRoom)   // le trait de la pièce vivait dans un groupe qu'on vient de jeter
+    this.refreshOpeningNotes()
+    this.highlightRoom(this.highlightedRoom)
     this.applyLevelFocus()
     this.refreshLevelPasses()
-    // PENDANT le geste, la carte d'ombre ne se refait pas : elle redessine tout le bâti depuis le
-    // soleil, et l'ombre d'un trou de mur qui glisse n'est pas ce qu'on regarde. Elle se refait au
-    // relâché (`endOpeningDrag`).
     if (!this.openingDragger?.active()) this.invalidateShadows()
     this.loop.invalidate()
+  }
+
+  /** Refait le maillage du toit (trous de Velux) sans toucher aux niveaux ni à la caméra. */
+  private rebuildRoof(): void {
+    if (!this.nodes) return
+    const old = this.nodes.roof
+    if (old) {
+      old.removeFromParent()
+      disposeObject3D(old, new Set<Material>(this.materials.all))
+      this.nodes.roof = null
+    }
+    if (!this.geometry?.roof) return
+    const roof = buildRoofMesh(this.geometry.roof, this.materials)
+    this.nodes.root.add(roof)
+    this.nodes.roof = roof
   }
 
   /**
@@ -1004,27 +1028,96 @@ export class HouseScene {
 
   /**
    * Arme (ou désarme) la pose d'une ouverture dans une pièce : le prochain tap sur le bâti de son
-   * niveau rapporte le point touché (`placeTap`) au lieu de changer la sélection. Rien n'est dessiné
-   * ici — c'est le panneau qui dit ce qu'on attend, la scène ne fait que router le tap.
+   * niveau rapporte le point touché (`placeTap`) au lieu de changer la sélection. Pour une
+   * ouverture de surface (toit / sol), un cône de cap est affiché au centre de la pièce.
    */
-  setPlacingOpening(roomId: string | null): void {
-    this.placingRoomId = roomId
+  setPlacingOpening(armed: { roomId: string; type: string } | null): void {
+    this.placingOpening = armed
+    this.clearPlacingYawGuide()
+    if (armed && (armed.type === 'roof-window' || armed.type === 'skylight')) {
+      this.showPlacingYawGuide(armed.roomId || null, armed.type === 'roof-window' ? 180 : 0)
+    }
+  }
+
+  private clearPlacingYawGuide(): void {
+    if (!this.placingYawGuide) return
+    this.placingYawGuide.geometry.dispose()
+    ;(this.placingYawGuide.material as MeshBasicMaterial).dispose()
+    this.placingYawGuide.parent?.remove(this.placingYawGuide)
+    this.placingYawGuide = null
+    this.loop.invalidate()
+  }
+
+  private showPlacingYawGuide(roomId: string | null, yawDeg: number): void {
+    if (!this.nodes) return
+    let cx = 0, cy = 0, z = 0.02
+    let parent: Group | undefined
+    if (roomId) {
+      const room = this.house?.rooms.find((r) => r.id === roomId)
+      const level = room ? this.nodes.levels.get(room.levelId) : undefined
+      if (!room || !level) return
+      for (const [x, y] of room.polygon) { cx += x; cy += y }
+      cx /= room.polygon.length
+      cy /= room.polygon.length
+      parent = level.group
+    } else {
+      const outline = this.geometry?.roof?.outline
+      if (!outline?.length) return
+      for (const [x, y] of outline) { cx += x; cy += y }
+      cx /= outline.length
+      cy /= outline.length
+      const roofLvl = this.roofLevel()
+      parent = roofLvl ? this.nodes.levels.get(roofLvl.id)?.group : undefined
+      if (!parent) return
+      // au-dessus de la dalle du toit, dans le repère du niveau-toit (z local)
+      const elev = roofLvl?.elevation ?? 0
+      z = (this.geometry?.roof?.zBase ?? elev) - elev + 0.05
+    }
+    const shape = new Shape()
+    shape.moveTo(0, 0.18)
+    shape.lineTo(-0.42, 1.35)
+    shape.quadraticCurveTo(0, 1.6, 0.42, 1.35)
+    shape.lineTo(0, 0.18)
+    const color = this.theme.primary
+    const mesh = new Mesh(
+      new ShapeGeometry(shape, 12),
+      new MeshBasicMaterial({ color, transparent: true, opacity: 0.55, depthWrite: false, depthTest: false, side: DoubleSide }),
+    )
+    mesh.renderOrder = 999
+    mesh.rotation.z = (yawDeg * Math.PI) / 180
+    // Même convention que l'existant : (x, 0.02, −y) dans le groupe de niveau.
+    mesh.position.set(cx, z, -cy)
+    parent.add(mesh)
+    this.placingYawGuide = mesh
+    this.loop.invalidate()
   }
 
   /**
-   * Point du bâti sous le doigt, en repère maison : sols ET murs du niveau de la pièce visée. On
-   * lance le rayon sur les vraies surfaces plutôt que sur le plan du sol (comme le fait le
-   * glissement) parce qu'ici on vise un MUR : tapé à mi-hauteur, il donne un point sur le mur, là
-   * où le plan du sol aurait rendu un point situé bien au-delà, derrière la maison.
+   * Point du bâti sous le doigt, en repère maison. Selon la nature armée : murs+sols (murale),
+   * sols seuls (puits de lumière), toit (fenêtre de toit).
    */
-  private buildingPoint(roomId: string, ndc: { x: number; y: number }): [number, number] | null {
+  private buildingPoint(roomId: string, type: string | undefined, ndc: { x: number; y: number }): [number, number] | null {
+    this.raycaster.setFromCamera(new Vector2(ndc.x, ndc.y), this.camera)
+    // Fenêtre de toit : on vise le maillage du toit, pièce ou non (pose depuis l'onglet Toit).
+    if (type === 'roof-window') {
+      if (!this.nodes?.roof) return null
+      const hit = this.raycaster.intersectObject(this.nodes.roof, false)[0]
+      return hit ? [hit.point.x, -hit.point.z] : null
+    }
     const levelId = this.house?.rooms.find((r) => r.id === roomId)?.levelId
     const level = levelId ? this.nodes?.levels.get(levelId) : undefined
     if (!level) return null
-    this.raycaster.setFromCamera(new Vector2(ndc.x, ndc.y), this.camera)
-    const targets: Object3D[] = [...level.walls, ...level.floors.values()]
+    const targets: Object3D[] = []
+    if (type === 'skylight') {
+      const floor = level.floors.get(roomId)
+      if (floor) targets.push(floor)
+      else targets.push(...level.floors.values())
+    } else {
+      targets.push(...level.walls, ...level.floors.values())
+    }
+    if (targets.length === 0) return null
     const hit = this.raycaster.intersectObjects(targets, false)[0]
-    return hit ? [hit.point.x, -hit.point.z] : null       // monde (x, y, z) → maison (x, z, -y)
+    return hit ? [hit.point.x, -hit.point.z] : null
   }
 
   /**
@@ -1035,21 +1128,31 @@ export class HouseScene {
   focusOpening(openingId: string, animate = true): void {
     const rect = this.openingRect(openingId)
     if (!rect || !this.house) return
-    if (this.focusedLevelId !== rect.levelId) this.focusLevel(rect.levelId)
+    // Fenêtre de toit : cadrer depuis l'onglet Toit (sinon le toit disparaît et on croit la voir au sol).
+    if (rect.host === 'roof') {
+      const roofLvl = this.roofLevel()
+      if (roofLvl && this.focusedLevelId !== roofLvl.id) this.focusLevel(roofLvl.id)
+    } else if (this.focusedLevelId !== rect.levelId) {
+      this.focusLevel(rect.levelId)
+    }
     const elevation = this.geometry?.levels.find((l) => l.levelId === rect.levelId)?.elevation ?? 0
-    const cx = rect.origin[0] + (rect.u[0] * rect.width) / 2
-    const cy = rect.origin[1] + (rect.u[1] * rect.width) / 2
-    const z = elevation + rect.origin[2] + rect.height / 2
+    const centre = openingCentre(rect)
+    const cx = centre[0], cy = centre[1]
+    const z = elevation + centre[2]
     // Cadrer l'ouverture ET SES COTES, pas seulement elle : une boîte fixe autour de l'ouverture
     // laissait la cote de droite hors de l'image (ou sous le champ de recherche) dès que le vide de
     // ce côté dépassait un mètre et demi. On borne la portée — sur un mur de dix mètres, le bout de
     // la cote n'a plus d'intérêt et reculer d'autant ne montrerait plus rien de l'ouverture.
     const room = this.house.rooms.find((r) => r.id === rect.roomId)
     const opening = room?.openings.find((o) => o.id === openingId)
-    const gaps = room && opening ? openingGaps(room, opening) : { left: 0, right: 0 }
     const box = new Box3()
-    for (const t of [-Math.min(gaps.right, OPENING_FOCUS_REACH_M), rect.width + Math.min(gaps.left, OPENING_FOCUS_REACH_M)]) {
-      box.expandByPoint(houseToWorld([rect.origin[0] + rect.u[0] * t, rect.origin[1] + rect.u[1] * t, z]))
+    if (rect.host === 'wall') {
+      const gaps = room && opening ? openingGaps(room, opening) : { left: 0, right: 0 }
+      for (const t of [-Math.min(gaps.right, OPENING_FOCUS_REACH_M), rect.width + Math.min(gaps.left, OPENING_FOCUS_REACH_M)]) {
+        box.expandByPoint(houseToWorld([rect.origin[0] + rect.u[0] * t, rect.origin[1] + rect.u[1] * t, z]))
+      }
+    } else {
+      box.expandByPoint(houseToWorld([cx, cy, z]))
     }
     box.expandByScalar(DEVICE_FOCUS_SIZE_M / 2)     // la hauteur de l'ouverture, l'épaisseur du mur, et de l'air
     const b = roomBounds(this.house, rect.roomId, resolveDefaults(this.house.defaults))
@@ -1458,24 +1561,32 @@ export class HouseScene {
       for (const o of level.openings) {
         const group = new Group()
         group.name = `opening:${o.openingId}`
-        group.position.set(
-          o.origin[0] + (o.u[0] * o.width) / 2 + (o.normal[0] * o.depth) / 2,
-          o.origin[1] + (o.u[1] * o.width) / 2 + (o.normal[1] * o.depth) / 2,
-          o.origin[2] + o.height / 2,
+        const centre = openingCentre(o)
+        group.position.set(centre[0], centre[1], centre[2])
+        if (o.host === 'wall') {
+          group.rotation.z = Math.atan2(o.u[1], o.u[0])
+        } else {
+          group.rotation.z = ((o.yaw ?? 0) * Math.PI) / 180
+          group.rotation.x = -((o.slope ?? 0) * Math.PI) / 180
+        }
+        const thick = o.host === 'wall' ? o.depth + 2 * OPENING_HANDLE_PROUD_M : Math.max(0.08, o.depth)
+        const fill = new Mesh(
+          o.host === 'wall'
+            ? new BoxGeometry(o.width, thick, o.height)
+            : new BoxGeometry(o.width, o.height, thick),
+          mats.fill,
         )
-        group.rotation.z = Math.atan2(o.u[1], o.u[0])
-        const thick = o.depth + 2 * OPENING_HANDLE_PROUD_M
-        const fill = new Mesh(new BoxGeometry(o.width, thick, o.height), mats.fill)
         fill.userData = { role: 'opening', openingId: o.openingId }
-        // Les deux cadres sont bâtis dans le plan XY puis REDRESSÉS (le y local devient le z du mur) :
-        // celui du repos extrudé dans l'épaisseur de la poignée (un tube, donc jamais coplanaire avec
-        // la menuiserie qui l'entoure), celui de la sélection plat, puisqu'il se dessine par-dessus
-        // tout et n'a personne avec qui se disputer la profondeur.
+        // Cadre : pour un MUR, bâti dans XY puis redressé (y local → z du mur). Pour une SURFACE
+        // (sol / toit), il RESTE dans XY — le plan du porteur — sans `rotateX`, sinon il se dresse
+        // à la verticale (mesuré sur un puits de lumière).
         const rest = extrudeRing(...frameRect(o.width, o.height, OPENING_RING.rest), -thick / 2, thick / 2)
-        rest.rotateX(Math.PI / 2)
+        const bold = flatRing(...frameRect(o.width, o.height, OPENING_RING.on), o.host === 'wall' ? 0 : thick / 2 + 0.002)
+        if (o.host === 'wall') {
+          rest.rotateX(Math.PI / 2)
+          bold.rotateX(Math.PI / 2)
+        }
         const ring = new Mesh(rest, mats.ring)
-        const bold = flatRing(...frameRect(o.width, o.height, OPENING_RING.on), 0)
-        bold.rotateX(Math.PI / 2)
         const ringOn = new Mesh(bold, mats.ringOn)
         group.add(fill, ring, ringOn)
         group.traverse((n) => n.layers.set(DECOR_LAYER))
@@ -1531,24 +1642,26 @@ export class HouseScene {
     const opening = room?.openings.find((o) => o.id === id)
     const level = rect ? this.nodes?.levels.get(rect.levelId) : undefined
     if (!rect || !room || !opening || !level || typeof document === 'undefined') { this.clearOpeningNotes(); return }
-    if (!this.openingNotes || this.openingNotes.parent !== level.labels || this.openingNotes.cotes.parent !== level.markers) {
-      // les éléments sont GARDÉS d'une image à l'autre : les refaire à chaque mouvement de doigt
-      // ferait clignoter du DOM, et le navigateur repaindrait trois boîtes pour deux chiffres
+    const host = rect.host === 'wall' ? 'wall' : 'surface'
+    const gapCount = host === 'wall' ? 2 : 4
+    if (
+      !this.openingNotes
+      || this.openingNotes.parent !== level.labels
+      || this.openingNotes.cotes.parent !== level.markers
+      || this.openingNotes.host !== host
+    ) {
       this.clearOpeningNotes()
       const name = sceneNote('name')
-      const right = sceneNote('gap')
-      const left = sceneNote('gap')
-      level.labels.add(name, right, left)
-      // un trait et deux tirets par cote, dessinés PAR-DESSUS les murs comme le guide du mode
-      // déplacer : une cote que le tableau d'une fenêtre coupe en deux ne se lit plus
+      const gaps = Array.from({ length: gapCount }, () => sceneNote('gap'))
+      level.labels.add(name, ...gaps)
       const mat = new MeshBasicMaterial({
         color: this.theme.primary.clone().lerp(WHITE, 0.2).multiplyScalar(1.15),
         transparent: true, opacity: 0.9, depthWrite: false, depthTest: false,
       })
       const cotes = new Group()
       cotes.name = 'opening-cotes'
-      const lines = [0, 1].map(() => {
-        const line = new Mesh(new BoxGeometry(1, COTE.bar, COTE.bar), mat)      // longueur donnée par `scale.x`
+      const lines = Array.from({ length: gapCount }, () => {
+        const line = new Mesh(new BoxGeometry(1, COTE.bar, COTE.bar), mat)
         const a = new Mesh(new BoxGeometry(COTE.bar, COTE.bar, COTE.tick), mat)
         const b = new Mesh(new BoxGeometry(COTE.bar, COTE.bar, COTE.tick), mat)
         cotes.add(line, a, b)
@@ -1556,50 +1669,89 @@ export class HouseScene {
       })
       cotes.traverse((n) => n.layers.set(DECOR_LAYER))
       level.markers.add(cotes)
-      this.openingNotes = { name, right, left, parent: level.labels, cotes, lines }
+      this.openingNotes = { name, gaps, parent: level.labels, cotes, lines, host }
     }
     const notes = this.openingNotes
-    const gaps = openingGaps(room, opening)
-    // un point de la face du mur, à `t` mètres du bord gauche de l'ouverture, à la hauteur `z`
-    const at = (t: number, z: number): [number, number, number] => [
-      rect.origin[0] + rect.u[0] * t + (rect.normal[0] * rect.depth) / 2,
-      rect.origin[1] + rect.u[1] * t + (rect.normal[1] * rect.depth) / 2,
-      z,
-    ]
-    const mid = rect.origin[2] + rect.height / 2
     notes.name.element.textContent = openingLabel(opening)
-    notes.name.position.set(...at(rect.width / 2, rect.origin[2] + rect.height + OPENING_NOTE_LIFT_M))
-    notes.right.element.textContent = `${gaps.right.toFixed(2)} m`
-    notes.right.position.set(...at(-gaps.right / 2, mid + COTE.lift))
-    notes.left.element.textContent = `${gaps.left.toFixed(2)} m`
-    notes.left.position.set(...at(rect.width + gaps.left / 2, mid + COTE.lift))
-    // Le tracé est posé dans le repère de l'OUVERTURE — origine au bord gauche, x le long du mur : les
-    // deux cotes ne sont plus alors que deux intervalles [x0, x1] de cet axe.
-    notes.cotes.position.set(...at(0, 0))
-    notes.cotes.rotation.z = Math.atan2(rect.u[1], rect.u[0])
-    const spans: [number, number][] = [[-gaps.right, 0], [rect.width, rect.width + gaps.left]]
-    notes.lines.forEach((part, i) => {
-      const [x0, x1] = spans[i]!
-      const length = x1 - x0
-      part.line.visible = length > 1e-3        // à zéro, il n'y a pas d'intervalle à tracer
-      part.line.scale.x = Math.max(length, 1e-4)
-      part.line.position.set((x0 + x1) / 2, 0, mid)
-      part.a.position.set(x0, 0, mid)
-      part.b.position.set(x1, 0, mid)
-    })
-    // même piège que pour les poignées : le rendu 2D comme le lancer de rayon lisent `matrixWorld`, et
-    // celle d'un objet qu'on vient de poser (ou de déplacer) est périmée jusqu'à la prochaine image
-    for (const note of [notes.name, notes.right, notes.left]) note.updateWorldMatrix(true, false)
+
+    if (host === 'wall') {
+      const gaps = openingGaps(room, opening)
+      const at = (t: number, z: number): [number, number, number] => [
+        rect.origin[0] + rect.u[0] * t + (rect.normal[0] * rect.depth) / 2,
+        rect.origin[1] + rect.u[1] * t + (rect.normal[1] * rect.depth) / 2,
+        z,
+      ]
+      const mid = rect.origin[2] + rect.height / 2
+      notes.name.position.set(...at(rect.width / 2, rect.origin[2] + rect.height + OPENING_NOTE_LIFT_M))
+      const [rightNote, leftNote] = notes.gaps
+      rightNote!.element.textContent = `${gaps.right.toFixed(2)} m`
+      rightNote!.position.set(...at(-gaps.right / 2, mid + COTE.lift))
+      leftNote!.element.textContent = `${gaps.left.toFixed(2)} m`
+      leftNote!.position.set(...at(rect.width + gaps.left / 2, mid + COTE.lift))
+      notes.cotes.position.set(...at(0, 0))
+      notes.cotes.rotation.set(0, 0, Math.atan2(rect.u[1], rect.u[0]))
+      const spans: [number, number][] = [[-gaps.right, 0], [rect.width, rect.width + gaps.left]]
+      notes.lines.forEach((part, i) => {
+        const [x0, x1] = spans[i]!
+        const length = x1 - x0
+        part.line.visible = length > 1e-3
+        part.line.scale.set(Math.max(length, 1e-4), 1, 1)
+        part.line.rotation.set(0, 0, 0)
+        part.line.position.set((x0 + x1) / 2, 0, mid)
+        part.a.rotation.set(0, 0, 0)
+        part.b.rotation.set(0, 0, 0)
+        part.a.position.set(x0, 0, mid)
+        part.b.position.set(x1, 0, mid)
+      })
+    } else {
+      // Surface : quatre cotes dans le plan (comme une place), trait le long de chaque intervalle.
+      const gaps = surfaceGaps(room, opening)
+      const yaw = opening.yaw ?? 0
+      const { fwd, right } = surfaceAxes(yaw)
+      const cx = opening.x ?? 0, cy = opening.y ?? 0
+      const w = opening.width, h = opening.height
+      const z = rect.origin[2] + rect.depth / 2
+      notes.name.position.set(cx, cy, z + OPENING_NOTE_LIFT_M)
+      notes.cotes.position.set(cx, cy, z)
+      notes.cotes.rotation.set(0, 0, 0)
+      const dirs: { side: ParkingSide; dir: Vec2; half: number }[] = [
+        { side: 'front', dir: fwd, half: h / 2 },
+        { side: 'back', dir: [-fwd[0], -fwd[1]], half: h / 2 },
+        { side: 'right', dir: right, half: w / 2 },
+        { side: 'left', dir: [-right[0], -right[1]], half: w / 2 },
+      ]
+      dirs.forEach(({ side, dir, half }, i) => {
+        const d = gaps[side]
+        const note = notes.gaps[i]!
+        note.element.textContent = d === null ? '—' : `${d.toFixed(2)} m`
+        const span = d ?? 0
+        const mid = half + span / 2
+        note.position.set(cx + dir[0] * mid, cy + dir[1] * mid, z + COTE.lift)
+        const part = notes.lines[i]!
+        const length = span
+        part.line.visible = length > 1e-3
+        part.line.scale.set(Math.max(length, 1e-4), 1, 1)
+        const ang = Math.atan2(dir[1], dir[0])
+        part.line.rotation.set(0, 0, ang)
+        part.a.rotation.set(0, 0, ang)
+        part.b.rotation.set(0, 0, ang)
+        // repère du groupe cotes = centre de l'ouverture : bord à `half` le long de dir, bout à half+span
+        const x0 = dir[0] * half, y0 = dir[1] * half
+        const x1 = dir[0] * (half + span), y1 = dir[1] * (half + span)
+        part.line.position.set((x0 + x1) / 2, (y0 + y1) / 2, 0)
+        part.a.position.set(x0, y0, 0)
+        part.b.position.set(x1, y1, 0)
+      })
+    }
+    for (const note of [notes.name, ...notes.gaps]) note.updateWorldMatrix(true, false)
     notes.cotes.updateWorldMatrix(true, true)
     this.loop.invalidate()
   }
 
   private clearOpeningNotes(): void {
     if (!this.openingNotes) return
-    disposeObject3D(this.openingNotes.cotes)     // le matériau du tracé est le sien, il part avec lui
-    // un `CSS2DObject` a posé son élément dans la couche du rendu 2D : retirer l'objet de la scène ne
-    // l'enlève pas, il resterait dans le vide (même geste que `DeviceMarker.dispose`)
-    for (const note of [this.openingNotes.name, this.openingNotes.right, this.openingNotes.left]) {
+    disposeObject3D(this.openingNotes.cotes)
+    for (const note of [this.openingNotes.name, ...this.openingNotes.gaps]) {
       note.element.remove()
       note.removeFromParent()
     }
@@ -2346,8 +2498,8 @@ export class HouseScene {
     // Une ouverture armée prend le tap AVANT toute sélection : on est venu désigner un mur, pas
     // ouvrir la pièce ou l'appareil qui se trouve devant. Tapé à côté du bâti, c'est un tap de fond
     // — l'appelant y lit un renoncement, comme partout ailleurs dans la vue.
-    if (this.placingRoomId) {
-      const xy = this.buildingPoint(this.placingRoomId, ev.ndc)
+    if (this.placingOpening) {
+      const xy = this.buildingPoint(this.placingOpening.roomId, this.placingOpening.type, ev.ndc)
       if (xy) this.emit('placeTap', xy)
       else this.emit('backgroundTap')
       return

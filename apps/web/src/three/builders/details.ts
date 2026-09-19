@@ -52,7 +52,7 @@ const LEAF_GAP = 0.02
  * ferait un cycle — Vite réévalue un module à chaud, et un cycle le laisse à moitié initialisé
  * (cf. `6_faq/6_0_pieges-outillage.md`).
  */
-export const GLAZED_OPENINGS: ReadonlySet<OpeningType> = new Set<OpeningType>(['window', 'bay', 'glass-door'])
+export const GLAZED_OPENINGS: ReadonlySet<OpeningType> = new Set<OpeningType>(['window', 'bay', 'glass-door', 'roof-window', 'skylight'])
 
 /**
  * Vitrée pour de bon : par sa NATURE, ou parce que le relevé lui donne le verre pour matière. Une
@@ -91,6 +91,8 @@ function boxAt(o: OpeningRect, size: readonly [number, number, number], at: read
  */
 function frameOfOpening(o: OpeningRect, frames: BufferGeometry[], trim: BufferGeometry[]): void {
   if (o.type === 'passage') return
+  // cadre mural seulement : les ouvertures de surface ont leur dormant dessiné avec le vitrage
+  if (o.host === 'floor' || o.host === 'roof') return
   const f = o.type === 'window' ? FRAME : DOOR_FRAME
   const { width: w, height: h, depth: d } = o
   if (w <= 2 * f + EPS || h <= f + EPS) return

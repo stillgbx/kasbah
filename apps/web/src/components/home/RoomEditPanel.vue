@@ -23,7 +23,10 @@ const levelName = computed(() => (room.value ? house.index?.levelsById.get(room.
 const openings = computed(() => room.value?.openings ?? [])
 /** `openingLabel` est LA règle d'affichage d'une ouverture ; la nature et les cotes restent en sous-ligne. */
 function row(o: Opening) {
-  return { id: o.id, label: openingLabel(o), sub: `${t(`opening.types.${o.type}`)} · ${o.width.toFixed(2)} × ${o.height.toFixed(2)} m` }
+  const dims = o.type === 'roof-window' || o.type === 'skylight'
+    ? `${o.height.toFixed(2)} × ${o.width.toFixed(2)} m`
+    : `${o.width.toFixed(2)} × ${o.height.toFixed(2)} m`
+  return { id: o.id, label: openingLabel(o), sub: `${t(`opening.types.${o.type}`)} · ${dims}` }
 }
 
 /** Nature armée, en attente du mur qu'on va taper dans la 3D (`house.placeOpeningAt`). */
@@ -78,7 +81,7 @@ const parkings = computed(() => (room.value ? house.parkingsInRoom(room.value.id
         {{ $t('opening.cancel') }}
       </button>
       <!-- place réservée : la consigne apparaît sans pousser la liste (hauteur fixe, deux lignes) -->
-      <p class="muted hint">{{ armed ? $t('opening.placeHint') : '' }}</p>
+      <p class="muted hint">{{ armed ? $t(armed.type === 'roof-window' ? 'opening.placeHintRoof' : armed.type === 'skylight' ? 'opening.placeHintFloor' : 'opening.placeHint') : '' }}</p>
     </section>
 
     <ParkingRows :list="parkings" :level-id="room.levelId" />

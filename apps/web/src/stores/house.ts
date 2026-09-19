@@ -1,6 +1,6 @@
 import { computed, ref, shallowRef, watch } from 'vue'
 import { defineStore } from 'pinia'
-import { autoPlaceDevices, computeRoof, fitHeight, fitParkingGap, houseIdForDevice, longestEdgeYawDeg, indexHouse, isPlaced, newOpeningDims, newParkingSize, openingLimits, openingSill, panelArrayDevices, panelOf, parkingGaps, parkingHost, pointInPolygon, resolveDefaults, resolveDeviceLevelId, roomHeight, slotFromPoint, withPanelArrays, type DeviceDescriptor, type DeviceEntry, type DeviceKind, type DevicePlacement, type House, type HouseDevice, type HouseIndex, type Level, type Opening, type OpeningPatch, type OpeningType, type PanelArray, type PanelArrayPatch, type Parking, type ParkingPatch, type ParkingSide, type PlaceableDevice, type PlacedHouseDevice, type Room, type SceneTuning, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
+  import { autoPlaceDevices, computeRoof, defaultRoofYaw, fitHeight, fitParkingGap, houseIdForDevice, isSurfaceOpening, longestEdgeYawDeg, indexHouse, isPlaced, newOpeningDims, newParkingSize, openingLimits, openingSill, panelArrayDevices, panelOf, parkingGaps, parkingHost, pointInPolygon, resolveDefaults, resolveDeviceLevelId, roomHeight, slotFromPoint, slotFromSurfacePoint, withPanelArrays, type DeviceDescriptor, type DeviceEntry, type DeviceKind, type DevicePlacement, type House, type HouseDevice, type HouseIndex, type Level, type Opening, type OpeningPatch, type OpeningType, type PanelArray, type PanelArrayPatch, type Parking, type ParkingPatch, type ParkingSide, type PlaceableDevice, type PlacedHouseDevice, type Room, type SceneTuning, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
 import { getTransport } from '../api'
 import type { JournalPoint } from '../lib/journal'
 import { i18n, t } from '../i18n'
@@ -839,6 +839,7 @@ export const useHouseStore = defineStore('house', () => {
     openingOrigin.value = sel
       ? {
         type: sel.opening.type, segment: sel.opening.segment, offset: sel.opening.offset,
+        x: sel.opening.x, y: sel.opening.y, yaw: sel.opening.yaw,
         width: sel.opening.width, height: sel.opening.height,
         sill: openingSill(sel.opening, resolveDefaults(house.value?.defaults)),
         // la menuiserie se rétablit comme les cotes ; absente à la sélection, elle se RETIRE (chaîne
@@ -852,7 +853,16 @@ export const useHouseStore = defineStore('house', () => {
     selectedLevelId.value = null
     selectedRoomId.value = sel.room.id
     gardenFocus.value = false
-    focusedLevelId.value = sel.room.levelId
+    // Fenêtre de toit : rester sur le niveau-toit (sinon le toit se cache et la poignée semble au sol).
+    if (sel.opening.type === 'roof-window' && house.value) {
+      const roofDesc = computeRoof(house.value, resolveDefaults(house.value.defaults))
+      const roofTab = roofDesc
+        ? house.value.levels.find((l) => l.elevation >= roofDesc.zBase - 1e-3)
+        : undefined
+      focusedLevelId.value = roofTab?.id ?? sel.room.levelId
+    } else {
+      focusedLevelId.value = sel.room.levelId
+    }
   }
 
   /** Hauteur sous plafond de la pièce qui porte l'ouverture : la borne haute de ses cotes. */
@@ -878,6 +888,15 @@ export const useHouseStore = defineStore('house', () => {
   function previewOpeningAt(xy: Vec2) {
     const sel = selectedOpening.value
     if (!sel || !house.value) return
+    if (isSurfaceOpening(sel.opening.type)) {
+      const yaw = sel.opening.yaw ?? 0
+      const slot = slotFromSurfacePoint(sel.room, xy, yaw, sel.opening.width, sel.opening.height)
+      if (!slot) return
+      if (Math.abs(slot.x - (sel.opening.x ?? 0)) < 0.005 && Math.abs(slot.y - (sel.opening.y ?? 0)) < 0.005) return
+      openingDraft.value = { ...openingDraft.value, x: slot.x, y: slot.y }
+      return
+    }
+    if (sel.opening.segment === undefined || sel.opening.offset === undefined) return
     const siblings = index.value?.roomsByLevel.get(sel.room.levelId) ?? [sel.room]
     // `from` = là où elle est en ce moment : c'est ce qui la fait BUTER sur une voisine au lieu de
     // sauter par-dessus. Passer de l'autre côté se fait en faisant le tour de la pièce.
@@ -918,6 +937,7 @@ export const useHouseStore = defineStore('house', () => {
     if (!o || !sel || !house.value) return false
     const s = sel.opening
     return o.type !== s.type || o.segment !== s.segment || o.offset !== s.offset
+      || o.x !== s.x || o.y !== s.y || o.yaw !== s.yaw
       || o.width !== s.width || o.height !== s.height
       || o.sill !== openingSill(s, resolveDefaults(house.value.defaults))
       || o.leaves !== (s.leaves ?? '') || o.material !== (s.material ?? '') || o.color !== (s.color ?? '')
@@ -936,16 +956,32 @@ export const useHouseStore = defineStore('house', () => {
   // ensuite aller chercher.
   const placingOpening = shallowRef<{ roomId: string; type: OpeningType } | null>(null)
 
-  /** Arme une nature sur la pièce sélectionnée. Le réglage en cours se referme : on pose, on ne règle plus. */
+  /** Arme une nature. Mur / sol : pièce sélectionnée requise. Toit : pièce optionnelle (résolue au tap). */
   function startPlacingOpening(type: OpeningType) {
+    selectOpening(null)
+    if (type === 'roof-window') {
+      placingOpening.value = { roomId: selectedRoom.value?.id ?? '', type }
+      // Bascule sur le niveau-toit pour voir et taper la toiture (depuis un étage, le toit est masqué).
+      const h = house.value
+      if (h) {
+        const roofDesc = computeRoof(h, resolveDefaults(h.defaults))
+        const roofTab = roofDesc
+          ? h.levels.find((l) => l.elevation >= roofDesc.zBase - 1e-3)
+          : undefined
+        if (roofTab) focusLevel(roofTab.id)
+      }
+      return
+    }
     const room = selectedRoom.value
     if (!room) return
-    selectOpening(null)
     placingOpening.value = { roomId: room.id, type }
   }
   function cancelPlacingOpening() { placingOpening.value = null }
-  // quitter la pièce désarme : le mur qu'on taperait ne serait plus celui qu'on visait
-  watch(selectedRoomId, (id) => { if (placingOpening.value && placingOpening.value.roomId !== id) placingOpening.value = null })
+  // quitter la pièce désarme — sauf pose toit sans pièce (roomId vide), qui survit au changement d'onglet
+  watch(selectedRoomId, (id) => {
+    const armed = placingOpening.value
+    if (armed?.roomId && armed.roomId !== id) placingOpening.value = null
+  })
 
   /** Id libre pour une ouverture neuve : sa nature, numérotée s'il le faut (comme `addArray`). */
   function freeOpeningId(type: OpeningType): string {
@@ -956,29 +992,58 @@ export const useHouseStore = defineStore('house', () => {
   }
 
   /**
-   * Le mur tapé : l'ouverture naît là, aux cotes de sa nature (`newOpeningDims`), et devient la
-   * sélection — on l'a posée pour la régler. Une hauteur de catalogue qui ne tient pas sous CE
-   * plafond fait descendre l'allège, comme dans le panneau (`fitHeight`).
+   * Le mur / sol / toit tapé : l'ouverture naît là, aux cotes de sa nature (`newOpeningDims`), et
+   * devient la sélection — on l'a posée pour la régler.
    */
   async function placeOpeningAt(xy: Vec2): Promise<void> {
     const armed = placingOpening.value
-    const room = armed ? index.value?.roomsById.get(armed.roomId) : undefined
+    if (!armed || !house.value) return
+    let room = armed.roomId ? index.value?.roomsById.get(armed.roomId) : undefined
+    if (!room && armed.type === 'roof-window') {
+      const carrierId = house.value.roof?.levelId
+      const candidates = house.value.rooms.filter((r) => !carrierId || r.levelId === carrierId)
+      room = candidates.find((r) => pointInPolygon(xy, r.polygon))
+      if (!room) {
+        useNotificationsStore().error(t('opening.addNoRoomUnderRoof'))
+        return
+      }
+    }
     const level = room ? index.value?.levelsById.get(room.levelId) : undefined
-    if (!armed || !room || !level || !house.value) return
+    if (!room || !level) return
     const defaults = resolveDefaults(house.value.defaults)
     const dims = newOpeningDims(armed.type, defaults)
-    const siblings = index.value?.roomsByLevel.get(room.levelId) ?? [room]
-    const slot = slotFromPoint(room, siblings, defaults, xy, dims.width, '')
-    if (!slot) {
-      // aucun mur de la pièce n'a de vide assez large : le dire, plutôt que de poser ailleurs
-      useNotificationsStore().error(t('opening.addNoSpace', { width: dims.width.toFixed(2) }))
-      placingOpening.value = null
-      return
-    }
-    const fitted = fitHeight(dims.sill, dims.height, roomHeight(room, level, defaults), dims.height)
     const id = freeOpeningId(armed.type)
     savingOpening.value = true
     try {
+      if (isSurfaceOpening(armed.type)) {
+        let yaw = 0
+        if (armed.type === 'roof-window') {
+          const roofDesc = computeRoof(house.value, defaults)
+          yaw = roofDesc ? defaultRoofYaw(roofDesc, xy[0], xy[1]) : 180
+        }
+        const slot = slotFromSurfacePoint(room, xy, yaw, dims.width, dims.height)
+        if (!slot) {
+          useNotificationsStore().error(t('opening.addNoSpaceSurface', { width: dims.width.toFixed(2) }))
+          placingOpening.value = null
+          return
+        }
+        const next = await getTransport().addOpening(room.id, {
+          id, type: armed.type, x: slot.x, y: slot.y, yaw: slot.yaw,
+          width: dims.width, height: dims.height,
+        })
+        placingOpening.value = null
+        house.value = next
+        selectOpening(id)
+        return
+      }
+      const siblings = index.value?.roomsByLevel.get(room.levelId) ?? [room]
+      const slot = slotFromPoint(room, siblings, defaults, xy, dims.width, '')
+      if (!slot) {
+        useNotificationsStore().error(t('opening.addNoSpace', { width: dims.width.toFixed(2) }))
+        placingOpening.value = null
+        return
+      }
+      const fitted = fitHeight(dims.sill, dims.height, roomHeight(room, level, defaults), dims.height)
       const next = await getTransport().addOpening(room.id, {
         id, type: armed.type, segment: slot.segment, offset: snapCm(slot.offset),
         width: dims.width, height: fitted.height, sill: fitted.sill,
@@ -988,6 +1053,7 @@ export const useHouseStore = defineStore('house', () => {
       selectOpening(id)
     } catch (err) {
       useNotificationsStore().error(t('opening.saveError', { message: (err as Error).message }))
+      placingOpening.value = null
     } finally {
       savingOpening.value = false
     }

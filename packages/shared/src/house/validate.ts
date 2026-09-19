@@ -1,8 +1,9 @@
 import type { z } from 'zod'
 import { resolveDefaults } from './defaults'
-import { houseSchema, type House } from './schema'
+import { houseSchema, isSurfaceOpening, type House } from './schema'
 import { dist } from './geometry/vec2'
 import { classifySegments, isWalled, openingSill, roomHeight } from './geometry/walls'
+import { surfaceFitsInPolygon, surfaceRectsOverlap } from './openings'
 
 // Validation croisée (références, ouvertures dans leur segment…) et lint non bloquant.
 
@@ -52,8 +53,31 @@ function crossRefs(house: House, ctx: z.RefinementCtx) {
     const roomsOnLevel = house.rooms.filter((r) => r.levelId === room.levelId)
     const segs = isWalled(room) ? classifySegments(room, roomsOnLevel, defaults) : null
     const bySegment = new Map<number, { u0: number; u1: number; id: string }[]>()
+    const surfaceList: { x: number; y: number; yaw: number; width: number; height: number; id: string; type: string }[] = []
+    const roofLevelId = house.roof?.levelId ?? [...house.levels].sort((a, b) => b.elevation - a.elevation)[0]?.id
     room.openings.forEach((o, oi) => {
       const path = ['rooms', ri, 'openings', oi]
+      if (isSurfaceOpening(o.type)) {
+        if (o.x === undefined || o.y === undefined || o.yaw === undefined) return // schéma a déjà signalé
+        if (o.type === 'roof-window' && roofLevelId && room.levelId !== roofLevelId) {
+          issue(path, `roof-window must belong to a room on the roof level ("${roofLevelId}")`)
+        }
+        if (!surfaceFitsInPolygon([o.x, o.y], o.yaw, o.width, o.height, room.polygon)) {
+          issue(path, `surface opening does not fit inside room polygon`)
+        }
+        // Sol et toit sont deux porteurs distincts : un puits de lumière et une fenêtre de toit
+        // peuvent partager la même emprise en plan (puits traversant) sans se chevaucher.
+        for (const other of surfaceList) {
+          if (other.type !== o.type) continue
+          if (surfaceRectsOverlap(
+            { x: o.x, y: o.y, yaw: o.yaw, width: o.width, height: o.height },
+            other,
+          )) issue(path, `overlaps opening "${other.id}"`)
+        }
+        surfaceList.push({ x: o.x, y: o.y, yaw: o.yaw, width: o.width, height: o.height, id: o.id, type: o.type })
+        return
+      }
+      if (o.segment === undefined || o.offset === undefined) return
       if (o.segment >= n) { issue([...path, 'segment'], `segment ${o.segment} out of range (polygon has ${n} edges)`); return }
       if (!isWalled(room)) { issue(path, `room kind "${room.kind}" has no walls`); return }
       const seg = segs![o.segment]!

@@ -80,9 +80,19 @@ export type WallKind = (typeof WALL_KINDS)[number]
  * `bay` = baie vitrée (grande ouverture vitrée descendant au sol), `glass-door` = porte vitrée.
  * Toutes deux sont VITRÉES comme une fenêtre et posées au sol comme une porte : c'est justement ce
  * qu'aucune des quatre premières ne savait dire, et pourquoi elles existent à part.
+ *
+ * `roof-window` = fenêtre de toit (Velux) sur la surface du toit ; `skylight` = puits de lumière /
+ * vitre au sol. Toutes deux sont ancrées en surface (`x`, `y`, `yaw`), pas sur un mur.
  */
-export const OPENING_TYPES = ['door', 'window', 'passage', 'garage', 'bay', 'glass-door'] as const
+export const OPENING_TYPES = ['door', 'window', 'passage', 'garage', 'bay', 'glass-door', 'roof-window', 'skylight'] as const
 export type OpeningType = (typeof OPENING_TYPES)[number]
+
+/** Ouverture posée sur un sol ou un toit, pas sur un mur. */
+export const SURFACE_OPENING_TYPES = ['roof-window', 'skylight'] as const
+export type SurfaceOpeningType = (typeof SURFACE_OPENING_TYPES)[number]
+
+export const isSurfaceOpening = (type: OpeningType): type is SurfaceOpeningType =>
+  (SURFACE_OPENING_TYPES as readonly string[]).includes(type)
 
 /**
  * Matière de la MENUISERIE d'une ouverture — son dormant et ses vantaux, pas le mur qui la porte.
@@ -108,10 +118,24 @@ export const openingSchema = z.object({
    */
   name: z.string().min(1).max(60).optional(),
   type: z.enum(OPENING_TYPES),
-  /** Arête polygon[segment] → polygon[(segment+1) % n]. */
-  segment: z.number().int().min(0),
-  /** Distance (m) depuis polygon[segment] jusqu'au bord proche de l'ouverture. */
-  offset: z.number().min(0),
+  /**
+   * Arête polygon[segment] → polygon[(segment+1) % n]. Requis pour une ouverture MURALE ; absent
+   * pour `roof-window` / `skylight` (ancrage surface).
+   */
+  segment: z.number().int().min(0).optional(),
+  /** Distance (m) depuis polygon[segment] jusqu'au bord proche. Requis pour une ouverture murale. */
+  offset: z.number().min(0).optional(),
+  /**
+   * Centre en plan (repère maison) d'une ouverture de SURFACE. Requis pour `roof-window` /
+   * `skylight` ; absent pour une ouverture murale.
+   */
+  x: z.number().optional(),
+  y: z.number().optional(),
+  /**
+   * Cap (azimut, degrés) d'une ouverture de surface — même convention que les appareils et les
+   * places (0 = face à +y). Requis pour `roof-window` / `skylight`.
+   */
+  yaw: z.number().min(-360).max(360).optional(),
   width: z.number().positive(),
   height: z.number().positive(),
   /** Hauteur d'allège depuis le sol fini. Défaut : 0 (porte/passage/garage) ou defaults.windowSill (fenêtre). */
@@ -128,6 +152,15 @@ export const openingSchema = z.object({
   color: hexColorSchema.optional(),
   style: metaSchema,
   meta: metaSchema,
+}).superRefine((o, ctx) => {
+  if (isSurfaceOpening(o.type)) {
+    if (o.x === undefined) ctx.addIssue({ code: 'custom', path: ['x'], message: 'surface opening requires x' })
+    if (o.y === undefined) ctx.addIssue({ code: 'custom', path: ['y'], message: 'surface opening requires y' })
+    if (o.yaw === undefined) ctx.addIssue({ code: 'custom', path: ['yaw'], message: 'surface opening requires yaw' })
+  } else {
+    if (o.segment === undefined) ctx.addIssue({ code: 'custom', path: ['segment'], message: 'wall opening requires segment' })
+    if (o.offset === undefined) ctx.addIssue({ code: 'custom', path: ['offset'], message: 'wall opening requires offset' })
+  }
 })
 export type Opening = z.infer<typeof openingSchema>
 
