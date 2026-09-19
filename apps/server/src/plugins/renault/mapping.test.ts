@@ -3,7 +3,7 @@ import {
   ACCOUNT_ID, BATTERY_CHARGING, BATTERY_UNPLUGGED, BATTERY_WAITING, COCKPIT_V1, COCKPIT_V2_EASTER_EGG,
   EV_SETTINGS, HVAC_STATUS, LOCATION, PERSON, SOC_LEVELS, VEHICLES, VIN,
 } from './__fixtures__/kamereon'
-import { inWindow, socTargetPayload, toAccounts, toDescriptor, toStatePatch, toVehicleLinks, vehicleName, wakePayload } from './mapping'
+import { commandSummary, inWindow, socTargetPayload, toAccounts, toDescriptor, toStatePatch, toVehicleLinks, vehicleName, wakePayload } from './mapping'
 
 // Tout ce fichier travaille sur la CAPTURE du 2026-09-14, pas sur la documentation. Trois pièges
 // que seule la capture révèle sont testés nommément : le `cockpit` v2 farceur, le flottant de
@@ -62,7 +62,8 @@ describe('lectures → état', () => {
       NOW,
     )
     expect(patch).toEqual({
-      readAt: NOW,
+      // l'heure où la VOITURE a parlé, pas celle de notre appel
+      readAt: Date.parse('2026-09-14T08:19:43Z'),
       soc: 58,
       rangeKm: 218,
       pluggedIn: true,
@@ -97,6 +98,13 @@ describe('lectures → état', () => {
     const patch = toStatePatch({ battery: BATTERY_WAITING, cockpit: COCKPIT_V2_EASTER_EGG }, NOW)
     expect(patch.odometerKm).toBeUndefined()
     expect(patch.soc).toBe(58)                    // le reste du tour n'en souffre pas
+  })
+
+  it('date l’état de la VOITURE, pas de notre appel — et retombe sur le nôtre sans batterie', () => {
+    // Kamereon rend le dernier état remonté : sur une voiture qui dort, il a des heures. Dater du
+    // moment de l'appel ferait dire à l'UI « lu il y a 4 min » sur des chiffres de la mi-journée.
+    expect(toStatePatch({ battery: BATTERY_WAITING }, NOW).readAt).toBe(Date.parse('2026-09-14T08:19:43Z'))
+    expect(toStatePatch({}, NOW).readAt).toBe(NOW)
   })
 
   it('n’invente jamais un zéro quand une lecture manque', () => {
@@ -156,6 +164,16 @@ describe('réveil de charge', () => {
     expect(wakePayload(null, NOW)).toBeNull()
     expect(wakePayload('nope', NOW)).toBeNull()
     expect(wakePayload([1, 2], NOW)).toBeNull()
+  })
+
+  it('résume la COMMANDE rendue par Renault, et ne lève rien sur autre chose', () => {
+    // réponse réelle du 2026-09-19 : ce n'est pas un enregistrement, c'est une commande déposée
+    expect(commandSummary({ commandId: 'abc', type: 'HVAC_CHARGE_SYNCH', status: 'CREATED' }))
+      .toBe('HVAC_CHARGE_SYNCH CREATED abc')
+    expect(commandSummary({ status: 'CREATED' })).toBe('CREATED')
+    expect(commandSummary({})).toBeNull()
+    expect(commandSummary(null)).toBeNull()
+    expect(commandSummary('nope')).toBeNull()
   })
 
   it('la fenêtre horaire borne le réveil à la journée', () => {

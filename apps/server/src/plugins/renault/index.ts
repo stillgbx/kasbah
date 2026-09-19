@@ -10,8 +10,8 @@ import {
   DEFAULT_GIGYA_API_KEY, DEFAULT_GIGYA_URL, DEFAULT_KAMEREON_API_KEY, DEFAULT_KAMEREON_URL,
   RenaultAuth, createSessionFile, type SessionStore,
 } from './auth'
-import { DEFAULT_RATE_PER_HOUR, RenaultClient, carDataPath, isEndpointUnavailable } from './client'
-import { inWindow, socTargetPayload, toAccounts, toDescriptor, toStatePatch, toVehicleLinks, wakePayload, type VehicleReadings } from './mapping'
+import { DEFAULT_RATE_PER_HOUR, RenaultClient, carDataPath, isDeferred, isEndpointUnavailable } from './client'
+import { commandSummary, inWindow, socTargetPayload, toAccounts, toDescriptor, toStatePatch, toVehicleLinks, wakePayload, type VehicleReadings } from './mapping'
 import type { VehicleLink } from './types'
 
 // Plugin Renault (véhicules) — API privée Gigya + Kamereon, celle de l'appli MY Renault.
@@ -116,6 +116,19 @@ export const READ_ENDPOINTS = [
 export const CHARGE_WAKE = 'charge_wake'
 const CHARGE_WAKE_PART = [{ id: CHARGE_WAKE, labelKey: 'vehicle.chargeWake', enabledByDefault: true }] as const
 
+/**
+ * Ce qu'est devenu le dernier réveil. Sans cela, un réveil qui échoue ne se voit NULLE PART sauf
+ * dans la console du serveur : le 2026-09-19, cinq heures de refus ont passé inaperçues pendant
+ * qu'une journée de surplus solaire se perdait. C'est le vrai défaut que cette séance a trouvé.
+ */
+export interface WakeOutcome {
+  at: number
+  /** `sent` la commande est déposée ; `deferred` Renault dit « pas maintenant » ; `failed` le reste. */
+  result: 'sent' | 'deferred' | 'failed'
+  /** La commande rendue (`type status commandId`), ou le message du refus. */
+  detail: string | null
+}
+
 /** Ce que la carte des Réglages affiche. Ne porte jamais le mot de passe ni un jeton. */
 export interface RenaultStatus {
   linked: boolean
@@ -130,6 +143,8 @@ export interface RenaultStatus {
   rateWaitS: number
   sessionFile: string | null
   lastError: string | null
+  /** Le dernier réveil de charge tenté, et ce qu'il est devenu. `null` : aucun depuis le démarrage. */
+  lastWake: WakeOutcome | null
 }
 
 export interface RenaultPluginDeps {
@@ -156,6 +171,8 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
   const unavailable = new Set<string>()
   /** Dernier réveil envoyé par VIN : un véhicule ne se secoue pas en boucle. */
   const lastWake = new Map<string, number>()
+  /** Ce qu'est devenu le dernier réveil tenté, tous véhicules confondus. */
+  let lastWakeOutcome: WakeOutcome | null = null
 
   const log = () => ctx!.logger
 
@@ -204,7 +221,15 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
     ctx!.emitState(vin, patch)
     // un réveil raté ne doit pas faire échouer la lecture : l'état est déjà publié
     try { await maybeWake(vin, patch, signal) }
-    catch (err) { log().warn({ err, vin }, 'Renault charge wake-up failed') }
+    catch (err) {
+      // « Pas maintenant » n'est pas une panne : une commande déjà en attente (409) ou le quota des
+      // actions (429) sont la vie normale de cette API. Les journaliser en `warn` comme le reste
+      // noyait le vrai signal.
+      const deferred = isDeferred(err)
+      lastWakeOutcome = { at: ctx!.clock.now(), result: deferred ? 'deferred' : 'failed', detail: (err as Error).message }
+      if (deferred) log().info({ vin, err }, 'Renault is not taking a charge wake-up right now')
+      else log().warn({ err, vin }, 'Renault charge wake-up failed')
+    }
   }
 
   /**
@@ -242,9 +267,13 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
     // les réglages à rejouer se LISENT d'abord : on ne réécrit que ce que la voiture nous a donné
     const body = wakePayload(await client!.carData({ accountId: id, vin, endpoint: 'ev/settings', version: 1, adapter: 'kcm', signal }), now)
     if (!body) return
-    await client!.writeEvSettings({ accountId: id, vin, body, signal })
+    // la réponse est une COMMANDE déposée, pas un enregistrement : c'est elle, et elle seule, qui
+    // dit si le réveil a été pris — on la jetait
+    const command = commandSummary(await client!.writeEvSettings({ accountId: id, vin, body, signal }))
     lastWake.set(vin, now)
-    log().info({ vin, soc: patch.soc, target: patch.chargeLimit }, 'Renault charge wake-up sent (plugged in, not charging, below target)')
+    lastWakeOutcome = { at: now, result: 'sent', detail: command }
+    log().info({ vin, soc: patch.soc, target: patch.chargeLimit, command, dataAgeMs: patch.readAt ? now - patch.readAt : null },
+      'Renault charge wake-up sent (plugged in, not charging, below target)')
   }
 
   /** Un tour : tous les véhicules connus. Une erreur remonte au poller, qui la journalise. */
@@ -265,6 +294,7 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
       rateWaitS: Math.ceil((client?.waitMs() ?? 0) / 1000),
       sessionFile: config?.RENAULT_SESSION_FILE ?? null,
       lastError,
+      lastWake: lastWakeOutcome,
     }
   }
 

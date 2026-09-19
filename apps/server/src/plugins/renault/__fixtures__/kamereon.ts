@@ -174,5 +174,15 @@ export const EV_SETTINGS = {
  * Les deux refus, avec les codes CONSTATÉS. Seul `errorCode` a été capturé tel quel ; le libellé
  * est reconstitué, il n'est lu par personne.
  */
+/**
+ * Le refus d'une ÉCRITURE de réglages quand une commande est déjà en attente pour ce véhicule
+ * (HTTP 409, constaté le 2026-09-19 : un même corps accepté à 14:21 était refusé à 14:22). Comme
+ * pour les deux autres, seul `errorCode` a été capturé tel quel.
+ */
+export const SETTINGS_PENDING = { errors: [{ errorCode: 'err.func.vcps.ev.post-settings.error', errorMessage: 'The settings cannot be posted' }] }
+
+/** La réponse d'une écriture acceptée : une COMMANDE déposée, pas un enregistrement. */
+export const SETTINGS_COMMAND = { commandId: 'ba6a5b31-0000-0000-0000-9f2c1d4e8a70', type: 'HVAC_CHARGE_SYNCH', status: 'CREATED' }
+
 export const FORBIDDEN = { errors: [{ errorCode: 'err.func.wired.forbidden', errorMessage: 'The access is forbidden' }] }
 export const NOT_FOUND = { errors: [{ errorCode: 'err.func.wired.notFound', errorMessage: 'Not found' }] }

@@ -39,6 +39,19 @@ export function isEndpointUnavailable(err: unknown): boolean {
     && (err.upstreamCode === 'err.func.wired.forbidden' || err.upstreamCode === 'err.func.wired.notFound')
 }
 
+/**
+ * « Pas maintenant » — et non une panne. Deux refus distincts, tous deux normaux :
+ *   - HTTP 409 `err.func.vcps.ev.post-settings.error` : une commande de réglages est DÉJÀ en attente
+ *     pour ce véhicule, la suivante est refusée tant qu'elle n'est pas purgée. Constaté le
+ *     2026-09-19 : un même corps accepté à 14:21 était refusé à 14:22, puis encore à 14:33 ;
+ *   - `RATE_LIMITED` (429) : les actions ont leur propre quota, plus serré que les lectures.
+ * Les confondre avec une panne, c'est ce qui a rendu cinq heures d'échecs illisibles.
+ */
+export function isDeferred(err: unknown): boolean {
+  return (err instanceof RenaultApiError && err.upstreamCode === 'err.func.vcps.ev.post-settings.error')
+    || (err instanceof PluginError && err.code === 'RATE_LIMITED')
+}
+
 export type Adapter = 'kca' | 'kcm'
 
 /**

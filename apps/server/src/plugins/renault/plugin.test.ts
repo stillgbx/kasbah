@@ -6,7 +6,7 @@ import type { PluginContext } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
 import {
   BATTERY_CHARGING, BATTERY_UNPLUGGED, BATTERY_WAITING, COCKPIT_V1, COCKPIT_V2_EASTER_EGG, EV_SETTINGS,
-  FORBIDDEN, HVAC_STATUS, LOCATION, NOT_FOUND, SOC_LEVELS,
+  FORBIDDEN, HVAC_STATUS, LOCATION, NOT_FOUND, SETTINGS_COMMAND, SETTINGS_PENDING, SOC_LEVELS,
 } from './__fixtures__/kamereon'
 import { JWT_TTL_S, type SessionStore, type StoredSession } from './auth'
 import { createRenaultPlugin, renaultConfigSchema } from './index'
@@ -65,6 +65,8 @@ function fakeRenault(over: { gigyaError?: number } = {}) {
     hvacForbidden: false,
     /** Ce que `battery-status` renvoie : branchée en attente par défaut. */
     battery: BATTERY_WAITING as unknown,
+    /** Une commande de réglages est déjà en attente : toute écriture est refusée en 409. */
+    settingsPending: false,
   }
   const calls: { method: string; path: string; body?: string }[] = []
   const fetchImpl = vi.fn<FetchLike>(async (url, init) => {
@@ -106,7 +108,11 @@ function fakeRenault(over: { gigyaError?: number } = {}) {
     if (path.endsWith('/location')) return response(LOCATION)
     if (path.endsWith('/hvac-status')) return world.hvacForbidden ? response(FORBIDDEN, 403) : response(HVAC_STATUS)
     if (path.endsWith('/ev/soc-levels')) return response(method === 'POST' ? { ok: true } : SOC_LEVELS)
-    if (path.endsWith('/ev/settings')) return response(method === 'POST' ? { ok: true } : EV_SETTINGS)
+    if (path.endsWith('/ev/settings')) {
+      if (method !== 'POST') return response(EV_SETTINGS)
+      // une écriture acceptée rend une COMMANDE ; une commande déjà en attente la refuse en 409
+      return world.settingsPending ? response(SETTINGS_PENDING, 409) : response(SETTINGS_COMMAND)
+    }
     // les deux saveurs de refus : 403 « interdit » et 404 « inconnu »
     if (path.endsWith('/lock-status') || path.endsWith('/pressure')) return response(NOT_FOUND, 404)
     return response({ data: { attributes: {} } })
@@ -353,13 +359,14 @@ describe('Renault — réveil de charge', () => {
   const DEDANS = { RENAULT_WAKE_FROM: `${pad(hour)}:00`, RENAULT_WAKE_TO: `${pad(hour + 1)}:00` }
   const DEHORS = { RENAULT_WAKE_FROM: `${pad(hour + 2)}:00`, RENAULT_WAKE_TO: `${pad(hour + 3)}:00` }
 
-  async function running(over: { env?: Record<string, string>; parts?: Record<string, boolean>; battery?: unknown } = {}) {
+  async function running(over: { env?: Record<string, string>; parts?: Record<string, boolean>; battery?: unknown; pending?: boolean } = {}) {
     const s = await setup({
       session: { loginToken: LOGIN_TOKEN, personId: PERSON },
       env: { RENAULT_RATE_PER_HOUR: '600', RENAULT_POLL_MS: String(5 * 60_000), ...DEDANS, ...over.env },
       ...(over.parts ? { parts: over.parts } : {}),
     })
     if (over.battery !== undefined) s.renault.world.battery = over.battery
+    if (over.pending) s.renault.world.settingsPending = true
     await s.plugin.discover()
     await s.plugin.start()
     await flush()
@@ -422,11 +429,31 @@ describe('Renault — réveil de charge', () => {
   })
 
   it('un réveil qui échoue ne fait pas perdre la lecture', async () => {
-    const { plugin, ctx, renault } = await running()
-    renault.world.battery = BATTERY_WAITING
     // Kamereon refuse l'écriture : l'état doit tout de même avoir été publié
+    const { plugin, ctx, renault } = await running({ pending: true })
+    expect(wakes(renault)).toHaveLength(1)
     const patches = (ctx.emitState as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[1])
     expect(patches.at(-1)).toMatchObject({ soc: 58, pluggedIn: true, charging: false })
+    await plugin.stop()
+  })
+
+  /**
+   * Le défaut que la journée du 2026-09-19 a mis au jour : cinq heures de réveils refusés, visibles
+   * NULLE PART hors de la console du serveur, pendant qu'une journée de surplus solaire se perdait.
+   */
+  it('garde la commande rendue par Renault, et la montre dans le statut', async () => {
+    const { plugin, app } = await running()
+    const status = (await app.inject({ method: 'GET', url: '/api/plugins/renault/status' })).json()
+    expect(status.lastWake).toMatchObject({ result: 'sent', detail: 'HVAC_CHARGE_SYNCH CREATED ba6a5b31-0000-0000-0000-9f2c1d4e8a70' })
+    await plugin.stop()
+  })
+
+  it('lit un 409 comme « pas maintenant », pas comme une panne', async () => {
+    const { plugin, app } = await running({ pending: true })
+    const status = (await app.inject({ method: 'GET', url: '/api/plugins/renault/status' })).json()
+    expect(status.lastWake.result).toBe('deferred')
+    // le tour de sondage, lui, s'est bien passé : un refus de réveil n'est pas une panne du plugin
+    expect(status.lastError).toBeNull()
     await plugin.stop()
   })
 })

@@ -76,6 +76,12 @@ export interface RenaultStatus {
   rateWaitS: number
   sessionFile: string | null
   lastError: string | null
+  /**
+   * Ce qu'est devenu le dernier réveil de charge. Sans lui, un réveil refusé ne se voit nulle part
+   * sauf dans la console du serveur — c'est ce qui a laissé passer une journée entière de surplus
+   * solaire le 2026-09-19. `null` : aucun réveil tenté depuis le démarrage.
+   */
+  lastWake: { at: number; result: 'sent' | 'deferred' | 'failed'; detail: string | null } | null
 }
 
 /**

@@ -375,7 +375,10 @@
       "linked": "Account linked · {n} vehicle | Account linked · {n} vehicle | Account linked · {n} vehicles",
       "unlink": "Unlink the account",
       "poll": "One reading every {min} min, within the {rate} calls per hour Renault tolerates.",
-      "notStored": "No session file is configured (RENAULT_SESSION_FILE is empty): the link will be lost when the server restarts."
+      "notStored": "No session file is configured (RENAULT_SESSION_FILE is empty): the link will be lost when the server restarts.",
+      "wakeSent": "Last charge wake-up: command queued ({detail}). It only takes effect when the car reconnects.",
+      "wakeDeferred": "Last charge wake-up: Renault is not taking another one right now — a command is already pending.",
+      "wakeFailed": "Last charge wake-up: refused — {detail}"
     },
     "irobot": {
       "title": "iRobot",

@@ -122,6 +122,19 @@ export function wakePayload(settings: unknown, now: number): Record<string, unkn
 }
 
 /**
+ * Ce que Renault rend à une écriture de réglages n'est PAS un enregistrement : c'est une COMMANDE
+ * déposée pour la voiture — `{ commandId, type: 'HVAC_CHARGE_SYNCH', status: 'CREATED' }` — que son
+ * boîtier appliquera à sa prochaine connexion, ou jamais s'il dort. On la jetait ; c'est pourtant
+ * la seule chose qui dise ce qu'est devenu un réveil. Rendue en une ligne lisible, jamais levée.
+ */
+export function commandSummary(res: unknown): string | null {
+  if (!res || typeof res !== 'object') return null
+  const r = res as Record<string, unknown>
+  const parts = [r.type, r.status, r.commandId].filter((v) => typeof v === 'string' && v !== '')
+  return parts.length ? parts.join(' ') : null
+}
+
+/**
  * Les niveaux VE avec une nouvelle CIBLE de charge. Même règle que `wakePayload` : on rejoue ce que
  * la voiture vient de donner — le plancher `socMin` est SON réglage, pas le nôtre — et on ne change
  * que la cible, horodatage rafraîchi comme le fait l'application du fabricant.
@@ -205,7 +218,7 @@ function at(v: unknown): number | undefined {
 /**
  * L'état d'un véhicule à partir des lectures du tour. Tout champ absent de la réponse est absent du
  * patch — JAMAIS un zéro : sur ce contrat, `soc: 0` se lirait « batterie vide » et `rangeKm: 0`
- * « plus d'autonomie ». `readAt` date la lecture, c'est ce que l'UI affiche.
+ * « plus d'autonomie ». `readAt` date les VALEURS et non notre appel (voir plus bas).
  *
  * Ce que la R5 ne donne PAS, et qui reste donc absent : verrouillage, cap, pression des pneus,
  * vitesse et rapport, température extérieure, et la PUISSANCE de charge (revérifié voiture en
@@ -217,6 +230,12 @@ export function toStatePatch(r: VehicleReadings, now: number): StatePatch<'vehic
 
   const battery = attributes(r.battery)
   if (battery) {
+    // Kamereon ne va pas chercher la voiture : il rend le DERNIER état qu'elle a remonté, et son
+    // boîtier se tait dès qu'elle dort. Dater l'état de notre appel serait donc mentir — le
+    // 2026-09-19 il a servi six heures durant des chiffres de 11:42 pendant que l'UI annonçait
+    // « lu il y a 4 min ». Contrairement à Tesla, la R5 n'a aucune notion de veille : cet
+    // horodatage est le seul signe qu'elle a décroché, et c'est ce que `readAt` doit porter.
+    patch.readAt = at(battery.timestamp) ?? now
     const soc = num(battery.batteryLevel)
     if (soc !== undefined) patch.soc = soc
     const range = num(battery.batteryAutonomy)

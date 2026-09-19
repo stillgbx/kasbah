@@ -375,7 +375,10 @@
       "linked": "Compte lié · {n} véhicule | Compte lié · {n} véhicule | Compte lié · {n} véhicules",
       "unlink": "Délier le compte",
       "poll": "Une lecture toutes les {min} min, dans la limite de {rate} appels par heure que Renault tolère.",
-      "notStored": "Aucun fichier de session n'est configuré (RENAULT_SESSION_FILE est vide) : la liaison sera perdue au redémarrage du serveur."
+      "notStored": "Aucun fichier de session n'est configuré (RENAULT_SESSION_FILE est vide) : la liaison sera perdue au redémarrage du serveur.",
+      "wakeSent": "Dernier réveil de charge : commande déposée ({detail}). Elle ne prendra effet que lorsque la voiture se reconnectera.",
+      "wakeDeferred": "Dernier réveil de charge : Renault n'en accepte pas d'autre pour l'instant — une commande est déjà en attente.",
+      "wakeFailed": "Dernier réveil de charge : refusé — {detail}"
     },
     "irobot": {
       "title": "iRobot",

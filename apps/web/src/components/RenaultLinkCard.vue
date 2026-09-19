@@ -31,6 +31,13 @@ const busy = ref(false)
 const email = ref('')
 const password = ref('')
 
+/**
+ * Le dernier réveil de charge, dit en une phrase. Un refus n'est pas forcément une panne : Renault
+ * répond « une commande est déjà en attente » quand on écrit trop vite — d'où trois libellés, et la
+ * teinte d'alerte réservée aux deux qui méritent un coup d'œil.
+ */
+const WAKE_KEY = { sent: 'wakeSent', deferred: 'wakeDeferred', failed: 'wakeFailed' } as const
+
 async function refresh() {
   if (!health.value) return
   try { status.value = await getTransport().renaultStatus() }
@@ -101,6 +108,9 @@ async function unlink() {
       </form>
     </template>
 
+    <p v-if="status.lastWake" class="small" :class="status.lastWake.result === 'sent' ? 'muted' : 'rnl__warn'">
+      {{ $t(`settings.renault.${WAKE_KEY[status.lastWake.result]}`, { detail: status.lastWake.detail ?? '' }) }}
+    </p>
     <p v-if="status.lastError" class="rnl__warn small">{{ status.lastError }}</p>
     <p class="muted small rnl__hint">{{ $t('settings.renault.poll', { min: Math.round(status.pollMs / 60000), rate: status.ratePerHour }) }}</p>
     <p v-if="!status.sessionFile" class="rnl__warn small">{{ $t('settings.renault.notStored') }}</p>
