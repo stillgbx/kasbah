@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import type { Capability, CommandInput, DeviceEntry, JournalEntry, StateFor } from '@kasbah/shared'
 import { useJournals } from '../composables/useJournals'
@@ -24,6 +25,7 @@ import { useHouseStore } from '../stores/house'
 // proposer ce qu'il refuserait.
 const devices = useDevicesStore()
 const house = useHouseStore()
+const router = useRouter()
 const { t, d, locale } = useI18n()
 const EMPTY = '—'
 
@@ -39,6 +41,28 @@ function makeAndModel(m: MowerEntry): string {
   const model = m.descriptor.meta.model
   if (!model) return brand
   return model.toLowerCase().startsWith(brand.toLowerCase()) ? model : `${brand} · ${model}`
+}
+
+/**
+ * La BASE du robot : une place de stationnement qui lui est réservée (`site.parkings[]`). Tant
+ * qu'elle n'est pas posée, le robot se dessine où son GPS le met — donc de travers à côté de sa
+ * station, puisqu'un relevé est bon à quelques mètres près. La carte le dit et propose de la poser :
+ * c'est le même geste que pour un appareil qui attend sa place, sauf qu'ici c'est la STATION qu'on
+ * pose, pas le robot (lui bouge tout seul).
+ *
+ * Poser arme la pose et emmène sur la vue Maison : le tap au sol qui suit crée la base, et le
+ * panneau de la place s'ouvre sur ses cotes.
+ */
+const dockOf = (m: MowerEntry) => house.dockFor(m.descriptor.id)
+async function placeDock(m: MowerEntry) {
+  house.startPlacingParking('mower', m.descriptor.id)
+  await router.push({ name: 'home' }).catch(() => { /* navigation redondante */ })
+}
+async function editDock(m: MowerEntry) {
+  const dock = dockOf(m)
+  if (!dock) return
+  await router.push({ name: 'home' }).catch(() => { /* navigation redondante */ })
+  house.selectParking(dock.id)
 }
 
 /**
@@ -187,6 +211,21 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
           <VehicleMap class="rcard__map" subject="mower" :location="mapLocation(m)" :home="house.house?.origin" :caption="caption(m.state)"
                       :points="mapPoints(m)" :focus="journalFocus[m.descriptor.id]?.location" :active-at="journalFocus[m.descriptor.id]?.at"
                       @point-tap="pickAt(m, $event)" />
+          <!-- Sa station. Ce n'est pas une commande du fabricant (elle ne suit donc pas les
+               capacités, et ne vit pas dans la rangée des boutons) : c'est un relevé de la maison,
+               posé une fois, qui range le robot sur sa base dès qu'il y rentre. La ligne existe
+               dans les deux états, à la même hauteur — rien ne bouge quand la station est posée. -->
+          <div class="card card--soft dock">
+            <div class="min0">
+              <div class="muted stat__k">{{ $t('parking.dock') }}</div>
+              <div class="stat__v dock__state" :data-todo="dockOf(m) ? '0' : '1'">
+                {{ dockOf(m) ? $t('parking.dockPlaced') : $t('parking.dockMissing') }}
+              </div>
+            </div>
+            <button type="button" class="pill dock__btn" @click="dockOf(m) ? editDock(m) : placeDock(m)">
+              <StrokeIcon name="parking" :size="16" />{{ dockOf(m) ? $t('vehicle.tune') : $t('parking.dockPlace') }}
+            </button>
+          </div>
           <div class="rcard__actions">
             <button v-if="has(m, 'mow')" type="button" class="pill" :data-on="m.state.activity === 'mowing' ? '1' : '0'" :disabled="!m.state.available || busy(m)" :aria-busy="busy(m)"
                     @click="send(m.descriptor.id, m.state.activity === 'mowing' ? { type: 'mower.pause' } : { type: 'mower.start', durationMin: 60 })">
@@ -232,6 +271,12 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
 
 <style scoped>
 .robots { height: 100%; display: flex; flex-direction: column; }
+.dock { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.dock .min0 { flex: 1 1 0; min-width: 0; }
+.dock__btn { flex: none; }
+/* une station qui manque n'est pas une erreur, c'est un relevé à finir : la teinte d'accent le dit
+   sans crier, comme le bouton armé d'une pose */
+.dock__state[data-todo='1'] { color: var(--accent); }
 .robots__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 24px calc(var(--safe-bottom) + 24px); }
 .empty { padding: 24px; text-align: center; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }

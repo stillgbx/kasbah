@@ -71,7 +71,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   const openingDrag = new Set<Handler<[string, [number, number]]>>()
   const openingDrop = new Set<Handler<[string]>>()
   const placeTap = new Set<Handler<[[number, number]]>>()
-  const groundTap = new Set<Handler<[[number, number]]>>()
+  const groundTap = new Set<Handler<[[number, number], string | null]>>()
   const parkingTap = new Set<Handler<[string]>>()
   const parkingDrag = new Set<Handler<[string, [number, number]]>>()
   const parkingDrop = new Set<Handler<[string]>>()
@@ -99,7 +99,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     scene.on('openingDrag', (id, xy) => openingDrag.forEach((f) => f(id, xy)))
     scene.on('openingDrop', (id) => openingDrop.forEach((f) => f(id)))
     scene.on('placeTap', (xy) => placeTap.forEach((f) => f(xy)))
-    scene.on('groundTap', (xy) => groundTap.forEach((f) => f(xy)))
+    scene.on('groundTap', (xy, levelId) => groundTap.forEach((f) => f(xy, levelId)))
     scene.on('parkingTap', (id) => parkingTap.forEach((f) => f(id)))
     scene.on('parkingDrag', (id, xy) => parkingDrag.forEach((f) => f(id, xy)))
     scene.on('parkingDrop', (id) => parkingDrop.forEach((f) => f(id)))
@@ -179,7 +179,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     setPlacingOpening: (roomId: string | null) => scene?.setPlacingOpening(roomId),
     setEditingParkings: (on: boolean) => scene?.setEditingParkings(on),
     setPlacingParking: (on: boolean) => scene?.setPlacingParking(on),
-    onGroundTap: (f: Handler<[[number, number]]>) => { groundTap.add(f) },
+    onGroundTap: (f: Handler<[[number, number], string | null]>) => { groundTap.add(f) },
     setSelectedParking: (id: string | null) => scene?.setSelectedParking(id),
     focusParking: (id: string) => scene?.focusParking(id),
     onParkingTap: (f: Handler<[string]>) => { parkingTap.add(f) },

@@ -70,6 +70,10 @@ function crossRefs(house: House, ctx: z.RefinementCtx) {
     })
   })
 
+  house.site.parkings.forEach((pk, i) => {
+    if (pk.levelId && !levels.has(pk.levelId)) issue(['site', 'parkings', i, 'levelId'], `unknown level "${pk.levelId}"`)
+  })
+
   house.devices.forEach((d, di) => {
     const path = ['devices', di]
     if (d.levelId && !levels.has(d.levelId)) issue([...path, 'levelId'], `unknown level "${d.levelId}"`)

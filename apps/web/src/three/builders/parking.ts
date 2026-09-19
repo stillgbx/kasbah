@@ -1,23 +1,26 @@
 import {
   BoxGeometry, CanvasTexture, Color, DoubleSide, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry,
-  type BufferGeometry, type Texture,
+  Shape, ShapeGeometry, type BufferGeometry, type Texture,
 } from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { isParkingBay, type Parking, type ParkingSide } from '@kasbah/shared'
 
 // Ce qu'on VOIT d'une place de stationnement. Deux dessins, parce que ce sont deux objets :
 //
-// - une place de voiture est une PEINTURE au sol — des tirets fins, un « P », et un trait plein côté
-//   avant, qui est ce qui distingue l'avant de l'arrière sans écrire une flèche. Elle doit se lire
-//   quand on la cherche et disparaître quand on regarde la maison : c'est la demande, « discret ».
-// - la base d'un robot est un OBJET — une plaque au sol et un bloc de tête, comme les bases de robot
+// - une place de voiture est une PEINTURE au sol — des tirets fins, un « P » au milieu, et un trait
+//   plein côté ARRIÈRE, qui est ce qui distingue l'avant de l'arrière sans écrire une flèche : c'est
+//   la butée, celle contre laquelle on recule. Elle doit se lire quand on la cherche et disparaître
+//   quand on regarde la maison : c'est la demande, « discret ».
+// - la base d'un robot est un OBJET — une plaque au sol et un bloc, comme les bases de robot
 //   aspirateur. Un marquage au sol ne dirait pas qu'il y a quelque chose là où le robot se recharge.
+//   Le bloc est DERRIÈRE le robot (côté arrière de la place) : c'est là qu'il vient toucher en
+//   reculant dans sa station, et c'est ce qu'on voit sur une vraie base.
 //
 // Tout est construit dans le repère de la place (origine au centre, +y vers l'avant) : le groupe
 // porte la position et la rotation, et le reste ne connaît que des mètres.
 
-/** Cotes du marquage d'une place de voiture (m). */
-const BAY = { dash: 0.3, gap: 0.22, stroke: 0.06, glyph: 0.62, glyphInset: 0.5 } as const
+/** Cotes du marquage d'une place de voiture (m) : le « P » occupe le milieu, largement. */
+const BAY = { dash: 0.3, gap: 0.22, stroke: 0.06, glyph: 0.68 } as const
 /** Cotes d'une base de robot (m) : la plaque, puis le bloc de tête où le robot vient toucher. */
 const DOCK = { plate: 0.03, head: 0.16, headDepth: 0.1 } as const
 /** Épaisseur (m) d'une ligne de cote, celle des cotes d'ouverture. */
@@ -56,7 +59,7 @@ export function parkingMaterials(accent: Color): ParkingMaterials {
   return {
     // `depthWrite: false` : la peinture est posée à deux centimètres du sol, elle ne doit pas
     // disputer la profondeur à ce qui se gare dessus.
-    paint: new MeshBasicMaterial({ color: PAINT, transparent: true, opacity: 0.46, depthWrite: false, side: DoubleSide }),
+    paint: new MeshBasicMaterial({ color: PAINT, transparent: true, opacity: 0.26, depthWrite: false, side: DoubleSide }),
     cote: new MeshBasicMaterial({ color: trait, transparent: true, opacity: 0.9, depthWrite: false, depthTest: false, side: DoubleSide }),
     dock: new MeshStandardMaterial({ color: 0x2d3138, roughness: 0.7, metalness: 0.1 }),
     fillOn: new MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.22, depthWrite: false, side: DoubleSide }),
@@ -79,10 +82,15 @@ export function parkingGlyphTexture(color: Color): Texture | null {
   const ctx = canvas.getContext('2d')
   if (!ctx) return null
   ctx.fillStyle = `#${color.getHexString()}`
-  ctx.font = 'bold 104px system-ui, sans-serif'
+  ctx.font = 'bold 112px system-ui, sans-serif'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.fillText('P', 64, 68)
+  // Le canevas est dessiné à L'ENVERS (demi-tour) : la lettre est posée dans le repère de la place,
+  // dont le +y est l'avant, et une texture y arrive tête en bas. On la lit donc en se tenant DEVANT
+  // la place, comme le « P » d'un vrai parking se lit en arrivant dessus.
+  ctx.translate(64, 64)
+  ctx.rotate(Math.PI)
+  ctx.fillText('P', 0, 4)
   return new CanvasTexture(canvas)
 }
 
@@ -98,7 +106,8 @@ function stripe(len: number, width: number, x: number, y: number): BufferGeometr
  * constante, le pas étant ajusté pour qu'un côté commence et finisse par un tiret — un marquage qui
  * s'arrête au milieu d'un vide se lit comme un contour cassé.
  *
- * Le côté AVANT est plein : c'est lui qui dit dans quel sens l'engin se range, sans flèche ni texte.
+ * Le côté ARRIÈRE est plein : c'est lui qui dit dans quel sens l'engin se range, sans flèche ni
+ * texte. Un parking se peint ainsi — le trait plein est la butée, l'ouverture est devant.
  */
 function bayMarking(width: number, length: number): BufferGeometry | null {
   const parts: BufferGeometry[] = []
@@ -113,9 +122,30 @@ function bayMarking(width: number, length: number): BufferGeometry | null {
   }
   dashed(length, 'y', -width / 2)                 // les deux longs côtés
   dashed(length, 'y', width / 2)
-  dashed(width, 'x', -length / 2)                 // l'arrière
-  parts.push(stripe(width, BAY.stroke, 0, length / 2))   // l'avant, plein
+  dashed(width, 'x', length / 2)                  // l'avant, par où l'on sort
+  parts.push(stripe(width, BAY.stroke, 0, -length / 2))  // l'arrière, plein : la butée
   return parts.length ? mergeGeometries(parts, false) : null
+}
+
+/**
+ * Le cône « regarde vers » du mode édition, copié du guide d'un appareil orientable
+ * (`DeviceMarker.setMoving`) : c'est le langage que l'app a déjà pour dire un SENS, et une place
+ * sans lui se pose à l'aveugle — le trait plein de l'arrière ne se voit qu'une fois la place tracée.
+ *
+ * Il est posé devant l'avant de la place et dimensionné par elle : une base de tondeuse de 80 cm ne
+ * porte pas la même flèche qu'un garage de 5 m.
+ */
+function facingCone(length: number): BufferGeometry {
+  const reach = Math.min(Math.max(length * 0.42, 0.45), 1.6)
+  const w = reach * 0.31
+  const shape = new Shape()
+  shape.moveTo(0, 0)
+  shape.lineTo(-w, reach * 0.84)
+  shape.quadraticCurveTo(0, reach, w, reach * 0.84)
+  shape.lineTo(0, 0)
+  const g = new ShapeGeometry(shape, 12)
+  g.translate(0, length / 2 + 0.06, 0.035)
+  return g
 }
 
 export interface ParkingNodes {
@@ -125,6 +155,8 @@ export interface ParkingNodes {
   /** Cadre du mode édition, éteint le reste du temps par son MATÉRIAU (jamais par `visible`). */
   ring: Mesh
   ringOn: Mesh
+  /** Le cône qui dit l'avant, allumé avec le cadre. */
+  cone: Mesh
 }
 
 /**
@@ -149,19 +181,22 @@ export function buildParking(
       group.add(new Mesh(marking, mats.paint))
     }
     if (glyph) {
-      const g = new PlaneGeometry(BAY.glyph, BAY.glyph)
-      g.translate(0, -length / 2 + BAY.glyphInset, 0.021)
-      group.add(new Mesh(g, new MeshBasicMaterial({ map: glyph, transparent: true, opacity: 0.5, depthWrite: false })))
+      // Au MILIEU et grand : c'est ce qui se lit d'un coup d'œil de loin, là où une lettre posée dans
+      // un coin se confondait avec un tiret. Plus grand, donc plus pâle — la place reste discrète.
+      const side = Math.min(width, length) * BAY.glyph
+      const g = new PlaneGeometry(side, side)
+      g.translate(0, 0, 0.021)
+      group.add(new Mesh(g, new MeshBasicMaterial({ map: glyph, transparent: true, opacity: 0.22, depthWrite: false })))
     }
   } else {
     const plate = new BoxGeometry(width, length, DOCK.plate)
     plate.translate(0, 0, DOCK.plate / 2)
     const plateMesh = new Mesh(plate, mats.dock)
     plateMesh.receiveShadow = true
-    // le bloc de tête est là où le robot vient toucher, donc DEVANT lui : au bout de la plaque, du
-    // côté vers lequel la base regarde
+    // Le bloc est DERRIÈRE : un robot recule dans sa base, ses contacts sont à l'arrière, et c'est le
+    // bout de plaque qu'on voit dépasser quand il est posé dessus.
     const head = new BoxGeometry(width * 0.8, DOCK.headDepth, DOCK.head)
-    head.translate(0, length / 2 - DOCK.headDepth / 2, DOCK.head / 2)
+    head.translate(0, -length / 2 + DOCK.headDepth / 2, DOCK.head / 2)
     const headMesh = new Mesh(head, mats.dock)
     headMesh.castShadow = headMesh.receiveShadow = true
     group.add(plateMesh, headMesh)
@@ -196,8 +231,9 @@ export function buildParking(
   const ringOnGeo = frameGeometry(width, length, 0.08)
   ringOnGeo.translate(0, 0, 0.032)
   const ringOn = new Mesh(ringOnGeo, mats.off)
-  group.add(fill, ring, ringOn)
-  return { group, fill, ring, ringOn }
+  const cone = new Mesh(facingCone(length), mats.off)
+  group.add(fill, ring, ringOn, cone)
+  return { group, fill, ring, ringOn, cone }
 }
 
 /** Un cadre plat de `bar` mètres d'épaisseur, autour d'un rectangle `width × length`. */

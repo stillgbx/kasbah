@@ -6,7 +6,6 @@ import { useHomeSummary } from '../../composables/useHomeSummary'
 import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
 import { useScenesStore } from '../../stores/scenes'
-import { useSettingsStore } from '../../stores/settings'
 import { formatPercent, formatPower } from '../../lib/format'
 import RoomRows from './RoomRows.vue'
 import SceneChips from '../scenes/SceneChips.vue'
@@ -18,7 +17,6 @@ import type { IconName } from '../../lib/strokeIcons'
 const house = useHouseStore()
 const devices = useDevicesStore()
 const pluginScenes = useScenesStore()
-const settings = useSettingsStore()
 const summary = useHomeSummary()
 const { t, locale } = useI18n()
 
@@ -74,33 +72,6 @@ const zones = computed(() => {
     deviceIds: (idx.devicesByZone.get(z.id) ?? []).map((d) => d.deviceId),
   })).filter((z) => z.deviceIds.length > 0)
 })
-// --- places de stationnement, en MODE ÉDITION seulement : c'est du relevé, pas du pilotage. Elles
-// vivent dans le panneau de la maison et non dans celui d'une pièce (comme les ouvertures) parce
-// qu'une place n'appartient à personne — elle peut être dans un garage, dans l'allée ou sur le
-// terrain, et c'est la maison entière qui les porte (`site.parkings`).
-const editing = computed(() => settings.houseEditing)
-const parkings = computed(() => (editing.value ? house.parkings : []))
-function parkingRow(p: (typeof house.parkings)[number]) {
-  const who = p.deviceId
-    ? house.houseDeviceFor(p.deviceId)?.name ?? devices.descriptors[p.deviceId]?.name ?? p.deviceId
-    : t('parking.shared')
-  return {
-    id: p.id, label: p.name ?? p.id,
-    sub: `${p.accepts === 'vehicle' ? t('parking.bay') : t('parking.dock')} · ${who} · ${p.size[0].toFixed(2)} × ${p.size[1].toFixed(2)} m`,
-  }
-}
-/** Ce qu'on peut poser : une place de voiture partagée, et la base de chaque robot connu. */
-const parkingChoices = computed(() => {
-  const robots = Object.values(devices.descriptors)
-    .filter((d) => d.kind === 'mower' || d.kind === 'vacuum')
-    .map((d) => ({
-      accepts: d.kind, deviceId: d.id,
-      label: t('parking.addDock', { name: house.houseDeviceFor(d.id)?.name ?? d.name }),
-    }))
-  return [{ accepts: 'vehicle' as const, deviceId: undefined, label: t('parking.addBay') }, ...robots]
-})
-const armedParking = computed(() => house.placingParking)
-
 const scenes = computed(() => house.house?.scenes ?? [])
 /**
  * Ambiances du fabricant qu'aucune pièce ne réclame (zones Hue, pièces hors maison), regroupées
@@ -146,45 +117,6 @@ const sceneIcon = (icon?: string): IconName => (icon === 'leave' || icon === 'ni
     <RoomRows :rows="[...rooms, ...zones]" />
   </section>
 
-  <!-- Mode édition : les places de stationnement, posées et réglées comme les ouvertures. Hors
-       édition, cette section n'existe pas — le panneau de la maison reste celui qu'on pilote. -->
-  <section v-if="editing" class="block">
-    <div class="section-label">{{ $t('parking.list') }}</div>
-    <div v-if="parkings.length" class="rows">
-      <button v-for="p in parkings.map(parkingRow)" :key="p.id" type="button" class="park-row" @click="house.selectParking(p.id)">
-        <span class="icon-square"><StrokeIcon name="parking" :size="18" /></span>
-        <div class="park-row__main">
-          <div class="park-row__name">{{ p.label }}</div>
-          <div class="muted park-row__sub">{{ p.sub }}</div>
-        </div>
-        <StrokeIcon name="chevron" :size="18" class="muted" />
-      </button>
-    </div>
-    <p v-else class="muted empty">{{ $t('parking.none') }}</p>
-
-    <!-- Ajouter : le menu donne ce qui s'y range, le tap au sol donne la place. Le bouton garde la
-         même boîte une fois armé (il devient « Annuler ») : rien ne bouge sous le doigt. -->
-    <v-menu v-if="!armedParking" location="bottom start">
-      <template #activator="{ props: menu }">
-        <button v-bind="menu" type="button" class="pill add" :disabled="house.savingParking">
-          <StrokeIcon name="plus" :size="16" /> {{ $t('parking.add') }}
-        </button>
-      </template>
-      <div class="add-list card">
-        <div class="section-label add-list__title">{{ $t('parking.add') }}</div>
-        <button v-for="c in parkingChoices" :key="c.deviceId ?? c.accepts" type="button" class="add-item"
-                @click="house.startPlacingParking(c.accepts, c.deviceId)">
-          {{ c.label }}
-        </button>
-      </div>
-    </v-menu>
-    <button v-else type="button" class="pill add add--armed" @click="house.cancelPlacingParking()">
-      {{ $t('parking.cancel') }}
-    </button>
-    <!-- place réservée : la consigne apparaît sans pousser la liste (hauteur fixe, deux lignes) -->
-    <p class="muted hint">{{ armedParking ? $t('parking.placeHint') : '' }}</p>
-  </section>
-
   <div class="muted text-center hint">{{ $t('home.selectHint') }}</div>
 </template>
 
@@ -192,26 +124,5 @@ const sceneIcon = (icon?: string): IconName => (icon === 'leave' || icon === 'ni
 .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .block { display: grid; gap: 8px; }
 .chips { display: flex; gap: 8px; flex-wrap: wrap; }
-.hint { font-size: 12px; margin: 0; min-height: 32px; }
-.rows { display: grid; gap: 8px; }
-/* même ligne que celle d'une ouverture dans le panneau d'une pièce */
-.park-row {
-  display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--radius);
-  background: var(--surface2); border: 0; width: 100%; text-align: left; font: inherit; color: inherit;
-  cursor: pointer; transition: filter .15s;
-}
-.park-row:hover { filter: brightness(1.03); }
-.park-row__main { flex: 1 1 0; min-width: 0; }
-.park-row__name { font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.park-row__sub { font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.empty { font-size: 13px; margin: 0; }
-.add { width: 100%; justify-content: center; gap: 8px; }
-.add--armed { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
-.add-list { padding: 8px; display: grid; gap: 2px; min-width: 200px; }
-.add-list__title { padding: 2px 8px 4px; }
-.add-item {
-  display: block; width: 100%; text-align: left; padding: 8px 10px; border: 0; border-radius: 8px;
-  background: transparent; color: var(--text); font: inherit; font-size: 14px; cursor: pointer;
-}
-.add-item:hover { background: var(--surface2); }
+.hint { font-size: 12px; }
 </style>

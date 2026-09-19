@@ -190,6 +190,13 @@ export const parkingSchema = z.object({
   name: z.string().min(1).optional(),
   accepts: z.enum(DEVICE_KINDS),
   deviceId: deviceIdSchema.optional(),
+  /**
+   * Niveau qui porte la place. **Absent = au sol, sur le terrain** (jardin). Une place n'est pas
+   * toujours dehors : une voiture se gare dans un garage, un drone se pose sur le toit, un
+   * aspirateur a sa base à l'étage — et c'est le niveau qui donne son altitude au marquage, décide
+   * de la passe qui le dessine, et le fait disparaître quand on regarde un autre étage.
+   */
+  levelId: idSchema.optional(),
   /** Centre du rectangle (m, repère maison). */
   center: vec2Schema,
   /** `[largeur, longueur]` (m) : la longueur est l'axe avant-arrière, celui qu'oriente `yaw`. */

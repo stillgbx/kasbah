@@ -14,6 +14,7 @@ import RoomEditPanel from '../components/home/RoomEditPanel.vue'
 import DevicePanel from '../components/home/DevicePanel.vue'
 import OpeningPanel from '../components/home/OpeningPanel.vue'
 import ParkingPanel from '../components/home/ParkingPanel.vue'
+import HouseEditPanel from '../components/home/HouseEditPanel.vue'
 import SceneDebug from '../components/home/SceneDebug.vue'
 import SceneTuningPanel from '../components/home/SceneTuningPanel.vue'
 import SearchBar from '../components/home/SearchBar.vue'
@@ -95,7 +96,7 @@ scene.onPlaceTap((xy) => { void house.placeOpeningAt(xy) })
 watch(() => house.placingOpening, (armed) => scene.setPlacingOpening(armed?.roomId ?? null))
 // mode « poser une place » : le tap au sol donne le centre ; le reste (cotes de catalogue, sens du
 // garage) est décidé par le magasin, comme pour une ouverture posée sur un mur.
-scene.onGroundTap((xy) => { void house.placeParkingAt(xy) })
+scene.onGroundTap((xy, levelId) => { void house.placeParkingAt(xy, levelId) })
 watch(() => house.placingParking, (armed) => scene.setPlacingParking(!!armed))
 scene.onRoomTap((roomId) => {
   // pendant le réglage d'une ouverture OU d'une place, un tap sur une pièce ne referme pas le
@@ -271,13 +272,16 @@ onUnmounted(() => { offDeviceEvent?.() })
 
 // En mode édition, une PIÈCE (pas une zone du jardin, qui n'a pas de mur) montre ce qu'on peut
 // modifier d'elle à la place de ses appareils : on relève la maison, on ne l'allume pas.
-const panelMode = computed<'opening' | 'parking' | 'device' | 'roomEdit' | 'room' | 'level' | 'home'>(() => {
+const panelMode = computed<'opening' | 'parking' | 'device' | 'roomEdit' | 'room' | 'level' | 'houseEdit' | 'home'>(() => {
   if (house.selectedOpeningId) return 'opening'
   // une place se règle depuis la maison : elle n'appartient ni à une pièce ni à un appareil
   if (house.selectedParkingId) return 'parking'
   if (house.selectedKey) return 'device'
   if (house.selectedRoomId) return settings.houseEditing && house.selectedRoom ? 'roomEdit' : 'room'
-  return house.selectedLevelId ? 'level' : 'home'
+  if (house.selectedLevelId) return 'level'
+  // la maison en mode édition montre ce qu'on y RÈGLE (les places), pas ce qu'on y pilote : la
+  // section n'était plus atteignable sous les tuiles, les scènes et la liste des pièces
+  return settings.houseEditing ? 'houseEdit' : 'home'
 })
 
 // Le panneau ancré couvre le bord droit de la scène : le cadrage vise la partie libre (largeur du
@@ -337,6 +341,7 @@ const DOLLY_STEP = 1.35
       <DevicePanel v-else-if="panelMode === 'device'" @back="onDeviceBack()" />
       <RoomEditPanel v-else-if="panelMode === 'roomEdit'" @back="onRoomBack()" />
       <RoomPanel v-else-if="panelMode === 'room' || panelMode === 'level'" @back="onRoomBack()" />
+      <HouseEditPanel v-else-if="panelMode === 'houseEdit'" />
       <HomePanel v-else />
     </SidePanel>
   </div>

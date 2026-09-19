@@ -1,0 +1,123 @@
+<script setup lang="ts">
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import type { DeviceKind, Parking } from '@kasbah/shared'
+import { useDevicesStore } from '../../stores/devices'
+import { useHouseStore } from '../../stores/house'
+import StrokeIcon from '../ui/StrokeIcon.vue'
+
+// La section « Places de stationnement » : la liste, et le bouton qui arme une pose. Elle vit à DEUX
+// endroits — le panneau de la maison en mode édition (toutes les places) et le panneau d'une pièce
+// (celles de cette pièce, posées dans SON niveau) — et c'est la même section, pas deux copies :
+// l'utilisateur doit retrouver le même geste là où il pense à une place.
+const props = defineProps<{
+  /** Les places à lister. */
+  list: Parking[]
+  /** Pièce d'où l'on pose : son niveau est imposé à la place créée. Absent = la surface touchée décide. */
+  levelId?: string
+}>()
+const house = useHouseStore()
+const devices = useDevicesStore()
+const { t } = useI18n()
+
+function row(p: Parking) {
+  const who = p.deviceId
+    ? house.houseDeviceFor(p.deviceId)?.name ?? devices.descriptors[p.deviceId]?.name ?? p.deviceId
+    : t('parking.shared')
+  return {
+    id: p.id,
+    label: p.name ?? p.id,
+    sub: `${p.accepts === 'vehicle' ? t('parking.bay') : t('parking.dock')} · ${who}`,
+    size: `${p.size[0].toFixed(2)} × ${p.size[1].toFixed(2)} m`,
+  }
+}
+
+/**
+ * Ce qu'on peut poser : une place de voiture partagée, et la base de chaque robot QUI N'EN A PAS.
+ * Un robot n'a qu'une base — en proposer une seconde ne fait que créer une place que personne ne
+ * viendra occuper, la plus proche gagnant (`assignParkings`). La sienne se règle depuis sa ligne.
+ */
+const choices = computed(() => {
+  const robots = Object.values(devices.descriptors)
+    .filter((d) => (d.kind === 'mower' || d.kind === 'vacuum') && !house.dockFor(d.id))
+    .map((d) => ({
+      accepts: d.kind as DeviceKind, deviceId: d.id as string | undefined,
+      label: t('parking.addDock', { name: house.houseDeviceFor(d.id)?.name ?? d.name }),
+    }))
+  return [{ accepts: 'vehicle' as DeviceKind, deviceId: undefined, label: t('parking.addBay') }, ...robots]
+})
+const armed = computed(() => house.placingParking)
+</script>
+
+<template>
+  <section class="block">
+    <div class="section-label">{{ $t('parking.list') }}</div>
+    <div v-if="props.list.length" class="rows">
+      <button v-for="p in props.list.map(row)" :key="p.id" type="button" class="park-row" @click="house.selectParking(p.id)">
+        <span class="icon-square"><StrokeIcon name="parking" :size="18" /></span>
+        <div class="park-row__main">
+          <div class="park-row__name">{{ p.label }}</div>
+          <div class="muted park-row__sub">{{ p.sub }}</div>
+        </div>
+        <span class="muted park-row__size">{{ p.size }}</span>
+        <StrokeIcon name="chevron" :size="18" class="muted park-row__chevron" />
+      </button>
+    </div>
+    <p v-else class="muted empty">{{ $t('parking.none') }}</p>
+
+    <!-- Ajouter : le menu donne ce qui s'y range, le tap au sol donne la place. Le bouton garde la
+         même boîte une fois armé (il devient « Annuler ») : rien ne bouge sous le doigt. -->
+    <v-menu v-if="!armed" location="bottom start">
+      <template #activator="{ props: menu }">
+        <button v-bind="menu" type="button" class="pill add" :disabled="house.savingParking">
+          <StrokeIcon name="plus" :size="16" /> {{ $t('parking.add') }}
+        </button>
+      </template>
+      <div class="add-list card">
+        <div class="section-label add-list__title">{{ $t('parking.add') }}</div>
+        <button v-for="c in choices" :key="c.deviceId ?? c.accepts" type="button" class="add-item"
+                @click="house.startPlacingParking(c.accepts, c.deviceId, props.levelId)">
+          {{ c.label }}
+        </button>
+      </div>
+    </v-menu>
+    <button v-else type="button" class="pill add add--armed" @click="house.cancelPlacingParking()">
+      {{ $t('parking.cancel') }}
+    </button>
+    <!-- place réservée : la consigne apparaît sans pousser la liste (hauteur fixe, deux lignes) -->
+    <p class="muted hint">{{ armed ? $t('parking.placeHint') : '' }}</p>
+  </section>
+</template>
+
+<style scoped>
+.block { display: grid; gap: 8px; }
+.rows { display: grid; gap: 8px; }
+/* même ligne que celle d'une ouverture dans le panneau d'une pièce */
+.park-row {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius);
+  background: var(--surface2); border: 0; width: 100%; text-align: left; font: inherit; color: inherit;
+  cursor: pointer; transition: filter .15s; min-width: 0;
+}
+.park-row:hover { filter: brightness(1.03); }
+/* `min-width: 0` sur le bloc ET sur ses lignes : sans lui, un nom long POUSSE la ligne hors du
+   panneau au lieu d'être coupé (la largeur intrinsèque d'un flex enfant fait loi par défaut). */
+.park-row__main { flex: 1 1 0; min-width: 0; }
+.park-row__name, .park-row__sub { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.park-row__name { font-weight: 500; font-size: 14px; }
+.park-row__sub { font-size: 12px; }
+/* les cotes restent lisibles et ne se coupent jamais : c'est la ligne de gauche qui cède */
+.park-row__size { flex: none; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.park-row__chevron { flex: none; }
+.empty { font-size: 13px; margin: 0; }
+.add { width: 100%; justify-content: center; gap: 8px; }
+.add--armed { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.hint { margin: 0; font-size: 12px; min-height: 32px; }
+.add-list { padding: 8px; display: grid; gap: 2px; min-width: 200px; max-width: min(280px, 80vw); }
+.add-list__title { padding: 2px 8px 4px; }
+.add-item {
+  display: block; width: 100%; text-align: left; padding: 8px 10px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--text); font: inherit; font-size: 14px; cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.add-item:hover { background: var(--surface2); }
+</style>

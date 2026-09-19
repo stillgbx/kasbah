@@ -159,7 +159,7 @@ export interface SceneEvents {
    * terrain ou une zone, en repère maison. Une place se pose à plat — il n'y a pas de mur à viser,
    * donc pas de règle d'admissibilité à appliquer, contrairement à une ouverture.
    */
-  groundTap: (xy: [number, number]) => void
+  groundTap: (xy: [number, number], levelId: string | null) => void
   /** Tap sur une place de stationnement (mode édition seulement). */
   parkingTap: (parkingId: string) => void
   /**
@@ -1109,7 +1109,7 @@ export class HouseScene {
     this.parkingGlyph = parkingGlyphTexture(mats.paint.color)
     for (const p of parkings) {
       const { parent, z, levelled } = this.parkingParent(p)
-      const gaps = this.editingParkings && p.id === this.selectedParkingId ? this.parkingGaps(p) : undefined
+      const gaps = p.id === this.selectedParkingId ? this.parkingGaps(p) : undefined
       const nodes = buildParking(p, z, mats, this.parkingGlyph, gaps ?? undefined)
       if (levelled) nodes.group.traverse((n) => n.layers.set(DECOR_LAYER))
       parent.add(nodes.group)
@@ -1122,12 +1122,21 @@ export class HouseScene {
     this.loop.invalidate()
   }
 
-  /** Le groupe qui porte une place, et son z LOCAL : les marqueurs de son niveau, ou le site. */
+  /**
+   * Le groupe qui porte une place, et son z LOCAL : les marqueurs de son NIVEAU, ou le site.
+   *
+   * C'est `levelId` qui tranche, pas le point : une place se pose SUR un niveau (le garage, le toit
+   * pour une aire de drone) ou sur le terrain, et c'est le choix qu'on a fait en la posant. Une
+   * place écrite sans niveau retombe sur la pièce qui la contient — celles d'avant le champ ne
+   * bougent pas.
+   */
   private parkingParent(p: Parking): { parent: Group; z: number; levelled: boolean } {
     const site = this.nodes!.site
-    const host = this.house ? parkingHost(this.house, p) : null
-    const room = host?.kind === 'room' ? this.index?.roomsById.get(host.id) : undefined
-    const levelNodes = room ? this.nodes!.levels.get(room.levelId) : undefined
+    const levelId = p.levelId ?? (() => {
+      const host = this.house ? parkingHost(this.house, p) : null
+      return host?.kind === 'room' ? this.index?.roomsById.get(host.id)?.levelId : undefined
+    })()
+    const levelNodes = levelId ? this.nodes!.levels.get(levelId) : undefined
     return levelNodes
       ? { parent: levelNodes.markers, z: 0, levelled: true }
       : { parent: site, z: this.house?.site.elevation ?? 0, levelled: false }
@@ -1158,10 +1167,15 @@ export class HouseScene {
     const mats = this.parkingMats
     if (!mats) return
     for (const [id, n] of this.parkingNodes) {
-      const on = this.editingParkings && id === this.selectedParkingId
+      // La place CHOISIE se montre même hors mode édition : on arrive ici depuis la vue Robots, qui
+      // arme la pose d'une base sans rien demander aux Réglages, et une place qu'on vient de poser
+      // doit se voir et se glisser. Les autres n'ont leur cadre qu'en édition.
+      const on = id === this.selectedParkingId
       n.fill.material = on ? mats.fillOn : mats.off
       n.ring.material = this.editingParkings && !on ? mats.ring : mats.off
       n.ringOn.material = on ? mats.ringOn : mats.off
+      // le cône de sens vit avec le cadre : il n'a de raison d'être que pendant qu'on pose
+      n.cone.material = on ? mats.ringOn : this.editingParkings ? mats.ring : mats.off
     }
     this.loop.invalidate()
   }
@@ -1176,14 +1190,29 @@ export class HouseScene {
     this.loop.invalidate()
   }
 
-  /** Le point du sol sous le doigt : sol de pièce, terrain ou zone — le premier rencontré. */
-  private groundPoint(ndc: { x: number; y: number }): [number, number] | null {
+  /**
+   * Le point du sol sous le doigt, ET le niveau de ce sol : sol de pièce, dalle de toit, terrain ou
+   * zone — le premier rencontré. `levelId: null` = on a touché le terrain, donc le jardin.
+   *
+   * C'est ce qui donne son NIVEAU à une place qu'on pose : on la met dans le garage en tapant le sol
+   * du garage, sur le toit en tapant le toit, dans le jardin en tapant la pelouse. Rien à choisir
+   * dans un menu — la surface touchée dit déjà tout.
+   */
+  private groundPoint(ndc: { x: number; y: number }): { xy: [number, number]; levelId: string | null } | null {
     if (!this.nodes) return null
     this.raycaster.setFromCamera(new Vector2(ndc.x, ndc.y), this.camera)
+    const floorLevel = new Map<Object3D, string>()
     const targets: Object3D[] = [this.nodes.terrain, ...this.nodes.zones.values()]
-    for (const level of this.nodes.levels.values()) if (level.group.visible) targets.push(...level.floors.values())
+    for (const [levelId, level] of this.nodes.levels) {
+      if (!level.group.visible) continue
+      for (const floor of level.floors.values()) { targets.push(floor); floorLevel.set(floor, levelId) }
+    }
+    const roof = this.nodes.roof
+    const roofLevel = roof?.visible ? this.roofLevel() : undefined
+    if (roof && roofLevel) { targets.push(roof); floorLevel.set(roof, roofLevel.id) }
     const hit = this.raycaster.intersectObjects(targets, false)[0]
-    return hit ? [hit.point.x, -hit.point.z] : null       // monde (x, y, z) → maison (x, z, -y)
+    if (!hit) return null
+    return { xy: [hit.point.x, -hit.point.z], levelId: floorLevel.get(hit.object) ?? null }   // monde (x, y, z) → maison (x, z, -y)
   }
 
   /** Mode « régler les places » : armé depuis les Réglages, comme celui des ouvertures. */
@@ -1204,7 +1233,7 @@ export class HouseScene {
     this.refreshParkingNotes()
     this.parkingDragger?.detach()
     this.parkingDragger = null
-    if (id && this.editingParkings && !this.deps.headless) {
+    if (id && !this.deps.headless) {
       this.parkingDragger = createDragDetector(this.canvas, {
         hitTest: (ev) => this.grabsParking(id, ev),
         onStart: () => this.startParkingDrag(id),
@@ -1254,7 +1283,9 @@ export class HouseScene {
     const box = new Box3()
     nodes.group.updateWorldMatrix(true, true)
     box.setFromObject(nodes.group)
-    box.expandByScalar(Math.max(1, Math.max(...p.size) * 0.35))
+    // Au moins la boîte d'un appareil : une base de tondeuse fait 60 cm, et la cadrer au plus juste
+    // mettait la caméra sous le sol. Une grande place, elle, garde sa marge proportionnelle.
+    box.expandByScalar(Math.max(DEVICE_FOCUS_SIZE_M / 2, Math.max(...p.size) * 0.35))
     const { azimuth, polar } = this.currentSpherical()
     this.flyTo(box, azimuth, clamp(polar, DEVICE_FOCUS_POLAR[0], DEVICE_FOCUS_POLAR[1]), animate, 1.1)
   }
@@ -1322,7 +1353,7 @@ export class HouseScene {
    */
   private refreshParkingNotes(): void {
     const id = this.selectedParkingId
-    const p = id && this.editingParkings ? this.house?.site.parkings.find((x) => x.id === id) : undefined
+    const p = id ? this.house?.site.parkings.find((x) => x.id === id) : undefined
     if (!p || !this.nodes || typeof document === 'undefined') { this.clearParkingNotes(); return }
     const { parent, z } = this.parkingParent(p)
     if (!this.parkingNotes || this.parkingNotes.parent !== parent) {
@@ -2323,8 +2354,8 @@ export class HouseScene {
     }
     // Une place armée prend le tap de la même façon, mais au SOL : c'est là qu'on la pose.
     if (this.placingParking) {
-      const xy = this.groundPoint(ev.ndc)
-      if (xy) this.emit('groundTap', xy)
+      const hit = this.groundPoint(ev.ndc)
+      if (hit) this.emit('groundTap', hit.xy, hit.levelId)
       else this.emit('backgroundTap')
       return
     }

@@ -1026,8 +1026,12 @@ export const useHouseStore = defineStore('house', () => {
   // tape l'endroit dans la 3D, puis on règle les quatre cotes — ce qui sépare la place du contour de
   // son hôte (le garage, l'allée) — ou on la glisse au doigt.
   const savingParking = ref(false)
-  /** Place armée, en attente du point qu'on va taper dans la 3D. */
-  const placingParking = shallowRef<{ accepts: DeviceKind; deviceId?: string } | null>(null)
+  /**
+   * Place armée, en attente du point qu'on va taper dans la 3D. `levelId` vient du panneau d'une
+   * PIÈCE (« ajouter une place dans ce garage ») : le niveau est alors décidé d'avance, et le tap ne
+   * donne plus que le point. Armée depuis la maison, c'est la surface touchée qui tranche.
+   */
+  const placingParking = shallowRef<{ accepts: DeviceKind; deviceId?: string; levelId?: string } | null>(null)
 
   /** La place sélectionnée, brouillon compris : c'est elle que le panneau AFFICHE. */
   const selectedParking = computed<Parking | null>(
@@ -1035,6 +1039,16 @@ export const useHouseStore = defineStore('house', () => {
   /** La même, telle qu'elle est ÉCRITE. */
   const savedParking = computed<Parking | null>(
     () => house.value?.site.parkings.find((p) => p.id === selectedParkingId.value) ?? null)
+
+  /**
+   * Les places posées DANS une pièce : celles dont l'hôte est cette pièce. C'est ce que le panneau
+   * d'une pièce en mode édition liste — on ajoute une place de garage depuis le garage, pas depuis
+   * une liste de toute la maison.
+   */
+  const parkingsInRoom = (roomId: string) => parkings.value.filter((p) => {
+    const h = house.value ? parkingHost(house.value, p) : null
+    return h?.kind === 'room' && h.id === roomId
+  })
 
   /** Ce qui PORTE la place sélectionnée (pièce, zone ou terrain) : les quatre cotes s'y mesurent. */
   const parkingHostOf = computed(() => {
@@ -1105,9 +1119,9 @@ export const useHouseStore = defineStore('house', () => {
   }
 
   /** Arme une place : on choisit ce qui s'y range, puis on tape l'endroit dans la 3D. */
-  function startPlacingParking(accepts: DeviceKind, deviceId?: string) {
+  function startPlacingParking(accepts: DeviceKind, deviceId?: string, levelId?: string) {
     selectParking(null)
-    placingParking.value = deviceId ? { accepts, deviceId } : { accepts }
+    placingParking.value = { accepts, ...(deviceId ? { deviceId } : {}), ...(levelId ? { levelId } : {}) }
   }
   function cancelPlacingParking() { placingParking.value = null }
 
@@ -1125,11 +1139,17 @@ export const useHouseStore = defineStore('house', () => {
    * une voiture dans son sens, et c'est mieux que le nord. Elle devient la sélection : on l'a posée
    * pour la régler.
    */
-  async function placeParkingAt(xy: Vec2): Promise<void> {
+  async function placeParkingAt(xy: Vec2, levelId?: string | null): Promise<void> {
     const armed = placingParking.value
     if (!armed || !house.value) return
+    // Le niveau imposé par la pièce d'où l'on a armé gagne sur la surface touchée : on a dit « dans
+    // ce garage », un doigt qui glisse sur la pelouse voisine ne doit pas changer d'avis pour nous.
+    const level = armed.levelId ?? levelId ?? undefined
     const size = newParkingSize(armed.accepts)
-    const probe = { id: '', accepts: armed.accepts, center: [snapCm(xy[0]), snapCm(xy[1])] as Vec2, size, yaw: 0 }
+    const probe = {
+      id: '', accepts: armed.accepts, center: [snapCm(xy[0]), snapCm(xy[1])] as Vec2, size, yaw: 0,
+      ...(level ? { levelId: level } : {}),
+    }
     const host = parkingHost(house.value, probe)
     const yaw = host?.kind === 'room' ? longestEdgeYawDeg(host.polygon) ?? 0 : 0
     const id = freeParkingId(armed.accepts)
@@ -1137,6 +1157,7 @@ export const useHouseStore = defineStore('house', () => {
     try {
       const next = await getTransport().addParking({
         id, accepts: armed.accepts, ...(armed.deviceId ? { deviceId: armed.deviceId } : {}),
+        ...(level ? { levelId: level } : {}),
         center: probe.center, size, yaw: snapCm(yaw),
       })
       placingParking.value = null
@@ -1148,6 +1169,9 @@ export const useHouseStore = defineStore('house', () => {
       savingParking.value = false
     }
   }
+
+  /** La place réservée à cet appareil, s'il en a une : la base d'un robot (vue Robots, panneau). */
+  const dockFor = (deviceId: string) => parkings.value.find((p) => p.deviceId === deviceId) ?? null
 
   /** Retire la place sélectionnée : l'engin qui s'y rangeait retourne à son point GPS. */
   async function removeParking(): Promise<boolean> {
@@ -1251,7 +1275,8 @@ export const useHouseStore = defineStore('house', () => {
     selectedOpeningId, selectedOpening, savedOpening, openingDraft, openingBounds, openingCeiling, openingDevices, savingOpening, canRevertOpening,
     placingOpening, startPlacingOpening, cancelPlacingOpening, placeOpeningAt, removeOpening,
     selectOpening, previewOpeningAt, saveOpening, dropOpening, revertOpening, setOpeningDevice, setCoverOpening, coversWithoutOpening,
-    parkings, selectedParkingId, selectedParking, savedParking, parkingHostOf, parkingGapsOf, savingParking, placingParking,
+    parkings, parkingsInRoom, selectedParkingId, selectedParking, savedParking, parkingHostOf, parkingGapsOf, savingParking, placingParking,
+    dockFor,
     selectParking, previewParkingAt, saveParking, dropParking, setParkingGap,
     startPlacingParking, cancelPlacingParking, placeParkingAt, removeParking,
     arrays, arraysOf, editingArrayId, editingArray, editingArrayModules, arrayDraft, hoveredKey, hoverSlot, freeInverters,

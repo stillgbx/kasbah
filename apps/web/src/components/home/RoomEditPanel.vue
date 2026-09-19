@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { OPENING_TYPES, openingLabel, type Opening } from '@kasbah/shared'
 import { useHouseStore } from '../../stores/house'
+import ParkingRows from './ParkingRows.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
 // Panneau d'une pièce en MODE ÉDITION : ce qu'on peut modifier DE LA PIÈCE, à la place des appareils
@@ -10,8 +11,9 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 // relève la maison, on ne l'allume pas — et le même tap sur la même pièce donne toujours la même
 // chose, sans onglet à retenir dans le panneau.
 //
-// Une seule matière pour l'instant, les ouvertures. Le nom, la hauteur sous plafond et le sol de la
-// pièce ont vocation à venir ici, en sections voisines.
+// Deux matières : les ouvertures de la pièce, et les places de stationnement qu'elle porte — on
+// ajoute la place d'un garage DEPUIS le garage, et la place créée prend son niveau. Le nom, la
+// hauteur sous plafond et le sol de la pièce ont vocation à venir ici, en sections voisines.
 const emit = defineEmits<{ back: [] }>()
 const house = useHouseStore()
 const { t } = useI18n()
@@ -26,6 +28,8 @@ function row(o: Opening) {
 
 /** Nature armée, en attente du mur qu'on va taper dans la 3D (`house.placeOpeningAt`). */
 const armed = computed(() => house.placingOpening)
+/** Les places posées dans cette pièce : elles se règlent là où on les pense. */
+const parkings = computed(() => (room.value ? house.parkingsInRoom(room.value.id) : []))
 </script>
 
 <template>
@@ -76,6 +80,8 @@ const armed = computed(() => house.placingOpening)
       <!-- place réservée : la consigne apparaît sans pousser la liste (hauteur fixe, deux lignes) -->
       <p class="muted hint">{{ armed ? $t('opening.placeHint') : '' }}</p>
     </section>
+
+    <ParkingRows :list="parkings" :level-id="room.levelId" />
   </template>
 </template>
 

@@ -455,6 +455,8 @@
     "whereHint": "Se règle ici, ou en glissant la place au sol dans la vue 3D.",
     "margin": "Rayon d'accroche", "marginHint": "Un engin au repos à moins de cette distance de la place s'y range. Vide = {default} m.",
     "occupied": "{name} s'y range", "free": "Libre",
+    "roomHint": "Touchez une pièce dans la vue 3D pour ses ouvertures et ses places.",
+    "dockMissing": "Non placée", "dockPlaced": "Placée", "dockPlace": "Placer la station",
     "rename": "Renommer la place", "remove": "Supprimer la place", "removeConfirm": "Confirmer la suppression",
     "smaller": "Réduire", "bigger": "Agrandir", "turnLeft": "Tourner à gauche", "turnRight": "Tourner à droite",
     "saveError": "Place non enregistrée : {message}"

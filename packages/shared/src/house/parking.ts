@@ -123,8 +123,8 @@ export function assignParkings(
   return out
 }
 
-/** Ce qui PORTE une place : la pièce où elle est posée, sinon la zone, sinon le terrain. */
-export interface ParkingHost { kind: 'room' | 'zone' | 'terrain'; id: string; name: string; polygon: Vec2[] }
+/** Ce qui PORTE une place : sa pièce, l'emprise de son niveau, sinon la zone ou le terrain. */
+export interface ParkingHost { kind: 'room' | 'level' | 'zone' | 'terrain'; id: string; name: string; polygon: Vec2[] }
 
 /**
  * L'hôte d'une place, cherché sous son centre. Les pièces sont essayées du niveau le plus BAS au
@@ -136,9 +136,22 @@ export interface ParkingHost { kind: 'room' | 'zone' | 'terrain'; id: string; na
  */
 export function parkingHost(house: House, p: Parking): ParkingHost | null {
   const elevation = (levelId: string) => house.levels.find((l) => l.id === levelId)?.elevation ?? 0
-  const rooms: Room[] = [...house.rooms].sort((a, b) => elevation(a.levelId) - elevation(b.levelId))
+  // Le NIVEAU de la place commande la recherche : une place posée au premier n'a rien à mesurer
+  // depuis le salon qui est dessous. Sans niveau, elle est au sol et les pièces sont essayées du
+  // plus bas au plus haut — ce qui fait qu'une place écrite avant ce champ se cote comme avant.
+  const rooms: Room[] = p.levelId
+    ? house.rooms.filter((r) => r.levelId === p.levelId)
+    : [...house.rooms].sort((a, b) => elevation(a.levelId) - elevation(b.levelId))
   const room = rooms.find((r) => pointInPolygon(p.center, r.polygon))
   if (room) return { kind: 'room', id: room.id, name: room.name, polygon: room.polygon }
+  // Un niveau sans pièce sous le point — le toit qui porte une aire de drone — rend son EMPRISE
+  // quand elle est déclarée ; sinon il n'y a rien à coter, et le panneau le dit.
+  if (p.levelId) {
+    const level = house.levels.find((l) => l.id === p.levelId)
+    return level?.outline && pointInPolygon(p.center, level.outline)
+      ? { kind: 'level', id: level.id, name: level.name, polygon: level.outline }
+      : null
+  }
   const zone: Zone | undefined = house.site.zones.find((z) => z.kind !== 'pool' && pointInPolygon(p.center, z.polygon))
   if (zone) return { kind: 'zone', id: zone.id, name: zone.name, polygon: zone.polygon }
   if (pointInPolygon(p.center, house.site.terrain)) return { kind: 'terrain', id: 'terrain', name: '', polygon: house.site.terrain }

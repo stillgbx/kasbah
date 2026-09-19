@@ -650,6 +650,8 @@ export const newParkingSchema = z.object({
   accepts: z.enum(DEVICE_KINDS),
   /** Base réservée à cet appareil. Absent = place partagée par tous les appareils du kind. */
   deviceId: deviceIdSchema.optional(),
+  /** Niveau qui porte la place, donné par le SOL tapé dans la 3D. Absent = sur le terrain. */
+  levelId: z.string().min(1).optional(),
   center: vec2Schema,
   size: z.tuple([z.number().min(MIN_PARKING_DIM).max(30), z.number().min(MIN_PARKING_DIM).max(30)]),
   yaw: z.number().min(-180).max(180),
@@ -666,6 +668,7 @@ export function addParkingToJson(doc: unknown, parking: NewParking): JsonObject 
   }
   if (parking.name) next.name = parking.name
   if (parking.deviceId) next.deviceId = parking.deviceId
+  if (parking.levelId) next.levelId = parking.levelId
   return { ...doc, site: { ...site, parkings: [...list, next] } }
 }
 

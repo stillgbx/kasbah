@@ -5,6 +5,7 @@ import type { Parking } from './schema'
 import {
   assignParkings, atRest, fitParkingGap, parkingAccepts, parkingCorners, parkingDistance, parkingGaps, parkingHost,
 } from './parking'
+import { pointInPolygon as pointIn } from './geometry/vec2'
 
 const house = parseHouse(demo)
 
@@ -141,5 +142,20 @@ describe('parkingHost', () => {
     const inSalon = parkingHost(house, bay('p', [salon.polygon[0]![0] + 1, salon.polygon[0]![1] + 1]))
     expect(inSalon).toMatchObject({ kind: 'room', id: 'salon' })
     expect(parkingHost(house, bay('p', [9999, 9999]))).toBeNull()
+  })
+
+  /**
+   * Une place porte son NIVEAU : le même point au sol tombe dans le salon au rez-de-chaussée et dans
+   * une chambre à l'étage, et une place du premier n'a rien à mesurer depuis la pièce du dessous.
+   */
+  it('cherche sa pièce DANS son niveau, pas dans celui du dessous', () => {
+    const point: [number, number] = [6, 2]                      // salon (rdc) ET chambre 2 (étage)
+    expect(parkingHost(house, bay('p', point))).toMatchObject({ kind: 'room', id: 'salon' })
+    const upstairs = house.rooms.find((r) => r.levelId !== 'rdc' && pointIn(point, r.polygon))!
+    expect(parkingHost(house, bay('p', point, 0, { levelId: upstairs.levelId }))).toMatchObject({ kind: 'room', id: upstairs.id })
+  })
+
+  it('ne cote rien sur un niveau qui n a ni pièce sous le point ni emprise', () => {
+    expect(parkingHost(house, bay('p', [-30, -30], 0, { levelId: 'rdc' }))).toBeNull()
   })
 })
