@@ -1,10 +1,9 @@
-import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import type { Command, DeviceDescriptor, PluginHealth, StatePatch } from '@kasbah/shared'
 import { createBackoff } from '../../core/backoff'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
+import { stateFile } from '../../core/paths'
 import { createPoller } from '../../core/poll'
 import type { FetchLike } from '../../core/sse'
 import {
@@ -37,7 +36,6 @@ import type { VehicleLink } from './types'
 // écrire des fixtures d'après la documentation est l'erreur que ce projet a déjà commise deux fois.
 
 const optionalKey = z.string().trim().transform((s) => (s === '' ? undefined : s)).optional()
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../..')
 
 export const renaultConfigSchema = z.object({
   /** Pays du compte, exigé en paramètre sur TOUTES les routes Kamereon. */
@@ -54,7 +52,7 @@ export const renaultConfigSchema = z.object({
   /** Compte Kamereon à lire, quand la personne en a plusieurs. Absent = le premier compte actif. */
   RENAULT_ACCOUNT_ID: optionalKey,
   /** Où garder le jeton de session Gigya. Le mot de passe, lui, n'y est JAMAIS écrit. */
-  RENAULT_SESSION_FILE: z.string().trim().default(resolve(REPO_ROOT, 'apps/server/.state/renault-session.json')),
+  RENAULT_SESSION_FILE: z.string().trim().default(stateFile('renault-session.json')),
   /**
    * Cadence de lecture, 10 min comme Tesla. Cinq lectures par véhicule et par tour, soit une
    * trentaine d'appels par heure — confortablement sous les 60 que Renault tolère.

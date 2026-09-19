@@ -1,10 +1,9 @@
-import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import type { Command, DeviceDescriptor, JournalEntry, PluginHealth, StatePatch } from '@kasbah/shared'
 import { createBackoff } from '../../core/backoff'
 import { PluginError, type DevicePlugin, type PluginContext, type PluginJournal } from '../../core/plugin'
+import { stateFile } from '../../core/paths'
 import { createPoller } from '../../core/poll'
 import type { FetchLike } from '../../core/sse'
 import { AutomowerAuth } from './auth'
@@ -39,7 +38,6 @@ import { mowerListSchema, wsEventSchema, wsReadySchema, type MowerData } from '.
 // restent à capturer.
 
 const optionalKey = z.string().trim().transform((s) => (s === '' ? undefined : s)).optional()
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../..')
 
 export const automowerConfigSchema = z.object({
   /** Clé (« Application key ») et secret de l'application, developer.husqvarnagroup.cloud. */
@@ -53,7 +51,7 @@ export const automowerConfigSchema = z.object({
   /** Fuseau des horodatages « locaux » du robot. Défaut : celui du serveur. */
   AUTOMOWER_TIMEZONE: optionalKey.refine((tz) => tz === undefined || isTimeZone(tz), 'AUTOMOWER_TIMEZONE: fuseau IANA inconnu'),
   /** Où garder le compte de requêtes de la fenêtre. Chaîne vide = ne rien garder. */
-  AUTOMOWER_USAGE_FILE: z.string().trim().default(resolve(REPO_ROOT, 'apps/server/.state/automower-usage.json')),
+  AUTOMOWER_USAGE_FILE: z.string().trim().default(stateFile('automower-usage.json')),
   /**
    * Un instant de remise à zéro du quota tel que le portail développeur l'affiche (« Resets at … »),
    * en ISO 8601 : cale la fenêtre de sept jours exactement. Absent = la première requête fait foi.

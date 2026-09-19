@@ -1,9 +1,8 @@
-import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import type { Command, ConsumptionPoint, DeviceDescriptor, PluginHealth } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { PluginError, type DevicePlugin, type PluginConsumption, type PluginContext } from '../../core/plugin'
+import { stateFile } from '../../core/paths'
 import { createPoller } from '../../core/poll'
 import { sendError } from '../../http/errors'
 import { applyReading, monthlyOf, readingAt, type ComapHistoryCursor } from './history'
@@ -11,7 +10,6 @@ import { modelOf, parseRead, readRequest, toDescriptor, toStatePatch, STATION_ID
 import { netSocketFactory, readOnce, type SocketFactory } from './socket'
 import { createHistoryFile, EMPTY_HISTORY, type ComapHistoryState, type HistoryStore } from './state'
 
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../..')
 
 // Plugin COMAP Proteo 2 : station de filtration d'eau lue en JSON clair sur TCP/23, sans
 // authentification, LAN pur (192.168.1.92 par défaut). UN SEUL appareil `water` publié — la station
@@ -42,7 +40,7 @@ export const comapConfigSchema = z.object({
   /** La station accepte la connexion même quand elle est déjà occupée, et ne répond alors jamais. */
   COMAP_TIMEOUT_MS: z.coerce.number().int().min(500).max(30_000).default(5_000),
   /** Où garder l'historique de consommation déjà calculé (voir `history.ts`). Chaîne vide = ne rien garder. */
-  COMAP_HISTORY_FILE: z.string().trim().default(resolve(REPO_ROOT, 'apps/server/.state/comap-consumption.json')),
+  COMAP_HISTORY_FILE: z.string().trim().default(stateFile('comap-consumption.json')),
 })
 export type ComapConfig = z.infer<typeof comapConfigSchema>
 

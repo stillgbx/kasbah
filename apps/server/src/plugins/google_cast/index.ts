@@ -1,11 +1,10 @@
-import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import type { Command, DeviceDescriptor, PluginHealth } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { createBackoff, type Backoff } from '../../core/backoff'
 import { sleep } from '../../core/clock'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
+import { stateFile } from '../../core/paths'
 import { isBravia, probeBravia, sameAudioOutput, type AudioOutput, type BraviaFetch } from './bravia'
 import { CastConnection, tlsSocketFactory, type SocketFactory } from './channel'
 import { createMdnsDiscovery, type CastDiscovery } from './discovery'
@@ -29,7 +28,6 @@ import type { StatePatch } from '@kasbah/shared'
 
 const optionalKey = z.string().trim().transform((s) => (s === '' ? undefined : s)).optional()
 const bool = z.enum(['true', 'false', '1', '0']).transform((v) => v === 'true' || v === '1')
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../..')
 
 export const googleCastConfigSchema = z.object({
   /** IPv4 de l'interface réseau qui porte le multicast mDNS (machine à plusieurs cartes : VPN, VM). */
@@ -42,7 +40,7 @@ export const googleCastConfigSchema = z.object({
    * Où retenir les appareils déjà vus (voir `known.ts`) : un Cast éteint ne s'annonce plus, il reste
    * listé grâce à ce fichier. Chaîne vide = ne rien retenir (l'appareil disparaît quand il s'éteint).
    */
-  CAST_KNOWN_FILE: z.string().trim().default(resolve(REPO_ROOT, 'apps/server/.state/google-cast-devices.json')),
+  CAST_KNOWN_FILE: z.string().trim().default(stateFile('google-cast-devices.json')),
   /**
    * Enrichir les lectures Crunchyroll (série, saison, épisode, vignette) par l'API interne du service,
    * en anonyme, sans compte — NON OFFICIEL (voir `enrich/crunchyroll.ts`). `false` pour s'en passer.

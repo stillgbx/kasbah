@@ -1,11 +1,10 @@
 import { randomBytes } from 'node:crypto'
-import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import type { Command, DeviceDescriptor, PluginHealth, VehicleFinish, VehicleSleepState } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { fetch as undiciFetch } from 'undici'
 import { z } from 'zod'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
+import { stateFile } from '../../core/paths'
 import { sleep } from '../../core/clock'
 import type { FetchLike } from '../../core/sse'
 import { describeError, sendError } from '../../http/errors'
@@ -48,7 +47,6 @@ import { commandResultSchema, partnerPublicKeySchema, vehicleDataSchema, vehicle
 // au moment d'écrire : `GET /api/plugins/tesla/raw` sert à les remplacer par une vraie capture.
 
 const optionalKey = z.string().trim().transform((s) => (s === '' ? undefined : s)).optional()
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../..')
 
 export const teslaConfigSchema = z.object({
   /** Identifiants de l'application créée sur developer.tesla.com. */
@@ -61,15 +59,15 @@ export const teslaConfigSchema = z.object({
   /** Doit être déclarée telle quelle dans l'application (« Allowed Redirect URI »). */
   TESLA_REDIRECT_URI: z.string().url().default('http://localhost:8787/api/plugins/tesla/auth/callback'),
   /** Où garder les jetons du compte (le refresh token est à usage unique : on le réécrit à chaque tour). */
-  TESLA_TOKEN_FILE: z.string().trim().default(resolve(REPO_ROOT, 'apps/server/.state/tesla-token.json')),
+  TESLA_TOKEN_FILE: z.string().trim().default(stateFile('tesla-token.json')),
   /** Où garder la clé privée de l'application (sa clé publique est celle qu'on pose sur le domaine). */
-  TESLA_KEY_FILE: z.string().trim().default(resolve(REPO_ROOT, 'apps/server/.state/tesla-key.json')),
+  TESLA_KEY_FILE: z.string().trim().default(stateFile('tesla-key.json')),
   /**
    * Où garder le DERNIER ÉTAT de chaque véhicule et la consommation du mois (voir `state.ts`). Sans
    * lui, un redémarrage repart d'une carte vide jusqu'à la prochaine lecture — qui peut attendre des
    * heures — et la jauge de quota perd le compte. Chaîne vide = ne rien garder.
    */
-  TESLA_STATE_FILE: z.string().trim().default(resolve(REPO_ROOT, 'apps/server/.state/tesla-state.json')),
+  TESLA_STATE_FILE: z.string().trim().default(stateFile('tesla-state.json')),
   /** Cadence de la liste des véhicules (veille) et, quand un véhicule est éveillé, de sa lecture complète. */
   TESLA_POLL_MS: z.coerce.number().int().min(60_000).max(3_600_000).default(600_000),
   /** Après une lecture au repos, durée sans relecture : c'est le temps que le véhicule s'endorme. 0 = jamais de repos. */

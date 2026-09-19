@@ -1,13 +1,10 @@
-import { fileURLToPath } from 'node:url'
-import { dirname, resolve } from 'node:path'
+import { resolve } from 'node:path'
 import { z } from 'zod'
+import { REPO_ROOT } from '../core/paths'
 
 // Variables KASBAH_* du serveur. Les clés propres à un plugin (HUE_*, CAST_*) sont validées par
 // le plugin lui-même (voir DevicePlugin.configSchema). Quels plugins sont ACTIFS ne se décide pas
 // ici mais dans la maison (`house.plugins`), depuis Réglages → Plugins.
-
-const here = dirname(fileURLToPath(import.meta.url))
-const REPO_ROOT = resolve(here, '../../../..')
 
 const bool = z.enum(['true', 'false', '1', '0']).transform((v) => v === 'true' || v === '1')
 

@@ -1,9 +1,8 @@
-import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import type { Command, DeviceDescriptor, PluginHealth } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
+import { stateFile } from '../../core/paths'
 import type { FetchLike } from '../../core/sse'
 import { sendError } from '../../http/errors'
 import { createPoller } from '../../core/poll'
@@ -37,7 +36,6 @@ import {
 // local étant verrouillé côté installateur. Elle fera l'objet d'un chemin séparé.
 
 const optionalKey = z.string().trim().transform((s) => (s === '' ? undefined : s)).optional()
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../..')
 
 export const enphaseConfigSchema = z.object({
   /** Nom ou IP de la passerelle. `envoy.local` est le nom que le fabricant lui donne sur le LAN. */
@@ -50,7 +48,7 @@ export const enphaseConfigSchema = z.object({
    */
   ENPHASE_TOKEN: optionalKey,
   /** Où garder le jeton entre deux démarrages (il vaut un an). Chaîne vide = ne rien garder. */
-  ENPHASE_TOKEN_FILE: z.string().trim().default(resolve(REPO_ROOT, 'apps/server/.state/enphase-token.json')),
+  ENPHASE_TOKEN_FILE: z.string().trim().default(stateFile('enphase-token.json')),
   /** Cadence des compteurs : ils mesurent en temps réel, c'est ce que la vue Énergie montre. */
   ENPHASE_POLL_MS: z.coerce.number().int().min(2000).max(300_000).default(10_000),
   /**

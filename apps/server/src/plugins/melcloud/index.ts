@@ -1,10 +1,9 @@
-import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import type { Command, DeviceDescriptor, PluginHealth } from '@kasbah/shared'
 import { createBackoff } from '../../core/backoff'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
+import { stateFile } from '../../core/paths'
 import { createPoller } from '../../core/poll'
 import type { FetchLike } from '../../core/sse'
 import { DEFAULT_APP_VERSION, DEFAULT_BASE_URL, MelcloudAuth, createSessionFile, type SessionStore } from './auth'
@@ -36,7 +35,6 @@ import type { DeviceLink, SystemReading } from './types'
 // encombrerait l'inventaire, la recherche et la scène 3D ; ils sont servis à la vue Chauffage par
 // `GET /api/plugins/melcloud/system`.
 
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../..')
 /** Profondeur du relevé d'énergie du `raw`, quand la requête n'en demande pas d'autre. */
 const REPORT_DAYS = 7
 
@@ -49,7 +47,7 @@ export const melcloudConfigSchema = z.object({
   /** Version d'application annoncée à la connexion (MELCloud l'exige). */
   MELCLOUD_APP_VERSION: z.string().trim().min(1).default(DEFAULT_APP_VERSION),
   /** Où garder la clé de session. Le mot de passe du compte n'y est JAMAIS écrit. */
-  MELCLOUD_SESSION_FILE: z.string().trim().default(resolve(REPO_ROOT, 'apps/server/.state/melcloud-session.json')),
+  MELCLOUD_SESSION_FILE: z.string().trim().default(stateFile('melcloud-session.json')),
   /**
    * Cadence de lecture. UN seul appel par tour quel que soit le nombre de machines : `ListDevices`
    * rend tout le compte d'un coup, et il est plus riche que la lecture détaillée (210 champs contre
@@ -63,7 +61,7 @@ export const melcloudConfigSchema = z.object({
    * des sondages, et sans ce fichier il repartirait de zéro à chaque redémarrage. Chaîne vide = ne
    * rien garder.
    */
-  MELCLOUD_HISTORY_FILE: z.string().trim().default(resolve(REPO_ROOT, 'apps/server/.state/melcloud-history.json')),
+  MELCLOUD_HISTORY_FILE: z.string().trim().default(stateFile('melcloud-history.json')),
 })
 export type MelcloudConfig = z.infer<typeof melcloudConfigSchema>
 
