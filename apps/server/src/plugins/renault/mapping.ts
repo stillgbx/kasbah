@@ -179,10 +179,41 @@ export function inWindow(date: Date, from: string, to: string): boolean {
  * `0.3` avec un câble branché est l'état où la R5 se coince quand la borne lui coupe le courant
  * (charge sur surplus solaire) : elle ne repart pas d'elle-même. C'est cet état qu'un futur mode
  * de réveil devra reconnaître.
+ *
+ * **Et `chargingStatus` MENT (2026-09-19).** Voiture en charge, 5,5 kW mesurés à la borne et par
+ * l'onduleur, elle a servi pendant des heures un `0.3` dans des trames par ailleurs FRAÎCHES et
+ * exactes : même trame, `batteryLevel` qui grimpe (63 → 71 → 73) et 52 minutes de charge restantes
+ * datées de l'instant. L'appli MY Renault affichait la même erreur — c'est le champ qui est faux,
+ * pas la liaison. D'où `isCharging()` ci-dessous, qui ne le croit plus sur parole.
  */
 export const CHARGE_IN_PROGRESS = 1
 /** `plugStatus` : `1` branché, `0` débranché, `-1` erreur, `-2147483648` inconnu. */
 export const PLUGGED = 1
+
+/**
+ * « Cette voiture charge-t-elle ? » — deux témoins valent mieux qu'un menteur.
+ *
+ * `chargingStatus === 1.0` reste le oui franc. À défaut, on croit le **temps de charge restant
+ * daté de la trame elle-même** : la capture du 2026-09-14 a établi que ce champ TRAÎNE hors charge
+ * (rendu daté de l'avant-veille sur une voiture à l'arrêt) et n'est rafraîchi que pendant une
+ * charge. Un temps restant à l'heure de la trame est donc une charge en cours, quoi qu'en dise
+ * `chargingStatus`.
+ *
+ * Ce que cette règle ne couvre PAS, faute d'observation : une voiture qui attendrait une charge
+ * PROGRAMMÉE en rafraîchissant quand même son estimation. Un seul contre-exemple est connu (14/09,
+ * branchée en attente, temps restant vieux de deux jours) et il va dans le bon sens ; si un jour
+ * l'UI annonce « en charge » à tort, c'est ici qu'il faut revenir.
+ */
+export function isCharging(battery: Record<string, unknown>): boolean | undefined {
+  const status = num(battery.chargingStatus)
+  if (status === CHARGE_IN_PROGRESS) return true
+  const eta = num(battery.chargingRemainingTime)
+  const fresh = eta !== undefined && eta > 0
+    && at(battery.chargingRemainingTimeLastUpdateDateTime) === at(battery.timestamp)
+  if (fresh) return true
+  // ni l'un ni l'autre : on ne sait dire « non » que si la voiture a donné son état
+  return status === undefined ? undefined : false
+}
 
 /** Les lectures d'un tour, chacune facultative : la R5 en refuse plusieurs, et une peut échouer. */
 export interface VehicleReadings {
@@ -242,8 +273,8 @@ export function toStatePatch(r: VehicleReadings, now: number): StatePatch<'vehic
     if (range !== undefined) patch.rangeKm = range
     const plug = num(battery.plugStatus)
     if (plug !== undefined) patch.pluggedIn = plug === PLUGGED
-    const charge = num(battery.chargingStatus)
-    if (charge !== undefined) patch.charging = charge === CHARGE_IN_PROGRESS
+    const charge = isCharging(battery)
+    if (charge !== undefined) patch.charging = charge
     // `chargingRemainingTime` (minutes) TRAÎNE : la capture réelle le donne daté de l'avant-veille
     // sur une voiture débranchée. Il ne vaut que pendant la charge ; sinon on l'efface.
     if (patch.charging) {

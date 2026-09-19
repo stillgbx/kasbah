@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  ACCOUNT_ID, BATTERY_CHARGING, BATTERY_UNPLUGGED, BATTERY_WAITING, COCKPIT_V1, COCKPIT_V2_EASTER_EGG,
+  ACCOUNT_ID, BATTERY_CHARGING, BATTERY_CHARGING_LIAR, BATTERY_UNPLUGGED, BATTERY_WAITING, COCKPIT_V1, COCKPIT_V2_EASTER_EGG,
   EV_SETTINGS, HVAC_STATUS, LOCATION, PERSON, SOC_LEVELS, VEHICLES, VIN,
 } from './__fixtures__/kamereon'
 import { commandSummary, inWindow, socTargetPayload, toAccounts, toDescriptor, toStatePatch, toVehicleLinks, vehicleName, wakePayload } from './mapping'
@@ -87,6 +87,23 @@ describe('lectures → état', () => {
   it('reconnaît la charge en cours (chargingStatus 1.0, et elle seule)', () => {
     expect(toStatePatch({ battery: BATTERY_CHARGING }, NOW).charging).toBe(true)
     expect(toStatePatch({ battery: BATTERY_UNPLUGGED }, NOW)).toMatchObject({ pluggedIn: false, charging: false })
+  })
+
+  /**
+   * Le 2026-09-19, la voiture a servi des heures durant un `0.3` (« en attente de courant ») alors
+   * qu'elle avalait 5,5 kW. Deux champs de la MÊME trame la démentaient — d'où la règle du second
+   * témoin. Sans elle, l'UI ment et le réveil de charge secoue une voiture déjà en charge.
+   */
+  it('démasque un `chargingStatus` menteur grâce au temps restant daté de la trame', () => {
+    const patch = toStatePatch({ battery: BATTERY_CHARGING_LIAR }, NOW)
+    expect(patch.charging).toBe(true)
+    expect(patch.chargeMinutesRemaining).toBe(52)
+
+    // le même corps, mais le temps restant TRAÎNE d'une trame précédente : on ne crie pas au loup
+    const attrs = { ...BATTERY_CHARGING_LIAR.data.attributes, chargingRemainingTimeLastUpdateDateTime: '2026-09-17T14:45:35Z' }
+    const stale = toStatePatch({ battery: { data: { id: 'VF1', attributes: attrs } } }, NOW)
+    expect(stale.charging).toBe(false)
+    expect(stale.chargeMinutesRemaining).toBeNull()
   })
 
   it('ne retient le temps de charge restant QUE pendant la charge', () => {

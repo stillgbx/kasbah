@@ -175,6 +175,28 @@ export const EV_SETTINGS = {
  * est reconstitué, il n'est lu par personne.
  */
 /**
+ * La trame qui a démasqué `chargingStatus` (capture du 2026-09-19, 16:11 locale). La voiture
+ * charge — 5,5 kW mesurés à la borne ET par l'onduleur, `batteryLevel` passé de 63 à 73 dans
+ * l'après-midi — et elle annonce pourtant `0.3`, « en attente de courant ». Deux champs de la
+ * MÊME trame la démentent : le niveau qui monte, et un temps restant daté de la trame elle-même.
+ * L'appli MY Renault affichait la même erreur : c'est le champ qui ment, pas la liaison.
+ */
+export const BATTERY_CHARGING_LIAR = {
+  data: {
+    id: VIN,
+    attributes: {
+      timestamp: '2026-09-19T14:11:54Z',
+      batteryLevel: 73,
+      batteryAutonomy: 281,
+      plugStatus: 1,
+      chargingStatus: 0.3,
+      chargingRemainingTime: 52,
+      chargingRemainingTimeLastUpdateDateTime: '2026-09-19T14:11:54Z',
+    },
+  },
+}
+
+/**
  * Le refus d'une ÉCRITURE de réglages quand une commande est déjà en attente pour ce véhicule
  * (HTTP 409, constaté le 2026-09-19 : un même corps accepté à 14:21 était refusé à 14:22). Comme
  * pour les deux autres, seul `errorCode` a été capturé tel quel.
