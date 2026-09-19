@@ -458,7 +458,7 @@
     "roomHint": "Touchez une pièce dans la vue 3D pour ses ouvertures et ses places.",
     "dockMissing": "Non placée", "dockPlaced": "Placée", "dockPlace": "Placer la station",
     "rename": "Renommer la place", "remove": "Supprimer la place", "removeConfirm": "Confirmer la suppression",
-    "smaller": "Réduire", "bigger": "Agrandir", "turnLeft": "Tourner à gauche", "turnRight": "Tourner à droite",
+    "smaller": "Réduire", "bigger": "Agrandir",
     "saveError": "Place non enregistrée : {message}"
   },
   "weather": {

@@ -101,15 +101,40 @@ function commitEdit(field: Field) {
 }
 
 /**
- * Le cap, par quarts de tour et par pas de 5° : une place se pose dans le sens du garage, et c'est
- * un demi-tour qu'on corrige le plus souvent (l'avant est du mauvais côté). L'angle est ramené dans
- * `[-180, 180[` AVANT l'envoi — le contrat le borne, saisir 200° doit donner -160°, pas un refus.
+ * Le cap, exactement comme celui d'un appareil orienté (`PlacementControl`) : deux touches de
+ * rotation et la SAISIE DIRECTE de l'angle entre elles. Trois raisons de copier cette ligne plutôt
+ * que d'en inventer une :
+ *
+ *  - le `yaw` tourne dans le sens TRIGONOMÉTRIQUE, donc l'augmenter fait pivoter vers la gauche vu
+ *    de dessus. Des touches marquées « −5° » et « +5° » mentaient : appuyer sur « +5° » affichait
+ *    « -5° ». Une icône de rotation ne peut pas mentir — ce qu'on voit tourner suit la touche ;
+ *  - aligner une place sur un garage au degré près demandait autrement des dizaines d'appuis ;
+ *  - et l'angle se lit dans la même boîte que partout ailleurs, dans `[0, 360[`.
+ *
+ * Le pas reste de 5° (et non les 45° d'un appareil) : une place se cale sur un mur, pas sur une
+ * direction cardinale.
  */
-const wrap = (deg: number) => ((deg + 180) % 360 + 360) % 360 - 180
+const YAW_STEP = 5
+const norm = (deg: number) => ((Math.round(deg) % 360) + 360) % 360
+const yaw = computed(() => norm(parking.value?.yaw ?? 0))
 function turn(delta: number) {
-  const p = parking.value
-  if (!p) return
-  void house.saveParking({ yaw: Math.round(wrap(p.yaw + delta) * 100) / 100 })
+  if (!parking.value) return
+  void house.saveParking({ yaw: norm(yaw.value + delta) })
+}
+const yawDraft = ref('')
+const editingYaw = ref(false)
+function startYaw(ev?: FocusEvent) {
+  editingYaw.value = true
+  yawDraft.value = String(yaw.value)
+  const el = ev?.target as HTMLInputElement | undefined
+  if (el) void nextTick(() => el.select())
+}
+function commitYaw() {
+  if (!editingYaw.value) return                // sortie par Échap : rien à écrire
+  editingYaw.value = false
+  const raw = Number(yawDraft.value.replace(',', '.').trim())
+  if (!Number.isFinite(raw) || norm(raw) === yaw.value) return
+  void house.saveParking({ yaw: norm(raw) })
 }
 
 /** Rayon d'accroche propre à la place. Vide = la marge commune ; `0` l'efface (règle du contrat). */
@@ -214,11 +239,24 @@ onBeforeUnmount(() => clearTimeout(disarm))
         <span class="muted">{{ $t('parking.yaw') }}</span>
         <span class="park__turn">
           <button type="button" class="key" :disabled="house.savingParking"
-                  :title="$t('parking.turnLeft')" :aria-label="$t('parking.turnLeft')" @click="turn(5)">−5°</button>
-          <span class="park__num park__num--read">{{ Math.round(parking.yaw) }}°</span>
+                  :title="$t('place.rotateLeft')" :aria-label="$t('place.rotateLeft')" @click="turn(YAW_STEP)">
+            <StrokeIcon name="rotateLeft" :size="16" />
+          </button>
+          <span class="park__deg">
+            <input class="park__num park__num--deg" type="text" inputmode="numeric" enterkeyhint="done"
+                   :value="editingYaw ? yawDraft : String(yaw)" :disabled="house.savingParking" :aria-label="$t('parking.yaw')"
+                   @focus="startYaw($event)"
+                   @mouseup.prevent
+                   @input="yawDraft = ($event.target as HTMLInputElement).value"
+                   @keydown.enter="($event.target as HTMLInputElement).blur()"
+                   @keydown.esc="editingYaw = false; ($event.target as HTMLInputElement).blur()"
+                   @blur="commitYaw">
+            <span class="park__unit">°</span>
+          </span>
           <button type="button" class="key" :disabled="house.savingParking"
-                  :title="$t('parking.turnRight')" :aria-label="$t('parking.turnRight')" @click="turn(-5)">+5°</button>
-          <button type="button" class="key key--wide" :disabled="house.savingParking" @click="turn(180)">180°</button>
+                  :title="$t('place.rotateRight')" :aria-label="$t('place.rotateRight')" @click="turn(-YAW_STEP)">
+            <StrokeIcon name="rotateRight" :size="16" />
+          </button>
         </span>
       </div>
 
@@ -286,8 +324,10 @@ onBeforeUnmount(() => clearTimeout(disarm))
 }
 .park__num:focus { outline: none; background: var(--accent-soft); box-shadow: inset 0 -1px 0 var(--accent); }
 .park__num:disabled { opacity: .4; box-shadow: none; }
-/* le cap se lit, il ne se tape pas : les touches le tournent (même boîte que les champs) */
-.park__num--read { display: inline-grid; place-items: center; box-shadow: none; }
+/* le degré colle à son nombre, comme dans le panneau de placement d'un appareil */
+.park__deg { display: inline-flex; align-items: baseline; gap: 1px; }
+.park__num--deg { width: 4ch; }
+.park__unit { font-size: 12px; color: var(--muted); }
 .park__num--margin { width: 6ch; }
 .key {
   display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px;

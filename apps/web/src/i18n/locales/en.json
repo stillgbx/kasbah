@@ -458,7 +458,7 @@
     "roomHint": "Tap a room in the 3D view for its openings and spots.",
     "dockMissing": "Not placed", "dockPlaced": "Placed", "dockPlace": "Place the base",
     "rename": "Rename the spot", "remove": "Delete the spot", "removeConfirm": "Confirm deletion",
-    "smaller": "Smaller", "bigger": "Bigger", "turnLeft": "Turn left", "turnRight": "Turn right",
+    "smaller": "Smaller", "bigger": "Bigger",
     "saveError": "Spot not saved: {message}"
   },
   "weather": {

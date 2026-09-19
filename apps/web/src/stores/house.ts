@@ -1151,7 +1151,10 @@ export const useHouseStore = defineStore('house', () => {
       ...(level ? { levelId: level } : {}),
     }
     const host = parkingHost(house.value, probe)
-    const yaw = host?.kind === 'room' ? longestEdgeYawDeg(host.polygon) ?? 0 : 0
+    // L'axe d'une pièce revient dans `[-180, 180]` ; on l'écrit dans `[0, 360[`, la convention des
+    // appareils orientés — sans quoi le panneau afficherait « -90° » là où il montre « 270° ».
+    const axis = host?.kind === 'room' ? longestEdgeYawDeg(host.polygon) ?? 0 : 0
+    const yaw = ((axis % 360) + 360) % 360
     const id = freeParkingId(armed.accepts)
     savingParking.value = true
     try {

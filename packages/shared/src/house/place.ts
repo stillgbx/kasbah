@@ -608,8 +608,12 @@ export const parkingPatchSchema = z.object({
   name: z.string().trim().max(60).optional(),
   center: vec2Schema.optional(),
   size: z.tuple([z.number().min(MIN_PARKING_DIM).max(30), z.number().min(MIN_PARKING_DIM).max(30)]).optional(),
-  /** Ramené dans `[-180, 180[` par l'UI avant l'envoi, comme le `yawOffset` d'un véhicule. */
-  yaw: z.number().min(-180).max(180).optional(),
+  /**
+   * Cap de l'avant. L'UI le ramène dans `[0, 360[` avant l'envoi, comme le `yaw` d'un appareil
+   * orienté (`PlacementControl`) ; les bornes restent larges parce qu'un axe CALCULÉ (celui d'un
+   * garage, `longestEdgeYawDeg`) revient négatif, et qu'un refus n'apprendrait rien à personne.
+   */
+  yaw: z.number().min(-360).max(360).optional(),
   /** `0` EFFACE et rend la main à la marge commune — une place sans marge propre n'accrocherait rien. */
   margin: z.number().min(0).max(20).optional(),
 })
@@ -654,7 +658,7 @@ export const newParkingSchema = z.object({
   levelId: z.string().min(1).optional(),
   center: vec2Schema,
   size: z.tuple([z.number().min(MIN_PARKING_DIM).max(30), z.number().min(MIN_PARKING_DIM).max(30)]),
-  yaw: z.number().min(-180).max(180),
+  yaw: z.number().min(-360).max(360),
 })
 export type NewParking = z.infer<typeof newParkingSchema>
 
