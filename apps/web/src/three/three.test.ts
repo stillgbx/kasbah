@@ -747,6 +747,39 @@ describe('marqueurs 3D', () => {
     expect(animations.length).toBe(0)
   })
 
+  it('une borne de recharge souffle en vert seulement quand elle charge', () => {
+    const theme = defaultSceneTheme()
+    const desc = { id: 'p:c', pluginId: 'p', externalId: 'c', kind: 'ev_charger', name: 'Borne', capabilities: [], meta: {} } as unknown as DeviceDescriptor
+    const charger = (status: 'disconnected' | 'connected' | 'charging' | 'error') =>
+      ({ kind: 'ev_charger', updatedAt: 0, available: true, status, powerW: 0 } as DeviceState)
+    const matOf = (m: { object: { traverse(cb: (x: unknown) => void): void } }) => meshes(m.object)[0]!.material as MeshStandardMaterial
+    const pillOn = (m: DeviceMarker) => {
+      const css = m.object.children.find((c) => 'element' in c) as unknown as { element: HTMLElement }
+      return (css.element.firstElementChild as HTMLElement).dataset.on
+    }
+
+    const m = marker(device(), desc)
+    // branchée, pas en charge : rien ne souffle — le rendu reste à la demande
+    m.update(charger('connected'))
+    expect(matOf(m).emissiveIntensity).toBe(0)
+    expect(animations.length).toBe(0)
+    expect(pillOn(m)).toBe('0')
+    // en charge : vert, même à 0 W — Enphase n'a pas encore montré le champ des watts
+    m.update(charger('charging'))
+    expect(matOf(m).emissive.getHex()).toBe(theme.success.getHex())
+    expect(animations.length).toBe(1)
+    expect(pillOn(m)).toBe('1')
+    const at = (ms: number) => { animations[0]!.step(ms, 0); return matOf(m).emissiveIntensity }
+    expect(at(1000)).toBeCloseTo(0.06)
+    expect(at(1000 + 1300)).toBeCloseTo(0.6)
+    expect(at(1000 + 2600)).toBeCloseTo(0.06)
+    // retour au repos : le coffret s'éteint et rend la main
+    m.update(charger('connected'))
+    expect(matOf(m).emissiveIntensity).toBe(0)
+    expect(animations[0]!.step(4000, 0)).toBe(false)
+    expect(pillOn(m)).toBe('0')
+  })
+
   it("la jauge d'un coffret de batterie monte avec sa charge, sur ses deux faces", () => {
     const stored = { id: 'p:b', pluginId: 'p', externalId: 'b', kind: 'energy', name: 'Batterie', capabilities: ['storage'], meta: {} } as unknown as DeviceDescriptor
     const site = { ...stored, id: 'p:site', capabilities: ['production', 'consumption', 'grid', 'storage'] } as unknown as DeviceDescriptor

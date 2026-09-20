@@ -27,8 +27,8 @@ const WAVE_R0 = 0.18
 const WAVE_R1 = 1.2
 
 /**
- * Pulsation d'un coffret de batterie : période d'un souffle (ms) et bornes de son émissif. Lente —
- * c'est un état, pas une alerte —, et bien plus longue que l'onde d'un lecteur, qui est un rythme.
+ * Pulsation d'un coffret (batterie, ou borne en charge) : période d'un souffle (ms) et bornes de
+ * son émissif. Lente — c'est un état, pas une alerte —, et bien plus longue que l'onde d'un lecteur.
  */
 const BATTERY_PULSE_MS = 2600
 const BATTERY_GLOW = { min: 0.06, max: 0.6 }
@@ -89,10 +89,10 @@ export class GenericMarker extends DeviceMarker {
   /** Pochette affichée sur l'écran (téléviseur et écran connecté seulement). */
   private art: ScreenArt | null = null
   /**
-   * Matériau PROPRE au coffret d'une batterie : il pulse, il ne peut donc pas partager celui des
-   * autres objets neutres. `null` pour tout le reste, qui garde le matériau commun.
+   * Matériau PROPRE à ce qui pulse (coffret de batterie, borne en charge) : il ne peut pas partager
+   * celui des autres objets neutres. `null` pour tout le reste, qui garde le matériau commun.
    */
-  private readonly batteryMat: MeshStandardMaterial | null = null
+  private readonly pulseMat: MeshStandardMaterial | null = null
   /** Couleur de ce que la batterie fait en ce moment, `null` si elle n'a rien à dire (au repos). */
   private cue: Color | null = null
   /**
@@ -110,6 +110,7 @@ export class GenericMarker extends DeviceMarker {
     // bloc au sol pour une pompe à chaleur (absent = thermostat, le cas d'avant)
     const climateClass = kind === 'climate' ? ctx.descriptor?.meta.climate?.deviceClass ?? 'thermostat' : undefined
     let battery = false
+    let pulse = false
     switch (kind) {
       case 'media_player':
         if (mediaClass === 'tv') { geometry = new BoxGeometry(1, 0.06, 0.56); this.setLift(0.8) }
@@ -126,13 +127,13 @@ export class GenericMarker extends DeviceMarker {
         if (climateClass === 'heat_pump') { geometry = new BoxGeometry(HEATPUMP_BOX.w, HEATPUMP_BOX.d, HEATPUMP_BOX.h); this.setLift(HEATPUMP_BOX.h / 2 + 0.25) }
         else { geometry = new CylinderGeometry(0.06, 0.06, 0.04, 28); this.setLift(0.18) }
         break
-      case 'ev_charger': geometry = new BoxGeometry(0.3, 0.15, 0.8); this.setLift(0.6); break
+      case 'ev_charger': geometry = new BoxGeometry(0.3, 0.15, 0.8); this.setLift(0.6); pulse = true; break
       // Deux objets sous le même kind : le SITE d'une installation est une passerelle, un boîtier de
       // la taille d'une grosse boîte de dérivation ; une batterie, elle, est un coffret qui monte du
       // sol. Le coffret d'un mètre donné aux deux faisait de la passerelle solaire un meuble.
       case 'energy':
         if (ctx.descriptor && isEnergySite(ctx.descriptor)) { geometry = new BoxGeometry(0.28, 0.12, 0.32); this.setLift(0.3) }
-        else { geometry = new BoxGeometry(BATTERY_BOX.w, BATTERY_BOX.d, BATTERY_BOX.h); this.setLift(0.7); battery = true }
+        else { geometry = new BoxGeometry(BATTERY_BOX.w, BATTERY_BOX.d, BATTERY_BOX.h); this.setLift(0.7); battery = true; pulse = true }
         break
       // Station de traitement d'eau : une centrale MURALE aux cotes du constructeur (COMAP Proteo 2,
       // 59 × 59 × 17 cm) — un caisson plat et large, bien plus grand qu'un thermostat et bien plus
@@ -142,8 +143,8 @@ export class GenericMarker extends DeviceMarker {
       case 'vacuum': geometry = new CylinderGeometry(0.18, 0.18, 0.09, 24); this.setLift(0.25); break
       default: geometry = new SphereGeometry(0.1, 16, 12); this.setLift(0.3)
     }
-    if (battery) this.batteryMat = devMaterial(ctx).clone()
-    this.mesh = new Mesh(geometry, this.batteryMat ?? devMaterial(ctx))
+    if (pulse) this.pulseMat = devMaterial(ctx).clone()
+    this.mesh = new Mesh(geometry, this.pulseMat ?? devMaterial(ctx))
     // Enceinte, robot : cylindre DEBOUT, donc l'axe Y du cylindre passe en Z-up local. Le thermostat,
     // lui, est une pastille couchée contre son mur : il garde l'axe du cylindre à l'horizontale.
     if (geometry instanceof CylinderGeometry && kind !== 'climate') this.mesh.rotation.x = Math.PI / 2
@@ -243,7 +244,7 @@ export class GenericMarker extends DeviceMarker {
       case 'ev_charger': return s.status === 'charging'
       // une batterie est active quand elle DÉPLACE de l'énergie (elle ne produit jamais rien, et sa
       // pilule serait restée éteinte en pleine charge) ; le site, lui, quand il produit
-      case 'energy': return this.batteryMat ? Math.abs(s.batteryW ?? 0) >= IDLE_W : s.productionW > 0
+      case 'energy': return this.pulseMat ? Math.abs(s.batteryW ?? 0) >= IDLE_W : s.productionW > 0
       default: return false
     }
   }
@@ -254,7 +255,7 @@ export class GenericMarker extends DeviceMarker {
       const media = state?.kind === 'media_player' && state.available ? state : undefined
       this.art.set(media?.nowPlaying?.artUrl)
     }
-    if (this.batteryMat) { this.pulse(state); this.setCharge(state) }
+    if (this.pulseMat) { this.pulse(state); this.setCharge(state) }
     if (this.waves.length === 0) return
     // l'onde est du SON : elle suit ce que la scène dit entendre ici (`SoundCue`) — une TV dont le son
     // part en HDMI vers une barre garde l'image, la barre prend l'onde ; sans indication, l'état seul
@@ -284,13 +285,16 @@ export class GenericMarker extends DeviceMarker {
     }
   }
   /**
-   * Ce qu'un coffret de batterie doit dire, et rien de plus : VERT quand il se remplit, BLEU quand il
-   * rend ce qu'il a, ROUGE quand il ne répond plus (la seule panne que le contrat porte — un `energy`
-   * n'a pas de champ de défaut, et une batterie muette garde ses dernières valeurs, gelées).
-   * `null` au repos : sous le seuil des compteurs, une batterie à l'arrêt n'a rien à signaler.
+   * Ce qu'un coffret doit dire, et rien de plus. Batterie : VERT quand elle se remplit, BLEU quand
+   * elle rend ce qu'elle a, ROUGE quand elle ne répond plus (la seule panne que le contrat porte —
+   * un `energy` n'a pas de champ de défaut, et une batterie muette garde ses dernières valeurs,
+   * gelées). Borne : VERT seulement en charge — branchée au repos, ça ne pulse pas. `null` au
+   * repos : sous le seuil des compteurs, une batterie à l'arrêt n'a rien à signaler.
    */
-  private batteryCue(state: DeviceState | undefined): Color | null {
-    if (!state || state.kind !== 'energy') return null
+  private pulseCue(state: DeviceState | undefined): Color | null {
+    if (!state) return null
+    if (state.kind === 'ev_charger') return state.status === 'charging' ? this.ctx.theme.success : null
+    if (state.kind !== 'energy') return null
     if (!state.available) return this.ctx.theme.error
     const w = state.batteryW ?? 0
     if (w >= IDLE_W) return this.ctx.theme.success
@@ -304,9 +308,9 @@ export class GenericMarker extends DeviceMarker {
    * fait rien ne doit pas réveiller le rendu.
    */
   private pulse(state: DeviceState | undefined): void {
-    const mat = this.batteryMat
+    const mat = this.pulseMat
     if (!mat) return
-    this.cue = this.batteryCue(state)
+    this.cue = this.pulseCue(state)
     const base = this.ctx.materials.device.color
     if (!this.cue) {
       this.stopAnimation?.()
@@ -321,7 +325,7 @@ export class GenericMarker extends DeviceMarker {
     mat.emissive.copy(this.cue)
     if (this.stopAnimation) return                        // déjà en train de souffler : seule la couleur a changé
     let t0 = -1
-    // le marqueur n'a qu'un créneau d'animation, et une batterie n'a pas d'onde sonore : les deux ne
+    // le marqueur n'a qu'un créneau d'animation, et un coffret n'a pas d'onde sonore : les deux ne
     // se rencontrent jamais
     this.stopAnimation = this.ctx.addAnimation({
       step: (now) => {
@@ -335,7 +339,7 @@ export class GenericMarker extends DeviceMarker {
   }
   override dispose(): void {
     this.mesh.geometry.dispose()
-    this.batteryMat?.dispose()
+    this.pulseMat?.dispose()
     for (const { track, fill } of this.charge) { track.geometry.dispose(); track.material.dispose(); fill.geometry.dispose(); fill.material.dispose() }
     this.art?.dispose()
     for (const w of this.waves) { w.geometry.dispose(); w.material.dispose() }
