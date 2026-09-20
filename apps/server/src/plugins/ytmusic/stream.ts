@@ -52,8 +52,9 @@ function runCapture(command: string, args: string[], spawnImpl: SpawnFn): Promis
 }
 
 /**
- * Résout la meilleure URL audio via yt-dlp (client `web_music` + extractor PO Token).
- * Même chemin que Music Assistant `_get_stream_format`.
+ * Résout la meilleure URL audio via yt-dlp (client `web_music` + PO Token + runtime JS node).
+ * Même idée que Music Assistant `_get_stream_format` ; sans `--js-runtimes` yt-dlp ≥2026
+ * ne livre plus que des storyboards.
  */
 export async function resolveStreamUrl(opts: StreamResolveOpts): Promise<ResolvedStream> {
   const spawnImpl = opts.spawnImpl ?? (spawn as unknown as SpawnFn)
@@ -64,17 +65,18 @@ export async function resolveStreamUrl(opts: StreamResolveOpts): Promise<Resolve
   }
   const poBase = opts.poTokenUrl.replace(/\/$/, '')
   const pageUrl = `https://music.youtube.com/watch?v=${opts.videoId}`
-  // Music Assistant utilise `web_music`, mais chez nous (2026-09-20) ce client renvoie 0 format
-  // (« Requested format is not available », GVS PO). `android_music` seul livre de l'audio (ex. 251
-  // opus). Ne pas combiner les deux : yt-dlp échoue alors aussi. `--ignore-config` évite un `-f`
-  // utilisateur. Sélection fine ensuite en JS.
+  // yt-dlp ≥2026.08 : `android_music` n'existe plus (« Skipping unsupported client »).
+  // Sans runtime JS, seuls les storyboards restent (challenge n/sig) → « Requested format
+  // is not available ». `web_music` + `--js-runtimes node` + PO Token livre m4a/opus.
+  // Pas de `-f` : on dump `-J` puis on trie en JS. `--ignore-config` évite un `-f` user.
   const args = [
     '--ignore-config',
     '-J', '--no-download', '--no-warnings',
-    '-f', 'bestaudio/best',
     '--cookies', netscapePath,
+    '--js-runtimes', 'node',
+    '--remote-components', 'ejs:github',
     '--extractor-args', `youtubepot-bgutilhttp:base_url=${poBase}`,
-    '--extractor-args', 'youtube:player_client=android_music;skip=translated_subs',
+    '--extractor-args', 'youtube:player_client=web_music;skip=translated_subs',
     pageUrl,
   ]
   const { code, stdout, stderr } = await runCapture(opts.ytdlpPath, args, spawnImpl)
@@ -85,7 +87,7 @@ export async function resolveStreamUrl(opts: StreamResolveOpts): Promise<Resolve
   let info: { formats?: Array<{ url?: string; format_id?: string; ext?: string; acodec?: string; vcodec?: string; abr?: number; tbr?: number }> ; url?: string; format_id?: string; ext?: string }
   try { info = JSON.parse(stdout) as typeof info }
   catch { throw new Error('yt-dlp returned non-JSON') }
-  // `-f bestaudio/best` a déjà posé `url` ; on préfère quand même m4a / 140 / 141 s'ils existent
+  // Préférer m4a / 140 / 141, sinon opus/webm, sinon premier format avec audio.
   const formats = info.formats ?? []
   const audio = formats
     .filter((f) => f.url && f.acodec && f.acodec !== 'none' && (f.vcodec === 'none' || !f.vcodec))
@@ -100,7 +102,11 @@ export async function resolveStreamUrl(opts: StreamResolveOpts): Promise<Resolve
       }
       return rank(b) - rank(a)
     })
-  const pick = audio[0] ?? (info.url ? { url: info.url, format_id: info.format_id, ext: info.ext } : null)
+  // Fallback : flux muxé (audio+vidéo) s'il n'y a pas d'audio-only — ffmpeg -vn suffit.
+  const muxed = formats
+    .filter((f) => f.url && f.acodec && f.acodec !== 'none')
+    .sort((a, b) => (b.abr ?? b.tbr ?? 0) - (a.abr ?? a.tbr ?? 0))
+  const pick = audio[0] ?? muxed[0] ?? (info.url ? { url: info.url, format_id: info.format_id, ext: info.ext } : null)
   if (!pick?.url) throw new Error(`no audio stream format found (${formats.length} formats reported)`)
   return { url: pick.url, formatId: pick.format_id ?? null, ext: pick.ext ?? null }
 }

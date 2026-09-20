@@ -130,11 +130,13 @@ export interface IrobotStatus {
  */
 export interface YtmusicStatus {
   linked: boolean
+  cookieExpired: boolean
   poTokenOk: boolean
   unofficial: true
   cookieFile: string | null
   poTokenUrl: string
   lastError: string | null
+  browsers: string[]
 }
 
 export interface YtmusicTrack {
@@ -279,6 +281,11 @@ export interface Transport {
   ytmusicStatus(): Promise<YtmusicStatus>
   /** Colle le cookie du compte (corps JSON). Jamais journalisé. */
   ytmusicPutCookie(cookie: string): Promise<YtmusicStatus>
+  /**
+   * Importe les cookies YouTube via `yt-dlp --cookies-from-browser` sur la machine serveur
+   * (navigateur déjà connecté à music.youtube.com sur cet hôte).
+   */
+  ytmusicImportCookieFromBrowser(browser: string): Promise<YtmusicStatus>
   /** Efface le cookie. */
   ytmusicClearCookie(): Promise<YtmusicStatus>
   ytmusicSearch(q: string): Promise<{ tracks: YtmusicTrack[] }>

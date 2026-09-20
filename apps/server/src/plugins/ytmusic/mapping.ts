@@ -35,6 +35,31 @@ export function absHttpUrl(url: string | null | undefined): string | null {
   return null
 }
 
+/** Taille demandée au CDN Google pour les pochettes (écrans Nest / TV). */
+export const ART_CDN_SIZE = 544
+
+/**
+ * Passe d'une vignette catalogue (~60 px) à une taille adaptée à l'écran.
+ * Les URL `googleusercontent` / `ggpht` acceptent `=wN-hN` ; hors ça, inchangé.
+ * Indépendant du client yt-dlp (`android_music` vs `web_music`).
+ */
+export function upgradeArtUrl(url: string | null | undefined): string | null {
+  const u = absHttpUrl(url)
+  if (!u) return null
+  if (/googleusercontent\.com|ggpht\.com/i.test(u)) {
+    const size = `=w${ART_CDN_SIZE}-h${ART_CDN_SIZE}-l90-rj`
+    if (/=w\d+-h\d+/i.test(u)) return u.replace(/=w\d+-h\d+[^=/?#]*/i, size)
+    return `${u}${size}`
+  }
+  if (/i\.ytimg\.com/i.test(u)) {
+    return u
+      .replace(/\/default\.jpg/i, '/hqdefault.jpg')
+      .replace(/\/mqdefault\.jpg/i, '/hqdefault.jpg')
+      .replace(/\/sddefault\.jpg/i, '/hqdefault.jpg')
+  }
+  return u
+}
+
 export function mapTrack(raw: RawTrack): YtmusicTrack | null {
   const videoId = (raw.videoId ?? raw.id ?? '').trim()
   if (!videoId) return null
@@ -47,7 +72,7 @@ export function mapTrack(raw: RawTrack): YtmusicTrack | null {
     videoId,
     title: (raw.title ?? '').trim() || videoId,
     artists,
-    artUrl: absHttpUrl(raw.artUrl ?? raw.thumbnail ?? null),
+    artUrl: upgradeArtUrl(raw.artUrl ?? raw.thumbnail ?? null),
     durationS: typeof durationS === 'number' && Number.isFinite(durationS) && durationS >= 0
       ? Math.round(durationS) : null,
     album: album?.trim() || null,
@@ -76,7 +101,7 @@ export function mapPlaylist(raw: RawPlaylist): YtmusicPlaylist | null {
   return {
     id,
     title: (raw.title ?? raw.name ?? '').trim() || id,
-    artUrl: absHttpUrl(raw.artUrl ?? raw.thumbnail ?? null),
+    artUrl: upgradeArtUrl(raw.artUrl ?? raw.thumbnail ?? null),
     trackCount,
   }
 }
@@ -100,5 +125,5 @@ export function bestThumb(thumbs: Array<{ url?: string; width?: number } | null>
     const width = t?.width ?? 0
     if (!best || width >= best.width) best = { url, width }
   }
-  return best?.url ? (best.url.startsWith('//') ? `https:${best.url}` : best.url) : null
+  return best?.url ? upgradeArtUrl(best.url.startsWith('//') ? `https:${best.url}` : best.url) : null
 }

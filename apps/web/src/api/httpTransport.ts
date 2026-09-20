@@ -166,6 +166,11 @@ export function createHttpTransport(base = ''): Transport {
       { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ cookie }) },
       (j) => j as YtmusicStatus,
     ),
+    ytmusicImportCookieFromBrowser: (browser) => request(
+      `${base}/api/plugins/ytmusic/cookie/from-browser`,
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ browser }) },
+      (j) => j as YtmusicStatus,
+    ),
     ytmusicClearCookie: () => request(`${base}/api/plugins/ytmusic/cookie`, { method: 'DELETE' }, (j) => j as YtmusicStatus),
     ytmusicSearch: (q) => request(
       `${base}/api/plugins/ytmusic/search?q=${encodeURIComponent(q)}`, undefined,

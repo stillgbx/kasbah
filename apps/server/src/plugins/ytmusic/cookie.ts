@@ -15,6 +15,23 @@ export function hasRequiredCookie(raw: string): boolean {
 }
 
 /**
+ * Netscape → chaîne `Cookie:` pour InnerTube. Ignore les lignes de commentaire.
+ */
+export function fromNetscape(text: string): string {
+  const pairs: string[] = []
+  for (const line of text.split(/\r?\n/)) {
+    if (!line || line.startsWith('#')) continue
+    const parts = line.split('\t')
+    if (parts.length < 7) continue
+    const name = parts[5]?.trim()
+    const value = parts[6] ?? ''
+    if (!name) continue
+    pairs.push(`${name}=${value}`)
+  }
+  return pairs.join('; ')
+}
+
+/**
  * Convertit une chaîne `Cookie:` (ou paires `a=b; c=d`) en fichier Netscape pour yt-dlp.
  * Même logique que Music Assistant `convert_to_netscape`.
  */

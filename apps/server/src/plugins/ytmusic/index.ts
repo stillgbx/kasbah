@@ -7,6 +7,7 @@ import { describeError, sendError } from '../../http/errors'
 import { getYtmusicBridge } from './bridge'
 import { YtmusicCatalog, type CreateSession } from './catalog'
 import { createCookieFile, hasRequiredCookie, writeNetscapeBeside, type CookieStore } from './cookie'
+import { importCookiesFromBrowser, isAuthError, YTM_BROWSERS } from './browserCookies'
 import { pingPoToken, resolveStreamUrl, StreamProxy, type SpawnFn } from './stream'
 import type { YtmusicStatus } from './types'
 
@@ -45,12 +46,14 @@ export interface YtmusicPluginDeps {
 
 export function healthFrom(
   linked: boolean,
+  cookieExpired: boolean,
   poOk: boolean,
   lastError: string | null,
   keys: string[],
 ): PluginHealth {
   const base = 'YouTube Music (unofficial)'
-  if (!linked) return { status: 'needs_pairing', detail: `${base}: paste account cookie in Settings`, keys }
+  if (!linked) return { status: 'needs_pairing', detail: `${base}: paste cookie or import from browser on server host`, keys }
+  if (cookieExpired) return { status: 'needs_pairing', detail: `${base}: cookie expired — reconnect in browser on server host`, keys }
   if (!poOk) return { status: 'degraded', detail: `${base}: PO Token generator unreachable`, keys }
   if (lastError) return { status: 'degraded', detail: `${base}: ${lastError}`, keys }
   return { status: 'ok', detail: `${base}: catalog + play_url proxy`, keys }
@@ -66,13 +69,18 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
   let poTokenOk = false
   /** Cache pour `health()` synchrone — mis à jour à chaque lecture cookie. */
   let linked = false
+  /** Cookie présent mais refusé par InnerTube. */
+  let cookieExpired = false
+  let lastProbeAt = 0
 
   const log = () => ctx!.logger
   const keys = () => Object.keys(ytmusicConfigSchema.shape)
+  const PROBE_MS = 5 * 60_000
 
   async function loadCookie(): Promise<string | null> {
     const raw = (await cookies!.read())?.trim() ?? null
     linked = !!(raw && hasRequiredCookie(raw))
+    if (!linked) cookieExpired = false
     return linked ? raw : null
   }
 
@@ -81,16 +89,42 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
     return poTokenOk
   }
 
-  async function status(): Promise<YtmusicStatus> {
+  /** Sonde légère : likes (`LM`) — échoue en 401 si le cookie est mort. */
+  async function probeCookie(raw: string): Promise<void> {
+    try {
+      await catalog!.liked(raw)
+      cookieExpired = false
+    } catch (err) {
+      if (isAuthError(err)) {
+        cookieExpired = true
+        lastError = 'cookie expired or rejected by YouTube'
+        log().warn('YouTube Music cookie expired — reconnect via Settings')
+      } else {
+        log().debug({ err }, 'ytmusic cookie probe failed (non-auth)')
+      }
+    } finally {
+      lastProbeAt = ctx!.clock.now()
+    }
+  }
+
+  async function status(opts?: { probe?: boolean }): Promise<YtmusicStatus> {
     await loadCookie()
     await refreshPo().catch(() => { poTokenOk = false })
+    const now = ctx?.clock.now() ?? 0
+    const due = linked && catalog && (opts?.probe === true || cookieExpired || now - lastProbeAt > PROBE_MS)
+    if (due) {
+      const raw = (await cookies!.read())?.trim()
+      if (raw && hasRequiredCookie(raw)) await probeCookie(raw)
+    }
     return {
       linked,
+      cookieExpired,
       poTokenOk,
       unofficial: true,
       cookieFile: cookies?.path ?? null,
       poTokenUrl: config!.YTM_PO_TOKEN_URL,
       lastError,
+      browsers: [...YTM_BROWSERS],
     }
   }
 
@@ -111,6 +145,7 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
   async function requireCookie(): Promise<string> {
     const raw = await loadCookie()
     if (!raw) throw new PluginError('NEEDS_PAIRING', 'no YouTube Music cookie linked (unofficial)')
+    if (cookieExpired) throw new PluginError('NEEDS_PAIRING', 'YouTube Music cookie expired — reconnect in Settings')
     return raw
   }
 
@@ -124,9 +159,18 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
     return { get, play }
   }
 
+  function noteAuthFailure(err: unknown) {
+    if (isAuthError(err)) {
+      cookieExpired = true
+      lastError = 'cookie expired or rejected by YouTube'
+    } else {
+      lastError = (err as Error).message
+    }
+  }
+
   function catalogError(reply: FastifyReply, err: unknown) {
-    lastError = (err as Error).message
-    const d = describeError(err instanceof PluginError ? err : new PluginError('UPSTREAM_ERROR', lastError, { cause: err }))
+    noteAuthFailure(err)
+    const d = describeError(err instanceof PluginError ? err : new PluginError('UPSTREAM_ERROR', lastError ?? 'upstream error', { cause: err }))
     return sendError(reply, d.status, d.code, d.message)
   }
 
@@ -146,6 +190,7 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
       })
       lastError = null
       linked = false
+      cookieExpired = false
       poTokenOk = false
     },
 
@@ -153,8 +198,12 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
 
     async start() {
       await loadCookie()
-      if (!linked) log().info('YouTube Music (unofficial): no cookie yet — paste from Settings')
-      else log().info('YouTube Music (unofficial): cookie present')
+      if (!linked) log().info('YouTube Music (unofficial): no cookie yet — paste or import from browser on server host')
+      else {
+        log().info('YouTube Music (unofficial): cookie present')
+        const raw = await cookies!.read()
+        if (raw) void probeCookie(raw)
+      }
       void refreshPo().then((ok) => {
         if (!ok) log().warn({ url: config!.YTM_PO_TOKEN_URL }, 'PO Token generator unreachable')
       })
@@ -173,10 +222,11 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
       ctx = null
       config = null
       linked = false
+      cookieExpired = false
     },
 
     registerRoutes(app: FastifyInstance) {
-      app.get('/status', async () => status())
+      app.get('/status', async () => status({ probe: true }))
 
       app.put<{ Body: unknown }>('/cookie', async (req, reply) => {
         let raw = ''
@@ -190,11 +240,46 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
           return sendError(reply, 400, 'INVALID_BODY', 'cookie must include __Secure-3PAPISID (export from music.youtube.com)')
         }
         await cookies!.write(raw)
+        if (cookies!.path) await writeNetscapeBeside(cookies!.path, raw)
         catalog!.reset()
         linked = true
+        cookieExpired = false
         lastError = null
         log().info('YouTube Music cookie saved (unofficial)')
-        return status()
+        return status({ probe: true })
+      })
+
+      app.post<{ Body: unknown }>('/cookie/from-browser', async (req, reply) => {
+        const body = z.object({
+          browser: z.enum(YTM_BROWSERS).default('chrome'),
+        }).safeParse(req.body ?? {})
+        if (!body.success) return sendError(reply, 400, 'INVALID_BODY', `browser must be one of ${YTM_BROWSERS.join(', ')}`)
+        if (!cookies!.path) {
+          return sendError(reply, 400, 'INVALID_BODY', 'YTM_COOKIE_FILE is empty — cannot persist browser cookies')
+        }
+        try {
+          const netscapePath = `${cookies!.path}.netscape`
+          const raw = await importCookiesFromBrowser({
+            ytdlpPath: config!.YTM_YTDLP_PATH,
+            browser: body.data.browser,
+            netscapePath,
+            ...(deps.spawnImpl ? { spawnImpl: deps.spawnImpl } : {}),
+          })
+          await cookies!.write(raw)
+          catalog!.reset()
+          linked = true
+          cookieExpired = false
+          lastError = null
+          log().info({ browser: body.data.browser }, 'YouTube Music cookie imported from browser (unofficial)')
+          return status({ probe: true })
+        } catch (err) {
+          noteAuthFailure(err)
+          if (err instanceof PluginError) {
+            const d = describeError(err)
+            return sendError(reply, d.status, d.code, d.message)
+          }
+          throw err
+        }
       })
 
       app.delete('/cookie', async () => {
@@ -202,11 +287,11 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
         catalog!.reset()
         proxy!.clear()
         linked = false
+        cookieExpired = false
         lastError = null
         log().info('YouTube Music cookie cleared')
-        return status()
+        return status({ probe: false })
       })
-
       app.get<{ Querystring: { q?: string } }>('/search', async (req, reply) => {
         const q = (req.query.q ?? '').trim()
         if (!q) return sendError(reply, 400, 'INVALID_BODY', 'q is required')
@@ -214,6 +299,7 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
           const cookie = await requireCookie()
           const tracks = await catalog!.search(cookie, q)
           lastError = null
+          cookieExpired = false
           return { tracks }
         } catch (err) {
           return catalogError(reply, err)
@@ -225,6 +311,7 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
           const cookie = await requireCookie()
           const tracks = await catalog!.liked(cookie)
           lastError = null
+          cookieExpired = false
           return { tracks }
         } catch (err) {
           return catalogError(reply, err)
@@ -305,9 +392,9 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
           }, 'ytmusic play_url dispatched')
           return { ok: true as const, streamUrl, sid: session.sid }
         } catch (err) {
-          lastError = (err as Error).message
+          noteAuthFailure(err)
           if (err instanceof PluginError) throw err
-          throw new PluginError('UPSTREAM_ERROR', lastError, { cause: err })
+          throw new PluginError('UPSTREAM_ERROR', lastError ?? (err as Error).message, { cause: err })
         }
       })
 
@@ -331,7 +418,7 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
     },
 
     health(): PluginHealth {
-      return healthFrom(linked, poTokenOk, lastError, keys())
+      return healthFrom(linked, cookieExpired, poTokenOk, lastError, keys())
     },
   }
 }
