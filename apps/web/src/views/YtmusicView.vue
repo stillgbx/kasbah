@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { DeviceEntry } from '@kasbah/shared'
 import { getTransport } from '../api'
@@ -29,9 +29,9 @@ const playlistTitle = ref('')
 const busy = ref(false)
 const playingId = ref<string | null>(null)
 const deviceId = ref('')
-
-const linked = computed(() => plugins.byId.ytmusic?.health.status !== 'needs_pairing'
-  && plugins.byId.ytmusic?.enabled === true)
+/** false tant que le statut cookie n'a pas été lu — éviter le faux « manquant ». */
+const statusReady = ref(false)
+const linked = ref(false)
 
 const players = computed(() => devices.list.filter((e: DeviceEntry) =>
   e.state.kind === 'media_player'
@@ -44,6 +44,28 @@ watch(players, (list) => {
     deviceId.value = list[0]?.descriptor.id ?? ''
   }
 }, { immediate: true })
+
+async function refreshLink(): Promise<void> {
+  // L'inventaire plugins n'est chargé que dans Réglages — le charger ici aussi.
+  if (!plugins.loaded) await plugins.load()
+  const plug = plugins.byId.ytmusic
+  if (!plug?.enabled) {
+    linked.value = false
+    return
+  }
+  try {
+    const s = await getTransport().ytmusicStatus()
+    linked.value = s.linked && !s.cookieExpired
+  } catch {
+    // Fallback santé (peut être stale) si /status échoue.
+    linked.value = plug.health.status !== 'needs_pairing'
+  }
+}
+
+onMounted(async () => {
+  try { await refreshLink() }
+  finally { statusReady.value = true }
+})
 
 function fmtDur(s: number | null): string {
   if (s == null || !Number.isFinite(s)) return ''
@@ -129,7 +151,8 @@ watch(tab, (v) => {
       <div class="muted count">{{ $t('ytmusic.unofficial') }}</div>
     </PageHeader>
     <div class="page__scroll">
-      <div v-if="!linked" class="card card--soft empty muted">{{ $t('ytmusic.needCookie') }}</div>
+      <div v-if="!statusReady" class="muted empty">{{ $t('common.loading') }}</div>
+      <div v-else-if="!linked" class="card card--soft empty muted">{{ $t('ytmusic.needCookie') }}</div>
       <template v-else>
         <div class="toolbar">
           <div class="tabs">
