@@ -2,6 +2,7 @@
 import { useLocalStorage } from '@vueuse/core'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import type { DeviceEntry } from '@kasbah/shared'
 import { getTransport } from '../api'
 import type { YtmusicAlbum, YtmusicArtist, YtmusicPlaylist, YtmusicTrack } from '../api/transport'
@@ -11,6 +12,7 @@ import PlayButton from '../components/ui/PlayButton.vue'
 import Segmented from '../components/ui/Segmented.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import { useDevicesStore } from '../stores/devices'
+import { useHouseStore } from '../stores/house'
 import { useNotificationsStore } from '../stores/notifications'
 import { usePluginsStore } from '../stores/plugins'
 
@@ -28,7 +30,9 @@ type Browse =
 type SectionSort = 'relevance' | 'alpha' | 'date'
 
 const { t } = useI18n()
+const router = useRouter()
 const devices = useDevicesStore()
+const house = useHouseStore()
 const notifications = useNotificationsStore()
 const plugins = usePluginsStore()
 
@@ -334,15 +338,21 @@ async function play(track: YtmusicTrack) {
   }
   rememberPlay(track)
   playingId.value = track.videoId
+  const targetId = deviceId.value
   try {
     await getTransport().ytmusicPlay({
       videoId: track.videoId,
-      deviceId: deviceId.value,
+      deviceId: targetId,
       title: track.title,
       ...(track.artists.length ? { artist: track.artists.join(', ') } : {}),
       ...(track.artUrl ? { artUrl: track.artUrl } : {}),
     })
     notifications.success(t('ytmusic.playing', { title: track.title }))
+    // Naviguer d'abord : HomeView (keep-alive) reflète la sélection dans l'URL courante
+    // — sélectionner avant le push réécrit ?device=… sur /ytmusic et annule la nav (cf. 6_1).
+    await router.push({ name: 'home' }).catch(() => { /* navigation redondante */ })
+    const hd = house.houseDeviceFor(targetId)
+    house.selectDevice(hd?.id ?? targetId)
   } catch (err) {
     notifications.error(t('errors.UNKNOWN', { name: 'YouTube Music', message: (err as Error).message }))
   } finally { playingId.value = null }

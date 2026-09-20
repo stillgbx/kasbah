@@ -9,10 +9,11 @@ export const NAV_ITEMS: NavItem[] = [
   { name: 'home', icon: 'home', label: 'nav.home' },
   // la météo juste après la maison : ce qu'on regarde en arrivant, avant de piloter quoi que ce soit
   { name: 'weather', icon: 'cloudSun', label: 'nav.weather' },
+  // musique juste après la météo : on lance un titre, on voit l'enceinte dans la 3D
+  { name: 'ytmusic', icon: 'music', label: 'nav.ytmusic' },
   { name: 'lights', icon: 'light', label: 'nav.lights' },
   { name: 'covers', icon: 'shutter', label: 'nav.covers' },
   { name: 'media', icon: 'cast', label: 'nav.media' },
-  { name: 'ytmusic', icon: 'music', label: 'nav.ytmusic' },
   { name: 'cameras', icon: 'camera', label: 'nav.cameras' },
   { name: 'energy', icon: 'bolt', label: 'nav.energy' },
   // équipement technique de la maison, comme l'énergie — pas un média, pas un véhicule

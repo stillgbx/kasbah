@@ -7,7 +7,7 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 import { NAV_ITEMS } from '../../lib/navItems'
 import type { IconName } from '../../lib/strokeIcons'
 
-// Rail de navigation (72 px) : initiales de la maison, 8 vues, puis apparence et langue en bas.
+// Rail de navigation (72 px) : initiales de la maison, vues, puis apparence en bas.
 const route = useRoute()
 const house = useHouseStore()
 const settings = useSettingsStore()
@@ -33,7 +33,6 @@ const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] 
     <button type="button" class="rail__btn" :title="$t('settings.appearance')" :aria-label="$t('settings.appearance')" @click="settings.cycleAppearance()">
       <StrokeIcon :name="themeIcon" :size="22" />
     </button>
-    <button type="button" class="rail__lang" :title="$t('settings.language')" @click="settings.toggleLocale()">{{ settings.resolvedLocale.toUpperCase() }}</button>
   </nav>
 </template>
 
@@ -78,8 +77,4 @@ const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] 
 .rail__btn:hover { color: var(--text); background: color-mix(in srgb, var(--surface) 55%, transparent); }
 .rail__btn[data-on='1'] { background: var(--accent-soft); color: var(--accent); }
 .rail__spacer { flex: 1 1 0; }
-.rail__lang {
-  width: 52px; height: 40px; border-radius: 12px; border: 1px solid var(--line); background: transparent; color: var(--muted);
-  font-weight: 600; font-size: 12px; letter-spacing: .06em;
-}
 </style>
