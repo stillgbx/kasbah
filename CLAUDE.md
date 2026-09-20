@@ -69,41 +69,6 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 No automatic markdown recap files - a response summary is enough. For structured knowledge (architecture, session outcomes), use `_generated-ai-doc/` (gitignored ephemeral) or the wiki in `doc/` via `wiki-update`.
 
-### 5.1. Agent team session folder
-
-Subagents (defined in `.claude/agents/`) do not see each other's context. They
-exchange notes through one folder per session:
-`_generated-ai-doc/sessions/YYYY-MM-DD-slug/`, one file per role - `brief.md`
-(eclaireur), `contrat.md` (dev-serveur), `test.md` (testeur), `revue-ui.md`
-(relecteur-ui). The main thread creates the folder and passes its path to each
-agent; an agent given no path writes no file and reports back instead.
-
-`brief.md` opens with the short `HEAD` it was written against: the code moves
-under the brief while the team works, and a note without that marker reads as
-current when it is not.
-
-The same folder holds **`journal.md`**, a shared append-only trace. One line per
-entry, `HH:MM · role · type · #tag text`, four types: `info` (a fact
-established), `decision` (a choice and its why), `bloque` (stopped, needs the
-main thread), `resultat` (outcome of a check). Append with Bash `>>` and nothing
-else:
-
-```bash
-printf '%s · dev-serveur · decision · %s\n' "$(date +%H:%M)" "#quota fenêtre ancrée dans le fichier d'usage" >> "$SESSION/journal.md"
-```
-
-**Never `Edit` or `Write` this file** - parallel agents have no lock, and an
-agent that tidies the journal erases its peers. Append-only removes the need for
-one; one line per fact keeps each write small enough to land whole.
-
-It is a trace, not a mailbox: subagents do not poll for replies. A question that
-blocks work goes back to the main thread in the agent's report, not into the
-journal.
-
-The journal has a reader: at the end of a session the `scribe` agent mines it for
-the wiki, where decisions, measured numbers and abandoned leads belong. A diff
-records what changed; only the journal records why, and what was tried first.
-
 ## 6. LLM Wiki
 
 ### 6.1. Wiki-first reflex
@@ -149,7 +114,7 @@ The wiki and GitNexus are complementary — pick the right tool for the question
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **kasbah** (12764 symbols, 36589 relationships, 692 execution flows).
+This project is indexed by GitNexus as **kasbah** (3995 symbols, 10819 relationships, 343 execution flows).
 
 > Index stale? Run `node .gitnexus/run.cjs analyze --index-only` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? Bootstrap with `npx`, `bunx`, or `pnpm dlx` — e.g. `bunx gitnexus@latest analyze` (npm 11 npx crash; #1939).
 
