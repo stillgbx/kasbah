@@ -3,9 +3,10 @@ import { deviceDescriptorSchema, mergeState, defaultState } from '@kasbah/shared
 import {
   ENSEMBLE_INVENTORY, ENSEMBLE_POWER, INVERTERS, LIVEDATA, METERS, PRODUCTION,
 } from './__fixtures__/gateway'
+import { EVSE_STATUS, EVSE_SUMMARY } from './__fixtures__/evse'
 import {
-  PANEL_STALE_MS, batteriesOf, isBatteryAvailable, isPanelStale, productionW, toBatteryPatch, toDailyPatch,
-  toDescriptors, toPanelPatch, toSitePatch,
+  PANEL_STALE_MS, batteriesOf, chargerSummariesOf, chargersOf, isBatteryAvailable, isPanelStale, productionW, toBatteryPatch,
+  toChargerDescriptors, toChargerPatch, toDailyPatch, toDescriptors, toPanelPatch, toSitePatch,
 } from './mapping'
 import {
   ensembleInventorySchema, ensemblePowerSchema, invertersSchema, livedataSchema, productionSchema,
@@ -175,5 +176,35 @@ describe('état d\'une batterie', () => {
   it('une batterie qui ne communique plus est indisponible et garde ses valeurs', () => {
     expect(isBatteryAvailable(batteries[0]!)).toBe(true)
     expect(isBatteryAvailable({ ...batteries[0]!, communicating: false })).toBe(false)
+  })
+})
+
+describe('borne IQ EV Charger 2 (capture Enlighten)', () => {
+  const chargers = chargersOf(EVSE_STATUS)
+  const summaries = chargerSummariesOf(EVSE_SUMMARY)
+
+  it('lit la borne malgré `error: {}` dans un HTTP 200', () => {
+    expect(chargers).toHaveLength(1)
+    expect(chargers[0]).toMatchObject({ sn: '482000000001', pluggedIn: true, charging: false, connected: true, sessionWh: 12363 })
+    expect(summaries[0]).toMatchObject({ serialNumber: '482000000001', modelName: 'IQ-EVSE-EU-3032', maxCurrent: 32, defaultChargeLevel: 24 })
+  })
+
+  it('une enveloppe inconnue ne lève pas : liste vide', () => {
+    expect(chargersOf(null)).toEqual([])
+    expect(chargersOf({ error: 'nope' })).toEqual([])
+    expect(chargerSummariesOf({ data: {} })).toEqual([])
+  })
+
+  it('SUSPENDED_EVSE / INSUFFICIENT_SOLAR = connected, pas une panne, et 0 W', () => {
+    const patch = toChargerPatch(chargers[0]!, summaries[0])
+    expect(patch).toMatchObject({ kind: 'ev_charger', status: 'connected', powerW: 0, sessionWh: 12363, maxCurrentA: 24 })
+    const merged = mergeState(defaultState('ev_charger'), patch, 1000)
+    expect(merged).toMatchObject({ kind: 'ev_charger', status: 'connected', sessionWh: 12363 })
+  })
+
+  it('déclare un ev_charger sans commande : rien n\'a encore été capturé à l\'écriture', () => {
+    const [d] = toChargerDescriptors(chargers, summaries)
+    expect(d).toMatchObject({ id: 'enphase:482000000001', kind: 'ev_charger', capabilities: [], meta: { model: 'IQ-EVSE-EU-3032' } })
+    expect(deviceDescriptorSchema.parse(d)).toEqual(d)
   })
 })

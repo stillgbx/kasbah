@@ -36,6 +36,10 @@ export interface EnphaseTokenStatus {
   source?: 'config' | 'cache' | 'minted'
   renewUnderDays: number
   tokenFile: string | null
+  /** Session Enlighten : indispensable à la borne, distincte du jeton local de la passerelle. */
+  cloudLinked: boolean
+  cloudFile: string | null
+  siteId?: string
 }
 
 export type EnphasePairing = { token: string } | { user: string; password: string; force?: boolean }

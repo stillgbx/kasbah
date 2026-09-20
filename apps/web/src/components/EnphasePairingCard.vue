@@ -18,9 +18,9 @@ import Segmented from './ui/Segmented.vue'
 // La carte ne décide plus de son apparition : elle vit DANS la section du plugin Enphase, que
 // l'utilisateur déplie — et qui s'ouvre seule quand le serveur dit que le jeton expire ou a expiré.
 //
-// Deux temps avant de frapper un jeton quand celui en place est encore bon : le serveur répond
-// `TOKEN_STILL_VALID`, la carte l'explique et le bouton demande confirmation. Chaque frappe crée un
-// jeton chez Enphase, en accumuler d'inutilisés n'aurait pas de sens.
+// En mode compte le bouton dit « Valider » : ça lie (ou rafraîchit) Enlighten pour la borne, et
+// ne frappe un JWT local que s'il manque ou expire. Un 409 `TOKEN_STILL_VALID` d'un serveur plus
+// ancien est lu comme un succès, pas comme une demande de remplacement.
 
 type Mode = 'account' | 'token'
 
@@ -66,13 +66,15 @@ const headline = computed(() => {
   if (!s) return ''
   if (s.stage === 'expiring') return t('settings.enphase.expiring', { left: remaining(s.expiresAt, s.daysLeft) })
   if (s.stage === 'expired') return t('settings.enphase.expired')
-  return s.paired ? t('settings.enphase.paired') : t('settings.enphase.intro')
+  if (s.paired) return s.cloudLinked ? t('settings.enphase.paired') : t('settings.enphase.pairedNeedCloud')
+  return t('settings.enphase.intro')
 })
 
-/** Ce que le bouton fait : appairer, renouveler, ou confirmer le remplacement d'un jeton valable. */
+/** Compte : Valider. Jeton collé : Appairer / Renouveler. Confirmation seulement si `force`. */
 const action = computed(() => {
   if (confirming.value) return t('settings.enphase.replaceAnyway')
-  if (busy.value) return t('settings.enphase.pairing')
+  if (busy.value) return mode.value === 'account' ? t('settings.enphase.validating') : t('settings.enphase.pairing')
+  if (mode.value === 'account') return t('settings.enphase.validate')
   return status.value?.paired ? t('settings.enphase.renew') : t('settings.enphase.pair')
 })
 const canSubmit = computed(() => (mode.value === 'token' ? pasted.value.trim().length > 0 : user.value.trim().length > 0 && password.value.length > 0))
@@ -96,6 +98,18 @@ const modes = computed(() => [
   { value: 'token' as Mode, label: t('settings.enphase.modeToken') },
 ])
 
+async function finishOk(r: EnphaseTokenStatus) {
+  status.value = r
+  done.value = r.cloudLinked
+    ? t('settings.enphase.successCloud', { left: remaining(r.expiresAt, r.daysLeft) })
+    : t('settings.enphase.success', { left: remaining(r.expiresAt, r.daysLeft) })
+  confirming.value = false
+  password.value = ''
+  pasted.value = ''
+  notifications.success(t('settings.enphase.title'))
+  await devices.refreshHealth()
+}
+
 async function submit() {
   if (!canSubmit.value) return
   const body: EnphasePairing = mode.value === 'token'
@@ -104,17 +118,15 @@ async function submit() {
   busy.value = true
   try {
     const r = await getTransport().pairEnphase(body)
-    status.value = r
-    done.value = t('settings.enphase.success', { left: remaining(r.expiresAt, r.daysLeft) })
-    confirming.value = false
-    // le mot de passe ne reste pas en mémoire de la page plus longtemps que nécessaire
-    password.value = ''
-    pasted.value = ''
-    notifications.success(t('settings.enphase.title'))
-    await devices.refreshHealth()
+    await finishOk(r)
   } catch (err) {
-    if (err instanceof ApiRequestError && err.code === 'TOKEN_STILL_VALID') {
-      confirming.value = true                            // le bouton demande maintenant confirmation
+    if (err instanceof ApiRequestError && err.code === 'TOKEN_STILL_VALID' && mode.value === 'account') {
+      // serveur antérieur : 409 alors que le cloud est déjà lié. Ce n'est pas un remplacement.
+      await refresh()
+      if (status.value) await finishOk(status.value)
+    } else if (err instanceof ApiRequestError && err.code === 'TOKEN_STILL_VALID') {
+      confirming.value = true
+      await refresh()
     } else {
       confirming.value = false
       notifications.error(t('errors.UNKNOWN', { name: 'Enphase', message: (err as Error).message }))
@@ -170,6 +182,11 @@ async function submit() {
     <p v-if="isInstaller" class="enp__warn small">{{ $t('settings.enphase.installerNote') }}</p>
     <p class="muted small enp__hint">
       {{ status?.tokenFile ? $t('settings.enphase.serverKept', { file: status.tokenFile }) : $t('settings.enphase.notStored') }}
+    </p>
+    <p class="muted small enp__hint">
+      {{ status?.cloudLinked
+        ? (status.cloudFile ? $t('settings.enphase.cloudLinked', { file: status.cloudFile }) : $t('settings.enphase.cloudLinkedNoFile'))
+        : $t('settings.enphase.cloudNeeded') }}
     </p>
   </div>
 </template>

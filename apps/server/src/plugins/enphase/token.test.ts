@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { FetchLike } from '../../core/sse'
 import {
-  RENEW_WARNING_DAYS, checkToken, createTokenFile, decodeEnphaseToken, mintEnphaseToken, rejectionMessage,
+  RENEW_WARNING_DAYS, checkToken, createTokenFile, decodeEnphaseToken, loginEnlighten, mintEnphaseToken, rejectionMessage,
   resolveEnphaseToken, tokenStage,
 } from './token'
 
@@ -118,6 +118,30 @@ describe('frappe au cloud', () => {
     await expect(mintEnphaseToken({ user: 'u', password: 'faux', serial: SERIAL, fetchImpl: cloud.fetchImpl }))
       .rejects.toMatchObject({ code: 'NEEDS_PAIRING' })
     expect(cloud.calls).toHaveLength(1)
+  })
+
+  it('sépare le cookie Rails du session_id JSON : le premier ouvre Enlighten, le second frappe le jeton', async () => {
+    const fetchImpl = vi.fn<FetchLike>(async (url) => {
+      if (url.includes('/login/login.json')) {
+        return {
+          ok: true, status: 200, body: null,
+          json: async () => ({ session_id: 'sess-json', message: 'success' }),
+          text: async () => '{"session_id":"sess-json","message":"success"}',
+          headers: {
+            get: (name: string) => name.toLowerCase() === 'set-cookie'
+              ? 'locale=en; path=/, _enlighten_4_session=rails-cookie; path=/; httponly'
+              : null,
+            getSetCookie: () => [
+              'locale=en; path=/',
+              '_enlighten_4_session=rails-cookie; path=/; httponly',
+            ],
+          },
+        }
+      }
+      return response(token(365))
+    })
+    const r = await loginEnlighten({ user: 'u', password: 'p', fetchImpl })
+    expect(r).toEqual({ sessionId: 'sess-json', cookie: 'rails-cookie' })
   })
 
   it('réponse sans jeton utilisable → UPSTREAM_ERROR, cloud injoignable → UPSTREAM_ERROR', async () => {

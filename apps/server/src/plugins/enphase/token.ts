@@ -124,17 +124,23 @@ export function rejectionMessage(reason: TokenRejection, claims: EnphaseTokenCla
   }
 }
 
-export interface MintOptions {
-  /** Identifiant du compte Enphase (adresse e-mail). Jamais conservé. */
-  user: string
-  /** Mot de passe du compte. Traverse cette fonction, n'est ni journalisé ni écrit. */
-  password: string
-  /** Numéro de série de la passerelle — lu sur `/info`, qui ne demande aucun jeton. */
-  serial: string
+export interface CloudFetchOptions {
   fetchImpl?: FetchLike
   signal?: AbortSignal
   /** Abrégé dans les tests ; en production c'est `CLOUD_TIMEOUT_MS`. */
   timeoutMs?: number
+}
+
+export interface LoginOptions extends CloudFetchOptions {
+  /** Identifiant du compte Enphase (adresse e-mail). Jamais conservé. */
+  user: string
+  /** Mot de passe du compte. Traverse cette fonction, n'est ni journalisé ni écrit. */
+  password: string
+}
+
+export interface MintOptions extends LoginOptions {
+  /** Numéro de série de la passerelle — lu sur `/info`, qui ne demande aucun jeton. */
+  serial: string
 }
 
 function deadline(timeoutMs: number, signal?: AbortSignal): AbortSignal {
@@ -142,38 +148,93 @@ function deadline(timeoutMs: number, signal?: AbortSignal): AbortSignal {
   return signal ? AbortSignal.any([signal, timeout]) : timeout
 }
 
-/** Frappe un jeton auprès du cloud Enphase (session puis échange). Lève `PluginError` sinon. */
-export async function mintEnphaseToken(o: MintOptions): Promise<{ token: string; claims: EnphaseTokenClaims }> {
-  const doFetch = o.fetchImpl ?? ((url, init) => fetch(url, init as RequestInit) as unknown as ReturnType<FetchLike>)
-  const timeoutMs = o.timeoutMs ?? CLOUD_TIMEOUT_MS
+function cloudFetch(o: CloudFetchOptions): FetchLike {
+  return o.fetchImpl ?? ((url, init) => fetch(url, init as RequestInit) as unknown as ReturnType<FetchLike>)
+}
 
-  const post = async (url: string, init: Parameters<FetchLike>[1]): Promise<{ status: number; text: string }> => {
-    let res: Awaited<ReturnType<FetchLike>>
-    try {
-      res = await doFetch(url, { ...init, method: 'POST', signal: deadline(timeoutMs, o.signal) })
-    } catch (err) {
-      const aborted = (err as Error)?.name === 'TimeoutError' || (err as Error)?.name === 'AbortError'
-      throw new PluginError(aborted ? 'TIMEOUT' : 'UPSTREAM_ERROR', `Enphase cloud unreachable (${url})`, { cause: err })
-    }
-    return { status: res.status, text: await res.text() }
+async function postCloud(
+  doFetch: FetchLike,
+  url: string,
+  init: Parameters<FetchLike>[1],
+  timeoutMs: number,
+  signal?: AbortSignal,
+): Promise<{ status: number; text: string; headers?: MinimalHeaders }> {
+  let res: Awaited<ReturnType<FetchLike>>
+  try {
+    res = await doFetch(url, { ...init, method: 'POST', signal: deadline(timeoutMs, signal) })
+  } catch (err) {
+    const aborted = (err as Error)?.name === 'TimeoutError' || (err as Error)?.name === 'AbortError'
+    throw new PluginError(aborted ? 'TIMEOUT' : 'UPSTREAM_ERROR', `Enphase cloud unreachable (${url})`, { cause: err })
   }
+  return { status: res.status, text: await res.text(), headers: headersOf(res) }
+}
 
-  // 1. session : le cloud répond `{ session_id }`. Identifiants faux → pas de `session_id`, et c'est
-  // à l'utilisateur d'agir (NEEDS_PAIRING), pas une panne passagère à réessayer.
-  const login = await post(LOGIN_URL, {
+/** Sous-ensemble de `Headers` : le `fetch` réel l'a, les faux des tests souvent pas. */
+interface MinimalHeaders {
+  get(name: string): string | null
+  getSetCookie?(): string[]
+}
+
+function headersOf(res: Awaited<ReturnType<FetchLike>>): MinimalHeaders | undefined {
+  const h = (res as { headers?: MinimalHeaders }).headers
+  return h && typeof h.get === 'function' ? h : undefined
+}
+
+function setCookieLines(headers?: MinimalHeaders): string[] {
+  if (!headers) return []
+  // undici : `get('set-cookie')` concatène au virgule (cassé dès qu'un cookie a un `Expires`),
+  // `getSetCookie()` rend une ligne par cookie. C'est ça qu'il faut lire.
+  const lines = typeof headers.getSetCookie === 'function' ? headers.getSetCookie() : []
+  if (lines.length) return lines
+  const joined = headers.get('set-cookie')
+  return joined ? [joined] : []
+}
+
+function cookieValue(setCookie: string, name: string): string | undefined {
+  const m = new RegExp(`(?:^|,\\s*)${name}=([^;]+)`).exec(setCookie)
+  return m?.[1]?.trim()
+}
+
+function cookieFrom(headers: MinimalHeaders | undefined, name: string): string | undefined {
+  for (const line of setCookieLines(headers)) {
+    const v = cookieValue(line, name)
+    if (v) return v
+  }
+  return undefined
+}
+
+/**
+ * Ouvre une session Enlighten. Deux jetons distincts, à ne pas confondre :
+ *  - `session_id` JSON → `POST entrez.enphaseenergy.com/tokens` (JWT local de la passerelle) ;
+ *  - cookie `_enlighten_4_session` → API web/appli (sites, borne). Un `session_id` collé en
+ *    cookie se fait répondre 401. Identifiants faux → `NEEDS_PAIRING`, pas une panne.
+ */
+export async function loginEnlighten(o: LoginOptions): Promise<{ sessionId: string; cookie?: string }> {
+  const timeoutMs = o.timeoutMs ?? CLOUD_TIMEOUT_MS
+  const login = await postCloud(cloudFetch(o), LOGIN_URL, {
     headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
     body: new URLSearchParams({ 'user[email]': o.user, 'user[password]': o.password }).toString(),
-  })
-  const session = loginResponseSchema.safeParse(((): unknown => { try { return JSON.parse(login.text) } catch { return null } })())
-  if (!session.success) {
+  }, timeoutMs, o.signal)
+  const parsed = loginResponseSchema.safeParse(((): unknown => { try { return JSON.parse(login.text) } catch { return null } })())
+  const sessionId = parsed.success ? parsed.data.session_id : undefined
+  const cookie = cookieFrom(login.headers, '_enlighten_4_session')
+  if (!sessionId) {
     throw new PluginError('NEEDS_PAIRING', `Enphase refused the sign-in (HTTP ${login.status}): wrong e-mail or password`)
   }
+  return cookie ? { sessionId, cookie } : { sessionId }
+}
 
-  // 2. échange contre un jeton pour CETTE passerelle
-  const minted = await post(TOKENS_URL, {
+/** Échange une session Enlighten déjà ouverte contre un jeton LOCAL de CETTE passerelle. */
+export async function exchangeEnphaseToken(o: CloudFetchOptions & {
+  sessionId: string
+  serial: string
+  username: string
+}): Promise<{ token: string; claims: EnphaseTokenClaims }> {
+  const timeoutMs = o.timeoutMs ?? CLOUD_TIMEOUT_MS
+  const minted = await postCloud(cloudFetch(o), TOKENS_URL, {
     headers: { 'content-type': 'application/json', accept: 'application/json' },
-    body: JSON.stringify({ session_id: session.data.session_id, serial_num: o.serial, username: o.user }),
-  })
+    body: JSON.stringify({ session_id: o.sessionId, serial_num: o.serial, username: o.username }),
+  }, timeoutMs, o.signal)
   const asJson = tokenResponseSchema.safeParse(((): unknown => { try { return JSON.parse(minted.text) } catch { return null } })())
   const token = (asJson.success ? asJson.data.token : minted.text).trim()
   const claims = decodeEnphaseToken(token)
@@ -181,6 +242,12 @@ export async function mintEnphaseToken(o: MintOptions): Promise<{ token: string;
     throw new PluginError('UPSTREAM_ERROR', `Enphase returned no usable token for gateway ${o.serial} (HTTP ${minted.status})`)
   }
   return { token, claims }
+}
+
+/** Frappe un jeton auprès du cloud Enphase (session puis échange). Lève `PluginError` sinon. */
+export async function mintEnphaseToken(o: MintOptions): Promise<{ token: string; claims: EnphaseTokenClaims }> {
+  const { sessionId } = await loginEnlighten(o)
+  return exchangeEnphaseToken({ ...o, sessionId, username: o.user })
 }
 
 export interface TokenStore {

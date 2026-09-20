@@ -5,9 +5,11 @@ import { ManualClock } from '@kasbah/mock-sim'
 import type { PluginContext } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
 import { ENSEMBLE_INVENTORY, ENSEMBLE_POWER, INVERTERS, LIVEDATA, PRODUCTION } from './__fixtures__/gateway'
+import { EVSE_STATUS, EVSE_SUMMARY } from './__fixtures__/evse'
 import { createEnphasePlugin, enphaseConfigSchema } from './index'
 import { PANEL_STALE_MS } from './mapping'
 import type { TokenStore } from './token'
+import type { CloudStore, CloudSession } from './cloud'
 
 // Appairage de la passerelle IQ. Le point surveillé ici : les identifiants du compte Enphase
 // TRAVERSENT la route et disparaissent — ils ne sont ni conservés en cache, ni renvoyés à l'UI, ni
@@ -71,6 +73,12 @@ function fakeCloud(minted = token(365)) {
   const fetchImpl = vi.fn<FetchLike>(async (url, init) => {
     calls.push({ url, body: String(init?.body ?? '') })
     if (url.includes('/login/login.json')) return response('{"session_id":"sess-1"}')
+    if (url.includes('/tokens')) return response(minted)
+    if (url.includes('search_sites')) return response(JSON.stringify({ sites: [{ id: 1000001, title: 'Maison' }] }))
+    if (url.includes('/users/self/token')) return response('{"token":"access-1"}')
+    if (url.includes('/ev_chargers/status') && url.includes('/api/v2/')) return response(JSON.stringify({ data: {} }))
+    if (url.includes('/ev_chargers/status')) return response(JSON.stringify(EVSE_STATUS))
+    if (url.includes('/ev_chargers/summary')) return response(JSON.stringify(EVSE_SUMMARY))
     return response(minted)
   })
   return { fetchImpl, calls }
@@ -85,29 +93,43 @@ function memoryStore(): TokenStore & { value: string | null } {
   return store
 }
 
+function memoryCloud(): CloudStore & { value: CloudSession | null } {
+  const store = {
+    value: null as CloudSession | null,
+    load: async () => store.value,
+    save: async (s: CloudSession) => { store.value = s },
+  }
+  return store
+}
+
 async function started(over: {
   env?: Record<string, string>
   gateway?: ReturnType<typeof fakeGateway>
   cloud?: ReturnType<typeof fakeCloud>
   store?: ReturnType<typeof memoryStore>
+  cloudStore?: ReturnType<typeof memoryCloud>
+  parts?: Record<string, boolean>
 } = {}) {
   const gateway = over.gateway ?? fakeGateway()
   const cloud = over.cloud ?? fakeCloud()
   const store = over.store ?? memoryStore()
-  const plugin = createEnphasePlugin({ gatewayFetch: gateway.fetchImpl, cloudFetch: cloud.fetchImpl, store })
+  const cloudStore = over.cloudStore ?? memoryCloud()
+  const plugin = createEnphasePlugin({
+    gatewayFetch: gateway.fetchImpl, cloudFetch: cloud.fetchImpl, store, cloudStore,
+  })
   const clock = new ManualClock(NOW)
   const ctx: PluginContext = {
     pluginId: 'enphase',
     config: enphaseConfigSchema.parse({ ENPHASE_HOST: HOST, ...over.env }),
     logger: pino({ level: 'silent' }), clock, signal: new AbortController().signal,
     emitState: vi.fn(), setAvailable: vi.fn(), emitDevices: vi.fn(), emitScenes: vi.fn(), emitSceneState: vi.fn(), emitEvent: vi.fn(),
-    parts: {}, site: { lat: 47.3, lon: 5.05, alt: 180 },
+    parts: over.parts ?? {}, site: { lat: 47.3, lon: 5.05, alt: 180 },
   }
   await plugin.init(ctx)
   const app = Fastify()
   app.register(async (sub) => plugin.registerRoutes!(sub), { prefix: '/api/plugins/enphase' })
   await app.ready()
-  return { plugin, app, gateway, cloud, store, ctx, clock }
+  return { plugin, app, gateway, cloud, store, cloudStore, ctx, clock }
 }
 
 /** Laisse les promesses en vol se resoudre (les sondes tournent sur l'horloge injectee). */
@@ -124,7 +146,7 @@ describe('passerelle non appairée', () => {
     expect(plugin.health!()).toMatchObject({ status: 'needs_pairing' })
     // /info ne porte AUCUN jeton : c'est ce qui permet de reconnaître la passerelle avant l'appairage
     expect(gateway.calls).toEqual([{ path: '/info', auth: undefined }])
-    expect(await get(app, '/token').then((r) => r.json())).toMatchObject({ paired: false, serial: SERIAL, software: 'D8.3.5289', stage: 'none' })
+    expect(await get(app, '/token').then((r) => r.json())).toMatchObject({ paired: false, serial: SERIAL, software: 'D8.3.5289', stage: 'none', cloudLinked: false })
   })
 
   it('dit OÙ le jeton sera gardé : c\'est ce qui répond « ai-je quelque chose à recopier ? »', async () => {
@@ -137,13 +159,15 @@ describe('passerelle non appairée', () => {
 
   it('les clés annoncées dans les Réglages ne contiennent aucun identifiant de compte', async () => {
     const { plugin } = await started()
-    expect(plugin.health!().keys).toEqual(['ENPHASE_HOST', 'ENPHASE_TOKEN', 'ENPHASE_TOKEN_FILE'])
+    expect(plugin.health!().keys).toEqual(['ENPHASE_HOST', 'ENPHASE_TOKEN', 'ENPHASE_TOKEN_FILE', 'ENPHASE_CLOUD_FILE'])
     expect(Object.keys(enphaseConfigSchema.shape)).not.toContain('ENPHASE_PASSWORD')
+    expect(plugin.parts).toEqual([{ id: 'ev_charger', labelKey: 'kinds.ev_charger', enabledByDefault: true }])
   })
 
   it('refuse le relevé brut tant qu\'aucun jeton n\'est en place', async () => {
     const { app } = await started()
     expect((await get(app, '/raw')).statusCode).toBe(409)
+    expect((await get(app, '/ev/raw')).statusCode).toBe(409)
   })
 })
 
@@ -191,32 +215,38 @@ describe('appairage par jeton collé', () => {
 describe('appairage par identifiants', () => {
   it('frappe un jeton au cloud pour CETTE passerelle, sans conserver le mot de passe', async () => {
     const minted = token(365)
-    const { app, cloud, store } = await started({ gateway: fakeGateway({ accept: minted }), cloud: fakeCloud(minted) })
+    const { app, cloud, store, cloudStore } = await started({ gateway: fakeGateway({ accept: minted }), cloud: fakeCloud(minted) })
     const r = await post(app, { user: 'toit@exemple.fr', password: 'motdepasse' })
     expect(r.statusCode).toBe(200)
-    expect(r.json()).toMatchObject({ paired: true, stage: 'ok', daysLeft: 365 })
+    expect(r.json()).toMatchObject({ paired: true, stage: 'ok', daysLeft: 365, cloudLinked: true })
 
-    // le numéro de série vient de /info : l'utilisateur n'a pas eu à le saisir
-    expect(JSON.parse(cloud.calls[1]!.body)).toMatchObject({ serial_num: SERIAL })
-    // le mot de passe n'a servi qu'à la session, et ne survit ni en cache ni dans la réponse
-    expect(new URLSearchParams(cloud.calls[0]!.body).get('user[password]')).toBe('motdepasse')
+    const login = cloud.calls.find((c) => c.url.includes('/login/login.json'))
+    const mintedCall = cloud.calls.find((c) => c.url.includes('/tokens'))
+    expect(new URLSearchParams(login!.body).get('user[password]')).toBe('motdepasse')
+    expect(JSON.parse(mintedCall!.body)).toMatchObject({ serial_num: SERIAL })
     expect(store.value).toBe(minted)
+    expect(cloudStore.value).toMatchObject({ sessionId: 'sess-1' })
     expect(r.body).not.toContain('motdepasse')
+    expect(JSON.stringify(cloudStore.value)).not.toContain('motdepasse')
   })
 
-  it('sans passerelle joignable, refuse de frapper : son numéro de série est indispensable', async () => {
-    const { app, cloud } = await started({ gateway: fakeGateway({ infoDown: true }) })
+  it('sans passerelle joignable, lie quand même le cloud : la borne n\'a pas besoin du numéro de série', async () => {
+    const { app, cloud, cloudStore } = await started({ gateway: fakeGateway({ infoDown: true }) })
     const r = await post(app, { user: 'u', password: 'p' })
     expect(r.statusCode).toBe(502)
-    expect(cloud.calls).toHaveLength(0)
+    expect(cloud.calls.some((c) => c.url.includes('/login/login.json'))).toBe(true)
+    expect(cloudStore.value).toMatchObject({ sessionId: 'sess-1' })
+    expect(cloud.calls.some((c) => c.url.includes('/tokens'))).toBe(false)
   })
 
-  it('refuse de frapper quand le jeton en place est encore bon : un jeton de plus serait inutilisé', async () => {
-    const { app, cloud } = await started({ env: { ENPHASE_TOKEN: token(200) } })
+  it('ne frappe pas quand le jeton en place est encore bon, mais lie le cloud (la borne)', async () => {
+    const { app, cloud, cloudStore } = await started({ env: { ENPHASE_TOKEN: token(200) } })
     const r = await post(app, { user: 'u', password: 'p' })
-    expect(r.statusCode).toBe(409)
-    expect(r.json()).toMatchObject({ error: { code: 'TOKEN_STILL_VALID', message: expect.stringContaining('200 day(s)') as unknown as string } })
-    expect(cloud.calls).toHaveLength(0)
+    expect(r.statusCode).toBe(200)
+    expect(r.json()).toMatchObject({ paired: true, cloudLinked: true, daysLeft: 200 })
+    expect(cloud.calls.some((c) => c.url.includes('/login/login.json'))).toBe(true)
+    expect(cloud.calls.some((c) => c.url.includes('/tokens'))).toBe(false)
+    expect(cloudStore.value).toMatchObject({ sessionId: 'sess-1' })
   })
 
   it('`force` passe outre ce garde-fou, pour qui veut vraiment remplacer son jeton', async () => {
@@ -224,24 +254,24 @@ describe('appairage par identifiants', () => {
     const { app, cloud, store } = await started({ env: { ENPHASE_TOKEN: token(200) }, cloud: fakeCloud(minted) })
     const r = await post(app, { user: 'u', password: 'p', force: true })
     expect(r.statusCode).toBe(200)
-    expect(r.json()).toMatchObject({ daysLeft: 365 })
-    expect(cloud.calls).toHaveLength(2)
+    expect(cloud.calls.some((c) => c.url.includes('/tokens'))).toBe(true)
     expect(store.value).toBe(minted)
   })
 
   it('un jeton qui expire bientôt ne déclenche PAS le garde-fou : le renouveler est justement le but', async () => {
     const { app, cloud } = await started({ env: { ENPHASE_TOKEN: token(5) } })
     expect((await post(app, { user: 'u', password: 'p' })).statusCode).toBe(200)
-    expect(cloud.calls).toHaveLength(2)
+    expect(cloud.calls.some((c) => c.url.includes('/tokens'))).toBe(true)
   })
 
   it('identifiants refusés par le cloud → 400, et rien n\'est mis en cache', async () => {
     const cloud = { calls: [] as { url: string; body: string }[], fetchImpl: vi.fn<FetchLike>(async () => response('{"message":"bad"}', 401)) }
-    const { app, store } = await started({ cloud: cloud as unknown as ReturnType<typeof fakeCloud> })
+    const { app, store, cloudStore } = await started({ cloud: cloud as unknown as ReturnType<typeof fakeCloud> })
     const r = await post(app, { user: 'u', password: 'faux' })
     expect(r.statusCode).toBe(400)
     expect(r.json()).toMatchObject({ error: { code: 'NEEDS_PAIRING' } })
     expect(store.value).toBeNull()
+    expect(cloudStore.value).toBeNull()
   })
 })
 
@@ -285,6 +315,23 @@ describe('relevé brut (pour écrire les fixtures du mappage)', () => {
     // toutes les routes authentifiées portent le Bearer
     const authed = gateway.calls.filter((c) => c.path !== '/info')
     expect(authed.every((c) => c.auth === `Bearer ${pasted}`)).toBe(true)
+  })
+
+  it('le relevé EVSE refuse tant que le compte Enlighten n\'est pas lié — un jeton collé ne suffit pas', async () => {
+    const pasted = token(300)
+    const { app } = await started()
+    await post(app, { token: pasted })
+    expect((await get(app, '/ev/raw')).statusCode).toBe(409)
+  })
+
+  it('le relevé EVSE sonde le cloud après un appairage par identifiants', async () => {
+    const minted = token(365)
+    const cloud = fakeCloud(minted)
+    const { app } = await started({ gateway: fakeGateway({ accept: minted }), cloud })
+    await post(app, { user: 'u', password: 'p' })
+    const raw = await get(app, '/ev/raw').then((r) => r.json() as Record<string, unknown>)
+    expect(raw).toHaveProperty('/users/self/token')
+    expect(cloud.calls.some((c) => c.url.includes('/ev_chargers/status') || c.url.includes('search_sites'))).toBe(true)
   })
 })
 
@@ -357,5 +404,38 @@ describe('appareils', () => {
   it('refuse toute commande : la passerelle est en lecture seule ici', async () => {
     const { plugin } = await started()
     await expect(plugin.execute('x', { type: 'light.set', on: true })).rejects.toMatchObject({ code: 'UNSUPPORTED_COMMAND' })
+  })
+
+  it('un jeton collé n\'ouvre pas la borne', async () => {
+    const { plugin } = await paired()
+    expect((await plugin.discover()).filter((d) => d.kind === 'ev_charger')).toHaveLength(0)
+  })
+
+  it('publie la borne après un appairage par compte, en lecture seule', async () => {
+    const minted = token(365)
+    const { plugin, app, ctx } = await started({ gateway: fakeGateway({ accept: minted }), cloud: fakeCloud(minted) })
+    expect((await post(app, { user: 'u', password: 'p' })).statusCode).toBe(200)
+    const devices = await plugin.discover()
+    const charger = devices.find((d) => d.kind === 'ev_charger')
+    expect(charger).toMatchObject({
+      id: 'enphase:482000000001', kind: 'ev_charger', name: 'Borne Enphase',
+      capabilities: [], meta: { manufacturer: 'Enphase', model: 'IQ-EVSE-EU-3032' },
+    })
+    await plugin.start()
+    await settle()
+    const state = (ctx.emitState as ReturnType<typeof vi.fn>).mock.calls.find(([id]) => id === '482000000001')
+    expect(state?.[1]).toMatchObject({ kind: 'ev_charger', status: 'connected', powerW: 0, sessionWh: 12363, maxCurrentA: 24 })
+    await plugin.stop()
+  })
+
+  it('le sous-item décoché retire la borne sans toucher au solaire', async () => {
+    const minted = token(365)
+    const { plugin, app } = await started({
+      gateway: fakeGateway({ accept: minted }), cloud: fakeCloud(minted), parts: { ev_charger: false },
+    })
+    await post(app, { user: 'u', password: 'p' })
+    const devices = await plugin.discover()
+    expect(devices.filter((d) => d.kind === 'ev_charger')).toHaveLength(0)
+    expect(devices.filter((d) => d.kind === 'sensor')).toHaveLength(20)
   })
 })

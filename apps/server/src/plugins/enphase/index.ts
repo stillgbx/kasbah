@@ -8,17 +8,21 @@ import { sendError } from '../../http/errors'
 import { createPoller } from '../../core/poll'
 import { EnphaseClient } from './client'
 import {
-  batteriesOf, isBatteryAvailable, isPanelStale, toBatteryPatch, toDailyPatch, toDescriptors, toPanelPatch,
-  toSitePatch, SITE_ID, type Inventory,
+  batteriesOf, chargerSummariesOf, chargersOf, isBatteryAvailable, isPanelStale, toBatteryPatch, toChargerDescriptors,
+  toChargerPatch, toDailyPatch, toDescriptors, toPanelPatch, toSitePatch, SITE_ID, type EvCharger, type EvChargerSummary,
+  type Inventory,
 } from './mapping'
 import {
   ensembleInventorySchema, ensemblePowerSchema, invertersSchema, livedataSchema, productionSchema,
   type EnsembleDevice, type Inverter,
 } from './types'
 import {
-  RENEW_WARNING_DAYS, checkToken, createTokenFile, mintEnphaseToken, rejectionMessage, resolveEnphaseToken,
+  RENEW_WARNING_DAYS, checkToken, createTokenFile, exchangeEnphaseToken, rejectionMessage, resolveEnphaseToken,
   type CheckedToken, type TokenSource, type TokenStore,
 } from './token'
+import {
+  EnlightenClient, createCloudFile, openCloudSession, probeEvRaw, type CloudStore,
+} from './cloud'
 
 // Plugin Enphase : production solaire, micro-onduleurs et batteries lus sur l'API LOCALE de la
 // passerelle IQ (aucun quota cloud, aucune dépendance à Internet une fois le jeton en place).
@@ -32,8 +36,10 @@ import {
 // documentation laissent passer des bugs que le vrai matériel trouve tout de suite. Elle a resservi
 // ici, le signe du stockage étant l'inverse de celui que le contrat attend.
 //
-// La borne IQ EV Charger 2 n'est PAS visible ici : elle ne parle qu'au cloud Enphase, son Modbus
-// local étant verrouillé côté installateur. Elle fera l'objet d'un chemin séparé.
+// La borne IQ EV Charger 2 n'est PAS sur la passerelle : elle parle au cloud Enphase (API privée
+// de l'appli). Un sous-item `ev_charger` et une session Enlighten distincte du jeton local.
+// Mappage d'après `GET /api/plugins/enphase/ev/raw` du 20/09 : lecture seule (aucune commande
+// capturée), `SUSPENDED_EVSE` / `INSUFFICIENT_SOLAR` lu comme `connected`.
 
 const optionalKey = z.string().trim().transform((s) => (s === '' ? undefined : s)).optional()
 
@@ -49,6 +55,11 @@ export const enphaseConfigSchema = z.object({
   ENPHASE_TOKEN: optionalKey,
   /** Où garder le jeton entre deux démarrages (il vaut un an). Chaîne vide = ne rien garder. */
   ENPHASE_TOKEN_FILE: z.string().trim().default(stateFile('enphase-token.json')),
+  /**
+   * Session Enlighten (borne). Distincte du jeton local : coller un JWT de passerelle n'ouvre pas
+   * le cloud. Chaîne vide = ne pas garder la session, donc retaper le compte pour relire la borne.
+   */
+  ENPHASE_CLOUD_FILE: z.string().trim().default(stateFile('enphase-cloud.json')),
   /** Cadence des compteurs : ils mesurent en temps réel, c'est ce que la vue Énergie montre. */
   ENPHASE_POLL_MS: z.coerce.number().int().min(2000).max(300_000).default(10_000),
   /**
@@ -101,6 +112,10 @@ export interface TokenStatus {
    * tablette suffit et survit aux redémarrages. Sans cache, il faudra le poser dans `.env`.
    */
   tokenFile: string | null
+  /** Session Enlighten en cache : indispensable pour la borne, inutile à la passerelle. */
+  cloudLinked: boolean
+  cloudFile: string | null
+  siteId: string | undefined
 }
 
 export interface EnphasePluginDeps {
@@ -110,6 +125,8 @@ export interface EnphasePluginDeps {
   cloudFetch?: FetchLike
   /** Injecté par les tests : cache du jeton (sinon un fichier sous `.state/`). */
   store?: TokenStore
+  /** Injecté par les tests : session Enlighten (borne). */
+  cloudStore?: CloudStore
 }
 
 export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin {
@@ -117,12 +134,16 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
   let config: EnphaseConfig | null = null
   let client: EnphaseClient | null = null
   let store: TokenStore | null = null
+  let cloudStore: CloudStore | null = null
+  let enlighten: EnlightenClient | null = null
   /** Identité de la passerelle (`/info`, sans jeton). Absente si elle n'a pas encore répondu. */
   let gateway: { serial: string; software?: string } | null = null
   let token: (CheckedToken & { source: TokenSource }) | null = null
   let lastError: string | null = null
   /** Dernier inventaire connu (compteurs, onduleurs, batteries) : source des descripteurs. */
   let inventory: Inventory | null = null
+  let chargers: EvCharger[] | null = null
+  let chargerSummaries: EvChargerSummary[] = []
   let pollers: { stop(): void }[] = []
 
   const log = () => ctx!.logger
@@ -152,6 +173,9 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
       source: token?.source,
       renewUnderDays: RENEW_WARNING_DAYS,
       tokenFile: config?.ENPHASE_TOKEN_FILE || null,
+      cloudLinked: !!enlighten?.hasSession,
+      cloudFile: config?.ENPHASE_CLOUD_FILE || null,
+      siteId: enlighten?.current?.siteId,
     }
   }
 
@@ -231,19 +255,73 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
     if (!inventory || deviceIds(inventory) !== deviceIds(next)) {
       log().info({ inverters: inverters.length, batteries: batteries.length }, 'Enphase inventory changed')
       inventory = next
-      ctx!.emitDevices(toDescriptors(next))
+      publishDevices()
     } else inventory = next
     lastError = null
+  }
+
+  const chargersOn = () => ctx!.parts.ev_charger !== false
+
+  function publishDevices() {
+    ctx!.emitDevices([
+      ...(inventory ? toDescriptors(inventory) : []),
+      ...(chargers ? toChargerDescriptors(chargers, chargerSummaries) : []),
+    ])
+  }
+
+  async function ensureSiteId(): Promise<string | undefined> {
+    if (!enlighten?.hasSession) return undefined
+    if (enlighten.current?.siteId) return enlighten.current.siteId
+    const sites = await enlighten.readSites(ctx!.signal)
+    if (!sites[0] || !enlighten.current) return undefined
+    const session = { ...enlighten.current, siteId: sites[0].id }
+    enlighten.setSession(session)
+    await cloudStore?.save(session)
+    return sites[0].id
+  }
+
+  async function fetchChargers(): Promise<void> {
+    const siteId = await ensureSiteId()
+    if (!siteId || !enlighten) { chargers = []; return }
+    const status = await enlighten.getJson(`/service/evse_controller/${siteId}/ev_chargers/status`, ctx!.signal)
+    const summary = await enlighten.getJson(
+      `/service/evse_controller/api/v2/${siteId}/ev_chargers/summary?filter_retired=true`, ctx!.signal,
+    ).catch(() => undefined)
+    chargers = chargersOf(status)
+    if (summary) chargerSummaries = chargerSummariesOf(summary)
+  }
+
+  async function pollChargers(): Promise<void> {
+    await fetchChargers()
+    publishDevices()
+    for (const c of chargers ?? []) {
+      if (!c.connected) ctx!.setAvailable(c.sn, false)
+      else {
+        const sum = chargerSummaries.find((s) => s.serialNumber === c.sn)
+        ctx!.emitState(c.sn, toChargerPatch(c, sum))
+      }
+    }
   }
 
   return {
     id: 'enphase',
     configSchema: enphaseConfigSchema,
+    parts: [{ id: 'ev_charger', labelKey: 'kinds.ev_charger', enabledByDefault: true }],
 
     async init(context) {
       ctx = context
       config = context.config as EnphaseConfig
       store = deps.store ?? (config.ENPHASE_TOKEN_FILE ? createTokenFile(config.ENPHASE_TOKEN_FILE, context.logger) : null)
+      cloudStore = deps.cloudStore ?? (config.ENPHASE_CLOUD_FILE ? createCloudFile(config.ENPHASE_CLOUD_FILE, context.logger) : null)
+      enlighten = new EnlightenClient({
+        ...(deps.cloudFetch ? { fetchImpl: deps.cloudFetch } : {}),
+        logger: context.logger,
+      })
+      const cloud = cloudStore ? await cloudStore.load() : null
+      if (cloud) {
+        enlighten.setSession(cloud)
+        log().info({ siteId: cloud.siteId }, 'Enlighten session restored')
+      }
       client = new EnphaseClient({
         host: config.ENPHASE_HOST,
         ...(deps.gatewayFetch ? { fetchImpl: deps.gatewayFetch } : {}),
@@ -273,20 +351,39 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
       }
     },
 
-    /** Sans jeton, rien à publier : la carte des Réglages dit quoi faire, et l'inventaire suivra. */
+    /** Sans jeton local ET sans session cloud, rien à publier. */
     async discover(): Promise<DeviceDescriptor[]> {
-      if (!client?.hasToken) return []
-      inventory = await readInventory()
-      log().info({ inverters: inventory.inverters.length, batteries: inventory.batteries.length }, 'Enphase inventory read')
-      return toDescriptors(inventory)
+      const list: DeviceDescriptor[] = []
+      if (client?.hasToken) {
+        inventory = await readInventory()
+        log().info({ inverters: inventory.inverters.length, batteries: inventory.batteries.length }, 'Enphase inventory read')
+        list.push(...toDescriptors(inventory))
+      }
+      if (chargersOn() && enlighten?.hasSession) {
+        try {
+          await fetchChargers()
+          if (chargers) list.push(...toChargerDescriptors(chargers, chargerSummaries))
+        } catch (err) {
+          log().warn({ err }, 'Enphase EV charger inventory unread')
+        }
+      }
+      return list
     },
 
     async start() {
-      if (!client?.hasToken) return                      // un appairage plus tard relancera le plugin
-      pollers = [
-        createPoller({ name: 'enphase:meters', intervalMs: config!.ENPHASE_POLL_MS, fn: pollMeters, clock: ctx!.clock, signal: ctx!.signal, logger: ctx!.logger }),
-        createPoller({ name: 'enphase:devices', intervalMs: config!.ENPHASE_SLOW_POLL_MS, fn: pollDevices, clock: ctx!.clock, signal: ctx!.signal, logger: ctx!.logger }),
-      ]
+      pollers = []
+      if (client?.hasToken) {
+        pollers.push(
+          createPoller({ name: 'enphase:meters', intervalMs: config!.ENPHASE_POLL_MS, fn: pollMeters, clock: ctx!.clock, signal: ctx!.signal, logger: ctx!.logger }),
+          createPoller({ name: 'enphase:devices', intervalMs: config!.ENPHASE_SLOW_POLL_MS, fn: pollDevices, clock: ctx!.clock, signal: ctx!.signal, logger: ctx!.logger }),
+        )
+      }
+      if (chargersOn() && enlighten?.hasSession) {
+        pollers.push(createPoller({
+          name: 'enphase:ev', intervalMs: config!.ENPHASE_SLOW_POLL_MS, fn: pollChargers,
+          clock: ctx!.clock, signal: ctx!.signal, logger: ctx!.logger,
+        }))
+      }
     },
 
     async execute(_externalId, command: Command) {
@@ -300,6 +397,9 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
       token = null
       gateway = null
       inventory = null
+      chargers = null
+      chargerSummaries = []
+      enlighten = null
     },
 
     registerRoutes(app: FastifyInstance) {
@@ -308,10 +408,11 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
 
       /**
        * Appairage. Deux corps acceptés :
-       *  - `{ token }` : un jeton obtenu à la main sur entrez.enphaseenergy.com ;
-       *  - `{ user, password }` : les identifiants du compte Enphase, qui servent à frapper un
-       *    jeton puis sont OUBLIÉS — ni journalisés, ni écrits, ni renvoyés. C'est le choix
-       *    délibéré de ne pas les garder en configuration.
+       *  - `{ token }` : un jeton obtenu à la main sur entrez.enphaseenergy.com — ouvre la
+       *    passerelle, PAS le cloud de la borne ;
+       *  - `{ user, password }` : identifiants du compte. Ils ouvrent d'abord une session
+       *    Enlighten (gardée, c'est elle qui lit la borne), puis frappent un jeton local s'il
+       *    manque ou expire. Le mot de passe est OUBLIÉ — ni journalisé, ni écrit, ni renvoyé.
        */
       app.post('/token', async (req, reply) => {
         if (!client || !ctx) return sendError(reply, 409, 'NEEDS_PAIRING', 'plugin not started')
@@ -327,18 +428,27 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
           if ('token' in parsed.data) {
             await adopt(parsed.data.token)
           } else {
+            const session = await openCloudSession({
+              user: parsed.data.user, password: parsed.data.password,
+              ...(deps.cloudFetch ? { fetchImpl: deps.cloudFetch } : {}),
+              signal: ctx.signal, logger: ctx.logger,
+            })
+            enlighten?.setSession(session)
+            await cloudStore?.save(session)
             if (!gateway) {
               return sendError(reply, 502, 'UPSTREAM_ERROR', `cannot reach the gateway at ${config!.ENPHASE_HOST}: its serial number is needed to mint a token`)
             }
             // garde-fou : un jeton encore confortablement valable n'a pas à être remplacé. Sans
-            // cela, chaque visite de la carte des Réglages pourrait créer un jeton de plus chez
-            // Enphase, tous valables un an et tous inutilisés sauf le dernier.
+            // cela, chaque validation du compte pourrait créer un jeton de plus chez Enphase,
+            // tous valables un an et tous inutilisés sauf le dernier. La session cloud, elle,
+            // EST déjà enregistrée : on répond 200 (compte lié, JWT intact). `force` reste le
+            // seul moyen de le remplacer avant l'avertissement des 30 jours.
             if (token && token.stage === 'ok' && !parsed.data.force) {
-              return sendError(reply, 409, 'TOKEN_STILL_VALID',
-                `the current token is still valid for ${token.daysLeft} day(s): send force to replace it anyway`)
+              log().info({ daysLeft: token.daysLeft, cloud: true }, 'Enphase Enlighten session linked, gateway token kept')
+              return status()
             }
-            const minted = await mintEnphaseToken({
-              user: parsed.data.user, password: parsed.data.password, serial: gateway.serial,
+            const minted = await exchangeEnphaseToken({
+              sessionId: session.sessionId, serial: gateway.serial, username: parsed.data.user,
               ...(deps.cloudFetch ? { fetchImpl: deps.cloudFetch } : {}),
               signal: ctx.signal,
             })
@@ -350,7 +460,7 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
           const code = e.code ?? 'UPSTREAM_ERROR'
           return sendError(reply, code === 'NEEDS_PAIRING' ? 400 : 502, code, e.message)
         }
-        log().info({ daysLeft: token?.daysLeft, role: token?.claims.role }, 'Enphase gateway paired')
+        log().info({ daysLeft: token?.daysLeft, role: token?.claims.role, cloud: !!enlighten?.hasSession }, 'Enphase gateway paired')
         return status()
       })
 
@@ -368,22 +478,34 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
         }
         return out
       })
+
+      /**
+       * Relevé BRUT du cloud EVSE, pour écrire les fixtures de la borne depuis de vraies réponses.
+       * Indépendant du jeton local : coller un JWT de passerelle ne suffit pas, il faut le compte.
+       * Une route en échec est rendue avec son erreur au lieu de faire tomber tout le relevé.
+       */
+      app.get('/ev/raw', async (_req, reply) => {
+        if (!enlighten?.hasSession) return sendError(reply, 409, 'NEEDS_PAIRING', 'pair with the Enphase account first (a pasted gateway token is not enough)')
+        return probeEvRaw(enlighten, enlighten.current?.siteId, ctx?.signal)
+      })
     },
 
     health(): PluginHealth {
-      const keys = ['ENPHASE_HOST', 'ENPHASE_TOKEN', 'ENPHASE_TOKEN_FILE']
+      const keys = ['ENPHASE_HOST', 'ENPHASE_TOKEN', 'ENPHASE_TOKEN_FILE', 'ENPHASE_CLOUD_FILE']
       if (!token) {
         return { status: 'needs_pairing', detail: lastError ?? 'no Enphase token: pair the gateway from Settings', keys }
       }
       if (token.stage === 'expiring') {
         // `degraded` et non `ok` : c'est ce qui fait passer la pastille des Réglages à l'orange
         // AVANT la panne. Un jeton d'installateur (12 h) naît dans cet état, et c'est voulu.
-        return { status: 'degraded', detail: `Enphase token expires in ${token.daysLeft} day(s): renew it`, keys, deviceCount: inventory ? toDescriptors(inventory).length : 0 }
+        return { status: 'degraded', detail: `Enphase token expires in ${token.daysLeft} day(s): renew it`, keys, deviceCount: (inventory ? toDescriptors(inventory).length : 0) + (chargers?.length ?? 0) }
       }
-      const deviceCount = inventory ? toDescriptors(inventory).length : 0
+      const chargerCount = chargers?.length ?? 0
+      const deviceCount = (inventory ? toDescriptors(inventory).length : 0) + chargerCount
       if (lastError) return { status: 'degraded', detail: lastError, keys, deviceCount }
       const parc = inventory ? ` · ${inventory.inverters.length} onduleurs, ${inventory.batteries.length} batteries` : ''
-      return { status: 'ok', detail: `IQ Gateway ${gateway?.software ?? ''}${parc}`.trim(), keys, deviceCount }
+      const borne = chargerCount ? ` · ${chargerCount} borne` : ''
+      return { status: 'ok', detail: `IQ Gateway ${gateway?.software ?? ''}${parc}${borne}`.trim(), keys, deviceCount }
     },
   }
 }

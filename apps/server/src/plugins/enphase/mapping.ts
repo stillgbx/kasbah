@@ -13,7 +13,9 @@ import {
 //   - UN `energy` par batterie IQ, avec la seule capacité `storage` : l'UI leur donne déjà l'icône
 //     batterie (`strokeIcons.ts`), et chacune se place dans une pièce.
 //
-// La borne IQ EV Charger 2 n'est PAS ici : elle ne parle qu'au cloud Enphase.
+// La borne IQ EV Charger 2 parle au cloud, pas à la passerelle : `chargersOf` / `toChargerPatch`
+// sont ici parce que le contrat est le même fichier, mais leurs fixtures viennent de
+// `__fixtures__/evse.ts` (capture Enlighten), pas de `gateway.ts`.
 
 export const PLUGIN_ID = 'enphase'
 /** Identifiant du site : un seul par passerelle, nom stable pour que house.json puisse le lier. */
@@ -187,4 +189,122 @@ export function toBatteryPatch(battery: EnsembleDevice, power: EnsemblePower | u
 /** Une batterie qui ne communique plus garde ses dernières valeurs, grisées côté UI. */
 export function isBatteryAvailable(battery: EnsembleDevice): boolean {
   return battery.communicating !== false
+}
+
+/** Une ligne de borne, extraite de `/ev_chargers/status` (v1). Champs absents = inconnus, pas des zéros. */
+export interface EvCharger {
+  sn: string
+  name?: string
+  connected: boolean
+  charging: boolean
+  pluggedIn: boolean
+  faulted: boolean
+  sessionWh: number
+  chargeLevel?: number
+}
+
+export interface EvChargerSummary {
+  serialNumber: string
+  displayName?: string
+  modelName?: string
+  maxCurrent?: number
+  defaultChargeLevel?: number
+}
+
+function num(v: unknown): number | undefined {
+  if (typeof v === 'number' && Number.isFinite(v)) return v
+  if (typeof v === 'string' && v.trim() !== '') {
+    const n = Number(v)
+    if (Number.isFinite(n)) return n
+  }
+  return undefined
+}
+
+/**
+ * Bornes d'un site, d'après le corps v1. `error: {}` y figure même en succès (capture du 20/09) :
+ * ce n'est pas un échec. Une enveloppe inconnue rend une liste vide, jamais une exception.
+ */
+export function chargersOf(json: unknown): EvCharger[] {
+  if (!json || typeof json !== 'object') return []
+  const data = (json as { data?: { chargers?: unknown } }).data
+  if (!data || !Array.isArray(data.chargers)) return []
+  const out: EvCharger[] = []
+  for (const raw of data.chargers) {
+    if (!raw || typeof raw !== 'object') continue
+    const o = raw as Record<string, unknown>
+    const sn = typeof o.sn === 'string' && o.sn.trim() ? o.sn : undefined
+    if (!sn) continue
+    const session = o.session_d && typeof o.session_d === 'object' ? o.session_d as Record<string, unknown> : undefined
+    const chargeLevel = num(session?.charge_level)
+    out.push({
+      sn,
+      ...(typeof o.name === 'string' && o.name.trim() ? { name: o.name.trim() } : {}),
+      connected: o.connected === true,
+      charging: o.charging === true,
+      pluggedIn: o.pluggedIn === true,
+      faulted: o.faulted === true,
+      sessionWh: Math.round(num(session?.e_c) ?? 0),
+      ...(chargeLevel !== undefined ? { chargeLevel } : {}),
+    })
+  }
+  return out
+}
+
+export function chargerSummariesOf(json: unknown): EvChargerSummary[] {
+  if (!json || typeof json !== 'object') return []
+  const data = (json as { data?: unknown }).data
+  if (!Array.isArray(data)) return []
+  const out: EvChargerSummary[] = []
+  for (const raw of data) {
+    if (!raw || typeof raw !== 'object') continue
+    const o = raw as Record<string, unknown>
+    const serialNumber = typeof o.serialNumber === 'string' && o.serialNumber.trim() ? o.serialNumber : undefined
+    if (!serialNumber) continue
+    const details = o.chargeLevelDetails && typeof o.chargeLevelDetails === 'object'
+      ? o.chargeLevelDetails as Record<string, unknown> : undefined
+    const maxCurrent = num(o.maxCurrent)
+    const defaultChargeLevel = num(details?.defaultChargeLevel)
+    out.push({
+      serialNumber,
+      ...(typeof o.displayName === 'string' ? { displayName: o.displayName } : {}),
+      ...(typeof o.modelName === 'string' ? { modelName: o.modelName } : {}),
+      ...(maxCurrent !== undefined ? { maxCurrent } : {}),
+      ...(defaultChargeLevel !== undefined ? { defaultChargeLevel } : {}),
+    })
+  }
+  return out
+}
+
+export function toChargerDescriptors(chargers: EvCharger[], summaries: EvChargerSummary[] = []): DeviceDescriptor[] {
+  return chargers.map((c) => {
+    const sum = summaries.find((s) => s.serialNumber === c.sn)
+    return descriptor(
+      c.sn, 'ev_charger', c.name || `Borne ${shortSerial(c.sn)}`,
+      // lecture seule tant qu'aucune commande n'a été capturée : les boutons Démarrer / Arrêter
+      // de l'UI ne s'affichent que si `charge_control` est déclaré.
+      [],
+      { manufacturer: 'Enphase', ...(sum?.modelName ? { model: sum.modelName } : {}) },
+    )
+  })
+}
+
+/**
+ * État d'une borne. Capture du 20/09 : branchée, pas en charge, `SUSPENDED_EVSE` /
+ * `INSUFFICIENT_SOLAR` (charge verte à l'arrêt faute de soleil). Ça reste `connected`, pas une
+ * panne. Aucun watt dans cette trame : `powerW` vaut 0 hors charge, et 0 aussi EN charge tant
+ * qu'une capture en cours n'a pas montré le champ — on n'invente pas 7 kW.
+ */
+export function toChargerPatch(charger: EvCharger, summary?: EvChargerSummary): StatePatch {
+  const status = charger.faulted ? 'error'
+    : charger.charging ? 'charging'
+    : charger.pluggedIn ? 'connected'
+    : 'disconnected'
+  const maxCurrentA = charger.chargeLevel ?? summary?.defaultChargeLevel ?? summary?.maxCurrent
+  return {
+    kind: 'ev_charger',
+    status,
+    powerW: 0,
+    sessionWh: charger.sessionWh,
+    ...(maxCurrentA !== undefined ? { maxCurrentA: Math.round(maxCurrentA) } : {}),
+  } as StatePatch
 }

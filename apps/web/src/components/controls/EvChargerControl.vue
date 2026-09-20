@@ -16,7 +16,7 @@ const emit = defineEmits<{ command: [cmd: CommandInput] }>()
       <span>{{ $t('charger.session') }} · {{ formatEnergy(state.sessionWh, $i18n.locale) }}</span>
       <span v-if="state.maxCurrentA">{{ $t('charger.maxCurrent') }} · {{ state.maxCurrentA }} A</span>
     </div>
-    <div class="d-flex ga-2 mb-3">
+    <div v-if="descriptor.capabilities.includes('charge_control')" class="d-flex ga-2 mb-3">
       <v-btn class="flex-grow-1" height="56" variant="tonal" color="success" prepend-icon="bolt" :disabled="disabled || state.status === 'disconnected'"
              @click="emit('command', { type: 'ev_charger.start' })">{{ $t('common.start') }}</v-btn>
       <v-btn class="flex-grow-1" height="56" variant="tonal" prepend-icon="boltOff" :disabled="disabled || state.status !== 'charging'"
