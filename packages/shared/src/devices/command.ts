@@ -41,6 +41,11 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('media_player.set_mute'), muted: z.boolean() }),
   /** Se placer dans le morceau (capacité `seek`) ; sans effet sur un direct, qui n'a pas de durée. */
   z.object({ type: z.literal('media_player.seek'), positionS: z.number().min(0) }),
+  /** Charger et lire un flux HTTP(S) (capacité `play_url`) : MP3, AAC, HLS… pas une page web. */
+  z.object({
+    type: z.literal('media_player.play_url'),
+    url: z.string().url().max(2048).refine((u) => /^https?:\/\//i.test(u), 'http or https only'),
+  }),
   // climate
   z.object({ type: z.literal('climate.set_mode'), mode: z.enum(CLIMATE_MODES) }),
   z.object({ type: z.literal('climate.set_target_temp'), targetTempC: z.number() }),
@@ -81,6 +86,7 @@ export const COMMAND_REQUIRES: Record<CommandType, Capability> = {
   'media_player.play': 'playback', 'media_player.pause': 'playback', 'media_player.stop': 'playback',
   'media_player.next': 'track_skip', 'media_player.previous': 'track_skip',
   'media_player.set_volume': 'volume', 'media_player.set_mute': 'mute', 'media_player.seek': 'seek',
+  'media_player.play_url': 'play_url',
   'climate.set_mode': 'hvac_mode', 'climate.set_target_temp': 'target_temp',
   'vacuum.start': 'clean', 'vacuum.pause': 'clean', 'vacuum.dock': 'dock', 'vacuum.locate': 'locate',
   'mower.start': 'mow', 'mower.pause': 'mow', 'mower.park': 'park',

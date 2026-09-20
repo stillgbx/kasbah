@@ -93,7 +93,7 @@
   "media": {
     "summary": "{playing} en diffusion sur {total}", "none": "Aucun lecteur remonté par les plugins.",
     "playing": "Lecture", "paused": "En pause", "idle": "Au repos", "on": "À l'écran", "off": "Éteint", "nothing": "Rien en diffusion", "relaying": "Son de {name}",
-    "play": "Lire", "next": "Piste suivante", "previous": "Piste précédente", "mute": "Couper le son", "unmute": "Rétablir le son", "volume": "Volume", "volumeUp": "Monter le son", "volumeDown": "Baisser le son", "seek": "Position dans le morceau",
+    "play": "Lire", "playUrl": "Lire une URL", "urlPlaceholder": "https://… (mp3, HLS…)", "next": "Piste suivante", "previous": "Piste précédente", "mute": "Couper le son", "unmute": "Rétablir le son", "volume": "Volume", "volumeUp": "Monter le son", "volumeDown": "Baisser le son", "seek": "Position dans le morceau",
     "classes": { "speaker": "Enceinte", "tv": "Téléviseur", "display": "Écran connecté" }
   },
   "rooms": {

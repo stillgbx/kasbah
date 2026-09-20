@@ -51,7 +51,7 @@ export function manufacturerOf(model: string | undefined): string | undefined {
  */
 export function toDescriptor(service: CastService, volume?: { controlType?: string }): DeviceDescriptor {
   const fixed = volume?.controlType === 'fixed'
-  const capabilities: Capability[] = ['playback', 'now_playing', 'track_skip', 'seek', ...(fixed ? [] : ['volume', 'mute'] as Capability[])]
+  const capabilities: Capability[] = ['playback', 'now_playing', 'track_skip', 'seek', 'play_url', ...(fixed ? [] : ['volume', 'mute'] as Capability[])]
   const model = service.txt.md
   return {
     id: `${PLUGIN_ID}:${service.txt.id}`,
@@ -187,4 +187,36 @@ export function toMediaPatch(media: MediaStatus | undefined, app: ReceiverApplic
       ...(isLive(media) ? { live: true } : {}),
     },
   }
+}
+
+/** Récepteur média par défaut Cast (`LOAD` d'une URL HTTP) — pas l'appli YouTube / Spotify. */
+export const DEFAULT_MEDIA_RECEIVER = 'CC1AD845'
+
+export type CastLoadMedia = {
+  contentId: string
+  contentType: string
+  streamType: 'BUFFERED' | 'LIVE'
+  metadata: { metadataType: 0; title: string }
+}
+
+/**
+ * Ce que le récepteur média par défaut veut dans `LOAD.media` : type MIME et `LIVE` vs `BUFFERED`
+ * d'après le chemin (HLS = direct). Une URL sans extension est un MP3 : c'est le cas des webradios
+ * Icecast (franceinfo-midfi.mp3) comme d'un fichier nu.
+ */
+export function mediaFromUrl(url: string): CastLoadMedia {
+  let path = url
+  try { path = new URL(url).pathname } catch { /* garder la chaîne */ }
+  const lower = path.toLowerCase()
+  const live = lower.endsWith('.m3u8') || lower.endsWith('.m3u')
+  let contentType = 'audio/mpeg'
+  if (live) contentType = 'application/x-mpegurl'
+  else if (lower.endsWith('.mp4') || lower.endsWith('.m4v')) contentType = 'video/mp4'
+  else if (lower.endsWith('.m4a') || lower.endsWith('.aac')) contentType = 'audio/mp4'
+  else if (lower.endsWith('.flac')) contentType = 'audio/flac'
+  else if (lower.endsWith('.ogg') || lower.endsWith('.opus')) contentType = 'audio/ogg'
+  else if (lower.endsWith('.wav')) contentType = 'audio/wav'
+  let title = 'Stream'
+  try { title = new URL(url).hostname || title } catch { /* */ }
+  return { contentId: url, contentType, streamType: live ? 'LIVE' : 'BUFFERED', metadata: { metadataType: 0, title } }
 }

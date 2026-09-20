@@ -460,6 +460,7 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
       case 'media_player.next': return c.queueJump(1)
       case 'media_player.previous': return c.previous()                 // début du morceau passé 3 s, sinon le précédent
       case 'media_player.seek': return c.seek(command.positionS)
+      case 'media_player.play_url': return c.playUrl(command.url)
       case 'media_player.set_volume':
         if (entry.controlType === 'fixed') throw new PluginError('UNSUPPORTED_COMMAND', 'volume is fixed on this device (set it on the TV)')
         return c.setVolume({ level: Math.min(100, Math.max(0, command.volume)) / 100 })

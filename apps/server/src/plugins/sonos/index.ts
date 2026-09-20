@@ -8,7 +8,7 @@ import { sendError } from '../../http/errors'
 import type { FetchLike } from '../../core/sse'
 import { createSsdpDiscovery, type SonosDiscovery } from './discovery'
 import { createKnownPlayersFile, type KnownPlayers } from './known'
-import { formatSonosTime, parseDeviceDescription, parseMute, parsePosition, parseTransport, parseVolume, parseZoneMembers, parseZpInfo, toDescriptor, toPlayback, toStatePatch } from './mapping'
+import { formatSonosTime, parseDeviceDescription, parseMute, parsePosition, parseTransport, parseVolume, parseZoneMembers, parseZpInfo, streamLoad, toDescriptor, toPlayback, toStatePatch } from './mapping'
 import { AV_PATH, AV_URN, RC_PATH, RC_URN, ZG_PATH, ZG_URN, httpGet, soapAction } from './soap'
 import type { PositionInfo, SonosPlayer, TransportInfo, ZoneMember } from './types'
 import { PLUGIN_ID } from './types'
@@ -18,7 +18,8 @@ import { PLUGIN_ID } from './types'
 // GetTransportInfo / GetPositionInfo / GetZoneGroupState en HTTP 200. `/status/info` est vide ;
 // l'identité est dans `/status/zp`. wss://:1443 refuse sans clé d'API (HTTP 400) : hors phase 1.
 //
-// PHASE 1 : contrat `media_player` (état, télécommande). Pas de lancement de file / Spotify.
+// PHASE 1 : contrat `media_player` (état, télécommande) + `play_url` (SetAVTransportURI d'un flux
+// HTTP). Pas de lancement Spotify / file Sonos.
 
 const optionalKey = z.string().trim().transform((s) => (s === '' ? undefined : s)).optional()
 
@@ -274,6 +275,12 @@ export function createSonosPlugin(deps: SonosPluginDeps = {}): DevicePlugin {
         if (parseDidlLive(entry)) throw new PluginError('UNSUPPORTED_COMMAND', 'there is nothing to seek through')
         await av('Seek', { InstanceID: '0', Unit: 'REL_TIME', Target: formatSonosTime(command.positionS) })
         return
+      case 'media_player.play_url': {
+        const load = streamLoad(command.url)
+        await av('SetAVTransportURI', { InstanceID: '0', CurrentURI: load.uri, CurrentURIMetaData: load.didl })
+        await av('Play', { InstanceID: '0', Speed: '1' })
+        return
+      }
       case 'media_player.set_volume':
         await soap(entry.player.host, RC_PATH, RC_URN, 'SetVolume', {
           InstanceID: '0', Channel: 'Master', DesiredVolume: String(Math.max(0, Math.min(100, Math.round(command.volume)))),

@@ -18,8 +18,10 @@ export const CAPABILITIES = [
   // `preset_set` = cette mémoire est RÉINSCRIPTIBLE — trois niveaux distincts, et un même
   // appareil peut en avoir un sans les suivants (un RTS rappelle sans lire ni écrire)
   'open_close', 'position', 'tilt', 'stop', 'preset', 'preset_set',
-  // media_player
-  'playback', 'volume', 'mute', 'now_playing', 'track_skip', 'seek',
+  // media_player — `play_url` : charger un flux HTTP(S) (MP3, HLS…) ; distinct de `playback`
+  // (lire / pause / stop sur la session déjà là). Cast et Sonos le déclarent ; un lecteur qui ne
+  // sait que télécommander (appli native sans LOAD) ne le déclare pas.
+  'playback', 'volume', 'mute', 'now_playing', 'track_skip', 'seek', 'play_url',
   // climate
   'hvac_mode', 'target_temp', 'current_temp', 'humidity', 'fan_mode',
   // vacuum / mower — `journal` : l'appareil tient un journal de ce qui lui arrive (erreurs,
@@ -59,7 +61,7 @@ export type Capability = (typeof CAPABILITIES)[number]
 export const KIND_CAPABILITIES: Record<DeviceKind, readonly Capability[]> = {
   light: ['on_off', 'brightness', 'color_temp', 'color', 'effect'],
   cover: ['open_close', 'position', 'tilt', 'stop', 'preset', 'preset_set'],
-  media_player: ['playback', 'volume', 'mute', 'now_playing', 'track_skip', 'seek'],
+  media_player: ['playback', 'volume', 'mute', 'now_playing', 'track_skip', 'seek', 'play_url'],
   climate: ['hvac_mode', 'target_temp', 'current_temp', 'humidity', 'fan_mode'],
   vacuum: ['clean', 'dock', 'battery', 'locate', 'mop'],
   mower: ['mow', 'park', 'battery', 'schedule', 'journal'],

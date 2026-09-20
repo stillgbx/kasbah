@@ -93,7 +93,7 @@
   "media": {
     "summary": "{playing} playing out of {total}", "none": "No media player reported by the plugins.",
     "playing": "Playing", "paused": "Paused", "idle": "Idle", "on": "On screen", "off": "Off", "nothing": "Nothing playing", "relaying": "Sound from {name}",
-    "play": "Play", "next": "Next track", "previous": "Previous track", "mute": "Mute", "unmute": "Unmute", "volume": "Volume", "volumeUp": "Volume up", "volumeDown": "Volume down", "seek": "Position in the track",
+    "play": "Play", "playUrl": "Play a URL", "urlPlaceholder": "https://… (mp3, HLS…)", "next": "Next track", "previous": "Previous track", "mute": "Mute", "unmute": "Unmute", "volume": "Volume", "volumeUp": "Volume up", "volumeDown": "Volume down", "seek": "Position in the track",
     "classes": { "speaker": "Speaker", "tv": "TV", "display": "Smart display" }
   },
   "rooms": {

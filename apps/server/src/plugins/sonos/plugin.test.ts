@@ -48,7 +48,7 @@ function fakeNetwork(opts: { playing?: boolean } = {}) {
     if (action.includes('GetTransportInfo')) return textRes(playing.value ? SOAP_PLAYING : SOAP_STOPPED)
     if (action.includes('GetPositionInfo')) return textRes(playing.value ? SOAP_POSITION_PLAYING : SOAP_POSITION_IDLE)
     if (action.includes('GetZoneGroupState')) return textRes(SOAP_ZONES)
-    if (action.includes('#Play') || action.includes('#Pause') || action.includes('#Stop') || action.includes('#Next') || action.includes('#Previous') || action.includes('#Seek') || action.includes('#SetVolume') || action.includes('#SetMute')) {
+    if (action.includes('#Play') || action.includes('#Pause') || action.includes('#Stop') || action.includes('#Next') || action.includes('#Previous') || action.includes('#Seek') || action.includes('#SetVolume') || action.includes('#SetMute') || action.includes('#SetAVTransportURI')) {
       if (action.includes('#Play')) playing.value = true
       if (action.includes('#Pause') || action.includes('#Stop')) playing.value = false
       return textRes(SOAP_OK)
@@ -232,6 +232,20 @@ describe('sonos plugin', () => {
     const second = fakeContext(new ManualClock(0))
     await plugin.init(second.ctx)
     expect((await plugin.discover()).map((d) => d.externalId)).toEqual([UUID_PORT])
+    await plugin.stop()
+  })
+
+  it('sets AVTransport URI then Plays for play_url', async () => {
+    const net = fakeNetwork()
+    const { plugin } = await started(net, fakeDiscovery(), fakeKnown([PLAYER_PLAY3]))
+    const url = 'https://icecast.radiofrance.fr/franceinfo-midfi.mp3'
+    await plugin.execute(UUID_PLAY3, { type: 'media_player.play_url', url })
+    const actions = net.calls.map((c) => c.action).filter(Boolean)
+    const set = actions.findIndex((a) => a.includes('#SetAVTransportURI'))
+    const play = actions.findIndex((a) => a.includes('#Play'))
+    expect(set).toBeGreaterThanOrEqual(0)
+    expect(play).toBeGreaterThan(set)
+    expect(net.playing.value).toBe(true)
     await plugin.stop()
   })
 })

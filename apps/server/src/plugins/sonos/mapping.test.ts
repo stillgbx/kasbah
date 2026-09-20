@@ -8,7 +8,7 @@ import {
 } from './__fixtures__/network'
 import {
   formatSonosTime, parseDeviceDescription, parseDidl, parseMute, parsePosition, parseSonosTime,
-  parseSsdpHeaders, parseTransport, parseVolume, parseZoneMembers, parseZpInfo, toDescriptor,
+  parseSsdpHeaders, parseTransport, parseVolume, parseZoneMembers, parseZpInfo, streamLoad, toDescriptor,
   toPlayback, toStatePatch, uuidFromUsn,
 } from './mapping'
 
@@ -117,6 +117,16 @@ describe('sonos mapping', () => {
     expect(d.externalId).toBe(UUID_PORT)
     expect(d.meta.forgettable).toBe(true)
     expect(d.meta.mediaPlayer).toEqual({ deviceClass: 'speaker' })
+    expect(d.capabilities).toContain('play_url')
     expect(d.id).not.toContain('::')
+  })
+
+  it('builds DIDL for an HTTP stream', () => {
+    const { uri, didl } = streamLoad('https://icecast.radiofrance.fr/franceinfo-midfi.mp3')
+    expect(uri).toBe('https://icecast.radiofrance.fr/franceinfo-midfi.mp3')
+    expect(didl).toContain('icecast.radiofrance.fr')
+    expect(didl).toContain('audio/mpeg')
+    expect(didl).toContain('musicTrack')
+    expect(streamLoad('https://ex.example/live.m3u8').didl).toContain('audioBroadcast')
   })
 })

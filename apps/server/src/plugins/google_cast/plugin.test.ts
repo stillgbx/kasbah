@@ -54,10 +54,40 @@ function fakeReceiver(receiver: Record<string, unknown>, media?: Record<string, 
         }
         // STOP d'une session : l'appli se ferme, le récepteur répond par un état sans appli
         if (body.type === 'STOP') { state.receiver = { ...state.receiver, applications: [] }; state.media = undefined }
+        if (body.type === 'LAUNCH') {
+          const appId = String(body.appId)
+          state.receiver = {
+            ...state.receiver,
+            applications: [{
+              appId, appType: 'WEB', displayName: 'Default Media Receiver', iconUrl: '', isIdleScreen: false,
+              namespaces: [{ name: 'urn:x-cast:com.google.cast.media' }],
+              sessionId: 'session-dmr', statusText: '', transportId: 'transport-dmr', universalAppId: appId,
+            }],
+          }
+          state.media = undefined
+        }
         reply(m.destinationId, NS_RECEIVER, { type: 'RECEIVER_STATUS', requestId, status: state.receiver })
       }
       if (m.namespace === NS_MEDIA) {
-        if (!state.media) { reply(m.destinationId, NS_MEDIA, { type: 'INVALID_REQUEST', requestId, reason: 'INVALID_MEDIA_SESSION_ID' }); continue }
+        if (body.type === 'LOAD') {
+          const loaded = body.media as { contentId: string; contentType?: string; streamType?: string; metadata?: { title?: string } }
+          state.media = {
+            mediaSessionId: 1, playerState: 'PLAYING', currentTime: 0,
+            media: {
+              contentId: loaded.contentId,
+              contentType: loaded.contentType ?? 'audio/mpeg',
+              streamType: loaded.streamType ?? 'BUFFERED',
+              metadata: { metadataType: 0, title: loaded.metadata?.title ?? loaded.contentId },
+            },
+          }
+          reply(m.destinationId, NS_MEDIA, mediaStatus(requestId))
+          continue
+        }
+        if (!state.media) {
+          if (body.type === 'GET_STATUS') { reply(m.destinationId, NS_MEDIA, { type: 'MEDIA_STATUS', requestId, status: [] }); continue }
+          reply(m.destinationId, NS_MEDIA, { type: 'INVALID_REQUEST', requestId, reason: 'INVALID_MEDIA_SESSION_ID' })
+          continue
+        }
         if (body.type === 'PAUSE') state.media.playerState = 'PAUSED'
         if (body.type === 'PLAY') state.media.playerState = 'PLAYING'
         if (body.type === 'SEEK') state.media.currentTime = body.currentTime
@@ -261,6 +291,25 @@ describe('google_cast plugin', () => {
     await flush()
     expect(patches(ctx, TXT_NEST_MINI.id).at(-1)).toEqual({ playback: 'idle', nowPlaying: null })
     await expect(plugin.execute(TXT_NEST_MINI.id, { type: 'media_player.play' })).rejects.toMatchObject({ code: 'UNSUPPORTED_COMMAND', message: expect.stringContaining('nothing is playing') })
+    await plugin.stop()
+  })
+
+  it('launches the default media receiver and LOADs an HTTP URL', async () => {
+    const speaker = fakeReceiver(RECEIVER_STATUS_NEST_HUB_IDLE)
+    const { plugin, ctx } = await started(fakeDiscovery([SERVICE_NEST_MINI]), network({ [SERVICE_NEST_MINI.host]: speaker }))
+    const url = 'https://icecast.radiofrance.fr/franceinfo-midfi.mp3'
+    await plugin.execute(TXT_NEST_MINI.id, { type: 'media_player.play_url', url })
+    expect(speaker.of('LAUNCH')[0]!.body).toMatchObject({ appId: 'CC1AD845' })
+    const load = speaker.of('LOAD')[0]
+    expect(load).toBeDefined()
+    expect(load!.destination).toBe('transport-dmr')
+    expect(load!.body).toMatchObject({
+      type: 'LOAD',
+      autoplay: true,
+      media: { contentId: url, contentType: 'audio/mpeg', streamType: 'BUFFERED' },
+    })
+    await flush()
+    expect(patches(ctx, TXT_NEST_MINI.id).at(-1)).toMatchObject({ playback: 'playing', nowPlaying: { title: 'icecast.radiofrance.fr' } })
     await plugin.stop()
   })
 

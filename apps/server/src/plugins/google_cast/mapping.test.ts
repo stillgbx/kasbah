@@ -6,7 +6,7 @@ import {
   SERVICE_NEST_HUB, SERVICE_SOUNDBAR, TXT_CHROMECAST, TXT_LENOVO_CLOCK, TXT_NEST_HUB, TXT_NEST_MINI,
 } from './__fixtures__/network'
 import { toCastService } from './discovery'
-import { activeApplication, artProxyUrl, hasScreen, isLive, manufacturerOf, mediaPlayerClass, toDescriptor, toMediaPatch, toReceiverPatch } from './mapping'
+import { activeApplication, artProxyUrl, hasScreen, isLive, manufacturerOf, mediaFromUrl, mediaPlayerClass, toDescriptor, toMediaPatch, toReceiverPatch } from './mapping'
 import { mediaStatusSchema, receiverStatusSchema } from './types'
 
 const receiver = (raw: unknown) => receiverStatusSchema.parse(raw)
@@ -49,7 +49,7 @@ describe('google_cast mapping', () => {
     const hub = toDescriptor(SERVICE_NEST_HUB, receiver(RECEIVER_STATUS_NEST_HUB_IDLE).volume)
     expect(deviceDescriptorSchema.safeParse(hub).success).toBe(true)
     expect(hub).toMatchObject({ id: `google_cast:${TXT_NEST_HUB.id}`, kind: 'media_player', name: 'Réveil parents', meta: { manufacturer: 'Google', model: 'Google Nest Hub' } })
-    expect(hub.capabilities).toEqual(expect.arrayContaining(['playback', 'volume', 'mute', 'now_playing', 'track_skip', 'seek']))
+    expect(hub.capabilities).toEqual(expect.arrayContaining(['playback', 'volume', 'mute', 'now_playing', 'track_skip', 'seek', 'play_url']))
 
     const tv = toDescriptor(SERVICE_CHROMECAST, receiver(RECEIVER_STATUS_CHROMECAST_FIXED).volume)
     expect(tv.capabilities).not.toContain('volume')
@@ -151,5 +151,18 @@ describe('google_cast mapping', () => {
 
   it('accepts the sound bar and the Lenovo clock as plain media players', () => {
     for (const s of [SERVICE_SOUNDBAR, SERVICE_LENOVO_CLOCK]) expect(deviceDescriptorSchema.safeParse(toDescriptor(s)).success).toBe(true)
+  })
+
+  it('guesses Cast LOAD media from the URL path', () => {
+    expect(mediaFromUrl('https://icecast.radiofrance.fr/franceinfo-midfi.mp3')).toMatchObject({
+      contentId: 'https://icecast.radiofrance.fr/franceinfo-midfi.mp3',
+      contentType: 'audio/mpeg',
+      streamType: 'BUFFERED',
+    })
+    expect(mediaFromUrl('https://stream.example/live.m3u8?token=1')).toMatchObject({
+      contentType: 'application/x-mpegurl',
+      streamType: 'LIVE',
+    })
+    expect(mediaFromUrl('https://cdn.example/clip.mp4')).toMatchObject({ contentType: 'video/mp4', streamType: 'BUFFERED' })
   })
 })

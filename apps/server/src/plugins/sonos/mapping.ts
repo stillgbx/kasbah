@@ -1,5 +1,5 @@
 import type { Capability, DeviceDescriptor, StatePatch } from '@kasbah/shared'
-import { decodeXml, xmlAttr, xmlTag } from './soap'
+import { decodeXml, encodeXml, xmlAttr, xmlTag } from './soap'
 import type { PositionInfo, SonosPlayer, TrackMeta, TransportInfo, ZoneMember } from './types'
 import { PLUGIN_ID } from './types'
 
@@ -15,7 +15,7 @@ export function artProxyUrl(url: string): string {
   return `${ART_ROUTE}?url=${encodeURIComponent(url)}`
 }
 
-export const CAPABILITIES: Capability[] = ['playback', 'volume', 'mute', 'now_playing', 'track_skip', 'seek']
+export const CAPABILITIES: Capability[] = ['playback', 'volume', 'mute', 'now_playing', 'track_skip', 'seek', 'play_url']
 
 export function toDescriptor(player: SonosPlayer): DeviceDescriptor {
   return {
@@ -224,4 +224,23 @@ export function toStatePatch(
     ...(meta.source ? { source: meta.source } : {}),
   }
   return patch
+}
+
+/**
+ * DIDL-Lite pour `SetAVTransportURI` : un flux HTTP que l'enceinte va chercher. HLS / m3u = direct
+ * (`audioBroadcast`) ; le reste est un morceau. L'URL et le titre sont échappés : le SOAP ré-échappe
+ * tout le bloc ensuite.
+ */
+export function streamDidl(url: string, contentType: string, live: boolean): string {
+  const title = encodeXml((() => { try { return new URL(url).hostname } catch { return 'Stream' } })())
+  const res = encodeXml(url)
+  const cls = live ? 'object.item.audioItem.audioBroadcast' : 'object.item.audioItem.musicTrack'
+  return `<DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"><item id="0" parentID="-1" restricted="true"><dc:title>${title}</dc:title><upnp:class>${cls}</upnp:class><res protocolInfo="http-get:*:${contentType}:*">${res}</res></item></DIDL-Lite>`
+}
+
+export function streamLoad(url: string): { uri: string; didl: string } {
+  const path = (() => { try { return new URL(url).pathname.toLowerCase() } catch { return url.toLowerCase() } })()
+  const live = path.endsWith('.m3u8') || path.endsWith('.m3u')
+  const contentType = live ? 'application/x-mpegURL' : path.endsWith('.mp4') ? 'video/mp4' : path.endsWith('.aac') || path.endsWith('.m4a') ? 'audio/mp4' : 'audio/mpeg'
+  return { uri: url, didl: streamDidl(url, contentType, live) }
 }
