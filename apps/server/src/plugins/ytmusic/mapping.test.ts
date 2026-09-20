@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { fromNetscape, hasRequiredCookie, toNetscape } from './cookie'
 import { isAuthError } from './browserCookies'
 import { healthFrom } from './index'
-import { mapPlaylist, mapTrack, mapTracks, upgradeArtUrl } from './mapping'
+import { mapAlbum, mapArtist, mapPlaylist, mapTrack, mapTracks, parseReleaseType, partitionAlbums, textOf, upgradeArtUrl, bestThumb } from './mapping'
 
 describe('ytmusic cookie', () => {
   it('requires __Secure-3PAPISID', () => {
@@ -33,6 +33,7 @@ describe('ytmusic mapping', () => {
       artUrl: 'https://i.ytimg.com/x.jpg',
       durationS: 187,
       album: { name: 'EP' },
+      year: '2021',
     })).toEqual({
       videoId: 'abc123',
       title: 'Terracotta',
@@ -40,6 +41,8 @@ describe('ytmusic mapping', () => {
       artUrl: 'https://i.ytimg.com/x.jpg',
       durationS: 187,
       album: 'EP',
+      year: '2021',
+      explicit: false,
     })
   })
 
@@ -52,9 +55,16 @@ describe('ytmusic mapping', () => {
     )
   })
 
+  it('picks the widest thumb from nested MusicThumbnail-like shapes', () => {
+    expect(bestThumb([
+      { url: 'https://i.ytimg.com/small.jpg', width: 60 },
+      { url: 'https://i.ytimg.com/big.jpg', width: 544 },
+    ])).toBe('https://i.ytimg.com/big.jpg')
+  })
+
   it('drops tracks without id', () => {
     expect(mapTracks([{ title: 'no id' }, { id: 'x', title: 'ok' }])).toEqual([
-      { videoId: 'x', title: 'ok', artists: [], artUrl: null, durationS: null, album: null },
+      { videoId: 'x', title: 'ok', artists: [], artUrl: null, durationS: null, album: null, year: null, explicit: false },
     ])
   })
 
@@ -64,6 +74,87 @@ describe('ytmusic mapping', () => {
       title: 'Soirée',
       artUrl: 'https://i.ytimg.com/p.jpg',
       trackCount: 12,
+    })
+  })
+
+  it('reads youtubei Text titles (library playlists)', () => {
+    expect(textOf({ text: 'Mix soirée' })).toBe('Mix soirée')
+    expect(textOf({ runs: [{ text: 'Liked ' }, { text: 'Music' }] })).toBe('Liked Music')
+    expect(mapPlaylist({ id: 'VLLM', title: { text: 'Titres likés' } })).toMatchObject({
+      id: 'VLLM',
+      title: 'Titres likés',
+    })
+  })
+
+  it('maps artist and album fixtures', () => {
+    expect(mapArtist({ id: 'UCx', name: 'Radiohead', subscribers: '12M subscribers' })).toEqual({
+      id: 'UCx',
+      name: 'Radiohead',
+      artUrl: null,
+      subscribers: '12M subscribers',
+    })
+    expect(mapAlbum({
+      id: 'MPREb_1',
+      title: 'OK Computer',
+      artists: [{ name: 'Radiohead' }],
+      year: '1997',
+      subtitleParts: ['Album', 'Radiohead', '1997'],
+    })).toEqual({
+      id: 'MPREb_1',
+      title: 'OK Computer',
+      artUrl: null,
+      artists: ['Radiohead'],
+      year: '1997',
+      releaseType: 'album',
+      explicit: false,
+    })
+  })
+
+  it('parses and partitions release types from subtitles', () => {
+    expect(parseReleaseType(['Single', 'Artist', '2020'])).toBe('single')
+    expect(parseReleaseType(['EP', 'Artist'])).toBe('ep')
+    expect(parseReleaseType(['LP', 'Artist'])).toBe('album')
+    expect(parseReleaseType(['Compilation', 'Various'])).toBe('compilation')
+    expect(mapAlbum({
+      id: 'MPREb_best',
+      title: 'Best of Radiohead',
+      artists: [{ name: 'Radiohead' }],
+      subtitleParts: ['Album', 'Radiohead', '2008'],
+    })?.releaseType).toBe('compilation')
+    expect(mapAlbum({
+      id: 'MPREb_ed',
+      title: 'OK Computer - Edition',
+      artists: [{ name: 'Radiohead' }],
+      subtitleParts: ['Album'],
+    })?.releaseType).toBe('compilation')
+    expect(mapAlbum({
+      id: 'MPREb_ec',
+      title: 'The Essential Collection',
+      artists: [{ name: 'Artist' }],
+      subtitleParts: ['Album'],
+    })?.releaseType).toBe('compilation')
+    expect(mapAlbum({
+      id: 'MPREb_x',
+      title: 'X',
+      artists: [],
+      explicit: true,
+    })).toMatchObject({ explicit: true })
+    expect(partitionAlbums([
+      { id: '1', title: 'A', artUrl: null, artists: [], releaseType: 'album' },
+      { id: '2', title: 'S', artUrl: null, artists: [], releaseType: 'single' },
+      { id: '3', title: 'C', artUrl: null, artists: [], releaseType: 'compilation' },
+      { id: '4', title: 'E', artUrl: null, artists: [], releaseType: 'ep' },
+      { id: '5', title: '?', artUrl: null, artists: [], releaseType: null },
+    ])).toEqual({
+      albums: [
+        { id: '1', title: 'A', artUrl: null, artists: [], releaseType: 'album' },
+        { id: '5', title: '?', artUrl: null, artists: [], releaseType: null },
+      ],
+      singles: [
+        { id: '2', title: 'S', artUrl: null, artists: [], releaseType: 'single' },
+        { id: '4', title: 'E', artUrl: null, artists: [], releaseType: 'ep' },
+      ],
+      compilations: [{ id: '3', title: 'C', artUrl: null, artists: [], releaseType: 'compilation' }],
     })
   })
 })

@@ -297,10 +297,10 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
         if (!q) return sendError(reply, 400, 'INVALID_BODY', 'q is required')
         try {
           const cookie = await requireCookie()
-          const tracks = await catalog!.search(cookie, q)
+          const result = await catalog!.search(cookie, q)
           lastError = null
           cookieExpired = false
-          return { tracks }
+          return result
         } catch (err) {
           return catalogError(reply, err)
         }
@@ -333,6 +333,28 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
         try {
           const cookie = await requireCookie()
           const tracks = await catalog!.playlistTracks(cookie, req.params.id)
+          lastError = null
+          return { tracks }
+        } catch (err) {
+          return catalogError(reply, err)
+        }
+      })
+
+      app.get<{ Params: { id: string } }>('/albums/:id', async (req, reply) => {
+        try {
+          const cookie = await requireCookie()
+          const tracks = await catalog!.albumTracks(cookie, req.params.id)
+          lastError = null
+          return { tracks }
+        } catch (err) {
+          return catalogError(reply, err)
+        }
+      })
+
+      app.get<{ Params: { id: string } }>('/artists/:id', async (req, reply) => {
+        try {
+          const cookie = await requireCookie()
+          const tracks = await catalog!.artistTracks(cookie, req.params.id)
           lastError = null
           return { tracks }
         } catch (err) {

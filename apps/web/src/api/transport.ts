@@ -146,6 +146,8 @@ export interface YtmusicTrack {
   artUrl: string | null
   durationS: number | null
   album?: string | null
+  year?: string | null
+  explicit?: boolean
 }
 
 export interface YtmusicPlaylist {
@@ -153,6 +155,32 @@ export interface YtmusicPlaylist {
   title: string
   artUrl: string | null
   trackCount: number | null
+}
+
+export interface YtmusicArtist {
+  id: string
+  name: string
+  artUrl: string | null
+  subscribers?: string | null
+}
+
+export interface YtmusicAlbum {
+  id: string
+  title: string
+  artUrl: string | null
+  artists: string[]
+  year?: string | null
+  /** Déduit du sous-titre InnerTube — pas un champ API dédié. */
+  releaseType?: 'album' | 'single' | 'ep' | 'compilation' | null
+  explicit?: boolean
+}
+
+export interface YtmusicSearchResult {
+  artists: YtmusicArtist[]
+  albums: YtmusicAlbum[]
+  singles: YtmusicAlbum[]
+  compilations: YtmusicAlbum[]
+  tracks: YtmusicTrack[]
 }
 
 /**
@@ -288,10 +316,12 @@ export interface Transport {
   ytmusicImportCookieFromBrowser(browser: string): Promise<YtmusicStatus>
   /** Efface le cookie. */
   ytmusicClearCookie(): Promise<YtmusicStatus>
-  ytmusicSearch(q: string): Promise<{ tracks: YtmusicTrack[] }>
+  ytmusicSearch(q: string): Promise<YtmusicSearchResult>
   ytmusicLiked(): Promise<{ tracks: YtmusicTrack[] }>
   ytmusicPlaylists(): Promise<{ playlists: YtmusicPlaylist[] }>
   ytmusicPlaylist(id: string): Promise<{ tracks: YtmusicTrack[] }>
+  ytmusicAlbum(id: string): Promise<{ tracks: YtmusicTrack[] }>
+  ytmusicArtist(id: string): Promise<{ tracks: YtmusicTrack[] }>
   /** Résout le flux et envoie `play_url` au lecteur (métadonnées optionnelles pour titre / pochette). */
   ytmusicPlay(body: {
     videoId: string

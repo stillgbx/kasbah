@@ -32,19 +32,124 @@ function fakeCtx(config: Record<string, unknown>): PluginContext {
   }
 }
 
-function fakeMusic(tracks = [{ id: 'vid1', title: 'Song', artists: [{ name: 'A' }], duration: { seconds: 10 }, thumbnails: [{ url: 'https://i.ytimg.com/a.jpg', width: 120 }] }]): InnertubeLike {
+function fakeMusic(tracks = [{ id: 'vid1', title: 'Song', artists: [{ name: 'A' }], duration: { seconds: 10 }, thumbnails: [{ url: 'https://i.ytimg.com/a.jpg', width: 120 }], item_type: 'song' }]): InnertubeLike {
   return {
     music: {
-      async search() { return { songs: { contents: tracks } } },
+      async search(_query?: string, filters?: { type?: string }) {
+        if (filters?.type === 'artist') {
+          return {
+            contents: [{
+              contents: [
+                { id: 'UCradiohead', item_type: 'artist', name: 'Radiohead', subscribers: '9M subscribers', thumbnail: [{ url: 'https://i.ytimg.com/rh.jpg', width: 60 }] },
+                { id: 'UCyorke', item_type: 'artist', name: 'Thom Yorke', thumbnail: [{ url: 'https://i.ytimg.com/a.jpg', width: 60 }] },
+              ],
+            }],
+          }
+        }
+        if (filters?.type === 'album') {
+          return {
+            contents: [{
+              contents: [
+                { id: 'MPREb_ok', item_type: 'album', title: 'OK Computer', artists: [{ name: 'Radiohead' }], year: '1997', subtitle: { text: 'Album · Radiohead · 1997' }, thumbnail: [{ url: 'https://i.ytimg.com/a.jpg', width: 60 }] },
+                { id: 'MPREb_kid', item_type: 'album', title: 'Kid A', artists: [{ name: 'Radiohead' }], year: '2000', subtitle: { text: 'Album · Radiohead · 2000' }, thumbnail: [{ url: 'https://i.ytimg.com/a.jpg', width: 60 }] },
+                { id: 'MPREb_sing', item_type: 'album', title: 'Creep', artists: [{ name: 'Radiohead' }], year: '1992', subtitle: { text: 'Single · Radiohead · 1992' }, thumbnail: [{ url: 'https://i.ytimg.com/a.jpg', width: 60 }] },
+                { id: 'MPREb_comp', item_type: 'album', title: 'Best Of', artists: [{ name: 'Radiohead' }], subtitle: { text: 'Compilation · Radiohead' }, thumbnail: [{ url: 'https://i.ytimg.com/a.jpg', width: 60 }] },
+              ],
+            }],
+          }
+        }
+        if (filters?.type === 'song') {
+          return {
+            contents: [{
+              contents: tracks.map((t) => ({ ...t, badges: [{ icon_type: 'MUSIC_EXPLICIT_BADGE' }] })),
+            }],
+          }
+        }
+        return { contents: [] }
+      },
       async getPlaylist() { return { items: tracks } },
+      async getAlbum() { return { contents: tracks } },
+      async getArtist() {
+        return {
+          sections: [{ contents: tracks }],
+        }
+      },
       async getLibrary() {
         return {
-          contents: [{ contents: [{ id: 'PL1', title: 'Mix', thumbnails: [{ url: 'https://i.ytimg.com/p.jpg', width: 60 }], item_count: '3' }] }],
+          contents: [{
+            contents: [
+              { id: 'PL1', item_type: 'playlist', title: { text: 'Mix' }, thumbnail: [{ url: 'https://i.ytimg.com/p.jpg', width: 60 }], item_count: '3' },
+            ],
+          }],
           async applyFilter() {
-            return { contents: [{ contents: [{ id: 'PL1', title: 'Mix', thumbnails: [{ url: 'https://i.ytimg.com/p.jpg', width: 60 }], item_count: '3' }] }] }
+            return {
+              contents: [{
+                contents: [
+                  { id: 'PL1', item_type: 'playlist', title: { text: 'Mix' }, thumbnail: [{ url: 'https://i.ytimg.com/p.jpg', width: 60 }], item_count: '3' },
+                  { id: 'MPREb_album', item_type: 'album', title: { text: 'Not a playlist' }, thumbnail: [] },
+                ],
+              }],
+            }
           },
         }
       },
+    },
+  }
+}
+
+/** Cas Jäde : browseId uniquement sur title.runs (pas on_tap), + homonyme faible en étagère. */
+function fakeMusicJade(): InnertubeLike {
+  return {
+    music: {
+      async search(_query?: string, filters?: { type?: string }) {
+        if (filters?.type === 'artist') {
+          return {
+            contents: [{
+              contents: [
+                {
+                  id: 'UCjade_real',
+                  item_type: 'artist',
+                  name: 'Jäde',
+                  subscribers: '12.3K subscribers',
+                  thumbnail: [{ url: 'https://i.ytimg.com/jade.jpg', width: 60 }],
+                },
+                {
+                  id: 'UCjade_fake',
+                  item_type: 'artist',
+                  name: 'JÄDE',
+                  subscribers: '10 subscribers',
+                  thumbnail: [{ url: 'https://i.ytimg.com/fake.jpg', width: 60 }],
+                },
+              ],
+            }],
+          }
+        }
+        if (filters?.type === 'album') {
+          return {
+            contents: [{
+              contents: [
+                { id: 'MPREb_jade_ep_sexe', item_type: 'album', title: 'Sexe & the city', artists: [{ name: 'Jäde', channel_id: 'UCjade_real' }], year: '2025', subtitle: { text: 'EP · Jäde · 2025' }, thumbnail: [{ url: 'https://i.ytimg.com/ep.jpg', width: 60 }] },
+                { id: 'MPREb_jade_romance', item_type: 'album', title: 'Romance', artists: [{ name: 'Jäde', channel_id: 'UCjade_real' }], year: '2021', subtitle: { text: 'Album · Jäde · 2021' }, thumbnail: [{ url: 'https://i.ytimg.com/a.jpg', width: 60 }] },
+                { id: 'MPREb_jade_premiere', item_type: 'album', title: 'Première fois', artists: [{ name: 'Jäde', channel_id: 'UCjade_real' }], year: '2020', subtitle: { text: 'Album · Jäde · 2020' }, thumbnail: [{ url: 'https://i.ytimg.com/a.jpg', width: 60 }] },
+                { id: 'MPREb_jade_ep', item_type: 'album', title: 'Comme des garçons', artists: [{ name: 'Jäde', channel_id: 'UCjade_real' }], year: '2025', subtitle: { text: 'Single · Jäde · 2025' }, thumbnail: [{ url: 'https://i.ytimg.com/ep.jpg', width: 60 }] },
+                { id: 'MPREb_jade_dsl', item_type: 'album', title: 'Dsl', artists: [{ name: 'Jäde', channel_id: 'UCjade_real' }], year: '2025', subtitle: { text: 'Single · Jäde · 2025' }, thumbnail: [{ url: 'https://i.ytimg.com/ep.jpg', width: 60 }] },
+                { id: 'MPREb_jade_sexe_album', item_type: 'album', title: 'Sexe & the city', artists: [{ name: 'Jäde', channel_id: 'UCjade_real' }], year: '2026', subtitle: { text: 'Album · Jäde · 2026' }, thumbnail: [{ url: 'https://i.ytimg.com/a.jpg', width: 60 }] },
+                { id: 'MPREb_jade_diabolo', item_type: 'album', title: 'Diabolo Grenadine / Rivalise', artists: [{ name: 'Jäde', channel_id: 'UCjade_real' }], year: '2024', subtitle: { text: 'Single · Jäde · 2024' }, thumbnail: [{ url: 'https://i.ytimg.com/ep.jpg', width: 60 }] },
+                { id: 'MPREb_jade_meteo', item_type: 'album', title: 'Météo', artists: [{ name: 'Jäde', channel_id: 'UCjade_real' }], year: '2022', subtitle: { text: 'Album · Jäde · 2022' }, thumbnail: [{ url: 'https://i.ytimg.com/a.jpg', width: 60 }] },
+                { id: 'MPREb_jade_best', item_type: 'album', title: 'Best of Jäde', artists: [{ name: 'Jäde', channel_id: 'UCjade_real' }], year: '2023', subtitle: { text: 'Album · Jäde · 2023' }, thumbnail: [{ url: 'https://i.ytimg.com/a.jpg', width: 60 }], badges: [{ icon_type: 'MUSIC_EXPLICIT_BADGE' }] },
+              ],
+            }],
+          }
+        }
+        if (filters?.type === 'song') {
+          return { contents: [{ contents: [] }] }
+        }
+        return { contents: [] }
+      },
+      async getPlaylist() { return { items: [] } },
+      async getAlbum() { return { contents: [] } },
+      async getArtist() { return { sections: [] } },
+      async getLibrary() { return { contents: [] } },
     },
   }
 }
@@ -54,11 +159,12 @@ async function boot(extra: {
   playUrl?: (id: string, url: string) => Promise<void>
   getDevice?: (id: string) => { descriptor: DeviceDescriptor } | undefined
   spawnImpl?: ReturnType<typeof fakeSpawn>['spawnImpl']
+  createSession?: () => Promise<InnertubeLike>
 } = {}) {
   const store = createCookieFile('')
   const plugin = createYtmusicPlugin({
     cookieStore: store,
-    createSession: async () => fakeMusic(),
+    createSession: extra.createSession ?? (async () => fakeMusic()),
     fetchImpl: extra.fetchImpl ?? (async () => new Response('ok', { status: 200 })) as typeof fetch,
     ...(extra.playUrl ? { playUrl: extra.playUrl } : {}),
     ...(extra.getDevice ? { getDevice: extra.getDevice } : {}),
@@ -171,16 +277,119 @@ describe('ytmusic plugin', () => {
     const { plugin, app } = await boot()
     await app.inject({ method: 'PUT', url: '/api/plugins/ytmusic/cookie', payload: { cookie: COOKIE } })
     const search = await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/search?q=terra' })
-    expect(search.json().tracks[0]).toMatchObject({ videoId: 'vid1', title: 'Song', artists: ['A'] })
+    expect(search.json()).toMatchObject({
+      artists: [
+        { id: 'UCradiohead', name: 'Radiohead' },
+        { id: 'UCyorke', name: 'Thom Yorke' },
+      ],
+      albums: [
+        { id: 'MPREb_ok', title: 'OK Computer', releaseType: 'album' },
+        { id: 'MPREb_kid', title: 'Kid A', releaseType: 'album' },
+      ],
+      singles: [{ id: 'MPREb_sing', title: 'Creep', releaseType: 'single' }],
+      compilations: [{ id: 'MPREb_comp', title: 'Best Of', releaseType: 'compilation' }],
+      tracks: [{ videoId: 'vid1', title: 'Song', artists: ['A'], explicit: true }],
+    })
+    expect(search.json().artists[0].name).toBe('Radiohead')
 
     const liked = await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/library/liked' })
     expect(liked.json().tracks).toHaveLength(1)
 
     const pls = await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/library/playlists' })
+    expect(pls.json().playlists).toHaveLength(1)
     expect(pls.json().playlists[0]).toMatchObject({ id: 'PL1', title: 'Mix' })
 
     const pl = await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/playlists/PL1' })
     expect(pl.json().tracks[0].videoId).toBe('vid1')
+
+    const alb = await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/albums/MPREb_ok' })
+    expect(alb.json().tracks[0].videoId).toBe('vid1')
+
+    const art = await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/artists/UCradio' })
+    expect(art.json().tracks[0].videoId).toBe('vid1')
+    await app.close()
+    await plugin.stop()
+  })
+
+  it('surfaces top MusicCardShelf artist even when browseId is only on title runs', async () => {
+    const { plugin, app } = await boot({ createSession: async () => fakeMusicJade() })
+    await app.inject({ method: 'PUT', url: '/api/plugins/ytmusic/cookie', payload: { cookie: COOKIE } })
+    const search = await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/search?q=jäde' })
+    const body = search.json()
+    const artists = body.artists as Array<{ id: string; name: string; subscribers?: string }>
+    expect(artists[0]).toMatchObject({
+      id: 'UCjade_real',
+      name: 'Jäde',
+      subscribers: '12.3K subscribers',
+    })
+    expect(artists.some((a) => a.id === 'UCjade_fake')).toBe(true)
+    expect(body.albums.map((a: { title: string }) => a.title)).toEqual([
+      'Romance',
+      'Première fois',
+      'Sexe & the city',
+      'Météo',
+    ])
+    expect(body.singles.map((a: { title: string; releaseType: string }) => [a.title, a.releaseType])).toEqual([
+      ['Sexe & the city', 'ep'],
+      ['Comme des garçons', 'single'],
+      ['Dsl', 'single'],
+      ['Diabolo Grenadine / Rivalise', 'single'],
+    ])
+    expect(body.compilations[0]).toMatchObject({ title: 'Best of Jäde', explicit: true })
+    await app.close()
+    await plugin.stop()
+  })
+
+  it('recovers the main artist from album channel ids when the top card is missing', async () => {
+    const session: InnertubeLike = {
+      music: {
+        async search(_q?: string, filters?: { type?: string }) {
+          if (filters?.type === 'artist') {
+            return {
+              contents: [{
+                contents: [
+                  { id: 'UCjade_fake', item_type: 'artist', name: 'JÄDE', subscribers: '10 subscribers', thumbnail: [] },
+                ],
+              }],
+            }
+          }
+          if (filters?.type === 'album') {
+            return {
+              contents: [{
+                contents: [
+                  {
+                    id: 'MPREb_r',
+                    item_type: 'album',
+                    title: 'Romance',
+                    artists: [{ name: 'Jäde', channel_id: 'UCjade_real' }],
+                    subtitle: { text: 'Album · Jäde · 2021' },
+                    thumbnail: [{ url: 'https://i.ytimg.com/a.jpg', width: 60 }],
+                  },
+                  {
+                    id: 'MPREb_m',
+                    item_type: 'album',
+                    title: 'Météo',
+                    artists: [{ name: 'Jäde', channel_id: 'UCjade_real' }],
+                    subtitle: { text: 'Album · Jäde · 2022' },
+                    thumbnail: [{ url: 'https://i.ytimg.com/a.jpg', width: 60 }],
+                  },
+                ],
+              }],
+            }
+          }
+          if (filters?.type === 'song') return { contents: [] }
+          return { contents: [] }
+        },
+        async getPlaylist() { return { items: [] } },
+        async getLibrary() { return { contents: [] } },
+      },
+    }
+    const { plugin, app } = await boot({ createSession: async () => session })
+    await app.inject({ method: 'PUT', url: '/api/plugins/ytmusic/cookie', payload: { cookie: COOKIE } })
+    const search = await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/search?q=jäde' })
+    const ids = (search.json().artists as Array<{ id: string }>).map((a) => a.id)
+    expect(ids).toContain('UCjade_real')
+    expect(ids).toContain('UCjade_fake')
     await app.close()
     await plugin.stop()
   })

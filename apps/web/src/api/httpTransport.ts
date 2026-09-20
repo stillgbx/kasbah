@@ -1,6 +1,6 @@
 import { apiErrorSchema, devicesResponseSchema, energyHistorySchema, healthResponseSchema, houseSchema, pluginsResponseSchema, scenesResponseSchema, serverMessageSchema, weatherForecastSchema, deviceJournalSchema, deviceConsumptionSchema, type CommandInput, type DeviceConsumption, type DeviceJournal, type DeviceEntry, type DevicePlacement, type EnergyHistory, type HealthResponse, type House, type PluginInfo, type PluginSceneEntry, type PluginSettingsPatch, type SceneRecallInput, type SceneUpdate, type WeatherForecast } from '@kasbah/shared'
 import { parseDeviceId } from '@kasbah/shared'
-import { ApiRequestError, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type MelcloudStatus, type MelcloudUnit, type RenaultStatus, type TeslaStatus, type Transport, type TransportHandlers, type YtmusicPlaylist, type YtmusicStatus, type YtmusicTrack } from './transport'
+import { ApiRequestError, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type MelcloudStatus, type MelcloudUnit, type RenaultStatus, type TeslaStatus, type Transport, type TransportHandlers, type YtmusicPlaylist, type YtmusicSearchResult, type YtmusicStatus, type YtmusicTrack } from './transport'
 
 // URLs relatives : même origine en prod (Fastify sert le build) et via le proxy Vite en dev.
 
@@ -174,12 +174,20 @@ export function createHttpTransport(base = ''): Transport {
     ytmusicClearCookie: () => request(`${base}/api/plugins/ytmusic/cookie`, { method: 'DELETE' }, (j) => j as YtmusicStatus),
     ytmusicSearch: (q) => request(
       `${base}/api/plugins/ytmusic/search?q=${encodeURIComponent(q)}`, undefined,
-      (j) => j as { tracks: YtmusicTrack[] },
+      (j) => j as YtmusicSearchResult,
     ),
     ytmusicLiked: () => request(`${base}/api/plugins/ytmusic/library/liked`, undefined, (j) => j as { tracks: YtmusicTrack[] }),
     ytmusicPlaylists: () => request(`${base}/api/plugins/ytmusic/library/playlists`, undefined, (j) => j as { playlists: YtmusicPlaylist[] }),
     ytmusicPlaylist: (id) => request(
       `${base}/api/plugins/ytmusic/playlists/${encodeURIComponent(id)}`, undefined,
+      (j) => j as { tracks: YtmusicTrack[] },
+    ),
+    ytmusicAlbum: (id) => request(
+      `${base}/api/plugins/ytmusic/albums/${encodeURIComponent(id)}`, undefined,
+      (j) => j as { tracks: YtmusicTrack[] },
+    ),
+    ytmusicArtist: (id) => request(
+      `${base}/api/plugins/ytmusic/artists/${encodeURIComponent(id)}`, undefined,
       (j) => j as { tracks: YtmusicTrack[] },
     ),
     ytmusicPlay: (body) => request(
