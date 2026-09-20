@@ -13,6 +13,7 @@ import { createRenaultPlugin } from './renault'
 import { createSonosPlugin } from './sonos'
 import { createTahomaPlugin } from './tahoma'
 import { createTeslaPlugin } from './tesla'
+import { createYtmusicPlugin } from './ytmusic'
 
 // Table statique des plugins : typée, grep-able, sans import dynamique. `KASBAH_PLUGINS`
 // sélectionne parmi ces ids.
@@ -32,4 +33,5 @@ export const PLUGIN_FACTORIES: Record<string, PluginFactory> = {
   tesla: () => createTeslaPlugin(),
   renault: () => createRenaultPlugin(),
   open_meteo: () => createOpenMeteoPlugin(),
+  ytmusic: () => createYtmusicPlugin(),
 }

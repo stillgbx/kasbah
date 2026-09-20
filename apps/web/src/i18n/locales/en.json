@@ -1,6 +1,6 @@
 {
   "app": { "name": "Kasbah" },
-  "nav": { "main": "Navigation", "home": "Home", "energy": "Energy", "water": "Water", "heating": "Heating", "vehicles": "Vehicles", "robots": "Robots", "weather": "Weather", "settings": "Settings", "lights": "Lights", "covers": "Covers", "cameras": "Cameras", "media": "Media" },
+  "nav": { "main": "Navigation", "home": "Home", "energy": "Energy", "water": "Water", "heating": "Heating", "vehicles": "Vehicles", "robots": "Robots", "weather": "Weather", "settings": "Settings", "lights": "Lights", "covers": "Covers", "cameras": "Cameras", "media": "Media", "ytmusic": "YouTube Music" },
   "common": {
     "close": "Close", "back": "Back", "retry": "Retry", "all": "All", "none": "None", "unavailable": "Unavailable",
     "loading": "Loading house…", "on": "On", "off": "Off", "stop": "Stop",
@@ -95,6 +95,23 @@
     "playing": "Playing", "paused": "Paused", "idle": "Idle", "on": "On screen", "off": "Off", "nothing": "Nothing playing", "relaying": "Sound from {name}",
     "play": "Play", "playUrl": "Play a URL", "urlPlaceholder": "https://… (mp3, HLS…)", "next": "Next track", "previous": "Previous track", "mute": "Mute", "unmute": "Unmute", "volume": "Volume", "volumeUp": "Volume up", "volumeDown": "Volume down", "seek": "Position in the track",
     "classes": { "speaker": "Speaker", "tv": "TV", "display": "Smart display" }
+  },
+  "ytmusic": {
+    "unofficial": "Unofficial source — personal home use only",
+    "needCookie": "Paste the YouTube Music cookie in Settings → Plugins → ytmusic.",
+    "tabSearch": "Search",
+    "tabLiked": "Liked",
+    "tabPlaylists": "Playlists",
+    "search": "Search",
+    "searchPlaceholder": "Title, artist…",
+    "player": "Player",
+    "noPlayer": "No player with play_url (Cast / Sonos)",
+    "play": "Play",
+    "starting": "Sending…",
+    "playing": "Playing: {title}",
+    "empty": "Nothing to show.",
+    "tracks": "No tracks | {n} track | {n} tracks",
+    "backPlaylists": "Playlists"
   },
   "rooms": {
     "noRoom": "No room", "notInHouse": "Not in the house",
@@ -413,6 +430,18 @@
       "poll": "One reading every {min} min, in a single call for the whole account.",
       "readOnly": "Read-only: setpoints are shown, they cannot be changed from the tablet yet.",
       "notStored": "No session file is configured (MELCLOUD_SESSION_FILE is empty): the link will be lost when the server restarts."
+    },
+    "ytmusic": {
+      "unofficial": "Unofficial — InnerTube / yt-dlp reverse, personal use only",
+      "intro": "Paste a music.youtube.com session cookie (must include __Secure-3PAPISID). It lives in a server state file, never in .env. Cookies expire — paste again when needed. Premium recommended for a full catalogue.",
+      "cookie": "YouTube Music cookie",
+      "link": "Save cookie",
+      "linking": "Saving…",
+      "linked": "Cookie saved",
+      "unlink": "Clear cookie",
+      "poOk": "PO Token generator reachable ({url}).",
+      "poBad": "PO Token generator unreachable — start it (port 4416): {url}.",
+      "notStored": "No cookie file is configured (YTM_COOKIE_FILE is empty): the link will be lost on restart."
     },
     "tesla": {
       "title": "Tesla",

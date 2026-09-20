@@ -1,0 +1,204 @@
+import { spawn, type ChildProcessWithoutNullStreams, type SpawnOptions } from 'node:child_process'
+import { randomBytes } from 'node:crypto'
+import { mkdir, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { toNetscape } from './cookie'
+
+// Résolution de flux (yt-dlp + PO Token) et proxy LAN (ffmpeg → MP3) pour Cast/Sonos.
+// Les enceintes ne voient jamais googlevideo.com — seulement une URL HTTP du serveur Kasbah.
+
+export type SpawnFn = (command: string, args: readonly string[], options?: SpawnOptions) => ChildProcessWithoutNullStreams
+
+export interface StreamResolveOpts {
+  videoId: string
+  cookieRaw: string
+  ytdlpPath: string
+  poTokenUrl: string
+  /** Fichier Netscape déjà écrit ; sinon on en crée un temporaire. */
+  netscapePath?: string
+  spawnImpl?: SpawnFn
+}
+
+export interface ResolvedStream {
+  url: string
+  formatId: string | null
+  ext: string | null
+}
+
+/** Ping du générateur PO Token (Music Assistant : `GET {base}/ping`). */
+export async function pingPoToken(baseUrl: string, fetchImpl: typeof fetch = fetch): Promise<boolean> {
+  const url = `${baseUrl.replace(/\/$/, '')}/ping`
+  try {
+    const r = await fetchImpl(url, { signal: AbortSignal.timeout(3_000) })
+    return r.ok
+  } catch {
+    return false
+  }
+}
+
+function runCapture(command: string, args: string[], spawnImpl: SpawnFn): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const proc = spawnImpl(command, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
+    let stdout = ''
+    let stderr = ''
+    proc.stdout.setEncoding('utf8')
+    proc.stderr.setEncoding('utf8')
+    proc.stdout.on('data', (c: string) => { stdout += c })
+    proc.stderr.on('data', (c: string) => { stderr += c })
+    proc.on('error', reject)
+    proc.on('close', (code) => resolve({ code, stdout, stderr }))
+  })
+}
+
+/**
+ * Résout la meilleure URL audio via yt-dlp (client `web_music` + extractor PO Token).
+ * Même chemin que Music Assistant `_get_stream_format`.
+ */
+export async function resolveStreamUrl(opts: StreamResolveOpts): Promise<ResolvedStream> {
+  const spawnImpl = opts.spawnImpl ?? (spawn as unknown as SpawnFn)
+  let netscapePath = opts.netscapePath
+  if (!netscapePath) {
+    netscapePath = join(tmpdir(), `kasbah-ytm-${randomBytes(8).toString('hex')}.netscape`)
+    await writeFile(netscapePath, toNetscape(opts.cookieRaw), 'utf8')
+  }
+  const poBase = opts.poTokenUrl.replace(/\/$/, '')
+  const pageUrl = `https://music.youtube.com/watch?v=${opts.videoId}`
+  // Music Assistant utilise `web_music`, mais chez nous (2026-09-20) ce client renvoie 0 format
+  // (« Requested format is not available », GVS PO). `android_music` seul livre de l'audio (ex. 251
+  // opus). Ne pas combiner les deux : yt-dlp échoue alors aussi. `--ignore-config` évite un `-f`
+  // utilisateur. Sélection fine ensuite en JS.
+  const args = [
+    '--ignore-config',
+    '-J', '--no-download', '--no-warnings',
+    '-f', 'bestaudio/best',
+    '--cookies', netscapePath,
+    '--extractor-args', `youtubepot-bgutilhttp:base_url=${poBase}`,
+    '--extractor-args', 'youtube:player_client=android_music;skip=translated_subs',
+    pageUrl,
+  ]
+  const { code, stdout, stderr } = await runCapture(opts.ytdlpPath, args, spawnImpl)
+  if (code !== 0) {
+    const tail = stderr.trim().split(/\r?\n/).filter(Boolean).slice(-2).join(' ; ')
+    throw new Error(`yt-dlp failed (${code})${tail ? `: ${tail}` : ''}`)
+  }
+  let info: { formats?: Array<{ url?: string; format_id?: string; ext?: string; acodec?: string; vcodec?: string; abr?: number; tbr?: number }> ; url?: string; format_id?: string; ext?: string }
+  try { info = JSON.parse(stdout) as typeof info }
+  catch { throw new Error('yt-dlp returned non-JSON') }
+  // `-f bestaudio/best` a déjà posé `url` ; on préfère quand même m4a / 140 / 141 s'ils existent
+  const formats = info.formats ?? []
+  const audio = formats
+    .filter((f) => f.url && f.acodec && f.acodec !== 'none' && (f.vcodec === 'none' || !f.vcodec))
+    .sort((a, b) => {
+      const rank = (f: { ext?: string; format_id?: string; abr?: number; tbr?: number }) => {
+        let r = 0
+        if (f.format_id === '141') r += 30
+        else if (f.format_id === '140' || f.ext === 'm4a') r += 20
+        else if (f.ext === 'webm' || f.ext === 'opus') r += 10
+        r += f.abr ?? f.tbr ?? 0
+        return r
+      }
+      return rank(b) - rank(a)
+    })
+  const pick = audio[0] ?? (info.url ? { url: info.url, format_id: info.format_id, ext: info.ext } : null)
+  if (!pick?.url) throw new Error(`no audio stream format found (${formats.length} formats reported)`)
+  return { url: pick.url, formatId: pick.format_id ?? null, ext: pick.ext ?? null }
+}
+
+export interface ProxySession {
+  sid: string
+  videoId: string
+  deviceId: string
+  sourceUrl: string
+  createdAt: number
+  mime: string
+}
+
+export interface StreamProxyOpts {
+  ffmpegPath: string
+  spawnImpl?: SpawnFn
+  /** TTL d'une session inactive (ms). */
+  ttlMs?: number
+  now?: () => number
+}
+
+/**
+ * Sessions courtes : `GET /stream/:sid` lance ffmpeg qui lit googlevideo et sort du MP3 sur stdout.
+ * Une session par sid ; on peut en avoir plusieurs (un lecteur = une session typiquement).
+ */
+export class StreamProxy {
+  private readonly sessions = new Map<string, ProxySession>()
+  private readonly byDevice = new Map<string, string>()
+  private readonly spawnImpl: SpawnFn
+  private readonly ttlMs: number
+  private readonly now: () => number
+
+  constructor(private readonly opts: StreamProxyOpts) {
+    this.spawnImpl = opts.spawnImpl ?? (spawn as unknown as SpawnFn)
+    this.ttlMs = opts.ttlMs ?? 3_600_000
+    this.now = opts.now ?? (() => Date.now())
+  }
+
+  open(videoId: string, deviceId: string, sourceUrl: string): ProxySession {
+    this.closeDevice(deviceId)
+    const sid = randomBytes(12).toString('hex')
+    const session: ProxySession = {
+      sid, videoId, deviceId, sourceUrl,
+      createdAt: this.now(),
+      mime: 'audio/mpeg',
+    }
+    this.sessions.set(sid, session)
+    this.byDevice.set(deviceId, sid)
+    return session
+  }
+
+  get(sid: string): ProxySession | undefined {
+    const s = this.sessions.get(sid)
+    if (!s) return undefined
+    if (this.now() - s.createdAt > this.ttlMs) {
+      this.close(sid)
+      return undefined
+    }
+    return s
+  }
+
+  close(sid: string): void {
+    const s = this.sessions.get(sid)
+    if (!s) return
+    this.sessions.delete(sid)
+    if (this.byDevice.get(s.deviceId) === sid) this.byDevice.delete(s.deviceId)
+  }
+
+  closeDevice(deviceId: string): void {
+    const sid = this.byDevice.get(deviceId)
+    if (sid) this.close(sid)
+  }
+
+  clear(): void {
+    this.sessions.clear()
+    this.byDevice.clear()
+  }
+
+  /** Pipe ffmpeg stdout vers le client HTTP. Le caller doit détruire le processus si le client part. */
+  spawnFfmpeg(sourceUrl: string): ChildProcessWithoutNullStreams {
+    const args = [
+      '-hide_banner', '-loglevel', 'warning',
+      '-i', sourceUrl,
+      '-vn', '-c:a', 'libmp3lame', '-b:a', '192k',
+      '-f', 'mp3', 'pipe:1',
+    ]
+    return this.spawnImpl(this.opts.ffmpegPath, args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    })
+  }
+}
+
+/** Écrit un Netscape temporaire (tests / resolve sans fichier d'état). */
+export async function writeTempNetscape(raw: string): Promise<string> {
+  const dir = join(tmpdir(), 'kasbah-ytm')
+  await mkdir(dir, { recursive: true })
+  const path = join(dir, `${randomBytes(8).toString('hex')}.netscape`)
+  await writeFile(path, toNetscape(raw), 'utf8')
+  return path
+}

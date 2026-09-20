@@ -4,7 +4,7 @@ import type { Logger } from 'pino'
 import type { Clock } from '../../core/clock'
 import { PluginError } from '../../core/plugin'
 import { withTimeout } from '../../core/poll'
-import { activeApplication, isLive, DEFAULT_MEDIA_RECEIVER, mediaFromUrl } from './mapping'
+import { activeApplication, isLive, DEFAULT_MEDIA_RECEIVER, mediaFromUrl, type PlayUrlMeta } from './mapping'
 import { FrameDecoder, NS_CONNECTION, NS_HEARTBEAT, NS_MEDIA, NS_RECEIVER, RECEIVER_ID, SENDER_ID, encodeFrame, jsonMessage, type CastMessage } from './protocol'
 import { inboundSchema, mediaStatusSchema, receiverStatusSchema, type MediaStatus, type ReceiverApplication, type ReceiverStatus } from './types'
 
@@ -130,14 +130,15 @@ export class CastConnection {
   /**
    * Lance le récepteur média par défaut s'il n'est pas déjà là, puis `LOAD` l'URL. C'est l'étape 2
    * du plugin : MP3 / HLS / radio, pas YouTube Music (le protocole n'a pas de compte).
+   * `meta` optionnel : titre / artiste / pochette pour l'écran et le `nowPlaying` Kasbah.
    */
-  async playUrl(url: string): Promise<void> {
+  async playUrl(url: string, meta?: PlayUrlMeta): Promise<void> {
     if (this.app?.appId !== DEFAULT_MEDIA_RECEIVER) {
       await this.request(RECEIVER_ID, NS_RECEIVER, { type: 'LAUNCH', appId: DEFAULT_MEDIA_RECEIVER })
     }
     const transportId = this.app?.transportId
     if (!transportId) throw new PluginError('UNSUPPORTED_COMMAND', 'default media receiver did not start')
-    await this.request(transportId, NS_MEDIA, { type: 'LOAD', autoplay: true, currentTime: 0, media: mediaFromUrl(url) })
+    await this.request(transportId, NS_MEDIA, { type: 'LOAD', autoplay: true, currentTime: 0, media: mediaFromUrl(url, meta) })
   }
 
   /** Position estimée (s) : dernier relevé, avancé du temps écoulé si ça joue. */

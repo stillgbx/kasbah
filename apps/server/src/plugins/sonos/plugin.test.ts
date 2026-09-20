@@ -248,4 +248,27 @@ describe('sonos plugin', () => {
     expect(net.playing.value).toBe(true)
     await plugin.stop()
   })
+
+  it('emits sticky title and art after play_url with meta', async () => {
+    const net = fakeNetwork()
+    const { plugin, ctx } = await started(net, fakeDiscovery(), fakeKnown([PLAYER_PLAY3]))
+    const url = 'http://192.168.1.10:8787/api/plugins/ytmusic/stream/abc'
+    await plugin.execute(UUID_PLAY3, {
+      type: 'media_player.play_url',
+      url,
+      title: 'Horizon',
+      artist: 'Mira Solano',
+      artUrl: 'https://i.ytimg.com/vi/x/hqdefault.jpg',
+    })
+    const last = patches(ctx, UUID_PLAY3).at(-1)
+    expect(last).toMatchObject({
+      playback: 'playing',
+      nowPlaying: {
+        title: 'Horizon',
+        artist: 'Mira Solano',
+        artUrl: expect.stringContaining(encodeURIComponent('https://i.ytimg.com/vi/x/hqdefault.jpg')),
+      },
+    })
+    await plugin.stop()
+  })
 })

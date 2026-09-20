@@ -1,6 +1,6 @@
 import { apiErrorSchema, devicesResponseSchema, energyHistorySchema, healthResponseSchema, houseSchema, pluginsResponseSchema, scenesResponseSchema, serverMessageSchema, weatherForecastSchema, deviceJournalSchema, deviceConsumptionSchema, type CommandInput, type DeviceConsumption, type DeviceJournal, type DeviceEntry, type DevicePlacement, type EnergyHistory, type HealthResponse, type House, type PluginInfo, type PluginSceneEntry, type PluginSettingsPatch, type SceneRecallInput, type SceneUpdate, type WeatherForecast } from '@kasbah/shared'
 import { parseDeviceId } from '@kasbah/shared'
-import { ApiRequestError, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type MelcloudStatus, type MelcloudUnit, type RenaultStatus, type TeslaStatus, type Transport, type TransportHandlers } from './transport'
+import { ApiRequestError, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type MelcloudStatus, type MelcloudUnit, type RenaultStatus, type TeslaStatus, type Transport, type TransportHandlers, type YtmusicPlaylist, type YtmusicStatus, type YtmusicTrack } from './transport'
 
 // URLs relatives : même origine en prod (Fastify sert le build) et via le proxy Vite en dev.
 
@@ -160,6 +160,28 @@ export function createHttpTransport(base = ''): Transport {
       (j) => j as IrobotStatus,
     ),
     irobotLogout: () => request(`${base}/api/plugins/irobot/logout`, { method: 'POST' }, (j) => j as IrobotStatus),
+    ytmusicStatus: () => request(`${base}/api/plugins/ytmusic/status`, undefined, (j) => j as YtmusicStatus),
+    ytmusicPutCookie: (cookie) => request(
+      `${base}/api/plugins/ytmusic/cookie`,
+      { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ cookie }) },
+      (j) => j as YtmusicStatus,
+    ),
+    ytmusicClearCookie: () => request(`${base}/api/plugins/ytmusic/cookie`, { method: 'DELETE' }, (j) => j as YtmusicStatus),
+    ytmusicSearch: (q) => request(
+      `${base}/api/plugins/ytmusic/search?q=${encodeURIComponent(q)}`, undefined,
+      (j) => j as { tracks: YtmusicTrack[] },
+    ),
+    ytmusicLiked: () => request(`${base}/api/plugins/ytmusic/library/liked`, undefined, (j) => j as { tracks: YtmusicTrack[] }),
+    ytmusicPlaylists: () => request(`${base}/api/plugins/ytmusic/library/playlists`, undefined, (j) => j as { playlists: YtmusicPlaylist[] }),
+    ytmusicPlaylist: (id) => request(
+      `${base}/api/plugins/ytmusic/playlists/${encodeURIComponent(id)}`, undefined,
+      (j) => j as { tracks: YtmusicTrack[] },
+    ),
+    ytmusicPlay: (body) => request(
+      `${base}/api/plugins/ytmusic/play`,
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
+      (j) => j as { ok: true; streamUrl: string; sid: string },
+    ),
     forgetDevice: (deviceId) => {
       const { pluginId, externalId } = parseDeviceId(deviceId)
       return request(

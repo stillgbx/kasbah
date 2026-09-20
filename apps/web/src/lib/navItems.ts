@@ -12,6 +12,7 @@ export const NAV_ITEMS: NavItem[] = [
   { name: 'lights', icon: 'light', label: 'nav.lights' },
   { name: 'covers', icon: 'shutter', label: 'nav.covers' },
   { name: 'media', icon: 'cast', label: 'nav.media' },
+  { name: 'ytmusic', icon: 'music', label: 'nav.ytmusic' },
   { name: 'cameras', icon: 'camera', label: 'nav.cameras' },
   { name: 'energy', icon: 'bolt', label: 'nav.energy' },
   // équipement technique de la maison, comme l'énergie — pas un média, pas un véhicule

@@ -8,6 +8,7 @@ import MelcloudLinkCard from '../MelcloudLinkCard.vue'
 import NestLinkCard from '../NestLinkCard.vue'
 import RenaultLinkCard from '../RenaultLinkCard.vue'
 import TeslaLinkCard from '../TeslaLinkCard.vue'
+import YtmusicLinkCard from '../YtmusicLinkCard.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import { usePluginsStore } from '../../stores/plugins'
 import { useScenesStore } from '../../stores/scenes'
@@ -55,6 +56,7 @@ const SETUP_CARDS = {
   renault: RenaultLinkCard,
   melcloud: MelcloudLinkCard,
   irobot: IrobotLinkCard,
+  ytmusic: YtmusicLinkCard,
 } as const
 const setupCard = computed(() => SETUP_CARDS[props.plugin.id as keyof typeof SETUP_CARDS] ?? null)
 

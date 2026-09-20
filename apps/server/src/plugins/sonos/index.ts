@@ -8,7 +8,7 @@ import { sendError } from '../../http/errors'
 import type { FetchLike } from '../../core/sse'
 import { createSsdpDiscovery, type SonosDiscovery } from './discovery'
 import { createKnownPlayersFile, type KnownPlayers } from './known'
-import { formatSonosTime, parseDeviceDescription, parseMute, parsePosition, parseTransport, parseVolume, parseZoneMembers, parseZpInfo, streamLoad, toDescriptor, toPlayback, toStatePatch } from './mapping'
+import { formatSonosTime, parseDeviceDescription, parseMute, parsePosition, parseTransport, parseVolume, parseZoneMembers, parseZpInfo, streamLoad, overlayStreamMeta, artProxyUrl, toDescriptor, toPlayback, toStatePatch, type StreamMeta } from './mapping'
 import { AV_PATH, AV_URN, RC_PATH, RC_URN, ZG_PATH, ZG_URN, httpGet, soapAction } from './soap'
 import type { PositionInfo, SonosPlayer, TransportInfo, ZoneMember } from './types'
 import { PLUGIN_ID } from './types'
@@ -56,6 +56,8 @@ interface Entry {
   muted?: boolean
   transport?: TransportInfo
   position?: PositionInfo
+  /** Métadonnées du dernier `play_url` tant que l'URI joue encore (Sonos oublie souvent le DIDL). */
+  stickyPlay?: StreamMeta & { uri: string }
 }
 
 export interface SonosPluginDeps {
@@ -180,7 +182,14 @@ export function createSonosPlugin(deps: SonosPluginDeps = {}): DevicePlugin {
     entry.transport = parseTransport(trXml)
     entry.position = parsePosition(posXml)
     entry.reachable = true
-    const patch = toStatePatch(entry.volume, entry.muted, entry.transport, entry.position, host)
+    let patch = toStatePatch(entry.volume, entry.muted, entry.transport, entry.position, host)
+    if (entry.stickyPlay) {
+      if (patch.playback === 'idle' || (entry.position?.trackUri && entry.position.trackUri !== entry.stickyPlay.uri)) {
+        entry.stickyPlay = undefined
+      } else {
+        patch = overlayStreamMeta(patch, entry.stickyPlay, entry.position?.trackUri, artProxyUrl)
+      }
+    }
     const artUrl = patch.nowPlaying?.artUrl
     if (artUrl) rememberArt(artUrl)
     ctx!.emitState(entry.player.uuid, patch)
@@ -276,9 +285,31 @@ export function createSonosPlugin(deps: SonosPluginDeps = {}): DevicePlugin {
         await av('Seek', { InstanceID: '0', Unit: 'REL_TIME', Target: formatSonosTime(command.positionS) })
         return
       case 'media_player.play_url': {
-        const load = streamLoad(command.url)
+        const meta: StreamMeta = {
+          ...(command.title ? { title: command.title } : {}),
+          ...(command.artist ? { artist: command.artist } : {}),
+          ...(command.artUrl ? { artUrl: command.artUrl } : {}),
+        }
+        const load = streamLoad(command.url, meta)
         await av('SetAVTransportURI', { InstanceID: '0', CurrentURI: load.uri, CurrentURIMetaData: load.didl })
         await av('Play', { InstanceID: '0', Speed: '1' })
+        // Sonos oublie souvent le DIDL d'un flux HTTP : on retient titre / pochette jusqu'au prochain URI.
+        if (meta.title || meta.artist || meta.artUrl) {
+          entry.stickyPlay = { uri: command.url, ...meta }
+          const art = meta.artUrl ? artProxyUrl(meta.artUrl) : undefined
+          if (art) rememberArt(art)
+          ctx!.emitState(entry.player.uuid, {
+            playback: 'playing',
+            nowPlaying: {
+              title: meta.title ?? '',
+              ...(meta.artist ? { artist: meta.artist } : {}),
+              ...(art ? { artUrl: art } : {}),
+              source: command.url,
+            },
+          })
+        } else {
+          entry.stickyPlay = undefined
+        }
         return
       }
       case 'media_player.set_volume':

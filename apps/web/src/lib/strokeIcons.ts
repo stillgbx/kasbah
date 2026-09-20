@@ -16,6 +16,8 @@ export const ICONS = {
   tv: 'M3 5h18v12H3zM8 21h8M12 17v4',
   /** Médias (catégorie) : le glyphe cast — un écran et le flux qui y arrive. */
   cast: 'M3 8V5.5h18v13h-8M3 11.5a7 7 0 0 1 7 7M3 15.5a3 3 0 0 1 3 3M3.4 18.5m-.5 0a.5.5 0 1 0 1 0a.5.5 0 1 0-1 0',
+  /** Note de musique — vue YouTube Music (non officiel). */
+  music: 'M9 18V5l12-2v13M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0zm12-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0z',
   /** Écran connecté (Nest Hub) : tablette posée, un trait pour le pied. */
   tablet: 'M4 5.5h16a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5H4A1.5 1.5 0 0 1 2.5 16V7A1.5 1.5 0 0 1 4 5.5zM9 20.5h6',
   thermostat: 'M12 3a2 2 0 0 1 2 2v9.2a4 4 0 1 1-4 0V5a2 2 0 0 1 2-2zM12 9v8',

@@ -165,4 +165,19 @@ describe('google_cast mapping', () => {
     })
     expect(mediaFromUrl('https://cdn.example/clip.mp4')).toMatchObject({ contentType: 'video/mp4', streamType: 'BUFFERED' })
   })
+
+  it('embeds title, artist and artwork in Cast LOAD metadata', () => {
+    expect(mediaFromUrl('http://192.168.1.10:8787/api/plugins/ytmusic/stream/abc', {
+      title: 'Horizon',
+      artist: 'Mira Solano',
+      artUrl: 'https://i.ytimg.com/vi/x/hqdefault.jpg',
+    })).toMatchObject({
+      metadata: {
+        metadataType: 0,
+        title: 'Horizon',
+        subtitle: 'Mira Solano',
+        images: [{ url: 'https://i.ytimg.com/vi/x/hqdefault.jpg' }],
+      },
+    })
+  })
 })

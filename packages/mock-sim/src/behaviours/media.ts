@@ -48,10 +48,18 @@ export function mediaPlayer(externalId: string, o: MediaOptions): SimDevice<'med
           if (dev.state.nowPlaying) dev.state.nowPlaying = now(clamp(Math.floor(cmd.positionS), 0, PLAYLIST[track]!.durationS))
           break
         case 'media_player.play_url': {
-          let title = cmd.url
-          try { title = new URL(cmd.url).hostname || cmd.url } catch { /* */ }
+          let title = cmd.title
+          if (!title) {
+            title = cmd.url
+            try { title = new URL(cmd.url).hostname || cmd.url } catch { /* */ }
+          }
           dev.state.playback = 'playing'
-          dev.state.nowPlaying = { title, source: cmd.url }
+          dev.state.nowPlaying = {
+            title,
+            ...(cmd.artist ? { artist: cmd.artist } : {}),
+            ...(cmd.artUrl ? { artUrl: cmd.artUrl } : {}),
+            source: cmd.url,
+          }
           break
         }
         default: throw new SimError('UNSUPPORTED_COMMAND', `${cmd.type} on media_player`)

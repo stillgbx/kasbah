@@ -226,21 +226,55 @@ export function toStatePatch(
   return patch
 }
 
+/** Métadonnées optionnelles pour `play_url` (titre / artiste / pochette). */
+export type StreamMeta = { title?: string; artist?: string; artUrl?: string }
+
 /**
  * DIDL-Lite pour `SetAVTransportURI` : un flux HTTP que l'enceinte va chercher. HLS / m3u = direct
  * (`audioBroadcast`) ; le reste est un morceau. L'URL et le titre sont échappés : le SOAP ré-échappe
- * tout le bloc ensuite.
+ * tout le bloc ensuite. Sans `meta.title`, le hostname de l'URL (comportement historique).
  */
-export function streamDidl(url: string, contentType: string, live: boolean): string {
-  const title = encodeXml((() => { try { return new URL(url).hostname } catch { return 'Stream' } })())
+export function streamDidl(url: string, contentType: string, live: boolean, meta?: StreamMeta): string {
+  const fallback = (() => { try { return new URL(url).hostname } catch { return 'Stream' } })()
+  const title = encodeXml(meta?.title?.trim() || fallback)
+  const artist = meta?.artist?.trim()
+  const art = meta?.artUrl?.trim()
   const res = encodeXml(url)
   const cls = live ? 'object.item.audioItem.audioBroadcast' : 'object.item.audioItem.musicTrack'
-  return `<DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"><item id="0" parentID="-1" restricted="true"><dc:title>${title}</dc:title><upnp:class>${cls}</upnp:class><res protocolInfo="http-get:*:${contentType}:*">${res}</res></item></DIDL-Lite>`
+  const creator = artist ? `<dc:creator>${encodeXml(artist)}</dc:creator>` : ''
+  const albumArt = art ? `<upnp:albumArtURI>${encodeXml(art)}</upnp:albumArtURI>` : ''
+  return `<DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"><item id="0" parentID="-1" restricted="true"><dc:title>${title}</dc:title>${creator}${albumArt}<upnp:class>${cls}</upnp:class><res protocolInfo="http-get:*:${contentType}:*">${res}</res></item></DIDL-Lite>`
 }
 
-export function streamLoad(url: string): { uri: string; didl: string } {
+export function streamLoad(url: string, meta?: StreamMeta): { uri: string; didl: string } {
   const path = (() => { try { return new URL(url).pathname.toLowerCase() } catch { return url.toLowerCase() } })()
   const live = path.endsWith('.m3u8') || path.endsWith('.m3u')
   const contentType = live ? 'application/x-mpegURL' : path.endsWith('.mp4') ? 'video/mp4' : path.endsWith('.aac') || path.endsWith('.m4a') ? 'audio/mp4' : 'audio/mpeg'
-  return { uri: url, didl: streamDidl(url, contentType, live) }
+  return { uri: url, didl: streamDidl(url, contentType, live, meta) }
+}
+
+/**
+ * Sonos n'écho pas toujours le DIDL d'un `play_url` HTTP : GetPositionInfo renvoie souvent un titre
+ * vide ou le dernier segment de l'URL (ex. le sid du proxy ytmusic). Tant que l'URI collée correspond,
+ * on impose titre / artiste / pochette fournis à la commande.
+ */
+export function overlayStreamMeta(
+  patch: StatePatch<'media_player'>,
+  sticky: StreamMeta & { uri: string },
+  trackUri: string | undefined,
+  artProxy: (url: string) => string,
+): StatePatch<'media_player'> {
+  if (patch.playback === 'idle') return patch
+  if (trackUri && trackUri !== sticky.uri) return patch
+  const art = sticky.artUrl?.trim() ? artProxy(sticky.artUrl.trim()) : undefined
+  const base = patch.nowPlaying ?? { title: '' }
+  return {
+    ...patch,
+    nowPlaying: {
+      ...base,
+      ...(sticky.title?.trim() ? { title: sticky.title.trim() } : {}),
+      ...(sticky.artist?.trim() ? { artist: sticky.artist.trim() } : {}),
+      ...(art ? { artUrl: art } : {}),
+    },
+  }
 }

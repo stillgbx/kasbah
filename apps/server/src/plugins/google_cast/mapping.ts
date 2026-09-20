@@ -196,15 +196,23 @@ export type CastLoadMedia = {
   contentId: string
   contentType: string
   streamType: 'BUFFERED' | 'LIVE'
-  metadata: { metadataType: 0; title: string }
+  metadata: {
+    metadataType: 0
+    title: string
+    subtitle?: string
+    images?: { url: string }[]
+  }
 }
+
+/** Métadonnées optionnelles pour `play_url` (titre / artiste / pochette). */
+export type PlayUrlMeta = { title?: string; artist?: string; artUrl?: string }
 
 /**
  * Ce que le récepteur média par défaut veut dans `LOAD.media` : type MIME et `LIVE` vs `BUFFERED`
  * d'après le chemin (HLS = direct). Une URL sans extension est un MP3 : c'est le cas des webradios
- * Icecast (franceinfo-midfi.mp3) comme d'un fichier nu.
+ * Icecast (franceinfo-midfi.mp3) comme d'un fichier nu. Sans `meta.title`, le hostname de l'URL.
  */
-export function mediaFromUrl(url: string): CastLoadMedia {
+export function mediaFromUrl(url: string, meta?: PlayUrlMeta): CastLoadMedia {
   let path = url
   try { path = new URL(url).pathname } catch { /* garder la chaîne */ }
   const lower = path.toLowerCase()
@@ -218,5 +226,9 @@ export function mediaFromUrl(url: string): CastLoadMedia {
   else if (lower.endsWith('.wav')) contentType = 'audio/wav'
   let title = 'Stream'
   try { title = new URL(url).hostname || title } catch { /* */ }
-  return { contentId: url, contentType, streamType: live ? 'LIVE' : 'BUFFERED', metadata: { metadataType: 0, title } }
+  if (meta?.title?.trim()) title = meta.title.trim()
+  const metadata: CastLoadMedia['metadata'] = { metadataType: 0, title }
+  if (meta?.artist?.trim()) metadata.subtitle = meta.artist.trim()
+  if (meta?.artUrl?.trim()) metadata.images = [{ url: meta.artUrl.trim() }]
+  return { contentId: url, contentType, streamType: live ? 'LIVE' : 'BUFFERED', metadata }
 }

@@ -52,6 +52,13 @@ describe('assertCommandAllowed', () => {
   })
   it('accepts play_url only with http(s) and the play_url capability', () => {
     expect(commandSchema.safeParse({ type: 'media_player.play_url', url: 'https://icecast.example/a.mp3' }).success).toBe(true)
+    expect(commandSchema.safeParse({
+      type: 'media_player.play_url',
+      url: 'https://icecast.example/a.mp3',
+      title: 'Horizon',
+      artist: 'Mira',
+      artUrl: 'https://i.ytimg.com/vi/x/hqdefault.jpg',
+    }).success).toBe(true)
     expect(commandSchema.safeParse({ type: 'media_player.play_url', url: 'ftp://files.example/a.mp3' }).success).toBe(false)
     const player: DeviceDescriptor = {
       ...light, id: 'mock:p', externalId: 'p', kind: 'media_player', capabilities: ['playback'],

@@ -13,3 +13,5 @@ _generated-ai-doc
 apps/server/.state/
 house/maison.json
 house/*.bak
+.tmp-check
+_external

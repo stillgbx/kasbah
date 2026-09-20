@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import type { PluginHealth, PluginInfo } from '@kasbah/shared'
 import MelcloudLinkCard from '../MelcloudLinkCard.vue'
 import PluginSection from './PluginSection.vue'
+import YtmusicLinkCard from '../YtmusicLinkCard.vue'
 
 const plugin = (over: Partial<PluginInfo> = {}, health: Partial<PluginHealth> = {}): PluginInfo => ({
   id: 'tahoma', implemented: true, enabled: true, parts: [],
@@ -55,6 +56,12 @@ describe('PluginSection — ce qui s’ouvre tout seul', () => {
     const w = mount(PluginSection, { props: { plugin: plugin({ id: 'melcloud' }, { status: 'needs_pairing', detail: 'no MELCloud account linked' }) } })
     expect(body(w)).toBe(true)
     expect(w.findComponent(MelcloudLinkCard).exists()).toBe(true)
+  })
+
+  it('monte la carte YouTube Music quand un cookie est demandé', () => {
+    const w = mount(PluginSection, { props: { plugin: plugin({ id: 'ytmusic' }, { status: 'needs_pairing', detail: 'paste cookie' }) } })
+    expect(body(w)).toBe(true)
+    expect(w.findComponent(YtmusicLinkCard).exists()).toBe(true)
   })
 
   /** Un squelette n'a ni détail, ni clé, ni carte : le chevron reste là pour l'alignement, inerte. */

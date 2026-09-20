@@ -7,7 +7,7 @@ import {
   SSDP_PLAY3, SSDP_PORT, UUID_PLAY3, UUID_PORT, ZP_PLAY3, ZP_PORT,
 } from './__fixtures__/network'
 import {
-  formatSonosTime, parseDeviceDescription, parseDidl, parseMute, parsePosition, parseSonosTime,
+  artProxyUrl, formatSonosTime, overlayStreamMeta, parseDeviceDescription, parseDidl, parseMute, parsePosition, parseSonosTime,
   parseSsdpHeaders, parseTransport, parseVolume, parseZoneMembers, parseZpInfo, streamLoad, toDescriptor,
   toPlayback, toStatePatch, uuidFromUsn,
 } from './mapping'
@@ -128,5 +128,35 @@ describe('sonos mapping', () => {
     expect(didl).toContain('audio/mpeg')
     expect(didl).toContain('musicTrack')
     expect(streamLoad('https://ex.example/live.m3u8').didl).toContain('audioBroadcast')
+  })
+
+  it('embeds title, artist and artwork in stream DIDL', () => {
+    const { didl } = streamLoad('http://192.168.1.10:8787/api/plugins/ytmusic/stream/abc', {
+      title: 'Horizon',
+      artist: 'Mira Solano',
+      artUrl: 'https://i.ytimg.com/vi/x/hqdefault.jpg',
+    })
+    expect(didl).toContain('<dc:title>Horizon</dc:title>')
+    expect(didl).toContain('<dc:creator>Mira Solano</dc:creator>')
+    expect(didl).toContain('<upnp:albumArtURI>https://i.ytimg.com/vi/x/hqdefault.jpg</upnp:albumArtURI>')
+    expect(didl).not.toContain('<dc:title>192.168.1.10</dc:title>')
+  })
+
+  it('overlays sticky play_url meta when Sonos forgets DIDL', () => {
+    const weak = {
+      playback: 'playing' as const,
+      nowPlaying: { title: '', source: 'http://192.168.1.10:8787/api/plugins/ytmusic/stream/abc' },
+    }
+    const out = overlayStreamMeta(
+      weak,
+      { uri: 'http://192.168.1.10:8787/api/plugins/ytmusic/stream/abc', title: 'Horizon', artist: 'Mira', artUrl: 'https://i.ytimg.com/a.jpg' },
+      'http://192.168.1.10:8787/api/plugins/ytmusic/stream/abc',
+      artProxyUrl,
+    )
+    expect(out.nowPlaying).toMatchObject({
+      title: 'Horizon',
+      artist: 'Mira',
+      artUrl: artProxyUrl('https://i.ytimg.com/a.jpg'),
+    })
   })
 })

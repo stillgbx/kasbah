@@ -13,7 +13,7 @@ import { sendError } from '../../http/errors'
 import { AppIconResolver, registryAppId, type RegistryFetch } from './enrich/appIcon'
 import { CoverFinder, type CoverFetch, type Track } from './enrich/cover'
 import { CrunchyrollEnricher, isCrunchyrollApp, type EnrichFetch } from './enrich/crunchyroll'
-import { applyEnrichment, toDescriptor, toMediaPatch, toReceiverPatch, withFallbackArt } from './mapping'
+import { applyEnrichment, artProxyUrl, toDescriptor, toMediaPatch, toReceiverPatch, withFallbackArt, type PlayUrlMeta } from './mapping'
 import type { CastService, MediaStatus, ReceiverApplication, ReceiverStatus } from './types'
 import type { StatePatch } from '@kasbah/shared'
 
@@ -99,6 +99,8 @@ interface Entry {
   /** Sortie son d'une TV Sony (dernier relevé de `bravia.ts`) ; `undefined` tant qu'elle n'a pas répondu. */
   audio: AudioOutput | undefined
   audioTimer: unknown
+  /** Métadonnées du dernier `play_url` tant que le contentId correspond. */
+  stickyPlay?: PlayUrlMeta & { uri: string }
 }
 
 export interface GoogleCastPluginDeps {
@@ -290,7 +292,30 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
    * étage ne parle que si l'image manque encore.
    */
   function mediaPatch(entry: Entry, media: MediaStatus | undefined, app: ReceiverApplication | undefined): StatePatch<'media_player'> {
-    return withAppIcon(entry, app, withCover(entry, enrichedPatch(entry, media, app)))
+    let patch = withAppIcon(entry, app, withCover(entry, enrichedPatch(entry, media, app)))
+    const sticky = entry.stickyPlay
+    if (!sticky) return patch
+    if (patch.playback === 'idle') {
+      entry.stickyPlay = undefined
+      return patch
+    }
+    const contentId = media?.media?.contentId
+    if (contentId && contentId !== sticky.uri) {
+      entry.stickyPlay = undefined
+      return patch
+    }
+    const art = sticky.artUrl?.trim()
+    if (art) rememberArt(art)
+    const base = patch.nowPlaying ?? { title: '' }
+    return {
+      ...patch,
+      nowPlaying: {
+        ...base,
+        ...(sticky.title?.trim() ? { title: sticky.title.trim() } : {}),
+        ...(sticky.artist?.trim() ? { artist: sticky.artist.trim() } : {}),
+        ...(art ? { artUrl: artProxyUrl(art) } : {}),
+      },
+    }
   }
 
   /** Le morceau nommé par un patch, s'il a de quoi être cherché (titre ET artiste). */
@@ -460,7 +485,32 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
       case 'media_player.next': return c.queueJump(1)
       case 'media_player.previous': return c.previous()                 // début du morceau passé 3 s, sinon le précédent
       case 'media_player.seek': return c.seek(command.positionS)
-      case 'media_player.play_url': return c.playUrl(command.url)
+      case 'media_player.play_url': {
+        const meta: PlayUrlMeta = {
+          ...(command.title ? { title: command.title } : {}),
+          ...(command.artist ? { artist: command.artist } : {}),
+          ...(command.artUrl ? { artUrl: command.artUrl } : {}),
+        }
+        await c.playUrl(command.url, meta)
+        if (meta.title || meta.artist || meta.artUrl) {
+          entry.stickyPlay = { uri: command.url, ...meta }
+          if (meta.artUrl) rememberArt(meta.artUrl)
+          if (started) {
+            ctx!.emitState(entry.service.txt.id, {
+              playback: 'playing',
+              nowPlaying: {
+                title: meta.title ?? '',
+                ...(meta.artist ? { artist: meta.artist } : {}),
+                ...(meta.artUrl ? { artUrl: artProxyUrl(meta.artUrl) } : {}),
+                source: 'Default Media Receiver',
+              },
+            })
+          }
+        } else {
+          entry.stickyPlay = undefined
+        }
+        return
+      }
       case 'media_player.set_volume':
         if (entry.controlType === 'fixed') throw new PluginError('UNSUPPORTED_COMMAND', 'volume is fixed on this device (set it on the TV)')
         return c.setVolume({ level: Math.min(100, Math.max(0, command.volume)) / 100 })

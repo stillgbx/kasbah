@@ -45,6 +45,12 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('media_player.play_url'),
     url: z.string().url().max(2048).refine((u) => /^https?:\/\//i.test(u), 'http or https only'),
+    /** Titre affiché (DIDL Sonos / métadonnées Cast) ; sinon le hostname de l'URL. */
+    title: z.string().trim().min(1).max(512).optional(),
+    /** Artiste / sous-titre optionnel. */
+    artist: z.string().trim().min(1).max(512).optional(),
+    /** Pochette absolue HTTP(S) que l'enceinte peut télécharger (ex. `i.ytimg.com`). */
+    artUrl: z.string().url().max(2048).refine((u) => /^https?:\/\//i.test(u), 'http or https only').optional(),
   }),
   // climate
   z.object({ type: z.literal('climate.set_mode'), mode: z.enum(CLIMATE_MODES) }),

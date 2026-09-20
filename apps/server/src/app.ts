@@ -15,6 +15,7 @@ import { EnergyHistory } from './core/history'
 import { registerRoutes } from './http/routes'
 import { registerStatic } from './http/static'
 import { PLUGIN_FACTORIES } from './plugins'
+import { setYtmusicBridge } from './plugins/ytmusic/bridge'
 import { WsHub } from './ws/hub'
 
 export interface BuildAppOptions {
@@ -91,6 +92,17 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
 
   registerRoutes(app, { registry, scenes, host, house, hub, history, startedAt: clock.now() })
   host.registerRoutes(app)
+  // YouTube Music n'a pas d'appareils : pour `play_url` il passe par Cast/Sonos via l'hôte.
+  setYtmusicBridge({
+    getDevice: (id) => registry.get(id),
+    playUrl: (id, url, meta) => host.execute(id, {
+      type: 'media_player.play_url',
+      url,
+      ...(meta?.title ? { title: meta.title } : {}),
+      ...(meta?.artist ? { artist: meta.artist } : {}),
+      ...(meta?.artUrl ? { artUrl: meta.artUrl } : {}),
+    }),
+  })
   if (opts.serveStatic ?? true) {
     const served = await registerStatic(app, opts.env.KASBAH_STATIC_DIR)
     opts.logger.info({ dir: opts.env.KASBAH_STATIC_DIR, served }, served ? 'serving web build' : 'no web build found (dev mode: use Vite)')
@@ -100,6 +112,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
     app, registry, scenes, bus, hub, host, house,
     startPlugins: () => host.startAll(),
     async close() {
+      setYtmusicBridge(null)
       await host.stopAll()
       seeder.close()
       hub.close()

@@ -125,6 +125,35 @@ export interface IrobotStatus {
 }
 
 /**
+ * Mise en route YouTube Music (non officiel). Le cookie n'y figure jamais — il ne fait que
+ * traverser `ytmusicPutCookie`.
+ */
+export interface YtmusicStatus {
+  linked: boolean
+  poTokenOk: boolean
+  unofficial: true
+  cookieFile: string | null
+  poTokenUrl: string
+  lastError: string | null
+}
+
+export interface YtmusicTrack {
+  videoId: string
+  title: string
+  artists: string[]
+  artUrl: string | null
+  durationS: number | null
+  album?: string | null
+}
+
+export interface YtmusicPlaylist {
+  id: string
+  title: string
+  artUrl: string | null
+  trackCount: number | null
+}
+
+/**
  * L'état d'une MACHINE de chauffage, servi par son plugin et non par le registre d'appareils : ce
  * sont une douzaine de mesures qu'on ne consulte que sur la page Chauffage, et qui n'avaient pas à
  * devenir autant de capteurs dans la maison et dans la scène 3D.
@@ -246,6 +275,24 @@ export interface Transport {
   irobotLogin(body: { email: string; password: string }): Promise<IrobotStatus>
   /** Délie le compte : les mots de passe locaux sont effacés et les liens fermés. */
   irobotLogout(): Promise<IrobotStatus>
+  /** Où en est la liaison YouTube Music (cookie présent, PO Token joignable). */
+  ytmusicStatus(): Promise<YtmusicStatus>
+  /** Colle le cookie du compte (corps JSON). Jamais journalisé. */
+  ytmusicPutCookie(cookie: string): Promise<YtmusicStatus>
+  /** Efface le cookie. */
+  ytmusicClearCookie(): Promise<YtmusicStatus>
+  ytmusicSearch(q: string): Promise<{ tracks: YtmusicTrack[] }>
+  ytmusicLiked(): Promise<{ tracks: YtmusicTrack[] }>
+  ytmusicPlaylists(): Promise<{ playlists: YtmusicPlaylist[] }>
+  ytmusicPlaylist(id: string): Promise<{ tracks: YtmusicTrack[] }>
+  /** Résout le flux et envoie `play_url` au lecteur (métadonnées optionnelles pour titre / pochette). */
+  ytmusicPlay(body: {
+    videoId: string
+    deviceId: string
+    title?: string
+    artist?: string
+    artUrl?: string
+  }): Promise<{ ok: true; streamUrl: string; sid: string }>
   /**
    * Fait oublier un appareil au plugin qui le retenait (`meta.forgettable`), par convention
    * `DELETE /api/plugins/<plugin>/devices/<externalId>` : il quitte l'inventaire jusqu'à ce qu'il
