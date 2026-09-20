@@ -22,6 +22,7 @@
     "scenes": "Scènes", "rooms": "Pièces", "garden": "Jardin",
     "roomsCount": "{n} pièce | {n} pièce | {n} pièces",
     "devicesCount": "{n} appareil | {n} appareil | {n} appareils", "active": "{n} actif | {n} actif | {n} actifs",
+    "filter": { "aria": "Filtrer les appareils", "light": "Lumière", "cover": "Volet", "climate": "Température", "media": "Média", "camera": "Caméra", "other": "Autre" },
     "selectHint": "Touchez une pièce ou un appareil dans la vue 3D",
     "resetView": "Vue d'ensemble", "rotateLeft": "Tourner à gauche", "rotateRight": "Tourner à droite", "zoomIn": "Rapprocher", "zoomOut": "Éloigner", "openPanel": "Panneau", "noScenes": "Aucune scène définie dans la maison."
   },

@@ -6,7 +6,7 @@ import type { HouseDevice } from '@kasbah/shared'
 import { emitsSound, relayLabel, soundRouting } from './audioRouting'
 import { headlineValue, isDeviceBusy, isDeviceOn, isDevicePulsing, statusLabel, toggleChecked, toggleCommand } from './deviceState'
 import { formatFlow, formatPower, formatSensor, formatVolume, formatVolumeAxisTick, summarize, volumeAxisUnit } from './format'
-import { deviceColor, deviceIcon } from './deviceIcons'
+import { deviceColor, deviceIcon, presentRoomFilters, roomFilterCategory } from './deviceIcons'
 import { findBatteries, findEnergySite, inverterGroups, isEnergySite, isInverter, shortInverterId } from './energy'
 import { coverActivity, coverAtRest, isFlatCover, isPassageCover } from './cover'
 import { coverLeaves, coverSize, hasLeaves, isOrientable, isSizable } from './orientation'
@@ -452,6 +452,24 @@ describe('format & icons', () => {
     expect(deviceIcon(d, { ...light, on: true })).not.toBe(deviceIcon(d, light))
     expect(deviceColor({ ...light, on: true })).toBe('warning')
     expect(deviceColor({ ...light, available: false })).toBe('on-surface-variant')
+  })
+})
+
+describe('filtre de pièce', () => {
+  it('range le chauffage et la sonde de température à part, le reste comme le rail', () => {
+    expect(roomFilterCategory('light')).toBe('light')
+    expect(roomFilterCategory('cover')).toBe('cover')
+    expect(roomFilterCategory('climate')).toBe('climate')
+    expect(roomFilterCategory('media_player')).toBe('media')
+    expect(roomFilterCategory('camera')).toBe('camera')
+    expect(roomFilterCategory('vacuum')).toBe('other')
+    expect(roomFilterCategory(undefined)).toBe('other')
+    expect(roomFilterCategory('sensor', { ...sensor, kind: 'sensor' })).toBe('climate')
+    expect(roomFilterCategory('sensor', { ...sensor, kind: 'sensor', meta: { sensor: { unit: '%', deviceClass: 'humidity', precision: 0 } } })).toBe('other')
+  })
+  it('ne retient que les catégories présentes, dans l ordre des onglets', () => {
+    expect(presentRoomFilters(['other', 'media', 'light', 'light'])).toEqual(['light', 'media', 'other'])
+    expect(presentRoomFilters([])).toEqual([])
   })
 })
 

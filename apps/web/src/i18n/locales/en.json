@@ -22,6 +22,7 @@
     "scenes": "Scenes", "rooms": "Rooms", "garden": "Garden",
     "roomsCount": "{n} room | {n} room | {n} rooms",
     "devicesCount": "{n} device | {n} device | {n} devices", "active": "{n} active | {n} active | {n} active",
+    "filter": { "aria": "Filter devices", "light": "Light", "cover": "Cover", "climate": "Temp", "media": "Media", "camera": "Camera", "other": "Other" },
     "selectHint": "Tap a room or a device in the 3D view",
     "resetView": "Overview", "rotateLeft": "Rotate left", "rotateRight": "Rotate right", "zoomIn": "Zoom in", "zoomOut": "Zoom out", "openPanel": "Panel", "noScenes": "No scene defined in the house."
   },

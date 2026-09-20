@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { DeviceState, HouseDevice, Opening } from '@kasbah/shared'
 import { openingLabel } from '@kasbah/shared'
 import { relayLabel } from '../../lib/audioRouting'
+import { presentRoomFilters, ROOM_FILTER_ICONS, roomFilterCategory, type RoomFilterCat } from '../../lib/deviceIcons'
 import { isDeviceOn, isDevicePulsing, statusLabel, toggleChecked, toggleCommand } from '../../lib/deviceState'
 import { lightTintCss } from '../../lib/lightTint'
 import { kindIcon } from '../../lib/strokeIcons'
@@ -16,6 +17,7 @@ import RoomLightsToggle from '../devices/RoomLightsToggle.vue'
 import RoomRows from './RoomRows.vue'
 import SceneChips from '../scenes/SceneChips.vue'
 import MarqueeText from '../ui/MarqueeText.vue'
+import Segmented from '../ui/Segmented.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import PulseDot from '../ui/PulseDot.vue'
 
@@ -75,6 +77,7 @@ function row(d: HouseDevice) {
   const toggle = relay ? toggleCommand(relay.state) : state ? toggleCommand(state, aimed) : null
   return {
     key: d.id, name: d.name ?? descriptor?.name ?? d.id, icon: kindIcon(descriptor?.kind ?? d.kind, descriptor),
+    cat: roomFilterCategory(descriptor?.kind ?? d.kind, descriptor),
     on: !!state && (isDeviceOn(state, descriptor) || !!relay),
     // `on` teinte l'icône (un volet OUVERT est l'actif), `checked` est la valeur de
     // l'interrupteur (un volet FERMÉ est coché) — voir `lib/cover.ts`. La cible tenue par le store
@@ -103,6 +106,19 @@ const rows = computed(() => (target.value?.list ?? []).map(row))
 const deviceIds = computed(() => (target.value?.list ?? []).map((d) => d.deviceId))
 /** Ambiances du fabricant rattachées à cette pièce (rapprochement par nom) — un niveau n'en a pas. */
 const roomScenes = computed(() => (roomTarget.value ? scenes.forRoom(roomTarget.value.name) : []))
+
+// Filtre de la liste : « Tout » plus les catégories réellement présentes. Une seule catégorie
+// n'affiche pas la barre (le geste ne ferait rien). On revient à « Tout » en changeant de pièce.
+type RoomFilter = 'all' | RoomFilterCat
+const filter = ref<RoomFilter>('all')
+const filterCats = computed(() => presentRoomFilters(rows.value.map((r) => r.cat)))
+const filterOptions = computed(() => [
+  { value: 'all' as RoomFilter, label: t('common.all'), icon: ROOM_FILTER_ICONS.all },
+  ...filterCats.value.map((c) => ({ value: c as RoomFilter, label: t(`home.filter.${c}`), icon: ROOM_FILTER_ICONS[c] })),
+])
+const visibleRows = computed(() => (filter.value === 'all' ? rows.value : rows.value.filter((r) => r.cat === filter.value)))
+watch(() => house.selectedRoomId ?? house.selectedLevelId ?? '', () => { filter.value = 'all' })
+watch(filterCats, (cats) => { if (filter.value !== 'all' && !cats.includes(filter.value)) filter.value = 'all' })
 </script>
 
 <template>
@@ -127,21 +143,25 @@ const roomScenes = computed(() => (roomTarget.value ? scenes.forRoom(roomTarget.
       <div class="section-label">{{ $t('home.rooms') }}</div>
       <RoomRows :rows="target.rooms" />
     </section>
-    <div class="rows">
-      <div v-for="r in rows" :key="r.key" class="dev-row" role="button" tabindex="0" @click="house.selectDevice(r.key)" @keydown.enter="house.selectDevice(r.key)">
-        <!-- fond sous le contenu (pochette ou teinte), fondu vers l'interrupteur ; absolu, il ne décale rien -->
-        <Transition name="rowart">
-          <div v-if="r.backdrop" :key="r.backdropKey" class="dev-row__art" :style="r.backdrop" aria-hidden="true" />
-        </Transition>
-        <span class="icon-square" :data-on="r.on ? '1' : '0'"><StrokeIcon :name="r.icon" :size="18" /></span>
-        <div class="dev-row__main">
-          <div class="dev-row__name">{{ r.name }}</div>
-          <!-- statut trop long (titre d'un morceau) : il défile avec un fondu plutôt que d'être coupé -->
-          <div class="dev-row__status"><PulseDot :on="r.busy" class="dev-row__dot" /><MarqueeText class="dev-row__statustext" :text="r.status" /></div>
+    <div class="block">
+      <Segmented v-if="filterCats.length > 1" dense fill :model-value="filter" :options="filterOptions"
+                 :label="$t('home.filter.aria')" @update:model-value="filter = $event" />
+      <div class="rows">
+        <div v-for="r in visibleRows" :key="r.key" class="dev-row" role="button" tabindex="0" @click="house.selectDevice(r.key)" @keydown.enter="house.selectDevice(r.key)">
+          <!-- fond sous le contenu (pochette ou teinte), fondu vers l'interrupteur ; absolu, il ne décale rien -->
+          <Transition name="rowart">
+            <div v-if="r.backdrop" :key="r.backdropKey" class="dev-row__art" :style="r.backdrop" aria-hidden="true" />
+          </Transition>
+          <span class="icon-square" :data-on="r.on ? '1' : '0'"><StrokeIcon :name="r.icon" :size="18" /></span>
+          <div class="dev-row__main">
+            <div class="dev-row__name">{{ r.name }}</div>
+            <!-- statut trop long (titre d'un morceau) : il défile avec un fondu plutôt que d'être coupé -->
+            <div class="dev-row__status"><PulseDot :on="r.busy" class="dev-row__dot" /><MarqueeText class="dev-row__statustext" :text="r.status" /></div>
+          </div>
+          <v-switch v-if="r.toggle && r.target" :model-value="r.checked" :disabled="!r.available" class="dev-row__switch"
+                    @click.stop @update:model-value="devices.sendCommand(r.target!, r.toggle!)" />
+          <StrokeIcon v-else name="chevron" :size="18" class="muted" />
         </div>
-        <v-switch v-if="r.toggle && r.target" :model-value="r.checked" :disabled="!r.available" class="dev-row__switch"
-                  @click.stop @update:model-value="devices.sendCommand(r.target!, r.toggle!)" />
-        <StrokeIcon v-else name="chevron" :size="18" class="muted" />
       </div>
     </div>
     <!-- mode édition : chemin de secours vers une ouverture qu'on ne voit pas sous l'angle courant —

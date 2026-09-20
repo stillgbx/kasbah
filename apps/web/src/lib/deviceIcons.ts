@@ -31,6 +31,36 @@ export function deviceCategory(kind: DeviceKind | undefined): DeviceCategory {
   return (kind && KIND_CATEGORY[kind]) ?? 'other'
 }
 
+/**
+ * Catégories du filtre de la liste d'une pièce : les quatre teintes du rail, plus le chauffage
+ * (thermostat, pompe à chaleur, sonde de température) qui sinon tomberait dans « Autre ».
+ * L'ordre est celui des onglets.
+ */
+export type RoomFilterCat = 'light' | 'cover' | 'climate' | 'media' | 'camera' | 'other'
+export const ROOM_FILTER_CATS: readonly RoomFilterCat[] = ['light', 'cover', 'climate', 'media', 'camera', 'other']
+
+const KIND_FILTER: Partial<Record<DeviceKind, RoomFilterCat>> = {
+  light: 'light', cover: 'cover', climate: 'climate', media_player: 'media', camera: 'camera',
+}
+
+export function roomFilterCategory(kind: DeviceKind | undefined, descriptor?: DeviceDescriptor): RoomFilterCat {
+  const k = descriptor?.kind ?? kind
+  if (k === 'sensor' && descriptor?.meta.sensor?.deviceClass === 'temperature') return 'climate'
+  return (k && KIND_FILTER[k]) ?? 'other'
+}
+
+/** Catégories présentes dans une pièce, dans l'ordre des onglets — pas l'ordre d'apparition. */
+export function presentRoomFilters(cats: Iterable<RoomFilterCat>): RoomFilterCat[] {
+  const seen = new Set<RoomFilterCat>()
+  for (const cat of cats) seen.add(cat)
+  return ROOM_FILTER_CATS.filter((c) => seen.has(c))
+}
+
+/** Icônes du filtre de pièce : les mêmes que le rail, thermostat pour la température, `devices` pour Tout. */
+export const ROOM_FILTER_ICONS: Record<'all' | RoomFilterCat, IconName> = {
+  all: 'devices', light: 'light', cover: 'shutter', climate: 'thermostat', media: 'cast', camera: 'camera', other: 'dots',
+}
+
 export function deviceIcon(descriptor: DeviceDescriptor | undefined, state?: DeviceState): IconName {
   if (!descriptor) return 'devices'
   switch (descriptor.kind) {
