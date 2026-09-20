@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { StorageSerializers, useLocalStorage } from '@vueuse/core'
+import { useLocalStorage } from '@vueuse/core'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { DeviceEntry } from '@kasbah/shared'
@@ -34,9 +34,8 @@ const plugins = usePluginsStore()
 
 const tab = useLocalStorage<YtmTab>('kasbah.ytmusic.tab', 'search')
 const query = useLocalStorage('kasbah.ytmusic.query', '')
-const selectedMedia = useLocalStorage<YtmusicTrack | null>('kasbah.ytmusic.selectedMedia', null, {
-  serializer: StorageSerializers.object,
-})
+/** Derniers titres joués (pastilles). */
+const recentPlays = useLocalStorage<YtmusicTrack[]>('kasbah.ytmusic.recentPlays', [])
 const tracks = ref<YtmusicTrack[]>([])
 const searchArtists = ref<YtmusicArtist[]>([])
 const searchAlbums = ref<YtmusicAlbum[]>([])
@@ -57,6 +56,14 @@ const sortAlbums = useLocalStorage<SectionSort>('kasbah.ytmusic.sort.albums', 'r
 const sortSingles = useLocalStorage<SectionSort>('kasbah.ytmusic.sort.singles', 'relevance')
 const sortCompilations = useLocalStorage<SectionSort>('kasbah.ytmusic.sort.compilations', 'relevance')
 const sortTracks = useLocalStorage<SectionSort>('kasbah.ytmusic.sort.tracks', 'relevance')
+/** Masquer albums / EP / titres marqués explicit. */
+const hideExplicit = useLocalStorage('kasbah.ytmusic.hideExplicit', false)
+/** Dernières requêtes (pastilles sous la barre). */
+const recentQueries = useLocalStorage<string[]>('kasbah.ytmusic.recentQueries', [])
+const RECENT_MAX = 10
+const RECENT_PLAYS_MAX = 10
+
+const selectedVideoId = computed(() => recentPlays.value[0]?.videoId ?? null)
 
 const tabOptions = computed(() => [
   { value: 'search' as const, label: t('ytmusic.tabSearch') },
@@ -97,16 +104,22 @@ function sortedBy<T>(
   return copy
 }
 
+function withoutExplicit<T extends { explicit?: boolean }>(items: T[]): T[] {
+  if (!hideExplicit.value) return items
+  return items.filter((i) => !i.explicit)
+}
+
 const artistsView = computed(() =>
   sortedBy(searchArtists.value, sortArtists.value, (a) => a.name))
 const albumsView = computed(() =>
-  sortedBy(searchAlbums.value, sortAlbums.value, (a) => a.title, (a) => a.year))
+  sortedBy(withoutExplicit(searchAlbums.value), sortAlbums.value, (a) => a.title, (a) => a.year))
 const singlesView = computed(() =>
-  sortedBy(searchSingles.value, sortSingles.value, (a) => a.title, (a) => a.year))
+  sortedBy(withoutExplicit(searchSingles.value), sortSingles.value, (a) => a.title, (a) => a.year))
 const compilationsView = computed(() =>
-  sortedBy(searchCompilations.value, sortCompilations.value, (a) => a.title, (a) => a.year))
+  sortedBy(withoutExplicit(searchCompilations.value), sortCompilations.value, (a) => a.title, (a) => a.year))
 const tracksView = computed(() =>
-  sortedBy(searchTracks.value, sortTracks.value, (a) => a.title, (a) => a.year))
+  sortedBy(withoutExplicit(searchTracks.value), sortTracks.value, (a) => a.title, (a) => a.year))
+const browseTracksView = computed(() => withoutExplicit(tracks.value))
 
 const players = computed(() => devices.list.filter((e: DeviceEntry) =>
   e.state.kind === 'media_player'
@@ -169,22 +182,16 @@ function fmtDur(s: number | null): string {
   return `${m}:${sec.toString().padStart(2, '0')}`
 }
 
-/** Sous-titre : artiste · album · durée (pas de label discographique côté InnerTube). */
+/** Sous-titre : artiste · album (durée et année à droite, hors ellipsis). */
 function trackMeta(tr: YtmusicTrack): string {
   const parts: string[] = []
   if (tr.artists.length) parts.push(tr.artists.join(', '))
   if (tr.album) parts.push(tr.album)
-  if (tr.year) parts.push(tr.year)
-  const dur = fmtDur(tr.durationS)
-  if (dur) parts.push(dur)
   return parts.join(' · ')
 }
 
 function albumMeta(al: YtmusicAlbum): string {
-  const parts: string[] = []
-  if (al.artists.length) parts.push(al.artists.join(', '))
-  if (al.year) parts.push(al.year)
-  return parts.join(' · ')
+  return al.artists.length ? al.artists.join(', ') : ''
 }
 
 function clearSearchResults() {
@@ -195,11 +202,60 @@ function clearSearchResults() {
   searchTracks.value = []
 }
 
+function rememberQuery(q: string) {
+  const trimmed = q.trim()
+  if (!trimmed) return
+  const key = trimmed.toLowerCase()
+  const cur = recentQueries.value
+  const idx = cur.findIndex((x) => x.toLowerCase() === key)
+  // Déjà en tête : rien. Déjà présent : remonter sans dropper le 10ᵉ.
+  if (idx === 0) return
+  if (idx > 0) {
+    const copy = [...cur]
+    const [hit] = copy.splice(idx, 1)
+    recentQueries.value = [hit!, ...copy]
+    return
+  }
+  recentQueries.value = [trimmed, ...cur].slice(0, RECENT_MAX)
+}
+
+function removeRecent(q: string) {
+  recentQueries.value = recentQueries.value.filter((x) => x !== q)
+}
+
+function rememberPlay(track: YtmusicTrack) {
+  const cur = recentPlays.value
+  const idx = cur.findIndex((t) => t.videoId === track.videoId)
+  if (idx === 0) {
+    recentPlays.value = [track, ...cur.slice(1)]
+    return
+  }
+  if (idx > 0) {
+    const copy = [...cur]
+    copy.splice(idx, 1)
+    recentPlays.value = [track, ...copy]
+    return
+  }
+  recentPlays.value = [track, ...cur].slice(0, RECENT_PLAYS_MAX)
+}
+
+function removeRecentPlay(videoId: string) {
+  recentPlays.value = recentPlays.value.filter((t) => t.videoId !== videoId)
+}
+
+async function runRecent(q: string) {
+  tab.value = 'search'
+  browse.value = null
+  query.value = q
+  await runSearch()
+}
+
 async function runSearch() {
   const q = query.value.trim()
   if (!q) return
   busy.value = true
   browse.value = null
+  rememberQuery(q)
   try {
     const result = await getTransport().ytmusicSearch(q)
     searchArtists.value = result.artists
@@ -276,7 +332,7 @@ async function play(track: YtmusicTrack) {
     notifications.error(t('ytmusic.noPlayer'))
     return
   }
-  selectedMedia.value = track
+  rememberPlay(track)
   playingId.value = track.videoId
   try {
     await getTransport().ytmusicPlay({
@@ -324,6 +380,10 @@ watch(tab, (v) => {
               <option v-for="p in players" :key="p.descriptor.id" :value="p.descriptor.id">{{ p.descriptor.name }}</option>
             </select>
           </label>
+          <label class="hide-explicit">
+            <v-switch v-model="hideExplicit" density="compact" hide-details color="primary" />
+            <span class="muted small">{{ $t('ytmusic.hideExplicit') }}</span>
+          </label>
         </div>
 
         <form v-if="tab === 'search' && !browse" class="search" @submit.prevent="runSearch">
@@ -331,15 +391,46 @@ watch(tab, (v) => {
           <button type="submit" class="pill" data-on="1" :disabled="busy || !query.trim()">{{ $t('ytmusic.search') }}</button>
         </form>
 
-        <div v-if="selectedMedia" class="selected muted small">
-          <span class="selected__label">{{ $t('ytmusic.lastPlayed') }}</span>
-          <span class="selected__title">{{ selectedMedia.title }}</span>
-          <span v-if="trackMeta(selectedMedia)"> · {{ trackMeta(selectedMedia) }}</span>
+        <div class="recent-stack">
+          <div class="recent">
+            <span class="recent__label muted small">{{ $t('ytmusic.recent') }}</span>
+            <div class="recent__chips">
+              <div v-for="rq in recentQueries" :key="rq" class="recent-chip">
+                <button type="button" class="recent-chip__go" :disabled="busy" @click="runRecent(rq)">{{ rq }}</button>
+                <button
+                  type="button"
+                  class="recent-chip__x"
+                  :aria-label="$t('ytmusic.recentRemove')"
+                  :disabled="busy"
+                  @click="removeRecent(rq)"
+                >
+                  <StrokeIcon name="close" :size="12" />
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="recent">
+            <span class="recent__label muted small">{{ $t('ytmusic.lastPlayed') }}</span>
+            <div class="recent__chips">
+              <div v-for="tr in recentPlays" :key="tr.videoId" class="recent-chip">
+                <button type="button" class="recent-chip__go" :disabled="!!playingId" @click="play(tr)">{{ tr.title }}</button>
+                <button
+                  type="button"
+                  class="recent-chip__x"
+                  :aria-label="$t('ytmusic.lastPlayedRemove')"
+                  :disabled="!!playingId"
+                  @click="removeRecentPlay(tr.videoId)"
+                >
+                  <StrokeIcon name="close" :size="12" />
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div v-if="tab === 'playlists' && !browse" class="list">
           <button v-for="pl in playlists" :key="pl.id" type="button" class="row" @click="openPlaylist(pl)">
-            <ArtThumb :src="pl.artUrl" />
+            <ArtThumb :src="pl.artUrl" icon="list" />
             <div class="min0">
               <div class="title">{{ pl.title }}</div>
               <div v-if="pl.trackCount != null" class="muted small">{{ $t('ytmusic.tracks', { n: pl.trackCount }, pl.trackCount) }}</div>
@@ -367,7 +458,7 @@ watch(tab, (v) => {
             </div>
             <div class="list">
               <button v-for="ar in artistsView" :key="ar.id" type="button" class="row" @click="openArtist(ar)">
-                <ArtThumb :src="ar.artUrl" round />
+                <ArtThumb :src="ar.artUrl" round icon="person" />
                 <div class="min0">
                   <div class="title">{{ ar.name }}</div>
                   <div v-if="ar.subscribers" class="muted small meta">{{ ar.subscribers }}</div>
@@ -384,13 +475,17 @@ watch(tab, (v) => {
             </div>
             <div class="list">
               <button v-for="al in albumsView" :key="al.id" type="button" class="row" @click="openAlbum(al)">
-                <ArtThumb :src="al.artUrl" />
+                <ArtThumb :src="al.artUrl" icon="disc" />
                 <div class="min0">
-                  <div class="title-row">
-                    <span v-if="al.explicit" class="explicit" :title="$t('ytmusic.explicit')">E</span>
+                  <div class="line1">
                     <div class="title">{{ al.title }}</div>
+                    <span v-if="al.explicit" class="explicit" :title="$t('ytmusic.explicit')">E</span>
                   </div>
-                  <div v-if="albumMeta(al)" class="muted small meta">{{ albumMeta(al) }}</div>
+                  <div class="line2">
+                    <div v-if="albumMeta(al)" class="muted small meta">{{ albumMeta(al) }}</div>
+                    <span v-else class="meta" />
+                    <span class="year muted small">{{ al.year || '\u00a0' }}</span>
+                  </div>
                 </div>
                 <StrokeIcon name="chevron" :size="16" class="chev" />
               </button>
@@ -404,13 +499,17 @@ watch(tab, (v) => {
             </div>
             <div class="list">
               <button v-for="al in singlesView" :key="al.id" type="button" class="row" @click="openAlbum(al)">
-                <ArtThumb :src="al.artUrl" />
+                <ArtThumb :src="al.artUrl" icon="disc" />
                 <div class="min0">
-                  <div class="title-row">
-                    <span v-if="al.explicit" class="explicit" :title="$t('ytmusic.explicit')">E</span>
+                  <div class="line1">
                     <div class="title">{{ al.title }}</div>
+                    <span v-if="al.explicit" class="explicit" :title="$t('ytmusic.explicit')">E</span>
                   </div>
-                  <div v-if="albumMeta(al)" class="muted small meta">{{ albumMeta(al) }}</div>
+                  <div class="line2">
+                    <div v-if="albumMeta(al)" class="muted small meta">{{ albumMeta(al) }}</div>
+                    <span v-else class="meta" />
+                    <span class="year muted small">{{ al.year || '\u00a0' }}</span>
+                  </div>
                 </div>
                 <StrokeIcon name="chevron" :size="16" class="chev" />
               </button>
@@ -424,13 +523,17 @@ watch(tab, (v) => {
             </div>
             <div class="list">
               <button v-for="al in compilationsView" :key="al.id" type="button" class="row" @click="openAlbum(al)">
-                <ArtThumb :src="al.artUrl" />
+                <ArtThumb :src="al.artUrl" icon="disc" />
                 <div class="min0">
-                  <div class="title-row">
-                    <span v-if="al.explicit" class="explicit" :title="$t('ytmusic.explicit')">E</span>
+                  <div class="line1">
                     <div class="title">{{ al.title }}</div>
+                    <span v-if="al.explicit" class="explicit" :title="$t('ytmusic.explicit')">E</span>
                   </div>
-                  <div v-if="albumMeta(al)" class="muted small meta">{{ albumMeta(al) }}</div>
+                  <div class="line2">
+                    <div v-if="albumMeta(al)" class="muted small meta">{{ albumMeta(al) }}</div>
+                    <span v-else class="meta" />
+                    <span class="year muted small">{{ al.year || '\u00a0' }}</span>
+                  </div>
                 </div>
                 <StrokeIcon name="chevron" :size="16" class="chev" />
               </button>
@@ -443,14 +546,18 @@ watch(tab, (v) => {
               <Segmented v-model="sortTracks" dense fill :options="sortOptionsDated" :label="$t('ytmusic.sortLabel')" />
             </div>
             <div class="list">
-              <div v-for="tr in tracksView" :key="tr.videoId" class="row" :data-selected="selectedMedia?.videoId === tr.videoId ? '1' : '0'">
-                <ArtThumb :src="tr.artUrl" />
+              <div v-for="tr in tracksView" :key="tr.videoId" class="row" :data-selected="selectedVideoId === tr.videoId ? '1' : '0'">
+                <ArtThumb :src="tr.artUrl" icon="music" />
                 <div class="min0">
-                  <div class="title-row">
-                    <span v-if="tr.explicit" class="explicit" :title="$t('ytmusic.explicit')">E</span>
+                  <div class="line1">
                     <div class="title">{{ tr.title }}</div>
+                    <span v-if="tr.explicit" class="explicit" :title="$t('ytmusic.explicit')">E</span>
                   </div>
-                  <div class="muted small meta">{{ trackMeta(tr) }}</div>
+                  <div class="line2">
+                    <div class="muted small meta">{{ trackMeta(tr) }}</div>
+                    <span class="dur muted small">{{ fmtDur(tr.durationS) || '\u00a0' }}</span>
+                    <span class="year muted small">{{ tr.year || '\u00a0' }}</span>
+                  </div>
                 </div>
                 <PlayButton
                   :disabled="!deviceId"
@@ -467,14 +574,18 @@ watch(tab, (v) => {
 
         <!-- Likes / détail album·artiste·playlist -->
         <div v-if="tab === 'liked' || browse" class="list">
-          <div v-for="tr in tracks" :key="tr.videoId" class="row" :data-selected="selectedMedia?.videoId === tr.videoId ? '1' : '0'">
-            <ArtThumb :src="tr.artUrl" />
+          <div v-for="tr in browseTracksView" :key="tr.videoId" class="row" :data-selected="selectedVideoId === tr.videoId ? '1' : '0'">
+            <ArtThumb :src="tr.artUrl" icon="music" />
             <div class="min0">
-              <div class="title-row">
-                <span v-if="tr.explicit" class="explicit" :title="$t('ytmusic.explicit')">E</span>
+              <div class="line1">
                 <div class="title">{{ tr.title }}</div>
+                <span v-if="tr.explicit" class="explicit" :title="$t('ytmusic.explicit')">E</span>
               </div>
-              <div class="muted small meta">{{ trackMeta(tr) }}</div>
+              <div class="line2">
+                <div class="muted small meta">{{ trackMeta(tr) }}</div>
+                <span class="dur muted small">{{ fmtDur(tr.durationS) || '\u00a0' }}</span>
+                <span class="year muted small">{{ tr.year || '\u00a0' }}</span>
+              </div>
             </div>
             <PlayButton
               :disabled="!deviceId"
@@ -483,7 +594,7 @@ watch(tab, (v) => {
               @click="play(tr)"
             />
           </div>
-          <p v-if="!busy && tracks.length === 0" class="muted empty">{{ $t('ytmusic.empty') }}</p>
+          <p v-if="!busy && browseTracksView.length === 0" class="muted empty">{{ $t('ytmusic.empty') }}</p>
         </div>
       </template>
     </div>
@@ -495,29 +606,66 @@ watch(tab, (v) => {
 .page__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 24px calc(var(--safe-bottom) + 24px); }
 .toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 14px; }
 .player { display: grid; gap: 4px; min-width: 180px; }
+.hide-explicit {
+  display: flex; align-items: center; gap: 8px;
+  margin-left: auto; padding-bottom: 2px; cursor: pointer;
+}
 .player__select {
   padding: 8px 10px; border-radius: var(--radius); border: 1px solid var(--line);
   background: var(--surface); color: var(--text); font: inherit; font-size: 13px;
 }
-.search { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+.search { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
 .search__input {
   flex: 1 1 200px; padding: 8px 12px; border-radius: var(--radius); border: 1px solid var(--line);
   background: var(--surface); color: var(--text); font: inherit; font-size: 14px;
 }
-.selected {
-  margin: -4px 0 12px; padding: 0 4px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+.recent-stack {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 12px;
 }
-.selected__label { margin-right: 6px; }
-.selected__title { color: var(--text); font-weight: 500; }
+.recent {
+  display: flex; flex-wrap: nowrap; align-items: center; gap: 8px;
+  min-height: 32px; padding: 0 2px;
+}
+.recent__label {
+  flex: 0 0 11.5rem;
+  width: 11.5rem;
+  white-space: nowrap;
+}
+.recent__chips {
+  display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; flex: 1 1 auto;
+  min-height: 28px; align-items: center;
+}
+.recent-chip {
+  display: inline-flex; align-items: center; max-width: 220px;
+  border: 1px solid var(--line); border-radius: 999px;
+  background: var(--surface); overflow: hidden;
+}
+.recent-chip__go {
+  min-width: 0; flex: 1 1 auto;
+  padding: 4px 8px 4px 10px; border: 0; background: transparent;
+  color: var(--text); font: inherit; font-size: 12px; cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;
+}
+.recent-chip__go:hover:not(:disabled) { background: color-mix(in srgb, var(--muted) 12%, transparent); }
+.recent-chip__x {
+  flex: 0 0 auto; display: grid; place-items: center;
+  width: 26px; height: 26px; padding: 0; border: 0; border-left: 1px solid var(--line);
+  background: transparent; color: var(--muted); cursor: pointer;
+}
+.recent-chip__x:hover:not(:disabled) { color: var(--text); background: color-mix(in srgb, var(--muted) 12%, transparent); }
+.recent-chip__go:disabled, .recent-chip__x:disabled { opacity: .45; cursor: default; }
 .search-grid {
   display: grid;
   gap: 18px;
   align-items: start;
-  grid-template-columns: repeat(auto-fill, 280px);
-  justify-content: start;
+  /* 5 colonnes ≈ 1790 px (4×18 de gap) ; plus étroit → moins de colonnes qui s'étalent. */
+  max-width: 1790px;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  justify-content: stretch;
 }
-.section { margin-bottom: 0; width: 280px; min-width: 0; max-width: 280px; }
+.section { margin-bottom: 0; min-width: 0; }
 .section__head {
   display: flex; flex-direction: column; align-items: stretch; gap: 6px;
   margin: 0 0 6px;
@@ -535,16 +683,27 @@ watch(tab, (v) => {
 }
 .row[data-selected='1'] { background: color-mix(in srgb, var(--accent) 8%, transparent); }
 button.row { cursor: pointer; }
+.min0 { min-width: 0; flex: 1 1 0; display: grid; gap: 2px; }
+.title {
+  min-width: 0;
+  font-size: 14px; font-weight: 500;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  line-height: 1.25;
+}
 .meta {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.title-row {
-  display: flex; align-items: center; gap: 6px; min-width: 0; width: 100%;
+.line1 {
+  display: flex; align-items: center; gap: 6px; min-width: 0;
 }
-.title {
-  flex: 1 1 0; min-width: 0;
-  font-size: 14px; font-weight: 500;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+.line1 .title {
+  flex: 1 1 auto; min-width: 0;
+}
+.line2 {
+  display: flex; align-items: baseline; gap: 8px; min-width: 0;
+}
+.line2 .meta {
+  flex: 1 1 auto; min-width: 0;
 }
 .explicit {
   flex: 0 0 auto;
@@ -553,7 +712,14 @@ button.row { cursor: pointer; }
   border-radius: 3px; border: 1px solid var(--muted);
   font-size: 10px; font-weight: 700; line-height: 1; color: var(--muted);
 }
-.min0 { min-width: 0; flex: 1 1 0; }
+.dur, .year {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  line-height: 1.1;
+}
+.year { min-width: 2.75rem; text-align: right; }
+.dur { text-align: right; }
 .chev { color: var(--muted); flex: 0 0 auto; }
 .back-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
 .back-row .title { min-width: 0; }

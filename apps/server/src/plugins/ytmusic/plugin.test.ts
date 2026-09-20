@@ -340,6 +340,150 @@ describe('ytmusic plugin', () => {
     await plugin.stop()
   })
 
+  it('fills albums from tracks + getAlbum when the album filter is empty (Samara Cyn)', async () => {
+    const session: InnertubeLike = {
+      music: {
+        async search(_q?: string, filters?: { type?: string }) {
+          if (filters?.type === 'artist') {
+            return {
+              contents: [{
+                contents: [
+                  { id: 'UCsamara', item_type: 'artist', name: 'Samara Cyn', thumbnail: [{ url: 'https://i.ytimg.com/a.jpg', width: 60 }] },
+                ],
+              }],
+            }
+          }
+          if (filters?.type === 'album') {
+            return {
+              contents: [{ type: 'ItemSection', contents: [{ type: 'Message', text: 'No results' }] }],
+            }
+          }
+          if (filters?.type === 'song') {
+            return {
+              contents: [{
+                contents: [
+                  {
+                    id: 'vidFree', item_type: 'song', title: 'FREE',
+                    artists: [{ name: 'Samara Cyn', channel_id: 'UCsamara' }],
+                    album: { id: 'MPREb_detour', name: 'Detour' },
+                    thumbnail: [{ url: 'https://i.ytimg.com/a.jpg', width: 60 }],
+                  },
+                  {
+                    id: 'vidNomad', item_type: 'song', title: 'Nomad',
+                    artists: [{ name: 'Samara Cyn', channel_id: 'UCsamara' }],
+                    album: { id: 'MPREb_detour', name: 'Detour' },
+                    thumbnail: [{ url: 'https://i.ytimg.com/a.jpg', width: 60 }],
+                  },
+                  {
+                    id: 'vidChrome', item_type: 'song', title: 'Chrome',
+                    artists: [{ name: 'Samara Cyn', channel_id: 'UCsamara' }],
+                    album: { id: 'MPREb_chrome', name: 'Chrome' },
+                    thumbnail: [{ url: 'https://i.ytimg.com/a.jpg', width: 60 }],
+                  },
+                  {
+                    id: 'vidX', item_type: 'song', title: 'oooshxt!',
+                    artists: [{ name: 'Samara Cyn', channel_id: 'UCsamara' }],
+                    album: { id: 'MPREb_detour', name: 'Detour' },
+                    thumbnail: [{ url: 'https://i.ytimg.com/a.jpg', width: 60 }],
+                  },
+                ],
+              }],
+            }
+          }
+          return { contents: [] }
+        },
+        async getPlaylist() { return { items: [] } },
+        async getAlbum(id: string) {
+          if (id === 'MPREb_detour') {
+            return {
+              header: {
+                title: { text: 'Detour' },
+                subtitle: { text: 'Album · 2026' },
+                subtitle_badge: [{ icon_type: 'MUSIC_EXPLICIT_BADGE' }],
+              },
+              contents: [
+                { id: 'vidFree', title: 'FREE' },
+                { id: 'vidX', title: 'oooshxt!', badges: [{ icon_type: 'MUSIC_EXPLICIT_BADGE' }] },
+                { id: 'vidNomad', title: 'Nomad' },
+              ],
+            }
+          }
+          if (id === 'MPREb_teeth') {
+            return {
+              header: { title: { text: 'brand new teeth' }, subtitle: { text: 'Single · 2025' } },
+              contents: [{ id: 'vidTeeth' }],
+            }
+          }
+          if (id === 'MPREb_chrome') {
+            return {
+              header: { title: { text: 'Chrome' }, subtitle: { text: 'Single · 2024' } },
+              contents: [{ id: 'c1' }],
+            }
+          }
+          if (id === 'MPREb_drive') {
+            return {
+              header: { title: { text: 'The Drive Home' }, subtitle: { text: 'Album · 2024' } },
+              contents: Array.from({ length: 10 }, (_, i) => ({ id: `t${i}` })),
+            }
+          }
+          if (id === 'MPREb_backroads') {
+            return {
+              header: { title: { text: 'backroads' }, subtitle: { text: 'EP · 2025' } },
+              contents: Array.from({ length: 5 }, (_, i) => ({ id: `e${i}` })),
+            }
+          }
+          return { contents: [] }
+        },
+        async getArtist(id: string) {
+          expect(id).toBe('UCsamara')
+          return {
+            sections: [
+              {
+                type: 'MusicCarouselShelf',
+                header: { title: { text: 'Albums' } },
+                contents: [
+                  { id: 'MPREb_drive', item_type: 'album', title: 'The Drive Home', year: '2024', subtitle: '2024', thumbnail: [{ url: 'https://i.ytimg.com/a.jpg', width: 60 }] },
+                ],
+              },
+              {
+                type: 'MusicCarouselShelf',
+                header: { title: { text: 'Singles & EPs' } },
+                contents: [
+                  { id: 'MPREb_backroads', item_type: 'album', title: 'backroads', year: '2025', subtitle: 'EP · 2025', thumbnail: [{ url: 'https://i.ytimg.com/a.jpg', width: 60 }] },
+                  { id: 'MPREb_teeth', item_type: 'album', title: 'brand new teeth', year: '2025', subtitle: 'Single · 2025', thumbnail: [{ url: 'https://i.ytimg.com/a.jpg', width: 60 }] },
+                  { id: 'MPREb_chrome', item_type: 'album', title: 'Chrome', year: '2024', subtitle: 'Single · 2024', thumbnail: [{ url: 'https://i.ytimg.com/a.jpg', width: 60 }] },
+                ],
+              },
+            ],
+          }
+        },
+        async getLibrary() { return { contents: [] } },
+      },
+    }
+    const { plugin, app } = await boot({ createSession: async () => session })
+    await app.inject({ method: 'PUT', url: '/api/plugins/ytmusic/cookie', payload: { cookie: COOKIE } })
+    const body = (await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/search?q=samara%20cyn' })).json()
+    const albumTitles = body.albums.map((a: { title: string }) => a.title)
+    expect(albumTitles).toEqual(expect.arrayContaining(['Detour', 'The Drive Home']))
+    const detour = body.albums.find((a: { title: string }) => a.title === 'Detour')
+    expect(detour?.explicit).toBe(true)
+    expect(body.tracks.find((t: { videoId: string }) => t.videoId === 'vidX')?.explicit).toBe(true)
+    // Année reprise de l'album (absente sur les titres de recherche).
+    expect(body.tracks.find((t: { videoId: string }) => t.videoId === 'vidFree')?.year).toBe('2026')
+    expect(body.tracks.find((t: { videoId: string }) => t.videoId === 'vidFree')?.explicit).toBe(false)
+    expect(body.singles.map((a: { title: string; releaseType: string }) => [a.title, a.releaseType])).toEqual(
+      expect.arrayContaining([
+        ['backroads', 'ep'],
+        ['brand new teeth', 'single'],
+        ['Chrome', 'single'],
+      ]),
+    )
+    // FREE sans badge titre → pas explicit (même si Detour l'est).
+    expect(body.tracks.find((t: { videoId: string }) => t.videoId === 'vidFree')?.explicit).toBe(false)
+    await app.close()
+    await plugin.stop()
+  })
+
   it('recovers the main artist from album channel ids when the top card is missing', async () => {
     const session: InnertubeLike = {
       music: {

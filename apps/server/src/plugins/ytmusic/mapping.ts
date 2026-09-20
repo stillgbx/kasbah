@@ -52,10 +52,23 @@ export interface RawAlbum {
   explicit?: boolean | null
 }
 
+/** ≥ N artistes distincts sur une sortie → compilation (hors Single pur). */
+export const MULTI_ARTIST_COMPILATION_MIN = 3
+
+function uniqueArtistKeyCount(artists: string[]): number {
+  const keys = new Set<string>()
+  for (const a of artists) {
+    const k = a.trim().toLowerCase().normalize('NFD').replace(/\p{M}/gu, '')
+    if (k) keys.add(k)
+  }
+  return keys.size
+}
+
 /**
  * InnerTube n'a pas de champ `releaseType` : le type est dans le sous-titre
  * (« Album · Artiste · 1997 », « Single · … », « EP · … », « Compilation · … »).
  * Repli : titres du genre « Best of », « Greatest Hits », etc.
+ * Puis multi-artistes (≥ {@link MULTI_ARTIST_COMPILATION_MIN}) → compil.
  */
 export function parseReleaseType(parts: Iterable<string> | null | undefined): YtmusicAlbumReleaseType | null {
   if (!parts) return null
@@ -84,6 +97,7 @@ export function inferCompilationFromTitle(title: string | null | undefined): 'co
     || /\bessentiel(s|les)?\b/.test(n)
     || /\bedition\b/.test(n)
     || /\bessential\s+collection\b/.test(n)
+    || /\bdj[\s-]*kicks\b/.test(n)
   ) return 'compilation'
   return null
 }
@@ -129,27 +143,33 @@ export function absHttpUrl(url: string | null | undefined): string | null {
   return null
 }
 
-/** Taille demandée au CDN Google pour les pochettes (écrans Nest / TV). */
-export const ART_CDN_SIZE = 544
+/** Taille CDN pour vignettes catalogue UI (~44 px × retina). */
+export const ART_CDN_SIZE = 120
+/** Taille CDN pour stickyPlay / Nest / TV. */
+export const ART_PLAY_SIZE = 544
 
 /**
- * Passe d'une vignette catalogue (~60 px) à une taille adaptée à l'écran.
- * Les URL `googleusercontent` / `ggpht` acceptent `=wN-hN` ; hors ça, inchangé.
+ * Passe d'une vignette catalogue à une taille adaptée.
+ * Les URL `googleusercontent` / `ggpht` acceptent `=wN-hN` ; `i.ytimg.com` via default/mq/hq.
  * Indépendant du client yt-dlp (`android_music` vs `web_music`).
  */
-export function upgradeArtUrl(url: string | null | undefined): string | null {
+export function upgradeArtUrl(
+  url: string | null | undefined,
+  size: number = ART_CDN_SIZE,
+): string | null {
   const u = absHttpUrl(url)
   if (!u) return null
   if (/googleusercontent\.com|ggpht\.com/i.test(u)) {
-    const size = `=w${ART_CDN_SIZE}-h${ART_CDN_SIZE}-l90-rj`
-    if (/=w\d+-h\d+/i.test(u)) return u.replace(/=w\d+-h\d+[^=/?#]*/i, size)
-    return `${u}${size}`
+    const token = `=w${size}-h${size}-l90-rj`
+    if (/=w\d+-h\d+/i.test(u)) return u.replace(/=w\d+-h\d+[^=/?#]*/i, token)
+    return `${u}${token}`
   }
   if (/i\.ytimg\.com/i.test(u)) {
+    const leaf = size <= 120 ? 'default.jpg'
+      : size <= 320 ? 'mqdefault.jpg'
+        : 'hqdefault.jpg'
     return u
-      .replace(/\/default\.jpg/i, '/hqdefault.jpg')
-      .replace(/\/mqdefault\.jpg/i, '/hqdefault.jpg')
-      .replace(/\/sddefault\.jpg/i, '/hqdefault.jpg')
+      .replace(/\/(default|mqdefault|hqdefault|sddefault|maxresdefault)\.jpg/i, `/${leaf}`)
   }
   return u
 }
@@ -249,11 +269,19 @@ export function mapAlbum(raw: RawAlbum): YtmusicAlbum | null {
   const title = textOf(raw.title) ?? textOf(raw.name) ?? ''
   const fromSub = parseReleaseType(raw.subtitleParts)
   const fromTitle = inferCompilationFromTitle(title)
-  // « Best of » reste une compil même si InnerTube affiche « Album · … ».
-  const releaseType = raw.releaseType
-    ?? (fromTitle && fromSub !== 'single' && fromSub !== 'ep' ? fromTitle : null)
-    ?? fromSub
-    ?? null
+  let releaseType = raw.releaseType ?? fromSub ?? null
+  // « Best of » / « Greatest Hits » → compil même si InnerTube / getAlbum dit Album.
+  // (les mots-clés titre sont déjà normalisés en minuscules → casse ignorée)
+  if (fromTitle && releaseType !== 'single' && releaseType !== 'ep') {
+    releaseType = 'compilation'
+  }
+  // Plusieurs artistes distincts → compil (ex. « whose radio? »), sauf Single.
+  if (
+    releaseType !== 'single'
+    && uniqueArtistKeyCount(artists) >= MULTI_ARTIST_COMPILATION_MIN
+  ) {
+    releaseType = 'compilation'
+  }
   return {
     id,
     title: title || id,
@@ -267,14 +295,74 @@ export function mapAlbum(raw: RawAlbum): YtmusicAlbum | null {
 
 export function mapAlbums(raws: RawAlbum[]): YtmusicAlbum[] {
   const out: YtmusicAlbum[] = []
-  const seen = new Set<string>()
+  const byId = new Map<string, YtmusicAlbum>()
+  const byTitleArtist = new Map<string, YtmusicAlbum>()
+  const mergeInto = (prev: YtmusicAlbum, a: YtmusicAlbum) => {
+    const rank = (t: typeof a.releaseType) =>
+      t === 'compilation' ? 4 : t === 'album' ? 3 : t === 'ep' ? 2 : t === 'single' ? 1 : 0
+    if (rank(a.releaseType) > rank(prev.releaseType)) prev.releaseType = a.releaseType
+    if (!prev.year && a.year) prev.year = a.year
+    if (!prev.artUrl && a.artUrl) prev.artUrl = a.artUrl
+    if (a.artists.length > prev.artists.length) prev.artists = a.artists
+    if (!prev.explicit && a.explicit) prev.explicit = a.explicit
+    // Re-évaluer multi-artistes après fusion des crédits.
+    if (
+      prev.releaseType !== 'single'
+      && uniqueArtistKeyCount(prev.artists) >= MULTI_ARTIST_COMPILATION_MIN
+    ) {
+      prev.releaseType = 'compilation'
+    }
+  }
   for (const r of raws) {
     const a = mapAlbum(r)
-    if (!a || seen.has(a.id)) continue
-    seen.add(a.id)
+    if (!a) continue
+    const prevId = byId.get(a.id)
+    if (prevId) {
+      mergeInto(prevId, a)
+      continue
+    }
+    // Même sortie, browseId InnerTube différent (ex. Drive Home ×2).
+    // Clé = titre + artiste + famille de type (EP ≠ Album du même nom, cas Jäde).
+    if (a.artists.length) {
+      const family = a.releaseType === 'ep' || a.releaseType === 'single' ? a.releaseType
+        : a.releaseType === 'compilation' ? 'compilation'
+          : 'album'
+      const titleKey = `${albumTitleKey(a.title)}|${albumTitleKey(a.artists.join('\0'))}|${family}`
+      const prevTitle = byTitleArtist.get(titleKey)
+      if (prevTitle) {
+        mergeInto(prevTitle, a)
+        continue
+      }
+      byTitleArtist.set(titleKey, a)
+    }
+    byId.set(a.id, a)
     out.push(a)
   }
+  propagateExplicitByTitle(out)
   return out
+}
+
+/**
+ * InnerTube omet parfois `MUSIC_EXPLICIT_BADGE` sur l'EP alors que l'Album
+ * du même titre / artiste le porte — propager le flag.
+ */
+export function propagateExplicitByTitle(albums: YtmusicAlbum[]): void {
+  const marked = new Set<string>()
+  for (const a of albums) {
+    if (!a.explicit) continue
+    marked.add(`${albumTitleKey(a.title)}|${albumTitleKey(a.artists.join('\0'))}`)
+  }
+  if (!marked.size) return
+  for (const a of albums) {
+    if (a.explicit) continue
+    if (marked.has(`${albumTitleKey(a.title)}|${albumTitleKey(a.artists.join('\0'))}`)) {
+      a.explicit = true
+    }
+  }
+}
+
+function albumTitleKey(s: string): string {
+  return s.trim().toLowerCase().normalize('NFD').replace(/\p{M}/gu, '')
 }
 
 /** Plafond par section de recherche (UI en colonnes). */

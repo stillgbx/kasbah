@@ -10,6 +10,7 @@ import { createCookieFile, hasRequiredCookie, writeNetscapeBeside, type CookieSt
 import { importCookiesFromBrowser, isAuthError, YTM_BROWSERS } from './browserCookies'
 import { pingPoToken, resolveStreamUrl, StreamProxy, type SpawnFn } from './stream'
 import type { YtmusicStatus } from './types'
+import { ART_PLAY_SIZE, upgradeArtUrl } from './mapping'
 
 // Plugin YouTube Music (NON OFFICIEL) : catalogue InnerTube via youtubei.js, flux via yt-dlp +
 // PO Token, lecture sur Cast/Sonos par `media_player.play_url` d'une URL proxy LAN.
@@ -78,14 +79,22 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
   const PROBE_MS = 5 * 60_000
 
   async function loadCookie(): Promise<string | null> {
-    const raw = (await cookies!.read())?.trim() ?? null
+    // HMR tsx : routes parfois rechargées sans repasser par init().
+    if (!cookies) {
+      cookies = deps.cookieStore ?? createCookieFile(
+        config?.YTM_COOKIE_FILE ?? stateFile('ytmusic-cookie.txt'),
+      )
+    }
+    if (!catalog) catalog = deps.catalog ?? new YtmusicCatalog(deps.createSession)
+    const raw = (await cookies.read())?.trim() ?? null
     linked = !!(raw && hasRequiredCookie(raw))
     if (!linked) cookieExpired = false
     return linked ? raw : null
   }
 
   async function refreshPo(): Promise<boolean> {
-    poTokenOk = await pingPoToken(config!.YTM_PO_TOKEN_URL, deps.fetchImpl ?? fetch)
+    const url = config?.YTM_PO_TOKEN_URL ?? 'http://127.0.0.1:4416'
+    poTokenOk = await pingPoToken(url, deps.fetchImpl ?? fetch)
     return poTokenOk
   }
 
@@ -103,7 +112,7 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
         log().debug({ err }, 'ytmusic cookie probe failed (non-auth)')
       }
     } finally {
-      lastProbeAt = ctx!.clock.now()
+      lastProbeAt = ctx?.clock.now() ?? Date.now()
     }
   }
 
@@ -122,7 +131,7 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
       poTokenOk,
       unofficial: true,
       cookieFile: cookies?.path ?? null,
-      poTokenUrl: config!.YTM_PO_TOKEN_URL,
+      poTokenUrl: config?.YTM_PO_TOKEN_URL ?? 'http://127.0.0.1:4416',
       lastError,
       browsers: [...YTM_BROWSERS],
     }
@@ -403,7 +412,9 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
           const meta = {
             ...(body.data.title ? { title: body.data.title } : {}),
             ...(body.data.artist ? { artist: body.data.artist } : {}),
-            ...(body.data.artUrl ? { artUrl: body.data.artUrl } : {}),
+            ...(body.data.artUrl
+              ? { artUrl: upgradeArtUrl(body.data.artUrl, ART_PLAY_SIZE) ?? body.data.artUrl }
+              : {}),
           }
           await play(body.data.deviceId, streamUrl, Object.keys(meta).length ? meta : undefined)
           lastError = null

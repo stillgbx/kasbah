@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { fromNetscape, hasRequiredCookie, toNetscape } from './cookie'
 import { isAuthError } from './browserCookies'
 import { healthFrom } from './index'
-import { mapAlbum, mapArtist, mapPlaylist, mapTrack, mapTracks, parseReleaseType, partitionAlbums, textOf, upgradeArtUrl, bestThumb } from './mapping'
+import { mapAlbum, mapArtist, mapPlaylist, mapTrack, mapTracks, parseReleaseType, partitionAlbums, propagateExplicitByTitle, textOf, upgradeArtUrl, bestThumb, ART_PLAY_SIZE } from './mapping'
 
 describe('ytmusic cookie', () => {
   it('requires __Secure-3PAPISID', () => {
@@ -46,12 +46,27 @@ describe('ytmusic mapping', () => {
     })
   })
 
-  it('upgrades googleusercontent thumbs to 544px', () => {
+  it('upgrades googleusercontent thumbs to catalog size (120px)', () => {
     expect(upgradeArtUrl('https://yt3.googleusercontent.com/abc=w60-h60-l90-rj')).toBe(
-      'https://yt3.googleusercontent.com/abc=w544-h544-l90-rj',
+      'https://yt3.googleusercontent.com/abc=w120-h120-l90-rj',
     )
     expect(upgradeArtUrl('//lh3.googleusercontent.com/xyz')).toBe(
-      'https://lh3.googleusercontent.com/xyz=w544-h544-l90-rj',
+      'https://lh3.googleusercontent.com/xyz=w120-h120-l90-rj',
+    )
+  })
+
+  it('upgrades to play size when asked', () => {
+    expect(upgradeArtUrl('https://yt3.googleusercontent.com/abc=w60-h60-l90-rj', ART_PLAY_SIZE)).toBe(
+      'https://yt3.googleusercontent.com/abc=w544-h544-l90-rj',
+    )
+  })
+
+  it('picks a lighter ytimg leaf for catalog thumbs', () => {
+    expect(upgradeArtUrl('https://i.ytimg.com/vi/x/hqdefault.jpg')).toBe(
+      'https://i.ytimg.com/vi/x/default.jpg',
+    )
+    expect(upgradeArtUrl('https://i.ytimg.com/vi/x/default.jpg', ART_PLAY_SIZE)).toBe(
+      'https://i.ytimg.com/vi/x/hqdefault.jpg',
     )
   })
 
@@ -121,6 +136,21 @@ describe('ytmusic mapping', () => {
       artists: [{ name: 'Radiohead' }],
       subtitleParts: ['Album', 'Radiohead', '2008'],
     })?.releaseType).toBe('compilation')
+    // Casse ignorée + releaseType InnerTube « album » ne doit pas bloquer.
+    expect(mapAlbum({
+      id: 'MPREb_best_of_lower',
+      title: 'The Best of Depeche Mode, Vol. 1',
+      artists: [{ name: 'Depeche Mode' }],
+      subtitleParts: ['Album', '2006'],
+      releaseType: 'album',
+    })?.releaseType).toBe('compilation')
+    expect(mapAlbum({
+      id: 'MPREb_best_of_upper',
+      title: 'The Best Of Depeche Mode',
+      artists: [{ name: 'The Plastic Pepper Band' }],
+      subtitleParts: ['Album'],
+      releaseType: 'album',
+    })?.releaseType).toBe('compilation')
     expect(mapAlbum({
       id: 'MPREb_ed',
       title: 'OK Computer - Edition',
@@ -134,11 +164,44 @@ describe('ytmusic mapping', () => {
       subtitleParts: ['Album'],
     })?.releaseType).toBe('compilation')
     expect(mapAlbum({
+      id: 'MPREb_djk',
+      title: 'DJ-Kicks: Four Tet',
+      artists: [{ name: 'Four Tet' }],
+      subtitleParts: ['Album', 'Four Tet', '2006'],
+    })?.releaseType).toBe('compilation')
+    // ≥3 artistes → compil même si sous-titre / type EP
+    expect(mapAlbum({
+      id: 'MPREb_radio',
+      title: 'whose radio?',
+      artists: ['samara', 'Ansh Mehta', 'sudan'],
+      subtitleParts: ['EP'],
+      releaseType: 'ep',
+    })?.releaseType).toBe('compilation')
+    expect(mapAlbum({
       id: 'MPREb_x',
       title: 'X',
       artists: [],
       explicit: true,
     })).toMatchObject({ explicit: true })
+    // EP sans badge + Album explicit du même titre → EP aussi explicit
+    const sexe = [
+      mapAlbum({
+        id: 'MPREb_sexe_alb',
+        title: 'Sexe & the city',
+        artists: [{ name: 'Jäde' }],
+        subtitleParts: ['Album', 'Jäde', '2026'],
+        explicit: true,
+      })!,
+      mapAlbum({
+        id: 'MPREb_sexe_ep',
+        title: 'Sexe & the city',
+        artists: [{ name: 'Jäde' }],
+        subtitleParts: ['EP', 'Jäde', '2025'],
+        explicit: false,
+      })!,
+    ]
+    propagateExplicitByTitle(sexe)
+    expect(sexe.every((a) => a.explicit)).toBe(true)
     expect(partitionAlbums([
       { id: '1', title: 'A', artUrl: null, artists: [], releaseType: 'album' },
       { id: '2', title: 'S', artUrl: null, artists: [], releaseType: 'single' },

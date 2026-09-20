@@ -23,7 +23,9 @@ export function sendError(reply: FastifyReply, status: number, code: string, mes
 
 /** Traduit toute erreur levée par une route en (statut, code, message). */
 export function describeError(err: unknown): { status: number; code: string; message: string } {
-  if (err instanceof PluginError) return { status: STATUS_BY_CODE[err.code], code: err.code, message: err.message }
+  if (err instanceof PluginError) {
+    return { status: STATUS_BY_CODE[err.code] ?? 500, code: err.code, message: err.message }
+  }
   if (err instanceof CommandNotAllowedError) return { status: 400, code: err.code, message: err.message }
   if (err instanceof HouseValidationError) return { status: 400, code: 'INVALID_HOUSE', message: err.issues.map((i) => `${i.path}: ${i.message}`).join('; ') }
   if (err instanceof ZodError) {
