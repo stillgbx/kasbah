@@ -2,23 +2,21 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useHouseStore } from '../../stores/house'
-import { useSettingsStore } from '../../stores/settings'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import { NAV_ITEMS } from '../../lib/navItems'
-import type { IconName } from '../../lib/strokeIcons'
 
-// Rail de navigation (72 px) : initiales de la maison, vues, puis apparence en bas.
+// Rail de navigation (72 px) : initiales de la maison, vues, puis les réglages tout en bas.
 const route = useRoute()
 const house = useHouseStore()
-const settings = useSettingsStore()
 
 const initials = computed(() => {
   const words = (house.house?.name ?? 'Kasbah').split(/\s+/).filter((w) => w.length > 2 || /^[A-Z0-9]/.test(w))
   return words.slice(0, 2).map((w) => w[0]!.toUpperCase()).join('') || 'K'
 })
-const items = NAV_ITEMS
-const APPEARANCE_ICON: Record<string, IconName> = { light: 'sun', dark: 'moon', system: 'auto', auto: 'sunHorizon' }
-const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] ?? 'auto')
+// Les réglages restent dans NAV_ITEMS — la recherche de la vue Maison s'en sert pour ouvrir la
+// page — mais ils quittent la file des vues : leur place est en bas du rail, sous le spacer.
+const items = NAV_ITEMS.filter((it) => it.name !== 'settings')
+const settingsItem = NAV_ITEMS.find((it) => it.name === 'settings')!
 </script>
 
 <template>
@@ -30,9 +28,11 @@ const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] 
       </button>
     </router-link>
     <div class="rail__spacer" />
-    <button type="button" class="rail__btn" :title="$t('settings.appearance')" :aria-label="$t('settings.appearance')" @click="settings.cycleAppearance()">
-      <StrokeIcon :name="themeIcon" :size="22" />
-    </button>
+    <router-link v-slot="{ navigate }" :to="{ name: settingsItem.name }" custom>
+      <button type="button" class="rail__btn" :data-on="route.name === settingsItem.name ? '1' : '0'" :title="$t(settingsItem.label)" :aria-label="$t(settingsItem.label)" @click="navigate">
+        <StrokeIcon :name="settingsItem.icon" :size="24" />
+      </button>
+    </router-link>
   </nav>
 </template>
 

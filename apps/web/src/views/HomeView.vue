@@ -24,6 +24,7 @@ import type { SearchHit } from '../composables/useSearch'
 import { useDevicesStore } from '../stores/devices'
 import { useHouseStore, type FloorTab } from '../stores/house'
 import { useSettingsStore } from '../stores/settings'
+import type { IconName } from '../lib/strokeIcons'
 
 defineOptions({ name: 'HomeView' })
 
@@ -299,6 +300,12 @@ function onSearchPicked(hit: SearchHit) { if (hit.family !== 'page') panelOpen.v
 const ORBIT_STEP = Math.PI / 4
 /** Un cran de zoom des boutons de vue. */
 const DOLLY_STEP = 1.35
+
+// Apparence : sortie du rail, elle se règle ici, dans la rangée de l'en-tête, juste après les
+// onglets de niveau — un réglage d'app reste avec la chrome du haut, la colonne en bas à droite
+// garde les seules commandes de caméra. Le bouton a une taille fixe : seule l'icône change.
+const APPEARANCE_ICON: Record<string, IconName> = { light: 'sun', dark: 'moon', system: 'auto', auto: 'sunHorizon' }
+const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] ?? 'auto')
 </script>
 
 <template>
@@ -313,6 +320,9 @@ const DOLLY_STEP = 1.35
     <div class="home__header">
       <PageHeader>
         <Segmented :model-value="house.floorTab" :options="floorTabs" @update:model-value="onTab" />
+        <button type="button" class="pill" :title="$t('settings.appearance')" :aria-label="$t('settings.appearance')" @click="settings.cycleAppearance()">
+          <StrokeIcon :name="themeIcon" :size="18" />
+        </button>
         <button v-if="!wide" type="button" class="pill" :data-on="panelOpen ? '1' : '0'" :aria-label="$t('home.openPanel')" @click="panelOpen = !panelOpen">
           <StrokeIcon name="list" :size="18" />
         </button>
