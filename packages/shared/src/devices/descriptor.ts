@@ -88,6 +88,23 @@ export const deviceMetaSchema = z.object({
    * fait que le dire. `model` : le modèle numérique derrière les chiffres (« AROME France HD »).
    */
   weather: z.object({ attribution: z.string().min(1), model: z.string().optional() }).optional(),
+  /**
+   * Ce qu'une mangeoire accepte comme ration, et dans quelle unité elle compte (capacité `feed`).
+   * Ce n'est pas un intervalle : une Fresh Element Solo ne connaît que cinq valeurs. Un curseur
+   * mentirait ; la liste dit la vérité, et le serveur peut refuser ce qui n'y est pas au lieu de
+   * laisser le fabricant arrondir en silence.
+   */
+  petFeeder: z.object({
+    /** Rations acceptées, dans `unit`. Une Fresh Element Solo : 0,1 à 0,5 tasse par dixièmes. */
+    portions: z.array(z.number().positive()).min(1),
+    /**
+     * L'unité dans laquelle CETTE mangeoire compte. Elle n'est pas la même d'un modèle à l'autre
+     * de la même gamme : une Fresh Element Solo mesure en TASSES, une Infinity en grammes — et
+     * l'appareil le déclare lui-même (`settings.factor`). Écrire « 30 g » pour trois dixièmes de
+     * tasse, comme on l'a fait un moment, se trompe d'un facteur trois.
+     */
+    unit: z.enum(['cup', 'g']),
+  }).optional(),
 })
 export type DeviceMeta = z.infer<typeof deviceMetaSchema>
 

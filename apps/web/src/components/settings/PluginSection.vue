@@ -5,6 +5,7 @@ import EnphasePairingCard from '../EnphasePairingCard.vue'
 import HuePairingCard from '../HuePairingCard.vue'
 import IrobotLinkCard from '../IrobotLinkCard.vue'
 import MelcloudLinkCard from '../MelcloudLinkCard.vue'
+import PetkitLinkCard from '../PetkitLinkCard.vue'
 import NestLinkCard from '../NestLinkCard.vue'
 import RenaultLinkCard from '../RenaultLinkCard.vue'
 import TeslaLinkCard from '../TeslaLinkCard.vue'
@@ -55,6 +56,7 @@ const SETUP_CARDS = {
   tesla: TeslaLinkCard,
   renault: RenaultLinkCard,
   melcloud: MelcloudLinkCard,
+  petkit: PetkitLinkCard,
   irobot: IrobotLinkCard,
   ytmusic: YtmusicLinkCard,
 } as const

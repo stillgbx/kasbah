@@ -91,7 +91,7 @@ describe('activation des plugins (GET /api/plugins, PATCH /api/plugins/:id)', ()
       expect(Object.keys(byId).length).toBeGreaterThan(5)          // tous disponibles, pas seulement les actifs
       expect(byId.mock).toMatchObject({ enabled: true, implemented: true })
       expect(byId.sonos).toMatchObject({ enabled: false, implemented: true })     // plus de squelette : activable, eteint par defaut
-      expect(byId.mock.parts).toHaveLength(12)              // un par kind simulé (tous sauf `camera`)
+      expect(byId.mock.parts).toHaveLength(14)              // un par kind simulé (tous sauf `camera`)
 
       // eteindre la simulation : ses appareils quittent le registre
       expect((await kasbah.app.inject({ method: 'PATCH', url: '/api/plugins/mock', payload: { enabled: false } })).statusCode).toBe(200)

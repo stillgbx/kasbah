@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { AQI_LEVELS, CLIMATE_MODES, POLLEN_TYPES, WEATHER_CONDITIONS, type DeviceKind } from './kinds'
+import { AQI_LEVELS, CLIMATE_MODES, PET_PUMP_MODES, POLLEN_TYPES, WEATHER_CONDITIONS, type DeviceKind } from './kinds'
 
 // État courant d'un appareil, discriminé par `kind`. `updatedAt` est posé par le serveur
 // (jamais par un plugin) ; `available:false` conserve les dernières valeurs connues
@@ -361,10 +361,78 @@ export const waterStateSchema = z.object({
   defect: z.boolean().optional(),
 })
 
+export const petFeederStateSchema = z.object({
+  kind: z.literal('pet_feeder'), ...base,
+  /**
+   * Le fabricant annonce un MANQUE de croquettes, pas un niveau : la mangeoire n'a qu'un détecteur
+   * de trémie vide, aucune jauge. Publier un pourcentage serait inventer une précision qui n'existe
+   * pas. Absent = la machine ne s'est pas prononcée.
+   */
+  foodLow: z.boolean().optional(),
+  /** Une ration tombe EN CE MOMENT. Dure quelques secondes ; sert à accuser le geste. */
+  feeding: z.boolean().optional(),
+  /**
+   * Servi depuis minuit et ce que le plan du jour prévoit EN TOUT, **dans l'unité que l'appareil
+   * déclare** (`meta.petFeeder.unit`). Ce n'est pas toujours une masse : une Fresh Element Solo
+   * compte en TASSES (0,3 tasse), une Fresh Element Infinity en grammes. L'écart entre servi et
+   * prévu dit s'il reste des repas à venir.
+   */
+  servedToday: z.number().min(0).optional(),
+  plannedToday: z.number().min(0).optional(),
+  /**
+   * Mangé depuis minuit. Absent sur les modèles SANS pesée : une Fresh Element Solo dit ce qu'elle
+   * a versé, pas ce que l'animal a pris (vérifié sur la machine réelle le 21/09) — seuls les
+   * modèles à plateau pesant le rapportent.
+   */
+  eatenToday: z.number().min(0).optional(),
+  /** Quand tombe le prochain repas programmé, et combien. Absent = plus rien d'ici minuit. */
+  nextMealAt: z.number().int().optional(),
+  nextMealAmount: z.number().min(0).optional(),
+  /** Jours qu'il reste au sachet dessiccant (capacité `consumables`). */
+  desiccantDays: z.number().int().min(0).optional(),
+  /**
+   * Batterie de SECOURS (capacité `battery`) : la mangeoire vit sur secteur et ne tient sur pile
+   * qu'une coupure. Absente = pas de pile en place, ce qui n'est pas une panne.
+   */
+  batteryPct: pct.optional(),
+  errorMessage: z.string().optional(),
+})
+
+export const petFountainStateSchema = z.object({
+  kind: z.literal('pet_fountain'), ...base,
+  /** La pompe tourne. Seul champ obligatoire : c'est ce que l'interrupteur montre. */
+  on: z.boolean(),
+  mode: z.enum(PET_PUMP_MODES).optional(),
+  /** Ce qu'il reste au filtre (capacité `consumables`), et en jours quand le fabricant l'estime. */
+  filterPct: pct.optional(),
+  filterDays: z.number().int().min(0).optional(),
+  /** Le bac est vide, ou presque — l'alerte que le fabricant lève, pas un niveau mesuré. */
+  waterLow: z.boolean().optional(),
+  batteryPct: pct.optional(),
+  /**
+   * Ce que la fontaine sait de la journée (capacité `water_usage`). Une Eversweet Max ne mesure
+   * PAS un volume — elle compte les PASSAGES et leur durée. Le volume reste là pour les modèles
+   * qui le mesurent ; l'un ou l'autre peut manquer, jamais les deux ensemble sur une même machine.
+   */
+  drinksToday: z.number().int().min(0).optional(),
+  /** Durée moyenne d'un passage, en secondes. */
+  drinkAvgS: z.number().min(0).optional(),
+  todayMl: z.number().min(0).optional(),
+  errorMessage: z.string().optional(),
+  /**
+   * Quand ces valeurs ont été relevées SUR la fontaine. Indispensable ici et nulle part ailleurs :
+   * une Eversweet n'a pas de Wi-Fi, elle est lue par relais Bluetooth au travers d'un appareil
+   * voisin. Entre deux relais, le cloud rend la dernière synchro — parfois vieille de plusieurs
+   * heures si le relais était hors de portée. Montrer l'âge vaut mieux que laisser croire au direct
+   * (même raison que `readAt` d'un véhicule endormi). Absent = on ne sait pas dater le relevé.
+   */
+  syncedAt: z.number().int().optional(),
+})
+
 export const deviceStateSchema = z.discriminatedUnion('kind', [
   lightStateSchema, coverStateSchema, mediaPlayerStateSchema, climateStateSchema, vacuumStateSchema,
   mowerStateSchema, sensorStateSchema, energyStateSchema, evChargerStateSchema, vehicleStateSchema,
-  cameraStateSchema, weatherStateSchema, waterStateSchema,
+  cameraStateSchema, weatherStateSchema, waterStateSchema, petFeederStateSchema, petFountainStateSchema,
 ])
 export type DeviceState = z.infer<typeof deviceStateSchema>
 export type StateFor<K extends DeviceKind> = Extract<DeviceState, { kind: K }>

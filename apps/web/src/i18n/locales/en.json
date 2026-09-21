@@ -1,8 +1,8 @@
 {
   "app": { "name": "Kasbah" },
-  "nav": { "main": "Navigation", "home": "Home", "energy": "Energy", "water": "Water", "heating": "Heating", "vehicles": "Vehicles", "robots": "Robots", "weather": "Weather", "settings": "Settings", "lights": "Lights", "covers": "Covers", "cameras": "Cameras", "media": "Media", "ytmusic": "YouTube Music" },
+  "nav": { "main": "Navigation", "home": "Home", "energy": "Energy", "water": "Water", "heating": "Heating", "vehicles": "Vehicles", "robots": "Robots", "pets": "Pets", "weather": "Weather", "settings": "Settings", "lights": "Lights", "covers": "Covers", "cameras": "Cameras", "media": "Media", "ytmusic": "YouTube Music" },
   "common": {
-    "close": "Close", "back": "Back", "retry": "Retry", "all": "All", "none": "None", "unavailable": "Unavailable",
+    "cancel": "Cancel", "close": "Close", "back": "Back", "retry": "Retry", "all": "All", "none": "None", "unavailable": "Unavailable",
     "loading": "Loading house…", "on": "On", "off": "Off", "stop": "Stop",
     "start": "Start", "pause": "Pause", "dock": "Return to dock", "park": "Park", "locate": "Locate",
     "lock": "Lock", "unlock": "Unlock", "unknown": "Unknown", "status": "Status", "mode": "Mode"
@@ -28,7 +28,8 @@
   },
   "kinds": {
     "light": "Light", "cover": "Cover", "media_player": "Player", "climate": "Heating", "vacuum": "Vacuum",
-    "mower": "Mower", "sensor": "Sensor", "energy": "Energy", "ev_charger": "EV charger", "vehicle": "Vehicle", "camera": "Camera", "weather": "Weather", "water": "Water treatment"
+    "mower": "Mower", "sensor": "Sensor", "energy": "Energy", "ev_charger": "EV charger", "vehicle": "Vehicle", "camera": "Camera", "weather": "Weather", "water": "Water treatment",
+    "pet_feeder": "Feeder", "pet_fountain": "Fountain"
   },
   "device": {
     "unbound": "This device is not bound to any plugin ({id}).", "notPlaced": "Not placed", "outdoor": "Outdoor",
@@ -436,6 +437,17 @@
       "local": "Once linked, the plugin only talks to the robot, directly on the local network: no manufacturer polling, no quota. The robot is found on its own — there is no address to type in.",
       "notStored": "No session file is configured (IROBOT_SESSION_FILE is empty): the link will be lost when the server restarts."
     },
+    "petkit": {
+      "intro": "PetKit offers no delegated sign-in: you log in with the account address and a code sent by email, valid for ten minutes. No password ever passes through this server; only the session token is kept.",
+      "dedicatedAccount": "Use a DEDICATED PetKit account and share your devices with it. A new sign-in invalidates the previous one: on your main account, this server and your phone would log each other out in a loop.",
+      "email": "PetKit account address", "code": "Code received by email",
+      "askCode": "Send me a code", "sending": "Sending…", "codeSent": "Code sent, check your email",
+      "codeHint": "The code is valid for ten minutes. After that, ask for a new one.",
+      "link": "Link", "linking": "Linking…", "unlink": "Unlink",
+      "linked": "{n} device linked | {n} device linked | {n} devices linked",
+      "expires": "Session valid until {date}; a new code will be needed after that.",
+      "poll": "Devices re-read every {min} min."
+    },
     "melcloud": {
       "intro": "Mitsubishi offers no delegated sign-in for third parties: your MELCloud e-mail and password are required. The password crosses the server once and is never stored — only a session key is.",
       "email": "MELCloud e-mail",
@@ -571,6 +583,20 @@
     "observed": "Observed at {time}", "attribution": "Data {source}", "model": "Model {model}",
     "radarHint": "Observed radar (2 h), then AROME forecast (6 h)", "radarUnavailable": "Radar unavailable", "radarSource": "RainViewer radar", "nowcastSource": "Nowcast", "aromeSource": "AROME forecast · Météo-France",
     "play": "Play", "pause": "Pause", "today": "Today", "min": "min", "max": "max", "noForecast": "Forecast unavailable"
+  },
+  "pets": {
+    "noDevice": "No pet device active. Enable a plugin in Settings → Plugins.",
+    "foodLow": "Refill the hopper", "foodOk": "Hopper filled", "feeding": "Dispensing",
+    "servedTodayLabel": "Served today", "nextMeal": "Next meal {time}", "noMealLeft": "No meal left today", "nextMealLabel": "Next meal","drinksToday": "Visits today", "drinkAvg": "Average stay", 
+    "ofPlanned": "of {amount}", "avgStay": "{s} s on average", "drunkVolume": "Drunk today", 
+    "cupGrams": "Weight of one cup", "cupGramsHint": "The feeder counts volume and weighs nothing: weigh one portion once to calibrate this. The grams shown stay an estimate.", "cupGramsDec": "Decrease the weight of one cup", "cupGramsInc": "Increase the weight of one cup", 
+    "plannedToday": "Planned today", "eatenToday": "Eaten today",
+    "desiccant": "Desiccant", "backupBattery": "Backup battery", "feedNow": "Serve a portion", "callPet": "Call the pet",
+    "waterLow": "Refill the bowl", "waterOk": "Water level fine", "filter": "Filter", "battery": "Battery",
+    "mode": { "continuous": "Continuous", "intermittent": "Intermittent" },
+    "startPump": "Start", "stopPump": "Stop", "pumpStopped": "Pump stopped",
+    "syncedAgo": "Read {ago}", "syncedUnknown": "Reading time unknown",
+    "days": "{n} day | {n} day | {n} days"
   },
   "water": {
     "noDevice": "No water treatment station is active. Enable a plugin in Settings → Plugins.",

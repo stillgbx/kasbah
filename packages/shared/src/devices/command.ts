@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { CLIMATE_MODES, type Capability, type DeviceKind } from './kinds'
+import { CLIMATE_MODES, PET_PUMP_MODES, type Capability, type DeviceKind } from './kinds'
 import { xySchema } from './state'
 
 // Commandes nommées `<kind>.<verbe>` : le préfixe donne le kind gratuitement et
@@ -77,6 +77,20 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('vehicle.wake') }),
   /** Relire le véhicule MAINTENANT (lecture facturée) ; le sondage repart de ce moment. */
   z.object({ type: z.literal('vehicle.refresh') }),
+  // pet_feeder
+  /**
+   * Servir une ration TOUT DE SUITE, en plus du plan de repas (qui n'est pas touché). `amount` est
+   * dans l'unité que l'appareil déclare (`meta.petFeeder.unit`) : des TASSES sur une Fresh Element
+   * Solo, des grammes ailleurs. La ration n'est pas libre non plus — chaque modèle n'accepte qu'une
+   * liste de valeurs (`meta.petFeeder.portions`), et le serveur refuse ce qui n'y est pas plutôt
+   * que de laisser le fabricant l'arrondir en silence.
+   */
+  z.object({ type: z.literal('pet_feeder.feed'), amount: z.number().positive().max(1000) }),
+  /** Jouer le son enregistré pour appeler l'animal. Aucun état ne change. */
+  z.object({ type: z.literal('pet_feeder.call_pet') }),
+  // pet_fountain
+  z.object({ type: z.literal('pet_fountain.set_power'), on: z.boolean() }),
+  z.object({ type: z.literal('pet_fountain.set_mode'), mode: z.enum(PET_PUMP_MODES) }),
 ])
 export type Command = z.infer<typeof commandSchema>
 export type CommandInput = z.input<typeof commandSchema>
@@ -100,6 +114,8 @@ export const COMMAND_REQUIRES: Record<CommandType, Capability> = {
   'vehicle.lock': 'lock', 'vehicle.unlock': 'lock',
   'vehicle.start_charge': 'charging', 'vehicle.stop_charge': 'charging',
   'vehicle.set_charge_limit': 'charge_limit', 'vehicle.wake': 'soc', 'vehicle.refresh': 'soc',
+  'pet_feeder.feed': 'feed', 'pet_feeder.call_pet': 'call_pet',
+  'pet_fountain.set_power': 'on_off', 'pet_fountain.set_mode': 'pump_mode',
 }
 
 export function commandKind(cmd: Command | CommandType): DeviceKind {

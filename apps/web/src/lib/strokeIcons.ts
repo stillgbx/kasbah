@@ -77,6 +77,17 @@ export const ICONS = {
   gauge: 'M4 17.5a8.5 8.5 0 1 1 16 0M12 14l3.5-3.5',
   waves: 'M3 9c1.5-1.6 3-1.6 4.5 0s3 1.6 4.5 0 3-1.6 4.5 0 3 1.6 4.5 0M3 15c1.5-1.6 3-1.6 4.5 0s3 1.6 4.5 0 3-1.6 4.5 0 3 1.6 4.5 0',
 
+  // animaux — la patte pour la vue, la trémie et le jet pour distinguer les deux appareils l'un de
+  // l'autre à 16 px : deux gamelles se ressembleraient trop, c'est ce qui les SURMONTE qui les dit.
+  /** Patte : quatre coussinets et la paume — la vue Animaux. */
+  paw: 'M6.6 10.2m-1.8 0a1.8 1.8 0 1 0 3.6 0a1.8 1.8 0 1 0-3.6 0M9.9 7.1m-1.9 0a1.9 1.9 0 1 0 3.8 0a1.9 1.9 0 1 0-3.8 0M14.1 7.1m-1.9 0a1.9 1.9 0 1 0 3.8 0a1.9 1.9 0 1 0-3.8 0M17.4 10.2m-1.8 0a1.8 1.8 0 1 0 3.6 0a1.8 1.8 0 1 0-3.6 0M12 16.4m-4.2 0a4.2 3.5 0 1 0 8.4 0a4.2 3.5 0 1 0-8.4 0',
+  /** Horloge : l'heure du prochain repas. */
+  clock: 'M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0-18 0M12 6.5V12l3.5 2',
+  /** Mangeoire : la trémie qui se vide dans la gamelle. */
+  feeder: 'M4.5 13h15a7.5 7.5 0 0 1-15 0zM8 3h8v4.5a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2z',
+  /** Fontaine : la gamelle et le jet qui retombe des deux côtés. */
+  fountain: 'M4.5 13h15a7.5 7.5 0 0 1-15 0zM12 13V9.5M12 9.5a3.5 3.5 0 0 1 3.5-3.5M12 9.5A3.5 3.5 0 0 0 8.5 6',
+
   // contrôles d'appareil
   minus: 'M5 12h14',
   stop: 'M6 6h12v12H6z',
@@ -140,6 +151,7 @@ export type IconName = keyof typeof ICONS
 const KIND_ICON: Record<DeviceKind, IconName> = {
   light: 'light', cover: 'shutter', media_player: 'speaker', climate: 'heatpump', vacuum: 'vacuum', mower: 'mower',
   sensor: 'sensor', energy: 'solar', ev_charger: 'charger', vehicle: 'vehicle', camera: 'camera', weather: 'cloud', water: 'droplet',
+  pet_feeder: 'feeder', pet_fountain: 'fountain',
 }
 
 export function kindIcon(kind: DeviceKind | undefined, descriptor?: DeviceDescriptor): IconName {

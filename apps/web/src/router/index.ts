@@ -16,6 +16,7 @@ export const router = createRouter({
     { path: '/heating', name: 'heating', component: () => import('../views/HeatingView.vue') },
     { path: '/vehicles', name: 'vehicles', component: () => import('../views/VehiclesView.vue') },
     { path: '/robots', name: 'robots', component: () => import('../views/RobotsView.vue') },
+    { path: '/pets', name: 'pets', component: () => import('../views/PetsView.vue') },
     { path: '/weather', name: 'weather', component: () => import('../views/WeatherView.vue') },
     { path: '/settings', name: 'settings', component: () => import('../views/SettingsView.vue') },
     { path: '/:pathMatch(.*)*', redirect: '/' },

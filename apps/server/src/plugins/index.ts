@@ -9,6 +9,7 @@ import { createMelcloudPlugin } from './melcloud'
 import { createMockPlugin } from './mock'
 import { createNestPlugin } from './nest'
 import { createOpenMeteoPlugin } from './open_meteo'
+import { createPetkitPlugin } from './petkit'
 import { createRenaultPlugin } from './renault'
 import { createSonosPlugin } from './sonos'
 import { createTahomaPlugin } from './tahoma'
@@ -33,5 +34,6 @@ export const PLUGIN_FACTORIES: Record<string, PluginFactory> = {
   tesla: () => createTeslaPlugin(),
   renault: () => createRenaultPlugin(),
   open_meteo: () => createOpenMeteoPlugin(),
+  petkit: () => createPetkitPlugin(),
   ytmusic: () => createYtmusicPlugin(),
 }

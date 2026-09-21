@@ -98,6 +98,21 @@ export interface RenaultStatus {
  * une ou deux zones, et plusieurs pompes à chaleur en cascade n'apparaissent que comme une seule
  * machine (l'installation de référence : trois Zubadan, un appareil, deux zones).
  */
+/**
+ * État de la liaison PetKit. Pas de mot de passe dans cette interface, et ce n'est pas un oubli :
+ * le fabricant connecte par CODE envoyé par courriel. `expiresAt` est donc une information utile à
+ * l'écran — une session perdue ne se reprend pas toute seule, il faudra un nouveau code.
+ */
+export interface PetkitStatus {
+  linked: boolean
+  account: string | null
+  gateway: string
+  expiresAt: number | null
+  devices: { externalId: string; name: string; type: string; kind: string }[]
+  pollMs: number
+  lastError: string | null
+}
+
 export interface MelcloudStatus {
   linked: boolean
   accountName: string | null
@@ -292,6 +307,14 @@ export interface Transport {
   melcloudLogin(body: { email: string; password: string }): Promise<MelcloudStatus>
   /** Délie le compte : la clé de session est effacée. */
   melcloudLogout(): Promise<MelcloudStatus>
+  /** Où en est la liaison du compte PetKit. */
+  petkitStatus(): Promise<PetkitStatus>
+  /** Étape 1 : demander à PetKit d'envoyer un code à cette adresse. Il vaut dix minutes. */
+  petkitRequestCode(body: { email: string }): Promise<{ sent: boolean }>
+  /** Étape 2 : échanger le code contre une session. Aucun mot de passe n'entre jamais ici. */
+  petkitLogin(body: { email: string; code: string }): Promise<PetkitStatus>
+  /** Délie le compte : le jeton de session est effacé. */
+  petkitLogout(): Promise<PetkitStatus>
   /** L'état des machines de chauffage (dernière lecture du sondage, jamais un nouvel appel au fabricant). */
   melcloudSystem(): Promise<{ units: MelcloudUnit[]; pollMs: number }>
   /** L'historique de fonctionnement, construit par le serveur au fil des sondages. */

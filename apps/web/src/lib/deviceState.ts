@@ -1,7 +1,7 @@
 import type { CommandInput, DeviceDescriptor, DeviceState, StateFor } from '@kasbah/shared'
 import { coverActivity, coverRestKey, coverWords, toClosure } from './cover'
 import { isEnergySite } from './energy'
-import { formatPercent, formatPower, formatSensor, formatTemp, waterAlertState, waterLowestPct } from './format'
+import { formatFeedAmount, formatMilliliters, formatPercent, formatPower, formatSensor, formatTemp, waterAlertState, waterLowestPct } from './format'
 
 // Lecture « métier » d'un état : actif ?, bascule rapide possible ?, libellé court traduit.
 
@@ -37,6 +37,9 @@ export function isDeviceOn(s: DeviceState, descriptor?: DeviceDescriptor): boole
     case 'camera': return false
     case 'weather': return false
     case 'water': return false
+    // une ration EN TRAIN de tomber : le seul moment où une mangeoire fait quelque chose
+    case 'pet_feeder': return s.feeding === true
+    case 'pet_fountain': return s.on
   }
 }
 
@@ -110,6 +113,11 @@ export function toggleCommand(s: DeviceState, aimed?: number): CommandInput | nu
 
 type Translate = (key: string, named?: Record<string, unknown>) => string
 
+/** Heure du jour seule (« 19:00 ») : un repas de ce soir n'a pas besoin de porter sa date. */
+function timeOfDay(at: number, locale: string): string {
+  return new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(new Date(at))
+}
+
 /** Libellé court d'état pour les listes et l'en-tête du panneau appareil. */
 export function statusLabel(descriptor: DeviceDescriptor, s: DeviceState, t: Translate, locale: string): string {
   if (!s.available) return t('common.unavailable')
@@ -147,6 +155,24 @@ export function statusLabel(descriptor: DeviceDescriptor, s: DeviceState, t: Tra
     case 'camera': return t('camera.online')
     case 'weather': return t(`weather.conditions.${s.condition}`)
     case 'water': return waterAlertLabel(s, t)
+    // Ordre de priorité : la panne, puis ce qui demande un geste (remplir la trémie), puis ce qui
+    // se passe, puis le chiffre du jour. Un seul fait à la fois — c'est une ligne, pas un tableau.
+    case 'pet_feeder': {
+      if (s.errorMessage) return s.errorMessage
+      if (s.feeding) return t('pets.feeding')
+      if (s.foodLow) return t('pets.foodLow')
+      // Ce que ni la grande valeur (le servi) ni la première ligne de la carte (la trémie) ne
+      // disent : QUAND tombe le prochain repas. C'est ce que l'appli du fabricant met en avant sur
+      // sa vignette, et le seul renseignement qui parle de l'avenir.
+      if (s.nextMealAt !== undefined) return t('pets.nextMeal', { time: timeOfDay(s.nextMealAt, locale) })
+      return t('pets.noMealLeft')
+    }
+    case 'pet_fountain': {
+      if (s.errorMessage) return s.errorMessage
+      if (s.waterLow) return t('pets.waterLow')
+      if (!s.on) return t('pets.pumpStopped')
+      return s.mode ? t(`pets.mode.${s.mode}`) : t('common.on')
+    }
   }
 }
 
@@ -204,6 +230,26 @@ export function headlineValue(descriptor: DeviceDescriptor, s: DeviceState, t: T
       if (a === 'warning' || a === 'defect') return waterAlertLabel(s, t)
       const p = waterLowestPct(s)
       return p !== undefined ? formatPercent(p, locale) : t('common.unknown')
+    }
+    // Même arbitrage que la station d'eau : une alerte prime sur le chiffre, parce qu'elle appelle
+    // un geste ; sinon on montre ce que la journée a donné, qui n'est écrit nulle part ailleurs.
+    // Contrairement à la station d'eau, l'alerte ne prend PAS la place du chiffre : c'est la ligne
+    // de statut juste en dessous qui la porte, et l'écrire aux deux endroits l'affichait deux fois.
+    case 'pet_feeder': {
+      const u = descriptor.meta.petFeeder?.unit
+      return s.servedToday !== undefined && u ? formatFeedAmount(s.servedToday, u, locale) : t('common.unknown')
+    }
+    case 'pet_fountain': {
+      if (!s.on) return t('common.off')
+      // Les PASSAGES du jour : c'est ce que l'appli du fabricant met en grand (« 6 fois »), et la
+      // seule mesure de consommation qu'une Eversweet Max sache produire. Le volume pour les
+      // modèles qui le mesurent ; sinon le filtre, seul chiffre qui appelle un geste.
+      // Forme COMPACTE (« 6× ») et non « 6 passages » : la grande valeur est à 32 px dans une
+      // réserve de 144, et le mot s'y coupait (« 0 passa… », mesuré). Le libellé entier vit sur la
+      // ligne de la carte, où il a la place.
+      if (s.drinksToday !== undefined) return `${s.drinksToday}×`
+      if (s.todayMl !== undefined) return formatMilliliters(s.todayMl, locale)
+      return s.filterPct !== undefined ? formatPercent(s.filterPct, locale) : t('common.on')
     }
   }
 }

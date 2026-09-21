@@ -1,8 +1,8 @@
 {
   "app": { "name": "Kasbah" },
-  "nav": { "main": "Navigation", "home": "Maison", "energy": "Énergie", "water": "Eau", "heating": "Chauffage", "vehicles": "Véhicules", "robots": "Robots", "weather": "Météo", "settings": "Réglages", "lights": "Lumières", "covers": "Ouvrants", "cameras": "Caméras", "media": "Médias", "ytmusic": "YouTube Music" },
+  "nav": { "main": "Navigation", "home": "Maison", "energy": "Énergie", "water": "Eau", "heating": "Chauffage", "vehicles": "Véhicules", "robots": "Robots", "pets": "Animaux", "weather": "Météo", "settings": "Réglages", "lights": "Lumières", "covers": "Ouvrants", "cameras": "Caméras", "media": "Médias", "ytmusic": "YouTube Music" },
   "common": {
-    "close": "Fermer", "back": "Retour", "retry": "Réessayer", "all": "Tout", "none": "Aucun", "unavailable": "Indisponible",
+    "cancel": "Annuler", "close": "Fermer", "back": "Retour", "retry": "Réessayer", "all": "Tout", "none": "Aucun", "unavailable": "Indisponible",
     "loading": "Chargement de la maison…", "on": "Allumé", "off": "Éteint", "stop": "Stop",
     "start": "Démarrer", "pause": "Pause", "dock": "Retour base", "park": "Rentrer", "locate": "Localiser",
     "lock": "Verrouiller", "unlock": "Déverrouiller", "unknown": "Inconnu", "status": "État", "mode": "Mode"
@@ -28,7 +28,8 @@
   },
   "kinds": {
     "light": "Lumière", "cover": "Ouvrant", "media_player": "Lecteur", "climate": "Chauffage", "vacuum": "Aspirateur",
-    "mower": "Tondeuse", "sensor": "Capteur", "energy": "Énergie", "ev_charger": "Borne de recharge", "vehicle": "Véhicule", "camera": "Caméra", "weather": "Météo", "water": "Traitement de l'eau"
+    "mower": "Tondeuse", "sensor": "Capteur", "energy": "Énergie", "ev_charger": "Borne de recharge", "vehicle": "Véhicule", "camera": "Caméra", "weather": "Météo", "water": "Traitement de l'eau",
+    "pet_feeder": "Mangeoire", "pet_fountain": "Fontaine"
   },
   "device": {
     "unbound": "Cet appareil n'est lié à aucun plugin ({id}).", "notPlaced": "Non placés", "outdoor": "Extérieur",
@@ -436,6 +437,17 @@
       "local": "Une fois relié, le plugin ne parle qu'au robot, en direct sur le réseau local : ni sondage du fabricant, ni quota. Le robot est retrouvé tout seul, il n'y a aucune adresse à saisir.",
       "notStored": "Aucun fichier de session n'est configuré (IROBOT_SESSION_FILE est vide) : la liaison sera perdue au redémarrage du serveur."
     },
+    "petkit": {
+      "intro": "PetKit n'offre aucune connexion déléguée : on se connecte avec l'adresse du compte et un code reçu par courriel, valable dix minutes. Aucun mot de passe ne traverse ce serveur ; seul le jeton de session est conservé.",
+      "dedicatedAccount": "Utilisez un compte PetKit DÉDIÉ, à qui vous partagez vos appareils. Une nouvelle connexion invalide la précédente : sur votre compte principal, ce serveur et votre téléphone se déconnecteraient l'un l'autre en boucle.",
+      "email": "Adresse du compte PetKit", "code": "Code reçu par courriel",
+      "askCode": "Recevoir un code", "sending": "Envoi…", "codeSent": "Code envoyé, regardez vos courriels",
+      "codeHint": "Le code vaut dix minutes. Passé ce délai, demandez-en un nouveau.",
+      "link": "Relier", "linking": "Liaison…", "unlink": "Délier",
+      "linked": "{n} appareil relié | {n} appareil relié | {n} appareils reliés",
+      "expires": "Session valable jusqu'au {date} ; un nouveau code sera demandé ensuite.",
+      "poll": "Appareils relus toutes les {min} min."
+    },
     "melcloud": {
       "intro": "Mitsubishi n'offre aucune connexion déléguée à un tiers : il faut l'identifiant et le mot de passe de votre compte MELCloud. Le mot de passe ne traverse le serveur qu'une fois et n'est jamais enregistré — seule une clé de session l'est.",
       "email": "Adresse e-mail MELCloud",
@@ -571,6 +583,20 @@
     "observed": "Observé à {time}", "attribution": "Données {source}", "model": "Modèle {model}",
     "radarHint": "Radar observé (2 h), puis prévision AROME (6 h)", "radarUnavailable": "Radar indisponible", "radarSource": "Radar RainViewer", "nowcastSource": "Prévision immédiate", "aromeSource": "Prévision AROME · Météo-France",
     "play": "Lecture", "pause": "Pause", "today": "Aujourd'hui", "min": "min", "max": "max", "noForecast": "Prévisions indisponibles"
+  },
+  "pets": {
+    "noDevice": "Aucun appareil pour animaux actif. Activez un plugin dans Réglages → Plugins.",
+    "foodLow": "Croquettes à remettre", "foodOk": "Trémie garnie", "feeding": "Distribution en cours",
+    "servedTodayLabel": "Servi aujourd'hui", "nextMeal": "Prochain repas {time}", "noMealLeft": "Plus de repas aujourd'hui", "nextMealLabel": "Prochain repas","drinksToday": "Passages aujourd'hui", "drinkAvg": "Durée moyenne", 
+    "ofPlanned": "sur {amount}", "avgStay": "{s} s en moyenne", "drunkVolume": "Bu aujourd'hui", 
+    "cupGrams": "Poids d'une tasse", "cupGramsHint": "La mangeoire compte en volume et ne pèse rien : pesez une ration une fois pour caler cette valeur. Les grammes affichés restent une estimation.", "cupGramsDec": "Diminuer le poids d'une tasse", "cupGramsInc": "Augmenter le poids d'une tasse", 
+    "plannedToday": "Prévu aujourd'hui", "eatenToday": "Mangé aujourd'hui",
+    "desiccant": "Dessiccant", "backupBattery": "Batterie de secours", "feedNow": "Servir une ration", "callPet": "Appeler l'animal",
+    "waterLow": "Bac à remplir", "waterOk": "Niveau d'eau correct", "filter": "Filtre", "battery": "Batterie",
+    "mode": { "continuous": "Continu", "intermittent": "Intermittent" },
+    "startPump": "Démarrer", "stopPump": "Arrêter", "pumpStopped": "Pompe arrêtée",
+    "syncedAgo": "Relevé {ago}", "syncedUnknown": "Date du relevé inconnue",
+    "days": "{n} jour | {n} jour | {n} jours"
   },
   "water": {
     "noDevice": "Aucune station de traitement de l'eau active. Activez un plugin dans Réglages → Plugins.",

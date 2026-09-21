@@ -5,6 +5,7 @@
 export const DEVICE_KINDS = [
   'light', 'cover', 'media_player', 'climate', 'vacuum', 'mower',
   'sensor', 'energy', 'ev_charger', 'vehicle', 'camera', 'weather', 'water',
+  'pet_feeder', 'pet_fountain',
 ] as const
 export type DeviceKind = (typeof DEVICE_KINDS)[number]
 
@@ -54,6 +55,16 @@ export const CAPABILITIES = [
   // d'en afficher une vide. Aucune commande — les réglages restent sur l'écran de la station, une
   // fausse manœuvre à distance sur de l'eau potable coûterait plus cher que le confort gagné.
   'consumables', 'water_flow', 'water_usage', 'uv_lamp',
+  // pet_feeder / pet_fountain — deux appareils d'animalerie qui ne partagent AUCUNE commande, d'où
+  // deux kinds. `feed` = servir une ration tout de suite, hors du plan de repas ; les rations
+  // acceptées ne sont pas libres et varient d'un modèle à l'autre — pas même l'UNITÉ —, elles sont
+  // donc déclarées dans `meta.petFeeder`. `call_pet` = jouer le son enregistré pour appeler
+  // l'animal : un geste, pas un état. `pump_mode` = la pompe sait alterner un débit continu et un
+  // cycle intermittent ; une fontaine qui n'a que le continu ne la déclare pas.
+  // Réutilisées telles quelles : `battery` (les deux ont une batterie de secours), `consumables`
+  // (dessiccant de la mangeoire, filtre de la fontaine) et `water_usage` — qui ne veut pas dire
+  // « un volume » : une Eversweet Max compte les PASSAGES de l'animal, pas des millilitres.
+  'feed', 'call_pet', 'pump_mode',
 ] as const
 export type Capability = (typeof CAPABILITIES)[number]
 
@@ -72,7 +83,21 @@ export const KIND_CAPABILITIES: Record<DeviceKind, readonly Capability[]> = {
   camera: ['live_stream', 'chime'],
   weather: ['forecast', 'air_quality', 'pollen'],
   water: ['consumables', 'water_flow', 'water_usage', 'uv_lamp'],
+  pet_feeder: ['feed', 'call_pet', 'consumables', 'battery'],
+  pet_fountain: ['on_off', 'pump_mode', 'consumables', 'battery', 'water_usage'],
 }
+
+/**
+ * Régime de la pompe d'une fontaine (capacité `pump_mode`). `continuous` : elle coule sans
+ * s'arrêter. `intermittent` : elle alterne des cycles de marche et de repos (3 min / 3 min sur la
+ * machine réelle), ce qui fait durer la batterie.
+ *
+ * CORRIGÉ le 2026-09-21 : ces deux-là s'appelaient `normal` et `smart`, et `smart` était traduit
+ * « à l'approche » — un contresens. L'appli du fabricant dit « Intermittent » et affiche le cycle
+ * en minutes : c'est une MINUTERIE, pas une détection de présence.
+ */
+export const PET_PUMP_MODES = ['continuous', 'intermittent'] as const
+export type PetPumpMode = (typeof PET_PUMP_MODES)[number]
 
 export const CLIMATE_MODES = ['off', 'heat', 'cool', 'auto', 'eco', 'fan_only'] as const
 export type ClimateMode = (typeof CLIMATE_MODES)[number]

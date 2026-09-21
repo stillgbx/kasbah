@@ -31,6 +31,22 @@ export const APPEARANCES = ['light', 'dark', 'system', 'auto'] as const
 export type Appearance = (typeof APPEARANCES)[number]
 
 /** Bornes du foyer déclaré (vue Eau, repère de consommation moyenne française) : 1 personne au minimum, 10 au maximum. */
+/**
+ * Combien pèse une « tasse » de croquettes, en grammes. C'est un RÉGLAGE et pas une constante :
+ * une mangeoire PetKit compte en volume (elle déclare `settings.factor`, jamais un poids), et le
+ * poids dépend des croquettes — leur taille, leur densité. Le seul moyen honnête de l'obtenir est
+ * que l'utilisateur pèse une ration une fois.
+ *
+ * 100 g par défaut, et ce n'est pas une supposition : l'appli du fabricant écrit elle-même
+ * « 1/2 (environ 50 g) » pour une demi-tasse. Elle applique donc 10 g par dixième — exactement ce
+ * défaut. La valeur affichée garde un « ~ » parce qu'elle dépend des croquettes : c'est
+ * l'estimation du fabricant, pas une pesée.
+ */
+export const CUP_GRAMS_MIN = 20
+export const CUP_GRAMS_MAX = 300
+export const CUP_GRAMS_STEP = 5
+export const CUP_GRAMS_DEFAULT = 100
+
 export const HOUSEHOLD_SIZE_MIN = 1
 export const HOUSEHOLD_SIZE_MAX = 10
 
@@ -68,6 +84,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const sceneVisibilityM = useLocalStorage<number>('kasbah.sceneVisibilityM', 25_000)
   /** Foyer déclaré (vue Eau) : compare la consommation à la moyenne française — préférence d'affichage, jamais écrite dans house.json. */
   const householdSize = useLocalStorage<number>('kasbah.householdSize', 3)
+  const cupGrams = useLocalStorage<number>('kasbah.cupGrams', CUP_GRAMS_DEFAULT)
   const preferredDark = usePreferredDark()
   const weather = useWeather()
   const house = useHouseStore()
@@ -147,6 +164,9 @@ export const useSettingsStore = defineStore('settings', () => {
   function setSceneWeather(v: SceneWeatherChoice) { if (v === 'real' || WEATHER_CONDITIONS.includes(v)) sceneWeather.value = v }
   function setSceneCloudCover(v: number) { if (Number.isFinite(v)) sceneCloudCover.value = Math.min(100, Math.max(0, Math.round(v))) }
   function setSceneVisibilityM(v: number) { if (Number.isFinite(v)) sceneVisibilityM.value = Math.min(50_000, Math.max(50, Math.round(v))) }
+  function setCupGrams(v: number) {
+    if (Number.isFinite(v)) cupGrams.value = Math.min(CUP_GRAMS_MAX, Math.max(CUP_GRAMS_MIN, Math.round(v / CUP_GRAMS_STEP) * CUP_GRAMS_STEP))
+  }
   function setHouseholdSize(v: number) { if (Number.isFinite(v)) householdSize.value = Math.min(HOUSEHOLD_SIZE_MAX, Math.max(HOUSEHOLD_SIZE_MIN, Math.round(v))) }
   function toggleLocale() { locale.value = resolvedLocale.value === 'fr' ? 'en' : 'fr' }
 
@@ -174,9 +194,9 @@ export const useSettingsStore = defineStore('settings', () => {
 
   return {
     appearance, theme, locale, isDark, wantDark, themeId, currentTheme, resolvedLocale, fullscreen,
-    sceneStyle, sceneAmbience, sceneQuality, sceneProjection, sceneAssets, sceneDebug, sceneTuning, savedSceneTuning, sceneTuningDirty, sceneTuningPreset, sceneTuningOpen, houseEditing, sceneWeather, sceneCloudCover, sceneVisibilityM, householdSize,
+    sceneStyle, sceneAmbience, sceneQuality, sceneProjection, sceneAssets, sceneDebug, sceneTuning, savedSceneTuning, sceneTuningDirty, sceneTuningPreset, sceneTuningOpen, houseEditing, sceneWeather, sceneCloudCover, sceneVisibilityM, householdSize, cupGrams,
     setAppearance, cycleAppearance, setTheme, setLocale, toggleLocale, applyToVuetify, applyLocale,
-    setSceneStyle, setSceneAmbience, setSceneQuality, setSceneProjection, setSceneAssets, setSceneDebug, setSceneTuning, resetSceneTuning, applySceneTuningPreset, saveSceneTuning, setSceneTuningOpen, setHouseEditing, setSceneWeather, setSceneCloudCover, setSceneVisibilityM, setHouseholdSize,
+    setSceneStyle, setSceneAmbience, setSceneQuality, setSceneProjection, setSceneAssets, setSceneDebug, setSceneTuning, resetSceneTuning, applySceneTuningPreset, saveSceneTuning, setSceneTuningOpen, setHouseEditing, setSceneWeather, setSceneCloudCover, setSceneVisibilityM, setHouseholdSize, setCupGrams,
     appearances: APPEARANCES, themes: THEME_LIST, locales: LOCALES,
     styles: RENDER_STYLES, ambiences: AMBIENCE_MODES, qualities: RENDER_QUALITIES, projections: SCENE_PROJECTIONS,
   }

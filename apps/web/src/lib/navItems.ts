@@ -23,5 +23,8 @@ export const NAV_ITEMS: NavItem[] = [
   { name: 'heating', icon: 'radiator', label: 'nav.heating' },
   { name: 'vehicles', icon: 'vehicle', label: 'nav.vehicles' },
   { name: 'robots', icon: 'mower', label: 'nav.robots' },
+  // les animaux après les robots : deux familles d'appareils qui vivent leur vie dans la maison et
+  // qu'on vient consulter, pas piloter au quotidien
+  { name: 'pets', icon: 'paw', label: 'nav.pets' },
   { name: 'settings', icon: 'gear', label: 'nav.settings' },
 ]

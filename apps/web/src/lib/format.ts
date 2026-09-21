@@ -8,6 +8,31 @@ const nf = (locale: string, digits: number) => new Intl.NumberFormat(locale, { m
 export function formatPower(w: number, locale = 'fr'): string {
   return Math.abs(w) >= 1000 ? `${nf(locale, 1).format(w / 1000)} kW` : `${nf(locale, 0).format(w)} W`
 }
+/**
+ * Une ration, DANS L'UNITE DE L'APPAREIL (`meta.petFeeder.unit`). Ce n'est pas toujours une masse :
+ * une Fresh Element Solo compte en TASSES par dixiemes, une Infinity en grammes. Ecrire « g »
+ * partout se tromperait d'un facteur dix sur la premiere.
+ */
+export function formatFeedAmount(v: number, unit: 'cup' | 'g', locale = 'fr'): string {
+  if (unit === 'g') return `${nf(locale, 0).format(v)} g`
+  return `${nf(locale, 1).format(v / 10)} ${locale.startsWith('fr') ? 'tasse' : 'cup'}`
+}
+
+/**
+ * La contrepartie en grammes d'une ration comptée en tasses — **une ESTIMATION**, d'où le « ~ ».
+ * La machine ne pèse rien : elle compte du volume, et le poids dépend des croquettes. `gPerCup`
+ * vient d'un réglage que l'utilisateur ajuste après avoir pesé une ration une fois.
+ *
+ * Rien pour une mangeoire qui pèse déjà (`unit: 'g'`) : répéter la même valeur ne dirait rien.
+ */
+export function formatFeedGrams(v: number, unit: 'cup' | 'g', gPerCup: number, locale = 'fr'): string | null {
+  if (unit === 'g') return null
+  return `~ ${nf(locale, 0).format((v / 10) * gPerCup)} g`
+}
+/** Eau bue, en millilitres jusqu'au litre puis en litres : « 1,2 L » se lit mieux que « 1200 mL ». */
+export function formatMilliliters(ml: number, locale = 'fr'): string {
+  return ml >= 1000 ? `${nf(locale, 1).format(ml / 1000)} L` : `${nf(locale, 0).format(ml)} mL`
+}
 export function formatEnergy(wh: number, locale = 'fr'): string {
   return Math.abs(wh) >= 1000 ? `${nf(locale, 1).format(wh / 1000)} kWh` : `${nf(locale, 0).format(wh)} Wh`
 }
@@ -138,5 +163,10 @@ export function summarize(descriptor: DeviceDescriptor, state: DeviceState, loca
     case 'camera': return ''
     case 'weather': return formatTemp(state.tempC, locale)
     case 'water': { const p = waterLowestPct(state); return p !== undefined ? formatPercent(p, locale) : '—' }
+    case 'pet_feeder': {
+      const u = descriptor.meta.petFeeder?.unit
+      return state.servedToday !== undefined && u ? formatFeedAmount(state.servedToday, u, locale) : '—'
+    }
+    case 'pet_fountain': return state.drinksToday !== undefined ? `${state.drinksToday}\u00d7` : (state.on ? '●' : '○')
   }
 }

@@ -84,6 +84,19 @@ export function optimisticPatch(state: DeviceState, cmd: CommandInput): Partial<
         case 'vehicle.stop_charge': return { charging: false } as Partial<DeviceState>
         default: return null
       }
+    case 'pet_feeder':
+      // On n'avance PAS le compteur du servi : la machine peut verser moins que demandé (trémie
+      // presque vide), et un chiffre qui saute ensuite est pire que pas de chiffre. « Distribution
+      // en cours » est vrai dans tous les cas, et la relecture du plugin suit d'une seconde.
+      return cmd.type === 'pet_feeder.feed' ? { feeding: true } as Partial<DeviceState> : null
+    case 'pet_fountain':
+      switch (cmd.type) {
+        case 'pet_fountain.set_power': return { on: cmd.on } as Partial<DeviceState>
+        // Régler le régime rallume la pompe : c'est la même trame qui porte les deux, et
+        // l'appareil ne saurait pas appliquer un régime à l'arrêt.
+        case 'pet_fountain.set_mode': return { mode: cmd.mode, on: true } as Partial<DeviceState>
+        default: return null
+      }
     default:
       return null
   }
