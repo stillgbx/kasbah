@@ -11,6 +11,7 @@ import { evCharger, vehicle } from './behaviours/ev'
 import { weather } from './behaviours/weather'
 import { water } from './behaviours/water'
 import { petFeeder, petFountain } from './behaviours/pets'
+import { ceilingFan, ceilingFanLight } from './behaviours/fan'
 
 // Scénarios : `default` reproduit la maison démo (ids stables liés dans house/demo-house.json),
 // `empty` teste le rendu sans appareil, `chaos` exerce les erreurs/indisponibilités, `winter`
@@ -55,6 +56,9 @@ function defaultDevices(opts: { winter?: boolean } = {}) {
     // exemplaire suffit à vérifier les cartes et la vue)
     petFeeder('pet-feeder-kitchen', { name: 'Mangeoire cuisine' }),
     petFountain('pet-fountain-kitchen', { name: 'Fontaine cuisine' }),
+    // Ventilateur-plafonnier CREATE : deux appareils liés (aucune commande commune).
+    ceilingFanLight('fan-chambre2_light', { name: 'Plafonnier chambre 2' }),
+    ceilingFan('fan-chambre2_fan', { name: 'Ventilateur chambre 2', linkedLightId: 'mock:fan-chambre2_light' }),
     vehicle('vehicle-tesla', { name: 'Tesla', manufacturer: 'Tesla', model: 'Model Y', batteryKwh: 75, rangeKmFull: 450, home: HOME, work: WORK, soc: 68, chargeLimit: 80 }),
     vehicle('vehicle-r5', { name: 'R5', manufacturer: 'Renault', model: 'Renault 5 E-Tech', batteryKwh: 52, rangeKmFull: 410, home: HOME, work: WORK, workDays: [], soc: 55, chargeLimit: 80, socMin: 20, chargerPowerW: 0 }),
     evCharger('charger-home', { name: 'Borne de recharge', vehicleId: 'vehicle-tesla' }),

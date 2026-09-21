@@ -29,7 +29,7 @@
   "kinds": {
     "light": "Lumière", "cover": "Ouvrant", "media_player": "Lecteur", "climate": "Chauffage", "vacuum": "Aspirateur",
     "mower": "Tondeuse", "sensor": "Capteur", "energy": "Énergie", "ev_charger": "Borne de recharge", "vehicle": "Véhicule", "camera": "Caméra", "weather": "Météo", "water": "Traitement de l'eau",
-    "pet_feeder": "Mangeoire", "pet_fountain": "Fontaine"
+    "pet_feeder": "Mangeoire", "pet_fountain": "Fontaine", "fan": "Ventilateur", "lightFan": "Lumière - Ventilateur"
   },
   "device": {
     "unbound": "Cet appareil n'est lié à aucun plugin ({id}).", "notPlaced": "Non placés", "outdoor": "Extérieur",
@@ -55,10 +55,22 @@
   },
   "light": {
     "brightness": "Luminosité", "colorTemp": "Température", "color": "Couleur", "warm": "Chaud", "cold": "Froid", "effect": "Effet",
+    "kelvinLabel": { "2700": "Chaud", "3300": "Neutre", "4000": "Froid" },
+    "kelvin": { "2700": "2700 K", "3300": "3300 K", "4000": "4000 K" },
     "effects": {
       "no_effect": "Aucun", "candle": "Bougie", "fire": "Feu", "prism": "Prisme", "sparkle": "Scintillement",
       "opal": "Opale", "glisten": "Éclat", "underwater": "Sous l'eau", "cosmos": "Cosmos", "sunbeam": "Rayon de soleil", "enchant": "Enchantement"
     }
+  },
+  "fan": {
+    "title": "Ventilateur",
+    "speed": "Vitesse",
+    "speedN": "vitesse {n}",
+    "direction": "Sens",
+    "directions": { "forward": "Avant", "reverse": "Arrière" },
+    "timer": "Minuterie",
+    "timers": { "off": "Off", "1h": "1 h", "2h": "2 h", "4h": "4 h" },
+    "mute": "Bip silencieux"
   },
   "scenes": {
     "title": "Ambiances", "group": "Ambiances · {name}", "animate": "Animer la palette",

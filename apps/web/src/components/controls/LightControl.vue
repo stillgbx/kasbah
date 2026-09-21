@@ -4,12 +4,34 @@ import { useDebounceFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { hexToRgb, mirekToRgb, rgbToHex, rgbToXy, xyToRgb, type CommandInput, type DeviceDescriptor, type StateFor } from '@kasbah/shared'
 import { formatKelvin } from '../../lib/format'
+import { useDevicesStore } from '../../stores/devices'
+import FanControl from './FanControl.vue'
+import Segmented from '../ui/Segmented.vue'
 
 const props = defineProps<{ descriptor: DeviceDescriptor; state: StateFor<'light'>; pending?: boolean; disabled?: boolean }>()
 const emit = defineEmits<{ command: [cmd: CommandInput] }>()
 
 const has = (c: string) => props.descriptor.capabilities.includes(c as never)
 const [mirekMin, mirekMax] = props.descriptor.meta.colorTempMirek ?? [153, 500]
+
+/** Liste de crans (3CCT) : prioritaire sur la plage — un curseur mentirait. */
+const tempSteps = computed(() => props.descriptor.meta.colorTempMirekSteps)
+
+const MIREK_TO_K: Record<number, number> = { 370: 2700, 303: 3300, 250: 4000 }
+function kelvinOf(mirek: number): number {
+  return MIREK_TO_K[mirek] ?? Math.round(1_000_000 / mirek)
+}
+
+const { t } = useI18n()
+const tempOptions = computed(() => (tempSteps.value ?? []).map((step) => {
+  const k = kelvinOf(step)
+  return {
+    value: String(step),
+    label: t(`light.kelvinLabel.${k}`, String(k)),
+    sublabel: t(`light.kelvin.${k}`, `${k} K`),
+    disabled: props.disabled,
+  }
+}))
 
 // Valeurs locales pendant le glissement ; resynchronisées depuis l'état quand on ne touche pas.
 const brightness = ref(props.state.brightness ?? 100)
@@ -20,9 +42,6 @@ watch(() => props.state.colorTempMirek, (v) => { if (v !== undefined) mirek.valu
 const hex = computed(() => (props.state.color ? rgbToHex(xyToRgb(props.state.color.x, props.state.color.y)) : rgbToHex(mirekToRgb(mirek.value))))
 const swatch = computed(() => (props.state.on ? hex.value : 'transparent'))
 
-// Effets du fabricant (bougie, feu, cosmos…) : liste fournie par le descripteur, libellé traduit
-// quand on le connaît, nom brut sinon (les ponts en ajoutent à chaque firmware).
-const { t } = useI18n()
 const effects = computed(() => (props.descriptor.meta.effects ?? []).map((value) => ({
   value, title: t(`light.effects.${value}`, value),
 })))
@@ -31,6 +50,12 @@ const sendColor = useDebounceFn((h: string) => {
   const { x, y } = rgbToXy(hexToRgb(h))
   emit('command', { type: 'light.set', on: true, color: { x: +x.toFixed(4), y: +y.toFixed(4) } })
 }, 200)
+
+// Ventilateur lié (D5) : section dans la carte lumière. Place réservée même si indisponible.
+const devices = useDevicesStore()
+const linkedFan = computed(() => devices.list.find(
+  (e) => e.state.kind === 'fan' && e.descriptor.meta.linkedTo === props.descriptor.id,
+))
 </script>
 
 <template>
@@ -46,7 +71,19 @@ const sendColor = useDebounceFn((h: string) => {
                 @end="(v: number) => emit('command', { type: 'light.set', brightness: Math.round(v) })" />
     </template>
 
-    <template v-if="has('color_temp')">
+    <template v-if="has('color_temp') && tempSteps?.length">
+      <div class="text-caption text-medium-emphasis mb-1">{{ $t('light.colorTemp') }}</div>
+      <Segmented
+        :model-value="String(state.colorTempMirek ?? tempSteps[0])"
+        :options="tempOptions"
+        fill
+        dense
+        :label="$t('light.colorTemp')"
+        class="mb-2"
+        @update:model-value="(v) => emit('command', { type: 'light.set', colorTempMirek: Number(v) })"
+      />
+    </template>
+    <template v-else-if="has('color_temp')">
       <div class="text-caption text-medium-emphasis">{{ $t('light.colorTemp') }} · {{ formatKelvin(mirek) }}</div>
       <v-slider v-model="mirek" :min="mirekMin" :max="mirekMax" :step="1" :disabled="disabled" class="ct-slider" track-color="transparent"
                 @end="(v: number) => emit('command', { type: 'light.set', colorTempMirek: Math.round(v) })">
@@ -67,10 +104,23 @@ const sendColor = useDebounceFn((h: string) => {
       <v-color-picker :model-value="hex" mode="hsl" :modes="['hsl']" hide-inputs :disabled="disabled" width="100%" elevation="0" class="bg-transparent"
                       @update:model-value="(h: string) => sendColor(h)" />
     </template>
+
+    <!-- Section ventilateur lié : hauteur réservée pour que la carte ne change pas selon l'état. -->
+    <div v-if="linkedFan" class="linked-fan">
+      <FanControl
+        :descriptor="linkedFan.descriptor"
+        :state="linkedFan.state as StateFor<'fan'>"
+        :pending="devices.isPending(linkedFan.descriptor.id)"
+        :disabled="!linkedFan.state.available"
+        embedded
+        @command="(c) => devices.sendCommand(linkedFan!.descriptor.id, c)"
+      />
+    </div>
   </div>
 </template>
 
 <style scoped>
 .light-swatch { width: 28px; height: 28px; border-radius: 50%; border: 2px solid rgb(var(--v-theme-on-surface) / 0.25); transition: box-shadow .3s; }
 .ct-slider :deep(.v-slider-track__background) { background: linear-gradient(90deg, #cfe3ff, #fff3d6, #ffb46b) !important; opacity: 1; }
+.linked-fan { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgb(var(--v-theme-on-surface) / 0.12); min-height: 220px; }
 </style>

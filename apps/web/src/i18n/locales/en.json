@@ -29,7 +29,7 @@
   "kinds": {
     "light": "Light", "cover": "Cover", "media_player": "Player", "climate": "Heating", "vacuum": "Vacuum",
     "mower": "Mower", "sensor": "Sensor", "energy": "Energy", "ev_charger": "EV charger", "vehicle": "Vehicle", "camera": "Camera", "weather": "Weather", "water": "Water treatment",
-    "pet_feeder": "Feeder", "pet_fountain": "Fountain"
+    "pet_feeder": "Feeder", "pet_fountain": "Fountain", "fan": "Fan", "lightFan": "Light - Fan"
   },
   "device": {
     "unbound": "This device is not bound to any plugin ({id}).", "notPlaced": "Not placed", "outdoor": "Outdoor",
@@ -55,10 +55,22 @@
   },
   "light": {
     "brightness": "Brightness", "colorTemp": "Temperature", "color": "Color", "warm": "Warm", "cold": "Cold", "effect": "Effect",
+    "kelvinLabel": { "2700": "Warm", "3300": "Neutral", "4000": "Cool" },
+    "kelvin": { "2700": "2700 K", "3300": "3300 K", "4000": "4000 K" },
     "effects": {
       "no_effect": "None", "candle": "Candle", "fire": "Fire", "prism": "Prism", "sparkle": "Sparkle",
       "opal": "Opal", "glisten": "Glisten", "underwater": "Underwater", "cosmos": "Cosmos", "sunbeam": "Sunbeam", "enchant": "Enchant"
     }
+  },
+  "fan": {
+    "title": "Fan",
+    "speed": "Speed",
+    "speedN": "speed {n}",
+    "direction": "Direction",
+    "directions": { "forward": "Forward", "reverse": "Reverse" },
+    "timer": "Timer",
+    "timers": { "off": "Off", "1h": "1 h", "2h": "2 h", "4h": "4 h" },
+    "mute": "Silent beep"
   },
   "scenes": {
     "title": "Light scenes", "group": "Light scenes · {name}", "animate": "Animate the palette",

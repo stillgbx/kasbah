@@ -804,13 +804,18 @@ export class HouseScene {
     const yaw = d.position ? d.yaw : this.vehicleYaw(d, state, position)
     const device: PlacedHouseDevice = { ...d, position, ...(yaw === undefined ? {} : { yaw }) }
     const descriptor = device.deviceId ? this.descriptors.get(device.deviceId) : undefined
+    const linkedFanDesc = descriptor?.kind === 'light'
+      ? [...this.descriptors.values()].find((d) => d.kind === 'fan' && d.meta.linkedTo === descriptor.id)
+      : undefined
     const levelId = resolveDeviceLevelId(device, this.index.roomsById)
     const levelNodes = levelId ? this.nodes.levels.get(levelId) : undefined
     const parent = levelNodes ? levelNodes.markers : this.nodes.outdoorMarkers
     const opening = device.openingId ? this.openingRect(device.openingId) : undefined
     const house = this.house
     const marker = createMarker(device, {
-      materials: this.materials, theme: this.theme, glow: this.look.glow, outdoor: !levelNodes, descriptor, ...(opening ? { opening } : {}),
+      materials: this.materials, theme: this.theme, glow: this.look.glow, outdoor: !levelNodes, descriptor,
+      ...(linkedFanDesc ? { linkedFan: true, linkedFanId: linkedFanDesc.id } : {}),
+      ...(opening ? { opening } : {}),
       addAnimation: (a) => this.loop.addAnimation(a),
       invalidate: () => this.loop.invalidate(),
       onTap: (key) => this.emit('deviceTap', key),
@@ -889,6 +894,7 @@ export class HouseScene {
       marker.update(state, deviceId
         ? { emits: emitsSound(deviceId, state, routing), ...(relay && this.states[relay] ? { relayFrom: this.states[relay] } : {}) }
         : undefined)
+      if (marker.linkedFanDeviceId) marker.setCompanionFan(this.states[marker.linkedFanDeviceId])
     }
     if (this.editingOpenings) this.buildOpeningHandles()
     this.refreshOpeningNotes()
@@ -2108,8 +2114,12 @@ export class HouseScene {
       const sound: SoundCue = { emits: emitsSound(id, next, routing), ...(relay && states[relay] ? { relayFrom: states[relay] } : {}) }
       const was = marker.currentSound
       const soundChanged = !was || was.emits !== sound.emits || was.relayFrom !== sound.relayFrom
-      if (force || next !== prev[id] || !marker.currentState || soundChanged) {
+      const fanId = marker.linkedFanDeviceId
+      const fanNext = fanId ? states[fanId] : undefined
+      const fanChanged = !!fanId && fanNext !== prev[fanId]
+      if (force || next !== prev[id] || !marker.currentState || soundChanged || fanChanged) {
         marker.update(next, sound)
+        if (fanId) marker.setCompanionFan(fanNext)
         touched = true
         // Seuls ces trois-là DÉPLACENT quelque chose qui porte une ombre (un tablier, une voiture) ou
         // en allument une (une lampe de jardin). Un capteur qui publie sa mesure toutes les secondes

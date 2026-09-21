@@ -105,6 +105,23 @@ export const deviceMetaSchema = z.object({
      */
     unit: z.enum(['cup', 'g']),
   }).optional(),
+  /**
+   * Températures de couleur RÉELLEMENT applicables, en mirek, quand la lampe n'en accepte qu'une
+   * liste. Un module 3CCT (format très répandu) n'a que trois crans : il ACCEPTE une valeur
+   * intermédiaire puis l'ignore en silence — mesuré sur le CREATE. Déclarer une plage ferait
+   * afficher un curseur qui ment. Même raisonnement que `petFeeder.portions`.
+   * Exclusif de `colorTempMirek` : si les deux sont là, la liste gagne.
+   */
+  colorTempMirekSteps: z.array(z.number().positive()).min(2).optional(),
+  /** Vitesses acceptées par le ventilateur (capacité `fan_speed`). Liste, pas intervalle. */
+  fan: z.object({ speeds: z.array(z.number().int().positive()).min(1) }).optional(),
+  /**
+   * Cet appareil fait physiquement partie du même appareil que celui désigné. Un ventilateur de
+   * plafond et son plafonnier sont deux appareils du contrat (aucune commande commune) mais un
+   * seul objet au plafond : l'UI les rend ensemble. Le lien va de l'accessoire vers le principal,
+   * ce qui laisse l'accessoire valide tout seul.
+   */
+  linkedTo: deviceIdSchema.optional(),
 })
 export type DeviceMeta = z.infer<typeof deviceMetaSchema>
 

@@ -5,7 +5,7 @@
 export const DEVICE_KINDS = [
   'light', 'cover', 'media_player', 'climate', 'vacuum', 'mower',
   'sensor', 'energy', 'ev_charger', 'vehicle', 'camera', 'weather', 'water',
-  'pet_feeder', 'pet_fountain',
+  'pet_feeder', 'pet_fountain', 'fan',
 ] as const
 export type DeviceKind = (typeof DEVICE_KINDS)[number]
 
@@ -22,7 +22,14 @@ export const CAPABILITIES = [
   // media_player — `play_url` : charger un flux HTTP(S) (MP3, HLS…) ; distinct de `playback`
   // (lire / pause / stop sur la session déjà là). Cast et Sonos le déclarent ; un lecteur qui ne
   // sait que télécommander (appli native sans LOAD) ne le déclare pas.
+  //
+  // `mute` : DOUBLE SENS volontaire. Sur un `media_player`, coupe le son de lecture. Sur un `fan`,
+  // coupe le BIP d'accusé de réception de la télécommande (pas un flux audio). Même capacité, deux
+  // gestes différents — documenté ici pour qu'une prochaine lecture ne confonde pas.
   'playback', 'volume', 'mute', 'now_playing', 'track_skip', 'seek', 'play_url',
+  // fan — ventilateur (plafond, tour, etc.). `fan_speed` / `fan_direction` / `fan_timer` : listes
+  // et sens déclarés dans `meta.fan`, pas des intervalles libres. `mute` = bip d'accusé (voir ci-dessus).
+  'fan_speed', 'fan_direction', 'fan_timer',
   // climate
   'hvac_mode', 'target_temp', 'current_temp', 'humidity', 'fan_mode',
   // vacuum / mower — `journal` : l'appareil tient un journal de ce qui lui arrive (erreurs,
@@ -85,6 +92,8 @@ export const KIND_CAPABILITIES: Record<DeviceKind, readonly Capability[]> = {
   water: ['consumables', 'water_flow', 'water_usage', 'uv_lamp'],
   pet_feeder: ['feed', 'call_pet', 'consumables', 'battery'],
   pet_fountain: ['on_off', 'pump_mode', 'consumables', 'battery', 'water_usage'],
+  // `mute` = bip d'accusé, pas le son d'un lecteur — voir commentaire sur la capacité.
+  fan: ['on_off', 'fan_speed', 'fan_direction', 'fan_timer', 'mute'],
 }
 
 /**
@@ -98,6 +107,10 @@ export const KIND_CAPABILITIES: Record<DeviceKind, readonly Capability[]> = {
  */
 export const PET_PUMP_MODES = ['continuous', 'intermittent'] as const
 export type PetPumpMode = (typeof PET_PUMP_MODES)[number]
+
+/** Sens de rotation d'un ventilateur (capacité `fan_direction`). Valeurs Tuya / CREATE. */
+export const FAN_DIRECTIONS = ['forward', 'reverse'] as const
+export type FanDirection = (typeof FAN_DIRECTIONS)[number]
 
 export const CLIMATE_MODES = ['off', 'heat', 'cool', 'auto', 'eco', 'fan_only'] as const
 export type ClimateMode = (typeof CLIMATE_MODES)[number]

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { CLIMATE_MODES, PET_PUMP_MODES, type Capability, type DeviceKind } from './kinds'
+import { CLIMATE_MODES, FAN_DIRECTIONS, PET_PUMP_MODES, type Capability, type DeviceKind } from './kinds'
 import { xySchema } from './state'
 
 // Commandes nommées `<kind>.<verbe>` : le préfixe donne le kind gratuitement et
@@ -91,6 +91,15 @@ export const commandSchema = z.discriminatedUnion('type', [
   // pet_fountain
   z.object({ type: z.literal('pet_fountain.set_power'), on: z.boolean() }),
   z.object({ type: z.literal('pet_fountain.set_mode'), mode: z.enum(PET_PUMP_MODES) }),
+  // fan — une seule commande fusionnée, comme `light.set` (pas quatre verbes)
+  z.object({
+    type: z.literal('fan.set'),
+    on: z.boolean().optional(),
+    speed: z.number().int().positive().optional(),
+    direction: z.enum(FAN_DIRECTIONS).optional(),
+    timerMin: z.number().int().min(0).optional(),
+    muted: z.boolean().optional(),
+  }),
 ])
 export type Command = z.infer<typeof commandSchema>
 export type CommandInput = z.input<typeof commandSchema>
@@ -116,6 +125,7 @@ export const COMMAND_REQUIRES: Record<CommandType, Capability> = {
   'vehicle.set_charge_limit': 'charge_limit', 'vehicle.wake': 'soc', 'vehicle.refresh': 'soc',
   'pet_feeder.feed': 'feed', 'pet_feeder.call_pet': 'call_pet',
   'pet_fountain.set_power': 'on_off', 'pet_fountain.set_mode': 'pump_mode',
+  'fan.set': 'on_off',
 }
 
 export function commandKind(cmd: Command | CommandType): DeviceKind {

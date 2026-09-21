@@ -16,7 +16,7 @@ const MEDIA_ICONS: Record<MediaPlayerClass, IconName> = { speaker: 'speaker', tv
 export const KIND_ICONS: Record<DeviceKind, IconName> = {
   light: 'light', cover: 'shutter', media_player: 'speaker', climate: 'heatpump', vacuum: 'vacuum',
   mower: 'mower', sensor: 'thermostat', energy: 'solar', ev_charger: 'charger', vehicle: 'vehicle', camera: 'camera', weather: 'cloud', water: 'droplet',
-  pet_feeder: 'feeder', pet_fountain: 'fountain',
+  pet_feeder: 'feeder', pet_fountain: 'fountain', fan: 'wind',
 }
 
 /**
@@ -26,7 +26,7 @@ export const KIND_ICONS: Record<DeviceKind, IconName> = {
  */
 export type DeviceCategory = 'light' | 'cover' | 'camera' | 'media' | 'other'
 
-const KIND_CATEGORY: Partial<Record<DeviceKind, DeviceCategory>> = { light: 'light', cover: 'cover', camera: 'camera', media_player: 'media' }
+const KIND_CATEGORY: Partial<Record<DeviceKind, DeviceCategory>> = { light: 'light', fan: 'light', cover: 'cover', camera: 'camera', media_player: 'media' }
 
 export function deviceCategory(kind: DeviceKind | undefined): DeviceCategory {
   return (kind && KIND_CATEGORY[kind]) ?? 'other'
@@ -41,7 +41,7 @@ export type RoomFilterCat = 'light' | 'cover' | 'climate' | 'media' | 'camera' |
 export const ROOM_FILTER_CATS: readonly RoomFilterCat[] = ['light', 'cover', 'climate', 'media', 'camera', 'other']
 
 const KIND_FILTER: Partial<Record<DeviceKind, RoomFilterCat>> = {
-  light: 'light', cover: 'cover', climate: 'climate', media_player: 'media', camera: 'camera',
+  light: 'light', fan: 'light', cover: 'cover', climate: 'climate', media_player: 'media', camera: 'camera',
 }
 
 export function roomFilterCategory(kind: DeviceKind | undefined, descriptor?: DeviceDescriptor): RoomFilterCat {
@@ -62,11 +62,18 @@ export const ROOM_FILTER_ICONS: Record<'all' | RoomFilterCat, IconName> = {
   all: 'devices', light: 'light', cover: 'shutter', climate: 'thermostat', media: 'cast', camera: 'camera', other: 'dots',
 }
 
-export function deviceIcon(descriptor: DeviceDescriptor | undefined, state?: DeviceState): IconName {
+export function deviceIcon(
+  descriptor: DeviceDescriptor | undefined,
+  state?: DeviceState,
+  opts?: { linkedFan?: boolean },
+): IconName {
   if (!descriptor) return 'devices'
   switch (descriptor.kind) {
     case 'camera': return descriptor.meta.camera?.deviceClass === 'doorbell' ? 'doorbell' : 'camera'
-    case 'light': return state?.kind === 'light' && state.on ? 'lightOn' : 'light'
+    case 'light': {
+      if (opts?.linkedFan) return state?.kind === 'light' && state.on ? 'lightFanOn' : 'lightFan'
+      return state?.kind === 'light' && state.on ? 'lightOn' : 'light'
+    }
     case 'cover': return state?.kind === 'cover' && (state.position ?? 0) > 50 ? 'shutterOpen' : 'shutter'
     case 'media_player': {
       const cls = descriptor.meta.mediaPlayer?.deviceClass ?? 'speaker'

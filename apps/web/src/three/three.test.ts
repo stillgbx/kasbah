@@ -446,6 +446,40 @@ describe('marqueurs 3D', () => {
     expect(sprites).toEqual([1 << SITE_DECOR_LAYER])  // son halo se dessine avec le jardin
   })
 
+  it('une lumière liée à un ventilateur pose un hub et trois pales, pas une sphère seule', () => {
+    const lamp = createMarker(device(), {
+      materials: createMaterials(defaultSceneTheme(), defaultLook()), theme: defaultSceneTheme(), glow: defaultLook().glow,
+      linkedFan: true, linkedFanId: 'p:fan',
+      descriptor: { id: 'p:l', pluginId: 'p', externalId: 'l', kind: 'light', name: 'Plafonnier', capabilities: ['on_off'], meta: {} } as DeviceDescriptor,
+      addAnimation: () => () => {}, invalidate: () => {}, onTap: () => {}, label: 'Plafonnier',
+    }, () => true)
+    expect(lamp.object.getObjectByName('ceiling-fan')).toBeTruthy()
+    expect(lamp.object.getObjectByName('ceiling-fan-blades')).toBeTruthy()
+    let meshCount = 0
+    lamp.object.getObjectByName('ceiling-fan')!.traverse((o) => { if ((o as { isMesh?: boolean }).isMesh) meshCount++ })
+    // hub + globe + 3 pales
+    expect(meshCount).toBe(5)
+  })
+
+  it('les pales tournent quand le ventilateur lié est allumé, et s\'arrêtent sinon', () => {
+    const steps: { step: (now: number, dt: number) => boolean }[] = []
+    const lamp = createMarker(device(), {
+      materials: createMaterials(defaultSceneTheme(), defaultLook()), theme: defaultSceneTheme(), glow: defaultLook().glow,
+      linkedFan: true, linkedFanId: 'p:fan',
+      descriptor: { id: 'p:l', pluginId: 'p', externalId: 'l', kind: 'light', name: 'Plafonnier', capabilities: ['on_off'], meta: {} } as DeviceDescriptor,
+      addAnimation: (a) => { steps.push(a); return () => { const i = steps.indexOf(a); if (i >= 0) steps.splice(i, 1) } },
+      invalidate: () => {}, onTap: () => {}, label: 'Plafonnier',
+    }, () => true)
+    const blades = lamp.object.getObjectByName('ceiling-fan-blades')!
+    const z0 = blades.rotation.z
+    lamp.setCompanionFan({ kind: 'fan', updatedAt: 0, available: true, on: true, speed: 3 } as DeviceState)
+    expect(steps).toHaveLength(1)
+    steps[0]!.step(0, 0.5)
+    expect(blades.rotation.z).not.toBe(z0)
+    lamp.setCompanionFan({ kind: 'fan', updatedAt: 1, available: true, on: false, speed: 3 } as DeviceState)
+    expect(steps).toHaveLength(0)
+  })
+
   // La carrosserie 3D arrive APRÈS le marqueur (le .glb se télécharge). Ce qui se vérifie ici, c'est
   // que la substitution ne déplace rien : la silhouette générique est dessinée aux cotes du modèle
   // attendu, et la vraie carrosserie prend exactement sa place.

@@ -8,16 +8,27 @@ import StrokeIcon from './StrokeIcon.vue'
 // (les commandes d'ensemble des ouvrants — voir `CoversMaster.vue`).
 // `fill` : occupe la largeur du parent et coupe les libellés plutôt que de déborder.
 // `icon` : à la place du texte (le `label` reste l'infobulle et le nom accessible).
-defineProps<{ modelValue: T; options: { value: T; label: string; icon?: IconName; disabled?: boolean }[]; dense?: boolean; fill?: boolean; label?: string }>()
+// `sublabel` : seconde ligne plus petite (ex. « 2700 K » sous « Chaud »).
+defineProps<{
+  modelValue: T
+  options: { value: T; label: string; sublabel?: string; icon?: IconName; disabled?: boolean }[]
+  dense?: boolean
+  fill?: boolean
+  label?: string
+}>()
 const emit = defineEmits<{ 'update:modelValue': [value: T] }>()
 </script>
 
 <template>
-  <div class="segmented" :class="{ 'segmented--dense': dense, 'segmented--fill': fill }" role="tablist" :aria-label="label">
+  <div class="segmented" :class="{ 'segmented--dense': dense, 'segmented--fill': fill, 'segmented--stack': options.some((o) => o.sublabel) }" role="tablist" :aria-label="label">
     <button v-for="o in options" :key="o.value" type="button" role="tab" class="segmented__item" :data-on="o.value === modelValue ? '1' : '0'"
-            :disabled="o.disabled" :aria-selected="o.value === modelValue" :aria-label="o.label" :title="o.label"
+            :disabled="o.disabled" :aria-selected="o.value === modelValue" :aria-label="o.sublabel ? `${o.label}, ${o.sublabel}` : o.label" :title="o.sublabel ? `${o.label} · ${o.sublabel}` : o.label"
             @click="emit('update:modelValue', o.value)">
       <StrokeIcon v-if="o.icon" :name="o.icon" :size="dense ? 16 : 18" />
+      <span v-else-if="o.sublabel" class="segmented__stack">
+        <span class="segmented__main">{{ o.label }}</span>
+        <span class="segmented__sub">{{ o.sublabel }}</span>
+      </span>
       <template v-else>{{ o.label }}</template>
     </button>
   </div>
@@ -36,6 +47,14 @@ const emit = defineEmits<{ 'update:modelValue': [value: T] }>()
 .segmented--fill { display: flex; width: 100%; min-width: 0; box-sizing: border-box; overflow: hidden; }
 .segmented--fill .segmented__item { flex: 1 1 0; min-width: 0; padding: 0 8px; overflow: hidden; text-overflow: ellipsis; }
 .segmented--fill.segmented--dense .segmented__item { padding: 0 6px; font-size: 12px; }
+/* Deux lignes (libellé + K) : un peu plus haut, texte centré, pas de nowrap qui écraserait le sous-libellé. */
+.segmented--stack .segmented__item { height: auto; min-height: 40px; padding-block: 6px; white-space: normal; }
+.segmented--stack.segmented--dense .segmented__item { min-height: 36px; padding-block: 4px; }
+.segmented__stack {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; line-height: 1.15;
+}
+.segmented__main { overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.segmented__sub { font-size: 10px; font-weight: 400; opacity: .72; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .segmented__item:hover:not(:disabled) { color: var(--text); }
 .segmented__item:disabled { opacity: .4; }
 .segmented__item[data-on='1'] { background: var(--accent); color: var(--on-accent); }

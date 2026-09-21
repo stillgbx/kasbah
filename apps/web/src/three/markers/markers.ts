@@ -493,16 +493,42 @@ function glowMap(): DataTexture {
 /** Portée (m) d'une lampe. Sert aussi de `far` au cône d'ombre d'une lampe de jardin. */
 const LIGHT_RANGE = 7
 
+/** Ventilateur-plafonnier (m) : hub vertical + 3 pales + globe lumineux — mêmes ordres que la sphère. */
+const CEILING_FAN = {
+  hubR: 0.045, hubH: 0.11,
+  globeR: 0.075,
+  bladeL: 0.34, bladeW: 0.075, bladeT: 0.012,
+  bladeZ: -0.04,
+}
+/** Vitesse de rotation des pales (rad/s) — décorative, ~0,6 tr/s. */
+const FAN_SPIN_RAD_S = Math.PI * 1.2
+
 export class LightMarker extends DeviceMarker {
   private readonly mat: MeshStandardMaterial
-  private readonly sphere: Mesh
+  private readonly bladeMat: MeshStandardMaterial | null
+  private readonly body: Mesh | Group
+  /** Groupe des pales (null hors plafonnier) : c'est lui qui tourne autour de Z. */
+  private readonly blades: Group | null
+  private spinning = false
+  private readonly geometries: BufferGeometry[] = []
   private readonly light: PointLight
   private readonly glow: Sprite
   private readonly glowMat: SpriteMaterial
   constructor(device: PlacedHouseDevice, ctx: MarkerContext) {
     super(device, ctx)
     this.mat = new MeshStandardMaterial({ color: 0xfff2d0, emissive: 0xffc46b, emissiveIntensity: 0, roughness: 0.4 })
-    this.sphere = new Mesh(new SphereGeometry(0.13, 20, 14), this.mat)
+    if (ctx.linkedFan) {
+      this.bladeMat = new MeshStandardMaterial({ color: 0x5c6573, metalness: 0.3, roughness: 0.5 })
+      const built = this.buildCeilingFan()
+      this.body = built.root
+      this.blades = built.blades
+    } else {
+      this.bladeMat = null
+      this.blades = null
+      const geo = new SphereGeometry(0.13, 20, 14)
+      this.geometries.push(geo)
+      this.body = new Mesh(geo, this.mat)
+    }
     this.light = new PointLight(0xffd9a0, 0, LIGHT_RANGE, 1.6)
     if (ctx.outdoor) {
       // Une lampe de JARDIN doit éclairer la façade sans traverser le mur. Aucune couche ne sait
@@ -520,10 +546,48 @@ export class LightMarker extends DeviceMarker {
     this.glow = new Sprite(this.glowMat)
     this.asDecor(this.glow)
     this.glow.visible = false
-    this.object.add(this.sphere, this.light, this.glow)
-    this.registerPickable(this.sphere)
+    this.object.add(this.body, this.light, this.glow)
+    this.body.traverse((o) => { if ((o as Mesh).isMesh) this.registerPickable(o) })
     this.setLift(0.3)
   }
+
+  /**
+   * Hub cylindrique (axe Z, maison Z-up) + trois pales + globe émissif sous le hub.
+   * Le globe reprend le matériau de la lampe : couleur / température s'y appliquent.
+   */
+  private buildCeilingFan(): { root: Group; blades: Group } {
+    const root = new Group()
+    root.name = 'ceiling-fan'
+    const { hubR, hubH, globeR, bladeL, bladeW, bladeT, bladeZ } = CEILING_FAN
+
+    const hubGeo = new CylinderGeometry(hubR, hubR * 0.9, hubH, 16)
+    this.geometries.push(hubGeo)
+    const hub = new Mesh(hubGeo, this.mat)
+    hub.rotation.x = Math.PI / 2
+    hub.position.z = -hubH / 2
+
+    const globeGeo = new SphereGeometry(globeR, 16, 12)
+    this.geometries.push(globeGeo)
+    const globe = new Mesh(globeGeo, this.mat)
+    globe.position.z = -hubH - globeR * 0.55
+
+    const blades = new Group()
+    blades.name = 'ceiling-fan-blades'
+    const bladeGeo = new BoxGeometry(bladeL, bladeW, bladeT)
+    this.geometries.push(bladeGeo)
+    for (let i = 0; i < 3; i++) {
+      const arm = new Group()
+      arm.rotation.z = (i * Math.PI * 2) / 3
+      const blade = new Mesh(bladeGeo, this.bladeMat!)
+      blade.position.set(hubR + bladeL / 2 + 0.015, 0, bladeZ)
+      blade.rotation.x = 0.1
+      arm.add(blade)
+      blades.add(arm)
+    }
+    root.add(hub, globe, blades)
+    return { root, blades }
+  }
+
   private color(): Color {
     const s = this.state
     if (!s || s.kind !== 'light') return new Color('#ffd9a0')
@@ -551,7 +615,35 @@ export class LightMarker extends DeviceMarker {
     this.glow.scale.setScalar(g.scale)
     this.glow.visible = k > 0
   }
-  override dispose(): void { this.sphere.geometry.dispose(); this.mat.dispose(); this.glowMat.dispose(); super.dispose() }
+
+  override setCompanionFan(state: DeviceState | undefined): void {
+    if (!this.blades) return
+    const on = !!state && state.kind === 'fan' && state.available && state.on
+    if (on === this.spinning) return
+    this.spinning = on
+    if (!on) {
+      this.stopAnimation?.()
+      this.stopAnimation = null
+      this.ctx.invalidate()
+      return
+    }
+    // Animation décorative (20 Hz via la boucle) : les pales tournent tant que le ventilateur est on.
+    this.stopAnimation = this.ctx.addAnimation({
+      step: (_now, dtS) => {
+        if (!this.spinning || !this.blades) return false
+        this.blades.rotation.z += FAN_SPIN_RAD_S * dtS
+        return true
+      },
+    })
+  }
+
+  override dispose(): void {
+    for (const geo of this.geometries) geo.dispose()
+    this.mat.dispose()
+    this.bladeMat?.dispose()
+    this.glowMat.dispose()
+    super.dispose()
+  }
 }
 
 /** Épaisseur (m) du panneau d'un ouvrant libre : elle ne se règle pas, un portail se voit de face. */

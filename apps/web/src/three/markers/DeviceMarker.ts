@@ -29,6 +29,10 @@ export interface MarkerContext {
    */
   outdoor?: boolean
   descriptor: DeviceDescriptor | undefined
+  /** Lumière liée à un ventilateur : icône `lightFan` dans la pilule + corps 3D ventilateur. */
+  linkedFan?: boolean
+  /** Id du descripteur `fan` lié (pour faire tourner les pales selon son état). */
+  linkedFanId?: string
   /** Rectangle de l'ouverture liée (volets). */
   opening?: OpeningRect
   addAnimation(a: Animation): () => void
@@ -107,7 +111,10 @@ export abstract class DeviceMarker {
       const disc = document.createElement('span')
       disc.className = 'marker-pill__icon'
       // un module de champ de panneaux est un capteur de puissance, mais ce qu'on voit sur le toit est du solaire
-      disc.appendChild(iconSvg(panelOf(device) ? 'solar' : kindIcon(kind, ctx.descriptor), 16, 2))
+      disc.appendChild(iconSvg(
+        panelOf(device) ? 'solar' : kindIcon(kind, ctx.descriptor, { linkedFan: ctx.linkedFan }),
+        16, 2,
+      ))
       this.pill.appendChild(disc)
       this.pill.title = ctx.label                       // la pilule est bornée : le nom entier reste lisible au survol
       const span = document.createElement('span')
@@ -141,6 +148,8 @@ export abstract class DeviceMarker {
 
   get currentState(): DeviceState | undefined { return this.state }
   get currentSound(): SoundCue | undefined { return this.sound }
+  /** Ventilateur lié à cette lumière (plafonnier), s'il y en a un. */
+  get linkedFanDeviceId(): string | undefined { return this.ctx.linkedFanId }
 
   update(state: DeviceState | undefined, sound?: SoundCue): void {
     this.state = state
@@ -152,6 +161,12 @@ export abstract class DeviceMarker {
     }
     this.onState(state)
   }
+
+  /**
+   * État du ventilateur lié (plafonnier). No-op hors `LightMarker` : les pales tournent quand
+   * le fan est allumé.
+   */
+  setCompanionFan(_state: DeviceState | undefined): void { /* no-op */ }
 
   setSelected(s: boolean): void {
     this.selected = s

@@ -40,6 +40,7 @@ export function isDeviceOn(s: DeviceState, descriptor?: DeviceDescriptor): boole
     // une ration EN TRAIN de tomber : le seul moment où une mangeoire fait quelque chose
     case 'pet_feeder': return s.feeding === true
     case 'pet_fountain': return s.on
+    case 'fan': return s.on
   }
 }
 
@@ -107,6 +108,7 @@ export function toggleCommand(s: DeviceState, aimed?: number): CommandInput | nu
     case 'media_player': return s.playback === 'playing' ? { type: 'media_player.pause' } : s.playback === 'on' ? { type: 'media_player.stop' } : { type: 'media_player.play' }
     case 'vacuum': return s.activity === 'cleaning' ? { type: 'vacuum.dock' } : { type: 'vacuum.start' }
     case 'mower': return s.activity === 'mowing' ? { type: 'mower.park', untilNextSchedule: true } : { type: 'mower.start', durationMin: 60 }
+    case 'fan': return { type: 'fan.set', on: !s.on }
     default: return null
   }
 }
@@ -172,6 +174,12 @@ export function statusLabel(descriptor: DeviceDescriptor, s: DeviceState, t: Tra
       if (s.waterLow) return t('pets.waterLow')
       if (!s.on) return t('pets.pumpStopped')
       return s.mode ? t(`pets.mode.${s.mode}`) : t('common.on')
+    }
+    case 'fan': {
+      if (!s.on) return t('common.off')
+      const parts = [t('common.on')]
+      if (s.speed !== undefined) parts.push(t('fan.speedN', { n: s.speed }))
+      return parts.join(' · ')
     }
   }
 }
@@ -251,5 +259,8 @@ export function headlineValue(descriptor: DeviceDescriptor, s: DeviceState, t: T
       if (s.todayMl !== undefined) return formatMilliliters(s.todayMl, locale)
       return s.filterPct !== undefined ? formatPercent(s.filterPct, locale) : t('common.on')
     }
+    case 'fan': return s.on
+      ? (s.speed !== undefined ? String(s.speed) : t('common.on'))
+      : t('common.off')
   }
 }

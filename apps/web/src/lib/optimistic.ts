@@ -97,6 +97,16 @@ export function optimisticPatch(state: DeviceState, cmd: CommandInput): Partial<
         case 'pet_fountain.set_mode': return { mode: cmd.mode, on: true } as Partial<DeviceState>
         default: return null
       }
+    case 'fan':
+      if (cmd.type !== 'fan.set') return null
+      return {
+        ...(cmd.on !== undefined ? { on: cmd.on } : {}),
+        // Écrire la vitesse ALLUME le ventilateur (mesuré sur le CREATE).
+        ...(cmd.speed !== undefined ? { on: true, speed: cmd.speed } : {}),
+        ...(cmd.direction !== undefined ? { direction: cmd.direction } : {}),
+        ...(cmd.timerMin !== undefined ? { timerMin: cmd.timerMin } : {}),
+        ...(cmd.muted !== undefined ? { muted: cmd.muted } : {}),
+      } as Partial<DeviceState>
     default:
       return null
   }

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { AQI_LEVELS, CLIMATE_MODES, PET_PUMP_MODES, POLLEN_TYPES, WEATHER_CONDITIONS, type DeviceKind } from './kinds'
+import { AQI_LEVELS, CLIMATE_MODES, FAN_DIRECTIONS, PET_PUMP_MODES, POLLEN_TYPES, WEATHER_CONDITIONS, type DeviceKind } from './kinds'
 
 // État courant d'un appareil, discriminé par `kind`. `updatedAt` est posé par le serveur
 // (jamais par un plugin) ; `available:false` conserve les dernières valeurs connues
@@ -429,10 +429,29 @@ export const petFountainStateSchema = z.object({
   syncedAt: z.number().int().optional(),
 })
 
+export const fanStateSchema = z.object({
+  kind: z.literal('fan'), ...base,
+  on: z.boolean(),
+  /** Vitesse courante (capacité `fan_speed`) — valeurs acceptées dans `meta.fan.speeds`. */
+  speed: z.number().int().positive().optional(),
+  direction: z.enum(FAN_DIRECTIONS).optional(),
+  /**
+   * Minutes restantes sur la minuterie. 0 / absent = aucune. Effacée quand le ventilateur
+   * s'éteint (mesuré sur le CREATE : éteindre remet `dp 64` à 0).
+   */
+  timerMin: z.number().int().min(0).optional(),
+  /**
+   * Bip d'accusé coupé (`true` = silencieux). Capacité `mute` — pas le son d'un lecteur
+   * multimédia ; voir commentaire sur la capacité dans `kinds.ts`.
+   */
+  muted: z.boolean().optional(),
+})
+
 export const deviceStateSchema = z.discriminatedUnion('kind', [
   lightStateSchema, coverStateSchema, mediaPlayerStateSchema, climateStateSchema, vacuumStateSchema,
   mowerStateSchema, sensorStateSchema, energyStateSchema, evChargerStateSchema, vehicleStateSchema,
   cameraStateSchema, weatherStateSchema, waterStateSchema, petFeederStateSchema, petFountainStateSchema,
+  fanStateSchema,
 ])
 export type DeviceState = z.infer<typeof deviceStateSchema>
 export type StateFor<K extends DeviceKind> = Extract<DeviceState, { kind: K }>

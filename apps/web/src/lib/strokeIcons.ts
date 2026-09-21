@@ -69,6 +69,9 @@ export const ICONS = {
 
   // variantes d'état (voir deviceIcons.ts) et classes de capteur
   lightOn: 'M9 18h6M10 21h4M12 6a4.5 4.5 0 0 0-3 7.9c.5.5.8 1.1.8 2.1h4.4c0-1 .3-1.6.8-2.1A4.5 4.5 0 0 0 12 6zM12 1.5v1.6M4.6 5.1l1.2 1.2M19.4 5.1l-1.2 1.2M1.8 12.6h1.6M20.6 12.6h1.6',
+  /** Plafonnier + ventilateur : ampoule à gauche, souffle à droite — les deux fonctions au même plafond. */
+  lightFan: 'M7 17h5M7.8 20h3.4M9.5 3a5 5 0 0 0-3.3 8.7c.5.5.8 1.1.8 2.1h5c0-1 .3-1.6.8-2.1A5 5 0 0 0 9.5 3zM15 7.5h6M15.5 11h5M16.5 14.5h3.5',
+  lightFanOn: 'M7 17h5M7.8 20h3.4M9.5 5.5a3.8 3.8 0 0 0-2.5 6.6c.4.4.7.9.7 1.7h3.6c0-.8.3-1.3.7-1.7A3.8 3.8 0 0 0 9.5 5.5zM9.5 1.8v1.4M4 5.2l1 1M15 7.5h6M15.5 11h5M16.5 14.5h3.5',
   shutterOpen: 'M4 3h16v18H4zM4 6.5h16M4 10h16',
   speakerOn: 'M4 3h11v18H4zM9.5 8m-1.5 0a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0M9.5 15m-3 0a3 3 0 1 0 6 0a3 3 0 1 0-6 0M18 9.5a5 5 0 0 1 0 5M20.8 7.5a8 8 0 0 1 0 9',
   devices: 'M3 5h11v9H3zM6 18h5M8.5 14v4M16 9h5v11h-5z',
@@ -151,11 +154,16 @@ export type IconName = keyof typeof ICONS
 const KIND_ICON: Record<DeviceKind, IconName> = {
   light: 'light', cover: 'shutter', media_player: 'speaker', climate: 'heatpump', vacuum: 'vacuum', mower: 'mower',
   sensor: 'sensor', energy: 'solar', ev_charger: 'charger', vehicle: 'vehicle', camera: 'camera', weather: 'cloud', water: 'droplet',
-  pet_feeder: 'feeder', pet_fountain: 'fountain',
+  pet_feeder: 'feeder', pet_fountain: 'fountain', fan: 'wind',
 }
 
-export function kindIcon(kind: DeviceKind | undefined, descriptor?: DeviceDescriptor): IconName {
+export function kindIcon(
+  kind: DeviceKind | undefined,
+  descriptor?: DeviceDescriptor,
+  opts?: { linkedFan?: boolean },
+): IconName {
   if (!kind) return 'sensor'
+  if (kind === 'light' && opts?.linkedFan) return 'lightFan'
   if (kind === 'camera' && descriptor?.meta.camera?.deviceClass === 'doorbell') return 'doorbell'
   if (kind === 'media_player' && descriptor?.meta.mediaPlayer?.deviceClass === 'tv') return 'tv'
   if (kind === 'media_player' && descriptor?.meta.mediaPlayer?.deviceClass === 'display') return 'tablet'

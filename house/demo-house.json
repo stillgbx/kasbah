@@ -290,6 +290,24 @@
       "mount": "ceiling"
     },
     {
+      "id": "light.chambre2",
+      "name": "Plafonnier chambre 2",
+      "deviceId": "mock:fan-chambre2_light",
+      "roomId": "chambre2",
+      "levelId": "etage",
+      "position": [7.5, 2.4, 2.4],
+      "mount": "ceiling"
+    },
+    {
+      "id": "fan.chambre2",
+      "name": "Ventilateur chambre 2",
+      "deviceId": "mock:fan-chambre2_fan",
+      "roomId": "chambre2",
+      "levelId": "etage",
+      "position": [7.5, 2.4, 2.4],
+      "mount": "ceiling"
+    },
+    {
       "id": "cover.baie",
       "name": "Volet baie",
       "deviceId": "mock:cover-living",

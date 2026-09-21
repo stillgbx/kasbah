@@ -5,6 +5,7 @@ import type { DeviceEntry, DeviceKind } from '@kasbah/shared'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import { useRouter } from 'vue-router'
 import { deviceIcon } from '../../lib/deviceIcons'
+import { fanLinkedTo } from '../../lib/linkedDevices'
 import ForgetDeviceButton from './ForgetDeviceButton.vue'
 import MarqueeText from '../ui/MarqueeText.vue'
 import { relayLabel } from '../../lib/audioRouting'
@@ -23,7 +24,7 @@ import { useHouseStore } from '../../stores/house'
 // `status-badge`, permet d'ajouter une pastille devant le libellé d'état (vide par défaut).
 // `kind` accepte une LISTE : la vue Énergie réunit le site, les batteries et la borne, qui n'ont
 // pas le même kind mais se lisent et se placent au même endroit.
-const props = defineProps<{ kind: DeviceKind | DeviceKind[] }>()
+const props = defineProps<{ kind: DeviceKind | DeviceKind[]; /** Masquer les appareils qui déclarent `meta.linkedTo`. */ hideLinked?: boolean }>()
 const kinds = computed<DeviceKind[]>(() => (Array.isArray(props.kind) ? props.kind : [props.kind]))
 const router = useRouter()
 
@@ -47,7 +48,12 @@ interface Row { entry: DeviceEntry; name: string; origin: Origin; on: boolean; s
 interface Group { key: string; roomId: string | null; title: string; rows: Row[] }
 interface Band { key: string; levelId: string | null; title: string; groups: Group[] }
 
-const entries = computed(() => devices.list.filter((e) => kinds.value.includes(e.state.kind)))
+const entries = computed(() => devices.list.filter((e) => {
+  if (!kinds.value.includes(e.state.kind)) return false
+  // Un accessoire lié (ventilateur → lumière) s'affiche dans la carte du principal, pas en ligne.
+  if (props.hideLinked && e.descriptor.meta.linkedTo) return false
+  return true
+}))
 const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name)
 
 // ---- réordonner les pièces d'une bande -------------------------------------------------------
@@ -170,7 +176,7 @@ defineExpose({ count: computed(() => entries.value.length) })
             <!-- fond optionnel de la ligne (pochette d'un lecteur), sous le contenu, hors de la grille -->
             <slot name="backdrop" :entry="r.entry" />
             <span class="icon-square" :data-on="r.on ? '1' : '0'">
-              <StrokeIcon :name="deviceIcon(r.entry.descriptor, r.entry.state)" :size="18" />
+              <StrokeIcon :name="deviceIcon(r.entry.descriptor, r.entry.state, { linkedFan: !!fanLinkedTo(r.entry.descriptor.id, devices.list) })" :size="18" />
             </span>
             <div class="min0">
               <div class="row__name">{{ r.name }}</div>

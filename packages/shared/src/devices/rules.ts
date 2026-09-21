@@ -127,5 +127,6 @@ export function defaultState(kind: DeviceKind, now = 0): DeviceState {
     case 'pet_feeder': return { kind, ...base }
     // `on: false` parce que l'interrupteur doit montrer quelque chose ; `available: false` le grise
     case 'pet_fountain': return { kind, ...base, on: false }
+    case 'fan': return { kind, ...base, on: false }
   }
 }

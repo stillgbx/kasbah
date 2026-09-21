@@ -168,5 +168,6 @@ export function summarize(descriptor: DeviceDescriptor, state: DeviceState, loca
       return state.servedToday !== undefined && u ? formatFeedAmount(state.servedToday, u, locale) : '—'
     }
     case 'pet_fountain': return state.drinksToday !== undefined ? `${state.drinksToday}\u00d7` : (state.on ? '●' : '○')
+    case 'fan': return state.on ? (state.speed !== undefined ? String(state.speed) : '●') : '○'
   }
 }

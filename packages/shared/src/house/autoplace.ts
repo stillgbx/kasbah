@@ -74,7 +74,7 @@ export function autoPlaceDevices(house: House, devices: readonly PlaceableDevice
     const ceiling = level ? roomHeight(room, level, defaults) - CEILING_GAP : FREE_Z
     list.forEach((d, i) => {
       const [x, y] = spread(room.polygon, c, i, list.length)
-      const onCeiling = d.kind === 'light'
+      const onCeiling = d.kind === 'light' || d.kind === 'fan'
       placed.push({
         id: autoId(d.id, index),
         deviceId: d.id,

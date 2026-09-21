@@ -11,6 +11,7 @@ import { toClosure } from '../../lib/cover'
 import { formatPercent } from '../../lib/format'
 import { headlineValue, isDeviceBusy, isDeviceOn, toggleChecked, toggleCommand } from '../../lib/deviceState'
 import { kindIcon } from '../../lib/strokeIcons'
+import { fanLinkedTo } from '../../lib/linkedDevices'
 import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
 import { useNotificationsStore } from '../../stores/notifications'
@@ -117,7 +118,17 @@ const kindLabel = computed(() => {
   if (!d) return ''
   if (d.kind === 'media_player') return t(`media.classes.${d.meta.mediaPlayer?.deviceClass ?? 'speaker'}`)
   if (d.kind === 'cover' && d.meta.cover?.deviceClass) return t(`cover.classes.${d.meta.cover.deviceClass}`)
+  // Plafonnier lié à un ventilateur (ou l'inverse) : les deux fonctions du même objet.
+  if (d.kind === 'light' && fanLinkedTo(d.id, devices.list)) return t('kinds.lightFan')
+  if (d.kind === 'fan' && d.meta.linkedTo) return t('kinds.lightFan')
   return t(`kinds.${d.kind}`)
+})
+
+const headIcon = computed(() => {
+  const d = resolved.value?.descriptor
+  const kind = d?.kind ?? resolved.value?.houseDevice?.kind
+  const linkedFan = d?.kind === 'light' && !!fanLinkedTo(d.id, devices.list)
+  return kindIcon(kind, d, { linkedFan })
 })
 
 /** Lecteur dont cet appareil joue le son (barre de son d'une TV en lecture) — voir `lib/audioRouting.ts`. */
@@ -250,7 +261,7 @@ function send(cmd: CommandInput) {
     <div class="panel-head">
     <button type="button" class="crumb" @click="emit('back')"><StrokeIcon name="back" :size="14" /> {{ crumb }}</button>
     <div class="head">
-      <span class="icon-square icon-square--lg" :data-on="on ? '1' : '0'"><StrokeIcon :name="kindIcon(resolved.descriptor?.kind ?? resolved.houseDevice?.kind, resolved.descriptor)" :size="22" /></span>
+      <span class="icon-square icon-square--lg" :data-on="on ? '1' : '0'"><StrokeIcon :name="headIcon" :size="22" /></span>
       <div class="head__main">
         <!-- nom trop long pour les 340 px du panneau (un id d'appareil non lié fait 50 caractères) :
              il défile avec un fondu plutôt que de déborder, comme le titre d'un morceau -->
