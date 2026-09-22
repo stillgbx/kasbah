@@ -506,7 +506,10 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
           durationS: z.number().positive().optional(),
           /** Ce que le catalogue dit du morceau : l'enceinte, elle, ne le saura jamais. */
           explicit: z.boolean().optional(),
-          /** SONDE : servir le flux source tel quel, sans repasser par ffmpeg. */
+          /**
+           * Par défaut le flux source est RELAYÉ tel quel ; `false` force le réencodage MP3 (échappatoire
+           * si un lecteur bute sur le conteneur d'origine).
+           */
           raw: z.boolean().optional(),
         }).safeParse(req.body)
         if (!body.success) return sendError(reply, 400, 'INVALID_BODY', 'videoId and deviceId are required')
@@ -533,8 +536,10 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
           if (cookies!.path) netscapePath = await writeNetscapeBeside(cookies!.path, cookie)
           const resolved = await resolveStreamUrl({
             videoId: body.data.videoId,
-            // relais : viser un conteneur que les enceintes lisent (AAC en MP4), pas le plus gros débit
-            ...(body.data.raw ? { preferExts: ['m4a', 'mp4'] } : {}),
+            // Viser un conteneur que les enceintes lisent (AAC en MP4) plutôt que le plus gros débit :
+            // c'est lui qu'on relaiera tel quel, et un Sonos ne lit pas le WebM/Opus que YouTube
+            // propose parfois plus haut. Sans m4a, on tombera dans le repli ffmpeg, qui lit tout.
+            preferExts: ['m4a', 'mp4'],
             cookieRaw: cookie,
             ytdlpPath: cfg().YTM_YTDLP_PATH,
             poTokenUrl: cfg().YTM_PO_TOKEN_URL,
@@ -552,15 +557,17 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
             ...(body.data.explicit ? { explicit: true } : {}),
             source: { ext: resolved.ext, formatId: resolved.formatId, abrKbps: resolved.abrKbps },
           }
-          // Relais possible seulement si la source est un conteneur connu ET de taille annoncée :
-          // c'est la taille qui fait le « fichier », et le conteneur ce que l'enceinte saura lire.
+          // RELAIS PAR DÉFAUT : la source est déjà un fichier de taille exacte, découpable en plages —
+          // le réencoder ne fait que perdre de la qualité. Deux conditions : un conteneur que les
+          // enceintes lisent, et une taille annoncée (c'est elle qui en fait un « fichier »). Sinon,
+          // repli sur le MP3 à trames fixes, qui fabrique cette taille à partir de la durée.
           const rawExt = resolved.ext?.toLowerCase() ?? ''
           const rawMime = RAW_MIME[rawExt]
-          const raw = body.data.raw && rawMime && resolved.sizeBytes
+          const raw = body.data.raw !== false && rawMime && resolved.sizeBytes
             ? { mime: rawMime, sizeBytes: resolved.sizeBytes, ext: rawExt }
             : undefined
-          if (body.data.raw && !raw) {
-            log().warn({ ext: resolved.ext, sizeBytes: resolved.sizeBytes }, 'ytmusic raw relay unavailable for this format, falling back to MP3')
+          if (!raw && body.data.raw !== false) {
+            log().info({ ext: resolved.ext, sizeBytes: resolved.sizeBytes }, 'ytmusic: source not relayable, falling back to MP3 transcoding')
           }
           const { session, streamUrl } = await launch(req, body.data.videoId, body.data.deviceId, resolved.url, meta, raw)
           lastError = null
@@ -569,6 +576,8 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
             deviceId: body.data.deviceId,
             title: body.data.title ?? null,
             durationS: durationS ?? null,
+            mode: raw ? `relay ${raw.ext}` : 'mp3',
+            sourceKbps: resolved.abrKbps,
           }, 'ytmusic play_url dispatched')
           return { ok: true as const, streamUrl, sid: session.sid }
         } catch (err) {

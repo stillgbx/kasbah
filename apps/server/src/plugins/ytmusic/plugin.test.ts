@@ -189,7 +189,7 @@ async function boot(extra: {
   return { plugin, app, store, ctx }
 }
 
-function fakeSpawn() {
+function fakeSpawn(format: { filesize?: number } = {}) {
   const procs: Array<EventEmitter & { stdout: PassThrough; stderr: PassThrough; kill: ReturnType<typeof vi.fn> }> = []
   const spawnImpl = vi.fn((_cmd: string, args: readonly string[]) => {
     // yt-dlp -J : rendre un JSON audio
@@ -202,7 +202,7 @@ function fakeSpawn() {
       queueMicrotask(() => {
         proc.stdout.end(JSON.stringify({
           duration: 20,
-          formats: [{ url: 'https://googlevideo.example/a.m4a', format_id: '140', ext: 'm4a', acodec: 'mp4a.40.2', vcodec: 'none' }],
+          formats: [{ url: 'https://googlevideo.example/a.m4a', format_id: '140', ext: 'm4a', acodec: 'mp4a.40.2', vcodec: 'none', ...format }],
         }))
         proc.emit('close', 0)
       })
@@ -539,6 +539,70 @@ describe('ytmusic plugin', () => {
     await plugin.stop()
   })
 
+  /**
+   * RELAIS (le cas normal) : quand yt-dlp annonce un conteneur lisible par les enceintes ET sa
+   * taille, la source EST déjà le « fichier » — on repasse ses octets, ffmpeg n'entre pas en jeu.
+   */
+  it('relays the source untouched when it announces a size, and passes byte ranges through', async () => {
+    const SIZE = 4_373_288
+    const ff = fakeSpawn({ filesize: SIZE })
+    const player: DeviceDescriptor = {
+      id: 'sonos:1', pluginId: 'sonos', externalId: '1', kind: 'media_player', name: 'Bureau',
+      capabilities: ['playback', 'play_url', 'seek'], meta: {},
+    } as DeviceDescriptor
+    const commands: Array<{ id: string; cmd: Command }> = []
+    const asked: Array<string | undefined> = []
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      const range = (init?.headers as Record<string, string> | undefined)?.range
+      asked.push(range)
+      if (String(url).includes('4416')) return new Response('ok', { status: 200 })
+      return range
+        ? new Response('partiel', { status: 206, headers: { 'content-length': '7', 'content-range': `bytes 1000-1006/${SIZE}` } })
+        : new Response('tout', { status: 200, headers: { 'content-length': String(SIZE) } })
+    }) as unknown as typeof fetch
+    const { plugin, app } = await boot({
+      spawnImpl: ff.spawnImpl,
+      fetchImpl,
+      getDevice: (id) => (id === player.id ? { descriptor: player } : undefined),
+      execute: async (id, cmd) => { commands.push({ id, cmd }) },
+    })
+    await app.inject({ method: 'PUT', url: '/api/plugins/ytmusic/cookie', payload: { cookie: COOKIE } })
+    await app.inject({
+      method: 'POST', url: '/api/plugins/ytmusic/play',
+      payload: { videoId: 'vid1', deviceId: player.id, title: 'Song', durationS: 265 },
+    })
+    // l'extension de l'URL n'est pas décorative : elle décide du type annoncé dans le DIDL Sonos
+    const url = (commands[0]!.cmd as { url: string }).url
+    expect(url).toMatch(/\/raw\/[0-9a-f]+\.m4a$/)
+    // ffmpeg n'a pas été lancé : seul yt-dlp a tourné
+    const spawned = (ff.spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls as Array<[string, string[]]>
+    expect(spawned.every(([, args]) => args.includes('-J'))).toBe(true)
+
+    const file = url.split('/').pop()!
+    const head = await app.inject({ method: 'HEAD', url: `/api/plugins/ytmusic/raw/${file}` })
+    expect(head.statusCode).toBe(200)
+    expect(head.headers['content-length']).toBe(String(SIZE))
+    expect(head.headers['content-type']).toBe('audio/mp4')
+    expect(head.headers['accept-ranges']).toBe('bytes')
+
+    const whole = await app.inject({ method: 'GET', url: `/api/plugins/ytmusic/raw/${file}` })
+    expect(whole.statusCode).toBe(200)
+    expect(whole.headers['content-length']).toBe(String(SIZE))
+
+    // la plage demandée par l'enceinte est repassée telle quelle à la source
+    const part = await app.inject({ method: 'GET', url: `/api/plugins/ytmusic/raw/${file}`, headers: { range: 'bytes=1000-1006' } })
+    expect(part.statusCode).toBe(206)
+    expect(part.headers['content-range']).toBe(`bytes 1000-1006/${SIZE}`)
+    expect(asked).toContain('bytes=1000-1006')
+
+    // la session dit ce qu'elle sert : le format de la SOURCE, pas une sortie à nous
+    const sess = (await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/sessions' })).json().sessions
+    expect(sess[0].quality).toMatchObject({ mime: 'audio/mp4', sampleRateHz: null, source: { ext: 'm4a', formatId: '140' } })
+
+    await app.close()
+    await plugin.stop()
+  })
+
   it('recovers the main artist from album channel ids when the top card is missing', async () => {
     const session: InnertubeLike = {
       music: {
@@ -633,6 +697,10 @@ describe('ytmusic plugin', () => {
     await plugin.stop()
   })
 
+  /**
+   * REPLI : la source de ce faux yt-dlp n'annonce AUCUNE taille, elle n'est donc pas relayable —
+   * c'est le MP3 à trames fixes qui fabrique le « fichier » à partir de la durée.
+   */
   it('serves the track as a sized MP3 file (HEAD, ranges), transfers with a native seek, and drops a session the player left', async () => {
     const office: DeviceDescriptor = { ...player, id: 'sonos:office', pluginId: 'sonos', externalId: 'office', name: 'Bureau' }
     const commands: { id: string; cmd: Command }[] = []

@@ -6,16 +6,21 @@ import { join } from 'node:path'
 import { Transform, type TransformCallback } from 'node:stream'
 import { toNetscape } from './cookie'
 
-// Résolution de flux (yt-dlp + PO Token) et proxy LAN (ffmpeg → MP3) pour Cast/Sonos.
-// Les enceintes ne voient jamais googlevideo.com — seulement une URL HTTP du serveur Kasbah.
+// Résolution de flux (yt-dlp + PO Token) et proxy LAN pour Cast/Sonos. Les enceintes ne voient
+// jamais googlevideo.com — seulement une URL HTTP du serveur Kasbah.
 //
-// Le proxy se présente à l'enceinte comme un FICHIER MP3 de taille connue, découpable par plages
-// d'octets, sans rien télécharger d'avance : MP3 à débit constant 320 kb/s à 48 kHz, sans en-tête
-// Xing ni ID3, donc chaque trame fait exactement 960 octets pour 24 ms. Une durée se traduit en
-// taille exacte, une plage d'octets en instant précis où lancer ffmpeg. L'enceinte connaît alors la
-// durée et sa position, met en pause, reprend et se déplace toute seule, et passe au repos à la
-// fin : plus de décalage à calculer ni de reprise à deviner côté serveur. Un flux sans durée (un
-// direct) est servi à l'ancienne, sans taille.
+// Ce que l'enceinte reçoit est un FICHIER de taille connue, découpable par plages d'octets, sans
+// rien télécharger d'avance : elle en connaît la durée et sa position, met en pause, reprend et se
+// déplace toute seule, et passe au repos à la fin. Deux façons d'y arriver :
+//
+//  1. RELAIS (le cas normal) — la source EST déjà ce fichier : googlevideo annonce une taille exacte
+//     et accepte les plages. On repasse ses octets tels quels (AAC en MP4, `index.ts` route `/raw`),
+//     sans réencoder : aucune perte, aucun ffmpeg.
+//  2. REPLI ffmpeg — quand la source n'est pas relayable (pas de taille annoncée, ou seulement de
+//     l'Opus en WebM, qu'un Sonos ne lit pas) : MP3 à débit constant 320 kb/s à 48 kHz, sans en-tête
+//     Xing ni ID3, donc chaque trame fait exactement 960 octets pour 24 ms. La durée se traduit alors
+//     en taille exacte, et une plage d'octets en instant précis où lancer ffmpeg. Un flux sans durée
+//     (un direct) est servi à l'ancienne, sans taille.
 
 export type SpawnFn = (command: string, args: readonly string[], options?: SpawnOptions) => ChildProcessWithoutNullStreams
 
