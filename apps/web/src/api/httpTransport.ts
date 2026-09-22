@@ -215,6 +215,10 @@ export function createHttpTransport(base = ''): Transport {
       `${base}/api/plugins/ytmusic/explore/category?params=${encodeURIComponent(params)}${hl ? `&hl=${encodeURIComponent(hl)}` : ''}`,
       undefined, (j) => j as { shelves: YtmusicExploreShelf[] },
     ),
+    ytmusicExploreCovers: (hl) => request(
+      `${base}/api/plugins/ytmusic/explore/covers${hl ? `?hl=${encodeURIComponent(hl)}` : ''}`, undefined,
+      (j) => j as { covers: Record<string, string[]> },
+    ),
     ytmusicPlay: (body) => request(
       `${base}/api/plugins/ytmusic/play`,
       { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },

@@ -10,7 +10,7 @@ import { YtmusicCatalog, type CreateSession } from './catalog'
 import { createCookieFile, hasRequiredCookie, writeNetscapeBeside, type CookieStore } from './cookie'
 import { importCookiesFromBrowser, isAuthError, YTM_BROWSERS } from './browserCookies'
 import { LengthLock, OUT_BITRATE_KBPS, OUT_CHANNELS, OUT_SAMPLE_RATE_HZ, parseRange, pingPoToken, resolveStreamUrl, seekFor, StreamProxy, type ProxySession, type ResolvedStream, type SessionMeta, type SpawnFn } from './stream'
-import type { YtmusicStatus } from './types'
+import type { YtmusicExploreCategory, YtmusicStatus } from './types'
 import { ART_PLAY_SIZE, upgradeArtUrl } from './mapping'
 import { afterEnd, insert, jumpTo, removeAt, REPEAT_MODES, upcoming, type PlayQueue, type QueueTrack, type RepeatMode } from './queue'
 
@@ -806,6 +806,70 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
           const result = await cached(`explore|${lang ?? ''}`, () => catalog!.explore(cookie, lang))
           lastError = null
           return result
+        } catch (err) {
+          return catalogError(reply, err)
+        }
+      })
+
+      /**
+       * Pochettes des catégories : la page « Humeurs et genres » n'a AUCUNE image, on prend donc les
+       * deux premières pochettes de chaque page de catégorie (playlists, sinon albums, sinon titres).
+       * Une page par catégorie (~37), quatre à la fois, gardées 6 h ; les pages lues servent aussi à
+       * l'ouverture d'une catégorie. L'UI affiche les cartes d'abord et les pochettes à leur arrivée.
+       */
+      const COVERS_TTL_MS = 6 * 3_600_000
+      const COVERS_CONCURRENCY = 4
+      /**
+       * Par langue, les pochettes déjà trouvées, catégorie par catégorie : « Pour vous » change d'une
+       * lecture de la page à l'autre, une nouvelle catégorie ne doit pas attendre 6 h ses pochettes —
+       * on ne va chercher que celles qui manquent (ou ont vieilli).
+       */
+      const coverStore = new Map<string, Map<string, { at: number; urls: string[] }>>()
+      const coversInflight = new Map<string, Promise<void>>()
+      const coversOf = (page: { shelves: Array<{ tracks: Array<{ artUrl: string | null }>; playlists: Array<{ artUrl: string | null }>; albums: Array<{ artUrl: string | null }> }> }) => {
+        const arts = [
+          ...page.shelves.flatMap((sh) => sh.playlists),
+          ...page.shelves.flatMap((sh) => sh.albums),
+          ...page.shelves.flatMap((sh) => sh.tracks),
+        ].map((x) => x.artUrl).filter((u): u is string => !!u)
+        // en 240 px : la carte les montre autour de 90 px, sur des écrans à haute densité
+        return [...new Set(arts)].slice(0, 2).map((u) => upgradeArtUrl(u, 240) ?? u)
+      }
+      async function fillCovers(cookie: string, lang: string | undefined, cats: YtmusicExploreCategory[], store: Map<string, { at: number; urls: string[] }>) {
+        let next = 0
+        await Promise.all(Array.from({ length: COVERS_CONCURRENCY }, async () => {
+          while (next < cats.length) {
+            const c = cats[next++]!
+            try {
+              const page = await cached(`category|${lang ?? ''}|${c.params}`, () => catalog!.exploreCategory(cookie, c.params, lang))
+              store.set(c.params, { at: now(), urls: coversOf(page) })
+            } catch (err) {
+              log().debug({ err, category: c.title }, 'ytmusic explore: covers of a category failed')
+            }
+          }
+        }))
+      }
+
+      app.get<{ Querystring: { hl?: string } }>('/explore/covers', async (req, reply) => {
+        try {
+          const cookie = await requireCookie()
+          const lang = langOf(req.query.hl)
+          const key = lang ?? ''
+          const ex = await cached(`explore|${key}`, () => catalog!.explore(cookie, lang))
+          const cats = [...new Map([...ex.forYou.categories, ...ex.moods.categories, ...ex.genres.categories].map((c) => [c.params, c])).values()]
+          let store = coverStore.get(key)
+          if (!store) coverStore.set(key, store = new Map())
+          const missing = cats.filter((c) => { const hit = store!.get(c.params); return !hit || now() - hit.at > COVERS_TTL_MS })
+          if (missing.length) {
+            // deux onglets ouverts en même temps ne lancent pas deux fois les mêmes lectures
+            let run = coversInflight.get(key)
+            if (!run) {
+              run = fillCovers(cookie, lang, missing, store).finally(() => coversInflight.delete(key))
+              coversInflight.set(key, run)
+            }
+            await run
+          }
+          return { covers: Object.fromEntries(cats.flatMap((c) => { const hit = store!.get(c.params); return hit ? [[c.params, hit.urls]] : [] })) }
         } catch (err) {
           return catalogError(reply, err)
         }

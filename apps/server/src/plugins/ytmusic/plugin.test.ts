@@ -943,24 +943,26 @@ describe('ytmusic plugin', () => {
     const btn = (text: string, params: string) => ({ musicNavigationButtonRenderer: { buttonText: { runs: [{ text }] }, solid: { leftStripeColor: 4288988671 }, clickCommand: { browseEndpoint: { params } } } })
     const grid = (title: string, items: unknown[]) => ({ gridRenderer: { header: { gridHeaderRenderer: { title: { runs: [{ text: title }] } } }, items } })
     let browses = 0
+    let withNew = false
+    const parsedFor: Array<string | undefined> = []
     const session = (lang?: string): InnertubeLike => ({
       ...fakeMusic(),
       async browseRaw() {
         browses++
         return { contents: { singleColumnBrowseResultsRenderer: { tabs: [{ tabRenderer: { content: { sectionListRenderer: { contents: [
           grid(lang === 'fr' ? 'Humeurs et moments' : 'Moods & moments', [btn(lang === 'fr' ? 'Calme' : 'Chill', 'p-calm')]),
-          grid('Genres', [btn('Jazz', 'p-jazz')]),
+          grid('Genres', [btn('Jazz', 'p-jazz'), ...(withNew ? [btn('Nouveau', 'p-new')] : [])]),
         ] } } } }] } } }
       },
       async browseParsed(_id: string, params?: string) {
-        expect(params).toBe('p-jazz')
+        parsedFor.push(params)
         return {
           contents: { contents: [
             { type: 'MusicCarouselShelf', header: { title: { text: 'Titres' } }, contents: [
               { type: 'MusicResponsiveListItem', item_type: 'song', id: 'vSo', title: 'So What', artists: [{ name: 'Miles Davis' }], duration: { seconds: 562 }, badges: [{ icon_type: 'MUSIC_EXPLICIT_BADGE' }] },
             ] },
             { type: 'MusicCarouselShelf', header: { title: { text: 'Playlists' } }, contents: [
-              { type: 'MusicTwoRowItem', item_type: 'playlist', id: 'VLRDCLAK5uy_jazz', title: { text: 'Jazz essentiel' } },
+              { type: 'MusicTwoRowItem', item_type: 'playlist', id: 'VLRDCLAK5uy_jazz', title: { text: 'Jazz essentiel' }, thumbnail: [{ url: 'https://lh3.googleusercontent.com/jazz=w226-h226', width: 226 }] },
               { type: 'MusicTwoRowItem', item_type: 'playlist', id: 'VLPLcommunity', title: { text: 'Mon jazz à moi' } },
             ] },
             { type: 'MusicCarouselShelf', header: { title: { text: 'Clips musicaux' } }, contents: [
@@ -973,7 +975,7 @@ describe('ytmusic plugin', () => {
         }
       },
     })
-    const { plugin, app } = await boot({ createSession: async (_c, lang) => { langs.push(lang); return session(lang) } })
+    const { plugin, app, ctx } = await boot({ createSession: async (_c, lang) => { langs.push(lang); return session(lang) } })
     await app.inject({ method: 'PUT', url: '/api/plugins/ytmusic/cookie', payload: { cookie: COOKIE } })
 
     const fr = (await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/explore?hl=fr' })).json()
@@ -997,6 +999,23 @@ describe('ytmusic plugin', () => {
     expect(body.shelves[1].playlists.map((p: { title: string }) => p.title)).toEqual(['Jazz essentiel'])
     expect(body.shelves[2].albums[0]).toMatchObject({ id: 'MPREb_kind', title: 'Kind of Blue' })
     expect((await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/explore/category' })).statusCode).toBe(400)
+
+    // pochettes : la page des catégories n'en a pas, on les prend dans chaque page de catégorie
+    parsedFor.length = 0
+    const covers = (await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/explore/covers?hl=fr' })).json().covers
+    expect(Object.keys(covers).sort()).toEqual(['p-calm', 'p-jazz'])
+    expect(covers['p-jazz']).toHaveLength(1)
+    expect(covers['p-jazz'][0]).toMatch(/googleusercontent\.com\/jazz=/)
+    // Jazz était déjà lu (cache des catégories) : seule Calme repart chez YouTube, et plus rien ensuite
+    expect(parsedFor).toEqual(['p-calm'])
+    await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/explore/covers?hl=fr' })
+    expect(parsedFor).toEqual(['p-calm'])
+    // « Pour vous » tourne : une catégorie apparaît à la relecture de la page, SEULE elle est lue
+    withNew = true
+    ;(ctx.clock as ManualClock).advance(11 * 60_000)
+    const later = (await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/explore/covers?hl=fr' })).json().covers
+    expect(Object.keys(later).sort()).toEqual(['p-calm', 'p-jazz', 'p-new'])
+    expect(parsedFor).toEqual(['p-calm', 'p-new'])
     await app.close()
     await plugin.stop()
   })

@@ -507,9 +507,23 @@ async function loadExplore() {
   try {
     explore.value = await getTransport().ytmusicExplore(locale.value)
     exploreLang = locale.value
+    void loadCovers(locale.value)
   } catch (err) { fail(err) }
   finally { busy.value = false }
 }
+/**
+ * Pochettes des cartes : la page de YouTube n'en a pas, le serveur les prend dans chaque catégorie
+ * (lent la première fois, ~10 s, puis gardé 6 h). Les cartes n'attendent pas : les pochettes y entrent
+ * en fondu à leur arrivée, dans un emplacement déjà réservé. Un échec les laisse simplement nues.
+ */
+const covers = ref<Record<string, string[]>>({})
+async function loadCovers(lang: string) {
+  try { covers.value = (await getTransport().ytmusicExploreCovers(lang)).covers }
+  catch { /* cartes sans pochettes */ }
+}
+/** Une pochette n'apparaît qu'une fois chargée : jamais de carré vide ni d'image qui se dessine par bandes. */
+const coverLoaded = ref<Set<string>>(new Set())
+function markCover(url: string) { coverLoaded.value = new Set(coverLoaded.value).add(url) }
 /** Genres : « Pour vous » en tête (s'il y en a), puis les genres ; Ambiances : les humeurs et moments. */
 const exploreGroups = computed(() => {
   const e = explore.value
@@ -830,7 +844,7 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
                               @play="play(tr, browseTracksView)" @play-next="addToQueue(tr, 'next')" @add-end="addToQueue(tr, 'end')" />
                 <p v-if="!busy && browseTracksView.length === 0" class="muted empty">{{ $t('ytmusic.empty') }}</p>
               </div>
-              <!-- genres / ambiances : pastilles de hauteur fixe, liseré à la couleur de YouTube Music -->
+              <!-- genres / ambiances : cartes de taille fixe, dégradé de la couleur de YouTube Music, deux pochettes inclinées -->
               <div v-else-if="browseTab === 'genres' || browseTab === 'moods'">
                 <div v-if="busy && !exploreGroups.length" class="cat-grid" aria-hidden="true">
                   <span v-for="i in 12" :key="i" class="skel cat-skel" />
@@ -838,9 +852,14 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
                 <template v-for="grp in exploreGroups" :key="grp.key">
                   <h2 v-if="grp.title" class="section-label cat-head">{{ grp.title }}</h2>
                   <div class="cat-grid">
-                    <button v-for="c in grp.categories" :key="c.params" type="button" class="cat" :style="{ '--cat': c.color ?? 'var(--line)' }"
+                    <button v-for="c in grp.categories" :key="c.params" type="button" class="cat" :style="{ '--cat': c.color ?? '#606060' }"
                             :title="c.title" @click="openCategory(c)">
                       <span class="cat__title">{{ c.title }}</span>
+                      <span class="cat__art" aria-hidden="true">
+                        <img v-for="(u, ci) in (covers[c.params] ?? []).slice(0, 2).reverse()" :key="u" :src="u" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"
+                             class="cat__cover" :class="[`cat__cover--${(covers[c.params] ?? []).slice(0, 2).length - ci}`, { 'is-in': coverLoaded.has(u) }]"
+                             @load="markCover(u)">
+                      </span>
                     </button>
                   </div>
                 </template>
@@ -930,18 +949,41 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
 .section-label { margin: 0 4px; }
 .list { display: grid; gap: 2px; }
 
-/* genres / ambiances : grille de pastilles, toutes de la même taille ; un nom trop long est coupé */
+/* genres / ambiances : cartes de taille FIXE (les pochettes arrivent après, dans une place déjà faite).
+   Fond : la couleur de YouTube Music assombrie en dégradé — ces couleurs sont pastel (#a4ffa4,
+   #cccccc…), en aplat le texte blanc y serait illisible. Même carte dans les deux thèmes : c'est une
+   vignette, comme une pochette. */
 .cat-head { margin: 4px 4px 8px; }
-.cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 10px; margin: 0 0 18px; }
+.cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(208px, 1fr)); gap: 12px; margin: 0 0 20px; }
 .cat {
-  height: 52px; min-width: 0; display: flex; align-items: center; padding: 0 14px 0 14px;
-  border: 1px solid var(--line); border-left: 6px solid var(--cat); border-radius: 10px;
-  background: var(--surface); color: var(--text); font: inherit; font-size: 14px; font-weight: 500; text-align: left; cursor: pointer;
-  transition: background .15s;
+  position: relative; overflow: hidden; height: 108px; min-width: 0; display: block; padding: 14px 16px;
+  border: 0; border-radius: 12px; text-align: left; cursor: pointer; font: inherit; color: #fff;
+  background:
+    radial-gradient(120% 90% at 100% 100%, color-mix(in srgb, var(--cat) 55%, transparent) 0%, transparent 60%),
+    linear-gradient(135deg, color-mix(in srgb, var(--cat) 58%, #0b0d12) 0%, color-mix(in srgb, var(--cat) 24%, #0b0d12) 100%);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / .06);
+  transition: filter .2s, transform .2s;
 }
-.cat:hover { background: color-mix(in srgb, var(--cat) 16%, var(--surface)); }
+.cat:hover { filter: brightness(1.1); }
+.cat:active { transform: scale(.985); }
 .cat:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.cat__title { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cat-skel { height: 52px; border-radius: 10px; }
+/* deux lignes au plus, à gauche : les pochettes occupent le coin opposé */
+.cat__title {
+  position: relative; z-index: 1; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  max-width: 62%; font-size: 17px; font-weight: 700; line-height: 1.2; letter-spacing: -.01em; text-shadow: 0 1px 8px rgb(0 0 0 / .35);
+}
+.cat__art { position: absolute; right: 0; bottom: 0; width: 132px; height: 100%; pointer-events: none; }
+.cat__cover {
+  position: absolute; width: 76px; height: 76px; border-radius: 6px; object-fit: cover;
+  box-shadow: 0 6px 18px rgb(0 0 0 / .45); opacity: 0; transition: opacity .35s ease, transform .3s ease;
+}
+/* la première pochette devant, penchée vers la droite ; la seconde derrière, en retrait */
+.cat__cover--1 { right: -10px; bottom: -12px; transform: rotate(22deg); }
+.cat__cover--2 { right: 44px; bottom: -22px; width: 64px; height: 64px; transform: rotate(-10deg); filter: brightness(.85); }
+.cat__cover.is-in { opacity: 1; }
+.cat:hover .cat__cover--1 { transform: rotate(16deg) translateY(-3px); }
+.cat:hover .cat__cover--2 { transform: rotate(-14deg) translateY(-2px); }
+@media (prefers-reduced-motion: reduce) { .cat, .cat__cover { transition: none; } }
+.cat-skel { height: 108px; border-radius: 12px; }
 .empty { padding: 16px 4px; }
 </style>

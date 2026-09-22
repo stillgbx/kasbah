@@ -209,6 +209,7 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     async ytmusicArtist() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music cookie in mock mode') },
     async ytmusicExplore() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music cookie in mock mode') },
     async ytmusicExploreCategory() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music cookie in mock mode') },
+    async ytmusicExploreCovers() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music cookie in mock mode') },
     async ytmusicPlay() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music cookie in mock mode') },
     // aucun flux servi par la simulation : la page Musique montre ses lecteurs, sans transfert possible
     async ytmusicSessions() { return { sessions: [] } },
