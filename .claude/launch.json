@@ -25,7 +25,10 @@
             "env": {
                 "PORT": "6173",
                 "KASBAH_PORT": "9787",
-                "KASBAH_SERVER": "http://localhost:9787"
+                "KASBAH_SERVER": "http://localhost:9787",
+                // Ce que la preview publie aux enceintes : SON port, sinon un `play_url` renvoie
+                // le lecteur vers le serveur de l'IDE, qui ne connait pas la session ouverte ici.
+                "YTM_PUBLISH_BASE": "http://192.168.1.68:9787"
             },
             "port": 6173,
             // `true` : une seconde session prend le port libre suivant au lieu d'echouer

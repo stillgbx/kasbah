@@ -21,6 +21,11 @@ export type SpawnFn = (command: string, args: readonly string[], options?: Spawn
 
 export interface StreamResolveOpts {
   videoId: string
+  /**
+   * Conteneurs à PRÉFÉRER quel que soit le débit (ex. `['m4a']`) : pour un relais sans réencodage,
+   * c'est ce que l'enceinte sait lire qui décide, pas le meilleur débit — un Sonos ne lit pas WebM.
+   */
+  preferExts?: string[]
   cookieRaw: string
   ytdlpPath: string
   poTokenUrl: string
@@ -35,6 +40,8 @@ export interface ResolvedStream {
   ext: string | null
   /** Débit annoncé par yt-dlp pour ce format (kb/s) : ce qu'on reçoit AVANT notre transcodage. */
   abrKbps: number | null
+  /** Taille exacte du flux source (octets), quand yt-dlp la donne : elle rend le relais possible. */
+  sizeBytes: number | null
   /** Durée du média d'après yt-dlp (s), sinon null (direct, inconnue). */
   durationS: number | null
 }
@@ -97,7 +104,7 @@ export async function resolveStreamUrl(opts: StreamResolveOpts): Promise<Resolve
     const tail = stderr.trim().split(/\r?\n/).filter(Boolean).slice(-2).join(' ; ')
     throw new Error(`yt-dlp failed (${code})${tail ? `: ${tail}` : ''}`)
   }
-  let info: { formats?: Array<{ url?: string; format_id?: string; ext?: string; acodec?: string; vcodec?: string; abr?: number; tbr?: number }> ; url?: string; format_id?: string; ext?: string; duration?: number; is_live?: boolean }
+  let info: { formats?: Array<{ url?: string; format_id?: string; ext?: string; acodec?: string; vcodec?: string; abr?: number; tbr?: number; filesize?: number; filesize_approx?: number }> ; url?: string; format_id?: string; ext?: string; duration?: number; is_live?: boolean }
   try { info = JSON.parse(stdout) as typeof info }
   catch { throw new Error('yt-dlp returned non-JSON') }
   // Préférer m4a / 140 / 141, sinon opus/webm, sinon premier format avec audio.
@@ -105,8 +112,10 @@ export async function resolveStreamUrl(opts: StreamResolveOpts): Promise<Resolve
   const audio = formats
     .filter((f) => f.url && f.acodec && f.acodec !== 'none' && (f.vcodec === 'none' || !f.vcodec))
     .sort((a, b) => {
+      const prefer = opts.preferExts?.map((e) => e.toLowerCase())
       const rank = (f: { ext?: string; format_id?: string; abr?: number; tbr?: number }) => {
         let r = 0
+        if (prefer?.length) r += prefer.includes((f.ext ?? '').toLowerCase()) ? 10_000 : 0
         if (f.format_id === '141') r += 30
         else if (f.format_id === '140' || f.ext === 'm4a') r += 20
         else if (f.ext === 'webm' || f.ext === 'opus') r += 10
@@ -123,11 +132,13 @@ export async function resolveStreamUrl(opts: StreamResolveOpts): Promise<Resolve
   if (!pick?.url) throw new Error(`no audio stream format found (${formats.length} formats reported)`)
   const durationS = !info.is_live && typeof info.duration === 'number' && info.duration > 0 ? info.duration : null
   const rate = (pick as { abr?: number; tbr?: number }).abr ?? (pick as { tbr?: number }).tbr ?? null
+  const size = (pick as { filesize?: number }).filesize ?? (pick as { filesize_approx?: number }).filesize_approx ?? null
   return {
     url: pick.url,
     formatId: pick.format_id ?? null,
     ext: pick.ext ?? null,
     abrKbps: rate ? Math.round(rate) : null,
+    sizeBytes: typeof size === 'number' && size > 0 ? Math.floor(size) : null,
     durationS,
   }
 }
@@ -231,6 +242,11 @@ export interface SessionMeta {
 
 export interface ProxySession {
   sid: string
+  /**
+   * SONDE : servir les octets de la source au lieu de les réencoder. googlevideo annonce déjà une
+   * taille exacte et accepte les plages — le « fichier » que le MP3 fabrique, il le fournit.
+   */
+  raw: boolean
   videoId: string
   deviceId: string
   sourceUrl: string
@@ -270,14 +286,17 @@ export class StreamProxy {
     this.now = opts.now ?? (() => Date.now())
   }
 
-  open(videoId: string, deviceId: string, sourceUrl: string, meta: SessionMeta = {}): ProxySession {
+  open(videoId: string, deviceId: string, sourceUrl: string, meta: SessionMeta = {}, raw?: { mime: string; sizeBytes: number }): ProxySession {
     this.closeDevice(deviceId)
     const sid = randomBytes(12).toString('hex')
     const session: ProxySession = {
       sid, videoId, deviceId, sourceUrl,
+      raw: !!raw,
       createdAt: this.now(),
-      mime: 'audio/mpeg',
-      lengthBytes: meta.durationS && meta.durationS > 0 ? lengthFor(meta.durationS) : null,
+      mime: raw?.mime ?? 'audio/mpeg',
+      lengthBytes: raw
+        ? raw.sizeBytes
+        : meta.durationS && meta.durationS > 0 ? lengthFor(meta.durationS) : null,
       meta,
     }
     this.sessions.set(sid, session)

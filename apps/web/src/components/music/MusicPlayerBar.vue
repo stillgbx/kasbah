@@ -89,19 +89,20 @@ const subtitle = computed(() => {
 // une taille, donc une durée et un déplacement), et en info-bulle ce que YouTube nous a donné pour
 // le produire. Une ligne, sous le nom du lecteur : on veut pouvoir juger la chaîne d'un coup d'œil,
 // pas ouvrir le journal du serveur.
-const MIME_LABELS: Record<string, string> = { 'audio/mpeg': 'MP3' }
+const MIME_LABELS: Record<string, string> = { 'audio/mpeg': 'MP3', 'audio/mp4': 'AAC', 'audio/webm': 'Opus', 'audio/ogg': 'Opus' }
 const quality = computed(() => ours.value?.quality ?? null)
 const qualityLine = computed(() => {
   const q = quality.value
   if (!q) return NBSP
-  return `${MIME_LABELS[q.mime] ?? q.mime} ${q.bitrateKbps}${NBSP}kb/s`
+  const label = MIME_LABELS[q.mime] ?? q.mime
+  return q.bitrateKbps ? `${label} ${q.bitrateKbps}${NBSP}kb/s` : label
 })
 const qualityHint = computed(() => {
   const q = quality.value
   if (!q) return undefined
   const parts = [
-    `${q.sampleRateHz / 1000}${NBSP}kHz`,
-    q.channels === 2 ? t('music.stereo') : `${q.channels} ch`,
+    ...(q.sampleRateHz ? [`${q.sampleRateHz / 1000}${NBSP}kHz`] : []),
+    ...(q.channels ? [q.channels === 2 ? t('music.stereo') : `${q.channels} ch`] : []),
   ]
   if (q.lengthBytes) parts.push(t('music.megabytes', { size: (q.lengthBytes / 1_000_000).toFixed(1) }))
   if (q.source) {

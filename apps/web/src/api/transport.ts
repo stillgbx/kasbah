@@ -194,9 +194,11 @@ export interface YtmusicAlbum {
 /** Ce que le proxy sert à l'enceinte, et ce qu'il a reçu de YouTube pour le produire. */
 export interface YtmusicStreamQuality {
   mime: string
-  bitrateKbps: number
-  sampleRateHz: number
-  channels: number
+  /** null quand on relaie le flux source sans le connaître (débit variable). */
+  bitrateKbps: number | null
+  /** null quand le proxy ne réencode pas : c'est la source qui décide, on ne l'inspecte pas. */
+  sampleRateHz: number | null
+  channels: number | null
   /** Taille annoncée à l'enceinte ; null si la durée est inconnue (flux sans taille). */
   lengthBytes: number | null
   source: { ext: string | null; formatId: string | null; abrKbps: number | null } | null

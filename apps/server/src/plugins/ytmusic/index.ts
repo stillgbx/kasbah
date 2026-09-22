@@ -1,3 +1,4 @@
+import { Readable } from 'node:stream'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import type { Command, DeviceDescriptor, PluginHealth } from '@kasbah/shared'
@@ -213,10 +214,20 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
   }
 
   /** Ouvre une session pour ce lecteur (la précédente du même lecteur est fermée) et lui envoie `play_url`. */
-  async function launch(req: FastifyRequest, videoId: string, deviceId: string, sourceUrl: string, meta: SessionMeta) {
+  async function launch(
+    req: FastifyRequest,
+    videoId: string,
+    deviceId: string,
+    sourceUrl: string,
+    meta: SessionMeta,
+    raw?: { mime: string; sizeBytes: number; ext: string },
+  ) {
     const { play } = resolvePlay()
-    const session = getProxy().open(videoId, deviceId, sourceUrl, meta)
-    const streamUrl = `${publishBase(req)}/api/plugins/ytmusic/stream/${session.sid}`
+    const session = getProxy().open(videoId, deviceId, sourceUrl, meta, raw)
+    // L'extension n'est pas décorative : `streamLoad` (Sonos) en déduit le type annoncé dans le DIDL.
+    const streamUrl = raw
+      ? `${publishBase(req)}/api/plugins/ytmusic/raw/${session.sid}.${raw.ext}`
+      : `${publishBase(req)}/api/plugins/ytmusic/stream/${session.sid}`
     await play(deviceId, streamUrl, meta)
     return { session, streamUrl }
   }
@@ -260,6 +271,9 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
     return !!s.meta.title && t.toLowerCase() === s.meta.title.trim().toLowerCase()
   }
 
+  /** Type de contenu d'un flux source relayé tel quel (le conteneur décide, pas le codec). */
+  const RAW_MIME: Record<string, string> = { m4a: 'audio/mp4', mp4: 'audio/mp4', webm: 'audio/webm', opus: 'audio/ogg' }
+
   const sessionView = (s: ProxySession) => ({
     deviceId: s.deviceId, videoId: s.videoId, sid: s.sid,
     durationS: s.meta.durationS ?? null, title: s.meta.title ?? null, artist: s.meta.artist ?? null, artUrl: s.meta.artUrl ?? null,
@@ -267,9 +281,10 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
     // ce que vaut la chaîne, sans ouvrir le journal.
     quality: {
       mime: s.mime,
-      bitrateKbps: OUT_BITRATE_KBPS,
-      sampleRateHz: OUT_SAMPLE_RATE_HZ,
-      channels: OUT_CHANNELS,
+      // relais : ce que sert le proxy EST ce que YouTube a donné, il n'y a plus de sortie à nous
+      bitrateKbps: s.raw ? s.meta.source?.abrKbps ?? null : OUT_BITRATE_KBPS,
+      sampleRateHz: s.raw ? null : OUT_SAMPLE_RATE_HZ,
+      channels: s.raw ? null : OUT_CHANNELS,
       lengthBytes: s.lengthBytes,
       source: s.meta.source ?? null,
     },
@@ -491,6 +506,8 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
           durationS: z.number().positive().optional(),
           /** Ce que le catalogue dit du morceau : l'enceinte, elle, ne le saura jamais. */
           explicit: z.boolean().optional(),
+          /** SONDE : servir le flux source tel quel, sans repasser par ffmpeg. */
+          raw: z.boolean().optional(),
         }).safeParse(req.body)
         if (!body.success) return sendError(reply, 400, 'INVALID_BODY', 'videoId and deviceId are required')
 
@@ -516,6 +533,8 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
           if (cookies!.path) netscapePath = await writeNetscapeBeside(cookies!.path, cookie)
           const resolved = await resolveStreamUrl({
             videoId: body.data.videoId,
+            // relais : viser un conteneur que les enceintes lisent (AAC en MP4), pas le plus gros débit
+            ...(body.data.raw ? { preferExts: ['m4a', 'mp4'] } : {}),
             cookieRaw: cookie,
             ytdlpPath: cfg().YTM_YTDLP_PATH,
             poTokenUrl: cfg().YTM_PO_TOKEN_URL,
@@ -533,7 +552,17 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
             ...(body.data.explicit ? { explicit: true } : {}),
             source: { ext: resolved.ext, formatId: resolved.formatId, abrKbps: resolved.abrKbps },
           }
-          const { session, streamUrl } = await launch(req, body.data.videoId, body.data.deviceId, resolved.url, meta)
+          // Relais possible seulement si la source est un conteneur connu ET de taille annoncée :
+          // c'est la taille qui fait le « fichier », et le conteneur ce que l'enceinte saura lire.
+          const rawExt = resolved.ext?.toLowerCase() ?? ''
+          const rawMime = RAW_MIME[rawExt]
+          const raw = body.data.raw && rawMime && resolved.sizeBytes
+            ? { mime: rawMime, sizeBytes: resolved.sizeBytes, ext: rawExt }
+            : undefined
+          if (body.data.raw && !raw) {
+            log().warn({ ext: resolved.ext, sizeBytes: resolved.sizeBytes }, 'ytmusic raw relay unavailable for this format, falling back to MP3')
+          }
+          const { session, streamUrl } = await launch(req, body.data.videoId, body.data.deviceId, resolved.url, meta, raw)
           lastError = null
           log().info({
             videoId: body.data.videoId,
@@ -571,7 +600,11 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
         const positionS = trackPosition(get, source)
 
         try {
-          const { session, streamUrl } = await launch(req, source.videoId, body.data.toDeviceId, source.sourceUrl, source.meta)
+          const srcExt = source.meta.source?.ext?.toLowerCase() ?? ''
+          const raw = source.raw && source.lengthBytes !== null && RAW_MIME[srcExt]
+            ? { mime: source.mime, sizeBytes: source.lengthBytes, ext: srcExt }
+            : undefined
+          const { session, streamUrl } = await launch(req, source.videoId, body.data.toDeviceId, source.sourceUrl, source.meta, raw)
           if (positionS > 1 && session.lengthBytes !== null) {
             await seekWhenReady(body.data.toDeviceId, positionS + TRANSFER_LEAD_S)
               .catch((err) => log().warn({ err, deviceId: body.data.toDeviceId, positionS }, 'ytmusic transfer: seek on target failed, playing from start'))
@@ -610,6 +643,78 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
         reply.hijack()
         reply.raw.writeHead(200, fileHeaders(session))
         reply.raw.end()
+      })
+
+      /**
+       * SONDE — relais SANS reencodage. googlevideo annonce une taille exacte et accepte les plages :
+       * le « fichier » que le MP3 fabrique, la source le fournit deja, en AAC 258 kb/s. On se contente
+       * de repasser les octets, en reportant la plage demandee par l'enceinte. L'extension de l'URL
+       * (`.m4a`) est ce qui fait annoncer `audio/mp4` dans le DIDL Sonos.
+       */
+      const rawSession = (file: string) => {
+        const sid = file.split('.')[0] ?? ''
+        const s = getProxy().get(sid)
+        return s?.raw ? s : undefined
+      }
+
+      app.head<{ Params: { file: string } }>('/raw/:file', async (req, reply) => {
+        const session = rawSession(req.params.file)
+        if (!session) return sendError(reply, 404, 'NOT_FOUND', 'raw session expired or unknown')
+        log().debug({ sid: session.sid, deviceId: session.deviceId, ua: req.headers['user-agent'] ?? null }, 'ytmusic raw HEAD')
+        reply.hijack()
+        reply.raw.writeHead(200, {
+          'content-type': session.mime,
+          'cache-control': 'no-store',
+          'accept-ranges': 'bytes',
+          ...(session.lengthBytes !== null ? { 'content-length': String(session.lengthBytes) } : {}),
+        })
+        reply.raw.end()
+      })
+
+      app.get<{ Params: { file: string } }>('/raw/:file', async (req, reply) => {
+        const session = rawSession(req.params.file)
+        if (!session) return sendError(reply, 404, 'NOT_FOUND', 'raw session expired or unknown')
+        const range = req.headers.range
+        const abort = new AbortController()
+        let upstream: Response
+        try {
+          upstream = await (deps.fetchImpl ?? fetch)(session.sourceUrl, {
+            signal: abort.signal,
+            ...(range ? { headers: { range } } : {}),
+          })
+        } catch (err) {
+          log().warn({ err, sid: session.sid }, 'ytmusic raw GET: upstream failed')
+          return sendError(reply, 502, 'UPSTREAM_ERROR', 'source stream unreachable')
+        }
+        if (!upstream.ok || !upstream.body) {
+          log().warn({ sid: session.sid, status: upstream.status }, 'ytmusic raw GET: upstream refused')
+          return sendError(reply, 502, 'UPSTREAM_ERROR', `source stream answered ${upstream.status}`)
+        }
+        const len = upstream.headers.get('content-length')
+        const contentRange = upstream.headers.get('content-range')
+        log().info({
+          sid: session.sid, deviceId: session.deviceId, range: range ?? null, status: upstream.status,
+          len, contentRange, ua: req.headers['user-agent'] ?? null,
+        }, 'ytmusic raw GET')
+        reply.hijack()
+        reply.raw.writeHead(upstream.status === 206 ? 206 : 200, {
+          'content-type': session.mime,
+          'cache-control': 'no-store',
+          'accept-ranges': 'bytes',
+          ...(len ? { 'content-length': len } : {}),
+          ...(contentRange ? { 'content-range': contentRange } : {}),
+        })
+        // Le lecteur coupe quand il veut (pause, changement de titre, fin de sonde) : on arrête alors
+        // de tirer sur googlevideo. PIÈGE : l'annulation fait émettre une AbortError au flux ; sans
+        // écouteur d'erreur, Node la remonte en exception non gérée et le SERVEUR tombe.
+        const body = Readable.fromWeb(upstream.body as Parameters<typeof Readable.fromWeb>[0])
+        const stop = () => { if (!reply.raw.writableEnded) reply.raw.end() }
+        body.on('error', (err) => {
+          log().debug({ err, sid: session.sid }, 'ytmusic raw GET: source stream cut')
+          stop()
+        })
+        reply.raw.on('close', () => { abort.abort(); body.destroy() })
+        body.pipe(reply.raw)
       })
 
       app.get<{ Params: { sid: string } }>('/stream/:sid', async (req, reply) => {
