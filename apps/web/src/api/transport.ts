@@ -195,9 +195,7 @@ export interface YtmusicSession {
   deviceId: string
   videoId: string
   sid: string
-  /** Décalage du flux : la position publiée par le lecteur compte depuis ici. */
-  startS: number
-  /** Durée catalogue du titre (le flux proxy n'en annonce pas). */
+  /** Durée du titre (yt-dlp ou catalogue) ; le lecteur la connaît aussi par la taille du « fichier ». */
   durationS: number | null
   /** Ce que le catalogue disait du titre : l'UI le préfère à ce que l'enceinte publie (parfois l'URL du flux). */
   title: string | null
@@ -369,11 +367,9 @@ export interface Transport {
     artUrl?: string
     durationS?: number
   }): Promise<{ ok: true; streamUrl: string; sid: string }>
-  /** Se placer dans le titre en cours sur ce lecteur : le flux repart à cette position. */
-  ytmusicSeek(body: { deviceId: string; positionS: number }): Promise<{ ok: true; streamUrl: string; sid: string; positionS: number }>
   /** Lecteurs qui jouent en ce moment un flux YouTube Music servi par Kasbah. */
   ytmusicSessions(): Promise<{ sessions: YtmusicSession[] }>
-  /** Le titre en cours sur `fromDeviceId` repart sur `toDeviceId` à la même position, la source s'arrête. */
+  /** Le titre en cours sur `fromDeviceId` repart sur `toDeviceId`, qui se place à la même position ; la source s'arrête. */
   ytmusicTransfer(body: { fromDeviceId: string; toDeviceId: string }): Promise<{ ok: true; streamUrl: string; sid: string; positionS: number }>
   /**
    * Fait oublier un appareil au plugin qui le retenait (`meta.forgettable`), par convention

@@ -249,27 +249,6 @@ describe('sonos plugin', () => {
     await plugin.stop()
   })
 
-  it('keeps a stopped stream as paused with its title, until an explicit stop', async () => {
-    const net = fakeNetwork()
-    const { plugin, ctx, clock } = await started(net, fakeDiscovery(), fakeKnown([PLAYER_PLAY3]))
-    await plugin.execute(UUID_PLAY3, { type: 'media_player.play_url', url: 'http://192.168.1.10:8787/api/plugins/ytmusic/stream/abc', title: 'Horizon', artist: 'Mira Solano' })
-    // le Sonos « met en pause » un flux en l'arrêtant : au sondage suivant il dit STOPPED, URI vide
-    net.playing.value = false
-    clock.advance(2_000)
-    await flush(12)
-    expect(patches(ctx, UUID_PLAY3).at(-1)).toMatchObject({ playback: 'paused', nowPlaying: { title: 'Horizon', artist: 'Mira Solano' } })
-    // reprendre = reposer l'URI puis Play (sinon le Sonos tente une reprise à l'octet et abandonne)
-    const before = net.calls.length
-    await plugin.execute(UUID_PLAY3, { type: 'media_player.play' })
-    expect(net.calls.slice(before).map((c) => ['SetAVTransportURI', 'Play'].find((a) => c.action.includes(a)))).toEqual(['SetAVTransportURI', 'Play'])
-    // un arrêt demandé, lui, efface pour de bon
-    await plugin.execute(UUID_PLAY3, { type: 'media_player.stop' })
-    clock.advance(2_000)
-    await flush(12)
-    expect(patches(ctx, UUID_PLAY3).at(-1)).toMatchObject({ playback: 'idle', nowPlaying: null })
-    await plugin.stop()
-  })
-
   it('emits sticky title and art after play_url with meta', async () => {
     const net = fakeNetwork()
     const { plugin, ctx } = await started(net, fakeDiscovery(), fakeKnown([PLAYER_PLAY3]))

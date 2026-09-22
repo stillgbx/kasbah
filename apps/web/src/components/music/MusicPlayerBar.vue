@@ -14,17 +14,16 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 // que quelque chose joue ou non ; sans durée, curseur et temps sont invisibles mais gardent leur
 // place ; une touche sans capacité reste à sa place, grisée.
 //
-// `session` : le flux que NOUS servons à ce lecteur. L'enceinte compte le temps depuis le début du
-// flux, pas du morceau — après un transfert ou un déplacement, la position affichée = la sienne +
-// `startS` ; et c'est la durée du catalogue qui sert, le proxy n'en annonce pas. Titre, artiste et
-// pochette viennent aussi de la session quand il y en a une : l'enceinte, elle, publie parfois l'URL
-// du flux ou le nom de l'appli le temps que les métadonnées arrivent. `pending` : titre
+// `session` : le flux que NOUS servons à ce lecteur — un « fichier » de taille connue pour lui, donc
+// la position est la sienne. Titre, artiste, pochette et durée viennent de la session quand il y en a
+// une : l'enceinte, elle, publie parfois l'URL du flux ou le nom de l'appli le temps que les
+// métadonnées arrivent, et pas toujours la durée. `pending` : titre
 // en cours d'envoi (résolution yt-dlp : quelques secondes) — il s'affiche tout de suite, la touche
 // centrale tourne, l'enceinte rattrape ensuite.
 const props = defineProps<{
   entry: DeviceEntry | null
   name: string
-  session: { startS: number; durationS: number | null; title?: string | null; artist?: string | null; artUrl?: string | null } | null
+  session: { durationS: number | null; title?: string | null; artist?: string | null; artUrl?: string | null } | null
   pending: { title: string; artists: string[]; artUrl: string | null } | null
   transferMode: boolean
   canTransfer: boolean
@@ -79,22 +78,20 @@ const subtitle = computed(() => {
 
 // ---- position ------------------------------------------------------------------------------------
 const { position: rawPosition, duration: deviceDuration, hasPosition } = useMediaPosition(toRef(() => state.value))
-const startS = computed(() => ours.value?.startS ?? 0)
-const duration = computed(() => ours.value?.durationS ?? deviceDuration.value)
+const duration = computed(() => deviceDuration.value ?? ours.value?.durationS ?? undefined)
 const hasDuration = computed(() => duration.value !== undefined && duration.value !== null)
 const position = computed<number | undefined>(() => {
-  if (rawPosition.value === undefined) return ours.value ? startS.value : undefined
-  const p = rawPosition.value + startS.value
-  return duration.value ? Math.min(p, duration.value) : p
+  if (rawPosition.value === undefined) return undefined
+  return duration.value ? Math.min(rawPosition.value, duration.value) : rawPosition.value
 })
 // Curseur : valeur locale pendant le glissement, puis `seek`. Après le relâcher, elle reste affichée
-// tant que le lecteur n'a pas publié une position NOUVELLE : notre flux relancé repart de zéro chez
-// lui, et l'ancien relevé + le nouveau décalage aurait fait sauter le curseur en avant.
+// tant que le lecteur n'a pas publié une position NOUVELLE — sinon le curseur revenait au dernier
+// relevé, d'avant le geste, avant de rejoindre la position demandée.
 const seekDraft = ref<number | null>(null)
 const holding = ref(false)
 watch(() => state.value?.nowPlaying?.positionS, () => { if (holding.value) { holding.value = false; seekDraft.value = null } })
 watch(() => props.entry?.descriptor.id, () => { holding.value = false; seekDraft.value = null })
-const canSeek = computed(() => hasDuration.value && !live.value && loaded.value && (!!ours.value || has('seek')))
+const canSeek = computed(() => hasDuration.value && !live.value && loaded.value && has('seek'))
 const shownPosition = computed(() => seekDraft.value ?? position.value ?? 0)
 function seekEnd(v: number) {
   holding.value = true

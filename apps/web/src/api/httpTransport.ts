@@ -207,11 +207,6 @@ export function createHttpTransport(base = ''): Transport {
       { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
       (j) => j as { ok: true; streamUrl: string; sid: string },
     ),
-    ytmusicSeek: (body) => request(
-      `${base}/api/plugins/ytmusic/seek`,
-      { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
-      (j) => j as { ok: true; streamUrl: string; sid: string; positionS: number },
-    ),
     ytmusicSessions: () => request(`${base}/api/plugins/ytmusic/sessions`, undefined, (j) => j as { sessions: YtmusicSession[] }),
     ytmusicTransfer: (body) => request(
       `${base}/api/plugins/ytmusic/transfer`,

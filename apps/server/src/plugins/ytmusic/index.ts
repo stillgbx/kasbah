@@ -8,7 +8,7 @@ import { getYtmusicBridge } from './bridge'
 import { YtmusicCatalog, type CreateSession } from './catalog'
 import { createCookieFile, hasRequiredCookie, writeNetscapeBeside, type CookieStore } from './cookie'
 import { importCookiesFromBrowser, isAuthError, YTM_BROWSERS } from './browserCookies'
-import { pingPoToken, resolveStreamUrl, StreamProxy, type ProxySession, type SessionMeta, type SpawnFn } from './stream'
+import { LengthLock, parseRange, pingPoToken, resolveStreamUrl, seekFor, StreamProxy, type ProxySession, type SessionMeta, type SpawnFn } from './stream'
 import type { YtmusicStatus } from './types'
 import { ART_PLAY_SIZE, upgradeArtUrl } from './mapping'
 
@@ -32,11 +32,6 @@ export const ytmusicConfigSchema = z.object({
    * requête `POST /play` (Host de la tablette) — adapté au LAN.
    */
   YTM_PUBLISH_BASE: z.string().trim().default(''),
-  /**
-   * Avance (ms) ajoutée à la position d'une reprise après transfert : le temps que la cible remplisse
-   * son tampon avant le premier son, que la source n'attend pas. Mesuré ~1 s de retard sans elle.
-   */
-  YTM_RESUME_LEAD_MS: z.coerce.number().int().min(0).max(5_000).default(1100),
 })
 export type YtmusicConfig = z.infer<typeof ytmusicConfigSchema>
 
@@ -93,7 +88,6 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
     })
     return proxy
   }
-  const leadS = () => cfg().YTM_RESUME_LEAD_MS / 1000
   const keys = () => Object.keys(ytmusicConfigSchema.shape)
   const PROBE_MS = 5 * 60_000
 
@@ -205,33 +199,46 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
   }
 
   /**
-   * Position ACTUELLE de la source, ramenée au début du morceau (son compteur part du début du FLUX).
-   * Le relevé publié date du dernier sondage (Sonos : jusqu'à 2 s) : tant que ça joue, on y ajoute le
-   * temps écoulé depuis `updatedAt` — jamais plus que le vrai retard, puisqu'un autre changement
-   * d'état l'aurait rafraîchi entre-temps.
+   * Position ACTUELLE de la source dans le morceau. Le relevé publié date du dernier sondage (Sonos :
+   * jusqu'à 2 s) : tant que ça joue, on y ajoute le temps écoulé depuis `updatedAt` — jamais plus que
+   * le vrai retard, puisqu'un autre changement d'état l'aurait rafraîchi entre-temps.
    */
   function trackPosition(get: (id: string) => { state?: unknown } | undefined, session: ProxySession): number {
     const st = get(session.deviceId)?.state as { kind?: string; playback?: string; updatedAt?: number; nowPlaying?: { positionS?: number } } | undefined
-    if (st?.kind !== 'media_player') return session.startS
+    if (st?.kind !== 'media_player') return 0
     const pos = st.nowPlaying?.positionS ?? 0
     const sinceS = st.playback === 'playing' && typeof st.updatedAt === 'number' ? Math.max(0, (now() - st.updatedAt) / 1000) : 0
-    return Math.max(0, pos + sinceS + session.startS)
+    return Math.max(0, pos + sinceS)
   }
 
-  /**
-   * Relance le titre d'une session sur `toDeviceId` à `startS` (transfert : autre lecteur ; déplacement :
-   * le même). Une session neuve remplace l'ancienne du lecteur cible ; l'appelant ferme la source.
-   * `resume` : `startS` est la position de la source MAINTENANT — le décalage définitif se fixe au
-   * premier `GET /stream` (voir `StreamProxy.startFor`).
-   */
-  async function relaunch(req: FastifyRequest, source: ProxySession, toDeviceId: string, startS: number, resume: boolean) {
+  /** Ouvre une session pour ce lecteur (la précédente du même lecteur est fermée) et lui envoie `play_url`. */
+  async function launch(req: FastifyRequest, videoId: string, deviceId: string, sourceUrl: string, meta: SessionMeta) {
     const { play } = resolvePlay()
-    const session = getProxy().open(source.videoId, toDeviceId, source.sourceUrl, {
-      startS, meta: source.meta, ...(resume ? { resumeAt: now() } : {}),
-    })
+    const session = getProxy().open(videoId, deviceId, sourceUrl, meta)
     const streamUrl = `${publishBase(req)}/api/plugins/ytmusic/stream/${session.sid}`
-    await play(toDeviceId, streamUrl, source.meta)
+    await play(deviceId, streamUrl, meta)
     return { session, streamUrl }
+  }
+
+  /** La cible d'un transfert met environ une seconde à démarrer : on la place d'autant plus loin. */
+  const TRANSFER_LEAD_S = 1
+
+  /**
+   * Se placer dans le morceau juste après `play_url` : l'enceinte n'a pas forcément fini de charger,
+   * la première commande peut être refusée — on réessaie un peu. Le « fichier » ayant une taille, le
+   * déplacement est le sien (plage d'octets), précis à la trame.
+   */
+  async function seekWhenReady(deviceId: string, positionS: number): Promise<void> {
+    const { execute } = resolvePlay()
+    let lastErr: unknown
+    for (let attempt = 0; attempt < 5; attempt++) {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, 600))
+      try {
+        await execute(deviceId, { type: 'media_player.seek', positionS: Math.max(0, positionS) })
+        return
+      } catch (err) { lastErr = err }
+    }
+    throw lastErr
   }
 
   /**
@@ -253,7 +260,7 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
   }
 
   const sessionView = (s: ProxySession) => ({
-    deviceId: s.deviceId, videoId: s.videoId, sid: s.sid, startS: s.startS,
+    deviceId: s.deviceId, videoId: s.videoId, sid: s.sid,
     durationS: s.meta.durationS ?? null, title: s.meta.title ?? null, artist: s.meta.artist ?? null, artUrl: s.meta.artUrl ?? null,
   })
 
@@ -469,12 +476,12 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
           artUrl: z.string().trim().min(1).max(2048).transform((u) => (u.startsWith('//') ? `https:${u}` : u))
             .pipe(z.string().url().refine((u) => /^https?:\/\//i.test(u), 'http or https only'))
             .optional(),
-          /** Durée catalogue : le proxy n'en annonce pas, c'est elle que l'UI montre. */
+          /** Durée catalogue, si yt-dlp n'en donne pas : elle fixe la taille du « fichier ». */
           durationS: z.number().positive().optional(),
         }).safeParse(req.body)
         if (!body.success) return sendError(reply, 400, 'INVALID_BODY', 'videoId and deviceId are required')
 
-        const { get, play, execute } = resolvePlay()
+        const { get, execute } = resolvePlay()
         const target = playableOrError(reply, get, body.data.deviceId)
         if ('error' in target) return target.error
 
@@ -502,22 +509,22 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
             ...(netscapePath ? { netscapePath } : {}),
             ...(deps.spawnImpl ? { spawnImpl: deps.spawnImpl } : {}),
           })
+          const durationS = resolved.durationS ?? body.data.durationS
           const meta: SessionMeta = {
             ...(body.data.title ? { title: body.data.title } : {}),
             ...(body.data.artist ? { artist: body.data.artist } : {}),
             ...(body.data.artUrl
               ? { artUrl: upgradeArtUrl(body.data.artUrl, ART_PLAY_SIZE) ?? body.data.artUrl }
               : {}),
-            ...(body.data.durationS ? { durationS: body.data.durationS } : {}),
+            ...(durationS ? { durationS } : {}),
           }
-          const session = getProxy().open(body.data.videoId, body.data.deviceId, resolved.url, { meta })
-          const streamUrl = `${publishBase(req)}/api/plugins/ytmusic/stream/${session.sid}`
-          await play(body.data.deviceId, streamUrl, meta)
+          const { session, streamUrl } = await launch(req, body.data.videoId, body.data.deviceId, resolved.url, meta)
           lastError = null
           log().info({
             videoId: body.data.videoId,
             deviceId: body.data.deviceId,
             title: body.data.title ?? null,
+            durationS: durationS ?? null,
           }, 'ytmusic play_url dispatched')
           return { ok: true as const, streamUrl, sid: session.sid }
         } catch (err) {
@@ -527,12 +534,12 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
         }
       })
 
-      /** Ce que nos lecteurs jouent de nous en ce moment : position décalée, durée et transfert côté UI. */
+      /** Ce que nos lecteurs jouent de nous en ce moment : titre, durée et transfert côté UI. */
       app.get('/sessions', async () => ({ sessions: getProxy().list().filter(sessionActive).map(sessionView) }))
 
-      // Transfert : le titre que joue `from` repart sur `to`, à la position où `from` en était
-      // (relevée dans l'état publié du lecteur), puis `from` s'arrête. Pas de nouvelle résolution
-      // yt-dlp : l'URL googlevideo de la session source est encore bonne (TTL 1 h < validité ~6 h).
+      // Transfert : le titre que joue `from` repart sur `to` (même « fichier »), la cible se place à la
+      // position où `from` en était (relevée dans l'état publié du lecteur), puis `from` s'arrête. Pas de
+      // nouvelle résolution yt-dlp : l'URL googlevideo de la session source est encore bonne.
       app.post<{ Body: unknown }>('/transfer', async (req, reply) => {
         const body = z.object({
           fromDeviceId: z.string().trim().min(1),
@@ -549,7 +556,11 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
         const positionS = trackPosition(get, source)
 
         try {
-          const { session, streamUrl } = await relaunch(req, source, body.data.toDeviceId, positionS, true)
+          const { session, streamUrl } = await launch(req, source.videoId, body.data.toDeviceId, source.sourceUrl, source.meta)
+          if (positionS > 1 && session.lengthBytes !== null) {
+            await seekWhenReady(body.data.toDeviceId, positionS + TRANSFER_LEAD_S)
+              .catch((err) => log().warn({ err, deviceId: body.data.toDeviceId, positionS }, 'ytmusic transfer: seek on target failed, playing from start'))
+          }
           // la source ne s'arrête qu'une fois la cible lancée : un échec laisse la musique où elle était
           await execute(body.data.fromDeviceId, { type: 'media_player.stop' })
             .catch((err) => log().warn({ err, deviceId: body.data.fromDeviceId }, 'ytmusic transfer: source stop failed'))
@@ -562,73 +573,65 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
         }
       })
 
-      // Se déplacer dans le morceau : le flux proxy n'est pas « seekable » pour l'enceinte (pas de
-      // taille, pas de durée), on relance donc le même titre sur le même lecteur à la position voulue.
-      app.post<{ Body: unknown }>('/seek', async (req, reply) => {
-        const body = z.object({
-          deviceId: z.string().trim().min(1),
-          positionS: z.number().min(0),
-        }).safeParse(req.body)
-        if (!body.success) return sendError(reply, 400, 'INVALID_BODY', 'deviceId and positionS are required')
-        const source = getProxy().forDevice(body.data.deviceId)
-        if (!source || !sessionActive(source)) return sendError(reply, 404, 'NOT_FOUND', 'device is not playing a YouTube Music stream')
-        const positionS = body.data.positionS
-        try {
-          const { session, streamUrl } = await relaunch(req, source, body.data.deviceId, positionS, false)
-          return { ok: true as const, streamUrl, sid: session.sid, positionS }
-        } catch (err) {
-          if (err instanceof PluginError) throw err
-          throw new PluginError('UPSTREAM_ERROR', (err as Error).message, { cause: err })
-        }
-      })
-
-      const streamHeaders = (mime: string) => ({
-        'content-type': mime,
+      /**
+       * En-têtes du « fichier » : taille annoncée et plages acceptées quand la durée est connue ; sinon
+       * un flux vivant sans taille (direct). `connection: close` : une connexion par service ffmpeg.
+       */
+      const fileHeaders = (session: ProxySession): Record<string, string> => ({
+        'content-type': session.mime,
         'cache-control': 'no-store',
-        // flux vivant, sans taille ni retour en arrière : le lecteur ne doit pas tenter de « Range »
-        'accept-ranges': 'none',
         connection: 'close',
+        ...(session.lengthBytes !== null
+          ? { 'accept-ranges': 'bytes', 'content-length': String(session.lengthBytes) }
+          : { 'accept-ranges': 'none' }),
       })
 
-      // Certains lecteurs sondent le format par HEAD — un Sonos le fait à la reprise après une pause :
-      // répondre les mêmes en-têtes que le GET, sans lancer ffmpeg (Fastify dérive sinon HEAD du GET
-      // et exécuterait tout le handler, flux compris) et SANS `content-length: 0` : le Sonos y lisait
-      // un fichier vide et abandonnait la reprise, il fallait appuyer deux fois sur lecture.
+      // Les lecteurs sondent le fichier par HEAD (taille, plages) : répondre sans lancer ffmpeg —
+      // Fastify dérive sinon HEAD du GET et exécuterait tout le handler, flux compris.
       app.head<{ Params: { sid: string } }>('/stream/:sid', async (req, reply) => {
         const session = getProxy().get(req.params.sid)
         if (!session) return sendError(reply, 404, 'NOT_FOUND', 'stream session expired or unknown')
-        log().info({ sid: session.sid, deviceId: session.deviceId, range: req.headers.range ?? null, ua: req.headers['user-agent'] ?? null }, 'ytmusic stream HEAD')
+        log().debug({ sid: session.sid, deviceId: session.deviceId, ua: req.headers['user-agent'] ?? null }, 'ytmusic stream HEAD')
         reply.hijack()
-        const res = reply.raw
-        res.writeHead(200, streamHeaders(session.mime))
-        res.end()
+        reply.raw.writeHead(200, fileHeaders(session))
+        reply.raw.end()
       })
 
       app.get<{ Params: { sid: string } }>('/stream/:sid', async (req, reply) => {
         const session = getProxy().get(req.params.sid)
         if (!session) return sendError(reply, 404, 'NOT_FOUND', 'stream session expired or unknown')
 
-        const lead = leadS()
-        const { startS, why } = getProxy().startFor(session, lead)
-        const servedAt = session.servedAt!
-        // Journal volontairement bavard : c'est lui qui dit si un lecteur redemande le flux, quand, et
-        // à quel décalage on l'a servi — la seule façon de régler la synchro sans être devant l'enceinte.
+        // Plage d'octets → instant où lancer ffmpeg (à la trame), octets de la première trame à sauter,
+        // et nombre d'octets promis. Sans durée connue : tout, depuis le début, sans taille.
+        const range = session.lengthBytes !== null ? parseRange(req.headers.range, session.lengthBytes) : null
+        const start = range?.start ?? 0
+        const end = range?.end ?? (session.lengthBytes !== null ? session.lengthBytes - 1 : null)
+        const { startS, skipBytes } = seekFor(start)
+        const headers = fileHeaders(session)
+        if (range && session.lengthBytes !== null) {
+          headers['content-range'] = `bytes ${range.start}-${range.end}/${session.lengthBytes}`
+          headers['content-length'] = String(range.end - range.start + 1)
+        }
         log().info({
-          sid: session.sid, deviceId: session.deviceId, why, startS: Number(startS.toFixed(3)),
-          range: req.headers.range ?? null, ua: req.headers['user-agent'] ?? null,
+          sid: session.sid, deviceId: session.deviceId, range: req.headers.range ?? null, startS: Number(startS.toFixed(3)),
+          ua: req.headers['user-agent'] ?? null,
         }, 'ytmusic stream GET')
+
         const proc = getProxy().spawnFfmpeg(session.sourceUrl, startS)
         reply.hijack()
         const res = reply.raw
-        res.writeHead(200, streamHeaders(session.mime))
-        proc.stdout.pipe(res)
-        proc.on('error', () => { if (!res.writableEnded) res.end() })
-        proc.on('close', () => { if (!res.writableEnded) res.end() })
-        res.on('close', () => {
-          try { proc.kill('SIGKILL') } catch { /* gone */ }
-          getProxy().noteClosed(session, servedAt, lead)
-          log().info({ sid: session.sid, deviceId: session.deviceId, playedS: session.playedS === undefined ? null : Number(session.playedS.toFixed(3)) }, 'ytmusic stream closed')
-        })
+        res.writeHead(range ? 206 : 200, headers)
+        const finish = () => { if (!res.writableEnded) res.end() }
+        if (end !== null) {
+          const lock = new LengthLock(end - start + 1, skipBytes, await getProxy().silentFrame())
+          proc.stdout.pipe(lock).pipe(res)
+          lock.on('error', finish)
+        } else {
+          proc.stdout.pipe(res)
+        }
+        proc.on('error', finish)
+        proc.on('close', () => { if (end === null) finish() })
+        res.on('close', () => { try { proc.kill('SIGKILL') } catch { /* gone */ } })
       })
     },
 

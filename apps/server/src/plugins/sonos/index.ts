@@ -184,17 +184,14 @@ export function createSonosPlugin(deps: SonosPluginDeps = {}): DevicePlugin {
     entry.reachable = true
     let patch = toStatePatch(entry.volume, entry.muted, entry.transport, entry.position, host)
     if (entry.stickyPlay) {
-      const uri = entry.position?.trackUri
-      if (uri && uri !== entry.stickyPlay.uri) {
-        // un autre URI a pris la place : le flux est bel et bien parti
+      // Un autre URI a pris la place : le flux est parti, le titre collé avec lui. Le repos ne suffit
+      // pas à oublier : le Sonos passe une seconde à l'arrêt juste après avoir reçu l'URI, et le
+      // titre collé disparaissait avant même le premier son. Au repos l'overlay ne s'applique pas
+      // (rien ne joue) ; il revient si le même URI repart.
+      if (entry.position?.trackUri && entry.position.trackUri !== entry.stickyPlay.uri) {
         entry.stickyPlay = undefined
       } else {
-        // Un Sonos ne sait pas mettre un flux HTTP en pause : il l'ARRÊTE, l'URI reste chargé et Play le
-        // redemande au serveur, qui reprend où l'écoute en était. Tant que c'est notre flux (même URI,
-        // ou URI vide juste après l'arrêt), on le dit « en pause » et on garde titre et pochette —
-        // sinon tout s'effaçait à la première pause. Un `media_player.stop` explicite, lui, oublie.
-        if (patch.playback === 'idle') patch = { ...patch, playback: 'paused' }
-        patch = overlayStreamMeta(patch, entry.stickyPlay, uri, artProxyUrl)
+        patch = overlayStreamMeta(patch, entry.stickyPlay, entry.position?.trackUri, artProxyUrl)
       }
     }
     const artUrl = patch.nowPlaying?.artUrl
@@ -263,16 +260,6 @@ export function createSonosPlugin(deps: SonosPluginDeps = {}): DevicePlugin {
       soap(transportHost(entry), AV_PATH, AV_URN, action, args)
     switch (command.type) {
       case 'media_player.play':
-        // Un flux HTTP en pause (PAUSED_PLAYBACK, ou STOPPED quand le Sonos a préféré l'arrêter) :
-        // sur Play, le Sonos essaie de reprendre le « fichier » à l'octet où il en était — sonde HEAD,
-        // pas de taille ni de Range chez nous — n'y arrive pas et s'arrête sans un son ; il fallait
-        // appuyer deux fois. Reposer l'URI le fait repartir de zéro ; c'est le serveur qui reprend le
-        // morceau là où l'écoute en était (la connexion s'est fermée à la pause).
-        if (entry.stickyPlay && toPlayback(entry.transport?.state ?? '') !== 'playing') {
-          const { uri, ...meta } = entry.stickyPlay
-          const load = streamLoad(uri, meta)
-          await av('SetAVTransportURI', { InstanceID: '0', CurrentURI: load.uri, CurrentURIMetaData: load.didl })
-        }
         await av('Play', { InstanceID: '0', Speed: '1' })
         return
       case 'media_player.pause':

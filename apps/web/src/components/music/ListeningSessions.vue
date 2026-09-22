@@ -75,11 +75,13 @@ const rows = computed<Row[]>(() => {
       const relay = house.relaySource(e.descriptor.id)
       const heard = relay && relay.state.kind === 'media_player' ? relay.state : s
       const n = heard.nowPlaying
-      // un identifiant de flux ou une URL n'est pas un titre (Sonos, serveur redémarré)
-      const title = n?.title && !/^([0-9a-f]{24}|https?:\/\/.*)$/i.test(n.title.trim()) ? n.title : undefined
+      // un identifiant de flux ou une URL n'est ni un titre ni une source lisible (Sonos, serveur redémarré)
+      const readable = (v: string | undefined) => (v && !/^([0-9a-f]{24}|https?:\/\/.*)$/i.test(v.trim()) ? v : undefined)
+      const title = readable(n?.title)
+      const source = readable(n?.source)
       const status = !s.available ? t('common.unavailable')
         : title ? [title, n?.artist].filter(Boolean).join(' — ')
-        : n?.source ? n.source
+        : source ? source
         : t(`media.${s.playback}`)
       const active = s.available && (isMediaActive(s) || !!relay)
       return {

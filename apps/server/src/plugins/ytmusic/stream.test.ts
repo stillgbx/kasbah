@@ -1,60 +1,58 @@
+import { PassThrough } from 'node:stream'
 import { describe, expect, it } from 'vitest'
-import { StreamProxy } from './stream'
+import { FRAME_BYTES, FRAME_S, LengthLock, lengthFor, parseRange, seekFor } from './stream'
 
-// Décalage servi à chaque `GET /stream` d'une même session : lancement, sonde du Sonos, reprise
-// après transfert, reconnexion pendant la lecture, reprise après pause. Horloge manuelle.
+// Le « fichier » MP3 à trames fixes : taille depuis la durée, instant depuis l'octet, plages, et la
+// promesse de taille tenue quoi que produise ffmpeg.
 
-function proxy() {
-  let t = 1_000_000
-  const p = new StreamProxy({ ffmpegPath: 'ffmpeg', now: () => t })
-  return { p, tick: (ms: number) => { t += ms } }
+async function collect(lock: LengthLock, chunks: Buffer[]): Promise<Buffer> {
+  const out = new PassThrough()
+  const got: Buffer[] = []
+  out.on('data', (c: Buffer) => got.push(c))
+  const done = new Promise<void>((resolve) => out.on('end', resolve))
+  lock.pipe(out)
+  for (const c of chunks) lock.write(c)
+  lock.end()
+  await done
+  return Buffer.concat(got)
 }
-const LEAD = 1.1
 
-describe('StreamProxy.startFor', () => {
-  it('serves the probe at the same offset, then continues while the connection stays open', () => {
-    const { p, tick } = proxy()
-    const s = p.open('vid', 'dev', 'http://src')
-    expect(p.startFor(s, LEAD)).toEqual({ startS: 0, why: 'start' })
-    // la sonde se referme aussitôt, la vraie lecture arrive 300 ms plus tard : même décalage
-    p.noteClosed(s, s.servedAt!, LEAD)
-    tick(300)
-    expect(p.startFor(s, LEAD)).toEqual({ startS: 0, why: 'probe' })
-    // le lecteur redemande le flux 10 s plus tard SANS avoir fermé : il en est à 10 s
-    tick(10_000)
-    expect(p.startFor(s, LEAD)).toEqual({ startS: 10, why: 'reconnect' })
+describe('the sized MP3 file', () => {
+  it('turns a duration into whole frames and a byte offset into a frame start', () => {
+    expect(FRAME_BYTES).toBe(576)
+    expect(FRAME_S).toBeCloseTo(0.024, 9)
+    expect(lengthFor(20)).toBe(834 * 576)
+    expect(lengthFor(0.001)).toBe(576)
+    expect(seekFor(0)).toEqual({ startS: 0, skipBytes: 0 })
+    expect(seekFor(576 * 100)).toEqual({ startS: expect.closeTo(2.4, 9), skipBytes: 0 })
+    expect(seekFor(576 * 100 + 10)).toEqual({ startS: expect.closeTo(2.4, 9), skipBytes: 10 })
   })
 
-  it('resumes a paused stream where it was heard when the connection closed', () => {
-    const { p, tick } = proxy()
-    const s = p.open('vid', 'dev', 'http://src', { startS: 40, resumeAt: 1_000_000 })
-    tick(500)
-    // reprise après transfert : position + délai de commande + avance de tampon
-    expect(p.startFor(s, LEAD).startS).toBeCloseTo(40.5 + LEAD, 6)
-    const servedAt = s.servedAt!
-    // écoute pendant 20 s, puis le Sonos arrête (pause) : le premier son était venu LEAD après le service
-    tick(20_000)
-    p.noteClosed(s, servedAt, LEAD)
-    expect(s.playedS).toBeCloseTo(40.5 + LEAD + 20 - LEAD, 6)
-    // reprise deux minutes plus tard : là où l'écoute en était, pas deux minutes plus loin
-    tick(120_000)
-    expect(p.startFor(s, LEAD)).toEqual({ startS: expect.closeTo(60.5, 6), why: 'reconnect' })
-    expect(s.playedS).toBeUndefined()
-    // le Sonos a reposé l'URI : sonde refermée aussitôt, puis la vraie lecture, toujours à 60,5
-    p.noteClosed(s, s.servedAt!, LEAD)
-    tick(300)
-    expect(p.startFor(s, LEAD)).toEqual({ startS: expect.closeTo(60.5, 6), why: 'probe' })
+  it('parses byte ranges against the announced length', () => {
+    expect(parseRange(undefined, 1000)).toBeNull()
+    expect(parseRange('bytes=0-', 1000)).toEqual({ start: 0, end: 999 })
+    expect(parseRange('bytes=100-199', 1000)).toEqual({ start: 100, end: 199 })
+    expect(parseRange('bytes=100-5000', 1000)).toEqual({ start: 100, end: 999 })
+    expect(parseRange('bytes=-100', 1000)).toEqual({ start: 900, end: 999 })
+    expect(parseRange('bytes=1000-', 1000)).toBeNull()
+    expect(parseRange('items=0-1', 1000)).toBeNull()
   })
 
-  it('ignores the close of an older connection (the probe closing after the real request)', () => {
-    const { p, tick } = proxy()
-    const s = p.open('vid', 'dev', 'http://src')
-    p.startFor(s, LEAD)
-    const probeServedAt = s.servedAt!
-    tick(300)
-    p.startFor(s, LEAD)               // la vraie lecture
-    tick(100)
-    p.noteClosed(s, probeServedAt, LEAD)   // la sonde se ferme ensuite
-    expect(s.playedS).toBeUndefined()
+  it('delivers exactly the promised bytes: skips the head of the first frame, truncates, pads with silence', async () => {
+    const silence = Buffer.alloc(576, 7)
+    // ffmpeg en produit trop : on coupe
+    const a = await collect(new LengthLock(10, 0, silence), [Buffer.alloc(8, 1), Buffer.alloc(8, 2)])
+    expect(a.length).toBe(10)
+    expect([...a.subarray(0, 8)]).toEqual(Array(8).fill(1))
+    expect([...a.subarray(8)]).toEqual([2, 2])
+    // ffmpeg s'arrête trop tôt : silence jusqu'à la taille promise
+    const b = await collect(new LengthLock(1000, 0, silence), [Buffer.alloc(100, 1)])
+    expect(b.length).toBe(1000)
+    expect(b[99]).toBe(1)
+    expect(b[100]).toBe(7)
+    expect(b[999]).toBe(7)
+    // plage qui commence au milieu d'une trame : les premiers octets sont avalés
+    const c = await collect(new LengthLock(5, 3, silence), [Buffer.from([1, 2, 3, 4, 5, 6, 7, 8, 9])])
+    expect([...c]).toEqual([4, 5, 6, 7, 8])
   })
 })

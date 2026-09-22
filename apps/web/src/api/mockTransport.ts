@@ -210,7 +210,6 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     async ytmusicPlay() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music cookie in mock mode') },
     // aucun flux servi par la simulation : la page Musique montre ses lecteurs, sans transfert possible
     async ytmusicSessions() { return { sessions: [] } },
-    async ytmusicSeek() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
     async ytmusicTransfer() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
     // la simulation déclare ses appareils, elle n'en découvre aucun : il n'y a rien à oublier
     async forgetDevice() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'nothing to forget in mock mode') },

@@ -176,7 +176,6 @@ async function boot(extra: {
     YTM_YTDLP_PATH: 'yt-dlp',
     YTM_PO_TOKEN_URL: 'http://127.0.0.1:4416',
     FFMPEG_PATH: 'ffmpeg',
-    YTM_RESUME_LEAD_MS: LEAD_MS,
   })
   const ctx = fakeCtx(config)
   await plugin.init(ctx)
@@ -202,6 +201,7 @@ function fakeSpawn() {
       proc.stdin = null
       queueMicrotask(() => {
         proc.stdout.end(JSON.stringify({
+          duration: 20,
           formats: [{ url: 'https://googlevideo.example/a.m4a', format_id: '140', ext: 'm4a', acodec: 'mp4a.40.2', vcodec: 'none' }],
         }))
         proc.emit('close', 0)
@@ -220,10 +220,6 @@ function fakeSpawn() {
   })
   return { spawnImpl: spawnImpl as unknown as SpawnFn, procs }
 }
-
-/** Avance de tampon du test : les attentes en découlent, la valeur réglée en production n'a pas à être la même. */
-const LEAD_MS = 1100
-const LEAD_S = LEAD_MS / 1000
 
 const player: DeviceDescriptor = {
   id: 'google_cast:mini',
@@ -583,16 +579,15 @@ describe('ytmusic plugin', () => {
     await plugin.stop()
   })
 
-  it('transfers the running stream to another player at the source position, then stops the source', async () => {
+  it('serves the track as a sized MP3 file (HEAD, ranges), transfers with a native seek, and drops a session the player left', async () => {
     const office: DeviceDescriptor = { ...player, id: 'sonos:office', pluginId: 'sonos', externalId: 'office', name: 'Bureau' }
     const commands: { id: string; cmd: Command }[] = []
     const ff = fakeSpawn()
     const ctxRef = { clock: new ManualClock(0) as { now(): number } }
     type Dev = { descriptor: DeviceDescriptor; state?: unknown } | undefined
     const deviceOf = (id: string): Dev => {
-      // la cible joue bien notre titre (sinon sa session ne compterait plus)
       if (id === player.id) return { descriptor: player, state: { kind: 'media_player', playback: 'playing', nowPlaying: { title: 'Song' } } }
-      // le Sonos publie sa position depuis le début du FLUX, pas du morceau ; relevé il y a 1,5 s
+      // le Sonos publie sa position dans le morceau ; relevé il y a 1,5 s
       if (id === office.id) return { descriptor: office, state: { kind: 'media_player', playback: 'playing', updatedAt: ctxRef.clock.now() - 1_500, nowPlaying: { title: 'Song', positionS: 42.7 } } }
       return undefined
     }
@@ -605,75 +600,64 @@ describe('ytmusic plugin', () => {
     ctxRef.clock = ctx.clock
     await app.inject({ method: 'PUT', url: '/api/plugins/ytmusic/cookie', payload: { cookie: COOKIE } })
 
-    // rien ne joue encore : ni transfert ni déplacement possibles
+    // rien ne joue encore : pas de transfert possible
     expect((await app.inject({ method: 'POST', url: '/api/plugins/ytmusic/transfer', payload: { fromDeviceId: office.id, toDeviceId: player.id } })).statusCode).toBe(404)
-    expect((await app.inject({ method: 'POST', url: '/api/plugins/ytmusic/seek', payload: { deviceId: office.id, positionS: 10 } })).statusCode).toBe(404)
 
+    // la durée vient de yt-dlp (20 s), pas du catalogue (265 s)
     await app.inject({
       method: 'POST', url: '/api/plugins/ytmusic/play',
-      payload: { videoId: 'vid1', deviceId: office.id, title: 'Song', artist: 'A', artUrl: 'https://i.ytimg.com/a.jpg', durationS: 200 },
+      payload: { videoId: 'vid1', deviceId: office.id, title: 'Song', artist: 'A', artUrl: 'https://i.ytimg.com/a.jpg', durationS: 265 },
     })
-    // premier lancement : rien à mettre en pause avant
     expect(commands.map((c) => c.cmd.type)).toEqual(['media_player.play_url'])
-    const before = await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/sessions' })
-    expect(before.json().sessions).toEqual([expect.objectContaining({ deviceId: office.id, startS: 0, durationS: 200, title: 'Song' })])
+    const sessions = (await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/sessions' })).json().sessions
+    expect(sessions).toEqual([expect.objectContaining({ deviceId: office.id, durationS: 20, title: 'Song', artist: 'A' })])
+    expect(sessions[0]).not.toHaveProperty('startS')
 
-    // déplacement dans le morceau : même lecteur, nouvelle session à la position voulue, mêmes métas
-    const seek = await app.inject({ method: 'POST', url: '/api/plugins/ytmusic/seek', payload: { deviceId: office.id, positionS: 30.9 } })
-    expect(seek.statusCode).toBe(200)
-    expect(seek.json().positionS).toBe(30.9)
-    const seekPlay = commands.at(-1)!.cmd
-    expect(seekPlay.type).toBe('media_player.play_url')
-    expect(seekPlay).toMatchObject({ title: 'Song', artist: 'A', artUrl: 'https://i.ytimg.com/a.jpg' })
-
-    // transfert : position du lecteur (42,7) + 1,5 s depuis son relevé + départ de la session (30,9),
-    // la source s'arrête ensuite
-    const r = await app.inject({ method: 'POST', url: '/api/plugins/ytmusic/transfer', payload: { fromDeviceId: office.id, toDeviceId: player.id } })
-    expect(r.statusCode).toBe(200)
-    expect(r.json().positionS).toBeCloseTo(75.1, 3)
-    const tail = commands.slice(-2)
-    expect(tail[0]!.id).toBe(player.id)
-    expect(tail[0]!.cmd).toMatchObject({ type: 'media_player.play_url', title: 'Song', artist: 'A', artUrl: 'https://i.ytimg.com/a.jpg' })
-    expect(tail[1]).toEqual({ id: office.id, cmd: { type: 'media_player.stop' } })
-    const after = await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/sessions' })
-    expect(after.json().sessions).toEqual([expect.objectContaining({ deviceId: player.id, videoId: 'vid1', durationS: 200 })])
-    expect(after.json().sessions[0].startS).toBeCloseTo(75.1, 3)
-
-    // le flux de la cible démarre à la position transférée (`-ss` avant `-i`), plus le temps que la
-    // commande a pris (2 s ici) et l'avance de tampon : la source a continué d'avancer
-    ;(ctx.clock as ManualClock).advance(2_000)
-    const sid = (tail[0]!.cmd as { url: string }).url.split('/').pop()!
-    const stream = await app.inject({ method: 'GET', url: `/api/plugins/ytmusic/stream/${sid}` })
-    expect(stream.statusCode).toBe(200)
-    const ffmpegCalls = (ff.spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls.filter((c) => !(c[1] as string[]).includes('-J'))
-    const args = ffmpegCalls.at(-1)![1] as string[]
-    expect(Number(args[args.indexOf('-ss') + 1])).toBeCloseTo(77.1 + LEAD_S, 3)
-    expect(args.indexOf('-ss')).toBeLessThan(args.indexOf('-i'))
-    // la sonde du Sonos vient 300 ms plus tard : même décalage, pas d'accroc
-    ;(ctx.clock as ManualClock).advance(300)
-    await app.inject({ method: 'GET', url: `/api/plugins/ytmusic/stream/${sid}` })
-    const argsProbe = (ff.spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls.filter((c) => !(c[1] as string[]).includes('-J')).at(-1)![1] as string[]
-    expect(Number(argsProbe[argsProbe.indexOf('-ss') + 1])).toBeCloseTo(77.1 + LEAD_S, 3)
-    // pause (la connexion s'est fermée — ici aussitôt, `inject` n'attend pas) puis reprise 5 s plus
-    // tard : le flux repart où l'écoute en était, pas 5 s plus loin — et la position de l'UI suit
-    ;(ctx.clock as ManualClock).advance(5_000)
-    await app.inject({ method: 'GET', url: `/api/plugins/ytmusic/stream/${sid}` })
-    const args2 = (ff.spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls.filter((c) => !(c[1] as string[]).includes('-J')).at(-1)![1] as string[]
-    expect(Number(args2[args2.indexOf('-ss') + 1])).toBeCloseTo(77.1 + LEAD_S, 3)
-    expect((await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/sessions' })).json().sessions[0].startS).toBeCloseTo(77.1 + LEAD_S, 3)
-    // une pause longue reprend au même endroit : le délai n'entre pas en compte
-    ;(ctx.clock as ManualClock).advance(60_000)
-    await app.inject({ method: 'GET', url: `/api/plugins/ytmusic/stream/${sid}` })
-    const args3 = (ff.spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls.filter((c) => !(c[1] as string[]).includes('-J')).at(-1)![1] as string[]
-    expect(Number(args3[args3.indexOf('-ss') + 1])).toBeCloseTo(77.1 + LEAD_S, 3)
-    // sonder le format (HEAD) ne lance pas ffmpeg et ne compte pas comme un service
-    const spawnsBefore = (ff.spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls.length
+    // un « fichier » : 20 s = 834 trames de 576 octets
+    const LENGTH = Math.ceil(20 / (1152 / 48000)) * 576
+    const sid = (commands[0]!.cmd as { url: string }).url.split('/').pop()!
     const head = await app.inject({ method: 'HEAD', url: `/api/plugins/ytmusic/stream/${sid}` })
     expect(head.statusCode).toBe(200)
-    expect(head.headers['content-type']).toBe('audio/mpeg')
-    expect((ff.spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls.length).toBe(spawnsBefore)
+    expect(head.headers['content-length']).toBe(String(LENGTH))
+    expect(head.headers['accept-ranges']).toBe('bytes')
+    const ffArgs = () => (ff.spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls.filter((c) => !(c[1] as string[]).includes('-J') && !(c[1] as string[]).includes('lavfi')).at(-1)![1] as string[]
+    // tout le fichier : ffmpeg depuis le début, taille promise tenue (la fausse sortie ne fait que 3 octets : on complète)
+    const whole = await app.inject({ method: 'GET', url: `/api/plugins/ytmusic/stream/${sid}` })
+    expect(whole.statusCode).toBe(200)
+    expect(whole.headers['content-length']).toBe(String(LENGTH))
+    expect(whole.rawPayload.length).toBe(LENGTH)
+    expect(ffArgs()).not.toContain('-ss')
+    expect(ffArgs()).toContain('libmp3lame')
+    // une plage : ffmpeg lancé à la trame (57 600 octets = 100 trames = 2,4 s), 206 avec la bonne étendue
+    const part = await app.inject({ method: 'GET', url: `/api/plugins/ytmusic/stream/${sid}`, headers: { range: `bytes=57600-` } })
+    expect(part.statusCode).toBe(206)
+    expect(part.headers['content-range']).toBe(`bytes 57600-${LENGTH - 1}/${LENGTH}`)
+    expect(part.rawPayload.length).toBe(LENGTH - 57600)
+    const args = ffArgs()
+    expect(Number(args[args.indexOf('-ss') + 1])).toBeCloseTo(2.4, 3)
+    expect(args.indexOf('-ss')).toBeLessThan(args.indexOf('-i'))
+    // plage hors du fichier : on sert tout (200), l'enceinte s'y retrouve
+    expect((await app.inject({ method: 'GET', url: `/api/plugins/ytmusic/stream/${sid}`, headers: { range: `bytes=${LENGTH + 10}-` } })).statusCode).toBe(200)
+
+    // transfert : même fichier sur la cible, déplacement natif à la position de la source
+    // (42,7 + 1,5 s depuis le relevé), puis la source s'arrête
+    commands.length = 0
+    const r = await app.inject({ method: 'POST', url: '/api/plugins/ytmusic/transfer', payload: { fromDeviceId: office.id, toDeviceId: player.id } })
+    expect(r.statusCode).toBe(200)
+    expect(r.json().positionS).toBeCloseTo(44.2, 3)
+    expect(commands.map((c) => [c.id, c.cmd.type])).toEqual([
+      [player.id, 'media_player.play_url'],
+      [player.id, 'media_player.seek'],
+      [office.id, 'media_player.stop'],
+    ])
+    // la cible se place une seconde plus loin : le temps qu'elle démarre
+    expect((commands[1]!.cmd as { positionS: number }).positionS).toBeCloseTo(45.2, 3)
+    expect(commands[0]!.cmd).toMatchObject({ title: 'Song', artist: 'A', artUrl: 'https://i.ytimg.com/a.jpg' })
+    const after = (await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/sessions' })).json().sessions
+    expect(after).toEqual([expect.objectContaining({ deviceId: player.id, videoId: 'vid1', durationS: 20 })])
 
     // l'enceinte joue autre chose (une radio lancée ailleurs) : la session ne compte plus, ni pour l'UI ni pour un transfert
+    ;(ctx.clock as ManualClock).advance(6_000)
     const radio: Dev = { descriptor: player, state: { kind: 'media_player', playback: 'playing', nowPlaying: { title: 'franceinfo' } } }
     devices.get = (id) => (id === player.id ? radio : deviceOf(id))
     expect((await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/sessions' })).json().sessions).toEqual([])
@@ -681,21 +665,9 @@ describe('ytmusic plugin', () => {
     devices.get = deviceOf
 
     // relancer un autre titre là où l'un des nôtres joue : pause immédiate, puis le nouveau flux
+    commands.length = 0
     await app.inject({ method: 'POST', url: '/api/plugins/ytmusic/play', payload: { videoId: 'vid2', deviceId: player.id, title: 'Next' } })
-    expect(commands.slice(-2).map((c) => c.cmd.type)).toEqual(['media_player.pause', 'media_player.play_url'])
-    // au lancement, le Sonos sonde l'URI (GET) puis lit pour de bon 300 ms plus tard : le morceau
-    // commence au début les deux fois, la sonde n'a rien joué
-    const sid2 = (commands.at(-1)!.cmd as { url: string }).url.split('/').pop()!
-    const ffArgs = () => (ff.spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls.filter((c) => !(c[1] as string[]).includes('-J')).at(-1)![1] as string[]
-    await app.inject({ method: 'GET', url: `/api/plugins/ytmusic/stream/${sid2}` })
-    expect(ffArgs()).not.toContain('-ss')
-    ;(ctx.clock as ManualClock).advance(300)
-    await app.inject({ method: 'GET', url: `/api/plugins/ytmusic/stream/${sid2}` })
-    expect(ffArgs()).not.toContain('-ss')
-    // pause aussitôt après le départ puis reprise 4 s plus tard : le morceau reprend au début
-    ;(ctx.clock as ManualClock).advance(4_000)
-    await app.inject({ method: 'GET', url: `/api/plugins/ytmusic/stream/${sid2}` })
-    expect(ffArgs()).not.toContain('-ss')
+    expect(commands.map((c) => c.cmd.type)).toEqual(['media_player.pause', 'media_player.play_url'])
     await app.close()
     await plugin.stop()
   })

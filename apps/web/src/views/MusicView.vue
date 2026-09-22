@@ -27,9 +27,9 @@ import { usePluginsStore } from '../stores/plugins'
 // playlists. Une seule source aujourd'hui (YouTube Music, non officiel) ; la rangée de sources est
 // là pour les suivantes. La lecture reste un titre à la fois (`play_url`) — la file d'attente viendra.
 //
-// Le transfert (bureau → salon) passe par le serveur : il connaît le titre que joue la source et
-// relance le flux sur la cible à la même position, puis arrête la source. Il n'est possible que pour
-// une lecture lancée d'ici (`GET /sessions`) : une appli native sur le Chromecast n'est pas à nous.
+// Le transfert (bureau → salon) passe par le serveur : il connaît le titre que joue la source, le
+// relance sur la cible qui se place à la même position, puis arrête la source. Il n'est possible que
+// pour une lecture lancée d'ici (`GET /sessions`) : une appli native sur le Chromecast n'est pas à nous.
 
 defineOptions({ name: 'MusicView' })
 
@@ -221,17 +221,10 @@ async function transferTo(toId: string) {
     void refreshSessions()
   }
 }
-/** Se placer dans le morceau : notre flux se relance à la position (le proxy n'est pas « seekable ») ; sinon la commande du lecteur. */
-async function barSeek(positionS: number) {
+/** Se placer dans le morceau : la commande du lecteur suffit, notre flux est un « fichier » pour lui. */
+function barSeek(positionS: number) {
   const s = selected.value
-  if (!s) return
-  if (selectedSession.value) {
-    try { await getTransport().ytmusicSeek({ deviceId: s.descriptor.id, positionS }) }
-    catch (err) { fail(err) }
-    finally { void refreshSessions() }
-  } else {
-    void devices.sendCommand(s.descriptor.id, { type: 'media_player.seek', positionS: Math.round(positionS) })
-  }
+  if (s) void devices.sendCommand(s.descriptor.id, { type: 'media_player.seek', positionS: Math.round(positionS) })
 }
 
 // ---- liaison et chargement ---------------------------------------------------------------------

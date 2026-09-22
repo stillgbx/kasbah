@@ -1,12 +1,21 @@
 import { spawn, type ChildProcessWithoutNullStreams, type SpawnOptions } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { Transform, type TransformCallback } from 'node:stream'
 import { toNetscape } from './cookie'
 
 // Résolution de flux (yt-dlp + PO Token) et proxy LAN (ffmpeg → MP3) pour Cast/Sonos.
 // Les enceintes ne voient jamais googlevideo.com — seulement une URL HTTP du serveur Kasbah.
+//
+// Le proxy se présente à l'enceinte comme un FICHIER MP3 de taille connue, découpable par plages
+// d'octets, sans rien télécharger d'avance : MP3 à débit constant 192 kb/s à 48 kHz, sans en-tête
+// Xing ni ID3, donc chaque trame fait exactement 576 octets pour 24 ms. Une durée se traduit en
+// taille exacte, une plage d'octets en instant précis où lancer ffmpeg. L'enceinte connaît alors la
+// durée et sa position, met en pause, reprend et se déplace toute seule, et passe au repos à la
+// fin : plus de décalage à calculer ni de reprise à deviner côté serveur. Un flux sans durée (un
+// direct) est servi à l'ancienne, sans taille.
 
 export type SpawnFn = (command: string, args: readonly string[], options?: SpawnOptions) => ChildProcessWithoutNullStreams
 
@@ -24,6 +33,8 @@ export interface ResolvedStream {
   url: string
   formatId: string | null
   ext: string | null
+  /** Durée du média d'après yt-dlp (s), sinon null (direct, inconnue). */
+  durationS: number | null
 }
 
 /** Ping du générateur PO Token (Music Assistant : `GET {base}/ping`). */
@@ -84,7 +95,7 @@ export async function resolveStreamUrl(opts: StreamResolveOpts): Promise<Resolve
     const tail = stderr.trim().split(/\r?\n/).filter(Boolean).slice(-2).join(' ; ')
     throw new Error(`yt-dlp failed (${code})${tail ? `: ${tail}` : ''}`)
   }
-  let info: { formats?: Array<{ url?: string; format_id?: string; ext?: string; acodec?: string; vcodec?: string; abr?: number; tbr?: number }> ; url?: string; format_id?: string; ext?: string }
+  let info: { formats?: Array<{ url?: string; format_id?: string; ext?: string; acodec?: string; vcodec?: string; abr?: number; tbr?: number }> ; url?: string; format_id?: string; ext?: string; duration?: number; is_live?: boolean }
   try { info = JSON.parse(stdout) as typeof info }
   catch { throw new Error('yt-dlp returned non-JSON') }
   // Préférer m4a / 140 / 141, sinon opus/webm, sinon premier format avec audio.
@@ -108,7 +119,90 @@ export async function resolveStreamUrl(opts: StreamResolveOpts): Promise<Resolve
     .sort((a, b) => (b.abr ?? b.tbr ?? 0) - (a.abr ?? a.tbr ?? 0))
   const pick = audio[0] ?? muxed[0] ?? (info.url ? { url: info.url, format_id: info.format_id, ext: info.ext } : null)
   if (!pick?.url) throw new Error(`no audio stream format found (${formats.length} formats reported)`)
-  return { url: pick.url, formatId: pick.format_id ?? null, ext: pick.ext ?? null }
+  const durationS = !info.is_live && typeof info.duration === 'number' && info.duration > 0 ? info.duration : null
+  return { url: pick.url, formatId: pick.format_id ?? null, ext: pick.ext ?? null, durationS }
+}
+
+// ---- le « fichier » MP3 : trames de taille fixe ---------------------------------------------------
+/** MPEG-1 Layer III, 48 kHz, 192 kb/s : 144 × 192000 / 48000 = 576 octets par trame, sans bit de bourrage. */
+export const FRAME_BYTES = 576
+/** 1152 échantillons à 48 kHz. */
+export const FRAME_S = 1152 / 48000
+export const BYTES_PER_S = FRAME_BYTES / FRAME_S   // 24 000
+
+/** Taille annoncée pour une durée : un nombre entier de trames, la dernière seconde partielle comprise. */
+export function lengthFor(durationS: number): number {
+  return Math.ceil(durationS / FRAME_S) * FRAME_BYTES
+}
+
+/** Instant (s) où commence la trame qui contient cet octet, et les octets de cette trame à sauter. */
+export function seekFor(byteOffset: number): { startS: number; skipBytes: number } {
+  const frame = Math.floor(byteOffset / FRAME_BYTES)
+  return { startS: frame * FRAME_S, skipBytes: byteOffset - frame * FRAME_BYTES }
+}
+
+/** Plage `bytes=a-b` (b optionnel) ramenée à la taille ; null = pas de plage ou plage impossible. */
+export function parseRange(header: string | undefined, length: number): { start: number; end: number } | null {
+  if (!header) return null
+  const m = /^bytes=(\d*)-(\d*)$/.exec(header.trim())
+  if (!m) return null
+  const [, a, b] = m
+  if (a === '' && b === '') return null
+  if (a === '') {
+    // suffixe : les N derniers octets
+    const n = Number(b)
+    return n > 0 ? { start: Math.max(0, length - n), end: length - 1 } : null
+  }
+  const start = Number(a)
+  const end = b === '' ? length - 1 : Math.min(Number(b), length - 1)
+  if (!Number.isFinite(start) || start >= length || start > end) return null
+  return { start, end }
+}
+
+/**
+ * Tient la promesse de taille : passe exactement `total` octets, en jetant ce que ffmpeg produit
+ * en trop (sa dernière trame peut déborder de la durée) et en complétant par du silence s'il
+ * s'arrête avant (durée arrondie, source un peu plus courte). `skip` octets sont d'abord avalés :
+ * une plage qui commence au milieu d'une trame reçoit exactement les octets demandés.
+ */
+export class LengthLock extends Transform {
+  private sent = 0
+  constructor(private readonly total: number, private skip: number, private readonly silence: Buffer) {
+    super()
+  }
+
+  override _transform(chunk: Buffer, _enc: BufferEncoding, cb: TransformCallback): void {
+    let c = chunk
+    if (this.skip > 0) {
+      const eat = Math.min(this.skip, c.length)
+      this.skip -= eat
+      c = c.subarray(eat)
+    }
+    const room = this.total - this.sent
+    if (room <= 0 || c.length === 0) return cb()
+    const out = c.length > room ? c.subarray(0, room) : c
+    this.sent += out.length
+    cb(null, out)
+  }
+
+  override _flush(cb: TransformCallback): void {
+    let room = this.total - this.sent
+    while (room > 0) {
+      const out = this.silence.length > room ? this.silence.subarray(0, room) : this.silence
+      this.push(out)
+      this.sent += out.length
+      room -= out.length
+    }
+    cb()
+  }
+}
+
+export interface SessionMeta {
+  title?: string
+  artist?: string
+  artUrl?: string
+  /** Durée du titre (catalogue ou yt-dlp) : c'est elle qui fixe la taille du « fichier ». */
+  durationS?: number
 }
 
 export interface ProxySession {
@@ -118,50 +212,10 @@ export interface ProxySession {
   sourceUrl: string
   createdAt: number
   mime: string
-  /** Décalage de départ (s) : un transfert ou un déplacement reprend le morceau plus loin que son début. */
-  startS: number
-  /**
-   * Reprise « en direct » (transfert) : `startS` vaut la position de la source à cet instant (ms
-   * d'horloge). Le décalage définitif n'est fixé qu'au premier `GET /stream`, en y ajoutant le temps
-   * écoulé depuis — commande au lecteur, connexion — et l'avance de mise en tampon (`startFor`).
-   * Sans lui (lancement, déplacement voulu), `startS` est déjà définitif.
-   */
-  resumeAt?: number
-  /** Dernier `GET /stream` servi : horloge (ms) et raison — pour décider quoi faire à la reconnexion. */
-  servedAt?: number
-  servedWhy?: ServeReason
-  /**
-   * Position (s dans le morceau) où l'écoute en était quand la dernière connexion s'est fermée : une
-   * pause (le Sonos ARRÊTE un flux et le redemande au Play) reprend ici, quel que soit son délai.
-   */
-  playedS?: number
-  /** Ce que l'UI savait du titre au lancement (catalogue) : réutilisé tel quel au transfert / déplacement. */
+  /** Taille annoncée ; null = durée inconnue (direct), servi sans taille ni plages. */
+  lengthBytes: number | null
+  /** Ce que l'UI savait du titre au lancement (catalogue) : réutilisé tel quel au transfert. */
   meta: SessionMeta
-}
-
-/**
- * Un Sonos SONDE l'URI à sa réception (premier GET, aussitôt refermé) puis la lit pour de bon à la
- * commande Play (second GET, quelques centaines de ms plus tard) : la sonde n'est pas jouée. Le
- * second GET doit donc repartir au MÊME décalage, pas « au temps écoulé » — sinon le premier quart
- * de seconde saute, ou deux décalages différents s'entendent comme un accroc. Ça vaut au lancement,
- * au transfert et à la reprise après pause (le Sonos repose l'URI et sonde à nouveau).
- */
-export const PROBE_WINDOW_MS = 1_500
-export type ServeReason = 'start' | 'resume' | 'reconnect' | 'probe'
-
-export interface OpenOpts {
-  startS?: number
-  meta?: SessionMeta
-  /** Horloge (ms) à laquelle `startS` a été relevé sur la source d'un transfert. */
-  resumeAt?: number
-}
-
-export interface SessionMeta {
-  title?: string
-  artist?: string
-  artUrl?: string
-  /** Durée catalogue : le flux proxy n'en annonce pas, l'enceinte ne peut donc pas la publier. */
-  durationS?: number
 }
 
 export interface StreamProxyOpts {
@@ -174,7 +228,7 @@ export interface StreamProxyOpts {
 
 /**
  * Sessions courtes : `GET /stream/:sid` lance ffmpeg qui lit googlevideo et sort du MP3 sur stdout.
- * Une session par sid ; on peut en avoir plusieurs (un lecteur = une session typiquement).
+ * Une session par lecteur ; ouvrir la suivante ferme la précédente du même lecteur.
  */
 export class StreamProxy {
   private readonly sessions = new Map<string, ProxySession>()
@@ -182,23 +236,25 @@ export class StreamProxy {
   private readonly spawnImpl: SpawnFn
   private readonly ttlMs: number
   private readonly now: () => number
+  private silence: Promise<Buffer> | null = null
 
   constructor(private readonly opts: StreamProxyOpts) {
     this.spawnImpl = opts.spawnImpl ?? (spawn as unknown as SpawnFn)
-    this.ttlMs = opts.ttlMs ?? 3_600_000
+    // Longtemps : un mix de plusieurs heures doit rester servable, et l'enceinte redemande le fichier
+    // à chaque reprise ou déplacement.
+    this.ttlMs = opts.ttlMs ?? 6 * 3_600_000
     this.now = opts.now ?? (() => Date.now())
   }
 
-  open(videoId: string, deviceId: string, sourceUrl: string, opts: OpenOpts = {}): ProxySession {
+  open(videoId: string, deviceId: string, sourceUrl: string, meta: SessionMeta = {}): ProxySession {
     this.closeDevice(deviceId)
     const sid = randomBytes(12).toString('hex')
     const session: ProxySession = {
       sid, videoId, deviceId, sourceUrl,
       createdAt: this.now(),
       mime: 'audio/mpeg',
-      startS: Math.max(0, opts.startS ?? 0),
-      ...(opts.resumeAt !== undefined ? { resumeAt: opts.resumeAt } : {}),
-      meta: opts.meta ?? {},
+      lengthBytes: meta.durationS && meta.durationS > 0 ? lengthFor(meta.durationS) : null,
+      meta,
     }
     this.sessions.set(sid, session)
     this.byDevice.set(deviceId, sid)
@@ -227,53 +283,6 @@ export class StreamProxy {
     if (sid) this.close(sid)
   }
 
-  /**
-   * Décalage auquel servir CE `GET /stream`, et pourquoi (`why`, pour le journal) :
-   * - `resume` : reprise après transfert — la source a continué d'avancer pendant la commande et la
-   *   connexion, et l'enceinte ne jouera le premier octet qu'après avoir rempli son tampon (`leadS`) ;
-   *   sans ça, la cible repartait ~1 s en arrière ;
-   * - `reconnect` : le même lecteur redemande le flux — après une pause (connexion fermée : on
-   *   reprend à la position atteinte à la fermeture, `playedS`, quel que soit le délai) ou pendant
-   *   qu'il joue encore (connexion ouverte : on continue au temps écoulé) — au lieu de rejouer ce
-   *   qu'il a déjà entendu ;
-   * - `probe` : GET qui suit de peu une connexion aussitôt refermée — la sonde de format du Sonos
-   *   n'a rien joué, la lecture commence ici, au MÊME décalage ; le délai jusqu'au premier son est
-   *   l'affaire de l'avance de tampon `leadS`, pas du temps entre les deux GET ;
-   * - `start` : premier service (lancement, déplacement voulu) — `startS` est déjà définitif.
-   * `session.startS` reflète toujours le dernier service : c'est lui que l'UI ajoute à la position.
-   */
-  startFor(session: ProxySession, leadS: number): { startS: number; why: ServeReason } {
-    const now = this.now()
-    let why: ServeReason = 'start'
-    if (session.resumeAt !== undefined) {
-      session.startS += Math.max(0, (now - session.resumeAt) / 1000) + Math.max(0, leadS)
-      delete session.resumeAt
-      why = 'resume'
-    } else if (session.servedAt !== undefined) {
-      if (session.playedS !== undefined && now - session.servedAt < PROBE_WINDOW_MS) {
-        why = 'probe'
-      } else {
-        session.startS = session.playedS ?? session.startS + (now - session.servedAt) / 1000
-        why = 'reconnect'
-      }
-    }
-    session.servedAt = now
-    session.servedWhy = why
-    delete session.playedS
-    return { startS: session.startS, why }
-  }
-
-  /**
-   * La connexion servie à `servedAt` s'est fermée : retenir où l'écoute en était. Le lecteur joue en
-   * temps réel depuis le premier son, venu `leadS` après le début du service — d'où la soustraction.
-   * Une connexion plus ancienne (la sonde qui se ferme après la vraie lecture) ne compte pas.
-   */
-  noteClosed(session: ProxySession, servedAt: number, leadS: number): void {
-    if (session.servedAt !== servedAt) return
-    const heardS = (this.now() - servedAt) / 1000 - Math.max(0, leadS)
-    session.playedS = session.startS + Math.max(0, heardS)
-  }
-
   /** Session vivante de ce lecteur (ce qu'il joue de nous), sinon undefined. */
   forDevice(deviceId: string): ProxySession | undefined {
     const sid = this.byDevice.get(deviceId)
@@ -293,15 +302,17 @@ export class StreamProxy {
   /** Pipe ffmpeg stdout vers le client HTTP. Le caller doit détruire le processus si le client part. */
   spawnFfmpeg(sourceUrl: string, startS = 0): ChildProcessWithoutNullStreams {
     // `-ss` AVANT `-i` : ffmpeg se place dans la source (rapide, sans décoder ce qui précède).
-    // Fondu d'entrée de 60 ms : un flux qui démarre en milieu de morceau commence sur un échantillon
-    // quelconque et claque sans lui ; au début d'un titre il couvre l'amorce de l'encodeur et le
-    // premier tampon de l'enceinte (petit craquement entendu au lancement). Inaudible sur une intro.
+    // Sortie à trames FIXES (48 kHz, CBR 192k, ni Xing ni ID3) : voir l'en-tête du fichier. Fondu
+    // d'entrée de 60 ms : un flux qui démarre en milieu de morceau commence sur un échantillon
+    // quelconque et claque sans lui ; au début d'un titre il est inaudible.
     const args = [
       '-hide_banner', '-loglevel', 'warning',
       ...(startS > 0 ? ['-ss', startS.toFixed(3)] : []),
       '-i', sourceUrl,
       '-vn', '-af', 'afade=t=in:st=0:d=0.06',
+      '-ar', '48000', '-ac', '2',
       '-c:a', 'libmp3lame', '-b:a', '192k',
+      '-write_xing', '0', '-id3v2_version', '0',
       '-f', 'mp3', 'pipe:1',
     ]
     return this.spawnImpl(this.opts.ffmpegPath, args, {
@@ -309,13 +320,26 @@ export class StreamProxy {
       windowsHide: true,
     })
   }
-}
 
-/** Écrit un Netscape temporaire (tests / resolve sans fichier d'état). */
-export async function writeTempNetscape(raw: string): Promise<string> {
-  const dir = join(tmpdir(), 'kasbah-ytm')
-  await mkdir(dir, { recursive: true })
-  const path = join(dir, `${randomBytes(8).toString('hex')}.netscape`)
-  await writeFile(path, toNetscape(raw), 'utf8')
-  return path
+  /** Une trame de silence (576 octets), produite une fois par ffmpeg, pour compléter une taille promise. */
+  silentFrame(): Promise<Buffer> {
+    this.silence ??= new Promise<Buffer>((resolve) => {
+      const proc = this.spawnImpl(this.opts.ffmpegPath, [
+        '-hide_banner', '-loglevel', 'error',
+        '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo', '-t', '0.5',
+        '-c:a', 'libmp3lame', '-b:a', '192k', '-write_xing', '0', '-id3v2_version', '0',
+        '-f', 'mp3', 'pipe:1',
+      ], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
+      const chunks: Buffer[] = []
+      proc.stdout.on('data', (c: Buffer) => chunks.push(c))
+      const done = () => {
+        const all = Buffer.concat(chunks)
+        // une trame entière si ffmpeg en a livré, sinon des zéros (les décodeurs les ignorent)
+        resolve(all.length >= FRAME_BYTES ? all.subarray(0, FRAME_BYTES) : Buffer.alloc(FRAME_BYTES))
+      }
+      proc.on('close', done)
+      proc.on('error', done)
+    })
+    return this.silence
+  }
 }
