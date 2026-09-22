@@ -17,7 +17,6 @@ import { useNotificationsStore } from '../stores/notifications'
 import { usePluginsStore } from '../stores/plugins'
 
 // Vue YouTube Music (non officiel) : recherche + likes + playlists → play_url sur Cast/Sonos.
-// Pas de redesign de Médias : le play_url manuel reste ailleurs.
 
 defineOptions({ name: 'YtmusicView' })
 

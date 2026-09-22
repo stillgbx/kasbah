@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { resolveDefaults, roomHeight, type HouseDevice, type PlacedHouseDevice } from '@kasbah/shared'
 import { isFlatCover } from '../../lib/cover'
-import { coverLeaves, coverSize, hasLeaves, isOrientable, isSizable } from '../../lib/orientation'
+import { coverLeaves, coverSize, hasLeaves, isOrientable, isSizable, isTv, tvInchesFromSize, tvSizeFromInches } from '../../lib/orientation'
 import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
 import Segmented from '../ui/Segmented.vue'
@@ -51,14 +51,18 @@ function rotate(delta: number) {
   void house.savePlacement({ yaw: (((yaw.value + delta) % 360) + 360) % 360 })
 }
 
-// Taille de ce qui est DESSINÉ : proposée aux ouvrants qu'aucune ouverture ne dimensionne (portail,
-// porte de garage posés dehors, voir `lib/orientation.ts`). Mêmes touches que l'orientation, pas de
-// 25 cm, écrit à chaque pression. Bornes larges mais finies : un portail de 12 m n'existe pas, et
-// un panneau de 0 m disparaîtrait de la scène sans qu'on sache pourquoi.
+// Taille de ce qui est DESSINÉ : ouvrants libres (largeur × hauteur ou avancée, en mètres) et
+// téléviseurs (une seule diagonale en pouces — c'est le chiffre sur le carton, converti en dalle
+// 16:9 pour la scène). Voir `lib/orientation.ts`. Bornes larges mais finies.
 const SIZE_STEP = 0.25
 const SIZE_LIMITS = { width: { min: 0.25, max: 12 }, height: { min: 0.25, max: 4 } } as const
+/** Pas et bornes de la diagonale TV (pouces) : les tailles commerciales vont par pouce entier. */
+const DIAGONAL_STEP = 1
+const DIAGONAL_LIMITS = { min: 20, max: 100 } as const
 const sizable = computed(() => isSizable(props.device, descriptor.value))
+const tv = computed(() => isTv(descriptor.value))
 const size = computed(() => coverSize(props.device, descriptor.value))
+const inches = computed(() => tvInchesFromSize(size.value))
 // La seconde dimension n'est pas la même chose selon la nature : la HAUTEUR d'un portail debout,
 // l'AVANCÉE d'un store déployé à plat. Même champ dans le JSON, deux mots à l'écran.
 const dimLabel = (dim: 'width' | 'height') =>
@@ -68,6 +72,11 @@ function resize(dim: 'width' | 'height', delta: number) {
   const next = Math.min(max, Math.max(min, Math.round((size.value[dim] + delta) * 100) / 100))
   if (next === size.value[dim]) return
   void house.savePlacement({ size: { ...size.value, [dim]: next } })
+}
+function resizeDiagonal(delta: number) {
+  const next = Math.min(DIAGONAL_LIMITS.max, Math.max(DIAGONAL_LIMITS.min, inches.value + delta))
+  if (next === inches.value) return
+  void house.savePlacement({ size: tvSizeFromInches(next) })
 }
 
 // Battants d'un portail : ce qui s'écarte quand il s'ouvre, donc ce que la scène anime. Un store se
@@ -81,7 +90,7 @@ const leavesOptions = [{ value: '1', label: '1' }, { value: '2', label: '2' }]
 // mètre demandait seize appuis. Le champ ne commite qu'à la validation (Entrée ou perte du focus) —
 // écrire house.json à chaque frappe enverrait une maison par caractère. Tant qu'on tape, c'est le
 // brouillon qui s'affiche : sinon la valeur relue du serveur écraserait la saisie en cours.
-type Field = 'yaw' | 'width' | 'height'
+type Field = 'yaw' | 'width' | 'height' | 'diagonal'
 const editing = ref<Field | null>(null)
 const draft = ref('')
 
@@ -106,6 +115,11 @@ function commitEdit(field: Field) {
   if (field === 'yaw') {
     const next = (((Math.round(raw) % 360) + 360) % 360)
     if (next !== yaw.value) void house.savePlacement({ yaw: next })
+    return
+  }
+  if (field === 'diagonal') {
+    const next = Math.min(DIAGONAL_LIMITS.max, Math.max(DIAGONAL_LIMITS.min, Math.round(raw)))
+    if (next !== inches.value) void house.savePlacement({ size: tvSizeFromInches(next) })
     return
   }
   const { min, max } = SIZE_LIMITS[field]
@@ -220,9 +234,37 @@ function applyPreset(p: Preset) {
             </button>
           </span>
         </div>
-        <!-- une ligne par dimension : deux séries de touches sur la même ligne ne laisseraient plus
-             de place au libellé dans un panneau de 340 px -->
-        <template v-if="sizable">
+        <!-- TV : une diagonale en pouces (le chiffre du carton). Ouvrant : largeur × hauteur/avancée. -->
+        <div v-if="sizable && tv" class="place__row">
+          <span class="muted">{{ $t('place.size.diagonal') }}</span>
+          <span class="place__turn">
+            <button type="button" class="key" :disabled="house.saving || !house.placing"
+                    :title="`${$t('place.smaller')} — ${$t('place.size.diagonal')}`"
+                    :aria-label="`${$t('place.smaller')} — ${$t('place.size.diagonal')}`"
+                    @click="resizeDiagonal(-DIAGONAL_STEP)">
+              <StrokeIcon name="minus" :size="16" />
+            </button>
+            <span class="place__deg">
+              <input class="place__value place__num" type="text" inputmode="numeric" enterkeyhint="done"
+                     :value="shownValue('diagonal', String(inches))" :disabled="house.saving || !house.placing"
+                     :aria-label="$t('place.size.diagonal')"
+                     @focus="startEdit('diagonal', String(inches), $event)"
+                     @mouseup.prevent
+                     @input="draft = ($event.target as HTMLInputElement).value"
+                     @keydown.enter="($event.target as HTMLInputElement).blur()"
+                     @keydown.esc="cancelEdit(); ($event.target as HTMLInputElement).blur()"
+                     @blur="commitEdit('diagonal')">
+              <span class="place__unit">″</span>
+            </span>
+            <button type="button" class="key" :disabled="house.saving || !house.placing"
+                    :title="`${$t('place.bigger')} — ${$t('place.size.diagonal')}`"
+                    :aria-label="`${$t('place.bigger')} — ${$t('place.size.diagonal')}`"
+                    @click="resizeDiagonal(DIAGONAL_STEP)">
+              <StrokeIcon name="plus" :size="16" />
+            </button>
+          </span>
+        </div>
+        <template v-else-if="sizable">
           <div v-for="dim in (['width', 'height'] as const)" :key="dim" class="place__row">
             <span class="muted">{{ dimLabel(dim) }}</span>
             <span class="place__turn">

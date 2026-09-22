@@ -190,7 +190,10 @@ export const useHouseStore = defineStore('house', () => {
       const zone = index.value?.zonesById.get(selectedRoomId.value)
       if ((room && room.levelId !== focusedLevelId.value) || (zone && tab !== 'garden')) selectedRoomId.value = null
     }
-    if (tab === 'garden' || tab === 'all') selectedKey.value = null
+    // Un onglet NAVIGUE : on quitte l'appareil (sauf en mode Déplacer — le sélecteur Emplacement
+    // seul change alors de niveau). Sinon `frameSelection` le recadre (`focusDevice` → `focusLevel`
+    // de SA pièce) et annule le niveau demandé.
+    if (!placing.value) selectedKey.value = null
     if (selectedLevelId.value !== focusedLevelId.value) selectedLevelId.value = null
   }
 

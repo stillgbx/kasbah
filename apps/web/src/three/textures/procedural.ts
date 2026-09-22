@@ -24,7 +24,7 @@ import { DataTexture, LinearSRGBColorSpace, RepeatWrapping, SRGBColorSpace, type
 
 /** Une matière disponible. Les styles y puisent ; ajouter une entrée ici suffit à en offrir une de plus. */
 export type SurfaceRole =
-  | 'plaster' | 'wood' | 'tile' | 'carpet' | 'concrete'
+  | 'plaster' | 'wood' | 'tile' | 'poolTile' | 'carpet' | 'concrete'
   | 'grass' | 'water' | 'pavers' | 'soil' | 'roof'
   | 'metal' | 'grid' | 'gloss' | 'stone' | 'gravel'
 
@@ -155,7 +155,7 @@ const SPECS: Record<SurfaceRole, Spec> = {
     rough: (u, v) => 0.78 + 0.22 * hash(Math.floor((u + (Math.floor(v * 20) % 2) * 0.25) % 1 * 2), Math.floor(v * 20), 31),
     tint: (u, v) => { const w = 0.06 * (fbm(u * 6, v * 0.5, 24, 2, 33) - 0.5); return [1 + w, 1, 1 - w] as const },
   },
-  // carreaux de 60 cm, joint de 6 mm, léger nuage par carreau
+  // carreaux de 60 cm, joint de 6 mm, léger nuage par carreau — sol de maison
   tile: {
     size: 512, tileM: 2.4, relief: 0.003,
     shade: (u, v) => {
@@ -167,6 +167,18 @@ const SPECS: Record<SurfaceRole, Spec> = {
     height: (u, v) => 1 - grout(cell(u, v, 4).edge, 0.035),
     // la faïence est lisse, le joint est mat : c'est ce contraste qui fait lire un carrelage
     rough: (u, v) => 0.35 + 0.65 * grout(cell(u, v, 4).edge, 0.04),
+  },
+  // faïence fine du bassin (plus serrée que le sol) — le procédural tient jusqu'à la photo Tiles133A
+  poolTile: {
+    size: 512, tileM: 1.2, relief: 0.002,
+    shade: (u, v) => {
+      const { ix, iy, edge } = cell(u, v, 4)
+      const g = grout(edge, 0.025)
+      const face = 0.9 + 0.06 * hash(ix, iy, 5) + 0.05 * (fbm(u, v, 10, 2, 7) - 0.5)
+      return face * (1 - 0.35 * g)
+    },
+    height: (u, v) => 1 - grout(cell(u, v, 4).edge, 0.04),
+    rough: (u, v) => 0.3 + 0.7 * grout(cell(u, v, 4).edge, 0.045),
   },
   // moquette : grain serré et uniforme
   carpet: {

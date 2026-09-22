@@ -9,7 +9,7 @@ import { formatFlow, formatPower, formatSensor, formatVolume, formatVolumeAxisTi
 import { deviceColor, deviceIcon, presentRoomFilters, roomFilterCategory } from './deviceIcons'
 import { findBatteries, findEnergySite, inverterGroups, isEnergySite, isInverter, shortInverterId } from './energy'
 import { coverActivity, coverAtRest, isFlatCover, isPassageCover } from './cover'
-import { coverLeaves, coverSize, hasLeaves, isOrientable, isSizable } from './orientation'
+import { coverLeaves, coverSize, hasLeaves, isOrientable, isSizable, tvInchesFromSize, tvSizeFromInches } from './orientation'
 import { bodyColorOf, bodyFinishOf, FINISH_MATERIAL, SCENE_FINISH } from './vehicleTuning'
 import { BOTH_MAX_M, CAR_ZOOM, IGN_ORTHO_TILE_URL, initialView, normalizeHeading, planStyleUrl, satelliteStyle, satelliteStyleWithLabels } from './map'
 import { isDaylight, TWILIGHT_MS } from './daylight'
@@ -386,6 +386,20 @@ describe("ce qui a une orientation reglable", () => {
     const onWindow = { ...dev, openingId: 'win.salon' }
     expect(isOrientable(onWindow, shutter)).toBe(false)
     expect(isSizable(onWindow, shutter)).toBe(false)
+  })
+
+  it('une TV se dimensionne par sa diagonale (pouces → dalle 16:9), une enceinte non', () => {
+    const tv = desc('media_player', { mediaPlayer: { deviceClass: 'tv' } })
+    const speaker = desc('media_player', { mediaPlayer: { deviceClass: 'speaker' } })
+    const display = desc('media_player', { mediaPlayer: { deviceClass: 'display' } })
+    expect(isSizable(dev, tv)).toBe(true)
+    expect(isSizable(dev, speaker)).toBe(false)
+    expect(isSizable(dev, display)).toBe(false)
+    // défaut 45″ → largeur × hauteur 16:9
+    expect(coverSize(dev, tv)).toEqual(tvSizeFromInches(45))
+    expect(tvInchesFromSize(coverSize(dev, tv))).toBe(45)
+    expect(tvInchesFromSize(tvSizeFromInches(55))).toBe(55)
+    expect(coverSize({ ...dev, size: tvSizeFromInches(65) }, tv)).toEqual(tvSizeFromInches(65))
   })
 
   it('un store se deploie A PLAT, avec sa propre taille par defaut', () => {

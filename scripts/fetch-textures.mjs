@@ -24,10 +24,11 @@ import { inflateRawSync } from 'node:zlib'
 const ROLES = {
   plaster: 'Plaster001',
   concrete: 'Concrete046',
-  wood: 'WoodFloor051',
-  tile: 'Tiles133A',
+  wood: 'WoodFloor051',   // parquet ; Planks033B archivé sous photo/wood033b/
+  tile: 'Tiles107',       // carreaux blancs clairs à joint fin (Tiles052 était trop sombre)
+  poolTile: 'Tiles133A',  // faïence du bassin, inchangée
   carpet: 'Carpet016',
-  grass: 'Grass004',
+  grass: 'Grass006',      // pelouse ; Grass004 archivée sous photo/grass004/
   pavers: 'PavingStones128',
   soil: 'Ground048',
   roof: 'RoofingTiles013A',

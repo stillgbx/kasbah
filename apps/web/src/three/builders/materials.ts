@@ -193,7 +193,7 @@ function weathered(m: MeshStandardMaterial, look: SurfaceLook, tex: SurfaceTextu
 export function applyLook(mats: MaterialSet, theme: SceneTheme, look: StyleLook, photos?: SurfaceTextures, weather: SurfaceWeather = DRY): void {
   const s = look.surfaces
   const roofFlat: SurfaceLook = s.roofFlat ?? { texture: 'gravel', roughness: 1 }
-  ensureTextures(mats.textures, [...rolesOf(s), 'tile', roofFlat.texture])   // le bassin est carrelé quel que soit le style
+  ensureTextures(mats.textures, [...rolesOf(s), 'tile', 'poolTile', roofFlat.texture])
   // une matière en images (`textures/assets.ts`) passe devant la procédurale du même rôle
   const tex = (l: SurfaceLook) => photos?.[l.texture] ?? mats.textures[l.texture]
   // dehors, la météo passe après la matière ; dedans et sur l'eau, elle ne passe pas
@@ -233,8 +233,8 @@ export function applyLook(mats: MaterialSet, theme: SceneTheme, look: StyleLook,
   // changement de style ou d'heure les rattrape même si elles sont nées entre deux applications
   mats.applied = { theme, look }
   for (const [key, m] of mats.joinery) applyJoinery(m, key, theme)
-  // le bassin : la couleur de l'eau du style, très éclaircie — l'eau translucide par-dessus la rend
-  const basin: SurfaceLook = { texture: 'tile', roughness: 0.35 }
+  // le bassin : faïence fine (`poolTile`), pas les grands carreaux du sol maison
+  const basin: SurfaceLook = { texture: 'poolTile', roughness: 0.35 }
   surface(mats.poolBasin, theme.zones.pool.clone().lerp(WHITE, 0.55), basin, tex(basin))
 }
 

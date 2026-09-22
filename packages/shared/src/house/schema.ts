@@ -320,9 +320,10 @@ export const houseDeviceSchema = z.object({
   yaw: z.number().optional(),
   /**
    * Encombrement (m) de ce qui est DESSINÉ pour l'appareil, quand la scène n'a rien d'autre pour le
-   * dimensionner : un portail ou une porte de garage posés dehors sont des objets libres, alors qu'un
-   * volet lié à une ouverture épouse déjà son rectangle. `width` en travers, `height` en hauteur ;
-   * absent = la taille par défaut du marqueur.
+   * dimensionner : un portail ou une porte de garage posés dehors sont des objets libres ; un
+   * téléviseur stocke ici la dalle 16:9 dérivée de sa diagonale commerciale (saisie en pouces dans
+   * l'UI) ; un volet lié à une ouverture épouse déjà son rectangle. `width` en travers, `height` en
+   * hauteur ; absent = la taille par défaut du marqueur.
    */
   size: z.object({ width: z.number().positive(), height: z.number().positive() }).optional(),
   /**

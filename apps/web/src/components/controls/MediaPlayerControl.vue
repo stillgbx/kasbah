@@ -57,12 +57,6 @@ const loaded = computed(() => props.state.playback === 'playing' || props.state.
 // SEEK à 0 comme sur un morceau) — voir 6_1_pieges-runtime. Lecture / pause et le volume, eux, marchent.
 const live = computed(() => props.state.nowPlaying?.live === true)
 const skippable = computed(() => loaded.value && !live.value)
-const urlDraft = ref('')
-function playUrl() {
-  const url = urlDraft.value.trim()
-  if (!url) return
-  emit('command', { type: 'media_player.play_url', url })
-}
 
 // Position : l'appareil ne la pousse pas, le plugin la relit toutes les dix secondes. Entre deux
 // relevés, on la fait avancer ICI à la seconde tant que ça joue, à partir du dernier relevé reçu
@@ -139,14 +133,6 @@ function nudgeVolume(delta: number) {
       <v-btn icon="plus" variant="text" size="x-small" :disabled="disabled || state.muted || volume >= 100" :aria-label="$t('media.volumeUp')" @click="nudgeVolume(VOLUME_STEP)" />
       <span class="text-caption volume-value">{{ Math.round(volume) }}</span>
     </div>
-    <div v-if="has('play_url')" class="url__row mt-3">
-      <v-text-field v-model="urlDraft" class="flex-grow-1" density="compact" hide-details variant="outlined"
-                    :placeholder="$t('media.urlPlaceholder')" :disabled="disabled"
-                    :aria-label="$t('media.playUrl')"
-                    @keyup.enter="playUrl" />
-      <v-btn icon="play" variant="tonal" size="small" :disabled="disabled || !urlDraft.trim()"
-             :aria-label="$t('media.playUrl')" @click="playUrl" />
-    </div>
   </div>
 </template>
 
@@ -159,5 +145,4 @@ function nudgeVolume(delta: number) {
 .volume__row { display: flex; align-items: center; gap: 4px; }
 /* largeur fixe (« 100 ») et chiffres à largeur constante : la valeur change sans faire bouger le curseur */
 .volume-value { width: 3ch; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.url__row { display: flex; align-items: center; gap: 8px; }
 </style>

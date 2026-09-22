@@ -33,8 +33,12 @@ export const PHOTO_PACK: TexturePack = {
     plaster: { tileM: 2 },
     concrete: { tileM: 2.4 },
     wood: { tileM: 1.8 },
-    tile: { tileM: 1.2 },
+    // Tiles107 : carreaux blancs clairs (8 × 60 cm → 4,8 m) — Tiles052 était trop sombre
+    tile: { tileM: 4.8 },
+    // Tiles133A : faïence fine du bassin (restée telle quelle)
+    poolTile: { tileM: 1.2 },
     carpet: { tileM: 1.7 },
+    // Grass006 : cote absente chez ambientCG — on garde 1,4 m (celle de Grass004)
     grass: { tileM: 1.4 },
     pavers: { tileM: 3.5 },
     soil: { tileM: 1.4 },

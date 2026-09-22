@@ -91,4 +91,14 @@ describe('house store', () => {
     store.selectRoom('salon')
     expect(store.selectedLevelId).toBeNull()
   })
+
+  it("un onglet de niveau désélectionne l'appareil pour ne pas se faire recadrer", () => {
+    const store = useHouseStore()
+    store.house = parseHouse(demo)
+    store.selectDevice('light.salon')
+    expect(store.selectedKey).toBe('light.salon')
+    store.setFloorTab('etage')
+    expect(store.selectedKey).toBeNull()
+    expect(store.focusedLevelId).toBe('etage')
+  })
 })

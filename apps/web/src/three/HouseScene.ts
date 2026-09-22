@@ -2795,7 +2795,8 @@ export class HouseScene {
     const pack = this.assets ? packById(this.style.assets) : undefined
     const gen = this.photoGen
     const photos = pack
-      ? loadPackTextures(pack, rolesOf(this.look.surfaces), () => {
+      // `poolTile` n'est dans aucun look (le bassin l'impose dans `applyLook`) : on le charge quand même
+      ? loadPackTextures(pack, [...rolesOf(this.look.surfaces), 'poolTile'], () => {
         if (gen !== this.photoGen) return
         this.applyMaterials()
         this.highlightRoom(this.highlightedRoom)   // recopie les couleurs des clones, et redessine

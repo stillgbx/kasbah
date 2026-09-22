@@ -51,8 +51,11 @@ const WATER_BOX = { w: 0.59, d: 0.17, h: 0.59 }
  */
 const HEATPUMP_BOX = { w: 0.6, d: 0.36, h: 1.2 }
 
-/** Écrans d'un lecteur : dalle (m) et demi-profondeur de la boîte, d'où l'image est posée. */
-const SCREENS = { tv: { width: 1, height: 0.56, depth: 0.03 }, display: { width: 0.25, height: 0.16, depth: 0.04 } } as const
+/** Écrans d'un lecteur : demi-profondeur de la boîte (d'où l'image est posée). Largeur × hauteur
+ * d'une TV viennent de `coverSize` (JSON ou défaut) ; l'écran connecté reste une petite dalle fixe. */
+const SCREENS = { tv: { depth: 0.03 }, display: { width: 0.25, height: 0.16, depth: 0.04 } } as const
+/** Épaisseur du chassis TV (m) — indépendante de la dalle saisie. */
+const TV_CHASSIS_DEPTH = 0.06
 /** L'image occupe TOUTE la dalle : elle est posée 2 mm devant, il n'y a pas de cadre à respecter. */
 const ART_INSET = 1
 
@@ -106,6 +109,8 @@ export class GenericMarker extends DeviceMarker {
     let geometry
     // un lecteur prend la forme de sa nature : enceinte (cylindre), téléviseur (écran plat), écran connecté (petite dalle)
     const mediaClass = kind === 'media_player' ? ctx.descriptor?.meta.mediaPlayer?.deviceClass ?? 'speaker' : undefined
+    // dalle TV : JSON ou défaut 1 × 0,56 — lue une fois pour le chassis, la pilule et la pochette
+    const tvSize = mediaClass === 'tv' ? coverSize(device, ctx.descriptor) : undefined
     // un appareil de chauffage prend la forme de ce qu'il EST : pastille murale pour un thermostat,
     // bloc au sol pour une pompe à chaleur (absent = thermostat, le cas d'avant)
     const climateClass = kind === 'climate' ? ctx.descriptor?.meta.climate?.deviceClass ?? 'thermostat' : undefined
@@ -113,7 +118,11 @@ export class GenericMarker extends DeviceMarker {
     let pulse = false
     switch (kind) {
       case 'media_player':
-        if (mediaClass === 'tv') { geometry = new BoxGeometry(1, 0.06, 0.56); this.setLift(0.8) }
+        if (tvSize) {
+          geometry = new BoxGeometry(tvSize.width, TV_CHASSIS_DEPTH, tvSize.height)
+          // pilule juste au-dessus de l'arête haute (0,24 m d'air, comme l'ancien 0,8 − 0,56)
+          this.setLift(tvSize.height + 0.24)
+        }
         else if (mediaClass === 'display') { geometry = new BoxGeometry(0.25, 0.08, 0.16); this.setLift(0.35) }
         else { geometry = new CylinderGeometry(0.13, 0.13, 0.32, 20); this.setLift(0.5) }
         break
@@ -148,7 +157,9 @@ export class GenericMarker extends DeviceMarker {
     // Enceinte, robot : cylindre DEBOUT, donc l'axe Y du cylindre passe en Z-up local. Le thermostat,
     // lui, est une pastille couchée contre son mur : il garde l'axe du cylindre à l'horizontale.
     if (geometry instanceof CylinderGeometry && kind !== 'climate') this.mesh.rotation.x = Math.PI / 2
-    if (kind === 'media_player') this.mesh.position.z = mediaClass === 'tv' ? 0.28 : mediaClass === 'display' ? 0.08 : 0.16
+    if (kind === 'media_player') {
+      this.mesh.position.z = tvSize ? tvSize.height / 2 : mediaClass === 'display' ? 0.08 : 0.16
+    }
     // ce qui regarde quelque part, et ce qui se pose contre un mur, suivent leur `yaw` (0 = face à
     // +y) : un écran, mais aussi une borne de recharge, une batterie ou le boîtier d'une passerelle.
     // Un cylindre d'enceinte, lui, n'en a pas besoin.
@@ -158,7 +169,9 @@ export class GenericMarker extends DeviceMarker {
     // ce que l'écran diffuse se voit SUR l'écran : la pochette du morceau (ou le logo de l'appli), posée
     // devant la face avant et enfant du maillage, donc tournée du même `yaw` que lui
     if (mediaClass === 'tv' || mediaClass === 'display') {
-      const screen = SCREENS[mediaClass]
+      const screen = tvSize
+        ? { width: tvSize.width, height: tvSize.height, depth: SCREENS.tv.depth }
+        : SCREENS.display
       this.art = new ScreenArt({
         width: screen.width * ART_INSET,
         height: screen.height * ART_INSET,
