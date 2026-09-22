@@ -345,7 +345,7 @@ const explicit = computed(() => (props.pending
      droite) est ce qui la borne : ~376 px à 1280, ~682 px à 1920. */
   --key: 42px;
   --key-w: clamp(42px, calc(5.2vw - 24px), 84px);
-  --key-main: calc(var(--key) * 1.2);
+  --key-main: calc(var(--key) * 1.1);
 }
 .key {
   display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px;
