@@ -369,7 +369,7 @@
     "sceneAutoDynamicHint": "Start the animation automatically, stored at the vendor: Kasbah and the vendor app read the same value. Unchecked, tapping plays the static version and the animation only starts from the ✨ button.",
     "editMode": "Edit mode",
     "gps": "GPS origin of the local frame", "gpsHeading": "heading", "houseStats": "{levels} floors · {rooms} rooms · {devices} devices",
-    "plugins": "Plugins", "keys": ".env keys",
+    "plugins": "Plugins", "pluginsStats": "{active} / {available} enabled · {n} device | {active} / {available} enabled · {n} device | {active} / {available} enabled · {n} devices", "keys": ".env keys",
     "pluginsHint": "Turn on the vendors this house uses. The choice is written to the house file and takes effect right away; keys and tokens stay in .env.",
     "pluginEnable": "Enable this plugin", "pluginParts": "Provides",
     "pluginDetails": "Show this plugin's info and settings",

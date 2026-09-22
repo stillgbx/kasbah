@@ -35,6 +35,14 @@ const { t } = useI18n()
 onMounted(() => { void devices.refreshHealth(); void plugins.load() })
 const router = useRouter()
 
+/** Actifs / implémentés dans l'inventaire, plus le parc d'appareils vu à l'instant T. */
+const pluginsStats = computed(() => {
+  if (!plugins.loaded) return ''
+  const available = plugins.list.filter((p) => p.implemented).length
+  const active = plugins.list.filter((p) => p.implemented && p.enabled).length
+  return t('settings.pluginsStats', { active, available, n: devices.count }, devices.count)
+})
+
 // Le banc de réglage de la lumière ne s'ouvre pas ICI : une lumière ne se juge que devant la maison,
 // à l'heure qu'elle a. Le bouton arme le panneau et emmène sur la vue Maison, où les curseurs
 // changent l'image sous les doigts.
@@ -240,7 +248,10 @@ const houseStats = computed(() => {
       <!-- les fabricants ferment la page : une liste pleine largeur, où chaque ligne a la place de
            dire nom, statut et interrupteur sans se serrer -->
       <section class="card block settings__plugins">
-        <div class="block__title">{{ $t('settings.plugins') }}</div>
+        <div class="plugins__head">
+          <div class="block__title">{{ $t('settings.plugins') }}</div>
+          <div v-if="pluginsStats" class="muted small">{{ pluginsStats }}</div>
+        </div>
         <p class="muted small plugins__hint">{{ $t('settings.pluginsHint') }}</p>
         <div class="plugins">
           <PluginSection v-for="p in plugins.list" :key="p.id" :plugin="p" />
@@ -277,6 +288,7 @@ const houseStats = computed(() => {
 }
 /* Les plugins ensuite, pleine largeur, sous la grille. */
 .settings__plugins { margin-top: 14px; }
+.plugins__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .block { padding: 18px 20px; display: grid; gap: 12px; }
 .block--row { grid-template-columns: 1fr auto; align-items: center; }
 .block__title { font-weight: 600; font-size: 15px; }

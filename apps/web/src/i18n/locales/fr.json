@@ -369,7 +369,7 @@
     "sceneAutoDynamicHint": "Démarrage automatique de l'animation, réglé chez le fabricant : la valeur est la même dans Kasbah et dans son app. Décoché, la pastille joue la version fixe et l'animation ne part qu'au bouton ✨.",
     "editMode": "Mode édition",
     "gps": "Origine GPS du repère local", "gpsHeading": "cap", "houseStats": "{levels} niveaux · {rooms} pièces · {devices} appareils",
-    "plugins": "Plugins", "keys": "Clés .env",
+    "plugins": "Plugins", "pluginsStats": "{active} / {available} actifs · {n} appareil | {active} / {available} actifs · {n} appareil | {active} / {available} actifs · {n} appareils", "keys": "Clés .env",
     "pluginsHint": "Activez les fabricants que cette maison utilise. Le choix est écrit dans le fichier de la maison et prend effet tout de suite ; les clés et les jetons, eux, restent dans .env.",
     "pluginEnable": "Activer ce plugin", "pluginParts": "Fournit",
     "pluginDetails": "Afficher les infos et réglages de ce plugin",
