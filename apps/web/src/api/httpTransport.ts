@@ -1,6 +1,6 @@
 import { apiErrorSchema, devicesResponseSchema, energyHistorySchema, healthResponseSchema, houseSchema, pluginsResponseSchema, scenesResponseSchema, serverMessageSchema, weatherForecastSchema, deviceJournalSchema, deviceConsumptionSchema, type CommandInput, type DeviceConsumption, type DeviceJournal, type DeviceEntry, type DevicePlacement, type EnergyHistory, type HealthResponse, type House, type PluginInfo, type PluginSceneEntry, type PluginSettingsPatch, type SceneRecallInput, type SceneUpdate, type WeatherForecast } from '@kasbah/shared'
 import { parseDeviceId } from '@kasbah/shared'
-import { ApiRequestError, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type MelcloudStatus, type MelcloudUnit, type PetkitStatus, type RenaultStatus, type TeslaStatus, type Transport, type TransportHandlers, type YtmusicPlaylist, type YtmusicQueue, type YtmusicSearchResult, type YtmusicSession, type YtmusicStatus, type YtmusicTrack } from './transport'
+import { ApiRequestError, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type MelcloudStatus, type MelcloudUnit, type PetkitStatus, type RenaultStatus, type TeslaStatus, type Transport, type TransportHandlers, type YtmusicExplore, type YtmusicExploreShelf, type YtmusicPlaylist, type YtmusicQueue, type YtmusicSearchResult, type YtmusicSession, type YtmusicStatus, type YtmusicTrack } from './transport'
 
 // URLs relatives : même origine en prod (Fastify sert le build) et via le proxy Vite en dev.
 
@@ -207,6 +207,13 @@ export function createHttpTransport(base = ''): Transport {
     ytmusicArtist: (id) => request(
       `${base}/api/plugins/ytmusic/artists/${encodeURIComponent(id)}`, undefined,
       (j) => j as { tracks: YtmusicTrack[] },
+    ),
+    ytmusicExplore: (hl) => request(
+      `${base}/api/plugins/ytmusic/explore${hl ? `?hl=${encodeURIComponent(hl)}` : ''}`, undefined, (j) => j as YtmusicExplore,
+    ),
+    ytmusicExploreCategory: (params, hl) => request(
+      `${base}/api/plugins/ytmusic/explore/category?params=${encodeURIComponent(params)}${hl ? `&hl=${encodeURIComponent(hl)}` : ''}`,
+      undefined, (j) => j as { shelves: YtmusicExploreShelf[] },
     ),
     ytmusicPlay: (body) => request(
       `${base}/api/plugins/ytmusic/play`,

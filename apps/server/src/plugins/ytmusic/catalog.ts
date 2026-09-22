@@ -14,7 +14,8 @@ import {
   type RawPlaylist,
   type RawTrack,
 } from './mapping'
-import type { YtmusicPlaylist, YtmusicSearchResult, YtmusicTrack } from './types'
+import { carouselsOf, parseMoodsPage } from './explore'
+import { exploreCategoryPageSchema, exploreSchema, type YtmusicExplore, type YtmusicExploreCategoryPage, type YtmusicPlaylist, type YtmusicSearchResult, type YtmusicTrack } from './types'
 
 // Catalogue via youtubei.js `yt.music` (client InnerTube Music / WEB_REMIX).
 // Pas de flux audio ici — c'est le rôle de yt-dlp + PO Token (`stream.ts`).
@@ -45,13 +46,25 @@ export type InnertubeLike = {
       applyFilter?(filter: string): Promise<{ contents?: unknown[] }>
     }>
   }
+  /** `browse` InnerTube, JSON BRUT (la page « Humeurs et genres » : youtubei.js n'en garde pas les couleurs). */
+  browseRaw?(browseId: string, params?: string): Promise<unknown>
+  /** `browse` InnerTube analysé par youtubei.js (nœuds `MusicCarouselShelf`, comme la recherche). */
+  browseParsed?(browseId: string, params?: string): Promise<unknown>
 }
 
-export type CreateSession = (cookie: string) => Promise<InnertubeLike>
+/** `lang` : langue des textes rendus par InnerTube (noms des genres…). Absente = celle d'aujourd'hui. */
+export type CreateSession = (cookie: string, lang?: string) => Promise<InnertubeLike>
 
 /** WEB_REMIX : même client que music.youtube.com (pas le client WEB générique). */
-const defaultCreate: CreateSession = async (cookie) =>
-  Innertube.create({ cookie, client_type: ClientType.MUSIC }) as unknown as InnertubeLike
+const defaultCreate: CreateSession = async (cookie, lang) => {
+  const yt = await Innertube.create({ cookie, client_type: ClientType.MUSIC, ...(lang ? { lang } : {}) })
+  const browse = (browseId: string, params: string | undefined, parse: boolean) =>
+    yt.actions.execute('/browse', { browseId, ...(params ? { params } : {}), client: 'YTMUSIC', ...(parse ? { parse: true } : {}) } as never)
+  return Object.assign(yt, {
+    browseRaw: async (browseId: string, params?: string) => ((await browse(browseId, params, false)) as { data: unknown }).data,
+    browseParsed: (browseId: string, params?: string) => browse(browseId, params, true) as Promise<unknown>,
+  }) as unknown as InnertubeLike
+}
 
 /** Session InnerTube morte (HMR / body déjà consommé) — typiquement `null.read`. */
 function isDeadSession(err: unknown): boolean {
@@ -800,33 +813,76 @@ function dedupeArtists(raws: RawArtist[]): RawArtist[] {
 }
 
 export class YtmusicCatalog {
-  private session: InnertubeLike | null = null
+  /**
+   * Une session par LANGUE ('' = sans langue imposée, celle de la recherche et de la bibliothèque) :
+   * les genres s'affichent dans la langue de l'app sans changer les textes que la recherche analyse
+   * (sous-titres « Album · … », compteurs).
+   */
+  private sessions = new Map<string, InnertubeLike>()
   private sessionCookie: string | null = null
 
   constructor(private readonly createSession: CreateSession = defaultCreate) {}
 
-  /** Invalide la session (cookie changé / oublié). */
+  /** Invalide les sessions (cookie changé / oublié). */
   reset(): void {
-    this.session = null
+    this.sessions.clear()
     this.sessionCookie = null
   }
 
-  private async ensure(cookie: string, force = false): Promise<InnertubeLike> {
-    if (!force && this.session && this.sessionCookie === cookie) return this.session
-    this.session = await this.createSession(cookie)
+  private async ensure(cookie: string, force = false, lang = ''): Promise<InnertubeLike> {
+    if (this.sessionCookie !== cookie) this.reset()
+    const hit = this.sessions.get(lang)
+    if (!force && hit) return hit
+    const yt = await this.createSession(cookie, ...(lang ? [lang] : []))
+    this.sessions.set(lang, yt)
     this.sessionCookie = cookie
-    return this.session
+    return yt
   }
 
   /** Une tentative ; si la session InnerTube est morte, reset + retry. */
-  private async withSession<T>(cookie: string, fn: (yt: InnertubeLike) => Promise<T>): Promise<T> {
+  private async withSession<T>(cookie: string, fn: (yt: InnertubeLike) => Promise<T>, lang = ''): Promise<T> {
     try {
-      return await fn(await this.ensure(cookie))
+      return await fn(await this.ensure(cookie, false, lang))
     } catch (err) {
       if (!isDeadSession(err)) throw err
       this.reset()
-      return await fn(await this.ensure(cookie, true))
+      return await fn(await this.ensure(cookie, true, lang))
     }
+  }
+
+  /** Les catégories de « Humeurs et genres », dans la langue demandée. */
+  async explore(cookie: string, lang?: string): Promise<YtmusicExplore> {
+    return this.withSession(cookie, async (yt) => {
+      if (typeof yt.browseRaw !== 'function') return exploreSchema.parse({ forYou: { title: '', categories: [] }, moods: { title: '', categories: [] }, genres: { title: '', categories: [] } })
+      return exploreSchema.parse(parseMoodsPage(await yt.browseRaw('FEmusic_moods_and_genres')))
+    }, lang)
+  }
+
+  /**
+   * La page d'une catégorie : ses rangées, chacune réduite à ses titres, ses playlists OFFICIELLES
+   * (`RDCLAK…`, éditées par YouTube Music) et ses albums. Les clips et les playlists d'utilisateurs
+   * (`PL…`, de qualité très variable) sont laissés de côté — choix de l'utilisateur.
+   */
+  async exploreCategory(cookie: string, params: string, lang?: string): Promise<YtmusicExploreCategoryPage> {
+    return this.withSession(cookie, async (yt) => {
+      if (typeof yt.browseParsed !== 'function') return { shelves: [] }
+      const page = await yt.browseParsed('FEmusic_moods_and_genres_category', params)
+      const shelves = carouselsOf(page).map(({ title, items }) => {
+        const songs = items.filter((it) => asRecord(it)?.item_type === 'song')
+        const playlists = items.filter((it) => {
+          const o = asRecord(it)
+          return o?.item_type === 'playlist' && typeof o.id === 'string' && o.id.replace(/^VL/, '').startsWith('RDCLAK')
+        })
+        const albums = items.filter((it) => asRecord(it)?.item_type === 'album')
+        return {
+          title,
+          tracks: mapTracks(songs.map(itemToRawTrack).filter((r): r is RawTrack => !!r)),
+          playlists: mapPlaylists(playlists.map(itemToRawPlaylist).filter((r): r is RawPlaylist => !!r)),
+          albums: mapAlbums(albums.map(itemToRawAlbum).filter((r): r is RawAlbum => !!r)),
+        }
+      }).filter((sh) => sh.tracks.length + sh.playlists.length + sh.albums.length > 0)
+      return exploreCategoryPageSchema.parse({ shelves })
+    }, lang)
   }
 
   /**

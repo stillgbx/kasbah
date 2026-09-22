@@ -79,7 +79,7 @@ const rows = computed<Row[]>(() => {
       const heard = relay && relay.state.kind === 'media_player' ? relay.state : s
       const n = heard.nowPlaying
       // un identifiant de flux ou une URL n'est ni un titre ni une source lisible (Sonos, serveur redémarré)
-      const readable = (v: string | undefined) => (v && !/^([0-9a-f]{24}|https?:\/\/.*)$/i.test(v.trim()) ? v : undefined)
+      const readable = (v: string | undefined) => (v && !/^([0-9a-f]{24}(\.[a-z0-9]{2,4})?|https?:\/\/.*)$/i.test(v.trim()) ? v : undefined)
       const title = readable(n?.title)
       const source = readable(n?.source)
       const status = !s.available ? t('common.unavailable')

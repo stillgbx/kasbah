@@ -78,7 +78,7 @@ const NBSP = '\u00a0'
  * affiche le temps que les métadonnées arrivent — ou pour de bon quand le serveur a redémarré et ne
  * sait plus ce qu'elle joue.
  */
-const looksLikeUrl = (v: string | undefined) => !!v && (/^(https?:\/\/|[a-z0-9.-]+\/api\/)/i.test(v) || /^[0-9a-f]{24}$/i.test(v.trim()))
+const looksLikeUrl = (v: string | undefined) => !!v && (/^(https?:\/\/|[a-z0-9.-]+\/api\/)/i.test(v) || /^[0-9a-f]{24}(\.[a-z0-9]{2,4})?$/i.test(v.trim()))
 const art = computed(() => {
   if (props.pending) return props.pending.artUrl
   const n = state.value?.nowPlaying

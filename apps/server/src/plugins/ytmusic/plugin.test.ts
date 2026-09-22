@@ -159,7 +159,7 @@ async function boot(extra: {
   execute?: (id: string, command: Command) => Promise<void>
   getDevice?: (id: string) => { descriptor: DeviceDescriptor; state?: unknown } | undefined
   spawnImpl?: ReturnType<typeof fakeSpawn>['spawnImpl']
-  createSession?: () => Promise<InnertubeLike>
+  createSession?: (cookie: string, lang?: string) => Promise<InnertubeLike>
   onState?: (cb: (deviceId: string, state: unknown) => void) => () => void
 } = {}) {
   const store = createCookieFile('')
@@ -934,6 +934,90 @@ describe('ytmusic plugin', () => {
     const [track] = r.json().tracks
     expect(track).toMatchObject({ videoId: 'vAirbag', artists: ['Radiohead'], album: 'OK Computer', year: '1997' })
     expect(track.artUrl).toMatch(/^https:\/\/yt3\.googleusercontent\.com\/ok=/)
+    await app.close()
+    await plugin.stop()
+  })
+
+  it('serves moods & genres in the asked language, and a category page without clips nor user playlists', async () => {
+    const langs: Array<string | undefined> = []
+    const btn = (text: string, params: string) => ({ musicNavigationButtonRenderer: { buttonText: { runs: [{ text }] }, solid: { leftStripeColor: 4288988671 }, clickCommand: { browseEndpoint: { params } } } })
+    const grid = (title: string, items: unknown[]) => ({ gridRenderer: { header: { gridHeaderRenderer: { title: { runs: [{ text: title }] } } }, items } })
+    let browses = 0
+    const session = (lang?: string): InnertubeLike => ({
+      ...fakeMusic(),
+      async browseRaw() {
+        browses++
+        return { contents: { singleColumnBrowseResultsRenderer: { tabs: [{ tabRenderer: { content: { sectionListRenderer: { contents: [
+          grid(lang === 'fr' ? 'Humeurs et moments' : 'Moods & moments', [btn(lang === 'fr' ? 'Calme' : 'Chill', 'p-calm')]),
+          grid('Genres', [btn('Jazz', 'p-jazz')]),
+        ] } } } }] } } }
+      },
+      async browseParsed(_id: string, params?: string) {
+        expect(params).toBe('p-jazz')
+        return {
+          contents: { contents: [
+            { type: 'MusicCarouselShelf', header: { title: { text: 'Titres' } }, contents: [
+              { type: 'MusicResponsiveListItem', item_type: 'song', id: 'vSo', title: 'So What', artists: [{ name: 'Miles Davis' }], duration: { seconds: 562 }, badges: [{ icon_type: 'MUSIC_EXPLICIT_BADGE' }] },
+            ] },
+            { type: 'MusicCarouselShelf', header: { title: { text: 'Playlists' } }, contents: [
+              { type: 'MusicTwoRowItem', item_type: 'playlist', id: 'VLRDCLAK5uy_jazz', title: { text: 'Jazz essentiel' } },
+              { type: 'MusicTwoRowItem', item_type: 'playlist', id: 'VLPLcommunity', title: { text: 'Mon jazz à moi' } },
+            ] },
+            { type: 'MusicCarouselShelf', header: { title: { text: 'Clips musicaux' } }, contents: [
+              { type: 'MusicTwoRowItem', item_type: 'video', id: 'vClip', title: { text: 'Live' } },
+            ] },
+            { type: 'MusicCarouselShelf', header: { title: { text: 'Albums' } }, contents: [
+              { type: 'MusicTwoRowItem', item_type: 'album', id: 'MPREb_kind', title: { text: 'Kind of Blue' }, artists: [{ name: 'Miles Davis' }] },
+            ] },
+          ] },
+        }
+      },
+    })
+    const { plugin, app } = await boot({ createSession: async (_c, lang) => { langs.push(lang); return session(lang) } })
+    await app.inject({ method: 'PUT', url: '/api/plugins/ytmusic/cookie', payload: { cookie: COOKIE } })
+
+    const fr = (await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/explore?hl=fr' })).json()
+    expect(fr.moods).toEqual({ title: 'Humeurs et moments', categories: [{ title: 'Calme', params: 'p-calm', color: '#a4c5ff' }] })
+    expect(fr.genres.categories[0].title).toBe('Jazz')
+    expect(langs).toContain('fr')
+    // en cache : la même langue ne repart pas chez YouTube ; une autre si
+    await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/explore?hl=fr' })
+    expect(browses).toBe(1)
+    const en = (await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/explore?hl=en' })).json()
+    expect(en.moods.categories[0].title).toBe('Chill')
+    // une langue mal formée est ignorée, pas transmise
+    await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/explore?hl=../x' })
+    expect(langs).not.toContain('../x')
+
+    const cat = await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/explore/category?params=p-jazz&hl=fr' })
+    expect(cat.statusCode).toBe(200)
+    const body = cat.json()
+    expect(body.shelves.map((sh: { title: string }) => sh.title)).toEqual(['Titres', 'Playlists', 'Albums'])
+    expect(body.shelves[0].tracks[0]).toMatchObject({ videoId: 'vSo', artists: ['Miles Davis'], explicit: true })
+    expect(body.shelves[1].playlists.map((p: { title: string }) => p.title)).toEqual(['Jazz essentiel'])
+    expect(body.shelves[2].albums[0]).toMatchObject({ id: 'MPREb_kind', title: 'Kind of Blue' })
+    expect((await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/explore/category' })).statusCode).toBe(400)
+    await app.close()
+    await plugin.stop()
+  })
+
+  it('keeps a relayed session when the Sonos publishes the file name as the title', async () => {
+    const office: DeviceDescriptor = { ...player, id: 'sonos:office', pluginId: 'sonos', externalId: 'office', name: 'Bureau' }
+    const ff = fakeSpawn({ filesize: 400_000 })
+    const commands: Command[] = []
+    let title = ''
+    const { plugin, app, ctx } = await boot({
+      spawnImpl: ff.spawnImpl,
+      getDevice: (id) => (id === office.id ? { descriptor: office, state: { kind: 'media_player', playback: 'playing', nowPlaying: { title } } } : undefined),
+      execute: async (_id, cmd) => { commands.push(cmd) },
+    })
+    await app.inject({ method: 'PUT', url: '/api/plugins/ytmusic/cookie', payload: { cookie: COOKIE } })
+    await app.inject({ method: 'POST', url: '/api/plugins/ytmusic/play', payload: { videoId: 'v1', deviceId: office.id, title: 'Madwoman' } })
+    // le relais s'appelle `<sid>.m4a`, et c'est ce que le Sonos affiche faute d'avoir lu le DIDL
+    title = (commands[0] as { url: string }).url.split('/').pop()!
+    expect(title).toMatch(/^[0-9a-f]{24}\.m4a$/)
+    ;(ctx.clock as ManualClock).advance(6_000)
+    expect((await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/sessions' })).json().sessions).toEqual([expect.objectContaining({ title: 'Madwoman' })])
     await app.close()
     await plugin.stop()
   })

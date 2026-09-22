@@ -16,7 +16,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import type { CommandInput, DeviceEntry } from '@kasbah/shared'
 import { getTransport } from '../api'
-import type { YtmusicAlbum, YtmusicArtist, YtmusicPlaylist, YtmusicQueue, YtmusicQueueTrack, YtmusicRepeat, YtmusicSession, YtmusicTrack } from '../api/transport'
+import type { YtmusicAlbum, YtmusicArtist, YtmusicExplore, YtmusicExploreCategory, YtmusicExploreShelf, YtmusicPlaylist, YtmusicQueue, YtmusicQueueTrack, YtmusicRepeat, YtmusicSession, YtmusicTrack } from '../api/transport'
 import PageHeader from '../components/layout/PageHeader.vue'
 import ChipRow from '../components/music/ChipRow.vue'
 import ListeningSessions from '../components/music/ListeningSessions.vue'
@@ -36,7 +36,9 @@ import { usePluginsStore } from '../stores/plugins'
 // panneau « Écoute » à droite (un lecteur = une session : là où partent les lectures et ce que pilote
 // la barre), et le lecteur en bas. Sans recherche, la zone centrale sert à parcourir : récents, likes,
 // playlists. Une seule source aujourd'hui (YouTube Music, non officiel) ; la rangée de sources est
-// là pour les suivantes.
+// là pour les suivantes. « Genres » et « Ambiances » ouvrent les « Humeurs et genres » de YouTube
+// Music : une grille de pastilles, puis la page d'une catégorie en rangées de tuiles (titres,
+// playlists officielles, albums), chaque rangée jouable comme une liste.
 //
 // File d'attente : elle vit sur le SERVEUR, par lecteur (l'enceinte ne connaît qu'un « fichier » à la
 // fois). Jouer un titre d'une liste (album, playlist, likes, résultats) y met la liste entière, à
@@ -50,15 +52,16 @@ import { usePluginsStore } from '../stores/plugins'
 
 defineOptions({ name: 'MusicView' })
 
-type BrowseTab = 'recent' | 'liked' | 'playlists'
+type BrowseTab = 'recent' | 'liked' | 'playlists' | 'genres' | 'moods'
 type Browse =
   | { kind: 'playlist'; id: string; title: string }
   | { kind: 'album'; id: string; title: string }
   | { kind: 'artist'; id: string; title: string }
+  | { kind: 'category'; params: string; title: string }
 /** Ordre API InnerTube = pertinence. */
 type SectionSort = 'relevance' | 'alpha' | 'date'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const router = useRouter()
 const devices = useDevicesStore()
 const house = useHouseStore()
@@ -106,6 +109,8 @@ const browseOptions = computed(() => [
   { value: 'recent' as const, label: t('music.browseRecent') },
   { value: 'liked' as const, label: t('music.browseLiked') },
   { value: 'playlists' as const, label: t('music.browsePlaylists') },
+  { value: 'genres' as const, label: t('music.browseGenres') },
+  { value: 'moods' as const, label: t('music.browseMoods') },
 ])
 const sortOptionsName = computed(() => [
   { value: 'relevance' as const, label: t('ytmusic.sortRelevance') },
@@ -448,6 +453,7 @@ async function runSearch() {
   const q = query.value.trim()
   if (!q) return
   browse.value = null
+  backStack.value = []
   queueOpen.value = false
   searched.value = true
   rememberQuery(q)
@@ -480,10 +486,54 @@ async function clearSearch() {
 
 async function loadBrowseTab(): Promise<void> {
   browse.value = null
+  backStack.value = []
   if (browseTab.value === 'liked') await loadLiked()
   else if (browseTab.value === 'playlists') await loadPlaylists()
+  else if (browseTab.value === 'genres' || browseTab.value === 'moods') await loadExplore()
   else tracks.value = []
 }
+
+// ---- humeurs et genres ---------------------------------------------------------------------------
+/** Les catégories, dans la langue de l'app (YouTube les nomme) ; relues seulement si la langue change. */
+const explore = ref<YtmusicExplore | null>(null)
+let exploreLang = ''
+const categoryShelves = ref<YtmusicExploreShelf[]>([])
+/** Ce qu'on a ouvert DEPUIS une catégorie (une playlist, un album) revient à elle par « Retour ». */
+const backStack = ref<Browse[]>([])
+async function loadExplore() {
+  if (explore.value && exploreLang === locale.value) return
+  busy.value = true
+  tracks.value = []
+  try {
+    explore.value = await getTransport().ytmusicExplore(locale.value)
+    exploreLang = locale.value
+  } catch (err) { fail(err) }
+  finally { busy.value = false }
+}
+/** Genres : « Pour vous » en tête (s'il y en a), puis les genres ; Ambiances : les humeurs et moments. */
+const exploreGroups = computed(() => {
+  const e = explore.value
+  if (!e) return []
+  const groups = browseTab.value === 'moods'
+    ? [{ key: 'moods', ...e.moods }]
+    : [{ key: 'forYou', ...e.forYou }, { key: 'genres', ...e.genres }]
+  return groups.filter((g) => g.categories.length > 0)
+})
+async function openCategory(c: YtmusicExploreCategory) {
+  backStack.value = []
+  queueOpen.value = false
+  browse.value = { kind: 'category', params: c.params, title: c.title }
+  categoryShelves.value = []
+  busy.value = true
+  try { categoryShelves.value = (await getTransport().ytmusicExploreCategory(c.params, locale.value)).shelves }
+  catch (err) { fail(err) }
+  finally { busy.value = false }
+}
+/** « Masquer explicit » vaut aussi ici ; une rangée vidée par le filtre disparaît. */
+const categoryView = computed(() => categoryShelves.value
+  .map((sh) => ({ ...sh, tracks: withoutExplicit(sh.tracks), albums: withoutExplicit(sh.albums) }))
+  .filter((sh) => sh.tracks.length + sh.playlists.length + sh.albums.length > 0))
+const categoryLoading = computed(() => busy.value && browse.value?.kind === 'category')
 async function loadLiked() {
   busy.value = true
   try { tracks.value = (await getTransport().ytmusicLiked()).tracks }
@@ -498,6 +548,7 @@ async function loadPlaylists() {
   finally { busy.value = false }
 }
 async function openDetail(next: Browse, load: () => Promise<{ tracks: YtmusicTrack[] }>) {
+  if (browse.value?.kind === 'category') backStack.value = [...backStack.value, browse.value]
   busy.value = true
   browse.value = next
   queueOpen.value = false
@@ -509,8 +560,15 @@ const openPlaylist = (pl: YtmusicPlaylist) => openDetail({ kind: 'playlist', id:
 const openAlbum = (al: YtmusicAlbum) => openDetail({ kind: 'album', id: al.id, title: al.title }, () => getTransport().ytmusicAlbum(al.id))
 const openArtist = (ar: YtmusicArtist) => openDetail({ kind: 'artist', id: ar.id, title: ar.name }, () => getTransport().ytmusicArtist(ar.id))
 function backFromDetail() {
-  browse.value = null
   tracks.value = []
+  const prev = backStack.value.at(-1)
+  if (prev) {
+    // la catégorie d'où l'on vient : ses rangées sont encore en mémoire
+    backStack.value = backStack.value.slice(0, -1)
+    browse.value = prev
+    return
+  }
+  browse.value = null
   if (!searched.value) void loadBrowseTab()
 }
 
@@ -551,6 +609,7 @@ async function playCollection(id: string, load: () => Promise<{ tracks: YtmusicT
 }
 const playAlbum = (al: YtmusicAlbum) => playCollection(al.id, () => getTransport().ytmusicAlbum(al.id))
 const playArtist = (ar: YtmusicArtist) => playCollection(ar.id, () => getTransport().ytmusicArtist(ar.id))
+const playPlaylist = (pl: YtmusicPlaylist) => playCollection(pl.id, () => getTransport().ytmusicPlaylist(pl.id))
 
 watch(browseTab, () => { queueOpen.value = false; if (linked.value && !searched.value) void loadBrowseTab() })
 const playTarget = computed(() => !!selected.value && canReceive(selected.value))
@@ -620,6 +679,45 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
                 </template>
                 <p v-else class="muted empty">{{ $t('music.queueEmpty') }}</p>
               </div>
+            </template>
+
+            <!-- une catégorie (genre, ambiance) : ses rangées de tuiles -->
+            <template v-else-if="browse?.kind === 'category'">
+              <div class="back-row">
+                <button type="button" class="pill" @click="backFromDetail">
+                  <StrokeIcon name="back" :size="16" />
+                  <span>{{ $t('common.back') }}</span>
+                </button>
+                <span class="back-row__title">{{ browse.title }}</span>
+              </div>
+              <template v-if="categoryLoading">
+                <section v-for="n in 3" :key="n" class="shelf" aria-hidden="true">
+                  <div class="shelf__head"><span class="skel skel--label" /></div>
+                  <div class="shelf__row">
+                    <span v-for="i in 7" :key="i" class="skel-tile">
+                      <span class="skel skel--art" />
+                      <span class="skel skel--line" />
+                      <span class="skel skel--line skel--short" />
+                    </span>
+                  </div>
+                </section>
+              </template>
+              <template v-else>
+                <section v-for="(sh, si) in categoryView" :key="`${si}:${sh.title}`" class="shelf">
+                  <div class="shelf__head"><h2 class="section-label">{{ sh.title }}</h2></div>
+                  <div class="shelf__row">
+                    <MusicTile v-for="tr in sh.tracks" :key="tr.videoId" action="play" :art="tr.artUrl" :title="tr.title" :explicit="!!tr.explicit" :meta="trackMeta(tr)"
+                               :disabled="!playTarget" :busy="playingId === tr.videoId" :play-label="$t('ytmusic.play')" @play="play(tr, sh.tracks)" />
+                    <MusicTile v-for="pl in sh.playlists" :key="pl.id" action="open" playable icon="list" :art="pl.artUrl" :title="pl.title"
+                               :meta="pl.trackCount != null ? $t('ytmusic.tracks', { n: pl.trackCount }, pl.trackCount) : ''"
+                               :disabled="!playTarget" :busy="playingCollection === pl.id" :play-label="$t('music.playAll')" @open="openPlaylist(pl)" @play="playPlaylist(pl)" />
+                    <MusicTile v-for="al in sh.albums" :key="al.id" action="open" playable icon="disc" :art="al.artUrl" :title="al.title" :explicit="!!al.explicit"
+                               :meta="[albumMeta(al), al.year].filter(Boolean).join(' · ')"
+                               :disabled="!playTarget" :busy="playingCollection === al.id" :play-label="$t('music.playAll')" @open="openAlbum(al)" @play="playAlbum(al)" />
+                  </div>
+                </section>
+                <p v-if="categoryView.length === 0" class="muted empty">{{ $t('ytmusic.empty') }}</p>
+              </template>
             </template>
 
             <!-- détail : album, artiste, playlist -->
@@ -713,7 +811,7 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
               <p v-if="searchEmpty" class="muted empty">{{ $t('ytmusic.empty') }}</p>
             </div>
 
-            <!-- parcourir : récents, likes, playlists -->
+            <!-- parcourir : récents, likes, playlists, genres, ambiances -->
             <template v-else>
               <div class="browse-head">
                 <Segmented v-model="browseTab" dense :options="browseOptions" :label="$t('music.browse')" />
@@ -731,6 +829,22 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
                               :disabled="!playTarget" :busy="playingId === tr.videoId" :play-label="$t('ytmusic.play')"
                               @play="play(tr, browseTracksView)" @play-next="addToQueue(tr, 'next')" @add-end="addToQueue(tr, 'end')" />
                 <p v-if="!busy && browseTracksView.length === 0" class="muted empty">{{ $t('ytmusic.empty') }}</p>
+              </div>
+              <!-- genres / ambiances : pastilles de hauteur fixe, liseré à la couleur de YouTube Music -->
+              <div v-else-if="browseTab === 'genres' || browseTab === 'moods'">
+                <div v-if="busy && !exploreGroups.length" class="cat-grid" aria-hidden="true">
+                  <span v-for="i in 12" :key="i" class="skel cat-skel" />
+                </div>
+                <template v-for="grp in exploreGroups" :key="grp.key">
+                  <h2 v-if="grp.title" class="section-label cat-head">{{ grp.title }}</h2>
+                  <div class="cat-grid">
+                    <button v-for="c in grp.categories" :key="c.params" type="button" class="cat" :style="{ '--cat': c.color ?? 'var(--line)' }"
+                            :title="c.title" @click="openCategory(c)">
+                      <span class="cat__title">{{ c.title }}</span>
+                    </button>
+                  </div>
+                </template>
+                <p v-if="!busy && exploreGroups.length === 0" class="muted empty">{{ $t('ytmusic.empty') }}</p>
               </div>
               <div v-else class="list">
                 <MusicItemRow v-for="pl in playlists" :key="pl.id" action="open" icon="list" :art="pl.artUrl" :title="pl.title"
@@ -815,5 +929,19 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
 .section__head { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin: 0 0 6px; }
 .section-label { margin: 0 4px; }
 .list { display: grid; gap: 2px; }
+
+/* genres / ambiances : grille de pastilles, toutes de la même taille ; un nom trop long est coupé */
+.cat-head { margin: 4px 4px 8px; }
+.cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 10px; margin: 0 0 18px; }
+.cat {
+  height: 52px; min-width: 0; display: flex; align-items: center; padding: 0 14px 0 14px;
+  border: 1px solid var(--line); border-left: 6px solid var(--cat); border-radius: 10px;
+  background: var(--surface); color: var(--text); font: inherit; font-size: 14px; font-weight: 500; text-align: left; cursor: pointer;
+  transition: background .15s;
+}
+.cat:hover { background: color-mix(in srgb, var(--cat) 16%, var(--surface)); }
+.cat:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cat__title { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cat-skel { height: 52px; border-radius: 10px; }
 .empty { padding: 16px 4px; }
 </style>

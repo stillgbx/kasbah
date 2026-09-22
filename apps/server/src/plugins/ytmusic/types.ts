@@ -60,6 +60,37 @@ export const searchResultSchema = z.object({
 })
 export type YtmusicSearchResult = z.infer<typeof searchResultSchema>
 
+/** Un genre ou une ambiance de « Humeurs et genres » : de quoi l'afficher, et le `params` qui ouvre sa page. */
+export const exploreCategorySchema = z.object({
+  title: z.string().min(1),
+  params: z.string().min(1),
+  /** Couleur de la pastille chez YouTube Music (`#rrggbb`), si elle est donnée. */
+  color: z.string().regex(/^#[0-9a-f]{6}$/).nullable(),
+})
+export type YtmusicExploreCategory = z.infer<typeof exploreCategorySchema>
+
+const exploreGroupSchema = z.object({ title: z.string(), categories: z.array(exploreCategorySchema) })
+
+/** « Pour vous » (personnalisé, parfois absent), « Humeurs et moments », « Genres » — titres tels que YouTube les localise. */
+export const exploreSchema = z.object({
+  forYou: exploreGroupSchema,
+  moods: exploreGroupSchema,
+  genres: exploreGroupSchema,
+})
+export type YtmusicExplore = z.infer<typeof exploreSchema>
+
+/** Une rangée de la page d'une catégorie : titres, playlists OFFICIELLES, albums (ni clips ni playlists d'utilisateurs). */
+export const exploreShelfSchema = z.object({
+  title: z.string(),
+  tracks: z.array(trackSchema),
+  playlists: z.array(playlistSchema),
+  albums: z.array(albumSchema),
+})
+export const exploreCategoryPageSchema = z.object({
+  shelves: z.array(exploreShelfSchema),
+})
+export type YtmusicExploreCategoryPage = z.infer<typeof exploreCategoryPageSchema>
+
 export const statusSchema = z.object({
   /** Compte relié (fichier cookie présent et contient `__Secure-3PAPISID`). */
   linked: z.boolean(),

@@ -286,7 +286,8 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
     if (st?.kind !== 'media_player') return false
     if (st.playback !== 'playing' && st.playback !== 'paused') return false
     const t = st.nowPlaying?.title?.trim() ?? ''
-    if (!t || /^[0-9a-f]{24}$/i.test(t) || /^https?:\/\//i.test(t)) return true
+    // un relais s'appelle `<sid>.m4a` : le Sonos publie parfois ce NOM DE FICHIER comme titre
+    if (!t || /^[0-9a-f]{24}(\.[a-z0-9]{2,4})?$/i.test(t) || /^https?:\/\//i.test(t)) return true
     return !!s.meta.title && t.toLowerCase() === s.meta.title.trim().toLowerCase()
   }
 
@@ -779,6 +780,46 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
           const tracks = await catalog!.artistTracks(cookie, req.params.id)
           lastError = null
           return { tracks }
+        } catch (err) {
+          return catalogError(reply, err)
+        }
+      })
+
+      // ---- Humeurs et genres ------------------------------------------------------------------------
+      // `hl` : la langue de l'app (les noms des genres sont rendus par YouTube). Réponses gardées
+      // quelques minutes : elles changent peu, et l'onglet se rouvre souvent.
+      const langOf = (hl: unknown) => (typeof hl === 'string' && /^[a-z]{2}(-[A-Z]{2})?$/.test(hl) ? hl : undefined)
+      const EXPLORE_TTL_MS = 10 * 60_000
+      const exploreCache = new Map<string, { at: number; value: unknown }>()
+      const cached = async <T>(key: string, load: () => Promise<T>): Promise<T> => {
+        const hit = exploreCache.get(key)
+        if (hit && now() - hit.at < EXPLORE_TTL_MS) return hit.value as T
+        const value = await load()
+        exploreCache.set(key, { at: now(), value })
+        return value
+      }
+
+      app.get<{ Querystring: { hl?: string } }>('/explore', async (req, reply) => {
+        try {
+          const cookie = await requireCookie()
+          const lang = langOf(req.query.hl)
+          const result = await cached(`explore|${lang ?? ''}`, () => catalog!.explore(cookie, lang))
+          lastError = null
+          return result
+        } catch (err) {
+          return catalogError(reply, err)
+        }
+      })
+
+      app.get<{ Querystring: { params?: string; hl?: string } }>('/explore/category', async (req, reply) => {
+        const params = (req.query.params ?? '').trim()
+        if (!params) return sendError(reply, 400, 'INVALID_BODY', 'params is required')
+        try {
+          const cookie = await requireCookie()
+          const lang = langOf(req.query.hl)
+          const result = await cached(`category|${lang ?? ''}|${params}`, () => catalog!.exploreCategory(cookie, params, lang))
+          lastError = null
+          return result
         } catch (err) {
           return catalogError(reply, err)
         }

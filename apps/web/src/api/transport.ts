@@ -220,6 +220,27 @@ export interface YtmusicSession {
   queue?: { length: number; index: number; repeat: YtmusicRepeat } | null
 }
 
+/** Un genre ou une ambiance : son nom (dans la langue demandée), sa couleur, et de quoi ouvrir sa page. */
+export interface YtmusicExploreCategory {
+  title: string
+  params: string
+  /** `#rrggbb`, la pastille chez YouTube Music. */
+  color: string | null
+}
+/** « Pour vous » (personnalisé, parfois vide), « Humeurs et moments », « Genres » — titres localisés par YouTube. */
+export interface YtmusicExplore {
+  forYou: { title: string; categories: YtmusicExploreCategory[] }
+  moods: { title: string; categories: YtmusicExploreCategory[] }
+  genres: { title: string; categories: YtmusicExploreCategory[] }
+}
+/** Une rangée de la page d'une catégorie : titres, playlists officielles, albums. */
+export interface YtmusicExploreShelf {
+  title: string
+  tracks: YtmusicTrack[]
+  playlists: YtmusicPlaylist[]
+  albums: YtmusicAlbum[]
+}
+
 /** Répétition du TITRE en cours : `once` le rejoue une fois puis la file reprend, `loop` sans fin. */
 export type YtmusicRepeat = 'off' | 'once' | 'loop'
 
@@ -395,6 +416,10 @@ export interface Transport {
   ytmusicPlaylist(id: string): Promise<{ tracks: YtmusicTrack[] }>
   ytmusicAlbum(id: string): Promise<{ tracks: YtmusicTrack[] }>
   ytmusicArtist(id: string): Promise<{ tracks: YtmusicTrack[] }>
+  /** Humeurs et genres ; `hl` = langue de l'app (les noms viennent de YouTube). */
+  ytmusicExplore(hl?: string): Promise<YtmusicExplore>
+  /** La page d'une catégorie, en rangées. */
+  ytmusicExploreCategory(params: string, hl?: string): Promise<{ shelves: YtmusicExploreShelf[] }>
   /** Résout le flux et envoie `play_url` au lecteur (métadonnées optionnelles pour titre / pochette). */
   ytmusicPlay(body: {
     videoId: string
