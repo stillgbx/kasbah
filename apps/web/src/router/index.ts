@@ -10,7 +10,9 @@ export const router = createRouter({
     { path: '/covers', name: 'covers', component: () => import('../views/CoversView.vue') },
     { path: '/cameras', name: 'cameras', component: () => import('../views/CamerasView.vue') },
     { path: '/media', name: 'media', component: () => import('../views/MediaView.vue') },
-    { path: '/ytmusic', name: 'ytmusic', component: () => import('../views/YtmusicView.vue') },
+    { path: '/music', name: 'music', component: () => import('../views/MusicView.vue') },
+    // ancien nom de la vue (une seule source à l'époque) : un signet y mène encore
+    { path: '/ytmusic', redirect: '/music' },
     { path: '/energy', name: 'energy', component: () => import('../views/EnergyView.vue') },
     { path: '/water', name: 'water', component: () => import('../views/WaterView.vue') },
     { path: '/heating', name: 'heating', component: () => import('../views/HeatingView.vue') },

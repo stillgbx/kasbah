@@ -95,13 +95,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
   // YouTube Music n'a pas d'appareils : pour `play_url` il passe par Cast/Sonos via l'hôte.
   setYtmusicBridge({
     getDevice: (id) => registry.get(id),
-    playUrl: (id, url, meta) => host.execute(id, {
-      type: 'media_player.play_url',
-      url,
-      ...(meta?.title ? { title: meta.title } : {}),
-      ...(meta?.artist ? { artist: meta.artist } : {}),
-      ...(meta?.artUrl ? { artUrl: meta.artUrl } : {}),
-    }),
+    execute: (id, command) => host.execute(id, command),
   })
   if (opts.serveStatic ?? true) {
     const served = await registerStatic(app, opts.env.KASBAH_STATIC_DIR)

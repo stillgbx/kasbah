@@ -118,6 +118,50 @@ export interface ProxySession {
   sourceUrl: string
   createdAt: number
   mime: string
+  /** Décalage de départ (s) : un transfert ou un déplacement reprend le morceau plus loin que son début. */
+  startS: number
+  /**
+   * Reprise « en direct » (transfert) : `startS` vaut la position de la source à cet instant (ms
+   * d'horloge). Le décalage définitif n'est fixé qu'au premier `GET /stream`, en y ajoutant le temps
+   * écoulé depuis — commande au lecteur, connexion — et l'avance de mise en tampon (`startFor`).
+   * Sans lui (lancement, déplacement voulu), `startS` est déjà définitif.
+   */
+  resumeAt?: number
+  /** Dernier `GET /stream` servi : horloge (ms) et raison — pour décider quoi faire à la reconnexion. */
+  servedAt?: number
+  servedWhy?: ServeReason
+  /**
+   * Position (s dans le morceau) où l'écoute en était quand la dernière connexion s'est fermée : une
+   * pause (le Sonos ARRÊTE un flux et le redemande au Play) reprend ici, quel que soit son délai.
+   */
+  playedS?: number
+  /** Ce que l'UI savait du titre au lancement (catalogue) : réutilisé tel quel au transfert / déplacement. */
+  meta: SessionMeta
+}
+
+/**
+ * Un Sonos SONDE l'URI à sa réception (premier GET, aussitôt refermé) puis la lit pour de bon à la
+ * commande Play (second GET, quelques centaines de ms plus tard) : la sonde n'est pas jouée. Le
+ * second GET doit donc repartir au MÊME décalage, pas « au temps écoulé » — sinon le premier quart
+ * de seconde saute, ou deux décalages différents s'entendent comme un accroc. Ça vaut au lancement,
+ * au transfert et à la reprise après pause (le Sonos repose l'URI et sonde à nouveau).
+ */
+export const PROBE_WINDOW_MS = 1_500
+export type ServeReason = 'start' | 'resume' | 'reconnect' | 'probe'
+
+export interface OpenOpts {
+  startS?: number
+  meta?: SessionMeta
+  /** Horloge (ms) à laquelle `startS` a été relevé sur la source d'un transfert. */
+  resumeAt?: number
+}
+
+export interface SessionMeta {
+  title?: string
+  artist?: string
+  artUrl?: string
+  /** Durée catalogue : le flux proxy n'en annonce pas, l'enceinte ne peut donc pas la publier. */
+  durationS?: number
 }
 
 export interface StreamProxyOpts {
@@ -145,13 +189,16 @@ export class StreamProxy {
     this.now = opts.now ?? (() => Date.now())
   }
 
-  open(videoId: string, deviceId: string, sourceUrl: string): ProxySession {
+  open(videoId: string, deviceId: string, sourceUrl: string, opts: OpenOpts = {}): ProxySession {
     this.closeDevice(deviceId)
     const sid = randomBytes(12).toString('hex')
     const session: ProxySession = {
       sid, videoId, deviceId, sourceUrl,
       createdAt: this.now(),
       mime: 'audio/mpeg',
+      startS: Math.max(0, opts.startS ?? 0),
+      ...(opts.resumeAt !== undefined ? { resumeAt: opts.resumeAt } : {}),
+      meta: opts.meta ?? {},
     }
     this.sessions.set(sid, session)
     this.byDevice.set(deviceId, sid)
@@ -180,17 +227,81 @@ export class StreamProxy {
     if (sid) this.close(sid)
   }
 
+  /**
+   * Décalage auquel servir CE `GET /stream`, et pourquoi (`why`, pour le journal) :
+   * - `resume` : reprise après transfert — la source a continué d'avancer pendant la commande et la
+   *   connexion, et l'enceinte ne jouera le premier octet qu'après avoir rempli son tampon (`leadS`) ;
+   *   sans ça, la cible repartait ~1 s en arrière ;
+   * - `reconnect` : le même lecteur redemande le flux — après une pause (connexion fermée : on
+   *   reprend à la position atteinte à la fermeture, `playedS`, quel que soit le délai) ou pendant
+   *   qu'il joue encore (connexion ouverte : on continue au temps écoulé) — au lieu de rejouer ce
+   *   qu'il a déjà entendu ;
+   * - `probe` : GET qui suit de peu une connexion aussitôt refermée — la sonde de format du Sonos
+   *   n'a rien joué, la lecture commence ici, au MÊME décalage ; le délai jusqu'au premier son est
+   *   l'affaire de l'avance de tampon `leadS`, pas du temps entre les deux GET ;
+   * - `start` : premier service (lancement, déplacement voulu) — `startS` est déjà définitif.
+   * `session.startS` reflète toujours le dernier service : c'est lui que l'UI ajoute à la position.
+   */
+  startFor(session: ProxySession, leadS: number): { startS: number; why: ServeReason } {
+    const now = this.now()
+    let why: ServeReason = 'start'
+    if (session.resumeAt !== undefined) {
+      session.startS += Math.max(0, (now - session.resumeAt) / 1000) + Math.max(0, leadS)
+      delete session.resumeAt
+      why = 'resume'
+    } else if (session.servedAt !== undefined) {
+      if (session.playedS !== undefined && now - session.servedAt < PROBE_WINDOW_MS) {
+        why = 'probe'
+      } else {
+        session.startS = session.playedS ?? session.startS + (now - session.servedAt) / 1000
+        why = 'reconnect'
+      }
+    }
+    session.servedAt = now
+    session.servedWhy = why
+    delete session.playedS
+    return { startS: session.startS, why }
+  }
+
+  /**
+   * La connexion servie à `servedAt` s'est fermée : retenir où l'écoute en était. Le lecteur joue en
+   * temps réel depuis le premier son, venu `leadS` après le début du service — d'où la soustraction.
+   * Une connexion plus ancienne (la sonde qui se ferme après la vraie lecture) ne compte pas.
+   */
+  noteClosed(session: ProxySession, servedAt: number, leadS: number): void {
+    if (session.servedAt !== servedAt) return
+    const heardS = (this.now() - servedAt) / 1000 - Math.max(0, leadS)
+    session.playedS = session.startS + Math.max(0, heardS)
+  }
+
+  /** Session vivante de ce lecteur (ce qu'il joue de nous), sinon undefined. */
+  forDevice(deviceId: string): ProxySession | undefined {
+    const sid = this.byDevice.get(deviceId)
+    return sid ? this.get(sid) : undefined
+  }
+
+  /** Sessions vivantes, une par lecteur. */
+  list(): ProxySession[] {
+    return [...this.byDevice.values()].map((sid) => this.get(sid)).filter((s): s is ProxySession => !!s)
+  }
+
   clear(): void {
     this.sessions.clear()
     this.byDevice.clear()
   }
 
   /** Pipe ffmpeg stdout vers le client HTTP. Le caller doit détruire le processus si le client part. */
-  spawnFfmpeg(sourceUrl: string): ChildProcessWithoutNullStreams {
+  spawnFfmpeg(sourceUrl: string, startS = 0): ChildProcessWithoutNullStreams {
+    // `-ss` AVANT `-i` : ffmpeg se place dans la source (rapide, sans décoder ce qui précède).
+    // Fondu d'entrée de 60 ms : un flux qui démarre en milieu de morceau commence sur un échantillon
+    // quelconque et claque sans lui ; au début d'un titre il couvre l'amorce de l'encodeur et le
+    // premier tampon de l'enceinte (petit craquement entendu au lancement). Inaudible sur une intro.
     const args = [
       '-hide_banner', '-loglevel', 'warning',
+      ...(startS > 0 ? ['-ss', startS.toFixed(3)] : []),
       '-i', sourceUrl,
-      '-vn', '-c:a', 'libmp3lame', '-b:a', '192k',
+      '-vn', '-af', 'afade=t=in:st=0:d=0.06',
+      '-c:a', 'libmp3lame', '-b:a', '192k',
       '-f', 'mp3', 'pipe:1',
     ]
     return this.spawnImpl(this.opts.ffmpegPath, args, {

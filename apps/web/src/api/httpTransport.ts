@@ -1,6 +1,6 @@
 import { apiErrorSchema, devicesResponseSchema, energyHistorySchema, healthResponseSchema, houseSchema, pluginsResponseSchema, scenesResponseSchema, serverMessageSchema, weatherForecastSchema, deviceJournalSchema, deviceConsumptionSchema, type CommandInput, type DeviceConsumption, type DeviceJournal, type DeviceEntry, type DevicePlacement, type EnergyHistory, type HealthResponse, type House, type PluginInfo, type PluginSceneEntry, type PluginSettingsPatch, type SceneRecallInput, type SceneUpdate, type WeatherForecast } from '@kasbah/shared'
 import { parseDeviceId } from '@kasbah/shared'
-import { ApiRequestError, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type MelcloudStatus, type MelcloudUnit, type PetkitStatus, type RenaultStatus, type TeslaStatus, type Transport, type TransportHandlers, type YtmusicPlaylist, type YtmusicSearchResult, type YtmusicStatus, type YtmusicTrack } from './transport'
+import { ApiRequestError, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type MelcloudStatus, type MelcloudUnit, type PetkitStatus, type RenaultStatus, type TeslaStatus, type Transport, type TransportHandlers, type YtmusicPlaylist, type YtmusicSearchResult, type YtmusicSession, type YtmusicStatus, type YtmusicTrack } from './transport'
 
 // URLs relatives : même origine en prod (Fastify sert le build) et via le proxy Vite en dev.
 
@@ -206,6 +206,17 @@ export function createHttpTransport(base = ''): Transport {
       `${base}/api/plugins/ytmusic/play`,
       { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
       (j) => j as { ok: true; streamUrl: string; sid: string },
+    ),
+    ytmusicSeek: (body) => request(
+      `${base}/api/plugins/ytmusic/seek`,
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
+      (j) => j as { ok: true; streamUrl: string; sid: string; positionS: number },
+    ),
+    ytmusicSessions: () => request(`${base}/api/plugins/ytmusic/sessions`, undefined, (j) => j as { sessions: YtmusicSession[] }),
+    ytmusicTransfer: (body) => request(
+      `${base}/api/plugins/ytmusic/transfer`,
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
+      (j) => j as { ok: true; streamUrl: string; sid: string; positionS: number },
     ),
     forgetDevice: (deviceId) => {
       const { pluginId, externalId } = parseDeviceId(deviceId)

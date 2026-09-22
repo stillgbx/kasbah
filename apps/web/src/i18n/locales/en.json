@@ -1,6 +1,6 @@
 {
   "app": { "name": "Kasbah" },
-  "nav": { "main": "Navigation", "home": "Home", "energy": "Energy", "water": "Water", "heating": "Heating", "vehicles": "Vehicles", "robots": "Robots", "pets": "Pets", "weather": "Weather", "settings": "Settings", "lights": "Lights", "covers": "Covers", "cameras": "Cameras", "media": "Media", "ytmusic": "YouTube Music" },
+  "nav": { "main": "Navigation", "home": "Home", "energy": "Energy", "water": "Water", "heating": "Heating", "vehicles": "Vehicles", "robots": "Robots", "pets": "Pets", "weather": "Weather", "settings": "Settings", "lights": "Lights", "covers": "Covers", "cameras": "Cameras", "media": "Media", "music": "Music" },
   "common": {
     "cancel": "Cancel", "close": "Close", "back": "Back", "retry": "Retry", "all": "All", "none": "None", "unavailable": "Unavailable",
     "loading": "Loading house…", "on": "On", "off": "Off", "stop": "Stop",
@@ -109,6 +109,21 @@
     "play": "Play", "playUrl": "Play a URL", "urlPlaceholder": "https://… (mp3, HLS…)", "next": "Next track", "previous": "Previous track", "mute": "Mute", "unmute": "Unmute", "volume": "Volume", "volumeUp": "Volume up", "volumeDown": "Volume down", "seek": "Position in the track",
     "classes": { "speaker": "Speaker", "tv": "TV", "display": "Smart display" }
   },
+  "music": {
+    "searchPlaceholder": "Search an artist, an album, a track…", "search": "Search", "clear": "Clear search",
+    "advanced": "Advanced", "advancedHint": "Advanced search: artists, albums, EPs, compilations and tracks in columns",
+    "sources": "Sources", "sourceLinked": "Linked", "sourceUnlinked": "Not linked",
+    "browse": "Browse", "browseRecent": "Recent", "browseLiked": "Likes", "browsePlaylists": "Playlists",
+    "topResults": "Top results", "seeAll": "See all", "noRecent": "Your recent plays will show up here.",
+    "sessions": "Listening", "sessionsHint": "Where playback goes — tap a player to control it", "transferHint": "Tap the player that should pick up the track",
+    "noSession": "No player available", "nothing": "Nothing playing", "idle": "Idle",
+    "transfer": "Transfer", "transferTo": "Transfer playback to…", "transferHere": "Here", "transferring": "Transferring…",
+    "transferred": "Playback transferred to {name}", "transferUnavailable": "Only playback started from Kasbah can be transferred",
+    "stop": "Stop", "onDevice": "on {name}",
+    "filterPlayers": "Filter players", "favorites": "Favorites", "otherPlayers": "Other players",
+    "favoriteAdd": "Add to favorites", "locate": "Show in the house", "favoriteRemove": "Remove from favorites"
+  },
+
   "ytmusic": {
     "unofficial": "Unofficial source — personal home use only",
     "needCookie": "YouTube Music cookie missing or expired — Settings → Plugins → ytmusic.",

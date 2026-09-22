@@ -1,15 +1,12 @@
-import type { DeviceEntry } from '@kasbah/shared'
+import type { Command, DeviceEntry } from '@kasbah/shared'
 
 // Pont tardif vers le registre / l'hôte : le plugin n'a pas `PluginContext.execute` pour un autre
 // fabricant. `app.ts` branche après `PluginHost` ; les tests injectent directement via deps.
 
 export interface YtmusicBridge {
   getDevice(deviceId: string): DeviceEntry | undefined
-  playUrl(
-    deviceId: string,
-    url: string,
-    meta?: { title?: string; artist?: string; artUrl?: string },
-  ): Promise<void>
+  /** Commande à un lecteur d'un autre plugin : `play_url`, `pause` du flux qu'on remplace, `stop` de la source d'un transfert. */
+  execute(deviceId: string, command: Command): Promise<void>
 }
 
 let bridge: YtmusicBridge | null = null

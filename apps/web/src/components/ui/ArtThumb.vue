@@ -13,10 +13,13 @@ const props = withDefaults(defineProps<{
   round?: boolean
   /** Icône pendant le chargement / sans URL (artiste / album / titre / playlist). */
   icon?: IconName
+  /** Côté en px (carré) — 44 dans les listes, plus grand dans le lecteur et les tuiles. */
+  size?: number
 }>(), {
   src: null,
   round: false,
   icon: 'music',
+  size: 44,
 })
 
 const root = ref<HTMLElement | null>(null)
@@ -65,7 +68,7 @@ watch(
 </script>
 
 <template>
-  <div ref="root" class="art-wrap" :class="{ 'art-wrap--round': round }">
+  <div ref="root" class="art-wrap" :class="{ 'art-wrap--round': round }" :style="{ '--art': `${props.size}px` }">
     <img
       v-if="displaySrc"
       class="art"
@@ -85,14 +88,14 @@ watch(
 
 <style scoped>
 .art-wrap {
-  width: 44px;
-  height: 44px;
+  width: var(--art, 44px);
+  height: var(--art, 44px);
   flex: 0 0 auto;
 }
 .art-wrap--round { border-radius: 999px; overflow: hidden; }
 .art {
-  width: 44px;
-  height: 44px;
+  width: var(--art, 44px);
+  height: var(--art, 44px);
   border-radius: 6px;
   object-fit: cover;
   display: block;

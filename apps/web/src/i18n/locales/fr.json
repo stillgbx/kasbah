@@ -1,6 +1,6 @@
 {
   "app": { "name": "Kasbah" },
-  "nav": { "main": "Navigation", "home": "Maison", "energy": "Énergie", "water": "Eau", "heating": "Chauffage", "vehicles": "Véhicules", "robots": "Robots", "pets": "Animaux", "weather": "Météo", "settings": "Réglages", "lights": "Lumières", "covers": "Ouvrants", "cameras": "Caméras", "media": "Médias", "ytmusic": "YouTube Music" },
+  "nav": { "main": "Navigation", "home": "Maison", "energy": "Énergie", "water": "Eau", "heating": "Chauffage", "vehicles": "Véhicules", "robots": "Robots", "pets": "Animaux", "weather": "Météo", "settings": "Réglages", "lights": "Lumières", "covers": "Ouvrants", "cameras": "Caméras", "media": "Médias", "music": "Musique" },
   "common": {
     "cancel": "Annuler", "close": "Fermer", "back": "Retour", "retry": "Réessayer", "all": "Tout", "none": "Aucun", "unavailable": "Indisponible",
     "loading": "Chargement de la maison…", "on": "Allumé", "off": "Éteint", "stop": "Stop",
@@ -109,6 +109,21 @@
     "play": "Lire", "playUrl": "Lire une URL", "urlPlaceholder": "https://… (mp3, HLS…)", "next": "Piste suivante", "previous": "Piste précédente", "mute": "Couper le son", "unmute": "Rétablir le son", "volume": "Volume", "volumeUp": "Monter le son", "volumeDown": "Baisser le son", "seek": "Position dans le morceau",
     "classes": { "speaker": "Enceinte", "tv": "Téléviseur", "display": "Écran connecté" }
   },
+  "music": {
+    "searchPlaceholder": "Rechercher un artiste, un album, un titre…", "search": "Rechercher", "clear": "Effacer la recherche",
+    "advanced": "Avancée", "advancedHint": "Recherche avancée : artistes, albums, EP, compilations et titres en colonnes",
+    "sources": "Sources", "sourceLinked": "Reliée", "sourceUnlinked": "Non reliée",
+    "browse": "Parcourir", "browseRecent": "Récents", "browseLiked": "Likes", "browsePlaylists": "Playlists",
+    "topResults": "Meilleurs résultats", "seeAll": "Voir tout", "noRecent": "Vos lectures récentes apparaîtront ici.",
+    "sessions": "Écoute", "sessionsHint": "Où partent les lectures — toucher un lecteur pour le piloter", "transferHint": "Toucher le lecteur qui doit reprendre le morceau",
+    "noSession": "Aucun lecteur disponible", "nothing": "Rien ne joue", "idle": "Au repos",
+    "transfer": "Transférer", "transferTo": "Transférer la lecture vers…", "transferHere": "Ici", "transferring": "Transfert…",
+    "transferred": "Lecture transférée vers {name}", "transferUnavailable": "Seule une lecture lancée depuis Kasbah se transfère",
+    "stop": "Arrêter", "onDevice": "sur {name}",
+    "filterPlayers": "Filtrer les lecteurs", "favorites": "Favoris", "otherPlayers": "Autres lecteurs",
+    "favoriteAdd": "Ajouter aux favoris", "locate": "Voir dans la maison", "favoriteRemove": "Retirer des favoris"
+  },
+
   "ytmusic": {
     "unofficial": "Source non officielle — usage perso maison seulement",
     "needCookie": "Cookie YouTube Music manquant ou expiré — Réglages → Plugins → ytmusic.",
