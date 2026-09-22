@@ -29,3 +29,12 @@ describe('lecture posée sur la pochette', () => {
     expect(track.find('.row__art .art-play').exists()).toBe(true)
   })
 })
+
+describe('marquage explicit sur les tuiles', () => {
+  it('pose le « E » à côté du titre, seulement quand le catalogue le dit', () => {
+    const marked = mount(MusicTile, { props: { art: null, title: 'The W', action: 'open', explicit: true } })
+    expect(marked.find('.tile__line1 .explicit').exists()).toBe(true)
+    const clean = mount(MusicTile, { props: { art: null, title: 'Iron Flag', action: 'open' } })
+    expect(clean.find('.explicit').exists()).toBe(false)
+  })
+})

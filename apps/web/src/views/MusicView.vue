@@ -671,14 +671,14 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
               <section v-if="releasesSimple.length" class="shelf">
                 <div class="shelf__head"><h2 class="section-label">{{ $t('ytmusic.sectionAlbums') }}</h2><button type="button" class="see-all" @click="advanced = true">{{ $t('music.seeAll') }}</button></div>
                 <div class="shelf__row">
-                  <MusicTile v-for="al in releasesSimple" :key="al.id" action="open" playable icon="disc" :art="al.artUrl" :title="al.title" :meta="[albumMeta(al), al.year].filter(Boolean).join(' · ')"
+                  <MusicTile v-for="al in releasesSimple" :key="al.id" action="open" playable icon="disc" :art="al.artUrl" :title="al.title" :explicit="!!al.explicit" :meta="[albumMeta(al), al.year].filter(Boolean).join(' · ')"
                              :disabled="!playTarget" :busy="playingCollection === al.id" :play-label="$t('music.playAll')" @open="openAlbum(al)" @play="playAlbum(al)" />
                 </div>
               </section>
               <section v-if="tracksSimple.length" class="shelf">
                 <div class="shelf__head"><h2 class="section-label">{{ $t('ytmusic.sectionTracks') }}</h2><button type="button" class="see-all" @click="advanced = true">{{ $t('music.seeAll') }}</button></div>
                 <div class="shelf__row">
-                  <MusicTile v-for="tr in tracksSimple" :key="tr.videoId" action="play" :art="tr.artUrl" :title="tr.title" :meta="trackMeta(tr)"
+                  <MusicTile v-for="tr in tracksSimple" :key="tr.videoId" action="play" :art="tr.artUrl" :title="tr.title" :explicit="!!tr.explicit" :meta="trackMeta(tr)"
                              :disabled="!playTarget" :busy="playingId === tr.videoId" :play-label="$t('ytmusic.play')" @play="play(tr, tracksSimple)" />
                 </div>
               </section>
