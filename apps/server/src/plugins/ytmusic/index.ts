@@ -875,6 +875,18 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
         }
       })
 
+      app.get<{ Querystring: { hl?: string } }>('/explore/new', async (req, reply) => {
+        try {
+          const cookie = await requireCookie()
+          const lang = langOf(req.query.hl)
+          const result = await cached(`new|${lang ?? ''}`, () => catalog!.newReleases(cookie, lang))
+          lastError = null
+          return result
+        } catch (err) {
+          return catalogError(reply, err)
+        }
+      })
+
       app.get<{ Querystring: { params?: string; hl?: string } }>('/explore/category', async (req, reply) => {
         const params = (req.query.params ?? '').trim()
         if (!params) return sendError(reply, 400, 'INVALID_BODY', 'params is required')

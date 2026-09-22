@@ -55,4 +55,12 @@ describe('ytmusic « Humeurs et genres »', () => {
     const parsed = { contents: {}, contents_memo: new Map([['MusicCarouselShelf', [{ header: { title: { text: 'Titres' } }, contents: [{ id: 'a' }] }]]]) }
     expect(carouselsOf(parsed)).toEqual([{ title: 'Titres', items: [{ id: 'a' }] }])
   })
+
+  it('prend aussi les grilles, en tête (la page des nouveautés y met ses playlists phares)', () => {
+    const parsed = { contents: {}, contents_memo: new Map<string, unknown[]>([
+      ['MusicCarouselShelf', [{ header: { title: { text: 'Albums et singles' } }, contents: [{ id: 'al' }] }]],
+      ['Grid', [{ items: [{ id: 'VLRDCLAK_released' }] }]],
+    ]) }
+    expect(carouselsOf(parsed)).toEqual([{ title: '', items: [{ id: 'VLRDCLAK_released' }] }, { title: 'Albums et singles', items: [{ id: 'al' }] }])
+  })
 })

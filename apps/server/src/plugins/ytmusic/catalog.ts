@@ -184,6 +184,14 @@ function itemToRawPlaylist(item: unknown): RawPlaylist | null {
 function asList(v: unknown): unknown[] {
   if (!v) return []
   if (Array.isArray(v)) return v
+  // `SuperParsedResult` de youtubei.js (réponses `browse` analysées : badges d'une tuile d'album…) :
+  // une enveloppe sans clés, qui ne se lit que par ses méthodes — sans ça, les badges explicit des
+  // nouveautés et des catégories passaient inaperçus.
+  const spr = v as { is_null?: unknown; is_array?: unknown; array?: unknown; item?: unknown }
+  if (typeof spr.array === 'function' && typeof spr.item === 'function' && typeof spr.is_array === 'boolean') {
+    if (spr.is_null === true) return []
+    return spr.is_array ? asList((spr.array as () => unknown)()) : [(spr.item as () => unknown)()]
+  }
   if (typeof v === 'object' && typeof (v as { [Symbol.iterator]?: unknown })[Symbol.iterator] === 'function') {
     return Array.from(v as Iterable<unknown>)
   }
@@ -864,9 +872,34 @@ export class YtmusicCatalog {
    * (`PL…`, de qualité très variable) sont laissés de côté — choix de l'utilisateur.
    */
   async exploreCategory(cookie: string, params: string, lang?: string): Promise<YtmusicExploreCategoryPage> {
+    return this.browseShelves(cookie, 'FEmusic_moods_and_genres_category', params, lang)
+  }
+
+  /**
+   * Les nouveautés de YouTube Music : playlists phares (« RELEASED »…) et albums et singles récents ;
+   * mêmes rangées qu'une catégorie. La page d'accueil des nouveautés n'en montre que 24 : la liste
+   * complète (~180-200, en une réponse) est sur sa page « Voir tout », `FEmusic_new_releases_albums`,
+   * lue en parallèle — et montrée EN ENTIER, choix de l'utilisateur.
+   */
+  async newReleases(cookie: string, lang?: string): Promise<YtmusicExploreCategoryPage> {
+    const [home, all] = await Promise.all([
+      this.browseShelves(cookie, 'FEmusic_new_releases', undefined, lang),
+      this.browseShelves(cookie, 'FEmusic_new_releases_albums', undefined, lang).catch(() => ({ shelves: [] })),
+    ])
+    const albums = all.shelves.flatMap((sh) => sh.albums)
+    if (!albums.length) return home
+    const hasAlbums = home.shelves.some((sh) => sh.albums.length)
+    return {
+      shelves: hasAlbums
+        ? home.shelves.map((sh) => (sh.albums.length ? { ...sh, albums } : sh))
+        : [...home.shelves, { title: '', tracks: [], playlists: [], albums }],
+    }
+  }
+
+  private async browseShelves(cookie: string, browseId: string, params: string | undefined, lang?: string): Promise<YtmusicExploreCategoryPage> {
     return this.withSession(cookie, async (yt) => {
       if (typeof yt.browseParsed !== 'function') return { shelves: [] }
-      const page = await yt.browseParsed('FEmusic_moods_and_genres_category', params)
+      const page = await yt.browseParsed(browseId, params)
       const shelves = carouselsOf(page).map(({ title, items }) => {
         const songs = items.filter((it) => asRecord(it)?.item_type === 'song')
         const playlists = items.filter((it) => {
@@ -874,11 +907,18 @@ export class YtmusicCatalog {
           return o?.item_type === 'playlist' && typeof o.id === 'string' && o.id.replace(/^VL/, '').startsWith('RDCLAK')
         })
         const albums = items.filter((it) => asRecord(it)?.item_type === 'album')
+        // YouTube répète parfois un élément dans la même rangée (la playlist « RELEASED » deux fois, même
+        // id, dans la grille des nouveautés) : une fois suffit, et deux tuiles ne partagent pas une clé.
+        // On garde le PREMIER exemplaire : le suivant peut venir sans pochette.
+        const once = <T,>(items: T[], id: (x: T) => string) => {
+          const seen = new Set<string>()
+          return items.filter((x) => !seen.has(id(x)) && !!seen.add(id(x)))
+        }
         return {
           title,
-          tracks: mapTracks(songs.map(itemToRawTrack).filter((r): r is RawTrack => !!r)),
-          playlists: mapPlaylists(playlists.map(itemToRawPlaylist).filter((r): r is RawPlaylist => !!r)),
-          albums: mapAlbums(albums.map(itemToRawAlbum).filter((r): r is RawAlbum => !!r)),
+          tracks: once(mapTracks(songs.map(itemToRawTrack).filter((r): r is RawTrack => !!r)), (t) => t.videoId),
+          playlists: once(mapPlaylists(playlists.map(itemToRawPlaylist).filter((r): r is RawPlaylist => !!r)), (p) => p.id),
+          albums: once(mapAlbums(albums.map(itemToRawAlbum).filter((r): r is RawAlbum => !!r)), (a) => a.id),
         }
       }).filter((sh) => sh.tracks.length + sh.playlists.length + sh.albums.length > 0)
       return exploreCategoryPageSchema.parse({ shelves })

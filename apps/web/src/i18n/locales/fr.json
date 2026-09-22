@@ -113,7 +113,7 @@
     "searchPlaceholder": "Rechercher un artiste, un album, un titre…", "search": "Rechercher", "clear": "Effacer la recherche",
     "advanced": "Avancée", "advancedHint": "Recherche avancée : artistes, albums, EP, compilations et titres en colonnes",
     "sources": "Sources", "sourceLinked": "Reliée", "sourceUnlinked": "Non reliée",
-    "browse": "Parcourir", "browseRecent": "Récents", "browseLiked": "Likes", "browsePlaylists": "Playlists", "browseGenres": "Genres", "browseMoods": "Ambiances",
+    "browse": "Parcourir", "browseRecent": "Récents", "browseLiked": "Likes", "browsePlaylists": "Playlists", "browseNew": "Nouveautés", "browseGenres": "Genres", "browseMoods": "Ambiances",
     "topResults": "Meilleurs résultats", "seeAll": "Voir tout", "noRecent": "Vos lectures récentes apparaîtront ici.",
     "sessions": "Écoute", "sessionsHint": "Où partent les lectures — toucher un lecteur pour le piloter", "transferHint": "Toucher le lecteur qui doit reprendre le morceau",
     "noSession": "Aucun lecteur disponible", "nothing": "Rien ne joue", "idle": "Au repos",

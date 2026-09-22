@@ -420,6 +420,8 @@ export interface Transport {
   ytmusicExplore(hl?: string): Promise<YtmusicExplore>
   /** La page d'une catégorie, en rangées. */
   ytmusicExploreCategory(params: string, hl?: string): Promise<{ shelves: YtmusicExploreShelf[] }>
+  /** Les nouveautés de YouTube Music (playlists phares, albums et singles récents), en rangées. */
+  ytmusicExploreNew(hl?: string): Promise<{ shelves: YtmusicExploreShelf[] }>
   /** Deux pochettes par catégorie (clé = `params`), prises dans sa page : lent la première fois (~10 s), gardé 6 h. */
   ytmusicExploreCovers(hl?: string): Promise<{ covers: Record<string, string[]> }>
   /** Résout le flux et envoie `play_url` au lecteur (métadonnées optionnelles pour titre / pochette). */

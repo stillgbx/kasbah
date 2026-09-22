@@ -32,7 +32,9 @@ const props = withDefaults(defineProps<{
   playLabel?: string
   queueable?: boolean
   removable?: boolean
-}>(), { icon: 'music', round: false, explicit: false, meta: '', dur: '', year: null, busy: false, disabled: false, selected: false, playLabel: undefined, queueable: false, removable: false, playable: false })
+  /** Rang dans la file (1, 2…) : colonne fixe devant la pochette. */
+  position?: number | null
+}>(), { icon: 'music', round: false, explicit: false, meta: '', dur: '', year: null, busy: false, disabled: false, selected: false, playLabel: undefined, queueable: false, removable: false, playable: false, position: null })
 const emit = defineEmits<{ open: []; play: []; playNext: []; addEnd: []; remove: [] }>()
 const open = () => { if (props.action === 'open') emit('open') }
 </script>
@@ -41,6 +43,7 @@ const open = () => { if (props.action === 'open') emit('open') }
   <div class="row" :class="{ 'row--open': action === 'open' }" :data-selected="selected ? '1' : '0'"
        :role="action === 'open' ? 'button' : undefined" :tabindex="action === 'open' ? 0 : undefined"
        @click="open" @keydown.enter.self="open" @keydown.space.self.prevent="open">
+    <span v-if="position != null" class="pos" :class="{ 'pos--long': position > 999 }">#{{ position }}</span>
     <div class="row__art" :class="{ 'row__art--round': round }">
       <ArtThumb :src="art" :icon="icon" :round="round" />
       <ArtPlay v-if="action === 'play' || playable" :size="30" :disabled="disabled" :busy="busy" :label="playLabel" @click="$emit('play')" />
@@ -104,6 +107,11 @@ const open = () => { if (props.action === 'open') emit('open') }
 .mini:disabled { opacity: .35; }
 .is-hidden { visibility: hidden; }
 .row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* rang dans la file : largeur fixe EN PIXELS (jusqu'à #999) — en `ch` elle suivait la graisse, et la
+   ligne en cours (numéro en gras) décalait sa pochette d'un pixel */
+.pos { flex: 0 0 auto; width: 38px; text-align: right; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pos--long { font-size: 10.5px; }
+.row[data-selected='1'] .pos { color: var(--accent); font-weight: 600; }
 .row__art { position: relative; flex: 0 0 auto; border-radius: 8px; overflow: hidden; }
 .row__art--round { border-radius: 999px; }
 /* lecture et touches de file : au survol de la ligne seulement, place gardée ; pendant l'envoi le sablier reste */

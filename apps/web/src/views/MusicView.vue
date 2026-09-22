@@ -22,6 +22,7 @@ import ChipRow from '../components/music/ChipRow.vue'
 import ListeningSessions from '../components/music/ListeningSessions.vue'
 import MusicItemRow from '../components/music/MusicItemRow.vue'
 import MusicPlayerBar from '../components/music/MusicPlayerBar.vue'
+import MusicShelves from '../components/music/MusicShelves.vue'
 import MusicTile from '../components/music/MusicTile.vue'
 import Segmented from '../components/ui/Segmented.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
@@ -52,7 +53,7 @@ import { usePluginsStore } from '../stores/plugins'
 
 defineOptions({ name: 'MusicView' })
 
-type BrowseTab = 'recent' | 'liked' | 'playlists' | 'genres' | 'moods'
+type BrowseTab = 'recent' | 'liked' | 'playlists' | 'new' | 'genres' | 'moods'
 type Browse =
   | { kind: 'playlist'; id: string; title: string }
   | { kind: 'album'; id: string; title: string }
@@ -109,6 +110,7 @@ const browseOptions = computed(() => [
   { value: 'recent' as const, label: t('music.browseRecent') },
   { value: 'liked' as const, label: t('music.browseLiked') },
   { value: 'playlists' as const, label: t('music.browsePlaylists') },
+  { value: 'new' as const, label: t('music.browseNew') },
   { value: 'genres' as const, label: t('music.browseGenres') },
   { value: 'moods' as const, label: t('music.browseMoods') },
 ])
@@ -490,6 +492,7 @@ async function loadBrowseTab(): Promise<void> {
   if (browseTab.value === 'liked') await loadLiked()
   else if (browseTab.value === 'playlists') await loadPlaylists()
   else if (browseTab.value === 'genres' || browseTab.value === 'moods') await loadExplore()
+  else if (browseTab.value === 'new') await loadNew()
   else tracks.value = []
 }
 
@@ -544,9 +547,27 @@ async function openCategory(c: YtmusicExploreCategory) {
   finally { busy.value = false }
 }
 /** « Masquer explicit » vaut aussi ici ; une rangée vidée par le filtre disparaît. */
-const categoryView = computed(() => categoryShelves.value
-  .map((sh) => ({ ...sh, tracks: withoutExplicit(sh.tracks), albums: withoutExplicit(sh.albums) }))
-  .filter((sh) => sh.tracks.length + sh.playlists.length + sh.albums.length > 0))
+function visibleShelves(shelves: YtmusicExploreShelf[]): YtmusicExploreShelf[] {
+  return shelves
+    .map((sh) => ({ ...sh, tracks: withoutExplicit(sh.tracks), albums: withoutExplicit(sh.albums) }))
+    .filter((sh) => sh.tracks.length + sh.playlists.length + sh.albums.length > 0)
+}
+const categoryView = computed(() => visibleShelves(categoryShelves.value))
+
+/** Les nouveautés : gardées pour la séance, relues si la langue change (le serveur les garde 10 min). */
+const newShelves = ref<YtmusicExploreShelf[]>([])
+let newLang = ''
+async function loadNew() {
+  if (newShelves.value.length && newLang === locale.value) return
+  busy.value = true
+  tracks.value = []
+  try {
+    newShelves.value = (await getTransport().ytmusicExploreNew(locale.value)).shelves
+    newLang = locale.value
+  } catch (err) { fail(err) }
+  finally { busy.value = false }
+}
+const newView = computed(() => visibleShelves(newShelves.value))
 const categoryLoading = computed(() => busy.value && browse.value?.kind === 'category')
 async function loadLiked() {
   busy.value = true
@@ -654,7 +675,8 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
               <StrokeIcon name="close" :size="14" />
             </button>
           </div>
-          <button type="button" class="pill" :data-on="advanced ? '1' : '0'" :title="$t('music.advancedHint')" @click="advanced = !advanced">
+          <!-- la présentation des RÉSULTATS : sans recherche affichée, rien à présenter — grisée, le choix reste mémorisé -->
+          <button type="button" class="pill" :data-on="advanced && searched ? '1' : '0'" :disabled="!searched" :title="$t('music.advancedHint')" @click="advanced = !advanced">
             <StrokeIcon name="layers" :size="16" />
             <span>{{ $t('music.advanced') }}</span>
           </button>
@@ -685,7 +707,7 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
               </div>
               <div class="list queue-list">
                 <template v-if="queue">
-                  <MusicItemRow v-for="(qt, i) in queue.items" :key="`${i}:${qt.videoId}`" action="play" removable :art="qt.artUrl ?? null" :title="qt.title ?? qt.videoId"
+                  <MusicItemRow v-for="(qt, i) in queue.items" :key="`${i}:${qt.videoId}`" action="play" removable :position="i + 1" :art="qt.artUrl ?? null" :title="qt.title ?? qt.videoId"
                                 :explicit="!!qt.explicit" :meta="qt.artist ?? ''" :dur="formatClock(qt.durationS)" :selected="i === queue.index"
                                 :disabled="!playTarget" :busy="queueBusyIndex === i" :play-label="$t('ytmusic.play')"
                                 @play="queueGo(i)" @remove="removeFromQueue(i)" />
@@ -717,19 +739,8 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
                 </section>
               </template>
               <template v-else>
-                <section v-for="(sh, si) in categoryView" :key="`${si}:${sh.title}`" class="shelf">
-                  <div class="shelf__head"><h2 class="section-label">{{ sh.title }}</h2></div>
-                  <div class="shelf__row">
-                    <MusicTile v-for="tr in sh.tracks" :key="tr.videoId" action="play" :art="tr.artUrl" :title="tr.title" :explicit="!!tr.explicit" :meta="trackMeta(tr)"
-                               :disabled="!playTarget" :busy="playingId === tr.videoId" :play-label="$t('ytmusic.play')" @play="play(tr, sh.tracks)" />
-                    <MusicTile v-for="pl in sh.playlists" :key="pl.id" action="open" playable icon="list" :art="pl.artUrl" :title="pl.title"
-                               :meta="pl.trackCount != null ? $t('ytmusic.tracks', { n: pl.trackCount }, pl.trackCount) : ''"
-                               :disabled="!playTarget" :busy="playingCollection === pl.id" :play-label="$t('music.playAll')" @open="openPlaylist(pl)" @play="playPlaylist(pl)" />
-                    <MusicTile v-for="al in sh.albums" :key="al.id" action="open" playable icon="disc" :art="al.artUrl" :title="al.title" :explicit="!!al.explicit"
-                               :meta="[albumMeta(al), al.year].filter(Boolean).join(' · ')"
-                               :disabled="!playTarget" :busy="playingCollection === al.id" :play-label="$t('music.playAll')" @open="openAlbum(al)" @play="playAlbum(al)" />
-                  </div>
-                </section>
+                <MusicShelves :shelves="categoryView" :play-target="playTarget" :playing-id="playingId" :playing-collection="playingCollection"
+                              @play-track="play" @open-playlist="openPlaylist" @play-playlist="playPlaylist" @open-album="openAlbum" @play-album="playAlbum" />
                 <p v-if="categoryView.length === 0" class="muted empty">{{ $t('ytmusic.empty') }}</p>
               </template>
             </template>
@@ -748,7 +759,7 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
                 </button>
               </div>
               <div class="list">
-                <MusicItemRow v-for="tr in browseTracksView" :key="tr.videoId" action="play" queueable :art="tr.artUrl" :title="tr.title" :explicit="!!tr.explicit"
+                <MusicItemRow v-for="(tr, i) in browseTracksView" :key="tr.videoId" action="play" queueable :position="i + 1" :art="tr.artUrl" :title="tr.title" :explicit="!!tr.explicit"
                               :meta="trackMeta(tr)" :dur="formatClock(tr.durationS)" :year="tr.year ?? null" :selected="recentPlays[0]?.videoId === tr.videoId"
                               :disabled="!playTarget" :busy="playingId === tr.videoId" :play-label="$t('ytmusic.play')"
                               @play="play(tr, browseTracksView)" @play-next="addToQueue(tr, 'next')" @add-end="addToQueue(tr, 'end')" />
@@ -838,11 +849,31 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
                 <p v-if="recentPlays.length === 0" class="muted empty">{{ $t('music.noRecent') }}</p>
               </div>
               <div v-else-if="browseTab === 'liked'" class="list">
-                <MusicItemRow v-for="tr in browseTracksView" :key="tr.videoId" action="play" queueable :art="tr.artUrl" :title="tr.title" :explicit="!!tr.explicit"
+                <MusicItemRow v-for="(tr, i) in browseTracksView" :key="tr.videoId" action="play" queueable :position="i + 1" :art="tr.artUrl" :title="tr.title" :explicit="!!tr.explicit"
                               :meta="trackMeta(tr)" :dur="formatClock(tr.durationS)" :year="tr.year ?? null"
                               :disabled="!playTarget" :busy="playingId === tr.videoId" :play-label="$t('ytmusic.play')"
                               @play="play(tr, browseTracksView)" @play-next="addToQueue(tr, 'next')" @add-end="addToQueue(tr, 'end')" />
                 <p v-if="!busy && browseTracksView.length === 0" class="muted empty">{{ $t('ytmusic.empty') }}</p>
+              </div>
+              <!-- nouveautés : les rangées de la page de YouTube Music -->
+              <div v-else-if="browseTab === 'new'">
+                <template v-if="busy && !newShelves.length">
+                  <section v-for="n in 2" :key="n" class="shelf" aria-hidden="true">
+                    <div class="shelf__head"><span class="skel skel--label" /></div>
+                    <div class="shelf__row">
+                      <span v-for="i in 7" :key="i" class="skel-tile">
+                        <span class="skel skel--art" />
+                        <span class="skel skel--line" />
+                        <span class="skel skel--line skel--short" />
+                      </span>
+                    </div>
+                  </section>
+                </template>
+                <template v-else>
+                  <MusicShelves :shelves="newView" grid :play-target="playTarget" :playing-id="playingId" :playing-collection="playingCollection"
+                                @play-track="play" @open-playlist="openPlaylist" @play-playlist="playPlaylist" @open-album="openAlbum" @play-album="playAlbum" />
+                  <p v-if="!busy && newView.length === 0" class="muted empty">{{ $t('ytmusic.empty') }}</p>
+                </template>
               </div>
               <!-- genres / ambiances : cartes de taille fixe, dégradé de la couleur de YouTube Music, deux pochettes inclinées -->
               <div v-else-if="browseTab === 'genres' || browseTab === 'moods'">
@@ -866,8 +897,9 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
                 <p v-if="!busy && exploreGroups.length === 0" class="muted empty">{{ $t('ytmusic.empty') }}</p>
               </div>
               <div v-else class="list">
-                <MusicItemRow v-for="pl in playlists" :key="pl.id" action="open" icon="list" :art="pl.artUrl" :title="pl.title"
-                              :meta="pl.trackCount != null ? $t('ytmusic.tracks', { n: pl.trackCount }, pl.trackCount) : ''" @open="openPlaylist(pl)" />
+                <MusicItemRow v-for="pl in playlists" :key="pl.id" action="open" playable icon="list" :art="pl.artUrl" :title="pl.title"
+                              :meta="pl.trackCount != null ? $t('ytmusic.tracks', { n: pl.trackCount }, pl.trackCount) : ''"
+                              :disabled="!playTarget" :busy="playingCollection === pl.id" :play-label="$t('music.playAll')" @open="openPlaylist(pl)" @play="playPlaylist(pl)" />
                 <p v-if="!busy && playlists.length === 0" class="muted empty">{{ $t('ytmusic.empty') }}</p>
               </div>
             </template>

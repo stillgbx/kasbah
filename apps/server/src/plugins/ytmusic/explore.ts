@@ -55,20 +55,24 @@ export function parseMoodsPage(raw: unknown): YtmusicExplore {
 }
 
 /**
- * Les rangées (`MusicCarouselShelf`) d'une page analysée par youtubei.js, dans l'ordre, où qu'elles
+ * Les rangées (`MusicCarouselShelf`, et les grilles `Grid`) d'une page analysée par youtubei.js, dans l'ordre, où qu'elles
  * soient dans l'arbre : on ne dépend pas de l'emballage (onglets, liste de sections) qui varie.
  */
 export function carouselsOf(parsed: unknown): Array<{ title: string; items: unknown[] }> {
   const shelf = (o: Json) => {
     const title = rec(rec(o.header)?.title)?.text
-    return { title: typeof title === 'string' ? title : '', items: [...list(o.contents)] }
+    // une rangée range ses éléments dans `contents`, une grille dans `items`
+    return { title: typeof title === 'string' ? title : '', items: [...list(o.contents), ...list(o.items)] }
   }
   // Une vraie réponse analysée enveloppe `contents` dans un objet aux clés non parcourables, mais
   // youtubei.js indexe chaque type de nœud dans `contents_memo`, dans l'ordre de la page : c'est là
   // qu'on les prend. Le parcours de l'arbre ne sert qu'en repli (réponses simplifiées, tests).
+  // Les GRILLES (`Grid`) aussi : la page des nouveautés met en tête, en grille, ses playlists phares
+  // (« RELEASED »…) — placées d'abord, comme sur la page de YouTube.
   const memo = rec(parsed)?.contents_memo
-  if (memo instanceof Map && memo.has('MusicCarouselShelf')) {
-    return list(memo.get('MusicCarouselShelf')).map(rec).filter((o): o is Json => !!o).map(shelf)
+  if (memo instanceof Map && (memo.has('MusicCarouselShelf') || memo.has('Grid'))) {
+    const of = (type: string) => list(memo.get(type)).map(rec).filter((o): o is Json => !!o).map(shelf)
+    return [...of('Grid'), ...of('MusicCarouselShelf')]
   }
   const out: Array<{ title: string; items: unknown[] }> = []
   const seen = new Set<unknown>()
@@ -77,7 +81,7 @@ export function carouselsOf(parsed: unknown): Array<{ title: string; items: unkn
     seen.add(v)
     if (Array.isArray(v)) { for (const x of v) walk(x, depth + 1); return }
     const o = v as Json
-    if (o.type === 'MusicCarouselShelf') { out.push(shelf(o)); return }
+    if (o.type === 'MusicCarouselShelf' || o.type === 'Grid') { out.push(shelf(o)); return }
     for (const k of ['contents', 'content', 'tabs']) walk(o[k], depth + 1)
   }
   walk(rec(parsed)?.contents, 0)

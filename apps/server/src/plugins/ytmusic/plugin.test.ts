@@ -945,6 +945,7 @@ describe('ytmusic plugin', () => {
     let browses = 0
     let withNew = false
     const parsedFor: Array<string | undefined> = []
+    const browsedIds: string[] = []
     const session = (lang?: string): InnertubeLike => ({
       ...fakeMusic(),
       async browseRaw() {
@@ -954,8 +955,13 @@ describe('ytmusic plugin', () => {
           grid('Genres', [btn('Jazz', 'p-jazz'), ...(withNew ? [btn('Nouveau', 'p-new')] : [])]),
         ] } } } }] } } }
       },
-      async browseParsed(_id: string, params?: string) {
-        parsedFor.push(params)
+      async browseParsed(id: string, params?: string) {
+        browsedIds.push(id)
+        if (id === 'FEmusic_moods_and_genres_category') parsedFor.push(params)
+        // la page « Voir tout » des nouveautés : une grille de 120 albums, en une réponse
+        if (id === 'FEmusic_new_releases_albums') {
+          return { contents: { contents: [{ type: 'Grid', items: Array.from({ length: 120 }, (_, i) => ({ type: 'MusicTwoRowItem', item_type: 'album', id: `MPREb_new${i}`, title: { text: `Nouveau ${i}` } })) }] } }
+        }
         return {
           contents: { contents: [
             { type: 'MusicCarouselShelf', header: { title: { text: 'Titres' } }, contents: [
@@ -964,12 +970,17 @@ describe('ytmusic plugin', () => {
             { type: 'MusicCarouselShelf', header: { title: { text: 'Playlists' } }, contents: [
               { type: 'MusicTwoRowItem', item_type: 'playlist', id: 'VLRDCLAK5uy_jazz', title: { text: 'Jazz essentiel' }, thumbnail: [{ url: 'https://lh3.googleusercontent.com/jazz=w226-h226', width: 226 }] },
               { type: 'MusicTwoRowItem', item_type: 'playlist', id: 'VLPLcommunity', title: { text: 'Mon jazz à moi' } },
+              // la même playlist une seconde fois, même id (vu dans la grille des nouveautés)
+              { type: 'MusicTwoRowItem', item_type: 'playlist', id: 'VLRDCLAK5uy_jazz', title: { text: 'Jazz essentiel' } },
             ] },
             { type: 'MusicCarouselShelf', header: { title: { text: 'Clips musicaux' } }, contents: [
               { type: 'MusicTwoRowItem', item_type: 'video', id: 'vClip', title: { text: 'Live' } },
             ] },
             { type: 'MusicCarouselShelf', header: { title: { text: 'Albums' } }, contents: [
               { type: 'MusicTwoRowItem', item_type: 'album', id: 'MPREb_kind', title: { text: 'Kind of Blue' }, artists: [{ name: 'Miles Davis' }] },
+              // badges dans l'enveloppe `SuperParsedResult` de youtubei.js (vraie réponse `browse`) : sans clés, lue par ses méthodes
+              { type: 'MusicTwoRowItem', item_type: 'album', id: 'MPREb_wrapped', title: { text: 'Explicite' },
+                badges: { is_null: false, is_array: true, is_node: false, array: () => [{ icon_type: 'MUSIC_EXPLICIT_BADGE' }], item: () => null } },
             ] },
           ] },
         }
@@ -998,7 +1009,15 @@ describe('ytmusic plugin', () => {
     expect(body.shelves[0].tracks[0]).toMatchObject({ videoId: 'vSo', artists: ['Miles Davis'], explicit: true })
     expect(body.shelves[1].playlists.map((p: { title: string }) => p.title)).toEqual(['Jazz essentiel'])
     expect(body.shelves[2].albums[0]).toMatchObject({ id: 'MPREb_kind', title: 'Kind of Blue' })
+    expect(body.shelves[2].albums[1]).toMatchObject({ id: 'MPREb_wrapped', explicit: true })
     expect((await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/explore/category' })).statusCode).toBe(400)
+    // les nouveautés : même lecture en rangées, sur `FEmusic_new_releases`
+    const fresh = (await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/explore/new?hl=fr' })).json()
+    expect(fresh.shelves.map((sh: { title: string }) => sh.title)).toEqual(['Titres', 'Playlists', 'Albums'])
+    expect(browsedIds).toEqual(expect.arrayContaining(['FEmusic_new_releases', 'FEmusic_new_releases_albums']))
+    // la rangée d'albums prend la liste complète de « Voir tout », en entier
+    expect(fresh.shelves[2].albums).toHaveLength(120)
+    expect(fresh.shelves[2].albums[0].title).toBe('Nouveau 0')
 
     // pochettes : la page des catégories n'en a pas, on les prend dans chaque page de catégorie
     parsedFor.length = 0
