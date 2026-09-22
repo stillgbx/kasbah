@@ -935,6 +935,20 @@ describe('marqueurs 3D', () => {
     expect([blockP.width, blockP.height, blockP.depth]).toEqual([0.14, 0.08, 0.1])
     expect(block.rotation.z).toBeCloseTo(Math.PI / 2)
   })
+
+  it("une mangeoire ou une fontaine est une tour un peu plus haute que large, pas une boule", () => {
+    for (const kind of ['pet_feeder', 'pet_fountain'] as const) {
+      const desc = {
+        id: `p:${kind}`, pluginId: 'p', externalId: kind, kind, name: kind, capabilities: [], meta: {},
+      } as unknown as DeviceDescriptor
+      const box = meshes(marker(device(), desc).object)[0]!
+      expect(box.geometry).toBeInstanceOf(BoxGeometry)
+      const p = (box.geometry as BoxGeometry).parameters
+      expect([p.width, p.height, p.depth]).toEqual([0.12, 0.12, 0.2])
+      expect(p.depth).toBeGreaterThan(p.width)            // plus haute que large (Z-up)
+      expect(box.position.z).toBeCloseTo(0.1)             // posée au sol, pas à moitié enterrée
+    }
+  })
 })
 
 describe('tap sur le toit', () => {

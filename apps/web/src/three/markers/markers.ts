@@ -89,6 +89,8 @@ const SPEAKER_BAR = { w: 0.55, d: 0.08, h: 0.07 } as const
 const SPEAKER_PEBBLE = { r: 0.14, h: 0.1 } as const
 /** Petit bloc rectangulaire (m) : réveil / Nest Hub Mini — largeur × profondeur × hauteur. */
 const SPEAKER_BLOCK = { w: 0.14, d: 0.08, h: 0.1 } as const
+/** Mangeoire / fontaine (m) : tour un peu plus haute que large — pas une boule. */
+const PET_BOX = { w: 0.12, d: 0.12, h: 0.2 } as const
 
 export class GenericMarker extends DeviceMarker {
   private mesh: Mesh
@@ -170,6 +172,13 @@ export class GenericMarker extends DeviceMarker {
       // coffret ; la pilule se pose juste au-dessus de son arête haute.
       case 'water': geometry = new BoxGeometry(WATER_BOX.w, WATER_BOX.d, WATER_BOX.h); this.setLift(WATER_BOX.h / 2 + 0.2); break
       case 'vacuum': geometry = new CylinderGeometry(0.18, 0.18, 0.09, 24); this.setLift(0.25); break
+      // Mangeoire et fontaine : tours au sol, un peu plus hautes que larges — la sphère du repli
+      // (`default`) les faisait passer pour des capteurs.
+      case 'pet_feeder':
+      case 'pet_fountain':
+        geometry = new BoxGeometry(PET_BOX.w, PET_BOX.d, PET_BOX.h)
+        this.setLift(PET_BOX.h / 2 + 0.2)
+        break
       default: geometry = new SphereGeometry(0.1, 16, 12); this.setLift(0.3)
     }
     if (pulse) this.pulseMat = devMaterial(ctx).clone()
@@ -208,6 +217,7 @@ export class GenericMarker extends DeviceMarker {
     }
     if (battery) this.buildCharge(ctx)
     if (kind === 'vacuum') this.mesh.position.z = 0.05
+    if (kind === 'pet_feeder' || kind === 'pet_fountain') this.mesh.position.z = PET_BOX.h / 2
     this.mesh.castShadow = true
     this.registerPickable(this.mesh)
     this.object.add(this.mesh)
