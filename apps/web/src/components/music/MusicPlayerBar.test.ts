@@ -23,7 +23,7 @@ const session = { durationS: 248, title: 'see through (remix)', artist: 'Samara 
 
 const props = (over: Record<string, unknown> = {}) => ({
   entry: entry('playing'), name: 'Bureau', session, pending: null,
-  transferMode: false, canTransfer: false, transferBusy: false, ...over,
+  transferMode: false, canTransfer: false, transferBusy: false, queueOpen: false, ...over,
 })
 
 /**
@@ -122,5 +122,49 @@ describe('MusicPlayerBar — qualité du flux', () => {
     const q = w.find('.bar__quality')
     expect(q.exists()).toBe(true)
     expect(q.text().trim()).toBe('')
+  })
+})
+
+/**
+ * La file vit sur le serveur : c'est elle, pas l'enceinte (qui n'a qu'un « fichier »), qui rend
+ * précédent / suivant possibles. La répétition prend la place qui répond à stop.
+ */
+describe('MusicPlayerBar — file et répétition', () => {
+  const keys = (w: ReturnType<typeof mount>) => w.findAll('.bar__keys .key')
+  const withQueue = (index: number, length: number, repeat = 'off') => props({ session: { ...session, queue: { length, index, repeat } } })
+
+  it('ouvre suivant tant que la file a une suite, précédent toujours', () => {
+    const middle = mount(MusicPlayerBar, { props: withQueue(0, 3) })
+    const [, prev, , , , next] = keys(middle)
+    expect(prev!.attributes('disabled')).toBeUndefined()
+    expect(next!.attributes('disabled')).toBeUndefined()
+    const last = mount(MusicPlayerBar, { props: withQueue(2, 3) })
+    expect(keys(last)[5]!.attributes('disabled')).toBeDefined()
+    expect(keys(last)[1]!.attributes('disabled')).toBeUndefined()
+  })
+
+  it('fait tourner la répétition : une fois, en boucle, arrêt', async () => {
+    const w = mount(MusicPlayerBar, { props: withQueue(0, 1, 'once') })
+    const repeat = keys(w)[0]!
+    expect(repeat.attributes('data-on')).toBe('1')
+    expect(repeat.find('.key__step').text()).toBe('1')
+    await repeat.trigger('click')
+    expect(w.emitted('repeat')).toEqual([['loop']])
+    const off = mount(MusicPlayerBar, { props: withQueue(0, 1) })
+    expect(keys(off)[0]!.find('.key__step').classes()).toContain('bar--hidden')
+  })
+
+  it('compte les titres en attente sur la touche File, sans rien déplacer', () => {
+    const w = mount(MusicPlayerBar, { props: withQueue(1, 5) })
+    expect(w.find('.key__badge').text()).toBe('3')
+    const none = mount(MusicPlayerBar, { props: withQueue(0, 1) })
+    expect(none.find('.key__badge').classes()).toContain('bar--hidden')
+  })
+
+  it("sans file ni saut déclaré par l'enceinte, précédent et suivant restent grisés", () => {
+    const w = mount(MusicPlayerBar, { props: props() })
+    expect(keys(w)[1]!.attributes('disabled')).toBeDefined()
+    expect(keys(w)[5]!.attributes('disabled')).toBeDefined()
+    expect(keys(w)[0]!.attributes('disabled')).toBeDefined()
   })
 })

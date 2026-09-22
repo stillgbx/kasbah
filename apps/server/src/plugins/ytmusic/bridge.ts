@@ -7,6 +7,8 @@ export interface YtmusicBridge {
   getDevice(deviceId: string): DeviceEntry | undefined
   /** Commande à un lecteur d'un autre plugin : `play_url`, `pause` du flux qu'on remplace, `stop` de la source d'un transfert. */
   execute(deviceId: string, command: Command): Promise<void>
+  /** Chaque état publié par un lecteur : la file y voit la fin d'un titre. Rend de quoi se désabonner. */
+  onState(cb: (deviceId: string, state: unknown) => void): () => void
 }
 
 let bridge: YtmusicBridge | null = null

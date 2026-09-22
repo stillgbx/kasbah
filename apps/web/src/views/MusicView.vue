@@ -11,12 +11,12 @@ let lastSearch: { query: string; result: YtmusicSearchResult } | null = null
 
 <script setup lang="ts">
 import { useLocalStorage } from '@vueuse/core'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import type { CommandInput, DeviceEntry } from '@kasbah/shared'
 import { getTransport } from '../api'
-import type { YtmusicAlbum, YtmusicArtist, YtmusicPlaylist, YtmusicSession, YtmusicTrack } from '../api/transport'
+import type { YtmusicAlbum, YtmusicArtist, YtmusicPlaylist, YtmusicQueue, YtmusicQueueTrack, YtmusicRepeat, YtmusicSession, YtmusicTrack } from '../api/transport'
 import PageHeader from '../components/layout/PageHeader.vue'
 import ChipRow from '../components/music/ChipRow.vue'
 import ListeningSessions from '../components/music/ListeningSessions.vue'
@@ -36,7 +36,13 @@ import { usePluginsStore } from '../stores/plugins'
 // panneau « Écoute » à droite (un lecteur = une session : là où partent les lectures et ce que pilote
 // la barre), et le lecteur en bas. Sans recherche, la zone centrale sert à parcourir : récents, likes,
 // playlists. Une seule source aujourd'hui (YouTube Music, non officiel) ; la rangée de sources est
-// là pour les suivantes. La lecture reste un titre à la fois (`play_url`) — la file d'attente viendra.
+// là pour les suivantes.
+//
+// File d'attente : elle vit sur le SERVEUR, par lecteur (l'enceinte ne connaît qu'un « fichier » à la
+// fois). Jouer un titre d'une liste (album, playlist, likes, résultats) y met la liste entière, à
+// partir de ce titre ; « lire ensuite » et « ajouter à la fin » la complètent sans interrompre. La
+// barre en tire précédent / suivant et la répétition du titre ; la file s'affiche à la place de la
+// zone centrale (touche File de la barre).
 //
 // Le transfert (bureau → salon) passe par le serveur : il connaît le titre que joue la source, le
 // relance sur la cible qui se place à la même position, puis arrête la source. Il n'est possible que
@@ -200,6 +206,122 @@ async function refreshSessions(): Promise<void> {
   } catch { /* plugin absent ou serveur muet : rien à transférer */ }
 }
 let sessionsTicker: ReturnType<typeof setInterval> | undefined
+// Le serveur enchaîne tout seul : quand le lecteur change de titre ou d'état, relire les sessions
+// tout de suite (titre, file) plutôt qu'au prochain tour de 20 s. Un peu de retard, pour laisser le
+// serveur finir de lancer le titre qu'il enchaîne.
+let sessionsSoon: ReturnType<typeof setTimeout> | undefined
+watch(() => {
+  const st = selected.value?.state
+  return st?.kind === 'media_player' ? `${st.playback}|${st.nowPlaying?.title ?? ''}` : ''
+}, () => {
+  clearTimeout(sessionsSoon)
+  sessionsSoon = setTimeout(() => { void refreshSessions() }, 800)
+})
+
+// ---- file d'attente --------------------------------------------------------------------------------
+/** Une liste de plus de titres que la file n'en accepte : on en envoie une fenêtre autour du titre choisi. */
+const QUEUE_WINDOW = 1000
+const queueOpen = ref(false)
+const queue = ref<YtmusicQueue | null>(null)
+const queueBusyIndex = ref<number | null>(null)
+const queueWaiting = computed(() => (queue.value ? queue.value.items.length - queue.value.index - 1 : 0))
+function toQueueTrack(tr: YtmusicTrack): YtmusicQueueTrack {
+  return {
+    videoId: tr.videoId,
+    title: tr.title,
+    ...(tr.artists.length ? { artist: tr.artists.join(', ') } : {}),
+    ...(tr.artUrl ? { artUrl: tr.artUrl } : {}),
+    ...(tr.durationS ? { durationS: tr.durationS } : {}),
+    ...(tr.explicit ? { explicit: true } : {}),
+  }
+}
+/** Un titre de la file vu comme un titre du catalogue (barre pendant l'envoi, lignes de la file). */
+function fromQueueTrack(qt: YtmusicQueueTrack): YtmusicTrack {
+  return {
+    videoId: qt.videoId, title: qt.title ?? qt.videoId, artists: qt.artist ? [qt.artist] : [],
+    artUrl: qt.artUrl ?? null, durationS: qt.durationS ?? null, ...(qt.explicit ? { explicit: true } : {}),
+  }
+}
+async function loadQueue(): Promise<void> {
+  const id = selected.value?.descriptor.id
+  if (!id || !selectedSession.value?.queue) {
+    queue.value = null
+    return
+  }
+  try { queue.value = await getTransport().ytmusicQueue(id) }
+  catch { queue.value = null }
+}
+// relire la file dès que la session dit qu'elle a bougé (titre suivant, ajout, retrait, répétition)
+watch(() => {
+  const s = selectedSession.value
+  return s?.queue ? `${s.deviceId}|${s.sid}|${s.queue.index}|${s.queue.length}|${s.queue.repeat}` : ''
+}, () => { void loadQueue() }, { immediate: true })
+// à l'ouverture, amener le titre qui joue sous les yeux
+watch(queueOpen, async (open) => {
+  if (!open) return
+  await loadQueue()
+  await nextTick()
+  document.querySelector('.queue-list [data-selected="1"]')?.scrollIntoView({ block: 'nearest' })
+})
+function patchSessionQueue(q: YtmusicQueue) {
+  const s = selectedSession.value
+  if (!s) return
+  queue.value = q
+  const next = new Map(ourSessions.value)
+  next.set(s.deviceId, { ...s, queue: { length: q.items.length, index: q.index, repeat: q.repeat } })
+  ourSessions.value = next
+}
+/** Suivant / précédent / un titre choisi : le serveur lance le titre, la barre le montre tout de suite. */
+async function queueGo(step: 'next' | 'previous' | number) {
+  const id = selected.value?.descriptor.id
+  if (!id) return
+  const target = typeof step === 'number' ? step : step === 'next' && queue.value ? queue.value.index + 1 : null
+  const track = target !== null ? queue.value?.items[target] : undefined
+  if (track) pendingTrack.value = fromQueueTrack(track)
+  if (typeof step === 'number') queueBusyIndex.value = step
+  try {
+    const api = getTransport()
+    const q = step === 'next' ? await api.ytmusicQueueNext(id) : step === 'previous' ? await api.ytmusicQueuePrevious(id) : await api.ytmusicQueueJump(id, step)
+    patchSessionQueue(q)
+  } catch (err) { fail(err) }
+  finally {
+    pendingTrack.value = null
+    queueBusyIndex.value = null
+    void refreshSessions()
+  }
+}
+async function setRepeat(mode: YtmusicRepeat) {
+  const id = selected.value?.descriptor.id
+  if (!id) return
+  try { patchSessionQueue(await getTransport().ytmusicQueueRepeat(id, mode)) }
+  catch (err) { fail(err) }
+}
+async function removeFromQueue(index: number) {
+  const id = selected.value?.descriptor.id
+  if (!id) return
+  try { patchSessionQueue(await getTransport().ytmusicQueueRemove(id, index)) }
+  catch (err) { fail(err) }
+}
+async function clearQueue() {
+  const id = selected.value?.descriptor.id
+  if (!id) return
+  try { patchSessionQueue(await getTransport().ytmusicQueueClear(id)) }
+  catch (err) { fail(err) }
+}
+/** Lire ensuite / ajouter à la fin, sans interrompre. Rien ne joue ici ? Le serveur lance le titre. */
+async function addToQueue(track: YtmusicTrack, where: 'next' | 'end') {
+  const target = selected.value
+  if (!target || !canReceive(target)) {
+    notifications.error(t('ytmusic.noPlayer'))
+    return
+  }
+  try {
+    const r = await getTransport().ytmusicQueueAdd({ deviceId: target.descriptor.id, tracks: [toQueueTrack(track)], where })
+    if (r.started) rememberPlay(track)
+    patchSessionQueue(r.queue)
+  } catch (err) { fail(err) }
+  finally { void refreshSessions() }
+}
 
 function selectSession(id: string) {
   sessionId.value = id
@@ -211,6 +333,11 @@ async function locate(id: string) {
 }
 function barCommand(cmd: CommandInput) {
   if (!selected.value) return
+  // une file : c'est elle qui saute, l'enceinte n'a qu'un titre
+  if ((cmd.type === 'media_player.next' || cmd.type === 'media_player.previous') && selectedSession.value?.queue) {
+    void queueGo(cmd.type === 'media_player.next' ? 'next' : 'previous')
+    return
+  }
   void devices.sendCommand(selected.value.descriptor.id, cmd).then(() => {
     if (cmd.type === 'media_player.stop') void refreshSessions()
   })
@@ -265,7 +392,7 @@ onMounted(async () => {
   if (query.value.trim()) await runSearch()
   else await loadBrowseTab()
 })
-onBeforeUnmount(() => clearInterval(sessionsTicker))
+onBeforeUnmount(() => { clearInterval(sessionsTicker); clearTimeout(sessionsSoon) })
 
 function trackMeta(tr: YtmusicTrack): string {
   const parts: string[] = []
@@ -321,6 +448,7 @@ async function runSearch() {
   const q = query.value.trim()
   if (!q) return
   browse.value = null
+  queueOpen.value = false
   searched.value = true
   rememberQuery(q)
   // Même terme qu'au dernier passage : on réaffiche, on ne redemande pas.
@@ -372,6 +500,7 @@ async function loadPlaylists() {
 async function openDetail(next: Browse, load: () => Promise<{ tracks: YtmusicTrack[] }>) {
   busy.value = true
   browse.value = next
+  queueOpen.value = false
   try { tracks.value = (await load()).tracks }
   catch (err) { fail(err) }
   finally { busy.value = false }
@@ -385,7 +514,8 @@ function backFromDetail() {
   if (!searched.value) void loadBrowseTab()
 }
 
-async function play(track: YtmusicTrack) {
+/** Jouer `track` ; la liste d'où il vient (album, playlist, likes, résultats) devient la file, à partir de lui. */
+async function play(track: YtmusicTrack, list: YtmusicTrack[] = [track]) {
   const target = selected.value
   if (!target || !canReceive(target)) {
     notifications.error(t('ytmusic.noPlayer'))
@@ -394,16 +524,12 @@ async function play(track: YtmusicTrack) {
   rememberPlay(track)
   playingId.value = track.videoId
   pendingTrack.value = track
+  const at = Math.max(0, list.findIndex((x) => x.videoId === track.videoId))
+  const from = Math.max(0, Math.min(at - 100, list.length - QUEUE_WINDOW))
+  const tracksWindow = list.slice(from, from + QUEUE_WINDOW)
   try {
-    await getTransport().ytmusicPlay({
-      videoId: track.videoId,
-      deviceId: target.descriptor.id,
-      title: track.title,
-      ...(track.artists.length ? { artist: track.artists.join(', ') } : {}),
-      ...(track.artUrl ? { artUrl: track.artUrl } : {}),
-      ...(track.durationS ? { durationS: track.durationS } : {}),
-      ...(track.explicit ? { explicit: true } : {}),
-    })
+    const r = await getTransport().ytmusicQueuePlay({ deviceId: target.descriptor.id, tracks: tracksWindow.map(toQueueTrack), startIndex: at - from })
+    patchSessionQueue(r.queue)
     void refreshSessions()
   } catch (err) { fail(err) }
   finally {
@@ -412,7 +538,7 @@ async function play(track: YtmusicTrack) {
   }
 }
 
-watch(browseTab, () => { if (linked.value && !searched.value) void loadBrowseTab() })
+watch(browseTab, () => { queueOpen.value = false; if (linked.value && !searched.value) void loadBrowseTab() })
 const playTarget = computed(() => !!selected.value && canReceive(selected.value))
 /** Une recherche est partie et sa réponse n'est pas là : la zone des résultats montre des squelettes. */
 const searching = computed(() => busy.value && searched.value && !browse.value)
@@ -457,19 +583,49 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
           <div v-if="!statusReady" class="muted empty">{{ $t('common.loading') }}</div>
           <div v-else-if="!linked" class="card card--soft empty muted">{{ $t('ytmusic.needCookie') }}</div>
           <template v-else>
+            <!-- file d'attente du lecteur choisi : ce qui joue, ce qui suit -->
+            <template v-if="queueOpen">
+              <div class="back-row">
+                <button type="button" class="pill" @click="queueOpen = false">
+                  <StrokeIcon name="back" :size="16" />
+                  <span>{{ $t('common.back') }}</span>
+                </button>
+                <span class="back-row__title">{{ $t('music.queue') }}</span>
+                <button type="button" class="pill back-row__end" :disabled="queueWaiting <= 0 && !(queue && queue.index > 0)" @click="clearQueue">
+                  <StrokeIcon name="trash" :size="16" />
+                  <span>{{ $t('music.queueClear') }}</span>
+                </button>
+              </div>
+              <div class="list queue-list">
+                <template v-if="queue">
+                  <MusicItemRow v-for="(qt, i) in queue.items" :key="`${i}:${qt.videoId}`" action="play" removable :art="qt.artUrl ?? null" :title="qt.title ?? qt.videoId"
+                                :explicit="!!qt.explicit" :meta="qt.artist ?? ''" :dur="formatClock(qt.durationS)" :selected="i === queue.index"
+                                :disabled="!playTarget" :busy="queueBusyIndex === i" :play-label="$t('ytmusic.play')"
+                                @play="queueGo(i)" @remove="removeFromQueue(i)" />
+                  <p v-if="queueWaiting <= 0" class="muted empty">{{ $t('music.queueNothingNext') }}</p>
+                </template>
+                <p v-else class="muted empty">{{ $t('music.queueEmpty') }}</p>
+              </div>
+            </template>
+
             <!-- détail : album, artiste, playlist -->
-            <template v-if="browse">
+            <template v-else-if="browse">
               <div class="back-row">
                 <button type="button" class="pill" @click="backFromDetail">
                   <StrokeIcon name="back" :size="16" />
                   <span>{{ $t('common.back') }}</span>
                 </button>
                 <span class="back-row__title">{{ browse.title }}</span>
+                <button type="button" class="pill back-row__end" data-on="1" :disabled="!playTarget || browseTracksView.length === 0" @click="play(browseTracksView[0]!, browseTracksView)">
+                  <StrokeIcon name="play" :size="16" />
+                  <span>{{ $t('music.playAll') }}</span>
+                </button>
               </div>
               <div class="list">
-                <MusicItemRow v-for="tr in browseTracksView" :key="tr.videoId" action="play" :art="tr.artUrl" :title="tr.title" :explicit="!!tr.explicit"
+                <MusicItemRow v-for="tr in browseTracksView" :key="tr.videoId" action="play" queueable :art="tr.artUrl" :title="tr.title" :explicit="!!tr.explicit"
                               :meta="trackMeta(tr)" :dur="formatClock(tr.durationS)" :year="tr.year ?? null" :selected="recentPlays[0]?.videoId === tr.videoId"
-                              :disabled="!playTarget" :busy="playingId === tr.videoId" :play-label="$t('ytmusic.play')" @play="play(tr)" />
+                              :disabled="!playTarget" :busy="playingId === tr.videoId" :play-label="$t('ytmusic.play')"
+                              @play="play(tr, browseTracksView)" @play-next="addToQueue(tr, 'next')" @add-end="addToQueue(tr, 'end')" />
                 <p v-if="!busy && browseTracksView.length === 0" class="muted empty">{{ $t('ytmusic.empty') }}</p>
               </div>
             </template>
@@ -507,7 +663,7 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
                 <div class="shelf__head"><h2 class="section-label">{{ $t('ytmusic.sectionTracks') }}</h2><button type="button" class="see-all" @click="advanced = true">{{ $t('music.seeAll') }}</button></div>
                 <div class="shelf__row">
                   <MusicTile v-for="tr in tracksSimple" :key="tr.videoId" action="play" :art="tr.artUrl" :title="tr.title" :meta="trackMeta(tr)"
-                             :disabled="!playTarget" :busy="playingId === tr.videoId" :play-label="$t('ytmusic.play')" @play="play(tr)" />
+                             :disabled="!playTarget" :busy="playingId === tr.videoId" :play-label="$t('ytmusic.play')" @play="play(tr, tracksSimple)" />
                 </div>
               </section>
               <p v-if="searchEmpty" class="muted empty">{{ $t('ytmusic.empty') }}</p>
@@ -531,9 +687,10 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
                   <Segmented v-model="sortTracks" dense fill :options="sortOptionsDated" :label="$t('ytmusic.sortLabel')" />
                 </div>
                 <div class="list">
-                  <MusicItemRow v-for="tr in tracksView" :key="tr.videoId" action="play" :art="tr.artUrl" :title="tr.title" :explicit="!!tr.explicit"
+                  <MusicItemRow v-for="tr in tracksView" :key="tr.videoId" action="play" queueable :art="tr.artUrl" :title="tr.title" :explicit="!!tr.explicit"
                                 :meta="trackMeta(tr)" :dur="formatClock(tr.durationS)" :year="tr.year ?? null" :selected="recentPlays[0]?.videoId === tr.videoId"
-                                :disabled="!playTarget" :busy="playingId === tr.videoId" :play-label="$t('ytmusic.play')" @play="play(tr)" />
+                                :disabled="!playTarget" :busy="playingId === tr.videoId" :play-label="$t('ytmusic.play')"
+                                @play="play(tr, tracksView)" @play-next="addToQueue(tr, 'next')" @add-end="addToQueue(tr, 'end')" />
                 </div>
               </section>
               <p v-if="searchEmpty" class="muted empty">{{ $t('ytmusic.empty') }}</p>
@@ -545,15 +702,17 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
                 <Segmented v-model="browseTab" dense :options="browseOptions" :label="$t('music.browse')" />
               </div>
               <div v-if="browseTab === 'recent'" class="list">
-                <MusicItemRow v-for="tr in recentPlays" :key="tr.videoId" action="play" :art="tr.artUrl" :title="tr.title" :explicit="!!tr.explicit"
+                <MusicItemRow v-for="tr in recentPlays" :key="tr.videoId" action="play" queueable :art="tr.artUrl" :title="tr.title" :explicit="!!tr.explicit"
                               :meta="trackMeta(tr)" :dur="formatClock(tr.durationS)" :year="tr.year ?? null"
-                              :disabled="!playTarget" :busy="playingId === tr.videoId" :play-label="$t('ytmusic.play')" @play="play(tr)" />
+                              :disabled="!playTarget" :busy="playingId === tr.videoId" :play-label="$t('ytmusic.play')"
+                              @play="play(tr, [...recentPlays])" @play-next="addToQueue(tr, 'next')" @add-end="addToQueue(tr, 'end')" />
                 <p v-if="recentPlays.length === 0" class="muted empty">{{ $t('music.noRecent') }}</p>
               </div>
               <div v-else-if="browseTab === 'liked'" class="list">
-                <MusicItemRow v-for="tr in browseTracksView" :key="tr.videoId" action="play" :art="tr.artUrl" :title="tr.title" :explicit="!!tr.explicit"
+                <MusicItemRow v-for="tr in browseTracksView" :key="tr.videoId" action="play" queueable :art="tr.artUrl" :title="tr.title" :explicit="!!tr.explicit"
                               :meta="trackMeta(tr)" :dur="formatClock(tr.durationS)" :year="tr.year ?? null"
-                              :disabled="!playTarget" :busy="playingId === tr.videoId" :play-label="$t('ytmusic.play')" @play="play(tr)" />
+                              :disabled="!playTarget" :busy="playingId === tr.videoId" :play-label="$t('ytmusic.play')"
+                              @play="play(tr, browseTracksView)" @play-next="addToQueue(tr, 'next')" @add-end="addToQueue(tr, 'end')" />
                 <p v-if="!busy && browseTracksView.length === 0" class="muted empty">{{ $t('ytmusic.empty') }}</p>
               </div>
               <div v-else class="list">
@@ -573,8 +732,9 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
     </div>
 
     <MusicPlayerBar :entry="selected" :name="selectedName" :session="selectedSession" :pending="pendingTrack"
-                    :transfer-mode="transferMode" :can-transfer="canTransfer" :transfer-busy="!!transferBusyId"
-                    @command="barCommand" @seek="barSeek" @transfer="transferMode = true" @cancel-transfer="transferMode = false" />
+                    :transfer-mode="transferMode" :can-transfer="canTransfer" :transfer-busy="!!transferBusyId" :queue-open="queueOpen"
+                    @command="barCommand" @seek="barSeek" @transfer="transferMode = true" @cancel-transfer="transferMode = false"
+                    @repeat="setRepeat" @toggle-queue="queueOpen = !queueOpen" />
   </div>
 </template>
 
@@ -611,7 +771,8 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
 
 .browse-head { display: flex; align-items: center; gap: 12px; margin: 4px 0 10px; }
 .back-row { display: flex; align-items: center; gap: 12px; margin: 4px 0 10px; }
-.back-row__title { min-width: 0; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.back-row__title { min-width: 0; flex: 1 1 auto; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.back-row__end { flex: 0 0 auto; white-space: nowrap; }
 
 /* attente d'une recherche : des blocs de la taille des tuiles, qui respirent doucement */
 .skel { display: block; border-radius: 8px; background: var(--surface2); animation: skel 1.4s ease-in-out infinite; }

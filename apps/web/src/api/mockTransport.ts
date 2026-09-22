@@ -211,6 +211,15 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     // aucun flux servi par la simulation : la page Musique montre ses lecteurs, sans transfert possible
     async ytmusicSessions() { return { sessions: [] } },
     async ytmusicTransfer() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
+    async ytmusicQueuePlay() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
+    async ytmusicQueue() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
+    async ytmusicQueueAdd() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
+    async ytmusicQueueNext() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
+    async ytmusicQueuePrevious() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
+    async ytmusicQueueJump() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
+    async ytmusicQueueRepeat() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
+    async ytmusicQueueRemove() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
+    async ytmusicQueueClear() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
     // la simulation déclare ses appareils, elle n'en découvre aucun : il n'y a rien à oublier
     async forgetDevice() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'nothing to forget in mock mode') },
     cameraStreamUrl() { return null },

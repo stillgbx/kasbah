@@ -216,6 +216,28 @@ export interface YtmusicSession {
   artUrl: string | null
   /** Absent d'un serveur plus ancien que l'affichage de la qualité. */
   quality?: YtmusicStreamQuality | null
+  /** La file de ce lecteur (précédent / suivant, répétition) ; null ou absent sans file. */
+  queue?: { length: number; index: number; repeat: YtmusicRepeat } | null
+}
+
+/** Répétition du TITRE en cours : `once` le rejoue une fois puis la file reprend, `loop` sans fin. */
+export type YtmusicRepeat = 'off' | 'once' | 'loop'
+
+/** Un titre tel que la file le garde (ce que `/play` accepte). */
+export interface YtmusicQueueTrack {
+  videoId: string
+  title?: string
+  artist?: string
+  artUrl?: string
+  durationS?: number
+  explicit?: boolean
+}
+
+/** La file d'un lecteur : `items[index]` joue. */
+export interface YtmusicQueue {
+  items: YtmusicQueueTrack[]
+  index: number
+  repeat: YtmusicRepeat
 }
 
 export interface YtmusicSearchResult {
@@ -388,6 +410,19 @@ export interface Transport {
   ytmusicSessions(): Promise<{ sessions: YtmusicSession[] }>
   /** Le titre en cours sur `fromDeviceId` repart sur `toDeviceId`, qui se place à la même position ; la source s'arrête. */
   ytmusicTransfer(body: { fromDeviceId: string; toDeviceId: string }): Promise<{ ok: true; streamUrl: string; sid: string; positionS: number }>
+  /** Nouvelle file sur ce lecteur (l'ancienne est remplacée) : `tracks[startIndex]` joue, la suite enchaîne. */
+  ytmusicQueuePlay(body: { deviceId: string; tracks: YtmusicQueueTrack[]; startIndex?: number }): Promise<{ ok: true; streamUrl: string; sid: string; queue: YtmusicQueue }>
+  ytmusicQueue(deviceId: string): Promise<YtmusicQueue>
+  /** Ajouter sans interrompre ; rien ne joue sur ce lecteur ? Les titres partent tout de suite (`started`). */
+  ytmusicQueueAdd(body: { deviceId: string; tracks: YtmusicQueueTrack[]; where: 'next' | 'end' }): Promise<{ ok: true; started: boolean; queue: YtmusicQueue }>
+  ytmusicQueueNext(deviceId: string): Promise<YtmusicQueue>
+  /** Au début du titre s'il joue depuis quelques secondes, sinon le titre d'avant. */
+  ytmusicQueuePrevious(deviceId: string): Promise<YtmusicQueue>
+  ytmusicQueueJump(deviceId: string, index: number): Promise<YtmusicQueue>
+  ytmusicQueueRepeat(deviceId: string, mode: YtmusicRepeat): Promise<YtmusicQueue>
+  ytmusicQueueRemove(deviceId: string, index: number): Promise<YtmusicQueue>
+  /** Vider la file : le titre en cours continue, seul. */
+  ytmusicQueueClear(deviceId: string): Promise<YtmusicQueue>
   /**
    * Fait oublier un appareil au plugin qui le retenait (`meta.forgettable`), par convention
    * `DELETE /api/plugins/<plugin>/devices/<externalId>` : il quitte l'inventaire jusqu'à ce qu'il

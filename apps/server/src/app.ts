@@ -96,6 +96,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
   setYtmusicBridge({
     getDevice: (id) => registry.get(id),
     execute: (id, command) => host.execute(id, command),
+    onState: (cb) => bus.on('state', cb),
   })
   if (opts.serveStatic ?? true) {
     const served = await registerStatic(app, opts.env.KASBAH_STATIC_DIR)

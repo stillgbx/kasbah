@@ -160,6 +160,7 @@ async function boot(extra: {
   getDevice?: (id: string) => { descriptor: DeviceDescriptor; state?: unknown } | undefined
   spawnImpl?: ReturnType<typeof fakeSpawn>['spawnImpl']
   createSession?: () => Promise<InnertubeLike>
+  onState?: (cb: (deviceId: string, state: unknown) => void) => () => void
 } = {}) {
   const store = createCookieFile('')
   const plugin = createYtmusicPlugin({
@@ -169,6 +170,7 @@ async function boot(extra: {
     ...(extra.execute ? { execute: extra.execute } : {}),
     ...(extra.getDevice ? { getDevice: extra.getDevice } : {}),
     ...(extra.spawnImpl ? { spawnImpl: extra.spawnImpl } : {}),
+    ...(extra.onState ? { onState: extra.onState } : {}),
   })
   const config = plugin.configSchema.parse({
     YTM_COOKIE_FILE: '',
@@ -790,6 +792,125 @@ describe('ytmusic plugin', () => {
     commands.length = 0
     await app.inject({ method: 'POST', url: '/api/plugins/ytmusic/play', payload: { videoId: 'vid2', deviceId: player.id, title: 'Next' } })
     expect(commands.map((c) => c.cmd.type)).toEqual(['media_player.pause', 'media_player.play_url'])
+    await app.close()
+    await plugin.stop()
+  })
+
+  it('chains a queue at the end of each track, repeats, skips, and follows a transfer', async () => {
+    const office: DeviceDescriptor = { ...player, id: 'sonos:office', pluginId: 'sonos', externalId: 'office', name: 'Bureau', capabilities: ['playback', 'play_url', 'seek'] }
+    const commands: { id: string; cmd: Command }[] = []
+    const ff = fakeSpawn({ filesize: 400_000 })
+    const states = new Map<string, { kind: 'media_player'; playback: string; nowPlaying?: { positionS?: number } | null }>([
+      [office.id, { kind: 'media_player', playback: 'idle', nowPlaying: null }],
+      [player.id, { kind: 'media_player', playback: 'idle', nowPlaying: null }],
+    ])
+    let feed: ((id: string, state: unknown) => void) | null = null
+    const { plugin, app, ctx } = await boot({
+      spawnImpl: ff.spawnImpl,
+      getDevice: (id) => (id === office.id ? { descriptor: office, state: states.get(id) } : id === player.id ? { descriptor: player, state: states.get(id) } : undefined),
+      execute: async (id, cmd) => { commands.push({ id, cmd }) },
+      onState: (cb) => { feed = cb; return () => { feed = null } },
+    })
+    const clock = ctx.clock as ManualClock
+    const say = (id: string, playback: string, positionS?: number) => {
+      const st = { kind: 'media_player' as const, playback, nowPlaying: playback === 'idle' ? null : { ...(positionS !== undefined ? { positionS } : {}) } }
+      states.set(id, st)
+      feed?.(id, st)
+    }
+    const played = () => commands.filter((c) => c.cmd.type === 'media_player.play_url').map((c) => (c.cmd as { title?: string }).title)
+    const ytdlpRuns = () => (ff.spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls.filter((c) => (c[1] as string[]).includes('-J')).length
+    const post = (url: string, payload: object) => app.inject({ method: 'POST', url: `/api/plugins/ytmusic${url}`, payload })
+    await app.inject({ method: 'PUT', url: '/api/plugins/ytmusic/cookie', payload: { cookie: COOKIE } })
+
+    const tracks = ['A', 'B', 'C'].map((title) => ({ videoId: `v${title}`, title }))
+    const r = await post('/queue', { deviceId: office.id, tracks })
+    expect(r.statusCode).toBe(200)
+    expect(r.json().queue).toMatchObject({ index: 0, repeat: 'off' })
+    expect(played()).toEqual(['A'])
+    // le suivant est résolu d'avance, pendant que le premier joue
+    await vi.waitFor(() => expect(ytdlpRuns()).toBe(2))
+    expect((await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/sessions' })).json().sessions[0].queue).toEqual({ length: 3, index: 0, repeat: 'off' })
+
+    // un arrêt en milieu de morceau (20 s au total) n'enchaîne pas
+    clock.advance(4_000); say(office.id, 'playing', 5)
+    clock.advance(2_000); say(office.id, 'idle')
+    expect(played()).toEqual(['A'])
+
+    // fin de piste : entendu à 17 s, à l'arrêt 2 s plus tard → B, sans nouvel aller yt-dlp
+    say(office.id, 'playing', 17)
+    clock.advance(2_000); say(office.id, 'idle')
+    await vi.waitFor(() => expect(played()).toEqual(['A', 'B']))
+    expect(ytdlpRuns()).toBe(3) // C, préparé à son tour
+
+    // répéter une fois : B rejoue sur le même flux, puis la file reprend
+    expect((await post('/queue/repeat', { deviceId: office.id, mode: 'once' })).json().repeat).toBe('once')
+    clock.advance(4_000); say(office.id, 'playing', 18)
+    clock.advance(1_000); say(office.id, 'idle')
+    await vi.waitFor(() => expect(played()).toEqual(['A', 'B', 'B']))
+    expect(ytdlpRuns()).toBe(3)
+    expect((await app.inject({ method: 'GET', url: `/api/plugins/ytmusic/queue?deviceId=${office.id}` })).json()).toMatchObject({ index: 1, repeat: 'off' })
+
+    // ajouter juste après le courant, retirer, sauter
+    clock.advance(4_000); say(office.id, 'playing', 1)
+    const added = await post('/queue/add', { deviceId: office.id, tracks: [{ videoId: 'vX', title: 'X' }], where: 'next' })
+    expect(added.json()).toMatchObject({ started: false, queue: { index: 1 } })
+    expect(added.json().queue.items.map((t: { title: string }) => t.title)).toEqual(['A', 'B', 'X', 'C'])
+    expect((await post('/queue/remove', { deviceId: office.id, index: 1 })).statusCode).toBe(400) // celui qui joue
+    expect((await post('/queue/remove', { deviceId: office.id, index: 0 })).json()).toMatchObject({ index: 0 })
+    expect((await post('/queue/next', { deviceId: office.id })).json()).toMatchObject({ index: 1 })
+    expect(played().at(-1)).toBe('X')
+
+    // précédent : au début du titre s'il joue depuis un moment, sinon le titre d'avant
+    clock.advance(4_000); say(office.id, 'playing', 30)
+    commands.length = 0
+    await post('/queue/previous', { deviceId: office.id })
+    expect(commands.map((c) => c.cmd)).toEqual([{ type: 'media_player.seek', positionS: 0 }])
+    say(office.id, 'playing', 1)
+    await post('/queue/previous', { deviceId: office.id })
+    expect(played()).toEqual(['B'])
+
+    // transfert : la file suit le titre sur la cible
+    clock.advance(4_000); say(office.id, 'playing', 2)
+    expect((await post('/transfer', { fromDeviceId: office.id, toDeviceId: player.id })).statusCode).toBe(200)
+    say(office.id, 'idle')
+    states.set(player.id, { kind: 'media_player', playback: 'playing', nowPlaying: { positionS: 3 } })
+    expect((await app.inject({ method: 'GET', url: `/api/plugins/ytmusic/queue?deviceId=${player.id}` })).json()).toMatchObject({ index: 0 })
+    expect((await app.inject({ method: 'GET', url: `/api/plugins/ytmusic/queue?deviceId=${office.id}` })).statusCode).toBe(404)
+    // … et y enchaîne en bout de titre
+    clock.advance(4_000); say(player.id, 'playing', 18)
+    clock.advance(2_000); say(player.id, 'idle')
+    await vi.waitFor(() => expect(played().at(-1)).toBe('X'))
+
+    // un autre titre lancé sur ce lecteur remplace la file
+    await post('/play', { videoId: 'vZ', deviceId: player.id, title: 'Z' })
+    expect((await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/sessions' })).json().sessions[0].queue).toEqual({ length: 1, index: 0, repeat: 'off' })
+    await app.close()
+    await plugin.stop()
+    expect(feed).toBeNull()
+  })
+
+  it('waits for the pause of the playing track before sending a prefetched one', async () => {
+    const office: DeviceDescriptor = { ...player, id: 'sonos:office', pluginId: 'sonos', externalId: 'office', name: 'Bureau' }
+    const steps: string[] = []
+    const ff = fakeSpawn({ filesize: 400_000 })
+    const { plugin, app, ctx } = await boot({
+      spawnImpl: ff.spawnImpl,
+      getDevice: (id) => (id === office.id ? { descriptor: office, state: { kind: 'media_player', playback: 'playing', nowPlaying: { positionS: 5 } } } : undefined),
+      // un Sonos met quelques dizaines de ms à répondre à Pause : le titre suivant ne doit pas le doubler
+      execute: async (_id, cmd) => {
+        steps.push(cmd.type)
+        if (cmd.type === 'media_player.pause') { await new Promise((r) => setTimeout(r, 30)); steps.push('paused') }
+      },
+      onState: () => () => {},
+    })
+    await app.inject({ method: 'PUT', url: '/api/plugins/ytmusic/cookie', payload: { cookie: COOKIE } })
+    await app.inject({ method: 'POST', url: '/api/plugins/ytmusic/queue', payload: { deviceId: office.id, tracks: [{ videoId: 'v1', title: 'A' }, { videoId: 'v2', title: 'B' }] } })
+    const ytdlp = () => (ff.spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls.filter((c) => (c[1] as string[]).includes('-J')).length
+    await vi.waitFor(() => expect(ytdlp()).toBe(2))
+    ;(ctx.clock as ManualClock).advance(6_000)
+    steps.length = 0
+    expect((await app.inject({ method: 'POST', url: '/api/plugins/ytmusic/queue/next', payload: { deviceId: office.id } })).statusCode).toBe(200)
+    expect(steps).toEqual(['media_player.pause', 'paused', 'media_player.play_url'])
     await app.close()
     await plugin.stop()
   })

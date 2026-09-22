@@ -96,6 +96,11 @@ export const ICONS = {
   stop: 'M6 6h12v12H6z',
   skipPrev: 'M18 5v14L8 12zM6 5v14',
   skipNext: 'M6 5v14l10-7zM18 5v14',
+  /** Répéter : deux flèches en boucle, le centre laissé libre pour « 1 » ou « ∞ ». */
+  repeat: 'M17 2l3 3-3 3M4 11V9a4 4 0 0 1 4-4h12M7 22l-3-3 3-3M20 13v2a4 4 0 0 1-4 4H4',
+  /** File : lire ensuite (le plus en tête de liste) / ajouter à la fin (le plus en bas). */
+  queueNext: 'M4 6h9M4 12h16M4 18h16M18 3v6M15 6h6',
+  queueAdd: 'M4 6h16M4 12h16M4 18h9M18 15v6M15 18h6',
   volume: 'M4 9.5h3.5L12 5.5v13L7.5 14.5H4zM15.8 9.5a4 4 0 0 1 0 5M18.6 7a7.5 7.5 0 0 1 0 10',
   volumeOff: 'M4 9.5h3.5L12 5.5v13L7.5 14.5H4zM16 9.5l5 5M21 9.5l-5 5',
   collapseUp: 'M4 4h16M12 20V9M8 13l4-4 4 4',

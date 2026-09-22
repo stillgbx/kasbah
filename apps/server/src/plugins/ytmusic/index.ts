@@ -9,9 +9,10 @@ import { getYtmusicBridge } from './bridge'
 import { YtmusicCatalog, type CreateSession } from './catalog'
 import { createCookieFile, hasRequiredCookie, writeNetscapeBeside, type CookieStore } from './cookie'
 import { importCookiesFromBrowser, isAuthError, YTM_BROWSERS } from './browserCookies'
-import { LengthLock, OUT_BITRATE_KBPS, OUT_CHANNELS, OUT_SAMPLE_RATE_HZ, parseRange, pingPoToken, resolveStreamUrl, seekFor, StreamProxy, type ProxySession, type SessionMeta, type SpawnFn } from './stream'
+import { LengthLock, OUT_BITRATE_KBPS, OUT_CHANNELS, OUT_SAMPLE_RATE_HZ, parseRange, pingPoToken, resolveStreamUrl, seekFor, StreamProxy, type ProxySession, type ResolvedStream, type SessionMeta, type SpawnFn } from './stream'
 import type { YtmusicStatus } from './types'
 import { ART_PLAY_SIZE, upgradeArtUrl } from './mapping'
+import { afterEnd, insert, jumpTo, removeAt, REPEAT_MODES, upcoming, type PlayQueue, type QueueTrack, type RepeatMode } from './queue'
 
 // Plugin YouTube Music (NON OFFICIEL) : catalogue InnerTube via youtubei.js, flux via yt-dlp +
 // PO Token, lecture sur Cast/Sonos par `media_player.play_url` d'une URL proxy LAN.
@@ -36,6 +37,22 @@ export const ytmusicConfigSchema = z.object({
 })
 export type YtmusicConfig = z.infer<typeof ytmusicConfigSchema>
 
+/** Un titre tel que l'UI l'envoie (`/play`, la file) : de quoi le résoudre, et ce que le catalogue en dit. */
+const trackSchema = z.object({
+  videoId: z.string().trim().min(1),
+  title: z.string().trim().min(1).max(512).optional(),
+  artist: z.string().trim().min(1).max(512).optional(),
+  artUrl: z.string().trim().min(1).max(2048).transform((u) => (u.startsWith('//') ? `https:${u}` : u))
+    .pipe(z.string().url().refine((u) => /^https?:\/\//i.test(u), 'http or https only'))
+    .optional(),
+  /** Durée catalogue, si yt-dlp n'en donne pas : elle fixe la taille du « fichier ». */
+  durationS: z.number().positive().optional(),
+  /** Ce que le catalogue dit du morceau : l'enceinte, elle, ne le saura jamais. */
+  explicit: z.boolean().optional(),
+})
+/** Une playlist de plusieurs heures tient largement ; au-delà, c'est une erreur de l'appelant. */
+const QUEUE_MAX = 1000
+
 export interface YtmusicPluginDeps {
   cookieStore?: CookieStore
   catalog?: YtmusicCatalog
@@ -45,6 +62,8 @@ export interface YtmusicPluginDeps {
   /** Commande à un lecteur d'un autre plugin (tests) ; sinon le pont `app.ts`. */
   execute?: (deviceId: string, command: Command) => Promise<void>
   getDevice?: (deviceId: string) => { descriptor: { kind: string; capabilities: string[] }; state?: unknown } | undefined
+  /** Les états publiés par les lecteurs (tests) ; sinon le pont `app.ts`. */
+  onState?: (cb: (deviceId: string, state: unknown) => void) => () => void
 }
 
 export function healthFrom(
@@ -215,7 +234,7 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
 
   /** Ouvre une session pour ce lecteur (la précédente du même lecteur est fermée) et lui envoie `play_url`. */
   async function launch(
-    req: FastifyRequest,
+    base: string,
     videoId: string,
     deviceId: string,
     sourceUrl: string,
@@ -226,8 +245,8 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
     const session = getProxy().open(videoId, deviceId, sourceUrl, meta, raw)
     // L'extension n'est pas décorative : `streamLoad` (Sonos) en déduit le type annoncé dans le DIDL.
     const streamUrl = raw
-      ? `${publishBase(req)}/api/plugins/ytmusic/raw/${session.sid}.${raw.ext}`
-      : `${publishBase(req)}/api/plugins/ytmusic/stream/${session.sid}`
+      ? `${base}/api/plugins/ytmusic/raw/${session.sid}.${raw.ext}`
+      : `${base}/api/plugins/ytmusic/stream/${session.sid}`
     await play(deviceId, streamUrl, meta)
     return { session, streamUrl }
   }
@@ -271,6 +290,269 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
     return !!s.meta.title && t.toLowerCase() === s.meta.title.trim().toLowerCase()
   }
 
+  // ---- lancer un titre -----------------------------------------------------------------------------
+
+  async function resolveTrack(cookie: string, videoId: string): Promise<ResolvedStream> {
+    let netscapePath: string | undefined
+    if (cookies!.path) netscapePath = await writeNetscapeBeside(cookies!.path, cookie)
+    return resolveStreamUrl({
+      videoId,
+      // Viser un conteneur que les enceintes lisent (AAC en MP4) plutôt que le plus gros débit :
+      // c'est lui qu'on relaiera tel quel, et un Sonos ne lit pas le WebM/Opus que YouTube
+      // propose parfois plus haut. Sans m4a, on tombera dans le repli ffmpeg, qui lit tout.
+      preferExts: ['m4a', 'mp4'],
+      cookieRaw: cookie,
+      ytdlpPath: cfg().YTM_YTDLP_PATH,
+      poTokenUrl: cfg().YTM_PO_TOKEN_URL,
+      ...(netscapePath ? { netscapePath } : {}),
+      ...(deps.spawnImpl ? { spawnImpl: deps.spawnImpl } : {}),
+    })
+  }
+
+  /**
+   * Le titre suivant d'une file, résolu PENDANT que le courant joue : yt-dlp prend quelques secondes,
+   * qu'on ne veut pas entendre entre deux morceaux. L'URL googlevideo vaut ~6 h ; on n'en garde
+   * qu'une heure, un titre pas encore joué au bout d'une heure sera résolu à nouveau.
+   */
+  const prefetched = new Map<string, { at: number; p: Promise<ResolvedStream> }>()
+  const PREFETCH_TTL_MS = 3_600_000
+
+  function prefetchUpcoming(q: PlayQueue): void {
+    const next = upcoming(q)
+    if (!next) return
+    const hit = prefetched.get(next.videoId)
+    if (hit && now() - hit.at < PREFETCH_TTL_MS) return
+    const entry = { at: now(), p: requireCookie().then((cookie) => resolveTrack(cookie, next.videoId)) }
+    // un échec ne se garde pas : le lancement réessaiera pour de bon, et dira pourquoi
+    entry.p.catch((err) => {
+      if (prefetched.get(next.videoId) === entry) prefetched.delete(next.videoId)
+      log().debug({ err, videoId: next.videoId }, 'ytmusic queue: prefetch failed')
+    })
+    prefetched.set(next.videoId, entry)
+  }
+
+  function takePrefetched(videoId: string): Promise<ResolvedStream> | undefined {
+    const hit = prefetched.get(videoId)
+    prefetched.delete(videoId)
+    return hit && now() - hit.at < PREFETCH_TTL_MS ? hit.p : undefined
+  }
+
+  /** La session d'un relais se relance telle quelle (transfert, titre rejoué) ; sinon le repli MP3. */
+  function rawOf(s: ProxySession): { mime: string; sizeBytes: number; ext: string } | undefined {
+    const ext = s.meta.source?.ext?.toLowerCase() ?? ''
+    return s.raw && s.lengthBytes !== null && RAW_MIME[ext] ? { mime: s.mime, sizeBytes: s.lengthBytes, ext } : undefined
+  }
+
+  /**
+   * Résoudre (ou reprendre la résolution préparée) puis envoyer `play_url`. `stillWanted` est relu
+   * après la résolution, qui dure plusieurs secondes : une autre commande a pu passer entre-temps, et
+   * ce titre-ci ne doit alors plus partir (null).
+   */
+  async function startTrack(base: string, deviceId: string, track: QueueTrack, opts: { raw?: boolean; stillWanted: () => boolean }) {
+    const cookie = await requireCookie()
+    if (!(await refreshPo())) {
+      lastError = 'PO Token generator unreachable'
+      throw new PluginError('DEVICE_UNAVAILABLE', lastError)
+    }
+    // Un de nos flux joue déjà là : le mettre en pause TOUT DE SUITE, avant les secondes de
+    // résolution yt-dlp — la tablette montre un sablier, l'enceinte se tait, le nouveau titre
+    // remplace l'ancien. Pas `stop` : sur un Cast il fermerait l'appli, qu'il faudrait relancer.
+    // La pause est ATTENDUE avant `play_url` : un titre résolu d'avance part aussitôt, et une pause
+    // arrivée après lui laissait le nouveau titre en pause à 0 s (vu sur le Sonos « Bureau »).
+    const { get, execute } = resolvePlay()
+    const playing = (get(deviceId)?.state as { playback?: string } | undefined)?.playback === 'playing'
+    const paused = getProxy().forDevice(deviceId) && playing
+      ? execute(deviceId, { type: 'media_player.pause' }).catch((err) => log().debug({ err }, 'ytmusic: pause before replace failed'))
+      : Promise.resolve()
+
+    try {
+      const resolved = await (takePrefetched(track.videoId) ?? resolveTrack(cookie, track.videoId))
+      await paused
+      if (!opts.stillWanted()) return null
+      const durationS = resolved.durationS ?? track.durationS
+      const meta: SessionMeta = {
+        ...(track.title ? { title: track.title } : {}),
+        ...(track.artist ? { artist: track.artist } : {}),
+        ...(track.artUrl ? { artUrl: upgradeArtUrl(track.artUrl, ART_PLAY_SIZE) ?? track.artUrl } : {}),
+        ...(durationS ? { durationS } : {}),
+        ...(track.explicit ? { explicit: true } : {}),
+        source: { ext: resolved.ext, formatId: resolved.formatId, abrKbps: resolved.abrKbps },
+      }
+      // RELAIS PAR DÉFAUT : la source est déjà un fichier de taille exacte, découpable en plages —
+      // le réencoder ne fait que perdre de la qualité. Deux conditions : un conteneur que les
+      // enceintes lisent, et une taille annoncée (c'est elle qui en fait un « fichier »). Sinon,
+      // repli sur le MP3 à trames fixes, qui fabrique cette taille à partir de la durée.
+      const rawExt = resolved.ext?.toLowerCase() ?? ''
+      const rawMime = RAW_MIME[rawExt]
+      const raw = opts.raw !== false && rawMime && resolved.sizeBytes
+        ? { mime: rawMime, sizeBytes: resolved.sizeBytes, ext: rawExt }
+        : undefined
+      if (!raw && opts.raw !== false) {
+        log().info({ ext: resolved.ext, sizeBytes: resolved.sizeBytes }, 'ytmusic: source not relayable, falling back to MP3 transcoding')
+      }
+      const started = await launch(base, track.videoId, deviceId, resolved.url, meta, raw)
+      lastError = null
+      log().info({
+        videoId: track.videoId,
+        deviceId,
+        title: track.title ?? null,
+        durationS: durationS ?? null,
+        mode: raw ? `relay ${raw.ext}` : 'mp3',
+        sourceKbps: resolved.abrKbps,
+      }, 'ytmusic play_url dispatched')
+      return started
+    } catch (err) {
+      noteAuthFailure(err)
+      if (err instanceof PluginError) throw err
+      throw new PluginError('UPSTREAM_ERROR', lastError ?? (err as Error).message, { cause: err })
+    }
+  }
+
+  // ---- file d'attente ------------------------------------------------------------------------------
+
+  /** Une file en cours : ce qu'elle contient, et de quoi voir le titre courant finir. */
+  interface RunningQueue extends PlayQueue {
+    /** URL publiée aux enceintes (dérivée de la requête qui a créé la file). */
+    base: string
+    /** `false` : repli MP3 forcé pour toute la file. */
+    raw?: boolean
+    /** Session du proxy du titre courant ; une autre session sur ce lecteur = la file est finie. */
+    sid: string | null
+    /** Dernière position de lecture relevée, et quand : de quoi estimer où en était le titre à l'arrêt. */
+    heard: { positionS: number; at: number } | null
+    /** Un titre part (résolution, `play_url`, transfert) : les états du lecteur ne disent rien de la file. */
+    busy: boolean
+  }
+  const queues = new Map<string, RunningQueue>()
+  /** Plus près de la fin que ça, un lecteur qui s'arrête a fini le titre (Sonos relevé toutes les 2 s). */
+  const END_SLACK_S = 5
+  /** Juste après `play_url`, le Sonos passe une seconde à l'arrêt, et un relevé en vol peut encore parler du titre précédent. */
+  const SETTLE_MS = 3_000
+  /** Précédent au-delà de ce temps de lecture : retour au début du titre, comme le fait le plugin Sonos. */
+  const RESTART_AFTER_S = 3
+
+  const queueView = (q: RunningQueue) => ({ items: q.items, index: q.index, repeat: q.repeat })
+
+  /** La file d'un lecteur, tant que son titre courant est bien celui que joue l'enceinte. */
+  function liveQueue(deviceId: string): RunningQueue | undefined {
+    const q = queues.get(deviceId)
+    if (!q) return undefined
+    const s = getProxy().forDevice(deviceId)
+    if (q.busy || (s && s.sid === q.sid && sessionActive(s))) return q
+    return undefined
+  }
+
+  let unwatch: (() => void) | null = null
+  /** S'abonner aux états des lecteurs à la première file (pas au démarrage : HMR tsx recharge les routes sans `start()`). */
+  function watchPlayers(): void {
+    if (unwatch) return
+    const on = deps.onState ?? getYtmusicBridge()?.onState
+    if (!on) {
+      log().warn('ytmusic queue: no player state feed — tracks will not chain')
+      return
+    }
+    unwatch = on((deviceId, state) => onPlayerState(deviceId, state))
+  }
+
+  /**
+   * Fin de piste : aucun lecteur ne l'annonce, l'état passe simplement à `idle` (Sonos STOPPED en fin
+   * de fichier, Cast IDLE). On l'y reconnaît à la position : partie de là où on l'a entendue jouer
+   * pour la dernière fois, elle doit avoir atteint la durée. Un `idle` en milieu de morceau (arrêt
+   * voulu, pause d'un flux que le Sonos change en Stop) laisse la file en attente, sans avancer.
+   */
+  function onPlayerState(deviceId: string, state: unknown): void {
+    const q = queues.get(deviceId)
+    if (!q || q.busy) return
+    const s = q.sid ? getProxy().get(q.sid) : undefined
+    if (!s || getProxy().forDevice(deviceId)?.sid !== s.sid) {
+      // notre flux a été remplacé (un autre `play`) ou fermé (cookie retiré, TTL) : la file s'en va avec
+      queues.delete(deviceId)
+      return
+    }
+    if (now() - s.createdAt < SETTLE_MS) return
+    const st = state as { kind?: string; playback?: string; nowPlaying?: { positionS?: number } | null } | undefined
+    if (st?.kind !== 'media_player') return
+    if (st.playback === 'playing') {
+      if (!sessionActive(s)) {
+        log().info({ deviceId }, 'ytmusic queue: player moved on to something else, queue dropped')
+        queues.delete(deviceId)
+        return
+      }
+      // Un état republié pour autre chose (volume) garde l'ANCIENNE position : ne la redater que si
+      // elle a bougé, sinon l'estimation à l'arrêt partirait de trop tôt.
+      const pos = st.nowPlaying?.positionS
+      if (typeof pos === 'number' && pos !== q.heard?.positionS) q.heard = { positionS: pos, at: now() }
+      else if (!q.heard) q.heard = { positionS: 0, at: now() }
+      return
+    }
+    if (st.playback !== 'idle' || !q.heard) return
+    const reached = q.heard.positionS + (now() - q.heard.at) / 1000
+    q.heard = null
+    const dur = s.meta.durationS
+    if (!dur || reached < dur - END_SLACK_S) return
+    void advance(deviceId, q)
+  }
+
+  /** Enchaîner après une fin de piste. Un titre qui ne se lance pas est sauté, trois fois au plus d'affilée. */
+  async function advance(deviceId: string, q: RunningQueue, failures = 0): Promise<void> {
+    const next = afterEnd(q)
+    if (!next) {
+      log().info({ deviceId, tracks: q.items.length }, 'ytmusic queue finished')
+      queues.delete(deviceId)
+      return
+    }
+    try {
+      await playAt(deviceId, q, next.index, next.repeat)
+    } catch (err) {
+      log().warn({ err, deviceId, videoId: q.items[next.index]?.videoId }, 'ytmusic queue: next track failed')
+      if (queues.get(deviceId) !== q || failures >= 2) return
+      q.index = next.index
+      q.repeat = 'off'
+      await advance(deviceId, q, failures + 1)
+    }
+  }
+
+  /**
+   * Jouer le titre `index` de la file. Le même titre rejoué (répétition) repart du flux déjà résolu :
+   * l'URL googlevideo est encore bonne, pas de nouvel aller yt-dlp.
+   */
+  async function playAt(deviceId: string, q: RunningQueue, index: number, repeat: RepeatMode) {
+    const track = q.items[index]!
+    const stillWanted = () => queues.get(deviceId) === q
+    q.busy = true
+    try {
+      const current = q.sid ? getProxy().get(q.sid) : undefined
+      const started = current && index === q.index && current.videoId === track.videoId
+        ? await launch(q.base, current.videoId, deviceId, current.sourceUrl, current.meta, rawOf(current))
+        : await startTrack(q.base, deviceId, track, { ...(q.raw === false ? { raw: false } : {}), stillWanted })
+      if (!started || !stillWanted()) return null
+      Object.assign(q, { index, repeat, sid: started.session.sid, heard: null })
+      prefetchUpcoming(q)
+      return started
+    } finally {
+      q.busy = false
+    }
+  }
+
+  /** Nouvelle file sur ce lecteur (l'ancienne est remplacée), qui joue `tracks[startIndex]`. */
+  async function playQueue(reply: FastifyReply, base: string, deviceId: string, tracks: QueueTrack[], startIndex: number, raw?: boolean) {
+    const q: RunningQueue = {
+      items: tracks, index: startIndex, repeat: 'off', base,
+      ...(raw === false ? { raw: false } : {}),
+      sid: null, heard: null, busy: false,
+    }
+    queues.set(deviceId, q)
+    watchPlayers()
+    try {
+      const started = await playAt(deviceId, q, startIndex, 'off')
+      if (!started) return { error: sendError(reply, 409, 'SUPERSEDED', 'another track was started on this player meanwhile') }
+      return { ...started, queue: q }
+    } catch (err) {
+      if (queues.get(deviceId) === q) queues.delete(deviceId)
+      throw err
+    }
+  }
+
   /** Type de contenu d'un flux source relayé tel quel (le conteneur décide, pas le codec). */
   const RAW_MIME: Record<string, string> = { m4a: 'audio/mp4', mp4: 'audio/mp4', webm: 'audio/webm', opus: 'audio/ogg' }
 
@@ -288,6 +570,11 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
       lengthBytes: s.lengthBytes,
       source: s.meta.source ?? null,
     },
+    // de quoi griser précédent / suivant et montrer la répétition sans ouvrir la file
+    queue: (() => {
+      const q = queues.get(s.deviceId)
+      return q && q.sid === s.sid ? { length: q.items.length, index: q.index, repeat: q.repeat } : null
+    })(),
   })
 
   function noteAuthFailure(err: unknown) {
@@ -345,6 +632,10 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
     },
 
     async stop() {
+      unwatch?.()
+      unwatch = null
+      queues.clear()
+      prefetched.clear()
       proxy?.clear()
       catalog?.reset()
       cookies = null
@@ -493,19 +784,11 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
         }
       })
 
+      // Un titre seul est une file d'un titre : la répétition vaut aussi pour lui, et c'est la même
+      // mécanique qui le lance.
       app.post<{ Body: unknown }>('/play', async (req, reply) => {
-        const body = z.object({
-          videoId: z.string().trim().min(1),
+        const body = trackSchema.extend({
           deviceId: z.string().trim().min(1),
-          title: z.string().trim().min(1).max(512).optional(),
-          artist: z.string().trim().min(1).max(512).optional(),
-          artUrl: z.string().trim().min(1).max(2048).transform((u) => (u.startsWith('//') ? `https:${u}` : u))
-            .pipe(z.string().url().refine((u) => /^https?:\/\//i.test(u), 'http or https only'))
-            .optional(),
-          /** Durée catalogue, si yt-dlp n'en donne pas : elle fixe la taille du « fichier ». */
-          durationS: z.number().positive().optional(),
-          /** Ce que le catalogue dit du morceau : l'enceinte, elle, ne le saura jamais. */
-          explicit: z.boolean().optional(),
           /**
            * Par défaut le flux source est RELAYÉ tel quel ; `false` force le réencodage MP3 (échappatoire
            * si un lecteur bute sur le conteneur d'origine).
@@ -513,78 +796,136 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
           raw: z.boolean().optional(),
         }).safeParse(req.body)
         if (!body.success) return sendError(reply, 400, 'INVALID_BODY', 'videoId and deviceId are required')
-
-        const { get, execute } = resolvePlay()
-        const target = playableOrError(reply, get, body.data.deviceId)
+        const { deviceId, raw, ...track } = body.data
+        const { get } = resolvePlay()
+        const target = playableOrError(reply, get, deviceId)
         if ('error' in target) return target.error
+        const started = await playQueue(reply, publishBase(req), deviceId, [track], 0, raw)
+        if ('error' in started) return started.error
+        return { ok: true as const, streamUrl: started.streamUrl, sid: started.session.sid }
+      })
 
-        const cookie = await requireCookie()
-        if (!(await refreshPo())) {
-          lastError = 'PO Token generator unreachable'
-          return sendError(reply, 503, 'DEVICE_UNAVAILABLE', lastError)
-        }
+      // ---- file d'attente -----------------------------------------------------------------------
+      // Elle vit ici, par lecteur : l'enceinte ne connaît jamais qu'un « fichier ». Précédent et
+      // suivant passent par ces routes, pas par `media_player.next` — l'enceinte n'aurait rien à sauter.
 
-        // Un de nos flux joue déjà là : le mettre en pause TOUT DE SUITE, avant les secondes de
-        // résolution yt-dlp — la tablette montre un sablier, l'enceinte se tait, le nouveau titre
-        // remplace l'ancien. Pas `stop` : sur un Cast il fermerait l'appli, qu'il faudrait relancer.
-        if (getProxy().forDevice(body.data.deviceId)) {
-          void execute(body.data.deviceId, { type: 'media_player.pause' }).catch((err) => log().debug({ err }, 'ytmusic: pause before replace failed'))
-        }
+      app.post<{ Body: unknown }>('/queue', async (req, reply) => {
+        const body = z.object({
+          deviceId: z.string().trim().min(1),
+          tracks: z.array(trackSchema).min(1).max(QUEUE_MAX),
+          startIndex: z.number().int().min(0).optional(),
+          raw: z.boolean().optional(),
+        }).safeParse(req.body)
+        if (!body.success) return sendError(reply, 400, 'INVALID_BODY', `deviceId and 1 to ${QUEUE_MAX} tracks are required`)
+        const { deviceId, tracks, startIndex = 0, raw } = body.data
+        if (startIndex >= tracks.length) return sendError(reply, 400, 'INVALID_BODY', 'startIndex is past the last track')
+        const target = playableOrError(reply, resolvePlay().get, deviceId)
+        if ('error' in target) return target.error
+        const started = await playQueue(reply, publishBase(req), deviceId, tracks, startIndex, raw)
+        if ('error' in started) return started.error
+        return { ok: true as const, streamUrl: started.streamUrl, sid: started.session.sid, queue: queueView(started.queue) }
+      })
 
-        try {
-          let netscapePath: string | undefined
-          if (cookies!.path) netscapePath = await writeNetscapeBeside(cookies!.path, cookie)
-          const resolved = await resolveStreamUrl({
-            videoId: body.data.videoId,
-            // Viser un conteneur que les enceintes lisent (AAC en MP4) plutôt que le plus gros débit :
-            // c'est lui qu'on relaiera tel quel, et un Sonos ne lit pas le WebM/Opus que YouTube
-            // propose parfois plus haut. Sans m4a, on tombera dans le repli ffmpeg, qui lit tout.
-            preferExts: ['m4a', 'mp4'],
-            cookieRaw: cookie,
-            ytdlpPath: cfg().YTM_YTDLP_PATH,
-            poTokenUrl: cfg().YTM_PO_TOKEN_URL,
-            ...(netscapePath ? { netscapePath } : {}),
-            ...(deps.spawnImpl ? { spawnImpl: deps.spawnImpl } : {}),
-          })
-          const durationS = resolved.durationS ?? body.data.durationS
-          const meta: SessionMeta = {
-            ...(body.data.title ? { title: body.data.title } : {}),
-            ...(body.data.artist ? { artist: body.data.artist } : {}),
-            ...(body.data.artUrl
-              ? { artUrl: upgradeArtUrl(body.data.artUrl, ART_PLAY_SIZE) ?? body.data.artUrl }
-              : {}),
-            ...(durationS ? { durationS } : {}),
-            ...(body.data.explicit ? { explicit: true } : {}),
-            source: { ext: resolved.ext, formatId: resolved.formatId, abrKbps: resolved.abrKbps },
-          }
-          // RELAIS PAR DÉFAUT : la source est déjà un fichier de taille exacte, découpable en plages —
-          // le réencoder ne fait que perdre de la qualité. Deux conditions : un conteneur que les
-          // enceintes lisent, et une taille annoncée (c'est elle qui en fait un « fichier »). Sinon,
-          // repli sur le MP3 à trames fixes, qui fabrique cette taille à partir de la durée.
-          const rawExt = resolved.ext?.toLowerCase() ?? ''
-          const rawMime = RAW_MIME[rawExt]
-          const raw = body.data.raw !== false && rawMime && resolved.sizeBytes
-            ? { mime: rawMime, sizeBytes: resolved.sizeBytes, ext: rawExt }
-            : undefined
-          if (!raw && body.data.raw !== false) {
-            log().info({ ext: resolved.ext, sizeBytes: resolved.sizeBytes }, 'ytmusic: source not relayable, falling back to MP3 transcoding')
-          }
-          const { session, streamUrl } = await launch(req, body.data.videoId, body.data.deviceId, resolved.url, meta, raw)
-          lastError = null
-          log().info({
-            videoId: body.data.videoId,
-            deviceId: body.data.deviceId,
-            title: body.data.title ?? null,
-            durationS: durationS ?? null,
-            mode: raw ? `relay ${raw.ext}` : 'mp3',
-            sourceKbps: resolved.abrKbps,
-          }, 'ytmusic play_url dispatched')
-          return { ok: true as const, streamUrl, sid: session.sid }
-        } catch (err) {
-          noteAuthFailure(err)
-          if (err instanceof PluginError) throw err
-          throw new PluginError('UPSTREAM_ERROR', lastError ?? (err as Error).message, { cause: err })
+      app.get<{ Querystring: { deviceId?: string } }>('/queue', async (req, reply) => {
+        const q = liveQueue(req.query.deviceId ?? '')
+        if (!q) return sendError(reply, 404, 'NOT_FOUND', 'no YouTube Music queue on this player')
+        return queueView(q)
+      })
+
+      /** Ajouter sans interrompre : juste après le titre courant, ou à la fin. Rien ne joue ? Ça part tout de suite. */
+      app.post<{ Body: unknown }>('/queue/add', async (req, reply) => {
+        const body = z.object({
+          deviceId: z.string().trim().min(1),
+          tracks: z.array(trackSchema).min(1).max(QUEUE_MAX),
+          where: z.enum(['next', 'end']).default('end'),
+        }).safeParse(req.body)
+        if (!body.success) return sendError(reply, 400, 'INVALID_BODY', 'deviceId and tracks are required')
+        const { deviceId, tracks, where } = body.data
+        const q = liveQueue(deviceId)
+        if (!q) {
+          const target = playableOrError(reply, resolvePlay().get, deviceId)
+          if ('error' in target) return target.error
+          const started = await playQueue(reply, publishBase(req), deviceId, tracks, 0)
+          if ('error' in started) return started.error
+          return { ok: true as const, started: true, queue: queueView(started.queue) }
         }
+        if (q.items.length + tracks.length > QUEUE_MAX) return sendError(reply, 400, 'INVALID_BODY', `a queue holds at most ${QUEUE_MAX} tracks`)
+        const { items } = insert(q, tracks, where)
+        q.items = items
+        prefetchUpcoming(q)
+        return { ok: true as const, started: false, queue: queueView(q) }
+      })
+
+      app.post<{ Body: unknown }>('/queue/next', async (req, reply) => {
+        const body = z.object({ deviceId: z.string().trim().min(1) }).safeParse(req.body)
+        if (!body.success) return sendError(reply, 400, 'INVALID_BODY', 'deviceId is required')
+        const q = liveQueue(body.data.deviceId)
+        if (!q) return sendError(reply, 404, 'NOT_FOUND', 'no YouTube Music queue on this player')
+        const step = jumpTo(q, q.index + 1)
+        if (!step) return sendError(reply, 409, 'QUEUE_END', 'no next track in the queue')
+        await playAt(body.data.deviceId, q, step.index, step.repeat)
+        return queueView(q)
+      })
+
+      /** Précédent : au début du titre après quelques secondes de lecture (comme un lecteur de salon), sinon le titre d'avant. */
+      app.post<{ Body: unknown }>('/queue/previous', async (req, reply) => {
+        const body = z.object({ deviceId: z.string().trim().min(1) }).safeParse(req.body)
+        if (!body.success) return sendError(reply, 400, 'INVALID_BODY', 'deviceId is required')
+        const q = liveQueue(body.data.deviceId)
+        if (!q) return sendError(reply, 404, 'NOT_FOUND', 'no YouTube Music queue on this player')
+        const { get, execute } = resolvePlay()
+        const session = q.sid ? getProxy().get(q.sid) : undefined
+        const step = jumpTo(q, q.index - 1)
+        if (!step || (session && trackPosition(get, session) > RESTART_AFTER_S)) {
+          await execute(body.data.deviceId, { type: 'media_player.seek', positionS: 0 })
+          return queueView(q)
+        }
+        await playAt(body.data.deviceId, q, step.index, step.repeat)
+        return queueView(q)
+      })
+
+      /** Jouer un titre choisi dans la file. */
+      app.post<{ Body: unknown }>('/queue/jump', async (req, reply) => {
+        const body = z.object({ deviceId: z.string().trim().min(1), index: z.number().int().min(0) }).safeParse(req.body)
+        if (!body.success) return sendError(reply, 400, 'INVALID_BODY', 'deviceId and index are required')
+        const q = liveQueue(body.data.deviceId)
+        if (!q) return sendError(reply, 404, 'NOT_FOUND', 'no YouTube Music queue on this player')
+        const step = jumpTo(q, body.data.index)
+        if (!step) return sendError(reply, 400, 'INVALID_BODY', 'index is outside the queue')
+        await playAt(body.data.deviceId, q, step.index, step.repeat)
+        return queueView(q)
+      })
+
+      app.post<{ Body: unknown }>('/queue/repeat', async (req, reply) => {
+        const body = z.object({ deviceId: z.string().trim().min(1), mode: z.enum(REPEAT_MODES) }).safeParse(req.body)
+        if (!body.success) return sendError(reply, 400, 'INVALID_BODY', `deviceId and mode (${REPEAT_MODES.join(', ')}) are required`)
+        const q = liveQueue(body.data.deviceId)
+        if (!q) return sendError(reply, 404, 'NOT_FOUND', 'no YouTube Music queue on this player')
+        q.repeat = body.data.mode
+        prefetchUpcoming(q)
+        return queueView(q)
+      })
+
+      app.post<{ Body: unknown }>('/queue/remove', async (req, reply) => {
+        const body = z.object({ deviceId: z.string().trim().min(1), index: z.number().int().min(0) }).safeParse(req.body)
+        if (!body.success) return sendError(reply, 400, 'INVALID_BODY', 'deviceId and index are required')
+        const q = liveQueue(body.data.deviceId)
+        if (!q) return sendError(reply, 404, 'NOT_FOUND', 'no YouTube Music queue on this player')
+        const next = removeAt(q, body.data.index)
+        if (!next) return sendError(reply, 400, 'INVALID_BODY', 'cannot remove the playing track or a track outside the queue')
+        q.items = next.items
+        q.index = next.index
+        prefetchUpcoming(q)
+        return queueView(q)
+      })
+
+      /** Vider la file : le titre en cours continue, seul, rien ne le suit. */
+      app.delete<{ Querystring: { deviceId?: string } }>('/queue', async (req, reply) => {
+        const q = liveQueue(req.query.deviceId ?? '')
+        if (!q) return sendError(reply, 404, 'NOT_FOUND', 'no YouTube Music queue on this player')
+        q.items = [q.items[q.index]!]
+        q.index = 0
+        return queueView(q)
       })
 
       /** Ce que nos lecteurs jouent de nous en ce moment : titre, durée et transfert côté UI. */
@@ -608,12 +949,12 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
         if ('error' in target) return target.error
         const positionS = trackPosition(get, source)
 
+        // la file suit le titre : elle ne réagit à rien le temps du transfert (la source va s'arrêter
+        // en milieu de morceau, ce n'est pas une fin de piste)
+        const queue = queues.get(body.data.fromDeviceId)
+        if (queue) queue.busy = true
         try {
-          const srcExt = source.meta.source?.ext?.toLowerCase() ?? ''
-          const raw = source.raw && source.lengthBytes !== null && RAW_MIME[srcExt]
-            ? { mime: source.mime, sizeBytes: source.lengthBytes, ext: srcExt }
-            : undefined
-          const { session, streamUrl } = await launch(req, source.videoId, body.data.toDeviceId, source.sourceUrl, source.meta, raw)
+          const { session, streamUrl } = await launch(publishBase(req), source.videoId, body.data.toDeviceId, source.sourceUrl, source.meta, rawOf(source))
           if (positionS > 1 && session.lengthBytes !== null) {
             await seekWhenReady(body.data.toDeviceId, positionS + TRANSFER_LEAD_S)
               .catch((err) => log().warn({ err, deviceId: body.data.toDeviceId, positionS }, 'ytmusic transfer: seek on target failed, playing from start'))
@@ -622,11 +963,18 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
           await execute(body.data.fromDeviceId, { type: 'media_player.stop' })
             .catch((err) => log().warn({ err, deviceId: body.data.fromDeviceId }, 'ytmusic transfer: source stop failed'))
           getProxy().closeDevice(body.data.fromDeviceId)
-          log().info({ videoId: source.videoId, from: body.data.fromDeviceId, to: body.data.toDeviceId, positionS }, 'ytmusic playback transferred')
+          if (queue && queues.get(body.data.fromDeviceId) === queue) {
+            queues.delete(body.data.fromDeviceId)
+            Object.assign(queue, { sid: session.sid, heard: null, base: publishBase(req) })
+            queues.set(body.data.toDeviceId, queue)
+          }
+          log().info({ videoId: source.videoId, from: body.data.fromDeviceId, to: body.data.toDeviceId, positionS, queued: queue?.items.length ?? 0 }, 'ytmusic playback transferred')
           return { ok: true as const, streamUrl, sid: session.sid, positionS }
         } catch (err) {
           if (err instanceof PluginError) throw err
           throw new PluginError('UPSTREAM_ERROR', (err as Error).message, { cause: err })
+        } finally {
+          if (queue) queue.busy = false
         }
       })
 

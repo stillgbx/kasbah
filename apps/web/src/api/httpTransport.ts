@@ -1,6 +1,6 @@
 import { apiErrorSchema, devicesResponseSchema, energyHistorySchema, healthResponseSchema, houseSchema, pluginsResponseSchema, scenesResponseSchema, serverMessageSchema, weatherForecastSchema, deviceJournalSchema, deviceConsumptionSchema, type CommandInput, type DeviceConsumption, type DeviceJournal, type DeviceEntry, type DevicePlacement, type EnergyHistory, type HealthResponse, type House, type PluginInfo, type PluginSceneEntry, type PluginSettingsPatch, type SceneRecallInput, type SceneUpdate, type WeatherForecast } from '@kasbah/shared'
 import { parseDeviceId } from '@kasbah/shared'
-import { ApiRequestError, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type MelcloudStatus, type MelcloudUnit, type PetkitStatus, type RenaultStatus, type TeslaStatus, type Transport, type TransportHandlers, type YtmusicPlaylist, type YtmusicSearchResult, type YtmusicSession, type YtmusicStatus, type YtmusicTrack } from './transport'
+import { ApiRequestError, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type MelcloudStatus, type MelcloudUnit, type PetkitStatus, type RenaultStatus, type TeslaStatus, type Transport, type TransportHandlers, type YtmusicPlaylist, type YtmusicQueue, type YtmusicSearchResult, type YtmusicSession, type YtmusicStatus, type YtmusicTrack } from './transport'
 
 // URLs relatives : même origine en prod (Fastify sert le build) et via le proxy Vite en dev.
 
@@ -24,6 +24,12 @@ async function request<T>(url: string, init: RequestInit | undefined, parse: (js
 }
 
 export function createHttpTransport(base = ''): Transport {
+  /** Un geste sur la file d'un lecteur (`/queue/<step>`) : le serveur rend la file telle qu'elle est après. */
+  const queueStep = (step: string, body: object) => request(
+    `${base}/api/plugins/ytmusic/queue/${step}`,
+    { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
+    (j) => j as YtmusicQueue,
+  )
   return {
     getHouse: () => request(`${base}/api/house`, undefined, (j) => houseSchema.parse(j) as House),
     getDevices: () => request(`${base}/api/devices`, undefined, (j) => devicesResponseSchema.parse(j).devices as DeviceEntry[]),
@@ -212,6 +218,25 @@ export function createHttpTransport(base = ''): Transport {
       `${base}/api/plugins/ytmusic/transfer`,
       { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
       (j) => j as { ok: true; streamUrl: string; sid: string; positionS: number },
+    ),
+    ytmusicQueuePlay: (body) => request(
+      `${base}/api/plugins/ytmusic/queue`,
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
+      (j) => j as { ok: true; streamUrl: string; sid: string; queue: YtmusicQueue },
+    ),
+    ytmusicQueue: (deviceId) => request(`${base}/api/plugins/ytmusic/queue?deviceId=${encodeURIComponent(deviceId)}`, undefined, (j) => j as YtmusicQueue),
+    ytmusicQueueAdd: (body) => request(
+      `${base}/api/plugins/ytmusic/queue/add`,
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
+      (j) => j as { ok: true; started: boolean; queue: YtmusicQueue },
+    ),
+    ytmusicQueueNext: (deviceId) => queueStep('next', { deviceId }),
+    ytmusicQueuePrevious: (deviceId) => queueStep('previous', { deviceId }),
+    ytmusicQueueJump: (deviceId, index) => queueStep('jump', { deviceId, index }),
+    ytmusicQueueRepeat: (deviceId, mode) => queueStep('repeat', { deviceId, mode }),
+    ytmusicQueueRemove: (deviceId, index) => queueStep('remove', { deviceId, index }),
+    ytmusicQueueClear: (deviceId) => request(
+      `${base}/api/plugins/ytmusic/queue?deviceId=${encodeURIComponent(deviceId)}`, { method: 'DELETE' }, (j) => j as YtmusicQueue,
     ),
     forgetDevice: (deviceId) => {
       const { pluginId, externalId } = parseDeviceId(deviceId)

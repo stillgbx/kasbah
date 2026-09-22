@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, ref, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CommandInput, DeviceEntry, StateFor } from '@kasbah/shared'
-import type { YtmusicStreamQuality } from '../../api/transport'
+import type { YtmusicRepeat, YtmusicStreamQuality } from '../../api/transport'
 import { formatClock, useMediaPosition, useSeekHold } from '../../composables/useMediaPosition'
 import { deviceIcon } from '../../lib/deviceIcons'
 import ArtThumb from '../ui/ArtThumb.vue'
@@ -22,6 +22,9 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 // métadonnées arrivent, et pas toujours la durée. `pending` : titre
 // en cours d'envoi (résolution yt-dlp : quelques secondes) — il s'affiche tout de suite, la touche
 // centrale tourne, l'enceinte rattrape ensuite.
+//
+// La FILE du lecteur (`session.queue`) pilote précédent / suivant — l'enceinte n'a qu'un « fichier »
+// et n'aurait rien à sauter — et la répétition du titre, dans l'emplacement qui répond à stop.
 const props = defineProps<{
   entry: DeviceEntry | null
   name: string
@@ -31,13 +34,19 @@ const props = defineProps<{
     artist?: string | null
     artUrl?: string | null
     quality?: YtmusicStreamQuality | null
+    queue?: { length: number; index: number; repeat: YtmusicRepeat } | null
   } | null
   pending: { title: string; artists: string[]; artUrl: string | null; explicit?: boolean } | null
   transferMode: boolean
   canTransfer: boolean
   transferBusy: boolean
+  /** La file s'affiche dans la zone centrale de la page. */
+  queueOpen: boolean
 }>()
-const emit = defineEmits<{ command: [cmd: CommandInput]; seek: [positionS: number]; transfer: []; cancelTransfer: [] }>()
+const emit = defineEmits<{
+  command: [cmd: CommandInput]; seek: [positionS: number]; transfer: []; cancelTransfer: []
+  repeat: [mode: YtmusicRepeat]; toggleQueue: []
+}>()
 const { t } = useI18n()
 
 const state = computed<StateFor<'media_player'> | undefined>(() =>
@@ -51,6 +60,17 @@ const skippable = computed(() => loaded.value && !live.value)
 // elle ne dit plus rien de vrai tant que le lecteur n'a rien de chargé — sinon la barre montrait une
 // pochette et une durée pour « Rien ne joue ».
 const ours = computed(() => (loaded.value ? props.session : null))
+
+// ---- file et répétition ----------------------------------------------------------------------------
+const queue = computed(() => ours.value?.queue ?? null)
+// Précédent reste possible au premier titre : il ramène au début du morceau.
+const canPrevious = computed(() => available.value && (queue.value ? loaded.value : has('track_skip') && skippable.value))
+const canNext = computed(() => available.value && (queue.value ? loaded.value && queue.value.index < queue.value.length - 1 : has('track_skip') && skippable.value))
+/** Titres qui attendent après le courant : pastille sur la touche File (le retour d'un « ajouter » sans toast). */
+const waiting = computed(() => (queue.value ? Math.max(0, queue.value.length - queue.value.index - 1) : 0))
+const repeat = computed<YtmusicRepeat>(() => queue.value?.repeat ?? 'off')
+const NEXT_REPEAT: Record<YtmusicRepeat, YtmusicRepeat> = { off: 'once', once: 'loop', loop: 'off' }
+const repeatLabel = computed(() => t(repeat.value === 'once' ? 'music.repeatOnce' : repeat.value === 'loop' ? 'music.repeatLoop' : 'music.repeatOff'))
 
 const NBSP = '\u00a0'
 /**
@@ -203,14 +223,28 @@ const explicit = computed(() => (props.pending
         </div>
         <MarqueeText class="bar__sub muted" :text="subtitle" />
       </div>
+      <!-- au bout du morceau, pas à droite : volume, lecteur et transfert remplissent déjà cette colonne à 1280 px -->
+      <button type="button" class="key key--small key--queue" :data-on="queueOpen ? '1' : '0'" :disabled="!entry"
+              :title="queueOpen ? $t('music.queueHide') : $t('music.queueShow')" :aria-label="queueOpen ? $t('music.queueHide') : $t('music.queueShow')"
+              :aria-pressed="queueOpen" @click="emit('toggleQueue')">
+        <StrokeIcon name="list" :size="16" />
+        <!-- posée sur le coin : elle n'élargit rien quand elle apparaît -->
+        <span class="key__badge" :class="{ 'bar--hidden': !waiting }" :title="$t('music.queueWaiting', { n: waiting }, waiting)">{{ waiting > 99 ? '99+' : waiting }}</span>
+      </button>
     </div>
 
     <!-- transport + position, au centre de l'écran -->
     <div class="bar__center">
       <div class="bar__keys">
-        <!-- emplacement vide qui répond à la touche stop : la rangée est symétrique, lecture est pile au centre -->
-        <span class="key key--ghost" aria-hidden="true" />
-        <button type="button" class="key" :disabled="!available || !has('track_skip') || !skippable"
+        <!-- répéter répond à la touche stop : la rangée est symétrique, lecture est pile au centre.
+             Le pas (« 1 » une fois, « ∞ » en boucle) vit au centre des flèches, comme les sauts de 10 s. -->
+        <button type="button" class="key key--repeat" :data-on="repeat !== 'off' ? '1' : '0'" :disabled="!available || !queue"
+                :title="repeatLabel" :aria-label="repeatLabel" :aria-pressed="repeat !== 'off'"
+                @click="emit('repeat', NEXT_REPEAT[repeat])">
+          <StrokeIcon name="repeat" :size="24" />
+          <span class="key__step" :class="{ 'bar--hidden': repeat === 'off' }" aria-hidden="true">{{ repeat === 'loop' ? '∞' : '1' }}</span>
+        </button>
+        <button type="button" class="key" :disabled="!canPrevious"
                 :title="$t('media.previous')" :aria-label="$t('media.previous')"
                 @click="emit('command', { type: 'media_player.previous' })">
           <StrokeIcon name="skipPrev" :size="18" />
@@ -234,7 +268,7 @@ const explicit = computed(() => (props.pending
           <StrokeIcon name="rotateRight" :size="24" />
           <span class="key__step" aria-hidden="true">{{ SEEK_STEP_S }}</span>
         </button>
-        <button type="button" class="key" :disabled="!available || !has('track_skip') || !skippable"
+        <button type="button" class="key" :disabled="!canNext"
                 :title="$t('media.next')" :aria-label="$t('media.next')"
                 @click="emit('command', { type: 'media_player.next' })">
           <StrokeIcon name="skipNext" :size="18" />
@@ -355,7 +389,7 @@ const explicit = computed(() => (props.pending
 .bar__keys .key { flex: 0 0 auto; width: var(--key-w); height: var(--key); border-radius: calc(var(--key) * .3); }
 /* l'icône se règle sur la HAUTEUR : en pourcentage des deux côtés, elle s'étirerait avec la touche */
 .bar__keys .key svg { height: 46%; width: auto; }
-.bar__keys .key--jump svg { height: 62%; }
+.bar__keys .key--jump svg, .bar__keys .key--repeat svg { height: 62%; }
 .key:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
 .key:disabled { opacity: .35; cursor: default; }
 .key--main { width: 46px; height: 46px; border-radius: 999px; border-color: transparent; background: var(--accent); color: var(--on-accent); }
@@ -363,9 +397,15 @@ const explicit = computed(() => (props.pending
 .bar__keys .key--main svg { height: 44%; }
 .key--main:hover:not(:disabled) { background: var(--accent); color: var(--on-accent); filter: brightness(1.06); }
 .key--main:disabled[aria-busy='true'] { opacity: .85; }
-.key--ghost { visibility: hidden; }
+.key--queue { position: relative; flex: 0 0 auto; }
+.key__badge {
+  position: absolute; top: -4px; right: -6px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px;
+  background: var(--accent); color: var(--on-accent); font-size: 10px; font-weight: 700; line-height: 16px; text-align: center;
+  font-variant-numeric: tabular-nums; pointer-events: none;
+}
+.key--queue[data-on='1'] .key__badge { background: var(--on-accent); color: var(--accent); }
 /* le pas vit AU CENTRE de la flèche (même case de grille), comme sur les lecteurs de podcast */
-.key--jump > * { grid-area: 1 / 1; }
+.key--jump > *, .key--repeat > * { grid-area: 1 / 1; }
 .key__step {
   /* assez petit pour NE PAS toucher la flèche : à 10 px sur une flèche de 22 les deux chiffres
      remplissaient le cercle bord à bord et l'ensemble devenait une tache */

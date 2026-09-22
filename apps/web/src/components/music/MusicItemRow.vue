@@ -7,6 +7,8 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 // Ligne de catalogue : pochette, titre (+ badge explicit), méta, durée / année à droite, et une
 // action — ouvrir (artiste, album, playlist : toute la ligne est le bouton) ou jouer (titre : bouton
 // play au bout). Mêmes hauteurs partout : la ligne 2 garde sa place même vide (espace insécable).
+// Un titre peut aussi rejoindre la file (`queueable` : lire ensuite, ajouter à la fin) ou en sortir
+// (`removable`) : petites touches fixes devant le bouton play, jamais au survol — rien ne bouge.
 withDefaults(defineProps<{
   art: string | null
   icon?: IconName
@@ -23,8 +25,10 @@ withDefaults(defineProps<{
   disabled?: boolean
   selected?: boolean
   playLabel?: string
-}>(), { icon: 'music', round: false, explicit: false, meta: '', dur: '', year: null, busy: false, disabled: false, selected: false, playLabel: undefined })
-defineEmits<{ open: []; play: [] }>()
+  queueable?: boolean
+  removable?: boolean
+}>(), { icon: 'music', round: false, explicit: false, meta: '', dur: '', year: null, busy: false, disabled: false, selected: false, playLabel: undefined, queueable: false, removable: false })
+defineEmits<{ open: []; play: []; playNext: []; addEnd: []; remove: [] }>()
 </script>
 
 <template>
@@ -44,7 +48,22 @@ defineEmits<{ open: []; play: [] }>()
       </div>
     </div>
     <StrokeIcon v-if="action === 'open'" name="chevron" :size="16" class="chev" />
-    <PlayButton v-else :disabled="disabled" :busy="busy" :label="playLabel" @click="$emit('play')" />
+    <template v-else>
+      <template v-if="queueable">
+        <button type="button" class="mini" :disabled="disabled" :title="$t('music.playNext')" :aria-label="$t('music.playNext')" @click.stop="$emit('playNext')">
+          <StrokeIcon name="queueNext" :size="18" />
+        </button>
+        <button type="button" class="mini" :disabled="disabled" :title="$t('music.addToQueue')" :aria-label="$t('music.addToQueue')" @click.stop="$emit('addEnd')">
+          <StrokeIcon name="queueAdd" :size="18" />
+        </button>
+      </template>
+      <!-- le titre qui joue ne sort pas de la file : sa touche garde sa place, invisible -->
+      <button v-if="removable" type="button" class="mini" :class="{ 'is-hidden': selected }" :disabled="selected" :tabindex="selected ? -1 : 0"
+              :title="$t('music.queueRemove')" :aria-label="$t('music.queueRemove')" @click.stop="$emit('remove')">
+        <StrokeIcon name="close" :size="16" />
+      </button>
+      <PlayButton :disabled="disabled" :busy="busy" :label="playLabel" @click="$emit('play')" />
+    </template>
   </component>
 </template>
 
@@ -69,4 +88,11 @@ defineEmits<{ open: []; play: [] }>()
 .dur, .year { flex: 0 0 auto; font-variant-numeric: tabular-nums; white-space: nowrap; line-height: 1.1; }
 .year { min-width: 2.75rem; text-align: right; }
 .chev { color: var(--muted); flex: 0 0 auto; }
+.mini {
+  flex: 0 0 auto; display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 10px;
+  background: transparent; color: var(--muted); transition: background .15s, color .15s;
+}
+.mini:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); }
+.mini:disabled { opacity: .35; }
+.is-hidden { visibility: hidden; }
 </style>

@@ -122,7 +122,11 @@
     "stop": "Arrêter", "onDevice": "sur {name}",
     "filterPlayers": "Filtrer les lecteurs", "favorites": "Favoris", "otherPlayers": "Autres lecteurs",
     "favoriteAdd": "Ajouter aux favoris", "locate": "Voir dans la maison", "favoriteRemove": "Retirer des favoris",
-    "stereo": "stéréo", "streamSource": "source {format}", "megabytes": "{size} Mo"
+    "stereo": "stéréo", "streamSource": "source {format}", "megabytes": "{size} Mo",
+    "queue": "File d'attente", "queueShow": "Voir la file d'attente", "queueHide": "Fermer la file d'attente", "queueClear": "Vider la file",
+    "queueEmpty": "Rien ne joue depuis Kasbah sur ce lecteur.", "queueNothingNext": "Rien après ce titre.", "queueRemove": "Retirer de la file",
+    "queueWaiting": "{n} titre en attente | {n} titres en attente", "playAll": "Tout lire", "playNext": "Lire ensuite", "addToQueue": "Ajouter à la fin de la file",
+    "repeatOff": "Répéter le titre", "repeatOnce": "Titre rejoué une fois — toucher pour le rejouer en boucle", "repeatLoop": "Titre en boucle — toucher pour arrêter de répéter"
   },
 
   "ytmusic": {
