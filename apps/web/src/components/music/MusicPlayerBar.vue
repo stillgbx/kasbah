@@ -2,7 +2,7 @@
 import { computed, ref, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CommandInput, DeviceEntry, StateFor } from '@kasbah/shared'
-import { formatClock, useMediaPosition } from '../../composables/useMediaPosition'
+import { formatClock, useMediaPosition, useSeekHold } from '../../composables/useMediaPosition'
 import { deviceIcon } from '../../lib/deviceIcons'
 import ArtThumb from '../ui/ArtThumb.vue'
 import MarqueeText from '../ui/MarqueeText.vue'
@@ -84,18 +84,16 @@ const position = computed<number | undefined>(() => {
   if (rawPosition.value === undefined) return undefined
   return duration.value ? Math.min(rawPosition.value, duration.value) : rawPosition.value
 })
-// Curseur : valeur locale pendant le glissement, puis `seek`. Après le relâcher, elle reste affichée
-// tant que le lecteur n'a pas publié une position NOUVELLE — sinon le curseur revenait au dernier
-// relevé, d'avant le geste, avant de rejoindre la position demandée.
-const seekDraft = ref<number | null>(null)
-const holding = ref(false)
-watch(() => state.value?.nowPlaying?.positionS, () => { if (holding.value) { holding.value = false; seekDraft.value = null } })
-watch(() => props.entry?.descriptor.id, () => { holding.value = false; seekDraft.value = null })
+// Curseur : valeur locale pendant le glissement, puis tenu jusqu'à un relevé proche de la cible —
+// sinon un vieux sondage faisait rebondir le pouce (clic → ancienne position → cible).
+const { seekDraft, beginSeek } = useSeekHold(
+  toRef(() => state.value?.nowPlaying?.positionS),
+  toRef(() => props.entry?.descriptor.id),
+)
 const canSeek = computed(() => hasDuration.value && !live.value && loaded.value && has('seek'))
 const shownPosition = computed(() => seekDraft.value ?? position.value ?? 0)
 function seekEnd(v: number) {
-  holding.value = true
-  emit('seek', Math.round(v))
+  emit('seek', beginSeek(v))
 }
 
 // ---- volume : sourdine, −, curseur, +, valeur — comme la carte du panneau appareil ------------------

@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, ref, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CommandInput, DeviceDescriptor, StateFor } from '@kasbah/shared'
+import { useMediaPosition, useSeekHold } from '../../composables/useMediaPosition'
 import MarqueeText from '../ui/MarqueeText.vue'
 
 // Contrôle d'un lecteur dans le panneau appareil. Règle « rien ne doit bouger » (voir le wiki,
@@ -39,15 +40,12 @@ const details = computed(() => {
 const NBSP = '\u00a0'
 const line1 = computed(() => details.value[0] || NBSP)
 const line2 = computed(() => details.value[1] || NBSP)
-// Une durée n'est une durée que POSITIVE : un lecteur peut en annoncer une absurde pour dire
-// « inconnue » (Prime Video : `-0.001`), et elle écrasait alors la position et les deux temps.
-const duration = computed(() => {
-  const d = props.state.nowPlaying?.durationS
-  return d !== undefined && d > 0 ? d : undefined
-})
+// Position, durée et curseur tenu : les mêmes règles que la barre de la page Musique
+// (`useMediaPosition`, `useSeekHold`) — une durée n'est une durée que positive, la position avance
+// localement entre deux relevés et se fige net à la pause, et après un déplacement le curseur reste
+// sur la cible tant qu'un vieux sondage la contredit.
+const { position, duration, hasPosition } = useMediaPosition(toRef(() => props.state))
 const hasDuration = computed(() => duration.value !== undefined)
-/** Position connue : une lecture sans durée (direct, appli native) en a une, et elle vaut d'être lue. */
-const hasPosition = computed(() => props.state.nowPlaying?.positionS !== undefined)
 // Précédent / lecture / suivant n'ont de sens que sur une session chargée (lecture ou pause) : au repos, ou
 // appli à l'écran sans canal média (`on`, Netflix), le plugin refuserait — les touches sont grisées, comme
 // dans la vue Médias. Le volume, lui, reste réglable.
@@ -58,31 +56,13 @@ const loaded = computed(() => props.state.playback === 'playing' || props.state.
 const live = computed(() => props.state.nowPlaying?.live === true)
 const skippable = computed(() => loaded.value && !live.value)
 
-// Position : l'appareil ne la pousse pas, le plugin la relit toutes les dix secondes. Entre deux
-// relevés, on la fait avancer ICI à la seconde tant que ça joue, à partir du dernier relevé reçu
-// (repère local, posé quand la position ou le morceau change — pas `updatedAt`, qu'un simple
-// changement de volume ferait bouger). Le relevé suivant recale, sans à-coup visible.
-const anchor = ref({ pos: 0, at: 0 })
-watch(() => [props.state.nowPlaying?.positionS, props.state.nowPlaying?.title, props.state.playback] as const,
-  () => { anchor.value = { pos: props.state.nowPlaying?.positionS ?? 0, at: Date.now() } }, { immediate: true })
-const now = ref(Date.now())
-let ticker: ReturnType<typeof setInterval> | undefined
-onMounted(() => { ticker = setInterval(() => { if (props.state.playback === 'playing') now.value = Date.now() }, 500) })
-onBeforeUnmount(() => clearInterval(ticker))
-const position = computed<number | undefined>(() => {
-  const n = props.state.nowPlaying
-  if (!n) return undefined
-  const p = props.state.playback === 'playing' ? anchor.value.pos + (now.value - anchor.value.at) / 1000 : (n.positionS ?? 0)
-  return duration.value ? Math.min(p, duration.value) : p
-})
 // Curseur de position : valeur locale pendant le glissement, puis `media_player.seek` au relâcher.
 // Le curseur n'agit que sur un morceau à durée (un direct n'en a pas) et si l'appareil sait se placer.
-const seekDraft = ref<number | null>(null)
+const { seekDraft, beginSeek } = useSeekHold(toRef(() => props.state.nowPlaying?.positionS), toRef(() => props.descriptor.id))
 const canSeek = computed(() => hasDuration.value && has('seek') && !live.value)
 const shownPosition = computed(() => seekDraft.value ?? position.value ?? 0)
 function seekEnd(v: number) {
-  seekDraft.value = null
-  emit('command', { type: 'media_player.seek', positionS: Math.round(v) })
+  emit('command', { type: 'media_player.seek', positionS: beginSeek(v) })
 }
 
 // Volume par pas de 5, depuis la valeur AFFICHÉE (le curseur peut être en avance sur l'état)

@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import type { DeviceDescriptor, StateFor } from '@kasbah/shared'
+import { SEEK_HOLD_MIN_MS } from '../../composables/useMediaPosition'
 import MediaPlayerControl from './MediaPlayerControl.vue'
 
 // Ce qu'un lecteur affiche quand il ne dit presque rien : appli native d'une TV Android (Prime Video),
@@ -61,5 +62,30 @@ describe('MediaPlayerControl', () => {
     expect(times(w).exists()).toBe(true)
     expect(hidden(w, '.now__times')).toBe(true)
     expect(hidden(w, '.now__seek')).toBe(true)
+  })
+
+  it('keeps the seek draft until the published position nears the target', async () => {
+    vi.useFakeTimers()
+    try {
+      const state = { ...base, playback: 'paused' as const, nowPlaying: { title: 'Terracotta', positionS: 40, durationS: 200 } }
+      const w = mount(MediaPlayerControl, { props: { descriptor, state } })
+      const sliders = w.findAllComponents({ name: 'VSlider' })
+      // premier VSlider = position ; le second est le volume
+      await sliders[0]!.vm.$emit('end', 120)
+      expect(w.emitted('command')?.[0]).toEqual([{ type: 'media_player.seek', positionS: 120 }])
+      expect(times(w).text().startsWith('2:00')).toBe(true)
+
+      // écho optimiste puis relevé d'avant le geste : la cible reste affichée
+      await w.setProps({ state: { ...state, nowPlaying: { ...state.nowPlaying, positionS: 120 } } })
+      await w.setProps({ state: { ...state, nowPlaying: { ...state.nowPlaying, positionS: 42 } } })
+      expect(times(w).text().startsWith('2:00')).toBe(true)
+
+      // le vrai relevé, après la tenue minimale
+      vi.advanceTimersByTime(SEEK_HOLD_MIN_MS + 100)
+      await w.setProps({ state: { ...state, nowPlaying: { ...state.nowPlaying, positionS: 119 } } })
+      expect(times(w).text().startsWith('1:59')).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
