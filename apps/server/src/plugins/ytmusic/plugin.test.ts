@@ -915,6 +915,29 @@ describe('ytmusic plugin', () => {
     await plugin.stop()
   })
 
+  it('gives album tracks the album art, artist and title from the header (the rows carry neither)', async () => {
+    const music = fakeMusic()
+    music.music.getAlbum = async () => ({
+      header: {
+        type: 'MusicResponsiveHeader',
+        title: { text: 'OK Computer' },
+        subtitle: { runs: [{ text: 'Album' }, { text: ' • ' }, { text: '1997' }] },
+        strapline_text_one: { text: 'Radiohead' },
+        thumbnail: { type: 'MusicThumbnail', contents: [{ url: 'https://yt3.googleusercontent.com/ok=w544-h544', width: 544, height: 544 }] },
+      },
+      // telle que YouTube Music la rend : ni artistes, ni vignette, un compteur d'écoutes en sous-titre
+      contents: [{ id: 'vAirbag', item_type: 'song', title: 'Airbag', duration: { seconds: 284 }, subtitle: { text: '19M plays' } }],
+    })
+    const { plugin, app } = await boot({ createSession: async () => music })
+    await app.inject({ method: 'PUT', url: '/api/plugins/ytmusic/cookie', payload: { cookie: COOKIE } })
+    const r = await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/albums/MPREb_ok' })
+    const [track] = r.json().tracks
+    expect(track).toMatchObject({ videoId: 'vAirbag', artists: ['Radiohead'], album: 'OK Computer', year: '1997' })
+    expect(track.artUrl).toMatch(/^https:\/\/yt3\.googleusercontent\.com\/ok=/)
+    await app.close()
+    await plugin.stop()
+  })
+
   it('execute always refuses', async () => {
     const { plugin, app } = await boot()
     await expect(plugin.execute('x', { type: 'media_player.play' })).rejects.toBeInstanceOf(PluginError)

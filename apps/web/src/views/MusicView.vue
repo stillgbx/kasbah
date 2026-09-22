@@ -149,13 +149,13 @@ const releasesSimple = computed(() => withoutExplicit([...searchAlbums.value, ..
 const artistsSimple = computed(() => searchArtists.value.slice(0, SIMPLE_MAX))
 const tracksSimple = computed(() => withoutExplicit(searchTracks.value).slice(0, SIMPLE_MAX))
 const advancedSections = computed(() => [
-  { key: 'artists', title: t('ytmusic.sectionArtists'), sort: sortArtists, options: sortOptionsName.value, items: artistsView.value.map((a) => ({ id: a.id, art: a.artUrl, title: a.name, meta: a.subscribers ?? '', open: () => openArtist(a) })), round: true, icon: 'person' as const },
+  { key: 'artists', title: t('ytmusic.sectionArtists'), sort: sortArtists, options: sortOptionsName.value, items: artistsView.value.map((a) => ({ id: a.id, art: a.artUrl, title: a.name, meta: a.subscribers ?? '', open: () => openArtist(a), play: () => playArtist(a) })), round: true, icon: 'person' as const },
   { key: 'albums', title: t('ytmusic.sectionAlbums'), sort: sortAlbums, options: sortOptionsDated.value, items: albumsView.value.map(releaseItem), round: false, icon: 'disc' as const },
   { key: 'singles', title: t('ytmusic.sectionEp'), sort: sortSingles, options: sortOptionsDated.value, items: singlesView.value.map(releaseItem), round: false, icon: 'disc' as const },
   { key: 'compilations', title: t('ytmusic.sectionCompil'), sort: sortCompilations, options: sortOptionsDated.value, items: compilationsView.value.map(releaseItem), round: false, icon: 'disc' as const },
 ].filter((s) => s.items.length))
 function releaseItem(al: YtmusicAlbum) {
-  return { id: al.id, art: al.artUrl, title: al.title, meta: albumMeta(al), year: al.year ?? null, explicit: !!al.explicit, open: () => openAlbum(al) }
+  return { id: al.id, art: al.artUrl, title: al.title, meta: albumMeta(al), year: al.year ?? null, explicit: !!al.explicit, open: () => openAlbum(al), play: () => playAlbum(al) }
 }
 
 const searchEmpty = computed(() =>
@@ -538,6 +538,20 @@ async function play(track: YtmusicTrack, list: YtmusicTrack[] = [track]) {
   }
 }
 
+/** Album ou artiste joué d'un geste (sa tuile, sa ligne) : ses titres deviennent la file, depuis le premier. */
+const playingCollection = ref<string | null>(null)
+async function playCollection(id: string, load: () => Promise<{ tracks: YtmusicTrack[] }>) {
+  playingCollection.value = id
+  try {
+    const list = withoutExplicit((await load()).tracks)
+    if (list.length) await play(list[0]!, list)
+    else notifications.error(t('ytmusic.empty'))
+  } catch (err) { fail(err) }
+  finally { playingCollection.value = null }
+}
+const playAlbum = (al: YtmusicAlbum) => playCollection(al.id, () => getTransport().ytmusicAlbum(al.id))
+const playArtist = (ar: YtmusicArtist) => playCollection(ar.id, () => getTransport().ytmusicArtist(ar.id))
+
 watch(browseTab, () => { queueOpen.value = false; if (linked.value && !searched.value) void loadBrowseTab() })
 const playTarget = computed(() => !!selected.value && canReceive(selected.value))
 /** Une recherche est partie et sa réponse n'est pas là : la zone des résultats montre des squelettes. */
@@ -650,13 +664,15 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
               <section v-if="artistsSimple.length" class="shelf">
                 <div class="shelf__head"><h2 class="section-label">{{ $t('ytmusic.sectionArtists') }}</h2><button type="button" class="see-all" @click="advanced = true">{{ $t('music.seeAll') }}</button></div>
                 <div class="shelf__row">
-                  <MusicTile v-for="ar in artistsSimple" :key="ar.id" action="open" round icon="person" :art="ar.artUrl" :title="ar.name" :meta="ar.subscribers ?? ''" @open="openArtist(ar)" />
+                  <MusicTile v-for="ar in artistsSimple" :key="ar.id" action="open" playable round icon="person" :art="ar.artUrl" :title="ar.name" :meta="ar.subscribers ?? ''"
+                             :disabled="!playTarget" :busy="playingCollection === ar.id" :play-label="$t('music.playAll')" @open="openArtist(ar)" @play="playArtist(ar)" />
                 </div>
               </section>
               <section v-if="releasesSimple.length" class="shelf">
                 <div class="shelf__head"><h2 class="section-label">{{ $t('ytmusic.sectionAlbums') }}</h2><button type="button" class="see-all" @click="advanced = true">{{ $t('music.seeAll') }}</button></div>
                 <div class="shelf__row">
-                  <MusicTile v-for="al in releasesSimple" :key="al.id" action="open" icon="disc" :art="al.artUrl" :title="al.title" :meta="[albumMeta(al), al.year].filter(Boolean).join(' · ')" @open="openAlbum(al)" />
+                  <MusicTile v-for="al in releasesSimple" :key="al.id" action="open" playable icon="disc" :art="al.artUrl" :title="al.title" :meta="[albumMeta(al), al.year].filter(Boolean).join(' · ')"
+                             :disabled="!playTarget" :busy="playingCollection === al.id" :play-label="$t('music.playAll')" @open="openAlbum(al)" @play="playAlbum(al)" />
                 </div>
               </section>
               <section v-if="tracksSimple.length" class="shelf">
@@ -677,8 +693,9 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
                   <Segmented v-model="sec.sort.value" dense fill :options="sec.options" :label="$t('ytmusic.sortLabel')" />
                 </div>
                 <div class="list">
-                  <MusicItemRow v-for="it in sec.items" :key="it.id" action="open" :round="sec.round" :icon="sec.icon" :art="it.art" :title="it.title"
-                                :explicit="'explicit' in it && it.explicit" :meta="it.meta" :year="'year' in it ? it.year : null" @open="it.open()" />
+                  <MusicItemRow v-for="it in sec.items" :key="it.id" action="open" playable :round="sec.round" :icon="sec.icon" :art="it.art" :title="it.title"
+                                :explicit="'explicit' in it && it.explicit" :meta="it.meta" :year="'year' in it ? it.year : null"
+                                :disabled="!playTarget" :busy="playingCollection === it.id" :play-label="$t('music.playAll')" @open="it.open()" @play="it.play()" />
                 </div>
               </section>
               <section v-if="tracksView.length" class="section">

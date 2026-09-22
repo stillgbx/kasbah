@@ -1,15 +1,18 @@
 <script setup lang="ts">
 import type { IconName } from '../../lib/strokeIcons'
 import ArtThumb from '../ui/ArtThumb.vue'
-import PlayButton from '../ui/PlayButton.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
+import ArtPlay from './ArtPlay.vue'
 
 // Ligne de catalogue : pochette, titre (+ badge explicit), méta, durée / année à droite, et une
-// action — ouvrir (artiste, album, playlist : toute la ligne est le bouton) ou jouer (titre : bouton
-// play au bout). Mêmes hauteurs partout : la ligne 2 garde sa place même vide (espace insécable).
+// action — ouvrir (artiste, album, playlist : toute la ligne s'ouvre) ou jouer (titre). La lecture est
+// un cercle au milieu de la pochette ; une ligne qui s'ouvre peut aussi se jouer (`playable`). Mêmes
+// hauteurs partout : la ligne 2 garde sa place même vide (espace insécable).
 // Un titre peut aussi rejoindre la file (`queueable` : lire ensuite, ajouter à la fin) ou en sortir
-// (`removable`) : petites touches fixes devant le bouton play, jamais au survol — rien ne bouge.
-withDefaults(defineProps<{
+// (`removable`) : petites touches à droite. Lecture et touches n'apparaissent qu'au SURVOL de la
+// ligne (toujours là sur un écran tactile, qui n'en a pas) ; leur place est gardée — rien ne bouge.
+// La racine est un `div` : un bouton de lecture ne peut pas vivre dans un `<button>`.
+const props = withDefaults(defineProps<{
   art: string | null
   icon?: IconName
   round?: boolean
@@ -21,21 +24,27 @@ withDefaults(defineProps<{
   /** Dernière colonne (année). */
   year?: string | null
   action: 'open' | 'play'
+  /** Une ligne qui s'ouvre (album, artiste) peut aussi se jouer d'un geste. */
+  playable?: boolean
   busy?: boolean
   disabled?: boolean
   selected?: boolean
   playLabel?: string
   queueable?: boolean
   removable?: boolean
-}>(), { icon: 'music', round: false, explicit: false, meta: '', dur: '', year: null, busy: false, disabled: false, selected: false, playLabel: undefined, queueable: false, removable: false })
-defineEmits<{ open: []; play: []; playNext: []; addEnd: []; remove: [] }>()
+}>(), { icon: 'music', round: false, explicit: false, meta: '', dur: '', year: null, busy: false, disabled: false, selected: false, playLabel: undefined, queueable: false, removable: false, playable: false })
+const emit = defineEmits<{ open: []; play: []; playNext: []; addEnd: []; remove: [] }>()
+const open = () => { if (props.action === 'open') emit('open') }
 </script>
 
 <template>
-  <component :is="action === 'open' ? 'button' : 'div'" :type="action === 'open' ? 'button' : undefined"
-             class="row" :class="{ 'row--open': action === 'open' }" :data-selected="selected ? '1' : '0'"
-             @click="action === 'open' && $emit('open')">
-    <ArtThumb :src="art" :icon="icon" :round="round" />
+  <div class="row" :class="{ 'row--open': action === 'open' }" :data-selected="selected ? '1' : '0'"
+       :role="action === 'open' ? 'button' : undefined" :tabindex="action === 'open' ? 0 : undefined"
+       @click="open" @keydown.enter.self="open" @keydown.space.self.prevent="open">
+    <div class="row__art" :class="{ 'row__art--round': round }">
+      <ArtThumb :src="art" :icon="icon" :round="round" />
+      <ArtPlay v-if="action === 'play' || playable" :size="30" :disabled="disabled" :busy="busy" :label="playLabel" @click="$emit('play')" />
+    </div>
     <div class="min0">
       <div class="line1">
         <div class="title">{{ title }}</div>
@@ -62,9 +71,8 @@ defineEmits<{ open: []; play: []; playNext: []; addEnd: []; remove: [] }>()
               :title="$t('music.queueRemove')" :aria-label="$t('music.queueRemove')" @click.stop="$emit('remove')">
         <StrokeIcon name="close" :size="16" />
       </button>
-      <PlayButton :disabled="disabled" :busy="busy" :label="playLabel" @click="$emit('play')" />
     </template>
-  </component>
+  </div>
 </template>
 
 <style scoped>
@@ -95,4 +103,14 @@ defineEmits<{ open: []; play: []; playNext: []; addEnd: []; remove: [] }>()
 .mini:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); }
 .mini:disabled { opacity: .35; }
 .is-hidden { visibility: hidden; }
+.row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.row__art { position: relative; flex: 0 0 auto; border-radius: 8px; overflow: hidden; }
+.row__art--round { border-radius: 999px; }
+/* lecture et touches de file : au survol de la ligne seulement, place gardée ; pendant l'envoi le sablier reste */
+@media (hover: hover) {
+  .row :deep(.art-play), .row .mini { opacity: 0; }
+  .row:hover :deep(.art-play), .row:focus-within :deep(.art-play), .row :deep(.art-play[aria-busy='true']),
+  .row:hover .mini:not(:disabled), .row:focus-within .mini:not(:disabled) { opacity: 1; }
+  .row:hover .mini:disabled { opacity: .35; }
+}
 </style>

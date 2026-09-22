@@ -127,7 +127,8 @@ function itemToRawTrack(item: unknown): RawTrack | null {
   // Music Video (TwoRow) : souvent pas de `artists[]`, crédit dans le sous-titre.
   if (!artists.length) {
     const parts = subtitlePartsOf(o).map((p) => p.trim()).filter(Boolean)
-    const skip = /^(views?|view|vues?|\d[\d.,]*\s*[kmb]?\s*views?)$/i
+    // un compteur (vues, écoutes) n'est pas un artiste : la ligne d'un titre d'ALBUM n'a que lui
+    const skip = /^(views?|view|vues?|\d[\d.,]*\s*[kmb]?\s*(views?|vues|plays?|lectures|(d['’]\s*)?écoutes))$/i
     for (const p of parts) {
       if (skip.test(p) || /^[12]\d{3}$/.test(p)) continue
       if (p.includes('·') || p.includes('•')) continue
@@ -1016,12 +1017,17 @@ export class YtmusicCatalog {
       const albumYear = header
         ? runTexts(header.subtitle).find((p) => /^[12]\d{3}$/.test(p)) ?? null
         : null
+      // Les lignes d'une page d'album n'ont ni pochette ni artiste : les deux sont dans l'en-tête.
+      const albumArt = header ? bestThumb(thumbsOf(header)) : null
+      const albumArtist = header ? textOf(header.strapline_text_one) : null
+      const albumTitle = header ? textOf(header.title) : null
       const items = album.contents ?? []
       const raws = items.map(itemToRawTrack).filter((r): r is RawTrack => !!r)
-      if (albumYear) {
-        for (const r of raws) {
-          if (!r.year) r.year = albumYear
-        }
+      for (const r of raws) {
+        if (!r.year && albumYear) r.year = albumYear
+        if (!r.artUrl && albumArt) r.artUrl = albumArt
+        if (!r.artists?.length && albumArtist) r.artists = [albumArtist]
+        if (!r.album && albumTitle) r.album = albumTitle
       }
       return mapTracks(raws)
     })
