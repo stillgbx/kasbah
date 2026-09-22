@@ -900,6 +900,41 @@ describe('marqueurs 3D', () => {
     expect([p.width, p.height, p.depth]).toEqual([0.59, 0.17, 0.59])
     expect(box.rotation.z).toBeCloseTo(Math.PI / 2)      // il se pose contre son mur, comme le thermostat
   })
+
+  it("une enceinte prend la silhouette demandée : cylindre, galet, barre ou bloc orientable", () => {
+    const speaker = {
+      id: 'p:s', pluginId: 'p', externalId: 's', kind: 'media_player', name: 'Enceinte', capabilities: [],
+      meta: { mediaPlayer: { deviceClass: 'speaker' } },
+    } as unknown as DeviceDescriptor
+    // défaut (champ absent) : cylindre debout, sans yaw
+    const tube = meshes(marker(device({ yaw: 90 }), speaker).object)[0]!
+    expect(tube.geometry).toBeInstanceOf(CylinderGeometry)
+    const tubeP = (tube.geometry as CylinderGeometry).parameters
+    expect([tubeP.radiusTop, tubeP.height]).toEqual([0.13, 0.32])
+    expect(tube.rotation.x).toBeCloseTo(Math.PI / 2)     // axe Y → Z-up
+    expect(tube.rotation.z).toBe(0)                      // un tube n'a pas de face
+
+    // galet : cylindre court, toujours sans yaw
+    const pebble = meshes(marker(device({ speakerShape: 'pebble', yaw: 90 }), speaker).object)[0]!
+    expect(pebble.geometry).toBeInstanceOf(CylinderGeometry)
+    const pebbleP = (pebble.geometry as CylinderGeometry).parameters
+    expect([pebbleP.radiusTop, pebbleP.height]).toEqual([0.14, 0.1])
+    expect(pebble.rotation.z).toBe(0)
+
+    // barre : boîte allongée, yaw appliqué
+    const bar = meshes(marker(device({ speakerShape: 'bar', yaw: 90 }), speaker).object)[0]!
+    expect(bar.geometry).toBeInstanceOf(BoxGeometry)
+    const barP = (bar.geometry as BoxGeometry).parameters
+    expect([barP.width, barP.height, barP.depth]).toEqual([0.55, 0.08, 0.07])
+    expect(bar.rotation.z).toBeCloseTo(Math.PI / 2)
+
+    // bloc-réveil : petit rectangle, yaw appliqué (face avant)
+    const block = meshes(marker(device({ speakerShape: 'block', yaw: 90 }), speaker).object)[0]!
+    expect(block.geometry).toBeInstanceOf(BoxGeometry)
+    const blockP = (block.geometry as BoxGeometry).parameters
+    expect([blockP.width, blockP.height, blockP.depth]).toEqual([0.14, 0.08, 0.1])
+    expect(block.rotation.z).toBeCloseTo(Math.PI / 2)
+  })
 })
 
 describe('tap sur le toit', () => {

@@ -368,13 +368,23 @@ describe("ce qui a une orientation reglable", () => {
     expect(isOrientable(dev, desc('water'))).toBe(true)
   })
 
-  it("ni une enceinte, ni une lampe, ni un capteur n'ont d'orientation utile", () => {
-    expect(isOrientable(dev, desc('media_player', { mediaPlayer: { deviceClass: 'speaker' } }))).toBe(false)
+  it("ni une enceinte cylindre/galet, ni une lampe, ni un capteur n'ont d'orientation utile", () => {
+    const speaker = desc('media_player', { mediaPlayer: { deviceClass: 'speaker' } })
+    expect(isOrientable(dev, speaker)).toBe(false)
+    expect(isOrientable({ ...dev, speakerShape: 'pebble' }, speaker)).toBe(false)
     expect(isOrientable(dev, desc('light'))).toBe(false)
     expect(isOrientable(dev, desc('sensor'))).toBe(false)
     // sans descripteur, seul un `yaw` deja pose dans le JSON fait foi
     expect(isOrientable(dev, undefined)).toBe(false)
     expect(isOrientable({ ...dev, yaw: 90 }, undefined)).toBe(true)
+  })
+
+  it("une barre de son ou un bloc-réveil s'orientent : leur face a un sens", () => {
+    const speaker = desc('media_player', { mediaPlayer: { deviceClass: 'speaker' } })
+    expect(isOrientable({ ...dev, speakerShape: 'bar' }, speaker)).toBe(true)
+    expect(isOrientable({ ...dev, speakerShape: 'block' }, speaker)).toBe(true)
+    // mediaClass absent = speaker par défaut : la barre reste orientable
+    expect(isOrientable({ ...dev, speakerShape: 'bar' }, desc('media_player'))).toBe(true)
   })
 
   it("un ouvrant LIBRE s'oriente et se dimensionne, un ouvrant lie a une ouverture non", () => {

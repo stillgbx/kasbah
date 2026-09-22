@@ -107,6 +107,10 @@ export const isSurfaceOpening = (type: OpeningType): type is SurfaceOpeningType 
 export const OPENING_MATERIALS = ['wood', 'metal', 'glass', 'fabric'] as const
 export type OpeningMaterial = (typeof OPENING_MATERIALS)[number]
 
+/** Silhouette 3D d'une enceinte (`media_player` speaker) : cylindre, galet, barre, bloc. */
+export const SPEAKER_SHAPES = ['default', 'pebble', 'bar', 'block'] as const
+export type SpeakerShape = (typeof SPEAKER_SHAPES)[number]
+
 /** Bornes du nombre de vantaux. Dix : au-delà, ce n'est plus une ouverture, c'est une façade. */
 export const MIN_OPENING_LEAVES = 1
 export const MAX_OPENING_LEAVES = 10
@@ -332,6 +336,11 @@ export const houseDeviceSchema = z.object({
    * Absent = un seul, sauf un portail, qui en a deux.
    */
   leaves: z.union([z.literal(1), z.literal(2)]).optional(),
+  /**
+   * Silhouette 3D d'une enceinte (`SPEAKER_SHAPES`). Absente = cylindre (`default`). Sans effet sur
+   * un téléviseur ou un écran, qui ont déjà leur propre géométrie.
+   */
+  speakerShape: z.enum(SPEAKER_SHAPES).optional(),
   /**
    * Matière d'un ouvrant (`OPENING_MATERIALS`), comme `Opening.material` l'est d'une menuiserie.
    * Absente, la scène garde la matière d'ouvrant du style de rendu. Préfixée `cover` — `style.color`

@@ -83,6 +83,13 @@ function waveMaterial(color: Color, directional: boolean): ShaderMaterial {
 }
 
 /** Petit objet neutre (capteur, PAC, borne, énergie…). */
+/** Encombrement d'une barre de son (m) : largeur × profondeur × hauteur. */
+const SPEAKER_BAR = { w: 0.55, d: 0.08, h: 0.07 } as const
+/** Galet : cylindre court (m) — rayon × hauteur avant rotation Z-up. */
+const SPEAKER_PEBBLE = { r: 0.14, h: 0.1 } as const
+/** Petit bloc rectangulaire (m) : réveil / Nest Hub Mini — largeur × profondeur × hauteur. */
+const SPEAKER_BLOCK = { w: 0.14, d: 0.08, h: 0.1 } as const
+
 export class GenericMarker extends DeviceMarker {
   private mesh: Mesh
   /** Lecteur en lecture : anneaux concentriques qui s'élargissent et s'estompent, comme une onde sonore. */
@@ -107,8 +114,9 @@ export class GenericMarker extends DeviceMarker {
     super(device, ctx)
     const kind = ctx.descriptor?.kind ?? device.kind
     let geometry
-    // un lecteur prend la forme de sa nature : enceinte (cylindre), téléviseur (écran plat), écran connecté (petite dalle)
+    // un lecteur prend la forme de sa nature : enceinte (cylindre / galet / barre), téléviseur, écran
     const mediaClass = kind === 'media_player' ? ctx.descriptor?.meta.mediaPlayer?.deviceClass ?? 'speaker' : undefined
+    const speakerShape = mediaClass === 'speaker' ? (device.speakerShape ?? 'default') : undefined
     // dalle TV : JSON ou défaut 1 × 0,56 — lue une fois pour le chassis, la pilule et la pochette
     const tvSize = mediaClass === 'tv' ? coverSize(device, ctx.descriptor) : undefined
     // un appareil de chauffage prend la forme de ce qu'il EST : pastille murale pour un thermostat,
@@ -124,6 +132,18 @@ export class GenericMarker extends DeviceMarker {
           this.setLift(tvSize.height + 0.24)
         }
         else if (mediaClass === 'display') { geometry = new BoxGeometry(0.25, 0.08, 0.16); this.setLift(0.35) }
+        else if (speakerShape === 'pebble') {
+          geometry = new CylinderGeometry(SPEAKER_PEBBLE.r, SPEAKER_PEBBLE.r, SPEAKER_PEBBLE.h, 24)
+          this.setLift(0.28)
+        }
+        else if (speakerShape === 'bar') {
+          geometry = new BoxGeometry(SPEAKER_BAR.w, SPEAKER_BAR.d, SPEAKER_BAR.h)
+          this.setLift(0.28)
+        }
+        else if (speakerShape === 'block') {
+          geometry = new BoxGeometry(SPEAKER_BLOCK.w, SPEAKER_BLOCK.d, SPEAKER_BLOCK.h)
+          this.setLift(0.28)
+        }
         else { geometry = new CylinderGeometry(0.13, 0.13, 0.32, 20); this.setLift(0.5) }
         break
       // Deux objets sous le même kind, comme pour `energy`. Un THERMOSTAT est une pastille contre le
@@ -158,12 +178,17 @@ export class GenericMarker extends DeviceMarker {
     // lui, est une pastille couchée contre son mur : il garde l'axe du cylindre à l'horizontale.
     if (geometry instanceof CylinderGeometry && kind !== 'climate') this.mesh.rotation.x = Math.PI / 2
     if (kind === 'media_player') {
-      this.mesh.position.z = tvSize ? tvSize.height / 2 : mediaClass === 'display' ? 0.08 : 0.16
+      this.mesh.position.z = tvSize ? tvSize.height / 2
+        : mediaClass === 'display' ? 0.08
+        : speakerShape === 'bar' ? SPEAKER_BAR.h / 2
+        : speakerShape === 'block' ? SPEAKER_BLOCK.h / 2
+        : speakerShape === 'pebble' ? SPEAKER_PEBBLE.h / 2
+        : 0.16
     }
     // ce qui regarde quelque part, et ce qui se pose contre un mur, suivent leur `yaw` (0 = face à
-    // +y) : un écran, mais aussi une borne de recharge, une batterie ou le boîtier d'une passerelle.
-    // Un cylindre d'enceinte, lui, n'en a pas besoin.
-    if (mediaClass === 'tv' || mediaClass === 'display' || kind === 'ev_charger' || kind === 'energy' || kind === 'climate' || kind === 'water') {
+    // +y) : un écran, une barre de son, un bloc-réveil, mais aussi une borne de recharge, une batterie…
+    // Un cylindre / galet d'enceinte, lui, n'en a pas besoin.
+    if (mediaClass === 'tv' || mediaClass === 'display' || speakerShape === 'bar' || speakerShape === 'block' || kind === 'ev_charger' || kind === 'energy' || kind === 'climate' || kind === 'water') {
       this.mesh.rotation.z = yawToRad(device.yaw)
     }
     // ce que l'écran diffuse se voit SUR l'écran : la pochette du morceau (ou le logo de l'appli), posée

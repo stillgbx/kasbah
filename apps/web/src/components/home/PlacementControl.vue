@@ -1,21 +1,21 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { resolveDefaults, roomHeight, type HouseDevice, type PlacedHouseDevice } from '@kasbah/shared'
+import { resolveDefaults, roomHeight, SPEAKER_SHAPES, type HouseDevice, type PlacedHouseDevice, type SpeakerShape } from '@kasbah/shared'
 import { isFlatCover } from '../../lib/cover'
 import { coverLeaves, coverSize, hasLeaves, isOrientable, isSizable, isTv, tvInchesFromSize, tvSizeFromInches } from '../../lib/orientation'
+import type { IconName } from '../../lib/strokeIcons'
 import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
 import Segmented from '../ui/Segmented.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Emplacement d'un appareil : « Déplacer » ouvre le mode placement — x;y en glissant l'appareil dans
-// la 3D, hauteur par préréglage (plafond, applique, table, sol) ou curseur fin, orientation par pas
-// de 45° pour ce qui regarde quelque part. Chaque réglage est écrit dans house.json (store `house`) ;
-// « Rétablir » renvoie au placement d'entrée dans le mode.
+// Réglages d'un appareil posé : « Modifier » ouvre le mode édition — x;y en glissant dans la 3D,
+// hauteur, orientation, taille TV / forme d'enceinte, battants… Chaque réglage est écrit dans
+// house.json (store `house`) ; « Rétablir » renvoie au placement d'entrée dans le mode.
 //
 // La section vit au FOND du panneau : sa ligne de titre est en bas, et le corps s'ouvre AU-DESSUS
-// d'elle, en douceur (transition de `grid-template-rows`). Le bouton « Déplacer » et le bouton
+// d'elle, en douceur (transition de `max-height`). Le bouton « Modifier » et le bouton
 // « Terminé » occupent exactement la même place (même largeur, même coin) : on referme là où on a
 // ouvert. « Rétablir » a une place réservée dans le corps, invisible tant qu'il n'y a rien à rétablir —
 // rien ne se décale quand il apparaît.
@@ -85,6 +85,29 @@ const leavesShown = computed(() => hasLeaves(props.device, descriptor.value))
 // `Segmented` parle en chaînes (sa clé de segment) ; le JSON, lui, compte des battants.
 const leaves = computed(() => String(coverLeaves(props.device, descriptor.value)))
 const leavesOptions = [{ value: '1', label: '1' }, { value: '2', label: '2' }]
+
+/** Enceinte : silhouette 3D (cylindre / galet / barre / bloc), indépendante du mode glisser. */
+const isSpeaker = computed(() =>
+  descriptor.value?.kind === 'media_player'
+  && (descriptor.value.meta.mediaPlayer?.deviceClass ?? 'speaker') === 'speaker')
+const speakerShape = computed(() => props.device.speakerShape ?? 'default')
+/** Glyphe par silhouette : le Segmented n'affiche que l'icône, le libellé reste en title / aria. */
+const SPEAKER_SHAPE_ICONS: Record<SpeakerShape, IconName> = {
+  default: 'speakerTube',
+  pebble: 'speakerPebble',
+  bar: 'speakerBar',
+  block: 'speakerBlock',
+}
+const speakerShapeOptions = computed(() =>
+  SPEAKER_SHAPES.map((s) => ({ value: s, label: t(`place.speakerShape.${s}`), icon: SPEAKER_SHAPE_ICONS[s] })))
+function setSpeakerShape(raw: string): void {
+  const next = (SPEAKER_SHAPES.find((s) => s === raw) ?? 'default') as SpeakerShape
+  if (next === speakerShape.value) return
+  const id = props.device.deviceId
+  if (!id) return
+  // `''` efface → cylindre par défaut ; les autres valeurs s'écrivent telles quelles
+  void house.setDeviceTuning(id, { speakerShape: next === 'default' ? '' : next })
+}
 
 // Saisie DIRECTE d'une valeur, à côté des touches −/+ : régler un portail de 4,10 m au quart de
 // mètre demandait seize appuis. Le champ ne commite qu'à la validation (Entrée ou perte du focus) —
@@ -294,6 +317,11 @@ function applyPreset(p: Preset) {
           <span class="muted">{{ $t('place.leaves') }}</span>
           <Segmented dense class="place__leaves" :model-value="leaves" :options="leavesOptions"
                      @update:model-value="(v: string) => house.savePlacement({ leaves: v === '2' ? 2 : 1 })" />
+        </div>
+        <div v-if="isSpeaker" class="place__row">
+          <span class="muted">{{ $t('place.speakerShape.label') }}</span>
+          <Segmented dense class="place__leaves" :model-value="speakerShape" :options="speakerShapeOptions"
+                     @update:model-value="setSpeakerShape" />
         </div>
         <div class="place__row place__bottom">
           <div class="muted place__coords">x {{ position[0].toFixed(2) }} · y {{ position[1].toFixed(2) }} · {{ anchorName }}</div>

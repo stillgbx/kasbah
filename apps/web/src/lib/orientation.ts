@@ -16,7 +16,10 @@ export function isOrientable(device: HouseDevice, descriptor: DeviceDescriptor |
   if (!descriptor) return device.yaw !== undefined
   if (descriptor.kind === 'media_player') {
     const cls = descriptor.meta.mediaPlayer?.deviceClass
-    return cls === 'tv' || cls === 'display'
+    if (cls === 'tv' || cls === 'display') return true
+    // une barre ou un bloc-réveil a un sens ; cylindre et galet n'en ont pas
+    return (cls === 'speaker' || cls === undefined)
+      && (device.speakerShape === 'bar' || device.speakerShape === 'block')
   }
   if (descriptor.kind === 'cover') return isFreeCover(device)
   return descriptor.kind === 'camera' || descriptor.kind === 'vehicle'

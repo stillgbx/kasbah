@@ -148,6 +148,16 @@ export const ICONS = {
   fog: 'M7 13h10.5a4.5 4.5 0 0 0 .4-8.98A7 7 0 0 0 4.6 6.6 4 4 0 0 0 7 13zM5 17h14M7 21h10',
   thunder: 'M7 14h10.5a4.5 4.5 0 0 0 .4-8.98A7 7 0 0 0 4.6 7.6 4 4 0 0 0 7 14zM13 15l-2.5 4h3L11 23',
   wind: 'M3 8h11a2.5 2.5 0 1 0-2.5-2.5M3 12h15a2.5 2.5 0 1 1-2.5 2.5M3 16h9a2 2 0 1 1-2 2',
+
+  // silhouettes d'enceinte (réglage Forme) : le libellé reste en infobulle du Segmented
+  /** Colonne / tube — enceinte cylindrique. */
+  speakerTube: 'M9 3.5h6a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2z',
+  /** Galet — ovale aplati. */
+  speakerPebble: 'M4 12a8 5.5 0 1 0 16 0a8 5.5 0 1 0-16 0',
+  /** Barre de son — rectangle allongé. */
+  speakerBar: 'M2.5 10h19a1.5 1.5 0 0 1 0 4h-19a1.5 1.5 0 0 1 0-4z',
+  /** Bloc-réveil — petit rectangle. */
+  speakerBlock: 'M6.5 7.5h11v9h-11z',
 } as const
 export type IconName = keyof typeof ICONS
 

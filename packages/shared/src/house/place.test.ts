@@ -102,6 +102,27 @@ describe('placeDeviceInJson', () => {
     expect(() => parseHouse(bare)).not.toThrow()
   })
 
+  it("écrit la silhouette d'une enceinte, et la chaîne vide la ramène au cylindre", () => {
+    const entry = (doc: Record<string, unknown>) => devices(doc).find((x) => x.id === 'speaker.salon')
+    expect(entry(demo as Record<string, unknown>)).not.toHaveProperty('speakerShape')
+    const bar = placeDeviceInJson(demo, 'speaker.salon', { speakerShape: 'bar' })
+    expect(entry(bar)).toMatchObject({ speakerShape: 'bar' })
+    expect(() => parseHouse(bar)).not.toThrow()
+    // la place ne bouge pas : on n'a réglé que la silhouette
+    expect(entry(bar)!.position).toEqual(entry(demo as Record<string, unknown>)!.position)
+
+    const pebble = placeDeviceInJson(bar, 'speaker.salon', { speakerShape: 'pebble' })
+    expect(entry(pebble)).toMatchObject({ speakerShape: 'pebble' })
+
+    const block = placeDeviceInJson(pebble, 'speaker.salon', { speakerShape: 'block' })
+    expect(entry(block)).toMatchObject({ speakerShape: 'block' })
+    expect(() => parseHouse(block)).not.toThrow()
+
+    const cleared = placeDeviceInJson(block, 'speaker.salon', { speakerShape: '' })
+    expect(entry(cleared)).not.toHaveProperty('speakerShape')
+    expect(() => parseHouse(cleared)).not.toThrow()
+  })
+
   it("recale sur sa baie l'ouvrant qui l'habille, quand elle bouge et quand on la lie", () => {
     const place = (doc: Record<string, unknown>, id: string) => devices(doc).find((x) => x.id === id)!.position
     // le fichier de démo porte la même dérive que la vraie maison : le volet est posé 1,7 m à côté

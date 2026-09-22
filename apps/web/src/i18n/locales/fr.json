@@ -36,7 +36,7 @@
     "gone": "Cet appareil ne répond plus", "forget": "Oublier l'appareil", "forgetConfirm": "Confirmer l'oubli", "forgetHint": "Cet appareil ne répond plus : le plugin le retient pour garder son nom. S'il a disparu pour de bon, faites-le oublier.",
     "pending": "Commande en cours…", "lastUpdate": "Mis à jour {time}", "empty": "Aucun appareil connu. Vérifiez les plugins dans les réglages."
   },
-  "place": {"title": "Emplacement", "move": "Déplacer", "done": "Terminé", "hint": "Faites glisser l'appareil dans la vue 3D pour le déplacer. Le niveau et la hauteur se règlent ici.", "level": "Niveau", "height": "Hauteur de pose", "presets": {"ceiling": "Plafond", "wall": "Applique", "table": "Table", "floor": "Sol"}, "revert": "Rétablir", "cancel": "Annuler", "remove": "Retirer de la maison", "removeConfirm": "Confirmer le retrait", "removeWithArrays": "Confirmer · {n} champ | Confirmer · {n} champ | Confirmer · {n} champs", "removeHint": "Sortir cet appareil de la maison : il redevient « non placé » (ou auto-placé si sa pièce existe) ; il pourra être reposé", "orientation": "Orientation", "leaves": "Battants", "rotateLeft": "Tourner vers la gauche", "rotateRight": "Tourner vers la droite", "size": {"width": "Largeur", "height": "Hauteur", "projection": "Avancée", "diagonal": "Diagonale"}, "smaller": "Réduire", "bigger": "Agrandir", "outside": "hors pièce", "saveError": "Position non enregistrée : {message}"},
+  "place": {"title":"Réglages","move":"Modifier","done":"Terminé","hint":"Niveau, hauteur, orientation, taille ou forme selon l'appareil : glissez-le dans la vue 3D pour le déplacer.","level":"Niveau","height":"Hauteur de pose","presets":{"ceiling":"Plafond","wall":"Applique","table":"Table","floor":"Sol"},"revert":"Rétablir","cancel":"Annuler","remove":"Retirer de la maison","removeConfirm":"Confirmer le retrait","removeWithArrays":"Confirmer · {n} champ | Confirmer · {n} champ | Confirmer · {n} champs","removeHint":"Sortir cet appareil de la maison : il redevient « non placé » (ou auto-placé si sa pièce existe) ; il pourra être reposé","orientation":"Orientation","leaves":"Battants","rotateLeft":"Tourner vers la gauche","rotateRight":"Tourner vers la droite","size":{"width":"Largeur","height":"Hauteur","projection":"Avancée","diagonal":"Diagonale"},"smaller":"Réduire","bigger":"Agrandir","outside":"hors pièce","saveError":"Position non enregistrée : {message}","speakerShape":{"label":"Forme","default":"Défaut","pebble":"Galet","bar":"Barre","block":"Bloc"}},
   "arrays": {
     "title": "Champs de panneaux", "add": "Ajouter", "addHint": "Ajouter un champ de panneaux", "edit": "Régler", "done": "Terminé",
     "none": "Aucun champ déclaré. Ajoutez-en un : ses modules se dessinent sur le toit, et chaque emplacement reçoit son onduleur.",
@@ -265,8 +265,8 @@
     "chargeTarget": "cible {percent}",
     "offset": "Décalage 3D (m)",
     "rotation": "Rotation (°)",
-    "tune": "Régler",
-    "tuneTitle": "Paramètres",
+    "tune": "Modifier",
+    "tuneTitle": "Réglages",
     "capacity": "Capacité (kWh)",
     "capacityHint": "Le constructeur ne donne la capacité de sa batterie. Elle ne sert qu'à estimer la puissance de charge d'un véhicule.",
     "model3d": "Carrosserie 3D",

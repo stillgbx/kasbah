@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { deviceIdSchema } from '../devices/descriptor'
-import { defaultPlugins, hexColorSchema, MAX_OPENING_LEAVES, MIN_OPENING_LEAVES, MIN_PARKING_DIM, model3dSchema, MOUNTS, NEUTRAL_TUNING, OPENING_MATERIALS, OPENING_TYPES, vec2Schema, vec3Schema, type PluginSettingsPatch, type SceneTuning } from './schema'
+import { defaultPlugins, hexColorSchema, MAX_OPENING_LEAVES, MIN_OPENING_LEAVES, MIN_PARKING_DIM, model3dSchema, MOUNTS, NEUTRAL_TUNING, OPENING_MATERIALS, OPENING_TYPES, SPEAKER_SHAPES, vec2Schema, vec3Schema, type PluginSettingsPatch, type SceneTuning } from './schema'
 import { DEVICE_KINDS, VEHICLE_FINISHES } from '../devices/kinds'
 import { computeHouseGeometry, openingCentre } from './geometry'
 import { parseHouse } from './validate'
@@ -74,6 +74,11 @@ export const devicePlacementSchema = z.object({
    * main à ce que le fabricant dit, comme pour la couleur.
    */
   bodyFinish: z.union([z.literal(''), z.enum(VEHICLE_FINISHES)]).optional(),
+  /**
+   * Silhouette 3D d'une enceinte (comme `HouseDevice.speakerShape`). **Chaîne vide = effacer** et
+   * revenir au cylindre par défaut.
+   */
+  speakerShape: z.union([z.literal(''), z.enum(SPEAKER_SHAPES)]).optional(),
   /**
    * Ouverture que l'appareil habille (comme `HouseDevice.openingId`) : un volet, un capteur de
    * fenêtre épousent son rectangle au lieu d'occuper un point. **Chaîne vide = délier**, comme la
@@ -216,6 +221,10 @@ export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePla
       if (placement.bodyFinish) next.bodyFinish = placement.bodyFinish
       else delete next.bodyFinish
     }
+    if (placement.speakerShape !== undefined) {
+      if (placement.speakerShape) next.speakerShape = placement.speakerShape
+      else delete next.speakerShape
+    }
     if (placement.coverMaterial !== undefined) {
       if (placement.coverMaterial) next.coverMaterial = placement.coverMaterial
       else delete next.coverMaterial
@@ -262,6 +271,7 @@ export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePla
     if (placement.model3d) next.model3d = placement.model3d
     if (placement.bodyColor) next.bodyColor = placement.bodyColor
     if (placement.bodyFinish) next.bodyFinish = placement.bodyFinish
+    if (placement.speakerShape) next.speakerShape = placement.speakerShape
     if (placement.coverMaterial) next.coverMaterial = placement.coverMaterial
     if (placement.coverColor) next.coverColor = placement.coverColor
     if (placement.openingId) {

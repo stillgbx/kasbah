@@ -42,6 +42,8 @@ const emit = defineEmits<{ 'update:modelValue': [value: T] }>()
   font: 500 14px/1 var(--font); transition: background .15s, color .15s; white-space: nowrap;
 }
 .segmented--dense .segmented__item { height: 32px; padding: 0 12px; font-size: 13px; }
+/* icône seule : padding plus serré — quatre silhouettes tiennent à côté d'un libellé court */
+.segmented--dense .segmented__item:has(svg):not(:has(.segmented__stack)) { padding: 0 8px; }
 /* pleine largeur du parent : les segments se partagent l'espace et se coupent plutôt que de déborder
    (un `min-content` de libellés longs a déjà fait défiler le panneau — voir doc 4_1). */
 .segmented--fill { display: flex; width: 100%; min-width: 0; box-sizing: border-box; overflow: hidden; }
