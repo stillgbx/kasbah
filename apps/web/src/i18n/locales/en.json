@@ -121,7 +121,8 @@
     "transferred": "Playback transferred to {name}", "transferUnavailable": "Only playback started from Kasbah can be transferred",
     "stop": "Stop", "onDevice": "on {name}",
     "filterPlayers": "Filter players", "favorites": "Favorites", "otherPlayers": "Other players",
-    "favoriteAdd": "Add to favorites", "locate": "Show in the house", "favoriteRemove": "Remove from favorites"
+    "favoriteAdd": "Add to favorites", "locate": "Show in the house", "favoriteRemove": "Remove from favorites",
+    "stereo": "stereo", "streamSource": "source {format}", "megabytes": "{size} MB"
   },
 
   "ytmusic": {

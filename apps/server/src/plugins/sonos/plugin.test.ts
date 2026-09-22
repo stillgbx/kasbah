@@ -195,7 +195,7 @@ describe('sonos plugin', () => {
 
   it('serves captured artwork through /art after decoding XML entities in getaa', async () => {
     const net = fakeNetwork({ playing: true })
-    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xd9])
+    const jpeg = Uint8Array.from([0xff, 0xd8, 0xff, 0xd9]).buffer
     const speakerUrl = `http://${HOST_PLAY3}:1400${HLS_ART}`
     const artFetch = vi.fn(async (url: string) => {
       expect(url).toBe(speakerUrl)

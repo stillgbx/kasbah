@@ -51,6 +51,12 @@ export const commandSchema = z.discriminatedUnion('type', [
     artist: z.string().trim().min(1).max(512).optional(),
     /** Pochette absolue HTTP(S) que l'enceinte peut télécharger (ex. `i.ytimg.com`). */
     artUrl: z.string().url().max(2048).refine((u) => /^https?:\/\//i.test(u), 'http or https only').optional(),
+    /**
+     * Le catalogue marque ce titre EXPLICIT. Aucune enceinte ne le publie : c'est le service qui
+     * lance la lecture qui le sait, et il le dit ici pour que l'état le porte ensuite partout où le
+     * morceau s'affiche.
+     */
+    explicit: z.boolean().optional(),
   }),
   // climate
   z.object({ type: z.literal('climate.set_mode'), mode: z.enum(CLIMATE_MODES) }),

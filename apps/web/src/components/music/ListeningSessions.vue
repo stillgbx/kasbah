@@ -6,6 +6,7 @@ import type { CommandInput, DeviceEntry, MediaPlayerClass, StateFor } from '@kas
 import { deviceIcon } from '../../lib/deviceIcons'
 import { isMediaActive } from '../../lib/deviceState'
 import { useHouseStore } from '../../stores/house'
+import ExplicitBadge from '../ui/ExplicitBadge.vue'
 import MarqueeText from '../ui/MarqueeText.vue'
 import PulseDot from '../ui/PulseDot.vue'
 import Segmented from '../ui/Segmented.vue'
@@ -61,6 +62,8 @@ interface Row {
   entry: DeviceEntry; id: string; name: string; room: string; status: string; active: boolean; target: boolean; art: string | null; favorite: boolean
   /** Ce qu'on entend sur cette ligne (une barre de son relaie sa TV) : c'est lui que lecture / pause commande. */
   heardId: string; heardPlayback: StateFor<'media_player'>['playback']
+  /** Morceau signalé explicit par le service qui l'a lancé. */
+  explicit: boolean
 }
 interface Group { key: 'favorites' | 'others'; title: string; rows: Row[] }
 
@@ -95,6 +98,7 @@ const rows = computed<Row[]>(() => {
         active,
         target: s.available && e.descriptor.capabilities.includes('play_url'),
         art: active && n?.artUrl ? n.artUrl : null,
+        explicit: active && n?.explicit === true,
         favorite: isFavorite(e.descriptor.id),
       }
     })
@@ -159,6 +163,7 @@ function tap(r: Row) {
               <span class="line2 muted">
                 <span v-if="r.room" class="room">{{ r.room }}</span>
                 <span v-if="r.room" class="sep">·</span>
+                <ExplicitBadge v-if="r.explicit" class="row-explicit" />
                 <MarqueeText class="status" :text="r.status" />
               </span>
             </span>
@@ -233,6 +238,7 @@ function tap(r: Row) {
 .line1 { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .name { min-width: 0; flex: 1 1 auto; font-size: 14px; font-weight: 500; }
 .dot { color: var(--accent); flex: 0 0 auto; }
+.row-explicit { transform: scale(0.85); }
 .line2 { display: flex; align-items: baseline; gap: 6px; min-width: 0; font-size: 12px; }
 .room { flex: 0 0 auto; white-space: nowrap; }
 .sep { flex: 0 0 auto; }

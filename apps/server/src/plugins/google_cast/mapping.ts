@@ -205,7 +205,7 @@ export type CastLoadMedia = {
 }
 
 /** Métadonnées optionnelles pour `play_url` (titre / artiste / pochette). */
-export type PlayUrlMeta = { title?: string; artist?: string; artUrl?: string }
+export type PlayUrlMeta = { title?: string; artist?: string; artUrl?: string; explicit?: boolean }
 
 /**
  * Ce que le récepteur média par défaut veut dans `LOAD.media` : type MIME et `LIVE` vs `BUFFERED`

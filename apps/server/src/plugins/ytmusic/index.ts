@@ -8,7 +8,7 @@ import { getYtmusicBridge } from './bridge'
 import { YtmusicCatalog, type CreateSession } from './catalog'
 import { createCookieFile, hasRequiredCookie, writeNetscapeBeside, type CookieStore } from './cookie'
 import { importCookiesFromBrowser, isAuthError, YTM_BROWSERS } from './browserCookies'
-import { LengthLock, parseRange, pingPoToken, resolveStreamUrl, seekFor, StreamProxy, type ProxySession, type SessionMeta, type SpawnFn } from './stream'
+import { LengthLock, OUT_BITRATE_KBPS, OUT_CHANNELS, OUT_SAMPLE_RATE_HZ, parseRange, pingPoToken, resolveStreamUrl, seekFor, StreamProxy, type ProxySession, type SessionMeta, type SpawnFn } from './stream'
 import type { YtmusicStatus } from './types'
 import { ART_PLAY_SIZE, upgradeArtUrl } from './mapping'
 
@@ -184,6 +184,7 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
       ...(meta.title ? { title: meta.title } : {}),
       ...(meta.artist ? { artist: meta.artist } : {}),
       ...(meta.artUrl ? { artUrl: meta.artUrl } : {}),
+      ...(meta.explicit ? { explicit: true } : {}),
     })
     return { get, play, execute }
   }
@@ -262,6 +263,16 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
   const sessionView = (s: ProxySession) => ({
     deviceId: s.deviceId, videoId: s.videoId, sid: s.sid,
     durationS: s.meta.durationS ?? null, title: s.meta.title ?? null, artist: s.meta.artist ?? null, artUrl: s.meta.artUrl ?? null,
+    // Ce que l'enceinte reçoit de NOUS, et ce que nous recevons de YouTube : de quoi juger à l'œil
+    // ce que vaut la chaîne, sans ouvrir le journal.
+    quality: {
+      mime: s.mime,
+      bitrateKbps: OUT_BITRATE_KBPS,
+      sampleRateHz: OUT_SAMPLE_RATE_HZ,
+      channels: OUT_CHANNELS,
+      lengthBytes: s.lengthBytes,
+      source: s.meta.source ?? null,
+    },
   })
 
   function noteAuthFailure(err: unknown) {
@@ -478,6 +489,8 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
             .optional(),
           /** Durée catalogue, si yt-dlp n'en donne pas : elle fixe la taille du « fichier ». */
           durationS: z.number().positive().optional(),
+          /** Ce que le catalogue dit du morceau : l'enceinte, elle, ne le saura jamais. */
+          explicit: z.boolean().optional(),
         }).safeParse(req.body)
         if (!body.success) return sendError(reply, 400, 'INVALID_BODY', 'videoId and deviceId are required')
 
@@ -517,6 +530,8 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
               ? { artUrl: upgradeArtUrl(body.data.artUrl, ART_PLAY_SIZE) ?? body.data.artUrl }
               : {}),
             ...(durationS ? { durationS } : {}),
+            ...(body.data.explicit ? { explicit: true } : {}),
+            source: { ext: resolved.ext, formatId: resolved.formatId, abrKbps: resolved.abrKbps },
           }
           const { session, streamUrl } = await launch(req, body.data.videoId, body.data.deviceId, resolved.url, meta)
           lastError = null

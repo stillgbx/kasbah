@@ -292,7 +292,7 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
    * étage ne parle que si l'image manque encore.
    */
   function mediaPatch(entry: Entry, media: MediaStatus | undefined, app: ReceiverApplication | undefined): StatePatch<'media_player'> {
-    let patch = withAppIcon(entry, app, withCover(entry, enrichedPatch(entry, media, app)))
+    const patch = withAppIcon(entry, app, withCover(entry, enrichedPatch(entry, media, app)))
     const sticky = entry.stickyPlay
     if (!sticky) return patch
     if (patch.playback === 'idle') {
@@ -314,6 +314,7 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
         ...(sticky.title?.trim() ? { title: sticky.title.trim() } : {}),
         ...(sticky.artist?.trim() ? { artist: sticky.artist.trim() } : {}),
         ...(art ? { artUrl: artProxyUrl(art) } : {}),
+        ...(sticky.explicit ? { explicit: true } : {}),
       },
     }
   }
@@ -490,6 +491,7 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
           ...(command.title ? { title: command.title } : {}),
           ...(command.artist ? { artist: command.artist } : {}),
           ...(command.artUrl ? { artUrl: command.artUrl } : {}),
+          ...(command.explicit ? { explicit: true } : {}),
         }
         await c.playUrl(command.url, meta)
         if (meta.title || meta.artist || meta.artUrl) {
@@ -502,6 +504,7 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
                 title: meta.title ?? '',
                 ...(meta.artist ? { artist: meta.artist } : {}),
                 ...(meta.artUrl ? { artUrl: artProxyUrl(meta.artUrl) } : {}),
+                ...(meta.explicit ? { explicit: true } : {}),
                 source: 'Default Media Receiver',
               },
             })

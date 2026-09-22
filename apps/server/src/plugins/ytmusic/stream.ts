@@ -10,8 +10,8 @@ import { toNetscape } from './cookie'
 // Les enceintes ne voient jamais googlevideo.com — seulement une URL HTTP du serveur Kasbah.
 //
 // Le proxy se présente à l'enceinte comme un FICHIER MP3 de taille connue, découpable par plages
-// d'octets, sans rien télécharger d'avance : MP3 à débit constant 192 kb/s à 48 kHz, sans en-tête
-// Xing ni ID3, donc chaque trame fait exactement 576 octets pour 24 ms. Une durée se traduit en
+// d'octets, sans rien télécharger d'avance : MP3 à débit constant 320 kb/s à 48 kHz, sans en-tête
+// Xing ni ID3, donc chaque trame fait exactement 960 octets pour 24 ms. Une durée se traduit en
 // taille exacte, une plage d'octets en instant précis où lancer ffmpeg. L'enceinte connaît alors la
 // durée et sa position, met en pause, reprend et se déplace toute seule, et passe au repos à la
 // fin : plus de décalage à calculer ni de reprise à deviner côté serveur. Un flux sans durée (un
@@ -33,6 +33,8 @@ export interface ResolvedStream {
   url: string
   formatId: string | null
   ext: string | null
+  /** Débit annoncé par yt-dlp pour ce format (kb/s) : ce qu'on reçoit AVANT notre transcodage. */
+  abrKbps: number | null
   /** Durée du média d'après yt-dlp (s), sinon null (direct, inconnue). */
   durationS: number | null
 }
@@ -120,15 +122,33 @@ export async function resolveStreamUrl(opts: StreamResolveOpts): Promise<Resolve
   const pick = audio[0] ?? muxed[0] ?? (info.url ? { url: info.url, format_id: info.format_id, ext: info.ext } : null)
   if (!pick?.url) throw new Error(`no audio stream format found (${formats.length} formats reported)`)
   const durationS = !info.is_live && typeof info.duration === 'number' && info.duration > 0 ? info.duration : null
-  return { url: pick.url, formatId: pick.format_id ?? null, ext: pick.ext ?? null, durationS }
+  const rate = (pick as { abr?: number; tbr?: number }).abr ?? (pick as { tbr?: number }).tbr ?? null
+  return {
+    url: pick.url,
+    formatId: pick.format_id ?? null,
+    ext: pick.ext ?? null,
+    abrKbps: rate ? Math.round(rate) : null,
+    durationS,
+  }
 }
 
 // ---- le « fichier » MP3 : trames de taille fixe ---------------------------------------------------
-/** MPEG-1 Layer III, 48 kHz, 192 kb/s : 144 × 192000 / 48000 = 576 octets par trame, sans bit de bourrage. */
-export const FRAME_BYTES = 576
+/**
+ * Ce que le proxy sert, toujours : c'est cette fixité qui rend la taille du « fichier » calculable.
+ * 320 kb/s alors que YouTube nous donne du 130–160 kb/s déjà compressé : on n'y gagne aucune
+ * finesse, on perd seulement moins au réencodage, pour 40 ko/s sur le réseau local.
+ * PIÈGE : le débit doit donner un nombre ENTIER d'octets par trame (192 → 576, 320 → 960) ; sinon
+ * l'encodeur ajoute un bit de bourrage, les trames changent de taille et toute la promesse de
+ * taille — donc la durée et le déplacement de l'enceinte — tombe.
+ */
+export const OUT_BITRATE_KBPS = 320
+export const OUT_SAMPLE_RATE_HZ = 48_000
+export const OUT_CHANNELS = 2
+/** MPEG-1 Layer III : 144 × débit / échantillonnage, sans bit de bourrage. */
+export const FRAME_BYTES = (144 * OUT_BITRATE_KBPS * 1000) / OUT_SAMPLE_RATE_HZ
 /** 1152 échantillons à 48 kHz. */
 export const FRAME_S = 1152 / 48000
-export const BYTES_PER_S = FRAME_BYTES / FRAME_S   // 24 000
+export const BYTES_PER_S = FRAME_BYTES / FRAME_S   // 40 000
 
 /** Taille annoncée pour une durée : un nombre entier de trames, la dernière seconde partielle comprise. */
 export function lengthFor(durationS: number): number {
@@ -201,6 +221,10 @@ export interface SessionMeta {
   title?: string
   artist?: string
   artUrl?: string
+  /** Titre marqué explicit par le catalogue : reposé tel quel au transfert. */
+  explicit?: boolean
+  /** Le format reçu de YouTube, pour dire à l'écran ce qu'on transcode. */
+  source?: { ext: string | null; formatId: string | null; abrKbps: number | null }
   /** Durée du titre (catalogue ou yt-dlp) : c'est elle qui fixe la taille du « fichier ». */
   durationS?: number
 }
@@ -302,7 +326,7 @@ export class StreamProxy {
   /** Pipe ffmpeg stdout vers le client HTTP. Le caller doit détruire le processus si le client part. */
   spawnFfmpeg(sourceUrl: string, startS = 0): ChildProcessWithoutNullStreams {
     // `-ss` AVANT `-i` : ffmpeg se place dans la source (rapide, sans décoder ce qui précède).
-    // Sortie à trames FIXES (48 kHz, CBR 192k, ni Xing ni ID3) : voir l'en-tête du fichier. Fondu
+    // Sortie à trames FIXES (48 kHz, CBR, ni Xing ni ID3) : voir l'en-tête du fichier. Fondu
     // d'entrée de 60 ms : un flux qui démarre en milieu de morceau commence sur un échantillon
     // quelconque et claque sans lui ; au début d'un titre il est inaudible.
     const args = [
@@ -310,8 +334,8 @@ export class StreamProxy {
       ...(startS > 0 ? ['-ss', startS.toFixed(3)] : []),
       '-i', sourceUrl,
       '-vn', '-af', 'afade=t=in:st=0:d=0.06',
-      '-ar', '48000', '-ac', '2',
-      '-c:a', 'libmp3lame', '-b:a', '192k',
+      '-ar', String(OUT_SAMPLE_RATE_HZ), '-ac', String(OUT_CHANNELS),
+      '-c:a', 'libmp3lame', '-b:a', `${OUT_BITRATE_KBPS}k`,
       '-write_xing', '0', '-id3v2_version', '0',
       '-f', 'mp3', 'pipe:1',
     ]
@@ -321,13 +345,13 @@ export class StreamProxy {
     })
   }
 
-  /** Une trame de silence (576 octets), produite une fois par ffmpeg, pour compléter une taille promise. */
+  /** Une trame de silence ({@link FRAME_BYTES} octets), produite une fois par ffmpeg, pour compléter une taille promise. */
   silentFrame(): Promise<Buffer> {
     this.silence ??= new Promise<Buffer>((resolve) => {
       const proc = this.spawnImpl(this.opts.ffmpegPath, [
         '-hide_banner', '-loglevel', 'error',
-        '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo', '-t', '0.5',
-        '-c:a', 'libmp3lame', '-b:a', '192k', '-write_xing', '0', '-id3v2_version', '0',
+        '-f', 'lavfi', '-i', `anullsrc=r=${OUT_SAMPLE_RATE_HZ}:cl=stereo`, '-t', '0.5',
+        '-c:a', 'libmp3lame', '-b:a', `${OUT_BITRATE_KBPS}k`, '-write_xing', '0', '-id3v2_version', '0',
         '-f', 'mp3', 'pipe:1',
       ], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
       const chunks: Buffer[] = []

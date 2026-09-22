@@ -3,9 +3,7 @@ import {
   bestThumb,
   mapAlbums,
   mapArtists,
-  mapPlaylist,
   mapPlaylists,
-  mapTrack,
   mapTracks,
   parseReleaseType,
   partitionAlbums,
@@ -289,18 +287,18 @@ function artistRefsFromItem(item: unknown): RawArtist[] {
       typeof ar.name === 'string' ? ar.name : textOf(ar.name),
     )
   }
-  for (const col of asList(o.flex_columns)) {
-    for (const run of asList(asRecord(asRecord(col)?.title)?.runs)) {
-      const rr = asRecord(run)
-      const id = browseIdFromEndpoint(rr?.endpoint)
-      if (id) push(id, typeof rr?.text === 'string' ? rr.text : null)
-    }
-  }
-  for (const run of asList(asRecord(o.subtitle)?.runs)) {
+  // Un crédit qui mène à une chaîne perso n'est pas un artiste : « … Fan Page » n'a rien à faire
+  // dans la rangée Artistes.
+  const pushRun = (run: unknown) => {
     const rr = asRecord(run)
+    if (pageTypeFromEndpoint(rr?.endpoint) === USER_CHANNEL_PAGE) return
     const id = browseIdFromEndpoint(rr?.endpoint)
     if (id) push(id, typeof rr?.text === 'string' ? rr.text : null)
   }
+  for (const col of asList(o.flex_columns)) {
+    for (const run of asList(asRecord(asRecord(col)?.title)?.runs)) pushRun(run)
+  }
+  for (const run of asList(asRecord(o.subtitle)?.runs)) pushRun(run)
   return out
 }
 
@@ -479,7 +477,7 @@ function albumsInferredFromTracks(items: unknown[], primaryName: string | null):
     if (!ref?.id) continue
     const trackTitle = textOf(asRecord(item)?.title) ?? ''
     const cur = byId.get(ref.id)
-    const titleHit = trackTitle && nameKey(trackTitle) === nameKey(ref.title ?? '') ? 1 : 0
+    const titleHit = trackTitle && nameKey(trackTitle) === nameKey(textOf(ref.title) ?? '') ? 1 : 0
     if (!cur) {
       byId.set(ref.id, { raw: ref, count: 1, titleHits: titleHit })
     } else {
@@ -625,7 +623,7 @@ function stampTrackYearsFromAlbums(tracks: RawTrack[], albums: RawAlbum[]): void
   if (!byAlbum.size) return
   for (const t of tracks) {
     if (t.year) continue
-    const al = nameKey(t.album ?? '')
+    const al = nameKey(textOf(typeof t.album === 'string' ? t.album : t.album?.name ?? null) ?? '')
     if (al && byAlbum.has(al)) t.year = byAlbum.get(al)!
   }
 }
@@ -716,6 +714,35 @@ function mergeArtistsInOrder(
   return dedupeArtists([...primary, ...extras])
 }
 
+/** Page d'artiste du catalogue vs page d'une chaîne quelconque : YouTube Music le dit lui-même. */
+const ARTIST_PAGE = 'MUSIC_PAGE_TYPE_ARTIST'
+const USER_CHANNEL_PAGE = 'MUSIC_PAGE_TYPE_USER_CHANNEL'
+
+/** Types de page cités par les crédits d'un item (2ᵉ ligne : artistes, ou nom de chaîne). */
+function creditPageTypes(o: Record<string, unknown>): Set<string> {
+  const out = new Set<string>()
+  const scan = (runs: unknown) => {
+    for (const run of asList(runs)) {
+      const pt = pageTypeFromEndpoint(asRecord(run)?.endpoint)
+      if (pt) out.add(pt)
+    }
+  }
+  for (const col of asList(o.flex_columns)) scan(asRecord(asRecord(col)?.title)?.runs)
+  scan(asRecord(o.subtitle)?.runs)
+  return out
+}
+
+/**
+ * Mis en ligne par un PARTICULIER : reprise ralentie, concert filmé au téléphone, chorégraphie,
+ * « type beat », page de fans. Le crédit pointe alors une chaîne (`USER_CHANNEL`) là où un vrai clip
+ * est crédité à ses artistes (`ARTIST`) — c'est le filtre le plus sûr : il vient de YouTube Music.
+ * Un item sans aucun crédit cliquable est gardé (rien ne dit qu'il est amateur).
+ */
+function isUserUpload(o: Record<string, unknown>): boolean {
+  const pages = creditPageTypes(o)
+  return pages.has(USER_CHANNEL_PAGE) && !pages.has(ARTIST_PAGE)
+}
+
 function browsePageType(payload: Record<string, unknown> | null): string | null {
   const cfg = asRecord(asRecord(payload?.browseEndpointContextSupportedConfigs)?.browseEndpointContextMusicConfig)
   return typeof cfg?.pageType === 'string' ? cfg.pageType : null
@@ -741,7 +768,8 @@ function cardToTypedRaw(item: unknown): { kind: 'artist'; raw: RawArtist } | { k
   const fromSub = subtitleKind(parts)
   const title = textOf(o.title) ?? textOf(o.name)
   const art = bestThumb(thumbsOf(o))
-  const isArtist = pt === 'MUSIC_PAGE_TYPE_ARTIST' || browseId.startsWith('UC') || fromSub === 'artist'
+  if (pt === USER_CHANNEL_PAGE) return null
+  const isArtist = pt === ARTIST_PAGE || browseId.startsWith('UC') || fromSub === 'artist'
   if (isArtist) {
     return {
       kind: 'artist',
@@ -835,6 +863,8 @@ export class YtmusicCatalog {
     }
 
     const pushTrack = (item: unknown) => {
+      const o = asRecord(item)
+      if (o && isUserUpload(o)) return
       const t = itemToRawTrack(item)
       if (!t?.videoId || seenVideoIds.has(t.videoId)) return
       seenVideoIds.add(t.videoId)
@@ -886,8 +916,9 @@ export class YtmusicCatalog {
       ingest(searchItems(albumsOnly), shelfArtists)
       albumFilterHits = albums.length - before
     }
-    if (songsOnly) ingest(searchItems(songsOnly).slice(0, 12), shelfArtists)
-    // Videos après, avec places réservées : certains titres n'existent que comme Music Video.
+    // Assez de titres du CATALOGUE pour remplir la section à eux seuls : les vidéos ne sont plus là
+    // que pour ce qui n'existe qu'en clip, et la plupart d'entre elles sont écartées (chaînes perso).
+    if (songsOnly) ingest(searchItems(songsOnly).slice(0, SEARCH_SECTION_LIMIT), shelfArtists)
     if (videosOnly) ingest(searchItems(videosOnly).slice(0, 12), shelfArtists)
     // Remonter les titres qui collent à la requête (ex. vidéo « Good Is A LIE »).
     {
@@ -1008,5 +1039,3 @@ export class YtmusicCatalog {
   }
 }
 
-/** Export pour les tests de mapping depuis des items déjà aplatis. */
-export { mapTrack, mapTracks, mapPlaylist, mapPlaylists, mapArtist, mapAlbum, parseReleaseType, partitionAlbums }

@@ -3,6 +3,7 @@ import { computed, ref, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CommandInput, DeviceDescriptor, StateFor } from '@kasbah/shared'
 import { useMediaPosition, useSeekHold } from '../../composables/useMediaPosition'
+import ExplicitBadge from '../ui/ExplicitBadge.vue'
 import MarqueeText from '../ui/MarqueeText.vue'
 
 // Contrôle d'un lecteur dans le panneau appareil. Règle « rien ne doit bouger » (voir le wiki,
@@ -78,7 +79,10 @@ function nudgeVolume(delta: number) {
   <div>
     <div class="now mb-3">
       <!-- un titre trop long défile doucement plutôt que d'être coupé (MarqueeText) -->
-      <MarqueeText class="text-subtitle-1 font-weight-medium" :text="line1" />
+      <div class="now__line1">
+        <ExplicitBadge v-if="state.nowPlaying?.explicit" />
+        <MarqueeText class="text-subtitle-1 font-weight-medium" :text="line1" />
+      </div>
       <MarqueeText class="text-body-2 text-medium-emphasis" :text="line2" />
       <!-- curseur de position et temps : invisibles sans durée (direct), mais l'espace reste réservé -->
       <v-slider class="now__seek" :class="{ 'now--hidden': !hasDuration }"
@@ -119,6 +123,8 @@ function nudgeVolume(delta: number) {
 <style scoped>
 .now--hidden { visibility: hidden; }
 /* curseur de position : fin, collé au texte ; la poignée reste petite pour ne pas manger les temps */
+.now__line1 { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.now__line1 > :last-child { min-width: 0; flex: 1 1 auto; }
 .now__seek { margin-top: 2px; }
 /* chiffres à largeur fixe : une valeur qui défile ne fait pas frémir ses voisins */
 .now__times { font-variant-numeric: tabular-nums; }

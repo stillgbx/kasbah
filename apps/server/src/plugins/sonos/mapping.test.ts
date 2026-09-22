@@ -159,4 +159,19 @@ describe('sonos mapping', () => {
       artUrl: artProxyUrl('https://i.ytimg.com/a.jpg'),
     })
   })
+
+  /**
+   * Le marquage explicit vient du catalogue, JAMAIS du Sonos : sans report, le badge s'allumait au
+   * lancement puis s'éteignait au premier sondage, quelques secondes plus tard.
+   */
+  it('keeps the explicit mark across polls: no Sonos reading ever carries it', () => {
+    const uri = 'http://192.168.1.10:8787/api/plugins/ytmusic/stream/abc'
+    const out = overlayStreamMeta(
+      { playback: 'playing' as const, nowPlaying: { title: 'abc', source: uri } },
+      { uri, title: 'Horizon', explicit: true },
+      uri,
+      artProxyUrl,
+    )
+    expect(out.nowPlaying).toMatchObject({ title: 'Horizon', explicit: true })
+  })
 })

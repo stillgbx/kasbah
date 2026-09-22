@@ -11,6 +11,7 @@ export default tseslint.config(
       '**/node_modules/**',
       '**/coverage/**',
       '_generated-ai-doc/**',
+      '_external/**',
       '.gitnexus/**',
       '.claude/worktrees/**',
     ],

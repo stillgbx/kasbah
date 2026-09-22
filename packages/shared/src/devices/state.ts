@@ -64,6 +64,11 @@ export const mediaPlayerStateSchema = z.object({
      * direct. Ce que l'UI en fait : précédent / suivant / se placer sont refusés.
      */
     live: z.boolean().optional(),
+    /**
+     * Titre marqué EXPLICIT par le service qui l'a lancé (`media_player.play_url`) : les enceintes
+     * ne le publient jamais. Absent = on ne sait pas, et l'UI ne marque rien.
+     */
+    explicit: z.boolean().optional(),
   }).optional(),
   /**
    * Où SORT le son de l'appareil, quand il sait le dire (une TV Sony par son API locale) : `internal`

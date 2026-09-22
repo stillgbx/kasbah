@@ -66,7 +66,7 @@ export async function importCookiesFromBrowser(opts: {
   spawnImpl?: SpawnFn
 }): Promise<string> {
   if (!YTM_BROWSERS.includes(opts.browser as YtmBrowser)) {
-    throw new PluginError('INVALID_BODY', `unsupported browser "${opts.browser}" (use ${YTM_BROWSERS.join(', ')})`)
+    throw new PluginError('UNSUPPORTED_COMMAND', `unsupported browser "${opts.browser}" (use ${YTM_BROWSERS.join(', ')})`)
   }
   const spawnImpl = opts.spawnImpl ?? (spawn as unknown as SpawnFn)
   await mkdir(dirname(opts.netscapePath), { recursive: true })

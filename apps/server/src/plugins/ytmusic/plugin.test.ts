@@ -485,6 +485,60 @@ describe('ytmusic plugin', () => {
     await plugin.stop()
   })
 
+  /**
+   * Une recherche YouTube Music remonte aussi ce que des PARTICULIERS ont mis en ligne : reprises
+   * ralenties, concerts filmes au telephone, « type beats », pages de fans. Le catalogue officiel
+   * credite ses artistes (page ARTIST), une chaine perso se credite elle-meme (page USER_CHANNEL) :
+   * ces items-la ne doivent entrer ni dans les titres, ni dans la rangee Artistes.
+   */
+  it('keeps official videos and drops what personal channels posted', async () => {
+    const credit = (text: string, browseId: string, pageType: string) => ({
+      text,
+      endpoint: {
+        payload: {
+          browseId,
+          browseEndpointContextSupportedConfigs: { browseEndpointContextMusicConfig: { pageType } },
+        },
+      },
+    })
+    const video = (id: string, title: string, by: ReturnType<typeof credit>) => ({
+      id, item_type: 'video', title,
+      thumbnail: [{ url: 'https://i.ytimg.com/a.jpg', width: 60 }],
+      flex_columns: [
+        { title: { runs: [{ text: title }] } },
+        { title: { runs: [by, { text: ' \u00b7 ' }, { text: '924K views' }] } },
+      ],
+    })
+    const session: InnertubeLike = {
+      music: {
+        async search(_q?: string, filters?: { type?: string }) {
+          if (filters?.type === 'video') {
+            return {
+              contents: [{
+                contents: [
+                  video('vidClip', 'see through (remix)', credit('Samara Cyn', 'UCsamara', 'MUSIC_PAGE_TYPE_ARTIST')),
+                  video('vidSlowed', 'samara cyn - highest (slowed + reverb)', credit('velemxnts', 'UCvelem', 'MUSIC_PAGE_TYPE_USER_CHANNEL')),
+                  video('vidFan', 'All Points East | Samara Cyn performs', credit('Samara Cyn Fan Page', 'UCfanpage', 'MUSIC_PAGE_TYPE_USER_CHANNEL')),
+                ],
+              }],
+            }
+          }
+          return { contents: [] }
+        },
+        async getPlaylist() { return { items: [] } },
+        async getLibrary() { return { contents: [] } },
+      },
+    }
+    const { plugin, app } = await boot({ createSession: async () => session })
+    await app.inject({ method: 'PUT', url: '/api/plugins/ytmusic/cookie', payload: { cookie: COOKIE } })
+    const body = (await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/search?q=samara%20cyn' })).json()
+    expect((body.tracks as Array<{ videoId: string }>).map((t) => t.videoId)).toEqual(['vidClip'])
+    // la page de fans porte le nom de la requete : sans le type de page, elle passait pour l'artiste
+    expect((body.artists as Array<{ id: string }>).map((a) => a.id)).not.toContain('UCfanpage')
+    await app.close()
+    await plugin.stop()
+  })
+
   it('recovers the main artist from album channel ids when the top card is missing', async () => {
     const session: InnertubeLike = {
       music: {
@@ -613,8 +667,8 @@ describe('ytmusic plugin', () => {
     expect(sessions).toEqual([expect.objectContaining({ deviceId: office.id, durationS: 20, title: 'Song', artist: 'A' })])
     expect(sessions[0]).not.toHaveProperty('startS')
 
-    // un « fichier » : 20 s = 834 trames de 576 octets
-    const LENGTH = Math.ceil(20 / (1152 / 48000)) * 576
+    // un « fichier » : 20 s = 834 trames de 960 octets (320 kb/s à 48 kHz)
+    const LENGTH = Math.ceil(20 / (1152 / 48000)) * 960
     const sid = (commands[0]!.cmd as { url: string }).url.split('/').pop()!
     const head = await app.inject({ method: 'HEAD', url: `/api/plugins/ytmusic/stream/${sid}` })
     expect(head.statusCode).toBe(200)
@@ -628,11 +682,11 @@ describe('ytmusic plugin', () => {
     expect(whole.rawPayload.length).toBe(LENGTH)
     expect(ffArgs()).not.toContain('-ss')
     expect(ffArgs()).toContain('libmp3lame')
-    // une plage : ffmpeg lancé à la trame (57 600 octets = 100 trames = 2,4 s), 206 avec la bonne étendue
-    const part = await app.inject({ method: 'GET', url: `/api/plugins/ytmusic/stream/${sid}`, headers: { range: `bytes=57600-` } })
+    // une plage : ffmpeg lancé à la trame (96 000 octets = 100 trames = 2,4 s), 206 avec la bonne étendue
+    const part = await app.inject({ method: 'GET', url: `/api/plugins/ytmusic/stream/${sid}`, headers: { range: `bytes=96000-` } })
     expect(part.statusCode).toBe(206)
-    expect(part.headers['content-range']).toBe(`bytes 57600-${LENGTH - 1}/${LENGTH}`)
-    expect(part.rawPayload.length).toBe(LENGTH - 57600)
+    expect(part.headers['content-range']).toBe(`bytes 96000-${LENGTH - 1}/${LENGTH}`)
+    expect(part.rawPayload.length).toBe(LENGTH - 96000)
     const args = ffArgs()
     expect(Number(args[args.indexOf('-ss') + 1])).toBeCloseTo(2.4, 3)
     expect(args.indexOf('-ss')).toBeLessThan(args.indexOf('-i'))

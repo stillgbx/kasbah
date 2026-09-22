@@ -19,13 +19,13 @@ async function collect(lock: LengthLock, chunks: Buffer[]): Promise<Buffer> {
 
 describe('the sized MP3 file', () => {
   it('turns a duration into whole frames and a byte offset into a frame start', () => {
-    expect(FRAME_BYTES).toBe(576)
+    expect(FRAME_BYTES).toBe(960)
     expect(FRAME_S).toBeCloseTo(0.024, 9)
-    expect(lengthFor(20)).toBe(834 * 576)
-    expect(lengthFor(0.001)).toBe(576)
+    expect(lengthFor(20)).toBe(834 * 960)
+    expect(lengthFor(0.001)).toBe(960)
     expect(seekFor(0)).toEqual({ startS: 0, skipBytes: 0 })
-    expect(seekFor(576 * 100)).toEqual({ startS: expect.closeTo(2.4, 9), skipBytes: 0 })
-    expect(seekFor(576 * 100 + 10)).toEqual({ startS: expect.closeTo(2.4, 9), skipBytes: 10 })
+    expect(seekFor(960 * 100)).toEqual({ startS: expect.closeTo(2.4, 9), skipBytes: 0 })
+    expect(seekFor(960 * 100 + 10)).toEqual({ startS: expect.closeTo(2.4, 9), skipBytes: 10 })
   })
 
   it('parses byte ranges against the announced length', () => {
@@ -39,7 +39,7 @@ describe('the sized MP3 file', () => {
   })
 
   it('delivers exactly the promised bytes: skips the head of the first frame, truncates, pads with silence', async () => {
-    const silence = Buffer.alloc(576, 7)
+    const silence = Buffer.alloc(960, 7)
     // ffmpeg en produit trop : on coupe
     const a = await collect(new LengthLock(10, 0, silence), [Buffer.alloc(8, 1), Buffer.alloc(8, 2)])
     expect(a.length).toBe(10)

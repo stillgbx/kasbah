@@ -157,18 +157,18 @@ describe('VehiclesView — détail de la charge', () => {
 
     // rien de réglé à la main : les deux lignes montrent ce que la voiture dit, sans croix
     const { w, button } = setup(known)
-    await button('Régler')!.trigger('click')
+    await button('Modifier')!.trigger('click')
     expect(w.find('.tune').text()).toContain('Mate')
     expect(w.findAll('.tune__reset')).toHaveLength(0)
 
     // peinture choisie à la main : une croix, et une seule (la couleur, elle, reste au fabricant)
     const { w: tuned, button: b2 } = setup(known, { bodyFinish: 'solid' })
-    await b2('Régler')!.trigger('click')
+    await b2('Modifier')!.trigger('click')
     expect(tuned.findAll('.tune__reset')).toHaveLength(1)
 
     // les deux surchargées : deux croix
     const { w: both, button: b3 } = setup(known, { bodyFinish: 'solid', bodyColor: '#112233' })
-    await b3('Régler')!.trigger('click')
+    await b3('Modifier')!.trigger('click')
     expect(both.findAll('.tune__reset')).toHaveLength(2)
   })
 
@@ -177,7 +177,7 @@ describe('VehiclesView — détail de la charge', () => {
     const says = { ...e, descriptor: { ...e.descriptor, capabilities: [...e.descriptor.capabilities, 'charge_power'] } } as DeviceEntry
     const { w, button } = setup(says)
     // placé par son GPS : décalage et rotation restent à régler, plus carrosserie 3D, peinture et couleur
-    await button('Régler')!.trigger('click')
+    await button('Modifier')!.trigger('click')
     expect(w.findAll('.tune__row')).toHaveLength(5)
     expect(w.find('.tune').text()).toContain('Rotation')
     expect(w.find('.tune').text()).not.toContain('Capacité')
@@ -185,7 +185,7 @@ describe('VehiclesView — détail de la charge', () => {
     // placé à la main ET bavard sur sa puissance : ne reste que le choix d'apparence, qui ne dépend
     // ni de la place ni de la batterie — le plugin tesla livre une carrosserie
     const { w: manual, button: quiet } = setup(says, { position: [1, 2, 0] })
-    await quiet('Régler')!.trigger('click')
+    await quiet('Modifier')!.trigger('click')
     expect(manual.findAll('.tune__row')).toHaveLength(3)
     expect(manual.find('.tune').text()).toContain('Carrosserie 3D')
     expect(manual.find('.tune').text()).not.toContain('Rotation')

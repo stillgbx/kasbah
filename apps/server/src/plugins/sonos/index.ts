@@ -301,6 +301,7 @@ export function createSonosPlugin(deps: SonosPluginDeps = {}): DevicePlugin {
           ...(command.title ? { title: command.title } : {}),
           ...(command.artist ? { artist: command.artist } : {}),
           ...(command.artUrl ? { artUrl: command.artUrl } : {}),
+          ...(command.explicit ? { explicit: true } : {}),
         }
         const load = streamLoad(command.url, meta)
         await av('SetAVTransportURI', { InstanceID: '0', CurrentURI: load.uri, CurrentURIMetaData: load.didl })
@@ -316,6 +317,7 @@ export function createSonosPlugin(deps: SonosPluginDeps = {}): DevicePlugin {
               title: meta.title ?? '',
               ...(meta.artist ? { artist: meta.artist } : {}),
               ...(art ? { artUrl: art } : {}),
+              ...(meta.explicit ? { explicit: true } : {}),
               source: command.url,
             },
           })

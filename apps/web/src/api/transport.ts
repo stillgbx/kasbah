@@ -191,6 +191,17 @@ export interface YtmusicAlbum {
 }
 
 /** Un lecteur en train de jouer un flux du proxy Kasbah (`GET /sessions`). */
+/** Ce que le proxy sert à l'enceinte, et ce qu'il a reçu de YouTube pour le produire. */
+export interface YtmusicStreamQuality {
+  mime: string
+  bitrateKbps: number
+  sampleRateHz: number
+  channels: number
+  /** Taille annoncée à l'enceinte ; null si la durée est inconnue (flux sans taille). */
+  lengthBytes: number | null
+  source: { ext: string | null; formatId: string | null; abrKbps: number | null } | null
+}
+
 export interface YtmusicSession {
   deviceId: string
   videoId: string
@@ -201,6 +212,8 @@ export interface YtmusicSession {
   title: string | null
   artist: string | null
   artUrl: string | null
+  /** Absent d'un serveur plus ancien que l'affichage de la qualité. */
+  quality?: YtmusicStreamQuality | null
 }
 
 export interface YtmusicSearchResult {
@@ -366,6 +379,8 @@ export interface Transport {
     artist?: string
     artUrl?: string
     durationS?: number
+    /** Ce que dit le catalogue : l'enceinte ne le saura jamais, l'état le portera pour l'UI. */
+    explicit?: boolean
   }): Promise<{ ok: true; streamUrl: string; sid: string }>
   /** Lecteurs qui jouent en ce moment un flux YouTube Music servi par Kasbah. */
   ytmusicSessions(): Promise<{ sessions: YtmusicSession[] }>

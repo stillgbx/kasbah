@@ -227,7 +227,7 @@ export function toStatePatch(
 }
 
 /** Métadonnées optionnelles pour `play_url` (titre / artiste / pochette). */
-export type StreamMeta = { title?: string; artist?: string; artUrl?: string }
+export type StreamMeta = { title?: string; artist?: string; artUrl?: string; explicit?: boolean }
 
 /**
  * DIDL-Lite pour `SetAVTransportURI` : un flux HTTP que l'enceinte va chercher. HLS / m3u = direct
@@ -275,6 +275,9 @@ export function overlayStreamMeta(
       ...(sticky.title?.trim() ? { title: sticky.title.trim() } : {}),
       ...(sticky.artist?.trim() ? { artist: sticky.artist.trim() } : {}),
       ...(art ? { artUrl: art } : {}),
+      // le relevé du Sonos ne dit rien de l'explicit : sans ce report, le badge s'éteignait au
+      // premier sondage, quelques secondes après le lancement
+      ...(sticky.explicit ? { explicit: true } : {}),
     },
   }
 }

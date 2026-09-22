@@ -3,7 +3,8 @@ import { clamp, descriptor } from './common'
 
 const PLAYLIST = [
   { title: 'Morning Light', artist: 'The Kasbah Ensemble', album: 'Courtyard', durationS: 214 },
-  { title: 'Terracotta', artist: 'Mira Solano', album: 'Ochre', durationS: 187 },
+  // un titre marqué explicit : la simulation doit pouvoir montrer ce badge, aucune enceinte ne le dit
+  { title: 'Terracotta', artist: 'Mira Solano', album: 'Ochre', durationS: 187, explicit: true },
   { title: 'Riad at Dusk', artist: 'Nour Quartet', album: 'Lanterns', durationS: 256 },
   { title: 'Tiles', artist: 'The Kasbah Ensemble', album: 'Courtyard', durationS: 198 },
   { title: 'Fountain Loop', artist: 'Ambient Souk', album: 'Water', durationS: 302 },

@@ -121,7 +121,8 @@
     "transferred": "Lecture transférée vers {name}", "transferUnavailable": "Seule une lecture lancée depuis Kasbah se transfère",
     "stop": "Arrêter", "onDevice": "sur {name}",
     "filterPlayers": "Filtrer les lecteurs", "favorites": "Favoris", "otherPlayers": "Autres lecteurs",
-    "favoriteAdd": "Ajouter aux favoris", "locate": "Voir dans la maison", "favoriteRemove": "Retirer des favoris"
+    "favoriteAdd": "Ajouter aux favoris", "locate": "Voir dans la maison", "favoriteRemove": "Retirer des favoris",
+    "stereo": "stéréo", "streamSource": "source {format}", "megabytes": "{size} Mo"
   },
 
   "ytmusic": {

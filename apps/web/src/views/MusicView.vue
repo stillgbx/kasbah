@@ -1,3 +1,14 @@
+<script lang="ts">
+import type { YtmusicSearchResult } from '../api/transport'
+
+// Dernière recherche servie, gardée AU NIVEAU DU MODULE (donc hors du composant) : aller voir
+// l'appareil en 3D puis revenir remonte la vue, et le même terme repartait alors au serveur, donc à
+// InnerTube. Le terme sert de clé : dès qu'il change, on redemande. Mémoire du module et non
+// `localStorage` — le cache dure ce que dure l'onglet, un rechargement de page redonne des
+// résultats frais.
+let lastSearch: { query: string; result: YtmusicSearchResult } | null = null
+</script>
+
 <script setup lang="ts">
 import { useLocalStorage } from '@vueuse/core'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -299,25 +310,35 @@ async function runRecent(q: string) {
   query.value = q
   await runSearch()
 }
+function applySearch(result: YtmusicSearchResult) {
+  searchArtists.value = result.artists
+  searchAlbums.value = result.albums
+  searchSingles.value = result.singles
+  searchCompilations.value = result.compilations
+  searchTracks.value = result.tracks
+}
 async function runSearch() {
   const q = query.value.trim()
   if (!q) return
-  busy.value = true
   browse.value = null
   searched.value = true
   rememberQuery(q)
+  // Même terme qu'au dernier passage : on réaffiche, on ne redemande pas.
+  if (lastSearch?.query === q) {
+    applySearch(lastSearch.result)
+    return
+  }
+  busy.value = true
   try {
     const result = await getTransport().ytmusicSearch(q)
-    searchArtists.value = result.artists
-    searchAlbums.value = result.albums
-    searchSingles.value = result.singles
-    searchCompilations.value = result.compilations
-    searchTracks.value = result.tracks
+    lastSearch = { query: q, result }
+    applySearch(result)
   } catch (err) { fail(err) }
   finally { busy.value = false }
 }
 /** Effacer la recherche : retour au parcours. */
 async function clearSearch() {
+  lastSearch = null
   query.value = ''
   searched.value = false
   browse.value = null
@@ -377,6 +398,7 @@ async function play(track: YtmusicTrack) {
       ...(track.artists.length ? { artist: track.artists.join(', ') } : {}),
       ...(track.artUrl ? { artUrl: track.artUrl } : {}),
       ...(track.durationS ? { durationS: track.durationS } : {}),
+      ...(track.explicit ? { explicit: true } : {}),
     })
     void refreshSessions()
   } catch (err) { fail(err) }

@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, ref, toRef, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CommandInput, DeviceEntry, StateFor } from '@kasbah/shared'
+import type { YtmusicStreamQuality } from '../../api/transport'
 import { formatClock, useMediaPosition, useSeekHold } from '../../composables/useMediaPosition'
 import { deviceIcon } from '../../lib/deviceIcons'
 import ArtThumb from '../ui/ArtThumb.vue'
+import ExplicitBadge from '../ui/ExplicitBadge.vue'
 import MarqueeText from '../ui/MarqueeText.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
@@ -23,8 +25,14 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 const props = defineProps<{
   entry: DeviceEntry | null
   name: string
-  session: { durationS: number | null; title?: string | null; artist?: string | null; artUrl?: string | null } | null
-  pending: { title: string; artists: string[]; artUrl: string | null } | null
+  session: {
+    durationS: number | null
+    title?: string | null
+    artist?: string | null
+    artUrl?: string | null
+    quality?: YtmusicStreamQuality | null
+  } | null
+  pending: { title: string; artists: string[]; artUrl: string | null; explicit?: boolean } | null
   transferMode: boolean
   canTransfer: boolean
   transferBusy: boolean
@@ -76,6 +84,33 @@ const subtitle = computed(() => {
   return parts.filter((p, i, all): p is string => !!p && !looksLikeUrl(p) && all.indexOf(p) === i).join(' · ') || NBSP
 })
 
+// ---- qualité du flux ----------------------------------------------------------------------------
+// Ce que l'enceinte reçoit de NOUS (toujours du MP3 à débit constant : c'est ce qui donne au flux
+// une taille, donc une durée et un déplacement), et en info-bulle ce que YouTube nous a donné pour
+// le produire. Une ligne, sous le nom du lecteur : on veut pouvoir juger la chaîne d'un coup d'œil,
+// pas ouvrir le journal du serveur.
+const MIME_LABELS: Record<string, string> = { 'audio/mpeg': 'MP3' }
+const quality = computed(() => ours.value?.quality ?? null)
+const qualityLine = computed(() => {
+  const q = quality.value
+  if (!q) return NBSP
+  return `${MIME_LABELS[q.mime] ?? q.mime} ${q.bitrateKbps}${NBSP}kb/s`
+})
+const qualityHint = computed(() => {
+  const q = quality.value
+  if (!q) return undefined
+  const parts = [
+    `${q.sampleRateHz / 1000}${NBSP}kHz`,
+    q.channels === 2 ? t('music.stereo') : `${q.channels} ch`,
+  ]
+  if (q.lengthBytes) parts.push(t('music.megabytes', { size: (q.lengthBytes / 1_000_000).toFixed(1) }))
+  if (q.source) {
+    const src = [q.source.ext?.toUpperCase(), q.source.abrKbps ? `${q.source.abrKbps}${NBSP}kb/s` : null].filter(Boolean).join(' ')
+    if (src) parts.push(t('music.streamSource', { format: src }))
+  }
+  return parts.join(' · ')
+})
+
 // ---- position ------------------------------------------------------------------------------------
 const { position: rawPosition, duration: deviceDuration, hasPosition } = useMediaPosition(toRef(() => state.value))
 const duration = computed(() => deviceDuration.value ?? ours.value?.durationS ?? undefined)
@@ -98,14 +133,51 @@ function seekEnd(v: number) {
 
 // ---- volume : sourdine, −, curseur, +, valeur — comme la carte du panneau appareil ------------------
 const VOLUME_STEP = 5
+// Le réglage part à l'enceinte AU FIL du glissement : on entend ce qu'on règle sans relâcher.
+// Pas à chaque pixel pour autant — un envoi au plus toutes les VOLUME_THROTTLE_MS, puis la valeur
+// finale au relâché. Le relevé de l'appareil est ignoré tant que le pouce est tenu, sinon un
+// sondage en retard ferait sauter le curseur sous le doigt.
+const VOLUME_THROTTLE_MS = 200
 const volume = ref(state.value?.volume ?? 0)
-watch(() => state.value?.volume, (v) => { volume.value = v ?? 0 })
+const sliding = ref(false)
+let volumeSentAt = 0
+let volumeTimer: ReturnType<typeof setTimeout> | undefined
+watch(() => state.value?.volume, (v) => { if (!sliding.value) volume.value = v ?? 0 })
+function sendVolume(v: number) {
+  volumeSentAt = Date.now()
+  emit('command', { type: 'media_player.set_volume', volume: v })
+}
 function setVolume(v: number) {
   const next = Math.min(100, Math.max(0, Math.round(v)))
   volume.value = next
-  emit('command', { type: 'media_player.set_volume', volume: next })
+  clearTimeout(volumeTimer)
+  volumeTimer = undefined
+  sendVolume(next)
 }
+function slideVolume(v: number) {
+  sliding.value = true
+  volume.value = Math.min(100, Math.max(0, Math.round(v)))
+  if (volumeTimer) return // un envoi est déjà programmé : il prendra la dernière valeur
+  const wait = VOLUME_THROTTLE_MS - (Date.now() - volumeSentAt)
+  if (wait <= 0) { sendVolume(volume.value); return }
+  volumeTimer = setTimeout(() => { volumeTimer = undefined; sendVolume(volume.value) }, wait)
+}
+function endVolume(v: number) {
+  sliding.value = false
+  setVolume(v)
+}
+onBeforeUnmount(() => clearTimeout(volumeTimer))
 const volumeOk = computed(() => available.value && has('volume') && !state.value?.muted)
+
+/**
+ * Marqué par le service qui a lancé le titre (l'enceinte ne le dit jamais). Il suit la MÊME source
+ * que le titre et la pochette : pendant l'envoi c'est le catalogue qui parle, sinon l'état du
+ * lecteur. Sans ça, le badge arrivait en retard sur un titre explicit, et RESTAIT sur le suivant
+ * jusqu'à ce que le flux démarre vraiment — alors que titre et pochette avaient déjà changé.
+ */
+const explicit = computed(() => (props.pending
+  ? props.pending.explicit === true
+  : state.value?.nowPlaying?.explicit === true))
 </script>
 
 <template>
@@ -114,7 +186,10 @@ const volumeOk = computed(() => available.value && has('volume') && !state.value
     <div class="bar__track">
       <ArtThumb :key="art ?? 'none'" :src="art" :size="56" icon="music" class="bar__art" />
       <div class="bar__titles">
-        <MarqueeText class="bar__title" :text="title" />
+        <div class="bar__line1">
+          <MarqueeText class="bar__title" :text="title" />
+          <ExplicitBadge v-if="explicit" />
+        </div>
         <MarqueeText class="bar__sub muted" :text="subtitle" />
       </div>
     </div>
@@ -170,9 +245,9 @@ const volumeOk = computed(() => available.value && has('volume') && !state.value
         <button type="button" class="key key--tiny" :disabled="!volumeOk || volume <= 0" :aria-label="$t('media.volumeDown')" :title="$t('media.volumeDown')" @click="setVolume(volume - VOLUME_STEP)">
           <StrokeIcon name="minus" :size="14" />
         </button>
-        <v-slider v-model="volume" class="bar__volume-slider" :min="0" :max="100" :step="1" :disabled="!volumeOk"
+        <v-slider :model-value="volume" class="bar__volume-slider" :min="0" :max="100" :step="1" :disabled="!volumeOk"
                   density="compact" hide-details color="primary" track-size="4" thumb-size="14" :aria-label="$t('media.volume')"
-                  @end="(v: number) => setVolume(v)" />
+                  @update:model-value="slideVolume" @end="endVolume" />
         <button type="button" class="key key--tiny" :disabled="!volumeOk || volume >= 100" :aria-label="$t('media.volumeUp')" :title="$t('media.volumeUp')" @click="setVolume(volume + VOLUME_STEP)">
           <StrokeIcon name="plus" :size="14" />
         </button>
@@ -182,7 +257,11 @@ const volumeOk = computed(() => available.value && has('volume') && !state.value
         <span class="icon-square" :data-on="loaded ? '1' : '0'">
           <StrokeIcon :name="entry ? deviceIcon(entry.descriptor, entry.state) : 'speaker'" :size="18" />
         </span>
-        <MarqueeText class="bar__device-name" :text="name || NBSP" />
+        <div class="bar__device-text">
+          <MarqueeText class="bar__device-name" :text="name || NBSP" />
+          <!-- emplacement gardé même sans flux à nous : la colonne ne bouge pas quand la lecture part -->
+          <span class="bar__quality muted" :title="qualityHint">{{ qualityLine }}</span>
+        </div>
       </div>
       <!-- Transférer devient Annuler le temps de choisir la cible : une seule touche, une seule place -->
       <button v-if="transferMode" type="button" class="pill pill--transfer" data-on="1" :disabled="transferBusy" @click="emit('cancelTransfer')">
@@ -223,7 +302,8 @@ const volumeOk = computed(() => available.value && has('volume') && !state.value
 .bar__track { display: flex; align-items: center; gap: 14px; min-width: 0; }
 .bar__art { border-radius: 8px; overflow: hidden; }
 .bar__titles { min-width: 0; flex: 1 1 auto; display: grid; gap: 2px; }
-.bar__title { font-size: 15px; font-weight: 600; line-height: 1.25; }
+.bar__line1 { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.bar__title { min-width: 0; flex: 1 1 auto; font-size: 15px; font-weight: 600; line-height: 1.25; }
 .bar__sub { font-size: 12.5px; line-height: 1.25; }
 
 .bar__center { display: grid; gap: 2px; justify-items: center; min-width: 0; width: var(--center-w); }
@@ -251,7 +331,10 @@ const volumeOk = computed(() => available.value && has('volume') && !state.value
 .bar__volume-slider { flex: 1 1 auto; min-width: 90px; }
 .pct { width: 3ch; font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
 .bar__device { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.bar__device-name { min-width: 0; width: 80px; font-size: 13px; font-weight: 500; }
+.bar__device-text { display: grid; gap: 1px; min-width: 0; }
+.bar__device-name { min-width: 0; width: 96px; font-size: 13px; font-weight: 500; }
+/* discret : ce que sert le proxy, en dessous du nom, sur une ligne qui ne déborde jamais */
+.bar__quality { width: 96px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 /* largeur FIXE : « Transférer », « Annuler » et « Transfert… » se relaient dans la même touche sans
    décaler le volume ni le lecteur ; un libellé trop long est coupé */
 .pill--transfer { height: 36px; width: 124px; padding: 0 12px; font-size: 13px; flex: 0 0 auto; justify-content: center; }
