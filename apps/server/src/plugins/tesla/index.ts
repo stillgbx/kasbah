@@ -223,8 +223,17 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     for (const s of list) {
       seen.add(s.vin)
       const track = vehicles.get(s.vin)
-      if (track) track.summary = s
-      else vehicles.set(s.vin, { summary: s, sleepState: toSleepState(s.state), restUntil: 0 })
+      const paint = saved.paints[s.vin]
+      if (track) {
+        track.summary = s
+        // redémarrage : la piste renaît sans peinture, le fichier d'état la rend
+        if (!track.paint && paint) track.paint = paint
+      } else {
+        vehicles.set(s.vin, {
+          summary: s, sleepState: toSleepState(s.state), restUntil: 0,
+          ...(paint ? { paint } : {}),
+        })
+      }
     }
     for (const vin of [...vehicles.keys()]) if (!seen.has(vin)) vehicles.delete(vin)
     if (vins() !== before && emit) {
@@ -243,16 +252,18 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     ctx!.emitState(vin, patch)
     // gardé pour le prochain démarrage : la carte retrouve ces valeurs au lieu de repartir vide
     saved.vehicles[vin] = { ...saved.vehicles[vin], ...patch } as Record<string, unknown>
-    persist()
     track.sleepState = toSleepState(data.state)
     // La peinture n'arrive qu'ici, et elle peut CHANGER sans qu'on y soit pour rien : le « Coloriseur »
     // de l'écran de bord choisit couleur ET aspect. On republie alors le descripteur —
     // c'est le seul moment où il bouge sans que la liste des véhicules ait bougé.
     const paint = { color: bodyColor(data), finish: bodyFinish(data) }
-    if (paint.color !== track.paint?.color || paint.finish !== track.paint?.finish) {
+    if (paint.color || paint.finish) {
+      const changed = paint.color !== track.paint?.color || paint.finish !== track.paint?.finish
       track.paint = paint
-      ctx!.emitDevices(descriptors())
+      saved.paints[vin] = paint
+      if (changed) ctx!.emitDevices(descriptors())
     }
+    persist()
     // au repos : on le laisse s'endormir, la prochaine lecture attendra
     track.restUntil = isResting(data) && config!.TESLA_REST_MS > 0 ? ctx!.clock.now() + config!.TESLA_REST_MS : 0
     // une lecture, d'où qu'elle vienne (sondage, réveil, rafraîchissement demandé), remet le compteur

@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { StatePatch } from '@kasbah/shared'
+import { VEHICLE_FINISHES } from '@kasbah/shared'
 import type { Logger } from 'pino'
 import { z } from 'zod'
 
@@ -11,7 +12,11 @@ import { z } from 'zod'
 //     temps que la voiture se réveille d'elle-même. Ce sont les dernières valeurs connues : elles
 //     étaient déjà affichées comme telles (`readAt` les date), rien n'est inventé.
 //
-//  2. La CONSOMMATION du cycle de facturation. Tesla offre 10 $ par mois et par compte, et compte
+//  2. La PEINTURE (`vehicle_config`) : teinte et aspect lus dans une lecture complète. Absente de
+//     la liste des véhicules, elle disparaîtrait au redémarrage si la voiture dort — et la scène
+//     3D retomberait sur la couleur de thème jusqu'au prochain réveil.
+//
+//  3. La CONSOMMATION du cycle de facturation. Tesla offre 10 $ par mois et par compte, et compte
 //     en mois CALENDAIRE (« Billing cycles are monthly, starting on the first day »,
 //     developer.tesla.com/docs/fleet-api/billing-and-limits). Le compteur doit donc survivre à un
 //     redémarrage, sinon la jauge repart de zéro et ne veut plus rien dire.
@@ -72,6 +77,12 @@ export const cycleSchema = z.object({
 })
 export type Cycle = z.infer<typeof cycleSchema>
 
+export const vehiclePaintSchema = z.object({
+  color: z.string().optional(),
+  finish: z.enum(VEHICLE_FINISHES).optional(),
+})
+export type VehiclePaint = z.infer<typeof vehiclePaintSchema>
+
 export const teslaStateSchema = z.object({
   cycle: cycleSchema.optional(),
   /**
@@ -80,10 +91,12 @@ export const teslaStateSchema = z.object({
    * faire échouer le démarrage. Le registre valide de toute façon ce qu'on lui émet.
    */
   vehicles: z.record(z.string(), z.record(z.string(), z.unknown())).default({}),
+  /** Peinture par VIN : survit au redémarrage quand la voiture dort (pas dans la liste Fleet). */
+  paints: z.record(z.string(), vehiclePaintSchema).default({}),
 })
 export type TeslaState = z.infer<typeof teslaStateSchema>
 
-export const emptyState = (): TeslaState => ({ vehicles: {} })
+export const emptyState = (): TeslaState => ({ vehicles: {}, paints: {} })
 
 /** Le cycle en cours, remis à zéro si le mois a changé. Ne mute rien : rend le cycle à utiliser. */
 export function currentCycle(state: TeslaState, now: number): Cycle {

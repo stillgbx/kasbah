@@ -422,6 +422,26 @@ describe('ce qui survit à un redémarrage', () => {
     expect(patches(second.ctx)).toContainEqual(expect.objectContaining({ soc: 54, readAt: NOW }))
   })
 
+  it('la peinture survit au redémarrage : endormie, la voiture garde sa couleur sans relecture', async () => {
+    const tesla = fakeTesla()
+    tesla.world.list = VEHICLES_ONLINE
+    const state = memoryState()
+    const first = await started({ tesla, tokens: linkedTokens(), state })
+    await first.plugin.start()
+    await settle()
+    // paint_color_override de la fixture PARKED → #285ac8, aspect matte
+    expect(state.value?.paints[VIN]).toMatchObject({ color: '#285ac8', finish: 'matte' })
+    expect(first.ctx.emitDevices).toHaveBeenCalledWith([
+      expect.objectContaining({ id: `tesla:${VIN}`, meta: expect.objectContaining({ vehicle: { color: '#285ac8', finish: 'matte' } }) }),
+    ])
+
+    const asleep = fakeTesla()
+    const second = await started({ tesla: asleep, tokens: linkedTokens(), state })
+    const devices = await second.plugin.discover()
+    expect(dataCalls(asleep)).toBe(0)
+    expect(devices[0]?.meta.vehicle).toEqual({ color: '#285ac8', finish: 'matte' })
+  })
+
   it('la consommation du mois se poursuit après un redémarrage, et repart au mois suivant', async () => {
     const state = memoryState()
     const one = fakeTesla()

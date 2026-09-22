@@ -807,7 +807,10 @@ export class HouseScene {
     const linkedFanDesc = descriptor?.kind === 'light'
       ? [...this.descriptors.values()].find((d) => d.kind === 'fan' && d.meta.linkedTo === descriptor.id)
       : undefined
-    const levelId = resolveDeviceLevelId(device, this.index.roomsById)
+    // Une voiture rangée sur une place de garage n'est plus « dehors » : elle suit le niveau de la
+    // place (comme le marquage). Sinon, vue 1er étage, sa pilule DOM perce le plancher et le rayon
+    // la touche à travers le sol — elle n'a pas de roomId / levelId écrits.
+    const levelId = this.markerLevelId(device)
     const levelNodes = levelId ? this.nodes.levels.get(levelId) : undefined
     const parent = levelNodes ? levelNodes.markers : this.nodes.outdoorMarkers
     const opening = device.openingId ? this.openingRect(device.openingId) : undefined
@@ -849,8 +852,28 @@ export class HouseScene {
 
   /** z local au groupe parent : tel quel sous un niveau, décalé du terrain pour un appareil extérieur. */
   private localZ(device: HouseDevice, z: number): number {
-    const levelId = resolveDeviceLevelId(device, this.index!.roomsById)
+    const levelId = this.markerLevelId(device)
     return levelId && this.nodes!.levels.has(levelId) ? z : z + deviceFloorZ(this.house!, device, this.index!)
+  }
+
+  /**
+   * Niveau qui porte le marqueur : `levelId` / pièce écrits, sinon celui de la place où l'engin
+   * est rangé (`parkingFixes`). Sans quoi un GPS « au garage » reste parenté à `outdoorMarkers`.
+   */
+  private markerLevelId(device: HouseDevice): string | null {
+    const written = resolveDeviceLevelId(device, this.index!.roomsById)
+    if (written) return written
+    const fix = this.parkingFixes.get(device.id)
+    if (!fix || !this.house) return null
+    const parking = this.house.site.parkings.find((p) => p.id === fix.parkingId)
+    return parking ? this.parkingLevelId(parking) ?? null : null
+  }
+
+  /** Niveau d'une place : champ écrit, sinon pièce hôte (`parkingHost`). */
+  private parkingLevelId(p: Parking): string | undefined {
+    if (p.levelId) return p.levelId
+    const host = this.house ? parkingHost(this.house, p) : null
+    return host?.kind === 'room' ? this.index?.roomsById.get(host.id)?.levelId : undefined
   }
 
   /**
@@ -1241,10 +1264,7 @@ export class HouseScene {
    */
   private parkingParent(p: Parking): { parent: Group; z: number; levelled: boolean } {
     const site = this.nodes!.site
-    const levelId = p.levelId ?? (() => {
-      const host = this.house ? parkingHost(this.house, p) : null
-      return host?.kind === 'room' ? this.index?.roomsById.get(host.id)?.levelId : undefined
-    })()
+    const levelId = this.parkingLevelId(p)
     const levelNodes = levelId ? this.nodes!.levels.get(levelId) : undefined
     return levelNodes
       ? { parent: levelNodes.markers, z: 0, levelled: true }
@@ -2074,7 +2094,7 @@ export class HouseScene {
   /** Pièce du niveau de l'appareil contenant le point, sinon null (extérieur, hors de toute pièce). */
   private roomAt(device: HouseDevice, xy: [number, number]): string | null {
     if (!this.index) return null
-    const levelId = resolveDeviceLevelId(device, this.index.roomsById)
+    const levelId = this.markerLevelId(device)
     if (!levelId) return null
     return (this.index.roomsByLevel.get(levelId) ?? []).find((r) => pointInPolygon(xy, r.polygon))?.id ?? null
   }
@@ -2234,7 +2254,29 @@ export class HouseScene {
     // le toit se voit en vue d'ensemble et depuis le niveau qu'il porte (le toit déclaré comme un
     // niveau, pour ses panneaux) ; depuis un étage, il cacherait les pièces
     if (this.nodes.roof) this.nodes.roof.visible = !focused || this.isRoofLevel(focused)
-    for (const m of this.markers.values()) if (m.object.parent === this.nodes.outdoorMarkers) m.setPillVisible(true)
+    // jardin : pilules visibles — sauf un GPS coincé SOUS le plancher focalisé (même XY qu'une
+    // pièce de cet étage, plus bas). Une voiture sans place finissait ainsi à percer le 1er.
+    for (const m of this.markers.values()) {
+      if (m.object.parent !== this.nodes.outdoorMarkers) continue
+      m.setPillVisible(!focused || !this.coveredByFocusedFloor(m))
+    }
+  }
+
+  /**
+   * Marqueur d'extérieur caché par le plancher de l'étage qu'on regarde : plus bas que ce niveau,
+   * et son XY tombe dans une pièce de ce niveau (garage sous chambre, etc.).
+   */
+  private coveredByFocusedFloor(m: DeviceMarker): boolean {
+    if (!this.focusedLevelId || !this.house || !this.index) return false
+    const focused = this.house.levels.find((l) => l.id === this.focusedLevelId)
+    if (!focused) return false
+    // altitude absolue Z-up : somme des z locaux jusqu'à la racine de la maison
+    let absZ = 0
+    for (let o: Object3D | null = m.object; o && o !== this.nodes!.root; o = o.parent) absZ += o.position.z
+    if (absZ >= focused.elevation - 0.05) return false
+    const rooms = this.index.roomsByLevel.get(focused.id) ?? []
+    const xy: Vec2 = [m.object.position.x, m.object.position.y]
+    return rooms.some((r) => pointInPolygon(xy, r.polygon))
   }
 
   /** Les nœuds Three d'un niveau (tests, diagnostic). */
@@ -2295,7 +2337,7 @@ export class HouseScene {
     const position = found ? this.effectivePosition(found) : null
     if (!found || !position || !marker) return
     const device: PlacedHouseDevice = { ...found, position }
-    const levelId = resolveDeviceLevelId(device, this.index.roomsById)
+    const levelId = this.markerLevelId(device)
     if (levelId && this.focusedLevelId !== levelId) this.focusLevel(levelId)
     const size = new Vector3(DEVICE_FOCUS_SIZE_M, DEVICE_FOCUS_SIZE_M, DEVICE_FOCUS_SIZE_M)
     const box = new Box3().setFromCenterAndSize(marker.worldAnchor(), size)
@@ -2482,7 +2524,6 @@ export class HouseScene {
     const pickables: Object3D[] = []
     for (const m of this.markers.values()) if (m.visibleInScene) pickables.push(...m.pickables)
     const hitDevice = this.raycaster.intersectObjects(pickables, false)[0]
-    if (hitDevice) return { kind: 'device', key: hitDevice.object.userData.key as string }
     const floors: Mesh[] = []
     for (const nodes of this.nodes.levels.values()) if (nodes.group.visible && nodes.markers.visible) floors.push(...nodes.floors.values())
     const hitFloor = this.raycaster.intersectObjects(floors, false)[0]
@@ -2490,10 +2531,14 @@ export class HouseScene {
     // qu'on ne voit pas dessous (sans quoi le toit disparaissait au profit de l'étage).
     const roofNode = this.nodes.roof
     const roofLevel = roofNode?.visible ? this.roofLevel() : undefined
-    if (roofNode && roofLevel) {
-      const hitRoof = this.raycaster.intersectObject(roofNode, false)[0]
-      if (hitRoof && (!hitFloor || hitRoof.distance <= hitFloor.distance)) return { kind: 'level', levelId: roofLevel.id }
-    }
+    const hitRoof = roofNode && roofLevel ? this.raycaster.intersectObject(roofNode, false)[0] : undefined
+    // Un appareil SOUS un plancher (voiture au garage sous la chambre) est plus loin que le sol :
+    // on ne le prend que s'il est le plus proche — sinon on touche le plancher qu'on voit.
+    const deviceWins = !!hitDevice
+      && (!hitFloor || hitDevice.distance <= hitFloor.distance)
+      && (!hitRoof || hitDevice.distance <= hitRoof.distance)
+    if (deviceWins) return { kind: 'device', key: hitDevice!.object.userData.key as string }
+    if (hitRoof && (!hitFloor || hitRoof.distance <= hitFloor.distance)) return { kind: 'level', levelId: roofLevel!.id }
     if (hitFloor) return { kind: 'room', roomId: hitFloor.object.userData.roomId as string }
     // les zones du jardin ne se sélectionnent qu'en vue d'ensemble / jardin
     if (this.focusedLevelId === null) {

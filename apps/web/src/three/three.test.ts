@@ -1176,6 +1176,29 @@ describe('places de stationnement', () => {
     expect(marker.object.position.x).toBeCloseTo(-1, 2)
     expect(marker.object.position.y).toBeCloseTo(-8, 2)
   })
+
+  /**
+   * Une place sous le 1er étage : vue « etage », la voiture ne perce ni en pilule ni au tap — le
+   * plancher de la chambre gagne contre le mesh du garage.
+   */
+  it('sous un étage focalisé, la voiture garée ne se voit ni ne se touche', () => {
+    const bay = { id: 'park.sous-ch1', accepts: 'vehicle', center: [2, 2], size: [2.5, 5], yaw: 0, levelId: 'rdc' }
+    const house = withParkings([bay])
+    const scene = sceneWith(house)
+    scene.resize(600, 600)
+    scene.updateStates({ [VEHICLE]: stateAt(house, [2, 2]) })
+    const marker = scene.markers.get('vehicle.r5')!
+    // parentée au niveau de la place, pas au jardin
+    expect(marker.object.parent?.name).toBe('markers')
+    scene.focusLevel('etage')
+    expect(marker.visibleInScene).toBe(false)
+    // regard vertical sur la chambre 1 (2,5 ; 2,5) — le sol d'étage est devant la voiture
+    scene.camera.position.set(2.5, 40, -2.4)
+    scene.camera.lookAt(2.5, 5, -2.5)
+    scene.camera.updateMatrixWorld(true)
+    scene.scene.updateMatrixWorld(true)
+    expect(scene.pick({ x: 0, y: 0 })).toEqual({ kind: 'room', roomId: 'chambre1' })
+  })
 })
 
 /**

@@ -87,6 +87,15 @@ describe('fichier d’état', () => {
     expect(parsed.success).toBe(true)
     expect(parsed.data!.cycle).toMatchObject({ wakes: 0, commands: 0 })
     expect(parsed.data!.vehicles['5YJ']).toMatchObject({ soc: 54 })
+    expect(parsed.data!.paints).toEqual({})
+  })
+  it('un fichier avec paints se relit ; un fichier sans paints (ancienne version) repart avec un objet vide', () => {
+    const withPaint = teslaStateSchema.safeParse({
+      paints: { '5YJ': { color: '#285ac8', finish: 'matte' } },
+    })
+    expect(withPaint.success).toBe(true)
+    expect(withPaint.data!.paints['5YJ']).toEqual({ color: '#285ac8', finish: 'matte' })
+    expect(teslaStateSchema.safeParse({ vehicles: {} }).data!.paints).toEqual({})
   })
   it('un fichier vide ou d’une autre forme est rejeté proprement', () => {
     expect(teslaStateSchema.safeParse({}).success).toBe(true)          // ni cycle ni véhicule : état neuf
