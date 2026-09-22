@@ -131,6 +131,16 @@ const shownPosition = computed(() => seekDraft.value ?? position.value ?? 0)
 function seekEnd(v: number) {
   emit('seek', beginSeek(v))
 }
+/**
+ * Sauter de quelques secondes : même chemin qu'un déplacement au curseur (le pouce est « tenu » sur
+ * la cible tant qu'un vieux relevé la contredit), en partant de la position AFFICHÉE — deux appuis
+ * rapides doivent s'additionner, pas se répéter sur un relevé qui n'a pas encore bougé.
+ */
+const SEEK_STEP_S = 10
+function jump(deltaS: number) {
+  const max = duration.value ?? Number.MAX_SAFE_INTEGER
+  emit('seek', beginSeek(Math.min(max, Math.max(0, shownPosition.value + deltaS))))
+}
 
 // ---- volume : sourdine, −, curseur, +, valeur — comme la carte du panneau appareil ------------------
 const VOLUME_STEP = 5
@@ -205,12 +215,24 @@ const explicit = computed(() => (props.pending
                 @click="emit('command', { type: 'media_player.previous' })">
           <StrokeIcon name="skipPrev" :size="18" />
         </button>
+        <button type="button" class="key key--jump" :disabled="!available || !canSeek"
+                :title="$t('media.jumpBack', { seconds: SEEK_STEP_S })" :aria-label="$t('media.jumpBack', { seconds: SEEK_STEP_S })"
+                @click="jump(-SEEK_STEP_S)">
+          <StrokeIcon name="rotateLeft" :size="24" />
+          <span class="key__step" aria-hidden="true">{{ SEEK_STEP_S }}</span>
+        </button>
         <button type="button" class="key key--main" :disabled="!!pending || !available || !loaded" :aria-busy="pending ? 'true' : undefined"
                 :title="pending ? $t('ytmusic.starting') : state?.playback === 'playing' ? $t('common.pause') : $t('media.play')"
                 :aria-label="pending ? $t('ytmusic.starting') : state?.playback === 'playing' ? $t('common.pause') : $t('media.play')"
                 @click="emit('command', { type: state?.playback === 'playing' ? 'media_player.pause' : 'media_player.play' })">
           <v-progress-circular v-if="pending" indeterminate :size="22" :width="2" color="currentColor" />
           <StrokeIcon v-else :name="state?.playback === 'playing' ? 'pause' : 'play'" :size="20" />
+        </button>
+        <button type="button" class="key key--jump" :disabled="!available || !canSeek"
+                :title="$t('media.jumpForward', { seconds: SEEK_STEP_S })" :aria-label="$t('media.jumpForward', { seconds: SEEK_STEP_S })"
+                @click="jump(SEEK_STEP_S)">
+          <StrokeIcon name="rotateRight" :size="24" />
+          <span class="key__step" aria-hidden="true">{{ SEEK_STEP_S }}</span>
         </button>
         <button type="button" class="key" :disabled="!available || !has('track_skip') || !skippable"
                 :title="$t('media.next')" :aria-label="$t('media.next')"
@@ -308,17 +330,47 @@ const explicit = computed(() => (props.pending
 .bar__sub { font-size: 12.5px; line-height: 1.25; }
 
 .bar__center { display: grid; gap: 2px; justify-items: center; min-width: 0; width: var(--center-w); }
-.bar__keys { display: flex; align-items: center; gap: 8px; }
+/* Les touches de transport GRANDISSENT avec l'écran : à 1280 la rangée frôle déjà la zone du volume,
+   à 1920 elle a de la place. Plafonné par la hauteur de la barre (92 px) : touche + curseur de
+   position doivent y tenir. Le double (76 px) ne rentre ni dans l'une ni dans l'autre. */
+.bar__keys {
+  /* Largeur = celle de la colonne centrale, touches CENTRÉES dedans : quand la rangée déborde (écran
+     étroit), elle déborde des DEUX côtés à égalité et la touche lecture reste au centre exact de
+     l'écran. Sans ça la rangée partait du bord gauche de la colonne et lecture glissait à droite. */
+  display: flex; align-items: center; justify-content: center; gap: 8px; width: var(--center-w);
+  /* La HAUTEUR de la barre (92 px) borne la hauteur des touches : la colonne centrale empile la
+     rangée et le curseur de position, et 42 px (lecture 50) est ce qui tient dans 88. On agit donc
+     sur la LARGEUR — des touches oblongues, plus faciles à viser au doigt sans grandir la barre.
+     Cette largeur suit l'écran, car l'espace libre entre le morceau (à gauche) et le volume (à
+     droite) est ce qui la borne : ~376 px à 1280, ~682 px à 1920. */
+  --key: 42px;
+  --key-w: clamp(42px, calc(5.2vw - 24px), 84px);
+  --key-main: calc(var(--key) * 1.2);
+}
 .key {
   display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px;
   border: 1px solid var(--line); background: transparent; color: var(--text); transition: background .15s, color .15s;
 }
+/* taille pilotée par la rangée, icône comprise : un seul réglage à changer */
+.bar__keys .key { flex: 0 0 auto; width: var(--key-w); height: var(--key); border-radius: calc(var(--key) * .3); }
+/* l'icône se règle sur la HAUTEUR : en pourcentage des deux côtés, elle s'étirerait avec la touche */
+.bar__keys .key svg { height: 46%; width: auto; }
+.bar__keys .key--jump svg { height: 62%; }
 .key:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
 .key:disabled { opacity: .35; cursor: default; }
 .key--main { width: 46px; height: 46px; border-radius: 999px; border-color: transparent; background: var(--accent); color: var(--on-accent); }
+.bar__keys .key--main { width: var(--key-main); height: var(--key-main); border-radius: 999px; }
+.bar__keys .key--main svg { height: 44%; }
 .key--main:hover:not(:disabled) { background: var(--accent); color: var(--on-accent); filter: brightness(1.06); }
 .key--main:disabled[aria-busy='true'] { opacity: .85; }
 .key--ghost { visibility: hidden; }
+/* le pas vit AU CENTRE de la flèche (même case de grille), comme sur les lecteurs de podcast */
+.key--jump > * { grid-area: 1 / 1; }
+.key__step {
+  /* assez petit pour NE PAS toucher la flèche : à 10 px sur une flèche de 22 les deux chiffres
+     remplissaient le cercle bord à bord et l'ensemble devenait une tache */
+  font-size: calc(var(--key) * .2); font-weight: 600; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums;
+}
 .key--small { width: 32px; height: 32px; border-radius: 10px; border-color: transparent; }
 .key--tiny { width: 28px; height: 28px; border-radius: 8px; border-color: transparent; }
 .key[data-on='1'] { background: var(--accent); color: var(--on-accent); }

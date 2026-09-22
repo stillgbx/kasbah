@@ -106,7 +106,7 @@
   "media": {
     "summary": "{playing} playing out of {total}", "none": "No media player reported by the plugins.",
     "playing": "Playing", "paused": "Paused", "idle": "Idle", "on": "On screen", "off": "Off", "nothing": "Nothing playing", "relaying": "Sound from {name}",
-    "play": "Play", "playUrl": "Play a URL", "urlPlaceholder": "https://… (mp3, HLS…)", "next": "Next track", "previous": "Previous track", "mute": "Mute", "unmute": "Unmute", "volume": "Volume", "volumeUp": "Volume up", "volumeDown": "Volume down", "seek": "Position in the track",
+    "play": "Play", "playUrl": "Play a URL", "urlPlaceholder": "https://… (mp3, HLS…)", "next": "Next track", "previous": "Previous track", "mute": "Mute", "unmute": "Unmute", "volume": "Volume", "volumeUp": "Volume up", "volumeDown": "Volume down", "jumpBack": "Back {seconds} s", "jumpForward": "Forward {seconds} s", "seek": "Position in the track",
     "classes": { "speaker": "Speaker", "tv": "TV", "display": "Smart display" }
   },
   "music": {
@@ -139,7 +139,7 @@
     "play": "Play",
     "starting": "Sending…",
     "playing": "Playing: {title}",
-    "empty": "Nothing to show.",
+    "searching": "Searching…", "empty": "Nothing to show.",
     "tracks": "No tracks | {n} track | {n} tracks",
     "backPlaylists": "Playlists",
     "backAlbums": "Albums",

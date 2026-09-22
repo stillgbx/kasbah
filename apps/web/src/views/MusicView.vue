@@ -328,6 +328,10 @@ async function runSearch() {
     applySearch(lastSearch.result)
     return
   }
+  // Vider AVANT d'attendre : garder les résultats de la requête précédente le temps de la nouvelle
+  // (plusieurs secondes) laissait croire qu'on n'avait pas cliqué, ou pire, que c'était la réponse.
+  clearSearchResults()
+  tracks.value = []
   busy.value = true
   try {
     const result = await getTransport().ytmusicSearch(q)
@@ -410,6 +414,8 @@ async function play(track: YtmusicTrack) {
 
 watch(browseTab, () => { if (linked.value && !searched.value) void loadBrowseTab() })
 const playTarget = computed(() => !!selected.value && canReceive(selected.value))
+/** Une recherche est partie et sa réponse n'est pas là : la zone des résultats montre des squelettes. */
+const searching = computed(() => busy.value && searched.value && !browse.value)
 </script>
 
 <template>
@@ -466,6 +472,21 @@ const playTarget = computed(() => !!selected.value && canReceive(selected.value)
                               :disabled="!playTarget" :busy="playingId === tr.videoId" :play-label="$t('ytmusic.play')" @play="play(tr)" />
                 <p v-if="!busy && browseTracksView.length === 0" class="muted empty">{{ $t('ytmusic.empty') }}</p>
               </div>
+            </template>
+
+            <!-- l'attente : même forme que les résultats à venir, pour que rien ne saute quand ils arrivent -->
+            <template v-else-if="searching">
+              <section v-for="n in 3" :key="n" class="shelf" aria-hidden="true">
+                <div class="shelf__head"><span class="skel skel--label" /></div>
+                <div class="shelf__row">
+                  <span v-for="i in 7" :key="i" class="skel-tile">
+                    <span class="skel skel--art" />
+                    <span class="skel skel--line" />
+                    <span class="skel skel--line skel--short" />
+                  </span>
+                </div>
+              </section>
+              <p class="muted empty" role="status">{{ $t('ytmusic.searching') }}</p>
             </template>
 
             <!-- recherche simple : une rangée de tuiles par section -->
@@ -591,6 +612,16 @@ const playTarget = computed(() => !!selected.value && canReceive(selected.value)
 .browse-head { display: flex; align-items: center; gap: 12px; margin: 4px 0 10px; }
 .back-row { display: flex; align-items: center; gap: 12px; margin: 4px 0 10px; }
 .back-row__title { min-width: 0; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* attente d'une recherche : des blocs de la taille des tuiles, qui respirent doucement */
+.skel { display: block; border-radius: 8px; background: var(--surface2); animation: skel 1.4s ease-in-out infinite; }
+.skel-tile { width: 128px; flex: 0 0 auto; display: grid; gap: 6px; }
+.skel--art { width: 128px; height: 128px; border-radius: 10px; }
+.skel--line { height: 10px; }
+.skel--short { width: 60%; }
+.skel--label { width: 120px; height: 13px; }
+@keyframes skel { 0%, 100% { opacity: .45; } 50% { opacity: .9; } }
+@media (prefers-reduced-motion: reduce) { .skel { animation: none; opacity: .6; } }
 
 /* recherche simple : rangées défilantes de tuiles */
 .shelf { margin: 4px 0 18px; }

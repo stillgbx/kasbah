@@ -64,6 +64,47 @@ describe("MusicPlayerBar — badge explicit pendant l'envoi", () => {
   })
 })
 
+/**
+ * Sauter de 10 s passe par le MÊME chemin qu'un déplacement au curseur (`seek` vers le parent), et
+ * part de la position AFFICHÉE : deux appuis rapides s'additionnent au lieu de retomber sur un
+ * relevé qui n'a pas encore bougé.
+ */
+describe('MusicPlayerBar — reculer / avancer de 10 s', () => {
+  const at = (positionS: number, over: Record<string, unknown> = {}) => {
+    const e = entry('playing')
+    return {
+      ...props(),
+      entry: { descriptor: e.descriptor, state: { ...e.state, nowPlaying: { title: 'x', positionS, durationS: 248 }, ...over } } as DeviceEntry,
+    }
+  }
+  const keys = (w: ReturnType<typeof mount>) => w.findAll('.key--jump')
+
+  it("avance et recule de 10 s, et deux appuis rapides s'additionnent", async () => {
+    const w = mount(MusicPlayerBar, { props: at(100) })
+    expect(keys(w)).toHaveLength(2)
+    // deux appuis avant que le lecteur ait bougé : 100 → 110 → 120, et non deux fois 110
+    await keys(w)[1]!.trigger('click')
+    await keys(w)[1]!.trigger('click')
+    await keys(w)[0]!.trigger('click')
+    expect(w.emitted('seek')).toEqual([[110], [120], [110]])
+  })
+
+  it('ne sort jamais du morceau : ni avant le début, ni après la fin', async () => {
+    const debut = mount(MusicPlayerBar, { props: at(4) })
+    await keys(debut)[0]!.trigger('click')
+    expect(debut.emitted('seek')).toEqual([[0]])
+
+    const fin = mount(MusicPlayerBar, { props: at(245) })
+    await keys(fin)[1]!.trigger('click')
+    expect(fin.emitted('seek')).toEqual([[248]])
+  })
+
+  it('grise les deux touches sur un direct, qui n\'a ni début ni fin', () => {
+    const w = mount(MusicPlayerBar, { props: at(100, { nowPlaying: { title: 'radio', positionS: 100, live: true } }) })
+    expect(keys(w).map((k) => k.attributes('disabled'))).toEqual(['', ''])
+  })
+})
+
 describe('MusicPlayerBar — qualité du flux', () => {
   it('dit le format et le débit servis, et détaille la source en info-bulle', () => {
     const w = mount(MusicPlayerBar, { props: props() })
