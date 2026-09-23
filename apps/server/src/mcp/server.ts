@@ -23,8 +23,36 @@ export interface McpDeps {
 const json = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value) }] })
 const fail = (message: string) => ({ content: [{ type: 'text' as const, text: message }], isError: true })
 
-function buildServer(deps: McpDeps): McpServer {
+// Pistes prêtes à jouer, dans la forme du lecteur commun (`/api/music`) — mêmes champs que l'app.
+const playableTrackSchema = z.object({
+  source: z.enum(['ytmusic', 'mixcloud']),
+  id: z.string().min(1),
+  title: z.string().optional(),
+  artist: z.string().optional(),
+  artUrl: z.string().optional(),
+  durationS: z.number().positive().optional(),
+  explicit: z.boolean().optional(),
+})
+type PlayableTrack = z.infer<typeof playableTrackSchema>
+
+interface YtmTrack { videoId: string; title: string; artists: string[]; album?: string | null; artUrl: string | null; durationS: number | null; explicit?: boolean }
+interface MixcloudMix { key: string; name: string; user: { name: string }; artUrl: string | null; durationS: number | null }
+interface RadioStation { id: string; name: string; country?: string; tags: string[]; codec?: string; bitrateKbps?: number }
+
+const optional = <T extends object>(o: T) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== null && v !== undefined && v !== ''))
+
+function buildServer(deps: McpDeps, app: FastifyInstance): McpServer {
   const server = new McpServer({ name: 'kasbah', version: '0.1.0' })
+
+  // La musique passe par les routes de l'app (recherche des sources, lecteur commun) : mêmes
+  // validations, mêmes erreurs lisibles (source coupée, cookie expiré), même adresse publiée aux
+  // enceintes. Une réponse d'erreur devient une exception, que le SDK rend en `isError`.
+  const call = async <T>(method: 'GET' | 'POST', url: string, payload?: object): Promise<T> => {
+    const res = await app.inject({ method, url, ...(payload ? { payload } : {}) })
+    const body = res.json() as T & { error?: { message?: string } }
+    if (res.statusCode >= 400) throw new Error(body.error?.message ?? `HTTP ${res.statusCode}`)
+    return body
+  }
 
   // Nom et pièce tels que la maison les donne (renommage, placement), sinon ceux du fabricant.
   const describe = (e: DeviceEntry) => {
@@ -99,6 +127,56 @@ function buildServer(deps: McpDeps): McpServer {
     annotations: { readOnlyHint: true },
   }, async () => json(deps.host.health()))
 
+  server.registerTool('search_music', {
+    title: 'Chercher de la musique',
+    description: "Cherche dans une source musicale de Kasbah : YouTube Music (titres, par défaut), Mixcloud (mixes) ou Radios (stations). Il n'y a ni Spotify ni Apple Music. Les résultats ytmusic et mixcloud se passent TELS QUELS à play_music, ceux de radio (stationId) à play_radio.",
+    inputSchema: z.object({
+      query: z.string().trim().min(2),
+      source: z.enum(['ytmusic', 'mixcloud', 'radio']).default('ytmusic'),
+      limit: z.number().int().min(1).max(25).default(10),
+    }),
+    annotations: { readOnlyHint: true, openWorldHint: true },
+  }, async ({ query, source, limit }) => {
+    const q = encodeURIComponent(query)
+    if (source === 'ytmusic') {
+      const r = await call<{ tracks: YtmTrack[] }>('GET', `/api/plugins/ytmusic/search?q=${q}`)
+      return json(r.tracks.slice(0, limit).map((t) => optional({
+        source: 'ytmusic', id: t.videoId, title: t.title, artist: t.artists.join(', '), album: t.album,
+        artUrl: t.artUrl, durationS: t.durationS || null, explicit: t.explicit || null,
+      })))
+    }
+    if (source === 'mixcloud') {
+      const r = await call<{ items: MixcloudMix[] }>('GET', `/api/plugins/mixcloud/search?q=${q}`)
+      return json(r.items.slice(0, limit).map((m) => optional({
+        source: 'mixcloud', id: m.key, title: m.name, artist: m.user.name, artUrl: m.artUrl, durationS: m.durationS || null,
+      })))
+    }
+    const r = await call<{ stations: RadioStation[] }>('GET', `/api/plugins/radio/search?q=${q}`)
+    return json(r.stations.slice(0, limit).map((s) => optional({
+      stationId: s.id, name: s.name, country: s.country, tags: s.tags.slice(0, 5), codec: s.codec, bitrateKbps: s.bitrateKbps,
+    })))
+  })
+
+  server.registerTool('play_music', {
+    title: 'Jouer de la musique',
+    description: "Joue une piste, ou une file de pistes dans l'ordre, sur une enceinte ou un écran (appareil media_player qui a la capacité play_url, cf. list_devices). Les pistes viennent de search_music. Remplace ce que l'appareil jouait. Pause et volume : send_command.",
+    inputSchema: z.object({ deviceId: z.string(), tracks: z.array(playableTrackSchema).min(1).max(100) }),
+    annotations: { readOnlyHint: false, openWorldHint: true },
+  }, async ({ deviceId, tracks }) => {
+    await call('POST', '/api/music/queue', { deviceId, tracks: tracks.map((t: PlayableTrack) => optional(t)) })
+    return json({ ok: true, queued: tracks.length })
+  })
+
+  server.registerTool('play_radio', {
+    title: 'Jouer une radio',
+    description: 'Joue une station en direct (stationId venu de search_music avec source radio) sur un appareil media_player qui a la capacité play_url.',
+    inputSchema: z.object({ deviceId: z.string(), stationId: z.string() }),
+    annotations: { readOnlyHint: false, openWorldHint: true },
+  }, async ({ deviceId, stationId }) => {
+    await call('POST', '/api/plugins/radio/play', { deviceId, stationId })
+    return json({ ok: true })
+  })
+
   server.registerResource('house', 'kasbah://house', {
     title: 'Maison',
     description: 'house.json validé : niveaux, pièces, ouvertures, placement des appareils.',
@@ -109,7 +187,7 @@ function buildServer(deps: McpDeps): McpServer {
 }
 
 export async function registerMcp(app: FastifyInstance, deps: McpDeps): Promise<void> {
-  const handler = createMcpHandler(() => buildServer(deps))
+  const handler = createMcpHandler(() => buildServer(deps, app))
   app.addHook('onClose', () => handler.close())
   await app.register(async (sub) => {
     sub.addHook('onRequest', localhostHostValidation())

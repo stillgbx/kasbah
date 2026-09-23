@@ -152,6 +152,9 @@ Le serveur Kasbah expose aussi un serveur [MCP](https://modelcontextprotocol.io)
 | `send_command` | Commande un **vrai** appareil (même contrat et mêmes contrôles que `POST /api/devices/:id/command`) |
 | `list_scenes` / `recall_scene` | Scènes des fabricants, et leur rappel |
 | `get_health` | Santé des plugins |
+| `search_music` | Recherche YouTube Music (titres), Mixcloud (mixes) ou Radios (stations), résultats prêts à jouer |
+| `play_music` | Joue une piste ou une file sur une enceinte, par le lecteur commun (`/api/music/queue`) |
+| `play_radio` | Joue une station en direct (`/api/plugins/radio/play`) |
 
 Ressource : `kasbah://house` (le `house.json` validé).
 
