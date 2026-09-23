@@ -129,6 +129,15 @@
     "repeatOff": "Répéter le titre", "repeatOnce": "Titre rejoué une fois — toucher pour le rejouer en boucle", "repeatLoop": "Titre en boucle — toucher pour arrêter de répéter"
   },
 
+  "mixcloud": {
+    "source": "Mixcloud", "searchPlaceholder": "Rechercher un mix, une émission, un DJ…",
+    "tabFeed": "Nouveautés", "tabFavorites": "Favoris", "tabListens": "Écoutés", "tabUploads": "Mes mix", "tabPlaylists": "Playlists", "tabFollowing": "Suivis",
+    "linkTitle": "Relier ton compte Mixcloud", "linkHint": "Ton nom d'utilisateur, celui de l'adresse de ton profil (mixcloud.com/<nom>/). Aucun mot de passe : Kasbah ne lit que ce que ton profil montre publiquement.",
+    "username": "Nom d'utilisateur", "link": "Relier", "unlink": "Délier", "account": "Compte {name}",
+    "empty": "Rien ici pour l'instant.", "unavailable": "Mixcloud ne répond pas.", "more": "Afficher plus",
+    "resumeAt": "Reprendre à {time}", "restart": "Repartir du début", "play": "Écouter {name}", "mixes": "Mix de {name}",
+    "feedHint": "Les derniers mix des comptes que tu suis (mis à jour toutes les 30 min)."
+  },
   "radio": {
     "source": "Radios", "searchPlaceholder": "Rechercher une radio (franceinfo, FIP, Nova…)", "favorites": "Favorites", "top": "Les plus écoutées",
     "noFavorites": "Aucune radio favorite : ajoutez-en avec l'étoile.", "empty": "Aucune radio trouvée.", "unavailable": "L'annuaire des radios ne répond pas.",
@@ -476,6 +485,7 @@
       "local": "Une fois relié, le plugin ne parle qu'au robot, en direct sur le réseau local : ni sondage du fabricant, ni quota. Le robot est retrouvé tout seul, il n'y a aucune adresse à saisir.",
       "notStored": "Aucun fichier de session n'est configuré (IROBOT_SESSION_FILE est vide) : la liaison sera perdue au redémarrage du serveur."
     },
+    "mixcloud": { "linked": "Compte {name} relié", "change": "Changer de compte" },
     "petkit": {
       "intro": "PetKit n'offre aucune connexion déléguée : on se connecte avec l'adresse du compte et un code reçu par courriel, valable dix minutes. Aucun mot de passe ne traverse ce serveur ; seul le jeton de session est conservé.",
       "dedicatedAccount": "Utilisez un compte PetKit DÉDIÉ, à qui vous partagez vos appareils. Une nouvelle connexion invalide la précédente : sur votre compte principal, ce serveur et votre téléphone se déconnecteraient l'un l'autre en boucle.",

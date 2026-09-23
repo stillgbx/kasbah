@@ -3,7 +3,7 @@ import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import type { CommandInput, DeviceEntry } from '@kasbah/shared'
 import { getTransport } from '../api'
-import type { YtmusicQueue, YtmusicQueueTrack, YtmusicRepeat, YtmusicSession } from '../api/transport'
+import type { MusicQueue, MusicTrack, MusicRepeat, MusicSession } from '../api/transport'
 import { t } from '../i18n'
 
 // Lecteur LOCAL : le son de l'appareil qui affiche la page (tablette, ordinateur, téléphone). Le
@@ -44,8 +44,8 @@ export const useLocalPlayerStore = defineStore('localPlayer', () => {
   /** Position publiée, à la seconde : la barre l'avance d'elle-même entre deux relevés. */
   const positionS = ref(0)
   const updatedAt = ref(Date.now())
-  const session = ref<YtmusicSession | null>(null)
-  const queue = ref<YtmusicQueue | null>(null)
+  const session = ref<MusicSession | null>(null)
+  const queue = ref<MusicQueue | null>(null)
   /** Un titre en cours de résolution côté serveur (sablier dans la barre). */
   const busy = ref(false)
   /** Chaque lancement a son numéro : un titre résolu trop tard ne remplace pas le suivant. */
@@ -56,7 +56,7 @@ export const useLocalPlayerStore = defineStore('localPlayer', () => {
   /** Un seul nouvel essai par titre quand le fichier ne se lit plus (session expirée côté serveur). */
   let retried = false
 
-  const current = computed<YtmusicQueueTrack | null>(() => (queue.value ? queue.value.items[queue.value.index] ?? null : null))
+  const current = computed<MusicTrack | null>(() => (queue.value ? queue.value.items[queue.value.index] ?? null : null))
 
   function el(): HTMLAudioElement {
     if (audio) return audio
@@ -77,6 +77,23 @@ export const useLocalPlayerStore = defineStore('localPlayer', () => {
   function publish(pos: number) {
     positionS.value = Math.floor(pos)
     updatedAt.value = Date.now()
+    reportProgress(false)
+  }
+  /**
+   * La position de la piste en cours, dite au serveur de temps en temps (et à la fin) : c'est ce qui
+   * permet de reprendre un mix de plusieurs heures, que le serveur ne voit pas jouer ici.
+   */
+  let reportedAt = 0
+  const REPORT_EVERY_MS = 15_000
+  function reportProgress(ended: boolean) {
+    const tr = current.value
+    if (!tr || (!ended && Date.now() - reportedAt < REPORT_EVERY_MS)) return
+    reportedAt = Date.now()
+    const durationS = session.value?.durationS ?? tr.durationS
+    void getTransport().musicProgress({
+      source: tr.source, id: tr.id, positionS: ended && durationS ? durationS : positionS.value,
+      ...(durationS ? { durationS } : {}), ...(ended ? { ended: true } : {}),
+    }).catch(() => { /* la reprise est un confort : un envoi perdu ne gêne pas l'écoute */ })
   }
   watch(volume, (v) => { if (audio) audio.volume = v / 100 })
   watch(muted, (m) => { if (audio) audio.muted = m })
@@ -91,7 +108,7 @@ export const useLocalPlayerStore = defineStore('localPlayer', () => {
   }
 
   /** Lire le titre `index` de la file depuis `startS`. */
-  async function go(index: number, repeat: YtmusicRepeat, startS = 0) {
+  async function go(index: number, repeat: MusicRepeat, startS = 0) {
     const q = queue.value
     const track = q?.items[index]
     if (!q || !track) return
@@ -104,7 +121,7 @@ export const useLocalPlayerStore = defineStore('localPlayer', () => {
     try {
       const next = afterEnd({ ...q, index, repeat })
       const nextTrack = next && next.index !== index ? q.items[next.index] : undefined
-      const r = await getTransport().ytmusicLocalPlay({ ...track, clientId: clientId.value, ...(nextTrack ? { nextVideoId: nextTrack.videoId } : {}) })
+      const r = await getTransport().musicLocalPlay({ ...track, clientId: clientId.value, ...(nextTrack ? { next: { source: nextTrack.source, id: nextTrack.id } } : {}) })
       if (gen !== generation) return
       await load(r.streamUrl, r.session, startS)
     } finally {
@@ -112,7 +129,7 @@ export const useLocalPlayerStore = defineStore('localPlayer', () => {
     }
   }
 
-  async function load(streamUrl: string, s: YtmusicSession, startS: number) {
+  async function load(streamUrl: string, s: MusicSession, startS: number) {
     const a = el()
     session.value = s
     a.src = streamUrl
@@ -132,6 +149,7 @@ export const useLocalPlayerStore = defineStore('localPlayer', () => {
   }
 
   async function onEnded() {
+    reportProgress(true)
     const q = queue.value
     const next = q ? afterEnd(q) : null
     if (!next) {
@@ -164,9 +182,11 @@ export const useLocalPlayerStore = defineStore('localPlayer', () => {
 
   // ---- ce que la page appelle -------------------------------------------------------------------------
   /** Nouvelle file : `tracks[startIndex]` joue, la suite enchaîne. */
-  async function playQueue(tracks: YtmusicQueueTrack[], startIndex: number) {
-    queue.value = { items: tracks, index: startIndex, repeat: 'off' }
-    await go(startIndex, 'off')
+  async function playQueue(tracks: MusicTrack[], startIndex: number) {
+    // la reprise d'un mix ne vaut qu'au premier lancement : la file garde la piste sans elle
+    const startS = tracks[startIndex]?.startS ?? 0
+    queue.value = { items: tracks.map(({ startS: _s, ...t }) => t), index: startIndex, repeat: 'off' }
+    await go(startIndex, 'off', startS)
   }
   async function next() {
     const q = queue.value
@@ -185,11 +205,11 @@ export const useLocalPlayerStore = defineStore('localPlayer', () => {
     const q = queue.value
     if (q && index >= 0 && index < q.items.length) await go(index, jumpRepeat(q.repeat))
   }
-  function setRepeat(mode: YtmusicRepeat) {
+  function setRepeat(mode: MusicRepeat) {
     if (queue.value) queue.value = { ...queue.value, repeat: mode }
   }
   /** Ajouter sans interrompre ; rien ne joue ? Les titres partent tout de suite. */
-  async function add(tracks: YtmusicQueueTrack[], where: 'next' | 'end'): Promise<boolean> {
+  async function add(tracks: MusicTrack[], where: 'next' | 'end'): Promise<boolean> {
     const q = queue.value
     if (!q || playback.value === 'idle') {
       await playQueue(tracks, 0)
@@ -256,11 +276,11 @@ export const useLocalPlayerStore = defineStore('localPlayer', () => {
     }
   }
   /** Reprendre ici un titre transféré depuis une enceinte, à sa position, avec sa file. */
-  async function adopt(r: { streamUrl: string; session: YtmusicSession; positionS: number; queue?: YtmusicQueue | null }) {
+  async function adopt(r: { streamUrl: string; session: MusicSession; positionS: number; queue?: MusicQueue | null }) {
     generation++
     const s = r.session
     queue.value = r.queue ?? {
-      items: [{ videoId: s.videoId, ...(s.title ? { title: s.title } : {}), ...(s.artist ? { artist: s.artist } : {}), ...(s.artUrl ? { artUrl: s.artUrl } : {}), ...(s.durationS ? { durationS: s.durationS } : {}) }],
+      items: [{ source: s.source, id: s.id, ...(s.title ? { title: s.title } : {}), ...(s.artist ? { artist: s.artist } : {}), ...(s.artUrl ? { artUrl: s.artUrl } : {}), ...(s.durationS ? { durationS: s.durationS } : {}) }],
       index: 0, repeat: 'off',
     }
     retried = false
@@ -299,7 +319,7 @@ export const useLocalPlayerStore = defineStore('localPlayer', () => {
         playback: loaded ? playback.value : 'idle', volume: volume.value, muted: muted.value,
         ...(loaded ? {
           nowPlaying: {
-            title: tr.title ?? tr.videoId,
+            title: tr.title ?? tr.id,
             ...(tr.artist ? { artist: tr.artist } : {}),
             ...(tr.artUrl ? { artUrl: tr.artUrl } : {}),
             ...((session.value?.durationS ?? tr.durationS) ? { durationS: session.value?.durationS ?? tr.durationS } : {}),
@@ -311,13 +331,13 @@ export const useLocalPlayerStore = defineStore('localPlayer', () => {
     } as DeviceEntry
   })
   /** La session vue par la barre (titre, durée, qualité, file) — comme celles de `GET /sessions`. */
-  const barSession = computed<YtmusicSession | null>(() => {
+  const barSession = computed<MusicSession | null>(() => {
     const s = session.value, q = queue.value
     if (!s || playback.value === 'idle') return null
     const tr = current.value
     return {
       ...s,
-      ...(tr ? { videoId: tr.videoId, title: tr.title ?? s.title, artist: tr.artist ?? s.artist, artUrl: tr.artUrl ?? s.artUrl } : {}),
+      ...(tr ? { source: tr.source, id: tr.id, title: tr.title ?? s.title, artist: tr.artist ?? s.artist, artUrl: tr.artUrl ?? s.artUrl } : {}),
       queue: q ? { length: q.items.length, index: q.index, repeat: q.repeat } : null,
     }
   })
@@ -329,10 +349,10 @@ export const useLocalPlayerStore = defineStore('localPlayer', () => {
 })
 
 /** Même règles que la file du serveur (`queue.ts`) : ce qui joue après la fin naturelle du titre. */
-function afterEnd(q: YtmusicQueue): { index: number; repeat: YtmusicRepeat } | null {
+function afterEnd(q: MusicQueue): { index: number; repeat: MusicRepeat } | null {
   if (q.repeat === 'loop') return { index: q.index, repeat: 'loop' }
   if (q.repeat === 'once') return { index: q.index, repeat: 'off' }
   return q.index + 1 < q.items.length ? { index: q.index + 1, repeat: 'off' } : null
 }
 /** Sauter à un autre titre : un `once` en attente tombe avec le titre qu'il visait. */
-const jumpRepeat = (r: YtmusicRepeat): YtmusicRepeat => (r === 'once' ? 'off' : r)
+const jumpRepeat = (r: MusicRepeat): MusicRepeat => (r === 'once' ? 'off' : r)

@@ -2,14 +2,17 @@
 // (aucun appel réseau) — `index.ts` la pilote : il lance les titres, surveille la fin de piste et
 // décide quand avancer. L'enceinte, elle, ne connaît jamais qu'un « fichier » à la fois.
 
-/** Ce que `/play` accepte d'un titre : de quoi le résoudre et l'afficher. */
+/** Ce que `/play` accepte d'une piste : de quoi la résoudre (sa source et son id) et l'afficher. */
 export interface QueueTrack {
-  videoId: string
+  source: string
+  id: string
   title?: string
   artist?: string
   artUrl?: string
   durationS?: number
   explicit?: boolean
+  /** Partir de là (s) : la reprise d'un mix long. Vaut pour le premier lancement, pas pour une répétition. */
+  startS?: number
 }
 
 /**

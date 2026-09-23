@@ -16,6 +16,7 @@ import { registerRoutes } from './http/routes'
 import { registerStatic } from './http/static'
 import { PLUGIN_FACTORIES } from './plugins'
 import { setPlaybackBridge } from './core/playbackBridge'
+import { createMusicPlayer, musicConfigSchema, MUSIC_PREFIX } from './music/player'
 import { WsHub } from './ws/hub'
 
 export interface BuildAppOptions {
@@ -98,6 +99,14 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
     execute: (id, command) => host.execute(id, command),
     onState: (cb) => bus.on('state', cb),
   })
+  // Le lecteur COMMUN des sources musicales (file, relais LAN, transfert, écoute locale) : les
+  // sources s'y inscrivent à leur démarrage, il passe par le pont ci-dessus pour les enceintes.
+  const music = createMusicPlayer({
+    config: musicConfigSchema.parse(opts.envSource ?? process.env),
+    logger: opts.logger.child({ component: 'music' }),
+    now: () => clock.now(),
+  })
+  await app.register(async (sub) => music.registerRoutes(sub), { prefix: MUSIC_PREFIX })
   if (opts.serveStatic ?? true) {
     const served = await registerStatic(app, opts.env.KASBAH_STATIC_DIR)
     opts.logger.info({ dir: opts.env.KASBAH_STATIC_DIR, served }, served ? 'serving web build' : 'no web build found (dev mode: use Vite)')
@@ -108,6 +117,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
     startPlugins: () => host.startAll(),
     async close() {
       setPlaybackBridge(null)
+      music.stop()
       await host.stopAll()
       seeder.close()
       hub.close()

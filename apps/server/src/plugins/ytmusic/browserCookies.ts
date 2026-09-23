@@ -3,7 +3,7 @@ import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { PluginError } from '../../core/plugin'
 import { fromNetscape, hasRequiredCookie } from './cookie'
-import type { SpawnFn } from './stream'
+import type { SpawnFn } from '../../music/proxy'
 
 // Import des cookies YouTube depuis le navigateur **de la machine qui héberge Kasbah**
 // (`yt-dlp --cookies-from-browser`). Pas la tablette : yt-dlp ne voit que le disque local.

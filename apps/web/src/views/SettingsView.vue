@@ -29,6 +29,8 @@ import { styleById, type RenderStyle } from '../three/styles'
 // redémarrer le serveur.
 const settings = useSettingsStore()
 const plugins = usePluginsStore()
+/** Les plugins par ordre alphabétique de leur nom affiché (l'id, `_` en espace), pas dans l'ordre du serveur. */
+const pluginsByName = computed(() => [...plugins.list].sort((a, b) => a.id.replace('_', ' ').localeCompare(b.id.replace('_', ' '))))
 const devices = useDevicesStore()
 const house = useHouseStore()
 const { t } = useI18n()
@@ -254,7 +256,7 @@ const houseStats = computed(() => {
         </div>
         <p class="muted small plugins__hint">{{ $t('settings.pluginsHint') }}</p>
         <div class="plugins">
-          <PluginSection v-for="p in plugins.list" :key="p.id" :plugin="p" />
+          <PluginSection v-for="p in pluginsByName" :key="p.id" :plugin="p" />
           <div v-if="!plugins.loaded" class="muted small">{{ $t('common.loading') }}</div>
         </div>
       </section>

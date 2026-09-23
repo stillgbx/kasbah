@@ -5,6 +5,7 @@ import EnphasePairingCard from '../EnphasePairingCard.vue'
 import HuePairingCard from '../HuePairingCard.vue'
 import IrobotLinkCard from '../IrobotLinkCard.vue'
 import MelcloudLinkCard from '../MelcloudLinkCard.vue'
+import MixcloudLinkCard from '../MixcloudLinkCard.vue'
 import PetkitLinkCard from '../PetkitLinkCard.vue'
 import NestLinkCard from '../NestLinkCard.vue'
 import RenaultLinkCard from '../RenaultLinkCard.vue'
@@ -59,6 +60,7 @@ const SETUP_CARDS = {
   petkit: PetkitLinkCard,
   irobot: IrobotLinkCard,
   ytmusic: YtmusicLinkCard,
+  mixcloud: MixcloudLinkCard,
 } as const
 const setupCard = computed(() => SETUP_CARDS[props.plugin.id as keyof typeof SETUP_CARDS] ?? null)
 

@@ -154,6 +154,23 @@ export interface YtmusicStatus {
   browsers: string[]
 }
 
+/** Un mix Mixcloud (plugin `mixcloud`) ; `key` (`/user/slug/`) est son id pour le lecteur commun. */
+export interface MixcloudMix {
+  key: string
+  name: string
+  user: { username: string; name: string }
+  artUrl: string | null
+  durationS: number | null
+  createdAt: string | null
+  tags: string[]
+  /** Position retenue par le serveur (s), si ce mix a été écouté en partie d'ici. */
+  resumeS?: number
+}
+export interface MixcloudUser { username: string; name: string; artUrl: string | null }
+export interface MixcloudStatus { username: string | null; user: MixcloudUser | null; lastError: string | null }
+export type MixcloudList = 'feed' | 'favorites' | 'listens' | 'uploads'
+export interface MixcloudPage { items: MixcloudMix[]; next: string | null }
+
 /** Une webradio de l'annuaire radio-browser (plugin `radio`). */
 export interface RadioStation {
   id: string
@@ -205,7 +222,7 @@ export interface YtmusicAlbum {
 
 /** Un lecteur en train de jouer un flux du proxy Kasbah (`GET /sessions`). */
 /** Ce que le proxy sert à l'enceinte, et ce qu'il a reçu de YouTube pour le produire. */
-export interface YtmusicStreamQuality {
+export interface MusicStreamQuality {
   mime: string
   /** null quand on relaie le flux source sans le connaître (débit variable). */
   bitrateKbps: number | null
@@ -217,9 +234,11 @@ export interface YtmusicStreamQuality {
   source: { ext: string | null; formatId: string | null; abrKbps: number | null } | null
 }
 
-export interface YtmusicSession {
+export interface MusicSession {
   deviceId: string
-  videoId: string
+  /** La source de la piste (`ytmusic`, `mixcloud`…) et son id chez elle. */
+  source: string
+  id: string
   sid: string
   /** Durée du titre (yt-dlp ou catalogue) ; le lecteur la connaît aussi par la taille du « fichier ». */
   durationS: number | null
@@ -228,9 +247,9 @@ export interface YtmusicSession {
   artist: string | null
   artUrl: string | null
   /** Absent d'un serveur plus ancien que l'affichage de la qualité. */
-  quality?: YtmusicStreamQuality | null
+  quality?: MusicStreamQuality | null
   /** La file de ce lecteur (précédent / suivant, répétition) ; null ou absent sans file. */
-  queue?: { length: number; index: number; repeat: YtmusicRepeat } | null
+  queue?: { length: number; index: number; repeat: MusicRepeat } | null
 }
 
 /** Un genre ou une ambiance : son nom (dans la langue demandée), sa couleur, et de quoi ouvrir sa page. */
@@ -255,23 +274,26 @@ export interface YtmusicExploreShelf {
 }
 
 /** Répétition du TITRE en cours : `once` le rejoue une fois puis la file reprend, `loop` sans fin. */
-export type YtmusicRepeat = 'off' | 'once' | 'loop'
+export type MusicRepeat = 'off' | 'once' | 'loop'
 
-/** Un titre tel que la file le garde (ce que `/play` accepte). */
-export interface YtmusicQueueTrack {
-  videoId: string
+/** Une piste telle que la file la garde (ce que `/api/music/play` accepte) : sa source et son id chez elle. */
+export interface MusicTrack {
+  source: string
+  id: string
   title?: string
   artist?: string
   artUrl?: string
   durationS?: number
   explicit?: boolean
+  /** Partir de là (s) : la reprise d'un mix long. */
+  startS?: number
 }
 
 /** La file d'un lecteur : `items[index]` joue. */
-export interface YtmusicQueue {
-  items: YtmusicQueueTrack[]
+export interface MusicQueue {
+  items: MusicTrack[]
   index: number
-  repeat: YtmusicRepeat
+  repeat: MusicRepeat
 }
 
 export interface YtmusicSearchResult {
@@ -440,8 +462,9 @@ export interface Transport {
   /** Deux pochettes par catégorie (clé = `params`), prises dans sa page : lent la première fois (~10 s), gardé 6 h. */
   ytmusicExploreCovers(hl?: string): Promise<{ covers: Record<string, string[]> }>
   /** Résout le flux et envoie `play_url` au lecteur (métadonnées optionnelles pour titre / pochette). */
-  ytmusicPlay(body: {
-    videoId: string
+  musicPlay(body: {
+    source: string
+    id: string
     deviceId: string
     title?: string
     artist?: string
@@ -451,35 +474,50 @@ export interface Transport {
     explicit?: boolean
   }): Promise<{ ok: true; streamUrl: string; sid: string }>
   /** Lecteurs qui jouent en ce moment un flux YouTube Music servi par Kasbah. */
-  ytmusicSessions(): Promise<{ sessions: YtmusicSession[] }>
+  musicSessions(): Promise<{ sessions: MusicSession[] }>
   /** Le titre en cours sur `fromDeviceId` repart sur `toDeviceId`, qui se place à la même position ; la source s'arrête. */
-  ytmusicTransfer(body: {
+  musicTransfer(body: {
     fromDeviceId: string
     toDeviceId: string
     /** Source = ce navigateur : sa position et sa file, que le serveur reprend. */
     positionS?: number
-    queue?: { tracks: YtmusicQueueTrack[]; index: number; repeat: YtmusicRepeat }
+    queue?: { tracks: MusicTrack[]; index: number; repeat: MusicRepeat }
   }): Promise<{
     ok: true; streamUrl: string; sid: string; positionS: number
     /** Cible = ce navigateur : la session à lire, et la file qu'il reprend (null sans file). */
-    session?: YtmusicSession
-    queue?: YtmusicQueue | null
+    session?: MusicSession
+    queue?: MusicQueue | null
   }>
   /** Lecture dans CE navigateur : le serveur résout le titre et rend le chemin du « fichier » à lire. */
-  ytmusicLocalPlay(body: YtmusicQueueTrack & { clientId: string; nextVideoId?: string }): Promise<{ ok: true; streamUrl: string; session: YtmusicSession }>
+  musicLocalPlay(body: MusicTrack & { clientId: string; next?: { source: string; id: string } }): Promise<{ ok: true; streamUrl: string; session: MusicSession }>
   /** Nouvelle file sur ce lecteur (l'ancienne est remplacée) : `tracks[startIndex]` joue, la suite enchaîne. */
-  ytmusicQueuePlay(body: { deviceId: string; tracks: YtmusicQueueTrack[]; startIndex?: number }): Promise<{ ok: true; streamUrl: string; sid: string; queue: YtmusicQueue }>
-  ytmusicQueue(deviceId: string): Promise<YtmusicQueue>
+  musicQueuePlay(body: { deviceId: string; tracks: MusicTrack[]; startIndex?: number }): Promise<{ ok: true; streamUrl: string; sid: string; queue: MusicQueue }>
+  musicQueue(deviceId: string): Promise<MusicQueue>
   /** Ajouter sans interrompre ; rien ne joue sur ce lecteur ? Les titres partent tout de suite (`started`). */
-  ytmusicQueueAdd(body: { deviceId: string; tracks: YtmusicQueueTrack[]; where: 'next' | 'end' }): Promise<{ ok: true; started: boolean; queue: YtmusicQueue }>
-  ytmusicQueueNext(deviceId: string): Promise<YtmusicQueue>
+  musicQueueAdd(body: { deviceId: string; tracks: MusicTrack[]; where: 'next' | 'end' }): Promise<{ ok: true; started: boolean; queue: MusicQueue }>
+  musicQueueNext(deviceId: string): Promise<MusicQueue>
   /** Au début du titre s'il joue depuis quelques secondes, sinon le titre d'avant. */
-  ytmusicQueuePrevious(deviceId: string): Promise<YtmusicQueue>
-  ytmusicQueueJump(deviceId: string, index: number): Promise<YtmusicQueue>
-  ytmusicQueueRepeat(deviceId: string, mode: YtmusicRepeat): Promise<YtmusicQueue>
-  ytmusicQueueRemove(deviceId: string, index: number): Promise<YtmusicQueue>
+  musicQueuePrevious(deviceId: string): Promise<MusicQueue>
+  musicQueueJump(deviceId: string, index: number): Promise<MusicQueue>
+  musicQueueRepeat(deviceId: string, mode: MusicRepeat): Promise<MusicQueue>
+  musicQueueRemove(deviceId: string, index: number): Promise<MusicQueue>
+  /** Position atteinte dans une piste lue par CE navigateur (la reprise d'un mix) ; jamais bloquant. */
+  musicProgress(body: { source: string; id: string; positionS: number; durationS?: number; ended?: boolean }): Promise<void>
   /** Vider la file : le titre en cours continue, seul. */
-  ytmusicQueueClear(deviceId: string): Promise<YtmusicQueue>
+  musicQueueClear(deviceId: string): Promise<MusicQueue>
+  /** Le compte Mixcloud relié (un nom d'utilisateur : l'API publique ne demande rien d'autre). */
+  mixcloudStatus(): Promise<MixcloudStatus>
+  mixcloudSetAccount(username: string): Promise<MixcloudStatus>
+  mixcloudClearAccount(): Promise<MixcloudStatus>
+  /** Une liste du compte ; `next` = curseur rendu par la page précédente. `feed` = nouveautés des suivis. */
+  mixcloudList(list: MixcloudList, next?: string): Promise<MixcloudPage>
+  mixcloudPlaylists(): Promise<{ playlists: { key: string; name: string }[] }>
+  mixcloudPlaylist(key: string, next?: string): Promise<MixcloudPage>
+  mixcloudFollowing(): Promise<{ users: MixcloudUser[] }>
+  mixcloudUserMixes(username: string, next?: string): Promise<MixcloudPage>
+  mixcloudSearch(q: string, next?: string): Promise<MixcloudPage>
+  /** Repartir du début : oublier la position retenue d'un mix. */
+  mixcloudForgetResume(key: string): Promise<void>
   /** Radios de l'annuaire dont le nom contient `q`, les plus écoutées d'abord. */
   radioSearch(q: string): Promise<{ stations: RadioStation[] }>
   /** Les plus écoutées d'un pays (défaut du serveur : `RADIO_COUNTRY`). */

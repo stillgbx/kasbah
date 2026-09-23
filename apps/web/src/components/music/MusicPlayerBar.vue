@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, ref, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CommandInput, DeviceEntry, StateFor } from '@kasbah/shared'
-import type { YtmusicRepeat, YtmusicStreamQuality } from '../../api/transport'
+import type { MusicRepeat, MusicStreamQuality } from '../../api/transport'
 import { formatClock, useMediaPosition, useSeekHold } from '../../composables/useMediaPosition'
 import { deviceIcon } from '../../lib/deviceIcons'
 import { isLocalPlayer } from '../../stores/localPlayer'
@@ -34,8 +34,8 @@ const props = defineProps<{
     title?: string | null
     artist?: string | null
     artUrl?: string | null
-    quality?: YtmusicStreamQuality | null
-    queue?: { length: number; index: number; repeat: YtmusicRepeat } | null
+    quality?: MusicStreamQuality | null
+    queue?: { length: number; index: number; repeat: MusicRepeat } | null
   } | null
   pending: { title: string; artists: string[]; artUrl: string | null; explicit?: boolean } | null
   transferMode: boolean
@@ -46,7 +46,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{
   command: [cmd: CommandInput]; seek: [positionS: number]; transfer: []; cancelTransfer: []
-  repeat: [mode: YtmusicRepeat]; toggleQueue: []
+  repeat: [mode: MusicRepeat]; toggleQueue: []
 }>()
 const { t } = useI18n()
 
@@ -69,8 +69,8 @@ const canPrevious = computed(() => available.value && (queue.value ? loaded.valu
 const canNext = computed(() => available.value && (queue.value ? loaded.value && queue.value.index < queue.value.length - 1 : has('track_skip') && skippable.value))
 /** Titres qui attendent après le courant : pastille sur la touche File (le retour d'un « ajouter » sans toast). */
 const waiting = computed(() => (queue.value ? Math.max(0, queue.value.length - queue.value.index - 1) : 0))
-const repeat = computed<YtmusicRepeat>(() => queue.value?.repeat ?? 'off')
-const NEXT_REPEAT: Record<YtmusicRepeat, YtmusicRepeat> = { off: 'once', once: 'loop', loop: 'off' }
+const repeat = computed<MusicRepeat>(() => queue.value?.repeat ?? 'off')
+const NEXT_REPEAT: Record<MusicRepeat, MusicRepeat> = { off: 'once', once: 'loop', loop: 'off' }
 const repeatLabel = computed(() => t(repeat.value === 'once' ? 'music.repeatOnce' : repeat.value === 'loop' ? 'music.repeatLoop' : 'music.repeatOff'))
 
 const NBSP = '\u00a0'

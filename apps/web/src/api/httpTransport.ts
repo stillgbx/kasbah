@@ -1,6 +1,6 @@
 import { apiErrorSchema, devicesResponseSchema, energyHistorySchema, healthResponseSchema, houseSchema, pluginsResponseSchema, scenesResponseSchema, serverMessageSchema, weatherForecastSchema, deviceJournalSchema, deviceConsumptionSchema, type CommandInput, type DeviceConsumption, type DeviceJournal, type DeviceEntry, type DevicePlacement, type EnergyHistory, type HealthResponse, type House, type PluginInfo, type PluginSceneEntry, type PluginSettingsPatch, type SceneRecallInput, type SceneUpdate, type WeatherForecast } from '@kasbah/shared'
 import { parseDeviceId } from '@kasbah/shared'
-import { ApiRequestError, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type MelcloudStatus, type MelcloudUnit, type PetkitStatus, type RadioStation, type RenaultStatus, type TeslaStatus, type Transport, type TransportHandlers, type YtmusicExplore, type YtmusicExploreShelf, type YtmusicPlaylist, type YtmusicQueue, type YtmusicSearchResult, type YtmusicSession, type YtmusicStatus, type YtmusicTrack } from './transport'
+import { ApiRequestError, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type MelcloudStatus, type MelcloudUnit, type MixcloudPage, type MixcloudStatus, type MixcloudUser, type PetkitStatus, type RadioStation, type RenaultStatus, type TeslaStatus, type Transport, type TransportHandlers, type YtmusicExplore, type YtmusicExploreShelf, type YtmusicPlaylist, type MusicQueue, type YtmusicSearchResult, type MusicSession, type YtmusicStatus, type YtmusicTrack } from './transport'
 
 // URLs relatives : même origine en prod (Fastify sert le build) et via le proxy Vite en dev.
 
@@ -26,9 +26,9 @@ async function request<T>(url: string, init: RequestInit | undefined, parse: (js
 export function createHttpTransport(base = ''): Transport {
   /** Un geste sur la file d'un lecteur (`/queue/<step>`) : le serveur rend la file telle qu'elle est après. */
   const queueStep = (step: string, body: object) => request(
-    `${base}/api/plugins/ytmusic/queue/${step}`,
+    `${base}/api/music/queue/${step}`,
     { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
-    (j) => j as YtmusicQueue,
+    (j) => j as MusicQueue,
   )
   return {
     getHouse: () => request(`${base}/api/house`, undefined, (j) => houseSchema.parse(j) as House),
@@ -223,48 +223,67 @@ export function createHttpTransport(base = ''): Transport {
       `${base}/api/plugins/ytmusic/explore/covers${hl ? `?hl=${encodeURIComponent(hl)}` : ''}`, undefined,
       (j) => j as { covers: Record<string, string[]> },
     ),
-    ytmusicPlay: (body) => request(
-      `${base}/api/plugins/ytmusic/play`,
+    musicPlay: (body) => request(
+      `${base}/api/music/play`,
       { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
       (j) => j as { ok: true; streamUrl: string; sid: string },
     ),
-    ytmusicSessions: () => request(`${base}/api/plugins/ytmusic/sessions`, undefined, (j) => j as { sessions: YtmusicSession[] }),
-    ytmusicTransfer: (body) => request(
-      `${base}/api/plugins/ytmusic/transfer`,
+    musicSessions: () => request(`${base}/api/music/sessions`, undefined, (j) => j as { sessions: MusicSession[] }),
+    musicTransfer: (body) => request(
+      `${base}/api/music/transfer`,
       { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
       (j) => {
-        const r = j as Awaited<ReturnType<Transport['ytmusicTransfer']>>
+        const r = j as Awaited<ReturnType<Transport['musicTransfer']>>
         // cible = ce navigateur : le chemin rendu est relatif au serveur
         return r.session ? { ...r, streamUrl: `${base}${r.streamUrl}` } : r
       },
     ),
-    ytmusicLocalPlay: (body) => request(
-      `${base}/api/plugins/ytmusic/local`,
+    musicLocalPlay: (body) => request(
+      `${base}/api/music/local`,
       { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
       (j) => {
-        const r = j as { ok: true; streamUrl: string; session: YtmusicSession }
+        const r = j as { ok: true; streamUrl: string; session: MusicSession }
         return { ...r, streamUrl: `${base}${r.streamUrl}` }
       },
     ),
-    ytmusicQueuePlay: (body) => request(
-      `${base}/api/plugins/ytmusic/queue`,
+    musicQueuePlay: (body) => request(
+      `${base}/api/music/queue`,
       { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
-      (j) => j as { ok: true; streamUrl: string; sid: string; queue: YtmusicQueue },
+      (j) => j as { ok: true; streamUrl: string; sid: string; queue: MusicQueue },
     ),
-    ytmusicQueue: (deviceId) => request(`${base}/api/plugins/ytmusic/queue?deviceId=${encodeURIComponent(deviceId)}`, undefined, (j) => j as YtmusicQueue),
-    ytmusicQueueAdd: (body) => request(
-      `${base}/api/plugins/ytmusic/queue/add`,
+    musicQueue: (deviceId) => request(`${base}/api/music/queue?deviceId=${encodeURIComponent(deviceId)}`, undefined, (j) => j as MusicQueue),
+    musicQueueAdd: (body) => request(
+      `${base}/api/music/queue/add`,
       { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
-      (j) => j as { ok: true; started: boolean; queue: YtmusicQueue },
+      (j) => j as { ok: true; started: boolean; queue: MusicQueue },
     ),
-    ytmusicQueueNext: (deviceId) => queueStep('next', { deviceId }),
-    ytmusicQueuePrevious: (deviceId) => queueStep('previous', { deviceId }),
-    ytmusicQueueJump: (deviceId, index) => queueStep('jump', { deviceId, index }),
-    ytmusicQueueRepeat: (deviceId, mode) => queueStep('repeat', { deviceId, mode }),
-    ytmusicQueueRemove: (deviceId, index) => queueStep('remove', { deviceId, index }),
-    ytmusicQueueClear: (deviceId) => request(
-      `${base}/api/plugins/ytmusic/queue?deviceId=${encodeURIComponent(deviceId)}`, { method: 'DELETE' }, (j) => j as YtmusicQueue,
+    musicQueueNext: (deviceId) => queueStep('next', { deviceId }),
+    musicQueuePrevious: (deviceId) => queueStep('previous', { deviceId }),
+    musicQueueJump: (deviceId, index) => queueStep('jump', { deviceId, index }),
+    musicQueueRepeat: (deviceId, mode) => queueStep('repeat', { deviceId, mode }),
+    musicQueueRemove: (deviceId, index) => queueStep('remove', { deviceId, index }),
+    musicProgress: async (body) => {
+      await request(`${base}/api/music/progress`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }, () => undefined)
+    },
+    musicQueueClear: (deviceId) => request(
+      `${base}/api/music/queue?deviceId=${encodeURIComponent(deviceId)}`, { method: 'DELETE' }, (j) => j as MusicQueue,
     ),
+    mixcloudStatus: () => request(`${base}/api/plugins/mixcloud/status`, undefined, (j) => j as MixcloudStatus),
+    mixcloudSetAccount: (username) => request(
+      `${base}/api/plugins/mixcloud/account`,
+      { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username }) },
+      (j) => j as MixcloudStatus,
+    ),
+    mixcloudClearAccount: () => request(`${base}/api/plugins/mixcloud/account`, { method: 'DELETE' }, (j) => j as MixcloudStatus),
+    mixcloudList: (list, next) => request(`${base}/api/plugins/mixcloud/library/${list}${next ? `?next=${encodeURIComponent(next)}` : ''}`, undefined, (j) => j as MixcloudPage),
+    mixcloudPlaylists: () => request(`${base}/api/plugins/mixcloud/playlists`, undefined, (j) => j as { playlists: { key: string; name: string }[] }),
+    mixcloudPlaylist: (key, next) => request(`${base}/api/plugins/mixcloud/playlist?key=${encodeURIComponent(key)}${next ? `&next=${encodeURIComponent(next)}` : ''}`, undefined, (j) => j as MixcloudPage),
+    mixcloudFollowing: () => request(`${base}/api/plugins/mixcloud/following`, undefined, (j) => j as { users: MixcloudUser[] }),
+    mixcloudUserMixes: (username, next) => request(`${base}/api/plugins/mixcloud/users/${encodeURIComponent(username)}/cloudcasts${next ? `?next=${encodeURIComponent(next)}` : ''}`, undefined, (j) => j as MixcloudPage),
+    mixcloudSearch: (q, next) => request(`${base}/api/plugins/mixcloud/search?q=${encodeURIComponent(q)}${next ? `&next=${encodeURIComponent(next)}` : ''}`, undefined, (j) => j as MixcloudPage),
+    mixcloudForgetResume: async (key) => {
+      await request(`${base}/api/plugins/mixcloud/resume?key=${encodeURIComponent(key)}`, { method: 'DELETE' }, () => undefined)
+    },
     radioSearch: (q) => request(`${base}/api/plugins/radio/search?q=${encodeURIComponent(q)}`, undefined, (j) => j as { stations: RadioStation[] }),
     radioTop: (country) => request(`${base}/api/plugins/radio/top${country ? `?country=${encodeURIComponent(country)}` : ''}`, undefined, (j) => j as { stations: RadioStation[] }),
     radioFavorites: () => request(`${base}/api/plugins/radio/favorites`, undefined, (j) => j as { stations: RadioStation[] }),

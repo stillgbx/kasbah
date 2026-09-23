@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { afterEnd, insert, jumpTo, removeAt, upcoming, type PlayQueue } from './queue'
 
 const q = (index: number, repeat: PlayQueue['repeat'] = 'off', n = 3): PlayQueue => ({
-  items: Array.from({ length: n }, (_, i) => ({ videoId: `v${i}` })),
+  items: Array.from({ length: n }, (_, i) => ({ source: 'ytmusic', id: `v${i}` })),
   index,
   repeat,
 })
@@ -20,7 +20,7 @@ describe('ytmusic play queue', () => {
   })
 
   it('prepares the next different track only', () => {
-    expect(upcoming(q(0))?.videoId).toBe('v1')
+    expect(upcoming(q(0))?.id).toBe('v1')
     expect(upcoming(q(0, 'loop'))).toBeNull()
     expect(upcoming(q(2))).toBeNull()
   })
@@ -33,13 +33,13 @@ describe('ytmusic play queue', () => {
   })
 
   it('inserts after the current track or at the end', () => {
-    expect(insert(q(0), [{ videoId: 'x' }], 'next').items.map((t) => t.videoId)).toEqual(['v0', 'x', 'v1', 'v2'])
-    expect(insert(q(0), [{ videoId: 'x' }], 'end').items.map((t) => t.videoId)).toEqual(['v0', 'v1', 'v2', 'x'])
+    expect(insert(q(0), [{ source: 'ytmusic', id: 'x' }], 'next').items.map((t) => t.id)).toEqual(['v0', 'x', 'v1', 'v2'])
+    expect(insert(q(0), [{ source: 'ytmusic', id: 'x' }], 'end').items.map((t) => t.id)).toEqual(['v0', 'v1', 'v2', 'x'])
   })
 
   it('removes a waiting track and keeps pointing at the current one', () => {
     const r = removeAt(q(2), 0)!
-    expect(r.items.map((t) => t.videoId)).toEqual(['v1', 'v2'])
+    expect(r.items.map((t) => t.id)).toEqual(['v1', 'v2'])
     expect(r.index).toBe(1)
     expect(removeAt(q(2), 2)).toBeNull()
   })

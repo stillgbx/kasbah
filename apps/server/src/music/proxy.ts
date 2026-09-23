@@ -1,20 +1,17 @@
 import { spawn, type ChildProcessWithoutNullStreams, type SpawnOptions } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { Transform, type TransformCallback } from 'node:stream'
-import { toNetscape } from './cookie'
 
-// Résolution de flux (yt-dlp + PO Token) et proxy LAN pour Cast/Sonos. Les enceintes ne voient
-// jamais googlevideo.com — seulement une URL HTTP du serveur Kasbah.
+// Proxy LAN pour Cast/Sonos, commun à toutes les sources musicales (YouTube Music, Mixcloud…) : les
+// enceintes ne voient jamais l'hôte de la source (googlevideo, mixcloud.stream) — seulement une URL
+// HTTP du serveur Kasbah. Chaque source dit seulement où est le flux d'une piste (`ResolvedStream`).
 //
 // Ce que l'enceinte reçoit est un FICHIER de taille connue, découpable par plages d'octets, sans
 // rien télécharger d'avance : elle en connaît la durée et sa position, met en pause, reprend et se
 // déplace toute seule, et passe au repos à la fin. Deux façons d'y arriver :
 //
 //  1. RELAIS (le cas normal) — la source EST déjà ce fichier : googlevideo annonce une taille exacte
-//     et accepte les plages. On repasse ses octets tels quels (AAC en MP4, `index.ts` route `/raw`),
+//     et accepte les plages. On repasse ses octets tels quels (AAC en MP4, `player.ts` route `/raw`),
 //     sans réencoder : aucune perte, aucun ffmpeg.
 //  2. REPLI ffmpeg — quand la source n'est pas relayable (pas de taille annoncée, ou seulement de
 //     l'Opus en WebM, qu'un Sonos ne lit pas) : MP3 à débit constant 320 kb/s à 48 kHz, sans en-tête
@@ -24,128 +21,16 @@ import { toNetscape } from './cookie'
 
 export type SpawnFn = (command: string, args: readonly string[], options?: SpawnOptions) => ChildProcessWithoutNullStreams
 
-export interface StreamResolveOpts {
-  videoId: string
-  /**
-   * Conteneurs à PRÉFÉRER quel que soit le débit (ex. `['m4a']`) : pour un relais sans réencodage,
-   * c'est ce que l'enceinte sait lire qui décide, pas le meilleur débit — un Sonos ne lit pas WebM.
-   */
-  preferExts?: string[]
-  cookieRaw: string
-  ytdlpPath: string
-  poTokenUrl: string
-  /** Fichier Netscape déjà écrit ; sinon on en crée un temporaire. */
-  netscapePath?: string
-  spawnImpl?: SpawnFn
-}
-
 export interface ResolvedStream {
   url: string
   formatId: string | null
   ext: string | null
-  /** Débit annoncé par yt-dlp pour ce format (kb/s) : ce qu'on reçoit AVANT notre transcodage. */
+  /** Débit annoncé par la source pour ce format (kb/s) : ce qu'on reçoit AVANT notre transcodage. */
   abrKbps: number | null
-  /** Taille exacte du flux source (octets), quand yt-dlp la donne : elle rend le relais possible. */
+  /** Taille exacte du flux source (octets), quand la source la donne : elle rend le relais possible. */
   sizeBytes: number | null
-  /** Durée du média d'après yt-dlp (s), sinon null (direct, inconnue). */
+  /** Durée du média d'après la source (s), sinon null (direct, inconnue). */
   durationS: number | null
-}
-
-/** Ping du générateur PO Token (Music Assistant : `GET {base}/ping`). */
-export async function pingPoToken(baseUrl: string, fetchImpl: typeof fetch = fetch): Promise<boolean> {
-  const url = `${baseUrl.replace(/\/$/, '')}/ping`
-  try {
-    const r = await fetchImpl(url, { signal: AbortSignal.timeout(3_000) })
-    return r.ok
-  } catch {
-    return false
-  }
-}
-
-function runCapture(command: string, args: string[], spawnImpl: SpawnFn): Promise<{ code: number | null; stdout: string; stderr: string }> {
-  return new Promise((resolve, reject) => {
-    const proc = spawnImpl(command, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
-    let stdout = ''
-    let stderr = ''
-    proc.stdout.setEncoding('utf8')
-    proc.stderr.setEncoding('utf8')
-    proc.stdout.on('data', (c: string) => { stdout += c })
-    proc.stderr.on('data', (c: string) => { stderr += c })
-    proc.on('error', reject)
-    proc.on('close', (code) => resolve({ code, stdout, stderr }))
-  })
-}
-
-/**
- * Résout la meilleure URL audio via yt-dlp (client `web_music` + PO Token + runtime JS node).
- * Même idée que Music Assistant `_get_stream_format` ; sans `--js-runtimes` yt-dlp ≥2026
- * ne livre plus que des storyboards.
- */
-export async function resolveStreamUrl(opts: StreamResolveOpts): Promise<ResolvedStream> {
-  const spawnImpl = opts.spawnImpl ?? (spawn as unknown as SpawnFn)
-  let netscapePath = opts.netscapePath
-  if (!netscapePath) {
-    netscapePath = join(tmpdir(), `kasbah-ytm-${randomBytes(8).toString('hex')}.netscape`)
-    await writeFile(netscapePath, toNetscape(opts.cookieRaw), 'utf8')
-  }
-  const poBase = opts.poTokenUrl.replace(/\/$/, '')
-  const pageUrl = `https://music.youtube.com/watch?v=${opts.videoId}`
-  // yt-dlp ≥2026.08 : `android_music` n'existe plus (« Skipping unsupported client »).
-  // Sans runtime JS, seuls les storyboards restent (challenge n/sig) → « Requested format
-  // is not available ». `web_music` + `--js-runtimes node` + PO Token livre m4a/opus.
-  // Pas de `-f` : on dump `-J` puis on trie en JS. `--ignore-config` évite un `-f` user.
-  const args = [
-    '--ignore-config',
-    '-J', '--no-download', '--no-warnings',
-    '--cookies', netscapePath,
-    '--js-runtimes', 'node',
-    '--remote-components', 'ejs:github',
-    '--extractor-args', `youtubepot-bgutilhttp:base_url=${poBase}`,
-    '--extractor-args', 'youtube:player_client=web_music;skip=translated_subs',
-    pageUrl,
-  ]
-  const { code, stdout, stderr } = await runCapture(opts.ytdlpPath, args, spawnImpl)
-  if (code !== 0) {
-    const tail = stderr.trim().split(/\r?\n/).filter(Boolean).slice(-2).join(' ; ')
-    throw new Error(`yt-dlp failed (${code})${tail ? `: ${tail}` : ''}`)
-  }
-  let info: { formats?: Array<{ url?: string; format_id?: string; ext?: string; acodec?: string; vcodec?: string; abr?: number; tbr?: number; filesize?: number; filesize_approx?: number }> ; url?: string; format_id?: string; ext?: string; duration?: number; is_live?: boolean }
-  try { info = JSON.parse(stdout) as typeof info }
-  catch { throw new Error('yt-dlp returned non-JSON') }
-  // Préférer m4a / 140 / 141, sinon opus/webm, sinon premier format avec audio.
-  const formats = info.formats ?? []
-  const audio = formats
-    .filter((f) => f.url && f.acodec && f.acodec !== 'none' && (f.vcodec === 'none' || !f.vcodec))
-    .sort((a, b) => {
-      const prefer = opts.preferExts?.map((e) => e.toLowerCase())
-      const rank = (f: { ext?: string; format_id?: string; abr?: number; tbr?: number }) => {
-        let r = 0
-        if (prefer?.length) r += prefer.includes((f.ext ?? '').toLowerCase()) ? 10_000 : 0
-        if (f.format_id === '141') r += 30
-        else if (f.format_id === '140' || f.ext === 'm4a') r += 20
-        else if (f.ext === 'webm' || f.ext === 'opus') r += 10
-        r += f.abr ?? f.tbr ?? 0
-        return r
-      }
-      return rank(b) - rank(a)
-    })
-  // Fallback : flux muxé (audio+vidéo) s'il n'y a pas d'audio-only — ffmpeg -vn suffit.
-  const muxed = formats
-    .filter((f) => f.url && f.acodec && f.acodec !== 'none')
-    .sort((a, b) => (b.abr ?? b.tbr ?? 0) - (a.abr ?? a.tbr ?? 0))
-  const pick = audio[0] ?? muxed[0] ?? (info.url ? { url: info.url, format_id: info.format_id, ext: info.ext } : null)
-  if (!pick?.url) throw new Error(`no audio stream format found (${formats.length} formats reported)`)
-  const durationS = !info.is_live && typeof info.duration === 'number' && info.duration > 0 ? info.duration : null
-  const rate = (pick as { abr?: number; tbr?: number }).abr ?? (pick as { tbr?: number }).tbr ?? null
-  const size = (pick as { filesize?: number }).filesize ?? (pick as { filesize_approx?: number }).filesize_approx ?? null
-  return {
-    url: pick.url,
-    formatId: pick.format_id ?? null,
-    ext: pick.ext ?? null,
-    abrKbps: rate ? Math.round(rate) : null,
-    sizeBytes: typeof size === 'number' && size > 0 ? Math.floor(size) : null,
-    durationS,
-  }
 }
 
 // ---- le « fichier » MP3 : trames de taille fixe ---------------------------------------------------
@@ -233,13 +118,21 @@ export class LengthLock extends Transform {
   }
 }
 
+/** Une piste, d'où qu'elle vienne : la source qui sait la trouver, et son identifiant chez elle. */
+export interface TrackRef {
+  /** Id du plugin source (`ytmusic`, `mixcloud`…). */
+  source: string
+  /** Identifiant chez la source (videoId YouTube, clé `/user/mix/` Mixcloud). */
+  id: string
+}
+
 export interface SessionMeta {
   title?: string
   artist?: string
   artUrl?: string
   /** Titre marqué explicit par le catalogue : reposé tel quel au transfert. */
   explicit?: boolean
-  /** Le format reçu de YouTube, pour dire à l'écran ce qu'on transcode. */
+  /** Le format reçu de la source, pour dire à l'écran ce qu'on relaie ou transcode. */
   source?: { ext: string | null; formatId: string | null; abrKbps: number | null }
   /** Durée du titre (catalogue ou yt-dlp) : c'est elle qui fixe la taille du « fichier ». */
   durationS?: number
@@ -252,7 +145,8 @@ export interface ProxySession {
    * taille exacte et accepte les plages — le « fichier » que le MP3 fabrique, il le fournit.
    */
   raw: boolean
-  videoId: string
+  /** La piste servie. */
+  track: TrackRef
   deviceId: string
   sourceUrl: string
   createdAt: number
@@ -272,7 +166,7 @@ export interface StreamProxyOpts {
 }
 
 /**
- * Sessions courtes : `GET /stream/:sid` lance ffmpeg qui lit googlevideo et sort du MP3 sur stdout.
+ * Sessions courtes : `GET /stream/:sid` lance ffmpeg qui lit la source et sort du MP3 sur stdout.
  * Une session par lecteur ; ouvrir la suivante ferme la précédente du même lecteur.
  */
 export class StreamProxy {
@@ -291,11 +185,11 @@ export class StreamProxy {
     this.now = opts.now ?? (() => Date.now())
   }
 
-  open(videoId: string, deviceId: string, sourceUrl: string, meta: SessionMeta = {}, raw?: { mime: string; sizeBytes: number }): ProxySession {
+  open(track: TrackRef, deviceId: string, sourceUrl: string, meta: SessionMeta = {}, raw?: { mime: string; sizeBytes: number }): ProxySession {
     this.closeDevice(deviceId)
     const sid = randomBytes(12).toString('hex')
     const session: ProxySession = {
-      sid, videoId, deviceId, sourceUrl,
+      sid, track: { source: track.source, id: track.id }, deviceId, sourceUrl,
       raw: !!raw,
       createdAt: this.now(),
       mime: raw?.mime ?? 'audio/mpeg',

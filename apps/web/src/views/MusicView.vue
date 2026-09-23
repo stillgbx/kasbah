@@ -16,10 +16,11 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import type { CommandInput, DeviceEntry } from '@kasbah/shared'
 import { getTransport } from '../api'
-import type { YtmusicAlbum, YtmusicArtist, YtmusicExplore, YtmusicExploreCategory, YtmusicExploreShelf, YtmusicPlaylist, YtmusicQueue, YtmusicQueueTrack, YtmusicRepeat, YtmusicSession, YtmusicTrack } from '../api/transport'
+import type { YtmusicAlbum, YtmusicArtist, YtmusicExplore, YtmusicExploreCategory, YtmusicExploreShelf, YtmusicPlaylist, MusicQueue, MusicTrack, MusicRepeat, MusicSession, YtmusicTrack } from '../api/transport'
 import PageHeader from '../components/layout/PageHeader.vue'
 import ChipRow from '../components/music/ChipRow.vue'
 import ListeningSessions from '../components/music/ListeningSessions.vue'
+import MixcloudBrowser from '../components/music/MixcloudBrowser.vue'
 import MusicItemRow from '../components/music/MusicItemRow.vue'
 import MusicPlayerBar from '../components/music/MusicPlayerBar.vue'
 import MusicShelves from '../components/music/MusicShelves.vue'
@@ -31,6 +32,7 @@ import Segmented from '../components/ui/Segmented.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import { formatClock } from '../composables/useMediaPosition'
 import { artAt } from '../lib/artUrl'
+import type { IconName } from '../lib/strokeIcons'
 import { splitCredit } from '../lib/wikiCredit'
 import { useDevicesStore } from '../stores/devices'
 import { useHouseStore } from '../stores/house'
@@ -114,16 +116,18 @@ const RECENT_PLAYS_MAX = 20
 const SIMPLE_MAX = 12
 
 /** Les sources de musique : YouTube Music, puis chaque plugin source actif (les radios). */
-type SourceId = 'ytmusic' | 'radio'
+type SourceId = 'ytmusic' | 'radio' | 'mixcloud'
 const sources = computed(() => {
-  const out: { id: SourceId; label: string }[] = [{ id: 'ytmusic', label: 'YouTube Music' }]
-  if (plugins.byId.radio?.enabled) out.push({ id: 'radio', label: t('radio.source') })
+  const out: { id: SourceId; label: string; icon: IconName }[] = [{ id: 'ytmusic', label: 'YouTube Music', icon: 'sourceYtmusic' }]
+  if (plugins.byId.mixcloud?.enabled) out.push({ id: 'mixcloud', label: 'Mixcloud', icon: 'sourceMixcloud' })
+  if (plugins.byId.radio?.enabled) out.push({ id: 'radio', label: t('radio.source'), icon: 'sourceRadio' })
   return out
 })
 const sourceChoice = useLocalStorage<SourceId>('kasbah.music.source', 'ytmusic')
 /** La source affichée : le choix mémorisé, s'il est encore actif. */
 const activeSource = computed<SourceId>(() => (sources.value.some((s) => s.id === sourceChoice.value) ? sourceChoice.value : 'ytmusic'))
-const sourceOptions = computed(() => sources.value.map((s) => ({ value: s.id, label: s.label })))
+/** Des logos seuls : `Segmented` donne alors le nom en infobulle et en libellé accessible. */
+const sourceOptions = computed(() => sources.value.map((s) => ({ value: s.id, label: s.label, icon: s.icon })))
 
 const browseOptions = computed(() => [
   { value: 'recent' as const, label: t('music.browseRecent') },
@@ -204,17 +208,20 @@ const favoriteSessions = useLocalStorage<string[]>('kasbah.music.favoriteSession
 const selected = computed<DeviceEntry | null>(() => players.value.find((e) => e.descriptor.id === sessionId.value) ?? null)
 const selectedName = computed(() => selected.value ? (house.houseDeviceFor(selected.value.descriptor.id)?.name ?? selected.value.descriptor.name) : '')
 /** Les lecteurs qui jouent en ce moment un flux servi par Kasbah, par id plugin — transférables, déplaçables. */
-const ourSessions = ref<Map<string, YtmusicSession>>(new Map())
+const ourSessions = ref<Map<string, MusicSession>>(new Map())
 const selectedSession = computed(() => (localSelected.value ? local.barSession : selected.value ? ourSessions.value.get(selected.value.descriptor.id) ?? null : null))
 /**
  * Le titre que JOUE le lecteur choisi (servi par nous), pour le signaler dans les listes : surligné,
  * et un point qui pulse tant qu'il joue (immobile en pause). Rien si le lecteur est au repos.
  */
-const nowPlayingId = computed<string | null>(() => {
+const nowPlayingTrack = computed<{ source: string; id: string } | null>(() => {
   const st = selected.value?.state
   if (st?.kind !== 'media_player' || (st.playback !== 'playing' && st.playback !== 'paused')) return null
-  return selectedSession.value?.videoId ?? null
+  const s = selectedSession.value
+  return s ? { source: s.source, id: s.id } : null
 })
+/** Les listes YouTube Music de cette page : un id n'y a de sens que venu de lui. */
+const nowPlayingId = computed(() => (nowPlayingTrack.value?.source === 'ytmusic' ? nowPlayingTrack.value.id : null))
 const nowPulsing = computed(() => selected.value?.state.kind === 'media_player' && selected.value.state.playback === 'playing')
 /** Titre en cours d'envoi : la barre le montre tout de suite, avec un sablier, le temps que l'enceinte suive. */
 const pendingTrack = ref<YtmusicTrack | null>(null)
@@ -243,7 +250,7 @@ watch(players, (list) => {
 
 async function refreshSessions(): Promise<void> {
   try {
-    const r = await getTransport().ytmusicSessions()
+    const r = await getTransport().musicSessions()
     ourSessions.value = new Map(r.sessions.map((s) => [s.deviceId, s]))
   } catch { /* plugin absent ou serveur muet : rien à transférer */ }
 }
@@ -264,12 +271,13 @@ watch(() => {
 /** Une liste de plus de titres que la file n'en accepte : on en envoie une fenêtre autour du titre choisi. */
 const QUEUE_WINDOW = 1000
 const queueOpen = ref(false)
-const queue = ref<YtmusicQueue | null>(null)
+const queue = ref<MusicQueue | null>(null)
 const queueBusyIndex = ref<number | null>(null)
 const queueWaiting = computed(() => (queue.value ? queue.value.items.length - queue.value.index - 1 : 0))
-function toQueueTrack(tr: YtmusicTrack): YtmusicQueueTrack {
+function toQueueTrack(tr: YtmusicTrack): MusicTrack {
   return {
-    videoId: tr.videoId,
+    source: 'ytmusic',
+    id: tr.videoId,
     title: tr.title,
     ...(tr.artists.length ? { artist: tr.artists.join(', ') } : {}),
     ...(tr.artUrl ? { artUrl: tr.artUrl } : {}),
@@ -278,9 +286,9 @@ function toQueueTrack(tr: YtmusicTrack): YtmusicQueueTrack {
   }
 }
 /** Un titre de la file vu comme un titre du catalogue (barre pendant l'envoi, lignes de la file). */
-function fromQueueTrack(qt: YtmusicQueueTrack): YtmusicTrack {
+function fromQueueTrack(qt: MusicTrack): YtmusicTrack {
   return {
-    videoId: qt.videoId, title: qt.title ?? qt.videoId, artists: qt.artist ? [qt.artist] : [],
+    videoId: qt.id, title: qt.title ?? qt.id, artists: qt.artist ? [qt.artist] : [],
     artUrl: qt.artUrl ?? null, durationS: qt.durationS ?? null, ...(qt.explicit ? { explicit: true } : {}),
   }
 }
@@ -294,7 +302,7 @@ async function loadQueue(): Promise<void> {
     queue.value = local.queue
     return
   }
-  try { queue.value = await getTransport().ytmusicQueue(id) }
+  try { queue.value = await getTransport().musicQueue(id) }
   catch { queue.value = null }
 }
 // relire la file dès que la session dit qu'elle a bougé (titre suivant, ajout, retrait, répétition)
@@ -309,7 +317,7 @@ watch(queueOpen, async (open) => {
   await nextTick()
   document.querySelector('.queue-list [data-selected="1"]')?.scrollIntoView({ block: 'nearest' })
 })
-function patchSessionQueue(q: YtmusicQueue) {
+function patchSessionQueue(q: MusicQueue) {
   const s = selectedSession.value
   if (!s) return
   queue.value = q
@@ -333,7 +341,7 @@ async function queueGo(step: 'next' | 'previous' | number) {
       return
     }
     const api = getTransport()
-    const q = step === 'next' ? await api.ytmusicQueueNext(id) : step === 'previous' ? await api.ytmusicQueuePrevious(id) : await api.ytmusicQueueJump(id, step)
+    const q = step === 'next' ? await api.musicQueueNext(id) : step === 'previous' ? await api.musicQueuePrevious(id) : await api.musicQueueJump(id, step)
     patchSessionQueue(q)
   } catch (err) { fail(err) }
   finally {
@@ -342,25 +350,25 @@ async function queueGo(step: 'next' | 'previous' | number) {
     void refreshSessions()
   }
 }
-async function setRepeat(mode: YtmusicRepeat) {
+async function setRepeat(mode: MusicRepeat) {
   const id = selected.value?.descriptor.id
   if (!id) return
   if (localSelected.value) return local.setRepeat(mode)
-  try { patchSessionQueue(await getTransport().ytmusicQueueRepeat(id, mode)) }
+  try { patchSessionQueue(await getTransport().musicQueueRepeat(id, mode)) }
   catch (err) { fail(err) }
 }
 async function removeFromQueue(index: number) {
   const id = selected.value?.descriptor.id
   if (!id) return
   if (localSelected.value) return local.remove(index)
-  try { patchSessionQueue(await getTransport().ytmusicQueueRemove(id, index)) }
+  try { patchSessionQueue(await getTransport().musicQueueRemove(id, index)) }
   catch (err) { fail(err) }
 }
 async function clearQueue() {
   const id = selected.value?.descriptor.id
   if (!id) return
   if (localSelected.value) return local.clear()
-  try { patchSessionQueue(await getTransport().ytmusicQueueClear(id)) }
+  try { patchSessionQueue(await getTransport().musicQueueClear(id)) }
   catch (err) { fail(err) }
 }
 /** Lire ensuite / ajouter à la fin, sans interrompre. Rien ne joue ici ? Le serveur lance le titre. */
@@ -377,7 +385,7 @@ async function addToQueue(track: YtmusicTrack, where: 'next' | 'end') {
     return
   }
   try {
-    const r = await getTransport().ytmusicQueueAdd({ deviceId: target.descriptor.id, tracks: [toQueueTrack(track)], where })
+    const r = await getTransport().musicQueueAdd({ deviceId: target.descriptor.id, tracks: [toQueueTrack(track)], where })
     if (r.started) rememberPlay(track)
     patchSessionQueue(r.queue)
   } catch (err) { fail(err) }
@@ -428,10 +436,10 @@ async function transferTo(toId: string) {
   try {
     const api = getTransport()
     if (isLocalPlayer(fromId)) {
-      await api.ytmusicTransfer({ fromDeviceId: fromId, toDeviceId: toId, ...local.snapshot() })
+      await api.musicTransfer({ fromDeviceId: fromId, toDeviceId: toId, ...local.snapshot() })
       local.stop()
     } else {
-      const r = await api.ytmusicTransfer({ fromDeviceId: fromId, toDeviceId: toId })
+      const r = await api.musicTransfer({ fromDeviceId: fromId, toDeviceId: toId })
       if (isLocalPlayer(toId) && r.session) await local.adopt({ ...r, session: r.session })
     }
     sessionId.value = toId
@@ -753,15 +761,29 @@ async function play(track: YtmusicTrack, list: YtmusicTrack[] = [track]) {
     notifications.error(t('ytmusic.noPlayer'))
     return
   }
-  if (localSelected.value) local.prime()
   rememberPlay(track)
-  playingId.value = track.videoId
-  pendingTrack.value = track
-  const at = Math.max(0, list.findIndex((x) => x.videoId === track.videoId))
-  const from = Math.max(0, Math.min(at - 100, list.length - QUEUE_WINDOW))
-  const tracksWindow = list.slice(from, from + QUEUE_WINDOW)
+  await playTracks(list.map(toQueueTrack), Math.max(0, list.findIndex((x) => x.videoId === track.videoId)))
+}
+
+/**
+ * Jouer `all[at]`, d'où que viennent les pistes (YouTube Music, Mixcloud) : la liste devient la file
+ * du lecteur choisi — enceinte (file côté serveur) ou ce navigateur —, par fenêtre de `QUEUE_WINDOW`.
+ */
+async function playTracks(all: MusicTrack[], at: number) {
+  const target = selected.value
+  if (!target || !canReceive(target)) {
+    notifications.error(t('ytmusic.noPlayer'))
+    return
+  }
+  const track = all[at]
+  if (!track) return
+  if (localSelected.value) local.prime()
+  playingId.value = track.id
+  pendingTrack.value = fromQueueTrack(track)
+  const from = Math.max(0, Math.min(at - 100, all.length - QUEUE_WINDOW))
+  const tracksWindow = all.slice(from, from + QUEUE_WINDOW)
   if (localSelected.value) {
-    try { await local.playQueue(tracksWindow.map(toQueueTrack), at - from) }
+    try { await local.playQueue(tracksWindow, at - from) }
     catch (err) { failLocal(err) }
     finally {
       playingId.value = null
@@ -770,7 +792,7 @@ async function play(track: YtmusicTrack, list: YtmusicTrack[] = [track]) {
     return
   }
   try {
-    const r = await getTransport().ytmusicQueuePlay({ deviceId: target.descriptor.id, tracks: tracksWindow.map(toQueueTrack), startIndex: at - from })
+    const r = await getTransport().musicQueuePlay({ deviceId: target.descriptor.id, tracks: tracksWindow, startIndex: at - from })
     patchSessionQueue(r.queue)
     void refreshSessions()
   } catch (err) { fail(err) }
@@ -813,6 +835,8 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
     <div class="body">
       <section class="main">
         <RadioBrowser v-if="activeSource === 'radio'" :target="playTarget ? selected : null" :local-selected="localSelected" />
+        <MixcloudBrowser v-else-if="activeSource === 'mixcloud'" :now-playing="nowPlayingTrack" :pulsing="nowPulsing" :playing-id="playingId"
+                         :can-play="playTarget" @play="playTracks" />
         <template v-else>
         <form class="search" @submit.prevent="runSearch">
           <div class="search__field">
@@ -864,7 +888,7 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
             <template v-if="queueOpen">
               <div class="list queue-list">
                 <template v-if="queue">
-                  <MusicItemRow v-for="(qt, i) in queue.items" :key="`${i}:${qt.videoId}`" action="play" removable :position="i + 1" :art="qt.artUrl ?? null" :title="qt.title ?? qt.videoId"
+                  <MusicItemRow v-for="(qt, i) in queue.items" :key="`${i}:${qt.source}:${qt.id}`" action="play" removable :position="i + 1" :art="qt.artUrl ?? null" :title="qt.title ?? qt.id"
                                 :explicit="!!qt.explicit" :meta="qt.artist ?? ''" :dur="formatClock(qt.durationS)" :selected="i === queue.index" :playing="i === queue.index && nowPulsing"
                                 :disabled="!playTarget" :busy="queueBusyIndex === i" :play-label="$t('ytmusic.play')"
                                 @play="queueGo(i)" @remove="removeFromQueue(i)" />

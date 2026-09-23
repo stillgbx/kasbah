@@ -1,6 +1,6 @@
 import { PassThrough } from 'node:stream'
 import { describe, expect, it } from 'vitest'
-import { FRAME_BYTES, FRAME_S, LengthLock, lengthFor, parseRange, seekFor } from './stream'
+import { FRAME_BYTES, FRAME_S, LengthLock, lengthFor, parseRange, seekFor } from './proxy'
 
 // Le « fichier » MP3 à trames fixes : taille depuis la durée, instant depuis l'octet, plages, et la
 // promesse de taille tenue quoi que produise ffmpeg.

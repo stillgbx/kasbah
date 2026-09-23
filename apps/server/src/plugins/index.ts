@@ -6,6 +6,7 @@ import { createGoogleCastPlugin } from './google_cast'
 import { createHuePlugin } from './hue'
 import { createIrobotPlugin } from './irobot'
 import { createMelcloudPlugin } from './melcloud'
+import { createMixcloudPlugin } from './mixcloud'
 import { createMockPlugin } from './mock'
 import { createNestPlugin } from './nest'
 import { createOpenMeteoPlugin } from './open_meteo'
@@ -39,5 +40,6 @@ export const PLUGIN_FACTORIES: Record<string, PluginFactory> = {
   petkit: () => createPetkitPlugin(),
   ytmusic: () => createYtmusicPlugin(),
   radio: () => createRadioPlugin(),
+  mixcloud: () => createMixcloudPlugin(),
   tuya: () => createTuyaPlugin(),
 }

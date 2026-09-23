@@ -18,6 +18,10 @@ export const ICONS = {
   cast: 'M3 8V5.5h18v13h-8M3 11.5a7 7 0 0 1 7 7M3 15.5a3 3 0 0 1 3 3M3.4 18.5m-.5 0a.5.5 0 1 0 1 0a.5.5 0 1 0-1 0',
   /** Note de musique — vue YouTube Music (non officiel). */
   music: 'M9 18V5l12-2v13M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0zm12-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0z',
+  /** Sources de la page Musique, au trait comme le reste (leurs logos redessinés, pas les marques en couleur). */
+  sourceYtmusic: 'M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0-18 0M12 12m-5 0a5 5 0 1 0 10 0a5 5 0 1 0-10 0M10.5 9.8v4.4l3.6-2.2z',
+  sourceRadio: 'M3 9h18v11H3zM7 9l11-5M8 14.5m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0M14 13h4M14 16h4',
+  sourceMixcloud: 'M7 19h10.5a4.5 4.5 0 0 0 .4-8.98A7 7 0 0 0 4.6 12.6 4 4 0 0 0 7 19zM9 16v-3.5l1.5 2 1.5-2 1.5 2 1.5-2V16',
   /** Silhouette artiste (placeholder pochette). */
   person: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
   /** Disque / album (placeholder pochette). */
