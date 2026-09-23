@@ -6,6 +6,7 @@ import type { CommandInput, DeviceEntry, MediaPlayerClass, StateFor } from '@kas
 import { deviceIcon } from '../../lib/deviceIcons'
 import { isMediaActive } from '../../lib/deviceState'
 import { useHouseStore } from '../../stores/house'
+import { isLocalPlayer } from '../../stores/localPlayer'
 import ExplicitBadge from '../ui/ExplicitBadge.vue'
 import MarqueeText from '../ui/MarqueeText.vue'
 import PulseDot from '../ui/PulseDot.vue'
@@ -64,8 +65,10 @@ interface Row {
   heardId: string; heardPlayback: StateFor<'media_player'>['playback']
   /** Morceau signalé explicit par le service qui l'a lancé. */
   explicit: boolean
+  /** Ce navigateur : il n'est nulle part dans la maison 3D. */
+  local: boolean
 }
-interface Group { key: 'favorites' | 'others'; title: string; rows: Row[] }
+interface Group { key: 'local' | 'favorites' | 'others'; title: string; rows: Row[] }
 
 const rows = computed<Row[]>(() => {
   const idx = house.index
@@ -93,7 +96,8 @@ const rows = computed<Row[]>(() => {
         entry: e,
         id: e.descriptor.id,
         name: hd?.name ?? e.descriptor.name,
-        room: room?.name ?? e.descriptor.meta.room ?? '',
+        room: isLocalPlayer(e.descriptor.id) ? t('music.localRoom') : room?.name ?? e.descriptor.meta.room ?? '',
+        local: isLocalPlayer(e.descriptor.id),
         status,
         active,
         target: s.available && e.descriptor.capabilities.includes('play_url'),
@@ -104,12 +108,18 @@ const rows = computed<Row[]>(() => {
     })
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
 })
-/** Deux groupes, favoris au-dessus ; sans favori, une seule liste sans titre. */
+/**
+ * Ce navigateur tout en haut, avant même les favoris : c'est le lecteur qu'on a sous la main. Puis
+ * deux groupes, favoris au-dessus ; sans favori, une seule liste sans titre.
+ */
 const groups = computed<Group[]>(() => {
-  const fav = rows.value.filter((r) => r.favorite)
-  const rest = rows.value.filter((r) => !r.favorite)
-  if (!fav.length) return [{ key: 'others', title: '', rows: rest }]
+  const mine = rows.value.filter((r) => r.local)
+  const top: Group[] = mine.length ? [{ key: 'local', title: '', rows: mine }] : []
+  const fav = rows.value.filter((r) => r.favorite && !r.local)
+  const rest = rows.value.filter((r) => !r.favorite && !r.local)
+  if (!fav.length) return [...top, { key: 'others', title: '', rows: rest }]
   return [
+    ...top,
     { key: 'favorites', title: t('music.favorites'), rows: fav },
     ...(rest.length ? [{ key: 'others' as const, title: t('music.otherPlayers'), rows: rest }] : []),
   ]
@@ -153,7 +163,7 @@ function tap(r: Row) {
           </Transition>
           <button type="button" class="row__main" :disabled="rowDisabled(r)" @click="tap(r)">
             <span class="icon-square" :data-on="r.active ? '1' : '0'">
-              <StrokeIcon :name="deviceIcon(r.entry.descriptor, r.entry.state)" :size="18" />
+              <StrokeIcon :name="r.local ? 'tablet' : deviceIcon(r.entry.descriptor, r.entry.state)" :size="18" />
             </span>
             <span class="min0 lines">
               <span class="line1">
@@ -184,7 +194,9 @@ function tap(r: Row) {
                     @click.stop="togglePlayback(r)">
               <StrokeIcon :name="r.heardPlayback === 'playing' ? 'pause' : 'play'" :size="16" />
             </button>
-            <button type="button" class="key" :title="$t('music.locate')" :aria-label="$t('music.locate')" @click.stop="emit('locate', r.id)">
+            <!-- ce navigateur n'a pas de place dans la maison : la touche disparaît, son emplacement reste -->
+            <button type="button" class="key" :class="{ 'is-hidden': r.local }" :disabled="r.local" :tabindex="r.local ? -1 : 0"
+                    :title="$t('music.locate')" :aria-label="$t('music.locate')" @click.stop="emit('locate', r.id)">
               <StrokeIcon name="pin" :size="16" />
             </button>
           </template>

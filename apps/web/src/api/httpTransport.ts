@@ -232,7 +232,19 @@ export function createHttpTransport(base = ''): Transport {
     ytmusicTransfer: (body) => request(
       `${base}/api/plugins/ytmusic/transfer`,
       { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
-      (j) => j as { ok: true; streamUrl: string; sid: string; positionS: number },
+      (j) => {
+        const r = j as Awaited<ReturnType<Transport['ytmusicTransfer']>>
+        // cible = ce navigateur : le chemin rendu est relatif au serveur
+        return r.session ? { ...r, streamUrl: `${base}${r.streamUrl}` } : r
+      },
+    ),
+    ytmusicLocalPlay: (body) => request(
+      `${base}/api/plugins/ytmusic/local`,
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
+      (j) => {
+        const r = j as { ok: true; streamUrl: string; session: YtmusicSession }
+        return { ...r, streamUrl: `${base}${r.streamUrl}` }
+      },
     ),
     ytmusicQueuePlay: (body) => request(
       `${base}/api/plugins/ytmusic/queue`,

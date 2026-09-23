@@ -440,7 +440,20 @@ export interface Transport {
   /** Lecteurs qui jouent en ce moment un flux YouTube Music servi par Kasbah. */
   ytmusicSessions(): Promise<{ sessions: YtmusicSession[] }>
   /** Le titre en cours sur `fromDeviceId` repart sur `toDeviceId`, qui se place à la même position ; la source s'arrête. */
-  ytmusicTransfer(body: { fromDeviceId: string; toDeviceId: string }): Promise<{ ok: true; streamUrl: string; sid: string; positionS: number }>
+  ytmusicTransfer(body: {
+    fromDeviceId: string
+    toDeviceId: string
+    /** Source = ce navigateur : sa position et sa file, que le serveur reprend. */
+    positionS?: number
+    queue?: { tracks: YtmusicQueueTrack[]; index: number; repeat: YtmusicRepeat }
+  }): Promise<{
+    ok: true; streamUrl: string; sid: string; positionS: number
+    /** Cible = ce navigateur : la session à lire, et la file qu'il reprend (null sans file). */
+    session?: YtmusicSession
+    queue?: YtmusicQueue | null
+  }>
+  /** Lecture dans CE navigateur : le serveur résout le titre et rend le chemin du « fichier » à lire. */
+  ytmusicLocalPlay(body: YtmusicQueueTrack & { clientId: string; nextVideoId?: string }): Promise<{ ok: true; streamUrl: string; session: YtmusicSession }>
   /** Nouvelle file sur ce lecteur (l'ancienne est remplacée) : `tracks[startIndex]` joue, la suite enchaîne. */
   ytmusicQueuePlay(body: { deviceId: string; tracks: YtmusicQueueTrack[]; startIndex?: number }): Promise<{ ok: true; streamUrl: string; sid: string; queue: YtmusicQueue }>
   ytmusicQueue(deviceId: string): Promise<YtmusicQueue>

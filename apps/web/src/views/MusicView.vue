@@ -33,6 +33,7 @@ import { artAt } from '../lib/artUrl'
 import { splitCredit } from '../lib/wikiCredit'
 import { useDevicesStore } from '../stores/devices'
 import { useHouseStore } from '../stores/house'
+import { isLocalPlayer, useLocalPlayerStore } from '../stores/localPlayer'
 import { useNotificationsStore } from '../stores/notifications'
 import { usePluginsStore } from '../stores/plugins'
 
@@ -74,6 +75,7 @@ const devices = useDevicesStore()
 const house = useHouseStore()
 const notifications = useNotificationsStore()
 const plugins = usePluginsStore()
+const local = useLocalPlayerStore()
 
 // ---- recherche et catalogue -------------------------------------------------------------------
 const query = useLocalStorage('kasbah.ytmusic.query', '')
@@ -177,8 +179,13 @@ const searchEmpty = computed(() =>
   && searchCompilations.value.length === 0 && searchTracks.value.length === 0)
 
 // ---- sessions d'écoute ---------------------------------------------------------------------------
-/** Tous les lecteurs de la maison : on voit ce qui joue partout, même là où on ne peut rien envoyer. */
-const players = computed(() => devices.list.filter((e: DeviceEntry) => e.state.kind === 'media_player'))
+/**
+ * Tous les lecteurs de la maison : on voit ce qui joue partout, même là où on ne peut rien envoyer.
+ * En plus, CE navigateur (le son de la tablette, de l'ordinateur, du téléphone) : un lecteur privé,
+ * tenu par le store `localPlayer`, que seul cet écran voit.
+ */
+const players = computed(() => [local.entry, ...devices.list.filter((e: DeviceEntry) => e.state.kind === 'media_player')])
+const localSelected = computed(() => isLocalPlayer(sessionId.value))
 const canReceive = (e: DeviceEntry) => e.state.available && e.descriptor.capabilities.includes('play_url')
 const sessionId = useLocalStorage('kasbah.music.session', '')
 /** Même clé que l'étoile du panneau Écoute : le lecteur par défaut est le premier favori. */
@@ -187,7 +194,7 @@ const selected = computed<DeviceEntry | null>(() => players.value.find((e) => e.
 const selectedName = computed(() => selected.value ? (house.houseDeviceFor(selected.value.descriptor.id)?.name ?? selected.value.descriptor.name) : '')
 /** Les lecteurs qui jouent en ce moment un flux servi par Kasbah, par id plugin — transférables, déplaçables. */
 const ourSessions = ref<Map<string, YtmusicSession>>(new Map())
-const selectedSession = computed(() => (selected.value ? ourSessions.value.get(selected.value.descriptor.id) ?? null : null))
+const selectedSession = computed(() => (localSelected.value ? local.barSession : selected.value ? ourSessions.value.get(selected.value.descriptor.id) ?? null : null))
 /**
  * Le titre que JOUE le lecteur choisi (servi par nous), pour le signaler dans les listes : surligné,
  * et un point qui pulse tant qu'il joue (immobile en pause). Rien si le lecteur est au repos.
@@ -205,7 +212,7 @@ const transferBusyId = ref<string | null>(null)
 const canTransfer = computed(() => {
   const s = selected.value
   if (!s || s.state.kind !== 'media_player') return false
-  if (!ourSessions.value.has(s.descriptor.id)) return false
+  if (!selectedSession.value) return false
   if (s.state.playback !== 'playing' && s.state.playback !== 'paused') return false
   return players.value.some((e) => e.descriptor.id !== s.descriptor.id && canReceive(e))
 })
@@ -214,7 +221,8 @@ watch(players, (list) => {
   // Ne pas écraser le choix persisté tant que l'inventaire n'est pas arrivé ; sinon le premier
   // FAVORI qui sait recevoir (ordre alphabétique, comme le panneau), puis le premier lecteur qui sait
   // recevoir, à défaut le premier tout court.
-  if (!list.length) return
+  // le lecteur local est toujours là : attendre l'inventaire avant de juger un choix persisté
+  if (!devices.list.length && sessionId.value) return
   if (!sessionId.value || !list.some((e) => e.descriptor.id === sessionId.value)) {
     const byName = [...list].sort((a, b) => a.descriptor.name.localeCompare(b.descriptor.name, undefined, { sensitivity: 'base' }))
     const fav = byName.find((e) => canReceive(e) && favoriteSessions.value.includes(e.descriptor.id))
@@ -271,6 +279,10 @@ async function loadQueue(): Promise<void> {
     queue.value = null
     return
   }
+  if (localSelected.value) {
+    queue.value = local.queue
+    return
+  }
   try { queue.value = await getTransport().ytmusicQueue(id) }
   catch { queue.value = null }
 }
@@ -294,6 +306,8 @@ function patchSessionQueue(q: YtmusicQueue) {
   next.set(s.deviceId, { ...s, queue: { length: q.items.length, index: q.index, repeat: q.repeat } })
   ourSessions.value = next
 }
+// la file locale change sans aller au serveur : la montrer telle quelle
+watch(() => local.queue, (q) => { if (localSelected.value) queue.value = q })
 /** Suivant / précédent / un titre choisi : le serveur lance le titre, la barre le montre tout de suite. */
 async function queueGo(step: 'next' | 'previous' | number) {
   const id = selected.value?.descriptor.id
@@ -303,6 +317,10 @@ async function queueGo(step: 'next' | 'previous' | number) {
   if (track) pendingTrack.value = fromQueueTrack(track)
   if (typeof step === 'number') queueBusyIndex.value = step
   try {
+    if (localSelected.value) {
+      await (step === 'next' ? local.next() : step === 'previous' ? local.previous() : local.jump(step))
+      return
+    }
     const api = getTransport()
     const q = step === 'next' ? await api.ytmusicQueueNext(id) : step === 'previous' ? await api.ytmusicQueuePrevious(id) : await api.ytmusicQueueJump(id, step)
     patchSessionQueue(q)
@@ -316,18 +334,21 @@ async function queueGo(step: 'next' | 'previous' | number) {
 async function setRepeat(mode: YtmusicRepeat) {
   const id = selected.value?.descriptor.id
   if (!id) return
+  if (localSelected.value) return local.setRepeat(mode)
   try { patchSessionQueue(await getTransport().ytmusicQueueRepeat(id, mode)) }
   catch (err) { fail(err) }
 }
 async function removeFromQueue(index: number) {
   const id = selected.value?.descriptor.id
   if (!id) return
+  if (localSelected.value) return local.remove(index)
   try { patchSessionQueue(await getTransport().ytmusicQueueRemove(id, index)) }
   catch (err) { fail(err) }
 }
 async function clearQueue() {
   const id = selected.value?.descriptor.id
   if (!id) return
+  if (localSelected.value) return local.clear()
   try { patchSessionQueue(await getTransport().ytmusicQueueClear(id)) }
   catch (err) { fail(err) }
 }
@@ -336,6 +357,12 @@ async function addToQueue(track: YtmusicTrack, where: 'next' | 'end') {
   const target = selected.value
   if (!target || !canReceive(target)) {
     notifications.error(t('ytmusic.noPlayer'))
+    return
+  }
+  if (localSelected.value) {
+    local.prime()
+    try { if (await local.add([toQueueTrack(track)], where)) rememberPlay(track) }
+    catch (err) { failLocal(err) }
     return
   }
   try {
@@ -361,18 +388,41 @@ function barCommand(cmd: CommandInput) {
     void queueGo(cmd.type === 'media_player.next' ? 'next' : 'previous')
     return
   }
+  if (localSelected.value) {
+    local.command(cmd)
+    return
+  }
   void devices.sendCommand(selected.value.descriptor.id, cmd).then(() => {
     if (cmd.type === 'media_player.stop') void refreshSessions()
   })
 }
 // Pas de toast de succès ici ni au lancement d'un titre : la barre et le panneau montrent déjà le
 // résultat, et le toast passait par-dessus le lecteur. Les erreurs, elles, restent des toasts.
+/** Lecture / pause depuis une ligne du panneau : le lecteur local n'est pas un appareil du serveur. */
+function panelCommand(id: string, cmd: CommandInput) {
+  if (isLocalPlayer(id)) local.command(cmd)
+  else void devices.sendCommand(id, cmd)
+}
+/**
+ * Transférer, dans les deux sens avec ce navigateur : vers une enceinte, le serveur reprend la position
+ * et la file que le navigateur lui donne, puis le navigateur se tait ; depuis une enceinte, le serveur
+ * l'arrête et rend au navigateur de quoi reprendre (fichier, position, file).
+ */
 async function transferTo(toId: string) {
   const from = selected.value
   if (!from) return
+  const fromId = from.descriptor.id
+  if (isLocalPlayer(toId)) local.prime()
   transferBusyId.value = toId
   try {
-    await getTransport().ytmusicTransfer({ fromDeviceId: from.descriptor.id, toDeviceId: toId })
+    const api = getTransport()
+    if (isLocalPlayer(fromId)) {
+      await api.ytmusicTransfer({ fromDeviceId: fromId, toDeviceId: toId, ...local.snapshot() })
+      local.stop()
+    } else {
+      const r = await api.ytmusicTransfer({ fromDeviceId: fromId, toDeviceId: toId })
+      if (isLocalPlayer(toId) && r.session) await local.adopt({ ...r, session: r.session })
+    }
     sessionId.value = toId
     transferMode.value = false
   } catch (err) {
@@ -385,7 +435,8 @@ async function transferTo(toId: string) {
 /** Se placer dans le morceau : la commande du lecteur suffit, notre flux est un « fichier » pour lui. */
 function barSeek(positionS: number) {
   const s = selected.value
-  if (s) void devices.sendCommand(s.descriptor.id, { type: 'media_player.seek', positionS: Math.round(positionS) })
+  if (localSelected.value) local.seek(positionS)
+  else if (s) void devices.sendCommand(s.descriptor.id, { type: 'media_player.seek', positionS: Math.round(positionS) })
 }
 
 // ---- liaison et chargement ---------------------------------------------------------------------
@@ -427,6 +478,8 @@ function albumMeta(al: YtmusicAlbum): string {
   return al.artists.length ? al.artists.join(', ') : ''
 }
 const fail = (err: unknown) => notifications.error(t('errors.UNKNOWN', { name: 'YouTube Music', message: (err as Error).message }))
+/** Le navigateur refuse de lire (lecture automatique bloquée, format) : ce n'est pas une erreur du serveur. */
+const failLocal = (err: unknown) => (err instanceof DOMException ? notifications.error(t('music.localFailed')) : fail(err))
 
 function clearSearchResults() {
   searchArtists.value = []
@@ -689,12 +742,22 @@ async function play(track: YtmusicTrack, list: YtmusicTrack[] = [track]) {
     notifications.error(t('ytmusic.noPlayer'))
     return
   }
+  if (localSelected.value) local.prime()
   rememberPlay(track)
   playingId.value = track.videoId
   pendingTrack.value = track
   const at = Math.max(0, list.findIndex((x) => x.videoId === track.videoId))
   const from = Math.max(0, Math.min(at - 100, list.length - QUEUE_WINDOW))
   const tracksWindow = list.slice(from, from + QUEUE_WINDOW)
+  if (localSelected.value) {
+    try { await local.playQueue(tracksWindow.map(toQueueTrack), at - from) }
+    catch (err) { failLocal(err) }
+    finally {
+      playingId.value = null
+      pendingTrack.value = null
+    }
+    return
+  }
   try {
     const r = await getTransport().ytmusicQueuePlay({ deviceId: target.descriptor.id, tracks: tracksWindow.map(toQueueTrack), startIndex: at - from })
     patchSessionQueue(r.queue)
@@ -709,6 +772,8 @@ async function play(track: YtmusicTrack, list: YtmusicTrack[] = [track]) {
 /** Album ou artiste joué d'un geste (sa tuile, sa ligne) : ses titres deviennent la file, depuis le premier. */
 const playingCollection = ref<string | null>(null)
 async function playCollection(id: string, load: () => Promise<{ tracks: YtmusicTrack[] }>) {
+  // le déverrouillage du son doit avoir lieu dans le geste, avant le chargement de la liste
+  if (localSelected.value) local.prime()
   playingCollection.value = id
   try {
     const list = withoutExplicit((await load()).tracks)
@@ -1003,7 +1068,7 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
       <ListeningSessions :players="players" :selected-id="sessionId || null" :transfer-mode="transferMode" :transfer-busy-id="transferBusyId"
                          :pending-id="pendingTrack && selected ? selected.descriptor.id : null"
                          @select="selectSession" @transfer-to="transferTo" @locate="locate"
-                         @command="(id, cmd) => devices.sendCommand(id, cmd)" />
+                         @command="panelCommand" />
     </div>
 
     <MusicPlayerBar :entry="selected" :name="selectedName" :session="selectedSession" :pending="pendingTrack"

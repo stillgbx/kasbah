@@ -5,6 +5,7 @@ import type { CommandInput, DeviceEntry, StateFor } from '@kasbah/shared'
 import type { YtmusicRepeat, YtmusicStreamQuality } from '../../api/transport'
 import { formatClock, useMediaPosition, useSeekHold } from '../../composables/useMediaPosition'
 import { deviceIcon } from '../../lib/deviceIcons'
+import { isLocalPlayer } from '../../stores/localPlayer'
 import ArtThumb from '../ui/ArtThumb.vue'
 import ExplicitBadge from '../ui/ExplicitBadge.vue'
 import MarqueeText from '../ui/MarqueeText.vue'
@@ -312,7 +313,8 @@ const explicit = computed(() => (props.pending
       </div>
       <div class="bar__device">
         <span class="icon-square" :data-on="loaded ? '1' : '0'">
-          <StrokeIcon :name="entry ? deviceIcon(entry.descriptor, entry.state) : 'speaker'" :size="18" />
+          <!-- ce navigateur : une tablette, pas une enceinte -->
+          <StrokeIcon :name="!entry ? 'speaker' : isLocalPlayer(entry.descriptor.id) ? 'tablet' : deviceIcon(entry.descriptor, entry.state)" :size="18" />
         </span>
         <div class="bar__device-text">
           <MarqueeText class="bar__device-name" :text="name || NBSP" />

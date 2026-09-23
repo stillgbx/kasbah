@@ -116,7 +116,7 @@
     "browse": "Browse", "browseRecent": "Recent", "browseLiked": "Likes", "browsePlaylists": "Playlists", "browseNew": "New releases", "kindAlbum": "Album", "kindSingle": "Single", "kindEp": "EP", "kindCompilation": "Compilation", "kindPlaylist": "Playlist", "kindArtist": "Artist", "detailTracks": "{n} track | {n} tracks", "durMin": "{m} min", "durHourMin": "{h} hr {m} min", "browseGenres": "Genres", "browseMoods": "Moods",
     "topResults": "Top results", "seeAll": "See all", "noRecent": "Your recent plays will show up here.",
     "sessions": "Listening", "sessionsHint": "Where playback goes — tap a player to control it", "transferHint": "Tap the player that should pick up the track",
-    "noSession": "No player available", "nothing": "Nothing playing", "idle": "Idle",
+    "noSession": "No player available", "localPlayer": "This browser", "localRoom": "This device's sound", "localFailed": "This browser cannot play the track", "nothing": "Nothing playing", "idle": "Idle",
     "transfer": "Transfer", "transferTo": "Transfer playback to…", "transferHere": "Here", "transferring": "Transferring…",
     "transferred": "Playback transferred to {name}", "transferUnavailable": "Only playback started from Kasbah can be transferred",
     "stop": "Stop", "onDevice": "on {name}",

@@ -889,6 +889,59 @@ describe('ytmusic plugin', () => {
     expect(feed).toBeNull()
   })
 
+  it('opens a browser session without any player, and transfers both ways with the queue', async () => {
+    const office: DeviceDescriptor = { ...player, id: 'sonos:office', pluginId: 'sonos', externalId: 'office', name: 'Bureau', capabilities: ['playback', 'play_url', 'seek'] }
+    const commands: { id: string; cmd: Command }[] = []
+    const ff = fakeSpawn({ filesize: 400_000 })
+    const states = new Map<string, unknown>([[office.id, { kind: 'media_player', playback: 'idle', nowPlaying: null }]])
+    const { plugin, app, ctx } = await boot({
+      spawnImpl: ff.spawnImpl,
+      getDevice: (id) => (id === office.id ? { descriptor: office, state: states.get(id) } : undefined),
+      execute: async (id, cmd) => { commands.push({ id, cmd }) },
+      onState: () => () => {},
+    })
+    const post = (url: string, payload: object) => app.inject({ method: 'POST', url: `/api/plugins/ytmusic${url}`, payload })
+    const ytdlpRuns = () => (ff.spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls.filter((c) => (c[1] as string[]).includes('-J')).length
+    await app.inject({ method: 'PUT', url: '/api/plugins/ytmusic/cookie', payload: { cookie: COOKIE } })
+    const local = 'local:tablette-1234'
+
+    // le navigateur reçoit un chemin RELATIF vers le relais ; aucune commande n'est partie, aucune enceinte
+    const opened = await post('/local', { videoId: 'vA', title: 'A', clientId: 'tablette-1234', nextVideoId: 'vB' })
+    expect(opened.statusCode).toBe(200)
+    expect(opened.json().streamUrl).toMatch(/^\/api\/plugins\/ytmusic\/raw\/[0-9a-f]+\.m4a$/)
+    expect(opened.json().session).toMatchObject({ deviceId: local, videoId: 'vA', durationS: 20, title: 'A' })
+    expect(commands).toEqual([])
+    // le suivant est résolu d'avance
+    await vi.waitFor(() => expect(ytdlpRuns()).toBe(2))
+    // une lecture locale n'est la session d'aucune enceinte
+    expect((await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/sessions' })).json().sessions).toEqual([])
+    expect((await post('/local', { videoId: 'vA', clientId: 'x' })).statusCode).toBe(400)
+
+    // navigateur → enceinte : la position vient du navigateur, sa file passe au serveur
+    expect((await post('/transfer', { fromDeviceId: local, toDeviceId: office.id })).statusCode).toBe(400)
+    const tracks = ['A', 'B', 'C'].map((title) => ({ videoId: `v${title}`, title }))
+    const out = await post('/transfer', { fromDeviceId: local, toDeviceId: office.id, positionS: 7, queue: { tracks, index: 0, repeat: 'once' } })
+    expect(out.statusCode).toBe(200)
+    expect(out.json().queue).toMatchObject({ index: 0, repeat: 'once' })
+    expect(commands.map((c) => c.cmd.type)).toEqual(['media_player.play_url', 'media_player.seek'])
+    expect(commands[1]!.cmd).toEqual({ type: 'media_player.seek', positionS: 8 })
+    // pas de nouvelle résolution : l'URL de la session du navigateur a resservi
+    expect(ytdlpRuns()).toBe(2)
+
+    // enceinte → navigateur : l'enceinte s'arrête, la file revient au navigateur
+    states.set(office.id, { kind: 'media_player', playback: 'playing', nowPlaying: { positionS: 42, title: 'A' }, updatedAt: (ctx.clock as ManualClock).now() })
+    commands.length = 0
+    const back = await post('/transfer', { fromDeviceId: office.id, toDeviceId: local })
+    expect(back.statusCode).toBe(200)
+    expect(back.json()).toMatchObject({ positionS: 42, session: { deviceId: local, videoId: 'vA' }, queue: { index: 0, repeat: 'once' } })
+    expect(back.json().queue.items).toHaveLength(3)
+    expect(back.json().streamUrl).toMatch(/^\/api\/plugins\/ytmusic\/raw\//)
+    expect(commands).toEqual([{ id: office.id, cmd: { type: 'media_player.stop' } }])
+    expect((await app.inject({ method: 'GET', url: `/api/plugins/ytmusic/queue?deviceId=${office.id}` })).statusCode).toBe(404)
+    await app.close()
+    await plugin.stop()
+  })
+
   it('waits for the pause of the playing track before sending a prefetched one', async () => {
     const office: DeviceDescriptor = { ...player, id: 'sonos:office', pluginId: 'sonos', externalId: 'office', name: 'Bureau' }
     const steps: string[] = []
