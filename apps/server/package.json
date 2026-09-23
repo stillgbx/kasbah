@@ -16,6 +16,8 @@
     "@fastify/websocket": "^11.0.0",
     "@kasbah/mock-sim": "*",
     "@kasbah/shared": "*",
+    "@modelcontextprotocol/fastify": "^2.0.0",
+    "@modelcontextprotocol/server": "^2.0.0",
     "bonjour-service": "^1.4.4",
     "dotenv": "^17.0.0",
     "fastify": "^5.0.0",
@@ -28,6 +30,7 @@
     "zod": "^4.0.0"
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "^2.0.0",
     "@types/ws": "^8.0.0",
     "esbuild": "^0.28.0",
     "pino-pretty": "^13.0.0",

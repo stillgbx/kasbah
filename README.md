@@ -112,7 +112,7 @@ npm run dev
 Si npm bloque le script d'installation d'`esbuild` : `npm approve-scripts esbuild` puis `npm rebuild esbuild`.
 
 - Web (Vite, HMR) : <http://localhost:5173> — accessible depuis la tablette via l'IP du poste (`host: true`).
-- Serveur : <http://localhost:8787> — `GET /api/health`, `GET /api/house`, `GET /api/devices`, WebSocket `/ws`.
+- Serveur : <http://localhost:8787> — `GET /api/health`, `GET /api/house`, `GET /api/devices`, WebSocket `/ws`, serveur MCP `/mcp` (voir [Serveur MCP](#serveur-mcp)).
 
 Sans aucune configuration, le serveur démarre avec le plugin `mock` et la maison de démonstration : tout est pilotable immédiatement.
 
@@ -140,6 +140,42 @@ npm test           # vitest, tous les workspaces (shared, mock-sim, server, web)
 npm run typecheck  # tsc / vue-tsc par workspace
 npm run lint       # eslint (flat config, TypeScript + Vue)
 ```
+
+## Serveur MCP
+
+Le serveur Kasbah expose aussi un serveur [MCP](https://modelcontextprotocol.io) sur `http://localhost:8787/mcp` (Streamable HTTP, SDK TypeScript officiel v2, spec 2026-07-28, clients 2025 acceptés). Il démarre avec le serveur, rien à activer.
+
+| Outil | Rôle |
+|---|---|
+| `list_devices` | Appareils et état courant, filtres `kind`, `room`, `query` |
+| `get_device` | Descripteur complet et état d'un appareil |
+| `send_command` | Commande un **vrai** appareil (même contrat et mêmes contrôles que `POST /api/devices/:id/command`) |
+| `list_scenes` / `recall_scene` | Scènes des fabricants, et leur rappel |
+| `get_health` | Santé des plugins |
+
+Ressource : `kasbah://house` (le `house.json` validé).
+
+**Pas d'authentification** : `/mcp` n'accepte que les requêtes adressées à `localhost` / `127.0.0.1` (en-têtes `Host` et `Origin`, protection contre le DNS rebinding). Le client MCP doit donc tourner **sur la machine du serveur**. Ce n'est pas un contrôle d'accès : un poste du réseau local peut forger son `Host`, comme il peut déjà appeler l'API REST.
+
+Configurer un client (serveur Kasbah lancé) :
+
+- **Claude Code**
+  ```bash
+  claude mcp add --transport http kasbah http://localhost:8787/mcp
+  ```
+- **VS Code** (`.vscode/mcp.json` ou configuration utilisateur)
+  ```json
+  { "servers": { "kasbah": { "type": "http", "url": "http://localhost:8787/mcp" } } }
+  ```
+- **Cursor** (`~/.cursor/mcp.json`)
+  ```json
+  { "mcpServers": { "kasbah": { "url": "http://localhost:8787/mcp" } } }
+  ```
+- **Claude Desktop** : ses connecteurs distants passent par le cloud et n'atteignent pas `localhost` ; passer par le pont stdio `mcp-remote` dans `claude_desktop_config.json`
+  ```json
+  { "mcpServers": { "kasbah": { "command": "npx", "args": ["-y", "mcp-remote", "http://localhost:8787/mcp"] } } }
+  ```
+- **Tester à la main** : `npx @modelcontextprotocol/inspector`, transport « Streamable HTTP », URL ci-dessus.
 
 ## Configuration (`apps/server/.env`)
 
