@@ -1168,7 +1168,9 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
         }
         const len = upstream.headers.get('content-length')
         const contentRange = upstream.headers.get('content-range')
-        log().info({
+        // `debug` : un Sonos lit le fichier par plages de 6 Ko, soit une requête par fraction de seconde —
+        // en `info`, ces lignes noyaient le journal. Le lancement d'un titre, lui, reste en `info`.
+        log().debug({
           sid: session.sid, deviceId: session.deviceId, range: range ?? null, status: upstream.status,
           len, contentRange, ua: req.headers['user-agent'] ?? null,
         }, 'ytmusic raw GET')
@@ -1208,7 +1210,8 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
           headers['content-range'] = `bytes ${range.start}-${range.end}/${session.lengthBytes}`
           headers['content-length'] = String(range.end - range.start + 1)
         }
-        log().info({
+        // `debug`, comme le relais : une ligne par plage demandée par l'enceinte
+        log().debug({
           sid: session.sid, deviceId: session.deviceId, range: req.headers.range ?? null, startS: Number(startS.toFixed(3)),
           ua: req.headers['user-agent'] ?? null,
         }, 'ytmusic stream GET')
