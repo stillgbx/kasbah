@@ -169,6 +169,12 @@ export interface MixcloudMix {
 export interface MixcloudUser { username: string; name: string; artUrl: string | null }
 export interface MixcloudStatus { username: string | null; user: MixcloudUser | null; lastError: string | null }
 export type MixcloudList = 'feed' | 'favorites' | 'listens' | 'uploads'
+/** Une rangée de l'accueil Mixcloud, recomposé par le serveur à partir des écoutes publiques du compte. */
+export type MixcloudHomeSection =
+  | { kind: 'users'; id: 'topCreators'; users: MixcloudUser[] }
+  | { kind: 'mixes'; id: 'following' | 'listenAgain'; items: MixcloudMix[] }
+  | { kind: 'mixes'; id: 'moreFrom'; user: MixcloudUser; items: MixcloudMix[] }
+  | { kind: 'mixes'; id: 'popular'; genre: { slug: string; name: string }; items: MixcloudMix[] }
 export interface MixcloudPage { items: MixcloudMix[]; next: string | null }
 
 /** Une webradio de l'annuaire radio-browser (plugin `radio`). */
@@ -511,6 +517,8 @@ export interface Transport {
   mixcloudClearAccount(): Promise<MixcloudStatus>
   /** Une liste du compte ; `next` = curseur rendu par la page précédente. `feed` = nouveautés des suivis. */
   mixcloudList(list: MixcloudList, next?: string): Promise<MixcloudPage>
+  /** L'accueil : tes créateurs, tes suivis, réécouter, plus de tes créateurs, les populaires de tes genres. */
+  mixcloudHome(): Promise<{ sections: MixcloudHomeSection[] }>
   mixcloudPlaylists(): Promise<{ playlists: { key: string; name: string }[] }>
   mixcloudPlaylist(key: string, next?: string): Promise<MixcloudPage>
   mixcloudFollowing(): Promise<{ users: MixcloudUser[] }>

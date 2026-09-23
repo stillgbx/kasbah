@@ -7,6 +7,7 @@ import { sendError } from '../../http/errors'
 import type { ResolvedStream, SpawnFn } from '../../music/proxy'
 import { registerMusicSource, type MusicSource } from '../../music/sources'
 import { createMixcloudApi, followingUploads, KEY_RE, USERNAME_RE, type MixcloudApi, type MixcloudMix } from './api'
+import { buildHome, type HomeSection } from './home'
 import { resolveMixcloud } from './resolve'
 import { createMixcloudFile, noteProgress, resumePoint, type MixcloudState, type MixcloudStore } from './store'
 
@@ -46,6 +47,7 @@ export function createMixcloudPlugin(deps: MixcloudPluginDeps = {}): DevicePlugi
   let state: MixcloudState = { username: null, resume: {} }
   let lastError: string | null = null
   let feed: { username: string; at: number; items: MixcloudMix[] } | null = null
+  let home: { username: string; at: number; sections: HomeSection[] } | null = null
   let saveTimer: ReturnType<typeof setTimeout> | null = null
   let unregister: (() => void) | null = null
 
@@ -79,6 +81,13 @@ export function createMixcloudPlugin(deps: MixcloudPluginDeps = {}): DevicePlugi
   async function persistNow() {
     if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
     await store?.save(state)
+  }
+  /** Le fil des suivis, gardé une demi-heure (une requête par compte suivi). */
+  async function followingFeed(username: string): Promise<MixcloudMix[]> {
+    if (!feed || feed.username !== username || now() - feed.at > FEED_TTL_MS) {
+      feed = { username, at: now(), items: await followingUploads(needApi(), username) }
+    }
+    return feed.items
   }
   /** Chaque mix rendu à l'UI porte sa position de reprise, s'il en a une. */
   const withResume = (items: MixcloudMix[]) => items.map((m) => {
@@ -141,6 +150,7 @@ export function createMixcloudPlugin(deps: MixcloudPluginDeps = {}): DevicePlugi
       unregister = null
       if (saveTimer) await persistNow().catch(() => {})
       feed = null
+      home = null
       ctx = null
     },
 
@@ -158,6 +168,7 @@ export function createMixcloudPlugin(deps: MixcloudPluginDeps = {}): DevicePlugi
         if (!user) return sendError(reply, 404, 'NOT_FOUND', `no Mixcloud account named "${body.data.username}"`)
         state = { ...state, username: user.username }
         feed = null
+        home = null
         await persistNow()
         ctx?.logger.info({ username: user.username }, 'Mixcloud account set')
         return { username: user.username, user, lastError }
@@ -166,6 +177,7 @@ export function createMixcloudPlugin(deps: MixcloudPluginDeps = {}): DevicePlugi
       app.delete('/account', async () => {
         state = { ...state, username: null }
         feed = null
+        home = null
         await persistNow()
         return { username: null, user: null, lastError }
       })
@@ -176,12 +188,7 @@ export function createMixcloudPlugin(deps: MixcloudPluginDeps = {}): DevicePlugi
         const username = needUser()
         const { list } = req.params
         const next = req.query.next
-        if (list === 'feed') {
-          if (!feed || feed.username !== username || now() - feed.at > FEED_TTL_MS) {
-            feed = { username, at: now(), items: await ask((a) => followingUploads(a, username)) }
-          }
-          return { items: withResume(feed.items), next: null }
-        }
+        if (list === 'feed') return { items: withResume(await ask(() => followingFeed(username))), next: null }
         const call = list === 'favorites' ? (a: MixcloudApi) => a.favorites(username, next)
           : list === 'listens' ? (a: MixcloudApi) => a.listens(username, next)
             : list === 'uploads' ? (a: MixcloudApi) => a.cloudcasts(username, next)
@@ -189,6 +196,17 @@ export function createMixcloudPlugin(deps: MixcloudPluginDeps = {}): DevicePlugi
         if (!call) return sendError(reply, 404, 'NOT_FOUND', `unknown Mixcloud list "${list}"`)
         const page = await ask(call)
         return { items: withResume(page.items), next: page.next }
+      })
+
+      // L'accueil, façon site : tes créateurs, tes suivis, réécouter, plus de tes créateurs, les
+      // populaires de tes genres — recomposé de tes écoutes publiques, gardé une demi-heure. Les
+      // positions de reprise, elles, sont relues à chaque appel.
+      app.get('/home', async () => {
+        const username = needUser()
+        if (!home || home.username !== username || now() - home.at > FEED_TTL_MS) {
+          home = { username, at: now(), sections: await ask((a) => buildHome(a, username, () => followingFeed(username))) }
+        }
+        return { sections: home.sections.map((s) => (s.kind === 'mixes' ? { ...s, items: withResume(s.items) } : s)) }
       })
 
       app.get('/playlists', async () => ({ playlists: await ask((a) => a.playlists(needUser())) }))

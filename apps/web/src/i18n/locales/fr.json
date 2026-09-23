@@ -131,9 +131,10 @@
 
   "mixcloud": {
     "source": "Mixcloud", "searchPlaceholder": "Rechercher un mix, une émission, un DJ…",
+    "tabHome": "Accueil", "homeTopCreators": "Tes créateurs", "homeFollowing": "Des comptes que tu suis", "homeListenAgain": "Réécouter", "homeMoreFrom": "Plus de {name}", "homePopular": "Émissions {genre} populaires", "homeEmpty": "Écoute quelques mix sur Mixcloud : l'accueil se compose de tes écoutes.",
     "tabFeed": "Nouveautés", "tabFavorites": "Favoris", "tabListens": "Écoutés", "tabUploads": "Mes mix", "tabPlaylists": "Playlists", "tabFollowing": "Suivis",
     "linkTitle": "Relier ton compte Mixcloud", "linkHint": "Ton nom d'utilisateur, celui de l'adresse de ton profil (mixcloud.com/<nom>/). Aucun mot de passe : Kasbah ne lit que ce que ton profil montre publiquement.",
-    "username": "Nom d'utilisateur", "link": "Relier", "unlink": "Délier", "account": "Compte {name}",
+    "username": "Nom d'utilisateur", "link": "Relier", "unlink": "Délier",
     "empty": "Rien ici pour l'instant.", "unavailable": "Mixcloud ne répond pas.", "more": "Afficher plus",
     "resumeAt": "Reprendre à {time}", "restart": "Repartir du début", "play": "Écouter {name}", "mixes": "Mix de {name}",
     "feedHint": "Les derniers mix des comptes que tu suis (mis à jour toutes les 30 min)."

@@ -1,6 +1,6 @@
 import { apiErrorSchema, devicesResponseSchema, energyHistorySchema, healthResponseSchema, houseSchema, pluginsResponseSchema, scenesResponseSchema, serverMessageSchema, weatherForecastSchema, deviceJournalSchema, deviceConsumptionSchema, type CommandInput, type DeviceConsumption, type DeviceJournal, type DeviceEntry, type DevicePlacement, type EnergyHistory, type HealthResponse, type House, type PluginInfo, type PluginSceneEntry, type PluginSettingsPatch, type SceneRecallInput, type SceneUpdate, type WeatherForecast } from '@kasbah/shared'
 import { parseDeviceId } from '@kasbah/shared'
-import { ApiRequestError, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type MelcloudStatus, type MelcloudUnit, type MixcloudPage, type MixcloudStatus, type MixcloudUser, type PetkitStatus, type RadioStation, type RenaultStatus, type TeslaStatus, type Transport, type TransportHandlers, type YtmusicExplore, type YtmusicExploreShelf, type YtmusicPlaylist, type MusicQueue, type YtmusicSearchResult, type MusicSession, type YtmusicStatus, type YtmusicTrack } from './transport'
+import { ApiRequestError, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type MelcloudStatus, type MelcloudUnit, type MixcloudHomeSection, type MixcloudPage, type MixcloudStatus, type MixcloudUser, type PetkitStatus, type RadioStation, type RenaultStatus, type TeslaStatus, type Transport, type TransportHandlers, type YtmusicExplore, type YtmusicExploreShelf, type YtmusicPlaylist, type MusicQueue, type YtmusicSearchResult, type MusicSession, type YtmusicStatus, type YtmusicTrack } from './transport'
 
 // URLs relatives : même origine en prod (Fastify sert le build) et via le proxy Vite en dev.
 
@@ -276,6 +276,7 @@ export function createHttpTransport(base = ''): Transport {
     ),
     mixcloudClearAccount: () => request(`${base}/api/plugins/mixcloud/account`, { method: 'DELETE' }, (j) => j as MixcloudStatus),
     mixcloudList: (list, next) => request(`${base}/api/plugins/mixcloud/library/${list}${next ? `?next=${encodeURIComponent(next)}` : ''}`, undefined, (j) => j as MixcloudPage),
+    mixcloudHome: () => request(`${base}/api/plugins/mixcloud/home`, undefined, (j) => j as { sections: MixcloudHomeSection[] }),
     mixcloudPlaylists: () => request(`${base}/api/plugins/mixcloud/playlists`, undefined, (j) => j as { playlists: { key: string; name: string }[] }),
     mixcloudPlaylist: (key, next) => request(`${base}/api/plugins/mixcloud/playlist?key=${encodeURIComponent(key)}${next ? `&next=${encodeURIComponent(next)}` : ''}`, undefined, (j) => j as MixcloudPage),
     mixcloudFollowing: () => request(`${base}/api/plugins/mixcloud/following`, undefined, (j) => j as { users: MixcloudUser[] }),

@@ -230,6 +230,7 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     async mixcloudSetAccount() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Mixcloud account in mock mode') },
     async mixcloudClearAccount() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Mixcloud account in mock mode') },
     async mixcloudList() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Mixcloud account in mock mode') },
+    async mixcloudHome() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Mixcloud account in mock mode') },
     async mixcloudPlaylists() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Mixcloud account in mock mode') },
     async mixcloudPlaylist() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Mixcloud account in mock mode') },
     async mixcloudFollowing() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Mixcloud account in mock mode') },

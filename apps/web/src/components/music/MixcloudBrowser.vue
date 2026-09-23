@@ -3,20 +3,23 @@ import { useLocalStorage } from '@vueuse/core'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getTransport } from '../../api'
-import type { MixcloudList, MixcloudMix, MixcloudPage, MixcloudStatus, MixcloudUser, MusicTrack } from '../../api/transport'
+import type { MixcloudHomeSection, MixcloudList, MixcloudMix, MixcloudPage, MixcloudStatus, MixcloudUser, MusicTrack } from '../../api/transport'
 import { useNotificationsStore } from '../../stores/notifications'
 import Segmented from '../ui/Segmented.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import MusicItemRow from './MusicItemRow.vue'
+import MusicTile from './MusicTile.vue'
 
 // Source « Mixcloud » de la page Musique (plugin `mixcloud`). Le compte se relie par son NOM
-// d'utilisateur (l'API publique ne demande rien d'autre) ; les listes sont celles du profil —
+// d'utilisateur (l'API publique ne demande rien d'autre ; relier, changer, délier : dans la fiche du
+// plugin, Réglages → Plugins). L'accueil reprend celui du site, en rangées de tuiles recomposées par le
+// serveur à partir des écoutes publiques ; les autres listes sont celles du profil —
 // nouveautés des comptes suivis, favoris, écoutes, ses mix, ses playlists, ses suivis — et la
 // recherche. Jouer un mix passe par la page (`play`), qui sait l'envoyer à l'enceinte ou le lire
 // ici ; la liste d'où il vient devient la file. Un mix écouté en partie se reprend où on l'a laissé.
 // Même gabarit que les autres sources : rien ne bouge en changeant de source.
 
-type Tab = MixcloudList | 'playlists' | 'following'
+type Tab = 'home' | MixcloudList | 'playlists' | 'following'
 /** Ce qu'on regarde dans l'onglet : la liste elle-même, ou une playlist / un compte ouverts depuis lui. */
 type Drill = { kind: 'playlist'; key: string; name: string } | { kind: 'user'; username: string; name: string } | null
 
@@ -41,12 +44,13 @@ const usernameInput = ref('')
 const linking = ref(false)
 
 const query = useLocalStorage('kasbah.mixcloud.query', '')
-const tab = useLocalStorage<Tab>('kasbah.mixcloud.tab', 'feed')
+const tab = useLocalStorage<Tab>('kasbah.mixcloud.tab', 'home')
 const drill = ref<Drill>(null)
 const mixes = ref<MixcloudMix[]>([])
 const next = ref<string | null>(null)
 const playlists = ref<{ key: string; name: string }[]>([])
 const users = ref<MixcloudUser[]>([])
+const sections = ref<MixcloudHomeSection[]>([])
 const searching = ref(false)
 const busy = ref(false)
 const more = ref(false)
@@ -54,6 +58,7 @@ const failed = ref(false)
 
 const linked = computed(() => !!status.value?.username)
 const tabOptions = computed(() => [
+  { value: 'home' as const, label: t('mixcloud.tabHome') },
   { value: 'feed' as const, label: t('mixcloud.tabFeed') },
   { value: 'favorites' as const, label: t('mixcloud.tabFavorites') },
   { value: 'listens' as const, label: t('mixcloud.tabListens') },
@@ -62,7 +67,20 @@ const tabOptions = computed(() => [
   { value: 'following' as const, label: t('mixcloud.tabFollowing') },
 ])
 /** On montre des mix (et pas une liste de playlists ou de comptes). */
-const showsMixes = computed(() => searching.value || !!drill.value || (tab.value !== 'playlists' && tab.value !== 'following'))
+const showsMixes = computed(() => searching.value || !!drill.value || (tab.value !== 'playlists' && tab.value !== 'following' && tab.value !== 'home'))
+/** L'accueil (ses rangées), hors recherche et hors playlist / compte ouverts. */
+const showsHome = computed(() => tab.value === 'home' && !searching.value && !drill.value)
+
+function shelfTitle(s: MixcloudHomeSection): string {
+  switch (s.id) {
+    case 'topCreators': return t('mixcloud.homeTopCreators')
+    case 'following': return t('mixcloud.homeFollowing')
+    case 'listenAgain': return t('mixcloud.homeListenAgain')
+    case 'moreFrom': return t('mixcloud.homeMoreFrom', { name: s.user.name })
+    case 'popular': return t('mixcloud.homePopular', { genre: s.genre.name })
+  }
+}
+const shelfKey = (s: MixcloudHomeSection, i: number) => `${i}:${s.id}:${'user' in s ? s.user.username : 'genre' in s ? s.genre.slug : ''}`
 
 const fail = (err: unknown) => notifications.error(t('errors.UNKNOWN', { name: 'Mixcloud', message: (err as Error).message }))
 
@@ -96,8 +114,7 @@ function toTrack(m: MixcloudMix, withResume: boolean): MusicTrack {
     ...(withResume && m.resumeS ? { startS: m.resumeS } : {}),
   }
 }
-function play(m: MixcloudMix) {
-  const list = mixes.value
+function play(m: MixcloudMix, list: MixcloudMix[] = mixes.value) {
   const at = Math.max(0, list.findIndex((x) => x.key === m.key))
   // seule la piste lancée reprend : les suivantes de la file partent du début
   emit('play', list.map((x, i) => toTrack(x, i === at)), at)
@@ -125,6 +142,7 @@ async function loadTab() {
   mixes.value = []
   next.value = null
   const current = tab.value
+  if (current === 'home') return run(() => getTransport().mixcloudHome(), (r) => { sections.value = r.sections })
   if (current === 'playlists') return run(() => getTransport().mixcloudPlaylists(), (r) => { playlists.value = r.playlists })
   if (current === 'following') return run(() => getTransport().mixcloudFollowing(), (r) => { users.value = r.users })
   return run(() => getTransport().mixcloudList(current), setPage)
@@ -184,9 +202,6 @@ async function link() {
   } catch (err) { fail(err) }
   finally { linking.value = false }
 }
-async function unlink() {
-  try { status.value = await getTransport().mixcloudClearAccount() } catch (err) { fail(err) }
-}
 
 watch(tab, () => { if (linked.value && !searching.value) void loadTab() })
 onMounted(async () => {
@@ -223,15 +238,11 @@ onMounted(async () => {
           </button>
         </div>
       </form>
-      <!-- onglets et compte : même rangée, sa place gardée pendant une recherche (grisée) -->
+      <!-- onglets : leur place gardée pendant une recherche (grisés) -->
       <div class="tabs">
         <div :class="{ 'is-dim': searching }">
           <Segmented v-model="tab" dense :options="tabOptions" :label="$t('mixcloud.source')" />
         </div>
-        <button type="button" class="pill account" :title="$t('mixcloud.unlink')" @click="unlink">
-          <StrokeIcon name="linkOff" :size="16" />
-          <span>{{ $t('mixcloud.account', { name: `@${status?.username}` }) }}</span>
-        </button>
       </div>
       <!-- « Retour » d'une playlist ou d'un compte ouverts, place gardée hors recherche -->
       <div v-if="drill && !searching" class="back-row">
@@ -244,7 +255,28 @@ onMounted(async () => {
 
       <div class="mc__scroll">
         <p v-if="tab === 'feed' && !searching && !drill" class="muted small hint">{{ $t('mixcloud.feedHint') }}</p>
-        <div v-if="busy && !mixes.length && showsMixes" class="list" aria-hidden="true">
+        <template v-if="showsHome">
+          <div v-if="busy && !sections.length" aria-hidden="true">
+            <div v-for="n in 3" :key="n" class="shelf">
+              <span class="skel skel--label" />
+              <div class="shelf__row"><div v-for="k in 6" :key="k" class="skel-tile"><span class="skel skel--tile" /><span class="skel skel--line" /></div></div>
+            </div>
+          </div>
+          <p v-else-if="!sections.length" class="muted empty" role="status">{{ failed ? $t('mixcloud.unavailable') : $t('mixcloud.homeEmpty') }}</p>
+          <section v-for="(sh, si) in sections" :key="shelfKey(sh, si)" class="shelf">
+            <h2 class="section-label shelf__head">{{ shelfTitle(sh) }}</h2>
+            <div class="shelf__row">
+              <template v-if="sh.kind === 'users'">
+                <MusicTile v-for="u in sh.users" :key="u.username" action="open" round icon="person" :art="u.artUrl" :title="u.name" :meta="`@${u.username}`" @open="openUser(u)" />
+              </template>
+              <template v-else>
+                <MusicTile v-for="m in sh.items" :key="m.key" action="play" icon="sourceMixcloud" :art="m.artUrl" :title="m.name" :meta="meta(m)"
+                           :busy="playingId === m.key" :disabled="!canPlay" :play-label="$t('mixcloud.play', { name: m.name })" @play="play(m, sh.items)" />
+              </template>
+            </div>
+          </section>
+        </template>
+        <div v-else-if="busy && !mixes.length && showsMixes" class="list" aria-hidden="true">
           <div v-for="n in 8" :key="n" class="skel-row"><span class="skel skel--art" /><span class="skel skel--line" /></div>
         </div>
 
@@ -303,11 +335,19 @@ onMounted(async () => {
 .tabs { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
 .tabs > div { min-width: 0; overflow-x: auto; }
 .is-dim { opacity: 0.45; pointer-events: none; }
-.account { flex: 0 0 auto; white-space: nowrap; max-width: 40%; overflow: hidden; text-overflow: ellipsis; }
 .back-row { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; }
 .back-row__title { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mc__scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; }
 .hint { margin: 0 4px 8px; }
+/* l'accueil : des rangées de tuiles, comme sur le site */
+.shelf { margin: 4px 0 18px; }
+.shelf__head { margin: 0 4px 8px; }
+.shelf__row { display: flex; gap: 14px; overflow-x: auto; scroll-snap-type: x proximity; padding: 2px 4px 8px; }
+.shelf__row::-webkit-scrollbar { height: 6px; }
+.shelf__row::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; }
+.skel-tile { width: 128px; flex: 0 0 auto; display: grid; gap: 6px; }
+.skel--tile { width: 128px; height: 128px; border-radius: 10px; }
+.skel--label { display: block; width: 160px; height: 13px; margin: 0 4px 10px; }
 .small { font-size: 12px; }
 /* en colonnes, comme les radios : une ligne de mix est courte */
 .list { display: grid; gap: 2px 18px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); align-content: start; }

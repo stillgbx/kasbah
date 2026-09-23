@@ -15,7 +15,7 @@ const cloudcastSchema = z.object({
   pictures: picturesSchema,
   audio_length: z.number().optional(),
   created_time: z.string().optional(),
-  tags: z.array(z.object({ name: z.string() })).optional().default([]),
+  tags: z.array(z.object({ name: z.string(), key: z.string().optional() })).optional().default([]),
 })
 const pageSchema = <T extends z.ZodTypeAny>(item: T) => z.object({
   data: z.array(z.unknown()).transform((rows) => rows.flatMap((r) => { const p = item.safeParse(r); return p.success ? [p.data as z.infer<T>] : [] })),
@@ -32,6 +32,8 @@ export interface MixcloudMix {
   durationS: number | null
   createdAt: string | null
   tags: string[]
+  /** Les genres du mix tels que l'API les nomme dans ses URL (`/genres/jazz/` → `jazz`), dans l'ordre des tags. */
+  genres: { slug: string; name: string }[]
 }
 
 export interface MixcloudUser {
@@ -67,6 +69,10 @@ export function toMix(c: z.infer<typeof cloudcastSchema>): MixcloudMix {
     durationS: typeof c.audio_length === 'number' && c.audio_length > 0 ? c.audio_length : null,
     createdAt: c.created_time ?? null,
     tags: c.tags.map((t) => t.name).slice(0, 5),
+    genres: c.tags.flatMap((t) => {
+      const slug = /^\/genres\/([a-z0-9-]+)\/$/.exec(t.key ?? '')?.[1]
+      return slug ? [{ slug, name: t.name }] : []
+    }),
   }
 }
 
@@ -79,11 +85,14 @@ export interface MixcloudApi {
   user(username: string): Promise<MixcloudUser | null>
   cloudcasts(username: string, next?: string): Promise<MixcloudPage<MixcloudMix>>
   favorites(username: string, next?: string): Promise<MixcloudPage<MixcloudMix>>
-  listens(username: string, next?: string): Promise<MixcloudPage<MixcloudMix>>
+  /** `limit` : jusqu'à 100 par page (l'accueil en tire les créateurs et genres les plus écoutés). */
+  listens(username: string, next?: string, limit?: number): Promise<MixcloudPage<MixcloudMix>>
   playlists(username: string): Promise<MixcloudPlaylist[]>
   playlist(key: string, next?: string): Promise<MixcloudPage<MixcloudMix>>
   following(username: string): Promise<MixcloudUser[]>
   search(q: string, next?: string): Promise<MixcloudPage<MixcloudMix>>
+  /** Les émissions populaires d'un genre (`/discover/<slug>/popular/`). */
+  popular(genreSlug: string): Promise<MixcloudPage<MixcloudMix>>
 }
 
 const PAGE = 40
@@ -131,7 +140,7 @@ export function createMixcloudApi(base: string, fetchImpl: typeof fetch = fetch,
     // `async` : un nom invalide se rend en promesse rejetée, comme toute autre erreur de ces appels
     cloudcasts: async (u, next) => mixes(userPath(u, 'cloudcasts/'), next),
     favorites: async (u, next) => mixes(userPath(u, 'favorites/'), next),
-    listens: async (u, next) => mixes(userPath(u, 'listens/'), next),
+    listens: async (u, next, limit) => mixes(userPath(u, 'listens/'), next, limit ? { limit: String(Math.min(100, limit)) } : {}),
     async playlists(u) {
       const body = await get(urlFor(userPath(u, 'playlists/'), { limit: '100' }))
       if (body === null) return []
@@ -147,6 +156,10 @@ export function createMixcloudApi(base: string, fetchImpl: typeof fetch = fetch,
       return pageSchema(userSchema).parse(body).data.map((x) => ({ username: x.username, name: x.name || x.username, artUrl: bestPicture(x.pictures) }))
     },
     search: async (q, next) => mixes('/search/', next, { q, type: 'cloudcast' }),
+    async popular(slug) {
+      if (!/^[a-z0-9-]{1,64}$/.test(slug)) throw new PluginError('UNSUPPORTED_COMMAND', 'invalid Mixcloud genre')
+      return mixes(`/discover/${slug}/popular/`)
+    },
   }
 }
 

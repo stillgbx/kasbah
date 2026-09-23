@@ -11,6 +11,7 @@ import { createMusicPlayer } from '../../music/player'
 import type { SpawnFn } from '../../music/proxy'
 import { getMusicSource } from '../../music/sources'
 import { createMixcloudApi, followingUploads, KEY_RE, toMix, type MixcloudApi, type MixcloudMix } from './api'
+import { buildHome } from './home'
 import { createMixcloudPlugin } from './index'
 import { resolveMixcloud } from './resolve'
 import { memoryMixcloud, noteProgress, resumePoint } from './store'
@@ -19,7 +20,7 @@ import { memoryMixcloud, noteProgress, resumePoint } from './store'
 const RAW_CLOUDCAST = {
   key: '/NTSRadio/btwn-earthsky-lara-sarkissian-23rd-september-2026/',
   name: 'Btwn Earth+Sky: Lara Sarkissian - 23rd September 2026',
-  tags: [{ name: 'Experimental' }, { name: 'Persian Pop' }],
+  tags: [{ name: 'Experimental', key: '/genres/experimental/' }, { name: 'Persian Pop', key: '/genres/persian-pop/' }],
   created_time: '2026-09-23T10:02:35Z',
   pictures: { small: 'https://thumbnailer.mixcloud.com/unsafe/25x25/x', large: 'https://thumbnailer.mixcloud.com/unsafe/300x300/x', '1024wx1024h': 'https://thumbnailer.mixcloud.com/unsafe/1024x1024/x' },
   user: { username: 'NTSRadio', name: 'Mixcloud NTS Radio' },
@@ -80,6 +81,7 @@ function fakeApi(over: Partial<MixcloudApi> = {}): MixcloudApi {
     playlist: vi.fn(async () => page),
     following: vi.fn(async () => []),
     search: vi.fn(async () => page),
+    popular: vi.fn(async () => page),
     ...over,
   }
 }
@@ -125,6 +127,7 @@ describe('mixcloud api', () => {
       durationS: 5288,
       createdAt: '2026-09-23T10:02:35Z',
       tags: ['Experimental', 'Persian Pop'],
+      genres: [{ slug: 'experimental', name: 'Experimental' }, { slug: 'persian-pop', name: 'Persian Pop' }],
     })
     expect(KEY_RE.test(MIX.key)).toBe(true)
     expect(KEY_RE.test('/NTSRadio/../../etc/')).toBe(false)
@@ -154,6 +157,49 @@ describe('mixcloud api', () => {
     })
     const feed = await followingUploads(api, 'kasbahfan', { perUser: 2 })
     expect(feed.map((m) => m.key)).toEqual(['/c/22/', '/a/20/', '/a/10/'])
+  })
+})
+
+describe('mixcloud home', () => {
+  // la répartition relevée sur le compte de l'utilisateur le 2026-09-23 : The Boat Pod puis Worldwide FM,
+  // jazz puis soul ; `worldwide-fm` est aussi un genre chez Mixcloud, mais c'est déjà une rangée « Plus de »
+  const listen = (user: string, i: number, genres: string[]): MixcloudMix => ({
+    ...MIX, key: `/${user}/mix-${i}/`, user: { username: user, name: user === 'worldwidefm' ? 'Worldwide FM' : user },
+    genres: genres.map((g) => ({ slug: g, name: g[0]!.toUpperCase() + g.slice(1) })),
+  })
+  const listens = [
+    ...[0, 1, 2].map((i) => listen('TheBoAtPod', i, ['jazz', 'soul'])),
+    ...[0, 1].map((i) => listen('worldwidefm', i, ['worldwide-fm', 'jazz'])),
+    listen('WeAreOneJazz', 0, ['jazz', 'acoustic-jazz']),
+    listen('TheBoAtPod', 0, ['jazz', 'soul']),                // réécouté : une seule fois dans « Réécouter »
+  ]
+
+  it('builds the sections from what the account listens to', async () => {
+    const api = fakeApi({
+      listens: vi.fn(async () => ({ items: listens, next: null })),
+      cloudcasts: vi.fn(async (u: string) => ({ items: [listen(u, 9, [])], next: null })),
+      popular: vi.fn(async (g: string) => ({ items: g === 'acoustic-jazz' ? [] : [listen('someone', 1, [g])], next: null })),
+    })
+    const feed = [listen('followed', 1, [])]
+    const home = await buildHome(api, 'un_auditeur', async () => feed, { moreFrom: 2, genres: 3 })
+    expect(api.listens).toHaveBeenCalledWith('un_auditeur', undefined, 100)
+    expect(home.map((s) => s.id)).toEqual(['topCreators', 'following', 'listenAgain', 'moreFrom', 'moreFrom', 'popular', 'popular'])
+    const top = home[0]!
+    expect(top.kind === 'users' && top.users.map((u) => u.username)).toEqual(['TheBoAtPod', 'worldwidefm', 'WeAreOneJazz'])
+    expect(home.filter((s) => s.id === 'moreFrom').map((s) => s.kind === 'mixes' && 'user' in s && s.user.username)).toEqual(['TheBoAtPod', 'worldwidefm'])
+    expect(home.filter((s) => s.id === 'popular').map((s) => 'genre' in s && s.genre.slug)).toEqual(['jazz', 'soul'])
+    expect(api.popular).not.toHaveBeenCalledWith('worldwide-fm')
+    const again = home.find((s) => s.id === 'listenAgain')!
+    expect(again.kind === 'mixes' && again.items.map((m) => m.key)).toEqual(['/TheBoAtPod/mix-0/', '/TheBoAtPod/mix-1/', '/TheBoAtPod/mix-2/', '/worldwidefm/mix-0/', '/worldwidefm/mix-1/', '/WeAreOneJazz/mix-0/'])
+  })
+
+  it('keeps the other rows when one call fails', async () => {
+    const api = fakeApi({
+      listens: vi.fn(async () => ({ items: listens, next: null })),
+      cloudcasts: vi.fn(async () => { throw new PluginError('RATE_LIMITED', 'Mixcloud answered 429') }),
+    })
+    const home = await buildHome(api, 'un_auditeur', async () => { throw new Error('down') })
+    expect(home.map((s) => s.id)).toEqual(['topCreators', 'listenAgain', 'popular', 'popular', 'popular'])
   })
 })
 
