@@ -231,11 +231,21 @@ export function describeAction(a: ActionDraft, names: NameContext, t: Translate)
 }
 
 /** La phrase d'une ligne de liste : « Quand · sauf si … → Alors ». */
+/** Les exceptions, jointes par « ou » (il suffit d'une pour bloquer) ; vide s'il n'y en a pas. */
+export function describeUnless(unless: readonly Predicate[], names: NameContext, t: Translate, locale: string): string {
+  return unless.map((p) => describePredicate(p, names, t, locale)).join(t('automations.summary.or'))
+}
+
+/** Les actions, dans leur ordre d'exécution. */
+export function describeActions(actions: readonly ActionDraft[], names: NameContext, t: Translate): string {
+  return actions.map((x) => describeAction(x, names, t)).join(' ; ')
+}
+
+/** La phrase d'une automatisation : « Quand · sauf si … → Alors ». */
 export function describeAutomation(a: Pick<AutomationBody, 'trigger' | 'unless' | 'actions'>, names: NameContext, t: Translate, locale: string): string {
   const when = describeTrigger(a.trigger, names, t, locale)
-  const unless = a.unless.length ? ` · ${t('automations.summary.unless', { conditions: a.unless.map((p) => describePredicate(p, names, t, locale)).join(t('automations.summary.or')) })}` : ''
-  const then = a.actions.map((x) => describeAction(x, names, t)).join(' ; ')
-  return `${when}${unless} → ${then}`
+  const unless = a.unless.length ? ` · ${t('automations.summary.unless', { conditions: describeUnless(a.unless, names, t, locale) })}` : ''
+  return `${when}${unless} → ${describeActions(a.actions, names, t)}`
 }
 
 // ── brouillon ───────────────────────────────────────────────────────────────────────────────────

@@ -3,15 +3,17 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AutomationEntry } from '@kasbah/shared'
 import { useAutomationNames } from '../../composables/useAutomationNames'
-import { describeAutomation, HEALTH_DOT, triggerIcon } from '../../lib/automations'
+import { describeActions, describeTrigger, describeUnless, HEALTH_DOT, triggerIcon } from '../../lib/automations'
 import { formatAgo } from '../../lib/format'
 import { useAutomationsStore } from '../../stores/automations'
 import MarqueeText from '../ui/MarqueeText.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Une automatisation dans la liste. Empreinte FIXE : deux lignes de texte qui défilent si elles
-// débordent, une colonne de santé et une colonne d'horaires de largeurs réservées — basculer
-// l'interrupteur, perdre un appareil ou voir passer une exécution ne décale rien.
+// Une automatisation dans la liste, lisible sans l'ouvrir : le nom, puis « Quand », « Sauf si » et
+// « Alors » sur trois lignes étiquetées ; à droite, la prochaine exécution, la dernière et son issue,
+// et l'état (ce qui manque, ce qui ne répond pas). Empreinte FIXE : chaque ligne est toujours là
+// (« — » quand elle n'a rien à dire), chaque texte défile s'il déborde, la colonne de droite a sa
+// largeur réservée — basculer, perdre un appareil ou voir passer une exécution ne décale rien.
 const props = defineProps<{ entry: AutomationEntry; now: number }>()
 const emit = defineEmits<{ open: [] }>()
 const store = useAutomationsStore()
@@ -20,32 +22,42 @@ const { t, locale } = useI18n()
 
 const a = computed(() => props.entry.automation)
 const status = computed(() => props.entry.status)
-const summary = computed(() => describeAutomation(a.value, names, t, locale.value))
-
-const missingTitle = computed(() => {
-  const m = status.value.missing.map((x) => (x.kind === 'device' ? names.deviceName(x.id) : x.id))
-  const u = status.value.unavailableDeviceIds.map(names.deviceName)
-  return [
-    m.length ? t('automations.missing', { names: m.join(', ') }) : '',
-    u.length ? t('automations.unavailableList', { names: u.join(', ') }) : '',
-  ].filter(Boolean).join('\n')
-})
+const when = computed(() => describeTrigger(a.value.trigger, names, t, locale.value))
+const unless = computed(() => describeUnless(a.value.unless, names, t, locale.value) || '—')
+const then = computed(() => describeActions(a.value.actions, names, t))
 
 const next = computed(() => {
   const at = status.value.nextRunAt
   if (at === undefined) return '—'
-  return new Intl.DateTimeFormat(locale.value, { weekday: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(at))
+  return new Intl.DateTimeFormat(locale.value, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(at))
 })
+
+const lastRun = computed(() => status.value.lastRun)
 const last = computed(() => {
-  const run = status.value.lastRun
-  return run ? formatAgo(run.at, props.now, locale.value) : '—'
-})
-const lastFailed = computed(() => status.value.lastRun?.outcome === 'failed' || status.value.lastRun?.outcome === 'partial')
-const lastTitle = computed(() => {
-  const run = status.value.lastRun
+  const run = lastRun.value
   if (!run) return t('automations.neverRun')
-  const head = t(`automations.outcome.${run.outcome}`)
-  return run.errors.length ? `${head}\n${run.errors.map((e) => `${e.deviceId ? `${names.deviceName(e.deviceId)} : ` : ''}${e.message}`).join('\n')}` : head
+  const outcome = run.outcome === 'partial' ? t('automations.outcomeShort.partial', run.errors.length) : t(`automations.outcomeShort.${run.outcome}`)
+  return `${formatAgo(run.at, props.now, locale.value)} · ${outcome}`
+})
+const lastTone = computed(() => {
+  const o = lastRun.value?.outcome
+  return o === 'failed' || o === 'partial' ? 'bad' : o === 'skipped' ? 'muted' : 'ok'
+})
+const lastTitle = computed(() => {
+  const run = lastRun.value
+  if (!run?.errors.length) return undefined
+  return run.errors.map((e) => `${e.deviceId ? `${names.deviceName(e.deviceId)} : ` : ''}${e.message}`).join('\n')
+})
+
+/** L'état en clair : ce qui manque d'abord (la règle ne peut pas marcher), puis ce qui ne répond pas. */
+const state = computed(() => {
+  const s = status.value
+  if (s.health === 'incomplete') {
+    const what = s.missing.map((m) => (m.kind === 'device' ? names.deviceName(m.id) : m.id)).join(', ')
+    return t('automations.missingShort', { names: what })
+  }
+  if (s.health === 'unavailable') return t('automations.unavailableShort', { names: s.unavailableDeviceIds.map(names.deviceName).join(', ') })
+  return t('automations.health.ok')
 })
 </script>
 
@@ -55,15 +67,19 @@ const lastTitle = computed(() => {
       <span class="icon-square row__icon" :data-on="a.enabled ? '1' : '0'"><StrokeIcon :name="triggerIcon(a.trigger)" :size="18" /></span>
       <span class="row__text">
         <MarqueeText class="row__name" :text="a.name" />
-        <MarqueeText class="row__summary muted" :text="summary" />
+        <span class="row__line"><span class="row__label">{{ $t('automations.editor.when') }}</span><MarqueeText class="row__value" :text="when" /></span>
+        <span class="row__line"><span class="row__label">{{ $t('automations.editor.unless') }}</span><MarqueeText class="row__value" :text="unless" /></span>
+        <span class="row__line"><span class="row__label">{{ $t('automations.editor.then') }}</span><MarqueeText class="row__value" :text="then" /></span>
       </span>
-      <span class="row__health" :title="missingTitle || undefined">
-        <span class="row__dot" :style="{ background: HEALTH_DOT[status.health] }" />
-        <span class="row__health-label" :data-ok="status.health === 'ok' ? '1' : '0'">{{ $t(`automations.health.${status.health}`) }}</span>
-      </span>
-      <span class="row__times">
-        <span :title="$t('automations.nextRun')">{{ next }}</span>
-        <span :class="{ 'row__failed': lastFailed }" :title="lastTitle">{{ last }}</span>
+      <span class="row__side">
+        <span class="row__line"><span class="row__label">{{ $t('automations.row.next') }}</span><span class="row__fact">{{ next }}</span></span>
+        <span class="row__line"><span class="row__label">{{ $t('automations.row.last') }}</span><span class="row__fact" :data-tone="lastTone" :title="lastTitle">{{ last }}</span></span>
+        <span class="row__line">
+          <span class="row__label">{{ $t('automations.row.state') }}</span>
+          <span class="row__fact row__state" :data-health="status.health" :title="state">
+            <span class="row__dot" :style="{ background: HEALTH_DOT[status.health] }" /><span class="row__state-text">{{ state }}</span>
+          </span>
+        </span>
       </span>
     </button>
     <!-- hors du bouton de la ligne : basculer n'ouvre pas l'éditeur -->
@@ -75,32 +91,43 @@ const lastTitle = computed(() => {
 </template>
 
 <style scoped>
-.row { display: flex; align-items: center; gap: 8px; height: 64px; padding: 0 10px 0 0; box-sizing: border-box; }
+.row { display: flex; align-items: center; gap: 8px; height: 104px; padding: 0 10px 0 0; box-sizing: border-box; }
 .row__main {
-  flex: 1 1 0; min-width: 0; height: 100%; display: flex; align-items: center; gap: 12px; padding: 0 0 0 12px;
+  flex: 1 1 0; min-width: 0; height: 100%; display: flex; align-items: center; gap: 14px; padding: 0 0 0 14px;
   border: 0; background: transparent; color: inherit; text-align: left; font: inherit;
 }
-.row__text { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-/* estompé désactivé : le nom et la phrase seulement, l'interrupteur reste net */
-.row[data-on='0'] .row__icon, .row[data-on='0'] .row__text { opacity: .6; }
-.row__name { font-size: 15px; font-weight: 600; }
-.row__summary { font-size: 12px; }
-/* point toujours là ; le mot n'apparaît que s'il y a quelque chose à dire, dans une place réservée */
-.row__health { flex: 0 0 auto; width: 11ch; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
-.row__dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
-.row__health-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.row__health-label[data-ok='1'] { visibility: hidden; }
-.row__times {
-  flex: 0 0 auto; width: 12ch; display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
-  font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap;
+.row__icon { align-self: flex-start; margin-top: 12px; }
+.row__text { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+/* estompé désactivé : le texte seulement, l'interrupteur reste net */
+.row[data-on='0'] .row__icon, .row[data-on='0'] .row__text, .row[data-on='0'] .row__side { opacity: .6; }
+.row__name { font-size: 15px; font-weight: 600; margin-bottom: 2px; }
+.row__line { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: 12px; line-height: 17px; }
+/* étiquettes de largeur fixe : les trois valeurs commencent à la même colonne */
+.row__label {
+  flex: 0 0 auto; width: 7.5ch; color: var(--muted); font-size: 10px; font-weight: 600;
+  letter-spacing: .05em; text-transform: uppercase; white-space: nowrap;
 }
-.row__failed { color: #d24a43; }
+.row__value { flex: 1 1 0; min-width: 0; }
+.row__side { flex: 0 0 auto; width: 30ch; display: flex; flex-direction: column; gap: 3px; }
+.row__side .row__label { width: 9ch; }
+.row__fact { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.row__fact[data-tone='bad'] { color: #d24a43; }
+.row__fact[data-tone='muted'] { color: var(--muted); }
+.row__state { display: flex; align-items: center; gap: 6px; }
+.row__state[data-health='incomplete'] { color: #d38b22; }
+.row__state[data-health='unavailable'] { color: #d24a43; }
+.row__state-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.row__dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
 .row__switch { flex: 0 0 auto; }
 .row__chev { flex: 0 0 auto; color: var(--muted); }
-/* téléphone : le nom et la phrase d'abord ; la santé se réduit à son point, les horaires ne tiennent
-   plus. Décidé par la largeur de l'écran, jamais par l'état : rien ne bouge en cours d'usage. */
+/* écran moyen : la colonne de droite se resserre */
+@media (max-width: 1100px) {
+  .row__side { width: 24ch; }
+}
+/* téléphone : le nom et les trois lignes d'abord ; les faits de droite ne tiennent plus. Décidé par la
+   largeur de l'écran, jamais par l'état : rien ne bouge en cours d'usage. */
 @media (max-width: 600px) {
-  .row__health { width: auto; }
-  .row__health-label, .row__times, .row__chev { display: none; }
+  .row__side, .row__chev { display: none; }
+  .row__label { width: 6.5ch; }
 }
 </style>
