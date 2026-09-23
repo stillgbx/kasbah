@@ -154,6 +154,19 @@ export interface YtmusicStatus {
   browsers: string[]
 }
 
+/** Une webradio de l'annuaire radio-browser (plugin `radio`). */
+export interface RadioStation {
+  id: string
+  name: string
+  url: string
+  favicon?: string
+  country?: string
+  countryCode?: string
+  tags: string[]
+  codec?: string
+  bitrateKbps?: number
+}
+
 export interface YtmusicTrack {
   videoId: string
   title: string
@@ -467,6 +480,18 @@ export interface Transport {
   ytmusicQueueRemove(deviceId: string, index: number): Promise<YtmusicQueue>
   /** Vider la file : le titre en cours continue, seul. */
   ytmusicQueueClear(deviceId: string): Promise<YtmusicQueue>
+  /** Radios de l'annuaire dont le nom contient `q`, les plus écoutées d'abord. */
+  radioSearch(q: string): Promise<{ stations: RadioStation[] }>
+  /** Les plus écoutées d'un pays (défaut du serveur : `RADIO_COUNTRY`). */
+  radioTop(country?: string): Promise<{ stations: RadioStation[] }>
+  /** Les favorites de la maison, gardées par le serveur. */
+  radioFavorites(): Promise<{ stations: RadioStation[] }>
+  radioAddFavorite(station: RadioStation): Promise<{ stations: RadioStation[] }>
+  radioRemoveFavorite(id: string): Promise<{ stations: RadioStation[] }>
+  /** Ajoute aux favorites une radio que l'annuaire ne connaît pas (ou sous une adresse morte), par son flux. */
+  radioAddCustom(body: { name: string; url: string }): Promise<{ stations: RadioStation[] }>
+  /** Lance la radio en direct sur un lecteur (`play_url` marqué `live`). */
+  radioPlay(body: { deviceId: string; stationId: string }): Promise<{ ok: true; station: RadioStation }>
   /**
    * Fait oublier un appareil au plugin qui le retenait (`meta.forgettable`), par convention
    * `DELETE /api/plugins/<plugin>/devices/<externalId>` : il quitte l'inventaire jusqu'à ce qu'il

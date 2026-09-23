@@ -112,7 +112,7 @@
   "music": {
     "searchPlaceholder": "Rechercher un artiste, un album, un titre…", "search": "Rechercher", "clear": "Effacer la recherche",
     "advanced": "Avancée", "advancedHint": "Recherche avancée : artistes, albums, EP, compilations et titres en colonnes",
-    "sources": "Sources", "sourceLinked": "Reliée", "sourceUnlinked": "Non reliée",
+    "sources": "Sources",
     "browse": "Parcourir", "browseRecent": "Récents", "browseLiked": "Likes", "browsePlaylists": "Playlists", "browseNew": "Nouveautés", "kindAlbum": "Album", "kindSingle": "Single", "kindEp": "EP", "kindCompilation": "Compilation", "kindPlaylist": "Playlist", "kindArtist": "Artiste", "detailTracks": "{n} titre | {n} titres", "durMin": "{m} min", "durHourMin": "{h} h {m} min", "browseGenres": "Genres", "browseMoods": "Ambiances",
     "topResults": "Meilleurs résultats", "seeAll": "Voir tout", "noRecent": "Vos lectures récentes apparaîtront ici.",
     "sessions": "Écoute", "sessionsHint": "Où partent les lectures — toucher un lecteur pour le piloter", "transferHint": "Toucher le lecteur qui doit reprendre le morceau",
@@ -129,6 +129,13 @@
     "repeatOff": "Répéter le titre", "repeatOnce": "Titre rejoué une fois — toucher pour le rejouer en boucle", "repeatLoop": "Titre en boucle — toucher pour arrêter de répéter"
   },
 
+  "radio": {
+    "source": "Radios", "searchPlaceholder": "Rechercher une radio (franceinfo, FIP, Nova…)", "favorites": "Favorites", "top": "Les plus écoutées",
+    "noFavorites": "Aucune radio favorite : ajoutez-en avec l'étoile.", "empty": "Aucune radio trouvée.", "unavailable": "L'annuaire des radios ne répond pas.",
+    "addCustom": "Ajouter une radio", "customName": "Nom", "customUrl": "Adresse du flux (http…)", "customAdd": "Ajouter", "customCancel": "Annuler", "customHint": "Une radio absente de l'annuaire : collez l'adresse de son flux (souvent donnée par son lecteur en direct).",
+    "addFavorite": "Ajouter aux favorites", "removeFavorite": "Retirer des favorites", "play": "Écouter {name}", "live": "Direct",
+    "noLocal": "La radio ne se lit pas encore dans ce navigateur : choisissez une enceinte."
+  },
   "ytmusic": {
     "unofficial": "Source non officielle — usage perso maison seulement",
     "needCookie": "Cookie YouTube Music manquant ou expiré — Réglages → Plugins → ytmusic.",

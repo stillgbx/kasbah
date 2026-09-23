@@ -164,6 +164,11 @@ describe('google_cast mapping', () => {
       streamType: 'LIVE',
     })
     expect(mediaFromUrl('https://cdn.example/clip.mp4')).toMatchObject({ contentType: 'video/mp4', streamType: 'BUFFERED' })
+    // un Icecast .aac ressemble à un fichier : seul le service sait que c'est un direct
+    expect(mediaFromUrl('http://icecast.radiofrance.fr/franceinfo-hifi.aac', { live: true })).toMatchObject({
+      contentType: 'audio/mp4',
+      streamType: 'LIVE',
+    })
   })
 
   it('embeds title, artist and artwork in Cast LOAD metadata', () => {

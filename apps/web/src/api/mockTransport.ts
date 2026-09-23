@@ -225,6 +225,13 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     async ytmusicQueueRepeat() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
     async ytmusicQueueRemove() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
     async ytmusicQueueClear() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
+    async radioSearch() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no radio directory in mock mode') },
+    async radioTop() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no radio directory in mock mode') },
+    async radioFavorites() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no radio directory in mock mode') },
+    async radioAddFavorite() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no radio directory in mock mode') },
+    async radioAddCustom() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no radio directory in mock mode') },
+    async radioRemoveFavorite() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no radio directory in mock mode') },
+    async radioPlay() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no radio directory in mock mode') },
     // la simulation déclare ses appareils, elle n'en découvre aucun : il n'y a rien à oublier
     async forgetDevice() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'nothing to forget in mock mode') },
     cameraStreamUrl() { return null },

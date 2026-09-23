@@ -5,7 +5,7 @@ import type { Command, DeviceDescriptor, PluginHealth } from '@kasbah/shared'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
 import { stateFile } from '../../core/paths'
 import { describeError, sendError } from '../../http/errors'
-import { getYtmusicBridge } from './bridge'
+import { getPlaybackBridge } from '../../core/playbackBridge'
 import { YtmusicCatalog, type CreateSession } from './catalog'
 import { createCookieFile, hasRequiredCookie, writeNetscapeBeside, type CookieStore } from './cookie'
 import { importCookiesFromBrowser, isAuthError, YTM_BROWSERS } from './browserCookies'
@@ -192,9 +192,9 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
   }
 
   function resolvePlay() {
-    const get = deps.getDevice ?? ((id: string) => getYtmusicBridge()?.getDevice(id))
+    const get = deps.getDevice ?? ((id: string) => getPlaybackBridge()?.getDevice(id))
     const execute = deps.execute ?? ((id: string, command: Command) => {
-      const b = getYtmusicBridge()
+      const b = getPlaybackBridge()
       if (!b) return Promise.reject(new PluginError('DEVICE_UNAVAILABLE', 'playback bridge not ready'))
       return b.execute(id, command)
     })
@@ -469,7 +469,7 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
   /** S'abonner aux états des lecteurs à la première file (pas au démarrage : HMR tsx recharge les routes sans `start()`). */
   function watchPlayers(): void {
     if (unwatch) return
-    const on = deps.onState ?? getYtmusicBridge()?.onState
+    const on = deps.onState ?? getPlaybackBridge()?.onState
     if (!on) {
       log().warn('ytmusic queue: no player state feed — tracks will not chain')
       return

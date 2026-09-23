@@ -15,7 +15,7 @@ import { EnergyHistory } from './core/history'
 import { registerRoutes } from './http/routes'
 import { registerStatic } from './http/static'
 import { PLUGIN_FACTORIES } from './plugins'
-import { setYtmusicBridge } from './plugins/ytmusic/bridge'
+import { setPlaybackBridge } from './core/playbackBridge'
 import { WsHub } from './ws/hub'
 
 export interface BuildAppOptions {
@@ -92,8 +92,8 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
 
   registerRoutes(app, { registry, scenes, host, house, hub, history, startedAt: clock.now() })
   host.registerRoutes(app)
-  // YouTube Music n'a pas d'appareils : pour `play_url` il passe par Cast/Sonos via l'hôte.
-  setYtmusicBridge({
+  // Les sources musicales n'ont pas d'appareils : pour `play_url` elles passent par Cast/Sonos via l'hôte.
+  setPlaybackBridge({
     getDevice: (id) => registry.get(id),
     execute: (id, command) => host.execute(id, command),
     onState: (cb) => bus.on('state', cb),
@@ -107,7 +107,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
     app, registry, scenes, bus, hub, host, house,
     startPlugins: () => host.startAll(),
     async close() {
-      setYtmusicBridge(null)
+      setPlaybackBridge(null)
       await host.stopAll()
       seeder.close()
       hub.close()

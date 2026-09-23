@@ -205,7 +205,7 @@ export type CastLoadMedia = {
 }
 
 /** Métadonnées optionnelles pour `play_url` (titre / artiste / pochette). */
-export type PlayUrlMeta = { title?: string; artist?: string; artUrl?: string; explicit?: boolean }
+export type PlayUrlMeta = { title?: string; artist?: string; artUrl?: string; explicit?: boolean; live?: boolean }
 
 /**
  * Ce que le récepteur média par défaut veut dans `LOAD.media` : type MIME et `LIVE` vs `BUFFERED`
@@ -216,9 +216,10 @@ export function mediaFromUrl(url: string, meta?: PlayUrlMeta): CastLoadMedia {
   let path = url
   try { path = new URL(url).pathname } catch { /* garder la chaîne */ }
   const lower = path.toLowerCase()
-  const live = lower.endsWith('.m3u8') || lower.endsWith('.m3u')
+  const hls = lower.endsWith('.m3u8') || lower.endsWith('.m3u')
+  const live = hls || meta?.live === true
   let contentType = 'audio/mpeg'
-  if (live) contentType = 'application/x-mpegurl'
+  if (hls) contentType = 'application/x-mpegurl'
   else if (lower.endsWith('.mp4') || lower.endsWith('.m4v')) contentType = 'video/mp4'
   else if (lower.endsWith('.m4a') || lower.endsWith('.aac')) contentType = 'audio/mp4'
   else if (lower.endsWith('.flac')) contentType = 'audio/flac'

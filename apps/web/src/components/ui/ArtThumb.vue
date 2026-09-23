@@ -6,7 +6,8 @@ import { primeArtUrl } from './artThumbLoader'
 
 // Pochette YT Music : `<img referrerpolicy="no-referrer">` — un `background-image`
 // CSS envoie le Referer et Chrome bloque (net::ERR_BLOCKED_BY_ORB) sur ggpht / googleusercontent.
-// Chargement : IntersectionObserver + file partagée (dédup URL, max 4 en parallèle).
+// Chargement : IntersectionObserver + file partagée (dédup URL, max 4 en parallèle). Une image qui ne
+// vient pas (logo de radio disparu, lien direct refusé) laisse l'icône, pas l'image cassée du navigateur.
 
 const props = withDefaults(defineProps<{
   src?: string | null
@@ -79,6 +80,7 @@ watch(
       height="44"
       referrerpolicy="no-referrer"
       decoding="async"
+      @error="displaySrc = null"
     >
     <div v-else class="art art--empty" :class="{ 'art--round': round }">
       <StrokeIcon :name="icon" :size="18" />

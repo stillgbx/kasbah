@@ -24,6 +24,7 @@ import MusicItemRow from '../components/music/MusicItemRow.vue'
 import MusicPlayerBar from '../components/music/MusicPlayerBar.vue'
 import MusicShelves from '../components/music/MusicShelves.vue'
 import MusicTile from '../components/music/MusicTile.vue'
+import RadioBrowser from '../components/music/RadioBrowser.vue'
 import ArtThumb from '../components/ui/ArtThumb.vue'
 import ExplicitBadge from '../components/ui/ExplicitBadge.vue'
 import Segmented from '../components/ui/Segmented.vue'
@@ -41,8 +42,9 @@ import { usePluginsStore } from '../stores/plugins'
 // section ; avancée : cinq colonnes artistes / albums / EP / compilations / titres avec tris), le
 // panneau « Écoute » à droite (un lecteur = une session : là où partent les lectures et ce que pilote
 // la barre), et le lecteur en bas. Sans recherche, la zone centrale sert à parcourir : récents, likes,
-// playlists. Une seule source aujourd'hui (YouTube Music, non officiel) ; la rangée de sources est
-// là pour les suivantes. « Genres » et « Ambiances » ouvrent les « Humeurs et genres » de YouTube
+// playlists. Sources : YouTube Music (non officiel) et, si le plugin `radio` est actif, les Radios —
+// les pastilles en haut à droite choisissent celle qui occupe la recherche et la zone centrale ; le
+// panneau Écoute et le lecteur du bas restent communs. « Genres » et « Ambiances » ouvrent les « Humeurs et genres » de YouTube
 // Music : une grille de pastilles, puis la page d'une catégorie en rangées de tuiles (titres,
 // playlists officielles, albums), chaque rangée jouable comme une liste.
 //
@@ -111,8 +113,17 @@ const RECENT_PLAYS_MAX = 20
 /** Tuiles par rangée en recherche simple (le reste attend « Voir tout »). */
 const SIMPLE_MAX = 12
 
-/** Les sources de musique : une seule aujourd'hui, la rangée est prête pour les suivantes. */
-const sources = computed(() => [{ id: 'ytmusic', label: 'YouTube Music', linked: linked.value }])
+/** Les sources de musique : YouTube Music, puis chaque plugin source actif (les radios). */
+type SourceId = 'ytmusic' | 'radio'
+const sources = computed(() => {
+  const out: { id: SourceId; label: string }[] = [{ id: 'ytmusic', label: 'YouTube Music' }]
+  if (plugins.byId.radio?.enabled) out.push({ id: 'radio', label: t('radio.source') })
+  return out
+})
+const sourceChoice = useLocalStorage<SourceId>('kasbah.music.source', 'ytmusic')
+/** La source affichée : le choix mémorisé, s'il est encore actif. */
+const activeSource = computed<SourceId>(() => (sources.value.some((s) => s.id === sourceChoice.value) ? sourceChoice.value : 'ytmusic'))
+const sourceOptions = computed(() => sources.value.map((s) => ({ value: s.id, label: s.label })))
 
 const browseOptions = computed(() => [
   { value: 'recent' as const, label: t('music.browseRecent') },
@@ -795,18 +806,14 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
 <template>
   <div class="page">
     <PageHeader>
-      <!-- sources : une pastille par service relié, prête pour les suivantes -->
-      <div class="sources" :aria-label="$t('music.sources')">
-        <span v-for="s in sources" :key="s.id" class="pill source" data-on="1" :title="s.linked ? $t('music.sourceLinked') : $t('music.sourceUnlinked')">
-          <StrokeIcon name="music" :size="16" />
-          <span>{{ s.label }}</span>
-          <span class="source__dot" :data-linked="s.linked ? '1' : '0'" />
-        </span>
-      </div>
+      <!-- sources : YouTube Music et chaque plugin source actif ; la choisie occupe la recherche et la zone centrale -->
+      <Segmented v-model="sourceChoice" :options="sourceOptions" :label="$t('music.sources')" />
     </PageHeader>
 
     <div class="body">
       <section class="main">
+        <RadioBrowser v-if="activeSource === 'radio'" :target="playTarget ? selected : null" :local-selected="localSelected" />
+        <template v-else>
         <form class="search" @submit.prevent="runSearch">
           <div class="search__field">
             <StrokeIcon name="search" :size="18" class="search__icon" />
@@ -1063,6 +1070,7 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
           </template>
         </div>
         </div>
+        </template>
       </section>
 
       <ListeningSessions :players="players" :selected-id="sessionId || null" :transfer-mode="transferMode" :transfer-busy-id="transferBusyId"
@@ -1080,10 +1088,6 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
 
 <style scoped>
 .page { height: 100%; display: flex; flex-direction: column; min-height: 0; }
-.sources { display: flex; gap: 8px; align-items: center; }
-.source { height: 36px; font-size: 13px; white-space: nowrap; }
-.source__dot { width: 8px; height: 8px; border-radius: 999px; background: color-mix(in srgb, var(--on-accent) 45%, transparent); }
-.source__dot[data-linked='1'] { background: var(--on-accent); }
 
 .body {
   flex: 1 1 auto; min-height: 0;

@@ -57,6 +57,11 @@ export const commandSchema = z.discriminatedUnion('type', [
      * morceau s'affiche.
      */
     explicit: z.boolean().optional(),
+    /**
+     * Le service sait que c'est un DIRECT (une radio) : l'URL ne le dit pas toujours — un Icecast
+     * `.aac` ressemble à un fichier. L'enceinte le publie ensuite en `nowPlaying.live`.
+     */
+    live: z.boolean().optional(),
   }),
   // climate
   z.object({ type: z.literal('climate.set_mode'), mode: z.enum(CLIMATE_MODES) }),

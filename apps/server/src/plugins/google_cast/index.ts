@@ -315,6 +315,7 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
         ...(sticky.artist?.trim() ? { artist: sticky.artist.trim() } : {}),
         ...(art ? { artUrl: artProxyUrl(art) } : {}),
         ...(sticky.explicit ? { explicit: true } : {}),
+        ...(sticky.live ? { live: true } : {}),
       },
     }
   }
@@ -492,6 +493,7 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
           ...(command.artist ? { artist: command.artist } : {}),
           ...(command.artUrl ? { artUrl: command.artUrl } : {}),
           ...(command.explicit ? { explicit: true } : {}),
+          ...(command.live ? { live: true } : {}),
         }
         await c.playUrl(command.url, meta)
         if (meta.title || meta.artist || meta.artUrl) {
@@ -505,6 +507,7 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
                 ...(meta.artist ? { artist: meta.artist } : {}),
                 ...(meta.artUrl ? { artUrl: artProxyUrl(meta.artUrl) } : {}),
                 ...(meta.explicit ? { explicit: true } : {}),
+                ...(meta.live ? { live: true } : {}),
                 source: 'Default Media Receiver',
               },
             })

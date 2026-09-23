@@ -227,7 +227,7 @@ export function toStatePatch(
 }
 
 /** Métadonnées optionnelles pour `play_url` (titre / artiste / pochette). */
-export type StreamMeta = { title?: string; artist?: string; artUrl?: string; explicit?: boolean }
+export type StreamMeta = { title?: string; artist?: string; artUrl?: string; explicit?: boolean; live?: boolean }
 
 /**
  * DIDL-Lite pour `SetAVTransportURI` : un flux HTTP que l'enceinte va chercher. HLS / m3u = direct
@@ -248,8 +248,9 @@ export function streamDidl(url: string, contentType: string, live: boolean, meta
 
 export function streamLoad(url: string, meta?: StreamMeta): { uri: string; didl: string } {
   const path = (() => { try { return new URL(url).pathname.toLowerCase() } catch { return url.toLowerCase() } })()
-  const live = path.endsWith('.m3u8') || path.endsWith('.m3u')
-  const contentType = live ? 'application/x-mpegURL' : path.endsWith('.mp4') ? 'video/mp4' : path.endsWith('.aac') || path.endsWith('.m4a') ? 'audio/mp4' : 'audio/mpeg'
+  const hls = path.endsWith('.m3u8') || path.endsWith('.m3u')
+  const live = hls || meta?.live === true
+  const contentType = hls ? 'application/x-mpegURL' : path.endsWith('.mp4') ? 'video/mp4' : path.endsWith('.aac') || path.endsWith('.m4a') ? 'audio/mp4' : 'audio/mpeg'
   return { uri: url, didl: streamDidl(url, contentType, live, meta) }
 }
 
@@ -278,6 +279,7 @@ export function overlayStreamMeta(
       // le relevé du Sonos ne dit rien de l'explicit : sans ce report, le badge s'éteignait au
       // premier sondage, quelques secondes après le lancement
       ...(sticky.explicit ? { explicit: true } : {}),
+      ...(sticky.live ? { live: true } : {}),
     },
   }
 }

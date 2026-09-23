@@ -1,9 +1,10 @@
 import type { Command, DeviceEntry } from '@kasbah/shared'
 
-// Pont tardif vers le registre / l'hôte : le plugin n'a pas `PluginContext.execute` pour un autre
-// fabricant. `app.ts` branche après `PluginHost` ; les tests injectent directement via deps.
+// Pont tardif vers le registre / l'hôte, pour les SOURCES musicales (YouTube Music, radios…) : elles
+// n'ont pas d'appareils, ni `PluginContext.execute` vers les lecteurs d'un autre fabricant. `app.ts`
+// branche après `PluginHost` ; les tests injectent directement via deps.
 
-export interface YtmusicBridge {
+export interface PlaybackBridge {
   getDevice(deviceId: string): DeviceEntry | undefined
   /** Commande à un lecteur d'un autre plugin : `play_url`, `pause` du flux qu'on remplace, `stop` de la source d'un transfert. */
   execute(deviceId: string, command: Command): Promise<void>
@@ -11,12 +12,12 @@ export interface YtmusicBridge {
   onState(cb: (deviceId: string, state: unknown) => void): () => void
 }
 
-let bridge: YtmusicBridge | null = null
+let bridge: PlaybackBridge | null = null
 
-export function setYtmusicBridge(next: YtmusicBridge | null): void {
+export function setPlaybackBridge(next: PlaybackBridge | null): void {
   bridge = next
 }
 
-export function getYtmusicBridge(): YtmusicBridge | null {
+export function getPlaybackBridge(): PlaybackBridge | null {
   return bridge
 }

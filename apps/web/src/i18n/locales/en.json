@@ -112,7 +112,7 @@
   "music": {
     "searchPlaceholder": "Search an artist, an album, a track…", "search": "Search", "clear": "Clear search",
     "advanced": "Advanced", "advancedHint": "Advanced search: artists, albums, EPs, compilations and tracks in columns",
-    "sources": "Sources", "sourceLinked": "Linked", "sourceUnlinked": "Not linked",
+    "sources": "Sources",
     "browse": "Browse", "browseRecent": "Recent", "browseLiked": "Likes", "browsePlaylists": "Playlists", "browseNew": "New releases", "kindAlbum": "Album", "kindSingle": "Single", "kindEp": "EP", "kindCompilation": "Compilation", "kindPlaylist": "Playlist", "kindArtist": "Artist", "detailTracks": "{n} track | {n} tracks", "durMin": "{m} min", "durHourMin": "{h} hr {m} min", "browseGenres": "Genres", "browseMoods": "Moods",
     "topResults": "Top results", "seeAll": "See all", "noRecent": "Your recent plays will show up here.",
     "sessions": "Listening", "sessionsHint": "Where playback goes — tap a player to control it", "transferHint": "Tap the player that should pick up the track",
@@ -129,6 +129,13 @@
     "repeatOff": "Repeat the track", "repeatOnce": "Track replays once — tap to loop it", "repeatLoop": "Track loops — tap to stop repeating"
   },
 
+  "radio": {
+    "source": "Radios", "searchPlaceholder": "Search a radio station (franceinfo, FIP, Nova…)", "favorites": "Favorites", "top": "Most listened",
+    "noFavorites": "No favorite station yet: add some with the star.", "empty": "No station found.", "unavailable": "The radio directory is not answering.",
+    "addCustom": "Add a station", "customName": "Name", "customUrl": "Stream address (http…)", "customAdd": "Add", "customCancel": "Cancel", "customHint": "A station missing from the directory: paste its stream address (often given by its live player).",
+    "addFavorite": "Add to favorites", "removeFavorite": "Remove from favorites", "play": "Listen to {name}", "live": "Live",
+    "noLocal": "Radio does not play in this browser yet: pick a speaker."
+  },
   "ytmusic": {
     "unofficial": "Unofficial source — personal home use only",
     "needCookie": "YouTube Music cookie missing or expired — Settings → Plugins → ytmusic.",

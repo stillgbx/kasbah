@@ -164,6 +164,24 @@ describe('sonos mapping', () => {
    * Le marquage explicit vient du catalogue, JAMAIS du Sonos : sans report, le badge s'allumait au
    * lancement puis s'éteignait au premier sondage, quelques secondes plus tard.
    */
+  it('announces a radio as a broadcast when the service says live, whatever the extension', () => {
+    const { didl } = streamLoad('http://icecast.radiofrance.fr/franceinfo-hifi.aac', { title: 'franceinfo', live: true })
+    expect(didl).toContain('audioBroadcast')
+    expect(didl).toContain('http-get:*:audio/mp4:*')
+    expect(streamLoad('http://icecast.radiofrance.fr/franceinfo-hifi.aac').didl).toContain('musicTrack')
+  })
+
+  it('keeps the live mark across polls, like the explicit one', () => {
+    const uri = 'http://icecast.radiofrance.fr/franceinfo-hifi.aac'
+    const out = overlayStreamMeta(
+      { playback: 'playing' as const, nowPlaying: { title: 'franceinfo-hifi.aac', positionS: 12, source: uri } },
+      { uri, title: 'franceinfo', live: true },
+      uri,
+      artProxyUrl,
+    )
+    expect(out.nowPlaying).toMatchObject({ title: 'franceinfo', live: true })
+  })
+
   it('keeps the explicit mark across polls: no Sonos reading ever carries it', () => {
     const uri = 'http://192.168.1.10:8787/api/plugins/ytmusic/stream/abc'
     const out = overlayStreamMeta(

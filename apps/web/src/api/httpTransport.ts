@@ -1,6 +1,6 @@
 import { apiErrorSchema, devicesResponseSchema, energyHistorySchema, healthResponseSchema, houseSchema, pluginsResponseSchema, scenesResponseSchema, serverMessageSchema, weatherForecastSchema, deviceJournalSchema, deviceConsumptionSchema, type CommandInput, type DeviceConsumption, type DeviceJournal, type DeviceEntry, type DevicePlacement, type EnergyHistory, type HealthResponse, type House, type PluginInfo, type PluginSceneEntry, type PluginSettingsPatch, type SceneRecallInput, type SceneUpdate, type WeatherForecast } from '@kasbah/shared'
 import { parseDeviceId } from '@kasbah/shared'
-import { ApiRequestError, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type MelcloudStatus, type MelcloudUnit, type PetkitStatus, type RenaultStatus, type TeslaStatus, type Transport, type TransportHandlers, type YtmusicExplore, type YtmusicExploreShelf, type YtmusicPlaylist, type YtmusicQueue, type YtmusicSearchResult, type YtmusicSession, type YtmusicStatus, type YtmusicTrack } from './transport'
+import { ApiRequestError, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type MelcloudStatus, type MelcloudUnit, type PetkitStatus, type RadioStation, type RenaultStatus, type TeslaStatus, type Transport, type TransportHandlers, type YtmusicExplore, type YtmusicExploreShelf, type YtmusicPlaylist, type YtmusicQueue, type YtmusicSearchResult, type YtmusicSession, type YtmusicStatus, type YtmusicTrack } from './transport'
 
 // URLs relatives : même origine en prod (Fastify sert le build) et via le proxy Vite en dev.
 
@@ -264,6 +264,25 @@ export function createHttpTransport(base = ''): Transport {
     ytmusicQueueRemove: (deviceId, index) => queueStep('remove', { deviceId, index }),
     ytmusicQueueClear: (deviceId) => request(
       `${base}/api/plugins/ytmusic/queue?deviceId=${encodeURIComponent(deviceId)}`, { method: 'DELETE' }, (j) => j as YtmusicQueue,
+    ),
+    radioSearch: (q) => request(`${base}/api/plugins/radio/search?q=${encodeURIComponent(q)}`, undefined, (j) => j as { stations: RadioStation[] }),
+    radioTop: (country) => request(`${base}/api/plugins/radio/top${country ? `?country=${encodeURIComponent(country)}` : ''}`, undefined, (j) => j as { stations: RadioStation[] }),
+    radioFavorites: () => request(`${base}/api/plugins/radio/favorites`, undefined, (j) => j as { stations: RadioStation[] }),
+    radioAddFavorite: (station) => request(
+      `${base}/api/plugins/radio/favorites/${encodeURIComponent(station.id)}`,
+      { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(station) },
+      (j) => j as { stations: RadioStation[] },
+    ),
+    radioAddCustom: (body) => request(
+      `${base}/api/plugins/radio/favorites/custom`,
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
+      (j) => j as { stations: RadioStation[] },
+    ),
+    radioRemoveFavorite: (id) => request(`${base}/api/plugins/radio/favorites/${encodeURIComponent(id)}`, { method: 'DELETE' }, (j) => j as { stations: RadioStation[] }),
+    radioPlay: (body) => request(
+      `${base}/api/plugins/radio/play`,
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
+      (j) => j as { ok: true; station: RadioStation },
     ),
     forgetDevice: (deviceId) => {
       const { pluginId, externalId } = parseDeviceId(deviceId)

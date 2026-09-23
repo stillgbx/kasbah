@@ -10,6 +10,7 @@ import { createMockPlugin } from './mock'
 import { createNestPlugin } from './nest'
 import { createOpenMeteoPlugin } from './open_meteo'
 import { createPetkitPlugin } from './petkit'
+import { createRadioPlugin } from './radio'
 import { createRenaultPlugin } from './renault'
 import { createSonosPlugin } from './sonos'
 import { createTahomaPlugin } from './tahoma'
@@ -37,5 +38,6 @@ export const PLUGIN_FACTORIES: Record<string, PluginFactory> = {
   open_meteo: () => createOpenMeteoPlugin(),
   petkit: () => createPetkitPlugin(),
   ytmusic: () => createYtmusicPlugin(),
+  radio: () => createRadioPlugin(),
   tuya: () => createTuyaPlugin(),
 }
