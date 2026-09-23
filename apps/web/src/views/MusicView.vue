@@ -188,6 +188,16 @@ const selectedName = computed(() => selected.value ? (house.houseDeviceFor(selec
 /** Les lecteurs qui jouent en ce moment un flux servi par Kasbah, par id plugin — transférables, déplaçables. */
 const ourSessions = ref<Map<string, YtmusicSession>>(new Map())
 const selectedSession = computed(() => (selected.value ? ourSessions.value.get(selected.value.descriptor.id) ?? null : null))
+/**
+ * Le titre que JOUE le lecteur choisi (servi par nous), pour le signaler dans les listes : surligné,
+ * et un point qui pulse tant qu'il joue (immobile en pause). Rien si le lecteur est au repos.
+ */
+const nowPlayingId = computed<string | null>(() => {
+  const st = selected.value?.state
+  if (st?.kind !== 'media_player' || (st.playback !== 'playing' && st.playback !== 'paused')) return null
+  return selectedSession.value?.videoId ?? null
+})
+const nowPulsing = computed(() => selected.value?.state.kind === 'media_player' && selected.value.state.playback === 'playing')
 /** Titre en cours d'envoi : la barre le montre tout de suite, avec un sablier, le temps que l'enceinte suive. */
 const pendingTrack = ref<YtmusicTrack | null>(null)
 const transferMode = ref(false)
@@ -772,7 +782,7 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
               <div class="list queue-list">
                 <template v-if="queue">
                   <MusicItemRow v-for="(qt, i) in queue.items" :key="`${i}:${qt.videoId}`" action="play" removable :position="i + 1" :art="qt.artUrl ?? null" :title="qt.title ?? qt.videoId"
-                                :explicit="!!qt.explicit" :meta="qt.artist ?? ''" :dur="formatClock(qt.durationS)" :selected="i === queue.index"
+                                :explicit="!!qt.explicit" :meta="qt.artist ?? ''" :dur="formatClock(qt.durationS)" :selected="i === queue.index" :playing="i === queue.index && nowPulsing"
                                 :disabled="!playTarget" :busy="queueBusyIndex === i" :play-label="$t('ytmusic.play')"
                                 @play="queueGo(i)" @remove="removeFromQueue(i)" />
                   <p v-if="queueWaiting <= 0" class="muted empty">{{ $t('music.queueNothingNext') }}</p>
@@ -826,11 +836,11 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
                             :icon="detail.kind === 'artist' ? 'person' : detail.kind === 'album' ? 'disc' : 'list'" class="detail__art" />
                   <h2 class="detail__title" :title="detail.title">{{ detail.title }}</h2>
                   <div class="detail__artist">{{ detail.artists?.length ? detail.artists.join(', ') : '\u00a0' }}</div>
+                  <!-- type, année, titres et durée sur UNE ligne : la colonne gagne une ligne de hauteur -->
                   <div class="detail__meta muted">
                     <ExplicitBadge v-if="detail.explicit" />
-                    <span>{{ detailKind }}</span>
+                    <span>{{ [detailKind, detailStats].filter(Boolean).join(' · ') || '\u00a0' }}</span>
                   </div>
-                  <div class="detail__meta muted">{{ detailStats || '\u00a0' }}</div>
                   <!-- la présentation de l'album ou de l'artiste, repliée sur deux lignes : un clic la déplie -->
                   <p v-if="detailText" class="detail__desc muted" :class="{ 'is-open': descOpen }" :title="descOpen ? undefined : detailText"
                      role="button" tabindex="0" :aria-expanded="descOpen" @click="descOpen = !descOpen" @keydown.enter="descOpen = !descOpen">{{ detailText }}</p>
@@ -843,7 +853,7 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
                 <div class="list detail__list">
                   <MusicItemRow v-for="(tr, i) in browseTracksView" :key="tr.videoId" action="play" queueable :artless="detailArtless" :position="i + 1" :art="tr.artUrl" :title="tr.title" :explicit="!!tr.explicit"
                                 :meta="detailArtless ? tr.artists.join(', ') : trackMeta(tr)" :dur="formatClock(tr.durationS)" :year="detailArtless ? null : tr.year ?? null"
-                                :selected="recentPlays[0]?.videoId === tr.videoId"
+                                :selected="nowPlayingId === tr.videoId" :playing="nowPlayingId === tr.videoId && nowPulsing"
                                 :disabled="!playTarget" :busy="playingId === tr.videoId" :play-label="$t('ytmusic.play')"
                                 @play="play(tr, browseTracksView)" @play-next="addToQueue(tr, 'next')" @add-end="addToQueue(tr, 'end')" />
                   <p v-if="!busy && browseTracksView.length === 0" class="muted empty">{{ $t('ytmusic.empty') }}</p>
@@ -912,7 +922,7 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
                 </div>
                 <div class="list">
                   <MusicItemRow v-for="tr in tracksView" :key="tr.videoId" action="play" queueable :art="tr.artUrl" :title="tr.title" :explicit="!!tr.explicit"
-                                :meta="trackMeta(tr)" :dur="formatClock(tr.durationS)" :year="tr.year ?? null" :selected="recentPlays[0]?.videoId === tr.videoId"
+                                :meta="trackMeta(tr)" :dur="formatClock(tr.durationS)" :year="tr.year ?? null" :selected="nowPlayingId === tr.videoId" :playing="nowPlayingId === tr.videoId && nowPulsing"
                                 :disabled="!playTarget" :busy="playingId === tr.videoId" :play-label="$t('ytmusic.play')"
                                 @play="play(tr, tracksView)" @play-next="addToQueue(tr, 'next')" @add-end="addToQueue(tr, 'end')" />
                 </div>
@@ -927,6 +937,7 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
               </div>
               <div v-if="browseTab === 'recent'" class="list">
                 <MusicItemRow v-for="tr in recentPlays" :key="tr.videoId" action="play" queueable :art="tr.artUrl" :title="tr.title" :explicit="!!tr.explicit"
+                              :selected="nowPlayingId === tr.videoId" :playing="nowPlayingId === tr.videoId && nowPulsing"
                               :meta="trackMeta(tr)" :dur="formatClock(tr.durationS)" :year="tr.year ?? null"
                               :disabled="!playTarget" :busy="playingId === tr.videoId" :play-label="$t('ytmusic.play')"
                               @play="play(tr, [...recentPlays])" @play-next="addToQueue(tr, 'next')" @add-end="addToQueue(tr, 'end')" />
@@ -934,6 +945,7 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
               </div>
               <div v-else-if="browseTab === 'liked'" class="list">
                 <MusicItemRow v-for="(tr, i) in browseTracksView" :key="tr.videoId" action="play" queueable :position="i + 1" :art="tr.artUrl" :title="tr.title" :explicit="!!tr.explicit"
+                              :selected="nowPlayingId === tr.videoId" :playing="nowPlayingId === tr.videoId && nowPulsing"
                               :meta="trackMeta(tr)" :dur="formatClock(tr.durationS)" :year="tr.year ?? null"
                               :disabled="!playTarget" :busy="playingId === tr.videoId" :play-label="$t('ytmusic.play')"
                               @play="play(tr, browseTracksView)" @play-next="addToQueue(tr, 'next')" @add-end="addToQueue(tr, 'end')" />
@@ -1084,12 +1096,12 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
   filter: blur(60px) saturate(1.3); opacity: .24; transform: scale(1.1);
   -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 100%); mask-image: linear-gradient(to bottom, #000 0%, transparent 100%);
 }
-.detail__side { position: relative; z-index: 1; display: grid; justify-items: center; gap: 6px; padding: 12px 20px 20px; text-align: center; }
+.detail__side { position: relative; z-index: 1; display: grid; justify-items: center; gap: 5px; padding: 6px 20px 10px; text-align: center; }
 /* fixe quand elle tient en entier sous « Retour » (mesuré : `sideFits`), accrochée EXACTEMENT à sa
    place de départ — sinon elle glissait de quelques pixels avant de se fixer */
 .detail__side.is-fixed { position: sticky; top: var(--back-row-h); }
 /* `--art` est posé en ligne par ArtThumb : seul !important le remplace */
-.detail__art { --art: var(--cover) !important; box-shadow: 0 14px 36px rgb(0 0 0 / .38); border-radius: 10px; margin-bottom: 14px; }
+.detail__art { --art: var(--cover) !important; box-shadow: 0 14px 36px rgb(0 0 0 / .38); border-radius: 10px; margin-bottom: 10px; }
 .detail__art.art-wrap--round { border-radius: 999px; }
 .detail__art:not(.art-wrap--round) :deep(.art) { border-radius: 10px; }
 .detail__title {
@@ -1097,7 +1109,8 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .detail__artist { font-size: 15px; font-weight: 500; margin-bottom: 4px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.detail__meta { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; min-height: 18px; white-space: nowrap; }
+.detail__meta { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; min-height: 18px; max-width: 100%; white-space: nowrap; }
+.detail__meta > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .detail__desc {
   margin: 8px 0 0; max-width: 100%; font-size: 13px; line-height: 1.45; cursor: pointer;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
@@ -1106,7 +1119,7 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
 .detail__credit { margin: 2px 0 0; max-width: 100%; font-size: 10.5px; line-height: 1.35; opacity: .75; }
 .detail__desc:hover { color: var(--text); }
 .detail__play {
-  margin-top: 14px; display: grid; place-items: center; width: 56px; height: 56px; border-radius: 999px; border: 0;
+  margin-top: 8px; display: grid; place-items: center; width: 54px; height: 54px; border-radius: 999px; border: 0;
   background: var(--accent); color: var(--on-accent); cursor: pointer; box-shadow: 0 6px 18px rgb(0 0 0 / .3); transition: transform .15s, filter .15s;
 }
 .detail__play svg { margin-left: 3px; }

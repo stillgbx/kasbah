@@ -218,8 +218,8 @@ const explicit = computed(() => (props.pending
       <ArtThumb :key="art ?? 'none'" :src="art" :size="56" icon="music" class="bar__art" />
       <div class="bar__titles">
         <div class="bar__line1">
-          <MarqueeText class="bar__title" :text="title" />
           <ExplicitBadge v-if="explicit" />
+          <MarqueeText class="bar__title" :text="title" />
         </div>
         <MarqueeText class="bar__sub muted" :text="subtitle" />
       </div>
@@ -360,6 +360,8 @@ const explicit = computed(() => (props.pending
 .bar__art { border-radius: 8px; overflow: hidden; }
 .bar__titles { min-width: 0; flex: 1 1 auto; display: grid; gap: 2px; }
 .bar__line1 { display: flex; align-items: center; gap: 6px; min-width: 0; }
+/* le titre défile (MarqueeText, `contain: inline-size`) : il lui FAUT la place restante — ne lui laisser
+   que « sa » place le réduit à zéro. Le « E » se met donc devant lui, collé, et non rejeté au bout. */
 .bar__title { min-width: 0; flex: 1 1 auto; font-size: 15px; font-weight: 600; line-height: 1.25; }
 .bar__sub { font-size: 12.5px; line-height: 1.25; }
 

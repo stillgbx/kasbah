@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { IconName } from '../../lib/strokeIcons'
 import ArtThumb from '../ui/ArtThumb.vue'
+import PulseDot from '../ui/PulseDot.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import ArtPlay from './ArtPlay.vue'
 
@@ -38,7 +39,9 @@ const props = withDefaults(defineProps<{
   position?: number | null
   /** Sans vignette : le numéro porte la lecture, la ligne entière se joue. */
   artless?: boolean
-}>(), { icon: 'music', round: false, explicit: false, meta: '', dur: '', year: null, busy: false, disabled: false, selected: false, playLabel: undefined, queueable: false, removable: false, playable: false, position: null, artless: false })
+  /** Le titre joue en ce moment sur le lecteur choisi : un point pulse devant lui (place toujours gardée). */
+  playing?: boolean
+}>(), { icon: 'music', round: false, explicit: false, meta: '', dur: '', year: null, busy: false, disabled: false, selected: false, playLabel: undefined, queueable: false, removable: false, playable: false, position: null, artless: false, playing: false })
 const emit = defineEmits<{ open: []; play: []; playNext: []; addEnd: []; remove: [] }>()
 const playsOnRow = () => props.artless && props.action === 'play'
 function activate() {
@@ -65,6 +68,8 @@ function activate() {
     </div>
     <div class="min0">
       <div class="line1">
+        <!-- sur une ligne de titre seulement : sa place est gardée éteinte, le titre ne saute pas quand il s'allume -->
+        <PulseDot v-if="action === 'play'" :on="playing" class="now" />
         <div class="title">{{ title }}</div>
         <span v-if="explicit" class="explicit" :title="$t('ytmusic.explicit')">E</span>
       </div>
@@ -122,6 +127,7 @@ function activate() {
 .mini:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); }
 .mini:disabled { opacity: .35; }
 .is-hidden { visibility: hidden; }
+.now { color: var(--accent); }
 .row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 /* rang dans la file : largeur fixe EN PIXELS (jusqu'à #999) — en `ch` elle suivait la graisse, et la
    ligne en cours (numéro en gras) décalait sa pochette d'un pixel */
