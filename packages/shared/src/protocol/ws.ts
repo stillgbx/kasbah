@@ -3,6 +3,7 @@ import { deviceDescriptorSchema, deviceIdSchema } from '../devices/descriptor'
 import { deviceStateSchema } from '../devices/state'
 import { houseSchema } from '../house/schema'
 import { pluginSceneEntrySchema, pluginSceneStateSchema, sceneIdSchema } from '../scenes/scene'
+import { automationEntrySchema } from '../automations/automation'
 
 // Protocole WebSocket serveur → client. Les états sont envoyés ENTIERS (pas des patchs) :
 // messages idempotents, aucune fusion côté client, reconnexion = « recevoir un snapshot ».
@@ -22,6 +23,8 @@ export const serverMessageSchema = z.discriminatedUnion('type', [
     type: z.literal('snapshot'), serverTime: z.number(), devices: z.array(deviceEntrySchema),
     /** Scènes des fabricants ; absent d'un serveur qui n'en expose pas. */
     scenes: z.array(pluginSceneEntrySchema).default([]),
+    /** Automatisations de la maison et leur statut ; absent d'un serveur qui n'en a pas. */
+    automations: z.array(automationEntrySchema).default([]),
   }),
   z.object({ type: z.literal('state'), deviceId: deviceIdSchema, state: deviceStateSchema }),
   z.object({ type: z.literal('availability'), deviceIds: z.array(deviceIdSchema), available: z.boolean() }),
@@ -32,6 +35,8 @@ export const serverMessageSchema = z.discriminatedUnion('type', [
   /** La maison a été réécrite (placement d'un appareil depuis une tablette). */
   z.object({ type: z.literal('house'), house: houseSchema }),
   z.object({ type: z.literal('error'), code: z.string(), message: z.string() }),
+  /** Liste ENTIÈRE des automatisations et de leur statut, à chaque changement (écriture, exécution, appareil disparu). */
+  z.object({ type: z.literal('automations'), automations: z.array(automationEntrySchema) }),
   /** Un appareil vient de signaler un événement (sonnette, mouvement) ; `at` = horloge serveur. */
   z.object({ type: z.literal('deviceEvent'), deviceId: deviceIdSchema, event: z.enum(DEVICE_EVENT_KINDS), at: z.number() }),
 ])

@@ -7,6 +7,8 @@ import { NAV_ITEMS } from '../../lib/navItems'
 
 // Rail de navigation (72 px) : initiales de la maison, vues, puis les réglages tout en bas.
 const route = useRoute()
+/** Entrée du rail à allumer : une sous-page (l'édition d'une automatisation) nomme sa vue dans `meta.nav`. */
+const current = computed(() => (route.meta.nav as string | undefined) ?? route.name)
 const house = useHouseStore()
 
 const initials = computed(() => {
@@ -23,13 +25,13 @@ const settingsItem = NAV_ITEMS.find((it) => it.name === 'settings')!
   <nav class="rail" :aria-label="$t('nav.main')">
     <div class="rail__avatar" :title="house.house?.name">{{ initials }}</div>
     <router-link v-for="it in items" :key="it.name" v-slot="{ navigate }" :to="{ name: it.name }" custom>
-      <button type="button" class="rail__btn" :data-on="route.name === it.name ? '1' : '0'" :title="$t(it.label)" :aria-label="$t(it.label)" @click="navigate">
+      <button type="button" class="rail__btn" :data-on="current === it.name ? '1' : '0'" :title="$t(it.label)" :aria-label="$t(it.label)" @click="navigate">
         <StrokeIcon :name="it.icon" :size="24" />
       </button>
     </router-link>
     <div class="rail__spacer" />
     <router-link v-slot="{ navigate }" :to="{ name: settingsItem.name }" custom>
-      <button type="button" class="rail__btn" :data-on="route.name === settingsItem.name ? '1' : '0'" :title="$t(settingsItem.label)" :aria-label="$t(settingsItem.label)" @click="navigate">
+      <button type="button" class="rail__btn" :data-on="current === settingsItem.name ? '1' : '0'" :title="$t(settingsItem.label)" :aria-label="$t(settingsItem.label)" @click="navigate">
         <StrokeIcon :name="settingsItem.icon" :size="24" />
       </button>
     </router-link>

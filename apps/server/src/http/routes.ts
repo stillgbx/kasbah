@@ -1,6 +1,7 @@
-import { addOpeningToJson, addParkingToJson, assertCommandAllowed, commandSchema, devicePlacementSchema, newOpeningSchema, newParkingSchema, openingPatchSchema, panelArrayPatchSchema, parkingPatchSchema, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, roomOrderSchema, sceneTuningSchema, setRenderTuningInJson, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
+import { addOpeningToJson, addParkingToJson, assertCommandAllowed, automationBodySchema, automationIdSchema, automationPatchSchema, commandSchema, devicePlacementSchema, newOpeningSchema, newParkingSchema, openingPatchSchema, panelArrayPatchSchema, parkingPatchSchema, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, roomOrderSchema, sceneTuningSchema, setRenderTuningInJson, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { updateHouseFile, type LoadedHouse } from '../config/house'
+import type { AutomationEngine } from '../core/automations/engine'
 import type { PluginHost } from '../core/plugin-host'
 import type { DeviceRegistry } from '../core/registry'
 import type { EnergyHistory } from '../core/history'
@@ -15,6 +16,7 @@ export interface RoutesDeps {
   house: LoadedHouse
   hub: WsHub
   history: EnergyHistory
+  automations: AutomationEngine
   startedAt: number
 }
 
@@ -230,6 +232,36 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
     }
     await deps.host.updateScene(entry.scene.id, update)
     return { ok: true as const }
+  })
+
+  // Automatisations de la maison. Chaque écriture rediffuse la liste entière par le WebSocket
+  // (message `automations`, poussé par le moteur) ; la réponse porte l'automatisation et son statut.
+  app.get('/api/automations', async () => ({ automations: deps.automations.list() }))
+
+  app.put<{ Params: { id: string } }>('/api/automations/:id', async (req) => {
+    const id = automationIdSchema.parse(req.params.id)          // ZodError → 400
+    const body = automationBodySchema.parse(req.body)
+    return { automation: await deps.automations.upsert(id, body) }
+  })
+
+  app.patch<{ Params: { id: string } }>('/api/automations/:id', async (req, reply) => {
+    const { enabled } = automationPatchSchema.parse(req.body)
+    const entry = await deps.automations.setEnabled(req.params.id, enabled)
+    if (!entry) return sendError(reply, 404, 'NOT_FOUND', `unknown automation "${req.params.id}"`)
+    return { automation: entry }
+  })
+
+  app.delete<{ Params: { id: string } }>('/api/automations/:id', async (req, reply) => {
+    if (!(await deps.automations.remove(req.params.id))) return sendError(reply, 404, 'NOT_FOUND', `unknown automation "${req.params.id}"`)
+    return { ok: true as const }
+  })
+
+  // Exécute les actions tout de suite, sans déclencheur ni « sauf si ». 200 même en échec partiel :
+  // le compte rendu (`run.errors`) dit ce qui a raté, appareil par appareil.
+  app.post<{ Params: { id: string } }>('/api/automations/:id/run', async (req, reply) => {
+    const run = await deps.automations.runNow(req.params.id)
+    if (!run) return sendError(reply, 404, 'NOT_FOUND', `unknown automation "${req.params.id}"`)
+    return { run }
   })
 
   // Plugins : l'inventaire complet (tous déclarés, actifs ou non) et ce qu'on en choisit. Le choix

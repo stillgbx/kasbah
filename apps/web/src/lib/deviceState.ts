@@ -1,48 +1,12 @@
 import type { CommandInput, DeviceDescriptor, DeviceState, StateFor } from '@kasbah/shared'
-import { coverActivity, coverRestKey, coverWords, toClosure } from './cover'
+import { isDeviceOn, isMediaActive } from '@kasbah/shared'
+import { coverRestKey, coverWords, toClosure } from './cover'
 import { isEnergySite } from './energy'
 import { formatFeedAmount, formatMilliliters, formatPercent, formatPower, formatSensor, formatTemp, waterAlertState, waterLowestPct } from './format'
 
 // Lecture « métier » d'un état : actif ?, bascule rapide possible ?, libellé court traduit.
-
-/**
- * Le lecteur diffuse quelque chose : une lecture, ou une appli à l'écran dont on ne sait rien de plus
- * (`on`, Netflix natif) — l'écran est bien occupé. Sert à l'interrupteur, au point pulsant, à la teinte de
- * l'icône et à l'onde de la scène 3D ; le compteur « en diffusion » de l'en-tête, lui, ne compte que `playing`.
- */
-export function isMediaActive(s: StateFor<'media_player'>): boolean {
-  return s.playback === 'playing' || s.playback === 'on'
-}
-
-/**
- * Vrai si l'appareil est « actif » : lampe allumée, volet ouvert, lecture en cours, robot au travail…
- *
- * `descriptor` : seul un OUVRANT en a besoin, et seulement pour sa nature — un volet se remarque
- * ouvert, un store déployé (voir `coverActivity`). Sans descripteur, c'est la règle du volet.
- */
-export function isDeviceOn(s: DeviceState, descriptor?: DeviceDescriptor): boolean {
-  if (!s.available) return false
-  switch (s.kind) {
-    case 'light': return s.on
-    // position inconnue (RTS sans retour) : ni actif ni inactif, on ne teinte pas l'icône
-    case 'cover': return coverActivity(descriptor, s.position) > 0
-    case 'media_player': return isMediaActive(s)
-    case 'climate': return s.mode !== 'off'
-    case 'vacuum': return s.activity === 'cleaning'
-    case 'mower': return s.activity === 'mowing'
-    case 'ev_charger': return s.status === 'charging'
-    case 'vehicle': return s.charging
-    case 'energy': return s.productionW > 0
-    case 'sensor': return false
-    case 'camera': return false
-    case 'weather': return false
-    case 'water': return false
-    // une ration EN TRAIN de tomber : le seul moment où une mangeoire fait quelque chose
-    case 'pet_feeder': return s.feeding === true
-    case 'pet_fountain': return s.on
-    case 'fan': return s.on
-  }
-}
+// `isDeviceOn` / `isMediaActive` vivent dans `@kasbah/shared` (le serveur s'en sert aussi) : ré-exportés ici.
+export { isDeviceOn, isMediaActive }
 
 /**
  * Valeur AFFICHÉE par l'interrupteur, qui n'est pas toujours « l'appareil est actif ».

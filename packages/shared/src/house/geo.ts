@@ -30,6 +30,14 @@ export function geoToLocal(origin: GeoOrigin, p: { lat: number; lon: number; alt
   return [x, y, (p.alt ?? origin.alt) - origin.alt]
 }
 
+/**
+ * Rayon « à la maison » autour de l'origine, en mètres. Plus tolérant que le polygone du terrain
+ * (`sitePosition`, un test de DESSIN) : une voiture garée dans la rue devant la maison est rentrée.
+ * Même valeur que les vues web (`VehiclesView`, `VehicleCard`, `HouseScene`), qui la déclarent encore
+ * chacune pour elles.
+ */
+export const HOME_RADIUS_M = 120
+
 /** Distance au sol (m) entre deux points WGS84 (haversine). */
 export function geoDistance(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
   const dLat = toRad(b.lat - a.lat), dLon = toRad(b.lon - a.lon)

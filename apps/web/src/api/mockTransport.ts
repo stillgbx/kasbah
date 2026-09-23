@@ -1,4 +1,4 @@
-import { addOpeningToJson, addParkingToJson, commandSchema, defaultState, mergeState, parseHouse, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, setRenderTuningInJson, setRoomOrderInJson, type CommandInput, type DeviceConsumption, type DeviceEntry, type DeviceState, type House, type StatePatch } from '@kasbah/shared'
+import { addOpeningToJson, addParkingToJson, automationBodySchema, commandSchema, deviceClassOf, defaultState, mergeState, parseHouse, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, setRenderTuningInJson, setRoomOrderInJson, type Automation, type AutomationEntry, type AutomationRun, type AutomationStatus, type CommandInput, type DeviceConsumption, type DeviceEntry, type DeviceState, type House, type StatePatch } from '@kasbah/shared'
 import { SimError, Simulation, solarGeometry, type ScenarioName } from '@kasbah/mock-sim'
 import demoHouse from '@kasbah/shared/demo-house.json'
 import { ApiRequestError, type Transport, type TransportHandlers } from './transport'
@@ -55,6 +55,44 @@ function mockConsumption(deviceId: string, now = Date.now()): DeviceConsumption 
   return { deviceId, hourly, daily, monthly }
 }
 
+/**
+ * Automatisations de démonstration du mode maquette : une horaire au soleil, une au calendrier,
+ * et une qui vise un appareil que la simulation n'a pas — pour voir la pastille « incomplète ».
+ */
+const DEMO_AUTOMATIONS: Automation[] = [
+  {
+    id: 'volets-crepuscule', name: 'Volets au crépuscule', enabled: true,
+    trigger: { type: 'time', at: { kind: 'sun', event: 'dusk', offsetMin: -15, notAfter: '22:00' } },
+    unless: [{ type: 'anyInRoom', roomId: 'salon', kind: 'media_player' }],
+    actions: [{ type: 'command', target: { type: 'selector', kind: 'cover', deviceClass: 'shutter' }, command: { type: 'cover.close' } }],
+  },
+  {
+    id: 'portail-midi', name: 'Portail le midi', enabled: false,
+    trigger: { type: 'time', at: { kind: 'clock', time: '12:00' }, days: [1, 5] },
+    unless: [],
+    actions: [{ type: 'command', target: { type: 'devices', deviceIds: ['mock:cover-gate'] }, command: { type: 'cover.open' } }],
+  },
+  {
+    id: 'veilleuse', name: 'Veilleuse du couloir', enabled: true,
+    trigger: { type: 'time', at: { kind: 'clock', time: '23:30' } },
+    unless: [],
+    actions: [{ type: 'command', target: { type: 'devices', deviceIds: ['hue:veilleuse-couloir'] }, command: { type: 'light.set', on: true, brightness: 10 } }],
+  },
+]
+
+/** Prochain « HH:MM » d'un déclencheur horaire à heure fixe ; le soleil n'est pas calculé en maquette. */
+function mockNextRun(a: Automation, now = Date.now()): number | undefined {
+  if (!a.enabled || a.trigger.type !== 'time' || a.trigger.at.kind !== 'clock') return undefined
+  const [h = 0, m = 0] = a.trigger.at.time.split(':').map(Number)
+  const days = a.trigger.days
+  const from = new Date(now)
+  for (let k = 0; k < 8; k++) {
+    const t = new Date(from.getFullYear(), from.getMonth(), from.getDate() + k, h, m).getTime()
+    if (t > now && (!days || days.includes(new Date(t).getDay()))) return t
+  }
+  return undefined
+}
+
 export function createMockTransport(opts: MockTransportOptions = {}): Transport & { sim: Simulation } {
   const sim = new Simulation({ scenario: opts.scenario ?? 'default', seed: opts.seed ?? 42, timeScale: opts.timeScale ?? 1 })
   let house = opts.house ?? parseHouse(demoHouse)
@@ -64,6 +102,28 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
 
   const entries = (): DeviceEntry[] => descriptors.map((descriptor) => ({ descriptor, state: states.get(descriptor.id) ?? defaultState(descriptor.kind) }))
   let handlers: TransportHandlers | null = null
+
+  // Automatisations en mémoire : même forme que le serveur, statut approché (appareils absents,
+  // prochaine heure fixe). Chaque écriture repousse la liste, comme le message WebSocket du serveur.
+  const automations = new Map(DEMO_AUTOMATIONS.map((a) => [a.id, a]))
+  const lastRuns = new Map<string, AutomationRun>()
+  const automationEntry = (a: Automation): AutomationEntry => {
+    const ids = a.actions.flatMap((x) => (x.type === 'command' && x.target.type === 'devices' ? x.target.deviceIds : []))
+    const missing = ids.filter((id) => !states.has(id)).map((id) => ({ kind: 'device' as const, id }))
+    const status: AutomationStatus = { health: missing.length ? 'incomplete' : 'ok', missing, unavailableDeviceIds: [] }
+    const next = mockNextRun(a)
+    const last = lastRuns.get(a.id)
+    if (next !== undefined) status.nextRunAt = next
+    if (last) status.lastRun = last
+    return { automation: a, status }
+  }
+  const automationList = () => [...automations.values()].map(automationEntry)
+  const pushAutomations = () => handlers?.onMessage({ type: 'automations', automations: automationList() })
+  const knownAutomation = (id: string) => {
+    const a = automations.get(id)
+    if (!a) throw new ApiRequestError(404, 'NOT_FOUND', `unknown automation "${id}"`)
+    return a
+  }
 
   const apply = (externalId: string, patch: StatePatch) => {
     const id = `mock:${externalId}`
@@ -256,6 +316,45 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     async updateScene() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no vendor scenes in mock mode') },
     async createScene() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no vendor scenes in mock mode') },
     async deleteScene() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no vendor scenes in mock mode') },
+    async getAutomations() { return automationList() },
+    async putAutomation(id, body) {
+      const a: Automation = { id, ...automationBodySchema.parse(body), updatedAt: Date.now() }
+      automations.set(id, a)
+      pushAutomations()
+      return automationEntry(a)
+    },
+    async setAutomationEnabled(id, enabled) {
+      const a = { ...knownAutomation(id), enabled, updatedAt: Date.now() }
+      automations.set(id, a)
+      pushAutomations()
+      return automationEntry(a)
+    },
+    async deleteAutomation(id) {
+      knownAutomation(id)
+      automations.delete(id)
+      lastRuns.delete(id)
+      pushAutomations()
+    },
+    // Exécute pour de vrai sur la simulation (les volets se ferment dans la 3D) ; une sélection
+    // se résout ici sur le kind et la nature seulement, sans pièces ni exceptions.
+    async runAutomation(id) {
+      const a = knownAutomation(id)
+      const errors: AutomationRun['errors'] = []
+      for (const [i, action] of a.actions.entries()) {
+        if (action.type !== 'command') { errors.push({ action: i, code: 'NOT_IMPLEMENTED', message: 'no vendor scenes in mock mode' }); continue }
+        const t = action.target
+        const ids = t.type === 'devices' ? t.deviceIds
+          : descriptors.filter((d) => d.kind === t.kind && (!t.deviceClass || deviceClassOf(d) === t.deviceClass)).map((d) => d.id)
+        for (const deviceId of ids) {
+          try { await this.sendCommand(deviceId, action.command) }
+          catch (err) { errors.push({ action: i, deviceId, code: err instanceof ApiRequestError ? err.code : 'INTERNAL', message: (err as Error).message }) }
+        }
+      }
+      const run: AutomationRun = { at: Date.now(), by: 'manual', outcome: errors.length ? 'partial' : 'ok', errors }
+      lastRuns.set(id, run)
+      pushAutomations()
+      return run
+    },
     // maquette in-process : la simulation tourne dans la page, il n'y a pas de serveur à régler
     async getPlugins() { return [] },
     async setPluginSettings() { return [] },
@@ -263,7 +362,7 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
       handlers = h
       h.onStatus('connecting')
       sim.start(apply, (externalId, available) => apply(externalId, { available }))
-      h.onMessage({ type: 'snapshot', serverTime: Date.now(), devices: entries(), scenes: [] })
+      h.onMessage({ type: 'snapshot', serverTime: Date.now(), devices: entries(), scenes: [], automations: automationList() })
       h.onStatus('online')
       return () => { sim.stop(); handlers = null }
     },

@@ -1,4 +1,4 @@
-import type { SceneTuning, CommandInput, DeviceConsumption, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal } from '@kasbah/shared'
+import type { AutomationBody, AutomationEntry, AutomationRun, SceneTuning, CommandInput, DeviceConsumption, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal } from '@kasbah/shared'
 
 // Abstraction du canal serveur. Deux implémentations : HTTP + WebSocket (réel) et simulation
 // in-process (tests, démo statique sans serveur). Les commandes passent TOUJOURS par une requête
@@ -379,6 +379,14 @@ export interface Transport {
   createScene(fromSceneId: string, groupName: string): Promise<void>
   /** Supprime une ambiance chez le fabricant (destructif). */
   deleteScene(sceneId: string): Promise<void>
+  /** Automatisations de la maison et leur statut (le WebSocket pousse ensuite chaque changement). */
+  getAutomations(): Promise<AutomationEntry[]>
+  /** Crée ou remplace une automatisation ; rend son statut recalculé par le serveur. */
+  putAutomation(id: string, body: AutomationBody): Promise<AutomationEntry>
+  setAutomationEnabled(id: string, enabled: boolean): Promise<AutomationEntry>
+  deleteAutomation(id: string): Promise<void>
+  /** Exécute les actions tout de suite (ni déclencheur ni « sauf si ») ; rend le compte rendu. */
+  runAutomation(id: string): Promise<AutomationRun>
   /** Inventaire des plugins : tous ceux que le serveur connaît, actifs ou non. */
   getPlugins(): Promise<PluginInfo[]>
   /** Écrit un choix (activation, sous-item, ambiances) dans la maison ; rend l'inventaire à jour. */

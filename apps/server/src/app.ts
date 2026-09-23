@@ -4,6 +4,8 @@ import Fastify, { type FastifyInstance } from 'fastify'
 import type { Logger } from 'pino'
 import type { Env } from './config/env'
 import { loadHouse, type LoadedHouse } from './config/house'
+import { AutomationEngine } from './core/automations/engine'
+import { automationsPathFor, createAutomationsFile } from './core/automations/store'
 import { Bus } from './core/bus'
 import { systemClock, type Clock } from './core/clock'
 import type { PluginFactory } from './core/plugin'
@@ -39,6 +41,7 @@ export interface KasbahApp {
   hub: WsHub
   host: PluginHost
   house: LoadedHouse
+  automations: AutomationEngine
   /** Démarre les plugins (après app.ready()/listen pour que les routes soient prêtes). */
   startPlugins(): Promise<void>
   close(): Promise<void>
@@ -65,7 +68,6 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
   // Réglages par plugin : ils vivent DANS la maison (`house.plugins`), écrits par l'UI. `house`
   // est muté en place par `updateHouseFile`, donc cette lecture voit toujours la valeur courante.
   const settingsOf = (pluginId: string) => house.house.plugins[pluginId] ?? DEFAULT_PLUGIN_SETTINGS
-  const hub = new WsHub(registry, bus, clock, opts.logger.child({ component: 'ws' }), { scenes })
   const history = new EnergyHistory(bus, clock)
   const host = new PluginHost({
     settingsOf,
@@ -76,6 +78,16 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
     ...(opts.envSource ? { envSource: opts.envSource } : {}),
     commandTimeoutMs: opts.env.KASBAH_COMMAND_TIMEOUT_MS,
   })
+
+  // Automatisations : un fichier à côté de la maison, exécutées ici (la tablette dort, le serveur
+  // non). Après `host`, par qui passent les commandes ; avant le hub, dont le snapshot les porte.
+  const automations = new AutomationEngine({
+    store: createAutomationsFile(automationsPathFor(house.path)),
+    registry, scenes, host, house, bus, clock, logger: opts.logger.child({ component: 'automations' }),
+  })
+  const hub = new WsHub(registry, bus, clock, opts.logger.child({ component: 'ws' }), { scenes, automations })
+  automations.onChange(() => hub.broadcast({ type: 'automations', automations: automations.list() }))
+  await automations.start()
 
   await hub.attach(app)
   // initialise le réglage des ambiances qui APPARAISSENT (jamais l'existant) — après `host`,
@@ -92,7 +104,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
   // laissés tranquilles par défaut, et le WebSocket ne passe pas par ce crochet.
   await app.register(fastifyCompress, { global: true })
 
-  registerRoutes(app, { registry, scenes, host, house, hub, history, startedAt: clock.now() })
+  registerRoutes(app, { registry, scenes, host, house, hub, history, automations, startedAt: clock.now() })
   host.registerRoutes(app)
   await registerMcp(app, { registry, scenes, host, house })
   // Les sources musicales n'ont pas d'appareils : pour `play_url` elles passent par Cast/Sonos via l'hôte.
@@ -115,9 +127,10 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
   }
 
   return {
-    app, registry, scenes, bus, hub, host, house,
+    app, registry, scenes, bus, hub, host, house, automations,
     startPlugins: () => host.startAll(),
     async close() {
+      automations.close()                 // plus rien ne se déclenche pendant l'arrêt
       setPlaybackBridge(null)
       music.stop()
       await host.stopAll()

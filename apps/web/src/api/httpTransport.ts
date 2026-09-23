@@ -1,4 +1,4 @@
-import { apiErrorSchema, devicesResponseSchema, energyHistorySchema, healthResponseSchema, houseSchema, pluginsResponseSchema, scenesResponseSchema, serverMessageSchema, weatherForecastSchema, deviceJournalSchema, deviceConsumptionSchema, type CommandInput, type DeviceConsumption, type DeviceJournal, type DeviceEntry, type DevicePlacement, type EnergyHistory, type HealthResponse, type House, type PluginInfo, type PluginSceneEntry, type PluginSettingsPatch, type SceneRecallInput, type SceneUpdate, type WeatherForecast } from '@kasbah/shared'
+import { apiErrorSchema, automationResponseSchema, automationRunResponseSchema, automationsResponseSchema, devicesResponseSchema, energyHistorySchema, healthResponseSchema, houseSchema, pluginsResponseSchema, scenesResponseSchema, serverMessageSchema, weatherForecastSchema, deviceJournalSchema, deviceConsumptionSchema, type AutomationBody, type AutomationEntry, type AutomationRun, type CommandInput, type DeviceConsumption, type DeviceJournal, type DeviceEntry, type DevicePlacement, type EnergyHistory, type HealthResponse, type House, type PluginInfo, type PluginSceneEntry, type PluginSettingsPatch, type SceneRecallInput, type SceneUpdate, type WeatherForecast } from '@kasbah/shared'
 import { parseDeviceId } from '@kasbah/shared'
 import { ApiRequestError, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type MelcloudStatus, type MelcloudUnit, type MixcloudHomeSection, type MixcloudPage, type MixcloudStatus, type MixcloudUser, type PetkitStatus, type RadioStation, type RenaultStatus, type TeslaStatus, type Transport, type TransportHandlers, type YtmusicExplore, type YtmusicExploreShelf, type YtmusicPlaylist, type MusicQueue, type YtmusicSearchResult, type MusicSession, type YtmusicStatus, type YtmusicTrack } from './transport'
 
@@ -63,6 +63,23 @@ export function createHttpTransport(base = ''): Transport {
       `${base}/api/scenes/${encodeURIComponent(sceneId)}`,
       { method: 'DELETE' },
       () => undefined,
+    ),
+    getAutomations: () => request(`${base}/api/automations`, undefined, (j) => automationsResponseSchema.parse(j).automations as AutomationEntry[]),
+    putAutomation: (id, body: AutomationBody) => request(
+      `${base}/api/automations/${encodeURIComponent(id)}`,
+      { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
+      (j) => automationResponseSchema.parse(j).automation as AutomationEntry,
+    ),
+    setAutomationEnabled: (id, enabled) => request(
+      `${base}/api/automations/${encodeURIComponent(id)}`,
+      { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ enabled }) },
+      (j) => automationResponseSchema.parse(j).automation as AutomationEntry,
+    ),
+    deleteAutomation: (id) => request(`${base}/api/automations/${encodeURIComponent(id)}`, { method: 'DELETE' }, () => undefined),
+    runAutomation: (id) => request(
+      `${base}/api/automations/${encodeURIComponent(id)}/run`,
+      { method: 'POST' },
+      (j) => automationRunResponseSchema.parse(j).run as AutomationRun,
     ),
     getPlugins: () => request(`${base}/api/plugins`, undefined, (j) => pluginsResponseSchema.parse(j).plugins as PluginInfo[]),
     setPluginSettings: (pluginId, patch: PluginSettingsPatch) => request(

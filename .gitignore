@@ -13,6 +13,9 @@ _generated-ai-doc
 apps/server/.state/
 house/maison.json
 house/*.bak
+# automatisations d'une maison (données de l'utilisateur, à côté de sa maison)
+house/*.automations.json
+house/*.automations.json.tmp
 .tmp-check
 _external
 .claude/agents/

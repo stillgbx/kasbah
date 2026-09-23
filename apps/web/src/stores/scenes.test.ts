@@ -22,7 +22,7 @@ describe('scenes store', () => {
 
   it('groups scenes by room name (accents and case ignored) and sends the rest to the house level', () => {
     const store = useScenesStore()
-    store.apply({ type: 'snapshot', serverTime: 0, devices: [], scenes: SCENES })
+    store.apply({ type: 'snapshot', serverTime: 0, devices: [], scenes: SCENES, automations: [] })
     expect(store.count).toBe(3)
     expect(store.forRoom('salon').map((e) => e.scene.name)).toEqual(['Détente', 'Starlight'])
     expect(store.forRoom('Cuisine')).toEqual([])

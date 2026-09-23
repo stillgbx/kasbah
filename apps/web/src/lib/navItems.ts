@@ -26,5 +26,8 @@ export const NAV_ITEMS: NavItem[] = [
   // les animaux après les robots : deux familles d'appareils qui vivent leur vie dans la maison et
   // qu'on vient consulter, pas piloter au quotidien
   { name: 'pets', icon: 'paw', label: 'nav.pets' },
+  // ce que la maison fait TOUTE SEULE vient en dernier, juste avant les Réglages : on le règle et on
+  // vient le vérifier, on ne le pilote pas au quotidien
+  { name: 'automations', icon: 'automation', label: 'nav.automations' },
   { name: 'settings', icon: 'gear', label: 'nav.settings' },
 ]

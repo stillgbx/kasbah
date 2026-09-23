@@ -1,4 +1,4 @@
-import type { DeviceId, DeviceState, ServerMessage } from '@kasbah/shared'
+import type { AutomationEntry, DeviceId, DeviceState, ServerMessage } from '@kasbah/shared'
 import websocket from '@fastify/websocket'
 import type { FastifyInstance } from 'fastify'
 import type { Logger } from 'pino'
@@ -16,6 +16,8 @@ export interface WsHubOptions {
   heartbeatMs?: number
   /** Scènes des fabricants (snapshot et push) ; absentes des tests qui n'en ont pas besoin. */
   scenes?: SceneRegistry
+  /** Automatisations et leur statut (snapshot) ; le moteur pousse lui-même les changements. */
+  automations?: { list(): AutomationEntry[] }
 }
 
 export class WsHub {
@@ -27,6 +29,7 @@ export class WsHub {
   private readonly coalesceMs: number
   private readonly heartbeatMs: number
   private readonly scenes: SceneRegistry | undefined
+  private readonly automations: WsHubOptions['automations']
 
   constructor(
     private readonly registry: DeviceRegistry,
@@ -38,6 +41,7 @@ export class WsHub {
     this.coalesceMs = opts.coalesceMs ?? 50
     this.heartbeatMs = opts.heartbeatMs ?? 15_000
     this.scenes = opts.scenes
+    this.automations = opts.automations
     this.unsubscribe.push(
       bus.on('state', (id, state) => { this.pending.set(id, state); this.scheduleFlush() }),
       bus.on('availability', (deviceIds, available) => {
@@ -69,7 +73,7 @@ export class WsHub {
     socket.on('close', () => this.clients.delete(socket))
     socket.on('error', (err) => { this.logger.debug({ err }, 'ws client error'); this.clients.delete(socket) })
     socket.on('message', () => { /* v1 : le client n'envoie rien d'utile */ })
-    this.send(socket, { type: 'snapshot', serverTime: this.clock.now(), devices: this.registry.list(), scenes: this.scenes?.list() ?? [] })
+    this.send(socket, { type: 'snapshot', serverTime: this.clock.now(), devices: this.registry.list(), scenes: this.scenes?.list() ?? [], automations: this.automations?.list() ?? [] })
     this.logger.debug({ clients: this.clients.size }, 'ws client connected')
   }
 

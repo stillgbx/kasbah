@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { WEATHER_CONDITIONS } from '../devices/kinds'
 import { deviceEntrySchema } from './ws'
 import { pluginSceneEntrySchema } from '../scenes/scene'
+import { automationEntrySchema, automationRunSchema } from '../automations/automation'
 
 export const apiErrorSchema = z.object({ error: z.object({ code: z.string(), message: z.string() }) })
 export type ApiError = z.infer<typeof apiErrorSchema>
@@ -12,6 +13,13 @@ export type DevicesResponse = z.infer<typeof devicesResponseSchema>
 export const scenesResponseSchema = z.object({ scenes: z.array(pluginSceneEntrySchema) })
 export type ScenesResponse = z.infer<typeof scenesResponseSchema>
 
+/** `GET /api/automations`. */
+export const automationsResponseSchema = z.object({ automations: z.array(automationEntrySchema) })
+export type AutomationsResponse = z.infer<typeof automationsResponseSchema>
+/** `PUT` et `PATCH /api/automations/:id` : l'automatisation écrite et son statut recalculé. */
+export const automationResponseSchema = z.object({ automation: automationEntrySchema })
+/** `POST /api/automations/:id/run` : le compte rendu, même en échec partiel. */
+export const automationRunResponseSchema = z.object({ run: automationRunSchema })
 
 export const PLUGIN_HEALTH_STATUSES = ['ok', 'degraded', 'needs_pairing', 'error', 'not_implemented', 'disabled'] as const
 export const pluginHealthSchema = z.object({
