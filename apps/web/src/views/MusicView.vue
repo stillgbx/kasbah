@@ -609,13 +609,14 @@ const descOpen = ref(false)
  * d'écran.
  */
 const scrollEl = ref<HTMLElement | null>(null)
+/** File, catégorie ou détail ouverts : la ligne « Retour » s'affiche au-dessus de la zone qui défile. */
+const hasBackRow = computed(() => statusReady.value && linked.value && (queueOpen.value || !!browse.value))
 const sideEl = ref<HTMLElement | null>(null)
 const sideFits = ref(false)
 function measureSide() {
   const sc = scrollEl.value, side = sideEl.value
   if (!sc || !side) { sideFits.value = false; return }
-  const backRow = Number.parseFloat(getComputedStyle(sc).getPropertyValue('--back-row-h')) || 0
-  sideFits.value = side.offsetHeight + backRow <= sc.clientHeight
+  sideFits.value = side.offsetHeight <= sc.clientHeight
 }
 // `useResizeObserver` suit les références du gabarit quand elles apparaissent ou changent (la colonne
 // n'existe qu'une fois un détail ouvert) ; la présentation qui arrive, ou qu'on déplie, la redimensionne
@@ -762,23 +763,33 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
         <ChipRow :label="$t('ytmusic.recent')" :items="recentQueries.map((q) => ({ key: q, label: q }))" :disabled="busy || !linked"
                  :remove-label="$t('ytmusic.recentRemove')" @pick="runRecent" @remove="removeRecent" />
 
-        <div ref="scrollEl" class="main__scroll">
+        <div class="main__body">
+        <!-- le voile de la pochette d'un détail (album, playlist, artiste), flou, derrière « Retour » et la zone
+             qui défile — jamais sous la recherche —, fondu sur ses quatre bords : aucune démarcation, et fixe,
+             puisqu'il n'est pas dans la zone qui défile -->
+        <div v-if="detail?.art && !queueOpen" class="veil" aria-hidden="true">
+          <img :key="detail.art" :src="detail.art" alt="" referrerpolicy="no-referrer">
+        </div>
+        <!-- « Retour » (file, catégorie, détail) HORS de la zone qui défile : rien ne passe plus sous lui, et
+             pas de bande de fond pour le séparer du voile — le haut de la zone se fond, les lignes s'y
+             effacent en douceur -->
+        <div v-if="hasBackRow" class="back-row">
+          <button type="button" class="pill" @click="queueOpen ? (queueOpen = false) : backFromDetail()">
+            <StrokeIcon name="back" :size="16" />
+            <span>{{ $t('common.back') }}</span>
+          </button>
+          <span class="back-row__title">{{ queueOpen ? $t('music.queue') : browse?.kind === 'category' ? browse.title : '' }}</span>
+          <button v-if="queueOpen" type="button" class="pill back-row__end" :disabled="queueWaiting <= 0 && !(queue && queue.index > 0)" @click="clearQueue">
+            <StrokeIcon name="trash" :size="16" />
+            <span>{{ $t('music.queueClear') }}</span>
+          </button>
+        </div>
+        <div ref="scrollEl" class="main__scroll" :class="{ 'main__scroll--under': hasBackRow }">
           <div v-if="!statusReady" class="muted empty">{{ $t('common.loading') }}</div>
           <div v-else-if="!linked" class="card card--soft empty muted">{{ $t('ytmusic.needCookie') }}</div>
           <template v-else>
             <!-- file d'attente du lecteur choisi : ce qui joue, ce qui suit -->
             <template v-if="queueOpen">
-              <div class="back-row">
-                <button type="button" class="pill" @click="queueOpen = false">
-                  <StrokeIcon name="back" :size="16" />
-                  <span>{{ $t('common.back') }}</span>
-                </button>
-                <span class="back-row__title">{{ $t('music.queue') }}</span>
-                <button type="button" class="pill back-row__end" :disabled="queueWaiting <= 0 && !(queue && queue.index > 0)" @click="clearQueue">
-                  <StrokeIcon name="trash" :size="16" />
-                  <span>{{ $t('music.queueClear') }}</span>
-                </button>
-              </div>
               <div class="list queue-list">
                 <template v-if="queue">
                   <MusicItemRow v-for="(qt, i) in queue.items" :key="`${i}:${qt.videoId}`" action="play" removable :position="i + 1" :art="qt.artUrl ?? null" :title="qt.title ?? qt.videoId"
@@ -793,13 +804,6 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
 
             <!-- une catégorie (genre, ambiance) : ses rangées de tuiles -->
             <template v-else-if="browse?.kind === 'category'">
-              <div class="back-row">
-                <button type="button" class="pill" @click="backFromDetail">
-                  <StrokeIcon name="back" :size="16" />
-                  <span>{{ $t('common.back') }}</span>
-                </button>
-                <span class="back-row__title">{{ browse.title }}</span>
-              </div>
               <template v-if="categoryLoading">
                 <section v-for="n in 3" :key="n" class="shelf" aria-hidden="true">
                   <div class="shelf__head"><span class="skel skel--label" /></div>
@@ -821,15 +825,7 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
 
             <!-- détail : album, artiste, playlist — une colonne fixe à gauche (pochette, titre, lecture), les titres à droite -->
             <template v-else-if="detail">
-              <div class="back-row">
-                <button type="button" class="pill" @click="backFromDetail">
-                  <StrokeIcon name="back" :size="16" />
-                  <span>{{ $t('common.back') }}</span>
-                </button>
-              </div>
               <div class="detail">
-                <!-- le voile de la pochette, flou : l'ambiance de la page, sans rien porter -->
-                <img v-if="detail.art" :key="detail.art" :src="detail.art" alt="" aria-hidden="true" class="detail__veil" referrerpolicy="no-referrer">
                 <aside ref="sideEl" class="detail__side" :class="{ 'is-fixed': sideFits }">
                   <!-- en 600 px : la pochette s'affiche jusqu'à 300 px, sur des écrans à haute densité -->
                   <ArtThumb :key="detail.art ?? 'none'" :src="artAt(detail.art, 600)" :size="176" :round="detail.kind === 'artist'"
@@ -1001,6 +997,7 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
             </template>
           </template>
         </div>
+        </div>
       </section>
 
       <ListeningSessions :players="players" :selected-id="sessionId || null" :transfer-mode="transferMode" :transfer-busy-id="transferBusyId"
@@ -1029,7 +1026,20 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
   padding: 0 24px 16px;
 }
 .main { display: flex; flex-direction: column; min-height: 0; min-width: 0; gap: 10px; }
-.main__scroll { --back-row-h: 56px; flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; }
+/* sous la recherche : « Retour », la zone qui défile, et le voile derrière eux */
+.main__body { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.main__body > :not(.veil) { position: relative; z-index: 1; }
+/* voile : fondu sur ses QUATRE bords (deux masques croisés) — aucune ligne nette —, gardé dans la colonne
+   et rogné dans sa boîte : l'image floue agrandie ne déborde pas */
+.veil {
+  position: absolute; z-index: 0; inset: 0 0 auto; height: 540px; overflow: hidden; pointer-events: none;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14%, #000 38%, transparent 100%), linear-gradient(to right, transparent 0, #000 12%, #000 88%, transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask-image: linear-gradient(to bottom, transparent 0, #000 14%, #000 38%, transparent 100%), linear-gradient(to right, transparent 0, #000 12%, #000 88%, transparent 100%);
+  mask-composite: intersect;
+}
+.veil img { width: 100%; height: 100%; object-fit: cover; display: block; filter: blur(70px) saturate(1.35); opacity: .3; transform: scale(1.15); }
+.main__scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; }
 
 /* la recherche : le geste premier de la page, d'où sa taille */
 .search { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; }
@@ -1048,11 +1058,12 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
 .small { font-size: 12px; }
 
 .browse-head { display: flex; align-items: center; gap: 12px; margin: 4px 0 10px; }
-/* « Retour » reste en haut de la zone quand on défile, sur le fond de la page : il ne chevauche plus
-   le voile d'une pochette ni les lignes qui passent dessous */
-.back-row {
-  position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 12px;
-  height: var(--back-row-h); margin: 0; padding: 4px 0 12px; background: var(--bg);
+/* « Retour » : au-dessus de la zone qui défile, sans fond (le voile passe dessous sans démarcation) */
+.back-row { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; min-height: 36px; }
+/* sous « Retour », le haut de la zone qui défile se fond sur quelques pixels : une ligne qui monte s'y
+   efface au lieu d'être tranchée net */
+.main__scroll--under {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14px); mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
 }
 .back-row__title { min-width: 0; flex: 1 1 auto; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .back-row__end { flex: 0 0 auto; white-space: nowrap; }
@@ -1091,15 +1102,10 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
 }
 @media (min-width: 1500px) { .detail { --cover: 260px; gap: 48px; } }
 @media (min-width: 1800px) { .detail { --cover: 300px; gap: 56px; } }
-.detail__veil {
-  position: absolute; inset: 0 0 auto 0; width: 100%; height: 340px; object-fit: cover; z-index: 0; pointer-events: none;
-  filter: blur(60px) saturate(1.3); opacity: .24; transform: scale(1.1);
-  -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 100%); mask-image: linear-gradient(to bottom, #000 0%, transparent 100%);
-}
-.detail__side { position: relative; z-index: 1; display: grid; justify-items: center; gap: 5px; padding: 6px 20px 10px; text-align: center; }
+.detail__side { position: relative; z-index: 1; display: grid; justify-items: center; gap: 5px; padding: 14px 20px 10px; text-align: center; }
 /* fixe quand elle tient en entier sous « Retour » (mesuré : `sideFits`), accrochée EXACTEMENT à sa
    place de départ — sinon elle glissait de quelques pixels avant de se fixer */
-.detail__side.is-fixed { position: sticky; top: var(--back-row-h); }
+.detail__side.is-fixed { position: sticky; top: 0; }
 /* `--art` est posé en ligne par ArtThumb : seul !important le remplace */
 .detail__art { --art: var(--cover) !important; box-shadow: 0 14px 36px rgb(0 0 0 / .38); border-radius: 10px; margin-bottom: 10px; }
 .detail__art.art-wrap--round { border-radius: 999px; }
