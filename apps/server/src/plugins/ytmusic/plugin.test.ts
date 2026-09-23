@@ -924,6 +924,7 @@ describe('ytmusic plugin', () => {
         subtitle: { runs: [{ text: 'Album' }, { text: ' • ' }, { text: '1997' }] },
         strapline_text_one: { text: 'Radiohead' },
         thumbnail: { type: 'MusicThumbnail', contents: [{ url: 'https://yt3.googleusercontent.com/ok=w544-h544', width: 544, height: 544 }] },
+        description: { type: 'MusicDescriptionShelf', description: { text: ' OK Computer est le troisième album de Radiohead. ' } },
       },
       // telle que YouTube Music la rend : ni artistes, ni vignette, un compteur d'écoutes en sous-titre
       contents: [{ id: 'vAirbag', item_type: 'song', title: 'Airbag', duration: { seconds: 284 }, subtitle: { text: '19M plays' } }],
@@ -934,6 +935,27 @@ describe('ytmusic plugin', () => {
     const [track] = r.json().tracks
     expect(track).toMatchObject({ videoId: 'vAirbag', artists: ['Radiohead'], album: 'OK Computer', year: '1997' })
     expect(track.artUrl).toMatch(/^https:\/\/yt3\.googleusercontent\.com\/ok=/)
+    // le texte de présentation de l'en-tête, nettoyé
+    expect(r.json().description).toBe('OK Computer est le troisième album de Radiohead.')
+
+    // même chose pour un artiste : la présentation de son en-tête (`MusicImmersiveHeader`)
+    // … et seuls ses TITRES : la page range aussi albums, playlists et artistes proches dans ses rangées
+    music.music.getArtist = async () => ({
+      header: { type: 'MusicImmersiveHeader', description: { text: 'Radiohead est un groupe de rock britannique.' } },
+      sections: [{ contents: [
+        { id: 'vCreep00001', item_type: 'song', title: 'Creep', artists: [{ name: 'Radiohead' }] },
+        // le clip de la même chanson, dans la rangée « Clips » : une seule fois dans la liste
+        { id: 'vCreepClip1', item_type: 'video', title: 'Creep', artists: [{ name: 'Radiohead' }] },
+        { id: 'MPREb_kidA', item_type: 'album', title: 'Kid A' },
+        { id: 'VLRDCLAK5uy_radiohead', item_type: 'playlist', title: 'This Is Radiohead' },
+        { id: 'UCthomyorke', item_type: 'artist', title: 'Thom Yorke' },
+        // sans type : un id de chaîne (24 caractères) n'est pas un titre
+        { id: 'UCr_iyUANcn9OX_yy9piYoLw', title: 'Radiohead' },
+      ] }],
+    })
+    const ar = await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/artists/UCradiohead?hl=fr' })
+    expect(ar.json().description).toBe('Radiohead est un groupe de rock britannique.')
+    expect(ar.json().tracks.map((t: { videoId: string }) => t.videoId)).toEqual(['vCreep00001'])
     await app.close()
     await plugin.stop()
   })

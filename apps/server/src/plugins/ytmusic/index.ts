@@ -763,23 +763,25 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
         }
       })
 
-      app.get<{ Params: { id: string } }>('/albums/:id', async (req, reply) => {
+      app.get<{ Params: { id: string }; Querystring: { hl?: string } }>('/albums/:id', async (req, reply) => {
         try {
           const cookie = await requireCookie()
-          const tracks = await catalog!.albumTracks(cookie, req.params.id)
+          // `hl` : la langue du texte de présentation de l'album
+          const { tracks, description } = await catalog!.album(cookie, req.params.id, langOf(req.query.hl))
           lastError = null
-          return { tracks }
+          return { tracks, description }
         } catch (err) {
           return catalogError(reply, err)
         }
       })
 
-      app.get<{ Params: { id: string } }>('/artists/:id', async (req, reply) => {
+      app.get<{ Params: { id: string }; Querystring: { hl?: string } }>('/artists/:id', async (req, reply) => {
         try {
           const cookie = await requireCookie()
-          const tracks = await catalog!.artistTracks(cookie, req.params.id)
+          // `hl` : la langue du texte de présentation de l'artiste
+          const { tracks, description } = await catalog!.artist(cookie, req.params.id, langOf(req.query.hl))
           lastError = null
-          return { tracks }
+          return { tracks, description }
         } catch (err) {
           return catalogError(reply, err)
         }

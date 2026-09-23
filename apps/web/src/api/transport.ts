@@ -414,8 +414,10 @@ export interface Transport {
   ytmusicLiked(): Promise<{ tracks: YtmusicTrack[] }>
   ytmusicPlaylists(): Promise<{ playlists: YtmusicPlaylist[] }>
   ytmusicPlaylist(id: string): Promise<{ tracks: YtmusicTrack[] }>
-  ytmusicAlbum(id: string): Promise<{ tracks: YtmusicTrack[] }>
-  ytmusicArtist(id: string): Promise<{ tracks: YtmusicTrack[] }>
+  /** Titres d'un album, et son texte de présentation s'il en a un (dans la langue `hl`). */
+  ytmusicAlbum(id: string, hl?: string): Promise<{ tracks: YtmusicTrack[]; description?: string | null }>
+  /** Titres d'un artiste, et son texte de présentation s'il en a un (dans la langue `hl`). */
+  ytmusicArtist(id: string, hl?: string): Promise<{ tracks: YtmusicTrack[]; description?: string | null }>
   /** Humeurs et genres ; `hl` = langue de l'app (les noms viennent de YouTube). */
   ytmusicExplore(hl?: string): Promise<YtmusicExplore>
   /** La page d'une catégorie, en rangées. */

@@ -10,7 +10,7 @@ let lastSearch: { query: string; result: YtmusicSearchResult } | null = null
 </script>
 
 <script setup lang="ts">
-import { useLocalStorage } from '@vueuse/core'
+import { useLocalStorage, useResizeObserver } from '@vueuse/core'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -29,6 +29,8 @@ import ExplicitBadge from '../components/ui/ExplicitBadge.vue'
 import Segmented from '../components/ui/Segmented.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import { formatClock } from '../composables/useMediaPosition'
+import { artAt } from '../lib/artUrl'
+import { splitCredit } from '../lib/wikiCredit'
 import { useDevicesStore } from '../stores/devices'
 import { useHouseStore } from '../stores/house'
 import { useNotificationsStore } from '../stores/notifications'
@@ -586,20 +588,53 @@ async function loadPlaylists() {
   catch (err) { fail(err) }
   finally { busy.value = false }
 }
-async function openDetail(next: Browse, load: () => Promise<{ tracks: YtmusicTrack[] }>) {
+/** Le texte de présentation de l'album ou de l'artiste ouvert (YouTube Music, souvent tiré de Wikipédia), s'il y en a un. */
+const detailDescription = ref<string | null>(null)
+const descOpen = ref(false)
+/**
+ * La colonne de gauche du détail reste FIXE pendant qu'on fait défiler les titres, tant qu'elle tient
+ * en entier dans la zone visible (sous « Retour »). Sinon — écran trop bas, présentation dépliée — elle
+ * défile avec la liste, pour que sa touche de lecture ne sorte jamais de la vue. On MESURE (et on
+ * remesure à chaque changement de taille de l'une ou de l'autre) plutôt que de deviner par des seuils
+ * d'écran.
+ */
+const scrollEl = ref<HTMLElement | null>(null)
+const sideEl = ref<HTMLElement | null>(null)
+const sideFits = ref(false)
+function measureSide() {
+  const sc = scrollEl.value, side = sideEl.value
+  if (!sc || !side) { sideFits.value = false; return }
+  const backRow = Number.parseFloat(getComputedStyle(sc).getPropertyValue('--back-row-h')) || 0
+  sideFits.value = side.offsetHeight + backRow <= sc.clientHeight
+}
+// `useResizeObserver` suit les références du gabarit quand elles apparaissent ou changent (la colonne
+// n'existe qu'une fois un détail ouvert) ; la présentation qui arrive, ou qu'on déplie, la redimensionne
+useResizeObserver(scrollEl, measureSide)
+useResizeObserver(sideEl, measureSide)
+/** Le texte, et sa mention de source et de licence (Wikipédia), écrite à part en petit. */
+const detailParts = computed(() => splitCredit(detailDescription.value))
+const detailText = computed(() => detailParts.value.text)
+const detailCredit = computed(() => detailParts.value.credit)
+async function openDetail(next: Browse, load: () => Promise<{ tracks: YtmusicTrack[]; description?: string | null }>) {
   if (browse.value?.kind === 'category') backStack.value = [...backStack.value, browse.value]
   busy.value = true
   browse.value = next
   queueOpen.value = false
-  try { tracks.value = (await load()).tracks }
+  detailDescription.value = null
+  descOpen.value = false
+  try {
+    const r = await load()
+    tracks.value = r.tracks
+    detailDescription.value = r.description ?? null
+  }
   catch (err) { fail(err) }
   finally { busy.value = false }
 }
 const openPlaylist = (pl: YtmusicPlaylist) => openDetail({ kind: 'playlist', id: pl.id, title: pl.title, art: pl.artUrl }, () => getTransport().ytmusicPlaylist(pl.id))
 const openAlbum = (al: YtmusicAlbum) => openDetail({
   kind: 'album', id: al.id, title: al.title, art: al.artUrl, artists: al.artists, year: al.year ?? null, explicit: !!al.explicit, releaseType: al.releaseType ?? null,
-}, () => getTransport().ytmusicAlbum(al.id))
-const openArtist = (ar: YtmusicArtist) => openDetail({ kind: 'artist', id: ar.id, title: ar.name, art: ar.artUrl }, () => getTransport().ytmusicArtist(ar.id))
+}, () => getTransport().ytmusicAlbum(al.id, locale.value))
+const openArtist = (ar: YtmusicArtist) => openDetail({ kind: 'artist', id: ar.id, title: ar.name, art: ar.artUrl }, () => getTransport().ytmusicArtist(ar.id, locale.value))
 
 // ---- colonne de gauche du détail (album, playlist, artiste), à la manière de YouTube Music ----------
 /** Une pochette seule, en grand : la liste des titres d'un album n'a pas à la répéter à chaque ligne. */
@@ -717,7 +752,7 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
         <ChipRow :label="$t('ytmusic.recent')" :items="recentQueries.map((q) => ({ key: q, label: q }))" :disabled="busy || !linked"
                  :remove-label="$t('ytmusic.recentRemove')" @pick="runRecent" @remove="removeRecent" />
 
-        <div class="main__scroll">
+        <div ref="scrollEl" class="main__scroll">
           <div v-if="!statusReady" class="muted empty">{{ $t('common.loading') }}</div>
           <div v-else-if="!linked" class="card card--soft empty muted">{{ $t('ytmusic.needCookie') }}</div>
           <template v-else>
@@ -785,8 +820,9 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
               <div class="detail">
                 <!-- le voile de la pochette, flou : l'ambiance de la page, sans rien porter -->
                 <img v-if="detail.art" :key="detail.art" :src="detail.art" alt="" aria-hidden="true" class="detail__veil" referrerpolicy="no-referrer">
-                <aside class="detail__side">
-                  <ArtThumb :key="detail.art ?? 'none'" :src="detail.art" :size="176" :round="detail.kind === 'artist'"
+                <aside ref="sideEl" class="detail__side" :class="{ 'is-fixed': sideFits }">
+                  <!-- en 600 px : la pochette s'affiche jusqu'à 300 px, sur des écrans à haute densité -->
+                  <ArtThumb :key="detail.art ?? 'none'" :src="artAt(detail.art, 600)" :size="176" :round="detail.kind === 'artist'"
                             :icon="detail.kind === 'artist' ? 'person' : detail.kind === 'album' ? 'disc' : 'list'" class="detail__art" />
                   <h2 class="detail__title" :title="detail.title">{{ detail.title }}</h2>
                   <div class="detail__artist">{{ detail.artists?.length ? detail.artists.join(', ') : '\u00a0' }}</div>
@@ -795,6 +831,10 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
                     <span>{{ detailKind }}</span>
                   </div>
                   <div class="detail__meta muted">{{ detailStats || '\u00a0' }}</div>
+                  <!-- la présentation de l'album ou de l'artiste, repliée sur deux lignes : un clic la déplie -->
+                  <p v-if="detailText" class="detail__desc muted" :class="{ 'is-open': descOpen }" :title="descOpen ? undefined : detailText"
+                     role="button" tabindex="0" :aria-expanded="descOpen" @click="descOpen = !descOpen" @keydown.enter="descOpen = !descOpen">{{ detailText }}</p>
+                  <p v-if="detailCredit" class="detail__credit muted">{{ detailCredit }}</p>
                   <button type="button" class="detail__play" :disabled="!playTarget || browseTracksView.length === 0"
                           :title="$t('music.playAll')" :aria-label="$t('music.playAll')" @click="play(browseTracksView[0]!, browseTracksView)">
                     <StrokeIcon name="play" :size="22" :stroke-width="2" />
@@ -977,7 +1017,7 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
   padding: 0 24px 16px;
 }
 .main { display: flex; flex-direction: column; min-height: 0; min-width: 0; gap: 10px; }
-.main__scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; }
+.main__scroll { --back-row-h: 56px; flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; }
 
 /* la recherche : le geste premier de la page, d'où sa taille */
 .search { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; }
@@ -996,7 +1036,12 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
 .small { font-size: 12px; }
 
 .browse-head { display: flex; align-items: center; gap: 12px; margin: 4px 0 10px; }
-.back-row { display: flex; align-items: center; gap: 12px; margin: 4px 0 10px; }
+/* « Retour » reste en haut de la zone quand on défile, sur le fond de la page : il ne chevauche plus
+   le voile d'une pochette ni les lignes qui passent dessous */
+.back-row {
+  position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 12px;
+  height: var(--back-row-h); margin: 0; padding: 4px 0 12px; background: var(--bg);
+}
 .back-row__title { min-width: 0; flex: 1 1 auto; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .back-row__end { flex: 0 0 auto; white-space: nowrap; }
 
@@ -1027,25 +1072,41 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
 
 /* détail : colonne à gauche (pochette, titre, lecture), les titres à droite. `overflow-x: clip` (et non
    `hidden`) : le voile flou ne crée pas de barre horizontale, et la colonne peut rester collante. */
-.detail { position: relative; display: grid; grid-template-columns: 208px minmax(0, 1fr); gap: 28px; align-items: start; overflow-x: clip; }
+.detail {
+  /* la pochette grandit avec l'écran ; la colonne suit (pochette + marges) */
+  --cover: 208px;
+  position: relative; display: grid; grid-template-columns: calc(var(--cover) + 40px) minmax(0, 1fr); gap: 36px; align-items: start; overflow-x: clip;
+}
+@media (min-width: 1500px) { .detail { --cover: 260px; gap: 48px; } }
+@media (min-width: 1800px) { .detail { --cover: 300px; gap: 56px; } }
 .detail__veil {
-  position: absolute; inset: -24px 0 auto 0; width: 100%; height: 340px; object-fit: cover; z-index: 0; pointer-events: none;
+  position: absolute; inset: 0 0 auto 0; width: 100%; height: 340px; object-fit: cover; z-index: 0; pointer-events: none;
   filter: blur(60px) saturate(1.3); opacity: .24; transform: scale(1.1);
   -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 100%); mask-image: linear-gradient(to bottom, #000 0%, transparent 100%);
 }
-.detail__side { position: relative; z-index: 1; display: grid; justify-items: center; gap: 4px; padding: 4px 8px 12px; text-align: center; }
-/* collante seulement si l'écran a la hauteur de la tenir en entier : sinon sa touche de lecture
-   sortirait de la vue sans qu'on puisse l'y ramener en défilant */
-@media (min-height: 760px) { .detail__side { position: sticky; top: 0; } }
-.detail__art { box-shadow: 0 12px 32px rgb(0 0 0 / .35); margin-bottom: 8px; }
+.detail__side { position: relative; z-index: 1; display: grid; justify-items: center; gap: 6px; padding: 12px 20px 20px; text-align: center; }
+/* fixe quand elle tient en entier sous « Retour » (mesuré : `sideFits`), accrochée EXACTEMENT à sa
+   place de départ — sinon elle glissait de quelques pixels avant de se fixer */
+.detail__side.is-fixed { position: sticky; top: var(--back-row-h); }
+/* `--art` est posé en ligne par ArtThumb : seul !important le remplace */
+.detail__art { --art: var(--cover) !important; box-shadow: 0 14px 36px rgb(0 0 0 / .38); border-radius: 10px; margin-bottom: 14px; }
+.detail__art.art-wrap--round { border-radius: 999px; }
+.detail__art:not(.art-wrap--round) :deep(.art) { border-radius: 10px; }
 .detail__title {
-  margin: 0; font-size: 20px; font-weight: 700; line-height: 1.2; max-width: 100%;
+  margin: 0; font-size: 22px; font-weight: 700; line-height: 1.2; max-width: 100%;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
-.detail__artist { font-size: 14px; font-weight: 500; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.detail__artist { font-size: 15px; font-weight: 500; margin-bottom: 4px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .detail__meta { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; min-height: 18px; white-space: nowrap; }
+.detail__desc {
+  margin: 8px 0 0; max-width: 100%; font-size: 13px; line-height: 1.45; cursor: pointer;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.detail__desc.is-open { display: block; }
+.detail__credit { margin: 2px 0 0; max-width: 100%; font-size: 10.5px; line-height: 1.35; opacity: .75; }
+.detail__desc:hover { color: var(--text); }
 .detail__play {
-  margin-top: 8px; display: grid; place-items: center; width: 52px; height: 52px; border-radius: 999px; border: 0;
+  margin-top: 14px; display: grid; place-items: center; width: 56px; height: 56px; border-radius: 999px; border: 0;
   background: var(--accent); color: var(--on-accent); cursor: pointer; box-shadow: 0 6px 18px rgb(0 0 0 / .3); transition: transform .15s, filter .15s;
 }
 .detail__play svg { margin-left: 3px; }

@@ -55,9 +55,24 @@ export type InnertubeLike = {
 /** `lang` : langue des textes rendus par InnerTube (noms des genres…). Absente = celle d'aujourd'hui. */
 export type CreateSession = (cookie: string, lang?: string) => Promise<InnertubeLike>
 
+/**
+ * youtubei.js envoie TOUTES ses requêtes InnerTube à www.youtube.com, même pour le client YouTube
+ * Music. Or www.youtube.com RETIENT les titres explicit : la page de l'album « Paradise » y a 5 titres
+ * (Ride, Cola, Gods & Monsters absents, en-tête « 8 songs » quand même), music.youtube.com en rend 8 —
+ * avec ou sans compte, quelle que soit la version du client (sondé le 2026-09-23). On les redirige donc
+ * vers music.youtube.com, comme le fait le site ; les cookies valent pour tout `.youtube.com` et la
+ * signature SAPISIDHASH reste acceptée (bibliothèque, likes et compte répondent).
+ */
+export const musicHostFetch: typeof fetch = (input, init) => {
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+  if (!url.startsWith('https://www.youtube.com/youtubei/')) return fetch(input, init)
+  const next = url.replace('https://www.youtube.com/youtubei/', 'https://music.youtube.com/youtubei/')
+  return fetch(input instanceof Request ? new Request(next, input) : next, init)
+}
+
 /** WEB_REMIX : même client que music.youtube.com (pas le client WEB générique). */
 const defaultCreate: CreateSession = async (cookie, lang) => {
-  const yt = await Innertube.create({ cookie, client_type: ClientType.MUSIC, ...(lang ? { lang } : {}) })
+  const yt = await Innertube.create({ cookie, client_type: ClientType.MUSIC, fetch: musicHostFetch, ...(lang ? { lang } : {}) })
   const browse = (browseId: string, params: string | undefined, parse: boolean) =>
     yt.actions.execute('/browse', { browseId, ...(params ? { params } : {}), client: 'YTMUSIC', ...(parse ? { parse: true } : {}) } as never)
   return Object.assign(yt, {
@@ -1106,8 +1121,18 @@ export class YtmusicCatalog {
   }
 
   async albumTracks(cookie: string, albumId: string): Promise<YtmusicTrack[]> {
+    return (await this.album(cookie, albumId)).tracks
+  }
+
+  /**
+   * Un album : ses titres, et le texte de présentation que YouTube Music affiche sous la pochette
+   * (`MusicDescriptionShelf` de l'en-tête, souvent tiré de Wikipédia), s'il y en a un. `lang` : la
+   * langue de ce texte — la même session sert aux titres (les lignes n'ont ni artiste ni sous-titre à
+   * analyser, l'en-tête donne l'année).
+   */
+  async album(cookie: string, albumId: string, lang?: string): Promise<{ tracks: YtmusicTrack[]; description: string | null }> {
     return this.withSession(cookie, async (yt) => {
-      if (typeof yt.music.getAlbum !== 'function') return []
+      if (typeof yt.music.getAlbum !== 'function') return { tracks: [], description: null }
       const album = await yt.music.getAlbum(albumId)
       const header = asRecord(album.header)
       const albumYear = header
@@ -1125,19 +1150,50 @@ export class YtmusicCatalog {
         if (!r.artists?.length && albumArtist) r.artists = [albumArtist]
         if (!r.album && albumTitle) r.album = albumTitle
       }
-      return mapTracks(raws)
-    })
+      const description = header ? textOf(asRecord(header.description)?.description)?.trim() || null : null
+      return { tracks: mapTracks(raws), description }
+    }, lang)
   }
 
   /** Titres déjà présents sur la page artiste (Top songs) — pas de 2ᵉ requête localisée. */
   async artistTracks(cookie: string, artistId: string): Promise<YtmusicTrack[]> {
+    return (await this.artist(cookie, artistId)).tracks
+  }
+
+  /**
+   * Un artiste : ses titres, et le texte de présentation de l'en-tête (`MusicImmersiveHeader`,
+   * `description`, souvent tiré de Wikipédia) dans la langue `lang`, s'il y en a un.
+   */
+  async artist(cookie: string, artistId: string, lang?: string): Promise<{ tracks: YtmusicTrack[]; description: string | null }> {
     return this.withSession(cookie, async (yt) => {
-      if (typeof yt.music.getArtist !== 'function') return []
+      if (typeof yt.music.getArtist !== 'function') return { tracks: [], description: null }
       const artist = await yt.music.getArtist(artistId)
       const items = shelfItems(artist.sections)
-      const raws = items.map(itemToRawTrack).filter((r): r is RawTrack => !!r)
-      return mapTracks(raws)
-    })
+      // La page artiste range aussi ses albums (`MPREb…`), playlists (`VL…`) et artistes proches
+      // (`UC…`) dans ses rangées : 50 éléments sur 73 chez un artiste. Seuls les TITRES se jouent —
+      // les autres partaient en file et échouaient à la lecture. Le type donné par YouTube d'abord ;
+      // à défaut, la forme de l'id (ceux des collections sont longs et préfixés, pas ceux des vidéos).
+      const notTrack = (it: unknown) => {
+        const o = asRecord(it)
+        const type = typeof o?.item_type === 'string' ? o.item_type : ''
+        if (type === 'album' || type === 'playlist' || type === 'artist') return true
+        const id = typeof o?.id === 'string' ? o.id : ''
+        return id.length > 11 && /^(MPRE|VL|UC|OLAK|PL|RDCLAK)/.test(id)
+      }
+      const raws = items.filter((it) => !notTrack(it)).map(itemToRawTrack).filter((r): r is RawTrack => !!r)
+      const header = asRecord(artist.header)
+      const description = header ? textOf(header.description)?.trim() || null : null
+      // La rangée « Clips » reprend souvent les chansons de « Titres » sous un autre id (le clip) :
+      // une chanson une fois, la première venue — la version audio, rangée avant.
+      const seen = new Set<string>()
+      const tracks = mapTracks(raws).filter((t) => {
+        const key = `${t.title.trim().toLowerCase()}|${t.artists.join(',').toLowerCase()}`
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      return { tracks, description }
+    }, lang)
   }
 }
 

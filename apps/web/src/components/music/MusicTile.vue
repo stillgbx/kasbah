@@ -2,6 +2,7 @@
 import type { IconName } from '../../lib/strokeIcons'
 import ArtThumb from '../ui/ArtThumb.vue'
 import ExplicitBadge from '../ui/ExplicitBadge.vue'
+import { artAt } from '../../lib/artUrl'
 import ArtPlay from './ArtPlay.vue'
 
 // Tuile de la recherche simple : grande pochette, deux lignes de texte de hauteur fixe. Un artiste
@@ -31,7 +32,8 @@ const open = () => { if (props.action === 'open') emit('open') }
   <div class="tile" :class="{ 'tile--open': action === 'open' }" :role="action === 'open' ? 'button' : undefined"
        :tabindex="action === 'open' ? 0 : undefined" @click="open" @keydown.enter.self="open" @keydown.space.self.prevent="open">
     <div class="tile__art" :class="{ 'tile__art--round': round }">
-      <ArtThumb :src="art" :icon="icon" :round="round" :size="128" />
+      <!-- la tuile fait 128 px, la pochette du catalogue 120 : on la redemande au double, nette sur un écran dense -->
+      <ArtThumb :src="artAt(art, 256)" :icon="icon" :round="round" :size="128" />
       <ArtPlay v-if="action === 'play' || playable" :size="48" :disabled="disabled" :busy="busy" :label="playLabel" @click="$emit('play')" />
     </div>
     <div class="tile__line1">

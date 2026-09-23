@@ -200,13 +200,13 @@ export function createHttpTransport(base = ''): Transport {
       `${base}/api/plugins/ytmusic/playlists/${encodeURIComponent(id)}`, undefined,
       (j) => j as { tracks: YtmusicTrack[] },
     ),
-    ytmusicAlbum: (id) => request(
-      `${base}/api/plugins/ytmusic/albums/${encodeURIComponent(id)}`, undefined,
-      (j) => j as { tracks: YtmusicTrack[] },
+    ytmusicAlbum: (id, hl) => request(
+      `${base}/api/plugins/ytmusic/albums/${encodeURIComponent(id)}${hl ? `?hl=${encodeURIComponent(hl)}` : ''}`, undefined,
+      (j) => j as { tracks: YtmusicTrack[]; description?: string | null },
     ),
-    ytmusicArtist: (id) => request(
-      `${base}/api/plugins/ytmusic/artists/${encodeURIComponent(id)}`, undefined,
-      (j) => j as { tracks: YtmusicTrack[] },
+    ytmusicArtist: (id, hl) => request(
+      `${base}/api/plugins/ytmusic/artists/${encodeURIComponent(id)}${hl ? `?hl=${encodeURIComponent(hl)}` : ''}`, undefined,
+      (j) => j as { tracks: YtmusicTrack[]; description?: string | null },
     ),
     ytmusicExplore: (hl) => request(
       `${base}/api/plugins/ytmusic/explore${hl ? `?hl=${encodeURIComponent(hl)}` : ''}`, undefined, (j) => j as YtmusicExplore,

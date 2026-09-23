@@ -104,7 +104,8 @@ function activate() {
 .row[data-selected='1'] { background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .min0 { min-width: 0; flex: 1 1 0; display: grid; gap: 2px; }
 .line1 { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.title { flex: 1 1 auto; min-width: 0; font-size: 14px; font-weight: 500; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* le titre ne prend que sa place : le « E » le suit, au lieu d'être rejeté au bout de la ligne */
+.title { flex: 0 1 auto; min-width: 0; font-size: 14px; font-weight: 500; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .line2 { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: 12px; }
 .meta { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .explicit {

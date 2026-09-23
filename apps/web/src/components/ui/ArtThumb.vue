@@ -68,7 +68,7 @@ watch(
 </script>
 
 <template>
-  <div ref="root" class="art-wrap" :class="{ 'art-wrap--round': round }" :style="{ '--art': `${props.size}px` }">
+  <div ref="root" class="art-wrap" :class="{ 'art-wrap--round': round, 'art-wrap--img': !!displaySrc }" :style="{ '--art': `${props.size}px` }">
     <img
       v-if="displaySrc"
       class="art"
@@ -93,6 +93,16 @@ watch(
   flex: 0 0 auto;
 }
 .art-wrap--round { border-radius: 999px; overflow: hidden; }
+/* Un voile qui assombrit le bas de chaque pochette (0 → 25 % de noir) : une page pleine d'images crie
+   moins, sans rien cacher. Seulement sur une vraie image (pas sur l'icône d'attente), à l'arrondi de
+   la pochette ; les touches de lecture posées dessus restent au-dessus. */
+.art-wrap--img { position: relative; border-radius: 6px; overflow: hidden; }
+.art-wrap--round.art-wrap--img { border-radius: 999px; }
+/* l'arrondi est celui de la pochette qui le porte (un parent peut le changer, le détail l'a à 10 px) */
+.art-wrap--img::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  background: linear-gradient(to bottom, rgb(0 0 0 / 0) 0, rgb(0 0 0 / .25) 100%);
+}
 .art {
   width: var(--art, 44px);
   height: var(--art, 44px);
