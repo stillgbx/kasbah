@@ -172,30 +172,49 @@ describe('mixcloud home', () => {
     ...[0, 1].map((i) => listen('worldwidefm', i, ['worldwide-fm', 'jazz'])),
     listen('WeAreOneJazz', 0, ['jazz', 'acoustic-jazz']),
     listen('TheBoAtPod', 0, ['jazz', 'soul']),                // réécouté : une seule fois dans « Réécouter »
+    listen('notfollowed', 0, ['house', 'notfollowed']),      // écouté mais pas suivi : ni créateur, ni « Plus de »
+    listen('notfollowed', 1, ['house', 'notfollowed']),      // … et son nom de compte n'est pas un genre
   ]
+  const followed = ['sohoradio', 'TheBoAtPod', 'worldwidefm', 'KioskRadio', 'WeAreOneJazz'].map((username) => ({ username, name: username, artUrl: null }))
 
   it('builds the sections from what the account listens to', async () => {
     const api = fakeApi({
       listens: vi.fn(async () => ({ items: listens, next: null })),
+      following: vi.fn(async () => followed),
       cloudcasts: vi.fn(async (u: string) => ({ items: [listen(u, 9, [])], next: null })),
       popular: vi.fn(async (g: string) => ({ items: g === 'acoustic-jazz' ? [] : [listen('someone', 1, [g])], next: null })),
     })
     const feed = [listen('followed', 1, [])]
     const home = await buildHome(api, 'un_auditeur', async () => feed, { moreFrom: 2, genres: 3 })
     expect(api.listens).toHaveBeenCalledWith('un_auditeur', undefined, 100)
-    expect(home.map((s) => s.id)).toEqual(['topCreators', 'following', 'listenAgain', 'moreFrom', 'moreFrom', 'popular', 'popular'])
+    // les genres, eux, comptent toutes les écoutes (suivies ou non) : jazz, soul, puis house
+    expect(home.map((s) => s.id)).toEqual(['topCreators', 'following', 'listenAgain', 'moreFrom', 'moreFrom', 'popular', 'popular', 'popular'])
     const top = home[0]!
-    expect(top.kind === 'users' && top.users.map((u) => u.username)).toEqual(['TheBoAtPod', 'worldwidefm', 'WeAreOneJazz'])
+    // les suivis écoutés, par écoutes, puis les autres suivis dans l'ordre de la liste
+    expect(top.kind === 'users' && top.users.map((u) => u.username)).toEqual(['TheBoAtPod', 'worldwidefm', 'WeAreOneJazz', 'sohoradio', 'KioskRadio'])
     expect(home.filter((s) => s.id === 'moreFrom').map((s) => s.kind === 'mixes' && 'user' in s && s.user.username)).toEqual(['TheBoAtPod', 'worldwidefm'])
-    expect(home.filter((s) => s.id === 'popular').map((s) => 'genre' in s && s.genre.slug)).toEqual(['jazz', 'soul'])
+    expect(home.filter((s) => s.id === 'popular').map((s) => 'genre' in s && s.genre.slug)).toEqual(['jazz', 'soul', 'house'])
     expect(api.popular).not.toHaveBeenCalledWith('worldwide-fm')
+    expect(api.popular).not.toHaveBeenCalledWith('notfollowed')
     const again = home.find((s) => s.id === 'listenAgain')!
-    expect(again.kind === 'mixes' && again.items.map((m) => m.key)).toEqual(['/TheBoAtPod/mix-0/', '/TheBoAtPod/mix-1/', '/TheBoAtPod/mix-2/', '/worldwidefm/mix-0/', '/worldwidefm/mix-1/', '/WeAreOneJazz/mix-0/'])
+    expect(again.kind === 'mixes' && again.items.map((m) => m.key)).toEqual(['/TheBoAtPod/mix-0/', '/TheBoAtPod/mix-1/', '/TheBoAtPod/mix-2/', '/worldwidefm/mix-0/', '/worldwidefm/mix-1/', '/WeAreOneJazz/mix-0/', '/notfollowed/mix-0/', '/notfollowed/mix-1/'])
+    expect(api.cloudcasts).not.toHaveBeenCalledWith('notfollowed')
+  })
+
+  it('keeps every listened creator when the following list cannot be read', async () => {
+    const api = fakeApi({
+      listens: vi.fn(async () => ({ items: listens, next: null })),
+      following: vi.fn(async () => { throw new PluginError('RATE_LIMITED', 'Mixcloud answered 429') }),
+    })
+    const home = await buildHome(api, 'un_auditeur', async () => [])
+    const top = home[0]!
+    expect(top.kind === 'users' && top.users.map((u) => u.username)).toEqual(['TheBoAtPod', 'worldwidefm', 'notfollowed', 'WeAreOneJazz'])
   })
 
   it('keeps the other rows when one call fails', async () => {
     const api = fakeApi({
       listens: vi.fn(async () => ({ items: listens, next: null })),
+      following: vi.fn(async () => followed),
       cloudcasts: vi.fn(async () => { throw new PluginError('RATE_LIMITED', 'Mixcloud answered 429') }),
     })
     const home = await buildHome(api, 'un_auditeur', async () => { throw new Error('down') })

@@ -44,9 +44,17 @@ export async function buildHome(
   opts: HomeOptions = {},
 ): Promise<HomeSection[]> {
   const { topCreators = 10, moreFrom = 3, genres = 3, perShelf = 20 } = opts
-  const listens = (await api.listens(username, undefined, 100)).items
-  const creators = ranked(listens, (m) => m.user.username).filter((c) => c.value.user.username !== username)
-  const creatorSlugs = new Set(creators.flatMap((c) => [slugOf(c.value.user.username), slugOf(c.value.user.name)]))
+  const [listens, followed] = await Promise.all([
+    api.listens(username, undefined, 100).then((p) => p.items),
+    api.following(username).catch(() => null),
+  ])
+  // Comme sur le site : « tes créateurs » sont des comptes SUIVIS, classés par écoutes — l'API publique
+  // rend aussi ceux qu'on a écoutés sans les suivre, on les écarte ici. Suivis illisibles : on garde tout.
+  const followedNames = followed ? new Set(followed.map((u) => u.username.toLowerCase())) : null
+  const listenedCreators = ranked(listens, (m) => m.user.username).filter((c) => c.value.user.username !== username)
+  const creators = listenedCreators.filter((c) => !followedNames || followedNames.has(c.value.user.username.toLowerCase()))
+  // tous les créateurs ÉCOUTÉS, suivis ou non : un genre qui n'est que le nom de l'un d'eux n'est pas un genre
+  const creatorSlugs = new Set(listenedCreators.flatMap((c) => [slugOf(c.value.user.username), slugOf(c.value.user.name)]))
   const topGenres = ranked(listens.flatMap((m) => m.genres), (g) => g.slug)
     .filter((g) => !creatorSlugs.has(g.value.slug))
     .slice(0, genres)
@@ -55,6 +63,9 @@ export async function buildHome(
   // les appels suivants sont indépendants : en parallèle, chacun pouvant échouer seul
   const safe = <T>(p: Promise<T>, fallback: T) => p.catch(() => fallback)
   const top = creators.slice(0, topCreators)
+  // la rangée se complète de tes autres suivis, dans l'ordre de ta liste : ceux que tu écoutes d'abord
+  const listened = new Set(top.map((c) => c.value.user.username.toLowerCase()))
+  const others = (followed ?? []).filter((u) => !listened.has(u.username.toLowerCase())).slice(0, Math.max(0, topCreators - top.length))
   const [users, feed, more, popular] = await Promise.all([
     Promise.all(top.map((c) => safe(api.user(c.value.user.username), null))),
     safe(following(), [] as MixcloudMix[]),
@@ -68,7 +79,7 @@ export async function buildHome(
 
   const sections: HomeSection[] = []
   const creatorUsers = users.flatMap((u, i) => u ? [u] : [{ username: top[i]!.value.user.username, name: top[i]!.value.user.name, artUrl: null }])
-  if (creatorUsers.length) sections.push({ kind: 'users', id: 'topCreators', users: creatorUsers })
+  if (creatorUsers.length + others.length) sections.push({ kind: 'users', id: 'topCreators', users: [...creatorUsers, ...others] })
   if (feed.length) sections.push({ kind: 'mixes', id: 'following', items: feed.slice(0, perShelf) })
   if (listenAgain.length) sections.push({ kind: 'mixes', id: 'listenAgain', items: listenAgain.slice(0, perShelf) })
   more.forEach((page, i) => {
