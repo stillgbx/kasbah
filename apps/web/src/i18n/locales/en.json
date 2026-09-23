@@ -113,7 +113,7 @@
     "searchPlaceholder": "Search an artist, an album, a track…", "search": "Search", "clear": "Clear search",
     "advanced": "Advanced", "advancedHint": "Advanced search: artists, albums, EPs, compilations and tracks in columns",
     "sources": "Sources", "sourceLinked": "Linked", "sourceUnlinked": "Not linked",
-    "browse": "Browse", "browseRecent": "Recent", "browseLiked": "Likes", "browsePlaylists": "Playlists", "browseNew": "New releases", "browseGenres": "Genres", "browseMoods": "Moods",
+    "browse": "Browse", "browseRecent": "Recent", "browseLiked": "Likes", "browsePlaylists": "Playlists", "browseNew": "New releases", "kindAlbum": "Album", "kindSingle": "Single", "kindEp": "EP", "kindCompilation": "Compilation", "kindPlaylist": "Playlist", "kindArtist": "Artist", "detailTracks": "{n} track | {n} tracks", "durMin": "{m} min", "durHourMin": "{h} hr {m} min", "browseGenres": "Genres", "browseMoods": "Moods",
     "topResults": "Top results", "seeAll": "See all", "noRecent": "Your recent plays will show up here.",
     "sessions": "Listening", "sessionsHint": "Where playback goes — tap a player to control it", "transferHint": "Tap the player that should pick up the track",
     "noSession": "No player available", "nothing": "Nothing playing", "idle": "Idle",

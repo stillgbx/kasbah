@@ -38,3 +38,24 @@ describe('marquage explicit sur les tuiles', () => {
     expect(clean.find('.explicit').exists()).toBe(false)
   })
 })
+
+describe("ligne sans vignette (titres d'un album)", () => {
+  it('se joue en touchant la ligne, sans pochette, et le numéro porte la lecture', async () => {
+    const w = mount(MusicItemRow, { props: { art: null, title: 'Ride', action: 'play', artless: true, position: 1 } })
+    expect(w.find('.row__art').exists()).toBe(false)
+    expect(w.find('.pos__n').text()).toBe('#1')
+    await w.find('.title').trigger('click')
+    expect(w.emitted('play')).toHaveLength(1)
+    // les touches de file ne lancent pas le titre au passage
+    const q = mount(MusicItemRow, { props: { art: null, title: 'Ride', action: 'play', artless: true, queueable: true } })
+    await q.find('.mini').trigger('click')
+    expect(q.emitted('play')).toBeUndefined()
+    expect(q.emitted('playNext')).toHaveLength(1)
+  })
+
+  it('ne joue rien quand aucun lecteur ne peut recevoir', async () => {
+    const w = mount(MusicItemRow, { props: { art: null, title: 'Ride', action: 'play', artless: true, disabled: true } })
+    await w.find('.title').trigger('click')
+    expect(w.emitted('play')).toBeUndefined()
+  })
+})

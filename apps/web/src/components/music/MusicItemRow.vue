@@ -12,6 +12,8 @@ import ArtPlay from './ArtPlay.vue'
 // (`removable`) : petites touches à droite. Lecture et touches n'apparaissent qu'au SURVOL de la
 // ligne (toujours là sur un écran tactile, qui n'en a pas) ; leur place est gardée — rien ne bouge.
 // La racine est un `div` : un bouton de lecture ne peut pas vivre dans un `<button>`.
+// `artless` (titres d'un album : la même pochette partout) : pas de vignette ; comme sur YouTube
+// Music, le numéro devient ▶ au survol, et toucher la ligne (écran tactile) lance le titre.
 const props = withDefaults(defineProps<{
   art: string | null
   icon?: IconName
@@ -34,17 +36,30 @@ const props = withDefaults(defineProps<{
   removable?: boolean
   /** Rang dans la file (1, 2…) : colonne fixe devant la pochette. */
   position?: number | null
-}>(), { icon: 'music', round: false, explicit: false, meta: '', dur: '', year: null, busy: false, disabled: false, selected: false, playLabel: undefined, queueable: false, removable: false, playable: false, position: null })
+  /** Sans vignette : le numéro porte la lecture, la ligne entière se joue. */
+  artless?: boolean
+}>(), { icon: 'music', round: false, explicit: false, meta: '', dur: '', year: null, busy: false, disabled: false, selected: false, playLabel: undefined, queueable: false, removable: false, playable: false, position: null, artless: false })
 const emit = defineEmits<{ open: []; play: []; playNext: []; addEnd: []; remove: [] }>()
-const open = () => { if (props.action === 'open') emit('open') }
+const playsOnRow = () => props.artless && props.action === 'play'
+function activate() {
+  if (props.action === 'open') emit('open')
+  else if (playsOnRow() && !props.disabled && !props.busy) emit('play')
+}
 </script>
 
 <template>
-  <div class="row" :class="{ 'row--open': action === 'open' }" :data-selected="selected ? '1' : '0'"
-       :role="action === 'open' ? 'button' : undefined" :tabindex="action === 'open' ? 0 : undefined"
-       @click="open" @keydown.enter.self="open" @keydown.space.self.prevent="open">
-    <span v-if="position != null" class="pos" :class="{ 'pos--long': position > 999 }">#{{ position }}</span>
-    <div class="row__art" :class="{ 'row__art--round': round }">
+  <div class="row" :class="{ 'row--open': action === 'open' || (artless && action === 'play' && !disabled), 'row--artless': artless }" :data-selected="selected ? '1' : '0'"
+       :role="action === 'open' || playsOnRow() ? 'button' : undefined" :tabindex="action === 'open' || playsOnRow() ? 0 : undefined"
+       :aria-label="playsOnRow() ? playLabel : undefined"
+       @click="activate" @keydown.enter.self="activate" @keydown.space.self.prevent="activate">
+    <span v-if="position != null && !artless" class="pos" :class="{ 'pos--long': position > 999 }">#{{ position }}</span>
+    <!-- sans vignette : le numéro, qui laisse place à ▶ au survol (et au sablier pendant l'envoi) -->
+    <span v-if="artless" class="pos pos--play" :class="{ 'pos--long': (position ?? 0) > 999 }" :aria-busy="busy ? 'true' : undefined">
+      <span class="pos__n">{{ position != null ? `#${position}` : '' }}</span>
+      <v-progress-circular v-if="busy" class="pos__icon" indeterminate :size="16" :width="2" color="currentColor" />
+      <StrokeIcon v-else class="pos__icon" name="play" :size="16" :stroke-width="2" />
+    </span>
+    <div v-if="!artless" class="row__art" :class="{ 'row__art--round': round }">
       <ArtThumb :src="art" :icon="icon" :round="round" />
       <ArtPlay v-if="action === 'play' || playable" :size="30" :disabled="disabled" :busy="busy" :label="playLabel" @click="$emit('play')" />
     </div>
@@ -112,6 +127,16 @@ const open = () => { if (props.action === 'open') emit('open') }
 .pos { flex: 0 0 auto; width: 38px; text-align: right; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .pos--long { font-size: 10.5px; }
 .row[data-selected='1'] .pos { color: var(--accent); font-weight: 600; }
+/* sans vignette : la case du numéro prend la hauteur de la vignette (44 px), la ligne garde la sienne */
+.pos--play { display: grid; place-items: center end; height: 44px; }
+.pos--play > * { grid-area: 1 / 1; }
+.pos__icon { opacity: 0; color: var(--text); }
+.pos--play[aria-busy='true'] .pos__n { opacity: 0; }
+.pos--play[aria-busy='true'] .pos__icon { opacity: 1; }
+@media (hover: hover) {
+  .row--artless:hover .pos__n { opacity: 0; }
+  .row--artless:hover .pos__icon { opacity: 1; }
+}
 .row__art { position: relative; flex: 0 0 auto; border-radius: 8px; overflow: hidden; }
 .row__art--round { border-radius: 999px; }
 /* lecture et touches de file : au survol de la ligne seulement, place gardée ; pendant l'envoi le sablier reste */

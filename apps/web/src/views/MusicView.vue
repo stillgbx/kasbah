@@ -24,6 +24,8 @@ import MusicItemRow from '../components/music/MusicItemRow.vue'
 import MusicPlayerBar from '../components/music/MusicPlayerBar.vue'
 import MusicShelves from '../components/music/MusicShelves.vue'
 import MusicTile from '../components/music/MusicTile.vue'
+import ArtThumb from '../components/ui/ArtThumb.vue'
+import ExplicitBadge from '../components/ui/ExplicitBadge.vue'
 import Segmented from '../components/ui/Segmented.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import { formatClock } from '../composables/useMediaPosition'
@@ -54,10 +56,12 @@ import { usePluginsStore } from '../stores/plugins'
 defineOptions({ name: 'MusicView' })
 
 type BrowseTab = 'recent' | 'liked' | 'playlists' | 'new' | 'genres' | 'moods'
+/** Ce que le détail affiche dans sa colonne de gauche : l'élément tel que la liste d'où il vient le connaissait. */
+interface DetailHead { art: string | null; artists?: string[]; year?: string | null; explicit?: boolean; releaseType?: YtmusicAlbum['releaseType'] }
 type Browse =
-  | { kind: 'playlist'; id: string; title: string }
-  | { kind: 'album'; id: string; title: string }
-  | { kind: 'artist'; id: string; title: string }
+  | ({ kind: 'playlist'; id: string; title: string } & DetailHead)
+  | ({ kind: 'album'; id: string; title: string } & DetailHead)
+  | ({ kind: 'artist'; id: string; title: string } & DetailHead)
   | { kind: 'category'; params: string; title: string }
 /** Ordre API InnerTube = pertinence. */
 type SectionSort = 'relevance' | 'alpha' | 'date'
@@ -591,9 +595,34 @@ async function openDetail(next: Browse, load: () => Promise<{ tracks: YtmusicTra
   catch (err) { fail(err) }
   finally { busy.value = false }
 }
-const openPlaylist = (pl: YtmusicPlaylist) => openDetail({ kind: 'playlist', id: pl.id, title: pl.title }, () => getTransport().ytmusicPlaylist(pl.id))
-const openAlbum = (al: YtmusicAlbum) => openDetail({ kind: 'album', id: al.id, title: al.title }, () => getTransport().ytmusicAlbum(al.id))
-const openArtist = (ar: YtmusicArtist) => openDetail({ kind: 'artist', id: ar.id, title: ar.name }, () => getTransport().ytmusicArtist(ar.id))
+const openPlaylist = (pl: YtmusicPlaylist) => openDetail({ kind: 'playlist', id: pl.id, title: pl.title, art: pl.artUrl }, () => getTransport().ytmusicPlaylist(pl.id))
+const openAlbum = (al: YtmusicAlbum) => openDetail({
+  kind: 'album', id: al.id, title: al.title, art: al.artUrl, artists: al.artists, year: al.year ?? null, explicit: !!al.explicit, releaseType: al.releaseType ?? null,
+}, () => getTransport().ytmusicAlbum(al.id))
+const openArtist = (ar: YtmusicArtist) => openDetail({ kind: 'artist', id: ar.id, title: ar.name, art: ar.artUrl }, () => getTransport().ytmusicArtist(ar.id))
+
+// ---- colonne de gauche du détail (album, playlist, artiste), à la manière de YouTube Music ----------
+/** Une pochette seule, en grand : la liste des titres d'un album n'a pas à la répéter à chaque ligne. */
+const detail = computed(() => (browse.value && browse.value.kind !== 'category' ? browse.value : null))
+const detailArtless = computed(() => detail.value?.kind === 'album')
+/** « Album · 2012 » : le type de sortie (ou playlist / artiste) et l'année. */
+const detailKind = computed(() => {
+  const d = detail.value
+  if (!d) return ''
+  const kind = d.kind === 'playlist' ? t('music.kindPlaylist')
+    : d.kind === 'artist' ? t('music.kindArtist')
+    : ({ single: t('music.kindSingle'), ep: t('music.kindEp'), compilation: t('music.kindCompilation') } as Record<string, string>)[d.releaseType ?? ''] ?? t('music.kindAlbum')
+  return [kind, d.year].filter(Boolean).join(' · ')
+})
+/** « 8 titres · 33 min » — rien pendant le chargement (la ligne garde sa place). */
+const detailStats = computed(() => {
+  const list = browseTracksView.value
+  if (!list.length) return ''
+  const total = Math.round(list.reduce((sum, tr) => sum + (tr.durationS ?? 0), 0) / 60)
+  const h = Math.floor(total / 60)
+  const dur = total <= 0 ? '' : h ? t('music.durHourMin', { h, m: total % 60 }) : t('music.durMin', { m: total })
+  return [t('music.detailTracks', { n: list.length }, list.length), dur].filter(Boolean).join(' · ')
+})
 function backFromDetail() {
   tracks.value = []
   const prev = backStack.value.at(-1)
@@ -745,25 +774,40 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
               </template>
             </template>
 
-            <!-- détail : album, artiste, playlist -->
-            <template v-else-if="browse">
+            <!-- détail : album, artiste, playlist — une colonne fixe à gauche (pochette, titre, lecture), les titres à droite -->
+            <template v-else-if="detail">
               <div class="back-row">
                 <button type="button" class="pill" @click="backFromDetail">
                   <StrokeIcon name="back" :size="16" />
                   <span>{{ $t('common.back') }}</span>
                 </button>
-                <span class="back-row__title">{{ browse.title }}</span>
-                <button type="button" class="pill back-row__end" data-on="1" :disabled="!playTarget || browseTracksView.length === 0" @click="play(browseTracksView[0]!, browseTracksView)">
-                  <StrokeIcon name="play" :size="16" />
-                  <span>{{ $t('music.playAll') }}</span>
-                </button>
               </div>
-              <div class="list">
-                <MusicItemRow v-for="(tr, i) in browseTracksView" :key="tr.videoId" action="play" queueable :position="i + 1" :art="tr.artUrl" :title="tr.title" :explicit="!!tr.explicit"
-                              :meta="trackMeta(tr)" :dur="formatClock(tr.durationS)" :year="tr.year ?? null" :selected="recentPlays[0]?.videoId === tr.videoId"
-                              :disabled="!playTarget" :busy="playingId === tr.videoId" :play-label="$t('ytmusic.play')"
-                              @play="play(tr, browseTracksView)" @play-next="addToQueue(tr, 'next')" @add-end="addToQueue(tr, 'end')" />
-                <p v-if="!busy && browseTracksView.length === 0" class="muted empty">{{ $t('ytmusic.empty') }}</p>
+              <div class="detail">
+                <!-- le voile de la pochette, flou : l'ambiance de la page, sans rien porter -->
+                <img v-if="detail.art" :key="detail.art" :src="detail.art" alt="" aria-hidden="true" class="detail__veil" referrerpolicy="no-referrer">
+                <aside class="detail__side">
+                  <ArtThumb :key="detail.art ?? 'none'" :src="detail.art" :size="176" :round="detail.kind === 'artist'"
+                            :icon="detail.kind === 'artist' ? 'person' : detail.kind === 'album' ? 'disc' : 'list'" class="detail__art" />
+                  <h2 class="detail__title" :title="detail.title">{{ detail.title }}</h2>
+                  <div class="detail__artist">{{ detail.artists?.length ? detail.artists.join(', ') : '\u00a0' }}</div>
+                  <div class="detail__meta muted">
+                    <ExplicitBadge v-if="detail.explicit" />
+                    <span>{{ detailKind }}</span>
+                  </div>
+                  <div class="detail__meta muted">{{ detailStats || '\u00a0' }}</div>
+                  <button type="button" class="detail__play" :disabled="!playTarget || browseTracksView.length === 0"
+                          :title="$t('music.playAll')" :aria-label="$t('music.playAll')" @click="play(browseTracksView[0]!, browseTracksView)">
+                    <StrokeIcon name="play" :size="22" :stroke-width="2" />
+                  </button>
+                </aside>
+                <div class="list detail__list">
+                  <MusicItemRow v-for="(tr, i) in browseTracksView" :key="tr.videoId" action="play" queueable :artless="detailArtless" :position="i + 1" :art="tr.artUrl" :title="tr.title" :explicit="!!tr.explicit"
+                                :meta="detailArtless ? tr.artists.join(', ') : trackMeta(tr)" :dur="formatClock(tr.durationS)" :year="detailArtless ? null : tr.year ?? null"
+                                :selected="recentPlays[0]?.videoId === tr.videoId"
+                                :disabled="!playTarget" :busy="playingId === tr.videoId" :play-label="$t('ytmusic.play')"
+                                @play="play(tr, browseTracksView)" @play-next="addToQueue(tr, 'next')" @add-end="addToQueue(tr, 'end')" />
+                  <p v-if="!busy && browseTracksView.length === 0" class="muted empty">{{ $t('ytmusic.empty') }}</p>
+                </div>
               </div>
             </template>
 
@@ -980,6 +1024,34 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
 .section__head { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin: 0 0 6px; }
 .section-label { margin: 0 4px; }
 .list { display: grid; gap: 2px; }
+
+/* détail : colonne à gauche (pochette, titre, lecture), les titres à droite. `overflow-x: clip` (et non
+   `hidden`) : le voile flou ne crée pas de barre horizontale, et la colonne peut rester collante. */
+.detail { position: relative; display: grid; grid-template-columns: 208px minmax(0, 1fr); gap: 28px; align-items: start; overflow-x: clip; }
+.detail__veil {
+  position: absolute; inset: -24px 0 auto 0; width: 100%; height: 340px; object-fit: cover; z-index: 0; pointer-events: none;
+  filter: blur(60px) saturate(1.3); opacity: .24; transform: scale(1.1);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 100%); mask-image: linear-gradient(to bottom, #000 0%, transparent 100%);
+}
+.detail__side { position: relative; z-index: 1; display: grid; justify-items: center; gap: 4px; padding: 4px 8px 12px; text-align: center; }
+/* collante seulement si l'écran a la hauteur de la tenir en entier : sinon sa touche de lecture
+   sortirait de la vue sans qu'on puisse l'y ramener en défilant */
+@media (min-height: 760px) { .detail__side { position: sticky; top: 0; } }
+.detail__art { box-shadow: 0 12px 32px rgb(0 0 0 / .35); margin-bottom: 8px; }
+.detail__title {
+  margin: 0; font-size: 20px; font-weight: 700; line-height: 1.2; max-width: 100%;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.detail__artist { font-size: 14px; font-weight: 500; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.detail__meta { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; min-height: 18px; white-space: nowrap; }
+.detail__play {
+  margin-top: 8px; display: grid; place-items: center; width: 52px; height: 52px; border-radius: 999px; border: 0;
+  background: var(--accent); color: var(--on-accent); cursor: pointer; box-shadow: 0 6px 18px rgb(0 0 0 / .3); transition: transform .15s, filter .15s;
+}
+.detail__play svg { margin-left: 3px; }
+.detail__play:hover:not(:disabled) { filter: brightness(1.08); transform: scale(1.04); }
+.detail__play:disabled { opacity: .45; cursor: default; }
+.detail__list { position: relative; z-index: 1; min-width: 0; }
 
 /* genres / ambiances : cartes de taille FIXE (les pochettes arrivent après, dans une place déjà faite).
    Fond : la couleur de YouTube Music assombrie en dégradé — ces couleurs sont pastel (#a4ffa4,
