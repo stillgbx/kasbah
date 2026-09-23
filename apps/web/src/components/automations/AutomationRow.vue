@@ -9,8 +9,8 @@ import { useAutomationsStore } from '../../stores/automations'
 import MarqueeText from '../ui/MarqueeText.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Une automatisation dans la liste, lisible sans l'ouvrir : le nom, puis « Quand », « Sauf si » et
-// « Alors » sur trois lignes étiquetées ; à droite, la prochaine exécution, la dernière et son issue,
+// Une automatisation dans la liste, lisible sans l'ouvrir : le nom, puis « Quand », « Alors » et
+// « Sauf si » sur trois lignes étiquetées ; à droite, la prochaine exécution, la dernière et son issue,
 // et l'état (ce qui manque, ce qui ne répond pas). Empreinte FIXE : chaque ligne est toujours là
 // (« — » quand elle n'a rien à dire), chaque texte défile s'il déborde, la colonne de droite a sa
 // largeur réservée — basculer, perdre un appareil ou voir passer une exécution ne décale rien.
@@ -68,8 +68,8 @@ const state = computed(() => {
       <span class="row__text">
         <MarqueeText class="row__name" :text="a.name" />
         <span class="row__line"><span class="row__label">{{ $t('automations.editor.when') }}</span><MarqueeText class="row__value" :text="when" /></span>
-        <span class="row__line"><span class="row__label">{{ $t('automations.editor.unless') }}</span><MarqueeText class="row__value" :text="unless" /></span>
         <span class="row__line"><span class="row__label">{{ $t('automations.editor.then') }}</span><MarqueeText class="row__value" :text="then" /></span>
+        <span class="row__line"><span class="row__label">{{ $t('automations.editor.unless') }}</span><MarqueeText class="row__value" :text="unless" /></span>
       </span>
       <span class="row__side">
         <span class="row__line"><span class="row__label">{{ $t('automations.row.next') }}</span><span class="row__fact">{{ next }}</span></span>

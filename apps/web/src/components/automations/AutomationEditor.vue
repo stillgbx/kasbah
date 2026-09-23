@@ -16,9 +16,9 @@ import AddMenu from './AddMenu.vue'
 import DayPills from './DayPills.vue'
 import PredicateEditor from './PredicateEditor.vue'
 
-// Éditeur d'une automatisation : « Quand », « Sauf si », « Alors ». Le BROUILLON est local — un
+// Éditeur d'une automatisation : « Quand », « Alors », « Sauf si ». Le BROUILLON est local — un
 // message du serveur qui arrive pendant la frappe ne l'écrase pas — et ne part qu'à
-// l'enregistrement. Page entière (`AutomationEditView`) : trois colonnes Quand / Sauf si / Alors.
+// l'enregistrement. Page entière (`AutomationEditView`) : trois colonnes Quand / Alors / Sauf si.
 const props = defineProps<{ id: string; isNew: boolean }>()
 const emit = defineEmits<{ close: []; saved: [id: string] }>()
 const store = useAutomationsStore()
@@ -183,8 +183,8 @@ onBeforeUnmount(() => { if (disarm) clearTimeout(disarm) })
       <p class="edit__hint" :data-warn="missing ? '1' : '0'">{{ missing ? $t(`automations.editor.missing.${missing}`) : (dirty ? $t('automations.editor.unsaved') : '') }}</p>
     </header>
 
-    <!-- trois colonnes qui défilent chacune de leur côté : une liste d'exceptions qui s'allonge ne
-         pousse ni le déclencheur ni les actions -->
+    <!-- trois colonnes qui défilent chacune de leur côté, dans l'ordre où la règle se lit (quand,
+         alors, sauf si) : une liste d'exceptions qui s'allonge ne pousse ni le déclencheur ni les actions -->
     <div class="edit__cols">
       <section class="col">
         <div class="section-label">{{ $t('automations.editor.when') }}</div>
@@ -236,16 +236,16 @@ onBeforeUnmount(() => { if (disarm) clearTimeout(disarm) })
       </section>
 
       <section class="col">
+        <div class="section-label">{{ $t('automations.editor.then') }}</div>
+        <ActionEditor v-for="(x, i) in draft.actions" :key="i" :model-value="x" @update:model-value="(y: ActionDraft) => setAction(i, y)" @remove="removeAction(i)" />
+        <AddMenu :label="$t('automations.editor.addAction')" :items="actionItems" @pick="addAction" />
+      </section>
+
+      <section class="col">
         <div class="section-label">{{ $t('automations.editor.unless') }}</div>
         <PredicateEditor v-for="(p, i) in draft.unless" :key="i" :model-value="p" negatable removable
                          @update:model-value="(q: Predicate) => setUnless(i, q)" @remove="removeUnless(i)" />
         <AddMenu :label="$t('automations.editor.addCondition')" :items="predicateItems" @pick="addUnless" />
-      </section>
-
-      <section class="col">
-        <div class="section-label">{{ $t('automations.editor.then') }}</div>
-        <ActionEditor v-for="(x, i) in draft.actions" :key="i" :model-value="x" @update:model-value="(y: ActionDraft) => setAction(i, y)" @remove="removeAction(i)" />
-        <AddMenu :label="$t('automations.editor.addAction')" :items="actionItems" @pick="addAction" />
       </section>
     </div>
   </div>

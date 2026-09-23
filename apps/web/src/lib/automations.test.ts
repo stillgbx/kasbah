@@ -28,7 +28,7 @@ describe('describeAutomation', () => {
 
   it('reads the dusk shutters rule as one sentence', () => {
     expect(describeAutomation(dusk, names, t, 'fr')).toBe(
-      'Lun–ven · 15 min avant le crépuscule · pas après 22:00 · sauf si Lecteur en marche · Terrasse ou Lumière en marche · Terrasse → Fermer · chaque volet · Rez-de-chaussée',
+      'Lun–ven · 15 min avant le crépuscule · pas après 22:00 → Fermer · chaque volet · Rez-de-chaussée · sauf si Lecteur en marche · Terrasse ou Lumière en marche · Terrasse',
     )
   })
 
@@ -39,7 +39,7 @@ describe('describeAutomation', () => {
       unless: [{ type: 'timeWindow', from: '23:00', to: '06:00', not: true }],
       actions: [{ type: 'command', target: { type: 'devices', deviceIds: ['mock:cover-gate', 'mock:light-living'] }, command: { type: 'cover.open' } }],
     }
-    expect(describeAutomation(a, names, t, 'fr')).toBe('Quand Tesla à la maison depuis 2 min · sauf si pas (entre 23:00 et 06:00) → Ouvrir · 2 appareils')
+    expect(describeAutomation(a, names, t, 'fr')).toBe('Quand Tesla à la maison depuis 2 min → Ouvrir · 2 appareils · sauf si pas (entre 23:00 et 06:00)')
   })
 
   it('speaks English too', () => {

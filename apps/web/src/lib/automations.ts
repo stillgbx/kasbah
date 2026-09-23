@@ -241,11 +241,11 @@ export function describeActions(actions: readonly ActionDraft[], names: NameCont
   return actions.map((x) => describeAction(x, names, t)).join(' ; ')
 }
 
-/** La phrase d'une automatisation : « Quand · sauf si … → Alors ». */
+/** La phrase d'une automatisation, dans l'ordre de l'éditeur : « Quand → Alors · sauf si … ». */
 export function describeAutomation(a: Pick<AutomationBody, 'trigger' | 'unless' | 'actions'>, names: NameContext, t: Translate, locale: string): string {
   const when = describeTrigger(a.trigger, names, t, locale)
   const unless = a.unless.length ? ` · ${t('automations.summary.unless', { conditions: describeUnless(a.unless, names, t, locale) })}` : ''
-  return `${when}${unless} → ${describeActions(a.actions, names, t)}`
+  return `${when} → ${describeActions(a.actions, names, t)}${unless}`
 }
 
 // ── brouillon ───────────────────────────────────────────────────────────────────────────────────
