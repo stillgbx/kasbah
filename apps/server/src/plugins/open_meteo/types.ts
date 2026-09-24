@@ -28,6 +28,8 @@ export const currentSchema = z.looseObject({
 
 export const forecastResponseSchema = z.looseObject({
   utc_offset_seconds: z.number(),
+  /** Fuseau IANA du lieu (`timezone=auto`) : l'UI y affiche les heures d'un lieu lointain. */
+  timezone: z.string().optional(),
   current: currentSchema,
   hourly: z.looseObject({
     time: z.array(z.number()),
@@ -69,3 +71,18 @@ export const airQualityResponseSchema = z.looseObject({
   }),
 })
 export type AirQualityResponse = z.infer<typeof airQualityResponseSchema>
+
+/** Un lieu trouvé par l'API de géocodage (`geocoding-api.open-meteo.com`, GeoNames). */
+export const geocodingPlaceSchema = z.looseObject({
+  id: z.number(),
+  name: z.string(),
+  latitude: z.number(),
+  longitude: z.number(),
+  country: z.string().optional(),
+  country_code: z.string().optional(),
+  admin1: z.string().optional(),
+  timezone: z.string().optional(),
+})
+/** Sans résultat, la clé `results` est ABSENTE (pas un tableau vide). */
+export const geocodingResponseSchema = z.looseObject({ results: z.array(geocodingPlaceSchema).optional() })
+export type GeocodingResponse = z.infer<typeof geocodingResponseSchema>

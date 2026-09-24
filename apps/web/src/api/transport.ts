@@ -1,4 +1,4 @@
-import type { AutomationBody, AutomationEntry, AutomationRun, SceneTuning, CommandInput, DeviceConsumption, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal } from '@kasbah/shared'
+import type { AutomationBody, AutomationEntry, AutomationRun, SceneTuning, CommandInput, DeviceConsumption, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal, StateFor } from '@kasbah/shared'
 
 // Abstraction du canal serveur. Deux implémentations : HTTP + WebSocket (réel) et simulation
 // in-process (tests, démo statique sans serveur). Les commandes passent TOUJOURS par une requête
@@ -16,6 +16,26 @@ export class ApiRequestError extends Error {
     super(message)
     this.name = 'ApiRequestError'
   }
+}
+
+/** Un lieu où lire la météo hors de la maison (recherche et favoris de la vue Météo). */
+export interface WeatherPlace {
+  /** Identifiant GeoNames : deux homonymes restent deux favoris. */
+  id: string
+  name: string
+  /** Région et pays, pour départager deux homonymes (« Bourgogne, France »). */
+  region?: string
+  countryCode?: string
+  lat: number
+  lon: number
+}
+/** La météo d'un lieu quelconque, au format de l'appareil de la maison. */
+export interface WeatherElsewhere {
+  state: StateFor<'weather'>
+  forecast: Omit<WeatherForecast, 'deviceId'>
+  /** Fuseau IANA du lieu : ses heures s'y affichent. */
+  timezone?: string
+  attribution: string
 }
 
 /**
@@ -370,6 +390,10 @@ export interface Transport {
   getHistory(deviceId: string, hours?: number): Promise<EnergyHistory>
   /** Prévisions d'un appareil `weather`, à la demande (le serveur rend la dernière lecture de son plugin). */
   getForecast(deviceId: string): Promise<WeatherForecast>
+  /** Lieux dont le nom répond à la recherche (géocodage Open-Meteo), noms dans la langue donnée. */
+  searchPlaces(query: string, lang: string): Promise<WeatherPlace[]>
+  /** Météo actuelle et prévisions d'une autre position que la maison. */
+  getWeatherAt(lat: number, lon: number): Promise<WeatherElsewhere>
   /** Journal d'un appareil qui déclare la capacité `journal` (erreurs, avertissements consignés), du plus récent au plus ancien. */
   getJournal(deviceId: string): Promise<DeviceJournal>
   /** Historique de consommation (litres par pas, jamais un cumul) d'un appareil `water`, en trois séries : heure, jour, mois. */

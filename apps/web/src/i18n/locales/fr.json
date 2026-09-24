@@ -617,6 +617,7 @@
   },
   "weather": {
     "title": "Météo", "noDevice": "Aucun service météo actif. Activez-en un dans Réglages → Plugins.",
+    "home": "Maison", "places": "Lieux", "searchPlace": "Chercher un lieu", "searching": "Recherche…", "noPlace": "Aucun lieu trouvé", "searchFailed": "Recherche indisponible", "addFavorite": "Garder en favori", "removeFavorite": "Retirer des favoris", "placeFailed": "Météo indisponible pour ce lieu pour l'instant.",
     "conditions": {
       "clear": "Dégagé", "partly_cloudy": "Éclaircies", "cloudy": "Couvert", "fog": "Brouillard", "drizzle": "Bruine",
       "rain": "Pluie", "snow": "Neige", "sleet": "Neige fondue", "thunderstorm": "Orage"

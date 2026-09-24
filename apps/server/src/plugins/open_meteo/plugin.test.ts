@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import Fastify from 'fastify'
 import pino from 'pino'
 import { ManualClock } from '@kasbah/mock-sim'
 import { PluginError, type PluginContext } from '../../core/plugin'
@@ -129,6 +130,59 @@ describe('sondage', () => {
     clock.advance(60_000); await settle()
     expect(ctx.setAvailable).toHaveBeenCalledWith('home', false)
     expect(plugin.health!()).toMatchObject({ status: 'degraded' })
+    await plugin.stop()
+  })
+})
+
+describe('ailleurs qu’à la maison (vue Météo)', () => {
+  /** Géocodage réduit à ce que l'API renvoie vraiment (capture du 2026-09-24, codes postaux ôtés). */
+  const DIJON = { id: 3021372, name: 'Dijon', latitude: 47.31344, longitude: 5.01391, country_code: 'FR', timezone: 'Europe/Paris', country: 'France', admin1: 'Bourgogne' }
+  function routed() {
+    const service = fakeService()
+    const fetchImpl: FetchLike = async (url, init) => {
+      if (!url.includes('geocoding')) return service.fetchImpl(url, init)
+      service.calls.push(url)
+      const body = url.includes('name=zz') ? { generationtime_ms: 0.2 } : { results: [DIJON] }
+      return { ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) } as Awaited<ReturnType<FetchLike>>
+    }
+    return { service, fetchImpl }
+  }
+  async function app(fetchImpl: FetchLike) {
+    const s = await started(fetchImpl)
+    const a = Fastify()
+    s.plugin.registerRoutes?.(a)
+    return { ...s, app: a }
+  }
+
+  it('cherche un lieu par son nom, et rend une liste vide sans résultat', async () => {
+    const { service, fetchImpl } = routed()
+    const { app: a, plugin } = await app(fetchImpl)
+    const res = await a.inject({ method: 'GET', url: '/places?q=Dijon&lang=fr' })
+    expect(res.json()).toEqual({ places: [{ id: '3021372', name: 'Dijon', region: 'Bourgogne, France', countryCode: 'FR', lat: 47.31344, lon: 5.01391 }] })
+    expect(service.calls.at(-1)).toContain('name=Dijon')
+    expect((await a.inject({ method: 'GET', url: '/places?q=zzqqx' })).json()).toEqual({ places: [] })
+    expect((await a.inject({ method: 'GET', url: '/places?q=a' })).statusCode).toBe(400)
+    await plugin.stop()
+  })
+
+  it('lit la météo d’une autre position, complète, et la garde le temps d’un sondage', async () => {
+    const { service, fetchImpl } = routed()
+    const { app: a, plugin, clock } = await app(fetchImpl)
+    const paris = () => service.calls.filter((u) => u.includes('latitude=48.85660&longitude=2.35220')).length
+    const before = service.calls.length
+    const body = (await a.inject({ method: 'GET', url: '/at?lat=48.8566&lon=2.3522' })).json()
+    expect(service.calls.slice(before).every((u) => u.includes('latitude=48.85660&longitude=2.35220'))).toBe(true)
+    expect(body.state).toMatchObject({ kind: 'weather', available: true })
+    expect(body.state.tempC).toEqual(expect.any(Number))
+    expect(Object.values(body.state)).not.toContain(null)        // les effacements du patch ne fuient pas
+    expect(body.forecast.hourly).toHaveLength(24)
+    expect(body.attribution).toContain('Open-Meteo')
+    await a.inject({ method: 'GET', url: '/at?lat=48.8566&lon=2.3522' })
+    expect(paris()).toBe(2)                                       // relue du cache : pas de nouvel appel
+    clock.advance(600_000)
+    await a.inject({ method: 'GET', url: '/at?lat=48.8566&lon=2.3522' })
+    expect(paris()).toBe(4)
+    expect((await a.inject({ method: 'GET', url: '/at?lat=91&lon=0' })).statusCode).toBe(400)
     await plugin.stop()
   })
 })

@@ -1,7 +1,7 @@
 import { fetch as undiciFetch } from 'undici'
 import { PluginError } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
-import { airQualityResponseSchema, forecastResponseSchema, type AirQualityResponse, type ForecastResponse } from './types'
+import { airQualityResponseSchema, forecastResponseSchema, geocodingResponseSchema, type AirQualityResponse, type ForecastResponse, type GeocodingResponse } from './types'
 
 // Client des deux API d'Open-Meteo : prévisions (`api.open-meteo.com`) et qualité de l'air
 // (`air-quality-api.open-meteo.com`). Sans clé, sans compte ; le seul paramètre est la position de
@@ -22,6 +22,7 @@ export interface OpenMeteoClientOptions {
   requestTimeoutMs?: number
   forecastBase?: string
   airQualityBase?: string
+  geocodingBase?: string
 }
 
 export class OpenMeteoClient {
@@ -44,6 +45,14 @@ export class OpenMeteoClient {
     this.raw.forecast = json
     const parsed = forecastResponseSchema.safeParse(json)
     if (!parsed.success) throw new PluginError('UPSTREAM_ERROR', `unexpected forecast response: ${parsed.error.issues[0]?.message ?? '?'}`)
+    return parsed.data
+  }
+
+  /** Recherche de lieux par nom (villes, villages), noms rendus dans la langue demandée. */
+  async places(name: string, language: string, signal: AbortSignal): Promise<GeocodingResponse> {
+    const url = `${this.opts.geocodingBase ?? 'https://geocoding-api.open-meteo.com'}/v1/search?name=${encodeURIComponent(name)}&count=8&language=${encodeURIComponent(language)}&format=json`
+    const parsed = geocodingResponseSchema.safeParse(await this.getJson(url, signal))
+    if (!parsed.success) throw new PluginError('UPSTREAM_ERROR', `unexpected geocoding response: ${parsed.error.issues[0]?.message ?? '?'}`)
     return parsed.data
   }
 

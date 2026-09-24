@@ -1,7 +1,14 @@
-import { addOpeningToJson, addParkingToJson, automationBodySchema, commandSchema, deviceClassOf, defaultState, mergeState, parseHouse, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, setRenderTuningInJson, setRoomOrderInJson, type Automation, type AutomationEntry, type AutomationRun, type AutomationStatus, type CommandInput, type DeviceConsumption, type DeviceEntry, type DeviceState, type House, type StatePatch } from '@kasbah/shared'
+import { addOpeningToJson, addParkingToJson, automationBodySchema, commandSchema, deviceClassOf, defaultState, mergeState, parseHouse, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, setRenderTuningInJson, setRoomOrderInJson, type Automation, type AutomationEntry, type AutomationRun, type AutomationStatus, type CommandInput, type DeviceConsumption, type DeviceEntry, type DeviceState, type House, type StateFor, type StatePatch } from '@kasbah/shared'
 import { SimError, Simulation, solarGeometry, type ScenarioName } from '@kasbah/mock-sim'
 import demoHouse from '@kasbah/shared/demo-house.json'
-import { ApiRequestError, type Transport, type TransportHandlers } from './transport'
+import { ApiRequestError, type Transport, type TransportHandlers, type WeatherPlace } from './transport'
+
+const MOCK_PLACES: WeatherPlace[] = [
+  { id: '2988507', name: 'Paris', region: 'Île-de-France, France', countryCode: 'FR', lat: 48.85341, lon: 2.3488 },
+  { id: '2995469', name: 'Marseille', region: "Provence-Alpes-Côte d'Azur, France", countryCode: 'FR', lat: 43.29695, lon: 5.38107 },
+  { id: '3021372', name: 'Dijon', region: 'Bourgogne, France', countryCode: 'FR', lat: 47.31344, lon: 5.01391 },
+  { id: '2643743', name: 'Londres', region: 'Angleterre, Royaume-Uni', countryCode: 'GB', lat: 51.50853, lon: -0.12574 },
+]
 
 // Transport sans serveur : la même simulation que le plugin serveur `mock`, dans l'onglet.
 // Sert aux tests de composants et à une démo statique (VITE_INPROCESS_MOCK=1).
@@ -201,6 +208,18 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
         if (err instanceof SimError) throw new ApiRequestError(STATUS[err.code] ?? 500, err.code, err.message)
         throw err
       }
+    },
+    // ailleurs : quelques villes en dur, et la météo simulée de la maison, décalée pour qu'on voie le changement
+    async searchPlaces(query) {
+      const q = query.trim().toLowerCase()
+      return MOCK_PLACES.filter((p) => p.name.toLowerCase().startsWith(q))
+    },
+    async getWeatherAt(lat, lon) {
+      const home = entries().find((e) => e.descriptor.kind === 'weather')
+      if (!home) throw new ApiRequestError(503, 'DEVICE_UNAVAILABLE', 'no simulated weather')
+      const shift = Math.round((lat - 45) / 2 - Math.abs(lon) / 20)
+      const state = { ...(home.state as StateFor<'weather'>), available: true, tempC: (home.state as StateFor<'weather'>).tempC + shift }
+      return { state, forecast: sim.forecast(home.descriptor.id.replace(/^mock:/, '')), attribution: 'Simulation' }
     },
     // la simulation ne tient aucun journal : ses appareils ne déclarent pas la capacité, la vue ne demande rien
     async getJournal(deviceId) { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', `no journal in mock mode for ${deviceId}`) },

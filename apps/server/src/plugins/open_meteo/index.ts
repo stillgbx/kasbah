@@ -6,7 +6,7 @@ import { createPoller } from '../../core/poll'
 import type { FetchLike } from '../../core/sse'
 import { sendError } from '../../http/errors'
 import { OpenMeteoClient } from './client'
-import { HOME_ID, toDescriptor, toForecast, toStatePatch } from './mapping'
+import { ATTRIBUTION, HOME_ID, toDescriptor, toForecast, toPlaces, toStatePatch, toWeatherState } from './mapping'
 import type { AirQualityResponse, ForecastResponse } from './types'
 
 // Plugin Open-Meteo : la météo au-dessus de la maison, lue sur une API libre, sans clé ni compte
@@ -28,6 +28,12 @@ export const openMeteoConfigSchema = z.object({
 })
 export type OpenMeteoConfig = z.infer<typeof openMeteoConfigSchema>
 
+/** Ailleurs qu'à la maison : une position valide, arrondie au centième (~1 km) pour partager le cache. */
+const atQuerySchema = z.object({ lat: z.coerce.number().min(-90).max(90), lon: z.coerce.number().min(-180).max(180) })
+const placesQuerySchema = z.object({ q: z.string().trim().min(2).max(100), lang: z.string().regex(/^[a-z]{2}$/).default('fr') })
+/** Lieux tenus en cache à la fois : les favoris d'une maison, avec de la marge. */
+const ELSEWHERE_MAX = 24
+
 export interface OpenMeteoDeps {
   fetchImpl?: FetchLike
   requestTimeoutMs?: number
@@ -42,6 +48,25 @@ export function createOpenMeteoPlugin(deps: OpenMeteoDeps = {}): DevicePlugin {
   /** Déclaré d'emblée : l'air fait partie d'Open-Meteo ; la première lecture qui le dément retire les capacités. */
   let hasAirQuality = true
   let lastError: string | null = null
+  /** Météo ailleurs (vue Météo), lue à la demande et gardée le temps d'un sondage : même règle que la maison. */
+  const elsewhere = new Map<string, { at: number; forecast: ForecastResponse; airQuality: AirQualityResponse | null }>()
+
+  async function readElsewhere(lat: number, lon: number) {
+    const key = `${lat.toFixed(2)},${lon.toFixed(2)}`
+    const now = ctx!.clock.now()
+    const hit = elsewhere.get(key)
+    if (hit && now - hit.at < config!.OPEN_METEO_POLL_MS) return hit
+    const c = new OpenMeteoClient({ lat, lon, ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}), ...(deps.requestTimeoutMs ? { requestTimeoutMs: deps.requestTimeoutMs } : {}) })
+    const forecast = await c.forecast(ctx!.signal)
+    let airQuality: AirQualityResponse | null = null
+    try { airQuality = await c.airQuality(ctx!.signal) }
+    catch { /* hors d'Europe ou API d'air tombée : la météo suffit */ }
+    const entry = { at: now, forecast, airQuality }
+    elsewhere.delete(key)
+    elsewhere.set(key, entry)
+    if (elsewhere.size > ELSEWHERE_MAX) elsewhere.delete(elsewhere.keys().next().value!)
+    return entry
+  }
 
   async function poll(): Promise<void> {
     const forecast = await client!.forecast(ctx!.signal)
@@ -96,6 +121,27 @@ export function createOpenMeteoPlugin(deps: OpenMeteoDeps = {}): DevicePlugin {
       app.get('/raw', async (_req, reply) => {
         if (!client?.raw.forecast) return sendError(reply, 409, 'DEVICE_UNAVAILABLE', 'nothing read yet')
         return client.raw
+      })
+      /** Recherche d'un lieu par son nom (géocodage Open-Meteo, sans clé lui non plus). */
+      app.get('/places', async (req, reply) => {
+        const query = placesQuerySchema.safeParse(req.query)
+        if (!query.success) return sendError(reply, 400, 'INVALID_QUERY', 'q (2 to 100 characters) and lang (two letters) expected')
+        const { q, lang } = query.data
+        return { places: toPlaces(await client!.places(q, lang, ctx!.signal)) }
+      })
+      /** La météo d'un autre lieu : état complet et prévisions, au format de l'appareil de la maison. */
+      app.get('/at', async (req, reply) => {
+        const query = atQuerySchema.safeParse(req.query)
+        if (!query.success) return sendError(reply, 400, 'INVALID_QUERY', 'lat (-90 to 90) and lon (-180 to 180) expected')
+        const { lat, lon } = query.data
+        const r = await readElsewhere(lat, lon)
+        const now = ctx!.clock.now()
+        return {
+          state: toWeatherState(r.forecast, r.airQuality, now),
+          forecast: toForecast(r.forecast, Math.floor(now / 1000)),
+          ...(r.forecast.timezone ? { timezone: r.forecast.timezone } : {}),
+          attribution: ATTRIBUTION,
+        }
       })
     },
     health(): PluginHealth {

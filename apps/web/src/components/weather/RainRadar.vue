@@ -20,7 +20,10 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 // frise de temps a une taille fixe quel que soit le nombre d'images. La lecture démarre d'elle-même
 // à l'arrivée sur la vue : une carte de pluie se lit en mouvement.
 
-const props = defineProps<{ home: LatLon }>()
+/** `home` = le centre de la carte ; `away` : ce n'est pas la maison (repère d'épingle, pas de maison). */
+const props = defineProps<{ home: LatLon; away?: boolean }>()
+const HOUSE_SVG = '<svg viewBox="0 0 24 24" width="26" height="26"><path d="M3 11l9-7 9 7v9H3zM9 20v-6h6v6" fill="var(--surface)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>'
+const PIN_SVG = '<svg viewBox="0 0 24 24" width="26" height="26"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z" fill="var(--surface)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="9.5" r="2.5" fill="currentColor"/></svg>'
 const { d, t } = useI18n()
 const settings = useSettingsStore()
 
@@ -39,6 +42,7 @@ const playing = ref(false)
 const failed = ref(false)
 const container = ref<HTMLDivElement | null>(null)
 let map: MlMap | null = null
+let marker: Marker | null = null
 let ticker: ReturnType<typeof setInterval> | null = null
 let refresher: ReturnType<typeof setInterval> | null = null
 /** La lecture part toute seule au premier chargement des images ; ensuite, c'est l'utilisateur qui décide. */
@@ -152,8 +156,8 @@ onMounted(() => {
   m.addControl(new NavigationControl({ showCompass: false }), 'top-left')
   const el = document.createElement('div')
   el.className = 'radar__home'
-  el.innerHTML = '<svg viewBox="0 0 24 24" width="26" height="26"><path d="M3 11l9-7 9 7v9H3zM9 20v-6h6v6" fill="var(--surface)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>'
-  new Marker({ element: el }).setLngLat([props.home.lon, props.home.lat]).addTo(m)
+  el.innerHTML = props.away ? PIN_SVG : HOUSE_SVG
+  marker = new Marker({ element: el }).setLngLat([props.home.lon, props.home.lat]).addTo(m)
   // les couches sont reposées après chaque changement de style (le thème les retire avec le style)
   m.on('style.load', () => { styleReady = true; applyFrame() })
   void loadFrames()
@@ -162,9 +166,16 @@ onMounted(() => {
 onBeforeUnmount(() => {
   if (ticker) clearInterval(ticker)
   if (refresher) clearInterval(refresher)
-  map?.remove(); map = null
+  map?.remove(); map = null; marker = null
 })
 watch([current, host], applyFrame)
+// un autre lieu : la carte s'y recentre (même zoom), le repère le suit
+watch(() => [props.home.lat, props.home.lon, props.away] as const, ([lat, lon, away]) => {
+  map?.jumpTo({ center: [lon, lat] })
+  marker?.setLngLat([lon, lat])
+  const el = marker?.getElement()
+  if (el) el.innerHTML = away ? PIN_SVG : HOUSE_SVG
+})
 watch(() => settings.isDark, (dark) => { styleReady = false; map?.setStyle(planStyleUrl(dark)) })
 </script>
 

@@ -617,6 +617,7 @@
   },
   "weather": {
     "title": "Weather", "noDevice": "No weather service is active. Enable one in Settings → Plugins.",
+    "home": "Home", "places": "Places", "searchPlace": "Search a place", "searching": "Searching…", "noPlace": "No place found", "searchFailed": "Search unavailable", "addFavorite": "Keep as favourite", "removeFavorite": "Remove from favourites", "placeFailed": "Weather unavailable for this place right now.",
     "conditions": {
       "clear": "Clear", "partly_cloudy": "Partly cloudy", "cloudy": "Overcast", "fog": "Fog", "drizzle": "Drizzle",
       "rain": "Rain", "snow": "Snow", "sleet": "Sleet", "thunderstorm": "Thunderstorm"

@@ -5,8 +5,9 @@ import { useIntervalFn } from '@vueuse/core'
 import { AQI_LEVELS, POLLEN_TYPES, type WeatherDailyPoint, type WeatherHourlyPoint } from '@kasbah/shared'
 import PageHeader from '../components/layout/PageHeader.vue'
 import RainRadar from '../components/weather/RainRadar.vue'
+import WeatherPlaces from '../components/weather/WeatherPlaces.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
-import { useForecast, useWeather } from '../composables/useWeather'
+import { useForecast, useWeather, useWeatherAt, useWeatherPlaces } from '../composables/useWeather'
 import { formatMinutes } from '../lib/format'
 import type { IconName } from '../lib/strokeIcons'
 import { compassPoint, conditionIcon } from '../lib/weather'
@@ -19,14 +20,29 @@ import { useHouseStore } from '../stores/house'
 const { d, n, t, locale } = useI18n()
 const house = useHouseStore()
 const weather = useWeather()
-const live = weather.live
-const caps = computed(() => new Set(weather.descriptor.value?.capabilities ?? []))
-const { forecast } = useForecast(computed(() => weather.entry.value?.descriptor.id))
+const { forecast: homeForecast } = useForecast(computed(() => weather.entry.value?.descriptor.id))
+// Ailleurs qu'à la maison (barre de lieux de l'en-tête) : même mise en page, données lues à la demande.
+const places = useWeatherPlaces()
+const place = places.selected
+const elsewhere = useWeatherAt(place)
+const live = computed(() => (place.value ? elsewhere.data.value?.state : weather.live.value))
+const forecast = computed(() => (place.value ? elsewhere.data.value?.forecast ?? null : homeForecast.value))
+/** Ailleurs, Open-Meteo donne toujours air et pollens (des tirets hors d'Europe) : les cartes restent en place. */
+const caps = computed(() => new Set(place.value ? ['forecast', 'air_quality', 'pollen'] : weather.descriptor.value?.capabilities ?? []))
+const attribution = computed(() => (place.value ? elsewhere.data.value?.attribution : weather.descriptor.value?.meta.weather?.attribution))
+const model = computed(() => (place.value ? undefined : weather.descriptor.value?.meta.weather?.model))
+/** Fuseau du lieu affiché ; `undefined` = celui de la tablette (la maison). */
+const tz = computed(() => (place.value ? elsewhere.data.value?.timezone : undefined))
+const localTz = Intl.DateTimeFormat().resolvedOptions().timeZone
+/** Une heure du lieu affiché, dans SON fuseau : le lever à Tokyo est celui de Tokyo. */
+const fd = (ms: number, key: 'time' | 'hour' | 'weekday') => d(new Date(ms), tz.value ? { key, timeZone: tz.value } : key)
+/** L'heure du relevé ; ailleurs, avec le décalage quand le fuseau n'est pas celui de la tablette. */
+const observed = (ms: number) => (tz.value && tz.value !== localTz ? d(new Date(ms), { key: 'time', timeZone: tz.value, timeZoneName: 'short' }) : fd(ms, 'time'))
 
 const now = ref(Date.now())
 useIntervalFn(() => { now.value = Date.now() }, 60_000)
 
-const home = computed(() => (house.house ? { lat: house.house.origin.lat, lon: house.house.origin.lon } : undefined))
+const home = computed(() => (place.value ? { lat: place.value.lat, lon: place.value.lon } : house.house ? { lat: house.house.origin.lat, lon: house.house.origin.lon } : undefined))
 const icon = computed<IconName>(() => (live.value ? conditionIcon(live.value.condition, live.value.isDay) : 'cloud'))
 const deg = (v: number | undefined) => (v === undefined ? '—' : `${n(v, 'integer')}°`)
 const opt = (v: number | undefined, unit: string, fmt: 'integer' | 'decimal1' = 'integer') => (v === undefined ? '—' : `${n(v, fmt)}${unit}`)
@@ -55,7 +71,8 @@ const barStyle = (p: WeatherDailyPoint) => {
   const span = Math.max(1, weekRange.value.max - weekRange.value.min)
   return { left: `${((p.minC - weekRange.value.min) / span) * 100}%`, width: `${Math.max(4, ((p.maxC - p.minC) / span) * 100)}%` }
 }
-const isToday = (tMs: number) => new Date(tMs).toDateString() === new Date(now.value).toDateString()
+const dayOf = (ms: number) => new Date(ms).toLocaleDateString('en-CA', tz.value ? { timeZone: tz.value } : {})
+const isToday = (tMs: number) => dayOf(tMs) === dayOf(now.value)
 
 const aqiIndex = computed(() => (live.value?.aqiLevel ? AQI_LEVELS.indexOf(live.value.aqiLevel) : -1))
 /** Couleurs du palier européen, du bon au très mauvais (échelle officielle EAQI). */
@@ -80,13 +97,21 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
 
 <template>
   <div class="weather">
-    <PageHeader />
+    <PageHeader class="wx-header"><WeatherPlaces class="wx-header__places" /></PageHeader>
     <div class="weather__scroll">
-      <div v-if="!weather.entry.value" class="card card--soft empty muted">{{ $t('weather.noDevice') }}</div>
+      <div v-if="!place && !weather.entry.value" class="card card--soft empty muted">{{ $t('weather.noDevice') }}</div>
       <div class="weather__grid" :data-live="live ? '1' : '0'">
         <!-- Maintenant : la grande température et la condition ; ressenti et pluie du moment dessous -->
         <section class="card wx-now">
-          <div class="wx-now__head"><span class="section-label">{{ $t('weather.now') }}</span><span class="muted small">{{ live ? $t('weather.observed', { time: d(new Date(live.observedAt), 'time') }) : '—' }}</span></div>
+          <!-- le lieu affiché, en toutes lettres : la maison ou le lieu choisi, sa région en retrait -->
+          <div class="wx-now__head">
+            <span class="wx-now__place" :title="place?.region ? `${place.name} — ${place.region}` : undefined">
+              <StrokeIcon :name="place ? 'pin' : 'home'" :size="16" class="wx-now__pin" />
+              <span class="wx-now__name">{{ place ? place.name : $t('weather.home') }}</span>
+              <span v-if="place?.region" class="muted small wx-now__region">{{ place.region }}</span>
+            </span>
+            <span class="muted small wx-now__obs">{{ live ? $t('weather.observed', { time: observed(live.observedAt) }) : place && elsewhere.failed.value ? $t('weather.placeFailed') : '—' }}</span>
+          </div>
           <div class="wx-now__main">
             <StrokeIcon :name="icon" :size="64" class="wx-now__icon" />
             <div>
@@ -110,9 +135,9 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
             <circle v-if="sun && sun.up" :cx="sun.x" :cy="sun.y" r="7" fill="var(--cat-light)" />
           </svg>
           <div class="wx-sun__times">
-            <div><div class="muted small">{{ $t('weather.sunrise') }}</div><div class="wx-sun__t">{{ live?.sunrise ? d(new Date(live.sunrise), 'time') : '—:—' }}</div></div>
+            <div><div class="muted small">{{ $t('weather.sunrise') }}</div><div class="wx-sun__t">{{ live?.sunrise ? fd(live.sunrise, 'time') : '—:—' }}</div></div>
             <div class="text-center"><div class="muted small">{{ $t('weather.dayLength') }}</div><div class="wx-sun__t">{{ sun ? formatMinutes(sun.lengthMin, locale) : '—' }}</div></div>
-            <div class="text-right"><div class="muted small">{{ $t('weather.sunset') }}</div><div class="wx-sun__t">{{ live?.sunset ? d(new Date(live.sunset), 'time') : '—:—' }}</div></div>
+            <div class="text-right"><div class="muted small">{{ $t('weather.sunset') }}</div><div class="wx-sun__t">{{ live?.sunset ? fd(live.sunset, 'time') : '—:—' }}</div></div>
           </div>
         </section>
 
@@ -140,7 +165,7 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
           <div class="section-label">{{ $t('weather.hourly') }}</div>
           <div class="wx-hourly__strip">
             <div v-for="(p, i) in hourly" :key="i" class="wx-hour">
-              <div class="muted small">{{ p ? d(new Date(p.t), 'hour') : '—' }}</div>
+              <div class="muted small">{{ p ? fd(p.t, 'hour') : '—' }}</div>
               <StrokeIcon :name="p ? conditionIcon(p.condition, p.isDay) : 'cloud'" :size="22" :class="{ 'wx-dim': !p }" />
               <div class="wx-hour__temp">{{ p ? deg(p.tempC) : '—' }}</div>
               <div class="small wx-hour__rain" :data-on="p && (p.precipProbability ?? 0) >= 10 ? '1' : '0'">{{ p && p.precipProbability !== undefined ? `${n(p.precipProbability, 'integer')} %` : '·' }}</div>
@@ -153,7 +178,7 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
           <div class="section-label">{{ $t('weather.daily') }}</div>
           <div class="wx-daily__rows">
             <div v-for="(p, i) in daily" :key="i" class="wx-day">
-              <div class="wx-day__name">{{ p ? (isToday(p.t) ? $t('weather.today') : d(new Date(p.t), 'weekday')) : '—' }}</div>
+              <div class="wx-day__name">{{ p ? (isToday(p.t) ? $t('weather.today') : fd(p.t, 'weekday')) : '—' }}</div>
               <StrokeIcon :name="p ? conditionIcon(p.condition) : 'cloud'" :size="20" :class="{ 'wx-dim': !p }" />
               <div class="small wx-day__rain" :data-on="p && (p.precipProbability ?? 0) >= 10 ? '1' : '0'">{{ p && p.precipProbability !== undefined ? `${n(p.precipProbability, 'integer')} %` : '·' }}</div>
               <div class="wx-day__min muted">{{ p ? deg(p.minC) : '—' }}</div>
@@ -224,14 +249,14 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
         </div>
 
         <div class="muted small wx-credit">
-          <template v-if="weather.descriptor.value?.meta.weather">{{ $t('weather.attribution', { source: weather.descriptor.value.meta.weather.attribution }) }}<template v-if="weather.descriptor.value.meta.weather.model"> · {{ $t('weather.model', { model: weather.descriptor.value.meta.weather.model }) }}</template> · </template>
+          <template v-if="attribution">{{ $t('weather.attribution', { source: attribution }) }}<template v-if="model"> · {{ $t('weather.model', { model }) }}</template> · </template>
           {{ $t('weather.radarHint') }} · {{ $t('weather.radarSource') }}
         </div>
         </div>
 
         <!-- Radar des précipitations, centré sur la maison -->
         <section class="wx-radar">
-          <RainRadar v-if="home" :home="home" />
+          <RainRadar v-if="home" :home="home" :away="!!place" />
         </section>
 
       </div>
@@ -243,6 +268,11 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
 .weather { height: 100%; display: flex; flex-direction: column; }
 .weather__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 24px calc(var(--safe-bottom) + 24px); display: grid; gap: 20px; align-content: start; }
 .empty { padding: 24px; text-align: center; }
+/* étroit : les lieux passent sous le titre, sur toute la largeur — pastilles à gauche, recherche à droite */
+@media (max-width: 1100px) {
+  .wx-header { flex-wrap: wrap; row-gap: 10px; }
+  .wx-header__places { flex: 1 1 100%; justify-content: space-between; }
+}
 .small { font-size: 12px; }
 .weather__grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 20px; }
 /* les sections de la grille, directes ou dans un bloc transparent (`.wx-side`, `.wx-bottom`) : mêmes marges, même largeur par défaut */
@@ -261,7 +291,12 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
 .wx-dim { opacity: .3; }
 
 .wx-now { display: flex; flex-direction: column; gap: 14px; min-height: 196px; }
-.wx-now__head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.wx-now__head { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-width: 0; height: 22px; }
+.wx-now__place { display: inline-flex; align-items: baseline; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; }
+.wx-now__pin { color: var(--accent); flex: 0 0 auto; align-self: center; }
+.wx-now__name { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; min-width: 0; }
+.wx-now__region { overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; min-width: 0; }
+.wx-now__obs { flex: 0 0 auto; white-space: nowrap; }
 .wx-now__main { display: flex; align-items: center; gap: 20px; flex: 1 1 auto; }
 .wx-now__icon { color: var(--cat-light); flex: 0 0 auto; }
 .wx-now__temp { font-size: 56px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }

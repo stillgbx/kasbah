@@ -1,9 +1,9 @@
 import {
-  aqiLevelOf, POLLEN_TYPES, type DeviceDescriptor, type PollenType, type StatePatch, type WeatherCondition, type WeatherDailyPoint,
+  aqiLevelOf, defaultState, mergeState, POLLEN_TYPES, type DeviceDescriptor, type StateFor, type PollenType, type StatePatch, type WeatherCondition, type WeatherDailyPoint,
   type WeatherHourlyPoint,
 } from '@kasbah/shared'
 import type { PluginForecast } from '../../core/plugin'
-import type { AirQualityResponse, ForecastResponse } from './types'
+import type { AirQualityResponse, ForecastResponse, GeocodingResponse } from './types'
 
 // Mappage PUR des réponses d'Open-Meteo vers le contrat `weather`. Écrit d'après des réponses
 // capturées (`__fixtures__/open-meteo.ts`), pas d'après la documentation.
@@ -149,4 +149,31 @@ export function toForecast(f: ForecastResponse, nowS: number): PluginForecast {
     daily.push(p)
   }
   return { issuedAt: f.current.time * 1000, hourly, daily }
+}
+
+/** Un lieu où lire la météo, hors de la maison (recherche et favoris de la vue Météo). */
+export interface WeatherPlace {
+  id: string
+  name: string
+  /** Région et pays, pour départager deux homonymes (« Bourgogne, France »). */
+  region?: string
+  countryCode?: string
+  lat: number
+  lon: number
+}
+
+export function toPlaces(r: GeocodingResponse): WeatherPlace[] {
+  return (r.results ?? []).map((p) => {
+    const place: WeatherPlace = { id: String(p.id), name: p.name, lat: p.latitude, lon: p.longitude }
+    const region = [p.admin1, p.country].filter((x) => x && x !== p.name).join(', ')
+    if (region) place.region = region
+    if (p.country_code) place.countryCode = p.country_code
+    return place
+  })
+}
+
+/** L'état COMPLET d'un lieu quelconque, comme si un appareil l'avait publié (les `null` du patch effacent). */
+export function toWeatherState(f: ForecastResponse, aq: AirQualityResponse | null, now: number): StateFor<'weather'> {
+  const base = defaultState('weather', now) as StateFor<'weather'>
+  return { ...mergeState(base, toStatePatch(f, aq), now), available: true }
 }
