@@ -548,8 +548,93 @@ const CEILING_FAN = {
   bladeL: 0.34, bladeW: 0.075, bladeT: 0.012,
   bladeZ: -0.04,
 }
-/** Vitesse de rotation des pales (rad/s) — décorative, ~0,6 tr/s. */
-const FAN_SPIN_RAD_S = Math.PI * 1.2
+/**
+ * Tours par seconde des pales, de la plus petite vitesse à la plus grande. Un vrai plafonnier monte à
+ * 3 tr/s, mais la boucle anime à 20 Hz et trois pales se ressemblent tous les 120° : au-delà d'1 tr/s
+ * (18° par image), l'œil commence à voir la roue de charrette tourner à l'envers.
+ */
+const FAN_TURNS_S = [0.3, 1] as const
+/** Vitesses supposées quand le descripteur n'en déclare pas — celles du CREATE (télécommande 1 à 6). */
+const FAN_DEFAULT_SPEEDS = [1, 2, 3, 4, 5, 6]
+
+/**
+ * Flux d'air sous le plafonnier, dans la langue de l'onde sonore d'un lecteur : des anneaux à plat qui
+ * naissent et s'estompent. Sens `forward` (été) : ils partent des pales et DESCENDENT en s'élargissant,
+ * en bleu — l'air est poussé vers le bas, il rafraîchit. Sens `reverse` (hiver) : ils MONTENT vers les
+ * pales en se resserrant, en rouge — l'air est aspiré, il redescend le long des murs la chaleur
+ * accumulée au plafond. Discret : c'est un état, pas une alerte.
+ */
+const AIRFLOW = {
+  rings: 3,
+  /** Hauteur (m) de la colonne d'air, depuis le plan des pales. */
+  length: 1.3,
+  top: -0.08,
+  /** Rayon (m) de l'anneau au plan des pales et en bas de la colonne. */
+  rTop: 0.32, rBottom: 0.85,
+  /** Période d'un anneau (s), de la plus petite vitesse à la plus grande. */
+  periodS: [4.5, 1.8] as const,
+  /** Opacité d'un anneau au plus fort, de la plus petite vitesse à la plus grande. */
+  opacity: [0.22, 0.4] as const,
+  cool: new Color(0x4da3ff),
+  warm: new Color(0xff6a3d),
+}
+
+/** Rang de `speed` dans les vitesses du ventilateur, de 0 (la plus lente) à 1 (la plus rapide). */
+export function fanSpeedFraction(speed: number | undefined, speeds: readonly number[] = FAN_DEFAULT_SPEEDS): number {
+  const min = Math.min(...speeds), max = Math.max(...speeds)
+  if (speed === undefined) return 0.5
+  if (max <= min) return 1
+  return Math.min(1, Math.max(0, (speed - min) / (max - min)))
+}
+
+class FanAirflow {
+  readonly object = new Group()
+  private readonly rings: Mesh<RingGeometry, ShaderMaterial>[] = []
+  private readonly geometry = new RingGeometry(0.93, 1, 64)
+  /** Avancée du premier anneau sur la colonne (0 → 1) ; les autres suivent, décalés. */
+  private phase = 0
+  private down = true
+  private rate = 1 / AIRFLOW.periodS[0]
+  private peak: number = AIRFLOW.opacity[0]
+
+  constructor() {
+    this.object.name = 'ceiling-fan-airflow'
+    this.object.visible = false
+    for (let i = 0; i < AIRFLOW.rings; i++) {
+      const ring = new Mesh(this.geometry, waveMaterial(AIRFLOW.cool, false))
+      this.rings.push(ring)
+      this.object.add(ring)
+    }
+  }
+
+  /** `k` : rang de la vitesse (0 → 1). */
+  set(forward: boolean, k: number): void {
+    this.down = forward
+    this.rate = 1 / lerp(AIRFLOW.periodS[0], AIRFLOW.periodS[1], k)
+    this.peak = lerp(AIRFLOW.opacity[0], AIRFLOW.opacity[1], k)
+    for (const r of this.rings) (r.material.uniforms.uColor!.value as Color).copy(forward ? AIRFLOW.cool : AIRFLOW.warm)
+    this.step(0)
+  }
+
+  step(dtS: number): void {
+    // la phase AVANCE au rythme courant : changer de vitesse n'a pas à faire sauter les anneaux
+    this.phase = (this.phase + Math.min(0.1, Math.max(0, dtS)) * this.rate) % 1
+    this.rings.forEach((ring, i) => {
+      const p = (this.phase + i / AIRFLOW.rings) % 1
+      const depth = this.down ? p : 1 - p          // 0 au plan des pales, 1 en bas de la colonne
+      const r = lerp(AIRFLOW.rTop, AIRFLOW.rBottom, depth)
+      ring.scale.set(r, r, 1)
+      ring.position.z = AIRFLOW.top - depth * AIRFLOW.length
+      // naît et s'éteint en douceur : aucun anneau n'apparaît ni ne disparaît d'un coup
+      ring.material.uniforms.uOpacity!.value = this.peak * Math.sin(Math.PI * p)
+    })
+  }
+
+  dispose(): void {
+    this.geometry.dispose()
+    for (const r of this.rings) r.material.dispose()
+  }
+}
 
 export class LightMarker extends DeviceMarker {
   private readonly mat: MeshStandardMaterial
@@ -557,7 +642,10 @@ export class LightMarker extends DeviceMarker {
   private readonly body: Mesh | Group
   /** Groupe des pales (null hors plafonnier) : c'est lui qui tourne autour de Z. */
   private readonly blades: Group | null
-  private spinning = false
+  /** Flux d'air sous les pales (null hors plafonnier), visible tant que le ventilateur tourne. */
+  private readonly airflow: FanAirflow | null
+  /** Vitesse signée des pales (rad/s) ; 0 = arrêtées. */
+  private spinRadS = 0
   private readonly geometries: BufferGeometry[] = []
   private readonly light: PointLight
   private readonly glow: Sprite
@@ -570,9 +658,13 @@ export class LightMarker extends DeviceMarker {
       const built = this.buildCeilingFan()
       this.body = built.root
       this.blades = built.blades
+      this.airflow = new FanAirflow()
+      this.airflow.object.traverse((o) => this.asDecor(o))
+      this.object.add(this.airflow.object)
     } else {
       this.bladeMat = null
       this.blades = null
+      this.airflow = null
       const geo = new SphereGeometry(0.13, 20, 14)
       this.geometries.push(geo)
       this.body = new Mesh(geo, this.mat)
@@ -665,21 +757,32 @@ export class LightMarker extends DeviceMarker {
   }
 
   override setCompanionFan(state: DeviceState | undefined): void {
-    if (!this.blades) return
+    if (!this.blades || !this.airflow) return
     const on = !!state && state.kind === 'fan' && state.available && state.on
-    if (on === this.spinning) return
-    this.spinning = on
+    const wasOn = this.spinRadS !== 0
     if (!on) {
+      if (!wasOn) return
+      this.spinRadS = 0
+      this.airflow.object.visible = false
       this.stopAnimation?.()
       this.stopAnimation = null
       this.ctx.invalidate()
       return
     }
-    // Animation décorative (20 Hz via la boucle) : les pales tournent tant que le ventilateur est on.
+    const k = fanSpeedFraction(state.speed, this.ctx.linkedFanSpeeds)
+    const forward = state.direction !== 'reverse'
+    // `forward` = été : vu d'EN DESSOUS les pales tournent dans le sens trigonométrique et poussent
+    // l'air vers le bas. La caméra regarde d'en haut, où ce sens se lit horaire : Z négatif.
+    this.spinRadS = (forward ? -1 : 1) * Math.PI * 2 * lerp(FAN_TURNS_S[0], FAN_TURNS_S[1], k)
+    this.airflow.set(forward, k)
+    this.airflow.object.visible = true
+    if (wasOn) return
+    // Animation décorative (20 Hz via la boucle) : pales et flux d'air tant que le ventilateur tourne.
     this.stopAnimation = this.ctx.addAnimation({
       step: (_now, dtS) => {
-        if (!this.spinning || !this.blades) return false
-        this.blades.rotation.z += FAN_SPIN_RAD_S * dtS
+        if (this.spinRadS === 0 || !this.blades || !this.airflow) return false
+        this.blades.rotation.z += this.spinRadS * dtS
+        this.airflow.step(dtS)
         return true
       },
     })
@@ -689,6 +792,7 @@ export class LightMarker extends DeviceMarker {
     for (const geo of this.geometries) geo.dispose()
     this.mat.dispose()
     this.bladeMat?.dispose()
+    this.airflow?.dispose()
     this.glowMat.dispose()
     super.dispose()
   }

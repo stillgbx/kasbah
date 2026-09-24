@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BackSide, Box3, BoxGeometry, type OrthographicCamera, type PerspectiveCamera, type BufferGeometry, CylinderGeometry, Mesh, type MeshBasicMaterial, type MeshStandardMaterial, type Object3D, ShaderLib, ShapeGeometry, Vector3, type BufferAttribute, type Texture } from 'three'
+import { BackSide, Box3, BoxGeometry, type OrthographicCamera, type PerspectiveCamera, type BufferGeometry, CylinderGeometry, Mesh, type MeshBasicMaterial, type MeshStandardMaterial, type Object3D, type ShaderMaterial, ShaderLib, ShapeGeometry, Vector3, type BufferAttribute, type Texture } from 'three'
 import { computeHouseGeometry, localToGeo, openingGaps, parseHouse, type DeviceDescriptor, type DeviceState, type OpeningRect, type PlacedHouseDevice } from '@kasbah/shared'
 import demo from '@kasbah/shared/demo-house.json'
 import { buildHouse, buildLevel, buildWallsGeometry, countTriangles } from './builders/buildHouse'
@@ -477,6 +477,61 @@ describe('marqueurs 3D', () => {
     steps[0]!.step(0, 0.5)
     expect(blades.rotation.z).not.toBe(z0)
     lamp.setCompanionFan({ kind: 'fan', updatedAt: 1, available: true, on: false, speed: 3 } as DeviceState)
+    expect(steps).toHaveLength(0)
+  })
+
+  it('les pales suivent la vitesse et le sens, et le flux d\'air dit frais (bas, bleu) ou chaud (haut, rouge)', () => {
+    const steps: { step: (now: number, dt: number) => boolean }[] = []
+    const lamp = createMarker(device(), {
+      materials: createMaterials(defaultSceneTheme(), defaultLook()), theme: defaultSceneTheme(), glow: defaultLook().glow,
+      linkedFan: true, linkedFanId: 'p:fan', linkedFanSpeeds: [1, 2, 3, 4, 5, 6],
+      descriptor: { id: 'p:l', pluginId: 'p', externalId: 'l', kind: 'light', name: 'Plafonnier', capabilities: ['on_off'], meta: {} } as DeviceDescriptor,
+      addAnimation: (a) => { steps.push(a); return () => { const i = steps.indexOf(a); if (i >= 0) steps.splice(i, 1) } },
+      invalidate: () => {}, onTap: () => {}, label: 'Plafonnier',
+    }, () => true)
+    const blades = lamp.object.getObjectByName('ceiling-fan-blades')!
+    const air = lamp.object.getObjectByName('ceiling-fan-airflow')!
+    const fan = (speed: number, direction: 'forward' | 'reverse') => lamp.setCompanionFan({ kind: 'fan', updatedAt: 0, available: true, on: true, speed, direction } as DeviceState)
+    const turn = () => { const z0 = blades.rotation.z; steps[0]!.step(0, 0.1); return blades.rotation.z - z0 }
+    expect(air.visible).toBe(false)
+
+    fan(1, 'forward')
+    const slow = turn()
+    fan(6, 'forward')
+    expect(steps).toHaveLength(1)                       // changer de vitesse ne relance pas une 2e animation
+    const fast = turn()
+    expect(slow).toBeLessThan(0)                        // été : horaire vu d'en haut
+    expect(Math.abs(fast)).toBeGreaterThan(Math.abs(slow) * 2)
+    fan(6, 'reverse')
+    expect(turn()).toBeCloseTo(-fast)
+
+    // couleur des anneaux, et sens vertical : un anneau large est en bas de la colonne
+    const rings = () => air.children as Mesh<BufferGeometry, ShaderMaterial>[]
+    const sample = () => {
+      const c = rings()[0]!.material.uniforms.uColor!.value as { r: number; b: number }
+      // tout le flux reste SOUS le plan des pales, quel que soit le sens
+      for (const r of rings()) expect(r.position.z).toBeLessThan(0)
+      return { r: c.r, b: c.b }
+    }
+    const widest = () => rings().reduce((a, r) => (r.scale.x > a.scale.x ? r : a))
+    const narrowest = () => rings().reduce((a, r) => (r.scale.x < a.scale.x ? r : a))
+    expect(widest().position.z).toBeLessThan(narrowest().position.z)
+    expect(air.visible).toBe(true)
+    const warm = sample()
+    expect(warm.r).toBeGreaterThan(warm.b)
+    fan(6, 'forward')
+    steps[0]!.step(0, 0.05)
+    const cool = sample()
+    expect(cool.b).toBeGreaterThan(cool.r)
+    const ring = narrowest(), z0 = ring.position.z
+    steps[0]!.step(0, 0.05)
+    expect(ring.position.z).toBeLessThan(z0)          // été : l'air descend
+    fan(6, 'reverse')
+    const low = widest(), zl = low.position.z
+    steps[0]!.step(0, 0.05)
+    expect(low.position.z).toBeGreaterThan(zl)        // hiver : il monte
+    lamp.setCompanionFan({ kind: 'fan', updatedAt: 1, available: true, on: false } as DeviceState)
+    expect(air.visible).toBe(false)
     expect(steps).toHaveLength(0)
   })
 

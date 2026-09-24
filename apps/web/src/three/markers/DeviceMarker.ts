@@ -33,6 +33,8 @@ export interface MarkerContext {
   linkedFan?: boolean
   /** Id du descripteur `fan` lié (pour faire tourner les pales selon son état). */
   linkedFanId?: string
+  /** `meta.fan.speeds` du ventilateur lié : la vitesse des pales se lit comme un rang dans cette liste. */
+  linkedFanSpeeds?: readonly number[]
   /** Rectangle de l'ouverture liée (volets). */
   opening?: OpeningRect
   addAnimation(a: Animation): () => void

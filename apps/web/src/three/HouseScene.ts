@@ -817,7 +817,7 @@ export class HouseScene {
     const house = this.house
     const marker = createMarker(device, {
       materials: this.materials, theme: this.theme, glow: this.look.glow, outdoor: !levelNodes, descriptor,
-      ...(linkedFanDesc ? { linkedFan: true, linkedFanId: linkedFanDesc.id } : {}),
+      ...(linkedFanDesc ? { linkedFan: true, linkedFanId: linkedFanDesc.id, ...(linkedFanDesc.meta.fan ? { linkedFanSpeeds: linkedFanDesc.meta.fan.speeds } : {}) } : {}),
       ...(opening ? { opening } : {}),
       addAnimation: (a) => this.loop.addAnimation(a),
       invalidate: () => this.loop.invalidate(),
