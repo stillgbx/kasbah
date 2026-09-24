@@ -18,7 +18,7 @@ import { DECOR_LAYER, LAMP_LAYER, SITE_DECOR_LAYER } from './core/layers'
 import { createPostPipeline, detectQuality, gpuName, PIXEL_RATIO, tiltBlurFactor, toneMappingOf, type EffectiveQuality, type PostPipeline, type RenderQuality } from './core/post'
 import { dayFactor, fogDistance, sunDirection, type SceneAmbience } from './core/ambience'
 import { Precipitation } from './effects/precipitation'
-import { makeWaterAlive, type WaterStrength } from './effects/water'
+import { createWaterUniforms, makeWaterAlive, setWaterSun, setWaterTint, WaterCaustics, type WaterStrength } from './effects/water'
 import { defaultAmbience, defaultSceneTheme, rolesOf, styleById, type GlowLook, type PostLook, type RenderStyle, type StyleLook } from './styles'
 import { applyTuning, NEUTRAL_TUNING, type SceneTuning } from './styles/tuning'
 import { buildHouse, buildLevel, buildRoofMesh, type HouseNodes, type LevelNodes } from './builders/buildHouse'
@@ -302,9 +302,11 @@ export class HouseScene {
   /**
    * L'eau vivante (`effects/water.ts`) : un temps PARTAGÉ par la surface et le fond — crêtes et
    * caustiques battent ensemble —, la force de chacun, et de quoi retirer l'animation. Les deux
-   * matériaux sont patchés une fois pour toutes ; c'est la force qui dit si l'eau bouge.
+   * matériaux sont patchés une fois pour toutes ; c'est la force qui dit si l'eau bouge. La carte
+   * des caustiques n'existe qu'avec un renderer (pas en headless).
    */
-  private waterTime = { value: 0 }
+  private readonly water = createWaterUniforms()
+  private caustics: WaterCaustics | null = null
   private readonly waterStrength: { surface: WaterStrength; basin: WaterStrength }
   private stopWater: (() => void) | null = null
   /** Direction d'où vient la lumière du jour, monde three. Relue à chaque changement d'ambiance. */
@@ -442,8 +444,8 @@ export class HouseScene {
     this.sunDir = sunDirection(this.ambience)
     this.materials = createMaterials(this.theme, this.look)
     this.waterStrength = {
-      surface: makeWaterAlive(this.materials.zones.pool, 'surface', this.waterTime),
-      basin: makeWaterAlive(this.materials.poolBasin, 'basin', this.waterTime),
+      surface: makeWaterAlive(this.materials.zones.pool, 'surface', this.water),
+      basin: makeWaterAlive(this.materials.poolBasin, 'basin', this.water),
     }
     // Voir `render()` : les matrices monde se mettent à jour une fois par image, pas une fois par passe.
     this.scene.matrixWorldAutoUpdate = false
@@ -465,6 +467,7 @@ export class HouseScene {
     // déprécié et retombe sur du PCF DUR (bords crénelés) avec un avertissement en console.
     // VSM floute nativement, piloté par `shadow.radius` / `shadow.blurSamples`.
     if (this.renderer) { this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = VSMShadowMap }
+    if (this.renderer) { this.caustics = new WaterCaustics(this.water); this.water.caustics.value = this.caustics.texture }
     this.applySky()
     this.applyQuality()
     this.labelRenderer = deps.labelLayer ? (deps.createLabelRenderer ?? ((el) => new CSS2DRenderer({ element: el })))(deps.labelLayer) : null
@@ -2799,13 +2802,15 @@ export class HouseScene {
   private syncWater(): void {
     const flow = this.look.surfaces.zones.pool.flow ?? 1
     this.waterStrength.surface.value = flow
+    setWaterTint(this.water, this.theme.zones.pool)
+    setWaterSun(this.water, this.sunDir)
     this.waterStrength.basin.value = flow * (0.25 + 0.75 * dayFactor(this.ambience))
     const wanted = flow > 0 && this.quality !== 'low' && this.poolInView()
     if (wanted === (this.stopWater !== null)) return
     if (!wanted) { this.stopWater?.(); this.stopWater = null; return }
     this.stopWater = this.loop.addAnimation({
       hz: WATER_HZ,
-      step: (_now, dtS) => { this.waterTime.value += dtS; return true },
+      step: (_now, dtS) => { this.water.time.value += dtS; return true },
     })
   }
 
@@ -3016,6 +3021,8 @@ export class HouseScene {
     // Les compteurs de three se remettent à zéro à chaque `render()` : avec plusieurs passes par
     // image, il faut les tenir nous-mêmes pour lire un total d'IMAGE et non de dernière passe.
     if (this.renderer) { this.renderer.info.autoReset = false; this.renderer.info.reset() }
+    // les caustiques d'abord : le fond du bassin les lit dans cette image-ci
+    if (this.renderer) this.caustics?.update(this.renderer)
     // Avec une chaîne d'effets, c'est elle qui appelle notre rendu (par `draw`) puis ses passes ;
     // sans elle, on dessine droit à l'écran.
     // Seules les images d'un geste SANS relevé d'ombres disent quelque chose de la machine au garde-fou.
@@ -3201,6 +3208,7 @@ export class HouseScene {
     this.clear()
     this.post?.dispose()
     disposeMaterials(this.materials)
+    this.caustics?.dispose()
     this.skyEnv?.dispose()
     this.renderer?.dispose()
     if (this.labelRenderer) this.labelRenderer.domElement.replaceChildren()

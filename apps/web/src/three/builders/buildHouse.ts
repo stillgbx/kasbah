@@ -1,9 +1,10 @@
 import type { BufferGeometry, Object3D } from 'three';
-import { BoxGeometry, Group, Mesh } from 'three'
+import { BoxGeometry, BufferAttribute, Group, Mesh } from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import type { HouseGeometry, LevelGeometry, OpeningRect, WallPrism } from '@kasbah/shared'
 import { buildDetails, buildRoofDetails, isGlazed } from './details'
 import type { MaterialSet } from './materials'
+import { WATER_DEPTH_ATTRIBUTE } from '../effects/water'
 import { alignedToLongestEdge, discWithHoles, extrudePolygon, extrudePolygonWithHoles, flatPolygon, flatRing, flatWithHoles, insetPolygon, planarFaces, planarFacesWithHoles } from './shapes'
 import { offsetPolygon } from '@kasbah/shared'
 
@@ -174,6 +175,11 @@ export function buildHouse(geometry: HouseGeometry, mats: MaterialSet, dressed?:
       // parois suivent ses bords, pas les axes du monde (une piscine tournée les avait en biais)
       const basin = new Mesh(alignedToLongestEdge(z.polygon, (p) => extrudePolygon(p, z.z - POOL_DEPTH, z.z + 0.012)), mats.poolBasin)
       basin.name = `pool:basin:${z.zoneId}`
+      // la profondeur de chaque sommet sous la lame : le shader en tire le chemin de la lumière dans l'eau
+      const pos = basin.geometry.getAttribute('position')
+      const depth = new Float32Array(pos.count)
+      for (let i = 0; i < pos.count; i++) depth[i] = z.z - POOL_WATER_DROP - pos.getZ(i)
+      basin.geometry.setAttribute(WATER_DEPTH_ATTRIBUTE, new BufferAttribute(depth, 1))
       const water = new Mesh(alignedToLongestEdge(insetPolygon(z.polygon, 0.005), (p) => flatPolygon(p, z.z - POOL_WATER_DROP)), mat)
       water.name = `zone:${z.zoneId}`
       water.userData = { role: 'zone', zoneId: z.zoneId, material: mat }

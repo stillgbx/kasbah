@@ -25,7 +25,7 @@ import { yawToRad } from '../lib/orientation'
 import { HouseScene } from './HouseScene'
 import type { Animation } from './core/renderLoop'
 import { Precipitation } from './effects/precipitation'
-import { makeWaterAlive } from './effects/water'
+import { createWaterUniforms, makeWaterAlive } from './effects/water'
 
 /** La cadence que `HouseScene` demande pour l'eau (`WATER_HZ`) — répétée ici, le test la vérifie. */
 const WATER_HZ_TEST = 10
@@ -2262,9 +2262,10 @@ const POOL_CENTER = new Vector3(18, 0, -4)
 describe('eau vivante', () => {
   it('injecte ses ondes et ses caustiques aux points que three lui laisse', () => {
     const mats = createMaterials(defaultSceneTheme(), defaultLook())
-    const time = { value: 0 }
+    const water = createWaterUniforms()
+    const time = water.time
     const patch = (mat: MeshStandardMaterial, role: 'surface' | 'basin') => {
-      const strength = makeWaterAlive(mat, role, time)
+      const strength = makeWaterAlive(mat, role, water)
       const shader = { uniforms: {} as Record<string, unknown>, vertexShader: ShaderLib.physical.vertexShader, fragmentShader: ShaderLib.physical.fragmentShader }
       mat.onBeforeCompile(shader as never, null as never)
       return { shader, strength }
@@ -2279,8 +2280,14 @@ describe('eau vivante', () => {
     // jour où une version en déplace un (le patch échouerait sinon en silence, eau figée)
     expect(surface.shader.vertexShader).toContain('vWaterPos = (modelMatrix')
     expect(surface.shader.fragmentShader).toContain('kasbahWaveGrad(vWaterPos.xz')
-    expect(surface.shader.fragmentShader).not.toContain('totalEmissiveRadiance += diffuseColor')
-    expect(basin.shader.fragmentShader).toContain('totalEmissiveRadiance += diffuseColor')
+    expect(surface.shader.fragmentShader).toContain('waterFresnel')
+    // le fond : caustiques sur la lumière directe, puis absorption par le chemin dans l'eau
+    expect(basin.shader.uniforms.uWaterCaustics).toBe(water.caustics)
+    expect(basin.shader.uniforms.uWaterRefracted).toBe(water.refracted)
+    expect(basin.shader.vertexShader).toContain('vWaterDepth = waterDepth')
+    expect(basin.shader.fragmentShader).toContain('reflectedLight.directDiffuse *= mix(1.0, caustic')
+    expect(basin.shader.fragmentShader).toMatch(/outgoingLight = outgoingLight \* waterT[\s\S]*#include <opaque_fragment>/)
+    expect(surface.shader.fragmentShader).not.toContain('waterT')
     // deux programmes distincts, et distincts de tout matériau standard aux mêmes réglages
     expect(mats.zones.pool.customProgramCacheKey!()).not.toBe(mats.poolBasin.customProgramCacheKey!())
   })
