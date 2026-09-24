@@ -85,8 +85,8 @@ const CLOSURE_STATES = ['core:ClosureState', 'core:DeploymentState'] as const
 
 /**
  * L'appareil renvoie-t-il une position réelle ? On lit les états LIVE et non
- * `definition.states` : l'API locale renvoie cette liste VIDE pour tous les appareils (vérifié sur
- * firmware 2026.3.3-7), alors que le tableau `states` porte une douzaine d'états pour un moteur
+ * `definition.states` : l'API locale renvoie cette liste VIDE pour la plupart des appareils (relevé
+ * sur firmware 2026.3.3-7 ; les volets solaires font exception), alors que le tableau `states` porte une douzaine d'états pour un moteur
  * io-homecontrol et reste STRICTEMENT VIDE pour la radio RTS, unidirectionnelle. C'est donc lui
  * qui distingue les deux, sans avoir à énumérer des modèles ni à lire le préfixe du deviceURL.
  */

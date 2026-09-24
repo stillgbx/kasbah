@@ -165,6 +165,32 @@ describe('tahoma plugin with solar shutters', () => {
     expect(saved.length).toBeLessThanOrEqual(3)
   })
 
+  it('recovers from a startup probe that fell during a box restart', async () => {
+    // relevé le 2026-09-24 : la box coupe toutes ses connexions (ECONNRESET) le temps de redémarrer ;
+    // une sonde `/apiVersion` tombée à ce moment ne doit pas laisser « activez le mode développeur »
+    let probes = 0
+    const fetchImpl = vi.fn<FetchLike>(async (url) => {
+      const path = url.replace(/^https:\/\/[^/]+\/enduser-mobile-web\/1\/enduserAPI/, '')
+      if (path === '/apiVersion' && probes++ === 0) throw new Error('read ECONNRESET')
+      if (path === '/setup') return json(SETUP)
+      if (path === '/events/register') return json({ id: 'l1' })
+      return json([])
+    })
+    const ctx: PluginContext = {
+      pluginId: 'tahoma', logger: pino({ level: 'silent' }), clock: new ManualClock(0), signal: new AbortController().signal,
+      config: tahomaConfigSchema.parse({ TAHOMA_HOST: 'box', TAHOMA_TOKEN: 't', TAHOMA_QUIET_FILE: '' }),
+      emitState: vi.fn(), setAvailable: vi.fn(), emitDevices: vi.fn(), emitScenes: vi.fn(), emitSceneState: vi.fn(), emitEvent: vi.fn(),
+      parts: {}, site: { lat: 0, lon: 0, alt: 0 },
+    }
+    const plugin = createTahomaPlugin({ fetchImpl, lightHistoryStore: { load: async () => null, save: async () => {} } })
+    await plugin.init(ctx)
+    expect(plugin.health!()).toMatchObject({ status: 'error', detail: expect.stringContaining('developer mode') })
+    await plugin.discover()                                 // la box est revenue
+    await plugin.start()
+    expect(plugin.health!()).toMatchObject({ status: 'ok' })
+    await plugin.stop()
+  })
+
   it('refuses quiet mode on a motor without linear speed', async () => {
     const { plugin } = await started()
     await expect(plugin.execute('io.1234-5678-9012.11110001', { type: 'cover.set_quiet', on: true })).rejects.toMatchObject({ code: 'UNSUPPORTED_COMMAND' })

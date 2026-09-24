@@ -101,7 +101,12 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
   let listenerId: string | null = null
   let poller: { stop(): void } | null = null
   let protocolVersion: string | undefined
-  /** L'API locale a répondu au moins une fois : le mode développeur est donc bien actif. */
+  /**
+   * L'API locale a répondu au moins une fois : le mode développeur est donc bien actif. Posé par la
+   * sonde de `init` ET par toute réponse réussie ensuite : sans ça, une sonde tombée pendant un
+   * redémarrage de la box (connexions coupées, relevé le 2026-09-24 à 8 h) laissait « activez le
+   * mode développeur » affiché pour de bon, alors que la suite fonctionnait.
+   */
   let localApiUp = false
   let lastError: string | null = null
   let needsResync = false
@@ -137,6 +142,7 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
     }
     entries = next
     sensors = nextSensors
+    localApiUp = true
     if (skipped.length) log().debug({ skipped }, 'TaHoma devices ignored (not covers)')
     lastError = null
   }
@@ -242,6 +248,7 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
       if (needsResync) { needsResync = false; await resync(true) }
       // une heure s'ouvre aussi sans trame (la nuit, la luminance ne change pas) : on l'écrit quand même
       if (history.advance(ctx!.clock.now())) await saveHistory()
+      localApiUp = true
       lastError = null
     } catch (err) {
       lastError = (err as Error).message

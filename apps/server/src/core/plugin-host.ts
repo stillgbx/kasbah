@@ -1,6 +1,7 @@
 import { DEFAULT_PLUGIN_SETTINGS, parseDeviceId, parseSceneId, type Command, type PluginHealth, type PluginInfo, type PluginSettings, type SceneRecall, type SceneUpdate, type DeviceConsumption, type DeviceJournal, type WeatherForecast } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import type { Logger } from 'pino'
+import { createBackoff, type Backoff } from './backoff'
 import type { Bus } from './bus'
 import type { Clock } from './clock'
 import { PluginError, type DevicePlugin, type PluginContext, type PluginFactory, type PluginSite } from './plugin'
@@ -27,7 +28,12 @@ export interface PluginHostOptions {
   /** Source des variables d'environnement (process.env par défaut). */
   envSource?: NodeJS.ProcessEnv
   commandTimeoutMs?: number
+  /** Premier délai avant de retenter un démarrage raté (doublé à chaque échec, plafonné à 10 min). */
+  retryInitialMs?: number
 }
+
+/** Plafond des nouvelles tentatives : une box absente pour la nuit ne doit pas être sondée en boucle. */
+const RETRY_MAX_MS = 10 * 60_000
 
 interface Slot {
   plugin: DevicePlugin
@@ -37,6 +43,9 @@ interface Slot {
   config: Record<string, unknown> | null
   /** Sous-items avec lesquels le plugin TOURNE : en changer demande un redémarrage. */
   appliedParts: Record<string, boolean> | null
+  /** Nouvelle tentative de démarrage programmée après un échec (voir `startOne`). */
+  retry: unknown
+  retryBackoff: Backoff
 }
 
 export class PluginHost {
@@ -49,7 +58,10 @@ export class PluginHost {
     for (const [id, factory] of Object.entries(opts.factories)) {
       const plugin = factory()
       const parsed = plugin.configSchema.safeParse(opts.envSource ?? process.env)
-      const slot: Slot = { plugin, ctrl: new AbortController(), ctx: null, status: { status: 'disabled' }, config: null, appliedParts: null }
+      const slot: Slot = {
+        plugin, ctrl: new AbortController(), ctx: null, status: { status: 'disabled' }, config: null, appliedParts: null,
+        retry: null, retryBackoff: createBackoff({ initialMs: opts.retryInitialMs ?? 15_000, maxMs: RETRY_MAX_MS, jitter: 0.1 }),
+      }
       if (parsed.success) slot.config = parsed.data
       else {
         const detail = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')
@@ -155,11 +167,32 @@ export class PluginHost {
       this.opts.registry.register(id, descriptors)
       await slot.plugin.start()
       slot.status = { status: 'ok' }
+      slot.retryBackoff.reset()
       log.info({ devices: descriptors.length }, 'plugin started')
     } catch (err) {
-      slot.status = { status: 'error', detail: (err as Error).message }
-      log.error({ err }, 'plugin failed to start')
+      const message = (err as Error).message
+      // Un fabricant injoignable AU DÉMARRAGE (box qui redémarre, réseau pas encore monté) laissait
+      // le plugin en erreur jusqu'au prochain redémarrage du serveur — relevé le 2026-09-24 sur la
+      // TaHoma. On retente donc, de plus en plus espacé. Sauf un appairage manquant ou refusé : là,
+      // c'est à l'utilisateur d'agir, et le réessayer ne ferait que marteler le fabricant.
+      if (err instanceof PluginError && err.code === 'NEEDS_PAIRING') {
+        slot.status = { status: 'error', detail: message }
+        log.error({ err }, 'plugin failed to start')
+        return
+      }
+      const delay = slot.retryBackoff.next()
+      slot.status = { status: 'error', detail: `${message} (retry in ${Math.round(delay / 1000)} s)` }
+      log.error({ err, retryInMs: delay }, 'plugin failed to start, will retry')
+      slot.retry = this.opts.clock.setTimeout(() => { slot.retry = null; void this.retryStart(id) }, delay)
     }
+  }
+
+  /** Nouvelle tentative après un échec : on repart d'un plugin arrêté proprement, s'il est toujours voulu. */
+  private async retryStart(id: string): Promise<void> {
+    const slot = this.slots.get(id)
+    if (!slot || !this.isEnabled(id) || slot.status.status !== 'error') return
+    await this.stopOne(id)
+    await this.startOne(id)
   }
 
   /** Redémarre un plugin (ex. Hue après appairage). Éteint dans la maison, il le reste. */
@@ -278,7 +311,10 @@ export class PluginHost {
 
   private async stopOne(id: string): Promise<void> {
     const slot = this.slots.get(id)
-    if (!slot || !slot.ctx) return
+    if (!slot) return
+    // arrêté, éteint ou redémarré à la main : une tentative programmée n'a plus lieu d'être
+    if (slot.retry !== null) { this.opts.clock.clearTimeout(slot.retry); slot.retry = null }
+    if (!slot.ctx) return
     slot.ctrl.abort()
     try { await withTimeout(slot.plugin.stop(), 5000, this.opts.clock, `stop ${id}`) }
     catch (err) { this.logger.warn({ plugin: id, err }, 'plugin stop failed') }

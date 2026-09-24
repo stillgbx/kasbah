@@ -28,8 +28,8 @@ export const overkizDefinitionSchema = z.looseObject({
   uiClass: z.string().optional(),
   widgetName: z.string().optional(),
   commands: z.array(z.looseObject({ commandName: z.string() })).default([]),
-  // `definition.states` existe dans la reponse mais l'API locale la renvoie toujours vide :
-  // les etats exploitables sont dans `OverkizDevice.states`.
+  // `definition.states` n'est pas une source fiable (vide pour la plupart des appareils relevés,
+  // rempli pour les volets solaires) : les etats exploitables sont dans `OverkizDevice.states`.
 })
 export type OverkizDefinition = z.infer<typeof overkizDefinitionSchema>
 
