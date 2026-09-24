@@ -143,6 +143,14 @@ describe('radio plugin', () => {
     expect(directory.click).toHaveBeenCalledWith(FRANCEINFO.id)
   })
 
+  it('remembers the station each player was given, for its quality', async () => {
+    const { app } = await boot()
+    expect((await app.inject({ method: 'GET', url: '/api/plugins/radio/playing' })).json()).toEqual({ playing: [] })
+    await app.inject({ method: 'POST', url: '/api/plugins/radio/play', payload: { deviceId: 'sonos:bureau', stationId: FRANCEINFO.id } })
+    const res = await app.inject({ method: 'GET', url: '/api/plugins/radio/playing' })
+    expect(res.json()).toEqual({ playing: [{ deviceId: 'sonos:bureau', station: expect.objectContaining({ id: FRANCEINFO.id, name: 'franceinfo:' }) }] })
+  })
+
   it('refuses a player without play_url and an unknown station', async () => {
     const { app, execute } = await boot()
     const tvRes = await app.inject({ method: 'POST', url: '/api/plugins/radio/play', payload: { deviceId: 'cast:tv', stationId: FRANCEINFO.id } })

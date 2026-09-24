@@ -37,6 +37,12 @@ export function createRadioPlugin(deps: RadioPluginDeps = {}): DevicePlugin {
   let store: FavoritesStore | null = null
   let favorites: Station[] = []
   let lastError: string | null = null
+  /**
+   * La station lancée sur chaque lecteur : le flux va de la radio à l'enceinte, qui ne dit ni codec
+   * ni débit — l'UI tient la qualité de l'annuaire. Pas d'effacement : l'UI ne s'en sert que tant
+   * que le lecteur publie un direct au nom de la station (il a pu passer à autre chose depuis).
+   */
+  const playing = new Map<string, Station>()
 
   const dir = () => {
     if (!directory) throw new PluginError('DEVICE_UNAVAILABLE', 'radio plugin is not started')
@@ -93,6 +99,8 @@ export function createRadioPlugin(deps: RadioPluginDeps = {}): DevicePlugin {
 
       app.get('/favorites', async () => ({ stations: favorites }))
 
+      app.get('/playing', async () => ({ playing: [...playing].map(([deviceId, station]) => ({ deviceId, station })) }))
+
       app.put<{ Params: { id: string }; Body: unknown }>('/favorites/:id', async (req, reply) => {
         const body = stationSchema.safeParse(req.body)
         if (!body.success || body.data.id !== req.params.id) return sendError(reply, 400, 'INVALID_BODY', 'a station whose id matches the path is required')
@@ -145,6 +153,7 @@ export function createRadioPlugin(deps: RadioPluginDeps = {}): DevicePlugin {
           ...(station.favicon ? { artUrl: station.favicon } : {}),
           live: true,
         })
+        playing.set(deviceId, station)
         // une station ajoutée à la main n'existe pas dans l'annuaire : rien à lui signaler
         if (!station.id.startsWith('custom-')) void directory?.click(station.id)
         ctx?.logger.info({ deviceId, station: station.name }, 'radio play')

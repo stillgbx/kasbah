@@ -331,6 +331,7 @@ export function createHttpTransport(base = ''): Transport {
       { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
       (j) => j as { ok: true; station: RadioStation },
     ),
+    radioPlaying: () => request(`${base}/api/plugins/radio/playing`, undefined, (j) => j as { playing: { deviceId: string; station: RadioStation }[] }),
     forgetDevice: (deviceId) => {
       const { pluginId, externalId } = parseDeviceId(deviceId)
       return request(

@@ -2,9 +2,10 @@
 import { computed, onBeforeUnmount, ref, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CommandInput, DeviceEntry, StateFor } from '@kasbah/shared'
-import type { MusicRepeat, MusicStreamQuality } from '../../api/transport'
+import type { MusicRepeat, MusicStreamQuality, RadioStation } from '../../api/transport'
 import { formatClock, useMediaPosition, useSeekHold } from '../../composables/useMediaPosition'
 import { deviceIcon } from '../../lib/deviceIcons'
+import { streamQuality } from '../../lib/streamQuality'
 import { isLocalPlayer } from '../../stores/localPlayer'
 import ArtThumb from '../ui/ArtThumb.vue'
 import ExplicitBadge from '../ui/ExplicitBadge.vue'
@@ -37,6 +38,8 @@ const props = defineProps<{
     quality?: MusicStreamQuality | null
     queue?: { length: number; index: number; repeat: MusicRepeat } | null
   } | null
+  /** La dernière radio lancée sur ce lecteur (plugin radio) : sa qualité, tant qu'il en joue le direct. */
+  station?: RadioStation | null
   pending: { title: string; artists: string[]; artUrl: string | null; explicit?: boolean } | null
   transferMode: boolean
   canTransfer: boolean
@@ -110,28 +113,10 @@ const subtitle = computed(() => {
 // une taille, donc une durée et un déplacement), et en info-bulle ce que YouTube nous a donné pour
 // le produire. Une ligne, sous le nom du lecteur : on veut pouvoir juger la chaîne d'un coup d'œil,
 // pas ouvrir le journal du serveur.
-const MIME_LABELS: Record<string, string> = { 'audio/mpeg': 'MP3', 'audio/mp4': 'AAC', 'audio/webm': 'Opus', 'audio/ogg': 'Opus' }
-const quality = computed(() => ours.value?.quality ?? null)
-const qualityLine = computed(() => {
-  const q = quality.value
-  if (!q) return NBSP
-  const label = MIME_LABELS[q.mime] ?? q.mime
-  return q.bitrateKbps ? `${label} ${q.bitrateKbps}${NBSP}kb/s` : label
-})
-const qualityHint = computed(() => {
-  const q = quality.value
-  if (!q) return undefined
-  const parts = [
-    ...(q.sampleRateHz ? [`${q.sampleRateHz / 1000}${NBSP}kHz`] : []),
-    ...(q.channels ? [q.channels === 2 ? t('music.stereo') : `${q.channels} ch`] : []),
-  ]
-  if (q.lengthBytes) parts.push(t('music.megabytes', { size: (q.lengthBytes / 1_000_000).toFixed(1) }))
-  if (q.source) {
-    const src = [q.source.ext?.toUpperCase(), q.source.abrKbps ? `${q.source.abrKbps}${NBSP}kb/s` : null].filter(Boolean).join(' ')
-    if (src) parts.push(t('music.streamSource', { format: src }))
-  }
-  return parts.join(' · ')
-})
+// Une radio, elle, va de la station à l'enceinte : sa qualité est celle que l'annuaire annonce.
+const quality = computed(() => streamQuality(t, ours.value?.quality, state.value, loaded.value ? props.station : null))
+const qualityLine = computed(() => quality.value?.label ?? NBSP)
+const qualityHint = computed(() => quality.value?.hint)
 
 // ---- position ------------------------------------------------------------------------------------
 const { position: rawPosition, duration: deviceDuration, hasPosition } = useMediaPosition(toRef(() => state.value))

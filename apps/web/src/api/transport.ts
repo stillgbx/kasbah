@@ -577,6 +577,8 @@ export interface Transport {
   radioAddCustom(body: { name: string; url: string }): Promise<{ stations: RadioStation[] }>
   /** Lance la radio en direct sur un lecteur (`play_url` marqué `live`). */
   radioPlay(body: { deviceId: string; stationId: string }): Promise<{ ok: true; station: RadioStation }>
+  /** La dernière station lancée sur chaque lecteur (sa qualité : l'enceinte ne la dit pas). */
+  radioPlaying(): Promise<{ playing: { deviceId: string; station: RadioStation }[] }>
   /**
    * Fait oublier un appareil au plugin qui le retenait (`meta.forgettable`), par convention
    * `DELETE /api/plugins/<plugin>/devices/<externalId>` : il quitte l'inventaire jusqu'à ce qu'il

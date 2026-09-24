@@ -106,7 +106,7 @@
   "media": {
     "summary": "{playing} playing out of {total}", "none": "No media player reported by the plugins.",
     "playing": "Playing", "paused": "Paused", "idle": "Idle", "on": "On screen", "off": "Off", "nothing": "Nothing playing", "relaying": "Sound from {name}",
-    "play": "Play", "playUrl": "Play a URL", "urlPlaceholder": "https://… (mp3, HLS…)", "next": "Next track", "previous": "Previous track", "mute": "Mute", "unmute": "Unmute", "volume": "Volume", "volumeUp": "Volume up", "volumeDown": "Volume down", "jumpBack": "Back {seconds} s", "jumpForward": "Forward {seconds} s", "seek": "Position in the track",
+    "play": "Play", "playUrl": "Play a URL", "urlPlaceholder": "https://… (mp3, HLS…)", "next": "Next track", "previous": "Previous track", "mute": "Mute", "unmute": "Unmute", "volume": "Volume", "volumeUp": "Volume up", "volumeDown": "Volume down", "jumpBack": "Back {seconds} s", "jumpForward": "Forward {seconds} s", "seek": "Position in the track", "musicPageHint": "Music page", "openInMusic": "Open",
     "classes": { "speaker": "Speaker", "tv": "TV", "display": "Smart display" }
   },
   "music": {
@@ -144,7 +144,8 @@
     "noFavorites": "No favorite station yet: add some with the star.", "empty": "No station found.", "unavailable": "The radio directory is not answering.",
     "addCustom": "Add a station", "customName": "Name", "customUrl": "Stream address (http…)", "customAdd": "Add", "customCancel": "Cancel", "customHint": "A station missing from the directory: paste its stream address (often given by its live player).",
     "addFavorite": "Add to favorites", "removeFavorite": "Remove from favorites", "play": "Listen to {name}", "live": "Live",
-    "noLocal": "Radio does not play in this browser yet: pick a speaker."
+    "noLocal": "Radio does not play in this browser yet: pick a speaker.",
+    "qualityHint": "Bitrate announced by the radio directory"
   },
   "ytmusic": {
     "unofficial": "Unofficial source — personal home use only",

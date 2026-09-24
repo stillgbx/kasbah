@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import type { DeviceDescriptor, StateFor } from '@kasbah/shared'
+import { setTransport } from '../../api'
+import type { Transport } from '../../api/transport'
 import { SEEK_HOLD_MIN_MS } from '../../composables/useMediaPosition'
 import MediaPlayerControl from './MediaPlayerControl.vue'
+
+vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn(() => Promise.resolve()) }) }))
 
 // Ce qu'un lecteur affiche quand il ne dit presque rien : appli native d'une TV Android (Prime Video),
 // direct sans durée, ou métadonnées en retard. Cas relevés en réel, voir le wiki 3_6_google-cast.
@@ -16,6 +20,8 @@ const base: StateFor<'media_player'> = { kind: 'media_player', updatedAt: 0, ava
 
 const times = (w: ReturnType<typeof mount>) => w.find('.now__times')
 const hidden = (w: ReturnType<typeof mount>, sel: string) => w.find(sel).classes().includes('now--hidden')
+// rangée de transport : répéter, précédent, −10 s, lecture, +10 s, suivant, stop
+const KEY = { repeat: 0, previous: 1, back: 2, play: 3, forward: 4, next: 5, stop: 6 } as const
 
 describe('MediaPlayerControl', () => {
   it('names the app when there is no title, without an endless waiting marker', () => {
@@ -30,7 +36,7 @@ describe('MediaPlayerControl', () => {
     const w = mount(MediaPlayerControl, { props: { descriptor, state: { ...base, nowPlaying: { title: '', source: 'Prime Video', positionS: 141.89, durationS: -0.001 } } } })
     expect(times(w).text()).toBe('2:21')                    // position seule, pas de total
     expect(times(w).text()).not.toContain('-')
-    expect(hidden(w, '.now__times')).toBe(false)            // les temps sont visibles
+    expect(w.findAll('.now__times > .now--hidden')).toHaveLength(0) // les temps sont visibles
     expect(hidden(w, '.now__seek')).toBe(true)              // le curseur, non : rien à parcourir
   })
 
@@ -40,27 +46,39 @@ describe('MediaPlayerControl', () => {
     expect(hidden(w, '.now__seek')).toBe(false)
   })
 
-  it('greys out previous / next / seek on a live stream, but not play-pause', () => {
+  it('greys out previous / next / jumps / repeat / seek on a live stream, but not play-pause nor stop', () => {
     // le direct de franceinfo : « précédent » y coupait le flux (SEEK à 0 côté plugin)
     const live = { descriptor, state: { ...base, nowPlaying: { title: 'franceinfo', source: 'Radio France', positionS: 38.2, live: true } } }
     const keys = mount(MediaPlayerControl, { props: live }).findAll('.v-btn')
-    expect(keys[0]!.attributes('disabled')).toBeDefined()             // précédent
-    expect(keys[1]!.attributes('disabled')).toBeUndefined()           // lecture / pause
-    expect(keys[2]!.attributes('disabled')).toBeDefined()             // suivant
+    for (const k of ['repeat', 'previous', 'back', 'forward', 'next'] as const) expect(keys[KEY[k]]!.attributes('disabled'), k).toBeDefined()
+    expect(keys[KEY.play]!.attributes('disabled')).toBeUndefined()    // lecture / pause
+    expect(keys[KEY.stop]!.attributes('disabled')).toBeUndefined()    // stop
     // un direct à durée (rare) ne se parcourt pas davantage
     const w = mount(MediaPlayerControl, { props: { descriptor, state: { ...live.state, nowPlaying: { ...live.state.nowPlaying, durationS: 3600 } } } })
     expect(w.find('.now__seek input').attributes('disabled')).toBeDefined()
   })
 
-  it('keeps previous and next active on an ordinary track', () => {
+  it('keeps previous, next and the 10 s jumps active on an ordinary track', () => {
     const keys = mount(MediaPlayerControl, { props: { descriptor, state: { ...base, nowPlaying: { title: 'Terracotta', positionS: 42.5, durationS: 187.2 } } } }).findAll('.v-btn')
-    for (const k of keys.slice(0, 3)) expect(k.attributes('disabled')).toBeUndefined()
+    for (const k of ['previous', 'back', 'play', 'forward', 'next', 'stop'] as const) expect(keys[KEY[k]]!.attributes('disabled'), k).toBeUndefined()
+    // sans flux Kasbah, pas de file : rien à répéter
+    expect(keys[KEY.repeat]!.attributes('disabled')).toBeDefined()
+  })
+
+  it('jumps 10 s from the shown position, clamped to the track', async () => {
+    const w = mount(MediaPlayerControl, { props: { descriptor, state: { ...base, playback: 'paused', nowPlaying: { title: 'Terracotta', positionS: 180, durationS: 187.2 } } } })
+    const keys = w.findAll('.v-btn')
+    await keys[KEY.back]!.trigger('click')
+    expect(w.emitted('command')?.[0]).toEqual([{ type: 'media_player.seek', positionS: 170 }])
+    await keys[KEY.forward]!.trigger('click')
+    await keys[KEY.forward]!.trigger('click')
+    expect(w.emitted('command')?.[2]).toEqual([{ type: 'media_player.seek', positionS: 187 }])
   })
 
   it('keeps the four lines of the block when nothing plays (rien ne doit bouger)', () => {
     const w = mount(MediaPlayerControl, { props: { descriptor, state: { ...base, playback: 'idle' } } })
     expect(times(w).exists()).toBe(true)
-    expect(hidden(w, '.now__times')).toBe(true)
+    expect(w.findAll('.now__times > .now--hidden')).toHaveLength(2)  // les deux temps
     expect(hidden(w, '.now__seek')).toBe(true)
   })
 
@@ -86,6 +104,54 @@ describe('MediaPlayerControl', () => {
       expect(times(w).text().startsWith('1:59')).toBe(true)
     } finally {
       vi.useRealTimers()
+    }
+  })
+
+  it('shows the quality of a Kasbah stream and lets its queue drive next and repeat', async () => {
+    vi.useFakeTimers()
+    const queue = { items: [], index: 0, repeat: 'once' as const }
+    const musicQueueNext = vi.fn(async () => queue)
+    const musicQueueRepeat = vi.fn(async () => queue)
+    setTransport({
+      musicSessions: async () => ({ sessions: [{
+        deviceId: 'google_cast:tv', source: 'ytmusic', id: 'abc', sid: 's1', durationS: 187,
+        quality: { mime: 'audio/mpeg', bitrateKbps: 192 }, queue: { length: 3, index: 0, repeat: 'off' },
+      }] }),
+      musicQueueNext, musicQueuePrevious: vi.fn(async () => queue), musicQueueRepeat,
+    } as unknown as Transport)
+    try {
+      const castable = { ...descriptor, capabilities: [...descriptor.capabilities, 'play_url' as const] }
+      const w = mount(MediaPlayerControl, { props: { descriptor: castable, state: { ...base, nowPlaying: { title: 'Terracotta', positionS: 42.5, durationS: 187.2 } } } })
+      await vi.waitFor(() => expect(w.find('.now__quality').text()).toBe('MP3 192 kb/s'))
+      const keys = w.findAll('.v-btn')
+      expect(keys[KEY.repeat]!.attributes('disabled')).toBeUndefined()
+      await keys[KEY.next]!.trigger('click')
+      expect(musicQueueNext).toHaveBeenCalledWith('google_cast:tv')
+      expect(w.emitted('command')).toBeUndefined()   // la file saute, pas l'enceinte
+      await keys[KEY.repeat]!.trigger('click')
+      expect(musicQueueRepeat).toHaveBeenCalledWith('google_cast:tv', 'once')
+    } finally {
+      setTransport(null)
+      vi.useRealTimers()
+    }
+  })
+
+  it("shows a radio's quality from the directory while the player plays that station live", async () => {
+    const station = { id: 'fi', name: 'France Info', url: 'http://x/fi.mp3', tags: [], codec: 'MP3', bitrateKbps: 128 }
+    setTransport({
+      musicSessions: async () => ({ sessions: [] }),
+      radioPlaying: async () => ({ playing: [{ deviceId: 'google_cast:tv', station }] }),
+    } as unknown as Transport)
+    try {
+      const castable = { ...descriptor, capabilities: [...descriptor.capabilities, 'play_url' as const] }
+      const live = { ...base, nowPlaying: { title: 'France Info', artist: 'France', positionS: 30, live: true } }
+      const w = mount(MediaPlayerControl, { props: { descriptor: castable, state: live } })
+      await vi.waitFor(() => expect(w.find('.now__quality').text()).toBe('MP3 128 kb/s'))
+      // passé à autre chose : la station ne dit plus rien de ce qu'il joue
+      await w.setProps({ state: { ...live, nowPlaying: { ...live.nowPlaying, title: 'FIP' } } })
+      expect(w.find('.now__quality').text()).toBe('')
+    } finally {
+      setTransport(null)
     }
   })
 })

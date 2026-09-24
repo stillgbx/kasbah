@@ -16,7 +16,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import type { CommandInput, DeviceEntry } from '@kasbah/shared'
 import { getTransport } from '../api'
-import type { YtmusicAlbum, YtmusicArtist, YtmusicExplore, YtmusicExploreCategory, YtmusicExploreShelf, YtmusicPlaylist, MusicQueue, MusicTrack, MusicRepeat, MusicSession, YtmusicTrack } from '../api/transport'
+import type { YtmusicAlbum, YtmusicArtist, YtmusicExplore, YtmusicExploreCategory, YtmusicExploreShelf, YtmusicPlaylist, MusicQueue, MusicTrack, MusicRepeat, MusicSession, RadioStation, YtmusicTrack } from '../api/transport'
 import PageHeader from '../components/layout/PageHeader.vue'
 import ChipRow from '../components/music/ChipRow.vue'
 import ListeningSessions from '../components/music/ListeningSessions.vue'
@@ -210,6 +210,9 @@ const selectedName = computed(() => selected.value ? (house.houseDeviceFor(selec
 /** Les lecteurs qui jouent en ce moment un flux servi par Kasbah, par id plugin — transférables, déplaçables. */
 const ourSessions = ref<Map<string, MusicSession>>(new Map())
 const selectedSession = computed(() => (localSelected.value ? local.barSession : selected.value ? ourSessions.value.get(selected.value.descriptor.id) ?? null : null))
+/** La dernière radio lancée sur chaque lecteur : la barre en tire la qualité (l'enceinte ne la dit pas). */
+const radioStations = ref<Map<string, RadioStation>>(new Map())
+const selectedStation = computed(() => (selected.value ? radioStations.value.get(selected.value.descriptor.id) ?? null : null))
 /**
  * Le titre que JOUE le lecteur choisi (servi par nous), pour le signaler dans les listes : surligné,
  * et un point qui pulse tant qu'il joue (immobile en pause). Rien si le lecteur est au repos.
@@ -253,6 +256,13 @@ async function refreshSessions(): Promise<void> {
     const r = await getTransport().musicSessions()
     ourSessions.value = new Map(r.sessions.map((s) => [s.deviceId, s]))
   } catch { /* plugin absent ou serveur muet : rien à transférer */ }
+  // la station n'a de sens que pour un direct : inutile de la demander le reste du temps
+  const st = selected.value?.state
+  if (st?.kind !== 'media_player' || !st.nowPlaying?.live) return
+  try {
+    const r = await getTransport().radioPlaying()
+    radioStations.value = new Map(r.playing.map((p) => [p.deviceId, p.station]))
+  } catch { /* plugin radio absent : pas de qualité à montrer */ }
 }
 let sessionsTicker: ReturnType<typeof setInterval> | undefined
 // Le serveur enchaîne tout seul : quand le lecteur change de titre ou d'état, relire les sessions
@@ -1103,7 +1113,7 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
                          @command="panelCommand" />
     </div>
 
-    <MusicPlayerBar :entry="selected" :name="selectedName" :session="selectedSession" :pending="pendingTrack"
+    <MusicPlayerBar :entry="selected" :name="selectedName" :session="selectedSession" :station="selectedStation" :pending="pendingTrack"
                     :transfer-mode="transferMode" :can-transfer="canTransfer" :transfer-busy="!!transferBusyId" :queue-open="queueOpen"
                     @command="barCommand" @seek="barSeek" @transfer="transferMode = true" @cancel-transfer="transferMode = false"
                     @repeat="setRepeat" @toggle-queue="queueOpen = !queueOpen" />
