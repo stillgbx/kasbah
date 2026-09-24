@@ -56,6 +56,38 @@ function mockConsumption(deviceId: string, now = Date.now()): DeviceConsumption 
 }
 
 /**
+ * Historique de luminosité plausible (courbe de soleil, nuages pseudo-aléatoires mais stables d'un
+ * appel à l'autre), comme `mockConsumption` : 48 heures, 400 jours, les mois déduits des jours. Les
+ * 6 dernières heures d'hier restent ABSENTES, pour voir le tiret d'un pas non mesuré.
+ */
+function mockLightHistory(now = Date.now()) {
+  const sun = (t: number) => {
+    const d = new Date(t)
+    const h = d.getHours() + d.getMinutes() / 60
+    const season = 0.55 + 0.45 * Math.cos((2 * Math.PI * (d.getMonth() - 5.5)) / 12)
+    const cloud = 0.5 + 0.5 * Math.abs(Math.sin(Math.floor(t / DAY_MS) * 12.9898))
+    return h <= 6 || h >= 20 ? 0 : Math.round(40_000 * season * cloud * Math.sin((Math.PI * (h - 6)) / 14))
+  }
+  const hour0 = Math.floor(now / HOUR_MS) * HOUR_MS
+  const hourly = Array.from({ length: 48 }, (_, i) => hour0 - (47 - i) * HOUR_MS)
+    .filter((t) => (hour0 - t) / HOUR_MS < 18 || (hour0 - t) / HOUR_MS >= 24)
+    .map((t) => ({ t, maxLux: sun(t + HOUR_MS / 2) }))
+  const day0 = new Date(now); day0.setHours(0, 0, 0, 0)
+  const daily = Array.from({ length: 400 }, (_, i) => {
+    const d = new Date(day0); d.setDate(d.getDate() - (399 - i))
+    return { t: d.getTime(), maxLux: sun(d.getTime() + 13 * HOUR_MS) }
+  })
+  const monthly: { t: number; maxLux: number }[] = []
+  for (const p of daily) {
+    const d = new Date(p.t); const m = new Date(d.getFullYear(), d.getMonth(), 1).getTime()
+    const last = monthly[monthly.length - 1]
+    if (last && last.t === m) last.maxLux = Math.max(last.maxLux, p.maxLux)
+    else monthly.push({ t: m, maxLux: p.maxLux })
+  }
+  return { hourly, daily, monthly }
+}
+
+/**
  * Automatisations de démonstration du mode maquette : une horaire au soleil, une au calendrier,
  * et une qui vise un appareil que la simulation n'a pas — pour voir la pastille « incomplète ».
  */
@@ -254,6 +286,7 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     async petkitLogout() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no PetKit account in mock mode') },
     async melcloudSystem() { return { units: [], pollMs: 0 } },
     async melcloudHistory() { return { hourly: [], pollMs: 0 } },
+    async lightHistory() { return mockLightHistory() },
     async irobotStatus() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no iRobot account in mock mode') },
     async irobotLogin() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no iRobot account in mock mode') },
     async irobotLogout() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no iRobot account in mock mode') },

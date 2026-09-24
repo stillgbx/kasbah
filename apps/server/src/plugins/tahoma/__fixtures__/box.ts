@@ -109,6 +109,51 @@ export const RTS_GATE = {
   states: [],
 }
 
+/**
+ * Volet SOLAIRE (relevé 2026-09-24, 11 sur 16 volets io) : batterie, et vitesse lente
+ * (`setClosureAndLinearSpeed`, signature `p1,*p2`) — le « mode discret » de l'appli.
+ */
+export const SOLAR_SHUTTER = {
+  deviceURL: `io://${PID}/44440001#1`,
+  label: 'Volet bureau',
+  controllableName: 'io:DynamicRollerShutterIOComponent',
+  available: true,
+  enabled: true,
+  definition: {
+    uiClass: 'RollerShutter',
+    commands: [
+      { commandName: 'open' }, { commandName: 'close' }, { commandName: 'stop' }, { commandName: 'my' },
+      { commandName: 'setClosure' }, { commandName: 'setMemorized1Position' },
+      { commandName: 'setClosureAndLinearSpeed', nparams: 1, paramsSig: 'p1,*p2' },
+      { commandName: 'setPositionAndLinearSpeed', nparams: 1, paramsSig: 'p1,*p2' },
+    ],
+  },
+  states: [
+    { name: 'core:ClosureState', type: 1, value: 100 },
+    { name: 'core:MovingState', type: 6, value: false },
+    { name: 'core:BatteryLevelState', type: 1, value: 100 },
+    { name: 'core:StatusState', type: 3, value: 'available' },
+  ],
+}
+
+/**
+ * Son panneau, que la box présente comme un capteur de lumière : même nœud radio (`#2`), MÊME
+ * libellé que le volet, aucune commande.
+ */
+export const SUN_SENSOR = {
+  deviceURL: `io://${PID}/44440001#2`,
+  label: 'Volet bureau',
+  controllableName: 'io:SunEnergyActuatorSensor',
+  available: true,
+  enabled: true,
+  definition: { uiClass: 'LightSensor', widgetName: 'LuminanceSensor', type: 'SENSOR', commands: [] },
+  states: [
+    { name: 'core:StatusState', type: 3, value: 'available' },
+    { name: 'core:LuminanceState', type: 1, value: 1200 },
+    { name: 'core:SunEnergyState', type: 1, value: 0 },
+  ],
+}
+
 export const GATEWAY = {
   deviceURL: `internal://${PID}/#1`,
   label: 'TaHoma switch',
@@ -128,7 +173,7 @@ export const THERMOSTAT = {
   states: [{ name: 'core:TemperatureState', type: 2, value: 20.5 }],
 }
 
-export const DEVICES = [IO_SHUTTER, IO_VENETIAN, IO_AWNING, RTS_SHUTTER, RTS_GATE, GATEWAY, THERMOSTAT]
+export const DEVICES = [IO_SHUTTER, IO_VENETIAN, IO_AWNING, RTS_SHUTTER, RTS_GATE, SOLAR_SHUTTER, SUN_SENSOR, GATEWAY, THERMOSTAT]
 
 export const SETUP = { devices: DEVICES }
 

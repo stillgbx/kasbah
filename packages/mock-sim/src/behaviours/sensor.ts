@@ -12,6 +12,8 @@ export interface SensorOptions {
   initial: number
   tauS?: number
   noise?: number
+  /** Appareil principal dont ce capteur fait physiquement partie (`meta.linkedTo`). */
+  linkedTo?: string
 }
 
 export function sensor(externalId: string, o: SensorOptions): SimDevice<'sensor'> {
@@ -20,6 +22,7 @@ export function sensor(externalId: string, o: SensorOptions): SimDevice<'sensor'
   const dev: SimDevice<'sensor'> = {
     descriptor: descriptor(externalId, 'sensor', o.name, ['measure'], {
       manufacturer: 'Mock', sensor: { unit: o.unit, deviceClass: o.deviceClass, precision: p },
+      ...(o.linkedTo ? { linkedTo: o.linkedTo } : {}),
     }),
     state: { kind: 'sensor', updatedAt: 0, available: true, value: o.initial },
     tick(ctx) {
@@ -34,6 +37,11 @@ export function sensor(externalId: string, o: SensorOptions): SimDevice<'sensor'
 
 /** Capteurs prêts à l'emploi. */
 export const sensors = {
+  /** Panneau d'un volet solaire : la luminance suit l'ensoleillement (~40 000 lx en plein soleil). */
+  shutterLight: (id: string, name: string, coverId: string) => sensor(id, {
+    name, unit: 'lx', deviceClass: 'illuminance', precision: 0, initial: 0, tauS: 120, linkedTo: coverId,
+    target: (ctx) => Math.max(0, ctx.world.irradiance * 40_000),
+  }),
   outdoorTemp: (id: string, name: string) => sensor(id, {
     name, unit: '°C', deviceClass: 'temperature', initial: 18, tauS: 600, noise: 0.15,
     target: (ctx) => ctx.world.outdoorTempC,

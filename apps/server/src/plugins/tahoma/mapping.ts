@@ -51,6 +51,11 @@ export interface CoverCommands {
   preset?: string
   /** `setMemorized1Position` : réécrit cette mémoire, paramètre en FERMETURE comme `setClosure`. */
   presetSet?: string
+  /**
+   * `setClosureAndLinearSpeed` : viser une fermeture EN VITESSE LENTE (le « mode discret » de
+   * l'appli). Signature relevée `p1,*p2` : la fermeture, puis la vitesse, facultative.
+   */
+  quiet?: string
 }
 
 export function coverCommands(device: OverkizDevice): CoverCommands {
@@ -63,6 +68,7 @@ export function coverCommands(device: OverkizDevice): CoverCommands {
   const tilt = pick(names, ['setOrientation'])
   const preset = pick(names, ['my'])
   const presetSet = pick(names, ['setMemorized1Position'])
+  const quiet = pick(names, ['setClosureAndLinearSpeed'])
   if (open) out.open = open
   if (close) out.close = close
   if (stop) out.stop = stop
@@ -70,6 +76,7 @@ export function coverCommands(device: OverkizDevice): CoverCommands {
   if (tilt) out.tilt = tilt
   if (preset) out.preset = preset
   if (presetSet) out.presetSet = presetSet
+  if (quiet) out.quiet = quiet
   return out
 }
 
@@ -147,6 +154,9 @@ export function toDescriptor(device: OverkizDevice): DeviceDescriptor {
   // écrire la mémoire est une capacité de plus : les stores RTS savent la rappeler sans savoir
   // ni la lire ni la réécrire (relevé : 18 rappels, 16 lectures, 16 écritures sur 19 ouvrants)
   if (cmd.presetSet) capabilities.push('preset_set')
+  if (cmd.quiet) capabilities.push('quiet')
+  // moteur sur batterie (volet solaire) : l'état est publié dès le `/setup`, on le lit là
+  if (device.states.some((st) => st.name === 'core:BatteryLevelState')) capabilities.push('battery')
   return {
     id: `tahoma:${externalId}`,
     pluginId: 'tahoma',
@@ -184,6 +194,10 @@ export function toCoverPatch(states: Map<string, OverkizValue>, previous?: numbe
   const tilt = pct(states.get('core:SlateOrientationState'))
   if (tilt !== undefined) patch.tilt = tilt
 
+  // volet solaire : `core:BatteryLevelState` en %, relevé à côté de `core:BatteryState` ('full'…)
+  const battery = pct(states.get('core:BatteryLevelState'))
+  if (battery !== undefined) patch.batteryPct = battery
+
   // Position favorite mémorisée dans le moteur (« my »). Exprimée comme une FERMETURE, de la même
   // famille que `core:ClosureState`, d'où le `100 - v` : relevé sur 16 volets io, seul celui qui
   // n'était pas fermé se tenait exactement sur sa valeur mémorisée (fermeture 80, mémoire 80).
@@ -213,10 +227,24 @@ export function toAvailability(device: OverkizDevice, states: Map<string, Overki
   return device.available !== false && device.enabled !== false
 }
 
-/** Traduit une commande Kasbah en action Overkiz. `undefined` = la box ne sait pas la faire. */
-export function toAction(deviceURL: string, cmd: Command, commands: CoverCommands): OverkizAction | undefined {
+/** Second paramètre de `setClosureAndLinearSpeed` : la vitesse lente. */
+export const LOW_SPEED = 'lowspeed'
+
+/**
+ * Traduit une commande Kasbah en action Overkiz. `undefined` = la box ne sait pas la faire.
+ * `quiet` : le mode discret est allumé — toute course vers une fermeture connue (ouvrir = 0,
+ * fermer = 100, viser une position) passe alors par `setClosureAndLinearSpeed` en vitesse lente.
+ * Le rappel `my` n'a pas d'équivalent lent : il garde sa vitesse.
+ */
+export function toAction(deviceURL: string, cmd: Command, commands: CoverCommands, quiet = false): OverkizAction | undefined {
   const one = (name: string, parameters: (string | number)[] = []): OverkizAction =>
     ({ deviceURL, commands: [{ name, parameters }] })
+  const slow = quiet ? commands.quiet : undefined
+  if (slow) {
+    const closure = cmd.type === 'cover.open' ? 0 : cmd.type === 'cover.close' ? 100
+      : cmd.type === 'cover.set_position' ? 100 - cmd.position : undefined
+    if (closure !== undefined) return one(slow, [closure, LOW_SPEED])
+  }
   switch (cmd.type) {
     case 'cover.open': return commands.open ? one(commands.open) : undefined
     case 'cover.close': return commands.close ? one(commands.close) : undefined
@@ -237,3 +265,45 @@ export function assumedPosition(cmd: Command): number | undefined {
   return undefined
 }
 
+// ── Capteurs de luminosité ────────────────────────────────────────────────────────────────────
+// Un volet SOLAIRE se déclare deux fois : le moteur (`…#1`) et son panneau, présenté comme un
+// capteur de lumière (`io:SunEnergyActuatorSensor`, uiClass `LightSensor`, `…#2`), sans aucune
+// commande. Le capteur devient un appareil `sensor` rattaché au volet par `meta.linkedTo`.
+
+/** Un capteur de luminosité exploitable : la box le classe `LightSensor` et publie une luminance. */
+export function isLightSensor(device: OverkizDevice): boolean {
+  return device.definition?.uiClass === 'LightSensor' && device.states.some((st) => st.name === 'core:LuminanceState')
+}
+
+/** L'appareil qui partage le même `deviceURL` hors index de sous-appareil (`io://…/612895#2` → `#1`). */
+export function sameNode(a: string, b: string): boolean {
+  return a !== b && a.split('#')[0] === b.split('#')[0]
+}
+
+export function toLightSensorDescriptor(device: OverkizDevice, linkedCover?: string): DeviceDescriptor {
+  const externalId = deviceUrlToExternalId(device.deviceURL)
+  const label = device.label ?? externalId
+  return {
+    id: `tahoma:${externalId}`,
+    pluginId: 'tahoma',
+    externalId,
+    kind: 'sensor',
+    // la box donne au capteur le libellé du volet : deux appareils du même nom dans une liste
+    name: `${label} · luminosité`,
+    capabilities: ['measure'],
+    meta: {
+      manufacturer: 'Somfy',
+      ...(device.controllableName ? { model: device.controllableName } : {}),
+      // l'appli Somfy affiche cette valeur en lux (maximum d'une journée de septembre : ~4 000 lx)
+      sensor: { unit: 'lx', deviceClass: 'illuminance', precision: 0 },
+      ...(linkedCover ? { linkedTo: linkedCover } : {}),
+    },
+  }
+}
+
+/** Luminance en lux, `undefined` si l'état est absent ou illisible. */
+export function luminance(states: Map<string, OverkizValue>): number | undefined {
+  const v = states.get('core:LuminanceState')
+  const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v) : NaN
+  return Number.isFinite(n) && n >= 0 ? Math.round(n) : undefined
+}

@@ -98,7 +98,7 @@ describe('tahoma plugin', () => {
   it('discovers only the covers and publishes their initial states', async () => {
     const box = fakeBox()
     const { plugin, ctx, descriptors } = await started(box)
-    expect(descriptors.map((d) => d.name)).toEqual(['Volet salon', 'BSO chambre', 'Store terrasse', 'Volet cuisine', 'Portail'])
+    expect(descriptors.map((d) => d.name)).toEqual(['Volet salon', 'BSO chambre', 'Store terrasse', 'Volet cuisine', 'Portail', 'Volet bureau', 'Volet bureau · luminosité'])
     expect(ctx.emitState).toHaveBeenCalledWith('io.1234-5678-9012.11110001', { position: 70, presetPosition: 27, motion: 'stopped' })
     // RTS : aucun état à publier, mais l'appareil doit devenir disponible
     expect(ctx.emitState).toHaveBeenCalledWith('rts.1234-5678-9012.22220001', {})

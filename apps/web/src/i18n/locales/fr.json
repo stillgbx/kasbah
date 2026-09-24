@@ -194,7 +194,7 @@
   },
   "cover": {
     "classes": {"shutter": "Volet", "awning": "Store banne", "blind": "Store", "curtain": "Rideau", "gate": "Portail", "garage": "Porte de garage", "window": "Fenêtre"},
-    "tilt": "Inclinaison", "assumed": "{state} (supposé)", "assumedHint": "Position supposée, jamais confirmée", "stopped": "À l'arrêt", "preset": "Position perso", "presetAt": "Position perso — {pct}", "presetSave": "Mémoriser cette position", "presetSaved": "Position perso mémorisée : {pct}",
+    "tilt": "Inclinaison", "assumed": "{state} (supposé)", "assumedHint": "Position supposée, jamais confirmée", "stopped": "À l'arrêt", "preset": "Position perso", "presetAt": "Position perso — {pct}", "presetSave": "Mémoriser cette position", "quiet": "Mode discret", "battery": "Batterie", "quietHint": "Les manœuvres lancées depuis Kasbah roulent en vitesse lente, plus silencieuse. La télécommande murale garde sa vitesse.", "presetSaved": "Position perso mémorisée : {pct}",
     "openClose": { "open": "Ouvert", "closed": "Fermé", "opening": "Ouverture en cours", "closing": "Fermeture en cours", "level": "Fermeture", "actionOpen": "Ouvrir", "actionClose": "Fermer" },
     "upDown": { "open": "Remonté", "closed": "Baissé", "opening": "Remontée en cours", "closing": "Descente en cours", "level": "Descente", "actionOpen": "Remonter", "actionClose": "Baisser" }
   },
@@ -648,6 +648,7 @@
     "syncedAgo": "Relevé {ago}", "syncedUnknown": "Date du relevé inconnue",
     "days": "{n} jour | {n} jour | {n} jours"
   },
+  "lightHistory": {"title": "Luminosité", "period": {"day": "Jour", "month": "Mois", "year": "Année"}, "peak": {"day": "Max sur 24 h : {value}", "month": "Max sur 31 jours : {value}", "year": "Max sur 12 mois : {value}"}, "empty": "L'historique se remplit au fil de la journée.", "noReading": "non mesuré"},
   "water": {
     "noDevice": "Aucune station de traitement de l'eau active. Activez un plugin dans Réglages → Plugins.",
     "prefilter": "Préfiltre", "carbon1": "Filtre à charbon 1", "carbon2": "Filtre à charbon 2", "uvLamp": "Lampe UVc",

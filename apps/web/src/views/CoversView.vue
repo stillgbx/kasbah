@@ -8,6 +8,7 @@ import RoomBands from '../components/devices/RoomBands.vue'
 import PulseDot from '../components/ui/PulseDot.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import { coverActivity, coverWords, fromClosure, toClosure } from '../lib/cover'
+import { formatPercent, formatSensor } from '../lib/format'
 import { useDevicesStore } from '../stores/devices'
 import { useHouseStore } from '../stores/house'
 
@@ -24,7 +25,7 @@ import { useHouseStore } from '../stores/house'
 // course ferait sinon revenir la poignée en arrière juste après le geste.
 const devices = useDevicesStore()
 const house = useHouseStore()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const covers = computed(() => devices.list.filter((e) => e.state.kind === 'cover'))
 
@@ -99,6 +100,22 @@ function assignOptions(hd: HouseDevice) {
   ]
 }
 
+// Volet solaire : son panneau est un capteur de luminosité à part (`meta.linkedTo` vers le volet).
+// Indexé une fois par volet, plutôt que cherché ligne par ligne à chaque rendu.
+const lightByCover = computed(() => {
+  const map = new Map<string, DeviceEntry>()
+  for (const e of devices.list) {
+    const to = e.descriptor.meta.linkedTo
+    if (to && e.descriptor.kind === 'sensor' && e.descriptor.meta.sensor?.deviceClass === 'illuminance') map.set(to, e)
+  }
+  return map
+})
+const lightText = (coverId: string) => {
+  const e = lightByCover.value.get(coverId)
+  return e && e.state.kind === 'sensor' ? formatSensor(e.descriptor, e.state.value, locale.value) : undefined
+}
+const batteryText = (s: StateFor<'cover'>) => (s.batteryPct === undefined ? '—' : formatPercent(s.batteryPct, locale.value))
+
 // Valeur locale pendant le glissement seulement ; ensuite c'est la cible du store qui s'affiche.
 const draft = ref<Record<string, number>>({})
 // le curseur n'existe que pour un ouvrant qui sait viser une position, donc qui la publie ; le
@@ -162,6 +179,17 @@ function commit(id: string, v: number) {
           </span>
           <PulseDot :on="(entry.state as StateFor<'cover'>).motion !== 'stopped'" class="dot" />
         </template>
+        <!-- volet solaire : luminosité du panneau et batterie du moteur, au bout de la ligne d'état.
+             Largeurs MINIMALES réservées : un chiffre qui s'allonge ne pousse pas le statut. -->
+        <template #status-after="{ entry }">
+          <span v-if="lightText(entry.descriptor.id) !== undefined" class="fact fact--lux" :title="$t('lightHistory.title')">
+            <StrokeIcon name="sun" :size="12" />{{ lightText(entry.descriptor.id) }}
+          </span>
+          <span v-if="entry.descriptor.capabilities.includes('battery')" class="fact fact--battery"
+                :class="{ 'fact--low': ((entry.state as StateFor<'cover'>).batteryPct ?? 100) < 20 }" :title="$t('cover.battery')">
+            <StrokeIcon name="battery" :size="12" />{{ batteryText(entry.state as StateFor<'cover'>) }}
+          </span>
+        </template>
         <template #control="{ entry }">
           <!-- ouvrant sans ouverture : c'est ICI qu'on l'affecte — pas de sens à montrer Ouvrir/Fermer
                tant qu'on ne sait pas quelle fenêtre il habille -->
@@ -192,7 +220,9 @@ function commit(id: string, v: number) {
                       @click="devices.sendCommand(entry.descriptor.id, { type: 'cover.close' })">
                 <StrokeIcon name="collapseDown" :size="18" />
               </button>
-              <!-- la valeur ne tient pas dans une touche de 36 px : elle passe par le libellé -->
+              <!-- les RÉGLAGES (position perso, mode discret) poussés à droite, loin des manœuvres -->
+              <span class="keys__gap" aria-hidden="true" />
+              <!-- la valeur ne tient pas dans une touche : elle passe par le libellé -->
               <button v-if="entry.descriptor.capabilities.includes('preset')" type="button" class="key"
                       :disabled="!entry.state.available"
                       :title="presetClosure(entry.state as StateFor<'cover'>) !== undefined
@@ -202,6 +232,13 @@ function commit(id: string, v: number) {
                       @click="devices.sendCommand(entry.descriptor.id, { type: 'cover.preset' })">
                 <StrokeIcon name="crosshair" :size="18" />
               </button>
+              <!-- mode discret : une BASCULE (pas une manœuvre), allumée à la teinte d'accent -->
+              <button v-if="entry.descriptor.capabilities.includes('quiet')" type="button" class="key key--toggle"
+                      :disabled="!entry.state.available" :aria-pressed="!!(entry.state as StateFor<'cover'>).quiet"
+                      :title="$t('cover.quietHint')" :aria-label="$t('cover.quiet')"
+                      @click="devices.sendCommand(entry.descriptor.id, { type: 'cover.set_quiet', on: !(entry.state as StateFor<'cover'>).quiet })">
+                <StrokeIcon name="moon" :size="18" />
+              </button>
             </div>
             <!-- pas de 1 % : Vuetify aligne le pouce sur le pas, et à 5 % il ne pouvait pas se
                  poser sur le repère de position favorite du moteur (voir `CoverControl.vue`) -->
@@ -210,7 +247,7 @@ function commit(id: string, v: number) {
                       :min="0" :max="100" :step="1" :disabled="!entry.state.available"
                       :ticks="presetTicks(entry.state as StateFor<'cover'>)"
                       :show-ticks="presetTicks(entry.state as StateFor<'cover'>) ? 'always' : false"
-                      density="compact" hide-details class="controls__slider cover-slider"
+                      density="compact" hide-details :thumb-size="22" :track-size="6" class="controls__slider cover-slider"
                       @update:model-value="(v: number) => drag(entry.descriptor.id, v)"
                       @end="(v: number) => commit(entry.descriptor.id, v)" />
           </div>
@@ -228,8 +265,11 @@ function commit(id: string, v: number) {
 /* estompé à 0 plutôt que masqué : le compteur ne saute pas d'apparence à la découverte d'un plugin */
 .count--waiting[data-zero='1'] { opacity: .55; }
 .empty { padding: 24px; text-align: center; }
-.controls { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; margin: 2px 4px 0; }
-.controls__slider { flex: 1 1 auto; }
+.controls { grid-column: 1 / -1; display: grid; gap: 6px; margin: 6px 4px 0; }
+/* Le curseur a sa PROPRE ligne, sur toute la largeur de la carte : partagé avec les touches, il ne
+   gardait qu'une centaine de pixels, trop peu pour viser au doigt. Piste et pouce épaissis pour la
+   même raison ; la hauteur de la ligne est fixe, qu'elle soit saisie ou non. */
+.controls__slider { width: 100%; }
 /* même empreinte que `.controls` : une ligne à part, pour ne pas écraser le nom de l'ouvrant */
 .assign { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; margin: 2px 4px 0; }
 .assign__label { font-size: 12px; flex: 0 0 auto; }
@@ -255,11 +295,17 @@ function commit(id: string, v: number) {
   transition: width .4s ease;
 }
 @media (prefers-reduced-motion: reduce) { .row-open { transition: none; } }
-.keys { display: flex; gap: 4px; flex: 0 0 auto; }
+.keys { display: flex; gap: 6px; }
+.keys__gap { flex: 1 1 auto; }
 .key {
-  display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px;
+  display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px;
   border: 1px solid var(--line); background: transparent; color: var(--text); transition: background .15s, color .15s;
 }
 .key:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
 .key:disabled { opacity: .4; }
+.key--toggle[aria-pressed='true'] { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.fact { display: inline-flex; align-items: center; justify-content: flex-end; gap: 3px; flex: 0 0 auto; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fact--lux { min-width: 8ch; }
+.fact--battery { min-width: 6ch; }
+.fact--low { color: rgb(var(--v-theme-error)); }
 </style>

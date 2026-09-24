@@ -18,7 +18,10 @@ export const CAPABILITIES = [
   // (le « my » de Somfy) ; sa valeur n'est pas toujours lisible, voir `presetPosition`.
   // `preset_set` = cette mémoire est RÉINSCRIPTIBLE — trois niveaux distincts, et un même
   // appareil peut en avoir un sans les suivants (un RTS rappelle sans lire ni écrire)
-  'open_close', 'position', 'tilt', 'stop', 'preset', 'preset_set',
+  // `quiet` = mode discret : le moteur sait rouler en vitesse lente (Somfy `LinearSpeed`). La box
+  // ne le mémorise pas, c'est une option de chaque manœuvre : le plugin tient l'interrupteur
+  // (`CoverState.quiet`) et l'applique à toutes les courses passées par Kasbah
+  'open_close', 'position', 'tilt', 'stop', 'preset', 'preset_set', 'quiet',
   // media_player — `play_url` : charger un flux HTTP(S) (MP3, HLS…) ; distinct de `playback`
   // (lire / pause / stop sur la session déjà là). Cast et Sonos le déclarent ; un lecteur qui ne
   // sait que télécommander (appli native sans LOAD) ne le déclare pas.
@@ -78,7 +81,7 @@ export type Capability = (typeof CAPABILITIES)[number]
 /** Capacités légales par kind — un descripteur qui en déclare d'autres est rejeté. */
 export const KIND_CAPABILITIES: Record<DeviceKind, readonly Capability[]> = {
   light: ['on_off', 'brightness', 'color_temp', 'color', 'effect'],
-  cover: ['open_close', 'position', 'tilt', 'stop', 'preset', 'preset_set'],
+  cover: ['open_close', 'position', 'tilt', 'stop', 'preset', 'preset_set', 'quiet', 'battery'],
   media_player: ['playback', 'volume', 'mute', 'now_playing', 'track_skip', 'seek', 'play_url'],
   climate: ['hvac_mode', 'target_temp', 'current_temp', 'humidity', 'fan_mode'],
   vacuum: ['clean', 'dock', 'battery', 'locate', 'mop'],

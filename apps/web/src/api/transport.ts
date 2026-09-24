@@ -358,6 +358,11 @@ export interface HeatingPoint {
   returnC: number | null
 }
 
+/** Maximum de luminosité d'un pas (heure pleine, jour ou mois local), en lux. */
+export interface LightPoint { t: number; maxLux: number }
+/** Historique de luminosité d'un volet solaire, tenu par le serveur au fil des trames de la box. */
+export interface LightHistory { hourly: LightPoint[]; daily: LightPoint[]; monthly: LightPoint[] }
+
 export interface Transport {
   getHouse(): Promise<House>
   getDevices(): Promise<DeviceEntry[]>
@@ -439,6 +444,8 @@ export interface Transport {
   melcloudSystem(): Promise<{ units: MelcloudUnit[]; pollMs: number }>
   /** L'historique de fonctionnement, construit par le serveur au fil des sondages. */
   melcloudHistory(): Promise<{ hourly: HeatingPoint[]; pollMs: number }>
+  /** Historique de luminosité d'un capteur de volet solaire (TaHoma seulement). */
+  lightHistory(deviceId: string): Promise<LightHistory>
   /** Où en est la liaison du compte iRobot (robots connus, et lesquels répondent sur le réseau). */
   irobotStatus(): Promise<IrobotStatus>
   /**

@@ -194,7 +194,7 @@
   },
   "cover": {
     "classes": {"shutter": "Shutter", "awning": "Awning", "blind": "Blind", "curtain": "Curtain", "gate": "Gate", "garage": "Garage door", "window": "Window"},
-    "tilt": "Tilt", "assumed": "{state} (assumed)", "assumedHint": "Assumed position, never confirmed", "stopped": "Stopped", "preset": "Preset position", "presetAt": "Preset position — {pct}", "presetSave": "Save this position", "presetSaved": "Preset position saved: {pct}",
+    "tilt": "Tilt", "assumed": "{state} (assumed)", "assumedHint": "Assumed position, never confirmed", "stopped": "Stopped", "preset": "Preset position", "presetAt": "Preset position — {pct}", "presetSave": "Save this position", "quiet": "Quiet mode", "battery": "Battery", "quietHint": "Moves started from Kasbah run at low speed, more quietly. The wall remote keeps its speed.", "presetSaved": "Preset position saved: {pct}",
     "openClose": { "open": "Open", "closed": "Closed", "opening": "Opening", "closing": "Closing", "level": "Closure", "actionOpen": "Open", "actionClose": "Close" },
     "upDown": { "open": "Raised", "closed": "Lowered", "opening": "Raising", "closing": "Lowering", "level": "Extension", "actionOpen": "Raise", "actionClose": "Lower" }
   },
@@ -648,6 +648,7 @@
     "syncedAgo": "Read {ago}", "syncedUnknown": "Reading time unknown",
     "days": "{n} day | {n} day | {n} days"
   },
+  "lightHistory": {"title": "Brightness", "period": {"day": "Day", "month": "Month", "year": "Year"}, "peak": {"day": "24 h max: {value}", "month": "31-day max: {value}", "year": "12-month max: {value}"}, "empty": "The history fills up over the day.", "noReading": "not measured"},
   "water": {
     "noDevice": "No water treatment station is active. Enable a plugin in Settings → Plugins.",
     "prefilter": "Prefilter", "carbon1": "Carbon filter 1", "carbon2": "Carbon filter 2", "uvLamp": "UV lamp",

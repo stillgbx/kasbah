@@ -30,6 +30,8 @@ export const commandSchema = z.discriminatedUnion('type', [
   // réécriture de cette mémoire : la position à graver est explicite, pas déduite de l'appareil,
   // pour que l'appelant grave ce qu'il MONTRE et non ce qu'un moteur en cours de course renvoie
   z.object({ type: z.literal('cover.set_preset'), position: pct }),
+  // mode discret : un interrupteur tenu par le plugin, appliqué aux courses suivantes — il ne bouge rien
+  z.object({ type: z.literal('cover.set_quiet'), on: z.boolean() }),
   // media_player
   z.object({ type: z.literal('media_player.play') }),
   z.object({ type: z.literal('media_player.pause') }),
@@ -122,7 +124,7 @@ export const COMMAND_REQUIRES: Record<CommandType, Capability> = {
   'light.set': 'on_off',
   'cover.open': 'open_close', 'cover.close': 'open_close', 'cover.stop': 'stop',
   'cover.set_position': 'position', 'cover.set_tilt': 'tilt', 'cover.preset': 'preset',
-  'cover.set_preset': 'preset_set',
+  'cover.set_preset': 'preset_set', 'cover.set_quiet': 'quiet',
   'media_player.play': 'playback', 'media_player.pause': 'playback', 'media_player.stop': 'playback',
   'media_player.next': 'track_skip', 'media_player.previous': 'track_skip',
   'media_player.set_volume': 'volume', 'media_player.set_mute': 'mute', 'media_player.seek': 'seek',

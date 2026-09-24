@@ -39,6 +39,7 @@ export function optimisticPatch(state: DeviceState, cmd: CommandInput): Partial<
           return { motion: to > p ? 'opening' : to < p ? 'closing' : 'stopped' } as Partial<DeviceState>
         }
         case 'cover.set_tilt': return { tilt: cmd.tilt } as Partial<DeviceState>
+        case 'cover.set_quiet': return { quiet: cmd.on } as Partial<DeviceState>
         default: return null
       }
     case 'media_player':

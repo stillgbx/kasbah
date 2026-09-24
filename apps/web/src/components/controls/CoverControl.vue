@@ -3,9 +3,11 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CommandInput, DeviceDescriptor, StateFor } from '@kasbah/shared'
 import { coverWords, fromClosure, toClosure } from '../../lib/cover'
+import { formatPercent } from '../../lib/format'
 import { useDevicesStore } from '../../stores/devices'
 import PulseDot from '../ui/PulseDot.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
+import LightHistoryChart from './LightHistoryChart.vue'
 
 // Contrôle d'un ouvrant dans le panneau appareil. Le pourcentage est une FERMETURE (0 % = ouvert),
 // voir `lib/cover.ts` — le grand nombre en tête du panneau suit la même convention, donc ce
@@ -72,6 +74,19 @@ const presetTicks = computed(() => (presetClosure.value === undefined ? undefine
 const hasPresetSet = props.descriptor.capabilities.includes('preset_set')
 const canSavePreset = computed(() => !props.disabled && !moving.value && props.state.position !== undefined)
 
+// Mode discret : un interrupteur tenu par le serveur, appliqué aux manœuvres SUIVANTES (vitesse
+// lente). Le basculer ne bouge rien, donc il reste actif pendant une course.
+const hasQuiet = props.descriptor.capabilities.includes('quiet')
+/** Moteur sur batterie (volet solaire) : la ligne est réservée dès la capacité, la valeur peut manquer. */
+const hasBattery = props.descriptor.capabilities.includes('battery')
+
+// Volet solaire : son panneau est un capteur de luminosité à part, qui déclare `meta.linkedTo` vers
+// ce volet. On l'affiche ici plutôt que comme un appareil de plus.
+const lightSensor = computed(() => {
+  const e = devices.list.find((x) => x.descriptor.kind === 'sensor' && x.descriptor.meta.linkedTo === props.descriptor.id)
+  return e && e.state.kind === 'sensor' ? { descriptor: e.descriptor, state: e.state } : undefined
+})
+
 function send(cmd: CommandInput) { emit('command', cmd) }
 </script>
 
@@ -126,6 +141,20 @@ function send(cmd: CommandInput) { emit('command', cmd) }
       </button>
     </div>
 
+    <label v-if="hasQuiet" class="quiet" :title="$t('cover.quietHint')">
+      <StrokeIcon name="moon" :size="16" />
+      <span class="quiet__text">{{ $t('cover.quiet') }}</span>
+      <v-switch :model-value="!!state.quiet" :disabled="disabled" color="primary" density="compact" hide-details inset
+                :aria-label="$t('cover.quiet')"
+                @update:model-value="(v: boolean | null) => send({ type: 'cover.set_quiet', on: !!v })" />
+    </label>
+
+    <div v-if="hasBattery" class="battery">
+      <StrokeIcon name="battery" :size="16" />
+      <span class="battery__text">{{ $t('cover.battery') }}</span>
+      <span class="battery__pct" :class="{ 'battery__pct--low': (state.batteryPct ?? 100) < 20 }">{{ state.batteryPct !== undefined ? formatPercent(state.batteryPct, $i18n.locale) : '—' }}</span>
+    </div>
+
     <template v-if="hasTilt">
       <!-- même gabarit que la ligne ci-dessus : les deux pourcentages s'alignent -->
       <div class="line">
@@ -137,6 +166,8 @@ function send(cmd: CommandInput) { emit('command', cmd) }
                 density="compact" hide-details
                 @end="(v: number) => send({ type: 'cover.set_tilt', tilt: Math.round(v) })" />
     </template>
+
+    <LightHistoryChart v-if="lightSensor" :descriptor="lightSensor.descriptor" :state="lightSensor.state" />
   </div>
 </template>
 
@@ -162,6 +193,15 @@ function send(cmd: CommandInput) { emit('command', cmd) }
 /* Les deux touches de position perso sur UNE ligne : le rappel s'etire (son libelle et sa valeur
    sont ecrits), la memorisation se reduit a une icone de 40 px. */
 .preset { display: flex; gap: 6px; margin-top: 6px; }
+/* Mode discret : une ligne de hauteur fixe, l'interrupteur à droite comme dans les réglages. */
+.quiet { display: flex; align-items: center; gap: 8px; height: 40px; margin-top: 6px; font-size: 12px; color: var(--text); cursor: pointer; }
+.quiet__text { flex: 1 1 auto; min-width: 0; }
+.quiet :deep(.v-switch) { flex: 0 0 auto; }
+/* Batterie : même gabarit que la ligne du mode discret, la valeur à droite en chiffres fixes. */
+.battery { display: flex; align-items: center; gap: 8px; height: 32px; font-size: 12px; color: var(--text); }
+.battery__text { flex: 1 1 auto; min-width: 0; }
+.battery__pct { flex: 0 0 auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+.battery__pct--low { color: rgb(var(--v-theme-error)); }
 .preset__recall { flex: 1 1 auto; justify-content: flex-start; gap: 8px; }
 /* Teinte d'AVERTISSEMENT : cette touche reecrit un reglage qui vit dans le moteur et sert aussi au
    bouton « my » des telecommandes murales. Regles placees APRES `.key:hover`, de meme specificite,

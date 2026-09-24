@@ -1,12 +1,17 @@
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { dirname } from 'node:path'
 import type { Command, DeviceDescriptor, PluginHealth } from '@kasbah/shared'
+import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
+import { stateFile } from '../../core/paths'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
 import { createPoller } from '../../core/poll'
 import type { FetchLike } from '../../core/sse'
 import { TahomaClient } from './client'
+import { LightHistory, createLightHistoryFile, type LightHistoryStore } from './history'
 import {
-  assumedPosition, coverCommands, deviceUrlToExternalId, hasPositionFeedback, isCover, readStates,
-  toAction, toAvailability, toCoverPatch, toDescriptor, type CoverCommands,
+  assumedPosition, coverCommands, deviceUrlToExternalId, hasPositionFeedback, isCover, isLightSensor, luminance,
+  readStates, sameNode, toAction, toAvailability, toCoverPatch, toDescriptor, toLightSensorDescriptor, type CoverCommands,
 } from './mapping'
 import type { OverkizDevice, OverkizEvent } from './types'
 
@@ -29,6 +34,10 @@ export const tahomaConfigSchema = z.object({
   TAHOMA_TOKEN: z.string().min(1).optional(),
   TAHOMA_TLS_INSECURE: bool.default(true),
   TAHOMA_POLL_MS: z.coerce.number().int().min(500).max(60_000).default(2000),
+  /** Historique de luminosité des volets solaires ; vide = pas de persistance. */
+  TAHOMA_LIGHT_HISTORY_FILE: z.string().trim().default(stateFile('tahoma-light-history.json')),
+  /** Volets en mode discret (un réglage de Kasbah, la box ne le retient pas) ; vide = pas de persistance. */
+  TAHOMA_QUIET_FILE: z.string().trim().default(stateFile('tahoma-quiet.json')),
 })
 export type TahomaConfig = z.infer<typeof tahomaConfigSchema>
 
@@ -37,6 +46,8 @@ export interface TahomaPluginDeps {
   fetchImpl?: FetchLike
   /** Injection pour les tests : délai d'abandon d'une requête, abrégé pour ne pas ralentir la suite. */
   requestTimeoutMs?: number
+  /** Injection pour les tests : historique de luminosité en mémoire. */
+  lightHistoryStore?: LightHistoryStore
 }
 
 interface Entry {
@@ -53,11 +64,37 @@ interface Entry {
   states: Map<string, unknown>
 }
 
+/** Un capteur de luminosité : le panneau d'un volet solaire. */
+interface SensorEntry {
+  device: OverkizDevice
+  states: Map<string, unknown>
+}
+
+/** Volets en mode discret, relus au démarrage. Fichier illisible ou absent = aucun. */
+async function loadQuiet(path: string): Promise<Set<string>> {
+  try {
+    const parsed = z.object({ quiet: z.array(z.string()) }).safeParse(JSON.parse(await readFile(path, 'utf8')))
+    return new Set(parsed.success ? parsed.data.quiet : [])
+  } catch { return new Set() }
+}
+
+async function saveQuiet(path: string, quiet: Set<string>): Promise<void> {
+  await mkdir(dirname(path), { recursive: true })
+  const tmp = `${path}.${process.pid}.tmp`
+  await writeFile(tmp, JSON.stringify({ quiet: [...quiet].sort() }), 'utf8')
+  await rename(tmp, path)
+}
+
 export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
   let ctx: PluginContext | null = null
   let config: TahomaConfig | null = null
   let client: TahomaClient | null = null
   let entries = new Map<string, Entry>()
+  let sensors = new Map<string, SensorEntry>()
+  let history = new LightHistory()
+  let historyStore: LightHistoryStore | null = null
+  /** Volets en mode discret (`externalId`). */
+  let quiet = new Set<string>()
   let descriptors: DeviceDescriptor[] = []
   /** Dernière position connue, pour deviner le sens du mouvement et pour les appareils sans retour. */
   const positions = new Map<string, number>()
@@ -79,9 +116,17 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
   async function refresh(): Promise<void> {
     const devices = await ready().getSetup(ctx!.signal)
     const next = new Map<string, Entry>()
+    const nextSensors = new Map<string, SensorEntry>()
     const skipped: string[] = []
     descriptors = []
     for (const device of devices) {
+      if (isLightSensor(device)) {
+        // rattaché au moteur du même nœud radio (`…#2` → `…#1`) : l'UI les montre ensemble
+        const cover = devices.find((d) => sameNode(d.deviceURL, device.deviceURL) && isCover(d))
+        nextSensors.set(deviceUrlToExternalId(device.deviceURL), { device, states: readStates(device.states) })
+        descriptors.push(toLightSensorDescriptor(device, cover ? `tahoma:${deviceUrlToExternalId(cover.deviceURL)}` : undefined))
+        continue
+      }
       if (!isCover(device)) { skipped.push(device.definition?.uiClass ?? device.controllableName ?? '?'); continue }
       const externalId = deviceUrlToExternalId(device.deviceURL)
       next.set(externalId, {
@@ -91,6 +136,7 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
       descriptors.push(toDescriptor(device))
     }
     entries = next
+    sensors = nextSensors
     if (skipped.length) log().debug({ skipped }, 'TaHoma devices ignored (not covers)')
     lastError = null
   }
@@ -102,8 +148,36 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
       // même vide, le patch marque l'appareil disponible (`emitState` ajoute `available: true`)
       ctx!.emitState(externalId, patch)
       if (typeof patch.position === 'number') positions.set(externalId, patch.position)
+      if (entry.commands.quiet) ctx!.emitState(externalId, { quiet: quiet.has(externalId) })
       ctx!.setAvailable(externalId, toAvailability(entry.device, entry.states))
     }
+    for (const [externalId, entry] of sensors) {
+      emitSensor(externalId, entry)
+      ctx!.setAvailable(externalId, toAvailability(entry.device, entry.states))
+    }
+  }
+
+  /** Publie la luminance d'un capteur et l'inscrit dans l'historique. */
+  function emitSensor(externalId: string, entry: SensorEntry): void {
+    const lux = luminance(entry.states)
+    if (lux === undefined) return
+    ctx!.emitState(externalId, { value: lux })
+    if (history.record(externalId, lux, ctx!.clock.now())) void saveHistory()
+  }
+
+  /**
+   * Une écriture à la fois : les 11 capteurs ouvrent leur heure dans la même passe, et des
+   * écritures simultanées se disputent le même fichier temporaire (ENOENT au renommage, relevé).
+   * Les demandes arrivées pendant une écriture sont fusionnées en UNE écriture de plus.
+   */
+  let saving: Promise<void> | null = null
+  let saveAgain = false
+  function saveHistory(): Promise<void> {
+    if (saving) { saveAgain = true; return saving }
+    saving = (async () => {
+      do { saveAgain = false; await historyStore?.save(history.toState()) } while (saveAgain)
+    })().finally(() => { saving = null })
+    return saving
   }
 
   async function resync(emitDevices: boolean): Promise<void> {
@@ -116,6 +190,18 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
     for (const ev of events) {
       if (ev.name === 'DeviceCreatedEvent' || ev.name === 'DeviceRemovedEvent') { needsResync = true; continue }
       const externalId = ev.deviceURL ? deviceUrlToExternalId(ev.deviceURL) : undefined
+      const sensor = externalId ? sensors.get(externalId) : undefined
+      if (externalId && sensor) {
+        if (ev.name === 'DeviceStateChangedEvent') {
+          const frame = readStates(ev.deviceStates)
+          for (const [name, value] of frame) sensor.states.set(name, value)
+          if (frame.has('core:LuminanceState')) emitSensor(externalId, sensor)
+          const status = frame.get('core:StatusState')
+          if (status === 'available' || status === 'unavailable') ctx!.setAvailable(externalId, status === 'available')
+        } else if (ev.name === 'DeviceUnavailableEvent' || ev.name === 'DeviceDisabledEvent') ctx!.setAvailable(externalId, false)
+        else if (ev.name === 'DeviceAvailableEvent' || ev.name === 'DeviceEnabledEvent') ctx!.setAvailable(externalId, true)
+        continue
+      }
       const entry = externalId ? entries.get(externalId) : undefined
       if (!externalId || !entry) continue
       switch (ev.name) {
@@ -154,6 +240,8 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
       if (events === null) { listenerId = null; return }
       handleEvents(events)
       if (needsResync) { needsResync = false; await resync(true) }
+      // une heure s'ouvre aussi sans trame (la nuit, la luminance ne change pas) : on l'écrit quand même
+      if (history.advance(ctx!.clock.now())) await saveHistory()
       lastError = null
     } catch (err) {
       lastError = (err as Error).message
@@ -168,6 +256,9 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
     async init(c) {
       ctx = c
       config = c.config as TahomaConfig                 // déjà validé/transformé par l'hôte
+      historyStore = deps.lightHistoryStore ?? (config.TAHOMA_LIGHT_HISTORY_FILE ? createLightHistoryFile(config.TAHOMA_LIGHT_HISTORY_FILE, c.logger) : null)
+      history = new LightHistory(await historyStore?.load())
+      quiet = config.TAHOMA_QUIET_FILE ? await loadQuiet(config.TAHOMA_QUIET_FILE) : new Set()
       if (!config.TAHOMA_HOST) {
         lastError = 'TAHOMA_HOST is not set'
         return
@@ -219,7 +310,16 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
       const c = ready()
       const entry = entries.get(externalId)
       if (!entry) throw new PluginError('DEVICE_UNAVAILABLE', `unknown TaHoma device ${externalId}`)
-      const action = toAction(entry.device.deviceURL, command, entry.commands)
+      if (command.type === 'cover.set_quiet') {
+        // rien n'est envoyé à la box : le mode discret est une option des manœuvres suivantes
+        if (!entry.commands.quiet) throw new PluginError('UNSUPPORTED_COMMAND', `${command.type} on ${entry.device.controllableName ?? externalId}`)
+        if (command.on) quiet.add(externalId)
+        else quiet.delete(externalId)
+        if (config?.TAHOMA_QUIET_FILE) await saveQuiet(config.TAHOMA_QUIET_FILE, quiet)
+        ctx!.emitState(externalId, { quiet: command.on })
+        return
+      }
+      const action = toAction(entry.device.deviceURL, command, entry.commands, quiet.has(externalId))
       if (!action) throw new PluginError('UNSUPPORTED_COMMAND', `${command.type} on ${entry.device.controllableName ?? externalId}`)
       await c.apply(`Kasbah ${command.type}`, action, ctx!.signal)
       if (entry.feedback) return
@@ -245,6 +345,7 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
     async stop() {
       poller?.stop()
       poller = null
+      await saveHistory()                               // l'heure en cours n'est écrite qu'à sa bascule
       if (client && listenerId) {
         try { await client.unregisterListener(listenerId) }
         catch (err) { log().debug({ err }, 'TaHoma listener unregister failed') }
@@ -252,6 +353,18 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
       listenerId = null
       client?.close()
       client = null
+    },
+
+    registerRoutes(app: FastifyInstance) {
+      /**
+       * Historique de luminosité d'un capteur : maximum par heure, par jour et par mois. Construit
+       * au fil des trames et rendu tel quel, jamais un appel à la box.
+       */
+      app.get<{ Params: { externalId: string } }>('/light/:externalId', async (req, reply) => {
+        const snap = history.snapshot(req.params.externalId, ctx?.clock.now() ?? Date.now())
+        if (!snap) return reply.code(404).send({ error: `no light history for ${req.params.externalId}` })
+        return snap
+      })
     },
 
     health(): PluginHealth {

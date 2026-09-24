@@ -32,7 +32,9 @@ function defaultDevices(opts: { winter?: boolean } = {}) {
     light('light-living', { name: 'Plafonnier salon', colorTemp: true, color: true, on: !!opts.winter, brightness: 70, powerW: 12 }),
     light('light-kitchen', { name: 'Spots cuisine', colorTemp: true, brightness: 90, powerW: 30 }),
     light('light-bedroom1', { name: 'Lampe chambre 1', brightness: 40, powerW: 9 }),
-    cover('cover-living', { name: 'Volet baie', deviceClass: 'shutter', position: 100, preset: 27 }),
+    cover('cover-living', { name: 'Volet baie', deviceClass: 'shutter', position: 100, preset: 27, quiet: true }),
+    // volet solaire : son panneau se déclare en capteur de luminosité, lié au volet
+    sensors.shutterLight('sensor-living-light', 'Volet baie · luminosité', 'mock:cover-living'),
     cover('cover-kitchen', { name: 'Volet cuisine', deviceClass: 'shutter', position: 100 }),
     cover('cover-bedroom1', { name: 'Volet chambre 1', deviceClass: 'shutter', position: opts.winter ? 30 : 100, tilt: true }),
     // Trois natures d'ouvrant, parce qu'elles ne se comportent pas pareil dans l'interface : le volet

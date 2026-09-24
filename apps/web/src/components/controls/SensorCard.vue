@@ -3,9 +3,12 @@ import { useI18n } from 'vue-i18n'
 import type { DeviceDescriptor, StateFor } from '@kasbah/shared'
 import { formatSensor } from '../../lib/format'
 import DeviceIcon from '../DeviceIcon.vue'
+import LightHistoryChart from './LightHistoryChart.vue'
 
-defineProps<{ descriptor: DeviceDescriptor; state: StateFor<'sensor'>; pending?: boolean; disabled?: boolean }>()
+const props = defineProps<{ descriptor: DeviceDescriptor; state: StateFor<'sensor'>; pending?: boolean; disabled?: boolean }>()
 const { d } = useI18n()
+/** Panneau d'un volet solaire : son historique est tenu par le serveur (voir `LightHistoryChart`). */
+const hasLightHistory = props.descriptor.meta.sensor?.deviceClass === 'illuminance' && !!props.descriptor.meta.linkedTo
 </script>
 
 <template>
@@ -16,4 +19,5 @@ const { d } = useI18n()
       <div class="text-caption text-medium-emphasis">{{ $t('device.lastUpdate', { time: d(new Date(state.updatedAt), 'time') }) }}</div>
     </div>
   </div>
+  <LightHistoryChart v-if="hasLightHistory" :descriptor="descriptor" :state="state" />
 </template>

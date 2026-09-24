@@ -40,6 +40,17 @@ export const coverStateSchema = z.object({
    * qu'on peut la montrer. Kasbah ne la programme pas, il la lit.
    */
   presetPosition: pct.optional(),
+  /**
+   * Mode discret (capacité `quiet`) : les manœuvres passées par Kasbah roulent en vitesse lente.
+   * C'est un réglage de KASBAH, pas du moteur — la télécommande murale garde sa vitesse normale.
+   * Absent = l'appareil ne sait pas rouler lentement.
+   */
+  quiet: z.boolean().optional(),
+  /**
+   * Charge de la batterie d'un moteur autonome (capacité `battery`) : un volet SOLAIRE vit sur sa
+   * batterie, rechargée par son panneau. Absente = le moteur ne la publie pas.
+   */
+  batteryPct: pct.optional(),
 })
 
 /** `on` : une appli est à l'écran mais ne dit pas ce qu'elle fait (Netflix natif sur un Chromecast) — ni lecture ni pause connues. */
