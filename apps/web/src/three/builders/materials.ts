@@ -149,6 +149,8 @@ export function createMaterials(theme: SceneTheme, look: StyleLook, textures: Su
     if (v instanceof Material) all.add(v)
     else for (const m of Object.values(v as Record<string, Material>)) all.add(m)
   }
+  // dehors, à la hauteur d'un niveau : une lampe d'intérieur les tacherait à travers la façade
+  for (const m of [set.terrain, set.roof, set.roofFlat, ...Object.values(set.zones)]) m.userData.noLamps = true
   const mats = { ...set, all }
   applyLook(mats, theme, look)
   return mats

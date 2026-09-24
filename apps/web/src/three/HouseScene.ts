@@ -1,7 +1,7 @@
 import {
   AmbientLight, Color, DirectionalLight, DoubleSide, HemisphereLight, MOUSE, OrthographicCamera, PerspectiveCamera, Plane, Raycaster, Scene, Shape, ShapeGeometry, Spherical, type Texture, TOUCH, Vector2, Vector3, VSMShadowMap,
   WebGLRenderer, Box3, BoxGeometry, Fog, Mesh, MeshBasicMaterial, type Material, type MeshStandardMaterial, type Object3D,
-  Group, SphereGeometry, CylinderGeometry, RingGeometry, Frustum, Matrix4, Sphere,
+  Group, SphereGeometry, CylinderGeometry, RingGeometry, Frustum, Matrix4, Sphere, PointLight,
 } from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js'
@@ -14,7 +14,8 @@ import {
 import { applyLook, backdropColor, createMaterials, disposeMaterials, type MaterialSet } from './builders/materials'
 import { loadPackTextures, packById } from './textures/assets'
 import { createSkyEnvironment, overcastSky } from './core/sky'
-import { DECOR_LAYER, LAMP_LAYER, SITE_DECOR_LAYER } from './core/layers'
+import { DECOR_LAYER, SITE_DECOR_LAYER } from './core/layers'
+import { setLevelHeights } from './core/levelLight'
 import { createPostPipeline, detectQuality, gpuName, PIXEL_RATIO, tiltBlurFactor, toneMappingOf, type EffectiveQuality, type PostPipeline, type RenderQuality } from './core/post'
 import { dayFactor, fogDistance, sunDirection, type SceneAmbience } from './core/ambience'
 import { Precipitation } from './effects/precipitation'
@@ -96,16 +97,12 @@ export interface SceneDebugStats {
    * qui gonfle pendant qu'on tourne désigne tout sauf notre dessin.
    */
   outsideMs: number
-  /** Appels de dessin et triangles d'UNE image, toutes passes comprises. */
+  /** Appels de dessin et triangles d'UNE image, tous rendus compris (scène, occlusion, effets). */
   calls: number
   triangles: number
   programs: number
   geometries: number
   textures: number
-  /** Passes de rendu de la dernière image (1 globale + une par niveau qui a de quoi la mériter). */
-  passes: number
-  /** Niveaux qui méritent leur passe, indépendamment de ce que la dernière image a dessiné. */
-  levelPasses: number
   /** La carte d'ombre du soleil a-t-elle été refaite à la dernière image ? */
   shadowsRebuilt: boolean
   /** Lampes qui portent une ombre cubique (six rendus de profondeur chacune). */
@@ -317,14 +314,7 @@ export class HouseScene {
    * moment après un changement de scène — le temps qu'une course de volet s'achève.
    */
   private shadowsDirtyUntil = 0
-  private perf = { fps: 0, cpuMs: 0, outsideMs: 0, lastStart: 0, wasInteractive: false, frames: 0, since: 0, passes: 1, shadowsRebuilt: false }
-  /**
-   * Niveaux qui MÉRITENT leur passe : ceux qui portent une lampe allumée (à relire sous sa lumière)
-   * ou un décor visible (onde, jauge, guide — que la passe globale n'a pas dessiné). Sur une maison
-   * de trente pièces, une passe de plus, c'est tout le bâti redessiné ; en plein jour, lampes
-   * éteintes, il n'y en a aucune à faire.
-   */
-  private levelsNeedingPass = new Set<string>()
+  private perf = { fps: 0, cpuMs: 0, outsideMs: 0, lastStart: 0, wasInteractive: false, frames: 0, since: 0, shadowsRebuilt: false }
   private probe: FrameProbe | null = null
   private labelsVisible = true
   private labelsIdle: ReturnType<typeof setTimeout> | null = null
@@ -421,6 +411,8 @@ export class HouseScene {
   private readonly deps: HouseSceneDeps
   private readonly sun: DirectionalLight
   private readonly hemi: HemisphereLight
+  /** Lampes ÉTEINTES qui tiennent la place des lampes des niveaux masqués : voir `padLamps`. */
+  private readonly lampPadding = new Group()
   private readonly ambient: AmbientLight
   /** Largeur (px) du bord droit du canvas couverte par le panneau flottant : le cadrage vise la partie libre. */
   private viewInsetRight = 0
@@ -447,13 +439,13 @@ export class HouseScene {
       surface: makeWaterAlive(this.materials.zones.pool, 'surface', this.water),
       basin: makeWaterAlive(this.materials.poolBasin, 'basin', this.water),
     }
-    // Voir `render()` : les matrices monde se mettent à jour une fois par image, pas une fois par passe.
+    // Voir `render()` : les matrices monde se mettent à jour une fois par image, pas une fois par rendu.
     this.scene.matrixWorldAutoUpdate = false
     this.perspectiveCamera = new PerspectiveCamera(38, 1, 0.1, 500)
     this.camera = this.perspectiveCamera
     this.camera.position.set(20, 18, 20)
-    // halos, ondes, jauges — d'un niveau et du jardin — et les lampes d'intérieur (`core/layers.ts`)
-    for (const l of [DECOR_LAYER, SITE_DECOR_LAYER, LAMP_LAYER]) this.camera.layers.enable(l)
+    // halos, ondes, jauges — d'un niveau et du jardin (`core/layers.ts`)
+    for (const l of [DECOR_LAYER, SITE_DECOR_LAYER]) this.camera.layers.enable(l)
     // Le lancer de rayon ne teste QUE des listes explicites (jamais l'arbre) : lui ouvrir la couche
     // des décors ne rend donc rien de plus touchable, mais c'est ce qui permet d'attraper la poignée
     // d'une ouverture, qui y vit pour être dessinée APRÈS les murs de son niveau. Sans cette ligne,
@@ -475,7 +467,7 @@ export class HouseScene {
     this.hemi = new HemisphereLight(0xffffff, 0x8899aa, 1)
     this.ambient = new AmbientLight(0xffffff, 0.25)
     this.sun = new DirectionalLight(0xffffff, 2)
-    this.scene.add(this.hemi, this.ambient, this.sun)
+    this.scene.add(this.hemi, this.ambient, this.sun, this.lampPadding)
     this.applyLighting()
     this.sun.castShadow = true
     this.sun.shadow.mapSize.set(2048, 2048)
@@ -565,7 +557,6 @@ export class HouseScene {
     this.buildOpeningHandles()             // la racine est neuve : le mode édition repose ses poignées
     this.buildOriginMark()                 // …son repère d'origine…
     this.refreshOpeningNotes()             // …et ses étiquettes, qui vivent dans un groupe jeté avec elle
-    this.refreshLevelPasses()
     const c = this.geometry.bounds
     this.controls?.target.set((c.min[0] + c.max[0]) / 2, 0, -(c.min[1] + c.max[1]) / 2)
     this.applyLevelFocus()
@@ -926,7 +917,6 @@ export class HouseScene {
     this.refreshOpeningNotes()
     this.highlightRoom(this.highlightedRoom)
     this.applyLevelFocus()
-    this.refreshLevelPasses()
     if (!this.openingDragger?.active()) this.invalidateShadows()
     this.loop.invalidate()
   }
@@ -982,7 +972,6 @@ export class HouseScene {
     this.buildMarkers()
     this.updateStates(this.states, true)
     this.applyLevelFocus()
-    this.refreshLevelPasses()
     this.invalidateShadows()
     this.loop.invalidate()
   }
@@ -994,12 +983,10 @@ export class HouseScene {
    * `null` sort du mode. Les événements de glissement nomment le marqueur ATTRAPÉ ; à l'appelant d'en
    * déduire ce que devient le groupe.
    */
-  /** Le guide du mode « déplacer » est un décor : le niveau qui le porte a besoin de sa passe. */
   setMovable(key: string | string[] | null): void {
     this.movableKeys = key === null ? [] : Array.isArray(key) ? key : [key]
     this.grabbedKey = null
     for (const m of this.markers.values()) m.setMoving(this.movableKeys.includes(m.key), m.device.position[2], m.key === this.movableKeys[0])
-    this.refreshLevelPasses()
     this.drag?.detach()
     this.drag = null
     if (this.movableKeys.length > 0 && !this.deps.headless) {
@@ -1029,9 +1016,6 @@ export class HouseScene {
     this.buildOpeningHandles()
     this.buildOriginMark()
     this.refreshOpeningNotes()
-    // poignées, repère et cotes sont des décors de niveau : c'est leur présence qui vaut sa passe à
-    // un niveau, et leur départ qui la lui retire
-    this.refreshLevelPasses()
     this.applyLevelFocus()                 // les poignées d'un niveau masqué n'ont pas à se montrer
     this.loop.invalidate()
   }
@@ -1044,7 +1028,6 @@ export class HouseScene {
     this.selectedOpeningId = id
     this.styleOpeningHandles()
     this.refreshOpeningNotes()
-    this.refreshLevelPasses()              // le tracé des cotes naît et meurt avec la sélection
     this.openingDragger?.detach()
     this.openingDragger = null
     if (id && this.editingOpenings && !this.deps.headless) {
@@ -1230,9 +1213,8 @@ export class HouseScene {
    * que le voile touchable et le cadre, par simple échange de matériau (`styleParkingHandles`).
    *
    * Où le poser : dans les MARQUEURS du niveau de la pièce qui la porte (un garage), sur
-   * `DECOR_LAYER`, faute de quoi la passe de ce niveau redessinerait son sol par-dessus et le
-   * marquage disparaîtrait — le piège déjà rencontré avec les poignées d'ouverture. Dehors, c'est
-   * du sol comme un autre : dans le groupe du site, dessiné par la passe globale avec le terrain.
+   * `DECOR_LAYER` — un décor translucide, hors du relevé d'occlusion, masqué avec son niveau. Dehors,
+   * c'est du sol comme un autre : dans le groupe du site, avec le terrain.
    */
   private buildParkings(): void {
     this.clearParkings()
@@ -1253,7 +1235,6 @@ export class HouseScene {
       this.parkingNodes.set(p.id, nodes)
     }
     this.styleParkingHandles()
-    this.refreshLevelPasses()              // un niveau qui porte du marquage a besoin de sa passe
     this.loop.invalidate()
   }
 
@@ -1550,21 +1531,9 @@ export class HouseScene {
    * Les deux cadres existent en permanence sur chaque poignée ; la sélection n'éteint que des
    * MATÉRIAUX. Rien ne se construit ni ne se détruit en sélectionnant.
    *
-   * **Elles vivent sur `DECOR_LAYER`, dans le groupe des MARQUEURS de leur niveau** — le chemin du
-   * guide du mode « déplacer », et il n'y en a pas d'autre pour quelque chose qui doit se voir
-   * PAR-DESSUS un mur. Essayé d'abord : `SITE_DECOR_LAYER`, dessiné dans la passe globale, pour
-   * économiser la passe qu'un décor de niveau coûte. Le trait se voyait dans l'embrasure et nulle
-   * part ailleurs, et les lignes de cote n'apparaissaient jamais — pour cette raison :
-   *
-   *   la passe d'un niveau REDESSINE ses murs et ses sols par-dessus l'image de la passe globale,
-   *   sans effacer et sans que la profondeur l'arrête (`depthWrite: false` laisse le tampon à la
-   *   valeur du mur, que le mur repasse à égalité). Tout ce que la passe globale a posé SUR une
-   *   surface de niveau est donc recouvert dès que ce niveau a une passe à lui.
-   *
-   * Un trou de mur n'a pas de surface à redessiner : c'est pourquoi le cadre d'une poignée survivait
-   * dans l'embrasure alors que la cote posée sur le mur, elle, disparaissait. Sur `DECOR_LAYER` le
-   * décor est dessiné DANS la passe du niveau, donc après ses murs ; et `refreshLevelPasses` donne sa
-   * passe au niveau justement parce qu'il porte ce décor.
+   * **Elles vivent sur `DECOR_LAYER`, dans le groupe des MARQUEURS de leur niveau** : hors du relevé
+   * d'occlusion (un voile translucide n'est pas un obstacle), touchables (le lancer de rayon ouvre
+   * cette couche), et masquées avec leur niveau.
    */
   private buildOpeningHandles(): void {
     this.clearOpeningHandles()
@@ -1804,7 +1773,7 @@ export class HouseScene {
    * fichier n'est pas un réglage.
    *
    * Il est posé dans les marqueurs du niveau qui porte le z = 0 du fichier, et sur `DECOR_LAYER`,
-   * pour la même raison que les poignées : ailleurs, le sol de ce niveau le recouvrirait à sa passe.
+   * comme les poignées.
    */
   private buildOriginMark(): void {
     this.clearOriginMark()
@@ -2150,7 +2119,7 @@ export class HouseScene {
         if (next && (next.kind === 'cover' || next.kind === 'vehicle' || next.kind === 'light')) this.invalidateShadows()
       }
     }
-    if (touched) { this.refreshLevelPasses(); this.loop.invalidate() }
+    if (touched) this.loop.invalidate()
   }
 
   // ---- focus / caméra -----------------------------------------------------
@@ -2236,6 +2205,9 @@ export class HouseScene {
   focusLevel(levelId: string | null): void {
     this.focusedLevelId = levelId
     this.applyLevelFocus()
+    // un niveau masqué ne porte plus d'ombre (et un niveau rendu en porte de nouveau) : sans relevé,
+    // l'étage caché continuait d'assombrir celui qu'on regarde
+    this.invalidateShadows()
     this.loop.invalidate()
   }
 
@@ -2263,6 +2235,26 @@ export class HouseScene {
       if (m.object.parent !== this.nodes.outdoorMarkers) continue
       m.setPillVisible(!focused || !this.coveredByFocusedFloor(m))
     }
+    this.padLamps()
+  }
+
+  /**
+   * Garde CONSTANT le nombre de lumières ponctuelles que voit le rendu. Three compile un programme
+   * par nombre de lumières : masquer l'étage retirait ses lampes, et la première visite du
+   * rez-de-chaussée recompilait toutes les matières — 2,2 s d'image figée sur l'iGPU (mesuré le
+   * 2026-09-24). Une lampe éteinte, posée hors de tout niveau, prend la place de chaque lampe
+   * masquée ; le shader ne calcule rien pour elle (`core/levelLight.ts`).
+   */
+  private padLamps(): void {
+    if (!this.nodes) return
+    let all = 0, shown = 0
+    for (const n of this.nodes.levels.values()) {
+      n.markers.traverse((o) => { if ((o as PointLight).isPointLight) all++ })
+      if (n.group.visible && n.markers.visible) n.markers.traverseVisible((o) => { if ((o as PointLight).isPointLight) shown++ })
+    }
+    const pad = this.lampPadding
+    while (pad.children.length < all - shown) pad.add(new PointLight(0, 0))
+    while (pad.children.length > all - shown) pad.remove(pad.children[pad.children.length - 1]!)
   }
 
   /**
@@ -2661,8 +2653,6 @@ export class HouseScene {
       programs: info?.programs?.length ?? 0,
       geometries: info?.memory.geometries ?? 0,
       textures: info?.memory.textures ?? 0,
-      passes: this.perf.passes,
-      levelPasses: this.levelsNeedingPass.size,
       shadowsRebuilt: this.perf.shadowsRebuilt,
       pointShadows,
       markers: this.markers.size,
@@ -2693,7 +2683,6 @@ export class HouseScene {
     this.buildParkings()                   // le marquage au sol suit le thème, comme le reste
     this.buildOriginMark()                 // le repère d'origine aussi
     this.highlightRoom(this.highlightedRoom)
-    this.refreshLevelPasses()              // l'heure change ce qu'une lampe allumée vaut
     this.invalidateShadows()               // le soleil a pu bouger
     this.syncStorm()
     this.syncPrecipitation()
@@ -2917,7 +2906,7 @@ export class HouseScene {
     }
     this.post = createPostPipeline({
       renderer: this.renderer, scene: this.scene, camera: this.camera, quality: wanted,
-      draw: (target) => { this.renderer!.setRenderTarget(target); this.renderPasses(this.renderer!) },
+      draw: (target) => { this.renderer!.setRenderTarget(target); this.renderScene(this.renderer!) },
       // La machine ne suit pas : on descend d'un cran, une seule fois, sans rien demander à personne.
       onDowngrade: (to) => { this.options = { ...this.options, quality: to }; this.applyQuality(); this.loop.invalidate() },
       ...(this.deps.now ? { now: this.deps.now } : {}),
@@ -3012,13 +3001,11 @@ export class HouseScene {
     this.probe?.begin()
     const t0 = this.deps.now?.() ?? performance.now()
     // Les matrices monde, UNE fois par image. Three les recalcule au début de CHAQUE `render()` —
-    // or une image en compte plusieurs (la passe globale, une par niveau éclairé, celles de
-    // l'occlusion ambiante) plus celle du `CSS2DRenderer`, et rien ne bouge entre elles. Sur une
-    // maison de trente pièces et quatre-vingts marqueurs, c'était le même arbre reparcouru quatre
-    // fois pour le même résultat. `matrixWorldAutoUpdate = false` coupe le recalcul automatique ;
-    // c'est nous qui le demandons, ici, avant la première passe.
+    // or une image en compte plusieurs (la scène, celle de l'occlusion ambiante) plus celle du
+    // `CSS2DRenderer`, et rien ne bouge entre elles. `matrixWorldAutoUpdate = false` coupe le
+    // recalcul automatique ; c'est nous qui le demandons, ici, avant le premier rendu.
     this.scene.updateMatrixWorld()
-    // Les compteurs de three se remettent à zéro à chaque `render()` : avec plusieurs passes par
+    // Les compteurs de three se remettent à zéro à chaque `render()` : avec plusieurs rendus par
     // image, il faut les tenir nous-mêmes pour lire un total d'IMAGE et non de dernière passe.
     if (this.renderer) { this.renderer.info.autoReset = false; this.renderer.info.reset() }
     // les caustiques d'abord : le fond du bassin les lit dans cette image-ci
@@ -3027,7 +3014,7 @@ export class HouseScene {
     // sans elle, on dessine droit à l'écran.
     // Seules les images d'un geste SANS relevé d'ombres disent quelque chose de la machine au garde-fou.
     if (this.post) this.post.render(interactive && t0 > this.shadowsDirtyUntil)
-    else if (this.renderer) { this.renderer.setRenderTarget(null); this.renderPasses(this.renderer) }
+    else if (this.renderer) { this.renderer.setRenderTarget(null); this.renderScene(this.renderer) }
     this.measure(t0, interactive)
     this.updatePillLod()
     this.updatePillFocus()
@@ -3036,99 +3023,20 @@ export class HouseScene {
   }
 
   /**
-   * Rendu en PASSES : les lampes d'un niveau n'éclairent que ce niveau.
-   *
-   * Une lumière ponctuelle ignore la géométrie : le plafonnier du salon éclairait le sas d'entrée
-   * en dessous à travers la dalle, et ceux du rez-de-chaussée l'étage par en dessous. Des ombres par
-   * lampe (six cartes chacune) sont hors de prix sur tablette. Three ne collecte que les lumières
-   * VISIBLES de la scène au moment du `render` : on rend donc
-   *   - d'abord tout — site, toit, niveaux — sans aucun marqueur de niveau, donc sans leurs lampes,
-   *     sous le seul éclairage global (soleil, ciel) ; c'est cette passe qui refait la carte d'ombre ;
-   *   - puis chaque niveau visible SEUL, avec ses marqueurs et donc ses lampes : ses surfaces sont
-   *     redessinées éclairées par elles, par-dessus la première passe (même profondeur, pas
-   *     d'effacement), et rien d'autre ne les voit.
-   * Les murs et sols d'un niveau se dessinent deux fois ; les marqueurs une seule (un halo additif
-   * dessiné deux fois doublerait). Reste : dans un même niveau, une lampe éclaire encore à travers
-   * une cloison.
+   * UNE passe : toute la scène, lampes comprises. Une lampe d'intérieur n'éclaire que son niveau par
+   * le masque de hauteur que chaque matière porte (`core/levelLight.ts`), plus par un rendu en passes.
+   * Reste, comme avant : dans un même niveau, une lampe éclaire encore à travers une cloison.
    */
-  private renderPasses(r: WebGLRenderer): void {
-    const nodes = this.nodes
-    if (!nodes) { r.render(this.scene, this.camera); return }
-    const levels = [...nodes.levels.values()].filter((n) => n.group.visible)
-    // Un niveau ne se redessine que s'il a quelque chose à montrer de plus que la passe globale :
-    // une lampe allumée, ou un décor. Un niveau fantôme n'a même pas de marqueurs.
-    const lit = [...nodes.levels.entries()]
-      .filter(([id, n]) => n.group.visible && n.markers.visible && this.levelsNeedingPass.has(id))
-      .map(([, n]) => n)
-    const roofShown = nodes.roof?.visible ?? false
-    // Ce que le JARDIN dessine : son sol et ses zones. Ses appareils, eux, restent visibles dans
-    // toutes les passes — leurs lampes portent une ombre et doivent éclairer la façade partout.
-    const siteSurfaces = [nodes.ground, nodes.terrain, ...nodes.zones.values()]
-
-    // 1) LA MATIÈRE, tout entière, sous l'éclairage global ET les lampes du jardin (qui portent une
-    //    vraie ombre, donc n'entrent pas par les murs). C'est cette passe qui refait la carte d'ombre,
-    //    et les appareils y sont VISIBLES : un volet fermé doit barrer le soleil, une voiture poser son
-    //    ombre sur l'allée. Ce qui en sort, ce sont les lampes d'INTÉRIEUR et les décors des niveaux —
-    //    par leur couche, jamais par leur visibilité (`core/layers.ts`).
+  private renderScene(r: WebGLRenderer): void {
+    // les tranches du masque : les élévations MONDE des niveaux (la racine peut être déplacée)
+    if (this.nodes) setLevelHeights([...this.nodes.levels.values()].map((n) => n.group.matrixWorld.elements[13]!))
     // Les ombres ne se refont qu'après un changement de scène, pas parce que la caméra a tourné :
     // le relevé redessine tout le bâti depuis le soleil, et six faces de plus par lampe de jardin.
     const rebuildShadows = (this.deps.now?.() ?? performance.now()) <= this.shadowsDirtyUntil
     this.perf.shadowsRebuilt = rebuildShadows
-    // Un appareil dessiné dans la passe globale PUIS dans celle de son niveau l'est deux fois pour
-    // rien : le second passage réécrit le premier, au même endroit, en mieux éclairé. Sur la maison
-    // réelle les marqueurs pèsent la moitié des appels de dessin — c'est la moitié qu'on ne paie
-    // plus. Ils restent dans la passe globale quand elle relève les OMBRES (il faut alors qu'ils
-    // soient là pour les porter) et quand leur niveau n'a pas de passe à lui.
-    const duplicated = rebuildShadows ? [] : lit
-    for (const n of duplicated) n.markers.visible = false
-    this.camera.layers.disable(DECOR_LAYER)
-    this.camera.layers.disable(LAMP_LAYER)
-    r.autoClear = true
     r.shadowMap.autoUpdate = rebuildShadows
     r.render(this.scene, this.camera)
     r.shadowMap.autoUpdate = false
-    r.autoClear = false
-    for (const n of duplicated) n.markers.visible = true
-    this.camera.layers.enable(DECOR_LAYER)
-    this.camera.layers.enable(LAMP_LAYER)
-    this.camera.layers.disable(SITE_DECOR_LAYER)   // le jardin a déjà posé ses halos
-
-    // 2) un passage par NIVEAU qui porte des lampes : il est seul à l'écran, ses surfaces se
-    //    redessinent éclairées par SES lampes (plus le global et le jardin, toujours là), par-dessus
-    //    la première passe — même tampon de profondeur, pas d'effacement. Le sol du jardin, lui, est
-    //    retiré : sinon une lampe d'intérieur viendrait le tacher à travers la façade.
-    for (const m of siteSurfaces) m.visible = false
-    if (nodes.roof) nodes.roof.visible = false
-    for (const n of lit) {
-      for (const o of levels) o.group.visible = o === n
-      r.render(this.scene, this.camera)
-    }
-    this.perf.passes = 1 + lit.length
-
-    for (const n of levels) n.group.visible = true
-    for (const m of siteSurfaces) m.visible = true
-    if (nodes.roof) nodes.roof.visible = roofShown
-    this.camera.layers.enable(SITE_DECOR_LAYER)
-    r.autoClear = true
-  }
-
-  /**
-   * Recalcule quels niveaux méritent leur passe. Appelé quand un état, un appareil ou l'apparence
-   * change — jamais pendant le rendu : la caméra ne change rien à cette réponse.
-   */
-  private refreshLevelPasses(): void {
-    this.levelsNeedingPass.clear()
-    if (!this.nodes) return
-    for (const [id, n] of this.nodes.levels) {
-      let needs = false
-      n.markers.traverse((o) => {
-        if (needs || !o.visible) return
-        const light = o as unknown as { isPointLight?: boolean; intensity?: number }
-        if (light.isPointLight) { if ((light.intensity ?? 0) > 0) needs = true; return }
-        if (o.layers.mask === 1 << DECOR_LAYER) needs = true
-      })
-      if (needs) this.levelsNeedingPass.add(id)
-    }
   }
 
   /** Temps passé dans `render()`, temps passé AILLEURS, et cadence. Lu par le voile de débogage. */

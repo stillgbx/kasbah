@@ -3,6 +3,7 @@ import {
   AdditiveBlending, InstancedBufferGeometry, LinearFilter, LinearMipmapLinearFilter, Mesh, OrthographicCamera,
   PlaneGeometry, RepeatWrapping, Scene, ShaderMaterial, Color as ThreeColor, Vector3, WebGLRenderTarget,
 } from 'three'
+import { applyLevelLight } from '../core/levelLight'
 
 // L'eau d'une piscine qui ne fait plus semblant. Trois gestes, sur les deux matériaux du bassin
 // (`builders/materials.ts`) :
@@ -238,7 +239,10 @@ export function setWaterTint(u: WaterUniforms, tint: Color): void {
 export function makeWaterAlive(mat: MeshStandardMaterial, role: WaterRole, water: WaterUniforms): WaterStrength {
   const strength: WaterStrength = { value: 0 }
   const basin = role === 'basin'
+  // l'eau est au jardin : aucune lampe d'intérieur ne l'atteint (`core/levelLight.ts`)
+  mat.userData.noLamps = true
   mat.onBeforeCompile = (shader) => {
+    applyLevelLight(shader, mat)
     shader.uniforms.uWaterTime = water.time
     shader.uniforms.uWaterStrength = strength
     if (basin) {

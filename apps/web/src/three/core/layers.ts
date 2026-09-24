@@ -1,37 +1,18 @@
-// Couches de rendu (three `Object3D.layers`). Trois, et chacune existe pour permettre à une passe de
-// voir la scène AUTREMENT que la suivante — three teste la couche d'un objet contre celle de la
-// caméra, y compris pour les lumières (`projectObject`) et pour le relevé des ombres
-// (`WebGLShadowMap.renderObject`). C'est ce qui remplace le masquage par `visible` : masquer un objet
-// pour l'exclure d'un éclairage l'exclut AUSSI de l'ombre — un volet fermé laissait passer le soleil.
+// Couches de rendu (three `Object3D.layers`). Deux, pour que l'OCCLUSION ambiante voie la scène
+// autrement que le rendu : `ArchitectureGTAOPass` (`core/post.ts`) les éteint le temps de son relevé
+// en profondeur et en normales. Un halo est un sprite additif, sans volume ; vu par ce relevé, il
+// devenait un panneau plein face à la caméra, donc un obstacle, donc un carré NOIR sous chaque lampe
+// allumée. Tout ce qui est translucide ou additif, posé sur la scène sans en être la matière, y vit.
 //
-// `DECOR_LAYER` — ce qui est POSÉ sur la scène sans en être la matière, pour les appareils d'un
-// NIVEAU : halo d'une lampe, onde d'un lecteur, jauges d'un coffret ou d'un module, pochette sur un
-// écran, guide du mode « déplacer », et le décor du mode ÉDITION (poignées d'ouverture, lignes de
-// cote, repère d'origine).
+// `DECOR_LAYER` — les décors des appareils d'un NIVEAU (halo d'une lampe, onde d'un lecteur, jauges
+// d'un coffret ou d'un module, pochette sur un écran, guide du mode « déplacer ») et ceux du mode
+// ÉDITION (poignées d'ouverture, lignes de cote, repère d'origine, marquage des places). Le lancer
+// de rayon ouvre cette couche : c'est ce qui rend une poignée touchable.
 //
-// C'est ici que se joue une règle qu'on n'apprend qu'en se trompant : **ce qui doit se voir
-// par-dessus un mur passe par cette couche ET par le groupe `markers` de son niveau**. La passe d'un
-// niveau redessine ses murs et ses sols par-dessus l'image de la passe globale, sans effacer ; tout
-// ce que la passe globale a posé sur une surface de niveau est donc recouvert. Un décor rangé sur
-// `SITE_DECOR_LAYER` « pour économiser une passe » devient invisible — et il le devient
-// SILENCIEUSEMENT sur le plein d'un mur tout en survivant dans un trou, qui n'a pas de surface à
-// redessiner. Deux passes l'éteignent :
-//   - l'OCCLUSION ambiante, qui redessine la scène en profondeur et en normales. Un halo est un
-//     sprite additif, sans volume ; vue par cette passe, l'image devenait un panneau plein face à la
-//     caméra, donc un obstacle, donc un carré NOIR sous chaque lampe allumée ;
-//   - la passe GLOBALE, qui dessine toute la matière d'un coup. Un décor translucide dessiné là PUIS
-//     dans la passe de son niveau se mélangerait deux fois.
+// `SITE_DECOR_LAYER` — les mêmes décors, mais ceux du JARDIN, que le lancer de rayon ne voit pas.
 //
-// `SITE_DECOR_LAYER` — les mêmes décors, mais ceux du JARDIN. Ils ne sont pas dessinés au même
-// moment : le décor d'un niveau l'est dans la passe de son niveau, celui du jardin dans la passe
-// globale — la seule où le terrain est dessiné. Deux couches pour une même idée, parce que c'est le
-// MOMENT du dessin qui diffère, pas la nature de l'objet.
-//
-// `LAMP_LAYER` — les lumières ponctuelles des lampes d'un NIVEAU, et elles seules. La passe globale
-// l'éteint : c'est ce qui fait qu'une lampe d'intérieur n'éclaire que les surfaces de son niveau,
-// une `PointLight` ignorant la géométrie qui devrait l'arrêter. Une lampe de JARDIN, elle, reste sur
-// la couche commune et porte une vraie ombre : elle doit éclairer la façade sans traverser le mur, et
-// la seule chose qui arrête vraiment la lumière est une ombre portée.
+// Jusqu'au 2026-09-24 la scène se rendait en PASSES (une globale, puis une par niveau allumé) et
+// une troisième couche, `LAMP_LAYER`, tenait les lampes d'intérieur hors de la passe globale. Une
+// seule passe aujourd'hui : la lampe est cantonnée à son niveau par le shader (`core/levelLight.ts`).
 export const DECOR_LAYER = 1
-export const LAMP_LAYER = 2
 export const SITE_DECOR_LAYER = 3

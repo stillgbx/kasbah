@@ -204,8 +204,8 @@ export abstract class DeviceMarker {
 
   /**
    * Marque un objet comme DÉCOR : il est posé sur la scène, il n'en est pas la matière. Il sort donc
-   * du relevé d'occlusion et de la passe globale (voir `core/layers.ts`) — ce qui vaut pour tout ce
-   * qui est translucide ou additif, et pour rien d'autre.
+   * du relevé d'occlusion (voir `core/layers.ts`) — ce qui vaut pour tout ce qui est translucide ou
+   * additif, et pour rien d'autre.
    */
   protected asDecor<T extends Object3D>(o: T): T {
     o.layers.set(this.ctx.outdoor ? SITE_DECOR_LAYER : DECOR_LAYER)

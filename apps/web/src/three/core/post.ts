@@ -1,10 +1,11 @@
-import { ACESFilmicToneMapping, AgXToneMapping, HalfFloatType, NeutralToneMapping, NoToneMapping, Vector2, WebGLRenderTarget, type Camera, type Scene, type ToneMapping, type WebGLRenderer } from 'three'
+import { ACESFilmicToneMapping, AgXToneMapping, HalfFloatType, NeutralToneMapping, NoBlending, NoToneMapping, ShaderMaterial, UniformsUtils, Vector2, WebGLRenderTarget, type Camera, type Scene, type ToneMapping, type WebGLRenderer } from 'three'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
-import { Pass } from 'three/addons/postprocessing/Pass.js'
+import { FullScreenQuad, Pass } from 'three/addons/postprocessing/Pass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
+import { CopyShader } from 'three/addons/shaders/CopyShader.js'
 import { DECOR_LAYER, SITE_DECOR_LAYER } from './layers'
 import type { PostLook } from '../styles/types'
 
@@ -20,12 +21,21 @@ import type { PostLook } from '../styles/types'
 //     La scène en faisait déjà une imitation par sprite additif (`GLOW`), qui reste — les deux se
 //     complètent, l'un donne le volume de la source, l'autre la diffusion dans l'image.
 //
-// Puis une vignette, en espace d'affichage, parce que c'est là qu'elle se règle à l'œil.
+// Puis une vignette, en espace d'affichage, parce que c'est là qu'elle se règle à l'œil — dans la
+// passe de sortie elle-même, pas dans une passe à elle (`VignetteOutputPass`).
 //
 // COÛT : ces passes sont payées à chaque image rendue. Le rendu étant à la demande
 // (`core/renderLoop.ts`), le coût au repos reste nul — mais pendant un vol de caméra sur tablette,
 // il compte. D'où les trois niveaux de `RenderQuality`, et le garde-fou qui descend d'un cran tout
 // seul si les images coûtent trop cher.
+//
+// L'ANTICRÉNELAGE (MSAA) ne sert qu'au rendu de la SCÈNE : c'est là que naissent les arêtes. Il vit
+// donc dans la cible de `ScenePass`, recopiée une fois dans le tampon du composer ; les deux tampons
+// du composer, eux, n'en ont pas. Jusqu'au 2026-09-25 la cible MSAA était celle du composer, qui la
+// CLONE pour son second tampon : chaque passe plein écran (bloom, sortie, vignette, tilt-shift)
+// écrivait dans une cible multi-échantillonnée puis la résolvait. Mesuré sur un iGPU (Radeon
+// intégrée, 1904×905, qualité moyenne) : 22 ms de GPU par image, 7,7 ms sans — le bloom passait de
+// 4,9 à 1,7 ms, chaque passe de shader de 2,8 à 0,8 ms.
 
 /** Ce que l'utilisateur choisit. `auto` mesure la machine, puis se corrige si les images traînent. */
 export type RenderQuality = 'auto' | 'high' | 'medium' | 'low'
@@ -99,25 +109,25 @@ export function createCostGuard(onOver: () => void, budgetMs = FRAME_BUDGET_MS, 
   }
 }
 
-/** Vignette appliquée APRÈS le tone mapping : c'est une atténuation d'objectif, pas une lumière. */
-const VIGNETTE_SHADER = {
-  uniforms: { tDiffuse: { value: null as unknown }, amount: { value: 0.3 } },
-  vertexShader: /* glsl */`
-    varying vec2 vUv;
-    void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
-  `,
-  fragmentShader: /* glsl */`
-    uniform sampler2D tDiffuse;
-    uniform float amount;
-    varying vec2 vUv;
-    void main() {
-      vec4 c = texture2D(tDiffuse, vUv);
+/**
+ * La SORTIE (tone mapping, espace colorimétrique) et la VIGNETTE en une passe : une lecture et une
+ * écriture plein écran de moins. La vignette est appliquée APRÈS la conversion sRGB, comme quand elle
+ * avait sa passe : c'est une atténuation d'objectif, pas une lumière. `vignette = 0` l'annule.
+ */
+class VignetteOutputPass extends OutputPass {
+  readonly vignette = { value: 0 }
+  constructor() {
+    super()
+    this.uniforms.vignette = this.vignette
+    const frag = this.material.fragmentShader
+    const at = frag.lastIndexOf('}')
+    if (!frag.includes('varying vec2 vUv;') || at < 0) throw new Error('post: OutputShader a changé')
+    this.material.fragmentShader = frag.slice(0, at).replace('varying vec2 vUv;', 'varying vec2 vUv;\nuniform float vignette;') + `
       // distance au centre, ramenée à 1 dans les coins ; courbe douce pour qu'aucun cercle ne se voie
-      float d = length(vUv - 0.5) * 1.41421356;
-      c.rgb *= 1.0 - amount * smoothstep(0.35, 1.0, d);
-      gl_FragColor = c;
-    }
-  `,
+      float kasbahD = length( vUv - 0.5 ) * 1.41421356;
+      gl_FragColor.rgb *= 1.0 - vignette * smoothstep( 0.35, 1.0, kasbahD );
+    ` + frag.slice(at)
+  }
 }
 
 /** Largeur de la transition net → flou, en fraction de l'image. */
@@ -131,7 +141,7 @@ const TILT_MAX_PX = 14
  * Ce n'est PAS une profondeur de champ : rien ici ne lit la profondeur. Et c'est fidèle — une photo
  * tilt-shift est faite avec un plan de netteté INCLINÉ, qui vu d'une caméra plongeante se lit
  * précisément comme une bande horizontale. Un vrai flou de profondeur (`BokehPass`) demanderait un
- * rendu de la scène en profondeur, alors qu'elle est déjà rendue en plusieurs passes par niveau.
+ * rendu de plus de la scène, en profondeur.
  *
  * Deux passes séparables (horizontale puis verticale) plutôt qu'un noyau 2D : neuf échantillons
  * chacune au lieu de quatre-vingt-un, pour le même flou. Le rayon varie par pixel, ce qui n'est pas
@@ -189,18 +199,46 @@ export function tiltBlurFactor(uvY: number, look: { center: number; width: numbe
   return t * t * (3 - 2 * t)              // smoothstep, celui du shader
 }
 
-/** Dessine la scène (toutes passes de niveaux comprises) dans la cible donnée, `null` = l'écran. */
+/** Dessine la scène dans la cible donnée, `null` = l'écran. */
 export type DrawScene = (target: WebGLRenderTarget | null) => void
 
-/** La première passe : notre propre rendu multi-passes, là où un `RenderPass` ferait un seul `render`. */
+/**
+ * La première passe : notre propre rendu (ombres à la demande, caustiques), là où un `RenderPass`
+ * ferait un `render` nu. Elle porte l'ANTICRÉNELAGE : la scène est dessinée dans sa cible MSAA, puis
+ * recopiée — résolue — dans le tampon du composer, qui n'en a pas (voir l'en-tête).
+ */
 class ScenePass extends Pass {
-  constructor(private readonly draw: DrawScene) {
+  private readonly msaa: WebGLRenderTarget | null
+  private readonly copy: FullScreenQuad | null
+  private readonly copyMaterial: ShaderMaterial | null
+
+  constructor(private readonly draw: DrawScene, samples: number) {
     super()
     this.needsSwap = false          // comme `RenderPass` : la suite lit le tampon qu'on vient d'écrire
+    this.msaa = samples > 0 ? new WebGLRenderTarget(1, 1, { type: HalfFloatType, samples }) : null
+    // sans mélange : la copie remplace le tampon, alpha compris (le canvas est transparent)
+    this.copyMaterial = this.msaa
+      ? new ShaderMaterial({ ...CopyShader, uniforms: UniformsUtils.clone(CopyShader.uniforms), blending: NoBlending, depthTest: false, depthWrite: false })
+      : null
+    this.copy = this.copyMaterial ? new FullScreenQuad(this.copyMaterial) : null
   }
 
-  override render(_renderer: WebGLRenderer, _write: WebGLRenderTarget, read: WebGLRenderTarget): void {
-    this.draw(this.renderToScreen ? null : read)
+  override setSize(width: number, height: number): void {
+    this.msaa?.setSize(width, height)
+  }
+
+  override render(renderer: WebGLRenderer, _write: WebGLRenderTarget, read: WebGLRenderTarget): void {
+    if (!this.msaa || this.renderToScreen) { this.draw(this.renderToScreen ? null : read); return }
+    this.draw(this.msaa)
+    this.copyMaterial!.uniforms.tDiffuse!.value = this.msaa.texture
+    renderer.setRenderTarget(read)
+    this.copy!.render(renderer)
+  }
+
+  override dispose(): void {
+    this.msaa?.dispose()
+    this.copyMaterial?.dispose()
+    this.copy?.dispose()
   }
 }
 
@@ -246,8 +284,13 @@ export interface PostPipelineDeps {
 /** Ce qu'on lit de `EXT_disjoint_timer_query_webgl2` (absent des types du DOM). */
 interface TimerQueryExt { readonly TIME_ELAPSED_EXT: number; readonly GPU_DISJOINT_EXT: number }
 
-/** Au-delà de ce coût MÉDIAN par image, la qualité descend d'un cran (≈ 25 images/s sur les vols de caméra). */
-const FRAME_BUDGET_MS = 40
+/**
+ * Au-delà de ce coût MÉDIAN par image, la qualité descend d'un cran (≈ 40 images/s sur les vols de
+ * caméra). 40 ms jusqu'au 2026-09-25 : le garde-fou laissait tourner une machine à 25 images/s, ce
+ * qui se voit comme une vue qui rame. Repère mesuré sur un iGPU (Radeon intégrée, 1904×905) :
+ * « medium » 12 ms, « high » 29 ms — qui descend donc d'un cran, et c'est voulu.
+ */
+const FRAME_BUDGET_MS = 25
 /** Images observées avant de trancher : à 5 images/s, c'est déjà trois secondes de saccade. */
 const FRAMES_WATCHED = 16
 
@@ -256,9 +299,10 @@ export function createPostPipeline(deps: PostPipelineDeps): PostPipeline {
   const now = deps.now ?? (() => performance.now())
   const samples = SAMPLES[quality]
 
-  const target = new WebGLRenderTarget(1, 1, { type: HalfFloatType, samples })
+  // Sans MSAA : il est dans la cible de la scène (`ScenePass`), et le composer CLONE cette cible-ci.
+  const target = new WebGLRenderTarget(1, 1, { type: HalfFloatType })
   const composer = new EffectComposer(renderer, target)
-  composer.addPass(new ScenePass(draw))
+  composer.addPass(new ScenePass(draw, samples))
 
   // L'occlusion n'est calculée qu'en qualité haute : c'est la passe la plus chère du lot (elle rend
   // la scène une fois de plus, en profondeur et en normales).
@@ -271,10 +315,8 @@ export function createPostPipeline(deps: PostPipelineDeps): PostPipeline {
   const bloom = quality === 'low' ? null : new UnrealBloomPass(new Vector2(1, 1), 0.5, 0.5, 0.8)
   if (bloom) composer.addPass(bloom)
 
-  composer.addPass(new OutputPass())
-
-  const vignette = new ShaderPass(VIGNETTE_SHADER)
-  composer.addPass(vignette)
+  const output = new VignetteOutputPass()
+  composer.addPass(output)
 
   // Le tilt-shift ferme la marche : il floute l'image FINIE, vignette comprise. Éteint en qualité
   // basse, comme le bloom — deux passes plein écran de plus sur une machine qui peine déjà, non.
@@ -306,7 +348,6 @@ export function createPostPipeline(deps: PostPipelineDeps): PostPipeline {
       gl2.deleteQuery(q)
     }
   }
-  const vignetteAmount = vignette.uniforms.amount as { value: number }
 
   return {
     quality,
@@ -342,8 +383,7 @@ export function createPostPipeline(deps: PostPipelineDeps): PostPipeline {
           ao.updateGtaoMaterial({ radius: look.ao.radius, distanceExponent: 1, thickness: 1, scale: 1 })
         }
       }
-      vignette.enabled = look.vignette > 0
-      vignetteAmount.value = look.vignette
+      output.vignette.value = look.vignette
       if (tilt) {
         const ts = look.tiltShift
         for (const pass of tilt) {

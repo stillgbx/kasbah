@@ -6,7 +6,6 @@ import { coverActivity, isFlatCover } from '../../lib/cover'
 import { IDLE_W, isEnergySite } from '../../lib/energy'
 import { coverLeaves, coverSize, yawToRad } from '../../lib/orientation'
 import { bodyColorOf, bodyFinishOf, FINISH_MATERIAL, SCENE_FINISH } from '../../lib/vehicleTuning'
-import { LAMP_LAYER } from '../core/layers'
 import { createTween, lerp } from '../core/tween'
 import { joineryMaterial } from '../builders/materials'
 import { DeviceMarker, type MarkerContext } from './DeviceMarker'
@@ -679,9 +678,8 @@ export class LightMarker extends DeviceMarker {
       this.light.shadow.normalBias = 0.04
       this.light.shadow.camera.near = 0.15
       this.light.shadow.camera.far = LIGHT_RANGE + 1
-    } else {
-      this.light.layers.set(LAMP_LAYER)   // n'éclaire que son niveau : voir `core/layers.ts`
     }
+    // une lampe d'INTÉRIEUR n'éclaire que son niveau : le shader l'y cantonne (`core/levelLight.ts`)
     this.glowMat = new SpriteMaterial({ map: glowMap(), color: 0xffd9a0, transparent: true, opacity: 0, blending: AdditiveBlending, depthWrite: false })
     this.glow = new Sprite(this.glowMat)
     this.asDecor(this.glow)
@@ -746,7 +744,7 @@ export class LightMarker extends DeviceMarker {
     this.mat.emissive.copy(c)
     this.mat.emissiveIntensity = k * g.emissive
     this.light.color.copy(c)
-    // la lumière n'atteint que les surfaces de SON niveau : voir le rendu en passes de `HouseScene`
+    // la lumière n'atteint que les surfaces de SON niveau : voir `core/levelLight.ts`
     this.light.intensity = k * g.lightIntensity
     // Une lampe éteinte n'a pas à coûter six rendus de profondeur.
     this.light.castShadow = !!this.ctx.outdoor && k > 0

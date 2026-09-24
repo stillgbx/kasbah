@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BackSide, Box3, BoxGeometry, type OrthographicCamera, type PerspectiveCamera, type BufferGeometry, CylinderGeometry, Mesh, type MeshBasicMaterial, type MeshStandardMaterial, type Object3D, type ShaderMaterial, ShaderLib, ShapeGeometry, Vector3, type BufferAttribute, type Texture } from 'three'
+import { BackSide, Box3, BoxGeometry, type OrthographicCamera, type PerspectiveCamera, type BufferGeometry, CylinderGeometry, type Material, Mesh, MeshBasicMaterial, MeshStandardMaterial, type Object3D, type ShaderMaterial, ShaderLib, ShapeGeometry, Vector3, type BufferAttribute, type Texture } from 'three'
 import { computeHouseGeometry, localToGeo, openingGaps, parseHouse, type DeviceDescriptor, type DeviceState, type OpeningRect, type PlacedHouseDevice } from '@kasbah/shared'
 import demo from '@kasbah/shared/demo-house.json'
 import { buildHouse, buildLevel, buildWallsGeometry, countTriangles } from './builders/buildHouse'
@@ -15,7 +15,8 @@ import { parseCssColor } from './core/theme'
 import { defaultLook, defaultSceneTheme, RENDER_STYLES, rolesOf, styleById } from './styles'
 import { applyLook } from './builders/materials'
 import { dayFactor, fogDistance, resolveAmbience, sunDirection, weatherEffects, type AmbienceMode } from './core/ambience'
-import { DECOR_LAYER, LAMP_LAYER, SITE_DECOR_LAYER } from './core/layers'
+import { DECOR_LAYER, SITE_DECOR_LAYER } from './core/layers'
+import { levelLightUniforms, setLevelHeights } from './core/levelLight'
 import { sunPosition } from './core/sun'
 import { createTween } from './core/tween'
 import { ScreenArt, coverCrop, screenArtGeometry } from './markers/screenArt'
@@ -403,13 +404,11 @@ describe('marqueurs 3D', () => {
     ({ kind: 'cover', updatedAt: 0, available: true, motion: 'stopped', ...(position === undefined ? {} : { position }) } as DeviceState)
 
   /**
-   * Un volet fermé doit BARRER la lumière. Ce qui l'en empêchait n'était pas le maillage (il porte
-   * `castShadow` depuis toujours) mais le rendu en passes : les marqueurs étaient masqués pendant la
-   * passe qui refait la carte d'ombre, donc aucun appareil ne portait d'ombre. Ce qui doit sortir de
-   * cette passe, ce sont les LAMPES (elles n'éclaireraient pas que leur groupe) et les DÉCORS
-   * translucides (ils se mélangeraient deux fois) — par leur couche, jamais par leur visibilité.
+   * Un volet fermé doit BARRER la lumière : son maillage porte `castShadow` et vit sur la couche
+   * commune. Sa lampe aussi — le shader la cantonne à son niveau (`core/levelLight.ts`) ; seuls les
+   * DÉCORS translucides ont leur couche, pour sortir du relevé d'occlusion.
    */
-  it('un appareil porte son ombre ; ses lampes et ses décors sortent de la passe globale', () => {
+  it('un appareil porte son ombre ; seuls ses décors ont leur couche', () => {
     const shutter = marker(device({ size: { width: 2, height: 1.2 } }), cover('shutter'))
     for (const mesh of meshes(shutter.object)) {
       expect(mesh.castShadow).toBe(true)
@@ -421,7 +420,7 @@ describe('marqueurs 3D', () => {
       if ((o as { isLight?: boolean }).isLight) parts.light.push(o.layers.mask)
       if ((o as { isSprite?: boolean }).isSprite) parts.sprite.push(o.layers.mask)
     })
-    expect(parts.light).toEqual([1 << LAMP_LAYER])
+    expect(parts.light).toEqual([1])
     expect(parts.sprite).toEqual([1 << DECOR_LAYER])
   })
 
@@ -437,13 +436,13 @@ describe('marqueurs 3D', () => {
       addAnimation: () => () => {}, invalidate: () => {}, onTap: () => {}, label: 'Borne',
     }, () => true)
     const light = (() => { let f: { layers: { mask: number }; castShadow: boolean } | null = null; lamp.object.traverse((o) => { if ((o as { isLight?: boolean }).isLight) f = o as never }); return f! })()
-    expect(light.layers.mask).toBe(1)                // couche commune : elle éclaire toutes les passes
+    expect(light.layers.mask).toBe(1)                // couche commune, comme toute lampe
     expect(light.castShadow).toBe(false)             // éteinte : pas six rendus de profondeur pour rien
     lamp.update({ kind: 'light', updatedAt: 0, available: true, on: true, brightness: 100 } as DeviceState)
     expect(light.castShadow).toBe(true)
     const sprites: number[] = []
     lamp.object.traverse((o) => { if ((o as { isSprite?: boolean }).isSprite) sprites.push(o.layers.mask) })
-    expect(sprites).toEqual([1 << SITE_DECOR_LAYER])  // son halo se dessine avec le jardin
+    expect(sprites).toEqual([1 << SITE_DECOR_LAYER])  // son halo est un décor du jardin
   })
 
   it('une lumière liée à un ventilateur pose un hub et trois pales, pas une sphère seule', () => {
@@ -1381,23 +1380,83 @@ describe('tondeuse placée par son GPS', () => {
   })
 })
 
-describe('coût du rendu', () => {
+describe('une lampe n’éclaire que son niveau (une seule passe)', () => {
+  const compile = (mat: Material) => {
+    const lit = mat.type !== 'MeshBasicMaterial'
+    const shader = { uniforms: {} as Record<string, { value: unknown }>, vertexShader: '', fragmentShader: lit ? '#include <lights_pars_begin>\n#include <lights_fragment_begin>' : '#include <common>' }
+    mat.onBeforeCompile(shader as never, null as never)
+    return shader
+  }
+
   /**
-   * Chaque passe de niveau REDESSINE tout le bâti : sur une maison de trente pièces, c'est le prix
-   * d'une image entière. Un niveau ne la mérite que s'il a quelque chose de plus à montrer que la
-   * passe globale — une lampe allumée, ou un décor. En plein jour, lampes éteintes, il n'y en a aucune.
+   * La scène se rendait en passes — une par niveau allumé — pour qu'une lampe du salon n'éclaire pas
+   * le sas d'en dessous à travers la dalle. Mesuré le 2026-09-24 : 14 ms de CPU par image perdus à
+   * réévaluer les programmes. Le masque est désormais dans la boucle des lumières de CHAQUE matière
+   * éclairée, par le prototype : une matière créée à la volée par un marqueur le reçoit aussi.
    */
-  it('un niveau sans lampe allumée ne coûte pas une passe de plus', () => {
+  it('toute matière éclairée reçoit le masque de hauteur, pas une matière non éclairée', () => {
+    const lit = compile(new MeshStandardMaterial())
+    expect(lit.fragmentShader).toContain('kasbahLampReaches( pointLight.position, geometryPosition )')
+    expect(lit.fragmentShader).toContain('UNROLLED_LOOP_INDEX >= NUM_POINT_LIGHT_SHADOWS')   // le jardin passe
+    expect(lit.fragmentShader).toContain('if ( directLight.visible ) RE_Direct')              // masquée : rien à calculer
+    expect(lit.uniforms.kasbahLevelY).toBe(levelLightUniforms.kasbahLevelY)                   // partagé, pas copié
+    expect(lit.uniforms.kasbahLamps!.value).toBe(1)
+    const basic = compile(new MeshBasicMaterial())
+    expect(basic.fragmentShader).not.toContain('kasbah')
+  })
+
+  it('le terrain, les zones, le toit et l’eau ne reçoivent aucune lampe d’intérieur ; les murs, si', () => {
+    const mats = createMaterials(defaultSceneTheme(), defaultLook())
+    for (const m of [mats.terrain, mats.roof, mats.roofFlat, ...Object.values(mats.zones)]) expect(compile(m).uniforms.kasbahLamps!.value).toBe(0)
+    for (const m of [mats.wall, mats.wallInterior, mats.floor, mats.device]) expect(compile(m).uniforms.kasbahLamps!.value).toBe(1)
+  })
+
+  it('les tranches sont les élévations des niveaux, sans la plus basse', () => {
+    setLevelHeights([2.85, 0, 5.45])
+    expect([...levelLightUniforms.kasbahLevelY.value.slice(0, 2)].map((v) => +v.toFixed(2))).toEqual([2.85, 5.45])
+    expect(levelLightUniforms.kasbahLevelCount.value).toBe(2)
+    setLevelHeights([0])
+    expect(levelLightUniforms.kasbahLevelCount.value).toBe(0)
+  })
+
+  /**
+   * Masquer l'étage retire son plancher de la carte d'ombre — à condition de la refaire. Sans
+   * relevé, l'étage caché continuait d'assombrir le rez-de-chaussée qu'on explorait.
+   */
+  it('focaliser un niveau redemande un relevé des ombres', () => {
+    let t = 1000
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true, now: () => t })
+    const house = parseHouse(demo)
+    scene.load(house)
+    t = 1_000_000
+    const dirty = () => (scene as unknown as { shadowsDirtyUntil: number }).shadowsDirtyUntil
+    expect(dirty()).toBeLessThan(t)
+    scene.focusLevel(house.levels[0]!.id)
+    expect(dirty()).toBeGreaterThan(t)
+    scene.dispose()
+  })
+
+  /**
+   * Three compile un programme par NOMBRE de lumières. Masquer un étage retirait ses lampes : la
+   * première visite du rez-de-chaussée recompilait toutes les matières, 2,2 s d'image figée sur
+   * l'iGPU. Des lampes éteintes tiennent la place des lampes masquées.
+   */
+  it('le nombre de lumières ponctuelles ne change pas quand on focalise un niveau', () => {
     const scene = new HouseScene(document.createElement('canvas'), { headless: true })
-    // Sans descripteur, un appareil n'est qu'une forme neutre : c'est le KIND qui donne une vraie
-    // lampe, avec sa lumière ponctuelle — et c'est elle qu'on compte ici.
-    scene.setDescriptors({ 'mock:light-living': { id: 'mock:light-living', pluginId: 'mock', externalId: 'light-living', kind: 'light', name: 'Plafonnier salon', capabilities: ['on_off'], meta: {} } as DeviceDescriptor })
-    scene.load(parseHouse(demo))
-    expect(scene.debugStats().levelPasses).toBe(0)
-    scene.updateStates({ 'mock:light-living': { kind: 'light', updatedAt: 0, available: true, on: true, brightness: 100 } as DeviceState })
-    expect(scene.debugStats().levelPasses).toBe(1)
-    scene.updateStates({ 'mock:light-living': { kind: 'light', updatedAt: 1, available: true, on: false } as DeviceState })
-    expect(scene.debugStats().levelPasses).toBe(0)
+    const house = parseHouse(demo)
+    const descriptors: Record<string, DeviceDescriptor> = {}
+    for (const d of house.devices) if (d.deviceId) descriptors[d.deviceId] = { id: d.deviceId, pluginId: 'mock', externalId: d.deviceId, kind: 'light', name: d.deviceId, capabilities: ['on_off'], meta: {} } as DeviceDescriptor
+    scene.setDescriptors(descriptors)
+    scene.load(house)
+    const lights = () => { let n = 0; scene.scene.traverseVisible((o) => { if ((o as { isPointLight?: boolean }).isPointLight) n++ }); return n }
+    const all = lights()
+    expect(all).toBeGreaterThan(0)
+    const lowest = [...house.levels].sort((a, b) => a.elevation - b.elevation)[0]!
+    scene.focusLevel(lowest.id)
+    expect((scene as unknown as { lampPadding: { children: unknown[] } }).lampPadding.children.length).toBeGreaterThan(0)   // l'étage masqué avait des lampes
+    expect(lights()).toBe(all)
+    scene.focusLevel(null)
+    expect(lights()).toBe(all)
     scene.dispose()
   })
 })
@@ -1413,14 +1472,7 @@ describe('régler les ouvertures', () => {
 
   /**
    * Les poignées vivent et meurent avec le mode : hors édition, la scène doit être exactement celle
-   * d'avant, au triangle près — y compris ses passes de niveau, qu'un mode refermé ne doit pas
-   * laisser derrière lui.
-   *
-   * Ce commentaire disait l'inverse jusqu'au 2026-09-18 (« aucune passe de niveau, dessinées dans la
-   * passe globale, donc un mode gratuit ») : c'est précisément ce qui rendait les lignes de cote
-   * invisibles, la passe d'un niveau repeignant ses murs par-dessus la passe globale. Le décor du
-   * mode édition coûte désormais une passe par niveau qui en porte, et c'est le prix de la
-   * visibilité — voir `doc/1_architecture/1_5_scene-3d.md`.
+   * d'avant, au triangle près.
    */
   it('pose une poignée par ouverture et ne laisse rien en sortant', () => {
     const scene = new HouseScene(document.createElement('canvas'), { headless: true })
@@ -1434,20 +1486,14 @@ describe('régler les ouvertures', () => {
     scene.setEditingOpenings(false)
     expect(handles(scene)).toBe(0)
     expect(countTriangles(scene.scene)).toBe(before)
-    expect(scene.debugStats().levelPasses).toBe(0)
     scene.dispose()
   })
 
   /**
-   * CE QUI MANQUAIT, et ce qui a laissé passer un mode édition dont les traits n'étaient JAMAIS
-   * dessinés : vérifier la structure ne dit rien du rendu. La passe d'un niveau redessine ses murs
-   * et ses sols par-dessus l'image de la passe globale ; tout ce qui est posé SUR une surface de
-   * niveau depuis la passe globale est donc recouvert. Le seul chemin qui se voit par-dessus un mur
-   * est celui du guide du mode « déplacer » : `DECOR_LAYER`, dans le groupe des MARQUEURS du niveau —
-   * et c'est ce que `refreshLevelPasses` inspecte pour donner sa passe au niveau. Un décor qui n'est
-   * ni sur cette couche ni dans ce groupe n'est dessiné nulle part.
+   * Poignées, cotes et repère sont des décors de NIVEAU : `DECOR_LAYER` (hors du relevé d'occlusion,
+   * ouverte au lancer de rayon), dans le groupe des MARQUEURS du niveau (masqués avec lui).
    */
-  it('dessine poignées et cotes dans la passe de leur niveau, seul endroit d’où l’on se voit par-dessus un mur', () => {
+  it('range poignées et cotes dans les décors de leur niveau', () => {
     const scene = new HouseScene(document.createElement('canvas'), { headless: true })
     scene.load(house)
     scene.setEditingOpenings(true)
@@ -1463,8 +1509,6 @@ describe('régler les ouvertures', () => {
     expect(decors).toHaveLength(openingCount + 2)          // les poignées, le tracé, le repère d'origine
     expect(decors.filter((d) => !d.inMarkers)).toEqual([])
     expect(decors.filter((d) => !d.layer)).toEqual([])
-    // et c'est bien ce qui vaut sa passe au niveau : sans elle, rien de tout ça ne serait dessiné
-    expect(scene.debugStats().levelPasses).toBeGreaterThan(0)
     scene.dispose()
   })
 
