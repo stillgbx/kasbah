@@ -1,6 +1,6 @@
 import { Color } from 'three'
 import { dayFactor, duskFactor, type SceneAmbience } from '../core/ambience'
-import { mix, mixRgb, toPalette, type PaletteSpec, type RenderStyle, type StyleLook, type SurfaceLooks } from './types'
+import { hourGrade, mix, mixRgb, toPalette, type PaletteSpec, type RenderStyle, type StyleLook, type SurfaceLooks } from './types'
 
 // NATURE : bois, pierre et verdure, lumière chaude, matières mates. Le contraire du réaliste sur un
 // point précis — ici rien ne brille. Pas de métal, pas d'eau miroir, une occlusion marquée qui pose
@@ -83,6 +83,7 @@ export const natureStyle: RenderStyle = {
         bloom: { strength: mix(0.5, 0.12, day), radius: 0.5, threshold: mix(0.8, 1.1, day) },
         ao: { intensity: mix(1.2, 1.1, day), radius: 0.45 },
         vignette: mix(0.4, 0.22, day),
+        grade: hourGrade(a),
       },
       glow: { scale: mix(1.2, 0.85, day), opacity: mix(0.7, 0.2, day), lightIntensity: mix(13, 5, day), emissive: mix(1.9, 1.1, day) },
     }

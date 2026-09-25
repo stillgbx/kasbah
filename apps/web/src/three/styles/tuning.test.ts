@@ -1,6 +1,30 @@
 import { describe, expect, it } from 'vitest'
-import { defaultLook } from './index'
+import { defaultLook, hourGrade, NEUTRAL_GRADE, styleById } from './index'
 import { applyTuning, NEUTRAL_TUNING, resolveTuning, sameTuning, TUNING_PRESETS, TUNING_RANGES } from './tuning'
+import { resolveAmbience } from '../core/ambience'
+
+describe('étalonnage de l’heure', () => {
+  const dusk = resolveAmbience({ mode: 'dusk' })                       // soleil rasant à l'OUEST
+  it('neutre en plein jour et en pleine nuit', () => {
+    expect(hourGrade(resolveAmbience({ mode: 'day' }))).toEqual(NEUTRAL_GRADE)
+    expect(hourGrade(resolveAmbience({ mode: 'night' }))).toEqual(NEUTRAL_GRADE)
+  })
+  it('orangé au couchant, bleuté à l’aube, atténué sous un ciel couvert', () => {
+    const evening = hourGrade(dusk)
+    expect(evening.gain[0]).toBeGreaterThan(1)
+    expect(evening.gain[2]).toBeLessThan(1)
+    const dawn = hourGrade({ ...dusk, sunAzimuthDeg: 80 })
+    expect(dawn.gain[2]).toBeGreaterThan(1)
+    expect(dawn.gain[0]).toBeLessThan(1)
+    const overcast = hourGrade({ ...dusk, cloudiness: 1 })
+    expect(overcast.gain[0]).toBeLessThan(evening.gain[0])
+    expect(overcast.gain[0]).toBeGreaterThan(1)
+  })
+  it('le banc le transmet tel quel', () => {
+    const look = styleById('realistic').look(dusk)
+    expect(applyTuning(look, NEUTRAL_TUNING).post.grade).toEqual(look.post.grade)
+  })
+})
 
 describe('banc de réglage de la lumière', () => {
   it('ne change rien au réglage neutre', () => {

@@ -1,6 +1,6 @@
 import { Color } from 'three'
 import type { FloorStyle, ZoneKind } from '@kasbah/shared'
-import type { SceneAmbience } from '../core/ambience'
+import { duskFactor, type SceneAmbience } from '../core/ambience'
 import type { SurfaceRole } from '../textures/procedural'
 
 // Un STYLE DE RENDU décide de tout ce qui relève du goût : les couleurs de matière, quelle matière
@@ -113,6 +113,24 @@ export interface PostLook {
    * le banc (`styles/tuning.ts`), parce que c'est un goût et non une propriété de la lumière.
    */
   tiltShift?: TiltShiftLook | null
+  /** Étalonnage de l'image finie (`GradeLook`). Absent = neutre : l'image du style, à l'identique. */
+  grade?: GradeLook | null
+}
+
+/**
+ * ÉTALONNAGE en espace d'affichage, dans la passe de sortie : `gain × (c + lift × (1 − c))`, puis
+ * la puissance `1 / gamma`, puis la saturation. Par canal (r, g, b) : c'est ce qui teinte une image
+ * sans toucher à aucune lumière — le bleu de l'aube, l'orangé du couchant.
+ */
+export interface GradeLook {
+  /** Relève les noirs vers cette couleur : 0 = neutre. */
+  lift: readonly [number, number, number]
+  /** > 1 éclaircit les tons moyens : 1 = neutre. */
+  gamma: readonly [number, number, number]
+  /** Multiplie les hautes lumières : 1 = neutre. */
+  gain: readonly [number, number, number]
+  /** 1 = neutre, 0 = noir et blanc. */
+  saturation: number
 }
 
 /** Voir `PostLook.tiltShift`. Les valeurs sont en fraction de l'image, l'origine en BAS (comme les UV). */
@@ -211,6 +229,28 @@ export const mix = (a: number, b: number, t: number) => a + (b - a) * t
 /** Idem pour un triplet de ciel. */
 export function mixRgb(a: readonly [number, number, number], b: readonly [number, number, number], t: number): [number, number, number] {
   return [mix(a[0], b[0], t), mix(a[1], b[1], t), mix(a[2], b[2], t)]
+}
+
+export const NEUTRAL_GRADE: GradeLook = { lift: [0, 0, 0], gamma: [1, 1, 1], gain: [1, 1, 1], saturation: 1 }
+/** Le couchant : hautes lumières orangées, noirs un peu violacés, couleurs plus franches. */
+const DUSK_GRADE: GradeLook = { lift: [0.012, 0, 0.03], gamma: [1.03, 1, 0.96], gain: [1.08, 0.97, 0.85], saturation: 1.1 }
+/** L'aube : froide et pâle, un bleu qui n'a pas encore chauffé. */
+const DAWN_GRADE: GradeLook = { lift: [0, 0.008, 0.03], gamma: [0.98, 1, 1.03], gain: [0.93, 0.99, 1.08], saturation: 0.94 }
+
+/**
+ * L'étalonnage de l'HEURE : neutre en plein jour et en pleine nuit, orangé quand le soleil rase
+ * l'horizon à l'ouest, bleuté quand il y est à l'est. Un ciel couvert l'éteint en grande partie :
+ * sans soleil, pas de couleur de couchant. `strength` le dose par style.
+ */
+export function hourGrade(a: SceneAmbience, strength = 1): GradeLook {
+  const k = duskFactor(a) * (1 - 0.7 * a.cloudiness) * strength
+  const target = a.sunAzimuthDeg < 180 ? DAWN_GRADE : DUSK_GRADE
+  return {
+    lift: mixRgb(NEUTRAL_GRADE.lift, target.lift, k),
+    gamma: mixRgb(NEUTRAL_GRADE.gamma, target.gamma, k),
+    gain: mixRgb(NEUTRAL_GRADE.gain, target.gain, k),
+    saturation: mix(NEUTRAL_GRADE.saturation, target.saturation, k),
+  }
 }
 
 /** Tous les rôles de matière qu'un look emploie : ce sont les seuls à cuire. */

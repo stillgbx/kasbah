@@ -1,4 +1,4 @@
-import { ACESFilmicToneMapping, AgXToneMapping, HalfFloatType, NeutralToneMapping, NoBlending, NoToneMapping, ShaderMaterial, UniformsUtils, Vector2, WebGLRenderTarget, type Camera, type Scene, type ToneMapping, type WebGLRenderer } from 'three'
+import { ACESFilmicToneMapping, AgXToneMapping, HalfFloatType, NeutralToneMapping, NoBlending, NoToneMapping, ShaderMaterial, UniformsUtils, Vector2, Vector3, WebGLRenderTarget, type Camera, type Scene, type ToneMapping, type WebGLRenderer } from 'three'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
@@ -7,7 +7,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { CopyShader } from 'three/addons/shaders/CopyShader.js'
 import { DECOR_LAYER, SITE_DECOR_LAYER } from './layers'
-import type { PostLook } from '../styles/types'
+import { NEUTRAL_GRADE, type PostLook } from '../styles/types'
 
 // Le POST-TRAITEMENT : ce qui sépare un rendu direct d'une image. Trois choses, dans cet ordre.
 //
@@ -116,13 +116,30 @@ export function createCostGuard(onOver: () => void, budgetMs = FRAME_BUDGET_MS, 
  */
 class VignetteOutputPass extends OutputPass {
   readonly vignette = { value: 0 }
+  /**
+   * L'étalonnage (`GradeLook`), appliqué AVANT la vignette, en espace d'affichage : c'est là qu'un
+   * étalonneur règle ses courbes. Neutre, il rend l'image à l'identique. `gamma` est passé INVERSÉ.
+   */
+  readonly grade = {
+    lift: { value: new Vector3(0, 0, 0) },
+    invGamma: { value: new Vector3(1, 1, 1) },
+    gain: { value: new Vector3(1, 1, 1) },
+    saturation: { value: 1 },
+  }
   constructor() {
     super()
     this.uniforms.vignette = this.vignette
+    this.uniforms.gradeLift = this.grade.lift
+    this.uniforms.gradeInvGamma = this.grade.invGamma
+    this.uniforms.gradeGain = this.grade.gain
+    this.uniforms.gradeSaturation = this.grade.saturation
     const frag = this.material.fragmentShader
     const at = frag.lastIndexOf('}')
     if (!frag.includes('varying vec2 vUv;') || at < 0) throw new Error('post: OutputShader a changé')
-    this.material.fragmentShader = frag.slice(0, at).replace('varying vec2 vUv;', 'varying vec2 vUv;\nuniform float vignette;') + `
+    this.material.fragmentShader = frag.slice(0, at).replace('varying vec2 vUv;', 'varying vec2 vUv;\nuniform float vignette;\nuniform vec3 gradeLift;\nuniform vec3 gradeInvGamma;\nuniform vec3 gradeGain;\nuniform float gradeSaturation;') + `
+      vec3 kasbahC = gradeGain * ( gl_FragColor.rgb + gradeLift * ( 1.0 - gl_FragColor.rgb ) );
+      kasbahC = pow( max( kasbahC, 0.0 ), gradeInvGamma );
+      gl_FragColor.rgb = mix( vec3( dot( kasbahC, vec3( 0.2126, 0.7152, 0.0722 ) ) ), kasbahC, gradeSaturation );
       // distance au centre, ramenée à 1 dans les coins ; courbe douce pour qu'aucun cercle ne se voie
       float kasbahD = length( vUv - 0.5 ) * 1.41421356;
       gl_FragColor.rgb *= 1.0 - vignette * smoothstep( 0.35, 1.0, kasbahD );
@@ -391,6 +408,11 @@ export function createPostPipeline(deps: PostPipelineDeps): PostPipeline {
         }
       }
       output.vignette.value = look.vignette
+      const g = look.grade ?? NEUTRAL_GRADE
+      output.grade.lift.value.set(...g.lift)
+      output.grade.invGamma.value.set(1 / g.gamma[0], 1 / g.gamma[1], 1 / g.gamma[2])
+      output.grade.gain.value.set(...g.gain)
+      output.grade.saturation.value = g.saturation
       if (tilt) {
         const ts = look.tiltShift
         for (const pass of tilt) {

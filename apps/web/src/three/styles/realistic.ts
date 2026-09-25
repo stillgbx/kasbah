@@ -1,6 +1,6 @@
 import { Color } from 'three'
 import { dayFactor, duskFactor, type SceneAmbience } from '../core/ambience'
-import { mix, mixRgb, toPalette, type PaletteSpec, type RenderStyle, type StyleLook, type SurfaceLooks } from './types'
+import { hourGrade, mix, mixRgb, toPalette, type PaletteSpec, type RenderStyle, type StyleLook, type SurfaceLooks } from './types'
 
 // Le style de la MAQUETTE : une maison réelle, de nuit, dont les lampes font toute la lumière.
 //
@@ -114,6 +114,7 @@ export const realisticStyle: RenderStyle = {
         // pied des murs ; plus long, elle salit les grandes surfaces planes.
         ao: { intensity: mix(1.1, 0.9, day), radius: 0.6 },
         vignette: mix(0.45, 0.18, day),
+        grade: hourGrade(a),
       },
       glow: {
         scale: mix(1.2, 0.9, day),
