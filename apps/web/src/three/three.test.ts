@@ -18,7 +18,8 @@ import { dayFactor, fogDistance, resolveAmbience, sunDirection, weatherEffects, 
 import { DECOR_LAYER, SITE_DECOR_LAYER } from './core/layers'
 import { levelLightUniforms, setLevelHeights } from './core/levelLight'
 import { heightMistUniforms, mistAmount } from './core/heightMist'
-import { levelFadeUniforms } from './core/levelFade'
+import { levelFadeUniforms, materialOpacity } from './core/levelFade'
+import { roomFocusUniforms } from './core/roomFocus'
 import { sunPosition } from './core/sun'
 import { createTween } from './core/tween'
 import { ScreenArt, coverCrop, screenArtGeometry } from './markers/screenArt'
@@ -2273,6 +2274,31 @@ describe('mise en évidence d’une pièce', () => {
     expect(level.group.children.filter((c) => c.name === 'highlight')).toHaveLength(0)
     scene.dispose()
   })
+
+  it('le reste de la maison s’efface derrière la pièce, par un masque et non par transparence', () => {
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true })
+    const house = parseHouse(demo)
+    scene.load(house)
+    const floor = computeHouseGeometry(house).levels[0]!.floors[0]!
+    scene.highlightRoom(floor.roomId)
+    const u = roomFocusUniforms
+    expect(u.kasbahFocus.value).toBe(1)
+    expect(u.kasbahFocusCount.value).toBe(floor.polygon.length)
+    // le y de la maison est le −z du monde ; le contour est élargi d'un mur : il contient le sien
+    const [x, y] = floor.polygon[0]!
+    const p = u.kasbahFocusPoly.value[0]!
+    expect(Math.abs(p.x - x)).toBeLessThan(0.5)
+    expect(Math.abs(p.y + y)).toBeLessThan(0.5)
+    scene.highlightRoom(null)
+    expect(u.kasbahFocus.value).toBe(0)
+    // injecté sur toute matière, après la lumière (`opaque_fragment`)
+    const mats = createMaterials(defaultSceneTheme(), defaultLook())
+    const shader = { uniforms: {} as Record<string, unknown>, vertexShader: ShaderLib.physical.vertexShader, fragmentShader: ShaderLib.physical.fragmentShader }
+    mats.wall.onBeforeCompile(shader as never, null as never)
+    expect(shader.fragmentShader.indexOf('kasbahInRoom( kasbahW )')).toBeGreaterThan(shader.fragmentShader.indexOf('#include <opaque_fragment>'))
+    expect(shader.uniforms.kasbahFocus).toBe(u.kasbahFocus)
+    scene.dispose()
+  })
 })
 
 describe('fenêtres éclairées', () => {
@@ -2436,10 +2462,25 @@ describe('brume basse', () => {
     expect(terrain.uniforms.kasbahMistDensity).toBe(heightMistUniforms.kasbahMistDensity)   // partagée : l'heure ne recompile rien
     // un sol de pièce est à la hauteur du jardin : sans ce tri, la maison de poupée s'embrumait
     expect(inject(mats.floor).fragmentShader).not.toContain('kasbahMist')
-    // le fondu des étages, lui, est sur TOUTES les matières : c'est l'étage entier qui s'efface
-    expect(inject(mats.floor).fragmentShader).toContain('kasbahBayer( gl_FragCoord.xy ) >= kasbahFadeVisibility')
-    expect(inject(mats.floor).uniforms.kasbahFadeY).toBe(levelFadeUniforms.kasbahFadeY)
+    // l'opacité (et le fondu des étages), elle, est sur TOUTES les matières : c'est l'étage entier qui s'efface
     expect(inject(mats.ground).fragmentShader).not.toContain('kasbahMist')
+    const floor = inject(mats.floor)
+    expect(floor.fragmentShader).toContain('#ifdef OPAQUE')
+    expect(floor.fragmentShader.indexOf('kasbahA < 1.0')).toBeLessThan(floor.fragmentShader.indexOf('#include <alphatest_fragment>'))
+    expect(floor.uniforms.kasbahFadeY).toBe(levelFadeUniforms.kasbahFadeY)
+  })
+
+  it('chaque matière a son opacité, réglable sans recompiler, et un clone la sienne', () => {
+    const mats = createMaterials(defaultSceneTheme(), defaultLook())
+    const shader = { uniforms: {} as Record<string, { value: unknown }>, vertexShader: ShaderLib.physical.vertexShader, fragmentShader: ShaderLib.physical.fragmentShader }
+    mats.wall.onBeforeCompile(shader as never, null as never)
+    const opacity = materialOpacity(mats.wall)
+    expect(shader.uniforms.kasbahOpacity).toBe(opacity)                 // l'uniform MÊME : le changer suffit
+    expect(opacity.value).toBe(1)                                        // opaque par défaut
+    opacity.value = 0.4
+    const clone = mats.wall.clone()
+    expect(materialOpacity(clone)).not.toBe(opacity)
+    expect(mats.wall.transparent).toBe(false)                           // la matière reste dans la file opaque
   })
 })
 

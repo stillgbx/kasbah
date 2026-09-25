@@ -1,6 +1,7 @@
 import { Material, ShaderChunk, type WebGLProgramParametersWithUniforms } from 'three'
 import { applyHeightMist } from './heightMist'
 import { applyLevelFade } from './levelFade'
+import { applyRoomFocus } from './roomFocus'
 
 // Une lampe d'intérieur n'éclaire que SON niveau, dans le shader, en une seule passe.
 //
@@ -92,10 +93,11 @@ export function applyLevelLight(shader: WebGLProgramParametersWithUniforms, mate
 // Posé sur le PROTOTYPE : toute matière éclairée de la scène le reçoit, y compris celles que les
 // marqueurs créent à la volée, sans qu'aucun constructeur ait à y penser. Une matière qui pose son
 // propre `onBeforeCompile` (l'eau) appelle `applyLevelLight` elle-même. La brume basse
-// (`heightMist.ts`) et le fondu des étages (`levelFade.ts`) passent par le même crochet, pour la
-// même raison.
+// (`heightMist.ts`), l'opacité et le fondu des étages (`levelFade.ts`) et la mise en valeur d'une
+// pièce (`roomFocus.ts`) passent par le même crochet, pour la même raison.
 Material.prototype.onBeforeCompile = function (this: Material, shader: WebGLProgramParametersWithUniforms) {
   applyLevelLight(shader, this)
   applyHeightMist(shader, this)
   applyLevelFade(shader, this)
+  applyRoomFocus(shader, this)
 }

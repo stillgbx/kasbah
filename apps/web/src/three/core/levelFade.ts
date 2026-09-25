@@ -1,12 +1,23 @@
 import type { Material, WebGLProgramParametersWithUniforms } from 'three'
 
-// Le FONDU de l'étage qui s'envole (`HouseScene.liftTo`). Un vrai fondu demanderait des matières
-// transparentes : three en fait un autre programme (`OPAQUE`), et la première transition
-// recompilerait toute la maison. Ici, un fondu TRAMÉ : au-dessus d'une hauteur, une part des pixels
-// est écartée selon une trame 4×4 (Bayer) — la part qui grandit à mesure que l'étage monte.
+// L'OPACITÉ, sur toute matière, sans en faire une matière transparente.
 //
-// Deux uniforms partagés par toutes les matières : le programme ne change jamais, et au repos
-// (`visibility` = 1) aucun pixel n'est écarté — l'image est rendue à l'identique.
+// `transparent: true` n'est pas un simple réglage dans three : la matière change de file (tri de
+// l'arrière vers l'avant, mélange des couleurs), de programme (define `OPAQUE`), et une maison à 50 %
+// laisse voir ses cloisons à travers ses façades. Ici, chaque matière porte en plus une opacité À
+// NOUS, lue par le shader comme un uniform :
+//   - une matière OPAQUE reste opaque : sous 1, une part de ses pixels est écartée (trame de bruit
+//     entrelacé, stable à l'écran) — elle garde sa file, sa profondeur, et aucun tri ne se trompe ;
+//   - une matière déjà TRANSPARENTE (verre, halo) voit son alpha multiplié : un vrai fondu.
+// Le choix se fait dans le shader (`#ifdef OPAQUE`, posé par three) : le même crochet sert les deux.
+//
+// Cette opacité est distincte de `material.opacity` et de l'alpha des textures : une carrosserie
+// dont l'image a un canal alpha, une lame de volet vitrée à 0,45 ne sont pas tramées pour autant.
+//
+// Deux usages aujourd'hui : l'opacité d'une matière (`materialOpacity`), et le FONDU de l'étage qui
+// s'envole (`HouseScene.liftTo`) — tout ce qui est au-dessus d'une hauteur s'efface ensemble. Au
+// repos, tout vaut 1 : rien n'est écarté, l'image est rendue à l'identique, et changer une opacité
+// ne recompile jamais rien.
 
 export const levelFadeUniforms = {
   /** Hauteur MONDE au-dessus de laquelle le fondu s'applique (le dessus du niveau qui reste). */
@@ -15,38 +26,49 @@ export const levelFadeUniforms = {
   kasbahFadeVisibility: { value: 1 },
 }
 
-/** Pose le fondu ; `visibility` 1 le lève. */
+/** Pose le fondu des étages ; `visibility` 1 le lève. */
 export function setLevelFade(cutY: number, visibility: number): void {
   levelFadeUniforms.kasbahFadeY.value = cutY
   levelFadeUniforms.kasbahFadeVisibility.value = visibility
+}
+
+/**
+ * L'opacité propre d'une matière (1 = pleine), à modifier par `.value` : c'est l'uniform même que
+ * lit son shader. Un clone de la matière en reçoit une à lui (les `userData` sont recopiés).
+ */
+export function materialOpacity(material: Material): { value: number } {
+  const u = material.userData as { kasbahOpacity?: { value: number } }
+  return (u.kasbahOpacity ??= { value: 1 })
 }
 
 const FRAGMENT_PARS = /* glsl */ `
 varying vec3 kasbahFadeView;
 uniform float kasbahFadeY;
 uniform float kasbahFadeVisibility;
-// trame de Bayer 4×4 : seize seuils répartis, pour que la part écartée se lise comme une densité
-float kasbahBayer( vec2 p ) {
-  vec2 q = mod( floor( p ), 4.0 );
-  float i = q.x + q.y * 4.0;
-  vec4 m = i < 4.0 ? vec4( 0.0, 8.0, 2.0, 10.0 ) : i < 8.0 ? vec4( 12.0, 4.0, 14.0, 6.0 ) : i < 12.0 ? vec4( 3.0, 11.0, 1.0, 9.0 ) : vec4( 15.0, 7.0, 13.0, 5.0 );
-  float k = mod( i, 4.0 );
-  float v = k < 1.0 ? m.x : k < 2.0 ? m.y : k < 3.0 ? m.z : m.w;
-  return ( v + 0.5 ) / 16.0;
-}
+uniform float kasbahOpacity;
 `
+// Bruit en gradient entrelacé (Jimenez 2014) : une trame sans motif visible, à coût quasi nul.
 const FRAGMENT = /* glsl */ `
-  if ( kasbahFadeVisibility < 1.0 && dot( viewMatrix[ 1 ].xyz, kasbahFadeView - viewMatrix[ 3 ].xyz ) > kasbahFadeY && kasbahBayer( gl_FragCoord.xy ) >= kasbahFadeVisibility ) discard;
+  {
+    float kasbahA = kasbahOpacity;
+    if ( kasbahFadeVisibility < 1.0 && dot( viewMatrix[ 1 ].xyz, kasbahFadeView - viewMatrix[ 3 ].xyz ) > kasbahFadeY ) kasbahA *= kasbahFadeVisibility;
+    #ifdef OPAQUE
+    if ( kasbahA < 1.0 && fract( 52.9829189 * fract( dot( gl_FragCoord.xy, vec2( 0.06711056, 0.00583715 ) ) ) ) >= kasbahA ) discard;
+    #else
+    diffuseColor.a *= kasbahA;
+    #endif
+  }
 `
 
-/** Ajoute le fondu à un shader en cours de compilation (toute matière qui a un brouillard, donc toutes celles de three). */
-export function applyLevelFade(shader: WebGLProgramParametersWithUniforms, _material: Material): void {
-  if (!shader.fragmentShader.includes('#include <clipping_planes_fragment>') || !shader.vertexShader.includes('#include <fog_vertex>')) return
+/** Ajoute l'opacité à un shader en cours de compilation (toute matière de three qui a un brouillard). */
+export function applyLevelFade(shader: WebGLProgramParametersWithUniforms, material: Material): void {
+  if (!shader.fragmentShader.includes('#include <alphatest_fragment>') || !shader.vertexShader.includes('#include <fog_vertex>')) return
   Object.assign(shader.uniforms, levelFadeUniforms)
+  shader.uniforms.kasbahOpacity = materialOpacity(material)
   shader.vertexShader = shader.vertexShader
     .replace('#include <fog_pars_vertex>', '#include <fog_pars_vertex>\nvarying vec3 kasbahFadeView;')
     .replace('#include <fog_vertex>', '#include <fog_vertex>\n  kasbahFadeView = mvPosition.xyz;')
   shader.fragmentShader = shader.fragmentShader
     .replace('#include <clipping_planes_pars_fragment>', `#include <clipping_planes_pars_fragment>\n${FRAGMENT_PARS}`)
-    .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>\n${FRAGMENT}`)
+    .replace('#include <alphatest_fragment>', `${FRAGMENT}\n#include <alphatest_fragment>`)
 }

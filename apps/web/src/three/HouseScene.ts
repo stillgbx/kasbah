@@ -6,7 +6,7 @@ import {
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js'
 import {
-  boundsCenter, buildingBounds, computeHouseGeometry, deviceFloorZ, geoDistance, indexHouse, longestEdgeYawDeg, pointInPolygon, resolveDefaults, resolveDeviceLevelId, sitePosition,
+  boundsCenter, buildingBounds, computeHouseGeometry, deviceFloorZ, geoDistance, indexHouse, longestEdgeYawDeg, offsetPolygon, pointInPolygon, resolveDefaults, resolveDeviceLevelId, sitePosition,
   roofBounds, roomBounds, zoneBounds, openingCentre, openingGaps, openingLabel, surfaceAxes, surfaceGaps,
   assignParkings, atRest, mirekToRgb, xyToRgb, parkingGaps, parkingHost, parkingLabel, PARKING_SIDES,
   type DeviceDescriptor, type DeviceState, type House, type HouseDevice, type HouseGeometry, type HouseIndex, type Level, type OpeningRect, type Parking, type ParkingFix, type ParkingSide, type PlacedHouseDevice, type Vec2, type Vec3,
@@ -19,6 +19,7 @@ import { DECOR_LAYER, SITE_DECOR_LAYER } from './core/layers'
 import { setLevelHeights } from './core/levelLight'
 import { setHeightMist } from './core/heightMist'
 import { setLevelFade } from './core/levelFade'
+import { roomFocusUniforms, setRoomFocusShape, setRoomFocusStrength } from './core/roomFocus'
 import { createPostPipeline, detectQuality, gpuName, PIXEL_RATIO, tiltBlurFactor, toneMappingOf, type EffectiveQuality, type PostPipeline, type RenderQuality } from './core/post'
 import { dayFactor, fogDistance, sunDirection, type SceneAmbience } from './core/ambience'
 import { Precipitation } from './effects/precipitation'
@@ -286,6 +287,11 @@ const SHADOW_SETTLE_MS = 700
  */
 const LEVEL_LIFT_M = 8
 const LEVEL_LIFT_MS = 450
+/** La pièce qu'on regarde : durée du fondu du reste de la maison, et épaisseur de dalle comprise sous son sol. */
+const ROOM_FOCUS_MS = 300
+const ROOM_FOCUS_SLAB_M = 0.35
+/** Marge (m) entre le masque et les surfaces de la pièce : jamais une limite posée sur une face. */
+const ROOM_FOCUS_MARGIN_M = 0.12
 /** Délai après lequel les étiquettes sont considérées immobiles (et leur promotion relâchée). */
 const LABELS_IDLE_MS = 500
 
@@ -456,6 +462,9 @@ export class HouseScene {
   private readonly lifts = new Map<string, { offset: number; shown: boolean; tween: Tween | null }>()
   /** Hauteur monde au-dessus de laquelle les étages en vol s'effacent (`core/levelFade.ts`). */
   private fadeCutY = Infinity
+  /** Où va la mise en valeur de la pièce (`core/roomFocus.ts`) : 0 ou 1, et la course en cours. */
+  private roomFocusTarget = 0
+  private roomFocusTween: Tween | null = null
   private readonly deps: HouseSceneDeps
   private readonly sun: DirectionalLight
   private readonly hemi: HemisphereLight
@@ -761,6 +770,10 @@ export class HouseScene {
     this.lifts.clear()
     this.fadeCutY = Infinity
     setLevelFade(1e9, 1)
+    this.roomFocusTween?.cancel()
+    this.roomFocusTween = null
+    this.roomFocusTarget = 0
+    setRoomFocusStrength(0)
     if (this.nodes) {
       disposeObject3D(this.nodes.root, new Set<Material>(this.materials.all))
       this.nodes = null
@@ -2680,9 +2693,33 @@ export class HouseScene {
         new MeshBasicMaterial({ color: accent, transparent: true, opacity: tn.fillOpacity, depthWrite: false }),
       )
       for (const m of [fill, ring]) { m.name = 'highlight'; level.group.add(m); this.highlightMeshes.push(m) }
+      // …et le reste de la maison s'efface derrière elle (`core/roomFocus.ts`) : son contour élargi
+      // d'un mur extérieur (ses murs restent entiers), de sous sa dalle au haut de ses murs. La
+      // limite tombe dans le VIDE, au-delà du mur : posée pile sur sa face extérieure, elle faisait
+      // basculer chaque pixel d'un côté ou de l'autre — un grain qui scintillait au moindre geste.
+      const wall = this.house ? resolveDefaults(this.house.defaults).exteriorWallThickness : 0.3
+      setRoomFocusShape(offsetPolygon(floor.polygon, wall + ROOM_FOCUS_MARGIN_M), level.elevation - ROOM_FOCUS_SLAB_M, level.elevation + level.height + ROOM_FOCUS_MARGIN_M)
     }
+    this.fadeRoomFocus(floor && level ? 1 : 0)
     this.highlightedRoom = roomId
     this.loop.invalidate()
+  }
+
+  /** Amène la mise en valeur d'une pièce à `to` (0 = aucune) en `ROOM_FOCUS_MS`, sans rejouer si elle y va déjà. */
+  private fadeRoomFocus(to: number): void {
+    if (this.roomFocusTarget === to) return
+    this.roomFocusTarget = to
+    this.roomFocusTween?.cancel()
+    this.roomFocusTween = null
+    const from = roomFocusUniforms.kasbahFocus.value
+    if (!this.renderer) { setRoomFocusStrength(to); return }
+    const tw = createTween({
+      durationMs: ROOM_FOCUS_MS, now: this.deps.now?.() ?? performance.now(), easing: easeInOutCubic,
+      onUpdate: (k) => setRoomFocusStrength(from + (to - from) * k),
+      onDone: () => { this.roomFocusTween = null },
+    })
+    this.roomFocusTween = tw
+    this.loop.addTween(tw)
   }
 
   /**
