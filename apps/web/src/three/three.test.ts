@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BackSide, Box3, BoxGeometry, type OrthographicCamera, type PerspectiveCamera, type BufferGeometry, CylinderGeometry, type Material, Mesh, MeshBasicMaterial, MeshStandardMaterial, type Object3D, type ShaderMaterial, ShaderLib, ShapeGeometry, Vector3, type BufferAttribute, type Texture } from 'three'
+import { BackSide, Box3, BoxGeometry, type OrthographicCamera, type PerspectiveCamera, type BufferGeometry, CylinderGeometry, type Material, Mesh, MeshBasicMaterial, MeshDepthMaterial, MeshStandardMaterial, type Object3D, type ShaderMaterial, ShaderLib, ShapeGeometry, Vector3, type BufferAttribute, type Texture } from 'three'
 import { computeHouseGeometry, localToGeo, openingGaps, parseHouse, type DeviceDescriptor, type DeviceState, type OpeningRect, type PlacedHouseDevice } from '@kasbah/shared'
 import demo from '@kasbah/shared/demo-house.json'
 import { buildHouse, buildLevel, buildWallsGeometry, countTriangles } from './builders/buildHouse'
@@ -7,7 +7,7 @@ import { buildDetails, buildRoofDetails, isGlazed } from './builders/details'
 import { alignedToLongestEdge, extrudePolygon } from './builders/shapes'
 import { createSurfaceTextures, type SurfaceTexture } from './textures/procedural'
 import { createMaterials } from './builders/materials'
-import { fitBox, fitDistance, ISO_POLAR, ORTHO_BASE_M, snapIsoAzimuth, sphericalOf, visibleHeight } from './core/cameraFit'
+import { fitBox, fitDistance, ISO_FOV_DEG, ISO_POLAR, ORTHO_BASE_M, snapIsoAzimuth, sphericalOf, visibleHeight } from './core/cameraFit'
 import { boundsToWorldBox, houseToWorld } from './core/coords'
 import { createRenderLoop } from './core/renderLoop'
 import { createCostGuard, detectQuality } from './core/post'
@@ -279,7 +279,13 @@ describe('projection de la vue', () => {
     const scene = new HouseScene(document.createElement('canvas'), { headless: true })
     scene.load(parseHouse(demo))
     scene.resize(1000, 500)
+    const shown = () => visibleHeight(scene.camera.position.length(), (scene.camera as PerspectiveCamera).fov)
+    const before = shown()
     scene.setOptions({ projection: 'iso' })
+    // une perspective à champ ÉTROIT, reculée d'autant : la maison garde sa taille à l'écran
+    expect((scene.camera as PerspectiveCamera).isPerspectiveCamera).toBe(true)
+    expect((scene.camera as PerspectiveCamera).fov).toBe(ISO_FOV_DEG)
+    expect(shown()).toBeCloseTo(before, 3)
     // headless : pas de contrôles, donc pas d'animation — la pose est posée d'un coup
     const poseOf = () => sphericalOf(scene.camera.position, new Vector3())
     expect(poseOf().polar).toBeCloseTo(ISO_POLAR, 5)
@@ -290,6 +296,11 @@ describe('projection de la vue', () => {
     const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a))
     for (let i = 1; i < quarters.length; i++) expect(wrap(quarters[i]! - quarters[i - 1]!)).toBeCloseTo(Math.PI / 2, 5)
     expect(poseOf().polar).toBeCloseTo(ISO_POLAR, 5)
+    // retour en perspective : le champ de base, la même hauteur montrée
+    const inIso = shown()
+    scene.setOptions({ projection: 'perspective' })
+    expect((scene.camera as PerspectiveCamera).fov).toBe(38)
+    expect(shown()).toBeCloseTo(inIso, 3)
   })
 
   it('ramène un azimut quelconque sur le coin isométrique le plus proche', () => {
@@ -1052,6 +1063,33 @@ describe('marqueurs 3D', () => {
       expect(p.depth).toBeGreaterThan(p.width)            // plus haute que large (Z-up)
       expect(box.position.z).toBeCloseTo(0.1)             // posée au sol, pas à moitié enterrée
     }
+  })
+})
+
+describe('tap sur un mur', () => {
+  // Le rayon traversait les murs : un tap sur la cloison de la chambre1 tombait sur le sol de la
+  // chambre2, derrière elle. Étage : chambre1 x∈[0 ; 4,9], cloison, chambre2 x∈[5,1 ; 10].
+  const scene = new HouseScene(document.createElement('canvas'), { headless: true })
+  scene.load(parseHouse(demo))
+  scene.resize(600, 600)
+  scene.focusLevel('etage')
+  const aim = (from: [number, number, number], to: [number, number, number]) => {
+    scene.camera.position.copy(houseToWorld(from))
+    scene.camera.lookAt(houseToWorld(to))
+    scene.camera.updateMatrixWorld(true)
+    scene.scene.updateMatrixWorld(true)
+  }
+
+  it('la face vue d’une cloison donne la pièce de devant, pas celle de derrière', () => {
+    aim([2, 2.5, 4.8], [5, 2.5, 4])
+    expect(scene.pick({ x: 0, y: 0 })).toEqual({ kind: 'room', roomId: 'chambre1' })
+    aim([8, 2.5, 4.8], [5, 2.5, 4])
+    expect(scene.pick({ x: 0, y: 0 })).toEqual({ kind: 'room', roomId: 'chambre2' })
+  })
+
+  it('une façade vue du jardin donne la pièce qu’elle ferme', () => {
+    aim([1, -6, 4.3], [1, 3, 4.1])            // x = 1 : à côté de la fenêtre de la chambre1
+    expect(scene.pick({ x: 0, y: 0 })).toEqual({ kind: 'room', roomId: 'chambre1' })
   })
 })
 
@@ -2281,6 +2319,17 @@ describe('toit et piscine', () => {
     expect(mats.roofFlat.map).not.toBe(mats.roof.map)
   })
 
+  it('la dalle végétalisée de nature ne survit pas au retour au réaliste', () => {
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true })
+    scene.load(parseHouse(demo))
+    const flatMat = () => (scene as unknown as { materials: { roofFlat: MeshStandardMaterial; roof: MeshStandardMaterial } }).materials
+    scene.setAppearance({ style: styleById('nature') })
+    expect(flatMat().roofFlat.color.getHexString()).toBe('5f7a42')
+    scene.setAppearance({ style: styleById('realistic') })
+    expect(flatMat().roofFlat.color.equals(flatMat().roof.color)).toBe(true)   // la couleur du versant, pas l'herbe
+    scene.dispose()
+  })
+
   it('une piscine est un bassin : margelle, parois vues de l’intérieur, eau translucide en retrait', () => {
     const nodes = buildHouse(geometry, mats)
     const water = nodes.zones.get('piscine')!
@@ -2530,6 +2579,14 @@ describe('brume basse', () => {
     expect(floor.fragmentShader).toContain('#ifdef OPAQUE')
     expect(floor.fragmentShader.indexOf('kasbahA < 1.0')).toBeLessThan(floor.fragmentShader.indexOf('#include <alphatest_fragment>'))
     expect(floor.uniforms.kasbahFadeY).toBe(levelFadeUniforms.kasbahFadeY)
+  })
+
+  it('la passe d’ombre reçoit le fondu : l’ombre de l’étage qui s’envole pâlit avec lui', () => {
+    const shader = { uniforms: {} as Record<string, { value: unknown }>, vertexShader: ShaderLib.depth.vertexShader, fragmentShader: ShaderLib.depth.fragmentShader }
+    new MeshDepthMaterial().onBeforeCompile(shader as never, null as never)
+    expect(shader.vertexShader).toContain('kasbahFadeView = mvPosition.xyz;')
+    expect(shader.fragmentShader.indexOf('kasbahA < 1.0')).toBeLessThan(shader.fragmentShader.indexOf('#include <alphatest_fragment>'))
+    expect(shader.uniforms.kasbahFadeVisibility).toBe(levelFadeUniforms.kasbahFadeVisibility)
   })
 
   it('chaque matière a son opacité, réglable sans recompiler, et un clone la sienne', () => {

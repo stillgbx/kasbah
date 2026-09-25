@@ -44,7 +44,8 @@ const SURFACES: SurfaceLooks = {
 }
 
 const SKY_NIGHT = { zenith: [0.06, 0.05, 0.12], horizon: [0.3, 0.24, 0.36], ground: [0.04, 0.035, 0.05], sunGlare: 5, sunColor: [1, 0.9, 1] } as const
-const SKY_DAY = { zenith: [0.35, 0.5, 0.8], horizon: [1, 0.95, 0.98], ground: [0.22, 0.24, 0.2], sunGlare: 9, sunColor: [1, 0.97, 0.92] } as const
+// le jour reste PASTEL, pas blanc : un horizon à 1 noyait la maison dans sa propre brume
+const SKY_DAY = { zenith: [0.3, 0.42, 0.7], horizon: [0.8, 0.8, 0.9], ground: [0.18, 0.19, 0.16], sunGlare: 5, sunColor: [1, 0.97, 0.92] } as const
 
 export const candyStyle: RenderStyle = {
   id: 'candy',
@@ -61,21 +62,21 @@ export const candyStyle: RenderStyle = {
         ground: mixRgb(SKY_NIGHT.ground, SKY_DAY.ground, day),
         sunGlare: mix(SKY_NIGHT.sunGlare, SKY_DAY.sunGlare, day),
         sunColor: mixRgb(SKY_NIGHT.sunColor, SKY_DAY.sunColor, day),
-        intensity: 1.3,
+        intensity: mix(1.3, 0.85, day),
       },
       lighting: {
         sunColor: new Color(0xd8c8ff).lerp(new Color(0xfff6ea), day),
         // même la nuit la lumière reste franche : une maquette posée sous une lampe, pas une maison
-        sunIntensity: mix(1.1, 2.4, day),
+        sunIntensity: mix(1.1, 1.7, day),
         hemiSky: new Color(0x6a5f96).lerp(new Color(0xe8f2ff), day),
         hemiGround: new Color(0x40395c).lerp(new Color(0xc0b6a8), day),
-        hemiIntensity: mix(0.8, 1.1, day),
+        hemiIntensity: mix(0.8, 0.7, day),
         ambientIntensity: mix(0.25, 0.32, day),
         shadowOpacity: 0.8,
       },
       post: {
         toneMapping: 'neutral',                          // il ne doit RIEN faire aux pastels
-        exposure: mix(1.15, 1, day),
+        exposure: mix(1.15, 0.9, day),
         bloom: { strength: mix(0.45, 0.2, day), radius: 0.7, threshold: 0.9 },
         ao: { intensity: 0.5, radius: 0.5 },
         vignette: 0,

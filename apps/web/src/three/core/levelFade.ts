@@ -60,14 +60,28 @@ const FRAGMENT = /* glsl */ `
   }
 `
 
-/** Ajoute l'opacité à un shader en cours de compilation (toute matière de three qui a un brouillard). */
+/**
+ * Ajoute l'opacité à un shader en cours de compilation (toute matière de three qui a un brouillard).
+ *
+ * Et à la matière de PROFONDEUR de la passe d'ombre (`MeshDepthMaterial`, sans brouillard) : l'étage
+ * qui s'efface y perd la même part de ses pixels, et le flou de la carte VSM fait de cette trame une
+ * ombre qui pâlit avec lui au lieu de disparaître d'un coup à l'arrivée. Le calcul de hauteur ne
+ * dépend que de `viewMatrix` : celle du soleil y vaut celle de la caméra.
+ */
 export function applyLevelFade(shader: WebGLProgramParametersWithUniforms, material: Material): void {
-  if (!shader.fragmentShader.includes('#include <alphatest_fragment>') || !shader.vertexShader.includes('#include <fog_vertex>')) return
+  if (!shader.fragmentShader.includes('#include <alphatest_fragment>')) return
+  const fog = shader.vertexShader.includes('#include <fog_vertex>')
+  const depth = (material as Material & { isMeshDepthMaterial?: boolean }).isMeshDepthMaterial === true
+  if (!fog && !(depth && shader.vertexShader.includes('#include <project_vertex>'))) return
   Object.assign(shader.uniforms, levelFadeUniforms)
   shader.uniforms.kasbahOpacity = materialOpacity(material)
-  shader.vertexShader = shader.vertexShader
-    .replace('#include <fog_pars_vertex>', '#include <fog_pars_vertex>\nvarying vec3 kasbahFadeView;')
-    .replace('#include <fog_vertex>', '#include <fog_vertex>\n  kasbahFadeView = mvPosition.xyz;')
+  shader.vertexShader = fog
+    ? shader.vertexShader
+      .replace('#include <fog_pars_vertex>', '#include <fog_pars_vertex>\nvarying vec3 kasbahFadeView;')
+      .replace('#include <fog_vertex>', '#include <fog_vertex>\n  kasbahFadeView = mvPosition.xyz;')
+    : shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 kasbahFadeView;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\n  kasbahFadeView = mvPosition.xyz;')
   shader.fragmentShader = shader.fragmentShader
     .replace('#include <clipping_planes_pars_fragment>', `#include <clipping_planes_pars_fragment>\n${FRAGMENT_PARS}`)
     .replace('#include <alphatest_fragment>', `${FRAGMENT}\n#include <alphatest_fragment>`)

@@ -2,29 +2,32 @@ import { Color } from 'three'
 import { dayFactor, duskFactor, type SceneAmbience } from '../core/ambience'
 import { hourGrade, mix, mixRgb, toPalette, type PaletteSpec, type RenderStyle, type StyleLook, type SurfaceLooks } from './types'
 
-// NATURE : bois, pierre et verdure, lumière chaude, matières mates. Le contraire du réaliste sur un
+// NATURE : le chalet — du bois partout (bardage, lambris, planchers, terrasse, toit, allées), des
+// toits plats végétalisés, un peu de pierre au sol, une lumière chaude, des matières mates. Le contraire du réaliste sur un
 // point précis — ici rien ne brille. Pas de métal, pas d'eau miroir, une occlusion marquée qui pose
 // les volumes, et une vignette douce. La maison a l'air d'être en matériaux, pas en rendu.
 
 const PALETTE: PaletteSpec = {
-  wall: '#d9cdb8',
-  wallInterior: '#e6dcc9',
-  floor: '#c2ab8c',
+  wall: '#a8784c',
+  wallInterior: '#d8b98f',
+  floor: '#b58a5c',
   floors: { wood: '#b07d4c', tile: '#cbc3b1', carpet: '#b8a58e', concrete: '#bdb5a6' },
   glass: '#b6cfc4',
-  roof: '#7a6a55',
+  roof: '#6e5238',
+  // toit plat végétalisé : un sedum plus sombre et plus sec que la pelouse
+  roofFlat: '#5f7a42',
   terrain: '#6d8f4e',
   zones: {
-    lawn: '#6d8f4e', pool: '#3f8f8a', driveway: '#a99c88', path: '#b9a98f',
-    bed: '#5a4530', terrace: '#b9a186', other: '#a89e8c',
+    lawn: '#6d8f4e', pool: '#3f8f8a', driveway: '#a99c88', path: '#a57a4e',
+    bed: '#5a4530', terrace: '#9c6b40', other: '#a89e8c',
   },
-  slat: '#c4b49a',
+  slat: '#8f6440',
   device: '#7b7466',
 }
 
 const SURFACES: SurfaceLooks = {
-  wall: { texture: 'stone', roughness: 1 },
-  wallInterior: { texture: 'plaster', roughness: 1 },
+  wall: { texture: 'siding', roughness: 0.95 },
+  wallInterior: { texture: 'wood', roughness: 0.9, relief: 0.8 },
   floor: { texture: 'wood', roughness: 0.75 },
   floors: {
     wood: { texture: 'wood', roughness: 0.7 },
@@ -32,13 +35,14 @@ const SURFACES: SurfaceLooks = {
     carpet: { texture: 'carpet', roughness: 1 },
     concrete: { texture: 'stone', roughness: 0.95 },
   },
-  roof: { texture: 'stone', roughness: 1 },
+  roof: { texture: 'wood', roughness: 1, relief: 1.4 },
+  roofFlat: { texture: 'grass', roughness: 1 },
   terrain: { texture: 'grass', roughness: 1 },
   zones: {
     lawn: { texture: 'grass', roughness: 1 },
     pool: { texture: 'water', roughness: 0.2, metalness: 0.15 },
     driveway: { texture: 'pavers', roughness: 0.95 },
-    path: { texture: 'pavers', roughness: 0.95 },
+    path: { texture: 'wood', roughness: 0.9 },
     bed: { texture: 'soil', roughness: 1 },
     terrace: { texture: 'wood', roughness: 0.85 },
     other: { texture: 'soil', roughness: 1 },

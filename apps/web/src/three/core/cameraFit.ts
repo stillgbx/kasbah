@@ -48,8 +48,10 @@ export const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.ma
  * Projection de la vue 3D. Trois valeurs, deux caméras :
  *  - `perspective` : la vue par défaut, celle qui donne de la profondeur ;
  *  - `ortho` : caméra orthographique, les parallèles le restent, mais on tourne librement ;
- *  - `iso` : la même caméra, angles VERROUILLÉS sur l'isométrie (45° d'azimut, `ISO_POLAR` de
- *    plongée) — on ne tourne plus que par quarts de tour.
+ *  - `iso` : angles VERROUILLÉS sur l'isométrie (45° d'azimut, `ISO_POLAR` de plongée) — on ne
+ *    tourne plus que par quarts de tour — vus par la caméra PERSPECTIVE à champ étroit
+ *    (`ISO_FOV_DEG`). Une vraie isométrie, orthographique, se lisait déformée : rien n'y rapetisse
+ *    au loin, et l'œil prend la piscine du fond pour agrandie (une perspective inversée).
  */
 export const SCENE_PROJECTIONS = ['perspective', 'ortho', 'iso'] as const
 export type SceneProjection = (typeof SCENE_PROJECTIONS)[number]
@@ -59,6 +61,9 @@ export type SceneProjection = (typeof SCENE_PROJECTIONS)[number]
  * cadrage, la molette et l'échelle des pilules passent tous par le zoom, qui s'y rapporte.
  */
 export const ORTHO_BASE_M = 20
+
+/** Champ vertical de l'isométrie : assez étroit pour garder ses lignes, assez ouvert pour qu'elles fuient un peu. */
+export const ISO_FOV_DEG = 20
 
 /** Plongée de l'isométrie : atan(√2) depuis la verticale, l'angle qui met les trois axes à égalité. */
 export const ISO_POLAR = Math.atan(Math.SQRT2)

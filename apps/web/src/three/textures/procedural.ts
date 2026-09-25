@@ -26,7 +26,7 @@ import { DataTexture, LinearSRGBColorSpace, RepeatWrapping, SRGBColorSpace, type
 export type SurfaceRole =
   | 'plaster' | 'wood' | 'tile' | 'poolTile' | 'carpet' | 'concrete'
   | 'grass' | 'water' | 'pavers' | 'soil' | 'roof'
-  | 'metal' | 'grid' | 'gloss' | 'stone' | 'gravel'
+  | 'metal' | 'grid' | 'gloss' | 'stone' | 'gravel' | 'siding'
 
 export interface SurfaceTexture {
   /** Couleur (sRGB) : luminance et teinte de la matière, à multiplier par la couleur du style. */
@@ -154,6 +154,27 @@ const SPECS: Record<SurfaceRole, Spec> = {
     // le vernis suit la lame : chaque planche s'use un peu différemment
     rough: (u, v) => 0.78 + 0.22 * hash(Math.floor((u + (Math.floor(v * 20) % 2) * 0.25) % 1 * 2), Math.floor(v * 20), 31),
     tint: (u, v) => { const w = 0.06 * (fbm(u * 6, v * 0.5, 24, 2, 33) - 0.5); return [1 + w, 1, 1 - w] as const },
+  },
+  // bardage à clin : 12 lames horizontales de 20 cm, chacune sur toute la longueur du motif — le mur
+  // d'un chalet. Le parquet (`wood`), à lames courtes décalées, se lisait comme de la brique sur une
+  // façade. Une lame est plus épaisse en bas, où elle recouvre celle du dessous : l'ombre du clin.
+  siding: {
+    size: 512, tileM: 2.4, relief: 0.006,
+    shade: (u, v) => {
+      const row = Math.floor(v * 12)
+      const f = v * 12 - row                               // 0 = bas de la lame, 1 = haut
+      const tone = 0.8 + 0.14 * hash(0, row, 41)
+      // veinage ÉTIRÉ dans le sens de la lame (4 cellules sur sa longueur, 6 sur sa hauteur) : fin
+      // dans le sens de la longueur, il hachait chaque lame en petits pavés — de la brique
+      const grain = 0.9 + 0.2 * fbm(u, v * 18 + hash(1, row, 43), 4, 3, 44)
+      return Math.min(1, tone * grain) * (f < 0.07 ? 0.55 : 1)
+    },
+    height: (u, v) => {
+      const f = v * 12 - Math.floor(v * 12)
+      return f < 0.07 ? 0 : 1 - 0.6 * f
+    },
+    rough: (_u, v) => 0.8 + 0.2 * hash(0, Math.floor(v * 12), 45),
+    tint: (u, v) => { const w = 0.06 * (fbm(u, v * 18, 4, 2, 46) - 0.5); return [1 + w, 1, 1 - w] as const },
   },
   // carreaux de 60 cm, joint de 6 mm, léger nuage par carreau — sol de maison
   tile: {

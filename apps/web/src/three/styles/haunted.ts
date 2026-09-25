@@ -4,7 +4,7 @@ import { mix, mixPalette, mixRgb, type PaletteSpec, type RenderStyle, type Style
 
 // MAISON HANTÉE : bois délavé, ardoise, herbe morte, une lune verdâtre et des fenêtres qui luisent
 // d'une lumière qu'on n'a pas allumée. Le jour n'y vient jamais tout à fait : `dayFactor` est écrasé,
-// un midi d'été reste un ciel bas et gris. Le relief est poussé partout — rien n'y est neuf.
+// un midi d'été reste un ciel bas et gris — mais on y voit la maison, sinon le style ne sert que la nuit. Le relief est poussé partout — rien n'y est neuf.
 
 const NIGHT: PaletteSpec = {
   wall: '#7a7a84',
@@ -64,13 +64,13 @@ const SURFACES: SurfaceLooks = {
 }
 
 const SKY_NIGHT = { zenith: [0.012, 0.008, 0.022], horizon: [0.06, 0.09, 0.07], ground: [0.006, 0.008, 0.006], sunGlare: 5, sunColor: [0.75, 0.95, 0.8] } as const
-const SKY_DAY = { zenith: [0.12, 0.13, 0.14], horizon: [0.35, 0.37, 0.35], ground: [0.05, 0.05, 0.045], sunGlare: 1, sunColor: [0.85, 0.88, 0.85] } as const
+const SKY_DAY = { zenith: [0.2, 0.21, 0.23], horizon: [0.52, 0.54, 0.52], ground: [0.08, 0.08, 0.07], sunGlare: 1, sunColor: [0.85, 0.88, 0.85] } as const
 
 export const hauntedStyle: RenderStyle = {
   id: 'haunted',
   labelKey: 'render.styles.haunted',
   look(a: SceneAmbience): StyleLook {
-    const day = dayFactor(a) * 0.45                     // le jour ne se lève qu'à moitié
+    const day = dayFactor(a) * 0.8                      // le jour ne se lève jamais tout à fait
     return {
       palette: mixPalette(NIGHT, DAY, day),
       surfaces: SURFACES,
@@ -86,21 +86,24 @@ export const hauntedStyle: RenderStyle = {
       },
       lighting: {
         sunColor: new Color(0x9fc9b0).lerp(new Color(0xc9cfcc), day),
-        sunIntensity: mix(1.2, 1.6, day),
+        sunIntensity: mix(1.2, 2.1, day),
         hemiSky: new Color(0x4a3f6b).lerp(new Color(0x8a8e94), day),
         hemiGround: new Color(0x16261b).lerp(new Color(0x3a3c30), day),
-        hemiIntensity: mix(1.2, 0.9, day),
-        ambientIntensity: mix(0.1, 0.14, day),
+        hemiIntensity: mix(1.2, 1, day),
+        ambientIntensity: mix(0.1, 0.22, day),
         shadowOpacity: mix(0.7, 0.5, day),
       },
       post: {
         toneMapping: 'aces',
-        exposure: mix(1.3, 1.05, day),
+        exposure: mix(1.3, 1.25, day),
         bloom: { strength: mix(0.9, 0.35, day), radius: 0.8, threshold: mix(0.55, 0.85, day) },
-        ao: { intensity: 1.5, radius: 0.45 },
-        vignette: mix(0.75, 0.55, day),
+        ao: { intensity: mix(1.5, 1.15, day), radius: 0.45 },
+        vignette: mix(0.75, 0.4, day),
       },
       glow: { scale: mix(1.4, 1, day), opacity: mix(0.8, 0.4, day), lightIntensity: mix(11, 6, day), emissive: mix(2.2, 1.3, day) },
+      // une nuée la nuit, deux ou trois égarées en plein jour ; gris violacé la nuit (le jardin y est
+      // noir), noires sur le jour gris
+      bats: { count: Math.round(mix(12, 3, day)), color: new Color(0x5a4d6b).lerp(new Color(0x141018), day / 0.8) },
     }
   },
 }

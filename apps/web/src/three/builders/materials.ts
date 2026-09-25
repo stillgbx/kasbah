@@ -206,7 +206,7 @@ export function applyLook(mats: MaterialSet, theme: SceneTheme, look: StyleLook,
   surface(mats.floor, theme.floor, s.floor, tex(s.floor))
   for (const k of Object.keys(mats.floors) as FloorStyle[]) surface(mats.floors[k], theme.floors[k], s.floors[k], tex(s.floors[k]))
   outdoor(mats.roof, theme.roof, s.roof)
-  outdoor(mats.roofFlat, theme.roof, roofFlat)
+  outdoor(mats.roofFlat, theme.roofFlat, roofFlat)
   outdoor(mats.terrain, theme.terrain, s.terrain)
   for (const k of Object.keys(mats.zones) as ZoneKind[]) {
     if (k === 'pool') surface(mats.zones[k], theme.zones[k], s.zones[k], tex(s.zones[k]))

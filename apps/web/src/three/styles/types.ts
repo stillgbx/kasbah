@@ -23,6 +23,12 @@ export interface ScenePalette {
   floors: Record<FloorStyle, Color>
   glass: Color
   roof: Color
+  /**
+   * La dalle d'un toit PLAT : celle du versant, sauf si le style la déclare (un toit végétalisé).
+   * TOUJOURS présente : le thème de scène se recompose en étalant l'ancien, une clé absente y
+   * gardait la couleur du style précédent (l'herbe de nature restait sur le toit du réaliste).
+   */
+  roofFlat: Color
   terrain: Color
   zones: Record<ZoneKind, Color>
   /** Lame d'un volet. */
@@ -166,6 +172,11 @@ export interface StyleLook {
   lighting: LightRig
   post: PostLook
   glow: GlowLook
+  /**
+   * Chauves-souris qui tournent autour de la maison (`effects/bats.ts`). Absent ou `count` 0 = aucune.
+   * La teinte est au style : une silhouette noire se perd la nuit sur un jardin noir.
+   */
+  bats?: { count: number; color: Color }
 }
 
 export interface RenderStyle {
@@ -191,6 +202,8 @@ export interface PaletteSpec {
   floors: Record<FloorStyle, string>
   glass: string
   roof: string
+  /** Absente = la couleur du toit (`roof`). */
+  roofFlat?: string
   terrain: string
   zones: Record<ZoneKind, string>
   slat: string
@@ -216,6 +229,7 @@ export function mixPalette(night: PaletteSpec, day: PaletteSpec, t: number): Sce
     floors: mixRecord(night.floors, day.floors, t),
     glass: mixColor(night.glass, day.glass, t),
     roof: mixColor(night.roof, day.roof, t),
+    roofFlat: mixColor(night.roofFlat ?? night.roof, day.roofFlat ?? day.roof, t),
     terrain: mixColor(night.terrain, day.terrain, t),
     zones: mixRecord(night.zones, day.zones, t),
     slat: mixColor(night.slat, day.slat, t),

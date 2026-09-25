@@ -1,5 +1,5 @@
 import {
-  AmbientLight, Color, DirectionalLight, DoubleSide, HemisphereLight, MOUSE, OrthographicCamera, PerspectiveCamera, Plane, Raycaster, Scene, Shape, ShapeGeometry, Spherical, type Texture, TOUCH, Vector2, Vector3, VSMShadowMap,
+  AmbientLight, Color, DirectionalLight, DoubleSide, HemisphereLight, MOUSE, OrthographicCamera, PerspectiveCamera, Plane, Raycaster, Scene, Shape, ShapeGeometry, Spherical, type Intersection, type Texture, TOUCH, Vector2, Vector3, VSMShadowMap,
   WebGLRenderer, Box3, BoxGeometry, Fog, Mesh, MeshBasicMaterial, type Material, type MeshPhysicalMaterial, type MeshStandardMaterial, type Object3D,
   Group, SphereGeometry, CylinderGeometry, RingGeometry, Frustum, Matrix4, Sphere, PointLight,
 } from 'three'
@@ -22,6 +22,7 @@ import { setLevelFade } from './core/levelFade'
 import { roomFocusUniforms, setRoomFocusShape, setRoomFocusStrength } from './core/roomFocus'
 import { createPostPipeline, detectQuality, gpuName, PIXEL_RATIO, tiltBlurFactor, toneMappingOf, type EffectiveQuality, type PostPipeline, type RenderQuality } from './core/post'
 import { dayFactor, fogDistance, sunDirection, type SceneAmbience } from './core/ambience'
+import { Bats } from './effects/bats'
 import { Precipitation } from './effects/precipitation'
 import { createWaterUniforms, makeWaterAlive, setWaterSun, setWaterTint, WaterCaustics, type WaterStrength } from './effects/water'
 import { defaultAmbience, defaultSceneTheme, rolesOf, styleById, type GlowLook, type PostLook, type RenderStyle, type StyleLook } from './styles'
@@ -30,7 +31,7 @@ import { buildHouse, buildLevel, buildRoofMesh, type HouseNodes, type LevelNodes
 import { buildParking, parkingGlyphTexture, parkingMaterials, type ParkingMaterials, type ParkingNodes } from './builders/parking'
 import { extrudeRing, flatPolygon, flatRing, insetPolygon } from './builders/shapes'
 import {
-  boxRadius, clamp, distanceForHeight, fitBox, fitZoom, ISO_POLAR, ORTHO_BASE_M, snapIsoAzimuth, sphericalOf, visibleHeight,
+  boxRadius, clamp, distanceForHeight, fitBox, fitZoom, ISO_FOV_DEG, ISO_POLAR, ORTHO_BASE_M, snapIsoAzimuth, sphericalOf, visibleHeight,
   type CameraPose, type SceneProjection,
 } from './core/cameraFit'
 import { boundsToWorldBox, houseToWorld } from './core/coords'
@@ -209,6 +210,13 @@ const JOURNAL_PIN_COLORS: Record<string, number> = { info: 0x8a94a6, warning: 0x
 /** Inclinaison permise en cadrant un appareil : plongeante, pour voir par-dessus les murs. */
 const DEVICE_FOCUS_POLAR = [(20 * Math.PI) / 180, (40 * Math.PI) / 180] as const
 const DEFAULT_AZIMUTH = -Math.PI / 4     // depuis le sud-est
+/** Ce qu'un appareil peut être « derrière » son mur et gagner quand même le tap (une applique y est collée). */
+const WALL_PICK_TOLERANCE_M = 0.05
+/** Champ vertical de la perspective (et le champ de référence de l'orthographique). */
+const BASE_FOV_DEG = 38
+/** Bornes de la molette, à ce champ-là ; un champ plus étroit les recule d'autant. */
+const MIN_DISTANCE_M = 4
+const MAX_DISTANCE_M = 120
 const DEFAULT_POLAR = (55 * Math.PI) / 180
 /** Cadrage d'un niveau-toit : plus plongeant que les autres, on vient regarder la dalle elle-même. */
 const ROOF_POLAR = (35 * Math.PI) / 180
@@ -355,6 +363,9 @@ export class HouseScene {
   /** Pluie ou neige en cours (`effects/precipitation.ts`), de quoi retirer son animation, et l'intensité avec laquelle elle a été bâtie. */
   private precip: Precipitation | null = null
   private stopPrecip: (() => void) | null = null
+  /** Chauves-souris du style (`effects/bats.ts`), et de quoi retirer leur animation. */
+  private bats: Bats | null = null
+  private stopBats: (() => void) | null = null
   private precipIntensity = 0
   /**
    * L'eau vivante (`effects/water.ts`) : un temps PARTAGÉ par la surface et le fond — crêtes et
@@ -514,7 +525,7 @@ export class HouseScene {
     }
     // Voir `render()` : les matrices monde se mettent à jour une fois par image, pas une fois par rendu.
     this.scene.matrixWorldAutoUpdate = false
-    this.perspectiveCamera = new PerspectiveCamera(38, 1, 0.1, 500)
+    this.perspectiveCamera = new PerspectiveCamera(BASE_FOV_DEG, 1, 0.1, 500)
     this.camera = this.perspectiveCamera
     this.camera.position.set(20, 18, 20)
     // halos, ondes, jauges — d'un niveau et du jardin (`core/layers.ts`)
@@ -558,9 +569,7 @@ export class HouseScene {
       this.controls.dampingFactor = 0.08
       this.controls.rotateSpeed = 0.6
       this.controls.screenSpacePanning = false
-      this.controls.minDistance = 4
-      this.controls.maxDistance = 120
-      // plongée, rotation, molette et doigts dépendent de la projection : un seul endroit les pose
+      // bornes de distance, plongée, rotation, molette et doigts dépendent de la projection : un seul endroit les pose
       this.applyControlLimits()
       this.controls.addEventListener('change', () => { this.loop.invalidate(); this.syncWater() })
       this.controls.addEventListener('start', () => { this.cameraTween?.cancel(); this.cameraTween = null })
@@ -624,6 +633,7 @@ export class HouseScene {
     this.nodes.terrain.receiveShadow = true
     this.scene.add(this.nodes.root)
     this.syncPrecipitation()               // la racine est neuve : ce qui tombe se repose dessus
+    this.syncBats()
     this.applyMist()                       // la nappe se pose sur CE terrain
     this.fitSunShadow()
     this.buildParkings()                   // le marquage au sol vit avec le terrain, avant les marqueurs
@@ -781,6 +791,7 @@ export class HouseScene {
     this.clearParkingNotes()
     this.clearOriginMark()
     this.removePrecipitation()
+    this.removeBats()
     // une maison neuve part posée : aucun étage n'est en vol
     for (const s of this.lifts.values()) s.tween?.cancel()
     this.lifts.clear()
@@ -2325,23 +2336,26 @@ export class HouseScene {
    */
   private applyProjectionMode(): void {
     const mode = this.options.projection
-    const fov = this.perspectiveCamera.fov
-    if (mode === 'perspective') {
-      if (this.camera !== this.perspectiveCamera) {
-        const height = ORTHO_BASE_M / (this.orthoCamera?.zoom ?? 1)
-        const lo = this.controls?.minDistance ?? 1, hi = this.controls?.maxDistance ?? Infinity
-        const distance = clamp(distanceForHeight(height, fov), lo, hi)
-        this.swapCamera(this.perspectiveCamera)
-        const { azimuth, polar } = this.currentSpherical()
-        this.camera.position.copy(this.poseAt(azimuth, polar, distance).position)
-      }
-    } else {
-      const target = this.controls?.target ?? new Vector3()
-      const ortho = (this.orthoCamera ??= new OrthographicCamera(-1, 1, 1, -1, 0.1, 500))
-      ortho.zoom = ORTHO_BASE_M / visibleHeight(this.camera.position.distanceTo(target), fov)
-      this.swapCamera(ortho)
-    }
+    const target = this.controls?.target ?? new Vector3()
+    // la hauteur de monde montrée au point visé, relevée AVANT tout changement : c'est elle qui tient
+    const height = this.camera instanceof OrthographicCamera
+      ? ORTHO_BASE_M / this.camera.zoom
+      : visibleHeight(this.camera.position.distanceTo(target), this.perspectiveCamera.fov)
+    // l'isométrie est une perspective à champ ÉTROIT ; l'orthographique se rapporte au champ de base
+    this.perspectiveCamera.fov = mode === 'iso' ? ISO_FOV_DEG : BASE_FOV_DEG
     this.applyControlLimits()
+    if (mode === 'ortho') {
+      const ortho = (this.orthoCamera ??= new OrthographicCamera(-1, 1, 1, -1, 0.1, 500))
+      ortho.zoom = ORTHO_BASE_M / height
+      this.swapCamera(ortho)
+    } else {
+      const lo = this.controls?.minDistance ?? 1, hi = this.controls?.maxDistance ?? Infinity
+      const distance = clamp(distanceForHeight(height, this.perspectiveCamera.fov), lo, hi)
+      this.swapCamera(this.perspectiveCamera)
+      this.applyProjection()                 // le champ a pu changer sans changer de caméra
+      const { azimuth, polar } = this.currentSpherical()
+      this.camera.position.copy(this.poseAt(azimuth, polar, distance).position)
+    }
     // l'isométrie ne se contente pas d'un tronc : elle impose ses angles, et la vue s'y range
     if (mode === 'iso') {
       const { azimuth, distance } = this.currentSpherical()
@@ -2374,6 +2388,10 @@ export class HouseScene {
     const c = this.controls
     if (!c) return
     const fov = this.perspectiveCamera.fov
+    // le champ étroit de l'isométrie recule la caméra d'autant : les bornes de la molette suivent
+    const k = Math.tan((BASE_FOV_DEG * Math.PI) / 360) / Math.tan((fov * Math.PI) / 360)
+    c.minDistance = MIN_DISTANCE_M * k
+    c.maxDistance = MAX_DISTANCE_M * k
     c.minZoom = ORTHO_BASE_M / visibleHeight(c.maxDistance, fov)
     c.maxZoom = ORTHO_BASE_M / visibleHeight(c.minDistance, fov)
     const iso = this.options.projection === 'iso'
@@ -2877,8 +2895,14 @@ export class HouseScene {
     for (const m of this.markers.values()) if (m.visibleInScene) pickables.push(...m.pickables)
     const hitDevice = this.raycaster.intersectObjects(pickables, false)[0]
     const floors: Mesh[] = []
-    for (const nodes of this.nodes.levels.values()) if (nodes.group.visible && nodes.markers.visible) floors.push(...nodes.floors.values())
+    const walls: Mesh[] = []
+    for (const nodes of this.nodes.levels.values()) {
+      if (nodes.group.visible && nodes.markers.visible) { floors.push(...nodes.floors.values()); walls.push(...nodes.walls) }
+    }
     const hitFloor = this.raycaster.intersectObjects(floors, false)[0]
+    // Un mur ARRÊTE le rayon : sans lui, le tap sur une cloison traversait et tombait sur le sol de
+    // la pièce voisine. Il sélectionne la pièce dont on voit la face (`roomOfWallHit`).
+    const hitWall = this.raycaster.intersectObjects(walls, false)[0]
     // Le toit cache ce qu'il couvre : un tap dessus va au niveau qui le porte, jamais à la pièce
     // qu'on ne voit pas dessous (sans quoi le toit disparaissait au profit de l'étage).
     const roofNode = this.nodes.roof
@@ -2889,8 +2913,14 @@ export class HouseScene {
     const deviceWins = !!hitDevice
       && (!hitFloor || hitDevice.distance <= hitFloor.distance)
       && (!hitRoof || hitDevice.distance <= hitRoof.distance)
+      // une applique, une télé murale sont DEVANT leur mur : la marge ne les fait pas perdre contre lui
+      && (!hitWall || hitDevice.distance <= hitWall.distance + WALL_PICK_TOLERANCE_M)
     if (deviceWins) return { kind: 'device', key: hitDevice!.object.userData.key as string }
-    if (hitRoof && (!hitFloor || hitRoof.distance <= hitFloor.distance)) return { kind: 'level', levelId: roofLevel!.id }
+    if (hitRoof && (!hitFloor || hitRoof.distance <= hitFloor.distance) && (!hitWall || hitRoof.distance <= hitWall.distance)) return { kind: 'level', levelId: roofLevel!.id }
+    if (hitWall && (!hitFloor || hitWall.distance < hitFloor.distance)) {
+      const roomId = this.roomOfWallHit(hitWall)
+      return roomId ? { kind: 'room', roomId } : null
+    }
     if (hitFloor) return { kind: 'room', roomId: hitFloor.object.userData.roomId as string }
     // les zones du jardin ne se sélectionnent qu'en vue d'ensemble / jardin
     if (this.focusedLevelId === null) {
@@ -2898,6 +2928,27 @@ export class HouseScene {
       if (hitZone) return { kind: 'zone', zoneId: hitZone.object.userData.zoneId as string }
     }
     return null
+  }
+
+  /**
+   * La pièce d'un mur touché : celle DEVANT la face vue (une cloison sépare deux pièces, on veut
+   * celle qu'on regarde), sinon celle DERRIÈRE (la façade vue du jardin ouvre la pièce qu'elle
+   * ferme). Le dessus d'un mur n'a pas de face verticale : c'est le côté caméra qui compte.
+   */
+  private roomOfWallHit(hit: Intersection): string | null {
+    if (!this.nodes || !this.index) return null
+    const levelId = [...this.nodes.levels].find(([, n]) => n.walls.includes(hit.object as Mesh))?.[0]
+    const rooms = levelId ? this.index.roomsByLevel.get(levelId) ?? [] : []
+    const toHouse = this.nodes.root.matrixWorld.clone().invert()
+    const p = hit.point.clone().applyMatrix4(toHouse)
+    const n = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld).transformDirection(toHouse) : new Vector3()
+    if (Math.hypot(n.x, n.y) < 0.5) n.copy(this.raycaster.ray.direction).transformDirection(toHouse).negate()
+    const h = new Vector2(n.x, n.y).normalize()
+    const roomAt = (d: number) => rooms.find((r) => pointInPolygon([p.x + h.x * d, p.y + h.y * d], r.polygon))?.id
+    // devant, à peine décollé ; derrière, au-delà de l'épaisseur du mur (une façade fait ~0,4 m)
+    let roomId = roomAt(0.1)
+    for (let d = 0.1; !roomId && d <= 1; d += 0.1) roomId = roomAt(-d)
+    return roomId ?? null
   }
 
   private handleTap(ev: TapEvent): void {
@@ -3066,6 +3117,7 @@ export class HouseScene {
     this.invalidateShadows()               // le soleil a pu bouger
     this.syncStorm()
     this.syncPrecipitation()
+    this.syncBats()
     this.syncWater()                       // le style dit si l'eau bouge, l'heure ce que le fond reçoit
     this.loop.invalidate()
   }
@@ -3148,6 +3200,29 @@ export class HouseScene {
     this.nodes.root.add(this.precip.object)
     const effect = this.precip
     this.stopPrecip = this.loop.addAnimation({ step: (_now, dtS) => { if (this.precip !== effect) return false; effect.step(dtS); return true } })
+  }
+
+  /**
+   * Les chauves-souris du style : une animation décorative de plus (20 Hz), coupée en qualité basse
+   * comme la pluie. Même nombre : on garde la nuée en vol ; sinon on la refait.
+   */
+  private syncBats(): void {
+    const n = this.look.bats?.count ?? 0
+    if (n <= 0 || this.quality === 'low' || !this.nodes || !this.geometry) { this.removeBats(); return }
+    if (this.bats && this.bats.count === n && this.bats.object.parent === this.nodes.root) { this.bats.setColor(this.look.bats!.color); return }
+    this.removeBats()
+    const b = this.geometry.bounds
+    const bats = new Bats({ min: [b.min[0], b.min[1]], max: [b.max[0], b.max[1]], roofZ: b.max[2] }, n, this.look.bats!.color)
+    this.bats = bats
+    this.nodes.root.add(bats.object)
+    this.stopBats = this.loop.addAnimation({ step: (_now, dtS) => { if (this.bats !== bats) return false; bats.step(dtS); return true } })
+  }
+
+  private removeBats(): void {
+    this.stopBats?.()
+    this.stopBats = null
+    this.bats?.dispose()
+    this.bats = null
   }
 
   private removePrecipitation(): void {
@@ -3282,6 +3357,7 @@ export class HouseScene {
     const wanted = this.options.quality === 'auto' ? detectQuality(this.renderer ? gpuName(this.renderer) : '') : this.options.quality
     this.quality = wanted
     this.syncPrecipitation()               // la qualité basse coupe la pluie
+    this.syncBats()                        // …et les chauves-souris
     this.syncWater()                       // …et fige l'eau
     if (!this.renderer) return
     const pixelRatio = Math.min(window.devicePixelRatio || 1, PIXEL_RATIO[wanted])
@@ -3500,6 +3576,7 @@ export class HouseScene {
     if (this.labelsIdle !== null) clearTimeout(this.labelsIdle)
     if (this.stormTimer !== null) { clearTimeout(this.stormTimer); this.stormTimer = null }
     this.removePrecipitation()
+    this.removeBats()
     this.drag?.detach()
     this.openingDragger?.detach()
     if (this.openingFrame !== 0) cancelAnimationFrame(this.openingFrame)
