@@ -3,7 +3,8 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useHouseStore } from '../../stores/house'
 import StrokeIcon from '../ui/StrokeIcon.vue'
-import { NAV_ITEMS } from '../../lib/navItems'
+import { NAV_ITEMS, visibleNavItems } from '../../lib/navItems'
+import { useLocalPluginsStore } from '../../stores/localPlugins'
 
 // Rail de navigation (72 px) : initiales de la maison, vues, puis les réglages tout en bas.
 const route = useRoute()
@@ -17,7 +18,8 @@ const initials = computed(() => {
 })
 // Les réglages restent dans NAV_ITEMS — la recherche de la vue Maison s'en sert pour ouvrir la
 // page — mais ils quittent la file des vues : leur place est en bas du rail, sous le spacer.
-const items = NAV_ITEMS.filter((it) => it.name !== 'settings')
+const localPlugins = useLocalPluginsStore()
+const items = computed(() => visibleNavItems(localPlugins.isEnabled).filter((it) => it.name !== 'settings'))
 const settingsItem = NAV_ITEMS.find((it) => it.name === 'settings')!
 </script>
 

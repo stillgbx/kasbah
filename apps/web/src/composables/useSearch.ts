@@ -3,7 +3,8 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { roomKey, type DeviceDescriptor } from '@kasbah/shared'
 import { deviceIcon } from '../lib/deviceIcons'
-import { NAV_ITEMS } from '../lib/navItems'
+import { visibleNavItems } from '../lib/navItems'
+import { useLocalPluginsStore } from '../stores/localPlugins'
 import { normalize, queryTerms, scoreQuery } from '../lib/search'
 import type { IconName } from '../lib/strokeIcons'
 import { useDevicesStore } from '../stores/devices'
@@ -63,6 +64,7 @@ export function useSearch(query: Ref<string>) {
   const devices = useDevicesStore()
   const scenes = useScenesStore()
   const router = useRouter()
+  const localPlugins = useLocalPluginsStore()
   const { t } = useI18n()
 
   const entries = computed<SearchEntry[]>(() => {
@@ -130,7 +132,7 @@ export function useSearch(query: Ref<string>) {
       })
     }
 
-    for (const item of NAV_ITEMS) {
+    for (const item of visibleNavItems(localPlugins.isEnabled)) {
       if (item.name === 'home') continue                 // on y est déjà : la recherche vit dessus
       out.push({ key: `page:${item.name}`, label: t(item.label), sub: t('search.page'), icon: item.icon, family: 'page', go: () => { void router.push({ name: item.name }) } })
     }

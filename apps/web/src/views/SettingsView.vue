@@ -10,6 +10,8 @@ import { LOCALE_LABELS } from '../i18n'
 import { useDevicesStore } from '../stores/devices'
 import { useHouseStore } from '../stores/house'
 import { usePluginsStore } from '../stores/plugins'
+import { useLocalPluginsStore } from '../stores/localPlugins'
+import { browserBluetooth } from '../lib/tens/link'
 import { WEATHER_CONDITIONS } from '@kasbah/shared'
 import { conditionIcon } from '../lib/weather'
 import type { IconName } from '../lib/strokeIcons'
@@ -29,6 +31,10 @@ import { styleById, type RenderStyle } from '../three/styles'
 // redémarrer le serveur.
 const settings = useSettingsStore()
 const plugins = usePluginsStore()
+// Les plugins LOCAUX, eux, sont des choix de CE poste (localStorage) : le TENS ne doit exister que
+// sur le navigateur qui lui parle en Bluetooth, jamais sur la tablette du palier.
+const localPlugins = useLocalPluginsStore()
+const bluetooth = browserBluetooth() !== null
 /** Les plugins par ordre alphabétique de leur nom affiché (l'id, `_` en espace), pas dans l'ordre du serveur. */
 const pluginsByName = computed(() => [...plugins.list].sort((a, b) => a.id.replace('_', ' ').localeCompare(b.id.replace('_', ' '))))
 const devices = useDevicesStore()
@@ -247,6 +253,19 @@ const houseStats = computed(() => {
           </section>
         </div>
       </div>
+      <!-- les appareils personnels de CE poste, avant les fabricants de la maison -->
+      <section class="card block settings__plugins">
+        <div class="block__title">{{ $t('settings.localPlugins') }}</div>
+        <p class="muted small plugins__hint">{{ $t('settings.localPluginsHint') }}</p>
+        <div class="auto-row">
+          <div class="min0">
+            <div class="auto-row__name">{{ $t('settings.localTens') }}</div>
+            <div class="muted small">{{ bluetooth ? $t('settings.localTensHint') : $t('settings.localUnsupported') }}</div>
+          </div>
+          <v-switch :model-value="localPlugins.isEnabled('tens')" hide-details density="compact"
+                    @update:model-value="(v: boolean | null) => localPlugins.setEnabled('tens', v === true)" />
+        </div>
+      </section>
       <!-- les fabricants ferment la page : une liste pleine largeur, où chaque ligne a la place de
            dire nom, statut et interrupteur sans se serrer -->
       <section class="card block settings__plugins">

@@ -19,6 +19,7 @@ export const router = createRouter({
     { path: '/vehicles', name: 'vehicles', component: () => import('../views/VehiclesView.vue') },
     { path: '/robots', name: 'robots', component: () => import('../views/RobotsView.vue') },
     { path: '/pets', name: 'pets', component: () => import('../views/PetsView.vue') },
+    { path: '/tens', name: 'tens', component: () => import('../views/TensView.vue') },
     { path: '/weather', name: 'weather', component: () => import('../views/WeatherView.vue') },
     { path: '/automations', name: 'automations', component: () => import('../views/AutomationsView.vue') },
     // l'édition a sa page : « Sauf si » et « Alors » s'allongent, un panneau de 340 px n'y suffit pas.

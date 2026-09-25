@@ -1,6 +1,6 @@
 {
   "app": { "name": "Kasbah" },
-  "nav": { "main": "Navigation", "home": "Home", "energy": "Energy", "water": "Water", "heating": "Heating", "vehicles": "Vehicles", "robots": "Robots", "pets": "Pets", "weather": "Weather", "settings": "Settings", "lights": "Lights", "covers": "Covers", "cameras": "Cameras", "media": "Media", "music": "Music", "automations": "Automations" },
+  "nav": { "main": "Navigation", "home": "Home", "energy": "Energy", "water": "Water", "heating": "Heating", "vehicles": "Vehicles", "robots": "Robots", "pets": "Pets", "weather": "Weather", "settings": "Settings", "lights": "Lights", "covers": "Covers", "cameras": "Cameras", "media": "Media", "music": "Music", "automations": "Automations", "tens": "TENS" },
   "common": {
     "cancel": "Cancel", "close": "Close", "back": "Back", "retry": "Retry", "all": "All", "none": "None", "unavailable": "Unavailable",
     "loading": "Loading house…", "on": "On", "off": "Off", "stop": "Stop",
@@ -409,6 +409,7 @@
     "gps": "GPS origin of the local frame", "gpsHeading": "heading", "houseStats": "{levels} floors · {rooms} rooms · {devices} devices",
     "plugins": "Plugins", "pluginsStats": "{active} / {available} enabled · {n} device | {active} / {available} enabled · {n} device | {active} / {available} enabled · {n} devices", "keys": ".env keys",
     "pluginsHint": "Turn on the vendors this house uses. The choice is written to the house file and takes effect right away; keys and tokens stay in .env.",
+    "localPlugins": "On this device", "localPluginsHint": "Personal devices paired with THIS browser. Enabled here only: other tablets know nothing about them, and neither automations nor the assistant can reach them.", "localTens": "TENS actiTENS mini", "localTensHint": "Bluetooth electrostimulation — Chrome or Edge, on localhost or HTTPS.", "localUnsupported": "Bluetooth unavailable in this browser",
     "pluginEnable": "Enable this plugin", "pluginParts": "Provides",
     "pluginDetails": "Show this plugin's info and settings",
     "pluginStatus": {
@@ -888,5 +889,79 @@
       "removeConfirm": "Confirm"
     },
     "toast": { "saved": "{name} saved", "ran": "{name} ran", "ranWithErrors": "{name}: {errors}", "saveError": "{name} not saved: {message}" }
+  },
+  "tens": {
+    "device": "Device",
+    "connect": "Connect",
+    "chooseOther": "Other devices",
+    "requested": "Requested intensity, channel {n}",
+    "actual": "TENS {v} mA",
+    "pairing": {
+      "title": "First connection",
+      "step1": "Turn the TENS on (green light), then hold the centre button for 3 seconds: the light blinks blue, it accepts a new device.",
+      "step2": "Pair it from Windows: Settings → Bluetooth & devices → Add device → Bluetooth, then pick “acTENSv2_…”. Windows learns its name that way.",
+      "step3": "Click Connect: the list then only offers “acTENSv2_…”.",
+      "step4": "Without Windows: “Other devices”, then the “Unknown device” whose address starts with 00:30:3A.",
+      "flag": "For Kasbah to reconnect by itself, without a click, even after a page reload: chrome://flags → “Web Bluetooth new permissions backend” → Enabled, then restart Chrome (or Edge: edge://flags).", "note": "The TENS keeps a single pairing: the phone will need pairing again to use the actiTENS app."
+    },
+    "disconnect": "Disconnect",
+    "status": {
+      "disconnected": "Disconnected",
+      "connecting": "Connecting…",
+      "connected": "Connected"
+    },
+    "battery": "Battery",
+    "charging": "Charging",
+    "noBattery": "—",
+    "session": "Session",
+    "state": {
+      "idle": "No session",
+      "ready": "Checking electrodes",
+      "running": "Running",
+      "paused": "Paused"
+    },
+    "elsewhere": "Started from another device",
+    "channel": "Channel {n}",
+    "decrease": "Lower channel {n}",
+    "increase": "Raise channel {n}",
+    "cap": "Cap: {max} mA per channel. Intensity rises in 0.5 mA steps.",
+    "pause": "Pause",
+    "resume": "Resume",
+    "stop": "Stop",
+    "favorites": "Favorites", "favoriteAdd": "Add {name} to favorites ({n} min)", "favoriteRemove": "Remove {name} from favorites", "favoritesEmpty": "No favorites: a program's star adds it, with the duration set.", "running": "Running",
+    "programs": "Programs",
+    "duration": "Duration",
+    "minutes": "{n} min",
+    "shorter": "Shorter",
+    "longer": "Longer",
+    "channels": "Channels",
+    "channelsBoth": "1 + 2",
+    "start": "Start",
+    "busyStarting": "Starting…",
+    "localOnly": "Controlled from this device only: neither automations nor other tablets can reach it.",
+    "unsupported": "This browser does not speak Bluetooth. Open Kasbah in Chrome or Edge, on localhost or HTTPS.",
+    "notEnabled": "The TENS is not enabled on this device: Settings → On this device.",
+    "openSettings": "Open settings",
+    "errors": {
+      "unsupported": "Bluetooth unavailable in this browser.",
+      "connect": "Could not connect to the TENS. Close the actiTENS phone app: the TENS accepts one connection at a time.",
+      "command": "The TENS did not answer the command.",
+      "electrodes": "Electrodes not detected: place the TENS on the skin, then start again.",
+      "refused": "The TENS refused the command."
+    },
+    "programNames": {
+      "p1": "Gate Control 100 Hz",
+      "p2": "Gate Control 80 Hz",
+      "p3": "Endorphin",
+      "p4": "Mixed",
+      "p5": "Sequential",
+      "p6": "HAN stimulation",
+      "p7": "Burst 2 Hz",
+      "p8": "Frequency modulation",
+      "p9": "Muscle relaxation",
+      "p10": "Massage",
+      "p11": "Friction",
+      "p12": "Sensitive areas"
+    }
   }
 }
