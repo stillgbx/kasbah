@@ -259,6 +259,12 @@ class ArchitectureGTAOPass extends GTAOPass {
 
 export interface PostPipeline {
   readonly quality: EffectiveQuality
+  /**
+   * Une cible au format de celle où la scène est dessinée (demi-flottant, linéaire). Précompiler
+   * les shaders en visant l'ÉCRAN produirait la variante « tone mapping + sRGB », que la scène
+   * n'utilise jamais ici : c'est la sortie de la chaîne qui s'en charge.
+   */
+  readonly sceneTarget: WebGLRenderTarget
   setSize(width: number, height: number, pixelRatio: number): void
   setLook(look: PostLook): void
   /**
@@ -351,6 +357,7 @@ export function createPostPipeline(deps: PostPipelineDeps): PostPipeline {
 
   return {
     quality,
+    sceneTarget: target,
     setSize(width, height, pixelRatio) {
       // `setPixelRatio` redimensionne déjà tampons ET passes : inutile de les toucher un à un.
       composer.setPixelRatio(pixelRatio)

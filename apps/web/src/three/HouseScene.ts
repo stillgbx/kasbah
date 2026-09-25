@@ -12,7 +12,8 @@ import {
   type DeviceDescriptor, type DeviceState, type House, type HouseDevice, type HouseGeometry, type HouseIndex, type Level, type OpeningRect, type Parking, type ParkingFix, type ParkingSide, type PlacedHouseDevice, type Vec2, type Vec3,
 } from '@kasbah/shared'
 import { applyLook, backdropColor, createMaterials, disposeMaterials, type MaterialSet } from './builders/materials'
-import { loadPackTextures, packById } from './textures/assets'
+import type { SurfaceRole } from './textures/procedural'
+import { loadPackTextures, packById, packTexturesSettled, type TexturePack } from './textures/assets'
 import { createSkyEnvironment, overcastSky } from './core/sky'
 import { DECOR_LAYER, SITE_DECOR_LAYER } from './core/layers'
 import { setLevelHeights } from './core/levelLight'
@@ -166,7 +167,26 @@ export interface SceneEvents {
    */
   parkingDrag: (parkingId: string, xy: [number, number]) => void
   parkingDrop: (parkingId: string) => void
+  /**
+   * La maison se prépare avant d'être montrée (voir `prepare`) : l'étape en cours, avec son compte
+   * quand elle en a un (les matières), puis `null` quand elle est prête.
+   */
+  prepare: (stage: ScenePrepareStage | null, progress: { done: number; total: number } | null) => void
 }
+
+/** Les étapes de la préparation d'une maison, dans l'ordre. */
+export type ScenePrepareStage = 'materials' | 'shaders' | 'frame'
+
+/**
+ * Après une image PEINTE : le rappel d'un `requestAnimationFrame` précède la peinture de son image,
+ * celui du suivant la suit.
+ */
+const nextPaint = () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+
+/** Au-delà, la maison se montre même si des matières photo sont encore en route (réseau lent, fichier absent). */
+const PREPARE_PHOTOS_MS = 10_000
+/** Au-delà, la maison se montre même si des shaders compilent encore (la première image les finira). */
+const PREPARE_SHADERS_MS = 30_000
 
 const HOME_RADIUS_M = 120
 /** Hauteur (m) de l'étiquette d'une place au-dessus du sol, et celle de ses quatre cotes. */
@@ -288,6 +308,15 @@ export class HouseScene {
   private assets = false
   /** Jeton des chargements de matières : un rôle qui arrive pour un style qu'on a quitté est ignoré. */
   private photoGen = 0
+  /** Jeton de la préparation en cours : un nouveau chargement (ou la fin de la scène) l'invalide. */
+  private prepareGen = 0
+  private preparing = false
+  /**
+   * Aucune image pendant la préparation. Une seule image rendue avant la fin de `compileAsync`
+   * compile TOUT d'un bloc, sur le fil principal : 9 s figées au premier chargement (cache de
+   * shaders froid, iGPU), le voile compris — mesuré le 2026-09-25.
+   */
+  private holdFrames = false
   private post: PostPipeline | null = null
   private quality: EffectiveQuality = 'high'
   /** Minuterie de l'orage en cours (prochain éclat, ou éclat en train de s'éteindre) ; `null` = pas d'orage. */
@@ -333,7 +362,7 @@ export class HouseScene {
     deviceTap: new Set(), roomTap: new Set(), zoneTap: new Set(), levelTap: new Set(), backgroundTap: new Set(),
     deviceDrag: new Set(), deviceDrop: new Set(), journalTap: new Set(),
     openingTap: new Set(), openingDrag: new Set(), openingDrop: new Set(), placeTap: new Set(),
-    parkingTap: new Set(), parkingDrag: new Set(), parkingDrop: new Set(), groundTap: new Set(),
+    parkingTap: new Set(), parkingDrag: new Set(), parkingDrop: new Set(), groundTap: new Set(), prepare: new Set(),
   }
   private detachInput: (() => void) | null = null
   /** Retire le relais de molette posé sur la couche des étiquettes (`forwardWheelFromLabels`). */
@@ -563,6 +592,99 @@ export class HouseScene {
     if (firstLoad) this.resetView(false)
     this.syncWater()                       // après le cadrage : la piscine est-elle DANS le champ ?
     this.loop.invalidate()
+    void this.prepare()
+  }
+
+  /** La maison se prépare encore (voir `prepare`) : le voile de chargement la cache. */
+  get preparingHouse(): boolean { return this.preparing }
+
+  /**
+   * Prépare la maison qu'on vient de construire AVANT qu'on la regarde : les matières photo, puis
+   * les shaders (`compileAsync`, qui compile en parallèle quand le pilote le permet), puis une
+   * première image — elle compile ce que `compileAsync` ne voit pas : la chaîne d'effets et le
+   * relevé des ombres. Sans ça, tout se compilait à la première image, et chaque matière photo
+   * arrivée ensuite recompilait sa matière : autant d'images figées au premier geste. Le rendu est
+   * le même ; seul le MOMENT où ces compilations sont payées change, sous le voile de chargement.
+   *
+   * Ne couvre que l'état du chargement : un autre style, la pluie, une lampe de jardin allumée plus
+   * tard peuvent encore demander leur variante.
+   */
+  private async prepare(): Promise<void> {
+    const gen = ++this.prepareGen
+    const step = (stage: ScenePrepareStage | null, progress: { done: number; total: number } | null = null) => {
+      if (gen !== this.prepareGen) return
+      this.preparing = stage !== null
+      this.emit('prepare', stage, progress)
+    }
+    this.holdFrames = true
+    try {
+      // les matières photo d'abord : chacune qui arrive change sa matière, donc son shader
+      step('materials')
+      const pack = this.photoPack()
+      if (pack) {
+        let timer: ReturnType<typeof setTimeout> | undefined
+        const settled = packTexturesSettled(pack, this.photoRoles(), (done, total) => step('materials', { done, total }))
+        await Promise.race([settled, new Promise((resolve) => { timer = setTimeout(resolve, PREPARE_PHOTOS_MS) })])
+        clearTimeout(timer)
+      }
+      const r = this.renderer
+      if (gen !== this.prepareGen || !r) return
+      step('shaders')
+      // laisser le voile PEINDRE l'étape avant de lancer les compilations, qui occupent le fil principal
+      await nextPaint()
+      if (gen !== this.prepareGen) return
+      this.scene.updateMatrixWorld()
+      // la variante que la scène utilise vraiment : celle de la cible de la chaîne d'effets (sans
+      // tone mapping, linéaire), ou l'écran quand il n'y a pas de chaîne (qualité basse)
+      const previous = r.getRenderTarget()
+      r.setRenderTarget(this.post?.sceneTarget ?? null)
+      // `compile` lance les compilations sans les attendre (en parallèle, quand le pilote a
+      // KHR_parallel_shader_compile) ; c'est `shadersReady` qui attend. PAS `compileAsync` : sa boucle
+      // lit le programme de chaque matière sans garde, et une matière détruite pendant l'attente (les
+      // marqueurs se reconstruisent quand les descripteurs arrivent) la fait planter en silence — la
+      // promesse ne se résolvait jamais et le voile restait (constaté le 2026-09-25).
+      r.compile(this.scene, this.camera)
+      r.setRenderTarget(previous)
+      await this.shadersReady(r, gen)
+      if (gen !== this.prepareGen) return
+      step('frame')
+      // laisser le voile peindre l'étape, puis rendre l'image qui compile le reste
+      await nextPaint()
+      if (gen !== this.prepareGen) return
+      this.holdFrames = false
+      this.render(false)
+    } catch {
+      // une préparation ratée ne doit pas laisser la maison sous le voile : on la montre telle quelle
+    } finally {
+      // la préparation suivante (un nouveau chargement) tient elle-même les images
+      if (gen === this.prepareGen) { this.holdFrames = false; this.loop.invalidate() }
+      step(null)
+    }
+  }
+
+  /**
+   * Attend que les programmes des matières visibles soient compilés. Une matière disparue ou qui
+   * n'a pas encore de programme ne retient rien : la première image la compilera. Plafonné, pour
+   * qu'aucun cas imprévu ne laisse la maison sous le voile.
+   */
+  private async shadersReady(r: WebGLRenderer, gen: number): Promise<void> {
+    const materials = new Set<Material>()
+    this.scene.traverseVisible((o) => {
+      const m = (o as Mesh).material as Material | Material[] | undefined
+      if (!m) return
+      for (const one of Array.isArray(m) ? m : [m]) materials.add(one)
+    })
+    const until = (this.deps.now?.() ?? performance.now()) + PREPARE_SHADERS_MS
+    for (;;) {
+      if (gen !== this.prepareGen) return
+      let pending = 0
+      for (const m of materials) {
+        const program = (r.properties.get(m) as { currentProgram?: { isReady(): boolean } }).currentProgram
+        if (program && !program.isReady()) pending++
+      }
+      if (pending === 0 || (this.deps.now?.() ?? performance.now()) > until) return
+      await new Promise((resolve) => setTimeout(resolve, 16))
+    }
   }
 
   private fitSunShadow(): void {
@@ -2831,11 +2953,10 @@ export class HouseScene {
    * réglage qu'on a quitté depuis — et une scène détruite, qui l'incrémente en partant.
    */
   private applyMaterials(): void {
-    const pack = this.assets ? packById(this.style.assets) : undefined
+    const pack = this.photoPack()
     const gen = this.photoGen
     const photos = pack
-      // `poolTile` n'est dans aucun look (le bassin l'impose dans `applyLook`) : on le charge quand même
-      ? loadPackTextures(pack, [...rolesOf(this.look.surfaces), 'poolTile'], () => {
+      ? loadPackTextures(pack, this.photoRoles(), () => {
         if (gen !== this.photoGen) return
         this.applyMaterials()
         this.highlightRoom(this.highlightedRoom)   // recopie les couleurs des clones, et redessine
@@ -2843,6 +2964,16 @@ export class HouseScene {
       : undefined
     applyLook(this.materials, this.theme, this.look, photos, { wetness: this.ambience.wetness ?? 0, snow: this.ambience.snow ?? 0 })
     this.syncFloorClones()
+  }
+
+  /** Le pack de matières photo du style, si l'utilisateur les veut. */
+  private photoPack(): TexturePack | undefined {
+    return this.assets ? packById(this.style.assets) : undefined
+  }
+
+  /** Les rôles à habiller de photos. `poolTile` n'est dans aucun look (le bassin l'impose dans `applyLook`) : on le charge quand même. */
+  private photoRoles(): SurfaceRole[] {
+    return [...rolesOf(this.look.surfaces), 'poolTile']
   }
 
   /**
@@ -2998,6 +3129,7 @@ export class HouseScene {
   }
 
   private render(interactive = true): void {
+    if (this.holdFrames) return
     this.probe?.begin()
     const t0 = this.deps.now?.() ?? performance.now()
     // Les matrices monde, UNE fois par image. Three les recalcule au début de CHAQUE `render()` —
@@ -3103,6 +3235,7 @@ export class HouseScene {
 
   dispose(): void {
     this.photoGen++                        // une matière qui arrive après n'a plus de scène à habiller
+    this.prepareGen++                      // …et une préparation en cours, plus de maison à montrer
     this.detachInput?.()
     this.detachWheel?.()
     if (this.labelsIdle !== null) clearTimeout(this.labelsIdle)

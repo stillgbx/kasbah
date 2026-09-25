@@ -1461,6 +1461,24 @@ describe('une lampe n’éclaire que son niveau (une seule passe)', () => {
   })
 })
 
+describe('préparer la maison avant de la montrer', () => {
+  /**
+   * Le voile de chargement suit ces étapes et ne part qu'au `null` final : une préparation qui ne
+   * finirait pas laisserait la maison cachée. Sans renderer (tests), elle s'arrête après les matières.
+   */
+  it('publie ses étapes et finit toujours par « prête »', async () => {
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true })
+    const seen: (string | null)[] = []
+    scene.on('prepare', (stage) => seen.push(stage))
+    scene.load(parseHouse(demo))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(seen[0]).toBe('materials')
+    expect(seen.at(-1)).toBeNull()
+    expect(scene.preparingHouse).toBe(false)
+    scene.dispose()
+  })
+})
+
 describe('régler les ouvertures', () => {
   const house = parseHouse(demo)
   const openingCount = computeHouseGeometry(house).levels.reduce((n, l) => n + l.openings.length, 0)

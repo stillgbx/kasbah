@@ -6,7 +6,7 @@ import type { DeviceState, House, Vec3 } from '@kasbah/shared'
 import { readUiTheme } from '../three/core/theme'
 import { resolveAmbience } from '../three/core/ambience'
 import { styleById } from '../three/styles'
-import { HouseScene, type HouseSceneOptions } from '../three/HouseScene'
+import { HouseScene, type HouseSceneOptions, type ScenePrepareStage } from '../three/HouseScene'
 import { useDevicesStore } from '../stores/devices'
 import { useSettingsStore } from '../stores/settings'
 import { useWeather } from './useWeather'
@@ -27,6 +27,10 @@ type Handler<T extends unknown[]> = (...args: T) => void
 export function useHouseScene(args: UseHouseSceneArgs) {
   const supported = ref(true)
   const ready = ref(false)
+  /** La maison se prépare (matières, shaders, première image) : l'étape en cours, ou `null`. */
+  const preparing = ref<{ stage: ScenePrepareStage; progress: { done: number; total: number } | null } | null>(null)
+  /** Une maison a été préparée et montrée au moins une fois (ou la 3D est indisponible : rien à attendre). */
+  const shown = ref(false)
   let scene: HouseScene | null = null
   const theme = useTheme()
   const visibility = useDocumentVisibility()
@@ -82,6 +86,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     scene = new HouseScene(canvas, { labelLayer: args.labelLayer.value, style: style.value, ambience: ambience.value })
     scene.setAppearance({ ui: readUiTheme(), style: style.value, ambience: ambience.value, assets: settings.sceneAssets, tuning: settings.sceneTuning })
     supported.value = scene.supported
+    if (!scene.supported) shown.value = true
     // Une scène 3D ne se débogue qu'en la regardant : en développement seulement, le contrôleur est
     // posé sur `window` pour qu'une console (ou un pilote de navigateur) puisse lire ses lumières,
     // ses matériaux et sa caméra sans instrumenter le code à chaque fois.
@@ -103,6 +108,10 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     scene.on('parkingTap', (id) => parkingTap.forEach((f) => f(id)))
     scene.on('parkingDrag', (id, xy) => parkingDrag.forEach((f) => f(id, xy)))
     scene.on('parkingDrop', (id) => parkingDrop.forEach((f) => f(id)))
+    scene.on('prepare', (stage, progress) => {
+      preparing.value = stage ? { stage, progress } : null
+      if (!stage) shown.value = true
+    })
 
     const parent = canvas.parentElement ?? canvas
     const fit = () => { const r = parent.getBoundingClientRect(); scene?.resize(r.width, r.height) }
@@ -148,7 +157,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   onBeforeUnmount(() => { scene?.dispose(); scene = null })
 
   return {
-    supported, ready,
+    supported, ready, preparing, shown,
     onDeviceTap: (f: Handler<[string]>) => { deviceTap.add(f) },
     onJournalTap: (f: Handler<[number]>) => { journalTap.add(f) },
     onRoomTap: (f: Handler<[string]>) => { roomTap.add(f) },

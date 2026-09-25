@@ -25,6 +25,8 @@ import { useDevicesStore } from '../stores/devices'
 import { useHouseStore, type FloorTab } from '../stores/house'
 import { useSettingsStore } from '../stores/settings'
 import type { IconName } from '../lib/strokeIcons'
+import SceneLoader from '../components/home/SceneLoader.vue'
+import type { ScenePrepareStage } from '../three/HouseScene'
 
 defineOptions({ name: 'HomeView' })
 
@@ -49,6 +51,40 @@ const scene = useHouseScene({
   house: computed(() => house.effective),
   states: computed(() => devices.states),
 })
+
+// Le voile de chargement : la maison arrive du serveur, puis la scène la prépare (matières,
+// shaders, première image — `HouseScene.prepare`). Au PREMIER chargement, la 3D et ce qui ne sert
+// qu'à elle (niveaux, recherche, caméra) partent MASQUÉS et le voile est là d'emblée : rien ne
+// s'affiche pour s'effacer aussitôt. Ensuite (une maison rechargée en mode édition), le voile ne
+// revient qu'au-delà d'un court délai, pour qu'une reconstruction rapide ne fasse pas clignoter la vue.
+const LOADER_DELAY_MS = 250
+const houseLoading = computed(() => house.loading || scene.preparing.value !== null)
+const loaderShown = ref(false)
+/** Le premier chargement n'est pas fini (et pas en échec : une erreur ne doit pas laisser le voile). */
+const firstLoad = computed(() => !scene.shown.value && !house.error)
+const loaderNeeded = computed(() => firstLoad.value || loaderShown.value)
+// Une fois affiché, le voile reste un cycle et demi de dessin (`settled`) : sinon, un chargement
+// rapide l'escamotait avant qu'on ait vu la maison se dessiner. La 3D, prête, attend dessous.
+const loaderDrawn = ref(false)
+const sceneHidden = ref(loaderNeeded.value)
+watch([loaderNeeded, loaderDrawn], ([needed, drawn]) => {
+  if (needed && !sceneHidden.value) { sceneHidden.value = true; loaderDrawn.value = false }
+  else if (!needed && drawn) sceneHidden.value = false
+})
+// la dernière étape connue : pendant le fondu de sortie, le sous-titre ne retombe pas sur la première
+const loaderStage = ref<'house' | ScenePrepareStage>('house')
+const loaderProgress = ref<{ done: number; total: number } | null>(null)
+let loaderTimer: ReturnType<typeof setTimeout> | undefined
+watch(houseLoading, (on) => {
+  clearTimeout(loaderTimer)
+  if (on) loaderTimer = setTimeout(() => { loaderShown.value = true }, LOADER_DELAY_MS)
+  else loaderShown.value = false
+}, { immediate: true })
+watch([() => house.loading, scene.preparing], ([fetching, prep]) => {
+  if (fetching) { loaderStage.value = 'house'; loaderProgress.value = null }
+  else if (prep) { loaderStage.value = prep.stage; loaderProgress.value = prep.progress }
+}, { immediate: true })
+onUnmounted(() => clearTimeout(loaderTimer))
 // Onglets à contre-courant des listes de l'app (qui vont du haut vers le bas, cf. `levelsSorted`) :
 // ici on monte, Jardin → RDC → étages → Tout. La rangée se lit comme une coupe du bâtiment, terrain
 // à gauche, et l'onglet ne bouge pas quand un niveau s'ajoute au-dessus.
@@ -309,7 +345,7 @@ const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] 
 </script>
 
 <template>
-  <div class="home" :data-wide="wide ? '1' : '0'">
+  <div class="home" :data-wide="wide ? '1' : '0'" :data-loading="sceneHidden ? '1' : '0'">
     <div class="home__stage">
       <canvas ref="canvas" class="scene-canvas" tabindex="0" />
       <div ref="labelLayer" class="scene-labels" />
@@ -319,7 +355,7 @@ const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] 
     </div>
     <div class="home__header">
       <PageHeader>
-        <Segmented :model-value="house.floorTab" :options="floorTabs" @update:model-value="onTab" />
+        <Segmented class="home__floors" :model-value="house.floorTab" :options="floorTabs" @update:model-value="onTab" />
         <button type="button" class="pill" :title="$t('settings.appearance')" :aria-label="$t('settings.appearance')" @click="settings.cycleAppearance()">
           <StrokeIcon :name="themeIcon" :size="18" />
         </button>
@@ -329,7 +365,11 @@ const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] 
       </PageHeader>
     </div>
     <div v-if="!scene.supported.value" class="home__fallback card">{{ $t('scene.webglUnavailable') }}</div>
-    <div v-if="house.loading" class="home__loading muted">{{ $t('common.loading') }}</div>
+    <Transition name="home-loader">
+      <div v-if="sceneHidden" class="home__loader">
+        <SceneLoader :house="house.effective" :stage="loaderStage" :progress="loaderProgress" @settled="(v) => (loaderDrawn = v)" />
+      </div>
+    </Transition>
     <WeatherWidget class="home__weather" />
     <div class="home__controls">
       <div class="home__cluster">
@@ -370,7 +410,22 @@ const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] 
 .home[data-wide='1'] .home__header { right: calc(var(--safe-right) + var(--aside-w) + 2 * var(--panel-gap)); }
 .home__fallback { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 16px 20px; z-index: 2; }
 /* au-dessus du widget météo, qui tient le coin bas gauche */
-.home__loading { position: absolute; left: calc(var(--rail-w) + 24px); bottom: calc(var(--safe-bottom) + var(--panel-gap) + 144px); font-size: 13px; z-index: 2; }
+/* Le voile de chargement, centré dans la partie LIBRE de la scène (hors rail, hors panneau large). */
+/* il couvre toute la scène : transparent aux clics, sinon l'en-tête (apparence) n'est plus touchable */
+.home__loader { position: absolute; top: 0; bottom: 0; left: var(--rail-w); right: var(--safe-right); z-index: 2; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.home[data-wide='1'] .home__loader { right: calc(var(--safe-right) + var(--aside-w) + 2 * var(--panel-gap)); }
+.home-loader-enter-active, .home-loader-leave-active { transition: opacity .45s ease; }
+.home-loader-enter-from, .home-loader-leave-to { opacity: 0; }
+/* sous le voile, la 3D se prépare sans se montrer ; elle apparaît en fondu quand il part */
+.home__stage > .scene-canvas, .home__stage > .scene-labels { transition: opacity .6s ease; }
+.home[data-loading='1'] .home__stage > .scene-canvas, .home[data-loading='1'] .home__stage > .scene-labels { opacity: 0; }
+/* ce qui ne sert qu'à la 3D s'efface avec elle, à sa PLACE (rien ne bouge) et hors d'atteinte */
+.home__floors, .home__search, .home__controls { transition: opacity .45s ease, visibility .45s; }
+.home[data-loading='1'] .home__floors, .home[data-loading='1'] .home__search, .home[data-loading='1'] .home__controls { opacity: 0; visibility: hidden; }
+@media (prefers-reduced-motion: reduce) {
+  .home-loader-enter-active, .home-loader-leave-active, .home__stage > .scene-canvas, .home__stage > .scene-labels,
+  .home__floors, .home__search, .home__controls { transition: none; }
+}
 .home__weather { position: absolute; left: calc(var(--rail-w) + var(--panel-gap)); bottom: calc(var(--safe-bottom) + var(--panel-gap)); z-index: 2; }
 /* Recherche : en bas, dans la bande laissée libre ENTRE la carte météo et les boutons de vue, et
    centrée dedans. Ses résultats s'ouvrent vers le haut (voir SearchBar), donc rien ici ne bouge. */

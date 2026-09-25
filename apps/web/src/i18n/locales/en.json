@@ -568,7 +568,17 @@
     "NEEDS_PAIRING": "{name}: pairing required.", "TIMEOUT": "{name}: no response.", "NOT_IMPLEMENTED": "{name}: plugin not implemented.",
     "INTERNAL": "{name}: server error.", "UNKNOWN": "{name}: {message}", "houseLoad": "Could not load the house: {message}"
   },
-  "scene": { "webglUnavailable": "3D is not available on this device." },
+  "scene": {
+    "webglUnavailable": "3D is not available on this device.",
+    "loading": {
+      "title": "Preparing the house",
+      "house": "House plan",
+      "materials": "Materials",
+      "materialsCount": "Materials · {done} / {total}",
+      "shaders": "Compiling shaders",
+      "frame": "First frame"
+    }
+  },
   "opening": {
     "list": "Openings", "type": "Type",
     "add": "Add an opening", "cancel": "Cancel",

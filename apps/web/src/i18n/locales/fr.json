@@ -568,7 +568,17 @@
     "NEEDS_PAIRING": "{name} : appairage requis.", "TIMEOUT": "{name} : pas de réponse.", "NOT_IMPLEMENTED": "{name} : plugin non implémenté.",
     "INTERNAL": "{name} : erreur serveur.", "UNKNOWN": "{name} : {message}", "houseLoad": "Impossible de charger la maison : {message}"
   },
-  "scene": { "webglUnavailable": "La 3D n'est pas disponible sur cet appareil." },
+  "scene": {
+    "webglUnavailable": "La 3D n'est pas disponible sur cet appareil.",
+    "loading": {
+      "title": "Préparation de la maison",
+      "house": "Plan de la maison",
+      "materials": "Matières",
+      "materialsCount": "Matières · {done} / {total}",
+      "shaders": "Compilation des shaders",
+      "frame": "Première image"
+    }
+  },
   "opening": {
     "list": "Ouvertures", "type": "Nature",
     "add": "Ajouter une ouverture", "cancel": "Annuler",

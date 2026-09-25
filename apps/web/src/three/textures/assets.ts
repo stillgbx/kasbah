@@ -95,6 +95,19 @@ const PENDING = new Map<string, Promise<SurfaceTexture>>()
  * rappelé à chaque rôle qui arrive (l'appelant repasse alors par ici et obtient une carte de plus).
  * Entre-temps, le procédural tient la place : la maison n'attend jamais une image.
  */
+/**
+ * Attend les matières d'un pack encore en route pour ces rôles (lancées par `loadPackTextures`),
+ * arrivées ou en échec : c'est ce qu'attend le voile de chargement de la scène, qui en affiche le
+ * compte. Une matière en échec ne bloque rien. `onProgress` reçoit (arrivées, total) à chaque pas.
+ */
+export function packTexturesSettled(pack: TexturePack, roles: Iterable<SurfaceRole>, onProgress?: (done: number, total: number) => void): Promise<void> {
+  const keys = [...new Set(roles)].filter((role) => pack.surfaces[role]).map((role) => `${pack.id}/${role}`)
+  const pending = keys.map((key) => PENDING.get(key)).filter((p) => !!p)
+  let done = keys.length - pending.length
+  onProgress?.(done, keys.length)
+  return Promise.allSettled(pending.map((p) => p.finally(() => onProgress?.(++done, keys.length)))).then(() => {})
+}
+
 export function loadPackTextures(pack: TexturePack, roles: Iterable<SurfaceRole>, onReady: () => void, load: ImageLoad = defaultLoad): SurfaceTextures {
   const out: SurfaceTextures = {}
   for (const role of new Set(roles)) {
