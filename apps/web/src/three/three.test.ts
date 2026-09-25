@@ -99,6 +99,27 @@ describe('render loop', () => {
     loop.dispose()
   })
 
+  it('l’image où une tween finit est dessinée, même quand le décor n’est pas encore dû', () => {
+    const frames: ((now: number) => void)[] = []
+    let renders = 0, now = 0, done = false
+    const loop = createRenderLoop({
+      render: () => { renders++ },
+      updateControls: () => false,
+      requestFrame: (cb) => { frames.push(cb); return frames.length },
+      cancelFrame: () => {},
+      now: () => now,
+    })
+    const tick = (ms: number) => { const cb = frames.shift(); if (cb) { now += ms; cb(now) } }
+    loop.addAnimation({ hz: 1, step: () => true })                     // un décor lent (1 Hz)
+    tick(1000)                                                          // il vient d'être servi
+    const before = renders
+    loop.addTween(createTween({ durationMs: 10, now, onUpdate: () => {}, onDone: () => { done = true } }))
+    tick(16)                                                            // la tween finit ici, le décor n'est pas dû
+    expect(done).toBe(true)
+    expect(renders).toBe(before + 1)                                    // l'état final est à l'écran
+    loop.dispose()
+  })
+
   it('une animation qui demande 10 Hz dessine deux fois moins qu’une qui en demande 20', () => {
     const run = (hz: number | undefined) => {
       const frames: ((now: number) => void)[] = []
@@ -1489,7 +1510,8 @@ describe('une lampe n’éclaire que son niveau (une seule passe)', () => {
     const fade = levelFadeUniforms.kasbahFadeVisibility.value
     expect(fade).toBeGreaterThan(0)
     expect(fade).toBeLessThan(1)
-    expect(levelFadeUniforms.kasbahFadeY.value).toBeCloseTo(low!.elevation + scene.nodesOf(low!.id)!.height, 6)
+    // juste AU-DESSUS du dessus de ses murs : posé pile dessus, ces faces scintillaient
+    expect(levelFadeUniforms.kasbahFadeY.value).toBeCloseTo(low!.elevation + scene.nodesOf(low!.id)!.height + 0.03, 6)
     for (const key of lifts.keys()) lifts.get(key)!.tween?.step(t = 500)
     expect(group.visible).toBe(false)
     expect(levelFadeUniforms.kasbahFadeVisibility.value).toBe(1)        // plus rien en vol : le fondu est levé
@@ -1500,6 +1522,41 @@ describe('une lampe n’éclaire que son niveau (une seule passe)', () => {
     for (const key of lifts.keys()) lifts.get(key)!.tween?.step(t = 1100)
     expect(group.position.z).toBeCloseTo(high!.elevation, 6)            // reposé exactement à sa place
     expect(group.visible).toBe(true)
+    ;(scene as unknown as { renderer: null }).renderer = null
+    scene.dispose()
+  })
+
+  it('les pilules d’un niveau apparaissent et s’effacent en fondu, au lieu de surgir', () => {
+    let t = 0
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true, now: () => t, requestFrame: () => 0, cancelFrame: () => {} })
+    const house = parseHouse(demo)
+    scene.load(house)
+    ;(scene as unknown as { renderer: object }).renderer = {}
+    const [low, high] = [...house.levels].sort((a, b) => a.elevation - b.elevation)
+    const on = (levelId: string) => [...scene.markers.values()].filter((m) => m.object.parent === scene.nodesOf(levelId)!.markers)
+    const pill = (m: DeviceMarker) => (m as unknown as { css: { visible: boolean; element: HTMLElement } }).css
+    const tween = () => (scene as unknown as { pillTween: { step(now: number): boolean } | null }).pillTween
+    const lows = on(low!.id), highs = on(high!.id)
+    expect(lows.length).toBeGreaterThan(0)
+    expect(highs.length).toBeGreaterThan(0)
+    scene.focusLevel(low!.id)                                           // vue d'ensemble → rez-de-chaussée
+    expect(pill(lows[0]!).visible).toBe(true)
+    expect(pill(lows[0]!).element.style.opacity).toBe('0.00')           // elles partent de rien…
+    tween()!.step(t = 100)
+    expect(pill(lows[0]!).element.style.opacity).toBe('0.00')           // …attendent que l'étage se dégage…
+    tween()!.step(t = 450)
+    expect(Number(pill(lows[0]!).element.style.opacity)).toBeGreaterThan(0.2)
+    tween()!.step(t = 800)
+    expect(pill(lows[0]!).element.style.opacity).toBe('')               // …et finissent pleines, sans style
+    scene.focusLevel(high!.id)                                          // rez-de-chaussée → étage
+    tween()!.step(t = 1025)
+    expect(pill(lows[0]!).visible).toBe(true)                           // elle s'estompe, elle n'a pas disparu
+    expect(Number(pill(lows[0]!).element.style.opacity)).toBeLessThan(0.8)
+    tween()!.step(t = 1250)
+    expect(Number(pill(highs[0]!).element.style.opacity)).toBeGreaterThan(0.2)
+    tween()!.step(t = 1600)
+    expect(pill(lows[0]!).visible).toBe(false)
+    expect(pill(highs[0]!).element.style.opacity).toBe('')
     ;(scene as unknown as { renderer: null }).renderer = null
     scene.dispose()
   })

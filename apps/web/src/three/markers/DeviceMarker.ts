@@ -189,8 +189,25 @@ export abstract class DeviceMarker {
    * laissée intacte au-dessus d'une maison floutée elle casse l'illusion de maquette.
    */
   setPillFocus(k: number): void {
+    this.pillFocus = k
+    this.applyPillOpacity()
+  }
+
+  /**
+   * Fondu de la pilule, de 1 (pleine) à 0 : elle apparaît et s'efface avec son niveau au lieu de
+   * surgir (`HouseScene.fadePills`). Se multiplie à la netteté du tilt-shift.
+   */
+  setPillFade(k: number): void {
+    this.pillFade = k
+    this.applyPillOpacity()
+  }
+
+  private pillFocus = 1
+  private pillFade = 1
+  private applyPillOpacity(): void {
     const el = this.css?.element
     if (!el) return
+    const k = this.pillFocus * this.pillFade
     // `''` et non `'1'` : à pleine netteté la pilule redevient un élément SANS style d'opacité
     const v = k >= 0.995 ? '' : k.toFixed(2)
     if (el.style.opacity !== v) el.style.opacity = v

@@ -38,7 +38,7 @@ import { disposeObject3D } from './core/dispose'
 import { createDragDetector, createTapDetector, type DragDetector, type TapEvent } from './core/input'
 import { createRenderLoop, type RenderLoop } from './core/renderLoop'
 import { resolveSceneTheme, type SceneTheme, type UiTheme } from './core/theme'
-import { createTween, easeInCubic, easeInOutCubic, easeOutCubic, type Tween } from './core/tween'
+import { createTween, easeInCubic, easeInOutCubic, easeOutCubic, linear, type Tween } from './core/tween'
 import { emitsSound, soundRouting } from '../lib/audioRouting'
 import { createMarker } from './markers/createMarker'
 import type { DeviceMarker, SoundCue } from './markers/DeviceMarker'
@@ -287,6 +287,14 @@ const SHADOW_SETTLE_MS = 700
  */
 const LEVEL_LIFT_M = 8
 const LEVEL_LIFT_MS = 450
+/** Marge (m) du seuil du fondu au-dessus du niveau qui reste : jamais une limite posée sur une face. */
+const LEVEL_FADE_MARGIN_M = 0.03
+/**
+ * Les pilules qui APPARAISSENT attendent que l'étage ait commencé à se dégager : leur fondu part à ce
+ * délai et dure un peu plus que le vol. Celles qui partent suivent le vol (`LEVEL_LIFT_MS`).
+ */
+const PILL_IN_DELAY_MS = 150
+const PILL_IN_MS = 550
 /** La pièce qu'on regarde : durée du fondu du reste de la maison, et épaisseur de dalle comprise sous son sol. */
 const ROOM_FOCUS_MS = 300
 const ROOM_FOCUS_SLAB_M = 0.35
@@ -465,6 +473,10 @@ export class HouseScene {
   /** Où va la mise en valeur de la pièce (`core/roomFocus.ts`) : 0 ou 1, et la course en cours. */
   private roomFocusTarget = 0
   private roomFocusTween: Tween | null = null
+  /** Ce que chaque pilule de niveau doit montrer, et le fondu en cours (`fadePills`). */
+  private pillTargets = new WeakMap<DeviceMarker, boolean>()
+  private pillFading: [DeviceMarker, boolean][] = []
+  private pillTween: Tween | null = null
   private readonly deps: HouseSceneDeps
   private readonly sun: DirectionalLight
   private readonly hemi: HemisphereLight
@@ -774,6 +786,10 @@ export class HouseScene {
     this.roomFocusTween = null
     this.roomFocusTarget = 0
     setRoomFocusStrength(0)
+    this.pillTween?.cancel()
+    this.pillTween = null
+    this.pillFading = []
+    this.pillTargets = new WeakMap()
     if (this.nodes) {
       disposeObject3D(this.nodes.root, new Set<Material>(this.materials.all))
       this.nodes = null
@@ -2376,18 +2392,23 @@ export class HouseScene {
   private applyLevelFocus(): void {
     if (!this.nodes || !this.house) return
     const focused = this.focusedLevelId ? this.house.levels.find((l) => l.id === this.focusedLevelId) : null
+    const pills: [DeviceMarker, boolean][] = []
     for (const [id, nodes] of this.nodes.levels) {
       const level = this.house.levels.find((l) => l.id === id)!
       const above = !!focused && level.elevation > focused.elevation
       const ghost = above && this.options.levelFocusMode === 'ghost'
       this.liftTo(`level:${id}`, () => this.nodes?.levels.get(id)?.group, level.elevation, !above || ghost, this.topBelow(level.elevation))
-      nodes.markers.visible = !above         // …et avec eux les poignées d'ouverture et les cotes
+      // …et avec eux les poignées d'ouverture et les cotes. Un étage qui s'ENVOLE garde les siens
+      // pendant le vol (ses pilules montent et s'estompent avec lui) : c'est son groupe, masqué à
+      // l'arrivée, qui les retire. Le fantôme, lui, reste en place sans ses marqueurs.
+      nodes.markers.visible = !ghost
       for (const mesh of [...nodes.walls, ...nodes.floors.values(), ...nodes.panes]) {
         mesh.material = ghost ? this.materials.ghost : (mesh.userData.material as Material)
       }
       // pilules : seulement le niveau focalisé (lisibilité) ; l'appareil sélectionné reste visible
-      for (const m of this.markers.values()) if (m.object.parent === nodes.markers) m.setPillVisible(focused?.id === id)
+      for (const m of this.markers.values()) if (m.object.parent === nodes.markers) pills.push([m, focused?.id === id])
     }
+    this.fadePills(pills)
     // le toit se voit en vue d'ensemble et depuis le niveau qu'il porte (le toit déclaré comme un
     // niveau, pour ses panneaux) ; depuis un étage, il cacherait les pièces
     if (this.nodes.roof) this.liftTo('roof', () => this.nodes?.roof ?? undefined, 0, !focused || this.isRoofLevel(focused), this.topBelow(this.geometry?.roof?.zBase ?? 0))
@@ -2452,11 +2473,56 @@ export class HouseScene {
     this.loop.addTween(tw)
   }
 
+  /**
+   * Montre ou masque les pilules des niveaux EN FONDU, au rythme de l'envol des étages : celles qui
+   * apparaissent partent de 0, celles qui partent s'estompent (et montent avec leur étage) puis se
+   * masquent. Auparavant elles basculaient d'un coup — les pilules du rez-de-chaussée surgissaient
+   * alors que l'étage, encore là, s'envolait sans les siennes. Une pilule neuve (marqueurs refaits)
+   * se pose sans fondu : elle n'a jamais été vue.
+   */
+  private fadePills(wanted: readonly [DeviceMarker, boolean][]): void {
+    const changes: [DeviceMarker, boolean][] = []
+    for (const [m, want] of wanted) {
+      const was = this.pillTargets.get(m)
+      this.pillTargets.set(m, want)
+      if (was === undefined || !this.renderer) { m.setPillFade(1); m.setPillVisible(want); continue }
+      if (was !== want) changes.push([m, want])
+    }
+    if (changes.length === 0) return
+    // un fondu en cours se termine d'un coup : ses pilules prennent leur état final
+    this.finishPillFade()
+    for (const [m, want] of changes) if (want) { m.setPillFade(0); m.setPillVisible(true) }
+    this.pillFading = changes
+    // une seule course, en temps : la sortie finit avec le vol, l'entrée part après un délai
+    const total = Math.max(LEVEL_LIFT_MS, PILL_IN_DELAY_MS + PILL_IN_MS)
+    const phase = (ms: number, from: number, len: number) => easeInOutCubic(Math.min(1, Math.max(0, (ms - from) / len)))
+    const tw = createTween({
+      durationMs: total, now: this.deps.now?.() ?? performance.now(), easing: linear,
+      onUpdate: (t) => {
+        const ms = t * total
+        const out = 1 - phase(ms, 0, LEVEL_LIFT_MS), into = phase(ms, PILL_IN_DELAY_MS, PILL_IN_MS)
+        for (const [m, want] of changes) m.setPillFade(want ? into : out)
+      },
+      onDone: () => this.finishPillFade(),
+    })
+    this.pillTween = tw
+    this.loop.addTween(tw)
+  }
+
+  private finishPillFade(): void {
+    this.pillTween?.cancel()
+    this.pillTween = null
+    for (const [m, want] of this.pillFading) { m.setPillFade(1); if (!want) m.setPillVisible(false) }
+    this.pillFading = []
+  }
+
   /** Le haut (z maison, donc hauteur monde) du plus haut niveau posé sous `z` : là où l'étage qui s'envole commence. */
   private topBelow(z: number): number {
     let top = -Infinity
     for (const l of this.nodes?.levels.values() ?? []) if (l.elevation < z - 1e-3) top = Math.max(top, l.elevation + l.height)
-    return Number.isFinite(top) ? Math.min(top, z) : z
+    // le seuil passe JUSTE au-dessus du dessus de ses murs : posé pile dessus, il faisait basculer
+    // chaque pixel de ces faces d'un côté ou de l'autre — un grain qui scintillait pendant l'envol
+    return (Number.isFinite(top) ? Math.min(top, z) : z) + LEVEL_FADE_MARGIN_M
   }
 
   /**

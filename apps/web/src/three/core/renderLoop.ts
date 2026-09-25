@@ -71,9 +71,13 @@ export function createRenderLoop(opts: RenderLoopOptions): RenderLoop {
     // `moving` dit s'il faut CONTINUER après cette image ; `dirty` dit seulement que celle-ci est
     // demandée. Les confondre ferait tourner la boucle indéfiniment après un simple `invalidate`.
     let moving = false
-    for (const tw of tweens) { if (tw.step(t)) moving = true; else tweens.delete(tw) }
+    // Une tween qui FINIT à cette image vient de poser son état final (une pilule masquée, un étage
+    // posé) : l'image doit être dessinée. Sans ça, une animation décorative pas encore due faisait
+    // sauter le dessin — la pilule restait affichée, pleine, jusqu'au prochain tic du décor.
+    let finished = false
+    for (const tw of tweens) { if (tw.step(t)) moving = true; else { tweens.delete(tw); finished = true } }
     if (opts.updateControls()) moving = true
-    const interactive = moving || dirty
+    const interactive = moving || dirty || finished
 
     // Rien que du décor à animer, et pas encore l'heure : on rend la main sans rien redessiner.
     let hz = 0
