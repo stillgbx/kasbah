@@ -445,6 +445,32 @@ describe('marqueurs 3D', () => {
     expect(sprites).toEqual([1 << SITE_DECOR_LAYER])  // son halo est un décor du jardin
   })
 
+  it('un plafonnier pose une tache de lumière au sol, de sa couleur, sans lumière de plus', () => {
+    const make = (d: PlacedHouseDevice, outdoor = false) => createMarker(d, {
+      materials: createMaterials(defaultSceneTheme(), defaultLook()), theme: defaultSceneTheme(), glow: defaultLook().glow,
+      ...(outdoor ? { outdoor } : {}),
+      descriptor: { id: 'p:l', pluginId: 'p', externalId: 'l', kind: 'light', name: 'Plafonnier', capabilities: ['on_off'], meta: {} } as DeviceDescriptor,
+      addAnimation: () => () => {}, invalidate: () => {}, onTap: () => {}, label: 'Plafonnier',
+    }, () => true)
+    const lamp = make(device({ position: [3, 2, 2.5], mount: 'ceiling' }))
+    lamp.object.position.set(3, 2, 2.5)
+    const pool = lamp.object.getObjectByName('lamp-pool') as Mesh
+    expect(pool.visible).toBe(false)                                   // éteinte : pas de tache
+    lamp.update({ kind: 'light', updatedAt: 0, available: true, on: true, brightness: 100, colorTempMirek: 153 } as DeviceState)
+    expect(pool.visible).toBe(true)
+    const m = pool.material as MeshBasicMaterial
+    expect(m.opacity).toBeGreaterThan(0)
+    expect(m.color.b).toBeGreaterThan(m.color.r * 0.9)                   // 6500 K : un blanc froid, pas le chaud par défaut
+    pool.onBeforeRender(null as never, null as never, null as never, null as never, null as never, null as never)
+    expect(pool.position.z).toBeCloseTo(0.004 - 2.5, 5)                 // posée sur le sol du niveau
+    expect(pool.layers.mask).toBe(1 << DECOR_LAYER)
+    let lights = 0
+    lamp.object.traverse((o) => { if ((o as { isLight?: boolean }).isLight) lights++ })
+    expect(lights).toBe(1)
+    expect(make(device({ position: [3, 2, 0.8] })).object.getObjectByName('lamp-pool')).toBeUndefined()
+    expect(make(device({ position: [3, 2, 2.5], mount: 'ceiling' }), true).object.getObjectByName('lamp-pool')).toBeUndefined()
+  })
+
   it('une lumière liée à un ventilateur pose un hub et trois pales, pas une sphère seule', () => {
     const lamp = createMarker(device(), {
       materials: createMaterials(defaultSceneTheme(), defaultLook()), theme: defaultSceneTheme(), glow: defaultLook().glow,

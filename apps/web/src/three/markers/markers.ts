@@ -539,6 +539,11 @@ function glowMap(): DataTexture {
 }
 /** Portée (m) d'une lampe. Sert aussi de `far` au cône d'ombre d'une lampe de jardin. */
 const LIGHT_RANGE = 7
+/**
+ * La TACHE au sol d'un plafonnier : rayon (m), opacité relative au halo du style, et hauteur au-dessus
+ * du sol (sous le voile de la pièce sélectionnée, posé à 8 mm).
+ */
+const POOL = { radius: 1.3, opacity: 0.55, lift: 0.004 }
 
 /** Ventilateur-plafonnier (m) : hub vertical + 3 pales + globe lumineux — mêmes ordres que la sphère. */
 const CEILING_FAN = {
@@ -649,6 +654,8 @@ export class LightMarker extends DeviceMarker {
   private readonly light: PointLight
   private readonly glow: Sprite
   private readonly glowMat: SpriteMaterial
+  /** Tache de lumière au sol sous un plafonnier (null sinon). */
+  private readonly pool: Mesh<PlaneGeometry, MeshBasicMaterial> | null
   constructor(device: PlacedHouseDevice, ctx: MarkerContext) {
     super(device, ctx)
     this.mat = new MeshStandardMaterial({ color: 0xfff2d0, emissive: 0xffc46b, emissiveIntensity: 0, roughness: 0.4 })
@@ -685,6 +692,25 @@ export class LightMarker extends DeviceMarker {
     this.asDecor(this.glow)
     this.glow.visible = false
     this.object.add(this.body, this.light, this.glow)
+    // Un plafonnier POSE sa lumière au sol : la `PointLight` éclaire tout autour d'elle, murs et
+    // plafond compris, et ne dessine pas la flaque qu'on voit sous une suspension. Un disque additif
+    // la dessine sans ajouter de lumière — leur nombre doit rester constant (`HouseScene.padLamps`).
+    this.pool = null
+    if (!ctx.outdoor && device.mount === 'ceiling') {
+      const geo = new PlaneGeometry(POOL.radius * 2, POOL.radius * 2)
+      this.geometries.push(geo)
+      const pool = new Mesh(geo, new MeshBasicMaterial({ map: glowMap(), transparent: true, opacity: 0, blending: AdditiveBlending, depthWrite: false }))
+      pool.name = 'lamp-pool'
+      pool.visible = false
+      // le sol du niveau est à z = 0 : la tache suit la hauteur de la lampe, même pendant un déplacement
+      pool.onBeforeRender = () => {
+        pool.position.z = POOL.lift - this.object.position.z
+        pool.updateMatrixWorld()
+      }
+      this.asDecor(pool)
+      this.object.add(pool)
+      this.pool = pool
+    }
     this.body.traverse((o) => { if ((o as Mesh).isMesh) this.registerPickable(o) })
     this.setLift(0.3)
   }
@@ -752,6 +778,11 @@ export class LightMarker extends DeviceMarker {
     this.glowMat.opacity = k * g.opacity
     this.glow.scale.setScalar(g.scale)
     this.glow.visible = k > 0
+    if (this.pool) {
+      this.pool.material.color.copy(c)
+      this.pool.material.opacity = k * g.opacity * POOL.opacity
+      this.pool.visible = k > 0
+    }
   }
 
   override setCompanionFan(state: DeviceState | undefined): void {
@@ -792,6 +823,7 @@ export class LightMarker extends DeviceMarker {
     this.bladeMat?.dispose()
     this.airflow?.dispose()
     this.glowMat.dispose()
+    this.pool?.material.dispose()
     super.dispose()
   }
 }
