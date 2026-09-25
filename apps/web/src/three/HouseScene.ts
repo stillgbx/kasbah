@@ -1,6 +1,6 @@
 import {
   AmbientLight, Color, DirectionalLight, DoubleSide, HemisphereLight, MOUSE, OrthographicCamera, PerspectiveCamera, Plane, Raycaster, Scene, Shape, ShapeGeometry, Spherical, type Texture, TOUCH, Vector2, Vector3, VSMShadowMap,
-  WebGLRenderer, Box3, BoxGeometry, Fog, Mesh, MeshBasicMaterial, type Material, type MeshStandardMaterial, type Object3D,
+  WebGLRenderer, Box3, BoxGeometry, Fog, Mesh, MeshBasicMaterial, type Material, type MeshPhysicalMaterial, type MeshStandardMaterial, type Object3D,
   Group, SphereGeometry, CylinderGeometry, RingGeometry, Frustum, Matrix4, Sphere, PointLight,
 } from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
@@ -8,7 +8,7 @@ import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer
 import {
   boundsCenter, buildingBounds, computeHouseGeometry, deviceFloorZ, geoDistance, indexHouse, longestEdgeYawDeg, pointInPolygon, resolveDefaults, resolveDeviceLevelId, sitePosition,
   roofBounds, roomBounds, zoneBounds, openingCentre, openingGaps, openingLabel, surfaceAxes, surfaceGaps,
-  assignParkings, atRest, parkingGaps, parkingHost, parkingLabel, PARKING_SIDES,
+  assignParkings, atRest, mirekToRgb, xyToRgb, parkingGaps, parkingHost, parkingLabel, PARKING_SIDES,
   type DeviceDescriptor, type DeviceState, type House, type HouseDevice, type HouseGeometry, type HouseIndex, type Level, type OpeningRect, type Parking, type ParkingFix, type ParkingSide, type PlacedHouseDevice, type Vec2, type Vec3,
 } from '@kasbah/shared'
 import { applyLook, backdropColor, createMaterials, disposeMaterials, type MaterialSet } from './builders/materials'
@@ -189,6 +189,9 @@ const PREPARE_PHOTOS_MS = 10_000
 const PREPARE_SHADERS_MS = 30_000
 
 const HOME_RADIUS_M = 120
+/** Émission d'une fenêtre dont la pièce est éclairée à fond, la nuit ; et son opacité alors. */
+const WINDOW_GLOW = 0.65
+const WINDOW_LIT_OPACITY = 0.6
 /** Hauteur (m) de l'étiquette d'une place au-dessus du sol, et celle de ses quatre cotes. */
 const PARKING_NOTE_LIFT_M = 0.9
 const PARKING_COTE_LIFT_M = 0.12
@@ -583,6 +586,7 @@ export class HouseScene {
     this.fitSunShadow()
     this.buildParkings()                   // le marquage au sol vit avec le terrain, avant les marqueurs
     this.buildMarkers()
+    this.syncWindowGlow()                  // les verres sont neufs : ils reprennent le style et les lampes
     this.buildOpeningHandles()             // la racine est neuve : le mode édition repose ses poignées
     this.buildOriginMark()                 // …son repère d'origine…
     this.refreshOpeningNotes()             // …et ses étiquettes, qui vivent dans un groupe jeté avec elle
@@ -1038,6 +1042,7 @@ export class HouseScene {
     if (this.editingOpenings) this.buildOpeningHandles()
     this.refreshOpeningNotes()
     this.highlightRoom(this.highlightedRoom)
+    this.syncWindowGlow()                  // les niveaux refaits ont des verres neufs
     this.applyLevelFocus()
     if (!this.openingDragger?.active()) this.invalidateShadows()
     this.loop.invalidate()
@@ -2241,7 +2246,7 @@ export class HouseScene {
         if (next && (next.kind === 'cover' || next.kind === 'vehicle' || next.kind === 'light')) this.invalidateShadows()
       }
     }
-    if (touched) this.loop.invalidate()
+    if (touched) this.syncWindowGlow()
   }
 
   // ---- focus / caméra -----------------------------------------------------
@@ -2599,6 +2604,47 @@ export class HouseScene {
     this.loop.invalidate()
   }
 
+  /**
+   * Les fenêtres d'une pièce dont une lampe est allumée s'éclairent, vues de dehors : le verre de la
+   * pièce (un clone par pièce, `buildLevel`) émet la couleur de ses lampes, poussée au-dessus de 1
+   * pour que le bloom l'accroche, et devient plus opaque — un verre à 30 % n'émettrait que 30 %.
+   * Seulement la nuit (`theme.night`) : en plein jour, une fenêtre éclairée ne se voit pas.
+   * Ne change qu'une couleur et une opacité : aucune variante de programme.
+   */
+  private syncWindowGlow(): void {
+    if (!this.nodes || !this.house) return
+    const lit = new Map<string, { color: Color; weight: number; k: number }>()
+    for (const d of this.house.devices) {
+      const s = d.deviceId && d.roomId ? this.states[d.deviceId] : undefined
+      if (!s || s.kind !== 'light' || !s.available || !s.on) continue
+      const k = (s.brightness ?? 100) / 100
+      const { r, g, b } = s.color ? xyToRgb(s.color.x, s.color.y) : mirekToRgb(s.colorTempMirek ?? 366)
+      const room = lit.get(d.roomId!) ?? { color: new Color(0, 0, 0), weight: 0, k: 0 }
+      room.color.r += r * k; room.color.g += g * k; room.color.b += b * k
+      room.weight += k
+      room.k = Math.max(room.k, k)
+      lit.set(d.roomId!, room)
+    }
+    const night = this.theme.night
+    for (const nodes of this.nodes.levels.values()) {
+      for (const pane of nodes.panes) {
+        const m = pane.userData.material as MeshPhysicalMaterial
+        const base = pane.userData.baseMaterial as MeshPhysicalMaterial
+        m.color.copy(base.color)
+        m.roughness = base.roughness
+        m.metalness = base.metalness
+        m.emissive.copy(base.emissive)
+        m.opacity = base.opacity
+        const room = lit.get(pane.userData.roomId as string)
+        const w = room && room.weight > 0 ? room.k * night : 0
+        if (w <= 0) continue
+        m.emissive.add(room!.color.clone().multiplyScalar((WINDOW_GLOW * w) / room!.weight))
+        m.opacity += (WINDOW_LIT_OPACITY - m.opacity) * w
+      }
+    }
+    this.loop.invalidate()
+  }
+
   // ---- sélection ----------------------------------------------------------
   setSelected(key: string | null): void {
     if (this.selectedKey) this.markers.get(this.selectedKey)?.setSelected(false)
@@ -2805,6 +2851,7 @@ export class HouseScene {
     this.buildParkings()                   // le marquage au sol suit le thème, comme le reste
     this.buildOriginMark()                 // le repère d'origine aussi
     this.highlightRoom(this.highlightedRoom)
+    this.syncWindowGlow()                  // le verre du style, et l'heure qui dit s'il fait nuit
     this.invalidateShadows()               // le soleil a pu bouger
     this.syncStorm()
     this.syncPrecipitation()

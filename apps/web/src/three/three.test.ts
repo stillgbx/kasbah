@@ -2213,6 +2213,30 @@ describe('mise en évidence d’une pièce', () => {
   })
 })
 
+describe('fenêtres éclairées', () => {
+  it('le verre d’une pièce s’allume avec ses lampes, la nuit seulement, sans toucher aux voisines', () => {
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true })
+    scene.load(parseHouse(demo))
+    scene.setAppearance({ ambience: resolveAmbience({ mode: 'night' }) })
+    const nodes = (scene as unknown as { nodes: { levels: Map<string, { panes: Mesh[] }> } }).nodes
+    const panes = [...nodes.levels.values()].flatMap((l) => l.panes)
+    const of = (roomId: string) => panes.find((p) => p.userData.roomId === roomId)!
+    const glass = (p: Mesh) => p.material as MeshStandardMaterial
+    const base = (p: Mesh) => p.userData.baseMaterial as MeshStandardMaterial
+    const salon = of('salon'), cuisine = of('cuisine')
+    expect(glass(salon)).not.toBe(glass(cuisine))                     // un verre par pièce
+    scene.updateStates({ 'mock:light-living': { kind: 'light', updatedAt: 0, available: true, on: true, brightness: 100 } as DeviceState })
+    expect(glass(salon).emissive.r).toBeGreaterThan(base(salon).emissive.r + 0.3)
+    expect(glass(salon).opacity).toBeGreaterThan(base(salon).opacity)
+    expect(glass(cuisine).emissive.getHex()).toBe(base(cuisine).emissive.getHex())
+    expect(glass(cuisine).opacity).toBe(base(cuisine).opacity)
+    scene.setAppearance({ ambience: resolveAmbience({ mode: 'day' }) })
+    expect(glass(salon).emissive.getHex()).toBe(base(salon).emissive.getHex())
+    expect(glass(salon).opacity).toBe(base(salon).opacity)
+    scene.dispose()
+  })
+})
+
 describe('météo dans la scène', () => {
   it('traduit une condition en ce que les surfaces en gardent', () => {
     expect(weatherEffects('rain')).toEqual({ wetness: 1, precipitation: { kind: 'rain', intensity: 0.8 } })

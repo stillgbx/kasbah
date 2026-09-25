@@ -1,4 +1,4 @@
-import type { BufferGeometry, Object3D } from 'three';
+import type { BufferGeometry, Material, Object3D } from 'three';
 import { BoxGeometry, BufferAttribute, Group, Mesh } from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import type { HouseGeometry, LevelGeometry, OpeningRect, WallPrism } from '@kasbah/shared'
@@ -123,9 +123,16 @@ export function buildLevel(level: LevelGeometry, mats: MaterialSet, dressed?: Re
     group.add(mesh)
   }
   const panes: Mesh[] = []
+  // un verre par PIÈCE : ses fenêtres s'allument avec ses lampes, sans allumer celles des voisines
+  const roomGlass = new Map<string, Material>()
   for (const o of level.openings) {
     if (!isGlazed(o)) continue
     const pane = buildPane(o, mats)
+    let glass = roomGlass.get(o.roomId)
+    if (!glass) { glass = mats.glass.clone(); roomGlass.set(o.roomId, glass) }
+    pane.material = glass
+    pane.userData.roomId = o.roomId
+    pane.userData.baseMaterial = mats.glass
     pane.userData.material = pane.material
     panes.push(pane)
     group.add(pane)
