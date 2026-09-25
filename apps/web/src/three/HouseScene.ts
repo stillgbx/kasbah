@@ -18,6 +18,7 @@ import { createSkyEnvironment, overcastSky } from './core/sky'
 import { DECOR_LAYER, SITE_DECOR_LAYER } from './core/layers'
 import { setLevelHeights } from './core/levelLight'
 import { setHeightMist } from './core/heightMist'
+import { setLevelFade } from './core/levelFade'
 import { createPostPipeline, detectQuality, gpuName, PIXEL_RATIO, tiltBlurFactor, toneMappingOf, type EffectiveQuality, type PostPipeline, type RenderQuality } from './core/post'
 import { dayFactor, fogDistance, sunDirection, type SceneAmbience } from './core/ambience'
 import { Precipitation } from './effects/precipitation'
@@ -36,7 +37,7 @@ import { disposeObject3D } from './core/dispose'
 import { createDragDetector, createTapDetector, type DragDetector, type TapEvent } from './core/input'
 import { createRenderLoop, type RenderLoop } from './core/renderLoop'
 import { resolveSceneTheme, type SceneTheme, type UiTheme } from './core/theme'
-import { createTween, easeInOutCubic } from './core/tween'
+import { createTween, easeInCubic, easeInOutCubic, easeOutCubic, type Tween } from './core/tween'
 import { emitsSound, soundRouting } from '../lib/audioRouting'
 import { createMarker } from './markers/createMarker'
 import type { DeviceMarker, SoundCue } from './markers/DeviceMarker'
@@ -279,6 +280,12 @@ const PILL_LOD_ICON_MIN_PX_PER_M = 26
  * animée la plus longue (un volet met 400 ms) : au-delà, rien de ce qui porte une ombre ne bouge plus.
  */
 const SHADOW_SETTLE_MS = 700
+/**
+ * L'envol d'un étage qu'on masque (`liftTo`) : de combien il monte avant de disparaître, et en
+ * combien de temps — un peu moins que le vol de la caméra (650 ms), qu'il accompagne.
+ */
+const LEVEL_LIFT_M = 8
+const LEVEL_LIFT_MS = 450
 /** Délai après lequel les étiquettes sont considérées immobiles (et leur promotion relâchée). */
 const LABELS_IDLE_MS = 500
 
@@ -445,6 +452,10 @@ export class HouseScene {
   private readonly raycaster = new Raycaster()
   private size = { width: 1, height: 1 }
   private cameraTween: { cancel(): void } | null = null
+  /** Où en est chaque étage (et le toit) de son envol : voir `liftTo`. */
+  private readonly lifts = new Map<string, { offset: number; shown: boolean; tween: Tween | null }>()
+  /** Hauteur monde au-dessus de laquelle les étages en vol s'effacent (`core/levelFade.ts`). */
+  private fadeCutY = Infinity
   private readonly deps: HouseSceneDeps
   private readonly sun: DirectionalLight
   private readonly hemi: HemisphereLight
@@ -745,6 +756,11 @@ export class HouseScene {
     this.clearParkingNotes()
     this.clearOriginMark()
     this.removePrecipitation()
+    // une maison neuve part posée : aucun étage n'est en vol
+    for (const s of this.lifts.values()) s.tween?.cancel()
+    this.lifts.clear()
+    this.fadeCutY = Infinity
+    setLevelFade(1e9, 1)
     if (this.nodes) {
       disposeObject3D(this.nodes.root, new Set<Material>(this.materials.all))
       this.nodes = null
@@ -2351,7 +2367,7 @@ export class HouseScene {
       const level = this.house.levels.find((l) => l.id === id)!
       const above = !!focused && level.elevation > focused.elevation
       const ghost = above && this.options.levelFocusMode === 'ghost'
-      nodes.group.visible = !above || ghost
+      this.liftTo(`level:${id}`, () => this.nodes?.levels.get(id)?.group, level.elevation, !above || ghost, this.topBelow(level.elevation))
       nodes.markers.visible = !above         // …et avec eux les poignées d'ouverture et les cotes
       for (const mesh of [...nodes.walls, ...nodes.floors.values(), ...nodes.panes]) {
         mesh.material = ghost ? this.materials.ghost : (mesh.userData.material as Material)
@@ -2361,7 +2377,7 @@ export class HouseScene {
     }
     // le toit se voit en vue d'ensemble et depuis le niveau qu'il porte (le toit déclaré comme un
     // niveau, pour ses panneaux) ; depuis un étage, il cacherait les pièces
-    if (this.nodes.roof) this.nodes.roof.visible = !focused || this.isRoofLevel(focused)
+    if (this.nodes.roof) this.liftTo('roof', () => this.nodes?.roof ?? undefined, 0, !focused || this.isRoofLevel(focused), this.topBelow(this.geometry?.roof?.zBase ?? 0))
     // jardin : pilules visibles — sauf un GPS coincé SOUS le plancher focalisé (même XY qu'une
     // pièce de cet étage, plus bas). Une voiture sans place finissait ainsi à percer le 1er.
     for (const m of this.markers.values()) {
@@ -2369,6 +2385,65 @@ export class HouseScene {
       m.setPillVisible(!focused || !this.coveredByFocusedFloor(m))
     }
     this.padLamps()
+  }
+
+  /**
+   * Montre ou masque un étage (ou le toit) en le faisant S'ENVOLER : il monte en accélérant puis
+   * disparaît ; il redescend et se pose en revenant. Un déplacement, et non un fondu TRANSPARENT :
+   * aucune matière ne devient transparente, aucun programme ne change. `get` relit l'objet à chaque image — un
+   * niveau reconstruit en plein vol (réglage d'une ouverture) reprend la course où elle en est.
+   * Sans renderer (tests), la bascule est immédiate, comme avant.
+   *
+   * Il s'efface en même temps qu'il monte (`core/levelFade.ts`) : tout ce qui est au-dessus de
+   * `fadeCutY` — le haut du niveau qui reste — perd des pixels à mesure que l'étage s'élève.
+   */
+  private liftTo(key: string, get: () => Object3D | undefined, baseZ: number, shown: boolean, fadeCutY: number): void {
+    let s = this.lifts.get(key)
+    if (!s) { s = { offset: shown ? 0 : LEVEL_LIFT_M, shown, tween: null }; this.lifts.set(key, s) }
+    const state = s
+    const apply = () => {
+      const o = get()
+      if (!o) return
+      o.position.z = baseZ + state.offset
+      o.visible = state.shown || state.tween !== null
+    }
+    if (state.shown === shown) { if (!state.tween) apply(); return }
+    state.shown = shown
+    state.tween?.cancel()
+    state.tween = null
+    const to = shown ? 0 : LEVEL_LIFT_M
+    if (!this.renderer) { state.offset = to; apply(); return }
+    const from = state.offset
+    // la carte d'ombre suit l'étage pendant tout le vol, et se refait une fois posé
+    this.invalidateShadows(LEVEL_LIFT_MS + SHADOW_SETTLE_MS)
+    // plusieurs étages partent ensemble (rez-de-chaussée depuis « Tout ») : le seuil le plus bas
+    this.fadeCutY = Math.min(this.fadeCutY, fadeCutY)
+    const tw = createTween({
+      durationMs: LEVEL_LIFT_MS, now: this.deps.now?.() ?? performance.now(),
+      easing: shown ? easeOutCubic : easeInCubic,
+      onUpdate: (k) => {
+        state.offset = from + (to - from) * k
+        setLevelFade(this.fadeCutY, 1 - state.offset / LEVEL_LIFT_M)
+        apply()
+      },
+      onDone: () => {
+        state.tween = null
+        apply()
+        this.padLamps()
+        // plus rien en vol : le fondu se lève, l'image redevient celle d'avant au pixel près
+        if ([...this.lifts.values()].every((l) => !l.tween)) { this.fadeCutY = Infinity; setLevelFade(1e9, 1) }
+      },
+    })
+    state.tween = tw
+    apply()
+    this.loop.addTween(tw)
+  }
+
+  /** Le haut (z maison, donc hauteur monde) du plus haut niveau posé sous `z` : là où l'étage qui s'envole commence. */
+  private topBelow(z: number): number {
+    let top = -Infinity
+    for (const l of this.nodes?.levels.values() ?? []) if (l.elevation < z - 1e-3) top = Math.max(top, l.elevation + l.height)
+    return Number.isFinite(top) ? Math.min(top, z) : z
   }
 
   /**

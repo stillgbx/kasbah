@@ -5,6 +5,7 @@ import {
 } from 'three'
 import { applyLevelLight } from '../core/levelLight'
 import { applyHeightMist } from '../core/heightMist'
+import { applyLevelFade } from '../core/levelFade'
 
 // L'eau d'une piscine qui ne fait plus semblant. Trois gestes, sur les deux matériaux du bassin
 // (`builders/materials.ts`) :
@@ -245,6 +246,7 @@ export function makeWaterAlive(mat: MeshStandardMaterial, role: WaterRole, water
   mat.onBeforeCompile = (shader) => {
     applyLevelLight(shader, mat)
     applyHeightMist(shader, mat)
+    applyLevelFade(shader, mat)
     shader.uniforms.uWaterTime = water.time
     shader.uniforms.uWaterStrength = strength
     if (basin) {

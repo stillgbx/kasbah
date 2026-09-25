@@ -18,6 +18,7 @@ import { dayFactor, fogDistance, resolveAmbience, sunDirection, weatherEffects, 
 import { DECOR_LAYER, SITE_DECOR_LAYER } from './core/layers'
 import { levelLightUniforms, setLevelHeights } from './core/levelLight'
 import { heightMistUniforms, mistAmount } from './core/heightMist'
+import { levelFadeUniforms } from './core/levelFade'
 import { sunPosition } from './core/sun'
 import { createTween } from './core/tween'
 import { ScreenArt, coverCrop, screenArtGeometry } from './markers/screenArt'
@@ -1468,6 +1469,40 @@ describe('une lampe n’éclaire que son niveau (une seule passe)', () => {
    * première visite du rez-de-chaussée recompilait toutes les matières, 2,2 s d'image figée sur
    * l'iGPU. Des lampes éteintes tiennent la place des lampes masquées.
    */
+  it('un étage masqué s’envole puis disparaît, et redescend se poser', () => {
+    let t = 0
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true, now: () => t, requestFrame: () => 0, cancelFrame: () => {} })
+    const house = parseHouse(demo)
+    scene.load(house)
+    // un renderer « présent » : c'est lui qui autorise l'animation ; la boucle, elle, ne dessine jamais
+    ;(scene as unknown as { renderer: object }).renderer = {}
+    const lifts = (scene as unknown as { lifts: Map<string, { tween: { step(now: number): boolean } | null }> }).lifts
+    const [low, high] = [...house.levels].sort((a, b) => a.elevation - b.elevation)
+    const group = scene.nodesOf(high!.id)!.group
+    scene.focusLevel(low!.id)
+    expect(group.visible).toBe(true)                                    // il part, il n'a pas disparu
+    lifts.get(`level:${high!.id}`)!.tween!.step(t = 200)
+    expect(group.position.z).toBeGreaterThan(high!.elevation)
+    expect(group.position.z).toBeLessThan(high!.elevation + 8)
+    // il s'efface en montant, au-dessus du haut du rez-de-chaussée — qui, lui, reste entier
+    const fade = levelFadeUniforms.kasbahFadeVisibility.value
+    expect(fade).toBeGreaterThan(0)
+    expect(fade).toBeLessThan(1)
+    expect(levelFadeUniforms.kasbahFadeY.value).toBeCloseTo(low!.elevation + scene.nodesOf(low!.id)!.height, 6)
+    for (const key of lifts.keys()) lifts.get(key)!.tween?.step(t = 500)
+    expect(group.visible).toBe(false)
+    expect(levelFadeUniforms.kasbahFadeVisibility.value).toBe(1)        // plus rien en vol : le fondu est levé
+    scene.focusLevel(low!.id)                                           // même focus : rien ne repart
+    expect(lifts.get(`level:${high!.id}`)!.tween).toBeNull()
+    scene.focusLevel(null)
+    expect(group.visible).toBe(true)
+    for (const key of lifts.keys()) lifts.get(key)!.tween?.step(t = 1100)
+    expect(group.position.z).toBeCloseTo(high!.elevation, 6)            // reposé exactement à sa place
+    expect(group.visible).toBe(true)
+    ;(scene as unknown as { renderer: null }).renderer = null
+    scene.dispose()
+  })
+
   it('le nombre de lumières ponctuelles ne change pas quand on focalise un niveau', () => {
     const scene = new HouseScene(document.createElement('canvas'), { headless: true })
     const house = parseHouse(demo)
@@ -2401,6 +2436,9 @@ describe('brume basse', () => {
     expect(terrain.uniforms.kasbahMistDensity).toBe(heightMistUniforms.kasbahMistDensity)   // partagée : l'heure ne recompile rien
     // un sol de pièce est à la hauteur du jardin : sans ce tri, la maison de poupée s'embrumait
     expect(inject(mats.floor).fragmentShader).not.toContain('kasbahMist')
+    // le fondu des étages, lui, est sur TOUTES les matières : c'est l'étage entier qui s'efface
+    expect(inject(mats.floor).fragmentShader).toContain('kasbahBayer( gl_FragCoord.xy ) >= kasbahFadeVisibility')
+    expect(inject(mats.floor).uniforms.kasbahFadeY).toBe(levelFadeUniforms.kasbahFadeY)
     expect(inject(mats.ground).fragmentShader).not.toContain('kasbahMist')
   })
 })
