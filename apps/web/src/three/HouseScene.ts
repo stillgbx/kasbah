@@ -281,6 +281,8 @@ const PILL_LOD_ICON_MIN_PX_PER_M = 26
  * animée la plus longue (un volet met 400 ms) : au-delà, rien de ce qui porte une ombre ne bouge plus.
  */
 const SHADOW_SETTLE_MS = 700
+/** Images dessinées au minimum qui refont les ombres après une demande (la VSM filtre sur deux passes). */
+const SHADOW_MIN_FRAMES = 2
 /**
  * L'envol d'un étage qu'on masque (`liftTo`) : de combien il monte avant de disparaître, et en
  * combien de temps — un peu moins que le vol de la caméra (650 ms), qu'il accompagne.
@@ -372,6 +374,8 @@ export class HouseScene {
    * moment après un changement de scène — le temps qu'une course de volet s'achève.
    */
   private shadowsDirtyUntil = 0
+  /** Images dessinées qui refont encore les ombres, quel que soit le temps écoulé (`invalidateShadows`). */
+  private shadowFramesPending = 0
   private perf = { fps: 0, cpuMs: 0, outsideMs: 0, lastStart: 0, wasInteractive: false, frames: 0, since: 0, shadowsRebuilt: false }
   private probe: FrameProbe | null = null
   private labelsVisible = true
@@ -2464,6 +2468,7 @@ export class HouseScene {
         state.tween = null
         apply()
         this.padLamps()
+        this.invalidateShadows()             // l'étage vient d'être masqué (ou posé) : son ombre suit
         // plus rien en vol : le fondu se lève, l'image redevient celle d'avant au pixel près
         if ([...this.lifts.values()].every((l) => !l.tween)) { this.fadeCutY = Infinity; setLevelFade(1e9, 1) }
       },
@@ -2977,6 +2982,10 @@ export class HouseScene {
    */
   invalidateShadows(ms = SHADOW_SETTLE_MS): void {
     this.shadowsDirtyUntil = (this.deps.now?.() ?? performance.now()) + ms
+    // …et, quoi que dure l'attente, les PROCHAINES images dessinées : une fenêtre en temps seule
+    // expirait pendant le voile de chargement (aucune image, shaders en compilation) — l'étage
+    // masqué pendant ce temps laissait son ombre sur le rez-de-chaussée.
+    this.shadowFramesPending = SHADOW_MIN_FRAMES
   }
 
   /**
@@ -3394,7 +3403,7 @@ export class HouseScene {
     // Avec une chaîne d'effets, c'est elle qui appelle notre rendu (par `draw`) puis ses passes ;
     // sans elle, on dessine droit à l'écran.
     // Seules les images d'un geste SANS relevé d'ombres disent quelque chose de la machine au garde-fou.
-    if (this.post) this.post.render(interactive && t0 > this.shadowsDirtyUntil)
+    if (this.post) this.post.render(interactive && t0 > this.shadowsDirtyUntil && this.shadowFramesPending === 0)
     else if (this.renderer) { this.renderer.setRenderTarget(null); this.renderScene(this.renderer) }
     this.measure(t0, interactive)
     this.updatePillLod()
@@ -3413,7 +3422,8 @@ export class HouseScene {
     if (this.nodes) setLevelHeights([...this.nodes.levels.values()].map((n) => n.group.matrixWorld.elements[13]!))
     // Les ombres ne se refont qu'après un changement de scène, pas parce que la caméra a tourné :
     // le relevé redessine tout le bâti depuis le soleil, et six faces de plus par lampe de jardin.
-    const rebuildShadows = (this.deps.now?.() ?? performance.now()) <= this.shadowsDirtyUntil
+    const rebuildShadows = (this.deps.now?.() ?? performance.now()) <= this.shadowsDirtyUntil || this.shadowFramesPending > 0
+    if (this.shadowFramesPending > 0) this.shadowFramesPending--
     this.perf.shadowsRebuilt = rebuildShadows
     r.shadowMap.autoUpdate = rebuildShadows
     r.render(this.scene, this.camera)

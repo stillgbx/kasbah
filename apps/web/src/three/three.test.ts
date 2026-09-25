@@ -1483,6 +1483,11 @@ describe('une lampe n’éclaire que son niveau (une seule passe)', () => {
     expect(dirty()).toBeLessThan(t)
     scene.focusLevel(house.levels[0]!.id)
     expect(dirty()).toBeGreaterThan(t)
+    // …et ce relevé survit à une attente sans image (voile de chargement, shaders en compilation) :
+    // la fenêtre en temps expire, les prochaines images dessinées le refont quand même
+    t += 60_000
+    expect(dirty()).toBeLessThan(t)
+    expect((scene as unknown as { shadowFramesPending: number }).shadowFramesPending).toBeGreaterThan(0)
     scene.dispose()
   })
 
