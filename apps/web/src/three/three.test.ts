@@ -2256,6 +2256,10 @@ describe('fenêtres éclairées', () => {
     expect(glass(salon).opacity).toBeGreaterThan(base(salon).opacity)
     expect(glass(cuisine).emissive.getHex()).toBe(base(cuisine).emissive.getHex())
     expect(glass(cuisine).opacity).toBe(base(cuisine).opacity)
+    // le puits de lumière du salon est dans une dalle : il ne s'allume pas avec la pièce
+    const puits = panes.find((p) => p.userData.openingId === 'puits-salon')!
+    expect(glass(puits)).toBe(base(salon))
+    expect(glass(puits).opacity).toBeLessThan(glass(salon).opacity)
     scene.setAppearance({ ambience: resolveAmbience({ mode: 'day' }) })
     expect(glass(salon).emissive.getHex()).toBe(base(salon).emissive.getHex())
     expect(glass(salon).opacity).toBe(base(salon).opacity)

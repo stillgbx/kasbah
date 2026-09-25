@@ -175,9 +175,12 @@ function onOpeningBack() { house.selectOpening(null) }
 
 // store → scène. Le cadrage suit la sélection la PLUS FINE : un appareil se cadre sur lui-même, pas
 // sur sa pièce — sinon un plafonnier de grand séjour restait un point dans un coin de l'écran.
+// Un appareil sélectionné n'allume PAS sa pièce : le trait et le voile couvraient justement ce
+// qu'on vient régler (la flaque d'une lampe, la nuit). La pièce ne s'allume que quand c'est elle
+// qu'on a choisie — tap sur son sol, recherche, retour depuis l'appareil.
 function frameSelection(roomId: string | null, key: string | null) {
   const zone = !!roomId && !!house.index?.zonesById.has(roomId)
-  if (key) { scene.highlightRoom(zone ? null : roomId); scene.focusDevice(key); return }
+  if (key) { scene.highlightRoom(null); scene.focusDevice(key); return }
   if (!roomId) { scene.highlightRoom(null); return }
   if (zone) scene.focusZone(roomId)
   else scene.focusRoom(roomId)

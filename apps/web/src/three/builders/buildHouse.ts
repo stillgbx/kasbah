@@ -128,10 +128,14 @@ export function buildLevel(level: LevelGeometry, mats: MaterialSet, dressed?: Re
   for (const o of level.openings) {
     if (!isGlazed(o)) continue
     const pane = buildPane(o, mats)
-    let glass = roomGlass.get(o.roomId)
-    if (!glass) { glass = mats.glass.clone(); roomGlass.set(o.roomId, glass) }
-    pane.material = glass
-    pane.userData.roomId = o.roomId
+    // un puits de lumière est dans une DALLE : allumé, il faisait un carré blanc au milieu de la
+    // pièce. Il garde le verre commun, qui ne s'allume jamais.
+    if (o.host !== 'floor') {
+      let glass = roomGlass.get(o.roomId)
+      if (!glass) { glass = mats.glass.clone(); roomGlass.set(o.roomId, glass) }
+      pane.material = glass
+      pane.userData.roomId = o.roomId
+    }
     pane.userData.baseMaterial = mats.glass
     pane.userData.material = pane.material
     panes.push(pane)
