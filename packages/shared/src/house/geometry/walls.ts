@@ -45,15 +45,15 @@ export function roomHeight(room: Room, level: Level, defaults: HouseDefaults): n
 /**
  * Hauteur d'un MUR, qui n'est pas celle de la pièce. `room.height` décrit le PLAFOND : c'est
  * lui qu'`autoplace` utilise pour accrocher un plafonnier, lui que `validate` compare à une
- * ouverture. Une cloison le suit. Une FAÇADE, elle, appartient à l'enveloppe du bâtiment : un
- * plafond plus bas ne la fait pas redescendre, sinon le mur extérieur marche d'une pièce à
- * l'autre (relevé de la remise à 2,20 m au milieu d'un niveau à 2,60 m).
+ * ouverture. Aucun mur ne le suit vers le bas. Une FAÇADE appartient à l'enveloppe du bâtiment,
+ * sinon le mur extérieur marche d'une pièce à l'autre ; une CLOISON est UN mur dont chaque pièce
+ * porte une moitié, et la voisine monte la sienne au niveau — la moitié basse laissait une marche
+ * de 40 cm en haut du mur, vue d'en dessus (relevé de la remise à 2,20 m dans un niveau à 2,60 m).
  *
- * `max` et non la hauteur du niveau : une pièce plus HAUTE que son niveau garde sa façade haute.
+ * `max` et non la hauteur du niveau : une pièce plus HAUTE que son niveau garde ses murs hauts.
  */
-export function wallHeight(room: Room, level: Level, defaults: HouseDefaults, kind: WallKind): number {
-  const h = roomHeight(room, level, defaults)
-  return kind === 'exterior' ? Math.max(h, level.height ?? defaults.levelHeight) : h
+export function wallHeight(room: Room, level: Level, defaults: HouseDefaults): number {
+  return Math.max(roomHeight(room, level, defaults), level.height ?? defaults.levelHeight)
 }
 
 export function openingSill(o: Opening, defaults: HouseDefaults): number {
@@ -168,7 +168,7 @@ function extendAcross(A: WallSegment, B: WallSegment, cornersA: SegmentCorners, 
 export function collectHoles(
   room: Room, seg: WallSegment, roomsOnLevel: readonly Room[], level: Level, defaults: HouseDefaults,
 ): Hole[] {
-  const H = wallHeight(room, level, defaults, seg.kind)
+  const H = wallHeight(room, level, defaults)
   const holes: Hole[] = []
   for (const o of room.openings) {
     if (o.segment === undefined || o.offset === undefined || o.segment !== seg.index) continue
@@ -351,7 +351,7 @@ export function computeWalls(level: Level, roomsOnLevel: readonly Room[], defaul
     for (const seg of segs) {
       if (seg.kind === 'none') continue
       const c = corners[seg.index]!
-      const height = wallHeight(room, level, defaults, seg.kind)
+      const height = wallHeight(room, level, defaults)
       plans.push({ room, seg, kind: seg.kind, corners: c, height, u0: -c.startExt, u1: seg.L + c.endExt })
     }
   }

@@ -139,9 +139,10 @@ describe('computeWalls', () => {
     const bSouth = prisms.find((p) => p.roomId === 'b' && p.segment === 0)!
     expect(Math.min(...bSouth.footprint.map((v) => v[0]))).toBeCloseTo(1.8)
   })
-  it('un plafond plus bas ne fait pas redescendre la façade', () => {
-    // La remise du relevé : 2,20 m de plafond dans un niveau à 2,60 m. Les cloisons suivent le
-    // plafond, les façades suivent le bâtiment — sinon le mur extérieur marche entre deux pièces.
+  it('un plafond plus bas ne fait redescendre ni la façade ni la cloison', () => {
+    // La remise du relevé : 2,20 m de plafond dans un niveau à 2,60 m. La façade suit le bâtiment,
+    // sinon le mur extérieur marche entre deux pièces ; la cloison est un seul mur avec sa voisine,
+    // sinon sa moitié basse laisse une marche en haut du mur.
     const a = room({ id: 'a', polygon: [[0, 0], [3, 0], [3, 4], [0, 4]], height: 2.2 })
     const b = room({ id: 'b', polygon: [[3.2, 0], [6, 0], [6, 4], [3.2, 4]] })
     const { prisms } = computeWalls(level, [a, b], HOUSE_DEFAULTS)
@@ -149,7 +150,7 @@ describe('computeWalls', () => {
     expect(of('a', 0).kind).toBe('exterior')
     expect(of('a', 0).z1).toBeCloseTo(HOUSE_DEFAULTS.levelHeight)  // façade : hauteur du niveau
     expect(of('a', 1).kind).toBe('interior')
-    expect(of('a', 1).z1).toBeCloseTo(2.2)                          // cloison : plafond de la pièce
+    expect(of('a', 1).z1).toBeCloseTo(of('b', 3).z1)                // cloison : même hauteur que sa moitié voisine
     expect(of('b', 0).z1).toBeCloseTo(HOUSE_DEFAULTS.levelHeight)   // la voisine ne marche pas
   })
   it('une pièce plus haute que son niveau garde sa façade haute', () => {
