@@ -1,7 +1,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComputedRef, type Ref } from 'vue'
 import type { JournalPoint } from '../lib/journal'
 import { useTheme } from 'vuetify'
-import { useDocumentVisibility, useIntervalFn, useResizeObserver } from '@vueuse/core'
+import { useDocumentVisibility, useIntervalFn, useResizeObserver, watchThrottled } from '@vueuse/core'
 import type { DeviceState, House, Vec3 } from '@kasbah/shared'
 import { readUiTheme } from '../three/core/theme'
 import { resolveAmbience } from '../three/core/ambience'
@@ -145,7 +145,9 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   // nextTick : les variables CSS du nouveau thème doivent être appliquées avant lecture
   watch(() => theme.global.name.value, () => { void nextTick(() => scene?.setAppearance({ ui: readUiTheme() })) })
   watch(style, (s) => scene?.setAppearance({ style: s }))
-  watch(ambience, (a) => scene?.setAppearance({ ambience: a }))
+  // Une ambiance refait le ciel (~35 ms) : les curseurs de la météo forcée en envoient une par cran,
+  // et le glissement accrochait. Au plus une tous les 100 ms, la dernière toujours appliquée.
+  watchThrottled(ambience, (a) => scene?.setAppearance({ ambience: a }), { throttle: 100 })
   watch(() => settings.sceneAssets, (v) => scene?.setAppearance({ assets: v }))
   // Le banc de réglage tire ses curseurs en direct : chemin court (chaîne d'image, halos, trait
   // de pièce), là où `setAppearance` referait matières, ciel et ombres à chaque image du glissement.

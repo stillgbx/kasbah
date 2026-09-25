@@ -17,6 +17,7 @@ import { applyLook } from './builders/materials'
 import { dayFactor, fogDistance, resolveAmbience, sunDirection, weatherEffects, type AmbienceMode } from './core/ambience'
 import { DECOR_LAYER, SITE_DECOR_LAYER } from './core/layers'
 import { levelLightUniforms, setLevelHeights } from './core/levelLight'
+import { heightMistUniforms, mistAmount } from './core/heightMist'
 import { sunPosition } from './core/sun'
 import { createTween } from './core/tween'
 import { ScreenArt, coverCrop, screenArtGeometry } from './markers/screenArt'
@@ -2374,6 +2375,35 @@ describe('précipitations (palier C)', () => {
 
 /** Centre (monde) de la piscine de la maison de démonstration. */
 const POOL_CENTER = new Vector3(18, 0, -4)
+
+describe('brume basse', () => {
+  it('rien le jour ni le soir, modérée la nuit, à son plus fort à l’aube, dispersée par le vent', () => {
+    const night = resolveAmbience({ mode: 'night' })
+    const dusk = resolveAmbience({ mode: 'dusk' })                       // soleil rasant à l'OUEST
+    expect(mistAmount(resolveAmbience({ mode: 'day' }))).toBe(0)
+    expect(mistAmount(night)).toBeGreaterThan(0.5)
+    const dawn = mistAmount({ ...dusk, sunAzimuthDeg: 80 })
+    expect(dawn).toBeGreaterThan(mistAmount(night))
+    expect(mistAmount(dusk)).toBeLessThan(dawn)
+    expect(mistAmount({ ...night, windKmh: 45 })).toBe(0)
+  })
+
+  it('s’injecte derrière le brouillard de three, sur les seules matières du dehors', () => {
+    const mats = createMaterials(defaultSceneTheme(), defaultLook())
+    const inject = (mat: Material) => {
+      const shader = { uniforms: {} as Record<string, { value: unknown }>, vertexShader: ShaderLib.physical.vertexShader, fragmentShader: ShaderLib.physical.fragmentShader }
+      mat.onBeforeCompile(shader as never, null as never)
+      return shader
+    }
+    const terrain = inject(mats.terrain)
+    expect(terrain.vertexShader).toContain('kasbahMistView = mvPosition.xyz;')
+    expect(terrain.fragmentShader).toContain('kasbahMistDensity * length( kasbahMistView )')
+    expect(terrain.uniforms.kasbahMistDensity).toBe(heightMistUniforms.kasbahMistDensity)   // partagée : l'heure ne recompile rien
+    // un sol de pièce est à la hauteur du jardin : sans ce tri, la maison de poupée s'embrumait
+    expect(inject(mats.floor).fragmentShader).not.toContain('kasbahMist')
+    expect(inject(mats.ground).fragmentShader).not.toContain('kasbahMist')
+  })
+})
 
 describe('eau vivante', () => {
   it('injecte ses ondes et ses caustiques aux points que three lui laisse', () => {

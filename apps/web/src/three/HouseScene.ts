@@ -17,6 +17,7 @@ import { loadPackTextures, packById, packTexturesSettled, type TexturePack } fro
 import { createSkyEnvironment, overcastSky } from './core/sky'
 import { DECOR_LAYER, SITE_DECOR_LAYER } from './core/layers'
 import { setLevelHeights } from './core/levelLight'
+import { setHeightMist } from './core/heightMist'
 import { createPostPipeline, detectQuality, gpuName, PIXEL_RATIO, tiltBlurFactor, toneMappingOf, type EffectiveQuality, type PostPipeline, type RenderQuality } from './core/post'
 import { dayFactor, fogDistance, sunDirection, type SceneAmbience } from './core/ambience'
 import { Precipitation } from './effects/precipitation'
@@ -192,6 +193,10 @@ const HOME_RADIUS_M = 120
 /** Émission d'une fenêtre dont la pièce est éclairée à fond, la nuit ; et son opacité alors. */
 const WINDOW_GLOW = 0.65
 const WINDOW_LIT_OPACITY = 0.6
+/** Portée (m) du brouillard quand l'air est clair : au-delà de tout ce que la scène dessine (sol infini : 400 m). */
+const NO_FOG_M = 1e6
+/** Part du ciel d'en haut (hémisphère) dans la couleur de la brume basse. */
+const MIST_SKY_SHARE = 0.35
 /** Hauteur (m) de l'étiquette d'une place au-dessus du sol, et celle de ses quatre cotes. */
 const PARKING_NOTE_LIFT_M = 0.9
 const PARKING_COTE_LIFT_M = 0.12
@@ -583,6 +588,7 @@ export class HouseScene {
     this.nodes.terrain.receiveShadow = true
     this.scene.add(this.nodes.root)
     this.syncPrecipitation()               // la racine est neuve : ce qui tombe se repose dessus
+    this.applyMist()                       // la nappe se pose sur CE terrain
     this.fitSunShadow()
     this.buildParkings()                   // le marquage au sol vit avec le terrain, avant les marqueurs
     this.buildMarkers()
@@ -2756,8 +2762,26 @@ export class HouseScene {
     this.scene.environmentIntensity = sky.intensity
     const backdrop = backdropColor(sky)
     this.renderer?.setClearColor(backdrop, 1)
+    // Le brouillard est TOUJOURS posé, rejeté à perte de vue quand l'air est clair : three compile un
+    // programme avec et un sans, et le faire apparaître (visibilité sous 5 km) recompilait toutes les
+    // matières — 2,1 s d'image figée mesurées sur le curseur de visibilité des Réglages (2026-09-25).
     const far = fogDistance(this.ambience)
-    this.scene.fog = far === null ? null : new Fog(backdrop, far * 0.35, far)
+    const fog = this.scene.fog instanceof Fog ? this.scene.fog : (this.scene.fog = new Fog(backdrop, NO_FOG_M, NO_FOG_M))
+    fog.color.copy(backdrop)
+    fog.near = far === null ? NO_FOG_M : far * 0.35
+    fog.far = far === null ? NO_FOG_M : far
+    this.applyMist()
+  }
+
+  /**
+   * La brume basse de l'aube et de la nuit (`core/heightMist.ts`), posée sur le terrain. Sa couleur
+   * est l'horizon du ciel, éclairci vers le ciel qui l'éclaire d'en haut (la lune, l'aube) : une
+   * nappe un peu plus claire que le fond, qui se lit contre lui.
+   */
+  private applyMist(): void {
+    const sky = new Color().copy(this.look.lighting.hemiSky).multiplyScalar(this.look.lighting.hemiIntensity * MIST_SKY_SHARE)
+    const color = backdropColor(overcastSky(this.look.sky, this.ambience.cloudiness)).lerp(sky, 0.5)
+    setHeightMist(this.ambience, color, this.geometry?.terrain.z ?? 0)
   }
 
   /**

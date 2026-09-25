@@ -1,4 +1,5 @@
 import { Material, ShaderChunk, type WebGLProgramParametersWithUniforms } from 'three'
+import { applyHeightMist } from './heightMist'
 
 // Une lampe d'intérieur n'éclaire que SON niveau, dans le shader, en une seule passe.
 //
@@ -89,7 +90,9 @@ export function applyLevelLight(shader: WebGLProgramParametersWithUniforms, mate
 
 // Posé sur le PROTOTYPE : toute matière éclairée de la scène le reçoit, y compris celles que les
 // marqueurs créent à la volée, sans qu'aucun constructeur ait à y penser. Une matière qui pose son
-// propre `onBeforeCompile` (l'eau) appelle `applyLevelLight` elle-même.
+// propre `onBeforeCompile` (l'eau) appelle `applyLevelLight` elle-même. La brume basse
+// (`heightMist.ts`) passe par le même crochet, pour la même raison.
 Material.prototype.onBeforeCompile = function (this: Material, shader: WebGLProgramParametersWithUniforms) {
   applyLevelLight(shader, this)
+  applyHeightMist(shader, this)
 }
