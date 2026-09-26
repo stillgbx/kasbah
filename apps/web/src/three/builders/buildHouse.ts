@@ -7,7 +7,7 @@ import type { MaterialSet } from './materials'
 import { WATER_DEPTH_ATTRIBUTE } from '../effects/water'
 import { applyTerrainHeights, drapeGeometry, skirtGeometry, TERRAIN_MESH_RES } from './terrain'
 import { alignedToLongestEdge, discWithHoles, extrudePolygon, extrudePolygonWithHoles, flatPolygon, flatRing, flatWithHoles, insetPolygon, planarFaces, planarFacesWithHoles } from './shapes'
-import { offsetPolygon } from '@kasbah/shared'
+import { offsetPolygon, openingCentre } from '@kasbah/shared'
 
 // Builders : descripteurs purs → maillages. Tous les objets vivent dans le repère maison (Z-up) ;
 // la racine porte la rotation vers le monde Three. Un maillage de murs par niveau et par matériau.
@@ -65,12 +65,12 @@ export function buildPane(o: OpeningRect, mats: MaterialSet): Mesh {
     const m = new Mesh(g, mats.glass)
     const yaw = ((o.yaw ?? 0) * Math.PI) / 180
     const slope = ((o.slope ?? 0) * Math.PI) / 180
-    // cap : 0 = +y → rotation Z ; pente : inclinaison autour de l'axe local X (largeur)
+    // cap : 0 = +y → rotation Z ; pente : inclinaison autour de l'axe local X (largeur). L'ordre
+    // ZXY penche APRÈS le cap ; l'ordre XYZ par défaut penchait autour du X monde (à l'envers à 180°)
+    m.rotation.order = 'ZXY'
     m.rotation.z = yaw
     m.rotation.x = -slope
-    const cx = o.origin[0] + (o.u[0] * o.width) / 2 + (-Math.sin(yaw) * o.height) / 2
-    const cy = o.origin[1] + (o.u[1] * o.width) / 2 + (Math.cos(yaw) * o.height) / 2
-    m.position.set(cx, cy, o.origin[2] + o.depth / 2)
+    m.position.set(...openingCentre(o))
     m.userData = { openingId: o.openingId }
     return m
   }

@@ -2,7 +2,7 @@ import type { HouseDefaults } from '../defaults'
 import { surfaceAxes, surfaceCorners } from '../openings'
 import type { House, Level, Opening, Room } from '../schema'
 import { isSurfaceOpening } from '../schema'
-import { openingLeaves } from './walls'
+import { openingLeaves, planLength } from './walls'
 import type { FloorHole, OpeningRect, RoofDescriptor, RoofHole, Vec3 } from './types'
 import { pointInPolygon, type Vec2 } from './vec2'
 
@@ -110,12 +110,14 @@ export function computeSurfaceOpenings(
       if (!roof) continue
       const at = roofAtPoint(roof, o.x, o.y)
       if (!at) continue
-      const zLocal = at.z - level.elevation
+      const depth = Math.max(0.05, roof.thickness || 0.2)
+      const roofOrigin = surfaceOrigin([o.x, o.y], o.yaw, o.width, planLength(o.height, at.slope))
       openings.push({
         openingId: o.id, roomId: room.id, levelId: level.id, type: o.type, host: 'roof',
-        origin: [origin2[0], origin2[1], zLocal],
+        // z : à mi-épaisseur sur le plan du versant, pour que le verre soit DANS le trou
+        origin: [roofOrigin[0], roofOrigin[1], at.z - level.elevation - depth / 2],
         u: right, normal: [0, 0],
-        width: o.width, height: o.height, depth: Math.max(0.05, roof.thickness || 0.2),
+        width: o.width, height: o.height, depth,
         leaves: openingLeaves(o),
         yaw: o.yaw, slope: at.slope,
         ...(o.material ? { material: o.material } : {}),
@@ -134,7 +136,7 @@ export function roofHolesOf(house: House, roof: RoofDescriptor): RoofHole[] {
       if (o.type !== 'roof-window' || !asSurfaceOpening(o)) continue
       const at = roofAtPoint(roof, o.x, o.y)
       if (!at) continue
-      const corners2 = surfaceCorners([o.x, o.y], o.yaw, o.width, o.height)
+      const corners2 = surfaceCorners([o.x, o.y], o.yaw, o.width, planLength(o.height, at.slope))
       const hole: RoofHole = {
         openingId: o.id, roomId: room.id, polygon: corners2,
         ...(at.faceIndex !== undefined ? { faceIndex: at.faceIndex } : {}),

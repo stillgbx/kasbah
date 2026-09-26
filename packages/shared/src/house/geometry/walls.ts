@@ -319,6 +319,12 @@ function trimCrossRoomOverlaps(plans: readonly SegmentPlan[]): void {
  *
  * Pour une surface (sol / toit), le centre est au milieu du rectangle, à mi-épaisseur du porteur.
  */
+/**
+ * Longueur VUE DU CIEL d'une ouverture de surface : sa longueur (`height`, le long du cap) se mesure
+ * le long de la pente — la vraie taille d'un Velux — et se raccourcit de cos(pente) en plan.
+ */
+export const planLength = (height: number, slopeDeg = 0): number => height * Math.cos((slopeDeg * Math.PI) / 180)
+
 export function openingCentre(o: OpeningRect): Vec3 {
   if (o.host === 'wall') {
     return [o.origin[0] + (o.u[0] * o.width) / 2, o.origin[1] + (o.u[1] * o.width) / 2, o.origin[2] + o.height / 2]
@@ -330,9 +336,10 @@ export function openingCentre(o: OpeningRect): Vec3 {
     const a = (yaw * Math.PI) / 180
     return { fwd: [-Math.sin(a), Math.cos(a)] as const }
   })()
+  const along = planLength(o.height, o.slope)
   return [
-    o.origin[0] + (o.u[0] * o.width) / 2 + (fwd[0] * o.height) / 2,
-    o.origin[1] + (o.u[1] * o.width) / 2 + (fwd[1] * o.height) / 2,
+    o.origin[0] + (o.u[0] * o.width) / 2 + (fwd[0] * along) / 2,
+    o.origin[1] + (o.u[1] * o.width) / 2 + (fwd[1] * along) / 2,
     o.origin[2] + o.depth / 2,
   ]
 }

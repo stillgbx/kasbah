@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { MAX_OPENING_LEAVES, MIN_OPENING_DIM, MIN_OPENING_LEAVES, OPENING_MATERIALS, OPENING_TYPES, fitGap, fitHeight, fitSurfaceGap, fitWidth, isSurfaceOpening, openingGaps, openingLabel, openingLeaves, openingSill, resolveDefaults, surfaceGaps, type OpeningType, type ParkingSide, type Room } from '@kasbah/shared'
+import { MAX_OPENING_LEAVES, MIN_OPENING_DIM, MIN_OPENING_LEAVES, OPENING_MATERIALS, OPENING_TYPES, computeRoof, fitGap, fitHeight, fitSurfaceGap, fitWidth, isSurfaceOpening, openingGaps, openingLabel, openingLeaves, openingSill, resolveDefaults, roofAtPoint, surfaceGaps, type OpeningType, type ParkingSide, type Room } from '@kasbah/shared'
 import { canTakeOpening } from '../../lib/cover'
 import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
@@ -94,11 +94,18 @@ const sill = computed(() => {
   const o = opening.value
   return o && house.house ? openingSill(o, resolveDefaults(house.house.defaults)) : 0
 })
+/** Pente du toit sous un Velux (0 ailleurs) : ses cotes en plan partent du bord de son trou. */
+const roofSlope = computed(() => {
+  const o = opening.value, h = house.house
+  if (!o || !h || o.type !== 'roof-window' || o.x === undefined || o.y === undefined) return 0
+  const roof = computeRoof(h, resolveDefaults(h.defaults))
+  return roof ? roofAtPoint(roof, o.x, o.y)?.slope ?? 0 : 0
+})
 /** Les deux cotes murales, ou les quatre cotes de surface. */
 const gaps = computed(() => (opening.value && room.value ? openingGaps(room.value, opening.value) : { left: 0, right: 0 }))
 const surfaceGapMap = computed(() => (
   opening.value && room.value && isSurfaceOpening(opening.value.type)
-    ? surfaceGaps(room.value, opening.value)
+    ? surfaceGaps(room.value, opening.value, roofSlope.value)
     : { front: null, back: null, left: null, right: null }
 ))
 
@@ -200,7 +207,7 @@ function apply(field: Field, wanted: number) {
   // Surface : les quatre cotes font GLISSER le centre (`fitSurfaceGap`), comme une place.
   if (isSurfaceOpening(o.type) && (field === 'front' || field === 'back' || field === 'left' || field === 'right')) {
     if (surfaceGapMap.value[field] === null) return
-    const next = fitSurfaceGap(room.value, o, field, wanted)
+    const next = fitSurfaceGap(room.value, o, field, wanted, roofSlope.value)
     if (next && (next.x !== o.x || next.y !== o.y)) void house.saveOpening({ x: next.x, y: next.y })
     return
   }

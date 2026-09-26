@@ -7,7 +7,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js'
 import {
   boundsCenter, buildingBounds, computeHouseGeometry, deviceFloorZ, emptyReliefGrid, isFlatRelief, parseRelief, serializeRelief, terrainHeight, geoDistance, indexHouse, longestEdgeYawDeg, offsetPolygon, pointInPolygon, resolveDefaults, resolveDeviceLevelId, sitePosition,
-  roofBounds, roomBounds, zoneBounds, openingCentre, openingGaps, openingLabel, surfaceAxes, surfaceGaps,
+  roofBounds, roomBounds, zoneBounds, openingCentre, openingGaps, openingLabel, planLength, surfaceAxes, surfaceGaps,
   assignParkings, atRest, mirekToRgb, xyToRgb, parkingGaps, parkingHost, parkingLabel, PARKING_SIDES,
   type DeviceDescriptor, type DeviceState, type House, type HouseDevice, type HouseGeometry, type HouseIndex, type Level, type OpeningRect, type Parking, type ParkingFix, type ParkingSide, type PlacedHouseDevice, type Relief, type ReliefGrid, type Vec2, type Vec3,
 } from '@kasbah/shared'
@@ -1973,6 +1973,7 @@ export class HouseScene {
         if (o.host === 'wall') {
           group.rotation.z = Math.atan2(o.u[1], o.u[0])
         } else {
+          group.rotation.order = 'ZXY'                    // pencher après le cap (cf. buildPane)
           group.rotation.z = ((o.yaw ?? 0) * Math.PI) / 180
           group.rotation.x = -((o.slope ?? 0) * Math.PI) / 180
         }
@@ -2112,11 +2113,12 @@ export class HouseScene {
       })
     } else {
       // Surface : quatre cotes dans le plan (comme une place), trait le long de chaque intervalle.
-      const gaps = surfaceGaps(room, opening)
+      const gaps = surfaceGaps(room, opening, rect.slope)
       const yaw = opening.yaw ?? 0
       const { fwd, right } = surfaceAxes(yaw)
       const cx = opening.x ?? 0, cy = opening.y ?? 0
-      const w = opening.width, h = opening.height
+      // longueur vue du ciel : les traits partent du bord du trou, pas de la longueur le long de la pente
+      const w = opening.width, h = planLength(opening.height, rect.slope)
       const z = rect.origin[2] + rect.depth / 2
       notes.name.position.set(cx, cy, z + OPENING_NOTE_LIFT_M)
       notes.cotes.position.set(cx, cy, z)

@@ -90,7 +90,11 @@ export function planarFacesWithHoles(
     }
     pos.needsUpdate = true
     g.computeVertexNormals()
-    parts.push(g)
+    // mergeGeometries exige les mêmes attributs partout : planarFaces n'est ni indexé ni UV-é
+    const flat = g.toNonIndexed()
+    flat.deleteAttribute('uv')
+    g.dispose()
+    parts.push(flat)
   }
   if (parts.length === 0) return planarFaces(faces)
   if (parts.length === 1) return parts[0]!

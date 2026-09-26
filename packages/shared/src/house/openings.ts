@@ -1,6 +1,6 @@
 import type { HouseDefaults } from './defaults'
 import { dist, pointInPolygon, type Vec2 } from './geometry/vec2'
-import { classifySegments, isWalled, type WallSegment } from './geometry/walls'
+import { classifySegments, isWalled, planLength, type WallSegment } from './geometry/walls'
 import { fitParkingGap, parkingGaps, type ParkingSide } from './parking'
 import { isSurfaceOpening, type Opening, type OpeningType, type Room } from './schema'
 
@@ -249,15 +249,17 @@ export function openingGaps(room: Room, opening: Opening): { left: number; right
 /**
  * Les quatre cotes d'une ouverture de SURFACE dans sa pièce — devant / derrière / gauche / droite
  * dans le sens du cap (`yaw`), comme une place de stationnement. Absent ou hors pièce : `null`.
+ * `slopeDeg` : la pente du toit sous un Velux — sa longueur se mesure le long de la pente, les cotes
+ * en plan partent donc du bord de son trou, raccourci de cos(pente).
  */
-export function surfaceGaps(room: Room, opening: Opening): Record<ParkingSide, number | null> {
+export function surfaceGaps(room: Room, opening: Opening, slopeDeg = 0): Record<ParkingSide, number | null> {
   if (!isSurfaceOpening(opening.type) || opening.x === undefined || opening.y === undefined || opening.yaw === undefined) {
     return { front: null, back: null, left: null, right: null }
   }
   return parkingGaps(room.polygon, {
     id: opening.id,
     center: [opening.x, opening.y],
-    size: [opening.width, opening.height],
+    size: [opening.width, planLength(opening.height, slopeDeg)],
     yaw: opening.yaw,
     accepts: 'vehicle',
   })
@@ -267,13 +269,13 @@ export function surfaceGaps(room: Room, opening: Opening): Record<ParkingSide, n
  * Cote voulue sur un côté → nouveau centre (l'ouverture GLISSE). Même règle que `fitParkingGap`.
  */
 export function fitSurfaceGap(
-  room: Room, opening: Opening, side: ParkingSide, wanted: number,
+  room: Room, opening: Opening, side: ParkingSide, wanted: number, slopeDeg = 0,
 ): { x: number; y: number } | null {
   if (opening.x === undefined || opening.y === undefined || opening.yaw === undefined) return null
   const next = fitParkingGap(room.polygon, {
     id: opening.id,
     center: [opening.x, opening.y],
-    size: [opening.width, opening.height],
+    size: [opening.width, planLength(opening.height, slopeDeg)],
     yaw: opening.yaw,
     accepts: 'vehicle',
   }, side, wanted)

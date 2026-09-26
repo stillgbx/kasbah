@@ -3,6 +3,7 @@ import { HOUSE_DEFAULTS } from './defaults'
 import { computeHouseGeometry } from './geometry'
 import { defaultRoofYaw, roofAtPoint } from './geometry/surface'
 import { fitSurfaceGap, newOpeningDims, slotFromSurfacePoint, surfaceCorners, surfaceFitsInPolygon, surfaceGaps, surfaceRectsOverlap } from './openings'
+import { withPanelArrays, type PanelPlacement } from './panels'
 import { isSurfaceOpening, openingSchema, type House, type Room } from './schema'
 import { parseHouse } from './validate'
 
@@ -78,6 +79,17 @@ describe('surface openings', () => {
     expect(slid).toEqual({ x: 3, y: 4 })
     expect(surfaceGaps(square, { ...opening, ...slid! })).toMatchObject({ front: 1, back: 3 })
   })
+
+  it('surfaceGaps of a roof-window start at the edge of its hole, shortened by the slope', () => {
+    // 1,2 m le long d'une pente de 60° : 0,6 m vu du ciel, donc 2,7 m de chaque côté dans 6 m
+    const velux = { id: 'v', type: 'roof-window' as const, x: 3, y: 3, yaw: 0, width: 1, height: 1.2 }
+    const gaps = surfaceGaps(square, velux, 60)
+    expect(gaps.front).toBeCloseTo(2.7, 9)
+    expect(gaps.back).toBeCloseTo(2.7, 9)
+    expect(gaps.left).toBeCloseTo(2.5, 9)                    // la largeur ne penche pas
+    const slid = fitSurfaceGap(square, velux, 'front', 1, 60)!
+    expect(surfaceGaps(square, { ...velux, ...slid }, 60).front).toBeCloseTo(1, 9)
+  })
 })
 
 describe('demo house surface openings', () => {
@@ -99,6 +111,22 @@ describe('demo house surface openings', () => {
       const at = roofAtPoint(geo.roof, velux!.x!, velux!.y!)
       expect(at).not.toBeNull()
       expect(defaultRoofYaw(geo.roof, velux!.x!, velux!.y!)).toBeTypeOf('number')
+    }
+  })
+
+  it('keeps every roof-window clear of the solar panels', async () => {
+    const { default: raw } = await import('./__fixtures__/demo-house.json')
+    const house = parseHouse(raw) as House
+    const veluxes = house.rooms.flatMap((r) => r.openings).filter((o) => o.type === 'roof-window')
+    expect(veluxes.length).toBeGreaterThan(0)
+    const panels = withPanelArrays(house).devices.flatMap((d) => (d.meta?.panel && d.position ? [{ d, at: d.position, p: d.meta.panel as PanelPlacement }] : []))
+    expect(panels.length).toBeGreaterThan(0)
+    for (const v of veluxes) {
+      for (const { d, at, p } of panels) {
+        // emprise du module vue du ciel : sa longueur penchée se raccourcit de cos(pente)
+        const footprint = { x: at[0], y: at[1], yaw: d.yaw ?? 0, width: p.width, height: p.height * Math.cos((p.tilt * Math.PI) / 180) }
+        expect(surfaceRectsOverlap(v as typeof footprint, footprint), `${v.id} sous ${d.id}`).toBe(false)
+      }
     }
   })
 
