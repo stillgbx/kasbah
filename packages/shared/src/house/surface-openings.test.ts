@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { HOUSE_DEFAULTS } from './defaults'
 import { computeHouseGeometry } from './geometry'
-import { defaultRoofYaw, roofAtPoint } from './geometry/surface'
+import { defaultRoofYaw, roofAtPoint, surfaceFootprint } from './geometry/surface'
 import { fitSurfaceGap, newOpeningDims, slotFromSurfacePoint, surfaceCorners, surfaceFitsInPolygon, surfaceGaps, surfaceRectsOverlap } from './openings'
 import { withPanelArrays, type PanelPlacement } from './panels'
 import { isSurfaceOpening, openingSchema, type House, type Room } from './schema'
@@ -80,15 +80,14 @@ describe('surface openings', () => {
     expect(surfaceGaps(square, { ...opening, ...slid! })).toMatchObject({ front: 1, back: 3 })
   })
 
-  it('surfaceGaps of a roof-window start at the edge of its hole, shortened by the slope', () => {
+  it('surfaceGaps measured on the footprint of a roof-window start at the edge of its hole', () => {
     // 1,2 m le long d'une pente de 60° : 0,6 m vu du ciel, donc 2,7 m de chaque côté dans 6 m
-    const velux = { id: 'v', type: 'roof-window' as const, x: 3, y: 3, yaw: 0, width: 1, height: 1.2 }
-    const gaps = surfaceGaps(square, velux, 60)
+    const velux = { id: 'v', type: 'roof-window' as const, x: 3, y: 3, yaw: 0, width: 1, height: 0.6 }
+    const gaps = surfaceGaps(square, velux)
     expect(gaps.front).toBeCloseTo(2.7, 9)
-    expect(gaps.back).toBeCloseTo(2.7, 9)
-    expect(gaps.left).toBeCloseTo(2.5, 9)                    // la largeur ne penche pas
-    const slid = fitSurfaceGap(square, velux, 'front', 1, 60)!
-    expect(surfaceGaps(square, { ...velux, ...slid }, 60).front).toBeCloseTo(1, 9)
+    expect(gaps.left).toBeCloseTo(2.5, 9)
+    const slid = fitSurfaceGap(square, velux, 'front', 1)!
+    expect(surfaceGaps(square, { ...velux, ...slid }).front).toBeCloseTo(1, 9)
   })
 })
 
@@ -110,8 +109,34 @@ describe('demo house surface openings', () => {
     if (geo.roof) {
       const at = roofAtPoint(geo.roof, velux!.x!, velux!.y!)
       expect(at).not.toBeNull()
-      expect(defaultRoofYaw(geo.roof, velux!.x!, velux!.y!)).toBeTypeOf('number')
+      expect(defaultRoofYaw(geo.roof, velux!.x!, velux!.y!)).toBe(180)          // versant sud : la descente va vers −y
     }
+  })
+
+  it('a roof-window on a slope follows it: downhill cap, length shortened by cos(slope)', async () => {
+    const { default: raw } = await import('./__fixtures__/demo-house.json')
+    const house = parseHouse(raw) as House
+    const roof = computeHouseGeometry(house).roof!
+    const cos35 = Math.cos((35 * Math.PI) / 180)
+    // versant sud : le cap écrit (0, vers le faîtage) cède à la descente (180)
+    const south = surfaceFootprint({ type: 'roof-window', x: 2.45, y: 3.1, yaw: 0, width: 1, height: 1.2 }, roof)
+    expect(south).toMatchObject({ x: 2.45, y: 3.1, yaw: 180, width: 1 })
+    expect(south.height).toBeCloseTo(1.2 * cos35, 9)
+    expect(south.slope).toBeCloseTo(35, 6)
+    // versant nord : il se retourne tout seul
+    expect(surfaceFootprint({ type: 'roof-window', x: 2.45, y: 6, yaw: 180, width: 1, height: 1.2 }, roof).yaw).toBe(0)
+    // un puits de lumière, ou un Velux sans toit sous lui, reste tel qu'écrit
+    expect(surfaceFootprint({ type: 'skylight', x: 2.45, y: 3.1, yaw: 30, width: 1, height: 1.2 }, roof)).toMatchObject({ yaw: 30, height: 1.2, slope: 0 })
+    expect(surfaceFootprint({ type: 'roof-window', x: 2.45, y: 3.1, yaw: 30, width: 1, height: 1.2 }, undefined)).toMatchObject({ yaw: 30, height: 1.2, slope: 0 })
+  })
+
+  it('validates a roof-window by its footprint: it may overhang the room by its unshortened length', async () => {
+    const { default: raw } = await import('./__fixtures__/demo-house.json')
+    const doc = JSON.parse(JSON.stringify(raw)) as House
+    // 1,2 m le long de la pente = 0,98 m en plan : à 0,52 m du mur sud, il tient (1,2 m en plan n'y tiendrait pas)
+    const velux = doc.rooms.find((r) => r.id === 'chambre1')!.openings.find((o) => o.id === 'velux-ch1')!
+    Object.assign(velux, { y: 0.52, yaw: 0 })
+    expect(() => parseHouse(doc)).not.toThrow()
   })
 
   it('keeps every roof-window clear of the solar panels', async () => {

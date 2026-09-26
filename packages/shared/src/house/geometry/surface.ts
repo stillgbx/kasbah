@@ -1,7 +1,7 @@
 import type { HouseDefaults } from '../defaults'
 import { surfaceAxes, surfaceCorners } from '../openings'
 import type { House, Level, Opening, Room } from '../schema'
-import { isSurfaceOpening } from '../schema'
+import { isSurfaceOpening, type OpeningType } from '../schema'
 import { openingLeaves, planLength } from './walls'
 import type { FloorHole, OpeningRect, RoofDescriptor, RoofHole, Vec3 } from './types'
 import { pointInPolygon, type Vec2 } from './vec2'
@@ -49,13 +49,35 @@ export function defaultRoofYaw(roof: RoofDescriptor, x: number, y: number): numb
   const nx = ab[1] * ac[2] - ab[2] * ac[1]
   const ny = ab[2] * ac[0] - ab[0] * ac[2]
   const nz = ab[0] * ac[1] - ab[1] * ac[0]
-  // normale orientée vers le haut ; la descente est la projection horizontale OPPOSÉE à (nx, ny)
+  // normale orientée vers le haut : elle PENCHE vers l'aval, sa projection horizontale est la descente
+  // (jusqu'au 2026-09-26 on prenait l'opposé : un Velux posé au doigt regardait le faîtage)
   if (Math.abs(nx) + Math.abs(ny) < 1e-9) return 180
-  const sign = nz >= 0 ? -1 : 1
+  const sign = nz >= 0 ? 1 : -1
   const dx = sign * nx, dy = sign * ny
   // yaw : 0 = +y → atan2(-dx, dy) en degrés
   const deg = (Math.atan2(-dx, dy) * 180) / Math.PI
   return Math.round(((deg % 360) + 360) % 360)
+}
+
+/**
+ * Emprise VUE DU CIEL d'une ouverture de surface. Un Velux posé sur un VERSANT suit la pente, comme
+ * une vraie pose : son cap est celui de la descente (`defaultRoofYaw` — le `yaw` écrit est ignoré, et
+ * il se retourne seul d'un versant à l'autre) et sa longueur, mesurée le long de la pente, se
+ * raccourcit de cos(pente). Puits de lumière, toit plat, hors toit : l'ouverture telle qu'écrite.
+ * Tout ce qui raisonne en plan (trou, cotes, place dans la pièce, chevauchement, pose) passe par elle.
+ */
+export function surfaceFootprint(
+  o: { type: OpeningType; x: number; y: number; yaw: number; width: number; height: number },
+  roof: RoofDescriptor | undefined,
+): { x: number; y: number; yaw: number; width: number; height: number; slope: number } {
+  const at = o.type === 'roof-window' && roof ? roofAtPoint(roof, o.x, o.y) : null
+  if (!roof || !at || at.faceIndex === undefined || at.slope < 1e-6) {
+    return { x: o.x, y: o.y, yaw: o.yaw, width: o.width, height: o.height, slope: 0 }
+  }
+  return {
+    x: o.x, y: o.y, yaw: defaultRoofYaw(roof, o.x, o.y), width: o.width,
+    height: planLength(o.height, at.slope), slope: at.slope,
+  }
 }
 
 /** Coin bas-gauche (vers −fwd, −right) du rectangle de surface, pour alimenter `OpeningRect.origin`. */
@@ -111,15 +133,16 @@ export function computeSurfaceOpenings(
       const at = roofAtPoint(roof, o.x, o.y)
       if (!at) continue
       const depth = Math.max(0.05, roof.thickness || 0.2)
-      const roofOrigin = surfaceOrigin([o.x, o.y], o.yaw, o.width, planLength(o.height, at.slope))
+      const fp = surfaceFootprint(o, roof)
+      const roofOrigin = surfaceOrigin([o.x, o.y], fp.yaw, o.width, fp.height)
       openings.push({
         openingId: o.id, roomId: room.id, levelId: level.id, type: o.type, host: 'roof',
         // z : à mi-épaisseur sur le plan du versant, pour que le verre soit DANS le trou
         origin: [roofOrigin[0], roofOrigin[1], at.z - level.elevation - depth / 2],
-        u: right, normal: [0, 0],
+        u: surfaceAxes(fp.yaw).right, normal: [0, 0],
         width: o.width, height: o.height, depth,
         leaves: openingLeaves(o),
-        yaw: o.yaw, slope: at.slope,
+        yaw: fp.yaw, slope: at.slope,
         ...(o.material ? { material: o.material } : {}),
         ...(o.color ? { color: o.color } : {}),
       })
@@ -136,7 +159,8 @@ export function roofHolesOf(house: House, roof: RoofDescriptor): RoofHole[] {
       if (o.type !== 'roof-window' || !asSurfaceOpening(o)) continue
       const at = roofAtPoint(roof, o.x, o.y)
       if (!at) continue
-      const corners2 = surfaceCorners([o.x, o.y], o.yaw, o.width, planLength(o.height, at.slope))
+      const fp = surfaceFootprint(o, roof)
+      const corners2 = surfaceCorners([o.x, o.y], fp.yaw, o.width, fp.height)
       const hole: RoofHole = {
         openingId: o.id, roomId: room.id, polygon: corners2,
         ...(at.faceIndex !== undefined ? { faceIndex: at.faceIndex } : {}),

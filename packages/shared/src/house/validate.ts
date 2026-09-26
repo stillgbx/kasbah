@@ -2,6 +2,9 @@ import type { z } from 'zod'
 import { resolveDefaults } from './defaults'
 import { houseSchema, isSurfaceOpening, type House } from './schema'
 import { dist } from './geometry/vec2'
+import { computeRoof } from './geometry/roof'
+import { surfaceFootprint } from './geometry/surface'
+import type { RoofDescriptor } from './geometry/types'
 import { classifySegments, isWalled, openingSill, roomHeight } from './geometry/walls'
 import { surfaceFitsInPolygon, surfaceRectsOverlap } from './openings'
 
@@ -19,6 +22,15 @@ export class HouseValidationError extends Error {
 function crossRefs(house: House, ctx: z.RefinementCtx) {
   const issue = (path: (string | number)[], message: string) => ctx.addIssue({ code: 'custom', path, message })
   const defaults = resolveDefaults(house.defaults)
+  // Le toit n'est calculé que si un Velux le demande. La maison est en cours de validation : un toit
+  // qui ne se calcule pas encore laisse juger le Velux sur ses cotes écrites (le contrôle d'avant).
+  let roofMemo: { value: RoofDescriptor | undefined } | undefined
+  const roof = (): RoofDescriptor | undefined => {
+    if (!roofMemo) {
+      try { roofMemo = { value: computeRoof(house, defaults) } } catch { roofMemo = { value: undefined } }
+    }
+    return roofMemo.value
+  }
   const seen = new Map<string, string>()
   const unique = (id: string, path: (string | number)[]) => {
     const prev = seen.get(id)
@@ -62,19 +74,18 @@ function crossRefs(house: House, ctx: z.RefinementCtx) {
         if (o.type === 'roof-window' && roofLevelId && room.levelId !== roofLevelId) {
           issue(path, `roof-window must belong to a room on the roof level ("${roofLevelId}")`)
         }
-        if (!surfaceFitsInPolygon([o.x, o.y], o.yaw, o.width, o.height, room.polygon)) {
+        // un Velux sur un versant se juge sur son emprise vue du ciel (longueur raccourcie par la pente)
+        const fp = surfaceFootprint({ type: o.type, x: o.x, y: o.y, yaw: o.yaw, width: o.width, height: o.height }, o.type === 'roof-window' ? roof() : undefined)
+        if (!surfaceFitsInPolygon([fp.x, fp.y], fp.yaw, fp.width, fp.height, room.polygon)) {
           issue(path, `surface opening does not fit inside room polygon`)
         }
         // Sol et toit sont deux porteurs distincts : un puits de lumière et une fenêtre de toit
         // peuvent partager la même emprise en plan (puits traversant) sans se chevaucher.
         for (const other of surfaceList) {
           if (other.type !== o.type) continue
-          if (surfaceRectsOverlap(
-            { x: o.x, y: o.y, yaw: o.yaw, width: o.width, height: o.height },
-            other,
-          )) issue(path, `overlaps opening "${other.id}"`)
+          if (surfaceRectsOverlap(fp, other)) issue(path, `overlaps opening "${other.id}"`)
         }
-        surfaceList.push({ x: o.x, y: o.y, yaw: o.yaw, width: o.width, height: o.height, id: o.id, type: o.type })
+        surfaceList.push({ x: fp.x, y: fp.y, yaw: fp.yaw, width: fp.width, height: fp.height, id: o.id, type: o.type })
         return
       }
       if (o.segment === undefined || o.offset === undefined) return

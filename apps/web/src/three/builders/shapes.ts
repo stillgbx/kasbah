@@ -30,16 +30,42 @@ export function flatPolygon(polygon: readonly Vec2[], z: number): ShapeGeometry 
   return g
 }
 
-/** Faces planes convexes (éventail) → géométrie indexée avec normales. */
+/**
+ * Repère 2D d'une face plane, en mètres : u le long de sa première arête (l'égout d'un versant),
+ * v dans le plan, orienté vers le HAUT (le faîtage). Sert aux UV — la texture se répète tous les
+ * `tileM` mètres, rangées de tuiles parallèles à l'égout — et au découpage des trous.
+ */
+function faceFrame(face: readonly Vec3[]): { to2: (p: Vec3) => [number, number]; from2: (u: number, v: number) => Vec3 } {
+  const a = face[0]!, b = face[1]!, c = face[2]!
+  const e1 = new Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]).normalize()
+  const n = new Vector3().crossVectors(e1, new Vector3(c[0] - a[0], c[1] - a[1], c[2] - a[2])).normalize()
+  const e2 = new Vector3().crossVectors(n, e1).normalize()
+  if (e2.z < 0) e2.negate()
+  return {
+    to2: (p) => {
+      const d = new Vector3(p[0] - a[0], p[1] - a[1], p[2] - a[2])
+      return [d.dot(e1), d.dot(e2)]
+    },
+    from2: (u, v) => [a[0] + e1.x * u + e2.x * v, a[1] + e1.y * u + e2.y * v, a[2] + e1.z * u + e2.z * v],
+  }
+}
+
+/** Faces planes convexes (éventail) → géométrie non indexée avec normales et UV en mètres. */
 export function planarFaces(faces: readonly Vec3[][]): BufferGeometry {
   const positions: number[] = []
+  const uvs: number[] = []
   for (const face of faces) {
+    const { to2 } = faceFrame(face)
     for (let i = 1; i + 1 < face.length; i++) {
-      positions.push(...face[0]!, ...face[i]!, ...face[i + 1]!)
+      for (const p of [face[0]!, face[i]!, face[i + 1]!]) {
+        positions.push(...p)
+        uvs.push(...to2(p))
+      }
     }
   }
   const g = new BufferGeometry()
   g.setAttribute('position', new BufferAttribute(new Float32Array(positions), 3))
+  g.setAttribute('uv', new BufferAttribute(new Float32Array(uvs), 2))
   g.computeVertexNormals()
   return g
 }
@@ -61,21 +87,7 @@ export function planarFacesWithHoles(
       parts.push(planarFaces([face]))
       continue
     }
-    const a = face[0]!, b = face[1]!, c = face[2]!
-    const e1 = new Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]).normalize()
-    const n = new Vector3().crossVectors(
-      e1, new Vector3(c[0] - a[0], c[1] - a[1], c[2] - a[2]),
-    ).normalize()
-    const e2 = new Vector3().crossVectors(n, e1).normalize()
-    const to2 = (p: Vec3): [number, number] => {
-      const d = new Vector3(p[0] - a[0], p[1] - a[1], p[2] - a[2])
-      return [d.dot(e1), d.dot(e2)]
-    }
-    const from2 = (u: number, v: number): Vec3 => [
-      a[0] + e1.x * u + e2.x * v,
-      a[1] + e1.y * u + e2.y * v,
-      a[2] + e1.z * u + e2.z * v,
-    ]
+    const { to2, from2 } = faceFrame(face)
     const outline = face.map(to2)
     const shape = new Shape(outline.map(([u, v]) => new Vector2(u, v)))
     for (const h of faceHoles) {
@@ -90,9 +102,9 @@ export function planarFacesWithHoles(
     }
     pos.needsUpdate = true
     g.computeVertexNormals()
-    // mergeGeometries exige les mêmes attributs partout : planarFaces n'est ni indexé ni UV-é
+    // mergeGeometries exige les mêmes attributs partout : planarFaces n'est pas indexé. Les UV du
+    // ShapeGeometry sont déjà les coordonnées (u, v) du repère de la face : on les garde.
     const flat = g.toNonIndexed()
-    flat.deleteAttribute('uv')
     g.dispose()
     parts.push(flat)
   }

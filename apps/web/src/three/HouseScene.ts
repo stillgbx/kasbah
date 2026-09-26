@@ -2113,12 +2113,14 @@ export class HouseScene {
       })
     } else {
       // Surface : quatre cotes dans le plan (comme une place), trait le long de chaque intervalle.
-      const gaps = surfaceGaps(room, opening, rect.slope)
-      const yaw = opening.yaw ?? 0
+      // l'emprise vue du ciel (cap et longueur du rectangle géométrique) : les traits partent du bord du
+      // trou d'un Velux, pas de sa longueur le long de la pente
+      const yaw = rect.yaw ?? opening.yaw ?? 0
+      const h = planLength(opening.height, rect.slope)
+      const gaps = surfaceGaps(room, { ...opening, yaw, height: h })
       const { fwd, right } = surfaceAxes(yaw)
       const cx = opening.x ?? 0, cy = opening.y ?? 0
-      // longueur vue du ciel : les traits partent du bord du trou, pas de la longueur le long de la pente
-      const w = opening.width, h = planLength(opening.height, rect.slope)
+      const w = opening.width
       const z = rect.origin[2] + rect.depth / 2
       notes.name.position.set(cx, cy, z + OPENING_NOTE_LIFT_M)
       notes.cotes.position.set(cx, cy, z)

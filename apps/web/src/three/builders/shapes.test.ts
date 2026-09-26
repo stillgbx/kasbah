@@ -46,4 +46,24 @@ describe('planarFacesWithHoles', () => {
     expect(meshArea(g)).toBeCloseTo(faces - cut, 3)
     expect(meshArea(g)).toBeLessThan(meshArea(planarFaces(roof.faces)) - 0.1)
   })
+
+  it('pose des UV en mètres dans le plan de chaque versant : u le long de l’égout, v qui monte', () => {
+    const roof = computeHouseGeometry(parseHouse(demo)).roof
+    if (roof?.type !== 'gable') throw new Error('la démo a un toit à pentes')
+    const holes = (roof.holes ?? []).filter((h) => h.faceIndex !== undefined && h.corners)
+    for (const g of [planarFaces(roof.faces), planarFacesWithHoles(roof.faces, holes)]) {
+      const pos = g.getAttribute('position'), uv = g.getAttribute('uv')
+      expect(uv?.count).toBe(pos.count)
+      // chaque triangle garde ses longueurs : la texture n'est ni étirée ni écrasée par la pente
+      for (let k = 0; k < pos.count; k += 3) {
+        for (const [i, j] of [[k, k + 1], [k + 1, k + 2]] as const) {
+          const d3 = Math.hypot(pos.getX(j) - pos.getX(i), pos.getY(j) - pos.getY(i), pos.getZ(j) - pos.getZ(i))
+          expect(Math.hypot(uv!.getX(j) - uv!.getX(i), uv!.getY(j) - uv!.getY(i))).toBeCloseTo(d3, 5)
+        }
+        // v monte avec z (les rangées de tuiles restent horizontales, et vont vers le faîtage)
+        const dz = pos.getZ(k + 1) - pos.getZ(k), dv = uv!.getY(k + 1) - uv!.getY(k)
+        if (Math.abs(dz) > 1e-6) expect(Math.sign(dv)).toBe(Math.sign(dz))
+      }
+    }
+  })
 })

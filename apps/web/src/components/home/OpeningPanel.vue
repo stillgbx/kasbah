@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { MAX_OPENING_LEAVES, MIN_OPENING_DIM, MIN_OPENING_LEAVES, OPENING_MATERIALS, OPENING_TYPES, computeRoof, fitGap, fitHeight, fitSurfaceGap, fitWidth, isSurfaceOpening, openingGaps, openingLabel, openingLeaves, openingSill, resolveDefaults, roofAtPoint, surfaceGaps, type OpeningType, type ParkingSide, type Room } from '@kasbah/shared'
+import { MAX_OPENING_LEAVES, MIN_OPENING_DIM, MIN_OPENING_LEAVES, OPENING_MATERIALS, OPENING_TYPES, computeRoof, fitGap, fitHeight, fitSurfaceGap, fitWidth, isSurfaceOpening, openingGaps, openingLabel, openingLeaves, openingSill, resolveDefaults, surfaceFootprint, surfaceGaps, type OpeningType, type ParkingSide, type Room } from '@kasbah/shared'
 import { canTakeOpening } from '../../lib/cover'
 import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
@@ -94,18 +94,28 @@ const sill = computed(() => {
   const o = opening.value
   return o && house.house ? openingSill(o, resolveDefaults(house.house.defaults)) : 0
 })
-/** Pente du toit sous un Velux (0 ailleurs) : ses cotes en plan partent du bord de son trou. */
-const roofSlope = computed(() => {
+/**
+ * Emprise vue du ciel (`surfaceFootprint`) : un Velux sur un versant prend le cap de la descente et sa
+ * longueur raccourcie par la pente, pour que ses cotes partent du bord de son trou. `null` hors surface.
+ */
+const footprint = computed(() => {
   const o = opening.value, h = house.house
-  if (!o || !h || o.type !== 'roof-window' || o.x === undefined || o.y === undefined) return 0
-  const roof = computeRoof(h, resolveDefaults(h.defaults))
-  return roof ? roofAtPoint(roof, o.x, o.y)?.slope ?? 0 : 0
+  if (!o || !h || !isSurfaceOpening(o.type) || o.x === undefined || o.y === undefined || o.yaw === undefined) return null
+  const roof = o.type === 'roof-window' ? computeRoof(h, resolveDefaults(h.defaults)) : undefined
+  return surfaceFootprint({ type: o.type, x: o.x, y: o.y, yaw: o.yaw, width: o.width, height: o.height }, roof)
 })
+/** L'ouverture telle que les cotes la voient en plan (cap et longueur de son emprise). */
+const planOpening = computed(() => {
+  const o = opening.value, fp = footprint.value
+  return o && fp ? { ...o, yaw: fp.yaw, height: fp.height } : o
+})
+/** Cap imposé par le versant : le champ garde sa place, grisé, et montre le cap réel. */
+const yawLocked = computed(() => (footprint.value?.slope ?? 0) > 0)
 /** Les deux cotes murales, ou les quatre cotes de surface. */
 const gaps = computed(() => (opening.value && room.value ? openingGaps(room.value, opening.value) : { left: 0, right: 0 }))
 const surfaceGapMap = computed(() => (
-  opening.value && room.value && isSurfaceOpening(opening.value.type)
-    ? surfaceGaps(room.value, opening.value, roofSlope.value)
+  planOpening.value && room.value && isSurfaceOpening(planOpening.value.type)
+    ? surfaceGaps(room.value, planOpening.value)
     : { front: null, back: null, left: null, right: null }
 ))
 
@@ -147,7 +157,7 @@ function fieldValue(field: Field): number {
     case 'left': return isSurface.value ? (surfaceGapMap.value.left ?? 0) : gaps.value.left
     case 'front': return surfaceGapMap.value.front ?? 0
     case 'back': return surfaceGapMap.value.back ?? 0
-    case 'yaw': return o.yaw ?? 0
+    case 'yaw': return footprint.value?.yaw ?? o.yaw ?? 0
   }
 }
 
@@ -172,6 +182,7 @@ function apply(field: Field, wanted: number) {
   if (!o || !house.house) return
   const defaults = resolveDefaults(house.house.defaults)
   if (field === 'yaw') {
+    if (yawLocked.value) return                     // le versant décide du cap
     const next = Math.round((((wanted % 360) + 360) % 360) * 10) / 10
     if (next !== (o.yaw ?? 0)) void house.saveOpening({ yaw: next })
     return
@@ -207,7 +218,7 @@ function apply(field: Field, wanted: number) {
   // Surface : les quatre cotes font GLISSER le centre (`fitSurfaceGap`), comme une place.
   if (isSurfaceOpening(o.type) && (field === 'front' || field === 'back' || field === 'left' || field === 'right')) {
     if (surfaceGapMap.value[field] === null) return
-    const next = fitSurfaceGap(room.value, o, field, wanted, roofSlope.value)
+    const next = fitSurfaceGap(room.value, planOpening.value ?? o, field, wanted)
     if (next && (next.x !== o.x || next.y !== o.y)) void house.saveOpening({ x: next.x, y: next.y })
     return
   }
@@ -349,20 +360,20 @@ const freedName = computed(() => {
       <div v-for="f in fields" :key="f.key" class="opening__row">
         <span class="muted">{{ f.label }}</span>
         <span class="opening__turn">
-          <button type="button" class="key" :disabled="house.savingOpening"
+          <button type="button" class="key" :disabled="house.savingOpening || (f.key === 'yaw' && yawLocked)"
                   :title="`${$t('opening.smaller')} — ${f.label}`" :aria-label="`${$t('opening.smaller')} — ${f.label}`"
                   @click="bump(f.key, -STEP)">
             <StrokeIcon name="minus" :size="16" />
           </button>
           <input class="opening__num" type="text" inputmode="decimal" enterkeyhint="done"
-                 :value="shownValue(f.key, fieldValue(f.key).toFixed(2))" :disabled="house.savingOpening" :aria-label="f.label"
+                 :value="shownValue(f.key, fieldValue(f.key).toFixed(2))" :disabled="house.savingOpening || (f.key === 'yaw' && yawLocked)" :aria-label="f.label"
                  @focus="startEdit(f.key, fieldValue(f.key).toFixed(2), $event)"
                  @mouseup.prevent
                  @input="draft = ($event.target as HTMLInputElement).value"
                  @keydown.enter="($event.target as HTMLInputElement).blur()"
                  @keydown.esc="cancelEdit(); ($event.target as HTMLInputElement).blur()"
                  @blur="commitEdit(f.key)">
-          <button type="button" class="key" :disabled="house.savingOpening"
+          <button type="button" class="key" :disabled="house.savingOpening || (f.key === 'yaw' && yawLocked)"
                   :title="`${$t('opening.bigger')} — ${f.label}`" :aria-label="`${$t('opening.bigger')} — ${f.label}`"
                   @click="bump(f.key, STEP)">
             <StrokeIcon name="plus" :size="16" />

@@ -32,6 +32,20 @@ describe('vitrage d’une fenêtre de toit', () => {
     expect(n.angleTo(faceNormal(roof.faces[faceIndex]!))).toBeLessThan(1e-6)
   })
 
+  it('suit la pente même quand le JSON lui donne un autre cap', () => {
+    // cap 0 écrit sur le versant sud (qui descend vers −y) : la géométrie reprend la descente
+    const doc = JSON.parse(JSON.stringify(demo)) as typeof demo
+    const o = doc.rooms.find((r) => r.id === 'chambre1')!.openings.find((x) => x.id === 'velux-ch1')!
+    Object.assign(o, { yaw: 0 })
+    const g2 = computeHouseGeometry(parseHouse(doc))
+    const rect = g2.levels.flatMap((l) => l.openings).find((x) => x.host === 'roof')!
+    expect(rect.yaw).toBe(180)
+    const pane = buildPane(rect, mats)
+    pane.updateMatrixWorld()
+    const n = new Vector3(0, 0, 1).transformDirection(pane.matrixWorld)
+    expect(n.angleTo(faceNormal(g2.roof!.faces[0]!))).toBeLessThan(1e-6)
+  })
+
   it('remplit exactement le trou du toit : même taille, même place, dans le plan du versant', () => {
     const hole = roof.holes!.find((h) => h.openingId === velux.openingId)!.corners!.map((p) => new Vector3(...p))
     const pane = buildPane(velux, mats)

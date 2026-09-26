@@ -1,6 +1,6 @@
 import { computed, ref, shallowRef, watch } from 'vue'
 import { defineStore } from 'pinia'
-  import { autoPlaceDevices, computeRoof, defaultRoofYaw, fitHeight, fitParkingGap, houseIdForDevice, isSurfaceOpening, longestEdgeYawDeg, indexHouse, isPlaced, newOpeningDims, newParkingSize, openingLimits, openingSill, panelArrayDevices, panelOf, parkingGaps, parkingHost, pointInPolygon, resolveDefaults, resolveDeviceLevelId, roomHeight, slotFromPoint, slotFromSurfacePoint, withPanelArrays, type DeviceDescriptor, type DeviceEntry, type DeviceKind, type DevicePlacement, type House, type HouseDevice, type HouseIndex, type Level, type Opening, type OpeningPatch, type OpeningType, type PanelArray, type PanelArrayPatch, type Parking, type ParkingPatch, type ParkingSide, type PlaceableDevice, type PlacedHouseDevice, type Relief, type Room, type SceneTuning, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
+  import { autoPlaceDevices, computeRoof, fitHeight, fitParkingGap, houseIdForDevice, isSurfaceOpening, longestEdgeYawDeg, indexHouse, isPlaced, newOpeningDims, newParkingSize, openingLimits, openingSill, panelArrayDevices, panelOf, parkingGaps, parkingHost, pointInPolygon, resolveDefaults, resolveDeviceLevelId, roomHeight, slotFromPoint, slotFromSurfacePoint, surfaceFootprint, withPanelArrays, type DeviceDescriptor, type DeviceEntry, type DeviceKind, type DevicePlacement, type House, type HouseDevice, type HouseIndex, type Level, type Opening, type OpeningPatch, type OpeningType, type PanelArray, type PanelArrayPatch, type Parking, type ParkingPatch, type ParkingSide, type PlaceableDevice, type PlacedHouseDevice, type Relief, type Room, type SceneTuning, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
 import { getTransport } from '../api'
 import type { JournalPoint } from '../lib/journal'
 import { i18n, t } from '../i18n'
@@ -903,8 +903,13 @@ export const useHouseStore = defineStore('house', () => {
     const sel = selectedOpening.value
     if (!sel || !house.value) return
     if (isSurfaceOpening(sel.opening.type)) {
-      const yaw = sel.opening.yaw ?? 0
-      const slot = slotFromSurfacePoint(sel.room, xy, yaw, sel.opening.width, sel.opening.height)
+      // un Velux sur un versant glisse sur son EMPRISE au point visé : cap de la descente, longueur
+      // raccourcie par la pente (`surfaceFootprint`) — il peut ainsi approcher le mur de sa vraie taille
+      const roofDesc = sel.opening.type === 'roof-window' ? computeRoof(house.value, resolveDefaults(house.value.defaults)) : undefined
+      const fp = surfaceFootprint({
+        type: sel.opening.type, x: xy[0], y: xy[1], yaw: sel.opening.yaw ?? 0, width: sel.opening.width, height: sel.opening.height,
+      }, roofDesc)
+      const slot = slotFromSurfacePoint(sel.room, xy, fp.yaw, fp.width, fp.height)
       if (!slot) return
       if (Math.abs(slot.x - (sel.opening.x ?? 0)) < 0.005 && Math.abs(slot.y - (sel.opening.y ?? 0)) < 0.005) return
       openingDraft.value = { ...openingDraft.value, x: slot.x, y: slot.y }
@@ -1031,11 +1036,14 @@ export const useHouseStore = defineStore('house', () => {
     try {
       if (isSurfaceOpening(armed.type)) {
         let yaw = 0
+        let planHeight = dims.height
         if (armed.type === 'roof-window') {
-          const roofDesc = computeRoof(house.value, defaults)
-          yaw = roofDesc ? defaultRoofYaw(roofDesc, xy[0], xy[1]) : 180
+          // sur un versant : cap de la descente, longueur vue du ciel raccourcie par la pente
+          const fp = surfaceFootprint({ type: armed.type, x: xy[0], y: xy[1], yaw: 180, width: dims.width, height: dims.height }, computeRoof(house.value, defaults))
+          yaw = fp.yaw
+          planHeight = fp.height
         }
-        const slot = slotFromSurfacePoint(room, xy, yaw, dims.width, dims.height)
+        const slot = slotFromSurfacePoint(room, xy, yaw, dims.width, planHeight)
         if (!slot) {
           useNotificationsStore().error(t('opening.addNoSpaceSurface', { width: dims.width.toFixed(2) }))
           placingOpening.value = null
