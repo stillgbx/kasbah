@@ -2406,7 +2406,7 @@ describe('mise en évidence d’une pièce', () => {
     const mats = createMaterials(defaultSceneTheme(), defaultLook())
     const shader = { uniforms: {} as Record<string, unknown>, vertexShader: ShaderLib.physical.vertexShader, fragmentShader: ShaderLib.physical.fragmentShader }
     mats.wall.onBeforeCompile(shader as never, null as never)
-    expect(shader.fragmentShader.indexOf('kasbahInRoom( kasbahW )')).toBeGreaterThan(shader.fragmentShader.indexOf('#include <opaque_fragment>'))
+    expect(shader.fragmentShader.indexOf('kasbahRoomDistance( kasbahW )')).toBeGreaterThan(shader.fragmentShader.indexOf('#include <opaque_fragment>'))
     expect(shader.uniforms.kasbahFocus).toBe(u.kasbahFocus)
     scene.dispose()
   })

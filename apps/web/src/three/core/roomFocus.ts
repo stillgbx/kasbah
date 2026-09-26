@@ -13,6 +13,13 @@ import type { Vec2 } from '@kasbah/shared'
 export const ROOM_FOCUS_MAX = 24
 /** Ce que garde de sa lumière ce qui est hors de la pièce, et de sa couleur, à pleine force. */
 const DIM = { light: 0.45, saturation: 0.35 }
+/**
+ * Distance (m) au contour de la pièce sur laquelle l'effacement monte de 0 à pleine force. Jusqu'au
+ * 2026-09-26 la bascule était franche au contour (« un peu brutal ») : c'est désormais un dégradé qui
+ * rayonne autour de la pièce — les pièces voisines s'estompent peu à peu, le fond de la maison tout à
+ * fait. Le contour ne tombe plus SUR aucune limite nette : le grain qui y scintillait ne peut revenir.
+ */
+const FEATHER_M = 2
 
 export const roomFocusUniforms = {
   /** 0 = aucune pièce mise en valeur, 1 = pleine force (animé entre les deux). */
@@ -44,16 +51,20 @@ uniform float kasbahFocus;
 uniform vec2 kasbahFocusPoly[ ${ROOM_FOCUS_MAX} ];
 uniform int kasbahFocusCount;
 uniform vec2 kasbahFocusY;
-bool kasbahInRoom( vec3 w ) {
-  if ( w.y < kasbahFocusY.x || w.y > kasbahFocusY.y ) return false;
+// Distance au volume de la pièce : 0 dedans, sinon l'écart au contour (plan) et à sa tranche (hauteur).
+float kasbahRoomDistance( vec3 w ) {
   bool inside = false;
+  float d = 1e6;
   for ( int i = 0; i < ${ROOM_FOCUS_MAX}; i ++ ) {
     if ( i >= kasbahFocusCount ) break;
     vec2 a = kasbahFocusPoly[ i ];
     vec2 b = kasbahFocusPoly[ i == kasbahFocusCount - 1 ? 0 : i + 1 ];
     if ( ( a.y > w.z ) != ( b.y > w.z ) && w.x < ( b.x - a.x ) * ( w.z - a.y ) / ( b.y - a.y ) + a.x ) inside = ! inside;
+    vec2 ab = b - a, ap = w.xz - a;
+    d = min( d, length( ap - ab * clamp( dot( ap, ab ) / dot( ab, ab ), 0.0, 1.0 ) ) );
   }
-  return inside;
+  float dy = max( max( kasbahFocusY.x - w.y, w.y - kasbahFocusY.y ), 0.0 );
+  return length( vec2( inside ? 0.0 : d, dy ) );
 }
 `
 const FRAGMENT = /* glsl */ `
@@ -61,11 +72,10 @@ const FRAGMENT = /* glsl */ `
     // du repère VUE au MONDE : l'inverse de la matrice de vue, colonne par colonne
     vec3 kasbahP = kasbahFocusView - viewMatrix[ 3 ].xyz;
     vec3 kasbahW = vec3( dot( viewMatrix[ 0 ].xyz, kasbahP ), dot( viewMatrix[ 1 ].xyz, kasbahP ), dot( viewMatrix[ 2 ].xyz, kasbahP ) );
-    if ( ! kasbahInRoom( kasbahW ) ) {
-      float kasbahL = dot( gl_FragColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) );
-      vec3 kasbahDim = mix( vec3( kasbahL ), gl_FragColor.rgb, ${DIM.saturation.toFixed(2)} ) * ${DIM.light.toFixed(2)};
-      gl_FragColor.rgb = mix( gl_FragColor.rgb, kasbahDim, kasbahFocus );
-    }
+    float kasbahK = kasbahFocus * smoothstep( 0.0, ${FEATHER_M.toFixed(1)}, kasbahRoomDistance( kasbahW ) );
+    float kasbahL = dot( gl_FragColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) );
+    vec3 kasbahDim = mix( vec3( kasbahL ), gl_FragColor.rgb, ${DIM.saturation.toFixed(2)} ) * ${DIM.light.toFixed(2)};
+    gl_FragColor.rgb = mix( gl_FragColor.rgb, kasbahDim, kasbahK );
   }
 `
 
