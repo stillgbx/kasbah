@@ -252,15 +252,14 @@ export function shapeTerrain(nodes: HouseNodes, geometry: Pick<HouseGeometry, 't
     return
   }
   if (!nodes.terrain.geometry.userData.drape) {
-    const walls = t.footprints.map((f) => f.polygon)
-    const g = drapeGeometry(t.polygon, basins, TERRAIN_MESH_RES, walls)
+    const g = drapeGeometry(t.polygon, basins, TERRAIN_MESH_RES, t.footprints)
     g.userData.drape = true
     swap(nodes.terrain, g)
     // le sol infini s'arrête au bord de la parcelle : c'est la jupe qui fait la marche
     swap(nodes.ground, discWithHoles(GROUND_RADIUS, [t.polygon], 0))
     for (const z of geometry.zones) {
       const mesh = nodes.zones.get(z.zoneId)
-      if (mesh && z.kind !== 'pool') { const zg = drapeGeometry(z.polygon, [], TERRAIN_MESH_RES, walls); zg.userData.drape = true; swap(mesh, zg) }
+      if (mesh && z.kind !== 'pool') { const zg = drapeGeometry(z.polygon, [], TERRAIN_MESH_RES, t.footprints); zg.userData.drape = true; swap(mesh, zg) }
     }
     const skirt = new Mesh(skirtGeometry(t.polygon), mats.ground)
     skirt.name = 'terrain:skirt'

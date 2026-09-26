@@ -1,5 +1,5 @@
 import { BufferAttribute, BufferGeometry, ShapeUtils, Vector2 } from 'three'
-import { ensureCCW, footprintCeiling, padWeight, pointInPolygon, reliefDelta, signedArea, type TerrainDescriptor, type Vec2 } from '@kasbah/shared'
+import { ensureCCW, footprintCeiling, padWeight, reliefDelta, signedArea, type Footprint, type TerrainDescriptor, type Vec2 } from '@kasbah/shared'
 
 // Terrain EN RELIEF : un polygone (percé de ses bassins) découpé en mailles carrées de
 // `TERRAIN_MESH_RES`, dont chaque sommet prend la hauteur de la surface (`terrainHeight`).
@@ -61,20 +61,22 @@ function subtractTriangle(poly: Vec2[], t: readonly [Vec2, Vec2, Vec2]): Vec2[][
 const REFINE = 4
 
 /**
- * Les mailles traversées par le CONTOUR de la maison. Une arête dont les deux côtés sont dans une
- * emprise (la cloison entre deux pièces) n'en est pas : seul le bord de l'ensemble compte.
+ * Les mailles traversées par une arête d'emprise où le PLAFOND change d'un côté à l'autre : c'est là
+ * que le terrain passe de libre à écrêté. Une cloison entre deux pièces du même niveau n'en est pas.
+ * Une façade sous un étage en porte-à-faux, si : dehors, le plafond est le plancher de l'étage.
+ * (Première version : « les deux côtés sont dans une pièce » — elle sautait ces façades-là, et le
+ * raccord s'étalait sur des mailles de 50 cm qui dépassaient du mur, en dents de scie le long d'une pente.)
  */
-function refinedCells(walls: readonly (readonly Vec2[])[], res: number): Set<string> {
+function refinedCells(footprints: Footprint[], res: number): Set<string> {
   const out = new Set<string>()
-  const insideAny = (p: Vec2) => walls.some((w) => pointInPolygon(p, w))
-  for (const w of walls) {
+  for (const { polygon: w } of footprints) {
     for (let k = 0; k < w.length; k++) {
       const a = w[k]!, b = w[(k + 1) % w.length]!
       const len = Math.hypot(b[0] - a[0], b[1] - a[1])
       if (len < 1e-6) continue
       const nx = (b[1] - a[1]) / len * 0.05, ny = -(b[0] - a[0]) / len * 0.05
       const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2
-      if (insideAny([mx + nx, my + ny]) && insideAny([mx - nx, my - ny])) continue
+      if (footprintCeiling(footprints, mx + nx, my + ny) === footprintCeiling(footprints, mx - nx, my - ny)) continue
       const n = Math.ceil(len / (res / 8))
       for (let i = 0; i <= n; i++) {
         const x = a[0] + (b[0] - a[0]) * (i / n), y = a[1] + (b[1] - a[1]) * (i / n)
@@ -127,7 +129,7 @@ function triangles(poly: readonly Vec2[]): [Vec2, Vec2, Vec2][] {
  * mètres, comme `ShapeGeometry` : les matières du terrain se posent pareil sur l'une ou l'autre.
  */
 export function drapeGeometry(
-  outer: readonly Vec2[], holes: readonly (readonly Vec2[])[], res = TERRAIN_MESH_RES, walls: readonly (readonly Vec2[])[] = [],
+  outer: readonly Vec2[], holes: readonly (readonly Vec2[])[], res = TERRAIN_MESH_RES, footprints: Footprint[] = [],
 ): BufferGeometry {
   const poly = ensureCCW(outer)
   const holeTris = holes.flatMap((h) => triangles(ensureCCW(h)).map((t) => {
@@ -135,7 +137,7 @@ export function drapeGeometry(
     return { t, x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) }
   }))
   const xs = poly.map((p) => p[0]), ys = poly.map((p) => p[1])
-  const refined = refinedCells(walls, res)
+  const refined = refinedCells(footprints, res)
   const sub = res / REFINE
   const pos: number[] = []
   const index: number[] = []

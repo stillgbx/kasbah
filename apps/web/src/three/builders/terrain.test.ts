@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { type BufferAttribute, ShapeGeometry } from 'three'
-import { computeHouseGeometry, emptyReliefGrid, footprintCeiling, padWeight, parseHouse, pointInPolygon, reliefNodeXY, resolveDefaults, serializeRelief, signedArea, terrainFootprints, terrainHeight, terrainPads, type House } from '@kasbah/shared'
+import { type BufferAttribute, DoubleSide, Mesh, MeshBasicMaterial, Raycaster, ShapeGeometry, Vector3 } from 'three'
+import { computeHouseGeometry, emptyReliefGrid, footprintCeiling, offsetPolygon, padWeight, parseHouse, parseRelief, pointInPolygon, reliefNodeXY, resolveDefaults, serializeRelief, signedArea, terrainFootprints, terrainHeight, terrainPads, type House } from '@kasbah/shared'
 import demo from '@kasbah/shared/demo-house.json'
 import { buildHouse, shapeTerrain } from './buildHouse'
 import { createMaterials } from './materials'
 import { defaultLook, defaultSceneTheme } from '../styles'
-import { drapeGeometry } from './terrain'
+import { applyTerrainHeights, drapeGeometry } from './terrain'
 
 const flat = parseHouse(demo)
 
@@ -53,7 +53,7 @@ describe('terrain en relief', () => {
     const outer = [[-7.3, -5.1], [9.2, -4.4], [11, 8.7], [-6, 10.2]] as [number, number][]
     const room = [[0.1, 0.2], [4.3, 0.2], [4.3, 3.1], [0.1, 3.1]] as [number, number][]
     const plain = drapeGeometry(outer, [])
-    const g = drapeGeometry(outer, [], 0.5, [room])
+    const g = drapeGeometry(outer, [], 0.5, [{ polygon: room, ceiling: 0 }])
     expect(area(g)).toBeCloseTo(signedArea(outer), 4)
     expect(g.getAttribute('position').count).toBeGreaterThan(plain.getAttribute('position').count)
     // chaque arête de bord du maillage est une arête du CONTOUR : une fente se verrait comme un bord intérieur
@@ -75,6 +75,25 @@ describe('terrain en relief', () => {
       if (n !== 1) continue
       const [u, v] = key.split(',').map(Number)
       expect(onOuter(u!) && onOuter(v!)).toBe(true)
+    }
+  })
+
+  it('sous un étage en porte-à-faux, la façade du RDC est affinée : le terrain dessiné touche le mur à sa hauteur', () => {
+    // RDC 4 × 4 enterré dans une pente, étage qui déborde de 2 m tout autour (cas de la maison réelle)
+    const rdc = { polygon: offsetPolygon([[0, 0], [4, 0], [4, 4], [0, 4]], 0.15), ceiling: -0.15 }
+    const etage = { polygon: offsetPolygon([[-2, -2], [6, -2], [6, 6], [-2, 6]], 0.15), ceiling: 2.6 }
+    const relief = parseRelief({ step: 2, origin: [-10, -10], rows: Array.from({ length: 11 }, () => Array.from({ length: 11 }, (_, i) => String(i * 25)).join(' ')) })!
+    const outer = [[-10, -10], [10, -10], [10, 10], [-10, 10]] as [number, number][]
+    const terrain = { polygon: outer, z: -0.15, relief, pads: [], footprints: [rdc, etage] }
+    const g = drapeGeometry(outer, [], 0.5, terrain.footprints)
+    applyTerrainHeights(g, terrain)
+    const mesh = new Mesh(g, new MeshBasicMaterial({ side: DoubleSide }))
+    const ray = new Raycaster()
+    // juste devant la face extérieure du mur (contour + 0,30 m), le long des quatre façades
+    for (const [x, y] of [[-0.33, 1.3], [-0.33, 2.7], [1.7, -0.33], [3.1, 4.33], [4.33, 0.6]] as const) {
+      ray.set(new Vector3(x, y, 50), new Vector3(0, 0, -1))
+      const hit = ray.intersectObject(mesh, false)[0]!
+      expect(hit.point.z).toBeCloseTo(terrainHeight(terrain, x, y), 3)
     }
   })
 
