@@ -978,5 +978,27 @@
       "p11": "Frottements",
       "p12": "Traitement zones sensibles"
     }
+  },
+  "relief": {
+    "title": "Modeler le terrain",
+    "open": "Ouvrir",
+    "hint": "Des points se posent sur le terrain de la vue Maison : tirez-en un vers le haut ou le bas pour monter ou creuser le sol à cet endroit, la surface s’arrondit entre les points. Les points sous la maison (plus pâles) modèlent ses abords : le terrain peut venir toucher un mur, sans jamais percer un sol. Autour de la piscine, il reste plat. Le relief est écrit dans le fichier de la maison.",
+    "help": "Touchez un point pour le choisir, puis tirez-le vers le haut ou le bas (il bouge seul), ou saisissez sa hauteur. Ailleurs, glisser fait tourner la vue. Les points pâles sont sous la maison.",
+    "point": "Point",
+    "none": "—",
+    "ign": "Importer l’IGN",
+    "reset": "Tout à zéro",
+    "view": "Vue",
+    "views": { "north": { "short": "N", "hint": "Vue depuis le nord" }, "east": { "short": "E", "hint": "Vue depuis l’est" }, "south": { "short": "S", "hint": "Vue depuis le sud" }, "west": { "short": "O", "hint": "Vue depuis l’ouest" }, "top": { "short": "Dessus", "hint": "Vue d’aplomb" } },
+    "ignLoading": "Lecture de l’IGN…",
+    "ignDone": { "lidar": "Relief IGN chargé (LiDAR HD, 50 cm). Validez pour le garder.", "rge": "Relief IGN chargé (RGE ALTI, 1 m). Validez pour le garder.", "mixed": "Relief IGN chargé (LiDAR HD et RGE ALTI). Validez pour le garder." },
+    "ignError": "IGN injoignable : {message}",
+    "undo": "Annuler (Ctrl+Z)",
+    "redo": "Rétablir (Ctrl+Y)",
+    "cancel": "Annuler",
+    "save": "Valider",
+    "saved": "Validé",
+    "finish": "Terminer",
+    "saveError": "Relief non enregistré : {message}"
   }
 }

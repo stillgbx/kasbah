@@ -1,6 +1,6 @@
 import { computed, ref, shallowRef, watch } from 'vue'
 import { defineStore } from 'pinia'
-  import { autoPlaceDevices, computeRoof, defaultRoofYaw, fitHeight, fitParkingGap, houseIdForDevice, isSurfaceOpening, longestEdgeYawDeg, indexHouse, isPlaced, newOpeningDims, newParkingSize, openingLimits, openingSill, panelArrayDevices, panelOf, parkingGaps, parkingHost, pointInPolygon, resolveDefaults, resolveDeviceLevelId, roomHeight, slotFromPoint, slotFromSurfacePoint, withPanelArrays, type DeviceDescriptor, type DeviceEntry, type DeviceKind, type DevicePlacement, type House, type HouseDevice, type HouseIndex, type Level, type Opening, type OpeningPatch, type OpeningType, type PanelArray, type PanelArrayPatch, type Parking, type ParkingPatch, type ParkingSide, type PlaceableDevice, type PlacedHouseDevice, type Room, type SceneTuning, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
+  import { autoPlaceDevices, computeRoof, defaultRoofYaw, fitHeight, fitParkingGap, houseIdForDevice, isSurfaceOpening, longestEdgeYawDeg, indexHouse, isPlaced, newOpeningDims, newParkingSize, openingLimits, openingSill, panelArrayDevices, panelOf, parkingGaps, parkingHost, pointInPolygon, resolveDefaults, resolveDeviceLevelId, roomHeight, slotFromPoint, slotFromSurfacePoint, withPanelArrays, type DeviceDescriptor, type DeviceEntry, type DeviceKind, type DevicePlacement, type House, type HouseDevice, type HouseIndex, type Level, type Opening, type OpeningPatch, type OpeningType, type PanelArray, type PanelArrayPatch, type Parking, type ParkingPatch, type ParkingSide, type PlaceableDevice, type PlacedHouseDevice, type Relief, type Room, type SceneTuning, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
 import { getTransport } from '../api'
 import type { JournalPoint } from '../lib/journal'
 import { i18n, t } from '../i18n'
@@ -303,6 +303,17 @@ export const useHouseStore = defineStore('house', () => {
       return true
     } catch (err) {
       useNotificationsStore().error(t('render.tuning.saveError', { message: (err as Error).message }))
+      return false
+    }
+  }
+
+  /** Enregistre le relief du terrain (`null` = plat) ; l'erreur est dite par une notification. */
+  async function saveRelief(relief: Relief | null): Promise<boolean> {
+    try {
+      house.value = await getTransport().saveRelief(relief)
+      return true
+    } catch (err) {
+      useNotificationsStore().error(t('relief.saveError', { message: (err as Error).message }))
       return false
     }
   }
@@ -1340,7 +1351,7 @@ export const useHouseStore = defineStore('house', () => {
   return {
     house, effective, loading, error, index, levels, zones, soundRoutes, relaySource,
     focusedLevelId, gardenFocus, selectedRoomId, selectedLevelId, selectedKey, floorTab, selectedRoom, selectedZone, selectedDevice,
-    load, setFloorTab, focusLevel, selectRoom, selectLevel, selectDevice, clearSelection, backToHome, backFromRoom, backFromDevice, houseDeviceFor, renameDevice, setDeviceTuning, bodyColorPreview, previewBodyColor, setRoomOrder, saveRenderTuning,
+    load, setFloorTab, focusLevel, selectRoom, selectLevel, selectDevice, clearSelection, backToHome, backFromRoom, backFromDevice, houseDeviceFor, renameDevice, setDeviceTuning, bodyColorPreview, previewBodyColor, setRoomOrder, saveRenderTuning, saveRelief,
     journalOverlay, journalFocus, journalActive, showJournal, hideJournal, focusJournalPoint, markJournalPoint,
     placing, saving, draft, canRevert, isProvisional, startPlacing, startPlacingNew, stopPlacing, previewPosition, previewHeight, savePlacement, revertPlacement, removePlacement,
     placementLevelId, setPlacementLevel,

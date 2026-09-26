@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { deviceIdSchema } from '../devices/descriptor'
-import { defaultPlugins, hexColorSchema, MAX_OPENING_LEAVES, MIN_OPENING_LEAVES, MIN_PARKING_DIM, model3dSchema, MOUNTS, NEUTRAL_TUNING, OPENING_MATERIALS, OPENING_TYPES, SPEAKER_SHAPES, vec2Schema, vec3Schema, type PluginSettingsPatch, type SceneTuning } from './schema'
+import { defaultPlugins, hexColorSchema, MAX_OPENING_LEAVES, MIN_OPENING_LEAVES, MIN_PARKING_DIM, model3dSchema, MOUNTS, NEUTRAL_TUNING, OPENING_MATERIALS, OPENING_TYPES, SPEAKER_SHAPES, vec2Schema, vec3Schema, type PluginSettingsPatch, type Relief, type SceneTuning } from './schema'
 import { DEVICE_KINDS, VEHICLE_FINISHES } from '../devices/kinds'
 import { computeHouseGeometry, openingCentre } from './geometry'
 import { parseHouse } from './validate'
@@ -327,6 +327,19 @@ export function setRenderTuningInJson(doc: unknown, tuning: SceneTuning): JsonOb
   else render.tuning = { ...tuning }
   const { render: _dropped, ...rest } = doc
   return Object.keys(render).length ? { ...rest, render } : rest
+}
+
+/**
+ * Renvoie une copie du document JSON avec le relief du terrain posé (`site.relief`), tel qu'il sort de
+ * l'éditeur de la vue Maison. Un relief PLAT (toutes les hauteurs à zéro) ou `null` n'est pas écrit :
+ * il est retiré, pour qu'un terrain sans relief reste un terrain sans champ.
+ */
+export function setReliefInJson(doc: unknown, relief: Relief | null): JsonObject {
+  if (!isObject(doc)) throw new PlacementError('house document is not an object')
+  if (!isObject(doc.site)) throw new PlacementError('house document has no site')
+  const { relief: _dropped, ...site } = doc.site
+  const flat = !relief || relief.rows.every((row) => row.split(' ').every((v) => Number(v) === 0))
+  return { ...doc, site: flat ? site : { ...site, relief: { step: relief.step, origin: [...relief.origin], rows: [...relief.rows] } } }
 }
 
 /**

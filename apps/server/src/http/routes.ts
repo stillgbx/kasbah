@@ -1,4 +1,4 @@
-import { addOpeningToJson, addParkingToJson, assertCommandAllowed, automationBodySchema, automationIdSchema, automationPatchSchema, commandSchema, devicePlacementSchema, newOpeningSchema, newParkingSchema, openingPatchSchema, panelArrayPatchSchema, parkingPatchSchema, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, roomOrderSchema, sceneTuningSchema, setRenderTuningInJson, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
+import { addOpeningToJson, addParkingToJson, assertCommandAllowed, automationBodySchema, automationIdSchema, automationPatchSchema, commandSchema, devicePlacementSchema, newOpeningSchema, newParkingSchema, openingPatchSchema, panelArrayPatchSchema, parkingPatchSchema, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, roomOrderSchema, reliefSchema, sceneTuningSchema, setReliefInJson, setRenderTuningInJson, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { updateHouseFile, type LoadedHouse } from '../config/house'
 import type { AutomationEngine } from '../core/automations/engine'
@@ -137,6 +137,14 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
   app.put('/api/house/render', async (req) => {
     const tuning = sceneTuningSchema.parse(req.body)   // ZodError → 400
     const house = await updateHouseFile(deps.house, (doc) => setRenderTuningInJson(doc, tuning))
+    deps.hub.broadcast({ type: 'house', house })
+    return { house }
+  })
+
+  // Relief du terrain (`site.relief`), posé depuis l'éditeur de la vue Maison. `null` = terrain plat.
+  app.put('/api/house/relief', async (req) => {
+    const relief = reliefSchema.nullable().parse(req.body)   // ZodError → 400
+    const house = await updateHouseFile(deps.house, (doc) => setReliefInJson(doc, relief))
     deps.hub.broadcast({ type: 'house', house })
     return { house }
   })

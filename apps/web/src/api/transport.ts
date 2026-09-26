@@ -1,4 +1,4 @@
-import type { AutomationBody, AutomationEntry, AutomationRun, SceneTuning, CommandInput, DeviceConsumption, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal, StateFor } from '@kasbah/shared'
+import type { AutomationBody, AutomationEntry, AutomationRun, Relief, SceneTuning, CommandInput, DeviceConsumption, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal, StateFor } from '@kasbah/shared'
 
 // Abstraction du canal serveur. Deux implémentations : HTTP + WebSocket (réel) et simulation
 // in-process (tests, démo statique sans serveur). Les commandes passent TOUJOURS par une requête
@@ -623,6 +623,8 @@ export interface Transport {
   setRoomOrder(levelId: string, roomIds: string[]): Promise<House>
   /** Enregistre le réglage de lumière de la scène 3D dans la maison ; renvoie la maison réécrite. */
   saveRenderTuning(tuning: SceneTuning): Promise<House>
+  /** Enregistre le relief du terrain dans la maison (`null` = plat) ; renvoie la maison réécrite. */
+  saveRelief(relief: Relief | null): Promise<House>
   /** Ouvre le canal de push ; retourne la fonction de fermeture. */
   connect(handlers: TransportHandlers): () => void
 }

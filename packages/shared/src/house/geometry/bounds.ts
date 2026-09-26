@@ -1,6 +1,7 @@
 import type { HouseDefaults } from '../defaults'
 import type { House } from '../schema'
 import type { AABB3, RoofDescriptor, Vec3 } from './types'
+import { parseRelief, reliefRange } from './relief'
 import { bbox, type Vec2 } from './vec2'
 
 // Boîtes englobantes ABSOLUES (repère maison, z absolu) pour le cadrage caméra.
@@ -53,7 +54,8 @@ export function levelBounds(house: House, levelId: string, defaults: HouseDefaul
 export function zoneBounds(house: House, zoneId: string): AABB3 | null {
   const zone = house.site.zones.find((z) => z.id === zoneId)
   if (!zone) return null
-  return fromPolygon(zone.polygon, house.site.elevation, house.site.elevation + 0.1)
+  const [lo, hi] = reliefRange(parseRelief(house.site.relief))
+  return fromPolygon(zone.polygon, house.site.elevation + lo, house.site.elevation + hi + 0.1)
 }
 
 /** Emprise de la seule dalle de toiture : le niveau-toit se cadre sur elle, pas sur le bâti entier. */
@@ -62,7 +64,8 @@ export function roofBounds(roof: RoofDescriptor): AABB3 {
 }
 
 export function siteBounds(house: House): AABB3 {
-  return fromPolygon(house.site.terrain, house.site.elevation, house.site.elevation)
+  const [lo, hi] = reliefRange(parseRelief(house.site.relief))
+  return fromPolygon(house.site.terrain, house.site.elevation + lo, house.site.elevation + hi)
 }
 
 export function houseBounds(house: House, defaults: HouseDefaults, roof?: RoofDescriptor): AABB3 {

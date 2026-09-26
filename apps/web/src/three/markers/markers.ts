@@ -1217,6 +1217,7 @@ export class MowerMarker extends DeviceMarker {
           const dx = this.targetXY[0] - this.object.position.x, dy = this.targetXY[1] - this.object.position.y
           this.object.position.x = lerp(this.object.position.x, this.targetXY[0], k)
           this.object.position.y = lerp(this.object.position.y, this.targetXY[1], k)
+          if (this.ctx.groundZ) this.object.position.z = this.ctx.groundZ(this.object.position.x, this.object.position.y)
           if (!this.parked && Math.hypot(dx, dy) > 0.05) this.mesh.rotation.z = Math.atan2(dy, dx) - Math.PI / 2
           if (Math.hypot(dx, dy) < 0.01 && !active) { this.moving = false; return false }
           return true

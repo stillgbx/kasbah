@@ -54,7 +54,8 @@ const pluginsStats = computed(() => {
 // Le banc de réglage de la lumière ne s'ouvre pas ICI : une lumière ne se juge que devant la maison,
 // à l'heure qu'elle a. Le bouton arme le panneau et emmène sur la vue Maison, où les curseurs
 // changent l'image sous les doigts.
-function openTuning() { settings.setSceneTuningOpen(true); void router.push({ name: 'home' }) }
+function openTuning() { settings.setReliefEditing(false); settings.setSceneTuningOpen(true); void router.push({ name: 'home' }) }
+function openRelief() { settings.setSceneTuningOpen(false); settings.setReliefEditing(true); void router.push({ name: 'home' }) }
 
 // `auto` a sa propre clé : « Automatique » (le libellé de la langue) allongeait la colonne de 73 px
 // — une piste `fr` ne descend jamais sous le min-content de ce qu'elle porte (voir le style plus bas).
@@ -186,6 +187,13 @@ const houseStats = computed(() => {
                   <div class="muted small">{{ $t('render.tuning.hint') }}</div>
                 </div>
                 <button type="button" class="pill pill--sm" @click="openTuning()">{{ $t('render.tuning.open') }}</button>
+              </div>
+              <div class="auto-row auto-row--default">
+                <div class="min0">
+                  <div class="auto-row__name">{{ $t('relief.title') }}</div>
+                  <div class="muted small">{{ $t('relief.hint') }}</div>
+                </div>
+                <button type="button" class="pill pill--sm" @click="openRelief()">{{ $t('relief.open') }}</button>
               </div>
             </div>
             <!-- les deux segmentés reprennent TOUTE la largeur du bloc : leurs quatre libellés ne

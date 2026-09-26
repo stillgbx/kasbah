@@ -6,10 +6,10 @@ import {
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js'
 import {
-  boundsCenter, buildingBounds, computeHouseGeometry, deviceFloorZ, geoDistance, indexHouse, longestEdgeYawDeg, offsetPolygon, pointInPolygon, resolveDefaults, resolveDeviceLevelId, sitePosition,
+  boundsCenter, buildingBounds, computeHouseGeometry, deviceFloorZ, emptyReliefGrid, isFlatRelief, parseRelief, serializeRelief, terrainHeight, geoDistance, indexHouse, longestEdgeYawDeg, offsetPolygon, pointInPolygon, resolveDefaults, resolveDeviceLevelId, sitePosition,
   roofBounds, roomBounds, zoneBounds, openingCentre, openingGaps, openingLabel, surfaceAxes, surfaceGaps,
   assignParkings, atRest, mirekToRgb, xyToRgb, parkingGaps, parkingHost, parkingLabel, PARKING_SIDES,
-  type DeviceDescriptor, type DeviceState, type House, type HouseDevice, type HouseGeometry, type HouseIndex, type Level, type OpeningRect, type Parking, type ParkingFix, type ParkingSide, type PlacedHouseDevice, type Vec2, type Vec3,
+  type DeviceDescriptor, type DeviceState, type House, type HouseDevice, type HouseGeometry, type HouseIndex, type Level, type OpeningRect, type Parking, type ParkingFix, type ParkingSide, type PlacedHouseDevice, type Relief, type ReliefGrid, type Vec2, type Vec3,
 } from '@kasbah/shared'
 import { applyLook, backdropColor, createMaterials, disposeMaterials, type MaterialSet } from './builders/materials'
 import type { SurfaceRole } from './textures/procedural'
@@ -18,7 +18,7 @@ import { createSkyEnvironment, overcastSky } from './core/sky'
 import { DECOR_LAYER, SITE_DECOR_LAYER } from './core/layers'
 import { setLevelHeights } from './core/levelLight'
 import { setHeightMist } from './core/heightMist'
-import { setLevelFade } from './core/levelFade'
+import { materialOpacity, setLevelFade } from './core/levelFade'
 import { roomFocusUniforms, setRoomFocusShape, setRoomFocusStrength } from './core/roomFocus'
 import { createPostPipeline, detectQuality, gpuName, PIXEL_RATIO, tiltBlurFactor, toneMappingOf, type EffectiveQuality, type PostPipeline, type RenderQuality } from './core/post'
 import { dayFactor, fogDistance, sunDirection, type SceneAmbience } from './core/ambience'
@@ -27,7 +27,8 @@ import { Precipitation } from './effects/precipitation'
 import { createWaterUniforms, makeWaterAlive, setWaterSun, setWaterTint, WaterCaustics, type WaterStrength } from './effects/water'
 import { defaultAmbience, defaultSceneTheme, rolesOf, styleById, type GlowLook, type PostLook, type RenderStyle, type StyleLook } from './styles'
 import { applyTuning, NEUTRAL_TUNING, type SceneTuning } from './styles/tuning'
-import { buildHouse, buildLevel, buildRoofMesh, type HouseNodes, type LevelNodes } from './builders/buildHouse'
+import { buildHouse, buildLevel, buildRoofMesh, shapeTerrain, type HouseNodes, type LevelNodes } from './builders/buildHouse'
+import { ReliefEditor } from './relief/reliefEditor'
 import { buildParking, parkingGlyphTexture, parkingMaterials, type ParkingMaterials, type ParkingNodes } from './builders/parking'
 import { extrudeRing, flatPolygon, flatRing, insetPolygon } from './builders/shapes'
 import {
@@ -129,6 +130,19 @@ export interface SceneDebugStats {
  */
 export interface FrameProbe { begin(): void; end(): void }
 
+/** Points de vue de l'éditeur du relief : depuis un point cardinal, ou d'aplomb. */
+export type TerrainView = 'north' | 'east' | 'south' | 'west' | 'top'
+
+/** L'édition du relief vue du panneau : hauteur du point choisi (cm), brouillon (`null` = plat). */
+export interface ReliefEditState {
+  pointCm: number | null
+  draft: Relief | null
+  canUndo: boolean
+  canRedo: boolean
+  /** Dernier point choisi au tap (`seq` croît à chaque tap) et le pointeur qui l'a choisi. */
+  pick: { seq: number; by: string }
+}
+
 export interface SceneEvents {
   deviceTap: (key: string) => void
   roomTap: (roomId: string) => void
@@ -162,6 +176,11 @@ export interface SceneEvents {
    * donc pas de règle d'admissibilité à appliquer, contrairement à une ouverture.
    */
   groundTap: (xy: [number, number], levelId: string | null) => void
+  /**
+   * L'édition du relief a bougé (entrée, glissement, import) ; `null` en sortant du mode.
+   * `draft` = le brouillon tel qu'il s'écrirait, `null` s'il est plat.
+   */
+  reliefChange: (state: ReliefEditState | null) => void
   /** Tap sur une place de stationnement (mode édition seulement). */
   parkingTap: (parkingId: string) => void
   /**
@@ -233,6 +252,10 @@ const PRECIP_HEIGHT_M = 14
  */
 const WATER_HZ = 10
 const WORLD_UP = new Vector3(0, 1, 0)
+/** Pas de la grille d'un relief créé dans l'éditeur (m) : ~900 poignées sur la parcelle, assez pour une bosse. */
+const RELIEF_STEP = 2
+/** Part visible de la maison pendant qu'on modèle le terrain : assez pour se repérer, pas pour gêner. */
+const RELIEF_HOUSE_OPACITY = 0.5
 /** De quoi tester la piscine contre le champ de la caméra sans rien allouer par mouvement. */
 const waterFrustum = new Frustum()
 const waterMatrix = new Matrix4()
@@ -406,7 +429,7 @@ export class HouseScene {
     deviceTap: new Set(), roomTap: new Set(), zoneTap: new Set(), levelTap: new Set(), backgroundTap: new Set(),
     deviceDrag: new Set(), deviceDrop: new Set(), journalTap: new Set(),
     openingTap: new Set(), openingDrag: new Set(), openingDrop: new Set(), placeTap: new Set(),
-    parkingTap: new Set(), parkingDrag: new Set(), parkingDrop: new Set(), groundTap: new Set(), prepare: new Set(),
+    parkingTap: new Set(), parkingDrag: new Set(), parkingDrop: new Set(), groundTap: new Set(), reliefChange: new Set(), prepare: new Set(),
   }
   private detachInput: (() => void) | null = null
   /** Retire le relais de molette posé sur la couche des étiquettes (`forwardWheelFromLabels`). */
@@ -478,6 +501,17 @@ export class HouseScene {
    * (`assignParkings`). Recalculé avec les marqueurs — c'est lui qui remplace le point du relevé.
    */
   private parkingFixes = new Map<string, ParkingFix>()
+  /**
+   * Relief en cours d'édition (brouillon), `null` hors du mode. Il survit à un rechargement de la
+   * maison ; l'éditeur, lui, vit et meurt avec les nœuds de la scène.
+   */
+  private reliefGrid: ReliefGrid | null = null
+  private reliefEditor: ReliefEditor | null = null
+  private reliefFrame = 0
+  /** Le mode est demandé ; il s'ouvre dès qu'une maison est chargée. */
+  private reliefWanted = false
+  /** Matières du bâti estompées pendant qu'on modèle le terrain, rendues pleines en sortant. */
+  private reliefFaded = new Set<Material>()
   private readonly raycaster = new Raycaster()
   private size = { width: 1, height: 1 }
   private cameraTween: { cancel(): void } | null = null
@@ -629,6 +663,9 @@ export class HouseScene {
     this.geometry = computeHouseGeometry(house)
     this.dressed = this.dressedOpenings()
     this.nodes = buildHouse(this.geometry, this.materials, this.dressed)
+    if (this.reliefWanted && !this.reliefGrid) this.reliefGrid = parseRelief(house.site.relief) ?? emptyReliefGrid(house.site.terrain, RELIEF_STEP)
+    this.applyReliefDraft()                // un relief en cours d'édition passe avant celui du fichier
+    if (this.reliefGrid) { this.syncReliefFocus(); this.emitRelief() }
     this.invalidateShadows()
     this.nodes.terrain.receiveShadow = true
     this.scene.add(this.nodes.root)
@@ -785,6 +822,8 @@ export class HouseScene {
   clear(): void {
     for (const m of this.markers.values()) m.dispose()
     this.markers.clear()
+    this.reliefEditor?.dispose()
+    this.reliefEditor = null
     this.clearOpeningHandles()
     this.clearOpeningNotes()
     this.clearParkings()
@@ -1010,6 +1049,7 @@ export class HouseScene {
       onTap: (key) => this.emit('deviceTap', key),
       label: device.name ?? descriptor?.name ?? device.id,
       toLocal: (p) => { const xyz = sitePosition(house, p, d.gpsOffset); return xyz ? [xyz[0], xyz[1]] : null },
+      groundZ: (x, y) => this.localZ(device, device.position[2], [x, y]),
       // Une tondeuse SUIT sa position publiée sans reconstruction (`MowerMarker`) : c'est donc au
       // marqueur, et non à la scène, de savoir qu'elle est rentrée à sa base — sinon elle dériverait
       // de quelques mètres au relevé suivant, alors même qu'elle est à l'arrêt dessus.
@@ -1036,10 +1076,20 @@ export class HouseScene {
     return undefined
   }
 
-  /** z local au groupe parent : tel quel sous un niveau, décalé du terrain pour un appareil extérieur. */
-  private localZ(device: HouseDevice, z: number): number {
+  /**
+   * z local au groupe parent : tel quel sous un niveau, décalé du terrain SOUS `xy` pour un appareil
+   * extérieur (le terrain dessiné, relief en cours d'édition compris).
+   */
+  private localZ(device: HouseDevice, z: number, xy: readonly number[] | undefined = device.position): number {
     const levelId = this.markerLevelId(device)
-    return levelId && this.nodes!.levels.has(levelId) ? z : z + deviceFloorZ(this.house!, device, this.index!)
+    if (levelId && this.nodes!.levels.has(levelId)) return z
+    if (resolveDeviceLevelId(device, this.index!.roomsById) || !xy) return z + deviceFloorZ(this.house!, device, this.index!)
+    return z + this.groundZ(xy[0]!, xy[1]!)
+  }
+
+  /** Hauteur absolue du terrain dessiné en (x, y) — relief compris, brouillon d'édition compris. */
+  private groundZ(x: number, y: number): number {
+    return this.geometry ? terrainHeight(this.geometry.terrain, x, y) : (this.house?.site.elevation ?? 0)
   }
 
   /**
@@ -1445,7 +1495,7 @@ export class HouseScene {
     const levelNodes = levelId ? this.nodes!.levels.get(levelId) : undefined
     return levelNodes
       ? { parent: levelNodes.markers, z: 0, levelled: true }
-      : { parent: site, z: this.house?.site.elevation ?? 0, levelled: false }
+      : { parent: site, z: this.groundZ(p.center[0], p.center[1]), levelled: false }
   }
 
   /** Les quatre cotes d'une place dans son hôte, `null` si elle n'est posée sur rien de connu. */
@@ -1574,6 +1624,172 @@ export class HouseScene {
     this.applyLevelFocus()
     this.refreshParkingNotes()
     this.loop.invalidate()
+  }
+
+  /**
+   * Seul le RELIEF a changé (on vient de l'enregistrer depuis l'éditeur). Le chemin complet (`load`)
+   * recentrerait la caméra ; ici, le terrain reprend ses z et ce qui s'y pose suit.
+   */
+  updateRelief(house: House): void {
+    if (!this.nodes || !this.house) { this.load(house); return }
+    this.house = house
+    this.index = indexHouse(house)
+    this.geometry = computeHouseGeometry(house)
+    if (this.reliefGrid) this.applyReliefDraft()
+    else shapeTerrain(this.nodes, this.geometry, this.materials)
+    this.afterTerrainChange()
+    this.fitSunShadow()                    // les bornes de la maison suivent le relief enregistré
+    this.emitRelief()
+  }
+
+  // ---- mode « modeler le terrain » ------------------------------------------
+  /**
+   * Entre (ou sort) de l'édition du relief. En entrant, le brouillon part du relief enregistré (ou
+   * d'une grille à plat au pas de `RELIEF_STEP`) ; en sortant, le terrain revient à celui du
+   * fichier — enregistrer est l'affaire du panneau, avant de sortir.
+   */
+  setEditingRelief(on: boolean): void {
+    this.reliefWanted = on
+    if (on === (this.reliefGrid !== null)) return
+    if (on) {
+      if (!this.house) return              // la maison n'est pas là : `load` ouvrira le mode
+      this.reliefGrid = parseRelief(this.house.site.relief) ?? emptyReliefGrid(this.house.site.terrain, RELIEF_STEP)
+    } else {
+      this.reliefGrid = null
+      this.reliefEditor?.dispose()
+      this.reliefEditor = null
+      if (this.house) this.geometry = computeHouseGeometry(this.house)
+    }
+    if (!this.nodes || !this.geometry) return
+    if (on) this.applyReliefDraft()
+    else shapeTerrain(this.nodes, this.geometry, this.materials)
+    this.syncReliefFocus()
+    this.afterTerrainChange()
+    this.emitRelief()
+  }
+
+  /**
+   * On modèle le TERRAIN : la maison s'estompe (toutes les matières des niveaux et du toit, par
+   * l'opacité tramée de `levelFade` — pas de tri de transparence, pas de recompilation) et les
+   * pilules disparaissent. Tout revient en sortant du mode.
+   */
+  private syncReliefFocus(): void {
+    for (const m of this.reliefFaded) materialOpacity(m).value = 1
+    this.reliefFaded.clear()
+    const on = this.reliefGrid !== null
+    if (on && this.nodes) {
+      const fade = (root: Object3D) => root.traverse((o) => {
+        const mat = (o as Mesh).material as Material | Material[] | undefined
+        for (const m of mat ? (Array.isArray(mat) ? mat : [mat]) : []) { materialOpacity(m).value = RELIEF_HOUSE_OPACITY; this.reliefFaded.add(m) }
+      })
+      for (const level of this.nodes.levels.values()) fade(level.group)
+      if (this.nodes.roof) fade(this.nodes.roof)
+    }
+    if (this.labelRenderer) this.labelRenderer.domElement.style.visibility = on ? 'hidden' : ''
+    this.invalidateShadows()
+    this.loop.invalidate()
+  }
+
+  /** Remplace le brouillon (import IGN) ; `null` = terrain plat. Le remplacement s'annule comme un geste. */
+  setReliefDraft(relief: Relief | null): void {
+    if (!this.reliefGrid || !this.house) return
+    this.reliefGrid = parseRelief(relief ?? undefined) ?? emptyReliefGrid(this.house.site.terrain, RELIEF_STEP)
+    this.reliefEditor?.setGrid(this.reliefGrid)
+    this.applyReliefDraft()
+    this.afterTerrainChange()
+    this.emitRelief()
+  }
+
+  /** Choisit le point voisin dans une direction de l'écran (flèches du clavier). */
+  stepReliefSelection(sx: number, sy: number): void {
+    if (this.reliefEditor?.stepSelection(sx, sy)) this.emitRelief()
+  }
+
+  /** Annule (ou rétablit) la dernière modification du relief. */
+  undoRelief(): void { if (this.reliefEditor?.undo()) this.afterReliefTravel() }
+  redoRelief(): void { if (this.reliefEditor?.redo()) this.afterReliefTravel() }
+  private afterReliefTravel(): void {
+    this.reliefGrid = this.reliefEditor!.grid            // l'historique rend un autre objet grille
+    this.applyReliefDraft()
+    this.afterTerrainChange()
+    this.emitRelief()
+  }
+
+  /** Le point choisi prend la hauteur saisie dans le panneau (cm). */
+  setReliefPoint(cm: number): void {
+    if (this.reliefEditor?.setSelectedCm(cm)) this.onReliefChanged(true)
+  }
+
+  /** Le brouillon tel qu'il s'écrit dans la maison ; `null` s'il est plat (le champ est retiré). */
+  reliefDraft(): Relief | null {
+    return this.reliefGrid && !isFlatRelief(this.reliefGrid) ? serializeRelief(this.reliefGrid) : null
+  }
+
+  /**
+   * Pose le brouillon sur la géométrie et sur les maillages, et (re)crée l'éditeur si la racine est
+   * neuve. Sans brouillon, rien : la géométrie est déjà celle du fichier.
+   */
+  private applyReliefDraft(): void {
+    const grid = this.reliefGrid
+    if (!grid || !this.nodes || !this.geometry) return
+    this.geometry = { ...this.geometry, terrain: { ...this.geometry.terrain, relief: grid } }
+    shapeTerrain(this.nodes, this.geometry, this.materials)
+    if (!this.reliefEditor) {
+      this.reliefEditor = new ReliefEditor({
+        canvas: this.canvas,
+        camera: this.camera,
+        parent: this.nodes.site,
+        terrain: () => this.geometry!.terrain,
+        setControls: (enabled) => { if (this.controls) this.controls.enabled = enabled; if (!enabled) this.cameraTween?.cancel() },
+        invalidate: () => this.loop.invalidate(),
+        changed: (final) => this.onReliefChanged(final),
+        selectionChanged: () => this.emitRelief(),
+        accent: this.theme.primary,
+      }, grid, !!this.deps.headless)
+    } else {
+      this.reliefEditor.refresh()
+    }
+  }
+
+  /** Un glissement en cours : une mise à jour du terrain par IMAGE ; la fin du geste refait le reste. */
+  private onReliefChanged(final: boolean): void {
+    if (final) {
+      if (this.reliefFrame !== 0) { cancelAnimationFrame(this.reliefFrame); this.reliefFrame = 0 }
+      this.applyReliefDraft()
+      this.afterTerrainChange()
+      this.emitRelief()
+      return
+    }
+    if (this.reliefFrame !== 0) return
+    this.reliefFrame = requestAnimationFrame(() => {
+      this.reliefFrame = 0
+      if (!this.nodes || !this.geometry) return
+      shapeTerrain(this.nodes, this.geometry, this.materials)
+      this.reliefEditor?.refresh()
+      this.emitRelief()
+    })
+  }
+
+  /**
+   * Ce qui se pose sur le terrain le suit : appareils du jardin, véhicules, épingles du journal,
+   * places de stationnement ; l'ombre et la brume se refont sur la nouvelle surface.
+   */
+  private afterTerrainChange(): void {
+    if (!this.nodes || !this.house) return
+    for (const m of this.markers.values()) {
+      if (m.object.parent !== this.nodes.outdoorMarkers) continue
+      m.object.position.z = this.localZ(m.device, m.device.position[2])
+    }
+    for (const p of this.journal?.points ?? []) p.anchor.position.z = this.groundZ(p.anchor.position.x, p.anchor.position.y)
+    this.buildParkings()
+    this.applyMist()
+    this.invalidateShadows()
+    this.loop.invalidate()
+  }
+
+  private emitRelief(): void {
+    const e = this.reliefEditor
+    this.emit('reliefChange', e ? { pointCm: e.selectedCm(), draft: this.reliefDraft(), canUndo: e.canUndo, canRedo: e.canRedo, pick: e.pick } : null)
   }
 
   /**
@@ -2143,7 +2359,7 @@ export class HouseScene {
       const xyz = sitePosition(this.house, p, device?.gpsOffset)
       if (!xyz) continue
       const pin = new Group()
-      pin.position.set(xyz[0], xyz[1], deviceFloorZ(this.house, { id: `journal-${p.at}`, position: [xyz[0], xyz[1], 0], meta: {} }, this.index))
+      pin.position.set(xyz[0], xyz[1], this.groundZ(xyz[0], xyz[1]))
       const rod = new Mesh(stem, stemMat)
       rod.position.z = 0.35
       const top = new Mesh(p.severity === 'fatal' ? bigHead : head, new MeshBasicMaterial({ color: JOURNAL_PIN_COLORS[p.severity] ?? JOURNAL_PIN_COLORS.info }))
@@ -2205,7 +2421,7 @@ export class HouseScene {
   moveMarker(key: string, position: Vec3): void {
     const marker = this.markers.get(key)
     if (!marker || !this.house || !this.index) return
-    marker.object.position.set(position[0], position[1], this.localZ(marker.device, position[2]))
+    marker.object.position.set(position[0], position[1], this.localZ(marker.device, position[2], position))
     marker.setGuideHeight(position[2])
     this.invalidateShadows()               // l'appareil déplacé emmène son ombre
     this.loop.invalidate()
@@ -2674,6 +2890,22 @@ export class HouseScene {
     this.flyTo(boundsToWorldBox(this.geometry.bounds), DEFAULT_AZIMUTH, (50 * Math.PI) / 180, animate, 1.05)
   }
 
+  /**
+   * Regarde la parcelle DEPUIS un point cardinal (le vrai, `origin.heading` compris), presque à
+   * l'horizontale : c'est de profil qu'on juge une pente ou un talus. `top` : d'aplomb, pour viser un
+   * point dans le plan.
+   */
+  viewTerrainFrom(side: TerrainView, animate = true): void {
+    if (!this.geometry || !this.house) return
+    if (side === 'top') { this.flyTo(boundsToWorldBox(this.geometry.bounds), this.currentSpherical().azimuth, 0.01, animate, 1.0); return }
+    const h = (this.house.origin.heading * Math.PI) / 180
+    const north: Vec2 = [-Math.sin(h), Math.cos(h)]      // le nord en repère maison (+y est tourné du cap)
+    const turn = { north: 0, east: -Math.PI / 2, south: Math.PI, west: Math.PI / 2 }[side]
+    const d: Vec2 = [north[0] * Math.cos(turn) - north[1] * Math.sin(turn), north[0] * Math.sin(turn) + north[1] * Math.cos(turn)]
+    // caméra du côté `d` : en monde (x, z = −y), azimut three = atan2(x, z)
+    this.flyTo(boundsToWorldBox(this.geometry.bounds), Math.atan2(d[0], -d[1]), Math.PI / 2 - 0.12, animate, 1.0)
+  }
+
   /** Cadre un niveau entier (après un changement d'onglet). */
   focusLevelView(levelId: string, animate = true): void {
     if (!this.house || !this.geometry) return
@@ -2952,7 +3184,9 @@ export class HouseScene {
   }
 
   private handleTap(ev: TapEvent): void {
-    if (this.drag?.active() || this.openingDragger?.active() || this.parkingDragger?.active()) return   // fin d'un glissement, pas un tap
+    if (this.drag?.active() || this.openingDragger?.active() || this.parkingDragger?.active() || this.reliefEditor?.active()) return   // fin d'un glissement, pas un tap
+    // on modèle le terrain : un tap choisit un point, il n'ouvre ni une pièce ni un appareil
+    if (this.reliefGrid) { this.reliefEditor?.tap(ev); return }
     // Une ouverture armée prend le tap AVANT toute sélection : on est venu désigner un mur, pas
     // ouvrir la pièce ou l'appareil qui se trouve devant. Tapé à côté du bâti, c'est un tap de fond
     // — l'appelant y lit un renoncement, comme partout ailleurs dans la vue.
@@ -3580,6 +3814,7 @@ export class HouseScene {
     this.drag?.detach()
     this.openingDragger?.detach()
     if (this.openingFrame !== 0) cancelAnimationFrame(this.openingFrame)
+    if (this.reliefFrame !== 0) cancelAnimationFrame(this.reliefFrame)
     this.loop.dispose()
     this.controls?.dispose()
     this.clear()

@@ -1,4 +1,4 @@
-import { addOpeningToJson, addParkingToJson, automationBodySchema, commandSchema, deviceClassOf, defaultState, mergeState, parseHouse, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, setRenderTuningInJson, setRoomOrderInJson, type Automation, type AutomationEntry, type AutomationRun, type AutomationStatus, type CommandInput, type DeviceConsumption, type DeviceEntry, type DeviceState, type House, type StateFor, type StatePatch } from '@kasbah/shared'
+import { addOpeningToJson, addParkingToJson, automationBodySchema, commandSchema, deviceClassOf, defaultState, mergeState, parseHouse, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, setReliefInJson, setRenderTuningInJson, setRoomOrderInJson, type Automation, type AutomationEntry, type AutomationRun, type AutomationStatus, type CommandInput, type DeviceConsumption, type DeviceEntry, type DeviceState, type House, type StateFor, type StatePatch } from '@kasbah/shared'
 import { SimError, Simulation, solarGeometry, type ScenarioName } from '@kasbah/mock-sim'
 import demoHouse from '@kasbah/shared/demo-house.json'
 import { ApiRequestError, type Transport, type TransportHandlers, type WeatherPlace } from './transport'
@@ -282,6 +282,11 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     },
     async saveRenderTuning(tuning) {
       house = parseHouse(setRenderTuningInJson(house, tuning))
+      handlers?.onMessage({ type: 'house', house })
+      return house
+    },
+    async saveRelief(relief) {
+      house = parseHouse(setReliefInJson(house, relief))
       handlers?.onMessage({ type: 'house', house })
       return house
     },

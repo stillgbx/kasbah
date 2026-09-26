@@ -17,6 +17,7 @@ import ParkingPanel from '../components/home/ParkingPanel.vue'
 import HouseEditPanel from '../components/home/HouseEditPanel.vue'
 import SceneDebug from '../components/home/SceneDebug.vue'
 import SceneTuningPanel from '../components/home/SceneTuningPanel.vue'
+import ReliefPanel from '../components/home/ReliefPanel.vue'
 import SearchBar from '../components/home/SearchBar.vue'
 import WeatherWidget from '../components/home/WeatherWidget.vue'
 import { useHouseScene } from '../composables/useHouseScene'
@@ -205,6 +206,9 @@ watch(() => settings.houseEditing, (on) => {
   // ne fermerait pas la porte qu'il prétend fermer
   if (!on && house.selectedOpeningId) house.selectOpening(null)
 })
+// modeler le terrain : armé depuis les Réglages, comme le banc de lumière — même règle que ci-dessus,
+// c'est le watcher de `scene.ready` qui rejoue l'état au chargement
+watch(() => settings.reliefEditing, (on) => scene.setEditingRelief(on))
 watch(() => house.selectedOpeningId, (id) => {
   scene.setSelectedOpening(id)
   if (id) {
@@ -235,6 +239,7 @@ watch(scene.ready, (ready) => {
   if (!ready) return
   scene.setEditingOpenings(settings.houseEditing)
   scene.setEditingParkings(settings.houseEditing)
+  scene.setEditingRelief(settings.reliefEditing)
   scene.focusLevel(house.focusedLevelId)
   scene.setSelected(house.selectedKey)
   frameSelection(house.selectedRoomId, house.selectedKey)
@@ -355,6 +360,7 @@ const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] 
       <div class="home__vignette" />
       <SceneDebug v-if="settings.sceneDebug" :scene="scene.controller" />
       <SceneTuningPanel v-if="settings.sceneTuningOpen" :scene="scene.controller" />
+      <ReliefPanel v-if="settings.reliefEditing" :scene="scene.controller" :state="scene.relief.value" />
     </div>
     <div class="home__header">
       <PageHeader>

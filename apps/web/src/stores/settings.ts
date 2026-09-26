@@ -112,6 +112,8 @@ export const useSettingsStore = defineStore('settings', () => {
   const sceneTuningPreset = computed(() => TUNING_PRESETS.find((p) => sameTuning(p.tuning, sceneTuning.value))?.id ?? null)
   /** Le banc est-il ouvert sur la vue Maison. Jamais persisté : il s'ouvre depuis les Réglages. */
   const sceneTuningOpen = ref(false)
+  /** L'éditeur du relief est-il ouvert sur la vue Maison. Jamais persisté, comme le banc. */
+  const reliefEditing = ref(false)
   /** Horloge de l'apparence « Auto ». Les autres modes ne la lisent pas : rien ne recalcule. */
   const clock = ref(new Date())
   useIntervalFn(() => { clock.value = new Date() }, 60_000)
@@ -160,6 +162,7 @@ export const useSettingsStore = defineStore('settings', () => {
     return ok
   }
   function setSceneTuningOpen(v: boolean) { sceneTuningOpen.value = v }
+  function setReliefEditing(v: boolean) { reliefEditing.value = v }
   function setHouseEditing(v: boolean) { houseEditing.value = v }
   function setSceneWeather(v: SceneWeatherChoice) { if (v === 'real' || WEATHER_CONDITIONS.includes(v)) sceneWeather.value = v }
   function setSceneCloudCover(v: number) { if (Number.isFinite(v)) sceneCloudCover.value = Math.min(100, Math.max(0, Math.round(v))) }
@@ -194,9 +197,9 @@ export const useSettingsStore = defineStore('settings', () => {
 
   return {
     appearance, theme, locale, isDark, wantDark, themeId, currentTheme, resolvedLocale, fullscreen,
-    sceneStyle, sceneAmbience, sceneQuality, sceneProjection, sceneAssets, sceneDebug, sceneTuning, savedSceneTuning, sceneTuningDirty, sceneTuningPreset, sceneTuningOpen, houseEditing, sceneWeather, sceneCloudCover, sceneVisibilityM, householdSize, cupGrams,
+    sceneStyle, sceneAmbience, sceneQuality, sceneProjection, sceneAssets, sceneDebug, sceneTuning, savedSceneTuning, sceneTuningDirty, sceneTuningPreset, sceneTuningOpen, reliefEditing, houseEditing, sceneWeather, sceneCloudCover, sceneVisibilityM, householdSize, cupGrams,
     setAppearance, cycleAppearance, setTheme, setLocale, toggleLocale, applyToVuetify, applyLocale,
-    setSceneStyle, setSceneAmbience, setSceneQuality, setSceneProjection, setSceneAssets, setSceneDebug, setSceneTuning, resetSceneTuning, applySceneTuningPreset, saveSceneTuning, setSceneTuningOpen, setHouseEditing, setSceneWeather, setSceneCloudCover, setSceneVisibilityM, setHouseholdSize, setCupGrams,
+    setSceneStyle, setSceneAmbience, setSceneQuality, setSceneProjection, setSceneAssets, setSceneDebug, setSceneTuning, resetSceneTuning, applySceneTuningPreset, saveSceneTuning, setSceneTuningOpen, setReliefEditing, setHouseEditing, setSceneWeather, setSceneCloudCover, setSceneVisibilityM, setHouseholdSize, setCupGrams,
     appearances: APPEARANCES, themes: THEME_LIST, locales: LOCALES,
     styles: RENDER_STYLES, ambiences: AMBIENCE_MODES, qualities: RENDER_QUALITIES, projections: SCENE_PROJECTIONS,
   }

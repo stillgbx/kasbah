@@ -1,3 +1,4 @@
+import type { Footprint, ReliefGrid } from './relief'
 import type { Vec2 } from './vec2'
 import type { FloorStyle, OpeningMaterial, OpeningType, RoomKind, ZoneKind } from '../schema'
 
@@ -69,7 +70,16 @@ export interface FloorDescriptor {
   holes?: FloorHole[]
 }
 
-export interface TerrainDescriptor { polygon: Vec2[]; z: number }
+export interface TerrainDescriptor {
+  polygon: Vec2[]
+  z: number
+  /** Relief parsé (`site.relief`), `null` = terrain plat. Hauteur en un point : `terrainHeight`. */
+  relief: ReliefGrid | null
+  /** Emprises autour desquelles le terrain reste plat : les bassins. */
+  pads: Vec2[][]
+  /** Emprises des pièces : sous elles, le terrain est écrêté sous le plancher. */
+  footprints: Footprint[]
+}
 export interface ZoneDescriptor { zoneId: string; kind: ZoneKind; polygon: Vec2[]; z: number }
 
 export interface RoofHole {

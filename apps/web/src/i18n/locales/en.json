@@ -963,5 +963,27 @@
       "p11": "Friction",
       "p12": "Sensitive areas"
     }
+  },
+  "relief": {
+    "title": "Shape the terrain",
+    "open": "Open",
+    "hint": "Points appear on the terrain in the Home view: drag one up or down to raise or dig the ground there, the surface rounds off between points. The points under the house (paler) shape its surroundings: the ground can reach a wall without ever breaking through a floor. Around the pool it stays flat. The relief is written to the house file.",
+    "help": "Tap a point to select it, then drag it up or down (it moves alone), or type its height. Anywhere else, dragging orbits the view. Pale points are under the house.",
+    "point": "Point",
+    "none": "—",
+    "ign": "Import IGN",
+    "reset": "Reset to 0",
+    "view": "View",
+    "views": { "north": { "short": "N", "hint": "View from the north" }, "east": { "short": "E", "hint": "View from the east" }, "south": { "short": "S", "hint": "View from the south" }, "west": { "short": "W", "hint": "View from the west" }, "top": { "short": "Top", "hint": "View from above" } },
+    "ignLoading": "Reading IGN…",
+    "ignDone": { "lidar": "IGN relief loaded (LiDAR HD, 50 cm). Save to keep it.", "rge": "IGN relief loaded (RGE ALTI, 1 m). Save to keep it.", "mixed": "IGN relief loaded (LiDAR HD and RGE ALTI). Save to keep it." },
+    "ignError": "IGN unreachable: {message}",
+    "undo": "Undo (Ctrl+Z)",
+    "redo": "Redo (Ctrl+Y)",
+    "cancel": "Cancel",
+    "save": "Save",
+    "saved": "Saved",
+    "finish": "Done",
+    "saveError": "Relief not saved: {message}"
   }
 }

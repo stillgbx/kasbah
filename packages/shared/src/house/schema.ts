@@ -250,9 +250,28 @@ export const parkingSchema = z.object({
 })
 export type Parking = z.infer<typeof parkingSchema>
 
+/**
+ * Relief du terrain : une grille régulière de hauteurs, en ÉCART à `site.elevation`. Absent = terrain
+ * plat, comme avant le champ.
+ *
+ * `rows` : une chaîne par rangée, du sud (y = `origin[1]`) au nord, valeurs en CENTIMÈTRES entières
+ * séparées par une espace, d'ouest en est. Une rangée par ligne du fichier au lieu d'un nombre par
+ * ligne : 1 800 points restent 56 lignes lisibles, et un diff montre la rangée qui a bougé.
+ * Hors de la grille, la hauteur est celle du bord le plus proche.
+ */
+export const reliefSchema = z.object({
+  step: z.number().min(0.5).max(10),
+  origin: vec2Schema,
+  rows: z.array(z.string().regex(/^-?\d+( -?\d+)*$/)).min(2),
+}).refine((r) => r.rows.every((row) => row.split(' ').length === r.rows[0]!.split(' ').length && row.split(' ').length >= 2), {
+  message: 'relief rows must all have the same number (≥ 2) of values',
+})
+export type Relief = z.infer<typeof reliefSchema>
+
 export const siteSchema = z.object({
   elevation: z.number().default(0),
   terrain: polygonSchema,
+  relief: reliefSchema.optional(),
   zones: z.array(zoneSchema).default([]),
   parkings: z.array(parkingSchema).default([]),
 })

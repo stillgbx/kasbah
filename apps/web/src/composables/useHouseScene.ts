@@ -1,4 +1,4 @@
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComputedRef, type Ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch, type ComputedRef, type Ref } from 'vue'
 import type { JournalPoint } from '../lib/journal'
 import { useTheme } from 'vuetify'
 import { useDocumentVisibility, useIntervalFn, useResizeObserver, watchThrottled } from '@vueuse/core'
@@ -6,7 +6,7 @@ import type { DeviceState, House, Vec3 } from '@kasbah/shared'
 import { readUiTheme } from '../three/core/theme'
 import { resolveAmbience } from '../three/core/ambience'
 import { styleById } from '../three/styles'
-import { HouseScene, type HouseSceneOptions, type ScenePrepareStage } from '../three/HouseScene'
+import { HouseScene, type HouseSceneOptions, type ReliefEditState, type ScenePrepareStage } from '../three/HouseScene'
 import { useDevicesStore } from '../stores/devices'
 import { useSettingsStore } from '../stores/settings'
 import { useWeather } from './useWeather'
@@ -31,6 +31,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   const preparing = ref<{ stage: ScenePrepareStage; progress: { done: number; total: number } | null } | null>(null)
   /** Une maison a été préparée et montrée au moins une fois (ou la 3D est indisponible : rien à attendre). */
   const shown = ref(false)
+  const relief = shallowRef<ReliefEditState | null>(null)
   let scene: HouseScene | null = null
   const theme = useTheme()
   const visibility = useDocumentVisibility()
@@ -108,6 +109,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     scene.on('parkingTap', (id) => parkingTap.forEach((f) => f(id)))
     scene.on('parkingDrag', (id, xy) => parkingDrag.forEach((f) => f(id, xy)))
     scene.on('parkingDrop', (id) => parkingDrop.forEach((f) => f(id)))
+    scene.on('reliefChange', (state) => { relief.value = state })
     scene.on('prepare', (stage, progress) => {
       preparing.value = stage ? { stage, progress } : null
       if (!stage) shown.value = true
@@ -135,6 +137,8 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     if (prev && sameShellButOpenings(prev, h)) { scene.updateOpenings(h); return }
     // seules des PLACES ont bougé → marquage au sol et engins qui s'y rangent, rien d'autre
     if (prev && sameShellButParkings(prev, h)) { scene.updateParkings(h); return }
+    // seul le RELIEF a changé (on vient de l'enregistrer) → le terrain et ce qui s'y pose
+    if (prev && sameShellButRelief(prev, h)) { scene.updateRelief(h); return }
     scene.load(h); scene.setDescriptors(devices.descriptors); scene.updateStates(args.states.value, true)
   })
   watch(() => devices.descriptors, (d) => scene?.setDescriptors(d))
@@ -189,6 +193,9 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     onOpeningDrop: (f: Handler<[string]>) => { openingDrop.add(f) },
     setPlacingOpening: (armed: { roomId: string; type: string } | null) => scene?.setPlacingOpening(armed),
     setEditingParkings: (on: boolean) => scene?.setEditingParkings(on),
+    setEditingRelief: (on: boolean) => scene?.setEditingRelief(on),
+    /** L'édition du relief telle que la scène la voit (rayon, point choisi, brouillon), `null` hors du mode. */
+    relief,
     setPlacingParking: (on: boolean) => scene?.setPlacingParking(on),
     onGroundTap: (f: Handler<[[number, number], string | null]>) => { groundTap.add(f) },
     setSelectedParking: (id: string | null) => scene?.setSelectedParking(id),
@@ -219,6 +226,12 @@ function sameShell(a: House, b: House): boolean {
  */
 function sameShellButOpenings(a: House, b: House): boolean {
   const shell = (h: House) => JSON.stringify([h.levels, h.rooms.map((r) => ({ ...r, openings: [] })), h.site, h.roof, h.defaults])
+  return shell(a) === shell(b)
+}
+
+/** Même bâti au RELIEF du terrain près : l'enregistrer ne doit pas recentrer la caméra. */
+function sameShellButRelief(a: House, b: House): boolean {
+  const shell = (h: House) => JSON.stringify([h.levels, h.rooms, { ...h.site, relief: null }, h.roof, h.defaults])
   return shell(a) === shell(b)
 }
 

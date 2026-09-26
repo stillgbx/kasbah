@@ -12,6 +12,9 @@ export const ICONS = {
   /** Rotation d'un quart de tour, sens horaire / antihoraire (orientation d'un écran). */
   rotateRight: 'M20 12a8 8 0 1 1-2.6-5.9M20 4v5h-5',
   rotateLeft: 'M4 12a8 8 0 1 0 2.6-5.9M4 4v5h5',
+  /** Annuler / rétablir : flèche qui revient en arrière (ou repart) au-dessus d'une ligne. */
+  undo: 'M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11',
+  redo: 'M15 14l5-5-5-5M20 9H9.5a5.5 5.5 0 0 0 0 11H13',
   /** Téléviseur (ou boîtier branché dessus) : écran sur pied. */
   tv: 'M3 5h18v12H3zM8 21h8M12 17v4',
   /** Médias (catégorie) : le glyphe cast — un écran et le flux qui y arrive. */

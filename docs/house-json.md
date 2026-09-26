@@ -60,6 +60,12 @@ Le fichier décrit la maison et le jardin ; il est validé au démarrage du serv
 
 `terrain` : polygone de la parcelle (n'a pas besoin d'être CCW). `zones` : surfaces colorées (`lawn`, `terrace`, `driveway`, `path`, `pool`, `bed`, `other`) qui servent aussi d'ancre aux appareils extérieurs et de cibles de cadrage caméra.
 
+`relief` (facultatif) : relief du terrain, en écart à `elevation`. `step` = pas de la grille (m), `origin` = coin sud-ouest de la grille (m), `rows` = une chaîne par rangée, du sud au nord, hauteurs en **centimètres entiers** séparées par une espace, d'ouest en est. Absent = terrain plat. Sous les pièces, le terrain reste sous le plancher ; autour d'une piscine, il reste plat. Se modèle depuis l'UI : Réglages → Rendu 3D → « Modeler le terrain ».
+
+```jsonc
+"relief": { "step": 2, "origin": [-28, -40], "rows": ["0 0 12 15", "0 3 20 41"] }
+```
+
 ### Appareils (`devices`)
 
 ```jsonc

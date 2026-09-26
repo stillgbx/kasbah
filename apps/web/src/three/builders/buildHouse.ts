@@ -5,6 +5,7 @@ import type { HouseGeometry, LevelGeometry, OpeningRect, WallPrism } from '@kasb
 import { buildDetails, buildRoofDetails, isGlazed } from './details'
 import type { MaterialSet } from './materials'
 import { WATER_DEPTH_ATTRIBUTE } from '../effects/water'
+import { applyTerrainHeights, drapeGeometry, skirtGeometry, TERRAIN_MESH_RES } from './terrain'
 import { alignedToLongestEdge, discWithHoles, extrudePolygon, extrudePolygonWithHoles, flatPolygon, flatRing, flatWithHoles, insetPolygon, planarFaces, planarFacesWithHoles } from './shapes'
 import { offsetPolygon } from '@kasbah/shared'
 
@@ -40,6 +41,8 @@ export interface HouseNodes {
   terrain: Mesh
   /** Sol infini sous la parcelle (non éclairé, couleur du fond). */
   ground: Mesh
+  /** Bord vertical d'un terrain EN RELIEF, jusqu'au sol infini ; `null` sur un terrain plat. */
+  skirt: Mesh | null
   roof: Mesh | null
   /** Marqueurs extérieurs (jardin). */
   outdoorMarkers: Group
@@ -221,7 +224,56 @@ export function buildHouse(geometry: HouseGeometry, mats: MaterialSet, dressed?:
     roof = buildRoofMesh(geometry.roof, mats)
     root.add(roof)
   }
-  return { root, levels, site, zones, terrain, ground, roof, outdoorMarkers }
+  const nodes: HouseNodes = { root, levels, site, zones, terrain, ground, skirt: null, roof, outdoorMarkers }
+  if (geometry.terrain.relief) shapeTerrain(nodes, geometry, mats)
+  return nodes
+}
+
+/**
+ * Met le terrain, sa jupe, le sol infini et les zones à plat en accord avec `geometry.terrain` :
+ * maillés et posés sur la surface quand il y a un relief, polygones plats sinon — le chemin d'avant,
+ * inchangé. Les MAILLAGES restent les mêmes objets (le rayon, les ombres, les matières les tiennent),
+ * seules leurs géométries changent ; une géométrie déjà maillée n'est pas refaite, seuls ses z
+ * bougent : c'est ce que l'éditeur du relief appelle à chaque image d'un glissement.
+ */
+export function shapeTerrain(nodes: HouseNodes, geometry: Pick<HouseGeometry, 'terrain' | 'zones'>, mats: MaterialSet): void {
+  const t = geometry.terrain
+  const basins = geometry.zones.filter((z) => z.kind === 'pool').map((z) => z.polygon)
+  const swap = (mesh: Mesh, g: BufferGeometry) => { mesh.geometry.dispose(); mesh.geometry = g }
+  if (!t.relief) {
+    if (!nodes.terrain.geometry.userData.drape) return
+    swap(nodes.terrain, flatWithHoles(t.polygon, basins, t.z))
+    swap(nodes.ground, discWithHoles(GROUND_RADIUS, basins, 0))
+    for (const z of geometry.zones) {
+      const mesh = nodes.zones.get(z.zoneId)
+      if (mesh && z.kind !== 'pool') swap(mesh, flatPolygon(z.polygon, z.z + 0.01))
+    }
+    if (nodes.skirt) { nodes.skirt.removeFromParent(); nodes.skirt.geometry.dispose(); nodes.skirt = null }
+    return
+  }
+  if (!nodes.terrain.geometry.userData.drape) {
+    const walls = t.footprints.map((f) => f.polygon)
+    const g = drapeGeometry(t.polygon, basins, TERRAIN_MESH_RES, walls)
+    g.userData.drape = true
+    swap(nodes.terrain, g)
+    // le sol infini s'arrête au bord de la parcelle : c'est la jupe qui fait la marche
+    swap(nodes.ground, discWithHoles(GROUND_RADIUS, [t.polygon], 0))
+    for (const z of geometry.zones) {
+      const mesh = nodes.zones.get(z.zoneId)
+      if (mesh && z.kind !== 'pool') { const zg = drapeGeometry(z.polygon, [], TERRAIN_MESH_RES, walls); zg.userData.drape = true; swap(mesh, zg) }
+    }
+    const skirt = new Mesh(skirtGeometry(t.polygon), mats.ground)
+    skirt.name = 'terrain:skirt'
+    skirt.userData = { role: 'ground' }
+    nodes.site.add(skirt)
+    nodes.skirt = skirt
+  }
+  applyTerrainHeights(nodes.terrain.geometry, t)
+  if (nodes.skirt) applyTerrainHeights(nodes.skirt.geometry, t)
+  for (const z of geometry.zones) {
+    const mesh = nodes.zones.get(z.zoneId)
+    if (mesh && z.kind !== 'pool') applyTerrainHeights(mesh.geometry, t, 0.01)
+  }
 }
 
 /** Maillage du toit (plat ou à pentes), trous de Velux compris. */

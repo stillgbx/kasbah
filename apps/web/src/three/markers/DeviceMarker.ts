@@ -50,6 +50,8 @@ export interface MarkerContext {
    * position publiée en GPS — la tondeuse — s'en sert à chaque relevé, sans reconstruction.
    */
   toLocal?: (p: { lat: number; lon: number }) => [number, number] | null
+  /** z local du marqueur posé en (x, y) : un engin qui roule dans le jardin suit le relief. */
+  groundZ?: (x: number, y: number) => number
   /**
    * La place où cet engin se RANGE quand il est au repos (centre en repère maison, et cap), `null`
    * s'il n'y en a pas ou s'il est en mouvement. C'est la scène qui tranche (elle connaît les places

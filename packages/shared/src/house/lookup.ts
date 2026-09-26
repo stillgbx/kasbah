@@ -1,4 +1,8 @@
 import type { House, HouseDevice, Level, Opening, Room, Zone } from './schema'
+import { resolveDefaults } from './defaults'
+import { terrainFootprints, terrainHeight, terrainPads } from './geometry/relief'
+import { computeTerrain } from './geometry/site'
+import type { TerrainDescriptor } from './geometry/types'
 
 // Index en O(1) sur une maison validée. La maison est traitée comme immuable : on ré-indexe
 // quand l'objet change (référence), jamais en place.
@@ -75,9 +79,20 @@ export function indexHouse(house: House): HouseIndex {
   }
 }
 
-/** z absolu du sol d'ancrage d'un appareil (niveau, sinon terrain). */
+const terrains = new WeakMap<House, TerrainDescriptor>()
+/** Le terrain d'une maison, relief compris, calculé une fois par objet maison (immuable). */
+export function houseTerrain(house: House): TerrainDescriptor {
+  let t = terrains.get(house)
+  if (!t) { t = computeTerrain(house.site, terrainPads(house), terrainFootprints(house, resolveDefaults(house.defaults))); terrains.set(house, t) }
+  return t
+}
+
+/**
+ * z absolu du sol d'ancrage d'un appareil : son niveau, sinon le terrain SOUS LUI — un appareil du
+ * jardin posé sur une bosse suit la bosse.
+ */
 export function deviceFloorZ(house: House, device: HouseDevice, index: HouseIndex): number {
   const lvl = resolveDeviceLevelId(device, index.roomsById)
   if (lvl) return index.levelsById.get(lvl)?.elevation ?? house.site.elevation
-  return house.site.elevation
+  return device.position ? terrainHeight(houseTerrain(house), device.position[0], device.position[1]) : house.site.elevation
 }
