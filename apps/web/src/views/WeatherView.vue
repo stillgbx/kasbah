@@ -61,6 +61,51 @@ const HOURS = 24
 const DAYS = 7
 const hourly = computed<(WeatherHourlyPoint | null)[]>(() => Array.from({ length: HOURS }, (_, i) => forecast.value?.hourly[i] ?? null))
 const daily = computed<(WeatherDailyPoint | null)[]>(() => Array.from({ length: DAYS }, (_, i) => forecast.value?.daily[i] ?? null))
+// Tendance des 24 heures, d'un coup d'œil : la courbe des températures (lissée) et les pluies en
+// barres, sous les colonnes, sur la même grille ; la nuit en fond. Unités du tracé : 10 par heure
+// en largeur, des pixels en hauteur (bande de TREND_H px).
+const TREND_H = 48
+/** Teinte d'une température, sur une échelle FIXE (5 °C froid → 28 °C chaud) : la couleur dit le chaud, pas le rang dans la journée. */
+const tempTint = (c: number) => `color-mix(in oklab, var(--cat-light) ${Math.round(Math.min(1, Math.max(0, (c - 5) / 23)) * 100)}%, var(--cat-media))`
+/** Hauteur d'une barre de pluie (px) : racine des millimètres, plafond 4 mm/h. */
+const rainH = (mm: number) => Math.sqrt(Math.min(1, mm / 4)) * (TREND_H - 6)
+/** Graduations de la pluie, montrées seulement quand il pleut dans les 24 heures. */
+const RAIN_TICKS = [1, 4].map((mm) => ({ mm, y: TREND_H - rainH(mm) }))
+const trend = computed(() => {
+  const pts = hourly.value
+  if (pts.some((p) => !p)) return null
+  const ps = pts as WeatherHourlyPoint[]
+  const temps = ps.map((p) => p.tempC)
+  const lo = Math.min(...temps)
+  const span = Math.max(3, Math.max(...temps) - lo)
+  const x = (i: number) => i * 10 + 5
+  // hors des bords, la première et la dernière heure se répètent
+  const y = (i: number) => 4 + (1 - (temps[Math.min(HOURS - 1, Math.max(0, i))]! - lo) / span) * (TREND_H - 12)
+  // Catmull-Rom → Bézier : la courbe passe par chaque heure sans angles
+  let line = `M${x(0)} ${y(0).toFixed(1)}`
+  for (let i = 0; i < HOURS - 1; i++) {
+    const dx = 10 / 3 // (x(i + 1) - x(i - 1)) / 6, constant : les heures sont équidistantes
+    line += ` C${x(i) + dx} ${(y(i) + (y(i + 1) - y(i - 1)) / 6).toFixed(1)} ${x(i + 1) - dx} ${(y(i + 1) - (y(i + 2) - y(i)) / 6).toFixed(1)} ${x(i + 1)} ${y(i + 1).toFixed(1)}`
+  }
+  const area = `${line} L${x(HOURS - 1)} ${TREND_H} L${x(0)} ${TREND_H} Z`
+  // pluie : hauteur selon les millimètres (racine, plafond 4 mm/h : la bruine se voit encore),
+  // opacité selon la probabilité
+  const rain = ps.filter((p) => p.precipMm >= 0.1).map((p) => ({ x: ps.indexOf(p) * 10 + 2, h: Math.max(3, rainH(p.precipMm)), o: 0.15 + 0.4 * ((p.precipProbability ?? 100) / 100) }))
+  // le plus froid et le plus chaud (première occurrence) : un point sur la courbe
+  const iMin = temps.indexOf(lo)
+  const iMax = temps.indexOf(Math.max(...temps))
+  const ext = [{ kind: 'min', i: iMin, y: y(iMin) }, { kind: 'max', i: iMax, y: y(iMax) }]
+  // nuit : les heures consécutives sans soleil, en une seule bande chacune
+  const nights: { x: number; w: number }[] = []
+  ps.forEach((p, i) => {
+    if (p.isDay) return
+    const last = nights[nights.length - 1]
+    if (last && last.x + last.w === i) last.w++
+    else nights.push({ x: i, w: 1 })
+  })
+  const tints = temps.map((c, i) => ({ offset: (i + 0.5) / 24, color: tempTint(c) }))
+  return { line, area, rain, nights, tints, ext, iMin, iMax }
+})
 /** Échelle commune des barres de la semaine : le froid et le chaud de la semaine entière. */
 const weekRange = computed(() => {
   const pts = daily.value.filter((p): p is WeatherDailyPoint => !!p)
@@ -164,10 +209,40 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
         <section class="card wx-hourly">
           <div class="section-label">{{ $t('weather.hourly') }}</div>
           <div class="wx-hourly__strip">
-            <div v-for="(p, i) in hourly" :key="i" class="wx-hour">
+            <!-- la nuit, en fond sur toute la hauteur des colonnes et de la courbe -->
+            <svg class="wx-trend__night" viewBox="0 0 24 1" preserveAspectRatio="none" aria-hidden="true">
+              <rect v-for="(b, i) in trend?.nights ?? []" :key="i" :x="b.x" y="0" :width="b.w" height="1" />
+            </svg>
+            <!-- la tendance : la bande garde sa hauteur même sans prévisions -->
+            <div class="wx-trend">
+            <svg :viewBox="`0 0 240 ${TREND_H}`" preserveAspectRatio="none" aria-hidden="true">
+              <template v-if="trend">
+                <template v-if="trend.rain.length">
+                  <line v-for="tk in RAIN_TICKS" :key="tk.mm" class="wx-trend__tick" x1="0" :y1="tk.y" x2="240" :y2="tk.y" vector-effect="non-scaling-stroke" />
+                </template>
+                <!-- la couleur suit la température de chaque heure, de gauche à droite -->
+                <defs>
+                  <linearGradient id="wx-trend-tint" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="240" y2="0">
+                    <stop v-for="(s, i) in trend.tints" :key="i" :offset="s.offset" :style="{ stopColor: s.color }" />
+                  </linearGradient>
+                </defs>
+                <rect v-for="(r, i) in trend.rain" :key="i" class="wx-trend__rain" :x="r.x" :y="TREND_H - r.h" width="6" :height="r.h" :opacity="r.o" />
+                <path :d="trend.area" fill="url(#wx-trend-tint)" fill-opacity=".14" />
+                <path :d="trend.line" fill="none" stroke="url(#wx-trend-tint)" stroke-width="2.5" stroke-linecap="round" vector-effect="non-scaling-stroke" />
+              </template>
+            </svg>
+            <!-- en HTML : un cercle dans un SVG étiré deviendrait une ellipse -->
+            <template v-if="trend">
+              <span v-for="e in trend.ext" :key="e.kind" class="wx-trend__dot" :data-kind="e.kind" :style="{ left: `${((e.i + 0.5) / HOURS) * 100}%`, top: `${e.y}px` }" />
+              <template v-if="trend.rain.length">
+                <span v-for="tk in RAIN_TICKS" :key="tk.mm" class="wx-trend__tick-label" :style="{ top: `${tk.y}px` }">{{ n(tk.mm, 'integer') }} mm</span>
+              </template>
+            </template>
+            </div>
+            <div v-for="(p, i) in hourly" :key="i" class="wx-hour" :style="{ gridColumn: i + 1 }">
               <div class="muted small">{{ p ? fd(p.t, 'hour') : '—' }}</div>
               <StrokeIcon :name="p ? conditionIcon(p.condition, p.isDay) : 'cloud'" :size="22" :class="{ 'wx-dim': !p }" />
-              <div class="wx-hour__temp">{{ p ? deg(p.tempC) : '—' }}</div>
+              <div class="wx-hour__temp" :data-ext="i === trend?.iMin ? 'min' : i === trend?.iMax ? 'max' : undefined">{{ p ? deg(p.tempC) : '—' }}</div>
               <div class="small wx-hour__rain" :data-on="p && (p.precipProbability ?? 0) >= 10 ? '1' : '0'">{{ p && p.precipProbability !== undefined ? `${n(p.precipProbability, 'integer')} %` : '·' }}</div>
             </div>
           </div>
@@ -316,7 +391,21 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
 .wx-wind__unit { font-size: 14px; font-weight: 500; }
 
 .wx-hourly__strip { display: grid; grid-template-columns: repeat(24, minmax(46px, 1fr)); gap: 4px; margin-top: 12px; overflow-x: auto; padding-bottom: 4px; }
-.wx-hour { display: grid; grid-template-rows: 16px 26px 20px 16px; justify-items: center; align-items: center; row-gap: 4px; min-width: 46px; }
+.wx-hourly__strip { grid-template-rows: auto 48px; }
+.wx-hour { grid-row: 1; display: grid; grid-template-rows: 16px 26px 20px 16px; justify-items: center; align-items: center; row-gap: 4px; min-width: 46px; }
+/* la tendance sous les colonnes, la nuit derrière tout : placées sur la même grille, elles suivent le défilement */
+.wx-trend { grid-row: 2; grid-column: 1 / -1; position: relative; height: 48px; }
+.wx-trend > svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.wx-trend__tick { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 4; opacity: .35; }
+/* la valeur posée SUR sa ligne, dans une pastille du fond de la carte : lisible même quand la courbe passe dessous */
+.wx-trend__tick-label { position: absolute; right: 0; transform: translateY(-50%); font-size: 10px; line-height: 1; padding: 1px 4px; border-radius: 4px; background: color-mix(in srgb, var(--surface) 85%, transparent); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none; }
+.wx-trend__dot { position: absolute; width: 8px; height: 8px; margin: -6px 0 0 -6px; border-radius: 50%; border: 2px solid var(--surface); box-sizing: content-box; }
+.wx-trend__dot[data-kind='min'] { background: var(--cat-media); }
+.wx-trend__dot[data-kind='max'] { background: var(--cat-light); }
+.wx-hour__temp[data-ext='min'] { color: var(--cat-media); }
+.wx-hour__temp[data-ext='max'] { color: var(--cat-light); }
+.wx-trend__night { grid-row: 1 / 3; grid-column: 1 / -1; width: 100%; height: 100%; display: block; fill: var(--text); opacity: .045; border-radius: 8px; }
+.wx-trend__rain { fill: var(--cat-media); }
 .wx-hour__temp { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .wx-hour__rain, .wx-day__rain { color: transparent; font-variant-numeric: tabular-nums; }
 .wx-hour__rain[data-on='1'], .wx-day__rain[data-on='1'] { color: var(--cat-media); }
