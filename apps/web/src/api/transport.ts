@@ -174,6 +174,14 @@ export interface YtmusicStatus {
   browsers: string[]
 }
 
+/** Un agenda de la maison (plugin `agenda`) ; son adresse iCal reste sur le serveur. */
+export interface AgendaCalendar { id: string; name: string; color: string; fetchedAt: number | null; error: string | null }
+/**
+ * Une occurrence d'événement. Journée entière : dates locales `YYYY-MM-DD`, fin exclue ; sinon des
+ * instants en ms.
+ */
+export type AgendaEvent = { id: string; calendarId: string; title: string; location?: string; description?: string }
+  & ({ allDay: true; start: string; end: string } | { allDay: false; start: number; end: number })
 /** Un mix Mixcloud (plugin `mixcloud`) ; `key` (`/user/slug/`) est son id pour le lecteur commun. */
 export interface MixcloudMix {
   key: string
@@ -550,6 +558,14 @@ export interface Transport {
   musicProgress(body: { source: string; id: string; positionS: number; durationS?: number; ended?: boolean }): Promise<void>
   /** Vider la file : le titre en cours continue, seul. */
   musicQueueClear(deviceId: string): Promise<MusicQueue>
+  /** Les agendas de la maison (plugin `agenda`, adresses iCal secrètes). */
+  agendaCalendars(): Promise<{ calendars: AgendaCalendar[] }>
+  /** Ajout par l'adresse iCal : le serveur la lit tout de suite et refuse ce qui n'est pas un agenda. */
+  agendaAddCalendar(body: { url: string; name?: string; color?: string }): Promise<{ calendars: AgendaCalendar[] }>
+  agendaUpdateCalendar(id: string, patch: { name?: string; color?: string }): Promise<{ calendars: AgendaCalendar[] }>
+  agendaRemoveCalendar(id: string): Promise<{ calendars: AgendaCalendar[] }>
+  /** Occurrences de tous les agendas sur `[from, to[` (ms, 62 jours au plus). */
+  agendaEvents(from: number, to: number): Promise<{ events: AgendaEvent[] }>
   /** Le compte Mixcloud relié (un nom d'utilisateur : l'API publique ne demande rien d'autre). */
   mixcloudStatus(): Promise<MixcloudStatus>
   mixcloudSetAccount(username: string): Promise<MixcloudStatus>

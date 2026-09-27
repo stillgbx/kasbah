@@ -1,6 +1,6 @@
 {
   "app": { "name": "Kasbah" },
-  "nav": { "main": "Navigation", "home": "Home", "energy": "Energy", "water": "Water", "heating": "Heating", "vehicles": "Vehicles", "robots": "Robots", "pets": "Pets", "weather": "Weather", "settings": "Settings", "lights": "Lights", "covers": "Covers", "cameras": "Cameras", "media": "Media", "music": "Music", "automations": "Automations", "tens": "TENS" },
+  "nav": { "main": "Navigation", "home": "Home", "energy": "Energy", "water": "Water", "heating": "Heating", "vehicles": "Vehicles", "robots": "Robots", "pets": "Pets", "weather": "Weather", "agenda": "Calendar", "settings": "Settings", "lights": "Lights", "covers": "Covers", "cameras": "Cameras", "media": "Media", "music": "Music", "automations": "Automations", "tens": "TENS" },
   "common": {
     "cancel": "Cancel", "close": "Close", "back": "Back", "retry": "Retry", "all": "All", "none": "None", "unavailable": "Unavailable",
     "loading": "Loading house…", "on": "On", "off": "Off", "stop": "Stop",
@@ -626,6 +626,23 @@
     "rename": "Rename the spot", "remove": "Delete the spot", "removeConfirm": "Confirm deletion",
     "smaller": "Smaller", "bigger": "Bigger",
     "saveError": "Spot not saved: {message}"
+  },
+  "agenda": {
+    "modes": { "month": "Month", "week": "Week", "day": "Day" },
+    "modesLabel": "View", "today": "Today", "prev": "Previous period", "next": "Next period",
+    "allDay": "All day", "allDayShort": "All day", "noTitle": "(No title)",
+    "more": "+{n} more | +{n} more | +{n} more",
+    "disabled": "The Calendar plugin is off. Turn it on in Settings → Plugins.",
+    "noCalendar": "No calendar linked. Add the secret iCal address of a Google calendar in Settings → Plugins → agenda.",
+    "openSettings": "Open settings", "unavailable": "The calendars are not answering.",
+    "staleOne": "{name} is not answering: showing the last read.",
+    "toggle": "Show or hide {name}",
+    "range": "From {start} to {end}", "location": "Place", "calendar": "Calendar", "close": "Close",
+    "addTitle": "Add a calendar", "urlLabel": "Secret address in iCal format",
+    "urlHint": "In Google Calendar on a computer, signed in with the account that holds the calendar: Settings → the calendar → “Integrate calendar” → “Secret address in iCal format”. It grants access to the calendar: it stays on the house server and is not shown again.",
+    "nameLabel": "Name (optional)", "namePlaceholder": "The calendar's own", "add": "Add",
+    "remove": "Remove", "removeConfirm": "Confirm removal", "color": "Colour of {name}",
+    "lastRead": "Read at {time}", "neverRead": "Not read yet", "readError": "Unreadable: {message}"
   },
   "weather": {
     "title": "Weather", "noDevice": "No weather service is active. Enable one in Settings → Plugins.",

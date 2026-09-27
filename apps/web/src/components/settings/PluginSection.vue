@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import type { PluginHealth, PluginInfo } from '@kasbah/shared'
+import AgendaLinkCard from '../AgendaLinkCard.vue'
 import EnphasePairingCard from '../EnphasePairingCard.vue'
 import HuePairingCard from '../HuePairingCard.vue'
 import IrobotLinkCard from '../IrobotLinkCard.vue'
@@ -61,6 +62,7 @@ const SETUP_CARDS = {
   irobot: IrobotLinkCard,
   ytmusic: YtmusicLinkCard,
   mixcloud: MixcloudLinkCard,
+  agenda: AgendaLinkCard,
 } as const
 const setupCard = computed(() => SETUP_CARDS[props.plugin.id as keyof typeof SETUP_CARDS] ?? null)
 

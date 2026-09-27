@@ -11,6 +11,8 @@ export const NAV_ITEMS: NavItem[] = [
   { name: 'home', icon: 'home', label: 'nav.home' },
   // la météo juste après la maison : ce qu'on regarde en arrivant, avant de piloter quoi que ce soit
   { name: 'weather', icon: 'cloudSun', label: 'nav.weather' },
+  // l'agenda avec la météo : ce qu'on regarde en arrivant — ce qu'il fait, ce qui nous attend
+  { name: 'agenda', icon: 'calendar', label: 'nav.agenda' },
   // musique juste après la météo : on lance un titre, on voit l'enceinte dans la 3D
   { name: 'music', icon: 'music', label: 'nav.music' },
   { name: 'lights', icon: 'light', label: 'nav.lights' },

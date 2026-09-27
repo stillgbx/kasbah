@@ -1,6 +1,6 @@
 {
   "app": { "name": "Kasbah" },
-  "nav": { "main": "Navigation", "home": "Maison", "energy": "Énergie", "water": "Eau", "heating": "Chauffage", "vehicles": "Véhicules", "robots": "Robots", "pets": "Animaux", "weather": "Météo", "settings": "Réglages", "lights": "Lumières", "covers": "Ouvrants", "cameras": "Caméras", "media": "Médias", "music": "Musique", "automations": "Automatisations", "tens": "TENS" },
+  "nav": { "main": "Navigation", "home": "Maison", "energy": "Énergie", "water": "Eau", "heating": "Chauffage", "vehicles": "Véhicules", "robots": "Robots", "pets": "Animaux", "weather": "Météo", "agenda": "Agenda", "settings": "Réglages", "lights": "Lumières", "covers": "Ouvrants", "cameras": "Caméras", "media": "Médias", "music": "Musique", "automations": "Automatisations", "tens": "TENS" },
   "common": {
     "cancel": "Annuler", "close": "Fermer", "back": "Retour", "retry": "Réessayer", "all": "Tout", "none": "Aucun", "unavailable": "Indisponible",
     "loading": "Chargement de la maison…", "on": "Allumé", "off": "Éteint", "stop": "Stop",
@@ -626,6 +626,23 @@
     "rename": "Renommer la place", "remove": "Supprimer la place", "removeConfirm": "Confirmer la suppression",
     "smaller": "Réduire", "bigger": "Agrandir",
     "saveError": "Place non enregistrée : {message}"
+  },
+  "agenda": {
+    "modes": { "month": "Mois", "week": "Semaine", "day": "Jour" },
+    "modesLabel": "Affichage", "today": "Aujourd'hui", "prev": "Période précédente", "next": "Période suivante",
+    "allDay": "Journée entière", "allDayShort": "Journée", "noTitle": "(Sans titre)",
+    "more": "+{n} autre | +{n} autre | +{n} autres",
+    "disabled": "Le plugin Agenda n'est pas activé. Activez-le dans Réglages → Plugins.",
+    "noCalendar": "Aucun agenda relié. Ajoutez l'adresse iCal secrète d'un agenda Google dans Réglages → Plugins → agenda.",
+    "openSettings": "Ouvrir les réglages", "unavailable": "Les agendas ne répondent pas.",
+    "staleOne": "{name} ne répond pas : dernière lecture affichée.",
+    "toggle": "Afficher ou masquer {name}",
+    "range": "Du {start} au {end}", "location": "Lieu", "calendar": "Agenda", "close": "Fermer",
+    "addTitle": "Ajouter un agenda", "urlLabel": "Adresse secrète au format iCal",
+    "urlHint": "Dans Google Agenda sur ordinateur, avec le compte qui porte l'agenda : Paramètres → l'agenda → « Intégrer l'agenda » → « Adresse secrète au format iCal ». Elle donne accès à l'agenda : elle reste sur le serveur de la maison et ne s'affiche plus ensuite.",
+    "nameLabel": "Nom (facultatif)", "namePlaceholder": "Celui de l'agenda", "add": "Ajouter",
+    "remove": "Retirer", "removeConfirm": "Confirmer le retrait", "color": "Couleur de {name}",
+    "lastRead": "Lu à {time}", "neverRead": "Pas encore lu", "readError": "Illisible : {message}"
   },
   "weather": {
     "title": "Météo", "noDevice": "Aucun service météo actif. Activez-en un dans Réglages → Plugins.",

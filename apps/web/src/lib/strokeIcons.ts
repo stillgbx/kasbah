@@ -96,6 +96,8 @@ export const ICONS = {
   /** TENS (électrostimulation) : une impulsion, trait plat puis pointe, comme un tracé de courant. */
   pulse: 'M3 12h4l2.5-6 4 12 2.5-6H21',
   paw: 'M6.6 10.2m-1.8 0a1.8 1.8 0 1 0 3.6 0a1.8 1.8 0 1 0-3.6 0M9.9 7.1m-1.9 0a1.9 1.9 0 1 0 3.8 0a1.9 1.9 0 1 0-3.8 0M14.1 7.1m-1.9 0a1.9 1.9 0 1 0 3.8 0a1.9 1.9 0 1 0-3.8 0M17.4 10.2m-1.8 0a1.8 1.8 0 1 0 3.6 0a1.8 1.8 0 1 0-3.6 0M12 16.4m-4.2 0a4.2 3.5 0 1 0 8.4 0a4.2 3.5 0 1 0-8.4 0',
+  /** Calendrier : la vue Agenda. */
+  calendar: 'M4 5.5h16v15H4zM4 10h16M8.5 3v4M15.5 3v4',
   /** Horloge : l'heure du prochain repas. */
   clock: 'M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0-18 0M12 6.5V12l3.5 2',
   /** Mangeoire : la trémie qui se vide dans la gamelle. */

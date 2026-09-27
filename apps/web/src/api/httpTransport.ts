@@ -1,6 +1,6 @@
 import { apiErrorSchema, automationResponseSchema, automationRunResponseSchema, automationsResponseSchema, devicesResponseSchema, energyHistorySchema, healthResponseSchema, houseSchema, pluginsResponseSchema, scenesResponseSchema, serverMessageSchema, weatherForecastSchema, deviceJournalSchema, deviceConsumptionSchema, type AutomationBody, type AutomationEntry, type AutomationRun, type CommandInput, type DeviceConsumption, type DeviceJournal, type DeviceEntry, type DevicePlacement, type EnergyHistory, type HealthResponse, type House, type PluginInfo, type PluginSceneEntry, type PluginSettingsPatch, type SceneRecallInput, type SceneUpdate, type WeatherForecast } from '@kasbah/shared'
 import { parseDeviceId } from '@kasbah/shared'
-import { ApiRequestError, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type LightHistory, type MelcloudStatus, type MelcloudUnit, type MixcloudHomeSection, type MixcloudPage, type MixcloudStatus, type MixcloudUser, type PetkitStatus, type RadioStation, type RenaultStatus, type TeslaStatus, type Transport, type TransportHandlers, type WeatherElsewhere, type WeatherPlace, type YtmusicExplore, type YtmusicExploreShelf, type YtmusicPlaylist, type MusicQueue, type YtmusicSearchResult, type MusicSession, type YtmusicStatus, type YtmusicTrack } from './transport'
+import { ApiRequestError, type AgendaCalendar, type AgendaEvent, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type LightHistory, type MelcloudStatus, type MelcloudUnit, type MixcloudHomeSection, type MixcloudPage, type MixcloudStatus, type MixcloudUser, type PetkitStatus, type RadioStation, type RenaultStatus, type TeslaStatus, type Transport, type TransportHandlers, type WeatherElsewhere, type WeatherPlace, type YtmusicExplore, type YtmusicExploreShelf, type YtmusicPlaylist, type MusicQueue, type YtmusicSearchResult, type MusicSession, type YtmusicStatus, type YtmusicTrack } from './transport'
 
 // URLs relatives : même origine en prod (Fastify sert le build) et via le proxy Vite en dev.
 
@@ -300,6 +300,19 @@ export function createHttpTransport(base = ''): Transport {
     musicQueueClear: (deviceId) => request(
       `${base}/api/music/queue?deviceId=${encodeURIComponent(deviceId)}`, { method: 'DELETE' }, (j) => j as MusicQueue,
     ),
+    agendaCalendars: () => request(`${base}/api/plugins/agenda/calendars`, undefined, (j) => j as { calendars: AgendaCalendar[] }),
+    agendaAddCalendar: (body) => request(
+      `${base}/api/plugins/agenda/calendars`,
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
+      (j) => j as { calendars: AgendaCalendar[] },
+    ),
+    agendaUpdateCalendar: (id, patch) => request(
+      `${base}/api/plugins/agenda/calendars/${encodeURIComponent(id)}`,
+      { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) },
+      (j) => j as { calendars: AgendaCalendar[] },
+    ),
+    agendaRemoveCalendar: (id) => request(`${base}/api/plugins/agenda/calendars/${encodeURIComponent(id)}`, { method: 'DELETE' }, (j) => j as { calendars: AgendaCalendar[] }),
+    agendaEvents: (from, to) => request(`${base}/api/plugins/agenda/events?from=${from}&to=${to}`, undefined, (j) => j as { events: AgendaEvent[] }),
     mixcloudStatus: () => request(`${base}/api/plugins/mixcloud/status`, undefined, (j) => j as MixcloudStatus),
     mixcloudSetAccount: (username) => request(
       `${base}/api/plugins/mixcloud/account`,

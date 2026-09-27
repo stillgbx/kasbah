@@ -1,4 +1,5 @@
 import type { PluginFactory } from '../core/plugin'
+import { createAgendaPlugin } from './agenda'
 import { createAutomowerPlugin } from './automower'
 import { createComapPlugin } from './comap'
 import { createEnphasePlugin } from './enphase'
@@ -42,4 +43,5 @@ export const PLUGIN_FACTORIES: Record<string, PluginFactory> = {
   radio: () => createRadioPlugin(),
   mixcloud: () => createMixcloudPlugin(),
   tuya: () => createTuyaPlugin(),
+  agenda: () => createAgendaPlugin(),
 }
