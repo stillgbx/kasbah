@@ -153,6 +153,19 @@ export function createAgendaPlugin(deps: AgendaPluginDeps = {}): DevicePlugin {
         return list()
       })
 
+      // Ordre des agendas : le fichier les garde dans cet ordre, la vue les liste ainsi. On attend
+      // TOUS les identifiants, chacun une fois — une liste partielle perdrait des agendas.
+      app.put<{ Body: unknown }>('/calendars/order', async (req, reply) => {
+        const body = z.object({ ids: z.array(z.string()) }).safeParse(req.body)
+        const ids = body.success ? body.data.ids : []
+        const byId = new Map(calendars.map((c) => [c.id, c]))
+        if (!body.success || ids.length !== calendars.length || new Set(ids).size !== ids.length || !ids.every((id) => byId.has(id))) {
+          return sendError(reply, 400, 'INVALID_BODY', 'ids must list every calendar exactly once')
+        }
+        await save(ids.map((id) => byId.get(id)!))
+        return list()
+      })
+
       app.delete<{ Params: { id: string } }>('/calendars/:id', async (req) => {
         feeds.delete(req.params.id)
         await save(calendars.filter((c) => c.id !== req.params.id))

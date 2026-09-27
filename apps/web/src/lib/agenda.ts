@@ -54,6 +54,13 @@ export function eventDays(e: AgendaEvent): string[] {
   return out
 }
 
+/** Terminée à `now` : une journée entière l'est le lendemain de son dernier jour (fin exclusive). */
+export function isPast(e: AgendaEvent, now: number): boolean {
+  if (!e.allDay) return e.end <= now
+  const today = dayKey(new Date(now))
+  return e.start < today && e.end <= today
+}
+
 /** Occurrences par jour, journées entières d'abord, puis par heure de début. */
 export function byDay(events: AgendaEvent[]): Map<string, AgendaEvent[]> {
   const map = new Map<string, AgendaEvent[]>()

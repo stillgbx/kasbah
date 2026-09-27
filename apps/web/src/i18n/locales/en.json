@@ -641,7 +641,7 @@
     "addTitle": "Add a calendar", "urlLabel": "Secret address in iCal format",
     "urlHint": "In Google Calendar on a computer, signed in with the account that holds the calendar: Settings → the calendar → “Integrate calendar” → “Secret address in iCal format”. It grants access to the calendar: it stays on the house server and is not shown again.",
     "nameLabel": "Name (optional)", "namePlaceholder": "The calendar's own", "add": "Add",
-    "remove": "Remove", "removeConfirm": "Confirm removal", "color": "Colour of {name}",
+    "remove": "Remove", "removeConfirm": "Confirm removal", "moveUp": "Move {name} up", "moveDown": "Move {name} down", "color": "Colour of {name}",
     "lastRead": "Read at {time}", "neverRead": "Not read yet", "readError": "Unreadable: {message}"
   },
   "weather": {

@@ -4,7 +4,7 @@ import { getTransport } from '../api'
 import type { AgendaCalendar } from '../api/transport'
 
 // Les agendas de la maison (plugin `agenda`) : partagés entre la vue Agenda et sa carte des
-// Réglages, qui les ajoute et les retire. Chaque écriture rend la liste à jour, adoptée telle quelle.
+// Réglages, qui les ajoute, les ordonne et les retire. Chaque écriture rend la liste à jour, adoptée telle quelle.
 
 export const useAgendaStore = defineStore('agenda', () => {
   const calendars = shallowRef<AgendaCalendar[]>([])
@@ -23,6 +23,9 @@ export const useAgendaStore = defineStore('agenda', () => {
   async function remove(id: string): Promise<void> {
     calendars.value = (await getTransport().agendaRemoveCalendar(id)).calendars
   }
+  async function reorder(ids: string[]): Promise<void> {
+    calendars.value = (await getTransport().agendaReorderCalendars(ids)).calendars
+  }
 
-  return { calendars, loaded, load, add, update, remove }
+  return { calendars, loaded, load, add, update, remove, reorder }
 })

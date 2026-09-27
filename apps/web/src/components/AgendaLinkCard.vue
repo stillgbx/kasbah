@@ -9,7 +9,7 @@ import StrokeIcon from './ui/StrokeIcon.vue'
 
 // Les agendas de la maison, dans Réglages → Plugins → agenda. On ajoute un agenda par son adresse
 // iCal secrète (le serveur la lit aussitôt et refuse ce qui n'en est pas une), on choisit sa
-// couleur, on le retire. L'adresse ne revient jamais du serveur : on ne peut que la recoller.
+// couleur, on le remonte ou le descend (la vue Agenda les liste dans cet ordre), on le retire. L'adresse ne revient jamais du serveur : on ne peut que la recoller.
 
 /** Les couleurs proposées ; le serveur donne la suivante de la même liste à un agenda ajouté. */
 const COLORS = ['#3f8cff', '#e5534b', '#2da44e', '#d38b22', '#a371f7', '#1bb3a7', '#db61a2', '#8d96a0']
@@ -51,6 +51,13 @@ const recolor = (id: string, color: string) => run(async () => {
   await agenda.update(id, { color })
 })
 
+/** Échange un agenda avec son voisin (`-1` au-dessus, `+1` en dessous). */
+const move = (index: number, dir: -1 | 1) => run(async () => {
+  const ids = agenda.calendars.map((c) => c.id)
+  ;[ids[index], ids[index + dir]] = [ids[index + dir]!, ids[index]!]
+  await agenda.reorder(ids)
+})
+
 // Retrait : premier appui arme, second confirme, on désarme tout seul.
 const armed = ref<string | null>(null)
 let armTimer: ReturnType<typeof setTimeout> | null = null
@@ -70,7 +77,7 @@ const readAt = (ms: number | null) => (ms === null ? t('agenda.neverRead') : t('
 
 <template>
   <div class="ag card card--soft">
-    <div v-for="c in agenda.calendars" :key="c.id" class="ag__cal">
+    <div v-for="(c, i) in agenda.calendars" :key="c.id" class="ag__cal">
       <div class="ag__row">
         <button type="button" class="ag__swatch" :style="{ background: c.color }" :title="$t('agenda.color', { name: c.name })"
                 :aria-label="$t('agenda.color', { name: c.name })" :aria-expanded="picking === c.id" :disabled="busy"
@@ -78,6 +85,14 @@ const readAt = (ms: number | null) => (ms === null ? t('agenda.neverRead') : t('
         <div class="min0 ag__main">
           <div class="ag__name">{{ c.name }}</div>
           <div class="small" :class="c.error ? 'ag__warn' : 'muted'">{{ c.error ? $t('agenda.readError', { message: c.error }) : readAt(c.fetchedAt) }}</div>
+        </div>
+        <div v-if="agenda.calendars.length > 1" class="ag__order">
+          <button type="button" class="ag__move" :aria-label="$t('agenda.moveUp', { name: c.name })" :disabled="busy || i === 0" @click="move(i, -1)">
+            <StrokeIcon name="chevronUp" :size="18" />
+          </button>
+          <button type="button" class="ag__move" :aria-label="$t('agenda.moveDown', { name: c.name })" :disabled="busy || i === agenda.calendars.length - 1" @click="move(i, 1)">
+            <StrokeIcon name="chevronDown" :size="18" />
+          </button>
         </div>
         <button type="button" class="pill ag__remove" :data-armed="armed === c.id ? '1' : '0'" :disabled="busy" @click="remove(c.id)">
           <StrokeIcon name="trash" :size="16" />{{ armed === c.id ? $t('agenda.removeConfirm') : $t('agenda.remove') }}
@@ -121,6 +136,14 @@ const readAt = (ms: number | null) => (ms === null ? t('agenda.neverRead') : t('
 .ag__palette { display: flex; gap: 10px; padding: 4px 0 4px 36px; flex-wrap: wrap; }
 /* largeur fixe : « Retirer » et « Confirmer le retrait » occupent la même place */
 .ag__remove { flex: 0 0 auto; width: 190px; justify-content: center; height: 34px; font-size: 13px; }
+.ag__order { flex: 0 0 auto; display: flex; gap: 4px; }
+/* une flèche sans voisin reste à sa place, grisée : les boutons ne se décalent pas */
+.ag__move {
+  width: 34px; height: 34px; border: 0; border-radius: 10px; background: transparent; color: var(--text);
+  display: grid; place-items: center; cursor: pointer;
+}
+.ag__move:hover:not(:disabled) { background: var(--surface2); }
+.ag__move:disabled { opacity: .25; cursor: default; }
 .ag__remove[data-armed='1'] { color: #d24a43; border-color: #d24a43; }
 .ag__warn { color: #d38b22; }
 .ag__form { display: grid; gap: 10px; padding-top: 4px; border-top: 1px solid var(--line); }

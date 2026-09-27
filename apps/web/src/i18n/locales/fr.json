@@ -641,7 +641,7 @@
     "addTitle": "Ajouter un agenda", "urlLabel": "Adresse secrète au format iCal",
     "urlHint": "Dans Google Agenda sur ordinateur, avec le compte qui porte l'agenda : Paramètres → l'agenda → « Intégrer l'agenda » → « Adresse secrète au format iCal ». Elle donne accès à l'agenda : elle reste sur le serveur de la maison et ne s'affiche plus ensuite.",
     "nameLabel": "Nom (facultatif)", "namePlaceholder": "Celui de l'agenda", "add": "Ajouter",
-    "remove": "Retirer", "removeConfirm": "Confirmer le retrait", "color": "Couleur de {name}",
+    "remove": "Retirer", "removeConfirm": "Confirmer le retrait", "moveUp": "Monter {name}", "moveDown": "Descendre {name}", "color": "Couleur de {name}",
     "lastRead": "Lu à {time}", "neverRead": "Pas encore lu", "readError": "Illisible : {message}"
   },
   "weather": {

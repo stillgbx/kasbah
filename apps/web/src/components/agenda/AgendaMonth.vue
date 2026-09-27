@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useElementSize } from '@vueuse/core'
 import type { AgendaEvent } from '../../api/transport'
-import { dayKey } from '../../lib/agenda'
+import { dayKey, isPast } from '../../lib/agenda'
 
 // Le mois : six semaines de sept jours, toujours. Chaque case montre autant d'occurrences que sa
 // hauteur en tient, puis « +n autres » — le nombre de lignes se déduit de la taille de la grille,
@@ -16,6 +16,7 @@ const props = defineProps<{
   events: Map<string, AgendaEvent[]>
   colorOf: (e: AgendaEvent) => string
   today: string
+  now: number
 }>()
 const emit = defineEmits<{ pickDay: [day: Date]; pickEvent: [event: AgendaEvent] }>()
 const { locale } = useI18n()
@@ -54,7 +55,7 @@ const startsOn = (e: AgendaEvent, key: string) => !e.allDay && dayKey(new Date(e
       <div v-for="c in cells" :key="c.key" class="month__cell" :data-out="c.out ? '1' : '0'" role="button" tabindex="0"
            @click="emit('pickDay', c.d)" @keydown.enter="emit('pickDay', c.d)">
         <div class="month__num" :data-today="c.key === today ? '1' : '0'">{{ c.d.getDate() }}</div>
-        <button v-for="e in c.shown" :key="e.id" type="button" class="month__ev" :data-all="e.allDay ? '1' : '0'"
+        <button v-for="e in c.shown" :key="e.id" type="button" class="month__ev" :data-all="e.allDay ? '1' : '0'" :data-past="isPast(e, now) ? '1' : '0'"
                 :style="{ '--ev': colorOf(e) }" :title="e.title || $t('agenda.noTitle')" @click.stop="emit('pickEvent', e)">
           <span v-if="!e.allDay" class="month__dot" />
           <span v-if="startsOn(e, c.key)" class="month__time">{{ timeFmt.format(e.start as number) }}</span>
@@ -89,7 +90,8 @@ const startsOn = (e: AgendaEvent, key: string) => !e.allDay && dayKey(new Date(e
   display: flex; align-items: center; gap: 5px; min-width: 0; font: 500 12px/18px var(--font); text-align: left; cursor: pointer;
 }
 .month__ev:hover { background: color-mix(in srgb, var(--ev) 14%, transparent); }
-.month__ev[data-all='1'] { background: color-mix(in srgb, var(--ev) 22%, var(--surface)); box-shadow: inset 3px 0 0 var(--ev); padding-left: 8px; }
+.month__ev[data-all='1'] { background: color-mix(in srgb, var(--ev) 22%, var(--surface)); }
+.month__ev[data-past='1'] { opacity: .45; }
 .month__dot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: var(--ev); }
 .month__time { flex: 0 0 auto; color: var(--muted); font-variant-numeric: tabular-nums; }
 .month__title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

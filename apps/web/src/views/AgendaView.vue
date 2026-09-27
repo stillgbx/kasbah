@@ -130,7 +130,7 @@ const selectedCalendar = computed(() => agenda.calendars.find((c) => c.id === se
         </button>
       </div>
       <div class="agenda__view">
-        <AgendaMonth v-if="mode === 'month'" :days="days" :month="anchor.getMonth()" :events="perDay" :color-of="colorOf" :today="today"
+        <AgendaMonth v-if="mode === 'month'" :days="days" :month="anchor.getMonth()" :events="perDay" :color-of="colorOf" :today="today" :now="now"
                      @pick-day="pickDay" @pick-event="(e: AgendaEvent) => (selected = e)" />
         <AgendaTimeGrid v-else :key="mode" :days="days" :events="visible" :by-day="perDay" :color-of="colorOf" :today="today" :now="now"
                         @pick-day="pickDay" @pick-event="(e: AgendaEvent) => (selected = e)" />

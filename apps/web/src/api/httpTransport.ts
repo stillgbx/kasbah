@@ -312,6 +312,11 @@ export function createHttpTransport(base = ''): Transport {
       (j) => j as { calendars: AgendaCalendar[] },
     ),
     agendaRemoveCalendar: (id) => request(`${base}/api/plugins/agenda/calendars/${encodeURIComponent(id)}`, { method: 'DELETE' }, (j) => j as { calendars: AgendaCalendar[] }),
+    agendaReorderCalendars: (ids) => request(
+      `${base}/api/plugins/agenda/calendars/order`,
+      { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids }) },
+      (j) => j as { calendars: AgendaCalendar[] },
+    ),
     agendaEvents: (from, to) => request(`${base}/api/plugins/agenda/events?from=${from}&to=${to}`, undefined, (j) => j as { events: AgendaEvent[] }),
     mixcloudStatus: () => request(`${base}/api/plugins/mixcloud/status`, undefined, (j) => j as MixcloudStatus),
     mixcloudSetAccount: (username) => request(

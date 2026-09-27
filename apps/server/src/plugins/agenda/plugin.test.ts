@@ -219,4 +219,16 @@ describe('agenda plugin', () => {
     const removed = await app.inject({ method: 'DELETE', url: `/api/plugins/agenda/calendars/${id}` })
     expect(removed.json().calendars).toEqual([])
   })
+
+  it('reorders the calendars, keeping every one of them', async () => {
+    const { app, store } = await boot(async () => ICS)
+    await app.inject({ method: 'POST', url: '/api/plugins/agenda/calendars', payload: { url: SECRET, name: 'A' } })
+    const [a, b] = (await app.inject({ method: 'POST', url: '/api/plugins/agenda/calendars', payload: { url: `${SECRET}?b`, name: 'B' } })).json().calendars
+    const res = await app.inject({ method: 'PUT', url: '/api/plugins/agenda/calendars/order', payload: { ids: [b.id, a.id] } })
+    expect(res.json().calendars.map((c: { name: string }) => c.name)).toEqual(['B', 'A'])
+    expect((await store.load()).map((c) => c.name)).toEqual(['B', 'A'])
+    for (const ids of [[b.id], [b.id, b.id], [b.id, 'nope']]) {
+      expect((await app.inject({ method: 'PUT', url: '/api/plugins/agenda/calendars/order', payload: { ids } })).statusCode).toBe(400)
+    }
+  })
 })

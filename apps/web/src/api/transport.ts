@@ -564,6 +564,8 @@ export interface Transport {
   agendaAddCalendar(body: { url: string; name?: string; color?: string }): Promise<{ calendars: AgendaCalendar[] }>
   agendaUpdateCalendar(id: string, patch: { name?: string; color?: string }): Promise<{ calendars: AgendaCalendar[] }>
   agendaRemoveCalendar(id: string): Promise<{ calendars: AgendaCalendar[] }>
+  /** Nouvel ordre : TOUS les identifiants, chacun une fois. */
+  agendaReorderCalendars(ids: string[]): Promise<{ calendars: AgendaCalendar[] }>
   /** Occurrences de tous les agendas sur `[from, to[` (ms, 62 jours au plus). */
   agendaEvents(from: number, to: number): Promise<{ events: AgendaEvent[] }>
   /** Le compte Mixcloud relié (un nom d'utilisateur : l'API publique ne demande rien d'autre). */

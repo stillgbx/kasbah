@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AgendaEvent } from '../../api/transport'
-import { dayKey, layoutDay } from '../../lib/agenda'
+import { dayKey, isPast, layoutDay } from '../../lib/agenda'
 
 // Semaine ou jour : une colonne par jour, les heures qui défilent, les journées entières dans une
 // bande de hauteur FIXE au-dessus (deux lignes, puis « +n ») — une semaine chargée ne décale pas
@@ -64,7 +64,7 @@ const range = (e: AgendaEvent) => (e.allDay ? '' : `${timeFmt.value.format(e.sta
     <div class="tg__row tg__allday">
       <div class="tg__gutter muted">{{ $t('agenda.allDayShort') }}</div>
       <div v-for="c in cols" :key="c.key" class="tg__allcell">
-        <button v-for="e in c.allDay" :key="e.id" type="button" class="tg__chip" :style="{ '--ev': colorOf(e) }" :title="e.title || $t('agenda.noTitle')" @click="emit('pickEvent', e)">
+        <button v-for="e in c.allDay" :key="e.id" type="button" class="tg__chip" :data-past="isPast(e, now) ? '1' : '0'" :style="{ '--ev': colorOf(e) }" :title="e.title || $t('agenda.noTitle')" @click="emit('pickEvent', e)">
           {{ e.title || $t('agenda.noTitle') }}
         </button>
         <button v-if="c.more" type="button" class="tg__more muted" @click="emit('pickDay', c.d)">{{ $t('agenda.more', { n: c.more }, c.more) }}</button>
@@ -76,7 +76,7 @@ const range = (e: AgendaEvent) => (e.allDay ? '' : `${timeFmt.value.format(e.sta
           <div v-for="h in hours" :key="h" class="tg__hour muted" :style="{ top: `${h * HOUR_PX}px` }">{{ h ? hourLabel(h) : '' }}</div>
         </div>
         <div v-for="c in cols" :key="c.key" class="tg__col" :data-today="c.key === today ? '1' : '0'">
-          <button v-for="p in c.placed" :key="p.event.id" type="button" class="tg__ev" :data-short="p.endMin - p.startMin < 45 ? '1' : '0'" :style="blockStyle(p)" :title="p.event.title || $t('agenda.noTitle')" @click="emit('pickEvent', p.event)">
+          <button v-for="p in c.placed" :key="p.event.id" type="button" class="tg__ev" :data-past="isPast(p.event, now) ? '1' : '0'" :data-short="p.endMin - p.startMin < 45 ? '1' : '0'" :style="blockStyle(p)" :title="p.event.title || $t('agenda.noTitle')" @click="emit('pickEvent', p.event)">
             <span class="tg__evtitle">{{ p.event.title || $t('agenda.noTitle') }}</span>
             <span class="tg__evtime">{{ range(p.event) }}</span>
           </button>
@@ -101,9 +101,10 @@ const range = (e: AgendaEvent) => (e.allDay ? '' : `${timeFmt.value.format(e.sta
 .tg__allcell { border-left: 1px solid var(--line); padding: 4px 3px; display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow: hidden; }
 .tg__chip {
   flex: 0 0 20px; border: 0; border-radius: 6px; padding: 0 6px; min-width: 0; text-align: left; cursor: pointer;
-  background: color-mix(in srgb, var(--ev) 22%, var(--surface)); box-shadow: inset 3px 0 0 var(--ev); color: var(--text);
+  background: color-mix(in srgb, var(--ev) 22%, var(--surface)); color: var(--text);
   font: 500 12px/20px var(--font); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.tg__chip[data-past='1'], .tg__ev[data-past='1'] { opacity: .45; }
 .tg__more { flex: 0 0 20px; border: 0; background: transparent; text-align: left; padding: 0 6px; font: 600 12px/20px var(--font); cursor: pointer; }
 /* la barre de défilement des heures prend sa largeur aussi en tête : les colonnes restent alignées */
 .tg__head, .tg__allday { overflow-y: hidden; scrollbar-gutter: stable; }
@@ -119,7 +120,7 @@ const range = (e: AgendaEvent) => (e.allDay ? '' : `${timeFmt.value.format(e.sta
 .tg__ev {
   position: absolute; border: 0; border-radius: 8px; padding: 3px 6px; overflow: hidden; cursor: pointer; text-align: left;
   display: flex; flex-direction: column; align-items: stretch; gap: 1px; min-width: 0;
-  background: color-mix(in srgb, var(--ev) 22%, var(--surface)); box-shadow: inset 3px 0 0 var(--ev); color: var(--text);
+  background: color-mix(in srgb, var(--ev) 22%, var(--surface)); color: var(--text);
 }
 /* moins de 45 min : pas la hauteur de deux lignes, titre et heure côte à côte */
 .tg__ev[data-short='1'] { flex-direction: row; align-items: center; gap: 6px; padding-block: 0; }

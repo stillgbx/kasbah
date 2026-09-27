@@ -347,6 +347,7 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     async agendaAddCalendar() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no calendar in mock mode') },
     async agendaUpdateCalendar() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no calendar in mock mode') },
     async agendaRemoveCalendar() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no calendar in mock mode') },
+    async agendaReorderCalendars() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no calendar in mock mode') },
     async agendaEvents() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no calendar in mock mode') },
     async mixcloudStatus() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Mixcloud account in mock mode') },
     async mixcloudSetAccount() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Mixcloud account in mock mode') },
