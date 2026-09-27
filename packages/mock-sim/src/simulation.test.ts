@@ -197,6 +197,21 @@ describe('simulated weather', () => {
     expect(deviceStateSchema.parse(noon)).toEqual(noon)
   })
 
+  // Le monde dérive à chaque pas ; la météo, elle, se relit toutes les 20 s de temps RÉEL, quelle que
+  // soit l'accélération. Publiée à chaque pas, elle refaisait le ciel de la scène 3D chaque seconde.
+  it('publishes the weather every 20 real seconds, whatever the time scale', () => {
+    const sim = make({ timeScale: 30 })
+    const observed = () => (sim.getState('weather') as StateFor<'weather'>).observedAt
+    const first = observed()
+    sim.tick(19 * 30)                                       // 19 s réelles à ×30
+    expect(observed()).toBe(first)
+    sim.tick(2 * 30)                                        // on passe les 20 s
+    const second = observed()
+    expect(second).toBeGreaterThan(first)
+    sim.tick(10 * 30)
+    expect(observed()).toBe(second)
+  })
+
   it('derives a forecast that the shared schema accepts, and refuses one for other kinds', () => {
     const sim = make()
     const f = sim.forecast('weather')

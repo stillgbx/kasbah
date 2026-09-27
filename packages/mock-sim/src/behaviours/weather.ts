@@ -14,6 +14,9 @@ import { clamp, descriptor, round1 } from './common'
 
 export interface WeatherOptions { name: string }
 
+/** Période de relecture de la météo simulée, en secondes de temps réel. */
+const OBSERVATION_REAL_S = 20
+
 /** Lever et coucher du monde simulé (6 h et 20 h locales, `solarGeometry`), pour le jour de `simTime`. */
 export function sunEvents(simTime: number, tzOffsetMin: number): { sunrise: number; sunset: number } {
   const local = simTime - tzOffsetMin * 60_000
@@ -57,6 +60,7 @@ export function weather(externalId: string, o: WeatherOptions): SimDevice<'weath
   // vent : marche lente propre à l'appareil (le monde n'en a pas besoin), plus fort sous les nuages
   let wind = 9
   let windDir = 240
+  let nextObservation = -Infinity
   const dev: SimDevice<'weather'> = {
     descriptor: descriptor(externalId, 'weather', o.name, ['forecast', 'air_quality', 'pollen'], {
       manufacturer: 'Mock', weather: { attribution: 'Simulation', model: 'Mock world' },
@@ -74,6 +78,11 @@ export function weather(externalId: string, o: WeatherOptions): SimDevice<'weath
       const swell = 4 * Math.sin(ctx.simTime / 3_600_000 / 6 * 2 * Math.PI)
       wind = clamp(wind + (8 + 26 * w.cloud + swell - wind) * k, 0, 90)
       windDir = (windDir + (200 + 60 * w.cloud + 20 * Math.sin(ctx.simTime / 86_400_000 * 2 * Math.PI) - windDir) * k + 360) % 360
+      // Le monde dérive à chaque pas ; la station, elle, ne se relit que toutes les 20 s de temps RÉEL.
+      // Publiée à chaque pas (un pour-cent de nuages suffit), elle refaisait le ciel de la scène 3D
+      // chaque seconde — trente fois plus vite encore à ×30.
+      if (ctx.simTime < nextObservation) return
+      nextObservation = ctx.simTime + OBSERVATION_REAL_S * 1000 * ctx.timeScale
       const tempC = round1(w.outdoorTempC)
       const humidity = Math.round(clamp(52 + 38 * w.cloud + (w.precipMmH > 0 ? 10 : 0) - 8 * solarGeometry(ctx.hour), 20, 100))
       const condition = conditionOf(w.cloud, w.precipMmH, tempC, humidity)

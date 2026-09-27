@@ -15,6 +15,8 @@ export interface TickCtx {
   simTime: number
   /** Pas de temps simulé (s). */
   dtS: number
+  /** Accélération du temps simulé (×1 = temps réel) : ce qui doit suivre l'horloge MURALE s'en sert. */
+  timeScale: number
   /** Heure locale fractionnaire [0, 24). */
   hour: number
   /** Jour de semaine local, 0 = dimanche. */

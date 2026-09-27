@@ -66,11 +66,10 @@ export function gpuName(renderer: WebGLRenderer): string {
   return String((dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)) ?? '')
 }
 
-// Un GPU INTÉGRÉ se reconnaît à son nom, et c'est lui qui décide. Mesuré sur un portable hybride
-// (Ryzen 9 5900HX + RTX 3060) dont Chrome dessinait sur la Radeon intégrée : une image « high » y
-// coûte 93 ms de GPU (8 img/s), « medium » 17 ms, « low » 3 ms — contre 14 ms en « high » sur la
-// RTX. Or les seize cœurs et les trente-et-un gigaoctets de la même machine disent « high ».
-const INTEGRATED_GPU = /\bIntel\b|Radeon\(TM\) Graphics|\bRadeon Graphics\b|\bRadeon \d{3}M\b|\bVega \d/i
+// Un GPU INTÉGRÉ partait d'office en « medium », sur son nom : la Radeon d'un portable hybride
+// (Ryzen 9 5900HX + RTX 3060) coûtait 93 ms de GPU par image « high » le 2026-09-15. Depuis la passe
+// unique et la chaîne allégée, elle en coûte 26 à 46 avec la vraie maison (mesuré le 2026-09-27) :
+// c'est au garde-fou d'en juger, sur la mesure, plus au nom.
 /** Rendu logiciel : rien n'y est tenable au-delà de « low ». */
 const SOFTWARE_GPU = /SwiftShader|llvmpipe|Basic Render Driver/i
 
@@ -85,7 +84,7 @@ export function detectQuality(gpu = ''): EffectiveQuality {
   const memory = nav?.deviceMemory ?? 8
   const coarse = globalThis.matchMedia?.('(pointer: coarse)').matches ?? false
   if (SOFTWARE_GPU.test(gpu) || cores <= 4 || memory <= 3) return 'low'
-  if (INTEGRATED_GPU.test(gpu) || coarse || cores <= 6) return 'medium'
+  if (coarse || cores <= 6) return 'medium'
   return 'high'
 }
 
@@ -308,12 +307,13 @@ export interface PostPipelineDeps {
 interface TimerQueryExt { readonly TIME_ELAPSED_EXT: number; readonly GPU_DISJOINT_EXT: number }
 
 /**
- * Au-delà de ce coût MÉDIAN par image, la qualité descend d'un cran (≈ 40 images/s sur les vols de
- * caméra). 40 ms jusqu'au 2026-09-25 : le garde-fou laissait tourner une machine à 25 images/s, ce
- * qui se voit comme une vue qui rame. Repère mesuré sur un iGPU (Radeon intégrée, 1904×905) :
- * « medium » 12 ms, « high » 29 ms — qui descend donc d'un cran, et c'est voulu.
+ * Au-delà de ce coût MÉDIAN par image, la qualité descend d'un cran (≈ 30 images/s sur les vols de
+ * caméra). 40 ms jusqu'au 2026-09-25 (25 images/s, une vue qui rame), puis 25 ms — qui faisait
+ * descendre la Radeon intégrée d'un cran dès qu'on touchait la vue : « high » y coûte 26-46 ms avec
+ * la vraie maison, « medium » 9-18 (mesuré le 2026-09-27). 30 images/s tenues valent mieux qu'une
+ * image appauvrie : choix de l'utilisateur, le même jour.
  */
-const FRAME_BUDGET_MS = 25
+const FRAME_BUDGET_MS = 33
 /** Images observées avant de trancher : à 5 images/s, c'est déjà trois secondes de saccade. */
 const FRAMES_WATCHED = 16
 

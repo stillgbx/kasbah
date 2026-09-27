@@ -1640,6 +1640,34 @@ describe('préparer la maison avant de la montrer', () => {
     expect(scene.preparingHouse).toBe(false)
     scene.dispose()
   })
+
+  /**
+   * Un style jamais vu (ou quitté : three jette les programmes que plus rien n'utilise) demande de
+   * nouveaux shaders. Compilés par la première image, ils figeaient TOUT le fil principal — 2,5 à
+   * 5,5 s sur l'iGPU pour « réaliste », sélection du style comprise, qui ne se peignait qu'après.
+   */
+  it('un changement de style compile ses shaders sans dessiner, puis redessine', async () => {
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true, requestFrame: () => 0, cancelFrame: () => {} })
+    scene.load(parseHouse(demo))
+    let ready = false
+    let compiled = 0
+    ;(scene as unknown as { renderer: object }).renderer = {
+      getRenderTarget: () => null,
+      setRenderTarget: () => {},
+      compile: () => { compiled++ },
+      properties: { get: () => ({ currentProgram: { isReady: () => ready } }) },
+    }
+    ;(scene as unknown as { applySky(): void }).applySky = () => {}   // le ciel veut un vrai renderer (PMREM)
+    const holding = () => (scene as unknown as { compiling: boolean }).compiling
+    scene.setAppearance({ style: styleById('realistic') })
+    expect(compiled).toBe(1)
+    expect(holding()).toBe(true)                       // l'ancienne image reste, le fil principal est libre
+    ready = true
+    await new Promise((resolve) => setTimeout(resolve, 40))
+    expect(holding()).toBe(false)
+    ;(scene as unknown as { renderer: null }).renderer = null
+    scene.dispose()
+  })
 })
 
 describe('régler les ouvertures', () => {
@@ -2133,12 +2161,13 @@ describe('styles de rendu', () => {
 
 describe('qualité de rendu', () => {
   /**
-   * Mesuré sur un portable hybride : Chrome dessinait sur la Radeon intégrée, 93 ms de GPU par
-   * image en « high », alors que ses seize cœurs disaient « high ». Le nom du GPU tranche.
+   * Un GPU intégré n'est plus rétrogradé sur son nom : la Radeon d'un portable hybride tient
+   * « high » à 26-46 ms par image avec la vraie maison (mesuré le 2026-09-27), et c'est le garde-fou
+   * qui en juge. Seul un rendu logiciel part d'office en « low ».
    */
-  it('un GPU intégré part en medium, un rendu logiciel en low, une carte dédiée reste high', () => {
-    expect(detectQuality('ANGLE (AMD, AMD Radeon(TM) Graphics (0x00001638) Direct3D11 vs_5_0 ps_5_0, D3D11)')).toBe('medium')
-    expect(detectQuality('ANGLE (Intel, Intel(R) Iris(R) Xe Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)')).toBe('medium')
+  it('un rendu logiciel part en low, tout vrai GPU, intégré compris, part en high', () => {
+    expect(detectQuality('ANGLE (AMD, AMD Radeon(TM) Graphics (0x00001638) Direct3D11 vs_5_0 ps_5_0, D3D11)')).toBe('high')
+    expect(detectQuality('ANGLE (Intel, Intel(R) Iris(R) Xe Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)')).toBe('high')
     expect(detectQuality('ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)')).toBe('low')
     expect(detectQuality('ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Laptop GPU (0x00002560) Direct3D11 vs_5_0 ps_5_0, D3D11)')).toBe('high')
     expect(detectQuality('ANGLE (AMD, AMD Radeon RX 6800 XT Direct3D11 vs_5_0 ps_5_0, D3D11)')).toBe('high')

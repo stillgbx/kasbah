@@ -151,7 +151,15 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   watch(style, (s) => scene?.setAppearance({ style: s }))
   // Une ambiance refait le ciel (~35 ms) : les curseurs de la météo forcée en envoient une par cran,
   // et le glissement accrochait. Au plus une tous les 100 ms, la dernière toujours appliquée.
-  watchThrottled(ambience, (a) => scene?.setAppearance({ ambience: a }), { throttle: 100 })
+  // Et seulement si elle a CHANGÉ : l'ambiance est un objet recalculé, neuf à chaque relecture (le quart
+  // d'heure, un état météo aux mêmes valeurs), et chacune refaisait ciel, matières et ombres pour rien.
+  let sentAmbience = JSON.stringify(ambience.value)
+  watchThrottled(ambience, (a) => {
+    const key = JSON.stringify(a)
+    if (key === sentAmbience) return
+    sentAmbience = key
+    scene?.setAppearance({ ambience: a })
+  }, { throttle: 100 })
   watch(() => settings.sceneAssets, (v) => scene?.setAppearance({ assets: v }))
   // Le banc de réglage tire ses curseurs en direct : chemin court (chaîne d'image, halos, trait
   // de pièce), là où `setAppearance` referait matières, ciel et ombres à chaque image du glissement.

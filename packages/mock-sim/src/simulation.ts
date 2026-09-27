@@ -165,7 +165,7 @@ export class Simulation {
     const hour = (((local / 3_600_000) % 24) + 24) % 24
     const dow = (((Math.floor(local / 86_400_000) + 4) % 7) + 7) % 7
     return {
-      simTime: this.simNow, dtS, hour, dow, tzOffsetMin: this.tzOffsetMin, rng: this.rng, world: this.world,
+      simTime: this.simNow, dtS, timeScale: this.timeScale, hour, dow, tzOffsetMin: this.tzOffsetMin, rng: this.rng, world: this.world,
       getState: (id) => this.getState(id),
     }
   }

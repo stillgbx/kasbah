@@ -379,8 +379,13 @@ export class HouseScene {
    * shaders froid, iGPU), le voile compris — mesuré le 2026-09-25.
    */
   private holdFrames = false
+  /** Des shaders demandés APRÈS le chargement (un style, une matière photo) se compilent : l'ancienne image reste. */
+  private compiling = false
+  private compileGen = 0
   private post: PostPipeline | null = null
   private quality: EffectiveQuality = 'high'
+  /** Le cran où le garde-fou est descendu en « auto » ; `null` = la détection décide. Le réglage, lui, reste « auto ». */
+  private autoQuality: EffectiveQuality | null = null
   /** Minuterie de l'orage en cours (prochain éclat, ou éclat en train de s'éteindre) ; `null` = pas d'orage. */
   private stormTimer: ReturnType<typeof setTimeout> | null = null
   /** Pluie ou neige en cours (`effects/precipitation.ts`), de quoi retirer son animation, et l'intensité avec laquelle elle a été bâtie. */
@@ -738,7 +743,7 @@ export class HouseScene {
       // promesse ne se résolvait jamais et le voile restait (constaté le 2026-09-25).
       r.compile(this.scene, this.camera)
       r.setRenderTarget(previous)
-      await this.shadersReady(r, gen)
+      await this.shadersReady(r, () => gen === this.prepareGen)
       if (gen !== this.prepareGen) return
       step('frame')
       // laisser le voile peindre l'étape, puis rendre l'image qui compile le reste
@@ -760,7 +765,7 @@ export class HouseScene {
    * n'a pas encore de programme ne retient rien : la première image la compilera. Plafonné, pour
    * qu'aucun cas imprévu ne laisse la maison sous le voile.
    */
-  private async shadersReady(r: WebGLRenderer, gen: number): Promise<void> {
+  private async shadersReady(r: WebGLRenderer, current: () => boolean): Promise<void> {
     const materials = new Set<Material>()
     this.scene.traverseVisible((o) => {
       const m = (o as Mesh).material as Material | Material[] | undefined
@@ -769,7 +774,7 @@ export class HouseScene {
     })
     const until = (this.deps.now?.() ?? performance.now()) + PREPARE_SHADERS_MS
     for (;;) {
-      if (gen !== this.prepareGen) return
+      if (!current()) return
       let pending = 0
       for (const m of materials) {
         const program = (r.properties.get(m) as { currentProgram?: { isReady(): boolean } }).currentProgram
@@ -777,6 +782,31 @@ export class HouseScene {
       }
       if (pending === 0 || (this.deps.now?.() ?? performance.now()) > until) return
       await new Promise((resolve) => setTimeout(resolve, 16))
+    }
+  }
+
+  /**
+   * La même compilation que `prepare`, pour ce qui change APRÈS le chargement : un style (jamais vu,
+   * ou quitté — three jette les programmes que plus rien n'utilise), une matière photo qui arrive.
+   * Laissés à la première image, ces shaders se compilaient sur le fil principal : 2,5 à 5,5 s
+   * figées sur l'iGPU pour « réaliste », la sélection du style ne se peignant qu'après (mesuré le
+   * 2026-09-27). Ici, `compile` les lance en parallèle et l'ancienne image reste jusqu'à ce qu'ils
+   * soient prêts. Sans `KHR_parallel_shader_compile`, tout est « prêt » tout de suite : rien n'attend.
+   */
+  private async compileBeforeShow(): Promise<void> {
+    const r = this.renderer
+    if (!r || this.holdFrames) return      // une préparation tient déjà les images, et compilera tout
+    const gen = ++this.compileGen
+    this.scene.updateMatrixWorld()
+    const previous = r.getRenderTarget()
+    r.setRenderTarget(this.post?.sceneTarget ?? null)
+    r.compile(this.scene, this.camera)
+    r.setRenderTarget(previous)
+    this.compiling = true
+    try {
+      await this.shadersReady(r, () => gen === this.compileGen)
+    } finally {
+      if (gen === this.compileGen) { this.compiling = false; this.loop.invalidate() }
     }
   }
 
@@ -2542,7 +2572,7 @@ export class HouseScene {
     const projectionBefore = this.options.projection
     this.options = { ...this.options, ...opts }
     if (this.renderer) this.renderer.shadowMap.enabled = this.options.shadows
-    if (this.options.quality !== before) this.applyQuality()
+    if (this.options.quality !== before) { this.autoQuality = null; this.applyQuality() }   // un choix explicite repart de la détection
     if (this.options.projection !== projectionBefore) this.applyProjectionMode()
     this.applyLevelFocus()
     this.loop.invalidate()
@@ -3358,6 +3388,7 @@ export class HouseScene {
     this.syncBats()
     this.syncWater()                       // le style dit si l'eau bouge, l'heure ce que le fond reçoit
     this.loop.invalidate()
+    void this.compileBeforeShow()
   }
 
   /**
@@ -3531,6 +3562,7 @@ export class HouseScene {
         if (gen !== this.photoGen) return
         this.applyMaterials()
         this.highlightRoom(this.highlightedRoom)   // recopie les couleurs des clones, et redessine
+        void this.compileBeforeShow()              // une carte de plus = un autre programme
       })
       : undefined
     applyLook(this.materials, this.theme, this.look, photos, { wetness: this.ambience.wetness ?? 0, snow: this.ambience.snow ?? 0 })
@@ -3592,7 +3624,8 @@ export class HouseScene {
   private applyQuality(): void {
     this.post?.dispose()
     this.post = null
-    const wanted = this.options.quality === 'auto' ? detectQuality(this.renderer ? gpuName(this.renderer) : '') : this.options.quality
+    const auto = this.options.quality === 'auto'
+    const wanted = this.options.quality === 'auto' ? (this.autoQuality ?? detectQuality(this.renderer ? gpuName(this.renderer) : '')) : this.options.quality
     this.quality = wanted
     this.syncPrecipitation()               // la qualité basse coupe la pluie
     this.syncBats()                        // …et les chauves-souris
@@ -3610,8 +3643,10 @@ export class HouseScene {
     this.post = createPostPipeline({
       renderer: this.renderer, scene: this.scene, camera: this.camera, quality: wanted,
       draw: (target) => { this.renderer!.setRenderTarget(target); this.renderScene(this.renderer!) },
-      // La machine ne suit pas : on descend d'un cran, une seule fois, sans rien demander à personne.
-      onDowngrade: (to) => { this.options = { ...this.options, quality: to }; this.applyQuality(); this.loop.invalidate() },
+      // La machine ne suit pas : on descend d'un cran, sans rien demander à personne — en « auto »
+      // seulement. Une qualité choisie est un choix : le garde-fou l'écrasait (mesuré le 2026-09-27,
+      // « high » forcé sur l'iGPU redescendait en « medium » au bout de 13 s).
+      ...(auto ? { onDowngrade: (to: EffectiveQuality) => { this.autoQuality = to; this.applyQuality(); this.loop.invalidate() } } : {}),
       ...(this.deps.now ? { now: this.deps.now } : {}),
     })
     this.post.setLook(this.look.post)
@@ -3701,7 +3736,7 @@ export class HouseScene {
   }
 
   private render(interactive = true): void {
-    if (this.holdFrames) return
+    if (this.holdFrames || this.compiling) return
     this.probe?.begin()
     const t0 = this.deps.now?.() ?? performance.now()
     // Les matrices monde, UNE fois par image. Three les recalcule au début de CHAQUE `render()` —
@@ -3809,6 +3844,7 @@ export class HouseScene {
   dispose(): void {
     this.photoGen++                        // une matière qui arrive après n'a plus de scène à habiller
     this.prepareGen++                      // …et une préparation en cours, plus de maison à montrer
+    this.compileGen++                      // …ni une compilation, plus d'image à retenir
     this.detachInput?.()
     this.detachWheel?.()
     if (this.labelsIdle !== null) clearTimeout(this.labelsIdle)
