@@ -190,7 +190,7 @@
     "reorder": "Reorder (drag)", "orderError": "Order not saved: {message}",
     "dangling": "Dead bindings", "danglingHint": "The JSON points at an id no plugin reports",
     "origins": {
-      "json": "Placed", "jsonHint": "Position set in house.json",
+      "show": "Show in the 3D house", "json": "Placed", "jsonHint": "Position set in house.json",
       "auto": "Auto", "autoHint": "Matched automatically to the room named like the plugin room",
       "unplaced": "Not placed", "unplacedHint": "No house room is named like the plugin room: absent from the 3D scene", "place": "Place", "placeHint": "Open the 3D house to put this device on the right level and spot"
     }

@@ -27,14 +27,15 @@ describe('CoverControl', () => {
     const w = mount(CoverControl, { props: { descriptor: descriptor(ALL), state: state({ position: 30 }) } })
     expect(w.text()).toContain('70 %')
   })
-  it('offers position and tilt sliders when the device can aim', () => {
+  it('offers a draggable cover pill and a tilt slider when the device can aim', () => {
     const w = mount(CoverControl, { props: { descriptor: descriptor(ALL), state: state() } })
-    expect(w.findAll('.v-slider')).toHaveLength(2)
+    expect(w.find('.pill').attributes('role')).toBe('slider')
+    expect(w.findAll('.v-slider')).toHaveLength(1)              // l'inclinaison seule
     expect(w.findAll('button')).toHaveLength(3)                 // ouvrir · stop · fermer
   })
-  it('drops the slider on a one-way device (volet RTS) but keeps open and close', () => {
+  it('the pill only SHOWS a one-way device (volet RTS), which keeps open and close', () => {
     const w = mount(CoverControl, { props: { descriptor: descriptor(['open_close', 'stop']), state: state() } })
-    expect(w.findAll('.v-slider')).toHaveLength(0)
+    expect(w.find('.pill').attributes('role')).toBe('img')
     expect(w.findAll('button')).toHaveLength(3)
   })
   it('drops the stop button when the device has no stop command', () => {
@@ -104,8 +105,8 @@ describe('CoverControl', () => {
     expect(key.text()).toContain(fr.cover.preset)
     expect(key.find('.key__pct').text()).toBe('73 %')            // 27 d'ouverture = 73 de fermeture
     expect(key.classes()).toContain('preset__recall')
-    // le repere est place par Vuetify sur la piste, donc a la bonne geometrie
-    expect(w.find('.v-slider-track__tick').exists()).toBe(true)
+    // le repere se pose sur la vignette, a la fermeture memorisee
+    expect(w.find('.pill__preset').exists()).toBe(true)
 
     // valeur inconnue (RTS) : la touche reste, le chiffre disparait, aucun repere invente
     const rts = mount(CoverControl, {
@@ -113,7 +114,7 @@ describe('CoverControl', () => {
     })
     expect(rts.findAll('button').at(-1)!.text()).toContain(fr.cover.preset)
     expect(rts.find('.key__pct').exists()).toBe(false)
-    expect(rts.find('.v-slider-track__tick').exists()).toBe(false)
+    expect(rts.find('.pill__preset').exists()).toBe(false)
 
     // sans la capacite, pas de touche du tout
     const plain = mount(CoverControl, { props: { descriptor: descriptor(ALL), state: state() } })

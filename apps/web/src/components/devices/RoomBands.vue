@@ -38,6 +38,12 @@ async function place(entry: DeviceEntry) {
   house.startPlacingNew(entry.descriptor.id)
 }
 
+/** Un appareil placé : on l'ouvre dans la maison 3D, même ordre que `place` (naviguer, puis sélectionner). */
+async function show(entry: DeviceEntry) {
+  await router.push({ name: 'home' }).catch(() => {})
+  house.selectDevice(house.houseDeviceFor(entry.descriptor.id)?.id ?? entry.descriptor.id)
+}
+
 const devices = useDevicesStore()
 const house = useHouseStore()
 const { t, locale } = useI18n()
@@ -175,9 +181,13 @@ defineExpose({ count: computed(() => entries.value.length) })
           <div v-for="r in g.rows" :key="r.entry.descriptor.id" class="row">
             <!-- fond optionnel de la ligne (pochette d'un lecteur), sous le contenu, hors de la grille -->
             <slot name="backdrop" :entry="r.entry" />
-            <span class="icon-square" :data-on="r.on ? '1' : '0'">
-              <StrokeIcon :name="deviceIcon(r.entry.descriptor, r.entry.state, { linkedFan: !!fanLinkedTo(r.entry.descriptor.id, devices.list) })" :size="18" />
-            </span>
+            <!-- 1re colonne : l'icône par défaut ; une vue peut la remplacer par un contrôle qui
+                 montre l'état (vue Ouvrants : la vignette verticale de l'ouvrant) -->
+            <slot name="leading" :entry="r.entry" :on="r.on">
+              <span class="icon-square" :data-on="r.on ? '1' : '0'">
+                <StrokeIcon :name="deviceIcon(r.entry.descriptor, r.entry.state, { linkedFan: !!fanLinkedTo(r.entry.descriptor.id, devices.list) })" :size="18" />
+              </span>
+            </slot>
             <div class="min0">
               <div class="row__name">{{ r.name }}</div>
               <div class="muted row__status">
@@ -191,10 +201,12 @@ defineExpose({ count: computed(() => entries.value.length) })
                     :aria-label="$t('rooms.origins.place')" @click="place(r.entry)">
               <StrokeIcon name="pin" :size="14" /><span class="badge__label">{{ $t('rooms.origins.place') }}</span>
             </button>
-            <span v-else class="badge" :data-kind="r.origin" role="img"
-                  :title="$t(`rooms.origins.${r.origin}Hint`)" :aria-label="$t(`rooms.origins.${r.origin}`)">
+            <!-- placé : la pastille mène à l'appareil dans la maison 3D (cadrage de sa pièce, panneau) -->
+            <button v-else type="button" class="badge badge--show" :data-kind="r.origin"
+                    :title="`${$t(`rooms.origins.${r.origin}Hint`)} · ${$t('rooms.origins.show')}`"
+                    :aria-label="`${$t(`rooms.origins.${r.origin}`)} · ${$t('rooms.origins.show')}`" @click="show(r.entry)">
               <StrokeIcon name="pin" :size="14" />
-            </span>
+            </button>
             <slot name="control" :entry="r.entry" :on="r.on" />
             <!-- Appareil que son plugin RETIENT alors qu'il ne répond plus, et qui n'est pas dans la
                  maison : c'est ici qu'un fantôme se voit (« Hors maison »), c'est donc ici qu'on
@@ -274,6 +286,9 @@ defineExpose({ count: computed(() => entries.value.length) })
 }
 .badge--place:hover { background: var(--accent); color: var(--on-accent); }
 .badge__label { line-height: 1; }
+/* pastille « placé » : un bouton discret, qui ne se révèle qu'au survol */
+.badge--show { border: 0; background: none; padding: 0; border-radius: 6px; cursor: pointer; transition: background .15s, color .15s; }
+.badge--show:hover { background: var(--accent-soft); color: var(--accent); }
 .badge[data-kind='auto'] { color: var(--accent); }
 .badge[data-kind='unplaced'] { color: #d38b22; }
 </style>

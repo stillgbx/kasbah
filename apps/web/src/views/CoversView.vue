@@ -5,6 +5,7 @@ import { openingLabel, type DeviceEntry, type HouseDevice, type StateFor } from 
 import PageHeader from '../components/layout/PageHeader.vue'
 import CoversMaster from '../components/devices/CoversMaster.vue'
 import RoomBands from '../components/devices/RoomBands.vue'
+import CoverPill from '../components/covers/CoverPill.vue'
 import PulseDot from '../components/ui/PulseDot.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import { coverActivity, coverWords, fromClosure, toClosure } from '../lib/cover'
@@ -118,25 +119,18 @@ const batteryText = (s: StateFor<'cover'>) => (s.batteryPct === undefined ? '—
 
 // Valeur locale pendant le glissement seulement ; ensuite c'est la cible du store qui s'affiche.
 const draft = ref<Record<string, number>>({})
-// le curseur n'existe que pour un ouvrant qui sait viser une position, donc qui la publie ; le
-// repli à 100 ne sert qu'à donner un nombre au composant si les deux se désaccordaient
-const shownClosure = (id: string, position?: number) => draft.value[id] ?? toClosure(devices.targetPosition(id) ?? position ?? 100)
-
-// Jauge peinte en fond de ligne (slot `backdrop` de `RoomBands`, comme la teinte d'une lampe allumée
-// ou la pochette d'un lecteur) : la part de l'ouvrant qui SE REMARQUE, de 0 (rien) à 1 (toute la
-// ligne). Un volet se remarque ouvert, un store DÉPLOYÉ — c'est l'inverse, et c'est voulu (voir
-// `coverActivity`). Position inconnue = pas de jauge : on n'affirme rien d'un moteur muet.
-// On lit la position VISÉE quand le store en tient une : la jauge suit le geste, comme le curseur.
-const openFraction = (e: DeviceEntry) => {
-  const s = e.state as StateFor<'cover'>
-  if (!s.available) return 0
-  return coverActivity(e.descriptor, devices.targetPosition(e.descriptor.id) ?? s.position)
+// Fermeture montrée par la vignette : le glissement, sinon la position VISÉE quand le store en tient
+// une (le tablier suit le geste, même d'un moteur qui ne publie qu'en fin de course), sinon la
+// position publiée. Inconnue = `undefined` : la vignette n'affirme rien d'un moteur muet.
+const pillClosure = (e: DeviceEntry) => {
+  const id = e.descriptor.id
+  const p = devices.targetPosition(id) ?? (e.state as StateFor<'cover'>).position
+  return draft.value[id] ?? (p === undefined ? undefined : toClosure(p))
 }
 
-// Position favorite du moteur : repère sur la piste du curseur, et valeur dans le libellé
-// accessible de la touche (une ligne de liste n'a pas la place de l'écrire).
+// Position favorite du moteur : repère sur la vignette, et valeur dans le libellé accessible de la
+// touche (une ligne de liste n'a pas la place de l'écrire).
 const presetClosure = (s: StateFor<'cover'>) => s.presetPosition === undefined ? undefined : toClosure(s.presetPosition)
-const presetTicks = (s: StateFor<'cover'>) => { const c = presetClosure(s); return c === undefined ? undefined : [c] }
 function drag(id: string, v: number) { draft.value = { ...draft.value, [id]: v } }
 function commit(id: string, v: number) {
   void devices.sendCommand(id, { type: 'cover.set_position', position: fromClosure(Math.round(v)) })
@@ -164,10 +158,18 @@ function commit(id: string, v: number) {
     <div class="page__scroll">
       <div v-if="covers.length === 0" class="card card--soft empty muted">{{ $t('covers.none') }}</div>
       <RoomBands kind="cover">
-        <!-- ce qui manquait le plus dans cette vue : voir OUVERT sans lire chaque ligne -->
-        <template #backdrop="{ entry }">
-          <div class="row-open" aria-hidden="true"
-               :style="{ '--open': openFraction(entry) }" />
+        <!-- l'ouvrant vu de face, à la place de l'icône : se lit OUVERT sans lire la ligne, et se
+             manœuvre dans le sens où il bouge (voir `CoverPill`). Glissable seulement pour un moteur
+             qui sait viser une position, et une fois son ouverture connue. -->
+        <template #leading="{ entry }">
+          <CoverPill :closure="pillClosure(entry)" :preset="presetClosure(entry.state as StateFor<'cover'>)"
+                     :interactive="entry.state.available && entry.descriptor.capabilities.includes('position')
+                       && !waiting(house.houseDeviceFor(entry.descriptor.id))"
+                     :device-class="entry.descriptor.meta.cover?.deviceClass"
+                     :label="$t(`cover.${coverWords(entry.descriptor)}.level`)"
+                     :class="{ 'pill--off': !entry.state.available }"
+                     @drag="(v: number) => drag(entry.descriptor.id, v)"
+                     @commit="(v: number) => commit(entry.descriptor.id, v)" />
         </template>
         <!-- le point pulsant accompagne le libellé (« Fermeture en cours »), qui est déjà dans le
              statut : posé avant le curseur, il en changerait la largeur à chaque mouvement -->
@@ -240,16 +242,6 @@ function commit(id: string, v: number) {
                 <StrokeIcon name="moon" :size="18" />
               </button>
             </div>
-            <!-- pas de 1 % : Vuetify aligne le pouce sur le pas, et à 5 % il ne pouvait pas se
-                 poser sur le repère de position favorite du moteur (voir `CoverControl.vue`) -->
-            <v-slider v-if="entry.descriptor.capabilities.includes('position')"
-                      :model-value="shownClosure(entry.descriptor.id, (entry.state as StateFor<'cover'>).position)"
-                      :min="0" :max="100" :step="1" :disabled="!entry.state.available"
-                      :ticks="presetTicks(entry.state as StateFor<'cover'>)"
-                      :show-ticks="presetTicks(entry.state as StateFor<'cover'>) ? 'always' : false"
-                      density="compact" hide-details :thumb-size="22" :track-size="6" class="controls__slider cover-slider"
-                      @update:model-value="(v: number) => drag(entry.descriptor.id, v)"
-                      @end="(v: number) => commit(entry.descriptor.id, v)" />
           </div>
         </template>
       </RoomBands>
@@ -265,13 +257,14 @@ function commit(id: string, v: number) {
 /* estompé à 0 plutôt que masqué : le compteur ne saute pas d'apparence à la découverte d'un plugin */
 .count--waiting[data-zero='1'] { opacity: .55; }
 .empty { padding: 24px; text-align: center; }
-.controls { grid-column: 1 / -1; display: grid; gap: 6px; margin: 6px 4px 0; }
-/* Le curseur a sa PROPRE ligne, sur toute la largeur de la carte : partagé avec les touches, il ne
-   gardait qu'une centaine de pixels, trop peu pour viser au doigt. Piste et pouce épaissis pour la
-   même raison ; la hauteur de la ligne est fixe, qu'elle soit saisie ou non. */
-.controls__slider { width: 100%; }
+/* Les touches sur leur propre ligne, SOUS le nom et à droite de la vignette (qui occupe la 1re
+   colonne sur les deux lignes, voir `CoverPill`) : trois boutons dans la 4e colonne écraseraient le
+   nom. La position se règle sur la vignette, dans le sens où l'ouvrant bouge : plus de curseur
+   horizontal, qui se lisait à l'envers d'un volet. */
+/* `min-width: 0` : sans lui, cinq touches élargiraient la colonne `1fr` au-delà de la carte (375 px) */
+.controls { grid-column: 2 / -1; display: grid; margin-top: 8px; min-width: 0; }
 /* même empreinte que `.controls` : une ligne à part, pour ne pas écraser le nom de l'ouvrant */
-.assign { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; margin: 2px 4px 0; }
+.assign { grid-column: 2 / -1; display: flex; align-items: center; gap: 10px; margin-top: 8px; }
 .assign__label { font-size: 12px; flex: 0 0 auto; }
 .assign__select { flex: 1 1 auto; min-width: 0; }
 /* pastille « sans ouverture » : même couleur que le badge « non placé » de `RoomBands` — un ouvrant
@@ -280,22 +273,12 @@ function commit(id: string, v: number) {
   display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; margin-right: 6px;
   font-size: 11px; font-weight: 600; color: #d38b22;
 }
-/* le repere de position favorite est style globalement, voir `styles/app.css` (`.cover-slider`) */
 .dot { margin-right: 6px; color: var(--accent); }
-/* Jauge d'ouverture : une bande d'accent doux qui part du bord gauche et s'étire avec l'ouverture,
-   fondue sur sa fin pour qu'elle ne se lise pas comme une seconde piste de curseur. Absolue et en
-   z-index négatif (contexte posé par `.row`) : elle ne décale rien, et une ligne fermée n'a
-   simplement rien à montrer. Déborde de 4 px de chaque côté, comme la teinte des lampes. */
-.row-open {
-  position: absolute; left: -4px; top: 0; bottom: 0; z-index: -1; pointer-events: none;
-  width: calc(var(--open) * (100% + 8px));
-  background: var(--accent-soft);
-  -webkit-mask-image: linear-gradient(90deg, #000 0, #000 60%, transparent 100%);
-  mask-image: linear-gradient(90deg, #000 0, #000 60%, transparent 100%);
-  transition: width .4s ease;
-}
-@media (prefers-reduced-motion: reduce) { .row-open { transition: none; } }
-.keys { display: flex; gap: 6px; }
+/* moteur injoignable : la vignette garde sa place et son dernier état connu, estompée comme les touches */
+.pill--off { opacity: .4; }
+/* retour à la ligne sur un téléphone : à côté de la vignette, cinq touches de 40 px n'y tiennent
+   plus, et les réglages passent sous les manœuvres. Cela ne dépend que de la largeur, jamais de l'état. */
+.keys { display: flex; flex-wrap: wrap; gap: 6px; }
 .keys__gap { flex: 1 1 auto; }
 .key {
   display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px;

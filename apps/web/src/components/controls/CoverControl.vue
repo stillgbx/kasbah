@@ -5,6 +5,7 @@ import type { CommandInput, DeviceDescriptor, StateFor } from '@kasbah/shared'
 import { coverWords, fromClosure, toClosure } from '../../lib/cover'
 import { formatPercent } from '../../lib/format'
 import { useDevicesStore } from '../../stores/devices'
+import CoverPill from '../covers/CoverPill.vue'
 import PulseDot from '../ui/PulseDot.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import LightHistoryChart from './LightHistoryChart.vue'
@@ -43,7 +44,9 @@ const moving = computed(() => props.state.motion !== 'stopped')
  * Texte de la ligne d'état : le mouvement quand il y en a un, sinon « Ouvert » / « Fermé » aux
  * extrêmes, sinon le nom du réglage. Jamais le pourcentage — il est déjà au bout de la ligne.
  */
-const hasPosition = props.descriptor.capabilities.includes('position')
+// Capacités CALCULÉES, pas lues une fois : le panneau garde ce composant quand on passe d'un
+// ouvrant à un autre, et un volet aurait sinon hérité des lignes (inclinaison, batterie) du précédent.
+const hasPosition = computed(() => props.descriptor.capabilities.includes('position'))
 const lineText = computed(() => {
   if (moving.value) return t(`cover.${w.value}.${props.state.motion}`)
   // Position jamais reçue : la grande valeur montre l'état SUPPOSÉ (« Fermé », « Remonté ») et cette
@@ -51,34 +54,31 @@ const lineText = computed(() => {
   if (shown.value === undefined) return t('cover.assumedHint')
   // Moteur sans retour à position déduite : la grande valeur dit déjà le mot, la ligne garde sa
   // hauteur sans le répéter (elle reprend la parole dès qu'un mouvement commence).
-  if (!hasPosition) return '—'
+  if (!hasPosition.value) return '—'
   if (shown.value <= 0) return t(`cover.${w.value}.open`)
   if (shown.value >= 100) return t(`cover.${w.value}.closed`)
   return t(`cover.${w.value}.level`)
 })
-const hasTilt = props.descriptor.capabilities.includes('tilt')
-const hasStop = props.descriptor.capabilities.includes('stop')
+const hasTilt = computed(() => props.descriptor.capabilities.includes('tilt'))
+const hasStop = computed(() => props.descriptor.capabilities.includes('stop'))
 
 // Position favorite mémorisée DANS le moteur (le « my » de Somfy). La capacité dit qu'on peut la
 // rappeler ; la valeur, seulement qu'on peut la montrer — un moteur unidirectionnel a la première
 // sans la seconde. D'où deux notions distinctes plutôt qu'une.
-const hasPreset = props.descriptor.capabilities.includes('preset')
+const hasPreset = computed(() => props.descriptor.capabilities.includes('preset'))
 const presetClosure = computed(() =>
   props.state.presetPosition === undefined ? undefined : toClosure(props.state.presetPosition))
-// Repère sur la piste du curseur : `ticks` en tableau place la marque avec la géométrie de Vuetify
-// (le pouce ne parcourt pas toute la largeur), donc sans calcul de position à la main.
-const presetTicks = computed(() => (presetClosure.value === undefined ? undefined : [presetClosure.value]))
 // Réécrire la mémoire du moteur : on grave la position ACTUELLE, comme le geste de la télécommande
 // Somfy (amener l'ouvrant au bon endroit, puis mémoriser) — donc on n'enregistre jamais une
 // position qu'on n'a pas vue. Impossible en pleine course : la position y est celle du départ.
-const hasPresetSet = props.descriptor.capabilities.includes('preset_set')
+const hasPresetSet = computed(() => props.descriptor.capabilities.includes('preset_set'))
 const canSavePreset = computed(() => !props.disabled && !moving.value && props.state.position !== undefined)
 
 // Mode discret : un interrupteur tenu par le serveur, appliqué aux manœuvres SUIVANTES (vitesse
 // lente). Le basculer ne bouge rien, donc il reste actif pendant une course.
-const hasQuiet = props.descriptor.capabilities.includes('quiet')
+const hasQuiet = computed(() => props.descriptor.capabilities.includes('quiet'))
 /** Moteur sur batterie (volet solaire) : la ligne est réservée dès la capacité, la valeur peut manquer. */
-const hasBattery = props.descriptor.capabilities.includes('battery')
+const hasBattery = computed(() => props.descriptor.capabilities.includes('battery'))
 
 // Volet solaire : son panneau est un capteur de luminosité à part, qui déclare `meta.linkedTo` vers
 // ce volet. On l'affiche ici plutôt que comme un appareil de plus.
@@ -92,35 +92,35 @@ function send(cmd: CommandInput) { emit('command', cmd) }
 
 <template>
   <div class="cover">
-    <div class="cover__keys">
-      <button type="button" class="key" :disabled="disabled" @click="send({ type: 'cover.open' })">
-        <StrokeIcon name="collapseUp" :size="16" /><span>{{ $t(`cover.${w}.actionOpen`) }}</span>
-      </button>
-      <button v-if="hasStop" type="button" class="key" :disabled="disabled" @click="send({ type: 'cover.stop' })">
-        <StrokeIcon name="stop" :size="16" /><span>{{ $t('common.stop') }}</span>
-      </button>
-      <button type="button" class="key" :disabled="disabled" @click="send({ type: 'cover.close' })">
-        <StrokeIcon name="collapseDown" :size="16" /><span>{{ $t(`cover.${w}.actionClose`) }}</span>
-      </button>
+    <!-- L'ouvrant vu de face, en grand, et ses trois manœuvres EMPILÉES à côté dans le sens du
+         mouvement (Ouvrir en haut, Fermer en bas) : la même vignette que la vue Ouvrants, qu'on fait
+         glisser verticalement. Un curseur horizontal se lisait à l'envers d'un volet. -->
+    <div class="hero">
+      <CoverPill class="hero__pill" :closure="dragging ? drag : shown" :preset="presetClosure"
+                 :interactive="hasPosition && !disabled" :device-class="descriptor.meta.cover?.deviceClass"
+                 :label="$t(`cover.${w}.level`)"
+                 @drag="(v: number) => { dragging = true; drag = v }"
+                 @commit="(v: number) => { dragging = false; send({ type: 'cover.set_position', position: fromClosure(Math.round(v)) }) }" />
+      <div class="hero__side">
+        <!-- UNE seule ligne, de hauteur constante : le point garde sa place même éteint, le texte
+             occupe le milieu et le pourcentage reste collé à droite. Une ligne qui apparaît et
+             disparaît décalerait tout ce qui suit à chaque mouvement. -->
+        <div class="line line--hero" :data-moving="moving ? '1' : '0'">
+          <PulseDot :on="moving" />
+          <span class="line__text">{{ lineText }}</span>
+          <span v-if="hasPosition && shown !== undefined" class="line__pct">{{ Math.round(closure) }} %</span>
+        </div>
+        <button type="button" class="key" :disabled="disabled" @click="send({ type: 'cover.open' })">
+          <StrokeIcon name="collapseUp" :size="16" /><span>{{ $t(`cover.${w}.actionOpen`) }}</span>
+        </button>
+        <button v-if="hasStop" type="button" class="key" :disabled="disabled" @click="send({ type: 'cover.stop' })">
+          <StrokeIcon name="stop" :size="16" /><span>{{ $t('common.stop') }}</span>
+        </button>
+        <button type="button" class="key" :disabled="disabled" @click="send({ type: 'cover.close' })">
+          <StrokeIcon name="collapseDown" :size="16" /><span>{{ $t(`cover.${w}.actionClose`) }}</span>
+        </button>
+      </div>
     </div>
-
-    <!-- UNE seule ligne, de hauteur constante : le point garde sa place même éteint, le texte
-         occupe le milieu et le pourcentage reste collé à droite. Une ligne qui apparaît et
-         disparaît décalerait tout ce qui suit à chaque mouvement. -->
-    <div class="line" :data-moving="moving ? '1' : '0'">
-      <PulseDot :on="moving" />
-      <span class="line__text">{{ lineText }}</span>
-      <span v-if="hasPosition && shown !== undefined" class="line__pct">{{ Math.round(closure) }} %</span>
-    </div>
-
-    <!-- Pas de 1 % et non de 5 : le repère de position favorite tombe où le moteur l'a mémorisé
-         (37 %, 63 %…), et Vuetify aligne le POUCE sur le pas. À 5 %, rappeler la position perso
-         posait le pouce jusqu'à 2 points à côté de son propre repère — mesuré, et visible. -->
-    <v-slider v-if="hasPosition" v-model="drag" :min="0" :max="100" :step="1" :disabled="disabled"
-              :ticks="presetTicks" :show-ticks="presetTicks ? 'always' : false"
-              density="compact" hide-details class="cover-slider"
-              @start="dragging = true"
-              @end="(v: number) => { dragging = false; send({ type: 'cover.set_position', position: fromClosure(Math.round(v)) }) }" />
 
     <!-- Une seule ligne pour les deux : le rappel prend la place (son libellé et sa valeur sont
          écrits), la mémorisation se réduit à une icône. Cette dernière porte une teinte
@@ -156,7 +156,8 @@ function send(cmd: CommandInput) { emit('command', cmd) }
     </div>
 
     <template v-if="hasTilt">
-      <!-- même gabarit que la ligne ci-dessus : les deux pourcentages s'alignent -->
+      <!-- Inclinaison : l'ANGLE des lames (store vénitien, brise-soleil orientable), sans monter ni
+           descendre — d'où un curseur horizontal ici, qui ne mime aucun mouvement. -->
       <div class="line">
         <PulseDot :on="false" />
         <span class="line__text">{{ $t('cover.tilt') }}</span>
@@ -173,7 +174,10 @@ function send(cmd: CommandInput) { emit('command', cmd) }
 
 <style scoped>
 .cover { display: grid; gap: 2px; }
-.cover__keys { display: flex; gap: 6px; }
+/* La vignette sur toute la hauteur de la colonne des touches (ligne d'état + trois touches). */
+.hero { display: grid; grid-template-columns: auto 1fr; gap: 14px; --pill-w: 88px; --pill-h: 150px; --pill-r: 16px; --pill-rows: auto; }
+.hero__side { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.line--hero { margin: 0 0 4px; height: 18px; }
 .line { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin-top: 10px; }
 .line[data-moving='1'] { color: var(--accent); }
 .line__text { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -182,7 +186,7 @@ function send(cmd: CommandInput) { emit('command', cmd) }
 /* `min-width: 0` est indispensable : trois boutons à largeur minimale par défaut débordent des
    340 px du panneau. */
 .key {
-  flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 5px;
+  flex: 0 0 auto; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 5px;
   height: 40px; padding: 0 6px; border-radius: 10px; border: 1px solid var(--line);
   background: transparent; color: var(--text); font-size: 12px; font-weight: 500;
   white-space: nowrap; overflow: hidden;
@@ -208,6 +212,4 @@ function send(cmd: CommandInput) { emit('command', cmd) }
    donc c'est l'ordre qui les fait gagner. */
 .preset__save { flex: 0 0 40px; color: rgb(var(--v-theme-warning)); border-color: rgba(var(--v-theme-warning), .45); }
 .preset__save:hover:not(:disabled) { background: rgba(var(--v-theme-warning), .14); color: rgb(var(--v-theme-warning)); border-color: transparent; }
-/* Le repere de position favorite est style globalement (`.cover-slider` dans styles/app.css) :
-   le panneau appareil et la vue Ouvrants l'affichent tous les deux. */
 </style>
