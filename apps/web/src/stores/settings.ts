@@ -13,6 +13,7 @@ import { RENDER_QUALITIES, type RenderQuality } from '../three/core/post'
 import { SCENE_PROJECTIONS, type SceneProjection } from '../three/core/cameraFit'
 import { DEFAULT_STYLE_ID, RENDER_STYLES } from '../three/styles'
 import { NEUTRAL_TUNING, resolveTuning, sameTuning, TUNING_PRESETS, type SceneTuning } from '../three/styles/tuning'
+import { SEASON_MODES, type SeasonMode } from '../three/garden/season'
 import { WEATHER_CONDITIONS, type WeatherCondition } from '@kasbah/shared'
 
 /** Une condition forcée dans la scène, ou `real` : la météo telle qu'elle est. */
@@ -57,6 +58,8 @@ export const useSettingsStore = defineStore('settings', () => {
   const locale = useLocalStorage<string>('kasbah.locale', '')
   const sceneStyle = useLocalStorage<string>('kasbah.sceneStyle', DEFAULT_STYLE_ID)
   const sceneAmbience = useLocalStorage<AmbienceMode>('kasbah.sceneAmbience', 'auto')
+  /** Saison du jardin de la vue Maison ; `auto` suit la date. */
+  const sceneSeason = useLocalStorage<SeasonMode>('kasbah.sceneSeason', 'auto')
   const sceneQuality = useLocalStorage<RenderQuality>('kasbah.sceneQuality', 'auto')
   /**
    * Comment la maison est PROJETÉE : en perspective, à plat (orthographique, on tourne encore), ou
@@ -144,6 +147,7 @@ export const useSettingsStore = defineStore('settings', () => {
   function setLocale(v: string) { if (v === '' || isLocale(v)) locale.value = v }
   function setSceneStyle(v: string) { if (RENDER_STYLES.some((st) => st.id === v)) sceneStyle.value = v }
   function setSceneAmbience(v: AmbienceMode) { if (AMBIENCE_MODES.includes(v)) sceneAmbience.value = v }
+  function setSceneSeason(v: SeasonMode) { if (SEASON_MODES.includes(v)) sceneSeason.value = v }
   function setSceneQuality(v: RenderQuality) { if (RENDER_QUALITIES.includes(v)) sceneQuality.value = v }
   function setSceneProjection(v: SceneProjection) { if (SCENE_PROJECTIONS.includes(v)) sceneProjection.value = v }
   function setSceneAssets(v: boolean) { sceneAssets.value = v }
@@ -201,6 +205,6 @@ export const useSettingsStore = defineStore('settings', () => {
     setAppearance, cycleAppearance, setTheme, setLocale, toggleLocale, applyToVuetify, applyLocale,
     setSceneStyle, setSceneAmbience, setSceneQuality, setSceneProjection, setSceneAssets, setSceneDebug, setSceneTuning, resetSceneTuning, applySceneTuningPreset, saveSceneTuning, setSceneTuningOpen, setReliefEditing, setHouseEditing, setSceneWeather, setSceneCloudCover, setSceneVisibilityM, setHouseholdSize, setCupGrams,
     appearances: APPEARANCES, themes: THEME_LIST, locales: LOCALES,
-    styles: RENDER_STYLES, ambiences: AMBIENCE_MODES, qualities: RENDER_QUALITIES, projections: SCENE_PROJECTIONS,
+    styles: RENDER_STYLES, ambiences: AMBIENCE_MODES, seasons: SEASON_MODES, sceneSeason, setSceneSeason, qualities: RENDER_QUALITIES, projections: SCENE_PROJECTIONS,
   }
 })

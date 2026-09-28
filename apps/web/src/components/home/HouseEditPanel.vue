@@ -4,6 +4,7 @@ import { openingLabel } from '@kasbah/shared'
 import { useI18n } from 'vue-i18n'
 import { useHouseStore } from '../../stores/house'
 import ParkingRows from './ParkingRows.vue'
+import GardenSection from './GardenSection.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
 // Panneau « maison » en MODE ÉDITION : ce qu'on modifie DE LA MAISON entière, à la place des tuiles
@@ -79,6 +80,8 @@ function startRoof() { house.startPlacingOpening('roof-window') }
   </section>
 
   <ParkingRows :list="parkings" />
+
+  <GardenSection />
 
   <p class="muted hint">{{ $t('parking.roomHint') }}</p>
 </template>

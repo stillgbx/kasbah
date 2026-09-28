@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { deviceIdSchema } from '../devices/descriptor'
-import { defaultPlugins, hexColorSchema, MAX_OPENING_LEAVES, MIN_OPENING_LEAVES, MIN_PARKING_DIM, model3dSchema, MOUNTS, NEUTRAL_TUNING, OPENING_MATERIALS, OPENING_TYPES, SPEAKER_SHAPES, vec2Schema, vec3Schema, type PluginSettingsPatch, type Relief, type SceneTuning } from './schema'
+import { defaultPlugins, GARDEN_KINDS, hexColorSchema, MAX_GARDEN_HEIGHT, MIN_GARDEN_HEIGHT, MAX_OPENING_LEAVES, MIN_OPENING_LEAVES, MIN_PARKING_DIM, model3dSchema, MOUNTS, NEUTRAL_TUNING, OPENING_MATERIALS, OPENING_TYPES, SPEAKER_SHAPES, vec2Schema, vec3Schema, type PluginSettingsPatch, type Relief, type SceneTuning } from './schema'
 import { DEVICE_KINDS, VEHICLE_FINISHES } from '../devices/kinds'
 import { computeHouseGeometry, openingCentre } from './geometry'
 import { parseHouse } from './validate'
@@ -734,4 +734,64 @@ export function removeParkingFromJson(doc: unknown, id: string): JsonObject {
   const { site, list } = parkingsOf(doc)
   if (!list.some((p) => isObject(p) && p.id === id)) throw new PlacementError(`unknown parking "${id}"`)
   return { ...doc, site: { ...site, parkings: list.filter((p) => !(isObject(p) && p.id === id)) } }
+}
+
+/** Élément du jardin AJOUTÉ depuis le mode édition. L'id est choisi par l'UI. */
+export const newGardenItemSchema = z.object({
+  id: z.string().min(1).max(60),
+  kind: z.enum(GARDEN_KINDS),
+  center: vec2Schema,
+  height: z.number().min(MIN_GARDEN_HEIGHT).max(MAX_GARDEN_HEIGHT),
+  yaw: z.number().min(-360).max(360).optional(),
+  seed: z.number().int().min(0).optional(),
+  /** Espèce du catalogue de l'app. Dans un réglage, la chaîne vide l'EFFACE (retour à la famille). */
+  species: z.string().regex(/^([a-z0-9_.-]+)?$/i).max(60).optional(),
+})
+export type NewGardenItem = z.infer<typeof newGardenItemSchema>
+
+/** Élément du jardin réglé : seuls les champs présents sont posés. Changer de famille est permis. */
+export const gardenItemPatchSchema = newGardenItemSchema.omit({ id: true }).partial()
+export type GardenItemPatch = z.infer<typeof gardenItemPatchSchema>
+
+/** Les éléments du jardin, tels qu'ils sont écrits (tableau absent = jardin vide). */
+function gardenOf(doc: JsonObject): { site: JsonObject; list: unknown[] } {
+  const site = isObject(doc.site) ? doc.site : null
+  if (!site) throw new PlacementError('house document has no site')
+  return { site, list: Array.isArray(site.garden) ? site.garden : [] }
+}
+
+/** Renvoie une copie du document JSON avec un élément de jardin de PLUS. L'id doit être libre. */
+export function addGardenItemToJson(doc: unknown, item: NewGardenItem): JsonObject {
+  if (!isObject(doc)) throw new PlacementError('house document is not an object')
+  const { site, list } = gardenOf(doc)
+  if (list.some((g) => isObject(g) && g.id === item.id)) throw new PlacementError(`garden item "${item.id}" already exists`)
+  const next: JsonObject = { id: item.id, kind: item.kind, center: item.center, height: item.height }
+  if (item.yaw) next.yaw = item.yaw
+  if (item.seed !== undefined) next.seed = item.seed
+  if (item.species) next.species = item.species
+  return { ...doc, site: { ...site, garden: [...list, next] } }
+}
+
+/** Renvoie une copie du document JSON avec l'élément de jardin `id` modifié. */
+export function patchGardenItemInJson(doc: unknown, id: string, patch: GardenItemPatch): JsonObject {
+  if (!isObject(doc)) throw new PlacementError('house document is not an object')
+  const { site, list } = gardenOf(doc)
+  const i = list.findIndex((g) => isObject(g) && g.id === id)
+  if (i < 0) throw new PlacementError(`unknown garden item "${id}"`)
+  const next: JsonObject = { ...(list[i] as JsonObject) }
+  for (const key of ['kind', 'center', 'height', 'seed'] as const) if (patch[key] !== undefined) next[key] = patch[key]
+  // un cap nul n'est pas écrit : c'est la valeur par défaut
+  if (patch.yaw !== undefined) { if (patch.yaw) next.yaw = patch.yaw; else delete next.yaw }
+  if (patch.species !== undefined) { if (patch.species) next.species = patch.species; else delete next.species }
+  const nextList = [...list]
+  nextList[i] = next
+  return { ...doc, site: { ...site, garden: nextList } }
+}
+
+/** Renvoie une copie du document JSON SANS l'élément de jardin `id`. Rien ne le nomme ailleurs. */
+export function removeGardenItemFromJson(doc: unknown, id: string): JsonObject {
+  if (!isObject(doc)) throw new PlacementError('house document is not an object')
+  const { site, list } = gardenOf(doc)
+  if (!list.some((g) => isObject(g) && g.id === id)) throw new PlacementError(`unknown garden item "${id}"`)
+  return { ...doc, site: { ...site, garden: list.filter((g) => !(isObject(g) && g.id === id)) } }
 }

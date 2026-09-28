@@ -1,4 +1,4 @@
-import type { AutomationBody, AutomationEntry, AutomationRun, Relief, SceneTuning, CommandInput, DeviceConsumption, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal, StateFor } from '@kasbah/shared'
+import type { AutomationBody, GardenItemPatch, NewGardenItem, AutomationEntry, AutomationRun, Relief, SceneTuning, CommandInput, DeviceConsumption, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal, StateFor } from '@kasbah/shared'
 
 // Abstraction du canal serveur. Deux implémentations : HTTP + WebSocket (réel) et simulation
 // in-process (tests, démo statique sans serveur). Les commandes passent TOUJOURS par une requête
@@ -654,6 +654,12 @@ export interface Transport {
   saveParking(id: string, patch: ParkingPatch): Promise<House>
   /** Retire une place : l'engin qui s'y rangeait retourne à son point GPS. Renvoie la maison réécrite. */
   removeParking(id: string): Promise<House>
+  /** Ajoute un élément au jardin (arbre, buisson, pierre) ; renvoie la maison réécrite. */
+  addGardenItem(item: NewGardenItem): Promise<House>
+  /** Règle un élément du jardin (famille, pied, hauteur, cap, forme) ; renvoie la maison réécrite. */
+  saveGardenItem(id: string, patch: GardenItemPatch): Promise<House>
+  /** Retire un élément du jardin ; renvoie la maison réécrite. */
+  removeGardenItem(id: string): Promise<House>
   /** Écrit l'ordre d'affichage des pièces d'un niveau ; renvoie la maison réécrite. */
   setRoomOrder(levelId: string, roomIds: string[]): Promise<House>
   /** Enregistre le réglage de lumière de la scène 3D dans la maison ; renvoie la maison réécrite. */

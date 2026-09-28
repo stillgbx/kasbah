@@ -250,6 +250,39 @@ export const parkingSchema = z.object({
 })
 export type Parking = z.infer<typeof parkingSchema>
 
+/** Familles d'éléments d'aménagement du jardin. Un décor : aucun appareil, aucun état. */
+export const GARDEN_KINDS = ['broadleaf', 'conifer', 'palm', 'shrub', 'rock'] as const
+export type GardenKind = (typeof GARDEN_KINDS)[number]
+/** Bornes de hauteur d'un élément (m) : un caillou de 5 cm disparaît dans le gazon, un arbre de 40 m sort du cadre. */
+export const MIN_GARDEN_HEIGHT = 0.1
+export const MAX_GARDEN_HEIGHT = 40
+
+/**
+ * Élément d'aménagement du jardin (arbre, buisson, pierre), posé sur le terrain et qui en suit le
+ * relief. Seule la HAUTEUR se règle : la largeur découle de la famille et de la forme tirée.
+ */
+export const gardenItemSchema = z.object({
+  id: idSchema,
+  kind: z.enum(GARDEN_KINDS),
+  /** Pied de l'élément (m, repère maison). */
+  center: vec2Schema,
+  height: z.number().min(MIN_GARDEN_HEIGHT).max(MAX_GARDEN_HEIGHT),
+  /** Rotation autour de la verticale (degrés). Absente = 0. */
+  yaw: z.number().optional(),
+  /**
+   * Graine de la forme : deux sapins de même hauteur ne sont pas jumeaux. Absente = tirée de l'id ;
+   * l'UI en écrit une quand on demande « une autre forme ».
+   */
+  seed: z.number().int().min(0).optional(),
+  /**
+   * Espèce (« cerisier ») : une recette de forme et de couleurs du catalogue de l'app, qui affine la
+   * famille. Absente, ou inconnue de l'app qui lit le fichier = la forme générique de la famille.
+   */
+  species: idSchema.optional(),
+  meta: metaSchema,
+})
+export type GardenItem = z.infer<typeof gardenItemSchema>
+
 /**
  * Relief du terrain : une grille régulière de hauteurs, en ÉCART à `site.elevation`. Absent = terrain
  * plat, comme avant le champ.
@@ -274,6 +307,7 @@ export const siteSchema = z.object({
   relief: reliefSchema.optional(),
   zones: z.array(zoneSchema).default([]),
   parkings: z.array(parkingSchema).default([]),
+  garden: z.array(gardenItemSchema).default([]),
 })
 export type Site = z.infer<typeof siteSchema>
 

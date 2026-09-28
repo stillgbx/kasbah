@@ -1,4 +1,4 @@
-import { addOpeningToJson, addParkingToJson, assertCommandAllowed, automationBodySchema, automationIdSchema, automationPatchSchema, commandSchema, devicePlacementSchema, newOpeningSchema, newParkingSchema, openingPatchSchema, panelArrayPatchSchema, parkingPatchSchema, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, roomOrderSchema, reliefSchema, sceneTuningSchema, setReliefInJson, setRenderTuningInJson, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
+import { addGardenItemToJson, addOpeningToJson, addParkingToJson, gardenItemPatchSchema, newGardenItemSchema, patchGardenItemInJson, removeGardenItemFromJson, assertCommandAllowed, automationBodySchema, automationIdSchema, automationPatchSchema, commandSchema, devicePlacementSchema, newOpeningSchema, newParkingSchema, openingPatchSchema, panelArrayPatchSchema, parkingPatchSchema, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, roomOrderSchema, reliefSchema, sceneTuningSchema, setReliefInJson, setRenderTuningInJson, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { updateHouseFile, type LoadedHouse } from '../config/house'
 import type { AutomationEngine } from '../core/automations/engine'
@@ -127,6 +127,28 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
 
   app.delete<{ Params: { id: string } }>('/api/house/parkings/:id', async (req) => {
     const house = await updateHouseFile(deps.house, (doc) => removeParkingFromJson(doc, req.params.id))
+    deps.hub.broadcast({ type: 'house', house })
+    return { house }
+  })
+
+  // Aménagement du jardin (`site.garden[]`) : arbres, buissons, pierres. Du décor, posé et réglé
+  // depuis le mode édition exactement comme une place.
+  app.post('/api/house/garden', async (req) => {
+    const item = newGardenItemSchema.parse(req.body)   // ZodError → 400
+    const house = await updateHouseFile(deps.house, (doc) => addGardenItemToJson(doc, item))
+    deps.hub.broadcast({ type: 'house', house })
+    return { house }
+  })
+
+  app.put<{ Params: { id: string } }>('/api/house/garden/:id', async (req) => {
+    const patch = gardenItemPatchSchema.parse(req.body)   // ZodError → 400
+    const house = await updateHouseFile(deps.house, (doc) => patchGardenItemInJson(doc, req.params.id, patch))
+    deps.hub.broadcast({ type: 'house', house })
+    return { house }
+  })
+
+  app.delete<{ Params: { id: string } }>('/api/house/garden/:id', async (req) => {
+    const house = await updateHouseFile(deps.house, (doc) => removeGardenItemFromJson(doc, req.params.id))
     deps.hub.broadcast({ type: 'house', house })
     return { house }
   })

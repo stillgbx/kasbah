@@ -66,6 +66,12 @@ Le fichier décrit la maison et le jardin ; il est validé au démarrage du serv
 "relief": { "step": 2, "origin": [-28, -40], "rows": ["0 0 12 15", "0 3 20 41"] }
 ```
 
+`garden` (facultatif) : arbres, buissons et pierres, posés sur le terrain et qui en suivent le relief. `kind` = `broadleaf` (feuillu), `conifer`, `palm`, `shrub` (buisson) ou `rock` (pierre) ; `center` = pied (m) ; `height` = hauteur (0,1 à 40 m, la largeur en découle) ; `yaw` = orientation (degrés, facultatif) ; `seed` = forme tirée (facultatif) ; `species` = espèce du catalogue de l'app (`cherry`…, facultatif ; inconnue = forme générique de la famille). Se pose depuis l'UI : Réglages → Mode édition, puis section « Jardin » de la vue Maison.
+
+```jsonc
+"garden": [{ "id": "garden.broadleaf-1", "kind": "broadleaf", "center": [4, 19], "height": 7, "yaw": 145, "species": "cherry" }]
+```
+
 ### Appareils (`devices`)
 
 ```jsonc

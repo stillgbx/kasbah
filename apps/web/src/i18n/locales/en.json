@@ -332,6 +332,9 @@
     "assetsNone": "This style is fully computed: it has no photo materials.",
     "ambience": "Time at the house",
     "ambienceHint": "Independent from the app's light/dark theme: « Automatic » follows the real sun above the house, from its GPS origin and the clock.",
+    "season": "Garden season",
+    "seasonHint": "Tree foliage, blossom and fruit. « Automatic » follows the date, in the house's hemisphere.",
+    "seasons": { "auto": "Automatic", "spring": "Spring", "summer": "Summer", "autumn": "Autumn", "winter": "Winter" },
     "ambiences": { "auto": "Automatic", "day": "Day", "dusk": "Dusk", "night": "Night" },
     "projection": "Projection",
     "projectionHint": "« Flat » removes the vanishing point: parallel lines stay parallel, and you still orbit the house freely. « Isometric » also locks the angles — the 45° corner, a fixed pitch — and the view then only turns a quarter at a time; finger and left button pan it instead of rotating it.",
@@ -396,7 +399,7 @@
         "tiltPills": "Pills blurred"
       }
     },
-  "houseEditing": "Adjust the house", "houseEditingHint": "The Home view then lets you adjust and drag windows and doors on the walls, and lay out parking spots on the ground. The survey is approximate: this is where it gets corrected, and nothing is written until something is actually adjusted."
+  "houseEditing": "Adjust the house and garden", "houseEditingHint": "The Home view then lets you adjust and drag windows and doors on the walls, lay out parking spots on the ground, and landscape the garden: trees, shrubs and stones to plant, move or remove. The wall survey is approximate: this is where it gets corrected. Nothing is written until something is actually adjusted."
   },
   "settings": {
     "title": "Settings", "appearance": "Appearance", "system": "System", "light": "Light", "dark": "Dark",
@@ -608,6 +611,19 @@
     "device": "Linked cover", "deviceNone": "None", "deviceTaken": "{name} (already on {opening})",
     "revert": "Revert", "smaller": "Smaller", "bigger": "Bigger",
     "saveError": "Opening not saved: {message}"
+  },
+  "garden": {
+    "list": "Garden", "add": "Plant", "done": "Done",
+    "count": "{n} item | {n} item | {n} items", "none": "No trees, shrubs or stones yet.",
+    "kinds": { "broadleaf": "Tree", "conifer": "Conifer", "palm": "Palm", "shrub": "Shrub", "rock": "Stone" },
+    "placeHint": "Tap the ground in the 3D view: each tap places an item.",
+    "hint": "Pick a family, then tap the ground. Tap an item to adjust or drag it.",
+    "height": "Height", "yaw": "Orientation", "kind": "Family", "species": "Species", "generic": "Generic",
+    "reshape": "Another shape",
+    "whereHint": "Adjust it here, or drag it along the ground in the 3D view.",
+    "remove": "Delete", "removeConfirm": "Confirm deletion",
+    "smaller": "Smaller", "bigger": "Bigger",
+    "saveError": "Garden item not saved: {message}"
   },
   "parking": {
     "list": "Parking spots",

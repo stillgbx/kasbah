@@ -18,6 +18,7 @@ import type { IconName } from '../lib/strokeIcons'
 import { useSettingsStore, type Appearance, type SceneWeatherChoice } from '../stores/settings'
 import { resolveVariant, type Theme } from '../themes'
 import { resolveAmbience, type AmbienceMode } from '../three/core/ambience'
+import type { SeasonMode } from '../three/garden/season'
 import { backdropColor, groundColor } from '../three/builders/materials'
 import type { RenderQuality } from '../three/core/post'
 import type { SceneProjection } from '../three/core/cameraFit'
@@ -83,6 +84,7 @@ function stylePreview(style: RenderStyle) {
 }
 /** Le switch des matières en images n'a de sens que pour un style qui porte un pack. */
 const styleHasAssets = computed(() => !!styleById(settings.sceneStyle).assets)
+const seasonOptions = computed(() => settings.seasons.map((s) => ({ value: s, label: t(`render.seasons.${s}`) })))
 const ambienceOptions = computed(() => settings.ambiences.map((a) => ({ value: a, label: t(`render.ambiences.${a}`) })))
 const qualityOptions = computed(() => settings.qualities.map((q) => ({ value: q, label: t(`render.qualities.${q}`) })))
 const projectionOptions = computed(() => settings.projections.map((p) => ({ value: p, label: t(`render.projections.${p}`) })))
@@ -202,6 +204,9 @@ const houseStats = computed(() => {
               <div class="block__sub">{{ $t('render.ambience') }}</div>
               <Segmented dense :model-value="settings.sceneAmbience" :options="ambienceOptions" class="w-100" @update:model-value="(v: AmbienceMode) => settings.setSceneAmbience(v)" />
               <div class="muted small">{{ $t('render.ambienceHint') }}</div>
+              <div class="block__sub">{{ $t('render.season') }}</div>
+              <Segmented dense :model-value="settings.sceneSeason" :options="seasonOptions" class="w-100" @update:model-value="(v: SeasonMode) => settings.setSceneSeason(v)" />
+              <div class="muted small">{{ $t('render.seasonHint') }}</div>
               <div class="block__sub">{{ $t('render.projection') }}</div>
               <Segmented dense :model-value="settings.sceneProjection" :options="projectionOptions" class="w-100" @update:model-value="(v: SceneProjection) => settings.setSceneProjection(v)" />
               <div class="muted small">{{ $t('render.projectionHint') }}</div>

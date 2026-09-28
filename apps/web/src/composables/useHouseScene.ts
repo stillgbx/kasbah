@@ -5,6 +5,7 @@ import { useDocumentVisibility, useIntervalFn, useResizeObserver, watchThrottled
 import type { DeviceState, House, Vec3 } from '@kasbah/shared'
 import { readUiTheme } from '../three/core/theme'
 import { resolveAmbience } from '../three/core/ambience'
+import { resolveSeason } from '../three/garden/season'
 import { styleById } from '../three/styles'
 import { HouseScene, type HouseSceneOptions, type ReliefEditState, type ScenePrepareStage } from '../three/HouseScene'
 import { useDevicesStore } from '../stores/devices'
@@ -63,6 +64,8 @@ export function useHouseScene(args: UseHouseSceneArgs) {
         ...(weather.live.value ? { condition: weather.live.value.condition } : {}),
       }),
   }))
+  /** Saison du jardin : imposée par les Réglages, ou celle de la date dans l'hémisphère de la maison. */
+  const season = computed(() => resolveSeason(settings.sceneSeason, clock.value, geo.value?.lat))
 
   const deviceTap = new Set<Handler<[string]>>()
   const journalTap = new Set<Handler<[number]>>()
@@ -80,6 +83,10 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   const parkingTap = new Set<Handler<[string]>>()
   const parkingDrag = new Set<Handler<[string, [number, number]]>>()
   const parkingDrop = new Set<Handler<[string]>>()
+  const gardenTap = new Set<Handler<[string]>>()
+  const gardenDrag = new Set<Handler<[string, [number, number]]>>()
+  const gardenDrop = new Set<Handler<[string]>>()
+  const gardenPlaceTap = new Set<Handler<[[number, number]]>>()
 
   onMounted(() => {
     const canvas = args.canvas.value
@@ -109,6 +116,10 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     scene.on('parkingTap', (id) => parkingTap.forEach((f) => f(id)))
     scene.on('parkingDrag', (id, xy) => parkingDrag.forEach((f) => f(id, xy)))
     scene.on('parkingDrop', (id) => parkingDrop.forEach((f) => f(id)))
+    scene.on('gardenTap', (id) => gardenTap.forEach((f) => f(id)))
+    scene.on('gardenDrag', (id, xy) => gardenDrag.forEach((f) => f(id, xy)))
+    scene.on('gardenDrop', (id) => gardenDrop.forEach((f) => f(id)))
+    scene.on('gardenPlaceTap', (xy) => gardenPlaceTap.forEach((f) => f(xy)))
     scene.on('reliefChange', (state) => { relief.value = state })
     scene.on('prepare', (stage, progress) => {
       preparing.value = stage ? { stage, progress } : null
@@ -126,6 +137,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     scene.setOptions({ quality: settings.sceneQuality, projection: settings.sceneProjection, ...(args.options ? args.options.value : {}) })
     if (args.house.value) scene.load(args.house.value)
     scene.updateStates(args.states.value)
+    scene.setSeason(season.value)
     ready.value = true
   })
 
@@ -137,6 +149,8 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     if (prev && sameShellButOpenings(prev, h)) { scene.updateOpenings(h); return }
     // seules des PLACES ont bougé → marquage au sol et engins qui s'y rangent, rien d'autre
     if (prev && sameShellButParkings(prev, h)) { scene.updateParkings(h); return }
+    // seul le JARDIN a changé (on pose, glisse ou règle un arbre) → les éléments seulement
+    if (prev && sameShellButGarden(prev, h)) { scene.updateGarden(h); return }
     // seul le RELIEF a changé (on vient de l'enregistrer) → le terrain et ce qui s'y pose
     if (prev && sameShellButRelief(prev, h)) { scene.updateRelief(h); return }
     scene.load(h); scene.setDescriptors(devices.descriptors); scene.updateStates(args.states.value, true)
@@ -149,6 +163,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   // nextTick : les variables CSS du nouveau thème doivent être appliquées avant lecture
   watch(() => theme.global.name.value, () => { void nextTick(() => scene?.setAppearance({ ui: readUiTheme() })) })
   watch(style, (s) => scene?.setAppearance({ style: s }))
+  watch(season, (s) => scene?.setSeason(s))
   // Une ambiance refait le ciel (~35 ms) : les curseurs de la météo forcée en envoient une par cran,
   // et le glissement accrochait. Au plus une tous les 100 ms, la dernière toujours appliquée.
   // Et seulement si elle a CHANGÉ : l'ambiance est un objet recalculé, neuf à chaque relecture (le quart
@@ -211,6 +226,14 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     onParkingTap: (f: Handler<[string]>) => { parkingTap.add(f) },
     onParkingDrag: (f: Handler<[string, [number, number]]>) => { parkingDrag.add(f) },
     onParkingDrop: (f: Handler<[string]>) => { parkingDrop.add(f) },
+    setEditingGarden: (on: boolean) => scene?.setEditingGarden(on),
+    setPlacingGarden: (on: boolean) => scene?.setPlacingGarden(on),
+    setSelectedGarden: (id: string | null) => scene?.setSelectedGarden(id),
+    focusGarden: (id: string) => scene?.focusGarden(id),
+    onGardenTap: (f: Handler<[string]>) => { gardenTap.add(f) },
+    onGardenDrag: (f: Handler<[string, [number, number]]>) => { gardenDrag.add(f) },
+    onGardenDrop: (f: Handler<[string]>) => { gardenDrop.add(f) },
+    onGardenPlaceTap: (f: Handler<[[number, number]]>) => { gardenPlaceTap.add(f) },
     onPlaceTap: (f: Handler<[[number, number]]>) => { placeTap.add(f) },
     moveMarker: (key: string, position: Vec3) => scene?.moveMarker(key, position),
     previewBodyColor: (key: string, color: string | null) => scene?.previewBodyColor(key, color),
@@ -250,5 +273,11 @@ function sameShellButRelief(a: House, b: House): boolean {
  */
 function sameShellButParkings(a: House, b: House): boolean {
   const shell = (h: House) => JSON.stringify([h.levels, h.rooms, { ...h.site, parkings: [] }, h.roof, h.defaults])
+  return shell(a) === shell(b)
+}
+
+/** Même bâti au JARDIN près (arbres, buissons, pierres) : les glisser ne recharge pas la maison. */
+function sameShellButGarden(a: House, b: House): boolean {
+  const shell = (h: House) => JSON.stringify([h.levels, h.rooms, { ...h.site, garden: [] }, h.roof, h.defaults])
   return shell(a) === shell(b)
 }

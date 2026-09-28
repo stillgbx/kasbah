@@ -1,0 +1,16 @@
+{
+  "id": "cherry",
+  "kind": "broadleaf",
+  "name": { "fr": "Cerisier", "en": "Cherry tree" },
+  "height": 7,
+  "trunk": { "height": 0.25, "radius": 0.03, "lean": 0.05, "forks": 3, "color": "#3a322c" },
+  "crown": { "shape": "spreading", "width": 1.25, "masses": 9, "roughness": 0.22, "droop": 0.35 },
+  "leaf": { "color": "#4f7a38", "top": "#86a85a" },
+  "accent": { "color": "#b0231c", "count": 90, "size": 0.02 },
+  "seasons": {
+    "spring": { "foliage": 0.8, "leaf": { "color": "#8fb85a", "top": "#b5cf85" }, "accent": { "color": "#f6f1ee", "count": 120, "size": 0.035 } },
+    "autumn": { "foliage": 0.85, "leaf": { "color": "#b8561f", "top": "#e0a03a" }, "accent": null },
+    "winter": { "foliage": 0, "accent": null }
+  },
+  "source": "Photo d'un cerisier en fruits dans un verger, fournie le 2026-09-28 dans la conversation (pas sur disque) : couleurs estimées à l'œil, pas mesurées. Printemps, automne et hiver déduits de la botanique (floraison blanche, feuillage orangé, caduc)."
+}

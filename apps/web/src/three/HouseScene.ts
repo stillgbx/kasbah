@@ -29,6 +29,8 @@ import { defaultAmbience, defaultSceneTheme, rolesOf, styleById, type GlowLook, 
 import { applyTuning, NEUTRAL_TUNING, type SceneTuning } from './styles/tuning'
 import { buildHouse, buildLevel, buildRoofMesh, shapeTerrain, type HouseNodes, type LevelNodes } from './builders/buildHouse'
 import { ReliefEditor } from './relief/reliefEditor'
+import { GardenLayer } from './garden/gardenLayer'
+import type { Season } from './garden/season'
 import { buildParking, parkingGlyphTexture, parkingMaterials, type ParkingMaterials, type ParkingNodes } from './builders/parking'
 import { extrudeRing, flatPolygon, flatRing, insetPolygon } from './builders/shapes'
 import {
@@ -190,6 +192,13 @@ export interface SceneEvents {
    */
   parkingDrag: (parkingId: string, xy: [number, number]) => void
   parkingDrop: (parkingId: string) => void
+  /** Tap sur un élément du jardin (mode édition seulement). */
+  gardenTap: (itemId: string) => void
+  /** Glissement de l'élément du jardin SÉLECTIONNÉ : son nouveau pied, en repère maison. */
+  gardenDrag: (itemId: string, xy: [number, number]) => void
+  gardenDrop: (itemId: string) => void
+  /** Élément du jardin armé : le point du TERRAIN touché (un sol de pièce ou un toit n'en est pas un). */
+  gardenPlaceTap: (xy: [number, number]) => void
   /**
    * La maison se prépare avant d'être montrée (voir `prepare`) : l'étape en cours, avec son compte
    * quand elle en a un (les matières), puis `null` quand elle est prête.
@@ -440,6 +449,7 @@ export class HouseScene {
     deviceDrag: new Set(), deviceDrop: new Set(), journalTap: new Set(),
     openingTap: new Set(), openingDrag: new Set(), openingDrop: new Set(), placeTap: new Set(),
     parkingTap: new Set(), parkingDrag: new Set(), parkingDrop: new Set(), groundTap: new Set(), reliefChange: new Set(), prepare: new Set(),
+    gardenTap: new Set(), gardenDrag: new Set(), gardenDrop: new Set(), gardenPlaceTap: new Set(),
   }
   private detachInput: (() => void) | null = null
   /** Retire le relais de molette posé sur la couche des étiquettes (`forwardWheelFromLabels`). */
@@ -511,6 +521,16 @@ export class HouseScene {
    * (`assignParkings`). Recalculé avec les marqueurs — c'est lui qui remplace le point du relevé.
    */
   private parkingFixes = new Map<string, ParkingFix>()
+  /** Arbres, buissons, pierres : un calque gardé d'une maison à l'autre, reposé sur chaque site neuf. */
+  private garden = new GardenLayer()
+  /** Saison du jardin (feuillage, fleurs, fruits), résolue par l'appelant (`auto` suit la date). */
+  private season: Season = 'summer'
+  private editingGarden = false
+  private selectedGardenId: string | null = null
+  private placingGarden = false
+  private gardenDragger: DragDetector | null = null
+  private pendingGardenXY: [number, number] | null = null
+  private gardenFrame = 0
   /**
    * Relief en cours d'édition (brouillon), `null` hors du mode. Il survit à un rechargement de la
    * maison ; l'éditeur, lui, vit et meurt avec les nœuds de la scène.
@@ -685,6 +705,7 @@ export class HouseScene {
     if (turned) this.applySky()            // le soleil du ciel suit le cap de la maison
     this.fitSunShadow()
     this.buildParkings()                   // le marquage au sol vit avec le terrain, avant les marqueurs
+    this.buildGarden()
     this.buildMarkers()
     this.syncWindowGlow()                  // les verres sont neufs : ils reprennent le style et les lampes
     this.buildOpeningHandles()             // la racine est neuve : le mode édition repose ses poignées
@@ -864,6 +885,7 @@ export class HouseScene {
     this.clearOpeningNotes()
     this.clearParkings()
     this.clearParkingNotes()
+    this.garden.group.removeFromParent()   // gardé : ses formes et matières servent à la maison suivante
     this.clearOriginMark()
     this.removePrecipitation()
     this.removeBats()
@@ -1678,6 +1700,116 @@ export class HouseScene {
     this.emitRelief()
   }
 
+  // ---- jardin (arbres, buissons, pierres) -----------------------------------
+  private buildGarden(): void {
+    if (!this.nodes || !this.house) return
+    this.nodes.site.add(this.garden.group)
+    this.garden.setAccent(this.theme.primary)
+    this.garden.build(this.house.site.garden, (x, y) => this.groundZ(x, y), this.season)
+  }
+
+  /** Seul le JARDIN a changé : les éléments se reposent, rien d'autre ne se reconstruit. */
+  updateGarden(house: House): void {
+    if (!this.nodes || !this.house) { this.load(house); return }
+    this.house = house
+    this.index = indexHouse(house)
+    this.buildGarden()
+    if (this.selectedGardenId && !house.site.garden.some((g) => g.id === this.selectedGardenId)) this.setSelectedGarden(null)
+    this.invalidateShadows()
+    this.loop.invalidate()
+  }
+
+  setSeason(season: Season): void {
+    if (this.season === season) return
+    this.season = season
+    this.buildGarden()
+    this.invalidateShadows()
+    this.loop.invalidate()
+  }
+
+  /** Mode édition : les éléments du jardin deviennent touchables. */
+  setEditingGarden(on: boolean): void {
+    if (this.editingGarden === on) return
+    this.editingGarden = on
+    if (!on) this.setSelectedGarden(null)
+  }
+
+  /** Élément armé : le tap suivant rapporte le point du terrain (`gardenPlaceTap`). */
+  setPlacingGarden(on: boolean): void {
+    this.placingGarden = on
+    this.loop.invalidate()
+  }
+
+  /** L'élément réglé : anneau au pied, et c'est lui seul qui se glisse, attrapé par lui-même. */
+  setSelectedGarden(id: string | null): void {
+    this.selectedGardenId = id
+    this.garden.setSelected(id)
+    this.gardenDragger?.detach()
+    this.gardenDragger = null
+    if (id && !this.deps.headless) {
+      this.gardenDragger = createDragDetector(this.canvas, {
+        hitTest: (ev) => this.grabsGarden(id, ev),
+        onStart: () => this.startGardenDrag(id),
+        onMove: (ev) => this.moveGardenDrag(id, ev),
+        onEnd: (_ev, moved) => this.endGardenDrag(id, moved),
+      })
+    }
+    this.loop.invalidate()
+  }
+
+  /** Cadre un élément du jardin, vu d'où on le regardait. */
+  focusGarden(id: string, animate = true): void {
+    const box = this.garden.boxOf(id)
+    if (!box) return
+    box.expandByScalar(DEVICE_FOCUS_SIZE_M / 2)
+    const { azimuth, polar } = this.currentSpherical()
+    this.flyTo(box, azimuth, clamp(polar, DEVICE_FOCUS_POLAR[0], DEVICE_FOCUS_POLAR[1]), animate, 1.1)
+  }
+
+  private grabsGarden(id: string, ev: TapEvent): boolean {
+    this.raycaster.setFromCamera(new Vector2(ev.ndc.x, ev.ndc.y), this.camera)
+    return this.raycaster.intersectObjects(this.garden.pickables(), false).some((h) => this.garden.idOf(h) === id)
+  }
+
+  private startGardenDrag(id: string): void {
+    const foot = this.garden.footOf(id)
+    if (!foot) return
+    if (this.controls) this.controls.enabled = false
+    this.cameraTween?.cancel()
+    // plan horizontal au PIED, écart doigt–pied conservé (même règle qu'une place)
+    const world = this.garden.group.localToWorld(foot.clone())
+    this.dragPlane.setFromNormalAndCoplanarPoint(WORLD_UP, world)
+    const hit = this.raycaster.ray.intersectPlane(this.dragPlane, new Vector3())
+    this.dragOffset.copy(hit ? hit.sub(world) : new Vector3())
+  }
+
+  private moveGardenDrag(id: string, ev: TapEvent): void {
+    this.raycaster.setFromCamera(new Vector2(ev.ndc.x, ev.ndc.y), this.camera)
+    const hit = this.raycaster.ray.intersectPlane(this.dragPlane, new Vector3())
+    if (!hit) return
+    hit.sub(this.dragOffset)
+    this.pendingGardenXY = [hit.x, -hit.z]          // monde (x, y, z) ← maison (x, z, -y)
+    if (this.gardenFrame !== 0) return
+    this.gardenFrame = requestAnimationFrame(() => {
+      this.gardenFrame = 0
+      this.flushGardenDrag(id)
+    })
+  }
+
+  private flushGardenDrag(id: string): void {
+    const xy = this.pendingGardenXY
+    this.pendingGardenXY = null
+    if (xy) this.emit('gardenDrag', id, xy)
+  }
+
+  private endGardenDrag(id: string, moved: boolean): void {
+    if (this.controls) this.controls.enabled = true
+    if (this.gardenFrame !== 0) { cancelAnimationFrame(this.gardenFrame); this.gardenFrame = 0 }
+    this.flushGardenDrag(id)
+    if (moved) this.emit('gardenDrop', id)
+    this.invalidateShadows()
+  }
+
   // ---- mode « modeler le terrain » ------------------------------------------
   /**
    * Entre (ou sort) de l'édition du relief. En entrant, le brouillon part du relief enregistré (ou
@@ -1818,6 +1950,7 @@ export class HouseScene {
     }
     for (const p of this.journal?.points ?? []) p.anchor.position.z = this.groundZ(p.anchor.position.x, p.anchor.position.y)
     this.buildParkings()
+    this.buildGarden()
     this.applyMist()
     this.invalidateShadows()
     this.loop.invalidate()
@@ -3134,9 +3267,15 @@ export class HouseScene {
   }
 
   /** Sélection au point NDC par lancer de rayon : objet d'appareil, sol de pièce, toit, zone. */
-  pick(ndc: { x: number; y: number }): { kind: 'device'; key: string } | { kind: 'room'; roomId: string } | { kind: 'level'; levelId: string } | { kind: 'zone'; zoneId: string } | { kind: 'journal'; at: number } | { kind: 'opening'; openingId: string } | { kind: 'parking'; parkingId: string } | null {
+  pick(ndc: { x: number; y: number }): { kind: 'device'; key: string } | { kind: 'room'; roomId: string } | { kind: 'level'; levelId: string } | { kind: 'zone'; zoneId: string } | { kind: 'journal'; at: number } | { kind: 'opening'; openingId: string } | { kind: 'parking'; parkingId: string } | { kind: 'garden'; itemId: string } | null {
     if (!this.nodes) return null
     this.raycaster.setFromCamera(new Vector2(ndc.x, ndc.y), this.camera)
+    // En mode édition, un arbre passe avant tout le reste : c'est le seul moment où on le touche.
+    if (this.editingGarden) {
+      const hitItem = this.raycaster.intersectObjects(this.garden.pickables(), false)[0]
+      const itemId = hitItem ? this.garden.idOf(hitItem) : null
+      if (itemId) return { kind: 'garden', itemId }
+    }
     // En mode édition, une place passe avant le sol qui la porte — mais APRÈS les appareils : la
     // voiture garée dessus reste ce qu'on touche en premier, c'est elle qu'on vient piloter.
     if (this.editingParkings) {
@@ -3224,7 +3363,7 @@ export class HouseScene {
   }
 
   private handleTap(ev: TapEvent): void {
-    if (this.drag?.active() || this.openingDragger?.active() || this.parkingDragger?.active() || this.reliefEditor?.active()) return   // fin d'un glissement, pas un tap
+    if (this.drag?.active() || this.openingDragger?.active() || this.parkingDragger?.active() || this.gardenDragger?.active() || this.reliefEditor?.active()) return   // fin d'un glissement, pas un tap
     // on modèle le terrain : un tap choisit un point, il n'ouvre ni une pièce ni un appareil
     if (this.reliefGrid) { this.reliefEditor?.tap(ev); return }
     // Une ouverture armée prend le tap AVANT toute sélection : on est venu désigner un mur, pas
@@ -3243,9 +3382,17 @@ export class HouseScene {
       else this.emit('backgroundTap')
       return
     }
+    // Un élément du jardin armé : seul le TERRAIN (pelouse, zones) l'accueille, pas un plancher.
+    if (this.placingGarden) {
+      const hit = this.groundPoint(ev.ndc)
+      if (hit && hit.levelId === null) this.emit('gardenPlaceTap', hit.xy)
+      else this.emit('backgroundTap')
+      return
+    }
     const hit = this.pick(ev.ndc)
     if (!hit) { this.emit('backgroundTap'); return }
     if (hit.kind === 'device') this.emit('deviceTap', hit.key)
+    else if (hit.kind === 'garden') this.emit('gardenTap', hit.itemId)
     else if (hit.kind === 'parking') this.emit('parkingTap', hit.parkingId)
     else if (hit.kind === 'opening') this.emit('openingTap', hit.openingId)
     else if (hit.kind === 'journal') this.emit('journalTap', hit.at)
@@ -3385,6 +3532,7 @@ export class HouseScene {
     for (const m of this.markers.values()) m.setTheme(this.theme, this.look.glow)
     this.buildOpeningHandles()             // les poignées sont teintées de l'accent, qui vient de changer
     this.buildParkings()                   // le marquage au sol suit le thème, comme le reste
+    this.buildGarden()                     // l'anneau d'accent suit le thème
     this.buildOriginMark()                 // le repère d'origine aussi
     this.highlightRoom(this.highlightedRoom)
     this.syncWindowGlow()                  // le verre du style, et l'heure qui dit s'il fait nuit
@@ -3860,6 +4008,9 @@ export class HouseScene {
     this.removeBats()
     this.drag?.detach()
     this.openingDragger?.detach()
+    this.gardenDragger?.detach()
+    if (this.gardenFrame !== 0) cancelAnimationFrame(this.gardenFrame)
+    this.garden.dispose()
     if (this.openingFrame !== 0) cancelAnimationFrame(this.openingFrame)
     if (this.reliefFrame !== 0) cancelAnimationFrame(this.reliefFrame)
     this.loop.dispose()

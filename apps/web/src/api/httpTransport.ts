@@ -142,6 +142,21 @@ export function createHttpTransport(base = ''): Transport {
       { method: 'DELETE' },
       (j) => houseSchema.parse((j as { house: unknown }).house) as House,
     ),
+    addGardenItem: (item) => request(
+      `${base}/api/house/garden`,
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(item) },
+      (j) => houseSchema.parse((j as { house: unknown }).house) as House,
+    ),
+    saveGardenItem: (id, patch) => request(
+      `${base}/api/house/garden/${encodeURIComponent(id)}`,
+      { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) },
+      (j) => houseSchema.parse((j as { house: unknown }).house) as House,
+    ),
+    removeGardenItem: (id) => request(
+      `${base}/api/house/garden/${encodeURIComponent(id)}`,
+      { method: 'DELETE' },
+      (j) => houseSchema.parse((j as { house: unknown }).house) as House,
+    ),
     setRoomOrder: (levelId, roomIds) => request(
       `${base}/api/house/levels/${encodeURIComponent(levelId)}/room-order`,
       { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ roomIds }) },

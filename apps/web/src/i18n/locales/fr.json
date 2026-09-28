@@ -332,6 +332,9 @@
     "assetsNone": "Ce style est entièrement calculé : il n'a pas de matières en images.",
     "ambience": "Heure de la maison",
     "ambienceHint": "Indépendante du thème clair/sombre de l'application : « Automatique » suit le soleil réel au-dessus de la maison, d'après son origine GPS et l'heure.",
+    "season": "Saison du jardin",
+    "seasonHint": "Feuillage, fleurs et fruits des arbres. « Automatique » suit la date, dans l'hémisphère de la maison.",
+    "seasons": { "auto": "Automatique", "spring": "Printemps", "summer": "Été", "autumn": "Automne", "winter": "Hiver" },
     "ambiences": { "auto": "Automatique", "day": "Jour", "dusk": "Crépuscule", "night": "Nuit" },
     "projection": "Projection",
     "projectionHint": "« À plat » retire la fuite : les lignes parallèles le restent, et on continue de tourner librement autour de la maison. « Isométrique » fige en plus les angles — le coin à 45°, une plongée fixe — et la vue ne tourne plus que par quarts de tour ; le doigt et le bouton gauche la déplacent alors au lieu de la faire pivoter.",
@@ -396,7 +399,7 @@
         "tiltPills": "Pilules floutées"
       }
     },
-  "houseEditing": "Régler la maison", "houseEditingHint": "La vue Maison permet alors de régler et de glisser les fenêtres et les portes sur les murs, et de poser les places de stationnement au sol. Le relevé est approximatif : c'est ici qu'on l'ajuste, rien n'est écrit tant qu'on n'a pas réglé quelque chose."
+  "houseEditing": "Régler la maison et le jardin", "houseEditingHint": "La vue Maison permet alors de régler et de glisser les fenêtres et les portes sur les murs, de poser les places de stationnement au sol, et d'aménager le jardin : arbres, buissons et pierres, à planter, déplacer ou retirer. Le relevé des murs est approximatif : c'est ici qu'on l'ajuste. Rien n'est écrit tant qu'on n'a pas réglé quelque chose."
   },
   "settings": {
     "title": "Réglages", "appearance": "Apparence", "system": "Système", "light": "Clair", "dark": "Sombre",
@@ -608,6 +611,19 @@
     "device": "Ouvrant lié", "deviceNone": "Aucun", "deviceTaken": "{name} (déjà posé sur {opening})",
     "revert": "Rétablir", "smaller": "Réduire", "bigger": "Agrandir",
     "saveError": "Ouverture non enregistrée : {message}"
+  },
+  "garden": {
+    "list": "Jardin", "add": "Planter", "done": "Terminé",
+    "count": "{n} élément | {n} élément | {n} éléments", "none": "Aucun arbre, buisson ni pierre.",
+    "kinds": { "broadleaf": "Feuillu", "conifer": "Conifère", "palm": "Palmier", "shrub": "Buisson", "rock": "Pierre" },
+    "placeHint": "Touchez le terrain dans la vue 3D : chaque tap y pose un élément.",
+    "hint": "Choisissez une famille, puis touchez le terrain. Touchez un élément pour le régler ou le glisser.",
+    "height": "Hauteur", "yaw": "Orientation", "kind": "Famille", "species": "Espèce", "generic": "Générique",
+    "reshape": "Autre forme",
+    "whereHint": "Se règle ici, ou en glissant l'élément au sol dans la vue 3D.",
+    "remove": "Supprimer", "removeConfirm": "Confirmer la suppression",
+    "smaller": "Réduire", "bigger": "Agrandir",
+    "saveError": "Élément du jardin non enregistré : {message}"
   },
   "parking": {
     "list": "Places de stationnement",

@@ -1,6 +1,6 @@
 import { computed, ref, shallowRef, watch } from 'vue'
 import { defineStore } from 'pinia'
-  import { autoPlaceDevices, computeRoof, fitHeight, fitParkingGap, houseIdForDevice, isSurfaceOpening, longestEdgeYawDeg, indexHouse, isPlaced, newOpeningDims, newParkingSize, openingLimits, openingSill, panelArrayDevices, panelOf, parkingGaps, parkingHost, pointInPolygon, resolveDefaults, resolveDeviceLevelId, roomHeight, slotFromPoint, slotFromSurfacePoint, surfaceFootprint, withPanelArrays, type DeviceDescriptor, type DeviceEntry, type DeviceKind, type DevicePlacement, type House, type HouseDevice, type HouseIndex, type Level, type Opening, type OpeningPatch, type OpeningType, type PanelArray, type PanelArrayPatch, type Parking, type ParkingPatch, type ParkingSide, type PlaceableDevice, type PlacedHouseDevice, type Relief, type Room, type SceneTuning, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
+  import { autoPlaceDevices, computeRoof, fitHeight, fitParkingGap, houseIdForDevice, isSurfaceOpening, longestEdgeYawDeg, indexHouse, isPlaced, newOpeningDims, newParkingSize, openingLimits, openingSill, panelArrayDevices, panelOf, parkingGaps, parkingHost, pointInPolygon, resolveDefaults, resolveDeviceLevelId, roomHeight, slotFromPoint, slotFromSurfacePoint, surfaceFootprint, withPanelArrays, type DeviceDescriptor, type DeviceEntry, type DeviceKind, type DevicePlacement, type GardenItem, type GardenItemPatch, type GardenKind, type House, type HouseDevice, type HouseIndex, type Level, type Opening, type OpeningPatch, type OpeningType, type PanelArray, type PanelArrayPatch, type Parking, type ParkingPatch, type ParkingSide, type PlaceableDevice, type PlacedHouseDevice, type Relief, type Room, type SceneTuning, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
 import { getTransport } from '../api'
 import type { JournalPoint } from '../lib/journal'
 import { i18n, t } from '../i18n'
@@ -10,6 +10,7 @@ import { coverLeaves, defaultCoverSize } from '../lib/orientation'
 import { expectsOpening } from '../lib/cover'
 import { useDevicesStore } from './devices'
 import { useNotificationsStore } from './notifications'
+import { speciesOf } from '../three/garden/species'
 
 // Maison (immuable : `shallowRef`, ré-indexée quand l'objet change) + sélection courante :
 // niveau focalisé (ou jardin, ou tout), pièce/zone, appareil. Partagée par la scène, les panneaux et l'URL.
@@ -61,6 +62,16 @@ function withParkingDraft(h: House | null, id: string | null, patch: ParkingPatc
   }
 }
 
+/** La maison avec l'élément de jardin `id` tel qu'on est en train de le régler (même rôle que les places). */
+function withGardenDraft(h: House | null, id: string | null, patch: GardenItemPatch | null): House | null {
+  if (!h || !id || !patch) return h
+  if (!h.site.garden.some((g) => g.id === id)) return h
+  return { ...h, site: { ...h.site, garden: h.site.garden.map((g) => (g.id === id ? { ...g, ...patch } : g)) } }
+}
+
+/** Hauteur d'un élément qui naît (m) : un ordre de grandeur de la famille, réglé ensuite. */
+export const GARDEN_DEFAULT_HEIGHT: Record<GardenKind, number> = { broadleaf: 7, conifer: 9, palm: 6, shrub: 1.2, rock: 0.6 }
+
 function withOpeningDraft(h: House | null, id: string | null, patch: OpeningPatch | null): House | null {
   if (!h || !id || !patch) return h
   if (!h.rooms.some((r) => r.openings.some((o) => o.id === id))) return h
@@ -105,6 +116,9 @@ export const useHouseStore = defineStore('house', () => {
   /** Place en cours de réglage et son brouillon : même mécanique, et même raison d'être déclarés ici. */
   const selectedParkingId = ref<string | null>(null)
   const parkingDraft = shallowRef<ParkingPatch | null>(null)
+  /** Élément du jardin en cours de réglage et son brouillon : même mécanique. */
+  const selectedGardenId = ref<string | null>(null)
+  const gardenDraft = shallowRef<GardenItemPatch | null>(null)
 
   /**
    * Maison du JSON complétée des modules dérivés de ses champs de panneaux (`arrays`) : c'est sur
@@ -118,7 +132,7 @@ export const useHouseStore = defineStore('house', () => {
   const expanded = computed<House | null>(() => {
     void i18n.global.locale.value                    // le nom des emplacements suit la langue choisie
     const drafted = withOpeningDraft(house.value, selectedOpeningId.value, openingDraft.value)
-    const base = withParkingDraft(drafted, selectedParkingId.value, parkingDraft.value)
+    const base = withGardenDraft(withParkingDraft(drafted, selectedParkingId.value, parkingDraft.value), selectedGardenId.value, gardenDraft.value)
     return base ? withPanelArrays(base, (row, col) => t('arrays.slot', { r: row + 1, c: col + 1 })) : null
   })
   const placement = computed(() => {
@@ -156,6 +170,8 @@ export const useHouseStore = defineStore('house', () => {
   const zones = computed<Zone[]>(() => house.value?.site.zones ?? [])
   /** Les places de stationnement, brouillon compris : la liste du panneau de la maison en mode édition. */
   const parkings = computed<Parking[]>(() => effective.value?.site.parkings ?? [])
+  /** Les éléments du jardin, brouillon compris. */
+  const gardenItems = computed<GardenItem[]>(() => effective.value?.site.garden ?? [])
 
   /** null = toute la maison (ou le jardin si `gardenFocus`). */
   const focusedLevelId = ref<string | null>(null)
@@ -1282,6 +1298,115 @@ export const useHouseStore = defineStore('house', () => {
     }
   }
 
+  // --- jardin (arbres, buissons, pierres) ------------------------------------
+  //
+  // Du décor, posé comme une place : on arme une famille dans le panneau de la maison, on tape la
+  // pelouse, puis on règle la hauteur et le cap, ou on glisse l'élément au doigt.
+  const savingGarden = ref(false)
+  /** Famille (et espèce éventuelle) armée, en attente du point qu'on va taper sur le terrain. */
+  const placingGarden = shallowRef<{ kind: GardenKind; species?: string } | null>(null)
+  /** L'élément sélectionné, brouillon compris (celui que le panneau AFFICHE). */
+  const selectedGardenItem = computed<GardenItem | null>(
+    () => effective.value?.site.garden.find((g) => g.id === selectedGardenId.value) ?? null)
+  const savedGardenItem = computed<GardenItem | null>(
+    () => house.value?.site.garden.find((g) => g.id === selectedGardenId.value) ?? null)
+
+  function selectGardenItem(id: string | null) {
+    gardenDraft.value = null
+    selectedGardenId.value = id
+    if (!id) return
+    // un élément du jardin se règle depuis la maison, comme une place
+    selectedKey.value = null
+    selectedOpeningId.value = null
+    selectedParkingId.value = null
+  }
+
+  /** Aperçu sans écriture (glissement, curseur de hauteur) : la scène suit, le fichier attend. */
+  function previewGardenItem(patch: GardenItemPatch) {
+    if (!savedGardenItem.value) return
+    gardenDraft.value = { ...gardenDraft.value, ...patch }
+  }
+  function previewGardenAt(xy: Vec2) { previewGardenItem({ center: [snapCm(xy[0]), snapCm(xy[1])] }) }
+
+  /** Écrit le brouillon (complété par `patch`) dans house.json. */
+  async function saveGardenItem(patch?: GardenItemPatch): Promise<boolean> {
+    const g = savedGardenItem.value
+    if (!g) return false
+    const body: GardenItemPatch = { ...gardenDraft.value, ...patch }
+    if (Object.keys(body).length === 0) return true
+    savingGarden.value = true
+    try {
+      house.value = await getTransport().saveGardenItem(g.id, body)
+      return true
+    } catch (err) {
+      useNotificationsStore().error(t('garden.saveError', { message: (err as Error).message }))
+      return false
+    } finally {
+      gardenDraft.value = null
+      savingGarden.value = false
+    }
+  }
+  async function dropGardenItem(): Promise<void> { if (gardenDraft.value) await saveGardenItem() }
+
+  /** Une autre forme pour le même élément : une graine neuve, rien d'autre ne change. */
+  function reshapeGardenItem(): Promise<boolean> {
+    return saveGardenItem({ seed: Math.floor(Math.random() * 1_000_000) })
+  }
+
+  function startPlacingGarden(kind: GardenKind, species?: string) {
+    selectGardenItem(null)
+    placingGarden.value = { kind, ...(species ? { species } : {}) }
+  }
+  function cancelPlacingGarden() { placingGarden.value = null }
+
+  function freeGardenId(kind: GardenKind): string {
+    const used = new Set((house.value?.site.garden ?? []).map((g) => g.id))
+    let n = 1
+    while (used.has(`garden.${kind}-${n}`)) n++
+    return `garden.${kind}-${n}`
+  }
+
+  /**
+   * Le point tapé sur le terrain : l'élément y naît à la hauteur type de sa famille, avec un cap
+   * tiré au hasard (une rangée d'arbres posés un à un n'a pas l'air clonée). L'arme reste levée :
+   * on plante souvent plusieurs arbres d'affilée — « Terminé » ou un tap à côté la baisse.
+   */
+  async function placeGardenAt(xy: Vec2): Promise<void> {
+    const armed = placingGarden.value
+    if (!armed || !house.value) return
+    const { kind, species } = armed
+    const recipe = speciesOf({ kind, species })
+    const id = freeGardenId(kind)
+    savingGarden.value = true
+    try {
+      house.value = await getTransport().addGardenItem({
+        id, kind, center: [snapCm(xy[0]), snapCm(xy[1])], height: recipe?.height ?? GARDEN_DEFAULT_HEIGHT[kind],
+        yaw: Math.floor(Math.random() * 360), ...(recipe ? { species: recipe.id } : {}),
+      })
+    } catch (err) {
+      useNotificationsStore().error(t('garden.saveError', { message: (err as Error).message }))
+    } finally {
+      savingGarden.value = false
+    }
+  }
+
+  async function removeGardenItem(): Promise<boolean> {
+    const g = savedGardenItem.value
+    if (!g) return false
+    savingGarden.value = true
+    try {
+      const next = await getTransport().removeGardenItem(g.id)
+      selectGardenItem(null)
+      house.value = next
+      return true
+    } catch (err) {
+      useNotificationsStore().error(t('garden.saveError', { message: (err as Error).message }))
+      return false
+    } finally {
+      savingGarden.value = false
+    }
+  }
+
   /** Descripteur de plugin d'un appareil de la maison (la nature d'un ouvrant en dépend). */
   const descriptorOf = (d: HouseDevice) => (d.deviceId ? devices.descriptors[d.deviceId] : undefined)
 
@@ -1370,6 +1495,9 @@ export const useHouseStore = defineStore('house', () => {
     dockFor,
     selectParking, previewParkingAt, saveParking, dropParking, setParkingGap,
     startPlacingParking, cancelPlacingParking, placeParkingAt, removeParking,
+    gardenItems, selectedGardenId, selectedGardenItem, savedGardenItem, savingGarden, placingGarden,
+    selectGardenItem, previewGardenItem, previewGardenAt, saveGardenItem, dropGardenItem, reshapeGardenItem,
+    startPlacingGarden, cancelPlacingGarden, placeGardenAt, removeGardenItem,
     arrays, arraysOf, editingArrayId, editingArray, editingArrayModules, arrayDraft, hoveredKey, hoverSlot, freeInverters,
     startEditingArray, stopEditingArray, editArray, siteOf, siteOfDevice, addArray, saveArray, removeArray, previewArrayOrigin, dropArray,
   }

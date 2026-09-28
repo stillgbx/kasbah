@@ -6,7 +6,7 @@ import { RELIEF_HISTORY, ReliefEditor } from './reliefEditor'
 const square = (s: number): Vec2[] => [[0, 0], [s, 0], [s, s], [0, s]]
 
 function editor() {
-  const site: Site = { elevation: 0, terrain: square(20), zones: [], parkings: [] }
+  const site: Site = { elevation: 0, terrain: square(20), zones: [], parkings: [], garden: [] }
   const grid = emptyReliefGrid(site.terrain, 2)
   const terrain = { ...computeTerrain(site), relief: grid }
   let current = grid                                  // la grille que l'éditeur tient (l'historique la remplace)

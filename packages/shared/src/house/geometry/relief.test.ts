@@ -46,7 +46,7 @@ describe('relief du terrain', () => {
   })
 
   it('sans relief, le terrain est à sa cote partout — comme avant le champ', () => {
-    const site: Site = { elevation: -0.15, terrain: square(-10, -10, 40), zones: [], parkings: [] }
+    const site: Site = { elevation: -0.15, terrain: square(-10, -10, 40), zones: [], parkings: [], garden: [] }
     expect(terrainHeight(computeTerrain(site), 20, 20)).toBe(-0.15)
   })
 
@@ -62,7 +62,7 @@ describe('relief du terrain', () => {
     expect(footprintCeiling(footprints, 3.8, 6)).toBe(Infinity)
     expect(footprintCeiling(footprints, 6, 14)).toBeCloseTo(2.6, 6)   // sous un étage : son plancher
     const hill: Relief = { step: 2, origin: [0, 0], rows: Array.from({ length: 10 }, () => Array(10).fill('120').join(' ')) }
-    const t = computeTerrain({ elevation: -0.15, terrain: square(0, 0, 20), relief: hill, zones: [], parkings: [] }, [], footprints)
+    const t = computeTerrain({ elevation: -0.15, terrain: square(0, 0, 20), relief: hill, zones: [], parkings: [], garden: [] }, [], footprints)
     expect(terrainHeight(t, 3.5, 6)).toBeCloseTo(1.05, 6)            // contre le mur : à sa vraie hauteur
     expect(terrainHeight(t, 6, 6)).toBe(-0.15)                        // dans la pièce : sous le sol
     expect(reliefSurface(t, 6, 6)).toBeCloseTo(1.05, 6)               // …mais le nœud, lui, est bien là-haut

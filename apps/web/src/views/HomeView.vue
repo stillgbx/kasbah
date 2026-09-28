@@ -14,6 +14,7 @@ import RoomEditPanel from '../components/home/RoomEditPanel.vue'
 import DevicePanel from '../components/home/DevicePanel.vue'
 import OpeningPanel from '../components/home/OpeningPanel.vue'
 import ParkingPanel from '../components/home/ParkingPanel.vue'
+import GardenPanel from '../components/home/GardenPanel.vue'
 import HouseEditPanel from '../components/home/HouseEditPanel.vue'
 import SceneDebug from '../components/home/SceneDebug.vue'
 import SceneTuningPanel from '../components/home/SceneTuningPanel.vue'
@@ -128,6 +129,17 @@ scene.onOpeningDrop(() => { void house.dropOpening() })
 scene.onParkingTap((parkingId) => { house.selectParking(parkingId); panelOpen.value = true })
 scene.onParkingDrag((_parkingId, xy) => house.previewParkingAt(xy))
 scene.onParkingDrop(() => { void house.dropParking() })
+// mode édition : un arbre, un buisson, une pierre se touchent et se glissent comme une place ; une
+// famille armée plante un élément à chaque tap sur le terrain
+scene.onGardenTap((id) => { house.selectGardenItem(id); panelOpen.value = true })
+scene.onGardenDrag((_id, xy) => house.previewGardenAt(xy))
+scene.onGardenDrop(() => { void house.dropGardenItem() })
+scene.onGardenPlaceTap((xy) => { void house.placeGardenAt(xy) })
+watch(() => house.placingGarden, (armed) => scene.setPlacingGarden(!!armed))
+watch(() => house.selectedGardenId, (id) => {
+  scene.setSelectedGarden(id)
+  if (id) scene.focusGarden(id)
+})
 // mode « poser » : une nature armée dans le panneau de la pièce attend le mur. Le tap rapporte le
 // point touché ; c'est le store qui en déduit le mur et la place, comme pour un glissement.
 scene.onPlaceTap((xy) => { void house.placeOpeningAt(xy) })
@@ -139,7 +151,7 @@ watch(() => house.placingParking, (armed) => scene.setPlacingParking(!!armed))
 scene.onRoomTap((roomId) => {
   // pendant le réglage d'une ouverture OU d'une place, un tap sur une pièce ne referme pas le
   // panneau par surprise (même garde-fou que le réglage d'un champ de panneaux, juste au-dessus)
-  if (house.selectedOpeningId || house.selectedParkingId) return
+  if (house.selectedOpeningId || house.selectedParkingId || house.selectedGardenId) return
   if (house.selectedRoomId === roomId && !house.selectedKey) { house.selectRoom(null); scene.highlightRoom(null) }
   else { house.selectRoom(roomId); panelOpen.value = true }
 })
@@ -158,6 +170,9 @@ scene.onBackgroundTap(() => {
   // à la sélection — la pièce reste ouverte, prête pour un autre essai
   if (house.placingOpening) { house.cancelPlacingOpening(); return }
   if (house.placingParking) { house.cancelPlacingParking(); return }
+  if (house.placingGarden) { house.cancelPlacingGarden(); return }
+  // un élément du jardin réglé se quitte par un tap à côté : rien d'autre à fermer derrière lui
+  if (house.selectedGardenId) { house.selectGardenItem(null); return }
   if (!house.editingArrayId && !house.selectedOpeningId && !house.selectedParkingId) house.clearSelection()
 })
 // une épingle du journal touchée : elle devient l'incident actif (étiquette dans la scène, ligne surlignée dans le panneau)
@@ -199,8 +214,10 @@ function frameSelection(roomId: string | null, key: string | null) {
 watch(() => settings.houseEditing, (on) => {
   scene.setEditingOpenings(on)
   scene.setEditingParkings(on)
-  if (!on) { house.cancelPlacingOpening(); house.cancelPlacingParking() }
+  scene.setEditingGarden(on)
+  if (!on) { house.cancelPlacingOpening(); house.cancelPlacingParking(); house.cancelPlacingGarden() }
   if (!on && house.selectedParkingId) house.selectParking(null)
+  if (!on && house.selectedGardenId) house.selectGardenItem(null)
   // désarmer ferme aussi le réglage en cours : sinon le panneau reste ouvert et ACTIF (« + » écrit
   // encore dans house.json) alors que la scène, elle, n'a plus rien de sélectionné — l'interrupteur
   // ne fermerait pas la porte qu'il prétend fermer
@@ -239,6 +256,7 @@ watch(scene.ready, (ready) => {
   if (!ready) return
   scene.setEditingOpenings(settings.houseEditing)
   scene.setEditingParkings(settings.houseEditing)
+  scene.setEditingGarden(settings.houseEditing)
   scene.setEditingRelief(settings.reliefEditing)
   scene.focusLevel(house.focusedLevelId)
   scene.setSelected(house.selectedKey)
@@ -317,10 +335,11 @@ onUnmounted(() => { offDeviceEvent?.() })
 
 // En mode édition, une PIÈCE (pas une zone du jardin, qui n'a pas de mur) montre ce qu'on peut
 // modifier d'elle à la place de ses appareils : on relève la maison, on ne l'allume pas.
-const panelMode = computed<'opening' | 'parking' | 'device' | 'roomEdit' | 'room' | 'level' | 'houseEdit' | 'home'>(() => {
+const panelMode = computed<'opening' | 'parking' | 'garden' | 'device' | 'roomEdit' | 'room' | 'level' | 'houseEdit' | 'home'>(() => {
   if (house.selectedOpeningId) return 'opening'
   // une place se règle depuis la maison : elle n'appartient ni à une pièce ni à un appareil
   if (house.selectedParkingId) return 'parking'
+  if (house.selectedGardenId) return 'garden'
   if (house.selectedKey) return 'device'
   if (house.selectedRoomId) return settings.houseEditing && house.selectedRoom ? 'roomEdit' : 'room'
   if (house.selectedLevelId) return 'level'
@@ -397,6 +416,7 @@ const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] 
     <SidePanel :open="panelOpen" :docked="wide" @close="panelOpen = false">
       <OpeningPanel v-if="panelMode === 'opening'" @back="onOpeningBack()" />
       <ParkingPanel v-else-if="panelMode === 'parking'" @back="house.selectParking(null)" />
+      <GardenPanel v-else-if="panelMode === 'garden'" @back="house.selectGardenItem(null)" />
       <DevicePanel v-else-if="panelMode === 'device'" @back="onDeviceBack()" />
       <RoomEditPanel v-else-if="panelMode === 'roomEdit'" @back="onRoomBack()" />
       <RoomPanel v-else-if="panelMode === 'room' || panelMode === 'level'" @back="onRoomBack()" />

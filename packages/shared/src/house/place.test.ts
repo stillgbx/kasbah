@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import demo from './__fixtures__/demo-house.json'
 import { parseHouse } from './validate'
 import { NEUTRAL_TUNING } from './schema'
-import { addOpeningToJson, patchOpeningInJson, PlacementError, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, setPluginInJson, setRenderTuningInJson, setRoomOrderInJson } from './place'
+import { addGardenItemToJson, addOpeningToJson, patchGardenItemInJson, removeGardenItemFromJson, patchOpeningInJson, PlacementError, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, setPluginInJson, setRenderTuningInJson, setRoomOrderInJson } from './place'
 
 const devices = (doc: Record<string, unknown>) => doc.devices as Record<string, unknown>[]
 
@@ -394,5 +394,42 @@ describe('setRenderTuningInJson', () => {
     const before = JSON.stringify(demo)
     setRenderTuningInJson(demo, { ...NEUTRAL_TUNING, vignette: 1.5 })
     expect(JSON.stringify(demo)).toBe(before)
+  })
+})
+
+describe('éléments du jardin', () => {
+  const garden = (doc: Record<string, unknown>) => (doc.site as Record<string, unknown>).garden as Record<string, unknown>[]
+  const base = addGardenItemToJson(demo, { id: 'oak-1', kind: 'broadleaf', center: [3, -4], height: 8 })
+
+  it('ajoute un élément valide, sans écrire un cap nul', () => {
+    expect(garden(base)).toEqual([{ id: 'oak-1', kind: 'broadleaf', center: [3, -4], height: 8 }])
+    expect(parseHouse(base).site.garden[0]!.kind).toBe('broadleaf')
+  })
+
+  it('refuse un id déjà pris', () => {
+    expect(() => addGardenItemToJson(base, { id: 'oak-1', kind: 'rock', center: [0, 0], height: 1 })).toThrow(PlacementError)
+  })
+
+  it('règle seulement les champs donnés, et un cap nul efface le cap', () => {
+    const turned = patchGardenItemInJson(base, 'oak-1', { yaw: 45, height: 10 })
+    expect(garden(turned)[0]).toMatchObject({ yaw: 45, height: 10, center: [3, -4] })
+    expect(garden(patchGardenItemInJson(turned, 'oak-1', { yaw: 0 }))[0]).not.toHaveProperty('yaw')
+    expect(() => patchGardenItemInJson(base, 'nope', { height: 2 })).toThrow(PlacementError)
+  })
+
+  it('pose une espèce, et la chaîne vide la retire', () => {
+    const cherry = patchGardenItemInJson(base, 'oak-1', { species: 'cherry' })
+    expect(parseHouse(cherry).site.garden[0]!.species).toBe('cherry')
+    expect(garden(patchGardenItemInJson(cherry, 'oak-1', { species: '' }))[0]).not.toHaveProperty('species')
+  })
+
+  it('retire un élément', () => {
+    expect(garden(removeGardenItemFromJson(base, 'oak-1'))).toEqual([])
+    expect(() => removeGardenItemFromJson(base, 'nope')).toThrow(PlacementError)
+  })
+
+  it('rejette une maison où un élément reprend l\'id d\'une pièce', () => {
+    const roomId = (demo.rooms[0] as { id: string }).id
+    expect(() => parseHouse(addGardenItemToJson(demo, { id: roomId, kind: 'rock', center: [0, 0], height: 1 }))).toThrow()
   })
 })
