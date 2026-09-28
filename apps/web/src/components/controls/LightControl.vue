@@ -12,7 +12,10 @@ const props = defineProps<{ descriptor: DeviceDescriptor; state: StateFor<'light
 const emit = defineEmits<{ command: [cmd: CommandInput] }>()
 
 const has = (c: string) => props.descriptor.capabilities.includes(c as never)
-const [mirekMin, mirekMax] = props.descriptor.meta.colorTempMirek ?? [153, 500]
+// calculées, pas lues une fois : le panneau garde ce composant d'une lampe à l'autre, et chaque
+// modèle Hue a sa propre plage de blanc
+const mirekMin = computed(() => (props.descriptor.meta.colorTempMirek ?? [153, 500])[0])
+const mirekMax = computed(() => (props.descriptor.meta.colorTempMirek ?? [153, 500])[1])
 
 /** Liste de crans (3CCT) : prioritaire sur la plage — un curseur mentirait. */
 const tempSteps = computed(() => props.descriptor.meta.colorTempMirekSteps)

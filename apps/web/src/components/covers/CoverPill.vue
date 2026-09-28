@@ -7,10 +7,11 @@ import { computed, ref } from 'vue'
 // l'envers du geste réel : un volet, un store, une porte de garage bougent de haut en bas. Seul un
 // portail se ferme de côté (`axis: 'horizontal'`, le vantail entre par la gauche).
 //
-// Glissement RELATIF, jamais « là où tombe le doigt » : sur une tablette, un doigt qui fait défiler
-// la page et se pose sur la vignette ne doit pas envoyer l'ouvrant à l'autre bout. Un simple appui
-// ne commande rien. `touch-action: none` sur la vignette seule : elle est étroite, la page défile
-// partout ailleurs.
+// Deux gestes. Un APPUI sans glisser envoie l'ouvrant là où tombe le doigt (« à mi-hauteur »). Un
+// GLISSEMENT est relatif : il part de la position actuelle et non du doigt, pour ajuster sans que
+// le tablier saute d'abord sous le doigt. `touch-action: none` sur la vignette seule : un geste qui
+// commence dessus lui appartient (il ne fait pas défiler la page), et elle est assez étroite pour
+// que la page défile partout ailleurs.
 const props = defineProps<{
   /** Fermeture affichée, 0..100 ; `undefined` = position inconnue (rien à affirmer). */
   closure?: number
@@ -29,7 +30,7 @@ const emit = defineEmits<{ drag: [v: number]; commit: [v: number] }>()
 
 const el = ref<HTMLElement | null>(null)
 const dragging = ref(false)
-let start: { at: number; from: number; size: number; moved: boolean } | null = null
+let start: { at: number; from: number; size: number; tapped: number; moved: boolean } | null = null
 
 const clamp = (v: number) => Math.max(0, Math.min(100, v))
 const pos = (ev: PointerEvent) => (axis.value === 'vertical' ? ev.clientY : ev.clientX)
@@ -37,7 +38,10 @@ const pos = (ev: PointerEvent) => (axis.value === 'vertical' ? ev.clientY : ev.c
 function down(ev: PointerEvent) {
   if (!props.interactive || !el.value) return
   const r = el.value.getBoundingClientRect()
-  start = { at: pos(ev), from: props.closure ?? 0, size: axis.value === 'vertical' ? r.height : r.width, moved: false }
+  const size = axis.value === 'vertical' ? r.height : r.width
+  // fermeture sous le doigt, depuis le haut (ou la gauche pour un portail) : la cible d'un appui
+  const tapped = clamp(((pos(ev) - (axis.value === 'vertical' ? r.top : r.left)) / size) * 100)
+  start = { at: pos(ev), from: props.closure ?? 0, size, tapped, moved: false }
   el.value.setPointerCapture(ev.pointerId)
 }
 function move(ev: PointerEvent) {
@@ -55,6 +59,8 @@ function up(ev: PointerEvent) {
   start = null
   dragging.value = false
   if (s.moved) emit('commit', clamp(s.from + ((pos(ev) - s.at) / s.size) * 100))
+  // un `pointercancel` (le navigateur reprend le geste) n'est jamais un appui
+  else if (ev.type === 'pointerup') emit('commit', s.tapped)
 }
 // Clavier : haut / gauche ouvre, bas / droite ferme, par pas de 10 ; chaque touche commande.
 function key(ev: KeyboardEvent) {

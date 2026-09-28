@@ -70,4 +70,22 @@ describe('ClimateControl — alignement de la consigne', () => {
     const pilotable = mount(ClimateControl, { props: { descriptor: thermostat, state } })
     expect(pilotable.find('.justify-center').exists()).toBe(true)
   })
+
+  // Le panneau GARDE ce composant quand on passe d'une zone à l'autre : tout ce qui dépend de
+  // l'appareil doit suivre le nouveau descripteur, pas celui du premier montage.
+  it('suit l’appareil quand le panneau passe d’un thermostat à une zone en départ d’eau', async () => {
+    const w = mount(ClimateControl, { props: { descriptor: thermostat, state } })
+    await w.setProps({ descriptor: flowZone })
+    expect(w.findAll('.v-btn')).toHaveLength(0)
+    expect(w.find('.v-chip-group').exists()).toBe(false)
+    expect(w.text()).toContain('départ')
+  })
+  it('borne la consigne sur la plage du NOUVEL appareil', async () => {
+    const w = mount(ClimateControl, { props: { descriptor: flowZone, state } })
+    const wide: DeviceDescriptor = { ...thermostat, meta: { ...thermostat.meta, targetTempC: [5, 35] } }
+    await w.setProps({ descriptor: wide, state: { ...state, targetTempC: 20 } })
+    await w.findAll('.v-btn')[0]!.trigger('click')
+    expect(w.emitted('command')).toEqual([[{ type: 'climate.set_target_temp', targetTempC: 19.5 }]])
+  })
 })
+

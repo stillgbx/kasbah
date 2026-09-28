@@ -40,4 +40,14 @@ describe('LightControl', () => {
     expect(w.text()).toContain('Neutre')
     expect(w.text()).toContain('4000 K')
   })
+
+  // le panneau garde ce composant d'une lampe à l'autre : la plage de blanc est celle de la lampe AFFICHÉE
+  it('reprend la plage de température de la nouvelle lampe', async () => {
+    const w = mountLight({ descriptor, state })
+    await w.setProps({ descriptor: { ...descriptor, id: 'mock:l2', meta: { colorTempMirek: [200, 454] } } })
+    const ct = w.findAll('.v-slider')[1]!.find('.v-slider-thumb')
+    expect(ct.attributes('aria-valuemin')).toBe('200')
+    expect(ct.attributes('aria-valuemax')).toBe('454')
+  })
 })
+
