@@ -38,7 +38,7 @@ Match the question against :
 - 1-line summaries,
 - filenames (keywords).
 
-Pick **3 to 5 pages maximum**. For code-level questions ("who calls X", "blast radius") prefer GitNexus tools (`gitnexus_*`) - the wiki is for narrative / design / procedure questions.
+Pick **1 to 3 pages**. For code-level questions ("who calls X", "blast radius") prefer GitNexus tools (`gitnexus_*`) - the wiki is for narrative / design / procedure questions.
 
 ### Step 3 : read
 
@@ -76,6 +76,6 @@ Use real paths from `index.md` — never invent page names.
 
 When `wiki-query` is invoked proactively at the start of a task :
 
-- **If 3 to 5 pages fully answer** the question or cover the necessary context : **stop there**. Do not also explore the code (Grep / Glob / read source files). The wiki is the narrative source of truth — trust it.
+- **If these pages fully answer** the question or cover the necessary context : **stop there**. Do not also explore the code (Grep / Glob / read source files). The wiki is the narrative source of truth — trust it.
 - **If the answer is partial** (wiki describes architecture but not the implementation detail asked, or page flagged stale) : continue with code exploration, but **cite the wiki pages that oriented the investigation** in the final answer. Flag the gap for a possible `wiki-update`.
 - **If no page covers** : say so explicitly, switch to code exploration (or GitNexus for code-structure questions), and suggest `wiki-update` at task end.

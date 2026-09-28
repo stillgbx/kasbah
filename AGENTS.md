@@ -74,9 +74,9 @@ No automatic markdown recap files - a response summary is enough. For structured
 ### 6.1. Wiki-first reflex
 
 Before exploring code for any question or task touching project domain concepts
-(scenario data model, IndexedDB / cloud sync, Supabase, Vue app architecture,
-themes, exports, PWA, i18n, deployment, FAQ topics), **read `doc/index.md`
-first** to identify 1-3 relevant pages, then read them or invoke the `wiki-query`
+(house JSON format and geometry, device contract, server and plugins, REST/WS
+protocol, 3D scene, UI layout and theming, i18n, setup, production, FAQ topics),
+**read `doc/index.md` first** to identify 1-3 relevant pages, then read them or invoke the `wiki-query`
 skill.
 
 The wiki is often faster than Grep for distilled questions. If the wiki pages

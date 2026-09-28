@@ -64,7 +64,7 @@ function buildServer(deps: McpDeps, app: FastifyInstance): McpServer {
 
   server.registerTool('list_devices', {
     title: 'Lister les appareils',
-    description: 'Appareils de la maison avec leur état courant. Filtres facultatifs, cumulables.',
+    description: "Appareils de la maison avec leur état courant (instantané au moment de l'appel). Nom et pièce sont ceux de la maison (renommage, placement), sinon ceux du fabricant. Filtres facultatifs et cumulables. Point de départ pour trouver l'id à passer à get_device, send_command ou play_music.",
     inputSchema: z.object({
       kind: z.enum(DEVICE_KINDS).optional(),
       room: z.string().optional().describe('Nom de pièce, sous-chaîne sans casse'),
@@ -80,7 +80,7 @@ function buildServer(deps: McpDeps, app: FastifyInstance): McpServer {
 
   server.registerTool('get_device', {
     title: 'Lire un appareil',
-    description: 'Descripteur complet (capacités, meta) et état courant d\'un appareil.',
+    description: "Descripteur complet d'un appareil (capacités, meta) et son état courant. À lire avant send_command pour savoir quelles commandes ses capacités permettent, et après pour relire l'état obtenu. Un id inconnu rend une erreur ; les ids viennent de list_devices.",
     inputSchema: z.object({ id: z.string() }),
     annotations: { readOnlyHint: true },
   }, async ({ id }) => {
@@ -103,13 +103,13 @@ function buildServer(deps: McpDeps, app: FastifyInstance): McpServer {
 
   server.registerTool('list_scenes', {
     title: 'Lister les scènes',
-    description: 'Scènes des fabricants (ambiances) et leur état.',
+    description: "Scènes enregistrées chez les fabricants (scènes Hue d'une pièce ou d'une zone) et leur état : active vaut inactive, static ou dynamic. dynamic: true signale une palette animée. Les scènes maison de house.json n'y figurent pas.",
     annotations: { readOnlyHint: true },
   }, async () => json(deps.scenes.list()))
 
   server.registerTool('recall_scene', {
     title: 'Rappeler une scène',
-    description: 'Active une scène de fabricant.',
+    description: "Rappelle une scène de fabricant (sceneId venu de list_scenes). recall.mode : static (défaut) applique les valeurs fixes, dynamic lance la palette animée (refusé si la scène n'en a pas), off éteint la pièce ou la zone de la scène — il n'existe pas de « désactiver une scène ». recall.brightness (0-100) rappelle la scène atténuée ; transitionMs règle le fondu. Réussit à l'accusé du fabricant.",
     inputSchema: z.object({ sceneId: z.string(), recall: sceneRecallSchema.optional() }),
     annotations: { readOnlyHint: false, openWorldHint: true },
   }, async ({ sceneId, recall }) => {
@@ -123,7 +123,7 @@ function buildServer(deps: McpDeps, app: FastifyInstance): McpServer {
 
   server.registerTool('get_health', {
     title: 'Santé des plugins',
-    description: 'État de chaque plugin (statut, détail, nombre d\'appareils, quota).',
+    description: "État de chaque plugin, par id : statut, détail lisible, nombre d'appareils, quota consommé quand l'API du fabricant est bornée. keys liste les noms des variables d'environnement lues, jamais leurs valeurs. À consulter quand un appareil manque ou ne répond pas.",
     annotations: { readOnlyHint: true },
   }, async () => json(deps.host.health()))
 

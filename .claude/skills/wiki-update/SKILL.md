@@ -54,6 +54,10 @@ Heuristics for this repo :
 | new plugin folder | `3_plugins/3_2_ecrire-un-plugin.md`, `3_plugins/3_3_fabricants-a-venir.md` |
 | `apps/web/src/{stores,api,router}/*`, `apps/web/src/lib/optimistic.ts` | `1_architecture/1_4_app-web.md` |
 | `apps/web/src/three/*`, `apps/web/src/composables/useHouseScene.ts` | `1_architecture/1_5_scene-3d.md` |
+| `apps/server/src/music/*`, `apps/web/src/**/music/*` | `1_architecture/1_6_lecteur-musique.md` |
+| `apps/server/src/mcp/*` | `1_architecture/1_7_serveur-mcp.md` |
+| `apps/server/src/core/automations/*`, `packages/shared/src/automations/*` | `1_architecture/1_8_automatisations.md` |
+| `apps/server/src/plugins/<fabricant>/*` | the plugin's own `3_plugins/3_N_<fabricant>.md` (see `index.md`) |
 | `apps/web/src/styles/*`, `apps/web/src/plugins/vuetify.ts`, `apps/web/src/lib/strokeIcons.ts` | `4_ui/4_0_langage-visuel.md` |
 | `apps/web/src/views/*`, `apps/web/src/components/**` | `4_ui/4_1_navigation-et-panneaux.md` |
 | `apps/web/src/stores/settings.ts`, `apps/web/src/i18n/*` | `4_ui/4_2_theme-et-langues.md` |
@@ -61,7 +65,7 @@ Heuristics for this repo :
 | incident / gotcha | `6_faq/6_0_pieges-outillage.md` or `6_faq/6_1_pieges-runtime.md` |
 
 - **Touched file → page** : find the closest indexed page; if none, propose a new page (`N_M_title.md` per SCHEMA).
-- **Product concept** (scène, carte, export joueur, mode MJ…) → thematic page in the matching section.
+- **Product concept** (scène maison, automatisation, source musicale…) → thematic page in the matching section.
 - **Incident / gotcha** → FAQ section (`6_faq/6_N_*.md`, format Date / Symptôme / Diagnostic / Solution).
 
 If no existing page fits, **propose creating a new page** with location and name. Ask for confirmation before creating.
