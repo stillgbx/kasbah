@@ -24,7 +24,7 @@ import { createPostPipeline, detectQuality, gpuName, PIXEL_RATIO, tiltBlurFactor
 import { dayFactor, fogDistance, sunDirection, type SceneAmbience } from './core/ambience'
 import { Bats } from './effects/bats'
 import { Precipitation } from './effects/precipitation'
-import { createWaterUniforms, makeWaterAlive, setWaterSun, setWaterTint, WaterCaustics, type WaterStrength } from './effects/water'
+import { createWaterUniforms, makeWaterAlive, setWaterSun, setWaterTint, setWaterWind, WaterCaustics, type WaterStrength } from './effects/water'
 import { defaultAmbience, defaultSceneTheme, rolesOf, styleById, type GlowLook, type PostLook, type RenderStyle, type StyleLook } from './styles'
 import { applyTuning, NEUTRAL_TUNING, type SceneTuning } from './styles/tuning'
 import { buildHouse, buildLevel, buildRoofMesh, shapeTerrain, type HouseNodes, type LevelNodes } from './builders/buildHouse'
@@ -405,8 +405,13 @@ export class HouseScene {
   private caustics: WaterCaustics | null = null
   private readonly waterStrength: { surface: WaterStrength; basin: WaterStrength }
   private stopWater: (() => void) | null = null
-  /** Direction d'où vient la lumière du jour, monde three. Relue à chaque changement d'ambiance. */
-  private sunDir = new Vector3(0.45, 0.82, 0.35)
+  /** Direction d'où vient la lumière du jour, monde three : l'heure de l'ambiance ET le cap de la maison. */
+  private get sunDir(): Vector3 { return sunDirection(this.ambience, undefined, this.headingDeg) }
+  /**
+   * Le cap du +y du plan (`origin.heading`) : la météo compte ses directions depuis le nord VRAI, la
+   * scène depuis le haut du plan. Soleil, pluie et houle le retranchent.
+   */
+  private get headingDeg(): number { return this.house?.origin.heading ?? 0 }
   /**
    * Les ombres ne dépendent PAS de la caméra : les refaire à chaque image pendant qu'on tourne
    * autour de la maison, c'est redessiner tout le bâti pour rien. Elles se refont pendant un court
@@ -556,7 +561,6 @@ export class HouseScene {
     this.ambience = deps.ambience ?? defaultAmbience()
     this.look = applyTuning(this.style.look(this.ambience), this.tuning)
     this.theme = deps.theme ?? defaultSceneTheme()
-    this.sunDir = sunDirection(this.ambience)
     this.materials = createMaterials(this.theme, this.look)
     this.waterStrength = {
       surface: makeWaterAlive(this.materials.zones.pool, 'surface', this.water),
@@ -662,6 +666,7 @@ export class HouseScene {
   // ---- chargement ---------------------------------------------------------
   load(house: House): void {
     const firstLoad = this.house === null
+    const turned = this.headingDeg !== house.origin.heading
     this.clear()
     this.house = house
     this.index = indexHouse(house)
@@ -677,6 +682,7 @@ export class HouseScene {
     this.syncPrecipitation()               // la racine est neuve : ce qui tombe se repose dessus
     this.syncBats()
     this.applyMist()                       // la nappe se pose sur CE terrain
+    if (turned) this.applySky()            // le soleil du ciel suit le cap de la maison
     this.fitSunShadow()
     this.buildParkings()                   // le marquage au sol vit avec le terrain, avant les marqueurs
     this.buildMarkers()
@@ -3362,7 +3368,7 @@ export class HouseScene {
 
   setAppearance(next: Partial<SceneAppearance>): void {
     if (next.style) this.style = next.style
-    if (next.ambience) { this.ambience = next.ambience; this.sunDir = sunDirection(this.ambience) }
+    if (next.ambience) this.ambience = next.ambience
     if (next.assets !== undefined) this.assets = next.assets
     if (next.tuning) this.tuning = next.tuning
     if (next.style || next.ambience || next.tuning) this.look = applyTuning(this.style.look(this.ambience), this.tuning)
@@ -3455,7 +3461,7 @@ export class HouseScene {
   private syncPrecipitation(): void {
     const p = this.ambience.precipitation
     if (!p || this.quality === 'low' || !this.nodes || !this.geometry) { this.removePrecipitation(); return }
-    const params = { kind: p.kind, intensity: p.intensity, windKmh: this.ambience.windKmh ?? 10, windDirDeg: this.ambience.windDirDeg ?? 250 }
+    const params = { kind: p.kind, intensity: p.intensity, windKmh: this.ambience.windKmh ?? 10, windDirDeg: (this.ambience.windDirDeg ?? 250) - this.headingDeg }
     // même nature et intensité voisine : on règle sans reconstruire ; sinon on repart (le nombre
     // de particules est fixé à la création)
     if (this.precip && this.precip.kind === p.kind && this.precip.object.parent === this.nodes.root && Math.abs(this.precipIntensity - p.intensity) < 0.25) {
@@ -3517,6 +3523,7 @@ export class HouseScene {
     this.waterStrength.surface.value = flow
     setWaterTint(this.water, this.theme.zones.pool)
     setWaterSun(this.water, this.sunDir)
+    setWaterWind(this.water, this.ambience.windKmh ?? 10, (this.ambience.windDirDeg ?? 250) - this.headingDeg)   // sans météo, la brise de la pluie
     this.waterStrength.basin.value = flow * (0.25 + 0.75 * dayFactor(this.ambience))
     const wanted = flow > 0 && this.quality !== 'low' && this.poolInView()
     if (wanted === (this.stopWater !== null)) return

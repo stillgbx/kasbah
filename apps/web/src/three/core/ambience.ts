@@ -130,16 +130,17 @@ export function duskFactor(a: SceneAmbience): number {
 
 /**
  * Direction d'où vient la lumière, dans le repère MONDE de three (x est, y haut, z sud — la racine
- * de la maison porte `rotation.x = -π/2`, donc le nord de la maison est en −z).
- * Vecteur unitaire pointant VERS le soleil ; la lumière se pose dessus, à distance.
+ * de la maison porte `rotation.x = -π/2`, donc le +y du plan est en −z). Le +y du plan n'est au
+ * nord vrai que si la maison n'est pas tournée : `headingDeg` (`origin.heading`, le cap de +y) se
+ * retranche de l'azimut. Vecteur unitaire pointant VERS le soleil ; la lumière se pose dessus, à distance.
  *
  * La nuit, le soleil est sous l'horizon et une `DirectionalLight` enterrée n'éclaire plus rien : on
  * garde l'azimut, et on relève la source à une hauteur plancher — c'est la lune, qui se lève rarement
  * exactement à l'opposé mais dont personne ne vérifiera la déclinaison.
  */
-export function sunDirection(a: SceneAmbience, minAltitudeDeg = 18): Vector3 {
+export function sunDirection(a: SceneAmbience, minAltitudeDeg = 18, headingDeg = 0): Vector3 {
   const alt = Math.max(a.sunAltitudeDeg, minAltitudeDeg) * (Math.PI / 180)
-  const az = a.sunAzimuthDeg * (Math.PI / 180)
+  const az = (a.sunAzimuthDeg - headingDeg) * (Math.PI / 180)
   const east = Math.sin(az) * Math.cos(alt)
   const north = Math.cos(az) * Math.cos(alt)
   return new Vector3(east, Math.sin(alt), -north).normalize()

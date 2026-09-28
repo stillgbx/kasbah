@@ -44,6 +44,8 @@ export interface WaterUniforms {
   /** La lumière du soleil qui ENTRE dans l'eau (monde, vers le bas), et ce rayon une fois réfracté par une eau plane. */
   light: { value: Vector3 }
   refracted: { value: Vector3 }
+  /** Le vent : (x, y) = vers où il pousse, dans le plan xz du monde (unitaire) ; z = amplitude de la houle (1 = une brise de 10 km/h). */
+  wind: { value: Vector3 }
 }
 
 /** Nom de l'attribut de sommet du bassin : sa profondeur sous la lame d'eau, en mètres. */
@@ -65,13 +67,15 @@ const CAUSTIC_RANGE = 4
 const ABSORPTION_PER_M = 0.3
 
 /** Une onde : vecteur d'onde (rad/m), amplitude (m), pulsation (rad/s), phase à l'origine. */
-interface Wave { kx: number; ky: number; a: number; w: number; phase: number }
+export interface Wave { kx: number; ky: number; a: number; w: number; phase: number }
 
 /**
  * La houle : une vingtaine d'ondes TIRÉES (graine fixe, donc la même eau à chaque chargement), pas
  * choisies — huit ondes posées à la main faisaient un réseau trop régulier. Longueurs d'onde de
- * 25 cm à 2,5 m, réparties en logarithme ; directions groupées autour d'un vent (±70°), un tiers en
- * clapot libre ; phases au hasard, sinon toutes les crêtes se rencontrent à l'origine.
+ * 25 cm à 2,5 m, réparties en logarithme ; directions groupées autour du vent (±70°), un tiers en
+ * clapot libre ; phases au hasard, sinon toutes les crêtes se rencontrent à l'origine. Les ondes
+ * sont tirées dans le REPÈRE DU VENT (+x = vers où il pousse) : le shader y ramène chaque point
+ * (`kasbahToWind`), et la houle tourne avec le vent réel sans être retirée.
  *
  * C'est la COURBURE (A·k²) qui concentre la lumière : au fond d'1,4 m il en faut ~3 pour une ligne
  * nette. Chaque onde en porte ~0,6 ; ce sont leurs rencontres qui dessinent le réseau. L'amplitude
@@ -88,7 +92,7 @@ function drawWaves(): Wave[] {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
   const k0 = (2 * Math.PI) / TILE_M
-  const wind = 0.6
+  const wind = 0
   const seen = new Set<string>()
   const waves: Wave[] = []
   while (waves.length < 20) {
@@ -108,22 +112,36 @@ function drawWaves(): Wave[] {
   }
   return waves
 }
-const WAVES = drawWaves()
+/** Exporté pour les tests : qu'elles partent bien sous le vent. */
+export const WAVES: readonly Wave[] = drawWaves()
 
 const glsl = (x: number): string => (Number.isInteger(x) ? x.toFixed(1) : String(x))
 
 /**
+ * Le repère du vent : `uWaterWind.xy` est la direction où il pousse (plan xz du monde). Les ondes y
+ * sont tirées ; un point du monde y entre par `kasbahToWind`, une pente en sort par `kasbahFromWind`.
+ * La carte des caustiques est une tuile de CE repère : le fond la lit donc par `kasbahToWind` aussi.
+ */
+const WIND_FRAME = /* glsl */`
+uniform vec3 uWaterWind;
+vec2 kasbahToWind(vec2 w) { return vec2(dot(w, uWaterWind.xy), dot(w, vec2(-uWaterWind.y, uWaterWind.x))); }
+vec2 kasbahFromWind(vec2 v) { return vec2(v.x * uWaterWind.x - v.y * uWaterWind.y, v.x * uWaterWind.y + v.y * uWaterWind.x); }
+`
+
+/**
  * La PENTE de la houle (son gradient), pas sa hauteur : c'est elle qui incline la normale. `px` est
  * la taille d'un pixel au sol (m) : une onde plus courte que quelques pixels s'efface au lieu de
- * scintiller. La passe des caustiques la demande à 0 (elle veut toutes les ondes).
+ * scintiller. La passe des caustiques la demande à 0 (elle veut toutes les ondes). La phase est
+ * `k·p − ωt` : chaque onde AVANCE dans le sens de son vecteur, donc sous le vent. `p` et le
+ * résultat sont dans le repère du vent, l'amplitude est celle du vent (`uWaterWind.z`).
  */
 const WAVE_GRAD = /* glsl */`
 vec2 kasbahWaveGrad(vec2 p, float t, float px) {
   vec2 g = vec2(0.0);
   vec2 k;
 ${WAVES.map(({ kx, ky, a, w, phase }) => `  k = vec2(${glsl(kx)}, ${glsl(ky)});
-  g += k * (${glsl(a)} * cos(dot(k, p) + ${glsl(w)} * t + ${glsl(phase)}) * (1.0 - smoothstep(0.15, 0.5, px * ${glsl(Math.hypot(kx, ky) / (2 * Math.PI))})));`).join('\n')}
-  return g;
+  g += k * (${glsl(a)} * cos(dot(k, p) - ${glsl(w)} * t + ${glsl(phase)}) * (1.0 - smoothstep(0.15, 0.5, px * ${glsl(Math.hypot(kx, ky) / (2 * Math.PI))})));`).join('\n')}
+  return g * uWaterWind.z;
 }
 `
 
@@ -131,7 +149,7 @@ const COMMON = /* glsl */`
 varying vec3 vWaterPos;
 uniform float uWaterTime;
 uniform float uWaterStrength;
-`
+${WIND_FRAME}`
 
 const BASIN_COMMON = /* glsl */`
 varying float vWaterDepth;
@@ -149,7 +167,7 @@ uniform vec3 uWaterRefracted;
  */
 const SURFACE = /* glsl */`
   float waterPx = length(fwidth(vWaterPos.xz));
-  vec2 waveG = kasbahWaveGrad(vWaterPos.xz, uWaterTime, waterPx) * uWaterStrength;
+  vec2 waveG = kasbahFromWind(kasbahWaveGrad(kasbahToWind(vWaterPos.xz), uWaterTime, waterPx)) * uWaterStrength;
   normal = normalize(normal + (viewMatrix * vec4(-waveG.x, 0.0, -waveG.y, 0.0)).xyz);
   float waterCos = clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
   float waterFresnel = 0.02 + 0.98 * pow(1.0 - waterCos, 5.0);
@@ -167,7 +185,7 @@ const SURFACE = /* glsl */`
 const BASIN_PRE = /* glsl */`
   float causticDepth = clamp(vWaterDepth, 0.0, ${glsl(FLOOR_DEPTH_M)});
   vec2 causticAt = vWaterPos.xz + uWaterRefracted.xz * ((${glsl(FLOOR_DEPTH_M)} - causticDepth) / -uWaterRefracted.y);
-  float caustic = texture2D(uWaterCaustics, causticAt * ${glsl(1 / TILE_M)}).r * ${glsl(CAUSTIC_RANGE)};
+  float caustic = texture2D(uWaterCaustics, kasbahToWind(causticAt) * ${glsl(1 / TILE_M)}).r * ${glsl(CAUSTIC_RANGE)};
   float causticWeight = sqrt(causticDepth * ${glsl(1 / FLOOR_DEPTH_M)});
 `
 
@@ -201,6 +219,7 @@ export function createWaterUniforms(): WaterUniforms {
     sigma: { value: new Vector3() },
     light: { value: new Vector3(0, -1, 0) },
     refracted: { value: new Vector3(0, -1, 0) },
+    wind: { value: new Vector3(1, 0, 1) },
   }
 }
 
@@ -227,6 +246,22 @@ export function setWaterSun(u: WaterUniforms, sunDir: Vector3): void {
   u.refracted.value.set(ETA * l.x, ETA * l.y + (ETA * cosI - k), ETA * l.z).normalize()
 }
 
+/** Sans vent, la piscine ne dort pas tout à fait (la filtration) ; par gros vent, la houle plafonne. */
+const CALM_WAVES = 0.15
+const MAX_WAVES = 1.5
+
+/**
+ * Le vent (convention météo : `windDirDeg` est d'où il VIENT, sens horaire, compté depuis le +y du
+ * plan — le cap de la maison déjà retranché par l'appelant) : la houle
+ * part sous le vent, et son amplitude suit la racine de la vitesse — 1 à 10 km/h, la houle d'avant.
+ * Repère three : +x du plan = +x, +y du plan = −z.
+ */
+export function setWaterWind(u: WaterUniforms, windKmh: number, windDirDeg: number): void {
+  const a = (windDirDeg * Math.PI) / 180
+  const amp = Math.min(MAX_WAVES, CALM_WAVES + (1 - CALM_WAVES) * Math.sqrt(Math.max(windKmh, 0) / 10))
+  u.wind.value.set(-Math.sin(a), Math.cos(a), amp)
+}
+
 /** La teinte de l'eau (celle du style, linéaire) : ce qu'elle diffuse, et donc ce qu'elle absorbe. */
 export function setWaterTint(u: WaterUniforms, tint: Color): void {
   u.tint.value.copy(tint)
@@ -251,6 +286,7 @@ export function makeWaterAlive(mat: MeshStandardMaterial, role: WaterRole, water
     applyRoomFocus(shader, mat)
     shader.uniforms.uWaterTime = water.time
     shader.uniforms.uWaterStrength = strength
+    shader.uniforms.uWaterWind = water.wind
     if (basin) {
       shader.uniforms.uWaterCaustics = water.caustics
       shader.uniforms.uWaterTint = water.tint
@@ -284,13 +320,15 @@ uniform float uTime;
 uniform vec3 uLight;
 out vec2 vOld;
 out vec2 vNew;
-${WAVE_GRAD}
+${WIND_FRAME}${WAVE_GRAD}
 void main() {
   // neuf copies de la tuile (3 × 3) : un rayon dévié hors de la tuile retombe chez la voisine
   vec2 offset = vec2(float(gl_InstanceID % 3) - 1.0, float(gl_InstanceID / 3) - 1.0);
   vec2 p = position.xy * ${glsl(TILE_M)};
   vec2 g = kasbahWaveGrad(p, uTime, 0.0);
-  vec3 r = refract(uLight, normalize(vec3(-g.x, 1.0, -g.y)), ${glsl(ETA)});
+  // la tuile est dans le repère du vent : le soleil y entre aussi
+  vec2 l = kasbahToWind(uLight.xz);
+  vec3 r = refract(vec3(l.x, uLight.y, l.y), normalize(vec3(-g.x, 1.0, -g.y)), ${glsl(ETA)});
   vec2 q = p + r.xz * (${glsl(FLOOR_DEPTH_M)} / -r.y);
   vOld = p;
   vNew = q;
@@ -327,6 +365,7 @@ export class WaterCaustics {
   private readonly geometry = new InstancedBufferGeometry()
   private drawnAt = Number.NaN
   private readonly drawnLight = new Vector3()
+  private readonly drawnWind = new Vector3()
 
   constructor(private readonly water: WaterUniforms) {
     const plane = new PlaneGeometry(1, 1, CAUSTIC_GRID, CAUSTIC_GRID).translate(0.5, 0.5, 0)
@@ -334,7 +373,7 @@ export class WaterCaustics {
     this.geometry.setAttribute('position', plane.getAttribute('position'))
     this.geometry.instanceCount = 9
     this.material = new ShaderMaterial({
-      uniforms: { uTime: water.time, uLight: water.light },
+      uniforms: { uTime: water.time, uLight: water.light, uWaterWind: water.wind },
       vertexShader: CAUSTIC_VERTEX,
       fragmentShader: CAUSTIC_FRAGMENT,
       blending: AdditiveBlending, transparent: true, depthTest: false, depthWrite: false,
@@ -346,11 +385,13 @@ export class WaterCaustics {
 
   get texture(): Texture { return this.target.texture }
 
-  /** Redessine la carte si l'eau ou le soleil ont bougé depuis ; remet le renderer comme il l'a trouvé. */
+  /** Redessine la carte si l'eau, le soleil ou le vent ont bougé depuis ; remet le renderer comme il l'a trouvé. */
   update(r: WebGLRenderer): void {
-    if (this.water.time.value === this.drawnAt && this.water.light.value.equals(this.drawnLight)) return
-    this.drawnAt = this.water.time.value
-    this.drawnLight.copy(this.water.light.value)
+    const w = this.water
+    if (w.time.value === this.drawnAt && w.light.value.equals(this.drawnLight) && w.wind.value.equals(this.drawnWind)) return
+    this.drawnAt = w.time.value
+    this.drawnLight.copy(w.light.value)
+    this.drawnWind.copy(w.wind.value)
     const prevTarget = r.getRenderTarget()
     const prevAlpha = r.getClearAlpha()
     r.getClearColor(clearColor)

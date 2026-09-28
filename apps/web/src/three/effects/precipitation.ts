@@ -17,7 +17,7 @@ export interface PrecipitationParams {
   /** 0 (quelques gouttes) à 1 (averse). Décide du nombre de particules et de l'opacité. */
   intensity: number
   windKmh: number
-  /** D'où vient le vent (degrés depuis le nord, sens horaire — la convention météo). */
+  /** D'où vient le vent (degrés depuis le +y du plan, sens horaire — la convention météo, cap de la maison retranché). */
   windDirDeg: number
 }
 

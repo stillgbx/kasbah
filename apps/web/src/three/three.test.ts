@@ -29,7 +29,7 @@ import { yawToRad } from '../lib/orientation'
 import { HouseScene } from './HouseScene'
 import type { Animation } from './core/renderLoop'
 import { Precipitation } from './effects/precipitation'
-import { createWaterUniforms, makeWaterAlive } from './effects/water'
+import { createWaterUniforms, makeWaterAlive, setWaterWind, WAVES } from './effects/water'
 
 /** La cadence que `HouseScene` demande pour l'eau (`WATER_HZ`) — répétée ici, le test la vérifie. */
 const WATER_HZ_TEST = 10
@@ -2126,6 +2126,14 @@ describe('heure de la maison', () => {
     expect(dir.x).toBeLessThan(0)
     expect(dir.z).toBeGreaterThan(0)
   })
+
+  it('retranche le cap de la maison : le haut du plan n’est pas forcément le nord', () => {
+    const noon = { ...resolveAmbience({ mode: 'day' }), sunAltitudeDeg: 30, sunAzimuthDeg: 90 }   // soleil à l'EST
+    // maison tournée de 90° : son +y regarde l'est, donc le soleil est sur le +y du plan, −z du monde
+    const dir = sunDirection(noon, undefined, 90)
+    expect(dir.x).toBeCloseTo(0)
+    expect(dir.z).toBeLessThan(-0.5)
+  })
 })
 
 describe('styles de rendu', () => {
@@ -2652,7 +2660,7 @@ describe('eau vivante', () => {
     // les points d'injection existent encore dans le shader de three : c'est CE test qui le dit le
     // jour où une version en déplace un (le patch échouerait sinon en silence, eau figée)
     expect(surface.shader.vertexShader).toContain('vWaterPos = (modelMatrix')
-    expect(surface.shader.fragmentShader).toContain('kasbahWaveGrad(vWaterPos.xz')
+    expect(surface.shader.fragmentShader).toContain('kasbahWaveGrad(kasbahToWind(vWaterPos.xz)')
     expect(surface.shader.fragmentShader).toContain('waterFresnel')
     // le fond : caustiques sur la lumière directe, puis absorption par le chemin dans l'eau
     expect(basin.shader.uniforms.uWaterCaustics).toBe(water.caustics)
@@ -2661,8 +2669,43 @@ describe('eau vivante', () => {
     expect(basin.shader.fragmentShader).toContain('reflectedLight.directDiffuse *= mix(1.0, caustic')
     expect(basin.shader.fragmentShader).toMatch(/outgoingLight = outgoingLight \* waterT[\s\S]*#include <opaque_fragment>/)
     expect(surface.shader.fragmentShader).not.toContain('waterT')
+    // le vent est le même pour la surface et pour le fond (qui lit la carte dans son repère)
+    expect(surface.shader.uniforms.uWaterWind).toBe(water.wind)
+    expect(basin.shader.uniforms.uWaterWind).toBe(water.wind)
+    expect(basin.shader.fragmentShader).toContain('kasbahToWind(causticAt)')
     // deux programmes distincts, et distincts de tout matériau standard aux mêmes réglages
     expect(mats.zones.pool.customProgramCacheKey!()).not.toBe(mats.poolBasin.customProgramCacheKey!())
+  })
+
+  it('la houle part sous le vent réel, et son amplitude suit sa force', () => {
+    // tirées dans le repère du vent, les ondes avancent (phase k·p − ωt) surtout vers +x
+    const push = WAVES.reduce((acc, w) => ({ x: acc.x + w.a * w.kx, y: acc.y + w.a * w.ky }), { x: 0, y: 0 })
+    expect(push.x).toBeGreaterThan(3 * Math.abs(push.y))
+    const water = createWaterUniforms()
+    // vent d'OUEST (270°) : pousse vers l'est, +x du monde
+    setWaterWind(water, 10, 270)
+    expect(water.wind.value.x).toBeCloseTo(1)
+    expect(water.wind.value.y).toBeCloseTo(0)
+    expect(water.wind.value.z).toBeCloseTo(1)                     // une brise de 10 km/h : la houle d'avant
+    // vent du NORD (0°) : pousse vers le sud, +z du monde (nord = −z)
+    setWaterWind(water, 10, 0)
+    expect(water.wind.value.x).toBeCloseTo(0)
+    expect(water.wind.value.y).toBeCloseTo(1)
+    setWaterWind(water, 0, 0)
+    expect(water.wind.value.z).toBeCloseTo(0.15)                  // calme : presque plate
+    setWaterWind(water, 80, 0)
+    expect(water.wind.value.z).toBeCloseTo(1.5)                   // tempête : plafonnée
+  })
+
+  it('compte le vent depuis le nord VRAI : le cap de la maison tourne la houle', () => {
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true })
+    const house = parseHouse(demo)
+    scene.load({ ...house, origin: { ...house.origin, heading: 90 } })   // +y du plan = est
+    scene.setAppearance({ ambience: { ...resolveAmbience({ mode: 'day' }), windKmh: 10, windDirDeg: 270 } })   // vent d'ouest
+    // il pousse vers l'est, c'est-à-dire le +y du plan : −z du monde
+    const wind = (scene as unknown as { water: { wind: { value: Vector3 } } }).water.wind.value
+    expect(wind.x).toBeCloseTo(0)
+    expect(wind.y).toBeCloseTo(-1)
   })
 
   it('ne fait tourner la boucle que si le style, la qualité ET le champ de la caméra le veulent', () => {

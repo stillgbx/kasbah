@@ -220,14 +220,14 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
           </div>
         </section>
 
-        <!-- Vent : la rose, d'où il vient -->
+        <!-- Vent : la rose pointe là où il souffle (comme la houle de la piscine en 3D) ; le libellé dit d'où il vient -->
         <section class="card wx-wind">
           <div class="section-label">{{ $t('weather.wind') }}</div>
           <div class="wx-wind__body">
             <svg viewBox="0 0 100 100" class="wx-wind__rose" aria-hidden="true">
               <circle cx="50" cy="50" r="44" fill="none" stroke="var(--line)" stroke-width="2" />
               <text x="50" y="14" text-anchor="middle" class="wx-wind__n">N</text>
-              <g v-if="live" :transform="`rotate(${live.windDirDeg} 50 50)`">
+              <g v-if="live" :transform="`rotate(${live.windDirDeg + 180} 50 50)`">
                 <path d="M50 12 L57 34 L50 29 L43 34 Z" fill="var(--accent)" />
                 <line x1="50" y1="30" x2="50" y2="78" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" />
               </g>
