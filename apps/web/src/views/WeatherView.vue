@@ -10,6 +10,7 @@ import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import { useForecast, useWeather, useWeatherAt, useWeatherPlaces } from '../composables/useWeather'
 import { formatMinutes } from '../lib/format'
 import type { IconName } from '../lib/strokeIcons'
+import { moonIllumination, moonPhaseName, moonTimes, nextPhase } from '../lib/moon'
 import { compassPoint, conditionIcon } from '../lib/weather'
 import { useHouseStore } from '../stores/house'
 
@@ -35,7 +36,7 @@ const model = computed(() => (place.value ? undefined : weather.descriptor.value
 const tz = computed(() => (place.value ? elsewhere.data.value?.timezone : undefined))
 const localTz = Intl.DateTimeFormat().resolvedOptions().timeZone
 /** Une heure du lieu affiché, dans SON fuseau : le lever à Tokyo est celui de Tokyo. */
-const fd = (ms: number, key: 'time' | 'hour' | 'weekday') => d(new Date(ms), tz.value ? { key, timeZone: tz.value } : key)
+const fd = (ms: number, key: 'time' | 'hour' | 'weekday' | 'date') => d(new Date(ms), tz.value ? { key, timeZone: tz.value } : key)
 /** L'heure du relevé ; ailleurs, avec le décalage quand le fuseau n'est pas celui de la tablette. */
 const observed = (ms: number) => (tz.value && tz.value !== localTz ? d(new Date(ms), { key: 'time', timeZone: tz.value, timeZoneName: 'short' }) : fd(ms, 'time'))
 
@@ -55,6 +56,26 @@ const sun = computed(() => {
   const p = Math.min(1, Math.max(0, (now.value - s.sunrise) / (s.sunset - s.sunrise)))
   const a = Math.PI * (1 - p)
   return { p, x: 100 + 86 * Math.cos(a), y: 96 - 86 * Math.sin(a), up: now.value >= s.sunrise && now.value <= s.sunset, lengthMin: (s.sunset - s.sunrise) / 60_000 }
+})
+
+// Lune : calculée ici (Open-Meteo n'en dit rien), pour le lieu affiché. Le disque : la moitié
+// éclairée côté soleil, fermée par le terminateur, une demi-ellipse ; miroir quand la lune décroît,
+// et encore dans l'hémisphère sud, où on la voit à l'envers.
+const moon = computed(() => {
+  const at = home.value
+  if (!at) return null
+  const { fraction, phase } = moonIllumination(now.value)
+  const r = 12
+  const rx = (r * Math.abs(1 - 2 * fraction)).toFixed(2)
+  const lit = `M14 2 A${r} ${r} 0 0 1 14 26 A${rx} ${r} 0 0 ${fraction < 0.5 ? 0 : 1} 14 2 Z`
+  const mirror = (phase > 0.5) !== (at.lat < 0)
+  const full = nextPhase(now.value, 0.5)
+  const fresh = nextPhase(now.value, 0)
+  return {
+    name: moonPhaseName(phase), fraction, lit, mirror,
+    times: moonTimes(now.value, at.lat, at.lon),
+    next: full < fresh ? { key: 'nextFull', t: full } : { key: 'nextNew', t: fresh },
+  }
 })
 
 const HOURS = 24
@@ -172,7 +193,7 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
 
         <!-- Soleil : l'arc du jour -->
         <section class="card wx-sun">
-          <div class="section-label">{{ $t('weather.sun') }}</div>
+          <div class="section-label">{{ $t('weather.sunMoon') }}</div>
           <svg viewBox="0 0 200 104" class="wx-sun__arc" aria-hidden="true">
             <path d="M14 96 A86 86 0 0 1 186 96" fill="none" stroke="var(--line)" stroke-width="2" stroke-dasharray="3 5" />
             <path v-if="sun && sun.up" :d="`M14 96 A86 86 0 0 1 ${sun.x.toFixed(1)} ${sun.y.toFixed(1)}`" fill="none" stroke="var(--cat-light)" stroke-width="2.5" />
@@ -183,6 +204,24 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
             <div><div class="muted small">{{ $t('weather.sunrise') }}</div><div class="wx-sun__t">{{ live?.sunrise ? fd(live.sunrise, 'time') : '—:—' }}</div></div>
             <div class="text-center"><div class="muted small">{{ $t('weather.dayLength') }}</div><div class="wx-sun__t">{{ sun ? formatMinutes(sun.lengthMin, locale) : '—' }}</div></div>
             <div class="text-right"><div class="muted small">{{ $t('weather.sunset') }}</div><div class="wx-sun__t">{{ live?.sunset ? fd(live.sunset, 'time') : '—:—' }}</div></div>
+          </div>
+          <!-- la lune, sous un filet : sa phase dessinée, sa part éclairée, ses prochains passages -->
+          <div class="wx-moon">
+            <svg viewBox="0 0 28 28" class="wx-moon__disc" aria-hidden="true">
+              <circle cx="14" cy="14" r="12" class="wx-moon__dark" />
+              <path v-if="moon" :d="moon.lit" class="wx-moon__lit" :transform="moon.mirror ? 'matrix(-1 0 0 1 28 0)' : undefined" />
+              <circle cx="14" cy="14" r="12" class="wx-moon__rim" />
+            </svg>
+            <div class="wx-moon__text">
+              <div class="wx-moon__head">
+                <span class="wx-moon__name">{{ moon ? $t(`weather.moon.phases.${moon.name}`) : '—' }}</span>
+                <span class="muted small">{{ moon ? $t('weather.moon.lit', { n: n(Math.round(moon.fraction * 100), 'integer') }) : '' }}</span>
+              </div>
+              <div class="muted small wx-moon__line">
+                {{ $t('weather.moon.rise') }} {{ moon?.times.rise ? fd(moon.times.rise, 'time') : '—:—' }} · {{ $t('weather.moon.set') }} {{ moon?.times.set ? fd(moon.times.set, 'time') : '—:—' }}
+              </div>
+              <div class="muted small wx-moon__line">{{ moon ? $t(`weather.moon.${moon.next.key}`, { date: fd(moon.next.t, 'date') }) : '—' }}</div>
+            </div>
           </div>
         </section>
 
@@ -382,6 +421,18 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
 .wx-sun__arc { width: 100%; height: 96px; display: block; }
 .wx-sun__times { display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: end; }
 .wx-sun__t { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.wx-moon { display: flex; align-items: center; gap: 12px; margin-top: 2px; padding-top: 8px; border-top: 1px solid var(--line); min-width: 0; }
+.wx-moon__disc { width: 32px; height: 32px; flex: 0 0 auto; }
+.wx-moon__text .small { line-height: 1.35; }
+.wx-moon__dark { fill: var(--line); }
+/* la part éclairée garde une teinte de lune quel que soit le thème (la couleur du texte la noircirait
+   en clair) ; un liseré la détache d'un fond de carte blanc */
+.wx-moon__lit { fill: color-mix(in oklab, var(--cat-light) 18%, #f3efe4); }
+.wx-moon__rim { fill: none; stroke: var(--muted); stroke-opacity: .35; stroke-width: 1; }
+.wx-moon__text { min-width: 0; flex: 1 1 auto; display: grid; gap: 2px; }
+.wx-moon__head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.wx-moon__name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wx-moon__head .small, .wx-moon__line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 
 .wx-wind { display: flex; flex-direction: column; gap: 10px; min-height: 196px; }
 .wx-wind__body { display: flex; align-items: center; gap: 16px; flex: 1 1 auto; }
@@ -472,6 +523,8 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
   .wx-now { grid-column: 1 / 4 !important; grid-row: 1; }
   .wx-sun { grid-column: 4 / 6 !important; grid-row: 1; }
   .wx-wind { grid-column: 6 / 8 !important; grid-row: 1; }
+  /* l'arc se resserre pour faire place à la lune sans pousser la page au-delà de l'écran */
+  .wx-sun__arc { height: 72px; }
   .wx-hourly { grid-column: 1 / 8 !important; grid-row: 2; }
   .wx-hourly__strip { grid-template-columns: repeat(24, minmax(36px, 1fr)); gap: 2px; overflow: hidden; padding-bottom: 0; }
   .wx-hour { min-width: 36px; }
