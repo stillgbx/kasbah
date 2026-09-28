@@ -30,6 +30,7 @@ import { applyTuning, NEUTRAL_TUNING, type SceneTuning } from './styles/tuning'
 import { buildHouse, buildLevel, buildRoofMesh, shapeTerrain, type HouseNodes, type LevelNodes } from './builders/buildHouse'
 import { ReliefEditor } from './relief/reliefEditor'
 import { GardenLayer } from './garden/gardenLayer'
+import { ReflectionProbe } from './effects/reflection'
 import type { Season } from './garden/season'
 import { buildParking, parkingGlyphTexture, parkingMaterials, type ParkingMaterials, type ParkingNodes } from './builders/parking'
 import { extrudeRing, flatPolygon, flatRing, insetPolygon } from './builders/shapes'
@@ -321,6 +322,10 @@ const PILL_LOD_ICON_MIN_PX_PER_M = 26
  * animée la plus longue (un volet met 400 ms) : au-delà, rien de ce qui porte une ombre ne bouge plus.
  */
 const SHADOW_SETTLE_MS = 700
+/** Calme exigé avant de refaire le reflet de la piscine (ms) : un geste en cours n'en paie aucun. */
+const REFLECTION_SETTLE_MS = 400
+/** Hauteur de la sonde de reflet au-dessus de l'eau (m) : l'œil d'un baigneur, pas le ras de l'eau. */
+const REFLECTION_EYE_M = 0.4
 /** Images dessinées au minimum qui refont les ombres après une demande (la VSM filtre sur deux passes). */
 const SHADOW_MIN_FRAMES = 2
 /**
@@ -412,6 +417,10 @@ export class HouseScene {
    */
   private readonly water = createWaterUniforms()
   private caustics: WaterCaustics | null = null
+  /** Reflet figé de la piscine (`effects/reflection.ts`) et l'instant où le refaire (0 = à jour). */
+  private reflection: ReflectionProbe | null = null
+  private reflectionDue = 0
+  private reflectionTimer: ReturnType<typeof setTimeout> | null = null
   private readonly waterStrength: { surface: WaterStrength; basin: WaterStrength }
   private stopWater: (() => void) | null = null
   /** Direction d'où vient la lumière du jour, monde three : l'heure de l'ambiance ET le cap de la maison. */
@@ -844,6 +853,10 @@ export class HouseScene {
     // sur de la pelouse vide. Les ombres portées restent couvertes : dans le repère de la
     // lumière, l'ombre d'une boîte tient exactement dans l'emprise de cette boîte.
     const b = boundsToWorldBox(buildingBounds(this.house, resolveDefaults(this.house.defaults), this.geometry.roof))
+    // …et le JARDIN : un arbre hors du bâti n'avait pas d'ombre, et celle d'un grand arbre était coupée
+    // au bord du cadre. Même carte, plus de surface : les ombres de la maison y perdent en netteté.
+    const garden = this.garden.worldBounds()
+    if (garden) b.union(garden)
     const center = b.getCenter(new Vector3())
     const r = b.getSize(new Vector3()).length() / 2
     // La lumière vient d'où vient le soleil de l'heure courante (`core/ambience.ts`), à une distance
@@ -1706,6 +1719,34 @@ export class HouseScene {
     this.nodes.site.add(this.garden.group)
     this.garden.setAccent(this.theme.primary)
     this.garden.build(this.house.site.garden, (x, y) => this.groundZ(x, y), this.season, this.look.garden)
+    this.fitSunShadow()                    // le cadre des ombres suit le jardin
+    this.markReflection()                  // la piscine voit les arbres
+  }
+
+  /**
+   * Le reflet de la piscine est à refaire. Pas tout de suite : un glissement au doigt, un curseur,
+   * un relief qu'on modèle en demandent un par image ; on attend que ça se calme, puis une image.
+   */
+  private markReflection(): void {
+    if (this.deps.headless || !this.renderer) return
+    this.reflectionDue = (this.deps.now?.() ?? performance.now()) + REFLECTION_SETTLE_MS
+    if (this.reflectionTimer !== null) clearTimeout(this.reflectionTimer)
+    this.reflectionTimer = setTimeout(() => { this.reflectionTimer = null; this.loop.invalidate() }, REFLECTION_SETTLE_MS + 20)
+  }
+
+  /** Refait la sonde au-dessus de la (première) piscine, si elle est due. Aucune piscine = aucun coût. */
+  private updateReflection(r: WebGLRenderer, now: number): void {
+    if (!this.reflectionDue || now < this.reflectionDue || !this.nodes || !this.geometry) return
+    this.reflectionDue = 0
+    const pool = this.geometry.zones.find((z) => z.kind === 'pool')
+    const mesh = pool ? this.nodes.zones.get(pool.zoneId) : undefined
+    if (!mesh) return
+    const box = new Box3().setFromObject(mesh)
+    const at = box.getCenter(new Vector3()).setY(box.max.y + REFLECTION_EYE_M)
+    this.reflection ??= new ReflectionProbe()
+    this.reflection.update(r, this.scene, at, [mesh], this.skyEnv)
+    const water = this.materials.zones.pool
+    if (water.envMap !== this.reflection.texture) { water.envMap = this.reflection.texture; water.needsUpdate = true }
   }
 
   /** Seul le JARDIN a changé : les éléments se reposent, rien d'autre ne se reconstruit. */
@@ -3904,6 +3945,7 @@ export class HouseScene {
     if (this.renderer) { this.renderer.info.autoReset = false; this.renderer.info.reset() }
     // les caustiques d'abord : le fond du bassin les lit dans cette image-ci
     if (this.renderer) this.caustics?.update(this.renderer)
+    if (this.renderer) this.updateReflection(this.renderer, t0)
     // Avec une chaîne d'effets, c'est elle qui appelle notre rendu (par `draw`) puis ses passes ;
     // sans elle, on dessine droit à l'écran.
     // Seules les images d'un geste SANS relevé d'ombres disent quelque chose de la machine au garde-fou.
@@ -4019,6 +4061,8 @@ export class HouseScene {
     this.post?.dispose()
     disposeMaterials(this.materials)
     this.caustics?.dispose()
+    this.reflection?.dispose()
+    if (this.reflectionTimer !== null) clearTimeout(this.reflectionTimer)
     this.skyEnv?.dispose()
     this.renderer?.dispose()
     if (this.labelRenderer) this.labelRenderer.domElement.replaceChildren()

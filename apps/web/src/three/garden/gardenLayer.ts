@@ -1,4 +1,4 @@
-import { Box3, Color, DoubleSide, Group, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial, Quaternion, RingGeometry, Vector3, type Intersection, type Object3D } from 'three'
+import { Box3, Color, DataTexture, DoubleSide, Group, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry, Quaternion, RingGeometry, Vector3, type Intersection, type Object3D } from 'three'
 import type { GardenItem, GardenKind } from '@kasbah/shared'
 import { SITE_DECOR_LAYER } from '../core/layers'
 import type { GardenLook } from '../styles/types'
@@ -31,6 +31,28 @@ const SEASON_LEAF: Partial<Record<Season, Partial<Record<GardenKind, number>>>> 
 /** Enfoncement du pied (m) : sur une pente, un tronc posé au centre flotterait côté aval. */
 const FOOT_SINK_M = 0.05
 const RING_MARGIN_M = 0.25
+/** Ombre de contact : son rayon rapporté à celui de l'élément, son opacité au centre. */
+const CONTACT_SCALE = 1.25
+const CONTACT_OPACITY = 0.38
+
+/**
+ * Le disque de l'ombre de contact : noir, opaque au centre, qui s'efface vers le bord. Calculé en
+ * mémoire (pas de canevas) pour qu'il existe aussi dans les tests.
+ */
+function contactTexture(): DataTexture {
+  const n = 64
+  const data = new Uint8Array(n * n * 4)
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      const d = Math.hypot((x + 0.5) / n - 0.5, (y + 0.5) / n - 0.5) * 2
+      const a = Math.max(0, 1 - d) ** 1.6
+      data[(y * n + x) * 4 + 3] = Math.round(a * 255)
+    }
+  }
+  const t = new DataTexture(data, n, n)
+  t.needsUpdate = true
+  return t
+}
 
 /** `owned` : matière propre à la tranche (néon d'un style), à libérer avec elle. */
 interface Slot { mesh: InstancedMesh; ids: string[]; owned?: MeshStandardMaterial }
@@ -47,6 +69,10 @@ export class GardenLayer {
     stone: new MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, vertexColors: true }),
     accent: new MeshStandardMaterial({ color: 0xffffff, roughness: 0.6, vertexColors: true }),
   }
+  /** Ombres de contact : un disque au pied de chaque élément, une seule instance pour tout le jardin. */
+  private readonly contactMap = contactTexture()
+  private readonly contactMaterial = new MeshBasicMaterial({ color: 0x000000, map: this.contactMap, transparent: true, opacity: CONTACT_OPACITY, depthWrite: false })
+  private contact: InstancedMesh | null = null
   private season: Season = 'summer'
   /** Palette de jardin du style courant ; absente = couleurs naturelles. */
   private look: GardenLook | undefined
@@ -61,6 +87,10 @@ export class GardenLayer {
     this.ring.renderOrder = 10
     this.ring.visible = false
     this.group.add(this.ring)
+    // Comme la pelouse : aucune lampe d'INTÉRIEUR sur le jardin (`core/levelLight.ts`). Un arbre au
+    // ras de la façade est à la hauteur du rez-de-chaussée, le plafonnier du salon l'éclairait à
+    // travers le mur. Les lampes de jardin, elles, l'éclairent toujours.
+    for (const m of Object.values(this.materials)) m.userData.noLamps = true
   }
 
   setAccent(color: Color): void { this.ringMaterial.color.copy(color) }
@@ -85,6 +115,12 @@ export class GardenLayer {
       this.signature = signature
       const groups = new Map<string, GardenItem[]>()
       for (const it of items) groups.set(keyOf(it), [...(groups.get(keyOf(it)) ?? []), it])
+      // une ombre de contact par élément, en couche de décor : l'occlusion ambiante ne la prend pas pour un objet
+      this.contact = new InstancedMesh(new PlaneGeometry(2, 2), this.contactMaterial, Math.max(1, items.length))
+      this.contact.count = items.length
+      this.contact.layers.set(SITE_DECOR_LAYER)
+      this.contact.renderOrder = 1
+      this.group.add(this.contact)
       for (const [key, list] of groups) {
         const first = list[0]!
         this.shapeOf(first).parts.forEach(({ geometry, part }, pi) => {
@@ -123,6 +159,28 @@ export class GardenLayer {
       slot.mesh.computeBoundingSphere()
       slot.mesh.computeBoundingBox()
     }
+    const contact = this.contact
+    if (!contact) return
+    let i = 0
+    for (const it of this.items.values()) {
+      const r = this.radiusOf(it) * CONTACT_SCALE
+      // à peine au-dessus du sol ; sur une pente le disque, plat, s'enfonce d'un côté : c'est le
+      // `depthWrite: false` + l'ordre de rendu qui le gardent lisible
+      p.set(it.center[0], it.center[1], this.groundZ(it.center[0], it.center[1]) + 0.03)
+      contact.setMatrixAt(i++, m.compose(p, q.identity(), s.set(r, r, 1)))
+    }
+    contact.instanceMatrix.needsUpdate = true
+    contact.computeBoundingSphere()
+  }
+
+  /** Boîte MONDE de tout le jardin (pour le cadre des ombres du soleil), `null` s'il est vide. */
+  worldBounds(): Box3 | null {
+    let box: Box3 | null = null
+    for (const id of this.items.keys()) {
+      const b = this.boxOf(id)
+      if (b) box = box ? box.union(b) : b
+    }
+    return box
   }
 
   /** L'élément réglé en mode édition : un anneau d'accent au pied. `null` = aucun. */
@@ -206,6 +264,7 @@ export class GardenLayer {
     // les géométries sont au cache des formes, partagées : seule l'instance part
     for (const slot of this.slots.values()) { slot.mesh.removeFromParent(); slot.mesh.dispose(); slot.owned?.dispose() }
     this.slots.clear()
+    if (this.contact) { this.contact.removeFromParent(); this.contact.geometry.dispose(); this.contact.dispose(); this.contact = null }
     this.signature = ''
   }
 
@@ -215,6 +274,8 @@ export class GardenLayer {
     for (const m of Object.values(this.materials)) m.dispose()
     this.ringMaterial.dispose()
     this.ring.geometry.dispose()
+    this.contactMaterial.dispose()
+    this.contactMap.dispose()
   }
 }
 
