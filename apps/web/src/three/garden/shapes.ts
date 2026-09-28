@@ -208,9 +208,13 @@ export function facet(g: BufferGeometry, next: () => number, gradient?: readonly
 
 const cache = new Map<string, GardenShape>()
 
-/** La forme `variant` d'une famille, construite une fois et partagée par toutes les instances. */
-export function gardenShape(kind: GardenKind, variant: number): GardenShape {
-  const key = `${kind}:${variant}`
+/**
+ * La forme `variant` d'une famille, construite une fois et partagée par toutes les instances.
+ * `foliage` < 1 retire des masses de feuillage (feuillus et buissons seulement : un conifère amputé
+ * de ses étages hauts n'aurait plus l'air de rien) — la hauteur, elle, reste celle de l'arbre entier.
+ */
+export function gardenShape(kind: GardenKind, variant: number, foliage = 1): GardenShape {
+  const key = `${kind}:${variant}:${foliage}`
   const hit = cache.get(key)
   if (hit) return hit
   const next = rng(0x9e3779b9 ^ (variant * 7919) ^ kind.length * 104729)
@@ -219,9 +223,17 @@ export function gardenShape(kind: GardenKind, variant: number): GardenShape {
       : kind === 'palm' ? palm(next)
         : kind === 'shrub' ? shrub(next)
           : rock(next)
+  // mise à l'échelle sur la forme ENTIÈRE, avant d'en retirer des masses
+  const width = normalize(Object.values(raw).flat(), kind === 'rock' ? 0.2 : 0)
+  if (foliage < 1 && raw.leaf && (kind === 'broadleaf' || kind === 'shrub')) {
+    // la grande masse centrale part la première : garder les petites fait un arbre dégarni, pas un
+    // arbre plus petit
+    const keep = Math.max(1, Math.round(raw.leaf.length * foliage))
+    for (const g of raw.leaf.slice(0, raw.leaf.length - keep)) g.dispose()
+    raw.leaf = raw.leaf.slice(raw.leaf.length - keep)
+  }
   const parts: GardenShapePart[] = Object.entries(raw).map(([part, list]) => ({ geometry: mergeGeometries(list, false), part: part as GardenPart }))
   for (const list of Object.values(raw)) for (const g of list) g.dispose()
-  const width = normalize(parts.map((p) => p.geometry), kind === 'rock' ? 0.2 : 0)
   for (const p of parts) p.geometry = facet(p.geometry, next)
   const shape: GardenShape = { parts, width }
   cache.set(key, shape)

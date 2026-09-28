@@ -17,16 +17,20 @@ function limb(a: Vector3, b: Vector3, r: number): BufferGeometry {
 
 const cache = new Map<string, GardenShape>()
 
-/** La forme `variant` d'une espèce en `season` : même recette, autre tirage (masses, fruits, inclinaison). */
-export function speciesShape(recipe: SpeciesRecipe, variant: number, season: Season = 'summer'): GardenShape {
-  const key = `${recipe.id}:${variant}:${season}:${JSON.stringify(recipe)}`
+/**
+ * La forme `variant` d'une espèce en `season` : même recette, autre tirage (masses, fruits, inclinaison).
+ * `style` (un style qui a sa palette de jardin) : ombrage seul, sans les couleurs de l'espèce — la
+ * teinte viendra de l'instance —, et `foliage` qui s'ajoute à celui de la saison.
+ */
+export function speciesShape(recipe: SpeciesRecipe, variant: number, season: Season = 'summer', style?: { foliage: number }): GardenShape {
+  const key = `${recipe.id}:${variant}:${season}:${style?.foliage ?? '-'}:${JSON.stringify(recipe)}`
   const hit = cache.get(key)
   if (hit) return hit
   // le tirage ne dépend PAS de la saison : le même arbre perd ses feuilles, il ne change pas de port
   const next = rng(gardenSeed({ id: recipe.id }) ^ (variant * 7919))
   const { trunk, crown } = recipe
   const over = recipe.seasons?.[season] ?? {}
-  const foliage = over.foliage ?? 1
+  const foliage = (over.foliage ?? 1) * (style?.foliage ?? 1)
   const leafColors = over.leaf ?? recipe.leaf
   const accentRecipe = over.accent === undefined ? recipe.accent : over.accent ?? undefined
   const R = crown.width / 2
@@ -125,7 +129,7 @@ export function speciesShape(recipe: SpeciesRecipe, variant: number, season: Sea
   const reach = Math.max(...masses.map((m) => Math.hypot(m.c.x, m.c.y) + m.r * bump))
   for (const p of merged) p.geometry.scale(1 / topZ, 1 / topZ, 1 / topZ)
   const width = (2 * reach) / topZ
-  merged.forEach((p, i) => { p.geometry = facet(p.geometry, next, raw[i]![2]) })
+  merged.forEach((p, i) => { p.geometry = facet(p.geometry, next, style ? undefined : raw[i]![2]) })
   const shape: GardenShape = { parts: merged, width }
   cache.set(key, shape)
   return shape

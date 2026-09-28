@@ -82,6 +82,8 @@ export const candyStyle: RenderStyle = {
         vignette: 0,
       },
       glow: { scale: mix(1.3, 1, day), opacity: mix(0.7, 0.3, day), lightIntensity: mix(10, 5, day), emissive: mix(2, 1.3, day) },
+      // jardin : confiserie : pastels rose, menthe, lilas, citron ; troncs caramel, fruits framboise
+      garden: { leaf: [new Color(0xffb3d9), new Color(0xb8f2e6), new Color(0xd7b8ff), new Color(0xfff3b0)], bark: new Color(0xc98b6b), stone: new Color(0xffd6e8), accent: new Color(0xff4f9a) },
     }
   },
 }

@@ -163,6 +163,25 @@ export interface GlowLook {
   emissive: number
 }
 
+/**
+ * Le jardin dans ce style (`three/garden/`). Absent = ses couleurs NATURELLES : les verts des
+ * familles, ceux de la saison, les couleurs propres à chaque espèce. Présent, la palette du style
+ * remplace tout cela — une espèce garde sa silhouette, ses saisons (feuillage restant) et ses
+ * fruits, mais prend les teintes du style.
+ */
+export interface GardenLook {
+  /** Teintes du feuillage ; chaque élément en prend une, tirée par sa graine. */
+  leaf: readonly Color[]
+  bark: Color
+  stone: Color
+  /** Fruits et fleurs. `null` = ceux de l'espèce. */
+  accent: Color | null
+  /** Part ÉMISE du feuillage et des fruits (néon) ; absent = rien n'émet. */
+  emissive?: number
+  /** Feuillage restant, en plus de celui de la saison : < 1 dégarnit (arbres à moitié morts). */
+  foliage?: number
+}
+
 /** Tout ce que la scène lit d'un style, pour une ambiance donnée. */
 export interface StyleLook {
   palette: ScenePalette
@@ -177,6 +196,7 @@ export interface StyleLook {
    * La teinte est au style : une silhouette noire se perd la nuit sur un jardin noir.
    */
   bats?: { count: number; color: Color }
+  garden?: GardenLook
 }
 
 export interface RenderStyle {

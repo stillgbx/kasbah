@@ -102,6 +102,8 @@ export const cyberpunkStyle: RenderStyle = {
         vignette: mix(0.6, 0.3, day),
       },
       glow: { scale: mix(1.6, 1, day), opacity: mix(1, 0.3, day), lightIntensity: mix(20, 7, day), emissive: mix(3, 1.4, day) },
+      // jardin : néon : le feuillage ÉMET, cyan, magenta, violet ; troncs noirs, fruits jaune fluo
+      garden: { leaf: [new Color(0x00e5ff), new Color(0xff2bd6), new Color(0x7c4dff)], bark: new Color(0x121218), stone: new Color(0x1c2030), accent: new Color(0xfff200), emissive: 0.3 },
     }
   },
 }

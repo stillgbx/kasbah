@@ -1,6 +1,7 @@
 import { Box3, Color, DoubleSide, Group, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial, Quaternion, RingGeometry, Vector3, type Intersection, type Object3D } from 'three'
 import type { GardenItem, GardenKind } from '@kasbah/shared'
 import { SITE_DECOR_LAYER } from '../core/layers'
+import type { GardenLook } from '../styles/types'
 import type { Season } from './season'
 import { GARDEN_VARIANTS, gardenSeed, gardenShape, rng, type GardenPart, type GardenShape } from './shapes'
 import { speciesOf } from './species'
@@ -31,7 +32,8 @@ const SEASON_LEAF: Partial<Record<Season, Partial<Record<GardenKind, number>>>> 
 const FOOT_SINK_M = 0.05
 const RING_MARGIN_M = 0.25
 
-interface Slot { mesh: InstancedMesh; ids: string[] }
+/** `owned` : matière propre à la tranche (néon d'un style), à libérer avec elle. */
+interface Slot { mesh: InstancedMesh; ids: string[]; owned?: MeshStandardMaterial }
 
 export class GardenLayer {
   readonly group = new Group()
@@ -46,6 +48,8 @@ export class GardenLayer {
     accent: new MeshStandardMaterial({ color: 0xffffff, roughness: 0.6, vertexColors: true }),
   }
   private season: Season = 'summer'
+  /** Palette de jardin du style courant ; absente = couleurs naturelles. */
+  private look: GardenLook | undefined
   private readonly ringMaterial = new MeshBasicMaterial({ transparent: true, opacity: 0.9, depthWrite: false, depthTest: false, side: DoubleSide })
   private readonly ring = new Mesh(new RingGeometry(0.92, 1, 48), this.ringMaterial)
   private selectedId: string | null = null
@@ -65,12 +69,17 @@ export class GardenLayer {
    * Pose les éléments. Même liste d'éléments, mêmes familles et mêmes formes (on en glisse un, on
    * change sa hauteur) → seules les matrices sont réécrites, sans recréer de tampon à chaque image.
    */
-  build(items: readonly GardenItem[], groundZ: (x: number, y: number) => number, season: Season): void {
+  build(items: readonly GardenItem[], groundZ: (x: number, y: number) => number, season: Season, look?: GardenLook): void {
     this.groundZ = groundZ
     this.season = season
+    this.look = look
     this.items = new Map(items.map((it) => [it.id, it]))
-    const keyOf = (it: GardenItem) => `${it.kind}:${speciesOf(it)?.id ?? ''}:${gardenSeed(it) % GARDEN_VARIANTS}`
-    const signature = `${season}|${items.map((it) => `${it.id}:${keyOf(it)}`).join('|')}`
+    // Sous une palette de style, la teinte du feuillage est tirée par élément : elle entre dans la
+    // clé, pour qu'une tranche n'ait qu'une teinte — c'est ce qui permet au néon d'en émettre une.
+    const tintOf = (it: GardenItem) => (look ? gardenSeed(it) % look.leaf.length : 0)
+    const keyOf = (it: GardenItem) => `${it.kind}:${speciesOf(it)?.id ?? ''}:${gardenSeed(it) % GARDEN_VARIANTS}:${tintOf(it)}`
+    const lookKey = look ? JSON.stringify([look.leaf, look.bark, look.stone, look.accent, look.emissive, look.foliage]) : ''
+    const signature = `${season}|${lookKey}|${items.map((it) => `${it.id}:${keyOf(it)}`).join('|')}`
     if (signature !== this.signature) {
       this.clearSlots()
       this.signature = signature
@@ -78,17 +87,18 @@ export class GardenLayer {
       for (const it of items) groups.set(keyOf(it), [...(groups.get(keyOf(it)) ?? []), it])
       for (const [key, list] of groups) {
         const first = list[0]!
-        const kind = first.kind
-        const species = speciesOf(first)
         this.shapeOf(first).parts.forEach(({ geometry, part }, pi) => {
-          const mesh = new InstancedMesh(geometry, this.materials[part], list.length)
+          const base = look ? this.styledColor(look, part, first) : this.naturalColor(part, first)
+          // le néon : une matière par tranche, qui émet sa propre teinte (l'émission ignore la couleur d'instance)
+          const glows = !!look?.emissive && (part === 'leaf' || part === 'accent')
+          const owned = glows ? this.materials[part].clone() : undefined
+          if (owned) { owned.emissive.copy(base); owned.emissiveIntensity = look!.emissive! }
+          const mesh = new InstancedMesh(geometry, owned ?? this.materials[part], list.length)
           mesh.castShadow = true
           mesh.receiveShadow = true
-          // une espèce porte ses couleurs dans ses sommets : l'instance n'y module que la clarté
-          const base = new Color(species ? 0xffffff : (part === 'leaf' ? SEASON_LEAF[season]?.[kind] : undefined) ?? COLORS[kind][part] ?? 0x808080)
           list.forEach((it, i) => mesh.setColorAt(i, jitter(base, gardenSeed(it))))
           this.group.add(mesh)
-          this.slots.set(`${key}:${pi}`, { mesh, ids: list.map((it) => it.id) })
+          this.slots.set(`${key}:${pi}`, { mesh, ids: list.map((it) => it.id), ...(owned ? { owned } : {}) })
         })
       }
     }
@@ -134,11 +144,34 @@ export class GardenLayer {
     return (this.shapeOf(it).width * it.height) / 2
   }
 
-  /** La forme d'un élément : celle de son espèce (à la saison courante), sinon celle de sa famille. */
+  /**
+   * La forme d'un élément : celle de son espèce (à la saison courante), sinon celle de sa famille.
+   * Sous une palette de style, l'espèce est tirée en ombrage seul et le feuillage du style s'applique.
+   */
   private shapeOf(it: GardenItem): GardenShape {
     const variant = gardenSeed(it) % GARDEN_VARIANTS
     const species = speciesOf(it)
-    return species ? speciesShape(species, variant, this.season) : gardenShape(it.kind, variant)
+    const foliage = this.look?.foliage ?? 1
+    if (species) return speciesShape(species, variant, this.season, this.look ? { foliage } : undefined)
+    return gardenShape(it.kind, variant, foliage)
+  }
+
+  /** Couleurs naturelles : une espèce porte les siennes dans ses sommets, l'instance n'y module que la clarté. */
+  private naturalColor(part: GardenPart, it: GardenItem): Color {
+    if (speciesOf(it)) return new Color(0xffffff)
+    return new Color((part === 'leaf' ? SEASON_LEAF[this.season]?.[it.kind] : undefined) ?? COLORS[it.kind][part] ?? 0x808080)
+  }
+
+  /** Couleurs du style ; les fruits d'une espèce gardent les leurs si le style n'en impose pas. */
+  private styledColor(look: GardenLook, part: GardenPart, it: GardenItem): Color {
+    if (part === 'leaf') return look.leaf[gardenSeed(it) % look.leaf.length]!.clone()
+    if (part === 'bark') return look.bark.clone()
+    if (part === 'stone') return look.stone.clone()
+    if (look.accent) return look.accent.clone()
+    const species = speciesOf(it)
+    const over = species?.seasons?.[this.season]?.accent
+    const accent = over === undefined ? species?.accent : over ?? undefined
+    return new Color(accent?.color ?? 0xffffff)
   }
 
   /** Ce que le lancer de rayon peut toucher : les instances, toutes familles confondues. */
@@ -171,7 +204,7 @@ export class GardenLayer {
 
   private clearSlots(): void {
     // les géométries sont au cache des formes, partagées : seule l'instance part
-    for (const slot of this.slots.values()) { slot.mesh.removeFromParent(); slot.mesh.dispose() }
+    for (const slot of this.slots.values()) { slot.mesh.removeFromParent(); slot.mesh.dispose(); slot.owned?.dispose() }
     this.slots.clear()
     this.signature = ''
   }

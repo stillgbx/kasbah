@@ -29,6 +29,19 @@ describe('espèces du jardin', () => {
     }
   })
 
+  it('sous la palette d\'un style, une espèce perd ses couleurs mais garde sa silhouette', () => {
+    const cherry = SPECIES.find((s) => s.id === 'cherry')!
+    const leaf = speciesShape(cherry, 0, 'summer', { foliage: 1 }).parts.find((p) => p.part === 'leaf')!
+    const c = leaf.geometry.getAttribute('color')
+    expect(c.getX(0)).toBeCloseTo(c.getY(0), 5)              // gris : la teinte viendra de l'instance
+    expect(c.getY(0)).toBeCloseTo(c.getZ(0), 5)
+    const natural = speciesShape(cherry, 0, 'summer').parts.find((p) => p.part === 'leaf')!.geometry.getAttribute('color')
+    expect(natural.getY(0)).toBeGreaterThan(natural.getX(0))  // vert de l'espèce
+    // un style qui dégarnit fait apparaître la ramure étagée, même l'été
+    const bark = (style?: { foliage: number }) => speciesShape(cherry, 0, 'summer', style).parts.find((p) => p.part === 'bark')!.geometry.getAttribute('position').count
+    expect(bark({ foliage: 0.45 })).toBeGreaterThan(bark())
+  })
+
   it('une espèce d\'une autre famille est ignorée', () => {
     expect(speciesOf({ kind: 'broadleaf', species: 'cherry' })?.id).toBe('cherry')
     expect(speciesOf({ kind: 'palm', species: 'cherry' })).toBeUndefined()

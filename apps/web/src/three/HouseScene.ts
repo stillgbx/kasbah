@@ -1705,7 +1705,7 @@ export class HouseScene {
     if (!this.nodes || !this.house) return
     this.nodes.site.add(this.garden.group)
     this.garden.setAccent(this.theme.primary)
-    this.garden.build(this.house.site.garden, (x, y) => this.groundZ(x, y), this.season)
+    this.garden.build(this.house.site.garden, (x, y) => this.groundZ(x, y), this.season, this.look.garden)
   }
 
   /** Seul le JARDIN a changé : les éléments se reposent, rien d'autre ne se reconstruit. */
@@ -3532,7 +3532,7 @@ export class HouseScene {
     for (const m of this.markers.values()) m.setTheme(this.theme, this.look.glow)
     this.buildOpeningHandles()             // les poignées sont teintées de l'accent, qui vient de changer
     this.buildParkings()                   // le marquage au sol suit le thème, comme le reste
-    this.buildGarden()                     // l'anneau d'accent suit le thème
+    this.buildGarden()                     // l'anneau d'accent suit le thème, le jardin la palette du style
     this.buildOriginMark()                 // le repère d'origine aussi
     this.highlightRoom(this.highlightedRoom)
     this.syncWindowGlow()                  // le verre du style, et l'heure qui dit s'il fait nuit

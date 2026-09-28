@@ -101,6 +101,8 @@ export const hauntedStyle: RenderStyle = {
         vignette: mix(0.75, 0.4, day),
       },
       glow: { scale: mix(1.4, 1, day), opacity: mix(0.8, 0.4, day), lightIntensity: mix(11, 6, day), emissive: mix(2.2, 1.3, day) },
+      // jardin : arbres à moitié morts : feuillage terne et clairsemé, troncs presque noirs, fruits phosphorescents
+      garden: { leaf: [new Color(0x33332a), new Color(0x2b2531), new Color(0x3d3a33)], bark: new Color(0x1e1a1f), stone: new Color(0x57555c), accent: new Color(0x9cff57), emissive: 0.6, foliage: 0.45 },
       // une nuée la nuit, deux ou trois égarées en plein jour ; gris violacé la nuit (le jardin y est
       // noir), noires sur le jour gris
       bats: { count: Math.round(mix(12, 3, day)), color: new Color(0x5a4d6b).lerp(new Color(0x141018), day / 0.8) },

@@ -92,6 +92,8 @@ export const maquetteStyle: RenderStyle = {
         vignette: 0.15,
       },
       glow: { scale: mix(1.1, 0.8, day), opacity: mix(0.6, 0.15, day), lightIntensity: mix(9, 3, day), emissive: mix(1.8, 1, day) },
+      // jardin : maquette d'architecte : feuillage blanc cassé, troncs en balsa, fruits fondus dans le feuillage
+      garden: { leaf: [new Color(0xf3f0ea), new Color(0xe9e5dd)], bark: new Color(0xd9c9ab), stone: new Color(0xe2dfd8), accent: new Color(0xefebe4) },
     }
   },
 }
