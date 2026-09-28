@@ -664,7 +664,7 @@
     "pollenExplain": "Concentration prévue en grains par m³ (programme européen Copernicus CAMS), graduée : faible sous 10, modéré sous 50, élevé sous 150, très élevé au-delà. Les six pollens suivis sont ceux de l'Europe ; chacun a sa saison.",
     "observed": "Observé à {time}", "attribution": "Données {source}", "model": "Modèle {model}",
     "radarHint": "Radar observé (2 h), puis prévision AROME (6 h)", "radarUnavailable": "Radar indisponible", "radarSource": "Radar RainViewer", "nowcastSource": "Prévision immédiate", "aromeSource": "Prévision AROME · Météo-France",
-    "play": "Lecture", "pause": "Pause", "today": "Aujourd'hui", "min": "min", "max": "max", "noForecast": "Prévisions indisponibles"
+    "play": "Lecture", "pause": "Pause", "today": "Aujourd'hui", "todayShort": "Auj.", "min": "min", "max": "max", "noForecast": "Prévisions indisponibles"
   },
   "pets": {
     "noDevice": "Aucun appareil pour animaux actif. Activez un plugin dans Réglages → Plugins.",

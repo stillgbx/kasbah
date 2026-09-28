@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useIntervalFn } from '@vueuse/core'
 import { AQI_LEVELS, POLLEN_TYPES, type WeatherDailyPoint, type WeatherHourlyPoint } from '@kasbah/shared'
 import PageHeader from '../components/layout/PageHeader.vue'
+import MoonDisc from '../components/weather/MoonDisc.vue'
 import RainRadar from '../components/weather/RainRadar.vue'
 import WeatherPlaces from '../components/weather/WeatherPlaces.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
@@ -58,21 +59,15 @@ const sun = computed(() => {
   return { p, x: 100 + 86 * Math.cos(a), y: 96 - 86 * Math.sin(a), up: now.value >= s.sunrise && now.value <= s.sunset, lengthMin: (s.sunset - s.sunrise) / 60_000 }
 })
 
-// Lune : calculée ici (Open-Meteo n'en dit rien), pour le lieu affiché. Le disque : la moitié
-// éclairée côté soleil, fermée par le terminateur, une demi-ellipse ; miroir quand la lune décroît,
-// et encore dans l'hémisphère sud, où on la voit à l'envers.
+// Lune : calculée ici (Open-Meteo n'en dit rien), pour le lieu affiché.
 const moon = computed(() => {
   const at = home.value
   if (!at) return null
   const { fraction, phase } = moonIllumination(now.value)
-  const r = 12
-  const rx = (r * Math.abs(1 - 2 * fraction)).toFixed(2)
-  const lit = `M14 2 A${r} ${r} 0 0 1 14 26 A${rx} ${r} 0 0 ${fraction < 0.5 ? 0 : 1} 14 2 Z`
-  const mirror = (phase > 0.5) !== (at.lat < 0)
   const full = nextPhase(now.value, 0.5)
   const fresh = nextPhase(now.value, 0)
   return {
-    name: moonPhaseName(phase), fraction, lit, mirror,
+    name: moonPhaseName(phase), fraction, phase, south: at.lat < 0,
     times: moonTimes(now.value, at.lat, at.lon),
     next: full < fresh ? { key: 'nextFull', t: full } : { key: 'nextNew', t: fresh },
   }
@@ -127,6 +122,10 @@ const trend = computed(() => {
   const tints = temps.map((c, i) => ({ offset: (i + 0.5) / 24, color: tempTint(c) }))
   return { line, area, rain, nights, tints, ext, iMin, iMax }
 })
+/** La lune de chaque jour de la semaine, prise à midi (le jour commence à minuit local). */
+const dailyMoon = computed(() => daily.value.map((p) => (p ? moonIllumination(p.t + 12 * 3_600_000) : null)))
+/** Libellé au survol d'un disque de la semaine : la phase et sa part éclairée. */
+const moonTitle = (m: { fraction: number; phase: number }) => `${t(`weather.moon.phases.${moonPhaseName(m.phase)}`)} · ${t('weather.moon.lit', { n: n(Math.round(m.fraction * 100), 'integer') })}`
 /** Échelle commune des barres de la semaine : le froid et le chaud de la semaine entière. */
 const weekRange = computed(() => {
   const pts = daily.value.filter((p): p is WeatherDailyPoint => !!p)
@@ -207,11 +206,7 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
           </div>
           <!-- la lune, sous un filet : sa phase dessinée, sa part éclairée, ses prochains passages -->
           <div class="wx-moon">
-            <svg viewBox="0 0 28 28" class="wx-moon__disc" aria-hidden="true">
-              <circle cx="14" cy="14" r="12" class="wx-moon__dark" />
-              <path v-if="moon" :d="moon.lit" class="wx-moon__lit" :transform="moon.mirror ? 'matrix(-1 0 0 1 28 0)' : undefined" />
-              <circle cx="14" cy="14" r="12" class="wx-moon__rim" />
-            </svg>
+            <MoonDisc class="wx-moon__disc" :fraction="moon?.fraction ?? 0" :phase="moon?.phase ?? 0" :south="moon?.south" />
             <div class="wx-moon__text">
               <div class="wx-moon__head">
                 <span class="wx-moon__name">{{ moon ? $t(`weather.moon.phases.${moon.name}`) : '—' }}</span>
@@ -292,9 +287,15 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
           <div class="section-label">{{ $t('weather.daily') }}</div>
           <div class="wx-daily__rows">
             <div v-for="(p, i) in daily" :key="i" class="wx-day">
-              <div class="wx-day__name">{{ p ? (isToday(p.t) ? $t('weather.today') : fd(p.t, 'weekday')) : '—' }}</div>
+              <div class="wx-day__name">
+                <template v-if="p && isToday(p.t)"><span class="wx-day__long">{{ $t('weather.today') }}</span><span class="wx-day__short">{{ $t('weather.todayShort') }}</span></template>
+                <template v-else>{{ p ? fd(p.t, 'weekday') : '—' }}</template>
+              </div>
               <StrokeIcon :name="p ? conditionIcon(p.condition) : 'cloud'" :size="20" :class="{ 'wx-dim': !p }" />
               <div class="small wx-day__rain" :data-on="p && (p.precipProbability ?? 0) >= 10 ? '1' : '0'">{{ p && p.precipProbability !== undefined ? `${n(p.precipProbability, 'integer')} %` : '·' }}</div>
+              <div class="wx-day__moon" :title="dailyMoon[i] ? moonTitle(dailyMoon[i]!) : undefined">
+                <MoonDisc v-if="dailyMoon[i]" :fraction="dailyMoon[i]!.fraction" :phase="dailyMoon[i]!.phase" :south="(home?.lat ?? 0) < 0" />
+              </div>
               <div class="wx-day__min muted">{{ p ? deg(p.minC) : '—' }}</div>
               <div class="wx-day__track"><div v-if="p" class="wx-day__bar" :style="barStyle(p)" /></div>
               <div class="wx-day__max">{{ p ? deg(p.maxC) : '—' }}</div>
@@ -424,11 +425,6 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
 .wx-moon { display: flex; align-items: center; gap: 12px; margin-top: 2px; padding-top: 8px; border-top: 1px solid var(--line); min-width: 0; }
 .wx-moon__disc { width: 32px; height: 32px; flex: 0 0 auto; }
 .wx-moon__text .small { line-height: 1.35; }
-.wx-moon__dark { fill: var(--line); }
-/* la part éclairée garde une teinte de lune quel que soit le thème (la couleur du texte la noircirait
-   en clair) ; un liseré la détache d'un fond de carte blanc */
-.wx-moon__lit { fill: color-mix(in oklab, var(--cat-light) 18%, #f3efe4); }
-.wx-moon__rim { fill: none; stroke: var(--muted); stroke-opacity: .35; stroke-width: 1; }
 .wx-moon__text { min-width: 0; flex: 1 1 auto; display: grid; gap: 2px; }
 .wx-moon__head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .wx-moon__name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -462,7 +458,19 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
 .wx-hour__rain[data-on='1'], .wx-day__rain[data-on='1'] { color: var(--cat-media); }
 
 .wx-daily__rows { display: grid; gap: 6px; margin-top: 12px; }
-.wx-day { display: grid; grid-template-columns: 52px 24px 44px 40px 1fr 40px; align-items: center; gap: 8px; height: 30px; }
+/* le nom du jour prend jusqu'à 72 px (« Aujourd'hui » en entier) sur la barre, qui garde au moins
+   48 px ; toutes les lignes ont la même largeur, donc les mêmes colonnes */
+.wx-day { display: grid; grid-template-columns: minmax(40px, 72px) 24px 44px 18px 40px minmax(48px, 1fr) 40px; align-items: center; gap: 8px; height: 30px; }
+.wx-day__short { display: none; }
+/* la semaine sur une demi-largeur (760-1099 px) : la place manque, « Aujourd'hui » s'abrège et la
+   colonne pluie se resserre, pour laisser une barre à l'amplitude */
+@media (min-width: 760px) and (max-width: 1099px) {
+  .wx-day { grid-template-columns: 44px 24px 36px 18px 40px minmax(0, 1fr) 40px; }
+  .wx-day__long { display: none; }
+  .wx-day__short { display: inline; }
+}
+.wx-day__moon { width: 18px; height: 18px; }
+.wx-day__moon > svg { width: 100%; height: 100%; }
 .wx-day__name { font-size: 13px; font-weight: 500; text-transform: capitalize; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wx-day__min, .wx-day__max { font-size: 13px; font-variant-numeric: tabular-nums; text-align: right; }
 .wx-day__max { font-weight: 600; }
