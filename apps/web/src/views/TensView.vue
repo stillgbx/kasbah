@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PageHeader from '../components/layout/PageHeader.vue'
 import MarqueeText from '../components/ui/MarqueeText.vue'
@@ -9,7 +9,7 @@ import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import { useLocalPluginsStore } from '../stores/localPlugins'
 import { useTensStore } from '../stores/tens'
 import {
-  DURATION_DEFAULT, DURATION_MAX, DURATION_MIN, DURATION_STEP, INTENSITY_MAX, TENS_PROGRAMS, tensProgram,
+  DURATION_DEFAULT, DURATION_MAX, DURATION_MIN, DURATION_STEP, INTENSITY_MAX, TENS_PROGRAMS, favoriteKey, tensProgram, type TensFavorite,
 } from '../lib/tens/programs'
 import { INTENSITY_STEP, type TensChannels } from '../lib/tens/protocol'
 
@@ -37,6 +37,19 @@ const channelOptions = computed(() => [
   { value: '3' as const, label: t('tens.channelsBoth') },
 ])
 
+/** L'intensité que la séance ira chercher d'elle-même, par canal (dixièmes de mA) ; 0 = à la main. */
+const targets = reactive<Record<1 | 2, number>>({ 1: 0, 2: 0 })
+const usesChannel = (ch: 1 | 2) => (Number(channels.value) & ch) !== 0
+/** Le lancement tel que réglé à droite : c'est lui que Démarrer envoie et que l'étoile enregistre. */
+const draft = (program: string): TensFavorite => ({
+  program, minutes: minutes.value, channels: Number(channels.value) as TensChannels,
+  ch1: usesChannel(1) ? targets[1] : 0, ch2: usesChannel(2) ? targets[2] : 0,
+})
+
+/** '1' : ces réglages sont un favori ; 'other' : le programme l'est, mais avec d'autres ; '0' : jamais. */
+const starState = (program: string) =>
+  tens.isFavorite(draft(program)) ? '1' : tens.favorites.some((f) => f.program === program) ? 'other' : '0'
+
 const programName = (id: string) => t(`tens.programNames.${id}`)
 const programLabel = (id: string) => `P${tensProgram(id)?.number ?? '?'} · ${programName(id)}`
 
@@ -48,7 +61,7 @@ const canDrive = computed(() => tens.connected && tens.running)
  */
 const canStop = computed(() => tens.connected && (tens.active || tens.busy))
 
-function launch(program: string, mins: number, ch: TensChannels) { void tens.startProgram(program, mins, ch) }
+function launch(f: TensFavorite) { void tens.startProgram(f.program, f.minutes, f.channels ?? 3, { 1: f.ch1 ?? 0, 2: f.ch2 ?? 0 }) }
 
 const statusLabel = computed(() => t(`tens.status.${tens.status}`))
 const batteryLabel = computed(() => {
@@ -71,6 +84,14 @@ const countdown = computed(() => {
 })
 
 const ma = (tenths: number) => (tenths / 10).toLocaleString(locale.value, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+/** « 60 min · 12,0 / 15,0 mA », « 30 min · canal 1 : 12,0 mA » ; la durée seule quand le favori ne monte pas seul. */
+function favoriteMeta(f: TensFavorite) {
+  const ch = f.channels ?? 3, v1 = f.ch1 ?? 0, v2 = f.ch2 ?? 0
+  const time = t('tens.minutes', { n: f.minutes })
+  if (ch === 3) return v1 || v2 ? `${time} · ${ma(v1)} / ${ma(v2)} mA` : time
+  const v = ch === 1 ? v1 : v2
+  return v ? `${time} · ${t('tens.channelShort', { n: ch })} ${ma(v)} mA` : time
+}
 const capLabel = computed(() => t('tens.cap', { max: ma(INTENSITY_MAX) }))
 /** Où en est le TENS, et ce qui est demandé : deux valeurs, la file rapproche l'une de l'autre. */
 const acquired = (ch: 1 | 2) => (tens.active ? tens.acquiredOf(ch) : 0)
@@ -184,14 +205,17 @@ const showPairing = ref(!tens.knownDeviceId)
           <section class="card launch">
             <div class="section-label">{{ $t('tens.favorites') }}</div>
             <div class="favorites">
-              <div v-for="f in tens.favorites" :key="f.program" class="favorite" :data-current="tens.currentProgram === f.program ? '1' : '0'">
-                <button type="button" class="favorite__go" :disabled="!canLaunch" @click="launch(f.program, f.minutes, 3)">
+              <div v-for="f in tens.favorites" :key="favoriteKey(f)" class="favorite" :data-current="tens.currentKey === favoriteKey(f) ? '1' : '0'">
+                <button type="button" class="favorite__go" :disabled="!canLaunch" @click="launch(f)">
                   <StrokeIcon name="play" :size="14" />
-                  <span class="favorite__name">{{ programLabel(f.program) }}</span>
-                  <span class="muted favorite__time">{{ $t('tens.minutes', { n: f.minutes }) }}</span>
+                  <!-- deux lignes pour tous : le nom garde la largeur, durée et intensités passent dessous -->
+                  <span class="favorite__text">
+                    <span class="favorite__name">{{ programLabel(f.program) }}</span>
+                    <span class="muted favorite__time">{{ favoriteMeta(f) }}</span>
+                  </span>
                 </button>
-                <button type="button" class="favorite__remove" :aria-label="$t('tens.favoriteRemove', { name: programLabel(f.program) })" :title="$t('tens.favoriteRemove', { name: programLabel(f.program) })"
-                        @click="tens.toggleFavorite(f.program, f.minutes)">
+                <button type="button" class="favorite__remove" :aria-label="$t('tens.favoriteRemove', { name: `${programLabel(f.program)} (${favoriteMeta(f)})` })" :title="$t('tens.favoriteRemove', { name: `${programLabel(f.program)} (${favoriteMeta(f)})` })"
+                        @click="tens.toggleFavorite(f)">
                   <StrokeIcon name="close" :size="14" />
                 </button>
               </div>
@@ -207,10 +231,12 @@ const showPairing = ref(!tens.knownDeviceId)
                   <span class="program__name">{{ programName(p.id) }}</span>
                   <PulseDot :on="tens.currentProgram === p.id && tens.running" :size="8" class="program__dot" />
                 </button>
-                <button type="button" class="program__star" :data-on="tens.isFavorite(p.id) ? '1' : '0'"
-                        :aria-label="$t(tens.isFavorite(p.id) ? 'tens.favoriteRemove' : 'tens.favoriteAdd', { name: programLabel(p.id), n: minutes })"
-                        :title="$t(tens.isFavorite(p.id) ? 'tens.favoriteRemove' : 'tens.favoriteAdd', { name: programLabel(p.id), n: minutes })"
-                        @click="tens.toggleFavorite(p.id, minutes)">
+                <!-- l'étoile parle des réglages EN COURS : pleine s'ils sont déjà un favori, pâle si le programme
+                     n'est favori qu'avec d'autres réglages -->
+                <button type="button" class="program__star" :data-on="starState(p.id)"
+                        :aria-label="$t(tens.isFavorite(draft(p.id)) ? 'tens.favoriteRemove' : 'tens.favoriteAdd', { name: programLabel(p.id), n: minutes })"
+                        :title="$t(tens.isFavorite(draft(p.id)) ? 'tens.favoriteRemove' : 'tens.favoriteAdd', { name: programLabel(p.id), n: minutes })"
+                        @click="tens.toggleFavorite(draft(p.id))">
                   <StrokeIcon name="star" :size="14" />
                 </button>
               </div>
@@ -232,7 +258,15 @@ const showPairing = ref(!tens.knownDeviceId)
               <span class="muted small">{{ $t('tens.channels') }}</span>
               <Segmented v-model="channels" dense :options="channelOptions" :label="$t('tens.channels')" />
             </div>
-            <button type="button" class="pill launch__go" data-on="1" :disabled="!canLaunch || !selected" @click="selected && launch(selected, minutes, Number(channels) as TensChannels)">
+            <!-- l'intensité visée : la séance y monte seule, par paliers, une fois partie -->
+            <div v-for="ch in ([1, 2] as const)" :key="ch" class="target" :data-off="usesChannel(ch) ? '0' : '1'">
+              <span class="muted small">{{ $t('tens.target', { n: ch }) }}</span>
+              <v-slider v-model="targets[ch]" :min="0" :max="INTENSITY_MAX" :step="INTENSITY_STEP" :disabled="!usesChannel(ch)"
+                        :ticks="TICKS" show-ticks="always" class="channel__slider" hide-details density="compact" :aria-label="$t('tens.target', { n: ch })" />
+              <span class="target__value">{{ ma(targets[ch]) }} mA</span>
+            </div>
+            <div class="muted small">{{ $t('tens.targetHint') }}</div>
+            <button type="button" class="pill launch__go" data-on="1" :disabled="!canLaunch || !selected" @click="selected && launch(draft(selected))">
               <StrokeIcon name="play" :size="16" />{{ tens.busy && !tens.active ? $t('tens.busyStarting') : $t('tens.start') }}
             </button>
           </section>
@@ -320,12 +354,13 @@ const showPairing = ref(!tens.knownDeviceId)
 .favorites { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
 .favorite { display: flex; align-items: center; border-radius: var(--radius-sm); border: 1px solid var(--line); background: var(--surface); min-width: 0; }
 .favorite[data-current='1'] { border-color: var(--accent); }
-.favorite__go { flex: 1 1 auto; display: flex; align-items: center; gap: 10px; padding: 12px 6px 12px 14px; border: 0; background: transparent; color: var(--text); text-align: left; min-width: 0; }
+.favorite__go { flex: 1 1 auto; display: flex; align-items: center; gap: 10px; padding: 8px 6px 8px 14px; border: 0; background: transparent; color: var(--text); text-align: left; min-width: 0; }
 .favorite__go:disabled { opacity: .45; cursor: default; }
 .favorite__remove, .program__star { flex: 0 0 auto; width: 30px; height: 30px; margin-right: 6px; border-radius: 50%; border: 0; background: transparent; color: var(--muted); display: grid; place-items: center; padding: 0; }
 .favorite__remove:hover, .program__star:hover { background: var(--surface2); color: var(--text); }
-.favorite__name { flex: 1 1 auto; min-width: 0; font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.favorite__time { font-size: 12px; white-space: nowrap; }
+.favorite__text { flex: 1 1 auto; min-width: 0; display: grid; gap: 2px; }
+.favorite__name { min-width: 0; font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.favorite__time { min-width: 0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* 200 px : la place du nom une fois le numéro, le point « en cours » et l'étoile posés — à 170 px
    « Gate Control 100 Hz » tombait à « Gate Con… » */
 .programs { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; }
@@ -336,12 +371,17 @@ const showPairing = ref(!tens.knownDeviceId)
 .program__dot { margin-left: auto; color: var(--accent); }
 .program__star { width: 26px; height: 26px; margin-right: 4px; }
 .program__star[data-on='1'] { color: var(--accent); }
+.program__star[data-on='other'] { color: var(--accent); opacity: .45; }
 .program__num { flex: 0 0 30px; font-size: 12px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
 /* le nom passe sur deux lignes plutôt que d'être coupé ; la case a la hauteur de deux lignes pour
    TOUTES, que la grille reste régulière quel que soit le nom */
 .program__name { min-width: 0; font-size: 13px; line-height: 1.25; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .launch__row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .launch__go { justify-content: center; }
+.target { display: grid; grid-template-columns: 130px 1fr 72px; align-items: center; gap: 10px; }
+.target[data-off='1'] { opacity: .45; }
+/* largeur fixe : « 0,0 mA » -> « 30,0 mA » ne raccourcit pas la piste */
+.target__value { font-size: 13px; font-weight: 600; text-align: right; white-space: nowrap; }
 .stepper { display: inline-flex; align-items: center; gap: 8px; }
 .stepper__btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border-radius: 50%; border: 1px solid var(--line); background: transparent; color: var(--text); }
 .stepper__btn:disabled { opacity: .35; cursor: default; }

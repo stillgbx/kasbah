@@ -7,6 +7,8 @@
 // <largeur c2> <enveloppe> <largeur c1> <largeur c2> <enveloppe>` — largeur en dizaines de µs,
 // enveloppe 0 plate / 1 montée / 2 descente, mode 1 = balayage de fréquence.
 
+import type { TensChannels } from './protocol'
+
 export interface TensProgram {
   id: string
   /** Numéro affiché par l'appli (P1…P12). */
@@ -59,7 +61,18 @@ export const TENS_PROGRAMS: TensProgram[] = [
 
 export const tensProgram = (id: string) => TENS_PROGRAMS.find((p) => p.id === id)
 
-export interface TensFavorite { program: string; minutes: number }
+/**
+ * Un favori rappelle tout le lancement : programme, durée, canaux et l'intensité à atteindre par
+ * canal (dixièmes de mA, 0 = rien d'automatique, on monte à la main). Les favoris enregistrés avant
+ * les canaux et les intensités n'ont ni l'un ni l'autre : 1 + 2 et 0.
+ */
+export interface TensFavorite { program: string; minutes: number; channels?: TensChannels; ch1?: number; ch2?: number }
+
+/**
+ * Ce qui distingue un favori d'un autre : tout le lancement. Un même programme peut donc revenir
+ * plusieurs fois, à des durées, canaux ou intensités différents.
+ */
+export const favoriteKey = (f: TensFavorite) => [f.program, f.minutes, f.channels ?? 3, f.ch1 ?? 0, f.ch2 ?? 0].join(':')
 
 /** Les favoris de départ (un clic, durée comprise, comme dans l'appli) ; modifiables ensuite, par poste. */
 export const TENS_FAVORITES: TensFavorite[] = [

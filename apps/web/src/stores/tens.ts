@@ -6,7 +6,7 @@ import {
   checkFrame, intensityFrame, pauseFrame, programFrame, rampSteps, resumeFrame, sessionFlagFrame, startFrame, stopFrame,
   INTENSITY_STEP, type TensBattery, type TensChannels, type TensSession,
 } from '../lib/tens/protocol'
-import { INTENSITY_MAX, TENS_FAVORITES, tensProgram, type TensFavorite } from '../lib/tens/programs'
+import { favoriteKey, INTENSITY_MAX, TENS_FAVORITES, tensProgram, type TensFavorite } from '../lib/tens/programs'
 
 // Le TENS (actiTENS mini) piloté depuis CE navigateur, en Web Bluetooth. Rien ne passe par le
 // serveur : ni automatisation, ni scène, ni assistant ne peuvent l'atteindre, et la tablette du
@@ -68,23 +68,24 @@ export const useTensStore = defineStore('tens', () => {
    * Le dernier lancement fait D'ICI : l'appareil ne dit pas quel programme tourne, seulement
    * l'identifiant de séance qu'on lui a donné. Persisté pour retrouver le nom après un rechargement.
    */
-  const lastLaunch = useLocalStorage<{ tag: number; program: string; minutes: number } | null>('kasbah.tens.lastLaunch', null, { serializer: readJson })
+  const lastLaunch = useLocalStorage<{ tag: number; program: string; minutes: number; key?: string } | null>('kasbah.tens.lastLaunch', null, { serializer: readJson })
   /**
    * L'identifiant Web Bluetooth du TENS, retenu à la première connexion : le TENS n'annonce pas son
    * nom, aucun filtre du sélecteur ne le trouve. Avec lui, Connecter le rejoint sans sélecteur.
    */
   const knownDeviceId = useLocalStorage<string | null>('kasbah.tens.deviceId', null, { serializer: readJson })
 
-  /** Les favoris de CE poste, un par programme, dans l'ordre d'ajout. */
+  /** Les favoris de CE poste, dans l'ordre d'ajout ; un programme y revient autant de fois qu'il a de réglages différents. */
   const favorites = useLocalStorage<TensFavorite[]>('kasbah.tens.favorites', TENS_FAVORITES.map((f) => ({ ...f })), {
     serializer: { read: (v) => { try { const a = JSON.parse(v); return Array.isArray(a) ? a : [] } catch { return [] } }, write: (v) => JSON.stringify(v) },
   })
-  const isFavorite = (program: string) => favorites.value.some((f) => f.program === program)
-  /** Ajoute le programme aux favoris avec cette durée, ou l'en retire s'il y est déjà. */
-  function toggleFavorite(program: string, minutes: number) {
-    favorites.value = isFavorite(program)
-      ? favorites.value.filter((f) => f.program !== program)
-      : [...favorites.value, { program, minutes }]
+  /** Ce lancement exact (programme, durée, canaux, intensités) est-il déjà un favori ? */
+  const isFavorite = (fav: TensFavorite) => favorites.value.some((f) => favoriteKey(f) === favoriteKey(fav))
+  /** Ajoute ce lancement aux favoris, ou l'en retire s'il y est déjà à l'identique. */
+  function toggleFavorite(fav: TensFavorite) {
+    favorites.value = isFavorite(fav)
+      ? favorites.value.filter((f) => favoriteKey(f) !== favoriteKey(fav))
+      : [...favorites.value, { ...fav }]
   }
 
   /** Consigne par canal (dixièmes de mA). */
@@ -116,6 +117,8 @@ export const useTensStore = defineStore('tens', () => {
     const s = session.value, l = lastLaunch.value
     return s && l && active.value && l.tag === s.sessionTag ? l.program : null
   })
+  /** Le lancement en cours sous la forme d'une clé de favori (`favoriteKey`), s'il a été lancé d'ici. */
+  const currentKey = computed(() => (currentProgram.value ? lastLaunch.value?.key ?? null : null))
 
   useIntervalFn(() => { now.value = Date.now() }, 1000)
 
@@ -239,7 +242,12 @@ export const useTensStore = defineStore('tens', () => {
     } finally { busy.value = false }
   }
 
-  function startProgram(programId: string, minutes: number, channels: TensChannels = 3) {
+  /**
+   * `targets` : l'intensité à atteindre par canal une fois le programme parti (dixièmes de mA). La
+   * file y monte par paliers comme pour un clic sur + ; tout geste la remplace, pause et arrêt la vident.
+   * Un canal hors de `channels` reste à 0.
+   */
+  function startProgram(programId: string, minutes: number, channels: TensChannels = 3, targets: Record<Channel, number> = { 1: 0, 2: 0 }) {
     const program = tensProgram(programId)
     if (!program || active.value) return Promise.resolve()
     return act(async () => {
@@ -251,10 +259,13 @@ export const useTensStore = defineStore('tens', () => {
       await sleep(CHECK_SETTLE_MS)
       for (const seg of program.segments) await step(programFrame(tag, program.segments.length, seg))
       await step(startFrame(Math.round(minutes * 60)))
-      lastLaunch.value = { tag, program: programId, minutes }
+      const ch1 = channels & 1 ? clampIntensity(targets[1]) : 0, ch2 = channels & 2 ? clampIntensity(targets[2]) : 0
+      lastLaunch.value = { tag, program: programId, minutes, key: favoriteKey({ program: programId, minutes, channels, ch1, ch2 }) }
       zero()
       setSession({ state: 'running', reason: 0, sessionTag: tag, remainingS: Math.round(minutes * 60), ch1: 0, ch2: 0 })
       await send(sessionFlagFrame(true)).catch(() => undefined)
+      target[1] = ch1; target[2] = ch2
+      void drain()
     })
   }
 
@@ -370,7 +381,7 @@ export const useTensStore = defineStore('tens', () => {
 
   return {
     status, error, errorDetail, battery, session, busy, deviceName, lastLaunch, knownDeviceId, favorites, isFavorite, toggleFavorite,
-    supported, connected, running, paused, active, remainingS, currentProgram,
+    supported, connected, running, paused, active, remainingS, currentProgram, currentKey,
     connect, reconnect, disconnect, startProgram, setIntensity, nudge, targetOf, acquiredOf, pause, resume, stop,
   }
 })

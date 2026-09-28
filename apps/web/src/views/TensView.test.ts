@@ -12,6 +12,7 @@ import TensView from './TensView.vue'
 // pressable dès la connexion.
 
 let dev: FakeTens
+const tens = () => useTensStore()
 
 function setup() {
   const w = mount(TensView, { global: { stubs: { PageHeader: true, RouterLink: RouterLinkStub } } })
@@ -86,6 +87,46 @@ describe('TensView', () => {
     expect(button('Démarrer')!.attributes('disabled')).toBeDefined()
     await w.findAll('.program__pick')[2]!.trigger('click')        // P3
     expect(button('Démarrer')!.attributes('disabled')).toBeUndefined()
+  })
+
+  it('saves the intensities with the favorite, and the favorite ramps to them in one click', async () => {
+    useLocalPluginsStore().setEnabled('tens', true)
+    const { w, button } = setup()
+    await button('Connecter')!.trigger('click')
+    await flushPromises()
+    const [c1, c2] = w.findAllComponents({ name: 'VSlider' }).slice(-2)
+    c1!.vm.$emit('update:modelValue', 15)
+    c2!.vm.$emit('update:modelValue', 10)
+    await flushPromises()
+    const p1 = w.findAll('.program').find((p) => p.text().includes('P1'))!
+    await p1.find('.program__star').trigger('click')
+    expect(tens().favorites[2]).toEqual({ program: 'p1', minutes: 30, channels: 3, ch1: 15, ch2: 10 })
+    expect(w.findAll('.favorite')[2]!.text()).toContain('30 min · 1,5 / 1,0 mA')
+    await w.findAll('.favorite__go')[2]!.trigger('click')
+    await vi.advanceTimersByTimeAsync(CHECK_SETTLE_MS + 100 + 300 * 6)
+    await flushPromises()
+    expect(tens().acquiredOf(1)).toBe(15)
+    expect(tens().acquiredOf(2)).toBe(10)
+  })
+
+  it('keeps several favorites of the same program when their settings differ', async () => {
+    useLocalPluginsStore().setEnabled('tens', true)
+    const { w, button } = setup()
+    const p6 = () => w.findAll('.program').find((p) => p.text().includes('P6'))!
+    expect(p6().find('.program__star').attributes('data-on')).toBe('other')   // P6 favori à 60 min, pas à 30
+    await p6().find('.program__star').trigger('click')                         // P6 à 30 min en plus
+    expect(w.findAll('.favorite').map((f) => f.text()).filter((t) => t.includes('P6'))).toHaveLength(2)
+    expect(p6().find('.program__star').attributes('data-on')).toBe('1')
+    // lancer le second : seule sa tuile est marquée en cours
+    await button('Connecter')!.trigger('click')
+    await flushPromises()
+    await w.findAll('.favorite__go')[2]!.trigger('click')
+    await vi.advanceTimersByTimeAsync(CHECK_SETTLE_MS + 100)
+    await flushPromises()
+    expect(w.findAll('.favorite').map((f) => f.attributes('data-current'))).toEqual(['0', '0', '1'])
+    // l'étoile ne retire que le favori aux réglages en cours : celui à 60 min reste
+    await p6().find('.program__star').trigger('click')
+    expect(tens().favorites.filter((f) => f.program === 'p6').map((f) => f.minutes)).toEqual([60])
   })
 
   it('adds and removes favorites with the star, kept on this device', async () => {

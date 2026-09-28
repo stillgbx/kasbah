@@ -142,6 +142,29 @@ describe('launch', () => {
     expect(dev.frames(CMD.check)[0]![4]).toBe(1)
   })
 
+  it('ramps up on its own to the intensities given at launch, on the channels in use only', async () => {
+    const tens = await connected()
+    const p = tens.startProgram('p3', 10, 1, { 1: 20, 2: 50 })
+    await vi.advanceTimersByTimeAsync(CHECK_SETTLE_MS + 100)
+    await p
+    await slots(6)
+    expect(intensities(1)).toEqual([5, 10, 15, 20])         // par paliers de 0,5 mA, pas d'un coup
+    expect(intensities(2)).toEqual([])                     // canal 2 hors séance : rien
+    expect(tens.targetOf(2)).toBe(0)
+  })
+
+  it('a launch target never exceeds the cap, and a gesture replaces it', async () => {
+    const tens = await connected()
+    const p = tens.startProgram('p3', 10, 3, { 1: INTENSITY_MAX + 100, 2: 0 })
+    await vi.advanceTimersByTimeAsync(CHECK_SETTLE_MS + 100)
+    await p
+    expect(tens.targetOf(1)).toBe(INTENSITY_MAX)
+    await slots(2)
+    tens.setIntensity(1, 5)
+    await slots(3)
+    expect(tens.acquiredOf(1)).toBe(5)
+  })
+
   it('refuses to launch over a running session', async () => {
     const tens = await running()
     await tens.startProgram('p6', 60)
