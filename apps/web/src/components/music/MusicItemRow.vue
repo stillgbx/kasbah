@@ -78,6 +78,7 @@ function activate() {
         <span v-if="dur" class="dur muted">{{ dur }}</span>
         <span class="year muted">{{ year || '\u00a0' }}</span>
       </div>
+      <slot name="extra" />
     </div>
     <StrokeIcon v-if="action === 'open'" name="chevron" :size="16" class="chev" />
     <template v-else>

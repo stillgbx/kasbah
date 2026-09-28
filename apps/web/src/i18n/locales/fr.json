@@ -137,7 +137,9 @@
     "username": "Nom d'utilisateur", "link": "Relier", "unlink": "Délier",
     "empty": "Rien ici pour l'instant.", "unavailable": "Mixcloud ne répond pas.", "more": "Afficher plus",
     "resumeAt": "Reprendre à {time}", "restart": "Repartir du début", "play": "Écouter {name}", "mixes": "Mix de {name}",
-    "feedHint": "Les derniers mix des comptes que tu suis (mis à jour toutes les 30 min)."
+    "feedHint": "Les derniers mix des comptes que tu suis (mis à jour toutes les 30 min).",
+    "genres": "Genres", "genresReset": "Tout remettre", "genresEmpty": "Aucun mix ne correspond à ces genres.",
+    "genreNeutral": "{name} : toucher pour ne garder que ce genre", "genreOn": "{name} gardé : toucher pour l'écarter", "genreOff": "{name} écarté : toucher pour l'oublier"
   },
   "radio": {
     "source": "Radios", "searchPlaceholder": "Rechercher une radio (franceinfo, FIP, Nova…)", "favorites": "Favorites", "top": "Les plus écoutées",

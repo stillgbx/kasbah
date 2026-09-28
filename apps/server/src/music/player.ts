@@ -3,11 +3,13 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import type { Logger } from 'pino'
 import { z } from 'zod'
 import type { Command } from '@kasbah/shared'
+import { stateFile } from '../core/paths'
 import { PluginError } from '../core/plugin'
 import { getPlaybackBridge } from '../core/playbackBridge'
 import { sendError } from '../http/errors'
 import { LengthLock, OUT_BITRATE_KBPS, OUT_CHANNELS, OUT_SAMPLE_RATE_HZ, parseRange, seekFor, StreamProxy, type ProxySession, type ResolvedStream, type SessionMeta, type SpawnFn, type TrackRef } from './proxy'
 import { afterEnd, insert, jumpTo, removeAt, REPEAT_MODES, upcoming, type PlayQueue, type QueueTrack, type RepeatMode } from './queue'
+import { createLastPlayedFile, type LastPlayedByDevice, type LastPlayedStore } from './lastPlayed'
 import { getMusicSource, type MusicSource } from './sources'
 
 // Lecteur COMMUN aux sources musicales, monté sous /api/music. Ce qui était le cœur du plugin YouTube
@@ -29,6 +31,8 @@ export const musicConfigSchema = z.object({
    */
   MUSIC_PUBLISH_BASE: z.string().trim().default(''),
   YTM_PUBLISH_BASE: z.string().trim().default(''),
+  /** La dernière écoute de chaque lecteur, reprise après un redémarrage (`lastPlayed.ts`). */
+  MUSIC_STATE_FILE: z.string().trim().default(stateFile('music.json')),
 })
 export type MusicConfig = z.infer<typeof musicConfigSchema>
 
@@ -64,6 +68,8 @@ export interface MusicPlayerDeps {
   getDevice?: (deviceId: string) => { descriptor: { kind: string; capabilities: string[] }; state?: unknown } | undefined
   /** Les états publiés par les lecteurs (tests) ; sinon le pont `app.ts`. */
   onState?: (cb: (deviceId: string, state: unknown) => void) => () => void
+  /** Où garder la dernière écoute (tests) ; sinon `MUSIC_STATE_FILE`. */
+  lastStore?: LastPlayedStore
 }
 
 export interface MusicPlayer {
@@ -364,6 +370,55 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
 
   const queueView = (q: RunningQueue) => ({ items: q.items, index: q.index, repeat: q.repeat })
 
+  // ---- dernière écoute -----------------------------------------------------------------------------
+  // Files et sessions ne survivent pas à un redémarrage : on garde sur disque, par lecteur, la file,
+  // la piste courante et la position atteinte. La barre en montre le titre en pause, `/resume` le
+  // relance de là. Oubliée quand la file finit d'elle-même : il n'y a plus rien à reprendre.
+  const lastStore = deps.lastStore ?? createLastPlayedFile(cfg.MUSIC_STATE_FILE, log)
+  let last: LastPlayedByDevice = {}
+  const lastLoaded = lastStore.load()
+    .then((v) => { last = { ...v, ...last } })
+    .catch((err) => log.warn({ err }, 'music: last played state unreadable'))
+  /** Une position arrive à chaque relevé d'enceinte : sur disque au plus toutes les 15 s. */
+  const LAST_SAVE_MS = 15_000
+  let lastTimer: ReturnType<typeof setTimeout> | undefined
+  function saveLast(soon: boolean): void {
+    if (lastTimer && !soon) return
+    clearTimeout(lastTimer)
+    lastTimer = setTimeout(() => {
+      lastTimer = undefined
+      void lastLoaded.then(() => lastStore.save(last)).catch((err) => log.warn({ err }, 'music: last played state not saved'))
+    }, soon ? 0 : LAST_SAVE_MS)
+  }
+  function remember(deviceId: string, q: PlayQueue, positionS: number, durationS: number | undefined): void {
+    if (isLocal(deviceId)) return
+    last[deviceId] = {
+      // la reprise d'un mix vaut pour son premier lancement : `startS` ne se garde pas
+      items: q.items.map(({ startS: _startS, ...t }) => t),
+      index: q.index, repeat: q.repeat, positionS: Math.max(0, positionS), durationS: durationS ?? null, at: now(),
+    }
+    saveLast(true)
+  }
+  /** Une session sans file (écoute arrivée d'un navigateur sans la sienne) : la piste telle qu'elle joue. */
+  const trackOfSession = (s: ProxySession): QueueTrack => ({
+    source: s.track.source, id: s.track.id,
+    ...(s.meta.title ? { title: s.meta.title } : {}),
+    ...(s.meta.artist ? { artist: s.meta.artist } : {}),
+    ...(s.meta.artUrl ? { artUrl: s.meta.artUrl } : {}),
+    ...(s.meta.durationS ? { durationS: s.meta.durationS } : {}),
+    ...(s.meta.explicit ? { explicit: true } : {}),
+  })
+  function forget(deviceId: string): void {
+    if (!last[deviceId]) return
+    delete last[deviceId]
+    saveLast(true)
+  }
+  /** La file a changé (ajout, retrait, répétition) sans que la piste change : la position reste. */
+  function rememberQueue(deviceId: string, q: PlayQueue): void {
+    const prev = last[deviceId]
+    if (prev) remember(deviceId, q, prev.positionS, prev.durationS ?? undefined)
+  }
+
   /** La file d'un lecteur, tant que sa piste courante est bien celle que joue l'enceinte. */
   function liveQueue(deviceId: string): RunningQueue | undefined {
     const q = queues.get(deviceId)
@@ -413,10 +468,26 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       // elle a bougé, sinon l'estimation à l'arrêt partirait de trop tôt.
       const pos = st.nowPlaying?.positionS
       if (typeof pos === 'number' && pos !== q.heard?.positionS) {
+        // reprise après une pause, ou saut dans le morceau : une action, écrite tout de suite
+        const expected = q.heard ? q.heard.positionS + (now() - q.heard.at) / 1000 : null
+        const acted = expected === null || Math.abs(pos - expected) > END_SLACK_S
         q.heard = { positionS: pos, at: now() }
         sourceOf(s.track.source)?.onProgress?.(s.track.id, pos, s.meta.durationS, false)
+        const mine = last[deviceId]
+        if (mine) {
+          mine.positionS = pos
+          mine.at = now()
+          saveLast(acted)
+        }
       } else if (!q.heard) q.heard = { positionS: 0, at: now() }
       return
+    }
+    // en pause : la position où l'on s'est arrêté, écrite tout de suite
+    const mine = last[deviceId]
+    if (st.playback === 'paused' && mine && typeof st.nowPlaying?.positionS === 'number') {
+      mine.positionS = st.nowPlaying.positionS
+      mine.at = now()
+      saveLast(true)
     }
     if (st.playback !== 'idle' || !q.heard) return
     const reached = q.heard.positionS + (now() - q.heard.at) / 1000
@@ -433,6 +504,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
     if (!next) {
       log.info({ deviceId, tracks: q.items.length }, 'music queue finished')
       queues.delete(deviceId)
+      forget(deviceId)
       return
     }
     try {
@@ -461,6 +533,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
         : await startTrack(q.base, deviceId, track, { ...(q.raw === false ? { raw: false } : {}), stillWanted })
       if (!started || !stillWanted()) return null
       Object.assign(q, { index, repeat, sid: started.session.sid, heard: null })
+      remember(deviceId, q, track.startS ?? 0, started.session.meta.durationS)
       if (track.startS && track.startS > 1 && started.session.lengthBytes !== null) {
         await seekWhenReady(deviceId, track.startS)
           .catch((err) => log.warn({ err, deviceId, startS: track.startS }, 'music: resume seek failed, playing from start'))
@@ -607,6 +680,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       const { items } = insert(q, tracks, where)
       q.items = items
       prefetchUpcoming(q)
+      rememberQueue(deviceId, q)
       return { ok: true as const, started: false, queue: queueView(q) }
     })
 
@@ -657,6 +731,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       if (!q) return sendError(reply, 404, 'NOT_FOUND', 'no music queue on this player')
       q.repeat = body.data.mode
       prefetchUpcoming(q)
+      rememberQueue(body.data.deviceId, q)
       return queueView(q)
     })
 
@@ -670,6 +745,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       q.items = next.items
       q.index = next.index
       prefetchUpcoming(q)
+      rememberQueue(body.data.deviceId, q)
       return queueView(q)
     })
 
@@ -679,6 +755,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       if (!q) return sendError(reply, 404, 'NOT_FOUND', 'no music queue on this player')
       q.items = [q.items[q.index]!]
       q.index = 0
+      rememberQueue(req.query.deviceId ?? '', q)
       return queueView(q)
     })
 
@@ -702,6 +779,44 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
 
     /** Ce que nos lecteurs jouent de nous en ce moment : titre, durée et transfert côté UI. */
     app.get('/sessions', async () => ({ sessions: proxy.list().filter(sessionActive).map(sessionView) }))
+
+    /**
+     * La dernière écoute des lecteurs qui ne jouent rien de nous en ce moment : de quoi montrer le
+     * titre interrompu (redémarrage du serveur, arrêt) en pause à sa position.
+     */
+    app.get('/last', async () => {
+      await lastLoaded
+      const live = new Set(proxy.list().filter(sessionActive).map((s) => s.deviceId))
+      return {
+        last: Object.entries(last).filter(([deviceId]) => !live.has(deviceId)).map(([deviceId, e]) => ({
+          deviceId,
+          track: e.items[e.index]!,
+          positionS: Math.floor(e.positionS),
+          durationS: e.durationS,
+          queue: { length: e.items.length, index: e.index, repeat: e.repeat },
+          at: e.at,
+        })),
+      }
+    })
+
+    /** Relancer la dernière écoute d'un lecteur, sa file comprise, à sa position (ou à `positionS`). */
+    app.post<{ Body: unknown }>('/resume', async (req, reply) => {
+      const body = z.object({ deviceId: z.string().trim().min(1), positionS: z.number().min(0).optional() }).safeParse(req.body)
+      if (!body.success) return sendError(reply, 400, 'INVALID_BODY', 'deviceId is required')
+      const { deviceId } = body.data
+      await lastLoaded
+      const entry = last[deviceId]
+      if (!entry) return sendError(reply, 404, 'NOT_FOUND', 'nothing to resume on this player')
+      const target = playableOrError(reply, resolvePlay().get, deviceId)
+      if ('error' in target) return target.error
+      const startS = Math.floor(body.data.positionS ?? entry.positionS)
+      const tracks = entry.items.map((t, i) => (i === entry.index && startS > 0 ? { ...t, startS } : t))
+      const started = await playQueue(reply, publishBase(req), deviceId, tracks, entry.index)
+      if ('error' in started) return started.error
+      started.queue.repeat = entry.repeat
+      rememberQueue(deviceId, started.queue)
+      return { ok: true as const, streamUrl: started.streamUrl, sid: started.session.sid, queue: queueView(started.queue) }
+    })
 
     // Transfert : la piste que joue `from` repart sur `to` (même « fichier »), la cible se place à la
     // position où `from` en était (relevée dans l'état publié du lecteur), puis `from` s'arrête. Pas de
@@ -751,6 +866,8 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
           proxy.closeDevice(fromDeviceId)
           const moved = queue && queue.sid === source.sid ? queueView(queue) : null
           if (queue && queues.get(fromDeviceId) === queue) queues.delete(fromDeviceId)
+          // le navigateur tient désormais l'écoute : l'enceinte n'a plus rien à reprendre
+          forget(fromDeviceId)
           log.info({ track: trackKey(source.track), from: fromDeviceId, to: toDeviceId, positionS, queued: moved?.items.length ?? 0 }, 'music playback transferred to a browser')
           return { ok: true as const, streamUrl: streamPath(session.sid, rawOf(session)), sid: session.sid, positionS, session: sessionView(session), queue: moved }
         }
@@ -780,6 +897,8 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
           prefetchUpcoming(queues.get(toDeviceId)!)
         }
         const moved = queues.get(toDeviceId)
+        forget(fromDeviceId)
+        remember(toDeviceId, moved ?? { items: [trackOfSession(source)], index: 0, repeat: 'off' }, positionS, source.meta.durationS)
         log.info({ track: trackKey(source.track), from: fromDeviceId, to: toDeviceId, positionS, queued: moved?.items.length ?? 0 }, 'music playback transferred')
         return { ok: true as const, streamUrl, sid: session.sid, positionS, ...(moved ? { queue: queueView(moved) } : {}) }
       } catch (err) {
@@ -933,6 +1052,12 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       unwatch = null
       queues.clear()
       prefetched.clear()
+      // la position la plus récente, pas celle d'il y a 15 s
+      if (lastTimer) {
+        clearTimeout(lastTimer)
+        lastTimer = undefined
+        void lastLoaded.then(() => lastStore.save(last)).catch((err) => log.warn({ err }, 'music: last played state not saved'))
+      }
       proxy.clear()
     },
   }

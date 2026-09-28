@@ -25,6 +25,10 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 // en cours d'envoi (résolution yt-dlp : quelques secondes) — il s'affiche tout de suite, la touche
 // centrale tourne, l'enceinte rattrape ensuite.
 //
+// `resume` : la dernière écoute de ce lecteur, quand il ne joue plus rien de nous (le serveur a
+// redémarré, la lecture a été arrêtée). Elle s'affiche EN PAUSE à sa position ; lecture la relance de
+// là, et le curseur choisit où elle repartira.
+//
 // La FILE du lecteur (`session.queue`) pilote précédent / suivant — l'enceinte n'a qu'un « fichier »
 // et n'aurait rien à sauter — et la répétition du titre, dans l'emplacement qui répond à stop.
 const props = defineProps<{
@@ -41,6 +45,7 @@ const props = defineProps<{
   /** La dernière radio lancée sur ce lecteur (plugin radio) : sa qualité, tant qu'il en joue le direct. */
   station?: RadioStation | null
   pending: { title: string; artists: string[]; artUrl: string | null; explicit?: boolean } | null
+  resume?: { title: string | null; artist: string | null; artUrl: string | null; durationS: number | null; positionS: number; explicit: boolean } | null
   transferMode: boolean
   canTransfer: boolean
   transferBusy: boolean
@@ -68,8 +73,10 @@ const ours = computed(() => (loaded.value ? props.session : null))
 // ---- file et répétition ----------------------------------------------------------------------------
 const queue = computed(() => ours.value?.queue ?? null)
 // Précédent reste possible au premier titre : il ramène au début du morceau.
-const canPrevious = computed(() => available.value && (queue.value ? loaded.value : has('track_skip') && skippable.value))
-const canNext = computed(() => available.value && (queue.value ? loaded.value && queue.value.index < queue.value.length - 1 : has('track_skip') && skippable.value))
+// la dernière écoute n'est pas encore relancée : rien à sauter ni à arrêter (l'enceinte peut encore
+// être « en pause » sur notre flux mort, et `loaded` dirait le contraire)
+const canPrevious = computed(() => available.value && !resume.value && (queue.value ? loaded.value : has('track_skip') && skippable.value))
+const canNext = computed(() => available.value && !resume.value && (queue.value ? loaded.value && queue.value.index < queue.value.length - 1 : has('track_skip') && skippable.value))
 /** Titres qui attendent après le courant : pastille sur la touche File (le retour d'un « ajouter » sans toast). */
 const waiting = computed(() => (queue.value ? Math.max(0, queue.value.length - queue.value.index - 1) : 0))
 const repeat = computed<MusicRepeat>(() => queue.value?.repeat ?? 'off')
@@ -83,13 +90,16 @@ const NBSP = '\u00a0'
  * sait plus ce qu'elle joue.
  */
 const looksLikeUrl = (v: string | undefined) => !!v && (/^(https?:\/\/|[a-z0-9.-]+\/api\/)/i.test(v) || /^[0-9a-f]{24}(\.[a-z0-9]{2,4})?$/i.test(v.trim()))
+const resume = computed(() => (props.pending ? null : props.resume ?? null))
 const art = computed(() => {
   if (props.pending) return props.pending.artUrl
+  if (resume.value) return resume.value.artUrl
   const n = state.value?.nowPlaying
   return n ? n.artUrl ?? ours.value?.artUrl ?? null : null
 })
 const title = computed(() => {
   if (props.pending) return props.pending.title
+  if (resume.value) return resume.value.title || t('media.paused')
   const n = state.value?.nowPlaying
   if (!props.entry) return t('music.noSession')
   if (!n) return t('music.nothing')
@@ -98,6 +108,7 @@ const title = computed(() => {
 })
 const subtitle = computed(() => {
   if (props.pending) return props.pending.artists.join(', ') || t('ytmusic.starting')
+  if (resume.value) return resume.value.artist || NBSP
   const s = state.value
   const n = s?.nowPlaying
   if (!s) return NBSP
@@ -120,9 +131,10 @@ const qualityHint = computed(() => quality.value?.hint)
 
 // ---- position ------------------------------------------------------------------------------------
 const { position: rawPosition, duration: deviceDuration, hasPosition } = useMediaPosition(toRef(() => state.value))
-const duration = computed(() => deviceDuration.value ?? ours.value?.durationS ?? undefined)
+const duration = computed(() => (resume.value ? resume.value.durationS ?? undefined : deviceDuration.value ?? ours.value?.durationS ?? undefined))
 const hasDuration = computed(() => duration.value !== undefined && duration.value !== null)
 const position = computed<number | undefined>(() => {
+  if (resume.value) return resume.value.positionS
   if (rawPosition.value === undefined) return undefined
   return duration.value ? Math.min(rawPosition.value, duration.value) : rawPosition.value
 })
@@ -132,7 +144,8 @@ const { seekDraft, beginSeek } = useSeekHold(
   toRef(() => state.value?.nowPlaying?.positionS),
   toRef(() => props.entry?.descriptor.id),
 )
-const canSeek = computed(() => hasDuration.value && !live.value && loaded.value && has('seek'))
+// la dernière écoute : le curseur choisit seulement d'où elle repartira
+const canSeek = computed(() => hasDuration.value && (resume.value ? true : !live.value && loaded.value && has('seek')))
 const shownPosition = computed(() => seekDraft.value ?? position.value ?? 0)
 function seekEnd(v: number) {
   emit('seek', beginSeek(v))
@@ -194,7 +207,7 @@ const volumeOk = computed(() => available.value && has('volume') && !state.value
  */
 const explicit = computed(() => (props.pending
   ? props.pending.explicit === true
-  : state.value?.nowPlaying?.explicit === true))
+  : resume.value ? resume.value.explicit : state.value?.nowPlaying?.explicit === true))
 </script>
 
 <template>
@@ -241,7 +254,7 @@ const explicit = computed(() => (props.pending
           <StrokeIcon name="rotateLeft" :size="24" />
           <span class="key__step" aria-hidden="true">{{ SEEK_STEP_S }}</span>
         </button>
-        <button type="button" class="key key--main" :disabled="!!pending || !available || !loaded" :aria-busy="pending ? 'true' : undefined"
+        <button type="button" class="key key--main" :disabled="!!pending || !available || (!loaded && !resume)" :aria-busy="pending ? 'true' : undefined"
                 :title="pending ? $t('ytmusic.starting') : state?.playback === 'playing' ? $t('common.pause') : $t('media.play')"
                 :aria-label="pending ? $t('ytmusic.starting') : state?.playback === 'playing' ? $t('common.pause') : $t('media.play')"
                 @click="emit('command', { type: state?.playback === 'playing' ? 'media_player.pause' : 'media_player.play' })">
@@ -259,14 +272,14 @@ const explicit = computed(() => (props.pending
                 @click="emit('command', { type: 'media_player.next' })">
           <StrokeIcon name="skipNext" :size="18" />
         </button>
-        <button type="button" class="key" :disabled="!available || !loaded"
+        <button type="button" class="key" :disabled="!available || !loaded || !!resume"
                 :title="$t('music.stop')" :aria-label="$t('music.stop')"
                 @click="emit('command', { type: 'media_player.stop' })">
           <StrokeIcon name="stop" :size="16" />
         </button>
       </div>
       <!-- invisible sans durée ni position (rien en cours), mais l'espace reste -->
-      <div class="bar__seek" :class="{ 'bar--hidden': !hasDuration && !hasPosition }">
+      <div class="bar__seek" :class="{ 'bar--hidden': !hasDuration && !hasPosition && !resume }">
         <span class="time">{{ formatClock(shownPosition) || '0:00' }}</span>
         <v-slider :class="{ 'bar--hidden': !hasDuration }" :model-value="shownPosition" :min="0" :max="duration ?? 1" :step="1"
                   :disabled="!available || !canSeek" density="compact" hide-details color="primary" track-size="4" thumb-size="16"

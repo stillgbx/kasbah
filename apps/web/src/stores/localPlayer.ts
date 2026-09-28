@@ -16,6 +16,10 @@ import { t } from '../i18n'
 // synthétique) : le panneau Écoute et la barre du bas le montrent sans cas particulier ; seules les
 // commandes changent de chemin (`command`, ici, au lieu de `devices.sendCommand`). Il vit hors de la
 // vue : la musique continue quand on change de page.
+//
+// La dernière écoute survit à un rechargement de la page : la file et la position sont gardées dans ce
+// navigateur (à chaque action : lecture, pause, déplacement, titre suivant). Au retour, le titre est
+// là, en pause à sa position (`restored` : rien de chargé dans l'`<audio>`) ; lecture le relance de là.
 
 export const LOCAL_PREFIX = 'local:'
 export const isLocalPlayer = (id: string | null | undefined) => !!id && id.startsWith(LOCAL_PREFIX)
@@ -55,6 +59,20 @@ export const useLocalPlayerStore = defineStore('localPlayer', () => {
   let unlocked = false
   /** Un seul nouvel essai par titre quand le fichier ne se lit plus (session expirée côté serveur). */
   let retried = false
+
+  // ---- dernière écoute, gardée dans ce navigateur ------------------------------------------------------
+  // Deux clés : la file (jusqu'à 1 000 titres) ne s'écrit que quand elle change, la position à chaque relevé.
+  const savedQueue = useLocalStorage<MusicQueue | null>('kasbah.music.localQueue', null, { serializer: { read: (v) => (v ? JSON.parse(v) as MusicQueue : null), write: (v) => JSON.stringify(v) } })
+  const savedPosition = useLocalStorage('kasbah.music.localPosition', 0)
+  if (savedQueue.value?.items[savedQueue.value.index]) {
+    queue.value = savedQueue.value
+    positionS.value = savedPosition.value
+    playback.value = 'paused'
+  }
+  /** Le titre affiché vient de la sauvegarde : l'`<audio>` n'a encore rien chargé. */
+  const restored = ref(playback.value === 'paused')
+  watch(queue, (q) => { savedQueue.value = q })
+  watch(positionS, (p) => { savedPosition.value = p })
 
   const current = computed<MusicTrack | null>(() => (queue.value ? queue.value.items[queue.value.index] ?? null : null))
 
@@ -113,6 +131,7 @@ export const useLocalPlayerStore = defineStore('localPlayer', () => {
     const track = q?.items[index]
     if (!q || !track) return
     const gen = ++generation
+    restored.value = false
     queue.value = { ...q, index, repeat }
     busy.value = true
     retried = false
@@ -154,6 +173,8 @@ export const useLocalPlayerStore = defineStore('localPlayer', () => {
     const next = q ? afterEnd(q) : null
     if (!next) {
       playback.value = 'idle'
+      // la file est allée au bout : plus rien à reprendre
+      queue.value = null
       return
     }
     if (next.index === q!.index && audio) {
@@ -194,7 +215,13 @@ export const useLocalPlayerStore = defineStore('localPlayer', () => {
   }
   async function previous() {
     const q = queue.value
-    if (!q || !audio) return
+    if (!q) return
+    if (restored.value) {
+      if (q.index === 0 || positionS.value > RESTART_AFTER_S) seek(0)
+      else await go(q.index - 1, jumpRepeat(q.repeat))
+      return
+    }
+    if (!audio) return
     if (audio.currentTime > RESTART_AFTER_S || q.index === 0) {
       audio.currentTime = 0
       return
@@ -231,6 +258,11 @@ export const useLocalPlayerStore = defineStore('localPlayer', () => {
     if (q) queue.value = { ...q, items: [q.items[q.index]!], index: 0 }
   }
   function seek(s: number) {
+    // rien de chargé : on choisit seulement d'où la lecture repartira
+    if (restored.value) {
+      publish(Math.max(0, s))
+      return
+    }
     if (!audio) return
     audio.currentTime = Math.max(0, s)
     publish(audio.currentTime)
@@ -239,6 +271,7 @@ export const useLocalPlayerStore = defineStore('localPlayer', () => {
   function stop() {
     generation++
     busy.value = false
+    restored.value = false
     if (audio) {
       audio.pause()
       audio.removeAttribute('src')
@@ -255,7 +288,13 @@ export const useLocalPlayerStore = defineStore('localPlayer', () => {
   function command(cmd: CommandInput) {
     const a = audio
     switch (cmd.type) {
-      case 'media_player.play': void a?.play().catch(() => { /* fichier perdu : `error` s'en charge */ }); break
+      case 'media_player.play':
+        if (restored.value && queue.value) {
+          prime()
+          void go(queue.value.index, queue.value.repeat, positionS.value).catch(() => { playback.value = 'paused' })
+          break
+        }
+        void a?.play().catch(() => { /* fichier perdu : `error` s'en charge */ }); break
       case 'media_player.pause': a?.pause(); break
       case 'media_player.stop': stop(); break
       case 'media_player.next': void next(); break
@@ -332,9 +371,14 @@ export const useLocalPlayerStore = defineStore('localPlayer', () => {
   })
   /** La session vue par la barre (titre, durée, qualité, file) — comme celles de `GET /sessions`. */
   const barSession = computed<MusicSession | null>(() => {
-    const s = session.value, q = queue.value
-    if (!s || playback.value === 'idle') return null
+    const q = queue.value
     const tr = current.value
+    // restauré : pas encore de session serveur, la piste gardée en tient lieu (titre, durée, file)
+    const s = session.value ?? (restored.value && tr ? {
+      deviceId: id.value, source: tr.source, id: tr.id, sid: '', durationS: tr.durationS ?? null,
+      title: tr.title ?? null, artist: tr.artist ?? null, artUrl: tr.artUrl ?? null,
+    } : null)
+    if (!s || playback.value === 'idle') return null
     return {
       ...s,
       ...(tr ? { source: tr.source, id: tr.id, title: tr.title ?? s.title, artist: tr.artist ?? s.artist, artUrl: tr.artUrl ?? s.artUrl } : {}),

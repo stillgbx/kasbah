@@ -137,7 +137,9 @@
     "username": "Username", "link": "Link", "unlink": "Unlink",
     "empty": "Nothing here yet.", "unavailable": "Mixcloud is not answering.", "more": "Show more",
     "resumeAt": "Resume at {time}", "restart": "Start over", "play": "Listen to {name}", "mixes": "Mixes by {name}",
-    "feedHint": "The latest mixes of the accounts you follow (refreshed every 30 min)."
+    "feedHint": "The latest mixes of the accounts you follow (refreshed every 30 min).",
+    "genres": "Genres", "genresReset": "Reset", "genresEmpty": "No mix matches these genres.",
+    "genreNeutral": "{name}: tap to keep only this genre", "genreOn": "{name} kept: tap to rule it out", "genreOff": "{name} ruled out: tap to clear"
   },
   "radio": {
     "source": "Radios", "searchPlaceholder": "Search a radio station (franceinfo, FIP, Nova…)", "favorites": "Favorites", "top": "Most listened",

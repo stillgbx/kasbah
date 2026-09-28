@@ -191,6 +191,8 @@ export interface MixcloudMix {
   durationS: number | null
   createdAt: string | null
   tags: string[]
+  /** Les genres du mix (tags `/genres/<slug>/` de Mixcloud), dans l'ordre des tags. */
+  genres: { slug: string; name: string }[]
   /** Position retenue par le serveur (s), si ce mix a été écouté en partie d'ici. */
   resumeS?: number
 }
@@ -284,6 +286,17 @@ export interface MusicSession {
   quality?: MusicStreamQuality | null
   /** La file de ce lecteur (précédent / suivant, répétition) ; null ou absent sans file. */
   queue?: { length: number; index: number; repeat: MusicRepeat } | null
+}
+
+/** La dernière écoute d'un lecteur qui ne joue plus rien de nous (serveur redémarré, arrêt) : de quoi la reprendre. */
+export interface MusicLastPlayed {
+  deviceId: string
+  track: MusicTrack
+  /** Position atteinte (s). */
+  positionS: number
+  durationS: number | null
+  queue: { length: number; index: number; repeat: MusicRepeat }
+  at: number
 }
 
 /** Un genre ou une ambiance : son nom (dans la langue demandée), sa couleur, et de quoi ouvrir sa page. */
@@ -528,6 +541,10 @@ export interface Transport {
   }): Promise<{ ok: true; streamUrl: string; sid: string }>
   /** Lecteurs qui jouent en ce moment un flux YouTube Music servi par Kasbah. */
   musicSessions(): Promise<{ sessions: MusicSession[] }>
+  /** La dernière écoute des lecteurs qui ne jouent rien de nous en ce moment. */
+  musicLast(): Promise<{ last: MusicLastPlayed[] }>
+  /** Relancer la dernière écoute d'un lecteur (sa file comprise), à sa position ou à `positionS`. */
+  musicResume(deviceId: string, positionS?: number): Promise<{ ok: true; streamUrl: string; sid: string; queue: MusicQueue }>
   /** Le titre en cours sur `fromDeviceId` repart sur `toDeviceId`, qui se place à la même position ; la source s'arrête. */
   musicTransfer(body: {
     fromDeviceId: string

@@ -23,7 +23,9 @@ const props = withDefaults(defineProps<{
   busy?: boolean
   disabled?: boolean
   playLabel?: string
-}>(), { icon: 'music', round: false, explicit: false, meta: '', playable: false, busy: false, disabled: false, playLabel: undefined })
+  /** Petite étiquette posée sur la pochette, en bas à droite (durée d'un mix). */
+  badge?: string
+}>(), { icon: 'music', round: false, explicit: false, meta: '', playable: false, busy: false, disabled: false, playLabel: undefined, badge: '' })
 const emit = defineEmits<{ open: []; play: [] }>()
 const open = () => { if (props.action === 'open') emit('open') }
 </script>
@@ -34,6 +36,7 @@ const open = () => { if (props.action === 'open') emit('open') }
     <div class="tile__art" :class="{ 'tile__art--round': round }">
       <!-- la tuile fait 128 px, la pochette du catalogue 120 : on la redemande au double, nette sur un écran dense -->
       <ArtThumb :src="artAt(art, 256)" :icon="icon" :round="round" :size="128" />
+      <span v-if="badge" class="tile__badge">{{ badge }}</span>
       <ArtPlay v-if="action === 'play' || playable" :size="48" :disabled="disabled" :busy="busy" :label="playLabel" @click="$emit('play')" />
     </div>
     <div class="tile__line1">
@@ -41,6 +44,7 @@ const open = () => { if (props.action === 'open') emit('open') }
       <ExplicitBadge v-if="explicit" />
     </div>
     <div class="tile__meta muted">{{ meta || '\u00a0' }}</div>
+    <slot name="extra" />
   </div>
 </template>
 
@@ -54,6 +58,11 @@ const open = () => { if (props.action === 'open') emit('open') }
 .tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 10px; }
 .tile__art { position: relative; width: 128px; height: 128px; border-radius: 10px; overflow: hidden; }
 .tile__art--round { border-radius: 999px; }
+/* sur la pochette : elle ne prend aucune place au texte, et ne se tronque pas avec lui */
+.tile__badge {
+  position: absolute; right: 6px; bottom: 6px; z-index: 1; padding: 1px 6px; border-radius: 6px;
+  background: rgb(0 0 0 / 0.68); color: #fff; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; pointer-events: none;
+}
 /* le badge ne décale rien : même hauteur que la ligne de titre, le titre se raccourcit pour lui */
 .tile__line1 { display: flex; align-items: center; gap: 5px; min-width: 0; margin-top: 4px; }
 .tile__title { flex: 1 1 auto; min-width: 0; font-size: 13.5px; font-weight: 500; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

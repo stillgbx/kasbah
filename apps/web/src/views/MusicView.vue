@@ -16,13 +16,14 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import type { CommandInput, DeviceEntry } from '@kasbah/shared'
 import { getTransport } from '../api'
-import type { YtmusicAlbum, YtmusicArtist, YtmusicExplore, YtmusicExploreCategory, YtmusicExploreShelf, YtmusicPlaylist, MusicQueue, MusicTrack, MusicRepeat, MusicSession, RadioStation, YtmusicTrack } from '../api/transport'
+import type { YtmusicAlbum, YtmusicArtist, YtmusicExplore, YtmusicExploreCategory, YtmusicExploreShelf, YtmusicPlaylist, MusicLastPlayed, MusicQueue, MusicTrack, MusicRepeat, MusicSession, RadioStation, YtmusicTrack } from '../api/transport'
 import PageHeader from '../components/layout/PageHeader.vue'
 import ChipRow from '../components/music/ChipRow.vue'
 import ListeningSessions from '../components/music/ListeningSessions.vue'
 import MixcloudBrowser from '../components/music/MixcloudBrowser.vue'
 import MusicItemRow from '../components/music/MusicItemRow.vue'
 import MusicPlayerBar from '../components/music/MusicPlayerBar.vue'
+import QueueList from '../components/music/QueueList.vue'
 import MusicShelves from '../components/music/MusicShelves.vue'
 import MusicTile from '../components/music/MusicTile.vue'
 import RadioBrowser from '../components/music/RadioBrowser.vue'
@@ -228,6 +229,48 @@ const nowPlayingId = computed(() => (nowPlayingTrack.value?.source === 'ytmusic'
 const nowPulsing = computed(() => selected.value?.state.kind === 'media_player' && selected.value.state.playback === 'playing')
 /** Titre en cours d'envoi : la barre le montre tout de suite, avec un sablier, le temps que l'enceinte suive. */
 const pendingTrack = ref<YtmusicTrack | null>(null)
+/**
+ * La dernière écoute de chaque lecteur qui ne joue plus rien de nous (serveur redémarré, arrêt) : la
+ * barre la montre en pause à sa position, et lecture la relance de là.
+ */
+const lastPlayed = ref<Map<string, MusicLastPlayed>>(new Map())
+/** Position choisie au curseur avant de relancer ; sinon celle retenue par le serveur. */
+const resumeAt = ref<number | null>(null)
+const selectedLast = computed(() => {
+  const s = selected.value
+  if (!s || localSelected.value || selectedSession.value || s.state.kind !== 'media_player') return null
+  const e = lastPlayed.value.get(s.descriptor.id)
+  if (!e) return null
+  // le lecteur joue autre chose (une radio lancée ailleurs, une appli) : c'est ça que la barre montre
+  const st = s.state
+  if (st.playback === 'playing') return null
+  const shown = st.nowPlaying?.title?.trim().toLowerCase() ?? ''
+  // en pause, l'enceinte peut encore montrer NOTRE titre (flux mort) ou le nom du fichier servi
+  const dead = !shown || shown === e.track.title?.trim().toLowerCase() || /^[0-9a-f]{24}(\.[a-z0-9]{2,4})?$/.test(shown) || /^https?:\/\//.test(shown)
+  if (st.playback === 'paused' && !dead) return null
+  return e
+})
+const barResume = computed(() => {
+  const e = selectedLast.value
+  return e ? {
+    title: e.track.title ?? null, artist: e.track.artist ?? null, artUrl: e.track.artUrl ?? null,
+    durationS: e.durationS ?? e.track.durationS ?? null, positionS: resumeAt.value ?? e.positionS, explicit: e.track.explicit === true,
+  } : null
+})
+watch(() => `${sessionId.value}|${selectedLast.value?.at ?? ''}`, () => { resumeAt.value = null })
+async function resumeLast() {
+  const e = selectedLast.value
+  if (!e) return
+  pendingTrack.value = fromQueueTrack(e.track)
+  try {
+    await getTransport().musicResume(e.deviceId, resumeAt.value ?? undefined)
+    lastPlayed.value = new Map([...lastPlayed.value].filter(([id]) => id !== e.deviceId))
+  } catch (err) { fail(err) }
+  finally {
+    pendingTrack.value = null
+    void refreshSessions()
+  }
+}
 const transferMode = ref(false)
 const transferBusyId = ref<string | null>(null)
 const canTransfer = computed(() => {
@@ -253,8 +296,9 @@ watch(players, (list) => {
 
 async function refreshSessions(): Promise<void> {
   try {
-    const r = await getTransport().musicSessions()
+    const [r, l] = await Promise.all([getTransport().musicSessions(), getTransport().musicLast()])
     ourSessions.value = new Map(r.sessions.map((s) => [s.deviceId, s]))
+    lastPlayed.value = new Map(l.last.map((e) => [e.deviceId, e]))
   } catch { /* plugin absent ou serveur muet : rien à transférer */ }
   // la station n'a de sens que pour un direct : inutile de la demander le reste du temps
   const st = selected.value?.state
@@ -412,6 +456,11 @@ async function locate(id: string) {
 }
 function barCommand(cmd: CommandInput) {
   if (!selected.value) return
+  // la dernière écoute : lecture la relance, file et position comprises
+  if (cmd.type === 'media_player.play' && selectedLast.value) {
+    void resumeLast()
+    return
+  }
   // une file : c'est elle qui saute, l'enceinte n'a qu'un titre
   if ((cmd.type === 'media_player.next' || cmd.type === 'media_player.previous') && selectedSession.value?.queue) {
     void queueGo(cmd.type === 'media_player.next' ? 'next' : 'previous')
@@ -464,6 +513,10 @@ async function transferTo(toId: string) {
 /** Se placer dans le morceau : la commande du lecteur suffit, notre flux est un « fichier » pour lui. */
 function barSeek(positionS: number) {
   const s = selected.value
+  if (selectedLast.value) {
+    resumeAt.value = Math.round(positionS)
+    return
+  }
   if (localSelected.value) local.seek(positionS)
   else if (s) void devices.sendCommand(s.descriptor.id, { type: 'media_player.seek', positionS: Math.round(positionS) })
 }
@@ -844,8 +897,27 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
 
     <div class="body">
       <section class="main">
-        <RadioBrowser v-if="activeSource === 'radio'" :target="playTarget ? selected : null" :local-selected="localSelected" />
-        <MixcloudBrowser v-else-if="activeSource === 'mixcloud'" :now-playing="nowPlayingTrack" :pulsing="nowPulsing" :playing-id="playingId"
+        <!-- la file, ouverte depuis la barre pendant qu'une autre source que YouTube Music est affichée : elle
+             prend la zone centrale ; la source reste montée (masquée), on la retrouve telle quelle au retour -->
+        <div v-if="queueOpen && activeSource !== 'ytmusic'" class="main__body">
+          <div class="back-row">
+            <button type="button" class="pill" @click="queueOpen = false">
+              <StrokeIcon name="back" :size="16" />
+              <span>{{ $t('common.back') }}</span>
+            </button>
+            <span class="back-row__title">{{ $t('music.queue') }}</span>
+            <button type="button" class="pill back-row__end" :disabled="queueWaiting <= 0 && !(queue && queue.index > 0)" @click="clearQueue">
+              <StrokeIcon name="trash" :size="16" />
+              <span>{{ $t('music.queueClear') }}</span>
+            </button>
+          </div>
+          <div class="main__scroll main__scroll--under">
+            <QueueList :queue="queue" :waiting="queueWaiting" :pulsing="nowPulsing" :can-play="playTarget" :busy-index="queueBusyIndex"
+                       @play="queueGo" @remove="removeFromQueue" />
+          </div>
+        </div>
+        <RadioBrowser v-if="activeSource === 'radio'" v-show="!queueOpen" :target="playTarget ? selected : null" :local-selected="localSelected" />
+        <MixcloudBrowser v-else-if="activeSource === 'mixcloud'" v-show="!queueOpen" :now-playing="nowPlayingTrack" :pulsing="nowPulsing" :playing-id="playingId"
                          :can-play="playTarget" @play="playTracks" />
         <template v-else>
         <form class="search" @submit.prevent="runSearch">
@@ -896,16 +968,8 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
           <template v-else>
             <!-- file d'attente du lecteur choisi : ce qui joue, ce qui suit -->
             <template v-if="queueOpen">
-              <div class="list queue-list">
-                <template v-if="queue">
-                  <MusicItemRow v-for="(qt, i) in queue.items" :key="`${i}:${qt.source}:${qt.id}`" action="play" removable :position="i + 1" :art="qt.artUrl ?? null" :title="qt.title ?? qt.id"
-                                :explicit="!!qt.explicit" :meta="qt.artist ?? ''" :dur="formatClock(qt.durationS)" :selected="i === queue.index" :playing="i === queue.index && nowPulsing"
-                                :disabled="!playTarget" :busy="queueBusyIndex === i" :play-label="$t('ytmusic.play')"
-                                @play="queueGo(i)" @remove="removeFromQueue(i)" />
-                  <p v-if="queueWaiting <= 0" class="muted empty">{{ $t('music.queueNothingNext') }}</p>
-                </template>
-                <p v-else class="muted empty">{{ $t('music.queueEmpty') }}</p>
-              </div>
+              <QueueList :queue="queue" :waiting="queueWaiting" :pulsing="nowPulsing" :can-play="playTarget" :busy-index="queueBusyIndex"
+                         @play="queueGo" @remove="removeFromQueue" />
             </template>
 
             <!-- une catégorie (genre, ambiance) : ses rangées de tuiles -->
@@ -1113,7 +1177,7 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
                          @command="panelCommand" />
     </div>
 
-    <MusicPlayerBar :entry="selected" :name="selectedName" :session="selectedSession" :station="selectedStation" :pending="pendingTrack"
+    <MusicPlayerBar :entry="selected" :name="selectedName" :session="selectedSession" :station="selectedStation" :pending="pendingTrack" :resume="barResume"
                     :transfer-mode="transferMode" :can-transfer="canTransfer" :transfer-busy="!!transferBusyId" :queue-open="queueOpen"
                     @command="barCommand" @seek="barSeek" @transfer="transferMode = true" @cancel-transfer="transferMode = false"
                     @repeat="setRepeat" @toggle-queue="queueOpen = !queueOpen" />

@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { useLocalStorage } from '@vueuse/core'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getTransport } from '../../api'
 import type { MixcloudHomeSection, MixcloudList, MixcloudMix, MixcloudPage, MixcloudStatus, MixcloudUser, MusicTrack } from '../../api/transport'
 import { useNotificationsStore } from '../../stores/notifications'
 import Segmented from '../ui/Segmented.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
+import GenrePills from './GenrePills.vue'
 import MusicItemRow from './MusicItemRow.vue'
 import MusicTile from './MusicTile.vue'
 
@@ -18,6 +19,11 @@ import MusicTile from './MusicTile.vue'
 // recherche. Jouer un mix passe par la page (`play`), qui sait l'envoyer à l'enceinte ou le lire
 // ici ; la liste d'où il vient devient la file. Un mix écouté en partie se reprend où on l'a laissé.
 // Même gabarit que les autres sources : rien ne bouge en changeant de source.
+//
+// Le genre est un critère de choix d'une émission : chaque mix montre les siens en pastilles, et une
+// rangée de filtres se compose des genres des mix reçus (les plus fréquents d'abord). Une pastille a
+// trois états — neutre, gardé, écarté : un mix reste s'il porte au moins un genre gardé (ou si aucun
+// ne l'est) et aucun genre écarté. Le choix est retenu d'une visite à l'autre.
 
 type Tab = 'home' | MixcloudList | 'playlists' | 'following'
 /** Ce qu'on regarde dans l'onglet : la liste elle-même, ou une playlist / un compte ouverts depuis lui. */
@@ -56,6 +62,52 @@ const busy = ref(false)
 const more = ref(false)
 const failed = ref(false)
 
+// ---- filtre par genre ------------------------------------------------------------------------------
+type GenreState = 'on' | 'off'
+/** Les genres choisis, avec leur nom : ils restent dans la rangée même absents des mix affichés. */
+const genreChoice = useLocalStorage<Record<string, { name: string; state: GenreState }>>('kasbah.mixcloud.genres', {})
+const kept = computed(() => new Set(Object.entries(genreChoice.value).filter(([, g]) => g.state === 'on').map(([slug]) => slug)))
+const ruledOut = computed(() => new Set(Object.entries(genreChoice.value).filter(([, g]) => g.state === 'off').map(([slug]) => slug)))
+const filtering = computed(() => kept.value.size > 0 || ruledOut.value.size > 0)
+function keep(m: MixcloudMix): boolean {
+  const genres = m.genres ?? []
+  if (genres.some((g) => ruledOut.value.has(g.slug))) return false
+  return kept.value.size === 0 || genres.some((g) => kept.value.has(g.slug))
+}
+const NEXT_GENRE_STATE = { neutral: 'on', on: 'off', off: 'neutral' } as const
+function cycleGenre(g: { slug: string; name: string }) {
+  const next = NEXT_GENRE_STATE[genreChoice.value[g.slug]?.state ?? 'neutral']
+  const choice = { ...genreChoice.value }
+  if (next === 'neutral') delete choice[g.slug]
+  else choice[g.slug] = { name: g.name, state: next }
+  genreChoice.value = choice
+}
+/** Le fondu de la rangée : de chaque côté où il reste des genres à voir. */
+const genresList = ref<HTMLElement | null>(null)
+const genresFade = ref({ start: false, end: false })
+function measureGenres() {
+  const el = genresList.value
+  if (!el) return
+  genresFade.value = { start: el.scrollLeft > 1, end: el.scrollLeft + el.clientWidth < el.scrollWidth - 1 }
+}
+let genresObserver: ResizeObserver | null = null
+onMounted(() => {
+  genresObserver = new ResizeObserver(measureGenres)
+  watch(genresList, (el) => { genresObserver?.disconnect(); if (el) genresObserver?.observe(el) }, { immediate: true })
+})
+onBeforeUnmount(() => genresObserver?.disconnect())
+/** La rangée défile à l'horizontale : la molette d'une souris (verticale) la fait avancer. */
+function wheelGenres(e: WheelEvent) {
+  const el = e.currentTarget as HTMLElement
+  if (Math.abs(e.deltaY) <= Math.abs(e.deltaX) || el.scrollWidth <= el.clientWidth) return
+  e.preventDefault()
+  el.scrollLeft += e.deltaY
+}
+function genreLabel(slug: string, name: string): string {
+  const st = genreChoice.value[slug]?.state
+  return t(st === 'on' ? 'mixcloud.genreOn' : st === 'off' ? 'mixcloud.genreOff' : 'mixcloud.genreNeutral', { name })
+}
+
 const linked = computed(() => !!status.value?.username)
 const tabOptions = computed(() => [
   { value: 'home' as const, label: t('mixcloud.tabHome') },
@@ -80,6 +132,42 @@ function shelfTitle(s: MixcloudHomeSection): string {
     case 'popular': return t('mixcloud.homePopular', { genre: s.genre.name })
   }
 }
+/** Les mix que l'écran reçoit (avant filtre) : la rangée des genres se compose d'eux. */
+const receivedMixes = computed<MixcloudMix[]>(() => (showsHome.value
+  ? sections.value.flatMap((s) => (s.kind === 'users' ? [] : s.items))
+  : showsMixes.value ? mixes.value : []))
+/**
+ * Les genres des mix reçus (avant filtre), les plus fréquents en tête — un mix présent dans plusieurs
+ * rangées ne compte qu'une fois ; puis les genres choisis absents de ce qu'on reçoit.
+ */
+const genreChips = computed(() => {
+  const count = new Map<string, { name: string; n: number }>()
+  const seen = new Set<string>()
+  for (const m of receivedMixes.value) {
+    for (const g of m.genres ?? []) {
+      // un même mix revient dans plusieurs rangées de l'accueil : il ne compte qu'une fois
+      if (seen.has(`${m.key}|${g.slug}`)) continue
+      seen.add(`${m.key}|${g.slug}`)
+      const c = count.get(g.slug)
+      if (c) c.n++
+      else count.set(g.slug, { name: g.name, n: 1 })
+    }
+  }
+  // l'ordre ne dépend pas du choix : une pastille ne se déplace pas quand on la touche
+  const state = (slug: string): GenreState | 'neutral' => genreChoice.value[slug]?.state ?? 'neutral'
+  const received = [...count].sort((a, b) => b[1].n - a[1].n).map(([slug, c]) => ({ slug, name: c.name, state: state(slug) }))
+  const absent = Object.entries(genreChoice.value).filter(([slug]) => !count.has(slug)).map(([slug, g]) => ({ slug, name: g.name, state: g.state }))
+  return [...received, ...absent]
+})
+// les genres arrivent (ou changent d'onglet) : le fondu suit
+watch(genreChips, () => void nextTick(measureGenres))
+/** Le filtre ne vaut que là où il y a des mix (pas sur les playlists ni les suivis) : sa rangée y reste, grisée. */
+const filterable = computed(() => showsHome.value || showsMixes.value)
+const shownMixes = computed(() => mixes.value.filter(keep))
+const shownSections = computed(() => sections.value
+  .map((s) => (s.kind === 'users' ? s : { ...s, items: s.items.filter(keep) }))
+  .filter((s) => s.kind === 'users' || s.items.length > 0))
+
 const shelfKey = (s: MixcloudHomeSection, i: number) => `${i}:${s.id}:${'user' in s ? s.user.username : 'genre' in s ? s.genre.slug : ''}`
 
 const fail = (err: unknown) => notifications.error(t('errors.UNKNOWN', { name: 'Mixcloud', message: (err as Error).message }))
@@ -97,8 +185,9 @@ function clock(s: number): string {
   return h ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${m}:${String(sec).padStart(2, '0')}`
 }
 function meta(m: MixcloudMix): string {
+  // les genres ont leurs pastilles, sous la méta
   const head = m.resumeS ? t('mixcloud.resumeAt', { time: clock(m.resumeS) }) : m.user.name
-  return [head, m.resumeS ? m.user.name : '', m.tags.slice(0, 2).join(', ')].filter(Boolean).join(' · ')
+  return [head, m.resumeS ? m.user.name : ''].filter(Boolean).join(' · ')
 }
 const isPlaying = (m: MixcloudMix) => props.nowPlaying?.source === 'mixcloud' && props.nowPlaying.id === m.key
 
@@ -114,7 +203,8 @@ function toTrack(m: MixcloudMix, withResume: boolean): MusicTrack {
     ...(withResume && m.resumeS ? { startS: m.resumeS } : {}),
   }
 }
-function play(m: MixcloudMix, list: MixcloudMix[] = mixes.value) {
+/** La file = la liste telle qu'on la voit, filtre compris. */
+function play(m: MixcloudMix, list: MixcloudMix[] = shownMixes.value) {
   const at = Math.max(0, list.findIndex((x) => x.key === m.key))
   // seule la piste lancée reprend : les suivantes de la file partent du début
   emit('play', list.map((x, i) => toTrack(x, i === at)), at)
@@ -244,6 +334,22 @@ onMounted(async () => {
           <Segmented v-model="tab" dense :options="tabOptions" :label="$t('mixcloud.source')" />
         </div>
       </div>
+      <!-- genres : toujours à sa place, grisée là où il n'y a pas de mix à filtrer -->
+      <div class="genres" :class="{ 'is-dim': !filterable }">
+        <span class="genres__label muted">{{ $t('mixcloud.genres') }}</span>
+        <div ref="genresList" class="genres__list" :data-fade-start="genresFade.start ? '1' : '0'" :data-fade-end="genresFade.end ? '1' : '0'"
+             @wheel="wheelGenres" @scroll="measureGenres">
+          <button v-for="g in genreChips" :key="g.slug" type="button" class="genre" :data-state="g.state" :aria-pressed="g.state === 'on'"
+                  :aria-label="genreLabel(g.slug, g.name)" :title="genreLabel(g.slug, g.name)" @click="cycleGenre(g)">
+            <span>{{ g.name }}</span>
+          </button>
+        </div>
+        <!-- pas une pastille : un lien discret avec son icône, qu'on ne prend pas pour un genre de plus -->
+        <button type="button" class="genres__reset" :class="{ 'is-hidden': !filtering }" :tabindex="filtering ? 0 : -1" @click="genreChoice = {}">
+          <StrokeIcon name="undo" :size="14" />
+          <span>{{ $t('mixcloud.genresReset') }}</span>
+        </button>
+      </div>
       <!-- « Retour » d'une playlist ou d'un compte ouverts, place gardée hors recherche -->
       <div v-if="drill && !searching" class="back-row">
         <button type="button" class="pill" @click="loadTab">
@@ -263,15 +369,18 @@ onMounted(async () => {
             </div>
           </div>
           <p v-else-if="!sections.length" class="muted empty" role="status">{{ failed ? $t('mixcloud.unavailable') : $t('mixcloud.homeEmpty') }}</p>
-          <section v-for="(sh, si) in sections" :key="shelfKey(sh, si)" class="shelf">
+          <p v-else-if="!shownSections.length" class="muted empty" role="status">{{ $t('mixcloud.genresEmpty') }}</p>
+          <section v-for="(sh, si) in shownSections" :key="shelfKey(sh, si)" class="shelf">
             <h2 class="section-label shelf__head">{{ shelfTitle(sh) }}</h2>
             <div class="shelf__row">
               <template v-if="sh.kind === 'users'">
                 <MusicTile v-for="u in sh.users" :key="u.username" action="open" round icon="person" :art="u.artUrl" :title="u.name" :meta="`@${u.username}`" @open="openUser(u)" />
               </template>
               <template v-else>
-                <MusicTile v-for="m in sh.items" :key="m.key" action="play" icon="sourceMixcloud" :art="m.artUrl" :title="m.name" :meta="meta(m)"
-                           :busy="playingId === m.key" :disabled="!canPlay" :play-label="$t('mixcloud.play', { name: m.name })" @play="play(m, sh.items)" />
+                <MusicTile v-for="m in sh.items" :key="m.key" action="play" icon="sourceMixcloud" :art="m.artUrl" :title="m.name" :meta="meta(m)" :badge="durLabel(m.durationS)"
+                           :busy="playingId === m.key" :disabled="!canPlay" :play-label="$t('mixcloud.play', { name: m.name })" @play="play(m, sh.items)">
+                  <template #extra><GenrePills class="tile-genres" :genres="m.genres ?? []" :kept="kept" /></template>
+                </MusicTile>
               </template>
             </div>
           </section>
@@ -282,11 +391,14 @@ onMounted(async () => {
 
         <template v-else-if="showsMixes">
           <p v-if="!mixes.length" class="muted empty" role="status">{{ failed ? $t('mixcloud.unavailable') : $t('mixcloud.empty') }}</p>
+          <p v-else-if="!shownMixes.length" class="muted empty" role="status">{{ $t('mixcloud.genresEmpty') }}</p>
           <div v-else class="list">
-            <div v-for="m in mixes" :key="m.key" class="mix">
+            <div v-for="m in shownMixes" :key="m.key" class="mix">
               <MusicItemRow action="play" icon="sourceMixcloud" :art="m.artUrl" :title="m.name" :meta="meta(m)" :dur="durLabel(m.durationS)"
                             :busy="playingId === m.key" :disabled="!canPlay" :selected="isPlaying(m)" :playing="isPlaying(m) && pulsing"
-                            :play-label="$t('mixcloud.play', { name: m.name })" @play="play(m)" />
+                            :play-label="$t('mixcloud.play', { name: m.name })" @play="play(m)">
+                <template #extra><GenrePills :genres="m.genres ?? []" :kept="kept" /></template>
+              </MusicItemRow>
               <!-- place toujours gardée : une ligne sans reprise ne se décale pas -->
               <button type="button" class="restart" :class="{ 'is-hidden': !m.resumeS }" :tabindex="m.resumeS ? 0 : -1"
                       :disabled="!canPlay" :aria-label="$t('mixcloud.restart')" :title="$t('mixcloud.restart')" @click="restart(m)">
@@ -335,6 +447,35 @@ onMounted(async () => {
 .tabs { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
 .tabs > div { min-width: 0; overflow-x: auto; }
 .is-dim { opacity: 0.45; pointer-events: none; }
+/* calé en haut : sous les pastilles, la liste réserve la place de sa barre de défilement ; libellé et
+   remise à zéro prennent la même marge haute (4 px) et la même hauteur (28 px) que les pastilles */
+.genres { flex: 0 0 auto; display: flex; align-items: flex-start; gap: 8px; min-width: 0; height: 44px; }
+.genres__label { flex: 0 0 auto; font-size: 12px; margin-top: 4px; line-height: 28px; }
+.genres__reset {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; height: 28px; margin-top: 4px; padding: 0 6px;
+  border: 0; border-radius: 8px; background: transparent; color: var(--muted); font: inherit; font-size: 12.5px; white-space: nowrap;
+}
+.genres__reset:hover { color: var(--accent); }
+/* une seule ligne qui défile (molette, glisser, barre fine de l'appli) : la rangée a la hauteur des
+   pastilles ET de la barre, qu'elle soit là ou non — rien ne bouge quand les genres arrivent */
+.genres__list { flex: 1 1 auto; min-width: 0; display: flex; gap: 6px; overflow-x: auto; padding-top: 4px; }
+/* fondu du côté où la rangée continue */
+.genres__list[data-fade-start='1'] { --fade-l: 24px; }
+.genres__list[data-fade-end='1'] { --fade-r: 24px; }
+.genres__list[data-fade-start='1'], .genres__list[data-fade-end='1'] {
+  mask-image: linear-gradient(90deg, transparent 0, #000 var(--fade-l, 0px), #000 calc(100% - var(--fade-r, 0px)), transparent 100%);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 var(--fade-l, 0px), #000 calc(100% - var(--fade-r, 0px)), transparent 100%);
+}
+.genre {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 12px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--text); font: inherit; font-size: 12.5px; white-space: nowrap;
+}
+.genre:hover { border-color: var(--muted); }
+/* l'état ne se lit qu'aux couleurs et au trait : une pastille garde sa largeur, rien ne bouge en la touchant */
+.genre[data-state='on'] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.genre[data-state='off'] { border-style: dashed; color: var(--muted); text-decoration: line-through; }
+.is-hidden { visibility: hidden; }
+.tile-genres { margin-top: 2px; }
 .back-row { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; }
 .back-row__title { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mc__scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; }

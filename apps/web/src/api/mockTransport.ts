@@ -331,6 +331,8 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     async musicPlay() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music cookie in mock mode') },
     // aucun flux servi par la simulation : la page Musique montre ses lecteurs, sans transfert possible
     async musicSessions() { return { sessions: [] } },
+    async musicLast() { return { last: [] } },
+    async musicResume() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
     async musicTransfer() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
     async musicLocalPlay() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
     async musicQueuePlay() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
