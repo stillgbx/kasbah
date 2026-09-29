@@ -66,7 +66,15 @@ function withParkingDraft(h: House | null, id: string | null, patch: ParkingPatc
 function withGardenDraft(h: House | null, id: string | null, patch: GardenItemPatch | null): House | null {
   if (!h || !id || !patch) return h
   if (!h.site.garden.some((g) => g.id === id)) return h
-  return { ...h, site: { ...h.site, garden: h.site.garden.map((g) => (g.id === id ? { ...g, ...patch } : g)) } }
+  // `spacing: null` efface l'espacement d'une haie : dans l'aperçu, le champ disparaît
+  const apply = (g: GardenItem): GardenItem => {
+    const { spacing, ...rest } = patch
+    const next: GardenItem = { ...g, ...rest }
+    if (spacing === null) delete next.spacing
+    else if (spacing !== undefined) next.spacing = spacing
+    return next
+  }
+  return { ...h, site: { ...h.site, garden: h.site.garden.map((g) => (g.id === id ? apply(g) : g)) } }
 }
 
 /** Hauteur d'un élément qui naît (m) : un ordre de grandeur de la famille, réglé ensuite. */

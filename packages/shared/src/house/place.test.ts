@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import demo from './__fixtures__/demo-house.json'
 import { parseHouse } from './validate'
 import { NEUTRAL_TUNING } from './schema'
-import { addGardenItemToJson, addOpeningToJson, patchGardenItemInJson, removeGardenItemFromJson, patchOpeningInJson, PlacementError, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, setPluginInJson, setRenderTuningInJson, setRoomOrderInJson } from './place'
+import { addGardenItemToJson, addOpeningToJson, gardenItemPatchSchema, patchGardenItemInJson, removeGardenItemFromJson, patchOpeningInJson, PlacementError, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, setPluginInJson, setRenderTuningInJson, setRoomOrderInJson } from './place'
 
 const devices = (doc: Record<string, unknown>) => doc.devices as Record<string, unknown>[]
 
@@ -423,13 +423,18 @@ describe('éléments du jardin', () => {
     expect(garden(patchGardenItemInJson(cherry, 'oak-1', { species: '' }))[0]).not.toHaveProperty('species')
   })
 
-  it('une haie porte sa longueur et sa largeur, posées puis réglées, dans les bornes', () => {
+  it('une haie porte sa longueur, sa largeur et son espacement, posés puis réglés, dans les bornes', () => {
     const hedge = addGardenItemToJson(demo, { id: 'hedge-1', kind: 'hedge', center: [0, 0], height: 1.8, length: 4 })
     expect(parseHouse(hedge).site.garden[0]).toMatchObject({ kind: 'hedge', length: 4 })
     expect(garden(patchGardenItemInJson(hedge, 'hedge-1', { length: 7.5 }))[0]!.length).toBe(7.5)
     expect(() => parseHouse(patchGardenItemInJson(hedge, 'hedge-1', { length: 0.1 }))).toThrow()
     expect(garden(patchGardenItemInJson(hedge, 'hedge-1', { width: 1.2 }))[0]!.width).toBe(1.2)
     expect(() => parseHouse(patchGardenItemInJson(hedge, 'hedge-1', { width: 9 }))).toThrow()
+    const spaced = patchGardenItemInJson(hedge, 'hedge-1', { spacing: 1.5 })
+    expect(garden(spaced)[0]!.spacing).toBe(1.5)
+    expect(garden(patchGardenItemInJson(spaced, 'hedge-1', { spacing: null }))[0]).not.toHaveProperty('spacing')   // retour à l'automatique
+    expect(gardenItemPatchSchema.parse({ spacing: null })).toEqual({ spacing: null })
+    expect(() => parseHouse(patchGardenItemInJson(hedge, 'hedge-1', { spacing: 0.05 }))).toThrow()
   })
 
   it('retire un élément', () => {

@@ -264,6 +264,9 @@ export const DEFAULT_HEDGE_LENGTH = 3
 export const MIN_HEDGE_WIDTH = 0.2
 export const MAX_HEDGE_WIDTH = 5
 export const DEFAULT_HEDGE_WIDTH = 0.7
+/** Espacement entre deux sujets d'une haie (m, de pied à pied). Absent = automatique (les feuillages se chevauchent). */
+export const MIN_HEDGE_SPACING = 0.2
+export const MAX_HEDGE_SPACING = 5
 
 /**
  * Élément d'aménagement du jardin (arbre, buisson, pierre), posé sur le terrain et qui en suit le
@@ -284,6 +287,8 @@ export const gardenItemSchema = z.object({
   length: z.number().min(MIN_HEDGE_LENGTH).max(MAX_HEDGE_LENGTH).optional(),
   /** Haie seulement : largeur (épaisseur) du segment (m), en travers de son axe. Absente = `DEFAULT_HEDGE_WIDTH`. */
   width: z.number().min(MIN_HEDGE_WIDTH).max(MAX_HEDGE_WIDTH).optional(),
+  /** Haie seulement : espacement de pied à pied entre ses sujets (m). Absent = automatique, serré. */
+  spacing: z.number().min(MIN_HEDGE_SPACING).max(MAX_HEDGE_SPACING).optional(),
   /**
    * Graine de la forme : deux sapins de même hauteur ne sont pas jumeaux. Absente = tirée de l'id ;
    * l'UI en écrit une quand on demande « une autre forme ».

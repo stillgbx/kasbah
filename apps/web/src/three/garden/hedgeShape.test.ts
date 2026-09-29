@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { Box3 } from 'three'
 import { SPECIES } from './species'
 import { DEFAULT_HEDGE_WIDTH } from '@kasbah/shared'
-import { hedgeShape } from './hedgeShape'
+import { autoHedgeSpacing, hedgeShape } from './hedgeShape'
 
 const boxOf = (shape: ReturnType<typeof hedgeShape>) => {
   const box = new Box3()
@@ -39,6 +39,22 @@ describe('haie', () => {
     const t = [...tops.values()]
     expect(Math.max(...t) - Math.min(...t)).toBeGreaterThan(0.03)
     expect(shape.parts.some((p) => p.part === 'bark')).toBe(true)
+  })
+
+  it('l\'espacement réglé fixe la distance de pied à pied ; absent, il reste serré', () => {
+    // les tiges : deux par sujet, le nombre de sommets d'écorce compte donc les sujets
+    const stems = (spacing?: number) => hedgeShape(6, 'summer', undefined, false, 0.7, 1.8, spacing).parts.find((p) => p.part === 'bark')!.geometry.getAttribute('position').count
+    // 6 m − 2 × 0,32 m de retrait = 5,36 m de rangée : 2 sujets à 5 m, 4 à 1,5 m
+    const perPlant = stems(5) / 2
+    expect(stems(1.5) / perPlant).toBe(4)
+    expect(stems() / perPlant).toBeGreaterThan(stems(1.5) / perPlant)
+    expect(stems(autoHedgeSpacing(0.7)) / perPlant).toBeGreaterThan(10)
+  })
+
+  it('une autre graine tire d\'autres sujets, à dimensions égales', () => {
+    const pos = (seed: number) => Array.from(hedgeShape(4, 'summer', undefined, false, 0.7, 1.8, undefined, seed).parts[0]!.geometry.getAttribute('position').array)
+    expect(pos(1)).toEqual(pos(1))
+    expect(pos(1)).not.toEqual(pos(2))
   })
 
   it('les facettes gardent leur taille : une haie deux fois plus longue a deux fois plus de faces', () => {

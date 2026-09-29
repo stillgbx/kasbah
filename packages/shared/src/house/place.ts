@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { deviceIdSchema } from '../devices/descriptor'
-import { defaultPlugins, GARDEN_KINDS, hexColorSchema, MAX_GARDEN_HEIGHT, MAX_HEDGE_LENGTH, MAX_HEDGE_WIDTH, MIN_GARDEN_HEIGHT, MIN_HEDGE_LENGTH, MIN_HEDGE_WIDTH, MAX_OPENING_LEAVES, MIN_OPENING_LEAVES, MIN_PARKING_DIM, model3dSchema, MOUNTS, NEUTRAL_TUNING, OPENING_MATERIALS, OPENING_TYPES, SPEAKER_SHAPES, vec2Schema, vec3Schema, type PluginSettingsPatch, type Relief, type SceneTuning } from './schema'
+import { defaultPlugins, GARDEN_KINDS, hexColorSchema, MAX_GARDEN_HEIGHT, MAX_HEDGE_LENGTH, MAX_HEDGE_SPACING, MAX_HEDGE_WIDTH, MIN_GARDEN_HEIGHT, MIN_HEDGE_LENGTH, MIN_HEDGE_SPACING, MIN_HEDGE_WIDTH, MAX_OPENING_LEAVES, MIN_OPENING_LEAVES, MIN_PARKING_DIM, model3dSchema, MOUNTS, NEUTRAL_TUNING, OPENING_MATERIALS, OPENING_TYPES, SPEAKER_SHAPES, vec2Schema, vec3Schema, type PluginSettingsPatch, type Relief, type SceneTuning } from './schema'
 import { DEVICE_KINDS, VEHICLE_FINISHES } from '../devices/kinds'
 import { computeHouseGeometry, openingCentre } from './geometry'
 import { parseHouse } from './validate'
@@ -747,14 +747,21 @@ export const newGardenItemSchema = z.object({
   length: z.number().min(MIN_HEDGE_LENGTH).max(MAX_HEDGE_LENGTH).optional(),
   /** Largeur d'une haie (m). */
   width: z.number().min(MIN_HEDGE_WIDTH).max(MAX_HEDGE_WIDTH).optional(),
+  /** Espacement entre les sujets d'une haie (m). */
+  spacing: z.number().min(MIN_HEDGE_SPACING).max(MAX_HEDGE_SPACING).optional(),
   seed: z.number().int().min(0).optional(),
   /** Espèce du catalogue de l'app. Dans un réglage, la chaîne vide l'EFFACE (retour à la famille). */
   species: z.string().regex(/^([a-z0-9_.-]+)?$/i).max(60).optional(),
 })
 export type NewGardenItem = z.infer<typeof newGardenItemSchema>
 
-/** Élément du jardin réglé : seuls les champs présents sont posés. Changer de famille est permis. */
-export const gardenItemPatchSchema = newGardenItemSchema.omit({ id: true }).partial()
+/**
+ * Élément du jardin réglé : seuls les champs présents sont posés. Changer de famille est permis.
+ * `spacing: null` EFFACE l'espacement d'une haie (retour à l'automatique).
+ */
+export const gardenItemPatchSchema = newGardenItemSchema.omit({ id: true }).partial().extend({
+  spacing: z.number().min(MIN_HEDGE_SPACING).max(MAX_HEDGE_SPACING).nullable().optional(),
+})
 export type GardenItemPatch = z.infer<typeof gardenItemPatchSchema>
 
 /** Les éléments du jardin, tels qu'ils sont écrits (tableau absent = jardin vide). */
@@ -773,6 +780,7 @@ export function addGardenItemToJson(doc: unknown, item: NewGardenItem): JsonObje
   if (item.yaw) next.yaw = item.yaw
   if (item.length !== undefined) next.length = item.length
   if (item.width !== undefined) next.width = item.width
+  if (item.spacing !== undefined) next.spacing = item.spacing
   if (item.seed !== undefined) next.seed = item.seed
   if (item.species) next.species = item.species
   return { ...doc, site: { ...site, garden: [...list, next] } }
@@ -786,6 +794,7 @@ export function patchGardenItemInJson(doc: unknown, id: string, patch: GardenIte
   if (i < 0) throw new PlacementError(`unknown garden item "${id}"`)
   const next: JsonObject = { ...(list[i] as JsonObject) }
   for (const key of ['kind', 'center', 'height', 'length', 'width', 'seed'] as const) if (patch[key] !== undefined) next[key] = patch[key]
+  if (patch.spacing !== undefined) { if (patch.spacing === null) delete next.spacing; else next.spacing = patch.spacing }
   // un cap nul n'est pas écrit : c'est la valeur par défaut
   if (patch.yaw !== undefined) { if (patch.yaw) next.yaw = patch.yaw; else delete next.yaw }
   if (patch.species !== undefined) { if (patch.species) next.species = patch.species; else delete next.species }

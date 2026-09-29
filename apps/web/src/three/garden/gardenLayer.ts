@@ -114,7 +114,7 @@ export class GardenLayer {
     // clé, pour qu'une tranche n'ait qu'une teinte — c'est ce qui permet au néon d'en émettre une.
     const tintOf = (it: GardenItem) => (look ? gardenSeed(it) % look.leaf.length : 0)
     // une haie est construite à ses dimensions : deux haies de tailles différentes n'ont pas la même forme
-    const keyOf = (it: GardenItem) => `${it.kind}:${speciesOf(it)?.id ?? ''}:${gardenSeed(it) % GARDEN_VARIANTS}:${tintOf(it)}${it.kind === 'hedge' ? `:${lengthOf(it).toFixed(2)}:${widthOf(it).toFixed(2)}:${it.height.toFixed(2)}` : ''}`
+    const keyOf = (it: GardenItem) => `${it.kind}:${speciesOf(it)?.id ?? ''}:${gardenSeed(it) % GARDEN_VARIANTS}:${tintOf(it)}${it.kind === 'hedge' ? `:${lengthOf(it).toFixed(2)}:${widthOf(it).toFixed(2)}:${it.height.toFixed(2)}:${it.spacing?.toFixed(2) ?? 'auto'}:${gardenSeed(it)}` : ''}`
     const lookKey = look ? JSON.stringify([look.leaf, look.bark, look.stone, look.accent, look.emissive, look.foliage]) : ''
     const signature = `${season}|${lookKey}|${items.map((it) => `${it.id}:${keyOf(it)}`).join('|')}`
     if (signature !== this.signature) {
@@ -224,7 +224,7 @@ export class GardenLayer {
     const variant = gardenSeed(it) % GARDEN_VARIANTS
     const species = speciesOf(it)
     const foliage = this.look?.foliage ?? 1
-    if (it.kind === 'hedge') return hedgeShape(lengthOf(it), this.season, species, !!this.look, widthOf(it), it.height)
+    if (it.kind === 'hedge') return hedgeShape(lengthOf(it), this.season, species, !!this.look, widthOf(it), it.height, it.spacing, gardenSeed(it))
     if (species) return speciesShape(species, variant, this.season, this.look ? { foliage } : undefined)
     return gardenShape(it.kind, variant, foliage)
   }

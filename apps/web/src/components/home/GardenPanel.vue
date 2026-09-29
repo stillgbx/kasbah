@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { DEFAULT_HEDGE_LENGTH, DEFAULT_HEDGE_WIDTH, GARDEN_KINDS, MAX_GARDEN_HEIGHT, MAX_HEDGE_LENGTH, MAX_HEDGE_WIDTH, MIN_GARDEN_HEIGHT, MIN_HEDGE_LENGTH, MIN_HEDGE_WIDTH, type GardenKind } from '@kasbah/shared'
+import { DEFAULT_HEDGE_LENGTH, DEFAULT_HEDGE_WIDTH, GARDEN_KINDS, MAX_GARDEN_HEIGHT, MAX_HEDGE_LENGTH, MAX_HEDGE_SPACING, MAX_HEDGE_WIDTH, MIN_GARDEN_HEIGHT, MIN_HEDGE_LENGTH, MIN_HEDGE_SPACING, MIN_HEDGE_WIDTH, type GardenKind } from '@kasbah/shared'
 import { useHouseStore } from '../../stores/house'
 import { GARDEN_ICON } from '../../lib/gardenIcons'
 import { SPECIES, speciesOf, type SpeciesRecipe } from '../../three/garden/species'
+import { autoHedgeSpacing } from '../../three/garden/hedgeShape'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
 // Panneau « élément du jardin » : sa famille, sa hauteur, son cap, une autre forme, le supprimer.
@@ -107,6 +108,34 @@ function commitWidth() {
   const next = clampWidth(raw)
   if (next !== width.value) void house.saveGardenItem({ width: next })
 }
+
+// --- espacement entre les sujets d'une haie : pas de 10 cm ; absent, la valeur automatique s'affiche
+const SPACING_STEP = 0.1
+const clampSpacing = (v: number) => Math.min(MAX_HEDGE_SPACING, Math.max(MIN_HEDGE_SPACING, round(v)))
+const spacing = computed(() => item.value?.spacing ?? round(autoHedgeSpacing(width.value)))
+function bumpSpacing(sign: 1 | -1) {
+  const next = clampSpacing(spacing.value + sign * SPACING_STEP)
+  if (next !== spacing.value) void house.saveGardenItem({ spacing: next })
+}
+const editingSpacing = ref(false)
+const spacingDraft = ref('')
+function startSpacing(ev?: FocusEvent) {
+  editingSpacing.value = true
+  spacingDraft.value = spacing.value.toFixed(2)
+  const el = ev?.target as HTMLInputElement | undefined
+  if (el) void nextTick(() => el.select())
+}
+function commitSpacing() {
+  if (!editingSpacing.value) return
+  editingSpacing.value = false
+  const raw = Number(spacingDraft.value.replace(',', '.').trim())
+  if (!Number.isFinite(raw) || raw <= 0) return
+  const next = clampSpacing(raw)
+  if (next !== spacing.value) void house.saveGardenItem({ spacing: next })
+}
+/** Espacement réglé : la pastille « auto » y ramène ; automatique, elle le dit (même place, rien ne bouge). */
+const spacingSet = computed(() => item.value?.spacing !== undefined)
+function resetSpacing() { if (spacingSet.value) void house.saveGardenItem({ spacing: null }) }
 
 // --- cap : sens trigonométrique, comme une place (la touche de gauche fait tourner à gauche)
 const YAW_STEP = 15
@@ -250,6 +279,37 @@ onBeforeUnmount(() => clearTimeout(disarm))
         </span>
       </div>
 
+      <div v-if="item.kind === 'hedge'" class="gp__row">
+        <span class="gp__lab">
+          <span class="muted">{{ $t('garden.spacing') }}</span>
+          <button type="button" class="pill pill--sm gp__auto" :data-on="spacingSet ? '0' : '1'" :disabled="busy || !spacingSet"
+                  :title="$t('garden.spacingAuto')" :aria-label="$t('garden.spacingAuto')" :aria-pressed="!spacingSet" @click="resetSpacing">
+            <StrokeIcon v-if="spacingSet" name="undo" :size="12" /> {{ $t('garden.auto') }}
+          </button>
+        </span>
+        <span class="gp__turn">
+          <button type="button" class="key" :disabled="busy || spacing <= MIN_HEDGE_SPACING"
+                  :title="$t('garden.closer')" :aria-label="$t('garden.closer')" @click="bumpSpacing(-1)">
+            <StrokeIcon name="minus" :size="16" />
+          </button>
+          <span class="gp__val">
+            <input class="gp__num" type="text" inputmode="decimal" enterkeyhint="done"
+                   :value="editingSpacing ? spacingDraft : spacing.toFixed(2)" :disabled="busy" :aria-label="$t('garden.spacing')"
+                   @focus="startSpacing($event)"
+                   @mouseup.prevent
+                   @input="spacingDraft = ($event.target as HTMLInputElement).value"
+                   @keydown.enter="($event.target as HTMLInputElement).blur()"
+                   @keydown.esc="editingSpacing = false; ($event.target as HTMLInputElement).blur()"
+                   @blur="commitSpacing">
+            <span class="gp__unit">m</span>
+          </span>
+          <button type="button" class="key" :disabled="busy || spacing >= MAX_HEDGE_SPACING"
+                  :title="$t('garden.farther')" :aria-label="$t('garden.farther')" @click="bumpSpacing(1)">
+            <StrokeIcon name="plus" :size="16" />
+          </button>
+        </span>
+      </div>
+
       <div class="gp__row">
         <span class="muted">{{ $t('garden.yaw') }}</span>
         <span class="gp__turn">
@@ -274,7 +334,7 @@ onBeforeUnmount(() => clearTimeout(disarm))
       </div>
 
       <div class="gp__row gp__bottom">
-        <button type="button" class="pill gp__btn" :disabled="busy || item.kind === 'hedge'" @click="house.reshapeGardenItem()">
+        <button type="button" class="pill gp__btn" :disabled="busy" @click="house.reshapeGardenItem()">
           <StrokeIcon name="sparkle" :size="14" /> {{ $t('garden.reshape') }}
         </button>
         <button type="button" class="pill gp__btn gp__remove" :class="{ 'gp__remove--armed': removeArmed }" :disabled="busy" @click="clickRemove">
@@ -301,6 +361,12 @@ onBeforeUnmount(() => clearTimeout(disarm))
 .gp__species { display: flex; flex-wrap: wrap; gap: 6px; min-height: 30px; }
 .gp__sp[data-on='1'] { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 .gp__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+/* libellé et pastille empilés : côte à côte, ils faisaient déborder la carte de 23 px */
+.gp__lab { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+/* pastille « auto » : largeur fixe, qu'elle porte l'icône de retour ou non */
+.gp__auto { box-sizing: border-box; width: 76px; height: 24px; min-height: 0; padding: 0 8px; justify-content: center; gap: 4px; font-size: 11px; line-height: 1; }
+.gp__auto[data-on='1'] { background: transparent; color: var(--muted); border-color: var(--border, currentColor); }
+.gp__auto[data-on='1']:disabled { opacity: 1; }
 .gp__turn { display: inline-flex; align-items: center; gap: 6px; }
 .gp__val { display: inline-flex; align-items: baseline; gap: 1px; }
 /* largeur fixe (« 12.34 ») : la valeur change sans déplacer les touches */

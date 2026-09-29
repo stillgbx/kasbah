@@ -19,6 +19,14 @@ const FOOT_M = 0.12
 
 const cache = new Map<string, GardenShape>()
 
+/** Rayon d'une masse d'une haie de `width` m : de quoi remplir la largeur, borné pour une haie très large. */
+const massRadius = (width: number) => Math.min(0.5, Math.max(0.12, width * 0.38))
+
+/** Espacement automatique entre deux sujets (m) : plus serré que leur largeur, les feuillages se chevauchent. */
+export function autoHedgeSpacing(width: number): number {
+  return massRadius(width) * 1.2
+}
+
 /** Une teinte un peu plus claire ou plus sombre : deux sujets voisins ne sont pas du même vert. */
 function shade(c: Color, k: number): Color {
   return c.clone().multiplyScalar(k)
@@ -27,13 +35,14 @@ function shade(c: Color, k: number): Color {
 /**
  * La haie de `length` × `width` × `height` mètres en `season`. `recipe` : l'espèce (couleurs de saison,
  * bosselage, écorce, fleurs) ; `styled` : sous la palette d'un style, ombrage seul (la teinte vient de
- * l'instance).
+ * l'instance). `spacing` : de pied à pied (m) ; absent = automatique, réparti sur la longueur. `seed` : le tirage.
  */
-export function hedgeShape(length: number, season: Season, recipe?: SpeciesRecipe, styled = false, width = DEFAULT_HEDGE_WIDTH, height = 1.8): GardenShape {
-  const key = `${length.toFixed(2)}:${width.toFixed(2)}:${height.toFixed(2)}:${season}:${styled}:${recipe ? JSON.stringify(recipe) : '-'}`
+export function hedgeShape(length: number, season: Season, recipe?: SpeciesRecipe, styled = false, width = DEFAULT_HEDGE_WIDTH, height = 1.8, spacing?: number, seed = 0): GardenShape {
+  const key = `${seed}:${length.toFixed(2)}:${width.toFixed(2)}:${height.toFixed(2)}:${spacing?.toFixed(2) ?? 'auto'}:${season}:${styled}:${recipe ? JSON.stringify(recipe) : '-'}`
   const hit = cache.get(key)
   if (hit) return hit
-  const next = rng(0x2545f491 ^ Math.round(length * 100) ^ (Math.round(width * 100) << 12))
+  // la graine de l'élément : « une autre forme » retire les sujets, comme pour un arbre
+  const next = rng(0x2545f491 ^ Math.round(length * 100) ^ (Math.round(width * 100) << 12) ^ Math.imul(seed, 0x9e3779b1))
   const L = length, D = width, H = height
   const rough = recipe?.crown.roughness ?? 0.15
   const over = recipe?.seasons?.[season] ?? {}
@@ -41,18 +50,21 @@ export function hedgeShape(length: number, season: Season, recipe?: SpeciesRecip
   const leafGradient = recipe && !styled && leafColors ? ([new Color(leafColors.color), new Color(leafColors.top)] as const) : undefined
   const barkColor = recipe && !styled ? new Color(recipe.trunk.color) : undefined
 
-  // taille d'une masse : de quoi remplir la largeur en une ou quelques colonnes, bornée pour une haie très large
-  const r = Math.min(0.5, Math.max(0.12, D * 0.38))
+  const r = massRadius(D)
   const cols = Math.max(1, Math.round(D / (r * 1.3)))
-  const step = r * 1.2                                   // sujets plus serrés que leur largeur : les feuillages se chevauchent
   const inset = r * 1.2                                 // les sujets des bouts restent dans la longueur réglée
-  const n = Math.max(1, Math.round((L - 2 * inset) / step) + 1)
-  const pitch = n > 1 ? (L - 2 * inset) / (n - 1) : 0
+  const span = Math.max(0, L - 2 * inset)
+  // automatique : autant de sujets que l'espacement serré en loge, répartis sur la longueur ; réglé :
+  // l'espacement exact, la rangée centrée sur le segment (au-delà de la largeur d'un sujet, des trous)
+  const step = spacing ?? autoHedgeSpacing(D)
+  const n = Math.max(1, (spacing === undefined ? Math.round(span / step) : Math.floor(span / step + 1e-6)) + 1)
+  const pitch = n > 1 ? (spacing === undefined ? span / (n - 1) : step) : 0
+  const start = -((n - 1) * pitch) / 2
 
   const leaf: BufferGeometry[] = []
   const bark: BufferGeometry[] = []
   for (let p = 0; p < n; p++) {
-    const x0 = n > 1 ? -L / 2 + inset + p * pitch + (p > 0 && p < n - 1 ? (next() - 0.5) * pitch * 0.25 : 0) : 0
+    const x0 = start + p * pitch + (p > 0 && p < n - 1 ? (next() - 0.5) * Math.min(pitch * 0.25, r * 0.5) : 0)
     const top = H * (0.9 + next() * 0.1)                 // chaque sujet a sa hauteur : le dessus se découpe
     // Masses ÉTIRÉES en hauteur, inégales et décalées : un sujet est un arbuste, pas une colonne de
     // billes. Rondes et en grille, elles faisaient une « pile de boules » (le premier raté des arbres).
