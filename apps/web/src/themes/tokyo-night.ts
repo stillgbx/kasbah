@@ -1,7 +1,9 @@
 import type { Theme } from './index'
 
 // Tokyo Night d'Enkia, valeurs reprises de tokyonight.nvim (variantes `night` et `day`). Le texte
-// du mode clair est un bleu (#3760bf) et non un noir : c'est la signature de la déclinaison Day.
+// du mode clair est un bleu et non un noir : c'est la signature de la déclinaison Day. Ce bleu
+// (#3760bf) et `fg_dark` (#6172b0) sont foncés à teinte égale : sur le fond, ils tombaient à 4 et
+// 3,2:1, sous le 4,5:1 d'un texte lisible.
 export const tokyoNight = {
   id: 'tokyo-night',
   label: 'Tokyo Night',
@@ -9,7 +11,7 @@ export const tokyoNight = {
   darkLabel: 'Night',
   light: {
     bg: '#d0d5e3', surface: '#e1e2e7', surface2: '#d6dae6', bright: '#eef0f5',
-    text: '#3760bf', muted: '#6172b0', accent: '#2e7de9',
+    text: '#2349a6', muted: '#495894', accent: '#2e7de9',
     error: '#f52a65', warning: '#8c6c3e', info: '#007197', success: '#587539',
     catLight: '#8c6c3e', catCover: '#118c74', catCamera: '#9854f1', catMedia: '#007197',
   },

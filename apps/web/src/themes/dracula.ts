@@ -1,7 +1,9 @@
 import type { Theme } from './index'
 
 // Dracula et son pendant clair officiel Alucard (draculatheme.com/spec). Les deux palettes ne
-// publient que le fond de l'éditeur : les paliers de surface en sont des nuances voisines.
+// publient que le fond de l'éditeur : les paliers de surface en sont des nuances voisines. Le texte
+// secondaire sombre est le bleu « comment » (#6272a4) éclairci à teinte égale : l'original tombait
+// à 3:1 sur la surface, sous le 4,5:1 exigé d'un texte qui porte de l'information.
 export const dracula = {
   id: 'dracula',
   label: 'Dracula',
@@ -15,7 +17,7 @@ export const dracula = {
   },
   dark: {
     bg: '#21222c', surface: '#282a36', surface2: '#343746', bright: '#44475a',
-    text: '#f8f8f2', muted: '#6272a4', accent: '#bd93f9',
+    text: '#f8f8f2', muted: '#8192c6', accent: '#bd93f9',
     error: '#ff5555', warning: '#ffb86c', info: '#8be9fd', success: '#50fa7b',
     catLight: '#f1fa8c', catCover: '#50fa7b', catCamera: '#ff79c6', catMedia: '#8be9fd',
   },

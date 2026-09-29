@@ -7,7 +7,7 @@ export const kasbah = {
   label: 'Kasbah',
   light: {
     bg: '#e9edf1', surface: '#ffffff', surface2: '#f2f5f8', bright: '#ffffff',
-    text: '#141a22', muted: '#66717f', accent: '#1f6f78',
+    text: '#141a22', muted: '#5f6a78', accent: '#1f6f78',
     error: '#d24a43', warning: '#d38b22', info: '#3f7fbf', success: '#4f7a4a',
     catLight: '#d18f0a', catCover: '#5b7086', catCamera: '#7a4fcf', catMedia: '#1a73d8',
   },

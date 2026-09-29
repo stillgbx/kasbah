@@ -49,11 +49,25 @@ describe('registre des thèmes', () => {
     expect(themeById('inconnu').id).toBe(THEME_LIST[0]!.id)
   })
 
-  it('pose un texte lisible sur l’accent et le texte sur le fond', () => {
+  it('pose un texte lisible sur l’accent', () => {
     for (const t of THEME_LIST) {
       for (const p of [t.light, t.dark].filter((x): x is Palette => !!x)) {
         expect(contrast(p.accent, onAccent(p)), `${t.id} on-accent`).toBeGreaterThanOrEqual(3)
-        expect(contrast(p.text, p.surface), `${t.id} texte`).toBeGreaterThanOrEqual(4.5)
+      }
+    }
+  })
+
+  // `muted` porte de l'information réelle (sous-titres d'appareils, lignes de la recherche) : il doit
+  // tenir l'AA 4,5:1 comme le texte principal, sur la surface comme sur le fond de page.
+  it('tient l’AA 4,5:1 pour le texte et le texte secondaire, sur la surface et le fond', () => {
+    for (const t of THEME_LIST) {
+      for (const [mode, p] of [['clair', t.light], ['sombre', t.dark]] as const) {
+        if (!p) continue
+        for (const role of ['text', 'muted'] as const) {
+          for (const ground of ['surface', 'bg'] as const) {
+            expect(contrast(p[role], p[ground]), `${t.id} ${mode} ${role}/${ground}`).toBeGreaterThanOrEqual(4.5)
+          }
+        }
       }
     }
   })
