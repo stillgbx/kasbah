@@ -50,7 +50,7 @@ function toggle(kind: GardenKind, species?: string) {
 
 <style scoped>
 .block { display: grid; gap: 8px; margin-bottom: 16px; }
-.kinds { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.kinds { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .kind {
   display: grid; justify-items: center; gap: 4px; padding: 8px 2px; min-width: 0;
   border: 1px solid transparent; border-radius: var(--radius); background: var(--surface2);

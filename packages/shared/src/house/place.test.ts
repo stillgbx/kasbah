@@ -423,6 +423,15 @@ describe('éléments du jardin', () => {
     expect(garden(patchGardenItemInJson(cherry, 'oak-1', { species: '' }))[0]).not.toHaveProperty('species')
   })
 
+  it('une haie porte sa longueur et sa largeur, posées puis réglées, dans les bornes', () => {
+    const hedge = addGardenItemToJson(demo, { id: 'hedge-1', kind: 'hedge', center: [0, 0], height: 1.8, length: 4 })
+    expect(parseHouse(hedge).site.garden[0]).toMatchObject({ kind: 'hedge', length: 4 })
+    expect(garden(patchGardenItemInJson(hedge, 'hedge-1', { length: 7.5 }))[0]!.length).toBe(7.5)
+    expect(() => parseHouse(patchGardenItemInJson(hedge, 'hedge-1', { length: 0.1 }))).toThrow()
+    expect(garden(patchGardenItemInJson(hedge, 'hedge-1', { width: 1.2 }))[0]!.width).toBe(1.2)
+    expect(() => parseHouse(patchGardenItemInJson(hedge, 'hedge-1', { width: 9 }))).toThrow()
+  })
+
   it('retire un élément', () => {
     expect(garden(removeGardenItemFromJson(base, 'oak-1'))).toEqual([])
     expect(() => removeGardenItemFromJson(base, 'nope')).toThrow(PlacementError)

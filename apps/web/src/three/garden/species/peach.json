@@ -1,0 +1,16 @@
+{
+  "id": "peach",
+  "kind": "broadleaf",
+  "name": { "fr": "Pêcher", "en": "Peach tree" },
+  "height": 4,
+  "trunk": { "height": 0.28, "radius": 0.035, "lean": 0.1, "forks": 4, "color": "#54493a" },
+  "crown": { "shape": "spreading", "width": 1.3, "masses": 10, "roughness": 0.3, "droop": 0.3 },
+  "leaf": { "color": "#567a30", "top": "#8aae5c" },
+  "accent": { "color": "#d8743a", "count": 70, "size": 0.03 },
+  "seasons": {
+    "spring": { "foliage": 0.3, "leaf": { "color": "#94bb58", "top": "#bcd888" }, "accent": { "color": "#f0a3bc", "count": 150, "size": 0.03 } },
+    "autumn": { "foliage": 0.7, "leaf": { "color": "#c08a2c", "top": "#e2b44c" }, "accent": null },
+    "winter": { "foliage": 0, "accent": null }
+  },
+  "source": "Deux photos de pêchers en fruits (verger conduit en gobelet, et jardin), fournies le 2026-09-29 (images/2.webp et 3.webp de la session). Feuillage mesuré par scripts/photo-palette.mjs (#7a8651 et #517630 au cœur, #7aa65b côté lumière) ; tronc mesuré (#484836 / #59623c) puis réchauffé vers le brun ; fruit mesuré #9e652b au soleil, ravivé vers l'orangé rosé. Floraison rose avant les feuilles, jaune d'automne et caducité déduits de la botanique."
+}

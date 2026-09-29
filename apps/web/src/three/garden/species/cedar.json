@@ -1,0 +1,14 @@
+{
+  "id": "cedar",
+  "kind": "conifer",
+  "name": { "fr": "Cèdre du Liban", "en": "Cedar of Lebanon" },
+  "height": 20,
+  "trunk": { "height": 0.3, "radius": 0.04, "lean": 0.03, "forks": 4, "color": "#4a4840" },
+  "crown": { "shape": "tiered", "width": 1, "masses": 16, "roughness": 0.25, "droop": 0.3, "tiers": 4 },
+  "leaf": { "color": "#2f5646", "top": "#6a8a7c" },
+  "seasons": {
+    "spring": { "leaf": { "color": "#2f5646", "top": "#86a88a" } },
+    "autumn": { "accent": { "color": "#8a7a52", "count": 25, "size": 0.02 } }
+  },
+  "source": "Photo d'un vieux cèdre du Liban isolé devant une maison, fournie le 2026-09-29 (images/7.webp de la session). Feuillage mesuré par scripts/photo-palette.mjs (#303b33 au cœur, #616c60 et #707d78 en haut, vert bleuté) puis ravivé ; tronc mesuré à l'ombre (#2e2f26) et éclairci. Persistant : pousses claires au printemps et cônes dressés en automne déduits de la botanique. Port en plateaux : `tiered` à 4 étages (le `cone` du générateur empile des cônes, silhouette du jeune cèdre, pas du vieux)."
+}

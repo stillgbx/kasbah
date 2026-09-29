@@ -1,0 +1,15 @@
+{
+  "id": "ginkgo",
+  "kind": "broadleaf",
+  "name": { "fr": "Ginkgo", "en": "Ginkgo" },
+  "height": 10,
+  "trunk": { "height": 0.2, "radius": 0.022, "lean": 0.03, "forks": 3, "color": "#6a5f4c" },
+  "crown": { "shape": "oval", "width": 0.7, "masses": 9, "roughness": 0.3, "droop": 0.1 },
+  "leaf": { "color": "#5e8a2e", "top": "#94b85a" },
+  "seasons": {
+    "spring": { "leaf": { "color": "#9cc45a", "top": "#c6de8a" } },
+    "autumn": { "leaf": { "color": "#d19b0d", "top": "#e9b929" } },
+    "winter": { "foliage": 0 }
+  },
+  "source": "Deux photos fournies le 2026-09-29 (images/4.webp et 5.webp de la session). La première, un jeune ginkgo au port ovoïde dressé à flèche centrale, montre le DÉBUT du jaunissement (#77761a / #b1ae42 mesurés) : elle sert à la silhouette. La seconde, un vieux sujet en plein automne, donne l'automne mesuré par scripts/photo-palette.mjs (#d19b0d au cœur, #e9b929 en haut). Tronc entre les deux mesures (#444532 à l'ombre, #a48454 au soleil). Vert d'été, vert tendre du printemps, chute d'un bloc en hiver et absence de fruits (sujets mâles, les plus plantés) déduits de la botanique."
+}

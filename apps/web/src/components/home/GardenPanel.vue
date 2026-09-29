@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { GARDEN_KINDS, MAX_GARDEN_HEIGHT, MIN_GARDEN_HEIGHT, type GardenKind } from '@kasbah/shared'
+import { DEFAULT_HEDGE_LENGTH, DEFAULT_HEDGE_WIDTH, GARDEN_KINDS, MAX_GARDEN_HEIGHT, MAX_HEDGE_LENGTH, MAX_HEDGE_WIDTH, MIN_GARDEN_HEIGHT, MIN_HEDGE_LENGTH, MIN_HEDGE_WIDTH, type GardenKind } from '@kasbah/shared'
 import { useHouseStore } from '../../stores/house'
 import { GARDEN_ICON } from '../../lib/gardenIcons'
 import { SPECIES, speciesOf, type SpeciesRecipe } from '../../three/garden/species'
@@ -56,6 +56,56 @@ function commitHeight() {
   if (!Number.isFinite(raw) || raw <= 0) return
   const next = clampHeight(raw)
   if (next !== height.value) void house.saveGardenItem({ height: next })
+}
+
+// --- longueur d'une haie : pas de 50 cm
+const LENGTH_STEP = 0.5
+const clampLength = (v: number) => Math.min(MAX_HEDGE_LENGTH, Math.max(MIN_HEDGE_LENGTH, round(v)))
+const length = computed(() => item.value?.length ?? DEFAULT_HEDGE_LENGTH)
+function bumpLength(sign: 1 | -1) {
+  const next = clampLength(length.value + sign * LENGTH_STEP)
+  if (next !== length.value) void house.saveGardenItem({ length: next })
+}
+const editingLength = ref(false)
+const lengthDraft = ref('')
+function startLength(ev?: FocusEvent) {
+  editingLength.value = true
+  lengthDraft.value = length.value.toFixed(2)
+  const el = ev?.target as HTMLInputElement | undefined
+  if (el) void nextTick(() => el.select())
+}
+function commitLength() {
+  if (!editingLength.value) return
+  editingLength.value = false
+  const raw = Number(lengthDraft.value.replace(',', '.').trim())
+  if (!Number.isFinite(raw) || raw <= 0) return
+  const next = clampLength(raw)
+  if (next !== length.value) void house.saveGardenItem({ length: next })
+}
+
+// --- largeur d'une haie : pas de 10 cm
+const WIDTH_STEP = 0.1
+const clampWidth = (v: number) => Math.min(MAX_HEDGE_WIDTH, Math.max(MIN_HEDGE_WIDTH, round(v)))
+const width = computed(() => item.value?.width ?? DEFAULT_HEDGE_WIDTH)
+function bumpWidth(sign: 1 | -1) {
+  const next = clampWidth(width.value + sign * WIDTH_STEP)
+  if (next !== width.value) void house.saveGardenItem({ width: next })
+}
+const editingWidth = ref(false)
+const widthDraft = ref('')
+function startWidth(ev?: FocusEvent) {
+  editingWidth.value = true
+  widthDraft.value = width.value.toFixed(2)
+  const el = ev?.target as HTMLInputElement | undefined
+  if (el) void nextTick(() => el.select())
+}
+function commitWidth() {
+  if (!editingWidth.value) return
+  editingWidth.value = false
+  const raw = Number(widthDraft.value.replace(',', '.').trim())
+  if (!Number.isFinite(raw) || raw <= 0) return
+  const next = clampWidth(raw)
+  if (next !== width.value) void house.saveGardenItem({ width: next })
 }
 
 // --- cap : sens trigonométrique, comme une place (la touche de gauche fait tourner à gauche)
@@ -150,6 +200,56 @@ onBeforeUnmount(() => clearTimeout(disarm))
         </span>
       </div>
 
+      <div v-if="item.kind === 'hedge'" class="gp__row">
+        <span class="muted">{{ $t('garden.length') }}</span>
+        <span class="gp__turn">
+          <button type="button" class="key" :disabled="busy || length <= MIN_HEDGE_LENGTH"
+                  :title="$t('garden.shorter')" :aria-label="$t('garden.shorter')" @click="bumpLength(-1)">
+            <StrokeIcon name="minus" :size="16" />
+          </button>
+          <span class="gp__val">
+            <input class="gp__num" type="text" inputmode="decimal" enterkeyhint="done"
+                   :value="editingLength ? lengthDraft : length.toFixed(2)" :disabled="busy" :aria-label="$t('garden.length')"
+                   @focus="startLength($event)"
+                   @mouseup.prevent
+                   @input="lengthDraft = ($event.target as HTMLInputElement).value"
+                   @keydown.enter="($event.target as HTMLInputElement).blur()"
+                   @keydown.esc="editingLength = false; ($event.target as HTMLInputElement).blur()"
+                   @blur="commitLength">
+            <span class="gp__unit">m</span>
+          </span>
+          <button type="button" class="key" :disabled="busy || length >= MAX_HEDGE_LENGTH"
+                  :title="$t('garden.longer')" :aria-label="$t('garden.longer')" @click="bumpLength(1)">
+            <StrokeIcon name="plus" :size="16" />
+          </button>
+        </span>
+      </div>
+
+      <div v-if="item.kind === 'hedge'" class="gp__row">
+        <span class="muted">{{ $t('garden.width') }}</span>
+        <span class="gp__turn">
+          <button type="button" class="key" :disabled="busy || width <= MIN_HEDGE_WIDTH"
+                  :title="$t('garden.narrower')" :aria-label="$t('garden.narrower')" @click="bumpWidth(-1)">
+            <StrokeIcon name="minus" :size="16" />
+          </button>
+          <span class="gp__val">
+            <input class="gp__num" type="text" inputmode="decimal" enterkeyhint="done"
+                   :value="editingWidth ? widthDraft : width.toFixed(2)" :disabled="busy" :aria-label="$t('garden.width')"
+                   @focus="startWidth($event)"
+                   @mouseup.prevent
+                   @input="widthDraft = ($event.target as HTMLInputElement).value"
+                   @keydown.enter="($event.target as HTMLInputElement).blur()"
+                   @keydown.esc="editingWidth = false; ($event.target as HTMLInputElement).blur()"
+                   @blur="commitWidth">
+            <span class="gp__unit">m</span>
+          </span>
+          <button type="button" class="key" :disabled="busy || width >= MAX_HEDGE_WIDTH"
+                  :title="$t('garden.wider')" :aria-label="$t('garden.wider')" @click="bumpWidth(1)">
+            <StrokeIcon name="plus" :size="16" />
+          </button>
+        </span>
+      </div>
+
       <div class="gp__row">
         <span class="muted">{{ $t('garden.yaw') }}</span>
         <span class="gp__turn">
@@ -174,7 +274,7 @@ onBeforeUnmount(() => clearTimeout(disarm))
       </div>
 
       <div class="gp__row gp__bottom">
-        <button type="button" class="pill gp__btn" :disabled="busy" @click="house.reshapeGardenItem()">
+        <button type="button" class="pill gp__btn" :disabled="busy || item.kind === 'hedge'" @click="house.reshapeGardenItem()">
           <StrokeIcon name="sparkle" :size="14" /> {{ $t('garden.reshape') }}
         </button>
         <button type="button" class="pill gp__btn gp__remove" :class="{ 'gp__remove--armed': removeArmed }" :disabled="busy" @click="clickRemove">
@@ -197,7 +297,7 @@ onBeforeUnmount(() => clearTimeout(disarm))
 
 .gp { padding: 12px 14px; font-size: 13px; display: grid; gap: 10px; }
 .gp__label { font-size: 12px; }
-.gp__kinds { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.gp__kinds { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
 .gp__species { display: flex; flex-wrap: wrap; gap: 6px; min-height: 30px; }
 .gp__sp[data-on='1'] { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 .gp__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }

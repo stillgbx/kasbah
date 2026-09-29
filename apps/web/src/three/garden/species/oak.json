@@ -1,0 +1,15 @@
+{
+  "id": "oak",
+  "kind": "broadleaf",
+  "name": { "fr": "Chêne", "en": "Oak" },
+  "height": 18,
+  "trunk": { "height": 0.33, "radius": 0.03, "lean": 0.02, "forks": 4, "color": "#4e4a40" },
+  "crown": { "shape": "round", "width": 0.95, "masses": 12, "roughness": 0.3, "droop": 0.15 },
+  "leaf": { "color": "#4f6a2a", "top": "#8a9a52" },
+  "seasons": {
+    "spring": { "leaf": { "color": "#8fb04e", "top": "#b8cf7a" } },
+    "autumn": { "foliage": 0.8, "leaf": { "color": "#9a6a2a", "top": "#c08a3a" }, "accent": { "color": "#7a5a26", "count": 40, "size": 0.015 } },
+    "winter": { "foliage": 0 }
+  },
+  "source": "Photo d'un grand chêne pédonculé isolé dans un parc, fournie le 2026-09-29 (images/6.webp de la session). Feuillage mesuré par scripts/photo-palette.mjs (#5c5f3a au cœur, #969a71 en haut) puis ravivé : la photo est voilée. Tronc mesuré à l'ombre (#36332b) et éclairci. Débourrement tendre, feuillage roux d'automne avec glands, chute en hiver (le sujet adulte ne garde pas ses feuilles sèches) déduits de la botanique."
+}

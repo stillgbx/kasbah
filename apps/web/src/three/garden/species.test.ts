@@ -57,6 +57,37 @@ describe('espèces du jardin', () => {
     for (const season of ['summer', 'winter'] as const) expect(low(at(0.02, season)), season).toBeGreaterThan(low(at(undefined, season)) * 2)
   })
 
+  it('spread écarte les pieds des charpentières au lieu d\'un seul point', () => {
+    const fig = SPECIES.find((s) => s.id === 'fig')!
+    const bark = (spread?: number) => speciesShape({ ...fig, trunk: { ...fig.trunk, forkAt: 0.02, spread } }, 0, 'summer')
+      .parts.find((p) => p.part === 'bark')!.geometry.getAttribute('position')
+    // écart horizontal maximal des sommets au pied (z < 0,05), loin de l'axe quand les chaumes sont écartés
+    const foot = (pos: ReturnType<typeof bark>) => {
+      let d = 0
+      for (let i = 0; i < pos.count; i++) if (pos.getZ(i) < 0.05) d = Math.max(d, Math.hypot(pos.getX(i), pos.getY(i)))
+      return d
+    }
+    expect(foot(bark(0.1))).toBeGreaterThan(foot(bark()) * 1.5)
+  })
+
+  it('tiered pose des plateaux plats, étagés et de plus en plus étroits', () => {
+    const cherry = SPECIES.find((s) => s.id === 'cherry')!
+    const recipe = { ...cherry, trunk: { ...cherry.trunk, height: 0.3 }, crown: { ...cherry.crown, shape: 'tiered' as const, width: 1.2, tiers: 3 } }
+    const leaf = speciesShape(recipe, 0, 'summer').parts.find((p) => p.part === 'leaf')!.geometry
+    leaf.computeBoundingBox()
+    const box = leaf.boundingBox!
+    expect(box.max.x - box.min.x).toBeGreaterThan(box.max.z - box.min.z)   // plus large que haut
+    // tranche basse plus large que tranche haute
+    const pos = leaf.getAttribute('position')
+    const span = (lo: number, hi: number) => {
+      let d = 0
+      for (let i = 0; i < pos.count; i++) if (pos.getZ(i) >= lo && pos.getZ(i) < hi) d = Math.max(d, Math.hypot(pos.getX(i), pos.getY(i)))
+      return d
+    }
+    const mid = (box.min.z + box.max.z) / 2
+    expect(span(box.min.z, mid)).toBeGreaterThan(span(mid, box.max.z))
+  })
+
   it('une espèce d\'une autre famille est ignorée', () => {
     expect(speciesOf({ kind: 'broadleaf', species: 'cherry' })?.id).toBe('cherry')
     expect(speciesOf({ kind: 'palm', species: 'cherry' })).toBeUndefined()

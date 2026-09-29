@@ -615,14 +615,14 @@
   "garden": {
     "list": "Garden", "add": "Plant", "done": "Done",
     "count": "{n} item | {n} item | {n} items", "none": "No trees, shrubs or stones yet.",
-    "kinds": { "broadleaf": "Tree", "conifer": "Conifer", "palm": "Palm", "shrub": "Shrub", "rock": "Stone" },
+    "kinds": { "broadleaf": "Tree", "conifer": "Conifer", "palm": "Palm", "shrub": "Shrub", "rock": "Stone", "hedge": "Hedge" },
     "placeHint": "Tap the ground in the 3D view: each tap places an item.",
     "hint": "Pick a family, then tap the ground. Tap an item to adjust or drag it.",
-    "height": "Height", "yaw": "Orientation", "kind": "Family", "species": "Species", "generic": "Generic",
+    "height": "Height", "length": "Length", "width": "Width", "yaw": "Orientation", "kind": "Family", "species": "Species", "generic": "Generic",
     "reshape": "Another shape",
     "whereHint": "Adjust it here, or drag it along the ground in the 3D view.",
     "remove": "Delete", "removeConfirm": "Confirm deletion",
-    "smaller": "Smaller", "bigger": "Bigger",
+    "smaller": "Smaller", "bigger": "Bigger", "shorter": "Shorten", "longer": "Lengthen", "narrower": "Narrower", "wider": "Wider",
     "saveError": "Garden item not saved: {message}"
   },
   "parking": {

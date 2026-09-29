@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { deviceIdSchema } from '../devices/descriptor'
-import { defaultPlugins, GARDEN_KINDS, hexColorSchema, MAX_GARDEN_HEIGHT, MIN_GARDEN_HEIGHT, MAX_OPENING_LEAVES, MIN_OPENING_LEAVES, MIN_PARKING_DIM, model3dSchema, MOUNTS, NEUTRAL_TUNING, OPENING_MATERIALS, OPENING_TYPES, SPEAKER_SHAPES, vec2Schema, vec3Schema, type PluginSettingsPatch, type Relief, type SceneTuning } from './schema'
+import { defaultPlugins, GARDEN_KINDS, hexColorSchema, MAX_GARDEN_HEIGHT, MAX_HEDGE_LENGTH, MAX_HEDGE_WIDTH, MIN_GARDEN_HEIGHT, MIN_HEDGE_LENGTH, MIN_HEDGE_WIDTH, MAX_OPENING_LEAVES, MIN_OPENING_LEAVES, MIN_PARKING_DIM, model3dSchema, MOUNTS, NEUTRAL_TUNING, OPENING_MATERIALS, OPENING_TYPES, SPEAKER_SHAPES, vec2Schema, vec3Schema, type PluginSettingsPatch, type Relief, type SceneTuning } from './schema'
 import { DEVICE_KINDS, VEHICLE_FINISHES } from '../devices/kinds'
 import { computeHouseGeometry, openingCentre } from './geometry'
 import { parseHouse } from './validate'
@@ -743,6 +743,10 @@ export const newGardenItemSchema = z.object({
   center: vec2Schema,
   height: z.number().min(MIN_GARDEN_HEIGHT).max(MAX_GARDEN_HEIGHT),
   yaw: z.number().min(-360).max(360).optional(),
+  /** Longueur d'une haie (m). */
+  length: z.number().min(MIN_HEDGE_LENGTH).max(MAX_HEDGE_LENGTH).optional(),
+  /** Largeur d'une haie (m). */
+  width: z.number().min(MIN_HEDGE_WIDTH).max(MAX_HEDGE_WIDTH).optional(),
   seed: z.number().int().min(0).optional(),
   /** Espèce du catalogue de l'app. Dans un réglage, la chaîne vide l'EFFACE (retour à la famille). */
   species: z.string().regex(/^([a-z0-9_.-]+)?$/i).max(60).optional(),
@@ -767,6 +771,8 @@ export function addGardenItemToJson(doc: unknown, item: NewGardenItem): JsonObje
   if (list.some((g) => isObject(g) && g.id === item.id)) throw new PlacementError(`garden item "${item.id}" already exists`)
   const next: JsonObject = { id: item.id, kind: item.kind, center: item.center, height: item.height }
   if (item.yaw) next.yaw = item.yaw
+  if (item.length !== undefined) next.length = item.length
+  if (item.width !== undefined) next.width = item.width
   if (item.seed !== undefined) next.seed = item.seed
   if (item.species) next.species = item.species
   return { ...doc, site: { ...site, garden: [...list, next] } }
@@ -779,7 +785,7 @@ export function patchGardenItemInJson(doc: unknown, id: string, patch: GardenIte
   const i = list.findIndex((g) => isObject(g) && g.id === id)
   if (i < 0) throw new PlacementError(`unknown garden item "${id}"`)
   const next: JsonObject = { ...(list[i] as JsonObject) }
-  for (const key of ['kind', 'center', 'height', 'seed'] as const) if (patch[key] !== undefined) next[key] = patch[key]
+  for (const key of ['kind', 'center', 'height', 'length', 'width', 'seed'] as const) if (patch[key] !== undefined) next[key] = patch[key]
   // un cap nul n'est pas écrit : c'est la valeur par défaut
   if (patch.yaw !== undefined) { if (patch.yaw) next.yaw = patch.yaw; else delete next.yaw }
   if (patch.species !== undefined) { if (patch.species) next.species = patch.species; else delete next.species }

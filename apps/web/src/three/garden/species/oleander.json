@@ -1,0 +1,16 @@
+{
+  "id": "oleander",
+  "kind": "shrub",
+  "name": { "fr": "Laurier rose", "en": "Oleander" },
+  "height": 2.5,
+  "trunk": { "height": 0.12, "radius": 0.02, "lean": 0.04, "forks": 4, "forkAt": 0.02, "color": "#6a5040" },
+  "crown": { "shape": "oval", "width": 1, "masses": 10, "roughness": 0.3, "droop": 0.1 },
+  "leaf": { "color": "#3f5a32", "top": "#7b8a60" },
+  "accent": { "color": "#e79aa8", "count": 200, "size": 0.045 },
+  "seasons": {
+    "spring": { "leaf": { "color": "#3f5a32", "top": "#94a870" }, "accent": null },
+    "autumn": { "accent": { "color": "#e79aa8", "count": 70, "size": 0.045 } },
+    "winter": { "accent": null }
+  },
+  "source": "Photo d'un laurier rose en pot devant une toise (environ 1,9 m de plante), fournie le 2026-09-29 (images/11.webp de la session). Feuillage mesuré par scripts/photo-palette.mjs (#3d4c30 au cœur, vert-gris ravivé ; #7b846a en haut) ; fleurs mesurées #d6a7a9 et ravivées en rose saumon ; tiges cachées, estimées. Port en cépée (forkAt au pied). Persistant ; floraison de juin à septembre (pleine l'été, finissante l'automne), pousses claires au printemps déduites de la botanique. Hauteur proposée plus grande qu'en pot : 2,5 m en pleine terre."
+}

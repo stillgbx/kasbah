@@ -1,0 +1,14 @@
+{
+  "id": "stone-pine",
+  "kind": "conifer",
+  "name": { "fr": "Pin parasol", "en": "Stone pine" },
+  "height": 15,
+  "trunk": { "height": 0.62, "radius": 0.025, "lean": 0.08, "forks": 3, "forkAt": 0.35, "color": "#6a5a4a" },
+  "crown": { "shape": "tiered", "width": 1.3, "masses": 10, "roughness": 0.15, "droop": 0.2, "tiers": 1 },
+  "leaf": { "color": "#4a6a28", "top": "#8ca951" },
+  "accent": { "color": "#7a5a36", "count": 15, "size": 0.025 },
+  "seasons": {
+    "spring": { "leaf": { "color": "#4a6a28", "top": "#a8c070" } }
+  },
+  "source": "Photo d'un bouquet de pins parasols sur une dune, fournie le 2026-09-29 (images/8.png de la session) ; silhouette lue sur le sujet de droite, isolé. Feuillage mesuré par scripts/photo-palette.mjs (#546e2e au cœur, #8ca951 en haut) ; tronc mesuré gris à l'ombre (#3b3a3c) et réchauffé vers le brun-rouge de l'écorce en plaques (estimé). Persistant ; pousses claires au printemps et pommes de pin toute l'année déduites de la botanique. Charpentières nues qui partent à 35 % (forkAt) sous un parasol posé à 62 %, en un seul plateau (`tiered`, tiers 1)."
+}

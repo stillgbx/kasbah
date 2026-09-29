@@ -1,0 +1,13 @@
+{
+  "id": "golden-bamboo",
+  "kind": "broadleaf",
+  "name": { "fr": "Bambou doré", "en": "Golden bamboo" },
+  "height": 6,
+  "trunk": { "height": 0.4, "radius": 0.012, "lean": 0.05, "forks": 6, "forkAt": 0.01, "spread": 0.07, "color": "#c4ad52" },
+  "crown": { "shape": "column", "width": 0.5, "masses": 12, "roughness": 0.3, "droop": 0.35 },
+  "leaf": { "color": "#3e6440", "top": "#6e9460" },
+  "seasons": {
+    "spring": { "leaf": { "color": "#3e6440", "top": "#8ab070" } }
+  },
+  "source": "Photo d'une bambouseraie de bambous à chaumes dorés (type Phyllostachys aureosulcata / vivax 'Aureocaulis') en lisière de pelouse, fournie le 2026-09-29 (images/12.webp de la session). Feuillage mesuré par scripts/photo-palette.mjs (#365244 au cœur, #446162 en haut, bleutés par le ciel couvert) puis ravivé vers le vert ; chaumes mesurés #cfc197 (côté pâle) et ravivés vers le doré. Un élément = une touffe : 6 chaumes nus sur 40 % de la hauteur (forkAt au pied, écartés par spread pour monter parallèles), feuillage colonnaire qui retombe en arcs ; une bambouseraie = plusieurs touffes posées côte à côte. Persistant ; jeunes pousses claires au printemps déduites de la botanique."
+}

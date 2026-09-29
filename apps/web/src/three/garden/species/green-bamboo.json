@@ -1,0 +1,13 @@
+{
+  "id": "green-bamboo",
+  "kind": "broadleaf",
+  "name": { "fr": "Bambou vert", "en": "Green bamboo" },
+  "height": 10,
+  "trunk": { "height": 0.55, "radius": 0.01, "lean": 0.06, "forks": 6, "forkAt": 0.01, "spread": 0.06, "color": "#7f9e4c" },
+  "crown": { "shape": "column", "width": 0.45, "masses": 12, "roughness": 0.3, "droop": 0.45 },
+  "leaf": { "color": "#5e8a3a", "top": "#a4c864" },
+  "seasons": {
+    "spring": { "leaf": { "color": "#5e8a3a", "top": "#bcd87e" } }
+  },
+  "source": "Photo d'une allée de grands bambous à chaumes verts (type Phyllostachys viridis / bambusoides) en bambouseraie, fournie le 2026-09-29 dans la conversation (pas sur disque) : couleurs ESTIMÉES à l'œil, pas mesurées. Un élément = une touffe : 6 chaumes verts, fins et parallèles (forkAt au pied, écartés par spread), nus sur plus de la moitié de la hauteur, feuillage léger en tête qui retombe en arcs ; une bambouseraie = plusieurs touffes côte à côte. Persistant ; jeunes pousses claires au printemps déduites de la botanique."
+}

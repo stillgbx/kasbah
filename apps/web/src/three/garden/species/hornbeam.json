@@ -1,0 +1,15 @@
+{
+  "id": "hornbeam",
+  "kind": "hedge",
+  "name": { "fr": "Charmille", "en": "Hornbeam" },
+  "height": 2,
+  "trunk": { "height": 0.05, "radius": 0.03, "lean": 0, "forks": 2, "color": "#5a5850" },
+  "crown": { "shape": "column", "width": 0.6, "masses": 8, "roughness": 0.12, "droop": 0 },
+  "leaf": { "color": "#4a6428", "top": "#9da861" },
+  "seasons": {
+    "spring": { "leaf": { "color": "#86ad48", "top": "#b8d27a" } },
+    "autumn": { "leaf": { "color": "#b89a3a", "top": "#d8b85a" } },
+    "winter": { "foliage": 0.5, "leaf": { "color": "#8a6a36", "top": "#a8854a" } }
+  },
+  "source": "Photo d'une haie de charmes taillée le long d'une allée, fournie le 2026-09-29 (images/9.webp de la session). Feuillage mesuré par scripts/photo-palette.mjs (#444a29 au cœur, ravivé ; #9da861 en haut côté lumière) ; tronc caché par la taille, estimé (écorce grise lisse du charme). Famille `hedge` : un segment taillé continu (hedgeShape.ts), dont `crown.roughness` règle le bosselage ; les champs de port ne servent qu'au rendu en arbre. Marcescente en hiver (feuilles sèches rousses gardées), jaune d'automne et vert tendre du printemps déduits de la botanique."
+}

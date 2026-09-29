@@ -615,14 +615,14 @@
   "garden": {
     "list": "Jardin", "add": "Planter", "done": "Terminé",
     "count": "{n} élément | {n} élément | {n} éléments", "none": "Aucun arbre, buisson ni pierre.",
-    "kinds": { "broadleaf": "Feuillu", "conifer": "Conifère", "palm": "Palmier", "shrub": "Buisson", "rock": "Pierre" },
+    "kinds": { "broadleaf": "Feuillu", "conifer": "Conifère", "palm": "Palmier", "shrub": "Buisson", "rock": "Pierre", "hedge": "Haie" },
     "placeHint": "Touchez le terrain dans la vue 3D : chaque tap y pose un élément.",
     "hint": "Choisissez une famille, puis touchez le terrain. Touchez un élément pour le régler ou le glisser.",
-    "height": "Hauteur", "yaw": "Orientation", "kind": "Famille", "species": "Espèce", "generic": "Générique",
+    "height": "Hauteur", "length": "Longueur", "width": "Largeur", "yaw": "Orientation", "kind": "Famille", "species": "Espèce", "generic": "Générique",
     "reshape": "Autre forme",
     "whereHint": "Se règle ici, ou en glissant l'élément au sol dans la vue 3D.",
     "remove": "Supprimer", "removeConfirm": "Confirmer la suppression",
-    "smaller": "Réduire", "bigger": "Agrandir",
+    "smaller": "Réduire", "bigger": "Agrandir", "shorter": "Raccourcir", "longer": "Allonger", "narrower": "Affiner", "wider": "Élargir",
     "saveError": "Élément du jardin non enregistré : {message}"
   },
   "parking": {

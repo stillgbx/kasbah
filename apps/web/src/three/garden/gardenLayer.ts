@@ -1,7 +1,8 @@
 import { Box3, Color, DataTexture, DoubleSide, Group, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry, Quaternion, RingGeometry, Vector3, type Intersection, type Object3D } from 'three'
-import type { GardenItem, GardenKind } from '@kasbah/shared'
+import { DEFAULT_HEDGE_LENGTH, DEFAULT_HEDGE_WIDTH, type GardenItem, type GardenKind } from '@kasbah/shared'
 import { SITE_DECOR_LAYER } from '../core/layers'
 import type { GardenLook } from '../styles/types'
+import { hedgeShape } from './hedgeShape'
 import type { Season } from './season'
 import { GARDEN_VARIANTS, gardenSeed, gardenShape, rng, type GardenPart, type GardenShape } from './shapes'
 import { speciesOf } from './species'
@@ -18,6 +19,7 @@ const COLORS: Record<GardenKind, Partial<Record<GardenPart, number>>> = {
   palm: { bark: 0x9a7b55, leaf: 0x7bb04a },
   shrub: { leaf: 0x5c9a45 },
   rock: { stone: 0x9aa0a6 },
+  hedge: { leaf: 0x4f8a3c },
 }
 /**
  * Feuillage des familles CADUQUES hors de l'été (feuillus, buissons) : vert tendre au printemps,
@@ -34,6 +36,10 @@ const RING_MARGIN_M = 0.25
 /** Ombre de contact : son rayon rapporté à celui de l'élément, son opacité au centre. */
 const CONTACT_SCALE = 1.25
 const CONTACT_OPACITY = 0.38
+
+/** Longueur et largeur d'une haie (m) ; les autres éléments n'en ont pas. */
+const lengthOf = (it: GardenItem) => it.length ?? DEFAULT_HEDGE_LENGTH
+const widthOf = (it: GardenItem) => it.width ?? DEFAULT_HEDGE_WIDTH
 
 /**
  * Le disque de l'ombre de contact : noir, opaque au centre, qui s'efface vers le bord. Calculé en
@@ -107,7 +113,8 @@ export class GardenLayer {
     // Sous une palette de style, la teinte du feuillage est tirée par élément : elle entre dans la
     // clé, pour qu'une tranche n'ait qu'une teinte — c'est ce qui permet au néon d'en émettre une.
     const tintOf = (it: GardenItem) => (look ? gardenSeed(it) % look.leaf.length : 0)
-    const keyOf = (it: GardenItem) => `${it.kind}:${speciesOf(it)?.id ?? ''}:${gardenSeed(it) % GARDEN_VARIANTS}:${tintOf(it)}`
+    // une haie est construite à sa longueur : deux haies de longueurs différentes n'ont pas la même forme
+    const keyOf = (it: GardenItem) => `${it.kind}:${speciesOf(it)?.id ?? ''}:${gardenSeed(it) % GARDEN_VARIANTS}:${tintOf(it)}${it.kind === 'hedge' ? `:${lengthOf(it).toFixed(2)}:${widthOf(it).toFixed(2)}` : ''}`
     const lookKey = look ? JSON.stringify([look.leaf, look.bark, look.stone, look.accent, look.emissive, look.foliage]) : ''
     const signature = `${season}|${lookKey}|${items.map((it) => `${it.id}:${keyOf(it)}`).join('|')}`
     if (signature !== this.signature) {
@@ -152,7 +159,9 @@ export class GardenLayer {
         const squash = 0.9 + next() * 0.2           // deux arbres de même forme n'ont pas la même carrure
         p.set(it.center[0], it.center[1], this.groundZ(it.center[0], it.center[1]) - FOOT_SINK_M)
         q.setFromAxisAngle(up, ((it.yaw ?? 0) * Math.PI) / 180)   // sens trigonométrique, comme le yaw d'un appareil
-        s.set(it.height * squash, it.height * squash, it.height)
+        // une haie est déjà à ses mètres en plan : seule sa hauteur s'étire
+        if (it.kind === 'hedge') s.set(1, 1, it.height)
+        else s.set(it.height * squash, it.height * squash, it.height)
         slot.mesh.setMatrixAt(i, m.compose(p, q, s))
       })
       slot.mesh.instanceMatrix.needsUpdate = true
@@ -167,7 +176,11 @@ export class GardenLayer {
       // à peine au-dessus du sol ; sur une pente le disque, plat, s'enfonce d'un côté : c'est le
       // `depthWrite: false` + l'ordre de rendu qui le gardent lisible
       p.set(it.center[0], it.center[1], this.groundZ(it.center[0], it.center[1]) + 0.03)
-      contact.setMatrixAt(i++, m.compose(p, q.identity(), s.set(r, r, 1)))
+      // une haie : un disque étiré le long de son axe, tourné avec elle
+      if (it.kind === 'hedge') {
+        q.setFromAxisAngle(up, ((it.yaw ?? 0) * Math.PI) / 180)
+        contact.setMatrixAt(i++, m.compose(p, q, s.set(lengthOf(it) / 2 + 0.3, widthOf(it) / 2 + 0.35, 1)))
+      } else contact.setMatrixAt(i++, m.compose(p, q.identity(), s.set(r, r, 1)))
     }
     contact.instanceMatrix.needsUpdate = true
     contact.computeBoundingSphere()
@@ -199,6 +212,7 @@ export class GardenLayer {
   }
 
   private radiusOf(it: GardenItem): number {
+    if (it.kind === 'hedge') return lengthOf(it) / 2
     return (this.shapeOf(it).width * it.height) / 2
   }
 
@@ -210,6 +224,7 @@ export class GardenLayer {
     const variant = gardenSeed(it) % GARDEN_VARIANTS
     const species = speciesOf(it)
     const foliage = this.look?.foliage ?? 1
+    if (it.kind === 'hedge') return hedgeShape(lengthOf(it), this.season, species, !!this.look, widthOf(it))
     if (species) return speciesShape(species, variant, this.season, this.look ? { foliage } : undefined)
     return gardenShape(it.kind, variant, foliage)
   }

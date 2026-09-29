@@ -44,9 +44,13 @@ export function speciesShape(recipe: SpeciesRecipe, variant: number, season: Sea
   bark.push(limb(new Vector3(0, 0, 0), top, trunk.radius))
   // départ des charpentières : le haut du fût, ou plus bas sur son axe (cépée du figuier, du noisetier)
   const fork = trunk.forkAt === undefined ? top : top.clone().multiplyScalar(Math.min(1, trunk.forkAt / Math.max(trunk.height, 1e-6)))
+  // pied de la charpentière k : ce point, ou un cercle autour (`spread`, chaumes d'un bambou), à angles fixes pour ne rien tirer de plus
+  const foot = (from: Vector3, k: number) => trunk.spread === undefined ? from
+    : from.clone().add(new Vector3(Math.cos(heading + (k * Math.PI * 2) / Math.max(1, trunk.forks)), Math.sin(heading + (k * Math.PI * 2) / Math.max(1, trunk.forks)), 0).multiplyScalar(trunk.spread))
 
   const leaf: BufferGeometry[] = []
-  const masses: { c: Vector3; r: number }[] = []
+  // `rz` : demi-hauteur d'une masse aplatie (plateaux) ; absente = ronde, de rayon `r`
+  const masses: { c: Vector3; r: number; rz?: number }[] = []
   if (crown.shape === 'cone') {
     const tiers = 3 + Math.floor(next() * 2)
     for (let i = 0; i < tiers; i++) {
@@ -56,6 +60,32 @@ export function speciesShape(recipe: SpeciesRecipe, variant: number, season: Sea
       g.translate(top.x, top.y, z0 + i * ((crownH - h) / Math.max(1, tiers - 1)) + h / 2)
       leaf.push(positionsOnly(g))
       masses.push({ c: new Vector3(top.x, top.y, z0 + (i + 0.5) * (crownH / tiers)), r: R * (1 - i * (0.7 / tiers)) * 0.6 })
+    }
+  } else if (crown.shape === 'tiered') {
+    // Plateaux : des masses APLATIES en anneau autour de la flèche, étagées, de plus en plus étroites vers
+    // le haut (cèdre ; un seul pour un pin parasol). Leur taille vient de la largeur du plateau, pas de la
+    // hauteur du houppier : sur la coquille, un houppier plat ne donnait que des billes séparées.
+    const t = crown.tiers ?? 3
+    const per = Math.max(3, Math.round(crown.masses / t))
+    const gap = crownH / t
+    const rz = Math.min(gap * 0.7, R * 0.5) / 2
+    const total = t * (per + 1)
+    let i = 0
+    for (let k = 0; k < t; k++) {
+      const Rk = R * (1 - (0.55 * k) / t)
+      const zk = z0 + gap * (k + 0.5)
+      for (let j = 0; j <= per; j++, i++) {
+        const core = j === per
+        const a = ((j + next() * 0.5) / per) * Math.PI * 2 + k
+        const r = core ? Rk * 0.5 : Rk * (0.42 + 0.12 * next())
+        const c = core
+          ? new Vector3(top.x, top.y, zk)
+          : new Vector3(top.x + Math.cos(a) * Rk * 0.55, top.y + Math.sin(a) * Rk * 0.55, zk - crown.droop * rz)
+        const g = blob(r, crown.roughness, next).scale(1, 1, rz / r).translate(c.x, c.y, c.z)
+        if (i < Math.round(total * foliage)) leaf.push(g)
+        else g.dispose()
+        masses.push({ c, r, rz })
+      }
     }
   } else {
     // Masses posées sur la COQUILLE d'un ellipsoïde (demi-axes R et crownH/2), à des élévations propres
@@ -88,11 +118,18 @@ export function speciesShape(recipe: SpeciesRecipe, variant: number, season: Sea
   if (foliage >= 1) {
     // une cépée monte ses tiges jusque DANS leur masse, et son fût central jusqu'au cœur du houppier
     if (trunk.forkAt === undefined) {
-      for (let k = 0; k < Math.min(trunk.forks, low.length); k++) bark.push(limb(top, top.clone().lerp(low[k]!.c, 0.7), trunk.radius * 0.6))
+      for (let k = 0; k < Math.min(trunk.forks, low.length); k++) bark.push(limb(foot(top, k), top.clone().lerp(low[k]!.c, 0.7), trunk.radius * 0.6))
     } else {
-      for (let k = 0; k < Math.min(trunk.forks, low.length); k++) bark.push(limb(fork, fork.clone().lerp(low[k]!.c, 0.9), trunk.radius * 0.6))
+      for (let k = 0; k < Math.min(trunk.forks, low.length); k++) {
+        const f = foot(fork, k)
+        // des chaumes écartés montent droit au-dessus de leur pied, un peu évasés : vers leur masse, ils se croisaient
+        const to = trunk.spread === undefined ? f.clone().lerp(low[k]!.c, 0.9) : new Vector3(f.x * 2 - fork.x, f.y * 2 - fork.y, f.z + (low[k]!.c.z - f.z) * 0.9)
+        bark.push(limb(f, to, trunk.radius * 0.6))
+      }
       bark.push(limb(top, top.clone().lerp(masses[0]!.c, 0.8), trunk.radius * 0.7))
     }
+    // des plateaux tiennent sur une flèche qui les traverse jusqu'au dernier
+    if (crown.shape === 'tiered') bark.push(limb(top, new Vector3(top.x, top.y, low[low.length - 1]!.c.z), trunk.radius * 0.6))
   } else {
     // Un arbre dégarni montre sa ramure, qui doit se lire ÉTAGÉE : une flèche prolonge le fût dans le
     // houppier, et chaque branche en part à la hauteur de la masse qu'elle nourrit (les basses en bas),
@@ -102,7 +139,7 @@ export function speciesShape(recipe: SpeciesRecipe, variant: number, season: Sea
     bark.push(limb(top, leader, trunk.radius * 0.7))
     low.forEach((m, k) => {
       // les plus basses d'une cépée partent du même point bas que l'été
-      const from = trunk.forkAt !== undefined && k < trunk.forks ? fork.clone() : top.clone().lerp(leader, 0.1 + 0.65 * (k / Math.max(1, low.length - 1)))
+      const from = trunk.forkAt !== undefined && k < trunk.forks ? foot(fork, k).clone() : top.clone().lerp(leader, 0.1 + 0.65 * (k / Math.max(1, low.length - 1)))
       const to = from.clone().lerp(m.c, 0.95)
       bark.push(limb(from, to, trunk.radius * 0.45))
       const knot = from.clone().lerp(to, 0.55)
@@ -118,7 +155,7 @@ export function speciesShape(recipe: SpeciesRecipe, variant: number, season: Sea
     for (let i = 0; i < accentRecipe.count; i++) {
       const m = masses[Math.floor(next() * masses.length)]!
       const d = new Vector3(next() - 0.5, next() - 0.5, next() - 0.7).normalize()   // plutôt sous le feuillage, comme un fruit pendant
-      const p = m.c.clone().addScaledVector(d, m.r * 0.95)
+      const p = m.rz === undefined ? m.c.clone().addScaledVector(d, m.r * 0.95) : m.c.clone().add(d.multiply(new Vector3(m.r, m.r, m.rz)).multiplyScalar(0.95))
       accent.push(positionsOnly(new OctahedronGeometry(accentRecipe.size, 0)).translate(p.x, p.y, p.z))
     }
   }
@@ -134,7 +171,7 @@ export function speciesShape(recipe: SpeciesRecipe, variant: number, season: Sea
   // Échelle tirée de l'enveloppe de TOUTES les masses, dessinées ou non : sans quoi l'arbre nu de
   // l'hiver, plus bas que son houppier, serait étiré jusqu'à la même hauteur.
   const bump = 1 + crown.roughness                    // une masse bosselée déborde de son rayon
-  const topZ = Math.max(top.z, ...masses.map((m) => m.c.z + m.r * bump))
+  const topZ = Math.max(top.z, ...masses.map((m) => m.c.z + (m.rz ?? m.r) * bump))
   const reach = Math.max(...masses.map((m) => Math.hypot(m.c.x, m.c.y) + m.r * bump))
   for (const p of merged) p.geometry.scale(1 / topZ, 1 / topZ, 1 / topZ)
   const width = (2 * reach) / topZ

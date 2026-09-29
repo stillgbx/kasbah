@@ -134,12 +134,13 @@ export const ICONS = {
   search: 'M11 11m-7 0a7 7 0 1 0 14 0a7 7 0 1 0-14 0M16 16l4.5 4.5',
   /** Une pièce, vue en plan : quatre murs et une ouverture. */
   room: 'M4 4h16v16H4zM4 10h5M15 4v6',
-  /** Éléments du jardin : feuillu, conifère, palmier, buisson, pierre. */
+  /** Éléments du jardin : feuillu, conifère, palmier, buisson, pierre, haie. */
   treeBroadleaf: 'M12 21v-7M12 14l-2.5-2M12 15.5l2.5-2M12 3a5 5 0 0 0-4.8 6.4A4 4 0 0 0 9 17h6a4 4 0 0 0 1.8-7.6A5 5 0 0 0 12 3z',
   treeConifer: 'M12 21v-3M12 3l-4 5h2.5L7 12.5h3L6 18h12l-4-5.5h3L13.5 8H16z',
   treePalm: 'M12 21c.4-3.5.3-7-1-10M11 11c-1.5-2.5-4-3.5-7-3M11 11c.5-3 2.6-5 6-5.5M11 11c2.8-.7 5.5.2 8 2.5M11 11c-2.6 0-4.8 1.4-6.5 4',
   shrub: 'M4 19h16M5.5 19a3.5 3.5 0 0 1 1.3-6.7A4.5 4.5 0 0 1 15 10.2a4 4 0 0 1 3.5 8.8',
   rock: 'M3 19l2.5-7 4-4 5 1 3.5 4 3 6zM9.5 8l1.5 5 3.5-4M11 13l-2 6',
+  hedge: 'M2 19h20M3.5 19v-8.5c1.5-2 3-2 4.25 0 1.25-2 2.75-2 4.25 0 1.5-2 3-2 4.25 0 1.25-2 2.75-2 4.25 0V19',
   /** Un niveau : des plans empilés. */
   layers: 'M12 3l9 4.5-9 4.5-9-4.5zM3 12.5l9 4.5 9-4.5M3 17l9 4.5 9-4.5',
 

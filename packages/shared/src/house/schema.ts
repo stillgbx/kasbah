@@ -251,11 +251,19 @@ export const parkingSchema = z.object({
 export type Parking = z.infer<typeof parkingSchema>
 
 /** Familles d'éléments d'aménagement du jardin. Un décor : aucun appareil, aucun état. */
-export const GARDEN_KINDS = ['broadleaf', 'conifer', 'palm', 'shrub', 'rock'] as const
+export const GARDEN_KINDS = ['broadleaf', 'conifer', 'palm', 'shrub', 'rock', 'hedge'] as const
 export type GardenKind = (typeof GARDEN_KINDS)[number]
 /** Bornes de hauteur d'un élément (m) : un caillou de 5 cm disparaît dans le gazon, un arbre de 40 m sort du cadre. */
 export const MIN_GARDEN_HEIGHT = 0.1
 export const MAX_GARDEN_HEIGHT = 40
+/** Longueur d'une haie (m) : bornes, et valeur prise quand le champ est absent. */
+export const MIN_HEDGE_LENGTH = 0.5
+export const MAX_HEDGE_LENGTH = 100
+export const DEFAULT_HEDGE_LENGTH = 3
+/** Largeur (épaisseur) d'une haie (m) : bornes, et valeur prise quand le champ est absent. */
+export const MIN_HEDGE_WIDTH = 0.2
+export const MAX_HEDGE_WIDTH = 5
+export const DEFAULT_HEDGE_WIDTH = 0.7
 
 /**
  * Élément d'aménagement du jardin (arbre, buisson, pierre), posé sur le terrain et qui en suit le
@@ -269,6 +277,13 @@ export const gardenItemSchema = z.object({
   height: z.number().min(MIN_GARDEN_HEIGHT).max(MAX_GARDEN_HEIGHT),
   /** Rotation autour de la verticale (degrés). Absente = 0. */
   yaw: z.number().optional(),
+  /**
+   * Haie seulement : longueur du segment (m), centré sur `center`, le long de l'axe x local tourné de
+   * `yaw`. Absente = `DEFAULT_HEDGE_LENGTH`. Une haie en L = deux segments.
+   */
+  length: z.number().min(MIN_HEDGE_LENGTH).max(MAX_HEDGE_LENGTH).optional(),
+  /** Haie seulement : largeur (épaisseur) du segment (m), en travers de son axe. Absente = `DEFAULT_HEDGE_WIDTH`. */
+  width: z.number().min(MIN_HEDGE_WIDTH).max(MAX_HEDGE_WIDTH).optional(),
   /**
    * Graine de la forme : deux sapins de même hauteur ne sont pas jumeaux. Absente = tirée de l'id ;
    * l'UI en écrit une quand on demande « une autre forme ».

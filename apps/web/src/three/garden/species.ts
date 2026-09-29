@@ -11,7 +11,7 @@ import { GARDEN_KINDS } from '@kasbah/shared'
 const hex = z.string().regex(/^#[0-9a-f]{6}$/i)
 const unit = z.number().min(0).max(1)
 
-export const CROWN_SHAPES = ['round', 'spreading', 'oval', 'cone', 'column'] as const
+export const CROWN_SHAPES = ['round', 'spreading', 'oval', 'cone', 'column', 'tiered'] as const
 
 const accentSchema = z.object({ color: hex, count: z.number().int().min(1).max(200), size: z.number().min(0.003).max(0.08) })
 
@@ -42,6 +42,8 @@ export const speciesSchema = z.object({
     forks: z.number().int().min(0).max(6),
     /** Départ des charpentières sur le fût, en part de la hauteur totale (absent = haut du fût) : bas pour une cépée. */
     forkAt: unit.optional(),
+    /** Écart des pieds des charpentières autour du fût, en part de la hauteur (absent = un seul point) : chaumes parallèles d'un bambou. */
+    spread: z.number().min(0).max(0.3).optional(),
     color: hex,
   }),
   crown: z.object({
@@ -54,6 +56,8 @@ export const speciesSchema = z.object({
     roughness: z.number().min(0).max(0.5),
     /** Retombée des masses du bord (0 = aucune, 1 = pleureur). */
     droop: unit,
+    /** Plateaux du port `tiered` (absent = 3) : 1 pour un pin parasol, 4 ou 5 pour un vieux cèdre. */
+    tiers: z.number().int().min(1).max(6).optional(),
   }),
   leaf: z.object({ color: hex, top: hex }),
   /** Fruits ou fleurs : petites facettes semées à la surface du houppier. */

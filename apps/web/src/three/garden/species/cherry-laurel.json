@@ -1,0 +1,13 @@
+{
+  "id": "cherry-laurel",
+  "kind": "hedge",
+  "name": { "fr": "Laurier-cerise", "en": "Cherry laurel" },
+  "height": 1.8,
+  "trunk": { "height": 0.02, "radius": 0.03, "lean": 0, "forks": 2, "color": "#4a4a3c" },
+  "crown": { "shape": "column", "width": 0.8, "masses": 9, "roughness": 0.18, "droop": 0 },
+  "leaf": { "color": "#3a6525", "top": "#8cc24e" },
+  "seasons": {
+    "spring": { "leaf": { "color": "#3a6525", "top": "#a8d868" }, "accent": { "color": "#f4f1e4", "count": 40, "size": 0.025 } }
+  },
+  "source": "Photo d'une haie de laurier-cerise taillée le long d'un trottoir, fournie le 2026-09-29 (images/10.png de la session). Feuillage mesuré par scripts/photo-palette.mjs (#3a6525 au cœur ; #6a9d31 et #9dcd5c en haut, moyennés en #8cc24e) ; tronc caché, estimé. Famille `hedge` : un segment taillé continu (hedgeShape.ts), dont `crown.roughness` règle le bosselage ; les fleurs du printemps sont semées sur les flancs et le dessus. Persistant ; pousses claires et grappes de fleurs blanches au printemps déduites de la botanique."
+}
