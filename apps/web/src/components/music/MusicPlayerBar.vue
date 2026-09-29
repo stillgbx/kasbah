@@ -205,6 +205,33 @@ const volumeOk = computed(() => available.value && has('volume') && !state.value
  * lecteur. Sans ça, le badge arrivait en retard sur un titre explicit, et RESTAIT sur le suivant
  * jusqu'à ce que le flux démarre vraiment — alors que titre et pochette avaient déjà changé.
  */
+/**
+ * Lecture sur un titre en pause (arrivée sur la page, dernière écoute relancée) : l'enceinte reste
+ * « en pause » le temps de remplir son tampon, et la touche ne bougeait pas. Elle tourne du clic
+ * jusqu'à ce que le lecteur joue — au plus STARTING_MAX_MS, si l'enceinte ne suit jamais.
+ */
+const STARTING_MAX_MS = 15_000
+const starting = ref(false)
+let startingTimer: ReturnType<typeof setTimeout> | undefined
+function stopStarting() {
+  starting.value = false
+  clearTimeout(startingTimer)
+}
+watch(() => state.value?.playback, (p) => { if (p === 'playing') stopStarting() })
+watch(() => props.entry?.descriptor.id, stopStarting)
+onBeforeUnmount(() => clearTimeout(startingTimer))
+const busy = computed(() => !!props.pending || starting.value)
+function playPause() {
+  if (state.value?.playback === 'playing') {
+    emit('command', { type: 'media_player.pause' })
+    return
+  }
+  starting.value = true
+  clearTimeout(startingTimer)
+  startingTimer = setTimeout(stopStarting, STARTING_MAX_MS)
+  emit('command', { type: 'media_player.play' })
+}
+
 const explicit = computed(() => (props.pending
   ? props.pending.explicit === true
   : resume.value ? resume.value.explicit : state.value?.nowPlaying?.explicit === true))
@@ -254,11 +281,11 @@ const explicit = computed(() => (props.pending
           <StrokeIcon name="rotateLeft" :size="24" />
           <span class="key__step" aria-hidden="true">{{ SEEK_STEP_S }}</span>
         </button>
-        <button type="button" class="key key--main" :disabled="!!pending || !available || (!loaded && !resume)" :aria-busy="pending ? 'true' : undefined"
-                :title="pending ? $t('ytmusic.starting') : state?.playback === 'playing' ? $t('common.pause') : $t('media.play')"
-                :aria-label="pending ? $t('ytmusic.starting') : state?.playback === 'playing' ? $t('common.pause') : $t('media.play')"
-                @click="emit('command', { type: state?.playback === 'playing' ? 'media_player.pause' : 'media_player.play' })">
-          <v-progress-circular v-if="pending" indeterminate :size="22" :width="2" color="currentColor" />
+        <button type="button" class="key key--main" :disabled="busy || !available || (!loaded && !resume)" :aria-busy="busy ? 'true' : undefined"
+                :title="busy ? $t('ytmusic.starting') : state?.playback === 'playing' ? $t('common.pause') : $t('media.play')"
+                :aria-label="busy ? $t('ytmusic.starting') : state?.playback === 'playing' ? $t('common.pause') : $t('media.play')"
+                @click="playPause">
+          <v-progress-circular v-if="busy" indeterminate :size="22" :width="2" color="currentColor" />
           <StrokeIcon v-else :name="state?.playback === 'playing' ? 'pause' : 'play'" :size="20" />
         </button>
         <button type="button" class="key key--jump" :disabled="!available || !canSeek"

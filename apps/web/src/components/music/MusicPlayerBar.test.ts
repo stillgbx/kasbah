@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import type { DeviceEntry } from '@kasbah/shared'
 import MusicPlayerBar from './MusicPlayerBar.vue'
@@ -61,6 +61,42 @@ describe("MusicPlayerBar — badge explicit pendant l'envoi", () => {
   it("reprend le marquage du lecteur une fois l'envoi terminé", () => {
     const w = mount(MusicPlayerBar, { props: playing() })
     expect(w.find('.explicit').exists()).toBe(true)
+  })
+})
+
+/**
+ * Lecture d'un titre en pause (la dernière écoute, après un rechargement ou un redémarrage du
+ * serveur) : la relance répond avant que l'enceinte publie « lecture ». La touche tourne du clic
+ * jusque-là, sans retomber entre-temps sur un « lire » grisé.
+ */
+describe('MusicPlayerBar — attente de la lecture', () => {
+  const resume = { title: 'Mix', artist: 'DJ', artUrl: null, durationS: 3600, positionS: 1200, explicit: false }
+  const main = (w: ReturnType<typeof mount>) => w.find('.key--main')
+  const spinning = (w: ReturnType<typeof mount>) => main(w).find('.v-progress-circular').exists()
+
+  it("tourne du clic jusqu'à ce que l'enceinte joue, même après la fin de l'envoi", async () => {
+    const w = mount(MusicPlayerBar, { props: props({ entry: entry('idle'), session: null, resume }) })
+    expect(spinning(w)).toBe(false)
+    await main(w).trigger('click')
+    expect(w.emitted('command')).toEqual([[{ type: 'media_player.play' }]])
+    expect(spinning(w)).toBe(true)
+    // la relance a répondu : la dernière écoute est oubliée, l'enceinte n'a encore rien dit
+    await w.setProps({ resume: null })
+    expect(spinning(w)).toBe(true)
+    await w.setProps({ entry: entry('playing') })
+    expect(spinning(w)).toBe(false)
+  })
+
+  it("rend la touche si l'enceinte ne suit jamais", async () => {
+    vi.useFakeTimers()
+    try {
+      const w = mount(MusicPlayerBar, { props: props({ entry: entry('idle'), session: null, resume }) })
+      await main(w).trigger('click')
+      expect(spinning(w)).toBe(true)
+      vi.advanceTimersByTime(15_000)
+      await w.vm.$nextTick()
+      expect(spinning(w)).toBe(false)
+    } finally { vi.useRealTimers() }
   })
 })
 
