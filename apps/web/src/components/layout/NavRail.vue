@@ -74,7 +74,11 @@ watch(current, () => void nextTick(() => {
   overflow: auto; overscroll-behavior: contain; scrollbar-width: none;
 }
 .rail__scroll::-webkit-scrollbar { display: none; }
-.rail__btn, .rail__avatar { flex: none; }
+/* Les boutons se TASSENT avant de défiler (jusqu'à 28 px, à peine plus que l'icône) : une fenêtre
+   de bureau un peu basse garde tout le rail en vue, comme avant ; le défilement n'arrive qu'au-delà,
+   et sur un téléphone, où les boutons gardent leur taille. */
+.rail__avatar { flex: none; }
+.rail__btn { flex: 0 1 auto; min-height: 28px; }
 /* Un voile du fond vers le transparent, plus large que le rail : les icônes se lisent par-dessus les
    murs et les pilules de la scène, sans qu'un bord ne coupe la vue. Sur les autres vues, il a la
    couleur de leur fond et ne se voit pas. Derrière les boutons (z-index -1 dans le rail), au-dessus
@@ -118,7 +122,7 @@ watch(current, () => void nextTick(() => {
     -webkit-mask-image: linear-gradient(to bottom, transparent, #000 14px, #000 calc(100% - 14px), transparent);
   }
   .rail__avatar { width: 32px; height: 32px; border-radius: 10px; font-size: 13px; margin-bottom: 6px; }
-  .rail__btn { width: 44px; height: 44px; border-radius: 14px; }
+  .rail__btn { flex: none; width: 44px; height: 44px; border-radius: 14px; }
   .rail__spacer { flex: 0 0 4px; }
 }
 
@@ -139,7 +143,7 @@ watch(current, () => void nextTick(() => {
     -webkit-mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent);
   }
   .rail__avatar { display: none; }
-  .rail__btn { width: 48px; height: 48px; border-radius: 14px; }
+  .rail__btn { flex: none; width: 48px; height: 48px; border-radius: 14px; }
   .rail__spacer { flex: 0 0 6px; }
 }
 </style>
