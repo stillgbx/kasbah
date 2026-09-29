@@ -182,6 +182,9 @@ export interface GardenLook {
   foliage?: number
 }
 
+/** Qui défile autour de la maison (`effects/parade.ts`). */
+export type ParadeKind = 'noel' | 'halloween' | 'tatooine'
+
 /** Tout ce que la scène lit d'un style, pour une ambiance donnée. */
 export interface StyleLook {
   palette: ScenePalette
@@ -201,6 +204,11 @@ export interface StyleLook {
    * Absent ou `spots` 0 = rien. Les projecteurs passent d'une couleur de `colors` à la suivante.
    */
   disco?: { spots: number; colors: readonly Color[] }
+  /**
+   * Des personnages qui tournent autour de la maison (`effects/parade.ts`) : le traîneau du père
+   * Noël, les fantômes et les squelettes d'Halloween, des X-wings. Absent = personne.
+   */
+  parade?: { kind: ParadeKind }
   garden?: GardenLook
 }
 
