@@ -16,7 +16,7 @@
     "awningsDown": "{n} awning deployed | {n} awning deployed | {n} awnings deployed",
     "playing": "{n} player streaming | {n} player streaming | {n} players streaming", "solar": "Solar" },
   "floors": { "garden": "Garden", "all": "All", "roof": "Roof" },
-  "search": { "placeholder": "Search a room, a device…", "aria": "Search the house", "clear": "Clear", "empty": "No result", "count": "{n} result | {n} result | {n} results", "level": "Level", "room": "Room", "scene": "Scene", "page": "Page" },
+  "search": { "placeholder": "Search a room, a device…", "aria": "Search the house", "clear": "Clear", "empty": "No result", "count": "{n} result | {n} result | {n} results", "level": "Level", "room": "Room", "scene": "Scene", "page": "Page", "palette": "Go to a room, a device, a page…", "paletteAria": "Navigation palette" },
   "home": {
     "lightsOn": "lights on", "shuttersOpen": "shutters open", "awningsDown": "awnings deployed", "solar": "Solar", "solarNow": "solar", "battery": "battery", "cameras": "cameras", "players": "players",
     "scenes": "Scenes", "rooms": "Rooms", "garden": "Garden",

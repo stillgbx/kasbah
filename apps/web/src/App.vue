@@ -5,6 +5,7 @@ import { useHouseStore } from './stores/house'
 import { useNotificationsStore } from './stores/notifications'
 import ConnectionBanner from './components/ConnectionBanner.vue'
 import NavRail from './components/layout/NavRail.vue'
+import SearchPalette from './components/layout/SearchPalette.vue'
 
 // Coquille : rail de navigation à gauche (barre en bas sur un téléphone en portrait), POSÉ sur la vue courante (il n'a ni fond ni bord : la vue
 // Maison étend sa scène 3D dessous, les autres vues se décalent de sa largeur). Charge la maison et
@@ -28,6 +29,7 @@ onBeforeUnmount(() => devices.stop())
       </router-view>
     </main>
     <ConnectionBanner />
+    <SearchPalette />
     <v-snackbar-queue
       :model-value="notifications.queue.map((n) => ({ text: n.text, color: n.color, timeout: n.timeout }))"
       location="bottom" closable :close-text="$t('common.close')"

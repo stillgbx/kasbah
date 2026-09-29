@@ -16,7 +16,7 @@
     "awningsDown": "{n} store déployé | {n} store déployé | {n} stores déployés",
     "playing": "{n} lecteur en diffusion | {n} lecteur en diffusion | {n} lecteurs en diffusion", "solar": "Solaire" },
   "floors": { "garden": "Jardin", "all": "Tout", "roof": "Toit" },
-  "search": { "placeholder": "Rechercher une pièce, un appareil…", "aria": "Rechercher dans la maison", "clear": "Effacer", "empty": "Aucun résultat", "count": "{n} résultat | {n} résultat | {n} résultats", "level": "Niveau", "room": "Pièce", "scene": "Ambiance", "page": "Page" },
+  "search": { "placeholder": "Rechercher une pièce, un appareil…", "aria": "Rechercher dans la maison", "clear": "Effacer", "empty": "Aucun résultat", "count": "{n} résultat | {n} résultat | {n} résultats", "level": "Niveau", "room": "Pièce", "scene": "Ambiance", "page": "Page", "palette": "Aller à une pièce, un appareil, une page…", "paletteAria": "Palette de navigation" },
   "home": {
     "lightsOn": "lumières allumées", "shuttersOpen": "volets ouverts", "awningsDown": "stores déployés", "solar": "Solaire", "solarNow": "solaire", "battery": "batterie", "cameras": "caméras", "players": "lecteurs",
     "scenes": "Scènes", "rooms": "Pièces", "garden": "Jardin",

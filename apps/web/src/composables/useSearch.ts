@@ -1,4 +1,4 @@
-import { computed, type Ref } from 'vue'
+import { computed, ref, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { roomKey, type DeviceDescriptor } from '@kasbah/shared'
@@ -59,7 +59,14 @@ const FAMILY_RANK: Record<SearchFamily, number> = { room: 0, zone: 1, level: 2, 
 /** Le nom passe AVANT la marque, toujours : la moindre correspondance de nom vaut mieux que « Tesla ». */
 const NAME_WEIGHT = 10
 
-export function useSearch(query: Ref<string>) {
+/**
+ * Un choix fait par la palette Ctrl+K qui vise la maison : la vue Maison, gardée en vie, ouvre
+ * son panneau à chaque incrément — c'est elle seule qui sait s'il est replié (fenêtre étroite).
+ */
+export const homePanelRequest = ref(0)
+
+/** `withHome` : la palette vit sur toutes les pages, la page Maison y est donc une destination. */
+export function useSearch(query: Ref<string>, { withHome = false } = {}) {
   const house = useHouseStore()
   const devices = useDevicesStore()
   const scenes = useScenesStore()
@@ -133,7 +140,7 @@ export function useSearch(query: Ref<string>) {
     }
 
     for (const item of visibleNavItems(localPlugins.isEnabled)) {
-      if (item.name === 'home') continue                 // on y est déjà : la recherche vit dessus
+      if (item.name === 'home' && !withHome) continue    // on y est déjà : la recherche vit dessus
       out.push({ key: `page:${item.name}`, label: t(item.label), sub: t('search.page'), icon: item.icon, family: 'page', go: () => { void router.push({ name: item.name }) } })
     }
     return out

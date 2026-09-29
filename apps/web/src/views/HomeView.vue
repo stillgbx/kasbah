@@ -22,7 +22,7 @@ import ReliefPanel from '../components/home/ReliefPanel.vue'
 import SearchBar from '../components/home/SearchBar.vue'
 import WeatherWidget from '../components/home/WeatherWidget.vue'
 import { useHouseScene } from '../composables/useHouseScene'
-import type { SearchHit } from '../composables/useSearch'
+import { homePanelRequest, type SearchHit } from '../composables/useSearch'
 import { useDevicesStore } from '../stores/devices'
 import { useHouseStore, type FloorTab } from '../stores/house'
 import { useSettingsStore } from '../stores/settings'
@@ -360,6 +360,7 @@ watch([wide, scene.ready], ([w, ready]) => { if (ready) scene.setViewInset(w ? a
 // que le tiroir cache tant qu'on n'est pas en fenêtre large. Une PAGE, elle, quitte la vue : lui
 // ouvrir le tiroir le ferait trouver ouvert au retour, sans qu'on l'ait demandé.
 function onSearchPicked(hit: SearchHit) { if (hit.family !== 'page') panelOpen.value = true }
+watch(homePanelRequest, () => { panelOpen.value = true })
 
 /** Un cran de rotation des boutons de vue : un huitième de tour. */
 const ORBIT_STEP = Math.PI / 4
