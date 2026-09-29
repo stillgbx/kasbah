@@ -7,7 +7,7 @@ import type { SpeciesRecipe } from './species'
 // Générateur des espèces : une recette (`species.ts`) → une forme facettée, à la saison voulue.
 
 /** Un cylindre de `a` à `b` (repère maison), pour les charpentières. */
-function limb(a: Vector3, b: Vector3, r: number): BufferGeometry {
+export function limb(a: Vector3, b: Vector3, r: number): BufferGeometry {
   const dir = new Vector3().subVectors(b, a)
   const g = new CylinderGeometry(r * 0.6, r, dir.length(), 5, 1)
   g.applyQuaternion(new Quaternion().setFromUnitVectors(new Vector3(0, 1, 0), dir.clone().normalize()))

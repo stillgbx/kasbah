@@ -11,13 +11,13 @@ const boxOf = (shape: ReturnType<typeof hedgeShape>) => {
 }
 
 describe('haie', () => {
-  it('un bloc continu à sa longueur et sa largeur en mètres, de hauteur 1', () => {
+  it('une rangée à sa longueur et sa largeur en mètres, de hauteur 1', () => {
     for (const L of [1, 3, 12]) {
       const box = boxOf(hedgeShape(L, 'summer'))
-      expect(box.max.x - box.min.x, `${L} m`).toBeGreaterThan(L * 0.9)
-      expect(box.max.x - box.min.x, `${L} m`).toBeLessThan(L * 1.1)
+      expect(box.max.x - box.min.x, `${L} m`).toBeGreaterThan(L - 0.25)
+      expect(box.max.x - box.min.x, `${L} m`).toBeLessThan(L + 0.25)
       expect(box.max.y - box.min.y).toBeLessThan(DEFAULT_HEDGE_WIDTH * 1.2)
-      expect(box.min.z).toBeCloseTo(0, 5)
+      expect(box.min.z).toBeGreaterThanOrEqual(-0.01)   // le pied d'une tige inclinée mord à peine sous le sol
       expect(box.max.z).toBeLessThanOrEqual(1.05)
     }
     for (const W of [0.4, 1.5, 3]) {
@@ -25,6 +25,20 @@ describe('haie', () => {
       expect(box.max.y - box.min.y, `${W} m`).toBeGreaterThan(W * 0.85)
       expect(box.max.y - box.min.y, `${W} m`).toBeLessThan(W * 1.15)
     }
+  })
+
+  it('des sujets individuels : le dessus se découpe d\'un sujet à l\'autre, et des tiges au pied', () => {
+    const shape = hedgeShape(8, 'summer')
+    const pos = shape.parts.find((p) => p.part === 'leaf')!.geometry.getAttribute('position')
+    // sommet de chaque tranche de 50 cm : pas une ligne droite
+    const tops = new Map<number, number>()
+    for (let i = 0; i < pos.count; i++) {
+      const bin = Math.floor((pos.getX(i) + 4) / 0.5)
+      tops.set(bin, Math.max(tops.get(bin) ?? 0, pos.getZ(i)))
+    }
+    const t = [...tops.values()]
+    expect(Math.max(...t) - Math.min(...t)).toBeGreaterThan(0.03)
+    expect(shape.parts.some((p) => p.part === 'bark')).toBe(true)
   })
 
   it('les facettes gardent leur taille : une haie deux fois plus longue a deux fois plus de faces', () => {

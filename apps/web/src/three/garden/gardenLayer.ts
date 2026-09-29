@@ -19,7 +19,7 @@ const COLORS: Record<GardenKind, Partial<Record<GardenPart, number>>> = {
   palm: { bark: 0x9a7b55, leaf: 0x7bb04a },
   shrub: { leaf: 0x5c9a45 },
   rock: { stone: 0x9aa0a6 },
-  hedge: { leaf: 0x4f8a3c },
+  hedge: { bark: 0x5a4a3a, leaf: 0x4f8a3c },
 }
 /**
  * Feuillage des familles CADUQUES hors de l'été (feuillus, buissons) : vert tendre au printemps,
@@ -113,8 +113,8 @@ export class GardenLayer {
     // Sous une palette de style, la teinte du feuillage est tirée par élément : elle entre dans la
     // clé, pour qu'une tranche n'ait qu'une teinte — c'est ce qui permet au néon d'en émettre une.
     const tintOf = (it: GardenItem) => (look ? gardenSeed(it) % look.leaf.length : 0)
-    // une haie est construite à sa longueur : deux haies de longueurs différentes n'ont pas la même forme
-    const keyOf = (it: GardenItem) => `${it.kind}:${speciesOf(it)?.id ?? ''}:${gardenSeed(it) % GARDEN_VARIANTS}:${tintOf(it)}${it.kind === 'hedge' ? `:${lengthOf(it).toFixed(2)}:${widthOf(it).toFixed(2)}` : ''}`
+    // une haie est construite à ses dimensions : deux haies de tailles différentes n'ont pas la même forme
+    const keyOf = (it: GardenItem) => `${it.kind}:${speciesOf(it)?.id ?? ''}:${gardenSeed(it) % GARDEN_VARIANTS}:${tintOf(it)}${it.kind === 'hedge' ? `:${lengthOf(it).toFixed(2)}:${widthOf(it).toFixed(2)}:${it.height.toFixed(2)}` : ''}`
     const lookKey = look ? JSON.stringify([look.leaf, look.bark, look.stone, look.accent, look.emissive, look.foliage]) : ''
     const signature = `${season}|${lookKey}|${items.map((it) => `${it.id}:${keyOf(it)}`).join('|')}`
     if (signature !== this.signature) {
@@ -224,7 +224,7 @@ export class GardenLayer {
     const variant = gardenSeed(it) % GARDEN_VARIANTS
     const species = speciesOf(it)
     const foliage = this.look?.foliage ?? 1
-    if (it.kind === 'hedge') return hedgeShape(lengthOf(it), this.season, species, !!this.look, widthOf(it))
+    if (it.kind === 'hedge') return hedgeShape(lengthOf(it), this.season, species, !!this.look, widthOf(it), it.height)
     if (species) return speciesShape(species, variant, this.season, this.look ? { foliage } : undefined)
     return gardenShape(it.kind, variant, foliage)
   }
