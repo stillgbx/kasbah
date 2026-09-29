@@ -86,7 +86,7 @@ const send = (deviceId: string, cmd: CommandInput) => devices.sendCommand(device
 
 <style scoped>
 .page { height: 100%; display: flex; flex-direction: column; }
-.page__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 24px calc(var(--safe-bottom) + 24px); display: grid; gap: 16px; align-content: start; }
+.page__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 var(--page-x) calc(var(--safe-bottom) + 24px); display: grid; gap: 16px; align-content: start; }
 /* Même seuil que les vues Eau et Énergie, pour que les trois pages se comportent pareil à la même
    largeur de fenêtre. Et comme elles, on laisse le `stretch` par défaut du grid : côte à côte, les
    deux cartes font la MÊME hauteur. `align-items: start` donnait une machine plus courte de 68 px

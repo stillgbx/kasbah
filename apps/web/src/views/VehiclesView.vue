@@ -338,7 +338,7 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
 
 <style scoped>
 .vehicles { height: 100%; display: flex; flex-direction: column; }
-.vehicles__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 24px calc(var(--safe-bottom) + 24px); }
+.vehicles__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 var(--page-x) calc(var(--safe-bottom) + 24px); }
 .empty { padding: 24px; text-align: center; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
 .vcard { padding: 18px 20px; display: grid; gap: 14px; align-content: start; }

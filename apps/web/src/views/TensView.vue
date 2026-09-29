@@ -278,7 +278,7 @@ const showPairing = ref(!tens.knownDeviceId)
 
 <style scoped>
 .page { height: 100%; display: flex; flex-direction: column; }
-.page__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 24px calc(var(--safe-bottom) + 24px); display: grid; gap: 14px; align-content: start; }
+.page__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 var(--page-x) calc(var(--safe-bottom) + 24px); display: grid; gap: 14px; align-content: start; }
 .empty { padding: 24px; text-align: center; display: grid; gap: 12px; justify-items: center; }
 .empty__btn { text-decoration: none; }
 .small { font-size: 12px; }

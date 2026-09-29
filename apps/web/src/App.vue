@@ -6,7 +6,7 @@ import { useNotificationsStore } from './stores/notifications'
 import ConnectionBanner from './components/ConnectionBanner.vue'
 import NavRail from './components/layout/NavRail.vue'
 
-// Coquille : rail de navigation à gauche, POSÉ sur la vue courante (il n'a ni fond ni bord : la vue
+// Coquille : rail de navigation à gauche (barre en bas sur un téléphone en portrait), POSÉ sur la vue courante (il n'a ni fond ni bord : la vue
 // Maison étend sa scène 3D dessous, les autres vues se décalent de sa largeur). Charge la maison et
 // ouvre le push.
 const house = useHouseStore()
@@ -38,5 +38,7 @@ onBeforeUnmount(() => devices.stop())
 
 <style>
 .app-shell .v-application__wrap { position: relative; height: 100dvh; overflow: hidden; }
-.app-main { position: relative; height: 100%; min-width: 0; min-height: 0; display: flex; flex-direction: column; padding-left: var(--rail-w); background: var(--bg); }
+.app-main { position: relative; height: 100%; min-width: 0; min-height: 0; display: flex; flex-direction: column; padding-left: var(--rail-w); padding-bottom: var(--dock-h); background: var(--bg); }
+/* En portrait, la barre du bas porte l'encoche basse : les vues n'ont plus à la réserver. */
+@media (max-width: 599px) { .app-main { --safe-bottom: 0px; } }
 </style>

@@ -275,7 +275,7 @@ onBeforeUnmount(() => { if (disarm) clearTimeout(disarm) })
 
 .edit__cols {
   flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px;
-  padding: 0 24px calc(var(--safe-bottom) + 24px);
+  padding: 0 var(--page-x) calc(var(--safe-bottom) + 24px);
 }
 .col {
   min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px;

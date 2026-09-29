@@ -306,7 +306,7 @@ const houseStats = computed(() => {
 .min0 { flex: 1 1 0; min-width: 0; }
 
 .settings { height: 100%; display: flex; flex-direction: column; }
-.settings__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 24px calc(var(--safe-bottom) + 24px); }
+.settings__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 var(--page-x) calc(var(--safe-bottom) + 24px); }
 /* Les réglages d'abord, en quatre unités : une pile d'une unité, le Rendu 3D sur deux, une pile
    d'une unité. Des PILES et non des cellules de grille : une rangée de grille s'aligne sur son
    plus grand, et le Rendu 3D aurait creusé sa hauteur à côté de chaque petit bloc. Ici chaque pile
@@ -325,11 +325,15 @@ const houseStats = computed(() => {
 /* Les plugins ensuite, pleine largeur, sous la grille. */
 .settings__plugins { margin-top: 14px; }
 .plugins__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.block { padding: 18px 20px; display: grid; gap: 12px; }
+.block { padding: 18px 20px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }   /* colonne bornée : rien ne l'élargit au-delà d'un téléphone */
 .block--row { grid-template-columns: 1fr auto; align-items: center; }
 .block__title { font-weight: 600; font-size: 15px; }
-.w-100 { width: 100%; display: flex; }
-.w-100 :deep(.segmented__item) { flex: 1 1 0; }
+.w-100 { width: 100%; min-width: 0; display: flex; }
+.w-100 :deep(.segmented__item) { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; }   /* un téléphone coupe le libellé plutôt que de déborder */
+@media (max-width: 599px) {
+  .block { padding: 16px 14px; }
+  .w-100 :deep(.segmented__item) { flex: 1 1 auto; padding: 0 4px; font-size: 12px; }   /* largeur à la mesure du libellé */
+}
 /* Sélecteur de thème : chaque tuile montre la palette qu'elle appliquerait (fond, carte, texte,
    accent). Empreinte fixe — la ligne de variante est toujours là, même vide. */
 /* Le contenu du Rendu 3D sur deux colonnes : les tuiles d'un côté, les bascules de l'autre.
@@ -338,9 +342,9 @@ const houseStats = computed(() => {
    Requête de CONTENEUR et non d'écran : ce qui décide, c'est la largeur du bloc, qu'il soit sur
    deux unités en grande largeur ou pleine page sur une tablette étroite. */
 .block--wide { container-type: inline-size; }
-.render { display: grid; gap: 12px; }
-.render__side { display: grid; gap: 12px; align-content: start; }
-.render__full { display: grid; gap: 12px; }
+.render { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.render__side { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-content: start; }
+.render__full { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 @container (min-width: 520px) {
   .render { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 18px; align-items: start; }
   .render__full { grid-column: 1 / -1; }

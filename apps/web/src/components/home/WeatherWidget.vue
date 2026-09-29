@@ -49,4 +49,13 @@ const condition = computed(() => (live.value ? t(`weather.conditions.${live.valu
 .wx__cond { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wx__time { font-size: 20px; font-weight: 500; line-height: 1; align-self: end; font-variant-numeric: tabular-nums; }
 .wx__date { font-size: 12px; color: var(--muted); white-space: nowrap; text-transform: capitalize; }
+/* Téléphone : la carte ne garde que l'essentiel — température et heure — sur deux lignes. */
+@media (max-width: 599px), (max-height: 500px) {
+  .wx { height: 72px; padding: 10px 12px; grid-template-rows: 26px 1fr; }
+  .wx__row { gap: 6px; }
+  .wx__icon { width: 22px; height: 22px; }
+  .wx__temp { font-size: 18px; }
+  .wx__time { font-size: 16px; }
+  .wx__cond, .wx__date { display: none; }
+}
 </style>

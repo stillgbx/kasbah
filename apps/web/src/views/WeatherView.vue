@@ -381,7 +381,7 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
 
 <style scoped>
 .weather { height: 100%; display: flex; flex-direction: column; }
-.weather__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 24px calc(var(--safe-bottom) + 24px); display: grid; gap: 20px; align-content: start; }
+.weather__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 var(--page-x) calc(var(--safe-bottom) + 24px); display: grid; gap: 20px; align-content: start; }
 .empty { padding: 24px; text-align: center; }
 /* étroit : les lieux passent sous le titre, sur toute la largeur — pastilles à gauche, recherche à droite */
 @media (max-width: 1100px) {

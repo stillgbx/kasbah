@@ -143,7 +143,7 @@ const selectedCalendar = computed(() => agenda.calendars.find((c) => c.id === se
 
 <style scoped>
 .page { height: 100%; display: flex; flex-direction: column; }
-.page__body { flex: 1 1 auto; min-height: 0; padding: 0 24px calc(var(--safe-bottom) + 24px); display: flex; flex-direction: column; gap: 12px; }
+.page__body { flex: 1 1 auto; min-height: 0; padding: 0 var(--page-x) calc(var(--safe-bottom) + 24px); display: flex; flex-direction: column; gap: 12px; }
 .agenda__arrow { width: 40px; padding: 0; justify-content: center; flex: 0 0 auto; }
 .agenda__bar { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; min-width: 0; height: 46px; }
 .agenda__bar > .pill, .agenda__bar > .segmented { flex: 0 0 auto; }

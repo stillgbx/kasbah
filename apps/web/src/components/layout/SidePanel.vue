@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Panneau latéral (340 px) : carte FLOTTANTE posée sur la scène à droite en paysage large (la scène
 // prend tout l'espace et se cadre dans la partie libre, cf. `HouseScene.setViewInset`), tiroir
-// superposé sinon.
+// superposé sinon — feuille qui monte du bas sur un téléphone en portrait.
 defineProps<{ open: boolean; docked: boolean }>()
 const emit = defineEmits<{ close: [] }>()
 </script>
@@ -52,6 +52,15 @@ const emit = defineEmits<{ close: [] }>()
 .side-panel--overlay .side-panel__scroll { padding-top: 20px; }
 .slide-enter-active, .slide-leave-active { transition: transform .22s ease; }
 .slide-enter-from, .slide-leave-to { transform: translateX(100%); }
+/* Téléphone en portrait : une feuille qui monte du bas, la scène reste visible au-dessus. */
+@media (max-width: 599px) {
+  .side-panel--overlay {
+    top: auto; left: 0; width: auto; max-width: none; height: 64dvh; padding-top: 0;
+    border-left: 0; border-top: 1px solid var(--line); border-radius: 20px 20px 0 0; overflow: hidden;
+  }
+  .side-panel--overlay .side-panel__scroll { padding-inline: var(--page-x); padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 36px); }
+  .slide-enter-from, .slide-leave-to { transform: translateY(100%); }
+}
 .fade-enter-active, .fade-leave-active { transition: opacity .2s; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
 </style>

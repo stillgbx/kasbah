@@ -101,7 +101,7 @@ const todayWh = computed(() => e.value?.todayProductionWh ?? points.value.reduce
 
 <style scoped>
 .energy { height: 100%; display: flex; flex-direction: column; }
-.energy__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 24px calc(var(--safe-bottom) + 24px); display: grid; gap: 20px; align-content: start; }
+.energy__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 var(--page-x) calc(var(--safe-bottom) + 24px); display: grid; gap: 20px; align-content: start; }
 .empty { padding: 24px; text-align: center; }
 /* `stretch` : les deux blocs de la ligne font la MÊME hauteur, celle du plus haut. */
 .energy__top { display: grid; gap: 20px; align-items: stretch; min-width: 0; }

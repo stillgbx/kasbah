@@ -124,7 +124,7 @@ const create = () => open('new')
 .search__clear { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 50%; background: transparent; color: var(--muted); flex: 0 0 auto; }
 .search__clear:hover { background: var(--surface2); color: var(--text); }
 .search__clear.is-hidden { visibility: hidden; }
-.page__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 24px calc(var(--safe-bottom) + 24px); }
+.page__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 var(--page-x) calc(var(--safe-bottom) + 24px); }
 .rows { display: grid; gap: 8px; }
 .empty { padding: 24px; text-align: center; margin-bottom: 8px; }
 @media (max-width: 600px) {

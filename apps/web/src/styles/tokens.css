@@ -44,4 +44,16 @@
   --safe-right: env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
+  /* hauteur de la barre de navigation du bas (téléphone en portrait), encoche comprise : 0 ailleurs */
+  --dock-h: 0px;
+  /* marge latérale des pages */
+  --page-x: 24px;
+}
+/* Téléphone en portrait : le rail devient une barre en bas, qui rend toute la largeur aux vues. */
+@media (max-width: 599px) {
+  :root { --rail-w: 0px; --dock-h: calc(60px + var(--safe-bottom)); --page-x: 16px; --wx-w: 108px; }
+}
+/* Téléphone en paysage : la hauteur est rare, le rail se resserre et défile. */
+@media (min-width: 600px) and (max-height: 500px) {
+  :root { --rail-w: 60px; --wx-w: 108px; }
 }

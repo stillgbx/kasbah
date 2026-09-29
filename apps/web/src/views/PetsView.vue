@@ -128,7 +128,7 @@ async function send(id: string, cmd: CommandInput): Promise<void> {
 
 <style scoped>
 .page { height: 100%; display: flex; flex-direction: column; }
-.page__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 24px calc(var(--safe-bottom) + 24px); display: grid; gap: 20px; align-content: start; }
+.page__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 var(--page-x) calc(var(--safe-bottom) + 24px); display: grid; gap: 20px; align-content: start; }
 .empty { padding: 24px; text-align: center; }
 /* Même seuil que la vue Traitement de l'eau (1040px, mesuré là-bas) : l'en-tête de carte réserve
    une largeur fixe à droite (valeur + statut), et en dessous la marque passerait sur deux lignes. */

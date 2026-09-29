@@ -90,7 +90,7 @@ const { consumption } = useConsumption(computed(() => entry.value?.descriptor.id
 
 <style scoped>
 .page { height: 100%; display: flex; flex-direction: column; }
-.page__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 24px calc(var(--safe-bottom) + 24px); display: grid; gap: 20px; align-content: start; }
+.page__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 var(--page-x) calc(var(--safe-bottom) + 24px); display: grid; gap: 20px; align-content: start; }
 .empty { padding: 24px; text-align: center; }
 /* Sous 1040px (seuil mesuré, voir rapport de tâche) : une colonne, comme avant. Au-delà : la carte
    détail et le graphique côte à côte, `stretch` (défaut de `align-items`) leur donnant la même
@@ -102,7 +102,7 @@ const { consumption } = useConsumption(computed(() => entry.value?.descriptor.id
    `.hero__name` qui défile via `MarqueeText`) — mesuré au `getBoundingClientRect()` : 68px de large
    à 950px de fenêtre (marque sur 2 lignes, 36px de haut) contre 98px à 980px (1 ligne, 18px). 1040px
    donne de la marge au-delà de ce seuil plutôt que de coller au pixel près. */
-.water__top { display: grid; gap: 20px; min-width: 0; }
+.water__top { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; min-width: 0; }   /* colonne bornée : une valeur longue ne l'élargit pas au-delà du téléphone */
 @media (min-width: 1040px) { .water__top:not(.water__top--solo) { grid-template-columns: 1fr 1fr; } }
 .hero { padding: 18px 20px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .hero__head { display: flex; align-items: center; gap: 12px; }

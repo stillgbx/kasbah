@@ -43,6 +43,8 @@ const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
 const wide = useMediaQuery('(min-width: 1000px)')
+/** Téléphone en portrait : les onglets de niveau passent sur leur propre ligne et se partagent sa largeur. */
+const phone = useMediaQuery('(max-width: 599px)')
 
 const canvas = ref<HTMLCanvasElement | null>(null)
 const labelLayer = ref<HTMLDivElement | null>(null)
@@ -383,7 +385,7 @@ const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] 
     </div>
     <div class="home__header">
       <PageHeader>
-        <Segmented class="home__floors" :model-value="house.floorTab" :options="floorTabs" @update:model-value="onTab" />
+        <Segmented class="home__floors" :model-value="house.floorTab" :options="floorTabs" :fill="phone" :dense="phone" @update:model-value="onTab" />
         <button type="button" class="pill" :title="$t('settings.appearance')" :aria-label="$t('settings.appearance')" @click="settings.cycleAppearance()">
           <StrokeIcon :name="themeIcon" :size="18" />
         </button>
@@ -429,7 +431,12 @@ const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] 
 <style scoped>
 /* La vue déborde sous le rail (marge négative de sa largeur, que `.app-main` réserve en padding) :
    la scène couvre toute la fenêtre, et ce qui flotte dessus se décale du rail à gauche. */
-.home { position: relative; height: 100%; margin-left: calc(-1 * var(--rail-w)); min-height: 0; }
+/* …et sous la barre du bas d'un téléphone en portrait (que `.app-main` réserve aussi) : ce qui flotte
+   en bas s'en écarte de `--dock-h`, nul ailleurs. */
+.home {
+  position: relative; flex: none; height: calc(100% + var(--dock-h)); margin-left: calc(-1 * var(--rail-w)); min-height: 0;
+  --float-bottom: calc(var(--safe-bottom) + var(--dock-h) + var(--panel-gap));
+}
 .home__stage { position: absolute; inset: 0; }
 /* assombrit les bords la nuit, comme une vignette : le regard va au centre, où la maison est */
 .home__vignette { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
@@ -455,23 +462,40 @@ const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] 
   .home-loader-enter-active, .home-loader-leave-active, .home__stage > .scene-canvas, .home__stage > .scene-labels,
   .home__floors, .home__search, .home__controls { transition: none; }
 }
-.home__weather { position: absolute; left: calc(var(--rail-w) + var(--panel-gap)); bottom: calc(var(--safe-bottom) + var(--panel-gap)); z-index: 2; }
+.home__weather { position: absolute; left: calc(var(--rail-w) + var(--panel-gap)); bottom: var(--float-bottom); z-index: 2; }
 /* Recherche : en bas, dans la bande laissée libre ENTRE la carte météo et les boutons de vue, et
    centrée dedans. Ses résultats s'ouvrent vers le haut (voir SearchBar), donc rien ici ne bouge. */
 .home__search {
-  position: absolute; z-index: 3; bottom: calc(var(--safe-bottom) + var(--panel-gap));
+  position: absolute; z-index: 3; bottom: var(--float-bottom);
   left: calc(var(--rail-w) + var(--panel-gap) + var(--wx-w) + var(--panel-gap));
-  right: calc(var(--safe-right) + var(--panel-gap) + var(--ctl-w) + var(--panel-gap));
+  right: calc(var(--safe-right) + var(--panel-gap) + var(--ctl-span) + var(--panel-gap));
   display: flex; justify-content: center; pointer-events: none;
 }
 .home__search > * { pointer-events: auto; }
-.home[data-wide='1'] .home__search { right: calc(var(--safe-right) + var(--aside-w) + 2 * var(--panel-gap) + 26px + var(--ctl-w) + var(--panel-gap)); }
+.home[data-wide='1'] .home__search { right: calc(var(--safe-right) + var(--aside-w) + 2 * var(--panel-gap) + 26px + var(--ctl-span) + var(--panel-gap)); }
 /* boutons de vue : rotation, zoom, vue d'ensemble — en bas à droite, avant le panneau quand il est ancré */
-.home__controls { position: absolute; right: calc(var(--safe-right) + var(--panel-gap)); bottom: calc(var(--safe-bottom) + var(--panel-gap)); z-index: 2; display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
+.home__controls { position: absolute; right: calc(var(--safe-right) + var(--panel-gap)); bottom: var(--float-bottom); z-index: 2; display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
 .home[data-wide='1'] .home__controls { right: calc(var(--safe-right) + var(--aside-w) + 2 * var(--panel-gap) + 26px); }
 .home__cluster { display: flex; flex-direction: column; border-radius: 999px; border: 1px solid var(--line); overflow: hidden; background: color-mix(in srgb, var(--surface) 86%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: var(--shadow); }
 .home__ctl { width: var(--ctl-w); height: var(--ctl-w); border: 0; background: transparent; color: var(--muted); display: grid; place-items: center; transition: background .15s, color .15s; }
 .home__ctl:hover { color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); }
 .home__cluster .home__ctl + .home__ctl { border-top: 1px solid var(--line); }
+/* Téléphone : au doigt, glisser tourne et pincer zoome — seule la « vue d'ensemble » reste. À la
+   souris dans une fenêtre basse, les deux grappes passent en rangée, sinon leur colonne monte
+   jusqu'à l'en-tête. `--ctl-span` : la largeur qu'elles occupent, que la recherche laisse libre. */
+.home { --ctl-span: var(--ctl-w); }
+@media (max-height: 500px) {
+  .home { --ctl-span: calc(5 * var(--ctl-w) + 2 * 10px + 6px); }
+  .home__controls, .home__cluster { flex-direction: row; }
+  .home__cluster .home__ctl + .home__ctl { border-top: 0; border-left: 1px solid var(--line); }
+}
+@media (pointer: coarse) and (max-width: 599px), (pointer: coarse) and (max-height: 500px) {
+  .home { --ctl-span: var(--ctl-w); }
+  .home__cluster { display: none; }
+}
+/* portrait : les onglets de niveau prennent la ligne, à côté des deux pastilles */
+@media (max-width: 599px) {
+  .home__floors { flex: 1 1 0; min-width: 0; }
+}
 .home__ctl--solo { border-radius: 999px; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 86%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: var(--shadow); color: var(--text); }
 </style>

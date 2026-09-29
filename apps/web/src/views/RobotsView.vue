@@ -343,7 +343,7 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
 /* une station qui manque n'est pas une erreur, c'est un relevé à finir : la teinte d'accent le dit
    sans crier, comme le bouton armé d'une pose */
 .dock__state[data-todo='1'] { color: var(--accent); }
-.robots__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 24px calc(var(--safe-bottom) + 24px); }
+.robots__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 var(--page-x) calc(var(--safe-bottom) + 24px); }
 .empty { padding: 24px; text-align: center; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
 .rcard { padding: 18px 20px; display: grid; gap: 14px; align-content: start; }

@@ -1190,7 +1190,11 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
 .body {
   flex: 1 1 auto; min-height: 0;
   display: grid; grid-template-columns: minmax(0, 1fr) var(--aside-w); gap: 16px;
-  padding: 0 24px 16px;
+  padding: 0 var(--page-x) 16px;
+}
+/* Téléphone en portrait : les lecteurs passent SOUS la zone centrale, sur un gros tiers de la hauteur. */
+@media (max-width: 599px) {
+  .body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 38%); gap: 10px; padding-bottom: 10px; }
 }
 .main { display: flex; flex-direction: column; min-height: 0; min-width: 0; gap: 10px; }
 /* sous la recherche : « Retour », la zone qui défile, et le voile derrière eux */
@@ -1222,6 +1226,11 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
 .search__clear:hover { color: var(--text); }
 .is-hidden { visibility: hidden; }
 .hide-explicit { display: flex; align-items: center; gap: 6px; cursor: pointer; flex: 0 0 auto; }
+/* Téléphone en portrait : la recherche prend sa ligne, « Avancée » et le filtre explicite passent dessous. */
+@media (max-width: 599px) {
+  .search { flex-wrap: wrap; row-gap: 8px; }
+  .search__field { flex: 1 1 100%; }
+}
 .small { font-size: 12px; }
 
 .browse-head { display: flex; align-items: center; gap: 12px; margin: 4px 0 10px; }

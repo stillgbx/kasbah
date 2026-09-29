@@ -117,7 +117,7 @@ function toggleFan(fan: DeviceEntry): void {
 
 <style scoped>
 .page { height: 100%; display: flex; flex-direction: column; }
-.page__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 24px calc(var(--safe-bottom) + 24px); }
+.page__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 var(--page-x) calc(var(--safe-bottom) + 24px); }
 .head { display: flex; align-items: center; gap: 14px; }
 .count { font-size: 13px; }
 .empty { padding: 24px; text-align: center; }

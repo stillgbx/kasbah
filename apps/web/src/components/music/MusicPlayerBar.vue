@@ -435,4 +435,21 @@ const explicit = computed(() => (props.pending
 .pill--transfer { height: 36px; width: 124px; padding: 0 12px; font-size: 13px; flex: 0 0 auto; justify-content: center; }
 .pill--transfer span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bar[data-empty='1'] .bar__title { color: var(--muted); }
+/* Téléphone en portrait : les trois colonnes s'empilent — le morceau, les touches, la position, puis
+   le volume avec le lecteur et « Transférer ». Hauteurs fixes : rien ne bouge d'un titre à l'autre. */
+@media (max-width: 599px) {
+  .bar {
+    --center-w: 100%; --bar-gap: 6px;
+    height: auto; grid-template-columns: minmax(0, 1fr); padding: 8px var(--page-x) calc(var(--safe-bottom) + 8px);
+  }
+  .bar__track { gap: 10px; }
+  .bar__keys { --key: 40px; --key-w: 40px; gap: 6px; }
+  .bar__right { justify-content: space-between; gap: 8px; }
+  .bar__volume { min-width: 0; max-width: none; }
+  .bar__volume-slider { min-width: 0; }
+  .bar__device-name, .bar__quality { width: 72px; }
+  /* « Transférer » en icône seule ; le libellé reste lu par les lecteurs d'écran */
+  .pill--transfer { width: 44px; padding: 0; }
+  .pill--transfer span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+}
 </style>

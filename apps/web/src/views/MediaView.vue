@@ -120,7 +120,7 @@ const skippable = (s: StateFor<'media_player'>) => loaded(s) && s.nowPlaying?.li
 
 <style scoped>
 .page { height: 100%; display: flex; flex-direction: column; }
-.page__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 24px calc(var(--safe-bottom) + 24px); }
+.page__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 var(--page-x) calc(var(--safe-bottom) + 24px); }
 .count { font-size: 13px; }
 .empty { padding: 24px; text-align: center; }
 .controls { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; margin: 2px 4px 0; }
