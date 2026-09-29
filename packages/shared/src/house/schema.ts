@@ -251,7 +251,7 @@ export const parkingSchema = z.object({
 export type Parking = z.infer<typeof parkingSchema>
 
 /** Familles d'éléments d'aménagement du jardin. Un décor : aucun appareil, aucun état. */
-export const GARDEN_KINDS = ['broadleaf', 'conifer', 'palm', 'shrub', 'rock', 'hedge'] as const
+export const GARDEN_KINDS = ['broadleaf', 'fruit', 'conifer', 'palm', 'bamboo', 'shrub', 'rock', 'hedge'] as const
 export type GardenKind = (typeof GARDEN_KINDS)[number]
 /** Bornes de hauteur d'un élément (m) : un caillou de 5 cm disparaît dans le gazon, un arbre de 40 m sort du cadre. */
 export const MIN_GARDEN_HEIGHT = 0.1

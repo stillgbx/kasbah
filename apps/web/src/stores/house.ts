@@ -78,7 +78,7 @@ function withGardenDraft(h: House | null, id: string | null, patch: GardenItemPa
 }
 
 /** Hauteur d'un élément qui naît (m) : un ordre de grandeur de la famille, réglé ensuite. */
-export const GARDEN_DEFAULT_HEIGHT: Record<GardenKind, number> = { broadleaf: 7, conifer: 9, palm: 6, shrub: 1.2, rock: 0.6, hedge: 1.8 }
+export const GARDEN_DEFAULT_HEIGHT: Record<GardenKind, number> = { broadleaf: 7, fruit: 5, conifer: 9, palm: 6, bamboo: 5, shrub: 1.2, rock: 0.6, hedge: 1.8 }
 
 function withOpeningDraft(h: House | null, id: string | null, patch: OpeningPatch | null): House | null {
   if (!h || !id || !patch) return h

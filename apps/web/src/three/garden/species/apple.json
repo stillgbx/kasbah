@@ -1,0 +1,16 @@
+{
+  "id": "apple",
+  "kind": "fruit",
+  "name": { "fr": "Pommier", "en": "Apple tree" },
+  "height": 5,
+  "trunk": { "height": 0.28, "radius": 0.035, "lean": 0.08, "forks": 4, "color": "#4a3e33" },
+  "crown": { "shape": "spreading", "width": 1.15, "masses": 10, "roughness": 0.24, "droop": 0.25 },
+  "leaf": { "color": "#4e7a34", "top": "#7fa352" },
+  "accent": { "color": "#c23a2a", "count": 50, "size": 0.03 },
+  "seasons": {
+    "spring": { "foliage": 0.7, "leaf": { "color": "#8cb85c", "top": "#b3d185" }, "accent": { "color": "#f6e3e6", "count": 140, "size": 0.03 } },
+    "autumn": { "foliage": 0.75, "leaf": { "color": "#9c8a2e", "top": "#d2ae48" }, "accent": { "color": "#b02e1e", "count": 70, "size": 0.032 } },
+    "winter": { "foliage": 0, "accent": null }
+  },
+  "source": "Sans photo (demande du 2026-09-29) : port, proportions et couleurs estimés d'après la botanique courante du pommier de jardin (Malus domestica) — tronc court et tortueux, houppier étalé un peu plus large que haut, 4 à 6 m. Floraison blanc rosé au printemps, pommes rouges de la fin d'été à l'automne, feuillage jaune terne en automne, caduc."
+}

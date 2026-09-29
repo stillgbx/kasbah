@@ -399,7 +399,7 @@
         "tiltPills": "Pills blurred"
       }
     },
-  "houseEditing": "Adjust the house and garden", "houseEditingHint": "The Home view then lets you adjust and drag windows and doors on the walls, lay out parking spots on the ground, and landscape the garden: trees, shrubs and stones to plant, move or remove. The wall survey is approximate: this is where it gets corrected. Nothing is written until something is actually adjusted."
+  "houseEditing": "Adjust the house and garden", "houseEditingDone": "Done", "houseEditingHint": "The Home view then lets you adjust and drag windows and doors on the walls, lay out parking spots on the ground, and landscape the garden: trees, shrubs and stones to plant, move or remove. The wall survey is approximate: this is where it gets corrected. Nothing is written until something is actually adjusted."
   },
   "settings": {
     "title": "Settings", "appearance": "Appearance", "system": "System", "light": "Light", "dark": "Dark",
@@ -615,10 +615,10 @@
   "garden": {
     "list": "Garden", "add": "Plant", "done": "Done",
     "count": "{n} item | {n} item | {n} items", "none": "No trees, shrubs or stones yet.",
-    "kinds": { "broadleaf": "Tree", "conifer": "Conifer", "palm": "Palm", "shrub": "Shrub", "rock": "Stone", "hedge": "Hedge" },
+    "kinds": { "broadleaf": "Tree", "fruit": "Fruit tree", "conifer": "Conifer", "palm": "Palm", "bamboo": "Bamboo", "shrub": "Shrub", "rock": "Stone", "hedge": "Hedge" },
     "placeHint": "Tap the ground in the 3D view: each tap places an item.",
     "hint": "Pick a family, then tap the ground. Tap an item to adjust or drag it.",
-    "height": "Height", "length": "Length", "width": "Width", "spacing": "Spacing", "yaw": "Orientation", "kind": "Family", "species": "Species", "generic": "Generic",
+    "height": "Height", "length": "Length", "width": "Width", "spacing": "Spacing", "yaw": "Orientation", "kind": "Family", "species": "Species", "generic": "Generic", "noSpecies": "No species yet: generic shape only.",
     "reshape": "Another shape",
     "whereHint": "Adjust it here, or drag it along the ground in the 3D view.",
     "remove": "Delete", "removeConfirm": "Confirm deletion",
@@ -630,7 +630,7 @@
     "add": "Add a spot", "cancel": "Cancel",
     "placeHint": "Tap where it is in the 3D view.",
     "addBay": "Car spot", "addDock": "{name}'s base",
-    "count": "{n} spot | {n} spot | {n} spots", "none": "No spot defined.",
+    "none": "No spot defined.",
     "bay": "Car spot", "dock": "Robot base",
     "shared": "Shared", "reserved": "Reserved for {name}",
     "width": "Width", "length": "Length", "yaw": "Heading",

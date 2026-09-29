@@ -1,6 +1,6 @@
 {
   "id": "golden-bamboo",
-  "kind": "broadleaf",
+  "kind": "bamboo",
   "name": { "fr": "Bambou doré", "en": "Golden bamboo" },
   "height": 6,
   "trunk": { "height": 0.4, "radius": 0.012, "lean": 0.05, "forks": 6, "forkAt": 0.01, "spread": 0.07, "color": "#c4ad52" },

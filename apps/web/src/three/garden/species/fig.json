@@ -1,6 +1,6 @@
 {
   "id": "fig",
-  "kind": "broadleaf",
+  "kind": "fruit",
   "name": { "fr": "Figuier", "en": "Fig tree" },
   "height": 6,
   "trunk": { "height": 0.22, "radius": 0.055, "lean": 0.08, "forks": 3, "forkAt": 0.02, "color": "#5e584a" },

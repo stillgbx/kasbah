@@ -1,4 +1,4 @@
-import { Box3, BufferAttribute, ConeGeometry, CylinderGeometry, IcosahedronGeometry, Vector3, type BufferGeometry, type Color } from 'three'
+import { Box3, BufferAttribute, ConeGeometry, CylinderGeometry, IcosahedronGeometry, OctahedronGeometry, Vector3, type BufferGeometry, type Color } from 'three'
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js'
 import type { GardenKind } from '@kasbah/shared'
 
@@ -97,6 +97,19 @@ function broadleaf(next: () => number): Record<string, BufferGeometry[]> {
   return { bark, leaf }
 }
 
+/** Un fruitier générique : un feuillu plus bas et plus étalé, semé de fruits rouges. */
+function fruit(next: () => number): Record<string, BufferGeometry[]> {
+  const { bark = [], leaf = [] } = broadleaf(next)
+  for (const g of leaf) g.scale(1.25, 1.25, 0.9)
+  const accent: BufferGeometry[] = []
+  for (let i = 0; i < 24; i++) {
+    const a = next() * Math.PI * 2
+    const e = (next() - 0.4) * 1.2
+    accent.push(positionsOnly(new OctahedronGeometry(0.025, 0)).translate(Math.cos(a) * Math.cos(e) * 0.36, Math.sin(a) * Math.cos(e) * 0.36, 0.62 + Math.sin(e) * 0.18))
+  }
+  return { bark, leaf, accent }
+}
+
 function conifer(next: () => number, variant: number): Record<string, BufferGeometry[]> {
   const bark = [trunk(0.04, 0.03, 0.2)]
   const leaf: BufferGeometry[] = []
@@ -137,6 +150,30 @@ function palm(next: () => number): Record<string, BufferGeometry[]> {
     g.rotateZ((i / fronds) * Math.PI * 2 + next() * 0.3)
     g.translate(x, 0, 0.86)
     leaf.push(positionsOnly(g))
+  }
+  return { bark, leaf }
+}
+
+/** Une touffe de chaumes presque droits, nus au pied, et des plumets de feuilles sur le haut. */
+function bamboo(next: () => number): Record<string, BufferGeometry[]> {
+  const bark: BufferGeometry[] = []
+  const leaf: BufferGeometry[] = []
+  const culms = 6 + Math.floor(next() * 4)
+  for (let i = 0; i < culms; i++) {
+    const a = next() * Math.PI * 2
+    const d = next() * 0.09
+    const x = Math.cos(a) * d
+    const y = Math.sin(a) * d
+    const h = 0.7 + next() * 0.3
+    const g = trunk(0.014, 0.01, h)
+    g.rotateY((next() - 0.5) * 0.12)
+    g.rotateZ(a)
+    bark.push(g.translate(x, y, 0))
+    const tufts = 2 + Math.floor(next() * 2)
+    for (let k = 0; k < tufts; k++) {
+      const z = h * (0.55 + (k / tufts) * 0.4)
+      leaf.push(blob(0.07 + next() * 0.04, 0.2, next).scale(1, 1, 1.5).translate(x * 1.6, y * 1.6, z))
+    }
   }
   return { bark, leaf }
 }
@@ -219,13 +256,15 @@ export function gardenShape(kind: GardenKind, variant: number, foliage = 1): Gar
   if (hit) return hit
   const next = rng(0x9e3779b9 ^ (variant * 7919) ^ kind.length * 104729)
   const raw = kind === 'broadleaf' ? broadleaf(next)
+    : kind === 'fruit' ? fruit(next)
     : kind === 'conifer' ? conifer(next, variant)
       : kind === 'palm' ? palm(next)
+        : kind === 'bamboo' ? bamboo(next)
         : kind === 'shrub' ? shrub(next)
           : rock(next)
   // mise à l'échelle sur la forme ENTIÈRE, avant d'en retirer des masses
   const width = normalize(Object.values(raw).flat(), kind === 'rock' ? 0.2 : 0)
-  if (foliage < 1 && raw.leaf && (kind === 'broadleaf' || kind === 'shrub')) {
+  if (foliage < 1 && raw.leaf && (kind === 'broadleaf' || kind === 'fruit' || kind === 'shrub')) {
     // la grande masse centrale part la première : garder les petites fait un arbre dégarni, pas un
     // arbre plus petit
     const keep = Math.max(1, Math.round(raw.leaf.length * foliage))

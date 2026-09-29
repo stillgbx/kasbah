@@ -89,7 +89,7 @@ describe('espèces du jardin', () => {
   })
 
   it('une espèce d\'une autre famille est ignorée', () => {
-    expect(speciesOf({ kind: 'broadleaf', species: 'cherry' })?.id).toBe('cherry')
+    expect(speciesOf({ kind: 'fruit', species: 'cherry' })?.id).toBe('cherry')
     expect(speciesOf({ kind: 'palm', species: 'cherry' })).toBeUndefined()
   })
 

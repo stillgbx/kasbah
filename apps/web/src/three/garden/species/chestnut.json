@@ -1,0 +1,17 @@
+{
+  "id": "chestnut",
+  "kind": "broadleaf",
+  "name": { "fr": "Châtaignier", "en": "Sweet chestnut" },
+  "height": 16,
+  "trunk": { "height": 0.3, "radius": 0.05, "lean": 0.04, "forks": 4, "color": "#4e4034" },
+  "crown": { "shape": "round", "width": 1.05, "masses": 11, "roughness": 0.22, "droop": 0.2 },
+  "leaf": { "color": "#3f6a2c", "top": "#7a9a45" },
+  "accent": { "color": "#a8b83e", "count": 60, "size": 0.025 },
+  "seasons": {
+    "spring": { "foliage": 0.85, "leaf": { "color": "#7fae4a", "top": "#b0cc72" }, "accent": null },
+    "summer": { "accent": { "color": "#ece0a0", "count": 110, "size": 0.022 } },
+    "autumn": { "foliage": 0.8, "leaf": { "color": "#b07a2a", "top": "#d8a848" }, "accent": { "color": "#8a5a24", "count": 50, "size": 0.028 } },
+    "winter": { "foliage": 0, "accent": null }
+  },
+  "source": "Sans photo (demande du 2026-09-29) : châtaignier (Castanea sativa), estimé d'après la botanique — gros fût court au bois brun sillonné, houppier ample et arrondi, feuilles vert franc. Chatons crème en été, bogues vert-jaune puis brunes à l'automne, feuillage doré-roux, caduc. Rangé en Feuillu (arbre de haute tige plus que de verger)."
+}

@@ -1,6 +1,6 @@
 {
   "id": "peach",
-  "kind": "broadleaf",
+  "kind": "fruit",
   "name": { "fr": "Pêcher", "en": "Peach tree" },
   "height": 4,
   "trunk": { "height": 0.28, "radius": 0.035, "lean": 0.1, "forks": 4, "color": "#54493a" },

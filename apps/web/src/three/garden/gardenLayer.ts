@@ -15,20 +15,22 @@ import { speciesShape } from './speciesShape'
 /** Teinte de base par famille et matière ; chaque instance s'en écarte un peu (`jitter`). */
 const COLORS: Record<GardenKind, Partial<Record<GardenPart, number>>> = {
   broadleaf: { bark: 0x7a5236, leaf: 0x6fa84a },
+  fruit: { bark: 0x5e4a38, leaf: 0x5f9a40, accent: 0xc0392b },
   conifer: { bark: 0x6b4a30, leaf: 0x3f7d4f },
   palm: { bark: 0x9a7b55, leaf: 0x7bb04a },
+  bamboo: { bark: 0x8f9a4c, leaf: 0x6a9f45 },
   shrub: { leaf: 0x5c9a45 },
   rock: { stone: 0x9aa0a6 },
   hedge: { bark: 0x5a4a3a, leaf: 0x4f8a3c },
 }
 /**
- * Feuillage des familles CADUQUES hors de l'été (feuillus, buissons) : vert tendre au printemps,
+ * Feuillage des familles CADUQUES hors de l'été (feuillus, fruitiers, buissons) : vert tendre au printemps,
  * roux en automne, terne en hiver. Conifères et palmiers gardent le leur.
  */
 const SEASON_LEAF: Partial<Record<Season, Partial<Record<GardenKind, number>>>> = {
-  spring: { broadleaf: 0x8cc152, shrub: 0x7cb342 },
-  autumn: { broadleaf: 0xd08a2e, shrub: 0xb5652b },
-  winter: { broadleaf: 0x8d8272, shrub: 0x7d7a5a },
+  spring: { broadleaf: 0x8cc152, fruit: 0x8cc152, shrub: 0x7cb342 },
+  autumn: { broadleaf: 0xd08a2e, fruit: 0xc49a34, shrub: 0xb5652b },
+  winter: { broadleaf: 0x8d8272, fruit: 0x8d8272, shrub: 0x7d7a5a },
 }
 /** Enfoncement du pied (m) : sur une pente, un tronc posé au centre flotterait côté aval. */
 const FOOT_SINK_M = 0.05

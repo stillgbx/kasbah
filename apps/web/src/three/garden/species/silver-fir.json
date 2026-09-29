@@ -1,0 +1,14 @@
+{
+  "id": "silver-fir",
+  "kind": "conifer",
+  "name": { "fr": "Sapin", "en": "Silver fir" },
+  "height": 15,
+  "trunk": { "height": 0.08, "radius": 0.025, "lean": 0, "forks": 0, "color": "#6b6660" },
+  "crown": { "shape": "cone", "width": 0.42, "masses": 8, "roughness": 0.15, "droop": 0.15 },
+  "leaf": { "color": "#24503a", "top": "#4f7a5c" },
+  "seasons": {
+    "spring": { "leaf": { "color": "#24503a", "top": "#7fa37a" } },
+    "autumn": { "accent": { "color": "#7a5a3a", "count": 20, "size": 0.025 } }
+  },
+  "source": "Sans photo (demande du 2026-09-29) : sapin pectiné (Abies alba), port et couleurs estimés d'après la botanique — flèche conique étroite, branches jusqu'au pied, écorce gris argenté, aiguilles vert sombre. Persistant : pousses claires au printemps et cônes dressés brun clair en automne."
+}

@@ -171,8 +171,10 @@ export function speciesShape(recipe: SpeciesRecipe, variant: number, season: Sea
   // Échelle tirée de l'enveloppe de TOUTES les masses, dessinées ou non : sans quoi l'arbre nu de
   // l'hiver, plus bas que son houppier, serait étiré jusqu'à la même hauteur.
   const bump = 1 + crown.roughness                    // une masse bosselée déborde de son rayon
-  const topZ = Math.max(top.z, ...masses.map((m) => m.c.z + (m.rz ?? m.r) * bump))
-  const reach = Math.max(...masses.map((m) => Math.hypot(m.c.x, m.c.y) + m.r * bump))
+  // un port conique a ses VRAIS cônes : leur pointe (z0 + crownH = 1) et leur base (R) dépassent les masses témoins
+  const cone = crown.shape === 'cone'
+  const topZ = Math.max(top.z, cone ? z0 + crownH : 0, ...masses.map((m) => m.c.z + (m.rz ?? m.r) * bump))
+  const reach = Math.max(cone ? Math.hypot(top.x, top.y) + R : 0, ...masses.map((m) => Math.hypot(m.c.x, m.c.y) + m.r * bump))
   for (const p of merged) p.geometry.scale(1 / topZ, 1 / topZ, 1 / topZ)
   const width = (2 * reach) / topZ
   merged.forEach((p, i) => { p.geometry = facet(p.geometry, next, style ? undefined : raw[i]![2]) })

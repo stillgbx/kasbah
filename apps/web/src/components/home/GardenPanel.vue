@@ -357,7 +357,7 @@ onBeforeUnmount(() => clearTimeout(disarm))
 
 .gp { padding: 12px 14px; font-size: 13px; display: grid; gap: 10px; }
 .gp__label { font-size: 12px; }
-.gp__kinds { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+.gp__kinds { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; }
 .gp__species { display: flex; flex-wrap: wrap; gap: 6px; min-height: 30px; }
 .gp__sp[data-on='1'] { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 .gp__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }

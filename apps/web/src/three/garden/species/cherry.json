@@ -1,6 +1,6 @@
 {
   "id": "cherry",
-  "kind": "broadleaf",
+  "kind": "fruit",
   "name": { "fr": "Cerisier", "en": "Cherry tree" },
   "height": 7,
   "trunk": { "height": 0.25, "radius": 0.03, "lean": 0.05, "forks": 3, "color": "#3a322c" },

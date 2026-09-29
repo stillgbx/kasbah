@@ -1,6 +1,6 @@
 {
   "id": "green-bamboo",
-  "kind": "broadleaf",
+  "kind": "bamboo",
   "name": { "fr": "Bambou vert", "en": "Green bamboo" },
   "height": 10,
   "trunk": { "height": 0.55, "radius": 0.01, "lean": 0.06, "forks": 6, "forkAt": 0.01, "spread": 0.06, "color": "#7f9e4c" },

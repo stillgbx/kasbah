@@ -1,0 +1,15 @@
+{
+  "id": "silver-birch",
+  "kind": "broadleaf",
+  "name": { "fr": "Bouleau", "en": "Silver birch" },
+  "height": 12,
+  "trunk": { "height": 0.3, "radius": 0.02, "lean": 0.06, "forks": 2, "color": "#e6e1d8" },
+  "crown": { "shape": "oval", "width": 0.55, "masses": 10, "roughness": 0.2, "droop": 0.4 },
+  "leaf": { "color": "#6a9a3c", "top": "#a8c460" },
+  "seasons": {
+    "spring": { "foliage": 0.8, "leaf": { "color": "#9cc65a", "top": "#c8e08a" }, "accent": { "color": "#b89a4a", "count": 40, "size": 0.015 } },
+    "autumn": { "foliage": 0.75, "leaf": { "color": "#d2a82c", "top": "#ecc85a" } },
+    "winter": { "foliage": 0 }
+  },
+  "source": "Sans photo (demande du 2026-09-29) : bouleau verruqueux (Betula pendula), estimé d'après la botanique — fût élancé à l'écorce blanche, houppier ovale et léger aux rameaux retombants, feuillage vert clair. Chatons bruns au printemps, jaune d'or à l'automne, caduc."
+}

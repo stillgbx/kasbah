@@ -56,6 +56,8 @@ const pluginsStats = computed(() => {
 // à l'heure qu'elle a. Le bouton arme le panneau et emmène sur la vue Maison, où les curseurs
 // changent l'image sous les doigts.
 function openTuning() { settings.setReliefEditing(false); settings.setSceneTuningOpen(true); void router.push({ name: 'home' }) }
+/** Armer l'édition mène à la vue Maison : c'est là qu'on règle, comme pour le relief. */
+function setHouseEditing(on: boolean) { settings.setHouseEditing(on); if (on) void router.push({ name: 'home' }) }
 function openRelief() { settings.setSceneTuningOpen(false); settings.setReliefEditing(true); void router.push({ name: 'home' }) }
 
 // `auto` a sa propre clé : « Automatique » (le libellé de la langue) allongeait la colonne de 73 px
@@ -256,7 +258,7 @@ const houseStats = computed(() => {
                 <div class="muted small">{{ $t('render.houseEditingHint') }}</div>
               </div>
               <v-switch :model-value="settings.houseEditing" hide-details density="compact"
-                        @update:model-value="(v: boolean | null) => settings.setHouseEditing(v === true)" />
+                        @update:model-value="(v: boolean | null) => setHouseEditing(v === true)" />
             </div>
           </section>
           <section class="card block">

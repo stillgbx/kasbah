@@ -399,7 +399,7 @@
         "tiltPills": "Pilules floutées"
       }
     },
-  "houseEditing": "Régler la maison et le jardin", "houseEditingHint": "La vue Maison permet alors de régler et de glisser les fenêtres et les portes sur les murs, de poser les places de stationnement au sol, et d'aménager le jardin : arbres, buissons et pierres, à planter, déplacer ou retirer. Le relevé des murs est approximatif : c'est ici qu'on l'ajuste. Rien n'est écrit tant qu'on n'a pas réglé quelque chose."
+  "houseEditing": "Régler la maison et le jardin", "houseEditingDone": "Terminer", "houseEditingHint": "La vue Maison permet alors de régler et de glisser les fenêtres et les portes sur les murs, de poser les places de stationnement au sol, et d'aménager le jardin : arbres, buissons et pierres, à planter, déplacer ou retirer. Le relevé des murs est approximatif : c'est ici qu'on l'ajuste. Rien n'est écrit tant qu'on n'a pas réglé quelque chose."
   },
   "settings": {
     "title": "Réglages", "appearance": "Apparence", "system": "Système", "light": "Clair", "dark": "Sombre",
@@ -615,10 +615,10 @@
   "garden": {
     "list": "Jardin", "add": "Planter", "done": "Terminé",
     "count": "{n} élément | {n} élément | {n} éléments", "none": "Aucun arbre, buisson ni pierre.",
-    "kinds": { "broadleaf": "Feuillu", "conifer": "Conifère", "palm": "Palmier", "shrub": "Buisson", "rock": "Pierre", "hedge": "Haie" },
+    "kinds": { "broadleaf": "Feuillu", "fruit": "Fruitier", "conifer": "Conifère", "palm": "Palmier", "bamboo": "Bambou", "shrub": "Buisson", "rock": "Pierre", "hedge": "Haie" },
     "placeHint": "Touchez le terrain dans la vue 3D : chaque tap y pose un élément.",
     "hint": "Choisissez une famille, puis touchez le terrain. Touchez un élément pour le régler ou le glisser.",
-    "height": "Hauteur", "length": "Longueur", "width": "Largeur", "spacing": "Espacement", "yaw": "Orientation", "kind": "Famille", "species": "Espèce", "generic": "Générique",
+    "height": "Hauteur", "length": "Longueur", "width": "Largeur", "spacing": "Espacement", "yaw": "Orientation", "kind": "Famille", "species": "Espèce", "generic": "Générique", "noSpecies": "Pas encore d'espèce : la forme générique seulement.",
     "reshape": "Autre forme",
     "whereHint": "Se règle ici, ou en glissant l'élément au sol dans la vue 3D.",
     "remove": "Supprimer", "removeConfirm": "Confirmer la suppression",
@@ -630,7 +630,7 @@
     "add": "Ajouter une place", "cancel": "Annuler",
     "placeHint": "Touchez dans la vue 3D l'endroit où elle se trouve.",
     "addBay": "Place de voiture", "addDock": "Base : {name}",
-    "count": "{n} place | {n} place | {n} places", "none": "Aucune place définie.",
+    "none": "Aucune place définie.",
     "bay": "Place de voiture", "dock": "Base de robot",
     "shared": "Partagée", "reserved": "Réservée à {name}",
     "width": "Largeur", "length": "Longueur", "yaw": "Orientation",

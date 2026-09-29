@@ -1,0 +1,13 @@
+{
+  "id": "eucalyptus",
+  "kind": "broadleaf",
+  "name": { "fr": "Eucalyptus", "en": "Eucalyptus" },
+  "height": 14,
+  "trunk": { "height": 0.4, "radius": 0.025, "lean": 0.12, "forks": 3, "color": "#cfc4b2" },
+  "crown": { "shape": "oval", "width": 0.6, "masses": 9, "roughness": 0.28, "droop": 0.3 },
+  "leaf": { "color": "#5f8577", "top": "#9ab5a4" },
+  "seasons": {
+    "spring": { "accent": { "color": "#f0ead2", "count": 50, "size": 0.018 } }
+  },
+  "source": "Sans photo (demande du 2026-09-29) : eucalyptus de jardin (type Eucalyptus gunnii), estimé d'après la botanique — fût haut, clair et lisse (écorce qui pèle en plaques crème), port dressé irrégulier et aéré, feuillage vert bleuté argenté. Persistant ; fleurs crème discrètes au printemps."
+}

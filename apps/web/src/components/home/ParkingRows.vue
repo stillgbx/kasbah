@@ -15,6 +15,8 @@ const props = defineProps<{
   list: Parking[]
   /** Pièce d'où l'on pose : son niveau est imposé à la place créée. Absent = la surface touchée décide. */
   levelId?: string
+  /** Le titre est déjà porté par l'en-tête qui l'enveloppe (section repliable du panneau de la maison). */
+  hideLabel?: boolean
 }>()
 const house = useHouseStore()
 const devices = useDevicesStore()
@@ -51,7 +53,7 @@ const armed = computed(() => house.placingParking)
 
 <template>
   <section class="block">
-    <div class="section-label">{{ $t('parking.list') }}</div>
+    <div v-if="!props.hideLabel" class="section-label">{{ $t('parking.list') }}</div>
     <div v-if="props.list.length" class="rows">
       <button v-for="p in props.list.map(row)" :key="p.id" type="button" class="park-row" @click="house.selectParking(p.id)">
         <span class="icon-square"><StrokeIcon name="parking" :size="18" /></span>
