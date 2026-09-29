@@ -196,6 +196,11 @@ export interface StyleLook {
    * La teinte est au style : une silhouette noire se perd la nuit sur un jardin noir.
    */
   bats?: { count: number; color: Color }
+  /**
+   * Boule à facettes au-dessus du toit et projecteurs qui balaient la maison (`effects/disco.ts`).
+   * Absent ou `spots` 0 = rien. Les projecteurs passent d'une couleur de `colors` à la suivante.
+   */
+  disco?: { spots: number; colors: readonly Color[] }
   garden?: GardenLook
 }
 

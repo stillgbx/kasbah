@@ -326,7 +326,7 @@
   },
   "render": {
     "title": "Rendu 3D", "style": "Style",
-    "styles": { "realistic": "Réaliste", "nature": "Nature", "cyberpunk": "Cyberpunk", "candy": "Candy", "indigo": "Indigo", "maquette": "Maquette", "haunted": "Maison hantée" },
+    "styles": { "realistic": "Réaliste", "nature": "Nature", "cyberpunk": "Cyberpunk", "candy": "Candy", "indigo": "Indigo", "maquette": "Maquette", "haunted": "Maison hantée", "disco": "Disco" },
     "assets": "Matières en images",
     "assetsHint": "Textures photo libres (ambientCG, CC0) à la place des matières calculées : plâtre, parquet, gazon, pavés… Le style garde ses couleurs pour le reste.",
     "assetsNone": "Ce style est entièrement calculé : il n'a pas de matières en images.",

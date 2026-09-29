@@ -326,7 +326,7 @@
   },
   "render": {
     "title": "3D rendering", "style": "Style",
-    "styles": { "realistic": "Realistic", "nature": "Nature", "cyberpunk": "Cyberpunk", "candy": "Candy", "indigo": "Indigo", "maquette": "Model", "haunted": "Haunted house" },
+    "styles": { "realistic": "Realistic", "nature": "Nature", "cyberpunk": "Cyberpunk", "candy": "Candy", "indigo": "Indigo", "maquette": "Model", "haunted": "Haunted house", "disco": "Disco" },
     "assets": "Photo materials",
     "assetsHint": "Free photo textures (ambientCG, CC0) instead of the computed materials: plaster, parquet, grass, pavers… The style keeps its colours for the rest.",
     "assetsNone": "This style is fully computed: it has no photo materials.",

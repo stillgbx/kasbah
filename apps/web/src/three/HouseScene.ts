@@ -23,6 +23,7 @@ import { roomFocusUniforms, setRoomFocusShape, setRoomFocusStrength } from './co
 import { createPostPipeline, detectQuality, gpuName, PIXEL_RATIO, tiltBlurFactor, toneMappingOf, type EffectiveQuality, type PostPipeline, type RenderQuality } from './core/post'
 import { dayFactor, fogDistance, sunDirection, type SceneAmbience } from './core/ambience'
 import { Bats } from './effects/bats'
+import { Disco } from './effects/disco'
 import { Precipitation } from './effects/precipitation'
 import { createWaterUniforms, makeWaterAlive, setWaterSun, setWaterTint, setWaterWind, WaterCaustics, type WaterStrength } from './effects/water'
 import { defaultAmbience, defaultSceneTheme, rolesOf, styleById, type GlowLook, type PostLook, type RenderStyle, type StyleLook } from './styles'
@@ -408,6 +409,9 @@ export class HouseScene {
   /** Chauves-souris du style (`effects/bats.ts`), et de quoi retirer leur animation. */
   private bats: Bats | null = null
   private stopBats: (() => void) | null = null
+  /** Boule à facettes et projecteurs du style (`effects/disco.ts`), et de quoi retirer leur animation. */
+  private disco: Disco | null = null
+  private stopDisco: (() => void) | null = null
   private precipIntensity = 0
   /**
    * L'eau vivante (`effects/water.ts`) : un temps PARTAGÉ par la surface et le fond — crêtes et
@@ -710,6 +714,7 @@ export class HouseScene {
     this.scene.add(this.nodes.root)
     this.syncPrecipitation()               // la racine est neuve : ce qui tombe se repose dessus
     this.syncBats()
+    this.syncDisco()
     this.applyMist()                       // la nappe se pose sur CE terrain
     if (turned) this.applySky()            // le soleil du ciel suit le cap de la maison
     this.fitSunShadow()
@@ -902,6 +907,7 @@ export class HouseScene {
     this.clearOriginMark()
     this.removePrecipitation()
     this.removeBats()
+    this.removeDisco()
     // une maison neuve part posée : aucun étage n'est en vol
     for (const s of this.lifts.values()) s.tween?.cancel()
     this.lifts.clear()
@@ -3581,6 +3587,7 @@ export class HouseScene {
     this.syncStorm()
     this.syncPrecipitation()
     this.syncBats()
+    this.syncDisco()
     this.syncWater()                       // le style dit si l'eau bouge, l'heure ce que le fond reçoit
     this.loop.invalidate()
     void this.compileBeforeShow()
@@ -3687,6 +3694,29 @@ export class HouseScene {
     this.stopBats = null
     this.bats?.dispose()
     this.bats = null
+  }
+
+  /**
+   * La boule à facettes et les projecteurs du style (`effects/disco.ts`) : même régime que les
+   * chauves-souris (20 Hz, coupés en qualité basse). Même nombre de projecteurs : on garde la fête.
+   */
+  private syncDisco(): void {
+    const n = this.look.disco?.spots ?? 0
+    if (n <= 0 || this.quality === 'low' || !this.nodes || !this.geometry) { this.removeDisco(); return }
+    if (this.disco && this.disco.spotCount === n && this.disco.object.parent === this.nodes.root) { this.disco.setColors(this.look.disco!.colors); return }
+    this.removeDisco()
+    const b = this.geometry.bounds
+    const disco = new Disco({ min: [b.min[0], b.min[1]], max: [b.max[0], b.max[1]], roofZ: b.max[2] }, n, this.look.disco!.colors)
+    this.disco = disco
+    this.nodes.root.add(disco.object)
+    this.stopDisco = this.loop.addAnimation({ step: (_now, dtS) => { if (this.disco !== disco) return false; disco.step(dtS); return true } })
+  }
+
+  private removeDisco(): void {
+    this.stopDisco?.()
+    this.stopDisco = null
+    this.disco?.dispose()
+    this.disco = null
   }
 
   private removePrecipitation(): void {
@@ -3825,6 +3855,7 @@ export class HouseScene {
     this.quality = wanted
     this.syncPrecipitation()               // la qualité basse coupe la pluie
     this.syncBats()                        // …et les chauves-souris
+    this.syncDisco()                       // …et la boule à facettes
     this.syncWater()                       // …et fige l'eau
     if (!this.renderer) return
     const pixelRatio = Math.min(window.devicePixelRatio || 1, PIXEL_RATIO[wanted])
@@ -4048,6 +4079,7 @@ export class HouseScene {
     if (this.stormTimer !== null) { clearTimeout(this.stormTimer); this.stormTimer = null }
     this.removePrecipitation()
     this.removeBats()
+    this.removeDisco()
     this.drag?.detach()
     this.openingDragger?.detach()
     this.gardenDragger?.detach()
