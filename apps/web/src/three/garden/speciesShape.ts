@@ -42,6 +42,8 @@ export function speciesShape(recipe: SpeciesRecipe, variant: number, season: Sea
   const heading = next() * Math.PI * 2
   const top = new Vector3(Math.cos(heading) * Math.sin(trunk.lean) * trunk.height, Math.sin(heading) * Math.sin(trunk.lean) * trunk.height, trunk.height)
   bark.push(limb(new Vector3(0, 0, 0), top, trunk.radius))
+  // départ des charpentières : le haut du fût, ou plus bas sur son axe (cépée du figuier, du noisetier)
+  const fork = trunk.forkAt === undefined ? top : top.clone().multiplyScalar(Math.min(1, trunk.forkAt / Math.max(trunk.height, 1e-6)))
 
   const leaf: BufferGeometry[] = []
   const masses: { c: Vector3; r: number }[] = []
@@ -84,7 +86,13 @@ export function speciesShape(recipe: SpeciesRecipe, variant: number, season: Sea
   // charpentières : du haut du fût vers les masses les plus basses, jusqu'aux deux tiers.
   const low = [...masses].sort((m1, m2) => m1.c.z - m2.c.z)
   if (foliage >= 1) {
-    for (let k = 0; k < Math.min(trunk.forks, low.length); k++) bark.push(limb(top, top.clone().lerp(low[k]!.c, 0.7), trunk.radius * 0.6))
+    // une cépée monte ses tiges jusque DANS leur masse, et son fût central jusqu'au cœur du houppier
+    if (trunk.forkAt === undefined) {
+      for (let k = 0; k < Math.min(trunk.forks, low.length); k++) bark.push(limb(top, top.clone().lerp(low[k]!.c, 0.7), trunk.radius * 0.6))
+    } else {
+      for (let k = 0; k < Math.min(trunk.forks, low.length); k++) bark.push(limb(fork, fork.clone().lerp(low[k]!.c, 0.9), trunk.radius * 0.6))
+      bark.push(limb(top, top.clone().lerp(masses[0]!.c, 0.8), trunk.radius * 0.7))
+    }
   } else {
     // Un arbre dégarni montre sa ramure, qui doit se lire ÉTAGÉE : une flèche prolonge le fût dans le
     // houppier, et chaque branche en part à la hauteur de la masse qu'elle nourrit (les basses en bas),
@@ -93,7 +101,8 @@ export function speciesShape(recipe: SpeciesRecipe, variant: number, season: Sea
     const leader = new Vector3(top.x, top.y, crest.c.z + crest.r * 0.5)
     bark.push(limb(top, leader, trunk.radius * 0.7))
     low.forEach((m, k) => {
-      const from = top.clone().lerp(leader, 0.1 + 0.65 * (k / Math.max(1, low.length - 1)))
+      // les plus basses d'une cépée partent du même point bas que l'été
+      const from = trunk.forkAt !== undefined && k < trunk.forks ? fork.clone() : top.clone().lerp(leader, 0.1 + 0.65 * (k / Math.max(1, low.length - 1)))
       const to = from.clone().lerp(m.c, 0.95)
       bark.push(limb(from, to, trunk.radius * 0.45))
       const knot = from.clone().lerp(to, 0.55)

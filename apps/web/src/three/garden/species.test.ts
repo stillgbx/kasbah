@@ -42,6 +42,21 @@ describe('espèces du jardin', () => {
     expect(bark({ foliage: 0.45 })).toBeGreaterThan(bark())
   })
 
+  it('forkAt fait partir les charpentières du bas du fût, et monter l\'écorce dans le houppier', () => {
+    const cherry = SPECIES.find((s) => s.id === 'cherry')!
+    const at = (forkAt?: number, season: 'summer' | 'winter' = 'summer') => speciesShape({ ...cherry, trunk: { ...cherry.trunk, forkAt } }, 0, season)
+      .parts.find((p) => p.part === 'bark')!.geometry.getAttribute('position')
+    // sommets d'écorce près du sol : le pied du fût seul sans forkAt, plus le pied de chaque charpentière avec
+    const low = (pos: ReturnType<typeof at>) => {
+      let n = 0
+      for (let i = 0; i < pos.count; i++) if (pos.getZ(i) < 0.1) n++
+      return n
+    }
+    const topZ = (pos: ReturnType<typeof at>) => Math.max(...Array.from({ length: pos.count }, (_, i) => pos.getZ(i)))
+    expect(topZ(at(0.02))).toBeGreaterThan(topZ(at()))   // l'été, tiges et fût central entrent dans le feuillage
+    for (const season of ['summer', 'winter'] as const) expect(low(at(0.02, season)), season).toBeGreaterThan(low(at(undefined, season)) * 2)
+  })
+
   it('une espèce d\'une autre famille est ignorée', () => {
     expect(speciesOf({ kind: 'broadleaf', species: 'cherry' })?.id).toBe('cherry')
     expect(speciesOf({ kind: 'palm', species: 'cherry' })).toBeUndefined()

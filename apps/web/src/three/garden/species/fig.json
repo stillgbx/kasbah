@@ -1,0 +1,16 @@
+{
+  "id": "fig",
+  "kind": "broadleaf",
+  "name": { "fr": "Figuier", "en": "Fig tree" },
+  "height": 6,
+  "trunk": { "height": 0.22, "radius": 0.055, "lean": 0.08, "forks": 3, "forkAt": 0.02, "color": "#5e584a" },
+  "crown": { "shape": "spreading", "width": 2, "masses": 12, "roughness": 0.28, "droop": 0.55 },
+  "leaf": { "color": "#48622a", "top": "#809646" },
+  "accent": { "color": "#5b3a55", "count": 25, "size": 0.025 },
+  "seasons": {
+    "spring": { "foliage": 0.6, "leaf": { "color": "#86ad48", "top": "#b6d27a" }, "accent": null },
+    "autumn": { "foliage": 0.6, "leaf": { "color": "#b09a32", "top": "#dcc65a" }, "accent": null },
+    "winter": { "foliage": 0, "accent": null }
+  },
+  "source": "Photo d'un figuier adulte isolé dans un pré, fournie le 2026-09-29 (images/1.png de la session). Feuillage mesuré par scripts/photo-palette.mjs (cœur #5c6c33, haut côté lumière #7e8d46/#a0ae67, ravivés puis refoncés après rendu) ; tronc estimé à l'œil (la zone mesurée ramasse l'herbe). Figues d'été, débourrement tardif, jaune d'automne et caducité déduits de la botanique."
+}

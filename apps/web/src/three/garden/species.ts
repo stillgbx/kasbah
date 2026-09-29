@@ -40,6 +40,8 @@ export const speciesSchema = z.object({
     lean: z.number().min(0).max(0.6),
     /** Charpentières qui partent du haut du fût vers le houppier (0 = aucune). */
     forks: z.number().int().min(0).max(6),
+    /** Départ des charpentières sur le fût, en part de la hauteur totale (absent = haut du fût) : bas pour une cépée. */
+    forkAt: unit.optional(),
     color: hex,
   }),
   crown: z.object({
