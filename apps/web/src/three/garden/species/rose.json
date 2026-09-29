@@ -1,0 +1,16 @@
+{
+  "id": "rose",
+  "kind": "shrub",
+  "name": { "fr": "Rosier", "en": "Rose bush" },
+  "height": 1.2,
+  "trunk": { "height": 0.1, "radius": 0.015, "lean": 0.05, "forks": 5, "forkAt": 0.02, "color": "#5a4a30" },
+  "crown": { "shape": "round", "width": 0.9, "masses": 9, "roughness": 0.3, "droop": 0.2 },
+  "leaf": { "color": "#3f6a30", "top": "#6f9450" },
+  "accent": { "color": "#c8283c", "count": 90, "size": 0.06 },
+  "seasons": {
+    "spring": { "foliage": 0.8, "leaf": { "color": "#5a8a3a", "top": "#8cb060" }, "accent": { "color": "#c8283c", "count": 30, "size": 0.05 } },
+    "autumn": { "foliage": 0.8, "accent": { "color": "#c8283c", "count": 35, "size": 0.055 } },
+    "winter": { "foliage": 0, "accent": { "color": "#b8402a", "count": 20, "size": 0.025 } }
+  },
+  "source": "Sans photo (demande du 2026-09-29) : rosier buisson remontant à fleurs rouges, estimé d'après la botanique — touffe de tiges parties du pied (cépée), feuillage vert sombre. Premières roses à la fin du printemps, pleine floraison l'été, remontée plus clairsemée à l'automne, cynorhodons orangés sur les tiges nues en hiver, caduc."
+}

@@ -1,0 +1,16 @@
+{
+  "id": "quince",
+  "kind": "fruit",
+  "name": { "fr": "Cognassier", "en": "Quince tree" },
+  "height": 4,
+  "trunk": { "height": 0.2, "radius": 0.03, "lean": 0.12, "forks": 3, "color": "#5a4a3c" },
+  "crown": { "shape": "round", "width": 1.1, "masses": 9, "roughness": 0.25, "droop": 0.3 },
+  "leaf": { "color": "#5a8040", "top": "#8fb070" },
+  "accent": { "color": "#b8c048", "count": 30, "size": 0.04 },
+  "seasons": {
+    "spring": { "foliage": 0.8, "leaf": { "color": "#8cb85c", "top": "#b8d48c" }, "accent": { "color": "#f4d8dc", "count": 70, "size": 0.035 } },
+    "autumn": { "foliage": 0.8, "leaf": { "color": "#c8a030", "top": "#e0c050" }, "accent": { "color": "#e8c830", "count": 35, "size": 0.045 } },
+    "winter": { "foliage": 0, "accent": null }
+  },
+  "source": "Sans photo (demande du 2026-09-29) : cognassier (Cydonia oblonga), estimé d'après la botanique — petit arbre au tronc court et tortueux, houppier arrondi un peu retombant, feuilles vert moyen au revers grisé. Grandes fleurs rose pâle au printemps, coings verts l'été puis jaune d'or à l'automne, feuillage jaune, caduc."
+}

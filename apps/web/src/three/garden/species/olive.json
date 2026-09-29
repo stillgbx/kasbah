@@ -1,0 +1,16 @@
+{
+  "id": "olive",
+  "kind": "fruit",
+  "name": { "fr": "Olivier", "en": "Olive tree" },
+  "height": 5,
+  "trunk": { "height": 0.35, "radius": 0.06, "lean": 0.15, "forks": 3, "color": "#6e675c" },
+  "crown": { "shape": "spreading", "width": 1.1, "masses": 12, "roughness": 0.3, "droop": 0.15 },
+  "leaf": { "color": "#6b7d5a", "top": "#a3ad8e" },
+  "accent": { "color": "#7a8a3a", "count": 60, "size": 0.018 },
+  "seasons": {
+    "spring": { "leaf": { "color": "#6b7d5a", "top": "#b3bc9c" }, "accent": { "color": "#e8e2c0", "count": 70, "size": 0.012 } },
+    "autumn": { "accent": { "color": "#3a2a3a", "count": 80, "size": 0.02 } },
+    "winter": { "accent": null }
+  },
+  "source": "Sans photo (demande du 2026-09-29) : olivier (Olea europaea), estimé d'après la botanique — tronc court, épais, noueux et penché à l'écorce grise, houppier étalé et ébouriffé, feuillage vert-gris argenté. Persistant ; petites fleurs crème au printemps, olives vertes l'été puis noires à l'automne, récoltées avant l'hiver."
+}

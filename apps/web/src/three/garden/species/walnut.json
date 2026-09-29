@@ -1,0 +1,16 @@
+{
+  "id": "walnut",
+  "kind": "broadleaf",
+  "name": { "fr": "Noyer", "en": "Walnut tree" },
+  "height": 15,
+  "trunk": { "height": 0.35, "radius": 0.045, "lean": 0.04, "forks": 4, "color": "#8a8478" },
+  "crown": { "shape": "spreading", "width": 1.2, "masses": 11, "roughness": 0.2, "droop": 0.15 },
+  "leaf": { "color": "#4f7a34", "top": "#86a655" },
+  "accent": { "color": "#6a8a3a", "count": 40, "size": 0.025 },
+  "seasons": {
+    "spring": { "foliage": 0.6, "leaf": { "color": "#a88a5a", "top": "#c0b070" }, "accent": null },
+    "autumn": { "foliage": 0.7, "leaf": { "color": "#a8903a", "top": "#cdb258" }, "accent": { "color": "#6a5030", "count": 30, "size": 0.025 } },
+    "winter": { "foliage": 0, "accent": null }
+  },
+  "source": "Sans photo (demande du 2026-09-29) : noyer commun (Juglans regia), estimé d'après la botanique — fût clair gris argenté, houppier ample et étalé, feuillage vert franc. Feuilles tardives et bronzées au printemps, brou vert l'été, noix brunes et feuillage jaune-brun à l'automne, caduc. Rangé en Feuillu (grand arbre de haute tige, comme le châtaignier)."
+}
