@@ -124,6 +124,9 @@ function onEscape() {
    seulement la teinte — mesurée à 1,26:1, elle ne disait pas assez où le clavier se trouve.
    `outline` et non `border` : il se pose SUR la ligne sans en changer la hauteur. */
 .search__row[data-on='1'] { background: color-mix(in srgb, var(--accent) 14%, transparent); outline: 2px solid var(--accent); outline-offset: -2px; }
+/* le gris seul tombe à 4,07:1 sur la teinte de la ligne active (thème clair) : un quart de texte
+   le remonte au-dessus de 4,5:1, dans le sens du texte, donc dans tous les thèmes */
+.search__row[data-on='1'] .search__sub { color: color-mix(in srgb, var(--muted) 75%, var(--text)); }
 .search__row--empty { justify-content: center; }
 .search__icon { color: var(--muted); flex: none; }
 /* une ligne chacun, coupés aux points de suspension : toutes les lignes ont la même hauteur */

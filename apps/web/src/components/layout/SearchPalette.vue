@@ -127,8 +127,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
 .palette__row + .palette__row { border-top: 1px solid var(--line); }
 /* même ligne active que la barre de la vue Maison : teinte ET liseré, `outline` pour ne rien décaler */
 .palette__row[data-on='1'] { background: color-mix(in srgb, var(--accent) 14%, transparent); outline: 2px solid var(--accent); outline-offset: -2px; }
+/* le gris seul tombe à 4,07:1 sur la teinte de la ligne active (thème clair) : un quart de texte
+   le remonte au-dessus de 4,5:1, dans le sens du texte, donc dans tous les thèmes */
+.palette__row[data-on='1'] .palette__sub { color: color-mix(in srgb, var(--muted) 75%, var(--text)); }
 .palette__row--empty { justify-content: center; }
 .palette__icon { color: var(--muted); flex: none; }
 .palette__label { flex: 1 1 auto; min-width: 0; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .palette__sub { flex: 0 1 auto; min-width: 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* téléphone : le texte indicatif français (283 px) ne tenait pas dans le champ (281 px) à 16 px
+   de marge ; 12 px lui rendent la place sans toucher à la boîte */
+@media (max-width: 599px) {
+  .palette__field, .palette__row { padding: 0 12px; }
+}
 </style>
