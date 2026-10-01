@@ -230,11 +230,12 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
       entry.backoff.reset()
       log().info({ externalId: id, name: entry.service.txt.fn }, 'cast device connected')
       startAudioProbe(entry)
-    } catch (err) {
+    } catch {
       // `open` échoué : `onClose` n'est pas forcément passé (connexion jamais établie)
       entry.connection = null
       connection.close('open failed')
-      log().warn({ externalId: id, host: entry.service.host, err }, 'cast connection failed')
+      // log désactivés car trop nombreux
+      // log().warn({ externalId: id, host: entry.service.host, err }, 'cast connection failed')
       scheduleReconnect(entry)
     }
   }
