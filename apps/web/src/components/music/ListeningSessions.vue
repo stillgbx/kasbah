@@ -196,7 +196,7 @@ function tap(r: Row) {
             </button>
             <!-- ce navigateur n'a pas de place dans la maison : la touche disparaît, son emplacement reste -->
             <button type="button" class="key" :class="{ 'is-hidden': r.local }" :disabled="r.local" :tabindex="r.local ? -1 : 0"
-                    :title="$t('music.locate')" :aria-label="$t('music.locate')" @click.stop="emit('locate', r.id)">
+                    :title="$t('common.showIn3d')" :aria-label="$t('common.showIn3d')" @click.stop="emit('locate', r.id)">
               <StrokeIcon name="pin" :size="16" />
             </button>
           </template>

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { HOME_RADIUS_M, estimateChargePowerW, geoDistance, type Capability, type CommandInput, type DeviceEntry, type StateFor } from '@kasbah/shared'
+import { useRouter } from 'vue-router'
+import { HOME_RADIUS_M, estimateChargePowerW, geoDistance, sitePosition, type Capability, type CommandInput, type DeviceEntry, type StateFor } from '@kasbah/shared'
 import PageHeader from '../components/layout/PageHeader.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import ChargeLimitCard from '../components/vehicles/ChargeLimitCard.vue'
@@ -23,6 +24,7 @@ import { useHouseStore } from '../stores/house'
 // déclare ni `lock` ni `charging`, et ne se voit donc pas proposer ce qu'il refuserait.
 const devices = useDevicesStore()
 const house = useHouseStore()
+const router = useRouter()
 const { t, locale } = useI18n()
 const EMPTY = '—'
 const TIRES = ['fl', 'fr', 'rl', 'rr'] as const
@@ -61,6 +63,21 @@ function location(s: StateFor<'vehicle'>): string {
   if (!o || !s.location) return t('common.unknown')
   const d = geoDistance(o, s.location)
   return d < HOME_RADIUS_M ? t('vehicle.atHome') : t('vehicle.away', { distance: formatDistance(d, locale.value) })
+}
+/**
+ * Sur le TERRAIN, la voiture est dessinée dans la 3D : même test que la scène (`gpsPoint`), le
+ * relevé corrigé de son décalage tombe dans le polygone du terrain. « À la maison » (rayon) ne suffit
+ * pas : le rayon déborde le terrain, et on proposerait d'aller voir une voiture que la 3D ne montre pas.
+ */
+function onSite(v: VehicleEntry): boolean {
+  const h = house.effective ?? house.house
+  if (!h || !v.state.location) return false
+  return sitePosition(h, v.state.location, house.houseDeviceFor(v.descriptor.id)?.gpsOffset) !== null
+}
+/** Ouvre la voiture dans la 3D, même ordre que la liste des appareils : naviguer, PUIS sélectionner. */
+async function showIn3d(v: VehicleEntry): Promise<void> {
+  await router.push({ name: 'home' }).catch(() => {})
+  house.selectDevice(house.houseDeviceFor(v.descriptor.id)?.id ?? v.descriptor.id)
 }
 const has = (v: VehicleEntry, c: Capability) => v.descriptor.capabilities.includes(c)
 const asleep = (s: StateFor<'vehicle'>) => s.sleepState !== undefined && s.sleepState !== 'online'
@@ -247,7 +264,8 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
       <div class="cards">
         <article v-for="v in vehicles" :key="v.descriptor.id" class="card vcard">
           <div class="vcard__head">
-            <span class="icon-square" :data-on="v.state.charging ? '1' : '0'"><StrokeIcon name="vehicle" :size="18" /></span>
+            <!-- en charge : l'éclair et un halo qui pulse (une ombre : rien ne bouge autour) -->
+            <span class="icon-square vcard__icon" :data-on="v.state.charging ? '1' : '0'"><StrokeIcon :name="v.state.charging ? 'bolt' : 'vehicle'" :size="18" /></span>
             <div class="min0">
               <!-- nom, ou saisie : le champ occupe la MÊME boîte que le titre, rien ne se décale -->
               <div class="vcard__name-row">
@@ -262,13 +280,26 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
                   </button>
                 </template>
               </div>
-              <div class="muted vcard__sub">{{ v.descriptor.meta.manufacturer ?? v.descriptor.pluginId }} · {{ location(v.state) }}</div>
+              <!-- sur le terrain, l'épingle au bout du lieu mène (même pastille que les listes d'appareils) à la voiture dans la 3D. Il est au BOUT
+                   de la ligne : absent, il ne décale rien -->
+              <div class="muted vcard__sub">
+                <span class="vcard__sub-text" :title="`${v.descriptor.meta.manufacturer ?? v.descriptor.pluginId} · ${location(v.state)}`">{{ v.descriptor.meta.manufacturer ?? v.descriptor.pluginId }} · {{ location(v.state) }}</span>
+                <button v-if="onSite(v)" type="button" class="vcard__locate" :title="$t('common.showIn3d')" :aria-label="$t('common.showIn3d')" @click="showIn3d(v)">
+                  <StrokeIcon name="pin" :size="14" />
+                </button>
+              </div>
             </div>
-            <!-- pas de pastille quand le fabricant n'a pas de veille (Renault) : un soleil suivi d'un
-                 tiret se lirait « éveillée : inconnu ». Rien ne bouge pour autant, l'absence est stable -->
-            <span v-if="v.state.sleepState !== undefined" class="vcard__sleep muted" :data-asleep="asleep(v.state) ? '1' : '0'">
-              <StrokeIcon :name="asleep(v.state) ? 'moon' : 'sun'" :size="14" />{{ $t(`vehicle.sleep.${v.state.sleepState}`) }}
-            </span>
+            <!-- à droite, deux lignes en face du nom et du sous-titre : la veille, puis l'âge des valeurs.
+                 L'âge est en HAUT de carte : il ne descend plus quand un panneau s'ouvre -->
+            <div class="vcard__side">
+              <!-- pas de pastille quand le fabricant n'a pas de veille (Renault) : un soleil suivi d'un
+                   tiret se lirait « éveillée : inconnu ». Rien ne bouge pour autant, l'absence est stable -->
+              <span v-if="v.state.sleepState !== undefined" class="vcard__sleep muted" :data-asleep="asleep(v.state) ? '1' : '0'">
+                <StrokeIcon :name="asleep(v.state) ? 'moon' : 'sun'" :size="14" />{{ $t(`vehicle.sleep.${v.state.sleepState}`) }}
+              </span>
+              <!-- l'âge des valeurs, toujours affiché : sur une API facturée et une voiture qui dort, elles en ont un -->
+              <span class="muted vcard__age" :title="asleep(v.state) ? $t('vehicle.wakeHint') : undefined">{{ readAgo(v.state) }}</span>
+            </div>
           </div>
           <div class="vcard__soc">
             <div class="big-value">{{ unread(v.state) ? EMPTY : formatPercent(v.state.soc, locale) }}</div>
@@ -277,7 +308,8 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
           <!-- la jauge et ses repères : la cible de charge, et le plancher voulu quand le fabricant
                a cette notion (la R5 ; Tesla ne l'a pas, et un seul repère se dessine alors) -->
           <div class="vcard__bar">
-            <div class="vcard__bar-fill" :style="{ width: `${v.state.soc}%` }" />
+            <!-- en charge, un reflet parcourt le remplissage : on voit la charge active d'un coup d'œil -->
+            <div class="vcard__bar-fill" :data-charging="v.state.charging ? '1' : '0'" :style="{ width: `${v.state.soc}%` }" />
             <span v-if="v.state.socMin !== undefined" class="vcard__tick" :style="{ left: `${v.state.socMin}%` }"
                   :title="$t('vehicle.floorMark', { percent: formatPercent(v.state.socMin, locale) })" />
             <span v-if="v.state.chargeLimit !== undefined" class="vcard__tick" :style="{ left: `${v.state.chargeLimit}%` }"
@@ -361,12 +393,10 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
           </div>
           <VehicleClimate v-if="climate === v.descriptor.id" class="card card--soft" :descriptor="v.descriptor" :state="v.state" />
           <VehicleTuning v-if="tuning === v.descriptor.id" :descriptor="v.descriptor" />
-          <!-- l'âge des valeurs, toujours affiché : sur une API facturée et une voiture qui dort, elles en ont un -->
-          <p class="muted vcard__hint">{{ readAgo(v.state) }}<template v-if="asleep(v.state)"> · {{ $t('vehicle.wakeHint') }}</template></p>
           <!-- ce qu'il reste du quota que le plugin s'impose (API du fabricant facturée) : rien pour
                un plugin qui ne compte pas, la simulation par exemple -->
           <div v-if="quotaOf(v)" class="vcard__quota">
-            <span class="muted vcard__quota-text">{{ quotaLabel(quotaOf(v)!) }}</span>
+            <span class="muted vcard__quota-text" :title="quotaLabel(quotaOf(v)!)">{{ quotaLabel(quotaOf(v)!) }}</span>
             <div class="vcard__quota-track">
               <div class="vcard__quota-fill" :data-tense="quotaPercent(quotaOf(v)!.used, quotaOf(v)!.limit) >= QUOTA_TENSE_PCT ? '1' : '0'"
                    :style="{ width: `${quotaPercent(quotaOf(v)!.used, quotaOf(v)!.limit)}%` }" />
@@ -398,15 +428,44 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
   font: inherit; font-size: inherit; font-weight: inherit;
 }
 .vcard__name { font-weight: 600; font-size: 16px; }
-.vcard__sub { font-size: 12px; }
+/* une ligne, coupée : l'âge des valeurs en face lui prend de la largeur, et un lieu long qui passait
+   à la ligne faisait grandir l'en-tête de 18 px sur téléphone (mesuré le 2026-10-01) */
+.vcard__sub { font-size: 12px; display: flex; align-items: center; gap: 4px; min-width: 0; height: 18px; }
+.vcard__sub-text { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* l'épingle « voir dans la vue 3D » : la pastille `.badge--show` des listes d'appareils (RoomBands),
+   dans la hauteur de la ligne */
+.vcard__locate {
+  flex: none; display: grid; place-items: center; width: 18px; height: 18px; padding: 0;
+  border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; transition: background .15s, color .15s;
+}
+.vcard__locate:hover, .vcard__locate:focus-visible { background: var(--accent-soft); color: var(--accent); }
 .min0 { min-width: 0; flex: 1 1 auto; }
-.vcard__sleep { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap; flex: 0 0 auto; }
+/* deux rangées fixes : l'âge reste sur la seconde (celle du sous-titre) même sans pastille de veille */
+.vcard__side { flex: 0 0 auto; align-self: stretch; display: grid; grid-template-rows: auto auto; align-content: space-between; justify-items: end; }
+.vcard__sleep { grid-row: 1; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap; }
+.vcard__age { grid-row: 2; font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .vcard__sleep[data-asleep='1'] { color: var(--text); }
 .vcard__soc { display: flex; align-items: baseline; justify-content: space-between; }
 /* pas d'`overflow: hidden` : les repères DÉBORDENT de la jauge, c'est ce qui les rend lisibles.
    Le remplissage a son propre arrondi, il n'a jamais eu besoin d'être rogné. */
 .vcard__bar { position: relative; height: 6px; border-radius: 999px; background: var(--line); }
-.vcard__bar-fill { height: 100%; background: var(--accent); border-radius: 999px; transition: width .4s; }
+.vcard__bar-fill { position: relative; height: 100%; background: var(--accent); border-radius: 999px; transition: width .4s; }
+/* le reflet est rogné au remplissage, pas à la jauge : les repères débordent toujours */
+.vcard__bar-fill[data-charging='1'] { overflow: hidden; }
+.vcard__bar-fill[data-charging='1']::after {
+  content: ''; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / .65), transparent);
+  animation: vcard-flow 1.8s ease-in-out infinite;
+}
+@keyframes vcard-flow { to { transform: translateX(100%); } }
+.vcard__icon[data-on='1'] { animation: vcard-halo 2s ease-out infinite; }
+@keyframes vcard-halo {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); }
+  100% { box-shadow: 0 0 0 10px color-mix(in srgb, var(--accent) 0%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vcard__bar-fill[data-charging='1']::after, .vcard__icon[data-on='1'] { animation: none; }
+}
 /* Repères de limites : le trait de la POSITION FAVORITE d'un ouvrant (cf. `.cover-slider` dans
    app.css), en plus court — mais posé PAR-DESSUS la jauge, qui n'a pas de pouce pour le cacher. */
 .vcard__tick {
@@ -437,10 +496,10 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
 /* un bouton qui ATTEND n'est pas un bouton indisponible : l'opacité des boutons désactivés (.45)
    rendait le spinner à peine visible, or c'est lui qui porte l'information */
 .vcard__actions .pill[aria-busy='true']:disabled { opacity: .7; }
-.vcard__hint { margin: 0; font-size: 12px; }
 /* quota du fabricant : même langage que la jauge de charge en haut de carte, en plus discret */
 .vcard__quota { display: grid; gap: 6px; }
-.vcard__quota-text { font-size: 11px; }
+/* une seule ligne : le texte tient dans la carte la plus étroite (320 px), la coupure n'est qu'un filet */
+.vcard__quota-text { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vcard__quota-track { height: 4px; border-radius: 999px; background: var(--line); overflow: hidden; }
 .vcard__quota-fill { height: 100%; border-radius: 999px; background: var(--accent); transition: width .4s; }
 /* le quota touche à sa fin : le même orangé que les avertissements des cartes de Réglages */

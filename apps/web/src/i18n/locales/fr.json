@@ -2,6 +2,7 @@
   "app": { "name": "Kasbah" },
   "nav": { "main": "Navigation", "home": "Maison", "energy": "Énergie", "water": "Eau", "heating": "Chauffage", "vehicles": "Véhicules", "robots": "Robots", "pets": "Animaux", "weather": "Météo", "agenda": "Agenda", "settings": "Réglages", "lights": "Lumières", "covers": "Ouvrants", "cameras": "Caméras", "media": "Médias", "music": "Musique", "automations": "Automatisations", "tens": "TENS" },
   "common": {
+    "showIn3d": "Voir dans la vue 3D",
     "cancel": "Annuler", "close": "Fermer", "back": "Retour", "retry": "Réessayer", "all": "Tout", "none": "Aucun", "unavailable": "Indisponible",
     "loading": "Chargement de la maison…", "on": "Allumé", "off": "Éteint", "stop": "Stop",
     "start": "Démarrer", "pause": "Pause", "dock": "Retour base", "park": "Rentrer", "locate": "Localiser",
@@ -121,7 +122,7 @@
     "transferred": "Lecture transférée vers {name}", "transferUnavailable": "Seule une lecture lancée depuis Kasbah se transfère",
     "stop": "Arrêter", "onDevice": "sur {name}",
     "filterPlayers": "Filtrer les lecteurs", "favorites": "Favoris", "otherPlayers": "Autres lecteurs",
-    "favoriteAdd": "Ajouter aux favoris", "locate": "Voir dans la maison", "favoriteRemove": "Retirer des favoris",
+    "favoriteAdd": "Ajouter aux favoris", "favoriteRemove": "Retirer des favoris",
     "stereo": "stéréo", "streamSource": "source {format}", "megabytes": "{size} Mo",
     "queue": "File d'attente", "queueShow": "Voir la file d'attente", "queueHide": "Fermer la file d'attente", "queueClear": "Vider la file",
     "queueEmpty": "Rien ne joue depuis Kasbah sur ce lecteur.", "queueNothingNext": "Rien après ce titre.", "queueRemove": "Retirer de la file",
@@ -190,7 +191,7 @@
     "reorder": "Réordonner (glisser)", "orderError": "Ordre non enregistré : {message}",
     "dangling": "Liaisons mortes", "danglingHint": "Le JSON pointe vers un id qu'aucun plugin ne remonte",
     "origins": {
-      "show": "Voir dans la maison 3D", "json": "Placé", "jsonHint": "Position définie dans house.json",
+      "json": "Placé", "jsonHint": "Position définie dans house.json",
       "auto": "Auto", "autoHint": "Rattachement automatique à la pièce qui porte le nom de la pièce du plugin",
       "unplaced": "Non placé", "unplacedHint": "Aucune pièce de la maison ne porte le nom de la pièce du plugin : absente de la scène 3D", "place": "Placer", "placeHint": "Ouvrir la maison en 3D pour poser cet appareil au bon niveau et au bon endroit"
     }
@@ -300,7 +301,7 @@
     "readAt": "Lu {ago}",
     "neverRead": "Jamais lu",
     "refresh": "Actualiser",
-    "charge": "Charge",
+    "charge": "Câble",
     "chargeEstimated": "~{power} estimé",
     "targetMark": "Cible de charge {percent}",
     "floorMark": "Plancher voulu {percent}",
@@ -343,7 +344,7 @@
     },
     "seat": {"fl": "AV G", "fr": "AV D", "rl": "AR G", "rc": "AR C", "rr": "AR D"},
     "map": {"plan": "Plan", "satellite": "Satellite", "fullscreen": "Plein écran", "close": "Fermer", "recenter": "Recentrer", "noPosition": "Position inconnue"},
-    "quota": "Evaluation de {used}/{limit} {what}",
+    "quota": "≈ {used}/{limit} {what}",
     "quotaCredit": "de crédit Tesla",
     "quotaSince": "depuis le {date}"
   },

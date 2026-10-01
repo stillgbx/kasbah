@@ -2,6 +2,7 @@
   "app": { "name": "Kasbah" },
   "nav": { "main": "Navigation", "home": "Home", "energy": "Energy", "water": "Water", "heating": "Heating", "vehicles": "Vehicles", "robots": "Robots", "pets": "Pets", "weather": "Weather", "agenda": "Calendar", "settings": "Settings", "lights": "Lights", "covers": "Covers", "cameras": "Cameras", "media": "Media", "music": "Music", "automations": "Automations", "tens": "TENS" },
   "common": {
+    "showIn3d": "Show in the 3D view",
     "cancel": "Cancel", "close": "Close", "back": "Back", "retry": "Retry", "all": "All", "none": "None", "unavailable": "Unavailable",
     "loading": "Loading house…", "on": "On", "off": "Off", "stop": "Stop",
     "start": "Start", "pause": "Pause", "dock": "Return to dock", "park": "Park", "locate": "Locate",
@@ -121,7 +122,7 @@
     "transferred": "Playback transferred to {name}", "transferUnavailable": "Only playback started from Kasbah can be transferred",
     "stop": "Stop", "onDevice": "on {name}",
     "filterPlayers": "Filter players", "favorites": "Favorites", "otherPlayers": "Other players",
-    "favoriteAdd": "Add to favorites", "locate": "Show in the house", "favoriteRemove": "Remove from favorites",
+    "favoriteAdd": "Add to favorites", "favoriteRemove": "Remove from favorites",
     "stereo": "stereo", "streamSource": "source {format}", "megabytes": "{size} MB",
     "queue": "Queue", "queueShow": "Show the queue", "queueHide": "Close the queue", "queueClear": "Clear the queue",
     "queueEmpty": "Nothing from Kasbah is playing on this player.", "queueNothingNext": "Nothing after this track.", "queueRemove": "Remove from the queue",
@@ -190,7 +191,7 @@
     "reorder": "Reorder (drag)", "orderError": "Order not saved: {message}",
     "dangling": "Dead bindings", "danglingHint": "The JSON points at an id no plugin reports",
     "origins": {
-      "show": "Show in the 3D house", "json": "Placed", "jsonHint": "Position set in house.json",
+      "json": "Placed", "jsonHint": "Position set in house.json",
       "auto": "Auto", "autoHint": "Matched automatically to the room named like the plugin room",
       "unplaced": "Not placed", "unplacedHint": "No house room is named like the plugin room: absent from the 3D scene", "place": "Place", "placeHint": "Open the 3D house to put this device on the right level and spot"
     }
@@ -300,7 +301,7 @@
     "readAt": "Read {ago}",
     "neverRead": "Never read",
     "refresh": "Refresh",
-    "charge": "Charge",
+    "charge": "Cable",
     "chargeEstimated": "~{power} est.",
     "targetMark": "Charge target {percent}",
     "floorMark": "Wanted floor {percent}",
@@ -343,7 +344,7 @@
     },
     "seat": {"fl": "FL", "fr": "FR", "rl": "RL", "rc": "RC", "rr": "RR"},
     "map": {"plan": "Map", "satellite": "Satellite", "fullscreen": "Full screen", "close": "Close", "recenter": "Recenter", "noPosition": "Unknown position"},
-    "quota": "Evaluation of {used}/{limit} {what}",
+    "quota": "≈ {used}/{limit} {what}",
     "quotaCredit": "of Tesla credit",
     "quotaSince": "since {date}"
   },

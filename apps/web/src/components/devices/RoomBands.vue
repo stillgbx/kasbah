@@ -203,8 +203,8 @@ defineExpose({ count: computed(() => entries.value.length) })
             </button>
             <!-- placé : la pastille mène à l'appareil dans la maison 3D (cadrage de sa pièce, panneau) -->
             <button v-else type="button" class="badge badge--show" :data-kind="r.origin"
-                    :title="`${$t(`rooms.origins.${r.origin}Hint`)} · ${$t('rooms.origins.show')}`"
-                    :aria-label="`${$t(`rooms.origins.${r.origin}`)} · ${$t('rooms.origins.show')}`" @click="show(r.entry)">
+                    :title="`${$t(`rooms.origins.${r.origin}Hint`)} · ${$t('common.showIn3d')}`"
+                    :aria-label="`${$t(`rooms.origins.${r.origin}`)} · ${$t('common.showIn3d')}`" @click="show(r.entry)">
               <StrokeIcon name="pin" :size="14" />
             </button>
             <slot name="control" :entry="r.entry" :on="r.on" />
