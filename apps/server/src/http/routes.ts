@@ -1,4 +1,4 @@
-import { addGardenItemToJson, addOpeningToJson, addParkingToJson, gardenItemPatchSchema, newGardenItemSchema, patchGardenItemInJson, removeGardenItemFromJson, assertCommandAllowed, automationBodySchema, automationIdSchema, automationPatchSchema, commandSchema, devicePlacementSchema, newOpeningSchema, newParkingSchema, openingPatchSchema, panelArrayPatchSchema, parkingPatchSchema, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, roomOrderSchema, reliefSchema, sceneTuningSchema, setReliefInJson, setRenderTuningInJson, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
+import { addGardenItemToJson, addOpeningToJson, addParkingToJson, gardenItemPatchSchema, newGardenItemSchema, patchGardenItemInJson, removeGardenItemFromJson, assertCommandAllowed, automationBodySchema, automationIdSchema, automationPatchSchema, commandSchema, devicePlacementSchema, newOpeningSchema, newParkingSchema, openingPatchSchema, panelArrayPatchSchema, parkingPatchSchema, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, roomOrderSchema, polygonSchema, reliefSchema, sceneTuningSchema, setReliefInJson, setTerrainInJson, setRenderTuningInJson, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { updateHouseFile, type LoadedHouse } from '../config/house'
 import type { AutomationEngine } from '../core/automations/engine'
@@ -167,6 +167,15 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
   app.put('/api/house/relief', async (req) => {
     const relief = reliefSchema.nullable().parse(req.body)   // ZodError → 400
     const house = await updateHouseFile(deps.house, (doc) => setReliefInJson(doc, relief))
+    deps.hub.broadcast({ type: 'house', house })
+    return { house }
+  })
+
+  // Contour du terrain (`site.terrain`), posé depuis l'éditeur de la vue Maison. Un contour qui se
+  // croise → 400 ; un relief présent s'agrandit pour le couvrir.
+  app.put('/api/house/terrain', async (req) => {
+    const polygon = polygonSchema.parse(req.body)            // ZodError → 400
+    const house = await updateHouseFile(deps.house, (doc) => setTerrainInJson(doc, polygon))
     deps.hub.broadcast({ type: 'house', house })
     return { house }
   })

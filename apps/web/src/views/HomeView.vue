@@ -228,6 +228,7 @@ watch(() => settings.houseEditing, (on) => {
 // modeler le terrain : armé depuis les Réglages, comme le banc de lumière — même règle que ci-dessus,
 // c'est le watcher de `scene.ready` qui rejoue l'état au chargement
 watch(() => settings.reliefEditing, (on) => scene.setEditingRelief(on))
+watch(() => settings.terrainTab, (tab) => scene.setTerrainTab(tab))
 watch(() => house.selectedOpeningId, (id) => {
   scene.setSelectedOpening(id)
   if (id) {
@@ -259,6 +260,7 @@ watch(scene.ready, (ready) => {
   scene.setEditingOpenings(settings.houseEditing)
   scene.setEditingParkings(settings.houseEditing)
   scene.setEditingGarden(settings.houseEditing)
+  scene.setTerrainTab(settings.terrainTab)
   scene.setEditingRelief(settings.reliefEditing)
   scene.focusLevel(house.focusedLevelId)
   scene.setSelected(house.selectedKey)

@@ -1,4 +1,4 @@
-import type { AutomationBody, GardenItemPatch, NewGardenItem, AutomationEntry, AutomationRun, Relief, SceneTuning, CommandInput, DeviceConsumption, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal, StateFor } from '@kasbah/shared'
+import type { AutomationBody, GardenItemPatch, NewGardenItem, AutomationEntry, AutomationRun, Relief, SceneTuning, Vec2, CommandInput, DeviceConsumption, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal, StateFor } from '@kasbah/shared'
 
 // Abstraction du canal serveur. Deux implémentations : HTTP + WebSocket (réel) et simulation
 // in-process (tests, démo statique sans serveur). Les commandes passent TOUJOURS par une requête
@@ -666,6 +666,8 @@ export interface Transport {
   saveRenderTuning(tuning: SceneTuning): Promise<House>
   /** Enregistre le relief du terrain dans la maison (`null` = plat) ; renvoie la maison réécrite. */
   saveRelief(relief: Relief | null): Promise<House>
+  /** Enregistre le contour du terrain ; renvoie la maison réécrite (relief agrandi s'il le faut). */
+  saveTerrain(polygon: Vec2[]): Promise<House>
   /** Ouvre le canal de push ; retourne la fonction de fermeture. */
   connect(handlers: TransportHandlers): () => void
 }

@@ -54,6 +54,26 @@ export function emptyReliefGrid(polygon: readonly Vec2[], step: number): ReliefG
   return { step, origin: [i0 * step, j0 * step], cols, rows, cm: new Array<number>(cols * rows).fill(0) }
 }
 
+/**
+ * La grille agrandie, si besoin, pour couvrir `polygon` avec une maille de marge (un contour qu'on
+ * vient d'étendre). Les nœuds existants gardent leur place et leur hauteur ; les nouveaux prennent
+ * celle du bord le plus proche — ce qu'on lisait déjà là, puisque hors de la grille la hauteur est
+ * celle du bord : le terrain ne bouge pas. Rend la MÊME grille quand elle couvre déjà tout.
+ */
+export function extendReliefGrid(grid: ReliefGrid, polygon: readonly Vec2[]): ReliefGrid {
+  const xs = polygon.map((p) => p[0]), ys = polygon.map((p) => p[1])
+  const s = grid.step
+  const left = Math.max(0, Math.ceil((grid.origin[0] - (Math.min(...xs) - s)) / s - 1e-9))
+  const bottom = Math.max(0, Math.ceil((grid.origin[1] - (Math.min(...ys) - s)) / s - 1e-9))
+  const right = Math.max(0, Math.ceil((Math.max(...xs) + s - (grid.origin[0] + (grid.cols - 1) * s)) / s - 1e-9))
+  const top = Math.max(0, Math.ceil((Math.max(...ys) + s - (grid.origin[1] + (grid.rows - 1) * s)) / s - 1e-9))
+  if (!left && !bottom && !right && !top) return grid
+  const cols = grid.cols + left + right, rows = grid.rows + bottom + top
+  const cm = new Array<number>(cols * rows)
+  for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) cm[j * cols + i] = node(grid, i - left, j - bottom)
+  return { step: s, origin: [grid.origin[0] - left * s, grid.origin[1] - bottom * s], cols, rows, cm }
+}
+
 /** Position d'un nœud en repère maison. */
 export const reliefNodeXY = (grid: ReliefGrid, i: number, j: number): Vec2 => [grid.origin[0] + i * grid.step, grid.origin[1] + j * grid.step]
 

@@ -1019,7 +1019,7 @@
   "relief": {
     "title": "Modeler le terrain",
     "open": "Ouvrir",
-    "hint": "Des points se posent sur le terrain de la vue Maison : tirez-en un vers le haut ou le bas pour monter ou creuser le sol à cet endroit, la surface s’arrondit entre les points. Les points sous la maison (plus pâles) modèlent ses abords : le terrain peut venir toucher un mur, sans jamais percer un sol. Autour de la piscine, il reste plat. Le relief est écrit dans le fichier de la maison.",
+    "hint": "Des points se posent sur le terrain de la vue Maison : tirez-en un vers le haut ou le bas pour monter ou creuser le sol à cet endroit, la surface s’arrondit entre les points. Les points sous la maison (plus pâles) modèlent ses abords : le terrain peut venir toucher un mur, sans jamais percer un sol. Autour de la piscine, il reste plat. L’onglet Contour change la forme de la parcelle : ses sommets se déplacent, s’ajoutent ou se retirent. Relief et contour sont écrits dans le fichier de la maison.",
     "help": "Touchez un point pour le choisir, puis tirez-le vers le haut ou le bas (il bouge seul), ou saisissez sa hauteur. Ailleurs, glisser fait tourner la vue. Les points pâles sont sous la maison.",
     "point": "Point",
     "none": "—",
@@ -1036,6 +1036,25 @@
     "save": "Valider",
     "saved": "Validé",
     "finish": "Terminer",
+    "tabs": { "label": "Ce qu’on modifie", "relief": "Relief", "outline": "Contour" },
+    "outline": {
+      "help": "Touchez un sommet pour le choisir, puis glissez-le sur le sol, ou saisissez sa position. Touchez un petit point au milieu d’un côté pour y ajouter un sommet. Un contour qui se croiserait est refusé. Ailleurs, glisser fait tourner la vue.",
+      "point": "Sommet",
+      "remove": "Supprimer le sommet",
+      "removeHint": "Suppr. — il en faut au moins trois, et le contour ne doit pas se croiser",
+      "points": "{n} sommet | {n} sommet | {n} sommets",
+      "outside": "Hors du nouveau contour : {list}. Rien n’est retiré.",
+      "count": {
+        "garden": "{n} élément du jardin | {n} élément du jardin | {n} éléments du jardin",
+        "parking": "{n} place | {n} place | {n} places",
+        "zone": "{n} zone | {n} zone | {n} zones",
+        "device": "{n} appareil extérieur | {n} appareil extérieur | {n} appareils extérieurs"
+      },
+      "house": "une partie de la maison",
+      "open": "Modifier le contour du terrain",
+      "openHint": "Ouvre l’éditeur du terrain sur son contour : déplacer, ajouter ou retirer des sommets.",
+      "saveError": "Contour non enregistré : {message}"
+    },
     "saveError": "Relief non enregistré : {message}"
   }
 }

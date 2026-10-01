@@ -58,6 +58,33 @@ export function pointInPolygon(p: Vec2, poly: readonly Vec2[]): boolean {
   return inside
 }
 
+/**
+ * Polygone SIMPLE : au moins trois sommets distincts, aucun côté nul, et deux côtés non voisins ne
+ * se touchent pas (un contour en huit, ou qui revient sur lui-même, n'a pas d'intérieur clair).
+ */
+export function isSimplePolygon(poly: readonly Vec2[]): boolean {
+  const n = poly.length
+  if (n < 3 || Math.abs(signedArea(poly)) < EPS) return false
+  for (let i = 0; i < n; i++) if (dist(poly[i]!, poly[(i + 1) % n]!) < EPS) return false
+  const side = (a: Vec2, b: Vec2, c: Vec2) => cross(sub(b, a), sub(c, a))
+  const onSeg = (a: Vec2, b: Vec2, p: Vec2) =>
+    Math.min(a[0], b[0]) - EPS <= p[0] && p[0] <= Math.max(a[0], b[0]) + EPS
+    && Math.min(a[1], b[1]) - EPS <= p[1] && p[1] <= Math.max(a[1], b[1]) + EPS
+  const touch = (a: Vec2, b: Vec2, c: Vec2, d: Vec2) => {
+    const d1 = side(c, d, a), d2 = side(c, d, b), d3 = side(a, b, c), d4 = side(a, b, d)
+    if (((d1 > EPS && d2 < -EPS) || (d1 < -EPS && d2 > EPS)) && ((d3 > EPS && d4 < -EPS) || (d3 < -EPS && d4 > EPS))) return true
+    return (Math.abs(d1) <= EPS && onSeg(c, d, a)) || (Math.abs(d2) <= EPS && onSeg(c, d, b))
+      || (Math.abs(d3) <= EPS && onSeg(a, b, c)) || (Math.abs(d4) <= EPS && onSeg(a, b, d))
+  }
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 2; j < n; j++) {
+      if (i === 0 && j === n - 1) continue                  // voisins par la fermeture
+      if (touch(poly[i]!, poly[(i + 1) % n]!, poly[j]!, poly[(j + 1) % n]!)) return false
+    }
+  }
+  return true
+}
+
 /** Convexité d'un polygone : tous les tournants dans le même sens (colinéaires ignorés). */
 export function isConvex(poly: readonly Vec2[]): boolean {
   let sign = 0

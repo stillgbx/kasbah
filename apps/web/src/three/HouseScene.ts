@@ -6,7 +6,7 @@ import {
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js'
 import {
-  boundsCenter, buildingBounds, computeHouseGeometry, deviceFloorZ, emptyReliefGrid, isFlatRelief, parseRelief, serializeRelief, terrainHeight, geoDistance, indexHouse, longestEdgeYawDeg, offsetPolygon, pointInPolygon, resolveDefaults, resolveDeviceLevelId, sitePosition,
+  boundsCenter, buildingBounds, computeHouseGeometry, deviceFloorZ, emptyReliefGrid, extendReliefGrid, isFlatRelief, parseRelief, serializeRelief, terrainHeight, geoDistance, indexHouse, longestEdgeYawDeg, offsetPolygon, pointInPolygon, resolveDefaults, resolveDeviceLevelId, sitePosition,
   roofBounds, roomBounds, zoneBounds, openingCentre, openingGaps, openingLabel, planLength, surfaceAxes, surfaceGaps,
   assignParkings, atRest, mirekToRgb, xyToRgb, parkingGaps, parkingHost, parkingLabel, PARKING_SIDES,
   type DeviceDescriptor, type DeviceState, type House, type HouseDevice, type HouseGeometry, type HouseIndex, type Level, type OpeningRect, type Parking, type ParkingFix, type ParkingSide, type PlacedHouseDevice, type Relief, type ReliefGrid, type Vec2, type Vec3,
@@ -31,6 +31,7 @@ import { defaultAmbience, defaultSceneTheme, rolesOf, styleById, type GlowLook, 
 import { applyTuning, NEUTRAL_TUNING, type SceneTuning } from './styles/tuning'
 import { buildHouse, buildLevel, buildRoofMesh, shapeTerrain, type HouseNodes, type LevelNodes } from './builders/buildHouse'
 import { ReliefEditor } from './relief/reliefEditor'
+import { OutlineEditor } from './relief/outlineEditor'
 import { GardenLayer } from './garden/gardenLayer'
 import { ReflectionProbe } from './effects/reflection'
 import type { Season } from './garden/season'
@@ -138,6 +139,19 @@ export interface FrameProbe { begin(): void; end(): void }
 /** Points de vue de l'éditeur du relief : depuis un point cardinal, ou d'aplomb. */
 export type TerrainView = 'north' | 'east' | 'south' | 'west' | 'top'
 
+/** Les deux onglets de l'éditeur du terrain : les hauteurs, ou la forme de la parcelle. */
+export type TerrainTab = 'relief' | 'outline'
+
+/** L'édition du contour vue du panneau : sommet choisi, brouillon, historique. */
+export interface OutlineEditState {
+  point: Vec2 | null
+  draft: Vec2[]
+  canUndo: boolean
+  canRedo: boolean
+  canRemove: boolean
+  pick: { seq: number; by: string }
+}
+
 /** L'édition du relief vue du panneau : hauteur du point choisi (cm), brouillon (`null` = plat). */
 export interface ReliefEditState {
   pointCm: number | null
@@ -146,6 +160,8 @@ export interface ReliefEditState {
   canRedo: boolean
   /** Dernier point choisi au tap (`seq` croît à chaque tap) et le pointeur qui l'a choisi. */
   pick: { seq: number; by: string }
+  tab: TerrainTab
+  outline: OutlineEditState | null
 }
 
 export interface SceneEvents {
@@ -557,6 +573,15 @@ export class HouseScene {
   private reliefFrame = 0
   /** Le mode est demandé ; il s'ouvre dès qu'une maison est chargée. */
   private reliefWanted = false
+  /**
+   * Contour en cours d'édition (brouillon), `null` hors du mode ; comme le relief, il survit à un
+   * rechargement de la maison, et son éditeur vit et meurt avec les nœuds.
+   */
+  private outlineDraft: Vec2[] | null = null
+  private outlineEditor: OutlineEditor | null = null
+  private terrainTab: TerrainTab = 'relief'
+  /** Le contour sur lequel le terrain est maillé : un autre contour impose de le remailler. */
+  private meshedOutline = ''
   /** Matières du bâti estompées pendant qu'on modèle le terrain, rendues pleines en sortant. */
   private reliefFaded = new Set<Material>()
   private readonly raycaster = new Raycaster()
@@ -710,7 +735,9 @@ export class HouseScene {
     this.geometry = computeHouseGeometry(house)
     this.dressed = this.dressedOpenings()
     this.nodes = buildHouse(this.geometry, this.materials, this.dressed)
+    this.meshedOutline = JSON.stringify(this.geometry.terrain.polygon)
     if (this.reliefWanted && !this.reliefGrid) this.reliefGrid = parseRelief(house.site.relief) ?? emptyReliefGrid(house.site.terrain, RELIEF_STEP)
+    if (this.reliefWanted && !this.outlineDraft) this.outlineDraft = house.site.terrain.map(([x, y]) => [x, y])
     this.applyReliefDraft()                // un relief en cours d'édition passe avant celui du fichier
     if (this.reliefGrid) { this.syncReliefFocus(); this.emitRelief() }
     this.invalidateShadows()
@@ -904,6 +931,8 @@ export class HouseScene {
     this.markers.clear()
     this.reliefEditor?.dispose()
     this.reliefEditor = null
+    this.outlineEditor?.dispose()
+    this.outlineEditor = null
     this.clearOpeningHandles()
     this.clearOpeningNotes()
     this.clearParkings()
@@ -1710,8 +1739,9 @@ export class HouseScene {
   }
 
   /**
-   * Seul le RELIEF a changé (on vient de l'enregistrer depuis l'éditeur). Le chemin complet (`load`)
-   * recentrerait la caméra ; ici, le terrain reprend ses z et ce qui s'y pose suit.
+   * Seul le TERRAIN a changé — relief ou contour (on vient de l'enregistrer depuis l'éditeur). Le
+   * chemin complet (`load`) recentrerait la caméra ; ici, le terrain reprend ses z (ou se remaille
+   * sur son nouveau contour) et ce qui s'y pose suit.
    */
   updateRelief(house: House): void {
     if (!this.nodes || !this.house) { this.load(house); return }
@@ -1719,7 +1749,7 @@ export class HouseScene {
     this.index = indexHouse(house)
     this.geometry = computeHouseGeometry(house)
     if (this.reliefGrid) this.applyReliefDraft()
-    else shapeTerrain(this.nodes, this.geometry, this.materials)
+    else this.shapeTerrainNow()
     this.afterTerrainChange()
     this.fitSunShadow()                    // les bornes de la maison suivent le relief enregistré
     this.emitRelief()
@@ -1875,15 +1905,19 @@ export class HouseScene {
     if (on) {
       if (!this.house) return              // la maison n'est pas là : `load` ouvrira le mode
       this.reliefGrid = parseRelief(this.house.site.relief) ?? emptyReliefGrid(this.house.site.terrain, RELIEF_STEP)
+      this.outlineDraft = this.house.site.terrain.map(([x, y]) => [x, y])
     } else {
       this.reliefGrid = null
+      this.outlineDraft = null
       this.reliefEditor?.dispose()
       this.reliefEditor = null
+      this.outlineEditor?.dispose()
+      this.outlineEditor = null
       if (this.house) this.geometry = computeHouseGeometry(this.house)
     }
     if (!this.nodes || !this.geometry) return
     if (on) this.applyReliefDraft()
-    else shapeTerrain(this.nodes, this.geometry, this.materials)
+    else this.shapeTerrainNow()
     this.syncReliefFocus()
     this.afterTerrainChange()
     this.emitRelief()
@@ -1951,10 +1985,29 @@ export class HouseScene {
    * neuve. Sans brouillon, rien : la géométrie est déjà celle du fichier.
    */
   private applyReliefDraft(): void {
-    const grid = this.reliefGrid
-    if (!grid || !this.nodes || !this.geometry) return
-    this.geometry = { ...this.geometry, terrain: { ...this.geometry.terrain, relief: grid } }
-    shapeTerrain(this.nodes, this.geometry, this.materials)
+    const drafted = this.reliefGrid
+    if (!drafted || !this.nodes || !this.geometry) return
+    const polygon = this.outlineDraft ?? this.geometry.terrain.polygon
+    // un contour étendu au-delà de la grille l'agrandit : ses nouveaux nœuds ont une poignée
+    const grid = extendReliefGrid(drafted, polygon)
+    if (grid !== drafted) { this.reliefGrid = grid; this.reliefEditor?.adoptGrid(grid) }
+    this.geometry = { ...this.geometry, terrain: { ...this.geometry.terrain, polygon, relief: grid } }
+    const reshaped = this.shapeTerrainNow()
+    if (!this.outlineEditor) {
+      this.outlineEditor = new OutlineEditor({
+        canvas: this.canvas,
+        camera: this.camera,
+        parent: this.nodes.site,
+        ground: (x, y) => this.groundZ(x, y),
+        setControls: (enabled) => { if (this.controls) this.controls.enabled = enabled; if (!enabled) this.cameraTween?.cancel() },
+        invalidate: () => this.loop.invalidate(),
+        changed: (final) => this.onOutlineChanged(final),
+        selectionChanged: () => this.emitRelief(),
+        accent: this.theme.primary,
+      }, polygon, !!this.deps.headless)
+    } else {
+      this.outlineEditor.refresh()
+    }
     if (!this.reliefEditor) {
       this.reliefEditor = new ReliefEditor({
         canvas: this.canvas,
@@ -1967,9 +2020,59 @@ export class HouseScene {
         selectionChanged: () => this.emitRelief(),
         accent: this.theme.primary,
       }, grid, !!this.deps.headless)
+    } else if (reshaped) {
+      this.reliefEditor.layout()           // les nœuds DANS la parcelle ont changé
     } else {
       this.reliefEditor.refresh()
     }
+    this.reliefEditor.setEnabled(this.terrainTab === 'relief')
+    this.outlineEditor.setEnabled(this.terrainTab === 'outline')
+  }
+
+  /** Pose le terrain sur `geometry.terrain`, remaillé si son contour n'est plus celui du maillage ; vrai s'il l'a été. */
+  private shapeTerrainNow(): boolean {
+    if (!this.nodes || !this.geometry) return false
+    const key = JSON.stringify(this.geometry.terrain.polygon)
+    const reshaped = key !== this.meshedOutline
+    shapeTerrain(this.nodes, this.geometry, this.materials, reshaped)
+    this.meshedOutline = key
+    return reshaped
+  }
+
+  /** Change d'onglet : seul l'éditeur de l'onglet montre ses poignées et prend les taps. */
+  setTerrainTab(tab: TerrainTab): void {
+    if (this.terrainTab === tab) return
+    this.terrainTab = tab
+    this.reliefEditor?.setEnabled(tab === 'relief')
+    this.outlineEditor?.setEnabled(tab === 'outline')
+    this.emitRelief()
+  }
+
+  /** Le contour a bougé : pendant un glissement, seul le trait suit ; la fin du geste remaille le terrain. */
+  private onOutlineChanged(final: boolean): void {
+    const e = this.outlineEditor
+    if (!e) return
+    this.outlineDraft = e.polygon.map(([x, y]) => [x, y])
+    if (final) {
+      this.applyReliefDraft()
+      this.afterTerrainChange()
+    }
+    this.emitRelief()
+  }
+
+  /** Annule (ou rétablit) la dernière modification du contour. */
+  undoOutline(): void { if (this.outlineEditor?.undo()) this.onOutlineChanged(true) }
+  redoOutline(): void { if (this.outlineEditor?.redo()) this.onOutlineChanged(true) }
+
+  /** Le sommet choisi prend la position saisie dans le panneau (m, repère maison). */
+  setOutlinePoint(xy: Vec2): void {
+    if (this.outlineEditor?.setSelectedXY(xy)) this.onOutlineChanged(true)
+    else this.emitRelief()                 // refusé : le panneau réaffiche la position gardée
+  }
+
+  /** Retire le sommet choisi. */
+  removeOutlinePoint(): void {
+    if (this.outlineEditor?.removeSelected()) this.onOutlineChanged(true)
   }
 
   /** Un glissement en cours : une mise à jour du terrain par IMAGE ; la fin du geste refait le reste. */
@@ -2011,7 +2114,9 @@ export class HouseScene {
 
   private emitRelief(): void {
     const e = this.reliefEditor
-    this.emit('reliefChange', e ? { pointCm: e.selectedCm(), draft: this.reliefDraft(), canUndo: e.canUndo, canRedo: e.canRedo, pick: e.pick } : null)
+    const o = this.outlineEditor
+    const outline: OutlineEditState | null = o ? { point: o.selectedXY(), draft: o.polygon.map(([x, y]) => [x, y]), canUndo: o.canUndo, canRedo: o.canRedo, canRemove: o.canRemove, pick: o.pick } : null
+    this.emit('reliefChange', e ? { pointCm: e.selectedCm(), draft: this.reliefDraft(), canUndo: e.canUndo, canRedo: e.canRedo, pick: e.pick, tab: this.terrainTab, outline } : null)
   }
 
   /**
@@ -3416,9 +3521,9 @@ export class HouseScene {
   }
 
   private handleTap(ev: TapEvent): void {
-    if (this.drag?.active() || this.openingDragger?.active() || this.parkingDragger?.active() || this.gardenDragger?.active() || this.reliefEditor?.active()) return   // fin d'un glissement, pas un tap
+    if (this.drag?.active() || this.openingDragger?.active() || this.parkingDragger?.active() || this.gardenDragger?.active() || this.reliefEditor?.active() || this.outlineEditor?.active()) return   // fin d'un glissement, pas un tap
     // on modèle le terrain : un tap choisit un point, il n'ouvre ni une pièce ni un appareil
-    if (this.reliefGrid) { this.reliefEditor?.tap(ev); return }
+    if (this.reliefGrid) { (this.terrainTab === 'outline' ? this.outlineEditor : this.reliefEditor)?.tap(ev); return }
     // Une ouverture armée prend le tap AVANT toute sélection : on est venu désigner un mur, pas
     // ouvrir la pièce ou l'appareil qui se trouve devant. Tapé à côté du bâti, c'est un tap de fond
     // — l'appelant y lit un renoncement, comme partout ailleurs dans la vue.

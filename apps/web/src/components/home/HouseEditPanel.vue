@@ -40,6 +40,22 @@ const roofWindows = computed(() => {
 const armedRoof = computed(() => house.placingOpening?.type === 'roof-window')
 
 function selectRoof(id: string) { house.selectOpening(id) }
+
+/**
+ * Le contour du terrain se règle dans l'éditeur du terrain, pas ici : ses poignées prendraient les
+ * mêmes taps et glissements que le jardin et les places. On ferme donc ce qui est en cours, puis on
+ * l'ouvre sur son onglet Contour ; « Terminer » y ramène au réglage de la maison.
+ */
+function openOutline() {
+  if (house.placingOpening) house.cancelPlacingOpening()
+  if (house.placingParking) house.cancelPlacingParking()
+  if (house.placingGarden) house.cancelPlacingGarden()
+  if (house.selectedParkingId) house.selectParking(null)
+  if (house.selectedGardenId) house.selectGardenItem(null)
+  if (house.selectedOpeningId) house.selectOpening(null)
+  settings.setSceneTuningOpen(false)
+  settings.setReliefEditing(true, 'outline')
+}
 function startRoof() { house.startPlacingOpening('roof-window') }
 
 // Une section ouverte à la fois, retenue d'une visite à l'autre (confort de ce poste seulement).
@@ -113,6 +129,13 @@ function toggle(s: Section) {
     <GardenSection />
   </EditSection>
 
+  <div class="block outline">
+    <button type="button" class="pill add" :disabled="settings.reliefEditing && settings.terrainTab === 'outline'" @click="openOutline()">
+      <StrokeIcon name="pencil" :size="16" /> {{ $t('relief.outline.open') }}
+    </button>
+    <p class="muted hint">{{ $t('relief.outline.openHint') }}</p>
+  </div>
+
   <p class="muted hint foot">{{ $t('parking.roomHint') }}</p>
 </template>
 
@@ -124,6 +147,7 @@ function toggle(s: Section) {
 .hint { font-size: 12px; margin: 0; min-height: 32px; }
 .block { display: grid; gap: 8px; }
 .foot { margin-top: 12px; }
+.outline { margin-top: 12px; }
 .rows { display: grid; gap: 8px; }
 .op-row {
   display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--radius);

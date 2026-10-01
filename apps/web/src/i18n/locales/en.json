@@ -1004,7 +1004,7 @@
   "relief": {
     "title": "Shape the terrain",
     "open": "Open",
-    "hint": "Points appear on the terrain in the Home view: drag one up or down to raise or dig the ground there, the surface rounds off between points. The points under the house (paler) shape its surroundings: the ground can reach a wall without ever breaking through a floor. Around the pool it stays flat. The relief is written to the house file.",
+    "hint": "Points appear on the terrain in the Home view: drag one up or down to raise or dig the ground there, the surface rounds off between points. The points under the house (paler) shape its surroundings: the ground can reach a wall without ever breaking through a floor. Around the pool it stays flat. The Outline tab changes the shape of the plot: its corners can be moved, added or deleted. Relief and outline are written to the house file.",
     "help": "Tap a point to select it, then drag it up or down (it moves alone), or type its height. Anywhere else, dragging orbits the view. Pale points are under the house.",
     "point": "Point",
     "none": "—",
@@ -1021,6 +1021,25 @@
     "save": "Save",
     "saved": "Saved",
     "finish": "Done",
+    "tabs": { "label": "What you edit", "relief": "Relief", "outline": "Outline" },
+    "outline": {
+      "help": "Tap a corner to select it, then drag it along the ground, or type its position. Tap a small dot in the middle of a side to add a corner there. An outline that would cross itself is refused. Anywhere else, dragging orbits the view.",
+      "point": "Corner",
+      "remove": "Delete the corner",
+      "removeHint": "Del — at least three are needed, and the outline must not cross itself",
+      "points": "{n} corners | {n} corner | {n} corners",
+      "outside": "Outside the new outline: {list}. Nothing is removed.",
+      "count": {
+        "garden": "{n} garden items | {n} garden item | {n} garden items",
+        "parking": "{n} parking spaces | {n} parking space | {n} parking spaces",
+        "zone": "{n} zones | {n} zone | {n} zones",
+        "device": "{n} outdoor devices | {n} outdoor device | {n} outdoor devices"
+      },
+      "house": "part of the house",
+      "open": "Edit the terrain outline",
+      "openHint": "Opens the terrain editor on its outline: move, add or delete corners.",
+      "saveError": "Outline not saved: {message}"
+    },
     "saveError": "Relief not saved: {message}"
   }
 }

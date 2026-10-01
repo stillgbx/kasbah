@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { deviceIdSchema } from '../devices/descriptor'
 import { defaultPlugins, GARDEN_KINDS, hexColorSchema, MAX_GARDEN_HEIGHT, MAX_HEDGE_LENGTH, MAX_HEDGE_SPACING, MAX_HEDGE_WIDTH, MIN_GARDEN_HEIGHT, MIN_HEDGE_LENGTH, MIN_HEDGE_SPACING, MIN_HEDGE_WIDTH, MAX_OPENING_LEAVES, MIN_OPENING_LEAVES, MIN_PARKING_DIM, model3dSchema, MOUNTS, NEUTRAL_TUNING, OPENING_MATERIALS, OPENING_TYPES, SPEAKER_SHAPES, vec2Schema, vec3Schema, type PluginSettingsPatch, type Relief, type SceneTuning } from './schema'
 import { DEVICE_KINDS, VEHICLE_FINISHES } from '../devices/kinds'
-import { computeHouseGeometry, openingCentre } from './geometry'
+import { computeHouseGeometry, extendReliefGrid, isSimplePolygon, openingCentre, parseRelief, serializeRelief, type Vec2 } from './geometry'
 import { parseHouse } from './validate'
 import type { Vec3 } from './geometry/types'
 
@@ -340,6 +340,26 @@ export function setReliefInJson(doc: unknown, relief: Relief | null): JsonObject
   const { relief: _dropped, ...site } = doc.site
   const flat = !relief || relief.rows.every((row) => row.split(' ').every((v) => Number(v) === 0))
   return { ...doc, site: flat ? site : { ...site, relief: { step: relief.step, origin: [...relief.origin], rows: [...relief.rows] } } }
+}
+
+/**
+ * Renvoie une copie du document JSON avec le CONTOUR du terrain (`site.terrain`) remplacé, posé
+ * depuis l'éditeur de la vue Maison. Un contour qui se croise lui-même est refusé (400, rien n'est
+ * écrit). Un relief présent est agrandi s'il ne couvre plus le contour (`extendReliefGrid`) : ses
+ * nouveaux nœuds prennent la hauteur du bord, le terrain déjà modelé ne bouge pas. Ce qui se
+ * retrouve hors du contour (arbres, places, zones) n'est PAS retiré : l'éditeur le signale.
+ */
+export function setTerrainInJson(doc: unknown, polygon: readonly Vec2[]): JsonObject {
+  if (!isObject(doc)) throw new PlacementError('house document is not an object')
+  if (!isObject(doc.site)) throw new PlacementError('house document has no site')
+  if (!isSimplePolygon(polygon)) throw new PlacementError('terrain outline must be a simple polygon (no crossing edges)')
+  const site: JsonObject = { ...doc.site, terrain: polygon.map((p) => [p[0], p[1]]) }
+  const grid = parseRelief(doc.site.relief as Relief | undefined)
+  if (grid) {
+    const grown = extendReliefGrid(grid, polygon)
+    if (grown !== grid) site.relief = serializeRelief(grown)
+  }
+  return { ...doc, site }
 }
 
 /**

@@ -46,7 +46,7 @@ const DEAD_PX = 6
 /** Pas d'annulation retenus. */
 export const RELIEF_HISTORY = 10
 
-function dotTexture(): CanvasTexture | null {
+export function dotTexture(): CanvasTexture | null {
   if (typeof document === 'undefined') return null
   const c = document.createElement('canvas')
   c.width = c.height = 64
@@ -59,7 +59,7 @@ function dotTexture(): CanvasTexture | null {
 }
 
 /** Le point CHOISI : un anneau d'accent autour d'un cœur blanc, plus gros que les autres. */
-function ringTexture(accent: Color): CanvasTexture | null {
+export function ringTexture(accent: Color): CanvasTexture | null {
   if (typeof document === 'undefined') return null
   const c = document.createElement('canvas')
   c.width = c.height = 64
@@ -135,6 +135,7 @@ export class ReliefEditor {
   private handled = new Set<number>()
   private undoStack: ReliefGrid[] = []
   private redoStack: ReliefGrid[] = []
+  private enabled = true
 
   constructor(private readonly host: ReliefEditorHost, grid: ReliefGrid, headless: boolean) {
     this.grid = grid
@@ -162,7 +163,7 @@ export class ReliefEditor {
     this.layout()
     if (!headless) {
       this.drag = createDragDetector(host.canvas, {
-        hitTest: (ev) => { const n = this.nearest(ev), s = this.selected; return !!n && !!s && n.i === s.i && n.j === s.j },
+        hitTest: (ev) => { const n = this.enabled ? this.nearest(ev) : null, s = this.selected; return !!n && !!s && n.i === s.i && n.j === s.j },
         onStart: (ev) => this.start(ev),
         onMove: (ev) => this.move(ev),
         onEnd: () => this.end(),
@@ -188,6 +189,28 @@ export class ReliefEditor {
     this.record(this.snapshot())
     this.grid.cm[k] = Math.round(cm)
     return true
+  }
+
+  /** Montre (ou cache) les poignées : l'onglet Contour garde l'éditeur, sans qu'il réponde. */
+  setEnabled(on: boolean): void {
+    this.enabled = on
+    for (const set of this.sets) set.points.visible = on
+    this.mark.visible = on && !!this.selected
+    this.host.invalidate()
+  }
+
+  /**
+   * La même grille, agrandie pour un contour qu'on vient d'étendre (`extendReliefGrid`) : pas un pas
+   * d'historique — rien n'a changé de hauteur. Le point choisi suit son nœud.
+   */
+  adoptGrid(grid: ReliefGrid): void {
+    const s = this.selected
+    if (s) {
+      const di = Math.round((this.grid.origin[0] - grid.origin[0]) / grid.step), dj = Math.round((this.grid.origin[1] - grid.origin[1]) / grid.step)
+      this.selected = { i: s.i + di, j: s.j + dj }
+    }
+    this.grid = grid
+    this.layout()
   }
 
   /** Nouvelle grille (import) : un pas d'historique, et les poignées se refont sur ses nœuds. */
@@ -297,7 +320,7 @@ export class ReliefEditor {
   refresh(): void {
     const t = this.host.terrain()
     const s = this.selected
-    this.mark.visible = !!s
+    this.mark.visible = this.enabled && !!s
     if (s) {
       const [x, y] = reliefNodeXY(this.grid, s.i, s.j)
       ;(this.mark.geometry.getAttribute('position') as BufferAttribute).setXYZ(0, x, y, reliefSurface(t, x, y) + HANDLE_LIFT)

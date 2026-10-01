@@ -342,6 +342,16 @@ export const useHouseStore = defineStore('house', () => {
     }
   }
 
+  async function saveTerrain(polygon: Vec2[]): Promise<boolean> {
+    try {
+      house.value = await getTransport().saveTerrain(polygon)
+      return true
+    } catch (err) {
+      useNotificationsStore().error(t('relief.outline.saveError', { message: (err as Error).message }))
+      return false
+    }
+  }
+
   /** Appareil maison lié à un id de plugin. */
   function houseDeviceFor(pluginDeviceId: string): HouseDevice | undefined {
     return index.value?.devicesByBinding.get(pluginDeviceId)
@@ -1492,7 +1502,7 @@ export const useHouseStore = defineStore('house', () => {
   return {
     house, effective, loading, error, index, levels, zones, soundRoutes, relaySource,
     focusedLevelId, gardenFocus, selectedRoomId, selectedLevelId, selectedKey, floorTab, selectedRoom, selectedZone, selectedDevice,
-    load, setFloorTab, focusLevel, selectRoom, selectLevel, selectDevice, clearSelection, backToHome, backFromRoom, backFromDevice, houseDeviceFor, renameDevice, setDeviceTuning, bodyColorPreview, previewBodyColor, setRoomOrder, saveRenderTuning, saveRelief,
+    load, setFloorTab, focusLevel, selectRoom, selectLevel, selectDevice, clearSelection, backToHome, backFromRoom, backFromDevice, houseDeviceFor, renameDevice, setDeviceTuning, bodyColorPreview, previewBodyColor, setRoomOrder, saveRenderTuning, saveRelief, saveTerrain,
     journalOverlay, journalFocus, journalActive, showJournal, hideJournal, focusJournalPoint, markJournalPoint,
     placing, saving, draft, canRevert, isProvisional, startPlacing, startPlacingNew, stopPlacing, previewPosition, previewHeight, savePlacement, revertPlacement, removePlacement,
     placementLevelId, setPlacementLevel,

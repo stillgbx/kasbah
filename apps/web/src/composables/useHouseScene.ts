@@ -151,7 +151,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     if (prev && sameShellButParkings(prev, h)) { scene.updateParkings(h); return }
     // seul le JARDIN a changé (on pose, glisse ou règle un arbre) → les éléments seulement
     if (prev && sameShellButGarden(prev, h)) { scene.updateGarden(h); return }
-    // seul le RELIEF a changé (on vient de l'enregistrer) → le terrain et ce qui s'y pose
+    // seul le TERRAIN a changé (relief ou contour enregistré) → le terrain et ce qui s'y pose
     if (prev && sameShellButRelief(prev, h)) { scene.updateRelief(h); return }
     scene.load(h); scene.setDescriptors(devices.descriptors); scene.updateStates(args.states.value, true)
   })
@@ -217,6 +217,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     setPlacingOpening: (armed: { roomId: string; type: string } | null) => scene?.setPlacingOpening(armed),
     setEditingParkings: (on: boolean) => scene?.setEditingParkings(on),
     setEditingRelief: (on: boolean) => scene?.setEditingRelief(on),
+    setTerrainTab: (tab: 'relief' | 'outline') => scene?.setTerrainTab(tab),
     /** L'édition du relief telle que la scène la voit (rayon, point choisi, brouillon), `null` hors du mode. */
     relief,
     setPlacingParking: (on: boolean) => scene?.setPlacingParking(on),
@@ -260,9 +261,9 @@ function sameShellButOpenings(a: House, b: House): boolean {
   return shell(a) === shell(b)
 }
 
-/** Même bâti au RELIEF du terrain près : l'enregistrer ne doit pas recentrer la caméra. */
+/** Même bâti au TERRAIN près (relief, contour) : l'enregistrer ne doit pas recentrer la caméra. */
 function sameShellButRelief(a: House, b: House): boolean {
-  const shell = (h: House) => JSON.stringify([h.levels, h.rooms, { ...h.site, relief: null }, h.roof, h.defaults])
+  const shell = (h: House) => JSON.stringify([h.levels, h.rooms, { ...h.site, relief: null, terrain: null }, h.roof, h.defaults])
   return shell(a) === shell(b)
 }
 

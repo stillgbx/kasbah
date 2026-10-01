@@ -235,13 +235,15 @@ export function buildHouse(geometry: HouseGeometry, mats: MaterialSet, dressed?:
  * inchangé. Les MAILLAGES restent les mêmes objets (le rayon, les ombres, les matières les tiennent),
  * seules leurs géométries changent ; une géométrie déjà maillée n'est pas refaite, seuls ses z
  * bougent : c'est ce que l'éditeur du relief appelle à chaque image d'un glissement.
+ * `outlineChanged` : le CONTOUR a changé (éditeur du contour, ou contour enregistré ailleurs) — le
+ * terrain et sa jupe se remaillent, même déjà maillés.
  */
-export function shapeTerrain(nodes: HouseNodes, geometry: Pick<HouseGeometry, 'terrain' | 'zones'>, mats: MaterialSet): void {
+export function shapeTerrain(nodes: HouseNodes, geometry: Pick<HouseGeometry, 'terrain' | 'zones'>, mats: MaterialSet, outlineChanged = false): void {
   const t = geometry.terrain
   const basins = geometry.zones.filter((z) => z.kind === 'pool').map((z) => z.polygon)
   const swap = (mesh: Mesh, g: BufferGeometry) => { mesh.geometry.dispose(); mesh.geometry = g }
   if (!t.relief) {
-    if (!nodes.terrain.geometry.userData.drape) return
+    if (!nodes.terrain.geometry.userData.drape && !outlineChanged) return
     swap(nodes.terrain, flatWithHoles(t.polygon, basins, t.z))
     swap(nodes.ground, discWithHoles(GROUND_RADIUS, basins, 0))
     for (const z of geometry.zones) {
@@ -251,7 +253,8 @@ export function shapeTerrain(nodes: HouseNodes, geometry: Pick<HouseGeometry, 't
     if (nodes.skirt) { nodes.skirt.removeFromParent(); nodes.skirt.geometry.dispose(); nodes.skirt = null }
     return
   }
-  if (!nodes.terrain.geometry.userData.drape) {
+  if (!nodes.terrain.geometry.userData.drape || outlineChanged) {
+    if (nodes.skirt) { nodes.skirt.removeFromParent(); nodes.skirt.geometry.dispose(); nodes.skirt = null }
     const g = drapeGeometry(t.polygon, basins, TERRAIN_MESH_RES, t.footprints)
     g.userData.drape = true
     swap(nodes.terrain, g)

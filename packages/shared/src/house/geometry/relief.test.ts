@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { emptyReliefGrid, footprintCeiling, PAD_BLEND, PAD_FLAT, padWeight, parseRelief, reliefDelta, reliefRange, reliefSurface, serializeRelief, terrainFootprints, terrainHeight } from './relief'
+import { emptyReliefGrid, extendReliefGrid, footprintCeiling, PAD_BLEND, PAD_FLAT, padWeight, parseRelief, reliefDelta, reliefRange, reliefSurface, serializeRelief, terrainFootprints, terrainHeight } from './relief'
 import { computeTerrain } from './site'
 import type { Relief, Site } from '../schema'
 import type { Vec2 } from './vec2'
@@ -75,5 +75,23 @@ describe('relief du terrain', () => {
     expect(g.origin[0] + (g.cols - 1) * g.step).toBeGreaterThanOrEqual(2 + 2)
     expect(g.origin[1] + (g.rows - 1) * g.step).toBeGreaterThanOrEqual(6 + 2)
     expect(g.cm.every((v) => v === 0)).toBe(true)
+  })
+})
+
+describe('extendReliefGrid', () => {
+  it('rend la même grille quand elle couvre déjà le contour', () => {
+    const grid = emptyReliefGrid(square(0, 0, 10), 2)
+    expect(extendReliefGrid(grid, square(0, 0, 10))).toBe(grid)
+  })
+  it('agrandit sans bouger les nœuds existants, les nouveaux à la hauteur du bord', () => {
+    const grid = parseRelief(bump)!
+    const t0 = computeTerrain({ elevation: 0, terrain: square(0, 0, 6), zones: [], parkings: [], garden: [] })
+    const grown = extendReliefGrid(grid, square(-5, 0, 11))
+    expect(grown.step).toBe(2)
+    expect(grown.origin).toEqual([-8, -2])
+    // même surface partout : ce qui était lu hors de la grille (le bord) l'est maintenant dans la grille
+    for (const [x, y] of [[-6, 0], [2, 2], [7, 5], [-3, 9], [11, 11]] as Vec2[]) {
+      expect(terrainHeight({ ...t0, relief: grown }, x, y)).toBeCloseTo(terrainHeight({ ...t0, relief: grid }, x, y), 6)
+    }
   })
 })

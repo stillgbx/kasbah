@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { centroid, clipConvex, isCCW, isConvex, lineIntersect, longestEdgeYawDeg, offsetPolygon, perpRight, pointInPolygon, signedArea, type Vec2 } from './vec2'
+import { centroid, clipConvex, isCCW, isConvex, isSimplePolygon, lineIntersect, longestEdgeYawDeg, offsetPolygon, perpRight, pointInPolygon, signedArea, type Vec2 } from './vec2'
 
 const square: Vec2[] = [[0, 0], [2, 0], [2, 2], [0, 2]]
 
@@ -52,5 +52,20 @@ describe('longestEdgeYawDeg', () => {
   it('rend null sur un polygone dégénéré', () => {
     expect(longestEdgeYawDeg([])).toBeNull()
     expect(longestEdgeYawDeg([[1, 1], [1, 1], [1, 1]])).toBeNull()
+  })
+})
+
+describe('isSimplePolygon', () => {
+  it('accepte un carré, un L, et les deux sens de parcours', () => {
+    expect(isSimplePolygon(square)).toBe(true)
+    expect(isSimplePolygon([...square].reverse())).toBe(true)
+    expect(isSimplePolygon([[0, 0], [4, 0], [4, 1], [1, 1], [1, 4], [0, 4]])).toBe(true)
+  })
+  it('refuse un huit, un côté nul, un sommet posé sur un autre côté, et moins de trois points', () => {
+    expect(isSimplePolygon([[0, 0], [2, 2], [2, 0], [0, 2]])).toBe(false)
+    expect(isSimplePolygon([[0, 0], [2, 0], [2, 0], [0, 2]])).toBe(false)
+    expect(isSimplePolygon([[0, 0], [4, 0], [4, 4], [2, 0], [0, 4]])).toBe(false)
+    expect(isSimplePolygon([[0, 0], [2, 0]])).toBe(false)
+    expect(isSimplePolygon([[0, 0], [1, 0], [2, 0]])).toBe(false)     // aplati : pas d'aire
   })
 })
