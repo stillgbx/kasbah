@@ -183,7 +183,7 @@ export interface GardenLook {
 }
 
 /** Qui défile autour de la maison (`effects/parade.ts`). */
-export type ParadeKind = 'noel' | 'halloween' | 'tatooine'
+export type ParadeKind = 'noel' | 'halloween' | 'tatooine' | 'akira'
 
 /** Tout ce que la scène lit d'un style, pour une ambiance donnée. */
 export interface StyleLook {
@@ -206,7 +206,7 @@ export interface StyleLook {
   disco?: { spots: number; colors: readonly Color[] }
   /**
    * Des personnages qui tournent autour de la maison (`effects/parade.ts`) : le traîneau du père
-   * Noël, les fantômes et les squelettes d'Halloween, des X-wings. Absent = personne.
+   * Noël, les fantômes et les squelettes d'Halloween, des X-wings, la moto de Kaneda. Absent = personne.
    */
   parade?: { kind: ParadeKind }
   garden?: GardenLook

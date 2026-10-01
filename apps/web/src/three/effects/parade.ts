@@ -1,19 +1,24 @@
 import {
-  AdditiveBlending, BoxGeometry, BufferAttribute, BufferGeometry, CircleGeometry, Color, ConeGeometry, CylinderGeometry,
-  type BufferGeometry as Geometry, Group, LineBasicMaterial, LineSegments, type Material, Mesh, MeshBasicMaterial,
+  AdditiveBlending, BoxGeometry, BufferAttribute, BufferGeometry, CapsuleGeometry, CircleGeometry, Color, ConeGeometry,
+  CylinderGeometry, DoubleSide, type BufferGeometry as Geometry, Group, LineBasicMaterial, LineSegments, type Material, Mesh, MeshBasicMaterial,
   MeshStandardMaterial, type Object3D, Points, PointsMaterial, SphereGeometry, TorusGeometry, Vector3,
 } from 'three'
 import type { ParadeKind } from '../styles/types'
+import { type Box, type Circle, type Obstacles, type Path, roam, type RoamArea } from './roam'
 
-// Des PERSONNAGES qui défilent autour de la maison, selon le style (`StyleLook.parade`) :
-//  - `noel` : le traîneau du père Noël et ses rennes, qui errent au-dessus du toit en semant des
+// Des PERSONNAGES qui parcourent le terrain, selon le style (`StyleLook.parade`) :
+//  - `noel` : le traîneau du père Noël et ses rennes, qui volent au-dessus du jardin en semant des
 //    paillettes dorées ;
 //  - `halloween` : des fantômes qui flottent (et traversent les murs, ce sont des fantômes) et des
-//    squelettes qui marchent en procession AU SOL, autour de la maison, sur le relief ;
-//  - `tatooine` : trois X-wings, ailes en X, chacun son vol ; ils se croisent et s'inclinent dans les virages.
+//    squelettes qui marchent AU SOL, chacun de son côté, sur le relief ;
+//  - `tatooine` : trois X-wings, ailes en X, chacun son vol ; ils se croisent et s'inclinent dans les virages ;
+//  - `akira` : la moto rouge de Kaneda qui roule AU SOL, couchée dans les virages, et la traînée
+//    rouge de son feu arrière.
 //
-// Traîneau et X-wings ne tournent pas en rond : leur vol ERRE (`wander`), tiré au hasard à la création
-// comme celui des chauves-souris, et le nez suit la trajectoire (`fly`).
+// Personne ne tourne en rond : chacun suit un parcours tiré au hasard sur TOUT le terrain
+// (`roam.ts`), qui contourne la maison, la piscine et le jardin, et s'écarte des voitures et de la
+// tondeuse — sauf les fantômes, qui traversent tout, et le traîneau et les X-wings, qui volent
+// au-dessus et ne contournent que la maison et les arbres. Le nez suit la trajectoire (`fly`).
 //
 // Tout est dans le repère LOCAL de la maison (Z-up, enfant de la racine), comme les chauves-souris.
 // Les modèles sont faits de primitives (boîtes, cylindres, sphères) : aucun fichier, aucun
@@ -22,9 +27,16 @@ import type { ParadeKind } from '../styles/types'
 
 type XY = readonly [number, number]
 
-/** Où défiler : l'emprise bâtie (tous en font le tour), le haut du toit, le sol (les squelettes y marchent). */
+/** Où défiler : le terrain, l'emprise bâtie (évitée), le haut du toit, le sol (squelettes et moto y roulent). */
 export interface ParadeArea {
-  building: { min: XY; max: XY }
+  terrain: readonly XY[]
+  building: Box
+  /** Les autres emprises à contourner (la piscine). */
+  pools?: readonly Box[]
+  /** Le jardin, en disques ; `tall` = un arbre, que même ce qui vole au-dessus du toit contourne. */
+  statics?: readonly (Circle & { tall?: boolean })[]
+  /** Ce qui bouge (voitures, tondeuse), relu à chaque pas. */
+  around?: () => readonly Circle[]
   roofZ: number
   groundZ?: (x: number, y: number) => number
 }
@@ -35,16 +47,24 @@ export class Parade {
   readonly object = new Group()
   readonly kind: ParadeKind
   private readonly actors: Actor[] = []
+  private readonly obstacles: Obstacles = { list: [] }
+  private readonly readObstacles: () => readonly Circle[]
   private time = 0
 
   constructor(kind: ParadeKind, area: ParadeArea) {
     this.kind = kind
     this.object.name = `parade-${kind}`
-    const building = frame(area.building)
     const groundZ = area.groundZ ?? (() => 0)
-    if (kind === 'noel') this.sleigh(building, area.roofZ)
-    else if (kind === 'halloween') { this.ghosts(building, area.roofZ); this.skeletons(building, groundZ) }
-    else this.xwings(building, area.roofZ)
+    this.readObstacles = area.around ?? (() => [])
+    this.obstacles.list = this.readObstacles()
+    const site: RoamArea = { terrain: area.terrain, avoid: [area.building, ...(area.pools ?? [])], statics: area.statics, around: this.obstacles }
+    // ce qui vole au-dessus du toit ne contourne que la maison et les arbres : ni voiture, ni
+    // tondeuse, ni buisson, ni piscine
+    const sky: RoamArea = { terrain: area.terrain, avoid: [area.building], statics: area.statics?.filter((c) => c.tall) }
+    if (kind === 'noel') this.sleigh(sky, area.roofZ)
+    else if (kind === 'halloween') { this.ghosts({ terrain: area.terrain, avoid: [] }, area.roofZ); this.skeletons(site, groundZ) }
+    else if (kind === 'tatooine') this.xwings(sky, area.roofZ)
+    else this.bike(site, groundZ)
     this.object.traverse((o) => { o.raycast = () => {}; o.castShadow = false })
     this.write()
   }
@@ -52,6 +72,7 @@ export class Parade {
   /** Avance l'animation de `dtS` secondes. */
   step(dtS: number): void {
     this.time += Math.min(0.1, Math.max(0, dtS))
+    this.obstacles.list = this.readObstacles()
     this.write()
   }
 
@@ -73,7 +94,7 @@ export class Parade {
 
   // ---- Noël -------------------------------------------------------------------------------------
 
-  private sleigh(house: Frame, roofZ: number): void {
+  private sleigh(site: RoamArea, roofZ: number): void {
     const S = 1.4                                        // plus grand que nature, pour se voir d'en haut
     const red = std(0xc0161e, 0.5), gold = std(0xd9a53a, 0.3, 0.8), brown = std(0x8a5a34, 0.8)
     const white = std(0xf4f4f0, 0.9), skin = std(0xf1c9a5, 0.7), black = std(0x141414, 0.6)
@@ -141,8 +162,7 @@ export class Parade {
     let head = 0, lastDrop = -1
     const glitter = new Color(0xffd36b)
 
-    // une trajectoire qui erre (`wander`), tirée au hasard comme le vol des chauves-souris
-    const path = wander(house, house.reach * 1.25, roofZ + 1.8, 0.22, 0.6)
+    const path = aloft(roam(site, 3), roofZ + 1.8, 0.6)
     const rear = new Vector3()
     this.actors.push({
       update: (t) => {
@@ -171,7 +191,7 @@ export class Parade {
 
   // ---- Halloween --------------------------------------------------------------------------------
 
-  private ghosts(house: Frame, roofZ: number): void {
+  private ghosts(site: RoamArea, roofZ: number): void {
     const eye = new MeshBasicMaterial({ color: 0x0a0a12 })
     for (let i = 0; i < 5; i++) {
       const mat = new MeshStandardMaterial({ color: 0xeef4ff, emissive: 0xbfe8ff, emissiveIntensity: 0.6, roughness: 0.6, transparent: true, opacity: 0.8, depthWrite: false })
@@ -186,13 +206,13 @@ export class Parade {
       g.add(sized(at(mesh(new SphereGeometry(0.08, 8, 6), eye), 0.4, 0, -0.1), 0.5, 1, 1.3))
       g.scale.setScalar(1.2)
       this.object.add(g)
-      const r = house.reach * (0.5 + 0.25 * i)
-      const speed = (0.15 + 0.04 * i) * (i % 2 ? -1 : 1)
       const z0 = roofZ * (0.35 + 0.13 * i)
       const phase = i * 1.3
+      const flat = roam(site, 1.5 + 0.3 * i)
+      const path: Path = (t, out) => { flat(t, out); out.z = z0 + 0.4 * Math.sin(t * 1.1 + phase); return out }
       this.actors.push({
         update: (t) => {
-          orbit(g, house, r * (1 + 0.15 * Math.sin(t * 0.4 + phase)), t * speed + phase, z0 + 0.4 * Math.sin(t * 1.1 + phase), Math.sign(speed))
+          fly(g, path, t, 0)
           g.rotation.x = 0.15 * Math.sin(t * 1.7 + phase)
           // ils s'effacent et reviennent
           mat.opacity = 0.45 + 0.4 * (0.5 + 0.5 * Math.sin(t * 0.8 + phase))
@@ -201,14 +221,13 @@ export class Parade {
     }
   }
 
-  private skeletons(building: Frame, groundZ: (x: number, y: number) => number): void {
+  private skeletons(site: RoamArea, groundZ: (x: number, y: number) => number): void {
     const bone = std(0xefe6d2, 0.7)
     bone.emissive.set(0xefe6d2)
     bone.emissiveIntensity = 0.15                        // qu'on les voie encore la nuit
     const hole = new MeshBasicMaterial({ color: 0x0a0806 })
     const n = 4
-    const r = building.reach + 1.6                       // hors de l'emprise bâtie
-    const speed = 0.9 / r                                // ~0,9 m/s, une marche
+    // chacun son parcours, à la vitesse d'une marche (~0,9 m/s) : ils se dispersent sur le terrain
     for (let i = 0; i < n; i++) {
       const g = new Group()
       g.add(at(mesh(new BoxGeometry(0.14, 0.3, 0.12), bone), 0, 0, 0.95))                        // bassin
@@ -228,11 +247,10 @@ export class Parade {
       g.scale.setScalar(1.5)                             // plus grand que nature, comme le reste
       this.object.add(g)
       const phase = (i / n) * Math.PI * 2
+      const path = onGround(roam(site, 0.8 + 0.1 * i), groundZ)
       this.actors.push({
         update: (t) => {
-          const a = t * speed + phase
-          const x = building.cx + Math.cos(a) * r, y = building.cy + Math.sin(a) * r
-          orbit(g, building, r, a, groundZ(x, y), 1)
+          fly(g, path, t, 0)
           const s = Math.sin(t * 5 + phase)
           legs[0]!.rotation.y = 0.45 * s; legs[1]!.rotation.y = -0.45 * s
           arms[0]!.rotation.y = -0.4 * s; arms[1]!.rotation.y = 0.4 * s
@@ -244,7 +262,7 @@ export class Parade {
 
   // ---- Tatooine ---------------------------------------------------------------------------------
 
-  private xwings(house: Frame, roofZ: number): void {
+  private xwings(site: RoamArea, roofZ: number): void {
     const hull = std(0xd8d8d4, 0.5, 0.3), grey = std(0x8a8a88, 0.6, 0.4), stripe = std(0xb8322a, 0.6)
     const canopy = std(0x1a2230, 0.15, 0.6), droid = std(0x2a5ab8, 0.4, 0.3)
     const flame = new MeshBasicMaterial({ color: new Color(0xff6a3a).multiplyScalar(4) })   // > 1 : le bloom le prend
@@ -270,49 +288,102 @@ export class Parade {
       ships.push(g)
     }
     // chacun son vol, tiré au hasard : ils se croisent, se rapprochent, s'écartent
-    const paths = ships.map(() => wander(house, house.reach * 1.4, roofZ + 3, 0.35, 1))
+    const paths = ships.map(() => aloft(roam(site, 6), roofZ + 3, 1))
     this.actors.push({ update: (t) => ships.forEach((g, i) => fly(g, paths[i]!, t, 0.9)) })
+  }
+
+  // ---- Akira ------------------------------------------------------------------------------------
+
+  private bike(site: RoamArea, groundZ: (x: number, y: number) => number): void {
+    const red = std(0xc8141a, 0.35, 0.3), black = std(0x111114, 0.7), metal = std(0x9a9ca4, 0.3, 0.9)
+    const white = std(0xf2f0ea, 0.5), screen = std(0x1a2a34, 0.1, 0.6), denim = std(0x2a3448, 0.8)
+    const tail = new MeshBasicMaterial({ color: new Color(0xff2010).multiplyScalar(5) })   // > 1 : le bloom le prend
+    const head = new MeshBasicMaterial({ color: new Color(0xfff2d0).multiplyScalar(3) })
+
+    const g = new Group()
+    // les roues : pneus noirs épais, moyeux rouges pleins (l'axe des cylindres de three est Y, ici le côté)
+    for (const x of [-0.95, 0.95]) {
+      g.add(at(mesh(new CylinderGeometry(0.34, 0.34, 0.22, 20), black), x, 0, 0.34))
+      g.add(at(mesh(new CylinderGeometry(0.22, 0.22, 0.24, 16), red), x, 0, 0.34))
+    }
+    // le carénage : une gélule rouge allongée, basse, le nez arrondi qui descend vers la roue avant
+    g.add(sized(at(tilt(mesh(new CapsuleGeometry(0.3, 1.5, 6, 14), red), 0, 0, Math.PI / 2), -0.05, 0, 0.62), 1, 0.85, 1))
+    g.add(sized(at(mesh(new SphereGeometry(0.34, 14, 10), red), 0.85, 0, 0.62), 1.2, 0.85, 0.9))
+    g.add(at(tilt(mesh(new SphereGeometry(0.22, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), screen), 0, -0.6), 0.55, 0, 0.82))
+    g.add(at(mesh(new BoxGeometry(1.6, 0.27, 0.05), white), -0.1, 0, 0.5))                          // le liseré blanc
+    g.add(at(mesh(new BoxGeometry(0.5, 0.5, 0.08), black), -0.75, 0, 0.92))                          // la selle
+    g.add(at(mesh(new BoxGeometry(0.6, 0.12, 0.12), metal), -0.95, 0.22, 0.3))                       // l'échappement
+    g.add(at(mesh(new BoxGeometry(0.05, 0.3, 0.1), tail), -1.28, 0, 0.72))
+    g.add(at(tilt(mesh(new CircleGeometry(0.09, 12), head), 0, Math.PI / 2), 1.26, 0, 0.66))
+
+    // Kaneda : couché sur le réservoir, blouson rouge à la gélule blanche dans le dos, casque rouge
+    g.add(tilt(at(mesh(new BoxGeometry(0.75, 0.42, 0.3), red), -0.35, 0, 1.12), 0, 0.45))
+    g.add(tilt(at(mesh(new CapsuleGeometry(0.06, 0.14, 4, 8), white), -0.42, 0, 1.3), 0, 0, Math.PI / 2))
+    g.add(at(mesh(new SphereGeometry(0.16, 14, 10), red), 0.12, 0, 1.36))
+    g.add(at(mesh(new BoxGeometry(0.08, 0.24, 0.1), screen), 0.25, 0, 1.36))                          // la visière
+    for (const y of [-0.17, 0.17]) {
+      g.add(tilt(at(mesh(new BoxGeometry(0.55, 0.09, 0.09), red), 0.1, y, 1.08), 0, 0.5))           // bras vers le guidon
+      g.add(tilt(at(mesh(new BoxGeometry(0.5, 0.12, 0.12), denim), -0.6, y * 1.25, 0.82), 0, -0.5))  // cuisse
+    }
+    g.scale.setScalar(1.3)                               // plus grand que nature, comme le reste
+    this.object.add(g)
+
+    const path = onGround(roam(site, 8, { margin: 2.5 }), groundZ)   // ~8 m/s
+
+    // la traînée du feu arrière : deux rubans croisés (vus d'en haut comme de côté) posés sur la
+    // trajectoire passée — `path` est une fonction du temps, la traînée n'a rien à mémoriser
+    const N = 48, DT = 0.025, LAG = 0.2, Z = 0.72 * 1.3, W = 0.09
+    const pos = new Float32Array(N * 4 * 3), col = new Float32Array(N * 4 * 3)
+    const index: number[] = []
+    for (let i = 0; i < N - 1; i++) for (const o of [0, 2]) {
+      const a = i * 4 + o, b = a + 1, c = a + 4, d = a + 5
+      index.push(a, b, c, b, d, c)
+    }
+    const trailGeo = new BufferGeometry()
+    trailGeo.setAttribute('position', new BufferAttribute(pos, 3))
+    trailGeo.setAttribute('color', new BufferAttribute(col, 3))
+    trailGeo.setIndex(index)
+    const trail = new Mesh(trailGeo, new MeshBasicMaterial({ color: new Color(1, 1, 1).multiplyScalar(4), vertexColors: true, transparent: true, blending: AdditiveBlending, depthWrite: false, side: DoubleSide }))
+    trail.frustumCulled = false
+    this.object.add(trail)
+    const p = new Vector3(), q = new Vector3(), glow = new Color(0xff2010)
+
+    this.actors.push({
+      update: (t) => {
+        fly(g, path, t, 0.6)
+        for (let i = 0; i < N; i++) {
+          path(t - LAG - i * DT, p)
+          path(t - LAG - i * DT - DT, q)
+          // la normale horizontale au trajet, pour le ruban couché
+          const dx = p.x - q.x, dy = p.y - q.y, l = Math.hypot(dx, dy) || 1
+          const nx = -dy / l * W, ny = dx / l * W, z = p.z + Z
+          pos.set([p.x + nx, p.y + ny, z, p.x - nx, p.y - ny, z, p.x, p.y, z + W, p.x, p.y, z - W], i * 12)
+          const k = (1 - i / (N - 1)) ** 1.5
+          for (let v = 0; v < 4; v++) col.set([glow.r * k, glow.g * k, glow.b * k], i * 12 + v * 3)
+        }
+        trailGeo.getAttribute('position').needsUpdate = true
+        trailGeo.getAttribute('color').needsUpdate = true
+      },
+    })
   }
 }
 
 // ---- outils ---------------------------------------------------------------------------------------
 
-interface Frame { cx: number; cy: number; reach: number }
-
-function frame(b: { min: XY; max: XY }): Frame {
-  return { cx: (b.min[0] + b.max[0]) / 2, cy: (b.min[1] + b.max[1]) / 2, reach: Math.hypot(b.max[0] - b.min[0], b.max[1] - b.min[1]) / 2 }
-}
-
-/** Pose `o` sur le cercle, face à la tangente (`dir` = sens de parcours, +1 anti-horaire). */
-function orbit(o: Object3D, f: Frame, r: number, a: number, z: number, dir: number): void {
-  o.position.set(f.cx + Math.cos(a) * r, f.cy + Math.sin(a) * r, z)
-  o.rotation.order = 'ZYX'                               // cap d'abord, puis tangage et roulis
-  o.rotation.z = a + dir * Math.PI / 2
-}
-
-/** Une trajectoire : la position au temps `t`, écrite dans `out`. */
-type Path = (t: number, out: Vector3) => Vector3
-
-/**
- * Un vol qui ERRE autour de la maison, comme les chauves-souris mais sans jamais repasser au même
- * endroit : l'angle avance à une vitesse qui varie, le rayon respire, le centre dérive, l'altitude
- * monte et descend. Toutes les fréquences et phases sont tirées à la création ; la somme de sinus
- * reste lisse (pas de saut) et bornée (on ne part pas au bout du terrain).
- * `speed` en rad/s (le sens est tiré aussi), `swing` règle l'amplitude des écarts, 0 = un cercle.
- */
-function wander(f: Frame, radius: number, z0: number, speed: number, swing: number): Path {
-  const rnd = (a: number, b: number) => a + (b - a) * Math.random()
-  const w = speed * rnd(0.8, 1.2) * (Math.random() < 0.5 ? -1 : 1)
-  const [fa, fr, fr2, fz, fz2, fx, fy] = [rnd(0.2, 0.4), rnd(0.15, 0.3), rnd(0.5, 0.8), rnd(0.3, 0.6), rnd(0.9, 1.4), rnd(0.07, 0.15), rnd(0.07, 0.15)]
-  const ph = Array.from({ length: 8 }, () => rnd(0, Math.PI * 2))
+/** Un parcours plat mis en l'air : l'altitude monte et descend (deux sinus aux phases tirées). */
+function aloft(flat: Path, z0: number, swing: number): Path {
+  const rnd = (lo: number, hi: number) => lo + (hi - lo) * Math.random()
+  const [f1, f2, p1, p2] = [rnd(0.3, 0.6), rnd(0.9, 1.4), rnd(0, Math.PI * 2), rnd(0, Math.PI * 2)]
   return (t, out) => {
-    const a = ph[0]! + w * t + swing * 0.6 * Math.sin(fa * t + ph[1]!)
-    const r = radius * (1 + swing * (0.3 * Math.sin(fr * t + ph[2]!) + 0.1 * Math.sin(fr2 * t + ph[3]!)))
-    const cx = f.cx + swing * f.reach * 0.35 * Math.sin(fx * t + ph[4]!)
-    const cy = f.cy + swing * f.reach * 0.35 * Math.sin(fy * t + ph[5]!)
-    const z = z0 + swing * (1.2 * Math.sin(fz * t + ph[6]!) + 0.4 * Math.sin(fz2 * t + ph[7]!))
-    return out.set(cx + Math.cos(a) * r, cy + Math.sin(a) * r, Math.max(z0 - 1, z))
+    flat(t, out)
+    out.z = z0 + swing * (1.2 * Math.sin(f1 * t + p1) + 0.4 * Math.sin(f2 * t + p2))
+    return out
   }
+}
+
+/** Un parcours plat posé sur le relief. */
+function onGround(flat: Path, groundZ: (x: number, y: number) => number): Path {
+  return (t, out) => { flat(t, out); out.z = groundZ(out.x, out.y); return out }
 }
 
 const ahead = new Vector3(), behind = new Vector3()

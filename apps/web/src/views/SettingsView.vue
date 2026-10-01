@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
+import { Color, SRGBColorSpace } from 'three'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import PageHeader from '../components/layout/PageHeader.vue'
@@ -22,7 +23,7 @@ import type { SeasonMode } from '../three/garden/season'
 import { backdropColor, groundColor } from '../three/builders/materials'
 import type { RenderQuality } from '../three/core/post'
 import type { SceneProjection } from '../three/core/cameraFit'
-import { styleById, type RenderStyle } from '../three/styles'
+import { styleById, type GradeLook, type RenderStyle } from '../three/styles'
 
 // Réglages, en deux temps : D'ABORD les réglages, ENSUITE la liste des plugins, pleine largeur
 // en fin de page. Les réglages tiennent en trois zones — une pile d'une unité (apparence, langue,
@@ -77,12 +78,22 @@ const renderAmbience = computed(() => resolveAmbience({
 }))
 function stylePreview(style: RenderStyle) {
   const look = style.look(renderAmbience.value)
+  const g = look.post.grade
   return {
-    sky: backdropColor(look.sky).getStyle(),
-    ground: groundColor(look.sky).getStyle(),
-    wall: look.palette.wall.getStyle(),
-    glass: look.palette.glass.getStyle(),
+    sky: graded(backdropColor(look.sky), g),
+    ground: graded(groundColor(look.sky), g),
+    wall: graded(look.palette.wall, g),
+    glass: graded(look.palette.glass, g),
   }
+}
+/** L'étalonnage de la passe de sortie (`core/post.ts`), en espace d'affichage : la tuile voit ce que voit l'écran. */
+function graded(c: Color, g: GradeLook | null | undefined): string {
+  if (!g) return c.getStyle()
+  const rgb = c.getRGB(new Color(), SRGBColorSpace)
+  const v = ([rgb.r, rgb.g, rgb.b] as const).map((x, i) => Math.max(0, g.gain[i]! * (x + g.lift[i]! * (1 - x))) ** (1 / g.gamma[i]!))
+  const luma = 0.2126 * v[0]! + 0.7152 * v[1]! + 0.0722 * v[2]!
+  const [r, gg, b] = v.map((x) => Math.min(1, Math.max(0, luma + (x - luma) * g.saturation)))
+  return new Color().setRGB(r!, gg!, b!, SRGBColorSpace).getStyle()
 }
 /** Le switch des matières en images n'a de sens que pour un style qui porte un pack. */
 const styleHasAssets = computed(() => !!styleById(settings.sceneStyle).assets)

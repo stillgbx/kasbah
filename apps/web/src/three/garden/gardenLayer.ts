@@ -198,6 +198,32 @@ export class GardenLayer {
     return box
   }
 
+  /**
+   * Ce dont s'écartent les personnages qui défilent (`effects/roam.ts`), en disques au sol. Un arbre
+   * ne bloque que la moitié de sa couronne (on passe sous le bord, pas dans le tronc) ; un buisson,
+   * un rocher ou une haie bloquent tout leur volume — une haie en chapelet de disques. `tall` = un
+   * arbre : le traîneau et les X-wings, qui volent au-dessus du reste, ne contournent que ceux-là.
+   */
+  footprints(): { x: number; y: number; r: number; tall: boolean }[] {
+    const out: { x: number; y: number; r: number; tall: boolean }[] = []
+    for (const it of this.items.values()) {
+      const [x, y] = it.center
+      if (it.kind === 'hedge') {
+        const len = lengthOf(it), r = widthOf(it) / 2, a = ((it.yaw ?? 0) * Math.PI) / 180
+        const n = Math.max(1, Math.ceil(len / (2 * r)))
+        for (let k = 0; k < n; k++) {
+          const s = (k + 0.5) / n * len - len / 2
+          out.push({ x: x + Math.cos(a) * s, y: y + Math.sin(a) * s, r, tall: false })
+        }
+      } else {
+        const r = this.radiusOf(it)
+        const low = it.kind === 'shrub' || it.kind === 'rock'
+        out.push({ x, y, r: low ? r : Math.min(r * 0.5, 2.5), tall: !low })
+      }
+    }
+    return out
+  }
+
   /** L'élément réglé en mode édition : un anneau d'accent au pied. `null` = aucun. */
   setSelected(id: string | null): void {
     this.selectedId = id

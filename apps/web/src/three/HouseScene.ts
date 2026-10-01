@@ -25,6 +25,7 @@ import { dayFactor, fogDistance, sunDirection, type SceneAmbience } from './core
 import { Bats } from './effects/bats'
 import { Disco } from './effects/disco'
 import { Parade } from './effects/parade'
+import type { Box, Circle } from './effects/roam'
 import { Precipitation } from './effects/precipitation'
 import { createWaterUniforms, makeWaterAlive, setWaterSun, setWaterTint, setWaterWind, WaterCaustics, type WaterStrength } from './effects/water'
 import { defaultAmbience, defaultSceneTheme, rolesOf, styleById, type GlowLook, type PostLook, type RenderStyle, type StyleLook } from './styles'
@@ -50,6 +51,7 @@ import { createTween, easeInCubic, easeInOutCubic, easeOutCubic, linear, type Tw
 import { emitsSound, soundRouting } from '../lib/audioRouting'
 import { createMarker } from './markers/createMarker'
 import type { DeviceMarker, SoundCue } from './markers/DeviceMarker'
+import { MowerMarker, VehicleMarker } from './markers/markers'
 
 // Contrôleur de scène sans Vue. Dépendances injectables (renderer, RAF) → instanciable en Node
 // pour les tests sans WebGL. Le composable useHouseScene est son adaptateur réactif.
@@ -318,6 +320,9 @@ const ORIGIN_MARK = { ring: 0.24, bar: 0.05, axis: 1.1, north: 0.7 } as const
  * bout, et de combien le nombre flotte au-dessus d'elle (m).
  */
 const COTE = { bar: 0.035, tick: 0.2, lift: 0.14 } as const
+
+/** Rayon (m) dont s'écartent les personnages qui défilent, par nature d'engin (`roamObstacles`). */
+const ROAM_RADIUS = { vehicle: 2.6, mower: 0.6 } as const
 /** Jusqu'où le cadrage d'une ouverture suit ses cotes (m) : au-delà, le bout du trait n'apprend rien. */
 const OPENING_FOCUS_REACH_M = 2
 /** Rayon (px) autour de l'ancre ou de la pilule où l'appui saisit l'appareil déplaçable. */
@@ -430,6 +435,8 @@ export class HouseScene {
   private stopDisco: (() => void) | null = null
   /** Personnages du style (`effects/parade.ts`), et de quoi retirer leur animation. */
   private parade: Parade | null = null
+  /** L'empreinte du jardin que les personnages contournent : changée, ils sont retracés. */
+  private gardenRoamKey = ''
   private stopParade: (() => void) | null = null
   private precipIntensity = 0
   /**
@@ -1762,6 +1769,14 @@ export class HouseScene {
     this.garden.build(this.house.site.garden, (x, y) => this.groundZ(x, y), this.season, this.look.garden)
     this.fitSunShadow()                    // le cadre des ombres suit le jardin
     this.markReflection()                  // la piscine voit les arbres
+    // les personnages contournent le jardin dès leur tracé : un jardin changé (édition, saison, ou
+    // simplement bâti après eux au chargement) les retrace
+    const key = JSON.stringify(this.garden.footprints().map((c) => [c.x, c.y, c.r].map((v) => Math.round(v * 10))))
+    if (key !== this.gardenRoamKey) {
+      this.gardenRoamKey = key
+      if (this.parade) { this.removeParade(); this.syncParade() }
+      if (this.bats) { this.removeBats(); this.syncBats() }
+    }
   }
 
   /**
@@ -3801,7 +3816,15 @@ export class HouseScene {
     if (this.bats && this.bats.count === n && this.bats.object.parent === this.nodes.root) { this.bats.setColor(this.look.bats!.color); return }
     this.removeBats()
     const b = this.geometry.bounds
-    const bats = new Bats({ min: [b.min[0], b.min[1]], max: [b.max[0], b.max[1]], roofZ: b.max[2] }, n, this.look.bats!.color)
+    const built = this.house ? buildingBounds(this.house, resolveDefaults(this.house.defaults), this.geometry.roof) : b
+    const bats = new Bats({
+      terrain: this.geometry.terrain.polygon,
+      building: { min: [built.min[0], built.min[1]], max: [built.max[0], built.max[1]] },
+      pools: this.poolBoxes(),
+      statics: this.roamStatics(),
+      around: () => this.roamObstacles(),
+      roofZ: b.max[2],
+    }, n, this.look.bats!.color)
     this.bats = bats
     this.nodes.root.add(bats.object)
     this.stopBats = this.loop.addAnimation({ step: (_now, dtS) => { if (this.bats !== bats) return false; bats.step(dtS); return true } })
@@ -3848,13 +3871,49 @@ export class HouseScene {
     this.removeParade()
     const built = buildingBounds(this.house, resolveDefaults(this.house.defaults), this.geometry.roof)
     const parade = new Parade(kind, {
+      terrain: this.geometry.terrain.polygon,
       building: { min: [built.min[0], built.min[1]], max: [built.max[0], built.max[1]] },
+      pools: this.poolBoxes(),
+      statics: this.roamStatics(),
+      around: () => this.roamObstacles(),
       roofZ: built.max[2],
       groundZ: (x, y) => this.groundZ(x, y),
     })
     this.parade = parade
     this.nodes.root.add(parade.object)
     this.stopParade = this.loop.addAnimation({ step: (_now, dtS) => { if (this.parade !== parade) return false; parade.step(dtS); return true } })
+  }
+
+  /** Les piscines, en boîtes : ce qui défile autour de la maison les contourne (`effects/roam.ts`). */
+  private poolBoxes(): Box[] {
+    return (this.geometry?.zones ?? []).filter((z) => z.kind === 'pool').map((z) => {
+      const xs = z.polygon.map((p) => p[0]), ys = z.polygon.map((p) => p[1])
+      return { min: [Math.min(...xs), Math.min(...ys)], max: [Math.max(...xs), Math.max(...ys)] }
+    })
+  }
+
+  /**
+   * Ce que les personnages contournent dès leur tracé : le jardin, et les voitures et la tondeuse là
+   * où elles sont garées à ce moment (pas des arbres : le traîneau et les X-wings les survolent). Une
+   * voiture garée contre la maison, évitée seulement au passage, faisait se battre l'écart et la
+   * maison : un squelette sautait de 11 m (mesuré sur la maison démo).
+   */
+  private roamStatics(): { x: number; y: number; r: number; tall: boolean }[] {
+    return [...this.garden.footprints(), ...this.roamObstacles().map((c) => ({ ...c, tall: false }))]
+  }
+
+  /**
+   * Ce dont s'écartent AU PASSAGE les personnages et les chauves-souris : les voitures et la tondeuse
+   * là où elles sont MAINTENANT (relu à chaque pas, 20 Hz). Le jardin, fixe, est contourné dès le
+   * tracé (`statics`).
+   */
+  private roamObstacles(): Circle[] {
+    const out: Circle[] = []
+    for (const m of this.markers.values()) {
+      const r = m instanceof VehicleMarker ? ROAM_RADIUS.vehicle : m instanceof MowerMarker ? ROAM_RADIUS.mower : 0
+      if (r && m.object.parent === this.nodes?.outdoorMarkers) out.push({ x: m.object.position.x, y: m.object.position.y, r })
+    }
+    return out
   }
 
   private removeParade(): void {

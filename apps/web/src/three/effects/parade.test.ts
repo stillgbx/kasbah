@@ -1,14 +1,15 @@
-import { Box3, Group, Raycaster, Vector3 } from 'three'
+import { Box3, Group, type Mesh, Raycaster, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import type { ParadeKind } from '../styles/types'
 import { Parade, type ParadeArea } from './parade'
 
 const AREA: ParadeArea = {
+  terrain: [[-10, -10], [40, -10], [40, 35], [-10, 35]],
   building: { min: [10, 8], max: [20, 16] },
   roofZ: 8,
   groundZ: (x) => x * 0.05,                              // un terrain en pente
 }
-const KINDS: ParadeKind[] = ['noel', 'halloween', 'tatooine']
+const KINDS: ParadeKind[] = ['noel', 'halloween', 'tatooine', 'akira']
 
 describe('Parade', () => {
   it.each(KINDS)('%s : les personnages bougent et restent finis', (kind) => {
@@ -47,6 +48,21 @@ describe('Parade', () => {
     p.dispose()
   })
 
+  it("la moto roule sur le relief, hors de l'emprise bâtie, sa traînée derrière elle", () => {
+    const p = new Parade('akira', AREA)
+    for (let i = 0; i < 20; i++) {
+      p.step(0.1)
+      const { x, y, z } = p.object.children[0]!.position
+      expect(x < 10 || x > 20 || y < 8 || y > 16).toBe(true)
+      expect(Math.abs(z - x * 0.05)).toBeLessThan(1e-6)
+    }
+    // la traînée : du rouge en tête, rien au bout
+    const col = (p.object.children[1] as Mesh).geometry.getAttribute('color')
+    expect(col.getX(0)).toBeGreaterThan(0.5)
+    expect(col.getX(col.count - 1)).toBe(0)
+    p.dispose()
+  })
+
   it('ne prend aucun clic, et se détache au dispose', () => {
     const root = new Group()
     for (const kind of KINDS) {
@@ -58,5 +74,25 @@ describe('Parade', () => {
       p.dispose()
     }
     expect(root.children).toHaveLength(0)
+  })
+
+  it("le traîneau et les X-wings ignorent ce qui est au sol (voiture), la moto l'évite", () => {
+    // une voiture garée au milieu du terrain, relue à chaque pas
+    const car = { x: 0, y: 25, r: 2.6 }
+    const area = { ...AREA, around: () => [car] }
+    for (const kind of ['noel', 'tatooine'] as const) {
+      // même tirage avec et sans voiture : le vol est identique
+      const seq = Array.from({ length: 4000 }, () => Math.random())
+      let k = 0
+      const real = Math.random
+      Math.random = () => seq[k++ % seq.length]!
+      const a = new Parade(kind, area)
+      k = 0
+      const b = new Parade(kind, AREA)
+      Math.random = real
+      for (let i = 0; i < 50; i++) { a.step(0.1); b.step(0.1) }
+      expect(a.object.children[0]!.position.distanceTo(b.object.children[0]!.position)).toBeLessThan(1e-9)
+      a.dispose(); b.dispose()
+    }
   })
 })

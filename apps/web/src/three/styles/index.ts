@@ -1,5 +1,6 @@
 import { resolveAmbience, type SceneAmbience } from '../core/ambience'
 import { defaultUiTheme, resolveSceneTheme, type SceneTheme } from '../core/theme'
+import { akiraStyle } from './akira'
 import { candyStyle } from './candy'
 import { cyberpunkStyle } from './cyberpunk'
 import { discoStyle } from './disco'
@@ -16,7 +17,7 @@ import type { RenderStyle } from './types'
 // Le catalogue des styles de rendu. UNE ligne à ajouter pour en offrir un de plus, plus deux clés
 // i18n (`scene.styles.<id>`) : ni la scène, ni les builders, ni les réglages ne connaissent la liste.
 
-export const RENDER_STYLES: readonly RenderStyle[] = [realisticStyle, natureStyle, indigoStyle, maquetteStyle, cyberpunkStyle, candyStyle, hauntedStyle, discoStyle, halloweenStyle, noelStyle, tatooineStyle]
+export const RENDER_STYLES: readonly RenderStyle[] = [realisticStyle, natureStyle, indigoStyle, maquetteStyle, cyberpunkStyle, candyStyle, hauntedStyle, discoStyle, halloweenStyle, noelStyle, tatooineStyle, akiraStyle]
 
 /** Celui de la maquette, et le défaut de l'application. */
 export const DEFAULT_STYLE_ID = realisticStyle.id
