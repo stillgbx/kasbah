@@ -41,6 +41,18 @@ describe('VehicleCard — repères de la jauge', () => {
   })
 })
 
+describe('VehicleCard — tuiles', () => {
+  beforeEach(() => { setActivePinia(createPinia()) })
+
+  it('verrouiller et charger sont TOUJOURS là, grisés avec leur raison quand le véhicule ne sait pas', () => {
+    const w = mount(VehicleCard, { props: { descriptor: descriptor(['soc', 'range']), state: state() } })
+    const tiles = w.findAll('.tiles button')
+    expect(tiles).toHaveLength(2)
+    expect(tiles.every((t) => t.attributes('disabled') !== undefined)).toBe(true)
+    expect(tiles.every((t) => t.attributes('title') === 'Pas disponible sur ce véhicule')).toBe(true)
+  })
+})
+
 describe('VehicleCard — charge demandée', () => {
   beforeEach(() => { setActivePinia(createPinia()); setTransport(null) })
 
@@ -51,14 +63,15 @@ describe('VehicleCard — charge demandée', () => {
     devices.setEntries([{ descriptor: d, state: state() }])
     const w = mount(VehicleCard, { props: { descriptor: d, state: state() } })
     const button = () => w.findAll('button').find((b) => /charge/i.test(b.text()))!
-    expect(button().classes()).not.toContain('v-btn--loading')
+    expect(button().attributes('aria-busy')).toBe('false')
     await devices.sendCommand(d.id, { type: 'vehicle.start_charge' })
     await w.vm.$nextTick()
-    expect(button().classes()).toContain('v-btn--loading')
+    expect(button().attributes('aria-busy')).toBe('true')
+    expect(button().find('.v-progress-circular').exists()).toBe(true)
     expect(button().attributes('disabled')).toBeDefined()
     devices.applyMessage({ type: 'state', deviceId: d.id, state: state({ updatedAt: 1, charging: true }) })
     await w.setProps({ state: state({ updatedAt: 1, charging: true }) })
-    expect(button().classes()).not.toContain('v-btn--loading')
+    expect(button().attributes('aria-busy')).toBe('false')
     expect(button().text()).toBe('Arrêter la charge')
   })
 })
