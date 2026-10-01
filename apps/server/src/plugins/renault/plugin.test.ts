@@ -10,6 +10,7 @@ import {
 } from './__fixtures__/kamereon'
 import { JWT_TTL_S, type SessionStore, type StoredSession } from './auth'
 import { createRenaultPlugin, renaultConfigSchema } from './index'
+import { CLIMATE_FEATURES } from './mapping'
 
 // Ce que le plugin doit tenir face à Renault, et que seule une API privée impose :
 //
@@ -194,7 +195,8 @@ describe('Renault — inventaire', () => {
     const devices = await plugin.discover()
     expect(devices).toEqual([{
       id: `renault:${VIN}`, pluginId: 'renault', externalId: VIN, kind: 'vehicle',
-      name: 'GA-123-BX', capabilities: ['soc', 'range', 'location', 'charge_limit'], meta: { manufacturer: 'Renault' },
+      name: 'GA-123-BX', capabilities: ['soc', 'range', 'location', 'charge_limit', 'climate_precondition'],
+      meta: { manufacturer: 'Renault', vehicle: { climate: CLIMATE_FEATURES } },
     }])
   })
 
@@ -329,6 +331,38 @@ describe('Renault — sondage', () => {
     expect(JSON.parse(write.body!)).toMatchObject({ socTarget: 70, socMin: SOC_LEVELS.socMin })
     // la cible est publiée tout de suite : Kamereon relit l'ANCIENNE valeur pendant quelques secondes
     expect(patches(ctx).at(-1)).toMatchObject({ chargeLimit: 70 })
+    await plugin.stop()
+  })
+
+  it('climatiser : l’action hvac-start à la consigne, puis une relecture une minute plus tard', async () => {
+    const { plugin, renault, clock } = await running()
+    await plugin.execute(VIN, { type: 'vehicle.climate_start', targetTempC: 20 })
+    const action = renault.calls.filter((c) => c.method === 'POST' && c.path.endsWith('/actions/hvac-start')).at(-1)!
+    expect(JSON.parse(action.body!)).toEqual({ data: { type: 'HvacStart', attributes: { action: 'start', targetTemperature: 20 } } })
+    const before = dataCalls(renault, '/hvac-status')
+    clock.advance(60_000)
+    await flush()
+    expect(dataCalls(renault, '/hvac-status')).toBe(before + 1)       // l'effet se CONSTATE
+    await plugin.execute(VIN, { type: 'vehicle.climate_stop' })
+    expect(JSON.parse(renault.calls.at(-1)!.body!)).toEqual({ data: { type: 'HvacStart', attributes: { action: 'cancel' } } })
+    await plugin.stop()
+  })
+
+  it('sous le seuil que la voiture annonce (socThreshold), refusé SANS dépenser une action', async () => {
+    const { plugin, renault } = await running()
+    renault.world.battery = { data: { ...BATTERY_WAITING.data, attributes: { ...BATTERY_WAITING.data.attributes, batteryLevel: 12 } } }
+    await plugin.execute(VIN, { type: 'vehicle.refresh' })
+    await expect(plugin.execute(VIN, { type: 'vehicle.climate_start' })).rejects.toMatchObject({ code: 'LOW_BATTERY' })
+    expect(renault.calls.some((c) => c.path.endsWith('/actions/hvac-start'))).toBe(false)
+    await plugin.stop()
+  })
+
+  it('régler sièges et volant RÉÉCRIT les réglages lus, et publie `seatHeat` entier', async () => {
+    const { plugin, renault, ctx } = await running()
+    await plugin.execute(VIN, { type: 'vehicle.climate_set', seatHeat: { fl: 1 }, steeringWheelHeat: true })
+    const write = renault.calls.filter((c) => c.method === 'POST' && c.path.endsWith('/ev/settings')).at(-1)!
+    expect(JSON.parse(write.body!)).toMatchObject({ preconditioningHeatedLeftSeat: true, preconditioningHeatedStrgWheel: true, programs: EV_SETTINGS.programs })
+    expect(patches(ctx).at(-1)).toEqual({ seatHeat: { fl: 1, fr: 0 }, steeringWheelHeat: true })
     await plugin.stop()
   })
 

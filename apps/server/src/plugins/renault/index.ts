@@ -1,9 +1,10 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import type { Command, DeviceDescriptor, PluginHealth, StatePatch } from '@kasbah/shared'
+import type { Command, DeviceDescriptor, PluginHealth, StatePatch, VehicleSeat } from '@kasbah/shared'
 import { createBackoff } from '../../core/backoff'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
 import { stateFile } from '../../core/paths'
+import { sleep } from '../../core/clock'
 import { createPoller } from '../../core/poll'
 import type { FetchLike } from '../../core/sse'
 import {
@@ -11,7 +12,10 @@ import {
   RenaultAuth, createSessionFile, type SessionStore,
 } from './auth'
 import { DEFAULT_RATE_PER_HOUR, RenaultClient, carDataPath, isDeferred, isEndpointUnavailable } from './client'
-import { commandSummary, inWindow, socTargetPayload, toAccounts, toDescriptor, toStatePatch, toVehicleLinks, wakePayload, type VehicleReadings } from './mapping'
+import {
+  climateSettingsPayload, commandSummary, hvacSocThreshold, hvacStartPayload, inWindow, socTargetPayload, toAccounts, toDescriptor, toStatePatch,
+  toVehicleLinks, wakePayload, type VehicleReadings,
+} from './mapping'
 import type { VehicleLink } from './types'
 
 // Plugin Renault (véhicules) — API privée Gigya + Kamereon, celle de l'appli MY Renault.
@@ -96,8 +100,8 @@ export const PROBE_ENDPOINTS = [
  * Les lectures du sondage : celles que la R5 a acceptées à la capture, chacune rangée sous la clé
  * que `toStatePatch` attend. `cockpit` est en **v1** — la v2 répond un HTTP 200 sans données.
  *
- * Cinq appels par véhicule et par tour. À 7 minutes cela fait environ 43 appels par heure pour un
- * véhicule, sous les 60 que Renault tolère ; la liste des véhicules n'est PAS relue à chaque tour
+ * Six appels par véhicule et par tour (`ev/settings` porte les réglages de la climatisation). Au
+ * défaut de 10 minutes cela fait 36 appels par heure pour un véhicule, sous les 60 que Renault tolère ; la liste des véhicules n'est PAS relue à chaque tour
  * (contrairement à Tesla, il n'y a pas de veille à surveiller). Avec deux véhicules le plafond
  * serait franchi : c'est le seau à jetons du client qui refuse alors, sans appeler.
  */
@@ -107,12 +111,16 @@ export const READ_ENDPOINTS = [
   { key: 'location', endpoint: 'location', version: 1, adapter: 'kca' },
   { key: 'hvac', endpoint: 'hvac-status', version: 1, adapter: 'kca' },
   { key: 'socLevels', endpoint: 'ev/soc-levels', version: 1, adapter: 'kcm' },
+  { key: 'settings', endpoint: 'ev/settings', version: 1, adapter: 'kcm' },
 ] as const satisfies readonly { key: keyof VehicleReadings; endpoint: string; version: number; adapter: 'kca' | 'kcm' }[]
 
 /**
  * Le réveil de charge est un SOUS-ITEM cochable, pas une variable d'environnement : il écrit dans
  * la voiture, et l'utilisateur doit pouvoir le couper depuis la tablette sans toucher au serveur.
  */
+/** Relecture après une commande de climatisation : le temps que le boîtier la prenne et le dise. */
+const CLIMATE_FOLLOW_UP_MS = 60_000
+
 export const CHARGE_WAKE = 'charge_wake'
 const CHARGE_WAKE_PART = [{ id: CHARGE_WAKE, labelKey: 'vehicle.chargeWake', enabledByDefault: true }] as const
 
@@ -173,6 +181,10 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
   const lastWake = new Map<string, number>()
   /** Ce qu'est devenu le dernier réveil tenté, tous véhicules confondus. */
   let lastWakeOutcome: WakeOutcome | null = null
+  /** Dernier niveau et dernier seuil de climatisation lus, par VIN : de quoi refuser AVANT l'action. */
+  const lastHvac = new Map<string, { soc?: number; threshold?: number }>()
+  /** Les sièges tels que publiés, par VIN : la fusion d'état est superficielle, `seatHeat` part entier. */
+  const lastSeats = new Map<string, Partial<Record<VehicleSeat, number>>>()
 
   const log = () => ctx!.logger
 
@@ -219,6 +231,8 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
     }
     const patch = toStatePatch(readings, ctx!.clock.now())
     ctx!.emitState(vin, patch)
+    lastHvac.set(vin, { soc: patch.soc ?? lastHvac.get(vin)?.soc, threshold: hvacSocThreshold(readings.hvac) ?? lastHvac.get(vin)?.threshold })
+    if (patch.seatHeat) lastSeats.set(vin, { ...patch.seatHeat })
     // un réveil raté ne doit pas faire échouer la lecture : l'état est déjà publié
     try { await maybeWake(vin, patch, signal) }
     catch (err) {
@@ -374,6 +388,47 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
         // la cible est publiée tout de suite : le prochain tour de sondage la confirmera
         ctx!.emitState(externalId, { chargeLimit: command.percent })
         log().info({ vin: externalId, percent: command.percent }, 'Renault charge target set')
+        return
+      }
+      if (command.type === 'vehicle.climate_start' || command.type === 'vehicle.climate_stop') {
+        const id = accountId
+        if (!id) throw new PluginError('NEEDS_PAIRING', 'no Kamereon account for this person')
+        const start = command.type === 'vehicle.climate_start'
+        // la R5 dit elle-même sous quel niveau elle refuse : on ne dépense pas une action, rare, pour un refus certain
+        const known = lastHvac.get(externalId)
+        if (start && known?.soc !== undefined && known.threshold !== undefined && known.soc < known.threshold) {
+          throw new PluginError('LOW_BATTERY', `battery at ${known.soc} %, below the ${known.threshold} % climate threshold of this vehicle`)
+        }
+        const res = await client!.hvacStart({
+          accountId: id, vin: externalId, signal: ctx?.signal,
+          body: hvacStartPayload(start ? 'start' : 'cancel', start ? command.targetTempC : undefined),
+        })
+        log().info({ vin: externalId, action: start ? 'start' : 'cancel', command: commandSummary(res) }, 'Renault climate command sent')
+        // une COMMANDE déposée, pas un effet : on relit une minute plus tard pour CONSTATER (`hvacStatus`)
+        void (async () => {
+          await sleep(ctx!.clock, CLIMATE_FOLLOW_UP_MS, ctx!.signal)
+          if (!ctx || ctx.signal.aborted) return
+          try { await readVehicle(externalId, ctx.signal) }
+          catch (err) { log().debug({ err, vin: externalId }, 'Renault follow-up read after a climate command failed') }
+        })()
+        return
+      }
+      if (command.type === 'vehicle.climate_set') {
+        const id = accountId
+        if (!id) throw new PluginError('NEEDS_PAIRING', 'no Kamereon account for this person')
+        // les réglages se LISENT d'abord : heure de départ et programmes sont ceux de l'utilisateur
+        const settings = await client!.carData({ accountId: id, vin: externalId, endpoint: 'ev/settings', version: 1, adapter: 'kcm', signal: ctx?.signal })
+        const body = climateSettingsPayload(settings, command, ctx!.clock.now())
+        if (!body) throw new PluginError('UPSTREAM_ERROR', 'Renault gave no EV settings back to rewrite')
+        const res = await client!.writeEvSettings({ accountId: id, vin: externalId, body, signal: ctx?.signal })
+        const seats = Object.fromEntries(Object.entries(command.seatHeat ?? {}).filter(([, v]) => v !== undefined))
+        if (Object.keys(seats).length) lastSeats.set(externalId, { ...lastSeats.get(externalId), ...seats })
+        ctx!.emitState(externalId, {
+          ...(command.targetTempC !== undefined ? { climateTargetC: command.targetTempC } : {}),
+          ...(Object.keys(seats).length ? { seatHeat: lastSeats.get(externalId) } : {}),
+          ...(command.steeringWheelHeat !== undefined ? { steeringWheelHeat: command.steeringWheelHeat } : {}),
+        })
+        log().info({ vin: externalId, command: commandSummary(res) }, 'Renault climate settings written')
         return
       }
       if (command.type !== 'vehicle.refresh') {

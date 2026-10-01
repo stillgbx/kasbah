@@ -1,4 +1,4 @@
-import { makeDeviceId, type Capability, type DeviceDescriptor, type StatePatch } from '@kasbah/shared'
+import { makeDeviceId, type Capability, type CommandOf, type DeviceDescriptor, type StatePatch } from '@kasbah/shared'
 import { personAccountSchema, vehicleLinkSchema, vehiclesSchema, type PersonAccount, type VehicleLink } from './types'
 
 // Mappage PUR : ressources Renault ↔ contrat Kasbah. Aucun accès réseau, aucun état.
@@ -13,7 +13,19 @@ import { personAccountSchema, vehicleLinkSchema, vehiclesSchema, type PersonAcco
  * Verrouillage, pression, démarrage à distance : la voiture répond 404 ; charge en pause/reprise :
  * 403. Rien d'autre n'est donc déclaré, et l'UI ne propose que ce que le plugin honore.
  */
-export const CAPABILITIES: readonly Capability[] = ['soc', 'range', 'location', 'charge_limit']
+export const CAPABILITIES: readonly Capability[] = ['soc', 'range', 'location', 'charge_limit', 'climate_precondition']
+
+/**
+ * La climatisation de la R5, telle que son appli la montre (captures de l'utilisateur, 2026-10-01) :
+ * « climatiser » maintenant, 10 min au plus ; une consigne ± et trois options — siège conducteur,
+ * volant, siège passager — « communes à tous les programmes ». Ce sont des réglages du
+ * PRÉCONDITIONNEMENT (`ev/settings` : `preconditioningTemperature`, `preconditioningHeated*`), en
+ * marche / arrêt, qui se règlent clim éteinte. Bornes 16-26 °C au degré : HYPOTHÈSE, l'appli ne les
+ * montre pas, à corriger au premier refus.
+ */
+export const CLIMATE_FEATURES = {
+  minC: 16, maxC: 26, stepC: 1, seats: ['fl', 'fr'] as ('fl' | 'fr')[], seatLevels: 1, steeringWheelHeat: true, heatWhileOff: true,
+}
 
 /**
  * Comptes Kamereon lisibles de la personne. Un foyer en a souvent plusieurs (`MYRENAULT`,
@@ -64,7 +76,7 @@ export function toDescriptor(link: VehicleLink, capabilities: readonly Capabilit
     capabilities: [...capabilities],
     // le fabricant, écrit comme il s'écrit : l'UI affiche sinon l'id du plugin (« renault »), et le
     // constructeur, lui, CRIE ses libellés (`brand.label` = « RENAULT »)
-    meta: { manufacturer: 'Renault', ...(color ? { vehicle: { color } } : {}) },
+    meta: { manufacturer: 'Renault', vehicle: { ...(color ? { color } : {}), climate: CLIMATE_FEATURES } },
   }
 }
 
@@ -148,6 +160,33 @@ export function socTargetPayload(levels: unknown, percent: number, now: number):
   }
 }
 
+/** Le corps de `actions/hvac-start` : démarrer à une consigne, ou annuler. */
+export function hvacStartPayload(action: 'start' | 'cancel', targetTemperature?: number): Record<string, unknown> {
+  return { data: { type: 'HvacStart', attributes: { action, ...(action === 'start' && targetTemperature !== undefined ? { targetTemperature } : {}) } } }
+}
+
+/** Le seuil de batterie sous lequel la R5 refuse de climatiser (`hvac-status.socThreshold`, 15 % à la capture). */
+export function hvacSocThreshold(hvac: unknown): number | undefined {
+  return num(attributes(hvac)?.socThreshold)
+}
+
+/**
+ * Les réglages VE avec la consigne, les sièges et le volant demandés. Même règle que `wakePayload` :
+ * on rejoue ce que la voiture vient de donner (heure de départ, programmes : SES réglages) et on ne
+ * change que les champs du préconditionnement que la commande nomme.
+ */
+export function climateSettingsPayload(settings: unknown, cmd: CommandOf<'vehicle.climate_set'>, now: number): Record<string, unknown> | null {
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return null
+  return {
+    ...(settings as Record<string, unknown>),
+    ...(cmd.targetTempC !== undefined ? { preconditioningTemperature: cmd.targetTempC } : {}),
+    ...(cmd.seatHeat?.fl !== undefined ? { preconditioningHeatedLeftSeat: cmd.seatHeat.fl > 0 } : {}),
+    ...(cmd.seatHeat?.fr !== undefined ? { preconditioningHeatedRightSeat: cmd.seatHeat.fr > 0 } : {}),
+    ...(cmd.steeringWheelHeat !== undefined ? { preconditioningHeatedStrgWheel: cmd.steeringWheelHeat } : {}),
+    lastSettingsUpdateTimestamp: new Date(now).toISOString(),
+  }
+}
+
 /**
  * L'heure locale tombe-t-elle dans la fenêtre `HH:MM`–`HH:MM` ? Le réveil n'a de sens qu'en journée :
  * la nuit, une voiture branchée qui ne charge pas attend souvent SA charge programmée, et la secouer
@@ -222,6 +261,8 @@ export interface VehicleReadings {
   location?: unknown
   hvac?: unknown
   socLevels?: unknown
+  /** `ev/settings` (kcm) : les réglages du préconditionnement — consigne, sièges, volant. */
+  settings?: unknown
 }
 
 /**
@@ -296,6 +337,18 @@ export function toStatePatch(r: VehicleReadings, now: number): StatePatch<'vehic
   // la R5 donne l'INTÉRIEUR de l'habitacle ; elle ne dit rien de la température extérieure
   const inside = num(attributes(r.hvac)?.internalTemperature)
   if (inside !== undefined) patch.insideTempC = inside
+  // `hvacStatus` vaut `off` à la capture ; `on` pendant une climatisation
+  const hvacStatus = attributes(r.hvac)?.hvacStatus
+  if (typeof hvacStatus === 'string') patch.climateOn = hvacStatus.toLowerCase() === 'on'
+
+  // `ev/settings` (kcm), sans enveloppe : la conduite à gauche fait du siège GAUCHE celui du conducteur
+  const settings = r.settings as Record<string, unknown> | null | undefined
+  const preTemp = num(settings?.preconditioningTemperature)
+  if (preTemp !== undefined) patch.climateTargetC = preTemp
+  const left = settings?.preconditioningHeatedLeftSeat, right = settings?.preconditioningHeatedRightSeat
+  if (typeof left === 'boolean' && typeof right === 'boolean') patch.seatHeat = { fl: left ? 1 : 0, fr: right ? 1 : 0 }
+  const wheel = settings?.preconditioningHeatedStrgWheel
+  if (typeof wheel === 'boolean') patch.steeringWheelHeat = wheel
 
   // `ev/soc-levels` (kcm) n'a pas d'enveloppe `data` : les champs sont à la racine
   const levels = r.socLevels as { socTarget?: unknown; socMin?: unknown } | null | undefined

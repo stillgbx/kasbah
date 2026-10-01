@@ -3,7 +3,7 @@ import {
   ACCOUNT_ID, BATTERY_CHARGING, BATTERY_CHARGING_LIAR, BATTERY_UNPLUGGED, BATTERY_WAITING, COCKPIT_V1, COCKPIT_V2_EASTER_EGG,
   EV_SETTINGS, HVAC_STATUS, LOCATION, PERSON, SOC_LEVELS, VEHICLES, VIN,
 } from './__fixtures__/kamereon'
-import { commandSummary, inWindow, socTargetPayload, toAccounts, toDescriptor, toStatePatch, toVehicleLinks, vehicleName, wakePayload } from './mapping'
+import { commandSummary, inWindow, socTargetPayload, toAccounts, toDescriptor, toStatePatch, toVehicleLinks, vehicleName, wakePayload, CLIMATE_FEATURES, climateSettingsPayload, hvacStartPayload, hvacSocThreshold } from './mapping'
 
 // Tout ce fichier travaille sur la CAPTURE du 2026-09-14, pas sur la documentation. Trois pièges
 // que seule la capture révèle sont testés nommément : le `cockpit` v2 farceur, le flottant de
@@ -25,8 +25,9 @@ describe('comptes et véhicules', () => {
     expect(links).toHaveLength(1)
     const d = toDescriptor(links[0]!)
     expect(d).toMatchObject({ id: `renault:${VIN}`, externalId: VIN, kind: 'vehicle', name: 'AA123BB' })
-    // aucune capacité de commande en phase 1 : l'UI ne propose rien que le plugin refuserait
-    expect(d.capabilities).toEqual(['soc', 'range', 'location', 'charge_limit'])
+    // la cible de charge et la climatisation : rien d'autre, l'UI grise le reste
+    expect(d.capabilities).toEqual(['soc', 'range', 'location', 'charge_limit', 'climate_precondition'])
+    expect(d.meta.vehicle?.climate).toEqual(CLIMATE_FEATURES)
   })
 
   it('lit la teinte dans la référence de configuration, et ne devine jamais', () => {
@@ -36,10 +37,10 @@ describe('comptes et véhicules', () => {
     // Un code de peinture qu'aucune voiture réelle n'a confirmé ne publie RIEN : la scène retombe
     // sur sa couleur de thème, et l'utilisateur tranche. Mieux vaut rien qu'une couleur inventée.
     const inconnu = { vin: VIN, vehicleDetails: { assets: [{ assetType: 'PICTURE', renditions: [{ url: 'https://3dv.renault.com/x?configuration=PAVEH%2FTEZZZ%2FMET05' }] }] } }
-    expect(toDescriptor(inconnu).meta.vehicle).toBeUndefined()
+    expect(toDescriptor(inconnu).meta.vehicle?.color).toBeUndefined()
 
     // Contrat de services expiré : ni `vehicleDetails`, ni images, ni couleur — et surtout pas de plantage.
-    expect(toDescriptor({ vin: VIN }).meta.vehicle).toBeUndefined()
+    expect(toDescriptor({ vin: VIN }).meta.vehicle?.color).toBeUndefined()
   })
 
   it('retombe sur le modèle puis le VIN quand la plaque manque', () => {
@@ -52,6 +53,27 @@ describe('comptes et véhicules', () => {
     const links = toVehicleLinks({ vehicleLinks: [{ pasDeVin: true }, VEHICLES.vehicleLinks[0]] })
     expect(links).toHaveLength(1)
     expect(links[0]!.vin).toBe(VIN)
+  })
+})
+
+describe('climatisation', () => {
+  it('lit consigne, sièges avant et volant dans les réglages du préconditionnement', () => {
+    const patch = toStatePatch({ settings: { ...EV_SETTINGS, preconditioningHeatedLeftSeat: true } }, NOW)
+    expect(patch).toMatchObject({ climateTargetC: 21, seatHeat: { fl: 1, fr: 0 }, steeringWheelHeat: false })
+  })
+
+  it('réécrit les réglages TELS QU’ILS SONT, seuls les champs nommés changent', () => {
+    const body = climateSettingsPayload(EV_SETTINGS, { type: 'vehicle.climate_set', seatHeat: { fr: 1 }, steeringWheelHeat: true }, NOW)!
+    expect(body).toMatchObject({ preconditioningHeatedRightSeat: true, preconditioningHeatedStrgWheel: true, preconditioningHeatedLeftSeat: false, preconditioningTemperature: 21 })
+    expect(body.programs).toEqual(EV_SETTINGS.programs)
+    expect(body.chargeTimeStart).toBe(EV_SETTINGS.chargeTimeStart)
+    expect(body.lastSettingsUpdateTimestamp).not.toBe(EV_SETTINGS.lastSettingsUpdateTimestamp)
+  })
+
+  it('le corps de hvac-start : la consigne au démarrage, rien à l’annulation', () => {
+    expect(hvacStartPayload('start', 20)).toEqual({ data: { type: 'HvacStart', attributes: { action: 'start', targetTemperature: 20 } } })
+    expect(hvacStartPayload('cancel')).toEqual({ data: { type: 'HvacStart', attributes: { action: 'cancel' } } })
+    expect(hvacSocThreshold(HVAC_STATUS)).toBe(15)
   })
 })
 
@@ -71,6 +93,7 @@ describe('lectures → état', () => {
       odometerKm: 12500,
       location: { lat: 47.32, lon: 5.04, at: Date.parse('2026-09-14T08:18:31Z') },
       insideTempC: 37,
+      climateOn: false,
       chargeLimit: 80,
       socMin: 20,
       // la voiture n'est pas en charge : le temps restant qu'elle traîne depuis l'avant-veille est EFFACÉ

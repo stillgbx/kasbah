@@ -45,6 +45,13 @@ describe('VehicleClimate', () => {
     expect(seats()[3]!.attributes('title')).toBe('Pas disponible sur ce véhicule')
   })
 
+  it('R5 : sièges et volant sont des options du préconditionnement, réglables CLIM ÉTEINTE', () => {
+    const e = entry()
+    const r5 = { ...e, descriptor: { ...e.descriptor, meta: { vehicle: { climate: { ...R5_CLIMATE, heatWhileOff: true } } } } } as DeviceEntry
+    const { seats } = setup(r5)
+    expect(seats().map((s) => s.attributes('disabled') !== undefined)).toEqual([false, false, false, true, true, true])
+  })
+
   it('clim à l’arrêt : sièges et volant grisés, la consigne reste réglable', () => {
     const { seats, steps } = setup(entry())
     expect(seats().every((s) => s.attributes('disabled') !== undefined)).toBe(true)

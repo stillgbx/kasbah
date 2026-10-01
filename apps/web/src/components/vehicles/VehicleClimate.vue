@@ -87,8 +87,8 @@ const REAR: VehicleSeat[] = ['rl', 'rc', 'rr']
 const hasSeat = (s: VehicleSeat) => features.value?.seats.includes(s) === true
 const levels = computed(() => features.value?.seatLevels ?? 3)
 const levelOf = (s: VehicleSeat) => props.state.seatHeat?.[s] ?? 0
-/** Chauffer suppose la clim en marche : c'est ainsi que les deux constructeurs le font depuis leur appli. */
-const heatable = computed(() => on.value && props.state.available && !asleep.value)
+/** Chauffer suppose la clim en marche (Tesla), sauf là où ce sont des options du préconditionnement (R5). */
+const heatable = computed(() => props.state.available && (features.value?.heatWhileOff === true || (on.value && !asleep.value)))
 function cycleSeat(s: VehicleSeat): void {
   const next = (levelOf(s) + 1) % (levels.value + 1)
   void devices.sendCommand(id.value, { type: 'vehicle.climate_set', seatHeat: { [s]: next } })
@@ -103,6 +103,7 @@ const lit = (s: VehicleSeat) => (levels.value === 1 ? (levelOf(s) > 0 ? 3 : 0) :
 const hint = computed(() => {
   if (!props.state.available) return t('vehicle.climatePanel.unavailable')
   if (warming.value) return t('vehicle.climatePanel.warming')
+  if (!on.value && features.value?.heatWhileOff) return t('vehicle.climatePanel.presetHint')
   if (!on.value) return asleep.value ? t('vehicle.climateWakeHint') : t('vehicle.climatePanel.offHint')
   return t('vehicle.climateStopHint')
 })

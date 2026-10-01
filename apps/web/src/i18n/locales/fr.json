@@ -335,6 +335,7 @@
       "unsupported": "Pas disponible sur ce véhicule",
       "unavailable": "Véhicule indisponible.",
       "warming": "Réveil puis démarrage de la climatisation…",
+      "presetHint": "Consigne, sièges et volant sont les réglages du préconditionnement : ils s'appliquent au prochain démarrage de la climatisation (10 min au plus).",
       "offHint": "Allumez la climatisation pour chauffer les sièges et le volant. La consigne s'applique tout de suite."
     },
     "seat": {"fl": "AV G", "fr": "AV D", "rl": "AR G", "rc": "AR C", "rr": "AR D"},

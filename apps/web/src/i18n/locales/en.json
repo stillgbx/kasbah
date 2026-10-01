@@ -335,6 +335,7 @@
       "unsupported": "Not available on this vehicle",
       "unavailable": "Vehicle unavailable.",
       "warming": "Waking up, then starting the climate…",
+      "presetHint": "Setpoint, seats and wheel are the preconditioning settings: they apply the next time the climate starts (10 min at most).",
       "offHint": "Turn the climate on to heat the seats and the steering wheel. The setpoint applies right away."
     },
     "seat": {"fl": "FL", "fr": "FR", "rl": "RL", "rc": "RC", "rr": "RR"},

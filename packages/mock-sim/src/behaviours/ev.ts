@@ -24,10 +24,11 @@ export interface VehicleOptions {
   /** Puissance de la borne qui le charge quand branché (W) ; 0 = jamais chargé par cette sim. */
   chargerPowerW?: number
   /** Ce que sa climatisation sait faire (`meta.vehicle.climate`) ; défaut : celle d'une Tesla. */
-  climate?: NonNullable<NonNullable<DeviceMeta['vehicle']>['climate']>
+  climate?: ClimateFeatures
 }
 
-const TESLA_CLIMATE = { minC: 15, maxC: 28, stepC: 0.5, seats: ['fl', 'fr', 'rl', 'rc', 'rr'] as VehicleSeat[], seatLevels: 3, steeringWheelHeat: true }
+type ClimateFeatures = NonNullable<NonNullable<DeviceMeta['vehicle']>['climate']>
+const TESLA_CLIMATE: ClimateFeatures = { minC: 15, maxC: 28, stepC: 0.5, seats: ['fl', 'fr', 'rl', 'rc', 'rr'] as VehicleSeat[], seatLevels: 3, steeringWheelHeat: true }
 
 export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehicle'> {
   const batteryKwh = o.batteryKwh ?? 75, rangeFull = o.rangeKmFull ?? 450
@@ -115,8 +116,9 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
         case 'vehicle.climate_start': if (s.soc < 20) throw new SimError('LOW_BATTERY', 'battery too low to run the climate'); s.sleepState = 'online'; s.climateOn = true; if (cmd.targetTempC !== undefined) s.climateTargetC = cmd.targetTempC; break
         case 'vehicle.climate_stop': s.climateOn = false; break
         case 'vehicle.climate_set': {
-          if (s.sleepState !== 'online') throw new SimError('DEVICE_UNAVAILABLE', 'vehicle is asleep')
           const climate = o.climate ?? TESLA_CLIMATE
+          // Tesla refuse un réglage voiture endormie ; la R5 écrit des réglages de préconditionnement, sans veille
+          if (!climate.heatWhileOff && s.sleepState !== 'online') throw new SimError('DEVICE_UNAVAILABLE', 'vehicle is asleep')
           if (cmd.targetTempC !== undefined) s.climateTargetC = clamp(cmd.targetTempC, climate.minC, climate.maxC)
           for (const [seat, level] of Object.entries(cmd.seatHeat ?? {}) as [VehicleSeat, number | undefined][]) {
             if (level === undefined) continue

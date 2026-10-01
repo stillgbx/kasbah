@@ -144,6 +144,15 @@ export class RenaultClient {
     return this.request('POST', path, { body: o.body, signal: o.signal })
   }
 
+  /**
+   * Climatiser maintenant (`start`, 10 min au plus) ou arrêter (`cancel`). Une ACTION `kca` : son
+   * quota est bien plus serré que celui des lectures (429 puis compte bloqué 1 h, le 2026-09-19).
+   */
+  hvacStart(o: { accountId: string; vin: string; body: unknown; signal?: AbortSignal }): Promise<unknown> {
+    const path = carDataPath({ accountId: o.accountId, vin: o.vin, endpoint: 'actions/hvac-start', version: 1, adapter: 'kca' })
+    return this.request('POST', path, { body: o.body, signal: o.signal })
+  }
+
   /** Une lecture véhicule (cf. `carDataPath`). */
   carData(o: { accountId: string; vin: string; endpoint: string; version?: number; adapter?: Adapter; signal?: AbortSignal }): Promise<unknown> {
     return this.request('GET', carDataPath(o), { signal: o.signal })

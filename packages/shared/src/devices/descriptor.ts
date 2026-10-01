@@ -87,6 +87,12 @@ export const deviceMetaSchema = z.object({
       seats: z.array(z.enum(VEHICLE_SEATS)),
       seatLevels: z.number().int().min(1).max(3),
       steeringWheelHeat: z.boolean(),
+      /**
+       * Sièges et volant se règlent CLIM ÉTEINTE : ce sont des options du préconditionnement (R5,
+       * « communs à tous les programmes »), pas des chauffages qu'on allume. Absent = il faut la clim
+       * en marche (Tesla : « Requires preconditioning or climate keeper to be on »).
+       */
+      heatWhileOff: z.boolean().optional(),
     }).optional(),
   }).optional(),
   /**
