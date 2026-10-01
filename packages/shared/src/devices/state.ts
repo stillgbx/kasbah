@@ -217,6 +217,8 @@ export type VehicleSleepState = (typeof VEHICLE_SLEEP_STATES)[number]
 export const VEHICLE_GEARS = ['P', 'R', 'N', 'D'] as const
 export type VehicleGear = (typeof VEHICLE_GEARS)[number]
 
+const seatLevel = z.number().int().min(0).max(3)
+
 export const vehicleStateSchema = z.object({
   kind: z.literal('vehicle'), ...base,
   soc: pct,
@@ -272,6 +274,11 @@ export const vehicleStateSchema = z.object({
   climateOn: z.boolean().optional(),
   /** Consigne de l'habitacle, °C, telle que la voiture la garde. Absente = inconnue. */
   climateTargetC: z.number().optional(),
+  /** Chauffage de chaque siège, cran 0 (arrêt) à 3. Une place absente = inconnue ou sans chauffage. */
+  seatHeat: z.object({
+    fl: seatLevel.optional(), fr: seatLevel.optional(), rl: seatLevel.optional(), rc: seatLevel.optional(), rr: seatLevel.optional(),
+  }).optional(),
+  steeringWheelHeat: z.boolean().optional(),
   /**
    * Date (ms epoch) de la dernière LECTURE COMPLÈTE du véhicule — pas `updatedAt`, que la seule veille
    * fait bouger. C'est ce que l'UI affiche (« lu il y a 12 min ») : sur une API facturée et un

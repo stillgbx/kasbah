@@ -6,6 +6,7 @@ import PageHeader from '../components/layout/PageHeader.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import ChargeLimitCard from '../components/vehicles/ChargeLimitCard.vue'
 import VehicleMap from '../components/vehicles/VehicleMap.vue'
+import VehicleClimate from '../components/vehicles/VehicleClimate.vue'
 import VehicleTuning from '../components/vehicles/VehicleTuning.vue'
 import { formatAgo, formatDistance, formatKm, formatMinutes, formatPercent, formatPower, formatTemp } from '../lib/format'
 import { QUOTA_TENSE_PCT, quotaPercent } from '../lib/map'
@@ -183,28 +184,8 @@ async function wake(v: VehicleEntry): Promise<void> {
 // le véhicule a ouvert les yeux : le bouton a fini son travail (et cède la place à « Actualiser »)
 watch(vehicles, (list) => { for (const v of list) if (v.state.sleepState === 'online') stopWaking(v.descriptor.id) })
 
-/**
- * Préconditionner l'habitacle. Endormie, la voiture est RÉVEILLÉE par le plugin avant la commande :
- * l'accusé arrive en une seconde, la clim une vingtaine plus tard. Comme pour le réveil, le bouton
- * tient l'attente jusqu'à l'effet constaté (`climateOn`), ou `WAKE_MAX_MS` au plus. La consigne est
- * celle que la voiture garde : la carte ne la change pas (une automatisation le peut).
- */
-const warming = ref<Record<string, true>>({})
-function stopWarming(id: string): void {
-  if (!(id in warming.value)) return
-  const next = { ...warming.value }
-  delete next[id]
-  warming.value = next
-}
-const climateBusy = (v: VehicleEntry) => devices.isPending(v.descriptor.id) || v.descriptor.id in warming.value
-async function toggleClimate(v: VehicleEntry): Promise<void> {
-  const id = v.descriptor.id
-  if (v.state.climateOn) { await send(id, { type: 'vehicle.climate_stop' }); return }
-  warming.value = { ...warming.value, [id]: true }
-  if (await send(id, { type: 'vehicle.climate_start' })) setTimeout(() => stopWarming(id), WAKE_MAX_MS)
-  else stopWarming(id)
-}
-watch(vehicles, (list) => { for (const v of list) if (v.state.climateOn) stopWarming(v.descriptor.id) })
+/** La climatisation, repliée derrière son bouton comme « Modifier » : marche, consigne, sièges (cf. `VehicleClimate`). */
+const climate = ref<string | null>(null)
 /** Sous la carte : où est la voiture par rapport à la maison, et son kilométrage. */
 const caption = (s: StateFor<'vehicle'>) =>
   `${location(s)}${s.odometerKm ? ` · ${t('vehicle.odometer')} ${formatKm(s.odometerKm, locale.value)}` : ''}`
@@ -309,46 +290,56 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
           <!-- la carte : voiture (avec son cap) et maison, plan ou satellite, plein écran -->
           <VehicleMap class="vcard__map" :location="v.state.location" :heading-deg="v.state.headingDeg" :home="house.house?.origin"
                       :caption="caption(v.state)" />
+          <!-- TOUS les boutons, toujours : ce qu'un véhicule ne sait pas faire est grisé, avec la raison
+               (règle de l'utilisateur, 2026-10-01). La rangée ne change ni d'un véhicule à l'autre, ni
+               quand on branche le câble -->
           <div class="vcard__actions">
-            <button v-if="has(v, 'lock')" type="button" class="pill" :disabled="!v.state.available" @click="send(v.descriptor.id, { type: v.state.locked ? 'vehicle.unlock' : 'vehicle.lock' })">
-              {{ v.state.locked ? $t('common.unlock') : $t('common.lock') }}
+            <button type="button" class="pill" :disabled="!has(v, 'lock') || !v.state.available"
+                    :title="has(v, 'lock') ? undefined : $t('vehicle.unsupported')" @click="send(v.descriptor.id, { type: v.state.locked ? 'vehicle.unlock' : 'vehicle.lock' })">
+              <StrokeIcon :name="v.state.locked ? 'lockOpen' : 'lock'" :size="16" /><span class="vcard__label">{{ v.state.locked ? $t('common.unlock') : $t('common.lock') }}</span>
             </button>
-            <button v-if="has(v, 'charging') && v.state.pluggedIn" type="button" class="pill" :data-on="v.state.charging ? '1' : '0'" :disabled="!v.state.available"
+            <button type="button" class="pill" :data-on="v.state.charging ? '1' : '0'" :disabled="!has(v, 'charging') || !v.state.pluggedIn || !v.state.available"
+                    :title="!has(v, 'charging') ? $t('vehicle.unsupported') : v.state.pluggedIn ? undefined : $t('vehicle.unplugged')"
                     @click="send(v.descriptor.id, { type: v.state.charging ? 'vehicle.stop_charge' : 'vehicle.start_charge' })">
-              {{ v.state.charging ? $t('vehicle.stopCharge') : $t('vehicle.startCharge') }}
+              <StrokeIcon :name="v.state.charging ? 'boltOff' : 'bolt'" :size="16" /><span class="vcard__label">{{ v.state.charging ? $t('vehicle.stopCharge') : $t('vehicle.startCharge') }}</span>
             </button>
-            <!-- libellé FIXE, l'état se lit à la teinte (`data-on`) : le bouton ne change pas de largeur -->
-            <button v-if="has(v, 'climate_precondition')" type="button" class="pill" :data-on="v.state.climateOn ? '1' : '0'"
-                    :disabled="!v.state.available || climateBusy(v)" :aria-busy="climateBusy(v)" :aria-pressed="v.state.climateOn === true"
-                    :title="v.state.climateOn ? $t('vehicle.climateStopHint') : asleep(v.state) ? $t('vehicle.climateWakeHint') : $t('vehicle.climateHint')"
-                    @click="toggleClimate(v)">
-              <v-progress-circular v-if="climateBusy(v)" indeterminate size="16" width="2" />
-              <StrokeIcon v-else name="thermostat" :size="16" />{{ $t('vehicle.climate') }}
-            </button>
-            <!-- réveiller est un geste explicite (Tesla le facture) : jamais automatique, proposé seulement quand ça dort -->
-            <button v-if="asleep(v.state)" type="button" class="pill" :disabled="!v.state.available || busy(v)"
-                    :aria-busy="busy(v)" :title="$t('vehicle.wakeHint')" @click="wake(v)">
+            <!-- réveiller est un geste explicite (Tesla le facture) : jamais automatique. TOUJOURS là pour un
+                 véhicule qui connaît la veille, grisé quand il est éveillé : s'il apparaissait et
+                 disparaissait, la rangée changerait de nombre de lignes et pousserait le panneau de la clim -->
+            <button type="button" class="pill" :disabled="v.state.sleepState === undefined || !v.state.available || !asleep(v.state) || busy(v)"
+                    :aria-busy="busy(v)" :title="v.state.sleepState === undefined ? $t('vehicle.unsupported') : $t('vehicle.wakeHint')" @click="wake(v)">
               <!-- le spinner prend la PLACE de l'icône, même taille : le bouton ne change pas de largeur -->
               <v-progress-circular v-if="busy(v)" indeterminate size="16" width="2" />
-              <StrokeIcon v-else name="sun" :size="16" />{{ $t('vehicle.wake') }}
+              <StrokeIcon v-else name="sun" :size="16" /><span class="vcard__label">{{ $t('vehicle.wake') }}</span>
             </button>
             <!-- relire maintenant (lecture facturée, pas de réveil) ; le sondage repart de cette lecture.
                  Proposé MÊME endormi : c'est ainsi qu'on constate qu'une voiture s'est réveillée seule,
                  sans payer le réveil -->
-            <button v-if="has(v, 'soc')" type="button" class="pill" :disabled="!v.state.available || devices.isPending(v.descriptor.id)"
+            <button type="button" class="pill" :disabled="!has(v, 'soc') || !v.state.available || devices.isPending(v.descriptor.id)"
                     :aria-busy="devices.isPending(v.descriptor.id)" :title="$t('vehicle.refreshHint')" @click="send(v.descriptor.id, { type: 'vehicle.refresh' })">
               <!-- il reste cliquable PENDANT un réveil : c'est justement le moment où l'on veut
                    demander « alors, tu es réveillée ? » sans repayer un réveil -->
               <v-progress-circular v-if="devices.isPending(v.descriptor.id)" indeterminate size="16" width="2" />
-              <StrokeIcon v-else name="rotateRight" :size="16" />{{ $t('vehicle.refresh') }}
-            </button>
-            <!-- ce que la voiture ne dira jamais : replié, parce qu'on le règle une fois -->
-            <button v-if="tunable(v)" type="button" class="pill" :data-on="tuning === v.descriptor.id ? '1' : '0'"
-                    :aria-expanded="tuning === v.descriptor.id"
-                    @click="tuning = tuning === v.descriptor.id ? null : v.descriptor.id">
-              <StrokeIcon name="gear" :size="16" />{{ $t('vehicle.tune') }}
+              <StrokeIcon v-else name="rotateRight" :size="16" /><span class="vcard__label">{{ $t('vehicle.refresh') }}</span>
             </button>
           </div>
+          <!-- dessous, à part : les boutons qui DÉPLIENT une section, sous les gestes qui agissent tout de suite -->
+          <div class="vcard__actions">
+            <!-- ouvre le panneau ; la teinte dit que la clim TOURNE (libellé fixe : la largeur ne bouge pas) -->
+            <button type="button" class="pill" :data-on="v.state.climateOn ? '1' : '0'" :disabled="!has(v, 'climate_precondition')"
+                    :aria-expanded="climate === v.descriptor.id" :title="has(v, 'climate_precondition') ? $t('vehicle.climateHint') : $t('vehicle.unsupported')"
+                    @click="climate = climate === v.descriptor.id ? null : v.descriptor.id">
+              <StrokeIcon name="thermostat" :size="16" /><span class="vcard__label">{{ $t('vehicle.climatePanel.title') }}</span>
+            </button>
+            <!-- ce que la voiture ne dira jamais : replié, parce qu'on le règle une fois -->
+            <!-- grisé quand il n'y a RIEN à régler (placé à la main, et bavard sur sa puissance) -->
+            <button type="button" class="pill" :data-on="tuning === v.descriptor.id ? '1' : '0'" :disabled="!tunable(v)"
+                    :aria-expanded="tuning === v.descriptor.id"
+                    @click="tuning = tuning === v.descriptor.id ? null : v.descriptor.id">
+              <StrokeIcon name="gear" :size="16" /><span class="vcard__label">{{ $t('vehicle.tune') }}</span>
+            </button>
+          </div>
+          <VehicleClimate v-if="climate === v.descriptor.id" class="card card--soft" :descriptor="v.descriptor" :state="v.state" />
           <VehicleTuning v-if="tuning === v.descriptor.id" :descriptor="v.descriptor" />
           <!-- l'âge des valeurs, toujours affiché : sur une API facturée et une voiture qui dort, elles en ont un -->
           <p class="muted vcard__hint">{{ readAgo(v.state) }}<template v-if="asleep(v.state)"> · {{ $t('vehicle.wakeHint') }}</template></p>
@@ -414,7 +405,13 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
 .vcard__map { height: 220px; }
 /* la ligne de charge tient sa hauteur même vide : la carte ne bouge pas quand la charge démarre */
 .vcard__charge { margin: -8px 0 0; font-size: 12px; min-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.vcard__actions { display: flex; gap: 8px; flex-wrap: wrap; min-height: 40px; }
+/* deux colonnes de tuiles IDENTIQUES, toujours la même disposition : gestes (2 × 2), puis sections */
+.vcard__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+/* icône AU-DESSUS du libellé : « Arrêter la charge » tient dans une demi-carte, sans être coupé */
+.vcard__actions .pill { min-width: 0; height: 56px; padding: 0 8px; border-radius: 12px; flex-direction: column; justify-content: center; gap: 3px; font-size: 13px; }
+.vcard__label { max-width: 100%; }
+.vcard__actions .pill :deep(svg), .vcard__actions .pill .v-progress-circular { flex: 0 0 auto; }
+.vcard__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* un bouton qui ATTEND n'est pas un bouton indisponible : l'opacité des boutons désactivés (.45)
    rendait le spinner à peine visible, or c'est lui qui porte l'information */
 .vcard__actions .pill[aria-busy='true']:disabled { opacity: .7; }

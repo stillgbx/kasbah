@@ -6,6 +6,7 @@ import { xySchema } from './state'
 // `COMMAND_REQUIRES` permet au serveur de refuser une commande non supportée par l'appareil.
 
 const pct = z.number().min(0).max(100)
+const seatLevel = z.number().int().min(0).max(3)
 
 export const commandSchema = z.discriminatedUnion('type', [
   // light — une seule commande fusionnée (miroir du PUT Hue, évite 4 allers-retours par mouvement de picker)
@@ -92,9 +93,23 @@ export const commandSchema = z.discriminatedUnion('type', [
    * Préconditionner l'habitacle (chauffer ou rafraîchir avant de partir). `targetTempC` absent = la
    * consigne que la voiture garde déjà ; bornes = celles de Tesla (`min/max_avail_temp`, 15-28 °C).
    * Le plugin RÉVEILLE la voiture s'il le faut : c'est le but même de la commande, un matin où elle dort.
+   * Batterie trop faible (Tesla : sous 20 %), le plugin refuse en `LOW_BATTERY` : l'appli Tesla sait
+   * forcer, l'API REST non (choix de l'utilisateur du 2026-10-01 : ne pas chercher de détour).
    */
   z.object({ type: z.literal('vehicle.climate_start'), targetTempC: z.number().min(15).max(28).optional() }),
   z.object({ type: z.literal('vehicle.climate_stop') }),
+  /**
+   * Régler sans mettre en marche : consigne, crans des sièges (0-3), volant. Ne RÉVEILLE jamais la
+   * voiture, à l'inverse de `climate_start`. Champ absent = pas touché.
+   */
+  z.object({
+    type: z.literal('vehicle.climate_set'),
+    targetTempC: z.number().min(15).max(28).optional(),
+    seatHeat: z.object({
+      fl: seatLevel.optional(), fr: seatLevel.optional(), rl: seatLevel.optional(), rc: seatLevel.optional(), rr: seatLevel.optional(),
+    }).optional(),
+    steeringWheelHeat: z.boolean().optional(),
+  }),
   /** Relire le véhicule MAINTENANT (lecture facturée) ; le sondage repart de ce moment. */
   z.object({ type: z.literal('vehicle.refresh') }),
   // pet_feeder
@@ -143,7 +158,7 @@ export const COMMAND_REQUIRES: Record<CommandType, Capability> = {
   'vehicle.lock': 'lock', 'vehicle.unlock': 'lock',
   'vehicle.start_charge': 'charging', 'vehicle.stop_charge': 'charging',
   'vehicle.set_charge_limit': 'charge_limit', 'vehicle.wake': 'soc', 'vehicle.refresh': 'soc',
-  'vehicle.climate_start': 'climate_precondition', 'vehicle.climate_stop': 'climate_precondition',
+  'vehicle.climate_start': 'climate_precondition', 'vehicle.climate_stop': 'climate_precondition', 'vehicle.climate_set': 'climate_precondition',
   'pet_feeder.feed': 'feed', 'pet_feeder.call_pet': 'call_pet',
   'pet_fountain.set_power': 'on_off', 'pet_fountain.set_mode': 'pump_mode',
   'fan.set': 'on_off',

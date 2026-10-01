@@ -161,6 +161,10 @@ export type ClimateClass = (typeof CLIMATE_CLASSES)[number]
  * c'est ce qui décide si la voiture renvoie le ciel ou l'absorbe, et l'écart se voit au premier
  * coup d'œil dans la scène.
  */
+/** Places d'un véhicule, pour le chauffage des sièges : avant gauche / droite, arrière gauche / centre / droite. */
+export const VEHICLE_SEATS = ['fl', 'fr', 'rl', 'rc', 'rr'] as const
+export type VehicleSeat = (typeof VEHICLE_SEATS)[number]
+
 export const VEHICLE_FINISHES = ['solid', 'metallic', 'matte'] as const
 export type VehicleFinish = (typeof VEHICLE_FINISHES)[number]
 

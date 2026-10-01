@@ -2,7 +2,7 @@ import type { Command, DeviceDescriptor, DeviceKind, DeviceState, StateFor, Weat
 import type { Rng } from './rng'
 import type { World, WorldConfig } from './world'
 
-export type SimErrorCode = 'UNSUPPORTED_COMMAND' | 'DEVICE_UNAVAILABLE' | 'UPSTREAM_ERROR' | 'TIMEOUT'
+export type SimErrorCode = 'UNSUPPORTED_COMMAND' | 'DEVICE_UNAVAILABLE' | 'UPSTREAM_ERROR' | 'TIMEOUT' | 'LOW_BATTERY'
 export class SimError extends Error {
   constructor(readonly code: SimErrorCode, message: string) {
     super(message)

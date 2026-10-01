@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { defaultState, deviceDescriptorSchema, deviceStateSchema, mergeState, stateKeys, type StateFor } from '@kasbah/shared'
 import { VEHICLES_ASLEEP, VEHICLES_ONLINE, VEHICLE_DATA_CHARGING, VEHICLE_DATA_DRIVING, VEHICLE_DATA_PARKED } from './__fixtures__/fleet'
-import { bodyColor, bodyFinish, isResting, modelFromVin, toDataPatch, toDescriptor, toSleepPatch, toSleepState } from './mapping'
+import { bodyColor, CLIMATE_FEATURES, bodyFinish, isResting, modelFromVin, toDataPatch, toDescriptor, toSleepPatch, toSleepState } from './mapping'
 import { vehicleDataSchema, vehicleSummarySchema, vehiclesListSchema } from './types'
 
 // Mappage de la Fleet API, éprouvé sur une réponse CAPTURÉE sur le vrai compte (Model S 2017, MCU2) :
@@ -26,7 +26,8 @@ describe('descripteur', () => {
     const d = toDescriptor(summary)
     expect(deviceDescriptorSchema.safeParse(d).success).toBe(true)
     expect(d).toMatchObject({ id: 'tesla:5YJSA7E20HF000001', externalId: '5YJSA7E20HF000001', kind: 'vehicle', name: 'Kasbah S' })
-    expect(d.meta).toEqual({ manufacturer: 'Tesla', model: 'Model S' })
+    // la climatisation se déclare d'emblée : l'UI commune grise ce qui n'y est pas
+    expect(d.meta).toEqual({ manufacturer: 'Tesla', model: 'Model S', vehicle: { climate: CLIMATE_FEATURES } })
     // phase 1 : lecture seule — ni `lock` ni `charging`, l'UI n'a donc pas à proposer ces boutons.
     // `charge_power` n'est pas une commande : elle dit que la voiture DONNE sa puissance de charge,
     // et dispense l'UI de la faire estimer (donc de demander la capacité de la batterie).
@@ -105,6 +106,8 @@ describe('lecture complète (`vehicle_data`)', () => {
     expect(p.outsideTempC).toBe(23)
     expect(p.climateOn).toBe(false)
     expect(p.climateTargetC).toBe(15)
+    expect(p.seatHeat).toEqual({ fl: 0, fr: 0, rl: 0, rc: 0, rr: 0 })
+    expect(p.steeringWheelHeat).toBe(false)
     expect(p.sleepState).toBe('online')
   })
 

@@ -64,7 +64,7 @@ describe('VehiclesView — réveil en cours', () => {
     expect(b.attributes('aria-busy')).toBe('true')
   })
 
-  it('le véhicule ouvre les yeux : l’indicateur s’efface et « Réveiller » s’en va', async () => {
+  it('le véhicule ouvre les yeux : l’indicateur s’efface et « Réveiller » se grise, SANS partir (rien ne bouge)', async () => {
     const { w, devices, button, spinner } = setup()
     await button('Réveiller')!.trigger('click')
     await w.vm.$nextTick()
@@ -72,7 +72,7 @@ describe('VehiclesView — réveil en cours', () => {
     devices.setEntries([vehicle('online')])
     await w.vm.$nextTick()
     expect(spinner()).toBe(false)
-    expect(button('Réveiller')).toBeUndefined()
+    expect(button('Réveiller')?.attributes('disabled')).toBeDefined()
     expect(button('Actualiser')?.attributes('disabled')).toBeUndefined()
   })
 
@@ -195,6 +195,15 @@ describe('VehiclesView — détail de la charge', () => {
     const { w } = setup(vehicle('online'))
     expect(w.find('.vcard__charge').exists()).toBe(true)
     expect(w.find('.vcard__charge').text()).toBe('')
+  })
+
+  it('tous les boutons, toujours : ce que le véhicule ne sait pas faire est GRISÉ avec sa raison, pas caché', () => {
+    // le véhicule de test ne déclare ni `lock`, ni `charging`, ni `climate_precondition`
+    const { button } = setup(vehicle('online'))
+    for (const label of ['Déverrouiller', 'Lancer la charge', 'Climatisation']) {
+      expect(button(label)?.attributes('disabled'), label).toBeDefined()
+      expect(button(label)?.attributes('title'), label).toBe('Pas disponible sur ce véhicule')
+    }
   })
 
   it('demande refusée : le bouton revient tout de suite', async () => {

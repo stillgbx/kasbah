@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { CAMERA_CLASSES, CAPABILITIES, CLIMATE_CLASSES, CLIMATE_MODES, COVER_CLASSES, DEVICE_KINDS, KIND_CAPABILITIES, MEDIA_PLAYER_CLASSES, SENSOR_CLASSES, STREAM_PROTOCOLS, VEHICLE_FINISHES } from './kinds'
+import { CAMERA_CLASSES, CAPABILITIES, CLIMATE_CLASSES, CLIMATE_MODES, COVER_CLASSES, DEVICE_KINDS, KIND_CAPABILITIES, MEDIA_PLAYER_CLASSES, SENSOR_CLASSES, STREAM_PROTOCOLS, VEHICLE_FINISHES, VEHICLE_SEATS } from './kinds'
 
 // Identité d'un appareil : `${pluginId}:${externalId}`. Une seule chaîne sert de clé de Map,
 // de segment d'URL, de champ WS et de nom de nœud 3D — jamais de couple à joindre côté client.
@@ -74,7 +74,21 @@ export const deviceMetaSchema = z.object({
    * C'est un DÉFAUT, jamais une vérité : le réglage manuel de la maison (`HouseDevice.bodyColor`)
    * l'emporte toujours, parce qu'un covering, une repeinte ou simplement un goût le contredisent.
    */
-  vehicle: z.object({ color: hexColorSchema.optional(), finish: z.enum(VEHICLE_FINISHES).optional() }).optional(),
+  vehicle: z.object({
+    color: hexColorSchema.optional(), finish: z.enum(VEHICLE_FINISHES).optional(),
+    /**
+     * Ce que la climatisation de CE véhicule sait faire (capacité `climate_precondition`). L'UI
+     * propose toujours le maximum et grise ce qui manque ici : un siège absent de `seats`, le volant
+     * sans `steeringWheelHeat`. `seatLevels` : 3 = trois crans (Tesla), 1 = marche / arrêt.
+     * Absent = marche / arrêt seuls, sans consigne.
+     */
+    climate: z.object({
+      minC: z.number(), maxC: z.number(), stepC: z.number().positive(),
+      seats: z.array(z.enum(VEHICLE_SEATS)),
+      seatLevels: z.number().int().min(1).max(3),
+      steeringWheelHeat: z.boolean(),
+    }).optional(),
+  }).optional(),
   /**
    * Le plugin RETIENT cet appareil même absent du réseau (un Cast éteint ne s'annonce plus, et son
    * entrée dans la maison perdrait son nom et son état). L'UI peut donc proposer de l'oublier —

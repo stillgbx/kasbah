@@ -30,6 +30,7 @@ const CODE_MAP: Record<SimErrorCode, PluginErrorCode> = {
   DEVICE_UNAVAILABLE: 'DEVICE_UNAVAILABLE',
   UPSTREAM_ERROR: 'UPSTREAM_ERROR',
   TIMEOUT: 'TIMEOUT',
+  LOW_BATTERY: 'LOW_BATTERY',
 }
 
 export function createMockPlugin(): DevicePlugin {

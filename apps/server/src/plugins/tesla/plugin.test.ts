@@ -10,7 +10,7 @@ import {
 } from './__fixtures__/fleet'
 import { REGION_BASE_URLS, TOKEN_URL, generateKeyPair, publicKeyOf, publicKeyPointHex, samePublicKey, type KeyStore, type StoredTokens, type TokenStore } from './auth'
 import { createTeslaPlugin, teslaConfigSchema } from './index'
-import type { TeslaState, TeslaStateStore } from './state'
+import { emptyState, type TeslaState, type TeslaStateStore } from './state'
 
 // Ce que le plugin doit tenir face au fabricant : ne JAMAIS lire un véhicule endormi, le laisser
 // s'endormir une fois vu au repos, ne pas dépasser le budget de lectures du jour, et survivre à la
@@ -432,14 +432,14 @@ describe('ce qui survit à un redémarrage', () => {
     // paint_color_override de la fixture PARKED → #285ac8, aspect matte
     expect(state.value?.paints[VIN]).toMatchObject({ color: '#285ac8', finish: 'matte' })
     expect(first.ctx.emitDevices).toHaveBeenCalledWith([
-      expect.objectContaining({ id: `tesla:${VIN}`, meta: expect.objectContaining({ vehicle: { color: '#285ac8', finish: 'matte' } }) }),
+      expect.objectContaining({ id: `tesla:${VIN}`, meta: expect.objectContaining({ vehicle: expect.objectContaining({ color: '#285ac8', finish: 'matte' }) }) }),
     ])
 
     const asleep = fakeTesla()
     const second = await started({ tesla: asleep, tokens: linkedTokens(), state })
     const devices = await second.plugin.discover()
     expect(dataCalls(asleep)).toBe(0)
-    expect(devices[0]?.meta.vehicle).toEqual({ color: '#285ac8', finish: 'matte' })
+    expect(devices[0]?.meta.vehicle).toMatchObject({ color: '#285ac8', finish: 'matte' })
   })
 
   it('la consommation du mois se poursuit après un redémarrage, et repart au mois suivant', async () => {
@@ -631,6 +631,24 @@ describe('climatisation', () => {
     expect(commandPaths(t)).toEqual([])
   })
 
+  it('batterie faible : le refus `low_soc` devient LOW_BATTERY', async () => {
+    const tesla = fakeTesla()
+    tesla.world.list = VEHICLES_ONLINE
+    tesla.world.commandResult = { result: false, reason: 'low_soc' }
+    const { plugin } = await started({ tesla, tokens: linkedTokens() })
+    await plugin.discover()
+    await expect(plugin.execute(VIN, { type: 'vehicle.climate_start' })).rejects.toMatchObject({ code: 'LOW_BATTERY' })
+  })
+
+  it('charge CONNUE sous 20 % : refusé AVANT de payer un réveil', async () => {
+    const tesla = fakeTesla()
+    const state = memoryState({ ...emptyState(), vehicles: { [VIN]: { soc: 17 } } })
+    const { plugin, tesla: t } = await started({ tesla, tokens: linkedTokens(), state })
+    await plugin.discover()
+    await expect(plugin.execute(VIN, { type: 'vehicle.climate_start' })).rejects.toMatchObject({ code: 'LOW_BATTERY' })
+    expect(t.calls.some((c) => c.path.endsWith('/wake_up'))).toBe(false)
+  })
+
   it('arrêter une voiture endormie ne la réveille pas : sa clim est forcément à l’arrêt', async () => {
     const tesla = fakeTesla()
     const { plugin, ctx, tesla: t } = await started({ tesla, tokens: linkedTokens() })
@@ -638,6 +656,31 @@ describe('climatisation', () => {
     await plugin.execute(VIN, { type: 'vehicle.climate_stop' })
     expect(t.calls.some((c) => c.path.endsWith('/wake_up') || c.path.includes('/command/'))).toBe(false)
     expect(patches(ctx).at(-1)).toMatchObject({ climateOn: false })
+  })
+
+  it('régler sièges, volant et consigne : une commande chacun, `seatHeat` publié ENTIER (fusion superficielle)', async () => {
+    const tesla = fakeTesla()
+    tesla.world.list = VEHICLES_ONLINE
+    const { plugin, ctx, tesla: t } = await started({ tesla, tokens: linkedTokens() })
+    await plugin.discover()
+    await plugin.execute(VIN, { type: 'vehicle.climate_set', seatHeat: { fl: 3 } })
+    await plugin.execute(VIN, { type: 'vehicle.climate_set', targetTempC: 20.5, seatHeat: { rc: 1 }, steeringWheelHeat: true })
+    expect(commandPaths(t)).toEqual(['remote_seat_heater_request', 'set_temps', 'remote_seat_heater_request', 'remote_steering_wheel_heater_request'])
+    const bodies = t.calls.filter((c) => c.path.includes('/command/')).map((c) => c.body)
+    expect(bodies).toEqual(['{"heater":0,"level":3}', '{"driver_temp":20.5,"passenger_temp":20.5}', '{"heater":4,"level":1}', '{"on":true}'])
+    expect(patches(ctx).filter((p) => 'seatHeat' in p).at(-1)).toEqual({ seatHeat: { fl: 3, rc: 1 } })
+    expect(patches(ctx).at(-1)).toMatchObject({ steeringWheelHeat: true })
+    expect(t.calls.some((c) => c.path.endsWith('/wake_up'))).toBe(false)
+  })
+
+  it('régler une voiture ENDORMIE ne la réveille pas : refusé, comme la limite de charge', async () => {
+    const tesla = fakeTesla()
+    tesla.world.list = VEHICLES_ONLINE
+    tesla.world.asleep = true
+    const { plugin, tesla: t } = await started({ tesla, tokens: linkedTokens() })
+    await plugin.discover()
+    await expect(plugin.execute(VIN, { type: 'vehicle.climate_set', steeringWheelHeat: true })).rejects.toMatchObject({ code: 'DEVICE_UNAVAILABLE' })
+    expect(t.calls.some((c) => c.path.endsWith('/wake_up'))).toBe(false)
   })
 
   it('arrêter une voiture éveillée : une commande, l’état suit', async () => {

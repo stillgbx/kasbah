@@ -11,6 +11,7 @@ const STATUS_BY_CODE: Record<PluginErrorCode, number> = {
   DEVICE_UNAVAILABLE: 503,
   TIMEOUT: 504,
   NOT_IMPLEMENTED: 501,
+  LOW_BATTERY: 409,
 }
 
 export function errorBody(code: string, message: string): ApiError {

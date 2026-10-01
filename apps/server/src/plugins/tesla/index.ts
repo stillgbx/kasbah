@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import type { Command, CommandOf, DeviceDescriptor, PluginHealth, VehicleFinish, VehicleSleepState } from '@kasbah/shared'
+import type { Command, CommandOf, DeviceDescriptor, PluginHealth, VehicleFinish, VehicleSeat, VehicleSleepState } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { fetch as undiciFetch } from 'undici'
 import { z } from 'zod'
@@ -13,7 +13,7 @@ import {
   samePublicKey, type KeyPair, type KeyStore, type TeslaRegion, type TokenStore,
 } from './auth'
 import { TeslaClient } from './client'
-import { bodyColor, bodyFinish, isResting, toDataPatch, toDescriptor, toSleepPatch, toSleepState } from './mapping'
+import { bodyColor, bodyFinish, isResting, SEAT_HEATER_INDEX, toDataPatch, toDescriptor, toSleepPatch, toSleepState } from './mapping'
 import {
   MONTHLY_CREDIT_USD, billableKind, countCall, createStateFile, currentCycle, cycleCostUsd, cycleStart, emptyState,
   type TeslaState, type TeslaStateStore,
@@ -82,6 +82,8 @@ const WAKE_FOLLOW_UP_MS = 15_000
 /** Préconditionnement d'une voiture endormie : la veille relue (liste, gratuite) à ce pas, jusqu'à ce plafond. */
 const CLIMATE_WAKE_POLL_MS = 5_000
 const CLIMATE_WAKE_MAX_MS = 90_000
+/** Sous ce niveau, Tesla refuse `auto_conditioning_start` (`low_soc`). */
+const LOW_SOC_PCT = 20
 /** Sections de `vehicle_data` lues. `location_data` est OBLIGATOIRE pour la position depuis le logiciel 2023.38. */
 const DATA_ENDPOINTS = ['charge_state', 'drive_state', 'vehicle_state', 'climate_state', 'location_data', 'vehicle_config'].join(';')
 
@@ -352,9 +354,45 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     if (command.targetTempC !== undefined) {
       await vehicleCommand(vin, 'set_temps', { driver_temp: command.targetTempC, passenger_temp: command.targetTempC })
     }
-    await vehicleCommand(vin, 'auto_conditioning_start')
+    try {
+      // Sous 20 %, Tesla refuse (`low_soc`). Son appli fait confirmer puis force ; l'API REST, NON :
+      // le proxy officiel (vehicle-command, `pkg/proxy/command.go`) ne lit aucun `manual_override`
+      // pour `auto_conditioning_start` (seulement keeper / max / bioweapon), et l'envoyer quand même
+      // était ignoré — constaté sur la vraie voiture le 2026-10-01
+      await vehicleCommand(vin, 'auto_conditioning_start')
+    } catch (err) {
+      if (err instanceof PluginError && err.message.endsWith(': low_soc')) {
+        throw new PluginError('LOW_BATTERY', 'Tesla refuses to start the climate on a low battery (low_soc)')
+      }
+      throw err
+    }
     ctx!.emitState(vin, { climateOn: true, ...(command.targetTempC !== undefined ? { climateTargetC: command.targetTempC } : {}) })
     log().info({ vin, targetTempC: command.targetTempC }, 'Tesla climate started')
+  }
+
+  /**
+   * Régler consigne, sièges et volant d'une voiture ÉVEILLÉE — jamais de réveil pour un réglage,
+   * comme pour la limite de charge (endormie : 408, `DEVICE_UNAVAILABLE`). Une commande par réglage,
+   * l'état publié au fil des accusés : un refus au milieu laisse la carte juste sur ce qui est passé.
+   */
+  async function setClimate(vin: string, command: CommandOf<'vehicle.climate_set'>): Promise<void> {
+    if (command.targetTempC !== undefined) {
+      await vehicleCommand(vin, 'set_temps', { driver_temp: command.targetTempC, passenger_temp: command.targetTempC })
+      ctx!.emitState(vin, { climateTargetC: command.targetTempC })
+    }
+    // la fusion de l'état est SUPERFICIELLE : `seatHeat` se publie entier, à partir du dernier connu
+    const last = (saved.vehicles[vin] ??= {}) as { seatHeat?: Partial<Record<VehicleSeat, number>> }
+    for (const [seat, level] of Object.entries(command.seatHeat ?? {}) as [VehicleSeat, number | undefined][]) {
+      if (level === undefined) continue
+      await vehicleCommand(vin, 'remote_seat_heater_request', { heater: SEAT_HEATER_INDEX[seat], level })
+      last.seatHeat = { ...last.seatHeat, [seat]: level }
+      ctx!.emitState(vin, { seatHeat: last.seatHeat })
+    }
+    if (command.steeringWheelHeat !== undefined) {
+      await vehicleCommand(vin, 'remote_steering_wheel_heater_request', { on: command.steeringWheelHeat })
+      ctx!.emitState(vin, { steeringWheelHeat: command.steeringWheelHeat })
+    }
+    log().info({ vin, command }, 'Tesla climate settings changed')
   }
 
   /**
@@ -367,6 +405,12 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
    */
   async function startClimate(vin: string, command: CommandOf<'vehicle.climate_start'>): Promise<void> {
     const track = vehicles.get(vin)!
+    // le refus `low_soc` est CONNU d'avance : sous le seuil, on refuse AVANT de payer un réveil, qui
+    // serait suivi d'un refus que personne ne verrait (il arrive en arrière-plan)
+    const soc = saved.vehicles[vin]?.soc
+    if (typeof soc === 'number' && soc < LOW_SOC_PCT) {
+      throw new PluginError('LOW_BATTERY', `battery at ${soc} %, below Tesla's ${LOW_SOC_PCT} % climate threshold (low_soc)`)
+    }
     if (track.sleepState === 'online') {
       try { await climateCommand(vin, command); return }
       catch (err) { if (!(err instanceof PluginError && err.code === 'DEVICE_UNAVAILABLE')) throw err }
@@ -517,6 +561,10 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
         // endormie, la voiture n'a pas sa clim en marche : rien à arrêter, et surtout rien à réveiller
         if (vehicles.get(externalId)!.sleepState !== 'online') { ctx!.emitState(externalId, { climateOn: false }); return }
         await climateCommand(externalId, command)
+        return
+      }
+      if (command.type === 'vehicle.climate_set') {
+        await setClimate(externalId, command)
         return
       }
       if (command.type === 'vehicle.climate_start') {

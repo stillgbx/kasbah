@@ -1,4 +1,4 @@
-import type { DeviceDescriptor, StatePatch, VehicleFinish, VehicleGear, VehicleSleepState } from '@kasbah/shared'
+import type { DeviceDescriptor, StatePatch, VehicleFinish, VehicleGear, VehicleSeat, VehicleSleepState } from '@kasbah/shared'
 import { VEHICLE_GEARS, VEHICLE_SLEEP_STATES } from '@kasbah/shared'
 import type { VehicleData, VehicleSummary } from './types'
 
@@ -27,6 +27,21 @@ export const READ_CAPABILITIES = ['soc', 'range', 'location', 'charge_power'] as
  */
 export const WRITE_CAPABILITIES = ['charge_limit', 'climate_precondition'] as const
 
+/**
+ * Ce que la climatisation sait faire, pour l'UI commune des véhicules. Les bornes sont celles que la
+ * voiture annonce (`min/max_avail_temp`, 15-28 °C), le pas celui de son appli (0,5 °C). Cinq places
+ * chauffées à trois crans et le volant : ce que l'appli Tesla montre sur la Model S de référence, et
+ * ce que sa `climate_state` rapporte (les cinq `seat_heater_*`, `steering_wheel_heater`). Une autre
+ * Tesla sans sièges arrière chauffés refuserait la commande, et le refus remonterait tel quel.
+ */
+export const CLIMATE_FEATURES = {
+  minC: 15, maxC: 28, stepC: 0.5,
+  seats: ['fl', 'fr', 'rl', 'rc', 'rr'] as VehicleSeat[], seatLevels: 3, steeringWheelHeat: true,
+}
+
+/** Numéro de siège de `remote_seat_heater_request` (3 et 6 sont les dossiers arrière, absents ici). */
+export const SEAT_HEATER_INDEX: Record<VehicleSeat, number> = { fl: 0, fr: 1, rl: 2, rc: 4, rr: 5 }
+
 /** Le 4e caractère d'un VIN Tesla est la gamme : S, 3, X, Y (et C pour le Cybertruck). */
 export function modelFromVin(vin: string): string | undefined {
   const code = vin.charAt(3).toUpperCase()
@@ -40,7 +55,10 @@ export function toDescriptor(v: VehicleSummary, paint?: { color?: string; finish
   return {
     id: `${PLUGIN_ID}:${v.vin}`, pluginId: PLUGIN_ID, externalId: v.vin, kind: 'vehicle', name,
     capabilities: [...READ_CAPABILITIES, ...WRITE_CAPABILITIES],
-    meta: { manufacturer: 'Tesla', ...(model ? { model } : {}), ...(paint?.color || paint?.finish ? { vehicle: paint } : {}) },
+    meta: {
+      manufacturer: 'Tesla', ...(model ? { model } : {}),
+      vehicle: { ...(paint?.color ? { color: paint.color } : {}), ...(paint?.finish ? { finish: paint.finish } : {}), climate: CLIMATE_FEATURES },
+    },
   }
 }
 
@@ -187,6 +205,10 @@ export function toDataPatch(d: VehicleData): StatePatch<'vehicle'> {
   if (defined(cl?.outside_temp)) patch.outsideTempC = round(cl.outside_temp, 1)
   if (defined(cl?.is_climate_on)) patch.climateOn = cl.is_climate_on
   if (defined(cl?.driver_temp_setting)) patch.climateTargetC = round(cl.driver_temp_setting, 1)
+  const seats = { fl: cl?.seat_heater_left, fr: cl?.seat_heater_right, rl: cl?.seat_heater_rear_left, rc: cl?.seat_heater_rear_center, rr: cl?.seat_heater_rear_right }
+  const heated = Object.entries(seats).filter(([, v]) => defined(v)) as [string, number][]
+  if (heated.length) patch.seatHeat = Object.fromEntries(heated.map(([k, v]) => [k, Math.max(0, Math.min(3, Math.round(v)))]))
+  if (defined(cl?.steering_wheel_heater)) patch.steeringWheelHeat = cl.steering_wheel_heater
   return patch
 }
 

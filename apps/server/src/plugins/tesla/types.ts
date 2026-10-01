@@ -74,6 +74,13 @@ export const climateStateSchema = z.looseObject({
   is_climate_on: bool,
   /** Consigne conducteur, °C (même quand l'affichage de la voiture est en °F). */
   driver_temp_setting: num,
+  /** Crans 0-3 ; `null` ou absent = place sans chauffage. */
+  seat_heater_left: num,
+  seat_heater_right: num,
+  seat_heater_rear_left: num,
+  seat_heater_rear_center: num,
+  seat_heater_rear_right: num,
+  steering_wheel_heater: bool,
 })
 
 export const vehicleDataSchema = z.looseObject({

@@ -9,6 +9,8 @@ import type { Clock } from './clock'
 
 export const PLUGIN_ERROR_CODES = [
   'DEVICE_UNAVAILABLE', 'UNSUPPORTED_COMMAND', 'UPSTREAM_ERROR', 'RATE_LIMITED', 'NEEDS_PAIRING', 'TIMEOUT', 'NOT_IMPLEMENTED',
+  // batterie trop faible pour ce que la commande demande (Tesla `low_soc` : pas de clim sous 20 %)
+  'LOW_BATTERY',
 ] as const
 export type PluginErrorCode = (typeof PLUGIN_ERROR_CODES)[number]
 

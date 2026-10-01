@@ -85,6 +85,15 @@ export function optimisticPatch(state: DeviceState, cmd: CommandInput): Partial<
         case 'vehicle.stop_charge': return { charging: false } as Partial<DeviceState>
         // l'arrêt seul : la marche d'une voiture endormie attend son réveil, l'annoncer d'avance mentirait
         case 'vehicle.climate_stop': return { climateOn: false } as Partial<DeviceState>
+        // un réglage, lui, ne part que voiture éveillée : l'accusé suit d'une seconde
+        case 'vehicle.climate_set': {
+          const seats = Object.fromEntries(Object.entries(cmd.seatHeat ?? {}).filter(([, v]) => v !== undefined))
+          return {
+            ...(cmd.targetTempC !== undefined ? { climateTargetC: cmd.targetTempC } : {}),
+            ...(Object.keys(seats).length ? { seatHeat: { ...state.seatHeat, ...seats } } : {}),
+            ...(cmd.steeringWheelHeat !== undefined ? { steeringWheelHeat: cmd.steeringWheelHeat } : {}),
+          } as Partial<DeviceState>
+        }
         default: return null
       }
     case 'pet_feeder':

@@ -1,3 +1,4 @@
+import type { DeviceMeta, VehicleSeat } from '@kasbah/shared'
 import { SimError, type SimDevice } from '../types'
 import { clamp, descriptor, inWindow } from './common'
 
@@ -22,7 +23,11 @@ export interface VehicleOptions {
   socMin?: number
   /** Puissance de la borne qui le charge quand branché (W) ; 0 = jamais chargé par cette sim. */
   chargerPowerW?: number
+  /** Ce que sa climatisation sait faire (`meta.vehicle.climate`) ; défaut : celle d'une Tesla. */
+  climate?: NonNullable<NonNullable<DeviceMeta['vehicle']>['climate']>
 }
+
+const TESLA_CLIMATE = { minC: 15, maxC: 28, stepC: 0.5, seats: ['fl', 'fr', 'rl', 'rc', 'rr'] as VehicleSeat[], seatLevels: 3, steeringWheelHeat: true }
 
 export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehicle'> {
   const batteryKwh = o.batteryKwh ?? 75, rangeFull = o.rangeKmFull ?? 450
@@ -45,7 +50,7 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
       // pas de borne, pas de puissance à dire : ce véhicule-là se fait estimer comme une vraie R5
       ...((o.chargerPowerW ?? 7400) > 0 ? ['charge_power' as const] : []),
     ], {
-      manufacturer: o.manufacturer ?? 'Mock', model: o.model ?? 'EV',
+      manufacturer: o.manufacturer ?? 'Mock', model: o.model ?? 'EV', vehicle: { climate: o.climate ?? TESLA_CLIMATE },
     }),
     state: {
       kind: 'vehicle', updatedAt: 0, available: true,
@@ -55,7 +60,8 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
       // ce qu'un vrai véhicule connecté dit aussi : la simulation le fournit pour que l'UI s'essaie dessus
       sleepState: 'asleep', gear: 'P', speedKmh: 0, headingDeg: bearing(o.home, o.work),
       tirePressureBar: { fl: 2.9, fr: 2.9, rl: 2.95, rr: 2.95 }, insideTempC: 21.5, outsideTempC: 17,
-      climateOn: false, climateTargetC: 20,
+      climateOn: false, climateTargetC: 20, steeringWheelHeat: false,
+      seatHeat: Object.fromEntries((o.climate ?? TESLA_CLIMATE).seats.map((k) => [k, 0])),
     },
     tick(ctx) {
       const s = dev.state
@@ -105,8 +111,25 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
         case 'vehicle.set_charge_limit': s.chargeLimit = clamp(Math.round(cmd.percent), 50, 100); break
         case 'vehicle.wake': s.sleepState = 'online'; break
         // comme la vraie : le préconditionnement réveille la voiture, et la tient éveillée
-        case 'vehicle.climate_start': s.sleepState = 'online'; s.climateOn = true; if (cmd.targetTempC !== undefined) s.climateTargetC = cmd.targetTempC; break
+        // comme Tesla (`low_soc`) : pas de clim sous 20 %
+        case 'vehicle.climate_start': if (s.soc < 20) throw new SimError('LOW_BATTERY', 'battery too low to run the climate'); s.sleepState = 'online'; s.climateOn = true; if (cmd.targetTempC !== undefined) s.climateTargetC = cmd.targetTempC; break
         case 'vehicle.climate_stop': s.climateOn = false; break
+        case 'vehicle.climate_set': {
+          if (s.sleepState !== 'online') throw new SimError('DEVICE_UNAVAILABLE', 'vehicle is asleep')
+          const climate = o.climate ?? TESLA_CLIMATE
+          if (cmd.targetTempC !== undefined) s.climateTargetC = clamp(cmd.targetTempC, climate.minC, climate.maxC)
+          for (const [seat, level] of Object.entries(cmd.seatHeat ?? {}) as [VehicleSeat, number | undefined][]) {
+            if (level === undefined) continue
+            if (!climate.seats.includes(seat)) throw new SimError('UNSUPPORTED_COMMAND', `no heater on seat ${seat}`)
+            // nouvel objet : la fusion de l'état est superficielle, et le diff du mock compare les références
+            s.seatHeat = { ...s.seatHeat, [seat]: Math.min(level, climate.seatLevels) }
+          }
+          if (cmd.steeringWheelHeat !== undefined) {
+            if (!climate.steeringWheelHeat) throw new SimError('UNSUPPORTED_COMMAND', 'no steering wheel heater')
+            s.steeringWheelHeat = cmd.steeringWheelHeat
+          }
+          break
+        }
         case 'vehicle.refresh': break
         default: throw new SimError('UNSUPPORTED_COMMAND', `${cmd.type} on vehicle`)
       }
