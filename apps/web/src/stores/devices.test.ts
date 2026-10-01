@@ -52,6 +52,53 @@ describe('devices store', () => {
   // Le besoin : une box qui ne publie la position qu'a la FIN de la course reemet l'ancienne
   // valeur pendant tout le mouvement. Le curseur doit rester sur la cible, et n'y renoncer que si
   // l'ouvrant s'arrete ailleurs.
+  describe('charge demandée', () => {
+    const ID = 'tesla:v'
+    const DESC: DeviceDescriptor = { id: ID, pluginId: 'tesla', externalId: 'v', kind: 'vehicle', name: 'Voiture', capabilities: ['soc', 'charging'], meta: {} }
+    const car = (charging: boolean, updatedAt = 1, pluggedIn = true): StateFor<'vehicle'> =>
+      ({ kind: 'vehicle', updatedAt, available: true, soc: 20, rangeKm: 80, pluggedIn, charging })
+    const seeded = (send: Transport['sendCommand'] = vi.fn(async () => {})) => {
+      setTransport({ ...createMockTransport({ seed: 1 }), sendCommand: send })
+      const store = useDevicesStore()
+      store.setEntries([{ descriptor: DESC, state: car(false) }])
+      return store
+    }
+
+    it("tenue après l'accusé, jusqu'à ce que la voiture se DISE en charge", async () => {
+      const store = seeded()
+      await store.sendCommand(ID, { type: 'vehicle.start_charge' })
+      expect(store.isPending(ID)).toBe(false)
+      expect(store.isChargeRequested(ID)).toBe(true)
+      store.applyMessage({ type: 'state', deviceId: ID, state: car(false, 2) })
+      expect(store.isChargeRequested(ID)).toBe(true)
+      store.applyMessage({ type: 'state', deviceId: ID, state: car(true, 3) })
+      expect(store.isChargeRequested(ID)).toBe(false)
+    })
+
+    it('levée sur un refus, sur un débranchement, ou au bout de trois minutes', async () => {
+      const refused = seeded(vi.fn(async () => { throw new ApiRequestError(409, 'DEVICE_UNAVAILABLE', 'not plugged') }))
+      await refused.sendCommand(ID, { type: 'vehicle.start_charge' })
+      expect(refused.isChargeRequested(ID)).toBe(false)
+
+      setActivePinia(createPinia())
+      const unplugged = seeded()
+      await unplugged.sendCommand(ID, { type: 'vehicle.start_charge' })
+      unplugged.applyMessage({ type: 'state', deviceId: ID, state: car(false, 2, false) })
+      expect(unplugged.isChargeRequested(ID)).toBe(false)
+
+      vi.useFakeTimers()
+      try {
+        setActivePinia(createPinia())
+        const slow = seeded()
+        await slow.sendCommand(ID, { type: 'vehicle.start_charge' })
+        vi.advanceTimersByTime(179_000)
+        expect(slow.isChargeRequested(ID)).toBe(true)
+        vi.advanceTimersByTime(2_000)
+        expect(slow.isChargeRequested(ID)).toBe(false)
+      } finally { vi.useRealTimers() }
+    })
+  })
+
   describe('cible dun ouvrant', () => {
     const ID = 'tahoma:v'
     const DESC: DeviceDescriptor = {

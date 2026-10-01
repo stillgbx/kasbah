@@ -275,7 +275,10 @@
   },
   "charger": {
     "status": { "disconnected": "Disconnected", "connected": "Connected", "charging": "Charging", "finished": "Charge finished", "error": "Error" },
-    "power": "Power", "session": "Session", "maxCurrent": "Max current"
+    "power": "Power", "session": "Session", "maxCurrent": "Max current",
+    "safeLimit": "Safe mode",
+    "safeLimitHint": "The charger fell back to its safe current: its load management has no reading, usually because it lost the gateway.",
+    "stopUntilUnplug": "Stopping blocks the charger until the next unplug: green charging will not resume with the sun."
   },
   "vehicle": {
     "soc": "Charge", "range": "Range", "chargeLimit": "Charge limit", "pluggedIn": "Plugged in", "unplugged": "Unplugged",

@@ -202,9 +202,22 @@ describe('borne IQ EV Charger 2 (capture Enlighten)', () => {
     expect(merged).toMatchObject({ kind: 'ev_charger', status: 'connected', sessionWh: 12363 })
   })
 
-  it('déclare un ev_charger sans commande : rien n\'a encore été capturé à l\'écriture', () => {
+  it('déclare un ev_charger qu\'on démarre et arrête (essayé sur la vraie borne le 2026-10-01)', () => {
     const [d] = toChargerDescriptors(chargers, summaries)
-    expect(d).toMatchObject({ id: 'enphase:482000000001', kind: 'ev_charger', capabilities: [], meta: { model: 'IQ-EVSE-EU-3032' } })
+    expect(d).toMatchObject({ id: 'enphase:482000000001', kind: 'ev_charger', capabilities: ['charge_control'], meta: { model: 'IQ-EVSE-EU-3032' } })
     expect(deviceDescriptorSchema.parse(d)).toEqual(d)
+  })
+
+  it('arrêter la bloque jusqu\'au débranchement : le descripteur le dit, pour l\'aide sous le bouton', () => {
+    expect(toChargerDescriptors(chargers, summaries)[0]!.meta.evCharger).toEqual({ stopUntilUnplug: true })
+  })
+
+  it('`safeLimitState` 1 = mode sécurisé, 0 = normal', () => {
+    expect(toChargerPatch(chargers[0]!, summaries[0])).toMatchObject({ safeLimit: false })
+    const safe = structuredClone(EVSE_STATUS) as unknown as { data: { chargers: { connectors: { safeLimitState: number }[] }[] } }
+    safe.data.chargers[0]!.connectors[0]!.safeLimitState = 1
+    const patch = toChargerPatch(chargersOf(safe)[0]!, summaries[0])
+    expect(patch).toMatchObject({ safeLimit: true })
+    expect(mergeState(defaultState('ev_charger'), patch, 1000)).toMatchObject({ safeLimit: true })
   })
 })

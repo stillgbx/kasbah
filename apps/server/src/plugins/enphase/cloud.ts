@@ -145,19 +145,40 @@ export class EnlightenClient {
   }
 
   async getJson(path: string, signal?: AbortSignal): Promise<unknown> {
+    return this.send('GET', path, undefined, signal)
+  }
+
+  /**
+   * Lecture ou écriture. En écriture (commande de la borne), les routes EVSE rendent `{ data, error }` :
+   * un `error` non vide est un refus même sous HTTP 200, et un 409 / 422 dit la borne pas prête
+   * (`DEVICE_UNAVAILABLE`, pas branchée selon l'intégration Home Assistant qui les a relevés).
+   */
+  async send(method: 'GET' | 'POST' | 'PUT', path: string, body?: unknown, signal?: AbortSignal): Promise<unknown> {
     const doFetch = this.opts.fetchImpl ?? ((url, init) => fetch(url, init as RequestInit) as unknown as ReturnType<FetchLike>)
     const url = path.startsWith('http') ? path : `${ENLIGHTEN_ORIGIN}${path}`
+    const headers = body === undefined ? this.headers() : { ...this.headers(), 'content-type': 'application/json' }
     let res: Awaited<ReturnType<FetchLike>>
     try {
-      res = await doFetch(url, { headers: this.headers(), signal: this.deadline(signal) })
+      res = await doFetch(url, {
+        method, headers, signal: this.deadline(signal), ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      })
     } catch (err) {
       const aborted = (err as Error)?.name === 'TimeoutError' || (err as Error)?.name === 'AbortError'
       throw new PluginError(aborted ? 'TIMEOUT' : 'UPSTREAM_ERROR', `Enlighten unreachable (${path})`, { cause: err })
     }
     const text = await res.text()
-    if (!res.ok) throw new PluginError('UPSTREAM_ERROR', `Enlighten ${path} → HTTP ${res.status}`)
-    try { return JSON.parse(text) as unknown }
+    if (!res.ok) {
+      const notReady = method !== 'GET' && (res.status === 409 || res.status === 422)
+      throw new PluginError(notReady ? 'DEVICE_UNAVAILABLE' : 'UPSTREAM_ERROR', `Enlighten ${path} → HTTP ${res.status}`)
+    }
+    let json: unknown
+    try { json = JSON.parse(text) as unknown }
     catch { throw new PluginError('UPSTREAM_ERROR', `Enlighten ${path} returned non-JSON`) }
+    const error = method !== 'GET' ? (json as { error?: unknown } | null)?.error : undefined
+    if (error && typeof error === 'object' && Object.keys(error).length > 0) {
+      throw new PluginError('UPSTREAM_ERROR', `Enlighten ${path} refused: ${JSON.stringify(error)}`)
+    }
+    return json
   }
 
   /** Jeton d'accès de l'appli, facultatif : beaucoup de lectures passent avec le cookie seul. */

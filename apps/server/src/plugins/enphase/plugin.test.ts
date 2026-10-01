@@ -69,9 +69,11 @@ function fakeGateway(opts: { infoDown?: boolean; accept?: string; failing?: stri
 
 /** Faux cloud Enphase : session puis échange, comme la note technique du fabricant les décrit. */
 function fakeCloud(minted = token(365)) {
-  const calls: { url: string; body: string }[] = []
+  const calls: { url: string; body: string; method: string }[] = []
   const fetchImpl = vi.fn<FetchLike>(async (url, init) => {
-    calls.push({ url, body: String(init?.body ?? '') })
+    calls.push({ url, body: String(init?.body ?? ''), method: init?.method ?? 'GET' })
+    if (url.includes('/start_charging')) return response('{"meta":{},"data":{"chargingLevel":24},"error":{}}')
+    if (url.includes('/stop_charging')) return response('{"meta":{},"data":{},"error":{}}')
     if (url.includes('/login/login.json')) return response('{"session_id":"sess-1"}')
     if (url.includes('/tokens')) return response(minted)
     if (url.includes('search_sites')) return response(JSON.stringify({ sites: [{ id: 1000001, title: 'Maison' }] }))
@@ -411,7 +413,7 @@ describe('appareils', () => {
     expect((await plugin.discover()).filter((d) => d.kind === 'ev_charger')).toHaveLength(0)
   })
 
-  it('publie la borne après un appairage par compte, en lecture seule', async () => {
+  it('publie la borne après un appairage par compte, démarrable et arrêtable', async () => {
     const minted = token(365)
     const { plugin, app, ctx } = await started({ gateway: fakeGateway({ accept: minted }), cloud: fakeCloud(minted) })
     expect((await post(app, { user: 'u', password: 'p' })).statusCode).toBe(200)
@@ -419,12 +421,49 @@ describe('appareils', () => {
     const charger = devices.find((d) => d.kind === 'ev_charger')
     expect(charger).toMatchObject({
       id: 'enphase:482000000001', kind: 'ev_charger', name: 'Borne Enphase',
-      capabilities: [], meta: { manufacturer: 'Enphase', model: 'IQ-EVSE-EU-3032' },
+      capabilities: ['charge_control'], meta: { manufacturer: 'Enphase', model: 'IQ-EVSE-EU-3032' },
     })
     await plugin.start()
     await settle()
     const state = (ctx.emitState as ReturnType<typeof vi.fn>).mock.calls.find(([id]) => id === '482000000001')
     expect(state?.[1]).toMatchObject({ kind: 'ev_charger', status: 'connected', powerW: 0, sessionWh: 12363, maxCurrentA: 24 })
+    await plugin.stop()
+  })
+
+  it('démarrer envoie l\'intensité PAR DÉFAUT de l\'appli (24 A), arrêter un PUT ; l\'état suit par une relecture', async () => {
+    const minted = token(365)
+    const { plugin, app, cloud, clock } = await started({ gateway: fakeGateway({ accept: minted }), cloud: fakeCloud(minted) })
+    await post(app, { user: 'u', password: 'p' })
+    await plugin.discover()
+    await plugin.start()
+    await settle()
+    await plugin.execute('482000000001', { type: 'ev_charger.start' })
+    const start = cloud.calls.find((c) => c.url.includes('/start_charging'))!
+    expect(start).toMatchObject({ method: 'POST', body: '{"chargingLevel":24,"connectorId":1}' })
+    expect(start.url).toContain('/service/evse_controller/1000001/ev_chargers/482000000001/start_charging')
+    await plugin.execute('482000000001', { type: 'ev_charger.stop' })
+    expect(cloud.calls.find((c) => c.url.includes('/stop_charging'))).toMatchObject({ method: 'PUT', body: '' })
+    const reads = cloud.calls.filter((c) => c.url.includes('/ev_chargers/status')).length
+    clock.advance(45_000)
+    for (let i = 0; i < 10; i++) await settle()
+    expect(cloud.calls.filter((c) => c.url.includes('/ev_chargers/status')).length).toBeGreaterThan(reads)
+    await plugin.stop()
+  })
+
+  it('un refus sous HTTP 200 (`error` non vide) remonte ; une borne inconnue est indisponible', async () => {
+    const minted = token(365)
+    const cloud = fakeCloud(minted)
+    const base = cloud.fetchImpl.getMockImplementation()!
+    cloud.fetchImpl.mockImplementation(async (url, init) => url.includes('/start_charging')
+      ? response('{"data":null,"error":{"displayMessage":"not plugged","code":"400"}}')
+      : base(url, init))
+    const { plugin, app } = await started({ gateway: fakeGateway({ accept: minted }), cloud })
+    await post(app, { user: 'u', password: 'p' })
+    await plugin.discover()
+    await plugin.start()
+    await settle()
+    await expect(plugin.execute('482000000001', { type: 'ev_charger.start' })).rejects.toMatchObject({ code: 'UPSTREAM_ERROR' })
+    await expect(plugin.execute('nope', { type: 'ev_charger.stop' })).rejects.toMatchObject({ code: 'DEVICE_UNAVAILABLE' })
     await plugin.stop()
   })
 

@@ -65,7 +65,28 @@ export const useDevicesStore = defineStore('devices', () => {
     if (!descriptors.value[id]) return
     states.value = { ...states.value, [id]: state }
     resolveTarget(id, state)
+    if (id in chargeAwaited.value && state.kind === 'vehicle' && (state.charging || !state.pluggedIn)) stopAwaitingCharge(id)
   }
+
+  /**
+   * Charge DEMANDÉE, pas encore constatée. Le serveur accuse « Lancer la charge » en quelques
+   * secondes (borne forcée, commande à la voiture), mais le courant n'arrive que 20 s à 1 min plus
+   * tard, et la voiture ne le dit qu'à sa relecture suivante (constaté le 2026-10-01) : `isPending`
+   * seul laisserait le bouton redevenir « Lancer la charge » entre les deux. Tenu ici, dans le store,
+   * parce que la vue Véhicules et le panneau de détail montrent la même attente. Levé quand la
+   * voiture se dit en charge (ou débranchée), sur un refus, ou au bout de `CHARGE_WAIT_MAX_MS`.
+   */
+  const CHARGE_WAIT_MAX_MS = 180_000
+  const chargeAwaited = ref<Record<string, ReturnType<typeof setTimeout>>>({})
+  function stopAwaitingCharge(id: string): void {
+    const timer = chargeAwaited.value[id]
+    if (timer === undefined) return
+    clearTimeout(timer)
+    const next = { ...chargeAwaited.value }
+    delete next[id]
+    chargeAwaited.value = next
+  }
+  const isChargeRequested = (id: string) => id in chargeAwaited.value
 
   /** Confronte la cible tenue à l'état qui arrive : atteinte, abandonnée, ou toujours en route. */
   function resolveTarget(id: string, state: DeviceState) {
@@ -174,11 +195,15 @@ export const useDevicesStore = defineStore('devices', () => {
       } else if (aimed === null || (prev.position !== undefined && Math.abs(aimed - prev.position) <= 1)) clearTarget(deviceId)
       else setTarget(deviceId, aimed, Date.now())
     }
+    if (command.type === 'vehicle.start_charge' && !isChargeRequested(deviceId)) {
+      chargeAwaited.value = { ...chargeAwaited.value, [deviceId]: setTimeout(() => stopAwaitingCharge(deviceId), CHARGE_WAIT_MAX_MS) }
+    }
     pending.value = { ...pending.value, [deviceId]: (pending.value[deviceId] ?? 0) + 1 }
     try {
       await getTransport().sendCommand(deviceId, command)
       return true
     } catch (err) {
+      stopAwaitingCharge(deviceId)                       // refusée : rien n'est plus attendu
       // retour arrière seulement si aucun état plus récent n'est arrivé entre-temps
       const cur = states.value[deviceId]
       if (cur && cur.updatedAt === prev.updatedAt) setState(deviceId, prev)
@@ -221,7 +246,7 @@ export const useDevicesStore = defineStore('devices', () => {
 
   return {
     descriptors, states, connection, pending, health, serverHouse, list, count, targets,
-    start, stop, applyMessage, onDeviceEvent, sendCommand, runScene, isPending, forget, refreshHealth, setEntries,
+    start, stop, applyMessage, onDeviceEvent, sendCommand, runScene, isPending, isChargeRequested, forget, refreshHealth, setEntries,
     targetPosition, clearTarget,
   }
 })

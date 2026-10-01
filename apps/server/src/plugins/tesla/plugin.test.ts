@@ -694,6 +694,95 @@ describe('climatisation', () => {
   })
 })
 
+describe('charge', () => {
+  const commandPaths = (t: ReturnType<typeof fakeTesla>) => t.calls.filter((c) => c.path.includes('/command/')).map((c) => c.path.split('/command/')[1])
+  const flush = async () => { for (let i = 0; i < 10; i++) await settle() }
+
+  it('éveillée : charge_start, puis une relecture une minute plus tard CONSTATE la charge (rien d’annoncé sur l’accusé)', async () => {
+    const tesla = fakeTesla()
+    tesla.world.list = VEHICLES_ONLINE
+    const { plugin, ctx, clock, tesla: t } = await started({ tesla, tokens: linkedTokens() })
+    await plugin.discover()
+    await plugin.execute(VIN, { type: 'vehicle.start_charge' })
+    expect(commandPaths(t)).toEqual(['charge_start'])
+    expect(t.calls.some((c) => c.path.endsWith('/wake_up'))).toBe(false)
+    expect(patches(ctx).some((p) => 'charging' in p)).toBe(false)
+    clock.advance(60_000); await flush()
+    expect(dataCalls(t)).toBe(1)
+  })
+
+  it('déjà en charge (`is_charging`) n’est pas un échec', async () => {
+    const tesla = fakeTesla()
+    tesla.world.list = VEHICLES_ONLINE
+    tesla.world.commandResult = { result: false, reason: 'is_charging' }
+    const { plugin } = await started({ tesla, tokens: linkedTokens() })
+    await plugin.discover()
+    await expect(plugin.execute(VIN, { type: 'vehicle.start_charge' })).resolves.toBeUndefined()
+  })
+
+  it('`could_not_wake_buses` (en ligne, bus encore endormis) : accepté, retenté derrière, puis relu', async () => {
+    const tesla = fakeTesla()
+    tesla.world.list = VEHICLES_ONLINE
+    tesla.world.commandResult = { result: false, reason: 'could_not_wake_buses' }
+    const { plugin, clock, tesla: t } = await started({ tesla, tokens: linkedTokens() })
+    await plugin.discover()
+    await expect(plugin.execute(VIN, { type: 'vehicle.start_charge' })).resolves.toBeUndefined()
+    expect(commandPaths(t)).toEqual(['charge_start'])
+    tesla.world.commandResult = { result: true }
+    clock.advance(5_000); await flush()
+    expect(commandPaths(t)).toEqual(['charge_start', 'charge_start'])
+    clock.advance(5_000); await flush()
+    expect(commandPaths(t)).toHaveLength(2)          // réussi : plus de nouvelle tentative
+    clock.advance(60_000); await flush()
+    expect(dataCalls(t)).toBe(1)
+  })
+
+  it('un autre refus remonte', async () => {
+    const tesla = fakeTesla()
+    tesla.world.list = VEHICLES_ONLINE
+    tesla.world.commandResult = { result: false, reason: 'complete' }
+    const { plugin } = await started({ tesla, tokens: linkedTokens() })
+    await plugin.discover()
+    await expect(plugin.execute(VIN, { type: 'vehicle.start_charge' })).rejects.toMatchObject({ code: 'UPSTREAM_ERROR' })
+  })
+
+  it('endormie : réveillée, charge_start part une fois en ligne', async () => {
+    const tesla = fakeTesla()
+    const { plugin, clock, tesla: t } = await started({ tesla, tokens: linkedTokens() })
+    await plugin.discover()
+    await plugin.execute(VIN, { type: 'vehicle.start_charge' })
+    expect(t.calls.at(-1)).toMatchObject({ method: 'POST', path: `/api/1/vehicles/${VIN}/wake_up` })
+    expect(commandPaths(t)).toEqual([])
+    tesla.world.list = VEHICLES_ONLINE
+    clock.advance(5_000); await flush()
+    expect(commandPaths(t)).toEqual(['charge_start'])
+  })
+
+  it('débranchée d’après le dernier état : refusé AVANT de payer un réveil', async () => {
+    const tesla = fakeTesla()
+    const state = memoryState({ ...emptyState(), vehicles: { [VIN]: { pluggedIn: false } } })
+    const { plugin, tesla: t } = await started({ tesla, tokens: linkedTokens(), state })
+    await plugin.discover()
+    await expect(plugin.execute(VIN, { type: 'vehicle.start_charge' })).rejects.toMatchObject({ code: 'DEVICE_UNAVAILABLE' })
+    expect(t.calls.some((c) => c.path.endsWith('/wake_up'))).toBe(false)
+  })
+
+  it('arrêter : charge_stop et l’état suit ; endormie, rien à arrêter ni à réveiller', async () => {
+    const tesla = fakeTesla()
+    tesla.world.list = VEHICLES_ONLINE
+    const { plugin, ctx, tesla: t } = await started({ tesla, tokens: linkedTokens() })
+    await plugin.discover()
+    await plugin.execute(VIN, { type: 'vehicle.stop_charge' })
+    expect(commandPaths(t)).toEqual(['charge_stop'])
+    expect(patches(ctx).at(-1)).toMatchObject({ charging: false })
+
+    const sleeping = await started({ tesla: fakeTesla(), tokens: linkedTokens() })
+    await sleeping.plugin.discover()
+    await sleeping.plugin.execute(VIN, { type: 'vehicle.stop_charge' })
+    expect(sleeping.tesla.calls.some((c) => c.path.endsWith('/wake_up') || c.path.includes('/command/'))).toBe(false)
+  })
+})
+
 describe('relevé brut', () => {
   it('liste puis vehicle_data des seuls véhicules éveillés, sans réveiller les autres', async () => {
     const { app, tesla } = await started({ tokens: linkedTokens() })

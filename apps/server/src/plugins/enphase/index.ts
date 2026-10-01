@@ -6,6 +6,7 @@ import { stateFile } from '../../core/paths'
 import type { FetchLike } from '../../core/sse'
 import { sendError } from '../../http/errors'
 import { createPoller } from '../../core/poll'
+import { sleep } from '../../core/clock'
 import { EnphaseClient } from './client'
 import {
   batteriesOf, chargerSummariesOf, chargersOf, isBatteryAvailable, isPanelStale, toBatteryPatch, toChargerDescriptors,
@@ -69,6 +70,9 @@ export const enphaseConfigSchema = z.object({
   ENPHASE_SLOW_POLL_MS: z.coerce.number().int().min(30_000).max(900_000).default(60_000),
 })
 export type EnphaseConfig = z.infer<typeof enphaseConfigSchema>
+
+/** Après une commande de la borne, délai avant de relire : le courant arrive en 20 s à 1 min. */
+const EV_FOLLOW_UP_MS = 45_000
 
 /** Relevé brut : ce qu'il faut capturer une fois pour écrire les fixtures du mappage. */
 const RAW_PATHS = [
@@ -303,6 +307,41 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
     }
   }
 
+  /**
+   * Démarrer ou arrêter la borne. Essayé sur la vraie borne le 2026-10-01 : en charge verte, l'un
+   * comme l'autre pose une ANNULATION MANUELLE « jusqu'au prochain débranchement » (le `mode` de
+   * l'état passe de 1 à 0, la préférence reste `GREEN_CHARGING`), puis la borne reprend seule son
+   * mode au débranchement. Un `stop` ne rend donc PAS la charge verte : il coupe la charge jusqu'au
+   * débranchement, soleil ou pas.
+   *
+   * L'intensité est celle de l'appli : son « Charger maintenant » envoie le `defaultChargeLevel` du
+   * résumé (24 A ici). Sans intensité, le cloud prenait 32 A et la borne n'avait rien donné en 90 s.
+   * L'état suit par une relecture `EV_FOLLOW_UP_MS` plus tard : le courant arrive en 20 s à 1 min.
+   */
+  async function chargerCommand(sn: string, start: boolean): Promise<void> {
+    if (!chargersOn() || !enlighten?.hasSession) throw new PluginError('NEEDS_PAIRING', 'no Enlighten session: pair with the Enphase account')
+    const siteId = await ensureSiteId()
+    if (!siteId) throw new PluginError('NEEDS_PAIRING', 'no Enlighten site')
+    if (!chargers?.some((c) => c.sn === sn)) throw new PluginError('DEVICE_UNAVAILABLE', `unknown Enphase charger ${sn}`)
+    const base = `/service/evse_controller/${siteId}/ev_chargers/${encodeURIComponent(sn)}`
+    if (start) {
+      const sum = chargerSummaries.find((s) => s.serialNumber === sn)
+      const level = sum?.defaultChargeLevel ?? sum?.maxCurrent
+      await enlighten.send('POST', `${base}/start_charging`, {
+        ...(level !== undefined ? { chargingLevel: Math.round(level) } : {}), connectorId: 1,
+      }, ctx!.signal)
+    } else {
+      await enlighten.send('PUT', `${base}/stop_charging`, undefined, ctx!.signal)
+    }
+    log().info({ start }, start ? 'Enphase charger forced to charge' : 'Enphase charger stopped')
+    void (async () => {
+      await sleep(ctx!.clock, EV_FOLLOW_UP_MS, ctx!.signal)
+      if (ctx!.signal.aborted) return
+      try { await pollChargers() }
+      catch (err) { log().debug({ err }, 'Enphase charger follow-up read failed') }
+    })()
+  }
+
   return {
     id: 'enphase',
     configSchema: enphaseConfigSchema,
@@ -386,7 +425,11 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
       }
     },
 
-    async execute(_externalId, command: Command) {
+    async execute(externalId, command: Command) {
+      if (command.type === 'ev_charger.start' || command.type === 'ev_charger.stop') {
+        await chargerCommand(externalId, command.type === 'ev_charger.start')
+        return
+      }
       throw new PluginError('UNSUPPORTED_COMMAND', `Enphase devices are read-only (${command.type})`)
     },
 

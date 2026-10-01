@@ -14,7 +14,11 @@ const emit = defineEmits<{ command: [cmd: CommandInput] }>()
     </div>
     <div class="d-flex justify-space-between text-body-2 text-medium-emphasis mb-3">
       <span>{{ $t('charger.session') }} · {{ formatEnergy(state.sessionWh, $i18n.locale) }}</span>
-      <span v-if="state.maxCurrentA">{{ $t('charger.maxCurrent') }} · {{ state.maxCurrentA }} A</span>
+      <!-- même place que le courant max : en mode sécurisé, ce courant-là ne vaut plus -->
+      <span v-if="state.safeLimit" class="text-warning d-inline-flex align-center ga-1" :title="$t('charger.safeLimitHint')">
+        <v-icon icon="alert" size="16" />{{ $t('charger.safeLimit') }}
+      </span>
+      <span v-else-if="state.maxCurrentA">{{ $t('charger.maxCurrent') }} · {{ state.maxCurrentA }} A</span>
     </div>
     <div v-if="descriptor.capabilities.includes('charge_control')" class="d-flex ga-2 mb-3">
       <v-btn class="flex-grow-1" height="56" variant="tonal" color="success" prepend-icon="bolt" :disabled="disabled || state.status === 'disconnected'"
@@ -22,6 +26,8 @@ const emit = defineEmits<{ command: [cmd: CommandInput] }>()
       <v-btn class="flex-grow-1" height="56" variant="tonal" prepend-icon="boltOff" :disabled="disabled || state.status !== 'charging'"
              @click="emit('command', { type: 'ev_charger.stop' })">{{ $t('common.stop') }}</v-btn>
     </div>
+    <div v-if="descriptor.capabilities.includes('charge_control') && descriptor.meta.evCharger?.stopUntilUnplug"
+         class="text-caption text-medium-emphasis mb-3">{{ $t('charger.stopUntilUnplug') }}</div>
     <template v-if="descriptor.capabilities.includes('charge_current')">
       <div class="text-caption text-medium-emphasis">{{ $t('charger.maxCurrent') }}</div>
       <v-slider :model-value="state.maxCurrentA ?? 16" :min="6" :max="32" :step="1" :disabled="disabled" thumb-label

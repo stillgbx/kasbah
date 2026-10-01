@@ -172,8 +172,25 @@ function stopWaking(id: string): void {
   delete next[id]
   waking.value = next
 }
-/** Une commande est en vol pour ce véhicule : le bouton le montre et refuse d'être rejoué. */
-const busy = (v: VehicleEntry) => devices.isPending(v.descriptor.id) || v.descriptor.id in waking.value
+/**
+ * Une commande est en vol pour ce véhicule, ou son effet est attendu (réveil, charge) : les gestes qui
+ * s'y croiseraient sont grisés. Seul le bouton de la commande en cours TOURNE (`waking`, `refreshing`,
+ * `devices.isChargeRequested`) : « Lancer la charge » faisait tourner Réveiller et Actualiser.
+ */
+const busy = (v: VehicleEntry) => devices.isPending(v.descriptor.id) || v.descriptor.id in waking.value || devices.isChargeRequested(v.descriptor.id)
+const charging = (v: VehicleEntry) => devices.isChargeRequested(v.descriptor.id)
+/** Relecture en vol : le spinner d'Actualiser, et lui seul. */
+const refreshing = ref<Record<string, true>>({})
+async function refresh(v: VehicleEntry): Promise<void> {
+  const id = v.descriptor.id
+  refreshing.value = { ...refreshing.value, [id]: true }
+  try { await send(id, { type: 'vehicle.refresh' }) }
+  finally {
+    const next = { ...refreshing.value }
+    delete next[id]
+    refreshing.value = next
+  }
+}
 
 async function wake(v: VehicleEntry): Promise<void> {
   const id = v.descriptor.id
@@ -298,28 +315,32 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
                     :title="has(v, 'lock') ? undefined : $t('vehicle.unsupported')" @click="send(v.descriptor.id, { type: v.state.locked ? 'vehicle.unlock' : 'vehicle.lock' })">
               <StrokeIcon :name="v.state.locked ? 'lockOpen' : 'lock'" :size="16" /><span class="vcard__label">{{ v.state.locked ? $t('common.unlock') : $t('common.lock') }}</span>
             </button>
-            <button type="button" class="pill" :data-on="v.state.charging ? '1' : '0'" :disabled="!has(v, 'charging') || !v.state.pluggedIn || !v.state.available"
+            <!-- demandée, la charge tourne jusqu'à ce que la voiture la DISE active (20 s à 1 min, cf. le store) -->
+            <button type="button" class="pill" :data-on="v.state.charging ? '1' : '0'"
+                    :disabled="!has(v, 'charging') || !v.state.pluggedIn || !v.state.available || busy(v)" :aria-busy="charging(v)"
                     :title="!has(v, 'charging') ? $t('vehicle.unsupported') : v.state.pluggedIn ? undefined : $t('vehicle.unplugged')"
                     @click="send(v.descriptor.id, { type: v.state.charging ? 'vehicle.stop_charge' : 'vehicle.start_charge' })">
-              <StrokeIcon :name="v.state.charging ? 'boltOff' : 'bolt'" :size="16" /><span class="vcard__label">{{ v.state.charging ? $t('vehicle.stopCharge') : $t('vehicle.startCharge') }}</span>
+              <v-progress-circular v-if="charging(v)" indeterminate size="16" width="2" />
+              <StrokeIcon v-else :name="v.state.charging ? 'boltOff' : 'bolt'" :size="16" />
+              <span class="vcard__label">{{ v.state.charging ? $t('vehicle.stopCharge') : $t('vehicle.startCharge') }}</span>
             </button>
             <!-- réveiller est un geste explicite (Tesla le facture) : jamais automatique. TOUJOURS là pour un
                  véhicule qui connaît la veille, grisé quand il est éveillé : s'il apparaissait et
                  disparaissait, la rangée changerait de nombre de lignes et pousserait le panneau de la clim -->
             <button type="button" class="pill" :disabled="v.state.sleepState === undefined || !v.state.available || !asleep(v.state) || busy(v)"
-                    :aria-busy="busy(v)" :title="v.state.sleepState === undefined ? $t('vehicle.unsupported') : $t('vehicle.wakeHint')" @click="wake(v)">
+                    :aria-busy="v.descriptor.id in waking" :title="v.state.sleepState === undefined ? $t('vehicle.unsupported') : $t('vehicle.wakeHint')" @click="wake(v)">
               <!-- le spinner prend la PLACE de l'icône, même taille : le bouton ne change pas de largeur -->
-              <v-progress-circular v-if="busy(v)" indeterminate size="16" width="2" />
+              <v-progress-circular v-if="v.descriptor.id in waking" indeterminate size="16" width="2" />
               <StrokeIcon v-else name="sun" :size="16" /><span class="vcard__label">{{ $t('vehicle.wake') }}</span>
             </button>
             <!-- relire maintenant (lecture facturée, pas de réveil) ; le sondage repart de cette lecture.
                  Proposé MÊME endormi : c'est ainsi qu'on constate qu'une voiture s'est réveillée seule,
                  sans payer le réveil -->
             <button type="button" class="pill" :disabled="!has(v, 'soc') || !v.state.available || devices.isPending(v.descriptor.id)"
-                    :aria-busy="devices.isPending(v.descriptor.id)" :title="$t('vehicle.refreshHint')" @click="send(v.descriptor.id, { type: 'vehicle.refresh' })">
+                    :aria-busy="v.descriptor.id in refreshing" :title="$t('vehicle.refreshHint')" @click="refresh(v)">
               <!-- il reste cliquable PENDANT un réveil : c'est justement le moment où l'on veut
                    demander « alors, tu es réveillée ? » sans repayer un réveil -->
-              <v-progress-circular v-if="devices.isPending(v.descriptor.id)" indeterminate size="16" width="2" />
+              <v-progress-circular v-if="v.descriptor.id in refreshing" indeterminate size="16" width="2" />
               <StrokeIcon v-else name="rotateRight" :size="16" /><span class="vcard__label">{{ $t('vehicle.refresh') }}</span>
             </button>
           </div>
@@ -403,8 +424,10 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
 .tire__k { font-size: 11px; }
 .tire__v { font-weight: 500; font-size: 13px; white-space: nowrap; }
 .vcard__map { height: 220px; }
-/* la ligne de charge tient sa hauteur même vide : la carte ne bouge pas quand la charge démarre */
-.vcard__charge { margin: -8px 0 0; font-size: 12px; min-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* la ligne de charge tient sa hauteur même vide : la carte ne bouge pas quand la charge démarre.
+   Une HAUTEUR égale à la ligne, pas un minimum : `min-height: 16px` sous une ligne de 18 px laissait
+   tout le bas de la carte descendre de 2 px au démarrage de la charge (mesuré le 2026-10-01) */
+.vcard__charge { margin: -8px 0 0; font-size: 12px; height: 1.5em; line-height: 1.5em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* deux colonnes de tuiles IDENTIQUES, toujours la même disposition : gestes (2 × 2), puis sections */
 .vcard__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 /* icône AU-DESSUS du libellé : « Arrêter la charge » tient dans une demi-carte, sans être coupé */

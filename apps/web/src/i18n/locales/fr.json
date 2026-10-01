@@ -275,7 +275,10 @@
   },
   "charger": {
     "status": { "disconnected": "Débranchée", "connected": "Branchée", "charging": "En charge", "finished": "Charge terminée", "error": "Erreur" },
-    "power": "Puissance", "session": "Session", "maxCurrent": "Courant max"
+    "power": "Puissance", "session": "Session", "maxCurrent": "Courant max",
+    "safeLimit": "Mode sécurisé",
+    "safeLimitHint": "La borne s'est limitée à son intensité de sécurité : sa répartition de charge n'a plus de mesure, souvent parce qu'elle a perdu la passerelle.",
+    "stopUntilUnplug": "Arrêter bloque la borne jusqu'au prochain débranchement : la charge verte ne reprendra pas avec le soleil."
   },
   "vehicle": {
     "soc": "Charge", "range": "Autonomie", "chargeLimit": "Limite de charge", "pluggedIn": "Branché", "unplugged": "Débranché",

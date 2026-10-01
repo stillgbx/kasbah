@@ -202,6 +202,12 @@ export const evChargerStateSchema = z.object({
   powerW: z.number(),
   sessionWh: z.number(),
   maxCurrentA: z.number().optional(),
+  /**
+   * La borne s'est repliée sur son intensité de SÉCURITÉ (Enphase `safeLimitState: 1`, « mode
+   * sécurisé », 8 A sur la borne de référence) : sa répartition dynamique de charge n'a plus de
+   * mesure, typiquement quand elle a perdu la passerelle. `maxCurrentA` ne vaut alors plus. Absent = inconnu.
+   */
+  safeLimit: z.boolean().optional(),
 })
 
 /**

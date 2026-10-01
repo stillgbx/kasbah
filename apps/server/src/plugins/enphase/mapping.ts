@@ -201,6 +201,8 @@ export interface EvCharger {
   faulted: boolean
   sessionWh: number
   chargeLevel?: number
+  /** `connectors[0].safeLimitState` : 1 = repliée sur l'intensité de sécurité (« mode sécurisé » de l'appli). */
+  safeLimit?: boolean
 }
 
 export interface EvChargerSummary {
@@ -236,6 +238,9 @@ export function chargersOf(json: unknown): EvCharger[] {
     if (!sn) continue
     const session = o.session_d && typeof o.session_d === 'object' ? o.session_d as Record<string, unknown> : undefined
     const chargeLevel = num(session?.charge_level)
+    const connector = Array.isArray(o.connectors) && o.connectors[0] && typeof o.connectors[0] === 'object'
+      ? o.connectors[0] as Record<string, unknown> : undefined
+    const safeLimitState = num(connector?.safeLimitState)
     out.push({
       sn,
       ...(typeof o.name === 'string' && o.name.trim() ? { name: o.name.trim() } : {}),
@@ -245,6 +250,7 @@ export function chargersOf(json: unknown): EvCharger[] {
       faulted: o.faulted === true,
       sessionWh: Math.round(num(session?.e_c) ?? 0),
       ...(chargeLevel !== undefined ? { chargeLevel } : {}),
+      ...(safeLimitState !== undefined ? { safeLimit: safeLimitState === 1 } : {}),
     })
   }
   return out
@@ -280,10 +286,11 @@ export function toChargerDescriptors(chargers: EvCharger[], summaries: EvCharger
     const sum = summaries.find((s) => s.serialNumber === c.sn)
     return descriptor(
       c.sn, 'ev_charger', c.name || `Borne ${shortSerial(c.sn)}`,
-      // lecture seule tant qu'aucune commande n'a été capturée : les boutons Démarrer / Arrêter
-      // de l'UI ne s'affichent que si `charge_control` est déclaré.
-      [],
-      { manufacturer: 'Enphase', ...(sum?.modelName ? { model: sum.modelName } : {}) },
+      // démarrer / arrêter, essayés sur la vraie borne le 2026-10-01 ; l'intensité ne se règle pas
+      // encore (`charge_current`) : Démarrer prend celle par défaut de l'appli
+      ['charge_control'],
+      // arrêter pose une annulation manuelle « jusqu'au prochain débranchement » : plus de charge verte
+      { manufacturer: 'Enphase', ...(sum?.modelName ? { model: sum.modelName } : {}), evCharger: { stopUntilUnplug: true } },
     )
   })
 }
@@ -306,5 +313,6 @@ export function toChargerPatch(charger: EvCharger, summary?: EvChargerSummary): 
     powerW: 0,
     sessionWh: charger.sessionWh,
     ...(maxCurrentA !== undefined ? { maxCurrentA: Math.round(maxCurrentA) } : {}),
+    ...(charger.safeLimit !== undefined ? { safeLimit: charger.safeLimit } : {}),
   } as StatePatch
 }

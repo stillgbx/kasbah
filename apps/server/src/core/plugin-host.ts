@@ -1,6 +1,7 @@
 import { DEFAULT_PLUGIN_SETTINGS, parseDeviceId, parseSceneId, type Command, type PluginHealth, type PluginInfo, type PluginSettings, type SceneRecall, type SceneUpdate, type DeviceConsumption, type DeviceJournal, type WeatherForecast } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import type { Logger } from 'pino'
+import { chargerToForce } from './chargeCoordination'
 import { createBackoff, type Backoff } from './backoff'
 import type { Bus } from './bus'
 import type { Clock } from './clock'
@@ -207,7 +208,25 @@ export class PluginHost {
     await this.startOne(id)
   }
 
+  /**
+   * Une commande, d'où qu'elle vienne (interface, automatisation, MCP). « Charger » une voiture force
+   * d'abord la borne où elle est branchée (`chargerToForce`) ; un échec de la borne n'empêche pas
+   * d'envoyer la commande à la voiture.
+   */
   async execute(deviceId: string, command: Command): Promise<void> {
+    const charger = chargerToForce(deviceId, command, this.opts.registry.list(), this.opts.site())
+    if (charger) {
+      try {
+        await this.dispatch(charger, { type: 'ev_charger.start' })
+        this.opts.logger.info({ vehicle: deviceId, charger }, 'charger forced to charge the vehicle')
+      } catch (err) {
+        this.opts.logger.warn({ err, vehicle: deviceId, charger }, 'could not force the charger: starting the vehicle anyway')
+      }
+    }
+    await this.dispatch(deviceId, command)
+  }
+
+  private async dispatch(deviceId: string, command: Command): Promise<void> {
     const { pluginId, externalId } = parseDeviceId(deviceId)
     const slot = this.slots.get(pluginId)
     if (!slot || !slot.ctx) throw new PluginError('DEVICE_UNAVAILABLE', `plugin "${pluginId}" is not running`)

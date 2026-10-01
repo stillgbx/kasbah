@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { mount } from '@vue/test-utils'
 import type { Capability, DeviceDescriptor, StateFor } from '@kasbah/shared'
+import { createMockTransport, setTransport } from '../../api'
+import { useDevicesStore } from '../../stores/devices'
 import VehicleCard from './VehicleCard.vue'
 
 const descriptor = (capabilities: Capability[] = ['soc', 'range', 'charge_limit']): DeviceDescriptor => ({
@@ -36,5 +38,27 @@ describe('VehicleCard — repères de la jauge', () => {
     const w = mount(VehicleCard, { props: { descriptor: descriptor(), state: state({ chargeLimit: 80 }) } })
     await w.findAll('.limit__step').find((b) => b.text() === '90')!.trigger('click')
     expect(ticks(w)).toEqual([['left: 90%;', 'Cible de charge 90 %']])
+  })
+})
+
+describe('VehicleCard — charge demandée', () => {
+  beforeEach(() => { setActivePinia(createPinia()); setTransport(null) })
+
+  it('le bouton TOURNE tant que la voiture ne se dit pas en charge, puis devient « Arrêter la charge »', async () => {
+    setTransport({ ...createMockTransport({ seed: 1 }), sendCommand: async () => {} })
+    const d = descriptor(['soc', 'range', 'charging'])
+    const devices = useDevicesStore()
+    devices.setEntries([{ descriptor: d, state: state() }])
+    const w = mount(VehicleCard, { props: { descriptor: d, state: state() } })
+    const button = () => w.findAll('button').find((b) => /charge/i.test(b.text()))!
+    expect(button().classes()).not.toContain('v-btn--loading')
+    await devices.sendCommand(d.id, { type: 'vehicle.start_charge' })
+    await w.vm.$nextTick()
+    expect(button().classes()).toContain('v-btn--loading')
+    expect(button().attributes('disabled')).toBeDefined()
+    devices.applyMessage({ type: 'state', deviceId: d.id, state: state({ updatedAt: 1, charging: true }) })
+    await w.setProps({ state: state({ updatedAt: 1, charging: true }) })
+    expect(button().classes()).not.toContain('v-btn--loading')
+    expect(button().text()).toBe('Arrêter la charge')
   })
 })

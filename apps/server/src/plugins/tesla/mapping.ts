@@ -21,11 +21,11 @@ const MILE_KM = 1.609344
 export const READ_CAPABILITIES = ['soc', 'range', 'location', 'charge_power'] as const
 
 /**
- * Ce que le véhicule ACCEPTE qu'on change : la limite de charge (un réglage borné par le contrat) et
- * le préconditionnement de l'habitacle — ni l'un ni l'autre ne fait bouger ni ouvrir la voiture.
- * Verrouiller et lancer la charge restent à faire.
+ * Ce que le véhicule ACCEPTE qu'on change : la limite de charge (un réglage borné par le contrat), la
+ * charge elle-même et le préconditionnement de l'habitacle — rien ne fait bouger ni ouvrir la voiture.
+ * Verrouiller reste à faire.
  */
-export const WRITE_CAPABILITIES = ['charge_limit', 'climate_precondition'] as const
+export const WRITE_CAPABILITIES = ['charge_limit', 'charging', 'climate_precondition'] as const
 
 /**
  * Ce que la climatisation sait faire, pour l'UI commune des véhicules. Les bornes sont celles que la

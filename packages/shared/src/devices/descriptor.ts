@@ -103,6 +103,12 @@ export const deviceMetaSchema = z.object({
    */
   forgettable: z.boolean().optional(),
   /**
+   * Borne (kind `ev_charger`). `stopUntilUnplug` : arrêter la borne la BLOQUE jusqu'au prochain
+   * débranchement, mode programmé compris (Enphase : une charge verte ne reprend plus avec le
+   * soleil). L'UI le dit sous le bouton Arrêter. Absent = un arrêt ordinaire.
+   */
+  evCharger: z.object({ stopUntilUnplug: z.boolean().optional() }).optional(),
+  /**
    * D'où vient la météo (kind `weather`). `attribution` est OBLIGATOIRE : les données libres
    * (Open-Meteo, CC BY 4.0) exigent d'être créditées, et c'est l'UI qui l'affiche — le plugin ne
    * fait que le dire. `model` : le modèle numérique derrière les chiffres (« AROME France HD »).

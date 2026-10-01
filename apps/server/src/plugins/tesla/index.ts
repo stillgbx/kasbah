@@ -82,6 +82,10 @@ const WAKE_FOLLOW_UP_MS = 15_000
 /** Préconditionnement d'une voiture endormie : la veille relue (liste, gratuite) à ce pas, jusqu'à ce plafond. */
 const CLIMATE_WAKE_POLL_MS = 5_000
 const CLIMATE_WAKE_MAX_MS = 90_000
+/** Après un démarrage ou un arrêt de charge, délai avant de relire : la borne met 20 s à 1 min à donner du courant. */
+const CHARGE_FOLLOW_UP_MS = 60_000
+/** Refus passager `could_not_wake_buses` : nouvelles tentatives, au pas de `CLIMATE_WAKE_POLL_MS`. */
+const BUSES_RETRIES = 3
 /** Sous ce niveau, Tesla refuse `auto_conditioning_start` (`low_soc`). */
 const LOW_SOC_PCT = 20
 /** Sections de `vehicle_data` lues. `location_data` est OBLIGATOIRE pour la position depuis le logiciel 2023.38. */
@@ -415,9 +419,18 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
       try { await climateCommand(vin, command); return }
       catch (err) { if (!(err instanceof PluginError && err.code === 'DEVICE_UNAVAILABLE')) throw err }
     }
+    await wakeThen(vin, 'start its climate', () => climateCommand(vin, command), WAKE_FOLLOW_UP_MS)
+  }
+
+  /**
+   * Réveiller, puis lancer `run` dès que la liste (gratuite) dit la voiture en ligne, et la relire
+   * `followUpMs` plus tard pour CONSTATER l'effet. `execute` rend la main à l'accusé du réveil : la
+   * suite tourne derrière, et son échec se lit dans le journal du serveur.
+   */
+  async function wakeThen(vin: string, what: string, run: () => Promise<void>, followUpMs: number): Promise<void> {
     await client!.request('POST', `/api/1/vehicles/${encodeURIComponent(vin)}/wake_up`, { signal: ctx!.signal })
-    log().info({ vin }, 'Tesla vehicle woken to start its climate')
-    track.restUntil = 0
+    log().info({ vin }, `Tesla vehicle woken to ${what}`)
+    vehicles.get(vin)!.restUntil = 0
     void (async () => {
       const deadline = ctx!.clock.now() + CLIMATE_WAKE_MAX_MS
       try {
@@ -430,16 +443,88 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
           t.sleepState = toSleepState(t.summary.state)
           ctx!.emitState(vin, toSleepPatch(t.summary))
           if (t.sleepState !== 'online') continue
-          await climateCommand(vin, command)
-          await sleep(ctx!.clock, WAKE_FOLLOW_UP_MS, ctx!.signal)
+          await run()
+          await sleep(ctx!.clock, followUpMs, ctx!.signal)
           if (!ctx!.signal.aborted && takeBudget()) await readVehicle(vin)
           return
         }
-        log().warn({ vin, waitedMs: CLIMATE_WAKE_MAX_MS }, 'Tesla vehicle did not wake up: climate not started')
+        log().warn({ vin, waitedMs: CLIMATE_WAKE_MAX_MS }, `Tesla vehicle did not wake up: could not ${what}`)
       } catch (err) {
-        if (!ctx!.signal.aborted) log().warn({ err, vin }, 'Tesla climate start failed after wake')
+        if (!ctx!.signal.aborted) log().warn({ err, vin }, `Tesla could not ${what} after wake`)
       }
     })()
+  }
+
+  // ---- charge -------------------------------------------------------------------------------
+
+  /**
+   * `charge_start` / `charge_stop`, non signés comme la limite de charge. Déjà dans l'état voulu
+   * (`is_charging`, `not_charging`) n'est pas un échec. `charging` n'est PAS publié sur l'accusé : la
+   * voiture accepte avant que le courant coule (la borne met 20 s à 1 min, constaté le 2026-10-01),
+   * c'est une relecture `CHARGE_FOLLOW_UP_MS` plus tard qui le constate.
+   */
+  async function chargeCommand(vin: string, start: boolean): Promise<void> {
+    try { await vehicleCommand(vin, start ? 'charge_start' : 'charge_stop') }
+    catch (err) {
+      if (!(err instanceof PluginError && err.message.endsWith(start ? ': is_charging' : ': not_charging'))) throw err
+    }
+    log().info({ vin }, start ? 'Tesla charge started' : 'Tesla charge stopped')
+  }
+
+  /**
+   * Lancer ou arrêter la charge. Débranchée d'après le dernier état connu : refusé AVANT tout réveil.
+   * Endormie, l'arrêt n'a rien à faire (une voiture qui charge ne dort pas) ; le démarrage, lui, la
+   * RÉVEILLE, comme la climatisation : c'est un geste de l'utilisateur ou d'une règle qu'il a écrite.
+   */
+  async function charge(vin: string, start: boolean): Promise<void> {
+    const track = vehicles.get(vin)!
+    if (start && saved.vehicles[vin]?.pluggedIn === false) throw new PluginError('DEVICE_UNAVAILABLE', 'vehicle not plugged in')
+    if (track.sleepState !== 'online') {
+      if (!start) { ctx!.emitState(vin, { charging: false }); return }
+      await wakeThen(vin, 'start charging', () => chargeCommand(vin, true), CHARGE_FOLLOW_UP_MS)
+      return
+    }
+    try { await chargeCommand(vin, start) }
+    catch (err) {
+      if (start && err instanceof PluginError && err.code === 'DEVICE_UNAVAILABLE') {
+        await wakeThen(vin, 'start charging', () => chargeCommand(vin, true), CHARGE_FOLLOW_UP_MS)
+        return
+      }
+      // « en ligne » d'après la liste, mais ses bus internes dorment encore : refus PASSAGER, constaté
+      // sur la vraie voiture le 2026-10-01 juste après la borne forcée. On retente derrière.
+      if (!(err instanceof PluginError && err.message.endsWith(': could_not_wake_buses'))) throw err
+      log().info({ vin }, 'Tesla buses still asleep: retrying the charge command')
+      void retryThenFollowUp(vin, start)
+      return
+    }
+    if (!start) ctx!.emitState(vin, { charging: false })
+    void followUp(vin)
+  }
+
+  async function retryThenFollowUp(vin: string, start: boolean): Promise<void> {
+    for (let attempt = 1; attempt <= BUSES_RETRIES; attempt++) {
+      await sleep(ctx!.clock, CLIMATE_WAKE_POLL_MS, ctx!.signal)
+      if (ctx!.signal.aborted) return
+      try {
+        await chargeCommand(vin, start)
+        if (!start) ctx!.emitState(vin, { charging: false })
+        break
+      } catch (err) {
+        if (!(err instanceof PluginError && err.message.endsWith(': could_not_wake_buses')) || attempt === BUSES_RETRIES) {
+          log().warn({ err, vin }, 'Tesla charge command failed after retries')
+          break
+        }
+      }
+    }
+    await followUp(vin)
+  }
+
+  /** Relire `CHARGE_FOLLOW_UP_MS` plus tard : c'est la lecture qui dit si le courant coule. */
+  async function followUp(vin: string): Promise<void> {
+    await sleep(ctx!.clock, CHARGE_FOLLOW_UP_MS, ctx!.signal)
+    if (ctx!.signal.aborted || !takeBudget()) return
+    try { await readVehicle(vin) }
+    catch (err) { log().debug({ err, vin }, 'Tesla charge follow-up read failed') }
   }
 
   // ---- enregistrement du domaine ------------------------------------------------------------
@@ -569,6 +654,10 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
       }
       if (command.type === 'vehicle.climate_start') {
         await startClimate(externalId, command)
+        return
+      }
+      if (command.type === 'vehicle.start_charge' || command.type === 'vehicle.stop_charge') {
+        await charge(externalId, command.type === 'vehicle.start_charge')
         return
       }
       if (command.type !== 'vehicle.wake') {

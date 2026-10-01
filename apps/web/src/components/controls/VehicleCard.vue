@@ -2,10 +2,14 @@
 import { computed, ref, watch } from 'vue'
 import { geoDistance, type CommandInput, type DeviceDescriptor, type StateFor } from '@kasbah/shared'
 import { formatDistance, formatKm, formatPercent, formatPower } from '../../lib/format'
+import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
 import ChargeLimitCard from '../vehicles/ChargeLimitCard.vue'
 
 const props = defineProps<{ descriptor: DeviceDescriptor; state: StateFor<'vehicle'>; pending?: boolean; disabled?: boolean }>()
+/** Charge demandée, pas encore constatée : la même attente que la vue Véhicules (tenue par le store). */
+const devices = useDevicesStore()
+const chargeRequested = computed(() => devices.isChargeRequested(props.descriptor.id))
 const emit = defineEmits<{ command: [cmd: CommandInput] }>()
 const house = useHouseStore()
 const HOME_RADIUS_M = 120
@@ -59,7 +63,8 @@ watch(() => [props.state.chargeLimit, props.pending], () => { dragged.value = nu
     <div class="d-flex ga-2 mb-3">
       <v-btn v-if="has('lock')" class="flex-grow-1" height="56" variant="tonal" :prepend-icon="state.locked ? 'lockOpen' : 'lock'" :disabled="disabled"
              @click="emit('command', { type: state.locked ? 'vehicle.unlock' : 'vehicle.lock' })">{{ state.locked ? $t('common.unlock') : $t('common.lock') }}</v-btn>
-      <v-btn v-if="has('charging')" class="flex-grow-1" height="56" variant="tonal" color="success" :disabled="disabled || !state.pluggedIn"
+      <v-btn v-if="has('charging')" class="flex-grow-1" height="56" variant="tonal" color="success"
+             :disabled="disabled || !state.pluggedIn || pending || chargeRequested" :loading="chargeRequested"
              @click="emit('command', { type: state.charging ? 'vehicle.stop_charge' : 'vehicle.start_charge' })">
         {{ state.charging ? $t('vehicle.stopCharge') : $t('vehicle.startCharge') }}
       </v-btn>
