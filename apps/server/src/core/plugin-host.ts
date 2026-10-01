@@ -123,8 +123,12 @@ export class PluginHost {
     }
   }
 
+  /**
+   * Tous les plugins démarrent en même temps : un fabricant lent (la découverte Cast attend le mDNS
+   * puis chaque appareil) ne retarde plus les autres. `startOne` rattrape ses propres erreurs.
+   */
   async startAll(): Promise<void> {
-    for (const id of this.order) if (this.isEnabled(id)) await this.startOne(id)
+    await Promise.all(this.order.filter((id) => this.isEnabled(id)).map((id) => this.startOne(id)))
   }
 
   /**

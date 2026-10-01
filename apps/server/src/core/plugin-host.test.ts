@@ -83,3 +83,31 @@ describe('plugin host start retry', () => {
     expect(h.health().flaky).toMatchObject({ status: 'disabled' })
   })
 })
+
+describe('plugin host startup', () => {
+  it('starts plugins side by side: a slow vendor does not hold back the others', async () => {
+    const clock = new ManualClock(0)
+    let release!: () => void
+    const gate = new Promise<void>((r) => { release = r })
+    const make = (id: string, discover: () => Promise<void>): DevicePlugin => ({
+      id, configSchema: z.object({}),
+      async init() {}, async discover() { await discover(); return [] }, async start() {}, async execute() {}, async stop() {},
+    })
+    const h = new PluginHost({
+      site: () => ({ lat: 0, lon: 0, alt: 0 }),
+      settingsOf: () => ({ ...DEFAULT_PLUGIN_SETTINGS, enabled: true }),
+      strict: false,
+      factories: { slow: () => make('slow', () => gate), fast: () => make('fast', async () => {}) },
+      registry: new DeviceRegistry(new Bus(), clock), scenes: new SceneRegistry(new Bus(), clock), bus: new Bus(), clock,
+      logger: pino({ level: 'silent' }), envSource: {},
+    })
+    const all = h.startAll()
+    await flush()
+    expect(h.health().fast).toMatchObject({ status: 'ok' })  // démarré sans attendre `slow`
+    expect(h.health().slow).not.toMatchObject({ status: 'ok' })
+    release()
+    await all
+    expect(h.health().slow).toMatchObject({ status: 'ok' })
+    await h.stopAll()
+  })
+})
