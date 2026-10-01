@@ -9,6 +9,7 @@ import type { HouseScene, ReliefEditState, TerrainTab, TerrainView } from '../..
 import { useHouseStore } from '../../stores/house'
 import { useSettingsStore } from '../../stores/settings'
 import { fetchIgnRelief, type IgnSource } from '../../lib/ignRelief'
+import { fetchIgnParcel, IgnParcelError, type IgnParcel } from '../../lib/ignParcel'
 
 // L'ÉDITEUR DU TERRAIN (Réglages → Rendu 3D → « Modeler le terrain », ou « Modifier le contour du
 // terrain » depuis le réglage de la maison). Il flotte sur la vue Maison comme le banc de lumière.
@@ -17,7 +18,8 @@ import { fetchIgnRelief, type IgnSource } from '../../lib/ignRelief'
 //
 // Trois sorties, parce que modeler est long : « Valider » écrit sans quitter (on garde ce qu'on a
 // et on continue), « Terminer » écrit puis quitte, « Annuler » quitte en revenant au dernier terrain
-// validé. Valider écrit ce qui a changé des deux onglets, le contour d'abord (le serveur agrandit
+// validé. L'import du cadastre, comme celui de l'IGN, remplace le BROUILLON du contour seulement.
+// Valider écrit ce qui a changé des deux onglets, le contour d'abord (le serveur agrandit
 // alors le relief s'il ne le couvre plus). L'import IGN remplace le BROUILLON seulement.
 
 const props = defineProps<{ scene: () => HouseScene | null; state: ReliefEditState | null }>()
@@ -100,7 +102,7 @@ async function save(): Promise<boolean> {
   // relu APRÈS le contour : le serveur a pu agrandir le relief comme le brouillon l'a fait
   if (ok && reliefDirty.value) ok = await house.saveRelief(props.state?.draft ?? null)
   saving.value = false
-  if (ok) { saved.value = true; setTimeout(() => { saved.value = false }, 1500) }
+  if (ok) { saved.value = true; cadastre.value = null; setTimeout(() => { saved.value = false }, 1500) }
   return ok
 }
 function undo() { if (tab.value === 'outline') props.scene()?.undoOutline(); else props.scene()?.undoRelief() }
@@ -196,7 +198,42 @@ const outsideText = computed(() => {
   if (h.rooms.some((r) => r.polygon.some(pushed))) parts.push(t('relief.outline.house'))
   return parts.length ? t('relief.outline.outside', { list: parts.join(', ') }) : ''
 })
-const outlineStatus = computed(() => outsideText.value || (outline.value ? t('relief.outline.points', outline.value.draft.length) : ''))
+/**
+ * Import du contour cadastral : il remplace le brouillon (un pas d'historique). Le message dit quelle
+ * parcelle est chargée tant que le brouillon EST celui de l'import ; une retouche ou un Valider l'efface.
+ */
+const cadastre = ref<{ kind: 'loading' } | { kind: 'done'; parcels: IgnParcel[]; merged: boolean; key: string } | { kind: 'error'; message: string; code?: 'none' | 'shape' } | null>(null)
+async function importCadastre() {
+  const h = house.house
+  if (!h || cadastre.value?.kind === 'loading') return
+  cadastre.value = { kind: 'loading' }
+  try {
+    const { polygon, parcels, merged } = await fetchIgnParcel(h)
+    props.scene()?.setOutlineDraft(polygon)
+    cadastre.value = { kind: 'done', parcels, merged, key: JSON.stringify(polygon) }
+  } catch (err) {
+    cadastre.value = { kind: 'error', message: (err as Error).message, ...(err instanceof IgnParcelError ? { code: err.code } : {}) }
+  }
+}
+watch(() => JSON.stringify(outline.value?.draft ?? null), (k) => {
+  const c = cadastre.value
+  if (c?.kind === 'done' && c.key !== k) cadastre.value = null
+})
+const parcelName = (p: IgnParcel) => `${p.section} ${Number(p.numero) || p.numero}`
+const cadastreText = computed(() => {
+  const c = cadastre.value
+  if (!c) return ''
+  if (c.kind === 'loading') return t('relief.outline.cadastreLoading')
+  if (c.kind === 'error') return c.code ? t(`relief.outline.cadastreFail.${c.code}`) : t('relief.outline.cadastreError', { message: c.message })
+  const m2 = c.parcels.reduce((sum, p) => sum + (p.contenance ?? 0), 0)
+  const area = m2 ? `${m2.toLocaleString(settings.resolvedLocale)} m²` : '—'
+  if (!c.merged) return t('relief.outline.cadastrePartial', { name: parcelName(c.parcels[0]!), area })
+  if (c.parcels.length > 1) return t('relief.outline.cadastreMerged', { names: c.parcels.map(parcelName).join(', '), area })
+  return t('relief.outline.cadastreDone', { name: parcelName(c.parcels[0]!), area })
+})
+
+const outlineStatus = computed(() => [cadastreText.value, outsideText.value].filter(Boolean).join(' ')
+  || (outline.value ? t('relief.outline.points', outline.value.draft.length) : ''))
 
 function setTab(v: TerrainTab) { settings.setTerrainTab(v) }
 </script>
@@ -269,6 +306,7 @@ function setTab(v: TerrainTab) { settings.setTerrainTab(v) }
           </div>
         </div>
         <div class="relief__actions">
+          <button type="button" class="chip chip--wide" :disabled="cadastre?.kind === 'loading'" @click="importCadastre()">{{ t('relief.outline.cadastre') }}</button>
           <button type="button" class="chip chip--wide" :disabled="!outline?.canRemove" :title="t('relief.outline.removeHint')"
                   @click="scene()?.removeOutlinePoint()">{{ t('relief.outline.remove') }}</button>
         </div>
@@ -278,7 +316,10 @@ function setTab(v: TerrainTab) { settings.setTerrainTab(v) }
                   @click="scene()?.viewTerrainFrom(v)">{{ t(`relief.views.${v}.short`) }}</button>
         </div>
         <!-- trois lignes réservées : l'avertissement n'écarte rien en apparaissant -->
-        <div class="relief__status relief__status--tall muted small" :data-error="outsideText ? '1' : '0'" :title="outsideText">{{ outlineStatus }}</div>
+        <div class="relief__status relief__status--tall muted small" :data-error="cadastre?.kind === 'error' ? '1' : '0'" :title="outlineStatus">
+          <template v-if="cadastreText || outsideText">{{ cadastreText }} <span class="relief__warn">{{ outsideText }}</span></template>
+          <template v-else>{{ outlineStatus }}</template>
+        </div>
       </div>
     </div>
 
@@ -323,6 +364,7 @@ function setTab(v: TerrainTab) { settings.setTerrainTab(v) }
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3;
 }
 .relief__status[data-error='1'] { color: var(--danger, #e5484d); }
+.relief__warn { color: var(--danger, #e5484d); }
 .row { display: grid; grid-template-columns: 1fr 104px; align-items: center; gap: 6px; min-height: 28px; }
 .row--xy { grid-template-columns: 1fr auto; }
 .point { display: flex; align-items: center; gap: 4px; }

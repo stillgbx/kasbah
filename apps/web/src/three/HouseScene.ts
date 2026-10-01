@@ -2070,6 +2070,13 @@ export class HouseScene {
     else this.emitRelief()                 // refusé : le panneau réaffiche la position gardée
   }
 
+  /** Remplace le brouillon du contour (import du cadastre) ; le remplacement s'annule comme un geste. */
+  setOutlineDraft(polygon: Vec2[]): void {
+    if (!this.outlineEditor) return
+    this.outlineEditor.setPolygon(polygon)
+    this.onOutlineChanged(true)
+  }
+
   /** Retire le sommet choisi. */
   removeOutlinePoint(): void {
     if (this.outlineEditor?.removeSelected()) this.onOutlineChanged(true)

@@ -88,3 +88,15 @@ describe('éditeur du contour', () => {
     expect(n).toBe(OUTLINE_HISTORY)
   })
 })
+
+describe('éditeur du contour : import', () => {
+  it('remplace le contour en un pas d’historique, sans sommet choisi', () => {
+    const ed = editor()
+    ed.selected = 1
+    ed.setPolygon([[0, 0], [5, 0], [5, 5]])
+    expect(ed.polygon).toEqual([[0, 0], [5, 0], [5, 5]])
+    expect(ed.selected).toBeNull()
+    expect(ed.undo()).toBe(true)
+    expect(ed.polygon).toEqual(square)
+  })
+})

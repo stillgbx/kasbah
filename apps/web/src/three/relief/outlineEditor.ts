@@ -152,6 +152,14 @@ export class OutlineEditor {
     return true
   }
 
+  /** Nouveau contour (import du cadastre) : un pas d'historique, plus de sommet choisi. */
+  setPolygon(polygon: readonly Vec2[]): void {
+    this.record(clone(this.polygon))
+    this.polygon = clone(polygon)
+    this.selected = null
+    this.refresh()
+  }
+
   /** Ajoute un sommet au milieu du côté `edge` → `edge + 1`, et le choisit. */
   insertOnEdge(edge: number): void {
     const n = this.polygon.length

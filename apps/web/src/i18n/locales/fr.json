@@ -1051,6 +1051,13 @@
         "device": "{n} appareil extérieur | {n} appareil extérieur | {n} appareils extérieurs"
       },
       "house": "une partie de la maison",
+      "cadastre": "Importer le cadastre",
+      "cadastreLoading": "Lecture du cadastre…",
+      "cadastreDone": "Parcelle {name} chargée ({area}). Validez pour la garder.",
+      "cadastreMerged": "Parcelles {names} fusionnées ({area}). Validez pour les garder.",
+      "cadastrePartial": "Parcelle {name} seule chargée ({area}) : celles sous la maison ne se fusionnent pas. Validez pour la garder.",
+      "cadastreError": "Cadastre indisponible : {message}",
+      "cadastreFail": {"none": "Aucune parcelle cadastrale sous la maison : elle est sur le domaine public, ou sa position GPS (origine du plan) est décalée.", "shape": "Le contour cadastral n’est pas utilisable (il se croise) : rien n’a changé."},
       "open": "Modifier le contour du terrain",
       "openHint": "Ouvre l’éditeur du terrain sur son contour : déplacer, ajouter ou retirer des sommets.",
       "saveError": "Contour non enregistré : {message}"

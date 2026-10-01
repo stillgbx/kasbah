@@ -1036,6 +1036,13 @@
         "device": "{n} outdoor devices | {n} outdoor device | {n} outdoor devices"
       },
       "house": "part of the house",
+      "cadastre": "Import land registry",
+      "cadastreLoading": "Reading the land registry…",
+      "cadastreDone": "Parcel {name} loaded ({area}). Validate to keep it.",
+      "cadastreMerged": "Parcels {names} merged ({area}). Validate to keep them.",
+      "cadastrePartial": "Only parcel {name} loaded ({area}): the parcels under the house do not merge. Validate to keep it.",
+      "cadastreError": "Land registry unavailable: {message}",
+      "cadastreFail": {"none": "No cadastral parcel under the house: it stands on public land, or its GPS position (plan origin) is off.", "shape": "The cadastral outline cannot be used (it crosses itself): nothing changed."},
       "open": "Edit the terrain outline",
       "openHint": "Opens the terrain editor on its outline: move, add or delete corners.",
       "saveError": "Outline not saved: {message}"
