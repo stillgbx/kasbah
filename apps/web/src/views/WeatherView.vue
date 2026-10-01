@@ -8,11 +8,12 @@ import MoonDisc from '../components/weather/MoonDisc.vue'
 import RainRadar from '../components/weather/RainRadar.vue'
 import WeatherPlaces from '../components/weather/WeatherPlaces.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
-import { useForecast, useWeather, useWeatherAt, useWeatherPlaces } from '../composables/useWeather'
+import { useForecast, useWeather, useWeatherAlerts, useWeatherAt, useWeatherPlaces } from '../composables/useWeather'
 import { formatMinutes } from '../lib/format'
 import type { IconName } from '../lib/strokeIcons'
 import { moonIllumination, moonPhaseName, moonTimes, nextPhase } from '../lib/moon'
 import { compassPoint, conditionIcon } from '../lib/weather'
+import type { WeatherAlert } from '../api/transport'
 import { useHouseStore } from '../stores/house'
 
 // Vue Météo : tout ce que l'appareil météo sait. L'actuel en grand, le soleil, le vent, les 24
@@ -139,6 +140,26 @@ const barStyle = (p: WeatherDailyPoint) => {
 const dayOf = (ms: number) => new Date(ms).toLocaleDateString('en-CA', tz.value ? { timeZone: tz.value } : {})
 const isToday = (tMs: number) => dayOf(tMs) === dayOf(now.value)
 
+// Vigilance Météo-France du département du lieu affiché (métropole seule) : une ligne, la plus
+// forte en cours d'abord ; les autres au survol. La ligne garde sa place même sans vigilance.
+const alerts = useWeatherAlerts(home)
+/** « minuit » pour la fin du jour, l'heure pour aujourd'hui, le jour et l'heure au-delà. */
+const when = (ms: number) => (isToday(ms - 1) && !isToday(ms) ? t('weather.alerts.midnight') : isToday(ms) ? fd(ms, 'time') : `${fd(ms, 'weekday')} ${fd(ms, 'time')}`)
+const alertText = (w: WeatherAlert) => {
+  const on = w.onset <= now.value
+  const label = t('weather.alerts.label', { level: t(`weather.alerts.levels.${w.level}`), type: t(`weather.alerts.types.${w.type}`) })
+  return `${label} · ${t(on ? 'weather.alerts.until' : 'weather.alerts.from', { when: when(on ? w.expires : w.onset) })}`
+}
+const alert = computed(() => {
+  const a = alerts.data.value
+  if (!a) return null
+  if (!a.area) return { level: 'none', text: t('weather.alerts.notCovered'), more: 0, title: undefined }
+  const ws = a.warnings.filter((w) => w.expires > now.value)
+  const title = [a.area, ...ws.map(alertText)].join('\n')
+  if (!ws.length) return { level: 'green', text: t('weather.alerts.none'), more: 0, title }
+  return { level: ws[0]!.level, text: alertText(ws[0]!), more: ws.length - 1, title }
+})
+
 const aqiIndex = computed(() => (live.value?.aqiLevel ? AQI_LEVELS.indexOf(live.value.aqiLevel) : -1))
 /** Couleurs du palier européen, du bon au très mauvais (échelle officielle EAQI). */
 const AQI_COLORS = ['#50f0e6', '#50ccaa', '#f0e641', '#ff5050', '#960032', '#7d2181']
@@ -183,6 +204,14 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
               <div class="wx-now__temp">{{ deg(live?.tempC) }}</div>
               <div class="wx-now__cond">{{ live ? $t(`weather.conditions.${live.condition}`) : '—' }}</div>
             </div>
+          </div>
+          <!-- vigilance du département : place réservée, vide pendant la lecture -->
+          <div class="small wx-alert" :data-level="alert?.level ?? 'none'" :title="alert?.title">
+            <template v-if="alert">
+              <span class="wx-alert__dot" />
+              <span class="wx-alert__text">{{ alert.text }}</span>
+              <span v-if="alert.more" class="wx-alert__more">+{{ alert.more }}</span>
+            </template>
           </div>
           <div class="wx-now__foot muted">
             <span>{{ $t('weather.feelsLike') }} {{ deg(live?.feelsLikeC) }}</span>
@@ -363,16 +392,19 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
         </section>
         </div>
 
-        <div class="muted small wx-credit">
-          <template v-if="attribution">{{ $t('weather.attribution', { source: attribution }) }}<template v-if="model"> · {{ $t('weather.model', { model }) }}</template> · </template>
-          {{ $t('weather.radarHint') }} · {{ $t('weather.radarSource') }}
-        </div>
         </div>
 
         <!-- Radar des précipitations, centré sur la maison -->
         <section class="wx-radar">
           <RainRadar v-if="home" :home="home" :away="!!place" />
         </section>
+
+        <!-- le crédit ferme la page ; écran large : sous le radar, seul bloc qui sait céder de la hauteur -->
+        <div class="muted small wx-credit">
+          <template v-if="attribution">{{ $t('weather.attribution', { source: attribution }) }}<template v-if="model"> · {{ $t('weather.model', { model }) }}</template> · </template>
+          <template v-if="alerts.data.value?.area">{{ $t('weather.alerts.source', { source: alerts.data.value.attribution }) }} · </template>
+          {{ $t('weather.radarHint') }} · {{ $t('weather.radarSource') }}
+        </div>
 
       </div>
     </div>
@@ -417,6 +449,17 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
 .wx-now__temp { font-size: 56px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
 .wx-now__cond { font-size: 16px; margin-top: 6px; }
 .wx-now__foot { display: flex; gap: 18px; font-size: 13px; }
+/* vigilance : une pastille teintée de sa couleur, hauteur fixe */
+.wx-alert { display: flex; align-items: center; gap: 8px; height: 24px; min-width: 0; max-width: 100%; align-self: flex-start; padding: 0 10px; border-radius: 12px; color: var(--muted); }
+.wx-alert[data-level='yellow'] { --alert: #f2c200; }
+.wx-alert[data-level='orange'] { --alert: #ff8a00; }
+.wx-alert[data-level='red'] { --alert: #e8322c; }
+.wx-alert[data-level='green'] { --alert: #3fb950; }
+.wx-alert[data-level='yellow'], .wx-alert[data-level='orange'], .wx-alert[data-level='red'] { background: color-mix(in srgb, var(--alert) 18%, transparent); color: var(--text); font-weight: 600; }
+.wx-alert[data-level='none'] { padding: 0; }
+.wx-alert__dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; background: var(--alert, var(--line)); }
+.wx-alert__text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.wx-alert__more { flex: 0 0 auto; opacity: .7; }
 
 .wx-sun { display: flex; flex-direction: column; gap: 6px; min-height: 196px; }
 .wx-sun__arc { width: 100%; height: 96px; display: block; }
@@ -513,9 +556,9 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
 
 .wx-radar { padding: 0 !important; height: 400px; }
 .wx-radar > * { height: 100%; }
-/* en flux, le crédit ferme la page (l'`order` le passe derrière le radar malgré sa place dans le DOM) */
-.wx-credit { grid-column: span 12; text-align: center; order: 99; }
-/* en flux, le bloc « bas gauche » est transparent : détails, air, pollens et crédit gardent leur place dans la grille */
+/* en flux, le crédit ferme la page, centré */
+.wx-credit { grid-column: span 12; text-align: center; }
+/* en flux, le bloc « bas gauche » est transparent : détails, air et pollens gardent leur place dans la grille */
 .wx-bottom { display: contents; }
 /* en flux, la colonne air/pollens est transparente : ses deux cartes gardent leur place dans la grille */
 .wx-side { display: contents; }
@@ -523,35 +566,39 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
 /* TOUT TIENT SANS DÉFILER : sur un écran large et assez haut (1920 × 945 est le cas visé), la
    SEMAINE prend le haut à droite, à côté de l'instant et des 24 heures ; la troisième rangée aligne
    détails, air et pollens à gauche, et le radar ferme la page en bas à droite, dans la hauteur qui
-   reste. Les blocs gardent leurs tailles ; seule la disposition change. Le crédit monte dans
-   l'en-tête pour ne pas coûter une rangée. */
-@media (min-width: 1400px) and (min-height: 820px) {
+   reste. Les blocs gardent leurs tailles ; seule la disposition change. Le crédit passe sous le
+   radar, le seul bloc qui sait céder de la hauteur. Grille de 24 colonnes : la première rangée se
+   partage 5 / 5 / 4, le soleil et la lune prennent la place dont le vent n'a pas besoin.
+   Seuils MESURÉS (2026-10-01) : la lune demande ~1770 px de large, le contenu ~934 px de haut ;
+   en dessous, la page défile plutôt que de couper. */
+@media (min-width: 1770px) and (min-height: 934px) {
   .weather__scroll { display: flex; flex-direction: column; overflow: hidden; gap: 0; }
-  .weather__grid { flex: 1 1 auto; min-height: 0; grid-template-rows: auto auto minmax(0, 1fr); gap: 16px; align-content: start; }
-  .wx-now { grid-column: 1 / 4 !important; grid-row: 1; }
-  .wx-sun { grid-column: 4 / 6 !important; grid-row: 1; }
-  .wx-wind { grid-column: 6 / 8 !important; grid-row: 1; }
+  .weather__grid { flex: 1 1 auto; min-height: 0; grid-template-columns: repeat(24, minmax(0, 1fr)); grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 16px; align-content: start; }
+  .wx-now { grid-column: 1 / 6 !important; grid-row: 1; }
+  .wx-sun { grid-column: 6 / 11 !important; grid-row: 1; }
+  .wx-wind { grid-column: 11 / 15 !important; grid-row: 1; }
   /* l'arc se resserre pour faire place à la lune sans pousser la page au-delà de l'écran */
   .wx-sun__arc { height: 72px; }
-  .wx-hourly { grid-column: 1 / 8 !important; grid-row: 2; }
+  .wx-hourly { grid-column: 1 / 15 !important; grid-row: 2; }
   .wx-hourly__strip { grid-template-columns: repeat(24, minmax(36px, 1fr)); gap: 2px; overflow: hidden; padding-bottom: 0; }
   .wx-hour { min-width: 36px; }
   .wx-hour__rain { font-size: 11px; }
   /* la semaine en haut à droite, sur la hauteur des deux premières rangées : ses lignes s'espacent pour la remplir */
-  .wx-daily { grid-column: 8 / 13 !important; grid-row: 1 / 3; min-height: 0; }
+  .wx-daily { grid-column: 15 / 25 !important; grid-row: 1 / 3; min-height: 0; }
   .wx-daily__rows { gap: 6px; margin-top: 12px; }
   .wx-day { height: 38px; }
   /* détails resserrés sur deux colonnes ; air et pollens à leur droite ; les deux blocs de DROITE
      (semaine, radar) partagent les mêmes colonnes, donc le même bord gauche */
-  .wx-bottom { display: grid; grid-column: 1 / 8; grid-row: 3; grid-template-columns: 2fr 5fr; grid-template-rows: auto minmax(0, 1fr); gap: 16px; align-items: stretch; min-height: 0; }
+  .wx-bottom { display: grid; grid-column: 1 / 15; grid-row: 3 / 5; grid-template-columns: 2fr 5fr; gap: 16px; align-items: stretch; min-height: 0; }
   /* la carte Détails s'aligne sur la hauteur de ses voisines (air, pollens) plutôt que de s'arrêter à sa dernière ligne */
   .wx-details { grid-column: 1 !important; grid-row: 1; }
   .wx-side { display: grid; grid-column: 2; grid-row: 1; grid-template-columns: 2fr 3fr; gap: 16px; }
-  /* les attributions en bas à gauche, sous les détails : la place y est */
-  .wx-credit { grid-column: 1 / 3; grid-row: 2; align-self: end; text-align: left; order: 0; }
+  /* les attributions sous le radar, sur deux lignes réservées : un lieu sans vigilance n'y fait rien bouger */
+  .wx-credit { grid-column: 15 / 25; grid-row: 4; text-align: left; line-height: 18px; height: 36px; overflow: hidden; }
   .wx-pollen__row { grid-template-columns: 84px auto 1fr; }
   /* la carte ferme la page : en bas à droite, dans la hauteur qui reste, alignée sur la semaine */
-  .wx-radar { grid-column: 8 / 13 !important; grid-row: 3; height: auto; min-height: 0; }
+  .wx-radar { grid-column: 15 / 25 !important; grid-row: 3; height: auto; min-height: 0; }
+  .wx-radar > * { min-height: 0; }
   .wx-air { grid-column: auto !important; }
   .wx-pollen { grid-column: auto !important; }
 }

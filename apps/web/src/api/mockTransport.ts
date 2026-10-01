@@ -221,6 +221,16 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
       const state = { ...(home.state as StateFor<'weather'>), available: true, tempC: (home.state as StateFor<'weather'>).tempC + shift }
       return { state, forecast: sim.forecast(home.descriptor.id.replace(/^mock:/, '')), attribution: 'Simulation' }
     },
+    // une vigilance jaune orages jusqu'à minuit, pour voir la ligne ; rien hors de la « métropole » simulée
+    async getWeatherAlerts(lat, lon) {
+      const inFrance = lat > 41 && lat < 51.5 && lon > -5.5 && lon < 10
+      const midnight = new Date(); midnight.setHours(24, 0, 0, 0)
+      return {
+        area: inFrance ? 'Simulation' : null,
+        warnings: inFrance ? [{ type: 'thunderstorm', level: 'yellow' as const, onset: midnight.getTime() - 86_400_000, expires: midnight.getTime() }] : [],
+        attribution: 'Simulation', web: 'https://vigilance.meteofrance.fr/',
+      }
+    },
     // la simulation ne tient aucun journal : ses appareils ne déclarent pas la capacité, la vue ne demande rien
     async getJournal(deviceId) { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', `no journal in mock mode for ${deviceId}`) },
     async getConsumption(deviceId) { return mockConsumption(deviceId) },

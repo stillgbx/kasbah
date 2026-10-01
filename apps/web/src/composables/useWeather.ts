@@ -2,7 +2,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue'
 import type { StateFor, WeatherForecast } from '@kasbah/shared'
 import { createSharedComposable, StorageSerializers, useLocalStorage } from '@vueuse/core'
 import { getTransport } from '../api'
-import type { WeatherElsewhere, WeatherPlace } from '../api/transport'
+import type { WeatherAlerts, WeatherElsewhere, WeatherPlace } from '../api/transport'
 import { useDevicesStore } from '../stores/devices'
 
 // Le SEUL point d'accès à la météo côté UI : widget, vue Météo et scène 3D passent par ici, jamais
@@ -81,4 +81,25 @@ export function useWeatherAt(place: Ref<WeatherPlace | null>) {
   // un autre lieu : rien de l'ancien ne doit rester affiché sous le nouveau nom
   watch(() => place.value?.id, () => { data.value = null; failed.value = false; void load() })
   return { data, failed }
+}
+
+/** La vigilance météo d'une position (maison ou lieu choisi), relue à la cadence des prévisions. `null` = pas (encore) lue. */
+export function useWeatherAlerts(at: Ref<{ lat: number; lon: number } | undefined>) {
+  const data = ref<WeatherAlerts | null>(null)
+  let asked = 0
+  async function load(): Promise<void> {
+    const p = at.value
+    const ticket = ++asked
+    if (!p) { data.value = null; return }
+    try {
+      const r = await getTransport().getWeatherAlerts(p.lat, p.lon)
+      if (ticket === asked) data.value = r
+    } catch { if (ticket === asked) data.value = null }
+  }
+  let timer: ReturnType<typeof setInterval> | null = null
+  onMounted(() => { void load(); timer = setInterval(() => { void load() }, FORECAST_REFRESH_MS) })
+  onBeforeUnmount(() => { if (timer) clearInterval(timer) })
+  // un autre lieu : la vigilance de l'ancien ne doit pas rester sous le nouveau nom
+  watch(() => (at.value ? `${at.value.lat},${at.value.lon}` : ''), () => { data.value = null; void load() })
+  return { data }
 }

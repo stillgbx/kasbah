@@ -8,6 +8,7 @@ import { sendError } from '../../http/errors'
 import { OpenMeteoClient } from './client'
 import { ATTRIBUTION, HOME_ID, toDescriptor, toForecast, toPlaces, toStatePatch, toWeatherState } from './mapping'
 import type { AirQualityResponse, ForecastResponse } from './types'
+import { VIGILANCE_ATTRIBUTION, VIGILANCE_WEB, VigilanceClient } from './vigilance'
 
 // Plugin Open-Meteo : la météo au-dessus de la maison, lue sur une API libre, sans clé ni compte
 // (usage non commercial, attribution CC BY 4.0 portée par `meta.weather.attribution`). Un seul
@@ -50,6 +51,8 @@ export function createOpenMeteoPlugin(deps: OpenMeteoDeps = {}): DevicePlugin {
   let lastError: string | null = null
   /** Météo ailleurs (vue Météo), lue à la demande et gardée le temps d'un sondage : même règle que la maison. */
   const elsewhere = new Map<string, { at: number; forecast: ForecastResponse; airQuality: AirQualityResponse | null }>()
+  /** Vigilance Météo-France (flux MeteoAlarm), lue à la demande de la vue : maison ou ailleurs. */
+  let vigilance: VigilanceClient | null = null
 
   async function readElsewhere(lat: number, lon: number) {
     const key = `${lat.toFixed(2)},${lon.toFixed(2)}`
@@ -88,6 +91,11 @@ export function createOpenMeteoPlugin(deps: OpenMeteoDeps = {}): DevicePlugin {
       config = c.config as OpenMeteoConfig
       client = new OpenMeteoClient({
         lat: c.site.lat, lon: c.site.lon,
+        ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
+        ...(deps.requestTimeoutMs ? { requestTimeoutMs: deps.requestTimeoutMs } : {}),
+      })
+      vigilance = new VigilanceClient({
+        ttlMs: config.OPEN_METEO_POLL_MS, now: () => c.clock.now(),
         ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
         ...(deps.requestTimeoutMs ? { requestTimeoutMs: deps.requestTimeoutMs } : {}),
       })
@@ -142,6 +150,13 @@ export function createOpenMeteoPlugin(deps: OpenMeteoDeps = {}): DevicePlugin {
           ...(r.forecast.timezone ? { timezone: r.forecast.timezone } : {}),
           attribution: ATTRIBUTION,
         }
+      })
+      /** Vigilance du département d'un lieu ; `area: null` hors de la métropole (rien à lire). */
+      app.get('/alerts', async (req, reply) => {
+        const query = atQuerySchema.safeParse(req.query)
+        if (!query.success) return sendError(reply, 400, 'INVALID_QUERY', 'lat (-90 to 90) and lon (-180 to 180) expected')
+        const r = await vigilance!.at(query.data.lat, query.data.lon, ctx!.signal)
+        return { ...r, attribution: VIGILANCE_ATTRIBUTION, web: VIGILANCE_WEB }
       })
     },
     health(): PluginHealth {

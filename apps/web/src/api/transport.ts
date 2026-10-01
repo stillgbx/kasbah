@@ -37,6 +37,22 @@ export interface WeatherElsewhere {
   timezone?: string
   attribution: string
 }
+/** Une vigilance Météo-France (au moins jaune), en cours ou à venir. */
+export interface WeatherAlert {
+  /** Phénomène : `thunderstorm`, `wind`, `rain_flood`… ; `other` pour un inconnu. */
+  type: string
+  level: 'yellow' | 'orange' | 'red'
+  onset: number
+  expires: number
+}
+/** La vigilance du département d'un lieu ; `area: null` hors de la métropole (rien à lire). */
+export interface WeatherAlerts {
+  area: string | null
+  /** En cours d'abord, la plus forte en tête. Vide = vert. */
+  warnings: WeatherAlert[]
+  attribution: string
+  web: string
+}
 
 /**
  * Appairage de la passerelle Enphase, tel que l'UI le voit. Le jeton n'y figure jamais : seul le
@@ -415,6 +431,8 @@ export interface Transport {
   searchPlaces(query: string, lang: string): Promise<WeatherPlace[]>
   /** Météo actuelle et prévisions d'une autre position que la maison. */
   getWeatherAt(lat: number, lon: number): Promise<WeatherElsewhere>
+  /** Vigilance météo d'une position (Météo-France par MeteoAlarm, métropole seule). */
+  getWeatherAlerts(lat: number, lon: number): Promise<WeatherAlerts>
   /** Journal d'un appareil qui déclare la capacité `journal` (erreurs, avertissements consignés), du plus récent au plus ancien. */
   getJournal(deviceId: string): Promise<DeviceJournal>
   /** Historique de consommation (litres par pas, jamais un cumul) d'un appareil `water`, en trois séries : heure, jour, mois. */
