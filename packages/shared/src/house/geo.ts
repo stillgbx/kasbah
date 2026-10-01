@@ -33,8 +33,8 @@ export function geoToLocal(origin: GeoOrigin, p: { lat: number; lon: number; alt
 /**
  * Rayon « à la maison » autour de l'origine, en mètres. Plus tolérant que le polygone du terrain
  * (`sitePosition`, un test de DESSIN) : une voiture garée dans la rue devant la maison est rentrée.
- * Même valeur que les vues web (`VehiclesView`, `VehicleCard`, `HouseScene`), qui la déclarent encore
- * chacune pour elles.
+ * Partagé par le serveur (coordination voiture ↔ borne) et les vues web (`VehiclesView`, `VehicleCard`,
+ * `HouseScene`) : une seule valeur.
  */
 export const HOME_RADIUS_M = 120
 

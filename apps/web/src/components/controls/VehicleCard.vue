@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { geoDistance, type CommandInput, type DeviceDescriptor, type StateFor } from '@kasbah/shared'
+import { HOME_RADIUS_M, geoDistance, type CommandInput, type DeviceDescriptor, type StateFor } from '@kasbah/shared'
 import { formatDistance, formatKm, formatPercent, formatPower } from '../../lib/format'
 import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
@@ -12,7 +12,6 @@ const devices = useDevicesStore()
 const chargeRequested = computed(() => devices.isChargeRequested(props.descriptor.id))
 const emit = defineEmits<{ command: [cmd: CommandInput] }>()
 const house = useHouseStore()
-const HOME_RADIUS_M = 120
 
 const distance = computed(() => {
   const o = house.house?.origin

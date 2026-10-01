@@ -6,7 +6,7 @@ import {
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js'
 import {
-  boundsCenter, buildingBounds, computeHouseGeometry, deviceFloorZ, emptyReliefGrid, extendReliefGrid, isFlatRelief, parseRelief, serializeRelief, terrainHeight, geoDistance, indexHouse, longestEdgeYawDeg, offsetPolygon, pointInPolygon, resolveDefaults, resolveDeviceLevelId, sitePosition,
+  boundsCenter, buildingBounds, computeHouseGeometry, deviceFloorZ, emptyReliefGrid, extendReliefGrid, isFlatRelief, parseRelief, serializeRelief, terrainHeight, geoDistance, HOME_RADIUS_M, indexHouse, longestEdgeYawDeg, offsetPolygon, pointInPolygon, resolveDefaults, resolveDeviceLevelId, sitePosition,
   roofBounds, roomBounds, zoneBounds, openingCentre, openingGaps, openingLabel, planLength, surfaceAxes, surfaceGaps,
   assignParkings, atRest, mirekToRgb, xyToRgb, parkingGaps, parkingHost, parkingLabel, PARKING_SIDES,
   type DeviceDescriptor, type DeviceState, type House, type HouseDevice, type HouseGeometry, type HouseIndex, type Level, type OpeningRect, type Parking, type ParkingFix, type ParkingSide, type PlacedHouseDevice, type Relief, type ReliefGrid, type Vec2, type Vec3,
@@ -239,7 +239,6 @@ const PREPARE_PHOTOS_MS = 10_000
 /** Au-delà, la maison se montre même si des shaders compilent encore (la première image les finira). */
 const PREPARE_SHADERS_MS = 30_000
 
-const HOME_RADIUS_M = 120
 /** Émission d'une fenêtre dont la pièce est éclairée à fond, la nuit ; et son opacité alors. */
 const WINDOW_GLOW = 0.65
 const WINDOW_LIT_OPACITY = 0.6

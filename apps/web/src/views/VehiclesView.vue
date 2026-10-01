@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { estimateChargePowerW, geoDistance, type Capability, type CommandInput, type DeviceEntry, type StateFor } from '@kasbah/shared'
+import { HOME_RADIUS_M, estimateChargePowerW, geoDistance, type Capability, type CommandInput, type DeviceEntry, type StateFor } from '@kasbah/shared'
 import PageHeader from '../components/layout/PageHeader.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import ChargeLimitCard from '../components/vehicles/ChargeLimitCard.vue'
@@ -24,7 +24,6 @@ import { useHouseStore } from '../stores/house'
 const devices = useDevicesStore()
 const house = useHouseStore()
 const { t, locale } = useI18n()
-const HOME_RADIUS_M = 120
 const EMPTY = '—'
 const TIRES = ['fl', 'fr', 'rl', 'rr'] as const
 
