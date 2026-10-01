@@ -4,7 +4,7 @@ import pino from 'pino'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { Bus } from './bus'
-import { chargerToForce } from './chargeCoordination'
+import { chargerToForce, chargerToStop } from './chargeCoordination'
 import { PluginError, type DevicePlugin } from './plugin'
 import { PluginHost } from './plugin-host'
 import { DeviceRegistry } from './registry'
@@ -19,11 +19,11 @@ const car: DeviceDescriptor = { id: 'car:1', pluginId: 'car', externalId: '1', k
 const evse = (n: string, caps: DeviceDescriptor['capabilities'] = ['charge_control']): DeviceDescriptor =>
   ({ id: `evse:${n}`, pluginId: 'evse', externalId: n, kind: 'ev_charger', name: `Borne ${n}`, capabilities: caps, meta: {} })
 
-function world(o: { vehicle?: Record<string, unknown>; chargers?: { d: DeviceDescriptor; status: string }[] } = {}) {
+function world(o: { vehicle?: Record<string, unknown>; chargers?: { d: DeviceDescriptor; status: string }[]; car?: DeviceDescriptor } = {}) {
   const clock = new ManualClock(0)
   const registry = new DeviceRegistry(new Bus(), clock)
   const chargers = o.chargers ?? [{ d: evse('a'), status: 'connected' }]
-  registry.register('car', [car])
+  registry.register('car', [o.car ?? car])
   registry.register('evse', chargers.map((c) => c.d))
   registry.applyPatch(car.id, { available: true, soc: 16, pluggedIn: true, charging: false, location: { lat: HOME.lat, lon: HOME.lon, at: 0 }, ...o.vehicle } as never)
   for (const c of chargers) registry.applyPatch(c.d.id, { available: true, status: c.status } as never)
@@ -65,6 +65,31 @@ describe('quelle borne forcer', () => {
   })
 })
 
+/** La R5 : elle ne sait pas arrêter sa charge à distance, c'est la borne qui l'arrête. */
+const r5: DeviceDescriptor = { ...car, meta: { vehicle: { stopViaCharger: true } } }
+const stop: Command = { type: 'vehicle.stop_charge' }
+const charging = [{ d: evse('a'), status: 'charging' }]
+
+describe('quelle borne arrêter à la place du véhicule', () => {
+  it('véhicule qui s\'arrête par la borne, branché, à la maison, UNE borne en charge : celle-là', () => {
+    expect(chargerToStop(car.id, stop, world({ car: r5, chargers: charging }).registry.list(), HOME)).toBe('evse:a')
+  })
+
+  it('jamais pour un véhicule qui s\'arrête lui-même, ni pour le démarrage', () => {
+    expect(chargerToStop(car.id, stop, world({ chargers: charging }).registry.list(), HOME)).toBeUndefined()
+    expect(chargerToStop(car.id, start, world({ car: r5, chargers: charging }).registry.list(), HOME)).toBeUndefined()
+  })
+
+  it('rien si la borne ne charge pas, si DEUX chargent, si le véhicule est débranché ou loin', () => {
+    expect(chargerToStop(car.id, stop, world({ car: r5 }).registry.list(), HOME)).toBeUndefined()
+    const two = [{ d: evse('a'), status: 'charging' }, { d: evse('b'), status: 'charging' }]
+    expect(chargerToStop(car.id, stop, world({ car: r5, chargers: two }).registry.list(), HOME)).toBeUndefined()
+    expect(chargerToStop(car.id, stop, world({ car: r5, chargers: charging, vehicle: { pluggedIn: false } }).registry.list(), HOME)).toBeUndefined()
+    const away = { location: { lat: 47.4, lon: 5.2, at: 0 } }
+    expect(chargerToStop(car.id, stop, world({ car: r5, chargers: charging, vehicle: away }).registry.list(), HOME)).toBeUndefined()
+  })
+})
+
 describe('l\'hôte relaie', () => {
   async function hosted(evseFails = false) {
     const { registry, clock } = world()
@@ -89,8 +114,17 @@ describe('l\'hôte relaie', () => {
     const w = world()
     registry.register('car', [car]); registry.register('evse', [evse('a')])
     for (const e of w.registry.list()) registry.applyPatch(e.descriptor.id, e.state as never)
-    return { host, sent }
+    return { host, sent, registry }
   }
+
+  it('« Arrêter » un véhicule qui s\'arrête par la borne : la borne SEULE, rien au véhicule', async () => {
+    const { host, sent, registry } = await hosted()
+    registry.register('car', [r5])
+    registry.applyPatch('evse:a', { status: 'charging' } as never)
+    await host.execute(car.id, stop)
+    expect(sent).toEqual(['evse:a ev_charger.stop'])
+    await host.stopAll()
+  })
 
   it('« Charger » force la borne PUIS lance la voiture', async () => {
     const { host, sent } = await hosted()

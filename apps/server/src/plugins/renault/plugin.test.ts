@@ -195,16 +195,15 @@ describe('Renault — inventaire', () => {
     const devices = await plugin.discover()
     expect(devices).toEqual([{
       id: `renault:${VIN}`, pluginId: 'renault', externalId: VIN, kind: 'vehicle',
-      name: 'GA-123-BX', capabilities: ['soc', 'range', 'location', 'charge_limit', 'climate_precondition'],
-      meta: { manufacturer: 'Renault', vehicle: { climate: CLIMATE_FEATURES } },
+      name: 'GA-123-BX', capabilities: ['soc', 'range', 'location', 'charge_limit', 'charging', 'climate_precondition'],
+      meta: { manufacturer: 'Renault', vehicle: { climate: CLIMATE_FEATURES, stopViaCharger: true } },
     }])
   })
 
-  it('ne déclare aucune capacité de commande : l’UI ne proposera rien que le plugin refuserait', async () => {
+  it('ne déclare pas le verrouillage (404) : l’UI ne proposera rien que le plugin refuserait', async () => {
     const { plugin } = await setup({ session: { loginToken: LOGIN_TOKEN, personId: PERSON } })
     const [device] = await plugin.discover()
     expect(device!.capabilities).not.toContain('lock')
-    expect(device!.capabilities).not.toContain('charging')
   })
 
   it('sans compte lié, aucun appareil et une santé qui le dit', async () => {
@@ -331,6 +330,35 @@ describe('Renault — sondage', () => {
     expect(JSON.parse(write.body!)).toMatchObject({ socTarget: 70, socMin: SOC_LEVELS.socMin })
     // la cible est publiée tout de suite : Kamereon relit l'ANCIENNE valeur pendant quelques secondes
     expect(patches(ctx).at(-1)).toMatchObject({ chargeLimit: 70 })
+    await plugin.stop()
+  })
+
+  it('lancer la charge : relit les réglages, les réécrit programmes coupés, puis relit une minute plus tard', async () => {
+    const { plugin, renault, clock } = await running()
+    const posts = () => renault.calls.filter((c) => c.method === 'POST' && c.path.endsWith('/ev/settings'))
+    const before = posts().length
+    await plugin.execute(VIN, { type: 'vehicle.start_charge' })
+    expect(posts()).toHaveLength(before + 1)
+    const body = JSON.parse(posts().at(-1)!.body!) as { programs: { programActivationStatus: boolean }[]; chargeTimeStart: string }
+    expect(body.programs.every((p) => p.programActivationStatus === false)).toBe(true)
+    expect(body.chargeTimeStart).toBe(EV_SETTINGS.chargeTimeStart)
+    const reads = dataCalls(renault, '/battery-status')
+    clock.advance(60_000)
+    await flush()
+    expect(dataCalls(renault, '/battery-status')).toBe(reads + 1)
+    await plugin.stop()
+  })
+
+  it('une commande de réglages déjà en attente (409) : RATE_LIMITED, « réessayer », pas une panne', async () => {
+    const { plugin, renault } = await running()
+    renault.world.settingsPending = true
+    await expect(plugin.execute(VIN, { type: 'vehicle.start_charge' })).rejects.toMatchObject({ code: 'RATE_LIMITED' })
+    await plugin.stop()
+  })
+
+  it('arrêter : la R5 ne sait pas, le plugin le dit (le serveur arrête la borne avant d’en arriver là)', async () => {
+    const { plugin } = await running()
+    await expect(plugin.execute(VIN, { type: 'vehicle.stop_charge' })).rejects.toMatchObject({ code: 'UNSUPPORTED_COMMAND' })
     await plugin.stop()
   })
 

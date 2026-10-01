@@ -1,7 +1,7 @@
 import { DEFAULT_PLUGIN_SETTINGS, parseDeviceId, parseSceneId, type Command, type PluginHealth, type PluginInfo, type PluginSettings, type SceneRecall, type SceneUpdate, type DeviceConsumption, type DeviceJournal, type WeatherForecast } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import type { Logger } from 'pino'
-import { chargerToForce } from './chargeCoordination'
+import { chargerToForce, chargerToStop } from './chargeCoordination'
 import { createBackoff, type Backoff } from './backoff'
 import type { Bus } from './bus'
 import type { Clock } from './clock'
@@ -214,6 +214,14 @@ export class PluginHost {
    * d'envoyer la commande à la voiture.
    */
   async execute(deviceId: string, command: Command): Promise<void> {
+    // un véhicule qui ne sait pas s'arrêter (`meta.vehicle.stopViaCharger`) : c'est sa borne qui
+    // s'arrête, et rien ne part au véhicule, qui refuserait
+    const stopper = chargerToStop(deviceId, command, this.opts.registry.list(), this.opts.site())
+    if (stopper) {
+      await this.dispatch(stopper, { type: 'ev_charger.stop' })
+      this.opts.logger.info({ vehicle: deviceId, charger: stopper }, 'charger stopped for a vehicle that cannot stop itself')
+      return
+    }
     const charger = chargerToForce(deviceId, command, this.opts.registry.list(), this.opts.site())
     if (charger) {
       try {

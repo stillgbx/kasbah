@@ -94,6 +94,12 @@ export const deviceMetaSchema = z.object({
        */
       heatWhileOff: z.boolean().optional(),
     }).optional(),
+    /**
+     * Ce véhicule ne sait pas ARRÊTER sa charge à distance : c'est la borne qui l'arrête (la R5,
+     * « use charger to stop » chez renault-api). Le serveur relaie alors `vehicle.stop_charge` à la
+     * borne où il est branché. Absent = le véhicule s'arrête lui-même.
+     */
+    stopViaCharger: z.boolean().optional(),
   }).optional(),
   /**
    * Le plugin RETIENT cet appareil même absent du réseau (un Cast éteint ne s'annonce plus, et son

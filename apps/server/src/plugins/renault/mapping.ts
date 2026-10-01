@@ -9,11 +9,12 @@ import { personAccountSchema, vehicleLinkSchema, vehiclesSchema, type PersonAcco
 // nature de `chargingStatus`).
 
 /**
- * Ce que la R5 dit, et la seule chose qu'elle laisse changer : sa CIBLE de charge (`ev/soc-levels`).
- * Verrouillage, pression, démarrage à distance : la voiture répond 404 ; charge en pause/reprise :
- * 403. Rien d'autre n'est donc déclaré, et l'UI ne propose que ce que le plugin honore.
+ * Ce que la R5 dit, et ce qu'elle laisse changer : sa CIBLE de charge (`ev/soc-levels`), la
+ * climatisation, et le DÉMARRAGE de la charge (`chargeStartPayload`). Verrouillage, pression : la
+ * voiture répond 404 ; charge en pause/reprise : 403. L'ARRÊT de la charge, `charging` le déclare
+ * aussi mais c'est la borne qui l'exécute (`meta.vehicle.stopViaCharger`, cf. `toDescriptor`).
  */
-export const CAPABILITIES: readonly Capability[] = ['soc', 'range', 'location', 'charge_limit', 'climate_precondition']
+export const CAPABILITIES: readonly Capability[] = ['soc', 'range', 'location', 'charge_limit', 'charging', 'climate_precondition']
 
 /**
  * La climatisation de la R5, telle que son appli la montre (captures de l'utilisateur, 2026-10-01) :
@@ -76,7 +77,9 @@ export function toDescriptor(link: VehicleLink, capabilities: readonly Capabilit
     capabilities: [...capabilities],
     // le fabricant, écrit comme il s'écrit : l'UI affiche sinon l'id du plugin (« renault »), et le
     // constructeur, lui, CRIE ses libellés (`brand.label` = « RENAULT »)
-    meta: { manufacturer: 'Renault', vehicle: { ...(color ? { color } : {}), climate: CLIMATE_FEATURES } },
+    // la R5 n'arrête pas sa charge à distance (« use charger to stop », renault-api) : le serveur
+    // arrête la borne à sa place
+    meta: { manufacturer: 'Renault', vehicle: { ...(color ? { color } : {}), climate: CLIMATE_FEATURES, stopViaCharger: true } },
   }
 }
 
@@ -157,6 +160,35 @@ export function socTargetPayload(levels: unknown, percent: number, now: number):
     ...(levels as Record<string, unknown>),
     socTarget: percent,
     lastEnergyUpdateTimestamp: new Date(now).toISOString(),
+  }
+}
+
+/**
+ * Lancer la charge MAINTENANT. Ce que fait l'appli MY Renault, relevé par renault-api pour la R5
+ * (`actions/charge-start-via-settings`, ticket n°1348) : réécrire les réglages VE avec tous les
+ * programmes de charge DÉSACTIVÉS — c'est la charge programmée qui fait attendre la voiture. Même
+ * règle que `wakePayload` pour le reste : rejoué tel quel. Les programmes coupés ne sont PAS
+ * restaurés (choix de l'utilisateur du 2026-10-01 : les rallumer couperait la charge en cours) ;
+ * `deactivated` dit combien l'étaient, pour le journal.
+ *
+ * Pas encore essayé sur la vraie voiture. `chargeModeRq` (`SCHEDULED` à la capture) n'est pas
+ * touché : renault-api ne le touche pas, et ses autres valeurs sont inconnues.
+ */
+export function chargeStartPayload(settings: unknown, now: number): { body: Record<string, unknown>; deactivated: number } | null {
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return null
+  const s = settings as Record<string, unknown>
+  let deactivated = 0
+  const programs = Array.isArray(s.programs)
+    ? s.programs.map((p: unknown) => {
+      if (!p || typeof p !== 'object') return p
+      const program = p as Record<string, unknown>
+      if (program.programActivationStatus === true) deactivated++
+      return { ...program, programActivationStatus: false }
+    })
+    : undefined
+  return {
+    body: { ...s, ...(programs ? { programs } : {}), lastSettingsUpdateTimestamp: new Date(now).toISOString() },
+    deactivated,
   }
 }
 

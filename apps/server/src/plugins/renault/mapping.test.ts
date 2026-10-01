@@ -3,7 +3,7 @@ import {
   ACCOUNT_ID, BATTERY_CHARGING, BATTERY_CHARGING_LIAR, BATTERY_UNPLUGGED, BATTERY_WAITING, COCKPIT_V1, COCKPIT_V2_EASTER_EGG,
   EV_SETTINGS, HVAC_STATUS, LOCATION, PERSON, SOC_LEVELS, VEHICLES, VIN,
 } from './__fixtures__/kamereon'
-import { commandSummary, inWindow, socTargetPayload, toAccounts, toDescriptor, toStatePatch, toVehicleLinks, vehicleName, wakePayload, CLIMATE_FEATURES, climateSettingsPayload, hvacStartPayload, hvacSocThreshold } from './mapping'
+import { chargeStartPayload, commandSummary, inWindow, socTargetPayload, toAccounts, toDescriptor, toStatePatch, toVehicleLinks, vehicleName, wakePayload, CLIMATE_FEATURES, climateSettingsPayload, hvacStartPayload, hvacSocThreshold } from './mapping'
 
 // Tout ce fichier travaille sur la CAPTURE du 2026-09-14, pas sur la documentation. Trois pièges
 // que seule la capture révèle sont testés nommément : le `cockpit` v2 farceur, le flottant de
@@ -26,7 +26,8 @@ describe('comptes et véhicules', () => {
     const d = toDescriptor(links[0]!)
     expect(d).toMatchObject({ id: `renault:${VIN}`, externalId: VIN, kind: 'vehicle', name: 'AA123BB' })
     // la cible de charge et la climatisation : rien d'autre, l'UI grise le reste
-    expect(d.capabilities).toEqual(['soc', 'range', 'location', 'charge_limit', 'climate_precondition'])
+    expect(d.capabilities).toEqual(['soc', 'range', 'location', 'charge_limit', 'charging', 'climate_precondition'])
+    expect(d.meta.vehicle?.stopViaCharger).toBe(true)
     expect(d.meta.vehicle?.climate).toEqual(CLIMATE_FEATURES)
   })
 
@@ -182,6 +183,26 @@ describe('cible de charge', () => {
   it('n’invente rien quand les niveaux ne sont pas un objet', () => {
     expect(socTargetPayload(null, 70, NOW)).toBeNull()
     expect(socTargetPayload([80], 70, NOW)).toBeNull()
+  })
+})
+
+describe('lancer la charge', () => {
+  it('coupe les programmes de charge ACTIFS, garde tout le reste, horodatage neuf', () => {
+    const active = { ...EV_SETTINGS, programs: [{ ...EV_SETTINGS.programs[0]!, programActivationStatus: true }, { ...EV_SETTINGS.programs[0]!, programDepartureTime: '07:00:00' }] }
+    const { body, deactivated } = chargeStartPayload(active, NOW)!
+    expect(deactivated).toBe(1)
+    const programs = body.programs as { programActivationStatus: boolean; programDepartureTime: string }[]
+    expect(programs.map((p) => p.programActivationStatus)).toEqual([false, false])
+    expect(programs.map((p) => p.programDepartureTime)).toEqual(['20:00:00', '07:00:00'])
+    expect(body).toMatchObject({ chargeTimeStart: '12:00', chargeDuration: 420, chargeModeRq: 'SCHEDULED', preconditioningTemperature: 21 })
+    expect(body.lastSettingsUpdateTimestamp).toBe(new Date(NOW).toISOString())
+  })
+
+  it('aucun programme actif : rien de coupé, les réglages rejoués tels quels', () => {
+    const { body, deactivated } = chargeStartPayload(EV_SETTINGS, NOW)!
+    expect(deactivated).toBe(0)
+    expect(body.programs).toEqual(EV_SETTINGS.programs)
+    expect(chargeStartPayload(null, NOW)).toBeNull()
   })
 })
 

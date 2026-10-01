@@ -13,7 +13,7 @@ import {
 } from './auth'
 import { DEFAULT_RATE_PER_HOUR, RenaultClient, carDataPath, isDeferred, isEndpointUnavailable } from './client'
 import {
-  climateSettingsPayload, commandSummary, hvacSocThreshold, hvacStartPayload, inWindow, socTargetPayload, toAccounts, toDescriptor, toStatePatch,
+  chargeStartPayload, climateSettingsPayload, commandSummary, hvacSocThreshold, hvacStartPayload, inWindow, socTargetPayload, toAccounts, toDescriptor, toStatePatch,
   toVehicleLinks, wakePayload, type VehicleReadings,
 } from './mapping'
 import type { VehicleLink } from './types'
@@ -372,9 +372,10 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
     },
 
     /**
-     * Deux commandes : `vehicle.refresh` (relire MAINTENANT) et la CIBLE de charge, le seul réglage
-     * que cette plateforme laisse écrire. Chacune vient avec une capacité que le plugin déclare ; ne
-     * pas l'honorer ferait proposer par l'UI un bouton que le plugin refuserait.
+     * `vehicle.refresh` (relire MAINTENANT), la CIBLE de charge, la climatisation et le DÉMARRAGE de
+     * la charge. Chacune vient avec une capacité que le plugin déclare ; ne pas l'honorer ferait
+     * proposer par l'UI un bouton que le plugin refuserait. L'arrêt de la charge, la R5 ne le sait
+     * pas : le serveur arrête la borne à sa place (`meta.vehicle.stopViaCharger`).
      */
     async execute(externalId: string, command: Command): Promise<void> {
       if (command.type === 'vehicle.set_charge_limit') {
@@ -430,6 +431,38 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
         })
         log().info({ vin: externalId, command: commandSummary(res) }, 'Renault climate settings written')
         return
+      }
+      if (command.type === 'vehicle.start_charge') {
+        const id = accountId
+        if (!id) throw new PluginError('NEEDS_PAIRING', 'no Kamereon account for this person')
+        // les réglages se LISENT d'abord : seuls les programmes de charge actifs changent (cf. `chargeStartPayload`)
+        const settings = await client!.carData({ accountId: id, vin: externalId, endpoint: 'ev/settings', version: 1, adapter: 'kcm', signal: ctx?.signal })
+        const now = ctx!.clock.now()
+        const payload = chargeStartPayload(settings, now)
+        if (!payload) throw new PluginError('UPSTREAM_ERROR', 'Renault gave no EV settings back to rewrite')
+        let res: unknown
+        try { res = await client!.writeEvSettings({ accountId: id, vin: externalId, body: payload.body, signal: ctx?.signal }) }
+        catch (err) {
+          // une commande de réglages déjà en attente (409) : pas une panne, mais rien n'est parti
+          if (isDeferred(err)) throw new PluginError('RATE_LIMITED', 'a Renault settings command is already pending for this vehicle: try again in a few minutes', { cause: err })
+          throw err
+        }
+        // c'est aussi une écriture de réglages : le réveil de charge ne doit pas en reposter une derrière (409)
+        lastWake.set(externalId, now)
+        log().info({ vin: externalId, deactivatedPrograms: payload.deactivated, command: commandSummary(res) }, 'Renault charge start sent')
+        // une COMMANDE déposée, pas un effet : on relit une minute plus tard pour CONSTATER la charge
+        void (async () => {
+          await sleep(ctx!.clock, CLIMATE_FOLLOW_UP_MS, ctx!.signal)
+          if (!ctx || ctx.signal.aborted) return
+          try { await readVehicle(externalId, ctx.signal) }
+          catch (err) { log().debug({ err, vin: externalId }, 'Renault follow-up read after a charge start failed') }
+        })()
+        return
+      }
+      if (command.type === 'vehicle.stop_charge') {
+        // le serveur arrête la BORNE à la place (`meta.vehicle.stopViaCharger`) ; on n'arrive ici que
+        // s'il n'en a trouvé aucune, unique, en train de charger à la maison
+        throw new PluginError('UNSUPPORTED_COMMAND', 'this Renault cannot stop its charge remotely, and no single charger is charging it at home: stop it from the charger')
       }
       if (command.type !== 'vehicle.refresh') {
         throw new PluginError('UNSUPPORTED_COMMAND', `Renault plugin does not support ${command.type} yet`)
