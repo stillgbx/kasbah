@@ -30,7 +30,7 @@ describe('descripteur', () => {
     // phase 1 : lecture seule — ni `lock` ni `charging`, l'UI n'a donc pas à proposer ces boutons.
     // `charge_power` n'est pas une commande : elle dit que la voiture DONNE sa puissance de charge,
     // et dispense l'UI de la faire estimer (donc de demander la capacité de la batterie).
-    expect(d.capabilities).toEqual(['soc', 'range', 'location', 'charge_power', 'charge_limit'])
+    expect(d.capabilities).toEqual(['soc', 'range', 'location', 'charge_power', 'charge_limit', 'climate_precondition'])
   })
 
   it('la gamme se lit au 4e caractère du VIN, et sert de nom à défaut', () => {
@@ -103,6 +103,8 @@ describe('lecture complète (`vehicle_data`)', () => {
     expect(p.odometerKm).toBeCloseTo(61234.01676 * MILE, 0)
     expect(p.insideTempC).toBe(25.8)
     expect(p.outsideTempC).toBe(23)
+    expect(p.climateOn).toBe(false)
+    expect(p.climateTargetC).toBe(15)
     expect(p.sleepState).toBe('online')
   })
 

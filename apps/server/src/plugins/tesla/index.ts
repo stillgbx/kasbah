@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import type { Command, DeviceDescriptor, PluginHealth, VehicleFinish, VehicleSleepState } from '@kasbah/shared'
+import type { Command, CommandOf, DeviceDescriptor, PluginHealth, VehicleFinish, VehicleSleepState } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { fetch as undiciFetch } from 'undici'
 import { z } from 'zod'
@@ -79,6 +79,9 @@ export type TeslaConfig = z.infer<typeof teslaConfigSchema>
 
 /** Après un réveil demandé, délai avant de relire : le véhicule met quelques secondes à répondre. */
 const WAKE_FOLLOW_UP_MS = 15_000
+/** Préconditionnement d'une voiture endormie : la veille relue (liste, gratuite) à ce pas, jusqu'à ce plafond. */
+const CLIMATE_WAKE_POLL_MS = 5_000
+const CLIMATE_WAKE_MAX_MS = 90_000
 /** Sections de `vehicle_data` lues. `location_data` est OBLIGATOIRE pour la position depuis le logiciel 2023.38. */
 const DATA_ENDPOINTS = ['charge_state', 'drive_state', 'vehicle_state', 'climate_state', 'location_data', 'vehicle_config'].join(';')
 
@@ -325,6 +328,76 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     void runPoll()
   }
 
+  // ---- climatisation ------------------------------------------------------------------------
+
+  /** Une commande REST, refusée en HTTP 200 par `result: false` (cf. la limite de charge). */
+  async function vehicleCommand(vin: string, name: string, body?: unknown): Promise<void> {
+    const res = commandResultSchema.parse(await client!.request(
+      'POST', `/api/1/vehicles/${encodeURIComponent(vin)}/command/${name}`, { body, signal: ctx!.signal },
+    ))
+    if (res.response?.result !== true) {
+      const reason = res.response?.reason
+      throw new PluginError('UPSTREAM_ERROR', `Tesla refused ${name}${reason ? `: ${reason}` : ''}`)
+    }
+  }
+
+  /** La consigne d'abord (même valeur des deux côtés), puis la marche ou l'arrêt ; l'état suit sans relecture. */
+  async function climateCommand(vin: string, command: CommandOf<'vehicle.climate_start'> | CommandOf<'vehicle.climate_stop'>): Promise<void> {
+    if (command.type === 'vehicle.climate_stop') {
+      await vehicleCommand(vin, 'auto_conditioning_stop')
+      ctx!.emitState(vin, { climateOn: false })
+      log().info({ vin }, 'Tesla climate stopped')
+      return
+    }
+    if (command.targetTempC !== undefined) {
+      await vehicleCommand(vin, 'set_temps', { driver_temp: command.targetTempC, passenger_temp: command.targetTempC })
+    }
+    await vehicleCommand(vin, 'auto_conditioning_start')
+    ctx!.emitState(vin, { climateOn: true, ...(command.targetTempC !== undefined ? { climateTargetC: command.targetTempC } : {}) })
+    log().info({ vin, targetTempC: command.targetTempC }, 'Tesla climate started')
+  }
+
+  /**
+   * Préconditionner. Éveillée, la commande part tout de suite. Endormie — le cas normal d'un matin —,
+   * on la RÉVEILLE : c'est l'objet même de la commande, et l'utilisateur l'a voulu ainsi (accord du
+   * 2026-10-01, y compris depuis une automatisation). Le réveil met une dizaine de secondes, bien plus
+   * que le délai d'une commande : `execute` rend la main à l'accusé du réveil, la suite tourne derrière
+   * (veille relue par la liste, gratuite, toutes les `CLIMATE_WAKE_POLL_MS`), puis une lecture
+   * complète CONSTATE l'effet. Un échec en arrière-plan se lit dans le journal du serveur.
+   */
+  async function startClimate(vin: string, command: CommandOf<'vehicle.climate_start'>): Promise<void> {
+    const track = vehicles.get(vin)!
+    if (track.sleepState === 'online') {
+      try { await climateCommand(vin, command); return }
+      catch (err) { if (!(err instanceof PluginError && err.code === 'DEVICE_UNAVAILABLE')) throw err }
+    }
+    await client!.request('POST', `/api/1/vehicles/${encodeURIComponent(vin)}/wake_up`, { signal: ctx!.signal })
+    log().info({ vin }, 'Tesla vehicle woken to start its climate')
+    track.restUntil = 0
+    void (async () => {
+      const deadline = ctx!.clock.now() + CLIMATE_WAKE_MAX_MS
+      try {
+        while (ctx!.clock.now() < deadline) {
+          await sleep(ctx!.clock, CLIMATE_WAKE_POLL_MS, ctx!.signal)
+          if (ctx!.signal.aborted) return
+          adoptList(await listVehicles())
+          const t = vehicles.get(vin)
+          if (!t) return
+          t.sleepState = toSleepState(t.summary.state)
+          ctx!.emitState(vin, toSleepPatch(t.summary))
+          if (t.sleepState !== 'online') continue
+          await climateCommand(vin, command)
+          await sleep(ctx!.clock, WAKE_FOLLOW_UP_MS, ctx!.signal)
+          if (!ctx!.signal.aborted && takeBudget()) await readVehicle(vin)
+          return
+        }
+        log().warn({ vin, waitedMs: CLIMATE_WAKE_MAX_MS }, 'Tesla vehicle did not wake up: climate not started')
+      } catch (err) {
+        if (!ctx!.signal.aborted) log().warn({ err, vin }, 'Tesla climate start failed after wake')
+      }
+    })()
+  }
+
   // ---- enregistrement du domaine ------------------------------------------------------------
 
   /**
@@ -438,6 +511,16 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
         }
         ctx!.emitState(externalId, { chargeLimit: command.percent })
         log().info({ vin: externalId, percent: command.percent }, 'Tesla charge limit set')
+        return
+      }
+      if (command.type === 'vehicle.climate_stop') {
+        // endormie, la voiture n'a pas sa clim en marche : rien à arrêter, et surtout rien à réveiller
+        if (vehicles.get(externalId)!.sleepState !== 'online') { ctx!.emitState(externalId, { climateOn: false }); return }
+        await climateCommand(externalId, command)
+        return
+      }
+      if (command.type === 'vehicle.climate_start') {
+        await startClimate(externalId, command)
         return
       }
       if (command.type !== 'vehicle.wake') {

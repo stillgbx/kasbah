@@ -182,6 +182,29 @@ async function wake(v: VehicleEntry): Promise<void> {
 }
 // le véhicule a ouvert les yeux : le bouton a fini son travail (et cède la place à « Actualiser »)
 watch(vehicles, (list) => { for (const v of list) if (v.state.sleepState === 'online') stopWaking(v.descriptor.id) })
+
+/**
+ * Préconditionner l'habitacle. Endormie, la voiture est RÉVEILLÉE par le plugin avant la commande :
+ * l'accusé arrive en une seconde, la clim une vingtaine plus tard. Comme pour le réveil, le bouton
+ * tient l'attente jusqu'à l'effet constaté (`climateOn`), ou `WAKE_MAX_MS` au plus. La consigne est
+ * celle que la voiture garde : la carte ne la change pas (une automatisation le peut).
+ */
+const warming = ref<Record<string, true>>({})
+function stopWarming(id: string): void {
+  if (!(id in warming.value)) return
+  const next = { ...warming.value }
+  delete next[id]
+  warming.value = next
+}
+const climateBusy = (v: VehicleEntry) => devices.isPending(v.descriptor.id) || v.descriptor.id in warming.value
+async function toggleClimate(v: VehicleEntry): Promise<void> {
+  const id = v.descriptor.id
+  if (v.state.climateOn) { await send(id, { type: 'vehicle.climate_stop' }); return }
+  warming.value = { ...warming.value, [id]: true }
+  if (await send(id, { type: 'vehicle.climate_start' })) setTimeout(() => stopWarming(id), WAKE_MAX_MS)
+  else stopWarming(id)
+}
+watch(vehicles, (list) => { for (const v of list) if (v.state.climateOn) stopWarming(v.descriptor.id) })
 /** Sous la carte : où est la voiture par rapport à la maison, et son kilométrage. */
 const caption = (s: StateFor<'vehicle'>) =>
   `${location(s)}${s.odometerKm ? ` · ${t('vehicle.odometer')} ${formatKm(s.odometerKm, locale.value)}` : ''}`
@@ -293,6 +316,14 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
             <button v-if="has(v, 'charging') && v.state.pluggedIn" type="button" class="pill" :data-on="v.state.charging ? '1' : '0'" :disabled="!v.state.available"
                     @click="send(v.descriptor.id, { type: v.state.charging ? 'vehicle.stop_charge' : 'vehicle.start_charge' })">
               {{ v.state.charging ? $t('vehicle.stopCharge') : $t('vehicle.startCharge') }}
+            </button>
+            <!-- libellé FIXE, l'état se lit à la teinte (`data-on`) : le bouton ne change pas de largeur -->
+            <button v-if="has(v, 'climate_precondition')" type="button" class="pill" :data-on="v.state.climateOn ? '1' : '0'"
+                    :disabled="!v.state.available || climateBusy(v)" :aria-busy="climateBusy(v)" :aria-pressed="v.state.climateOn === true"
+                    :title="v.state.climateOn ? $t('vehicle.climateStopHint') : asleep(v.state) ? $t('vehicle.climateWakeHint') : $t('vehicle.climateHint')"
+                    @click="toggleClimate(v)">
+              <v-progress-circular v-if="climateBusy(v)" indeterminate size="16" width="2" />
+              <StrokeIcon v-else name="thermostat" :size="16" />{{ $t('vehicle.climate') }}
             </button>
             <!-- réveiller est un geste explicite (Tesla le facture) : jamais automatique, proposé seulement quand ça dort -->
             <button v-if="asleep(v.state)" type="button" class="pill" :disabled="!v.state.available || busy(v)"

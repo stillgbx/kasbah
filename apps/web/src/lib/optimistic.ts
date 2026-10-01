@@ -83,6 +83,8 @@ export function optimisticPatch(state: DeviceState, cmd: CommandInput): Partial<
         case 'vehicle.unlock': return { locked: false } as Partial<DeviceState>
         case 'vehicle.set_charge_limit': return { chargeLimit: cmd.percent } as Partial<DeviceState>
         case 'vehicle.stop_charge': return { charging: false } as Partial<DeviceState>
+        // l'arrêt seul : la marche d'une voiture endormie attend son réveil, l'annoncer d'avance mentirait
+        case 'vehicle.climate_stop': return { climateOn: false } as Partial<DeviceState>
         default: return null
       }
     case 'pet_feeder':

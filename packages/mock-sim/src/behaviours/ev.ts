@@ -41,7 +41,7 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
   }
   const dev: SimDevice<'vehicle'> = {
     descriptor: descriptor(externalId, 'vehicle', o.name, [
-      'soc', 'range', 'location', 'lock', 'charging', 'charge_limit',
+      'soc', 'range', 'location', 'lock', 'charging', 'charge_limit', 'climate_precondition',
       // pas de borne, pas de puissance à dire : ce véhicule-là se fait estimer comme une vraie R5
       ...((o.chargerPowerW ?? 7400) > 0 ? ['charge_power' as const] : []),
     ], {
@@ -55,6 +55,7 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
       // ce qu'un vrai véhicule connecté dit aussi : la simulation le fournit pour que l'UI s'essaie dessus
       sleepState: 'asleep', gear: 'P', speedKmh: 0, headingDeg: bearing(o.home, o.work),
       tirePressureBar: { fl: 2.9, fr: 2.9, rl: 2.95, rr: 2.95 }, insideTempC: 21.5, outsideTempC: 17,
+      climateOn: false, climateTargetC: 20,
     },
     tick(ctx) {
       const s = dev.state
@@ -91,7 +92,7 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
       s.gear = driving ? 'D' : 'P'
       if (driving) s.headingDeg = phase === 'toWork' ? bearing(o.home, o.work) : bearing(o.work, o.home)
       s.speedKmh = driving ? Math.round((32 / tripMin) * 60) : 0
-      s.sleepState = driving || s.charging ? 'online' : 'asleep'
+      s.sleepState = driving || s.charging || s.climateOn ? 'online' : 'asleep'
       s.readAt = ctx.simTime
     },
     apply(cmd) {
@@ -103,6 +104,9 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
         case 'vehicle.stop_charge': s.chargeLimit = Math.floor(s.soc); break
         case 'vehicle.set_charge_limit': s.chargeLimit = clamp(Math.round(cmd.percent), 50, 100); break
         case 'vehicle.wake': s.sleepState = 'online'; break
+        // comme la vraie : le préconditionnement réveille la voiture, et la tient éveillée
+        case 'vehicle.climate_start': s.sleepState = 'online'; s.climateOn = true; if (cmd.targetTempC !== undefined) s.climateTargetC = cmd.targetTempC; break
+        case 'vehicle.climate_stop': s.climateOn = false; break
         case 'vehicle.refresh': break
         default: throw new SimError('UNSUPPORTED_COMMAND', `${cmd.type} on vehicle`)
       }

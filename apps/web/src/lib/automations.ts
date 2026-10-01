@@ -92,6 +92,9 @@ export const COMMAND_CHOICES: readonly CommandChoice[] = [
   choice({ key: 'vehicle.unlock', kind: 'vehicle', requires: 'lock', build: () => ({ type: 'vehicle.unlock' }), matches: is('vehicle.unlock') }),
   choice({ key: 'vehicle.start_charge', kind: 'vehicle', requires: 'charging', build: () => ({ type: 'vehicle.start_charge' }), matches: is('vehicle.start_charge') }),
   choice({ key: 'vehicle.stop_charge', kind: 'vehicle', requires: 'charging', build: () => ({ type: 'vehicle.stop_charge' }), matches: is('vehicle.stop_charge') }),
+  // bornes de Tesla (15-28 °C, celles du contrat) ; la voiture endormie est réveillée par le plugin
+  choice({ key: 'vehicle.climate_start', kind: 'vehicle', requires: 'climate_precondition', param: { type: 'number', min: 15, max: 28, step: 0.5, unit: '°C' }, build: (p) => ({ type: 'vehicle.climate_start', targetTempC: Number(p ?? 20) }), matches: is('vehicle.climate_start') }),
+  choice({ key: 'vehicle.climate_stop', kind: 'vehicle', requires: 'climate_precondition', build: () => ({ type: 'vehicle.climate_stop' }), matches: is('vehicle.climate_stop') }),
   choice({ key: 'ev_charger.start', kind: 'ev_charger', requires: 'charge_control', build: () => ({ type: 'ev_charger.start' }), matches: is('ev_charger.start') }),
   choice({ key: 'ev_charger.stop', kind: 'ev_charger', requires: 'charge_control', build: () => ({ type: 'ev_charger.stop' }), matches: is('ev_charger.stop') }),
   choice({ key: 'pet_fountain.on', kind: 'pet_fountain', requires: 'on_off', build: () => ({ type: 'pet_fountain.set_power', on: true }), matches: (c) => c.type === 'pet_fountain.set_power' && c.on }),
@@ -118,6 +121,7 @@ export function paramOf(cmd: CommandInput): number | string | undefined {
     case 'media_player.play_url': return cmd.url
     case 'climate.set_mode': return cmd.mode
     case 'climate.set_target_temp': return cmd.targetTempC
+    case 'vehicle.climate_start': return cmd.targetTempC
     default: return undefined
   }
 }

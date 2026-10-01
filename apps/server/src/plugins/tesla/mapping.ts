@@ -21,11 +21,11 @@ const MILE_KM = 1.609344
 export const READ_CAPABILITIES = ['soc', 'range', 'location', 'charge_power'] as const
 
 /**
- * Ce que le véhicule ACCEPTE qu'on change. Seule la limite de charge pour l'instant : c'est un
- * réglage, pas un geste — la voiture ne bouge pas, ne s'ouvre pas, et la valeur est bornée par le
- * contrat (50-100 %). Verrouiller et lancer la charge restent à faire.
+ * Ce que le véhicule ACCEPTE qu'on change : la limite de charge (un réglage borné par le contrat) et
+ * le préconditionnement de l'habitacle — ni l'un ni l'autre ne fait bouger ni ouvrir la voiture.
+ * Verrouiller et lancer la charge restent à faire.
  */
-export const WRITE_CAPABILITIES = ['charge_limit'] as const
+export const WRITE_CAPABILITIES = ['charge_limit', 'climate_precondition'] as const
 
 /** Le 4e caractère d'un VIN Tesla est la gamme : S, 3, X, Y (et C pour le Cybertruck). */
 export function modelFromVin(vin: string): string | undefined {
@@ -185,6 +185,8 @@ export function toDataPatch(d: VehicleData): StatePatch<'vehicle'> {
 
   if (defined(cl?.inside_temp)) patch.insideTempC = round(cl.inside_temp, 1)
   if (defined(cl?.outside_temp)) patch.outsideTempC = round(cl.outside_temp, 1)
+  if (defined(cl?.is_climate_on)) patch.climateOn = cl.is_climate_on
+  if (defined(cl?.driver_temp_setting)) patch.climateTargetC = round(cl.driver_temp_setting, 1)
   return patch
 }
 

@@ -576,6 +576,81 @@ describe('commandes', () => {
   })
 })
 
+describe('climatisation', () => {
+  const commandPaths = (t: ReturnType<typeof fakeTesla>) => t.calls.filter((c) => c.path.includes('/command/')).map((c) => c.path.split('/command/')[1])
+  const flush = async () => { for (let i = 0; i < 10; i++) await settle() }
+
+  it('éveillée : la consigne puis la marche, l’état publié sans relecture ni réveil', async () => {
+    const tesla = fakeTesla()
+    tesla.world.list = VEHICLES_ONLINE
+    const { plugin, ctx, tesla: t } = await started({ tesla, tokens: linkedTokens() })
+    await plugin.discover()
+    await plugin.execute(VIN, { type: 'vehicle.climate_start', targetTempC: 20 })
+    expect(commandPaths(t)).toEqual(['set_temps', 'auto_conditioning_start'])
+    expect(t.calls.find((c) => c.path.endsWith('/set_temps'))!.body).toBe('{"driver_temp":20,"passenger_temp":20}')
+    expect(t.calls.some((c) => c.path.endsWith('/wake_up'))).toBe(false)
+    expect(dataCalls(t)).toBe(0)
+    expect(patches(ctx).at(-1)).toMatchObject({ climateOn: true, climateTargetC: 20 })
+  })
+
+  it('sans consigne : la voiture garde la sienne, seule la marche part', async () => {
+    const tesla = fakeTesla()
+    tesla.world.list = VEHICLES_ONLINE
+    const { plugin, tesla: t } = await started({ tesla, tokens: linkedTokens() })
+    await plugin.discover()
+    await plugin.execute(VIN, { type: 'vehicle.climate_start' })
+    expect(commandPaths(t)).toEqual(['auto_conditioning_start'])
+  })
+
+  it('endormie : réveillée, la commande attend qu’elle soit en ligne, puis une lecture constate l’effet', async () => {
+    const tesla = fakeTesla()
+    const { plugin, ctx, clock, tesla: t } = await started({ tesla, tokens: linkedTokens() })
+    await plugin.discover()
+    await plugin.execute(VIN, { type: 'vehicle.climate_start', targetTempC: 21 })
+    expect(t.calls.at(-1)).toMatchObject({ method: 'POST', path: `/api/1/vehicles/${VIN}/wake_up` })
+    expect(commandPaths(t)).toEqual([])               // rien avant le réveil constaté
+    clock.advance(5_000); await flush()               // toujours endormie : on attend
+    expect(commandPaths(t)).toEqual([])
+    tesla.world.list = VEHICLES_ONLINE
+    clock.advance(5_000); await flush()
+    expect(commandPaths(t)).toEqual(['set_temps', 'auto_conditioning_start'])
+    expect(patches(ctx).some((p) => p.climateOn === true)).toBe(true)
+    clock.advance(15_000); await flush()
+    expect(dataCalls(t)).toBe(1)
+  })
+
+  it('une voiture qui ne se réveille pas : abandon au bout du plafond, aucune commande', async () => {
+    const tesla = fakeTesla()
+    const { plugin, clock, tesla: t } = await started({ tesla, tokens: linkedTokens() })
+    await plugin.discover()
+    await plugin.execute(VIN, { type: 'vehicle.climate_start' })
+    for (let i = 0; i < 20; i++) { clock.advance(5_000); await flush() }
+    const lists = listCalls(t)
+    clock.advance(5_000); await flush()
+    expect(listCalls(t)).toBe(lists)                  // plus rien ne tourne
+    expect(commandPaths(t)).toEqual([])
+  })
+
+  it('arrêter une voiture endormie ne la réveille pas : sa clim est forcément à l’arrêt', async () => {
+    const tesla = fakeTesla()
+    const { plugin, ctx, tesla: t } = await started({ tesla, tokens: linkedTokens() })
+    await plugin.discover()
+    await plugin.execute(VIN, { type: 'vehicle.climate_stop' })
+    expect(t.calls.some((c) => c.path.endsWith('/wake_up') || c.path.includes('/command/'))).toBe(false)
+    expect(patches(ctx).at(-1)).toMatchObject({ climateOn: false })
+  })
+
+  it('arrêter une voiture éveillée : une commande, l’état suit', async () => {
+    const tesla = fakeTesla()
+    tesla.world.list = VEHICLES_ONLINE
+    const { plugin, ctx, tesla: t } = await started({ tesla, tokens: linkedTokens() })
+    await plugin.discover()
+    await plugin.execute(VIN, { type: 'vehicle.climate_stop' })
+    expect(commandPaths(t)).toEqual(['auto_conditioning_stop'])
+    expect(patches(ctx).at(-1)).toMatchObject({ climateOn: false })
+  })
+})
+
 describe('relevé brut', () => {
   it('liste puis vehicle_data des seuls véhicules éveillés, sans réveiller les autres', async () => {
     const { app, tesla } = await started({ tokens: linkedTokens() })

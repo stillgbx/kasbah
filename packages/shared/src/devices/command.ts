@@ -88,6 +88,13 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('vehicle.stop_charge') }),
   z.object({ type: z.literal('vehicle.set_charge_limit'), percent: pct }),
   z.object({ type: z.literal('vehicle.wake') }),
+  /**
+   * Préconditionner l'habitacle (chauffer ou rafraîchir avant de partir). `targetTempC` absent = la
+   * consigne que la voiture garde déjà ; bornes = celles de Tesla (`min/max_avail_temp`, 15-28 °C).
+   * Le plugin RÉVEILLE la voiture s'il le faut : c'est le but même de la commande, un matin où elle dort.
+   */
+  z.object({ type: z.literal('vehicle.climate_start'), targetTempC: z.number().min(15).max(28).optional() }),
+  z.object({ type: z.literal('vehicle.climate_stop') }),
   /** Relire le véhicule MAINTENANT (lecture facturée) ; le sondage repart de ce moment. */
   z.object({ type: z.literal('vehicle.refresh') }),
   // pet_feeder
@@ -136,6 +143,7 @@ export const COMMAND_REQUIRES: Record<CommandType, Capability> = {
   'vehicle.lock': 'lock', 'vehicle.unlock': 'lock',
   'vehicle.start_charge': 'charging', 'vehicle.stop_charge': 'charging',
   'vehicle.set_charge_limit': 'charge_limit', 'vehicle.wake': 'soc', 'vehicle.refresh': 'soc',
+  'vehicle.climate_start': 'climate_precondition', 'vehicle.climate_stop': 'climate_precondition',
   'pet_feeder.feed': 'feed', 'pet_feeder.call_pet': 'call_pet',
   'pet_fountain.set_power': 'on_off', 'pet_fountain.set_mode': 'pump_mode',
   'fan.set': 'on_off',

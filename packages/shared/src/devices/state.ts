@@ -268,6 +268,10 @@ export const vehicleStateSchema = z.object({
   }).optional(),
   insideTempC: z.number().optional(),
   outsideTempC: z.number().optional(),
+  /** Climatisation de l'habitacle en marche (préconditionnement compris). Absent = inconnu. */
+  climateOn: z.boolean().optional(),
+  /** Consigne de l'habitacle, °C, telle que la voiture la garde. Absente = inconnue. */
+  climateTargetC: z.number().optional(),
   /**
    * Date (ms epoch) de la dernière LECTURE COMPLÈTE du véhicule — pas `updatedAt`, que la seule veille
    * fait bouger. C'est ce que l'UI affiche (« lu il y a 12 min ») : sur une API facturée et un

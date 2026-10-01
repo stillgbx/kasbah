@@ -71,6 +71,9 @@ export const vehicleStateSchema = z.looseObject({
 export const climateStateSchema = z.looseObject({
   inside_temp: num,
   outside_temp: num,
+  is_climate_on: bool,
+  /** Consigne conducteur, °C (même quand l'affichage de la voiture est en °F). */
+  driver_temp_setting: num,
 })
 
 export const vehicleDataSchema = z.looseObject({
