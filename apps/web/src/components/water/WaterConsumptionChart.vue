@@ -287,7 +287,7 @@ const measuredNote = computed(() => (fullyMeasured.value ? '' : t('water.measure
 .chart__missing { stroke: var(--muted); stroke-width: 2; stroke-linecap: round; stroke-dasharray: 1.5 3; opacity: .55; }
 /* Repère de moyenne française : couleur ET pointillé distincts de la barre (fond plein) comme du
    tiret « non mesuré » (fin, arrondi) — jamais confondu avec une mesure. Même jeton que les repères
-   de la vue Véhicules (`VehicleCard.vue .soc__tick`), déjà établi pour ce rôle. */
+   de la vue Véhicules (`VehicleBattery.vue .soc__tick`), déjà établi pour ce rôle. */
 .chart__reference-line { stroke: rgb(var(--v-theme-warning)); stroke-width: 1.5; stroke-dasharray: 5 3; opacity: .85; }
 .chart__axis { position: relative; flex: 0 0 20px; }
 .chart__axis-label { position: absolute; top: 2px; transform: translateX(-50%); font-size: 11px; white-space: nowrap; }

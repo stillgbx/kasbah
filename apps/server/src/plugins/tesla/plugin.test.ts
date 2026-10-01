@@ -549,6 +549,38 @@ describe('commandes', () => {
     expect(patches(ctx).some((p) => 'chargeLimit' in p)).toBe(false)
   })
 
+  // vu sur la vraie voiture le 2026-10-01 : la PREMIÈRE limite réglée échoue, la suivante passe
+  it('`could_not_wake_buses` (en ligne, bus encore endormis) : retenté dans la commande, puis la cible publiée', async () => {
+    const tesla = fakeTesla()
+    tesla.world.list = VEHICLES_ONLINE
+    tesla.world.commandResult = { result: false, reason: 'could_not_wake_buses' }
+    const { plugin, ctx, clock, tesla: t } = await started({ tesla, tokens: linkedTokens() })
+    await plugin.discover()
+    const limitCalls = () => t.calls.filter((c) => c.path.endsWith('/command/set_charge_limit')).length
+    const done = plugin.execute(VIN, { type: 'vehicle.set_charge_limit', percent: 70 })
+    for (let i = 0; i < 10; i++) await settle()
+    expect(limitCalls()).toBe(1)
+    tesla.world.commandResult = { result: true }
+    clock.advance(2_500)
+    await expect(done).resolves.toBeUndefined()
+    expect(limitCalls()).toBe(2)
+    expect(patches(ctx).at(-1)).toMatchObject({ chargeLimit: 70 })
+  })
+
+  it('des bus qui ne se réveillent pas : deux nouvelles tentatives sous le délai d’une commande, puis le refus remonte', async () => {
+    const tesla = fakeTesla()
+    tesla.world.list = VEHICLES_ONLINE
+    tesla.world.commandResult = { result: false, reason: 'could_not_wake_buses' }
+    const { plugin, ctx, clock, tesla: t } = await started({ tesla, tokens: linkedTokens() })
+    await plugin.discover()
+    const done = plugin.execute(VIN, { type: 'vehicle.set_charge_limit', percent: 70 })
+    const outcome = expect(done).rejects.toMatchObject({ code: 'UPSTREAM_ERROR', message: expect.stringContaining('could_not_wake_buses') })
+    for (let i = 0; i < 2; i++) { for (let j = 0; j < 10; j++) await settle(); clock.advance(2_500) }
+    await outcome
+    expect(t.calls.filter((c) => c.path.endsWith('/command/set_charge_limit'))).toHaveLength(3)
+    expect(patches(ctx).some((p) => 'chargeLimit' in p)).toBe(false)
+  })
+
   it('régler la limite d’un véhicule ENDORMI est refusé : c’est au réveil, payant, de le ramener', async () => {
     const tesla = fakeTesla()
     tesla.world.list = VEHICLES_ONLINE

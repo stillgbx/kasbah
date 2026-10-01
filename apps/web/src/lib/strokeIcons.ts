@@ -88,6 +88,11 @@ export const ICONS = {
   droplet: 'M12 3.5c3 3.7 5.5 6.6 5.5 9.4a5.5 5.5 0 0 1-11 0c0-2.8 2.5-5.7 5.5-9.4z',
   flask: 'M9 3h6M10 3v6.5L5.6 18a2 2 0 0 0 1.7 3h9.4a2 2 0 0 0 1.7-3L14 9.5V3M8 15h8',
   gauge: 'M4 17.5a8.5 8.5 0 1 1 16 0M12 14l3.5-3.5',
+  /** Chaud / froid : un soleil et un flocon de part et d'autre d'une diagonale (le sélecteur de mode
+   *  d'une clim). Pour des températures sans unité : ni °C ni °F, et pas de thermomètre, ambigu de loin. */
+  hotCold: 'M7 7m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0M7 1.8v1.8M7 10.4v1.8M1.8 7h1.8M10.4 7h1.8M3.3 3.3l1.3 1.3M9.4 9.4l1.3 1.3M3.3 10.7l1.3-1.3M9.4 4.6l1.3-1.3M20 4L4 20M17 13v8M13.5 15l7 4M13.5 19l7-4',
+  /** Pneu vu de côté : la bande de roulement crantée, la jante, le moyeu. */
+  tire: 'M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0-18 0M12 12m-4.5 0a4.5 4.5 0 1 0 9 0a4.5 4.5 0 1 0-9 0M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0-2 0M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8',
   waves: 'M3 9c1.5-1.6 3-1.6 4.5 0s3 1.6 4.5 0 3-1.6 4.5 0 3 1.6 4.5 0M3 15c1.5-1.6 3-1.6 4.5 0s3 1.6 4.5 0 3-1.6 4.5 0 3 1.6 4.5 0',
 
   // animaux — la patte pour la vue, la trémie et le jet pour distinguer les deux appareils l'un de

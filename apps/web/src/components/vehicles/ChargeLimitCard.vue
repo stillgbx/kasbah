@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { formatPercent } from '../../lib/format'
+import StrokeIcon from '../ui/StrokeIcon.vue'
 
 /**
  * La CIBLE DE CHARGE, partagée par la carte de la vue Véhicules et le panneau d'un véhicule dans la
@@ -21,7 +22,8 @@ const LIMIT_STEPS = [50, 60, 70, 80, 90, 100] as const
 /** Les traits dessinés sur la piste : 100 est la fin de la piste, un trait y serait à moitié rogné. */
 const MARKS = LIMIT_STEPS.filter((p) => p < LIMIT_MAX)
 
-defineProps<{ value: number; disabled?: boolean; hint?: string }>()
+/** `watermark` : la batterie en filigrane, comme les autres sections de la carte de la vue Véhicules. */
+defineProps<{ value: number; disabled?: boolean; hint?: string; watermark?: boolean }>()
 const emit = defineEmits<{ preview: [percent: number]; change: [percent: number] }>()
 const { locale } = useI18n()
 
@@ -38,6 +40,7 @@ function clamped(el: HTMLInputElement): number {
 
 <template>
   <div class="card card--soft limit">
+    <StrokeIcon v-if="watermark" class="limit__wm" name="battery" :size="80" />
     <div class="limit__head">
       <span class="muted limit__k">{{ $t('vehicle.chargeLimit') }}</span>
       <span class="limit__v">{{ formatPercent(value, locale) }}</span>
@@ -67,6 +70,15 @@ function clamped(el: HTMLInputElement): number {
 /* Hauteurs FIXES — la ligne ne bouge pas quand la voiture change d'avis, et les six paliers gardent
    leur place quel que soit le chiffre. */
 .limit { padding: 10px 12px; display: grid; gap: 8px; }
+/* le filigrane de la carte de la vue Véhicules (`.wm` de VehiclesView) : sous le contenu, rogné d'un
+   quart de sa surface en bas à droite, aucune place prise */
+.limit { position: relative; overflow: hidden; isolation: isolate; }
+/* la batterie DEBOUT (borne en haut) : couchée, elle tombait au niveau du curseur et le prolongeait.
+   Le corps est au tiers central de l'icône, d'où les décalages : collé au bord droit, rogné en bas */
+.limit__wm {
+  position: absolute; right: -18px; bottom: -25px; z-index: -1; transform: rotate(-90deg);
+  color: var(--text); opacity: .07; pointer-events: none;
+}
 .limit__head { display: flex; align-items: baseline; justify-content: space-between; }
 .limit__k { font-size: 11px; }
 .limit__v { font-weight: 500; font-size: 14px; font-variant-numeric: tabular-nums; }

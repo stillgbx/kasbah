@@ -132,10 +132,10 @@ describe('VehiclesView — détail de la charge', () => {
 
   it('la jauge porte les repères que le fabricant donne : la cible, et le plancher s’il existe', () => {
     const { w } = setup(charging({ chargeLimit: 80, socMin: 20 }))
-    expect(w.findAll('.vcard__tick').map((t) => t.attributes('style'))).toEqual(['left: 20%;', 'left: 80%;'])
+    expect(w.findAll('.soc__tick').map((t) => t.attributes('style'))).toEqual(['left: 20%;', 'left: 80%;'])
     // Tesla n'a pas de plancher : un seul repère, et rien d'inventé à 0 %
     const { w: tesla } = setup(charging({ chargeLimit: 80 }))
-    expect(tesla.findAll('.vcard__tick')).toHaveLength(1)
+    expect(tesla.findAll('.soc__tick')).toHaveLength(1)
   })
 
   /**

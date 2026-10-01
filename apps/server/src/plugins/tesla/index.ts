@@ -86,6 +86,13 @@ const CLIMATE_WAKE_MAX_MS = 90_000
 const CHARGE_FOLLOW_UP_MS = 60_000
 /** Refus passager `could_not_wake_buses` : nouvelles tentatives, au pas de `CLIMATE_WAKE_POLL_MS`. */
 const BUSES_RETRIES = 3
+/**
+ * Le même refus sur la limite de charge : retenté DANS la commande (l'UI attend le résultat, le
+ * curseur tient la valeur demandée), donc plus court — 2 essais à 2,5 s tiennent, requêtes comprises,
+ * sous le délai d'une commande (`KASBAH_COMMAND_TIMEOUT_MS`, 10 s par défaut).
+ */
+const LIMIT_BUSES_RETRIES = 2
+const LIMIT_BUSES_PAUSE_MS = 2_500
 /** Sous ce niveau, Tesla refuse `auto_conditioning_start` (`low_soc`). */
 const LOW_SOC_PCT = 20
 /** Sections de `vehicle_data` lues. `location_data` est OBLIGATOIRE pour la position depuis le logiciel 2023.38. */
@@ -630,12 +637,20 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
        * dans la minute), c'est notre écho qui tient la carte à jour jusqu'au prochain tour.
        */
       if (command.type === 'vehicle.set_charge_limit') {
-        const body = commandResultSchema.parse(await client.request(
-          'POST', `/api/1/vehicles/${encodeURIComponent(externalId)}/command/set_charge_limit`,
-          { body: { percent: command.percent }, signal: ctx!.signal },
-        ))
-        if (body.response?.result !== true) {
+        // « en ligne » d'après la liste, mais ses bus internes dorment encore : refus PASSAGER, vu sur
+        // la vraie voiture le 2026-10-01 (la première limite réglée échouait, la suivante passait)
+        for (let attempt = 0; ; attempt++) {
+          const body = commandResultSchema.parse(await client.request(
+            'POST', `/api/1/vehicles/${encodeURIComponent(externalId)}/command/set_charge_limit`,
+            { body: { percent: command.percent }, signal: ctx!.signal },
+          ))
+          if (body.response?.result === true) break
           const reason = body.response?.reason
+          if (reason === 'could_not_wake_buses' && attempt < LIMIT_BUSES_RETRIES) {
+            log().info({ vin: externalId }, 'Tesla buses still asleep: retrying the charge limit')
+            await sleep(ctx!.clock, LIMIT_BUSES_PAUSE_MS, ctx!.signal)
+            continue
+          }
           throw new PluginError('UPSTREAM_ERROR', `Tesla refused the charge limit${reason ? `: ${reason}` : ''}`)
         }
         ctx!.emitState(externalId, { chargeLimit: command.percent })

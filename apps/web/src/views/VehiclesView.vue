@@ -6,6 +6,7 @@ import { HOME_RADIUS_M, estimateChargePowerW, geoDistance, sitePosition, type Ca
 import PageHeader from '../components/layout/PageHeader.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import ChargeLimitCard from '../components/vehicles/ChargeLimitCard.vue'
+import VehicleBattery from '../components/vehicles/VehicleBattery.vue'
 import VehicleMap from '../components/vehicles/VehicleMap.vue'
 import VehicleClimate from '../components/vehicles/VehicleClimate.vue'
 import VehicleTuning from '../components/vehicles/VehicleTuning.vue'
@@ -81,12 +82,6 @@ async function showIn3d(v: VehicleEntry): Promise<void> {
 }
 const has = (v: VehicleEntry, c: Capability) => v.descriptor.capabilities.includes(c)
 const asleep = (s: StateFor<'vehicle'>) => s.sleepState !== undefined && s.sleepState !== 'online'
-/**
- * Jamais lu : un véhicule découvert ENDORMI n'a encore livré que sa veille, et son état porte les
- * défauts du contrat (0 %, 0 km). Les afficher se lirait comme une batterie vide ; « — » dit vrai.
- * Un vrai véhicule à 0 % aurait au moins un kilométrage ou une position.
- */
-const unread = (s: StateFor<'vehicle'>) => s.soc === 0 && s.rangeKm === 0 && s.odometerKm === undefined && s.location === undefined
 
 /** « En route · 83 km/h » quand ça roule, sinon le rapport ou « Garé » ; « — » si rien n'est connu. */
 function movement(s: StateFor<'vehicle'>): string {
@@ -301,35 +296,28 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
               <span class="muted vcard__age" :title="asleep(v.state) ? $t('vehicle.wakeHint') : undefined">{{ readAgo(v.state) }}</span>
             </div>
           </div>
-          <div class="vcard__soc">
-            <div class="big-value">{{ unread(v.state) ? EMPTY : formatPercent(v.state.soc, locale) }}</div>
-            <div class="muted">{{ unread(v.state) ? EMPTY : formatKm(v.state.rangeKm, locale) }}</div>
-          </div>
-          <!-- la jauge et ses repères : la cible de charge, et le plancher voulu quand le fabricant
-               a cette notion (la R5 ; Tesla ne l'a pas, et un seul repère se dessine alors) -->
-          <div class="vcard__bar">
-            <!-- en charge, un reflet parcourt le remplissage : on voit la charge active d'un coup d'œil -->
-            <div class="vcard__bar-fill" :data-charging="v.state.charging ? '1' : '0'" :style="{ width: `${v.state.soc}%` }" />
-            <span v-if="v.state.socMin !== undefined" class="vcard__tick" :style="{ left: `${v.state.socMin}%` }"
-                  :title="$t('vehicle.floorMark', { percent: formatPercent(v.state.socMin, locale) })" />
-            <span v-if="v.state.chargeLimit !== undefined" class="vcard__tick" :style="{ left: `${v.state.chargeLimit}%` }"
-                  :title="$t('vehicle.targetMark', { percent: formatPercent(v.state.chargeLimit, locale) })" />
-          </div>
+          <!-- l'autonomie : le composant partagé avec le panneau de la vue Maison ; le repère de cible suit le curseur -->
+          <VehicleBattery :state="v.state" :limit="limitOf(v)" />
           <!-- détail de la charge en cours : place TOUJOURS réservée, rien ne se décale quand elle démarre -->
           <p class="muted vcard__charge">{{ chargeDetail(v) }}</p>
           <!-- la cible de charge, quand le véhicule la laisse écrire : paliers au doigt, curseur au pour cent -->
-          <ChargeLimitCard v-if="has(v, 'charge_limit')" :value="limitOf(v)" :disabled="limitLocked(v)"
+          <ChargeLimitCard v-if="has(v, 'charge_limit')" watermark :value="limitOf(v)" :disabled="limitLocked(v)"
                            :hint="asleep(v.state) ? $t('vehicle.wakeHint') : undefined"
                            @preview="preview(v, $event)" @change="setLimit(v, $event)" />
+          <!-- chaque section porte en filigrane, en bas à droite, l'icône de ce qu'elle dit (essai 2026-10-01) -->
           <div class="vcard__stats">
-            <div class="card card--soft stat"><div class="muted stat__k">{{ $t('common.status') }}</div><div class="stat__v">{{ locked(v.state) }}</div></div>
-            <div class="card card--soft stat"><div class="muted stat__k">{{ $t('vehicle.charge') }}</div>
+            <div class="card card--soft stat"><StrokeIcon class="wm" :name="v.state.locked === false ? 'lockOpen' : 'lock'" :size="48" />
+              <div class="muted stat__k">{{ $t('common.status') }}</div><div class="stat__v">{{ locked(v.state) }}</div></div>
+            <div class="card card--soft stat"><StrokeIcon class="wm" name="plug" :size="48" /><div class="muted stat__k">{{ $t('vehicle.charge') }}</div>
               <div class="stat__v">{{ charge(v.state) }}</div></div>
-            <div class="card card--soft stat"><div class="muted stat__k">{{ $t('vehicle.movement') }}</div><div class="stat__v">{{ movement(v.state) }}</div></div>
-            <div class="card card--soft stat"><div class="muted stat__k">{{ $t('vehicle.temps') }}</div><div class="stat__v">{{ temps(v.state) }}</div></div>
+            <div class="card card--soft stat"><StrokeIcon class="wm" name="gauge" :size="48" />
+              <div class="muted stat__k">{{ $t('vehicle.movement') }}</div><div class="stat__v">{{ movement(v.state) }}</div></div>
+            <div class="card card--soft stat"><StrokeIcon class="wm" name="hotCold" :size="48" />
+              <div class="muted stat__k">{{ $t('vehicle.temps') }}</div><div class="stat__v">{{ temps(v.state) }}</div></div>
           </div>
           <!-- quatre roues, quatre cases fixes, dans l'ordre où on regarde une voiture de dessus -->
           <div class="card card--soft tires">
+            <StrokeIcon class="wm" name="tire" :size="56" />
             <div class="muted stat__k">{{ $t('vehicle.tires') }}</div>
             <div class="tires__grid">
               <div v-for="k in TIRES" :key="k" class="tire"><span class="muted tire__k">{{ $t(`vehicle.tire.${k}`) }}</span><span class="tire__v">{{ tire(v.state, k) }}</span></div>
@@ -445,35 +433,22 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
 .vcard__sleep { grid-row: 1; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap; }
 .vcard__age { grid-row: 2; font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .vcard__sleep[data-asleep='1'] { color: var(--text); }
-.vcard__soc { display: flex; align-items: baseline; justify-content: space-between; }
-/* pas d'`overflow: hidden` : les repères DÉBORDENT de la jauge, c'est ce qui les rend lisibles.
-   Le remplissage a son propre arrondi, il n'a jamais eu besoin d'être rogné. */
-.vcard__bar { position: relative; height: 6px; border-radius: 999px; background: var(--line); }
-.vcard__bar-fill { position: relative; height: 100%; background: var(--accent); border-radius: 999px; transition: width .4s; }
-/* le reflet est rogné au remplissage, pas à la jauge : les repères débordent toujours */
-.vcard__bar-fill[data-charging='1'] { overflow: hidden; }
-.vcard__bar-fill[data-charging='1']::after {
-  content: ''; position: absolute; inset: 0; transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, rgb(255 255 255 / .65), transparent);
-  animation: vcard-flow 1.8s ease-in-out infinite;
-}
-@keyframes vcard-flow { to { transform: translateX(100%); } }
 .vcard__icon[data-on='1'] { animation: vcard-halo 2s ease-out infinite; }
 @keyframes vcard-halo {
   0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); }
   100% { box-shadow: 0 0 0 10px color-mix(in srgb, var(--accent) 0%, transparent); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .vcard__bar-fill[data-charging='1']::after, .vcard__icon[data-on='1'] { animation: none; }
-}
-/* Repères de limites : le trait de la POSITION FAVORITE d'un ouvrant (cf. `.cover-slider` dans
-   app.css), en plus court — mais posé PAR-DESSUS la jauge, qui n'a pas de pouce pour le cacher. */
-.vcard__tick {
-  position: absolute; top: 50%; width: 3px; height: 14px; border-radius: 2px;
-  transform: translate(-50%, -50%); background: rgb(var(--v-theme-warning));
+  .vcard__icon[data-on='1'] { animation: none; }
 }
 .vcard__stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .stat { padding: 10px 12px; }
+/* Filigrane de section : l'icône, monochrome et très pâle, en bas à droite, rognée d'un quart de sa surface.
+   SOUS le texte : `isolation` fait de la section un contexte d'empilement, le `z-index: -1` y
+   reste (au-dessus du fond de la section, sous son contenu). Absolu : il ne prend aucune place. */
+.stat, .tires { position: relative; overflow: hidden; isolation: isolate; }
+.wm { position: absolute; right: -6px; bottom: -6px; z-index: -1; color: var(--text); opacity: .07; pointer-events: none; }
+.tires .wm { right: -8px; bottom: -8px; }
 .stat__k { font-size: 11px; }
 .stat__v { font-weight: 500; font-size: 14px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tires { padding: 10px 12px; display: grid; gap: 6px; }

@@ -155,6 +155,8 @@ const headline = computed(() => {
   // pour un ouvrant, la grande valeur suit la POSITION VISÉE, comme le curseur juste en dessous :
   // les deux se contrediraient sinon pendant toute la course
   const state = r.state
+  // un véhicule : la carte du dessous (`VehicleCard`) dit déjà la batterie, avec sa jauge
+  if (state.kind === 'vehicle') return ''
   if (state.kind === 'cover' && r.deviceId) {
     const target = devices.targetPosition(r.deviceId)
     if (target !== undefined) return headlineValue(r.descriptor, { ...state, position: target }, t, locale.value)
