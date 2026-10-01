@@ -1,7 +1,7 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readFile } from 'node:fs/promises'
 import type { Logger } from 'pino'
 import { z } from 'zod'
+import { writeFileAtomic } from '../../core/atomic-file'
 
 // Historique de LUMINOSITÉ des volets solaires : le maximum atteint par heure et par jour, le mois
 // se déduisant des jours. L'API locale n'en sert aucun (le graphe heure / jour / mois de l'appli
@@ -146,14 +146,8 @@ export function createLightHistoryFile(path: string, logger?: Logger): LightHist
       } catch { return null }
     },
     async save(h) {
-      try {
-        await mkdir(dirname(path), { recursive: true })
-        const tmp = `${path}.${process.pid}.tmp`
-        await writeFile(tmp, JSON.stringify(h), 'utf8')
-        await rename(tmp, path)
-      } catch (err) {
-        logger?.warn({ err, path }, 'could not write the TaHoma light history file')
-      }
+      try { await writeFileAtomic(path, JSON.stringify(h)) }
+      catch (err) { logger?.warn({ err, path }, 'could not write the TaHoma light history file') }
     },
   }
 }

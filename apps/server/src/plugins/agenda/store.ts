@@ -1,7 +1,7 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readFile } from 'node:fs/promises'
 import { z } from 'zod'
 import type { Logger } from 'pino'
+import { writeFileAtomic } from '../../core/atomic-file'
 
 // Les agendas de la maison. L'adresse iCal secrète donne à elle seule accès à l'agenda : elle vit
 // ici, dans `.state/` (hors dépôt, hors `.env`), et ne ressort jamais par l'API.
@@ -31,10 +31,7 @@ export function createCalendarsFile(path: string, logger?: Logger): CalendarsSto
       } catch { return [] }
     },
     async save(calendars) {
-      await mkdir(dirname(path), { recursive: true })
-      const tmp = `${path}.${process.pid}.tmp`
-      await writeFile(tmp, JSON.stringify({ calendars }, null, 2), 'utf8')
-      await rename(tmp, path)
+      await writeFileAtomic(path, JSON.stringify({ calendars }, null, 2))
     },
   }
 }

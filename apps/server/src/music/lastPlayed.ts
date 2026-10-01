@@ -1,8 +1,8 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readFile } from 'node:fs/promises'
 import { z } from 'zod'
 import type { Logger } from 'pino'
 import { REPEAT_MODES } from './queue'
+import { writeFileAtomic } from '../core/atomic-file'
 
 // La dernière écoute de chaque lecteur : sa file, la piste où elle en était, la position atteinte.
 // Les sessions et les files vivent en mémoire — un redémarrage du serveur les perd, et l'enceinte
@@ -46,10 +46,7 @@ export function createLastPlayedFile(path: string, logger?: Logger): LastPlayedS
       return {}
     },
     async save(all) {
-      await mkdir(dirname(path), { recursive: true })
-      const tmp = `${path}.${process.pid}.tmp`
-      await writeFile(tmp, JSON.stringify(all, null, 2), 'utf8')
-      await rename(tmp, path)
+      await writeFileAtomic(path, JSON.stringify(all, null, 2))
     },
   }
 }

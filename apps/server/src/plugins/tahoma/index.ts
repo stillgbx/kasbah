@@ -1,8 +1,8 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readFile } from 'node:fs/promises'
 import type { Command, DeviceDescriptor, PluginHealth } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
+import { writeFileAtomic } from '../../core/atomic-file'
 import { stateFile } from '../../core/paths'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
 import { createPoller } from '../../core/poll'
@@ -79,10 +79,7 @@ async function loadQuiet(path: string): Promise<Set<string>> {
 }
 
 async function saveQuiet(path: string, quiet: Set<string>): Promise<void> {
-  await mkdir(dirname(path), { recursive: true })
-  const tmp = `${path}.${process.pid}.tmp`
-  await writeFile(tmp, JSON.stringify({ quiet: [...quiet].sort() }), 'utf8')
-  await rename(tmp, path)
+  await writeFileAtomic(path, JSON.stringify({ quiet: [...quiet].sort() }))
 }
 
 export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {

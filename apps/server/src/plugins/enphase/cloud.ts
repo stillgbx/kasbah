@@ -1,10 +1,10 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readFile } from 'node:fs/promises'
 import type { Logger } from 'pino'
 import { z } from 'zod'
 import { PluginError } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
 import { CLOUD_TIMEOUT_MS, loginEnlighten, type LoginOptions } from './token'
+import { writeFileAtomic } from '../../core/atomic-file'
 
 // Session Enlighten (cloud) : ce dont la borne IQ EV Charger 2 a besoin. L'API LOCALE de la
 // passerelle ne la voit pas ; le Modbus est réservé aux partenaires. Reste l'API privée de
@@ -50,14 +50,8 @@ export function createCloudFile(path: string, logger?: Logger): CloudStore {
       return parsed.data
     },
     async save(session) {
-      const tmp = `${path}.${process.pid}.tmp`
-      try {
-        await mkdir(dirname(path), { recursive: true })
-        await writeFile(tmp, `${JSON.stringify(session, null, 2)}\n`, 'utf8')
-        await rename(tmp, path)
-      } catch (err) {
-        logger?.warn({ err, path }, 'could not write Enphase cloud session')
-      }
+      try { await writeFileAtomic(path, `${JSON.stringify(session, null, 2)}\n`) }
+      catch (err) { logger?.warn({ err, path }, 'could not write Enphase cloud session') }
     },
   }
 }

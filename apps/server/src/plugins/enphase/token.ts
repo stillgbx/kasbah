@@ -1,9 +1,9 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readFile } from 'node:fs/promises'
 import type { Logger } from 'pino'
 import { z } from 'zod'
 import { PluginError } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
+import { writeFileAtomic } from '../../core/atomic-file'
 
 // Jeton d'accès à l'API locale de la passerelle IQ (logiciel 7.0 et plus : plus de mot de passe, un
 // JWT signé par le cloud Enphase). Deux façons de l'obtenir, décrites par la note technique du
@@ -274,16 +274,8 @@ export function createTokenFile(path: string, logger?: Logger): TokenStore {
       return parsed.data.token
     },
     async save(token) {
-      // `.tmp` nommé d'après le processus : deux serveurs sur la même machine (développement et
-      // preview) partagent ce fichier, un intermédiaire commun se marcherait dessus
-      const tmp = `${path}.${process.pid}.tmp`
-      try {
-        await mkdir(dirname(path), { recursive: true })
-        await writeFile(tmp, `${JSON.stringify({ token }, null, 2)}\n`, 'utf8')
-        await rename(tmp, path)
-      } catch (err) {
-        logger?.warn({ err, path }, 'could not write Enphase token cache')
-      }
+      try { await writeFileAtomic(path, `${JSON.stringify({ token }, null, 2)}\n`) }
+      catch (err) { logger?.warn({ err, path }, 'could not write Enphase token cache') }
     },
   }
 }

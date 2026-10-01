@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { mkdtemp, readFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import type { Logger } from 'pino'
+import { describe, expect, it, vi } from 'vitest'
 import {
-  MONTHLY_CREDIT_USD, billableKind, countCall, currentCycle, cycleCostUsd, cycleKey, cycleStart, emptyState, teslaStateSchema,
+  MONTHLY_CREDIT_USD, billableKind, countCall, createStateFile, currentCycle, cycleCostUsd, cycleKey, cycleStart, emptyState, teslaStateSchema,
 } from './state'
 
 // Ce que le plugin garde entre deux démarrages : le dernier état des véhicules, et la consommation
@@ -100,5 +104,24 @@ describe('fichier d’état', () => {
   it('un fichier vide ou d’une autre forme est rejeté proprement', () => {
     expect(teslaStateSchema.safeParse({}).success).toBe(true)          // ni cycle ni véhicule : état neuf
     expect(teslaStateSchema.safeParse({ vehicles: 'non' }).success).toBe(false)
+  })
+})
+
+describe('fichier d’état', () => {
+  it('des écritures rapprochées ne se marchent pas dessus, et la dernière l’emporte', async () => {
+    // Vu au démarrage le 2026-10-01 : deux `persist()` sans attente partageaient le même `.tmp`, le
+    // second `rename` échouait en ENOENT. La course dépend du disque : deux écritures ne la déclenchent
+    // pas ici à coup sûr (0 sur 20), dix si (20 sur 20).
+    const path = join(await mkdtemp(join(tmpdir(), 'kasbah-tesla-')), 'tesla-state.json')
+    const warn = vi.fn()
+    const store = createStateFile(path, { warn } as unknown as Logger)
+    const states = Array.from({ length: 10 }, (_, i) => {
+      const s = emptyState()
+      for (let n = 0; n <= i; n++) countCall(s, 'data', SEPT)
+      return s
+    })
+    await Promise.all(states.map((s) => store.save(s)))
+    expect(warn).not.toHaveBeenCalled()
+    expect(JSON.parse(await readFile(path, 'utf8'))).toEqual(states.at(-1))
   })
 })

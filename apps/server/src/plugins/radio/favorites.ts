@@ -1,8 +1,8 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readFile } from 'node:fs/promises'
 import { z } from 'zod'
 import type { Logger } from 'pino'
 import { stationSchema, type Station } from './directory'
+import { writeFileAtomic } from '../../core/atomic-file'
 
 // Les radios favorites de la MAISON (pas du navigateur) : la station entière est gardée, pour que la
 // liste s'affiche et se lance même quand l'annuaire ne répond pas.
@@ -24,10 +24,7 @@ export function createFavoritesFile(path: string, logger?: Logger): FavoritesSto
       } catch { return [] }
     },
     async save(stations) {
-      await mkdir(dirname(path), { recursive: true })
-      const tmp = `${path}.${process.pid}.tmp`
-      await writeFile(tmp, JSON.stringify({ stations }, null, 2), 'utf8')
-      await rename(tmp, path)
+      await writeFileAtomic(path, JSON.stringify({ stations }, null, 2))
     },
   }
 }

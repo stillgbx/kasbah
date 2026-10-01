@@ -1,7 +1,7 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readFile } from 'node:fs/promises'
 import type { Logger } from 'pino'
 import { z } from 'zod'
+import { writeFileAtomic } from '../../core/atomic-file'
 
 // Ce que le plugin garde entre deux démarrages : le nombre de requêtes de la FENÊTRE en cours. Le
 // portail développeur du fabricant (relevé du 2026-09-16) borne chaque clé d'application à **21 000
@@ -61,14 +61,8 @@ export function createUsageFile(path: string, logger?: Logger): UsageStore {
       } catch { return null }
     },
     async save(u) {
-      try {
-        await mkdir(dirname(path), { recursive: true })
-        const tmp = `${path}.${process.pid}.tmp`
-        await writeFile(tmp, JSON.stringify(u, null, 2), 'utf8')
-        await rename(tmp, path)
-      } catch (err) {
-        logger?.warn({ err, path }, 'could not write the Automower usage file')
-      }
+      try { await writeFileAtomic(path, JSON.stringify(u, null, 2)) }
+      catch (err) { logger?.warn({ err, path }, 'could not write the Automower usage file') }
     },
   }
 }

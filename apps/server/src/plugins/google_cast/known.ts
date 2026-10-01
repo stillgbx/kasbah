@@ -1,8 +1,8 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readFile } from 'node:fs/promises'
 import type { Logger } from 'pino'
 import { z } from 'zod'
 import { castTxtSchema, type CastService } from './types'
+import { writeFileAtomic } from '../../core/atomic-file'
 
 // MÉMOIRE des récepteurs déjà vus. Un Cast éteint (téléviseur au repos, Chromecast débranché) ne
 // s'annonce plus en mDNS : sans mémoire, il quitte l'inventaire, et son entrée dans house.json perd
@@ -37,17 +37,8 @@ export function createKnownDevicesFile(path: string, logger: Logger): KnownDevic
       return parsed.data.devices
     },
     async save(services) {
-      const text = `${JSON.stringify({ devices: services }, null, 2)}\n`
-      // fichier intermédiaire propre au processus : deux serveurs sur la même machine (le serveur de
-      // développement et celui de la preview) écrivent ce fichier, et un `.tmp` commun se marcherait dessus
-      const tmp = `${path}.${process.pid}.tmp`
-      try {
-        await mkdir(dirname(path), { recursive: true })
-        await writeFile(tmp, text, 'utf8')
-        await rename(tmp, path)
-      } catch (err) {
-        logger.warn({ err, path }, 'could not write Cast device memory')
-      }
+      try { await writeFileAtomic(path, `${JSON.stringify({ devices: services }, null, 2)}\n`) }
+      catch (err) { logger.warn({ err, path }, 'could not write Cast device memory') }
     },
   }
 }

@@ -1,10 +1,10 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readFile } from 'node:fs/promises'
 import type { Logger } from 'pino'
 import { z } from 'zod'
 import { PluginError } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
 import { gigyaAccountInfoSchema, gigyaJwtSchema, gigyaLoginSchema, gigyaResponseSchema } from './types'
+import { writeFileAtomic } from '../../core/atomic-file'
 
 // Authentification Renault — Gigya (SAP Customer Data Cloud), celle de l'appli MY Renault.
 //
@@ -82,17 +82,11 @@ export function createSessionFile(path: string, logger?: Logger): SessionStore {
       return parsed.data
     },
     async save(session: StoredSession): Promise<void> {
-      const tmp = `${path}.${process.pid}.tmp`
-      try {
-        await mkdir(dirname(path), { recursive: true })
-        await writeFile(tmp, `${JSON.stringify(session, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
-        await rename(tmp, path)
-      } catch (err) {
-        logger?.warn({ err, path }, 'could not write Renault session cache')
-      }
+      try { await writeFileAtomic(path, `${JSON.stringify(session, null, 2)}\n`, { mode: 0o600 }) }
+      catch (err) { logger?.warn({ err, path }, 'could not write Renault session cache') }
     },
     async clear(): Promise<void> {
-      try { await writeFile(path, '{}\n', { encoding: 'utf8', mode: 0o600 }) }
+      try { await writeFileAtomic(path, '{}\n', { mode: 0o600 }) }
       catch (err) { logger?.warn({ err, path }, 'could not clear Renault session cache') }
     },
   }

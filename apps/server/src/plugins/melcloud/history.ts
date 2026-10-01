@@ -1,8 +1,8 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readFile } from 'node:fs/promises'
 import type { Logger } from 'pino'
 import { z } from 'zod'
 import type { SystemReading, ZoneReading } from './types'
+import { writeFileAtomic } from '../../core/atomic-file'
 
 // L'historique de FONCTIONNEMENT de la pompe à chaleur — quand elle a chauffé, combien de temps, à
 // quelle température de départ, face à quel dehors.
@@ -148,14 +148,8 @@ export function createHistoryFile(path: string, logger?: Logger): HistoryStore {
       } catch { return null }
     },
     async save(h) {
-      try {
-        await mkdir(dirname(path), { recursive: true })
-        const tmp = `${path}.${process.pid}.tmp`
-        await writeFile(tmp, JSON.stringify(h, null, 2), 'utf8')
-        await rename(tmp, path)
-      } catch (err) {
-        logger?.warn({ err, path }, 'could not write the MELCloud history file')
-      }
+      try { await writeFileAtomic(path, JSON.stringify(h, null, 2)) }
+      catch (err) { logger?.warn({ err, path }, 'could not write the MELCloud history file') }
     },
   }
 }

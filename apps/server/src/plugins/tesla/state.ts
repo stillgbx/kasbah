@@ -1,9 +1,9 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readFile } from 'node:fs/promises'
 import type { StatePatch } from '@kasbah/shared'
 import { VEHICLE_FINISHES } from '@kasbah/shared'
 import type { Logger } from 'pino'
 import { z } from 'zod'
+import { writeFileAtomic } from '../../core/atomic-file'
 
 // Ce que le plugin Tesla garde entre deux démarrages, et qui n'est ni un secret ni un jeton :
 //
@@ -142,14 +142,9 @@ export function createStateFile(path: string, logger?: Logger): TeslaStateStore 
       return parsed.data
     },
     async save(state) {
-      const tmp = `${path}.${process.pid}.tmp`
-      try {
-        await mkdir(dirname(path), { recursive: true })
-        await writeFile(tmp, `${JSON.stringify(state, null, 2)}\n`, 'utf8')
-        await rename(tmp, path)
-      } catch (err) {
-        logger?.warn({ err, path }, 'could not write Tesla state cache')
-      }
+      // `persist()` n'attend pas : la file de `writeFileAtomic` sépare deux écritures rapprochées
+      try { await writeFileAtomic(path, `${JSON.stringify(state, null, 2)}\n`) }
+      catch (err) { logger?.warn({ err, path }, 'could not write Tesla state cache') }
     },
   }
 }

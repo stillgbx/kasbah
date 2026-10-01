@@ -1,7 +1,7 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readFile } from 'node:fs/promises'
 import type { Logger } from 'pino'
 import { knownFileSchema, type SonosPlayer } from './types'
+import { writeFileAtomic } from '../../core/atomic-file'
 
 // Mémoire des enceintes déjà vues. Une Sonos éteinte ne répond plus au SSDP : sans ça elle
 // quitte l'inventaire, et son entrée dans house.json perd son nom. Fichier absent ou illisible
@@ -23,15 +23,8 @@ export function createKnownPlayersFile(path: string, logger: Logger): KnownPlaye
       return parsed.data.devices
     },
     async save(players) {
-      const text = `${JSON.stringify({ devices: players }, null, 2)}\n`
-      const tmp = `${path}.${process.pid}.tmp`
-      try {
-        await mkdir(dirname(path), { recursive: true })
-        await writeFile(tmp, text, 'utf8')
-        await rename(tmp, path)
-      } catch (err) {
-        logger.warn({ err, path }, 'could not write Sonos device memory')
-      }
+      try { await writeFileAtomic(path, `${JSON.stringify({ devices: players }, null, 2)}\n`) }
+      catch (err) { logger.warn({ err, path }, 'could not write Sonos device memory') }
     },
   }
 }

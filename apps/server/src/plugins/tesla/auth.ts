@@ -1,11 +1,11 @@
 import { generateKeyPairSync, createPublicKey } from 'node:crypto'
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readFile } from 'node:fs/promises'
 import type { Logger } from 'pino'
 import { z } from 'zod'
 import { PluginError } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
 import { tokenResponseSchema } from './types'
+import { writeFileAtomic } from '../../core/atomic-file'
 
 // Identité et jetons de la Fleet API Tesla. Trois choses distinctes vivent ici :
 //
@@ -146,14 +146,8 @@ function jsonFile<T>(path: string, schema: z.ZodType<T>, what: string, logger?: 
       return parsed.data
     },
     async save(value: T): Promise<void> {
-      const tmp = `${path}.${process.pid}.tmp`
-      try {
-        await mkdir(dirname(path), { recursive: true })
-        await writeFile(tmp, `${JSON.stringify(value, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
-        await rename(tmp, path)
-      } catch (err) {
-        logger?.warn({ err, path }, `could not write Tesla ${what} cache`)
-      }
+      try { await writeFileAtomic(path, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 }) }
+      catch (err) { logger?.warn({ err, path }, `could not write Tesla ${what} cache`) }
     },
   }
 }

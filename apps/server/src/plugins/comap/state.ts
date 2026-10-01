@@ -1,8 +1,8 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readFile } from 'node:fs/promises'
 import type { Logger } from 'pino'
 import { z } from 'zod'
 import { consumptionPointSchema } from '@kasbah/shared'
+import { writeFileAtomic } from '../../core/atomic-file'
 
 // Ce que le plugin garde entre deux démarrages : l'historique de consommation DÉJÀ CALCULÉ (jamais
 // les relevés bruts de la station, ni le curseur qui sert à dater le prochain delta — voir
@@ -35,14 +35,8 @@ export function createHistoryFile(path: string, logger?: Logger): HistoryStore {
       } catch { return null }
     },
     async save(h) {
-      try {
-        await mkdir(dirname(path), { recursive: true })
-        const tmp = `${path}.${process.pid}.tmp`
-        await writeFile(tmp, JSON.stringify(h, null, 2), 'utf8')
-        await rename(tmp, path)
-      } catch (err) {
-        logger?.warn({ err, path }, 'could not write the COMAP history file')
-      }
+      try { await writeFileAtomic(path, JSON.stringify(h, null, 2)) }
+      catch (err) { logger?.warn({ err, path }, 'could not write the COMAP history file') }
     },
   }
 }

@@ -1,9 +1,9 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readFile } from 'node:fs/promises'
 import type { Logger } from 'pino'
 import { PluginError } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
 import { cloudLoginSchema, endpointDiscoverySchema, gigyaLoginSchema, gigyaResponseSchema, storedSessionSchema, type StoredRobot, type StoredSession } from './types'
+import { writeFileAtomic } from '../../core/atomic-file'
 
 // Obtention des identifiants LOCAUX d'un robot iRobot — la seule partie du plugin qui touche
 // Internet, et elle ne sert qu'une fois.
@@ -63,17 +63,11 @@ export function createSessionFile(path: string, logger?: Logger): SessionStore {
       return parsed.data
     },
     async save(session: StoredSession): Promise<void> {
-      const tmp = `${path}.${process.pid}.tmp`
-      try {
-        await mkdir(dirname(path), { recursive: true })
-        await writeFile(tmp, `${JSON.stringify(session, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
-        await rename(tmp, path)
-      } catch (err) {
-        logger?.warn({ err, path }, 'could not write iRobot session cache')
-      }
+      try { await writeFileAtomic(path, `${JSON.stringify(session, null, 2)}\n`, { mode: 0o600 }) }
+      catch (err) { logger?.warn({ err, path }, 'could not write iRobot session cache') }
     },
     async clear(): Promise<void> {
-      try { await writeFile(path, '{"robots":[]}\n', { encoding: 'utf8', mode: 0o600 }) }
+      try { await writeFileAtomic(path, '{"robots":[]}\n', { mode: 0o600 }) }
       catch (err) { logger?.warn({ err, path }, 'could not clear iRobot session cache') }
     },
   }

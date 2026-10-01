@@ -1,7 +1,7 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readFile } from 'node:fs/promises'
 import { z } from 'zod'
 import type { Logger } from 'pino'
+import { writeFileAtomic } from '../../core/atomic-file'
 
 // Ce que le plugin Mixcloud garde : le compte (un NOM d'utilisateur — l'API publique n'en demande pas
 // plus, aucun mot de passe) et la position atteinte dans chaque mix écouté depuis Kasbah, pour le
@@ -31,10 +31,7 @@ export function createMixcloudFile(path: string, logger?: Logger): MixcloudStore
       return { username: null, resume: {} }
     },
     async save(state) {
-      await mkdir(dirname(path), { recursive: true })
-      const tmp = `${path}.${process.pid}.tmp`
-      await writeFile(tmp, JSON.stringify(state, null, 2), 'utf8')
-      await rename(tmp, path)
+      await writeFileAtomic(path, JSON.stringify(state, null, 2))
     },
   }
 }
