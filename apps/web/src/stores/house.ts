@@ -203,7 +203,7 @@ export const useHouseStore = defineStore('house', () => {
     catch (err) { error.value = (err as Error).message }
     finally { loading.value = false }
   }
-  // une autre tablette a déplacé un appareil : le serveur pousse la maison réécrite
+  // un autre écran a déplacé un appareil : le serveur pousse la maison réécrite
   watch(() => devices.serverHouse, (h) => { if (h) house.value = h })
 
   function setFloorTab(tab: FloorTab) {
@@ -319,7 +319,7 @@ export const useHouseStore = defineStore('house', () => {
   /**
    * Réglage de la lumière de la scène 3D enregistré dans la maison (banc de la vue Maison). Pas
    * d'application optimiste : la maison ne change pas d'aspect à l'enregistrement — la scène montre
-   * déjà le réglage en cours, l'écriture ne fait que le rendre durable et commun aux tablettes.
+   * déjà le réglage en cours, l'écriture ne fait que le rendre durable et commun à tous les écrans.
    */
   async function saveRenderTuning(tuning: SceneTuning): Promise<boolean> {
     try {

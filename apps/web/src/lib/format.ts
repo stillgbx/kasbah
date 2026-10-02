@@ -50,7 +50,7 @@ export function formatMinutes(min: number, locale = 'fr'): string {
 /**
  * Âge relatif court (« il y a 12 min », « il y a 3 h », « hier »), pour dater une lecture. En dessous
  * d'une minute : « maintenant » selon la langue (Intl, `numeric: 'auto'`). Une date DANS LE FUTUR est
- * ramenée à maintenant : l'horloge du serveur et celle de la tablette diffèrent de quelques secondes,
+ * ramenée à maintenant : l'horloge du serveur et celle du navigateur diffèrent de quelques secondes,
  * et la simulation vit dans un temps accéléré — « lu dans 8 min » ne veut rien dire.
  */
 export function formatAgo(at: number, now: number, locale = 'fr'): string {

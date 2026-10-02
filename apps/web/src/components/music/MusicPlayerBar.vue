@@ -338,7 +338,7 @@ const explicit = computed(() => (props.pending
       </div>
       <div class="bar__device">
         <span class="icon-square" :data-on="loaded ? '1' : '0'">
-          <!-- ce navigateur : une tablette, pas une enceinte -->
+          <!-- ce navigateur : un écran, pas une enceinte -->
           <StrokeIcon :name="!entry ? 'speaker' : isLocalPlayer(entry.descriptor.id) ? 'tablet' : deviceIcon(entry.descriptor, entry.state)" :size="18" />
         </span>
         <div class="bar__device-text">

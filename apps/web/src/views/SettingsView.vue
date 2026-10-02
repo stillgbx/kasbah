@@ -29,7 +29,7 @@ import { styleById, type GradeLook, type RenderStyle } from '../three/styles'
 // en fin de page. Les réglages tiennent en trois zones — une pile d'une unité (apparence, langue,
 // thème), le Rendu 3D sur deux unités parce que lui seul porte assez pour les remplir, une pile
 // d'une unité (plein écran, origine GPS). Les plugins actifs et leurs sous-items vivent dans
-// house.json : ce sont des choix de LA MAISON, pas de la tablette, et ils prennent effet sans
+// house.json : ce sont des choix de LA MAISON, pas de l'écran, et ils prennent effet sans
 // redémarrer le serveur.
 const settings = useSettingsStore()
 const plugins = usePluginsStore()
@@ -132,7 +132,7 @@ const houseStats = computed(() => {
     <PageHeader />
     <div class="settings__scroll">
       <div class="settings__blocks">
-        <!-- colonne de gauche : les réglages de la tablette, chacun sur une unité de large -->
+        <!-- colonne de gauche : les réglages de ce navigateur, chacun sur une unité de large -->
         <div class="stack">
           <section class="card block">
             <div class="block__title">{{ $t('settings.appearance') }}</div>
@@ -351,7 +351,7 @@ const houseStats = computed(() => {
    Les deux segmentés, eux, gardent TOUTE la largeur du bloc — mesuré : leurs quatre libellés
    demandent ~370 px, une demi-colonne n'en offre que ~280 et les coupait.
    Requête de CONTENEUR et non d'écran : ce qui décide, c'est la largeur du bloc, qu'il soit sur
-   deux unités en grande largeur ou pleine page sur une tablette étroite. */
+   deux unités en grande largeur ou pleine page sur un écran étroit. */
 .block--wide { container-type: inline-size; }
 .render { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .render__side { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-content: start; }

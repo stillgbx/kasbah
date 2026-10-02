@@ -1,7 +1,7 @@
 import { ensureCCW, geoToLocal, isSimplePolygon, localToGeo, pointInPolygon, signedArea, type House, type Vec2 } from '@kasbah/shared'
 
 // Contour RÉEL de la parcelle, lu au cadastre de l'IGN (Parcellaire Express, WFS de la Géoplateforme,
-// ouvert, sans clé, CORS ouvert — appelé depuis la tablette comme le relief).
+// ouvert, sans clé, CORS ouvert — appelé depuis le navigateur comme le relief).
 //
 // Interrogé par EMPRISE (BBOX) autour du bâti : un filtre `INTERSECTS(geom, POINT(…))` ne rend rien
 // sur ce service, dans un sens d'axes comme dans l'autre. On garde les parcelles qui portent la maison

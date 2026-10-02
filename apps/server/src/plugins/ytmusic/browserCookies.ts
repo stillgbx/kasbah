@@ -6,7 +6,7 @@ import { fromNetscape, hasRequiredCookie } from './cookie'
 import type { SpawnFn } from '../../music/proxy'
 
 // Import des cookies YouTube depuis le navigateur **de la machine qui héberge Kasbah**
-// (`yt-dlp --cookies-from-browser`). Pas la tablette : yt-dlp ne voit que le disque local.
+// (`yt-dlp --cookies-from-browser`). Pas celui de l'écran : yt-dlp ne voit que le disque local.
 
 export const YTM_BROWSERS = ['chrome', 'edge', 'firefox', 'chromium', 'brave'] as const
 export type YtmBrowser = (typeof YTM_BROWSERS)[number]

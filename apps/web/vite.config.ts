@@ -28,7 +28,7 @@ export default defineConfig({
   server: {
     port: DEV_PORT,
     strictPort: FIXED_PORT,
-    host: true, // accessible depuis la tablette sur le LAN
+    host: true, // accessible depuis les autres appareils du LAN
     proxy: {
       // `ws: true` : les flux vidéo des caméras sont des WebSockets sous /api/plugins/<id>/cameras/…
       '/api': { target: SERVER, ws: true },

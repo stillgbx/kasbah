@@ -2,7 +2,7 @@ import type { AgendaEvent } from '../api/transport'
 
 // Calcul de la vue Agenda, sans Vue : périodes affichées (mois de six semaines, semaine du lundi,
 // jour), répartition des occurrences par jour, et colonnes des rendez-vous qui se chevauchent.
-// Tout est en heure LOCALE de la tablette (celle de la maison).
+// Tout est en heure LOCALE du navigateur (celle de la maison).
 
 export type AgendaMode = 'month' | 'week' | 'day'
 export const AGENDA_MODES: AgendaMode[] = ['month', 'week', 'day']

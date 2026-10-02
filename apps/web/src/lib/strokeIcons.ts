@@ -56,7 +56,7 @@ export const ICONS = {
   moon: 'M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z',
   auto: 'M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0-18 0M12 3v18M12 3a9 9 0 0 1 0 18',
   /* Apparence « Automatique » : un soleil posé sur l'horizon, pour la distinguer de `auto` (le
-     disque mi-clair mi-sombre, qui dit « comme la tablette ») et de `sun` (l'apparence claire). */
+     disque mi-clair mi-sombre, qui dit « comme le système ») et de `sun` (l'apparence claire). */
   sunHorizon: 'M3 18h18M8 18a4 4 0 0 1 8 0M12 5v2.5M5.2 9.2l1.8 1.8M18.8 9.2l-1.8 1.8',
   back: 'M15 6l-6 6 6 6',
   chevron: 'M9 6l6 6-6 6',

@@ -12,7 +12,7 @@ import Segmented from './ui/Segmented.vue'
 // frapper un jeton et ne sont pas conservés.
 //
 // Le jeton, lui, est gardé par le SERVEUR : contrairement à Hue et Nest, il n'y a rien à recopier
-// dans `.env`, donc appairer depuis une tablette suffit et tient un an. La carte le dit, et prévient
+// dans `.env`, donc appairer depuis n'importe quel écran suffit et tient un an. La carte le dit, et prévient
 // dans le cas contraire (cache désactivé).
 //
 // La carte ne décide plus de son apparition : elle vit DANS la section du plugin Enphase, que

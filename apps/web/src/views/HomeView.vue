@@ -212,7 +212,7 @@ function frameSelection(roomId: string | null, key: string | null) {
 // par la sélection d'ouverture — sélectionner l'ouvre dans la scène, revenir à la pièce la referme.
 // PAS `immediate` ici : au premier rendu la scène n'existe pas encore (elle se construit dans le
 // `onMounted` de `useHouseScene`), et l'appel serait un no-op — c'est le watcher de `scene.ready`,
-// plus bas, qui rejoue l'état au bon moment (mode armé au chargement, tablette qui redémarre).
+// plus bas, qui rejoue l'état au bon moment (mode armé au chargement, page qui se recharge).
 watch(() => settings.houseEditing, (on) => {
   scene.setEditingOpenings(on)
   scene.setEditingParkings(on)

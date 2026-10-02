@@ -116,7 +116,7 @@ export const READ_ENDPOINTS = [
 
 /**
  * Le réveil de charge est un SOUS-ITEM cochable, pas une variable d'environnement : il écrit dans
- * la voiture, et l'utilisateur doit pouvoir le couper depuis la tablette sans toucher au serveur.
+ * la voiture, et l'utilisateur doit pouvoir le couper depuis l'interface sans toucher au serveur.
  */
 /** Relecture après une commande de climatisation : le temps que le boîtier la prenne et le dise. */
 const CLIMATE_FOLLOW_UP_MS = 60_000

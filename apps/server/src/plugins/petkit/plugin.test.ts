@@ -178,7 +178,7 @@ describe('PetKit — appairage par code', () => {
     const { app } = await setup()
     const r = await link(app, '000000')
     expect(r.statusCode).toBe(502)
-    // Enveloppe `{ error: { code, message } }` : c'est celle que la tablette sait lire. Avec un
+    // Enveloppe `{ error: { code, message } }` : c'est celle que l'interface sait lire. Avec un
     // `error` en simple chaîne, le message se perdait et l'écran n'affichait qu'un « HTTP 502 ».
     expect(r.json().error.message).toContain('invalid code')
     expect(r.json().error.code).toBe('UPSTREAM_ERROR')

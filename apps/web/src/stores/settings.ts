@@ -24,7 +24,7 @@ export type SceneWeatherChoice = WeatherCondition | 'real'
 //
 // Les trois réglages de la SCÈNE 3D sont délibérément séparés du thème de l'app : le style dit le
 // goût du rendu, l'ambiance l'heure qu'il fait au-dessus de la maison, la qualité le budget de la
-// tablette. Aucun des trois ne suit clair/sombre (voir `three/core/ambience.ts`).
+// machine. Aucun des trois ne suit clair/sombre (voir `three/core/ambience.ts`).
 
 // `system` suit L'APPAREIL qui regarde (`prefers-color-scheme`), `auto` suit le SOLEIL au-dessus de la maison
 // (`lib/daylight.ts`) : deux automatismes, deux sources, d'où deux entrées dans la liste.
@@ -94,11 +94,11 @@ export const useSettingsStore = defineStore('settings', () => {
   /**
    * Banc de réglage de la lumière. Deux étages, et c'est voulu :
    *  - ce qui est ENREGISTRÉ vit dans la maison (`house.render.tuning`), parce qu'une lumière se
-   *    règle une fois pour toutes les tablettes qui regardent cette maison ;
+   *    règle une fois pour tous les écrans qui regardent cette maison ;
    *  - ce qui est EN COURS de réglage vit ici, dans un brouillon local, pour qu'on puisse tirer les
    *    curseurs une soirée entière sans rien écrire dans le fichier de la maison.
    * `null` = aucun brouillon, la maison fait foi. C'est ce que rend « Réinitialiser » une fois
-   * enregistré, et c'est l'état d'une tablette qui n'a jamais ouvert le banc.
+   * enregistré, et c'est l'état d'un écran qui n'a jamais ouvert le banc.
    */
   // Le sérialiseur est DIT : `useLocalStorage` le devine de la valeur par défaut, et une valeur par
   // défaut `null` ne dit rien — le brouillon partait en `[object Object]` et ne survivait pas au
@@ -124,7 +124,7 @@ export const useSettingsStore = defineStore('settings', () => {
   useIntervalFn(() => { clock.value = new Date() }, 60_000)
 
   const themeId = computed<ThemeId>(() => (THEME_LIST.some((t) => t.id === theme.value) ? (theme.value as ThemeId) : DEFAULT_THEME_ID))
-  /** Apparence demandée par la tablette ; un thème qui n'a pas cette variante impose la sienne. */
+  /** Apparence demandée par ce navigateur ; un thème qui n'a pas cette variante impose la sienne. */
   const wantDark = computed(() => {
     if (appearance.value === 'light' || appearance.value === 'dark') return appearance.value === 'dark'
     if (appearance.value === 'system') return preferredDark.value

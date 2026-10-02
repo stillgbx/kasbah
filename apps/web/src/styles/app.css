@@ -1,7 +1,7 @@
 @import '@fontsource-variable/plus-jakarta-sans';
 @import './tokens.css';
 
-/* Tablette : la page ne scrolle jamais ; chaque colonne gère son propre défilement. */
+/* La page ne scrolle jamais ; chaque colonne gère son propre défilement. */
 html, body, #app { height: 100%; }
 body {
   margin: 0;

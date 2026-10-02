@@ -5,7 +5,7 @@ import { Mp4BoxParser, mseMimeFromMoov, type Mp4Box } from './fmp4'
 
 // Relais RTSP → MP4 fragmenté, pour afficher dans un navigateur une caméra qui ne parle que RTSP
 // (tout le parc Nest de la maison). UN processus ffmpeg par caméra regardée, quel que soit le
-// nombre de tablettes : il recopie les flux tels quels (`-c copy`, aucun ré-encodage, donc presque
+// nombre d'écrans : il recopie les flux tels quels (`-c copy`, aucun ré-encodage, donc presque
 // pas de CPU) dans un MP4 fragmenté que Media Source Extensions sait lire, et ce relais le distribue
 // à chaque abonné. Le premier fragment envoyé à un abonné est toujours l'entête (`ftyp` + `moov`),
 // puis les fragments (`moof` + `mdat`) au fil de l'eau.
@@ -89,8 +89,8 @@ export class RtspRelay {
   start(): void {
     if (this.current || this.ended) return
     this.current = this.launch(this.opts.url)
-    // Un relais démarre sans abonné (l'ouverture chez le fabricant prend quelques secondes, et la
-    // tablette a pu repartir entre-temps) : s'il n'en reçoit aucun dans le délai de grâce, il se
+    // Un relais démarre sans abonné (l'ouverture chez le fabricant prend quelques secondes, et
+    // l'écran a pu repartir entre-temps) : s'il n'en reçoit aucun dans le délai de grâce, il se
     // signale inutile plutôt que de tourner sans fin — c'est arrivé, un ffmpeg orphelin à la clé.
     this.armIdle()
   }

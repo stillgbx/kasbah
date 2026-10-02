@@ -417,7 +417,7 @@
   "tuning": {
       "title": "Tune the light",
       "open": "Open",
-      "hint": "Tuning bench: presets, exposure, bloom, lamp glow and the selected room's outline, adjusted live in front of the house. The sliders multiply what the style computes — the day/night curve is kept. What you save is written to the house file and applies to every tablet.",
+      "hint": "Tuning bench: presets, exposure, bloom, lamp glow and the selected room's outline, adjusted live in front of the house. The sliders multiply what the style computes — the day/night curve is kept. What you save is written to the house file and applies to every screen.",
       "curve": "Curve",
       "curves": {
         "style": "From style",
@@ -441,7 +441,7 @@
       "presetHints": {
         "soft": "The same picture without the glare: only real sources bloom, the lamp halo is halved, the outline underlines instead of shouting.",
         "cinema": "AgX curve: an overexposed lamp keeps its hue instead of turning white. Wider aperture, deeper vignette — a photograph.",
-        "plain": "For the hallway tablet: almost no bloom, no vignette, a crisp opaque outline readable at a glance.",
+        "plain": "For a hallway screen: almost no bloom, no vignette, a crisp opaque outline readable at a glance.",
         "model": "The model-house spirit: still glowing, but lit walls stop bleeding."
       },
       "save": "Save",
@@ -484,7 +484,7 @@
     "gps": "GPS origin of the local frame", "gpsHeading": "heading", "houseStats": "{levels} floors · {rooms} rooms · {devices} devices",
     "plugins": "Plugins", "pluginsStats": "{active} / {available} enabled · {n} device | {active} / {available} enabled · {n} device | {active} / {available} enabled · {n} devices", "keys": ".env keys",
     "pluginsHint": "Turn on the vendors this house uses. The choice is written to the house file and takes effect right away; keys and tokens stay in .env.",
-    "localPlugins": "On this device", "localPluginsHint": "Personal devices paired with THIS browser. Enabled here only: other tablets know nothing about them, and neither automations nor the assistant can reach them.", "localTens": "TENS actiTENS mini", "localTensHint": "Bluetooth electrostimulation — Chrome or Edge, on localhost or HTTPS.", "localUnsupported": "Bluetooth unavailable in this browser",
+    "localPlugins": "On this device", "localPluginsHint": "Personal devices paired with THIS browser. Enabled here only: other screens know nothing about them, and neither automations nor the assistant can reach them.", "localTens": "TENS actiTENS mini", "localTensHint": "Bluetooth electrostimulation — Chrome or Edge, on localhost or HTTPS.", "localUnsupported": "Bluetooth unavailable in this browser",
     "pluginEnable": "Enable this plugin", "pluginParts": "Provides",
     "pluginDetails": "Show this plugin's info and settings",
     "pluginStatus": {
@@ -509,7 +509,7 @@
     },
     "enphase": {
       "title": "Enphase gateway",
-      "intro": "The gateway requires a token, valid for one year. Pair it from this tablet: the server keeps the token, there is nothing to copy elsewhere.",
+      "intro": "The gateway requires a token, valid for one year. Pair it from this screen: the server keeps the token, there is nothing to copy elsewhere.",
       "expiring": "The gateway token expires in {left}. Renew it to keep reading solar production.",
       "leftDays": "{n} day | {n} days", "leftHours": "{n} hour | {n} hours", "leftSoon": "less than an hour",
       "expired": "The gateway token has expired: solar production is no longer read. Renew it.",
@@ -526,7 +526,7 @@
       "replaceAnyway": "Create a new token anyway",
       "success": "Gateway paired. Token valid for {left}, kept by the server.",
       "successCloud": "Enlighten account linked. The gateway token remains valid for {left}.",
-      "serverKept": "Token kept by the server in {file}. Nothing to copy, even from a tablet.",
+      "serverKept": "Token kept by the server in {file}. Nothing to copy, even away from the server.",
       "tokenInfo": "{role} token, expires on {date}.", "roleOwner": "Owner", "roleInstaller": "Installer",
       "installerNote": "An installer token only lasts 12 hours. Enphase's web form gives nothing else to an account that is also an installer: use the Enphase account above to get the one-year token.",
       "notStored": "No token file is configured (ENPHASE_TOKEN_FILE is empty): pairing will be lost when the server restarts.",
@@ -585,14 +585,14 @@
       "unlink": "Unlink the account",
       "zones": "No heating zone published | {n} heating zone published in the home | {n} heating zones published in the home",
       "poll": "One reading every {min} min, in a single call for the whole account.",
-      "readOnly": "Read-only: setpoints are shown, they cannot be changed from the tablet yet.",
+      "readOnly": "Read-only: setpoints are shown, they cannot be changed from Kasbah yet.",
       "notStored": "No session file is configured (MELCLOUD_SESSION_FILE is empty): the link will be lost when the server restarts."
     },
     "ytmusic": {
       "unofficial": "Unofficial — InnerTube / yt-dlp reverse, personal use only",
       "expired": "The YouTube Music cookie has expired. Renew it below.",
       "importTitle": "Import from a browser on the server",
-      "importSteps": "1. Keep Kasbah open here (tablet or another browser — not the YouTube Music one).\n2. On the Kasbah host: normal Firefox/Chrome window (not private) → music.youtube.com → sign in.\n3. Quit that browser completely (all windows), without signing out — private cookies vanish on close.\n4. Pick the browser and Import.\nOn Windows, Chrome/Edge often fails (encryption) — prefer Firefox, or paste above.",
+      "importSteps": "1. Keep Kasbah open here (this browser or another — not the YouTube Music one).\n2. On the Kasbah host: normal Firefox/Chrome window (not private) → music.youtube.com → sign in.\n3. Quit that browser completely (all windows), without signing out — private cookies vanish on close.\n4. Pick the browser and Import.\nOn Windows, Chrome/Edge often fails (encryption) — prefer Firefox, or paste above.",
       "browser": "Browser on the server",
       "importBrowser": "Import from browser",
       "importing": "Importing…",
@@ -1046,7 +1046,7 @@
     "channelsBoth": "1 + 2", "target": "Channel {n} intensity", "targetHint": "The session ramps up to these intensities on its own, in 0.5 mA steps; 0 = by hand. The star saves them with the favorite.", "channelShort": "channel {n}:",
     "start": "Start",
     "busyStarting": "Starting…",
-    "localOnly": "Controlled from this device only: neither automations nor other tablets can reach it.",
+    "localOnly": "Controlled from this device only: neither automations nor other screens can reach it.",
     "unsupported": "This browser does not speak Bluetooth. Open Kasbah in Chrome or Edge, on localhost or HTTPS.",
     "notEnabled": "The TENS is not enabled on this device: Settings → On this device.",
     "openSettings": "Open settings",

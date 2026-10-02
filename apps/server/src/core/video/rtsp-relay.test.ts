@@ -73,7 +73,7 @@ describe('RtspRelay', () => {
     expect(onIdle).not.toHaveBeenCalled()             // il reste un abonné
     relay.unsubscribe(b.fn)
     clock.advance(4000)
-    expect(onIdle).not.toHaveBeenCalled()             // délai de grâce : une tablette peut revenir
+    expect(onIdle).not.toHaveBeenCalled()             // délai de grâce : un écran peut revenir
     relay.subscribe(a.fn)                             // … et elle revient : le délai est annulé
     clock.advance(10_000)
     expect(onIdle).not.toHaveBeenCalled()

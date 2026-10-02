@@ -45,7 +45,7 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
   app.get('/api/house/warnings', async () => ({ warnings: deps.house.warnings }))
 
   // Placement d'un appareil depuis l'UI : réécrit house.json (voir config/house.ts) et diffuse la
-  // maison entière aux tablettes connectées. Seule écriture du serveur dans le JSON.
+  // maison entière aux écrans connectés. Seule écriture du serveur dans le JSON.
   app.put<{ Params: { id: string } }>('/api/house/devices/:id', async (req) => {
     const placement = devicePlacementSchema.parse(req.body)   // ZodError → 400
     const house = await updateHouseFile(deps.house, (doc) => placeDeviceInJson(doc, req.params.id, placement))
@@ -154,7 +154,7 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
   })
 
   // Réglage de la lumière de la scène 3D (`render.tuning`), posé depuis le banc de la vue Maison :
-  // c'est un choix de LA MAISON, pas de la tablette qui regarde — toutes les tablettes en héritent.
+  // c'est un choix de LA MAISON, pas de l'écran qui regarde — tous les écrans en héritent.
   // Même mécanique que le reste : patch du JSON brut, réécriture atomique, diffusion de la maison.
   app.put('/api/house/render', async (req) => {
     const tuning = sceneTuningSchema.parse(req.body)   // ZodError → 400

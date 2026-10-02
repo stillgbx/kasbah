@@ -9,7 +9,7 @@ import { usePluginsStore } from '../stores/plugins'
 import StrokeIcon from './ui/StrokeIcon.vue'
 
 // Liaison YouTube Music (NON OFFICIEL) : coller le cookie OU l'importer via yt-dlp
-// `--cookies-from-browser` sur la machine qui héberge Kasbah (pas la tablette).
+// `--cookies-from-browser` sur la machine qui héberge Kasbah (pas l'écran qui affiche Kasbah).
 
 const devices = useDevicesStore()
 const notifications = useNotificationsStore()

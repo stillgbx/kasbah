@@ -1,6 +1,6 @@
 # Kasbah
 
-Application web **pour tablette** qui montre la maison et le jardin en **3D** (souris et tactile) et permet de **visualiser et piloter les appareils connectés** placés dans les pièces : lumières, ouvrants, lecteurs, caméras, chauffage, robots, eau, énergie solaire et véhicules.
+Application web (**tablette, ordinateur, téléphone**) qui montre la maison et le jardin en **3D** (souris et tactile) et permet de **visualiser et piloter les appareils connectés** placés dans les pièces : lumières, ouvrants, lecteurs, caméras, chauffage, robots, eau, énergie solaire et véhicules.
 
 - La maison (étages, pièces, ouvertures, terrain, origine GPS, plugins actifs) est décrite dans un **fichier JSON** : voir [docs/house-json.md](docs/house-json.md) et le [wiki](doc/index.md).
 - Chaque fabricant est un **plugin** côté serveur ; les secrets d'API vivent dans un `.env` **serveur**, jamais dans le navigateur.
@@ -10,7 +10,7 @@ Application web **pour tablette** qui montre la maison et le jardin en **3D** (s
 
 ```
 kasbah/
-  apps/web          Vite 8 + Vue 3 + Vuetify 4 + Three.js — l'app tablette
+  apps/web          Vite 8 + Vue 3 + Vuetify 4 + Three.js — l'application web
   apps/server       Node 22 + Fastify 5 — REST + WebSocket, hôte des plugins, sert le build web
   packages/shared   Schémas zod : kinds, états, commandes, protocole, maison + géométrie pure
   packages/mock-sim Moteur de simulation déterministe (plugin `mock` et démo sans serveur)
@@ -18,13 +18,13 @@ kasbah/
   doc/              wiki du projet (architecture, plugins, UI, setup)
 ```
 
-Flux : les plugins découvrent des appareils et poussent des **patchs d'état** → le registre fusionne, horodate et publie → le hub WebSocket envoie des **états complets** (coalescés 50 ms) aux tablettes. Les commandes passent en **REST** (`POST /api/devices/:id/command`) ; l'état résultant revient par le WebSocket.
+Flux : les plugins découvrent des appareils et poussent des **patchs d'état** → le registre fusionne, horodate et publie → le hub WebSocket envoie des **états complets** (coalescés 50 ms) aux navigateurs connectés. Les commandes passent en **REST** (`POST /api/devices/:id/command`) ; l'état résultant revient par le WebSocket.
 
 Le contrat d'appareil est unique : un `kind` (forme de l'état et des commandes) et des `capabilities` (ce que l'UI affiche). Kinds : `light`, `cover`, `media_player`, `climate`, `vacuum`, `mower`, `sensor`, `energy`, `ev_charger`, `vehicle`, `camera`, `weather`, `water`.
 
 ## Fonctionnalités
 
-Mise en page tablette (paysage) en trois colonnes : **rail** à gauche, **scène 3D** au centre, **panneau** contextuel à droite. En portrait, le panneau devient un tiroir. L'URL reflète la sélection (`#/?level=…&room=…&device=…`).
+Mise en page en grand écran (paysage) en trois colonnes : **rail** à gauche, **scène 3D** au centre, **panneau** contextuel à droite. En portrait, le panneau devient un tiroir. L'URL reflète la sélection (`#/?level=…&room=…&device=…`).
 
 ### Vues
 
@@ -111,7 +111,7 @@ npm run dev
 
 Si npm bloque le script d'installation d'`esbuild` : `npm approve-scripts esbuild` puis `npm rebuild esbuild`.
 
-- Web (Vite, HMR) : <http://localhost:5173> — accessible depuis la tablette via l'IP du poste (`host: true`).
+- Web (Vite, HMR) : <http://localhost:5173> — accessible depuis un téléphone ou une tablette via l'IP du poste (`host: true`).
 - Serveur : <http://localhost:8787> — `GET /api/health`, `GET /api/house`, `GET /api/devices`, WebSocket `/ws`, serveur MCP `/mcp` (voir [Serveur MCP](#serveur-mcp)).
 
 Sans aucune configuration, le serveur démarre avec le plugin `mock` et la maison de démonstration : tout est pilotable immédiatement.
@@ -131,7 +131,7 @@ npm run build      # web → apps/web/dist, serveur → apps/server/dist/main.js
 npm start          # sert l'app web et l'API sur KASBAH_PORT (8787)
 ```
 
-Depuis la tablette : `http://<ip-du-serveur>:8787`.
+Depuis un autre appareil du réseau : `http://<ip-du-serveur>:8787`.
 
 ### Qualité
 

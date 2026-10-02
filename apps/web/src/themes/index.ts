@@ -1,4 +1,4 @@
-// Thèmes de la tablette : un thème porte TOUTE la palette (fond, surfaces, texte, accent, teintes
+// Thèmes de l'interface : un thème porte TOUTE la palette (fond, surfaces, texte, accent, teintes
 // des catégories), contrairement aux quatre « accents » d'avant qui ne changeaient que la couleur
 // primaire. Un thème peut n'exister qu'en clair ou qu'en sombre (Synthwave '84).
 //
@@ -66,7 +66,7 @@ export function themeById(id: string): Theme {
 }
 
 /**
- * Variante réellement appliquée : un thème qui n'existe que dans une apparence l'impose (la tablette
+ * Variante réellement appliquée : un thème qui n'existe que dans une apparence l'impose (l'interface
  * en clair passe en sombre sur Synthwave '84 plutôt que d'inventer une palette claire).
  */
 export function resolveVariant(id: string, wantDark: boolean): { palette: Palette, isDark: boolean } {

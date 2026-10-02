@@ -55,7 +55,7 @@ export function sunPosition(date: Date, lat: number, lon: number): SunPosition {
 
 /**
  * Course APPROCHÉE, quand la maison n'est pas géoréférencée : on ne sait ni où elle est ni quand le
- * soleil s'y lève, alors on prend l'heure locale de la tablette et une journée type (lever 7 h,
+ * soleil s'y lève, alors on prend l'heure locale du navigateur et une journée type (lever 7 h,
  * coucher 21 h, culmination à 55°). Faux de plusieurs degrés — mais la scène n'a besoin de savoir
  * qu'une chose : s'il fait jour, et de quel côté vient la lumière.
  */

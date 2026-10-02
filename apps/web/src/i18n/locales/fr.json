@@ -417,7 +417,7 @@
   "tuning": {
       "title": "Régler la lumière",
       "open": "Ouvrir",
-      "hint": "Banc de réglage : préréglages, exposition, bloom, halo des lampes et trait de la pièce sélectionnée, réglés en direct devant la maison. Les curseurs multiplient ce que le style calcule — la courbe jour/nuit est conservée. Ce qu'on enregistre est écrit dans le fichier de la maison, et vaut pour toutes les tablettes.",
+      "hint": "Banc de réglage : préréglages, exposition, bloom, halo des lampes et trait de la pièce sélectionnée, réglés en direct devant la maison. Les curseurs multiplient ce que le style calcule — la courbe jour/nuit est conservée. Ce qu'on enregistre est écrit dans le fichier de la maison, et vaut pour tous les écrans.",
       "curve": "Courbe",
       "curves": {
         "style": "Du style",
@@ -441,7 +441,7 @@
       "presetHints": {
         "soft": "La même image, sans l'éblouissement : seules les vraies sources bavent, le halo des lampes est divisé par deux, le trait souligne au lieu de crier.",
         "cinema": "Courbe AgX : une lampe surexposée garde sa teinte au lieu de virer au blanc. Diaphragme plus ouvert, vignette creusée — c'est une photo.",
-        "plain": "Pour la tablette de l'entrée : presque pas de bloom, pas de vignette, un trait net et opaque qu'on lit d'un pas.",
+        "plain": "Pour un écran dans l'entrée : presque pas de bloom, pas de vignette, un trait net et opaque qu'on lit d'un pas.",
         "model": "L'esprit de la maquette : ça brille toujours, mais les murs éclairés cessent de baver."
       },
       "save": "Enregistrer",
@@ -484,7 +484,7 @@
     "gps": "Origine GPS du repère local", "gpsHeading": "cap", "houseStats": "{levels} niveaux · {rooms} pièces · {devices} appareils",
     "plugins": "Plugins", "pluginsStats": "{active} / {available} actifs · {n} appareil | {active} / {available} actifs · {n} appareil | {active} / {available} actifs · {n} appareils", "keys": "Clés .env",
     "pluginsHint": "Activez les fabricants que cette maison utilise. Le choix est écrit dans le fichier de la maison et prend effet tout de suite ; les clés et les jetons, eux, restent dans .env.",
-    "localPlugins": "Sur cet appareil", "localPluginsHint": "Des appareils personnels appairés à CE navigateur. Activés ici seulement : les autres tablettes n'en voient rien, et ni les automatisations ni l'assistant ne peuvent les atteindre.", "localTens": "TENS actiTENS mini", "localTensHint": "Électrostimulation en Bluetooth — Chrome ou Edge, en localhost ou en HTTPS.", "localUnsupported": "Bluetooth indisponible dans ce navigateur",
+    "localPlugins": "Sur cet appareil", "localPluginsHint": "Des appareils personnels appairés à CE navigateur. Activés ici seulement : les autres écrans n'en voient rien, et ni les automatisations ni l'assistant ne peuvent les atteindre.", "localTens": "TENS actiTENS mini", "localTensHint": "Électrostimulation en Bluetooth — Chrome ou Edge, en localhost ou en HTTPS.", "localUnsupported": "Bluetooth indisponible dans ce navigateur",
     "pluginEnable": "Activer ce plugin", "pluginParts": "Fournit",
     "pluginDetails": "Afficher les infos et réglages de ce plugin",
     "pluginStatus": {
@@ -509,7 +509,7 @@
     },
     "enphase": {
       "title": "Passerelle Enphase",
-      "intro": "La passerelle exige un jeton, valable un an. Appairez-la depuis cette tablette : le serveur garde le jeton, il n'y a rien à recopier ailleurs.",
+      "intro": "La passerelle exige un jeton, valable un an. Appairez-la depuis cet écran : le serveur garde le jeton, il n'y a rien à recopier ailleurs.",
       "expiring": "Le jeton de la passerelle expire dans {left}. Renouvelez-le pour ne pas perdre la lecture de la production solaire.",
       "leftDays": "{n} jour | {n} jours", "leftHours": "{n} heure | {n} heures", "leftSoon": "moins d'une heure",
       "expired": "Le jeton de la passerelle a expiré : la production solaire n'est plus lue. Renouvelez-le.",
@@ -526,7 +526,7 @@
       "replaceAnyway": "Créer un nouveau jeton quand même",
       "success": "Passerelle appairée. Jeton valable {left}, gardé par le serveur.",
       "successCloud": "Compte Enlighten lié. Le jeton de la passerelle reste valable {left}.",
-      "serverKept": "Jeton conservé par le serveur dans {file}. Rien à recopier, même depuis une tablette.",
+      "serverKept": "Jeton conservé par le serveur dans {file}. Rien à recopier, même loin du serveur.",
       "tokenInfo": "Jeton {role}, expire le {date}.", "roleOwner": "de propriétaire", "roleInstaller": "d'installateur",
       "installerNote": "Un jeton d'installateur ne vaut que 12 heures. Le formulaire web d'Enphase n'en donne pas d'autre à un compte qui est aussi installateur : passez par le compte Enphase ci-dessus pour obtenir celui d'un an.",
       "notStored": "Aucun fichier de jeton n'est configuré (ENPHASE_TOKEN_FILE est vide) : l'appairage sera perdu au redémarrage du serveur.",
@@ -585,14 +585,14 @@
       "unlink": "Délier le compte",
       "zones": "Aucune zone de chauffage publiée | {n} zone de chauffage publiée dans la maison | {n} zones de chauffage publiées dans la maison",
       "poll": "Une lecture toutes les {min} min, en un seul appel pour tout le compte.",
-      "readOnly": "Lecture seule : les consignes s'affichent, elles ne se règlent pas encore depuis la tablette.",
+      "readOnly": "Lecture seule : les consignes s'affichent, elles ne se règlent pas encore depuis Kasbah.",
       "notStored": "Aucun fichier de session n'est configuré (MELCLOUD_SESSION_FILE est vide) : la liaison sera perdue au redémarrage du serveur."
     },
     "ytmusic": {
       "unofficial": "Non officiel — reverse InnerTube / yt-dlp, usage perso uniquement",
       "expired": "Le cookie YouTube Music a expiré. Renouvelez-le ci-dessous.",
       "importTitle": "Importer depuis un navigateur du serveur",
-      "importSteps": "1. Ouvrez Kasbah ici (tablette ou autre navigateur — pas celui de YouTube Music).\n2. Sur la machine Kasbah : fenêtre Firefox/Chrome normale (pas privée) → music.youtube.com → connectez-vous.\n3. Fermez complètement ce navigateur (toutes les fenêtres), sans vous déconnecter — les cookies privés disparaissent à la fermeture.\n4. Choisissez le navigateur et Importer.\nSur Windows, Chrome/Edge échoue souvent (chiffrement) — préférez Firefox, ou le collage ci-dessus.",
+      "importSteps": "1. Ouvrez Kasbah ici (ce navigateur ou un autre — pas celui de YouTube Music).\n2. Sur la machine Kasbah : fenêtre Firefox/Chrome normale (pas privée) → music.youtube.com → connectez-vous.\n3. Fermez complètement ce navigateur (toutes les fenêtres), sans vous déconnecter — les cookies privés disparaissent à la fermeture.\n4. Choisissez le navigateur et Importer.\nSur Windows, Chrome/Edge échoue souvent (chiffrement) — préférez Firefox, ou le collage ci-dessus.",
       "browser": "Navigateur sur le serveur",
       "importBrowser": "Importer depuis le navigateur",
       "importing": "Import…",
@@ -1061,7 +1061,7 @@
     "channelsBoth": "1 + 2", "target": "Intensité canal {n}", "targetHint": "La séance monte d'elle-même jusqu'à ces intensités, par paliers de 0,5 mA ; 0 = à la main. L'étoile les enregistre avec le favori.", "channelShort": "canal {n} :",
     "start": "Démarrer",
     "busyStarting": "Lancement…",
-    "localOnly": "Piloté depuis ce poste seulement : ni les automatisations ni les autres tablettes ne peuvent l'atteindre.",
+    "localOnly": "Piloté depuis ce poste seulement : ni les automatisations ni les autres écrans ne peuvent l'atteindre.",
     "unsupported": "Ce navigateur ne parle pas Bluetooth. Ouvrez Kasbah dans Chrome ou Edge, en localhost ou en HTTPS.",
     "notEnabled": "Le TENS n'est pas activé sur ce poste : Réglages → Sur cet appareil.",
     "openSettings": "Ouvrir les réglages",

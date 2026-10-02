@@ -7,7 +7,7 @@ import type { DeviceRegistry } from '../registry'
 
 // Ce qu'un prédicat a besoin de savoir du monde, pris à un instant : les appareils, la maison
 // EFFECTIVE (celle du fichier, plus les appareils que l'auto-placement rattache à une pièce d'après
-// ce que déclare leur fabricant — la même que voit la tablette, `apps/web/src/stores/house.ts`),
+// ce que déclare leur fabricant — la même que voit l'interface, `apps/web/src/stores/house.ts`),
 // et qui est garé où.
 
 export interface EvalContext {

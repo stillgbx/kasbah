@@ -46,7 +46,7 @@ export function useForecast(deviceId: Ref<string | undefined>) {
 }
 
 /**
- * Le lieu affiché par la vue Météo et les favoris, mémorisés sur la tablette (comme les recherches
+ * Le lieu affiché par la vue Météo et les favoris, mémorisés dans le navigateur (comme les recherches
  * récentes de la Musique). `null` = la maison, le défaut ; le widget d'accueil et la scène 3D, eux,
  * restent à la maison. Partagé : la barre de lieux et la vue lisent le même état.
  */

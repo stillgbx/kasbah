@@ -27,7 +27,7 @@ export const musicConfigSchema = z.object({
   FFMPEG_PATH: z.string().min(1).default('ffmpeg'),
   /**
    * Base URL publiée pour Cast/Sonos (ex. `http://192.168.1.10:8787`). Vide = dérivée de la requête
-   * (Host de la tablette) — adapté au LAN. `YTM_PUBLISH_BASE` (ancien nom) est encore lu.
+   * (Host du navigateur) — adapté au LAN. `YTM_PUBLISH_BASE` (ancien nom) est encore lu.
    */
   MUSIC_PUBLISH_BASE: z.string().trim().default(''),
   YTM_PUBLISH_BASE: z.string().trim().default(''),
@@ -318,7 +318,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
     const source = requireSource(track.source)
     await source.prepare?.()
     // Un de nos flux joue déjà là : le mettre en pause TOUT DE SUITE, avant les secondes de
-    // résolution — la tablette montre un sablier, l'enceinte se tait, la nouvelle piste remplace
+    // résolution — l'écran montre un sablier, l'enceinte se tait, la nouvelle piste remplace
     // l'ancienne. Pas `stop` : sur un Cast il fermerait l'appli, qu'il faudrait relancer.
     // La pause est ATTENDUE avant `play_url` : une piste résolue d'avance part aussitôt, et une pause
     // arrivée après elle laissait la nouvelle piste en pause à 0 s (vu sur le Sonos « Bureau »).

@@ -12,7 +12,7 @@ import { useSettingsStore } from '../../stores/settings'
 //
 // Trois façons d'arriver à une image : un PRÉRÉGLAGE (quatre partis pris écrits dans
 // `three/styles/tuning.ts`), les curseurs, ou les deux — un préréglage est un point de départ, pas
-// un verrou. « Enregistrer » écrit le réglage dans la maison, d'où toutes les tablettes le lisent ;
+// un verrou. « Enregistrer » écrit le réglage dans la maison, d'où tous les écrans le lisent ;
 // « Réinitialiser » revient à ce que le style calcule, sans toucher à ce qui est enregistré.
 //
 // Les curseurs sont des MULTIPLICATEURS du style (voir `three/styles/tuning.ts`) : régler la nuit

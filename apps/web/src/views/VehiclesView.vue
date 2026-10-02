@@ -239,7 +239,7 @@ type Quota = NonNullable<ReturnType<typeof quotaOf>>
 /**
  * « 0,42 $/10,00 $ de crédit Tesla · depuis le 13 sept. » — le plugin dit CE qu'il compte (`labelKey`),
  * dans quelle unité (`unit`) et depuis quand (`since`) ; la vue ne fait que mettre en forme, dans la
- * langue et le format de la tablette.
+ * langue et le format de l'interface.
  */
 const quotaLabel = (q: Quota) => {
   const fmt = (n: number) => (q.unit === 'usd'
@@ -452,7 +452,7 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
 .vpanel-enter-active, .vpanel-leave-active { transition: opacity .2s ease, transform .22s ease; }
 .vpanel-enter-from, .vpanel-leave-to { opacity: 0; transform: translateY(14px); }
 @media (prefers-reduced-motion: reduce) { .vpanel-enter-from, .vpanel-leave-to { transform: none; } }
-/* Tablette : énergie puis état à gauche, quota en bas ; boutons au-dessus de la carte à droite.
+/* Large : énergie puis état à gauche, quota en bas ; boutons au-dessus de la carte à droite.
    Les boutons partagent la rangée de l'énergie et s'étirent jusqu'à son bas : la carte commence
    à la même hauteur que les cases d'état. */
 @container (min-width: 720px) {

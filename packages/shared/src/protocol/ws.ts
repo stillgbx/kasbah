@@ -32,7 +32,7 @@ export const serverMessageSchema = z.discriminatedUnion('type', [
   /** Liste des scènes d'un fabricant (découverte, ajout/suppression côté pont). */
   z.object({ type: z.literal('scenes'), scenes: z.array(pluginSceneEntrySchema) }),
   z.object({ type: z.literal('scene'), sceneId: sceneIdSchema, state: pluginSceneStateSchema }),
-  /** La maison a été réécrite (placement d'un appareil depuis une tablette). */
+  /** La maison a été réécrite (placement d'un appareil depuis un écran). */
   z.object({ type: z.literal('house'), house: houseSchema }),
   z.object({ type: z.literal('error'), code: z.string(), message: z.string() }),
   /** Liste ENTIÈRE des automatisations et de leur statut, à chaque changement (écriture, exécution, appareil disparu). */

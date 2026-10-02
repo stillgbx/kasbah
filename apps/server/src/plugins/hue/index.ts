@@ -168,7 +168,7 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
             const fragment = item as { status?: { active?: string }; auto_dynamic?: boolean }
             if (fragment.status?.active) ctx!.emitSceneState(item.id, sceneStatusToActive({ status: fragment.status }))
             // le réglage « démarrer animée » vit sur le pont : le relire d'où qu'il vienne (Kasbah,
-            // app Hue, autre tablette) garde une seule source de vérité
+            // app Hue, autre écran) garde une seule source de vérité
             if (fragment.auto_dynamic !== undefined) {
               const scene = scenes.find((sc) => sc.id === item.id)
               if (scene && scene.auto_dynamic !== fragment.auto_dynamic) {

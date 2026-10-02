@@ -34,8 +34,8 @@ export interface UiTheme {
 
 export interface SceneTheme extends UiTheme, ScenePalette {
   /**
-   * 0 = plein jour, 1 = nuit noire. À NE PAS confondre avec le mode clair/sombre de l'app : la
-   * tablette peut être en thème sombre devant une maison en plein soleil. Ce qui se lit ici, c'est
+   * 0 = plein jour, 1 = nuit noire. À NE PAS confondre avec le mode clair/sombre de l'app : l'interface
+   * peut être en thème sombre devant une maison en plein soleil. Ce qui se lit ici, c'est
    * la position du soleil au-dessus de la maison (`core/ambience.ts`).
    */
   night: number

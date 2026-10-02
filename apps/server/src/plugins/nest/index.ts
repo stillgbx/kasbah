@@ -40,7 +40,7 @@ import type { SdmDevice } from './types'
 // Vidéo : tout le parc est en RTSP (caméras de 1re génération), qu'aucun navigateur ne lit. Google
 // ouvre une session RTSP à la demande (`GenerateRtspStream`, cinq minutes, prolongeable), un relais
 // ffmpeg par caméra regardée la recopie en MP4 fragmenté (`core/video/rtsp-relay.ts`), et la route
-// WebSocket `/cameras/<id>/stream` la distribue aux tablettes. Plus personne ne regarde → la
+// WebSocket `/cameras/<id>/stream` la distribue aux écrans. Plus personne ne regarde → la
 // session Google est arrêtée : rien ne justifie de la laisser courir.
 
 /**
@@ -83,9 +83,9 @@ const STREAM_EXTEND_MS = 4 * 60_000
 const PUBSUB_MAX_MESSAGES = 20
 /** Un relais sans abonné attend ce délai avant d'arrêter la session (changement de vue, reconnexion). */
 const STREAM_IDLE_MS = 8000
-/** Au-delà de ce retard d'envoi, une tablette ne suit plus : on saute des fragments plutôt que d'empiler. */
+/** Au-delà de ce retard d'envoi, un écran ne suit plus : on saute des fragments plutôt que d'empiler. */
 const WS_MAX_BUFFERED = 8 << 20
-/** Ping du flux vidéo : deux battements sans pong et la tablette est considérée partie. */
+/** Ping du flux vidéo : deux battements sans pong et l'écran est considéré parti. */
 const WS_HEARTBEAT_MS = 30_000
 
 /** La vue Caméras se signale toutes les 5 s ; sans nouvelle de personne pendant ce délai, les vignettes s'arrêtent. */
@@ -254,8 +254,8 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
   }
 
   /**
-   * Ouvre (ou rejoint) la session vidéo d'une caméra RTSP. Deux tablettes qui arrivent en même
-   * temps (ou une tablette qui se connecte deux fois, vu en réel) doivent partager la MÊME
+   * Ouvre (ou rejoint) la session vidéo d'une caméra RTSP. Deux écrans qui arrivent en même
+   * temps (ou un écran qui se connecte deux fois, vu en réel) doivent partager la MÊME
    * ouverture : sans `opening`, chacune demandait sa session à Google et la seconde écrasait la
    * première dans `streams`, dont le ffmpeg et le minuteur de prolongation tournaient alors sans fin.
    */
@@ -516,8 +516,8 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
       })
 
       // Flux vidéo d'une caméra : une ligne JSON d'entête (codecs), puis l'entête MP4 et les
-      // fragments en binaire. Chaque fragment commence par une image clé : une tablette qui arrive
-      // en cours de route décode dès le premier, et une tablette trop lente peut en sauter.
+      // fragments en binaire. Chaque fragment commence par une image clé : un écran qui arrive
+      // en cours de route décode dès le premier, et un écran trop lent peut en sauter.
       app.get<{ Params: { id: string } }>('/cameras/:id/stream', { websocket: true }, (socket, req) => {
         const externalId = req.params.id
         const fail = (message: string) => { socket.send(JSON.stringify({ type: 'error', message })); socket.close(1008, message.slice(0, 120)) }
@@ -533,7 +533,7 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
           if (socket.bufferedAmount > WS_MAX_BUFFERED) return
           socket.send(msg.data, { binary: true })
         }
-        // une tablette qui disparaît sans fermer (Wi-Fi coupé) laisserait la session Google et ffmpeg
+        // un écran qui disparaît sans fermer (Wi-Fi coupé) laisserait la session Google et ffmpeg
         // tourner : ping toutes les 30 s, et on coupe si le pong ne revient pas
         let alive = true
         socket.on('pong', () => { alive = true })
@@ -564,8 +564,8 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
       })
 
       // Bouton stop d'une tuile : la vignette de CETTE caméra s'arrête (sa session est rendue, l'image
-      // reste figée) jusqu'à reprise. Partagé entre les écrans — une tablette qui arrête une caméra
-      // l'arrête pour la maison, comme elle éteindrait une lampe. Le direct n'est pas concerné.
+      // reste figée) jusqu'à reprise. Partagé entre les écrans — un écran qui arrête une caméra
+      // l'arrête pour la maison, comme il éteindrait une lampe. Le direct n'est pas concerné.
       app.put<{ Params: { id: string }; Body: { enabled?: unknown } }>('/cameras/:id/snapshots', async (req, reply) => {
         const device = entries.get(req.params.id)
         if (!device || !isCamera(device)) return sendError(reply, 404, 'NOT_FOUND', `unknown Nest camera ${req.params.id}`)

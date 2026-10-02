@@ -79,7 +79,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
     commandTimeoutMs: opts.env.KASBAH_COMMAND_TIMEOUT_MS,
   })
 
-  // Automatisations : un fichier à côté de la maison, exécutées ici (la tablette dort, le serveur
+  // Automatisations : un fichier à côté de la maison, exécutées ici (l'écran dort, le serveur
   // non). Après `host`, par qui passent les commandes ; avant le hub, dont le snapshot les porte.
   const automations = new AutomationEngine({
     store: createAutomationsFile(automationsPathFor(house.path)),

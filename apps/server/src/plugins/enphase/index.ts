@@ -116,8 +116,8 @@ export interface TokenStatus {
   renewUnderDays: number
   /**
    * Où le serveur garde le jeton, ou `null` si `ENPHASE_TOKEN_FILE` est vide. C'est ce qui dit à
-   * l'UI s'il y a quelque chose à recopier à la main : avec un cache, non, l'appairage depuis une
-   * tablette suffit et survit aux redémarrages. Sans cache, il faudra le poser dans `.env`.
+   * l'UI s'il y a quelque chose à recopier à la main : avec un cache, non, l'appairage depuis
+   * l'interface suffit et survit aux redémarrages. Sans cache, il faudra le poser dans `.env`.
    */
   tokenFile: string | null
   /** Session Enlighten en cache : indispensable pour la borne, inutile à la passerelle. */

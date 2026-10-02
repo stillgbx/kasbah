@@ -9,7 +9,7 @@ export const PLUGIN_ID = 'google_cast'
 /** Route (montée sous /api/plugins/google_cast) qui sert une pochette téléchargée et mise en cache par le serveur. */
 export const ART_ROUTE = '/api/plugins/google_cast/art'
 /**
- * La pochette passe par le serveur plutôt que d'être chargée par chaque tablette directement chez
+ * La pochette passe par le serveur plutôt que d'être chargée par chaque écran directement chez
  * Google : ses serveurs d'images répondent `429 Too Many Requests` au bout de quelques affichages
  * (constaté), et une image qui échoue laissait le fond vide. Le serveur télécharge UNE fois, garde
  * en cache et réessaie avec un délai.

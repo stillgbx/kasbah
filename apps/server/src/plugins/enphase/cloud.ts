@@ -8,7 +8,7 @@ import { writeFileAtomic } from '../../core/atomic-file'
 
 // Session Enlighten (cloud) : ce dont la borne IQ EV Charger 2 a besoin. L'API LOCALE de la
 // passerelle ne la voit pas ; le Modbus est réservé aux partenaires. Reste l'API privée de
-// l'appli Enphase — même décision que Renault, faute de voie officielle utile à une tablette
+// l'appli Enphase — même décision que Renault, faute de voie officielle utile à une interface
 // (le plan Watt d'Enlighten v4 est 1 000 appels/mois, télémétrie 15 min, commandes VPP).
 //
 // Le mot de passe n'est JAMAIS gardé : il ouvre une session, on conserve le `session_id` (et

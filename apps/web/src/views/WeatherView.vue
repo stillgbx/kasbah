@@ -35,12 +35,12 @@ const forecast = computed(() => (place.value ? elsewhere.data.value?.forecast ??
 const caps = computed(() => new Set(place.value ? ['forecast', 'air_quality', 'pollen'] : weather.descriptor.value?.capabilities ?? []))
 const attribution = computed(() => (place.value ? elsewhere.data.value?.attribution : weather.descriptor.value?.meta.weather?.attribution))
 const model = computed(() => (place.value ? undefined : weather.descriptor.value?.meta.weather?.model))
-/** Fuseau du lieu affiché ; `undefined` = celui de la tablette (la maison). */
+/** Fuseau du lieu affiché ; `undefined` = celui du navigateur (la maison). */
 const tz = computed(() => (place.value ? elsewhere.data.value?.timezone : undefined))
 const localTz = Intl.DateTimeFormat().resolvedOptions().timeZone
 /** Une heure du lieu affiché, dans SON fuseau : le lever à Tokyo est celui de Tokyo. */
 const fd = (ms: number, key: 'time' | 'hour' | 'weekday' | 'date') => d(new Date(ms), tz.value ? { key, timeZone: tz.value } : key)
-/** L'heure du relevé ; ailleurs, avec le décalage quand le fuseau n'est pas celui de la tablette. */
+/** L'heure du relevé ; ailleurs, avec le décalage quand le fuseau n'est pas celui du navigateur. */
 const observed = (ms: number) => (tz.value && tz.value !== localTz ? d(new Date(ms), { key: 'time', timeZone: tz.value, timeZoneName: 'short' }) : fd(ms, 'time'))
 
 const now = ref(Date.now())

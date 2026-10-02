@@ -31,7 +31,7 @@ export const pluginHealthSchema = z.object({
   /**
    * Consommation d'un quota, quand l'API du fabricant est FACTURÉE ou bornée et que le plugin se
    * rationne (Tesla : les lectures du jour). `labelKey` est une clé i18n de l'app web — même
-   * convention que `PluginPart.labelKey`, le serveur ne connaît pas la langue de la tablette.
+   * convention que `PluginPart.labelKey`, le serveur ne connaît pas la langue de l'interface.
    * Absent = ce plugin ne compte rien, et l'UI n'a rien à montrer.
    */
   quota: z.object({
@@ -49,7 +49,7 @@ export type PluginHealth = z.infer<typeof pluginHealthSchema>
 /** Sous-item d'un plugin (un kind simulé par `mock`…) : ce que l'UI affiche et bascule. */
 export const pluginPartSchema = z.object({
   id: z.string(),
-  /** Clé i18n du libellé (`kinds.light`…) : le serveur ne connaît pas la langue de la tablette. */
+  /** Clé i18n du libellé (`kinds.light`…) : le serveur ne connaît pas la langue de l'interface. */
   labelKey: z.string(),
   enabled: z.boolean(),
 })
@@ -96,8 +96,8 @@ export type EnergyHistory = z.infer<typeof energyHistorySchema>
 
 /**
  * Prévisions d'un appareil `weather`, servies À LA DEMANDE (`GET /api/devices/:id/forecast`) et non
- * poussées : plusieurs Ko qui changent à chaque sondage n'ont rien à faire sur le WebSocket d'une
- * tablette qui n'a pas la vue Météo ouverte — même arbitrage que l'historique énergie. Deux
+ * poussées : plusieurs Ko qui changent à chaque sondage n'ont rien à faire sur le WebSocket d'un
+ * écran qui n'a pas la vue Météo ouverte — même arbitrage que l'historique énergie. Deux
  * granularités, chacune bornée : l'horaire pour la journée qui vient, le quotidien pour la semaine.
  * Les pourcentages sont sur 100, comme dans l'état.
  */

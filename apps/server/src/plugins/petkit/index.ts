@@ -386,7 +386,7 @@ export function createPetkitPlugin(deps: PetkitPluginDeps = {}): DevicePlugin {
 /**
  * Enveloppe d'erreur ATTENDUE par le client (`apiErrorSchema` : `{ error: { code, message } }`).
  * Renvoyer `{ error: '<texte>' }`, comme le font encore les routes de MELCloud et de Renault, fait
- * échouer l'analyse côté tablette : le message du fabricant est perdu et l'utilisateur ne voit
+ * échouer l'analyse côté interface : le message du fabricant est perdu et l'utilisateur ne voit
  * qu'un « HTTP 502 » qui n'oriente vers rien. Vécu le 21/09 au premier appairage.
  */
 const apiError = (code: string, message: string) => ({ error: { code, message } })

@@ -5,8 +5,8 @@ import type { SceneRegistry } from '../scene-registry'
 import type { EvalContext } from './context'
 import { resolveTarget } from './evaluate'
 
-// Exécution des actions d'une automatisation. Le même chemin qu'une commande envoyée depuis la
-// tablette (`POST /api/devices/:id/command`) : la commande est vérifiée contre ce que l'appareil
+// Exécution des actions d'une automatisation. Le même chemin qu'une commande envoyée depuis
+// l'interface (`POST /api/devices/:id/command`) : la commande est vérifiée contre ce que l'appareil
 // déclare (`assertCommandAllowed`) avant d'aller à son plugin — jamais sautée.
 //
 // Les actions s'enchaînent DANS L'ORDRE (fermer les volets, puis lancer la musique) ; les appareils

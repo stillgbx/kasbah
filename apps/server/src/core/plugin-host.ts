@@ -163,7 +163,7 @@ export class PluginHost {
     else {
       await this.stopOne(id)
       // éteint = sorti de la maison : ses appareils et ses ambiances quittent les registres, sinon
-      // les tablettes garderaient une liste que plus personne n'alimente
+      // les écrans garderaient une liste que plus personne n'alimente
       this.opts.registry.register(id, [])
       this.opts.scenes.register(id, [])
       slot.status = { status: 'disabled' }

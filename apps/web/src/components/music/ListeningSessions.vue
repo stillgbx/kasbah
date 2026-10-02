@@ -19,7 +19,7 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 // flux (`play_url`) montrent « Ici », la source reste visible mais grisée ; on en sort par le bouton
 // de la barre (Transférer devenu Annuler).
 //
-// Ordre : les FAVORIS d'abord (étoile, mémorisée sur la tablette), puis les autres, chaque groupe
+// Ordre : les FAVORIS d'abord (étoile, mémorisée dans le navigateur), puis les autres, chaque groupe
 // par ordre alphabétique — la pièce n'est qu'une légende. Un filtre segmenté en tête restreint aux
 // enceintes, téléviseurs ou écrans (`meta.mediaPlayer.deviceClass`), comme les filtres de pièce.
 // À droite de chaque ligne, trois touches de largeur fixe : lecture / pause du lecteur (invisible s'il

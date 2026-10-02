@@ -617,7 +617,7 @@ describe('isDaylight', () => {
     expect(isDaylight({ now: at('2026-06-21T10:00:00Z'), sunrise: 0, sunset: 0, geo })).toBe(true)
   })
 
-  it('maison sans origine GPS : la journée type 7 h - 21 h, heure de la tablette', () => {
+  it('maison sans origine GPS : la journée type 7 h - 21 h, heure du navigateur', () => {
     expect(isDaylight({ now: new Date(2026, 5, 21, 12, 0) })).toBe(true)
     expect(isDaylight({ now: new Date(2026, 5, 21, 8, 0) })).toBe(true)
     expect(isDaylight({ now: new Date(2026, 5, 21, 7, 10) })).toBe(false)       // tout juste levé

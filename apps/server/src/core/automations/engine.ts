@@ -13,7 +13,7 @@ import { nextOccurrence } from './schedule'
 import { computeStatus } from './status'
 import type { AutomationsStore } from './store'
 
-// Moteur des automatisations, côté serveur (la tablette dort, le serveur non).
+// Moteur des automatisations, côté serveur (l'écran dort, le serveur non).
 //
 // HORAIRE : un seul minuteur, posé sur la plus proche échéance de toutes les automatisations
 // actives, jamais plus loin que 6 h (le soleil se relit chaque jour, et `setTimeout` plafonne à

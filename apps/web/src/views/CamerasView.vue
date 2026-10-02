@@ -15,7 +15,7 @@ import { useDevicesStore } from '../stores/devices'
 // lance le direct, avec les mêmes boutons arrêter / son que la carte détail.
 //
 // Tant que la vue est ouverte, elle se signale au serveur toutes les 5 s : c'est ce qui tient les
-// sessions de vignettes ouvertes — et ce qui les ferme, 15 s après le départ de la dernière tablette.
+// sessions de vignettes ouvertes — et ce qui les ferme, 15 s après le départ du dernier écran.
 const devices = useDevicesStore()
 
 const cameras = computed(() => devices.list.filter((e) => e.state.kind === 'camera'))

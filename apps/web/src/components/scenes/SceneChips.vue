@@ -27,7 +27,7 @@ const rows = computed(() => props.scenes.map((e) => ({
   dynamic: e.scene.dynamic,
   active: e.state.active,
   background: preview(e.scene.swatches),
-  /** Mode joué au tap : dépend du réglage du fabricant et de la préférence de la tablette. */
+  /** Mode joué au tap : dépend du réglage du fabricant et de la préférence de ce navigateur. */
   tapMode: store.tapMode(e),
 })))
 

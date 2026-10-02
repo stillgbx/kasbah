@@ -10,7 +10,7 @@ import { approximateSunPosition, sunPosition } from './sun'
 //
 // Et ni l'un ni l'autre n'est le thème clair/sombre de l'application : demande explicite de
 // l'utilisateur — « le mode de l'app est une chose, pour la maison c'est en fonction de la position
-// gps, du soleil, de la météo ». Une tablette en thème sombre devant une maison en plein soleil est
+// gps, du soleil, de la météo ». Un écran en thème sombre devant une maison en plein soleil est
 // donc un état normal.
 //
 // La météo est branchée depuis le 2026-09-16 : `useHouseScene` lit l'appareil `weather` (nébulosité,

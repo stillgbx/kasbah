@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { useLocalStorage } from '@vueuse/core'
 
 // Plugins LOCAUX : activés sur CE poste seulement, jamais dans house.json. Un plugin de la maison
-// se voit sur toutes les tablettes ; celui-ci pilote un appareil personnel appairé au navigateur
+// se voit sur tous les écrans ; celui-ci pilote un appareil personnel appairé au navigateur
 // (le TENS en Bluetooth) et ne doit exister que là où on l'a allumé — pas sur la tablette du palier.
 
 export const LOCAL_PLUGINS = ['tens'] as const

@@ -83,7 +83,7 @@ export const TUNING_PRESETS: readonly TuningPreset[] = [
     // partent — c'est le flou d'un objectif ouvert, pas encore la maquette
     tiltShift: 0.45, tiltCenter: 0.52, tiltWidth: 0.3, tiltPills: 0.5,
   }),
-  // Pour la tablette de l'entrée, en plein jour, à un mètre : presque pas de bloom, pas de vignette,
+  // Pour un écran dans l'entrée, en plein jour, à un mètre : presque pas de bloom, pas de vignette,
   // un trait net et opaque qu'on lit d'un coup d'œil. Ici la maison est un TABLEAU DE BORD, et ce
   // qui compte est de voir d'un pas quelle pièce est ouverte — pas l'atmosphère.
   preset('plain', {

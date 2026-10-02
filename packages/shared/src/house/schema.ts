@@ -582,9 +582,9 @@ export const defaultPlugins = (): Record<string, PluginSettings> => ({ mock: { .
  * eux, sont les grandeurs mêmes du trait qui souligne la pièce sélectionnée — il vient du thème de
  * l'application, aucun style ne le calcule.
  *
- * Pourquoi dans la MAISON et non dans les préférences de la tablette (comme le style ou la
- * qualité) : une lumière se règle une fois, devant la maison, et vaut ensuite pour toutes les
- * tablettes qui la regardent. La qualité, elle, dépend de la machine qui dessine.
+ * Pourquoi dans la MAISON et non dans les préférences du navigateur (comme le style ou la
+ * qualité) : une lumière se règle une fois, devant la maison, et vaut ensuite pour tous les
+ * écrans qui la regardent. La qualité, elle, dépend de la machine qui dessine.
  *
  * Les bornes sont larges et strictes à la fois : larges parce qu'un goût ne se discute pas, strictes
  * parce qu'une valeur folle doit être REFUSÉE à l'écriture (400) plutôt qu'écrite puis subie. Un

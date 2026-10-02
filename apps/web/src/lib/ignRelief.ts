@@ -1,7 +1,7 @@
 import { emptyReliefGrid, footprintCeiling, localToGeo, reliefNodeXY, resolveDefaults, serializeRelief, terrainFootprints, type House, type Relief } from '@kasbah/shared'
 
 // Relief RÉEL de la parcelle, lu au service d'altimétrie de l'IGN (Géoplateforme, ouvert, sans clé,
-// CORS ouvert — appelé depuis la tablette comme la météo). Un point par nœud de la grille.
+// CORS ouvert — appelé depuis le navigateur comme la météo). Un point par nœud de la grille.
 //
 // Deux sources, de la plus fine à la plus sûre : le MNT LiDAR HD (50 cm) là où il est produit, le
 // RGE ALTI (1 m, France entière) ailleurs. Le LiDAR répond -99999 sur une zone pas encore couverte :

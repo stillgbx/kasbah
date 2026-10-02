@@ -10,7 +10,7 @@ import { daysSchema, deviceClassSchema, hhmmSchema, isoDateSchema, predicateSche
 // tous, et l'éditeur reste un formulaire faisable au doigt.
 //
 // Elle vit dans un fichier PAR MAISON (`<maison>.automations.json`, voir le serveur), elle est
-// exécutée par le serveur (la tablette dort), et elle ne connaît que le contrat : aucun plugin n'a
+// exécutée par le serveur (l'écran dort), et elle ne connaît que le contrat : aucun plugin n'a
 // rien à implémenter pour qu'on automatise ses appareils.
 
 export const SUN_EVENTS = ['dawn', 'sunrise', 'sunset', 'dusk'] as const
@@ -87,7 +87,7 @@ export const automationRecallSchema = z.object({
 })
 
 export const actionSchema = z.discriminatedUnion('type', [
-  /** Une commande du contrat, vérifiée appareil par appareil comme depuis la tablette. */
+  /** Une commande du contrat, vérifiée appareil par appareil comme depuis l'interface. */
   z.object({ type: z.literal('command'), target: targetSchema, command: commandSchema }),
   z.object({ type: z.literal('recallScene'), sceneId: sceneIdSchema, recall: automationRecallSchema }),
   // Itération 2 : { type: 'system.run', name } (liste blanche du .env) ; { type: 'webhook', url }

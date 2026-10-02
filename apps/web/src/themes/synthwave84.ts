@@ -1,7 +1,7 @@
 import type { Theme } from './index'
 
 // SynthWave '84 de Robb Owen (github.com/robb0wen/synthwave-vscode) : néon sur violet, SANS
-// déclinaison claire — la tablette reste donc en sombre tant qu'il est choisi.
+// déclinaison claire — l'interface reste donc en sombre tant qu'il est choisi.
 export const synthwave84 = {
   id: 'synthwave84',
   label: "Synthwave '84",
