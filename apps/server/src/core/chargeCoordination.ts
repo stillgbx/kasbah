@@ -1,4 +1,4 @@
-import { HOME_RADIUS_M, geoDistance, type CHARGER_STATUSES, type Command, type DeviceEntry, type DeviceId } from '@kasbah/shared'
+import { HOME_RADIUS_M, geoDistance, type CHARGER_STATUSES, type Command, type DeviceEntry, type DeviceId, type DeviceState } from '@kasbah/shared'
 
 type ChargerStatus = (typeof CHARGER_STATUSES)[number]
 
@@ -35,6 +35,17 @@ export function chargerToStop(vehicleId: DeviceId, command: Command, devices: De
   const v = entry?.state
   if (v?.kind !== 'vehicle' || !v.pluggedIn || entry!.descriptor.meta.vehicle?.stopViaCharger !== true) return undefined
   return onlyCharger(devices, 'charging', v.location, site)
+}
+
+/**
+ * Une voiture dont Kasbah a forcé la borne est arrivée à sa limite : la borne doit alors reprendre le
+ * mode d'avant le forçage (choix de l'utilisateur du 2026-10-02), sans attendre le débranchement.
+ * Arrivée = niveau au moins à la cible ET plus en charge : la R5 du 2026-10-02 s'est arrêtée à 51 %
+ * pour 50 %, une voiture qui charge encore à sa cible n'a pas fini.
+ */
+export function chargeLimitReached(state: DeviceState): boolean {
+  if (state.kind !== 'vehicle' || state.charging === true) return false
+  return state.soc !== undefined && state.chargeLimit != null && state.soc >= state.chargeLimit
 }
 
 function onlyCharger(devices: DeviceEntry[], status: ChargerStatus, location: { lat: number; lon: number } | undefined, site: { lat: number; lon: number }): DeviceId | undefined {

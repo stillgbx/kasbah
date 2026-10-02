@@ -203,6 +203,11 @@ export interface EvCharger {
   chargeLevel?: number
   /** `connectors[0].safeLimitState` : 1 = repliée sur l'intensité de sécurité (« mode sécurisé » de l'appli). */
   safeLimit?: boolean
+  /**
+   * `mode` à 0 : la borne obéit à une annulation manuelle (un démarrer / arrêter), pas à la
+   * préférence de l'appli, qui elle ne change pas. 1 en charge verte (captures du 20/09 et 02/10).
+   */
+  manualOverride?: boolean
 }
 
 export interface EvChargerSummary {
@@ -241,6 +246,7 @@ export function chargersOf(json: unknown): EvCharger[] {
     const connector = Array.isArray(o.connectors) && o.connectors[0] && typeof o.connectors[0] === 'object'
       ? o.connectors[0] as Record<string, unknown> : undefined
     const safeLimitState = num(connector?.safeLimitState)
+    const mode = num(o.mode)
     out.push({
       sn,
       ...(typeof o.name === 'string' && o.name.trim() ? { name: o.name.trim() } : {}),
@@ -251,9 +257,25 @@ export function chargersOf(json: unknown): EvCharger[] {
       sessionWh: Math.round(num(session?.e_c) ?? 0),
       ...(chargeLevel !== undefined ? { chargeLevel } : {}),
       ...(safeLimitState !== undefined ? { safeLimit: safeLimitState === 1 } : {}),
+      ...(mode !== undefined ? { manualOverride: mode === 0 } : {}),
     })
   }
   return out
+}
+
+/**
+ * Le mode choisi dans l'appli, d'après `…/charging-mode/{site}/{sn}/preference` : celui des `modes`
+ * marqué `enabled` (`GREEN_CHARGING`, `SCHEDULED_CHARGING`, `MANUAL_CHARGING`, `SMART_CHARGING`).
+ * Un forçage ne le touche pas : c'est le mode d'avant le forçage.
+ */
+export function enabledChargingMode(json: unknown): string | undefined {
+  const modes = (json as { data?: { modes?: unknown } } | null)?.data?.modes
+  if (!modes || typeof modes !== 'object') return undefined
+  for (const m of Object.values(modes as Record<string, unknown>)) {
+    const o = m as { chargingMode?: unknown; enabled?: unknown } | null
+    if (o?.enabled === true && typeof o.chargingMode === 'string') return o.chargingMode
+  }
+  return undefined
 }
 
 export function chargerSummariesOf(json: unknown): EvChargerSummary[] {

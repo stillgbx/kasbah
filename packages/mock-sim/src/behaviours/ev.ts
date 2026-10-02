@@ -263,6 +263,7 @@ export function evCharger(externalId: string, o: ChargerOptions): SimDevice<'ev_
       switch (cmd.type) {
         case 'ev_charger.start': enabled = true; break
         case 'ev_charger.stop': enabled = false; break
+        case 'ev_charger.resume_mode': enabled = true; break
         case 'ev_charger.set_current': dev.state.maxCurrentA = clamp(Math.round(cmd.amps), 6, 32); break
         default: throw new SimError('UNSUPPORTED_COMMAND', `${cmd.type} on ev_charger`)
       }

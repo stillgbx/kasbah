@@ -82,6 +82,11 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('ev_charger.start') }),
   z.object({ type: z.literal('ev_charger.stop') }),
   z.object({ type: z.literal('ev_charger.set_current'), amps: z.number().positive() }),
+  /**
+   * Fin d'un forçage : la borne reprend le mode choisi dans l'appli du fabricant (charge verte,
+   * programmée…), au lieu d'obéir au dernier démarrer / arrêter. Rien si elle y est déjà revenue.
+   */
+  z.object({ type: z.literal('ev_charger.resume_mode') }),
   // vehicle
   z.object({ type: z.literal('vehicle.lock') }),
   z.object({ type: z.literal('vehicle.unlock') }),
@@ -163,6 +168,7 @@ export const COMMAND_REQUIRES: Record<CommandType, Capability> = {
   'vacuum.start': 'clean', 'vacuum.pause': 'clean', 'vacuum.dock': 'dock', 'vacuum.locate': 'locate',
   'mower.start': 'mow', 'mower.pause': 'mow', 'mower.park': 'park',
   'ev_charger.start': 'charge_control', 'ev_charger.stop': 'charge_control', 'ev_charger.set_current': 'charge_current',
+  'ev_charger.resume_mode': 'charge_control',
   'vehicle.lock': 'lock', 'vehicle.unlock': 'lock',
   'vehicle.start_charge': 'charging', 'vehicle.stop_charge': 'charging',
   'vehicle.set_charge_limit': 'charge_limit', 'vehicle.wake': 'soc', 'vehicle.refresh': 'soc',

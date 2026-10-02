@@ -1,7 +1,7 @@
-import { DEFAULT_PLUGIN_SETTINGS, parseDeviceId, parseSceneId, type Command, type PluginHealth, type PluginInfo, type PluginSettings, type SceneRecall, type SceneUpdate, type DeviceConsumption, type DeviceJournal, type DeviceReleaseNotes, type WeatherForecast } from '@kasbah/shared'
+import { DEFAULT_PLUGIN_SETTINGS, parseDeviceId, parseSceneId, type Command, type DeviceState, type PluginHealth, type PluginInfo, type PluginSettings, type SceneRecall, type SceneUpdate, type DeviceConsumption, type DeviceJournal, type DeviceReleaseNotes, type WeatherForecast } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import type { Logger } from 'pino'
-import { chargerToForce, chargerToStop } from './chargeCoordination'
+import { chargeLimitReached, chargerToForce, chargerToStop } from './chargeCoordination'
 import { createBackoff, type Backoff } from './backoff'
 import type { Bus } from './bus'
 import type { Clock } from './clock'
@@ -53,9 +53,12 @@ export class PluginHost {
   private readonly slots = new Map<string, Slot>()
   private readonly order: string[] = []
   private readonly logger: Logger
+  /** Véhicule → borne que Kasbah a forcée pour lui, jusqu'à sa limite ou son débranchement. */
+  private readonly forcedFor = new Map<string, string>()
 
   constructor(private readonly opts: PluginHostOptions) {
     this.logger = opts.logger.child({ component: 'plugins' })
+    opts.bus.on('state', (id, state) => this.onVehicleState(id, state))
     for (const [id, factory] of Object.entries(opts.factories)) {
       const plugin = factory()
       const parsed = plugin.configSchema.safeParse(opts.envSource ?? process.env)
@@ -219,6 +222,7 @@ export class PluginHost {
     const stopper = chargerToStop(deviceId, command, this.opts.registry.list(), this.opts.site())
     if (stopper) {
       await this.dispatch(stopper, { type: 'ev_charger.stop' })
+      this.forcedFor.delete(deviceId)
       this.opts.logger.info({ vehicle: deviceId, charger: stopper }, 'charger stopped for a vehicle that cannot stop itself')
       return
     }
@@ -226,12 +230,29 @@ export class PluginHost {
     if (charger) {
       try {
         await this.dispatch(charger, { type: 'ev_charger.start' })
+        this.forcedFor.set(deviceId, charger)
         this.opts.logger.info({ vehicle: deviceId, charger }, 'charger forced to charge the vehicle')
       } catch (err) {
         this.opts.logger.warn({ err, vehicle: deviceId, charger }, 'could not force the charger: starting the vehicle anyway')
       }
     }
     await this.dispatch(deviceId, command)
+  }
+
+  /**
+   * La voiture d'une borne forcée arrive à sa limite : la borne reprend son mode d'avant le forçage
+   * (`chargeLimitReached`). Débranchée avant, c'est la borne qui s'en aperçoit (plugin Enphase).
+   */
+  private onVehicleState(vehicleId: string, state: DeviceState): void {
+    const charger = this.forcedFor.get(vehicleId)
+    if (!charger || state.kind !== 'vehicle') return
+    if (state.pluggedIn === false) { this.forcedFor.delete(vehicleId); return }
+    if (!chargeLimitReached(state)) return
+    this.forcedFor.delete(vehicleId)
+    this.dispatch(charger, { type: 'ev_charger.resume_mode' }).then(
+      () => this.logger.info({ vehicle: vehicleId, charger }, 'charge limit reached: charger back to its mode'),
+      (err) => this.logger.warn({ err, vehicle: vehicleId, charger }, 'charge limit reached: charger mode not resumed'),
+    )
   }
 
   private async dispatch(deviceId: string, command: Command): Promise<void> {

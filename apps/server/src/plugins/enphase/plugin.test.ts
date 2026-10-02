@@ -5,7 +5,7 @@ import { ManualClock } from '@kasbah/mock-sim'
 import type { PluginContext } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
 import { ENSEMBLE_INVENTORY, ENSEMBLE_POWER, INVERTERS, LIVEDATA, PRODUCTION } from './__fixtures__/gateway'
-import { EVSE_STATUS, EVSE_SUMMARY } from './__fixtures__/evse'
+import { EVSE_PREFERENCE, EVSE_STATUS, EVSE_SUMMARY } from './__fixtures__/evse'
 import { createEnphasePlugin, enphaseConfigSchema } from './index'
 import { PANEL_STALE_MS } from './mapping'
 import type { TokenStore } from './token'
@@ -465,6 +465,126 @@ describe('appareils', () => {
     await expect(plugin.execute('482000000001', { type: 'ev_charger.start' })).rejects.toMatchObject({ code: 'UPSTREAM_ERROR' })
     await expect(plugin.execute('nope', { type: 'ev_charger.stop' })).rejects.toMatchObject({ code: 'DEVICE_UNAVAILABLE' })
     await plugin.stop()
+  })
+
+  /**
+   * Vu sur la vraie borne le 2026-10-02 : une charge forcée finie, la borne débranchée, elle tenait
+   * encore son annulation (`mode: 0`, préférence `GREEN_CHARGING`) et l'appli ne pouvait plus
+   * remettre le vert (« already enabled »). Passer en manuel puis revenir en vert l'a levée.
+   */
+  function overriddenCloud(minted: string, opts: { pluggedIn?: boolean; preference?: string; failRestore?: number } = {}) {
+    const cloud = fakeCloud(minted)
+    const base = cloud.fetchImpl.getMockImplementation()!
+    const charger = { ...EVSE_STATUS.data.chargers[0]!, mode: 0, charging: false, pluggedIn: opts.pluggedIn ?? false }
+    const status = { ...EVSE_STATUS, data: { ...EVSE_STATUS.data, chargers: [charger] } }
+    const modes = EVSE_PREFERENCE.data.modes
+    const preference = opts.preference ?? 'GREEN_CHARGING'
+    const pref = { ...EVSE_PREFERENCE, data: { ...EVSE_PREFERENCE.data, modes: {
+      greenCharging: { ...modes.greenCharging, enabled: preference === 'GREEN_CHARGING' },
+      scheduledCharging: { ...modes.scheduledCharging, enabled: preference === 'SCHEDULED_CHARGING' },
+      manualCharging: { ...modes.manualCharging, enabled: preference === 'MANUAL_CHARGING' },
+    } } }
+    let restoreFailures = opts.failRestore ?? 0
+    cloud.fetchImpl.mockImplementation(async (url, init) => {
+      if (url.includes('/charging-mode/')) cloud.calls.push({ url, body: String(init?.body ?? ''), method: init?.method ?? 'GET' })
+      if (url.includes('/charging-mode/') && init?.method === 'PUT') {
+        if (!String(init.body).includes('MANUAL') && restoreFailures-- > 0) return response('{"data":null,"error":{"code":"500"}}', 500)
+        return response('{"meta":{},"data":{"data":null,"error":{}},"error":{}}')
+      }
+      if (url.includes('/charging-mode/')) return response(JSON.stringify(pref))
+      if (url.includes('/ev_chargers/status') && !url.includes('/api/v2/')) return response(JSON.stringify(status))
+      return base(url, init)
+    })
+    return cloud
+  }
+  const modeWrites = (cloud: ReturnType<typeof fakeCloud>) =>
+    cloud.calls.filter((c) => c.url.includes('/charging-mode/') && c.method === 'PUT').map((c) => c.body)
+
+  async function pollWithOverride(cloud: ReturnType<typeof fakeCloud>, minted: string) {
+    const s = await started({ gateway: fakeGateway({ accept: minted }), cloud })
+    await post(s.app, { user: 'u', password: 'p' })
+    await s.plugin.discover()
+    await s.plugin.start()
+    for (let i = 0; i < 10; i++) await settle()
+    return s
+  }
+  const drain = async (clock: ManualClock, ms: number) => {
+    clock.advance(ms)
+    for (let i = 0; i < 10; i++) await settle()
+  }
+
+  it('débranchée sous annulation manuelle, la borne reprend sa préférence (le vert) : manuel PUIS vert', async () => {
+    const minted = token(365)
+    const cloud = overriddenCloud(minted)
+    const { plugin: p, clock } = await pollWithOverride(cloud, minted)
+    await drain(clock, 5_000)
+    expect(modeWrites(cloud)).toEqual(['{"mode":"MANUAL_CHARGING"}', '{"mode":"GREEN_CHARGING"}'])
+    expect(cloud.calls.find((c) => c.url.includes('/charging-mode/'))!.url)
+      .toContain('/service/evse_scheduler/api/v1/iqevc/charging-mode/1000001/482000000001/preference')
+    // le cloud met un moment à refléter le mode : on ne recommence pas à chaque relecture
+    await drain(clock, 60_000)
+    expect(modeWrites(cloud)).toHaveLength(2)
+    await p.stop()
+  })
+
+  it('ne touche à rien tant qu\'une voiture est branchée, ni quand le manuel est le choix de l\'utilisateur', async () => {
+    const minted = token(365)
+    for (const opts of [{ pluggedIn: true }, { preference: 'MANUAL_CHARGING' }, { preference: 'SCHEDULED_CHARGING' }]) {
+      const cloud = overriddenCloud(minted, opts)
+      const { plugin: p, clock } = await pollWithOverride(cloud, minted)
+      await drain(clock, 5_000)
+      expect(modeWrites(cloud), JSON.stringify(opts)).toEqual([])
+      await p.stop()
+    }
+  })
+
+  it('après un forçage par Kasbah, c\'est le mode d\'AVANT qui revient, pas forcément le vert', async () => {
+    const minted = token(365)
+    const cloud = overriddenCloud(minted, { preference: 'SCHEDULED_CHARGING' })
+    const { plugin: p, clock } = await pollWithOverride(cloud, minted)
+    expect(modeWrites(cloud)).toEqual([])
+    await p.execute('482000000001', { type: 'ev_charger.start' })
+    await drain(clock, 45_000)
+    await drain(clock, 5_000)
+    expect(modeWrites(cloud)).toEqual(['{"mode":"MANUAL_CHARGING"}', '{"mode":"SCHEDULED_CHARGING"}'])
+    await p.stop()
+  })
+
+  it('un retour au mode d\'avant refusé est retenté à la relecture suivante, sans repasser par le manuel', async () => {
+    const minted = token(365)
+    const cloud = overriddenCloud(minted, { failRestore: 1 })
+    const { plugin: p, clock } = await pollWithOverride(cloud, minted)
+    await drain(clock, 5_000)
+    expect(modeWrites(cloud)).toEqual(['{"mode":"MANUAL_CHARGING"}', '{"mode":"GREEN_CHARGING"}'])
+    await drain(clock, 60_000)
+    expect(modeWrites(cloud)).toEqual(['{"mode":"MANUAL_CHARGING"}', '{"mode":"GREEN_CHARGING"}', '{"mode":"GREEN_CHARGING"}'])
+    await p.stop()
+  })
+
+  it('« reprendre son mode » à la limite de charge, voiture encore branchée : manuel, puis le mode d\'avant 5 s plus tard', async () => {
+    const minted = token(365)
+    const cloud = overriddenCloud(minted, { pluggedIn: true, preference: 'SCHEDULED_CHARGING' })
+    const { plugin: p, clock } = await pollWithOverride(cloud, minted)
+    expect(modeWrites(cloud)).toEqual([])
+    await p.execute('482000000001', { type: 'ev_charger.resume_mode' })
+    expect(modeWrites(cloud)).toEqual(['{"mode":"MANUAL_CHARGING"}'])
+    await drain(clock, 5_000)
+    expect(modeWrites(cloud)).toEqual(['{"mode":"MANUAL_CHARGING"}', '{"mode":"SCHEDULED_CHARGING"}'])
+    await p.stop()
+  })
+
+  it('« reprendre son mode » ne fait rien quand la borne y est déjà revenue, ni quand le manuel est le choix de l\'utilisateur', async () => {
+    const minted = token(365)
+    const back = await pollWithOverride(fakeCloud(minted), minted) // fixture : `mode` 1, charge verte
+    await back.plugin.execute('482000000001', { type: 'ev_charger.resume_mode' })
+    expect(modeWrites(back.cloud)).toEqual([])
+    await back.plugin.stop()
+    const cloud = overriddenCloud(minted, { pluggedIn: true, preference: 'MANUAL_CHARGING' })
+    const manual = await pollWithOverride(cloud, minted)
+    await manual.plugin.execute('482000000001', { type: 'ev_charger.resume_mode' })
+    await drain(manual.clock, 5_000)
+    expect(modeWrites(cloud)).toEqual([])
+    await manual.plugin.stop()
   })
 
   it('le sous-item décoché retire la borne sans toucher au solaire', async () => {

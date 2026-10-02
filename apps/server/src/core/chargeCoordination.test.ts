@@ -4,7 +4,7 @@ import pino from 'pino'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { Bus } from './bus'
-import { chargerToForce, chargerToStop } from './chargeCoordination'
+import { chargeLimitReached, chargerToForce, chargerToStop } from './chargeCoordination'
 import { PluginError, type DevicePlugin } from './plugin'
 import { PluginHost } from './plugin-host'
 import { DeviceRegistry } from './registry'
@@ -19,9 +19,9 @@ const car: DeviceDescriptor = { id: 'car:1', pluginId: 'car', externalId: '1', k
 const evse = (n: string, caps: DeviceDescriptor['capabilities'] = ['charge_control']): DeviceDescriptor =>
   ({ id: `evse:${n}`, pluginId: 'evse', externalId: n, kind: 'ev_charger', name: `Borne ${n}`, capabilities: caps, meta: {} })
 
-function world(o: { vehicle?: Record<string, unknown>; chargers?: { d: DeviceDescriptor; status: string }[]; car?: DeviceDescriptor } = {}) {
+function world(o: { vehicle?: Record<string, unknown>; chargers?: { d: DeviceDescriptor; status: string }[]; car?: DeviceDescriptor; bus?: Bus } = {}) {
   const clock = new ManualClock(0)
-  const registry = new DeviceRegistry(new Bus(), clock)
+  const registry = new DeviceRegistry(o.bus ?? new Bus(), clock)
   const chargers = o.chargers ?? [{ d: evse('a'), status: 'connected' }]
   registry.register('car', [o.car ?? car])
   registry.register('evse', chargers.map((c) => c.d))
@@ -90,9 +90,25 @@ describe('quelle borne arrêter à la place du véhicule', () => {
   })
 })
 
+describe('limite de charge atteinte', () => {
+  const at = (v: Record<string, unknown>) => ({ kind: 'vehicle', available: true, updatedAt: 0, pluggedIn: true, ...v }) as never
+  it('la voiture à sa limite et qui ne charge plus', () => {
+    expect(chargeLimitReached(at({ soc: 50, chargeLimit: 50, charging: false }))).toBe(true)
+    // la R5 du 2026-10-02 s'est arrêtée à 51 % pour 50 %
+    expect(chargeLimitReached(at({ soc: 51, chargeLimit: 50, charging: false }))).toBe(true)
+  })
+  it('pas tant qu\'elle charge encore, ni sous sa limite, ni limite ou niveau inconnus', () => {
+    expect(chargeLimitReached(at({ soc: 50, chargeLimit: 50, charging: true }))).toBe(false)
+    expect(chargeLimitReached(at({ soc: 40, chargeLimit: 50, charging: false }))).toBe(false)
+    expect(chargeLimitReached(at({ soc: 50, charging: false }))).toBe(false)
+    expect(chargeLimitReached(at({ chargeLimit: 50, charging: false }))).toBe(false)
+  })
+})
+
 describe('l\'hôte relaie', () => {
   async function hosted(evseFails = false) {
-    const { registry, clock } = world()
+    const bus = new Bus()
+    const { registry, clock } = world({ bus })
     const sent: string[] = []
     const plugin = (id: string): DevicePlugin => ({
       id, configSchema: z.object({}),
@@ -102,7 +118,6 @@ describe('l\'hôte relaie', () => {
         sent.push(`${id}:${externalId} ${command.type}`)
       },
     })
-    const bus = new Bus()
     const host = new PluginHost({
       site: () => HOME, settingsOf: () => ({ ...DEFAULT_PLUGIN_SETTINGS, enabled: true }), strict: false,
       factories: { car: () => plugin('car'), evse: () => plugin('evse') },
@@ -111,7 +126,7 @@ describe('l\'hôte relaie', () => {
     await host.startAll()
     await flush()
     // les plugins de test ne publient rien : on remet la scène après leur `discover` vide
-    const w = world()
+    const w = world({ bus: new Bus() })
     registry.register('car', [car]); registry.register('evse', [evse('a')])
     for (const e of w.registry.list()) registry.applyPatch(e.descriptor.id, e.state as never)
     return { host, sent, registry }
@@ -137,6 +152,32 @@ describe('l\'hôte relaie', () => {
     const { host, sent } = await hosted(true)
     await host.execute(car.id, start)
     expect(sent).toEqual(['car:1 vehicle.start_charge'])
+    await host.stopAll()
+  })
+
+  it('la voiture forcée arrive à sa limite : la borne reprend son mode, une seule fois', async () => {
+    const { host, sent, registry } = await hosted()
+    await host.execute(car.id, start)
+    registry.applyPatch(car.id, { soc: 50, chargeLimit: 50, charging: true } as never)
+    await flush()
+    expect(sent).not.toContain('evse:a ev_charger.resume_mode')
+    registry.applyPatch(car.id, { charging: false } as never)
+    await flush()
+    registry.applyPatch(car.id, { soc: 51 } as never)
+    await flush()
+    expect(sent.filter((s) => s === 'evse:a ev_charger.resume_mode')).toHaveLength(1)
+    await host.stopAll()
+  })
+
+  it('rien sans forçage par Kasbah, ni après un débranchement (la borne s\'en charge)', async () => {
+    const { host, sent, registry } = await hosted()
+    registry.applyPatch(car.id, { soc: 80, chargeLimit: 80, charging: false } as never)
+    await flush()
+    await host.execute(car.id, start)
+    registry.applyPatch(car.id, { soc: 30, chargeLimit: 80, pluggedIn: false } as never)
+    registry.applyPatch(car.id, { soc: 80, pluggedIn: true } as never)
+    await flush()
+    expect(sent).not.toContain('evse:a ev_charger.resume_mode')
     await host.stopAll()
   })
 })

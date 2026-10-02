@@ -9,7 +9,7 @@ import { createPoller } from '../../core/poll'
 import { sleep } from '../../core/clock'
 import { EnphaseClient } from './client'
 import {
-  batteriesOf, chargerSummariesOf, chargersOf, isBatteryAvailable, isPanelStale, toBatteryPatch, toChargerDescriptors,
+  batteriesOf, chargerSummariesOf, chargersOf, enabledChargingMode, isBatteryAvailable, isPanelStale, toBatteryPatch, toChargerDescriptors,
   toChargerPatch, toDailyPatch, toDescriptors, toPanelPatch, toSitePatch, SITE_ID, type EvCharger, type EvChargerSummary,
   type Inventory,
 } from './mapping'
@@ -73,6 +73,10 @@ export type EnphaseConfig = z.infer<typeof enphaseConfigSchema>
 
 /** Après une commande de la borne, délai avant de relire : le courant arrive en 20 s à 1 min. */
 const EV_FOLLOW_UP_MS = 45_000
+/** Entre le passage en manuel et le retour au mode d'avant : essayé à la main avec ~20 s, pas plus vite. */
+const MODE_RESTORE_GAP_MS = 5_000
+/** Le cloud met un moment à refléter le mode rendu : on ne recommence pas avant. */
+const MODE_RESTORE_RETRY_MS = 15 * 60_000
 
 /** Relevé brut : ce qu'il faut capturer une fois pour écrire les fixtures du mappage. */
 const RAW_PATHS = [
@@ -148,6 +152,11 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
   let inventory: Inventory | null = null
   let chargers: EvCharger[] | null = null
   let chargerSummaries: EvChargerSummary[] = []
+  /** Bornes démarrées ou arrêtées par Kasbah depuis le dernier retour à leur mode. */
+  const forced = new Set<string>()
+  /** Mode à rendre après un passage en manuel dont le retour a échoué : on ne repasse pas par le manuel. */
+  const owed = new Map<string, string>()
+  const lastRestore = new Map<string, number>()
   let pollers: { stop(): void }[] = []
 
   const log = () => ctx!.logger
@@ -305,6 +314,84 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
         ctx!.emitState(c.sn, toChargerPatch(c, sum))
       }
     }
+    try { await restoreModes() }
+    catch (err) { log().warn({ err }, 'Enphase charger mode not restored') }
+  }
+
+  /**
+   * Rendre à la borne débranchée le mode d'avant le forçage. Vu sur la vraie borne le 2026-10-02 :
+   * une charge forcée finie et la voiture débranchée, l'annulation tenait encore (`mode` 0) et
+   * l'appli refusait de remettre le vert (« Charging mode is already enabled »). Le mode d'avant est
+   * la préférence de l'appli, qu'un forçage ne change pas ; passer en manuel puis la réécrire lève
+   * l'annulation (essayé ce jour-là).
+   *
+   * Sans forçage connu (redémarrage du serveur, geste dans l'appli), on ne le fait qu'en charge
+   * verte, où `mode` 0 débranchée est sûrement une annulation oubliée. Une préférence manuelle est le
+   * choix de l'utilisateur : rien à rendre. La voiture encore branchée, c'est le serveur qui le
+   * demande, à sa limite de charge (`ev_charger.resume_mode`).
+   */
+  async function restoreModes(): Promise<void> {
+    const siteId = enlighten?.current?.siteId
+    if (!siteId || !enlighten) return
+    for (const c of chargers ?? []) {
+      if (!owed.has(c.sn)) {
+        if (c.pluggedIn || !c.manualOverride) continue
+        const now = ctx!.clock.now()
+        if (now - (lastRestore.get(c.sn) ?? -Infinity) < MODE_RESTORE_RETRY_MS) continue
+        lastRestore.set(c.sn, now)
+        if (!await leaveOverride(siteId, c.sn, forced.has(c.sn))) continue
+        await sleep(ctx!.clock, MODE_RESTORE_GAP_MS, ctx!.signal)
+      }
+      await giveModeBack(siteId, c.sn)
+    }
+  }
+
+  const modePath = (siteId: string | number, sn: string) =>
+    `/service/evse_scheduler/api/v1/iqevc/charging-mode/${siteId}/${encodeURIComponent(sn)}/preference`
+
+  /**
+   * Premier temps : lire la préférence (le mode d'avant) et passer en manuel. `known` : Kasbah a forcé
+   * cette borne, sinon seul le vert est rendu. Vrai quand le mode d'avant reste à réécrire (`owed`).
+   */
+  async function leaveOverride(siteId: string | number, sn: string, known: boolean): Promise<boolean> {
+    const path = modePath(siteId, sn)
+    const preferred = enabledChargingMode(await enlighten!.getJson(path, ctx!.signal))
+    if (!preferred || preferred === 'MANUAL_CHARGING') { forced.delete(sn); return false }
+    if (!known && preferred !== 'GREEN_CHARGING') return false
+    await enlighten!.send('PUT', path, { mode: 'MANUAL_CHARGING' }, ctx!.signal)
+    owed.set(sn, preferred)
+    return true
+  }
+
+  /** Second temps : réécrire le mode d'avant. Un échec le laisse dû : la relecture suivante le retente. */
+  async function giveModeBack(siteId: string | number, sn: string): Promise<void> {
+    const mode = owed.get(sn)
+    if (!mode) return
+    await enlighten!.send('PUT', modePath(siteId, sn), { mode }, ctx!.signal)
+    owed.delete(sn)
+    forced.delete(sn)
+    log().info({ sn, mode }, 'Enphase charger back to its mode after a forced session')
+  }
+
+  /**
+   * `ev_charger.resume_mode` : le serveur la demande quand la voiture forcée atteint sa limite,
+   * encore branchée. Rien si la borne n'est plus sous annulation (`mode` 1 relu). Le retour au mode
+   * d'avant part 5 s plus tard, hors du délai de la commande (`KASBAH_COMMAND_TIMEOUT_MS`, 10 s).
+   */
+  async function resumeMode(sn: string): Promise<void> {
+    if (!chargersOn() || !enlighten?.hasSession) throw new PluginError('NEEDS_PAIRING', 'no Enlighten session: pair with the Enphase account')
+    const siteId = await ensureSiteId()
+    if (!siteId) throw new PluginError('NEEDS_PAIRING', 'no Enlighten site')
+    const charger = chargers?.find((c) => c.sn === sn)
+    if (!charger) throw new PluginError('DEVICE_UNAVAILABLE', `unknown Enphase charger ${sn}`)
+    if (charger.manualOverride === false) { forced.delete(sn); return }
+    if (!owed.has(sn) && !await leaveOverride(siteId, sn, true)) return
+    void (async () => {
+      await sleep(ctx!.clock, MODE_RESTORE_GAP_MS, ctx!.signal)
+      if (ctx!.signal.aborted) return
+      try { await giveModeBack(siteId, sn) }
+      catch (err) { log().warn({ err }, 'Enphase charger mode not given back: retried at the next read') }
+    })()
   }
 
   /**
@@ -333,6 +420,8 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
     } else {
       await enlighten.send('PUT', `${base}/stop_charging`, undefined, ctx!.signal)
     }
+    forced.add(sn)
+    lastRestore.delete(sn)
     log().info({ start }, start ? 'Enphase charger forced to charge' : 'Enphase charger stopped')
     void (async () => {
       await sleep(ctx!.clock, EV_FOLLOW_UP_MS, ctx!.signal)
@@ -428,6 +517,10 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
     async execute(externalId, command: Command) {
       if (command.type === 'ev_charger.start' || command.type === 'ev_charger.stop') {
         await chargerCommand(externalId, command.type === 'ev_charger.start')
+        return
+      }
+      if (command.type === 'ev_charger.resume_mode') {
+        await resumeMode(externalId)
         return
       }
       throw new PluginError('UNSUPPORTED_COMMAND', `Enphase devices are read-only (${command.type})`)

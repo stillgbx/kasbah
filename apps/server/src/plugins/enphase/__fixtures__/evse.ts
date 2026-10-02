@@ -180,3 +180,23 @@ export const EVSE_SUMMARY = {
   ],
   "error": {}
 } as const
+
+/**
+ * `GET /service/evse_scheduler/api/v1/iqevc/charging-mode/{site}/{sn}/preference`, capturé le
+ * 2026-10-02 sur la borne débranchée qui tenait encore son annulation (`mode: 0` dans l'état).
+ */
+export const EVSE_PREFERENCE = {
+  "meta": { "serverTimeStamp": "2026-10-02T10:00:49.981+00:00" },
+  "data": {
+    "config": {
+      "profile": "self-consumption", "modeSyncStatus": "synced", "stormActive": false, "isModeCancellable": true,
+      "pendingModesOffGrid": false, "pendingSchedulesOffGrid": false, "isExternalMeterEnabled": false
+    },
+    "modes": {
+      "greenCharging": { "chargingMode": "GREEN_CHARGING", "enabled": true, "showSettings": false, "isHidden": false, "isDisabledByStorm": false, "schedulesEnabled": 0 },
+      "scheduledCharging": { "chargingMode": "SCHEDULED_CHARGING", "enabled": false, "showSettings": false, "isHidden": false, "isDisabledByStorm": false, "schedulesEnabled": 0 },
+      "manualCharging": { "chargingMode": "MANUAL_CHARGING", "enabled": false, "showSettings": false, "isHidden": false, "isDisabledByStorm": false }
+    }
+  },
+  "error": {}
+}
