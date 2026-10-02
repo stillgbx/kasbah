@@ -197,6 +197,28 @@ export const BATTERY_CHARGING_LIAR = {
 }
 
 /**
+ * Capture du 2026-10-02 (14:00 locale), relue telle quelle jusqu'au soir : la voiture dort. Borne en
+ * charge verte sans soleil, rien ne passe (0 W à la borne) — et pourtant le temps restant (480 min)
+ * est daté de la trame elle-même, comme chez la menteuse du 19/09. Seule différence : le niveau ne
+ * monte pas (51 % à 11:44, 52 % à 14:00). `0.3` disait VRAI ce jour-là.
+ */
+export const BATTERY_WAITING_FRESH_ETA = {
+  data: {
+    id: VIN,
+    attributes: {
+      timestamp: '2026-10-02T12:00:07Z',
+      batteryLevel: 52,
+      batteryAutonomy: 214,
+      V2L_SystemStatusDisplay: 0,
+      plugStatus: 1,
+      chargingStatus: 0.3,
+      chargingRemainingTime: 480,
+      chargingRemainingTimeLastUpdateDateTime: '2026-10-02T12:00:07Z',
+    },
+  },
+}
+
+/**
  * Le refus d'une ÉCRITURE de réglages quand une commande est déjà en attente pour ce véhicule
  * (HTTP 409, constaté le 2026-09-19 : un même corps accepté à 14:21 était refusé à 14:22). Comme
  * pour les deux autres, seul `errorCode` a été capturé tel quel.

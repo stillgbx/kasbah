@@ -48,6 +48,24 @@ export function chargeLimitReached(state: DeviceState): boolean {
   return state.soc !== undefined && state.chargeLimit != null && state.soc >= state.chargeLimit
 }
 
+/**
+ * Une voiture qui se dit en charge, alors qu'aucune borne de la maison ne charge : on la dément.
+ * Choix de l'utilisateur du 2026-10-02 : la R5 annonçait « en charge » depuis une trame de 14:00
+ * (temps restant daté de la trame, `chargingStatus` 0.3) pendant que la borne, en charge verte sans
+ * soleil, ne donnait rien. Prudence : la voiture est branchée, à la maison (position CONNUE, sinon
+ * elle peut charger ailleurs), elle ne mesure pas sa propre puissance (Tesla la donne : elle sait
+ * mieux que nous), et TOUTES les bornes sont joignables et ne chargent pas. Une borne qui charge ne
+ * dément rien : aucune ne dit quelle voiture est au bout du câble. Faux si la voiture charge sur une
+ * prise que Kasbah ne voit pas — risque accepté.
+ */
+export function chargingRefuted(vehicle: DeviceState, devices: DeviceEntry[], site: { lat: number; lon: number }): boolean {
+  if (vehicle.kind !== 'vehicle' || vehicle.charging !== true || vehicle.pluggedIn !== true) return false
+  if ((vehicle.chargePowerW ?? 0) > 0) return false
+  if (!vehicle.location || geoDistance(vehicle.location, site) > HOME_RADIUS_M) return false
+  const chargers = devices.filter((d) => d.state.kind === 'ev_charger')
+  return chargers.length > 0 && chargers.every((d) => d.state.available && d.state.kind === 'ev_charger' && d.state.status !== 'charging')
+}
+
 function onlyCharger(devices: DeviceEntry[], status: ChargerStatus, location: { lat: number; lon: number } | undefined, site: { lat: number; lon: number }): DeviceId | undefined {
   if (location && geoDistance(location, site) > HOME_RADIUS_M) return undefined
   const found = devices.filter((d) => d.state.kind === 'ev_charger' && d.state.available

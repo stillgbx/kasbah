@@ -1,7 +1,7 @@
-import { DEFAULT_PLUGIN_SETTINGS, parseDeviceId, parseSceneId, type Command, type DeviceState, type PluginHealth, type PluginInfo, type PluginSettings, type SceneRecall, type SceneUpdate, type DeviceConsumption, type DeviceJournal, type DeviceReleaseNotes, type WeatherForecast } from '@kasbah/shared'
+import { DEFAULT_PLUGIN_SETTINGS, parseDeviceId, parseSceneId, type Command, type DeviceState, type PluginHealth, type StatePatch, type PluginInfo, type PluginSettings, type SceneRecall, type SceneUpdate, type DeviceConsumption, type DeviceJournal, type DeviceReleaseNotes, type WeatherForecast } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import type { Logger } from 'pino'
-import { chargeLimitReached, chargerToForce, chargerToStop } from './chargeCoordination'
+import { chargeLimitReached, chargerToForce, chargerToStop, chargingRefuted } from './chargeCoordination'
 import { createBackoff, type Backoff } from './backoff'
 import type { Bus } from './bus'
 import type { Clock } from './clock'
@@ -55,10 +55,16 @@ export class PluginHost {
   private readonly logger: Logger
   /** Véhicule → borne que Kasbah a forcée pour lui, jusqu'à sa limite ou son débranchement. */
   private readonly forcedFor = new Map<string, string>()
+  /** Véhicules dont le PLUGIN dit qu'ils chargent : ce que `chargingRefuted` peut démentir puis rendre. */
+  private readonly claimsCharging = new Set<string>()
 
   constructor(private readonly opts: PluginHostOptions) {
     this.logger = opts.logger.child({ component: 'plugins' })
-    opts.bus.on('state', (id, state) => this.onVehicleState(id, state))
+    opts.bus.on('state', (id, state) => {
+      this.onVehicleState(id, state)
+      if (state.kind === 'ev_charger') this.recheckChargingClaims()
+    })
+    opts.bus.on('availability', () => this.recheckChargingClaims())
     for (const [id, factory] of Object.entries(opts.factories)) {
       const plugin = factory()
       const parsed = plugin.configSchema.safeParse(opts.envSource ?? process.env)
@@ -104,7 +110,10 @@ export class PluginHost {
       logger: this.logger.child({ plugin: id }),
       clock: this.opts.clock,
       signal: slot.ctrl.signal,
-      emitState: (externalId, patch) => { registry.applyPatch(`${id}:${externalId}`, { available: true, ...patch }) },
+      emitState: (externalId, patch) => {
+        const deviceId = `${id}:${externalId}`
+        registry.applyPatch(deviceId, { available: true, ...this.checkChargingClaim(deviceId, patch) })
+      },
       setAvailable: (externalId, available) => { registry.setAvailable(id, externalId, available) },
       emitDevices: (descriptors) => { registry.register(id, descriptors) },
       emitScenes: (list) => { scenes.register(id, list) },
@@ -253,6 +262,38 @@ export class PluginHost {
       () => this.logger.info({ vehicle: vehicleId, charger }, 'charge limit reached: charger back to its mode'),
       (err) => this.logger.warn({ err, vehicle: vehicleId, charger }, 'charge limit reached: charger mode not resumed'),
     )
+  }
+
+  /**
+   * « En charge » dit par un véhicule passe par `chargingRefuted` : démenti tant qu'aucune borne de la
+   * maison ne charge, rendu dès qu'une charge (`recheckChargingClaims`). Le plugin garde sa parole :
+   * on retient ce qu'il a dit, pas ce qu'on a publié.
+   */
+  private checkChargingClaim(deviceId: string, patch: StatePatch): StatePatch {
+    if ('charging' in patch) {
+      if ((patch as { charging?: boolean }).charging === true) this.claimsCharging.add(deviceId)
+      else this.claimsCharging.delete(deviceId)
+    }
+    if (!this.claimsCharging.has(deviceId)) return patch
+    const current = this.opts.registry.get(deviceId)?.state
+    if (current?.kind !== 'vehicle') return patch
+    const claimed = { ...current, ...patch, charging: true } as DeviceState
+    return chargingRefuted(claimed, this.opts.registry.list(), this.opts.site())
+      ? { ...patch, charging: false, chargeMinutesRemaining: null } as StatePatch
+      : { ...patch, charging: true } as StatePatch
+  }
+
+  /** Une borne a changé : la parole de chaque véhicule qui se dit en charge est relue. */
+  private recheckChargingClaims(): void {
+    const { registry } = this.opts
+    for (const id of this.claimsCharging) {
+      const state = registry.get(id)?.state
+      if (state?.kind !== 'vehicle') { this.claimsCharging.delete(id); continue }
+      const charging = !chargingRefuted({ ...state, charging: true }, registry.list(), this.opts.site())
+      if (state.charging === charging) continue
+      registry.applyPatch(id, (charging ? { charging } : { charging, chargeMinutesRemaining: null }) as StatePatch)
+      this.logger.info({ vehicle: id, charging }, charging ? 'a charger is charging: vehicle charging again' : 'no charger at home is charging: vehicle charging refuted')
+    }
   }
 
   private async dispatch(deviceId: string, command: Command): Promise<void> {

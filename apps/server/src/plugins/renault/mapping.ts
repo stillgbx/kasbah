@@ -270,20 +270,57 @@ export const PLUGGED = 1
  * charge. Un temps restant à l'heure de la trame est donc une charge en cours, quoi qu'en dise
  * `chargingStatus`.
  *
- * Ce que cette règle ne couvre PAS, faute d'observation : une voiture qui attendrait une charge
- * PROGRAMMÉE en rafraîchissant quand même son estimation. Un seul contre-exemple est connu (14/09,
- * branchée en attente, temps restant vieux de deux jours) et il va dans le bon sens ; si un jour
- * l'UI annonce « en charge » à tort, c'est ici qu'il faut revenir.
+ * Ce que cette règle ne couvrait PAS a fini par arriver (2026-10-02) : une voiture qui attend
+ * vraiment du courant (charge verte sans soleil, 0 W à la borne) en rafraîchissant quand même son
+ * estimation. Le second témoin ne vaut donc plus seul : il faut aussi que le NIVEAU MONTE
+ * (`levelRising`, suivi trame après trame par le plugin), ce que faisait la menteuse du 19/09
+ * (63 → 71 → 73) et pas l'attente du 02/10 (51 % à 11:44, 52 % à 14:00).
  */
-export function isCharging(battery: Record<string, unknown>): boolean | undefined {
+export function isCharging(battery: Record<string, unknown>, levelRising = false): boolean | undefined {
   const status = num(battery.chargingStatus)
   if (status === CHARGE_IN_PROGRESS) return true
   const eta = num(battery.chargingRemainingTime)
   const fresh = eta !== undefined && eta > 0
     && at(battery.chargingRemainingTimeLastUpdateDateTime) === at(battery.timestamp)
-  if (fresh) return true
+  if (fresh && levelRising) return true
   // ni l'un ni l'autre : on ne sait dire « non » que si la voiture a donné son état
   return status === undefined ? undefined : false
+}
+
+/**
+ * Une hausse du niveau ne compte que si elle tient en moins d'une heure entre deux trames, et elle
+ * vaut une heure de plus : à 5,5 kW (borne triphasée), 1 % passe en ~6 min ; à 8 A en mode sécurisé,
+ * en ~20 min. Le 51 → 52 % du 2026-10-02 s'est étalé sur 2 h 16 sans courant : pas une charge.
+ */
+export const LEVEL_RISE_WINDOW_MS = 60 * 60_000
+
+/** Ce qu'il faut retenir d'une trame à l'autre pour dire si le niveau monte. */
+export interface LevelTrack {
+  /** Horodatage de la trame (`timestamp` de `battery-status`), pas de notre appel. */
+  at: number
+  soc: number
+  /** Trame où une hausse a été vue pour la dernière fois. */
+  lastRiseAt?: number
+}
+
+/** Suivre le niveau trame après trame. La même trame relue (voiture endormie) ne change rien. */
+export function trackLevel(prev: LevelTrack | undefined, at: number, soc: number): LevelTrack {
+  if (!prev || at <= prev.at) return prev && at === prev.at ? prev : { at, soc }
+  const rose = soc > prev.soc && at - prev.at <= LEVEL_RISE_WINDOW_MS
+  const lastRiseAt = rose ? at : prev.lastRiseAt
+  return { at, soc, ...(lastRiseAt !== undefined ? { lastRiseAt } : {}) }
+}
+
+export function levelRising(track: LevelTrack | undefined): boolean {
+  return track?.lastRiseAt !== undefined && track.at - track.lastRiseAt <= LEVEL_RISE_WINDOW_MS
+}
+
+/** Niveau et horodatage de la trame `battery-status`, pour `trackLevel`. */
+export function batteryFrame(battery: unknown): { at: number; soc: number } | undefined {
+  const a = attributes(battery)
+  const when = at(a?.timestamp)
+  const soc = num(a?.batteryLevel)
+  return when !== undefined && soc !== undefined ? { at: when, soc } : undefined
 }
 
 /** Les lectures d'un tour, chacune facultative : la R5 en refuse plusieurs, et une peut échouer. */
@@ -329,7 +366,7 @@ function at(v: unknown): number | undefined {
  * charge, cf. `BATTERY_CHARGING`) — l'UI l'estime à l'affichage, à partir de la capacité saisie
  * dans la maison ; rien d'estimé n'entre dans l'état.
  */
-export function toStatePatch(r: VehicleReadings, now: number): StatePatch<'vehicle'> {
+export function toStatePatch(r: VehicleReadings, now: number, opts: { levelRising?: boolean } = {}): StatePatch<'vehicle'> {
   const patch: StatePatch<'vehicle'> = { readAt: now }
 
   const battery = attributes(r.battery)
@@ -346,7 +383,7 @@ export function toStatePatch(r: VehicleReadings, now: number): StatePatch<'vehic
     if (range !== undefined) patch.rangeKm = range
     const plug = num(battery.plugStatus)
     if (plug !== undefined) patch.pluggedIn = plug === PLUGGED
-    const charge = isCharging(battery)
+    const charge = isCharging(battery, opts.levelRising)
     if (charge !== undefined) patch.charging = charge
     // `chargingRemainingTime` (minutes) TRAÎNE : la capture réelle le donne daté de l'avant-veille
     // sur une voiture débranchée. Il ne vaut que pendant la charge ; sinon on l'efface.

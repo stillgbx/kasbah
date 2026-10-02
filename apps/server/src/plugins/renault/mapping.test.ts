@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
-  ACCOUNT_ID, BATTERY_CHARGING, BATTERY_CHARGING_LIAR, BATTERY_UNPLUGGED, BATTERY_WAITING, COCKPIT_V1, COCKPIT_V2_EASTER_EGG,
+  ACCOUNT_ID, BATTERY_CHARGING, BATTERY_CHARGING_LIAR, BATTERY_UNPLUGGED, BATTERY_WAITING, BATTERY_WAITING_FRESH_ETA, COCKPIT_V1, COCKPIT_V2_EASTER_EGG,
   EV_SETTINGS, HVAC_STATUS, LOCATION, PERSON, SOC_LEVELS, VEHICLES, VIN,
 } from './__fixtures__/kamereon'
-import { chargeStartPayload, commandSummary, inWindow, socTargetPayload, toAccounts, toDescriptor, toStatePatch, toVehicleLinks, vehicleName, wakePayload, CLIMATE_FEATURES, climateSettingsPayload, hvacStartPayload, hvacSocThreshold } from './mapping'
+import { chargeStartPayload, commandSummary, inWindow, socTargetPayload, toAccounts, toDescriptor, toStatePatch, toVehicleLinks, vehicleName, wakePayload, CLIMATE_FEATURES, climateSettingsPayload, hvacStartPayload, hvacSocThreshold, levelRising, trackLevel, type LevelTrack } from './mapping'
 
 // Tout ce fichier travaille sur la CAPTURE du 2026-09-14, pas sur la documentation. Trois pièges
 // que seule la capture révèle sont testés nommément : le `cockpit` v2 farceur, le flottant de
@@ -118,16 +118,51 @@ describe('lectures → état', () => {
    * qu'elle avalait 5,5 kW. Deux champs de la MÊME trame la démentaient — d'où la règle du second
    * témoin. Sans elle, l'UI ment et le réveil de charge secoue une voiture déjà en charge.
    */
-  it('démasque un `chargingStatus` menteur grâce au temps restant daté de la trame', () => {
-    const patch = toStatePatch({ battery: BATTERY_CHARGING_LIAR }, NOW)
+  it('démasque un `chargingStatus` menteur grâce au temps restant daté de la trame ET au niveau qui monte', () => {
+    const patch = toStatePatch({ battery: BATTERY_CHARGING_LIAR }, NOW, { levelRising: true })
     expect(patch.charging).toBe(true)
     expect(patch.chargeMinutesRemaining).toBe(52)
 
     // le même corps, mais le temps restant TRAÎNE d'une trame précédente : on ne crie pas au loup
     const attrs = { ...BATTERY_CHARGING_LIAR.data.attributes, chargingRemainingTimeLastUpdateDateTime: '2026-09-17T14:45:35Z' }
-    const stale = toStatePatch({ battery: { data: { id: 'VF1', attributes: attrs } } }, NOW)
+    const stale = toStatePatch({ battery: { data: { id: 'VF1', attributes: attrs } } }, NOW, { levelRising: true })
     expect(stale.charging).toBe(false)
     expect(stale.chargeMinutesRemaining).toBeNull()
+  })
+
+  /**
+   * Le 2026-10-02, la R5 attendait vraiment du courant (charge verte, pas de soleil, 0 W à la borne)
+   * avec un temps restant daté de la trame : le second témoin seul la disait en charge. Ce qui la
+   * distingue de la menteuse du 19/09, c'est le niveau qui ne monte pas.
+   */
+  it('`0.3` et un temps restant frais, niveau qui ne monte pas : EN ATTENTE, pas en charge', () => {
+    const patch = toStatePatch({ battery: BATTERY_WAITING_FRESH_ETA }, NOW)
+    expect(patch).toMatchObject({ pluggedIn: true, charging: false, chargeMinutesRemaining: null })
+    expect(toStatePatch({ battery: BATTERY_CHARGING_LIAR }, NOW).charging).toBe(false)
+    // le oui franc ne demande aucun témoin
+    expect(toStatePatch({ battery: BATTERY_CHARGING }, NOW).charging).toBe(true)
+  })
+
+  describe('le niveau qui monte (`trackLevel`)', () => {
+    const MIN = 60_000
+    const T = Date.parse('2026-10-02T12:00:07Z')
+    const run = (frames: [number, number][]) => {
+      let track: LevelTrack | undefined
+      return frames.map(([at, soc]) => levelRising(track = trackLevel(track, at, soc)))
+    }
+
+    it('une hausse entre deux trames rapprochées, et tant que la suivante tombe dans l\'heure', () => {
+      expect(run([[T, 63], [T + 10 * MIN, 64], [T + 25 * MIN, 64], [T + 50 * MIN, 65]])).toEqual([false, true, true, true])
+    })
+    it('pas une hausse étalée sur plus d\'une heure (le 51 → 52 % du 2026-10-02, 11:44 → 14:00)', () => {
+      expect(run([[T - 136 * MIN, 51], [T, 52]])).toEqual([false, false])
+    })
+    it('retombe une heure après la dernière hausse ; la même trame relue garde son verdict', () => {
+      expect(run([[T, 60], [T + 10 * MIN, 61], [T + 10 * MIN, 61], [T + 75 * MIN, 61]])).toEqual([false, true, true, false])
+    })
+    it('un niveau qui baisse n\'est pas une charge', () => {
+      expect(run([[T, 60], [T + 10 * MIN, 59]])).toEqual([false, false])
+    })
   })
 
   it('ne retient le temps de charge restant QUE pendant la charge', () => {

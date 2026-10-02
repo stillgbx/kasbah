@@ -4,8 +4,8 @@ import pino from 'pino'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { Bus } from './bus'
-import { chargeLimitReached, chargerToForce, chargerToStop } from './chargeCoordination'
-import { PluginError, type DevicePlugin } from './plugin'
+import { chargeLimitReached, chargerToForce, chargerToStop, chargingRefuted } from './chargeCoordination'
+import { PluginError, type DevicePlugin, type PluginContext } from './plugin'
 import { PluginHost } from './plugin-host'
 import { DeviceRegistry } from './registry'
 import { SceneRegistry } from './scene-registry'
@@ -105,14 +105,45 @@ describe('limite de charge atteinte', () => {
   })
 })
 
+describe('une voiture qui se dit en charge, démentie par les bornes', () => {
+  const claimed = { soc: 52, pluggedIn: true, charging: true }
+  const at = (w: ReturnType<typeof world>) => w.registry.get(car.id)!.state
+  const refuted = (w: ReturnType<typeof world>) => chargingRefuted(at(w), w.registry.list(), HOME)
+
+  it('à la maison, branchée, et aucune borne ne charge : démentie (la R5 du 2026-10-02)', () => {
+    expect(refuted(world({ vehicle: claimed }))).toBe(true)
+    expect(refuted(world({ vehicle: claimed, chargers: [{ d: evse('a'), status: 'connected' }, { d: evse('b'), status: 'disconnected' }] }))).toBe(true)
+  })
+  it('pas quand une borne charge : on ne sait pas laquelle des voitures elle sert', () => {
+    expect(refuted(world({ vehicle: claimed, chargers: [{ d: evse('a'), status: 'charging' }] }))).toBe(false)
+  })
+  it('pas sans borne, ni avec une borne injoignable', () => {
+    expect(refuted(world({ vehicle: claimed, chargers: [] }))).toBe(false)
+    const w = world({ vehicle: claimed })
+    w.registry.setAvailable('evse', 'a', false)
+    expect(refuted(w)).toBe(false)
+  })
+  it('pas loin de la maison, ni sans position connue : elle peut charger ailleurs', () => {
+    expect(refuted(world({ vehicle: { ...claimed, location: { lat: 48.85, lon: 2.35, at: 0 } } }))).toBe(false)
+    expect(refuted(world({ vehicle: { ...claimed, location: undefined } }))).toBe(false)
+  })
+  it('pas quand la voiture MESURE sa puissance de charge (Tesla) : elle sait mieux que nous', () => {
+    expect(refuted(world({ vehicle: { ...claimed, chargePowerW: 3200 } }))).toBe(false)
+  })
+  it('rien à démentir quand elle ne se dit pas en charge', () => {
+    expect(refuted(world({ vehicle: { charging: false } }))).toBe(false)
+  })
+})
+
 describe('l\'hôte relaie', () => {
   async function hosted(evseFails = false) {
     const bus = new Bus()
     const { registry, clock } = world({ bus })
     const sent: string[] = []
+    const ctxs: Record<string, PluginContext> = {}
     const plugin = (id: string): DevicePlugin => ({
       id, configSchema: z.object({}),
-      async init() {}, async discover() { return [] }, async start() {}, async stop() {},
+      async init(ctx) { ctxs[id] = ctx }, async discover() { return [] }, async start() {}, async stop() {},
       async execute(externalId, command) {
         if (id === 'evse' && evseFails) throw new PluginError('UPSTREAM_ERROR', 'cloud down')
         sent.push(`${id}:${externalId} ${command.type}`)
@@ -129,7 +160,7 @@ describe('l\'hôte relaie', () => {
     const w = world({ bus: new Bus() })
     registry.register('car', [car]); registry.register('evse', [evse('a')])
     for (const e of w.registry.list()) registry.applyPatch(e.descriptor.id, e.state as never)
-    return { host, sent, registry }
+    return { host, sent, registry, ctxs }
   }
 
   it('« Arrêter » un véhicule qui s\'arrête par la borne : la borne SEULE, rien au véhicule', async () => {
@@ -178,6 +209,23 @@ describe('l\'hôte relaie', () => {
     registry.applyPatch(car.id, { soc: 80, pluggedIn: true } as never)
     await flush()
     expect(sent).not.toContain('evse:a ev_charger.resume_mode')
+    await host.stopAll()
+  })
+
+  it('« en charge » publié par le véhicule est démenti tant qu\'aucune borne ne charge, et rendu quand l\'une charge', async () => {
+    const { host, registry, ctxs } = await hosted()
+    const charging = () => (registry.get(car.id)!.state as { charging?: boolean }).charging
+    ctxs.car!.emitState('1', { charging: true, chargeMinutesRemaining: 480 } as never)
+    expect(charging()).toBe(false)
+    expect((registry.get(car.id)!.state as { chargeMinutesRemaining?: number | null }).chargeMinutesRemaining ?? null).toBeNull()
+    registry.applyPatch('evse:a', { status: 'charging' } as never)
+    expect(charging()).toBe(true)
+    registry.applyPatch('evse:a', { status: 'connected' } as never)
+    expect(charging()).toBe(false)
+    // le véhicule se dit à l'arrêt : plus rien à rendre quand la borne charge (pour une autre voiture)
+    ctxs.car!.emitState('1', { charging: false } as never)
+    registry.applyPatch('evse:a', { status: 'charging' } as never)
+    expect(charging()).toBe(false)
     await host.stopAll()
   })
 })

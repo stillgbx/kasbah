@@ -13,7 +13,7 @@ import {
 } from './auth'
 import { DEFAULT_RATE_PER_HOUR, RenaultClient, carDataPath, isDeferred, isEndpointUnavailable } from './client'
 import {
-  chargeStartPayload, climateSettingsPayload, commandSummary, hvacSocThreshold, hvacStartPayload, inWindow, socTargetPayload, toAccounts, toDescriptor, toStatePatch,
+  chargeStartPayload, climateSettingsPayload, commandSummary, hvacSocThreshold, hvacStartPayload, inWindow, socTargetPayload, toAccounts, toDescriptor, toStatePatch, batteryFrame, levelRising, trackLevel, type LevelTrack,
   toVehicleLinks, wakePayload, type VehicleReadings,
 } from './mapping'
 import type { VehicleLink } from './types'
@@ -185,6 +185,8 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
   const lastHvac = new Map<string, { soc?: number; threshold?: number }>()
   /** Les sièges tels que publiés, par VIN : la fusion d'état est superficielle, `seatHeat` part entier. */
   const lastSeats = new Map<string, Partial<Record<VehicleSeat, number>>>()
+  /** Niveau suivi trame après trame, par VIN : le second témoin de la charge ne vaut que s'il monte. */
+  const levels = new Map<string, LevelTrack>()
 
   const log = () => ctx!.logger
 
@@ -229,7 +231,9 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
         throw err
       }
     }
-    const patch = toStatePatch(readings, ctx!.clock.now())
+    const frame = batteryFrame(readings.battery)
+    if (frame) levels.set(vin, trackLevel(levels.get(vin), frame.at, frame.soc))
+    const patch = toStatePatch(readings, ctx!.clock.now(), { levelRising: levelRising(levels.get(vin)) })
     ctx!.emitState(vin, patch)
     lastHvac.set(vin, { soc: patch.soc ?? lastHvac.get(vin)?.soc, threshold: hvacSocThreshold(readings.hvac) ?? lastHvac.get(vin)?.threshold })
     if (patch.seatHeat) lastSeats.set(vin, { ...patch.seatHeat })
