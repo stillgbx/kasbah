@@ -8,6 +8,7 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 import ChargeLimitCard from '../vehicles/ChargeLimitCard.vue'
 import VehicleBattery from '../vehicles/VehicleBattery.vue'
 import VehicleClimate from '../vehicles/VehicleClimate.vue'
+import VehicleSoftware from '../vehicles/VehicleSoftware.vue'
 
 const props = defineProps<{ descriptor: DeviceDescriptor; state: StateFor<'vehicle'>; pending?: boolean; disabled?: boolean }>()
 /** Charge demandée, pas encore constatée : la même attente que la vue Véhicules (tenue par le store). */
@@ -69,6 +70,9 @@ watch(() => [props.state.chargeLimit, props.pending], () => { dragged.value = nu
                      @preview="dragged = $event" @change="setLimit" />
     <!-- la climatisation : le panneau commun de la vue Véhicules, qui envoie lui-même ses commandes -->
     <VehicleClimate v-if="has('climate_precondition')" class="card card--soft mb-3" :descriptor="descriptor" :state="state" />
+    <!-- le logiciel : la ligne de la vue Véhicules et sa boîte (notes, installation). Toujours là, grisée
+         pour un véhicule qui n'en dit rien ; enveloppée parce que le composant a plusieurs racines -->
+    <div class="mb-3"><VehicleSoftware :descriptor="descriptor" :state="state" /></div>
     <div v-if="state.odometerKm" class="text-caption text-medium-emphasis">{{ $t('vehicle.odometer') }} · {{ formatKm(state.odometerKm, $i18n.locale) }}</div>
   </div>
 </template>
