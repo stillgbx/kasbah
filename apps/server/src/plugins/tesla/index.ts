@@ -112,6 +112,8 @@ const LOW_SOC_PCT = 20
 const NOTES_REFRESH_BEFORE_MS = 86_400_000
 /** Après un échec de lecture des notes, pas de nouvel essai avant : sinon chaque lecture complète le rejouerait. */
 const NOTES_RETRY_MS = 6 * 3_600_000
+/** Règle de lecture des notes, dans la clé du cache : la changer fait relire les caches une fois. */
+const NOTES_RULE = 'language+installed'
 /** Langues d'app retenues pour les notes, au plus (l'anglais en plus) : une requête ne peut pas en faire grossir la liste sans fin. */
 const NOTES_MAX_LANGS = 4
 /** Sections de `vehicle_data` lues. `location_data` est OBLIGATOIRE pour la position depuis le logiciel 2023.38. */
@@ -602,9 +604,9 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     const installed = last?.softwareVersion
     if (!installed) return
     const staged = last.softwareUpdate?.version
-    // la clé dit aussi COMMENT on a demandé (`language=`) : un cache lu autrement (`Accept-Language`,
-    // ignoré par Tesla, essai du 2026-10-02) est relu une fois au lieu de rester en anglais
-    const key = `language|${installed}|${staged ?? ''}`
+    // la clé dit aussi COMMENT on a lu : façon de demander (`language=` ; `Accept-Language` est ignoré
+    // par Tesla) et règle de tri (`NOTES_RULE`). Un cache lu autrement est relu une fois
+    const key = `${NOTES_RULE}|${installed}|${staged ?? ''}`
     const byLang = (saved.releaseNotes[vin] ??= {})
     const cache = byLang[lang]
     if (cache?.key === key && (cache.expiresAt === undefined || cache.expiresAt - NOTES_REFRESH_BEFORE_MS > ctx!.clock.now())) return
@@ -612,8 +614,13 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
       const base = `/api/1/vehicles/${encodeURIComponent(vin)}/release_notes`
       const current = releaseNotesResponseSchema.parse(await client!.request('GET', `${base}?language=${lang}`, { signal: ctx!.signal })).response
       // l'historique : ce que Tesla montre lui-même dans « Notes de mise à jour » (`show_in_history`),
-      // ajouté à ce qu'on gardait — Tesla ne remonte pas avant la dernière grosse mise à jour
-      const shown = notesByVersion(parseReleaseNotes(current.release_notes).filter((e) => e.show_in_history !== false))
+      // PLUS les nouveautés de la version installée — que Tesla rend en `show_in_history: false` juste
+      // après l'installation (relevé du 2026-10-02, 2026.38) —, sans l'entrée générique d'une version
+      // mineure (« Minor Fixes », `is_fallback`). Ajouté à ce qu'on gardait : Tesla ne remonte pas avant
+      // la dernière grosse mise à jour
+      const deployed = current.deployed_version ?? installed
+      const shown = notesByVersion(parseReleaseNotes(current.release_notes).filter((e) =>
+        e.show_in_history !== false || (e.customer_version === deployed && e.is_fallback !== true)))
       let pending: { version: string; notes: ReleaseNote[] } | undefined
       if (staged) {
         const next = releaseNotesResponseSchema.parse(await client!.request('GET', `${base}?staged=true&language=${lang}`, { signal: ctx!.signal })).response

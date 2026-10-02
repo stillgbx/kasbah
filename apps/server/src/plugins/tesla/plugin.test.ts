@@ -898,6 +898,33 @@ describe('logiciel : notes de version et mise à jour', () => {
     expect(n.history[1]!.notes.map((x) => x.title)).toEqual(['Apple Music'])
   })
 
+  it('juste après une installation, les nouveautés de la version installée entrent dans l’historique (Tesla les rend hors historique)', async () => {
+    const { plugin, tesla } = await awake()
+    await read(plugin)
+    // relevé réel du 2026-10-02, 2026.38 tout juste installée : ses notes en `show_in_history: false`
+    tesla.world.data = software('2026.38', { status: '', version: ' ', download_perc: 0, install_perc: 1, expected_duration_sec: 2700 })
+    tesla.world.notes = { response: {
+      release_notes: [
+        { title: 'Supercharger Site Maps', description: 'View Site Map.', customer_version: '2026.38', show_in_history: false },
+        { title: 'Security Improvements', description: 'Fixes.', customer_version: '2026.38', show_in_history: false },
+        { title: 'Apple Music', description: 'Library.', customer_version: '2026.32', show_in_history: true },
+      ],
+      deployed_version: '2026.38', staged_version: null,
+    } }
+    await read(plugin)
+    const n = await plugin.releaseNotes!(VIN, 'en')
+    expect(n.pending).toBeUndefined()
+    expect(n.history.map((h) => h.version)).toEqual(['2026.38', '2026.32', '2026.26.6'])
+    expect(n.history[0]!.notes.map((x) => x.title)).toEqual(['Supercharger Site Maps', 'Security Improvements'])
+  })
+
+  it('l’entrée générique de la version installée (« Minor Fixes », `is_fallback`) reste hors historique', async () => {
+    const { plugin } = await awake()
+    await read(plugin)
+    // la capture du 2026-10-02 : 2026.32.7 installée, son « Minor Fixes » en repli
+    expect((await plugin.releaseNotes!(VIN, 'en')).history.map((h) => h.version)).not.toContain('2026.32.7')
+  })
+
   it('les illustrations expirent : retirées à l’affichage, le texte reste ; relues un jour avant l’échéance', async () => {
     const { plugin, tesla, clock } = await awake()
     await read(plugin)
