@@ -1,6 +1,7 @@
 {
   "app": { "name": "Kasbah" },
   "nav": { "main": "Navigation", "home": "Maison", "energy": "Énergie", "water": "Eau", "heating": "Chauffage", "vehicles": "Véhicules", "robots": "Robots", "pets": "Animaux", "weather": "Météo", "agenda": "Agenda", "settings": "Réglages", "lights": "Lumières", "covers": "Ouvrants", "cameras": "Caméras", "media": "Médias", "music": "Musique", "automations": "Automatisations", "tens": "TENS" },
+  "alerts": { "pending": "{view} · alerte en cours", "dismiss": "Masquer", "dismissHint": "Ne plus la signaler sur le rail" },
   "common": {
     "showIn3d": "Voir dans la vue 3D",
     "cancel": "Annuler", "close": "Fermer", "back": "Retour", "retry": "Réessayer", "all": "Tout", "none": "Aucun", "unavailable": "Indisponible",

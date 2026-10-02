@@ -13,6 +13,7 @@ import VehicleMap from '../components/vehicles/VehicleMap.vue'
 import { formatAgo, formatDistance, formatPercent } from '../lib/format'
 import { QUOTA_TENSE_PCT, offsetLocation, quotaPercent } from '../lib/map'
 import { useDevicesStore } from '../stores/devices'
+import { useAlertsStore } from '../stores/alerts'
 import { useHouseStore } from '../stores/house'
 
 // Vue Robots : une carte par robot — tondeuse ou aspirateur, les deux kinds que la maison range ici.
@@ -31,6 +32,8 @@ import { useHouseStore } from '../stores/house'
 // Les boutons suivent les CAPACITÉS du descripteur : un plugin en lecture seule ne se voit pas
 // proposer ce qu'il refuserait.
 const devices = useDevicesStore()
+// une panne reste signalée sur le rail tant qu'on ne l'a pas masquée ici (ou qu'elle se règle)
+const alerts = useAlertsStore()
 const house = useHouseStore()
 const router = useRouter()
 const { t, d, locale } = useI18n()
@@ -209,7 +212,10 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
           <div class="rcard__bar">
             <div class="rcard__bar-fill" :data-low="v.state.battery < 20 ? '1' : '0'" :style="{ width: `${v.state.battery}%` }" />
           </div>
-          <p class="rcard__status" :data-error="v.state.activity === 'error' ? '1' : '0'">{{ v.state.errorMessage ?? '' }}</p>
+          <div class="rcard__status" :data-error="v.state.activity === 'error' ? '1' : '0'">
+            <span class="rcard__status-text">{{ v.state.errorMessage ?? '' }}</span>
+            <button v-if="alerts.closableFor(v.descriptor.id).length" type="button" class="rcard__dismiss" :title="$t('alerts.dismissHint')" @click="alerts.dismiss(alerts.closableFor(v.descriptor.id))">{{ $t('alerts.dismiss') }}</button>
+          </div>
           <div class="rcard__stats">
             <div class="card card--soft stat"><div class="muted stat__k">{{ $t('vacuum.bin') }}</div><div class="stat__v">{{ binState(v.state) }}</div></div>
             <div class="card card--soft stat"><div class="muted stat__k">{{ $t('vacuum.connection') }}</div><div class="stat__v">{{ v.state.available ? $t('vacuum.connected') : $t('vacuum.offline') }}</div></div>
@@ -257,7 +263,10 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
             <div class="rcard__bar-fill" :data-low="m.state.battery < 20 ? '1' : '0'" :style="{ width: `${m.state.battery}%` }" />
           </div>
           <!-- l'erreur du fabricant, ou ce qui retient le robot : place TOUJOURS réservée -->
-          <p class="rcard__status" :data-error="m.state.activity === 'error' ? '1' : '0'">{{ statusLine(m.state) }}</p>
+          <div class="rcard__status" :data-error="m.state.activity === 'error' ? '1' : '0'">
+            <span class="rcard__status-text">{{ statusLine(m.state) }}</span>
+            <button v-if="alerts.closableFor(m.descriptor.id).length" type="button" class="rcard__dismiss" :title="$t('alerts.dismissHint')" @click="alerts.dismiss(alerts.closableFor(m.descriptor.id))">{{ $t('alerts.dismiss') }}</button>
+          </div>
           <div class="rcard__stats">
             <div class="card card--soft stat"><div class="muted stat__k">{{ $t('mower.nextStartLabel') }}</div><div class="stat__v">{{ nextStart(m.state) }}</div></div>
             <div class="card card--soft stat"><div class="muted stat__k">{{ $t('mower.cuttingHeight') }}</div><div class="stat__v">{{ cuttingHeight(m.state) }}</div></div>
@@ -365,7 +374,11 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
 .rcard__bar-fill { height: 100%; background: var(--accent); border-radius: 999px; transition: width .4s; }
 .rcard__bar-fill[data-low='1'] { background: #d24a43; }
 /* la ligne d'état tient sa hauteur même vide : rien ne bouge quand l'erreur arrive ou tombe */
-.rcard__status { margin: -8px 0 0; font-size: 12px; min-height: 16px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rcard__status { margin: -8px 0 0; font-size: 12px; line-height: 16px; min-height: 16px; color: var(--muted); display: flex; gap: 10px; }
+.rcard__status-text { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* « Masquer » : un lien sur la ligne même, à sa hauteur (rien ne bouge quand il part) */
+.rcard__dismiss { flex: none; padding: 0; border: 0; background: none; font: inherit; line-height: 16px; color: var(--muted); text-decoration: underline; cursor: pointer; }
+.rcard__dismiss:hover { color: var(--text); }
 .rcard__status[data-error='1'] { color: #d38b22; font-weight: 500; }
 .rcard__stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .stat { padding: 10px 12px; min-width: 0; }

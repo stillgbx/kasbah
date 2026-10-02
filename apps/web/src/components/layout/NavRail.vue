@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch, watchEffect } from 'vue'
 import { useRoute } from 'vue-router'
 import { useHouseStore } from '../../stores/house'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import { NAV_ITEMS, visibleNavItems } from '../../lib/navItems'
 import { useLocalPluginsStore } from '../../stores/localPlugins'
+import { useAlertsStore } from '../../stores/alerts'
 
 // Rail de navigation (72 px) : initiales de la maison, vues, puis les réglages tout en bas. Sur un
 // téléphone, il DÉFILE : resserré à gauche en paysage, en barre horizontale en bas en portrait.
@@ -22,6 +23,11 @@ const initials = computed(() => {
 const localPlugins = useLocalPluginsStore()
 const items = computed(() => visibleNavItems(localPlugins.isEnabled).filter((it) => it.name !== 'settings'))
 const settingsItem = NAV_ITEMS.find((it) => it.name === 'settings')!
+
+// Une pastille sur l'icône d'une vue qui a une alerte en attente. Être sur la vue suffit à voir ses
+// alertes d'information, y compris celles qui arrivent pendant qu'on la regarde.
+const alerts = useAlertsStore()
+watchEffect(() => { if (typeof current.value === 'string') alerts.markViewSeen(current.value) })
 
 // La vue courante reste en vue dans la file qui défile : arrivé par la recherche sur « Réglages »,
 // on voit son bouton allumé au lieu d'une barre qui montre encore le début. Défilement du seul rail
@@ -48,8 +54,10 @@ watch(current, () => void nextTick(() => {
     <div ref="scroller" class="rail__scroll">
       <div class="rail__avatar" :title="house.house?.name">{{ initials }}</div>
       <router-link v-for="it in items" :key="it.name" v-slot="{ navigate }" :to="{ name: it.name }" custom>
-        <button type="button" class="rail__btn" :data-on="current === it.name ? '1' : '0'" :title="$t(it.label)" :aria-label="$t(it.label)" @click="navigate">
+        <button type="button" class="rail__btn" :data-on="current === it.name ? '1' : '0'" :title="$t(it.label)"
+                :aria-label="alerts.viewSeverity(it.name) ? $t('alerts.pending', { view: $t(it.label) }) : $t(it.label)" @click="navigate">
           <StrokeIcon :name="it.icon" :size="24" />
+          <span v-if="alerts.viewSeverity(it.name)" class="rail__badge" :data-severity="alerts.viewSeverity(it.name)" />
         </button>
       </router-link>
       <div class="rail__spacer" />
@@ -112,6 +120,15 @@ watch(current, () => void nextTick(() => {
 }
 .rail__btn:hover { color: var(--text); background: color-mix(in srgb, var(--surface) 55%, transparent); }
 .rail__btn[data-on='1'] { background: var(--accent-soft); color: var(--accent); }
+/* posée sur le coin de l'icône, hors du flux : rien ne bouge quand elle paraît. Un liseré du fond
+   la détache du trait de l'icône. */
+.rail__btn { position: relative; }
+.rail__badge {
+  position: absolute; top: 9px; right: 9px; width: 9px; height: 9px; border-radius: 50%; pointer-events: none;
+  background: var(--accent); box-shadow: 0 0 0 2px var(--bg);
+}
+.rail__badge[data-severity='problem'] { background: rgb(var(--v-theme-warning)); }
+.rail__badge[data-severity='critical'] { background: rgb(var(--v-theme-error)); }
 .rail__spacer { flex: 1 1 0; }
 
 /* Téléphone en paysage : boutons de 44 px, et la file défile avec un fondu aux deux bouts. */

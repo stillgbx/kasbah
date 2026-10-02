@@ -14,7 +14,7 @@ import { VIGILANCE_ATTRIBUTION, VIGILANCE_WEB, VigilanceClient } from './vigilan
 // (usage non commercial, attribution CC BY 4.0 portée par `meta.weather.attribution`). Un seul
 // appareil `weather`, à la position de la maison (`ctx.site`) ; deux appels par sondage (prévisions,
 // puis qualité de l'air et pollens), toutes les dix minutes — quelque 300 appels par jour sur les
-// 10 000 tolérés, rien à rationner.
+// 10 000 tolérés, rien à rationner. Le flux de vigilance MeteoAlarm est relu au même rythme.
 //
 // La qualité de l'air est FACULTATIVE : si son API ne répond pas, les champs d'air s'effacent
 // (patch `null`) et l'appareil est redéclaré SANS les capacités d'air — la vue ne montre pas de
@@ -80,7 +80,15 @@ export function createOpenMeteoPlugin(deps: OpenMeteoDeps = {}): DevicePlugin {
     lastError = null
     // les capacités suivent ce que l'API d'air répond : redéclarer l'appareil quand ça change
     if (!!airQuality !== hasAirQuality) { hasAirQuality = !!airQuality; ctx!.emitDevices([toDescriptor(hasAirQuality)]) }
-    ctx!.emitState(HOME_ID, toStatePatch(forecast, airQuality))
+    const patch = toStatePatch(forecast, airQuality)
+    // la vigilance EN COURS de la maison, dans l'état (les alertes du rail la lisent là). Facultative
+    // comme l'air : un flux tombé laisse la dernière valeur lue, hors de la métropole on l'efface
+    try {
+      const r = await vigilance!.at(ctx!.site.lat, ctx!.site.lon, ctx!.signal)
+      const now = ctx!.clock.now()
+      patch.vigilance = r.area ? r.warnings.filter((w) => w.onset <= now && now < w.expires) : null
+    } catch (err) { ctx!.logger.warn({ err }, 'vigilance unavailable, weather kept') }
+    ctx!.emitState(HOME_ID, patch)
   }
 
   return {

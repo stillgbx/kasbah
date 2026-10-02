@@ -337,6 +337,9 @@ export const cameraStateSchema = z.object({
  * jamais un zéro. Les pourcentages sont sur 100 comme partout ailleurs dans le contrat
  * (`climate.humidity`) — la scène 3D, qui pense en 0-1, convertit.
  */
+export const VIGILANCE_LEVELS = ['yellow', 'orange', 'red'] as const
+export type VigilanceLevel = (typeof VIGILANCE_LEVELS)[number]
+
 export const weatherStateSchema = z.object({
   kind: z.literal('weather'), ...base,
   condition: z.enum(WEATHER_CONDITIONS),
@@ -366,6 +369,19 @@ export const weatherStateSchema = z.object({
   pollen: z.partialRecord(z.enum(POLLEN_TYPES), z.number().int().min(0).max(4)).optional(),
   /** Heure de l'observation ou du pas de modèle (ms epoch), distincte d'`updatedAt` (heure du sondage). */
   observedAt: z.number().int(),
+  /**
+   * Vigilances Météo-France EN COURS sur le département de la maison (au moins jaunes), la plus
+   * forte d'abord : ce qu'une alerte ou une routine lit sans rien demander. `[]` = aucune ; absent =
+   * on ne sait pas (hors de la métropole, ou flux pas encore lu). Les vigilances à venir et celles
+   * d'un autre lieu se lisent à la demande (`/api/plugins/open_meteo/alerts`).
+   */
+  vigilance: z.array(z.object({
+    /** Phénomène (`thunderstorm`, `wind`…), `other` pour un phénomène inconnu. */
+    type: z.string(),
+    level: z.enum(VIGILANCE_LEVELS),
+    onset: z.number().int(),
+    expires: z.number().int(),
+  })).optional(),
 })
 
 /**

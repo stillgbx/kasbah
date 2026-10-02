@@ -12,17 +12,32 @@ import { createOpenMeteoPlugin, openMeteoConfigSchema } from './index'
 
 const NOW = 1789545000 * 1000
 
-function fakeService(over: { forecastStatus?: number; airStatus?: number; hang?: boolean } = {}) {
+/** Le flux MeteoAlarm d'un seul message, sur la Côte-d'Or (le département de `site`). */
+const alarm = (level: number, onset: string, expires: string) => ({ warnings: [{ alert: { sent: onset, info: [{
+  onset, expires, area: [{ areaDesc: "Côte-d'Or" }],
+  parameter: [{ valueName: 'awareness_type', value: '3; thunderstorm' }, { valueName: 'awareness_level', value: `${level}; x; y` }],
+}] } }] })
+
+function fakeService(over: { forecastStatus?: number; airStatus?: number; hang?: boolean; feed?: unknown; feedStatus?: number; departement?: string | null } = {}) {
+  /** Appels à Open-Meteo seulement ; ceux de la vigilance (MeteoAlarm, API Géo) à part. */
   const calls: string[] = []
+  const vigilanceCalls: string[] = []
   const fetchImpl: FetchLike = async (url, init) => {
+    const reply = (status: number, body: unknown) => ({ ok: status < 400, status, json: async () => body, text: async () => JSON.stringify(body) }) as Awaited<ReturnType<FetchLike>>
+    if (url.includes('meteoalarm')) { vigilanceCalls.push(url); return reply(over.feedStatus ?? 200, over.feed ?? { warnings: [] }) }
+    if (url.includes('geo.api.gouv.fr')) {
+      vigilanceCalls.push(url)
+      const d = over.departement === undefined ? '21' : over.departement
+      return reply(200, d === null ? [] : [{ nom: 'Dijon', departement: { code: d, nom: "Côte-d'Or" } }])
+    }
     calls.push(url)
     if (over.hang) await new Promise<void>((_, reject) => init?.signal?.addEventListener('abort', () => reject(new Error('aborted'))))
     const air = url.includes('air-quality')
     const status = air ? over.airStatus ?? 200 : over.forecastStatus ?? 200
     const body = air ? AIR_QUALITY : FORECAST
-    return { ok: status < 400, status, json: async () => body, text: async () => JSON.stringify(body) } as Awaited<ReturnType<FetchLike>>
+    return reply(status, body)
   }
-  return { fetchImpl, calls }
+  return { fetchImpl, calls, vigilanceCalls }
 }
 
 /** Laisse les promesses en vol se résoudre (le poller tourne sur l'horloge injectée). */
@@ -121,7 +136,7 @@ describe('sondage', () => {
   it('relit à la cadence configurée, et marque l’appareil indisponible quand le service tombe', async () => {
     const calls: string[] = []
     let status = 200
-    const flaky: FetchLike = (url, init) => { calls.push(url); return fakeService({ forecastStatus: status, airStatus: status }).fetchImpl(url, init) }
+    const flaky: FetchLike = (url, init) => { if (url.includes('open-meteo')) calls.push(url); return fakeService({ forecastStatus: status, airStatus: status }).fetchImpl(url, init) }
     const { plugin, ctx, clock } = await started(flaky, { OPEN_METEO_POLL_MS: '60000' })
     expect(calls).toHaveLength(2)                            // la première lecture vient du poller
     clock.advance(60_000); await settle()
@@ -184,5 +199,32 @@ describe('ailleurs qu’à la maison (vue Météo)', () => {
     expect(paris()).toBe(4)
     expect((await a.inject({ method: 'GET', url: '/at?lat=91&lon=0' })).statusCode).toBe(400)
     await plugin.stop()
+  })
+})
+
+describe('vigilance de la maison', () => {
+  const emitted = (ctx: PluginContext) => (ctx.emitState as ReturnType<typeof vi.fn>).mock.calls.at(-1)![1]
+
+  it('publie dans l’état les vigilances EN COURS du département, pas celles à venir', async () => {
+    const feed = { warnings: [
+      ...alarm(3, '2026-09-16T06:00:00+02:00', '2026-09-17T00:00:00+02:00').warnings,
+      ...alarm(4, '2026-09-17T00:00:00+02:00', '2026-09-17T12:00:00+02:00').warnings,
+    ] }
+    const service = fakeService({ feed })
+    const { ctx, plugin } = await started(service.fetchImpl)
+    expect(emitted(ctx).vigilance).toEqual([{ type: 'thunderstorm', level: 'orange', onset: Date.parse('2026-09-16T06:00:00+02:00'), expires: Date.parse('2026-09-17T00:00:00+02:00') }])
+    expect(service.calls).toHaveLength(2)                      // la vigilance n'ajoute rien à Open-Meteo
+    await plugin.stop()
+  })
+
+  it('aucune vigilance = liste vide ; hors de la métropole = effacée ; flux tombé = rien de touché', async () => {
+    const none = await started(fakeService().fetchImpl)
+    expect(emitted(none.ctx).vigilance).toEqual([])
+    const abroad = await started(fakeService({ departement: '971' }).fetchImpl)
+    expect(emitted(abroad.ctx).vigilance).toBeNull()
+    const down = await started(fakeService({ feedStatus: 503 }).fetchImpl)
+    expect(emitted(down.ctx)).not.toHaveProperty('vigilance')
+    expect(emitted(down.ctx)).toMatchObject({ condition: 'cloudy' })   // la météo passe quand même
+    for (const s of [none, abroad, down]) await s.plugin.stop()
   })
 })

@@ -15,6 +15,7 @@ import { moonIllumination, moonPhaseName, moonTimes, nextPhase } from '../lib/mo
 import { compassPoint, conditionIcon } from '../lib/weather'
 import type { WeatherAlert } from '../api/transport'
 import { useHouseStore } from '../stores/house'
+import { useAlertsStore } from '../stores/alerts'
 
 // Vue Météo : tout ce que l'appareil météo sait. L'actuel en grand, le soleil, le vent, les 24
 // prochaines heures, la semaine, l'air et les pollens, les grandeurs secondaires en tuiles, la
@@ -143,6 +144,9 @@ const isToday = (tMs: number) => dayOf(tMs) === dayOf(now.value)
 // Vigilance Météo-France du département du lieu affiché (métropole seule) : une ligne, la plus
 // forte en cours d'abord ; les autres au survol. La ligne garde sa place même sans vigilance.
 const alerts = useWeatherAlerts(home)
+// une vigilance orange de la MAISON reste signalée sur le rail tant qu'on ne l'a pas masquée ici
+const railAlerts = useAlertsStore()
+const closable = computed(() => (place.value || !weather.entry.value ? [] : railAlerts.closableFor(weather.entry.value.descriptor.id)))
 /** « minuit » pour la fin du jour, l'heure pour aujourd'hui, le jour et l'heure au-delà. */
 const when = (ms: number) => (isToday(ms - 1) && !isToday(ms) ? t('weather.alerts.midnight') : isToday(ms) ? fd(ms, 'time') : `${fd(ms, 'weekday')} ${fd(ms, 'time')}`)
 const alertText = (w: WeatherAlert) => {
@@ -206,12 +210,18 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
             </div>
           </div>
           <!-- vigilance du département : place réservée, vide pendant la lecture -->
-          <div class="small wx-alert" :data-level="alert?.level ?? 'none'" :title="alert?.title">
-            <template v-if="alert">
-              <span class="wx-alert__dot" />
-              <span class="wx-alert__text">{{ alert.text }}</span>
-              <span v-if="alert.more" class="wx-alert__more">+{{ alert.more }}</span>
-            </template>
+          <div class="wx-alert-row">
+            <div class="small wx-alert" :data-level="alert?.level ?? 'none'" :title="alert?.title">
+              <template v-if="alert">
+                <span class="wx-alert__dot" />
+                <span class="wx-alert__text">{{ alert.text }}</span>
+                <span v-if="alert.more" class="wx-alert__more">+{{ alert.more }}</span>
+              </template>
+            </div>
+            <!-- une croix plutôt qu'un mot : à 375 px, « Masquer » rognait la vigilance elle-même -->
+            <button v-if="closable.length" type="button" class="wx-alert__dismiss" :title="$t('alerts.dismissHint')" :aria-label="$t('alerts.dismissHint')" @click="railAlerts.dismiss(closable)">
+              <StrokeIcon name="close" :size="14" />
+            </button>
           </div>
           <div class="wx-now__foot muted">
             <span>{{ $t('weather.feelsLike') }} {{ deg(live?.feelsLikeC) }}</span>
@@ -449,8 +459,11 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
 .wx-now__temp { font-size: 56px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
 .wx-now__cond { font-size: 16px; margin-top: 6px; }
 .wx-now__foot { display: flex; gap: 18px; font-size: 13px; }
-/* vigilance : une pastille teintée de sa couleur, hauteur fixe */
-.wx-alert { display: flex; align-items: center; gap: 8px; height: 24px; min-width: 0; max-width: 100%; align-self: flex-start; padding: 0 10px; border-radius: 12px; color: var(--muted); }
+/* vigilance : une pastille teintée de sa couleur, hauteur fixe ; la croix qui la masque à côté, dans la même rangée */
+.wx-alert-row { display: flex; align-items: center; gap: 4px; height: 24px; min-width: 0; max-width: 100%; align-self: flex-start; }
+.wx-alert__dismiss { flex: none; width: 24px; height: 24px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 12px; background: none; color: var(--muted); cursor: pointer; }
+.wx-alert__dismiss:hover { color: var(--text); background: var(--surface2); }
+.wx-alert { display: flex; align-items: center; gap: 8px; height: 24px; min-width: 0; max-width: 100%; flex: 0 1 auto; padding: 0 10px; border-radius: 12px; color: var(--muted); }
 .wx-alert[data-level='yellow'] { --alert: #f2c200; }
 .wx-alert[data-level='orange'] { --alert: #ff8a00; }
 .wx-alert[data-level='red'] { --alert: #e8322c; }
