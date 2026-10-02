@@ -134,7 +134,6 @@ const tire = (s: StateFor<'vehicle'>, k: (typeof TIRES)[number]) => {
  * la capacité de la batterie (cf. `VehicleTuning`). Un véhicule qui n'a rien à régler — placé à la
  * main ET bavard sur sa puissance de charge — ne se voit pas proposer le bouton.
  */
-const tuning = ref<string | null>(null)
 const tunable = (v: VehicleEntry) => tunableVehicle(v.descriptor, house.houseDeviceFor(v.descriptor.id))
 const capacityOf = (v: VehicleEntry) => house.houseDeviceFor(v.descriptor.id)?.batteryKwh ?? 0
 
@@ -212,8 +211,16 @@ async function wake(v: VehicleEntry): Promise<void> {
 // le véhicule a ouvert les yeux : le bouton a fini son travail (et cède la place à « Actualiser »)
 watch(vehicles, (list) => { for (const v of list) if (v.state.sleepState === 'online') stopWaking(v.descriptor.id) })
 
-/** La climatisation, repliée derrière son bouton comme « Modifier » : marche, consigne, sièges (cf. `VehicleClimate`). */
-const climate = ref<string | null>(null)
+/**
+ * Le panneau ouvert, UN à la fois : la climatisation (marche, consigne, sièges, cf. `VehicleClimate`)
+ * ou les réglages (cf. `VehicleTuning`). Ils s'ouvrent au même endroit, par-dessus la carte.
+ */
+type Panel = 'climate' | 'tuning'
+const panel = ref<{ id: string; kind: Panel } | null>(null)
+const panelOf = (v: VehicleEntry): Panel | null => (panel.value?.id === v.descriptor.id ? panel.value.kind : null)
+function togglePanel(v: VehicleEntry, kind: Panel): void {
+  panel.value = panelOf(v) === kind ? null : { id: v.descriptor.id, kind }
+}
 /** Sous la carte : où est la voiture par rapport à la maison, et son kilométrage. */
 const caption = (s: StateFor<'vehicle'>) =>
   `${location(s)}${s.odometerKm ? ` · ${t('vehicle.odometer')} ${formatKm(s.odometerKm, locale.value)}` : ''}`
@@ -258,95 +265,86 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
       <div v-if="vehicles.length === 0" class="card card--soft empty muted">{{ $t('vehicle.none') }}</div>
       <div class="cards">
         <article v-for="v in vehicles" :key="v.descriptor.id" class="card vcard">
-          <div class="vcard__head">
-            <!-- en charge : l'éclair et un halo qui pulse (une ombre : rien ne bouge autour) -->
-            <span class="icon-square vcard__icon" :data-on="v.state.charging ? '1' : '0'"><StrokeIcon :name="v.state.charging ? 'bolt' : 'vehicle'" :size="18" /></span>
-            <div class="min0">
-              <!-- nom, ou saisie : le champ occupe la MÊME boîte que le titre, rien ne se décale -->
-              <div class="vcard__name-row">
-                <input v-if="renaming === v.descriptor.id" :ref="(el) => (renameInput = el as HTMLInputElement | null)"
-                       v-model="renameText" class="vcard__name vcard__name-input"
-                       :aria-label="$t('vehicle.rename')" :placeholder="v.descriptor.name" @keyup.enter="commitRename(v)"
-                       @keyup.escape="renaming = null" @blur="commitRename(v)" />
-                <template v-else>
-                  <div class="vcard__name">{{ displayName(v) }}</div>
-                  <button type="button" class="vcard__pencil" :title="$t('vehicle.rename')" :aria-label="$t('vehicle.rename')" @click="startRename(v)">
-                    <StrokeIcon name="pencil" :size="14" />
+          <!-- Ordre du DOM = la pile du téléphone : énergie, état, boutons, carte, quota. Plus large, des
+               ZONES de grille (et non des colonnes) : un bloc qui couvre plusieurs rangées laisse ses voisins
+               se suivre sans trou. Voir `.vcard` et ses deux @container. -->
+          <div class="vcard__energy">
+            <div class="vcard__head">
+              <!-- en charge : l'éclair et un halo qui pulse (une ombre : rien ne bouge autour) -->
+              <span class="icon-square vcard__icon" :data-on="v.state.charging ? '1' : '0'"><StrokeIcon :name="v.state.charging ? 'bolt' : 'vehicle'" :size="18" /></span>
+              <div class="min0">
+                <!-- nom, ou saisie : le champ occupe la MÊME boîte que le titre, rien ne se décale -->
+                <div class="vcard__name-row">
+                  <input v-if="renaming === v.descriptor.id" :ref="(el) => (renameInput = el as HTMLInputElement | null)"
+                         v-model="renameText" class="vcard__name vcard__name-input"
+                         :aria-label="$t('vehicle.rename')" :placeholder="v.descriptor.name" @keyup.enter="commitRename(v)"
+                         @keyup.escape="renaming = null" @blur="commitRename(v)" />
+                  <template v-else>
+                    <div class="vcard__name">{{ displayName(v) }}</div>
+                    <button type="button" class="vcard__pencil" :title="$t('vehicle.rename')" :aria-label="$t('vehicle.rename')" @click="startRename(v)">
+                      <StrokeIcon name="pencil" :size="14" />
+                    </button>
+                  </template>
+                </div>
+                <!-- sur le terrain, l'épingle au bout du lieu mène (même pastille que les listes d'appareils) à la voiture dans la 3D. Il est au BOUT
+                     de la ligne : absent, il ne décale rien -->
+                <div class="muted vcard__sub">
+                  <span class="vcard__sub-text" :title="`${v.descriptor.meta.manufacturer ?? v.descriptor.pluginId} · ${location(v.state)}`">{{ v.descriptor.meta.manufacturer ?? v.descriptor.pluginId }} · {{ location(v.state) }}</span>
+                  <button v-if="onSite(v)" type="button" class="vcard__locate" :title="$t('common.showIn3d')" :aria-label="$t('common.showIn3d')" @click="showIn3d(v)">
+                    <StrokeIcon name="pin" :size="14" />
                   </button>
-                </template>
+                </div>
               </div>
-              <!-- sur le terrain, l'épingle au bout du lieu mène (même pastille que les listes d'appareils) à la voiture dans la 3D. Il est au BOUT
-                   de la ligne : absent, il ne décale rien -->
-              <div class="muted vcard__sub">
-                <span class="vcard__sub-text" :title="`${v.descriptor.meta.manufacturer ?? v.descriptor.pluginId} · ${location(v.state)}`">{{ v.descriptor.meta.manufacturer ?? v.descriptor.pluginId }} · {{ location(v.state) }}</span>
-                <button v-if="onSite(v)" type="button" class="vcard__locate" :title="$t('common.showIn3d')" :aria-label="$t('common.showIn3d')" @click="showIn3d(v)">
-                  <StrokeIcon name="pin" :size="14" />
-                </button>
+              <!-- à droite, deux lignes en face du nom et du sous-titre : la veille, puis l'âge des valeurs.
+                   L'âge est en HAUT de carte : il ne descend plus quand un panneau s'ouvre -->
+              <div class="vcard__side">
+                <!-- pas de pastille quand le fabricant n'a pas de veille (Renault) : un soleil suivi d'un
+                     tiret se lirait « éveillée : inconnu ». Rien ne bouge pour autant, l'absence est stable -->
+                <span v-if="v.state.sleepState !== undefined" class="vcard__sleep muted" :data-asleep="asleep(v.state) ? '1' : '0'">
+                  <StrokeIcon :name="asleep(v.state) ? 'moon' : 'sun'" :size="14" />{{ $t(`vehicle.sleep.${v.state.sleepState}`) }}
+                </span>
+                <!-- l'âge des valeurs, toujours affiché : sur une API facturée et une voiture qui dort, elles en ont un -->
+                <span class="muted vcard__age" :title="asleep(v.state) ? $t('vehicle.wakeHint') : undefined">{{ readAgo(v.state) }}</span>
               </div>
             </div>
-            <!-- à droite, deux lignes en face du nom et du sous-titre : la veille, puis l'âge des valeurs.
-                 L'âge est en HAUT de carte : il ne descend plus quand un panneau s'ouvre -->
-            <div class="vcard__side">
-              <!-- pas de pastille quand le fabricant n'a pas de veille (Renault) : un soleil suivi d'un
-                   tiret se lirait « éveillée : inconnu ». Rien ne bouge pour autant, l'absence est stable -->
-              <span v-if="v.state.sleepState !== undefined" class="vcard__sleep muted" :data-asleep="asleep(v.state) ? '1' : '0'">
-                <StrokeIcon :name="asleep(v.state) ? 'moon' : 'sun'" :size="14" />{{ $t(`vehicle.sleep.${v.state.sleepState}`) }}
-              </span>
-              <!-- l'âge des valeurs, toujours affiché : sur une API facturée et une voiture qui dort, elles en ont un -->
-              <span class="muted vcard__age" :title="asleep(v.state) ? $t('vehicle.wakeHint') : undefined">{{ readAgo(v.state) }}</span>
+            <!-- l'autonomie : le composant partagé avec le panneau de la vue Maison ; le repère de cible suit le curseur -->
+            <VehicleBattery :state="v.state" :limit="limitOf(v)" />
+            <!-- détail de la charge en cours : place TOUJOURS réservée, rien ne se décale quand elle démarre -->
+            <p class="muted vcard__charge">{{ chargeDetail(v) }}</p>
+            <!-- la cible de charge, quand le véhicule la laisse écrire : paliers au doigt, curseur au pour cent -->
+            <ChargeLimitCard v-if="has(v, 'charge_limit')" watermark :value="limitOf(v)" :disabled="limitLocked(v)"
+                             :hint="asleep(v.state) ? $t('vehicle.wakeHint') : undefined"
+                             @preview="preview(v, $event)" @change="setLimit(v, $event)" />
+          </div>
+          <div class="vcard__state">
+            <!-- chaque section porte en filigrane, en bas à droite, l'icône de ce qu'elle dit (essai 2026-10-01) -->
+            <div class="vcard__stats">
+              <div class="card card--soft stat"><StrokeIcon class="wm" :name="v.state.locked === false ? 'lockOpen' : 'lock'" :size="48" />
+                <div class="muted stat__k">{{ $t('common.status') }}</div><div class="stat__v">{{ locked(v.state) }}</div></div>
+              <div class="card card--soft stat"><StrokeIcon class="wm" name="plug" :size="48" /><div class="muted stat__k">{{ $t('vehicle.charge') }}</div>
+                <div class="stat__v">{{ charge(v.state) }}</div></div>
+              <div class="card card--soft stat"><StrokeIcon class="wm" name="gauge" :size="48" />
+                <div class="muted stat__k">{{ $t('vehicle.movement') }}</div><div class="stat__v">{{ movement(v.state) }}</div></div>
+              <div class="card card--soft stat"><StrokeIcon class="wm" name="hotCold" :size="48" />
+                <div class="muted stat__k">{{ $t('vehicle.temps') }}</div><div class="stat__v">{{ temps(v.state) }}</div></div>
+            </div>
+            <!-- quatre roues, quatre cases fixes, dans l'ordre où on regarde une voiture de dessus -->
+            <div class="card card--soft tires">
+              <StrokeIcon class="wm" name="tire" :size="56" />
+              <div class="muted stat__k">{{ $t('vehicle.tires') }}</div>
+              <div class="tires__grid">
+                <div v-for="k in TIRES" :key="k" class="tire"><span class="muted tire__k">{{ $t(`vehicle.tire.${k}`) }}</span><span class="tire__v">{{ tire(v.state, k) }}</span></div>
+              </div>
             </div>
           </div>
-          <!-- l'autonomie : le composant partagé avec le panneau de la vue Maison ; le repère de cible suit le curseur -->
-          <VehicleBattery :state="v.state" :limit="limitOf(v)" />
-          <!-- détail de la charge en cours : place TOUJOURS réservée, rien ne se décale quand elle démarre -->
-          <p class="muted vcard__charge">{{ chargeDetail(v) }}</p>
-          <!-- la cible de charge, quand le véhicule la laisse écrire : paliers au doigt, curseur au pour cent -->
-          <ChargeLimitCard v-if="has(v, 'charge_limit')" watermark :value="limitOf(v)" :disabled="limitLocked(v)"
-                           :hint="asleep(v.state) ? $t('vehicle.wakeHint') : undefined"
-                           @preview="preview(v, $event)" @change="setLimit(v, $event)" />
-          <!-- chaque section porte en filigrane, en bas à droite, l'icône de ce qu'elle dit (essai 2026-10-01) -->
-          <div class="vcard__stats">
-            <div class="card card--soft stat"><StrokeIcon class="wm" :name="v.state.locked === false ? 'lockOpen' : 'lock'" :size="48" />
-              <div class="muted stat__k">{{ $t('common.status') }}</div><div class="stat__v">{{ locked(v.state) }}</div></div>
-            <div class="card card--soft stat"><StrokeIcon class="wm" name="plug" :size="48" /><div class="muted stat__k">{{ $t('vehicle.charge') }}</div>
-              <div class="stat__v">{{ charge(v.state) }}</div></div>
-            <div class="card card--soft stat"><StrokeIcon class="wm" name="gauge" :size="48" />
-              <div class="muted stat__k">{{ $t('vehicle.movement') }}</div><div class="stat__v">{{ movement(v.state) }}</div></div>
-            <div class="card card--soft stat"><StrokeIcon class="wm" name="hotCold" :size="48" />
-              <div class="muted stat__k">{{ $t('vehicle.temps') }}</div><div class="stat__v">{{ temps(v.state) }}</div></div>
-          </div>
-          <!-- quatre roues, quatre cases fixes, dans l'ordre où on regarde une voiture de dessus -->
-          <div class="card card--soft tires">
-            <StrokeIcon class="wm" name="tire" :size="56" />
-            <div class="muted stat__k">{{ $t('vehicle.tires') }}</div>
-            <div class="tires__grid">
-              <div v-for="k in TIRES" :key="k" class="tire"><span class="muted tire__k">{{ $t(`vehicle.tire.${k}`) }}</span><span class="tire__v">{{ tire(v.state, k) }}</span></div>
-            </div>
-          </div>
-          <!-- la carte : voiture (avec son cap) et maison, plan ou satellite, plein écran -->
-          <VehicleMap class="vcard__map" :location="v.state.location" :heading-deg="v.state.headingDeg" :home="house.house?.origin"
-                      :caption="caption(v.state)" />
           <!-- TOUS les boutons, toujours : ce qu'un véhicule ne sait pas faire est grisé, avec la raison
-               (règle de l'utilisateur, 2026-10-01). La rangée ne change ni d'un véhicule à l'autre, ni
-               quand on branche le câble -->
+               (règle de l'utilisateur, 2026-10-01). Une grille de six, rangée par `order` (`data-slot`) :
+               carte à droite, les boutons qui ouvrent un panneau sont dans la colonne qui la touche -->
           <div class="vcard__actions">
-            <button type="button" class="pill" :disabled="!has(v, 'lock') || !v.state.available"
-                    :title="has(v, 'lock') ? undefined : $t('vehicle.unsupported')" @click="send(v.descriptor.id, { type: v.state.locked ? 'vehicle.unlock' : 'vehicle.lock' })">
-              <StrokeIcon :name="v.state.locked ? 'lockOpen' : 'lock'" :size="16" /><span class="vcard__label">{{ v.state.locked ? $t('common.unlock') : $t('common.lock') }}</span>
-            </button>
-            <!-- demandée, la charge tourne jusqu'à ce que la voiture la DISE active (20 s à 1 min, cf. le store) -->
-            <button type="button" class="pill" :data-on="v.state.charging ? '1' : '0'"
-                    :disabled="!has(v, 'charging') || !v.state.pluggedIn || !v.state.available || busy(v)" :aria-busy="charging(v)"
-                    :title="!has(v, 'charging') ? $t('vehicle.unsupported') : v.state.pluggedIn ? undefined : $t('vehicle.unplugged')"
-                    @click="send(v.descriptor.id, { type: v.state.charging ? 'vehicle.stop_charge' : 'vehicle.start_charge' })">
-              <v-progress-circular v-if="charging(v)" indeterminate size="16" width="2" />
-              <StrokeIcon v-else :name="v.state.charging ? 'boltOff' : 'bolt'" :size="16" />
-              <span class="vcard__label">{{ v.state.charging ? $t('vehicle.stopCharge') : $t('vehicle.startCharge') }}</span>
-            </button>
             <!-- réveiller est un geste explicite (Tesla le facture) : jamais automatique. TOUJOURS là pour un
                  véhicule qui connaît la veille, grisé quand il est éveillé : s'il apparaissait et
                  disparaissait, la rangée changerait de nombre de lignes et pousserait le panneau de la clim -->
-            <button type="button" class="pill" :disabled="v.state.sleepState === undefined || !v.state.available || !asleep(v.state) || busy(v)"
+            <button type="button" class="pill" data-slot="wake" :disabled="v.state.sleepState === undefined || !v.state.available || !asleep(v.state) || busy(v)"
                     :aria-busy="v.descriptor.id in waking" :title="v.state.sleepState === undefined ? $t('vehicle.unsupported') : $t('vehicle.wakeHint')" @click="wake(v)">
               <!-- le spinner prend la PLACE de l'icône, même taille : le bouton ne change pas de largeur -->
               <v-progress-circular v-if="v.descriptor.id in waking" indeterminate size="16" width="2" />
@@ -355,32 +353,54 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
             <!-- relire maintenant (lecture facturée, pas de réveil) ; le sondage repart de cette lecture.
                  Proposé MÊME endormi : c'est ainsi qu'on constate qu'une voiture s'est réveillée seule,
                  sans payer le réveil -->
-            <button type="button" class="pill" :disabled="!has(v, 'soc') || !v.state.available || devices.isPending(v.descriptor.id)"
+            <button type="button" class="pill" data-slot="refresh" :disabled="!has(v, 'soc') || !v.state.available || devices.isPending(v.descriptor.id)"
                     :aria-busy="v.descriptor.id in refreshing" :title="$t('vehicle.refreshHint')" @click="refresh(v)">
               <!-- il reste cliquable PENDANT un réveil : c'est justement le moment où l'on veut
                    demander « alors, tu es réveillée ? » sans repayer un réveil -->
               <v-progress-circular v-if="v.descriptor.id in refreshing" indeterminate size="16" width="2" />
               <StrokeIcon v-else name="rotateRight" :size="16" /><span class="vcard__label">{{ $t('vehicle.refresh') }}</span>
             </button>
-          </div>
-          <!-- dessous, à part : les boutons qui DÉPLIENT une section, sous les gestes qui agissent tout de suite -->
-          <div class="vcard__actions">
+            <button type="button" class="pill" data-slot="lock" :disabled="!has(v, 'lock') || !v.state.available"
+                    :title="has(v, 'lock') ? undefined : $t('vehicle.unsupported')" @click="send(v.descriptor.id, { type: v.state.locked ? 'vehicle.unlock' : 'vehicle.lock' })">
+              <StrokeIcon :name="v.state.locked ? 'lockOpen' : 'lock'" :size="16" /><span class="vcard__label">{{ v.state.locked ? $t('common.unlock') : $t('common.lock') }}</span>
+            </button>
+            <!-- demandée, la charge tourne jusqu'à ce que la voiture la DISE active (20 s à 1 min, cf. le store) -->
+            <button type="button" class="pill" data-slot="charge" :data-on="v.state.charging ? '1' : '0'"
+                    :disabled="!has(v, 'charging') || !v.state.pluggedIn || !v.state.available || busy(v)" :aria-busy="charging(v)"
+                    :title="!has(v, 'charging') ? $t('vehicle.unsupported') : v.state.pluggedIn ? undefined : $t('vehicle.unplugged')"
+                    @click="send(v.descriptor.id, { type: v.state.charging ? 'vehicle.stop_charge' : 'vehicle.start_charge' })">
+              <v-progress-circular v-if="charging(v)" indeterminate size="16" width="2" />
+              <StrokeIcon v-else :name="v.state.charging ? 'boltOff' : 'bolt'" :size="16" />
+              <span class="vcard__label">{{ v.state.charging ? $t('vehicle.stopCharge') : $t('vehicle.startCharge') }}</span>
+            </button>
             <!-- ouvre le panneau ; la teinte dit que la clim TOURNE (libellé fixe : la largeur ne bouge pas) -->
-            <button type="button" class="pill" :data-on="v.state.climateOn ? '1' : '0'" :disabled="!has(v, 'climate_precondition')"
-                    :aria-expanded="climate === v.descriptor.id" :title="has(v, 'climate_precondition') ? $t('vehicle.climateHint') : $t('vehicle.unsupported')"
-                    @click="climate = climate === v.descriptor.id ? null : v.descriptor.id">
+            <button type="button" class="pill" data-slot="climate" :data-on="v.state.climateOn ? '1' : '0'" :disabled="!has(v, 'climate_precondition')"
+                    :aria-expanded="panelOf(v) === 'climate'" :title="has(v, 'climate_precondition') ? $t('vehicle.climateHint') : $t('vehicle.unsupported')"
+                    @click="togglePanel(v, 'climate')">
               <StrokeIcon name="thermostat" :size="16" /><span class="vcard__label">{{ $t('vehicle.climatePanel.title') }}</span>
             </button>
             <!-- ce que la voiture ne dira jamais : replié, parce qu'on le règle une fois -->
             <!-- grisé quand il n'y a RIEN à régler (placé à la main, et bavard sur sa puissance) -->
-            <button type="button" class="pill" :data-on="tuning === v.descriptor.id ? '1' : '0'" :disabled="!tunable(v)"
-                    :aria-expanded="tuning === v.descriptor.id"
-                    @click="tuning = tuning === v.descriptor.id ? null : v.descriptor.id">
+            <button type="button" class="pill" data-slot="tuning" :data-on="panelOf(v) === 'tuning' ? '1' : '0'" :disabled="!tunable(v)"
+                    :aria-expanded="panelOf(v) === 'tuning'"
+                    @click="togglePanel(v, 'tuning')">
               <StrokeIcon name="gear" :size="16" /><span class="vcard__label">{{ $t('vehicle.tune') }}</span>
             </button>
           </div>
-          <VehicleClimate v-if="climate === v.descriptor.id" class="card card--soft" :descriptor="v.descriptor" :state="v.state" />
-          <VehicleTuning v-if="tuning === v.descriptor.id" :descriptor="v.descriptor" />
+          <!-- la carte : voiture (avec son cap) et maison, plan ou satellite, plein écran. Un panneau s'ouvre
+               PAR-DESSUS, sans la redimensionner ; elle ne prend alors plus la main (`inert`) -->
+          <div class="vcard__mapzone">
+            <div class="vcard__mapbox" :inert="panelOf(v) !== null">
+              <VehicleMap class="vcard__map" :location="v.state.location" :heading-deg="v.state.headingDeg" :home="house.house?.origin"
+                          :caption="caption(v.state)" />
+            </div>
+            <Transition name="vpanel">
+              <div v-if="panelOf(v)" :key="panelOf(v)!" class="card vcard__overlay">
+                <VehicleClimate v-if="panelOf(v) === 'climate'" class="card card--soft" :descriptor="v.descriptor" :state="v.state" />
+                <VehicleTuning v-else :descriptor="v.descriptor" />
+              </div>
+            </Transition>
+          </div>
           <!-- ce qu'il reste du quota que le plugin s'impose (API du fabricant facturée) : rien pour
                un plugin qui ne compte pas, la simulation par exemple -->
           <div v-if="quotaOf(v)" class="vcard__quota">
@@ -398,10 +418,73 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
 
 <style scoped>
 .vehicles { height: 100%; display: flex; flex-direction: column; }
-.vehicles__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 var(--page-x) calc(var(--safe-bottom) + 24px); }
+.vehicles__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 var(--page-x) calc(var(--safe-bottom) + 24px); container-type: inline-size; }
 .empty { padding: 24px; text-align: center; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
-.vcard { padding: 18px 20px; display: grid; gap: 14px; align-content: start; }
+/* `--vmap-min` : la hauteur minimale COMMUNE de la carte et des panneaux qui s'ouvrent par-dessus */
+.vcard { padding: 18px 20px; display: grid; gap: 14px; align-content: start; --vmap-min: 245px; }
+/* Téléphone : la pile dans l'ordre du DOM — énergie, état, boutons, carte, quota. */
+.vcard__energy, .vcard__state { display: grid; gap: 14px; align-content: start; min-width: 0; }
+/* Boutons, ordre vertical : réveiller, actualiser / déverrouiller, charge / clim, modifier */
+.vcard__actions .pill[data-slot='wake'] { order: 1; }
+.vcard__actions .pill[data-slot='refresh'] { order: 2; }
+.vcard__actions .pill[data-slot='lock'] { order: 3; }
+.vcard__actions .pill[data-slot='charge'] { order: 4; }
+.vcard__actions .pill[data-slot='climate'] { order: 5; }
+.vcard__actions .pill[data-slot='tuning'] { order: 6; }
+/* la carte, et le panneau qui s'ouvre PAR-DESSUS : même boîte, aucune taille ne change */
+/* Téléphone : carte et panneau dans la MÊME cellule — la zone prend la hauteur du plus grand, et
+   grandit si le panneau en demande plus ; la carte, elle, garde la sienne */
+.vcard__mapzone { position: relative; min-width: 0; display: grid; }
+.vcard__mapbox, .vcard__overlay { grid-area: 1 / 1; }
+/* contexte d'empilement : les calques de Leaflet (z-index jusqu'à 1000) restent sous le panneau */
+.vcard__mapbox { isolation: isolate; height: 100%; }
+.vcard__mapbox[inert] { opacity: .35; transition: opacity .2s; }
+.vcard__overlay {
+  position: relative; z-index: 1; min-height: 100%;
+  display: flex; flex-direction: column; padding: 0; border-radius: 14px;
+}
+/* le panneau occupe TOUTE la zone de la carte, pas seulement sa propre hauteur */
+.vcard__overlay > * { flex: 1 0 auto; align-content: start; }
+.vpanel-enter-active, .vpanel-leave-active { transition: opacity .2s ease, transform .22s ease; }
+.vpanel-enter-from, .vpanel-leave-to { opacity: 0; transform: translateY(14px); }
+@media (prefers-reduced-motion: reduce) { .vpanel-enter-from, .vpanel-leave-to { transform: none; } }
+/* Tablette : énergie puis état à gauche, quota en bas ; boutons au-dessus de la carte à droite.
+   Les boutons partagent la rangée de l'énergie et s'étirent jusqu'à son bas : la carte commence
+   à la même hauteur que les cases d'état. */
+@container (min-width: 720px) {
+  .cards { grid-template-columns: 1fr; }
+  .vcard {
+    grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 20px;
+    grid-template-areas: 'a act' 'st map' 'q map';
+  }
+  .vcard__actions { grid-auto-rows: minmax(56px, 1fr); }
+  /* `.vcard` en tête : la règle de base des tuiles (56 px), plus bas dans le fichier, l'emporterait */
+  .vcard .vcard__actions .pill { height: auto; }
+  .vcard__energy { grid-area: a; }
+  .vcard__state { grid-area: st; }
+  .vcard__actions { grid-area: act; }
+  .vcard__mapzone { grid-area: map; display: flex; flex-direction: column; }
+  /* la zone est fixée par la grille : le panneau la recouvre exactement, et défile s'il le faut */
+  .vcard__overlay { position: absolute; inset: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+  .vcard__mapbox { flex: 1 1 auto; display: flex; flex-direction: column; }
+  .vcard__mapbox > .vcard__map { flex: 1 1 auto; height: auto; min-height: var(--vmap-min); }
+  .vcard__quota { grid-area: q; align-self: end; }
+}
+/* Écran large : énergie | état puis boutons | carte sur toute la hauteur. Le quota ferme la colonne
+   de gauche. Carte à DROITE des boutons : ceux qui ouvrent un panneau passent dans la colonne qui la
+   touche — réveiller, actualiser / déverrouiller, clim / charge, modifier */
+@container (min-width: 1100px) {
+  .vcard {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1fr);
+    grid-template-areas: 'a st map' 'a act map' 'q act map';
+  }
+  /* ici les boutons gardent leur hauteur : la rangée de l'énergie ne les concerne pas */
+  .vcard__actions { grid-auto-rows: auto; }
+  .vcard .vcard__actions .pill { height: 56px; }
+  .vcard__actions .pill[data-slot='climate'] { order: 4; }
+  .vcard__actions .pill[data-slot='charge'] { order: 5; }
+}
 .vcard__head { display: flex; align-items: center; gap: 12px; }
 .vcard__name-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
 /* le crayon ne prend pas de place tant qu'on ne le survole pas : il est là, discret, toujours au même point */
@@ -456,7 +539,7 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
 .tire { display: grid; gap: 2px; font-variant-numeric: tabular-nums; }
 .tire__k { font-size: 11px; }
 .tire__v { font-weight: 500; font-size: 13px; white-space: nowrap; }
-.vcard__map { height: 220px; }
+.vcard__map { height: var(--vmap-min); }
 /* la ligne de charge tient sa hauteur même vide : la carte ne bouge pas quand la charge démarre.
    Une HAUTEUR égale à la ligne, pas un minimum : `min-height: 16px` sous une ligne de 18 px laissait
    tout le bas de la carte descendre de 2 px au démarrage de la charge (mesuré le 2026-10-01) */

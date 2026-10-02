@@ -165,6 +165,10 @@ const unsupported = t('vehicle.climatePanel.unsupported')
 /* `min-width: 0` : le panneau est un élément de la grille de la carte ; sans lui, sa largeur
    minimale élargit la colonne et pousse TOUT le contenu de la carte hors de son cadre (vu à 828 px) */
 .clim { min-width: 0; padding: 8px; display: grid; gap: 12px; }
+/* Plus haut que son contenu (le panneau posé sur la carte de la vue Véhicules, en grand écran) :
+   les sièges prennent toute la place, et l'aide descend en bas. À sa hauteur naturelle
+   (panneau de la vue Maison, téléphone), `1fr` vaut le contenu : rien ne change. */
+.clim { grid-template-rows: auto 1fr auto; }
 /* trop étroit pour une ligne : la consigne passe dessous. Ne dépend que de la largeur, jamais de l'état */
 .clim__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .clim__power { flex: 0 0 auto; padding: 0 10px; }
@@ -178,9 +182,12 @@ const unsupported = t('vehicle.climatePanel.unsupported')
 .clim__target { width: 84px; display: grid; justify-items: center; }
 .clim__value { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .clim__inside { font-size: 11px; white-space: nowrap; }
-.clim__cabin { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+/* Rangées `minmax(52px, 1fr)` : à hauteur naturelle, 52 px ; étirée, les sièges se partagent toute
+   la place (un plafond fixe en `minmax` s'imposait PARTOUT : la grille sans hauteur donnée monte ses
+   rangées à leur maximum) */
+.clim__cabin { display: grid; grid-template-columns: repeat(3, 1fr); grid-auto-rows: minmax(52px, 1fr); gap: 8px; }
 .clim__seat {
-  min-width: 0; height: 52px; display: grid; place-items: center; gap: 4px; padding: 6px 4px;
+  min-width: 0; height: 100%; display: grid; place-content: center; justify-items: center; gap: 4px; padding: 6px 4px;
   border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--text);
   font: inherit; font-size: 12px; cursor: pointer;
 }
@@ -191,5 +198,5 @@ const unsupported = t('vehicle.climatePanel.unsupported')
 .clim__bars i { width: 12px; height: 3px; border-radius: 2px; background: var(--line); }
 .clim__bars i[data-lit='1'] { background: var(--accent); }
 /* une ligne réservée : le panneau ne change pas de hauteur quand la raison change */
-.clim__hint { margin: 0; font-size: 11px; min-height: 2lh; }
+.clim__hint { margin: 0; font-size: 11px; min-height: 2lh; align-self: end; }
 </style>
