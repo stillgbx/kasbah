@@ -191,3 +191,47 @@ export const deviceConsumptionSchema = z.object({
 export type ConsumptionPoint = z.infer<typeof consumptionPointSchema>
 export type DeviceConsumption = z.infer<typeof deviceConsumptionSchema>
 export type DeviceJournal = z.infer<typeof deviceJournalSchema>
+
+/**
+ * Notes de version d'un véhicule qui déclare la capacité `release_notes`, servies à la demande
+ * (`GET /api/devices/:id/release-notes`). C'est du CONTENU, pas un état : il change une fois par
+ * version, le plugin le garde en cache et ne le relit que quand une version change. Le texte est
+ * celui du fabricant, dans SA langue (Tesla répond en anglais) : rien n'est traduit ici.
+ */
+export const releaseNoteSchema = z.object({
+  title: z.string().min(1),
+  description: z.string().optional(),
+  /** Illustration pour le thème sombre, et sa variante claire. URL signées qui EXPIRENT : absentes une fois périmées. */
+  imageUrl: z.string().optional(),
+  lightImageUrl: z.string().optional(),
+})
+export const releaseNotesVersionSchema = z.object({
+  version: z.string(),
+  notes: z.array(releaseNoteSchema),
+})
+export const deviceReleaseNotesSchema = z.object({
+  deviceId: z.string(),
+  /**
+   * Langue des textes SERVIS (`fr`, `en`) : celle demandée (`?lang=`) quand le fabricant la publie,
+   * sinon l'anglais. Absente = inconnue (le fabricant ne la dit pas).
+   */
+  lang: z.string().optional(),
+  /** Version installée, d'après la dernière lecture des notes. */
+  installedVersion: z.string().optional(),
+  /** La mise à jour en attente et ce qu'elle apporte ; absente = rien en attente, ou notes pas encore lues. */
+  pending: releaseNotesVersionSchema.optional(),
+  /** Versions installées, de la plus récente à la plus ancienne (le plugin les garde au fil des mises à jour). */
+  history: z.array(releaseNotesVersionSchema),
+  /** Dernière lecture chez le fabricant (ms epoch) ; absente = jamais lues. */
+  fetchedAt: z.number().optional(),
+})
+export type ReleaseNote = z.infer<typeof releaseNoteSchema>
+export type ReleaseNotesVersion = z.infer<typeof releaseNotesVersionSchema>
+export type DeviceReleaseNotes = z.infer<typeof deviceReleaseNotesSchema>
+/** Langue de repli des notes de version : celle que tous les fabricants publient. */
+export const RELEASE_NOTES_FALLBACK_LANG = 'en'
+/** `fr-FR`, `FR`, `fr` → `fr` ; tout ce qui n'est pas une langue sur deux lettres → la langue de repli. */
+export function releaseNotesLang(lang: string | undefined): string {
+  const l = lang?.trim().slice(0, 2).toLowerCase()
+  return l && /^[a-z]{2}$/.test(l) ? l : RELEASE_NOTES_FALLBACK_LANG
+}

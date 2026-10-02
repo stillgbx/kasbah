@@ -74,6 +74,10 @@ describe('ce qui est facturable', () => {
   it('la lecture complète est facturée, et son chemin commence comme celui de la liste', () => {
     expect(billableKind('/api/1/vehicles/5YJ/vehicle_data?endpoints=charge_state')).toBe('data')
   })
+  it('les notes de version ne coûtent rien : constaté sur la console du fabricant', () => {
+    expect(billableKind('/api/1/vehicles/5YJ/release_notes?language=fr')).toBeNull()
+    expect(billableKind('/api/1/vehicles/5YJ/release_notes?staged=true&language=fr')).toBeNull()
+  })
   it('réveil et commandes ont leur propre tarif ; les routes partenaires ne touchent aucun véhicule', () => {
     expect(billableKind('/api/1/vehicles/5YJ/wake_up')).toBe('wake')
     expect(billableKind('/api/1/vehicles/5YJ/command/door_lock')).toBe('command')
@@ -101,6 +105,21 @@ describe('fichier d’état', () => {
     expect(withPaint.data!.paints['5YJ']).toEqual({ color: '#285ac8', finish: 'matte' })
     expect(teslaStateSchema.safeParse({ vehicles: {} }).data!.paints).toEqual({})
   })
+  it('des notes de version d’une AUTRE forme sont oubliées seules : le compteur du mois et les états survivent', () => {
+    const file = {
+      cycle: { month: '2026-10', data: 81, wakes: 2, commands: 22 },
+      vehicles: { VIN1: { soc: 54 } },
+      // forme de la première version : une entrée par VIN, sans langue
+      releaseNotes: { VIN1: { key: '2026.32.7|2026.38', fetchedAt: 1, history: {} } },
+      releaseNotesLangs: 'fr',
+    }
+    const parsed = teslaStateSchema.parse(file)
+    expect(parsed.cycle).toEqual(file.cycle)
+    expect(parsed.vehicles).toEqual(file.vehicles)
+    expect(parsed.releaseNotes).toEqual({})
+    expect(parsed.releaseNotesLangs).toEqual([])
+  })
+
   it('un fichier vide ou d’une autre forme est rejeté proprement', () => {
     expect(teslaStateSchema.safeParse({}).success).toBe(true)          // ni cycle ni véhicule : état neuf
     expect(teslaStateSchema.safeParse({ vehicles: 'non' }).success).toBe(false)

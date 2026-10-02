@@ -1,4 +1,4 @@
-import type { Command, DeviceConsumption, DeviceDescriptor, DeviceEventKind, DeviceJournal, PluginHealth, PluginScene, SceneActivation, SceneRecall, SceneUpdate, StatePatch, WeatherForecast } from '@kasbah/shared'
+import type { Command, DeviceConsumption, DeviceDescriptor, DeviceEventKind, DeviceJournal, DeviceReleaseNotes, PluginHealth, PluginScene, SceneActivation, SceneRecall, SceneUpdate, StatePatch, WeatherForecast } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import type { Logger } from 'pino'
 import type { z } from 'zod'
@@ -60,6 +60,8 @@ export interface PluginSite {
 export type PluginForecast = Omit<WeatherForecast, 'deviceId'>
 /** Journal tel qu'un plugin le rend : l'hôte y ajoute le `deviceId` (voir `deviceJournalSchema`). */
 export type PluginJournal = Omit<DeviceJournal, 'deviceId'>
+/** Notes de version telles qu'un plugin les rend : l'hôte y ajoute le `deviceId` (voir `deviceReleaseNotesSchema`). */
+export type PluginReleaseNotes = Omit<DeviceReleaseNotes, 'deviceId'>
 /** Consommation telle qu'un plugin la rend : l'hôte y ajoute le `deviceId` (voir `deviceConsumptionSchema`). */
 export type PluginConsumption = Omit<DeviceConsumption, 'deviceId'>
 
@@ -117,6 +119,13 @@ export interface DevicePlugin {
    * (l'hôte répond `NOT_IMPLEMENTED`).
    */
   consumption?(externalId: string): Promise<PluginConsumption>
+  /**
+   * Notes de version d'un véhicule qui déclare la capacité `release_notes`, servies À LA DEMANDE
+   * (`GET /api/devices/:id/release-notes`). Rendre le cache tenu par le plugin, jamais refaire un
+   * appel : les notes ne changent qu'avec une version. `lang` : la langue voulue (deux lettres) ;
+   * le plugin rend l'anglais tant qu'il ne l'a pas, et dit dans `lang` ce qu'il sert.
+   */
+  releaseNotes?(externalId: string, lang: string): Promise<PluginReleaseNotes>
   stop(): Promise<void>
   /** Routes propres au plugin, montées sous /api/plugins/<id>/. */
   registerRoutes?(app: FastifyInstance): void

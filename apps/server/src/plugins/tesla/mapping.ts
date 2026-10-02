@@ -1,6 +1,6 @@
-import type { DeviceDescriptor, StatePatch, VehicleFinish, VehicleGear, VehicleSeat, VehicleSleepState } from '@kasbah/shared'
+import type { DeviceDescriptor, ReleaseNote, StatePatch, StateFor, VehicleFinish, VehicleGear, VehicleSeat, VehicleSleepState, VehicleUpdateStatus } from '@kasbah/shared'
 import { VEHICLE_GEARS, VEHICLE_SLEEP_STATES } from '@kasbah/shared'
-import type { VehicleData, VehicleSummary } from './types'
+import { releaseNoteEntrySchema, type ReleaseNoteEntry, type VehicleData, type VehicleSummary } from './types'
 
 // Fleet API Tesla → contrat Kasbah. Fonctions PURES, testées sur les fixtures.
 //
@@ -18,14 +18,14 @@ const MILE_KM = 1.609344
  * `COMMAND_REQUIRES`). `charge_power` dit que la voiture DONNE sa puissance de charge
  * (`charger_power`) : l'UI n'a donc ni à l'estimer, ni à demander la capacité de la batterie.
  */
-export const READ_CAPABILITIES = ['soc', 'range', 'location', 'charge_power'] as const
+export const READ_CAPABILITIES = ['soc', 'range', 'location', 'charge_power', 'release_notes'] as const
 
 /**
  * Ce que le véhicule ACCEPTE qu'on change : la limite de charge (un réglage borné par le contrat), la
  * charge elle-même et le préconditionnement de l'habitacle — rien ne fait bouger ni ouvrir la voiture.
  * Verrouiller reste à faire.
  */
-export const WRITE_CAPABILITIES = ['charge_limit', 'charging', 'climate_precondition'] as const
+export const WRITE_CAPABILITIES = ['charge_limit', 'charging', 'climate_precondition', 'software_update'] as const
 
 /**
  * Ce que la climatisation sait faire, pour l'UI commune des véhicules. Les bornes sont celles que la
@@ -209,7 +209,101 @@ export function toDataPatch(d: VehicleData): StatePatch<'vehicle'> {
   const heated = Object.entries(seats).filter(([, v]) => defined(v)) as [string, number][]
   if (heated.length) patch.seatHeat = Object.fromEntries(heated.map(([k, v]) => [k, Math.max(0, Math.min(3, Math.round(v)))]))
   if (defined(cl?.steering_wheel_heater)) patch.steeringWheelHeat = cl.steering_wheel_heater
+
+  // le hash de build éventuel (« 2026.32.7 abc123 ») n'est pas la version qu'on montre
+  const version = vs?.car_version?.trim().split(/\s+/)[0]
+  if (version) patch.softwareVersion = version
+  if (vs?.software_update !== undefined) patch.softwareUpdate = toSoftwareUpdate(vs.software_update)
   return patch
+}
+
+const UPDATE_STATUS: Record<string, VehicleUpdateStatus> = {
+  available: 'available', scheduled: 'scheduled', downloading: 'downloading',
+  downloading_wifi_wait: 'waiting_wifi', installing: 'installing',
+}
+
+type SoftwareUpdate = NonNullable<StateFor<'vehicle'>['softwareUpdate']>
+
+/**
+ * `software_update` → `softwareUpdate`. Statut vide (rien en attente) = `null`, qui EFFACE le champ.
+ * Chaque nombre n'est publié que dans le statut où il veut dire quelque chose : Tesla laisse
+ * `install_perc` à 10 sur une mise à jour seulement disponible (capture du 2026-10-02). Un statut
+ * inconnu de Tesla compte pour un téléchargement tant qu'il n'est pas complet, sinon pour une mise
+ * à jour prête : il y a en tout cas quelque chose en attente.
+ */
+export function toSoftwareUpdate(su: NonNullable<VehicleData['vehicle_state']>['software_update']): SoftwareUpdate | null {
+  const raw = su?.status?.trim()
+  if (!su || !raw) return null
+  const status = UPDATE_STATUS[raw] ?? (defined(su.download_perc) && su.download_perc < 100 ? 'downloading' : 'available')
+  const pct = (n: number) => Math.max(0, Math.min(100, Math.round(n)))
+  return {
+    status,
+    ...(su.version ? { version: su.version } : {}),
+    ...(status === 'downloading' && defined(su.download_perc) ? { downloadPct: pct(su.download_perc) } : {}),
+    ...(status === 'installing' && defined(su.install_perc) ? { installPct: pct(su.install_perc) } : {}),
+    ...(status === 'scheduled' && defined(su.scheduled_time_ms) ? { scheduledAt: su.scheduled_time_ms } : {}),
+    ...(defined(su.expected_duration_sec) && su.expected_duration_sec > 0 ? { expectedDurationS: su.expected_duration_sec } : {}),
+  }
+}
+
+// ---- notes de version ------------------------------------------------------------------------
+
+/** Les entrées lisibles d'une réponse `release_notes` ; une entrée de forme inattendue est écartée seule. */
+export function parseReleaseNotes(raw: unknown[] | null | undefined): ReleaseNoteEntry[] {
+  return (raw ?? []).flatMap((e) => {
+    const parsed = releaseNoteEntrySchema.safeParse(e)
+    return parsed.success && parsed.data.title.trim() ? [parsed.data] : []
+  })
+}
+
+/** Une entrée Tesla → une note du contrat : titre rogné (« Apple Music  »), champs vides omis. */
+export function toReleaseNote(e: ReleaseNoteEntry): ReleaseNote {
+  const description = e.description?.trim()
+  return {
+    title: e.title.trim(),
+    ...(description ? { description } : {}),
+    ...(e.image_url ? { imageUrl: e.image_url } : {}),
+    ...(e.light_image_url ? { lightImageUrl: e.light_image_url } : {}),
+  }
+}
+
+/** Notes par version, dans l'ordre de la réponse. */
+export function notesByVersion(entries: ReleaseNoteEntry[]): Record<string, ReleaseNote[]> {
+  const out: Record<string, ReleaseNote[]> = {}
+  for (const e of entries) {
+    if (!e.customer_version) continue
+    ;(out[e.customer_version] ??= []).push(toReleaseNote(e))
+  }
+  return out
+}
+
+/** Échéance (ms epoch) d'une URL signée de Tesla (`__gda__=exp=<secondes>~…`) ; `undefined` = pas d'échéance lisible. */
+export function urlExpiresAt(url: string | undefined): number | undefined {
+  const m = url ? /[?&]__gda__=exp=(\d+)/.exec(url) : null
+  return m ? Number(m[1]) * 1000 : undefined
+}
+
+/** La plus proche échéance des illustrations de ces notes. */
+export function imagesExpireAt(notes: ReleaseNote[]): number | undefined {
+  const all = notes.flatMap((n) => [urlExpiresAt(n.imageUrl), urlExpiresAt(n.lightImageUrl)]).filter(defined)
+  return all.length ? Math.min(...all) : undefined
+}
+
+/** Retire les illustrations périmées : un lien mort afficherait une image cassée. */
+export function withoutExpiredImages(note: ReleaseNote, now: number): ReleaseNote {
+  const { imageUrl, lightImageUrl, ...rest } = note
+  const alive = (u: string | undefined) => u !== undefined && (urlExpiresAt(u) ?? Infinity) > now
+  return { ...rest, ...(alive(imageUrl) ? { imageUrl } : {}), ...(alive(lightImageUrl) ? { lightImageUrl } : {}) }
+}
+
+/** Ordre des versions Tesla (`2026.32.7` > `2026.32` > `2026.26.6`), numérique segment par segment. */
+export function compareVersions(a: string, b: string): number {
+  const pa = a.split('.').map(Number), pb = b.split('.').map(Number)
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] ?? -1) - (pb[i] ?? -1)
+    if (d !== 0 && Number.isFinite(d)) return d
+  }
+  return a.localeCompare(b)
 }
 
 /**

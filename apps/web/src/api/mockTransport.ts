@@ -233,6 +233,13 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     },
     // la simulation ne tient aucun journal : ses appareils ne déclarent pas la capacité, la vue ne demande rien
     async getJournal(deviceId) { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', `no journal in mock mode for ${deviceId}`) },
+    async getReleaseNotes(deviceId, lang) {
+      try { return { deviceId, ...sim.releaseNotes(deviceId.replace(/^mock:/, ''), lang) } }
+      catch (err) {
+        if (err instanceof SimError) throw new ApiRequestError(STATUS[err.code] ?? 500, err.code, err.message)
+        throw err
+      }
+    },
     async getConsumption(deviceId) { return mockConsumption(deviceId) },
     async placeDevice(id, placement) {
       // même logique que le serveur, en mémoire (rien n'est écrit) ; le message `house` suit comme en réel

@@ -1,4 +1,4 @@
-import type { DeviceMeta, VehicleSeat } from '@kasbah/shared'
+import type { DeviceMeta, ReleaseNote, VehicleSeat } from '@kasbah/shared'
 import { SimError, type SimDevice } from '../types'
 import { clamp, descriptor, inWindow } from './common'
 
@@ -25,6 +25,56 @@ export interface VehicleOptions {
   chargerPowerW?: number
   /** Ce que sa climatisation sait faire (`meta.vehicle.climate`) ; défaut : celle d'une Tesla. */
   climate?: ClimateFeatures
+  /**
+   * Logiciel, comme une Tesla : version installée et, s'il y en a une, la mise à jour déjà
+   * téléchargée (`pending`). Déclare `release_notes` et `software_update` ; sans lui, ni l'un ni l'autre.
+   */
+  software?: { version: string; pending?: string; notes?: Record<string, Record<string, ReleaseNote[]>> }
+}
+
+/** Réveillé à la demande, il reste éveillé ce temps-là (simulé) : une Tesla se rendort au bout d'un quart d'heure. */
+const AWAKE_AFTER_WAKE_MS = 10 * 60_000
+
+/**
+ * Notes simulées, par LANGUE puis par version : de quoi essayer la boîte des notes, son historique et
+ * le repli sur l'anglais sans compte. L'anglais est complet, le français aussi (comme chez Tesla).
+ */
+const SAMPLE_NOTES: Record<string, Record<string, ReleaseNote[]>> = {
+  en: {
+    '2026.38': [
+      { title: 'Supercharger Site Maps', description: 'Tap “View Site Map” to see the charger layout and live occupancy on arrival.' },
+      { title: 'Security Improvements', description: 'This update includes important security fixes and improvements.' },
+    ],
+    '2026.32': [
+      { title: 'Apple Music', description: 'Go to Search, select Apple Music, then tap Library to find your songs, albums and playlists.' },
+      { title: 'Security Improvements', description: 'This update includes important security fixes and improvements.' },
+    ],
+    '2026.26.6': [
+      { title: 'Automatic Navigation', description: 'Automatic Navigation adapts to your routine and suggests the places you visit regularly, when Destination Suggestions are enabled.' },
+      { title: 'Speed Cameras on Route', description: 'Navigation shows speed cameras along your route. Requires Premium Connectivity.' },
+      { title: 'Supercharger Search', description: 'You can now find Superchargers by name.' },
+    ],
+  },
+  fr: {
+  '2026.38': [
+    { title: 'Plans des Superchargeurs', description: 'Touchez « Voir le plan du site » pour voir la disposition des bornes et leur occupation à l’arrivée.' },
+    { title: 'Améliorations de la sécurité', description: 'Cette mise à jour comprend des correctifs et améliorations de sécurité importants.' },
+  ],
+  '2026.32': [
+    { title: 'Apple Music', description: 'Allez dans Recherche, choisissez Apple Music, puis Bibliothèque pour retrouver vos titres, albums et listes.' },
+    { title: 'Améliorations de la sécurité', description: 'Cette mise à jour comprend des correctifs et améliorations de sécurité importants.' },
+  ],
+  '2026.26.6': [
+    { title: 'Navigation automatique', description: 'La navigation automatique s’adapte à vos habitudes et propose les lieux où vous allez souvent, quand les suggestions de destination sont activées.' },
+    { title: 'Radars sur l’itinéraire', description: 'La navigation affiche les radars le long de votre itinéraire. Nécessite la Connectivité Premium.' },
+    { title: 'Recherche de Superchargeurs', description: 'Vous pouvez maintenant chercher un Superchargeur par son nom.' },
+  ],
+  },
+}
+const versionOrder = (a: string, b: string) => {
+  const pa = a.split('.').map(Number), pb = b.split('.').map(Number)
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) if ((pa[i] ?? -1) !== (pb[i] ?? -1)) return (pa[i] ?? -1) - (pb[i] ?? -1)
+  return 0
 }
 
 type ClimateFeatures = NonNullable<NonNullable<DeviceMeta['vehicle']>['climate']>
@@ -36,6 +86,9 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
   const tripMin = 25
   let phase: 'home' | 'toWork' | 'work' | 'toHome' = 'home'
   let tripProgress = 0
+  let awakeUntil = 0
+  let installStartedAt = 0
+  const notesIn = o.software?.notes ?? SAMPLE_NOTES
   const lerp = (a: number, b: number, t: number) => a + (b - a) * t
   /** Cap (0 = nord, horaire) de `a` vers `b`, en plan : assez pour orienter le marqueur d'une simulation. */
   const bearing = (a: { lat: number; lon: number }, b: { lat: number; lon: number }) => {
@@ -50,6 +103,7 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
       'soc', 'range', 'location', 'lock', 'charging', 'charge_limit', 'climate_precondition',
       // pas de borne, pas de puissance à dire : ce véhicule-là se fait estimer comme une vraie R5
       ...((o.chargerPowerW ?? 7400) > 0 ? ['charge_power' as const] : []),
+      ...(o.software ? ['release_notes' as const, 'software_update' as const] : []),
     ], {
       manufacturer: o.manufacturer ?? 'Mock', model: o.model ?? 'EV', vehicle: { climate: o.climate ?? TESLA_CLIMATE },
     }),
@@ -63,6 +117,8 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
       tirePressureBar: { fl: 2.9, fr: 2.9, rl: 2.95, rr: 2.95 }, insideTempC: 21.5, outsideTempC: 17,
       climateOn: false, climateTargetC: 20, steeringWheelHeat: false,
       seatHeat: Object.fromEntries((o.climate ?? TESLA_CLIMATE).seats.map((k) => [k, 0])),
+      ...(o.software ? { softwareVersion: o.software.version } : {}),
+      ...(o.software?.pending ? { softwareUpdate: { status: 'available' as const, version: o.software.pending, expectedDurationS: 1200 } } : {}),
     },
     tick(ctx) {
       const s = dev.state
@@ -99,10 +155,21 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
       s.gear = driving ? 'D' : 'P'
       if (driving) s.headingDeg = phase === 'toWork' ? bearing(o.home, o.work) : bearing(o.work, o.home)
       s.speedKmh = driving ? Math.round((32 / tripMin) * 60) : 0
-      s.sleepState = driving || s.charging || s.climateOn ? 'online' : 'asleep'
+      // une installation programmée démarre à son heure, et la voiture reste éveillée jusqu'au bout.
+      // Nouvel objet à chaque changement : le diff du mock compare les références
+      const su = s.softwareUpdate
+      if (su?.status === 'scheduled' && su.scheduledAt !== undefined && ctx.simTime >= su.scheduledAt) {
+        installStartedAt = ctx.simTime
+        s.softwareUpdate = { status: 'installing', ...(su.version ? { version: su.version } : {}), installPct: 0, ...(su.expectedDurationS ? { expectedDurationS: su.expectedDurationS } : {}) }
+      } else if (su?.status === 'installing') {
+        const pctDone = Math.min(100, Math.floor(((ctx.simTime - installStartedAt) / ((su.expectedDurationS ?? 1200) * 1000)) * 100))
+        if (pctDone >= 100) { if (su.version) s.softwareVersion = su.version; delete s.softwareUpdate }
+        else if (pctDone !== su.installPct) s.softwareUpdate = { ...su, installPct: pctDone }
+      }
+      s.sleepState = driving || s.charging || s.climateOn || s.softwareUpdate?.status === 'installing' || ctx.simTime < awakeUntil ? 'online' : 'asleep'
       s.readAt = ctx.simTime
     },
-    apply(cmd) {
+    apply(cmd, ctx) {
       const s = dev.state
       switch (cmd.type) {
         case 'vehicle.lock': s.locked = true; break
@@ -110,7 +177,7 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
         case 'vehicle.start_charge': if (!s.pluggedIn) throw new SimError('DEVICE_UNAVAILABLE', 'vehicle not plugged in'); s.chargeLimit = Math.max(s.chargeLimit ?? 80, Math.min(100, s.soc + 10)); break
         case 'vehicle.stop_charge': s.chargeLimit = Math.floor(s.soc); break
         case 'vehicle.set_charge_limit': s.chargeLimit = clamp(Math.round(cmd.percent), 50, 100); break
-        case 'vehicle.wake': s.sleepState = 'online'; break
+        case 'vehicle.wake': s.sleepState = 'online'; awakeUntil = ctx.simTime + AWAKE_AFTER_WAKE_MS; break
         // comme la vraie : le préconditionnement réveille la voiture, et la tient éveillée
         // comme Tesla (`low_soc`) : pas de clim sous 20 %
         case 'vehicle.climate_start': if (s.soc < 20) throw new SimError('LOW_BATTERY', 'battery too low to run the climate'); s.sleepState = 'online'; s.climateOn = true; if (cmd.targetTempC !== undefined) s.climateTargetC = cmd.targetTempC; break
@@ -133,7 +200,38 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
           break
         }
         case 'vehicle.refresh': break
+        // comme la vraie : voiture éveillée, mise à jour téléchargée
+        case 'vehicle.schedule_update': {
+          const su = s.softwareUpdate
+          if (!o.software) throw new SimError('UNSUPPORTED_COMMAND', 'no software updates on this vehicle')
+          if (s.sleepState !== 'online') throw new SimError('DEVICE_UNAVAILABLE', 'vehicle is asleep: wake it first')
+          if (su?.status !== 'available' && su?.status !== 'scheduled') throw new SimError('DEVICE_UNAVAILABLE', 'no downloaded software update to install')
+          s.softwareUpdate = { ...su, status: 'scheduled', scheduledAt: ctx.simTime + cmd.delayS * 1000 }
+          break
+        }
+        case 'vehicle.cancel_update': {
+          const su = s.softwareUpdate
+          if (!o.software) throw new SimError('UNSUPPORTED_COMMAND', 'no software updates on this vehicle')
+          if (su?.status !== 'scheduled') break
+          if (s.sleepState !== 'online') throw new SimError('DEVICE_UNAVAILABLE', 'vehicle is asleep: wake it first')
+          const { scheduledAt: _dropped, ...rest } = su
+          s.softwareUpdate = { ...rest, status: 'available' }
+          break
+        }
         default: throw new SimError('UNSUPPORTED_COMMAND', `${cmd.type} on vehicle`)
+      }
+    },
+    releaseNotes(lang = 'en') {
+      if (!o.software) throw new SimError('UNSUPPORTED_COMMAND', 'no release notes on this vehicle')
+      const served = notesIn[lang] ? lang : 'en'
+      const notes = notesIn[served] ?? {}
+      const installed = dev.state.softwareVersion ?? o.software.version
+      const next = dev.state.softwareUpdate?.version
+      return {
+        lang: served,
+        installedVersion: installed,
+        ...(next && notes[next] ? { pending: { version: next, notes: notes[next] } } : {}),
+        history: Object.keys(notes).filter((v) => versionOrder(v, installed) <= 0).sort((a, b) => versionOrder(b, a)).map((version) => ({ version, notes: notes[version]! })),
       }
     },
   }

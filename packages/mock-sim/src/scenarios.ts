@@ -61,7 +61,8 @@ function defaultDevices(opts: { winter?: boolean } = {}) {
     // Ventilateur-plafonnier CREATE : deux appareils liés (aucune commande commune).
     ceilingFanLight('fan-chambre2_light', { name: 'Plafonnier chambre 2' }),
     ceilingFan('fan-chambre2_fan', { name: 'Ventilateur chambre 2', linkedLightId: 'mock:fan-chambre2_light' }),
-    vehicle('vehicle-tesla', { name: 'Tesla', manufacturer: 'Tesla', model: 'Model Y', batteryKwh: 75, rangeKmFull: 450, home: HOME, work: WORK, soc: 68, chargeLimit: 80 }),
+    vehicle('vehicle-tesla', { name: 'Tesla', manufacturer: 'Tesla', model: 'Model Y', batteryKwh: 75, rangeKmFull: 450, home: HOME, work: WORK, soc: 68, chargeLimit: 80,
+      software: { version: '2026.32.7', pending: '2026.38' } }),
     vehicle('vehicle-r5', { name: 'R5', manufacturer: 'Renault', model: 'Renault 5 E-Tech', batteryKwh: 52, rangeKmFull: 410, home: HOME, work: WORK, workDays: [], soc: 55, chargeLimit: 80, socMin: 20, chargerPowerW: 0,
       // comme le plugin Renault : sièges avant et volant en marche / arrêt, réglables clim éteinte
       climate: { minC: 16, maxC: 26, stepC: 1, seats: ['fl', 'fr'], seatLevels: 1, steeringWheelHeat: true, heatWhileOff: true } }),

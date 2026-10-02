@@ -346,7 +346,40 @@
     "map": {"plan": "Plan", "satellite": "Satellite", "fullscreen": "Plein écran", "close": "Fermer", "recenter": "Recentrer", "noPosition": "Position inconnue"},
     "quota": "≈ {used}/{limit} {what}",
     "quotaCredit": "de crédit Tesla",
-    "quotaSince": "depuis le {date}"
+    "quotaSince": "depuis le {date}",
+    "software": {
+      "title": "Logiciel",
+      "open": "Notes de version et mise à jour",
+      "installed": "Installée : {version}",
+      "status": {
+        "available": "{version} disponible",
+        "scheduled": "{version} programmée {when}",
+        "downloading": "{version} · téléchargement {pct}",
+        "waiting_wifi": "{version} · attend le Wi-Fi",
+        "installing": "Installation de {version} · {pct}"
+      },
+      "at": "à {time}",
+      "tomorrowAt": "demain à {time}",
+      "onDate": "le {date} à {time}",
+      "now": "maintenant",
+      "pending": "À venir",
+      "history": "Historique",
+      "notRead": "Notes pas encore lues : elles arrivent avec la prochaine lecture de la voiture éveillée.",
+      "noHistory": "Aucune note gardée pour l'instant.",
+      "loadError": "Notes indisponibles pour l'instant.",
+      "vendorText": "Textes du constructeur, tels qu'il les publie.",
+      "fallbackLang": "Le constructeur ne publie pas encore ces notes en français : elles sont affichées en anglais.",
+      "installNow": "Installer maintenant",
+      "schedule": "Programmer",
+      "reschedule": "Reprogrammer",
+      "cancel": "Annuler la programmation",
+      "time": "Heure d'installation",
+      "wakeFirst": "Réveillez la voiture d'abord : endormie, elle n'accepte aucune commande.",
+      "unknownDuration": "une vingtaine de minutes",
+      "confirmTitle": "Installer {version} ?",
+      "confirmText": "L'installation commence {when}. La voiture sera inutilisable pendant environ {duration} : elle doit être garée, et personne ne doit en avoir besoin d'ici là.",
+      "confirm": "Installer"
+    }
   },
   "render": {
     "title": "Rendu 3D", "style": "Style",

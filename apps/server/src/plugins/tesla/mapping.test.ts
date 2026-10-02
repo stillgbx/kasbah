@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { defaultState, deviceDescriptorSchema, deviceStateSchema, mergeState, stateKeys, type StateFor } from '@kasbah/shared'
-import { VEHICLES_ASLEEP, VEHICLES_ONLINE, VEHICLE_DATA_CHARGING, VEHICLE_DATA_DRIVING, VEHICLE_DATA_PARKED } from './__fixtures__/fleet'
-import { bodyColor, CLIMATE_FEATURES, bodyFinish, isResting, modelFromVin, toDataPatch, toDescriptor, toSleepPatch, toSleepState } from './mapping'
-import { vehicleDataSchema, vehicleSummarySchema, vehiclesListSchema } from './types'
+import { defaultState, deviceDescriptorSchema, deviceStateSchema, mergeState, releaseNotesLang, stateKeys, type StateFor } from '@kasbah/shared'
+import { RELEASE_NOTES_INSTALLED, VEHICLES_ASLEEP, VEHICLES_ONLINE, VEHICLE_DATA_CHARGING, VEHICLE_DATA_DRIVING, VEHICLE_DATA_PARKED } from './__fixtures__/fleet'
+import {
+  bodyColor, CLIMATE_FEATURES, bodyFinish, compareVersions, isResting, modelFromVin, notesByVersion, parseReleaseNotes, toDataPatch,
+  toDescriptor, toSleepPatch, toSleepState, urlExpiresAt, withoutExpiredImages,
+} from './mapping'
+import { releaseNotesResponseSchema, vehicleDataSchema, vehicleSummarySchema, vehiclesListSchema } from './types'
 
 // Mappage de la Fleet API, éprouvé sur une réponse CAPTURÉE sur le vrai compte (Model S 2017, MCU2) :
 // voir l'en-tête de `__fixtures__/fleet.ts`.
@@ -31,7 +34,8 @@ describe('descripteur', () => {
     // phase 1 : lecture seule — ni `lock` ni `charging`, l'UI n'a donc pas à proposer ces boutons.
     // `charge_power` n'est pas une commande : elle dit que la voiture DONNE sa puissance de charge,
     // et dispense l'UI de la faire estimer (donc de demander la capacité de la batterie).
-    expect(d.capabilities).toEqual(['soc', 'range', 'location', 'charge_power', 'charge_limit', 'charging', 'climate_precondition'])
+    // `release_notes` se lit, `software_update` s'écrit (programmer l'installation d'une mise à jour)
+    expect(d.capabilities).toEqual(['soc', 'range', 'location', 'charge_power', 'release_notes', 'charge_limit', 'charging', 'climate_precondition', 'software_update'])
   })
 
   it('la gamme se lit au 4e caractère du VIN, et sert de nom à défaut', () => {
@@ -177,5 +181,83 @@ describe('repos', () => {
     expect(isResting(driving)).toBe(false)
     expect(isResting(charging)).toBe(false)
     expect(isResting({ ...parked, vehicle_state: { ...parked.vehicle_state, is_user_present: true } })).toBe(false)
+  })
+})
+
+describe('logiciel (`car_version`, `software_update`)', () => {
+  const withSoftware = (car_version: string | null, software_update: unknown) =>
+    vehicleDataSchema.parse({ response: { ...parked, vehicle_state: { ...parked.vehicle_state, car_version, software_update } } }).response
+
+  it('capture du 2026-10-02 : 2026.38 disponible — ni pourcentage d’installation qui traîne, ni heure', () => {
+    const patch = toDataPatch(withSoftware('2026.32.7', { download_perc: 100, expected_duration_sec: 1200, install_perc: 10, status: 'available', version: '2026.38' }))
+    expect(patch.softwareVersion).toBe('2026.32.7')
+    expect(patch.softwareUpdate).toEqual({ status: 'available', version: '2026.38', expectedDurationS: 1200 })
+    accepted(patch)
+  })
+
+  it('programmée (fixture garée) : l’heure d’installation, en millisecondes', () => {
+    const patch = toDataPatch(parked)
+    expect(patch.softwareVersion).toBe('2026.26.6.1')
+    expect(patch.softwareUpdate).toEqual({ status: 'scheduled', version: '2026.32.3', scheduledAt: 1789333199407, expectedDurationS: 1200 })
+  })
+
+  it('statut vide = rien en attente : le champ est EFFACÉ (null), pas laissé à sa dernière valeur', () => {
+    const patch = toDataPatch(withSoftware('2026.38', { status: '', download_perc: 0, install_perc: 1, expected_duration_sec: 2700 }))
+    expect(patch.softwareUpdate).toBeNull()
+    accepted(patch)
+  })
+
+  it('chaque nombre dans son statut : téléchargement, attente du Wi-Fi, installation', () => {
+    expect(toDataPatch(withSoftware('2026.32.7', { status: 'downloading', version: '2026.38', download_perc: 41.6, install_perc: 10 })).softwareUpdate)
+      .toEqual({ status: 'downloading', version: '2026.38', downloadPct: 42 })
+    expect(toDataPatch(withSoftware('2026.32.7', { status: 'downloading_wifi_wait', version: '2026.38', download_perc: 0 })).softwareUpdate)
+      .toEqual({ status: 'waiting_wifi', version: '2026.38' })
+    expect(toDataPatch(withSoftware('2026.32.7', { status: 'installing', version: '2026.38', install_perc: 35, download_perc: 100 })).softwareUpdate)
+      .toEqual({ status: 'installing', version: '2026.38', installPct: 35 })
+  })
+
+  it('un hash de build derrière la version est retiré ; une section sans `software_update` n’y touche pas', () => {
+    const patch = toDataPatch(withSoftware('2026.32.7 3d1a9c4e5f', undefined))
+    expect(patch.softwareVersion).toBe('2026.32.7')
+    expect('softwareUpdate' in patch).toBe(false)
+  })
+})
+
+describe('notes de version (`release_notes`)', () => {
+  const entries = parseReleaseNotes(releaseNotesResponseSchema.parse(RELEASE_NOTES_INSTALLED).response.release_notes)
+
+  it('groupées par version, titres rognés (« Automatic Navigation  »), dans l’ordre de la réponse', () => {
+    const byVersion = notesByVersion(entries.filter((e) => e.show_in_history !== false))
+    expect(Object.keys(byVersion)).toEqual(['2026.32', '2026.26.6'])
+    expect(byVersion['2026.32']!.map((n) => n.title)).toEqual(['Apple Music', 'Security Improvements'])
+    expect(byVersion['2026.26.6']).toHaveLength(7)
+    expect(byVersion['2026.26.6']!.map((n) => n.title)).toContain('Automatic Navigation')
+  })
+
+  it('une entrée de forme inattendue est écartée seule', () => {
+    expect(parseReleaseNotes([{ title: 'Ok' }, { description: 'sans titre' }, 42, { title: '  ' }]).map((e) => e.title)).toEqual(['Ok'])
+  })
+
+  it('les illustrations : URL signées dont l’échéance se lit, et qu’on retire une fois périmées', () => {
+    const note = notesByVersion(entries)['2026.32']![0]!
+    const exp = urlExpiresAt(note.imageUrl)
+    expect(exp).toBe(1792130420_000)
+    expect(urlExpiresAt('https://exemple.fr/image.png')).toBeUndefined()
+    expect(withoutExpiredImages(note, exp! - 1)).toEqual(note)
+    expect(withoutExpiredImages(note, exp!)).toEqual({ title: 'Apple Music', description: note.description })
+  })
+
+  it('les versions s’ordonnent segment par segment', () => {
+    expect(['2026.26.6', '2026.32.7', '2026.32', '2026.4'].sort(compareVersions)).toEqual(['2026.4', '2026.26.6', '2026.32', '2026.32.7'])
+  })
+})
+
+describe('langue demandée des notes', () => {
+  it('deux lettres, en minuscules ; tout le reste retombe sur l’anglais', () => {
+    expect(releaseNotesLang('fr')).toBe('fr')
+    expect(releaseNotesLang('fr-FR')).toBe('fr')
+    expect(releaseNotesLang('EN')).toBe('en')
+    expect(releaseNotesLang(undefined)).toBe('en')
+    expect(releaseNotesLang('1;')).toBe('en')
   })
 })

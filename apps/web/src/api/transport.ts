@@ -1,4 +1,4 @@
-import type { AutomationBody, GardenItemPatch, NewGardenItem, AutomationEntry, AutomationRun, Relief, SceneTuning, Vec2, CommandInput, DeviceConsumption, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal, StateFor } from '@kasbah/shared'
+import type { AutomationBody, GardenItemPatch, NewGardenItem, AutomationEntry, AutomationRun, Relief, SceneTuning, Vec2, CommandInput, DeviceConsumption, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal, DeviceReleaseNotes, StateFor } from '@kasbah/shared'
 
 // Abstraction du canal serveur. Deux implémentations : HTTP + WebSocket (réel) et simulation
 // in-process (tests, démo statique sans serveur). Les commandes passent TOUJOURS par une requête
@@ -435,6 +435,11 @@ export interface Transport {
   getWeatherAlerts(lat: number, lon: number): Promise<WeatherAlerts>
   /** Journal d'un appareil qui déclare la capacité `journal` (erreurs, avertissements consignés), du plus récent au plus ancien. */
   getJournal(deviceId: string): Promise<DeviceJournal>
+  /**
+   * Notes de version d'un véhicule qui déclare `release_notes`, dans `lang` si le fabricant la publie,
+   * sinon en anglais (`lang` de la réponse) : le serveur rend le cache de son plugin, sans appel au fabricant.
+   */
+  getReleaseNotes(deviceId: string, lang: string): Promise<DeviceReleaseNotes>
   /** Historique de consommation (litres par pas, jamais un cumul) d'un appareil `water`, en trois séries : heure, jour, mois. */
   getConsumption(deviceId: string): Promise<DeviceConsumption>
   sendCommand(deviceId: string, command: CommandInput): Promise<void>

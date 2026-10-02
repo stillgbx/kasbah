@@ -346,7 +346,40 @@
     "map": {"plan": "Map", "satellite": "Satellite", "fullscreen": "Full screen", "close": "Close", "recenter": "Recenter", "noPosition": "Unknown position"},
     "quota": "≈ {used}/{limit} {what}",
     "quotaCredit": "of Tesla credit",
-    "quotaSince": "since {date}"
+    "quotaSince": "since {date}",
+    "software": {
+      "title": "Software",
+      "open": "Release notes and update",
+      "installed": "Installed: {version}",
+      "status": {
+        "available": "{version} available",
+        "scheduled": "{version} scheduled {when}",
+        "downloading": "{version} · downloading {pct}",
+        "waiting_wifi": "{version} · waiting for Wi-Fi",
+        "installing": "Installing {version} · {pct}"
+      },
+      "at": "at {time}",
+      "tomorrowAt": "tomorrow at {time}",
+      "onDate": "on {date} at {time}",
+      "now": "now",
+      "pending": "Coming up",
+      "history": "History",
+      "notRead": "Notes not read yet: they come with the next read of the awake vehicle.",
+      "noHistory": "No notes kept yet.",
+      "loadError": "Notes unavailable for now.",
+      "vendorText": "Manufacturer's text, as it publishes it.",
+      "fallbackLang": "The manufacturer doesn't publish these notes in this language yet: they are shown in English.",
+      "installNow": "Install now",
+      "schedule": "Schedule",
+      "reschedule": "Reschedule",
+      "cancel": "Cancel the schedule",
+      "time": "Installation time",
+      "wakeFirst": "Wake the vehicle first: asleep, it accepts no command.",
+      "unknownDuration": "about twenty minutes",
+      "confirmTitle": "Install {version}?",
+      "confirmText": "The installation starts {when}. The vehicle can't be used for about {duration}: it must be parked, and nobody should need it until then.",
+      "confirm": "Install"
+    }
   },
   "render": {
     "title": "3D rendering", "style": "Style",

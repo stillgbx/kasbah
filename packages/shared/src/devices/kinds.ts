@@ -50,7 +50,11 @@ export const CAPABILITIES = [
   // vehicle — `charge_power` est une capacité de LECTURE, comme `soc` : le véhicule DIT sa puissance
   // de charge instantanée (Tesla). Sans elle, personne ne la connaît (la Renault 5 E-Tech, vérifié
   // voiture en charge) et l'UI l'estime, ce qui lui demande une capacité de batterie saisie à la main.
+  // `release_notes` : le véhicule publie les notes de ses versions logicielles, servies à la demande
+  // (`GET /api/devices/:id/release-notes`) ; `software_update` : il accepte qu'on programme ou annule
+  // l'installation d'une mise à jour déjà téléchargée (Tesla), deux choses distinctes
   'soc', 'range', 'location', 'lock', 'charging', 'charge_limit', 'charge_power', 'climate_precondition',
+  'release_notes', 'software_update',
   // camera — `live_stream` : un flux vidéo à la demande (protocoles dans `meta.camera.protocols`),
   // `chime` : l'appareil sonne (sonnette). Pas de `on_off` : l'API Google Nest ne permet pas
   // d'éteindre une caméra, et déclarer une capacité qu'aucune commande ne peut honorer serait mentir.
@@ -89,7 +93,7 @@ export const KIND_CAPABILITIES: Record<DeviceKind, readonly Capability[]> = {
   sensor: ['measure'],
   energy: ['production', 'consumption', 'grid', 'storage'],
   ev_charger: ['charge_control', 'charge_current'],
-  vehicle: ['soc', 'range', 'location', 'lock', 'charging', 'charge_limit', 'charge_power', 'climate_precondition'],
+  vehicle: ['soc', 'range', 'location', 'lock', 'charging', 'charge_limit', 'charge_power', 'climate_precondition', 'release_notes', 'software_update'],
   camera: ['live_stream', 'chime'],
   weather: ['forecast', 'air_quality', 'pollen'],
   water: ['consumables', 'water_flow', 'water_usage', 'uv_lamp'],

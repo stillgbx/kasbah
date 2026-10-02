@@ -65,8 +65,22 @@ export const vehicleStateSchema = z.looseObject({
   tpms_pressure_rr: num,
   is_user_present: bool,
   sentry_mode: bool,
+  /** `2026.32.7`, parfois suivi d'un espace et d'un hash de build. */
   car_version: str,
   vehicle_name: str,
+  /**
+   * Mise à jour en attente. `status` vaut `''` quand il n'y en a pas ; sinon `available`,
+   * `scheduled` (avec `scheduled_time_ms`), `downloading`, `downloading_wifi_wait`, `installing`.
+   * `install_perc` traîne à 10 hors installation (capture du 2026-10-02, statut `available`).
+   */
+  software_update: z.looseObject({
+    status: str,
+    version: str,
+    download_perc: num,
+    install_perc: num,
+    expected_duration_sec: num,
+    scheduled_time_ms: num,
+  }).nullable().optional(),
 })
 export const climateStateSchema = z.looseObject({
   inside_temp: num,
@@ -105,6 +119,37 @@ export const vehicleDataSchema = z.looseObject({
   }),
 })
 export type VehicleData = z.infer<typeof vehicleDataSchema>['response']
+
+/**
+ * Une note de `GET /api/1/vehicles/{vin}/release_notes` (capture réelle du 2026-10-02). `title`
+ * porte parfois une espace finale ; `image_url` (thème sombre) et `light_image_url` sont des URL
+ * signées qui expirent (`__gda__=exp=<secondes>~…`, une quinzaine de jours). `show_in_history` exclut
+ * l'entrée générique d'une version mineure (« Minor Fixes », `is_fallback`). Absents ou vides
+ * ailleurs : `subtitle`, `icon`, `control`.
+ */
+export const releaseNoteEntrySchema = z.looseObject({
+  title: z.string(),
+  description: str,
+  customer_version: str,
+  show_in_history: bool,
+  image_url: str,
+  light_image_url: str,
+  is_fallback: bool,
+})
+export type ReleaseNoteEntry = z.infer<typeof releaseNoteEntrySchema>
+
+/**
+ * Sans paramètre : les notes de la version INSTALLÉE et de quelques précédentes, jusqu'à la dernière
+ * grosse mise à jour. Avec `staged=true` : celles de la version EN ATTENTE (`staged_version`),
+ * suivies d'anciennes. Entrée par entrée en `unknown` : une note de forme inattendue est écartée seule.
+ */
+export const releaseNotesResponseSchema = z.looseObject({
+  response: z.looseObject({
+    release_notes: z.array(z.unknown()).nullable().optional(),
+    deployed_version: str,
+    staged_version: str,
+  }),
+})
 
 /** Réponse d'une commande REST (`/command/...`) : Tesla accuse par `result`, et explique par `reason`. */
 export const commandResultSchema = z.looseObject({

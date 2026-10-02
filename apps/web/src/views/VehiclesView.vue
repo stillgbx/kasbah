@@ -9,6 +9,7 @@ import ChargeLimitCard from '../components/vehicles/ChargeLimitCard.vue'
 import VehicleBattery from '../components/vehicles/VehicleBattery.vue'
 import VehicleMap from '../components/vehicles/VehicleMap.vue'
 import VehicleClimate from '../components/vehicles/VehicleClimate.vue'
+import VehicleSoftware from '../components/vehicles/VehicleSoftware.vue'
 import VehicleTuning from '../components/vehicles/VehicleTuning.vue'
 import { formatAgo, formatDistance, formatKm, formatMinutes, formatPercent, formatPower, formatTemp } from '../lib/format'
 import { QUOTA_TENSE_PCT, quotaPercent } from '../lib/map'
@@ -336,6 +337,8 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
                 <div v-for="k in TIRES" :key="k" class="tire"><span class="muted tire__k">{{ $t(`vehicle.tire.${k}`) }}</span><span class="tire__v">{{ tire(v.state, k) }}</span></div>
               </div>
             </div>
+            <!-- logiciel : version installée et mise à jour en attente, toujours là ; ouvre les notes de version -->
+            <VehicleSoftware :descriptor="v.descriptor" :state="v.state" />
           </div>
           <!-- TOUS les boutons, toujours : ce qu'un véhicule ne sait pas faire est grisé, avec la raison
                (règle de l'utilisateur, 2026-10-01). Une grille de six, rangée par `order` (`data-slot`) :

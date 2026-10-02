@@ -223,6 +223,14 @@ export type VehicleSleepState = (typeof VEHICLE_SLEEP_STATES)[number]
 export const VEHICLE_GEARS = ['P', 'R', 'N', 'D'] as const
 export type VehicleGear = (typeof VEHICLE_GEARS)[number]
 
+/**
+ * Où en est une mise à jour logicielle du véhicule. `available` = téléchargée, prête à installer ;
+ * `scheduled` = installation programmée (`scheduledAt`) ; `waiting_wifi` = le téléchargement attend
+ * un Wi-Fi (Tesla `downloading_wifi_wait`). Rien en attente = pas de `softwareUpdate` du tout.
+ */
+export const VEHICLE_UPDATE_STATUSES = ['available', 'scheduled', 'downloading', 'waiting_wifi', 'installing'] as const
+export type VehicleUpdateStatus = (typeof VEHICLE_UPDATE_STATUSES)[number]
+
 const seatLevel = z.number().int().min(0).max(3)
 
 export const vehicleStateSchema = z.object({
@@ -285,6 +293,23 @@ export const vehicleStateSchema = z.object({
     fl: seatLevel.optional(), fr: seatLevel.optional(), rl: seatLevel.optional(), rc: seatLevel.optional(), rr: seatLevel.optional(),
   }).optional(),
   steeringWheelHeat: z.boolean().optional(),
+  /** Version logicielle INSTALLÉE, telle que le fabricant la nomme (`2026.32.7`). Absente = inconnue. */
+  softwareVersion: z.string().optional(),
+  /**
+   * Mise à jour EN ATTENTE ; absente = aucune (ou inconnu). Chaque nombre est facultatif et ne vaut
+   * que dans son statut : Tesla laisse traîner `install_perc` hors installation, le plugin ne le
+   * publie que pendant `installing`.
+   */
+  softwareUpdate: z.object({
+    status: z.enum(VEHICLE_UPDATE_STATUSES),
+    version: z.string().optional(),
+    downloadPct: pct.optional(),
+    installPct: pct.optional(),
+    /** Heure d'installation programmée (ms epoch), en `scheduled` seulement. */
+    scheduledAt: z.number().optional(),
+    /** Durée annoncée de l'installation, secondes : la voiture est inutilisable pendant ce temps. */
+    expectedDurationS: z.number().min(0).optional(),
+  }).optional(),
   /**
    * Date (ms epoch) de la dernière LECTURE COMPLÈTE du véhicule — pas `updatedAt`, que la seule veille
    * fait bouger. C'est ce que l'UI affiche (« lu il y a 12 min ») : sur une API facturée et un

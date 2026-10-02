@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import type { StatePatch } from '@kasbah/shared'
-import { VEHICLE_FINISHES } from '@kasbah/shared'
+import { VEHICLE_FINISHES, releaseNoteSchema } from '@kasbah/shared'
 import type { Logger } from 'pino'
 import { z } from 'zod'
 import { writeFileAtomic } from '../../core/atomic-file'
@@ -47,6 +47,8 @@ export const MONTHLY_CREDIT_USD = 10
 export function billableKind(path: string): BillableKind | null {
   if (path.includes('/wake_up')) return 'wake'
   if (path.includes('/command/')) return 'command'
+  // les NOTES DE VERSION ne coûtent rien : la console du fabricant l'a tranché le 2026-10-02 — cinq
+  // appels `release_notes` seuls, puis une lecture complète : « Données » n'a pris que 1
   if (path.includes('/vehicle_data')) return 'data'
   return null
 }
@@ -83,6 +85,29 @@ export const vehiclePaintSchema = z.object({
 })
 export type VehiclePaint = z.infer<typeof vehiclePaintSchema>
 
+const notesVersionSchema = z.object({ version: z.string(), notes: z.array(releaseNoteSchema) })
+
+/**
+ * Notes de version d'un véhicule, telles qu'on les a lues. Elles ne changent qu'avec une version :
+ * relues quand `key` (version installée, version en attente) ne correspond plus, ou quand leurs
+ * illustrations — des URL signées — approchent de leur échéance (`expiresAt`).
+ *
+ * `history` s'ALLONGE au fil des mises à jour : Tesla ne rend que les versions depuis la dernière
+ * grosse mise à jour, Kasbah garde les précédentes. Leurs illustrations finissent par expirer ; le
+ * texte, lui, reste.
+ */
+export const releaseNotesCacheSchema = z.object({
+  key: z.string(),
+  fetchedAt: z.number(),
+  expiresAt: z.number().optional(),
+  installedVersion: z.string().optional(),
+  pending: notesVersionSchema.optional(),
+  history: z.record(z.string(), z.array(releaseNoteSchema)).default({}),
+  /** Tesla a rendu les MÊMES textes qu'en anglais pour cette langue : il ne la publie pas, on sert l'anglais. */
+  ignored: z.boolean().optional(),
+})
+export type ReleaseNotesCache = z.infer<typeof releaseNotesCacheSchema>
+
 export const teslaStateSchema = z.object({
   cycle: cycleSchema.optional(),
   /**
@@ -93,10 +118,22 @@ export const teslaStateSchema = z.object({
   vehicles: z.record(z.string(), z.record(z.string(), z.unknown())).default({}),
   /** Peinture par VIN : survit au redémarrage quand la voiture dort (pas dans la liste Fleet). */
   paints: z.record(z.string(), vehiclePaintSchema).default({}),
+  /**
+   * Notes de version par VIN, puis par langue (`en`, `fr`…) : voir `releaseNotesCacheSchema`. Un
+   * cache d'une autre forme est OUBLIÉ, jamais bloquant (`catch`) : ce n'est que du contenu qu'on
+   * relit. Sans cela, un fichier écrit par une version précédente était rejeté EN ENTIER, compteur
+   * du mois compris (vu le 2026-10-02 : tout le 1er octobre perdu).
+   */
+  releaseNotes: z.record(z.string(), z.record(z.string(), releaseNotesCacheSchema)).default({}).catch({}),
+  /**
+   * Langues dans lesquelles on a DEMANDÉ les notes (l'anglais, repli, est toujours lu en plus) :
+   * le serveur ne connaît pas la langue de l'app, il apprend celles qu'on lui demande.
+   */
+  releaseNotesLangs: z.array(z.string()).default([]).catch([]),
 })
 export type TeslaState = z.infer<typeof teslaStateSchema>
 
-export const emptyState = (): TeslaState => ({ vehicles: {}, paints: {} })
+export const emptyState = (): TeslaState => ({ vehicles: {}, paints: {}, releaseNotes: {}, releaseNotesLangs: [] })
 
 /** Le cycle en cours, remis à zéro si le mois a changé. Ne mute rien : rend le cycle à utiliser. */
 export function currentCycle(state: TeslaState, now: number): Cycle {

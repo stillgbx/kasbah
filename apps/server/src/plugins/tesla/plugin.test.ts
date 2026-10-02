@@ -2,11 +2,12 @@ import Fastify from 'fastify'
 import pino from 'pino'
 import { describe, expect, it, vi } from 'vitest'
 import { ManualClock } from '@kasbah/mock-sim'
+import { deviceReleaseNotesSchema } from '@kasbah/shared'
 import type { PluginContext } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
 import {
-  ASLEEP_408, PARTNER_TOKEN, TOKEN_REFRESHED, TOKEN_RESPONSE, VEHICLES_ASLEEP, VEHICLES_ONLINE, VEHICLE_DATA_CHARGING,
-  VEHICLE_DATA_DRIVING, VEHICLE_DATA_PARKED,
+  ASLEEP_408, PARTNER_TOKEN, RELEASE_NOTES_INSTALLED, RELEASE_NOTES_STAGED, TOKEN_REFRESHED, TOKEN_RESPONSE, VEHICLES_ASLEEP,
+  VEHICLES_ONLINE, VEHICLE_DATA_CHARGING, VEHICLE_DATA_DRIVING, VEHICLE_DATA_PARKED,
 } from './__fixtures__/fleet'
 import { REGION_BASE_URLS, TOKEN_URL, generateKeyPair, publicKeyOf, publicKeyPointHex, samePublicKey, type KeyStore, type StoredTokens, type TokenStore } from './auth'
 import { createTeslaPlugin, teslaConfigSchema } from './index'
@@ -44,8 +45,14 @@ function fakeTesla(over: { registeredKey?: string; servedKey?: string; publicKey
     unregistered: false,
     /** Ce qu'une commande accuse. Tesla REFUSE en HTTP 200 : `result: false` et une raison. */
     commandResult: { result: true } as { result: boolean; reason?: string },
+    /** `release_notes`, sans paramètre et `?staged=true` ; `null` = 500. */
+    notes: RELEASE_NOTES_INSTALLED as unknown,
+    stagedNotes: RELEASE_NOTES_STAGED as unknown,
+    /** Réponses à `language=fr` (vu sur la vraie voiture) ; `null` = Tesla ignore la langue (anglais). */
+    notesFr: null as unknown,
+    stagedNotesFr: null as unknown,
   }
-  const calls: { method: string; path: string; body?: string; auth?: string }[] = []
+  const calls: { method: string; path: string; body?: string; auth?: string; lang?: string }[] = []
   const fetchImpl = vi.fn<FetchLike>(async (url, init) => {
     const method = init?.method ?? 'GET'
     const headers = (init?.headers ?? {}) as Record<string, string>
@@ -60,7 +67,8 @@ function fakeTesla(over: { registeredKey?: string; servedKey?: string; publicKey
       return response({ error: 'invalid_grant' }, 400)
     }
     const path = url.replace(BASE, '')
-    calls.push({ method, path, body, auth: headers.authorization })
+    const lang = /[?&]language=([a-z]+)/.exec(path)?.[1]
+    calls.push({ method, path, body, auth: headers.authorization, ...(lang ? { lang } : {}) })
     if (path.startsWith('/api/1/partner_accounts')) {
       if (headers.authorization !== `Bearer ${PARTNER_TOKEN.access_token}`) return response({ error: 'unauthorized' }, 401)
       if (method === 'POST') {
@@ -81,6 +89,12 @@ function fakeTesla(over: { registeredKey?: string; servedKey?: string; publicKey
       return response(world.list)
     }
     if (path.includes('/vehicle_data')) return world.asleep ? response(ASLEEP_408, 408) : response(world.data)
+    if (path.includes('/release_notes')) {
+      const staged = path.includes('staged=true')
+      const fr = lang === 'fr' ? (staged ? world.stagedNotesFr : world.notesFr) : null
+      const body = fr ?? (staged ? world.stagedNotes : world.notes)
+      return body === null ? response({ error: 'internal error' }, 500) : response(body)
+    }
     if (path.endsWith('/wake_up')) return response({ response: { ...(VEHICLES_ONLINE.response[0] as object), state: 'online' } })
     // une commande sur un véhicule endormi répond 408, comme une lecture
     if (path.includes('/command/')) return world.asleep ? response(ASLEEP_408, 408) : response({ response: world.commandResult })
@@ -135,6 +149,8 @@ async function ticks(clock: ManualClock, n: number, ms = 10 * MIN) {
 }
 const dataCalls = (t: ReturnType<typeof fakeTesla>) => t.calls.filter((c) => c.path.includes('/vehicle_data')).length
 const listCalls = (t: ReturnType<typeof fakeTesla>) => t.calls.filter((c) => c.path === '/api/1/vehicles').length
+/** Appels des notes de version (gratuits chez Tesla, mais on veut savoir quand ils partent). */
+const notesCalls = (t: ReturnType<typeof fakeTesla>) => t.calls.filter((c) => c.path.includes('/release_notes')).length
 const patches = (ctx: PluginContext) => (ctx.emitState as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[1] as Record<string, unknown>)
 
 describe('mise en route', () => {
@@ -449,11 +465,14 @@ describe('ce qui survit à un redémarrage', () => {
     const first = await started({ tesla: one, tokens: linkedTokens(), state })
     await first.plugin.start()
     await settle()
-    expect(first.plugin.health!().quota!.used).toBeCloseTo(1 / 500, 5)      // une lecture complète
+    // une lecture complète ; les notes de version (installée, en attente), lues une fois, sont gratuites
+    const billed = 1 / 500
+    expect(notesCalls(one)).toBe(2)
+    expect(first.plugin.health!().quota!.used).toBeCloseTo(billed, 5)
     // le tour suivant tombe avant la fin du repos : il ne fait que LISTER, et lister ne coûte rien
     await ticks(first.clock, 1)
     expect(listCalls(one)).toBeGreaterThan(1)
-    expect(first.plugin.health!().quota!.used).toBeCloseTo(1 / 500, 5)
+    expect(first.plugin.health!().quota!.used).toBeCloseTo(billed, 5)
 
     // redémarrage : le compteur reprend où il en était (sondage non démarré, pour ne compter que
     // les appels demandés ici)
@@ -462,7 +481,9 @@ describe('ce qui survit à un redémarrage', () => {
     const second = await started({ tesla: two, tokens: linkedTokens(), state })
     await second.plugin.discover()
     await second.plugin.execute(VIN, { type: 'vehicle.refresh' })
-    expect(second.plugin.health!().quota!.used).toBeCloseTo(2 / 500, 5)
+    // les notes, gardées dans le fichier d'état pour ces versions, ne sont pas relues
+    expect(notesCalls(two)).toBe(0)
+    expect(second.plugin.health!().quota!.used).toBeCloseTo(billed + 1 / 500, 5)
 
     // le mois suivant, le compteur repart de zéro (cycle calendaire, comme la facturation du fabricant)
     second.clock.advance(31 * 24 * 60 * MIN)
@@ -815,6 +836,191 @@ describe('charge', () => {
   })
 })
 
+describe('logiciel : notes de version et mise à jour', () => {
+  /** La voiture de la capture du 2026-10-02 : 2026.32.7 installée, 2026.38 téléchargée. */
+  const AVAILABLE = { download_perc: 100, expected_duration_sec: 1200, install_perc: 10, status: 'available', version: '2026.38' }
+  const software = (car_version: string, software_update: Record<string, unknown>) => {
+    const d = structuredClone(VEHICLE_DATA_PARKED) as { response: { vehicle_state: Record<string, unknown> } }
+    d.response.vehicle_state.car_version = car_version
+    d.response.vehicle_state.software_update = software_update
+    return d
+  }
+  async function awake(over: { state?: ReturnType<typeof memoryState> } = {}) {
+    const tesla = fakeTesla()
+    tesla.world.list = VEHICLES_ONLINE
+    tesla.world.data = software('2026.32.7', AVAILABLE)
+    const s = await started({ tesla, tokens: linkedTokens(), ...over })
+    await s.plugin.discover()
+    return s
+  }
+  const read = async (plugin: Awaited<ReturnType<typeof started>>['plugin']) => { await plugin.execute(VIN, { type: 'vehicle.refresh' }); await settle() }
+  const softwarePatch = (ctx: PluginContext) => patches(ctx).filter((p) => 'softwareUpdate' in p).at(-1)?.softwareUpdate
+
+  it('une lecture complète apporte les notes : la version en attente, puis l’historique sans « Minor Fixes »', async () => {
+    const { plugin } = await awake()
+    // jamais lues : rien, et surtout aucun appel pour les servir
+    expect(await plugin.releaseNotes!(VIN, 'en')).toEqual({ history: [] })
+    await read(plugin)
+    const n = await plugin.releaseNotes!(VIN, 'en')
+    expect(deviceReleaseNotesSchema.parse({ deviceId: `tesla:${VIN}`, ...n })).toBeTruthy()
+    expect(n).toMatchObject({ installedVersion: '2026.32.7', fetchedAt: NOW })
+    expect(n.pending?.version).toBe('2026.38')
+    // la réponse « en attente » mêle des notes de 2026.32 : seules celles de 2026.38 restent
+    expect(n.pending?.notes.map((x) => x.title)).toEqual(['Supercharger Site Maps', 'Security Improvements'])
+    expect(n.history.map((h) => [h.version, h.notes.length])).toEqual([['2026.32', 2], ['2026.26.6', 7]])
+    expect(n.history.flatMap((h) => h.notes).some((x) => x.title === 'Minor Fixes')).toBe(false)
+  })
+
+  it('UN appel par version : relire la voiture ne relit pas les notes ; une version installée de plus, si — et l’historique s’allonge', async () => {
+    const { plugin, tesla, stateStore } = await awake()
+    await read(plugin)
+    await read(plugin)
+    await read(plugin)
+    expect(notesCalls(tesla)).toBe(2)                    // installée, puis en attente : une fois
+    expect(stateStore.value?.releaseNotes[VIN]?.en?.pending?.version).toBe('2026.38')
+
+    // 2026.38 installée : Tesla ne rend plus que depuis la dernière grosse mise à jour
+    tesla.world.data = software('2026.38', { status: '', download_perc: 0, install_perc: 1, expected_duration_sec: 2700 })
+    tesla.world.notes = { response: {
+      release_notes: [
+        { title: 'Supercharger Site Maps', description: 'View Site Map.', customer_version: '2026.38', show_in_history: true },
+        { title: 'Apple Music', description: 'Library.', customer_version: '2026.32', show_in_history: true },
+      ],
+      deployed_version: '2026.38', staged_version: null,
+    } }
+    await read(plugin)
+    expect(notesCalls(tesla)).toBe(3)                    // rien en attente : pas d'appel `staged`
+    const n = await plugin.releaseNotes!(VIN, 'en')
+    expect(n.installedVersion).toBe('2026.38')
+    expect(n.pending).toBeUndefined()
+    // 2026.26.6 n'est plus chez Tesla, mais Kasbah l'a gardée
+    expect(n.history.map((h) => h.version)).toEqual(['2026.38', '2026.32', '2026.26.6'])
+    expect(n.history[1]!.notes.map((x) => x.title)).toEqual(['Apple Music'])
+  })
+
+  it('les illustrations expirent : retirées à l’affichage, le texte reste ; relues un jour avant l’échéance', async () => {
+    const { plugin, tesla, clock } = await awake()
+    await read(plugin)
+    const exp = 1792130420_000
+    clock.advance(exp - NOW - 12 * 60 * MIN)            // la veille de l'échéance
+    expect((await plugin.releaseNotes!(VIN, 'en')).pending?.notes[0]).toHaveProperty('imageUrl')
+    await read(plugin)
+    expect(notesCalls(tesla)).toBe(4)                    // relues : les URL étaient sur le point d'expirer
+    // une voiture qui dort au-delà de l'échéance : rien n'est relu, les images partent, le texte reste
+    tesla.world.notes = null
+    clock.advance(24 * 60 * MIN)
+    const note = (await plugin.releaseNotes!(VIN, 'en')).history[0]!.notes[0]!
+    expect(note).toEqual({ title: 'Apple Music', description: expect.any(String) })
+  })
+
+  it('un échec ne se rejoue pas à chaque lecture : nouvel essai six heures plus tard', async () => {
+    const { plugin, tesla, clock } = await awake()
+    tesla.world.notes = null
+    await read(plugin)
+    await read(plugin)
+    expect(notesCalls(tesla)).toBe(1)
+    expect((await plugin.releaseNotes!(VIN, 'en')).history).toEqual([])
+    tesla.world.notes = RELEASE_NOTES_INSTALLED
+    clock.advance(6 * 60 * MIN + 1)
+    await read(plugin)
+    expect(notesCalls(tesla)).toBe(3)
+    expect((await plugin.releaseNotes!(VIN, 'en')).history).toHaveLength(2)
+  })
+
+  it('dans la langue de l’app : l’anglais d’abord (repli), le français une fois demandé et lu', async () => {
+    const { plugin, tesla } = await awake()
+    // ce que Tesla rendrait en français : mêmes entrées, autres titres
+    const fr = (body: unknown) => JSON.parse(JSON.stringify(body).replaceAll('Security Improvements', 'Améliorations de la sécurité').replaceAll('Supercharger Site Maps', 'Plans des Superchargeurs').replaceAll('"Apple Music', '"Apple Music (fr)'))
+    tesla.world.notesFr = fr(RELEASE_NOTES_INSTALLED)
+    tesla.world.stagedNotesFr = fr(RELEASE_NOTES_STAGED)
+    await read(plugin)
+    expect(tesla.calls.filter((c) => c.path.includes('/release_notes')).map((c) => c.lang)).toEqual(['en', 'en'])
+    // le français n'a jamais été demandé : l'anglais est servi, et la demande retenue
+    const first = await plugin.releaseNotes!(VIN, 'fr')
+    expect(first.lang).toBe('en')
+    expect(first.pending?.notes[0]?.title).toBe('Supercharger Site Maps')
+    await settle()                                       // éveillée : lu tout de suite, sans attendre une lecture complète
+    expect(notesCalls(tesla)).toBe(4)
+    const n = await plugin.releaseNotes!(VIN, 'fr')
+    expect(n.lang).toBe('fr')
+    expect(n.pending?.notes.map((x) => x.title)).toEqual(['Plans des Superchargeurs', 'Améliorations de la sécurité'])
+    expect(n.history[0]!.notes[0]!.title).toBe('Apple Music (fr)')
+    // l'anglais reste servi à qui le demande ; une relecture ne relit rien (mêmes versions)
+    expect((await plugin.releaseNotes!(VIN, 'en')).pending?.notes[0]?.title).toBe('Supercharger Site Maps')
+    await read(plugin)
+    expect(notesCalls(tesla)).toBe(4)
+  })
+
+  it('Tesla ignore la langue demandée (mêmes textes qu’en anglais) : l’anglais est servi, et la langue n’est pas relue', async () => {
+    const { plugin, tesla, stateStore } = await awake()
+    await read(plugin)
+    await plugin.releaseNotes!(VIN, 'fr')
+    await settle()
+    expect(stateStore.value?.releaseNotes[VIN]?.fr?.ignored).toBe(true)
+    expect((await plugin.releaseNotes!(VIN, 'fr')).lang).toBe('en')
+    const calls = notesCalls(tesla)
+    await read(plugin)
+    expect(notesCalls(tesla)).toBe(calls)
+  })
+
+  it('une langue demandée voiture endormie attend la prochaine lecture : jamais de réveil pour des notes', async () => {
+    const tesla = fakeTesla()
+    const { plugin } = await started({ tesla, tokens: linkedTokens() })
+    await plugin.discover()
+    expect(await plugin.releaseNotes!(VIN, 'fr')).toEqual({ history: [] })
+    await settle()
+    expect(tesla.calls.some((c) => c.path.includes('/release_notes') || c.path.endsWith('/wake_up'))).toBe(false)
+  })
+
+  it('programmer l’installation : une commande, l’état suit sans relecture ; reprogrammer déplace l’heure', async () => {
+    const { plugin, ctx, tesla } = await awake()
+    await read(plugin)
+    const reads = dataCalls(tesla)
+    await plugin.execute(VIN, { type: 'vehicle.schedule_update', delayS: 0 })
+    expect(tesla.calls.at(-1)).toMatchObject({ method: 'POST', path: `/api/1/vehicles/${VIN}/command/schedule_software_update`, body: '{"offset_sec":0}' })
+    expect(softwarePatch(ctx)).toEqual({ status: 'scheduled', version: '2026.38', expectedDurationS: 1200, scheduledAt: NOW })
+    await plugin.execute(VIN, { type: 'vehicle.schedule_update', delayS: 3600 })
+    expect(softwarePatch(ctx)).toMatchObject({ status: 'scheduled', scheduledAt: NOW + 60 * MIN })
+    expect(dataCalls(tesla)).toBe(reads)
+  })
+
+  it('annuler : la mise à jour redevient disponible ; rien de programmé, rien n’est envoyé', async () => {
+    const { plugin, ctx, tesla } = await awake()
+    await read(plugin)
+    const commands = () => tesla.calls.filter((c) => c.path.includes('/command/')).length
+    await plugin.execute(VIN, { type: 'vehicle.cancel_update' })
+    expect(commands()).toBe(0)
+    await plugin.execute(VIN, { type: 'vehicle.schedule_update', delayS: 600 })
+    await plugin.execute(VIN, { type: 'vehicle.cancel_update' })
+    expect(tesla.calls.at(-1)).toMatchObject({ method: 'POST', path: `/api/1/vehicles/${VIN}/command/cancel_software_update` })
+    expect(softwarePatch(ctx)).toEqual({ status: 'available', version: '2026.38', expectedDurationS: 1200 })
+  })
+
+  it('refusé d’avance : voiture endormie (aucun réveil), ou rien de téléchargé', async () => {
+    const asleep = await started({ tokens: linkedTokens() })
+    await asleep.plugin.discover()
+    await expect(asleep.plugin.execute(VIN, { type: 'vehicle.schedule_update', delayS: 0 })).rejects.toMatchObject({ code: 'DEVICE_UNAVAILABLE' })
+    expect(asleep.tesla.calls.some((c) => c.path.endsWith('/wake_up') || c.path.includes('/command/'))).toBe(false)
+
+    const { plugin, tesla } = await awake()
+    tesla.world.data = software('2026.32.7', { status: 'downloading', version: '2026.38', download_perc: 40 })
+    await read(plugin)
+    await expect(plugin.execute(VIN, { type: 'vehicle.schedule_update', delayS: 0 }))
+      .rejects.toMatchObject({ code: 'DEVICE_UNAVAILABLE', message: expect.stringContaining('downloading') })
+    expect(tesla.calls.some((c) => c.path.includes('/command/'))).toBe(false)
+  })
+
+  it('le refus de Tesla remonte, et l’état ne bouge pas', async () => {
+    const { plugin, ctx, tesla } = await awake()
+    await read(plugin)
+    tesla.world.commandResult = { result: false, reason: 'update_not_ready' }
+    const before = softwarePatch(ctx)
+    await expect(plugin.execute(VIN, { type: 'vehicle.schedule_update', delayS: 0 }))
+      .rejects.toMatchObject({ code: 'UPSTREAM_ERROR', message: expect.stringContaining('update_not_ready') })
+    expect(softwarePatch(ctx)).toEqual(before)
+  })
+})
+
 describe('relevé brut', () => {
   it('liste puis vehicle_data des seuls véhicules éveillés, sans réveiller les autres', async () => {
     const { app, tesla } = await started({ tokens: linkedTokens() })
@@ -822,9 +1028,12 @@ describe('relevé brut', () => {
     // la région d'abord : c'est ce qui explique une liste vide
     expect(Object.keys(asleep)).toEqual(['/api/1/users/region', '/api/1/vehicles'])
     expect(dataCalls(tesla)).toBe(0)
+    expect(tesla.calls.some((c) => c.path.includes('/release_notes'))).toBe(false)   // endormi : rien
     tesla.world.list = VEHICLES_ONLINE
     const awake = await app.inject({ method: 'GET', url: '/api/plugins/tesla/raw' }).then((r) => r.json())
-    expect(Object.keys(awake)).toHaveLength(3)
+    // éveillé : la lecture complète, puis les notes de version (installée, puis en attente)
+    expect(Object.keys(awake)).toHaveLength(5)
+    expect(Object.keys(awake).filter((k) => k.includes('/release_notes'))).toHaveLength(2)
     expect(dataCalls(tesla)).toBe(1)
   })
 })

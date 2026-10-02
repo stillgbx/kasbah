@@ -112,6 +112,14 @@ export const commandSchema = z.discriminatedUnion('type', [
   }),
   /** Relire le véhicule MAINTENANT (lecture facturée) ; le sondage repart de ce moment. */
   z.object({ type: z.literal('vehicle.refresh') }),
+  /**
+   * Installer la mise à jour logicielle DÉJÀ TÉLÉCHARGÉE (`softwareUpdate.status` `available` ou
+   * `scheduled`), dans `delayS` secondes — 0 = maintenant. Reprogrammer déplace l'heure. La voiture
+   * est inutilisable pendant l'installation (Tesla : une vingtaine de minutes) : un geste confirmé.
+   */
+  z.object({ type: z.literal('vehicle.schedule_update'), delayS: z.number().int().min(0).max(86_400) }),
+  /** Annuler une installation programmée ; la mise à jour reste disponible. */
+  z.object({ type: z.literal('vehicle.cancel_update') }),
   // pet_feeder
   /**
    * Servir une ration TOUT DE SUITE, en plus du plan de repas (qui n'est pas touché). `amount` est
@@ -159,6 +167,7 @@ export const COMMAND_REQUIRES: Record<CommandType, Capability> = {
   'vehicle.start_charge': 'charging', 'vehicle.stop_charge': 'charging',
   'vehicle.set_charge_limit': 'charge_limit', 'vehicle.wake': 'soc', 'vehicle.refresh': 'soc',
   'vehicle.climate_start': 'climate_precondition', 'vehicle.climate_stop': 'climate_precondition', 'vehicle.climate_set': 'climate_precondition',
+  'vehicle.schedule_update': 'software_update', 'vehicle.cancel_update': 'software_update',
   'pet_feeder.feed': 'feed', 'pet_feeder.call_pet': 'call_pet',
   'pet_fountain.set_power': 'on_off', 'pet_fountain.set_mode': 'pump_mode',
   'fan.set': 'on_off',

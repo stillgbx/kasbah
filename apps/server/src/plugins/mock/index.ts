@@ -91,6 +91,13 @@ export function createMockPlugin(): DevicePlugin {
         throw err
       }
     },
+    async releaseNotes(externalId: string, lang: string) {
+      try { return sim!.releaseNotes(externalId, lang) }
+      catch (err) {
+        if (err instanceof SimError) throw new PluginError(CODE_MAP[err.code], err.message, { cause: err })
+        throw err
+      }
+    },
     async stop() { sim?.stop() },
     health(): PluginHealth {
       const detail = `scenario ${config?.MOCK_SCENARIO ?? '?'} ×${config?.MOCK_TIME_SCALE ?? 1}`

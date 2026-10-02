@@ -1,9 +1,10 @@
 import { randomBytes } from 'node:crypto'
-import type { Command, CommandOf, DeviceDescriptor, PluginHealth, VehicleFinish, VehicleSeat, VehicleSleepState } from '@kasbah/shared'
+import type { Command, CommandOf, DeviceDescriptor, PluginHealth, ReleaseNote, StateFor, VehicleFinish, VehicleSeat, VehicleSleepState } from '@kasbah/shared'
+import { RELEASE_NOTES_FALLBACK_LANG } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { fetch as undiciFetch } from 'undici'
 import { z } from 'zod'
-import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
+import { PluginError, type DevicePlugin, type PluginContext, type PluginReleaseNotes } from '../../core/plugin'
 import { stateFile } from '../../core/paths'
 import { sleep } from '../../core/clock'
 import type { FetchLike } from '../../core/sse'
@@ -13,12 +14,15 @@ import {
   samePublicKey, type KeyPair, type KeyStore, type TeslaRegion, type TokenStore,
 } from './auth'
 import { TeslaClient } from './client'
-import { bodyColor, bodyFinish, isResting, SEAT_HEATER_INDEX, toDataPatch, toDescriptor, toSleepPatch, toSleepState } from './mapping'
+import {
+  bodyColor, bodyFinish, compareVersions, imagesExpireAt, isResting, notesByVersion, parseReleaseNotes, SEAT_HEATER_INDEX, toDataPatch,
+  toDescriptor, toSleepPatch, toSleepState, withoutExpiredImages,
+} from './mapping'
 import {
   MONTHLY_CREDIT_USD, billableKind, countCall, createStateFile, currentCycle, cycleCostUsd, cycleStart, emptyState,
   type TeslaState, type TeslaStateStore,
 } from './state'
-import { commandResultSchema, partnerPublicKeySchema, vehicleDataSchema, vehicleSummarySchema, vehiclesListSchema, type VehicleSummary } from './types'
+import { commandResultSchema, partnerPublicKeySchema, releaseNotesResponseSchema, vehicleDataSchema, vehicleSummarySchema, vehiclesListSchema, type VehicleSummary } from './types'
 
 // Plugin Tesla : véhicules lus par la Fleet API (cloud du fabricant, il n'existe rien en local).
 // Lu : charge, autonomie, câble, verrouillage, position, kilométrage, vitesse et rapport, pression
@@ -95,6 +99,12 @@ const LIMIT_BUSES_RETRIES = 2
 const LIMIT_BUSES_PAUSE_MS = 2_500
 /** Sous ce niveau, Tesla refuse `auto_conditioning_start` (`low_soc`). */
 const LOW_SOC_PCT = 20
+/** Notes de version relues un jour avant que leurs illustrations (URL signées, ~14 jours) n'expirent. */
+const NOTES_REFRESH_BEFORE_MS = 86_400_000
+/** Après un échec de lecture des notes, pas de nouvel essai avant : sinon chaque lecture complète le rejouerait. */
+const NOTES_RETRY_MS = 6 * 3_600_000
+/** Langues d'app retenues pour les notes, au plus (l'anglais en plus) : une requête ne peut pas en faire grossir la liste sans fin. */
+const NOTES_MAX_LANGS = 4
 /** Sections de `vehicle_data` lues. `location_data` est OBLIGATOIRE pour la position depuis le logiciel 2023.38. */
 const DATA_ENDPOINTS = ['charge_state', 'drive_state', 'vehicle_state', 'climate_state', 'location_data', 'vehicle_config'].join(';')
 
@@ -280,6 +290,8 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
       if (changed) ctx!.emitDevices(descriptors())
     }
     persist()
+    // la voiture est éveillée, c'est le moment : notes de version relues si une version a changé
+    void refreshNotes(vin)
     // au repos : on le laisse s'endormir, la prochaine lecture attendra
     track.restUntil = isResting(data) && config!.TESLA_REST_MS > 0 ? ctx!.clock.now() + config!.TESLA_REST_MS : 0
     // une lecture, d'où qu'elle vienne (sondage, réveil, rafraîchissement demandé), remet le compteur
@@ -534,6 +546,141 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     catch (err) { log().debug({ err, vin }, 'Tesla charge follow-up read failed') }
   }
 
+  // ---- logiciel : notes de version et mise à jour ---------------------------------------------
+
+  type SoftwareUpdate = NonNullable<StateFor<'vehicle'>['softwareUpdate']>
+  const lastSoftware = (vin: string) => saved.vehicles[vin] as { softwareVersion?: string; softwareUpdate?: SoftwareUpdate | null } | undefined
+  /** Lecture des notes en vol, par VIN : deux lectures complètes rapprochées n'en lancent qu'une. */
+  const notesInFlight = new Set<string>()
+  /** Pas de nouvel essai avant cette date (ms epoch), par VIN, après un échec. */
+  const notesRetryAt = new Map<string, number>()
+
+  /**
+   * Relire les notes de version — UNIQUEMENT quand la version installée ou celle en attente a changé
+   * depuis la dernière lecture, ou quand leurs illustrations vont expirer. Appelé après une lecture
+   * complète (voiture éveillée), sans la faire attendre : un échec ne coûte qu'un message de journal,
+   * et la prochaine lecture retentera.
+   */
+  async function refreshNotes(vin: string): Promise<void> {
+    const installed = lastSoftware(vin)?.softwareVersion
+    if (!installed || notesInFlight.has(vin)) return
+    if ((notesRetryAt.get(vin) ?? 0) > ctx!.clock.now()) return
+    notesInFlight.add(vin)
+    try {
+      // l'anglais d'abord : c'est le repli, et la référence qui dit si Tesla publie l'autre langue
+      for (const lang of [RELEASE_NOTES_FALLBACK_LANG, ...saved.releaseNotesLangs.filter((l) => l !== RELEASE_NOTES_FALLBACK_LANG)]) {
+        await refreshNotesIn(vin, lang)
+      }
+    } catch (err) {
+      if (ctx!.signal.aborted) return
+      notesRetryAt.set(vin, ctx!.clock.now() + NOTES_RETRY_MS)
+      log().warn({ err, vin }, 'could not read Tesla release notes')
+    } finally {
+      notesInFlight.delete(vin)
+    }
+  }
+
+  /**
+   * Les notes d'UNE langue, demandée à Tesla par le paramètre `language` (deux lettres). Essayé sur la
+   * vraie voiture le 2026-10-02 : `language=fr` rend le français de l'appli Tesla (« Cartes de sites
+   * Superchargeur ») ; `Accept-Language`, `locale=fr_FR` et `locale=fr-FR` sont ignorés (anglais).
+   * Rien n'est traduit ici : si Tesla rend les mêmes textes qu'en anglais, il ne publie pas cette
+   * langue (`ignored`), et on sert l'anglais.
+   */
+  async function refreshNotesIn(vin: string, lang: string): Promise<void> {
+    const last = lastSoftware(vin)
+    const installed = last?.softwareVersion
+    if (!installed) return
+    const staged = last.softwareUpdate?.version
+    // la clé dit aussi COMMENT on a demandé (`language=`) : un cache lu autrement (`Accept-Language`,
+    // ignoré par Tesla, essai du 2026-10-02) est relu une fois au lieu de rester en anglais
+    const key = `language|${installed}|${staged ?? ''}`
+    const byLang = (saved.releaseNotes[vin] ??= {})
+    const cache = byLang[lang]
+    if (cache?.key === key && (cache.expiresAt === undefined || cache.expiresAt - NOTES_REFRESH_BEFORE_MS > ctx!.clock.now())) return
+    {
+      const base = `/api/1/vehicles/${encodeURIComponent(vin)}/release_notes`
+      const current = releaseNotesResponseSchema.parse(await client!.request('GET', `${base}?language=${lang}`, { signal: ctx!.signal })).response
+      // l'historique : ce que Tesla montre lui-même dans « Notes de mise à jour » (`show_in_history`),
+      // ajouté à ce qu'on gardait — Tesla ne remonte pas avant la dernière grosse mise à jour
+      const shown = notesByVersion(parseReleaseNotes(current.release_notes).filter((e) => e.show_in_history !== false))
+      let pending: { version: string; notes: ReleaseNote[] } | undefined
+      if (staged) {
+        const next = releaseNotesResponseSchema.parse(await client!.request('GET', `${base}?staged=true&language=${lang}`, { signal: ctx!.signal })).response
+        // la réponse « en attente » mêle d'anciennes notes : seules celles de la version attendue comptent
+        const notes = notesByVersion(parseReleaseNotes(next.release_notes))[staged]
+        if (notes?.length) pending = { version: staged, notes }
+      }
+      const fetched = [...Object.values(shown).flat(), ...(pending?.notes ?? [])]
+      const expiresAt = imagesExpireAt(fetched)
+      // mêmes titres qu'en anglais, lus à l'instant : Tesla ignore la langue demandée
+      const en = byLang[RELEASE_NOTES_FALLBACK_LANG]
+      const enTitles = new Set([...Object.values(en?.history ?? {}).flat(), ...(en?.pending?.notes ?? [])].map((n) => n.title))
+      const ignored = lang !== RELEASE_NOTES_FALLBACK_LANG && fetched.length > 0 && fetched.every((n) => enTitles.has(n.title))
+      byLang[lang] = {
+        key, fetchedAt: ctx!.clock.now(), history: { ...cache?.history, ...shown },
+        installedVersion: current.deployed_version ?? installed,
+        ...(expiresAt !== undefined ? { expiresAt } : {}),
+        ...(pending ? { pending } : {}),
+        ...(ignored ? { ignored } : {}),
+      }
+      persist()
+      log().info({ vin, lang, installed, staged, ignored, versions: Object.keys(byLang[lang].history).length }, 'Tesla release notes read')
+    }
+  }
+
+  /** Le cache, tel quel : jamais d'appel ici. Les notes en attente ne valent que pour la version encore attendue. */
+  function releaseNotesOf(vin: string, wanted: string): PluginReleaseNotes {
+    const byLang = saved.releaseNotes[vin] ?? {}
+    const own = byLang[wanted]
+    const lang = own && !own.ignored ? wanted : RELEASE_NOTES_FALLBACK_LANG
+    const cache = byLang[lang]
+    const last = lastSoftware(vin)
+    const now = ctx!.clock.now()
+    const clean = (notes: ReleaseNote[]) => notes.map((n) => withoutExpiredImages(n, now))
+    const installedVersion = last?.softwareVersion ?? cache?.installedVersion
+    const pending = cache?.pending && cache.pending.version === last?.softwareUpdate?.version ? cache.pending : undefined
+    return {
+      ...(cache ? { lang } : {}),
+      ...(installedVersion ? { installedVersion } : {}),
+      ...(pending ? { pending: { version: pending.version, notes: clean(pending.notes) } } : {}),
+      history: Object.entries(cache?.history ?? {})
+        .sort(([a], [b]) => compareVersions(b, a))
+        .map(([version, notes]) => ({ version, notes: clean(notes) })),
+      ...(cache ? { fetchedAt: cache.fetchedAt } : {}),
+    }
+  }
+
+  /**
+   * Programmer ou annuler l'installation d'une mise à jour DÉJÀ téléchargée. Voiture éveillée
+   * seulement (jamais de réveil implicite pour un réglage, comme la limite de charge), et refusé
+   * d'avance quand rien n'est prêt : Tesla n'installe pas ce qu'il n'a pas fini de télécharger.
+   * L'état suit l'accusé, sans relecture (facturée) : la prochaine lecture le confirmera.
+   */
+  async function softwareCommand(vin: string, command: CommandOf<'vehicle.schedule_update'> | CommandOf<'vehicle.cancel_update'>): Promise<void> {
+    if (vehicles.get(vin)!.sleepState !== 'online') throw new PluginError('DEVICE_UNAVAILABLE', 'vehicle is asleep: wake it first')
+    const last = lastSoftware(vin)?.softwareUpdate ?? undefined
+    let next: SoftwareUpdate
+    if (command.type === 'vehicle.schedule_update') {
+      if (last?.status !== 'available' && last?.status !== 'scheduled') {
+        throw new PluginError('DEVICE_UNAVAILABLE', `no downloaded software update to install${last ? ` (${last.status})` : ''}`)
+      }
+      await vehicleCommand(vin, 'schedule_software_update', { offset_sec: command.delayS })
+      next = { ...last, status: 'scheduled', scheduledAt: ctx!.clock.now() + command.delayS * 1000 }
+      log().info({ vin, version: last.version, delayS: command.delayS }, 'Tesla software update scheduled')
+    } else {
+      // rien de programmé : rien à annuler, et rien à payer
+      if (last?.status !== 'scheduled') return
+      await vehicleCommand(vin, 'cancel_software_update')
+      const { scheduledAt: _dropped, ...rest } = last
+      next = { ...rest, status: 'available' }
+      log().info({ vin, version: last.version }, 'Tesla software update cancelled')
+    }
+    ctx!.emitState(vin, { softwareUpdate: next })
+    saved.vehicles[vin] = { ...saved.vehicles[vin], softwareUpdate: next }
+    persist()
+  }
+
   // ---- enregistrement du domaine ------------------------------------------------------------
 
   /**
@@ -673,6 +820,10 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
       }
       if (command.type === 'vehicle.start_charge' || command.type === 'vehicle.stop_charge') {
         await charge(externalId, command.type === 'vehicle.start_charge')
+        return
+      }
+      if (command.type === 'vehicle.schedule_update' || command.type === 'vehicle.cancel_update') {
+        await softwareCommand(externalId, command)
         return
       }
       if (command.type !== 'vehicle.wake') {
@@ -873,6 +1024,12 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
             if (!takeBudget()) { out[path] = { skipped: 'daily budget spent' }; continue }
             try { out[path] = await client.request('GET', path, { signal: ctx!.signal }) }
             catch (err) { out[path] = { error: (err as Error).message } }
+            // notes de version : documentées sans format ni paramètres ; `staged=true` (cité par la
+            // communauté) viserait la version EN ATTENTE. Capturées ici pour en tirer le schéma
+            for (const notes of [`/api/1/vehicles/${v.data.vin}/release_notes`, `/api/1/vehicles/${v.data.vin}/release_notes?staged=true`]) {
+              try { out[notes] = await client.request('GET', notes, { signal: ctx!.signal }) }
+              catch (err) { out[notes] = { error: (err as Error).message } }
+            }
           }
         } catch (err) {
           const d = describeError(err)
@@ -880,6 +1037,19 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
         }
         return out
       })
+    },
+
+    async releaseNotes(externalId, lang) {
+      const track = vehicles.get(externalId)
+      if (!track) throw new PluginError('DEVICE_UNAVAILABLE', `unknown Tesla vehicle ${externalId}`)
+      // une langue jamais demandée : retenue pour les prochaines lectures (l'anglais est servi d'ici là),
+      // et lue tout de suite si la voiture est éveillée — jamais de réveil pour des notes
+      if (lang !== RELEASE_NOTES_FALLBACK_LANG && !saved.releaseNotesLangs.includes(lang) && saved.releaseNotesLangs.length < NOTES_MAX_LANGS) {
+        saved.releaseNotesLangs = [...saved.releaseNotesLangs, lang]
+        persist()
+        if (track.sleepState === 'online') void refreshNotes(externalId)
+      }
+      return releaseNotesOf(externalId, lang)
     },
 
     health(): PluginHealth {

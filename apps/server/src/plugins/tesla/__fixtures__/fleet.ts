@@ -785,3 +785,148 @@ export const TOKEN_RESPONSE = {
 }
 export const TOKEN_REFRESHED = { ...TOKEN_RESPONSE, access_token: 'eyJ.access.second', refresh_token: 'refresh-second' }
 export const PARTNER_TOKEN = { access_token: 'eyJ.partner', expires_in: 28800, token_type: 'Bearer' }
+
+/**
+ * `GET /api/1/vehicles/{vin}/release_notes`, CAPTURE RÉELLE du 2026-10-02 (voiture en 2026.32.7,
+ * 2026.38 téléchargée) : seules les signatures des URL sont remplacées (`hmac=0`), leur échéance
+ * (`exp=1792130420`, le 2026-10-16) est gardée. Titres à espace finale et « Minor Fixes »
+ * (`show_in_history: false`) d'origine.
+ */
+export const RELEASE_NOTES_INSTALLED = {
+  "response": {
+    "release_notes": [
+      {
+        "title": "Minor Fixes",
+        "description": "This release contains minor fixes and improvements",
+        "customer_version": "2026.32.7",
+        "icon": "release_notes_icon",
+        "show_in_history": false,
+        "image_url": "https://vehicle-files.teslamotors.com/mothership_files/prd/release_notes/minor-fixes-image.png?__gda__=exp=1792130420~acl=/mothership_files/prd/release_notes/minor-fixes-image.png~hmac=0",
+        "light_image_url": "https://vehicle-files.teslamotors.com/mothership_files/prd/release_notes/minor-fixes-light-image.png?__gda__=exp=1792130420~acl=/mothership_files/prd/release_notes/minor-fixes-light-image.png~hmac=0",
+        "is_fallback": true
+      },
+      {
+        "title": "Apple Music",
+        "description": "Go to Search, select Apple Music, then tap Library to find the songs, albums, and playlists you've added",
+        "customer_version": "2026.32",
+        "show_in_history": true,
+        "image_url": "https://vehicle-files.teslamotors.com/release_notes/1cfa6a44eaac45c6212906124730eb2d?__gda__=exp=1792130420~acl=/release_notes/1cfa6a44eaac45c6212906124730eb2d~hmac=0",
+        "light_image_url": "https://vehicle-files.teslamotors.com/release_notes/f090c77b73dd88457909d369876aed62?__gda__=exp=1792130420~acl=/release_notes/f090c77b73dd88457909d369876aed62~hmac=0"
+      },
+      {
+        "title": "Security Improvements",
+        "description": "This update includes important security fixes and improvements.",
+        "customer_version": "2026.32",
+        "show_in_history": true,
+        "image_url": "https://vehicle-files.teslamotors.com/release_notes/6aa79c15cd4bd893e6b89ef70343f309?__gda__=exp=1792130420~acl=/release_notes/6aa79c15cd4bd893e6b89ef70343f309~hmac=0",
+        "light_image_url": "https://vehicle-files.teslamotors.com/release_notes/8178cbb1e88951beaa3283a7711aef52?__gda__=exp=1792130420~acl=/release_notes/8178cbb1e88951beaa3283a7711aef52~hmac=0"
+      },
+      {
+        "title": "Summer Update",
+        "description": "Swipe up to see your new features in the 2026 Summer Update.",
+        "customer_version": "2026.26.6",
+        "show_in_history": true,
+        "image_url": "https://vehicle-files.teslamotors.com/release_notes/6147933126c696ea8cfd1962703a721b?__gda__=exp=1792130420~acl=/release_notes/6147933126c696ea8cfd1962703a721b~hmac=0",
+        "light_image_url": "https://vehicle-files.teslamotors.com/release_notes/8ef70b7e8d47869f9bf7d53da4f2d808?__gda__=exp=1792130420~acl=/release_notes/8ef70b7e8d47869f9bf7d53da4f2d808~hmac=0"
+      },
+      {
+        "title": "Automatic Navigation ",
+        "description": "Automatic Navigation now adapts to your routine. In addition to Home, Work, and upcoming calendar events, your vehicle can now suggest and route to the places you visit regularly, like a school drop-off on the way to work, when Destination Suggestions are enabled. Location data is anonymous to Tesla and not associated with your vehicle.",
+        "customer_version": "2026.26.6",
+        "show_in_history": true,
+        "image_url": "https://vehicle-files.teslamotors.com/release_notes/677302cd3c2c9c6d90179beb0af8ca40?__gda__=exp=1792130420~acl=/release_notes/677302cd3c2c9c6d90179beb0af8ca40~hmac=0",
+        "light_image_url": "https://vehicle-files.teslamotors.com/release_notes/cc557f2b3a9366cef83c22f2a7fe6fb1?__gda__=exp=1792130420~acl=/release_notes/cc557f2b3a9366cef83c22f2a7fe6fb1~hmac=0",
+        "control": "automatic_navigation"
+      },
+      {
+        "title": "Speed Cameras on Route",
+        "subtitle": "",
+        "description": "Navigation now includes symbols along your route to show speed cameras. Requires Premium Connectivity.",
+        "customer_version": "2026.26.6",
+        "show_in_history": true,
+        "image_url": "https://vehicle-files.teslamotors.com/release_notes/27ed94940bdfa13950c905bc1c0e4460?__gda__=exp=1792130420~acl=/release_notes/27ed94940bdfa13950c905bc1c0e4460~hmac=0",
+        "light_image_url": "https://vehicle-files.teslamotors.com/release_notes/19d851384172ffb8daf2ba7937c15e52?__gda__=exp=1792130420~acl=/release_notes/19d851384172ffb8daf2ba7937c15e52~hmac=0"
+      },
+      {
+        "title": "Apple Music ",
+        "description": "Add songs to your Apple Music queue directly from Search results and Artist pages. Tap and hold a song, or tap the three-dot menu to play next, add to queue, save to your library, or mark as a favorite. Requires an active Apple Music subscription.",
+        "customer_version": "2026.26.6",
+        "show_in_history": true,
+        "image_url": "https://vehicle-files.teslamotors.com/release_notes/a410109ae1e45bbc1d98b84e27c3d675?__gda__=exp=1792130420~acl=/release_notes/a410109ae1e45bbc1d98b84e27c3d675~hmac=0",
+        "light_image_url": "https://vehicle-files.teslamotors.com/release_notes/87af71c69f67a62841dc8c23798c7d66?__gda__=exp=1792130420~acl=/release_notes/87af71c69f67a62841dc8c23798c7d66~hmac=0"
+      },
+      {
+        "title": "Driving Visualization",
+        "subtitle": "",
+        "description": "Customize your Self-Driving zoom preference. Select desired zoom level in Controls > Self-Driving > Visualization Camera Zoom.",
+        "customer_version": "2026.26.6",
+        "show_in_history": true,
+        "image_url": "https://vehicle-files.teslamotors.com/release_notes/e1f59802152c2f16a4dd02dd70daf112?__gda__=exp=1792130420~acl=/release_notes/e1f59802152c2f16a4dd02dd70daf112~hmac=0",
+        "light_image_url": "https://vehicle-files.teslamotors.com/release_notes/8c85dedd868b57aea12680a042474c8a?__gda__=exp=1792130420~acl=/release_notes/8c85dedd868b57aea12680a042474c8a~hmac=0"
+      },
+      {
+        "title": "Supercharger Search",
+        "description": "You can now find Superchargers by name when searching for a destination.",
+        "customer_version": "2026.26.6",
+        "show_in_history": true,
+        "image_url": "https://vehicle-files.teslamotors.com/release_notes/a4f7eef4d04b8c6fdade832d8ca1555a?__gda__=exp=1792130420~acl=/release_notes/a4f7eef4d04b8c6fdade832d8ca1555a~hmac=0",
+        "light_image_url": "https://vehicle-files.teslamotors.com/release_notes/393459937234a25e3f8ec42edae4369a?__gda__=exp=1792130420~acl=/release_notes/393459937234a25e3f8ec42edae4369a~hmac=0"
+      },
+      {
+        "title": "Security Improvements",
+        "description": "This update includes important security fixes and improvements.",
+        "customer_version": "2026.26.6",
+        "show_in_history": true,
+        "image_url": "https://vehicle-files.teslamotors.com/release_notes/6aa79c15cd4bd893e6b89ef70343f309?__gda__=exp=1792130420~acl=/release_notes/6aa79c15cd4bd893e6b89ef70343f309~hmac=0",
+        "light_image_url": "https://vehicle-files.teslamotors.com/release_notes/8178cbb1e88951beaa3283a7711aef52?__gda__=exp=1792130420~acl=/release_notes/8178cbb1e88951beaa3283a7711aef52~hmac=0"
+      }
+    ],
+    "deployed_version": "2026.32.7",
+    "staged_version": null,
+    "release_notes_version": "2026.32.7"
+  }
+}
+
+/** Même capture, `?staged=true` : la version EN ATTENTE (2026.38), suivie d'anciennes notes (2026.32). */
+export const RELEASE_NOTES_STAGED = {
+  "response": {
+    "release_notes": [
+      {
+        "title": "Supercharger Site Maps",
+        "description": "You can now see a detailed view of select Tesla Superchargers by tapping \"View Site Map.\" When navigating to a pilot location, the site layout and live occupancy (Available / Occupied / Down) will be displayed upon arrival.",
+        "customer_version": "2026.38",
+        "show_in_history": false,
+        "image_url": "https://vehicle-files.teslamotors.com/release_notes/e0b093eab3d68d9d1b8b51b81f567250?__gda__=exp=1792130420~acl=/release_notes/e0b093eab3d68d9d1b8b51b81f567250~hmac=0",
+        "light_image_url": "https://vehicle-files.teslamotors.com/release_notes/bc29e09b5f7696370fb150e7f924d581?__gda__=exp=1792130420~acl=/release_notes/bc29e09b5f7696370fb150e7f924d581~hmac=0"
+      },
+      {
+        "title": "Security Improvements",
+        "subtitle": "",
+        "description": "This update includes important security fixes and improvements.",
+        "customer_version": "2026.38",
+        "show_in_history": false,
+        "image_url": "https://vehicle-files.teslamotors.com/release_notes/6aa79c15cd4bd893e6b89ef70343f309?__gda__=exp=1792130420~acl=/release_notes/6aa79c15cd4bd893e6b89ef70343f309~hmac=0",
+        "light_image_url": "https://vehicle-files.teslamotors.com/release_notes/8178cbb1e88951beaa3283a7711aef52?__gda__=exp=1792130420~acl=/release_notes/8178cbb1e88951beaa3283a7711aef52~hmac=0"
+      },
+      {
+        "title": "Apple Music",
+        "description": "Go to Search, select Apple Music, then tap Library to find the songs, albums, and playlists you've added",
+        "customer_version": "2026.32",
+        "show_in_history": true,
+        "image_url": "https://vehicle-files.teslamotors.com/release_notes/1cfa6a44eaac45c6212906124730eb2d?__gda__=exp=1792130420~acl=/release_notes/1cfa6a44eaac45c6212906124730eb2d~hmac=0",
+        "light_image_url": "https://vehicle-files.teslamotors.com/release_notes/f090c77b73dd88457909d369876aed62?__gda__=exp=1792130420~acl=/release_notes/f090c77b73dd88457909d369876aed62~hmac=0"
+      },
+      {
+        "title": "Security Improvements",
+        "description": "This update includes important security fixes and improvements.",
+        "customer_version": "2026.32",
+        "show_in_history": true,
+        "image_url": "https://vehicle-files.teslamotors.com/release_notes/6aa79c15cd4bd893e6b89ef70343f309?__gda__=exp=1792130420~acl=/release_notes/6aa79c15cd4bd893e6b89ef70343f309~hmac=0",
+        "light_image_url": "https://vehicle-files.teslamotors.com/release_notes/8178cbb1e88951beaa3283a7711aef52?__gda__=exp=1792130420~acl=/release_notes/8178cbb1e88951beaa3283a7711aef52~hmac=0"
+      }
+    ],
+    "deployed_version": "2026.32.7",
+    "staged_version": "2026.38",
+    "release_notes_version": "2026.38"
+  }
+}

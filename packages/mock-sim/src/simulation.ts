@@ -3,7 +3,7 @@ import { shallowEqual } from '@kasbah/shared'
 import { systemClock, type Clock } from './clock'
 import { mulberry32, type Rng } from './rng'
 import { resolveScenario, type ScenarioName } from './scenarios'
-import { SimError, type AnySimDevice, type Scenario, type SimForecast, type TickCtx } from './types'
+import { SimError, type AnySimDevice, type Scenario, type SimForecast, type SimReleaseNotes, type TickCtx } from './types'
 import { createWorld, tickWorld, type World } from './world'
 
 export interface SimulationOptions {
@@ -154,6 +154,14 @@ export class Simulation {
     if (!dev) throw new SimError('DEVICE_UNAVAILABLE', `unknown mock device "${externalId}"`)
     if (!dev.forecast) throw new SimError('UNSUPPORTED_COMMAND', `${dev.descriptor.kind} has no forecast`)
     return dev.forecast(this.ctx(0))
+  }
+
+  /** Notes de version d'un véhicule simulé. */
+  releaseNotes(externalId: string, lang?: string): SimReleaseNotes {
+    const dev = this.byId.get(externalId)
+    if (!dev) throw new SimError('DEVICE_UNAVAILABLE', `unknown mock device "${externalId}"`)
+    if (!dev.releaseNotes) throw new SimError('UNSUPPORTED_COMMAND', `${dev.descriptor.kind} has no release notes`)
+    return dev.releaseNotes(lang)
   }
 
   private delay(ms: number): Promise<void> {

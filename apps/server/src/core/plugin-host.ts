@@ -1,4 +1,4 @@
-import { DEFAULT_PLUGIN_SETTINGS, parseDeviceId, parseSceneId, type Command, type PluginHealth, type PluginInfo, type PluginSettings, type SceneRecall, type SceneUpdate, type DeviceConsumption, type DeviceJournal, type WeatherForecast } from '@kasbah/shared'
+import { DEFAULT_PLUGIN_SETTINGS, parseDeviceId, parseSceneId, type Command, type PluginHealth, type PluginInfo, type PluginSettings, type SceneRecall, type SceneUpdate, type DeviceConsumption, type DeviceJournal, type DeviceReleaseNotes, type WeatherForecast } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import type { Logger } from 'pino'
 import { chargerToForce, chargerToStop } from './chargeCoordination'
@@ -259,6 +259,16 @@ export class PluginHost {
     if (!slot.plugin.journal) throw new PluginError('NOT_IMPLEMENTED', `plugin "${pluginId}" has no journal`)
     const j = await withTimeout(slot.plugin.journal(externalId), this.opts.commandTimeoutMs ?? 10_000, this.opts.clock, `journal ${deviceId}`)
     return { deviceId, ...j }
+  }
+
+  /** Notes de version d'un véhicule ; `NOT_IMPLEMENTED` si son plugin n'en tient pas. */
+  async releaseNotes(deviceId: string, lang: string): Promise<DeviceReleaseNotes> {
+    const { pluginId, externalId } = parseDeviceId(deviceId)
+    const slot = this.slots.get(pluginId)
+    if (!slot || !slot.ctx) throw new PluginError('DEVICE_UNAVAILABLE', `plugin "${pluginId}" is not running`)
+    if (!slot.plugin.releaseNotes) throw new PluginError('NOT_IMPLEMENTED', `plugin "${pluginId}" has no release notes`)
+    const n = await withTimeout(slot.plugin.releaseNotes(externalId, lang), this.opts.commandTimeoutMs ?? 10_000, this.opts.clock, `release notes ${deviceId}`)
+    return { deviceId, ...n }
   }
 
   /** Consommation d'un appareil ; `NOT_IMPLEMENTED` si son plugin n'en tient pas. */

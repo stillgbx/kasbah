@@ -212,6 +212,34 @@ describe('simulated weather', () => {
     expect(observed()).toBe(second)
   })
 
+  it('software update: refused asleep, scheduled once awake, installed at its time, then the notes move to the history', async () => {
+    const sim = make()
+    const tesla = () => sim.getState('vehicle-tesla') as StateFor<'vehicle'>
+    expect(tesla()).toMatchObject({ softwareVersion: '2026.32.7', softwareUpdate: { status: 'available', version: '2026.38' } })
+    expect(sim.releaseNotes('vehicle-tesla')).toMatchObject({ installedVersion: '2026.32.7', pending: { version: '2026.38' } })
+    // à minuit elle charge, donc elle veille : la charge arrêtée, elle s'endort
+    await sim.execute('vehicle-tesla', { type: 'vehicle.stop_charge' })
+    sim.tick(1)
+    expect(tesla().sleepState).toBe('asleep')
+    await expect(sim.execute('vehicle-tesla', { type: 'vehicle.schedule_update', delayS: 60 })).rejects.toMatchObject({ code: 'DEVICE_UNAVAILABLE' })
+    await sim.execute('vehicle-tesla', { type: 'vehicle.wake' })
+    sim.tick(5)
+    expect(tesla().sleepState).toBe('online')            // un réveil dure : on a le temps d'agir
+    await sim.execute('vehicle-tesla', { type: 'vehicle.schedule_update', delayS: 60 })
+    expect(tesla().softwareUpdate).toMatchObject({ status: 'scheduled', scheduledAt: MONDAY + 66_000 })
+    sim.tick(61)
+    expect(tesla().softwareUpdate).toMatchObject({ status: 'installing', installPct: 0 })
+    sim.tick(600)
+    expect(tesla().softwareUpdate?.installPct).toBeGreaterThan(40)
+    sim.tick(700)
+    expect(tesla().softwareVersion).toBe('2026.38')
+    expect(tesla().softwareUpdate).toBeUndefined()
+    const notes = sim.releaseNotes('vehicle-tesla')
+    expect(notes.pending).toBeUndefined()
+    expect(notes.history.map((h) => h.version)).toEqual(['2026.38', '2026.32', '2026.26.6'])
+    for (const [, s] of sim.states()) expect(deviceStateSchema.parse(s)).toEqual(s)
+  })
+
   it('derives a forecast that the shared schema accepts, and refuses one for other kinds', () => {
     const sim = make()
     const f = sim.forecast('weather')

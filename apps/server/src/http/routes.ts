@@ -1,4 +1,4 @@
-import { addGardenItemToJson, addOpeningToJson, addParkingToJson, gardenItemPatchSchema, newGardenItemSchema, patchGardenItemInJson, removeGardenItemFromJson, assertCommandAllowed, automationBodySchema, automationIdSchema, automationPatchSchema, commandSchema, devicePlacementSchema, newOpeningSchema, newParkingSchema, openingPatchSchema, panelArrayPatchSchema, parkingPatchSchema, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, roomOrderSchema, polygonSchema, reliefSchema, sceneTuningSchema, setReliefInJson, setTerrainInJson, setRenderTuningInJson, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
+import { addGardenItemToJson, addOpeningToJson, addParkingToJson, gardenItemPatchSchema, newGardenItemSchema, patchGardenItemInJson, removeGardenItemFromJson, assertCommandAllowed, automationBodySchema, automationIdSchema, automationPatchSchema, commandSchema, devicePlacementSchema, newOpeningSchema, newParkingSchema, openingPatchSchema, panelArrayPatchSchema, parkingPatchSchema, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, releaseNotesLang, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, roomOrderSchema, polygonSchema, reliefSchema, sceneTuningSchema, setReliefInJson, setTerrainInJson, setRenderTuningInJson, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { updateHouseFile, type LoadedHouse } from '../config/house'
 import type { AutomationEngine } from '../core/automations/engine'
@@ -215,6 +215,14 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
     if (!entry) return sendError(reply, 404, 'NOT_FOUND', `unknown device "${req.params.id}"`)
     if (!entry.descriptor.capabilities.includes('journal')) return sendError(reply, 400, 'KIND_MISMATCH', `device "${req.params.id}" keeps no journal`)
     return deps.host.journal(entry.descriptor.id)
+  })
+
+  // Notes de version d'un véhicule : à la demande, pour qui déclare la capacité (le plugin sert son cache).
+  app.get<{ Params: { id: string }; Querystring: { lang?: string } }>('/api/devices/:id/release-notes', async (req, reply) => {
+    const entry = deps.registry.get(req.params.id)
+    if (!entry) return sendError(reply, 404, 'NOT_FOUND', `unknown device "${req.params.id}"`)
+    if (!entry.descriptor.capabilities.includes('release_notes')) return sendError(reply, 400, 'KIND_MISMATCH', `device "${req.params.id}" publishes no release notes`)
+    return deps.host.releaseNotes(entry.descriptor.id, releaseNotesLang(req.query.lang))
   })
 
   // Consommation d'un appareil (litres par pas de temps) : à la demande, pour qui déclare la capacité.
