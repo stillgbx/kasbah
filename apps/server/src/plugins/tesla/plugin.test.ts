@@ -1010,6 +1010,40 @@ describe('logiciel : notes de version et mise à jour', () => {
     expect(tesla.calls.some((c) => c.path.includes('/command/'))).toBe(false)
   })
 
+  it('« maintenant » : Tesla fixe l’heure (décompte) — relue 15 s après, puis juste après le démarrage ; l’installation est relue à chaque tour', async () => {
+    const { plugin, ctx, tesla, clock } = await awake()
+    await read(plugin)
+    const reads = dataCalls(tesla)
+    // Tesla laisse deux minutes avant de démarrer (vu sur la vraie voiture le 2026-10-02)
+    tesla.world.data = software('2026.32.7', { ...AVAILABLE, status: 'scheduled', scheduled_time_ms: NOW + 2 * MIN })
+    await plugin.execute(VIN, { type: 'vehicle.schedule_update', delayS: 0 })
+    expect(softwarePatch(ctx)).toMatchObject({ status: 'scheduled', scheduledAt: NOW })        // notre écho
+    clock.advance(15_000); await settle()
+    expect(dataCalls(tesla)).toBe(reads + 1)
+    expect(softwarePatch(ctx)).toMatchObject({ status: 'scheduled', scheduledAt: NOW + 2 * MIN })   // l'heure de Tesla
+    // juste après l'heure prévue : lu, en installation
+    tesla.world.data = software('2026.32.7', { ...AVAILABLE, status: 'installing', install_perc: 5 })
+    clock.advance(2 * MIN + 60_000 - 15_000); await settle()
+    expect(dataCalls(tesla)).toBe(reads + 2)
+    expect(softwarePatch(ctx)).toEqual({ status: 'installing', version: '2026.38', installPct: 5, expectedDurationS: 1200 })
+    // en installation, pas de repos : la lecture suivante n'attend pas TESLA_REST_MS
+    await plugin.start(); await settle()
+    const during = dataCalls(tesla)
+    await ticks(clock, 1)
+    expect(dataCalls(tesla)).toBe(during + 1)
+  })
+
+  it('annuler retire la lecture prévue au démarrage', async () => {
+    const { plugin, tesla, clock } = await awake()
+    await read(plugin)
+    await plugin.execute(VIN, { type: 'vehicle.schedule_update', delayS: 600 })
+    clock.advance(15_000); await settle()                // la relecture de l'heure de Tesla
+    const reads = dataCalls(tesla)
+    await plugin.execute(VIN, { type: 'vehicle.cancel_update' })
+    clock.advance(11 * MIN); await settle()
+    expect(dataCalls(tesla)).toBe(reads)
+  })
+
   it('le refus de Tesla remonte, et l’état ne bouge pas', async () => {
     const { plugin, ctx, tesla } = await awake()
     await read(plugin)

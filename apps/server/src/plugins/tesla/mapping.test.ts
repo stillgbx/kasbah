@@ -181,6 +181,8 @@ describe('repos', () => {
     expect(isResting(driving)).toBe(false)
     expect(isResting(charging)).toBe(false)
     expect(isResting({ ...parked, vehicle_state: { ...parked.vehicle_state, is_user_present: true } })).toBe(false)
+    // une installation logicielle en cours : on veut la voir avancer
+    expect(isResting({ ...parked, vehicle_state: { ...parked.vehicle_state, software_update: { status: 'installing', install_perc: 30 } } })).toBe(false)
   })
 })
 

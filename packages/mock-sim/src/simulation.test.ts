@@ -36,6 +36,19 @@ describe('Simulation', () => {
     sim.stop()
   })
 
+  it('a field removed from the state is emitted as null, so the client clears it', async () => {
+    const sim = make()
+    const patches: StatePatch[] = []
+    sim.start((id, p) => { if (id === 'vehicle-tesla') patches.push(p) })
+    sim.tick(1)
+    expect(sim.getState('vehicle-tesla')).toHaveProperty('chargeMinutesRemaining')   // en charge à minuit
+    await sim.execute('vehicle-tesla', { type: 'vehicle.stop_charge' })
+    sim.tick(1)
+    expect(sim.getState('vehicle-tesla')).not.toHaveProperty('chargeMinutesRemaining')
+    expect(patches.some((p) => (p as Record<string, unknown>).chargeMinutesRemaining === null)).toBe(true)
+    sim.stop()
+  })
+
   it('cover moves at 5 %/s, stop freezes it', async () => {
     const sim = make()
     await sim.execute('cover-living', { type: 'cover.close' })
@@ -226,8 +239,9 @@ describe('simulated weather', () => {
     sim.tick(5)
     expect(tesla().sleepState).toBe('online')            // un réveil dure : on a le temps d'agir
     await sim.execute('vehicle-tesla', { type: 'vehicle.schedule_update', delayS: 60 })
-    expect(tesla().softwareUpdate).toMatchObject({ status: 'scheduled', scheduledAt: MONDAY + 66_000 })
-    sim.tick(61)
+    // 60 s demandées, mais pas moins que le décompte de deux minutes qu'un « maintenant » laisse aussi
+    expect(tesla().softwareUpdate).toMatchObject({ status: 'scheduled', scheduledAt: MONDAY + 126_000 })
+    sim.tick(121)
     expect(tesla().softwareUpdate).toMatchObject({ status: 'installing', installPct: 0 })
     sim.tick(600)
     expect(tesla().softwareUpdate?.installPct).toBeGreaterThan(40)

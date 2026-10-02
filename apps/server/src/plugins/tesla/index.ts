@@ -86,6 +86,15 @@ const WAKE_FOLLOW_UP_MS = 15_000
 /** Préconditionnement d'une voiture endormie : la veille relue (liste, gratuite) à ce pas, jusqu'à ce plafond. */
 const CLIMATE_WAKE_POLL_MS = 5_000
 const CLIMATE_WAKE_MAX_MS = 90_000
+/**
+ * Mise à jour logicielle : relire `UPDATE_FOLLOW_UP_MS` après l'accusé — Tesla fixe LUI-MÊME l'heure
+ * d'un « maintenant » (un décompte, vu sur la vraie voiture le 2026-10-02) —, puis
+ * `UPDATE_START_GRACE_MS` après l'heure prévue, pour constater que l'installation a démarré.
+ */
+const UPDATE_FOLLOW_UP_MS = 15_000
+const UPDATE_START_GRACE_MS = 60_000
+/** Au-delà, pas de minuterie : le sondage ordinaire constatera le démarrage. */
+const UPDATE_WATCH_MAX_MS = 6 * 3_600_000
 /** Après un démarrage ou un arrêt de charge, délai avant de relire : la borne met 20 s à 1 min à donner du courant. */
 const CHARGE_FOLLOW_UP_MS = 60_000
 /** Refus passager `could_not_wake_buses` : nouvelles tentatives, au pas de `CLIMATE_WAKE_POLL_MS`. */
@@ -292,6 +301,7 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     persist()
     // la voiture est éveillée, c'est le moment : notes de version relues si une version a changé
     void refreshNotes(vin)
+    watchUpdateStart(vin)
     // au repos : on le laisse s'endormir, la prochaine lecture attendra
     track.restUntil = isResting(data) && config!.TESLA_REST_MS > 0 ? ctx!.clock.now() + config!.TESLA_REST_MS : 0
     // une lecture, d'où qu'elle vienne (sondage, réveil, rafraîchissement demandé), remet le compteur
@@ -657,6 +667,35 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
    * d'avance quand rien n'est prêt : Tesla n'installe pas ce qu'il n'a pas fini de télécharger.
    * L'état suit l'accusé, sans relecture (facturée) : la prochaine lecture le confirmera.
    */
+  /** Une lecture prévue par VIN pour constater le démarrage d'une installation programmée. */
+  const updateWatch = new Map<string, unknown>()
+  function clearUpdateWatch(vin: string): void {
+    const t = updateWatch.get(vin)
+    if (t !== undefined) ctx!.clock.clearTimeout(t)
+    updateWatch.delete(vin)
+  }
+  /** Lire `delayMs` plus tard (comptée au budget) ; une voiture endormie entre-temps ne coûte qu'un journal. */
+  function readLater(vin: string, delayMs: number): unknown {
+    return ctx!.clock.setTimeout(() => {
+      updateWatch.delete(vin)
+      if (ctx!.signal.aborted || !vehicles.has(vin) || !takeBudget()) return
+      readVehicle(vin).catch((err) => log().debug({ err, vin }, 'Tesla software update follow-up read failed'))
+    }, delayMs)
+  }
+  /**
+   * Installation programmée : une lecture juste après l'heure prévue, pour la voir DÉMARRER (sinon la
+   * voiture vue au repos ne serait relue qu'après `TESLA_REST_MS`, et la carte annoncerait une heure
+   * passée). Pendant l'installation, `isResting` est faux : chaque tour du sondage relit.
+   */
+  function watchUpdateStart(vin: string): void {
+    clearUpdateWatch(vin)
+    const su = lastSoftware(vin)?.softwareUpdate
+    if (su?.status !== 'scheduled' || su.scheduledAt === undefined) return
+    const delay = su.scheduledAt - ctx!.clock.now() + UPDATE_START_GRACE_MS
+    if (delay <= 0 || delay > UPDATE_WATCH_MAX_MS) return
+    updateWatch.set(vin, readLater(vin, delay))
+  }
+
   async function softwareCommand(vin: string, command: CommandOf<'vehicle.schedule_update'> | CommandOf<'vehicle.cancel_update'>): Promise<void> {
     if (vehicles.get(vin)!.sleepState !== 'online') throw new PluginError('DEVICE_UNAVAILABLE', 'vehicle is asleep: wake it first')
     const last = lastSoftware(vin)?.softwareUpdate ?? undefined
@@ -679,6 +718,10 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     ctx!.emitState(vin, { softwareUpdate: next })
     saved.vehicles[vin] = { ...saved.vehicles[vin], softwareUpdate: next }
     persist()
+    // l'heure publiée est la NÔTRE ; Tesla fixe la sienne (décompte d'un « maintenant ») : on la relit.
+    // Annulé, plus rien à surveiller
+    clearUpdateWatch(vin)
+    if (command.type === 'vehicle.schedule_update') updateWatch.set(vin, readLater(vin, UPDATE_FOLLOW_UP_MS))
   }
 
   // ---- enregistrement du domaine ------------------------------------------------------------
@@ -845,6 +888,7 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
 
     async stop() {
       persist()
+      if (ctx) for (const vin of [...updateWatch.keys()]) clearUpdateWatch(vin)
       polling = false
       if (timer !== null && ctx) ctx.clock.clearTimeout(timer)
       timer = null

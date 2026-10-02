@@ -32,6 +32,8 @@ export interface VehicleOptions {
   software?: { version: string; pending?: string; notes?: Record<string, Record<string, ReleaseNote[]>> }
 }
 
+/** Décompte laissé par « installer maintenant » avant que l'installation démarre (secondes simulées). */
+const NOW_COUNTDOWN_S = 120
 /** Réveillé à la demande, il reste éveillé ce temps-là (simulé) : une Tesla se rendort au bout d'un quart d'heure. */
 const AWAKE_AFTER_WAKE_MS = 10 * 60_000
 
@@ -206,7 +208,9 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
           if (!o.software) throw new SimError('UNSUPPORTED_COMMAND', 'no software updates on this vehicle')
           if (s.sleepState !== 'online') throw new SimError('DEVICE_UNAVAILABLE', 'vehicle is asleep: wake it first')
           if (su?.status !== 'available' && su?.status !== 'scheduled') throw new SimError('DEVICE_UNAVAILABLE', 'no downloaded software update to install')
-          s.softwareUpdate = { ...su, status: 'scheduled', scheduledAt: ctx.simTime + cmd.delayS * 1000 }
+          // « maintenant » ne démarre pas tout de suite chez Tesla : il laisse un décompte, annulable (vu
+          // sur la vraie voiture le 2026-10-02) ; la simulation en laisse deux minutes
+          s.softwareUpdate = { ...su, status: 'scheduled', scheduledAt: ctx.simTime + Math.max(cmd.delayS, NOW_COUNTDOWN_S) * 1000 }
           break
         }
         case 'vehicle.cancel_update': {

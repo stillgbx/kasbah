@@ -210,6 +210,11 @@ export class Simulation {
       if (k === 'kind' || k === 'updatedAt' || k === 'available') continue
       if (!shallowEqual(prev[k], v)) { patch[k] = clone(v); changed = true }
     }
+    // un champ RETIRÉ de l'état (`delete s.x`) s'efface chez le client : `null` = « efface ce champ »
+    // dans un patch. Sans cela, la fin d'une installation ou d'une charge restait affichée
+    for (const k of Object.keys(prev)) {
+      if (!(k in cur)) { patch[k] = null; changed = true }
+    }
     if (!changed) return
     this.lastEmitted.set(id, snapshot(dev.state))
     this.onPatch?.(id, patch as StatePatch)

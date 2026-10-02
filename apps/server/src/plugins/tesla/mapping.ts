@@ -316,5 +316,7 @@ export function isResting(d: VehicleData): boolean {
   const gear = d.drive_state?.shift_state
   const parked = gear === null || gear === undefined || gear.toUpperCase() === 'P'
   const charging = d.charge_state?.charging_state === 'Charging' || d.charge_state?.charging_state === 'Starting'
-  return parked && !charging && d.vehicle_state?.is_user_present !== true
+  // une INSTALLATION en cours n'est pas du repos : on veut voir sa progression, puis la nouvelle version
+  const installing = d.vehicle_state?.software_update?.status === 'installing'
+  return parked && !charging && !installing && d.vehicle_state?.is_user_present !== true
 }
