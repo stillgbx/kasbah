@@ -183,7 +183,11 @@ const houseStats = computed(() => {
               <div class="auto-row auto-row--default">
                 <div class="min0">
                   <div class="auto-row__name">{{ $t('render.assets') }}</div>
-                  <div class="muted small">{{ $t(styleHasAssets ? 'render.assetsHint' : 'render.assetsNone') }}</div>
+                  <!-- les deux textes dans la même cellule : la hauteur est celle du plus long, rien ne bouge -->
+                  <div class="muted small swap">
+                    <span :data-on="styleHasAssets ? '1' : '0'" :aria-hidden="!styleHasAssets">{{ $t('render.assetsHint') }}</span>
+                    <span :data-on="styleHasAssets ? '0' : '1'" :aria-hidden="styleHasAssets">{{ $t('render.assetsNone') }}</span>
+                  </div>
                 </div>
                 <v-switch :model-value="settings.sceneAssets && styleHasAssets" :disabled="!styleHasAssets" hide-details density="compact"
                           @update:model-value="(v: boolean | null) => settings.setSceneAssets(v === true)" />
@@ -315,6 +319,9 @@ const houseStats = computed(() => {
 .auto-row--default { margin-bottom: 4px; }
 .auto-row__name { font-size: 14px; font-weight: 500; }
 .min0 { flex: 1 1 0; min-width: 0; }
+.swap { display: grid; }
+.swap > * { grid-area: 1 / 1; }
+.swap > [data-on='0'] { visibility: hidden; }
 
 .settings { height: 100%; display: flex; flex-direction: column; }
 .settings__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 var(--page-x) calc(var(--safe-bottom) + 24px); }
