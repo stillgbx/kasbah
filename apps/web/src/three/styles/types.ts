@@ -183,7 +183,7 @@ export interface GardenLook {
 }
 
 /** Qui défile autour de la maison (`effects/parade.ts`). */
-export type ParadeKind = 'noel' | 'halloween' | 'tatooine' | 'akira'
+export type ParadeKind = 'noel' | 'halloween' | 'tatooine' | 'akira' | 'girlyversaire'
 
 /** Tout ce que la scène lit d'un style, pour une ambiance donnée. */
 export interface StyleLook {

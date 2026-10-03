@@ -396,7 +396,7 @@
   },
   "render": {
     "title": "3D rendering", "style": "Style",
-    "styles": { "realistic": "Realistic", "nature": "Nature", "cyberpunk": "Cyberpunk", "candy": "Candy", "indigo": "Indigo", "maquette": "Model", "haunted": "Haunted house", "disco": "Disco", "halloween": "Halloween", "noel": "Christmas", "tatooine": "Star Wars — Tatooine", "akira": "Akira" },
+    "styles": { "realistic": "Realistic", "nature": "Nature", "cyberpunk": "Cyberpunk", "candy": "Candy", "indigo": "Indigo", "maquette": "Model", "haunted": "Haunted house", "disco": "Disco", "halloween": "Halloween", "noel": "Christmas", "tatooine": "Star Wars — Tatooine", "akira": "Akira", "girlyversaire": "Girlyversaire" },
     "assets": "Photo materials",
     "assetsHint": "Free photo textures (ambientCG, CC0) instead of the computed materials: plaster, parquet, grass, pavers… The style keeps its colours for the rest.",
     "assetsNone": "This style is fully computed: it has no photo materials.",

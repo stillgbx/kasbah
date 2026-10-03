@@ -13,9 +13,12 @@ import { type Box, type Circle, type Obstacles, type Path, roam, type RoamArea }
 //    squelettes qui marchent AU SOL, chacun de son côté, sur le relief ;
 //  - `tatooine` : trois X-wings, ailes en X, chacun son vol ; ils se croisent et s'inclinent dans les virages ;
 //  - `akira` : la moto rouge de Kaneda qui roule AU SOL, couchée dans les virages, et la traînée
-//    rouge de son feu arrière.
+//    rouge de son feu arrière ;
+//  - `girlyversaire` : des ballons de toutes les couleurs, lâchés au pied de la maison, qui montent
+//    en se balançant au bout de leur ficelle, poussés par le même petit vent, puis disparaissent
+//    au-dessus du toit pendant que d'autres partent du sol.
 //
-// Personne ne tourne en rond : chacun suit un parcours tiré au hasard sur TOUT le terrain
+// Hors ballons, personne ne tourne en rond : chacun suit un parcours tiré au hasard sur TOUT le terrain
 // (`roam.ts`), qui contourne la maison, la piscine et le jardin, et s'écarte des voitures et de la
 // tondeuse — sauf les fantômes, qui traversent tout, et le traîneau et les X-wings, qui volent
 // au-dessus et ne contournent que la maison et les arbres. Le nez suit la trajectoire (`fly`).
@@ -64,6 +67,7 @@ export class Parade {
     if (kind === 'noel') this.sleigh(sky, area.roofZ)
     else if (kind === 'halloween') { this.ghosts({ terrain: area.terrain, avoid: [] }, area.roofZ); this.skeletons(site, groundZ) }
     else if (kind === 'tatooine') this.xwings(sky, area.roofZ)
+    else if (kind === 'girlyversaire') this.balloons(area.building, area.roofZ, groundZ)
     else this.bike(site, groundZ)
     this.object.traverse((o) => { o.raycast = () => {}; o.castShadow = false })
     this.write()
@@ -363,6 +367,86 @@ export class Parade {
         }
         trailGeo.getAttribute('position').needsUpdate = true
         trailGeo.getAttribute('color').needsUpdate = true
+      },
+    })
+  }
+
+  // ---- Girlyversaire -----------------------------------------------------------------------------
+
+  private balloons(building: Box, roofZ: number, groundZ: (x: number, y: number) => number): void {
+    const N = 16, SEG = 6
+    const S = 1.5                                        // plus grand que nature, pour se voir d'en haut
+    const BELOW = (0.35 * 1.18 + 0.1) * S, STRING = 1.3 * S
+    const top = roofZ + 7
+    const wind = [0.18, 0.08] as const                   // dérive en mètres par mètre de montée
+    const body = new SphereGeometry(0.35, 20, 14), knot = new ConeGeometry(0.06, 0.1, 8)
+    // rose, lilas, or, menthe, ciel, corail : un peu émissifs, qu'on les voie aussi la nuit
+    const mats = [0xff5fa2, 0xb98aff, 0xffc93c, 0x5fd3c4, 0x6fb6ff, 0xff8a65].map((c) =>
+      new MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.18, roughness: 0.25 }))
+    const rnd = (lo: number, hi: number) => lo + (hi - lo) * Math.random()
+
+    // lâchés autour de la maison, à 1 à 3,5 m de ses murs
+    const release = (): [number, number] => {
+      const m = rnd(1, 3.5)
+      const x0 = building.min[0] - m, x1 = building.max[0] + m, y0 = building.min[1] - m, y1 = building.max[1] + m
+      const w = x1 - x0, h = y1 - y0
+      let u = Math.random() * 2 * (w + h)
+      if (u < w) return [x0 + u, y0]
+      if ((u -= w) < h) return [x1, y0 + u]
+      if ((u -= h) < w) return [x1 - u, y1]
+      return [x0, y1 - (u - w)]
+    }
+
+    const lines = new Float32Array(N * SEG * 2 * 3)
+    const lineGeo = new BufferGeometry()
+    lineGeo.setAttribute('position', new BufferAttribute(lines, 3))
+    const strings = new LineSegments(lineGeo, new LineBasicMaterial({ color: 0xf4f0f6 }))
+    strings.frustumCulled = false
+
+    const all = Array.from({ length: N }, (_, i) => {
+      const g = new Group()
+      const mat = mats[i % mats.length]!
+      g.add(sized(mesh(body, mat), 1, 1, 1.18))
+      g.add(at(tilt(mesh(knot, mat), -Math.PI / 2, 0), 0, 0, -0.35 * 1.18 - 0.03))
+      g.scale.setScalar(S)
+      this.object.add(g)
+      const b = { g, x: 0, y: 0, z: 0, t0: 0, speed: 0, freq: rnd(0.6, 1.1), phase: rnd(0, Math.PI * 2), drift: [rnd(-0.08, 0.08), rnd(-0.08, 0.08)] as const }
+      const launch = (t: number) => {
+        const [x, y] = release()
+        b.x = x; b.y = y
+        b.z = groundZ(b.x, b.y) + 0.6 * S
+        b.t0 = t
+        b.speed = rnd(0.7, 1.1)
+      }
+      launch(0)
+      b.t0 = -Math.random() * (top - b.z) / b.speed   // déjà en route, à toutes les hauteurs
+      return { b, launch }
+    })
+    this.object.add(strings)
+
+    this.actors.push({
+      update: (t) => {
+        all.forEach(({ b, launch }, i) => {
+          let rise = (t - b.t0) * b.speed
+          if (b.z + rise > top) { launch(t); rise = 0 }
+          const age = t - b.t0
+          const sway = Math.sin(b.freq * t + b.phase)
+          const x = b.x + (wind[0] + b.drift[0]) * rise + 0.25 * sway
+          const y = b.y + (wind[1] + b.drift[1]) * rise + 0.15 * Math.cos(b.freq * 0.8 * t + b.phase)
+          const z = b.z + rise
+          // il se gonfle au départ, et s'efface sur les deux derniers mètres
+          const s = Math.min(1, age / 0.6) * Math.min(1, (top - z) / 2)
+          b.g.position.set(x, y, z)
+          b.g.scale.setScalar(S * Math.max(0.001, s))
+          b.g.rotation.set(0.12 * Math.cos(b.freq * t + b.phase), -0.12 * sway, 0)
+          // la ficelle : sous le nœud, qui ondule un peu plus vers le bas
+          for (let k = 0; k < SEG; k++) for (const e of [0, 1]) {
+            const f = (k + e) / SEG
+            const wave = 0.12 * f * Math.sin(t * 2.5 + b.phase + f * 3) * s
+            lines.set([x + wave - 0.15 * sway * f * s, y + wave * 0.5, z - (BELOW + f * STRING) * s], ((i * SEG + k) * 2 + e) * 3)
+          }
+        })
+        lineGeo.getAttribute('position').needsUpdate = true
       },
     })
   }
