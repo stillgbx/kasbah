@@ -13,6 +13,7 @@ import {
 } from '@kasbah/shared'
 import { applyLook, backdropColor, createMaterials, disposeMaterials, type MaterialSet } from './builders/materials'
 import type { SurfaceRole } from './textures/procedural'
+import { RoomShapeEditor, type ShapeSelection } from './shape/roomShapeEditor'
 import { loadFinishTextures, loadPackTextures, packById, packTexturesSettled, type TexturePack } from './textures/assets'
 import { createSkyEnvironment, overcastSky } from './core/sky'
 import { DECOR_LAYER, SITE_DECOR_LAYER } from './core/layers'
@@ -225,6 +226,12 @@ export interface SceneEvents {
    * quand elle en a un (les matières), puis `null` quand elle est prête.
    */
   prepare: (stage: ScenePrepareStage | null, progress: { done: number; total: number } | null) => void
+  /** Forme d'une pièce (section « Dimensions ») : un mur poussé de `delta` m depuis le début du geste. */
+  shapeWall: (edge: number, delta: number, final: boolean) => void
+  /** …un sommet amené en `xy` (repère maison). */
+  shapeCorner: (index: number, xy: [number, number], final: boolean) => void
+  /** …la poignée choisie a changé. */
+  shapeSelect: (sel: ShapeSelection) => void
 }
 
 /** Les étapes de la préparation d'une maison, dans l'ordre. */
@@ -489,6 +496,7 @@ export class HouseScene {
     openingTap: new Set(), openingDrag: new Set(), openingDrop: new Set(), placeTap: new Set(),
     parkingTap: new Set(), parkingDrag: new Set(), parkingDrop: new Set(), groundTap: new Set(), reliefChange: new Set(), prepare: new Set(),
     gardenTap: new Set(), gardenDrag: new Set(), gardenDrop: new Set(), gardenPlaceTap: new Set(),
+    shapeWall: new Set(), shapeCorner: new Set(), shapeSelect: new Set(),
   }
   private detachInput: (() => void) | null = null
   /** Retire le relais de molette posé sur la couche des étiquettes (`forwardWheelFromLabels`). */
@@ -762,6 +770,7 @@ export class HouseScene {
     this.syncWindowGlow()                  // les verres sont neufs : ils reprennent le style et les lampes
     this.buildOpeningHandles()             // la racine est neuve : le mode édition repose ses poignées
     this.buildOriginMark()                 // …son repère d'origine…
+    this.rebuildShapeEditor()              // …et l'éditeur de forme, dont le groupe de niveau est neuf
     this.refreshOpeningNotes()             // …et ses étiquettes, qui vivent dans un groupe jeté avec elle
     const c = this.geometry.bounds
     this.controls?.target.set((c.min[0] + c.max[0]) / 2, 0, -(c.min[1] + c.max[1]) / 2)
@@ -3561,6 +3570,9 @@ export class HouseScene {
   }
 
   private handleTap(ev: TapEvent): void {
+    if (this.shapeEditor?.active()) return
+    // les poignées de la forme d'une pièce prennent le tap qui les touche ; ailleurs, il continue
+    if (this.shapeEditor?.tap(ev)) return
     if (this.drag?.active() || this.openingDragger?.active() || this.parkingDragger?.active() || this.gardenDragger?.active() || this.reliefEditor?.active() || this.outlineEditor?.active()) return   // fin d'un glissement, pas un tap
     // on modèle le terrain : un tap choisit un point, il n'ouvre ni une pièce ni un appareil
     if (this.reliefGrid) { (this.terrainTab === 'outline' ? this.outlineEditor : this.reliefEditor)?.tap(ev); return }
@@ -4042,17 +4054,74 @@ export class HouseScene {
     return [...out]
   }
 
+  // ---- forme d'une pièce (mode édition, section « Dimensions ») -----------------------------------
+  private shapeEditor: RoomShapeEditor | null = null
+  private shapeRoomId: string | null = null
+  private shapeLast: [number, number][] = []
+
+  /** Ouvre (ou ferme, `null`) l'éditeur de forme sur une pièce. */
+  setShapeEditing(roomId: string | null): void {
+    if (roomId === this.shapeRoomId && (this.shapeEditor || !roomId)) return
+    this.shapeRoomId = roomId
+    if (!roomId) this.shapeLast = []
+    this.rebuildShapeEditor()
+  }
+
+  /** La forme à montrer (cotes, m, repère maison) — celle que le store vient de calculer. */
+  setShapeOutline(points: readonly [number, number][]): void {
+    this.shapeLast = points.map(([x, y]) => [x, y])
+    this.shapeEditor?.setShape(this.shapeLast)
+  }
+
+  /** Choisit une poignée depuis le panneau (un côté de la liste). */
+  setShapeSelection(sel: ShapeSelection): void { this.shapeEditor?.setSelection(sel) }
+
+  private rebuildShapeEditor(): void {
+    const sel = this.shapeEditor?.selection ?? null
+    this.shapeEditor?.dispose()
+    this.shapeEditor = null
+    const room = this.shapeRoomId ? this.index?.roomsById.get(this.shapeRoomId) : undefined
+    const level = room ? this.nodes?.levels.get(room.levelId) : undefined
+    if (!room || !level) return
+    this.shapeEditor = new RoomShapeEditor({
+      canvas: this.canvas,
+      camera: this.camera,
+      parent: level.markers,
+      labels: level.labels,
+      note: () => sceneNote('gap'),
+      setControls: (enabled) => { if (this.controls) this.controls.enabled = enabled; if (!enabled) this.cameraTween?.cancel() },
+      invalidate: () => this.loop.invalidate(),
+      wall: (edge, delta, final) => this.emit('shapeWall', edge, delta, final),
+      corner: (index, xy, final) => this.emit('shapeCorner', index, xy, final),
+      select: (s) => this.emit('shapeSelect', s),
+      accent: this.theme.primary,
+    }, !!this.deps.headless)
+    this.shapeEditor.selection = sel
+    this.shapeEditor.setShape(this.shapeLast)
+  }
+
   /**
-   * Seule l'APPARENCE a changé (finitions du sol, des murs, de la façade) : les maillages des niveaux
-   * se refont (un maillage de murs par matériau), rien d'autre — ni caméra, ni marqueurs, ni voile de
-   * préparation. C'est le chemin de chaque clic du sélecteur de finitions.
+   * Seul le BÂTI a changé — finitions (sol, murs, façade) ou forme des pièces (cotes, ouvertures
+   * recalées, emprise des niveaux) : les maillages des niveaux se refont, le toit si son emprise a
+   * bougé, le terrain écrêté sous les planchers, et les marqueurs (un appareil auto-placé suit le
+   * centre de sa pièce). Ni caméra, ni voile de préparation : c'est le chemin de chaque clic du
+   * sélecteur de finitions et de chaque mur poussé.
    */
-  updateAppearance(house: House): void {
+  updateBuilding(house: House): void {
     if (!this.nodes || !this.house) { this.load(house); return }
+    const devicesMoved = JSON.stringify(this.house.devices) !== JSON.stringify(house.devices)
+    const before = this.geometry
     this.house = house
     this.index = indexHouse(house)
     this.geometry = computeHouseGeometry(house)
-    for (const l of this.geometry.levels) this.rebuildLevelNodes(l.levelId)
+    // seuls les niveaux dont la géométrie a changé (un mur poussé ne touche que le sien) ; tous si la façade a changé
+    const levelKey = (l: HouseGeometry['levels'][number]) => JSON.stringify([l.walls, l.floors, l.openings, l.wallFinishes ?? null])
+    const was = new Map(before?.levels.map((l) => [l.levelId, levelKey(l)]))
+    const facadeChanged = JSON.stringify(before?.facade ?? null) !== JSON.stringify(this.geometry.facade ?? null)
+    for (const l of this.geometry.levels) if (facadeChanged || was.get(l.levelId) !== levelKey(l)) this.rebuildLevelNodes(l.levelId)
+    if (JSON.stringify(before?.roof) !== JSON.stringify(this.geometry.roof)) this.rebuildRoof()
+    if (JSON.stringify(before?.terrain.footprints) !== JSON.stringify(this.geometry.terrain.footprints)) this.shapeTerrainNow()
+    if (devicesMoved) { this.buildMarkers(); this.updateStates(this.states, true) }
     this.applyMaterials()                  // les photos d'une finition qu'on vient de choisir
     if (this.editingOpenings) this.buildOpeningHandles()
     this.refreshOpeningNotes()
@@ -4339,6 +4408,8 @@ export class HouseScene {
   setPaused(paused: boolean): void { this.loop.setPaused(paused) }
 
   dispose(): void {
+    this.shapeEditor?.dispose()
+    this.shapeEditor = null
     this.photoGen++                        // une matière qui arrive après n'a plus de scène à habiller
     this.prepareGen++                      // …et une préparation en cours, plus de maison à montrer
     this.compileGen++                      // …ni une compilation, plus d'image à retenir

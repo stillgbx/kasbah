@@ -114,8 +114,8 @@ export function createHttpTransport(base = ''): Transport {
       { method: 'DELETE' },
       (j) => houseSchema.parse((j as { house: unknown }).house) as House,
     ),
-    saveAppearance: (patch) => request(
-      `${base}/api/house/appearance`,
+    saveEdit: (patch) => request(
+      `${base}/api/house/edit`,
       { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) },
       (j) => houseSchema.parse((j as { house: unknown }).house) as House,
     ),

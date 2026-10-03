@@ -1185,5 +1185,20 @@
       "herringbone-pavers": "Herringbone pavers",
       "long-slabs": "Long slabs"
     }
+  },
+  "shape": {
+    "section": "Dimensions",
+    "sides": "Sides",
+    "side": "Side {n}",
+    "length": "Length (m)",
+    "couple": "A shared wall moves the neighbouring room too",
+    "addCorner": "Add a corner at the middle",
+    "removeCorner": "Remove the corner",
+    "corner": "Corner {n}",
+    "noCorner": "No corner selected",
+    "hint": "Drag a wall to push it, or type the length of a side: the next wall moves back or forth. Pick a corner to move it.",
+    "area": "{m2} m² (measured)",
+    "blocking": "Cannot apply",
+    "openingNoFit": "{room} — {opening} no longer fits on its wall"
   }
 }

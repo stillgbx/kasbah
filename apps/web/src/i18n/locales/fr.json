@@ -1200,5 +1200,20 @@
       "herringbone-pavers": "Pavés en chevrons",
       "long-slabs": "Dalles longues"
     }
+  },
+  "shape": {
+    "section": "Dimensions",
+    "sides": "Côtés",
+    "side": "Côté {n}",
+    "length": "Longueur (m)",
+    "couple": "Le mur mitoyen entraîne la pièce voisine",
+    "addCorner": "Ajouter un sommet au milieu",
+    "removeCorner": "Retirer le sommet",
+    "corner": "Sommet {n}",
+    "noCorner": "Aucun sommet choisi",
+    "hint": "Glissez un mur pour le pousser, ou tapez la longueur d’un côté : le mur suivant recule ou avance. Choisissez un sommet pour le déplacer.",
+    "area": "{m2} m² (cotes)",
+    "blocking": "Impossible de valider",
+    "openingNoFit": "{room} — {opening} ne tient plus sur son mur"
   }
 }

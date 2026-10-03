@@ -1,4 +1,4 @@
-import { applyAppearanceToJson, addGardenItemToJson, addOpeningToJson, addParkingToJson, patchGardenItemInJson, removeGardenItemFromJson, automationBodySchema, commandSchema, deviceClassOf, defaultState, mergeState, parseHouse, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, setReliefInJson, setRenderTuningInJson, setTerrainInJson, setRoomOrderInJson, type Automation, type AutomationEntry, type AutomationRun, type AutomationStatus, type CommandInput, type DeviceConsumption, type DeviceEntry, type DeviceState, type House, type StateFor, type StatePatch } from '@kasbah/shared'
+import { applyHouseEditToJson, SurveyError, addGardenItemToJson, addOpeningToJson, addParkingToJson, patchGardenItemInJson, removeGardenItemFromJson, automationBodySchema, commandSchema, deviceClassOf, defaultState, mergeState, parseHouse, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, setReliefInJson, setRenderTuningInJson, setTerrainInJson, setRoomOrderInJson, type Automation, type AutomationEntry, type AutomationRun, type AutomationStatus, type CommandInput, type DeviceConsumption, type DeviceEntry, type DeviceState, type House, type StateFor, type StatePatch } from '@kasbah/shared'
 import { SimError, Simulation, solarGeometry, type ScenarioName } from '@kasbah/mock-sim'
 import demoHouse from '@kasbah/shared/demo-house.json'
 import { ApiRequestError, type Transport, type TransportHandlers, type WeatherPlace } from './transport'
@@ -322,8 +322,10 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
       handlers?.onMessage({ type: 'house', house })
       return house
     },
-    async saveAppearance(patch) {
-      house = parseHouse(applyAppearanceToJson(house, patch))
+    async saveEdit(patch) {
+      const r = applyHouseEditToJson(house, patch)
+      if (r.blocking.length) throw new SurveyError(r.blocking.join(' ; '))
+      house = parseHouse(r.doc)
       handlers?.onMessage({ type: 'house', house })
       return house
     },

@@ -8,6 +8,7 @@ import { resolveAmbience } from '../three/core/ambience'
 import { resolveSeason } from '../three/garden/season'
 import { styleById } from '../three/styles'
 import { HouseScene, type HouseSceneOptions, type ReliefEditState, type ScenePrepareStage } from '../three/HouseScene'
+import type { ShapeSelection } from '../three/shape/roomShapeEditor'
 import { useDevicesStore } from '../stores/devices'
 import { useSettingsStore } from '../stores/settings'
 import { useWeather } from './useWeather'
@@ -87,6 +88,9 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   const gardenDrag = new Set<Handler<[string, [number, number]]>>()
   const gardenDrop = new Set<Handler<[string]>>()
   const gardenPlaceTap = new Set<Handler<[[number, number]]>>()
+  const shapeWall = new Set<Handler<[number, number, boolean]>>()
+  const shapeCorner = new Set<Handler<[number, [number, number], boolean]>>()
+  const shapeSelect = new Set<Handler<[ShapeSelection]>>()
 
   onMounted(() => {
     const canvas = args.canvas.value
@@ -120,6 +124,9 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     scene.on('gardenDrag', (id, xy) => gardenDrag.forEach((f) => f(id, xy)))
     scene.on('gardenDrop', (id) => gardenDrop.forEach((f) => f(id)))
     scene.on('gardenPlaceTap', (xy) => gardenPlaceTap.forEach((f) => f(xy)))
+    scene.on('shapeWall', (e, d, fin) => shapeWall.forEach((f) => f(e, d, fin)))
+    scene.on('shapeCorner', (i, xy, fin) => shapeCorner.forEach((f) => f(i, xy, fin)))
+    scene.on('shapeSelect', (sel) => shapeSelect.forEach((f) => f(sel)))
     scene.on('reliefChange', (state) => { relief.value = state })
     scene.on('prepare', (stage, progress) => {
       preparing.value = stage ? { stage, progress } : null
@@ -145,11 +152,11 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   watch(args.house, (h, prev) => {
     if (!scene || !h) return
     if (prev && sameShell(prev, h)) { scene.updateDevices(h); return }
-    // seule l'APPARENCE a changé (finitions des pièces, façade) → les maillages des niveaux. AVANT les
-    // chemins suivants : ils ignorent `house.style`, et une façade seule y passait sans rien refaire
-    if (prev && sameShellButAppearance(prev, h)) { scene.updateAppearance(h); return }
     // seules des ouvertures ont bougé (on en règle une au doigt) → murs du seul niveau touché
     if (prev && sameShellButOpenings(prev, h)) { scene.updateOpenings(h); return }
+    // seul le BÂTI a changé (finitions, forme des pièces, emprises) → maillages des niveaux, toit et
+    // terrain s'il le faut, sans recharger la maison ni recentrer la caméra
+    if (prev && sameShellButBuilding(prev, h)) { scene.updateBuilding(h); return }
     // seules des PLACES ont bougé → marquage au sol et engins qui s'y rangent, rien d'autre
     if (prev && sameShellButParkings(prev, h)) { scene.updateParkings(h); return }
     // seul le JARDIN a changé (on pose, glisse ou règle un arbre) → les éléments seulement
@@ -239,6 +246,12 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     onGardenDrop: (f: Handler<[string]>) => { gardenDrop.add(f) },
     onGardenPlaceTap: (f: Handler<[[number, number]]>) => { gardenPlaceTap.add(f) },
     onPlaceTap: (f: Handler<[[number, number]]>) => { placeTap.add(f) },
+    setShapeEditing: (roomId: string | null) => scene?.setShapeEditing(roomId),
+    setShapeOutline: (points: readonly [number, number][]) => scene?.setShapeOutline(points),
+    setShapeSelection: (sel: ShapeSelection) => scene?.setShapeSelection(sel),
+    onShapeWall: (f: Handler<[number, number, boolean]>) => { shapeWall.add(f) },
+    onShapeCorner: (f: Handler<[number, [number, number], boolean]>) => { shapeCorner.add(f) },
+    onShapeSelect: (f: Handler<[ShapeSelection]>) => { shapeSelect.add(f) },
     moveMarker: (key: string, position: Vec3) => scene?.moveMarker(key, position),
     previewBodyColor: (key: string, color: string | null) => scene?.previewBodyColor(key, color),
     setJournalPoints: (key: string | null, points: readonly JournalPoint[]) => scene?.setJournalPoints(key, points),
@@ -260,21 +273,17 @@ function sameShell(a: House, b: House): boolean {
  * chaque mouvement de doigt. Ce cas-là a son chemin (`updateOpenings`).
  */
 function sameShellButOpenings(a: House, b: House): boolean {
-  const shell = (h: House) => JSON.stringify([h.levels, h.rooms.map((r) => ({ ...r, openings: [] })), h.site, h.roof, h.defaults])
+  const shell = (h: House) => JSON.stringify([h.levels, h.rooms.map((r) => ({ ...r, openings: [] })), h.site, h.roof, h.defaults, h.style])
   return shell(a) === shell(b)
 }
 
 /**
- * Même bâti aux FINITIONS près (`room.style.floorFinish` / `wallFinish`, `house.style`) : choisir une
- * finition dans le sélecteur ne doit ni recharger la maison ni recentrer la caméra.
+ * Même maison au BÂTI près : finitions (`room.style`, `house.style`), forme des pièces (polygone,
+ * murs, ouvertures recalées, cotes), emprise des niveaux — et les appareils auto-placés qui en
+ * suivent le centre. Ni le site, ni le toit déclaré, ni les défauts, ni l'élévation des niveaux.
  */
-function sameShellButAppearance(a: House, b: House): boolean {
-  const bare = (h: House) => h.rooms.map((r) => {
-    if (!r.style) return r
-    const { floorFinish: _f, wallFinish: _w, ...style } = r.style
-    return { ...r, style }
-  })
-  const shell = (h: House) => JSON.stringify([h.levels, bare(h), h.site, h.roof, h.defaults])
+function sameShellButBuilding(a: House, b: House): boolean {
+  const shell = (h: House) => JSON.stringify([h.levels.map((l) => ({ ...l, outline: null })), h.rooms.map((r) => [r.id, r.levelId]), h.site, h.roof, h.defaults])
   return shell(a) === shell(b)
 }
 

@@ -8,7 +8,7 @@ import ParkingRows from './ParkingRows.vue'
 import GardenSection from './GardenSection.vue'
 import EditSection from './EditSection.vue'
 import FinishPicker from './FinishPicker.vue'
-import AppearanceBar from './AppearanceBar.vue'
+import EditBar from './EditBar.vue'
 import { styleById } from '../../three/styles'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
@@ -129,8 +129,8 @@ function toggle(s: Section) {
   <EditSection :title="$t('finish.facade')" :meta="house.facadeFinish ? $t(`finish.names.${house.facadeFinish.id}`) : ''" :open="open === 'facade'" @toggle="toggle('facade')">
     <div class="block">
       <p class="muted hint">{{ costume ? $t('finish.costumeHint') : $t('finish.facadeHint') }}</p>
-      <AppearanceBar />
-      <FinishPicker surface="facade" :value="house.facadeFinish" :disabled="house.savingAppearance" @change="house.setFacadeFinish" />
+      <EditBar />
+      <FinishPicker surface="facade" :value="house.facadeFinish" :disabled="house.savingEdit" @change="house.setFacadeFinish" />
     </div>
   </EditSection>
 

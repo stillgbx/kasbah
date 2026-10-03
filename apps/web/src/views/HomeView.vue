@@ -233,12 +233,32 @@ watch(() => settings.houseEditing, (on) => {
   // ne fermerait pas la porte qu'il prétend fermer
   if (!on && house.selectedOpeningId) house.selectOpening(null)
   // quitter le mode édition abandonne les finitions non validées : la scène revient au fichier
-  if (!on) house.discardAppearance()
+  if (!on) house.discardEdit()
 })
 // modeler le terrain : armé depuis les Réglages, comme le banc de lumière — même règle que ci-dessus,
 // c'est le watcher de `scene.ready` qui rejoue l'état au chargement
 watch(() => settings.reliefEditing, (on) => scene.setEditingRelief(on))
 watch(() => settings.terrainTab, (tab) => scene.setTerrainTab(tab))
+// forme d'une pièce : l'onglet Dimensions du panneau allume ses poignées dans la 3D. Les gestes
+// reviennent en intentions (mur poussé, sommet déplacé) que le store traduit en cotes — voisine
+// comprise — et la forme recalculée repart vers la scène. Un glissement n'est qu'un pas d'historique.
+const shapeRoom = computed(() => (settings.houseEditing && house.shapeEditing && house.selectedRoom ? house.selectedRoom.id : null))
+watch([shapeRoom, scene.ready], ([id, ready]) => { if (ready) scene.setShapeEditing(id) }, { immediate: true })
+watch([() => (shapeRoom.value ? house.shapeOf(shapeRoom.value) : null), scene.ready], ([pts, ready]) => {
+  if (ready && pts) scene.setShapeOutline(pts as [number, number][])
+}, { immediate: true })
+watch(() => house.shapeSelection, (sel) => scene.setShapeSelection(sel))
+scene.onShapeSelect((sel) => { house.shapeSelection = sel })
+let shaping = false
+function shapeGesture(final: boolean, preview: (roomId: string) => void) {
+  const id = shapeRoom.value
+  if (!id) return
+  if (!shaping) { house.beginShapeDrag(); shaping = true }
+  preview(id)
+  if (final) { house.endShapeDrag(true); shaping = false }
+}
+scene.onShapeWall((edge, delta, final) => shapeGesture(final, (id) => house.previewRoomWall(id, edge, delta)))
+scene.onShapeCorner((index, xy, final) => shapeGesture(final, (id) => house.previewCorner(id, index, xy)))
 watch(() => house.selectedOpeningId, (id) => {
   scene.setSelectedOpening(id)
   if (id) {

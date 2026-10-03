@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { OPENING_TYPES, openingLabel, type Opening } from '@kasbah/shared'
 import { useHouseStore } from '../../stores/house'
 import { useSettingsStore } from '../../stores/settings'
 import { styleById } from '../../three/styles'
 import FinishPicker from './FinishPicker.vue'
-import AppearanceBar from './AppearanceBar.vue'
+import EditBar from './EditBar.vue'
+import RoomShapeSection from './RoomShapeSection.vue'
 import ParkingRows from './ParkingRows.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
@@ -39,7 +40,10 @@ const armed = computed(() => house.placingOpening)
 const parkings = computed(() => (room.value ? house.parkingsInRoom(room.value.id) : []))
 
 /** Sol ou murs : un seul sélecteur à la fois, il a la largeur du panneau. */
-const surface = ref<'floor' | 'walls'>('floor')
+const surface = ref<'floor' | 'walls' | 'shape'>('floor')
+// l'onglet Dimensions allume les poignées de la pièce dans la 3D ; quitter le panneau les éteint
+watch(surface, (s) => { house.shapeEditing = s === 'shape' }, { immediate: true })
+onBeforeUnmount(() => { house.shapeEditing = false; house.shapeSelection = null })
 const settings = useSettingsStore()
 /** Un style « costume » garde sa palette : les finitions ne s'y voient pas, on le dit. */
 const costume = computed(() => !styleById(settings.sceneStyle).assets)
@@ -99,12 +103,14 @@ const costume = computed(() => !styleById(settings.sceneStyle).assets)
       <div class="seg" role="tablist">
         <button type="button" role="tab" class="seg__btn" :aria-selected="surface === 'floor'" :data-on="surface === 'floor' ? '1' : '0'" @click="surface = 'floor'">{{ $t('finish.floor') }}</button>
         <button type="button" role="tab" class="seg__btn" :aria-selected="surface === 'walls'" :data-on="surface === 'walls' ? '1' : '0'" @click="surface = 'walls'">{{ $t('finish.walls') }}</button>
+        <button type="button" role="tab" class="seg__btn" :aria-selected="surface === 'shape'" :data-on="surface === 'shape' ? '1' : '0'" @click="surface = 'shape'">{{ $t('shape.section') }}</button>
       </div>
-      <p class="muted hint">{{ costume ? $t('finish.costumeHint') : '' }}</p>
+      <p class="muted hint">{{ costume && surface !== 'shape' ? $t('finish.costumeHint') : '' }}</p>
       <!-- la barre AVANT la grille : Sol et Murs n'ont pas le même nombre de vignettes, elle ne bouge pas -->
-      <AppearanceBar />
-      <FinishPicker :surface="surface === 'floor' ? 'floor' : 'wall'" :value="house.roomFinish(room.id, surface)"
-                    :disabled="house.savingAppearance" @change="(f) => house.setRoomFinish(room!.id, surface, f)" />
+      <EditBar />
+      <RoomShapeSection v-if="surface === 'shape'" :room-id="room.id" />
+      <FinishPicker v-else :surface="surface === 'floor' ? 'floor' : 'wall'" :value="house.roomFinish(room.id, surface)"
+                    :disabled="house.savingEdit" @change="(f) => house.setRoomFinish(room!.id, surface as 'floor' | 'walls', f)" />
     </section>
 
     <ParkingRows :list="parkings" :level-id="room.levelId" />
@@ -143,7 +149,7 @@ const costume = computed(() => !styleById(settings.sceneStyle).assets)
   background: transparent; color: var(--text); font: inherit; font-size: 14px; cursor: pointer;
 }
 .add-item:hover { background: var(--surface2); }
-.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 3px; border-radius: 999px; background: var(--surface2); }
+.seg { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; padding: 3px; border-radius: 999px; background: var(--surface2); }
 .seg__btn { border: 0; border-radius: 999px; padding: 6px 10px; background: transparent; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
 .seg__btn[data-on='1'] { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
 </style>

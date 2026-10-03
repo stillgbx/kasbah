@@ -1,6 +1,6 @@
 import { computed, ref, shallowRef, watch } from 'vue'
 import { defineStore } from 'pinia'
-  import { applyAppearanceToJson, mergeAppearancePatch, autoPlaceDevices, computeRoof, fitHeight, fitParkingGap, houseIdForDevice, isSurfaceOpening, longestEdgeYawDeg, indexHouse, isPlaced, newOpeningDims, newParkingSize, openingLimits, openingSill, panelArrayDevices, panelOf, parkingGaps, parkingHost, pointInPolygon, resolveDefaults, resolveDeviceLevelId, roomHeight, slotFromPoint, slotFromSurfacePoint, surfaceFootprint, withPanelArrays, type AppearancePatch, type DeviceDescriptor, type DeviceEntry, type Finish, type DeviceKind, type DevicePlacement, type GardenItem, type GardenItemPatch, type GardenKind, type House, type HouseDevice, type HouseIndex, type Level, type Opening, type OpeningPatch, type OpeningType, type PanelArray, type PanelArrayPatch, type Parking, type ParkingPatch, type ParkingSide, type PlaceableDevice, type PlacedHouseDevice, type Relief, type Room, type SceneTuning, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
+  import { applyHouseEditToJson, insertVertex, mergeAppearancePatch, moveVertex, openingLabel, pushWall, removeVertex, roomShape, safeParseHouse, setEdgeLength, autoPlaceDevices, computeRoof, fitHeight, fitParkingGap, houseIdForDevice, isSurfaceOpening, longestEdgeYawDeg, indexHouse, isPlaced, newOpeningDims, newParkingSize, openingLimits, openingSill, panelArrayDevices, panelOf, parkingGaps, parkingHost, pointInPolygon, resolveDefaults, resolveDeviceLevelId, roomHeight, slotFromPoint, slotFromSurfacePoint, surfaceFootprint, withPanelArrays, type DeviceDescriptor, type HouseEditPatch, type HouseIssue, type Shapes, type SurveyDoc, type DeviceEntry, type Finish, type DeviceKind, type DevicePlacement, type GardenItem, type GardenItemPatch, type GardenKind, type House, type HouseDevice, type HouseIndex, type Level, type Opening, type OpeningPatch, type OpeningType, type PanelArray, type PanelArrayPatch, type Parking, type ParkingPatch, type ParkingSide, type PlaceableDevice, type PlacedHouseDevice, type Relief, type Room, type SceneTuning, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
 import { getTransport } from '../api'
 import type { JournalPoint } from '../lib/journal'
 import { i18n, t } from '../i18n'
@@ -81,16 +81,55 @@ function withGardenDraft(h: House | null, id: string | null, patch: GardenItemPa
 export const GARDEN_DEFAULT_HEIGHT: Record<GardenKind, number> = { broadleaf: 7, fruit: 5, conifer: 9, palm: 6, bamboo: 5, shrub: 1.2, rock: 0.6, hedge: 1.8 }
 
 /**
- * La maison avec les finitions en cours d'édition. Un brouillon que le schéma refuserait (pièce
- * disparue entre-temps) ne s'applique pas : la scène montre alors la maison écrite.
+ * Ce qu'une séance d'édition change à une maison (formes, ouvertures recalées, finitions) : comparé
+ * avant / après pour savoir s'il reste à écrire. Ni les cotes (`meta.survey`) ni les emprises des
+ * niveaux, qui s'en DÉDUISENT : une maison convertie en relevé sans changer de forme (la démo, dont le
+ * RDC ne déclarait pas d'emprise) n'a rien à écrire.
  */
-function withAppearanceDraft(h: House | null, patch: AppearancePatch | null): House | null {
-  if (!h || !patch) return h
-  try { return applyAppearanceToJson(h, patch) } catch { return h }
+const buildingOf = (h: House | null) => JSON.stringify([
+  h?.style ?? null,
+  h?.rooms.map((r) => [r.polygon, r.openings, r.style?.floorFinish ?? null, r.style?.wallFinish ?? null]) ?? [],
+])
+
+/** Deux états de séance : le second passe devant (finitions surface par surface, formes pièce par pièce). */
+function mergeEdit(prev: HouseEditPatch | null, next: HouseEditPatch): HouseEditPatch {
+  const out: HouseEditPatch = {}
+  const appearance = prev?.appearance && next.appearance ? mergeAppearancePatch(prev.appearance, next.appearance) : next.appearance ?? prev?.appearance
+  if (appearance) out.appearance = appearance
+  const shapes = { ...prev?.shapes, ...next.shapes }
+  if (Object.keys(shapes).length) out.shapes = shapes
+  return out
 }
 
-/** Ce que les finitions changent d'une maison : comparé avant / après pour savoir s'il reste à écrire. */
-const appearanceOf = (h: House | null) => JSON.stringify([h?.style ?? null, h?.rooms.map((r) => [r.style?.floorFinish ?? null, r.style?.wallFinish ?? null]) ?? []])
+/** Une ouverture qui ne tient plus se dit par son nom et celui de sa pièce ; le reste, tel quel. */
+function issueText(h: House, i: HouseIssue): string {
+  const m = /^rooms\[(\d+)\]\.openings\[(\d+)\]/.exec(i.path)
+  const room = m ? h.rooms[Number(m[1])] : undefined
+  const o = room?.openings[Number(m![2])]
+  return room && o ? t('shape.openingNoFit', { room: room.name, opening: openingLabel(o) }) : `${i.path} : ${i.message}`
+}
+
+interface EditOutcome {
+  house: House | null
+  /** Le document tel que la séance le donne, même refusé : ce sont SES cotes que l'éditeur montre. */
+  raw: SurveyDoc | null
+  blocking: string[]
+  warnings: string[]
+}
+/** La maison que la séance donnerait, et ce qui empêche de l'écrire (pièces nommées, pas leurs ids). */
+function runEdit(h: House, patch: HouseEditPatch): EditOutcome {
+  let r
+  try { r = applyHouseEditToJson(h, patch) } catch (err) { return { house: null, raw: null, blocking: [(err as Error).message], warnings: [] } }
+  const names = new Map(h.rooms.map((x) => [x.id, x.name]))
+  const named = (msg: string) => msg.replace(/[a-z0-9_.-]+/gi, (w) => names.get(w) ?? w)
+  const parsed = safeParseHouse(r.doc)
+  return {
+    house: parsed.success ? parsed.house : null,
+    raw: r.doc as unknown as SurveyDoc,
+    blocking: [...r.blocking.map(named), ...(parsed.success ? [] : parsed.issues.map((i) => issueText(r.doc as House, i)))],
+    warnings: r.warnings.map(named),
+  }
+}
 
 function withOpeningDraft(h: House | null, id: string | null, patch: OpeningPatch | null): House | null {
   if (!h || !id || !patch) return h
@@ -140,12 +179,28 @@ export const useHouseStore = defineStore('house', () => {
   const selectedGardenId = ref<string | null>(null)
   const gardenDraft = shallowRef<GardenItemPatch | null>(null)
   /**
-   * Finitions en cours d'édition (mode édition) : la suite des états du brouillon, pour annuler et
-   * rétablir, et le pas courant (0 = rien de changé). Rien n'est écrit avant « Valider ».
+   * Séance d'édition en cours (mode édition) : finitions et formes des pièces. La suite des états du
+   * brouillon, pour annuler et rétablir, et le pas courant (0 = rien de changé). Rien n'est écrit
+   * avant « Valider ». `shapeTransient` = la forme pendant un GLISSEMENT : montrée, pas encore un pas.
    */
-  const appearanceHistory = shallowRef<AppearancePatch[]>([])
-  const appearanceStep = ref(0)
-  const appearanceDraft = computed<AppearancePatch | null>(() => appearanceHistory.value[appearanceStep.value - 1] ?? null)
+  const editHistory = shallowRef<HouseEditPatch[]>([])
+  const editStep = ref(0)
+  const editDraft = computed<HouseEditPatch | null>(() => editHistory.value[editStep.value - 1] ?? null)
+  const shapeTransient = shallowRef<Shapes | null>(null)
+  const editPatch = computed<HouseEditPatch | null>(() =>
+    shapeTransient.value ? mergeEdit(editDraft.value, { shapes: shapeTransient.value }) : editDraft.value)
+  const editOutcome = computed<EditOutcome | null>(() => (house.value && editPatch.value ? runEdit(house.value, editPatch.value) : null))
+  /**
+   * La maison montrée pendant la séance. Une forme que la validation refuse (une ouverture qui ne
+   * tient plus sur son mur) ne peut pas se dessiner : la scène garde alors la dernière qui pouvait.
+   */
+  let lastGoodEdit: House | null = null
+  const editView = computed<House | null>(() => {
+    const o = editOutcome.value
+    if (!o) { lastGoodEdit = null; return house.value }
+    if (o.house) lastGoodEdit = o.house
+    return o.house ?? lastGoodEdit ?? house.value
+  })
 
   /**
    * Maison du JSON complétée des modules dérivés de ses champs de panneaux (`arrays`) : c'est sur
@@ -158,7 +213,7 @@ export const useHouseStore = defineStore('house', () => {
    */
   const expanded = computed<House | null>(() => {
     void i18n.global.locale.value                    // le nom des emplacements suit la langue choisie
-    const drafted = withOpeningDraft(withAppearanceDraft(house.value, appearanceDraft.value), selectedOpeningId.value, openingDraft.value)
+    const drafted = withOpeningDraft(editView.value, selectedOpeningId.value, openingDraft.value)
     const base = withGardenDraft(withParkingDraft(drafted, selectedParkingId.value, parkingDraft.value), selectedGardenId.value, gardenDraft.value)
     return base ? withPanelArrays(base, (row, col) => t('arrays.slot', { r: row + 1, c: col + 1 })) : null
   })
@@ -371,53 +426,106 @@ export const useHouseStore = defineStore('house', () => {
     }
   }
 
-  // ---- mode édition : APPARENCE (finitions du sol et des murs des pièces, façade) -------------------
+  // ---- mode édition : SÉANCE (finitions des pièces et de la façade, formes des pièces) ---------------
   //
   // Chaque choix entre dans le brouillon, que la scène montre aussitôt ; rien n'est écrit dans
-  // house.json avant « Valider », qui écrit toute la séance d'un coup (plusieurs pièces et la façade).
+  // house.json avant « Valider », qui écrit toute la séance d'un coup (`PUT /api/house/edit`).
 
   /** Les finitions telles qu'on les VOIT (brouillon compris) : c'est ce que le sélecteur coche. */
-  const appearanceView = computed(() => withAppearanceDraft(house.value, appearanceDraft.value))
   function roomFinish(roomId: string, surface: 'floor' | 'walls'): Finish | undefined {
-    const r = appearanceView.value?.rooms.find((x) => x.id === roomId)
+    const r = editView.value?.rooms.find((x) => x.id === roomId)
     return surface === 'floor' ? r?.style?.floorFinish : r?.style?.wallFinish
   }
-  const facadeFinish = computed<Finish | undefined>(() => appearanceView.value?.style?.facade)
+  const facadeFinish = computed<Finish | undefined>(() => editView.value?.style?.facade)
 
-  /** Un geste du sélecteur : un nouvel état du brouillon, qui coupe les états « rétablissables ». */
-  function pushAppearance(patch: AppearancePatch) {
-    const next = mergeAppearancePatch(appearanceDraft.value ?? {}, patch)
-    appearanceHistory.value = [...appearanceHistory.value.slice(0, appearanceStep.value), next]
-    appearanceStep.value = appearanceHistory.value.length
+  /** Un geste : un nouvel état du brouillon, qui coupe les états « rétablissables ». */
+  function pushEdit(patch: HouseEditPatch) {
+    const next = mergeEdit(editDraft.value, patch)
+    editHistory.value = [...editHistory.value.slice(0, editStep.value), next]
+    editStep.value = editHistory.value.length
   }
   function setRoomFinish(roomId: string, surface: 'floor' | 'walls', finish: Finish | null) {
-    pushAppearance({ rooms: { [roomId]: { [surface]: finish } } })
+    pushEdit({ appearance: { rooms: { [roomId]: { [surface]: finish } } } })
   }
-  function setFacadeFinish(finish: Finish | null) { pushAppearance({ facade: finish }) }
+  function setFacadeFinish(finish: Finish | null) { pushEdit({ appearance: { facade: finish } }) }
 
-  const canUndoAppearance = computed(() => appearanceStep.value > 0)
-  const canRedoAppearance = computed(() => appearanceStep.value < appearanceHistory.value.length)
-  function undoAppearance() { if (canUndoAppearance.value) appearanceStep.value-- }
-  function redoAppearance() { if (canRedoAppearance.value) appearanceStep.value++ }
+  // -- formes : les cotes d'une pièce (relevé), le polygone en est déduit --
+  /** Le mur mitoyen entraîne celui de la pièce d'en face (réglage du panneau, oui par défaut). */
+  const coupleWalls = ref(true)
+  /** L'onglet Dimensions est ouvert : la scène montre les poignées de la pièce sélectionnée. */
+  const shapeEditing = ref(false)
+  /** Poignée choisie (sommet ou mur), partagée par la 3D et la liste des côtés. */
+  const shapeSelection = ref<{ corner: number } | { wall: number } | null>(null)
+  /**
+   * Les cotes de la pièce dans le brouillon (m, repère de la maison) — même un brouillon refusé : un
+   * sommet qu'on vient d'ajouter au travers d'une ouverture doit se voir pour qu'on le déplace. La 3D,
+   * elle, garde la dernière forme dessinable.
+   */
+  function shapeOf(roomId: string): Vec2[] | null {
+    const v = editOutcome.value?.raw ?? (editView.value as unknown as SurveyDoc | null)
+    if (!v?.rooms.some((r) => r.id === roomId)) return null
+    return roomShape(v, roomId)
+  }
+  /** Le document sur lequel s'appliquent les gestes : le brouillon tel quel, refusé ou non. */
+  const editBase = () => editOutcome.value?.raw ?? (editView.value as unknown as SurveyDoc | null)
+  function pushShapes(shapes: Shapes | null) { if (shapes) pushEdit({ shapes }) }
+  /** Pousse un mur de `delta` m vers l'extérieur (négatif : vers l'intérieur). */
+  function pushRoomWall(roomId: string, edge: number, delta: number) {
+    const base = editBase()
+    if (base) pushShapes(pushWall(base, roomId, edge, delta, coupleWalls.value))
+  }
+  /** Fixe la longueur d'un côté : le mur suivant recule ou avance. */
+  function setSideLength(roomId: string, edge: number, length: number) {
+    const base = editBase()
+    if (base) pushShapes(setEdgeLength(base, roomId, edge, length, coupleWalls.value))
+  }
+  function addCorner(roomId: string, edge: number) { const base = editBase(); if (base) pushShapes(insertVertex(base, roomId, edge)) }
+  function removeCorner(roomId: string, index: number) { const base = editBase(); if (base) pushShapes(removeVertex(base, roomId, index)) }
+
+  /** Glissement en cours : chaque position se calcule depuis la forme du DÉBUT du geste. */
+  let dragBase: SurveyDoc | null = null
+  function beginShapeDrag() { dragBase = editBase(); shapeTransient.value = null }
+  function previewRoomWall(roomId: string, edge: number, delta: number) {
+    if (dragBase) shapeTransient.value = pushWall(dragBase, roomId, edge, delta, coupleWalls.value)
+  }
+  function previewCorner(roomId: string, index: number, to: Vec2) {
+    if (dragBase) shapeTransient.value = moveVertex(dragBase, roomId, index, to)
+  }
+  /** Fin du geste : la forme devient un pas d'historique (ou s'abandonne). */
+  function endShapeDrag(commit = true) {
+    const tr = shapeTransient.value
+    dragBase = null
+    shapeTransient.value = null
+    if (commit && tr) pushEdit({ shapes: tr })
+  }
+
+  const canUndoEdit = computed(() => editStep.value > 0)
+  const canRedoEdit = computed(() => editStep.value < editHistory.value.length)
+  function undoEdit() { if (canUndoEdit.value) editStep.value-- }
+  function redoEdit() { if (canRedoEdit.value) editStep.value++ }
   /** Le brouillon change-t-il quelque chose à la maison écrite ? (choisir puis revenir ne compte pas) */
-  const appearanceDirty = computed(() => !!appearanceDraft.value && appearanceOf(appearanceView.value) !== appearanceOf(house.value))
+  const editDirty = computed(() => !!editDraft.value && buildingOf(editView.value) !== buildingOf(house.value))
+  /** Ce qui empêche d'écrire la séance : « Valider » reste grisé tant qu'il y en a. */
+  const editBlocking = computed<string[]>(() => editOutcome.value?.blocking ?? [])
+  const editWarnings = computed<string[]>(() => editOutcome.value?.warnings ?? [])
   /** Abandonne le brouillon : la scène revient à la maison écrite. */
-  function discardAppearance() { appearanceHistory.value = []; appearanceStep.value = 0 }
-  const savingAppearance = ref(false)
+  function discardEdit() { editHistory.value = []; editStep.value = 0; shapeTransient.value = null; dragBase = null }
+  const savingEdit = ref(false)
   /** « Valider » : toute la séance d'un coup ; en cas de refus, le brouillon reste là. */
-  async function saveAppearance(): Promise<boolean> {
-    const patch = appearanceDraft.value
-    if (!patch || !appearanceDirty.value) { discardAppearance(); return true }
-    savingAppearance.value = true
+  async function saveEdit(): Promise<boolean> {
+    const patch = editDraft.value
+    if (!patch || !editDirty.value) { discardEdit(); return true }
+    if (editBlocking.value.length) return false
+    savingEdit.value = true
     try {
-      house.value = await getTransport().saveAppearance(patch)
-      discardAppearance()
+      house.value = await getTransport().saveEdit(patch)
+      discardEdit()
       return true
     } catch (err) {
       useNotificationsStore().error(t('finish.saveError', { message: (err as Error).message }))
       return false
     } finally {
-      savingAppearance.value = false
+      savingEdit.value = false
     }
   }
 
@@ -1571,7 +1679,8 @@ export const useHouseStore = defineStore('house', () => {
   return {
     house, effective, loading, error, index, levels, zones, soundRoutes, relaySource,
     focusedLevelId, gardenFocus, selectedRoomId, selectedLevelId, selectedKey, floorTab, selectedRoom, selectedZone, selectedDevice,
-    roomFinish, facadeFinish, setRoomFinish, setFacadeFinish, canUndoAppearance, canRedoAppearance, undoAppearance, redoAppearance, appearanceDirty, discardAppearance, savingAppearance, saveAppearance,
+    roomFinish, facadeFinish, setRoomFinish, setFacadeFinish, canUndoEdit, canRedoEdit, undoEdit, redoEdit, editDirty, editBlocking, editWarnings, discardEdit, savingEdit, saveEdit,
+    coupleWalls, shapeEditing, shapeSelection, shapeOf, pushRoomWall, setSideLength, addCorner, removeCorner, beginShapeDrag, previewRoomWall, previewCorner, endShapeDrag,
     load, setFloorTab, focusLevel, selectRoom, selectLevel, selectDevice, clearSelection, backToHome, backFromRoom, backFromDevice, houseDeviceFor, renameDevice, setDeviceTuning, bodyColorPreview, previewBodyColor, setRoomOrder, saveRenderTuning, saveRelief, saveTerrain,
     journalOverlay, journalFocus, journalActive, showJournal, hideJournal, focusJournalPoint, markJournalPoint,
     placing, saving, draft, canRevert, isProvisional, startPlacing, startPlacingNew, stopPlacing, previewPosition, previewHeight, savePlacement, revertPlacement, removePlacement,

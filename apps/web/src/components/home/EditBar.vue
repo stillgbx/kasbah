@@ -13,8 +13,8 @@ function onKey(e: KeyboardEvent) {
   const el = e.target as HTMLElement | null
   if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return
   const k = e.key.toLowerCase()
-  if (k === 'z' && !e.shiftKey && house.canUndoAppearance) { e.preventDefault(); house.undoAppearance() }
-  else if ((k === 'y' || (k === 'z' && e.shiftKey)) && house.canRedoAppearance) { e.preventDefault(); house.redoAppearance() }
+  if (k === 'z' && !e.shiftKey && house.canUndoEdit) { e.preventDefault(); house.undoEdit() }
+  else if ((k === 'y' || (k === 'z' && e.shiftKey)) && house.canRedoEdit) { e.preventDefault(); house.redoEdit() }
 }
 onMounted(() => window.addEventListener('keydown', onKey))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
@@ -23,24 +23,28 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 <template>
   <div class="ab">
     <div class="ab__row">
-      <button type="button" class="ab__icon" :disabled="!house.canUndoAppearance || house.savingAppearance"
-              :title="$t('finish.undo')" :aria-label="$t('finish.undo')" @click="house.undoAppearance()">
+      <button type="button" class="ab__icon" :disabled="!house.canUndoEdit || house.savingEdit"
+              :title="$t('finish.undo')" :aria-label="$t('finish.undo')" @click="house.undoEdit()">
         <StrokeIcon name="undo" :size="18" />
       </button>
-      <button type="button" class="ab__icon" :disabled="!house.canRedoAppearance || house.savingAppearance"
-              :title="$t('finish.redo')" :aria-label="$t('finish.redo')" @click="house.redoAppearance()">
+      <button type="button" class="ab__icon" :disabled="!house.canRedoEdit || house.savingEdit"
+              :title="$t('finish.redo')" :aria-label="$t('finish.redo')" @click="house.redoEdit()">
         <StrokeIcon name="redo" :size="18" />
       </button>
-      <!-- l'état du brouillon, dans la place qui reste : il change sans rien pousser -->
-      <span class="muted ab__status">{{ house.appearanceDirty ? $t('finish.pending') : $t('finish.clean') }}</span>
+      <!-- l'état du brouillon, dans la place qui reste : il change sans rien pousser. Ce qui empêche
+           d'écrire s'y dit aussi (le premier motif ; tous dans l'info-bulle) -->
+      <span v-if="house.editBlocking.length" class="ab__status ab__status--block" :title="house.editBlocking.join('\n')">
+        {{ $t('shape.blocking') }} : {{ house.editBlocking[0] }}
+      </span>
+      <span v-else class="muted ab__status">{{ house.editDirty ? $t('finish.pending') : $t('finish.clean') }}</span>
     </div>
     <!-- deux moitiés égales : « Abandonner » ne tenait pas sur la même ligne que les flèches -->
     <div class="ab__actions">
-      <button type="button" class="pill ab__btn" :disabled="!house.canUndoAppearance || house.savingAppearance" @click="house.discardAppearance()">
+      <button type="button" class="pill ab__btn" :disabled="!house.canUndoEdit || house.savingEdit" @click="house.discardEdit()">
         {{ $t('finish.discard') }}
       </button>
-      <button type="button" class="pill ab__btn" :data-on="house.appearanceDirty ? '1' : '0'"
-              :disabled="!house.appearanceDirty || house.savingAppearance" @click="house.saveAppearance()">
+      <button type="button" class="pill ab__btn" :data-on="house.editDirty ? '1' : '0'"
+              :disabled="!house.editDirty || house.editBlocking.length > 0 || house.savingEdit" @click="house.saveEdit()">
         <StrokeIcon name="check" :size="16" /> {{ $t('finish.save') }}
       </button>
     </div>
@@ -58,5 +62,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 .ab__icon:hover:not(:disabled) { background: var(--surface2); }
 .ab__icon:disabled { opacity: .4; cursor: default; }
+.ab__status--block { color: rgb(var(--v-theme-error)); }
 .ab__status { flex: 1 1 0; min-width: 0; margin-left: 6px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 </style>

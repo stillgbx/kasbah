@@ -7,12 +7,12 @@ import { buildApp, type KasbahApp } from '../app'
 import { loadEnv } from '../config/env'
 import { loadHouse } from '../config/house'
 
-// Apparence validée depuis le mode édition : la route ÉCRIT dans house.json, elle se teste donc sur
+// Séance d'édition validée depuis le mode édition (apparence, forme des pièces) : la route ÉCRIT dans house.json, elle se teste donc sur
 // une COPIE de la maison de démo — et chaque écriture laisse sa version précédente dans `history/`.
 
 const DEMO_HOUSE = resolve(import.meta.dirname, '../../../../house/demo-house.json')
 
-describe('PUT /api/house/appearance', () => {
+describe('PUT /api/house/edit', () => {
   let kasbah: KasbahApp
   let dir: string
   let file: string
@@ -31,7 +31,7 @@ describe('PUT /api/house/appearance', () => {
   })
   afterAll(async () => { await kasbah.close() })
 
-  const put = (body: unknown) => kasbah.app.inject({ method: 'PUT', url: '/api/house/appearance', payload: JSON.stringify(body), headers: { 'content-type': 'application/json' } })
+  const put = (appearance: unknown) => kasbah.app.inject({ method: 'PUT', url: '/api/house/edit', payload: JSON.stringify({ appearance }), headers: { 'content-type': 'application/json' } })
   type Written = { rooms: { id: string; style?: Record<string, unknown> }[]; style?: Record<string, unknown> }
   const written = async () => JSON.parse(await readFile(file, 'utf8')) as Written
 
@@ -52,6 +52,27 @@ describe('PUT /api/house/appearance', () => {
     expect((await put({ facade: { id: 'beige-carpet' } })).statusCode).toBe(400)
     expect((await put({ rooms: { nope: { floor: { id: 'oak' } } } })).statusCode).toBe(400)
     expect((await put({ rooms: { salon: { floor: { id: 'oak', tint: '#ff0000' } } } })).statusCode).toBe(400)
+    expect(await readFile(file, 'utf8')).toBe(before)
+  })
+
+  const putShapes = (shapes: unknown) => kasbah.app.inject({ method: 'PUT', url: '/api/house/edit', payload: JSON.stringify({ shapes }), headers: { 'content-type': 'application/json' } })
+  type Shaped = { rooms: { id: string; polygon: number[][]; meta?: { survey?: { points: number[][] } } }[] }
+
+  it('écrit des cotes : la maison est convertie en relevé et le polygone recalculé', async () => {
+    const res = await putShapes({ salon: [[310, -50], [1000, -50], [1000, 500], [310, 500]] })
+    expect(res.statusCode).toBe(200)
+    const doc = (await written()) as unknown as Shaped
+    const salon = doc.rooms.find((r) => r.id === 'salon')!
+    expect(salon.polygon[0]).toEqual([3.2, -0.5])
+    expect(salon.meta!.survey!.points[0]).toEqual([310, -50])
+    expect(doc.rooms.every((r) => r.meta?.survey?.points)).toBe(true)
+  })
+
+  it('refuse des pièces qui se chevauchent, sans rien écrire', async () => {
+    const before = await readFile(file, 'utf8')
+    const res = await putShapes({ entree: [[0, 0], [360, 0], [360, 800], [0, 800]] })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe('INVALID_SURVEY')
     expect(await readFile(file, 'utf8')).toBe(before)
   })
 })
