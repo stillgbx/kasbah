@@ -1,5 +1,5 @@
 import { BackSide, Color, DoubleSide, LinearSRGBColorSpace, Material, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial } from 'three'
-import type { FloorStyle, OpeningMaterial, ZoneKind } from '@kasbah/shared'
+import { FINISHES, type Finish, type FinishFamily, type FinishId, type FloorStyle, type OpeningMaterial, type ZoneKind } from '@kasbah/shared'
 import type { SceneTheme } from '../core/theme'
 import { createSurfaceTextures, type SurfaceRole, type SurfaceTexture, type SurfaceTextures } from '../textures/procedural'
 import { rolesOf, type SkyLook, type StyleLook, type SurfaceLook } from '../styles/types'
@@ -45,6 +45,17 @@ export interface MaterialSet {
    * n'en déclare aucune n'en a aucune, et garde ses deux appels de dessin.
    */
   joinery: Map<string, MeshStandardMaterial>
+  /**
+   * Matériaux des FINITIONS posées par la maison (sol, murs d'une pièce, façade) : une entrée par
+   * clé `surface|finition|teinte|repli` (`finishMaterial`). Une maison sans finition n'en a aucune.
+   */
+  finishes: Map<string, MeshStandardMaterial>
+  /**
+   * Comment le style courant interprète les finitions : `honor` faux = un style « costume » qui
+   * garde sa palette (la finition prend l'apparence de la surface qu'elle remplace) ; `photos` =
+   * les photos déjà chargées, absentes quand l'utilisateur a coupé les matières en images.
+   */
+  finishMode: { honor: boolean; photos?: Partial<Record<FinishId, SurfaceTexture>> }
   /** Dernier style appliqué : une menuiserie créée après coup doit pouvoir se teindre tout de suite. */
   applied: { theme: SceneTheme; look: StyleLook } | null
   /** Les matières employées par le style courant. Elles appartiennent au CATALOGUE, pas à ce jeu de matériaux. */
@@ -85,6 +96,9 @@ function surface(m: MeshStandardMaterial, color: Color, look: SurfaceLook, tex: 
   m.emissive.copy(color).multiplyScalar(look.emissive ?? 0)
   if (changed) m.needsUpdate = true
 }
+
+/** `surface` sous un autre nom, là où un paramètre `surface` (la nature de la finition) le masque. */
+const surface_ = (m: MeshStandardMaterial, color: Color, look: SurfaceLook, tex: SurfaceTexture | undefined) => surface(m, color, look, tex)
 
 const std = (extra: ConstructorParameters<typeof MeshStandardMaterial>[0] = {}) =>
   new MeshStandardMaterial({ roughness: 0.9, metalness: 0, ...extra })
@@ -141,11 +155,13 @@ export function createMaterials(theme: SceneTheme, look: StyleLook, textures: Su
     door: std(ROLE_PBR.door),
     poolBasin: std({ roughness: 0.35, side: BackSide }),
     joinery: new Map(),
+    finishes: new Map(),
+    finishMode: { honor: false },
     applied: null,
   }
   const all = new Set<Material>()
   for (const [k, v] of Object.entries(set)) {
-    if (k === 'textures' || k === 'joinery' || k === 'applied') continue
+    if (k === 'textures' || k === 'joinery' || k === 'finishes' || k === 'finishMode' || k === 'applied') continue
     if (v instanceof Material) all.add(v)
     else for (const m of Object.values(v as Record<string, Material>)) all.add(m)
   }
@@ -235,6 +251,7 @@ export function applyLook(mats: MaterialSet, theme: SceneTheme, look: StyleLook,
   // changement de style ou d'heure les rattrape même si elles sont nées entre deux applications
   mats.applied = { theme, look }
   for (const [key, m] of mats.joinery) applyJoinery(m, key, theme)
+  for (const [key, m] of mats.finishes) applyFinish(mats, m, key, theme, look)
   // le bassin : faïence fine (`poolTile`), pas les grands carreaux du sol maison
   const basin: SurfaceLook = { texture: 'poolTile', roughness: 0.35 }
   surface(mats.poolBasin, theme.zones.pool.clone().lerp(WHITE, 0.55), basin, tex(basin))
@@ -295,8 +312,63 @@ export function joineryMaterial(
   return m
 }
 
+// ---- finitions (sol, murs d'une pièce, façade) -------------------------------------------------
+
+export type FinishSurfaceKind = 'floor' | 'wall' | 'facade'
+
+/** La matière procédurale qui tient lieu de photo, par famille. */
+const FAMILY_ROLE: Record<FinishFamily, SurfaceRole> = {
+  wood: 'wood', tile: 'tile', carpet: 'carpet', concrete: 'concrete',
+  paint: 'plaster', stone: 'stone', siding: 'siding', pavers: 'pavers',
+}
+/** Le réglage de sol du style le plus proche d'une famille (rugosité, relief). */
+const FAMILY_FLOOR: Partial<Record<FinishFamily, FloorStyle>> = { wood: 'wood', tile: 'tile', carpet: 'carpet', concrete: 'concrete', pavers: 'concrete' }
+
+const finishKey = (surface: FinishSurfaceKind, f: Finish, fallback?: FloorStyle) => `${surface}|${f.id}|${f.tint ?? ''}|${fallback ?? ''}`
+
+/**
+ * Le matériau d'une finition. Comme une menuiserie teintée : créé à la demande, partagé par clé, et
+ * repris par `applyLook` à chaque style ou heure. `fallback` = le sol que la pièce déclarait avant
+ * (`style.floor`) : c'est lui qu'on montre dans un style qui n'interprète pas les finitions.
+ */
+export function finishMaterial(mats: MaterialSet, surface: FinishSurfaceKind, finish: Finish, fallback?: FloorStyle): MeshStandardMaterial {
+  const key = finishKey(surface, finish, fallback)
+  const known = mats.finishes.get(key)
+  if (known) return known
+  const m = std()
+  mats.finishes.set(key, m)
+  mats.all.add(m)
+  if (mats.applied) applyFinish(mats, m, key, mats.applied.theme, mats.applied.look)
+  return m
+}
+
+function applyFinish(mats: MaterialSet, m: MeshStandardMaterial, key: string, theme: SceneTheme, look: StyleLook): void {
+  const [surface, id, tint, fallback] = key.split('|') as [FinishSurfaceKind, FinishId, string, FloorStyle | '']
+  const s = look.surfaces
+  const tex = (l: SurfaceLook) => mats.textures[l.texture]
+  if (!mats.finishMode.honor) {
+    // style « costume » : la finition prend l'apparence de la surface qu'elle remplace
+    if (surface === 'floor') {
+      const l = fallback ? s.floors[fallback] : s.floor
+      surface_(m, fallback ? theme.floors[fallback] : theme.floor, l, tex(l))
+    } else if (surface === 'wall') surface_(m, theme.wallInterior, s.wallInterior, tex(s.wallInterior))
+    else surface_(m, theme.wall, s.wall, tex(s.wall))
+    return
+  }
+  const spec = FINISHES[id]
+  const fam = FAMILY_FLOOR[spec.family]
+  const base = surface === 'floor' ? (fam ? s.floors[fam] : s.floor) : surface === 'wall' ? s.wallInterior : s.wall
+  const l: SurfaceLook = { ...base, texture: FAMILY_ROLE[spec.family], emissive: 0 }
+  ensureTextures(mats.textures, [l.texture])
+  const photo = mats.finishMode.photos?.[id]
+  surface_(m, new Color(tint || spec.color), l, photo ?? mats.textures[l.texture])
+  // une teinte choisie colore la photo (un enduit blanc photographié, repeint)
+  if (photo && tint) m.color.set(tint)
+}
+
 /** Les matières ne sont PAS libérées : elles appartiennent au catalogue partagé (`textures/procedural.ts`). */
 export function disposeMaterials(mats: MaterialSet): void {
   for (const m of mats.all) m.dispose()
   mats.joinery.clear()
+  mats.finishes.clear()
 }

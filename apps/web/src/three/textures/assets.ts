@@ -1,4 +1,5 @@
 import { NoColorSpace, RepeatWrapping, SRGBColorSpace, TextureLoader, type Texture } from 'three'
+import { FINISHES, type FinishId } from '@kasbah/shared'
 import type { SurfaceRole, SurfaceTexture, SurfaceTextures } from './procedural'
 
 // Matières en IMAGES : des jeux PBR photographiques libres (ambientCG, CC0) qui remplacent, rôle
@@ -61,12 +62,13 @@ export type ImageLoad = (url: string, onLoad: () => void, onError: () => void) =
 const defaultLoad: ImageLoad = (url, onLoad, onError) => new TextureLoader().load(url, onLoad, undefined, onError)
 
 /** `base: './'` dans Vite : URL relative, pour être servi à la racine par Fastify comme depuis un sous-dossier. */
-const fileUrl = (packId: string, role: SurfaceRole, file: string) =>
-  `${import.meta.env.BASE_URL}assets/textures/${packId}/${role}/${file}.jpg`
+/** `dir` = chemin sous `assets/textures/` : `<pack>/<rôle>` pour un pack, celui du catalogue pour une finition. */
+export const textureUrl = (dir: string, file: string) =>
+  `${import.meta.env.BASE_URL}assets/textures/${dir}/${file}.jpg`
 
-function fetchSurface(packId: string, role: SurfaceRole, spec: PackSurface, load: ImageLoad): Promise<SurfaceTexture> {
+function fetchSurface(dir: string, spec: PackSurface, load: ImageLoad): Promise<SurfaceTexture> {
   const one = (file: string, srgb: boolean) => new Promise<Texture>((resolve, reject) => {
-    const t = load(fileUrl(packId, role, file), () => resolve(t), () => reject(new Error(`matière introuvable : ${packId}/${role}/${file}`)))
+    const t = load(textureUrl(dir, file), () => resolve(t), () => reject(new Error(`matière introuvable : ${dir}/${file}`)))
     t.wrapS = t.wrapT = RepeatWrapping
     t.repeat.set(1 / spec.tileM, 1 / spec.tileM)
     // la couleur est en sRGB ; la normale et la rugosité sont des DONNÉES, à ne surtout pas recourber
@@ -118,7 +120,31 @@ export function loadPackTextures(pack: TexturePack, roles: Iterable<SurfaceRole>
     if (ready) { out[role] = ready; continue }
     let pending = PENDING.get(key)
     if (!pending) {
-      pending = fetchSurface(pack.id, role, spec, load)
+      pending = fetchSurface(key, spec, load)
+      PENDING.set(key, pending)
+      pending.then((t) => READY.set(key, t)).catch(() => {}).finally(() => PENDING.delete(key))
+    }
+    pending.then(() => onReady(), () => {})
+  }
+  return out
+}
+
+/**
+ * Les photos des FINITIONS (`@kasbah/shared › FINISHES`) déjà là ; les autres se chargent et
+ * `onReady` est rappelé à chaque arrivée, comme pour un pack. Même cache, la clé est le dossier :
+ * une finition qui reprend une matière du pack (`photo/wood`) ne la charge pas deux fois — d'où
+ * la règle que sa cote soit la même que celle du pack (vérifiée par les tests).
+ */
+export function loadFinishTextures(ids: Iterable<FinishId>, onReady: () => void, load: ImageLoad = defaultLoad): Partial<Record<FinishId, SurfaceTexture>> {
+  const out: Partial<Record<FinishId, SurfaceTexture>> = {}
+  for (const id of new Set(ids)) {
+    const spec = FINISHES[id]
+    const key = spec.dir
+    const ready = READY.get(key)
+    if (ready) { out[id] = ready; continue }
+    let pending = PENDING.get(key)
+    if (!pending) {
+      pending = fetchSurface(key, { tileM: spec.tileM }, load)
       PENDING.set(key, pending)
       pending.then((t) => READY.set(key, t)).catch(() => {}).finally(() => PENDING.delete(key))
     }

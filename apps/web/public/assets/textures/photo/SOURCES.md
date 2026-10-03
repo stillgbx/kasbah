@@ -22,3 +22,5 @@ Archives locales (non utilisées par le pack) :
 - `grass004/` = Grass004 (avant Grass006)
 - `wood051/` = WoodFloor051 (copie de l'actif)
 - `wood033b/` = Planks033B (essayé puis écarté)
+
+Finitions du catalogue (`../finishes/<asset>/`, même provenance et même licence CC0, page `https://ambientcg.com/view?id=<asset>`) : WoodFloor040, WoodFloor062, WoodFloor064, WoodFloor036, WoodFloor070, Planks029S, Tiles141, Tiles143, Tiles052, Tiles040, Marble014, Travertine009, Tiles136A, Tiles071, Tiles101, Carpet012, Carpet014, Concrete016, Concrete048, PaintedPlaster017, Plaster002, Bricks101, Bricks060, Bricks084, WoodSiding009, PavingStones136, PavingStones137, PavingStones144. Chaque dossier porte aussi `thumb.jpg` (128 px), la vignette du sélecteur.

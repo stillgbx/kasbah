@@ -1,8 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { OPENING_TYPES, openingLabel, type Opening } from '@kasbah/shared'
 import { useHouseStore } from '../../stores/house'
+import { useSettingsStore } from '../../stores/settings'
+import { styleById } from '../../three/styles'
+import FinishPicker from './FinishPicker.vue'
+import AppearanceBar from './AppearanceBar.vue'
 import ParkingRows from './ParkingRows.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
@@ -11,9 +15,9 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 // relève la maison, on ne l'allume pas — et le même tap sur la même pièce donne toujours la même
 // chose, sans onglet à retenir dans le panneau.
 //
-// Deux matières : les ouvertures de la pièce, et les places de stationnement qu'elle porte — on
-// ajoute la place d'un garage DEPUIS le garage, et la place créée prend son niveau. Le nom, la
-// hauteur sous plafond et le sol de la pièce ont vocation à venir ici, en sections voisines.
+// Trois matières : les ouvertures de la pièce, son apparence (finitions du sol et des murs, en
+// brouillon jusqu'à « Valider »), et les places de stationnement qu'elle porte — on ajoute la place
+// d'un garage DEPUIS le garage, et la place créée prend son niveau.
 const emit = defineEmits<{ back: [] }>()
 const house = useHouseStore()
 const { t } = useI18n()
@@ -33,6 +37,12 @@ function row(o: Opening) {
 const armed = computed(() => house.placingOpening)
 /** Les places posées dans cette pièce : elles se règlent là où on les pense. */
 const parkings = computed(() => (room.value ? house.parkingsInRoom(room.value.id) : []))
+
+/** Sol ou murs : un seul sélecteur à la fois, il a la largeur du panneau. */
+const surface = ref<'floor' | 'walls'>('floor')
+const settings = useSettingsStore()
+/** Un style « costume » garde sa palette : les finitions ne s'y voient pas, on le dit. */
+const costume = computed(() => !styleById(settings.sceneStyle).assets)
 </script>
 
 <template>
@@ -84,6 +94,19 @@ const parkings = computed(() => (room.value ? house.parkingsInRoom(room.value.id
       <p class="muted hint">{{ armed ? $t(armed.type === 'roof-window' ? 'opening.placeHintRoof' : armed.type === 'skylight' ? 'opening.placeHintFloor' : 'opening.placeHint') : '' }}</p>
     </section>
 
+    <section class="block">
+      <div class="section-label">{{ $t('finish.section') }}</div>
+      <div class="seg" role="tablist">
+        <button type="button" role="tab" class="seg__btn" :aria-selected="surface === 'floor'" :data-on="surface === 'floor' ? '1' : '0'" @click="surface = 'floor'">{{ $t('finish.floor') }}</button>
+        <button type="button" role="tab" class="seg__btn" :aria-selected="surface === 'walls'" :data-on="surface === 'walls' ? '1' : '0'" @click="surface = 'walls'">{{ $t('finish.walls') }}</button>
+      </div>
+      <p class="muted hint">{{ costume ? $t('finish.costumeHint') : '' }}</p>
+      <!-- la barre AVANT la grille : Sol et Murs n'ont pas le même nombre de vignettes, elle ne bouge pas -->
+      <AppearanceBar />
+      <FinishPicker :surface="surface === 'floor' ? 'floor' : 'wall'" :value="house.roomFinish(room.id, surface)"
+                    :disabled="house.savingAppearance" @change="(f) => house.setRoomFinish(room!.id, surface, f)" />
+    </section>
+
     <ParkingRows :list="parkings" :level-id="room.levelId" />
   </template>
 </template>
@@ -120,4 +143,7 @@ const parkings = computed(() => (room.value ? house.parkingsInRoom(room.value.id
   background: transparent; color: var(--text); font: inherit; font-size: 14px; cursor: pointer;
 }
 .add-item:hover { background: var(--surface2); }
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 3px; border-radius: 999px; background: var(--surface2); }
+.seg__btn { border: 0; border-radius: 999px; padding: 6px 10px; background: transparent; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
+.seg__btn[data-on='1'] { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
 </style>

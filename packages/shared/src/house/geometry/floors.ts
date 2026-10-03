@@ -17,6 +17,7 @@ export function computeFloors(
       roomId: room.id, levelId: level.id, polygon: [...room.polygon],
       z0: -(thin ? THIN_SLAB : defaults.slabThickness), z1: 0, kind: room.kind,
       ...(room.style?.floor ? { floorStyle: room.style.floor } : {}),
+      ...(room.style?.floorFinish ? { finish: room.style.floorFinish } : {}),
       ...(holes && holes.length > 0 ? { holes } : {}),
     }
   })

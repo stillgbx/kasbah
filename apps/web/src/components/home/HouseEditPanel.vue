@@ -7,6 +7,9 @@ import { useSettingsStore } from '../../stores/settings'
 import ParkingRows from './ParkingRows.vue'
 import GardenSection from './GardenSection.vue'
 import EditSection from './EditSection.vue'
+import FinishPicker from './FinishPicker.vue'
+import AppearanceBar from './AppearanceBar.vue'
+import { styleById } from '../../three/styles'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
 // Panneau « maison » en MODE ÉDITION : ce qu'on modifie DE LA MAISON entière, à la place des tuiles
@@ -56,15 +59,17 @@ function openOutline() {
   settings.setSceneTuningOpen(false)
   settings.setReliefEditing(true, 'outline')
 }
+/** Un style « costume » garde sa palette : la façade choisie ne s'y voit pas, on le dit. */
+const costume = computed(() => !styleById(settings.sceneStyle).assets)
 function startRoof() { house.startPlacingOpening('roof-window') }
 
 // Une section ouverte à la fois, retenue d'une visite à l'autre (confort de ce poste seulement).
-type Section = 'roof' | 'parking' | 'garden'
+type Section = 'roof' | 'parking' | 'garden' | 'facade'
 const STORE_KEY = 'kasbah.houseEdit.section'
 function remembered(): Section | null {
   try {
     const v = localStorage.getItem(STORE_KEY)
-    return v === 'roof' || v === 'parking' || v === 'garden' ? v : null
+    return v === 'roof' || v === 'parking' || v === 'garden' || v === 'facade' ? v : null
   } catch { return null }
 }
 const open = ref<Section | null>(remembered())
@@ -118,6 +123,14 @@ function toggle(s: Section) {
         {{ $t('opening.cancel') }}
       </button>
       <p class="muted hint">{{ armedRoof ? $t('opening.placeHintRoof') : $t('opening.roofHint') }}</p>
+    </div>
+  </EditSection>
+
+  <EditSection :title="$t('finish.facade')" :meta="house.facadeFinish ? $t(`finish.names.${house.facadeFinish.id}`) : ''" :open="open === 'facade'" @toggle="toggle('facade')">
+    <div class="block">
+      <p class="muted hint">{{ costume ? $t('finish.costumeHint') : $t('finish.facadeHint') }}</p>
+      <AppearanceBar />
+      <FinishPicker surface="facade" :value="house.facadeFinish" :disabled="house.savingAppearance" @change="house.setFacadeFinish" />
     </div>
   </EditSection>
 

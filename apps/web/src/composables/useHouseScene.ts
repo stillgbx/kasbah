@@ -145,6 +145,9 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   watch(args.house, (h, prev) => {
     if (!scene || !h) return
     if (prev && sameShell(prev, h)) { scene.updateDevices(h); return }
+    // seule l'APPARENCE a changé (finitions des pièces, façade) → les maillages des niveaux. AVANT les
+    // chemins suivants : ils ignorent `house.style`, et une façade seule y passait sans rien refaire
+    if (prev && sameShellButAppearance(prev, h)) { scene.updateAppearance(h); return }
     // seules des ouvertures ont bougé (on en règle une au doigt) → murs du seul niveau touché
     if (prev && sameShellButOpenings(prev, h)) { scene.updateOpenings(h); return }
     // seules des PLACES ont bougé → marquage au sol et engins qui s'y rangent, rien d'autre
@@ -245,9 +248,9 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   }
 }
 
-/** Même bâti (niveaux, pièces, site, toit, défauts) : seul `devices` peut différer. */
+/** Même bâti (niveaux, pièces, site, toit, défauts, apparence) : seul `devices` peut différer. */
 function sameShell(a: House, b: House): boolean {
-  const shell = (h: House) => JSON.stringify([h.levels, h.rooms, h.site, h.roof, h.defaults])
+  const shell = (h: House) => JSON.stringify([h.levels, h.rooms, h.site, h.roof, h.defaults, h.style])
   return shell(a) === shell(b)
 }
 
@@ -258,6 +261,20 @@ function sameShell(a: House, b: House): boolean {
  */
 function sameShellButOpenings(a: House, b: House): boolean {
   const shell = (h: House) => JSON.stringify([h.levels, h.rooms.map((r) => ({ ...r, openings: [] })), h.site, h.roof, h.defaults])
+  return shell(a) === shell(b)
+}
+
+/**
+ * Même bâti aux FINITIONS près (`room.style.floorFinish` / `wallFinish`, `house.style`) : choisir une
+ * finition dans le sélecteur ne doit ni recharger la maison ni recentrer la caméra.
+ */
+function sameShellButAppearance(a: House, b: House): boolean {
+  const bare = (h: House) => h.rooms.map((r) => {
+    if (!r.style) return r
+    const { floorFinish: _f, wallFinish: _w, ...style } = r.style
+    return { ...r, style }
+  })
+  const shell = (h: House) => JSON.stringify([h.levels, bare(h), h.site, h.roof, h.defaults])
   return shell(a) === shell(b)
 }
 

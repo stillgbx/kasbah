@@ -19,3 +19,4 @@ house/*.automations.json.tmp
 .tmp-check
 _external
 .claude/agents/
+house/history/

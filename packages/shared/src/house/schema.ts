@@ -4,6 +4,7 @@ import { deviceIdSchema, hexColorSchema } from '../devices/descriptor'
 export { hexColorSchema }
 import { commandSchema } from '../devices/command'
 import { signedArea } from './geometry/vec2'
+import { FINISH_IDS, FINISHES, type FinishSurface } from './finishes'
 
 // Description de la maison. Repère : Z-UP métrique, x = est, y = nord, z = haut (les
 // polygones vivent en XY comme `THREE.Shape`, les hauteurs s'extrudent en +Z).
@@ -172,6 +173,20 @@ export const ROOM_KINDS = ['room', 'corridor', 'stairs', 'garage', 'terrace', 'b
 export type RoomKind = (typeof ROOM_KINDS)[number]
 export const FLOOR_STYLES = ['wood', 'tile', 'concrete', 'carpet'] as const
 export type FloorStyle = (typeof FLOOR_STYLES)[number]
+/**
+ * Une finition posée sur une surface (`finishes.ts`). `tint` remplace la couleur de la photo et
+ * n'existe que pour les finitions teintables (peintures, enduits).
+ */
+export const finishSchema = z.object({ id: z.enum(FINISH_IDS), tint: hexColorSchema.optional() }).superRefine((f, ctx) => {
+  if (f.tint && !FINISHES[f.id].tintable) ctx.addIssue({ code: 'custom', path: ['tint'], message: `finish "${f.id}" cannot be tinted` })
+})
+export type Finish = z.infer<typeof finishSchema>
+/** Une finition qui n'habille pas cette surface (une moquette en façade) est refusée. */
+const finishOn = (surface: FinishSurface) => finishSchema.refine(
+  (f) => (FINISHES[f.id].surfaces as readonly FinishSurface[]).includes(surface),
+  { message: `finish not allowed on ${surface}` },
+)
+
 export const roomSchema = z.object({
   id: idSchema,
   levelId: idSchema,
@@ -185,7 +200,14 @@ export const roomSchema = z.object({
     thickness: z.number().min(0).optional(),
   })).optional(),
   openings: z.array(openingSchema).default([]),
-  style: z.object({ color: z.string().optional(), floor: z.enum(FLOOR_STYLES).optional() }).optional(),
+  style: z.object({
+    color: z.string().optional(),
+    floor: z.enum(FLOOR_STYLES).optional(),
+    /** Finition du sol ; passe devant `floor` dans les styles qui interprètent les finitions. */
+    floorFinish: finishOn('floor').optional(),
+    /** Finition des faces INTÉRIEURES de ses murs (cloisons et intérieur des façades). */
+    wallFinish: finishOn('wall').optional(),
+  }).optional(),
   meta: metaSchema,
 })
 export type Room = z.infer<typeof roomSchema>
@@ -666,6 +688,8 @@ export const houseSchema = z.object({
   plugins: z.record(z.string(), pluginSettingsSchema).default(defaultPlugins),
   /** Réglage de la lumière de la scène 3D, posé depuis la vue Maison. */
   render: renderSettingsSchema.optional(),
+  /** Apparence de l'enveloppe : la finition de la façade (faces extérieures des murs extérieurs). */
+  style: z.object({ facade: finishOn('facade').optional() }).optional(),
   meta: metaSchema,
 })
 export type House = z.infer<typeof houseSchema>

@@ -9,11 +9,11 @@ import {
   boundsCenter, buildingBounds, computeHouseGeometry, deviceFloorZ, emptyReliefGrid, extendReliefGrid, isFlatRelief, parseRelief, serializeRelief, terrainHeight, geoDistance, HOME_RADIUS_M, indexHouse, longestEdgeYawDeg, offsetPolygon, pointInPolygon, resolveDefaults, resolveDeviceLevelId, sitePosition,
   roofBounds, roomBounds, zoneBounds, openingCentre, openingGaps, openingLabel, planLength, surfaceAxes, surfaceGaps,
   assignParkings, atRest, mirekToRgb, xyToRgb, parkingGaps, parkingHost, parkingLabel, PARKING_SIDES,
-  type DeviceDescriptor, type DeviceState, type House, type HouseDevice, type HouseGeometry, type HouseIndex, type Level, type OpeningRect, type Parking, type ParkingFix, type ParkingSide, type PlacedHouseDevice, type Relief, type ReliefGrid, type Vec2, type Vec3,
+  type DeviceDescriptor, type FinishId, type DeviceState, type House, type HouseDevice, type HouseGeometry, type HouseIndex, type Level, type OpeningRect, type Parking, type ParkingFix, type ParkingSide, type PlacedHouseDevice, type Relief, type ReliefGrid, type Vec2, type Vec3,
 } from '@kasbah/shared'
 import { applyLook, backdropColor, createMaterials, disposeMaterials, type MaterialSet } from './builders/materials'
 import type { SurfaceRole } from './textures/procedural'
-import { loadPackTextures, packById, packTexturesSettled, type TexturePack } from './textures/assets'
+import { loadFinishTextures, loadPackTextures, packById, packTexturesSettled, type TexturePack } from './textures/assets'
 import { createSkyEnvironment, overcastSky } from './core/sky'
 import { DECOR_LAYER, SITE_DECOR_LAYER } from './core/layers'
 import { setLevelHeights } from './core/levelLight'
@@ -1307,7 +1307,7 @@ export class HouseScene {
     const old = nodes?.levels.get(levelId)
     const lg = this.geometry?.levels.find((l) => l.levelId === levelId)
     if (!nodes || !old || !lg) return
-    const fresh = buildLevel(lg, this.materials, this.dressed)
+    const fresh = buildLevel(lg, this.materials, this.dressed, this.geometry?.facade)
     fresh.group.remove(fresh.markers, fresh.labels)   // les neufs sont vides : ce sont les anciens qu'on garde
     old.markers.removeFromParent()
     old.labels.removeFromParent()
@@ -3449,6 +3449,11 @@ export class HouseScene {
   pick(ndc: { x: number; y: number }): { kind: 'device'; key: string } | { kind: 'room'; roomId: string } | { kind: 'level'; levelId: string } | { kind: 'zone'; zoneId: string } | { kind: 'journal'; at: number } | { kind: 'opening'; openingId: string } | { kind: 'parking'; parkingId: string } | { kind: 'garden'; itemId: string } | null {
     if (!this.nodes) return null
     this.raycaster.setFromCamera(new Vector2(ndc.x, ndc.y), this.camera)
+    // Une poignée d'ouverture ou une place ne passe devant le bâti que si le bâti ne la CACHE pas :
+    // sans ce garde, un tap sur le plancher du 1er traversait et attrapait la fenêtre ou la place du
+    // RDC juste dessous. La distance du bâti touché le premier n'est calculée qu'au besoin.
+    let front: number | undefined
+    const hidden = (d: number) => d > (front ??= this.nearestBuiltHit()) + WALL_PICK_TOLERANCE_M
     // En mode édition, un arbre passe avant tout le reste : c'est le seul moment où on le touche.
     if (this.editingGarden) {
       const hitItem = this.raycaster.intersectObjects(this.garden.pickables(), false)[0]
@@ -3464,7 +3469,7 @@ export class HouseScene {
       for (const m of this.markers.values()) if (m.visibleInScene) pickables.push(...m.pickables)
       const hitParking = this.raycaster.intersectObjects(fills, false)[0]
       const hitOnIt = this.raycaster.intersectObjects(pickables, false)[0]
-      if (hitParking && (!hitOnIt || hitParking.distance < hitOnIt.distance)) {
+      if (hitParking && !hidden(hitParking.distance) && (!hitOnIt || hitParking.distance < hitOnIt.distance)) {
         return { kind: 'parking', parkingId: hitParking.object.userData.parkingId as string }
       }
     }
@@ -3474,7 +3479,7 @@ export class HouseScene {
       const fills: Mesh[] = []
       for (const h of this.openingHandles.values()) if (shownInScene(h.group)) fills.push(h.fill)
       const hitHandle = this.raycaster.intersectObjects(fills, false)[0]
-      if (hitHandle) return { kind: 'opening', openingId: hitHandle.object.userData.openingId as string }
+      if (hitHandle && !hidden(hitHandle.distance)) return { kind: 'opening', openingId: hitHandle.object.userData.openingId as string }
     }
     // une épingle du journal d'abord : petite, posée au sol, elle perdrait contre le sol de la pièce
     if (this.journal) {
@@ -3518,6 +3523,20 @@ export class HouseScene {
       if (hitZone) return { kind: 'zone', zoneId: hitZone.object.userData.zoneId as string }
     }
     return null
+  }
+
+  /**
+   * Distance du premier élément BÂTI sous le rayon courant : sol ou mur d'un niveau montré, toit
+   * visible. `Infinity` si le rayon ne touche rien de bâti. Mêmes filtres que la sélection d'une pièce.
+   */
+  private nearestBuiltHit(): number {
+    if (!this.nodes) return Infinity
+    const built: Object3D[] = []
+    for (const nodes of this.nodes.levels.values()) {
+      if (nodes.group.visible && nodes.markers.visible) built.push(...nodes.floors.values(), ...nodes.walls)
+    }
+    if (this.nodes.roof?.visible) built.push(this.nodes.roof)
+    return this.raycaster.intersectObjects(built, false)[0]?.distance ?? Infinity
   }
 
   /**
@@ -3995,8 +4014,53 @@ export class HouseScene {
         void this.compileBeforeShow()              // une carte de plus = un autre programme
       })
       : undefined
+    // les finitions de la maison : seuls les styles qui portent un pack d'images les interprètent
+    const honor = !!this.style.assets
+    const finishPhotos = honor && pack
+      ? loadFinishTextures(this.usedFinishes(), () => {
+        if (gen !== this.photoGen) return
+        this.applyMaterials()
+        this.highlightRoom(this.highlightedRoom)
+        void this.compileBeforeShow()
+      })
+      : undefined
+    this.materials.finishMode = { honor, ...(finishPhotos ? { photos: finishPhotos } : {}) }
     applyLook(this.materials, this.theme, this.look, photos, { wetness: this.ambience.wetness ?? 0, snow: this.ambience.snow ?? 0 })
     this.syncFloorClones()
+  }
+
+  /** Les finitions employées par la maison chargée (sols, murs des pièces, façade). */
+  private usedFinishes(): FinishId[] {
+    const g = this.geometry
+    if (!g) return []
+    const out = new Set<FinishId>()
+    for (const l of g.levels) {
+      for (const f of l.floors) if (f.finish) out.add(f.finish.id)
+      for (const f of Object.values(l.wallFinishes ?? {})) out.add(f.id)
+    }
+    if (g.facade) out.add(g.facade.id)
+    return [...out]
+  }
+
+  /**
+   * Seule l'APPARENCE a changé (finitions du sol, des murs, de la façade) : les maillages des niveaux
+   * se refont (un maillage de murs par matériau), rien d'autre — ni caméra, ni marqueurs, ni voile de
+   * préparation. C'est le chemin de chaque clic du sélecteur de finitions.
+   */
+  updateAppearance(house: House): void {
+    if (!this.nodes || !this.house) { this.load(house); return }
+    this.house = house
+    this.index = indexHouse(house)
+    this.geometry = computeHouseGeometry(house)
+    for (const l of this.geometry.levels) this.rebuildLevelNodes(l.levelId)
+    this.applyMaterials()                  // les photos d'une finition qu'on vient de choisir
+    if (this.editingOpenings) this.buildOpeningHandles()
+    this.refreshOpeningNotes()
+    this.highlightRoom(this.highlightedRoom)
+    this.syncWindowGlow()                  // les niveaux refaits ont des verres neufs
+    this.applyLevelFocus()
+    this.invalidateShadows()
+    this.loop.invalidate()
   }
 
   /** Le pack de matières photo du style, si l'utilisateur les veut. */

@@ -1,5 +1,5 @@
 import { resolveDefaults, type HouseDefaults } from '../defaults'
-import type { House } from '../schema'
+import type { Finish, House, Room } from '../schema'
 import { houseBounds } from './bounds'
 import { computeFloors, computeLabelAnchors } from './floors'
 import { computeRoof } from './roof'
@@ -20,6 +20,13 @@ export * from './bounds'
 export * from './surface'
 
 /** Point d'entrée : toute la géométrie descriptive d'une maison, niveaux triés par élévation. */
+/** Les finitions murales des pièces qui en ont une ; rien du tout si aucune n'en a (géométrie inchangée). */
+function wallFinishesOf(rooms: readonly Room[]): { wallFinishes?: Record<string, Finish> } {
+  const out: Record<string, Finish> = {}
+  for (const r of rooms) if (r.style?.wallFinish) out[r.id] = r.style.wallFinish
+  return Object.keys(out).length ? { wallFinishes: out } : {}
+}
+
 export function computeHouseGeometry(house: House, defaultsOverride?: HouseDefaults): HouseGeometry {
   const defaults = defaultsOverride ?? resolveDefaults(house.defaults)
   const roofBase = computeRoof(house, defaults)
@@ -37,6 +44,7 @@ export function computeHouseGeometry(house: House, defaultsOverride?: HouseDefau
         walls: prisms,
         openings: [...wallOpenings, ...surfaceOpenings],
         labelAnchors: computeLabelAnchors(rooms),
+        ...wallFinishesOf(rooms),
       }
     })
   const roof = roofBase
@@ -47,6 +55,7 @@ export function computeHouseGeometry(house: House, defaultsOverride?: HouseDefau
     terrain: computeTerrain(house.site, terrainPads(house), terrainFootprints(house, defaults)),
     zones: computeZones(house.site),
     ...(roof ? { roof } : {}),
+    ...(house.style?.facade ? { facade: house.style.facade } : {}),
     bounds: houseBounds(house, defaults, roof),
   }
 }

@@ -1,4 +1,4 @@
-import { addGardenItemToJson, addOpeningToJson, addParkingToJson, gardenItemPatchSchema, newGardenItemSchema, patchGardenItemInJson, removeGardenItemFromJson, assertCommandAllowed, automationBodySchema, automationIdSchema, automationPatchSchema, commandSchema, devicePlacementSchema, newOpeningSchema, newParkingSchema, openingPatchSchema, panelArrayPatchSchema, parkingPatchSchema, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, releaseNotesLang, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, roomOrderSchema, polygonSchema, reliefSchema, sceneTuningSchema, setReliefInJson, setTerrainInJson, setRenderTuningInJson, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
+import { appearancePatchSchema, applyAppearanceToJson, addGardenItemToJson, addOpeningToJson, addParkingToJson, gardenItemPatchSchema, newGardenItemSchema, patchGardenItemInJson, removeGardenItemFromJson, assertCommandAllowed, automationBodySchema, automationIdSchema, automationPatchSchema, commandSchema, devicePlacementSchema, newOpeningSchema, newParkingSchema, openingPatchSchema, panelArrayPatchSchema, parkingPatchSchema, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, releaseNotesLang, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, roomOrderSchema, polygonSchema, reliefSchema, sceneTuningSchema, setReliefInJson, setTerrainInJson, setRenderTuningInJson, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { updateHouseFile, type LoadedHouse } from '../config/house'
 import type { AutomationEngine } from '../core/automations/engine'
@@ -176,6 +176,15 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
   app.put('/api/house/terrain', async (req) => {
     const polygon = polygonSchema.parse(req.body)            // ZodError → 400
     const house = await updateHouseFile(deps.house, (doc) => setTerrainInJson(doc, polygon))
+    deps.hub.broadcast({ type: 'house', house })
+    return { house }
+  })
+
+  // Apparence (finitions du sol et des murs des pièces, façade), validée depuis le mode édition : un
+  // patch porte toute une séance d'édition, écrit d'un coup ou pas du tout (`null` = retirer).
+  app.put('/api/house/appearance', async (req) => {
+    const patch = appearancePatchSchema.parse(req.body)   // ZodError → 400
+    const house = await updateHouseFile(deps.house, (doc) => applyAppearanceToJson(doc, patch))
     deps.hub.broadcast({ type: 'house', house })
     return { house }
   })

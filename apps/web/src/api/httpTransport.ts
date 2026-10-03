@@ -114,6 +114,11 @@ export function createHttpTransport(base = ''): Transport {
       { method: 'DELETE' },
       (j) => houseSchema.parse((j as { house: unknown }).house) as House,
     ),
+    saveAppearance: (patch) => request(
+      `${base}/api/house/appearance`,
+      { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) },
+      (j) => houseSchema.parse((j as { house: unknown }).house) as House,
+    ),
     saveOpening: (roomId, openingId, patch) => request(
       `${base}/api/house/rooms/${encodeURIComponent(roomId)}/openings/${encodeURIComponent(openingId)}`,
       { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) },

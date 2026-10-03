@@ -1,6 +1,6 @@
 import type { Footprint, ReliefGrid } from './relief'
 import type { Vec2 } from './vec2'
-import type { FloorStyle, OpeningMaterial, OpeningType, RoomKind, ZoneKind } from '../schema'
+import type { Finish, FloorStyle, OpeningMaterial, OpeningType, RoomKind, ZoneKind } from '../schema'
 
 // Descripteurs géométriques PURS (aucune dépendance three) : c'est le contrat testé.
 // Les builders côté web les transforment en BufferGeometry sans réfléchir.
@@ -66,6 +66,8 @@ export interface FloorDescriptor {
   z1: number
   kind: RoomKind
   floorStyle?: FloorStyle
+  /** Finition du sol choisie pour la pièce (`room.style.floorFinish`). */
+  finish?: Finish
   /** Trous des puits de lumière (`skylight`) de la pièce. */
   holes?: FloorHole[]
 }
@@ -118,6 +120,8 @@ export interface LevelGeometry {
   walls: WallPrism[]
   openings: OpeningRect[]
   labelAnchors: LabelAnchor[]
+  /** Finition des faces intérieures des murs, par pièce (`room.style.wallFinish`) ; absente = celle du style. */
+  wallFinishes?: Record<string, Finish>
 }
 
 export interface HouseGeometry {
@@ -125,6 +129,8 @@ export interface HouseGeometry {
   terrain: TerrainDescriptor
   zones: ZoneDescriptor[]
   roof?: RoofDescriptor
+  /** Finition de la façade (`house.style.facade`) ; absente = celle du style. */
+  facade?: Finish
   /** Boîte englobante ABSOLUE de tout (niveaux, terrain, toit). */
   bounds: AABB3
 }

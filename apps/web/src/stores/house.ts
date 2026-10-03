@@ -1,6 +1,6 @@
 import { computed, ref, shallowRef, watch } from 'vue'
 import { defineStore } from 'pinia'
-  import { autoPlaceDevices, computeRoof, fitHeight, fitParkingGap, houseIdForDevice, isSurfaceOpening, longestEdgeYawDeg, indexHouse, isPlaced, newOpeningDims, newParkingSize, openingLimits, openingSill, panelArrayDevices, panelOf, parkingGaps, parkingHost, pointInPolygon, resolveDefaults, resolveDeviceLevelId, roomHeight, slotFromPoint, slotFromSurfacePoint, surfaceFootprint, withPanelArrays, type DeviceDescriptor, type DeviceEntry, type DeviceKind, type DevicePlacement, type GardenItem, type GardenItemPatch, type GardenKind, type House, type HouseDevice, type HouseIndex, type Level, type Opening, type OpeningPatch, type OpeningType, type PanelArray, type PanelArrayPatch, type Parking, type ParkingPatch, type ParkingSide, type PlaceableDevice, type PlacedHouseDevice, type Relief, type Room, type SceneTuning, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
+  import { applyAppearanceToJson, mergeAppearancePatch, autoPlaceDevices, computeRoof, fitHeight, fitParkingGap, houseIdForDevice, isSurfaceOpening, longestEdgeYawDeg, indexHouse, isPlaced, newOpeningDims, newParkingSize, openingLimits, openingSill, panelArrayDevices, panelOf, parkingGaps, parkingHost, pointInPolygon, resolveDefaults, resolveDeviceLevelId, roomHeight, slotFromPoint, slotFromSurfacePoint, surfaceFootprint, withPanelArrays, type AppearancePatch, type DeviceDescriptor, type DeviceEntry, type Finish, type DeviceKind, type DevicePlacement, type GardenItem, type GardenItemPatch, type GardenKind, type House, type HouseDevice, type HouseIndex, type Level, type Opening, type OpeningPatch, type OpeningType, type PanelArray, type PanelArrayPatch, type Parking, type ParkingPatch, type ParkingSide, type PlaceableDevice, type PlacedHouseDevice, type Relief, type Room, type SceneTuning, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
 import { getTransport } from '../api'
 import type { JournalPoint } from '../lib/journal'
 import { i18n, t } from '../i18n'
@@ -80,6 +80,18 @@ function withGardenDraft(h: House | null, id: string | null, patch: GardenItemPa
 /** Hauteur d'un élément qui naît (m) : un ordre de grandeur de la famille, réglé ensuite. */
 export const GARDEN_DEFAULT_HEIGHT: Record<GardenKind, number> = { broadleaf: 7, fruit: 5, conifer: 9, palm: 6, bamboo: 5, shrub: 1.2, rock: 0.6, hedge: 1.8 }
 
+/**
+ * La maison avec les finitions en cours d'édition. Un brouillon que le schéma refuserait (pièce
+ * disparue entre-temps) ne s'applique pas : la scène montre alors la maison écrite.
+ */
+function withAppearanceDraft(h: House | null, patch: AppearancePatch | null): House | null {
+  if (!h || !patch) return h
+  try { return applyAppearanceToJson(h, patch) } catch { return h }
+}
+
+/** Ce que les finitions changent d'une maison : comparé avant / après pour savoir s'il reste à écrire. */
+const appearanceOf = (h: House | null) => JSON.stringify([h?.style ?? null, h?.rooms.map((r) => [r.style?.floorFinish ?? null, r.style?.wallFinish ?? null]) ?? []])
+
 function withOpeningDraft(h: House | null, id: string | null, patch: OpeningPatch | null): House | null {
   if (!h || !id || !patch) return h
   if (!h.rooms.some((r) => r.openings.some((o) => o.id === id))) return h
@@ -127,6 +139,13 @@ export const useHouseStore = defineStore('house', () => {
   /** Élément du jardin en cours de réglage et son brouillon : même mécanique. */
   const selectedGardenId = ref<string | null>(null)
   const gardenDraft = shallowRef<GardenItemPatch | null>(null)
+  /**
+   * Finitions en cours d'édition (mode édition) : la suite des états du brouillon, pour annuler et
+   * rétablir, et le pas courant (0 = rien de changé). Rien n'est écrit avant « Valider ».
+   */
+  const appearanceHistory = shallowRef<AppearancePatch[]>([])
+  const appearanceStep = ref(0)
+  const appearanceDraft = computed<AppearancePatch | null>(() => appearanceHistory.value[appearanceStep.value - 1] ?? null)
 
   /**
    * Maison du JSON complétée des modules dérivés de ses champs de panneaux (`arrays`) : c'est sur
@@ -139,7 +158,7 @@ export const useHouseStore = defineStore('house', () => {
    */
   const expanded = computed<House | null>(() => {
     void i18n.global.locale.value                    // le nom des emplacements suit la langue choisie
-    const drafted = withOpeningDraft(house.value, selectedOpeningId.value, openingDraft.value)
+    const drafted = withOpeningDraft(withAppearanceDraft(house.value, appearanceDraft.value), selectedOpeningId.value, openingDraft.value)
     const base = withGardenDraft(withParkingDraft(drafted, selectedParkingId.value, parkingDraft.value), selectedGardenId.value, gardenDraft.value)
     return base ? withPanelArrays(base, (row, col) => t('arrays.slot', { r: row + 1, c: col + 1 })) : null
   })
@@ -349,6 +368,56 @@ export const useHouseStore = defineStore('house', () => {
     } catch (err) {
       useNotificationsStore().error(t('relief.outline.saveError', { message: (err as Error).message }))
       return false
+    }
+  }
+
+  // ---- mode édition : APPARENCE (finitions du sol et des murs des pièces, façade) -------------------
+  //
+  // Chaque choix entre dans le brouillon, que la scène montre aussitôt ; rien n'est écrit dans
+  // house.json avant « Valider », qui écrit toute la séance d'un coup (plusieurs pièces et la façade).
+
+  /** Les finitions telles qu'on les VOIT (brouillon compris) : c'est ce que le sélecteur coche. */
+  const appearanceView = computed(() => withAppearanceDraft(house.value, appearanceDraft.value))
+  function roomFinish(roomId: string, surface: 'floor' | 'walls'): Finish | undefined {
+    const r = appearanceView.value?.rooms.find((x) => x.id === roomId)
+    return surface === 'floor' ? r?.style?.floorFinish : r?.style?.wallFinish
+  }
+  const facadeFinish = computed<Finish | undefined>(() => appearanceView.value?.style?.facade)
+
+  /** Un geste du sélecteur : un nouvel état du brouillon, qui coupe les états « rétablissables ». */
+  function pushAppearance(patch: AppearancePatch) {
+    const next = mergeAppearancePatch(appearanceDraft.value ?? {}, patch)
+    appearanceHistory.value = [...appearanceHistory.value.slice(0, appearanceStep.value), next]
+    appearanceStep.value = appearanceHistory.value.length
+  }
+  function setRoomFinish(roomId: string, surface: 'floor' | 'walls', finish: Finish | null) {
+    pushAppearance({ rooms: { [roomId]: { [surface]: finish } } })
+  }
+  function setFacadeFinish(finish: Finish | null) { pushAppearance({ facade: finish }) }
+
+  const canUndoAppearance = computed(() => appearanceStep.value > 0)
+  const canRedoAppearance = computed(() => appearanceStep.value < appearanceHistory.value.length)
+  function undoAppearance() { if (canUndoAppearance.value) appearanceStep.value-- }
+  function redoAppearance() { if (canRedoAppearance.value) appearanceStep.value++ }
+  /** Le brouillon change-t-il quelque chose à la maison écrite ? (choisir puis revenir ne compte pas) */
+  const appearanceDirty = computed(() => !!appearanceDraft.value && appearanceOf(appearanceView.value) !== appearanceOf(house.value))
+  /** Abandonne le brouillon : la scène revient à la maison écrite. */
+  function discardAppearance() { appearanceHistory.value = []; appearanceStep.value = 0 }
+  const savingAppearance = ref(false)
+  /** « Valider » : toute la séance d'un coup ; en cas de refus, le brouillon reste là. */
+  async function saveAppearance(): Promise<boolean> {
+    const patch = appearanceDraft.value
+    if (!patch || !appearanceDirty.value) { discardAppearance(); return true }
+    savingAppearance.value = true
+    try {
+      house.value = await getTransport().saveAppearance(patch)
+      discardAppearance()
+      return true
+    } catch (err) {
+      useNotificationsStore().error(t('finish.saveError', { message: (err as Error).message }))
+      return false
+    } finally {
+      savingAppearance.value = false
     }
   }
 
@@ -1502,6 +1571,7 @@ export const useHouseStore = defineStore('house', () => {
   return {
     house, effective, loading, error, index, levels, zones, soundRoutes, relaySource,
     focusedLevelId, gardenFocus, selectedRoomId, selectedLevelId, selectedKey, floorTab, selectedRoom, selectedZone, selectedDevice,
+    roomFinish, facadeFinish, setRoomFinish, setFacadeFinish, canUndoAppearance, canRedoAppearance, undoAppearance, redoAppearance, appearanceDirty, discardAppearance, savingAppearance, saveAppearance,
     load, setFloorTab, focusLevel, selectRoom, selectLevel, selectDevice, clearSelection, backToHome, backFromRoom, backFromDevice, houseDeviceFor, renameDevice, setDeviceTuning, bodyColorPreview, previewBodyColor, setRoomOrder, saveRenderTuning, saveRelief, saveTerrain,
     journalOverlay, journalFocus, journalActive, showJournal, hideJournal, focusJournalPoint, markJournalPoint,
     placing, saving, draft, canRevert, isProvisional, startPlacing, startPlacingNew, stopPlacing, previewPosition, previewHeight, savePlacement, revertPlacement, removePlacement,

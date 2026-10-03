@@ -35,6 +35,19 @@ const ROLES = {
   stone: 'Bricks100',
   gravel: 'Gravel043',
 }
+/**
+ * Finitions du catalogue (`packages/shared/src/house/finishes.ts`) qui ne sont pas déjà un rôle du
+ * pack : elles vivent sous `textures/finishes/<asset>/`. Liste à tenir avec le catalogue (un test
+ * côté web vérifie que chaque dossier du catalogue existe).
+ */
+const FINISH_ASSETS = [
+  'WoodFloor040', 'WoodFloor062', 'WoodFloor064', 'WoodFloor036', 'WoodFloor070', 'Planks029S',
+  'Tiles141', 'Tiles143', 'Tiles052', 'Tiles040', 'Marble014', 'Travertine009', 'Tiles136A', 'Tiles071', 'Tiles101',
+  'Carpet012', 'Carpet014', 'Concrete016', 'Concrete048', 'PaintedPlaster017', 'Plaster002',
+  'Bricks101', 'Bricks060', 'Bricks084', 'WoodSiding009', 'PavingStones136', 'PavingStones137', 'PavingStones144',
+]
+/** Vignette du sélecteur de finitions (px). */
+const THUMB = 128
 /** fichier de sortie → suffixe ambientCG. NormalGL : convention OpenGL (Y vers le haut), celle de three. */
 const MAPS = { color: 'Color', normal: 'NormalGL', roughness: 'Roughness' }
 const QUALITY = '1K-JPG'
@@ -43,7 +56,8 @@ const args = process.argv.slice(2)
 const size = Number(args[args.indexOf('--size') + 1] || 512) || 512
 const force = args.includes('--force')
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const outRoot = join(root, 'apps/web/public/assets/textures/photo')
+const texRoot = join(root, 'apps/web/public/assets/textures')
+const outRoot = join(texRoot, 'photo')
 
 /** Les entrées d'un zip, par nom, décompressées à la demande (répertoire central → en-tête local). */
 function readZip(buf) {
@@ -72,9 +86,8 @@ function readZip(buf) {
   return entries
 }
 
-async function fetchRole(role, id, tmp) {
-  const dir = join(outRoot, role)
-  if (!force && Object.keys(MAPS).every((m) => existsSync(join(dir, `${m}.jpg`)))) {
+async function fetchRole(role, id, tmp, dir = join(outRoot, role)) {
+  if (!force && [...Object.keys(MAPS), 'thumb'].every((m) => existsSync(join(dir, `${m}.jpg`)))) {
     console.log(`  ${role.padEnd(9)} ${id.padEnd(18)} déjà là`)
     return
   }
@@ -91,6 +104,7 @@ async function fetchRole(role, id, tmp) {
     writeFileSync(src, entry())
     // -q:v 4 : JPEG de bonne qualité (échelle 2–31, 2 = meilleur) ; carré, la texture se répète
     execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', src, '-vf', `scale=${size}:${size}`, '-q:v', '4', join(dir, `${out}.jpg`)])
+    if (out === 'color') execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', src, '-vf', `scale=${THUMB}:${THUMB}`, '-q:v', '5', join(dir, 'thumb.jpg')])
   }
   console.log(`  ${role.padEnd(9)} ${id.padEnd(18)} ok (${size} px)`)
 }
@@ -107,6 +121,8 @@ function writeSources() {
     '|---|---|---|',
     ...rows,
     '',
+    'Finitions du catalogue (`../finishes/<asset>/`, même provenance et même licence) : ' + FINISH_ASSETS.join(', ') + '.',
+    '',
   ].join('\n'))
 }
 
@@ -114,6 +130,7 @@ const tmp = await mkdtemp(join(tmpdir(), 'kasbah-tex-'))
 try {
   console.log(`Pack photo → ${outRoot}`)
   for (const [role, id] of Object.entries(ROLES)) await fetchRole(role, id, tmp)
+  for (const id of FINISH_ASSETS) await fetchRole(id, id, tmp, join(texRoot, 'finishes', id))
   writeSources()
 } finally {
   await rm(tmp, { recursive: true, force: true })

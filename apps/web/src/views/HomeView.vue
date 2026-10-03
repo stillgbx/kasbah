@@ -151,9 +151,17 @@ watch(() => house.placingOpening, (armed) => scene.setPlacingOpening(armed))
 scene.onGroundTap((xy, levelId) => { void house.placeParkingAt(xy, levelId) })
 watch(() => house.placingParking, (armed) => scene.setPlacingParking(!!armed))
 scene.onRoomTap((roomId) => {
-  // pendant le réglage d'une ouverture OU d'une place, un tap sur une pièce ne referme pas le
-  // panneau par surprise (même garde-fou que le réglage d'un champ de panneaux, juste au-dessus)
-  if (house.selectedOpeningId || house.selectedParkingId || house.selectedGardenId) return
+  // pendant le réglage d'une ouverture, d'une place ou d'un arbre, un tap sur le sol d'une pièce
+  // OUVRE cette pièce : on quitte le réglage (chaque geste y est déjà écrit) sans repasser par le fil
+  // d'Ariane. Le garde-fou d'avant ignorait le tap, et on restait coincé sur l'ouverture.
+  if (house.selectedOpeningId || house.selectedParkingId || house.selectedGardenId) {
+    if (house.selectedOpeningId) house.selectOpening(null)
+    if (house.selectedParkingId) house.selectParking(null)
+    if (house.selectedGardenId) house.selectGardenItem(null)
+    house.selectRoom(roomId)
+    panelOpen.value = true
+    return
+  }
   if (house.selectedRoomId === roomId && !house.selectedKey) { house.selectRoom(null); scene.highlightRoom(null) }
   else { house.selectRoom(roomId); panelOpen.value = true }
 })
@@ -224,6 +232,8 @@ watch(() => settings.houseEditing, (on) => {
   // encore dans house.json) alors que la scène, elle, n'a plus rien de sélectionné — l'interrupteur
   // ne fermerait pas la porte qu'il prétend fermer
   if (!on && house.selectedOpeningId) house.selectOpening(null)
+  // quitter le mode édition abandonne les finitions non validées : la scène revient au fichier
+  if (!on) house.discardAppearance()
 })
 // modeler le terrain : armé depuis les Réglages, comme le banc de lumière — même règle que ci-dessus,
 // c'est le watcher de `scene.ready` qui rejoue l'état au chargement

@@ -1,13 +1,12 @@
-import type { BufferGeometry, Material, Object3D } from 'three';
-import { BoxGeometry, BufferAttribute, Group, Mesh } from 'three'
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
-import type { HouseGeometry, LevelGeometry, OpeningRect, WallPrism } from '@kasbah/shared'
+import type { Material, Object3D } from 'three'
+import { BoxGeometry, BufferAttribute, BufferGeometry, Float32BufferAttribute, Group, Mesh } from 'three'
+import type { Finish, HouseGeometry, LevelGeometry, OpeningRect, WallPrism } from '@kasbah/shared'
 import { buildDetails, buildRoofDetails, isGlazed } from './details'
-import type { MaterialSet } from './materials'
+import { finishMaterial, type MaterialSet } from './materials'
 import { WATER_DEPTH_ATTRIBUTE } from '../effects/water'
 import { applyTerrainHeights, drapeGeometry, skirtGeometry, TERRAIN_MESH_RES } from './terrain'
 import { alignedToLongestEdge, discWithHoles, extrudePolygon, extrudePolygonWithHoles, flatPolygon, flatRing, flatWithHoles, insetPolygon, planarFaces, planarFacesWithHoles } from './shapes'
-import { offsetPolygon, openingCentre } from '@kasbah/shared'
+import { offsetPolygon, openingCentre, signedArea } from '@kasbah/shared'
 
 // Builders : descripteurs purs → maillages. Tous les objets vivent dans le repère maison (Z-up) ;
 // la racine porte la rotation vers le monde Three. Un maillage de murs par niveau et par matériau.
@@ -48,12 +47,48 @@ export interface HouseNodes {
   outdoorMarkers: Group
 }
 
-export function buildWallsGeometry(prisms: readonly WallPrism[]): BufferGeometry | null {
-  if (prisms.length === 0) return null
-  const parts = prisms.map((p) => extrudePolygon(p.footprint, p.z0, p.z1))
-  const merged = mergeGeometries(parts, false)
-  for (const p of parts) p.dispose()
-  return merged
+/** Triangles d'un lot de faces de murs, et leurs UV en mètres. */
+interface FaceBucket { pos: number[]; uv: number[] }
+const bucket = (): FaceBucket => ({ pos: [], uv: [] })
+
+/**
+ * Les six faces d'un prisme de mur, chacune dans son lot : la face INTÉRIEURE (côté pièce, celle que
+ * la finition murale habille) dans `inner`, tout le reste (face extérieure, bouts, dessus, dessous)
+ * dans `rest`. L'empreinte est `[P(u0), Q(u0), Q(u1), P(u1)]` (`pieceFootprint`) : P sur la face
+ * intérieure, donc l'arête 3 → 0 EST la face intérieure. Normales sortantes quel que soit le sens
+ * du quad ; UV en mètres (le long du mur × hauteur, et x × y sur les dessus), comme les autres.
+ */
+export function addWallPrism(p: WallPrism, inner: FaceBucket, rest: FaceBucket): void {
+  const fp = p.footprint
+  const ccw = signedArea(fp) >= 0
+  const tri = (b: FaceBucket, pts: [number, number, number][], uvs: [number, number][], order: number[]) => {
+    for (const i of order) { b.pos.push(...pts[i]!); b.uv.push(...uvs[i]!) }
+  }
+  for (let i = 0; i < 4; i++) {
+    const a = fp[i]!, b = fp[(i + 1) % 4]!
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1])
+    if (len < 1e-6) continue
+    const dx = (b[0] - a[0]) / len, dy = (b[1] - a[1]) / len
+    const ua = a[0] * dx + a[1] * dy, ub = b[0] * dx + b[1] * dy
+    const pts: [number, number, number][] = [[a[0], a[1], p.z0], [b[0], b[1], p.z0], [b[0], b[1], p.z1], [a[0], a[1], p.z1]]
+    const uvs: [number, number][] = [[ua, p.z0], [ub, p.z0], [ub, p.z1], [ua, p.z1]]
+    tri(i === 3 ? inner : rest, pts, uvs, ccw ? [0, 1, 2, 0, 2, 3] : [0, 2, 1, 0, 3, 2])
+  }
+  const cap = (z: number, up: boolean) => {
+    const pts = fp.map(([x, y]) => [x, y, z] as [number, number, number])
+    const uvs = fp.map(([x, y]) => [x, y] as [number, number])
+    tri(rest, pts, uvs, up === ccw ? [0, 1, 2, 0, 2, 3] : [0, 2, 1, 0, 3, 2])
+  }
+  cap(p.z1, true)
+  cap(p.z0, false)
+}
+
+function bucketGeometry(b: FaceBucket): BufferGeometry {
+  const g = new BufferGeometry()
+  g.setAttribute('position', new Float32BufferAttribute(b.pos, 3))
+  g.setAttribute('uv', new Float32BufferAttribute(b.uv, 2))
+  g.computeVertexNormals()
+  return g
 }
 
 /** Vitrage translucide dans l'embrasure d'une ouverture vitrée (au milieu de l'épaisseur du mur). */
@@ -91,28 +126,56 @@ export function buildPane(o: OpeningRect, mats: MaterialSet): Mesh {
  * `dressed` : les ouvertures HABILLÉES par un ouvrant (`HouseDevice.openingId`). Leur vantail est
  * dessiné par le marqueur de l'appareil, qui l'ouvre — le bâti n'en pose pas un second.
  */
-export function buildLevel(level: LevelGeometry, mats: MaterialSet, dressed?: ReadonlySet<string>): LevelNodes {
+/**
+ * Murs pleine hauteur d'un niveau : un maillage par MATÉRIAU. Sans aucune finition, ce sont les deux
+ * d'avant — `walls:exterior` (façade, intérieur des façades compris) et `walls:interior` (cloisons).
+ * Une pièce qui a une finition murale reçoit les faces intérieures de ses murs dans le maillage de
+ * cette finition ; une façade habillée prend tout l'extérieur, et l'intérieur des façades qui n'ont
+ * pas de finition passe alors au matériau des cloisons (la brique de la façade n'entre pas dans la pièce).
+ */
+function buildWalls(level: LevelGeometry, mats: MaterialSet, facade: Finish | undefined): Mesh[] {
+  const ext = facade ? finishMaterial(mats, 'facade', facade) : mats.wall
+  const bareInside = facade ? mats.wallInterior : mats.wall
+  const lots = new Map<Material, { b: FaceBucket; name: string; kind: 'exterior' | 'interior' }>()
+  const lot = (m: Material, name: string, kind: 'exterior' | 'interior') => {
+    let l = lots.get(m)
+    if (!l) { l = { b: bucket(), name, kind }; lots.set(m, l) }
+    return l.b
+  }
+  // l'ordre de création fixe l'ordre des maillages : `walls[0]` reste le mur extérieur
+  if (level.walls.some((w) => w.kind === 'exterior')) lot(ext, 'walls:exterior', 'exterior')
+  if (level.walls.some((w) => w.kind === 'interior') || facade) lot(mats.wallInterior, 'walls:interior', 'interior')
+  for (const w of level.walls) {
+    const finish = level.wallFinishes?.[w.roomId]
+    const own = finish ? finishMaterial(mats, 'wall', finish) : undefined
+    const inner = own ? lot(own, `walls:finish:${finish!.id}`, 'interior') : lot(w.kind === 'exterior' ? bareInside : mats.wallInterior, '', 'interior')
+    const rest = lot(w.kind === 'exterior' ? ext : mats.wallInterior, '', w.kind)
+    addWallPrism(w, inner, rest)
+  }
+  const meshes: Mesh[] = []
+  for (const [material, { b, name, kind }] of lots) {
+    if (b.pos.length === 0) continue
+    const mesh = new Mesh(bucketGeometry(b), material)
+    mesh.castShadow = true
+    mesh.receiveShadow = true
+    mesh.name = name
+    mesh.userData = { role: 'wall', kind, material }
+    meshes.push(mesh)
+  }
+  return meshes
+}
+export function buildLevel(level: LevelGeometry, mats: MaterialSet, dressed?: ReadonlySet<string>, facade?: Finish): LevelNodes {
   const group = new Group()
   group.name = `level:${level.levelId}`
   group.position.z = level.elevation
   const walls: Mesh[] = []
-  for (const kind of ['exterior', 'interior'] as const) {
-    const g = buildWallsGeometry(level.walls.filter((w) => w.kind === kind))
-    if (!g) continue
-    const mesh = new Mesh(g, kind === 'exterior' ? mats.wall : mats.wallInterior)
-    mesh.castShadow = true
-    mesh.receiveShadow = true
-    mesh.name = `walls:${kind}`
-    mesh.userData = { role: 'wall', kind, material: mesh.material }
-    walls.push(mesh)
-    group.add(mesh)
-  }
+  for (const mesh of buildWalls(level, mats, facade)) { walls.push(mesh); group.add(mesh) }
   // le détail architectural vit avec les murs : même fantôme, même retour de matériau ; APRÈS eux,
   // pour que `walls[0]` reste le mur extérieur
   for (const mesh of buildDetails(level, mats, dressed)) { walls.push(mesh); group.add(mesh) }
   const floors = new Map<string, Mesh>()
   for (const f of level.floors) {
-    const base = f.floorStyle ? mats.floors[f.floorStyle] : mats.floor
+    const base = f.finish ? finishMaterial(mats, 'floor', f.finish, f.floorStyle) : f.floorStyle ? mats.floors[f.floorStyle] : mats.floor
     const mat = base.clone()            // clone par pièce → surbrillance individuelle
     const holePolys = f.holes?.map((h) => h.polygon) ?? []
     const geom = holePolys.length > 0
@@ -214,7 +277,7 @@ export function buildHouse(geometry: HouseGeometry, mats: MaterialSet, dressed?:
 
   const levels = new Map<string, LevelNodes>()
   for (const lg of geometry.levels) {
-    const nodes = buildLevel(lg, mats, dressed)
+    const nodes = buildLevel(lg, mats, dressed, geometry.facade)
     levels.set(lg.levelId, nodes)
     root.add(nodes.group)
   }

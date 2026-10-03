@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { BackSide, Box3, BoxGeometry, type OrthographicCamera, type PerspectiveCamera, type BufferGeometry, CylinderGeometry, type Material, Mesh, MeshBasicMaterial, MeshDepthMaterial, MeshStandardMaterial, type Object3D, type ShaderMaterial, ShaderLib, ShapeGeometry, Vector3, type BufferAttribute, type Texture } from 'three'
 import { computeHouseGeometry, localToGeo, openingGaps, parseHouse, type DeviceDescriptor, type DeviceState, type OpeningRect, type PlacedHouseDevice } from '@kasbah/shared'
 import demo from '@kasbah/shared/demo-house.json'
-import { buildHouse, buildLevel, buildWallsGeometry, countTriangles } from './builders/buildHouse'
+import { buildHouse, buildLevel, countTriangles } from './builders/buildHouse'
 import { buildDetails, buildRoofDetails, isGlazed } from './builders/details'
 import { alignedToLongestEdge, extrudePolygon } from './builders/shapes'
 import { createSurfaceTextures, type SurfaceTexture } from './textures/procedural'
@@ -178,15 +178,15 @@ describe('render loop', () => {
 describe('builders', () => {
   const house = parseHouse(demo)
   const geometry = computeHouseGeometry(house)
+  const wallMesh = (name: string, level = geometry.levels[0]!) =>
+    buildLevel(level, createMaterials(defaultSceneTheme(), defaultLook())).walls.find((m) => m.name === name)!
   it('merges wall prisms into one geometry per kind with the right extents', () => {
-    const level = geometry.levels[0]!
-    const g = buildWallsGeometry(level.walls.filter((w) => w.kind === 'exterior'))!
+    const g = wallMesh('walls:exterior').geometry
     g.computeBoundingBox()
     expect(g.boundingBox!.min.x).toBeCloseTo(-0.3)
     expect(g.boundingBox!.max.x).toBeCloseTo(10.3)
     expect(g.boundingBox!.min.z).toBeCloseTo(0)
     expect(g.boundingBox!.max.z).toBeCloseTo(2.6)
-    expect(buildWallsGeometry([])).toBeNull()
   })
   it('builds the whole house with levels, floors, panes, zones and roof', () => {
     const mats = createMaterials(defaultSceneTheme(), defaultLook())
@@ -202,7 +202,7 @@ describe('builders', () => {
   })
   it('les murs vont du sol au plafond, cloisons comprises, et le sol infini est sous la parcelle', () => {
     const level = geometry.levels[0]!
-    const interior = buildWallsGeometry(level.walls.filter((w) => w.kind === 'interior'))!
+    const interior = wallMesh('walls:interior', level).geometry
     interior.computeBoundingBox()
     expect(interior.boundingBox!.max.z).toBeCloseTo(level.height)
     const nodes = buildHouse(geometry, createMaterials(defaultSceneTheme(), defaultLook()))
