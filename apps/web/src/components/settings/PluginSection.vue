@@ -10,6 +10,7 @@ import MixcloudLinkCard from '../MixcloudLinkCard.vue'
 import PetkitLinkCard from '../PetkitLinkCard.vue'
 import NestLinkCard from '../NestLinkCard.vue'
 import RenaultLinkCard from '../RenaultLinkCard.vue'
+import SchoolLinkCard from '../SchoolLinkCard.vue'
 import TeslaLinkCard from '../TeslaLinkCard.vue'
 import YtmusicLinkCard from '../YtmusicLinkCard.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
@@ -63,6 +64,7 @@ const SETUP_CARDS = {
   ytmusic: YtmusicLinkCard,
   mixcloud: MixcloudLinkCard,
   agenda: AgendaLinkCard,
+  toutemonannee: SchoolLinkCard,
 } as const
 const setupCard = computed(() => SETUP_CARDS[props.plugin.id as keyof typeof SETUP_CARDS] ?? null)
 

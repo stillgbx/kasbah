@@ -13,6 +13,8 @@ export const NAV_ITEMS: NavItem[] = [
   { name: 'weather', icon: 'cloudSun', label: 'nav.weather' },
   // l'agenda avec la météo : ce qu'on regarde en arrivant — ce qu'il fait, ce qui nous attend
   { name: 'agenda', icon: 'calendar', label: 'nav.agenda' },
+  // l'école après l'agenda : ce qui attend les enfants, devoirs et mots de l'enseignante
+  { name: 'school', icon: 'school', label: 'nav.school' },
   // musique juste après la météo : on lance un titre, on voit l'enceinte dans la 3D
   { name: 'music', icon: 'music', label: 'nav.music' },
   { name: 'lights', icon: 'light', label: 'nav.lights' },

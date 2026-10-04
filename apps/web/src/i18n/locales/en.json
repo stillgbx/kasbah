@@ -1,6 +1,6 @@
 {
   "app": { "name": "Kasbah" },
-  "nav": { "main": "Navigation", "home": "Home", "energy": "Energy", "water": "Water", "heating": "Heating", "vehicles": "Vehicles", "robots": "Robots", "pets": "Pets", "weather": "Weather", "agenda": "Calendar", "settings": "Settings", "lights": "Lights", "covers": "Covers", "cameras": "Cameras", "media": "Media", "music": "Music", "automations": "Automations", "tens": "TENS" },
+  "nav": { "main": "Navigation", "home": "Home", "energy": "Energy", "water": "Water", "heating": "Heating", "vehicles": "Vehicles", "robots": "Robots", "pets": "Pets", "weather": "Weather", "agenda": "Calendar", "school": "School", "settings": "Settings", "lights": "Lights", "covers": "Covers", "cameras": "Cameras", "media": "Media", "music": "Music", "automations": "Automations", "tens": "TENS" },
   "alerts": { "pending": "{view} · alert pending", "dismiss": "Dismiss", "dismissHint": "Stop flagging it on the rail" },
   "common": {
     "showIn3d": "Show in the 3D view",
@@ -575,6 +575,14 @@
       "expires": "Session valid until {date}; a new code will be needed after that.",
       "poll": "Devices re-read every {min} min."
     },
+    "toutemonannee": {
+      "intro": "TouteMonAnnée offers no delegated sign-in for third parties: the account's username and password are needed. The password crosses the server once and is never stored — only the session cookies are.",
+      "username": "Email address or username",
+      "password": "Password",
+      "link": "Link the account", "linking": "Linking…", "linked": "TouteMonAnnée account linked",
+      "linkedAs": "Linked: {user}", "unlink": "Unlink the account", "open": "Open the School view",
+      "sessionLost": "The session expired: link the account again."
+    },
     "melcloud": {
       "intro": "Mitsubishi offers no delegated sign-in for third parties: your MELCloud e-mail and password are required. The password crosses the server once and is never stored — only a session key is.",
       "email": "MELCloud e-mail",
@@ -731,6 +739,25 @@
     "nameLabel": "Name (optional)", "namePlaceholder": "The calendar's own", "add": "Add",
     "remove": "Remove", "removeConfirm": "Confirm removal", "moveUp": "Move {name} up", "moveDown": "Move {name} down", "color": "Colour of {name}",
     "lastRead": "Read at {time}", "neverRead": "Not read yet", "readError": "Unreadable: {message}"
+  },
+  "school": {
+    "tabs": { "homework": "Homework", "messages": "Notes home", "posts": "Posts" }, "tabsLabel": "School notebooks",
+    "disabled": "The TouteMonAnnée plugin is off. Turn it on in Settings → Plugins.",
+    "notLinked": "No TouteMonAnnée account linked. Link it in Settings → Plugins → toutemonannee.",
+    "openSettings": "Open settings",
+    "sessionLost": "The TouteMonAnnée session expired: showing the last read. Link the account again.",
+    "updatedAt": "Updated at {time}", "refresh": "Update now", "refreshFailed": "Could not update: {message}",
+    "filtersLabel": "Classes and levels shown", "levelHint": "Show or hide what is for {level} (entries naming no level stay visible)",
+    "saveFailed": "Filter not saved: {message}",
+    "today": "today", "tomorrow": "tomorrow", "yesterday": "yesterday", "inDays": "in {n} days", "daysAgo": "{n} days ago",
+    "showPast": "Show the past homework | Show the past homework | Show the {n} past homework entries", "hidePast": "Hide past homework",
+    "homework": "Homework", "noHomework": "Nothing due in the coming days.",
+    "markDone": "Done: {what}", "tickFailed": "Tick not saved: {message}",
+    "siteAck": "{n} / {total} ticked", "siteAckHint": "Box asked for by the teacher: she sees who ticked it.",
+    "message": "Message", "unread": "Unread", "noMessage": "No message in the notebook.",
+    "responses": "{n} reply | {n} reply | {n} replies",
+    "post": "Post", "new": "New", "noPost": "No post.",
+    "comments": "{n} comment | {n} comment | {n} comments"
   },
   "weather": {
     "title": "Weather", "noDevice": "No weather service is active. Enable one in Settings → Plugins.",

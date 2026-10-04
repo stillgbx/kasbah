@@ -103,6 +103,12 @@ export const ICONS = {
   paw: 'M6.6 10.2m-1.8 0a1.8 1.8 0 1 0 3.6 0a1.8 1.8 0 1 0-3.6 0M9.9 7.1m-1.9 0a1.9 1.9 0 1 0 3.8 0a1.9 1.9 0 1 0-3.8 0M14.1 7.1m-1.9 0a1.9 1.9 0 1 0 3.8 0a1.9 1.9 0 1 0-3.8 0M17.4 10.2m-1.8 0a1.8 1.8 0 1 0 3.6 0a1.8 1.8 0 1 0-3.6 0M12 16.4m-4.2 0a4.2 3.5 0 1 0 8.4 0a4.2 3.5 0 1 0-8.4 0',
   /** Calendrier : la vue Agenda. */
   calendar: 'M4 5.5h16v15H4zM4 10h16M8.5 3v4M15.5 3v4',
+  /** Cahier ouvert : la vue École (devoirs, cahier de liaison). */
+  school: 'M12 6.5C10 5 7 4.5 4 5v13c3-.5 6 0 8 1.5c2-1.5 5-2 8-1.5V5c-3-.5-6 0-8 1.5zM12 6.5v13',
+  /** Bulle : un message (cahier de liaison). */
+  message: 'M4 5h16v11H10l-4 3.5V16H4zM8 9h8M8 12.5h5',
+  /** Journal : les publications d'une classe. */
+  news: 'M4 5h12v13a1.5 1.5 0 0 0 1.5 1.5H6A2 2 0 0 1 4 17.5zM16 9h4v9a1.5 1.5 0 0 1-3 0M7 9h6M7 12.5h6M7 16h4',
   /** Horloge : l'heure du prochain repas. */
   clock: 'M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0-18 0M12 6.5V12l3.5 2',
   /** Mangeoire : la trémie qui se vide dans la gamelle. */

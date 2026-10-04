@@ -1,6 +1,6 @@
 import { apiErrorSchema, automationResponseSchema, automationRunResponseSchema, automationsResponseSchema, devicesResponseSchema, energyHistorySchema, healthResponseSchema, houseSchema, pluginsResponseSchema, scenesResponseSchema, serverMessageSchema, weatherForecastSchema, deviceJournalSchema, deviceConsumptionSchema, deviceReleaseNotesSchema, type AutomationBody, type AutomationEntry, type AutomationRun, type CommandInput, type DeviceConsumption, type DeviceJournal, type DeviceEntry, type DevicePlacement, type EnergyHistory, type HealthResponse, type House, type PluginInfo, type PluginSceneEntry, type PluginSettingsPatch, type SceneRecallInput, type SceneUpdate, type WeatherForecast } from '@kasbah/shared'
 import { parseDeviceId } from '@kasbah/shared'
-import { ApiRequestError, type AgendaCalendar, type AgendaEvent, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type LightHistory, type MelcloudStatus, type MelcloudUnit, type MixcloudHomeSection, type MixcloudPage, type MixcloudStatus, type MixcloudUser, type PetkitStatus, type RadioStation, type RenaultStatus, type TeslaStatus, type Transport, type TransportHandlers, type WeatherAlerts, type WeatherElsewhere, type WeatherPlace, type YtmusicExplore, type YtmusicExploreShelf, type YtmusicPlaylist, type MusicLastPlayed, type MusicQueue, type YtmusicSearchResult, type MusicSession, type YtmusicStatus, type YtmusicTrack } from './transport'
+import { ApiRequestError, type AgendaCalendar, type AgendaEvent, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type LightHistory, type MelcloudStatus, type MelcloudUnit, type MixcloudHomeSection, type MixcloudPage, type MixcloudStatus, type MixcloudUser, type PetkitStatus, type RadioStation, type RenaultStatus, type SchoolData, type TeslaStatus, type Transport, type TransportHandlers, type WeatherAlerts, type WeatherElsewhere, type WeatherPlace, type YtmusicExplore, type YtmusicExploreShelf, type YtmusicPlaylist, type MusicLastPlayed, type MusicQueue, type YtmusicSearchResult, type MusicSession, type YtmusicStatus, type YtmusicTrack } from './transport'
 
 // URLs relatives : même origine en prod (Fastify sert le build) et via le proxy Vite en dev.
 
@@ -22,6 +22,8 @@ async function request<T>(url: string, init: RequestInit | undefined, parse: (js
   }
   return parse(await res.json())
 }
+
+const json = (method: string, body: unknown): RequestInit => ({ method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
 
 export function createHttpTransport(base = ''): Transport {
   /** Un geste sur la file d'un lecteur (`/queue/<step>`) : le serveur rend la file telle qu'elle est après. */
@@ -351,6 +353,17 @@ export function createHttpTransport(base = ''): Transport {
       (j) => j as { calendars: AgendaCalendar[] },
     ),
     agendaEvents: (from, to) => request(`${base}/api/plugins/agenda/events?from=${from}&to=${to}`, undefined, (j) => j as { events: AgendaEvent[] }),
+    schoolData: () => request(`${base}/api/plugins/toutemonannee/school`, undefined, (j) => j as SchoolData),
+    schoolLogin: (body) => request(`${base}/api/plugins/toutemonannee/login`, json('POST', body), (j) => j as SchoolData),
+    schoolLogout: () => request(`${base}/api/plugins/toutemonannee/logout`, { method: 'POST' }, (j) => j as SchoolData),
+    schoolRefresh: () => request(`${base}/api/plugins/toutemonannee/refresh`, { method: 'POST' }, (j) => j as SchoolData),
+    schoolSetDone: (journalId, id, done) => request(
+      `${base}/api/plugins/toutemonannee/homework/${encodeURIComponent(journalId)}/${id}/done`,
+      json('PUT', { done }),
+      (j) => j as SchoolData,
+    ),
+    schoolSetFilters: (filters) => request(`${base}/api/plugins/toutemonannee/filters`, json('PUT', filters), (j) => j as SchoolData),
+    schoolSeenPosts: (id) => request(`${base}/api/plugins/toutemonannee/posts/seen`, json('PUT', { id }), (j) => j as SchoolData),
     mixcloudStatus: () => request(`${base}/api/plugins/mixcloud/status`, undefined, (j) => j as MixcloudStatus),
     mixcloudSetAccount: (username) => request(
       `${base}/api/plugins/mixcloud/account`,

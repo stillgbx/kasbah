@@ -9,9 +9,12 @@ import StrokeIcon from './StrokeIcon.vue'
 // `fill` : occupe la largeur du parent et coupe les libellés plutôt que de déborder.
 // `icon` : à la place du texte (le `label` reste l'infobulle et le nom accessible).
 // `sublabel` : seconde ligne plus petite (ex. « 2700 K » sous « Chaud »).
+// `count` : pastille (ex. devoirs à faire). Après un libellé, sa place reste réservée à 0 pour que le
+// segment ne rétrécisse pas — et ne pousse pas ses voisins — quand le nombre tombe à zéro. Sur une
+// icône, elle est posée en exposant, hors du flux : aucune place à réserver.
 defineProps<{
   modelValue: T
-  options: { value: T; label: string; sublabel?: string; icon?: IconName; disabled?: boolean }[]
+  options: { value: T; label: string; sublabel?: string; icon?: IconName; disabled?: boolean; count?: number }[]
   dense?: boolean
   fill?: boolean
   label?: string
@@ -30,6 +33,8 @@ const emit = defineEmits<{ 'update:modelValue': [value: T] }>()
         <span class="segmented__sub">{{ o.sublabel }}</span>
       </span>
       <template v-else>{{ o.label }}</template>
+      <span v-if="o.count !== undefined" class="segmented__count" :class="{ 'segmented__count--over': o.icon }"
+            :data-empty="o.count ? '0' : '1'" aria-hidden="true">{{ o.count || '' }}</span>
     </button>
   </div>
 </template>
@@ -61,4 +66,13 @@ const emit = defineEmits<{ 'update:modelValue': [value: T] }>()
 .segmented__item:disabled { opacity: .4; }
 .segmented__item[data-on='1'] { background: var(--accent); color: var(--on-accent); }
 .segmented__item svg { flex: 0 0 auto; }
+.segmented__count {
+  flex: 0 0 auto; min-width: 20px; height: 20px; margin-left: 8px; padding: 0 6px; border-radius: 999px; box-sizing: border-box;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;
+  background: var(--accent); color: var(--on-accent);
+}
+.segmented__item[data-on='1'] .segmented__count { background: var(--on-accent); color: var(--accent); }
+.segmented__count[data-empty='1'] { visibility: hidden; }
+.segmented__item:has(.segmented__count--over) { position: relative; }
+.segmented__count--over { position: absolute; top: 1px; right: 2px; margin: 0; min-width: 17px; height: 17px; padding: 0 4px; font-size: 11px; }
 </style>

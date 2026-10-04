@@ -17,6 +17,7 @@ import { createRenaultPlugin } from './renault'
 import { createSonosPlugin } from './sonos'
 import { createTahomaPlugin } from './tahoma'
 import { createTeslaPlugin } from './tesla'
+import { createToutemonanneePlugin } from './toutemonannee'
 import { createTuyaPlugin } from './tuya'
 import { createYtmusicPlugin } from './ytmusic'
 
@@ -44,4 +45,5 @@ export const PLUGIN_FACTORIES: Record<string, PluginFactory> = {
   mixcloud: () => createMixcloudPlugin(),
   tuya: () => createTuyaPlugin(),
   agenda: () => createAgendaPlugin(),
+  toutemonannee: () => createToutemonanneePlugin(),
 }

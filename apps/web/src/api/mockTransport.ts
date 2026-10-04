@@ -1,6 +1,7 @@
 import { applyHouseEditToJson, SurveyError, addGardenItemToJson, addOpeningToJson, addParkingToJson, patchGardenItemInJson, removeGardenItemFromJson, automationBodySchema, commandSchema, deviceClassOf, defaultState, mergeState, parseHouse, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, setReliefInJson, setRenderTuningInJson, setTerrainInJson, setRoomOrderInJson, type Automation, type AutomationEntry, type AutomationRun, type AutomationStatus, type CommandInput, type DeviceConsumption, type DeviceEntry, type DeviceState, type House, type StateFor, type StatePatch } from '@kasbah/shared'
 import { SimError, Simulation, solarGeometry, type ScenarioName } from '@kasbah/mock-sim'
 import demoHouse from '@kasbah/shared/demo-house.json'
+import { createMockSchool } from './mockSchool'
 import { ApiRequestError, type Transport, type TransportHandlers, type WeatherPlace } from './transport'
 
 const MOCK_PLACES: WeatherPlace[] = [
@@ -395,6 +396,7 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     async agendaRemoveCalendar() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no calendar in mock mode') },
     async agendaReorderCalendars() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no calendar in mock mode') },
     async agendaEvents() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no calendar in mock mode') },
+    ...createMockSchool(),
     async mixcloudStatus() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Mixcloud account in mock mode') },
     async mixcloudSetAccount() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Mixcloud account in mock mode') },
     async mixcloudClearAccount() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Mixcloud account in mock mode') },

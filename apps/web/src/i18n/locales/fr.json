@@ -1,6 +1,6 @@
 {
   "app": { "name": "Kasbah" },
-  "nav": { "main": "Navigation", "home": "Maison", "energy": "Énergie", "water": "Eau", "heating": "Chauffage", "vehicles": "Véhicules", "robots": "Robots", "pets": "Animaux", "weather": "Météo", "agenda": "Agenda", "settings": "Réglages", "lights": "Lumières", "covers": "Ouvrants", "cameras": "Caméras", "media": "Médias", "music": "Musique", "automations": "Automatisations", "tens": "TENS" },
+  "nav": { "main": "Navigation", "home": "Maison", "energy": "Énergie", "water": "Eau", "heating": "Chauffage", "vehicles": "Véhicules", "robots": "Robots", "pets": "Animaux", "weather": "Météo", "agenda": "Agenda", "school": "École", "settings": "Réglages", "lights": "Lumières", "covers": "Ouvrants", "cameras": "Caméras", "media": "Médias", "music": "Musique", "automations": "Automatisations", "tens": "TENS" },
   "alerts": { "pending": "{view} · alerte en cours", "dismiss": "Masquer", "dismissHint": "Ne plus la signaler sur le rail" },
   "common": {
     "showIn3d": "Voir dans la vue 3D",
@@ -575,6 +575,14 @@
       "expires": "Session valable jusqu'au {date} ; un nouveau code sera demandé ensuite.",
       "poll": "Appareils relus toutes les {min} min."
     },
+    "toutemonannee": {
+      "intro": "TouteMonAnnée n'offre aucune connexion déléguée à un tiers : il faut l'identifiant et le mot de passe du compte. Le mot de passe ne traverse le serveur qu'une fois et n'est jamais enregistré — seuls les cookies de session le sont.",
+      "username": "Adresse e-mail ou identifiant",
+      "password": "Mot de passe",
+      "link": "Relier le compte", "linking": "Liaison…", "linked": "Compte TouteMonAnnée relié",
+      "linkedAs": "Relié : {user}", "unlink": "Délier le compte", "open": "Ouvrir la vue École",
+      "sessionLost": "La session a expiré : reliez le compte à nouveau."
+    },
     "melcloud": {
       "intro": "Mitsubishi n'offre aucune connexion déléguée à un tiers : il faut l'identifiant et le mot de passe de votre compte MELCloud. Le mot de passe ne traverse le serveur qu'une fois et n'est jamais enregistré — seule une clé de session l'est.",
       "email": "Adresse e-mail MELCloud",
@@ -731,6 +739,25 @@
     "nameLabel": "Nom (facultatif)", "namePlaceholder": "Celui de l'agenda", "add": "Ajouter",
     "remove": "Retirer", "removeConfirm": "Confirmer le retrait", "moveUp": "Monter {name}", "moveDown": "Descendre {name}", "color": "Couleur de {name}",
     "lastRead": "Lu à {time}", "neverRead": "Pas encore lu", "readError": "Illisible : {message}"
+  },
+  "school": {
+    "tabs": { "homework": "Devoirs", "messages": "Liaison", "posts": "Publications" }, "tabsLabel": "Cahiers de l'école",
+    "disabled": "Le plugin TouteMonAnnée n'est pas activé. Activez-le dans Réglages → Plugins.",
+    "notLinked": "Aucun compte TouteMonAnnée relié. Reliez-le dans Réglages → Plugins → toutemonannee.",
+    "openSettings": "Ouvrir les réglages",
+    "sessionLost": "La session TouteMonAnnée a expiré : dernière lecture affichée. Reliez le compte à nouveau.",
+    "updatedAt": "Mis à jour à {time}", "refresh": "Mettre à jour maintenant", "refreshFailed": "Mise à jour impossible : {message}",
+    "filtersLabel": "Classes et niveaux affichés", "levelHint": "Afficher ou masquer ce qui est pour les {level} (ce qui ne nomme aucun niveau reste affiché)",
+    "saveFailed": "Filtre non enregistré : {message}",
+    "today": "aujourd'hui", "tomorrow": "demain", "yesterday": "hier", "inDays": "dans {n} jours", "daysAgo": "il y a {n} jours",
+    "showPast": "Afficher le devoir passé | Afficher le devoir passé | Afficher les {n} devoirs passés", "hidePast": "Masquer les devoirs passés",
+    "homework": "Devoirs", "noHomework": "Rien à rendre dans les jours qui viennent.",
+    "markDone": "Fait : {what}", "tickFailed": "Case non enregistrée : {message}",
+    "siteAck": "{n} / {total} ont coché", "siteAckHint": "Case demandée par l'enseignante : elle voit qui l'a cochée.",
+    "message": "Message", "unread": "Non lu", "noMessage": "Aucun message dans le cahier de liaison.",
+    "responses": "{n} réponse | {n} réponse | {n} réponses",
+    "post": "Publication", "new": "Nouveau", "noPost": "Aucune publication.",
+    "comments": "{n} commentaire | {n} commentaire | {n} commentaires"
   },
   "weather": {
     "title": "Météo", "noDevice": "Aucun service météo actif. Activez-en un dans Réglages → Plugins.",

@@ -198,6 +198,39 @@ export interface AgendaCalendar { id: string; name: string; color: string; fetch
  */
 export type AgendaEvent = { id: string; calendarId: string; title: string; location?: string; description?: string }
   & ({ allDay: true; start: string; end: string } | { allDay: false; start: number; end: number })
+
+/** Pièce jointe d'une entrée TouteMonAnnée : image ou document hébergé par le site. */
+export interface SchoolFile { type: string; url: string; thumb: string | null; name: string }
+/** Un cahier de texte (une classe) du compte TouteMonAnnée. */
+export interface SchoolJournal { id: string; name: string; years: string | null; students: string[] }
+/** Un devoir : `date` = le jour où c'est à rendre (`YYYY-MM-DD`). */
+export interface SchoolHomework {
+  id: number; journalId: string; date: string; title: string | null; subject: string | null; author: string | null
+  text: string; levels: string[]; files: SchoolFile[]; done: boolean
+  /** La case « fait » est celle du site : l'enseignante voit qui a coché. */
+  siteAck: { validated: number; total: number } | null
+}
+/** Un message du cahier de liaison ; `at` = heure locale `YYYY-MM-DDTHH:mm`. */
+export interface SchoolMessage {
+  id: number; journalId: string; at: string; title: string | null; author: string | null
+  text: string; levels: string[]; files: SchoolFile[]; read: boolean; responses: number
+}
+export interface SchoolPost {
+  id: number; journalId: string; at: string; title: string | null; author: string | null
+  text: string; levels: string[]; files: SchoolFile[]; comments: number
+}
+export interface SchoolFilters { hiddenJournals: string[]; hiddenLevels: string[] }
+/**
+ * Tout ce que le plugin `toutemonannee` sait, en une réponse : chaque écriture rend la même forme.
+ * Le mot de passe n'y figure JAMAIS ; il ne fait que traverser `schoolLogin`.
+ */
+export interface SchoolData {
+  linked: boolean; username: string | null; sessionLost: boolean; fetchedAt: number | null; error: string | null
+  journals: SchoolJournal[]; homework: SchoolHomework[]; messages: SchoolMessage[]; posts: SchoolPost[]
+  filters: SchoolFilters
+  /** Identifiant de la plus récente publication vue. */
+  postsSeen: number
+}
 /** Un mix Mixcloud (plugin `mixcloud`) ; `key` (`/user/slug/`) est son id pour le lecteur commun. */
 export interface MixcloudMix {
   key: string
@@ -608,6 +641,16 @@ export interface Transport {
   agendaReorderCalendars(ids: string[]): Promise<{ calendars: AgendaCalendar[] }>
   /** Occurrences de tous les agendas sur `[from, to[` (ms, 62 jours au plus). */
   agendaEvents(from: number, to: number): Promise<{ events: AgendaEvent[] }>
+  /** Devoirs, cahier de liaison et publications de la classe (plugin `toutemonannee`). */
+  schoolData(): Promise<SchoolData>
+  /** Relier le compte : le mot de passe sert une fois, côté serveur, puis il est oublié. */
+  schoolLogin(body: { username: string; password: string }): Promise<SchoolData>
+  schoolLogout(): Promise<SchoolData>
+  schoolRefresh(): Promise<SchoolData>
+  /** Cocher « fait » : sur le site quand l'enseignante a ouvert sa case, sinon dans Kasbah. */
+  schoolSetDone(journalId: string, id: number, done: boolean): Promise<SchoolData>
+  schoolSetFilters(filters: SchoolFilters): Promise<SchoolData>
+  schoolSeenPosts(id: number): Promise<SchoolData>
   /** Le compte Mixcloud relié (un nom d'utilisateur : l'API publique ne demande rien d'autre). */
   mixcloudStatus(): Promise<MixcloudStatus>
   mixcloudSetAccount(username: string): Promise<MixcloudStatus>
