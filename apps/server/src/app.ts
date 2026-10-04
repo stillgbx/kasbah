@@ -16,7 +16,9 @@ import { SceneSeeder } from './core/scene-seeder'
 import { EnergyHistory } from './core/history'
 import { registerRoutes } from './http/routes'
 import { registerStatic } from './http/static'
+import { createMcpAuth, mcpAuthConfigSchema } from './mcp/auth'
 import { registerMcp } from './mcp/server'
+import { registerMcpUserRoutes } from './mcp/users-routes'
 import { PLUGIN_FACTORIES } from './plugins'
 import { setPlaybackBridge } from './core/playbackBridge'
 import { createMusicPlayer, musicConfigSchema, MUSIC_PREFIX } from './music/player'
@@ -106,7 +108,10 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
 
   registerRoutes(app, { registry, scenes, host, house, hub, history, automations, startedAt: clock.now() })
   host.registerRoutes(app)
-  await registerMcp(app, { registry, scenes, host, house })
+  const mcpConfig = mcpAuthConfigSchema.parse(opts.envSource ?? process.env)
+  const mcpAuth = createMcpAuth({ config: mcpConfig, logger: opts.logger.child({ component: 'mcp' }) })
+  await registerMcp(app, { registry, scenes, host, house, auth: mcpAuth })
+  registerMcpUserRoutes(app, { usersFile: mcpConfig.MCP_USERS_FILE, publicHosts: mcpAuth.publicHosts })
   // Les sources musicales n'ont pas d'appareils : pour `play_url` elles passent par Cast/Sonos via l'hôte.
   setPlaybackBridge({
     getDevice: (id) => registry.get(id),

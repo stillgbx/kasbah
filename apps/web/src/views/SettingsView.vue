@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import PageHeader from '../components/layout/PageHeader.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
+import McpUsersCard from '../components/settings/McpUsersCard.vue'
 import PluginSection from '../components/settings/PluginSection.vue'
 import Segmented from '../components/ui/Segmented.vue'
 import { LOCALE_LABELS } from '../i18n'
@@ -295,6 +296,12 @@ const houseStats = computed(() => {
           <v-switch :model-value="localPlugins.isEnabled('tens')" hide-details density="compact"
                     @update:model-value="(v: boolean | null) => localPlugins.setEnabled('tens', v === true)" />
         </div>
+      </section>
+      <!-- qui peut connecter un assistant (Claude…) au serveur MCP, par sa page de connexion -->
+      <section class="card block settings__plugins">
+        <div class="block__title">{{ $t('mcpUsers.title') }}</div>
+        <p class="muted small plugins__hint">{{ $t('mcpUsers.hint') }}</p>
+        <McpUsersCard />
       </section>
       <!-- les fabricants ferment la page : une liste pleine largeur, où chaque ligne a la place de
            dire nom, statut et interrupteur sans se serrer -->

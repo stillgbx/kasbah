@@ -136,6 +136,7 @@ function mockNextRun(a: Automation, now = Date.now()): number | undefined {
 export function createMockTransport(opts: MockTransportOptions = {}): Transport & { sim: Simulation } {
   const sim = new Simulation({ scenario: opts.scenario ?? 'default', seed: opts.seed ?? 42, timeScale: opts.timeScale ?? 1 })
   let house = opts.house ?? parseHouse(demoHouse)
+  let mcpUsers = ['parent']
   const states = new Map<string, DeviceState>()
   const descriptors = sim.devices()
   for (const d of descriptors) states.set(d.id, { ...sim.getState(d.externalId)!, updatedAt: Date.now() })
@@ -390,6 +391,17 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     async musicQueueRemove() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
     async musicProgress() {},
     async musicQueueClear() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
+    // comptes MCP : en mémoire, un compte de démonstration
+    async mcpUsers() { return { users: mcpUsers.map((name) => ({ name })) } },
+    async mcpSetUser(name) {
+      if (!mcpUsers.includes(name)) mcpUsers.push(name)
+      return { users: mcpUsers.map((n) => ({ name: n })) }
+    },
+    async mcpRemoveUser(name) {
+      if (!mcpUsers.includes(name)) throw new ApiRequestError(404, 'NOT_FOUND', `no MCP user "${name}"`)
+      mcpUsers = mcpUsers.filter((n) => n !== name)
+      return { users: mcpUsers.map((n) => ({ name: n })) }
+    },
     async agendaCalendars() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no calendar in mock mode') },
     async agendaAddCalendar() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no calendar in mock mode') },
     async agendaUpdateCalendar() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no calendar in mock mode') },

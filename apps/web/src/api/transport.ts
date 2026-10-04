@@ -190,6 +190,9 @@ export interface YtmusicStatus {
   browsers: string[]
 }
 
+/** Un compte du serveur MCP (`mcp-users.json`) : le nom seul, le mot de passe haché reste sur le serveur. */
+export interface McpUser { name: string }
+
 /** Un agenda de la maison (plugin `agenda`) ; son adresse iCal reste sur le serveur. */
 export interface AgendaCalendar { id: string; name: string; color: string; fetchedAt: number | null; error: string | null }
 /**
@@ -631,6 +634,12 @@ export interface Transport {
   musicProgress(body: { source: string; id: string; positionS: number; durationS?: number; ended?: boolean }): Promise<void>
   /** Vider la file : le titre en cours continue, seul. */
   musicQueueClear(deviceId: string): Promise<MusicQueue>
+  /** Comptes du serveur MCP (assistants IA). */
+  mcpUsers(): Promise<{ users: McpUser[] }>
+  /** Crée le compte, ou change son mot de passe (8 caractères au moins). */
+  mcpSetUser(name: string, password: string): Promise<{ users: McpUser[] }>
+  /** Retire le compte : ses jetons ne passent plus. */
+  mcpRemoveUser(name: string): Promise<{ users: McpUser[] }>
   /** Les agendas de la maison (plugin `agenda`, adresses iCal secrètes). */
   agendaCalendars(): Promise<{ calendars: AgendaCalendar[] }>
   /** Ajout par l'adresse iCal : le serveur la lit tout de suite et refuse ce qui n'est pas un agenda. */

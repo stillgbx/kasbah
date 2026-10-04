@@ -723,6 +723,28 @@
     "smaller": "Réduire", "bigger": "Agrandir",
     "saveError": "Place non enregistrée : {message}"
   },
+  "mcpUsers": {
+    "title": "Assistants IA (MCP)",
+    "hint": "Les comptes qui ouvrent la page de connexion d'un assistant (Claude sur le téléphone, Claude Desktop…) au serveur MCP de Kasbah. Retirer un compte déconnecte aussitôt ses assistants. Cette liste ne se gère que depuis le réseau local.",
+    "none": "Aucun compte : aucun assistant ne peut se connecter.",
+    "password": "Mot de passe",
+    "remove": "Retirer",
+    "removeConfirm": "Confirmer le retrait",
+    "addTitle": "Ajouter un compte",
+    "changeTitle": "Nouveau mot de passe pour {name}",
+    "nameLabel": "Nom",
+    "passwordLabel": "Mot de passe",
+    "confirmLabel": "Encore une fois",
+    "add": "Ajouter",
+    "change": "Changer le mot de passe",
+    "cancel": "Annuler",
+    "badName": "Nom : lettres, chiffres, . _ @ - (64 au plus).",
+    "tooShort": "{n} caractères au moins.",
+    "mismatch": "Les deux saisies diffèrent.",
+    "added": "Compte {name} ajouté.",
+    "changed": "Mot de passe de {name} changé.",
+    "removed": "Compte {name} retiré."
+  },
   "agenda": {
     "modes": { "month": "Mois", "week": "Semaine", "day": "Jour" },
     "modesLabel": "Affichage", "today": "Aujourd'hui", "prev": "Période précédente", "next": "Période suivante",

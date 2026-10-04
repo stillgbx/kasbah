@@ -181,7 +181,18 @@ Le serveur Kasbah expose aussi un serveur [MCP](https://modelcontextprotocol.io)
 
 Ressource : `kasbah://house` (le `house.json` validé).
 
-**Pas d'authentification** : `/mcp` n'accepte que les requêtes adressées à `localhost` / `127.0.0.1` ou au nom du poste sur le DNS local, `kasbah` / `kasbah.home.internal` (en-têtes `Host` et `Origin`, protection contre le DNS rebinding) : depuis un autre poste du réseau, utiliser `http://kasbah:8787/mcp`. Ce n'est pas un contrôle d'accès : un poste du réseau local peut forger son `Host`, comme il peut déjà appeler l'API REST.
+**Authentification OAuth, partout** (réseau local compris) : Kasbah est son propre serveur d'autorisation. À la première connexion, le client ouvre une page Kasbah (utilisateur + mot de passe), puis garde un jeton (accès 1 h, renouvellement 90 jours glissants). Les clients s'enregistrent seuls (enregistrement dynamique, ou document de métadonnées pour claude.ai).
+
+- **Comptes** : `apps/server/mcp-users.json`, à côté du `.env`, hors dépôt, mots de passe hachés (scrypt). Les gérer dans **Réglages → Assistants IA (MCP)** (ajouter, changer le mot de passe, retirer ; depuis le réseau local seulement), ou en secours :
+  ```bash
+  npm run mcp-user -w @kasbah/server -- add <nom>
+  ```
+  (`remove <nom>` coupe aussi ses jetons, `list` les liste). Le fichier est relu à chaque connexion : pas besoin de redémarrer.
+- **Jetons et clients enregistrés** : `apps/server/.state/mcp-auth.json` (hachés). Le supprimer déconnecte tous les clients.
+- **Depuis Internet** (Claude sur le téléphone, connecteur claude.ai) : publier par un tunnel HTTPS **seulement** `/mcp`, `/oauth/*` et `/.well-known/oauth-*`, et déclarer l'adresse dans `MCP_PUBLIC_URL` (son nom est alors accepté, et annoncé en https). Puis sur claude.ai : Paramètres → Connecteurs → Ajouter un connecteur personnalisé → `https://<adresse>/mcp`.
+- **Réseau local** : les clients bâtis sur le SDK MCP refusent d'envoyer leurs identifiants à un serveur d'autorisation en `http://` hors de la machine : `http://localhost:8787/mcp` sur le poste du serveur, l'adresse publique en https ailleurs.
+
+`/mcp` n'accepte en plus que les requêtes adressées à `localhost` / `127.0.0.1`, `kasbah` / `kasbah.home.internal` ou au nom de `MCP_PUBLIC_URL` (en-têtes `Host` et `Origin`, protection contre le DNS rebinding).
 
 Configurer un client (serveur Kasbah lancé) :
 
@@ -197,11 +208,10 @@ Configurer un client (serveur Kasbah lancé) :
   ```json
   { "mcpServers": { "kasbah": { "url": "http://localhost:8787/mcp" } } }
   ```
-- **Claude Desktop** : ses connecteurs distants passent par le cloud et n'atteignent pas `localhost` ; passer par le pont stdio `mcp-remote` dans `claude_desktop_config.json`
+- **Claude Desktop et application mobile** : le connecteur claude.ai ci-dessus (adresse publique), partagé par tous les appareils du compte. Sans adresse publique, sur le poste du serveur, le pont stdio `mcp-remote` dans `claude_desktop_config.json`
   ```json
   { "mcpServers": { "kasbah": { "command": "npx", "args": ["-y", "mcp-remote", "http://localhost:8787/mcp"] } } }
   ```
-  Depuis un autre poste : `"http://kasbah:8787/mcp", "--allow-http"` (`mcp-remote` refuse une URL `http://` hors localhost sans ce drapeau).
 - **Tester à la main** : `npx @modelcontextprotocol/inspector`, transport « Streamable HTTP », URL ci-dessus.
 
 ## Configuration (`apps/server/.env`)

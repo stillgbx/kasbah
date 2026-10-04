@@ -9,7 +9,8 @@
     "build": "node build.mjs",
     "start": "node --env-file-if-exists=.env dist/main.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "mcp-user": "node --import tsx --env-file-if-exists=.env src/mcp/users-cli.ts"
   },
   "dependencies": {
     "@fastify/compress": "^9.2.0",

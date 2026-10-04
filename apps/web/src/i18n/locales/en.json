@@ -723,6 +723,28 @@
     "smaller": "Smaller", "bigger": "Bigger",
     "saveError": "Spot not saved: {message}"
   },
+  "mcpUsers": {
+    "title": "AI assistants (MCP)",
+    "hint": "Accounts that open the sign-in page of an assistant (Claude on your phone, Claude Desktop…) to Kasbah's MCP server. Removing an account disconnects its assistants right away. This list can only be managed from the local network.",
+    "none": "No account: no assistant can connect.",
+    "password": "Password",
+    "remove": "Remove",
+    "removeConfirm": "Confirm removal",
+    "addTitle": "Add an account",
+    "changeTitle": "New password for {name}",
+    "nameLabel": "Name",
+    "passwordLabel": "Password",
+    "confirmLabel": "Once again",
+    "add": "Add",
+    "change": "Change password",
+    "cancel": "Cancel",
+    "badName": "Name: letters, digits, . _ @ - (64 max).",
+    "tooShort": "{n} characters at least.",
+    "mismatch": "The two entries differ.",
+    "added": "Account {name} added.",
+    "changed": "{name}'s password changed.",
+    "removed": "Account {name} removed."
+  },
   "agenda": {
     "modes": { "month": "Month", "week": "Week", "day": "Day" },
     "modesLabel": "View", "today": "Today", "prev": "Previous period", "next": "Next period",

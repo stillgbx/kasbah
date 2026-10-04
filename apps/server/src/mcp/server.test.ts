@@ -1,4 +1,6 @@
-import { resolve } from 'node:path'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import type { AddressInfo } from 'node:net'
 import { Client, StreamableHTTPClientTransport, type VersionNegotiationMode } from '@modelcontextprotocol/client'
 import pino from 'pino'
@@ -8,7 +10,9 @@ import { loadEnv } from '../config/env'
 import { loadHouse } from '../config/house'
 import { registerMusicSource } from '../music/sources'
 import { createMockPlugin } from '../plugins/mock'
+import { hashPassword } from './auth'
 import { schoolDigest } from './server'
+import { signIn, type TestOAuthProvider } from './test-oauth'
 
 // `/mcp` servi par l'application assemblée, interrogé par le vrai client du SDK dans les DEUX
 // versions du protocole : 2025 (ce que parlent les clients d'aujourd'hui) et 2026-07-28 (sans état).
@@ -19,7 +23,12 @@ let kasbah: KasbahApp
 let url: URL
 // Une source ytmusic factice : le vrai plugin demande un cookie et le réseau.
 let unregister: () => void
+// Un compte dans un fichier jetable ; chaque client passe par la vraie connexion OAuth.
+const LOGIN = { username: 'lou', password: 'correct horse battery' }
+let provider: TestOAuthProvider
 beforeAll(async () => {
+  const usersFile = join(mkdtempSync(join(tmpdir(), 'kasbah-mcp-')), 'mcp-users.json')
+  writeFileSync(usersFile, JSON.stringify({ users: [{ name: LOGIN.username, password: await hashPassword(LOGIN.password) }] }))
   unregister = registerMusicSource({
     id: 'ytmusic', label: 'YouTube Music',
     resolve: async () => ({ url: 'http://192.0.2.9/audio.m4a', formatId: '140', ext: 'm4a', abrKbps: 128, sizeBytes: 4_500_000, durationS: 281 }),
@@ -30,12 +39,13 @@ beforeAll(async () => {
     house: await loadHouse(DEMO_HOUSE),
     factories: { mock: createMockPlugin },
     // les enceintes refusent localhost : le lecteur commun exige une base publiée
-    envSource: { MUSIC_PUBLISH_BASE: 'http://192.0.2.1:8787' },
+    envSource: { MUSIC_PUBLISH_BASE: 'http://192.0.2.1:8787', MCP_USERS_FILE: usersFile },
     serveStatic: false,
   })
   await kasbah.app.listen({ port: 0, host: '127.0.0.1' })
   await kasbah.startPlugins()
   url = new URL(`http://127.0.0.1:${(kasbah.app.server.address() as AddressInfo).port}/mcp`)
+  provider = (await signIn(url, LOGIN))!
 })
 afterAll(async () => { unregister(); await kasbah.close() })
 
@@ -45,7 +55,7 @@ describe.each<[string, VersionNegotiationMode]>([['2025', 'legacy'], ['2026-07-2
   let client: Client
   beforeAll(async () => {
     client = new Client({ name: 'test', version: '0' }, { versionNegotiation: { mode } })
-    await client.connect(new StreamableHTTPClientTransport(url))
+    await client.connect(new StreamableHTTPClientTransport(url, { authProvider: provider }))
   })
   afterAll(async () => { await client.close() })
 
@@ -151,7 +161,7 @@ describe('schoolDigest', () => {
 
 it('get_school sans le plugin rend une erreur d\'outil', async () => {
   const client = new Client({ name: 'test', version: '0' })
-  await client.connect(new StreamableHTTPClientTransport(url))
+  await client.connect(new StreamableHTTPClientTransport(url, { authProvider: provider }))
   const r = await client.callTool({ name: 'get_school', arguments: {} })
   expect(r.isError).toBe(true)
   await client.close()
@@ -159,7 +169,16 @@ it('get_school sans le plugin rend une erreur d\'outil', async () => {
 
 it('accepte le nom du poste sur le DNS local', async () => {
   const res = await kasbah.app.inject({ method: 'POST', url: '/mcp', headers: { host: 'kasbah:8787', 'content-type': 'application/json' }, payload: {} })
-  expect(res.statusCode).not.toBe(403)
+  expect(res.statusCode).toBe(401)
+})
+
+it('exige un jeton, même en local, et dit où trouver le serveur d\'autorisation', async () => {
+  const res = await kasbah.app.inject({ method: 'POST', url: '/mcp', headers: { host: 'kasbah:8787', 'content-type': 'application/json' }, payload: {} })
+  expect(res.statusCode).toBe(401)
+  expect(res.headers['www-authenticate']).toBe('Bearer resource_metadata="http://kasbah:8787/.well-known/oauth-protected-resource/mcp"')
+  const bad = await kasbah.app.inject({ method: 'POST', url: '/mcp', headers: { authorization: 'Bearer nope', 'content-type': 'application/json' }, payload: {} })
+  expect(bad.statusCode).toBe(401)
+  expect(bad.headers['www-authenticate']).toContain('error="invalid_token"')
 })
 
 it('refuse un Host qui n\'est ni localhost ni le poste (DNS rebinding)', async () => {

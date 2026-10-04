@@ -8,18 +8,20 @@ import type { PluginHost } from '../core/plugin-host'
 import type { DeviceRegistry } from '../core/registry'
 import type { SchoolFile, SchoolHomework, SchoolJournal, SchoolMessage, SchoolPost } from '../plugins/toutemonannee/mapping'
 import type { SceneRegistry } from '../core/scene-registry'
+import type { McpAuth } from './auth'
 
 export interface McpDeps {
   registry: DeviceRegistry
   scenes: SceneRegistry
   host: PluginHost
   house: LoadedHouse
+  auth: McpAuth
 }
 
 // Serveur MCP sur `/mcp` (Streamable HTTP, SDK v2) : les mêmes lectures et commandes que le REST,
-// pour un agent. Sans authentification : le Host et l'Origin doivent être localhost ou le nom du poste
-// sur le DNS local (protection contre le DNS rebinding — pas un contrôle d'accès, un client du LAN
-// peut forger son Host). Sans état : une instance par requête, clients 2025 servis aussi.
+// pour un agent. Jeton OAuth exigé partout (`auth.ts`). Le Host et l'Origin doivent en plus être
+// localhost, le nom du poste sur le DNS local ou celui de `MCP_PUBLIC_URL` (protection contre le DNS
+// rebinding). Sans état : une instance par requête, clients 2025 servis aussi.
 const ALLOWED_HOSTS = ['localhost', '127.0.0.1', '[::1]', 'kasbah', 'kasbah.home.internal']
 
 const json = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value) }] })
@@ -254,12 +256,14 @@ export async function registerMcp(app: FastifyInstance, deps: McpDeps): Promise<
   const handler = createMcpHandler(() => buildServer(deps, app))
   app.addHook('onClose', () => handler.close())
   await app.register(async (sub) => {
-    sub.addHook('onRequest', hostHeaderValidation(ALLOWED_HOSTS))
-    sub.addHook('onRequest', originValidation(ALLOWED_HOSTS))
+    const hosts = [...ALLOWED_HOSTS, ...deps.auth.publicHosts]
+    sub.addHook('onRequest', hostHeaderValidation(hosts))
+    deps.auth.routes(sub)
     // Fastify a déjà lu le corps JSON : on reconstruit la requête web que le SDK attend.
     // Pas de compression : la réponse peut être un flux SSE.
     sub.route({
       method: ['GET', 'POST', 'DELETE'], url: '/mcp', compress: false,
+      onRequest: [originValidation(hosts), deps.auth.requireToken],
       handler: async (req, reply) => {
         const headers = new Headers()
         for (const [k, v] of Object.entries(req.headers)) {
