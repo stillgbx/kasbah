@@ -12,10 +12,11 @@ const DEV_PORT = Number(process.env.PORT ?? 5173)
 const SERVER = process.env.KASBAH_SERVER ?? 'http://localhost:8787'
 const FIXED_PORT = process.env.PORT === undefined || process.env.KASBAH_SERVER !== undefined
 
-// `base: './'` : le build est servi par le serveur Fastify sous / (repli SPA), ou depuis un sous-dossier.
+// `base: '/'` : chemins absolus, sans quoi `/automations/new` rechargé chercherait ses fichiers sous
+// `/automations/assets/`. Le build est servi par le serveur Fastify sous / (repli SPA).
 export default defineConfig({
   plugins: [vue(), vuetify({ autoImport: true })],
-  base: './',
+  base: '/',
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   // MapLibre charge son worker par `new URL('./maplibre-gl-worker.mjs', import.meta.url)` : une fois
   // pré-empaqueté dans `.vite/deps`, cette URL ne pointe plus sur rien, le worker ne démarre pas et

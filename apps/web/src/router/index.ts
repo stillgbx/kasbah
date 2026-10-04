@@ -1,9 +1,11 @@
-import { createRouter, createWebHashHistory } from 'vue-router'
+import { createRouter, createWebHistory } from 'vue-router'
 
-// Historique par hash : le build est servi en `base: './'` par le serveur Fastify ou depuis un
-// dossier statique, sans configuration de réécriture côté serveur.
+// Historique HTML5 (pas de `#`) : le serveur Fastify renvoie index.html pour tout GET hors /api et
+// /ws (repli SPA), Vite fait de même en dev. Un ancien lien `/#/music` est réécrit en `/music`.
+if (location.hash.startsWith('#/')) history.replaceState(history.state, '', location.hash.slice(1))
+
 export const router = createRouter({
-  history: createWebHashHistory(),
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     { path: '/', name: 'home', component: () => import('../views/HomeView.vue') },
     { path: '/lights', name: 'lights', component: () => import('../views/LightsView.vue') },
