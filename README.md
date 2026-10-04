@@ -177,6 +177,7 @@ Le serveur Kasbah expose aussi un serveur [MCP](https://modelcontextprotocol.io)
 | `search_music` | Recherche YouTube Music (titres), Mixcloud (mixes) ou Radios (stations), résultats prêts à jouer |
 | `play_music` | Joue une piste ou une file sur une enceinte, par le lecteur commun (`/api/music/queue`) |
 | `play_radio` | Joue une station en direct (`/api/plugins/radio/play`) |
+| `get_school` | Devoirs à venir (ou passés), cahier de liaison et publications de l'école (TouteMonAnnée), en lecture seule, filtres de la vue École appliqués |
 
 Ressource : `kasbah://house` (le `house.json` validé).
 

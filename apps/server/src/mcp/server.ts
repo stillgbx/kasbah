@@ -6,6 +6,7 @@ import { z } from 'zod'
 import type { LoadedHouse } from '../config/house'
 import type { PluginHost } from '../core/plugin-host'
 import type { DeviceRegistry } from '../core/registry'
+import type { SchoolFile, SchoolHomework, SchoolJournal, SchoolMessage, SchoolPost } from '../plugins/toutemonannee/mapping'
 import type { SceneRegistry } from '../core/scene-registry'
 
 export interface McpDeps {
@@ -39,6 +40,53 @@ type PlayableTrack = z.infer<typeof playableTrackSchema>
 interface YtmTrack { videoId: string; title: string; artists: string[]; album?: string | null; artUrl: string | null; durationS: number | null; explicit?: boolean }
 interface MixcloudMix { key: string; name: string; user: { name: string }; artUrl: string | null; durationS: number | null }
 interface RadioStation { id: string; name: string; country?: string; tags: string[]; codec?: string; bitrateKbps?: number }
+
+// L'école, telle que `GET /api/plugins/toutemonannee/school` la rend.
+interface SchoolData {
+  linked: boolean
+  sessionLost: boolean
+  fetchedAt: number | null
+  error: string | null
+  journals: SchoolJournal[]
+  homework: SchoolHomework[]
+  messages: SchoolMessage[]
+  posts: SchoolPost[]
+  filters: { hiddenJournals: string[]; hiddenLevels: string[] }
+  postsSeen: number
+}
+export type SchoolSection = 'all' | 'homework' | 'messages' | 'posts'
+
+/**
+ * Devoirs, cahier de liaison et publications pour un agent : filtres de la vue École appliqués (même
+ * règle que `isVisible` côté web), classe nommée plutôt que son uuid, pièces jointes réduites à nom + url.
+ */
+export function schoolDigest(data: SchoolData, opts: { today: string; section: SchoolSection; includePast: boolean; includeHidden: boolean }) {
+  const f = data.filters
+  const visible = (e: { journalId: string; levels: string[] }) => opts.includeHidden || (!f.hiddenJournals.includes(e.journalId)
+    && (e.levels.length === 0 || e.levels.some((l) => !f.hiddenLevels.includes(l))))
+  const className = new Map(data.journals.map((j) => [j.id, j.name]))
+  type Common = { class?: string; title?: string; author?: string; text?: string; levels?: string[]; files?: { name: string; url: string }[] }
+  const common = (e: { journalId: string; title: string | null; author: string | null; text: string; levels: string[]; files: SchoolFile[] }): Common => optional({
+    class: className.get(e.journalId), title: e.title, author: e.author, text: e.text,
+    levels: e.levels.length ? e.levels : null, files: e.files.length ? e.files.map((x) => ({ name: x.name, url: x.url })) : null,
+  })
+  const want = (s: SchoolSection) => opts.section === 'all' || opts.section === s
+  const error = data.sessionLost ? 'session TouteMonAnnée perdue : dernière lecture gardée, relier le compte dans Kasbah' : data.error
+  return {
+    today: opts.today,
+    fetchedAt: data.fetchedAt ? new Date(data.fetchedAt).toISOString() : null,
+    ...(error ? { error } : {}),
+    classes: data.journals.map((j) => optional({ name: j.name, years: j.years, students: j.students })),
+    ...(want('homework') ? { homework: data.homework
+      .filter((h) => visible(h) && (opts.includePast || h.date >= opts.today))
+      .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id)
+      .map((h) => ({ date: h.date, ...optional({ subject: h.subject }), ...common(h), done: h.done })) } : {}),
+    ...(want('messages') ? { messages: data.messages.filter(visible).map((m) => ({ at: m.at, ...common(m), read: m.read })) } : {}),
+    ...(want('posts') ? { posts: data.posts.filter(visible).map((p) => ({ at: p.at, ...common(p), new: p.id > data.postsSeen })) } : {}),
+  }
+}
+
+const localDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
 const optional = <T extends object>(o: T) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== null && v !== undefined && v !== ''))
 
@@ -176,6 +224,21 @@ function buildServer(deps: McpDeps, app: FastifyInstance): McpServer {
   }, async ({ deviceId, stationId }) => {
     await call('POST', '/api/plugins/radio/play', { deviceId, stationId })
     return json({ ok: true })
+  })
+
+  server.registerTool('get_school', {
+    title: "Lire l'école",
+    description: "Cahier de texte (devoirs), cahier de liaison et publications de l'école (TouteMonAnnée), en lecture seule, tels que la vue École de Kasbah les montre : les classes et niveaux masqués dans ses filtres sont écartés sauf includeHidden. Devoirs triés par date à rendre (YYYY-MM-DD), à venir seulement sauf includePast (le site n'en garde que quelques jours) ; done = case « fait ». Messages de liaison avec read, publications avec new. La lecture date de fetchedAt (relue toutes les 30 min).",
+    inputSchema: z.object({
+      section: z.enum(['all', 'homework', 'messages', 'posts']).default('all'),
+      includePast: z.boolean().default(false).describe('Inclure les devoirs dont la date est passée'),
+      includeHidden: z.boolean().default(false).describe('Ignorer les filtres classes / niveaux de la vue École'),
+    }),
+    annotations: { readOnlyHint: true },
+  }, async ({ section, includePast, includeHidden }) => {
+    const data = await call<SchoolData>('GET', '/api/plugins/toutemonannee/school')
+    if (!data.linked) return fail("TouteMonAnnée n'est pas relié : le relier dans la vue École de Kasbah")
+    return json(schoolDigest(data, { today: localDay(new Date()), section, includePast, includeHidden }))
   })
 
   server.registerResource('house', 'kasbah://house', {

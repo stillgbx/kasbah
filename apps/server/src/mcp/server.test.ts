@@ -8,6 +8,7 @@ import { loadEnv } from '../config/env'
 import { loadHouse } from '../config/house'
 import { registerMusicSource } from '../music/sources'
 import { createMockPlugin } from '../plugins/mock'
+import { schoolDigest } from './server'
 
 // `/mcp` servi par l'application assemblée, interrogé par le vrai client du SDK dans les DEUX
 // versions du protocole : 2025 (ce que parlent les clients d'aujourd'hui) et 2026-07-28 (sans état).
@@ -50,7 +51,7 @@ describe.each<[string, VersionNegotiationMode]>([['2025', 'legacy'], ['2026-07-2
 
   it('expose les outils', async () => {
     const { tools } = await client.listTools()
-    expect(tools.map((t) => t.name).sort()).toEqual(['get_device', 'get_health', 'list_devices', 'list_scenes', 'play_music', 'play_radio', 'recall_scene', 'search_music', 'send_command'])
+    expect(tools.map((t) => t.name).sort()).toEqual(['get_device', 'get_health', 'get_school', 'list_devices', 'list_scenes', 'play_music', 'play_radio', 'recall_scene', 'search_music', 'send_command'])
   })
 
   it('joue une piste par le lecteur commun, sur une enceinte', async () => {
@@ -100,6 +101,60 @@ describe.each<[string, VersionNegotiationMode]>([['2025', 'legacy'], ['2026-07-2
     const r = await client.readResource({ uri: 'kasbah://house' })
     expect(JSON.parse((r.contents[0] as { text: string }).text).name).toBe(kasbah.house.house.name)
   })
+})
+
+describe('schoolDigest', () => {
+  const J = 'j-ce1-ce2'
+  const hw = (id: number, date: string, levels: string[]) => ({
+    id, journalId: J, date, title: 'devoirs', subject: null, author: 'Mme Martin', text: `texte ${id}`, levels, files: [], done: false, siteAck: null,
+  })
+  const data = {
+    linked: true, sessionLost: false, fetchedAt: Date.UTC(2026, 9, 4, 14), error: null,
+    journals: [{ id: J, name: 'CE1-CE2', years: '2026-2027', students: ['ÉLÈVE Lou'] }],
+    homework: [hw(3, '2026-10-06', ['CE2']), hw(2, '2026-10-05', ['CE1']), hw(1, '2026-10-01', []), hw(4, '2026-10-05', [])],
+    messages: [{ id: 10, journalId: J, at: '2026-09-08T17:09', title: 'sport', author: 'Mme Durand', text: 'baskets', levels: [], files: [], read: false, responses: 0 }],
+    posts: [
+      { id: 20, journalId: J, at: '2026-10-01T10:48', title: 'Photos', author: null, text: 'prêtes', levels: [], files: [{ type: 'image', url: 'https://s3.example/a.jpg', thumb: null, name: 'a.jpg' }], comments: 2 },
+      { id: 19, journalId: J, at: '2026-09-30T08:00', title: 'Vote', author: null, text: 'pochette', levels: [], files: [], comments: 0 },
+    ],
+    filters: { hiddenJournals: [], hiddenLevels: ['CE1'] },
+    postsSeen: 19,
+  }
+  const opts = { today: '2026-10-04', section: 'all' as const, includePast: false, includeHidden: false }
+
+  it('rend les devoirs à venir triés, filtres de la vue École appliqués', () => {
+    const d = schoolDigest(data, opts)
+    expect(d.homework!.map((h) => h.text)).toEqual(['texte 4', 'texte 3'])
+    expect(d.homework![0]).toEqual({ date: '2026-10-05', class: 'CE1-CE2', title: 'devoirs', author: 'Mme Martin', text: 'texte 4', done: false })
+  })
+
+  it('rend les devoirs passés et masqués sur demande', () => {
+    const d = schoolDigest(data, { ...opts, includePast: true, includeHidden: true })
+    expect(d.homework!.map((h) => h.text)).toEqual(['texte 1', 'texte 2', 'texte 4', 'texte 3'])
+  })
+
+  it('marque messages lus et publications nouvelles, pièces jointes réduites', () => {
+    const d = schoolDigest(data, opts)
+    expect(d.messages).toEqual([{ at: '2026-09-08T17:09', class: 'CE1-CE2', title: 'sport', author: 'Mme Durand', text: 'baskets', read: false }])
+    expect(d.posts!.map((p) => [p.title, p.new])).toEqual([['Photos', true], ['Vote', false]])
+    expect(d.posts![0]!.files).toEqual([{ name: 'a.jpg', url: 'https://s3.example/a.jpg' }])
+  })
+
+  it('ne rend que la section demandée, et signale une session perdue', () => {
+    const d = schoolDigest({ ...data, sessionLost: true }, { ...opts, section: 'messages' })
+    expect(d.homework).toBeUndefined()
+    expect(d.posts).toBeUndefined()
+    expect(d.messages).toHaveLength(1)
+    expect(d.error).toMatch(/session/)
+  })
+})
+
+it('get_school sans le plugin rend une erreur d\'outil', async () => {
+  const client = new Client({ name: 'test', version: '0' })
+  await client.connect(new StreamableHTTPClientTransport(url))
+  const r = await client.callTool({ name: 'get_school', arguments: {} })
+  expect(r.isError).toBe(true)
+  await client.close()
 })
 
 it('accepte le nom du poste sur le DNS local', async () => {
