@@ -14,7 +14,7 @@ beforeEach(() => {
   usersFile = join(mkdtempSync(join(tmpdir(), 'kasbah-mcp-users-')), 'mcp-users.json')
   app = Fastify()
   app.setErrorHandler((err, _req, reply) => { const d = describeError(err); return sendError(reply, d.status, d.code, d.message) })
-  registerMcpUserRoutes(app, { usersFile, publicHosts: ['kasbah.example.org'] })
+  registerMcpUserRoutes(app, { usersFile })
 })
 
 const put = (name: string, password: string) => app.inject({ method: 'PUT', url: `/api/mcp/users/${encodeURIComponent(name)}`, payload: { password } })
@@ -49,11 +49,4 @@ it('n\'écrase pas un fichier illisible', async () => {
   const res = await put('lou', 'premier-mdp')
   expect(res.statusCode).toBe(500)
   expect(readFileSync(usersFile, 'utf8')).toBe('{ pas du json')
-})
-
-it('refuse la gestion des comptes sous le nom public', async () => {
-  const res = await app.inject({ method: 'GET', url: '/api/mcp/users', headers: { host: 'kasbah.example.org' } })
-  expect(res.statusCode).toBe(404)
-  expect((await app.inject({ method: 'PUT', url: '/api/mcp/users/lou', headers: { host: 'kasbah.example.org' }, payload: { password: 'premier-mdp' } })).statusCode).toBe(404)
-  expect((await app.inject({ method: 'GET', url: '/api/mcp/users', headers: { host: 'kasbah:8787' } })).statusCode).toBe(200)
 })

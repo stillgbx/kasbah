@@ -139,6 +139,29 @@ export interface McpAuthDeps {
   fetch?: typeof fetch
 }
 
+// Ce qu'on peut joindre sous le nom PUBLIC : le serveur MCP et son autorisation, rien d'autre. Un
+// proxy inverse (celui du NAS) transmet tout ce qui arrive sous son nom ; c'est ici qu'on trie, pour
+// que l'interface, l'API REST (sans authentification) et les caméras restent au réseau local.
+const PUBLIC_PATHS = new Set([
+  '/mcp',
+  '/oauth/authorize', '/oauth/token', '/oauth/register',
+  '/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp', '/.well-known/oauth-authorization-server',
+])
+
+/**
+ * Crochet `onRequest` GLOBAL : sous un nom public (`Host`, ou `X-Forwarded-Host` d'un proxy), 404 hors
+ * des chemins du MCP. À poser avant toute route.
+ */
+export function publicHostFilter(publicHosts: string[]) {
+  return async (req: FastifyRequest, reply: FastifyReply) => {
+    if (!publicHosts.length) return
+    const forwarded = String(req.headers['x-forwarded-host'] ?? '').split(',')[0]!.trim().replace(/:\d+$/, '')
+    if (!publicHosts.includes(req.hostname) && !publicHosts.includes(forwarded)) return
+    if (PUBLIC_PATHS.has(req.url.split('?')[0]!)) return
+    await reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'not found' } })
+  }
+}
+
 export interface McpAuth {
   /** Routes OAuth et métadonnées, à monter dans la sous-application de `/mcp` (même contrôle de `Host`). */
   routes(sub: FastifyInstance): void
