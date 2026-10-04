@@ -101,13 +101,35 @@ Déclarez-le dans [apps/server/src/plugins/index.ts](apps/server/src/plugins/ind
 
 ## Démarrage
 
-Prérequis : Node ≥ 22, npm ≥ 10. Pour les caméras (relais RTSP) et pour régénérer les matières photo 3D : **ffmpeg** sur la machine du serveur.
+### Machine neuve (Windows)
+
+Les écrans n'installent rien : tout se passe sur la machine du serveur.
+
+| Outil | Requis pour | Installation |
+|---|---|---|
+| Node ≥ 22, npm ≥ 10, git | tout | `winget install OpenJS.NodeJS.LTS` puis `winget install Git.Git` |
+| ffmpeg | caméras (relais RTSP), lecture musicale (Cast / Sonos), matières 3D | `winget install Gyan.FFmpeg` |
+| yt-dlp | YouTube Music, Mixcloud | `yt-dlp.exe` dans `_external/` (`YTM_YTDLP_PATH`, `MIXCLOUD_YTDLP_PATH`) |
+| générateur PO Token + plugin yt-dlp `bgutil` | YouTube Music | voir [wiki, installation](doc/5_setup/5_0_installation-et-scripts.md) |
+
+Rouvrir le terminal après un `winget install` : un processus déjà lancé ne voit pas le nouveau `PATH`.
 
 ```bash
+git clone <dépôt> kasbah && cd kasbah
 npm install
 cp apps/server/.env.example apps/server/.env   # puis ajuster (Hue, TaHoma…)
 npm run dev
 ```
+
+Pour reprendre une maison existante, recopier depuis l'ancienne machine ce que git ne porte pas : `apps/server/.env`, `apps/server/.state/` (jetons et sessions des fabricants), `house/maison.json` (+ `maison.automations.json`, `history/`) et `_external/`.
+
+### Lancer
+
+| Commande | Maison | Usage |
+|---|---|---|
+| `npm run dev` | celle de `KASBAH_HOUSE_FILE` (défaut : démo + simulation) | développement, serveur relancé à chaque modification |
+| `npm run house` | idem | la maison réelle au quotidien : serveur **sans** relance automatique, front Vite |
+| `npm run build && npm start` | idem | production de base : tout sur `KASBAH_PORT` (8787), sans Vite |
 
 Si npm bloque le script d'installation d'`esbuild` : `npm approve-scripts esbuild` puis `npm rebuild esbuild`.
 
