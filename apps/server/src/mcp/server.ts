@@ -1,5 +1,5 @@
 import { assertCommandAllowed, commandSchema, DEVICE_KINDS, indexHouse, sceneRecallSchema, type DeviceEntry } from '@kasbah/shared'
-import { localhostHostValidation, localhostOriginValidation } from '@modelcontextprotocol/fastify'
+import { hostHeaderValidation, originValidation } from '@modelcontextprotocol/fastify'
 import { createMcpHandler, McpServer } from '@modelcontextprotocol/server'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
@@ -16,9 +16,10 @@ export interface McpDeps {
 }
 
 // Serveur MCP sur `/mcp` (Streamable HTTP, SDK v2) : les mêmes lectures et commandes que le REST,
-// pour un agent. Sans authentification, donc réservé à la machine du serveur : le Host et l'Origin
-// doivent être localhost (protection contre le DNS rebinding — pas un contrôle d'accès, un client du
-// LAN peut forger son Host). Sans état : une instance par requête, clients 2025 servis aussi.
+// pour un agent. Sans authentification : le Host et l'Origin doivent être localhost ou le nom du poste
+// sur le DNS local (protection contre le DNS rebinding — pas un contrôle d'accès, un client du LAN
+// peut forger son Host). Sans état : une instance par requête, clients 2025 servis aussi.
+const ALLOWED_HOSTS = ['localhost', '127.0.0.1', '[::1]', 'kasbah', 'kasbah.home.internal']
 
 const json = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value) }] })
 const fail = (message: string) => ({ content: [{ type: 'text' as const, text: message }], isError: true })
@@ -190,8 +191,8 @@ export async function registerMcp(app: FastifyInstance, deps: McpDeps): Promise<
   const handler = createMcpHandler(() => buildServer(deps, app))
   app.addHook('onClose', () => handler.close())
   await app.register(async (sub) => {
-    sub.addHook('onRequest', localhostHostValidation())
-    sub.addHook('onRequest', localhostOriginValidation())
+    sub.addHook('onRequest', hostHeaderValidation(ALLOWED_HOSTS))
+    sub.addHook('onRequest', originValidation(ALLOWED_HOSTS))
     // Fastify a déjà lu le corps JSON : on reconstruit la requête web que le SDK attend.
     // Pas de compression : la réponse peut être un flux SSE.
     sub.route({

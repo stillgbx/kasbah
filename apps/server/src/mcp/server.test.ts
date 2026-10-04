@@ -102,7 +102,12 @@ describe.each<[string, VersionNegotiationMode]>([['2025', 'legacy'], ['2026-07-2
   })
 })
 
-it('refuse un Host qui n\'est pas localhost (DNS rebinding)', async () => {
+it('accepte le nom du poste sur le DNS local', async () => {
+  const res = await kasbah.app.inject({ method: 'POST', url: '/mcp', headers: { host: 'kasbah:8787', 'content-type': 'application/json' }, payload: {} })
+  expect(res.statusCode).not.toBe(403)
+})
+
+it('refuse un Host qui n\'est ni localhost ni le poste (DNS rebinding)', async () => {
   const res = await kasbah.app.inject({ method: 'POST', url: '/mcp', headers: { host: 'evil.example:8787', 'content-type': 'application/json' }, payload: {} })
   expect(res.statusCode).toBe(403)
 })

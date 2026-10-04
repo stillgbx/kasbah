@@ -180,7 +180,7 @@ Le serveur Kasbah expose aussi un serveur [MCP](https://modelcontextprotocol.io)
 
 Ressource : `kasbah://house` (le `house.json` validé).
 
-**Pas d'authentification** : `/mcp` n'accepte que les requêtes adressées à `localhost` / `127.0.0.1` (en-têtes `Host` et `Origin`, protection contre le DNS rebinding). Le client MCP doit donc tourner **sur la machine du serveur**. Ce n'est pas un contrôle d'accès : un poste du réseau local peut forger son `Host`, comme il peut déjà appeler l'API REST.
+**Pas d'authentification** : `/mcp` n'accepte que les requêtes adressées à `localhost` / `127.0.0.1` ou au nom du poste sur le DNS local, `kasbah` / `kasbah.home.internal` (en-têtes `Host` et `Origin`, protection contre le DNS rebinding) : depuis un autre poste du réseau, utiliser `http://kasbah:8787/mcp`. Ce n'est pas un contrôle d'accès : un poste du réseau local peut forger son `Host`, comme il peut déjà appeler l'API REST.
 
 Configurer un client (serveur Kasbah lancé) :
 
@@ -200,6 +200,7 @@ Configurer un client (serveur Kasbah lancé) :
   ```json
   { "mcpServers": { "kasbah": { "command": "npx", "args": ["-y", "mcp-remote", "http://localhost:8787/mcp"] } } }
   ```
+  Depuis un autre poste : `"http://kasbah:8787/mcp", "--allow-http"` (`mcp-remote` refuse une URL `http://` hors localhost sans ce drapeau).
 - **Tester à la main** : `npx @modelcontextprotocol/inspector`, transport « Streamable HTTP », URL ci-dessus.
 
 ## Configuration (`apps/server/.env`)
