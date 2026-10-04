@@ -29,6 +29,7 @@ export default defineConfig({
     port: DEV_PORT,
     strictPort: FIXED_PORT,
     host: true, // accessible depuis les autres appareils du LAN
+    allowedHosts: ['kasbah.home.internal', 'kasbah'],
     proxy: {
       // `ws: true` : les flux vidéo des caméras sont des WebSockets sous /api/plugins/<id>/cameras/…
       '/api': { target: SERVER, ws: true },
