@@ -37,12 +37,12 @@ const datetimeFormats = {
   fr: {
     time: { hour: '2-digit', minute: '2-digit' }, short: { weekday: 'short', hour: '2-digit', minute: '2-digit' },
     date: { weekday: 'short', day: 'numeric', month: 'short' }, weekday: { weekday: 'short' }, hour: { hour: 'numeric' },
-    month: { month: 'short' },
+    month: { month: 'short' }, long: { day: 'numeric', month: 'long', year: 'numeric' },
   },
   en: {
     time: { hour: '2-digit', minute: '2-digit' }, short: { weekday: 'short', hour: '2-digit', minute: '2-digit' },
     date: { weekday: 'short', day: 'numeric', month: 'short' }, weekday: { weekday: 'short' }, hour: { hour: 'numeric' },
-    month: { month: 'short' },
+    month: { month: 'short' }, long: { day: 'numeric', month: 'long', year: 'numeric' },
   },
 } as const
 

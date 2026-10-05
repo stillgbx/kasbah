@@ -135,7 +135,7 @@
     "source": "Mixcloud", "searchPlaceholder": "Search a mix, a show, a DJ…",
     "tabHome": "Home", "homeTopCreators": "Your top creators", "homeFollowing": "From creators you follow", "homeListenAgain": "Listen again", "homeMoreFrom": "More from {name}", "homePopular": "Popular {genre} shows", "homeEmpty": "Listen to a few mixes on Mixcloud: the home page is made from your listens.",
     "tabFeed": "New", "tabFavorites": "Favorites", "tabListens": "Listened", "tabUploads": "My mixes", "tabPlaylists": "Playlists", "tabFollowing": "Following",
-    "linkTitle": "Link your Mixcloud account", "linkHint": "Your username, the one in your profile address (mixcloud.com/<name>/). No password: Kasbah only reads what your profile shows publicly.",
+    "linkTitle": "Link your Mixcloud account", "linkHint": "Your username, the one in your profile address (mixcloud.com/your-name/). No password: Kasbah only reads what your profile shows publicly.",
     "username": "Username", "link": "Link", "unlink": "Unlink",
     "empty": "Nothing here yet.", "unavailable": "Mixcloud is not answering.", "more": "Show more",
     "resumeAt": "Resume at {time}", "restart": "Start over", "play": "Listen to {name}", "mixes": "Mixes by {name}",

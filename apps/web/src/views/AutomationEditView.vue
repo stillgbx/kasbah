@@ -15,7 +15,16 @@ const store = useAutomationsStore()
 const router = useRouter()
 
 const isNew = props.id === 'new'
-const realId = isNew ? crypto.randomUUID() : props.id
+// `crypto.randomUUID` n'existe qu'en contexte sécurisé (https ou localhost) ; servie en http sur le
+// réseau local, l'app retombe sur 32 caractères hexadécimaux, admis aussi par `AUTOMATION_ID_RE`.
+function newId(): string {
+  try {
+    return crypto.randomUUID()
+  } catch {
+    return Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('')
+  }
+}
+const realId = isNew ? newId() : props.id
 /** Adresse ouverte directement : la liste peut ne pas être encore arrivée. */
 const ready = ref(isNew || !!store.entries[realId])
 const found = computed(() => isNew || !!store.entries[realId])
