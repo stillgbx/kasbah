@@ -12,10 +12,11 @@ import { createHistoryFile, EMPTY_HISTORY, type ComapHistoryState, type HistoryS
 
 
 // Plugin COMAP Proteo 2 : station de filtration d'eau lue en JSON clair sur TCP/23, sans
-// authentification, LAN pur (192.168.1.92 par défaut). UN SEUL appareil `water` publié — la station
-// reste un objet unique, pas un capteur par consommable. Lecture seule : le protocole sait écrire
-// (réglages de la lampe UVc), mais une fausse manœuvre à distance sur l'eau potable coûterait plus
-// cher que le confort gagné ; ce plugin n'envoie jamais de trame `write`.
+// authentification, LAN pur, adresse fixe dans `COMAP_HOST` (aucun défaut). UN SEUL appareil
+// `water` publié — la station reste un objet unique, pas un capteur par consommable. Lecture
+// seule : le protocole sait écrire (réglages de la lampe UVc), mais une fausse manœuvre à distance
+// sur l'eau potable coûterait plus cher que le confort gagné ; ce plugin n'envoie jamais de trame
+// `write`.
 //
 // La station n'accepte qu'UNE connexion TCP à la fois (vérifiée le 2026-09-16 : une lecture faite
 // pendant que l'appli mobile du fabricant tenait la connexion est restée sans réponse, la connexion
@@ -27,7 +28,12 @@ import { createHistoryFile, EMPTY_HISTORY, type ComapHistoryState, type HistoryS
 //    (`AVAILABILITY_FAILURE_THRESHOLD`), jamais sur un seul silence.
 
 export const comapConfigSchema = z.object({
-  COMAP_HOST: z.string().trim().min(1).default('192.168.1.92'),
+  /**
+   * Adresse de la station. Pas de défaut : la station ne se découvre pas, et une adresse d'exemple
+   * ferait sonder une machine au hasard. Absente, le plugin ne déclare rien et le dit dans sa santé
+   * (comme `TAHOMA_HOST`), au lieu de bloquer la configuration de tous les plugins au démarrage.
+   */
+  COMAP_HOST: z.string().trim().min(1).optional(),
   COMAP_PORT: z.coerce.number().int().min(1).max(65535).default(23),
   /**
    * Cadence de sondage. La station est sur le LAN, sans quota ni cloud, mais rien ne justifie de la
@@ -80,9 +86,11 @@ export function createComapPlugin(deps: ComapPluginDeps = {}): DevicePlugin {
   let monthly: ConsumptionPoint[] = []
 
   async function read(): Promise<unknown> {
+    const host = config!.COMAP_HOST
+    if (!host) throw new Error('COMAP_HOST is not set')
     msgId += 1
     return readOnce({
-      host: config!.COMAP_HOST, port: config!.COMAP_PORT, request: readRequest(msgId),
+      host, port: config!.COMAP_PORT, request: readRequest(msgId),
       connect, clock: ctx!.clock, signal: ctx!.signal, timeoutMs: config!.COMAP_TIMEOUT_MS,
     })
   }
@@ -130,10 +138,12 @@ export function createComapPlugin(deps: ComapPluginDeps = {}): DevicePlugin {
 
     /** Aucun appel réseau ici : l'appareil se déclare avec ses capacités, la première lecture du poller le remplit. */
     async discover(): Promise<DeviceDescriptor[]> {
+      if (!config?.COMAP_HOST) return []
       return [toDescriptor(model)]
     },
 
     async start() {
+      if (!config?.COMAP_HOST) return
       poller = createPoller({
         name: 'comap', intervalMs: config!.COMAP_POLL_MS, clock: ctx!.clock, signal: ctx!.signal, logger: ctx!.logger,
         fn: async () => {
@@ -171,6 +181,7 @@ export function createComapPlugin(deps: ComapPluginDeps = {}): DevicePlugin {
       /** Relevé brut, pour capturer une fixture depuis une vraie réponse plutôt que la notice. */
       app.get('/raw', async (_req, reply) => {
         if (!ctx) return sendError(reply, 409, 'DEVICE_UNAVAILABLE', 'plugin not started')
+        if (!config?.COMAP_HOST) return sendError(reply, 409, 'DEVICE_UNAVAILABLE', 'COMAP_HOST is not set')
         try { return await read() }
         catch (err) { return sendError(reply, 502, 'UPSTREAM_ERROR', (err as Error).message) }
       })
@@ -178,6 +189,7 @@ export function createComapPlugin(deps: ComapPluginDeps = {}): DevicePlugin {
 
     health(): PluginHealth {
       if (!ctx) return { status: 'error', detail: 'plugin not started' }
+      if (!config?.COMAP_HOST) return { status: 'error', detail: 'set COMAP_HOST to the station address' }
       if (failures >= AVAILABILITY_FAILURE_THRESHOLD) {
         return { status: 'degraded', detail: lastError ?? 'station silent', deviceCount: 1 }
       }

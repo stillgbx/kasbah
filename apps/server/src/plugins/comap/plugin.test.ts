@@ -48,7 +48,7 @@ function fakeStation() {
 function fakeContext(clock: ManualClock, config: Record<string, string> = {}): { ctx: PluginContext; ctrl: AbortController } {
   const ctrl = new AbortController()
   const ctx: PluginContext = {
-    pluginId: 'comap', config: comapConfigSchema.parse(config), logger: pino({ level: 'silent' }), clock, signal: ctrl.signal,
+    pluginId: 'comap', config: comapConfigSchema.parse({ COMAP_HOST: '192.168.1.50', ...config }), logger: pino({ level: 'silent' }), clock, signal: ctrl.signal,
     emitState: vi.fn(), setAvailable: vi.fn(), emitDevices: vi.fn(), emitScenes: vi.fn(), emitSceneState: vi.fn(), emitEvent: vi.fn(),
     parts: {}, site: { lat: 47.3, lon: 5.05, alt: 180 },
   }
@@ -163,12 +163,28 @@ describe('comap plugin', () => {
     expect(plugin.health!()).toMatchObject({ status: 'ok', detail: 'Proteo' })
   })
 
-  it('defaults to the station address and a read-only poll on the LAN, no auth key', () => {
+  it('defaults to a read-only poll on the LAN, no auth key, and no station address', () => {
     const config = comapConfigSchema.parse({})
     expect(config).toEqual({
-      COMAP_HOST: '192.168.1.92', COMAP_PORT: 23, COMAP_POLL_MS: 30_000, COMAP_TIMEOUT_MS: 5000,
+      COMAP_PORT: 23, COMAP_POLL_MS: 30_000, COMAP_TIMEOUT_MS: 5000,
       COMAP_HISTORY_FILE: expect.stringContaining('comap-consumption.json'),
     })
+  })
+
+  it('without COMAP_HOST, declares nothing, never connects, and says what is missing', async () => {
+    const clock = new ManualClock(0)
+    const ctrl = new AbortController()
+    const ctx: PluginContext = { ...fakeContext(clock).ctx, config: comapConfigSchema.parse({}), signal: ctrl.signal }
+    const station = fakeStation()
+    const plugin = createComapPlugin({ connect: station.connect, historyStore: { load: async () => null, save: async () => {} } })
+    await plugin.init(ctx)
+    expect(await plugin.discover()).toEqual([])
+    await plugin.start()
+    for (let i = 0; i < 10; i++) { clock.advance(30_000); await flush() }
+    expect(station.openCount()).toBe(0)
+    expect(ctx.emitState).not.toHaveBeenCalled()
+    expect(ctx.setAvailable).not.toHaveBeenCalled()             // pas de poller qui échoue en boucle
+    expect(plugin.health!()).toEqual({ status: 'error', detail: 'set COMAP_HOST to the station address' })
   })
 
   it('serves the consumption history it has already built, never a fresh read', async () => {

@@ -35,7 +35,7 @@ Tout passe par le réseau local : le serveur Kasbah ouvre une connexion TCP cour
 
 | Variable | Défaut | Rôle |
 |---|---|---|
-| `COMAP_HOST` | une adresse d'exemple de l'installation d'origine | Adresse IP de la station : **toujours à renseigner** |
+| `COMAP_HOST` | — | Adresse IP de la station : **obligatoire**. Sans elle, le plugin ne déclare aucun appareil et reste en erreur (« set COMAP_HOST to the station address ») |
 | `COMAP_PORT` | `23` | Port TCP de la station |
 | `COMAP_POLL_MS` | `30000` | Cadence de lecture (5 000 à 600 000 ms) |
 | `COMAP_TIMEOUT_MS` | `5000` | Délai avant d'abandonner une lecture restée muette (500 à 30 000 ms) |
