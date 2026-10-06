@@ -93,9 +93,9 @@ Un appareil peut se réduire à sa **liaison** et à sa **position** (`{ id, dev
 
 Les ids des appareils du plugin `mock` sont stables (`mock:light-living`, `mock:cover-kitchen`, `mock:energy-site`, `mock:vehicle-tesla`…) ; les ids Hue sont les UUID des ressources `light` du bridge (visibles dans `GET /api/devices`).
 
-### Scènes (`scenes`)
+### Scènes
 
-Lots de commandes exécutés d'un geste depuis le panneau Maison : `{ "id", "name", "icon"?: "leave" | "night" | "movie", "actions": [{ "deviceId", "command" }] }`. Les commandes sont celles de l'API (`light.set`, `cover.close`, `media_player.pause`, `climate.set_target_temp`…) ; les appareils inconnus du serveur sont ignorés.
+Il n'y a plus de section `scenes` (retirée le 2026-10-06 : plus rien ne l'exécutait). Une clé `scenes` laissée dans un ancien fichier est ignorée au chargement, puis disparaît à la prochaine écriture du fichier par le serveur. Les ambiances viennent des plugins (Hue) et se rappellent depuis le panneau Maison ou une automatisation.
 
 ### Toit (`roof`)
 

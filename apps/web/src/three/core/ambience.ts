@@ -75,7 +75,7 @@ export interface AmbienceInput {
   mode: AmbienceMode
   /** Maintenant, injectable pour les tests. */
   date?: Date
-  /** Origine géographique de la maison (`site.origin`), ou `null` si elle n'est pas géoréférencée. */
+  /** Origine géographique de la maison (`house.origin`), ou `null` si elle n'est pas géoréférencée. */
   geo?: { lat: number; lon: number } | null
   cloudiness?: number
   visibilityM?: number

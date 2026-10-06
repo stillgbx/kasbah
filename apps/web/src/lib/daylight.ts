@@ -26,7 +26,7 @@ export interface DaylightInput {
   /** Lever publié par la météo (ms epoch). `0` ou absent = pas de météo, on calcule. */
   sunrise?: number
   sunset?: number
-  /** Origine géographique de la maison (`site.origin`), ou `null` si elle n'est pas géoréférencée. */
+  /** Origine géographique de la maison (`house.origin`), ou `null` si elle n'est pas géoréférencée. */
   geo?: { lat: number; lon: number } | null
 }
 

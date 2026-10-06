@@ -3,8 +3,8 @@ import { pluginIdSchema } from '../devices/descriptor'
 
 // Scène PLUGIN : un préréglage qui vit chez le fabricant (scène Hue d'une pièce ou d'une zone),
 // fixe ou à palette animée. Kasbah ne la recompose pas — il la liste, en montre l'aperçu et
-// demande son rappel. À ne pas confondre avec la scène MAISON (lot de commandes de house.json,
-// `houseSceneSchema`) ni avec la scène 3D.
+// demande son rappel. À ne pas confondre avec la scène 3D. (Les « scènes maison », lots de
+// commandes déclarés dans house.json, ont été retirées le 2026-10-06 : aucun code ne les lisait.)
 
 export const SCENE_ID_RE = /^[a-z0-9_]+:[^:\s]+$/
 export const sceneIdSchema = z.string().regex(SCENE_ID_RE, 'sceneId: <pluginId>:<externalId>')

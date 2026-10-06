@@ -2,7 +2,6 @@ import { z } from 'zod'
 import { DEVICE_KINDS, VEHICLE_FINISHES } from '../devices/kinds'
 import { deviceIdSchema, hexColorSchema } from '../devices/descriptor'
 export { hexColorSchema }
-import { commandSchema } from '../devices/command'
 import { signedArea } from './geometry/vec2'
 import { FINISH_IDS, FINISHES, type FinishSurface } from './finishes'
 
@@ -547,17 +546,6 @@ export const panelArraySchema = z.object({
 })
 export type PanelArray = z.infer<typeof panelArraySchema>
 
-/** Scène : lot de commandes envoyées d'un coup (Départ, Nuit, Cinéma…). */
-export const sceneActionSchema = z.object({ deviceId: deviceIdSchema, command: commandSchema })
-export const houseSceneSchema = z.object({
-  id: idSchema,
-  name: z.string().min(1),
-  /** Nom d'icône (clé du jeu d'icônes de l'app), optionnel. */
-  icon: z.string().optional(),
-  actions: z.array(sceneActionSchema).min(1),
-})
-export type HouseScene = z.infer<typeof houseSceneSchema>
-
 /**
  * Réglages d'un PLUGIN, décidés depuis Réglages → Plugins et gardés DANS la maison : quels
  * fabricants cette maison utilise, et ce qu'on veut de chacun. Aucun secret ici — clés et jetons
@@ -681,7 +669,6 @@ export const houseSchema = z.object({
   rooms: z.array(roomSchema),
   site: siteSchema,
   devices: z.array(houseDeviceSchema).default([]),
-  scenes: z.array(houseSceneSchema).default([]),
   roof: roofSchema.optional(),
   arrays: z.array(panelArraySchema).default([]),
   /** Plugins de cette maison : lesquels sont actifs, et leurs sous-items. */

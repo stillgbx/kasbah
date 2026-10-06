@@ -20,6 +20,12 @@ describe('house schema & validation', () => {
     expect(house.devices.length).toBeGreaterThan(10)
     expect(house.rooms[0]!.kind).toBe('corridor')
   })
+  it('still loads a house file written before scenes were removed, and drops them', () => {
+    const h = clone()
+    h.scenes = [{ id: 'leave', name: 'Départ', actions: [{ deviceId: 'mock:light-living', command: { type: 'light.set', on: false } }] }]
+    const house = parseHouse(h)
+    expect(house).not.toHaveProperty('scenes')
+  })
   it('rejects a clockwise polygon', () => {
     const h = clone()
     h.rooms[1]!.polygon.reverse()
