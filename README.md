@@ -1,6 +1,6 @@
 # Kasbah
 
-Application web (**tablette, ordinateur, téléphone**) qui montre la maison et le jardin en **3D** (souris et tactile) et permet de **visualiser et piloter les appareils connectés** placés dans les pièces : lumières, ouvrants, lecteurs, caméras, chauffage, robots, eau, énergie solaire et véhicules.
+Application web (**tablette, ordinateur, téléphone**) qui montre la maison et le jardin en **3D** (souris et tactile) et permet de **visualiser et piloter les appareils connectés** placés dans les pièces : lumières, ventilateurs, ouvrants, lecteurs, caméras, chauffage, robots, eau, énergie solaire, véhicules et animaux. S'y ajoutent la musique (YouTube Music, Mixcloud, radios), la météo, l'agenda de la famille, le cahier de texte de l'école et des automatisations exécutées par le serveur.
 
 - La maison (étages, pièces, ouvertures, terrain, origine GPS, plugins actifs) est décrite dans un **fichier JSON** : voir [docs/house-json.md](docs/house-json.md) et le [wiki](doc/index.md).
 - Chaque fabricant est un **plugin** côté serveur ; les secrets d'API vivent dans un `.env` **serveur**, jamais dans le navigateur.
@@ -20,7 +20,7 @@ kasbah/
 
 Flux : les plugins découvrent des appareils et poussent des **patchs d'état** → le registre fusionne, horodate et publie → le hub WebSocket envoie des **états complets** (coalescés 50 ms) aux navigateurs connectés. Les commandes passent en **REST** (`POST /api/devices/:id/command`) ; l'état résultant revient par le WebSocket.
 
-Le contrat d'appareil est unique : un `kind` (forme de l'état et des commandes) et des `capabilities` (ce que l'UI affiche). Kinds : `light`, `cover`, `media_player`, `climate`, `vacuum`, `mower`, `sensor`, `energy`, `ev_charger`, `vehicle`, `camera`, `weather`, `water`.
+Le contrat d'appareil est unique : un `kind` (forme de l'état et des commandes) et des `capabilities` (ce que l'UI affiche). Kinds : `light`, `cover`, `media_player`, `climate`, `vacuum`, `mower`, `sensor`, `energy`, `ev_charger`, `vehicle`, `camera`, `weather`, `water`, `pet_feeder`, `pet_fountain`, `fan`.
 
 ## Fonctionnalités
 
@@ -32,7 +32,10 @@ Mise en page en grand écran (paysage) en trois colonnes : **rail** à gauche, *
 |---|---|
 | **Maison** | Scène 3D, tuiles de synthèse, recherche, panneau pièce → appareil. Un doigt tourne, deux doigts zooment ; la caméra ne passe jamais sous le sol. |
 | **Météo** | Conditions, prévisions, qualité de l'air et pollens (Open-Meteo). |
-| **Lumières** | Bandes par niveau et pièce, interrupteur d'ensemble, curseur de luminosité. |
+| **Agenda** | Agendas partagés de la famille (iCal) : mois, semaine, jour. |
+| **École** | Devoirs, cahier de liaison et publications de la classe (TouteMonAnnée). |
+| **Musique** | Lecteur commun : recherche et file d'attente YouTube Music, Mixcloud ou radios, joués sur une enceinte Cast ou Sonos. |
+| **Lumières** | Bandes par niveau et pièce, interrupteur d'ensemble, curseur de luminosité ; ventilateurs (Tuya) au même endroit. |
 | **Ouvrants** | Volets, stores, portails : position, favori « my », gestes d'ensemble (sécuriser / ouvrir). |
 | **Médias** | Lecteurs Cast et Sonos : transport, volume, pochette, relais son (barre HDMI ARC). |
 | **Caméras** | Vignettes et direct (MSE / ffmpeg). |
@@ -41,7 +44,10 @@ Mise en page en grand écran (paysage) en trois colonnes : **rail** à gauche, *
 | **Chauffage** | Zones et machine (pompe à chaleur), historique de fonctionnement. |
 | **Véhicules** | Charge, carte (plan / satellite), réveil, limite de charge, carrosserie 3D. |
 | **Robots** | Tondeuse (GPS, journal, quota) et aspirateur (serpillière selon capacités). |
-| **Réglages** | Thème, rendu 3D, plugins, cartes d'appairage, mode édition. |
+| **Animaux** | Mangeoires et fontaines PetKit : repas, distribution, eau, consommables. |
+| **TENS** | Électrostimulateur actiTENS en Bluetooth, depuis le navigateur ; n'apparaît que sur les postes où il est activé. |
+| **Automatisations** | Règles « Quand / Sauf si / Alors » (voir plus bas). |
+| **Réglages** | Thème, rendu 3D, plugins, cartes de mise en route, comptes des assistants IA (MCP), mode édition. |
 
 ### Scène 3D
 
@@ -53,39 +59,52 @@ En **mode édition** (Réglages) : poser et coter des ouvertures, affecter un ou
 
 Les ambiances viennent des **plugins** (Hue : scènes fixes et palettes animées), pas d'un lot de commandes dans le JSON. Elles se rappellent depuis le panneau Maison / pièce, et se gèrent dans Réglages → Plugins.
 
+### Automatisations
+
+Des règles **Quand / Sauf si / Alors**, exécutées par le **serveur** (un écran éteint ne les arrête pas) :
+
+- **Quand** : une heure, un moment solaire (lever, coucher…) ou un changement d'état d'un appareil, éventuellement maintenu un certain temps ;
+- **Sauf si** : plages horaires, jours, dates, état d'un appareil, véhicule présent ou garé à une place, appareil allumé dans une pièce ;
+- **Alors** : une commande sur des appareils nommés ou sur une sélection (tous les volets d'un niveau…), ou le rappel d'une ambiance.
+
+Elles s'écrivent sur le contrat d'appareil, jamais sur un fabricant : un plugin désactivé rend la règle incomplète sans rien supprimer. Elles vivent dans `<maison>.automations.json`, à côté du fichier de la maison.
+
 ## Plugins
 
 Tous sont **implémentés** (plus aucun squelette). Ils sont tous disponibles au démarrage ; on coche ceux qu'on veut dans **Réglages → Plugins**. Le choix (et les sous-items, comme les types simulés par `mock`) est écrit dans le fichier de la maison, sous `plugins`, et prend effet sans redémarrer. Une maison sans cette section démarre avec la simulation seule.
 
-| Id | Fabricant | Kinds | Accès |
-|---|---|---|---|
-| `mock` | Simulation de tous les types | tous | local |
-| `hue` | Philips Hue | `light` | local (CLIP v2 + SSE) |
-| `tahoma` | Somfy TaHoma | `cover` | local (API développeur Overkiz) |
-| `nest` | Google Nest | `camera`, `climate` | cloud (Smart Device Management) |
-| `google_cast` | Google Cast (enceintes, Chromecast, TV) | `media_player` | local (Cast v2 / mDNS) |
-| `sonos` | Sonos | `media_player` | local (UPnP/SOAP) |
-| `enphase` | Enphase (site, micro-onduleurs, batteries IQ) | `energy`, `sensor` | local (passerelle) |
-| `tesla` | Tesla | `vehicle` | cloud (Fleet API, crédit mensuel) |
-| `renault` | Renault (MY Renault) | `vehicle` | cloud privé (Gigya / Kamereon) |
-| `automower` | Husqvarna Automower | `mower` | cloud (Automower Connect) |
-| `comap` | COMAP Proteo 2 | `water` | local (TCP/23, sans auth) |
-| `melcloud` | Mitsubishi Ecodan (MELCloud) | `climate` | cloud non officiel |
-| `irobot` | iRobot Roomba | `vacuum` | local (MQTT) après une liaison compte |
-| `open_meteo` | Open-Meteo | `weather` | cloud sans clé (CC BY 4.0) |
+Chaque plugin a sa **page** : ce qu'il fait, comment il se connecte, sa mise en route pas à pas et ses variables `.env`.
 
-Détail, pièges et mise en route de chaque fabricant : [wiki, section Plugins](doc/index.md). La liste des clés `.env` est dans [apps/server/.env.example](apps/server/.env.example).
+| Id | Fabricant / service | Kinds | Accès | Page |
+|---|---|---|---|---|
+| `mock` | Simulation de tous les types | tous | local | [mock](docs/plugins/mock.md) |
+| `hue` | Philips Hue | `light` | local (CLIP v2 + SSE) | [hue](docs/plugins/hue.md) |
+| `tahoma` | Somfy TaHoma | `cover` | local (API développeur Overkiz) | [tahoma](docs/plugins/tahoma.md) |
+| `nest` | Google Nest | `camera`, `climate` | cloud (Smart Device Management) | [nest](docs/plugins/nest.md) |
+| `google_cast` | Google Cast (enceintes, Chromecast, TV) | `media_player` | local (Cast v2 / mDNS) | [google_cast](docs/plugins/google_cast.md) |
+| `sonos` | Sonos | `media_player` | local (UPnP/SOAP) | [sonos](docs/plugins/sonos.md) |
+| `enphase` | Enphase (site, micro-onduleurs, batteries IQ) | `energy`, `sensor` | local (passerelle) | [enphase](docs/plugins/enphase.md) |
+| `tesla` | Tesla | `vehicle` | cloud (Fleet API, crédit mensuel) | [tesla](docs/plugins/tesla.md) |
+| `renault` | Renault (MY Renault) | `vehicle` | cloud privé (Gigya / Kamereon) | [renault](docs/plugins/renault.md) |
+| `automower` | Husqvarna Automower | `mower` | cloud (Automower Connect) | [automower](docs/plugins/automower.md) |
+| `comap` | COMAP Proteo 2 | `water` | local (TCP/23, sans auth) | [comap](docs/plugins/comap.md) |
+| `melcloud` | Mitsubishi Ecodan (MELCloud) | `climate` | cloud non officiel | [melcloud](docs/plugins/melcloud.md) |
+| `irobot` | iRobot Roomba | `vacuum` | local (MQTT) après une liaison compte | [irobot](docs/plugins/irobot.md) |
+| `open_meteo` | Open-Meteo | `weather` | cloud sans clé (CC BY 4.0) | [open_meteo](docs/plugins/open_meteo.md) |
+| `petkit` | PetKit (mangeoires, fontaines) | `pet_feeder`, `pet_fountain` | cloud privé (connexion par code courriel) | [petkit](docs/plugins/petkit.md) |
+| `tuya` | Tuya (ventilateur-lumière) | `fan`, `light` | local (protocole Tuya 3.5) | [tuya](docs/plugins/tuya.md) |
+| `ytmusic` | YouTube Music | — (source musicale) | cloud non officiel (cookie du compte) | [ytmusic](docs/plugins/ytmusic.md) |
+| `mixcloud` | Mixcloud | — (source musicale) | cloud public sans clé | [mixcloud](docs/plugins/mixcloud.md) |
+| `radio` | Radios (radio-browser.info) | — (source musicale) | cloud libre sans clé | [radio](docs/plugins/radio.md) |
+| `agenda` | Agendas Google partagés | — (vue Agenda) | adresse iCal secrète | [agenda](docs/plugins/agenda.md) |
+| `toutemonannee` | TouteMonAnnée (école) | — (vue École) | cloud privé (compte parent) | [toutemonannee](docs/plugins/toutemonannee.md) |
+| `tens` | actiTENS mini (électrostimulation) | — (vue TENS) | **dans le navigateur** (Web Bluetooth), activé par poste | [actitens](docs/plugins/actitens.md) |
 
-Certains plugins sont encore **lecture seule** ou partiels (consignes MELCloud, borne Enphase, lancement de file Sonos…). Le détail est sur la page wiki du plugin.
+La liste commentée des clés `.env` est dans [apps/server/.env.example](apps/server/.env.example) ; le fonctionnement interne et les pièges de chaque fabricant, dans le [wiki, section Plugins](doc/index.md).
 
-### Appairer un bridge Hue
+Certains plugins sont encore **lecture seule** ou partiels (consignes MELCloud, borne Enphase, lancement de file Sonos…). Le détail est sur la page du plugin.
 
-1. Activez le plugin dans **Réglages → Plugins**. Sans `HUE_BRIDGE_HOST`, le bridge est cherché via `discovery.meethue.com` (fixez ensuite l'IP dans `.env`).
-2. Le plugin passe en `needs_pairing` (visible dans Réglages).
-3. Appuyez sur le bouton rond du bridge, puis dans les 30 s cliquez **Appairer le bridge** (ou `curl -X POST http://localhost:8787/api/plugins/hue/pair`).
-4. Copiez la clé renvoyée dans `apps/server/.env` (`HUE_APP_KEY=…`) : le serveur ne modifie jamais ce fichier, mais la clé est utilisée immédiatement en mémoire.
-
-Les autres fabricants ont leur **carte de mise en route** dans Réglages → Plugins (OAuth Nest / Tesla, jeton TaHoma / Enphase, identifiants Renault / MELCloud / iRobot, etc.).
+Les fabricants qui demandent une liaison ont leur **carte de mise en route** dans Réglages → Plugins (appairage Hue, OAuth Nest / Tesla, jeton Enphase, identifiants Renault / MELCloud / iRobot, code PetKit, cookie YouTube Music, adresse iCal, compte TouteMonAnnée…).
 
 ### Écrire un plugin
 
@@ -121,7 +140,7 @@ cp apps/server/.env.example apps/server/.env   # puis ajuster (Hue, TaHoma…)
 npm run dev
 ```
 
-Pour reprendre une maison existante, recopier depuis l'ancienne machine ce que git ne porte pas : `apps/server/.env`, `apps/server/.state/` (jetons et sessions des fabricants), `house/maison.json` (+ `maison.automations.json`, `history/`) et `_external/`.
+Pour reprendre une maison existante, recopier depuis l'ancienne machine ce que git ne porte pas : `apps/server/.env`, `apps/server/mcp-users.json` (comptes des assistants IA), `apps/server/.state/` (jetons et sessions des fabricants), `house/maison.json` (+ `maison.automations.json`, `history/`) et `_external/`.
 
 ### Lancer
 
@@ -146,7 +165,7 @@ VITE_INPROCESS_MOCK=1 npm run dev -w @kasbah/web
 
 ### Production
 
-Pas d'authentification ni de HTTPS en v1 : **réseau local de confiance uniquement**.
+L'interface et l'API n'ont ni authentification ni HTTPS en v1 : **réseau local de confiance uniquement**. Seul le serveur MCP est protégé (OAuth), et c'est la seule partie qu'on peut publier sur Internet (voir [Serveur MCP](#serveur-mcp)).
 
 ```bash
 npm run build      # web → apps/web/dist, serveur → apps/server/dist/main.js (bundle esbuild)
@@ -254,13 +273,15 @@ Clients de bureau et de développement (serveur Kasbah lancé) :
 | `MOCK_SCENARIO` | `default` | `default`, `empty`, `chaos`, `winter` |
 | `MOCK_TIME_SCALE` | `1` | Accélération du temps simulé (60 → une journée en 24 min) |
 | `FFMPEG_PATH` | `ffmpeg` | Relais vidéo des caméras |
+| `MCP_PUBLIC_URL` | — | Adresse publique HTTPS du serveur MCP (voir [Serveur MCP](#serveur-mcp)) |
 
-Chaque plugin valide ses propres variables (`HUE_*`, `TAHOMA_*`, `NEST_*`, `CAST_*`, `SONOS_*`, `ENPHASE_*`, `TESLA_*`, `RENAULT_*`, `AUTOMOWER_*`, `COMAP_*`, `MELCLOUD_*`, `IROBOT_*`, `OPEN_METEO_*`). Liste commentée : [apps/server/.env.example](apps/server/.env.example).
+Chaque plugin valide ses propres variables (`HUE_*`, `TAHOMA_*`, `NEST_*`, `CAST_*`, `SONOS_*`, `ENPHASE_*`, `TESLA_*`, `RENAULT_*`, `AUTOMOWER_*`, `COMAP_*`, `MELCLOUD_*`, `IROBOT_*`, `OPEN_METEO_*`, `PETKIT_*`, `TUYA_*`, `YTM_*`, `MIXCLOUD_*`, `RADIO_*`, `MUSIC_*`, `AGENDA_*`, `TMA_*`), détaillées sur la [page de chaque plugin](#plugins). Liste commentée : [apps/server/.env.example](apps/server/.env.example).
 
 **Quels plugins sont actifs ne se règle pas ici.**
 
 ## Documentation
 
+- [docs/plugins/](docs/plugins/) — une page par plugin : fonctionnalités, connexion, mise en route (liste dans [Plugins](#plugins)).
 - [doc/index.md](doc/index.md) — wiki (architecture, contrat, chaque plugin, UI, setup, pièges).
 - [docs/house-json.md](docs/house-json.md) — format du fichier maison (repère, pièces, relevé métré).
 - [doc/5_setup/5_1_configuration-env.md](doc/5_setup/5_1_configuration-env.md) — variables d'environnement.
