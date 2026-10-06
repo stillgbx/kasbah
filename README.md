@@ -194,12 +194,30 @@ Ressource : `kasbah://house` (le `house.json` validé).
 
 `/mcp` n'accepte en plus que les requêtes adressées à `localhost` / `127.0.0.1`, `kasbah` / `kasbah.home.internal` ou au nom de `MCP_PUBLIC_URL` (en-têtes `Host` et `Origin`, protection contre le DNS rebinding).
 
-Configurer un client (serveur Kasbah lancé) :
+### Brancher un assistant IA
+
+Deux adresses : `http://localhost:8787/mcp` sur le poste du serveur, **`https://<adresse>/mcp`** (celle de `MCP_PUBLIC_URL`) partout ailleurs, **sans numéro de port** (le proxy répond sur 443 ; 8787 ne sert qu'entre le proxy et le poste). À la première connexion, la page Kasbah s'ouvre dans le navigateur : se connecter avec un compte de Réglages → Assistants IA. Nom conseillé pour le connecteur : `Kasbah`, en un mot, pour le viser dans le chat (`@Kasbah allume le salon`).
+
+Procédures vérifiées avec Kasbah les 5 et 6 octobre 2026 (Claude, ChatGPT, Mistral Vibe, Grok).
+
+| Assistant | Où se configure le connecteur | Ensuite |
+|---|---|---|
+| **Claude** (claude.ai, app mobile) | app web : Paramètres → Connecteurs → Ajouter un connecteur personnalisé → `https://<adresse>/mcp` | suit le compte : disponible aussi dans l'app mobile |
+| **ChatGPT** | app web seulement, **mode développeur** activé : Plugins → Parcourir les plugins → **+** → Créer une application MCP. Nom, URL du serveur, authentification **OAuth** sans paramètres avancés, cocher « J'ai compris et je souhaite continuer », Créer, puis « Se connecter avec Kasbah » | disponible aussi dans l'app mobile |
+| **Mistral Vibe** | app web seulement : Contexte → Connecteurs → Ajouter un connecteur → Ajouter un connecteur personnalisé. Nom, serveur `https://<adresse>/mcp`, authentification **OAuth2.1** sans paramètres avancés | disponible aussi dans l'app mobile |
+| **Grok** | directement depuis l'**app mobile** : ajouter un connecteur personnalisé (nom, adresse) | — |
+| **Gemini** | pas encore possible en France : les « applications personnalisées » de l'app grand public sont réservées aux États-Unis (compte personnel, interface en anglais) ; Gemini Enterprise demande un client OAuth fixe avec secret, que Kasbah ne gère pas | — |
+
+- **Forfaits Claude gérés par une organisation** (Team, Enterprise…) : un membre ne peut pas ajouter son propre connecteur, c'est le propriétaire de l'organisation qui l'ajoute pour tous. Pour un serveur personnel comme Kasbah, passer par un compte Claude personnel.
+- Les clients s'inscrivent seuls : Mistral et Grok par enregistrement dynamique, ChatGPT et claude.ai par document de métadonnées client. Rien à régler côté Kasbah.
+
+Clients de bureau et de développement (serveur Kasbah lancé) :
 
 - **Claude Code**
   ```bash
   claude mcp add --transport http kasbah http://localhost:8787/mcp
   ```
+  (`https://<adresse>/mcp` depuis un autre poste), puis `/mcp` dans Claude Code pour s'authentifier.
 - **VS Code** (`.vscode/mcp.json` ou configuration utilisateur)
   ```json
   { "servers": { "kasbah": { "type": "http", "url": "http://localhost:8787/mcp" } } }
@@ -208,11 +226,19 @@ Configurer un client (serveur Kasbah lancé) :
   ```json
   { "mcpServers": { "kasbah": { "url": "http://localhost:8787/mcp" } } }
   ```
-- **Claude Desktop et application mobile** : le connecteur claude.ai ci-dessus (adresse publique), partagé par tous les appareils du compte. Sans adresse publique, sur le poste du serveur, le pont stdio `mcp-remote` dans `claude_desktop_config.json`
+- **Claude Desktop** : par son fichier `claude_desktop_config.json` (Windows : `%APPDATA%\Claude\`, macOS : `~/Library/Application Support/Claude/`), indépendant du forfait. Le pont stdio `mcp-remote` (Node.js requis) vers l'adresse publique, ou `http://localhost:8787/mcp` sur le poste du serveur :
   ```json
-  { "mcpServers": { "kasbah": { "command": "npx", "args": ["-y", "mcp-remote", "http://localhost:8787/mcp"] } } }
+  { "mcpServers": { "kasbah": { "command": "npx", "args": ["-y", "mcp-remote", "https://<adresse>/mcp"] } } }
   ```
+  Quitter complètement Claude Desktop (icône de la zone de notification comprise) et le relancer : la page de connexion s'ouvre. `mcp-remote` garde ses jetons dans `~/.mcp-auth` (le supprimer force une reconnexion).
 - **Tester à la main** : `npx @modelcontextprotocol/inspector`, transport « Streamable HTTP », URL ci-dessus.
+
+**Dépannage**
+
+- Journal de Claude Desktop : `%LOCALAPPDATA%\Claude\Logs\mcp-server-kasbah.log` (Windows, Microsoft Store), `%APPDATA%\Claude\logs\` (installateur classique), `~/Library/Logs/Claude/` (macOS).
+- `ETIMEDOUT`, rien dans le journal de Kasbah : la connexion n'arrive pas jusqu'au serveur. Souvent un port dans l'adresse publique (`https://<adresse>:8787/mcp` au lieu de `https://<adresse>/mcp`).
+- `http://kasbah:8787/mcp --allow-http` depuis un autre poste : le nom est accepté, mais la connexion échoue pendant OAuth. `--allow-http` ne lève que le contrôle de l'URL ; le SDK embarqué refuse ensuite d'envoyer les identifiants en `http://` hors de la machine locale (`Refusing to send credentials to non-https token endpoint`). Passer par l'adresse publique.
+- « invalid state » à la fin de la connexion (Mistral) : la page de connexion venait d'un ajout précédent du connecteur, ou le formulaire a été envoyé deux fois. Supprimer le connecteur, l'ajouter une seule fois, se connecter en un seul clic.
 
 ## Configuration (`apps/server/.env`)
 
