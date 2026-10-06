@@ -15,6 +15,7 @@ import { REPO_ROOT, SERVER_ROOT, stateFile } from '../core/paths'
 //
 // - Comptes : `mcp-users.json` à côté du `.env` serveur (hors dépôt), mots de passe en scrypt,
 //   écrits par `npm run mcp-user`. Relu à chaque connexion : retirer un compte coupe aussi ses jetons.
+//   Les mêmes comptes ouvrent l'application sous le nom public (`http/session.ts`).
 // - Clients : enregistrement dynamique (`/oauth/register`, RFC 7591) ou document de métadonnées
 //   (client_id = URL https, spec 2026-07-28). Clients publics : PKCE S256 obligatoire, pas de secret.
 // - Jetons opaques, gardés hachés dans `.state/mcp-auth.json` : accès 1 h, renouvellement 90 jours
@@ -25,6 +26,10 @@ export const mcpAuthConfigSchema = z.object({
   MCP_AUTH_FILE: z.string().trim().default(stateFile('mcp-auth.json')),
   /** Adresse publique (tunnel), ex. `https://kasbah.example.com` : son nom est accepté, et sert d'émetteur en https. */
   MCP_PUBLIC_URL: z.url().optional(),
+  /** Échecs de connexion d'affilée qui bloquent un compte (0 = jamais), pour l'app comme pour le MCP. */
+  KASBAH_LOGIN_MAX_FAILURES: z.coerce.number().int().min(0).default(5),
+  /** Durée du blocage d'un compte, en minutes. */
+  KASBAH_LOGIN_LOCK_MINUTES: z.coerce.number().positive().default(15),
 })
 export type McpAuthConfig = z.infer<typeof mcpAuthConfigSchema>
 
@@ -32,8 +37,54 @@ const ACCESS_TTL_MS = 60 * 60_000
 const REFRESH_TTL_MS = 90 * 24 * 60 * 60_000
 const CODE_TTL_MS = 60_000
 const MAX_CLIENTS = 50
-const LOCK_WINDOW_MS = 15 * 60_000
-const MAX_FAILURES = 10
+const GLOBAL_WINDOW_MS = 15 * 60_000
+const GLOBAL_MAX_FAILURES = 10
+const MAX_TRACKED_NAMES = 1000
+
+// --- tentatives de connexion -------------------------------------------------------------------
+
+/**
+ * Les deux pages de connexion (application et MCP) passent par le même gardien, les comptes étant
+ * partagés. Deux verrous : un plafond GLOBAL d'échecs (derrière un proxy, toutes les requêtes ont la
+ * même adresse) et le blocage d'un COMPTE après `maxFailures` échecs d'affilée, chacun à moins de
+ * `lockMs` du précédent. Suivi par nom saisi, qu'il existe ou non : le blocage ne trahit pas les
+ * comptes. En mémoire : un redémarrage débloque tout. Les sessions déjà ouvertes ne sont pas touchées.
+ */
+export class LoginGuard {
+  private readonly global: number[] = []
+  private readonly names = new Map<string, { count: number; last: number }>()
+
+  constructor(private readonly opts: { maxFailures: number; lockMs: number; now: () => number; logger?: Logger }) {}
+
+  /** `null` si l'essai est permis ; sinon l'instant où il le redeviendra. */
+  blockedUntil(name: string): number | null {
+    const t = this.opts.now()
+    while (this.global.length && this.global[0]! <= t - GLOBAL_WINDOW_MS) this.global.shift()
+    if (this.global.length >= GLOBAL_MAX_FAILURES) return this.global[0]! + GLOBAL_WINDOW_MS
+    const n = this.names.get(name)
+    const { maxFailures, lockMs } = this.opts
+    if (maxFailures > 0 && n && n.count >= maxFailures && t - n.last < lockMs) return n.last + lockMs
+    return null
+  }
+
+  fail(name: string): void {
+    const t = this.opts.now()
+    this.global.push(t)
+    const prev = this.names.get(name)
+    const count = prev && t - prev.last < this.opts.lockMs ? prev.count + 1 : 1
+    this.names.delete(name)
+    this.names.set(name, { count, last: t })
+    if (count === this.opts.maxFailures) this.opts.logger?.warn({ username: name, minutes: this.opts.lockMs / 60_000 }, 'login locked for this account')
+    // Borne : les noms les plus anciennement essayés sortent (la Map garde l'ordre d'insertion).
+    if (this.names.size > MAX_TRACKED_NAMES) this.names.delete(this.names.keys().next().value!)
+  }
+
+  succeed(name: string): void { this.names.delete(name) }
+}
+
+/** Message de refus pour un essai bloqué jusqu'à `until`. */
+export const lockedMessage = (until: number, now: number) =>
+  `Trop d’essais : réessayer dans ${Math.max(1, Math.ceil((until - now) / 60_000))} min.`
 
 // --- mots de passe ---------------------------------------------------------------------------
 
@@ -109,13 +160,89 @@ const stateSchema = z.object({
 type AuthState = z.infer<typeof stateSchema>
 type Grant = z.infer<typeof grantSchema>
 
-const sha256 = (s: string) => createHash('sha256').update(s).digest('base64url')
-const token = () => randomBytes(32).toString('base64url')
+export const sha256 = (s: string) => createHash('sha256').update(s).digest('base64url')
+export const token = () => randomBytes(32).toString('base64url')
 
-// Le logo de l'app, DANS la page : le tunnel ne publie que `/mcp`, `/oauth` et `/.well-known`, pas `/icons`.
+// Le logo de l'app, DANS la page : ni `/icons` ni le reste de l'interface ne sont servis sans session.
 const LOGO = (() => {
   try { return readFileSync(resolve(REPO_ROOT, 'apps/web/public/icons/icon.svg'), 'utf8').replace(/^<svg /, '<svg aria-hidden="true" ') } catch { return '' }
 })()
+
+// La police de l'app (Plus Jakarta Sans, jeu latin, 28 Ko), DANS la page pour la même raison. Sans
+// elle, la page retombe sur la police du système.
+const FONT_FACE = (() => {
+  const file = 'node_modules/@fontsource-variable/plus-jakarta-sans/files/plus-jakarta-sans-latin-wght-normal.woff2'
+  for (const dir of [REPO_ROOT, resolve(REPO_ROOT, 'apps/web')]) {
+    try {
+      const data = readFileSync(resolve(dir, file)).toString('base64')
+      return `@font-face{font-family:'Plus Jakarta Sans Variable';font-style:normal;font-display:swap;font-weight:200 800;src:url(data:font/woff2;base64,${data}) format('woff2-variations')}`
+    } catch { /* dossier suivant */ }
+  }
+  return ''
+})()
+
+// Le thème « Kasbah » (apps/web/src/themes/kasbah.ts et les jetons dérivés de `cssVars`), clair et
+// sombre selon le système : la page n'a ni script ni accès au thème choisi dans l'app.
+const PAGE_CSS = `${FONT_FACE}
+:root{--bg:#e9edf1;--surface:#fff;--surface2:#f2f5f8;--text:#141a22;--muted:#5f6a78;--line:rgba(20,26,34,.09);--accent:#1f6f78;--accent-soft:rgba(31,111,120,.12);--on-accent:#fff;--error:#d24a43;--shadow:0 8px 30px rgba(20,26,34,.08);color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1420;--surface:#161e2d;--surface2:#1d2839;--text:#e8edf3;--muted:#8d9ab0;--line:rgba(232,237,243,.08);--accent:#4fb3bd;--accent-soft:rgba(79,179,189,.18);--on-accent:#0d1420;--error:#e57373;--shadow:0 8px 30px rgba(0,0,0,.35);color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;min-height:100dvh;display:grid;place-items:center;padding:16px;background:var(--bg);color:var(--text);font:15px/1.5 'Plus Jakarta Sans Variable','Plus Jakarta Sans',system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+main{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:28px 24px 24px}
+.brand{display:flex;align-items:center;gap:12px;margin:0 0 20px}.brand svg{width:44px;height:44px;flex:none;border-radius:12px}
+h1{font-size:22px;font-weight:600;letter-spacing:-.02em;margin:0}
+p{margin:0 0 16px;color:var(--muted);font-size:14px}p strong{color:var(--text);font-weight:600}
+.err{color:var(--error);background:var(--surface2);border-radius:12px;padding:10px 12px;font-weight:500}
+label{display:block;margin:16px 0 6px;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+input{display:block;width:100%;height:44px;padding:0 14px;font:inherit;color:var(--text);background:var(--surface2);border:1px solid var(--line);border-radius:12px;outline:none;transition:border-color .15s,box-shadow .15s}
+input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+button{display:block;margin-top:24px;width:100%;height:44px;border:0;border-radius:999px;background:var(--accent);color:var(--on-accent);font:inherit;font-weight:600;cursor:pointer;transition:filter .15s}
+button:hover{filter:brightness(1.08)}button:focus-visible{outline:none;box-shadow:0 0 0 3px var(--accent-soft)}`
+
+export const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
+
+/**
+ * Page HTML autonome des connexions (MCP et application) : styles et police en ligne, aucune
+ * ressource externe. Pas de `form-action` dans la CSP : le navigateur l'applique aussi à la
+ * redirection qui suit le formulaire, et refusait le retour vers le client (vu dans le navigateur,
+ * invisible aux tests). `head` : balises en plus dans l'en-tête (le manifest de la connexion).
+ */
+export const htmlPage = (reply: FastifyReply, status: number, body: string, head = '') => reply.code(status)
+  .header('content-type', 'text/html; charset=utf-8')
+  .header('x-frame-options', 'DENY')
+  .header('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'; font-src data:; manifest-src 'self'; img-src 'self'; frame-ancestors 'none'")
+  .header('cache-control', 'no-store')
+  .send(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Kasbah — connexion</title>${head}
+<style>${PAGE_CSS}</style></head>
+<body><main><header class="brand">${LOGO}<h1>Kasbah</h1></header>${body}</main></body></html>`)
+
+/** Lecteur des comptes, relu quand le fichier change (un compte retiré est refusé sans redémarrage). */
+export function usersReader(path: string): () => Promise<UsersFile> {
+  let cached: { mtime: number; file: UsersFile } | null = null
+  return async () => {
+    const mtime = await stat(path).then((s) => s.mtimeMs, () => -1)
+    if (cached?.mtime !== mtime) cached = { mtime, file: await readUsers(path) }
+    return cached.file
+  }
+}
+
+// Haché factice : un compte inconnu coûte le même calcul qu'un mauvais mot de passe.
+const DUMMY_HASH = 'scrypt$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+
+/**
+ * Vérifie un nom et un mot de passe en passant par le gardien. `blocked` : refusé sans essai (le
+ * gardien bloque) ; `null` : mauvais couple ; sinon le compte.
+ */
+export async function checkLogin(guard: LoginGuard, users: () => Promise<UsersFile>, username: string, password: string):
+  Promise<{ user: UsersFile['users'][number] } | { blocked: number } | null> {
+  const blocked = guard.blockedUntil(username)
+  if (blocked !== null) return { blocked }
+  const user = (await users()).users.find((u) => u.name === username)
+  const ok = await verifyPassword(password, user?.password ?? DUMMY_HASH)
+  if (!user || !ok) { guard.fail(username); return null }
+  guard.succeed(username)
+  return { user }
+}
 
 // --- clients --------------------------------------------------------------------------------
 
@@ -139,26 +266,34 @@ export interface McpAuthDeps {
   fetch?: typeof fetch
 }
 
-// Ce qu'on peut joindre sous le nom PUBLIC : le serveur MCP et son autorisation, rien d'autre. Un
-// proxy inverse (celui du NAS) transmet tout ce qui arrive sous son nom ; c'est ici qu'on trie, pour
-// que l'interface, l'API REST (sans authentification) et les caméras restent au réseau local.
-const PUBLIC_PATHS = new Set([
+// Ce qu'on joint sous le nom PUBLIC sans session : le serveur MCP et son autorisation, qui ont leurs
+// jetons. Un proxy inverse (celui du NAS) transmet tout ce qui arrive sous son nom ; c'est ici qu'on
+// trie, le reste passe par la porte à session (`http/session.ts`).
+const MCP_PATHS = new Set([
   '/mcp',
   '/oauth/authorize', '/oauth/token', '/oauth/register',
   '/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp', '/.well-known/oauth-authorization-server',
 ])
 
+/** La requête arrive-t-elle sous un nom public (`Host`, ou premier `X-Forwarded-Host` d'un proxy) ? */
+export function isPublicRequest(req: FastifyRequest, publicHosts: string[]): boolean {
+  if (!publicHosts.length) return false
+  const forwarded = String(req.headers['x-forwarded-host'] ?? '').split(',')[0]!.trim().replace(/:\d+$/, '')
+  return publicHosts.includes(req.hostname) || publicHosts.includes(forwarded)
+}
+
+type Hook = (req: FastifyRequest, reply: FastifyReply) => Promise<void>
+const notFound: Hook = async (_req, reply) => { await reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'not found' } }) }
+
 /**
- * Crochet `onRequest` GLOBAL : sous un nom public (`Host`, ou `X-Forwarded-Host` d'un proxy), 404 hors
- * des chemins du MCP. À poser avant toute route.
+ * Crochet `onRequest` GLOBAL : sous un nom public, les chemins du MCP passent, tout le reste va à
+ * `gate` (404 par défaut). À poser avant toute route. Le réseau local n'est jamais filtré.
  */
-export function publicHostFilter(publicHosts: string[]) {
-  return async (req: FastifyRequest, reply: FastifyReply) => {
-    if (!publicHosts.length) return
-    const forwarded = String(req.headers['x-forwarded-host'] ?? '').split(',')[0]!.trim().replace(/:\d+$/, '')
-    if (!publicHosts.includes(req.hostname) && !publicHosts.includes(forwarded)) return
-    if (PUBLIC_PATHS.has(req.url.split('?')[0]!)) return
-    await reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'not found' } })
+export function publicHostFilter(publicHosts: string[], gate: Hook = notFound): Hook {
+  return async (req, reply) => {
+    if (!isPublicRequest(req, publicHosts)) return
+    if (MCP_PATHS.has(req.url.split('?')[0]!)) return
+    await gate(req, reply)
   }
 }
 
@@ -169,6 +304,10 @@ export interface McpAuth {
   requireToken(req: FastifyRequest, reply: FastifyReply): Promise<void>
   /** Noms d'hôte en plus de ceux du réseau local (celui de `MCP_PUBLIC_URL`). */
   publicHosts: string[]
+  /** Gardien des connexions, partagé avec la page de connexion de l'application. */
+  guard: LoginGuard
+  /** Les comptes (partagés avec l'application). */
+  users: () => Promise<UsersFile>
 }
 
 export function createMcpAuth(deps: McpAuthDeps): McpAuth {
@@ -192,12 +331,10 @@ export function createMcpAuth(deps: McpAuthDeps): McpAuth {
   }
 
   // Les comptes, relus quand le fichier change (un compte retiré coupe ses jetons sans redémarrage).
-  let users: { mtime: number; file: UsersFile } | null = null
-  const currentUsers = async () => {
-    const mtime = await stat(config.MCP_USERS_FILE).then((s) => s.mtimeMs, () => -1)
-    if (users?.mtime !== mtime) users = { mtime, file: await readUsers(config.MCP_USERS_FILE) }
-    return users.file
-  }
+  const currentUsers = usersReader(config.MCP_USERS_FILE)
+  const guard = new LoginGuard({
+    maxFailures: config.KASBAH_LOGIN_MAX_FAILURES, lockMs: config.KASBAH_LOGIN_LOCK_MINUTES * 60_000, now, logger,
+  })
 
   const cimdCache = new Map<string, { info: ClientInfo; until: number }>()
   async function clientInfo(clientId: string): Promise<ClientInfo | null> {
@@ -217,7 +354,6 @@ export function createMcpAuth(deps: McpAuthDeps): McpAuth {
   }
 
   const codes = new Map<string, { clientId: string; redirectUri: string; challenge: string; user: string; expiresAt: number }>()
-  const failures: number[] = []
 
   async function issue(clientId: string, user: string) {
     const s = await load()
@@ -253,27 +389,10 @@ export function createMcpAuth(deps: McpAuthDeps): McpAuth {
     return { params: p.data, client }
   }
 
-  // Pas de `form-action` dans la CSP : le navigateur l'applique aussi à la redirection qui suit le
-  // formulaire, et refusait le retour vers le client (vu dans le navigateur, invisible aux tests).
-  const page = (reply: FastifyReply, status: number, body: string) => reply.code(status)
-    .header('content-type', 'text/html; charset=utf-8')
-    .header('x-frame-options', 'DENY')
-    .header('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'")
-    .header('cache-control', 'no-store')
-    .send(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Kasbah — connexion</title>
-<style>body{font:16px system-ui,sans-serif;background:#f4f1ec;color:#222;display:grid;place-items:center;min-height:100vh;margin:0;padding:16px;box-sizing:border-box}
-@media (prefers-color-scheme:dark){body{background:#1b1a18;color:#eee}main{background:#26241f!important}input{background:#1b1a18;color:#eee;border-color:#555!important}}
-main{background:#fff;border-radius:12px;padding:24px;max-width:400px;width:100%;box-sizing:border-box;box-shadow:0 2px 12px #0002}.brand{display:flex;align-items:center;gap:12px;margin:0 0 16px}.brand svg{width:40px;height:40px;flex:none}h1{font-size:20px;margin:0}
-p{margin:0 0 16px;line-height:1.4}label{display:block;margin:12px 0 4px;font-size:14px}input{width:100%;box-sizing:border-box;padding:10px;font:inherit;border:1px solid #ccc;border-radius:8px}
-button{margin-top:20px;width:100%;padding:12px;font:inherit;font-weight:600;border:0;border-radius:8px;background:#b5562d;color:#fff;cursor:pointer}.err{color:#c0392b}</style></head>
-<body><main><header class="brand">${LOGO}<h1>Kasbah</h1></header>${body}</main></body></html>`)
-
-  const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
-
   function loginForm(reply: FastifyReply, status: number, params: AuthorizeParams, client: ClientInfo, error?: string, username = '') {
     const back = new URL(params.redirect_uri).host
     const hidden = Object.entries(params).map(([k, v]) => `<input type="hidden" name="${esc(k)}" value="${esc(String(v))}">`).join('')
-    return page(reply, status, `<p><strong>${esc(client.name ?? 'Un client MCP')}</strong> demande l’accès à la maison (retour vers <strong>${esc(back)}</strong>).</p>
+    return htmlPage(reply, status, `<p><strong>${esc(client.name ?? 'Un client MCP')}</strong> demande l’accès à la maison (retour vers <strong>${esc(back)}</strong>).</p>
 ${error ? `<p class="err">${esc(error)}</p>` : ''}
 <form method="post" action="/oauth/authorize">${hidden}
 <label for="u">Utilisateur</label><input id="u" name="username" value="${esc(username)}" autocomplete="username" required${username ? '' : ' autofocus'}>
@@ -286,6 +405,8 @@ ${error ? `<p class="err">${esc(error)}</p>` : ''}
 
   return {
     publicHosts: publicUrl ? [publicUrl.hostname] : [],
+    guard,
+    users: currentUsers,
 
     async requireToken(req, reply) {
       const metadata = `${baseOf(req)}/.well-known/oauth-protected-resource/mcp`
@@ -349,26 +470,22 @@ ${error ? `<p class="err">${esc(error)}</p>` : ''}
 
       sub.get('/oauth/authorize', async (req, reply) => {
         const checked = await checkAuthorize(req.query)
-        if (typeof checked === 'string') return page(reply, 400, `<p class="err">${esc(checked)}</p>`)
+        if (typeof checked === 'string') return htmlPage(reply, 400, `<p class="err">${esc(checked)}</p>`)
         return loginForm(reply, 200, checked.params, checked.client)
       })
 
       sub.post('/oauth/authorize', async (req, reply) => {
         const checked = await checkAuthorize(req.body)
-        if (typeof checked === 'string') return page(reply, 400, `<p class="err">${esc(checked)}</p>`)
+        if (typeof checked === 'string') return htmlPage(reply, 400, `<p class="err">${esc(checked)}</p>`)
         const { params, client } = checked
-        // Plafond GLOBAL d'échecs : derrière un tunnel, toutes les requêtes ont la même adresse.
-        while (failures.length && failures[0]! <= now() - LOCK_WINDOW_MS) failures.shift()
-        if (failures.length >= MAX_FAILURES) return loginForm(reply, 429, params, client, 'Trop d’essais : réessayer dans un quart d’heure.')
         const { username = '', password = '' } = req.body as { username?: string; password?: string }
-        const user = (await currentUsers()).users.find((u) => u.name === username)
-        // Un compte inconnu coûte le même calcul qu'un mauvais mot de passe.
-        const ok = await verifyPassword(password, user?.password ?? 'scrypt$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
-        if (!user || !ok) {
-          failures.push(now())
+        const result = await checkLogin(guard, currentUsers, username, password)
+        if (result && 'blocked' in result) return loginForm(reply, 429, params, client, lockedMessage(result.blocked, now()), username)
+        if (!result) {
           logger.warn({ username }, 'mcp login refused')
           return loginForm(reply, 401, params, client, 'Utilisateur ou mot de passe incorrect.', username)
         }
+        const { user } = result
         const code = token()
         codes.set(code, { clientId: params.client_id, redirectUri: params.redirect_uri, challenge: params.code_challenge, user: user.name, expiresAt: now() + CODE_TTL_MS })
         logger.info({ user: user.name, client: client.name ?? params.client_id }, 'mcp client authorized')

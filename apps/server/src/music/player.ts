@@ -7,6 +7,7 @@ import { stateFile } from '../core/paths'
 import { PluginError } from '../core/plugin'
 import { getPlaybackBridge } from '../core/playbackBridge'
 import { sendError } from '../http/errors'
+import { isPublicRequest } from '../mcp/auth'
 import { LengthLock, OUT_BITRATE_KBPS, OUT_CHANNELS, OUT_SAMPLE_RATE_HZ, parseRange, seekFor, StreamProxy, type ProxySession, type ResolvedStream, type SessionMeta, type SpawnFn, type TrackRef } from './proxy'
 import { afterEnd, insert, jumpTo, removeAt, REPEAT_MODES, upcoming, type PlayQueue, type QueueTrack, type RepeatMode } from './queue'
 import { createLastPlayedFile, type LastPlayedByDevice, type LastPlayedStore } from './lastPlayed'
@@ -70,6 +71,8 @@ export interface MusicPlayerDeps {
   onState?: (cb: (deviceId: string, state: unknown) => void) => () => void
   /** Où garder la dernière écoute (tests) ; sinon `MUSIC_STATE_FILE`. */
   lastStore?: LastPlayedStore
+  /** Noms publics (proxy du NAS) : une enceinte ne lit pas l'adresse publique, qui exige une session. */
+  publicHosts?: string[]
 }
 
 export interface MusicPlayer {
@@ -104,6 +107,9 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
     const hostname = host.split(':')[0]!
     if (hostname === '127.0.0.1' || hostname === 'localhost') {
       throw new PluginError('UPSTREAM_ERROR', 'MUSIC_PUBLISH_BASE required when the UI talks to localhost (Cast/Sonos need the LAN IP)')
+    }
+    if (isPublicRequest(req, deps.publicHosts ?? [])) {
+      throw new PluginError('UPSTREAM_ERROR', 'MUSIC_PUBLISH_BASE required when the UI is opened through the public address (Cast/Sonos need the LAN IP)')
     }
     const proto = (req.headers['x-forwarded-proto'] as string | undefined) ?? 'http'
     return `${proto}://${host}`

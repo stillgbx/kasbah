@@ -297,7 +297,7 @@ const houseStats = computed(() => {
                     @update:model-value="(v: boolean | null) => localPlugins.setEnabled('tens', v === true)" />
         </div>
       </section>
-      <!-- qui peut connecter un assistant (Claude…) au serveur MCP, par sa page de connexion -->
+      <!-- qui ouvre Kasbah par l'adresse publique, et connecte un assistant (Claude…) au serveur MCP -->
       <section class="card block settings__plugins">
         <div class="block__title">{{ $t('mcpUsers.title') }}</div>
         <p class="muted small plugins__hint">{{ $t('mcpUsers.hint') }}</p>

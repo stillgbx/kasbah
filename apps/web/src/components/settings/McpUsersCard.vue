@@ -2,13 +2,15 @@
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getTransport } from '../../api'
-import type { McpUser } from '../../api/transport'
+import { ApiRequestError, type McpUser } from '../../api/transport'
 import { useNotificationsStore } from '../../stores/notifications'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Comptes du serveur MCP (`apps/server/mcp-users.json`), dans Réglages : ceux qui ouvrent la page de
-// connexion d'un assistant (Claude sur le téléphone, Claude Desktop…). Le serveur ne rend que les noms.
-// Un nom déjà pris dans le formulaire = changer son mot de passe. Le script `mcp-user` reste en secours.
+// Comptes (`apps/server/mcp-users.json`), dans Réglages : ceux qui ouvrent Kasbah par l'adresse
+// publique, et la page de connexion d'un assistant (Claude sur le téléphone, Claude Desktop…). Le
+// serveur ne rend que les noms. Un nom déjà pris dans le formulaire = changer son mot de passe. Le
+// script `mcp-user` reste en secours. Sous l'adresse publique, la liste est refusée (`LAN_ONLY`, l'aide
+// le dit) : on n'y montre que la session, et de quoi la fermer.
 
 const NAME = /^[\w.@-]{1,64}$/
 const MIN_PASSWORD = 8
@@ -18,6 +20,10 @@ const { t } = useI18n()
 
 const users = ref<McpUser[]>([])
 const loaded = ref(false)
+/** Compte de la session (adresse publique) ; `null` sur le réseau local. */
+const sessionUser = ref<string | null>(null)
+/** Ouvert par l'adresse publique : les comptes se gèrent depuis le réseau local. */
+const lanOnly = ref(false)
 const busy = ref(false)
 const name = ref('')
 const password = ref('')
@@ -37,7 +43,15 @@ const ready = computed(() => !!name.value.trim() && password.value.length >= MIN
 const fail = (err: unknown) => notifications.error(t('errors.UNKNOWN', { name: 'MCP', message: (err as Error).message }))
 
 onMounted(async () => {
-  try { users.value = (await getTransport().mcpUsers()).users } catch (err) { fail(err) } finally { loaded.value = true }
+  try {
+    sessionUser.value = (await getTransport().session()).user
+    // Une session, c'est l'adresse publique : la liste y serait refusée, inutile de la demander.
+    if (sessionUser.value) { lanOnly.value = true; return }
+    users.value = (await getTransport().mcpUsers()).users
+  } catch (err) {
+    if (err instanceof ApiRequestError && err.code === 'LAN_ONLY') lanOnly.value = true
+    else fail(err)
+  } finally { loaded.value = true }
 })
 
 /** Rend vrai si l'écriture a réussi. */
@@ -87,6 +101,12 @@ function remove(n: string) {
 
 <template>
   <div class="mu">
+    <!-- formulaire natif : le serveur ferme la session et renvoie à sa page de connexion -->
+    <form v-if="sessionUser" method="post" action="/logout" class="mu__row">
+      <StrokeIcon name="person" :size="18" class="muted" />
+      <div class="mu__name min0">{{ $t('mcpUsers.signedInAs', { name: sessionUser }) }}</div>
+      <button type="submit" class="pill mu__btn">{{ $t('mcpUsers.signOut') }}</button>
+    </form>
     <div v-for="u in users" :key="u.name" class="mu__row">
       <StrokeIcon name="person" :size="18" class="muted" />
       <div class="mu__name min0">{{ u.name }}</div>
@@ -97,9 +117,9 @@ function remove(n: string) {
         <StrokeIcon name="trash" :size="16" />{{ armed === u.name ? $t('mcpUsers.removeConfirm') : $t('mcpUsers.remove') }}
       </button>
     </div>
-    <div v-if="loaded && !users.length" class="muted small">{{ $t('mcpUsers.none') }}</div>
+    <div v-if="loaded && !lanOnly && !users.length" class="muted small">{{ $t('mcpUsers.none') }}</div>
 
-    <form class="mu__form" @submit.prevent="save">
+    <form v-if="!lanOnly" class="mu__form" @submit.prevent="save">
       <div class="mu__formtitle">{{ existing ? $t('mcpUsers.changeTitle', { name: name.trim() }) : $t('mcpUsers.addTitle') }}</div>
       <div class="mu__fields">
         <label class="mu__field">

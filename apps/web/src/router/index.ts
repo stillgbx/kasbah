@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { getTransport } from '../api'
 
 // Historique HTML5 (pas de `#`) : le serveur Fastify renvoie index.html pour tout GET hors /api et
 // /ws (repli SPA), Vite fait de même en dev. Un ancien lien `/#/music` est réécrit en `/music`.
@@ -33,3 +34,7 @@ export const router = createRouter({
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 })
+
+// Une vue qui ne se charge pas, sous l'adresse publique, c'est souvent une session finie (le serveur
+// refuse alors ses fichiers) : on le demande à l'API, qui renvoie à la connexion s'il le faut.
+router.onError(() => { getTransport().session().catch(() => {}) })

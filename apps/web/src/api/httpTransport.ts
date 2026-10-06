@@ -8,6 +8,15 @@ const STALE_AFTER_MS = 45_000       // aucune trame depuis 45 s → on considèr
 const RECONNECT_MIN_MS = 1000
 const RECONNECT_MAX_MS = 30_000
 
+/**
+ * Sous l'adresse publique, une session finie (expirée, mot de passe changé, compte retiré) : retour à
+ * la page de connexion du serveur, qui ramènera ici. Le code seul compte : d'autres routes rendent 401
+ * pour leur propre compte chez un fabricant.
+ */
+function signInAgain() {
+  location.assign(`/login?next=${encodeURIComponent(location.pathname + location.search + location.hash)}`)
+}
+
 async function request<T>(url: string, init: RequestInit | undefined, parse: (json: unknown) => T): Promise<T> {
   let res: Response
   try { res = await fetch(url, init) }
@@ -18,6 +27,7 @@ async function request<T>(url: string, init: RequestInit | undefined, parse: (js
       const body = apiErrorSchema.safeParse(await res.json())
       if (body.success) ({ code, message } = body.data.error)
     } catch { /* corps non JSON */ }
+    if (res.status === 401 && code === 'AUTH_REQUIRED') signInAgain()
     throw new ApiRequestError(res.status, code, message)
   }
   return parse(await res.json())
@@ -335,6 +345,7 @@ export function createHttpTransport(base = ''): Transport {
     musicQueueClear: (deviceId) => request(
       `${base}/api/music/queue?deviceId=${encodeURIComponent(deviceId)}`, { method: 'DELETE' }, (j) => j as MusicQueue,
     ),
+    session: () => request(`${base}/api/session`, undefined, (j) => j as { user: string | null }),
     mcpUsers: () => request(`${base}/api/mcp/users`, undefined, (j) => j as { users: McpUser[] }),
     mcpSetUser: (name, password) => request(`${base}/api/mcp/users/${encodeURIComponent(name)}`, json('PUT', { password }), (j) => j as { users: McpUser[] }),
     mcpRemoveUser: (name) => request(`${base}/api/mcp/users/${encodeURIComponent(name)}`, { method: 'DELETE' }, (j) => j as { users: McpUser[] }),
@@ -477,7 +488,15 @@ function connectWebSocket(base: string, handlers: TransportHandlers): () => void
       handlers.onMessage(msg)
     }
     ws.onopen = () => { armStale() }
-    ws.onclose = () => { if (staleTimer) clearTimeout(staleTimer); if (!closed) { if (status === 'online') setStatus('connecting'); scheduleReconnect() } }
+    ws.onclose = () => {
+      if (staleTimer) clearTimeout(staleTimer)
+      if (closed) return
+      if (status === 'online') setStatus('connecting')
+      // Un refus de session ne se lit pas sur un WebSocket : on le demande à l'API, qui renvoie à
+      // la connexion s'il le faut (`request`).
+      request(`${base}/api/session`, undefined, () => null).catch(() => {})
+      scheduleReconnect()
+    }
     ws.onerror = () => { ws?.close() }
   }
   handlers.onStatus('connecting')

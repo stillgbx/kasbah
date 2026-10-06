@@ -724,9 +724,11 @@
     "saveError": "Place non enregistrée : {message}"
   },
   "mcpUsers": {
-    "title": "Assistants IA (MCP)",
-    "hint": "Les comptes qui ouvrent la page de connexion d'un assistant (Claude sur le téléphone, Claude Desktop…) au serveur MCP de Kasbah. Retirer un compte déconnecte aussitôt ses assistants. Cette liste ne se gère que depuis le réseau local.",
-    "none": "Aucun compte : aucun assistant ne peut se connecter.",
+    "title": "Comptes",
+    "hint": "Les comptes qui ouvrent Kasbah depuis l'extérieur, par l'adresse publique, et qui connectent un assistant IA (Claude, ChatGPT…) au serveur MCP. Sur le réseau local, aucun compte n'est demandé. Changer un mot de passe ferme les sessions du compte ; le retirer déconnecte aussi ses assistants. Cette liste ne se gère que depuis le réseau local.",
+    "none": "Aucun compte : personne ne peut ouvrir Kasbah depuis l'extérieur ni connecter un assistant.",
+    "signedInAs": "Connecté en tant que {name}",
+    "signOut": "Se déconnecter",
     "password": "Mot de passe",
     "remove": "Retirer",
     "removeConfirm": "Confirmer le retrait",

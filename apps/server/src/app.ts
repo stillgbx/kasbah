@@ -15,6 +15,7 @@ import { SceneRegistry } from './core/scene-registry'
 import { SceneSeeder } from './core/scene-seeder'
 import { EnergyHistory } from './core/history'
 import { registerRoutes } from './http/routes'
+import { createAppSession, sessionConfigSchema } from './http/session'
 import { registerStatic } from './http/static'
 import { createMcpAuth, mcpAuthConfigSchema, publicHostFilter } from './mcp/auth'
 import { registerMcp } from './mcp/server'
@@ -61,10 +62,18 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
     // Fastify 5 : les options du routeur vivent dans `routerOptions` (FSTDEP022 sinon).
     routerOptions: { maxParamLength: 512 },
   }) as unknown as FastifyInstance
-  // Sous le nom public du MCP, rien d'autre que le MCP : posé AVANT toute route.
+  // Sous le nom public : le MCP avec ses jetons, le reste derrière une session. Posé AVANT toute route.
   const mcpConfig = mcpAuthConfigSchema.parse(opts.envSource ?? process.env)
   const mcpAuth = createMcpAuth({ config: mcpConfig, logger: opts.logger.child({ component: 'mcp' }) })
-  app.addHook('onRequest', publicHostFilter(mcpAuth.publicHosts))
+  const session = createAppSession({
+    config: sessionConfigSchema.parse(opts.envSource ?? process.env),
+    publicUrl: mcpConfig.MCP_PUBLIC_URL,
+    publicHosts: mcpAuth.publicHosts,
+    guard: mcpAuth.guard,
+    users: mcpAuth.users,
+    logger: opts.logger.child({ component: 'session' }),
+  })
+  app.addHook('onRequest', publicHostFilter(mcpAuth.publicHosts, session.gate))
   const house = opts.house ?? (await loadHouse(opts.env.KASBAH_HOUSE_FILE))
   for (const w of house.warnings) opts.logger.warn({ path: w.path, code: w.code }, w.message)
 
@@ -114,6 +123,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
   host.registerRoutes(app)
   await registerMcp(app, { registry, scenes, host, house, auth: mcpAuth })
   registerMcpUserRoutes(app, { usersFile: mcpConfig.MCP_USERS_FILE })
+  session.routes(app)
   // Les sources musicales n'ont pas d'appareils : pour `play_url` elles passent par Cast/Sonos via l'hôte.
   setPlaybackBridge({
     getDevice: (id) => registry.get(id),
@@ -124,6 +134,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
   // sources s'y inscrivent à leur démarrage, il passe par le pont ci-dessus pour les enceintes.
   const music = createMusicPlayer({
     config: musicConfigSchema.parse(opts.envSource ?? process.env),
+    publicHosts: mcpAuth.publicHosts,
     logger: opts.logger.child({ component: 'music' }),
     now: () => clock.now(),
   })

@@ -140,7 +140,7 @@ cp apps/server/.env.example apps/server/.env   # puis ajuster (Hue, TaHoma…)
 npm run dev
 ```
 
-Pour reprendre une maison existante, recopier depuis l'ancienne machine ce que git ne porte pas : `apps/server/.env`, `apps/server/mcp-users.json` (comptes des assistants IA), `apps/server/.state/` (jetons et sessions des fabricants), `house/maison.json` (+ `maison.automations.json`, `history/`) et `_external/`.
+Pour reprendre une maison existante, recopier depuis l'ancienne machine ce que git ne porte pas : `apps/server/.env`, `apps/server/mcp-users.json` (comptes de l'accès extérieur et des assistants IA), `apps/server/.state/` (jetons et sessions des fabricants, sessions de l'accès extérieur), `house/maison.json` (+ `maison.automations.json`, `history/`) et `_external/`.
 
 ### Lancer
 
@@ -165,7 +165,7 @@ VITE_INPROCESS_MOCK=1 npm run dev -w @kasbah/web
 
 ### Production
 
-L'interface et l'API n'ont ni authentification ni HTTPS en v1 : **réseau local de confiance uniquement**. Seul le serveur MCP est protégé (OAuth), et c'est la seule partie qu'on peut publier sur Internet (voir [Serveur MCP](#serveur-mcp)).
+Sur le réseau local, l'interface et l'API ne demandent ni compte ni HTTPS : **réseau local de confiance**. Depuis Internet, tout passe par une adresse publique HTTPS où une connexion est exigée (voir [Accès depuis l'extérieur](#accès-depuis-lextérieur)).
 
 ```bash
 npm run build      # web → apps/web/dist, serveur → apps/server/dist/main.js (bundle esbuild)
@@ -173,6 +173,30 @@ npm start          # sert l'app web et l'API sur KASBAH_PORT (8787)
 ```
 
 Depuis un autre appareil du réseau : `http://<ip-du-serveur>:8787`.
+
+### Accès depuis l'extérieur
+
+Depuis un téléphone hors de la maison, sans VPN : un **proxy inverse HTTPS** (celui du NAS Synology, ou un tunnel) publie Kasbah sous une adresse publique, déclarée dans `MCP_PUBLIC_URL`. Kasbah reconnaît ce nom (`Host`, ou `X-Forwarded-Host`) et y exige une **connexion** :
+
+- **Sous l'adresse publique** : page de connexion, puis toute l'application (interface, API, caméras, WebSocket). Le serveur MCP y répond aussi, avec ses propres jetons (voir [Serveur MCP](#serveur-mcp)).
+- **Sur le réseau local** (`http://<ip>:8787`, `kasbah.home.internal`) : rien ne change, aucun compte demandé. C'est le **nom** qui décide, pas l'endroit : l'adresse publique demande la connexion même depuis la maison (par le proxy, toutes les requêtes arrivent du NAS).
+- **Comptes** : les mêmes que ceux des assistants IA, dans **Réglages → Comptes**, gérés depuis le réseau local seulement (même connecté, l'adresse publique ne les montre pas).
+- **Session** : un cookie de 90 jours, prolongé à chaque usage ; on se connecte une fois par appareil. Changer le mot de passe d'un compte ferme toutes ses sessions (téléphone perdu) ; le retirer aussi. « Se déconnecter » est dans Réglages → Comptes.
+- **Blocage** : après 5 échecs de connexion d'affilée, le compte est bloqué 15 minutes, même avec le bon mot de passe (application et assistants IA ; `KASBAH_LOGIN_MAX_FAILURES`, `KASBAH_LOGIN_LOCK_MINUTES`). Les sessions ouvertes ne sont pas touchées.
+- **App installable** : en HTTPS, le navigateur propose d'installer Kasbah, dès la page de connexion. Sur iPhone, l'app ajoutée à l'écran d'accueil a ses propres cookies : s'y connecter une fois.
+
+**Mise en service sur un NAS Synology** (DSM 6 : Panneau de configuration → Portail des applications → Proxy inversé ; DSM 7 : Portail de connexion → Avancé → Proxy inversé) :
+
+1. **D'abord** `MCP_PUBLIC_URL=https://<adresse>` dans `apps/server/.env`, et relancer Kasbah. Dans l'autre ordre, la règle publierait l'application **sans** connexion dès son enregistrement.
+2. Règle de proxy inversé :
+   - source : HTTPS, nom d'hôte `<adresse>`, port 443, HTTP/2 activé, pas de contrôle d'accès ;
+   - destination : HTTP, IP du poste Kasbah, port 8787 ;
+   - **en-têtes personnalisés** : Créer → WebSocket, qui ajoute `Upgrade: $http_upgrade` et `Connection: $connection_upgrade`. Sans eux, l'état en direct ne passe pas (l'app reste « hors ligne »).
+3. Un certificat Let's Encrypt pour `<adresse>` (Sécurité → Certificat), associé à la règle.
+4. Sur le routeur : le port 443 redirigé vers le NAS.
+5. Lecture sur les enceintes (Cast, Sonos) depuis l'extérieur : `MUSIC_PUBLISH_BASE=http://<ip-du-poste>:8787`, sinon le serveur refuse (une enceinte ne peut pas lire l'adresse publique).
+
+**Vérifier**, depuis le téléphone en 4G : `https://<adresse>/` ouvre la page de connexion, `https://<adresse>/.well-known/oauth-protected-resource` annonce l'adresse **en https** (sinon le proxy ne transmet pas le nom d'origine, et rien n'est protégé : le corriger avant tout). Une fois connecté, une lumière allumée change d'état à l'écran sans recharger.
 
 ### Qualité
 
@@ -202,20 +226,20 @@ Ressource : `kasbah://house` (le `house.json` validé).
 
 **Authentification OAuth, partout** (réseau local compris) : Kasbah est son propre serveur d'autorisation. À la première connexion, le client ouvre une page Kasbah (utilisateur + mot de passe), puis garde un jeton (accès 1 h, renouvellement 90 jours glissants). Les clients s'enregistrent seuls (enregistrement dynamique, ou document de métadonnées pour claude.ai).
 
-- **Comptes** : `apps/server/mcp-users.json`, à côté du `.env`, hors dépôt, mots de passe hachés (scrypt). Les gérer dans **Réglages → Assistants IA (MCP)** (ajouter, changer le mot de passe, retirer ; depuis le réseau local seulement), ou en secours :
+- **Comptes** : `apps/server/mcp-users.json`, à côté du `.env`, hors dépôt, mots de passe hachés (scrypt) ; les mêmes ouvrent l'application par l'adresse publique. Les gérer dans **Réglages → Comptes** (ajouter, changer le mot de passe, retirer ; depuis le réseau local seulement), ou en secours :
   ```bash
   npm run mcp-user -w @kasbah/server -- add <nom>
   ```
   (`remove <nom>` coupe aussi ses jetons, `list` les liste). Le fichier est relu à chaque connexion : pas besoin de redémarrer.
 - **Jetons et clients enregistrés** : `apps/server/.state/mcp-auth.json` (hachés). Le supprimer déconnecte tous les clients.
-- **Depuis Internet** (Claude sur le téléphone, connecteur claude.ai) : un proxy inverse HTTPS (celui du NAS Synology, ou un tunnel) vers `http://<poste>:8787`, et l'adresse dans `MCP_PUBLIC_URL`. Sous ce nom (`Host`, ou `X-Forwarded-Host`), Kasbah ne répond **qu'au MCP** (`/mcp`, `/oauth/*`, `/.well-known/oauth-*`) : tout le reste (interface, API, caméras, WebSocket) rend 404, même si le proxy transmet tout. Vérifier après coup que `https://<adresse>/` rend 404 et que `https://<adresse>/.well-known/oauth-protected-resource` annonce l'adresse en https (sinon le proxy ne transmet pas le nom d'origine). Puis sur claude.ai : Paramètres → Connecteurs → Ajouter un connecteur personnalisé → `https://<adresse>/mcp`.
+- **Depuis Internet** (Claude sur le téléphone, connecteur claude.ai) : l'adresse publique de [Accès depuis l'extérieur](#accès-depuis-lextérieur). Sous ce nom, `/mcp`, `/oauth/*` et `/.well-known/oauth-*` répondent avec les jetons du MCP ; le reste exige la connexion de l'application. Puis sur claude.ai : Paramètres → Connecteurs → Ajouter un connecteur personnalisé → `https://<adresse>/mcp`.
 - **Réseau local** : les clients bâtis sur le SDK MCP refusent d'envoyer leurs identifiants à un serveur d'autorisation en `http://` hors de la machine : `http://localhost:8787/mcp` sur le poste du serveur, l'adresse publique en https ailleurs.
 
 `/mcp` n'accepte en plus que les requêtes adressées à `localhost` / `127.0.0.1`, `kasbah` / `kasbah.home.internal` ou au nom de `MCP_PUBLIC_URL` (en-têtes `Host` et `Origin`, protection contre le DNS rebinding).
 
 ### Brancher un assistant IA
 
-Deux adresses : `http://localhost:8787/mcp` sur le poste du serveur, **`https://<adresse>/mcp`** (celle de `MCP_PUBLIC_URL`) partout ailleurs, **sans numéro de port** (le proxy répond sur 443 ; 8787 ne sert qu'entre le proxy et le poste). À la première connexion, la page Kasbah s'ouvre dans le navigateur : se connecter avec un compte de Réglages → Assistants IA. Nom conseillé pour le connecteur : `Kasbah`, en un mot, pour le viser dans le chat (`@Kasbah allume le salon`).
+Deux adresses : `http://localhost:8787/mcp` sur le poste du serveur, **`https://<adresse>/mcp`** (celle de `MCP_PUBLIC_URL`) partout ailleurs, **sans numéro de port** (le proxy répond sur 443 ; 8787 ne sert qu'entre le proxy et le poste). À la première connexion, la page Kasbah s'ouvre dans le navigateur : se connecter avec un compte de Réglages → Comptes. Nom conseillé pour le connecteur : `Kasbah`, en un mot, pour le viser dans le chat (`@Kasbah allume le salon`).
 
 Procédures vérifiées avec Kasbah les 5 et 6 octobre 2026 (Claude, ChatGPT, Mistral Vibe, Grok).
 
@@ -273,7 +297,9 @@ Clients de bureau et de développement (serveur Kasbah lancé) :
 | `MOCK_SCENARIO` | `default` | `default`, `empty`, `chaos`, `winter` |
 | `MOCK_TIME_SCALE` | `1` | Accélération du temps simulé (60 → une journée en 24 min) |
 | `FFMPEG_PATH` | `ffmpeg` | Relais vidéo des caméras |
-| `MCP_PUBLIC_URL` | — | Adresse publique HTTPS du serveur MCP (voir [Serveur MCP](#serveur-mcp)) |
+| `MCP_PUBLIC_URL` | — | Adresse publique HTTPS : application avec connexion et serveur MCP (voir [Accès depuis l'extérieur](#accès-depuis-lextérieur)) |
+| `KASBAH_LOGIN_MAX_FAILURES` / `KASBAH_LOGIN_LOCK_MINUTES` | `5` / `15` | Échecs de connexion d'affilée qui bloquent un compte (`0` = jamais), durée du blocage |
+| `KASBAH_SESSIONS_FILE` | `.state/sessions.json` | Sessions de l'adresse publique (hachées) ; le supprimer déconnecte tout le monde |
 
 Chaque plugin valide ses propres variables (`HUE_*`, `TAHOMA_*`, `NEST_*`, `CAST_*`, `SONOS_*`, `ENPHASE_*`, `TESLA_*`, `RENAULT_*`, `AUTOMOWER_*`, `COMAP_*`, `MELCLOUD_*`, `IROBOT_*`, `OPEN_METEO_*`, `PETKIT_*`, `TUYA_*`, `YTM_*`, `MIXCLOUD_*`, `RADIO_*`, `MUSIC_*`, `AGENDA_*`, `TMA_*`), détaillées sur la [page de chaque plugin](#plugins). Liste commentée : [apps/server/.env.example](apps/server/.env.example).
 

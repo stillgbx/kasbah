@@ -391,6 +391,7 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     async musicQueueRemove() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
     async musicProgress() {},
     async musicQueueClear() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
+    async session() { return { user: null } },
     // comptes MCP : en mémoire, un compte de démonstration
     async mcpUsers() { return { users: mcpUsers.map((name) => ({ name })) } },
     async mcpSetUser(name) {

@@ -634,7 +634,9 @@ export interface Transport {
   musicProgress(body: { source: string; id: string; positionS: number; durationS?: number; ended?: boolean }): Promise<void>
   /** Vider la file : le titre en cours continue, seul. */
   musicQueueClear(deviceId: string): Promise<MusicQueue>
-  /** Comptes du serveur MCP (assistants IA). */
+  /** Le compte de la session, sous l'adresse publique ; `null` sur le réseau local (aucune session). */
+  session(): Promise<{ user: string | null }>
+  /** Comptes de l'adresse publique et du serveur MCP (assistants IA) ; réseau local seulement. */
   mcpUsers(): Promise<{ users: McpUser[] }>
   /** Crée le compte, ou change son mot de passe (8 caractères au moins). */
   mcpSetUser(name: string, password: string): Promise<{ users: McpUser[] }>

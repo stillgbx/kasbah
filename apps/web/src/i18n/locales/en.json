@@ -724,9 +724,11 @@
     "saveError": "Spot not saved: {message}"
   },
   "mcpUsers": {
-    "title": "AI assistants (MCP)",
-    "hint": "Accounts that open the sign-in page of an assistant (Claude on your phone, Claude Desktop…) to Kasbah's MCP server. Removing an account disconnects its assistants right away. This list can only be managed from the local network.",
-    "none": "No account: no assistant can connect.",
+    "title": "Accounts",
+    "hint": "Accounts that open Kasbah from outside, through the public address, and connect an AI assistant (Claude, ChatGPT…) to the MCP server. No account is needed on the local network. Changing a password closes the account's sessions; removing it also disconnects its assistants. This list can only be managed from the local network.",
+    "none": "No account: nobody can open Kasbah from outside or connect an assistant.",
+    "signedInAs": "Signed in as {name}",
+    "signOut": "Sign out",
     "password": "Password",
     "remove": "Remove",
     "removeConfirm": "Confirm removal",
