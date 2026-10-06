@@ -10,8 +10,9 @@ import { detail, type AutomowerAuth } from './auth'
 // Ce qu'il traduit :
 //  - 401 → le jeton est périmé ou révoqué : on en redemande UN et on rejoue ; encore 401 →
 //    `NEEDS_PAIRING` (clé ou secret à revoir) ;
-//  - 403 → interdit : c'est aussi ainsi que le fabricant répond quand le QUOTA MENSUEL de la clé
-//    (10 000 requêtes) est épuisé — `RATE_LIMITED`, le corps dit lequel ;
+//  - 403 → interdit : c'est aussi ainsi que le fabricant répond quand le QUOTA de la clé
+//    (21 000 requêtes par fenêtre de 7 jours, voir `state.ts`) est épuisé — `RATE_LIMITED`, le
+//    corps dit lequel ;
 //  - 429 → plus d'une requête par seconde : `RATE_LIMITED` ;
 //  - 404 → robot inconnu de ce compte : `DEVICE_UNAVAILABLE` ;
 //  - le reste en `UPSTREAM_ERROR`.
@@ -88,7 +89,7 @@ export class AutomowerClient {
 
   private interpret(res: { status: number; text: string }, path: string): unknown {
     if (res.status === 401) throw new PluginError('NEEDS_PAIRING', `Husqvarna refused the token (HTTP 401 on ${path}): check the application key and secret`)
-    if (res.status === 403) throw new PluginError('RATE_LIMITED', `Husqvarna forbids ${path} (HTTP 403, monthly quota exhausted?)${detail(res.text)}`)
+    if (res.status === 403) throw new PluginError('RATE_LIMITED', `Husqvarna forbids ${path} (HTTP 403, weekly quota of 21 000 requests exhausted?)${detail(res.text)}`)
     if (res.status === 429) throw new PluginError('RATE_LIMITED', `Husqvarna rate limit hit on ${path} (1 request per second)`)
     if (res.status === 404) throw new PluginError('DEVICE_UNAVAILABLE', `Husqvarna knows no such mower (HTTP 404 on ${path})`)
     if (res.status >= 400) throw new PluginError('UPSTREAM_ERROR', `Automower Connect API returned HTTP ${res.status} on ${path}${detail(res.text)}`)

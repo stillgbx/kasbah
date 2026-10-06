@@ -7,7 +7,7 @@ import type { Clock } from '../../core/clock'
 // (`Authorization: Bearer` sur la poignée de main — d'où le paquet `ws` : le `WebSocket` natif de
 // Node ne laisse pas poser d'en-tête). Le fabricant y pousse batterie, activité, planning, position,
 // hauteur de coupe dès qu'ils changent : c'est ce qui rend le robot VIVANT à l'écran sans dépenser
-// le quota REST (10 000 requêtes par mois), qui ne sert plus qu'à resynchroniser.
+// le quota REST (21 000 requêtes par fenêtre de 7 jours), qui ne sert plus qu'à resynchroniser.
 //
 // Ce que la connexion demande pour tenir :
 //  - un PING toutes les minutes (le serveur coupe une connexion muette) ;

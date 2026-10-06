@@ -21,8 +21,8 @@ import { createToutemonanneePlugin } from './toutemonannee'
 import { createTuyaPlugin } from './tuya'
 import { createYtmusicPlugin } from './ytmusic'
 
-// Table statique des plugins : typée, grep-able, sans import dynamique. `KASBAH_PLUGINS`
-// sélectionne parmi ces ids.
+// Table statique des plugins : typée, grep-able, sans import dynamique. Tous sont instanciés ;
+// ceux qui tournent sont cochés dans Réglages → Plugins (`plugins` du fichier de la maison).
 
 export const PLUGIN_FACTORIES: Record<string, PluginFactory> = {
   mock: createMockPlugin,

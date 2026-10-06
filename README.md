@@ -24,7 +24,7 @@ Le contrat d'appareil est unique : un `kind` (forme de l'état et des commandes)
 
 ## Fonctionnalités
 
-Mise en page en grand écran (paysage) en trois colonnes : **rail** à gauche, **scène 3D** au centre, **panneau** contextuel à droite. En portrait, le panneau devient un tiroir. L'URL reflète la sélection (`#/?level=…&room=…&device=…`).
+Mise en page en grand écran (paysage) en trois colonnes : **rail** à gauche, **scène 3D** au centre, **panneau** contextuel à droite. En portrait, le panneau devient un tiroir. L'URL reflète la sélection (`/?level=…&room=…&device=…`).
 
 ### Vues
 
@@ -51,7 +51,7 @@ Mise en page en grand écran (paysage) en trois colonnes : **rail** à gauche, *
 
 ### Scène 3D
 
-La géométrie (murs, sols, toit, ouvertures, jardin, piscine) est construite depuis le JSON. Chaque appareil porte une **pilule** (icône + nom). Styles de rendu : réaliste, nature, indigo, maquette, cyberpunk, candy. L'ambiance solaire (auto / jour / crépuscule / nuit) est indépendante du thème de l'app. Véhicules et tondeuse se placent d'après leur GPS.
+La géométrie (murs, sols, toit, ouvertures, jardin, piscine) est construite depuis le JSON. Chaque appareil porte une **pilule** (icône + nom). Treize styles de rendu : réaliste, nature, indigo, maquette, cyberpunk, candy, maison hantée, disco, Halloween, Noël, Star Wars — Tatooine, Akira, Girlyversaire. L'ambiance solaire (auto / jour / crépuscule / nuit) est indépendante du thème de l'app. Véhicules et tondeuse se placent d'après leur GPS.
 
 En **mode édition** (Réglages) : poser et coter des ouvertures, affecter un ouvrant, régler des places de stationnement, déplacer les appareils.
 

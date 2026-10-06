@@ -76,9 +76,9 @@ export class Simulation {
 
   /**
    * `externalId` des appareils à masquer quand la simulation ne fait que COMPLÉTER un parc réel
-   * (`MOCK_EXCLUDE_KINDS`). Un appareil tombe si son propre kind est exclu, ou si son `partOf`
-   * l'est : exclure `energy` emporte ainsi les panneaux simulés, qui sont des capteurs de puissance
-   * mais appartiennent à l'installation solaire simulée.
+   * (sous-items du plugin `mock` décochés dans Réglages → Plugins). Un appareil tombe si son propre
+   * kind est exclu, ou si son `partOf` l'est : exclure `energy` emporte ainsi les panneaux simulés,
+   * qui sont des capteurs de puissance mais appartiennent à l'installation solaire simulée.
    */
   hiddenFor(excluded: Iterable<DeviceKind>): Set<string> {
     const kinds = new Set(excluded)
