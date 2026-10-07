@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAssistant } from '../../composables/useAssistant'
+import { useVoiceInput } from '../../composables/useVoiceInput'
 import { homePanelRequest, MIN_QUERY, useSearch, type SearchHit } from '../../composables/useSearch'
 import { normalize } from '../../lib/search'
 import StrokeIcon from '../ui/StrokeIcon.vue'
@@ -13,6 +14,7 @@ import AssistantReply from './AssistantReply.vue'
 //
 // La dernière ligne passe la saisie à l'assistant (« Demander à Kasbah ») : lui AGIT, et sa réponse
 // prend la place de la liste. Fermer la palette ne l'arrête pas ; la rouvrir la montre.
+// Le micro (plugin `transcription` allumé) dicte l'instruction, qui part aussitôt.
 
 const route = useRoute()
 const router = useRouter()
@@ -25,6 +27,10 @@ const listEl = ref<HTMLDivElement | null>(null)
 const { results } = useSearch(query, { withHome: true })
 const assistant = useAssistant()
 const { phase } = assistant
+const { ready: voiceReady, phase: voicePhase, toggle: toggleVoice } = useVoiceInput((text) => {
+  query.value = text
+  void assistant.ask(text)
+})
 /** Les résultats, plus la ligne de l'assistant. */
 const total = computed(() => results.value.length + 1)
 /** Ce qui avait le focus à l'ouverture : on le lui rend en fermant. */
@@ -61,6 +67,13 @@ async function pick(hit: SearchHit) {
   if (route.name !== 'home') await router.push({ name: 'home' }).catch(() => { /* navigation redondante */ })
   hit.go()
   homePanelRequest.value++
+}
+
+/** Le micro : la saisie s'efface pour laisser lire « J'écoute… » (sauf en `http://`, où il sera refusé). */
+function talk() {
+  if (voicePhase.value === 'idle' && window.isSecureContext) { assistant.reset(); query.value = '' }
+  toggleVoice()
+  input.value?.focus()
 }
 
 function askNow() {
@@ -107,9 +120,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
           <StrokeIcon class="palette__glass" name="search" :size="18" />
           <input ref="input" v-model="query" type="search" class="palette__input"
                  autocomplete="off" autocorrect="off" spellcheck="false"
-                 :placeholder="$t('search.palette')" :aria-label="$t('search.aria')" :readonly="phase === 'running'"
+                 :placeholder="voicePhase === 'recording' ? $t('voice.listening') : voicePhase === 'transcribing' ? $t('voice.transcribing') : $t('search.palette')"
+                 :aria-label="$t('search.aria')" :readonly="phase === 'running' || voicePhase !== 'idle'"
                  @keydown.down.prevent="move(1)" @keydown.up.prevent="move(-1)"
                  @keydown.enter.prevent="onEnter()" @keydown.esc.prevent="onEscape()">
+          <button v-if="voiceReady" type="button" class="palette__mic" :data-phase="voicePhase"
+                  :aria-label="voicePhase === 'recording' ? $t('voice.stop') : $t('voice.start')" :title="voicePhase === 'recording' ? $t('voice.stop') : $t('voice.start')"
+                  :disabled="voicePhase === 'transcribing'" @mousedown.prevent @click="talk()">
+            <StrokeIcon :name="voicePhase === 'recording' ? 'stop' : 'mic'" :size="16" />
+          </button>
         </div>
         <div v-if="showList()" ref="listEl" class="palette__list" role="listbox" @mousedown.prevent>
           <button v-for="(hit, i) in results" :key="hit.key" type="button" class="palette__row" role="option"
@@ -152,6 +171,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
 }
 .palette__input::placeholder { color: var(--muted); }
 .palette__input::-webkit-search-cancel-button { display: none; }
+/* rouge pendant l'écoute, qui pulse pendant la transcription (comme la barre de la vue Maison) */
+.palette__mic {
+  flex: none; width: 32px; height: 32px; margin-right: -6px; border: 0; border-radius: 999px; background: transparent;
+  color: var(--muted); display: grid; place-items: center;
+}
+.palette__mic:hover { color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); }
+.palette__mic[data-phase='recording'] { color: #fff; background: #d24a43; }
+.palette__mic[data-phase='transcribing'] { color: var(--accent); animation: mic-wait 1.1s ease-in-out infinite; }
+@keyframes mic-wait { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .palette__mic { animation: none; } }
 /* huit lignes visibles, le reste au défilement : c'est la frappe suivante qui trie */
 .palette__list { max-height: calc(8 * 46px); overflow-y: auto; overscroll-behavior: contain; border-top: 1px solid var(--line); }
 .palette__row {

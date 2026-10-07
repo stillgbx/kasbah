@@ -128,6 +128,8 @@ export const ICONS = {
   queueAdd: 'M4 6h16M4 12h16M4 18h9M18 15v6M15 18h6',
   volume: 'M4 9.5h3.5L12 5.5v13L7.5 14.5H4zM15.8 9.5a4 4 0 0 1 0 5M18.6 7a7.5 7.5 0 0 1 0 10',
   volumeOff: 'M4 9.5h3.5L12 5.5v13L7.5 14.5H4zM16 9.5l5 5M21 9.5l-5 5',
+  // micro de la recherche (voix de l'assistant) : capsule, arceau, pied
+  mic: 'M12 3.5a3 3 0 0 0-3 3V12a3 3 0 0 0 6 0V6.5a3 3 0 0 0-3-3zM5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9 21h6',
   collapseUp: 'M4 4h16M12 20V9M8 13l4-4 4 4',
   collapseDown: 'M4 20h16M12 4v11M8 11l4 4 4-4',
   boltOff: 'M13 2L4 14h7l-1 8 9-12h-7zM3 3l18 18',

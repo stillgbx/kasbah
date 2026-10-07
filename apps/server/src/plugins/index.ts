@@ -19,6 +19,7 @@ import { createSonosPlugin } from './sonos'
 import { createTahomaPlugin } from './tahoma'
 import { createTeslaPlugin } from './tesla'
 import { createToutemonanneePlugin } from './toutemonannee'
+import { createTranscriptionPlugin } from './transcription'
 import { createTuyaPlugin } from './tuya'
 import { createYtmusicPlugin } from './ytmusic'
 
@@ -48,4 +49,5 @@ export const PLUGIN_FACTORIES: Record<string, PluginFactory> = {
   agenda: () => createAgendaPlugin(),
   toutemonannee: () => createToutemonanneePlugin(),
   claude: () => createClaudePlugin(),
+  transcription: () => createTranscriptionPlugin(),
 }

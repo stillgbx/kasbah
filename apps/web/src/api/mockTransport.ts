@@ -402,6 +402,9 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
       onEvent({ type: 'done', ms: 400 })
     },
     async assistantLog() { return { entries: [] } },
+    // pas de moteur de transcription ici : le micro ne se montre pas
+    async transcriptionStatus() { return { ready: false, provider: null } },
+    async transcribe() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no transcription in mock mode') },
     // comptes MCP : en mémoire, un compte de démonstration
     async mcpUsers() { return { users: mcpUsers.map((name) => ({ name })) } },
     async mcpSetUser(name) {

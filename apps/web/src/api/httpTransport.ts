@@ -373,6 +373,8 @@ export function createHttpTransport(base = ''): Transport {
     assistantAsk: (text, onEvent, signal) => streamLines(
       `${base}/api/assistant/ask`, { ...json('POST', { text }), ...(signal ? { signal } : {}) }, (j) => onEvent(j as AssistantEvent),
     ),
+    transcriptionStatus: () => request(`${base}/api/plugins/transcription/status`, undefined, (j) => j as { ready: boolean; provider: string | null }),
+    transcribe: (audio, hints) => request(`${base}/api/plugins/transcription/transcribe`, json('POST', { audio, hints }), (j) => j as { text: string; ms: number }),
     assistantLog: () => request(`${base}/api/assistant/log`, undefined, (j) => j as { entries: AssistantLogEntry[] }),
     mcpUsers: () => request(`${base}/api/mcp/users`, undefined, (j) => j as { users: McpUser[] }),
     mcpSetUser: (name, password) => request(`${base}/api/mcp/users/${encodeURIComponent(name)}`, json('PUT', { password }), (j) => j as { users: McpUser[] }),
