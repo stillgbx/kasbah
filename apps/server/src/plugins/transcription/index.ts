@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
@@ -6,6 +7,8 @@ import { writeFileAtomic } from '../../core/atomic-file'
 import { stateFile } from '../../core/paths'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
 import { sendError } from '../../http/errors'
+import type { SpawnFn } from '../../music/proxy'
+import { findVoiceStudio, killVoiceStudio, spawnVoiceStudio } from './voicestudio'
 
 // Plugin Transcription : la voix de l'assistant. Le navigateur enregistre une instruction (WAV
 // 16 kHz mono), le serveur la passe à un moteur de transcription par la route compatible OpenAI
@@ -23,6 +26,9 @@ import { sendError } from '../../http/errors'
 // DICTÉE est dite à voix haute, sur l'appareil qui a parlé. Même serveur, route compatible OpenAI
 // `POST /v1/audio/speech` ; chez VoiceStudio, `tts-1` désigne le moteur de synthèse actif (OmniVoice,
 // profil « fast », décision de l'utilisateur 2026-10-07).
+//
+// VoiceStudio sans son interface (sous-item `voicestudio`, éteint par défaut) : lancé avec le plugin
+// quand `STT_URL` est sur cette machine et que rien n'y répond, arrêté avec lui (`voicestudio.ts`).
 
 export const STT_PROVIDERS = ['voicestudio', 'vllm', 'mistral'] as const
 export type SttProvider = (typeof STT_PROVIDERS)[number]
@@ -48,6 +54,8 @@ export const transcriptionConfigSchema = z.object({
   TTS_MODEL: z.string().trim().min(1).default('tts-1'),
   /** Voix : profil VoiceStudio, `default`, ou nom de voix du fournisseur. */
   TTS_VOICE: z.string().trim().min(1).default('default'),
+  /** Le runtime de VoiceStudio (dossier `project`) ; défaut : celui que l'app note dans `%APPDATA%`. */
+  VOICESTUDIO_DIR: z.string().trim().min(1).optional(),
 })
 export type TranscriptionConfig = z.infer<typeof transcriptionConfigSchema>
 
@@ -61,6 +69,9 @@ const TIMEOUT_MS = 30_000
 const MAX_SPOKEN = 1000
 /** La synthèse est plus lente que la transcription (OmniVoice sur la 3060 : à mesurer). */
 const SPEAK_TIMEOUT_MS = 60_000
+/** VoiceStudio lancé : `/health` répond 503 pendant le chargement (torch, modèles), 200 ensuite. */
+const VOICESTUDIO_READY_MS = 180_000
+const LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]'])
 
 /** Réglages de la fiche du plugin (`.state/transcription.json`) : la voix des réponses, pour toute la maison. */
 const settingsFile = () => stateFile('transcription.json')
@@ -78,15 +89,28 @@ const voicesSchema = z.object({
 
 export interface TranscriptionPluginDeps {
   fetch?: typeof fetch
+  spawnImpl?: SpawnFn
+  /** Où chercher `VoiceStudiountime-location.json` (défaut `%APPDATA%`). */
+  appData?: string
+  /** Intervalle de l'attente de VoiceStudio lancé (défaut 2 s). */
+  pollMs?: number
 }
 
 export function createTranscriptionPlugin(deps: TranscriptionPluginDeps = {}): DevicePlugin {
   const doFetch = deps.fetch ?? fetch
+  const spawnImpl = deps.spawnImpl ?? (spawn as unknown as SpawnFn)
   let ctx: PluginContext | null = null
   let target: { provider: SttProvider; url: string | null; model: string; hints: 'prompt' | 'context_bias'; key?: string; language: string; ttsModel: string; ttsVoice: string } | null = null
   /** Sous-item `speech` : les réponses aux instructions dictées sont dites à voix haute. */
   let speech = false
   let lastError: string | null = null
+  /** Sous-item `voicestudio` : lancer VoiceStudio sans son interface. */
+  let autostart = false
+  let studioDir: string | undefined
+  /** VoiceStudio vu par le lancement : ce que la santé en dit. */
+  let studio: { state: 'starting' | 'running' | 'external' | 'failed'; detail: string } | null = null
+  let studioChild: ReturnType<typeof spawnVoiceStudio> | null = null
+  let studioWait: AbortController | null = null
 
   const headers = (): Record<string, string> => (target?.key ? { authorization: `Bearer ${target.key}` } : {})
   const missing = (): string | null => {
@@ -105,6 +129,52 @@ export function createTranscriptionPlugin(deps: TranscriptionPluginDeps = {}): D
     } catch (err) {
       lastError = `${target.provider} unreachable at ${target.url} (${(err as Error).message})`
     }
+  }
+
+  /** Quelque chose répond-il déjà à l'adresse (l'app ouverte, un lancement précédent) ? 503 compris. */
+  async function answers(url: string): Promise<boolean> {
+    try { await doFetch(`${url}/health`, { signal: AbortSignal.timeout(2000) }); return true } catch { return false }
+  }
+
+  /** Lance VoiceStudio sans son interface si rien ne répond à `STT_URL`, puis attend qu'il soit prêt, sans bloquer le démarrage. */
+  async function launchStudio(): Promise<void> {
+    const t = target
+    if (!t?.url || t.provider !== 'voicestudio') return
+    const url = new URL(t.url)
+    if (!LOOPBACK.has(url.hostname)) { studio = { state: 'failed', detail: `not launched: STT_URL ${t.url} is not on this machine` }; return }
+    if (await answers(t.url)) { studio = { state: 'external', detail: 'already running, not launched by Kasbah' }; return }
+    const runtime = await findVoiceStudio(studioDir, deps.appData)
+    if (typeof runtime === 'string') { studio = { state: 'failed', detail: runtime }; return }
+    const launched = spawnVoiceStudio(spawnImpl, runtime, Number(url.port || 80))
+    studioChild = launched
+    studio = { state: 'starting', detail: 'starting (launched by Kasbah)' }
+    const wait = new AbortController()
+    studioWait = wait
+    launched.child.on('error', (err) => { studio = { state: 'failed', detail: `could not start: ${err.message}` }; wait.abort() })
+    launched.child.on('exit', (code) => {
+      if (studioChild !== launched) return
+      studioChild = null
+      wait.abort()
+      studio = { state: 'failed', detail: `exited with code ${code}${launched.tail() ? `: ${launched.tail()}` : ''}` }
+      ctx?.logger.warn({ code }, 'VoiceStudio exited')
+    })
+    void (async () => {
+      const until = Date.now() + VOICESTUDIO_READY_MS
+      while (!wait.signal.aborted && Date.now() < until) {
+        await new Promise((r) => setTimeout(r, deps.pollMs ?? 2000))
+        if (wait.signal.aborted) return
+        try {
+          const res = await doFetch(`${t.url}/health`, { signal: AbortSignal.timeout(2000) })
+          if (res.ok) {
+            studio = { state: 'running', detail: 'launched by Kasbah' }
+            ctx?.logger.info('VoiceStudio ready')
+            await probe()
+            return
+          }
+        } catch { /* pas encore à l'écoute */ }
+      }
+      if (!wait.signal.aborted) studio = { state: 'failed', detail: `not ready after ${VOICESTUDIO_READY_MS / 1000} s` }
+    })()
   }
 
   function ready() {
@@ -164,11 +234,15 @@ export function createTranscriptionPlugin(deps: TranscriptionPluginDeps = {}): D
   return {
     id: 'transcription',
     configSchema: transcriptionConfigSchema,
-    parts: [{ id: 'speech', labelKey: 'voice.speakAnswers', enabledByDefault: false }],
+    parts: [
+      { id: 'speech', labelKey: 'voice.speakAnswers', enabledByDefault: false },
+      { id: 'voicestudio', labelKey: 'voice.voicestudioAutostart', enabledByDefault: false },
+    ],
 
     async init(context) {
       ctx = context
       speech = context.parts.speech === true
+      autostart = context.parts.voicestudio === true
       // déjà validée par l'hôte : la revalider casserait un champ transformé (doc/6_faq/6_1, config re-validée)
       const c = context.config as TranscriptionConfig
       const preset = PRESETS[c.STT_PROVIDER]
@@ -182,13 +256,25 @@ export function createTranscriptionPlugin(deps: TranscriptionPluginDeps = {}): D
         ttsVoice: c.TTS_VOICE,
         ...(c.STT_API_KEY ? { key: c.STT_API_KEY } : {}),
       }
+      studioDir = c.VOICESTUDIO_DIR
     },
     async discover() { return [] },
-    async start() { await probe() },
+    async start() {
+      if (autostart && !missing()) await launchStudio()
+      if (studio?.state !== 'starting') await probe()
+    },
     async execute(_externalId, command) {
       throw new PluginError('UNSUPPORTED_COMMAND', `transcription publishes no device (${command.type})`)
     },
-    async stop() { ctx = null; target = null },
+    async stop() {
+      studioWait?.abort()
+      const launched = studioChild
+      studioChild = null
+      if (launched) await killVoiceStudio(spawnImpl, launched.child)
+      studio = null
+      ctx = null
+      target = null
+    },
 
     registerRoutes(app: FastifyInstance) {
       // L'app ne montre le micro que si le plugin tourne et sait où envoyer l'audio.
@@ -245,7 +331,9 @@ export function createTranscriptionPlugin(deps: TranscriptionPluginDeps = {}): D
       const problem = missing()
       if (problem) return { status: 'needs_pairing', detail: problem, keys }
       if (!target) return { status: 'ok', keys }
-      const where = `${target.provider} · ${target.model} at ${target.url}`
+      const where = `${target.provider} · ${target.model} at ${target.url}${studio ? ` — VoiceStudio ${studio.detail}` : ''}`
+      if (studio?.state === 'starting') return { status: 'degraded', detail: where, keys }
+      if (studio?.state === 'failed') return { status: 'error', detail: where, keys }
       return lastError ? { status: 'degraded', detail: `${where} — ${lastError}`, keys } : { status: 'ok', detail: where, keys }
     },
   }
