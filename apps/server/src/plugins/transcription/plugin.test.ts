@@ -1,6 +1,9 @@
 import Fastify, { type FastifyInstance } from 'fastify'
 import pino from 'pino'
-import { afterEach, describe, expect, it } from 'vitest'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { systemClock } from '../../core/clock'
 import type { PluginContext } from '../../core/plugin'
 import { describeError, sendError } from '../../http/errors'
@@ -25,27 +28,34 @@ function fakeStt(answer: (url: string) => Response | Promise<Response>) {
         else file = { name: (v as File).name, type: v.type, size: v.size }
       })
     }
+    if (typeof init?.body === 'string') fields.json = [init.body]
     sent.push({ url, auth: headers.get('authorization'), fields, file })
     return answer(url)
   }) as typeof fetch
   return { sent, fetchImpl }
 }
 
-const ok = (url: string) => (url.endsWith('/v1/models') ? Response.json({ data: [] }) : Response.json({ text: '  Allume la cuisine. ' }))
+const ok = (url: string) => (url.endsWith('/v1/models') ? Response.json({ data: [] })
+  : url.endsWith('/v1/audio/voices') ? Response.json({ voices: [
+    { voice_id: 'alloy', name: 'Alloy', type: 'openai_alias' },
+    { voice_id: '0a1b2c3d', name: 'ma-voix', type: 'profile', language: 'Auto' },
+  ] })
+  : url.endsWith('/v1/audio/speech') ? new Response(Buffer.from('RIFF0000WAVE'), { headers: { 'content-type': 'audio/wav' } })
+  : Response.json({ text: '  Allume la cuisine. ' }))
 /** Un WAV minimal : l'en-tête RIFF suffit au contrôle de la route. */
 const wav = Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(40)]).toString('base64')
 
 let app: FastifyInstance | null = null
 afterEach(async () => { await app?.close(); app = null })
 
-async function started(env: Record<string, string>, answer: (url: string) => Response | Promise<Response> = ok) {
+async function started(env: Record<string, string>, answer: (url: string) => Response | Promise<Response> = ok, parts: Record<string, boolean> = {}) {
   const stt = fakeStt(answer)
   const plugin = createTranscriptionPlugin({ fetch: stt.fetchImpl })
   const ctx: PluginContext = {
     // la config telle que l'hôte la donne : DÉJÀ validée
     pluginId: 'transcription', config: transcriptionConfigSchema.parse(env), logger: pino({ level: 'silent' }), clock: systemClock,
     signal: new AbortController().signal, emitState() {}, setAvailable() {}, emitDevices() {}, emitScenes() {}, emitSceneState() {},
-    emitEvent() {}, parts: {}, site: { lat: 0, lon: 0, alt: 0 },
+    emitEvent() {}, parts, site: { lat: 0, lon: 0, alt: 0 },
   }
   await plugin.init(ctx)
   await plugin.start()
@@ -74,7 +84,7 @@ describe('VoiceStudio', () => {
   it('sans adresse, dit quoi régler et cache le micro', async () => {
     const { plugin } = await started({})
     expect(plugin.health!()).toMatchObject({ status: 'needs_pairing', detail: 'STT_URL is required for voicestudio (the address of its local API)' })
-    expect((await app!.inject({ method: 'GET', url: '/api/plugins/transcription/status' })).json()).toEqual({ ready: false, provider: 'voicestudio' })
+    expect((await app!.inject({ method: 'GET', url: '/api/plugins/transcription/status' })).json()).toEqual({ ready: false, provider: 'voicestudio', speech: false })
     expect((await transcribe()).statusCode).toBe(409)
   })
 })
@@ -132,3 +142,62 @@ describe('pannes', () => {
   })
 })
 
+
+describe('réponses parlées (sous-item speech)', () => {
+  const speak = (text = 'Les spots de la cuisine sont allumés.') => app!.inject({ method: 'POST', url: '/api/plugins/transcription/speak', payload: { text } })
+
+  it('éteint par défaut : le dit au statut et refuse de parler', async () => {
+    await started({ STT_URL: 'http://localhost:7860' })
+    expect((await app!.inject({ method: 'GET', url: '/api/plugins/transcription/status' })).json()).toEqual({ ready: true, provider: 'voicestudio', speech: false })
+    expect((await speak()).statusCode).toBe(409)
+  })
+
+  it('allumé : demande la synthèse au même serveur (tts-1, voix, langue, WAV) et rend le son', async () => {
+    const { stt } = await started({ STT_URL: 'http://localhost:7860' }, ok, { speech: true })
+    expect((await app!.inject({ method: 'GET', url: '/api/plugins/transcription/status' })).json()).toMatchObject({ speech: true })
+    const res = await speak()
+    expect(res.statusCode).toBe(200)
+    expect(res.headers['content-type']).toBe('audio/wav')
+    expect(res.rawPayload.toString('ascii', 0, 4)).toBe('RIFF')
+    const post = stt.sent.find((x) => x.url.endsWith('/v1/audio/speech'))!
+    expect(post.url).toBe('http://localhost:7860/v1/audio/speech')
+    expect(JSON.parse(post.fields.json![0]!)).toEqual({ model: 'tts-1', input: 'Les spots de la cuisine sont allumés.', voice: 'default', language: 'fr', response_format: 'wav' })
+  })
+
+  it('un moteur de synthèse en panne se dit comme pour la transcription', async () => {
+    await started({ STT_URL: 'http://localhost:7860' }, (url) => (url.endsWith('/v1/models') ? Response.json({}) : new Response('model not loaded', { status: 500 })), { speech: true })
+    const res = await speak()
+    expect(res.statusCode).toBe(502)
+    expect(res.json().error.message).toBe('voicestudio answered 500: model not loaded')
+  })
+})
+
+describe('voix des réponses (fiche du plugin)', () => {
+  const stateDir = process.env.KASBAH_STATE_DIR
+  beforeEach(() => { process.env.KASBAH_STATE_DIR = mkdtempSync(join(tmpdir(), 'kasbah-stt-state-')) })
+  afterEach(() => { process.env.KASBAH_STATE_DIR = stateDir })
+
+  it('propose les profils du fournisseur, pas les alias OpenAI', async () => {
+    await started({ STT_URL: 'http://localhost:7860' })
+    const res = await app!.inject({ method: 'GET', url: '/api/plugins/transcription/voices' })
+    expect(res.json()).toEqual({ voices: [{ id: '0a1b2c3d', name: 'ma-voix', language: 'Auto' }] })
+  })
+
+  it('dit la réponse avec la voix choisie, et revient à TTS_VOICE quand on l’efface', async () => {
+    const { stt } = await started({ STT_URL: 'http://localhost:7860', TTS_VOICE: 'default' }, ok, { speech: true })
+    const voiceSent = () => JSON.parse(stt.sent.filter((x) => x.url.endsWith('/v1/audio/speech')).at(-1)!.fields.json![0]!).voice
+    expect((await app!.inject({ method: 'GET', url: '/api/plugins/transcription/settings' })).json()).toEqual({ voice: null, defaultVoice: 'default' })
+    const put = await app!.inject({ method: 'PUT', url: '/api/plugins/transcription/settings', payload: { voice: '0a1b2c3d' } })
+    expect(put.json()).toEqual({ voice: '0a1b2c3d', defaultVoice: 'default' })
+    await app!.inject({ method: 'POST', url: '/api/plugins/transcription/speak', payload: { text: 'Fait.' } })
+    expect(voiceSent()).toBe('0a1b2c3d')
+    await app!.inject({ method: 'PUT', url: '/api/plugins/transcription/settings', payload: { voice: null } })
+    await app!.inject({ method: 'POST', url: '/api/plugins/transcription/speak', payload: { text: 'Fait.' } })
+    expect(voiceSent()).toBe('default')
+  })
+
+  it('refuse une voix vide', async () => {
+    await started({ STT_URL: 'http://localhost:7860' })
+    expect((await app!.inject({ method: 'PUT', url: '/api/plugins/transcription/settings', payload: { voice: '' } })).statusCode).toBe(400)
+  })
+})

@@ -13,6 +13,7 @@ import NestLinkCard from '../NestLinkCard.vue'
 import RenaultLinkCard from '../RenaultLinkCard.vue'
 import SchoolLinkCard from '../SchoolLinkCard.vue'
 import TeslaLinkCard from '../TeslaLinkCard.vue'
+import TranscriptionLinkCard from '../TranscriptionLinkCard.vue'
 import YtmusicLinkCard from '../YtmusicLinkCard.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import { usePluginsStore } from '../../stores/plugins'
@@ -67,6 +68,7 @@ const SETUP_CARDS = {
   agenda: AgendaLinkCard,
   toutemonannee: SchoolLinkCard,
   claude: ClaudeLinkCard,
+  transcription: TranscriptionLinkCard,
 } as const
 const setupCard = computed(() => SETUP_CARDS[props.plugin.id as keyof typeof SETUP_CARDS] ?? null)
 

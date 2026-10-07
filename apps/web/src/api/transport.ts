@@ -675,9 +675,16 @@ export interface Transport {
   /** Une instruction : les événements arrivent au fil de l'eau, la promesse tient jusqu'à la fin. */
   assistantAsk(text: string, onEvent: (e: AssistantEvent) => void, signal?: AbortSignal): Promise<void>
   /** Le plugin `transcription` tourne-t-il et sait-il où envoyer l'audio ? (le micro ne se montre qu'alors) */
-  transcriptionStatus(): Promise<{ ready: boolean; provider: string | null }>
+  transcriptionStatus(): Promise<{ ready: boolean; provider: string | null; speech: boolean }>
   /** Un WAV 16 kHz mono en base64, et les noms de la maison comme vocabulaire ; rend le texte entendu. */
   transcribe(audio: string, hints: string[]): Promise<{ text: string; ms: number }>
+  /** La réponse de l'assistant dite à voix haute (sous-item `speech`) : le son, à jouer ici. */
+  speak(text: string): Promise<Blob>
+  /** Les voix créées chez le fournisseur (profils VoiceStudio), pour la fiche du plugin. */
+  transcriptionVoices(): Promise<{ voices: { id: string; name: string; language?: string }[] }>
+  /** La voix des réponses parlées (`null` = `TTS_VOICE`, rendue dans `defaultVoice`). */
+  transcriptionSettings(): Promise<{ voice: string | null; defaultVoice: string | null }>
+  setTranscriptionVoice(voice: string | null): Promise<{ voice: string | null; defaultVoice: string | null }>
   /** Le journal des instructions, la plus récente d'abord ; refusé sous l'adresse publique (`LAN_ONLY`). */
   assistantLog(): Promise<{ entries: AssistantLogEntry[] }>
   /** Comptes de l'adresse publique et du serveur MCP (assistants IA) ; réseau local seulement. */

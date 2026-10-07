@@ -36,6 +36,15 @@ async function request<T>(url: string, init: RequestInit | undefined, parse: (js
   return parse(await res.json())
 }
 
+/** Réponse binaire (un son) : mêmes erreurs que `request`. */
+async function requestBlob(url: string, init: RequestInit): Promise<Blob> {
+  let res: Response
+  try { res = await fetch(url, init) }
+  catch (err) { throw new ApiRequestError(0, 'NETWORK', (err as Error).message) }
+  if (!res.ok) throw await errorOf(res)
+  return res.blob()
+}
+
 /** Réponse en NDJSON (une ligne JSON par événement), lue au fil de l'eau. */
 async function streamLines(url: string, init: RequestInit, onLine: (json: unknown) => void): Promise<void> {
   let res: Response
@@ -373,7 +382,11 @@ export function createHttpTransport(base = ''): Transport {
     assistantAsk: (text, onEvent, signal) => streamLines(
       `${base}/api/assistant/ask`, { ...json('POST', { text }), ...(signal ? { signal } : {}) }, (j) => onEvent(j as AssistantEvent),
     ),
-    transcriptionStatus: () => request(`${base}/api/plugins/transcription/status`, undefined, (j) => j as { ready: boolean; provider: string | null }),
+    transcriptionStatus: () => request(`${base}/api/plugins/transcription/status`, undefined, (j) => j as { ready: boolean; provider: string | null; speech: boolean }),
+    transcriptionVoices: () => request(`${base}/api/plugins/transcription/voices`, undefined, (j) => j as { voices: { id: string; name: string; language?: string }[] }),
+    transcriptionSettings: () => request(`${base}/api/plugins/transcription/settings`, undefined, (j) => j as { voice: string | null; defaultVoice: string | null }),
+    setTranscriptionVoice: (voice) => request(`${base}/api/plugins/transcription/settings`, json('PUT', { voice }), (j) => j as { voice: string | null; defaultVoice: string | null }),
+    speak: (text) => requestBlob(`${base}/api/plugins/transcription/speak`, json('POST', { text })),
     transcribe: (audio, hints) => request(`${base}/api/plugins/transcription/transcribe`, json('POST', { audio, hints }), (j) => j as { text: string; ms: number }),
     assistantLog: () => request(`${base}/api/assistant/log`, undefined, (j) => j as { entries: AssistantLogEntry[] }),
     mcpUsers: () => request(`${base}/api/mcp/users`, undefined, (j) => j as { users: McpUser[] }),

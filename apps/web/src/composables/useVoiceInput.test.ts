@@ -29,18 +29,20 @@ class FakeRecorder {
 
 const track = { stop: vi.fn() }
 const transcribe = vi.fn(async () => ({ text: 'Allume la cuisine', ms: 300 }))
+const speak = vi.fn(async () => new Blob(['RIFF'], { type: 'audio/wav' }))
 
-function harness() {
+/** `answer` : ce que l'appelant rend après l'assistant (la réponse à dire, ou rien). */
+function harness(answer: string | null = null) {
   const heard: string[] = []
   let api!: ReturnType<typeof useVoiceInput>
-  const w = mount(defineComponent({ setup() { api = useVoiceInput((t) => heard.push(t)); return () => h('div') } }))
+  const w = mount(defineComponent({ setup() { api = useVoiceInput(async (t) => { heard.push(t); return answer }); return () => h('div') } }))
   return { w, heard, api: () => api }
 }
 
 beforeEach(() => {
   setActivePinia(createPinia())
-  transcribe.mockClear(); track.stop.mockClear()
-  setTransport({ transcriptionStatus: async () => ({ ready: true, provider: 'voicestudio' }), transcribe } as unknown as Transport)
+  transcribe.mockClear(); track.stop.mockClear(); speak.mockClear()
+  setTransport({ transcriptionStatus: async () => ({ ready: true, provider: 'voicestudio', speech: false }), transcribe, speak } as unknown as Transport)
   vi.stubGlobal('MediaRecorder', FakeRecorder)
   vi.stubGlobal('isSecureContext', true)
   Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: vi.fn(async () => ({ getTracks: () => [track] })) } })
@@ -94,5 +96,13 @@ describe('useVoiceInput', () => {
     api().toggle(); await flushPromises()
     expect(heard).toEqual([])
     expect(useNotificationsStore().queue.at(-1)?.text).toBe('Rien entendu.')
+  })
+
+  it('ne dit rien quand les réponses parlées sont éteintes', async () => {
+    const { api } = harness('Les spots de la cuisine sont allumés.')
+    api().toggle(); await flushPromises()
+    api().toggle(); await flushPromises()
+    expect(speak).not.toHaveBeenCalled()
+    expect(api().phase.value).toBe('idle')
   })
 })

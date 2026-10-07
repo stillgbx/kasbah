@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAssistant } from '../../composables/useAssistant'
 import { useVoiceInput } from '../../composables/useVoiceInput'
 import { homePanelRequest, MIN_QUERY, useSearch, type SearchHit } from '../../composables/useSearch'
@@ -27,10 +28,15 @@ const listEl = ref<HTMLDivElement | null>(null)
 const { results } = useSearch(query, { withHome: true })
 const assistant = useAssistant()
 const { phase } = assistant
-const { ready: voiceReady, phase: voicePhase, toggle: toggleVoice } = useVoiceInput((text) => {
+const { t } = useI18n()
+const { ready: voiceReady, phase: voicePhase, toggle: toggleVoice } = useVoiceInput(async (text) => {
   query.value = text
-  void assistant.ask(text)
+  await assistant.ask(text)
+  // la réponse, à dire à voix haute si les réponses parlées sont allumées
+  return assistant.phase.value === 'done' ? assistant.answer.value : null
 })
+/** Parler, terminer l'écoute, ou arrêter la réponse dite à voix haute. */
+const micLabel = computed(() => t(voicePhase.value === 'recording' ? 'voice.stop' : voicePhase.value === 'speaking' ? 'voice.stopSpeaking' : 'voice.start'))
 /** Les résultats, plus la ligne de l'assistant. */
 const total = computed(() => results.value.length + 1)
 /** Ce qui avait le focus à l'ouverture : on le lui rend en fermant. */
@@ -121,13 +127,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
           <input ref="input" v-model="query" type="search" class="palette__input"
                  autocomplete="off" autocorrect="off" spellcheck="false"
                  :placeholder="voicePhase === 'recording' ? $t('voice.listening') : voicePhase === 'transcribing' ? $t('voice.transcribing') : $t('search.palette')"
-                 :aria-label="$t('search.aria')" :readonly="phase === 'running' || voicePhase !== 'idle'"
+                 :aria-label="$t('search.aria')" :readonly="phase === 'running' || voicePhase === 'recording' || voicePhase === 'transcribing'"
                  @keydown.down.prevent="move(1)" @keydown.up.prevent="move(-1)"
                  @keydown.enter.prevent="onEnter()" @keydown.esc.prevent="onEscape()">
           <button v-if="voiceReady" type="button" class="palette__mic" :data-phase="voicePhase"
-                  :aria-label="voicePhase === 'recording' ? $t('voice.stop') : $t('voice.start')" :title="voicePhase === 'recording' ? $t('voice.stop') : $t('voice.start')"
+                  :aria-label="micLabel" :title="micLabel"
                   :disabled="voicePhase === 'transcribing'" @mousedown.prevent @click="talk()">
-            <StrokeIcon :name="voicePhase === 'recording' ? 'stop' : 'mic'" :size="16" />
+            <StrokeIcon :name="voicePhase === 'recording' || voicePhase === 'speaking' ? 'stop' : 'mic'" :size="16" />
           </button>
         </div>
         <div v-if="showList()" ref="listEl" class="palette__list" role="listbox" @mousedown.prevent>
@@ -178,6 +184,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
 }
 .palette__mic:hover { color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); }
 .palette__mic[data-phase='recording'] { color: #fff; background: #d24a43; }
+.palette__mic[data-phase='speaking'] { color: var(--accent); }
 .palette__mic[data-phase='transcribing'] { color: var(--accent); animation: mic-wait 1.1s ease-in-out infinite; }
 @keyframes mic-wait { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .palette__mic { animation: none; } }

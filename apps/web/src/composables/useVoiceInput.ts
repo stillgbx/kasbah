@@ -15,8 +15,12 @@ import { useScenesStore } from '../stores/scenes'
 //
 // Le micro n'existe qu'en contexte sûr (HTTPS, ou localhost) : sur le réseau local en `http://`, le
 // navigateur le refuse — on le dit au toucher, avec où trouver la manipulation (drapeau Chrome).
+//
+// Réponses parlées (sous-item `speech` du plugin) : quand `onText` rend la réponse de l'assistant, elle
+// est dite à voix haute ICI, sur l'appareil qui a parlé. Seules les instructions dictées parlent ; un
+// toucher du micro pendant la lecture l'arrête.
 
-export type VoicePhase = 'idle' | 'recording' | 'transcribing'
+export type VoicePhase = 'idle' | 'recording' | 'transcribing' | 'speaking'
 
 /** Au plus 15 s : une instruction, pas une dictée (et 480 Ko de WAV). */
 export const MAX_RECORDING_MS = 15_000
@@ -25,9 +29,15 @@ const MIN_SECONDS = 0.3
 
 /** Le plugin tourne-t-il ? Demandé une fois par chargement de page, partagé par la palette et la barre. */
 const ready = ref<boolean | null>(null)
+/** Sous-item `speech` allumé : dire les réponses aux instructions dictées. */
+const speech = ref(false)
 let asked = false
 
-export function useVoiceInput(onText: (text: string) => void) {
+/**
+ * `onText` reçoit le texte entendu ; s'il rend (ou promet) la réponse de l'assistant, elle est dite à
+ * voix haute quand les réponses parlées sont allumées.
+ */
+export function useVoiceInput(onText: (text: string) => void | Promise<string | null | undefined>) {
   const { t } = useI18n()
   const notifications = useNotificationsStore()
   const house = useHouseStore()
@@ -36,7 +46,7 @@ export function useVoiceInput(onText: (text: string) => void) {
 
   if (!asked) {
     asked = true
-    getTransport().transcriptionStatus().then((s) => { ready.value = s.ready }, () => { ready.value = false })
+    getTransport().transcriptionStatus().then((s) => { ready.value = s.ready; speech.value = s.speech }, () => { ready.value = false })
   }
 
   const phase = ref<VoicePhase>('idle')
@@ -46,6 +56,33 @@ export function useVoiceInput(onText: (text: string) => void) {
   let timer: ReturnType<typeof setTimeout> | null = null
   /** Démonté pendant l'enregistrement : on coupe le micro et on jette ce qui a été dit. */
   let discarded = false
+  /** La réponse en train d'être dite (une seule à la fois). */
+  let player: HTMLAudioElement | null = null
+  let playerUrl: string | null = null
+
+  function stopSpeaking() {
+    player?.pause()
+    player = null
+    if (playerUrl) { URL.revokeObjectURL(playerUrl); playerUrl = null }
+    if (phase.value === 'speaking') phase.value = 'idle'
+  }
+
+  async function say(answer: string) {
+    phase.value = 'speaking'
+    try {
+      const audio = await getTransport().speak(answer)
+      if (phase.value !== 'speaking') return              // arrêté pendant la synthèse
+      playerUrl = URL.createObjectURL(audio)
+      player = new Audio(playerUrl)
+      player.onended = stopSpeaking
+      player.onerror = stopSpeaking
+      await player.play()
+    } catch (err) {
+      stopSpeaking()
+      const message = err instanceof ApiRequestError ? err.message : (err as Error).message
+      notifications.error(t('voice.errors.speakFailed', { message }))
+    }
+  }
 
   /** Pièces, zones, niveaux, ambiances, puis appareils : le serveur en garde ce que le fournisseur accepte. */
   function hints(): string[] {
@@ -98,25 +135,29 @@ export function useVoiceInput(onText: (text: string) => void) {
       const samples = await toMono16k(new Blob(chunks, { type }))
       if (samples.length < STT_RATE * MIN_SECONDS) { notifications.notify(t('voice.errors.empty')); return }
       const { text } = await getTransport().transcribe(toBase64(encodeWav(samples)), hints())
-      if (!text) notifications.notify(t('voice.errors.empty'))
-      else onText(text)
+      if (!text) { notifications.notify(t('voice.errors.empty')); return }
+      phase.value = 'idle'
+      const answer = await onText(text)
+      if (answer && speech.value && !discarded && phase.value === 'idle') await say(answer)
     } catch (err) {
       const message = err instanceof ApiRequestError ? err.message : (err as Error).message
       notifications.error(t('voice.errors.failed', { message }))
     } finally {
-      phase.value = 'idle'
+      if (phase.value === 'transcribing') phase.value = 'idle'
     }
   }
 
   function toggle() {
     if (phase.value === 'idle') void start()
     else if (phase.value === 'recording') stop()
+    else if (phase.value === 'speaking') stopSpeaking()
   }
 
   onBeforeUnmount(() => {
     discarded = true
     stop()
     release()
+    stopSpeaking()
   })
 
   return { ready, phase, toggle }

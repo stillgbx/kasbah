@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useEventListener } from '@vueuse/core'
 import { computed, nextTick, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useAssistant } from '../../composables/useAssistant'
 import { useVoiceInput } from '../../composables/useVoiceInput'
 import { MIN_QUERY, useSearch, type SearchHit } from '../../composables/useSearch'
@@ -30,12 +31,17 @@ const root = ref<HTMLDivElement | null>(null)
 const { results } = useSearch(query)
 const assistant = useAssistant()
 const { phase } = assistant
-const { ready: voiceReady, phase: voicePhase, toggle: toggleVoice } = useVoiceInput((text) => {
+const { t } = useI18n()
+const { ready: voiceReady, phase: voicePhase, toggle: toggleVoice } = useVoiceInput(async (text) => {
   query.value = text
-  void assistant.ask(text)
+  await assistant.ask(text)
+  // la réponse, à dire à voix haute si les réponses parlées sont allumées
+  return assistant.phase.value === 'done' ? assistant.answer.value : null
 })
 /** La place du bout du champ : le micro pendant l'écoute, ou quand il n'y a rien à effacer. */
 const micSlot = computed(() => voiceReady.value === true && (voicePhase.value !== 'idle' || (!query.value && phase.value === 'idle')))
+/** Parler, terminer l'écoute, ou arrêter la réponse dite à voix haute. */
+const micLabel = computed(() => t(voicePhase.value === 'recording' ? 'voice.stop' : voicePhase.value === 'speaking' ? 'voice.stopSpeaking' : 'voice.start'))
 /** Les résultats, plus la ligne de l'assistant. */
 const total = computed(() => results.value.length + 1)
 
@@ -139,7 +145,7 @@ function onEscape() {
       <input ref="input" v-model="query" type="search" class="search__input" enterkeyhint="go"
              autocomplete="off" autocorrect="off" spellcheck="false"
              :placeholder="voicePhase === 'recording' ? $t('voice.listening') : voicePhase === 'transcribing' ? $t('voice.transcribing') : $t('search.placeholder')"
-             :aria-label="$t('search.aria')" :readonly="phase === 'running' || voicePhase !== 'idle'"
+             :aria-label="$t('search.aria')" :readonly="phase === 'running' || voicePhase === 'recording' || voicePhase === 'transcribing'"
              @focus="onFocus()" @blur="focused = false"
              @keydown.down.prevent="move(1)" @keydown.up.prevent="move(-1)"
              @keydown.enter.prevent="onEnter()" @keydown.esc.prevent="onEscape()">
@@ -147,9 +153,9 @@ function onEscape() {
            le champ sous les doigts, et deux ne laissaient que 31 px de saisie sur téléphone. Le micro
            quand il n'y a rien à effacer (ou pendant l'écoute), la croix sinon. -->
       <button v-if="micSlot" type="button" class="search__mic" :data-phase="voicePhase"
-              :aria-label="voicePhase === 'recording' ? $t('voice.stop') : $t('voice.start')" :title="voicePhase === 'recording' ? $t('voice.stop') : $t('voice.start')"
+              :aria-label="micLabel" :title="micLabel"
               :disabled="voicePhase === 'transcribing'" @mousedown.prevent @click="talk()">
-        <StrokeIcon :name="voicePhase === 'recording' ? 'stop' : 'mic'" :size="16" />
+        <StrokeIcon :name="voicePhase === 'recording' || voicePhase === 'speaking' ? 'stop' : 'mic'" :size="16" />
       </button>
       <button v-else type="button" class="search__clear" :data-show="query || phase !== 'idle' ? '1' : '0'" :tabindex="query || phase !== 'idle' ? 0 : -1"
               :aria-label="$t('search.clear')" @mousedown.prevent @click="clear()">
@@ -195,6 +201,7 @@ function onEscape() {
 }
 .search__mic:hover { color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); }
 .search__mic[data-phase='recording'] { color: #fff; background: #d24a43; }
+.search__mic[data-phase='speaking'] { color: var(--accent); }
 .search__mic[data-phase='transcribing'] { color: var(--accent); animation: mic-wait 1.1s ease-in-out infinite; }
 @keyframes mic-wait { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .search__mic { animation: none; } }
