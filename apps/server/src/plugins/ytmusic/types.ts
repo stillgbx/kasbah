@@ -103,7 +103,11 @@ export const statusSchema = z.object({
   cookieFile: z.string().nullable(),
   poTokenUrl: z.string(),
   lastError: z.string().nullable(),
-  /** Navigateurs acceptés pour `POST /cookie/from-browser`. */
+  /** Navigateurs acceptés pour `POST /cookie/from-browser` (aucun pour un utilisateur connecté). */
   browsers: z.array(z.string()),
+  /** Le compte en jeu : l'utilisateur connecté, ou `null` pour celui de la maison. */
+  user: z.string().nullable(),
+  /** Utilisateur connecté sans cookie : catalogue public seulement, rien de personnel. */
+  anonymous: z.boolean(),
 })
 export type YtmusicStatus = z.infer<typeof statusSchema>

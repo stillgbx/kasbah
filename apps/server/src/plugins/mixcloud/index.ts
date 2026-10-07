@@ -1,20 +1,21 @@
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import type { Command, PluginHealth } from '@kasbah/shared'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
-import { stateFile } from '../../core/paths'
+import { stateFile, userStateFile } from '../../core/paths'
 import { sendError } from '../../http/errors'
 import type { ResolvedStream, SpawnFn } from '../../music/proxy'
-import { registerMusicSource, type MusicSource } from '../../music/sources'
+import { musicUserOf, registerMusicSource, type MusicSource, type MusicUser } from '../../music/sources'
 import { createMixcloudApi, followingUploads, KEY_RE, USERNAME_RE, type MixcloudApi, type MixcloudMix } from './api'
 import { buildHome, type HomeSection } from './home'
 import { resolveMixcloud } from './resolve'
-import { createMixcloudFile, noteProgress, resumePoint, type MixcloudState, type MixcloudStore } from './store'
+import { createMixcloudFile, memoryMixcloud, noteProgress, resumePoint, type MixcloudState, type MixcloudStore } from './store'
 
 // Plugin Mixcloud (NON OFFICIEL pour la lecture) : catalogue par l'API publique (un nom d'utilisateur
 // suffit, aucun mot de passe), flux par yt-dlp. Aucun appareil publié : c'est une SOURCE du lecteur
 // commun (`music/player.ts`), qui sert le m4a aux enceintes, tient la file et le transfert. Ce que ce
-// plugin ajoute : la REPRISE — la position atteinte dans chaque mix écouté d'ici est retenue.
+// plugin ajoute : la REPRISE — la position atteinte dans chaque mix écouté d'ici est retenue, par compte
+// (la maison, et chaque utilisateur connecté qui a donné son nom Mixcloud).
 
 export const mixcloudConfigSchema = z.object({
   MIXCLOUD_API_URL: z.string().trim().url().default('https://api.mixcloud.com'),
@@ -28,6 +29,8 @@ export type MixcloudConfig = z.infer<typeof mixcloudConfigSchema>
 export interface MixcloudPluginDeps {
   api?: MixcloudApi
   store?: MixcloudStore
+  /** L'état d'un utilisateur connecté (tests) ; sinon un fichier de son dossier d'état. */
+  userStore?: (user: string) => MixcloudStore
   spawnImpl?: SpawnFn
   fetchImpl?: typeof fetch
   /** Résolution du flux (tests) ; sinon yt-dlp. */
@@ -43,23 +46,53 @@ export function createMixcloudPlugin(deps: MixcloudPluginDeps = {}): DevicePlugi
   let ctx: PluginContext | null = null
   let config: MixcloudConfig | null = null
   let api: MixcloudApi | null = null
-  let store: MixcloudStore | null = null
-  let state: MixcloudState = { username: null, resume: {} }
   let lastError: string | null = null
-  let feed: { username: string; at: number; items: MixcloudMix[] } | null = null
-  let home: { username: string; at: number; sections: HomeSection[] } | null = null
-  let saveTimer: ReturnType<typeof setTimeout> | null = null
+  /** Par nom Mixcloud : ce sont des données publiques, deux comptes qui suivent le même nom les partagent. */
+  const feeds = new Map<string, { at: number; items: MixcloudMix[] }>()
+  const homes = new Map<string, { at: number; sections: HomeSection[] }>()
   let unregister: (() => void) | null = null
+
+  /**
+   * Un compte Kasbah côté Mixcloud : celui de la maison (`user: null`, réglé dans le plugin) ou celui
+   * d'un utilisateur connecté (son dossier d'état). Chacun a son nom Mixcloud et SES positions de
+   * reprise : un mix écouté par l'un ne se « reprend » pas chez l'autre.
+   */
+  interface Account {
+    user: MusicUser
+    store: MixcloudStore
+    state: MixcloudState
+    saveTimer: ReturnType<typeof setTimeout> | null
+  }
+  const accounts = new Map<string, Promise<Account>>()
 
   const now = () => ctx?.clock.now() ?? Date.now()
   const needApi = () => {
     if (!api) throw new PluginError('DEVICE_UNAVAILABLE', 'Mixcloud plugin is not started')
     return api
   }
-  const needUser = () => {
-    if (!state.username) throw new PluginError('NEEDS_PAIRING', 'no Mixcloud username set')
-    return state.username
+  const needUser = (a: Account) => {
+    if (!a.state.username) throw new PluginError('NEEDS_PAIRING', 'no Mixcloud username set')
+    return a.state.username
   }
+  function storeOf(user: MusicUser): MixcloudStore {
+    const file = config?.MIXCLOUD_STATE_FILE ?? ''
+    if (user === null) return deps.store ?? createMixcloudFile(file, ctx?.logger)
+    return deps.userStore?.(user) ?? (file ? createMixcloudFile(userStateFile(user, 'mixcloud.json'), ctx?.logger) : memoryMixcloud())
+  }
+  function accountOf(user: MusicUser): Promise<Account> {
+    const key = user ?? ''
+    let a = accounts.get(key)
+    if (!a) {
+      const store = storeOf(user)
+      a = store.load().then((state) => ({ user, store, state, saveTimer: null }))
+      // une lecture ratée ne reste pas en cache : la suivante réessaie
+      a.catch(() => { if (accounts.get(key) === a) accounts.delete(key) })
+      accounts.set(key, a)
+    }
+    return a
+  }
+  const accountFor = (req: FastifyRequest) => accountOf(musicUserOf(req))
+
   /** Un appel à Mixcloud : l'échec est retenu pour la santé, puis relevé tel quel. */
   async function ask<T>(call: (a: MixcloudApi) => Promise<T>): Promise<T> {
     try {
@@ -71,29 +104,34 @@ export function createMixcloudPlugin(deps: MixcloudPluginDeps = {}): DevicePlugi
       throw err
     }
   }
-  function persistSoon() {
-    if (saveTimer) return
-    saveTimer = setTimeout(() => {
-      saveTimer = null
-      void store?.save(state).catch((err) => ctx?.logger.warn({ err }, 'could not write the Mixcloud state file'))
+  function persistSoon(a: Account) {
+    if (a.saveTimer) return
+    a.saveTimer = setTimeout(() => {
+      a.saveTimer = null
+      void a.store.save(a.state).catch((err) => ctx?.logger.warn({ err }, 'could not write the Mixcloud state file'))
     }, SAVE_EVERY_MS)
   }
-  async function persistNow() {
-    if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
-    await store?.save(state)
+  async function persistNow(a: Account) {
+    if (a.saveTimer) { clearTimeout(a.saveTimer); a.saveTimer = null }
+    await a.store.save(a.state)
   }
   /** Le fil des suivis, gardé une demi-heure (une requête par compte suivi). */
   async function followingFeed(username: string): Promise<MixcloudMix[]> {
-    if (!feed || feed.username !== username || now() - feed.at > FEED_TTL_MS) {
-      feed = { username, at: now(), items: await followingUploads(needApi(), username) }
+    let hit = feeds.get(username)
+    if (!hit || now() - hit.at > FEED_TTL_MS) {
+      hit = { at: now(), items: await followingUploads(needApi(), username) }
+      feeds.set(username, hit)
     }
-    return feed.items
+    return hit.items
   }
-  /** Chaque mix rendu à l'UI porte sa position de reprise, s'il en a une. */
-  const withResume = (items: MixcloudMix[]) => items.map((m) => {
-    const r = resumePoint(state.resume[m.key])
+  /** Chaque mix rendu à l'UI porte la position de reprise du compte, s'il en a une. */
+  const withResume = (a: Account, items: MixcloudMix[]) => items.map((m) => {
+    const r = resumePoint(a.state.resume[m.key])
     return r === null ? m : { ...m, resumeS: r }
   })
+  const forgetCaches = (...usernames: (string | null)[]) => {
+    for (const u of usernames) if (u) { feeds.delete(u); homes.delete(u) }
+  }
 
   const source: MusicSource = {
     id: 'mixcloud',
@@ -118,14 +156,21 @@ export function createMixcloudPlugin(deps: MixcloudPluginDeps = {}): DevicePlugi
         throw new PluginError('UPSTREAM_ERROR', lastError, { cause: err })
       }
     },
-    onProgress(key, positionS, durationS, ended) {
-      const before = resumePoint(state.resume[key])
-      state = { ...state, resume: noteProgress(state.resume, key, positionS, durationS ?? null, ended, now()) }
-      // fin ou oubli : tout de suite (l'UI relira) ; une progression : sans presse
-      if (ended || (before !== null && resumePoint(state.resume[key]) === null)) void persistNow().catch(() => {})
-      else persistSoon()
+    onProgress(key, positionS, durationS, ended, user) {
+      void accountOf(user).then((a) => {
+        // un utilisateur connecté sans compte Mixcloud écoute en anonyme : rien n'est retenu
+        if (a.user !== null && !a.state.username) return
+        const before = resumePoint(a.state.resume[key])
+        a.state = { ...a.state, resume: noteProgress(a.state.resume, key, positionS, durationS ?? null, ended, now()) }
+        // fin ou oubli : tout de suite (l'UI relira) ; une progression : sans presse
+        if (ended || (before !== null && resumePoint(a.state.resume[key]) === null)) void persistNow(a).catch(() => {})
+        else persistSoon(a)
+      }).catch((err) => ctx?.logger.warn({ err }, 'Mixcloud state unreadable, progress not kept'))
     },
   }
+
+  /** Le compte de la maison, déjà lu (pour la santé, synchrone). */
+  let home: Account | null = null
 
   return {
     id: 'mixcloud',
@@ -135,8 +180,8 @@ export function createMixcloudPlugin(deps: MixcloudPluginDeps = {}): DevicePlugi
       ctx = context
       config = mixcloudConfigSchema.parse(context.config)
       api = deps.api ?? createMixcloudApi(config.MIXCLOUD_API_URL, deps.fetchImpl ?? fetch, context.signal)
-      store = deps.store ?? createMixcloudFile(config.MIXCLOUD_STATE_FILE, context.logger)
-      state = await store.load()
+      accounts.clear()
+      home = await accountOf(null)
       unregister?.()
       unregister = registerMusicSource(source)
     },
@@ -148,106 +193,129 @@ export function createMixcloudPlugin(deps: MixcloudPluginDeps = {}): DevicePlugi
     async stop() {
       unregister?.()
       unregister = null
-      if (saveTimer) await persistNow().catch(() => {})
-      feed = null
-      home = null
+      for (const p of accounts.values()) {
+        const a = await p.catch(() => null)
+        if (a?.saveTimer) await persistNow(a).catch(() => {})
+      }
+      accounts.clear()
+      feeds.clear()
+      homes.clear()
       ctx = null
     },
 
     registerRoutes(app: FastifyInstance) {
-      app.get('/status', async () => {
-        const user = state.username ? await ask((a) => a.user(state.username!)).catch(() => null) : null
-        return { username: state.username, user, lastError }
+      // Chaque route agit sur le compte de qui la demande (`accountFor`) : le sien s'il est connecté,
+      // celui de la maison sinon. Sans nom Mixcloud, un utilisateur connecté cherche et écoute en anonyme.
+      app.get('/status', async (req) => {
+        const a = await accountFor(req)
+        const user = a.state.username ? await ask((x) => x.user(a.state.username!)).catch(() => null) : null
+        return { username: a.state.username, user, lastError, account: a.user }
       })
 
       // Relier = donner son nom d'utilisateur (celui de l'URL du profil) ; il doit exister chez Mixcloud.
       app.put<{ Body: unknown }>('/account', async (req, reply) => {
         const body = z.object({ username: z.string().trim().regex(USERNAME_RE) }).safeParse(req.body)
         if (!body.success) return sendError(reply, 400, 'INVALID_BODY', 'a Mixcloud username (letters, digits, - and _) is required')
-        const user = await ask((a) => a.user(body.data.username))
+        const a = await accountFor(req)
+        const user = await ask((x) => x.user(body.data.username))
         if (!user) return sendError(reply, 404, 'NOT_FOUND', `no Mixcloud account named "${body.data.username}"`)
-        state = { ...state, username: user.username }
-        feed = null
-        home = null
-        await persistNow()
-        ctx?.logger.info({ username: user.username }, 'Mixcloud account set')
-        return { username: user.username, user, lastError }
+        forgetCaches(a.state.username, user.username)
+        a.state = { ...a.state, username: user.username }
+        await persistNow(a)
+        ctx?.logger.info({ username: user.username, user: a.user }, 'Mixcloud account set')
+        return { username: user.username, user, lastError, account: a.user }
       })
 
-      app.delete('/account', async () => {
-        state = { ...state, username: null }
-        feed = null
-        home = null
-        await persistNow()
-        return { username: null, user: null, lastError }
+      app.delete('/account', async (req) => {
+        const a = await accountFor(req)
+        forgetCaches(a.state.username)
+        a.state = { ...a.state, username: null }
+        await persistNow(a)
+        return { username: null, user: null, lastError, account: a.user }
       })
 
       // Les listes du compte. `feed` : les nouveautés des comptes suivis (recomposées, en cache) ;
       // les autres se lisent page par page (`next` = curseur rendu par la page précédente).
       app.get<{ Params: { list: string }; Querystring: { next?: string } }>('/library/:list', async (req, reply) => {
-        const username = needUser()
+        const a = await accountFor(req)
+        const username = needUser(a)
         const { list } = req.params
         const next = req.query.next
-        if (list === 'feed') return { items: withResume(await ask(() => followingFeed(username))), next: null }
-        const call = list === 'favorites' ? (a: MixcloudApi) => a.favorites(username, next)
-          : list === 'listens' ? (a: MixcloudApi) => a.listens(username, next)
-            : list === 'uploads' ? (a: MixcloudApi) => a.cloudcasts(username, next)
+        if (list === 'feed') return { items: withResume(a, await ask(() => followingFeed(username))), next: null }
+        const call = list === 'favorites' ? (x: MixcloudApi) => x.favorites(username, next)
+          : list === 'listens' ? (x: MixcloudApi) => x.listens(username, next)
+            : list === 'uploads' ? (x: MixcloudApi) => x.cloudcasts(username, next)
               : null
         if (!call) return sendError(reply, 404, 'NOT_FOUND', `unknown Mixcloud list "${list}"`)
         const page = await ask(call)
-        return { items: withResume(page.items), next: page.next }
+        return { items: withResume(a, page.items), next: page.next }
       })
 
       // L'accueil, façon site : tes créateurs, tes suivis, réécouter, plus de tes créateurs, les
       // populaires de tes genres — recomposé de tes écoutes publiques, gardé une demi-heure. Les
       // positions de reprise, elles, sont relues à chaque appel.
-      app.get('/home', async () => {
-        const username = needUser()
-        if (!home || home.username !== username || now() - home.at > FEED_TTL_MS) {
-          home = { username, at: now(), sections: await ask((a) => buildHome(a, username, () => followingFeed(username))) }
+      app.get('/home', async (req) => {
+        const a = await accountFor(req)
+        const username = needUser(a)
+        let hit = homes.get(username)
+        if (!hit || now() - hit.at > FEED_TTL_MS) {
+          hit = { at: now(), sections: await ask((x) => buildHome(x, username, () => followingFeed(username))) }
+          homes.set(username, hit)
         }
-        return { sections: home.sections.map((s) => (s.kind === 'mixes' ? { ...s, items: withResume(s.items) } : s)) }
+        return { sections: hit.sections.map((s) => (s.kind === 'mixes' ? { ...s, items: withResume(a, s.items) } : s)) }
       })
 
-      app.get('/playlists', async () => ({ playlists: await ask((a) => a.playlists(needUser())) }))
+      app.get('/playlists', async (req) => {
+        const a = await accountFor(req)
+        return { playlists: await ask((x) => x.playlists(needUser(a))) }
+      })
 
       app.get<{ Querystring: { key?: string; next?: string } }>('/playlist', async (req, reply) => {
         const key = req.query.key ?? ''
         if (!KEY_RE.test(key)) return sendError(reply, 400, 'INVALID_QUERY', 'a playlist key is required')
-        const page = await ask((a) => a.playlist(key, req.query.next))
-        return { items: withResume(page.items), next: page.next }
+        const a = await accountFor(req)
+        const page = await ask((x) => x.playlist(key, req.query.next))
+        return { items: withResume(a, page.items), next: page.next }
       })
 
-      app.get('/following', async () => ({ users: await ask((a) => a.following(needUser())) }))
+      app.get('/following', async (req) => {
+        const a = await accountFor(req)
+        return { users: await ask((x) => x.following(needUser(a))) }
+      })
 
       app.get<{ Params: { username: string }; Querystring: { next?: string } }>('/users/:username/cloudcasts', async (req, reply) => {
         if (!USERNAME_RE.test(req.params.username)) return sendError(reply, 400, 'INVALID_QUERY', 'invalid Mixcloud username')
-        const page = await ask((a) => a.cloudcasts(req.params.username, req.query.next))
-        return { items: withResume(page.items), next: page.next }
+        const a = await accountFor(req)
+        const page = await ask((x) => x.cloudcasts(req.params.username, req.query.next))
+        return { items: withResume(a, page.items), next: page.next }
       })
 
       app.get<{ Querystring: { q?: string; next?: string } }>('/search', async (req, reply) => {
         const q = (req.query.q ?? '').trim()
         if (q.length < 2) return sendError(reply, 400, 'INVALID_QUERY', 'q must be at least 2 characters')
-        const page = await ask((a) => a.search(q, req.query.next))
-        return { items: withResume(page.items), next: page.next }
+        const a = await accountFor(req)
+        const page = await ask((x) => x.search(q, req.query.next))
+        return { items: withResume(a, page.items), next: page.next }
       })
 
       /** Repartir du début : oublier la position retenue d'un mix. */
       app.delete<{ Querystring: { key?: string } }>('/resume', async (req, reply) => {
         const key = req.query.key ?? ''
         if (!KEY_RE.test(key)) return sendError(reply, 400, 'INVALID_QUERY', 'a mix key is required')
-        const resume = { ...state.resume }
+        const a = await accountFor(req)
+        const resume = { ...a.state.resume }
         delete resume[key]
-        state = { ...state, resume }
-        await persistNow()
+        a.state = { ...a.state, resume }
+        await persistNow(a)
         return { ok: true as const }
       })
     },
 
+    // La santé est celle du compte de la maison : les comptes des utilisateurs ne regardent qu'eux.
     health(): PluginHealth {
       const keys = Object.keys(mixcloudConfigSchema.shape)
-      if (!state.username) return { status: 'needs_pairing', detail: 'Mixcloud: set your username on the Music page', keys }
+      const state = home?.state
+      if (!state?.username) return { status: 'needs_pairing', detail: 'Mixcloud: set your username on the Music page', keys }
       const detail = `Mixcloud: ${state.username}, ${Object.keys(state.resume).length} mix(es) to resume`
       return lastError ? { status: 'degraded', detail: `${detail} — ${lastError}`, keys } : { status: 'ok', detail, keys }
     },

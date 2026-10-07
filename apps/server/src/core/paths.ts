@@ -17,3 +17,14 @@ export const REPO_ROOT = resolve(SERVER_ROOT, '../..')
  */
 export const stateFile = (name: string): string =>
   resolve(process.env.KASBAH_STATE_DIR ?? resolve(SERVER_ROOT, '.state'), name)
+
+/**
+ * Dossier d'état d'un compte (`mcp-users.json`) : ses comptes musicaux, à lui seul. Un nom admis peut
+ * valoir `.` ou `..` (`userNameSchema`) : encodé, et jamais un point en tête. Les majuscules sont
+ * marquées d'un `+` (que l'encodage ne laisse jamais passer) : un disque Windows ne distingue pas
+ * `Alice` de `alice`, qui sont deux comptes.
+ */
+export const userStateDir = (user: string): string =>
+  stateFile(`users/${encodeURIComponent(user).replace(/^\./, '%2E').replace(/[A-Z]/g, (c) => `+${c.toLowerCase()}`)}`)
+
+export const userStateFile = (user: string, name: string): string => resolve(userStateDir(user), name)

@@ -15,7 +15,7 @@ import { SceneRegistry } from './core/scene-registry'
 import { SceneSeeder } from './core/scene-seeder'
 import { EnergyHistory } from './core/history'
 import { registerRoutes } from './http/routes'
-import { createAppSession, sessionConfigSchema } from './http/session'
+import { actAsHook, createAppSession, sessionConfigSchema } from './http/session'
 import { registerStatic } from './http/static'
 import { createMcpAuth, mcpAuthConfigSchema, publicHostFilter } from './mcp/auth'
 import { registerMcp } from './mcp/server'
@@ -74,6 +74,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
     logger: opts.logger.child({ component: 'session' }),
   })
   app.addHook('onRequest', publicHostFilter(mcpAuth.publicHosts, session.gate))
+  app.addHook('onRequest', actAsHook)
   const house = opts.house ?? (await loadHouse(opts.env.KASBAH_HOUSE_FILE))
   for (const w of house.warnings) opts.logger.warn({ path: w.path, code: w.code }, w.message)
 

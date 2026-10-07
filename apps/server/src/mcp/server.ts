@@ -1,6 +1,6 @@
 import { assertCommandAllowed, commandSchema, DEVICE_KINDS, indexHouse, sceneRecallSchema, type DeviceEntry } from '@kasbah/shared'
 import { hostHeaderValidation, originValidation } from '@modelcontextprotocol/fastify'
-import { createMcpHandler, McpServer } from '@modelcontextprotocol/server'
+import { createMcpHandler, McpServer, type McpRequestContext } from '@modelcontextprotocol/server'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import type { LoadedHouse } from '../config/house'
@@ -9,6 +9,7 @@ import type { DeviceRegistry } from '../core/registry'
 import type { SchoolFile, SchoolHomework, SchoolJournal, SchoolMessage, SchoolPost } from '../plugins/toutemonannee/mapping'
 import type { SceneRegistry } from '../core/scene-registry'
 import type { McpAuth } from './auth'
+import { actAsHeaders } from '../http/session'
 
 export interface McpDeps {
   registry: DeviceRegistry
@@ -92,14 +93,15 @@ const localDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).pad
 
 const optional = <T extends object>(o: T) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== null && v !== undefined && v !== ''))
 
-function buildServer(deps: McpDeps, app: FastifyInstance): McpServer {
+function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null): McpServer {
   const server = new McpServer({ name: 'kasbah', version: '0.1.0' })
 
   // La musique passe par les routes de l'app (recherche des sources, lecteur commun) : mêmes
   // validations, mêmes erreurs lisibles (source coupée, cookie expiré), même adresse publiée aux
-  // enceintes. Une réponse d'erreur devient une exception, que le SDK rend en `isError`.
+  // enceintes. Une réponse d'erreur devient une exception, que le SDK rend en `isError`. Au nom du
+  // compte du jeton : ce sont ses comptes musicaux qui cherchent et qui jouent.
   const call = async <T>(method: 'GET' | 'POST', url: string, payload?: object): Promise<T> => {
-    const res = await app.inject({ method, url, ...(payload ? { payload } : {}) })
+    const res = await app.inject({ method, url, ...(user ? { headers: actAsHeaders(user) } : {}), ...(payload ? { payload } : {}) })
     const body = res.json() as T & { error?: { message?: string } }
     if (res.statusCode >= 400) throw new Error(body.error?.message ?? `HTTP ${res.statusCode}`)
     return body
@@ -253,7 +255,8 @@ function buildServer(deps: McpDeps, app: FastifyInstance): McpServer {
 }
 
 export async function registerMcp(app: FastifyInstance, deps: McpDeps): Promise<void> {
-  const handler = createMcpHandler(() => buildServer(deps, app))
+  const userOf = (ctx: McpRequestContext) => (typeof ctx.authInfo?.extra?.user === 'string' ? ctx.authInfo.extra.user : null)
+  const handler = createMcpHandler((ctx) => buildServer(deps, app, userOf(ctx)))
   app.addHook('onClose', () => handler.close())
   await app.register(async (sub) => {
     const hosts = [...ALLOWED_HOSTS, ...deps.auth.publicHosts]
@@ -270,7 +273,9 @@ export async function registerMcp(app: FastifyInstance, deps: McpDeps): Promise<
           if (v !== undefined && k !== 'content-length') headers.set(k, Array.isArray(v) ? v.join(', ') : v)
         }
         const body = req.method === 'POST' ? JSON.stringify(req.body) : undefined
-        return reply.send(await handler.fetch(new Request(`http://${req.host}${req.url}`, { method: req.method, headers, body })))
+        // `requireToken` a posé le compte du jeton : le serveur de cette requête agit en son nom
+        const authInfo = { token: '', clientId: '', scopes: [], extra: { user: req.sessionUser } }
+        return reply.send(await handler.fetch(new Request(`http://${req.host}${req.url}`, { method: req.method, headers, body }), { authInfo }))
       },
     })
   })

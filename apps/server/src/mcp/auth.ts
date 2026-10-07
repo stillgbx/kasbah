@@ -1,12 +1,12 @@
 import { createHash, randomBytes, scrypt, timingSafeEqual } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import { readFile, stat } from 'node:fs/promises'
+import { readFile, rm, stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import type { Logger } from 'pino'
 import { z } from 'zod'
 import { writeFileAtomic } from '../core/atomic-file'
-import { REPO_ROOT, SERVER_ROOT, stateFile } from '../core/paths'
+import { REPO_ROOT, SERVER_ROOT, stateFile, userStateDir } from '../core/paths'
 
 // Authentification de `/mcp` : Kasbah est à la fois le serveur de ressource et son propre serveur
 // d'autorisation OAuth 2.1, le minimum que demande un connecteur claude.ai (qui appelle depuis le
@@ -142,12 +142,13 @@ export async function saveUser(path: string, name: string, password: string): Pr
   return users.map((u) => u.name)
 }
 
-/** Retire le compte (ses jetons ne passent plus) ; `null` s'il n'existait pas. */
+/** Retire le compte (ses jetons ne passent plus) et ses comptes musicaux ; `null` s'il n'existait pas. */
 export async function deleteUser(path: string, name: string): Promise<string[] | null> {
   const file = await readUsersForEdit(path)
   const users = file.users.filter((u) => u.name !== name)
   if (users.length === file.users.length) return null
   await writeUsers(path, { users })
+  await rm(userStateDir(name), { recursive: true, force: true })
   return users.map((u) => u.name)
 }
 
@@ -300,7 +301,7 @@ export function publicHostFilter(publicHosts: string[], gate: Hook = notFound): 
 export interface McpAuth {
   /** Routes OAuth et métadonnées, à monter dans la sous-application de `/mcp` (même contrôle de `Host`). */
   routes(sub: FastifyInstance): void
-  /** Crochet `onRequest` de `/mcp` : 401 et l'adresse des métadonnées sans jeton valide. */
+  /** Crochet `onRequest` de `/mcp` : 401 et l'adresse des métadonnées sans jeton valide ; sinon `req.sessionUser` = le compte du jeton. */
   requireToken(req: FastifyRequest, reply: FastifyReply): Promise<void>
   /** Noms d'hôte en plus de ceux du réseau local (celui de `MCP_PUBLIC_URL`). */
   publicHosts: string[]
@@ -412,7 +413,11 @@ ${error ? `<p class="err">${esc(error)}</p>` : ''}
       const metadata = `${baseOf(req)}/.well-known/oauth-protected-resource/mcp`
       const m = /^Bearer (\S+)$/i.exec(req.headers.authorization ?? '')
       const grant = m ? (await load()).access[sha256(m[1]!)] : undefined
-      if (grant && grant.expiresAt > now() && await userExists(grant)) return
+      if (grant && grant.expiresAt > now() && await userExists(grant)) {
+        // les outils agissent au nom de ce compte (ses comptes musicaux)
+        req.sessionUser = grant.user
+        return
+      }
       await reply.code(401)
         .header('www-authenticate', `Bearer resource_metadata="${metadata}"${m ? ', error="invalid_token"' : ''}`)
         .send({ jsonrpc: '2.0', error: { code: -32001, message: 'authentication required' }, id: null })

@@ -109,6 +109,8 @@ function genreLabel(slug: string, name: string): string {
 }
 
 const linked = computed(() => !!status.value?.username)
+/** Un utilisateur connecté sans nom Mixcloud : recherche seule, rien de retenu ; la maison, elle, doit relier. */
+const anonymous = computed(() => !linked.value && !!status.value?.account)
 const tabOptions = computed(() => [
   { value: 'home' as const, label: t('mixcloud.tabHome') },
   { value: 'feed' as const, label: t('mixcloud.tabFeed') },
@@ -119,9 +121,9 @@ const tabOptions = computed(() => [
   { value: 'following' as const, label: t('mixcloud.tabFollowing') },
 ])
 /** On montre des mix (et pas une liste de playlists ou de comptes). */
-const showsMixes = computed(() => searching.value || !!drill.value || (tab.value !== 'playlists' && tab.value !== 'following' && tab.value !== 'home'))
-/** L'accueil (ses rangées), hors recherche et hors playlist / compte ouverts. */
-const showsHome = computed(() => tab.value === 'home' && !searching.value && !drill.value)
+const showsMixes = computed(() => searching.value || !!drill.value || (linked.value && tab.value !== 'playlists' && tab.value !== 'following' && tab.value !== 'home'))
+/** L'accueil (ses rangées), hors recherche et hors playlist / compte ouverts ; il n'y en a pas en anonyme. */
+const showsHome = computed(() => linked.value && tab.value === 'home' && !searching.value && !drill.value)
 
 function shelfTitle(s: MixcloudHomeSection): string {
   switch (s.id) {
@@ -277,7 +279,8 @@ function clearSearch() {
   query.value = ''
   if (searching.value) {
     searching.value = false
-    void loadTab()
+    if (linked.value) void loadTab()
+    else { drill.value = null; mixes.value = [] }
   }
 }
 
@@ -297,9 +300,9 @@ watch(tab, () => { if (linked.value && !searching.value) void loadTab() })
 onMounted(async () => {
   try { status.value = await getTransport().mixcloudStatus() } catch { status.value = null }
   ready.value = true
-  if (!linked.value) return
+  if (!linked.value && !anonymous.value) return
   if (query.value.trim()) await runSearch()
-  else await loadTab()
+  else if (linked.value) await loadTab()
 })
 </script>
 
@@ -308,7 +311,7 @@ onMounted(async () => {
     <p v-if="!ready" class="muted empty">{{ $t('common.loading') }}</p>
 
     <!-- relier : un nom d'utilisateur, rien d'autre -->
-    <form v-else-if="!linked" class="link" @submit.prevent="link">
+    <form v-else-if="!linked && !anonymous" class="link" @submit.prevent="link">
       <h2 class="link__title">{{ $t('mixcloud.linkTitle') }}</h2>
       <p class="muted link__hint">{{ $t('mixcloud.linkHint') }}</p>
       <div class="link__row">
@@ -328,8 +331,8 @@ onMounted(async () => {
           </button>
         </div>
       </form>
-      <!-- onglets : leur place gardée pendant une recherche (grisés) -->
-      <div class="tabs">
+      <!-- onglets : leur place gardée pendant une recherche (grisés) ; en anonyme, rien de personnel à montrer -->
+      <div v-if="linked" class="tabs">
         <div :class="{ 'is-dim': searching }">
           <Segmented v-model="tab" dense :options="tabOptions" :label="$t('mixcloud.source')" />
         </div>
@@ -360,69 +363,82 @@ onMounted(async () => {
       </div>
 
       <div class="mc__scroll">
-        <p v-if="tab === 'feed' && !searching && !drill" class="muted small hint">{{ $t('mixcloud.feedHint') }}</p>
-        <template v-if="showsHome">
-          <div v-if="busy && !sections.length" aria-hidden="true">
-            <div v-for="n in 3" :key="n" class="shelf">
-              <span class="skel skel--label" />
-              <div class="shelf__row"><div v-for="k in 6" :key="k" class="skel-tile"><span class="skel skel--tile" /><span class="skel skel--line" /></div></div>
-            </div>
+        <!-- anonyme, hors recherche : de quoi relier son compte pour retrouver accueil, favoris et reprises ;
+             le champ avant l'explication, la zone étant basse sur un téléphone -->
+        <form v-if="anonymous && !searching && !drill" class="link" @submit.prevent="link">
+          <h2 class="link__title">{{ $t('mixcloud.linkTitle') }}</h2>
+          <div class="link__row">
+            <input v-model="usernameInput" class="field" type="text" autocomplete="username" autocapitalize="off" spellcheck="false"
+                   :placeholder="$t('mixcloud.username')" :aria-label="$t('mixcloud.username')" maxlength="64">
+            <button type="submit" class="pill" data-on="1" :disabled="!usernameInput.trim() || linking">{{ $t('mixcloud.link') }}</button>
           </div>
-          <p v-else-if="!sections.length" class="muted empty" role="status">{{ failed ? $t('mixcloud.unavailable') : $t('mixcloud.homeEmpty') }}</p>
-          <p v-else-if="!shownSections.length" class="muted empty" role="status">{{ $t('mixcloud.genresEmpty') }}</p>
-          <section v-for="(sh, si) in shownSections" :key="shelfKey(sh, si)" class="shelf">
-            <h2 class="section-label shelf__head">{{ shelfTitle(sh) }}</h2>
-            <div class="shelf__row">
-              <template v-if="sh.kind === 'users'">
-                <MusicTile v-for="u in sh.users" :key="u.username" action="open" round icon="person" :art="u.artUrl" :title="u.name" :meta="`@${u.username}`" @open="openUser(u)" />
-              </template>
-              <template v-else>
-                <MusicTile v-for="m in sh.items" :key="m.key" action="play" icon="sourceMixcloud" :art="m.artUrl" :title="m.name" :meta="meta(m)" :badge="durLabel(m.durationS)"
-                           :busy="playingId === m.key" :disabled="!canPlay" :play-label="$t('mixcloud.play', { name: m.name })" @play="play(m, sh.items)">
-                  <template #extra><GenrePills class="tile-genres" :genres="m.genres ?? []" :kept="kept" /></template>
-                </MusicTile>
-              </template>
-            </div>
-          </section>
-        </template>
-        <div v-else-if="busy && !mixes.length && showsMixes" class="list" aria-hidden="true">
-          <div v-for="n in 8" :key="n" class="skel-row"><span class="skel skel--art" /><span class="skel skel--line" /></div>
-        </div>
-
-        <template v-else-if="showsMixes">
-          <p v-if="!mixes.length" class="muted empty" role="status">{{ failed ? $t('mixcloud.unavailable') : $t('mixcloud.empty') }}</p>
-          <p v-else-if="!shownMixes.length" class="muted empty" role="status">{{ $t('mixcloud.genresEmpty') }}</p>
-          <div v-else class="list">
-            <div v-for="m in shownMixes" :key="m.key" class="mix">
-              <MusicItemRow action="play" icon="sourceMixcloud" :art="m.artUrl" :title="m.name" :meta="meta(m)" :dur="durLabel(m.durationS)"
-                            :busy="playingId === m.key" :disabled="!canPlay" :selected="isPlaying(m)" :playing="isPlaying(m) && pulsing"
-                            :play-label="$t('mixcloud.play', { name: m.name })" @play="play(m)">
-                <template #extra><GenrePills :genres="m.genres ?? []" :kept="kept" /></template>
-              </MusicItemRow>
-              <!-- place toujours gardée : une ligne sans reprise ne se décale pas -->
-              <button type="button" class="restart" :class="{ 'is-hidden': !m.resumeS }" :tabindex="m.resumeS ? 0 : -1"
-                      :disabled="!canPlay" :aria-label="$t('mixcloud.restart')" :title="$t('mixcloud.restart')" @click="restart(m)">
-                <StrokeIcon name="rotateLeft" :size="16" />
-              </button>
-            </div>
-          </div>
-          <div v-if="next" class="more">
-            <button type="button" class="pill" :disabled="more" @click="loadMore">{{ $t('mixcloud.more') }}</button>
-          </div>
-        </template>
-
-        <template v-else-if="tab === 'playlists'">
-          <p v-if="!busy && !playlists.length" class="muted empty" role="status">{{ failed ? $t('mixcloud.unavailable') : $t('mixcloud.empty') }}</p>
-          <div class="list">
-            <MusicItemRow v-for="p in playlists" :key="p.key" action="open" icon="list" :art="null" :title="p.name" @open="openPlaylist(p)" />
-          </div>
-        </template>
-
+          <p class="muted link__hint">{{ $t('mixcloud.anonymousHint') }}</p>
+        </form>
         <template v-else>
-          <p v-if="!busy && !users.length" class="muted empty" role="status">{{ failed ? $t('mixcloud.unavailable') : $t('mixcloud.empty') }}</p>
-          <div class="list">
-            <MusicItemRow v-for="u in users" :key="u.username" action="open" icon="person" round :art="u.artUrl" :title="u.name" :meta="`@${u.username}`" @open="openUser(u)" />
+          <p v-if="tab === 'feed' && !searching && !drill" class="muted small hint">{{ $t('mixcloud.feedHint') }}</p>
+          <template v-if="showsHome">
+            <div v-if="busy && !sections.length" aria-hidden="true">
+              <div v-for="n in 3" :key="n" class="shelf">
+                <span class="skel skel--label" />
+                <div class="shelf__row"><div v-for="k in 6" :key="k" class="skel-tile"><span class="skel skel--tile" /><span class="skel skel--line" /></div></div>
+              </div>
+            </div>
+            <p v-else-if="!sections.length" class="muted empty" role="status">{{ failed ? $t('mixcloud.unavailable') : $t('mixcloud.homeEmpty') }}</p>
+            <p v-else-if="!shownSections.length" class="muted empty" role="status">{{ $t('mixcloud.genresEmpty') }}</p>
+            <section v-for="(sh, si) in shownSections" :key="shelfKey(sh, si)" class="shelf">
+              <h2 class="section-label shelf__head">{{ shelfTitle(sh) }}</h2>
+              <div class="shelf__row">
+                <template v-if="sh.kind === 'users'">
+                  <MusicTile v-for="u in sh.users" :key="u.username" action="open" round icon="person" :art="u.artUrl" :title="u.name" :meta="`@${u.username}`" @open="openUser(u)" />
+                </template>
+                <template v-else>
+                  <MusicTile v-for="m in sh.items" :key="m.key" action="play" icon="sourceMixcloud" :art="m.artUrl" :title="m.name" :meta="meta(m)" :badge="durLabel(m.durationS)"
+                             :busy="playingId === m.key" :disabled="!canPlay" :play-label="$t('mixcloud.play', { name: m.name })" @play="play(m, sh.items)">
+                    <template #extra><GenrePills class="tile-genres" :genres="m.genres ?? []" :kept="kept" /></template>
+                  </MusicTile>
+                </template>
+              </div>
+            </section>
+          </template>
+          <div v-else-if="busy && !mixes.length && showsMixes" class="list" aria-hidden="true">
+            <div v-for="n in 8" :key="n" class="skel-row"><span class="skel skel--art" /><span class="skel skel--line" /></div>
           </div>
+
+          <template v-else-if="showsMixes">
+            <p v-if="!mixes.length" class="muted empty" role="status">{{ failed ? $t('mixcloud.unavailable') : $t('mixcloud.empty') }}</p>
+            <p v-else-if="!shownMixes.length" class="muted empty" role="status">{{ $t('mixcloud.genresEmpty') }}</p>
+            <div v-else class="list">
+              <div v-for="m in shownMixes" :key="m.key" class="mix">
+                <MusicItemRow action="play" icon="sourceMixcloud" :art="m.artUrl" :title="m.name" :meta="meta(m)" :dur="durLabel(m.durationS)"
+                              :busy="playingId === m.key" :disabled="!canPlay" :selected="isPlaying(m)" :playing="isPlaying(m) && pulsing"
+                              :play-label="$t('mixcloud.play', { name: m.name })" @play="play(m)">
+                  <template #extra><GenrePills :genres="m.genres ?? []" :kept="kept" /></template>
+                </MusicItemRow>
+                <!-- place toujours gardée : une ligne sans reprise ne se décale pas -->
+                <button type="button" class="restart" :class="{ 'is-hidden': !m.resumeS }" :tabindex="m.resumeS ? 0 : -1"
+                        :disabled="!canPlay" :aria-label="$t('mixcloud.restart')" :title="$t('mixcloud.restart')" @click="restart(m)">
+                  <StrokeIcon name="rotateLeft" :size="16" />
+                </button>
+              </div>
+            </div>
+            <div v-if="next" class="more">
+              <button type="button" class="pill" :disabled="more" @click="loadMore">{{ $t('mixcloud.more') }}</button>
+            </div>
+          </template>
+
+          <template v-else-if="tab === 'playlists'">
+            <p v-if="!busy && !playlists.length" class="muted empty" role="status">{{ failed ? $t('mixcloud.unavailable') : $t('mixcloud.empty') }}</p>
+            <div class="list">
+              <MusicItemRow v-for="p in playlists" :key="p.key" action="open" icon="list" :art="null" :title="p.name" @open="openPlaylist(p)" />
+            </div>
+          </template>
+
+          <template v-else>
+            <p v-if="!busy && !users.length" class="muted empty" role="status">{{ failed ? $t('mixcloud.unavailable') : $t('mixcloud.empty') }}</p>
+            <div class="list">
+              <MusicItemRow v-for="u in users" :key="u.username" action="open" icon="person" round :art="u.artUrl" :title="u.name" :meta="`@${u.username}`" @open="openUser(u)" />
+            </div>
+          </template>
         </template>
       </div>
     </template>

@@ -187,7 +187,12 @@ export interface YtmusicStatus {
   cookieFile: string | null
   poTokenUrl: string
   lastError: string | null
+  /** Navigateurs de la machine serveur pour l'import ; aucun pour un utilisateur connecté. */
   browsers: string[]
+  /** Le compte en jeu : l'utilisateur connecté, ou `null` pour celui de la maison. */
+  user: string | null
+  /** Utilisateur connecté sans cookie : catalogue public seulement, ni likes ni playlists. */
+  anonymous: boolean
 }
 
 /** Un compte du serveur MCP (`mcp-users.json`) : le nom seul, le mot de passe haché reste sur le serveur. */
@@ -249,7 +254,8 @@ export interface MixcloudMix {
   resumeS?: number
 }
 export interface MixcloudUser { username: string; name: string; artUrl: string | null }
-export interface MixcloudStatus { username: string | null; user: MixcloudUser | null; lastError: string | null }
+/** `account` : l'utilisateur connecté dont c'est le compte, `null` pour la maison. */
+export interface MixcloudStatus { username: string | null; user: MixcloudUser | null; lastError: string | null; account: string | null }
 export type MixcloudList = 'feed' | 'favorites' | 'listens' | 'uploads'
 /** Une rangée de l'accueil Mixcloud, recomposé par le serveur à partir des écoutes publiques du compte. */
 export type MixcloudHomeSection =

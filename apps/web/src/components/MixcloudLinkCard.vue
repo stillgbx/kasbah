@@ -56,6 +56,7 @@ async function unlink() {
 
 <template>
   <div v-if="status" class="mc card card--soft">
+    <p v-if="status.account" class="muted small">{{ $t('settings.musicAccountOf', { user: status.account }) }}</p>
     <div v-if="status.username" class="mc__done">
       <StrokeIcon name="checkCircle" :size="16" />
       <span>{{ $t('settings.mixcloud.linked', { name: `@${status.username}` }) }}</span>

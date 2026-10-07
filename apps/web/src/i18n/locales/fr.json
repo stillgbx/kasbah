@@ -136,6 +136,7 @@
     "tabHome": "Accueil", "homeTopCreators": "Tes créateurs", "homeFollowing": "Des comptes que tu suis", "homeListenAgain": "Réécouter", "homeMoreFrom": "Plus de {name}", "homePopular": "Émissions {genre} populaires", "homeEmpty": "Écoute quelques mix sur Mixcloud : l'accueil se compose de tes écoutes.",
     "tabFeed": "Nouveautés", "tabFavorites": "Favoris", "tabListens": "Écoutés", "tabUploads": "Mes mix", "tabPlaylists": "Playlists", "tabFollowing": "Suivis",
     "linkTitle": "Relier ton compte Mixcloud", "linkHint": "Ton nom d'utilisateur, celui de l'adresse de ton profil (mixcloud.com/ton-nom/). Aucun mot de passe : Kasbah ne lit que ce que ton profil montre publiquement.",
+    "anonymousHint": "Pour l'instant tu cherches et écoutes en anonyme : rien n'est retenu. Donne ton nom d'utilisateur (celui de mixcloud.com/ton-nom/) pour retrouver ton accueil, tes favoris et tes reprises.",
     "username": "Nom d'utilisateur", "link": "Relier", "unlink": "Délier",
     "empty": "Rien ici pour l'instant.", "unavailable": "Mixcloud ne répond pas.", "more": "Afficher plus",
     "resumeAt": "Reprendre à {time}", "restart": "Repartir du début", "play": "Écouter {name}", "mixes": "Mix de {name}",
@@ -563,6 +564,7 @@
       "local": "Une fois relié, le plugin ne parle qu'au robot, en direct sur le réseau local : ni sondage du fabricant, ni quota. Le robot est retrouvé tout seul, il n'y a aucune adresse à saisir.",
       "notStored": "Aucun fichier de session n'est configuré (IROBOT_SESSION_FILE est vide) : la liaison sera perdue au redémarrage du serveur."
     },
+    "musicAccountOf": "Compte de {user} : ce qui est réglé ici ne touche pas le compte de la maison.",
     "mixcloud": { "linked": "Compte {name} relié", "change": "Changer de compte" },
     "petkit": {
       "intro": "PetKit n'offre aucune connexion déléguée : on se connecte avec l'adresse du compte et un code reçu par courriel, valable dix minutes. Aucun mot de passe ne traverse ce serveur ; seul le jeton de session est conservé.",
@@ -605,8 +607,9 @@
       "importBrowser": "Importer depuis le navigateur",
       "importing": "Import…",
       "imported": "Cookie importé depuis le navigateur",
+      "anonymous": "Sans cookie, tu cherches et écoutes en anonyme : ni likes ni playlists.",
       "pasteTitle": "Ou coller le cookie à la main",
-      "pasteHowTo": "1. Fenêtre privée → music.youtube.com → connectez-vous.\n2. F12 → onglet Réseau → rechargez la page.\n3. Cliquez une requête vers music.youtube.com (ex. /browse).\n4. En-têtes de requête → Cookie → copiez toute la valeur (doit contenir __Secure-3PAPISID).\n5. Collez ci-dessous et Enregistrer. Ne vous déconnectez pas : fermez seulement la fenêtre.",
+      "pasteHowTo": "1. Fenêtre privée → music.youtube.com → connectez-vous.\n2. F12 → onglet Network (Réseau), puis rechargez la page (F5).\n3. Dans le champ Filter, tapez browse, puis cliquez une requête browse?… vers music.youtube.com.\n4. Onglet Headers → section Request Headers → ligne cookie : clic droit → Copy value. Sinon, cochez Raw et sélectionnez tout ce qui suit « cookie: ». La valeur est longue et contient __Secure-3PAPISID.\n5. Collez-la ci-dessous et Enregistrer. Ne vous déconnectez pas : fermez seulement la fenêtre.\nPas l'onglet Application → Cookies : il donne les cookies un par un, et il faut la ligne entière.",
       "cookie": "Cookie YouTube Music",
       "link": "Enregistrer le cookie",
       "linking": "Enregistrement…",

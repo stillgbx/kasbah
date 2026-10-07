@@ -1,8 +1,9 @@
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import Fastify, { type FastifyInstance } from 'fastify'
 import { beforeEach, expect, it } from 'vitest'
+import { userStateDir, userStateFile } from '../core/paths'
 import { describeError, sendError } from '../http/errors'
 import { readUsers, verifyPassword } from './auth'
 import { registerMcpUserRoutes } from './users-routes'
@@ -42,6 +43,26 @@ it('retire un compte, 404 s\'il n\'existe pas', async () => {
   await put('zoe', 'premier-mdp')
   expect((await app.inject({ method: 'DELETE', url: '/api/mcp/users/lou' })).json()).toEqual({ users: [{ name: 'zoe' }] })
   expect((await app.inject({ method: 'DELETE', url: '/api/mcp/users/lou' })).statusCode).toBe(404)
+})
+
+it('efface les comptes musicaux du compte retiré, et ceux-là seulement', async () => {
+  await put('lou', 'premier-mdp')
+  await put('zoe', 'premier-mdp')
+  for (const name of ['lou', 'zoe']) {
+    mkdirSync(dirname(userStateFile(name, 'mixcloud.json')), { recursive: true })
+    writeFileSync(userStateFile(name, 'mixcloud.json'), '{}')
+  }
+  await app.inject({ method: 'DELETE', url: '/api/mcp/users/lou' })
+  expect(existsSync(userStateDir('lou'))).toBe(false)
+  expect(existsSync(userStateFile('zoe', 'mixcloud.json'))).toBe(true)
+})
+
+it('range un nom en point dans son propre dossier, sous celui des comptes', () => {
+  // `userNameSchema` admet `.` et `..` : ils ne doivent désigner ni le dossier des comptes ni son parent
+  expect(dirname(userStateDir('..'))).toBe(dirname(userStateDir('lou')))
+  expect(userStateDir('.')).not.toBe(dirname(userStateDir('lou')))
+  // `Lou` et `lou` sont deux comptes : leurs dossiers diffèrent aussi sur un disque qui ignore la casse
+  expect(userStateDir('Lou').toLowerCase()).not.toBe(userStateDir('lou').toLowerCase())
 })
 
 it('n\'écrase pas un fichier illisible', async () => {

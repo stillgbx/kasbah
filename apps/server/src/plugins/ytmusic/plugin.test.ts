@@ -183,6 +183,12 @@ async function boot(extra: {
   await plugin.start()
   const app = Fastify()
   app.addContentTypeParser('text/plain', { parseAs: 'string' }, (_req, body, done) => { done(null, body) })
+  // ce que fait la porte à session sous l'adresse publique : le compte de la requête
+  app.decorateRequest('sessionUser', null)
+  app.addHook('onRequest', async (req) => {
+    const u = req.headers['x-test-user']
+    if (typeof u === 'string') req.sessionUser = u
+  })
   const routes = plugin.registerRoutes
   expect(routes).toBeTypeOf('function')
   await app.register(async (sub) => routes!.call(plugin, sub), { prefix: '/api/plugins/ytmusic' })
@@ -1152,6 +1158,72 @@ describe('ytmusic plugin', () => {
     const { plugin, app } = await boot()
     await expect(plugin.execute('x', { type: 'media_player.play' })).rejects.toBeInstanceOf(PluginError)
     await app.close()
+    await plugin.stop()
+  })
+})
+
+describe('ytmusic accounts', () => {
+  const alice = { 'x-test-user': 'alice' }
+
+  it('gives a signed-in user the public catalog without a cookie, and their own once linked', async () => {
+    const cookies: string[] = []
+    const yt = fakeSpawn()
+    const { plugin, app, store } = await boot({
+      createSession: async (c) => { cookies.push(c); return fakeMusic() },
+      spawnImpl: yt.spawnImpl,
+      getDevice: (id) => (id === player.id ? { descriptor: player } : undefined),
+      execute: async () => {},
+    })
+    const ytdlpArgs = () => (yt.spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[1] as string[]).filter((args) => args.includes('-J'))
+
+    // rien de relié : anonyme — catalogue public, rien de personnel, pas d'import du navigateur du serveur
+    expect((await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/status', headers: alice })).json())
+      .toMatchObject({ user: 'alice', linked: false, anonymous: true, browsers: [] })
+    expect((await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/search?q=jade', headers: alice })).statusCode).toBe(200)
+    expect(cookies).toEqual([''])
+    expect((await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/library/liked', headers: alice })).statusCode).toBeGreaterThanOrEqual(400)
+    expect((await app.inject({ method: 'POST', url: '/api/plugins/ytmusic/cookie/from-browser', headers: alice, payload: { browser: 'firefox' } })).statusCode).toBe(400)
+    const anon = await app.inject({ method: 'POST', url: '/api/music/play', headers: alice, payload: { source: 'ytmusic', id: 'vid1', deviceId: player.id } })
+    expect(anon.statusCode).toBe(200)
+    expect(ytdlpArgs()[0]).not.toContain('--cookies')
+    // la maison sans cookie, elle, reste à relier
+    expect((await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/search?q=jade' })).statusCode).toBeGreaterThanOrEqual(400)
+
+    // Alice relie SON compte : la maison n'en sait rien
+    const linked = await app.inject({ method: 'PUT', url: '/api/plugins/ytmusic/cookie', headers: alice, payload: { cookie: COOKIE } })
+    expect(linked.json()).toMatchObject({ user: 'alice', linked: true, anonymous: false })
+    expect(await store.read()).toBeNull()
+    expect(plugin.health!().status).toBe('needs_pairing')
+    expect((await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/status' })).json()).toMatchObject({ user: null, linked: false, anonymous: false })
+    expect((await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/library/liked', headers: alice })).statusCode).toBe(200)
+    expect(cookies).toContain(COOKIE)
+    await app.inject({ method: 'POST', url: '/api/music/play', headers: alice, payload: { source: 'ytmusic', id: 'vid2', deviceId: player.id } })
+    expect(ytdlpArgs().at(-1)).toContain('--cookies')
+    await plugin.stop()
+  })
+
+  it('keeps the house account for the house, whatever a user links', async () => {
+    // chaque recherche dit avec quel cookie elle part
+    const searchedWith: string[] = []
+    const { plugin, app } = await boot({
+      createSession: async (c) => {
+        const m = fakeMusic()
+        const search = m.music.search.bind(m.music)
+        m.music.search = (async (...args: Parameters<typeof search>) => { searchedWith.push(c); return search(...args) }) as typeof search
+        return m
+      },
+    })
+    await app.inject({ method: 'PUT', url: '/api/plugins/ytmusic/cookie', payload: { cookie: COOKIE } })
+    await app.inject({ method: 'PUT', url: '/api/plugins/ytmusic/cookie', headers: alice, payload: { cookie: '__Secure-3PAPISID=alice' } })
+    await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/search?q=jade' })
+    expect(new Set(searchedWith)).toEqual(new Set([COOKIE]))
+    searchedWith.length = 0
+    await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/search?q=jade', headers: alice })
+    expect(new Set(searchedWith)).toEqual(new Set(['__Secure-3PAPISID=alice']))
+    // Alice oublie le sien : celui de la maison reste
+    await app.inject({ method: 'DELETE', url: '/api/plugins/ytmusic/cookie', headers: alice })
+    expect((await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/status' })).json()).toMatchObject({ linked: true })
+    expect(plugin.health!().status).not.toBe('needs_pairing')
     await plugin.stop()
   })
 })

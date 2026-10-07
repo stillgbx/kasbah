@@ -70,9 +70,9 @@ export const musicHostFetch: typeof fetch = (input, init) => {
   return fetch(input instanceof Request ? new Request(next, input) : next, init)
 }
 
-/** WEB_REMIX : même client que music.youtube.com (pas le client WEB générique). */
+/** WEB_REMIX : même client que music.youtube.com (pas le client WEB générique). Sans cookie : anonyme. */
 const defaultCreate: CreateSession = async (cookie, lang) => {
-  const yt = await Innertube.create({ cookie, client_type: ClientType.MUSIC, fetch: musicHostFetch, ...(lang ? { lang } : {}) })
+  const yt = await Innertube.create({ ...(cookie ? { cookie } : {}), client_type: ClientType.MUSIC, fetch: musicHostFetch, ...(lang ? { lang } : {}) })
   const browse = (browseId: string, params: string | undefined, parse: boolean) =>
     yt.actions.execute('/browse', { browseId, ...(params ? { params } : {}), client: 'YTMUSIC', ...(parse ? { parse: true } : {}) } as never)
   return Object.assign(yt, {

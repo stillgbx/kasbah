@@ -8,6 +8,7 @@ import { runCapture } from '../../music/ytdlp'
 import { toNetscape } from './cookie'
 
 // Où est le flux d'un titre YouTube Music : yt-dlp (client `web_music`) + cookie du compte + PO Token.
+// Sans cookie (utilisateur connecté qui n'a rien relié) : anonyme, ce que YouTube sert sans compte.
 // Le proxy commun (`music/proxy.ts`) le sert ensuite aux enceintes.
 
 export interface StreamResolveOpts {
@@ -17,6 +18,7 @@ export interface StreamResolveOpts {
    * c'est ce que l'enceinte sait lire qui décide, pas le meilleur débit — un Sonos ne lit pas WebM.
    */
   preferExts?: string[]
+  /** Vide = sans compte. */
   cookieRaw: string
   ytdlpPath: string
   poTokenUrl: string
@@ -44,7 +46,7 @@ export async function pingPoToken(baseUrl: string, fetchImpl: typeof fetch = fet
 export async function resolveStreamUrl(opts: StreamResolveOpts): Promise<ResolvedStream> {
   const spawnImpl = opts.spawnImpl ?? (spawn as unknown as SpawnFn)
   let netscapePath = opts.netscapePath
-  if (!netscapePath) {
+  if (!netscapePath && opts.cookieRaw) {
     netscapePath = join(tmpdir(), `kasbah-ytm-${randomBytes(8).toString('hex')}.netscape`)
     await writeFile(netscapePath, toNetscape(opts.cookieRaw), 'utf8')
   }
@@ -57,7 +59,7 @@ export async function resolveStreamUrl(opts: StreamResolveOpts): Promise<Resolve
   const args = [
     '--ignore-config',
     '-J', '--no-download', '--no-warnings',
-    '--cookies', netscapePath,
+    ...(netscapePath ? ['--cookies', netscapePath] : []),
     '--js-runtimes', 'node',
     '--remote-components', 'ejs:github',
     '--extractor-args', `youtubepot-bgutilhttp:base_url=${poBase}`,

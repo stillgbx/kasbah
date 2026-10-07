@@ -21,8 +21,10 @@ const DEMO_HOUSE = resolve(import.meta.dirname, '../../../../house/demo-house.js
 
 let kasbah: KasbahApp
 let url: URL
-// Une source ytmusic factice : le vrai plugin demande un cookie et le réseau.
+// Une source ytmusic factice : le vrai plugin demande un cookie et le réseau. Elle note pour quel
+// compte chaque piste est résolue.
 let unregister: () => void
+const resolvedFor: (string | null)[] = []
 // Un compte dans un fichier jetable ; chaque client passe par la vraie connexion OAuth.
 const LOGIN = { username: 'lou', password: 'correct horse battery' }
 let provider: TestOAuthProvider
@@ -31,7 +33,10 @@ beforeAll(async () => {
   writeFileSync(usersFile, JSON.stringify({ users: [{ name: LOGIN.username, password: await hashPassword(LOGIN.password) }] }))
   unregister = registerMusicSource({
     id: 'ytmusic', label: 'YouTube Music',
-    resolve: async () => ({ url: 'http://192.0.2.9/audio.m4a', formatId: '140', ext: 'm4a', abrKbps: 128, sizeBytes: 4_500_000, durationS: 281 }),
+    resolve: async (_id, user) => {
+      resolvedFor.push(user)
+      return { url: 'http://192.0.2.9/audio.m4a', formatId: '140', ext: 'm4a', abrKbps: 128, sizeBytes: 4_500_000, durationS: 281 }
+    },
   })
   kasbah = await buildApp({
     env: loadEnv({ KASBAH_LOG_LEVEL: 'silent' }),
@@ -73,6 +78,8 @@ describe.each<[string, VersionNegotiationMode]>([['2025', 'legacy'], ['2026-07-2
     expect(r.isError).toBeFalsy()
     const queue = (await kasbah.app.inject({ method: 'GET', url: `/api/music/queue?deviceId=${speaker.descriptor.id}` })).json()
     expect(JSON.stringify(queue)).toContain('Gymnopédie No.1')
+    // au nom du compte du jeton : ce sont ses comptes musicaux qui jouent
+    expect(resolvedFor.at(-1)).toBe(LOGIN.username)
   })
 
   it('dit pourquoi une source ne répond pas, au lieu d\'échouer en silence', async () => {
@@ -184,4 +191,17 @@ it('exige un jeton, même en local, et dit où trouver le serveur d\'autorisatio
 it('refuse un Host qui n\'est ni localhost ni le poste (DNS rebinding)', async () => {
   const res = await kasbah.app.inject({ method: 'POST', url: '/mcp', headers: { host: 'evil.example:8787', 'content-type': 'application/json' }, payload: {} })
   expect(res.statusCode).toBe(403)
+})
+
+describe("agir au nom d'un compte", () => {
+  it('ne se laisse pas réclamer depuis le réseau', async () => {
+    const speaker = kasbah.registry.list().find((e) => e.descriptor.capabilities.includes('play_url'))!
+    const res = await fetch(new URL('/api/music/play', url), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-kasbah-internal': 'guess', 'x-kasbah-user': 'mallory' },
+      body: JSON.stringify({ source: 'ytmusic', id: 'vid-2', deviceId: speaker.descriptor.id }),
+    })
+    expect(res.status).toBe(200)
+    expect(resolvedFor.at(-1)).toBeNull()
+  })
 })

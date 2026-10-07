@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import type { Logger } from 'pino'
@@ -17,6 +18,7 @@ import { sendError } from './errors'
 // - Session gardée hachée dans `.state/sessions.json`, 90 jours glissants. Elle tombe avec le compte,
 //   ET quand son mot de passe change (empreinte du haché) : de quoi couper un téléphone perdu.
 // - Comptes gérés (`/api/mcp/users`) depuis le réseau local seulement, même connecté.
+// - Les outils MCP passent par `app.inject` au nom du compte de leur jeton (`actAsHeaders`).
 
 export const sessionConfigSchema = z.object({
   KASBAH_SESSIONS_FILE: z.string().trim().default(stateFile('sessions.json')),
@@ -42,7 +44,10 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 
 declare module 'fastify' {
   interface FastifyRequest {
-    /** Compte de la session, sous le nom public ; `null` sur le réseau local. */
+    /**
+     * Compte de la session, sous le nom public, ou celui du jeton d'un outil MCP ; `null` sur le
+     * réseau local. C'est lui qui choisit les comptes musicaux (`music/sources.ts`).
+     */
     sessionUser: string | null
   }
 }
@@ -62,6 +67,18 @@ export interface AppSession {
   /** Porte de `publicHostFilter` : tout ce qui, sous le nom public, n'est pas le MCP. */
   gate(req: FastifyRequest, reply: FastifyReply): Promise<void>
   routes(app: FastifyInstance): void
+}
+
+/**
+ * Un outil MCP rejoue une route de l'app par `app.inject` AU NOM du compte de son jeton. Le secret est
+ * tiré au démarrage et ne quitte jamais le processus : une requête venue du réseau ne peut pas s'en
+ * réclamer.
+ */
+const INTERNAL_SECRET = randomBytes(32).toString('base64url')
+export const actAsHeaders = (user: string): Record<string, string> => ({ 'x-kasbah-internal': INTERNAL_SECRET, 'x-kasbah-user': user })
+export async function actAsHook(req: FastifyRequest): Promise<void> {
+  const user = req.headers['x-kasbah-user']
+  if (req.headers['x-kasbah-internal'] === INTERNAL_SECRET && typeof user === 'string') req.sessionUser = user
 }
 
 const cookieOf = (req: FastifyRequest): string | null => {

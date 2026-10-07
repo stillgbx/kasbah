@@ -72,6 +72,9 @@ async function unlink() {
 <template>
   <div v-if="status" class="ytm card card--soft">
     <p class="ytm__badge muted small">{{ $t('settings.ytmusic.unofficial') }}</p>
+    <!-- connecté : c'est SON compte qu'on règle ici, celui de la maison n'est pas touché -->
+    <p v-if="status.user" class="muted small ytm__hint">{{ $t('settings.musicAccountOf', { user: status.user }) }}</p>
+    <p v-if="status.anonymous" class="muted small ytm__hint">{{ $t('settings.ytmusic.anonymous') }}</p>
 
     <template v-if="status.linked && !status.cookieExpired">
       <div class="ytm__done">
@@ -104,7 +107,8 @@ async function unlink() {
         </form>
       </section>
 
-      <section class="ytm__block">
+      <!-- l'import lit un navigateur de la machine serveur : pour le compte de la maison seulement -->
+      <section v-if="!status.user" class="ytm__block">
         <h3 class="ytm__title">{{ $t('settings.ytmusic.importTitle') }}</h3>
         <p class="muted small ytm__steps">{{ $t('settings.ytmusic.importSteps') }}</p>
         <div class="ytm__import">

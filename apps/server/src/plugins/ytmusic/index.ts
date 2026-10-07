@@ -1,11 +1,11 @@
-import type { FastifyInstance, FastifyReply } from 'fastify'
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import type { Command, DeviceDescriptor, PluginHealth } from '@kasbah/shared'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
-import { stateFile } from '../../core/paths'
+import { stateFile, userStateFile } from '../../core/paths'
 import { describeError, sendError } from '../../http/errors'
 import type { ResolvedStream, SpawnFn } from '../../music/proxy'
-import { registerMusicSource, type MusicSource } from '../../music/sources'
+import { musicUserOf, registerMusicSource, type MusicSource, type MusicUser } from '../../music/sources'
 import { YtmusicCatalog, type CreateSession } from './catalog'
 import { createCookieFile, hasRequiredCookie, writeNetscapeBeside, type CookieStore } from './cookie'
 import { importCookiesFromBrowser, isAuthError, YTM_BROWSERS } from './browserCookies'
@@ -18,7 +18,8 @@ import { ART_PLAY_SIZE, upgradeArtUrl } from './mapping'
 // lecteur COMMUN `music/player.ts` (/api/music), auquel ce plugin s'inscrit comme source.
 //
 // Aucun appareil publié (`discover` → []). Source ≠ lecteur — même découpage que Music Assistant.
-// Le cookie du compte perso vit dans un fichier d'état (jamais `.env`, jamais journalisé).
+// Le cookie du compte perso vit dans un fichier d'état (jamais `.env`, jamais journalisé) : celui de
+// la maison, et celui de chaque utilisateur connecté qui a relié le sien (son dossier d'état).
 
 export const ytmusicConfigSchema = z.object({
   /** Fichier cookie brut. Chaîne vide = mémoire seule (tests). */
@@ -32,6 +33,8 @@ export type YtmusicConfig = z.infer<typeof ytmusicConfigSchema>
 
 export interface YtmusicPluginDeps {
   cookieStore?: CookieStore
+  /** Le cookie d'un utilisateur connecté (tests) ; sinon un fichier de son dossier d'état. */
+  userCookieStore?: (user: string) => CookieStore
   catalog?: YtmusicCatalog
   createSession?: CreateSession
   fetchImpl?: typeof fetch
@@ -56,15 +59,7 @@ export function healthFrom(
 export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin {
   let ctx: PluginContext | null = null
   let config: YtmusicConfig | null = null
-  let cookies: CookieStore | null = null
-  let catalog: YtmusicCatalog | null = null
-  let lastError: string | null = null
   let poTokenOk = false
-  /** Cache pour `health()` synchrone — mis à jour à chaque lecture cookie. */
-  let linked = false
-  /** Cookie présent mais refusé par InnerTube. */
-  let cookieExpired = false
-  let lastProbeAt = 0
 
   // HMR tsx : le module peut être rechargé et ses routes réenregistrées SANS repasser par init() —
   // tout ce que init() construit se reconstruit alors à la demande, et les réglages ont un défaut.
@@ -74,18 +69,49 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
   const keys = () => Object.keys(ytmusicConfigSchema.shape)
   const PROBE_MS = 5 * 60_000
 
-  async function loadCookie(): Promise<string | null> {
-    // HMR tsx : routes parfois rechargées sans repasser par init().
-    if (!cookies) {
-      cookies = deps.cookieStore ?? createCookieFile(
-        config?.YTM_COOKIE_FILE ?? stateFile('ytmusic-cookie.txt'),
-      )
+  /**
+   * Un compte YouTube Music : celui de la maison (`user: null`, le cookie réglé dans le plugin) ou
+   * celui d'un utilisateur connecté (son cookie à lui, dans son dossier d'état). Chacun a ses sessions
+   * InnerTube, ses caches et son état : la recherche de l'un ne nourrit pas les propositions de l'autre.
+   */
+  interface Account {
+    user: MusicUser
+    cookies: CookieStore
+    catalog: YtmusicCatalog
+    /** Cache pour `health()` synchrone — mis à jour à chaque lecture cookie. */
+    linked: boolean
+    /** Cookie présent mais refusé par InnerTube. */
+    cookieExpired: boolean
+    lastProbeAt: number
+    lastError: string | null
+  }
+  const accounts = new Map<string, Account>()
+
+  function accountOf(user: MusicUser): Account {
+    const key = user ?? ''
+    let a = accounts.get(key)
+    if (!a) {
+      const file = cfg().YTM_COOKIE_FILE
+      a = {
+        user,
+        cookies: user === null
+          ? deps.cookieStore ?? createCookieFile(file)
+          // chemin vide = mémoire seule (tests) : de même pour les comptes des utilisateurs
+          : deps.userCookieStore?.(user) ?? createCookieFile(file ? userStateFile(user, 'ytmusic-cookie.txt') : ''),
+        catalog: deps.catalog ?? new YtmusicCatalog(deps.createSession),
+        linked: false, cookieExpired: false, lastProbeAt: 0, lastError: null,
+      }
+      accounts.set(key, a)
     }
-    if (!catalog) catalog = deps.catalog ?? new YtmusicCatalog(deps.createSession)
-    const raw = (await cookies.read())?.trim() ?? null
-    linked = !!(raw && hasRequiredCookie(raw))
-    if (!linked) cookieExpired = false
-    return linked ? raw : null
+    return a
+  }
+  const accountFor = (req: FastifyRequest) => accountOf(musicUserOf(req))
+
+  async function loadCookie(a: Account): Promise<string | null> {
+    const raw = (await a.cookies.read())?.trim() ?? null
+    a.linked = !!(raw && hasRequiredCookie(raw))
+    if (!a.linked) a.cookieExpired = false
+    return a.linked ? raw : null
   }
 
   async function refreshPo(): Promise<boolean> {
@@ -95,56 +121,65 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
   }
 
   /** Sonde légère : likes (`LM`) — échoue en 401 si le cookie est mort. */
-  async function probeCookie(raw: string): Promise<void> {
+  async function probeCookie(a: Account, raw: string): Promise<void> {
     try {
-      await catalog!.liked(raw)
-      cookieExpired = false
+      await a.catalog.liked(raw)
+      a.cookieExpired = false
     } catch (err) {
       if (isAuthError(err)) {
-        cookieExpired = true
-        lastError = 'cookie expired or rejected by YouTube'
-        log().warn('YouTube Music cookie expired — reconnect via Settings')
+        a.cookieExpired = true
+        a.lastError = 'cookie expired or rejected by YouTube'
+        log().warn({ user: a.user }, 'YouTube Music cookie expired — reconnect via Settings')
       } else {
         log().debug({ err }, 'ytmusic cookie probe failed (non-auth)')
       }
     } finally {
-      lastProbeAt = ctx?.clock.now() ?? Date.now()
+      a.lastProbeAt = ctx?.clock.now() ?? Date.now()
     }
   }
 
-  async function status(opts?: { probe?: boolean }): Promise<YtmusicStatus> {
-    await loadCookie()
+  async function status(a: Account, opts?: { probe?: boolean }): Promise<YtmusicStatus> {
+    await loadCookie(a)
     await refreshPo().catch(() => { poTokenOk = false })
     const now = ctx?.clock.now() ?? 0
-    const due = linked && catalog && (opts?.probe === true || cookieExpired || now - lastProbeAt > PROBE_MS)
+    const due = a.linked && (opts?.probe === true || a.cookieExpired || now - a.lastProbeAt > PROBE_MS)
     if (due) {
-      const raw = (await cookies!.read())?.trim()
-      if (raw && hasRequiredCookie(raw)) await probeCookie(raw)
+      const raw = (await a.cookies.read())?.trim()
+      if (raw && hasRequiredCookie(raw)) await probeCookie(a, raw)
     }
     return {
-      linked,
-      cookieExpired,
+      linked: a.linked,
+      cookieExpired: a.cookieExpired,
       poTokenOk,
       unofficial: true,
-      cookieFile: cookies?.path ?? null,
+      cookieFile: a.cookies.path,
       poTokenUrl: config?.YTM_PO_TOKEN_URL ?? 'http://127.0.0.1:4416',
-      lastError,
-      browsers: [...YTM_BROWSERS],
+      lastError: a.lastError,
+      // l'import lit un navigateur de la machine serveur : celui de la maison, pas d'un utilisateur
+      browsers: a.user === null ? [...YTM_BROWSERS] : [],
+      user: a.user,
+      anonymous: a.user !== null && !a.linked,
     }
   }
 
-  async function requireCookie(): Promise<string> {
-    const raw = await loadCookie()
-    if (!raw) throw new PluginError('NEEDS_PAIRING', 'no YouTube Music cookie linked (unofficial)')
-    if (cookieExpired) throw new PluginError('NEEDS_PAIRING', 'YouTube Music cookie expired — reconnect in Settings')
-    return raw
+  /**
+   * Le cookie du compte. Un utilisateur connecté qui n'a rien relié passe en ANONYME (`''`) : catalogue
+   * public, rien de personnel — sauf `personal` (likes, bibliothèque), qui exige un compte. La maison
+   * sans cookie reste à relier, comme avant.
+   */
+  async function requireCookie(a: Account, opts: { personal?: boolean } = {}): Promise<string> {
+    const raw = await loadCookie(a)
+    if (raw && a.cookieExpired) throw new PluginError('NEEDS_PAIRING', 'YouTube Music cookie expired — reconnect in Settings')
+    if (raw) return raw
+    if (a.user !== null && !opts.personal) return ''
+    throw new PluginError('NEEDS_PAIRING', 'no YouTube Music cookie linked (unofficial)')
   }
 
   // ---- source pour le lecteur commun (`music/player.ts`) ----------------------------------------
 
-  async function resolveTrack(cookie: string, videoId: string): Promise<ResolvedStream> {
+  async function resolveTrack(a: Account, cookie: string, videoId: string): Promise<ResolvedStream> {
     let netscapePath: string | undefined
-    if (cookies!.path) netscapePath = await writeNetscapeBeside(cookies!.path, cookie)
+    if (cookie && a.cookies.path) netscapePath = await writeNetscapeBeside(a.cookies.path, cookie)
     return resolveStreamUrl({
       videoId,
       // Viser un conteneur que les enceintes lisent (AAC en MP4) plutôt que le plus gros débit :
@@ -163,41 +198,43 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
   const source: MusicSource = {
     id: 'ytmusic',
     label: 'YouTube Music',
-    async prepare() {
-      await requireCookie()
+    async prepare(user) {
+      const a = accountOf(user)
+      await requireCookie(a)
       if (!(await refreshPo())) {
-        lastError = 'PO Token generator unreachable'
-        throw new PluginError('DEVICE_UNAVAILABLE', lastError)
+        a.lastError = 'PO Token generator unreachable'
+        throw new PluginError('DEVICE_UNAVAILABLE', a.lastError)
       }
     },
-    async resolve(videoId) {
-      const cookie = await requireCookie()
+    async resolve(videoId, user) {
+      const a = accountOf(user)
+      const cookie = await requireCookie(a)
       try {
-        const resolved = await resolveTrack(cookie, videoId)
-        lastError = null
+        const resolved = await resolveTrack(a, cookie, videoId)
+        a.lastError = null
         return resolved
       } catch (err) {
-        noteAuthFailure(err)
+        noteAuthFailure(a, err)
         if (err instanceof PluginError) throw err
-        throw new PluginError('UPSTREAM_ERROR', lastError ?? (err as Error).message, { cause: err })
+        throw new PluginError('UPSTREAM_ERROR', a.lastError ?? (err as Error).message, { cause: err })
       }
     },
     playArt: (url) => upgradeArtUrl(url, ART_PLAY_SIZE) ?? url,
   }
   let unregister: (() => void) | null = null
 
-  function noteAuthFailure(err: unknown) {
+  function noteAuthFailure(a: Account, err: unknown) {
     if (isAuthError(err)) {
-      cookieExpired = true
-      lastError = 'cookie expired or rejected by YouTube'
+      a.cookieExpired = true
+      a.lastError = 'cookie expired or rejected by YouTube'
     } else {
-      lastError = (err as Error).message
+      a.lastError = (err as Error).message
     }
   }
 
-  function catalogError(reply: FastifyReply, err: unknown) {
-    noteAuthFailure(err)
-    const d = describeError(err instanceof PluginError ? err : new PluginError('UPSTREAM_ERROR', lastError ?? 'upstream error', { cause: err }))
+  function catalogError(a: Account, reply: FastifyReply, err: unknown) {
+    noteAuthFailure(a, err)
+    const d = describeError(err instanceof PluginError ? err : new PluginError('UPSTREAM_ERROR', a.lastError ?? 'upstream error', { cause: err }))
     return sendError(reply, d.status, d.code, d.message)
   }
 
@@ -208,25 +245,21 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
     async init(c) {
       ctx = c
       config = c.config as YtmusicConfig
-      cookies = deps.cookieStore ?? createCookieFile(config.YTM_COOKIE_FILE)
-      catalog = deps.catalog ?? new YtmusicCatalog(deps.createSession)
+      accounts.clear()
       unregister?.()
       unregister = registerMusicSource(source)
-      lastError = null
-      linked = false
-      cookieExpired = false
       poTokenOk = false
     },
 
     async discover(): Promise<DeviceDescriptor[]> { return [] },
 
     async start() {
-      await loadCookie()
-      if (!linked) log().info('YouTube Music (unofficial): no cookie yet — paste or import from browser on server host')
+      const home = accountOf(null)
+      const raw = await loadCookie(home)
+      if (!raw) log().info('YouTube Music (unofficial): no cookie yet — paste or import from browser on server host')
       else {
         log().info('YouTube Music (unofficial): cookie present')
-        const raw = await cookies!.read()
-        if (raw) void probeCookie(raw)
+        void probeCookie(home, raw)
       }
       void refreshPo().then((ok) => {
         if (!ok) log().warn({ url: cfg().YTM_PO_TOKEN_URL }, 'PO Token generator unreachable')
@@ -240,17 +273,16 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
     async stop() {
       unregister?.()
       unregister = null
-      catalog?.reset()
-      cookies = null
-      catalog = null
+      for (const a of accounts.values()) a.catalog.reset()
+      accounts.clear()
       ctx = null
       config = null
-      linked = false
-      cookieExpired = false
     },
 
     registerRoutes(app: FastifyInstance) {
-      app.get('/status', async () => status({ probe: true }))
+      // Chaque route agit sur le compte de qui la demande (`accountFor`) : le sien s'il est connecté,
+      // celui de la maison sinon.
+      app.get('/status', async (req) => status(accountFor(req), { probe: true }))
 
       app.put<{ Body: unknown }>('/cookie', async (req, reply) => {
         let raw = ''
@@ -263,14 +295,15 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
         if (!hasRequiredCookie(raw)) {
           return sendError(reply, 400, 'INVALID_BODY', 'cookie must include __Secure-3PAPISID (export from music.youtube.com)')
         }
-        await cookies!.write(raw)
-        if (cookies!.path) await writeNetscapeBeside(cookies!.path, raw)
-        catalog!.reset()
-        linked = true
-        cookieExpired = false
-        lastError = null
-        log().info('YouTube Music cookie saved (unofficial)')
-        return status({ probe: true })
+        const a = accountFor(req)
+        await a.cookies.write(raw)
+        if (a.cookies.path) await writeNetscapeBeside(a.cookies.path, raw)
+        a.catalog.reset()
+        a.linked = true
+        a.cookieExpired = false
+        a.lastError = null
+        log().info({ user: a.user }, 'YouTube Music cookie saved (unofficial)')
+        return status(a, { probe: true })
       })
 
       app.post<{ Body: unknown }>('/cookie/from-browser', async (req, reply) => {
@@ -278,26 +311,29 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
           browser: z.enum(YTM_BROWSERS).default('chrome'),
         }).safeParse(req.body ?? {})
         if (!body.success) return sendError(reply, 400, 'INVALID_BODY', `browser must be one of ${YTM_BROWSERS.join(', ')}`)
-        if (!cookies!.path) {
+        const a = accountFor(req)
+        // un navigateur de la machine serveur porte le compte de la maison, pas celui d'un utilisateur
+        if (a.user !== null) return sendError(reply, 400, 'INVALID_BODY', 'browser import is for the house account only — paste your own cookie')
+        if (!a.cookies.path) {
           return sendError(reply, 400, 'INVALID_BODY', 'YTM_COOKIE_FILE is empty — cannot persist browser cookies')
         }
         try {
-          const netscapePath = `${cookies!.path}.netscape`
+          const netscapePath = `${a.cookies.path}.netscape`
           const raw = await importCookiesFromBrowser({
             ytdlpPath: cfg().YTM_YTDLP_PATH,
             browser: body.data.browser,
             netscapePath,
             ...(deps.spawnImpl ? { spawnImpl: deps.spawnImpl } : {}),
           })
-          await cookies!.write(raw)
-          catalog!.reset()
-          linked = true
-          cookieExpired = false
-          lastError = null
+          await a.cookies.write(raw)
+          a.catalog.reset()
+          a.linked = true
+          a.cookieExpired = false
+          a.lastError = null
           log().info({ browser: body.data.browser }, 'YouTube Music cookie imported from browser (unofficial)')
-          return status({ probe: true })
+          return status(a, { probe: true })
         } catch (err) {
-          noteAuthFailure(err)
+          noteAuthFailure(a, err)
           if (err instanceof PluginError) {
             const d = describeError(err)
             return sendError(reply, d.status, d.code, d.message)
@@ -306,90 +342,98 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
         }
       })
 
-      app.delete('/cookie', async () => {
-        await cookies!.clear()
-        catalog!.reset()
-        linked = false
-        cookieExpired = false
-        lastError = null
-        log().info('YouTube Music cookie cleared')
-        return status({ probe: false })
+      app.delete('/cookie', async (req) => {
+        const a = accountFor(req)
+        await a.cookies.clear()
+        a.catalog.reset()
+        a.linked = false
+        a.cookieExpired = false
+        a.lastError = null
+        log().info({ user: a.user }, 'YouTube Music cookie cleared')
+        return status(a, { probe: false })
       })
       app.get<{ Querystring: { q?: string } }>('/search', async (req, reply) => {
         const q = (req.query.q ?? '').trim()
         if (!q) return sendError(reply, 400, 'INVALID_BODY', 'q is required')
+        const a = accountFor(req)
         try {
-          const cookie = await requireCookie()
-          const result = await catalog!.search(cookie, q)
-          lastError = null
-          cookieExpired = false
+          const cookie = await requireCookie(a)
+          const result = await a.catalog.search(cookie, q)
+          a.lastError = null
+          if (cookie) a.cookieExpired = false
           return result
         } catch (err) {
-          return catalogError(reply, err)
+          return catalogError(a, reply, err)
         }
       })
 
-      app.get('/library/liked', async (_req, reply) => {
+      app.get('/library/liked', async (req, reply) => {
+        const a = accountFor(req)
         try {
-          const cookie = await requireCookie()
-          const tracks = await catalog!.liked(cookie)
-          lastError = null
-          cookieExpired = false
+          const cookie = await requireCookie(a, { personal: true })
+          const tracks = await a.catalog.liked(cookie)
+          a.lastError = null
+          a.cookieExpired = false
           return { tracks }
         } catch (err) {
-          return catalogError(reply, err)
+          return catalogError(a, reply, err)
         }
       })
 
-      app.get('/library/playlists', async (_req, reply) => {
+      app.get('/library/playlists', async (req, reply) => {
+        const a = accountFor(req)
         try {
-          const cookie = await requireCookie()
-          const playlists = await catalog!.playlists(cookie)
-          lastError = null
+          const cookie = await requireCookie(a, { personal: true })
+          const playlists = await a.catalog.playlists(cookie)
+          a.lastError = null
           return { playlists }
         } catch (err) {
-          return catalogError(reply, err)
+          return catalogError(a, reply, err)
         }
       })
 
       app.get<{ Params: { id: string } }>('/playlists/:id', async (req, reply) => {
+        const a = accountFor(req)
         try {
-          const cookie = await requireCookie()
-          const tracks = await catalog!.playlistTracks(cookie, req.params.id)
-          lastError = null
+          const cookie = await requireCookie(a)
+          const tracks = await a.catalog.playlistTracks(cookie, req.params.id)
+          a.lastError = null
           return { tracks }
         } catch (err) {
-          return catalogError(reply, err)
+          return catalogError(a, reply, err)
         }
       })
 
       app.get<{ Params: { id: string }; Querystring: { hl?: string } }>('/albums/:id', async (req, reply) => {
+        const a = accountFor(req)
         try {
-          const cookie = await requireCookie()
+          const cookie = await requireCookie(a)
           // `hl` : la langue du texte de présentation de l'album
-          const { tracks, description } = await catalog!.album(cookie, req.params.id, langOf(req.query.hl))
-          lastError = null
+          const { tracks, description } = await a.catalog.album(cookie, req.params.id, langOf(req.query.hl))
+          a.lastError = null
           return { tracks, description }
         } catch (err) {
-          return catalogError(reply, err)
+          return catalogError(a, reply, err)
         }
       })
 
       app.get<{ Params: { id: string }; Querystring: { hl?: string } }>('/artists/:id', async (req, reply) => {
+        const a = accountFor(req)
         try {
-          const cookie = await requireCookie()
+          const cookie = await requireCookie(a)
           // `hl` : la langue du texte de présentation de l'artiste
-          const { tracks, description } = await catalog!.artist(cookie, req.params.id, langOf(req.query.hl))
-          lastError = null
+          const { tracks, description } = await a.catalog.artist(cookie, req.params.id, langOf(req.query.hl))
+          a.lastError = null
           return { tracks, description }
         } catch (err) {
-          return catalogError(reply, err)
+          return catalogError(a, reply, err)
         }
       })
 
       // ---- Humeurs et genres ------------------------------------------------------------------------
       // `hl` : la langue de l'app (les noms des genres sont rendus par YouTube). Réponses gardées
-      // quelques minutes : elles changent peu, et l'onglet se rouvre souvent.
+      // quelques minutes : elles changent peu, et l'onglet se rouvre souvent. Par compte : « Pour vous »
+      // est propre à chacun.
       const langOf = (hl: unknown) => (typeof hl === 'string' && /^[a-z]{2}(-[A-Z]{2})?$/.test(hl) ? hl : undefined)
       const EXPLORE_TTL_MS = 10 * 60_000
       const exploreCache = new Map<string, { at: number; value: unknown }>()
@@ -400,18 +444,7 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
         exploreCache.set(key, { at: now(), value })
         return value
       }
-
-      app.get<{ Querystring: { hl?: string } }>('/explore', async (req, reply) => {
-        try {
-          const cookie = await requireCookie()
-          const lang = langOf(req.query.hl)
-          const result = await cached(`explore|${lang ?? ''}`, () => catalog!.explore(cookie, lang))
-          lastError = null
-          return result
-        } catch (err) {
-          return catalogError(reply, err)
-        }
-      })
+      const scope = (a: Account) => `${a.user ?? ''}|`
 
       /**
        * Pochettes des catégories : la page « Humeurs et genres » n'a AUCUNE image, on prend donc les
@@ -422,8 +455,8 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
       const COVERS_TTL_MS = 6 * 3_600_000
       const COVERS_CONCURRENCY = 4
       /**
-       * Par langue, les pochettes déjà trouvées, catégorie par catégorie : « Pour vous » change d'une
-       * lecture de la page à l'autre, une nouvelle catégorie ne doit pas attendre 6 h ses pochettes —
+       * Par compte et langue, les pochettes déjà trouvées, catégorie par catégorie : « Pour vous » change
+       * d'une lecture de la page à l'autre, une nouvelle catégorie ne doit pas attendre 6 h ses pochettes —
        * on ne va chercher que celles qui manquent (ou ont vieilli).
        */
       const coverStore = new Map<string, Map<string, { at: number; urls: string[] }>>()
@@ -437,13 +470,13 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
         // en 240 px : la carte les montre autour de 90 px, sur des écrans à haute densité
         return [...new Set(arts)].slice(0, 2).map((u) => upgradeArtUrl(u, 240) ?? u)
       }
-      async function fillCovers(cookie: string, lang: string | undefined, cats: YtmusicExploreCategory[], store: Map<string, { at: number; urls: string[] }>) {
+      async function fillCovers(a: Account, cookie: string, lang: string | undefined, cats: YtmusicExploreCategory[], store: Map<string, { at: number; urls: string[] }>) {
         let next = 0
         await Promise.all(Array.from({ length: COVERS_CONCURRENCY }, async () => {
           while (next < cats.length) {
             const c = cats[next++]!
             try {
-              const page = await cached(`category|${lang ?? ''}|${c.params}`, () => catalog!.exploreCategory(cookie, c.params, lang))
+              const page = await cached(`${scope(a)}category|${lang ?? ''}|${c.params}`, () => a.catalog.exploreCategory(cookie, c.params, lang))
               store.set(c.params, { at: now(), urls: coversOf(page) })
             } catch (err) {
               log().debug({ err, category: c.title }, 'ytmusic explore: covers of a category failed')
@@ -452,12 +485,26 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
         }))
       }
 
-      app.get<{ Querystring: { hl?: string } }>('/explore/covers', async (req, reply) => {
+      app.get<{ Querystring: { hl?: string } }>('/explore', async (req, reply) => {
+        const a = accountFor(req)
         try {
-          const cookie = await requireCookie()
+          const cookie = await requireCookie(a)
           const lang = langOf(req.query.hl)
-          const key = lang ?? ''
-          const ex = await cached(`explore|${key}`, () => catalog!.explore(cookie, lang))
+          const result = await cached(`${scope(a)}explore|${lang ?? ''}`, () => a.catalog.explore(cookie, lang))
+          a.lastError = null
+          return result
+        } catch (err) {
+          return catalogError(a, reply, err)
+        }
+      })
+
+      app.get<{ Querystring: { hl?: string } }>('/explore/covers', async (req, reply) => {
+        const a = accountFor(req)
+        try {
+          const cookie = await requireCookie(a)
+          const lang = langOf(req.query.hl)
+          const key = `${scope(a)}${lang ?? ''}`
+          const ex = await cached(`${scope(a)}explore|${lang ?? ''}`, () => a.catalog.explore(cookie, lang))
           const cats = [...new Map([...ex.forYou.categories, ...ex.moods.categories, ...ex.genres.categories].map((c) => [c.params, c])).values()]
           let store = coverStore.get(key)
           if (!store) coverStore.set(key, store = new Map())
@@ -466,46 +513,50 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
             // deux onglets ouverts en même temps ne lancent pas deux fois les mêmes lectures
             let run = coversInflight.get(key)
             if (!run) {
-              run = fillCovers(cookie, lang, missing, store).finally(() => coversInflight.delete(key))
+              run = fillCovers(a, cookie, lang, missing, store).finally(() => coversInflight.delete(key))
               coversInflight.set(key, run)
             }
             await run
           }
           return { covers: Object.fromEntries(cats.flatMap((c) => { const hit = store!.get(c.params); return hit ? [[c.params, hit.urls]] : [] })) }
         } catch (err) {
-          return catalogError(reply, err)
+          return catalogError(a, reply, err)
         }
       })
 
       app.get<{ Querystring: { hl?: string } }>('/explore/new', async (req, reply) => {
+        const a = accountFor(req)
         try {
-          const cookie = await requireCookie()
+          const cookie = await requireCookie(a)
           const lang = langOf(req.query.hl)
-          const result = await cached(`new|${lang ?? ''}`, () => catalog!.newReleases(cookie, lang))
-          lastError = null
+          const result = await cached(`${scope(a)}new|${lang ?? ''}`, () => a.catalog.newReleases(cookie, lang))
+          a.lastError = null
           return result
         } catch (err) {
-          return catalogError(reply, err)
+          return catalogError(a, reply, err)
         }
       })
 
       app.get<{ Querystring: { params?: string; hl?: string } }>('/explore/category', async (req, reply) => {
         const params = (req.query.params ?? '').trim()
         if (!params) return sendError(reply, 400, 'INVALID_BODY', 'params is required')
+        const a = accountFor(req)
         try {
-          const cookie = await requireCookie()
+          const cookie = await requireCookie(a)
           const lang = langOf(req.query.hl)
-          const result = await cached(`category|${lang ?? ''}|${params}`, () => catalog!.exploreCategory(cookie, params, lang))
-          lastError = null
+          const result = await cached(`${scope(a)}category|${lang ?? ''}|${params}`, () => a.catalog.exploreCategory(cookie, params, lang))
+          a.lastError = null
           return result
         } catch (err) {
-          return catalogError(reply, err)
+          return catalogError(a, reply, err)
         }
       })
     },
 
+    // La santé est celle du compte de la maison : les comptes des utilisateurs ne regardent qu'eux.
     health(): PluginHealth {
-      return healthFrom(linked, cookieExpired, poTokenOk, lastError, keys())
+      const home = accountOf(null)
+      return healthFrom(home.linked, home.cookieExpired, poTokenOk, home.lastError, keys())
     },
   }
 }

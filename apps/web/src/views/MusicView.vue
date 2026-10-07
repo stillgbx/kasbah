@@ -104,6 +104,8 @@ const playingId = ref<string | null>(null)
 /** false tant que le statut cookie n'a pas été lu — éviter le faux « manquant ». */
 const statusReady = ref(false)
 const linked = ref(false)
+/** Un compte relié : likes et playlists. Un utilisateur connecté sans cookie cherche en anonyme. */
+const personal = ref(true)
 
 const sortArtists = useLocalStorage<SectionSort>('kasbah.ytmusic.sort.artists', 'relevance')
 const sortAlbums = useLocalStorage<SectionSort>('kasbah.ytmusic.sort.albums', 'relevance')
@@ -132,8 +134,10 @@ const sourceOptions = computed(() => sources.value.map((s) => ({ value: s.id, la
 
 const browseOptions = computed(() => [
   { value: 'recent' as const, label: t('music.browseRecent') },
-  { value: 'liked' as const, label: t('music.browseLiked') },
-  { value: 'playlists' as const, label: t('music.browsePlaylists') },
+  ...(personal.value ? [
+    { value: 'liked' as const, label: t('music.browseLiked') },
+    { value: 'playlists' as const, label: t('music.browsePlaylists') },
+  ] : []),
   { value: 'new' as const, label: t('music.browseNew') },
   { value: 'genres' as const, label: t('music.browseGenres') },
   { value: 'moods' as const, label: t('music.browseMoods') },
@@ -532,7 +536,9 @@ async function refreshLink(): Promise<void> {
   }
   try {
     const s = await getTransport().ytmusicStatus()
-    linked.value = s.linked && !s.cookieExpired
+    linked.value = (s.linked && !s.cookieExpired) || s.anonymous
+    personal.value = !s.anonymous
+    if (s.anonymous && (browseTab.value === 'liked' || browseTab.value === 'playlists')) browseTab.value = 'recent'
   } catch {
     // Fallback santé (peut être stale) si /status échoue.
     linked.value = plug.health.status !== 'needs_pairing'

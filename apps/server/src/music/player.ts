@@ -11,7 +11,7 @@ import { isPublicRequest } from '../mcp/auth'
 import { LengthLock, OUT_BITRATE_KBPS, OUT_CHANNELS, OUT_SAMPLE_RATE_HZ, parseRange, seekFor, StreamProxy, type ProxySession, type ResolvedStream, type SessionMeta, type SpawnFn, type TrackRef } from './proxy'
 import { afterEnd, insert, jumpTo, removeAt, REPEAT_MODES, upcoming, type PlayQueue, type QueueTrack, type RepeatMode } from './queue'
 import { createLastPlayedFile, type LastPlayedByDevice, type LastPlayedStore } from './lastPlayed'
-import { getMusicSource, type MusicSource } from './sources'
+import { getMusicSource, musicUserOf as userOf, type MusicSource, type MusicUser } from './sources'
 
 // Lecteur COMMUN aux sources musicales, monté sous /api/music. Ce qui était le cœur du plugin YouTube
 // Music (2026-09-22) en est sorti le 2026-09-23 pour servir aussi Mixcloud : une source ne fournit que
@@ -22,6 +22,8 @@ import { getMusicSource, type MusicSource } from './sources'
 // - File d'attente par lecteur : l'enceinte ne connaît jamais qu'un fichier ; la file surveille son
 //   état pour enchaîner à la fin de chaque piste.
 // - Transfert (bureau → salon) et écoute LOCALE (le navigateur lit lui-même le fichier).
+// - Pour qui : le compte de la requête (`userOf`) ; une file garde celui de qui l'a lancée, ses pistes
+//   suivantes se résolvent et se notent chez lui, quel que soit l'écran qui la pilote ensuite.
 
 export const musicConfigSchema = z.object({
   /** Binaire ffmpeg du repli MP3 (clé commune Nest / caméras). */
@@ -233,11 +235,11 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
   // ---- lancer une piste ----------------------------------------------------------------------------
 
   /** Préparer la source puis résoudre ; toute erreur sort en `PluginError`. */
-  async function resolveTrack(track: TrackRef): Promise<ResolvedStream> {
+  async function resolveTrack(track: TrackRef, user: MusicUser): Promise<ResolvedStream> {
     const source = requireSource(track.source)
     try {
-      await source.prepare?.()
-      return await source.resolve(track.id)
+      await source.prepare?.(user)
+      return await source.resolve(track.id, user)
     } catch (err) {
       if (err instanceof PluginError) throw err
       throw new PluginError('UPSTREAM_ERROR', (err as Error).message, { cause: err })
@@ -248,20 +250,23 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
    * La piste suivante d'une file, résolue PENDANT que la courante joue : la résolution prend quelques
    * secondes, qu'on ne veut pas entendre entre deux morceaux. Une URL googlevideo vaut ~6 h ; on n'en
    * garde qu'une heure, une piste pas encore jouée au bout d'une heure sera résolue à nouveau.
+   * Par compte : un flux résolu avec les identifiants de l'un ne sert pas à l'autre.
    */
   const prefetched = new Map<string, { at: number; p: Promise<ResolvedStream> }>()
   const PREFETCH_TTL_MS = 3_600_000
 
-  function prefetchUpcoming(q: PlayQueue): void {
+  const prefetchKey = (track: TrackRef, user: MusicUser) => `${user ?? ''}|${trackKey(track)}`
+
+  function prefetchUpcoming(q: RunningQueue): void {
     const next = upcoming(q)
-    if (next) prefetchTrack(next)
+    if (next) prefetchTrack(next, q.user)
   }
 
-  function prefetchTrack(track: TrackRef): void {
-    const key = trackKey(track)
+  function prefetchTrack(track: TrackRef, user: MusicUser): void {
+    const key = prefetchKey(track, user)
     const hit = prefetched.get(key)
     if (hit && now() - hit.at < PREFETCH_TTL_MS) return
-    const entry = { at: now(), p: resolveTrack(track) }
+    const entry = { at: now(), p: resolveTrack(track, user) }
     // un échec ne se garde pas : le lancement réessaiera pour de bon, et dira pourquoi
     entry.p.catch((err) => {
       if (prefetched.get(key) === entry) prefetched.delete(key)
@@ -270,8 +275,8 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
     prefetched.set(key, entry)
   }
 
-  function takePrefetched(track: TrackRef): Promise<ResolvedStream> | undefined {
-    const key = trackKey(track)
+  function takePrefetched(track: TrackRef, user: MusicUser): Promise<ResolvedStream> | undefined {
+    const key = prefetchKey(track, user)
     const hit = prefetched.get(key)
     prefetched.delete(key)
     return hit && now() - hit.at < PREFETCH_TTL_MS ? hit.p : undefined
@@ -320,9 +325,9 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
    * après la résolution, qui dure plusieurs secondes : une autre commande a pu passer entre-temps, et
    * cette piste-ci ne doit alors plus partir (null).
    */
-  async function startTrack(base: string, deviceId: string, track: QueueTrack, opts: { raw?: boolean; stillWanted: () => boolean }) {
+  async function startTrack(base: string, deviceId: string, track: QueueTrack, user: MusicUser, opts: { raw?: boolean; stillWanted: () => boolean }) {
     const source = requireSource(track.source)
-    await source.prepare?.()
+    await source.prepare?.(user)
     // Un de nos flux joue déjà là : le mettre en pause TOUT DE SUITE, avant les secondes de
     // résolution — l'écran montre un sablier, l'enceinte se tait, la nouvelle piste remplace
     // l'ancienne. Pas `stop` : sur un Cast il fermerait l'appli, qu'il faudrait relancer.
@@ -334,7 +339,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       ? execute(deviceId, { type: 'media_player.pause' }).catch((err) => log.debug({ err }, 'music: pause before replace failed'))
       : Promise.resolve()
 
-    const resolved = await (takePrefetched(track) ?? resolveTrack(track))
+    const resolved = await (takePrefetched(track, user) ?? resolveTrack(track, user))
     await paused
     if (!opts.stillWanted()) return null
     const { meta, raw, durationS } = describeResolved(track, resolved, opts.raw)
@@ -365,6 +370,8 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
     heard: { positionS: number; at: number } | null
     /** Une piste part (résolution, `play_url`, transfert) : les états du lecteur ne disent rien de la file. */
     busy: boolean
+    /** Qui l'a lancée : ses comptes résolvent les pistes, sa reprise retient la position. */
+    user: MusicUser
   }
   const queues = new Map<string, RunningQueue>()
   /** Plus près de la fin que ça, un lecteur qui s'arrête a fini la piste (Sonos relevé toutes les 2 s). */
@@ -478,7 +485,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
         const expected = q.heard ? q.heard.positionS + (now() - q.heard.at) / 1000 : null
         const acted = expected === null || Math.abs(pos - expected) > END_SLACK_S
         q.heard = { positionS: pos, at: now() }
-        sourceOf(s.track.source)?.onProgress?.(s.track.id, pos, s.meta.durationS, false)
+        sourceOf(s.track.source)?.onProgress?.(s.track.id, pos, s.meta.durationS, false, q.user)
         const mine = last[deviceId]
         if (mine) {
           mine.positionS = pos
@@ -500,7 +507,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
     q.heard = null
     const dur = s.meta.durationS
     if (!dur || reached < dur - END_SLACK_S) return
-    sourceOf(s.track.source)?.onProgress?.(s.track.id, dur, dur, true)
+    sourceOf(s.track.source)?.onProgress?.(s.track.id, dur, dur, true, q.user)
     void advance(deviceId, q)
   }
 
@@ -536,7 +543,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       const current = q.sid ? proxy.get(q.sid) : undefined
       const started = current && index === q.index && sameTrack(current.track, track)
         ? await launch(q.base, current.track, deviceId, current.sourceUrl, current.meta, rawOf(current))
-        : await startTrack(q.base, deviceId, track, { ...(q.raw === false ? { raw: false } : {}), stillWanted })
+        : await startTrack(q.base, deviceId, track, q.user, { ...(q.raw === false ? { raw: false } : {}), stillWanted })
       if (!started || !stillWanted()) return null
       Object.assign(q, { index, repeat, sid: started.session.sid, heard: null })
       remember(deviceId, q, track.startS ?? 0, started.session.meta.durationS)
@@ -554,12 +561,12 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
   }
 
   /** Nouvelle file sur ce lecteur (l'ancienne est remplacée), qui joue `tracks[startIndex]`. */
-  async function playQueue(reply: FastifyReply, base: string, deviceId: string, tracks: QueueTrack[], startIndex: number, raw?: boolean) {
+  async function playQueue(reply: FastifyReply, base: string, deviceId: string, tracks: QueueTrack[], startIndex: number, user: MusicUser, raw?: boolean) {
     for (const t of tracks) requireSource(t.source)
     const q: RunningQueue = {
       items: tracks, index: startIndex, repeat: 'off', base,
       ...(raw === false ? { raw: false } : {}),
-      sid: null, heard: null, busy: false,
+      sid: null, heard: null, busy: false, user,
     }
     queues.set(deviceId, q)
     watchPlayers()
@@ -613,7 +620,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       const { deviceId, raw, ...track } = body.data
       const target = playableOrError(reply, resolvePlay().get, deviceId)
       if ('error' in target) return target.error
-      const started = await playQueue(reply, publishBase(req), deviceId, [track], 0, raw)
+      const started = await playQueue(reply, publishBase(req), deviceId, [track], 0, userOf(req), raw)
       if ('error' in started) return started.error
       return { ok: true as const, streamUrl: started.streamUrl, sid: started.session.sid }
     })
@@ -629,10 +636,11 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       if (!body.success) return sendError(reply, 400, 'INVALID_BODY', 'source, id and clientId are required')
       const { clientId, next, ...track } = body.data
       requireSource(track.source)
-      const resolved = await (takePrefetched(track) ?? resolveTrack(track))
+      const user = userOf(req)
+      const resolved = await (takePrefetched(track, user) ?? resolveTrack(track, user))
       const { meta, raw } = describeResolved(track, resolved)
       const session = proxy.open(track, `${LOCAL_PREFIX}${clientId}`, resolved.url, meta, raw)
-      if (next && sourceOf(next.source)) prefetchTrack(next)
+      if (next && sourceOf(next.source)) prefetchTrack(next, user)
       log.info({ source: track.source, id: track.id, clientId, mode: raw ? `relay ${raw.ext}` : 'mp3' }, 'music local playback opened')
       return { ok: true as const, streamUrl: streamPath(session.sid, raw), session: sessionView(session), ...(track.startS ? { startS: track.startS } : {}) }
     })
@@ -653,7 +661,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       if (startIndex >= tracks.length) return sendError(reply, 400, 'INVALID_BODY', 'startIndex is past the last track')
       const target = playableOrError(reply, resolvePlay().get, deviceId)
       if ('error' in target) return target.error
-      const started = await playQueue(reply, publishBase(req), deviceId, tracks, startIndex, raw)
+      const started = await playQueue(reply, publishBase(req), deviceId, tracks, startIndex, userOf(req), raw)
       if ('error' in started) return started.error
       return { ok: true as const, streamUrl: started.streamUrl, sid: started.session.sid, queue: queueView(started.queue) }
     })
@@ -677,7 +685,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       if (!q) {
         const target = playableOrError(reply, resolvePlay().get, deviceId)
         if ('error' in target) return target.error
-        const started = await playQueue(reply, publishBase(req), deviceId, tracks, 0)
+        const started = await playQueue(reply, publishBase(req), deviceId, tracks, 0, userOf(req))
         if ('error' in started) return started.error
         return { ok: true as const, started: true, queue: queueView(started.queue) }
       }
@@ -779,7 +787,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       }).safeParse(req.body)
       if (!body.success) return sendError(reply, 400, 'INVALID_BODY', 'source, id and positionS are required')
       const { source, id, positionS, durationS, ended } = body.data
-      sourceOf(source)?.onProgress?.(id, positionS, durationS, ended === true)
+      sourceOf(source)?.onProgress?.(id, positionS, durationS, ended === true, userOf(req))
       return { ok: true as const }
     })
 
@@ -817,7 +825,8 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       if ('error' in target) return target.error
       const startS = Math.floor(body.data.positionS ?? entry.positionS)
       const tracks = entry.items.map((t, i) => (i === entry.index && startS > 0 ? { ...t, startS } : t))
-      const started = await playQueue(reply, publishBase(req), deviceId, tracks, entry.index)
+      // relancer, c'est lancer : avec les comptes de qui relance, pas de qui écoutait avant
+      const started = await playQueue(reply, publishBase(req), deviceId, tracks, entry.index, userOf(req))
       if ('error' in started) return started.error
       started.queue.repeat = entry.repeat
       rememberQueue(deviceId, started.queue)
@@ -898,7 +907,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
         } else if (body.data.queue) {
           // la file du navigateur passe au serveur : c'est lui qui enchaînera sur l'enceinte
           const { tracks, index, repeat } = body.data.queue
-          queues.set(toDeviceId, { items: tracks, index, repeat, base, sid: session.sid, heard: null, busy: false })
+          queues.set(toDeviceId, { items: tracks, index, repeat, base, sid: session.sid, heard: null, busy: false, user: userOf(req) })
           watchPlayers()
           prefetchUpcoming(queues.get(toDeviceId)!)
         }

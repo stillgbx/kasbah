@@ -14,7 +14,7 @@ import { createMixcloudApi, followingUploads, KEY_RE, toMix, type MixcloudApi, t
 import { buildHome } from './home'
 import { createMixcloudPlugin } from './index'
 import { resolveMixcloud } from './resolve'
-import { memoryMixcloud, noteProgress, resumePoint } from './store'
+import { memoryMixcloud, noteProgress, resumePoint, type MixcloudStore } from './store'
 
 // Formes relevées sur api.mixcloud.com et yt-dlp 2026.08.19 le 2026-09-23 (raccourcies).
 const RAW_CLOUDCAST = {
@@ -93,8 +93,10 @@ const speaker: DeviceDescriptor = {
 
 async function boot(opts: { api?: MixcloudApi; username?: string | null; execute?: (id: string, c: Command) => Promise<void> } = {}) {
   const store = memoryMixcloud({ username: opts.username === undefined ? 'kasbahfan' : opts.username })
+  const userStores = new Map<string, MixcloudStore>()
+  const userStore = (user: string) => { if (!userStores.has(user)) userStores.set(user, memoryMixcloud()); return userStores.get(user)! }
   const yt = fakeYtdlp()
-  const plugin = createMixcloudPlugin({ api: opts.api ?? fakeApi(), store, spawnImpl: yt.spawnImpl, fetchImpl: headOk })
+  const plugin = createMixcloudPlugin({ api: opts.api ?? fakeApi(), store, userStore, spawnImpl: yt.spawnImpl, fetchImpl: headOk })
   const ctx = fakeCtx()
   await plugin.init(ctx)
   await plugin.start()
@@ -111,10 +113,16 @@ async function boot(opts: { api?: MixcloudApi; username?: string | null; execute
   const app = Fastify()
   // le gestionnaire d'erreurs du vrai serveur (`http/routes.ts`) : une PluginError y devient 4xx/5xx
   app.setErrorHandler((err, _req, reply) => { const d = describeError(err); return sendError(reply, d.status, d.code, d.message) })
+  // ce que fait la porte à session sous l'adresse publique : le compte de la requête
+  app.decorateRequest('sessionUser', null)
+  app.addHook('onRequest', async (req) => {
+    const u = req.headers['x-test-user']
+    if (typeof u === 'string') req.sessionUser = u
+  })
   await app.register(async (sub) => plugin.registerRoutes!.call(plugin, sub), { prefix: '/api/plugins/mixcloud' })
   await app.register(async (sub) => music.registerRoutes(sub), { prefix: '/api/music' })
   await app.ready()
-  return { plugin, app, store, execute, music, ctx, yt }
+  return { plugin, app, store, userStore, execute, music, ctx, yt }
 }
 
 describe('mixcloud api', () => {
@@ -266,7 +274,7 @@ describe('mixcloud plugin', () => {
   it('serves the lists with each mix resume point, and caches the following feed', async () => {
     const api = fakeApi({ following: vi.fn(async () => [{ username: 'NTSRadio', name: 'NTS', artUrl: null }]) })
     const { app, plugin, ctx } = await boot({ api })
-    getMusicSource('mixcloud')!.onProgress!(MIX.key, 1800, 5288, false)
+    getMusicSource('mixcloud')!.onProgress!(MIX.key, 1800, 5288, false, null)
     const fav = (await app.inject({ method: 'GET', url: '/api/plugins/mixcloud/library/favorites' })).json()
     expect(fav.items[0]).toMatchObject({ key: MIX.key, resumeS: 1800 })
     await app.inject({ method: 'GET', url: '/api/plugins/mixcloud/library/feed' })
@@ -302,5 +310,47 @@ describe('mixcloud plugin', () => {
     // plugin coupé : la source n'est plus là
     const off = await app.inject({ method: 'POST', url: '/api/music/play', payload: { source: 'mixcloud', id: MIX.key, deviceId: speaker.id } })
     expect(off.statusCode).toBe(400)
+  })
+})
+
+describe('mixcloud accounts', () => {
+  const alice = { 'x-test-user': 'alice' }
+  const favorites = async (app: Awaited<ReturnType<typeof boot>>['app'], headers = {}) =>
+    (await app.inject({ method: 'GET', url: '/api/plugins/mixcloud/library/favorites', headers })).json().items[0]
+  const progress = (app: Awaited<ReturnType<typeof boot>>['app'], positionS: number, headers = {}) =>
+    app.inject({ method: 'POST', url: '/api/music/progress', headers, payload: { source: 'mixcloud', id: MIX.key, positionS, durationS: 5288 } })
+
+  it('lets a signed-in user search anonymously, leaving no trace anywhere', async () => {
+    const { app, store, userStore, plugin } = await boot()
+    expect((await app.inject({ method: 'GET', url: '/api/plugins/mixcloud/status', headers: alice })).json()).toMatchObject({ username: null, account: 'alice' })
+    expect((await app.inject({ method: 'GET', url: '/api/plugins/mixcloud/search?q=nts', headers: alice })).statusCode).toBe(200)
+    expect((await app.inject({ method: 'GET', url: '/api/plugins/mixcloud/library/favorites', headers: alice })).statusCode).toBeGreaterThanOrEqual(400)
+    await progress(app, 1800, alice)
+    const found = (await app.inject({ method: 'GET', url: '/api/plugins/mixcloud/search?q=nts', headers: alice })).json()
+    expect(found.items[0].resumeS).toBeUndefined()
+    expect((await favorites(app)).resumeS).toBeUndefined()
+    await plugin.stop() // écrit ce qui attendait
+    expect((await store.load()).resume).toEqual({})
+    expect((await userStore('alice').load()).resume).toEqual({})
+  })
+
+  it('keeps each account its own Mixcloud name and resume points', async () => {
+    const { app, store, userStore, plugin } = await boot()
+    const linked = await app.inject({ method: 'PUT', url: '/api/plugins/mixcloud/account', headers: alice, payload: { username: 'alicemix' } })
+    expect(linked.json()).toMatchObject({ username: 'alicemix', account: 'alice' })
+    expect((await userStore('alice').load()).username).toBe('alicemix')
+    expect((await store.load()).username).toBe('kasbahfan')
+    expect((await app.inject({ method: 'GET', url: '/api/plugins/mixcloud/status' })).json()).toMatchObject({ username: 'kasbahfan', account: null })
+
+    await progress(app, 1800, alice)
+    await progress(app, 900)
+    expect((await favorites(app, alice)).resumeS).toBe(1800)
+    expect((await favorites(app)).resumeS).toBe(900)
+    // Alice repart du début : la maison garde sa position
+    await app.inject({ method: 'DELETE', url: `/api/plugins/mixcloud/resume?key=${encodeURIComponent(MIX.key)}`, headers: alice })
+    expect((await favorites(app, alice)).resumeS).toBeUndefined()
+    expect((await favorites(app)).resumeS).toBe(900)
+    await plugin.stop()
+    expect(Object.keys((await store.load()).resume)).toEqual([MIX.key])
   })
 })
