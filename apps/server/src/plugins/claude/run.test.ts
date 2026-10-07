@@ -27,7 +27,7 @@ async function go(over: Partial<ClaudeRunOptions> = {}, signal = new AbortContro
     mcp: { url: 'http://127.0.0.1:8787/mcp', token: 'run-1' },
     emit: (e) => events.push(e), signal,
   }
-  await runClaude({ bin: 'claude', dir, oauthToken: null, keepSessions: false, spawnImpl: fake.spawnImpl, ...over }, run)
+  await runClaude({ bin: 'claude', model: 'claude-haiku-5-5', dir, oauthToken: null, keepSessions: false, spawnImpl: fake.spawnImpl, ...over }, run)
   return events
 }
 
@@ -48,7 +48,7 @@ it('verrouille claude : aucun outil intégré, le seul MCP Kasbah, aucun réglag
   expect(args).toContain('--strict-mcp-config')
   expect(args).toContain('--no-session-persistence')
   expect(args[args.indexOf('--allowedTools') + 1]).toBe('mcp__kasbah')
-  expect(args[args.indexOf('--model') + 1]).toBe('haiku')
+  expect(args[args.indexOf('--model') + 1]).toBe('claude-haiku-5-5')
   expect(args[args.indexOf('--system-prompt') + 1]).toBe('Tu es l’assistant.')
 })
 

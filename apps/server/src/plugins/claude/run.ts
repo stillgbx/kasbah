@@ -14,12 +14,12 @@ import type { SpawnFn } from '../../music/proxy'
 // - pas de session gardée, sauf `CLAUDE_KEEP_SESSIONS` (pour déboguer).
 // `--safe-mode` n'est PAS une option : il coupe aussi les serveurs MCP (`mcp_servers: []`, vu le 2026-10-07).
 
-/** Haiku : le plus rapide, et une commande de maison n'a pas besoin de plus (décision 2026-10-07). */
-const MODEL = 'haiku'
 const TOOL_PREFIX = 'mcp__kasbah__'
 
 export interface ClaudeRunOptions {
   bin: string
+  /** `CLAUDE_MODEL` : Haiku par défaut, le plus rapide, et une commande de maison n'a pas besoin de plus (décision 2026-10-07). */
+  model: string
   /** Dossier de travail : `cwd` vide, `config` isolée quand un jeton est employé, fichiers MCP. */
   dir: string
   /** Jeton de `claude setup-token` ; `null` = la connexion `claude` de la machine serveur. */
@@ -46,7 +46,7 @@ export async function runClaude(opts: ClaudeRunOptions, run: AssistantRun): Prom
     env.CLAUDE_CONFIG_DIR = configDir
   }
   const args = [
-    '-p', '--model', MODEL,
+    '-p', '--model', opts.model,
     '--tools', '', '--strict-mcp-config', '--mcp-config', mcpFile, '--allowedTools', 'mcp__kasbah',
     '--setting-sources', '', ...(opts.keepSessions ? [] : ['--no-session-persistence']),
     '--system-prompt', run.systemPrompt,

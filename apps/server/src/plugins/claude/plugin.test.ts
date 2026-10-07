@@ -19,9 +19,9 @@ import { FakeChild, fakeClaude, happy } from './test-claude'
 const stateDir = process.env.KASBAH_STATE_DIR
 let fake: ReturnType<typeof fakeClaude>
 
-const ctx = (): PluginContext => ({
+const ctx = (env: Record<string, string> = {}): PluginContext => ({
   // la config telle que l'hôte la donne : DÉJÀ validée (booléens compris)
-  pluginId: 'claude', config: claudeConfigSchema.parse({}), logger: pino({ level: 'silent' }), clock: systemClock, signal: new AbortController().signal,
+  pluginId: 'claude', config: claudeConfigSchema.parse(env), logger: pino({ level: 'silent' }), clock: systemClock, signal: new AbortController().signal,
   emitState() {}, setAvailable() {}, emitDevices() {}, emitScenes() {}, emitSceneState() {}, emitEvent() {}, parts: {}, site: { lat: 0, lon: 0, alt: 0 },
 })
 
@@ -31,9 +31,9 @@ const saveToken = (user: string | null, token: string) => {
   writeFileSync(file, JSON.stringify({ token, savedAt: 1 }))
 }
 
-async function started(spawnImpl: SpawnFn = fake.spawnImpl) {
+async function started(spawnImpl: SpawnFn = fake.spawnImpl, env: Record<string, string> = {}) {
   const plugin = createClaudePlugin({ spawnImpl, workDir: mkdtempSync(join(tmpdir(), 'kasbah-claude-')) })
-  await plugin.init(ctx())
+  await plugin.init(ctx(env))
   await plugin.start()
   return plugin
 }
@@ -62,6 +62,19 @@ it('inscrit le moteur au démarrage et le retire à l’arrêt', async () => {
   expect(currentAssistantEngine()).toBeUndefined()
 })
 
+it('lance Haiku 5.5 par défaut, ou le modèle de CLAUDE_MODEL', async () => {
+  const model = (i: number) => fake.calls[i]!.args[fake.calls[i]!.args.indexOf('--model') + 1]
+  const plugin = await started()
+  await ask(null)
+  expect(model(0)).toBe('claude-haiku-5-5')
+  await plugin.stop()
+  const other = await started(fake.spawnImpl, { CLAUDE_MODEL: 'sonnet' })
+  await ask(null)
+  expect(model(1)).toBe('sonnet')
+  expect(other.health!()).toMatchObject({ detail: expect.stringContaining('— sonnet —') })
+  await other.stop()
+})
+
 it('prend le forfait du compte, sinon celui de la maison, sinon la connexion de la machine', async () => {
   const plugin = await started()
   await ask('lou')
@@ -79,7 +92,7 @@ it('prend le forfait du compte, sinon celui de la maison, sinon la connexion de 
 
 it('dit sa santé : la version de claude, ou le binaire introuvable', async () => {
   const ok = await started()
-  expect(ok.health!()).toMatchObject({ status: 'ok', detail: "claude 2.1.288 — no house token: the server's claude sign-in is used" })
+  expect(ok.health!()).toMatchObject({ status: 'ok', detail: "claude 2.1.288 — claude-haiku-5-5 — no house token: the server's claude sign-in is used" })
   await ok.stop()
   const missing = (() => {
     const child = new FakeChild({ args: [], env: {}, mcp: null, stdin: '', killed: false })
@@ -87,7 +100,7 @@ it('dit sa santé : la version de claude, ou le binaire introuvable', async () =
     return child
   }) as unknown as SpawnFn
   const ko = await started(missing)
-  expect(ko.health!()).toMatchObject({ status: 'error', detail: 'claude not found (CLAUDE_BIN, or the server PATH)', keys: ['CLAUDE_BIN', 'CLAUDE_KEEP_SESSIONS'] })
+  expect(ko.health!()).toMatchObject({ status: 'error', detail: 'claude not found (CLAUDE_BIN, or the server PATH)', keys: ['CLAUDE_BIN', 'CLAUDE_MODEL', 'CLAUDE_KEEP_SESSIONS'] })
   await ko.stop()
 })
 

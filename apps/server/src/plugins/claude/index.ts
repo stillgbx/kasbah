@@ -25,6 +25,12 @@ export const claudeConfigSchema = z.object({
   /** Le binaire `claude` (dans le PATH du serveur par défaut). */
   CLAUDE_BIN: z.string().trim().min(1).default('claude'),
   /**
+   * Le modèle passé à `--model` : un ID complet (version figée) ou un alias de la CLI (`haiku`,
+   * `sonnet`), qui suit les mises à jour de la CLI mais en retard : en CLI 2.1.288, `haiku` donnait
+   * encore Haiku 4.5 alors que Haiku 5.5 était sorti (relevé le 2026-10-07).
+   */
+  CLAUDE_MODEL: z.string().trim().min(1).default('claude-haiku-5-5'),
+  /**
    * Garder les sessions de `claude -p` (transcriptions JSONL, réflexion comprise), pour déboguer :
    * sous `.state/claude/config/projects/` avec un jeton, dans le `~/.claude` du serveur sinon.
    */
@@ -104,7 +110,7 @@ export function createClaudePlugin(deps: ClaudePluginDeps = {}): DevicePlugin {
         run: async (run) => {
           const token = (run.user !== null ? await readToken(run.user) : null) ?? await readToken(null)
           await runClaude({
-            bin: c.CLAUDE_BIN, dir: deps.workDir ?? stateFile('claude'), oauthToken: token?.token ?? null,
+            bin: c.CLAUDE_BIN, model: c.CLAUDE_MODEL, dir: deps.workDir ?? stateFile('claude'), oauthToken: token?.token ?? null,
             keepSessions: c.CLAUDE_KEEP_SESSIONS, spawnImpl,
           }, run)
         },
@@ -150,7 +156,7 @@ export function createClaudePlugin(deps: ClaudePluginDeps = {}): DevicePlugin {
       const keys = Object.keys(claudeConfigSchema.shape)
       if (versionError) return { status: 'error', detail: versionError, keys }
       const account = houseToken ? 'house token set' : "no house token: the server's claude sign-in is used"
-      return { status: 'ok', detail: `claude ${version ?? '?'} — ${account}`, keys }
+      return { status: 'ok', detail: `claude ${version ?? '?'} — ${config?.CLAUDE_MODEL ?? '?'} — ${account}`, keys }
     },
   }
 }
