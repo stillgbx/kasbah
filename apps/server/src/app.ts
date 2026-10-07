@@ -2,6 +2,7 @@ import { DEFAULT_PLUGIN_SETTINGS } from '@kasbah/shared'
 import fastifyCompress from '@fastify/compress'
 import Fastify, { type FastifyInstance } from 'fastify'
 import type { Logger } from 'pino'
+import { registerAssistantRoutes } from './assistant/assistant'
 import type { Env } from './config/env'
 import { loadHouse, type LoadedHouse } from './config/house'
 import { AutomationEngine } from './core/automations/engine'
@@ -124,6 +125,11 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
   host.registerRoutes(app)
   await registerMcp(app, { registry, scenes, host, house, auth: mcpAuth })
   registerMcpUserRoutes(app, { usersFile: mcpConfig.MCP_USERS_FILE })
+  registerAssistantRoutes(app, {
+    auth: mcpAuth,
+    mcpUrl: `http://127.0.0.1:${opts.env.KASBAH_PORT}/mcp`,
+    logger: opts.logger.child({ component: 'assistant' }),
+  })
   session.routes(app)
   // Les sources musicales n'ont pas d'appareils : pour `play_url` elles passent par Cast/Sonos via l'hôte.
   setPlaybackBridge({

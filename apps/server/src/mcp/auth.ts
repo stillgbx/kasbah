@@ -309,6 +309,11 @@ export interface McpAuth {
   guard: LoginGuard
   /** Les comptes (partagés avec l'application). */
   users: () => Promise<UsersFile>
+  /**
+   * Jeton d'accès pour un client lancé par le serveur lui-même (l'assistant, `claude -p`) : en mémoire
+   * seulement, au nom de `user` (`null` = la maison), jusqu'à `revoke()` ou `ttlMs`.
+   */
+  runToken(user: string | null, ttlMs: number): { token: string; revoke(): void }
 }
 
 export function createMcpAuth(deps: McpAuthDeps): McpAuth {
@@ -365,7 +370,11 @@ export function createMcpAuth(deps: McpAuthDeps): McpAuth {
     return { access_token: access, token_type: 'Bearer', expires_in: ACCESS_TTL_MS / 1000, refresh_token: refresh }
   }
 
-  const userExists = async (g: Grant) => (await currentUsers()).users.some((u) => u.name === g.user)
+  const accountExists = async (user: string) => (await currentUsers()).users.some((u) => u.name === user)
+  const userExists = (g: Grant) => accountExists(g.user)
+
+  // Jetons de course : jamais écrits sur disque, ils ne survivent pas au processus qui les a tirés.
+  const runs = new Map<string, { user: string | null; expiresAt: number }>()
 
   // Paramètres de `/oauth/authorize`, en query (GET) ou dans le formulaire (POST).
   const authorizeSchema = z.object({
@@ -409,9 +418,22 @@ ${error ? `<p class="err">${esc(error)}</p>` : ''}
     guard,
     users: currentUsers,
 
+    runToken(user, ttlMs) {
+      const t = now()
+      for (const [k, r] of runs) if (r.expiresAt <= t) runs.delete(k)
+      const raw = token()
+      runs.set(sha256(raw), { user, expiresAt: t + ttlMs })
+      return { token: raw, revoke: () => { runs.delete(sha256(raw)) } }
+    },
+
     async requireToken(req, reply) {
       const metadata = `${baseOf(req)}/.well-known/oauth-protected-resource/mcp`
       const m = /^Bearer (\S+)$/i.exec(req.headers.authorization ?? '')
+      const run = m ? runs.get(sha256(m[1]!)) : undefined
+      if (run && run.expiresAt > now() && (run.user === null || await accountExists(run.user))) {
+        req.sessionUser = run.user
+        return
+      }
       const grant = m ? (await load()).access[sha256(m[1]!)] : undefined
       if (grant && grant.expiresAt > now() && await userExists(grant)) {
         // les outils agissent au nom de ce compte (ses comptes musicaux)

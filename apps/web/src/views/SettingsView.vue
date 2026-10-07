@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import PageHeader from '../components/layout/PageHeader.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
+import AssistantCard from '../components/settings/AssistantCard.vue'
 import McpUsersCard from '../components/settings/McpUsersCard.vue'
 import PluginSection from '../components/settings/PluginSection.vue'
 import Segmented from '../components/ui/Segmented.vue'
@@ -302,6 +303,12 @@ const houseStats = computed(() => {
         <div class="block__title">{{ $t('mcpUsers.title') }}</div>
         <p class="muted small plugins__hint">{{ $t('mcpUsers.hint') }}</p>
         <McpUsersCard />
+      </section>
+      <!-- le forfait Claude de l'assistant (« Demander à Kasbah »), pour le compte courant -->
+      <section class="card block settings__plugins">
+        <div class="block__title">{{ $t('assistant.title') }}</div>
+        <p class="muted small plugins__hint">{{ $t('assistant.hint') }}</p>
+        <AssistantCard />
       </section>
       <!-- les fabricants ferment la page : une liste pleine largeur, où chaque ligne a la place de
            dire nom, statut et interrupteur sans se serrer -->

@@ -1,8 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { parseHouse, type DeviceDescriptor, type DeviceEntry } from '@kasbah/shared'
 import demo from '../../../../../house/demo-house.json'
+import { setTransport } from '../../api'
+import { ApiRequestError, type AssistantEvent, type Transport } from '../../api/transport'
 import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
 import SearchBar from './SearchBar.vue'
@@ -46,7 +48,8 @@ async function setup() {
   const input = w.find('input')
   await input.trigger('focus')
   const type = async (text: string) => { await input.setValue(text) }
-  const rows = () => w.findAll('.search__row').map((r) => ({
+  // les résultats ; la ligne de l'assistant, toujours la dernière, a ses propres tests
+  const rows = () => w.findAll('.search__row:not(.search__row--ask)').map((r) => ({
     label: r.find('.search__label').exists() ? r.find('.search__label').text() : '',
     sub: r.find('.search__sub').exists() ? r.find('.search__sub').text() : '',
     text: r.text(),
@@ -131,5 +134,76 @@ describe('SearchBar', () => {
     expect(house.selectedRoomId).toBe('cuisine')
     expect(w.find('input').element.value).toBe('')
     expect(w.emitted('picked')).toHaveLength(1)
+  })
+})
+
+describe('SearchBar — Demander à Kasbah', () => {
+  beforeEach(() => { setActivePinia(createPinia()) })
+  afterEach(() => { setTransport(null) })
+
+  /** Un assistant factice : relève l'instruction et rejoue les événements donnés. */
+  function fakeAssistant(events: AssistantEvent[] | Error) {
+    const asked: string[] = []
+    setTransport({
+      async assistantAsk(text: string, onEvent: (e: AssistantEvent) => void) {
+        asked.push(text)
+        if (events instanceof Error) throw events
+        for (const e of events) onEvent(e)
+      },
+    } as unknown as Transport)
+    return asked
+  }
+
+  it('propose de passer la saisie à l’assistant, en dernière ligne', async () => {
+    const { w, type } = await setup()
+    await type('allume le salon')
+    const last = w.findAll('.search__row').at(-1)!
+    expect(last.classes()).toContain('search__row--ask')
+    expect(last.text()).toBe('Demander à Kasbahallume le salon')
+  })
+
+  it('Entrée sans résultat demande à Kasbah, et montre ce qu’il a fait puis sa réponse', async () => {
+    const asked = fakeAssistant([
+      { type: 'tool', id: 't1', name: 'send_command', input: { deviceId: 'mock:lampe-atelier', command: { type: 'light.set', on: true } } },
+      { type: 'tool_result', id: 't1', ok: true },
+      { type: 'text', text: 'Le néon de l’atelier est allumé.' },
+      { type: 'done', ms: 6000 },
+    ])
+    const { w, type } = await setup()
+    await type('zzz allume le néon')
+    await w.find('input').trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(asked).toEqual(['zzz allume le néon'])
+    expect(w.find('.search__list').exists()).toBe(false)
+    const reply = w.find('.search__reply')
+    expect(reply.find('.reply__action').text()).toContain('Commande')
+    expect(reply.find('.reply__target').text()).toBe('Néon atelier')
+    expect(reply.find('.reply__answer').text()).toBe('Le néon de l’atelier est allumé.')
+    // la croix efface la réponse et la saisie
+    await w.find('.search__clear').trigger('click')
+    expect(w.find('.search__reply').exists()).toBe(false)
+    expect(w.find('input').element.value).toBe('')
+  })
+
+  it('dit en clair une instruction refusée', async () => {
+    fakeAssistant(new ApiRequestError(409, 'BUSY', 'an instruction is already running'))
+    const { w, type } = await setup()
+    await type('zzz éteins tout')
+    await w.find('.search__row--ask').trigger('click')
+    await flushPromises()
+    expect(w.find('.reply__error').text()).toBe('Une instruction est déjà en cours.')
+  })
+
+  it('revient à la recherche quand on retouche l’instruction après la réponse', async () => {
+    fakeAssistant([{ type: 'text', text: 'Fait.' }, { type: 'done', ms: 1 }])
+    const { w, type } = await setup()
+    await type('zzz fais un truc')
+    await w.find('.search__row--ask').trigger('click')
+    await flushPromises()
+    expect(w.find('.search__reply').exists()).toBe(true)
+    await w.find('input').trigger('focus')
+    await type('salon')
+    expect(w.find('.search__reply').exists()).toBe(false)
+    expect(w.find('.search__list').exists()).toBe(true)
   })
 })

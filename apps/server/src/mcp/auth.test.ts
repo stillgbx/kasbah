@@ -34,7 +34,7 @@ async function build(env: Record<string, string> = {}) {
   app = Fastify()
   await app.register(async (sub) => {
     auth.routes(sub)
-    sub.get('/mcp', { onRequest: auth.requireToken }, async () => ({ ok: true }))
+    sub.get('/mcp', { onRequest: auth.requireToken }, async (req) => ({ ok: true, user: req.sessionUser }))
   })
   return auth
 }
@@ -177,6 +177,26 @@ it('coupe les jetons d’un compte retiré du fichier', async () => {
   writeFileSync(usersFile, JSON.stringify({ users: [] }))
   expect((await callMcp(tokens.access_token)).statusCode).toBe(401)
   expect((await refresh(clientId, tokens.refresh_token)).statusCode).toBe(400)
+})
+
+it('ouvre /mcp au jeton de course, au nom du compte ou de la maison, jusqu’à sa révocation', async () => {
+  const auth = await build()
+  const lou = auth.runToken('lou', 60_000)
+  const house = auth.runToken(null, 60_000)
+  expect((await callMcp(lou.token)).json()).toEqual({ ok: true, user: 'lou' })
+  expect((await callMcp(house.token)).json()).toEqual({ ok: true, user: null })
+  lou.revoke()
+  expect((await callMcp(lou.token)).statusCode).toBe(401)
+  expect((await callMcp(house.token)).statusCode).toBe(200)
+  clock += 60_000
+  expect((await callMcp(house.token)).statusCode).toBe(401)
+})
+
+it('refuse le jeton de course d’un compte retiré', async () => {
+  const auth = await build()
+  const { token } = auth.runToken('lou', 60_000)
+  writeFileSync(usersFile, JSON.stringify({ users: [] }))
+  expect((await callMcp(token)).statusCode).toBe(401)
 })
 
 it('garde les jetons après un redémarrage', async () => {

@@ -1,8 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { parseHouse } from '@kasbah/shared'
 import demo from '../../../../../house/demo-house.json'
+import { setTransport } from '../../api'
+import type { AssistantEvent, Transport } from '../../api/transport'
 import { homePanelRequest } from '../../composables/useSearch'
 import { useHouseStore } from '../../stores/house'
 import SearchPalette from './SearchPalette.vue'
@@ -86,5 +88,38 @@ describe('SearchPalette', () => {
     await input.trigger('keydown.esc')
     expect(w.find('.palette').exists()).toBe(false)
     w.unmount()
+  })
+
+  describe('Demander à Kasbah', () => {
+    afterEach(() => { setTransport(null) })
+
+    it('Entrée sans résultat demande à Kasbah ; la réponse remplace la liste et survit à la fermeture', async () => {
+      const asked: string[] = []
+      setTransport({
+        async assistantAsk(text: string, onEvent: (e: AssistantEvent) => void) {
+          asked.push(text)
+          onEvent({ type: 'text', text: 'La radio joue dans la cuisine.' })
+          onEvent({ type: 'done', ms: 1 })
+        },
+      } as unknown as Transport)
+      const { w } = await setup()
+      ctrlK(); await flushPromises()
+      await w.find('input').setValue('zzz mets la radio')
+      await w.find('input').trigger('keydown', { key: 'Enter' })
+      await flushPromises()
+      expect(asked).toEqual(['zzz mets la radio'])
+      expect(w.find('.palette__list').exists()).toBe(false)
+      expect(w.find('.reply__answer').text()).toBe('La radio joue dans la cuisine.')
+      // fermer puis rouvrir : la réponse est toujours là, l'instruction dans le champ
+      ctrlK(); await flushPromises()
+      ctrlK(); await flushPromises()
+      expect((w.find('input').element as HTMLInputElement).value).toBe('zzz mets la radio')
+      expect(w.find('.reply__answer').exists()).toBe(true)
+      // Échap efface la réponse : la liste revient
+      await w.find('input').trigger('keydown', { key: 'Escape' })
+      expect(w.find('.reply__answer').exists()).toBe(false)
+      expect(w.find('.palette__row--ask').exists()).toBe(true)
+      w.unmount()
+    })
   })
 })

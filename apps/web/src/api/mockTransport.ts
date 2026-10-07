@@ -392,6 +392,16 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     async musicProgress() {},
     async musicQueueClear() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
     async session() { return { user: null } },
+    // assistant : pas de `claude` ici, une réponse de démonstration
+    async claudeAccount() { return { user: null, savedAt: null, house: false } },
+    async claudeSetToken() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Claude in mock mode') },
+    async claudeClearToken() { return { user: null, savedAt: null, house: false } },
+    async assistantAsk(_text, onEvent) {
+      await new Promise((r) => setTimeout(r, 400))
+      onEvent({ type: 'text', text: "Mode démo : l'assistant a besoin du serveur Kasbah." })
+      onEvent({ type: 'done', ms: 400 })
+    },
+    async assistantLog() { return { entries: [] } },
     // comptes MCP : en mémoire, un compte de démonstration
     async mcpUsers() { return { users: mcpUsers.map((name) => ({ name })) } },
     async mcpSetUser(name) {

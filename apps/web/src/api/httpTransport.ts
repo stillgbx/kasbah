@@ -1,6 +1,6 @@
 import { apiErrorSchema, automationResponseSchema, automationRunResponseSchema, automationsResponseSchema, devicesResponseSchema, energyHistorySchema, healthResponseSchema, houseSchema, pluginsResponseSchema, scenesResponseSchema, serverMessageSchema, weatherForecastSchema, deviceJournalSchema, deviceConsumptionSchema, deviceReleaseNotesSchema, type AutomationBody, type AutomationEntry, type AutomationRun, type CommandInput, type DeviceConsumption, type DeviceJournal, type DeviceEntry, type DevicePlacement, type EnergyHistory, type HealthResponse, type House, type PluginInfo, type PluginSceneEntry, type PluginSettingsPatch, type SceneRecallInput, type SceneUpdate, type WeatherForecast } from '@kasbah/shared'
 import { parseDeviceId } from '@kasbah/shared'
-import { ApiRequestError, type AgendaCalendar, type AgendaEvent, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type LightHistory, type McpUser, type MelcloudStatus, type MelcloudUnit, type MixcloudHomeSection, type MixcloudPage, type MixcloudStatus, type MixcloudUser, type PetkitStatus, type RadioStation, type RenaultStatus, type SchoolData, type TeslaStatus, type Transport, type TransportHandlers, type WeatherAlerts, type WeatherElsewhere, type WeatherPlace, type YtmusicExplore, type YtmusicExploreShelf, type YtmusicPlaylist, type MusicLastPlayed, type MusicQueue, type YtmusicSearchResult, type MusicSession, type YtmusicStatus, type YtmusicTrack } from './transport'
+import { ApiRequestError, type AgendaCalendar, type AssistantEvent, type ClaudeAccount, type AssistantLogEntry, type AgendaEvent, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type LightHistory, type McpUser, type MelcloudStatus, type MelcloudUnit, type MixcloudHomeSection, type MixcloudPage, type MixcloudStatus, type MixcloudUser, type PetkitStatus, type RadioStation, type RenaultStatus, type SchoolData, type TeslaStatus, type Transport, type TransportHandlers, type WeatherAlerts, type WeatherElsewhere, type WeatherPlace, type YtmusicExplore, type YtmusicExploreShelf, type YtmusicPlaylist, type MusicLastPlayed, type MusicQueue, type YtmusicSearchResult, type MusicSession, type YtmusicStatus, type YtmusicTrack } from './transport'
 
 // URLs relatives : même origine en prod (Fastify sert le build) et via le proxy Vite en dev.
 
@@ -17,20 +17,41 @@ function signInAgain() {
   location.assign(`/login?next=${encodeURIComponent(location.pathname + location.search + location.hash)}`)
 }
 
+/** L'erreur d'une réponse non OK, avec le code et le message de l'API quand elle les donne. */
+async function errorOf(res: Response): Promise<ApiRequestError> {
+  let code = 'HTTP_ERROR', message = `HTTP ${res.status}`
+  try {
+    const body = apiErrorSchema.safeParse(await res.json())
+    if (body.success) ({ code, message } = body.data.error)
+  } catch { /* corps non JSON */ }
+  if (res.status === 401 && code === 'AUTH_REQUIRED') signInAgain()
+  return new ApiRequestError(res.status, code, message)
+}
+
 async function request<T>(url: string, init: RequestInit | undefined, parse: (json: unknown) => T): Promise<T> {
   let res: Response
   try { res = await fetch(url, init) }
   catch (err) { throw new ApiRequestError(0, 'NETWORK', (err as Error).message) }
-  if (!res.ok) {
-    let code = 'HTTP_ERROR', message = `HTTP ${res.status}`
-    try {
-      const body = apiErrorSchema.safeParse(await res.json())
-      if (body.success) ({ code, message } = body.data.error)
-    } catch { /* corps non JSON */ }
-    if (res.status === 401 && code === 'AUTH_REQUIRED') signInAgain()
-    throw new ApiRequestError(res.status, code, message)
-  }
+  if (!res.ok) throw await errorOf(res)
   return parse(await res.json())
+}
+
+/** Réponse en NDJSON (une ligne JSON par événement), lue au fil de l'eau. */
+async function streamLines(url: string, init: RequestInit, onLine: (json: unknown) => void): Promise<void> {
+  let res: Response
+  try { res = await fetch(url, init) }
+  catch (err) { throw new ApiRequestError(0, 'NETWORK', (err as Error).message) }
+  if (!res.ok || !res.body) throw await errorOf(res)
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader()
+  let rest = ''
+  for (;;) {
+    const { value, done } = await reader.read()
+    if (done) break
+    const lines = (rest + value).split('\n')
+    rest = lines.pop()!
+    for (const line of lines) if (line.trim()) onLine(JSON.parse(line))
+  }
+  if (rest.trim()) onLine(JSON.parse(rest))
 }
 
 const json = (method: string, body: unknown): RequestInit => ({ method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
@@ -346,6 +367,13 @@ export function createHttpTransport(base = ''): Transport {
       `${base}/api/music/queue?deviceId=${encodeURIComponent(deviceId)}`, { method: 'DELETE' }, (j) => j as MusicQueue,
     ),
     session: () => request(`${base}/api/session`, undefined, (j) => j as { user: string | null }),
+    claudeAccount: () => request(`${base}/api/plugins/claude/account`, undefined, (j) => j as ClaudeAccount),
+    claudeSetToken: (token) => request(`${base}/api/plugins/claude/account`, json('PUT', { token }), (j) => j as ClaudeAccount),
+    claudeClearToken: () => request(`${base}/api/plugins/claude/account`, { method: 'DELETE' }, (j) => j as ClaudeAccount),
+    assistantAsk: (text, onEvent, signal) => streamLines(
+      `${base}/api/assistant/ask`, { ...json('POST', { text }), ...(signal ? { signal } : {}) }, (j) => onEvent(j as AssistantEvent),
+    ),
+    assistantLog: () => request(`${base}/api/assistant/log`, undefined, (j) => j as { entries: AssistantLogEntry[] }),
     mcpUsers: () => request(`${base}/api/mcp/users`, undefined, (j) => j as { users: McpUser[] }),
     mcpSetUser: (name, password) => request(`${base}/api/mcp/users/${encodeURIComponent(name)}`, json('PUT', { password }), (j) => j as { users: McpUser[] }),
     mcpRemoveUser: (name) => request(`${base}/api/mcp/users/${encodeURIComponent(name)}`, { method: 'DELETE' }, (j) => j as { users: McpUser[] }),

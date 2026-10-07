@@ -198,6 +198,31 @@ export interface YtmusicStatus {
 /** Un compte du serveur MCP (`mcp-users.json`) : le nom seul, le mot de passe haché reste sur le serveur. */
 export interface McpUser { name: string }
 
+/**
+ * Le forfait Claude (plugin `claude`) du compte courant (`null` = la maison, sur le réseau local) :
+ * jamais le jeton, seulement s'il y en a un et si la maison en a un en repli.
+ */
+export interface ClaudeAccount { user: string | null; savedAt: number | null; house: boolean }
+
+/** Ce que l'assistant (`claude -p` sur le serveur) rend, au fil de l'eau, pour une instruction. */
+export type AssistantEvent =
+  | { type: 'text'; text: string }
+  | { type: 'tool'; id: string; name: string; input: unknown }
+  | { type: 'tool_result'; id: string; ok: boolean }
+  | { type: 'done'; ms: number }
+  | { type: 'error'; code: string; message: string }
+
+/** Une instruction du journal de l'assistant (les 200 dernières, tous comptes, réseau local seulement). */
+export interface AssistantLogEntry {
+  at: number
+  user: string | null
+  text: string
+  tools: { id: string; name: string; input: unknown; ok?: boolean }[]
+  answer: string
+  error: { code: string; message: string } | null
+  ms: number
+}
+
 /** Un agenda de la maison (plugin `agenda`) ; son adresse iCal reste sur le serveur. */
 export interface AgendaCalendar { id: string; name: string; color: string; fetchedAt: number | null; error: string | null }
 /**
@@ -642,6 +667,15 @@ export interface Transport {
   musicQueueClear(deviceId: string): Promise<MusicQueue>
   /** Le compte de la session, sous l'adresse publique ; `null` sur le réseau local (aucune session). */
   session(): Promise<{ user: string | null }>
+  /** Le forfait Claude (plugin `claude`) du compte courant. */
+  claudeAccount(): Promise<ClaudeAccount>
+  /** Range le jeton de `claude setup-token` pour le compte courant ; il ne revient jamais. */
+  claudeSetToken(token: string): Promise<ClaudeAccount>
+  claudeClearToken(): Promise<ClaudeAccount>
+  /** Une instruction : les événements arrivent au fil de l'eau, la promesse tient jusqu'à la fin. */
+  assistantAsk(text: string, onEvent: (e: AssistantEvent) => void, signal?: AbortSignal): Promise<void>
+  /** Le journal des instructions, la plus récente d'abord ; refusé sous l'adresse publique (`LAN_ONLY`). */
+  assistantLog(): Promise<{ entries: AssistantLogEntry[] }>
   /** Comptes de l'adresse publique et du serveur MCP (assistants IA) ; réseau local seulement. */
   mcpUsers(): Promise<{ users: McpUser[] }>
   /** Crée le compte, ou change son mot de passe (8 caractères au moins). */

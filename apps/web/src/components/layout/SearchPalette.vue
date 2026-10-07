@@ -1,13 +1,18 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useAssistant } from '../../composables/useAssistant'
 import { homePanelRequest, MIN_QUERY, useSearch, type SearchHit } from '../../composables/useSearch'
 import { normalize } from '../../lib/search'
 import StrokeIcon from '../ui/StrokeIcon.vue'
+import AssistantReply from './AssistantReply.vue'
 
 // Palette Ctrl+K (Cmd+K sur Mac) : la recherche de la vue Maison, ouverte depuis n'importe quelle
 // page. Même moteur, même règle — un résultat NAVIGUE, il n'agit jamais. Le champ est posé à une
 // hauteur fixe et la liste grandit vers le bas : rien ne bouge quand les résultats changent.
+//
+// La dernière ligne passe la saisie à l'assistant (« Demander à Kasbah ») : lui AGIT, et sa réponse
+// prend la place de la liste. Fermer la palette ne l'arrête pas ; la rouvrir la montre.
 
 const route = useRoute()
 const router = useRouter()
@@ -18,17 +23,27 @@ const active = ref(0)
 const input = ref<HTMLInputElement | null>(null)
 const listEl = ref<HTMLDivElement | null>(null)
 const { results } = useSearch(query, { withHome: true })
+const assistant = useAssistant()
+const { phase } = assistant
+/** Les résultats, plus la ligne de l'assistant. */
+const total = computed(() => results.value.length + 1)
 /** Ce qui avait le focus à l'ouverture : on le lui rend en fermant. */
 let returnFocus: HTMLElement | null = null
 
-const showList = () => normalize(query.value).length >= MIN_QUERY
+const showList = () => phase.value === 'idle' && normalize(query.value).length >= MIN_QUERY
 
 watch(results, () => { active.value = 0 })
+// Retoucher l'instruction après la réponse revient à la recherche (pas la fermeture, qui vide le champ).
+watch(query, (q) => {
+  if (open.value && (phase.value === 'done' || phase.value === 'error') && q.trim() !== assistant.asked.value) assistant.reset()
+})
 
 function show() {
   returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
   open.value = true
-  void nextTick(() => input.value?.focus())
+  // la réponse en cours ou la dernière, l'instruction sélectionnée : la frappe suivante la remplace
+  if (phase.value !== 'idle') query.value = assistant.asked.value
+  void nextTick(() => { input.value?.focus(); if (phase.value !== 'idle') input.value?.select() })
 }
 
 function close() {
@@ -48,16 +63,27 @@ async function pick(hit: SearchHit) {
   homePanelRequest.value++
 }
 
+function askNow() {
+  void assistant.ask(query.value)
+}
+
+function onEnter() {
+  if (phase.value !== 'idle' || !showList()) return
+  const hit = results.value[active.value]
+  if (hit) void pick(hit)
+  else askNow()
+}
+
 function move(delta: number) {
-  const n = results.value.length
-  if (n === 0) return
+  const n = total.value
   active.value = (active.value + delta + n) % n
   void nextTick(() => listEl.value?.children[active.value]?.scrollIntoView({ block: 'nearest' }))
 }
 
-/** Échap efface d'abord, ferme ensuite, comme la barre de la vue Maison. */
+/** Échap arrête ou efface la réponse, puis efface la saisie, puis ferme, comme la barre de la vue Maison. */
 function onEscape() {
-  if (query.value) query.value = ''
+  if (phase.value !== 'idle') assistant.reset()
+  else if (query.value) query.value = ''
   else close()
 }
 
@@ -81,9 +107,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
           <StrokeIcon class="palette__glass" name="search" :size="18" />
           <input ref="input" v-model="query" type="search" class="palette__input"
                  autocomplete="off" autocorrect="off" spellcheck="false"
-                 :placeholder="$t('search.palette')" :aria-label="$t('search.aria')"
+                 :placeholder="$t('search.palette')" :aria-label="$t('search.aria')" :readonly="phase === 'running'"
                  @keydown.down.prevent="move(1)" @keydown.up.prevent="move(-1)"
-                 @keydown.enter.prevent="results[active] && pick(results[active]!)" @keydown.esc.prevent="onEscape()">
+                 @keydown.enter.prevent="onEnter()" @keydown.esc.prevent="onEscape()">
         </div>
         <div v-if="showList()" ref="listEl" class="palette__list" role="listbox" @mousedown.prevent>
           <button v-for="(hit, i) in results" :key="hit.key" type="button" class="palette__row" role="option"
@@ -93,7 +119,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
             <span class="palette__sub">{{ hit.sub }}</span>
           </button>
           <div v-if="results.length === 0" class="palette__row palette__row--empty muted">{{ $t('search.empty') }}</div>
+          <button type="button" class="palette__row palette__row--ask" role="option" :data-on="active === results.length ? '1' : '0'"
+                  :aria-selected="active === results.length" @click="askNow()" @mouseenter="active = results.length">
+            <StrokeIcon class="palette__icon palette__icon--ask" name="sparkle" :size="18" />
+            <span class="palette__label palette__label--ask">{{ $t('assistant.ask') }}</span>
+            <span class="palette__sub palette__sub--ask">{{ query.trim() }}</span>
+          </button>
         </div>
+        <AssistantReply v-else-if="phase !== 'idle'" class="palette__reply" :phase="phase" :asked="assistant.asked.value"
+                        :actions="assistant.actions.value" :answer="assistant.answer.value" :error="assistant.error.value" />
         <span class="palette__sr" aria-live="polite">{{ showList() ? $t('search.count', { n: results.length }, results.length) : '' }}</span>
       </div>
     </div>
@@ -132,6 +166,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
 .palette__row[data-on='1'] .palette__sub { color: color-mix(in srgb, var(--muted) 75%, var(--text)); }
 .palette__row--empty { justify-content: center; }
 .palette__icon { color: var(--muted); flex: none; }
+.palette__icon--ask { color: var(--accent); }
+/* la saisie vaut instruction : elle prend la place du lieu, le libellé ne s'étire pas */
+.palette__label--ask { flex: none; }
+.palette__sub--ask { flex: 1 1 0; text-align: right; }
+.palette__reply { border-top: 1px solid var(--line); max-height: 60vh; overflow-y: auto; overscroll-behavior: contain; }
 .palette__label { flex: 1 1 auto; min-width: 0; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .palette__sub { flex: 0 1 auto; min-width: 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* téléphone : le texte indicatif français (283 px) ne tenait pas dans le champ (281 px) à 16 px

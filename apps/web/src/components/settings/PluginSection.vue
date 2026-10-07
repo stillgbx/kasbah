@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import type { PluginHealth, PluginInfo } from '@kasbah/shared'
 import AgendaLinkCard from '../AgendaLinkCard.vue'
+import ClaudeLinkCard from '../ClaudeLinkCard.vue'
 import EnphasePairingCard from '../EnphasePairingCard.vue'
 import HuePairingCard from '../HuePairingCard.vue'
 import IrobotLinkCard from '../IrobotLinkCard.vue'
@@ -65,6 +66,7 @@ const SETUP_CARDS = {
   mixcloud: MixcloudLinkCard,
   agenda: AgendaLinkCard,
   toutemonannee: SchoolLinkCard,
+  claude: ClaudeLinkCard,
 } as const
 const setupCard = computed(() => SETUP_CARDS[props.plugin.id as keyof typeof SETUP_CARDS] ?? null)
 

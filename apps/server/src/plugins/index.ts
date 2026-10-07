@@ -1,6 +1,7 @@
 import type { PluginFactory } from '../core/plugin'
 import { createAgendaPlugin } from './agenda'
 import { createAutomowerPlugin } from './automower'
+import { createClaudePlugin } from './claude'
 import { createComapPlugin } from './comap'
 import { createEnphasePlugin } from './enphase'
 import { createGoogleCastPlugin } from './google_cast'
@@ -46,4 +47,5 @@ export const PLUGIN_FACTORIES: Record<string, PluginFactory> = {
   tuya: () => createTuyaPlugin(),
   agenda: () => createAgendaPlugin(),
   toutemonannee: () => createToutemonanneePlugin(),
+  claude: () => createClaudePlugin(),
 }
