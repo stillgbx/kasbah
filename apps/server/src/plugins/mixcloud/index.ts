@@ -311,12 +311,22 @@ export function createMixcloudPlugin(deps: MixcloudPluginDeps = {}): DevicePlugi
       })
     },
 
-    // La santé est celle du compte de la maison : les comptes des utilisateurs ne regardent qu'eux.
+    // `health` : le compte de la maison ; `healthFor` : celui d'un utilisateur connecté, qui ne voit que le sien.
     health(): PluginHealth {
       const keys = Object.keys(mixcloudConfigSchema.shape)
       const state = home?.state
       if (!state?.username) return { status: 'needs_pairing', detail: 'Mixcloud: set your username on the Music page', keys }
       const detail = `Mixcloud: ${state.username}, ${Object.keys(state.resume).length} mix(es) to resume`
+      return lastError ? { status: 'degraded', detail: `${detail} — ${lastError}`, keys } : { status: 'ok', detail, keys }
+    },
+
+    async healthFor(user: string): Promise<PluginHealth> {
+      const keys = Object.keys(mixcloudConfigSchema.shape)
+      const { state } = await accountOf(user)
+      // sans nom Mixcloud l'utilisateur cherche et écoute en anonyme : ça marche, rien n'est retenu
+      const detail = state.username
+        ? `Mixcloud: ${state.username}, ${Object.keys(state.resume).length} mix(es) to resume`
+        : 'Mixcloud: anonymous — search only; set your username for your home, favorites and resume points'
       return lastError ? { status: 'degraded', detail: `${detail} — ${lastError}`, keys } : { status: 'ok', detail, keys }
     },
   }

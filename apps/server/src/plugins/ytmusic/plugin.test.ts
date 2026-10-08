@@ -1179,6 +1179,8 @@ describe('ytmusic accounts', () => {
     // rien de relié : anonyme — catalogue public, rien de personnel, pas d'import du navigateur du serveur
     expect((await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/status', headers: alice })).json())
       .toMatchObject({ user: 'alice', linked: false, anonymous: true, browsers: [] })
+    // son badge : anonyme, ça marche — pas « à relier » comme celui de la maison
+    expect(await plugin.healthFor!('alice')).toMatchObject({ status: 'ok', detail: expect.stringContaining('anonymous') })
     expect((await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/search?q=jade', headers: alice })).statusCode).toBe(200)
     expect(cookies).toEqual([''])
     expect((await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/library/liked', headers: alice })).statusCode).toBeGreaterThanOrEqual(400)
@@ -1194,6 +1196,7 @@ describe('ytmusic accounts', () => {
     expect(linked.json()).toMatchObject({ user: 'alice', linked: true, anonymous: false })
     expect(await store.read()).toBeNull()
     expect(plugin.health!().status).toBe('needs_pairing')
+    expect(await plugin.healthFor!('alice')).toMatchObject({ status: 'ok', detail: expect.not.stringContaining('anonymous') })
     expect((await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/status' })).json()).toMatchObject({ user: null, linked: false, anonymous: false })
     expect((await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/library/liked', headers: alice })).statusCode).toBe(200)
     expect(cookies).toContain(COOKIE)

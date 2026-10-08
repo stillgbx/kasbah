@@ -553,10 +553,24 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
       })
     },
 
-    // La santé est celle du compte de la maison : les comptes des utilisateurs ne regardent qu'eux.
+    // `health` : le compte de la maison ; `healthFor` : celui d'un utilisateur connecté, qui ne voit que le sien.
     health(): PluginHealth {
       const home = accountOf(null)
       return healthFrom(home.linked, home.cookieExpired, poTokenOk, home.lastError, keys())
+    },
+
+    async healthFor(user: string): Promise<PluginHealth> {
+      const a = accountOf(user)
+      await loadCookie(a)
+      const base = 'YouTube Music (unofficial)'
+      // sans cookie l'utilisateur écoute en anonyme : ça marche, rien n'est à relier pour autant
+      if (!a.linked) {
+        return poTokenOk
+          ? { status: 'ok', detail: `${base}: anonymous — public catalog only; paste your cookie for likes and playlists`, keys: keys() }
+          : { status: 'degraded', detail: `${base}: PO Token generator unreachable`, keys: keys() }
+      }
+      if (a.cookieExpired) return { status: 'needs_pairing', detail: `${base}: your cookie expired — paste a new one in Settings`, keys: keys() }
+      return healthFrom(true, false, poTokenOk, a.lastError, keys())
     },
   }
 }

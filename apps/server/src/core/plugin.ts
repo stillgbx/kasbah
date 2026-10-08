@@ -130,6 +130,11 @@ export interface DevicePlugin {
   /** Routes propres au plugin, montées sous /api/plugins/<id>/. */
   registerRoutes?(app: FastifyInstance): void
   health?(): PluginHealth
+  /**
+   * La santé des comptes d'un utilisateur connecté, pour un plugin qui en tient par utilisateur
+   * (sources musicales) ; absent = la même pour tous, `health()`.
+   */
+  healthFor?(user: string): Promise<PluginHealth>
 }
 
 export type PluginFactory = () => DevicePlugin

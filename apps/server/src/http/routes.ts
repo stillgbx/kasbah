@@ -33,11 +33,12 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
     return sendError(reply, d.status, d.code, d.message)
   })
 
-  app.get('/api/health', async (): Promise<HealthResponse> => ({
+  app.get('/api/health', async (req): Promise<HealthResponse> => ({
     ok: true,
     uptimeS: Math.round((Date.now() - deps.startedAt) / 1000),
     clients: deps.hub.clientCount,
-    plugins: deps.host.health(),
+    // connecté : la santé de SES comptes, là où un plugin en tient par utilisateur
+    plugins: await deps.host.health(req.sessionUser ?? null),
   }))
 
   app.get('/api/house', async (_req, reply) => {
@@ -341,7 +342,7 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
 
   // Plugins : l'inventaire complet (tous déclarés, actifs ou non) et ce qu'on en choisit. Le choix
   // vit dans house.json ; l'écrire allume, éteint ou redémarre le plugin sans redémarrer le serveur.
-  app.get('/api/plugins', async () => ({ plugins: deps.host.inventory() }))
+  app.get('/api/plugins', async (req) => ({ plugins: await deps.host.inventory(req.sessionUser ?? null) }))
 
   app.patch<{ Params: { id: string } }>('/api/plugins/:id', async (req, reply) => {
     const id = req.params.id
@@ -350,7 +351,7 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
     const house = await updateHouseFile(deps.house, (doc) => setPluginInJson(doc, id, patch))
     await deps.host.apply(id)
     deps.hub.broadcast({ type: 'house', house })
-    return { plugins: deps.host.inventory() }
+    return { plugins: await deps.host.inventory(req.sessionUser ?? null) }
   })
 
   app.post<{ Params: { id: string } }>('/api/devices/:id/command', async (req, reply) => {

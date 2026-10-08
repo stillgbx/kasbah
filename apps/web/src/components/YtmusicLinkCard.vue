@@ -41,7 +41,7 @@ async function link() {
     status.value = await getTransport().ytmusicPutCookie(cookie.value.trim())
     cookie.value = ''
     notifications.success(t('settings.ytmusic.linked'))
-    await devices.refreshHealth()
+    await Promise.all([devices.refreshHealth(), plugins.load()])
   } catch (err) {
     notifications.error(t('errors.UNKNOWN', { name: 'YouTube Music', message: (err as Error).message }))
   } finally { busy.value = false }
@@ -52,7 +52,7 @@ async function importBrowser() {
   try {
     status.value = await getTransport().ytmusicImportCookieFromBrowser(browser.value)
     notifications.success(t('settings.ytmusic.imported'))
-    await devices.refreshHealth()
+    await Promise.all([devices.refreshHealth(), plugins.load()])
   } catch (err) {
     notifications.error(t('errors.UNKNOWN', { name: 'YouTube Music', message: (err as Error).message }))
   } finally { busy.value = false }
@@ -62,7 +62,7 @@ async function unlink() {
   busy.value = true
   try {
     status.value = await getTransport().ytmusicClearCookie()
-    await devices.refreshHealth()
+    await Promise.all([devices.refreshHealth(), plugins.load()])
   } catch (err) {
     notifications.error(t('errors.UNKNOWN', { name: 'YouTube Music', message: (err as Error).message }))
   } finally { busy.value = false }

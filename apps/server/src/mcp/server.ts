@@ -178,7 +178,7 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null): 
     title: 'Santé des plugins',
     description: "État de chaque plugin, par id : statut, détail lisible, nombre d'appareils, quota consommé quand l'API du fabricant est bornée. keys liste les noms des variables d'environnement lues, jamais leurs valeurs. À consulter quand un appareil manque ou ne répond pas.",
     annotations: { readOnlyHint: true },
-  }, async () => json(deps.host.health()))
+  }, async () => json(await deps.host.health(user)))
 
   server.registerTool('search_music', {
     title: 'Chercher de la musique',

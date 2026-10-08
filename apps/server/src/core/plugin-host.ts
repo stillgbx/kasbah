@@ -375,13 +375,14 @@ export class PluginHost {
     await withTimeout(slot.plugin.deleteScene(externalId), this.opts.commandTimeoutMs ?? 10_000, this.opts.clock, `delete ${sceneId}`)
   }
 
-  health(): Record<string, PluginHealth> {
+  /** `user` : le compte qui demande (session, jeton MCP) ; un plugin à comptes par utilisateur rend les siens. */
+  async health(user: string | null = null): Promise<Record<string, PluginHealth>> {
     const out: Record<string, PluginHealth> = {}
-    for (const [id, slot] of this.slots) out[id] = this.healthOf(id, slot)
+    for (const [id, slot] of this.slots) out[id] = await this.healthOf(id, slot, user)
     return out
   }
 
-  private healthOf(id: string, slot: Slot): PluginHealth {
+  private async healthOf(id: string, slot: Slot, user: string | null): Promise<PluginHealth> {
     const shape = (slot.plugin.configSchema as unknown as { shape?: Record<string, unknown> }).shape
     const keys = shape ? Object.keys(shape) : []
     const deviceCount = this.opts.registry.countOf(id)
@@ -390,13 +391,17 @@ export class PluginHost {
       const status = slot.plugin.implemented === false ? 'not_implemented' : 'disabled'
       return { status, ...(slot.status.detail ? { detail: slot.status.detail } : {}), deviceCount, keys }
     }
-    const h = slot.ctx && slot.status.status !== 'error' ? slot.plugin.health?.() ?? slot.status : slot.status
+    const running = slot.ctx && slot.status.status !== 'error'
+    const h = !running ? slot.status
+      // une santé par compte illisible ne fait pas tomber l'inventaire : celle de tous à la place
+      : user !== null && slot.plugin.healthFor ? await slot.plugin.healthFor(user).catch(() => slot.plugin.health?.() ?? slot.status)
+        : slot.plugin.health?.() ?? slot.status
     return { ...h, deviceCount, keys }
   }
 
-  /** Inventaire de l'écran Réglages : ce qu'est chaque plugin, ce qu'on en a choisi, comment il va. */
-  inventory(): PluginInfo[] {
-    return this.order.map((id) => {
+  /** Inventaire de l'écran Réglages : ce qu'est chaque plugin, ce qu'on en a choisi, comment il va (pour `user`, cf. `health`). */
+  async inventory(user: string | null = null): Promise<PluginInfo[]> {
+    return Promise.all(this.order.map(async (id) => {
       const slot = this.slots.get(id)!
       const settings = this.opts.settingsOf(id) ?? DEFAULT_PLUGIN_SETTINGS
       const parts = this.resolveParts(id, slot)
@@ -407,9 +412,9 @@ export class PluginHost {
         // le réglage des ambiances n'a de sens que chez un fabricant qui en écrit
         ...(slot.plugin.updateScene ? { autoDynamicForNewScenes: settings.autoDynamicForNewScenes } : {}),
         parts: (slot.plugin.parts ?? []).map((p) => ({ id: p.id, labelKey: p.labelKey, enabled: parts[p.id] ?? p.enabledByDefault })),
-        health: this.healthOf(id, slot),
+        health: await this.healthOf(id, slot, user),
       }
-    })
+    }))
   }
 
   private async stopOne(id: string): Promise<void> {

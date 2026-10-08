@@ -39,7 +39,7 @@ async function link() {
   try {
     status.value = await getTransport().mixcloudSetAccount(name)
     username.value = ''
-    await devices.refreshHealth()
+    await Promise.all([devices.refreshHealth(), plugins.load()])
   } catch (err) { fail(err) }
   finally { busy.value = false }
 }
@@ -48,7 +48,7 @@ async function unlink() {
   busy.value = true
   try {
     status.value = await getTransport().mixcloudClearAccount()
-    await devices.refreshHealth()
+    await Promise.all([devices.refreshHealth(), plugins.load()])
   } catch (err) { fail(err) }
   finally { busy.value = false }
 }

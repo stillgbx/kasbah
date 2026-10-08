@@ -323,6 +323,8 @@ describe('mixcloud accounts', () => {
   it('lets a signed-in user search anonymously, leaving no trace anywhere', async () => {
     const { app, store, userStore, plugin } = await boot()
     expect((await app.inject({ method: 'GET', url: '/api/plugins/mixcloud/status', headers: alice })).json()).toMatchObject({ username: null, account: 'alice' })
+    // son badge : anonyme, ça marche — la maison, elle, a son propre compte
+    expect(await plugin.healthFor!('alice')).toMatchObject({ status: 'ok', detail: expect.stringContaining('anonymous') })
     expect((await app.inject({ method: 'GET', url: '/api/plugins/mixcloud/search?q=nts', headers: alice })).statusCode).toBe(200)
     expect((await app.inject({ method: 'GET', url: '/api/plugins/mixcloud/library/favorites', headers: alice })).statusCode).toBeGreaterThanOrEqual(400)
     await progress(app, 1800, alice)
@@ -341,6 +343,8 @@ describe('mixcloud accounts', () => {
     expect((await userStore('alice').load()).username).toBe('alicemix')
     expect((await store.load()).username).toBe('kasbahfan')
     expect((await app.inject({ method: 'GET', url: '/api/plugins/mixcloud/status' })).json()).toMatchObject({ username: 'kasbahfan', account: null })
+    expect(await plugin.healthFor!('alice')).toMatchObject({ status: 'ok', detail: expect.stringContaining('alicemix') })
+    expect(plugin.health!().detail).toContain('kasbahfan')
 
     await progress(app, 1800, alice)
     await progress(app, 900)
