@@ -98,6 +98,7 @@ Chaque plugin a sa **page** : ce qu'il fait, comment il se connecte, sa mise en 
 | `radio` | Radios (radio-browser.info) | — (source musicale) | cloud libre sans clé | [radio](docs/plugins/radio.md) |
 | `agenda` | Agendas Google partagés | — (vue Agenda) | adresse iCal secrète | [agenda](docs/plugins/agenda.md) |
 | `toutemonannee` | TouteMonAnnée (école) | — (vue École) | cloud privé (compte parent) | [toutemonannee](docs/plugins/toutemonannee.md) |
+| `claude` | Claude (Claude Code, forfait de chaque compte) | — (assistant « Demander à Kasbah ») | `claude -p` sur le serveur, par le MCP de Kasbah | [claude](docs/plugins/claude-assistant.md) |
 | `transcription` | Voix de l'assistant (VoiceStudio, vLLM, Mistral) | — (micro, réponses parlées) | local ou cloud (route OpenAI `/v1/audio/*`) | [transcription](docs/plugins/transcription.md) |
 | `tens` | actiTENS mini (électrostimulation) | — (vue TENS) | **dans le navigateur** (Web Bluetooth), activé par poste | [actitens](docs/plugins/actitens.md) |
 
