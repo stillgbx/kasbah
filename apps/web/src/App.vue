@@ -3,6 +3,7 @@ import { onBeforeUnmount, onMounted } from 'vue'
 import { useDevicesStore } from './stores/devices'
 import { useHouseStore } from './stores/house'
 import { useNotificationsStore } from './stores/notifications'
+import { usePropertiesStore } from './stores/properties'
 import ConnectionBanner from './components/ConnectionBanner.vue'
 import NavRail from './components/layout/NavRail.vue'
 import SearchPalette from './components/layout/SearchPalette.vue'
@@ -13,8 +14,9 @@ import SearchPalette from './components/layout/SearchPalette.vue'
 const house = useHouseStore()
 const devices = useDevicesStore()
 const notifications = useNotificationsStore()
+const properties = usePropertiesStore()
 
-onMounted(() => { void house.load(); devices.start() })
+onMounted(() => { void house.load(); void properties.load(); devices.start() })
 onBeforeUnmount(() => devices.stop())
 </script>
 

@@ -1,4 +1,4 @@
-import type { HouseEditPatch, AutomationBody, GardenItemPatch, NewGardenItem, AutomationEntry, AutomationRun, Relief, SceneTuning, Vec2, CommandInput, DeviceConsumption, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal, DeviceReleaseNotes, StateFor } from '@kasbah/shared'
+import type { HouseEditPatch, AutomationBody, GardenItemPatch, NewGardenItem, AutomationEntry, AutomationRun, Relief, SceneTuning, Vec2, CommandInput, DeviceConsumption, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, PropertiesResponse, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal, DeviceReleaseNotes, StateFor } from '@kasbah/shared'
 
 // Abstraction du canal serveur. Deux implémentations : HTTP + WebSocket (réel) et simulation
 // in-process (tests, démo statique sans serveur). Les commandes passent TOUJOURS par une requête
@@ -531,6 +531,13 @@ export interface Transport {
   getPlugins(): Promise<PluginInfo[]>
   /** Écrit un choix (activation, sous-item, ambiances) dans la maison ; rend l'inventaire à jour. */
   setPluginSettings(pluginId: string, patch: PluginSettingsPatch): Promise<PluginInfo[]>
+  /** Les propriétés que l'application sait montrer, et celle qui l'est. */
+  getProperties(): Promise<PropertiesResponse>
+  /**
+   * Bascule sur une autre propriété (mode démo seulement : 409 sinon). Le serveur redémarre sur
+   * l'autre maison ; l'appelant recharge l'application une fois la bascule faite.
+   */
+  selectProperty(id: string): Promise<void>
   pairHue(): Promise<{ appKey: string; hint: string }>
   /** URL de consentement Google à ouvrir dans un navigateur pour lier le compte Nest. */
   nestAuthUrl(): Promise<{ url: string; redirectUri: string }>

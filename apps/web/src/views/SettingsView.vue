@@ -8,11 +8,13 @@ import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import AssistantCard from '../components/settings/AssistantCard.vue'
 import McpUsersCard from '../components/settings/McpUsersCard.vue'
 import PluginSection from '../components/settings/PluginSection.vue'
+import PropertyList from '../components/layout/PropertyList.vue'
 import Segmented from '../components/ui/Segmented.vue'
 import { LOCALE_LABELS } from '../i18n'
 import { useDevicesStore } from '../stores/devices'
 import { useHouseStore } from '../stores/house'
 import { usePluginsStore } from '../stores/plugins'
+import { usePropertiesStore } from '../stores/properties'
 import { useLocalPluginsStore } from '../stores/localPlugins'
 import { browserBluetooth } from '../lib/tens/link'
 import { WEATHER_CONDITIONS } from '@kasbah/shared'
@@ -35,6 +37,8 @@ import { styleById, type GradeLook, type RenderStyle } from '../three/styles'
 // redémarrer le serveur.
 const settings = useSettingsStore()
 const plugins = usePluginsStore()
+// mode démo : la bascule entre propriétés, aussi ici parce que le rail du téléphone n'a pas de pavé d'initiales
+const properties = usePropertiesStore()
 // Les plugins LOCAUX, eux, sont des choix de CE poste (localStorage) : le TENS ne doit exister que
 // sur le navigateur qui lui parle en Bluetooth, jamais sur la tablette du palier.
 const localPlugins = useLocalPluginsStore()
@@ -277,6 +281,11 @@ const houseStats = computed(() => {
               <v-switch :model-value="settings.houseEditing" hide-details density="compact"
                         @update:model-value="(v: boolean | null) => setHouseEditing(v === true)" />
             </div>
+          </section>
+          <section v-if="properties.switchable" class="card block">
+            <div class="block__title">{{ $t('properties.title') }}</div>
+            <PropertyList />
+            <div class="muted small">{{ $t('properties.hint') }}</div>
           </section>
           <section class="card block">
             <div class="block__title">{{ $t('settings.gps') }}</div>

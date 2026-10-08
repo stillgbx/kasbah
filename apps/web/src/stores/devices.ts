@@ -7,6 +7,7 @@ import { optimisticPatch } from '../lib/optimistic'
 import { useNotificationsStore } from './notifications'
 import { useScenesStore } from './scenes'
 import { useAutomationsStore } from './automations'
+import { usePropertiesStore } from './properties'
 
 // Appareils des plugins : descripteurs + états, connexion push, commandes avec mise à jour
 // optimiste et retour arrière. INVARIANT : l'objet d'état d'un appareil est REMPLACÉ (jamais muté)
@@ -151,9 +152,11 @@ export const useDevicesStore = defineStore('devices', () => {
     if (disconnect) return
     const scenes = useScenesStore()
     const automations = useAutomationsStore()
+    const properties = usePropertiesStore()
     disconnect = getTransport().connect({
-      // le même flux nourrit les appareils, les scènes des fabricants et les automatisations, chacun son store
-      onMessage: (msg) => { applyMessage(msg); scenes.apply(msg); automations.apply(msg) },
+      // le même flux nourrit les appareils, les scènes des fabricants et les automatisations, chacun son
+      // store ; la propriété du snapshot dit si un autre écran a basculé de maison démo
+      onMessage: (msg) => { properties.apply(msg); applyMessage(msg); scenes.apply(msg); automations.apply(msg) },
       onStatus: (s) => { connection.value = s },
     })
   }

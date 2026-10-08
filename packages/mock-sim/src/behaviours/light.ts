@@ -11,6 +11,8 @@ export interface LightOptions {
   brightness?: number
   /** Puissance consommée à pleine luminosité (W), déclarée au monde. */
   powerW?: number
+  /** Effets du fabricant (« bougie », « feu de cheminée ») : déclare la capacité `effect`. */
+  effects?: string[]
 }
 
 export function light(externalId: string, o: LightOptions): SimDevice<'light'> {
@@ -18,11 +20,14 @@ export function light(externalId: string, o: LightOptions): SimDevice<'light'> {
   if (o.dimmable ?? true) caps.push('brightness')
   if (o.colorTemp) caps.push('color_temp')
   if (o.color) caps.push('color')
+  if (o.effects?.length) caps.push('effect')
   let transition: { from: number; to: number; left: number; total: number } | null = null
   const dev: SimDevice<'light'> = {
     descriptor: descriptor(externalId, 'light', o.name, caps, {
       manufacturer: 'Mock', model: o.color ? 'Color bulb' : 'White bulb',
       ...(o.colorTemp ? { colorTempMirek: [153, 500] as [number, number] } : {}),
+      // `no_effect` en premier, comme le contrat le demande : c'est l'entrée qui arrête l'effet
+      ...(o.effects?.length ? { effects: ['no_effect', ...o.effects] } : {}),
     }),
     state: {
       kind: 'light', updatedAt: 0, available: true,
@@ -30,6 +35,7 @@ export function light(externalId: string, o: LightOptions): SimDevice<'light'> {
       ...(caps.includes('brightness') ? { brightness: o.brightness ?? 80 } : {}),
       ...(o.colorTemp ? { colorTempMirek: 366 } : {}),
       ...(o.color ? { color: { x: 0.4573, y: 0.41 } } : {}),
+      ...(o.effects?.length ? { effect: 'no_effect' } : {}),
     },
     tick(ctx: TickCtx) {
       if (transition) {
@@ -54,6 +60,11 @@ export function light(externalId: string, o: LightOptions): SimDevice<'light'> {
       }
       if (cmd.colorTempMirek !== undefined && o.colorTemp) dev.state.colorTempMirek = Math.min(500, Math.max(153, cmd.colorTempMirek))
       if (cmd.color !== undefined && o.color) dev.state.color = { ...cmd.color }
+      if (cmd.effect !== undefined && o.effects?.length) {
+        if (cmd.effect !== 'no_effect' && !o.effects.includes(cmd.effect)) throw new SimError('UNSUPPORTED_COMMAND', `unknown effect "${cmd.effect}"`)
+        dev.state.effect = cmd.effect
+        if (cmd.effect !== 'no_effect') dev.state.on = true
+      }
     },
   }
   return dev

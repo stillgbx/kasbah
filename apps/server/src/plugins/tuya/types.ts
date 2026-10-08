@@ -10,7 +10,7 @@ export const tuyaDeviceConfigSchema = z.object({
   /** Clé locale 16 caractères — jamais loguée. */
   key: z.string().min(1),
   ip: z.string().trim().min(1),
-  /** Nom de l'objet PHYSIQUE (« Ventilateur plafonnier chambre 2 ») — les kinds en dérivent le leur. */
+  /** Nom de l'objet PHYSIQUE (« Ventilateur plafonnier Bureau ») — les kinds en dérivent le leur. */
   name: z.string().trim().min(1),
   /** Protocole local. Le CREATE exige 3.5 (3.4 refuse la connexion). */
   version: z.string().trim().default('3.5'),

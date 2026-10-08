@@ -1,8 +1,9 @@
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { config as loadDotenv } from 'dotenv'
-import { buildApp } from './app'
+import { buildApp, type KasbahApp } from './app'
 import { loadEnv } from './config/env'
+import { loadDemoProperties, readActiveDemo, writeActiveDemo, type DemoProperty, type PropertyHost } from './config/properties'
 import { createLogger } from './core/logger'
 
 // Point d'entrée : .env (apps/server/.env) → env validé → app → plugins → écoute → arrêt propre.
@@ -11,15 +12,63 @@ const here = dirname(fileURLToPath(import.meta.url))
 loadDotenv({ path: resolve(here, '../.env'), quiet: true })
 loadDotenv({ path: resolve(here, '../../.env'), quiet: true }) // repli : .env à côté de dist/
 
+// Sans `KASBAH_HOUSE_FILE`, le serveur est une DÉMONSTRATION : il propose les propriétés de
+// `house/demos/` et fait vivre celle qu'on choisit (scénario mock lu dans la maison). Avec, il fait
+// vivre ce seul fichier, comme toujours.
+const demo = !process.env.KASBAH_HOUSE_FILE
 const env = loadEnv()
 const logger = createLogger(env.KASBAH_LOG_LEVEL, env.KASBAH_LOG_PRETTY || process.stdout.isTTY === true)
 
-const kasbah = await buildApp({ env, logger })
-await kasbah.app.listen({ port: env.KASBAH_PORT, host: env.KASBAH_HOST })
-logger.info({ port: env.KASBAH_PORT, plugins: Object.entries(kasbah.house.house.plugins).filter(([, p]) => p.enabled).map(([id]) => id), house: kasbah.house.house.name }, 'kasbah server listening')
-await kasbah.startPlugins()
+const demos: DemoProperty[] = demo ? await loadDemoProperties() : []
+let active: DemoProperty | undefined
+if (demo) {
+  const remembered = await readActiveDemo()
+  active = demos.find((p) => p.id === remembered) ?? demos[0]
+}
 
+let kasbah: KasbahApp
+let switching = false
 let closing = false
+
+/** Assemble, écoute et démarre l'application sur la maison courante. */
+async function start(): Promise<void> {
+  const properties: PropertyHost | undefined = active && {
+    list: () => ({ activeId: active!.id, switchable: true, properties: demos.map(({ id, name, kind }) => ({ id, name, kind })) }),
+    select: (id) => { setTimeout(() => void switchTo(id), 50) },   // après l'envoi de la réponse
+  }
+  // l'hiver demandé par `MOCK_SCENARIO=winter` vaut pour la propriété : son parc en version d'hiver
+  const scenario = active && (process.env.MOCK_SCENARIO === 'winter' ? `${active.scenario}-winter` : active.scenario)
+  kasbah = await buildApp({
+    env: active ? { ...env, KASBAH_HOUSE_FILE: active.path } : env,
+    logger,
+    ...(scenario ? { envSource: { ...process.env, MOCK_SCENARIO: scenario } } : {}),
+    ...(properties ? { properties } : {}),
+  })
+  await kasbah.app.listen({ port: env.KASBAH_PORT, host: env.KASBAH_HOST })
+  logger.info({ port: env.KASBAH_PORT, plugins: Object.entries(kasbah.house.house.plugins).filter(([, p]) => p.enabled).map(([id]) => id), house: kasbah.house.house.name, ...(active ? { demo: active.id } : {}) }, 'kasbah server listening')
+  await kasbah.startPlugins()
+}
+
+/** Bascule de propriété démo : on arrête tout, puis on reconstruit sur l'autre maison. */
+async function switchTo(id: string): Promise<void> {
+  const next = demos.find((p) => p.id === id)
+  if (!next || next.id === active?.id || switching || closing) return
+  switching = true
+  try {
+    logger.info({ from: active?.id, to: next.id }, 'switching demo property')
+    // les écrans gardent des connexions ouvertes (proxy de Vite, requêtes en cours) que `close()`
+    // attendrait : passé une seconde, on les coupe — ils se reconnectent à l'autre maison
+    const old = kasbah
+    const cut = setTimeout(() => old.app.server.closeAllConnections(), 1000)
+    try { await old.close() } finally { clearTimeout(cut) }
+    active = next
+    await writeActiveDemo(next.id)
+    await start()
+  } finally { switching = false }
+}
+
+await start()
+
 async function shutdown(signal: string) {
   if (closing) return
   closing = true

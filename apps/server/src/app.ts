@@ -5,6 +5,7 @@ import type { Logger } from 'pino'
 import { registerAssistantRoutes } from './assistant/assistant'
 import type { Env } from './config/env'
 import { loadHouse, type LoadedHouse } from './config/house'
+import type { PropertyHost } from './config/properties'
 import { AutomationEngine } from './core/automations/engine'
 import { automationsPathFor, createAutomationsFile } from './core/automations/store'
 import { Bus } from './core/bus'
@@ -35,6 +36,8 @@ export interface BuildAppOptions {
   /** Maison déjà chargée (tests) ; sinon lue depuis env.KASBAH_HOUSE_FILE. */
   house?: LoadedHouse
   serveStatic?: boolean
+  /** Propriétés entre lesquelles basculer (serveur de démonstration) ; absent = une seule maison. */
+  properties?: PropertyHost
 }
 
 export interface KasbahApp {
@@ -102,7 +105,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
     store: createAutomationsFile(automationsPathFor(house.path)),
     registry, scenes, host, house, bus, clock, logger: opts.logger.child({ component: 'automations' }),
   })
-  const hub = new WsHub(registry, bus, clock, opts.logger.child({ component: 'ws' }), { scenes, automations })
+  const hub = new WsHub(registry, bus, clock, opts.logger.child({ component: 'ws' }), { scenes, automations, propertyId: () => house.house.id })
   automations.onChange(() => hub.broadcast({ type: 'automations', automations: automations.list() }))
   await automations.start()
 
@@ -121,7 +124,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
   // laissés tranquilles par défaut, et le WebSocket ne passe pas par ce crochet.
   await app.register(fastifyCompress, { global: true })
 
-  registerRoutes(app, { registry, scenes, host, house, hub, history, automations, startedAt: clock.now() })
+  registerRoutes(app, { registry, scenes, host, house, hub, history, automations, startedAt: clock.now(), ...(opts.properties ? { properties: opts.properties } : {}) })
   host.registerRoutes(app)
   await registerMcp(app, { registry, scenes, host, house, auth: mcpAuth })
   registerMcpUserRoutes(app, { usersFile: mcpConfig.MCP_USERS_FILE })

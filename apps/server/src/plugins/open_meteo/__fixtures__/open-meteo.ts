@@ -1,5 +1,5 @@
 // Réponses CAPTURÉES le 2026-09-16 vers 09:50 (heure de Paris) sur les deux API d'Open-Meteo, pour
-// l'origine de `house/demo-house.json` (Dijon, Côte-d'Or). Telles que le service les a envoyées,
+// l'origine de `house/demo-house.json` (Dijon). Telles que le service les a envoyées,
 // avec ses particularités :
 //   - `timeformat=unixtime` : toutes les heures sont en SECONDES epoch, les `daily.time` valent le
 //     minuit LOCAL du jour (le fuseau est celui de `timezone=auto`) ;

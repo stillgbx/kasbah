@@ -104,7 +104,7 @@ describe('SearchBar', () => {
   it("focalise le NIVEAU de l'appareil, sinon l'étage au-dessus le cacherait", async () => {
     const { w, house, type } = await setup()
     expect(house.floorTab).toBe('all')                 // « Tout » : rien n'est masqué, le toit est posé dessus
-    await type('plafonnier')
+    await type('plafonnier salon')
     await w.findAll('.search__row')[0]!.trigger('click')
     expect(house.selectedKey).toBe('light.salon')
     expect(house.focusedLevelId).toBe('rdc')           // la scène masque alors étage et toit

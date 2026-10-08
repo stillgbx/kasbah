@@ -69,6 +69,27 @@ export const pluginInfoSchema = z.object({
 export type PluginInfo = z.infer<typeof pluginInfoSchema>
 
 export const pluginsResponseSchema = z.object({ plugins: z.array(pluginInfoSchema) })
+
+/**
+ * Une PROPRIÉTÉ que l'application sait montrer : une maison, un appartement. Aujourd'hui seules les
+ * propriétés de démonstration se choisissent (mode démo) ; une installation réelle n'en a qu'une, et
+ * la liste ne compte alors qu'elle — le sélecteur ne s'affiche pas.
+ */
+export const PROPERTY_KINDS = ['house', 'apartment'] as const
+export type PropertyKind = (typeof PROPERTY_KINDS)[number]
+export const propertySummarySchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  kind: z.enum(PROPERTY_KINDS),
+})
+export type PropertySummary = z.infer<typeof propertySummarySchema>
+/** `GET /api/properties` : les propriétés et celle qui est montrée. `switchable` = on peut en changer. */
+export const propertiesResponseSchema = z.object({
+  activeId: z.string().min(1),
+  switchable: z.boolean(),
+  properties: z.array(propertySummarySchema),
+})
+export type PropertiesResponse = z.infer<typeof propertiesResponseSchema>
 export type PluginsResponse = z.infer<typeof pluginsResponseSchema>
 
 export const healthResponseSchema = z.object({

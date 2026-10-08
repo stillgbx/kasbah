@@ -2,6 +2,7 @@
   "app": { "name": "Kasbah" },
   "nav": { "main": "Navigation", "home": "Home", "energy": "Energy", "water": "Water", "heating": "Heating", "vehicles": "Vehicles", "robots": "Robots", "pets": "Pets", "weather": "Weather", "agenda": "Calendar", "school": "School", "settings": "Settings", "lights": "Lights", "covers": "Covers", "cameras": "Cameras", "media": "Media", "music": "Music", "automations": "Automations", "tens": "TENS" },
   "alerts": { "pending": "{view} · alert pending", "dismiss": "Dismiss", "dismissHint": "Stop flagging it on the rail" },
+  "properties": { "title": "Property", "switch": "Switch property (current: {name})", "hint": "Demo mode: three properties to see everything. Switching reloads the app on the other home and its simulated devices.", "kinds": { "house": "House", "apartment": "Apartment" } },
   "common": {
     "showIn3d": "Show in the 3D view",
     "cancel": "Cancel", "close": "Close", "back": "Back", "retry": "Retry", "all": "All", "none": "None", "unavailable": "Unavailable",

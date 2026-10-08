@@ -6,6 +6,8 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 import { NAV_ITEMS, visibleNavItems } from '../../lib/navItems'
 import { useLocalPluginsStore } from '../../stores/localPlugins'
 import { useAlertsStore } from '../../stores/alerts'
+import { usePropertiesStore } from '../../stores/properties'
+import PropertyList from './PropertyList.vue'
 
 // Rail de navigation (72 px) : initiales de la maison, vues, puis les réglages tout en bas. Sur un
 // téléphone, il DÉFILE : resserré à gauche en paysage, en barre horizontale en bas en portrait.
@@ -13,6 +15,8 @@ const route = useRoute()
 /** Entrée du rail à allumer : une sous-page (l'édition d'une automatisation) nomme sa vue dans `meta.nav`. */
 const current = computed(() => (route.meta.nav as string | undefined) ?? route.name)
 const house = useHouseStore()
+// Plusieurs propriétés (mode démo) : le pavé d'initiales devient le sélecteur, à la même taille.
+const properties = usePropertiesStore()
 
 const initials = computed(() => {
   const words = (house.house?.name ?? 'Kasbah').split(/\s+/).filter((w) => w.length > 2 || /^[A-Z0-9]/.test(w))
@@ -52,7 +56,17 @@ watch(current, () => void nextTick(() => {
 <template>
   <nav class="rail" :aria-label="$t('nav.main')">
     <div ref="scroller" class="rail__scroll">
-      <div class="rail__avatar" :title="house.house?.name">{{ initials }}</div>
+      <v-menu v-if="properties.switchable" location="end top" :offset="10">
+        <template #activator="{ props: menu }">
+          <button v-bind="menu" type="button" class="rail__avatar rail__avatar--btn" :title="house.house?.name"
+                  :aria-label="$t('properties.switch', { name: house.house?.name ?? '' })">{{ initials }}</button>
+        </template>
+        <div class="card rail__props">
+          <div class="section-label rail__props-title">{{ $t('properties.title') }}</div>
+          <PropertyList />
+        </div>
+      </v-menu>
+      <div v-else class="rail__avatar" :title="house.house?.name">{{ initials }}</div>
       <router-link v-for="it in items" :key="it.name" v-slot="{ navigate }" :to="{ name: it.name }" custom>
         <button type="button" class="rail__btn" :data-on="current === it.name ? '1' : '0'" :title="$t(it.label)"
                 :aria-label="alerts.viewSeverity(it.name) ? $t('alerts.pending', { view: $t(it.label) }) : $t(it.label)" @click="navigate">
@@ -114,6 +128,10 @@ watch(current, () => void nextTick(() => {
   width: 38px; height: 38px; border-radius: 12px; background: var(--accent); color: var(--on-accent);
   display: grid; place-items: center; font-weight: 700; font-size: 15px; margin-bottom: 14px;
 }
+.rail__avatar--btn { border: 0; padding: 0; font: inherit; font-weight: 700; font-size: 15px; cursor: pointer; }
+.rail__avatar--btn:hover { filter: brightness(1.08); }
+.rail__props { padding: 8px; min-width: 260px; max-width: min(320px, 85vw); }
+.rail__props-title { padding: 2px 10px 6px; }
 .rail__btn {
   width: 52px; height: 52px; border-radius: 16px; border: 0; background: transparent; color: var(--muted);
   display: grid; place-items: center; transition: background .15s, color .15s;

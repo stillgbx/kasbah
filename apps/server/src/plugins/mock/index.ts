@@ -1,4 +1,4 @@
-import { DEVICE_KINDS, type Command, type DeviceDescriptor, type DeviceKind, type PluginHealth, type StatePatch } from '@kasbah/shared'
+import { DEVICE_KINDS, type Command, type DeviceDescriptor, type DeviceKind, type PluginHealth, type SceneRecall, type StatePatch } from '@kasbah/shared'
 import { SCENARIO_NAMES, SimError, Simulation, type SimErrorCode } from '@kasbah/mock-sim'
 import { z } from 'zod'
 import { PluginError, type DevicePlugin, type PluginContext, type PluginErrorCode } from '../../core/plugin'
@@ -20,9 +20,9 @@ export type MockConfig = z.infer<typeof mockConfigSchema>
  * ouvrants par TaHoma, le solaire par Enphase), ses équivalents simulés n'ont plus de raison
  * d'encombrer les listes en « hors plan ». Décocher emporte ce qui appartient à l'installation du
  * kind : sortir `energy` retire le site solaire ET ses panneaux, qui sont des capteurs
- * (`Simulation.hiddenFor`). `camera` n'est pas simulé : il n'est pas dans la liste.
+ * (`Simulation.hiddenFor`). Tous les kinds sont simulés, caméras et sonnettes comprises (sans flux).
  */
-const SIMULATED_KINDS = DEVICE_KINDS.filter((k) => k !== 'camera')
+const SIMULATED_KINDS = [...DEVICE_KINDS]
 const MOCK_PARTS = SIMULATED_KINDS.map((kind) => ({ id: kind, labelKey: `kinds.${kind}`, enabledByDefault: true }))
 
 const CODE_MAP: Record<SimErrorCode, PluginErrorCode> = {
@@ -72,13 +72,28 @@ export function createMockPlugin(): DevicePlugin {
       }
       // la simulation continue de faire vivre les appareils exclus ; on filtre à la sortie, sinon
       // le registre journalise un « patch pour un appareil inconnu » à chaque tick
+      // ambiances : elles posent des lampes, donc elles tombent avec les lampes simulées
+      const withScenes = !excluded.includes('light')
+      if (withScenes) {
+        ctx!.emitScenes(sim!.scenes().map((s) => ({ ...s, id: `mock:${s.externalId}`, pluginId: 'mock', autoDynamic: false })))
+        for (const s of sim!.scenes()) ctx!.emitSceneState(s.externalId, sim!.sceneState(s.externalId))
+      }
       sim!.start(
         (id, patch) => { if (!hidden.has(id)) ctx!.emitState(id, patch) },
         (id, available) => { if (!hidden.has(id)) ctx!.setAvailable(id, available) },
+        (id, event) => { if (!hidden.has(id)) ctx!.emitEvent(id, event) },
+        (id, active) => { if (withScenes) ctx!.emitSceneState(id, active) },
       )
     },
     async execute(externalId: string, command: Command) {
       try { await sim!.execute(externalId, command) }
+      catch (err) {
+        if (err instanceof SimError) throw new PluginError(CODE_MAP[err.code], err.message, { cause: err })
+        throw err
+      }
+    },
+    async recallScene(externalId: string, recall: SceneRecall) {
+      try { await sim!.recallScene(externalId, recall) }
       catch (err) {
         if (err instanceof SimError) throw new PluginError(CODE_MAP[err.code], err.message, { cause: err })
         throw err

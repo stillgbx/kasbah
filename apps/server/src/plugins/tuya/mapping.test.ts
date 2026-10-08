@@ -24,9 +24,9 @@ import {
 
 describe('tuya mapping', () => {
   it('dérive les noms du physique sans répéter la pièce', () => {
-    expect(deriveNames('Ventilateur plafonnier chambre 2')).toEqual({
-      fan: 'Ventilateur chambre 2',
-      light: 'Plafonnier chambre 2',
+    expect(deriveNames('Ventilateur plafonnier Bureau')).toEqual({
+      fan: 'Ventilateur Bureau',
+      light: 'Plafonnier Bureau',
     })
   })
 
@@ -35,7 +35,7 @@ describe('tuya mapping', () => {
       id: 'bf0000000000000000abcd',
       key: 'xxxxxxxxxxxxxxxx',
       ip: '192.168.1.56',
-      name: 'Ventilateur plafonnier chambre 2',
+      name: 'Ventilateur plafonnier Bureau',
       version: '3.5',
     })
     expect(deviceDescriptorSchema.parse(light).kind).toBe('light')

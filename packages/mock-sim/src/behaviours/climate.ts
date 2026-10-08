@@ -1,15 +1,24 @@
-import type { ClimateMode } from '@kasbah/shared'
+import type { ClimateClass, ClimateMode } from '@kasbah/shared'
 import { SimError, type SimDevice } from '../types'
 import { clamp, descriptor, round1 } from './common'
 
-export interface ClimateOptions { name: string; mode?: ClimateMode; targetTempC?: number; currentTempC?: number; heatPowerW?: number }
+export interface ClimateOptions {
+  name: string
+  mode?: ClimateMode
+  targetTempC?: number
+  currentTempC?: number
+  heatPowerW?: number
+  /** Thermostat au mur ou pompe à chaleur au sol : ne décide que le marqueur 3D. Absent = rien déclaré. */
+  deviceClass?: ClimateClass
+}
 
 /** PAC : l'intérieur tend vers la consigne (τ 20 min) ou vers l'extérieur (τ 4 h) si éteinte. */
 export function climate(externalId: string, o: ClimateOptions): SimDevice<'climate'> {
   const heatPowerW = o.heatPowerW ?? 1800
   const dev: SimDevice<'climate'> = {
     descriptor: descriptor(externalId, 'climate', o.name, ['hvac_mode', 'target_temp', 'current_temp', 'humidity'], {
-      manufacturer: 'Mock', model: 'Heat pump', targetTempC: [16, 28],
+      manufacturer: 'Mock', model: o.deviceClass === 'thermostat' ? 'Thermostat' : 'Heat pump', targetTempC: [16, 28],
+      ...(o.deviceClass ? { climate: { modes: ['off', 'heat', 'cool', 'auto', 'eco'], deviceClass: o.deviceClass } } : {}),
     }),
     state: {
       kind: 'climate', updatedAt: 0, available: true,

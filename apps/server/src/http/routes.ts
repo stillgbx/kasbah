@@ -1,6 +1,7 @@
 import { applyHouseEditToJson, houseEditPatchSchema, SurveyError, addGardenItemToJson, addOpeningToJson, addParkingToJson, gardenItemPatchSchema, newGardenItemSchema, patchGardenItemInJson, removeGardenItemFromJson, assertCommandAllowed, automationBodySchema, automationIdSchema, automationPatchSchema, commandSchema, devicePlacementSchema, newOpeningSchema, newParkingSchema, openingPatchSchema, panelArrayPatchSchema, parkingPatchSchema, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, releaseNotesLang, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, roomOrderSchema, polygonSchema, reliefSchema, sceneTuningSchema, setReliefInJson, setTerrainInJson, setRenderTuningInJson, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { updateHouseFile, type LoadedHouse } from '../config/house'
+import { singleProperty, type PropertyHost } from '../config/properties'
 import type { AutomationEngine } from '../core/automations/engine'
 import type { PluginHost } from '../core/plugin-host'
 import type { DeviceRegistry } from '../core/registry'
@@ -18,6 +19,8 @@ export interface RoutesDeps {
   history: EnergyHistory
   automations: AutomationEngine
   startedAt: number
+  /** Propriétés démo entre lesquelles basculer ; absent = la seule maison du fichier. */
+  properties?: PropertyHost
 }
 
 // REST : lecture (maison, appareils, santé) + commandes. L'état résultant d'une commande n'est
@@ -323,6 +326,17 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
     const run = await deps.automations.runNow(req.params.id)
     if (!run) return sendError(reply, 404, 'NOT_FOUND', `unknown automation "${req.params.id}"`)
     return { run }
+  })
+
+  // Propriétés : la liste, et la bascule (serveur de démonstration seulement). La bascule répond
+  // AVANT de reconstruire le serveur sur l'autre maison ; le client attend qu'elle soit nommée.
+  app.get('/api/properties', async () => deps.properties?.list() ?? singleProperty(deps.house.house))
+
+  app.post<{ Params: { id: string } }>('/api/properties/:id/select', async (req, reply) => {
+    if (!deps.properties) return sendError(reply, 409, 'NOT_SWITCHABLE', 'this server shows a single property (KASBAH_HOUSE_FILE)')
+    if (!deps.properties.list().properties.some((p) => p.id === req.params.id)) return sendError(reply, 404, 'NOT_FOUND', `unknown property "${req.params.id}"`)
+    deps.properties.select(req.params.id)
+    return reply.code(202).send({ ok: true })
   })
 
   // Plugins : l'inventaire complet (tous déclarés, actifs ou non) et ce qu'on en choisit. Le choix

@@ -14,7 +14,7 @@ const DEVICE = {
   id: 'bf0000000000000000abcd',
   key: 'xxxxxxxxxxxxxxxx',
   ip: '192.168.1.56',
-  name: 'Ventilateur plafonnier chambre 2',
+  name: 'Ventilateur plafonnier Bureau',
   version: '3.5',
 }
 

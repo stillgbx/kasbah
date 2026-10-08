@@ -16,7 +16,7 @@ import { evaluatePredicate, resolveTarget } from './evaluate'
 import { automationsPathFor, createAutomationsFile, type AutomationsStore } from './store'
 
 const HOUSE = resolve(import.meta.dirname, '../../../../../house/demo-house.json')
-// Origine de la maison de démo, et le « travail » du scénario mock (2,3 km)
+// Origine de la maison de démo, et le « travail » du scénario mock (1,4 km)
 const HOME = { lat: 47.309343, lon: 5.045591, at: 0 }
 const WORK = { lat: 47.3216, lon: 5.0415, at: 0 }
 

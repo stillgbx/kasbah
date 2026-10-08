@@ -1,0 +1,2284 @@
+{
+  "schemaVersion": 1,
+  "id": "tilleuls",
+  "name": "Les Tilleuls",
+  "meta": {
+    "demo": {
+      "scenario": "tilleuls",
+      "kind": "house"
+    },
+    "note": "Propriété de démonstration : maison familiale R+1 à Dijon, toit à deux pans, garage double sous une terrasse d'étage, piscine, jardin en pente. Liée appareil par appareil au scénario `tilleuls` du plugin mock."
+  },
+  "origin": {
+    "lat": 47.309343,
+    "lon": 5.045591,
+    "alt": 245,
+    "heading": 0
+  },
+  "defaults": {
+    "levelHeight": 2.6,
+    "slabThickness": 0.25,
+    "interiorWallThickness": 0.1,
+    "exteriorWallThickness": 0.3,
+    "doorHeight": 2.1,
+    "windowSill": 0.9
+  },
+  "style": {
+    "facade": {
+      "id": "rough-plaster",
+      "tint": "#ece3d3"
+    }
+  },
+  "levels": [
+    {
+      "id": "rdc",
+      "name": "Rez-de-chaussée",
+      "shortName": "RDC",
+      "elevation": 0.2,
+      "height": 2.6,
+      "roomOrder": [
+        "entree",
+        "salon",
+        "cuisine",
+        "bureau",
+        "home-cinema",
+        "escalier",
+        "wc",
+        "garage",
+        "buanderie",
+        "local-technique"
+      ]
+    },
+    {
+      "id": "etage",
+      "name": "Étage",
+      "elevation": 3.05,
+      "height": 2.5,
+      "outline": [
+        [
+          -0.3,
+          -0.3
+        ],
+        [
+          14.3,
+          -0.3
+        ],
+        [
+          14.3,
+          10.3
+        ],
+        [
+          -0.3,
+          10.3
+        ]
+      ],
+      "roomOrder": [
+        "palier",
+        "suite",
+        "salle-de-bain",
+        "dressing",
+        "chambre-1",
+        "chambre-2",
+        "terrasse"
+      ]
+    },
+    {
+      "id": "toit",
+      "name": "Toit",
+      "elevation": 5.55,
+      "height": 0.3
+    }
+  ],
+  "rooms": [
+    {
+      "id": "bureau",
+      "levelId": "rdc",
+      "name": "Bureau",
+      "polygon": [
+        [
+          0,
+          0
+        ],
+        [
+          5,
+          0
+        ],
+        [
+          5,
+          4.6
+        ],
+        [
+          0,
+          4.6
+        ]
+      ],
+      "style": {
+        "floor": "wood",
+        "floorFinish": {
+          "id": "oak"
+        },
+        "wallFinish": {
+          "id": "matte-paint",
+          "tint": "#dfe6e0"
+        }
+      },
+      "openings": [
+        {
+          "id": "fen-bureau-sud",
+          "type": "window",
+          "segment": 0,
+          "offset": 1.8,
+          "width": 1.4,
+          "height": 1.35,
+          "sill": 0.9,
+          "name": "Fenêtre du bureau"
+        },
+        {
+          "id": "fen-bureau-ouest",
+          "type": "window",
+          "segment": 3,
+          "offset": 1.7,
+          "width": 1.2,
+          "height": 1.35,
+          "sill": 0.9
+        },
+        {
+          "id": "porte-bureau",
+          "type": "door",
+          "segment": 1,
+          "offset": 3.2,
+          "width": 0.9,
+          "height": 2.1,
+          "material": "wood",
+          "color": "#f4efe6"
+        }
+      ]
+    },
+    {
+      "id": "home-cinema",
+      "levelId": "rdc",
+      "name": "Home cinéma",
+      "polygon": [
+        [
+          0,
+          4.8
+        ],
+        [
+          5,
+          4.8
+        ],
+        [
+          5,
+          10
+        ],
+        [
+          0,
+          10
+        ]
+      ],
+      "style": {
+        "floor": "carpet",
+        "floorFinish": {
+          "id": "beige-carpet"
+        },
+        "wallFinish": {
+          "id": "matte-paint",
+          "tint": "#3a3540"
+        }
+      },
+      "openings": [
+        {
+          "id": "fen-cinema",
+          "type": "window",
+          "segment": 3,
+          "offset": 2,
+          "width": 1.6,
+          "height": 1.35,
+          "sill": 0.9
+        },
+        {
+          "id": "porte-cinema",
+          "type": "door",
+          "segment": 1,
+          "offset": 1,
+          "width": 0.9,
+          "height": 2.1
+        }
+      ]
+    },
+    {
+      "id": "entree",
+      "levelId": "rdc",
+      "name": "Entrée",
+      "kind": "corridor",
+      "polygon": [
+        [
+          5.2,
+          0
+        ],
+        [
+          7.6,
+          0
+        ],
+        [
+          7.6,
+          4.6
+        ],
+        [
+          5.2,
+          4.6
+        ]
+      ],
+      "style": {
+        "floor": "tile",
+        "floorFinish": {
+          "id": "cement-tile"
+        }
+      },
+      "openings": [
+        {
+          "id": "porte-entree",
+          "type": "door",
+          "segment": 0,
+          "offset": 0.7,
+          "width": 1,
+          "height": 2.2,
+          "name": "Porte d'entrée",
+          "material": "wood",
+          "color": "#6b3f2a"
+        },
+        {
+          "id": "porte-salon",
+          "type": "glass-door",
+          "segment": 1,
+          "offset": 1.6,
+          "width": 1.4,
+          "height": 2.15,
+          "leaves": 2,
+          "name": "Porte vitrée du salon"
+        },
+        {
+          "id": "passage-escalier",
+          "type": "passage",
+          "segment": 2,
+          "offset": 0.6,
+          "width": 1.2,
+          "height": 2.1
+        }
+      ]
+    },
+    {
+      "id": "escalier",
+      "levelId": "rdc",
+      "name": "Escalier",
+      "kind": "stairs",
+      "polygon": [
+        [
+          5.2,
+          4.8
+        ],
+        [
+          7.6,
+          4.8
+        ],
+        [
+          7.6,
+          7.8
+        ],
+        [
+          5.2,
+          7.8
+        ]
+      ],
+      "style": {
+        "floor": "wood",
+        "floorFinish": {
+          "id": "light-oak"
+        }
+      }
+    },
+    {
+      "id": "wc",
+      "levelId": "rdc",
+      "name": "WC",
+      "polygon": [
+        [
+          5.2,
+          8
+        ],
+        [
+          7.6,
+          8
+        ],
+        [
+          7.6,
+          10
+        ],
+        [
+          5.2,
+          10
+        ]
+      ],
+      "style": {
+        "floor": "tile",
+        "floorFinish": {
+          "id": "cement-tile"
+        },
+        "wallFinish": {
+          "id": "white-tile"
+        }
+      },
+      "openings": [
+        {
+          "id": "porte-wc",
+          "type": "door",
+          "segment": 0,
+          "offset": 0.8,
+          "width": 0.8,
+          "height": 2.1
+        },
+        {
+          "id": "fen-wc",
+          "type": "window",
+          "segment": 2,
+          "offset": 0.9,
+          "width": 0.6,
+          "height": 0.6,
+          "sill": 1.4
+        }
+      ]
+    },
+    {
+      "id": "salon",
+      "levelId": "rdc",
+      "name": "Salon",
+      "polygon": [
+        [
+          7.8,
+          0
+        ],
+        [
+          14,
+          0
+        ],
+        [
+          14,
+          5.4
+        ],
+        [
+          7.8,
+          5.4
+        ]
+      ],
+      "walls": [
+        {
+          "segment": 2,
+          "kind": "none"
+        }
+      ],
+      "style": {
+        "floor": "wood",
+        "floorFinish": {
+          "id": "oak"
+        },
+        "wallFinish": {
+          "id": "matte-paint",
+          "tint": "#f3eee6"
+        }
+      },
+      "openings": [
+        {
+          "id": "baie-salon",
+          "type": "bay",
+          "segment": 0,
+          "offset": 1,
+          "width": 3,
+          "height": 2.2,
+          "name": "Baie du salon",
+          "material": "metal",
+          "color": "#3b3f44"
+        },
+        {
+          "id": "fen-salon",
+          "type": "window",
+          "segment": 0,
+          "offset": 4.4,
+          "width": 1.2,
+          "height": 1.35,
+          "sill": 0.9
+        }
+      ]
+    },
+    {
+      "id": "cuisine",
+      "levelId": "rdc",
+      "name": "Cuisine",
+      "polygon": [
+        [
+          7.8,
+          5.4
+        ],
+        [
+          14,
+          5.4
+        ],
+        [
+          14,
+          10
+        ],
+        [
+          7.8,
+          10
+        ]
+      ],
+      "walls": [
+        {
+          "segment": 0,
+          "kind": "none"
+        }
+      ],
+      "style": {
+        "floor": "tile",
+        "floorFinish": {
+          "id": "terrazzo"
+        }
+      },
+      "openings": [
+        {
+          "id": "porte-buanderie",
+          "type": "door",
+          "segment": 1,
+          "offset": 2,
+          "width": 0.9,
+          "height": 2.1
+        },
+        {
+          "id": "porte-jardin",
+          "type": "glass-door",
+          "segment": 2,
+          "offset": 1,
+          "width": 2.2,
+          "height": 2.15,
+          "leaves": 2,
+          "name": "Porte-fenêtre du jardin"
+        },
+        {
+          "id": "fen-cuisine",
+          "type": "window",
+          "segment": 2,
+          "offset": 4,
+          "width": 1.4,
+          "height": 1.1,
+          "sill": 1.05
+        }
+      ]
+    },
+    {
+      "id": "garage",
+      "levelId": "rdc",
+      "name": "Garage",
+      "kind": "garage",
+      "polygon": [
+        [
+          14.2,
+          0
+        ],
+        [
+          20.6,
+          0
+        ],
+        [
+          20.6,
+          6.6
+        ],
+        [
+          14.2,
+          6.6
+        ]
+      ],
+      "style": {
+        "floor": "concrete",
+        "floorFinish": {
+          "id": "polished-concrete"
+        }
+      },
+      "openings": [
+        {
+          "id": "porte-garage-1",
+          "type": "garage",
+          "segment": 0,
+          "offset": 0.4,
+          "width": 2.6,
+          "height": 2.2,
+          "name": "Porte de garage gauche"
+        },
+        {
+          "id": "porte-garage-2",
+          "type": "garage",
+          "segment": 0,
+          "offset": 3.4,
+          "width": 2.6,
+          "height": 2.2,
+          "name": "Porte de garage droite"
+        },
+        {
+          "id": "fen-garage",
+          "type": "window",
+          "segment": 1,
+          "offset": 2.5,
+          "width": 1,
+          "height": 0.8,
+          "sill": 1.3
+        },
+        {
+          "id": "porte-garage-buanderie",
+          "type": "door",
+          "segment": 2,
+          "offset": 4,
+          "width": 0.9,
+          "height": 2.1
+        }
+      ]
+    },
+    {
+      "id": "buanderie",
+      "levelId": "rdc",
+      "name": "Buanderie",
+      "polygon": [
+        [
+          14.2,
+          6.8
+        ],
+        [
+          17.2,
+          6.8
+        ],
+        [
+          17.2,
+          10
+        ],
+        [
+          14.2,
+          10
+        ]
+      ],
+      "style": {
+        "floor": "tile",
+        "floorFinish": {
+          "id": "polished-concrete"
+        }
+      },
+      "openings": [
+        {
+          "id": "fen-buanderie",
+          "type": "window",
+          "segment": 2,
+          "offset": 1,
+          "width": 1,
+          "height": 1,
+          "sill": 1.1
+        },
+        {
+          "id": "porte-local",
+          "type": "door",
+          "segment": 1,
+          "offset": 1,
+          "width": 0.8,
+          "height": 2.1
+        }
+      ]
+    },
+    {
+      "id": "local-technique",
+      "levelId": "rdc",
+      "name": "Local technique",
+      "polygon": [
+        [
+          17.4,
+          6.8
+        ],
+        [
+          20.6,
+          6.8
+        ],
+        [
+          20.6,
+          10
+        ],
+        [
+          17.4,
+          10
+        ]
+      ],
+      "style": {
+        "floor": "concrete",
+        "floorFinish": {
+          "id": "polished-concrete"
+        }
+      },
+      "openings": [
+        {
+          "id": "porte-local-ext",
+          "type": "door",
+          "segment": 1,
+          "offset": 1.2,
+          "width": 0.9,
+          "height": 2.1,
+          "material": "metal",
+          "color": "#5b6066"
+        }
+      ]
+    },
+    {
+      "id": "chambre-1",
+      "levelId": "etage",
+      "name": "Chambre 1",
+      "polygon": [
+        [
+          0,
+          0
+        ],
+        [
+          5,
+          0
+        ],
+        [
+          5,
+          4.6
+        ],
+        [
+          0,
+          4.6
+        ]
+      ],
+      "style": {
+        "floor": "carpet",
+        "floorFinish": {
+          "id": "beige-carpet"
+        },
+        "wallFinish": {
+          "id": "matte-paint",
+          "tint": "#e7d9c4"
+        }
+      },
+      "openings": [
+        {
+          "id": "fen-chambre-1",
+          "type": "window",
+          "segment": 0,
+          "offset": 1.8,
+          "width": 1.4,
+          "height": 1.3,
+          "sill": 0.9
+        },
+        {
+          "id": "porte-chambre-1",
+          "type": "door",
+          "segment": 1,
+          "offset": 3.4,
+          "width": 0.8,
+          "height": 2.05
+        }
+      ]
+    },
+    {
+      "id": "chambre-2",
+      "levelId": "etage",
+      "name": "Chambre 2",
+      "polygon": [
+        [
+          0,
+          4.8
+        ],
+        [
+          5,
+          4.8
+        ],
+        [
+          5,
+          10
+        ],
+        [
+          0,
+          10
+        ]
+      ],
+      "style": {
+        "floor": "wood",
+        "floorFinish": {
+          "id": "light-oak"
+        },
+        "wallFinish": {
+          "id": "matte-paint",
+          "tint": "#d6e2ea"
+        }
+      },
+      "openings": [
+        {
+          "id": "fen-chambre-2",
+          "type": "window",
+          "segment": 2,
+          "offset": 1.8,
+          "width": 1.4,
+          "height": 1.3,
+          "sill": 0.9
+        },
+        {
+          "id": "porte-chambre-2",
+          "type": "door",
+          "segment": 1,
+          "offset": 0.6,
+          "width": 0.8,
+          "height": 2.05
+        }
+      ]
+    },
+    {
+      "id": "palier",
+      "levelId": "etage",
+      "name": "Palier",
+      "kind": "corridor",
+      "polygon": [
+        [
+          5.2,
+          0
+        ],
+        [
+          7.6,
+          0
+        ],
+        [
+          7.6,
+          10
+        ],
+        [
+          5.2,
+          10
+        ]
+      ],
+      "style": {
+        "floor": "wood",
+        "floorFinish": {
+          "id": "light-oak"
+        }
+      },
+      "openings": [
+        {
+          "id": "fen-palier",
+          "type": "window",
+          "segment": 0,
+          "offset": 0.8,
+          "width": 0.8,
+          "height": 1.1,
+          "sill": 1
+        },
+        {
+          "id": "velux-palier",
+          "type": "roof-window",
+          "x": 6.4,
+          "y": 2.4,
+          "yaw": 180,
+          "width": 0.78,
+          "height": 1.18,
+          "name": "Fenêtre de toit du palier"
+        }
+      ]
+    },
+    {
+      "id": "suite",
+      "levelId": "etage",
+      "name": "Suite parentale",
+      "polygon": [
+        [
+          7.8,
+          0
+        ],
+        [
+          14,
+          0
+        ],
+        [
+          14,
+          5.4
+        ],
+        [
+          7.8,
+          5.4
+        ]
+      ],
+      "style": {
+        "floor": "wood",
+        "floorFinish": {
+          "id": "oak"
+        },
+        "wallFinish": {
+          "id": "matte-paint",
+          "tint": "#efe6dc"
+        }
+      },
+      "openings": [
+        {
+          "id": "fen-suite",
+          "type": "window",
+          "segment": 0,
+          "offset": 2.2,
+          "width": 1.6,
+          "height": 1.3,
+          "sill": 0.9
+        },
+        {
+          "id": "baie-terrasse",
+          "type": "bay",
+          "segment": 1,
+          "offset": 1.5,
+          "width": 2.4,
+          "height": 2.15,
+          "name": "Baie de la terrasse",
+          "material": "metal",
+          "color": "#3b3f44"
+        },
+        {
+          "id": "porte-dressing",
+          "type": "door",
+          "segment": 2,
+          "offset": 0.8,
+          "width": 0.8,
+          "height": 2.05
+        },
+        {
+          "id": "porte-suite",
+          "type": "door",
+          "segment": 3,
+          "offset": 3,
+          "width": 0.9,
+          "height": 2.05
+        }
+      ]
+    },
+    {
+      "id": "salle-de-bain",
+      "levelId": "etage",
+      "name": "Salle de bain",
+      "polygon": [
+        [
+          7.8,
+          5.6
+        ],
+        [
+          11.2,
+          5.6
+        ],
+        [
+          11.2,
+          10
+        ],
+        [
+          7.8,
+          10
+        ]
+      ],
+      "style": {
+        "floor": "tile",
+        "floorFinish": {
+          "id": "marble"
+        },
+        "wallFinish": {
+          "id": "white-tile"
+        }
+      },
+      "openings": [
+        {
+          "id": "porte-sdb",
+          "type": "door",
+          "segment": 3,
+          "offset": 1,
+          "width": 0.8,
+          "height": 2.05
+        },
+        {
+          "id": "fen-sdb",
+          "type": "window",
+          "segment": 2,
+          "offset": 1.2,
+          "width": 1,
+          "height": 0.9,
+          "sill": 1.2
+        }
+      ]
+    },
+    {
+      "id": "dressing",
+      "levelId": "etage",
+      "name": "Dressing",
+      "polygon": [
+        [
+          11.4,
+          5.6
+        ],
+        [
+          14,
+          5.6
+        ],
+        [
+          14,
+          10
+        ],
+        [
+          11.4,
+          10
+        ]
+      ],
+      "style": {
+        "floor": "wood",
+        "floorFinish": {
+          "id": "oak"
+        }
+      },
+      "openings": [
+        {
+          "id": "fen-dressing",
+          "type": "window",
+          "segment": 2,
+          "offset": 0.9,
+          "width": 0.8,
+          "height": 0.9,
+          "sill": 1.3
+        }
+      ]
+    },
+    {
+      "id": "terrasse",
+      "levelId": "etage",
+      "name": "Terrasse",
+      "kind": "terrace",
+      "polygon": [
+        [
+          14.3,
+          -0.3
+        ],
+        [
+          20.9,
+          -0.3
+        ],
+        [
+          20.9,
+          10.3
+        ],
+        [
+          14.3,
+          10.3
+        ]
+      ],
+      "style": {
+        "floorFinish": {
+          "id": "decking"
+        }
+      }
+    }
+  ],
+  "site": {
+    "elevation": 0,
+    "terrain": [
+      [
+        -16,
+        -24
+      ],
+      [
+        44,
+        -24
+      ],
+      [
+        46,
+        40
+      ],
+      [
+        -14,
+        44
+      ]
+    ],
+    "relief": {
+      "step": 4,
+      "origin": [
+        -16,
+        -24
+      ],
+      "rows": [
+        "-40 -40 -40 -40 -40 -40 -40 -40 -40 -40 -40 -40 -40 -40 -40 -40",
+        "-32 -32 -32 -32 -32 -32 -32 -32 -32 -32 -32 -32 -32 -32 -32 -32",
+        "-24 -24 -24 -24 -24 -24 -24 -24 -24 -24 -24 -24 -24 -24 -24 -24",
+        "-16 -16 -16 -16 -16 -16 -16 -16 -16 -16 -16 -16 -16 -16 -16 -16",
+        "-8 -8 -8 -8 -8 -8 -8 -8 -8 -8 -8 -8 -8 -8 -8 -8",
+        "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0",
+        "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0",
+        "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0",
+        "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0",
+        "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0",
+        "9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9",
+        "27 28 29 28 27 26 26 26 26 26 26 26 26 26 26 26",
+        "49 56 60 56 49 44 43 43 43 43 43 43 43 43 43 43",
+        "77 98 109 98 77 64 61 60 60 60 60 60 60 60 60 60",
+        "106 142 161 142 106 85 78 77 77 77 77 77 77 77 77 77",
+        "123 159 178 159 123 102 95 94 94 94 94 94 94 94 94 94",
+        "128 149 161 149 128 116 112 111 111 111 111 111 111 111 111 111",
+        "126 133 137 133 126 122 120 120 120 120 120 120 120 120 120 120"
+      ]
+    },
+    "zones": [
+      {
+        "id": "allee",
+        "name": "Allée",
+        "kind": "driveway",
+        "polygon": [
+          [
+            14,
+            -24
+          ],
+          [
+            22,
+            -24
+          ],
+          [
+            22,
+            -0.3
+          ],
+          [
+            14,
+            -0.3
+          ]
+        ]
+      },
+      {
+        "id": "chemin",
+        "name": "Chemin d'entrée",
+        "kind": "path",
+        "polygon": [
+          [
+            5.4,
+            -24
+          ],
+          [
+            7.4,
+            -24
+          ],
+          [
+            7.4,
+            -0.3
+          ],
+          [
+            5.4,
+            -0.3
+          ]
+        ]
+      },
+      {
+        "id": "terrasse-jardin",
+        "name": "Terrasse du jardin",
+        "kind": "terrace",
+        "polygon": [
+          [
+            7.5,
+            10.3
+          ],
+          [
+            14.3,
+            10.3
+          ],
+          [
+            14.3,
+            15
+          ],
+          [
+            7.5,
+            15
+          ]
+        ]
+      },
+      {
+        "id": "piscine",
+        "name": "Piscine",
+        "kind": "pool",
+        "polygon": [
+          [
+            24,
+            16
+          ],
+          [
+            34,
+            16
+          ],
+          [
+            34,
+            21
+          ],
+          [
+            24,
+            21
+          ]
+        ]
+      },
+      {
+        "id": "pelouse",
+        "name": "Pelouse",
+        "kind": "lawn",
+        "polygon": [
+          [
+            -12,
+            22
+          ],
+          [
+            42,
+            22
+          ],
+          [
+            43,
+            40
+          ],
+          [
+            -12,
+            41
+          ]
+        ]
+      },
+      {
+        "id": "pelouse-ouest",
+        "name": "Pelouse ouest",
+        "kind": "lawn",
+        "polygon": [
+          [
+            -14,
+            -8
+          ],
+          [
+            -1.5,
+            -8
+          ],
+          [
+            -1.5,
+            20
+          ],
+          [
+            -14,
+            20
+          ]
+        ]
+      },
+      {
+        "id": "potager",
+        "name": "Potager",
+        "kind": "bed",
+        "polygon": [
+          [
+            36,
+            -6
+          ],
+          [
+            42,
+            -6
+          ],
+          [
+            42,
+            8
+          ],
+          [
+            36,
+            8
+          ]
+        ]
+      }
+    ],
+    "parkings": [
+      {
+        "id": "park.garage-1",
+        "name": "Garage gauche",
+        "accepts": "vehicle",
+        "levelId": "rdc",
+        "center": [
+          15.9,
+          3.4
+        ],
+        "size": [
+          2.5,
+          5
+        ],
+        "yaw": 0
+      },
+      {
+        "id": "park.garage-2",
+        "name": "Garage droite",
+        "accepts": "vehicle",
+        "levelId": "rdc",
+        "center": [
+          18.9,
+          3.4
+        ],
+        "size": [
+          2.5,
+          5
+        ],
+        "yaw": 0
+      },
+      {
+        "id": "park.allee",
+        "name": "Allée",
+        "accepts": "vehicle",
+        "center": [
+          18,
+          -8
+        ],
+        "size": [
+          2.5,
+          5
+        ],
+        "yaw": 0,
+        "margin": 4
+      },
+      {
+        "id": "park.tondeuse",
+        "name": "Base de la tondeuse",
+        "accepts": "mower",
+        "deviceId": "mock:tl-mower",
+        "center": [
+          -8,
+          25
+        ],
+        "size": [
+          0.6,
+          0.8
+        ],
+        "yaw": 90,
+        "margin": 8
+      },
+      {
+        "id": "park.aspirateur",
+        "name": "Base de l'aspirateur",
+        "accepts": "vacuum",
+        "deviceId": "mock:tl-vacuum",
+        "levelId": "rdc",
+        "center": [
+          6.4,
+          4.25
+        ],
+        "size": [
+          0.4,
+          0.4
+        ],
+        "yaw": 180
+      }
+    ],
+    "garden": [
+      {
+        "id": "garden.tilleul-1",
+        "kind": "broadleaf",
+        "center": [
+          -6,
+          2
+        ],
+        "height": 11,
+        "yaw": 20
+      },
+      {
+        "id": "garden.tilleul-2",
+        "kind": "broadleaf",
+        "center": [
+          -9,
+          12
+        ],
+        "height": 12,
+        "yaw": 140
+      },
+      {
+        "id": "garden.chene",
+        "kind": "broadleaf",
+        "species": "oak",
+        "center": [
+          30,
+          34
+        ],
+        "height": 14,
+        "yaw": 60
+      },
+      {
+        "id": "garden.bouleau-1",
+        "kind": "broadleaf",
+        "species": "silver-birch",
+        "center": [
+          38,
+          24
+        ],
+        "height": 9,
+        "yaw": 10
+      },
+      {
+        "id": "garden.bouleau-2",
+        "kind": "broadleaf",
+        "species": "silver-birch",
+        "center": [
+          40,
+          28
+        ],
+        "height": 8,
+        "yaw": 200
+      },
+      {
+        "id": "garden.cerisier",
+        "kind": "fruit",
+        "species": "cherry",
+        "center": [
+          4,
+          26
+        ],
+        "height": 5.5,
+        "yaw": 30
+      },
+      {
+        "id": "garden.pommier",
+        "kind": "fruit",
+        "species": "apple",
+        "center": [
+          12,
+          30
+        ],
+        "height": 4.5,
+        "yaw": 75
+      },
+      {
+        "id": "garden.noyer",
+        "kind": "broadleaf",
+        "species": "walnut",
+        "center": [
+          -4,
+          34
+        ],
+        "height": 10,
+        "yaw": 300
+      },
+      {
+        "id": "garden.cedre",
+        "kind": "conifer",
+        "species": "cedar",
+        "center": [
+          20,
+          38
+        ],
+        "height": 15,
+        "yaw": 0
+      },
+      {
+        "id": "garden.sapin",
+        "kind": "conifer",
+        "center": [
+          -12,
+          30
+        ],
+        "height": 9
+      },
+      {
+        "id": "garden.olivier",
+        "kind": "fruit",
+        "species": "olive",
+        "center": [
+          16,
+          13
+        ],
+        "height": 3.5,
+        "yaw": 45
+      },
+      {
+        "id": "garden.figuier",
+        "kind": "fruit",
+        "species": "fig",
+        "center": [
+          36,
+          14
+        ],
+        "height": 3.8,
+        "yaw": 120
+      },
+      {
+        "id": "garden.palmier",
+        "kind": "palm",
+        "center": [
+          35.5,
+          18.5
+        ],
+        "height": 5
+      },
+      {
+        "id": "garden.bambou-1",
+        "kind": "bamboo",
+        "species": "green-bamboo",
+        "center": [
+          44,
+          2
+        ],
+        "height": 5
+      },
+      {
+        "id": "garden.bambou-2",
+        "kind": "bamboo",
+        "species": "golden-bamboo",
+        "center": [
+          44,
+          6
+        ],
+        "height": 4.5
+      },
+      {
+        "id": "garden.laurier",
+        "kind": "shrub",
+        "species": "oleander",
+        "center": [
+          22.5,
+          14
+        ],
+        "height": 1.8
+      },
+      {
+        "id": "garden.rosier-1",
+        "kind": "shrub",
+        "species": "rose",
+        "center": [
+          3,
+          -3
+        ],
+        "height": 1.2
+      },
+      {
+        "id": "garden.rosier-2",
+        "kind": "shrub",
+        "species": "rose",
+        "center": [
+          9.5,
+          -3
+        ],
+        "height": 1.2
+      },
+      {
+        "id": "garden.buisson-1",
+        "kind": "shrub",
+        "center": [
+          -2.5,
+          -6
+        ],
+        "height": 1.4
+      },
+      {
+        "id": "garden.buisson-2",
+        "kind": "shrub",
+        "center": [
+          12.5,
+          -5
+        ],
+        "height": 1.1
+      },
+      {
+        "id": "garden.rocher-1",
+        "kind": "rock",
+        "center": [
+          -9,
+          33
+        ],
+        "height": 0.7,
+        "yaw": 25
+      },
+      {
+        "id": "garden.rocher-2",
+        "kind": "rock",
+        "center": [
+          -7,
+          35.5
+        ],
+        "height": 0.5,
+        "yaw": 80
+      },
+      {
+        "id": "garden.haie-rue-ouest",
+        "kind": "hedge",
+        "species": "hornbeam",
+        "center": [
+          -5,
+          -23.2
+        ],
+        "height": 1.8,
+        "length": 21,
+        "width": 0.8
+      },
+      {
+        "id": "garden.haie-rue-est",
+        "kind": "hedge",
+        "species": "hornbeam",
+        "center": [
+          33,
+          -23.2
+        ],
+        "height": 1.8,
+        "length": 21,
+        "width": 0.8
+      },
+      {
+        "id": "garden.haie-est",
+        "kind": "hedge",
+        "species": "cherry-laurel",
+        "center": [
+          44.6,
+          24
+        ],
+        "height": 2.2,
+        "length": 30,
+        "width": 1,
+        "yaw": 92
+      }
+    ]
+  },
+  "roof": {
+    "type": "gable",
+    "levelId": "etage",
+    "ridgeAxis": "x",
+    "pitch": 35,
+    "overhang": 0.4
+  },
+  "arrays": [
+    {
+      "id": "pv-sud",
+      "name": "Champ sud",
+      "siteId": "mock:tl-energy",
+      "levelId": "toit",
+      "origin": [
+        13.8,
+        4.4,
+        3.57
+      ],
+      "yaw": 180,
+      "slope": 35,
+      "rows": 2,
+      "cols": 6,
+      "maxOutputW": 380,
+      "panels": [
+        "mock:tl-panel-01",
+        "mock:tl-panel-02",
+        "mock:tl-panel-03",
+        "mock:tl-panel-04",
+        "mock:tl-panel-05",
+        "mock:tl-panel-06",
+        "mock:tl-panel-07",
+        "mock:tl-panel-08",
+        "mock:tl-panel-09",
+        "mock:tl-panel-10",
+        "mock:tl-panel-11",
+        "mock:tl-panel-12"
+      ]
+    }
+  ],
+  "plugins": {
+    "mock": {
+      "enabled": true
+    }
+  },
+  "devices": [
+    {
+      "id": "light.salon",
+      "deviceId": "mock:tl-light-salon",
+      "levelId": "rdc",
+      "roomId": "salon",
+      "position": [
+        10.9,
+        2.7,
+        2.45
+      ],
+      "mount": "ceiling"
+    },
+    {
+      "id": "light.lampadaire",
+      "deviceId": "mock:tl-light-lampadaire",
+      "levelId": "rdc",
+      "roomId": "salon",
+      "position": [
+        13.4,
+        0.6,
+        1.6
+      ],
+      "mount": "floor"
+    },
+    {
+      "id": "light.cuisine",
+      "deviceId": "mock:tl-light-cuisine",
+      "levelId": "rdc",
+      "roomId": "cuisine",
+      "position": [
+        9.5,
+        8.6,
+        2.45
+      ],
+      "mount": "ceiling"
+    },
+    {
+      "id": "light.ilot",
+      "deviceId": "mock:tl-light-ilot",
+      "levelId": "rdc",
+      "roomId": "cuisine",
+      "position": [
+        11.4,
+        7.6,
+        2
+      ],
+      "mount": "ceiling"
+    },
+    {
+      "id": "light.entree",
+      "deviceId": "mock:tl-light-entree",
+      "levelId": "rdc",
+      "roomId": "entree",
+      "position": [
+        6.4,
+        2.3,
+        2.45
+      ],
+      "mount": "ceiling"
+    },
+    {
+      "id": "light.bureau",
+      "deviceId": "mock:tl-light-bureau",
+      "levelId": "rdc",
+      "roomId": "bureau",
+      "position": [
+        1.2,
+        1,
+        1
+      ],
+      "mount": "free"
+    },
+    {
+      "id": "light.cinema",
+      "deviceId": "mock:tl-light-cinema",
+      "levelId": "rdc",
+      "roomId": "home-cinema",
+      "position": [
+        2.5,
+        9.85,
+        2.3
+      ],
+      "mount": "wall",
+      "yaw": 180
+    },
+    {
+      "id": "light.chambre1",
+      "deviceId": "mock:tl-light-chambre1",
+      "levelId": "etage",
+      "roomId": "chambre-1",
+      "position": [
+        2.5,
+        2.3,
+        2.35
+      ],
+      "mount": "ceiling"
+    },
+    {
+      "id": "light.chambre2",
+      "deviceId": "mock:tl-light-chambre2",
+      "levelId": "etage",
+      "roomId": "chambre-2",
+      "position": [
+        2.5,
+        7.4,
+        2.35
+      ],
+      "mount": "ceiling"
+    },
+    {
+      "id": "light.palier",
+      "deviceId": "mock:tl-light-palier",
+      "levelId": "etage",
+      "roomId": "palier",
+      "position": [
+        7.45,
+        6.5,
+        1.9
+      ],
+      "mount": "wall",
+      "yaw": 270
+    },
+    {
+      "id": "light.wc",
+      "deviceId": "mock:tl-light-wc",
+      "levelId": "rdc",
+      "roomId": "wc",
+      "position": [
+        6.4,
+        9,
+        2.45
+      ],
+      "mount": "ceiling"
+    },
+    {
+      "id": "light.dressing",
+      "deviceId": "mock:tl-light-dressing",
+      "levelId": "etage",
+      "roomId": "dressing",
+      "position": [
+        12.7,
+        7.8,
+        2.35
+      ],
+      "mount": "ceiling"
+    },
+    {
+      "id": "light.sdb",
+      "deviceId": "mock:tl-light-sdb",
+      "levelId": "etage",
+      "roomId": "salle-de-bain",
+      "position": [
+        9.5,
+        9.85,
+        1.9
+      ],
+      "mount": "wall",
+      "yaw": 180
+    },
+    {
+      "id": "light.suite",
+      "deviceId": "mock:tl-fan-suite_light",
+      "levelId": "etage",
+      "roomId": "suite",
+      "position": [
+        10.9,
+        2.7,
+        2.35
+      ],
+      "mount": "ceiling"
+    },
+    {
+      "id": "fan.suite",
+      "deviceId": "mock:tl-fan-suite_fan",
+      "levelId": "etage",
+      "roomId": "suite",
+      "position": [
+        10.9,
+        2.7,
+        2.35
+      ],
+      "mount": "ceiling"
+    },
+    {
+      "id": "light.terrasse",
+      "deviceId": "mock:tl-light-terrasse",
+      "levelId": "etage",
+      "roomId": "terrasse",
+      "position": [
+        14.45,
+        8,
+        2.1
+      ],
+      "mount": "wall",
+      "yaw": 90
+    },
+    {
+      "id": "light.jardin",
+      "deviceId": "mock:tl-light-jardin",
+      "zoneId": "terrasse-jardin",
+      "position": [
+        11,
+        14.6,
+        0.6
+      ],
+      "mount": "floor"
+    },
+    {
+      "id": "light.piscine",
+      "deviceId": "mock:tl-light-piscine",
+      "zoneId": "piscine",
+      "position": [
+        29,
+        16.1,
+        -0.3
+      ],
+      "mount": "wall"
+    },
+    {
+      "id": "cover.baie",
+      "deviceId": "mock:tl-cover-baie",
+      "levelId": "rdc",
+      "roomId": "salon",
+      "position": [
+        10.3,
+        0.05,
+        1.1
+      ],
+      "openingId": "baie-salon",
+      "coverMaterial": "metal",
+      "coverColor": "#e9e6e0"
+    },
+    {
+      "id": "cover.salon",
+      "deviceId": "mock:tl-cover-salon",
+      "levelId": "rdc",
+      "roomId": "salon",
+      "position": [
+        12.8,
+        0.05,
+        1.6
+      ],
+      "openingId": "fen-salon"
+    },
+    {
+      "id": "cover.cuisine",
+      "deviceId": "mock:tl-cover-cuisine",
+      "levelId": "rdc",
+      "roomId": "cuisine",
+      "position": [
+        9.1,
+        9.95,
+        1.6
+      ],
+      "openingId": "fen-cuisine"
+    },
+    {
+      "id": "cover.bureau",
+      "deviceId": "mock:tl-cover-bureau",
+      "levelId": "rdc",
+      "roomId": "bureau",
+      "position": [
+        2.5,
+        0.05,
+        1.6
+      ],
+      "openingId": "fen-bureau-sud"
+    },
+    {
+      "id": "cover.cinema",
+      "deviceId": "mock:tl-cover-cinema",
+      "levelId": "rdc",
+      "roomId": "home-cinema",
+      "position": [
+        0.05,
+        7.2,
+        1.6
+      ],
+      "openingId": "fen-cinema",
+      "coverMaterial": "fabric",
+      "coverColor": "#5a1f2b"
+    },
+    {
+      "id": "cover.chambre1",
+      "deviceId": "mock:tl-cover-chambre1",
+      "levelId": "etage",
+      "roomId": "chambre-1",
+      "position": [
+        2.5,
+        0.05,
+        1.55
+      ],
+      "openingId": "fen-chambre-1"
+    },
+    {
+      "id": "cover.chambre2",
+      "deviceId": "mock:tl-cover-chambre2",
+      "levelId": "etage",
+      "roomId": "chambre-2",
+      "position": [
+        2.5,
+        9.95,
+        1.55
+      ],
+      "openingId": "fen-chambre-2"
+    },
+    {
+      "id": "cover.suite",
+      "deviceId": "mock:tl-cover-suite",
+      "levelId": "etage",
+      "roomId": "suite",
+      "position": [
+        10.8,
+        0.05,
+        1.55
+      ],
+      "openingId": "fen-suite"
+    },
+    {
+      "id": "cover.velux",
+      "deviceId": "mock:tl-cover-velux",
+      "levelId": "etage",
+      "roomId": "palier",
+      "position": [
+        6.4,
+        2.4,
+        2.3
+      ],
+      "openingId": "velux-palier"
+    },
+    {
+      "id": "cover.store",
+      "deviceId": "mock:tl-cover-store",
+      "levelId": "etage",
+      "roomId": "terrasse",
+      "position": [
+        14.5,
+        4.2,
+        2.4
+      ],
+      "mount": "wall",
+      "yaw": 90,
+      "size": {
+        "width": 5,
+        "height": 3
+      },
+      "coverMaterial": "fabric",
+      "coverColor": "#c8553d"
+    },
+    {
+      "id": "cover.portail",
+      "deviceId": "mock:tl-cover-portail",
+      "zoneId": "allee",
+      "position": [
+        18,
+        -23.6,
+        0.8
+      ],
+      "mount": "floor",
+      "yaw": 0,
+      "size": {
+        "width": 4.4,
+        "height": 1.6
+      },
+      "leaves": 2,
+      "coverMaterial": "metal",
+      "coverColor": "#2f3337"
+    },
+    {
+      "id": "cover.garage1",
+      "deviceId": "mock:tl-cover-garage1",
+      "levelId": "rdc",
+      "roomId": "garage",
+      "position": [
+        15.9,
+        0.05,
+        1.1
+      ],
+      "openingId": "porte-garage-1",
+      "coverMaterial": "metal",
+      "coverColor": "#e9e6e0"
+    },
+    {
+      "id": "cover.garage2",
+      "deviceId": "mock:tl-cover-garage2",
+      "levelId": "rdc",
+      "roomId": "garage",
+      "position": [
+        18.9,
+        0.05,
+        1.1
+      ],
+      "openingId": "porte-garage-2",
+      "coverMaterial": "metal",
+      "coverColor": "#e9e6e0"
+    },
+    {
+      "id": "media.salon",
+      "deviceId": "mock:tl-media-salon",
+      "levelId": "rdc",
+      "roomId": "salon",
+      "position": [
+        8.1,
+        5,
+        0.4
+      ],
+      "mount": "floor",
+      "speakerShape": "block",
+      "yaw": 135
+    },
+    {
+      "id": "media.cuisine",
+      "deviceId": "mock:tl-media-cuisine",
+      "levelId": "rdc",
+      "roomId": "cuisine",
+      "position": [
+        13.6,
+        9,
+        0.95
+      ],
+      "mount": "free",
+      "yaw": 225
+    },
+    {
+      "id": "media.tv",
+      "deviceId": "mock:tl-media-tv",
+      "levelId": "rdc",
+      "roomId": "home-cinema",
+      "position": [
+        2.5,
+        9.9,
+        1.5
+      ],
+      "mount": "wall",
+      "yaw": 180,
+      "size": {
+        "width": 1.65,
+        "height": 0.93
+      },
+      "meta": {
+        "audioOutput": "media.barre"
+      }
+    },
+    {
+      "id": "media.barre",
+      "deviceId": "mock:tl-media-barre",
+      "levelId": "rdc",
+      "roomId": "home-cinema",
+      "position": [
+        2.5,
+        9.8,
+        0.75
+      ],
+      "mount": "free",
+      "yaw": 180,
+      "speakerShape": "bar"
+    },
+    {
+      "id": "media.suite",
+      "deviceId": "mock:tl-media-suite",
+      "levelId": "etage",
+      "roomId": "suite",
+      "position": [
+        8.3,
+        4.6,
+        0.55
+      ],
+      "mount": "free",
+      "speakerShape": "pebble",
+      "yaw": 90
+    },
+    {
+      "id": "media.terrasse",
+      "deviceId": "mock:tl-media-terrasse",
+      "levelId": "etage",
+      "roomId": "terrasse",
+      "position": [
+        20.5,
+        9.8,
+        0.5
+      ],
+      "mount": "floor",
+      "speakerShape": "block",
+      "yaw": 225
+    },
+    {
+      "id": "climate.pac",
+      "deviceId": "mock:tl-climate-pac",
+      "levelId": "rdc",
+      "roomId": "local-technique",
+      "position": [
+        19.6,
+        9.4,
+        0
+      ],
+      "mount": "floor",
+      "yaw": 180
+    },
+    {
+      "id": "climate.etage",
+      "deviceId": "mock:tl-climate-etage",
+      "levelId": "etage",
+      "roomId": "palier",
+      "position": [
+        5.25,
+        5,
+        1.5
+      ],
+      "mount": "wall",
+      "yaw": 90
+    },
+    {
+      "id": "camera.sonnette",
+      "deviceId": "mock:tl-cam-sonnette",
+      "levelId": "rdc",
+      "roomId": "entree",
+      "position": [
+        7.45,
+        -0.35,
+        1.4
+      ],
+      "mount": "wall",
+      "yaw": 180
+    },
+    {
+      "id": "camera.allee",
+      "deviceId": "mock:tl-cam-allee",
+      "levelId": "rdc",
+      "roomId": "garage",
+      "position": [
+        20.75,
+        -0.35,
+        2.4
+      ],
+      "mount": "wall",
+      "yaw": 200
+    },
+    {
+      "id": "camera.jardin",
+      "deviceId": "mock:tl-cam-jardin",
+      "levelId": "rdc",
+      "roomId": "cuisine",
+      "position": [
+        14.15,
+        10.35,
+        2.4
+      ],
+      "mount": "wall",
+      "yaw": 20
+    },
+    {
+      "id": "vacuum.robot",
+      "deviceId": "mock:tl-vacuum",
+      "levelId": "rdc",
+      "roomId": "entree",
+      "position": [
+        6.4,
+        4.25,
+        0.05
+      ],
+      "mount": "floor"
+    },
+    {
+      "id": "mower.robot",
+      "deviceId": "mock:tl-mower",
+      "zoneId": "pelouse",
+      "position": [
+        -8,
+        25,
+        0.15
+      ]
+    },
+    {
+      "id": "sensor.chambre1",
+      "deviceId": "mock:tl-sensor-chambre1",
+      "levelId": "etage",
+      "roomId": "chambre-1",
+      "position": [
+        0.05,
+        3,
+        1.5
+      ],
+      "mount": "wall",
+      "yaw": 90
+    },
+    {
+      "id": "sensor.baie",
+      "deviceId": "mock:tl-sensor-baie-light",
+      "levelId": "rdc",
+      "roomId": "salon",
+      "position": [
+        10.3,
+        -0.35,
+        2.3
+      ],
+      "mount": "wall",
+      "yaw": 180
+    },
+    {
+      "id": "sensor.exterieur",
+      "deviceId": "mock:tl-sensor-ext",
+      "zoneId": "terrasse-jardin",
+      "position": [
+        7.65,
+        10.35,
+        1.8
+      ],
+      "mount": "wall"
+    },
+    {
+      "id": "sensor.piscine",
+      "deviceId": "mock:tl-sensor-piscine",
+      "zoneId": "piscine",
+      "position": [
+        26,
+        18.5,
+        0.1
+      ]
+    },
+    {
+      "id": "sensor.filtration",
+      "deviceId": "mock:tl-sensor-filtration",
+      "zoneId": "piscine",
+      "position": [
+        35,
+        20.5,
+        0.5
+      ],
+      "mount": "floor"
+    },
+    {
+      "id": "water.station",
+      "deviceId": "mock:tl-water",
+      "levelId": "rdc",
+      "roomId": "local-technique",
+      "position": [
+        17.9,
+        9.5,
+        0
+      ],
+      "mount": "floor"
+    },
+    {
+      "id": "pet.feeder",
+      "deviceId": "mock:tl-pet-feeder",
+      "levelId": "rdc",
+      "roomId": "buanderie",
+      "position": [
+        16.6,
+        7.2,
+        0
+      ],
+      "mount": "floor"
+    },
+    {
+      "id": "pet.fountain",
+      "deviceId": "mock:tl-pet-fountain",
+      "levelId": "rdc",
+      "roomId": "buanderie",
+      "position": [
+        15.4,
+        7.2,
+        0
+      ],
+      "mount": "floor"
+    },
+    {
+      "id": "energy.site",
+      "deviceId": "mock:tl-energy",
+      "levelId": "rdc",
+      "roomId": "local-technique",
+      "position": [
+        20.45,
+        8.4,
+        1.4
+      ],
+      "mount": "wall",
+      "yaw": 270
+    },
+    {
+      "id": "charger.garage",
+      "deviceId": "mock:tl-charger",
+      "levelId": "rdc",
+      "roomId": "garage",
+      "position": [
+        17.4,
+        6.45,
+        1.2
+      ],
+      "mount": "wall",
+      "yaw": 180
+    },
+    {
+      "id": "vehicle.tesla",
+      "deviceId": "mock:tl-vehicle-tesla",
+      "bodyColor": "#1d2a44",
+      "bodyFinish": "metallic"
+    },
+    {
+      "id": "vehicle.r5",
+      "deviceId": "mock:tl-vehicle-r5",
+      "batteryKwh": 52,
+      "bodyColor": "#f2c84b",
+      "bodyFinish": "solid"
+    }
+  ]
+}

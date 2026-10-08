@@ -148,7 +148,15 @@ Enfin, `origin` attend le GPS du `0;0` du relevé. Si le seul point connu tombe 
 
 ## Exemple complet
 
-[house/demo-house.json](../house/demo-house.json) : deux niveaux, sept pièces, jardin avec allée, terrasse, pelouse et piscine, dix-neuf appareils liés au plugin de simulation.
+Trois propriétés de démonstration, chacune liée appareil par appareil à son parc simulé :
+
+- [house/demos/tilleuls.json](../house/demos/tilleuls.json) — maison R+1 à toit à deux pans : relief, jardin, places de parking (garage, allée, bases des robots), terrasse d'étage sur le garage, fenêtre de toit, finitions, champ de panneaux en toiture ;
+- [house/demos/embruns.json](../house/demos/embruns.json) — plain-pied en L à toit plat : pièces non rectangulaires ouvertes l'une sur l'autre, `outline` en L, puits de lumière, deux champs sur châssis (`tilt`) ;
+- [house/demos/belvedere.json](../house/demos/belvedere.json) — appartement en étage, balcon, sans toit.
+
+`meta.demo` (`{ "scenario": "tilleuls", "kind": "house" }`) marque une propriété de démonstration : le scénario du plugin `mock` qui la peuple et sa nature (`house` ou `apartment`). Un serveur lancé sans `KASBAH_HOUSE_FILE` les propose toutes.
+
+[house/demo-house.json](../house/demo-house.json) reste la maison des **tests** (deux niveaux, sept pièces, scénario `default`).
 
 ## Vérifier un fichier
 

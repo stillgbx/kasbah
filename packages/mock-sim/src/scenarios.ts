@@ -12,17 +12,23 @@ import { weather } from './behaviours/weather'
 import { water } from './behaviours/water'
 import { petFeeder, petFountain } from './behaviours/pets'
 import { ceilingFan, ceilingFanLight } from './behaviours/fan'
+import { BELVEDERE_SCENES, EMBRUNS_SCENES, TILLEULS_SCENES, belvedereDevices, embrunsDevices, tilleulsDevices } from './demos'
 
-// Scénarios : `default` reproduit la maison démo (ids stables liés dans house/demo-house.json),
+// Scénarios : `default` reproduit la maison des TESTS (ids stables liés dans house/demo-house.json),
 // `empty` teste le rendu sans appareil, `chaos` exerce les erreurs/indisponibilités, `winter`
-// change la saison. Le site énergie est TOUJOURS construit en dernier (il lit les charges du tick).
+// change la saison. `tilleuls`, `embruns` et `belvedere` sont les parcs des trois propriétés de
+// démonstration (`house/demos/`), avec leur variante d'hiver. Le site énergie est TOUJOURS construit
+// en dernier (il lit les charges du tick).
 
-export const SCENARIO_NAMES = ['default', 'empty', 'chaos', 'winter'] as const
+export const SCENARIO_NAMES = [
+  'default', 'empty', 'chaos', 'winter',
+  'tilleuls', 'tilleuls-winter', 'embruns', 'embruns-winter', 'belvedere', 'belvedere-winter',
+] as const
 export type ScenarioName = (typeof SCENARIO_NAMES)[number]
 
-// Maison et destination de la simulation : deux endroits qui comptent pour l'utilisateur, et non
-// des coordonnées au hasard. Séparées de 2,3 km, donc la carte du véhicule cadre les deux (la règle
-// des 3 km de `lib/map.ts`) : la démo montre la voiture PAR RAPPORT à la maison, ce qui est tout
+// Maison et destination de la simulation, deux lieux publics de Dijon (le cours du Général-de-Gaulle,
+// la place de la Libération) à 1,4 km l'un de l'autre, donc la carte du véhicule cadre les deux (la
+// règle des 3 km de `lib/map.ts`) : la démo montre la voiture PAR RAPPORT à la maison, ce qui est tout
 // l'intérêt. `HOME` vaut l'origine de `house/demo-house.json` : la voiture garée se pose sur la maison.
 const HOME = { lat: 47.309343, lon: 5.045591 }
 const WORK = { lat: 47.3216, lon: 5.0415 }
@@ -88,6 +94,12 @@ export const SCENARIOS: Record<ScenarioName, Scenario> = {
     chaos: { flipEveryS: 30, flipForS: 10, failRate: 0.1, slowRate: 0.1, latencyMs: 3000 },
   },
   winter: { name: 'winter', build: () => defaultDevices({ winter: true }), world: WINTER_WORLD },
+  tilleuls: { name: 'tilleuls', build: () => tilleulsDevices(), scenes: TILLEULS_SCENES },
+  'tilleuls-winter': { name: 'tilleuls-winter', build: () => tilleulsDevices({ winter: true }), scenes: TILLEULS_SCENES, world: WINTER_WORLD },
+  embruns: { name: 'embruns', build: () => embrunsDevices(), scenes: EMBRUNS_SCENES },
+  'embruns-winter': { name: 'embruns-winter', build: () => embrunsDevices({ winter: true }), scenes: EMBRUNS_SCENES, world: WINTER_WORLD },
+  belvedere: { name: 'belvedere', build: () => belvedereDevices(), scenes: BELVEDERE_SCENES },
+  'belvedere-winter': { name: 'belvedere-winter', build: () => belvedereDevices({ winter: true }), scenes: BELVEDERE_SCENES, world: WINTER_WORLD },
 }
 
 export function resolveScenario(s: ScenarioName | Scenario): Scenario {

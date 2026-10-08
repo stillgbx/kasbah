@@ -1,4 +1,4 @@
-import type { Command, DeviceDescriptor, DeviceKind, DeviceReleaseNotes, DeviceState, StateFor, WeatherForecast } from '@kasbah/shared'
+import type { Command, DeviceDescriptor, DeviceEventKind, DeviceKind, DeviceReleaseNotes, DeviceState, PluginScene, StateFor, WeatherForecast } from '@kasbah/shared'
 import type { Rng } from './rng'
 import type { World, WorldConfig } from './world'
 
@@ -27,6 +27,8 @@ export interface TickCtx {
   world: World
   /** État courant d'un autre appareil de la simulation (couplages : borne ↔ véhicule). */
   getState(externalId: string): DeviceState | undefined
+  /** Événement transitoire de l'appareil en cours de tick (coup de sonnette) : rien n'est conservé. */
+  emitEvent?(event: DeviceEventKind): void
 }
 
 export interface SimDevice<K extends DeviceKind = DeviceKind> {
@@ -74,4 +76,17 @@ export interface Scenario {
   chaos?: ChaosConfig
   /** Réglages « monde » (pic solaire, saison). */
   world?: Partial<WorldConfig>
+  /** Ambiances du fabricant simulé (scènes de lampes rappelables), comme celles d'un pont Hue. */
+  scenes?: SimScene[]
+}
+
+/** Valeurs posées sur une lampe par le rappel d'une ambiance. */
+export interface SimSceneLight { on: boolean; brightness?: number; colorTempMirek?: number; color?: { x: number; y: number } }
+
+/**
+ * Ambiance simulée : ce que le pont publierait (nom, groupe, aperçu) et ce qu'elle POSE sur ses
+ * lampes. Elle reste active tant qu'on ne touche pas l'une de ses lampes à la main, comme chez Hue.
+ */
+export interface SimScene extends Pick<PluginScene, 'externalId' | 'name' | 'group' | 'dynamic' | 'swatches'> {
+  lights: Record<string, SimSceneLight>
 }

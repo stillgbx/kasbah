@@ -1,3 +1,4 @@
+import type { MediaPlayerClass } from '@kasbah/shared'
 import { SimError, type SimDevice } from '../types'
 import { clamp, descriptor } from './common'
 
@@ -11,13 +12,23 @@ const PLAYLIST = [
   { title: 'Saffron', artist: 'Mira Solano', album: 'Ochre', durationS: 176 },
 ]
 
-export interface MediaOptions { name: string; volume?: number; playing?: boolean }
+export interface MediaOptions {
+  name: string
+  volume?: number
+  playing?: boolean
+  /** Nature du lecteur (enceinte par défaut) : décide l'icône et le marqueur 3D. */
+  deviceClass?: MediaPlayerClass
+  /** Modèle annoncé (« Soundbar », « Smart TV ») ; défaut d'après la nature. */
+  model?: string
+}
+
+const MODELS: Record<MediaPlayerClass, string> = { speaker: 'Speaker', tv: 'Smart TV', display: 'Smart display' }
 
 export function mediaPlayer(externalId: string, o: MediaOptions): SimDevice<'media_player'> {
   let track = 0
   const now = (positionS: number) => ({ ...PLAYLIST[track]!, positionS, source: 'Mock Music' })
   const dev: SimDevice<'media_player'> = {
-    descriptor: descriptor(externalId, 'media_player', o.name, ['playback', 'volume', 'mute', 'now_playing', 'track_skip', 'seek', 'play_url'], { manufacturer: 'Mock', model: 'Speaker', mediaPlayer: { deviceClass: 'speaker' } }),
+    descriptor: descriptor(externalId, 'media_player', o.name, ['playback', 'volume', 'mute', 'now_playing', 'track_skip', 'seek', 'play_url'], { manufacturer: 'Mock', model: o.model ?? MODELS[o.deviceClass ?? 'speaker'], mediaPlayer: { deviceClass: o.deviceClass ?? 'speaker' } }),
     state: {
       kind: 'media_player', updatedAt: 0, available: true,
       playback: o.playing ? 'playing' : 'idle', volume: o.volume ?? 35, muted: false,

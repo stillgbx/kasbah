@@ -25,6 +25,11 @@ export const serverMessageSchema = z.discriminatedUnion('type', [
     scenes: z.array(pluginSceneEntrySchema).default([]),
     /** Automatisations de la maison et leur statut ; absent d'un serveur qui n'en a pas. */
     automations: z.array(automationEntrySchema).default([]),
+    /**
+     * Propriété que le serveur fait vivre (`house.id`). Un écran qui se reconnecte et la trouve
+     * changée (un autre écran a basculé de propriété démo) recharge tout plutôt que de mêler deux maisons.
+     */
+    propertyId: z.string().optional(),
   }),
   z.object({ type: z.literal('state'), deviceId: deviceIdSchema, state: deviceStateSchema }),
   z.object({ type: z.literal('availability'), deviceIds: z.array(deviceIdSchema), available: z.boolean() }),

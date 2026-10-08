@@ -1,4 +1,4 @@
-import { applyHouseEditToJson, SurveyError, addGardenItemToJson, addOpeningToJson, addParkingToJson, patchGardenItemInJson, removeGardenItemFromJson, automationBodySchema, commandSchema, deviceClassOf, defaultState, mergeState, parseHouse, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, setReliefInJson, setRenderTuningInJson, setTerrainInJson, setRoomOrderInJson, type Automation, type AutomationEntry, type AutomationRun, type AutomationStatus, type CommandInput, type DeviceConsumption, type DeviceEntry, type DeviceState, type House, type StateFor, type StatePatch } from '@kasbah/shared'
+import { applyHouseEditToJson, SurveyError, addGardenItemToJson, addOpeningToJson, addParkingToJson, patchGardenItemInJson, removeGardenItemFromJson, automationBodySchema, commandSchema, deviceClassOf, defaultState, mergeState, parseHouse, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, setReliefInJson, setRenderTuningInJson, setTerrainInJson, setRoomOrderInJson, type Automation, type AutomationEntry, type AutomationRun, type AutomationStatus, type CommandInput, type DeviceConsumption, type DeviceEntry, type DeviceState, type House, type PluginSceneEntry, type PropertiesResponse, type SceneActivation, type StateFor, type StatePatch } from '@kasbah/shared'
 import { SimError, Simulation, solarGeometry, type ScenarioName } from '@kasbah/mock-sim'
 import demoHouse from '@kasbah/shared/demo-house.json'
 import { createMockSchool } from './mockSchool'
@@ -16,7 +16,17 @@ const MOCK_PLACES: WeatherPlace[] = [
 
 const STATUS: Record<string, number> = { UNSUPPORTED_COMMAND: 400, DEVICE_UNAVAILABLE: 503, UPSTREAM_ERROR: 502, TIMEOUT: 504 }
 
-export interface MockTransportOptions { scenario?: ScenarioName; seed?: number; timeScale?: number; house?: House }
+export interface MockTransportOptions {
+  scenario?: ScenarioName
+  seed?: number
+  timeScale?: number
+  house?: House
+  /**
+   * Propriétés démo entre lesquelles basculer (mode démo). Absent : la seule maison du transport,
+   * sans bascule possible.
+   */
+  properties?: { list(): PropertiesResponse; select(id: string): void }
+}
 
 const HOUR_MS = 3_600_000
 const DAY_MS = 86_400_000
@@ -165,6 +175,15 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     if (!a) throw new ApiRequestError(404, 'NOT_FOUND', `unknown automation "${id}"`)
     return a
   }
+
+  // ambiances du parc simulé, présentées comme celles d'un pont (`mock:<id>`)
+  const sceneEntry = (s: ReturnType<Simulation['scenes']>[number]): PluginSceneEntry => ({
+    scene: { ...s, id: `mock:${s.externalId}`, pluginId: 'mock', autoDynamic: false },
+    state: { active: sim.sceneState(s.externalId), updatedAt: Date.now() },
+  })
+  const sceneEntries = () => sim.scenes().map(sceneEntry)
+  const onScene = (externalId: string, active: SceneActivation) =>
+    handlers?.onMessage({ type: 'scene', sceneId: `mock:${externalId}`, state: { active, updatedAt: Date.now() } })
 
   const apply = (externalId: string, patch: StatePatch) => {
     const id = `mock:${externalId}`
@@ -452,9 +471,15 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     async cameraSnapshots() { return {} },
     async setCameraSnapshots() { /* pas de caméra en mode maquette */ },
     cameraSnapshotUrl() { return null },
-    // la simulation n'a pas de fabricant, donc pas de scènes de fabricant
-    async getScenes() { return [] },
-    async recallScene() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no vendor scenes in mock mode') },
+    // les ambiances du parc simulé se rappellent ; elles ne se créent ni ne se réglent (pas de fabricant)
+    async getScenes() { return sceneEntries() },
+    async recallScene(sceneId, recall) {
+      try { await sim.recallScene(sceneId.replace(/^mock:/, ''), { mode: recall.mode ?? 'static', ...(recall.brightness !== undefined ? { brightness: recall.brightness } : {}) }) }
+      catch (err) {
+        if (err instanceof SimError) throw new ApiRequestError(STATUS[err.code] ?? 500, err.code, err.message)
+        throw err
+      }
+    },
     async updateScene() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no vendor scenes in mock mode') },
     async createScene() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no vendor scenes in mock mode') },
     async deleteScene() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no vendor scenes in mock mode') },
@@ -500,11 +525,24 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     // maquette in-process : la simulation tourne dans la page, il n'y a pas de serveur à régler
     async getPlugins() { return [] },
     async setPluginSettings() { return [] },
+    async getProperties() {
+      return opts.properties?.list() ?? { activeId: house.id, switchable: false, properties: [{ id: house.id, name: house.name, kind: 'house' }] }
+    },
+    async selectProperty(id) {
+      if (!opts.properties) throw new ApiRequestError(409, 'NOT_SWITCHABLE', 'no other property in this mode')
+      if (!opts.properties.list().properties.some((p) => p.id === id)) throw new ApiRequestError(404, 'NOT_FOUND', `unknown property "${id}"`)
+      opts.properties.select(id)
+    },
     connect(h) {
       handlers = h
       h.onStatus('connecting')
-      sim.start(apply, (externalId, available) => apply(externalId, { available }))
-      h.onMessage({ type: 'snapshot', serverTime: Date.now(), devices: entries(), scenes: [], automations: automationList() })
+      sim.start(
+        apply,
+        (externalId, available) => apply(externalId, { available }),
+        (externalId, event) => handlers?.onMessage({ type: 'deviceEvent', deviceId: `mock:${externalId}`, event, at: Date.now() }),
+        onScene,
+      )
+      h.onMessage({ type: 'snapshot', serverTime: Date.now(), devices: entries(), scenes: sceneEntries(), automations: automationList(), propertyId: house.id })
       h.onStatus('online')
       return () => { sim.stop(); handlers = null }
     },

@@ -1,9 +1,9 @@
-import type { Command, DeviceDescriptor, DeviceKind, DeviceState, StatePatch } from '@kasbah/shared'
+import type { Command, DeviceDescriptor, DeviceEventKind, DeviceKind, DeviceState, SceneActivation, SceneRecallMode, StatePatch } from '@kasbah/shared'
 import { shallowEqual } from '@kasbah/shared'
 import { systemClock, type Clock } from './clock'
 import { mulberry32, type Rng } from './rng'
 import { resolveScenario, type ScenarioName } from './scenarios'
-import { SimError, type AnySimDevice, type Scenario, type SimForecast, type SimReleaseNotes, type TickCtx } from './types'
+import { SimError, type AnySimDevice, type Scenario, type SimForecast, type SimReleaseNotes, type SimScene, type TickCtx } from './types'
 import { createWorld, tickWorld, type World } from './world'
 
 export interface SimulationOptions {
@@ -24,6 +24,10 @@ export interface SimulationOptions {
 
 export type PatchListener = (externalId: string, patch: StatePatch) => void
 export type AvailabilityListener = (externalId: string, available: boolean) => void
+export type EventListener = (externalId: string, event: DeviceEventKind) => void
+export type SceneListener = (sceneExternalId: string, active: SceneActivation) => void
+/** Ambiance telle que la simulation la publie : sans les valeurs qu'elle pose sur ses lampes. */
+export type SimSceneInfo = Omit<SimScene, 'lights'>
 
 /**
  * Moteur de simulation déterministe (graine + horloge injectée). Fait avancer les appareils,
@@ -48,6 +52,9 @@ export class Simulation {
   private timer: unknown = null
   private onPatch: PatchListener | null = null
   private onAvailability: AvailabilityListener | null = null
+  private onEvent: EventListener | null = null
+  private onScene: SceneListener | null = null
+  private readonly sceneActive = new Map<string, SceneActivation>()
   private readonly unavailableUntil = new Map<string, number>()
   private nextChaosAt = Infinity
 
@@ -108,9 +115,11 @@ export class Simulation {
     return until === undefined || until <= this.simNow
   }
 
-  start(onPatch: PatchListener, onAvailability?: AvailabilityListener): void {
+  start(onPatch: PatchListener, onAvailability?: AvailabilityListener, onEvent?: EventListener, onScene?: SceneListener): void {
     this.onPatch = onPatch
     this.onAvailability = onAvailability ?? null
+    this.onEvent = onEvent ?? null
+    this.onScene = onScene ?? null
     this.realStart = this.clock.now()
     const simAtStart = this.simNow
     this.timer = this.clock.setInterval(() => {
@@ -146,6 +155,54 @@ export class Simulation {
     if (!apply) throw new SimError('UNSUPPORTED_COMMAND', `${dev.descriptor.kind} accepts no command`)
     apply(cmd, this.ctx(0))
     this.emitDiff(dev)
+    // une lampe réglée à la main sort de l'ambiance qui l'avait posée, comme chez Hue
+    if (dev.descriptor.kind === 'light') this.leaveScenes(externalId)
+  }
+
+  /** Ambiances du scénario, sans les valeurs qu'elles posent. */
+  scenes(): SimSceneInfo[] {
+    return (this.scenario.scenes ?? []).map(({ lights: _l, ...info }) => info)
+  }
+
+  sceneState(externalId: string): SceneActivation {
+    return this.sceneActive.get(externalId) ?? 'inactive'
+  }
+
+  /**
+   * Rappel d'une ambiance : pose ses valeurs sur ses lampes (atténuées par `brightness`), ou les
+   * éteint (`off`). Les autres ambiances du même groupe s'effacent : une pièce n'en a qu'une à la fois.
+   */
+  async recallScene(externalId: string, recall: { mode: SceneRecallMode; brightness?: number }): Promise<void> {
+    const scene = (this.scenario.scenes ?? []).find((s) => s.externalId === externalId)
+    if (!scene) throw new SimError('DEVICE_UNAVAILABLE', `unknown mock scene "${externalId}"`)
+    if (recall.mode === 'dynamic' && !scene.dynamic) throw new SimError('UNSUPPORTED_COMMAND', `scene "${externalId}" has no animated palette`)
+    const scale = recall.brightness === undefined ? 1 : recall.brightness / 100
+    for (const [lightId, v] of Object.entries(scene.lights)) {
+      const dev = this.byId.get(lightId)
+      if (!dev?.apply || !this.isAvailable(lightId)) continue
+      const on = recall.mode !== 'off' && v.on
+      const cmd: Command = on
+        ? { type: 'light.set', on: true, ...(v.brightness !== undefined ? { brightness: Math.max(1, Math.round(v.brightness * scale)) } : {}),
+            ...(v.colorTempMirek !== undefined ? { colorTempMirek: v.colorTempMirek } : {}), ...(v.color ? { color: v.color } : {}) }
+        : { type: 'light.set', on: false }
+      ;(dev.apply as (c: Command, x: TickCtx) => void)(cmd, this.ctx(0))
+      this.emitDiff(dev)
+    }
+    for (const other of this.scenario.scenes ?? []) {
+      const sameGroup = other.group?.name === scene.group?.name
+      if (other.externalId !== externalId && sameGroup) this.setScene(other.externalId, 'inactive')
+    }
+    this.setScene(externalId, recall.mode === 'off' ? 'inactive' : recall.mode)
+  }
+
+  private leaveScenes(lightId: string): void {
+    for (const s of this.scenario.scenes ?? []) if (lightId in s.lights) this.setScene(s.externalId, 'inactive')
+  }
+
+  private setScene(externalId: string, active: SceneActivation): void {
+    if (this.sceneState(externalId) === active) return
+    this.sceneActive.set(externalId, active)
+    this.onScene?.(externalId, active)
   }
 
   /** Prévisions d'un appareil météo simulé, à l'heure simulée courante. */
@@ -181,7 +238,12 @@ export class Simulation {
   private step(dtS: number): void {
     const ctx = this.ctx(dtS)
     tickWorld(this.world, ctx.hour, dtS, this.rng)
-    for (const d of this.devs) d.tick(ctx)
+    for (const d of this.devs) {
+      const id = d.descriptor.externalId
+      ctx.emitEvent = (event) => this.onEvent?.(id, event)
+      d.tick(ctx)
+    }
+    delete ctx.emitEvent
     this.runChaos()
     for (const d of this.devs) this.emitDiff(d)
   }

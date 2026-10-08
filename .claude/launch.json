@@ -36,6 +36,32 @@
             "autoPort": true
         },
         {
+            // Serveur de DÉMONSTRATION (sans KASBAH_HOUSE_FILE) : les trois propriétés de house/demos/,
+            // le seul plugin mock, la bascule de propriété côté serveur. KASBAH_HOUSE_FILE vide gagne
+            // sur apps/server/.env (ni dotenv ni `node --env-file` n'écrasent process.env) ; l'état
+            // (propriété retenue, historiques) part dans apps/server/.state/demo (chemin relatif au
+            // serveur). Son front est `kasbah-demo`, à lancer ensuite.
+            // ATTENTION : une édition depuis l'UI réécrit le fichier VERSIONNÉ de la propriété.
+            "name": "kasbah-demo-server",
+            "runtimeExecutable": "npm",
+            "runtimeArgs": ["run", "dev", "-w", "@kasbah/server"],
+            "env": {
+                "KASBAH_PORT": "9789",
+                "KASBAH_HOUSE_FILE": "",
+                "KASBAH_STATE_DIR": ".state/demo"
+            },
+            "port": 9789
+        },
+        {
+            // Le front du serveur de démonstration ci-dessus.
+            "name": "kasbah-demo",
+            "runtimeExecutable": "npm",
+            "runtimeArgs": ["run", "dev", "-w", "@kasbah/web"],
+            "env": { "PORT": "6177", "KASBAH_SERVER": "http://localhost:9789" },
+            "port": 6177,
+            "autoPort": true
+        },
+        {
             // Le front SEUL sur la simulation IN-PROCESS (VITE_INPROCESS_MOCK=1) : aucun serveur, aucun
             // materiel, aucune ecriture dans la maison. Pour verifier une vue sur le parc simule complet
             // (vehicules, borne, tondeuse...) sans toucher a la maison reelle ni a ses plugins.

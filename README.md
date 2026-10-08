@@ -14,7 +14,7 @@ kasbah/
   apps/server       Node 22 + Fastify 5 — REST + WebSocket, hôte des plugins, sert le build web
   packages/shared   Schémas zod : kinds, états, commandes, protocole, maison + géométrie pure
   packages/mock-sim Moteur de simulation déterministe (plugin `mock` et démo sans serveur)
-  house/            demo-house.json — maison de démonstration liée au plugin mock
+  house/            demos/ — trois propriétés de démonstration (maison à deux pans, toit plat, appartement) ; demo-house.json — maison des tests
   doc/              wiki du projet (architecture, plugins, UI, setup)
 ```
 
@@ -146,7 +146,7 @@ Pour reprendre une maison existante, recopier depuis l'ancienne machine ce que g
 
 | Commande | Maison | Usage |
 |---|---|---|
-| `npm run dev` | celle de `KASBAH_HOUSE_FILE` (défaut : démo + simulation) | développement, serveur relancé à chaque modification |
+| `npm run dev` | celle de `KASBAH_HOUSE_FILE` (absent : les trois propriétés de démonstration) | développement, serveur relancé à chaque modification |
 | `npm run house` | idem | la maison réelle au quotidien : serveur **sans** relance automatique, front Vite |
 | `npm run build && npm start` | idem | production de base : tout sur `KASBAH_PORT` (8787), sans Vite |
 
@@ -155,9 +155,17 @@ Si npm bloque le script d'installation d'`esbuild` : `npm approve-scripts esbuil
 - Web (Vite, HMR) : <http://localhost:5173> — accessible depuis un téléphone ou une tablette via l'IP du poste (`host: true`).
 - Serveur : <http://localhost:8787> — `GET /api/health`, `GET /api/house`, `GET /api/devices`, WebSocket `/ws`, serveur MCP `/mcp` (voir [Serveur MCP](#serveur-mcp)).
 
-Sans aucune configuration, le serveur démarre avec le plugin `mock` et la maison de démonstration : tout est pilotable immédiatement.
+Sans aucune configuration, le serveur démarre en **démonstration** : trois propriétés fictives (`house/demos/`), chacune peuplée par la simulation, et tout est pilotable immédiatement.
 
-Front seul, sans serveur ni écriture dans la maison :
+| Propriété | Lieu | Ce qu'elle montre |
+|---|---|---|
+| Les Tilleuls | Dijon | Maison R+1 à toit à deux pans : garage double et ses portes, terrasse d'étage, piscine, jardin en pente, panneaux en toiture et fenêtre de toit motorisée, caméras et sonnette, TV et barre de son, deux voitures et une borne, ambiances |
+| Les Embruns | Pornic | Plain-pied contemporain en L à toit plat : panneaux sur châssis, puits de lumière, brise-soleil orientables, carport, voile d'ombrage |
+| Le Belvédère | Lille | Appartement au 4e étage : balcon, rideaux motorisés, interphone, ni toit, ni jardin, ni voiture |
+
+On passe de l'une à l'autre par le pavé d'initiales en haut du rail, ou **Réglages → Propriété** ; tous les écrans suivent. Les lieux sont des espaces publics, les noms sont fictifs.
+
+Front seul, sans serveur ni écriture dans la maison (les trois propriétés aussi, le choix est retenu par le navigateur) :
 
 ```bash
 VITE_INPROCESS_MOCK=1 npm run dev -w @kasbah/web
@@ -288,13 +296,13 @@ Clients de bureau et de développement (serveur Kasbah lancé) :
 | Variable | Défaut | Rôle |
 |---|---|---|
 | `KASBAH_PORT` / `KASBAH_HOST` | `8787` / `0.0.0.0` | Écoute HTTP + WS |
-| `KASBAH_HOUSE_FILE` | `house/demo-house.json` | Fichier de la maison |
+| `KASBAH_HOUSE_FILE` | — (démonstration : `house/demos/`) | Fichier de la maison ; absent, les trois propriétés de démonstration |
 | `KASBAH_STATIC_DIR` | `apps/web/dist` | Build web servi en production |
 | `KASBAH_STATE_DIR` | `apps/server/.state` | Jetons, historiques, appareils déjà vus |
 | `KASBAH_STRICT_PLUGINS` | `false` | `true` : une config de plugin invalide empêche le démarrage |
 | `KASBAH_COMMAND_TIMEOUT_MS` | `10000` | Délai max d'une commande |
 | `KASBAH_LOG_LEVEL` / `KASBAH_LOG_PRETTY` | `info` / `false` | Journalisation pino |
-| `MOCK_SCENARIO` | `default` | `default`, `empty`, `chaos`, `winter` |
+| `MOCK_SCENARIO` | `default` | `default`, `empty`, `chaos`, `winter` ; en démonstration, le parc suit la propriété (`winter` donne sa version d'hiver) |
 | `MOCK_TIME_SCALE` | `1` | Accélération du temps simulé (60 → une journée en 24 min) |
 | `FFMPEG_PATH` | `ffmpeg` | Relais vidéo des caméras |
 | `MCP_PUBLIC_URL` | — | Adresse publique HTTPS : application avec connexion et serveur MCP (voir [Accès depuis l'extérieur](#accès-depuis-lextérieur)) |

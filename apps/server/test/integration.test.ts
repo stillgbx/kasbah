@@ -91,7 +91,7 @@ describe('activation des plugins (GET /api/plugins, PATCH /api/plugins/:id)', ()
       expect(Object.keys(byId).length).toBeGreaterThan(5)          // tous disponibles, pas seulement les actifs
       expect(byId.mock).toMatchObject({ enabled: true, implemented: true })
       expect(byId.sonos).toMatchObject({ enabled: false, implemented: true })     // plus de squelette : activable, eteint par defaut
-      expect(byId.mock.parts).toHaveLength(DEVICE_KINDS.length - 1)  // un par kind simulé (tous sauf `camera`)
+      expect(byId.mock.parts).toHaveLength(DEVICE_KINDS.length)  // un par kind simulé (tous, caméras comprises)
 
       // eteindre la simulation : ses appareils quittent le registre
       expect((await kasbah.app.inject({ method: 'PATCH', url: '/api/plugins/mock', payload: { enabled: false } })).statusCode).toBe(200)
@@ -178,10 +178,11 @@ describe('plugin scenes (GET /api/scenes, POST /api/scenes/:id/recall)', () => {
       const notDynamic = await kasbah.app.inject({ method: 'POST', url: '/api/scenes/mock:s1/recall', payload: { mode: 'dynamic' } })
       expect(notDynamic.statusCode).toBe(400)
       expect(notDynamic.json().error.code).toBe('UNSUPPORTED_COMMAND')
-      // le plugin mock n'implémente ni recallScene ni updateScene
+      // le plugin mock ne rappelle que les ambiances de SON parc : une scène injectée qu'il ne
+      // connaît pas est refusée comme un appareil absent ; il n'implémente pas updateScene
       const noRecall = await kasbah.app.inject({ method: 'POST', url: '/api/scenes/mock:s1/recall', payload: {} })
-      expect(noRecall.statusCode).toBe(501)
-      expect(noRecall.json().error.code).toBe('NOT_IMPLEMENTED')
+      expect(noRecall.statusCode).toBe(503)
+      expect(noRecall.json().error.code).toBe('DEVICE_UNAVAILABLE')
 
       // PATCH : le réglage « démarrer animée » n'a pas de sens sans palette animée
       const notAnimated = await kasbah.app.inject({ method: 'PATCH', url: '/api/scenes/mock:s1', payload: { autoDynamic: true } })

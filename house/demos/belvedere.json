@@ -1,0 +1,837 @@
+{
+  "schemaVersion": 1,
+  "id": "belvedere",
+  "name": "Le Belvédère",
+  "meta": {
+    "demo": {
+      "scenario": "belvedere",
+      "kind": "apartment"
+    },
+    "note": "Propriété de démonstration : appartement T3 au 4e étage à Lille, balcon, sans toit (l'immeuble n'est pas dessiné), ni jardin ni véhicule. Liée appareil par appareil au scénario `belvedere` du plugin mock."
+  },
+  "origin": {
+    "lat": 50.6366,
+    "lon": 3.0635,
+    "alt": 20,
+    "heading": 0
+  },
+  "defaults": {
+    "levelHeight": 2.7,
+    "slabThickness": 0.25,
+    "interiorWallThickness": 0.1,
+    "exteriorWallThickness": 0.35,
+    "doorHeight": 2.1,
+    "windowSill": 0.9
+  },
+  "style": {
+    "facade": {
+      "id": "red-brick"
+    }
+  },
+  "levels": [
+    {
+      "id": "appartement",
+      "name": "Appartement",
+      "shortName": "4e",
+      "elevation": 12.2,
+      "height": 2.7,
+      "roomOrder": [
+        "sejour",
+        "cuisine",
+        "entree",
+        "chambre-1",
+        "chambre-2",
+        "salle-d-eau",
+        "couloir",
+        "balcon"
+      ]
+    }
+  ],
+  "rooms": [
+    {
+      "id": "sejour",
+      "levelId": "appartement",
+      "name": "Séjour",
+      "polygon": [
+        [
+          5.8,
+          0
+        ],
+        [
+          13,
+          0
+        ],
+        [
+          13,
+          4.8
+        ],
+        [
+          9.6,
+          4.8
+        ],
+        [
+          5.8,
+          4.8
+        ]
+      ],
+      "walls": [
+        {
+          "segment": 2,
+          "kind": "none"
+        }
+      ],
+      "style": {
+        "floor": "wood",
+        "floorFinish": {
+          "id": "herringbone"
+        },
+        "wallFinish": {
+          "id": "smooth-plaster",
+          "tint": "#f2ede6"
+        }
+      },
+      "openings": [
+        {
+          "id": "baie-balcon",
+          "type": "bay",
+          "segment": 0,
+          "offset": 0.8,
+          "width": 2.4,
+          "height": 2.3,
+          "leaves": 2,
+          "name": "Porte-fenêtre du balcon",
+          "material": "wood",
+          "color": "#f4f1ea"
+        },
+        {
+          "id": "fen-sejour",
+          "type": "window",
+          "segment": 0,
+          "offset": 4.6,
+          "width": 1.6,
+          "height": 1.5,
+          "sill": 0.9,
+          "material": "wood",
+          "color": "#f4f1ea"
+        },
+        {
+          "id": "fen-sejour-est",
+          "type": "window",
+          "segment": 1,
+          "offset": 1.8,
+          "width": 1.2,
+          "height": 1.5,
+          "sill": 0.9,
+          "material": "wood",
+          "color": "#f4f1ea"
+        }
+      ]
+    },
+    {
+      "id": "cuisine",
+      "levelId": "appartement",
+      "name": "Cuisine",
+      "polygon": [
+        [
+          9.6,
+          4.8
+        ],
+        [
+          13,
+          4.8
+        ],
+        [
+          13,
+          8
+        ],
+        [
+          9.6,
+          8
+        ]
+      ],
+      "walls": [
+        {
+          "segment": 0,
+          "kind": "none"
+        }
+      ],
+      "style": {
+        "floor": "tile",
+        "floorFinish": {
+          "id": "cement-tile"
+        },
+        "wallFinish": {
+          "id": "subway-tile"
+        }
+      },
+      "openings": [
+        {
+          "id": "fen-cuisine",
+          "type": "window",
+          "segment": 2,
+          "offset": 1,
+          "width": 1.2,
+          "height": 1.2,
+          "sill": 1.05,
+          "material": "wood",
+          "color": "#f4f1ea"
+        }
+      ]
+    },
+    {
+      "id": "entree",
+      "levelId": "appartement",
+      "name": "Entrée",
+      "kind": "corridor",
+      "polygon": [
+        [
+          5.8,
+          5
+        ],
+        [
+          9.4,
+          5
+        ],
+        [
+          9.4,
+          8
+        ],
+        [
+          5.8,
+          8
+        ]
+      ],
+      "style": {
+        "floor": "tile",
+        "floorFinish": {
+          "id": "cement-tile"
+        }
+      },
+      "openings": [
+        {
+          "id": "passage-sejour",
+          "type": "passage",
+          "segment": 0,
+          "offset": 1,
+          "width": 1.4,
+          "height": 2.1
+        },
+        {
+          "id": "porte-palier",
+          "type": "door",
+          "segment": 2,
+          "offset": 1.4,
+          "width": 0.9,
+          "height": 2.1,
+          "name": "Porte palière",
+          "material": "wood",
+          "color": "#3d2b20"
+        },
+        {
+          "id": "porte-couloir",
+          "type": "door",
+          "segment": 3,
+          "offset": 1.2,
+          "width": 0.8,
+          "height": 2.1
+        }
+      ]
+    },
+    {
+      "id": "couloir",
+      "levelId": "appartement",
+      "name": "Couloir",
+      "kind": "corridor",
+      "polygon": [
+        [
+          4,
+          2.4
+        ],
+        [
+          5.6,
+          2.4
+        ],
+        [
+          5.6,
+          8
+        ],
+        [
+          4,
+          8
+        ]
+      ],
+      "style": {
+        "floor": "wood",
+        "floorFinish": {
+          "id": "herringbone"
+        }
+      }
+    },
+    {
+      "id": "chambre-1",
+      "levelId": "appartement",
+      "name": "Chambre 1",
+      "polygon": [
+        [
+          0,
+          0
+        ],
+        [
+          3.8,
+          0
+        ],
+        [
+          3.8,
+          3.8
+        ],
+        [
+          0,
+          3.8
+        ]
+      ],
+      "style": {
+        "floor": "wood",
+        "floorFinish": {
+          "id": "honey-oak"
+        },
+        "wallFinish": {
+          "id": "matte-paint",
+          "tint": "#e5ddd0"
+        }
+      },
+      "openings": [
+        {
+          "id": "fen-chambre-1",
+          "type": "window",
+          "segment": 0,
+          "offset": 1.3,
+          "width": 1.2,
+          "height": 1.4,
+          "sill": 0.9,
+          "material": "wood",
+          "color": "#f4f1ea"
+        },
+        {
+          "id": "porte-chambre-1",
+          "type": "door",
+          "segment": 1,
+          "offset": 2.7,
+          "width": 0.8,
+          "height": 2.1
+        }
+      ]
+    },
+    {
+      "id": "chambre-2",
+      "levelId": "appartement",
+      "name": "Chambre 2",
+      "polygon": [
+        [
+          0,
+          4
+        ],
+        [
+          3.8,
+          4
+        ],
+        [
+          3.8,
+          8
+        ],
+        [
+          0,
+          8
+        ]
+      ],
+      "style": {
+        "floor": "carpet",
+        "floorFinish": {
+          "id": "white-carpet"
+        },
+        "wallFinish": {
+          "id": "matte-paint",
+          "tint": "#dbe6ee"
+        }
+      },
+      "openings": [
+        {
+          "id": "fen-chambre-2",
+          "type": "window",
+          "segment": 2,
+          "offset": 1.3,
+          "width": 1.2,
+          "height": 1.4,
+          "sill": 0.9,
+          "material": "wood",
+          "color": "#f4f1ea"
+        },
+        {
+          "id": "porte-chambre-2",
+          "type": "door",
+          "segment": 1,
+          "offset": 0.6,
+          "width": 0.8,
+          "height": 2.1
+        }
+      ]
+    },
+    {
+      "id": "salle-d-eau",
+      "levelId": "appartement",
+      "name": "Salle d'eau",
+      "polygon": [
+        [
+          4,
+          0
+        ],
+        [
+          5.6,
+          0
+        ],
+        [
+          5.6,
+          2.2
+        ],
+        [
+          4,
+          2.2
+        ]
+      ],
+      "style": {
+        "floor": "tile",
+        "floorFinish": {
+          "id": "hex-tile"
+        },
+        "wallFinish": {
+          "id": "white-tile"
+        }
+      },
+      "openings": [
+        {
+          "id": "fen-sde",
+          "type": "window",
+          "segment": 0,
+          "offset": 0.5,
+          "width": 0.6,
+          "height": 0.6,
+          "sill": 1.4
+        },
+        {
+          "id": "porte-sde",
+          "type": "door",
+          "segment": 2,
+          "offset": 0.4,
+          "width": 0.7,
+          "height": 2.1
+        }
+      ]
+    },
+    {
+      "id": "balcon",
+      "levelId": "appartement",
+      "name": "Balcon",
+      "kind": "balcony",
+      "polygon": [
+        [
+          5.5,
+          -1.9
+        ],
+        [
+          13.35,
+          -1.9
+        ],
+        [
+          13.35,
+          -0.35
+        ],
+        [
+          5.5,
+          -0.35
+        ]
+      ],
+      "style": {
+        "floorFinish": {
+          "id": "grey-slabs"
+        }
+      }
+    }
+  ],
+  "site": {
+    "elevation": 0,
+    "terrain": [
+      [
+        -8,
+        -10
+      ],
+      [
+        22,
+        -10
+      ],
+      [
+        22,
+        16
+      ],
+      [
+        -8,
+        16
+      ]
+    ],
+    "parkings": [
+      {
+        "id": "park.aspirateur",
+        "name": "Base de l'aspirateur",
+        "accepts": "vacuum",
+        "deviceId": "mock:ap-vacuum",
+        "levelId": "appartement",
+        "center": [
+          9.1,
+          5.3
+        ],
+        "size": [
+          0.4,
+          0.4
+        ],
+        "yaw": 0
+      }
+    ]
+  },
+  "plugins": {
+    "mock": {
+      "enabled": true
+    }
+  },
+  "devices": [
+    {
+      "id": "light.sejour",
+      "deviceId": "mock:ap-light-sejour",
+      "levelId": "appartement",
+      "roomId": "sejour",
+      "position": [
+        9.4,
+        2.4,
+        2.55
+      ],
+      "mount": "ceiling"
+    },
+    {
+      "id": "light.lampadaire",
+      "deviceId": "mock:ap-light-lampadaire",
+      "levelId": "appartement",
+      "roomId": "sejour",
+      "position": [
+        12.6,
+        4.4,
+        1.6
+      ],
+      "mount": "floor"
+    },
+    {
+      "id": "light.cuisine",
+      "deviceId": "mock:ap-light-cuisine",
+      "levelId": "appartement",
+      "roomId": "cuisine",
+      "position": [
+        11.3,
+        7.95,
+        1.6
+      ],
+      "mount": "wall",
+      "yaw": 180
+    },
+    {
+      "id": "light.entree",
+      "deviceId": "mock:ap-light-entree",
+      "levelId": "appartement",
+      "roomId": "entree",
+      "position": [
+        7.6,
+        6.5,
+        2.55
+      ],
+      "mount": "ceiling"
+    },
+    {
+      "id": "light.chambre1",
+      "deviceId": "mock:ap-light-chambre1",
+      "levelId": "appartement",
+      "roomId": "chambre-1",
+      "position": [
+        0.4,
+        1.2,
+        0.6
+      ],
+      "mount": "free"
+    },
+    {
+      "id": "light.plafonnier1",
+      "deviceId": "mock:ap-fan-chambre_light",
+      "levelId": "appartement",
+      "roomId": "chambre-1",
+      "position": [
+        1.9,
+        1.9,
+        2.55
+      ],
+      "mount": "ceiling"
+    },
+    {
+      "id": "fan.chambre1",
+      "deviceId": "mock:ap-fan-chambre_fan",
+      "levelId": "appartement",
+      "roomId": "chambre-1",
+      "position": [
+        1.9,
+        1.9,
+        2.55
+      ],
+      "mount": "ceiling"
+    },
+    {
+      "id": "light.chambre2",
+      "deviceId": "mock:ap-light-chambre2",
+      "levelId": "appartement",
+      "roomId": "chambre-2",
+      "position": [
+        1.9,
+        6,
+        0.5
+      ],
+      "mount": "free"
+    },
+    {
+      "id": "light.sde",
+      "deviceId": "mock:ap-light-sdb",
+      "levelId": "appartement",
+      "roomId": "salle-d-eau",
+      "position": [
+        4.8,
+        1.1,
+        2.55
+      ],
+      "mount": "ceiling"
+    },
+    {
+      "id": "light.balcon",
+      "deviceId": "mock:ap-light-balcon",
+      "levelId": "appartement",
+      "roomId": "balcon",
+      "position": [
+        9.4,
+        -1.85,
+        1
+      ],
+      "mount": "free"
+    },
+    {
+      "id": "cover.rideau",
+      "deviceId": "mock:ap-cover-rideau",
+      "levelId": "appartement",
+      "roomId": "sejour",
+      "position": [
+        7.8,
+        0.05,
+        1.1
+      ],
+      "openingId": "baie-balcon",
+      "coverMaterial": "fabric",
+      "coverColor": "#c9b79c"
+    },
+    {
+      "id": "cover.sejour",
+      "deviceId": "mock:ap-cover-sejour",
+      "levelId": "appartement",
+      "roomId": "sejour",
+      "position": [
+        11.2,
+        0.05,
+        1.6
+      ],
+      "openingId": "fen-sejour"
+    },
+    {
+      "id": "cover.chambre1",
+      "deviceId": "mock:ap-cover-chambre1",
+      "levelId": "appartement",
+      "roomId": "chambre-1",
+      "position": [
+        1.9,
+        0.05,
+        1.55
+      ],
+      "openingId": "fen-chambre-1"
+    },
+    {
+      "id": "cover.chambre2",
+      "deviceId": "mock:ap-cover-chambre2",
+      "levelId": "appartement",
+      "roomId": "chambre-2",
+      "position": [
+        1.9,
+        7.95,
+        1.55
+      ],
+      "openingId": "fen-chambre-2"
+    },
+    {
+      "id": "media.tv",
+      "deviceId": "mock:ap-media-tv",
+      "levelId": "appartement",
+      "roomId": "sejour",
+      "position": [
+        5.85,
+        2.4,
+        1.3
+      ],
+      "mount": "wall",
+      "yaw": 90,
+      "size": {
+        "width": 1.21,
+        "height": 0.68
+      },
+      "meta": {
+        "audioOutput": "media.barre"
+      }
+    },
+    {
+      "id": "media.barre",
+      "deviceId": "mock:ap-media-barre",
+      "levelId": "appartement",
+      "roomId": "sejour",
+      "position": [
+        6.1,
+        2.4,
+        0.55
+      ],
+      "mount": "free",
+      "yaw": 90,
+      "speakerShape": "bar"
+    },
+    {
+      "id": "media.cuisine",
+      "deviceId": "mock:ap-media-cuisine",
+      "levelId": "appartement",
+      "roomId": "cuisine",
+      "position": [
+        12.7,
+        5.2,
+        0.95
+      ],
+      "mount": "free",
+      "yaw": 270
+    },
+    {
+      "id": "media.chambre1",
+      "deviceId": "mock:ap-media-chambre",
+      "levelId": "appartement",
+      "roomId": "chambre-1",
+      "position": [
+        0.35,
+        2.8,
+        0.6
+      ],
+      "mount": "free",
+      "speakerShape": "pebble",
+      "yaw": 90
+    },
+    {
+      "id": "climate.thermostat",
+      "deviceId": "mock:ap-climate",
+      "levelId": "appartement",
+      "roomId": "entree",
+      "position": [
+        5.85,
+        6.6,
+        1.5
+      ],
+      "mount": "wall",
+      "yaw": 90
+    },
+    {
+      "id": "camera.interphone",
+      "deviceId": "mock:ap-cam-interphone",
+      "levelId": "appartement",
+      "roomId": "entree",
+      "position": [
+        8.6,
+        7.95,
+        1.5
+      ],
+      "mount": "wall",
+      "yaw": 180
+    },
+    {
+      "id": "camera.sejour",
+      "deviceId": "mock:ap-cam-sejour",
+      "levelId": "appartement",
+      "roomId": "sejour",
+      "position": [
+        12.95,
+        4.7,
+        2.3
+      ],
+      "mount": "wall",
+      "yaw": 225
+    },
+    {
+      "id": "vacuum.robot",
+      "deviceId": "mock:ap-vacuum",
+      "levelId": "appartement",
+      "roomId": "entree",
+      "position": [
+        9.1,
+        5.3,
+        0.05
+      ],
+      "mount": "floor"
+    },
+    {
+      "id": "sensor.chambre2",
+      "deviceId": "mock:ap-sensor-chambre2",
+      "levelId": "appartement",
+      "roomId": "chambre-2",
+      "position": [
+        0.05,
+        6,
+        1.5
+      ],
+      "mount": "wall",
+      "yaw": 90
+    },
+    {
+      "id": "sensor.balcon",
+      "deviceId": "mock:ap-sensor-balcon",
+      "levelId": "appartement",
+      "roomId": "balcon",
+      "position": [
+        13.1,
+        -1,
+        1.5
+      ],
+      "mount": "free"
+    },
+    {
+      "id": "pet.feeder",
+      "deviceId": "mock:ap-pet-feeder",
+      "levelId": "appartement",
+      "roomId": "cuisine",
+      "position": [
+        12.6,
+        7.6,
+        0
+      ],
+      "mount": "floor"
+    },
+    {
+      "id": "pet.fountain",
+      "deviceId": "mock:ap-pet-fountain",
+      "levelId": "appartement",
+      "roomId": "cuisine",
+      "position": [
+        12,
+        7.6,
+        0
+      ],
+      "mount": "floor"
+    }
+  ]
+}

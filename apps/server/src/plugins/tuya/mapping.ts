@@ -50,7 +50,7 @@ export function fanExternalId(deviceId: string): string {
 
 /**
  * Noms dérivés du nom PHYSIQUE de configuration. La pièce vit dans `house.json` — ne pas
- * l'injecter ici (« Chambre 2 › Ventilateur Chambre 2 »).
+ * l'injecter ici (« Bureau › Ventilateur Bureau »).
  */
 export function deriveNames(physicalName: string): { fan: string; light: string } {
   const m = physicalName.match(/^Ventilateur\s+plafonnier\s+(.+)$/i)
