@@ -204,6 +204,12 @@ export interface McpUser { name: string }
  */
 export interface ClaudeAccount { user: string | null; savedAt: number | null; house: boolean }
 
+/**
+ * La voix des réponses parlées (plugin `transcription`) du compte courant (`user` `null` = la maison,
+ * sur le réseau local). `voice` `null` : pas de choix, `houseVoice` sert, sinon `defaultVoice` (`TTS_VOICE`).
+ */
+export interface TranscriptionSettings { user: string | null; voice: string | null; houseVoice: string | null; defaultVoice: string | null }
+
 /** Ce que l'assistant (`claude -p` sur le serveur) rend, au fil de l'eau, pour une instruction. */
 export type AssistantEvent =
   | { type: 'text'; text: string }
@@ -689,9 +695,9 @@ export interface Transport {
   speak(text: string): Promise<Blob>
   /** Les voix créées chez le fournisseur (profils VoiceStudio), pour la fiche du plugin. */
   transcriptionVoices(): Promise<{ voices: { id: string; name: string; language?: string }[] }>
-  /** La voix des réponses parlées (`null` = `TTS_VOICE`, rendue dans `defaultVoice`). */
-  transcriptionSettings(): Promise<{ voice: string | null; defaultVoice: string | null }>
-  setTranscriptionVoice(voice: string | null): Promise<{ voice: string | null; defaultVoice: string | null }>
+  /** La voix des réponses parlées du compte courant (la maison sur le réseau local) ; `null` = celle de la maison, sinon `TTS_VOICE`. */
+  transcriptionSettings(): Promise<TranscriptionSettings>
+  setTranscriptionVoice(voice: string | null): Promise<TranscriptionSettings>
   /** Le journal des instructions, la plus récente d'abord ; refusé sous l'adresse publique (`LAN_ONLY`). */
   assistantLog(): Promise<{ entries: AssistantLogEntry[] }>
   /** Comptes de l'adresse publique et du serveur MCP (assistants IA) ; réseau local seulement. */

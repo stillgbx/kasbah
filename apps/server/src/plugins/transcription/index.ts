@@ -1,10 +1,11 @@
 import { spawn } from 'node:child_process'
-import { readFile } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
+import { dirname } from 'node:path'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import type { PluginHealth } from '@kasbah/shared'
 import { writeFileAtomic } from '../../core/atomic-file'
-import { stateFile } from '../../core/paths'
+import { stateFile, userStateFile } from '../../core/paths'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
 import { sendError } from '../../http/errors'
 import type { SpawnFn } from '../../music/proxy'
@@ -73,13 +74,17 @@ const SPEAK_TIMEOUT_MS = 60_000
 const VOICESTUDIO_READY_MS = 180_000
 const LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]'])
 
-/** Réglages de la fiche du plugin (`.state/transcription.json`) : la voix des réponses, pour toute la maison. */
-const settingsFile = () => stateFile('transcription.json')
+/**
+ * Réglages de la fiche du plugin : la voix des réponses. Celle de la maison (`.state/transcription.json`,
+ * réglée depuis le réseau local) et, par-dessus, celle d'un compte connecté (son dossier d'état) ;
+ * `null` = pas de choix, la voix du niveau d'en dessous sert (compte → maison → `TTS_VOICE`).
+ */
+const settingsFile = (user: string | null) => (user === null ? stateFile('transcription.json') : userStateFile(user, 'transcription.json'))
 const settingsSchema = z.object({ voice: z.string().trim().min(1).max(100).nullable().default(null) })
 type Settings = z.infer<typeof settingsSchema>
 
-async function readSettings(): Promise<Settings> {
-  try { return settingsSchema.parse(JSON.parse(await readFile(settingsFile(), 'utf8'))) } catch { return settingsSchema.parse({}) }
+async function readSettings(user: string | null): Promise<Settings> {
+  try { return settingsSchema.parse(JSON.parse(await readFile(settingsFile(user), 'utf8'))) } catch { return settingsSchema.parse({}) }
 }
 
 /** Une voix proposée par le fournisseur (`GET /v1/audio/voices`, extension de VoiceStudio à l'API OpenAI). */
@@ -219,10 +224,10 @@ export function createTranscriptionPlugin(deps: TranscriptionPluginDeps = {}): D
   }
 
   /** La réponse dite à voix haute : le son tel que le fournisseur le rend (WAV demandé). */
-  async function speak(text: string): Promise<{ audio: Buffer; type: string }> {
+  async function speak(text: string, user: string | null): Promise<{ audio: Buffer; type: string }> {
     const t = ready()
-    // la voix choisie dans la fiche du plugin, sinon `TTS_VOICE`
-    const voice = (await readSettings()).voice ?? t.ttsVoice
+    // la voix du compte, sinon celle de la maison, sinon `TTS_VOICE`
+    const voice = (user === null ? null : (await readSettings(user)).voice) ?? (await readSettings(null)).voice ?? t.ttsVoice
     const res = await call('/v1/audio/speech', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -303,15 +308,27 @@ export function createTranscriptionPlugin(deps: TranscriptionPluginDeps = {}): D
         return { voices: list.filter((v) => v.type !== 'openai_alias').map((v) => ({ id: v.voice_id, name: v.name, ...(v.language ? { language: v.language } : {}) })) }
       })
 
-      app.get('/settings', async () => ({ ...(await readSettings()), defaultVoice: target?.ttsVoice ?? null }))
+      // La voix du compte courant : celle de la session (adresse publique), la maison sur le réseau
+      // local. `houseVoice` : ce qui sert au compte qui n'a rien choisi.
+      const settingsOf = async (user: string | null) => ({
+        user,
+        voice: (await readSettings(user)).voice,
+        houseVoice: (await readSettings(null)).voice,
+        defaultVoice: target?.ttsVoice ?? null,
+      })
+
+      app.get('/settings', async (req) => settingsOf(req.sessionUser ?? null))
 
       app.put('/settings', async (req, reply) => {
         const body = settingsSchema.safeParse(req.body)
         if (!body.success) return sendError(reply, 400, 'INVALID_BODY', 'voice: a voice id, or null for the default')
-        await writeFileAtomic(settingsFile(), `${JSON.stringify(body.data)}
+        const user = req.sessionUser ?? null
+        const file = settingsFile(user)
+        await mkdir(dirname(file), { recursive: true })
+        await writeFileAtomic(file, `${JSON.stringify(body.data)}
 `)
-        ctx?.logger.info({ voice: body.data.voice }, 'spoken answers voice set')
-        return { ...body.data, defaultVoice: target?.ttsVoice ?? null }
+        ctx?.logger.info({ user, voice: body.data.voice }, 'spoken answers voice set')
+        return settingsOf(user)
       })
 
       // La réponse de l'assistant dite à voix haute, jouée par le navigateur qui a dicté l'instruction.
@@ -320,7 +337,7 @@ export function createTranscriptionPlugin(deps: TranscriptionPluginDeps = {}): D
         const body = z.object({ text: z.string().trim().min(1).max(4000) }).safeParse(req.body)
         if (!body.success) return sendError(reply, 400, 'INVALID_BODY', 'text is required')
         const started = Date.now()
-        const { audio, type } = await speak(body.data.text)
+        const { audio, type } = await speak(body.data.text, req.sessionUser ?? null)
         ctx?.logger.info({ provider: target?.provider, ms: Date.now() - started, bytes: audio.length }, 'spoken')
         return reply.header('cache-control', 'no-store').type(type).send(audio)
       })

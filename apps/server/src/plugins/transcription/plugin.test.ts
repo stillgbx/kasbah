@@ -60,6 +60,9 @@ async function started(env: Record<string, string>, answer: (url: string) => Res
   await plugin.init(ctx)
   await plugin.start()
   app = Fastify()
+  // le compte de la session, comme `http/session.ts` le pose : ici par un en-tête de test
+  app.decorateRequest('sessionUser', null)
+  app.addHook('onRequest', async (req) => { const u = req.headers['x-test-user']; req.sessionUser = typeof u === 'string' ? u : null })
   app.setErrorHandler((err, _req, reply) => { const d = describeError(err); return sendError(reply, d.status, d.code, d.message) })
   await app.register(async (sub) => plugin.registerRoutes!(sub), { prefix: '/api/plugins/transcription' })
   await app.ready()
@@ -186,14 +189,34 @@ describe('voix des réponses (fiche du plugin)', () => {
   it('dit la réponse avec la voix choisie, et revient à TTS_VOICE quand on l’efface', async () => {
     const { stt } = await started({ STT_URL: 'http://localhost:7860', TTS_VOICE: 'default' }, ok, { speech: true })
     const voiceSent = () => JSON.parse(stt.sent.filter((x) => x.url.endsWith('/v1/audio/speech')).at(-1)!.fields.json![0]!).voice
-    expect((await app!.inject({ method: 'GET', url: '/api/plugins/transcription/settings' })).json()).toEqual({ voice: null, defaultVoice: 'default' })
+    expect((await app!.inject({ method: 'GET', url: '/api/plugins/transcription/settings' })).json()).toEqual({ user: null, voice: null, houseVoice: null, defaultVoice: 'default' })
     const put = await app!.inject({ method: 'PUT', url: '/api/plugins/transcription/settings', payload: { voice: '0a1b2c3d' } })
-    expect(put.json()).toEqual({ voice: '0a1b2c3d', defaultVoice: 'default' })
+    expect(put.json()).toEqual({ user: null, voice: '0a1b2c3d', houseVoice: '0a1b2c3d', defaultVoice: 'default' })
     await app!.inject({ method: 'POST', url: '/api/plugins/transcription/speak', payload: { text: 'Fait.' } })
     expect(voiceSent()).toBe('0a1b2c3d')
     await app!.inject({ method: 'PUT', url: '/api/plugins/transcription/settings', payload: { voice: null } })
     await app!.inject({ method: 'POST', url: '/api/plugins/transcription/speak', payload: { text: 'Fait.' } })
     expect(voiceSent()).toBe('default')
+  })
+
+  it('un compte connecté surcharge la voix de la maison pour lui seul, et la retrouve en effaçant son choix', async () => {
+    const { stt } = await started({ STT_URL: 'http://localhost:7860' }, ok, { speech: true })
+    const as = (user: string | null) => (user ? { 'x-test-user': user } : {})
+    const settings = (user: string | null, voice?: string | null) => app!.inject({ method: voice === undefined ? 'GET' : 'PUT', url: '/api/plugins/transcription/settings', headers: as(user), ...(voice === undefined ? {} : { payload: { voice } }) })
+    const said = async (user: string | null) => {
+      await app!.inject({ method: 'POST', url: '/api/plugins/transcription/speak', headers: as(user), payload: { text: 'Fait.' } })
+      return JSON.parse(stt.sent.filter((x) => x.url.endsWith('/v1/audio/speech')).at(-1)!.fields.json![0]!).voice
+    }
+    await settings(null, 'maison')
+    expect(await said('Alice')).toBe('maison')
+    expect((await settings('Alice', '0a1b2c3d')).json()).toEqual({ user: 'Alice', voice: '0a1b2c3d', houseVoice: 'maison', defaultVoice: 'default' })
+    expect(await said('Alice')).toBe('0a1b2c3d')
+    // ni la maison ni un autre compte ne prennent sa voix
+    expect(await said(null)).toBe('maison')
+    expect(await said('bob')).toBe('maison')
+    expect((await settings(null)).json()).toMatchObject({ user: null, voice: 'maison' })
+    await settings('Alice', null)
+    expect(await said('Alice')).toBe('maison')
   })
 
   it('refuse une voix vide', async () => {
