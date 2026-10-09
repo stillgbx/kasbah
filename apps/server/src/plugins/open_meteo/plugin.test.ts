@@ -200,6 +200,16 @@ describe('ailleurs qu’à la maison (vue Météo)', () => {
     expect((await a.inject({ method: 'GET', url: '/at?lat=91&lon=0' })).statusCode).toBe(400)
     await plugin.stop()
   })
+
+  it('plugin monté mais jamais démarré : 409 DEVICE_UNAVAILABLE en clair, pas un 500', async () => {
+    const a = Fastify()
+    createOpenMeteoPlugin({ fetchImpl: fakeService().fetchImpl }).registerRoutes?.(a)
+    for (const url of ['/places?q=Pornic', '/at?lat=47.11&lon=-2.1', '/alerts?lat=47.11&lon=-2.1']) {
+      const res = await a.inject({ method: 'GET', url })
+      expect(res.statusCode, url).toBe(409)
+      expect(res.json().error, url).toMatchObject({ code: 'DEVICE_UNAVAILABLE', message: 'open_meteo plugin is not started' })
+    }
+  })
 })
 
 describe('vigilance de la maison', () => {

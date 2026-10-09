@@ -34,6 +34,8 @@ const atQuerySchema = z.object({ lat: z.coerce.number().min(-90).max(90), lon: z
 const placesQuerySchema = z.object({ q: z.string().trim().min(2).max(100), lang: z.string().regex(/^[a-z]{2}$/).default('fr') })
 /** Lieux tenus en cache à la fois : les favoris d'une maison, avec de la marge. */
 const ELSEWHERE_MAX = 24
+/** Routes montées mais plugin jamais démarré (désactivé, ou démarrage pas encore passé). */
+const NOT_STARTED = 'open_meteo plugin is not started'
 
 export interface OpenMeteoDeps {
   fetchImpl?: FetchLike
@@ -142,16 +144,18 @@ export function createOpenMeteoPlugin(deps: OpenMeteoDeps = {}): DevicePlugin {
       app.get('/places', async (req, reply) => {
         const query = placesQuerySchema.safeParse(req.query)
         if (!query.success) return sendError(reply, 400, 'INVALID_QUERY', 'q (2 to 100 characters) and lang (two letters) expected')
+        if (!client || !ctx) return sendError(reply, 409, 'DEVICE_UNAVAILABLE', NOT_STARTED)
         const { q, lang } = query.data
-        return { places: toPlaces(await client!.places(q, lang, ctx!.signal)) }
+        return { places: toPlaces(await client.places(q, lang, ctx.signal)) }
       })
       /** La météo d'un autre lieu : état complet et prévisions, au format de l'appareil de la maison. */
       app.get('/at', async (req, reply) => {
         const query = atQuerySchema.safeParse(req.query)
         if (!query.success) return sendError(reply, 400, 'INVALID_QUERY', 'lat (-90 to 90) and lon (-180 to 180) expected')
+        if (!ctx) return sendError(reply, 409, 'DEVICE_UNAVAILABLE', NOT_STARTED)
         const { lat, lon } = query.data
         const r = await readElsewhere(lat, lon)
-        const now = ctx!.clock.now()
+        const now = ctx.clock.now()
         return {
           state: toWeatherState(r.forecast, r.airQuality, now),
           forecast: toForecast(r.forecast, Math.floor(now / 1000)),
@@ -163,7 +167,8 @@ export function createOpenMeteoPlugin(deps: OpenMeteoDeps = {}): DevicePlugin {
       app.get('/alerts', async (req, reply) => {
         const query = atQuerySchema.safeParse(req.query)
         if (!query.success) return sendError(reply, 400, 'INVALID_QUERY', 'lat (-90 to 90) and lon (-180 to 180) expected')
-        const r = await vigilance!.at(query.data.lat, query.data.lon, ctx!.signal)
+        if (!vigilance || !ctx) return sendError(reply, 409, 'DEVICE_UNAVAILABLE', NOT_STARTED)
+        const r = await vigilance.at(query.data.lat, query.data.lon, ctx.signal)
         return { ...r, attribution: VIGILANCE_ATTRIBUTION, web: VIGILANCE_WEB }
       })
     },
