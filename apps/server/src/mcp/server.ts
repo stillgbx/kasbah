@@ -1,4 +1,4 @@
-import { assertCommandAllowed, commandSchema, DEVICE_KINDS, indexHouse, sceneRecallSchema, type DeviceEntry } from '@kasbah/shared'
+import { assertCommandAllowed, commandSchema, DEVICE_KINDS, indexHouse, sceneRecallSchema, type AutomationEntry, type AutomationRun, type DeviceConsumption, type DeviceEntry, type DeviceJournal, type EnergyHistory, type StateFor, type WeatherForecast } from '@kasbah/shared'
 import { hostHeaderValidation, originValidation } from '@modelcontextprotocol/fastify'
 import { createMcpHandler, McpServer, type McpRequestContext } from '@modelcontextprotocol/server'
 import type { FastifyInstance } from 'fastify'
@@ -8,6 +8,8 @@ import type { PluginHost } from '../core/plugin-host'
 import type { DeviceRegistry } from '../core/registry'
 import type { SchoolFile, SchoolHomework, SchoolJournal, SchoolMessage, SchoolPost } from '../plugins/toutemonannee/mapping'
 import type { SceneRegistry } from '../core/scene-registry'
+import type { AgendaEvent } from '../plugins/agenda/ics'
+import { REPEAT_MODES, type RepeatMode } from '../music/queue'
 import type { McpAuth } from './auth'
 import { actAsHeaders } from '../http/session'
 
@@ -42,6 +44,12 @@ type PlayableTrack = z.infer<typeof playableTrackSchema>
 
 interface YtmTrack { videoId: string; title: string; artists: string[]; album?: string | null; artUrl: string | null; durationS: number | null; explicit?: boolean }
 interface MixcloudMix { key: string; name: string; user: { name: string }; artUrl: string | null; durationS: number | null }
+// Le lecteur commun, tel que `/api/music/{queue,sessions,last}` le rend.
+interface QueueTrack { source: string; id: string; title?: string; artist?: string; durationS?: number }
+interface QueueView { items: QueueTrack[]; index: number; repeat: RepeatMode }
+type QueueBrief = { length: number; index: number; repeat: RepeatMode } | null
+interface MusicSession { deviceId: string; source: string; id: string; title: string | null; artist: string | null; durationS: number | null; queue: QueueBrief }
+interface LastPlayed { deviceId: string; track: QueueTrack; positionS: number; durationS: number | null; queue: QueueBrief; at: number }
 interface RadioStation { id: string; name: string; country?: string; tags: string[]; codec?: string; bitrateKbps?: number }
 
 // L'école, telle que `GET /api/plugins/toutemonannee/school` la rend.
@@ -89,6 +97,61 @@ export function schoolDigest(data: SchoolData, opts: { today: string; section: S
   }
 }
 
+/**
+ * Heures en clair (`2026-10-09 14:00`) : un agent convertit mal un epoch. `tz` absent = fuseau du
+ * serveur, celui de la maison.
+ */
+function clockOf(tz?: string) {
+  const part = (o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat('sv-SE', { timeZone: tz, ...o })
+  const day = part({ year: 'numeric', month: '2-digit', day: '2-digit' })
+  const hour = part({ hour: '2-digit', minute: '2-digit' })
+  return { day, hour, at: (ms: number) => `${day.format(ms)} ${hour.format(ms)}` }
+}
+
+/**
+ * L'agenda pour un agent : agenda nommé, heures en clair, triés par début. Une journée entière garde
+ * ses dates `YYYY-MM-DD` mais avec une fin INCLUSE (le flux iCal l'exclut, un agent la lirait mal).
+ */
+export function agendaDigest(events: AgendaEvent[], calendars: { id: string; name: string }[], tz?: string) {
+  const { at } = clockOf(tz)
+  const name = new Map(calendars.map((c) => [c.id, c.name]))
+  const startOf = (e: AgendaEvent) => (e.allDay ? Date.parse(`${e.start}T00:00`) : e.start)
+  const dayBefore = (d: string) => new Date(Date.parse(`${d}T12:00Z`) - 86_400_000).toISOString().slice(0, 10)
+  return [...events].sort((a, b) => startOf(a) - startOf(b)).map((e) => ({
+    calendar: name.get(e.calendarId), title: e.title,
+    ...(e.allDay
+      ? { allDay: true, date: e.start, ...(dayBefore(e.end) > e.start ? { until: dayBefore(e.end) } : {}) }
+      : { start: at(e.start), end: at(e.end) }),
+    ...optional({ location: e.location, description: e.description }),
+  }))
+}
+
+interface Vigilance { area: string | null; warnings: NonNullable<StateFor<'weather'>['vigilance']> }
+
+/**
+ * La météo pour un agent : heures en clair dans le fuseau du lieu (un agent convertit mal un epoch),
+ * champs absents omis. `tz` absent = fuseau du serveur, celui de la maison. `vigilance` : celle du
+ * département, à venir comprise ; absente = inconnue.
+ */
+export function weatherDigest(state: StateFor<'weather'>, forecast: Pick<WeatherForecast, 'hourly' | 'daily'>, opts: { tz?: string; vigilance?: Vigilance | null | undefined }) {
+  const { day, hour, at } = clockOf(opts.tz)
+  const { kind: _k, available: _a, updatedAt: _u, observedAt, sunrise, sunset, vigilance: current, ...now } = state
+  const vigilance = opts.vigilance === undefined
+    ? (current ? { area: null, warnings: current } : undefined)
+    : opts.vigilance
+  return {
+    now: { observedAt: at(observedAt), ...now, sunrise: hour.format(sunrise), sunset: hour.format(sunset) },
+    hourly: forecast.hourly.map(({ t, isDay: _d, ...h }) => ({ at: at(t), ...h })),
+    daily: forecast.daily.map(({ t, sunrise: up, sunset: down, ...d }) => ({ date: day.format(t), ...d, sunrise: hour.format(up), sunset: hour.format(down) })),
+    ...(vigilance === undefined ? {} : {
+      vigilance: vigilance && {
+        ...(vigilance.area ? { area: vigilance.area } : {}),
+        warnings: vigilance.warnings.map((w) => ({ type: w.type, level: w.level, from: at(w.onset), to: at(w.expires) })),
+      },
+    }),
+  }
+}
+
 const localDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
 const optional = <T extends object>(o: T) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== null && v !== undefined && v !== ''))
@@ -100,7 +163,7 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null): 
   // validations, mêmes erreurs lisibles (source coupée, cookie expiré), même adresse publiée aux
   // enceintes. Une réponse d'erreur devient une exception, que le SDK rend en `isError`. Au nom du
   // compte du jeton : ce sont ses comptes musicaux qui cherchent et qui jouent.
-  const call = async <T>(method: 'GET' | 'POST', url: string, payload?: object): Promise<T> => {
+  const call = async <T>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', url: string, payload?: object): Promise<T> => {
     const res = await app.inject({ method, url, ...(user ? { headers: actAsHeaders(user) } : {}), ...(payload ? { payload } : {}) })
     const body = res.json() as T & { error?: { message?: string } }
     if (res.statusCode >= 400) throw new Error(body.error?.message ?? `HTTP ${res.statusCode}`)
@@ -243,6 +306,225 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null): 
     const data = await call<SchoolData>('GET', '/api/plugins/toutemonannee/school')
     if (!data.linked) return fail("TouteMonAnnée n'est pas relié : le relier dans la vue École de Kasbah")
     return json(schoolDigest(data, { today: localDay(new Date()), section, includePast, includeHidden }))
+  })
+
+  server.registerTool('get_weather', {
+    title: 'Lire la météo',
+    description: "Météo actuelle, prévisions heure par heure (24 h) et jour par jour (7 jours), qualité de l'air, pollens (0 nul à 4 très élevé) et vigilance Météo-France (métropole seulement, à venir comprise ; vigilance null = hors métropole, warnings vide = vert). Sans place : la maison. place : un nom de lieu, le premier résultat du géocodage est retenu et rendu dans place pour vérification. Heures locales du lieu (timezone). Pourcentages sur 100, vent en km/h.",
+    inputSchema: z.object({
+      place: z.string().trim().min(2).max(100).optional().describe('Ville ou lieu, ex. « Pornic » ou « Lyon, France » ; absent = la maison'),
+    }),
+    annotations: { readOnlyHint: true, openWorldHint: true },
+  }, async ({ place }) => {
+    const alerts = (lat: number, lon: number) => call<Vigilance>('GET', `/api/plugins/open_meteo/alerts?lat=${lat}&lon=${lon}`)
+      .then((r) => (r.area ? r : null))
+    if (place) {
+      const { places } = await call<{ places: { name: string; region?: string; lat: number; lon: number }[] }>('GET', `/api/plugins/open_meteo/places?q=${encodeURIComponent(place)}&lang=fr`)
+      const p = places[0]
+      if (!p) return fail(`lieu introuvable "${place}"`)
+      const r = await call<{ state: StateFor<'weather'>; forecast: WeatherForecast; timezone?: string; attribution: string }>('GET', `/api/plugins/open_meteo/at?lat=${p.lat}&lon=${p.lon}`)
+      const vigilance = await alerts(p.lat, p.lon).catch(() => undefined)
+      return json({
+        place: optional({ name: p.name, region: p.region }), timezone: r.timezone,
+        ...weatherDigest(r.state, r.forecast, { ...(r.timezone ? { tz: r.timezone } : {}), vigilance }), attribution: r.attribution,
+      })
+    }
+    const entry = deps.registry.list().find((e) => e.descriptor.kind === 'weather')
+    if (!entry) return fail("aucun appareil météo : activer le plugin open meteo dans Réglages → Plugins de Kasbah")
+    const state = entry.state as StateFor<'weather'>
+    if (!state.available) return fail('météo de la maison pas encore lue ou indisponible : voir get_health')
+    const forecast = await deps.host.forecast(entry.descriptor.id)
+    // la vigilance à venir vient de la route du plugin ; sans elle, celle en cours que porte l'état
+    const { lat, lon } = deps.house.house.origin
+    const vigilance = await alerts(lat, lon).catch(() => undefined)
+    return json({
+      place: { name: deps.house.house.name, home: true }, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      ...weatherDigest(state, forecast, { vigilance }), ...optional({ attribution: entry.descriptor.meta.weather?.attribution }),
+    })
+  })
+
+  server.registerTool('get_agenda', {
+    title: "Lire l'agenda",
+    description: "Événements des agendas de la maison (flux iCal ajoutés dans la vue Agenda), triés par début, heures locales de la maison. Une journée entière rend date (et until, dernier jour INCLUS, si elle en couvre plusieurs). Lecture seule.",
+    inputSchema: z.object({
+      from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("Premier jour, YYYY-MM-DD ; absent = aujourd'hui"),
+      days: z.number().int().min(1).max(62).default(7).describe('Nombre de jours à couvrir'),
+    }),
+    annotations: { readOnlyHint: true },
+  }, async ({ from, days }) => {
+    const [y, m, d] = (from ?? localDay(new Date())).split('-').map(Number) as [number, number, number]
+    const start = new Date(y, m - 1, d).getTime()
+    const end = new Date(y, m - 1, d + days).getTime()
+    const { calendars } = await call<{ calendars: { id: string; name: string; error: string | null }[] }>('GET', '/api/plugins/agenda/calendars')
+    if (!calendars.length) return fail("aucun agenda : en ajouter un dans la vue Agenda de Kasbah (adresse iCal secrète)")
+    const { events } = await call<{ events: AgendaEvent[] }>('GET', `/api/plugins/agenda/events?from=${start}&to=${end}`)
+    const failing = calendars.filter((c) => c.error).map((c) => ({ calendar: c.name, error: c.error }))
+    return json({
+      from: localDay(new Date(start)), to: localDay(new Date(end - 1)), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      calendars: calendars.map((c) => c.name), ...(failing.length ? { failing } : {}),
+      events: agendaDigest(events, calendars),
+    })
+  })
+
+  // Automatisations : lire, lancer, activer ou couper. Ni création ni suppression : une règle tourne
+  // sans surveillance, elle s'écrit dans la vue Automatisations.
+  server.registerTool('list_automations', {
+    title: 'Lister les automatisations',
+    description: "Automatisations de la maison : déclencheur (heure fixe, soleil, état d'un appareil), « sauf si » (unless), actions, et leur statut (santé, références manquantes, prochaine exécution nextRun, dernière lastRun). Heures locales de la maison. Les ids se passent à run_automation et set_automation_enabled. Elles se créent et se modifient dans la vue Automatisations de Kasbah, pas ici.",
+    inputSchema: z.object({ query: z.string().optional().describe('Sous-chaîne sans casse du nom ou de l\'id') }),
+    annotations: { readOnlyHint: true },
+  }, async ({ query }) => {
+    const { at } = clockOf()
+    const { automations } = await call<{ automations: AutomationEntry[] }>('GET', '/api/automations')
+    const q = query?.toLowerCase()
+    return json(automations.filter(({ automation: a }) => !q || a.name.toLowerCase().includes(q) || a.id.toLowerCase().includes(q))
+      .map(({ automation: a, status: s }) => ({
+        id: a.id, name: a.name, enabled: a.enabled, trigger: a.trigger, ...(a.unless.length ? { unless: a.unless } : {}), actions: a.actions,
+        status: {
+          health: s.health,
+          ...optional({
+            missing: s.missing.length ? s.missing : null,
+            unavailableDeviceIds: s.unavailableDeviceIds.length ? s.unavailableDeviceIds : null,
+            nextRun: s.nextRunAt && at(s.nextRunAt),
+            pendingSince: s.pendingSince && at(s.pendingSince),
+            lastRun: s.lastRun && { at: at(s.lastRun.at), by: s.lastRun.by, outcome: s.lastRun.outcome, ...(s.lastRun.errors.length ? { errors: s.lastRun.errors } : {}) },
+          }),
+        },
+      })))
+  })
+
+  server.registerTool('run_automation', {
+    title: 'Lancer une automatisation',
+    description: "Exécute TOUT DE SUITE les actions d'une automatisation (id venu de list_automations), sans attendre son déclencheur et SANS vérifier ses « sauf si ». Marche aussi sur une automatisation désactivée. Rend outcome (ok, partial, failed) et les erreurs action par action.",
+    inputSchema: z.object({ id: z.string() }),
+    annotations: { readOnlyHint: false, openWorldHint: true },
+  }, async ({ id }) => {
+    const { run } = await call<{ run: AutomationRun }>('POST', `/api/automations/${encodeURIComponent(id)}/run`)
+    return json({ outcome: run.outcome, ...(run.errors.length ? { errors: run.errors } : {}) })
+  })
+
+  server.registerTool('set_automation_enabled', {
+    title: 'Activer ou couper une automatisation',
+    description: "Active (enabled: true) ou coupe (enabled: false) une automatisation (id venu de list_automations) : coupée, son déclencheur ne la lance plus. Rien d'autre n'est modifié.",
+    inputSchema: z.object({ id: z.string(), enabled: z.boolean() }),
+    annotations: { readOnlyHint: false, idempotentHint: true },
+  }, async ({ id, enabled }) => {
+    const { automation } = await call<{ automation: AutomationEntry }>('PATCH', `/api/automations/${encodeURIComponent(id)}`, { enabled })
+    return json({ ok: true, id: automation.automation.id, enabled: automation.automation.enabled })
+  })
+
+  // La file musicale est celle de Kasbah (lecteur commun), pas celle de l'enceinte : `media_player.next`
+  // de send_command n'y saute pas.
+  const deviceName = (id: string) => {
+    const entry = deps.registry.get(id)
+    return entry ? describe(entry).name : undefined
+  }
+  const trackView = (t: { [K in keyof QueueTrack]: QueueTrack[K] | null }) => optional({ source: t.source, id: t.id, title: t.title, artist: t.artist, durationS: t.durationS })
+  const queueSummary = (q: QueueView) => ({
+    index: q.index, length: q.items.length, repeat: q.repeat, ...(q.items[q.index] ? { current: trackView(q.items[q.index]!) } : {}),
+  })
+
+  server.registerTool('get_music', {
+    title: 'Lire ce qui joue',
+    description: "La musique de Kasbah (lancée par play_music, play_radio ou l'app) : playing = ce que chaque lecteur joue en ce moment, avec sa file (index, length, repeat) ; paused = la dernière écoute interrompue des lecteurs silencieux, à reprendre par control_music resume. Avec deviceId : en plus la file complète de ce lecteur (index de chaque piste pour control_music jump / remove). Pause et volume se lisent par get_device.",
+    inputSchema: z.object({ deviceId: z.string().optional() }),
+    annotations: { readOnlyHint: true },
+  }, async ({ deviceId }) => {
+    const { at } = clockOf()
+    const [{ sessions }, { last }] = await Promise.all([
+      call<{ sessions: MusicSession[] }>('GET', '/api/music/sessions'),
+      call<{ last: LastPlayed[] }>('GET', '/api/music/last'),
+    ])
+    const queue = deviceId
+      ? await call<QueueView>('GET', `/api/music/queue?deviceId=${encodeURIComponent(deviceId)}`).catch(() => null)
+      : undefined
+    return json({
+      playing: sessions.map((s) => optional({
+        deviceId: s.deviceId, device: deviceName(s.deviceId), ...trackView(s), queue: s.queue,
+      })),
+      paused: last.map((e) => optional({
+        deviceId: e.deviceId, device: deviceName(e.deviceId), ...trackView(e.track), positionS: e.positionS, durationS: e.durationS, queue: e.queue, at: at(e.at),
+      })),
+      ...(queue === undefined ? {} : { queue: queue && { index: queue.index, repeat: queue.repeat, items: queue.items.map((t, i) => ({ index: i, ...trackView(t) })) } }),
+    })
+  })
+
+  server.registerTool('queue_music', {
+    title: 'Ajouter à la file',
+    description: "Ajoute des pistes (venues de search_music) à la file d'un lecteur SANS interrompre ce qui joue : where next = juste après la piste en cours, end = à la fin (défaut). Si rien ne joue, la lecture part tout de suite. Pour remplacer ce qui joue : play_music.",
+    inputSchema: z.object({ deviceId: z.string(), tracks: z.array(playableTrackSchema).min(1).max(100), where: z.enum(['next', 'end']).default('end') }),
+    annotations: { readOnlyHint: false, openWorldHint: true },
+  }, async ({ deviceId, tracks, where }) => {
+    const r = await call<{ started: boolean; queue: QueueView }>('POST', '/api/music/queue/add', { deviceId, tracks: tracks.map((t: PlayableTrack) => optional(t)), where })
+    return json({ ok: true, started: r.started, queued: tracks.length, queue: queueSummary(r.queue) })
+  })
+
+  server.registerTool('control_music', {
+    title: 'Piloter la file musicale',
+    description: "Pilote la file Kasbah d'un lecteur : next / previous (au début de la piste si elle joue depuis quelques secondes), jump (index), remove (index, pas la piste en cours), repeat (mode : off, once = la file une fois, loop = en boucle), clear (vide la file, la piste en cours finit seule), resume (relance la dernière écoute de paused, à sa position ou à positionS), transfer (déplace la lecture vers toDeviceId, à la même position, et arrête deviceId). Index et lecteurs : get_music.",
+    inputSchema: z.object({
+      deviceId: z.string(),
+      action: z.enum(['next', 'previous', 'jump', 'remove', 'repeat', 'clear', 'resume', 'transfer']),
+      index: z.number().int().min(0).optional().describe('jump, remove'),
+      mode: z.enum(REPEAT_MODES).optional().describe('repeat'),
+      positionS: z.number().min(0).optional().describe('resume (facultatif)'),
+      toDeviceId: z.string().optional().describe('transfer'),
+    }),
+    annotations: { readOnlyHint: false, openWorldHint: true },
+  }, async ({ deviceId, action, index, mode, positionS, toDeviceId }) => {
+    const done = (r: QueueView | { queue?: QueueView }) => {
+      const q = 'items' in r ? r : r.queue
+      return json({ ok: true, ...(q ? { queue: queueSummary(q) } : {}) })
+    }
+    switch (action) {
+      case 'next': case 'previous':
+        return done(await call<QueueView>('POST', `/api/music/queue/${action}`, { deviceId }))
+      case 'jump': case 'remove':
+        if (index === undefined) return fail(`${action} demande index`)
+        return done(await call<QueueView>('POST', `/api/music/queue/${action}`, { deviceId, index }))
+      case 'repeat':
+        if (!mode) return fail('repeat demande mode')
+        return done(await call<QueueView>('POST', '/api/music/queue/repeat', { deviceId, mode }))
+      case 'clear':
+        return done(await call<QueueView>('DELETE', `/api/music/queue?deviceId=${encodeURIComponent(deviceId)}`))
+      case 'resume':
+        return done(await call<{ queue: QueueView }>('POST', '/api/music/resume', { deviceId, ...(positionS !== undefined ? { positionS } : {}) }))
+      case 'transfer':
+        if (!toDeviceId) return fail('transfer demande toDeviceId')
+        return done(await call<{ queue?: QueueView }>('POST', '/api/music/transfer', { fromDeviceId: deviceId, toDeviceId }))
+    }
+  })
+
+  server.registerTool('get_device_history', {
+    title: "Historique d'un appareil",
+    description: "Ce qu'un appareil a enregistré, à la demande (get_device ne donne que l'instant) : energy = puissances moyennes heure par heure (appareils energy, 48 h au plus, en mémoire depuis le démarrage du serveur) ; journal = erreurs et avertissements consignés par le fabricant (capacité journal, ex. tondeuse), du plus récent au plus ancien ; water = litres consommés par heure, jour et mois (capacité water_usage, ex. traitement d'eau, fontaine). Rend les séries que l'appareil a. Heures locales de la maison.",
+    inputSchema: z.object({ id: z.string(), hours: z.number().int().min(1).max(48).default(24).describe('Profondeur des séries horaires') }),
+    annotations: { readOnlyHint: true },
+  }, async ({ id, hours }) => {
+    const entry = deps.registry.get(id)
+    if (!entry) return fail(`appareil inconnu "${id}"`)
+    const { day, at } = clockOf()
+    const caps = entry.descriptor.capabilities as readonly string[]
+    const path = `/api/devices/${encodeURIComponent(entry.descriptor.id)}`
+    const out: Record<string, unknown> = { id: entry.descriptor.id, name: describe(entry).name }
+    if (entry.descriptor.kind === 'energy') {
+      const { points } = await call<EnergyHistory>('GET', `${path}/history?hours=${hours}`)
+      out.energy = points.map((p) => ({ at: at(p.t), productionW: p.productionW, consumptionW: p.consumptionW, gridW: p.gridW }))
+    }
+    if (caps.includes('journal')) {
+      const { entries } = await call<DeviceJournal>('GET', `${path}/journal`)
+      out.journal = entries.slice(0, 50).map((e) => ({ at: at(e.at), severity: e.severity, ...optional({ code: e.code, message: e.message, location: e.location }) }))
+    }
+    if (caps.includes('water_usage')) {
+      const c = await call<DeviceConsumption>('GET', `${path}/consumption`)
+      out.water = {
+        hourly: c.hourly.slice(-hours).map((p) => ({ at: at(p.t), litres: p.litres })),
+        daily: c.daily.slice(-31).map((p) => ({ date: day.format(p.t), litres: p.litres })),
+        monthly: c.monthly.map((p) => ({ month: day.format(p.t).slice(0, 7), litres: p.litres })),
+      }
+    }
+    if (Object.keys(out).length === 2) return fail(`"${id}" ne garde ni historique d'énergie, ni journal, ni consommation`)
+    return json(out)
   })
 
   server.registerResource('house', 'kasbah://house', {

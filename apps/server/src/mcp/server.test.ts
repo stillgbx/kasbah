@@ -1,7 +1,8 @@
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { AddressInfo } from 'node:net'
+import type { StateFor, WeatherForecast } from '@kasbah/shared'
 import { Client, StreamableHTTPClientTransport, type VersionNegotiationMode } from '@modelcontextprotocol/client'
 import pino from 'pino'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -11,7 +12,7 @@ import { loadHouse } from '../config/house'
 import { registerMusicSource } from '../music/sources'
 import { createMockPlugin } from '../plugins/mock'
 import { hashPassword } from './auth'
-import { schoolDigest } from './server'
+import { agendaDigest, schoolDigest, weatherDigest } from './server'
 import { signIn, type TestOAuthProvider } from './test-oauth'
 
 // `/mcp` servi par l'application assemblée, interrogé par le vrai client du SDK dans les DEUX
@@ -29,7 +30,11 @@ const resolvedFor: (string | null)[] = []
 const LOGIN = { username: 'lou', password: 'correct horse battery' }
 let provider: TestOAuthProvider
 beforeAll(async () => {
-  const usersFile = join(mkdtempSync(join(tmpdir(), 'kasbah-mcp-')), 'mcp-users.json')
+  const dir = mkdtempSync(join(tmpdir(), 'kasbah-mcp-'))
+  const usersFile = join(dir, 'mcp-users.json')
+  // une copie de la maison : ses automatisations s'écrivent à côté d'elle, pas dans le dépôt
+  const housePath = join(dir, 'demo-house.json')
+  copyFileSync(DEMO_HOUSE, housePath)
   writeFileSync(usersFile, JSON.stringify({ users: [{ name: LOGIN.username, password: await hashPassword(LOGIN.password) }] }))
   unregister = registerMusicSource({
     id: 'ytmusic', label: 'YouTube Music',
@@ -41,7 +46,7 @@ beforeAll(async () => {
   kasbah = await buildApp({
     env: loadEnv({ KASBAH_LOG_LEVEL: 'silent' }),
     logger: pino({ level: 'silent' }),
-    house: await loadHouse(DEMO_HOUSE),
+    house: await loadHouse(housePath),
     factories: { mock: createMockPlugin },
     // les enceintes refusent localhost : le lecteur commun exige une base publiée
     envSource: { MUSIC_PUBLISH_BASE: 'http://192.0.2.1:8787', MCP_USERS_FILE: usersFile },
@@ -66,7 +71,7 @@ describe.each<[string, VersionNegotiationMode]>([['2025', 'legacy'], ['2026-07-2
 
   it('expose les outils', async () => {
     const { tools } = await client.listTools()
-    expect(tools.map((t) => t.name).sort()).toEqual(['get_device', 'get_health', 'get_school', 'list_devices', 'list_scenes', 'play_music', 'play_radio', 'recall_scene', 'search_music', 'send_command'])
+    expect(tools.map((t) => t.name).sort()).toEqual(['control_music', 'get_agenda', 'get_device', 'get_device_history', 'get_health', 'get_music', 'get_school', 'get_weather', 'list_automations', 'list_devices', 'list_scenes', 'play_music', 'play_radio', 'queue_music', 'recall_scene', 'run_automation', 'search_music', 'send_command', 'set_automation_enabled'])
   })
 
   it('joue une piste par le lecteur commun, sur une enceinte', async () => {
@@ -80,6 +85,25 @@ describe.each<[string, VersionNegotiationMode]>([['2025', 'legacy'], ['2026-07-2
     expect(JSON.stringify(queue)).toContain('Gymnopédie No.1')
     // au nom du compte du jeton : ce sont ses comptes musicaux qui jouent
     expect(resolvedFor.at(-1)).toBe(LOGIN.username)
+  })
+
+  it('lit et pilote la file du lecteur commun', async () => {
+    const speaker = kasbah.registry.list().find((e) => e.descriptor.capabilities.includes('play_url'))!.descriptor.id
+    const json = async (name: string, args: Record<string, unknown>) => {
+      const r = await client.callTool({ name, arguments: args })
+      expect(r.isError, text(r)).toBeFalsy()
+      return JSON.parse(text(r))
+    }
+    const added = await json('queue_music', { deviceId: speaker, tracks: [{ source: 'ytmusic', id: 'vid-a', title: 'A' }, { source: 'ytmusic', id: 'vid-b', title: 'B' }] })
+    expect(added).toMatchObject({ started: false, queued: 2, queue: { index: 0, length: 3, current: { title: 'Gymnopédie No.1' } } })
+    const music = await json('get_music', { deviceId: speaker })
+    expect(music.playing.find((p: { deviceId: string }) => p.deviceId === speaker)).toMatchObject({ device: expect.any(String), title: 'Gymnopédie No.1' })
+    expect(music.queue.items.map((t: { index: number; title: string }) => [t.index, t.title])).toEqual([[0, 'Gymnopédie No.1'], [1, 'A'], [2, 'B']])
+    expect((await json('control_music', { deviceId: speaker, action: 'repeat', mode: 'loop' })).queue.repeat).toBe('loop')
+    expect((await json('control_music', { deviceId: speaker, action: 'jump', index: 2 })).queue).toMatchObject({ index: 2, current: { title: 'B' } })
+    const missing = await client.callTool({ name: 'control_music', arguments: { deviceId: speaker, action: 'remove' } })
+    expect(missing.isError).toBe(true)
+    expect((await json('control_music', { deviceId: speaker, action: 'clear' })).queue).toMatchObject({ index: 0, length: 1 })
   })
 
   it('dit pourquoi une source ne répond pas, au lieu d\'échouer en silence', async () => {
@@ -112,6 +136,49 @@ describe.each<[string, VersionNegotiationMode]>([['2025', 'legacy'], ['2026-07-2
     const light = kasbah.registry.list().find((e) => e.descriptor.kind === 'light')!
     const refused = await client.callTool({ name: 'send_command', arguments: { deviceId: light.descriptor.id, command: { type: 'cover.open' } } })
     expect(refused.isError).toBe(true)
+  })
+
+  it('rend la météo de la maison avec ses prévisions', async () => {
+    const r = await client.callTool({ name: 'get_weather', arguments: {} })
+    expect(r.isError).toBeFalsy()
+    const w = JSON.parse(text(r))
+    expect(w.place).toEqual({ name: kasbah.house.house.name, home: true })
+    expect(w.now.condition).toBeTypeOf('string')
+    expect(w.hourly.length).toBeGreaterThan(0)
+    expect(w.daily.length).toBeGreaterThan(0)
+    expect(w.daily[0].date).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  })
+
+  it('dit pourquoi la météo d\'un autre lieu ne répond pas (plugin open meteo absent)', async () => {
+    const r = await client.callTool({ name: 'get_weather', arguments: { place: 'Pornic' } })
+    expect(r.isError).toBe(true)
+  })
+
+  it('lit, coupe et lance une automatisation', async () => {
+    const light = kasbah.registry.list().find((e) => e.descriptor.kind === 'light')!.descriptor.id
+    await kasbah.app.inject({ method: 'PUT', url: '/api/automations/nuit', payload: {
+      name: 'Nuit', enabled: true, trigger: { type: 'time', at: { kind: 'clock', time: '03:00' } }, unless: [],
+      actions: [{ type: 'command', target: { type: 'devices', deviceIds: [light] }, command: { type: 'light.set', on: true } }],
+    } })
+    const list = JSON.parse(text(await client.callTool({ name: 'list_automations', arguments: { query: 'nui' } })))
+    expect(list).toEqual([expect.objectContaining({ id: 'nuit', enabled: true, status: expect.objectContaining({ health: 'ok', nextRun: expect.stringMatching(/ 03:00$/) }) })])
+    const off = await client.callTool({ name: 'set_automation_enabled', arguments: { id: 'nuit', enabled: false } })
+    expect(JSON.parse(text(off))).toEqual({ ok: true, id: 'nuit', enabled: false })
+    expect(kasbah.automations.list().find((e) => e.automation.id === 'nuit')!.automation.enabled).toBe(false)
+    await kasbah.app.inject({ method: 'POST', url: `/api/devices/${light}/command`, payload: { type: 'light.set', on: false } })
+    const run = await client.callTool({ name: 'run_automation', arguments: { id: 'nuit' } })
+    expect(JSON.parse(text(run))).toEqual({ outcome: 'ok' })
+    expect(kasbah.registry.get(light)!.state).toMatchObject({ on: true })
+    expect((await client.callTool({ name: 'run_automation', arguments: { id: 'inconnue' } })).isError).toBe(true)
+  })
+
+  it('rend l\'historique d\'un appareil qui en garde un, et refuse les autres', async () => {
+    // le plugin simulé du serveur ne tient ni journal ni consommation d'eau : l'énergie seule
+    const site = kasbah.registry.list().find((e) => e.descriptor.kind === 'energy')!
+    const h = JSON.parse(text(await client.callTool({ name: 'get_device_history', arguments: { id: site.descriptor.id, hours: 6 } })))
+    expect(h).toMatchObject({ id: site.descriptor.id, energy: expect.any(Array) })
+    const light = kasbah.registry.list().find((e) => e.descriptor.kind === 'light')!.descriptor.id
+    expect((await client.callTool({ name: 'get_device_history', arguments: { id: light } })).isError).toBe(true)
   })
 
   it('sert la maison en ressource', async () => {
@@ -164,6 +231,61 @@ describe('schoolDigest', () => {
     expect(d.messages).toHaveLength(1)
     expect(d.error).toMatch(/session/)
   })
+})
+
+describe('agendaDigest', () => {
+  it('trie, nomme l\'agenda et rend la fin incluse d\'une journée entière', () => {
+    const T = Date.UTC(2026, 9, 9, 12)
+    const events = [
+      { id: '1', calendarId: 'c', title: 'Dentiste', allDay: false as const, start: T, end: T + 1_800_000, location: 'Dijon' },
+      { id: '2', calendarId: 'c', title: 'Vacances', allDay: true as const, start: '2026-10-08', end: '2026-10-11' },
+      { id: '3', calendarId: 'c', title: 'Anniversaire', allDay: true as const, start: '2026-10-10', end: '2026-10-11' },
+    ]
+    expect(agendaDigest(events, [{ id: 'c', name: 'Famille' }], 'Europe/Paris')).toEqual([
+      { calendar: 'Famille', title: 'Vacances', allDay: true, date: '2026-10-08', until: '2026-10-10' },
+      { calendar: 'Famille', title: 'Dentiste', start: '2026-10-09 14:00', end: '2026-10-09 14:30', location: 'Dijon' },
+      { calendar: 'Famille', title: 'Anniversaire', allDay: true, date: '2026-10-10' },
+    ])
+  })
+})
+
+describe('weatherDigest', () => {
+  // 2026-10-09 12:00 UTC = 14:00 à Paris
+  const T = Date.UTC(2026, 9, 9, 12)
+  const state: StateFor<'weather'> = {
+    kind: 'weather', updatedAt: T, available: true, condition: 'rain', tempC: 14, humidity: 80, windKmh: 20, windDirDeg: 250,
+    cloudCover: 90, isDay: true, sunrise: Date.UTC(2026, 9, 9, 6, 5), sunset: Date.UTC(2026, 9, 9, 17, 10), observedAt: T,
+    vigilance: [{ type: 'thunderstorm', level: 'yellow', onset: T, expires: T + 3_600_000 }],
+  }
+  const forecast: Pick<WeatherForecast, 'hourly' | 'daily'> = {
+    hourly: [{ t: T, condition: 'rain', tempC: 14, precipMm: 1.2, windKmh: 20, isDay: true }],
+    daily: [{ t: Date.UTC(2026, 9, 8, 22), condition: 'rain', minC: 9, maxC: 15, precipMm: 6, sunrise: state.sunrise, sunset: state.sunset }],
+  }
+
+  it('écrit les heures dans le fuseau du lieu et retire le bruit', () => {
+    const d = weatherDigest(state, forecast, { tz: 'Europe/Paris' })
+    expect(d.now).toMatchObject({ observedAt: '2026-10-09 14:00', sunrise: '08:05', sunset: '19:10', tempC: 14 })
+    expect(d.now).not.toHaveProperty('kind')
+    expect(d.now).not.toHaveProperty('vigilance')
+    expect(d.hourly).toEqual([{ at: '2026-10-09 14:00', condition: 'rain', tempC: 14, precipMm: 1.2, windKmh: 20 }])
+    expect(d.daily[0]).toMatchObject({ date: '2026-10-09', minC: 9, maxC: 15, sunrise: '08:05' })
+  })
+
+  it('prend la vigilance du département, sinon celle en cours de l\'état', () => {
+    const area = { area: "Côte-d'Or", warnings: [{ type: 'wind', level: 'orange' as const, onset: T, expires: T + 7_200_000 }] }
+    expect(weatherDigest(state, forecast, { tz: 'Europe/Paris', vigilance: area }).vigilance)
+      .toEqual({ area: "Côte-d'Or", warnings: [{ type: 'wind', level: 'orange', from: '2026-10-09 14:00', to: '2026-10-09 16:00' }] })
+    expect(weatherDigest(state, forecast, { tz: 'Europe/Paris' }).vigilance!.warnings[0]).toMatchObject({ type: 'thunderstorm', to: '2026-10-09 15:00' })
+    expect(weatherDigest(state, forecast, { vigilance: null }).vigilance).toBeNull()
+    expect(weatherDigest({ ...state, vigilance: undefined }, forecast, {})).not.toHaveProperty('vigilance')
+  })
+})
+
+it('get_agenda sans le plugin rend une erreur d\'outil', async () => {
+  const client = new Client({ name: 'test', version: '0' })
+  await client.connect(new StreamableHTTPClientTransport(url, { authProvider: provider }))
+  expect((await client.callTool({ name: 'get_agenda', arguments: {} })).isError).toBe(true)
+  await client.close()
 })
 
 it('get_school sans le plugin rend une erreur d\'outil', async () => {

@@ -231,6 +231,12 @@ Le serveur Kasbah expose aussi un serveur [MCP](https://modelcontextprotocol.io)
 | `play_music` | Joue une piste ou une file sur une enceinte, par le lecteur commun (`/api/music/queue`) |
 | `play_radio` | Joue une station en direct (`/api/plugins/radio/play`) |
 | `get_school` | Devoirs à venir (ou passés), cahier de liaison et publications de l'école (TouteMonAnnée), en lecture seule, filtres de la vue École appliqués |
+| `get_weather` | Météo actuelle, prévisions 24 h et 7 jours, qualité de l'air, pollens et vigilance Météo-France, de la maison ou d'un lieu cherché par son nom |
+| `get_agenda` | Événements des agendas de la maison sur une période (62 jours au plus), en lecture seule |
+| `list_automations` / `run_automation` / `set_automation_enabled` | Automatisations et leur statut, lancement immédiat, activation ou coupure ; ni création ni suppression |
+| `get_music` | Ce que joue chaque lecteur, les écoutes à reprendre, la file d'un lecteur |
+| `queue_music` / `control_music` | Ajouter à la file sans interrompre ; suivant, précédent, saut, retrait, répétition, vider, reprendre, transférer vers une autre enceinte |
+| `get_device_history` | Historique énergie (48 h), journal du fabricant, consommation d'eau d'un appareil |
 
 Ressource : `kasbah://house` (le `house.json` validé).
 

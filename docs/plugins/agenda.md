@@ -15,7 +15,7 @@
 - **Récurrences** déroulées par Kasbah (événements qui se répètent, occurrences déplacées ou annulées, fuseaux horaires).
 - **Lecture seule** : Kasbah n'ajoute ni ne modifie aucun événement.
 
-Le plugin ne publie aucun appareil : il n'apparaît pas dans la maison 3D, et aucun outil de l'assistant (MCP) ne lit l'agenda.
+Le plugin ne publie aucun appareil : il n'apparaît pas dans la maison 3D. Côté assistant (MCP), l'outil `get_agenda` lit les événements sur une période, en lecture seule.
 
 ## Connexion
 
