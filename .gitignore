@@ -21,3 +21,6 @@ house/*.automations.json.tmp
 _external
 .claude/agents/
 house/history/
+
+# liste locale des donnees personnelles interdites (scripts/check-private.mjs)
+.private-denylist

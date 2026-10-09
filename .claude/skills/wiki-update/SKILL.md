@@ -120,6 +120,7 @@ If new info contradicts an existing page :
 ## Rules
 
 - **Preserve existing content** : golden rule. Complement, don't rewrite.
+- **No personal data** : the repository is public. Never write names, real IPs or domains, GPS, the real house plan, device ids, real measurements, family, school or health details — see CLAUDE.md §7. Write « vérifié sur la vraie maison » without the details; quote the user's request in `log.md` without them.
 - **One session = one log.md entry**, even if multiple pages are touched.
 - **No auto-commit** : let the user review wiki modifications before committing.
 - If > 5 pages impacted by a single update, propose to split into several steps rather than doing it all at once.

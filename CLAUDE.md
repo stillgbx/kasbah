@@ -109,6 +109,24 @@ The wiki and GitNexus are complementary — pick the right tool for the question
 
 <!-- Custom instruction : start -->
 
+## 7. Personal data — the repository is public
+
+Nothing that identifies the owner, the family or the real house goes into anything versioned: code,
+tests, fixtures, `docs/`, the wiki `doc/`, commit messages.
+
+- **Never**: first names, or nicknames given to devices; real IPs, host names or public domain; GPS
+  coordinates, commune or address of the real house; serial numbers, device / account / project ids;
+  real consumption figures and dated measurements; the real house plan (rooms, orientations,
+  dimensions, how many devices of each kind); a vehicle's real colour, mileage or configuration;
+  children, school, health; personal tastes (music, shows) taken from real use.
+- **Instead**: `192.168.1.x`, `example.org`, « chambre 2 », « Voiture 1 », the demo houses
+  (`house/demos/`), round or invented figures. "Verified on the real house" may be said, without the details.
+- A fixture captured on a real device is anonymised **when it is written**, before its first commit.
+- The real values stay in untracked files (`house/maison.json`, `apps/server/.env`, `apps/server/.state/`).
+  The untracked `.private-denylist` lists them, and `scripts/check-private.mjs` refuses a commit or a
+  commit message that adds one (hooks: `npm run hooks` once per clone; whole tree: `npm run check:private`).
+  A refused commit is fixed by removing the value, never by bypassing the hook (`--no-verify`).
+
 <!-- Custom instruction : end -->
 
 <!-- gitnexus:start -->

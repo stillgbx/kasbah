@@ -1,0 +1,3 @@
+#!/bin/sh
+# Refuse un message de commit qui contient une donnee personnelle (scripts/check-private.mjs).
+exec node scripts/check-private.mjs --message "$1"

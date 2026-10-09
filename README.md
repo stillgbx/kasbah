@@ -330,4 +330,4 @@ Chaque plugin valide ses propres variables (`HUE_*`, `TAHOMA_*`, `NEST_*`, `CAST
 
 ## Licence
 
-Projet personnel.
+[MIT](LICENSE).
