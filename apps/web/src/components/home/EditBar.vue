@@ -9,7 +9,8 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 const house = useHouseStore()
 
 function onKey(e: KeyboardEvent) {
-  if (!(e.ctrlKey || e.metaKey) || e.altKey) return
+  // le remplissage automatique de Chrome émet des `keydown` sans `key` (`undefined`, malgré le type)
+  if (typeof e.key !== 'string' || !(e.ctrlKey || e.metaKey) || e.altKey) return
   const el = e.target as HTMLElement | null
   if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return
   const k = e.key.toLowerCase()

@@ -2,6 +2,17 @@
 
 Entrées les plus récentes en haut. Une session = une entrée.
 
+## [2026-10-10] update | Barre de navigation du bas : plus haute, chevrons de défilement ; keydown sans touche
+
+**Déclencheur** : sur un vrai téléphone, le glissement dans la barre du bas était pris par le système (doigt trop bas), et rien ne disait qu'elle défilait ; erreur `toLowerCase` à la palette sur un `keydown` du remplissage automatique.
+
+**Pages modifiées** :
+- `4_ui/4_1_navigation-et-panneaux.md` - mise à jour datée (7) : barre 72 px à 14 px du bord, fondu et chevron du seul côté qui a une suite (`inert`), garde des raccourcis globaux.
+
+**Pages créées** : aucune.
+
+**Index** : inchangé (`4_1` déjà au 2026-10-10).
+
 ## [2026-10-10] update | Vue Maison sur téléphone, réponse de l'assistant refermable et réécoutable
 
 **Déclencheur** : retours de l'utilisateur sur un vrai téléphone (recherche trop étroite, réponse qui masquait la météo, feuille du bas sans geste de fermeture, « Rien entendu » brutal, clavier qui montait au micro) et sur toutes les versions (réécouter une réponse sans refaire la synthèse, fermer une réponse en vidant le champ).

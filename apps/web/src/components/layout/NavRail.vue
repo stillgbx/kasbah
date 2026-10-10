@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch, watchEffect } from 'vue'
 import { useRoute } from 'vue-router'
+import { useEventListener, useResizeObserver } from '@vueuse/core'
 import { useHouseStore } from '../../stores/house'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import { NAV_ITEMS, visibleNavItems } from '../../lib/navItems'
@@ -51,10 +52,35 @@ watch(current, () => void nextTick(() => {
   else if (start + size + PAD > pos + view) to = start + size + PAD - view
   if (to !== pos) box.scrollTo({ [horizontal ? 'left' : 'top']: to, behavior: 'smooth' })
 }), { immediate: true })
+
+// Barre du bas (portrait) : d'autres vues attendent d'un côté ? Ce côté-là se fond, et un chevron s'y
+// pose, qui fait défiler d'une bonne part de la largeur. Le fondu fixe des deux bouts ne disait pas
+// qu'il y avait une suite. Rien en hauteur : le rail vertical (paysage, bureau) ne déborde pas en
+// largeur, les deux côtés y restent éteints.
+const more = ref({ start: false, end: false })
+const moreStart = ref<HTMLButtonElement | null>(null)
+const moreEnd = ref<HTMLButtonElement | null>(null)
+function measure() {
+  const box = scroller.value
+  if (!box) return
+  more.value = { start: box.scrollLeft > 2, end: box.scrollLeft + box.clientWidth < box.scrollWidth - 2 }
+  // au clavier, le chevron qui s'éteint au bout de la file passe le focus à l'autre
+  const focused = document.activeElement
+  if (focused === moreStart.value && !more.value.start) moreEnd.value?.focus()
+  else if (focused === moreEnd.value && !more.value.end) moreStart.value?.focus()
+}
+useEventListener(scroller, 'scroll', measure, { passive: true })
+useResizeObserver(scroller, measure)
+watch(items, () => void nextTick(measure))
+
+function page(dir: 1 | -1) {
+  const box = scroller.value
+  box?.scrollBy({ left: dir * box.clientWidth * 0.7, behavior: 'smooth' })
+}
 </script>
 
 <template>
-  <nav class="rail" :aria-label="$t('nav.main')">
+  <nav class="rail" :aria-label="$t('nav.main')" :data-more-start="more.start ? '1' : '0'" :data-more-end="more.end ? '1' : '0'">
     <div ref="scroller" class="rail__scroll">
       <v-menu v-if="properties.hasMenu" location="end top" :offset="10">
         <template #activator="{ props: menu }">
@@ -81,6 +107,14 @@ watch(current, () => void nextTick(() => {
         </button>
       </router-link>
     </div>
+    <!-- hors de la file qui défile (et de son masque) : posés sur ses bouts, ils ne décalent rien.
+         `inert` et non `aria-hidden` : le chevron touché qui disparaît au bout de la file gardait le
+         focus sous un `aria-hidden` (refusé par Chrome). Au doigt et à la souris il ne prend pas le
+         focus (`mousedown.prevent`) ; au clavier, `measure` le passe à l'autre chevron. -->
+    <button ref="moreStart" type="button" class="rail__more rail__more--start" :inert="!more.start"
+            :aria-label="$t('nav.scrollStart')" @mousedown.prevent @click="page(-1)"><span class="rail__morechip"><StrokeIcon name="back" :size="16" /></span></button>
+    <button ref="moreEnd" type="button" class="rail__more rail__more--end" :inert="!more.end"
+            :aria-label="$t('nav.scrollEnd')" @mousedown.prevent @click="page(1)"><span class="rail__morechip"><StrokeIcon name="chevron" :size="16" /></span></button>
   </nav>
 </template>
 
@@ -161,8 +195,13 @@ watch(current, () => void nextTick(() => {
   .rail__spacer { flex: 0 0 4px; }
 }
 
+/* les chevrons n'existent que sur la barre du bas */
+.rail__more { display: none; }
+
 /* Téléphone en portrait : une barre en bas, qui défile de côté ; les réglages ferment la file.
-   Le voile monte du bas au lieu de venir de la gauche. */
+   Le voile monte du bas au lieu de venir de la gauche. Les boutons se posent 14 px au-dessus du bord
+   (encoche en plus) : loin de la zone des gestes du système. Le côté qui a une suite se fond sur
+   44 px, et son chevron s'y pose ; l'autre bout reste net. */
 @media (max-width: 599px) {
   .rail { top: auto; right: 0; width: auto; height: var(--dock-h); }
   .rail::before { top: auto; bottom: 0; right: 0; width: auto; height: calc(var(--dock-h) + 48px); }
@@ -171,14 +210,30 @@ watch(current, () => void nextTick(() => {
     color-mix(in srgb, var(--bg) 80%, transparent) 55%,
     color-mix(in srgb, var(--bg) 30%, transparent) 80%,
     transparent 100%); }
+  .rail { --fade-start: 0px; --fade-end: 0px; }
+  .rail[data-more-start='1'] { --fade-start: 44px; }
+  .rail[data-more-end='1'] { --fade-end: 44px; }
   .rail__scroll {
     flex-direction: row; gap: 2px;
-    padding: 0 calc(var(--safe-right) + 10px) var(--safe-bottom) calc(var(--safe-left) + 10px);
-    mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent);
-    -webkit-mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent);
+    padding: 0 calc(var(--safe-right) + 10px) calc(var(--safe-bottom) + 14px) calc(var(--safe-left) + 10px);
+    mask-image: linear-gradient(to right, transparent, #000 var(--fade-start), #000 calc(100% - var(--fade-end)), transparent);
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--fade-start), #000 calc(100% - var(--fade-end)), transparent);
   }
   .rail__avatar { display: none; }
-  .rail__btn { flex: none; width: 48px; height: 48px; border-radius: 14px; }
+  .rail__btn { flex: none; width: 52px; height: 52px; border-radius: 16px; }
   .rail__spacer { flex: 0 0 6px; }
+  .rail__more {
+    /* même bande que la file (au-dessus de ses 14 px de bas) et centré dedans, comme les boutons */
+    display: grid; place-items: center; position: absolute; top: 0; bottom: calc(var(--safe-bottom) + 14px); width: 32px;
+    border: 0; padding: 0; background: transparent; color: var(--text); opacity: 0; pointer-events: none; transition: opacity .2s;
+  }
+  .rail__more--start { left: var(--safe-left); }
+  .rail__more--end { right: var(--safe-right); }
+  .rail[data-more-start='1'] .rail__more--start, .rail[data-more-end='1'] .rail__more--end { opacity: 1; pointer-events: auto; }
+  /* une pastille du verre de l'app : le chevron se lit sur l'icône à demi fondue qu'il recouvre */
+  .rail__morechip {
+    width: 26px; height: 26px; border-radius: 999px; display: grid; place-items: center;
+    border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 92%, transparent); box-shadow: var(--shadow);
+  }
 }
 </style>

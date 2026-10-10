@@ -5923,3 +5923,31 @@ n'arrive pas pendant que le panneau est masqué) ; après rechargement, c'est ju
 
 Tests : `SearchBar.test.ts` (+2 : Échap et la croix effacent l'instruction), `SearchPalette.test.ts`
 (Échap sur une réponse vide le champ, la palette reste ouverte).
+
+### Mise à jour 2026-10-10 (7) — barre de navigation du bas : plus haute, et la suite qui se voit
+
+Retours de l'utilisateur sur un vrai téléphone (portrait).
+
+- **Hauteur** : `--dock-h` passe de 60 à **72 px** (+ encoche), boutons de 48 à **52 px**, posés
+  **14 px au-dessus du bord** même sans encoche déclarée (`tokens.css`, `NavRail.vue`). Le doigt posé
+  trop bas tombait dans la zone des gestes du système, qui prenait un glissement de côté pour un
+  changement d'app (ce n'était pas l'app). Tout ce qui flotte en bas de la vue Maison suit
+  (`--float-bottom` lit `--dock-h`).
+- **La suite de la file** : le fondu fixe de 12 px aux deux bouts ne disait pas qu'on pouvait faire
+  défiler. Désormais seul le côté qui a une suite se fond (44 px, `data-more-start` / `data-more-end`
+  posés par `measure()` au défilement et au redimensionnement), et un **chevron en pastille** s'y pose,
+  qui fait défiler de 70 % de la largeur. Il est hors de la file (et de son masque), centré dans la même
+  bande que les boutons. Éteint, il est `inert` (et non `aria-hidden` : Chrome refusait un
+  `aria-hidden` sur le chevron touché qui gardait le focus en s'éteignant au bout de la file) ; il ne
+  prend pas le focus au doigt (`mousedown.prevent`) et, au clavier, passe le focus à l'autre chevron.
+  Le rail vertical (bureau, paysage) n'a pas de chevron.
+- Écarté pour l'instant : régler l'espacement pour qu'un bouton soit toujours coupé à moitié au bord
+  (signal classique de défilement, mais espacement dépendant de la largeur d'écran).
+
+Vérifié dans la preview à 375 × 812 : boutons 52 px à 14 px du bord, chevron de droite seul au début,
+les deux au milieu, celui de gauche seul à la fin, centres alignés à 769 px. Non joué : thème clair.
+
+**Au passage** : les raccourcis clavier globaux (Ctrl+K de la palette, annuler / rétablir de
+`EditBar.vue` et `ReliefPanel.vue`) ignorent les `keydown` sans `key` — le remplissage automatique de
+Chrome en émet (`key` `undefined` malgré le type), et `e.key.toLowerCase()` levait une erreur. Test :
+`SearchPalette.test.ts` (rouge sans la garde).

@@ -118,9 +118,10 @@ function onEscape() {
 }
 
 // Écoute en phase de capture : le raccourci passe même quand un champ a le focus, et avant le
-// navigateur (Ctrl+K y met le focus sur la barre d'adresse).
+// navigateur (Ctrl+K y met le focus sur la barre d'adresse). Le remplissage automatique de Chrome
+// émet des `keydown` SANS `key` (`undefined`, malgré le type) : on les ignore.
 function onKey(e: KeyboardEvent) {
-  if (e.key.toLowerCase() !== 'k' || !(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return
+  if (typeof e.key !== 'string' || e.key.toLowerCase() !== 'k' || !(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return
   e.preventDefault()
   if (open.value) close()
   else show()

@@ -35,6 +35,14 @@ describe('SearchPalette', () => {
     push.mockClear()
   })
 
+  it('ignore un keydown sans touche (remplissage automatique de Chrome)', async () => {
+    const { w } = await setup()
+    expect(() => window.dispatchEvent(new Event('keydown'))).not.toThrow()
+    await flushPromises()
+    expect(w.find('.palette').exists()).toBe(false)
+    w.unmount()
+  })
+
   it('Ctrl+K ouvre la palette, un second Ctrl+K la referme', async () => {
     const { w } = await setup()
     expect(w.find('.palette').exists()).toBe(false)

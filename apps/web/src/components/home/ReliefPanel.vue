@@ -118,6 +118,8 @@ const canRedo = computed(() => (tab.value === 'outline' ? outline.value?.canRedo
 // Suppr (hors d'un champ) retire le sommet choisi du contour.
 const ARROWS: Record<string, [number, number]> = { ArrowUp: [0, 1], ArrowDown: [0, -1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }
 useEventListener(window, 'keydown', (e: KeyboardEvent) => {
+  // le remplissage automatique de Chrome émet des `keydown` sans `key` (`undefined`, malgré le type)
+  if (typeof e.key !== 'string') return
   const field = e.target instanceof Element ? e.target.closest('input, textarea') : null
   const arrow = ARROWS[e.key]
   if (tab.value === 'relief' && arrow && !e.ctrlKey && !e.metaKey && !e.altKey && props.state?.pointCm != null && (!field || field === pointInput.value)) {
