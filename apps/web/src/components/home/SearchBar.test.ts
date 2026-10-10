@@ -185,6 +185,29 @@ describe('SearchBar — Demander à Kasbah', () => {
     expect(w.find('input').element.value).toBe('')
   })
 
+  it('Échap ferme la réponse et efface l’instruction du champ', async () => {
+    fakeAssistant([{ type: 'text', text: 'Fait.' }, { type: 'done', ms: 1 }])
+    const { w, type } = await setup()
+    await type('zzz fais un truc')
+    await w.find('.search__row--ask').trigger('click')
+    await flushPromises()
+    expect(w.find('.search__reply').exists()).toBe(true)
+    await w.find('input').trigger('keydown.esc')
+    expect(w.find('.search__reply').exists()).toBe(false)
+    expect(w.find('input').element.value).toBe('')
+  })
+
+  it('la croix de la réponse la ferme et efface l’instruction du champ', async () => {
+    fakeAssistant([{ type: 'text', text: 'Fait.' }, { type: 'done', ms: 1 }])
+    const { w, type } = await setup()
+    await type('zzz fais un truc')
+    await w.find('.search__row--ask').trigger('click')
+    await flushPromises()
+    await w.find('.reply__close').trigger('click')
+    expect(w.find('.search__reply').exists()).toBe(false)
+    expect(w.find('input').element.value).toBe('')
+  })
+
   it('dit en clair une instruction refusée', async () => {
     fakeAssistant(new ApiRequestError(409, 'BUSY', 'an instruction is already running'))
     const { w, type } = await setup()

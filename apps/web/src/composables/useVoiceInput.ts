@@ -18,7 +18,12 @@ import { useScenesStore } from '../stores/scenes'
 //
 // Réponses parlées (sous-item `speech` du plugin) : quand `onText` rend la réponse de l'assistant, elle
 // est dite à voix haute ICI, sur l'appareil qui a parlé. Seules les instructions dictées parlent ; un
-// toucher du micro pendant la lecture l'arrête.
+// toucher du micro pendant la lecture l'arrête. Une réponse tapée se réécoute à la demande (`replay`).
+// L'audio de la dernière réponse dite est gardé : la réécouter ne refait pas la synthèse. L'appelant
+// l'oublie (`forgetSpoken`) quand la réponse se ferme ; une autre réponse le remplace.
+//
+// Rien entendu : pas de bandeau d'erreur, le champ le dit à la place de son texte indicatif
+// (`heardNothing`, quelques secondes), là où l'on regardait déjà.
 
 export type VoicePhase = 'idle' | 'recording' | 'transcribing' | 'speaking'
 
@@ -26,6 +31,8 @@ export type VoicePhase = 'idle' | 'recording' | 'transcribing' | 'speaking'
 export const MAX_RECORDING_MS = 15_000
 /** En dessous, c'est un toucher sans parole : rien à transcrire. */
 const MIN_SECONDS = 0.3
+/** Le temps que « rien entendu » reste dans le champ. */
+export const HEARD_NOTHING_MS = 4000
 
 /** Le plugin tourne-t-il ? Demandé une fois par chargement de page, partagé par la palette et la barre. */
 const ready = ref<boolean | null>(null)
@@ -50,6 +57,8 @@ export function useVoiceInput(onText: (text: string) => void | Promise<string | 
   }
 
   const phase = ref<VoicePhase>('idle')
+  const heardNothing = ref(false)
+  let heardNothingTimer: ReturnType<typeof setTimeout> | null = null
   let recorder: MediaRecorder | null = null
   let stream: MediaStream | null = null
   let chunks: Blob[] = []
@@ -59,6 +68,8 @@ export function useVoiceInput(onText: (text: string) => void | Promise<string | 
   /** La réponse en train d'être dite (une seule à la fois). */
   let player: HTMLAudioElement | null = null
   let playerUrl: string | null = null
+  /** La dernière réponse synthétisée, et son audio. */
+  let spoken: { text: string; audio: Blob } | null = null
 
   function stopSpeaking() {
     player?.pause()
@@ -70,7 +81,8 @@ export function useVoiceInput(onText: (text: string) => void | Promise<string | 
   async function say(answer: string) {
     phase.value = 'speaking'
     try {
-      const audio = await getTransport().speak(answer)
+      const audio = spoken?.text === answer ? spoken.audio : await getTransport().speak(answer)
+      spoken = { text: answer, audio }
       if (phase.value !== 'speaking') return              // arrêté pendant la synthèse
       playerUrl = URL.createObjectURL(audio)
       player = new Audio(playerUrl)
@@ -82,6 +94,12 @@ export function useVoiceInput(onText: (text: string) => void | Promise<string | 
       const message = err instanceof ApiRequestError ? err.message : (err as Error).message
       notifications.error(t('voice.errors.speakFailed', { message }))
     }
+  }
+
+  function setHeardNothing(on: boolean) {
+    if (heardNothingTimer) { clearTimeout(heardNothingTimer); heardNothingTimer = null }
+    heardNothing.value = on
+    if (on) heardNothingTimer = setTimeout(() => setHeardNothing(false), HEARD_NOTHING_MS)
   }
 
   /** Pièces, zones, niveaux, ambiances, puis appareils : le serveur en garde ce que le fournisseur accepte. */
@@ -103,6 +121,7 @@ export function useVoiceInput(onText: (text: string) => void | Promise<string | 
   }
 
   async function start() {
+    setHeardNothing(false)
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
       notifications.error(t('voice.errors.insecure'))
       return
@@ -133,9 +152,9 @@ export function useVoiceInput(onText: (text: string) => void | Promise<string | 
     phase.value = 'transcribing'
     try {
       const samples = await toMono16k(new Blob(chunks, { type }))
-      if (samples.length < STT_RATE * MIN_SECONDS) { notifications.notify(t('voice.errors.empty')); return }
+      if (samples.length < STT_RATE * MIN_SECONDS) { setHeardNothing(true); return }
       const { text } = await getTransport().transcribe(toBase64(encodeWav(samples)), hints())
-      if (!text) { notifications.notify(t('voice.errors.empty')); return }
+      if (!text) { setHeardNothing(true); return }
       phase.value = 'idle'
       const answer = await onText(text)
       if (answer && speech.value && !discarded && phase.value === 'idle') await say(answer)
@@ -153,12 +172,23 @@ export function useVoiceInput(onText: (text: string) => void | Promise<string | 
     else if (phase.value === 'speaking') stopSpeaking()
   }
 
+  /** Réécouter une réponse (réponses parlées allumées), ou arrêter celle qui se dit. */
+  function replay(answer: string) {
+    if (phase.value === 'speaking') stopSpeaking()
+    else if (phase.value === 'idle' && speech.value && answer) void say(answer)
+  }
+
+  function forgetSpoken() {
+    spoken = null
+  }
+
   onBeforeUnmount(() => {
+    setHeardNothing(false)
     discarded = true
     stop()
     release()
     stopSpeaking()
   })
 
-  return { ready, phase, toggle }
+  return { ready, speech, phase, heardNothing, toggle, replay, forgetSpoken }
 }

@@ -115,10 +115,11 @@ describe('SearchPalette', () => {
       ctrlK(); await flushPromises()
       expect((w.find('input').element as HTMLInputElement).value).toBe('zzz mets la radio')
       expect(w.find('.reply__answer').exists()).toBe(true)
-      // Échap efface la réponse : la liste revient
+      // Échap ferme la réponse et efface l'instruction : la palette reste ouverte, vide
       await w.find('input').trigger('keydown', { key: 'Escape' })
       expect(w.find('.reply__answer').exists()).toBe(false)
-      expect(w.find('.palette__row--ask').exists()).toBe(true)
+      expect((w.find('input').element as HTMLInputElement).value).toBe('')
+      expect(w.find('.palette').exists()).toBe(true)
       w.unmount()
     })
   })

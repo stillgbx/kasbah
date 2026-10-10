@@ -15,7 +15,8 @@ import AssistantReply from './AssistantReply.vue'
 //
 // La dernière ligne passe la saisie à l'assistant (« Demander à Kasbah ») : lui AGIT, et sa réponse
 // prend la place de la liste. Fermer la palette ne l'arrête pas ; la rouvrir la montre.
-// Le micro (plugin `transcription` allumé) dicte l'instruction, qui part aussitôt.
+// Le micro (plugin `transcription` allumé) dicte l'instruction, qui part aussitôt ; au doigt, il ne
+// rend pas le focus au champ (le clavier monterait).
 
 const route = useRoute()
 const router = useRouter()
@@ -29,7 +30,7 @@ const { results } = useSearch(query, { withHome: true })
 const assistant = useAssistant()
 const { phase } = assistant
 const { t } = useI18n()
-const { ready: voiceReady, phase: voicePhase, toggle: toggleVoice } = useVoiceInput(async (text) => {
+const { ready: voiceReady, speech, phase: voicePhase, heardNothing, toggle: toggleVoice, replay, forgetSpoken } = useVoiceInput(async (text) => {
   query.value = text
   await assistant.ask(text)
   // la réponse, à dire à voix haute si les réponses parlées sont allumées
@@ -45,6 +46,8 @@ let returnFocus: HTMLElement | null = null
 const showList = () => phase.value === 'idle' && normalize(query.value).length >= MIN_QUERY
 
 watch(results, () => { active.value = 0 })
+// la réponse fermée (ou remplacée par une autre question), son audio gardé pour la réécoute part avec elle
+watch(phase, (p) => { if (p === 'idle') forgetSpoken() })
 // Retoucher l'instruction après la réponse revient à la recherche (pas la fermeture, qui vide le champ).
 watch(query, (q) => {
   if (open.value && (phase.value === 'done' || phase.value === 'error') && q.trim() !== assistant.asked.value) assistant.reset()
@@ -79,7 +82,8 @@ async function pick(hit: SearchHit) {
 function talk() {
   if (voicePhase.value === 'idle' && window.isSecureContext) { assistant.reset(); query.value = '' }
   toggleVoice()
-  input.value?.focus()
+  if (matchMedia('(pointer: coarse)').matches) input.value?.blur()
+  else input.value?.focus()
 }
 
 function askNow() {
@@ -99,9 +103,16 @@ function move(delta: number) {
   void nextTick(() => listEl.value?.children[active.value]?.scrollIntoView({ block: 'nearest' }))
 }
 
+/** Fermer la réponse (Échap ou sa croix) : elle se tait, et l'instruction quitte le champ. */
+function closeReply() {
+  if (voicePhase.value === 'speaking') toggleVoice()
+  assistant.reset()
+  query.value = ''
+}
+
 /** Échap arrête ou efface la réponse, puis efface la saisie, puis ferme, comme la barre de la vue Maison. */
 function onEscape() {
-  if (phase.value !== 'idle') assistant.reset()
+  if (phase.value !== 'idle') closeReply()
   else if (query.value) query.value = ''
   else close()
 }
@@ -126,7 +137,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
           <StrokeIcon class="palette__glass" name="search" :size="18" />
           <input ref="input" v-model="query" type="search" class="palette__input"
                  autocomplete="off" autocorrect="off" spellcheck="false"
-                 :placeholder="voicePhase === 'recording' ? $t('voice.listening') : voicePhase === 'transcribing' ? $t('voice.transcribing') : $t('search.palette')"
+                 :placeholder="voicePhase === 'recording' ? $t('voice.listening') : voicePhase === 'transcribing' ? $t('voice.transcribing') : heardNothing ? $t('voice.heardNothing') : $t('search.palette')"
                  :aria-label="$t('search.aria')" :readonly="phase === 'running' || voicePhase === 'recording' || voicePhase === 'transcribing'"
                  @keydown.down.prevent="move(1)" @keydown.up.prevent="move(-1)"
                  @keydown.enter.prevent="onEnter()" @keydown.esc.prevent="onEscape()">
@@ -152,7 +163,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
           </button>
         </div>
         <AssistantReply v-else-if="phase !== 'idle'" class="palette__reply" :phase="phase" :asked="assistant.asked.value"
-                        :actions="assistant.actions.value" :answer="assistant.answer.value" :error="assistant.error.value" />
+                        :actions="assistant.actions.value" :answer="assistant.answer.value" :error="assistant.error.value"
+                        :can-replay="speech" :speaking="voicePhase === 'speaking'" closable
+                        @replay="replay(assistant.answer.value)" @close="closeReply(); input?.focus()" />
         <span class="palette__sr" aria-live="polite">{{ showList() ? $t('search.count', { n: results.length }, results.length) : '' }}</span>
       </div>
     </div>

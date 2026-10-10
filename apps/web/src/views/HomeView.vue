@@ -433,6 +433,11 @@ const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] 
           <StrokeIcon name="list" :size="18" />
         </button>
       </PageHeader>
+      <!-- téléphone en portrait : météo et vue d'ensemble sous les niveaux, le bas reste à la recherche -->
+      <div v-if="phone" class="home__toprow">
+        <WeatherWidget />
+        <button type="button" class="home__ctl home__ctl--solo" :title="$t('home.resetView')" :aria-label="$t('home.resetView')" @click="onTab('all')"><StrokeIcon name="home" :size="18" /></button>
+      </div>
     </div>
     <div v-if="!scene.supported.value" class="home__fallback card">{{ $t('scene.webglUnavailable') }}</div>
     <Transition name="home-loader">
@@ -440,7 +445,7 @@ const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] 
         <SceneLoader :house="house.effective" :stage="loaderStage" :progress="loaderProgress" @settled="(v) => (loaderDrawn = v)" />
       </div>
     </Transition>
-    <WeatherWidget class="home__weather" />
+    <WeatherWidget v-if="!phone" class="home__weather" />
     <div class="home__controls">
       <div class="home__cluster">
         <button type="button" class="home__ctl" :title="$t('home.rotateLeft')" :aria-label="$t('home.rotateLeft')" @click="scene.orbitBy(-ORBIT_STEP)"><StrokeIcon name="rotateLeft" :size="18" /></button>
@@ -450,7 +455,7 @@ const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] 
         <button type="button" class="home__ctl" :title="$t('home.zoomIn')" :aria-label="$t('home.zoomIn')" @click="scene.dollyBy(1 / DOLLY_STEP)"><StrokeIcon name="plus" :size="18" /></button>
         <button type="button" class="home__ctl" :title="$t('home.zoomOut')" :aria-label="$t('home.zoomOut')" @click="scene.dollyBy(DOLLY_STEP)"><StrokeIcon name="minus" :size="18" /></button>
       </div>
-      <button type="button" class="home__ctl home__ctl--solo" :title="$t('home.resetView')" :aria-label="$t('home.resetView')" @click="onTab('all')"><StrokeIcon name="home" :size="18" /></button>
+      <button v-if="!phone" type="button" class="home__ctl home__ctl--solo" :title="$t('home.resetView')" :aria-label="$t('home.resetView')" @click="onTab('all')"><StrokeIcon name="home" :size="18" /></button>
     </div>
     <div class="home__search">
       <SearchBar @picked="onSearchPicked" />
@@ -496,11 +501,12 @@ const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] 
 .home__stage > .scene-canvas, .home__stage > .scene-labels { transition: opacity .6s ease; }
 .home[data-loading='1'] .home__stage > .scene-canvas, .home[data-loading='1'] .home__stage > .scene-labels { opacity: 0; }
 /* ce qui ne sert qu'à la 3D s'efface avec elle, à sa PLACE (rien ne bouge) et hors d'atteinte */
-.home__floors, .home__search, .home__controls { transition: opacity .45s ease, visibility .45s; }
-.home[data-loading='1'] .home__floors, .home[data-loading='1'] .home__search, .home[data-loading='1'] .home__controls { opacity: 0; visibility: hidden; }
+.home__floors, .home__search, .home__controls, .home__toprow > .home__ctl { transition: opacity .45s ease, visibility .45s; }
+.home[data-loading='1'] .home__floors, .home[data-loading='1'] .home__search, .home[data-loading='1'] .home__controls,
+.home[data-loading='1'] .home__toprow > .home__ctl { opacity: 0; visibility: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .home-loader-enter-active, .home-loader-leave-active, .home__stage > .scene-canvas, .home__stage > .scene-labels,
-  .home__floors, .home__search, .home__controls { transition: none; }
+  .home__floors, .home__search, .home__controls, .home__toprow > .home__ctl { transition: none; }
 }
 .home__weather { position: absolute; left: calc(var(--rail-w) + var(--panel-gap)); bottom: var(--float-bottom); z-index: 2; }
 /* Recherche : en bas, dans la bande laissée libre ENTRE la carte météo et les boutons de vue, et
@@ -537,5 +543,17 @@ const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] 
 @media (max-width: 599px) {
   .home__floors { flex: 1 1 0; min-width: 0; }
 }
+/* Téléphone en portrait : entre la météo et la vue d'ensemble, la recherche n'avait que 160 px. Elle
+   prend toute la largeur au ras de la barre du bas, et sa liste comme la réponse s'ouvrent juste
+   au-dessus d'elle ; la météo (en pastille) et la vue d'ensemble montent sous les niveaux
+   (`.home__toprow`). À la souris, les grappes rotation/zoom restent en bas, au-dessus du champ. */
+@media (max-width: 599px) {
+  .home__search { left: calc(var(--rail-w) + var(--panel-gap)); right: calc(var(--safe-right) + var(--panel-gap)); }
+  .home__search > * { width: 100%; }
+  .home__controls { bottom: calc(var(--float-bottom) + var(--ctl-w) + 10px); }
+}
+/* la rangée laisse passer les gestes vers la scène entre ses deux éléments */
+.home__header > .home__toprow { display: flex; justify-content: space-between; align-items: center; padding: 0 var(--page-x); pointer-events: none; }
+.home__toprow > * { pointer-events: auto; }
 .home__ctl--solo { border-radius: 999px; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 86%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: var(--shadow); color: var(--text); }
 </style>

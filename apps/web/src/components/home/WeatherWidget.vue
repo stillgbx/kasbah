@@ -58,4 +58,14 @@ const condition = computed(() => (live.value ? t(`weather.conditions.${live.valu
   .wx__time { font-size: 16px; }
   .wx__cond, .wx__date { display: none; }
 }
+/* Téléphone en portrait : une pastille de la hauteur des boutons de vue, sous les onglets de niveau
+   (voir HomeView) — icône, température, heure. */
+@media (max-width: 599px) {
+  .wx {
+    width: auto; height: var(--ctl-w); padding: 0 14px 0 10px; border-radius: 999px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .wx__temp { font-size: 16px; font-variant-numeric: tabular-nums; }
+  .wx__time { font-size: 16px; color: var(--muted); align-self: center; }
+}
 </style>

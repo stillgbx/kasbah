@@ -1,6 +1,6 @@
 # Plugin Transcription (la voix de l'assistant)
 
-> Dernière mise à jour : 2026-10-08
+> Dernière mise à jour : 2026-10-10
 > Sources : `apps/server/src/plugins/transcription/index.ts`, `apps/server/src/plugins/transcription/voicestudio.ts` (+ test), tests `apps/server/src/plugins/transcription/plugin.test.ts`, `apps/web/src/composables/useVoiceInput.ts` (+ test), `apps/web/src/lib/wav.ts` (+ test), `apps/web/src/components/home/SearchBar.vue`, `apps/web/src/components/layout/SearchPalette.vue`, `apps/server/.env.example`, session du 2026-10-07, `apps/web/src/composables/useVoiceInput.speech.test.ts`, `apps/web/src/components/TranscriptionLinkCard.vue` (+ test), `docs/plugins/transcription.md`, session du 2026-10-08
 
 ## Ce que c'est
@@ -37,7 +37,7 @@ l'adresse, le modèle, la clé et le champ du vocabulaire.
   moteur ne répond pas — il peut démarrer après Kasbah ; `ok` dès qu'une transcription réussit.
 - **Erreurs** : moteur injoignable → 503 `DEVICE_UNAVAILABLE` ; clé refusée (401/403) → 409
   `NEEDS_PAIRING` ; autre refus → 502 `UPSTREAM_ERROR` avec le début de la réponse ; texte vide →
-  l'app dit « Rien entendu. ».
+  l'app dit « Rien entendu. » (dans le champ depuis le 2026-10-10, voir la mise à jour en bas).
 
 ## L'audio : WAV 16 kHz mono, fait par le navigateur
 
@@ -273,3 +273,22 @@ Tests : `plugin.test.ts` (+1 : un compte surcharge la voix de la maison, ni la m
 compte ne la prennent, l'effacer ramène la voix de la maison ; contrôle négatif fait — lecture de la
 voix du compte retirée → rouge), `TranscriptionLinkCard.test.ts` (+1, cas connecté). Vérifié par
 l'utilisateur sur son installation (« ça fonctionne »).
+
+### Mise à jour 2026-10-10 — rien entendu dans le champ, réécouter une réponse
+
+- **Rien entendu** : plus de bandeau d'erreur. `useVoiceInput` expose `heardNothing`, vrai pendant
+  `HEARD_NOTHING_MS` (4 s) ou jusqu'à la prochaine écoute ; la barre et la palette l'affichent à la
+  place du texte indicatif (« Je n'ai rien entendu, réessayez ? », `voice.heardNothing`). La clé
+  `voice.errors.empty` a disparu.
+- **Réécouter** : `replay(answer)` dit une réponse à la demande, y compris celle d'une instruction
+  **tapée**, ou arrête celle qui se dit. Bouton « Réécouter » / « Arrêter » en bas à droite de la
+  réponse (`AssistantReply`, `canReplay` = sous-item `speech` allumé, exposé par `speech`), place
+  réservée dès que le texte arrive, largeur du plus long libellé.
+- **Cache** : l'audio de la dernière réponse synthétisée est gardé (`{ text, audio }`) ; la réécouter
+  ne rappelle pas `/speak`. Une autre réponse le remplace ; la barre et la palette l'oublient
+  (`forgetSpoken`) dès que l'assistant revient au repos (réponse fermée, nouvelle question,
+  instruction retouchée).
+
+Tests : `useVoiceInput.test.ts` (rien entendu sans bandeau puis effacé au bout de 4 s ; effacé en
+reparlant), `useVoiceInput.speech.test.ts` (+2 : réécoute et arrêt ; une seule synthèse tant que la
+réponse n'est pas oubliée).

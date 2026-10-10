@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { useEventListener } from '@vueuse/core'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAssistant } from '../../composables/useAssistant'
@@ -15,10 +14,12 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 // déplacer la sélection (voir `useSearch`) — le cadrage 3D et le panneau suivent tout seuls.
 //
 // La dernière ligne passe la saisie à l'assistant, qui AGIT. Sa réponse s'ouvre à la place de la
-// liste et y reste sans le focus (sur téléphone, le clavier se ferme) jusqu'à la croix ou à Échap.
+// liste et y reste sans le focus (sur téléphone, le clavier se ferme) jusqu'à la croix ou à Échap,
+// qui effacent aussi l'instruction du champ.
 //
 // Le micro (plugin `transcription` allumé) : appuyer pour parler, appuyer pour finir ; le texte
-// entendu devient l'instruction et part aussitôt à l'assistant.
+// entendu devient l'instruction et part aussitôt à l'assistant. Le toucher du micro rend le focus :
+// sur téléphone, le clavier ne monte pas (ni à la fin de l'écoute, quand le champ redevient éditable).
 
 const emit = defineEmits<{ picked: [hit: SearchHit] }>()
 
@@ -27,12 +28,11 @@ const focused = ref(false)
 const active = ref(0)
 const input = ref<HTMLInputElement | null>(null)
 const listEl = ref<HTMLDivElement | null>(null)
-const root = ref<HTMLDivElement | null>(null)
 const { results } = useSearch(query)
 const assistant = useAssistant()
 const { phase } = assistant
 const { t } = useI18n()
-const { ready: voiceReady, phase: voicePhase, toggle: toggleVoice } = useVoiceInput(async (text) => {
+const { ready: voiceReady, speech, phase: voicePhase, heardNothing, toggle: toggleVoice, replay, forgetSpoken } = useVoiceInput(async (text) => {
   query.value = text
   await assistant.ask(text)
   // la réponse, à dire à voix haute si les réponses parlées sont allumées
@@ -51,20 +51,12 @@ const isOpen = () => phase.value === 'idle' && focused.value && normalize(query.
 // La frappe rebat les cartes : le curseur revient en tête, sinon Entrée validerait la 4e ligne
 // d'une liste qui n'a plus rien à voir avec celle qu'on regardait.
 watch(results, () => { active.value = 0 })
+// la réponse fermée (ou remplacée par une autre question), son audio gardé pour la réécoute part avec elle
+watch(phase, (p) => { if (p === 'idle') forgetSpoken() })
 // Retoucher l'instruction après la réponse revient à la recherche.
 watch(query, (q) => {
   if ((phase.value === 'done' || phase.value === 'error') && q.trim() !== assistant.asked.value) assistant.reset()
 })
-
-// Sur téléphone le champ est étroit (160 px entre la météo et les boutons) : la réponse, qui se lit,
-// prend la largeur de l'écran à 16 px des bords, toujours au-dessus du champ, qui ne bouge pas.
-const replyStyle = ref<Record<string, string>>({})
-function placeReply() {
-  const r = root.value?.getBoundingClientRect()
-  replyStyle.value = r && innerWidth < 600 ? { left: `${16 - r.left}px`, right: `${r.right - innerWidth + 16}px` } : {}
-}
-watch(phase, (_p, was) => { if (was === 'idle') placeReply() })
-useEventListener(window, 'resize', placeReply)
 
 /** Revenir au champ après une réponse sélectionne l'instruction : la frappe suivante la remplace. */
 function onFocus() {
@@ -95,13 +87,20 @@ function onEnter() {
 function talk() {
   // en `http://` le micro sera refusé : on garde la saisie
   if (voicePhase.value === 'idle' && window.isSecureContext) { assistant.reset(); query.value = '' }
+  input.value?.blur()
   toggleVoice()
+}
+
+/** Fermer la réponse : elle se tait, et l'instruction quitte le champ. */
+function closeReply() {
+  if (voicePhase.value === 'speaking') toggleVoice()
+  assistant.reset()
+  query.value = ''
 }
 
 /** La croix : arrête ou efface la réponse, et la saisie. */
 function clear() {
-  assistant.reset()
-  query.value = ''
+  closeReply()
   input.value?.focus()
 }
 
@@ -111,16 +110,16 @@ function move(delta: number) {
   void nextTick(() => listEl.value?.children[active.value]?.scrollIntoView({ block: 'nearest' }))
 }
 
-/** Échap arrête ou efface la réponse, puis la saisie, puis rend la main : on corrige sans perdre le champ. */
+/** Échap arrête ou efface la réponse (et l'instruction), puis la saisie, puis rend la main : on corrige sans perdre le champ. */
 function onEscape() {
-  if (phase.value !== 'idle') assistant.reset()
+  if (phase.value !== 'idle') closeReply()
   else if (query.value) query.value = ''
   else input.value?.blur()
 }
 </script>
 
 <template>
-  <div ref="root" class="search">
+  <div class="search">
     <!-- `mousedown.prevent` : sans lui, le champ perd le focus AVANT le clic, la liste se ferme et
          le résultat n'est jamais choisi (le doigt passe par la même séquence que la souris). -->
     <div v-if="isOpen()" ref="listEl" class="search__list" role="listbox" @mousedown.prevent>
@@ -138,13 +137,15 @@ function onEscape() {
         <span class="search__sub search__sub--ask">{{ query.trim() }}</span>
       </button>
     </div>
-    <AssistantReply v-else-if="phase !== 'idle'" class="search__reply" :style="replyStyle" :phase="phase" :asked="assistant.asked.value"
-                    :actions="assistant.actions.value" :answer="assistant.answer.value" :error="assistant.error.value" />
+    <AssistantReply v-else-if="phase !== 'idle'" class="search__reply" :phase="phase" :asked="assistant.asked.value"
+                    :actions="assistant.actions.value" :answer="assistant.answer.value" :error="assistant.error.value"
+                    :can-replay="speech" :speaking="voicePhase === 'speaking'" closable
+                    @replay="replay(assistant.answer.value)" @close="closeReply()" />
     <div class="search__field">
       <StrokeIcon class="search__glass" name="search" :size="18" />
       <input ref="input" v-model="query" type="search" class="search__input" enterkeyhint="go"
              autocomplete="off" autocorrect="off" spellcheck="false"
-             :placeholder="voicePhase === 'recording' ? $t('voice.listening') : voicePhase === 'transcribing' ? $t('voice.transcribing') : $t('search.placeholder')"
+             :placeholder="voicePhase === 'recording' ? $t('voice.listening') : voicePhase === 'transcribing' ? $t('voice.transcribing') : heardNothing ? $t('voice.heardNothing') : $t('search.placeholder')"
              :aria-label="$t('search.aria')" :readonly="phase === 'running' || voicePhase === 'recording' || voicePhase === 'transcribing'"
              @focus="onFocus()" @blur="focused = false"
              @keydown.down.prevent="move(1)" @keydown.up.prevent="move(-1)"

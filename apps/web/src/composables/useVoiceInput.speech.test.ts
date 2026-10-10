@@ -78,6 +78,36 @@ it('revient au repos à la fin de la lecture', async () => {
   expect(api().phase.value).toBe('idle')
 })
 
+it('réécoute une réponse à la demande, et le même bouton l’arrête', async () => {
+  const api = harness(null)
+  await flushPromises()
+  expect(api().speech.value).toBe(true)
+  api().replay('Il fait 19 degrés.'); await flushPromises()
+  expect(speak).toHaveBeenCalledWith('Il fait 19 degrés.')
+  expect(api().phase.value).toBe('speaking')
+  api().replay('Il fait 19 degrés.')
+  expect(FakeAudio.last!.playing).toBe(false)
+  expect(api().phase.value).toBe('idle')
+})
+
+it('réécoute sans refaire la synthèse, tant que la réponse n’est pas oubliée', async () => {
+  const api = harness('Fait.')
+  await flushPromises()
+  api().toggle(); await flushPromises()
+  api().toggle(); await flushPromises()
+  FakeAudio.last!.onended!()
+  api().replay('Fait.'); await flushPromises()
+  expect(speak).toHaveBeenCalledTimes(1)
+  expect(api().phase.value).toBe('speaking')
+  FakeAudio.last!.onended!()
+  api().replay('Autre chose.'); await flushPromises()
+  expect(speak).toHaveBeenCalledTimes(2)
+  FakeAudio.last!.onended!()
+  api().forgetSpoken()
+  api().replay('Autre chose.'); await flushPromises()
+  expect(speak).toHaveBeenCalledTimes(3)
+})
+
 it('ne parle pas quand l’appelant ne rend pas de réponse (erreur de l’assistant)', async () => {
   const api = harness(null)
   await flushPromises()

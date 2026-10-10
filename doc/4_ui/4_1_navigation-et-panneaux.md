@@ -5885,3 +5885,41 @@ Vérifié dans la preview simulée : renommages (onglet « R+1 », en-tête), ri
 zoom 1,5 sans débordement ; recherches Paris (IGN seul), Madrid et Londres (Photon).
 
 Tests : `apps/web/src/lib/geocode.test.ts`.
+
+### Mise à jour 2026-10-10 (6) — vue Maison sur téléphone : recherche pleine largeur, feuille à glisser, réponse refermable
+
+Retours de l'utilisateur sur un vrai téléphone (portrait, < 600 px). Rien ne change au-delà.
+
+- **Bas de la vue Maison** (`HomeView.vue`) : entre la météo et la vue d'ensemble, la recherche
+  n'avait que 160 px. Elle prend désormais **toute la largeur** au ras de la barre du bas (343 px à
+  375 px de large). La météo devient une **pastille** de la hauteur des boutons (icône, température,
+  heure ; `WeatherWidget.vue`) et monte, avec la vue d'ensemble, sur une rangée **sous les onglets de
+  niveau** (`.home__toprow`, rendue par `phone`). Choix de l'utilisateur, en deux temps : la rangée
+  était d'abord au-dessus du champ ; il l'a voulue en haut pour que la liste et la réponse s'ouvrent
+  **juste au-dessus du champ**, sans couper la météo (la réponse masquait le haut de la carte). Le
+  calcul en JS qui élargissait la réponse à l'écran (`placeReply`) a disparu avec. À la souris dans
+  une fenêtre étroite, les grappes rotation / zoom restent en bas à droite, au-dessus du champ.
+- **Feuille du bas** (`SidePanel.vue`, panneau superposé en portrait) : une **poignée** (bande de
+  28 px sur la marge haute du contenu, barrette de 40 × 4 px) se glisse vers le bas. Lâchée après un
+  quart de la hauteur, ou lancée (> 0,5 px/ms et > 16 px), la feuille descend et se ferme ; sinon elle
+  remonte. Seule la poignée se glisse : le contenu défile comme avant. Piège évité : la fermeture
+  attend que le style « partie » (`translateY(100%)`) soit posé (`nextTick`), sinon le style en ligne
+  du glissement écraserait la transition de sortie de Vue.
+- **Réponse de l'assistant** (`AssistantReply.vue`) : une **croix** en haut à droite (`closable`, dans
+  la hauteur de la ligne de l'instruction) la ferme comme Échap ; « **Réécouter** » en pastille
+  libellée en bas à droite de la réponse (l'icône seule était ambiguë), voir
+  `../3_plugins/3_25_transcription.md`. Fermer la réponse (croix, Échap) l'arrête si elle est dite et
+  **efface l'instruction du champ**, dans la barre comme dans la palette — Échap ramenait jusque-là la
+  liste de résultats sur l'instruction.
+- **Clavier virtuel** : toucher le micro rend le focus du champ (`blur`) ; dans la palette, le focus
+  ne revient au champ qu'à la souris (`pointer: coarse` sinon). Hypothèse : le champ gardait le focus
+  et redevenait éditable à la fin de la transcription. Non reproduit sur un vrai téléphone.
+
+Vérifié dans la preview (`kasbah-mock`) à 375 × 812 (géométrie : rangée sous l'en-tête, champ
+16 → 359 px, réponse au-dessus du champ, glisser ferme et un petit glissement revient) et à
+1 280 × 800 (inchangé). Non joué : thème clair (la barrette dérive de `--text`). Piège de preview :
+redimensionner sans recharger peut laisser la disposition téléphone (le `change` du media query
+n'arrive pas pendant que le panneau est masqué) ; après rechargement, c'est juste.
+
+Tests : `SearchBar.test.ts` (+2 : Échap et la croix effacent l'instruction), `SearchPalette.test.ts`
+(Échap sur une réponse vide le champ, la palette reste ouverte).

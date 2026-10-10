@@ -10,7 +10,10 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 
 // Ce que l'assistant a fait et répondu, sous le champ de la palette ou au-dessus de la barre de la
 // vue Maison. Une ligne par outil appelé, l'appareil ou l'ambiance nommés comme dans l'app ; puis la
-// réponse, ou l'erreur dite en clair.
+// réponse, ou l'erreur dite en clair. Avec `canReplay` (réponses parlées allumées), « Réécouter » en
+// bas à droite de la réponse la fait dire à voix haute ; sa rangée existe dès que le texte arrive
+// (cachée jusqu'à la fin) : elle n'agrandit pas le panneau après coup. Avec `closable`, une croix en
+// haut à droite ferme la réponse, comme celle du champ de recherche.
 
 const props = defineProps<{
   phase: AssistantPhase
@@ -18,7 +21,12 @@ const props = defineProps<{
   actions: AssistantAction[]
   answer: string
   error: { code: string; message: string } | null
+  canReplay?: boolean
+  closable?: boolean
+  /** La réponse est en train d'être dite : le bouton l'arrête. */
+  speaking?: boolean
 }>()
+const emit = defineEmits<{ replay: []; close: [] }>()
 
 const { t, te } = useI18n()
 const devices = useDevicesStore()
@@ -61,6 +69,10 @@ const errorText = computed(() => {
     <div class="reply__asked">
       <StrokeIcon name="sparkle" :size="16" />
       <span class="reply__askedtext">{{ asked }}</span>
+      <button v-if="closable" type="button" class="reply__close" :aria-label="$t('assistant.close')" :title="$t('assistant.close')"
+              @mousedown.prevent @click="emit('close')">
+        <StrokeIcon name="close" :size="16" />
+      </button>
     </div>
     <div v-for="r in rows" :key="r.id" class="reply__action">
       <StrokeIcon class="reply__icon" :name="r.icon" :size="16" />
@@ -74,6 +86,18 @@ const errorText = computed(() => {
       </span>
     </div>
     <div v-if="answer" class="reply__answer">{{ answer }}</div>
+    <div v-if="answer && canReplay" class="reply__foot">
+      <button type="button" class="reply__replay" :data-show="phase === 'done' ? '1' : '0'"
+              :tabindex="phase === 'done' ? 0 : -1" :data-speaking="speaking ? '1' : '0'"
+              :aria-label="$t(speaking ? 'voice.stopSpeaking' : 'voice.replay')" @mousedown.prevent @click="emit('replay')">
+        <StrokeIcon :name="speaking ? 'stop' : 'volume'" :size="16" />
+        <!-- les deux libellés dans la même case : le bouton garde la largeur du plus long -->
+        <span class="reply__replaylabel">
+          <span :data-on="speaking ? '0' : '1'">{{ $t('voice.replayShort') }}</span>
+          <span :data-on="speaking ? '1' : '0'">{{ $t('voice.stopShort') }}</span>
+        </span>
+      </button>
+    </div>
     <div v-else-if="phase === 'running'" class="reply__wait muted"><PulseDot :on="true" />{{ $t('assistant.thinking') }}</div>
     <div v-if="phase === 'error'" class="reply__error">{{ errorText }}</div>
   </div>
@@ -83,7 +107,25 @@ const errorText = computed(() => {
 .reply { display: grid; gap: 6px; padding: 12px 16px 14px; }
 .reply__asked { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; min-width: 0; }
 .reply__asked > :first-child { flex: none; color: var(--accent); }
-.reply__askedtext { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.reply__askedtext { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* la croix, dans la hauteur de la ligne (marges négatives) : elle n'agrandit rien */
+.reply__close {
+  flex: none; width: 32px; height: 32px; margin: -8px -10px -8px 0; border: 0; border-radius: 999px; background: transparent;
+  color: var(--muted); display: grid; place-items: center;
+}
+.reply__close:hover { color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); }
+/* « Réécouter » : une pastille libellée, en bas à droite de la réponse (l'icône seule était ambiguë) */
+.reply__foot { display: flex; justify-content: flex-end; margin-top: 2px; }
+.reply__replay {
+  display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px 0 10px; margin-right: -4px;
+  border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--text); font: inherit; font-size: 13px;
+}
+.reply__replay[data-show='0'] { visibility: hidden; }
+.reply__replay:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
+.reply__replay > :first-child { color: var(--accent); }
+.reply__replaylabel { display: grid; }
+.reply__replaylabel > span { grid-area: 1 / 1; white-space: nowrap; }
+.reply__replaylabel > span[data-on='0'] { visibility: hidden; }
 .reply__action { display: flex; align-items: center; gap: 8px; min-height: 24px; font-size: 13px; min-width: 0; }
 .reply__icon { flex: none; color: var(--muted); }
 /* le libellé passe avant la cible (base 0), et se coupe plutôt que de pousser l'état hors du panneau */

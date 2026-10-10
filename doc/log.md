@@ -2,6 +2,18 @@
 
 Entrées les plus récentes en haut. Une session = une entrée.
 
+## [2026-10-10] update | Vue Maison sur téléphone, réponse de l'assistant refermable et réécoutable
+
+**Déclencheur** : retours de l'utilisateur sur un vrai téléphone (recherche trop étroite, réponse qui masquait la météo, feuille du bas sans geste de fermeture, « Rien entendu » brutal, clavier qui montait au micro) et sur toutes les versions (réécouter une réponse sans refaire la synthèse, fermer une réponse en vidant le champ).
+
+**Pages modifiées** :
+- `4_ui/4_1_navigation-et-panneaux.md` - mise à jour datée (6) : recherche pleine largeur, météo et vue d'ensemble sous les niveaux, poignée de la feuille, croix et Échap qui vident le champ, focus rendu au micro.
+- `3_plugins/3_25_transcription.md` - mise à jour datée : « rien entendu » dans le champ, réécoute et cache de l'audio.
+
+**Pages créées** : aucune.
+
+**Index** : date de `3_25_transcription` au 2026-10-10.
+
 ## [2026-10-10] update | Voile de la vue 3D : l'animation complète une seule fois
 
 **Déclencheur** : sur le téléphone, chaque relance de l'app (et chaque rechargement dans un navigateur) faisait patienter plus de 5 s devant le voile, à cause des minimums d'animation et non du calcul.

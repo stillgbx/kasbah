@@ -8,7 +8,7 @@ import type { Transport } from '../api/transport'
 import type * as Wav from '../lib/wav'
 import { useDevicesStore } from '../stores/devices'
 import { useNotificationsStore } from '../stores/notifications'
-import { useVoiceInput } from './useVoiceInput'
+import { HEARD_NOTHING_MS, useVoiceInput } from './useVoiceInput'
 
 // Le micro de la recherche : appuyer, parler, rappuyer → le WAV part au plugin avec les noms de la
 // maison, et le texte entendu revient à l'appelant. Le décodage audio du navigateur est simulé :
@@ -89,13 +89,30 @@ describe('useVoiceInput', () => {
     expect(useNotificationsStore().queue.at(-1)?.text).toContain('adresse http')
   })
 
-  it('dit « Rien entendu » quand le moteur ne rend rien', async () => {
+  it('dit « rien entendu » dans le champ, sans bandeau, quelques secondes', async () => {
     transcribe.mockResolvedValueOnce({ text: '', ms: 1 })
     const { heard, api } = harness()
+    const queued = useNotificationsStore().queue.length
+    vi.useFakeTimers()
+    try {
+      api().toggle(); await flushPromises()
+      api().toggle(); await flushPromises()
+      expect(heard).toEqual([])
+      expect(api().heardNothing.value).toBe(true)
+      expect(useNotificationsStore().queue.length).toBe(queued)
+      vi.advanceTimersByTime(HEARD_NOTHING_MS)
+      expect(api().heardNothing.value).toBe(false)
+    } finally { vi.useRealTimers() }
+  })
+
+  it('reparler efface « rien entendu »', async () => {
+    transcribe.mockResolvedValueOnce({ text: '', ms: 1 })
+    const { api } = harness()
     api().toggle(); await flushPromises()
     api().toggle(); await flushPromises()
-    expect(heard).toEqual([])
-    expect(useNotificationsStore().queue.at(-1)?.text).toBe('Rien entendu.')
+    expect(api().heardNothing.value).toBe(true)
+    api().toggle(); await flushPromises()
+    expect(api().heardNothing.value).toBe(false)
   })
 
   it('ne dit rien quand les réponses parlées sont éteintes', async () => {
