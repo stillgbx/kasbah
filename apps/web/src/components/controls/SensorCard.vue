@@ -6,6 +6,8 @@ import { formatSensor } from '../../lib/format'
 import DeviceIcon from '../DeviceIcon.vue'
 import LightHistoryChart from './LightHistoryChart.vue'
 
+// Deux racines (rien où hériter) : l'aiguillage passe à tous les contrôles `@command` et `relay-from`, inutiles ici
+defineOptions({ inheritAttrs: false })
 const props = defineProps<{ descriptor: DeviceDescriptor; state: StateFor<'sensor'>; pending?: boolean; disabled?: boolean }>()
 const { d } = useI18n()
 /**
