@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import type { House } from '@kasbah/shared'
 import SceneLoader from './SceneLoader.vue'
@@ -20,6 +20,25 @@ describe('voile de chargement de la vue 3D', () => {
     expect(w.findAll('.loader__floor')).toHaveLength(2)
     expect(w.findAll('.loader__leader')).toHaveLength(0)            // un seul niveau dessiné : rien à relier
     w.unmount()
+  })
+
+  /** L'animation se découvre en entier une fois ; ensuite, un rechargement ne la fait plus subir. */
+  it('ne retient le voile que la première fois sur ce poste', async () => {
+    vi.useFakeTimers()
+    localStorage.removeItem('kasbah.sceneLoaderSeen')
+    const settled = (w: ReturnType<typeof mount>) => w.emitted<[boolean]>('settled')?.at(-1)?.[0]
+    const first = mount(SceneLoader, { props: { house, stage: 'shaders', progress: null } })
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(settled(first)).toBeUndefined()                          // la maison peut être prête : on regarde le dessin
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(settled(first)).toBe(true)
+    first.unmount()
+    const again = mount(SceneLoader, { props: { house, stage: 'shaders', progress: null } })
+    await vi.advanceTimersByTimeAsync(1)
+    expect(settled(again)).toBe(true)
+    again.unmount()
+    localStorage.removeItem('kasbah.sceneLoaderSeen')
+    vi.useRealTimers()
   })
 
   it('dit l’étape en cours, avec le compte des matières quand il est connu', () => {

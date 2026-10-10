@@ -2,6 +2,17 @@
 
 Entrées les plus récentes en haut. Une session = une entrée.
 
+## [2026-10-10] update | Voile de la vue 3D : l'animation complète une seule fois
+
+**Déclencheur** : sur le téléphone, chaque relance de l'app (et chaque rechargement dans un navigateur) faisait patienter plus de 5 s devant le voile, à cause des minimums d'animation et non du calcul.
+
+**Pages modifiées** :
+- `1_architecture/1_5_scene-3d.md` - mise à jour datée : minimums du voile tenus la première fois seulement (`kasbah.sceneLoaderSeen`) ; la section du 2026-09-25 est annotée « dépassé ».
+
+**Pages créées** : aucune.
+
+**Index** : date de `1_5_scene-3d` au 2026-10-10.
+
 ## [2026-10-10] update | Renommer la propriété et un niveau, recherche d'adresse dans le monde, bascule depuis la démo
 
 **Déclencheur** : trois limites relevées en fin de lot C, que l'utilisateur veut lever.

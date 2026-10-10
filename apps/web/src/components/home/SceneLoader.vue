@@ -130,6 +130,14 @@ let timer: ReturnType<typeof setTimeout> | undefined
 let drawnTimer: ReturnType<typeof setTimeout> | undefined
 const loop = () => { timer = setTimeout(() => { cycle.value++; loop() }, drawing.value.cycleMs) }
 const reduced = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+/**
+ * Le voile a déjà été vu EN ENTIER sur ce poste : il part dès que la maison est prête. Les minimums
+ * ne servent qu'à découvrir l'animation, pas à la subir à chaque rechargement ou relance de l'app.
+ */
+const SEEN_KEY = 'kasbah.sceneLoaderSeen'
+const seen = (() => { try { return localStorage.getItem(SEEN_KEY) === '1' } catch { return false } })()
+/** Rien à attendre : mouvements réduits, ou animation déjà vue. */
+const brief = reduced || seen
 
 // LES ÉTAPES À LIRE. La préparation les enchaîne souvent plus vite qu'on ne lit : le voile tient sa
 // propre file, et chaque étape reste affichée au moins `MIN_STEP_MS` — fondu d'entrée, lecture,
@@ -152,7 +160,7 @@ const caughtUp = ref(false)
 function pump(): void {
   clearTimeout(settleTimer)
   if (busy) return
-  const readFor = Math.max(0, shownAt + (reduced ? 0 : MIN_STEP_MS) - Date.now())
+  const readFor = Math.max(0, shownAt + (brief ? 0 : MIN_STEP_MS) - Date.now())
   if (queue.length === 0) {
     settleTimer = setTimeout(() => { caughtUp.value = true }, readFor)
     return
@@ -167,7 +175,7 @@ function pump(): void {
       shownAt = Date.now()
       busy = false
       pump()
-    }, reduced ? 0 : FADE_MS)
+    }, brief ? 0 : FADE_MS)
   }, readFor)
 }
 watch(() => props.stage, (stage) => {
@@ -184,14 +192,17 @@ const step = computed(() => {
   return t(`scene.loading.${stage}`)
 })
 
-// Un chargement rapide ne doit escamoter ni le dessin ni les étapes. Sans animation (mouvements
-// réduits), rien à attendre.
+// Un chargement rapide ne doit escamoter ni le dessin ni les étapes, la première fois. Sans animation
+// (mouvements réduits) ou une fois l'animation vue, rien à attendre.
 const drawingDone = ref(false)
-watch(() => drawingDone.value && caughtUp.value, (settled) => emit('settled', settled))
+watch(() => drawingDone.value && caughtUp.value, (settled) => {
+  if (settled && !brief) { try { localStorage.setItem(SEEN_KEY, '1') } catch { /* stockage indisponible : on la reverra */ } }
+  emit('settled', settled)
+})
 onMounted(() => {
   loop()
   pump()
-  drawnTimer = setTimeout(() => { drawingDone.value = true }, reduced ? 0 : MIN_DRAWINGS * drawing.value.cycleMs)
+  drawnTimer = setTimeout(() => { drawingDone.value = true }, brief ? 0 : MIN_DRAWINGS * drawing.value.cycleMs)
 })
 onUnmounted(() => { clearTimeout(timer); clearTimeout(drawnTimer); clearTimeout(stepTimer); clearTimeout(settleTimer) })
 </script>

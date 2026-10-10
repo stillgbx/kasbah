@@ -1,6 +1,6 @@
 # Scène 3D (Three.js)
 
-> Dernière mise à jour : 2026-10-06
+> Dernière mise à jour : 2026-10-10
 > Sources : `apps/web/src/three/HouseScene.ts`, `apps/web/src/three/core/*.ts`, `apps/web/src/three/builders/*.ts`, `apps/web/src/three/markers/*.ts`, `apps/web/src/composables/useHouseScene.ts`, `apps/web/src/three/markers/DeviceMarker.ts`, `apps/web/src/three/markers/screenArt.ts`, `apps/web/src/lib/audioRouting.ts`, `packages/shared/src/house/panels.ts`, `apps/web/src/lib/orientation.ts`, `apps/web/src/three/markers/markers.ts`, `apps/web/src/three/core/theme.ts`, `apps/web/src/three/styles/*.ts`, `apps/web/src/three/textures/{procedural,assets}.ts`, `apps/web/src/three/core/layers.ts`, `packages/shared/src/house/openings.ts`, `apps/web/src/three/core/cameraFit.ts`, `apps/web/src/three/effects/water.ts`, `apps/web/src/three/effects/disco.ts`, `apps/web/src/three/effects/parade.ts`, `apps/web/src/three/builders/parking.ts`, `packages/shared/src/house/sun.ts`, `apps/web/src/three/builders/terrain.ts`, `apps/web/src/three/relief/reliefEditor.ts`, `apps/web/src/three/effects/roam.ts`, `apps/web/src/three/effects/bats.ts`, `apps/web/src/three/garden/gardenLayer.ts`
 
 ## Répartition
@@ -3340,6 +3340,9 @@ Après la préparation, une orbite ne compile plus rien (27 programmes avant et 
 Mesuré, iGPU, cache froid : 8 à 11 s de voile à 80 %, 125 % et 150 % de zoom, cinq chargements sur cinq
 aboutis ; cache chaud : ~5-7 s, bornés par les minimums d'animation.
 
+*(Dépassé le 2026-10-10 : les deux minimums, 1,3 s par étape et 1,5 cycle de dessin, ne s'appliquent
+plus qu'à la première fois sur un poste — voir « Mise à jour 2026-10-10 ».)*
+
 Sources : `apps/web/src/three/HouseScene.ts` (`prepare`, `shadersReady`, `holdFrames`),
 `apps/web/src/three/core/post.ts` (`sceneTarget`), `apps/web/src/three/textures/assets.ts`
 (`packTexturesSettled`), `apps/web/src/composables/useHouseScene.ts` (`preparing`, `shown`),
@@ -4494,3 +4497,24 @@ Mesuré dans la preview simulée (7 pièces) : ~9 ms par pas de glissement, dont
 le store ; non mesuré sur la maison réelle.
 
 Sources : `apps/web/src/three/{shape/roomShapeEditor,HouseScene}.ts`, `apps/web/src/composables/useHouseScene.ts`.
+
+### Mise à jour 2026-10-10 — l'animation du voile ne se voit en entier qu'une fois
+
+**Pourquoi.** À chaque rechargement, et à chaque relance de l'app sur le téléphone, la maison restait
+cachée plus de 5 s (deux niveaux : 1,5 × 3,6 s de dessin), même quand la préparation finissait bien
+avant. Le cache chaud était déjà borné par les minimums d'animation (mesure du 2026-09-25). Il n'y a
+rien à mettre en cache côté 3D : le contexte WebGL meurt avec la page, et la scène se reconstruit à
+chaque fois. Ce qu'on retire, c'est l'attente imposée.
+
+**Règle.** `SceneLoader` lit `localStorage['kasbah.sceneLoaderSeen']` à son montage. Si la clé est
+absente, le voile tient ses minimums comme avant (chaque étape 1,3 s, 1,5 cycle de dessin). Il pose
+la clé quand il les a tenus jusqu'au bout (`settled`). Une page fermée avant la fin ne pose rien, et
+l'animation revient entière. Une fois la clé posée, le voile se comporte comme avec les mouvements
+réduits : aucune attente, fondus d'étape nuls, il part dès que la maison est prête. Le dessin s'anime
+toujours tant qu'il est affiché. Les reconstructions du mode édition en profitent aussi. Stockage
+indisponible : l'animation complète à chaque fois.
+
+Non mesuré sur le téléphone : ce qui reste est le vrai travail (matières, shaders, première image).
+Piste suivante si c'est encore long : afficher une capture de la dernière vue en attendant la 3D.
+
+Sources : `apps/web/src/components/home/SceneLoader.vue` (`SEEN_KEY`, `brief`), `SceneLoader.test.ts`.
