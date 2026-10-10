@@ -21,6 +21,8 @@ house/*.automations.json.tmp
 _external
 .claude/agents/
 house/history/
+# propriétés créées ou dupliquées depuis l'UI (serveur de démonstration) : les données de l'utilisateur
+house/properties/
 
 # liste locale des donnees personnelles interdites (scripts/check-private.mjs)
 .private-denylist

@@ -1,7 +1,7 @@
 # Configuration (.env)
 
-> Dernière mise à jour : 2026-10-08
-> Sources : `apps/server/src/config/env.ts`, `apps/server/.env.example`, `apps/server/src/plugins/{mock,hue,tahoma,nest}/index.ts`, `apps/server/src/plugins/google_cast/{index,known}.ts`, `apps/server/src/plugins/google_cast/enrich/cover.ts`, `apps/server/src/plugins/google_cast/bravia.ts`, `apps/server/src/plugins/enphase/index.ts`, `apps/server/src/plugins/tesla/index.ts`, `apps/server/src/plugins/comap/index.ts`, `apps/server/src/plugins/sonos/index.ts`, `apps/server/src/plugins/ytmusic/index.ts`, `apps/server/src/core/paths.ts`, `apps/server/test/state-isolation.ts`, `apps/server/.env.example`, `apps/server/src/music/player.ts`, `apps/server/src/plugins/{mixcloud,radio}/index.ts`, `apps/server/src/core/automations/schedule.ts` (`TZ`), `apps/server/src/plugins/claude/index.ts`, `apps/server/src/plugins/transcription/index.ts`, `apps/server/src/main.ts`
+> Dernière mise à jour : 2026-10-10
+> Sources : `apps/server/src/config/env.ts`, `apps/server/.env.example`, `apps/server/src/plugins/{mock,hue,tahoma,nest}/index.ts`, `apps/server/src/plugins/google_cast/{index,known}.ts`, `apps/server/src/plugins/google_cast/enrich/cover.ts`, `apps/server/src/plugins/google_cast/bravia.ts`, `apps/server/src/plugins/enphase/index.ts`, `apps/server/src/plugins/tesla/index.ts`, `apps/server/src/plugins/comap/index.ts`, `apps/server/src/plugins/sonos/index.ts`, `apps/server/src/plugins/ytmusic/index.ts`, `apps/server/src/core/paths.ts`, `apps/server/test/state-isolation.ts`, `apps/server/.env.example`, `apps/server/src/music/player.ts`, `apps/server/src/plugins/{mixcloud,radio}/index.ts`, `apps/server/src/core/automations/schedule.ts` (`TZ`), `apps/server/src/plugins/claude/index.ts`, `apps/server/src/plugins/transcription/index.ts`, `apps/server/src/main.ts`, `.gitignore`
 
 ## Où vivent les secrets
 
@@ -553,3 +553,18 @@ mode démonstration le parc vient de la propriété affichée ; `winter` y donne
 parc. Tout est commenté dans `apps/server/.env.example`.
 
 Sources : `apps/server/src/config/env.ts`, `apps/server/src/main.ts`, `apps/server/.env.example`.
+
+
+### Mise à jour 2026-10-10 — `house/properties/` : où vivent les maisons créées sur ce poste
+
+Aucune variable nouvelle. En **mode démonstration** (`KASBAH_HOUSE_FILE` absent ou vide), le serveur
+propose en plus des démos les propriétés trouvées dans **`house/properties/`**, dossier **ignoré par
+git** (`.gitignore`) : celles qu'on crée par l'assistant « Créer une propriété » ou qu'on obtient en
+dupliquant une démo (`../1_architecture/1_2_serveur-et-plugins.md`, même date). Les démos de
+`house/demos/` sont en **lecture seule** ; pour en changer, on les duplique. Le dossier est distinct de
+`house/` à dessein : le serveur de démonstration ne doit pas ramasser `house/maison.json`.
+
+Une installation fraîche peut donc créer sa maison sans éditer de fichier. Une installation qui fixe
+`KASBAH_HOUSE_FILE` fait toujours vivre ce seul fichier : ni sélecteur, ni création.
+
+Sources : `.gitignore`, `apps/server/src/config/properties.ts`, `apps/server/src/main.ts`.

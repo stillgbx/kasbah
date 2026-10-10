@@ -1,6 +1,6 @@
 # Protocole REST et WebSocket
 
-> Dernière mise à jour : 2026-10-08
+> Dernière mise à jour : 2026-10-10
 > Sources : `packages/shared/src/protocol/{ws,http}.ts`, `apps/server/src/http/{routes,errors}.ts`, `apps/server/src/ws/hub.ts`, `apps/web/src/api/httpTransport.ts`, `apps/server/src/plugins/tesla/index.ts`, `apps/server/src/config/house.ts`, `packages/shared/src/house/place.ts`, `apps/server/src/core/scene-registry.ts`, `packages/shared/src/protocol/http.ts` (`deviceConsumptionSchema`), `apps/server/src/http/routes.ts` (automatisations), `apps/server/src/http/relief.test.ts`, `apps/server/src/config/properties.ts`
 
 ## REST
@@ -622,3 +622,22 @@ utilisateur — ytmusic, Mixcloud — est celle de **ses** comptes. Le réseau l
 Mécanique : `1_2_serveur-et-plugins.md`, mise à jour du 2026-10-08.
 
 Sources : `apps/server/src/http/routes.ts`, `apps/server/src/core/plugin-host.ts`.
+
+
+### Mise à jour 2026-10-10 — créer et dupliquer une propriété, `demo` et `canCreate`
+
+| Route | Réponse |
+|---|---|
+| `POST /api/properties` | corps `newPropertyBodySchema` : `name`, `kind`, `origin { lat, lon, heading, alt? }`, `terrain { width, depth }?` (5 à 2000 m), `levelName`, `roomName` (1 à 60 caractères). **201** `{ id }` ; 400 si le corps est invalide ; **409 `NOT_SWITCHABLE`** hors serveur de démonstration. |
+| `POST /api/properties/:id/duplicate` | corps `{ name }`. **201** `{ id }` de la copie ; même 409 hors démonstration ; 404 si l'id est inconnu. |
+
+`GET /api/properties` gagne `canCreate?` (le serveur sait créer et dupliquer) et, par propriété,
+`demo?` (elle se regarde, ne se modifie pas). Les deux sont optionnels : un serveur à une seule maison
+ne les envoie pas.
+
+**Nouveau code d'erreur : 409 `DEMO_READONLY`**, levé par toute écriture de `house.json` ou du fichier
+d'automatisations d'une démo (`ReadOnlyHouseError`). Le client le traduit (`httpTransport.ts` :
+`properties.readOnly`). Le mode in-process répond 409 à `createProperty` / `duplicateProperty`.
+
+Sources : `packages/shared/src/protocol/http.ts`, `apps/server/src/http/routes.ts`,
+`apps/server/src/config/house.ts`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`.

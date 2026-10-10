@@ -2,7 +2,7 @@
   "app": { "name": "Kasbah" },
   "nav": { "main": "Navigation", "home": "Home", "energy": "Energy", "water": "Water", "heating": "Heating", "vehicles": "Vehicles", "robots": "Robots", "pets": "Pets", "weather": "Weather", "agenda": "Calendar", "school": "School", "settings": "Settings", "lights": "Lights", "covers": "Covers", "cameras": "Cameras", "media": "Media", "music": "Music", "automations": "Automations", "tens": "TENS" },
   "alerts": { "pending": "{view} · alert pending", "dismiss": "Dismiss", "dismissHint": "Stop flagging it on the rail" },
-  "properties": { "title": "Property", "switch": "Switch property (current: {name})", "hint": "Demo mode: three properties to see everything. Switching reloads the app on the other home and its simulated devices.", "kinds": { "house": "House", "apartment": "Apartment" } },
+  "properties": { "title": "Property", "switch": "Switch property (current: {name})", "hint": "Demo mode: three properties to see everything. Switching reloads the app on the other home and its simulated devices.", "kinds": { "house": "House", "apartment": "Apartment" }, "mine": "My properties", "demos": "Demos", "create": "Create a property", "duplicate": "Duplicate “{name}”", "duplicateShort": "Duplicate", "copyName": "{name} (copy)", "readOnly": "A demo can’t be changed: duplicate it (properties menu) to edit it.", "demoReadOnly": "Read-only demo", "demoReadOnlyHint": "A demo can be explored, not changed. Duplicate it: the copy keeps the house and its simulated devices, and everything can be edited.", "hintCreate": "Demos are read-only; your properties, created or duplicated here, can be edited. Switching reloads the app." },
   "common": {
     "showIn3d": "Show in the 3D view",
     "cancel": "Cancel", "close": "Close", "back": "Back", "retry": "Retry", "all": "All", "none": "None", "unavailable": "Unavailable",
@@ -1289,5 +1289,55 @@
     "removeRoom": "Remove the room",
     "removeRoomHint": "Its devices stay known, with no place in the 3D view. Can be undone until “Apply”.",
     "roofWindowUnder": "{room} — {opening} is no longer under the roof, which moved up to the new floor: remove this roof window, or the floor"
+  },
+  "property": {
+    "wizard": {
+      "step": "Step {n} of {of}",
+      "steps": {
+        "name": "the property",
+        "origin": "point 0",
+        "terrain": "the land"
+      },
+      "name": "Name",
+      "namePlaceholder": "My house",
+      "kind": "Type",
+      "nameHint": "The name shows in the header and the selector; it can be changed later in the house file.",
+      "principle": "Every measurement of the house starts from a point 0 you choose, usually an outside corner of the house. Place it on the map, then turn the heading so the first room (5 × 4 m, in blue) runs along a wall: x and y are the two measuring axes.",
+      "terrainHint": "A rough rectangle around the first room: you will draw the real outline next, or import the land register.",
+      "searchPlaceholder": "Address (France)",
+      "search": "Search",
+      "locate": "My location",
+      "locateUnavailable": "Location is not available in this browser.",
+      "locateFailed": "Location denied or not found: place the point on the map.",
+      "noPoint": "Tap the map to place point 0",
+      "heading": "Heading",
+      "turnLeft": "Turn left",
+      "turnRight": "Turn right",
+      "originHint": "Tap the map or drag the marker; zoom in to aim at a precise corner.",
+      "width": "Width",
+      "depth": "Depth",
+      "back": "Back",
+      "next": "Next",
+      "create": "Create",
+      "levelName": "Ground floor",
+      "roomName": "Room 1",
+      "satellite": "Satellite",
+      "plan": "Map",
+      "legendRoom": "1st room",
+      "legendTerrain": "land"
+    },
+    "coach": {
+      "step": "Step {n} of 2",
+      "skip": "Skip",
+      "done": "Done",
+      "terrain": {
+        "title": "The land outline",
+        "text": "Drag the corners, add some, or import the land register. Then “Done” in the land panel."
+      },
+      "room": {
+        "title": "The first room",
+        "text": "It sits on point 0. In the Dimensions tab, type its real measurements; add the other rooms from a chosen wall or “Rooms and levels”, then “Apply”."
+      }
+    }
   }
 }

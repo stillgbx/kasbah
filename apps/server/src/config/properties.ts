@@ -1,6 +1,6 @@
-import { readFile, rename, writeFile, mkdir } from 'node:fs/promises'
-import { dirname, resolve } from 'node:path'
-import { PROPERTY_KINDS, type PropertiesResponse, type PropertyKind } from '@kasbah/shared'
+import { readdir, readFile, rename, writeFile, mkdir } from 'node:fs/promises'
+import { dirname, join, resolve } from 'node:path'
+import { PROPERTY_KINDS, newHouseJson, parseHouse, propertyIdFor, type NewPropertyBody, type PropertiesResponse, type PropertyKind } from '@kasbah/shared'
 import type { House } from '@kasbah/shared'
 import { REPO_ROOT, stateFile } from '../core/paths'
 
@@ -29,6 +29,74 @@ export async function loadDemoProperties(files = DEMO_HOUSE_FILES): Promise<Demo
   }))
 }
 
+/**
+ * Les propriétés CRÉÉES ou DUPLIQUÉES sur ce poste (assistant « Créer une propriété », « Dupliquer
+ * cette démo ») : un fichier chacune, dans un dossier ignoré par git. Un dossier à part plutôt que
+ * `house/` : le serveur de démonstration n'y ramasse pas la maison réelle (`house/maison.json`) ni
+ * ses fichiers voisins (automatisations, sauvegardes, historique).
+ */
+export const LOCAL_PROPERTIES_DIR = resolve(REPO_ROOT, 'house/properties')
+
+/** Une propriété que le serveur sait faire vivre ; `demo` = une démonstration, en lecture seule. */
+export interface PropertyEntry {
+  id: string
+  name: string
+  kind: PropertyKind
+  /** Scénario du plugin `mock` (`meta.demo.scenario`) : une démo, ou sa copie, garde son parc simulé. */
+  scenario?: string
+  path: string
+  demo: boolean
+}
+
+type RawProperty = { id?: unknown; name?: unknown; meta?: { kind?: unknown; demo?: { scenario?: unknown; kind?: unknown } } }
+/** Le type se lit dans `meta.demo.kind` (démos) ou `meta.kind` (propriété créée) ; maison par défaut. */
+function kindOf(raw: RawProperty): PropertyKind {
+  const k = raw.meta?.demo?.kind ?? raw.meta?.kind
+  return (PROPERTY_KINDS as readonly unknown[]).includes(k) ? k as PropertyKind : 'house'
+}
+
+/** Les propriétés locales, triées par nom ; un fichier illisible ou sans id est ignoré. */
+export async function loadLocalProperties(dir = LOCAL_PROPERTIES_DIR): Promise<PropertyEntry[]> {
+  let names: string[]
+  try { names = await readdir(dir) }
+  catch (err) { if ((err as NodeJS.ErrnoException).code === 'ENOENT') return []; throw err }
+  const out: PropertyEntry[] = []
+  for (const f of names.filter((n) => n.endsWith('.json') && !n.endsWith('.automations.json'))) {
+    const path = join(dir, f)
+    let raw: RawProperty
+    try { raw = JSON.parse(await readFile(path, 'utf8')) as RawProperty } catch { continue }
+    if (typeof raw.id !== 'string' || typeof raw.name !== 'string') continue
+    const scenario = typeof raw.meta?.demo?.scenario === 'string' ? raw.meta.demo.scenario : undefined
+    out.push({ id: raw.id, name: raw.name, kind: kindOf(raw), path, demo: false, ...(scenario ? { scenario } : {}) })
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/** Écrit une maison neuve, validée, dans le dossier local ; son id est tiré du nom. */
+async function writeLocal(dir: string, id: string, doc: unknown): Promise<string> {
+  parseHouse(doc)                                      // une maison invalide n'est jamais écrite
+  await mkdir(dir, { recursive: true })
+  const path = join(dir, `${id}.json`)
+  await writeFile(`${path}.tmp`, `${JSON.stringify(doc, null, 2)}\n`, 'utf8')
+  await rename(`${path}.tmp`, path)
+  return path
+}
+
+/** Crée la maison d'une installation neuve (`newHouseJson`) ; rend son id. */
+export async function createLocalProperty(body: NewPropertyBody, taken: Iterable<string>, dir = LOCAL_PROPERTIES_DIR): Promise<string> {
+  const id = propertyIdFor(body.name, taken)
+  await writeLocal(dir, id, newHouseJson(id, body))
+  return id
+}
+
+/** Copie modifiable d'une propriété (une démo, le plus souvent) : même maison, même parc simulé, autre nom. */
+export async function duplicateProperty(source: PropertyEntry, name: string, taken: Iterable<string>, dir = LOCAL_PROPERTIES_DIR): Promise<string> {
+  const id = propertyIdFor(name, taken)
+  const doc = JSON.parse(await readFile(source.path, 'utf8')) as Record<string, unknown>
+  await writeLocal(dir, id, { ...doc, id, name })
+  return id
+}
+
 /** La propriété démo que le serveur a fait vivre en dernier : elle survit à un redémarrage. */
 const ACTIVE_FILE = 'demo-property.json'
 
@@ -48,10 +116,13 @@ export interface PropertyHost {
   list(): PropertiesResponse
   /** Bascule APRÈS la réponse : le serveur se reconstruit sur l'autre maison. */
   select(id: string): void
+  /** Crée une propriété neuve ; rend son id (la bascule est un `select` à part). */
+  create(body: NewPropertyBody): Promise<string>
+  /** Duplique une propriété sous un autre nom ; rend l'id de la copie. */
+  duplicate(id: string, name: string): Promise<string>
 }
 
 /** La réponse d'un serveur à une seule maison : elle, et pas de bascule. */
 export function singleProperty(house: House): PropertiesResponse {
-  const kind = (house.meta?.demo as { kind?: string } | undefined)?.kind === 'apartment' ? 'apartment' : 'house'
-  return { activeId: house.id, switchable: false, properties: [{ id: house.id, name: house.name, kind }] }
+  return { activeId: house.id, switchable: false, properties: [{ id: house.id, name: house.name, kind: kindOf(house as RawProperty) }] }
 }

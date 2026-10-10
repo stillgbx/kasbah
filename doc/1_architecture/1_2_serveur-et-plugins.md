@@ -1,6 +1,6 @@
 # Serveur et hôte de plugins
 
-> Dernière mise à jour : 2026-10-08
+> Dernière mise à jour : 2026-10-10
 > Sources : `apps/server/src/{app,main}.ts`, `apps/server/src/core/*.ts`, `apps/server/src/plugins/index.ts`, `apps/server/src/core/scene-registry.ts`, `apps/server/src/core/{plugin,plugin-host,scene-seeder}.ts`, `packages/shared/src/house/schema.ts`, `apps/server/src/plugins/comap/{history,state}.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/core/playbackBridge.ts`, `apps/server/src/music/{player,sources}.ts`, `apps/server/src/core/automations/engine.ts`, `apps/server/src/core/atomic-file.ts`, `apps/server/src/config/properties.ts`, `apps/server/src/main.ts`
 
 ## Assemblage (`app.ts`)
@@ -505,3 +505,39 @@ existants attendent désormais `await h.health()`. Suite complète 2 019 tests v
 
 Sources : `apps/server/src/core/{plugin,plugin-host}.ts`, `apps/server/src/http/routes.ts`,
 `apps/server/src/mcp/server.ts`.
+
+
+### Mise à jour 2026-10-10 — propriétés locales, démos en lecture seule, duplication
+
+**Pourquoi** : le dépôt est public, et une installation fraîche doit pouvoir créer SA maison sans
+toucher aux fichiers versionnés (par défaut, elle démarre en mode démonstration). Choix validés par
+l'utilisateur : les propriétés créées vivent dans un dossier **ignoré par git**, repérées
+automatiquement et proposées dans le sélecteur ; les démos ne se modifient **pas** (on les duplique).
+
+- **`house/properties/`** (`LOCAL_PROPERTIES_DIR`, `.gitignore`) : un fichier `<id>.json` par
+  propriété. Écart assumé avec l'idée première (« `house/` ») : le serveur de démonstration y aurait
+  ramassé `house/maison.json` (la maison réelle, avec ses vrais plugins) et les fichiers voisins
+  (automatisations, sauvegardes, historique). `loadLocalProperties` ignore `*.automations.json`, un
+  fichier illisible ou sans `id` / `name`, et trie par nom.
+- **Liste = propriétés locales d'abord, puis démos** (`all()` dans `main.ts`). Le serveur de
+  démonstration seul porte `canCreate: true` ; avec `KASBAH_HOUSE_FILE`, rien ne change
+  (`singleProperty`, `kindOf` partagé lit `meta.demo.kind` puis `meta.kind`).
+- **Le scénario mock se lit dans la maison, pour toute propriété** : une copie de démo garde donc
+  `meta.demo.scenario` et son parc simulé (69 appareils simulés vérifiés sur une copie) ; une maison
+  neuve n'a pas de scénario, donc pas de parc.
+- **Lecture seule d'une démo** : `start()` passe `readOnly` à `buildApp`, qui pose
+  `LoadedHouse.readOnly`. `updateHouseFile` lève `ReadOnlyHouseError` (409 `DEMO_READONLY`) AVANT de
+  lire le fichier, et `createAutomationsFile(path, { readOnly })` refuse `save` de la même façon.
+  Tout passe par là : placement, pièces, réglages de plugins (activation écrite dans le JSON) et
+  automatisations. Vérifié : 409 et fichier inchangé.
+- **Remplace** la limite de la mise à jour du 2026-10-08 (« en démo, une édition réécrit le fichier
+  versionné `house/demos/<id>.json` ») : elle n'est plus vraie.
+- **Création et duplication** (`createLocalProperty`, `duplicateProperty`) : l'id vient du nom
+  (`propertyIdFor`, unique parmi les ids existants), le document passe `parseHouse` avant d'être écrit
+  (jamais de maison invalide sur disque), écriture par `.tmp` puis `rename`. La bascule vers la
+  nouvelle propriété est un `select` à part, comme avant.
+
+Limite : le nom ne se change pas après création ; pas de création en mode in-process.
+
+Sources : `apps/server/src/main.ts`, `apps/server/src/config/{properties,house}.ts`,
+`apps/server/src/core/automations/store.ts`, `apps/server/src/app.ts`.

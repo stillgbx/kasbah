@@ -71,9 +71,10 @@ export type PluginInfo = z.infer<typeof pluginInfoSchema>
 export const pluginsResponseSchema = z.object({ plugins: z.array(pluginInfoSchema) })
 
 /**
- * Une PROPRIÉTÉ que l'application sait montrer : une maison, un appartement. Aujourd'hui seules les
- * propriétés de démonstration se choisissent (mode démo) ; une installation réelle n'en a qu'une, et
- * la liste ne compte alors qu'elle — le sélecteur ne s'affiche pas.
+ * Une PROPRIÉTÉ que l'application sait montrer : une maison, un appartement. Un serveur lancé sans
+ * maison (`KASBAH_HOUSE_FILE` absent) propose les démonstrations, en lecture seule (`demo`), et les
+ * propriétés créées ou dupliquées sur ce poste ; une installation réelle n'en a qu'une, et la liste
+ * ne compte alors qu'elle — le sélecteur ne s'affiche pas.
  */
 export const PROPERTY_KINDS = ['house', 'apartment'] as const
 export type PropertyKind = (typeof PROPERTY_KINDS)[number]
@@ -81,6 +82,8 @@ export const propertySummarySchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   kind: z.enum(PROPERTY_KINDS),
+  /** Propriété de démonstration : elle se regarde, elle ne se modifie pas (on la duplique). */
+  demo: z.boolean().optional(),
 })
 export type PropertySummary = z.infer<typeof propertySummarySchema>
 /** `GET /api/properties` : les propriétés et celle qui est montrée. `switchable` = on peut en changer. */
@@ -88,8 +91,30 @@ export const propertiesResponseSchema = z.object({
   activeId: z.string().min(1),
   switchable: z.boolean(),
   properties: z.array(propertySummarySchema),
+  /** Le serveur sait créer et dupliquer une propriété (`POST /api/properties`, `…/duplicate`). */
+  canCreate: z.boolean().optional(),
 })
 export type PropertiesResponse = z.infer<typeof propertiesResponseSchema>
+
+const propertyNameSchema = z.string().trim().min(1).max(60)
+/** `POST /api/properties` : la maison d'une installation neuve (voir `newHouseJson`). */
+export const newPropertyBodySchema = z.object({
+  name: propertyNameSchema,
+  kind: z.enum(PROPERTY_KINDS),
+  origin: z.object({
+    lat: z.number().min(-90).max(90),
+    lon: z.number().min(-180).max(180),
+    heading: z.number().min(-360).max(360),
+    alt: z.number().min(-500).max(9000).optional(),
+  }),
+  terrain: z.object({ width: z.number().min(5).max(2000), depth: z.number().min(5).max(2000) }).optional(),
+  levelName: propertyNameSchema,
+  roomName: propertyNameSchema,
+})
+export type NewPropertyBody = z.infer<typeof newPropertyBodySchema>
+/** `POST /api/properties/:id/duplicate` : la copie modifiable d'une propriété, sous un autre nom. */
+export const duplicatePropertyBodySchema = z.object({ name: propertyNameSchema })
+export const propertyCreatedSchema = z.object({ id: z.string().min(1) })
 export type PluginsResponse = z.infer<typeof pluginsResponseSchema>
 
 export const healthResponseSchema = z.object({

@@ -2,6 +2,31 @@
 
 Entrées les plus récentes en haut. Une session = une entrée.
 
+## [2026-10-10] update | Lot B : créer une propriété, démos en lecture seule, duplication, guide
+
+**Déclencheur** : le dépôt est public ; une installation fraîche doit pouvoir créer sa maison (par
+défaut en mode démo). Lot B, non commité à l'écriture : propriétés locales, démos non modifiables et
+dupliquables, assistant de création, guide de premier lancement. Complète aussi le lot A (corrections
+de la relecture UI, commit 000d5f8).
+
+**Pages modifiées** :
+- `1_architecture/1_2_serveur-et-plugins.md` - `house/properties/`, liste locales + démos, lecture
+  seule (`ReadOnlyHouseError`), création / duplication ; la limite du 2026-10-08 (« une édition en démo
+  réécrit le fichier versionné ») est notée comme remplacée.
+- `1_architecture/1_3_protocole-rest-ws.md` - deux routes POST, `demo?` / `canCreate?`, 409 `DEMO_READONLY`.
+- `2_maison/2_0_format-house-json.md` - maison neuve (`newHouseJson`), `meta.kind`, `propertyIdFor`.
+- `4_ui/4_1_navigation-et-panneaux.md` - sélecteur, assistant, carte de pose, guide, Réglages ; mise à
+  jour séparée pour les corrections du lot A.
+- `5_setup/5_1_configuration-env.md` - dossier `house/properties/`, mode démo.
+
+**Pages créées** : aucune.
+
+**Contradiction** : la mise à jour du 2026-10-08 de `1_2` dit qu'en démo l'édition réécrit
+`house/demos/<id>.json` ; le code le refuse désormais (409). Ancien texte conservé, nouvelle
+mise à jour qui le remplace.
+
+**Index** : mis à jour (5 lignes).
+
 ## [2026-10-10] update | Lot A : pièces et niveaux qui naissent ou disparaissent en mode édition
 
 **Déclencheur** : le dépôt public doit permettre de créer une maison depuis une installation neuve ;

@@ -1,7 +1,7 @@
 # Navigation et panneaux
 
 > Dernière mise à jour : 2026-10-10
-> Sources : `apps/web/src/App.vue`, `apps/web/src/components/layout/*.vue`, `apps/web/src/views/*.vue`, `apps/web/src/components/home/*.vue`, `apps/web/src/components/controls/*.vue`, `apps/web/src/views/LightsView.vue`, `apps/web/src/components/home/PlacementControl.vue`, `apps/web/src/components/scenes/SceneChips.vue`, `apps/web/src/components/devices/RoomBands.vue`, `apps/web/src/components/devices/RoomLightsToggle.vue`, `apps/web/src/views/CoversView.vue`, `apps/web/src/components/covers/CoverPill.vue`, `apps/web/src/lib/{cover,deviceState}.ts`, `apps/web/src/composables/useHomeSummary.ts`, `apps/web/src/components/devices/ForgetDeviceButton.vue`, `apps/web/src/components/controls/MediaPlayerControl.vue`, `apps/web/src/lib/audioRouting.ts`, `apps/web/src/components/energy/EnergyFlow.vue`, `apps/web/src/components/EnphasePairingCard.vue`, `apps/web/src/lib/energy.ts`, `apps/web/src/components/devices/RoomBrightness.vue`, `apps/web/src/components/devices/CoversMaster.vue`, `apps/web/src/components/devices/LightsMaster.vue`, `apps/web/src/composables/useRoomLights.ts`, `apps/web/src/components/home/PanelArraysCard.vue`, `apps/web/src/components/energy/InverterFields.vue`, `apps/web/src/components/TeslaLinkCard.vue`, `apps/web/src/views/VehiclesView.vue`, `apps/web/src/components/vehicles/VehicleMap.vue`, `apps/web/src/components/vehicles/VehicleTuning.vue`, `apps/web/src/lib/vehicleTuning.ts`, `apps/web/src/lib/map.ts`, `apps/web/src/components/controls/VehicleCard.vue`, `apps/web/src/components/vehicles/ChargeLimitCard.vue`, `apps/web/src/components/home/DevicePanel.vue`, `apps/web/src/components/settings/PluginSection.vue`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/components/ui/Segmented.vue`, `apps/web/src/components/home/SearchBar.vue`, `apps/web/src/composables/useSearch.ts`, `apps/web/src/components/layout/SearchPalette.vue`, `apps/web/src/lib/search.ts`, `apps/web/src/lib/navItems.ts`, `apps/web/src/views/HeatingView.vue`, `apps/web/src/components/heating/*.vue`, `apps/web/src/components/MelcloudLinkCard.vue`, `apps/web/src/components/home/OpeningPanel.vue`, `apps/web/src/components/home/RoomEditPanel.vue`, `apps/web/src/components/home/ParkingPanel.vue`, `apps/web/src/lib/deviceIcons.ts`, `apps/web/src/views/MusicView.vue`, `apps/web/src/components/music/{MusicPlayerBar,ListeningSessions,MusicItemRow,MusicTile,ChipRow}.vue`, `apps/web/src/stores/localPlayer.ts`, `apps/web/src/components/music/MixcloudBrowser.vue`, `apps/web/src/components/MixcloudLinkCard.vue`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/views/{AutomationsView,AutomationEditView}.vue`, `apps/web/src/components/automations/*.vue`, `apps/web/src/components/layout/NavRail.vue` (`meta.nav`), `apps/web/src/components/controls/LightHistoryChart.vue`, `apps/web/src/components/weather/WeatherPlaces.vue`, `apps/web/src/composables/useMusicSession.ts`, `apps/web/src/lib/streamQuality.ts`, `apps/web/src/components/home/ReliefPanel.vue`, `apps/web/src/lib/ignRelief.ts`, `apps/web/src/lib/moon.ts`, `apps/web/src/components/vehicles/VehicleSoftware.vue`, `apps/web/src/components/layout/AssistantReply.vue`, `apps/web/src/components/settings/AssistantCard.vue`, `apps/web/src/components/ClaudeLinkCard.vue`, `apps/web/src/composables/useVoiceInput.ts`, `apps/web/src/stores/properties.ts`, `apps/web/src/components/layout/PropertyList.vue`, `apps/web/src/components/home/{HouseEditPanel,RoomShapeSection}.vue`
+> Sources : `apps/web/src/App.vue`, `apps/web/src/components/layout/*.vue`, `apps/web/src/views/*.vue`, `apps/web/src/components/home/*.vue`, `apps/web/src/components/controls/*.vue`, `apps/web/src/views/LightsView.vue`, `apps/web/src/components/home/PlacementControl.vue`, `apps/web/src/components/scenes/SceneChips.vue`, `apps/web/src/components/devices/RoomBands.vue`, `apps/web/src/components/devices/RoomLightsToggle.vue`, `apps/web/src/views/CoversView.vue`, `apps/web/src/components/covers/CoverPill.vue`, `apps/web/src/lib/{cover,deviceState}.ts`, `apps/web/src/composables/useHomeSummary.ts`, `apps/web/src/components/devices/ForgetDeviceButton.vue`, `apps/web/src/components/controls/MediaPlayerControl.vue`, `apps/web/src/lib/audioRouting.ts`, `apps/web/src/components/energy/EnergyFlow.vue`, `apps/web/src/components/EnphasePairingCard.vue`, `apps/web/src/lib/energy.ts`, `apps/web/src/components/devices/RoomBrightness.vue`, `apps/web/src/components/devices/CoversMaster.vue`, `apps/web/src/components/devices/LightsMaster.vue`, `apps/web/src/composables/useRoomLights.ts`, `apps/web/src/components/home/PanelArraysCard.vue`, `apps/web/src/components/energy/InverterFields.vue`, `apps/web/src/components/TeslaLinkCard.vue`, `apps/web/src/views/VehiclesView.vue`, `apps/web/src/components/vehicles/VehicleMap.vue`, `apps/web/src/components/vehicles/VehicleTuning.vue`, `apps/web/src/lib/vehicleTuning.ts`, `apps/web/src/lib/map.ts`, `apps/web/src/components/controls/VehicleCard.vue`, `apps/web/src/components/vehicles/ChargeLimitCard.vue`, `apps/web/src/components/home/DevicePanel.vue`, `apps/web/src/components/settings/PluginSection.vue`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/components/ui/Segmented.vue`, `apps/web/src/components/home/SearchBar.vue`, `apps/web/src/composables/useSearch.ts`, `apps/web/src/components/layout/SearchPalette.vue`, `apps/web/src/lib/search.ts`, `apps/web/src/lib/navItems.ts`, `apps/web/src/views/HeatingView.vue`, `apps/web/src/components/heating/*.vue`, `apps/web/src/components/MelcloudLinkCard.vue`, `apps/web/src/components/home/OpeningPanel.vue`, `apps/web/src/components/home/RoomEditPanel.vue`, `apps/web/src/components/home/ParkingPanel.vue`, `apps/web/src/lib/deviceIcons.ts`, `apps/web/src/views/MusicView.vue`, `apps/web/src/components/music/{MusicPlayerBar,ListeningSessions,MusicItemRow,MusicTile,ChipRow}.vue`, `apps/web/src/stores/localPlayer.ts`, `apps/web/src/components/music/MixcloudBrowser.vue`, `apps/web/src/components/MixcloudLinkCard.vue`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/views/{AutomationsView,AutomationEditView}.vue`, `apps/web/src/components/automations/*.vue`, `apps/web/src/components/layout/NavRail.vue` (`meta.nav`), `apps/web/src/components/controls/LightHistoryChart.vue`, `apps/web/src/components/weather/WeatherPlaces.vue`, `apps/web/src/composables/useMusicSession.ts`, `apps/web/src/lib/streamQuality.ts`, `apps/web/src/components/home/ReliefPanel.vue`, `apps/web/src/lib/ignRelief.ts`, `apps/web/src/lib/moon.ts`, `apps/web/src/components/vehicles/VehicleSoftware.vue`, `apps/web/src/components/layout/AssistantReply.vue`, `apps/web/src/components/settings/AssistantCard.vue`, `apps/web/src/components/ClaudeLinkCard.vue`, `apps/web/src/composables/useVoiceInput.ts`, `apps/web/src/stores/properties.ts`, `apps/web/src/components/layout/PropertyList.vue`, `apps/web/src/components/home/{HouseEditPanel,RoomShapeSection}.vue`, `apps/web/src/components/property/*.vue`, `apps/web/src/lib/onboarding.ts`
 
 ## Grille
 
@@ -5757,3 +5757,72 @@ Tests : `apps/web/src/stores/house.structure.test.ts`.
 Sources : `apps/web/src/components/home/{HouseEditPanel,RoomEditPanel,RoomShapeSection}.vue`,
 `apps/web/src/stores/house.ts`, `apps/web/src/three/HouseScene.ts`, `apps/web/src/composables/useHouseScene.ts`,
 `apps/web/src/views/{HomeView,SettingsView}.vue`, `apps/web/src/i18n/locales/{fr,en}.json` (`structure.*`).
+
+
+### Mise à jour 2026-10-10 (2) — créer une propriété, démos en lecture seule, guide de premier lancement
+
+Décisions de l'utilisateur : le dépôt est public, il faut pouvoir créer une maison depuis une
+installation fraîche ; les démos ne se modifient pas mais se **dupliquent** ; la création pose d'office
+une première pièce et un guide enchaîne **contour du terrain → cotes de la pièce**. Côté serveur et
+format : `../1_architecture/1_2_serveur-et-plugins.md`, `../1_architecture/1_3_protocole-rest-ws.md`,
+`../2_maison/2_0_format-house-json.md` (même date).
+
+- **Sélecteur** (`components/layout/PropertyList.vue`) : deux groupes (propriétés du poste, puis
+  démonstrations), actions « Créer » et « Dupliquer ». Le store `stores/properties.ts` gagne `isDemo`,
+  `canCreate`, `creating`, `busy`, `create`, `duplicateActive`. Sur une démo, il **coupe le mode édition
+  et le relief au chargement** : l'écriture serait refusée de toute façon (409 `DEMO_READONLY`).
+- **Boîte « Nouvelle propriété »** (`components/property/NewPropertyDialog.vue`, montée par `App.vue`),
+  trois étapes, **hauteur fixe** (règle « rien ne bouge » : le bouton « Suivant » a bougé d'une étape
+  à l'autre à la première version, corrigé). Recherche d'adresse par le géocodage IGN
+  (`data.geopf.fr/geocodage/search`) ou « Ma position » (`navigator.geolocation`). Après la relecture
+  UI : le corps est une colonne flex où **la carte prend la hauteur qui reste** (plancher 140 px) — la
+  ligne du cap tombait sous le pli aux trois zooms ; aux étapes 2 et 3, la carte garde la même place
+  (texte sur quatre lignes réservées, rangée de 40 px au-dessus : recherche ou cotes, rangée du cap
+  au-dessous, réglable aussi à l'étape du terrain) ; « Suivant » et « Créer » ont la même largeur
+  (`min-width` 104 px) ; le type se dit en toutes lettres (`Segmented` affiche l'icône À LA PLACE du
+  libellé quand on lui en donne une).
+- **Carte de pose** (`components/property/OriginPicker.vue`, MapLibre) : satellite IGN ou plan
+  OpenFreeMap, repère glissable pour le point 0, superposition de la pièce, des axes x / y et du
+  terrain, zoom 20, recadrage sur le terrain à l'étape 3 (le terrain sortait de la carte avant ça).
+  Le cap est celui de l'axe +y, horaire depuis le nord (`geo.ts`).
+- **Guide** (`components/property/OnboardingCoach.vue`, monté par `HomeView.vue` ; état dans
+  `lib/onboarding.ts`) : la création recharge l'application sur la maison neuve, donc l'étape est
+  retenue en `localStorage` (`kasbah.onboarding` = `{ propertyId, step }`). Déroulé de « Créer »
+  (`stores/properties.ts`, `create`) : `POST /api/properties`, écriture du guide (« room » d'emblée
+  pour un appartement), fermeture de la boîte, puis le `select` habituel, qui attend que le serveur
+  nomme la nouvelle propriété avant de recharger ; « Dupliquer » (`duplicateActive`) fait de même sous
+  « nom (copie) », sans guide. « terrain » ouvre l'éditeur
+  du contour ; « Terminer » sélectionne la pièce en mode édition (étape « room »). Confort de CE poste
+  seulement : sans lui, la maison existe quand même. Corrigé à la vérification : le guide chevauchait le
+  panneau du terrain. Après la relecture UI : à l'étape « room », le guide émet `room` et `HomeView`
+  ouvre le panneau — sur un écran étroit c'est un tiroir fermé, et le guide renvoyait à un onglet
+  invisible. L'avertissement MapLibre `Image "circle-11" could not be loaded` vient du jeu d'icônes du
+  style OpenFreeMap, partagé avec la carte des véhicules.
+- **Réglages** (`views/SettingsView.vue`) : sur une démo, la carte « Mode édition » est en lecture
+  seule, avec un bouton « Dupliquer ». Message traduit pour `DEMO_READONLY` (`properties.readOnly`).
+
+**Limites** : recherche d'adresse et fond satellite pour la France seulement ; nom non modifiable après
+création ; pas de création en mode in-process (409).
+
+**Vérifié** sur `kasbah-demo-server` + `kasbah-demo` : création, guide, écriture de la maison créée,
+duplication (le parc simulé suit), 409 sur une démo avec fichier inchangé. Suite complète 2065 / 2065,
+typecheck et lint globaux propres.
+
+Sources : `apps/web/src/components/layout/PropertyList.vue`, `apps/web/src/components/property/*.vue`,
+`apps/web/src/lib/onboarding.ts`, `apps/web/src/stores/properties.ts`, `apps/web/src/views/{SettingsView,HomeView}.vue`,
+`apps/web/src/App.vue`, `apps/web/src/api/httpTransport.ts`.
+
+### Mise à jour 2026-10-10 (3) — corrections de la relecture UI du lot « pièces et niveaux » (commit 000d5f8)
+
+Une relecture indépendante de la mise à jour précédente a trouvé, puis corrigé :
+
+- **Annuler ou abandonner une pièce ou un niveau né laissait un panneau et un onglet vides** : le store
+  remonte désormais à la maison (watch sur `index`).
+- **Ajouter puis retirer un étage laissait le niveau du toit relevé** : `structure.ts` ignore les
+  niveaux nés et retirés dans la même séance.
+- **Titre de pièce au nom long** : en `MarqueeText` (défilement avec fondu, règle « rien ne bouge »).
+- **Consigne distincte sur l'onglet « Tout »** : `structure.addRoomHintLowest`, parce que la pièce y
+  naît au niveau le plus bas.
+
+Sources : `apps/web/src/stores/house.ts`, `apps/web/src/components/home/HouseEditPanel.vue`,
+`packages/shared/src/house/structure.ts`, `apps/web/src/i18n/locales/{fr,en}.json`.

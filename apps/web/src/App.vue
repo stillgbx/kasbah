@@ -7,6 +7,7 @@ import { usePropertiesStore } from './stores/properties'
 import ConnectionBanner from './components/ConnectionBanner.vue'
 import NavRail from './components/layout/NavRail.vue'
 import SearchPalette from './components/layout/SearchPalette.vue'
+import NewPropertyDialog from './components/property/NewPropertyDialog.vue'
 
 // Coquille : rail de navigation à gauche (barre en bas sur un téléphone en portrait), POSÉ sur la vue courante (il n'a ni fond ni bord : la vue
 // Maison étend sa scène 3D dessous, les autres vues se décalent de sa largeur). Charge la maison et
@@ -32,6 +33,8 @@ onBeforeUnmount(() => devices.stop())
     </main>
     <ConnectionBanner />
     <SearchPalette />
+    <!-- « Créer une propriété » : ouverte depuis le sélecteur du rail ou la carte des Réglages -->
+    <NewPropertyDialog />
     <v-snackbar-queue
       :model-value="notifications.queue.map((n) => ({ text: n.text, color: n.color, timeout: n.timeout }))"
       location="bottom" closable :close-text="$t('common.close')"

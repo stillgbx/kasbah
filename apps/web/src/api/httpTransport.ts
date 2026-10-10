@@ -1,5 +1,6 @@
-import { apiErrorSchema, automationResponseSchema, automationRunResponseSchema, automationsResponseSchema, devicesResponseSchema, energyHistorySchema, healthResponseSchema, houseSchema, pluginsResponseSchema, propertiesResponseSchema, scenesResponseSchema, serverMessageSchema, weatherForecastSchema, deviceJournalSchema, deviceConsumptionSchema, deviceReleaseNotesSchema, type AutomationBody, type AutomationEntry, type AutomationRun, type CommandInput, type DeviceConsumption, type DeviceJournal, type DeviceEntry, type DevicePlacement, type EnergyHistory, type HealthResponse, type House, type PluginInfo, type PluginSceneEntry, type PluginSettingsPatch, type SceneRecallInput, type SceneUpdate, type WeatherForecast } from '@kasbah/shared'
+import { apiErrorSchema, automationResponseSchema, automationRunResponseSchema, automationsResponseSchema, devicesResponseSchema, energyHistorySchema, healthResponseSchema, houseSchema, pluginsResponseSchema, propertiesResponseSchema, propertyCreatedSchema, scenesResponseSchema, serverMessageSchema, weatherForecastSchema, deviceJournalSchema, deviceConsumptionSchema, deviceReleaseNotesSchema, type AutomationBody, type AutomationEntry, type AutomationRun, type CommandInput, type DeviceConsumption, type DeviceJournal, type DeviceEntry, type DevicePlacement, type EnergyHistory, type HealthResponse, type House, type PluginInfo, type PluginSceneEntry, type PluginSettingsPatch, type SceneRecallInput, type SceneUpdate, type WeatherForecast } from '@kasbah/shared'
 import { parseDeviceId } from '@kasbah/shared'
+import { t } from '../i18n'
 import { ApiRequestError, type AgendaCalendar, type AssistantEvent, type ClaudeAccount, type TranscriptionSettings, type AssistantLogEntry, type AgendaEvent, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type LightHistory, type McpUser, type MelcloudStatus, type MelcloudUnit, type MixcloudHomeSection, type MixcloudPage, type MixcloudStatus, type MixcloudUser, type PetkitStatus, type RadioStation, type RenaultStatus, type SchoolData, type TeslaStatus, type Transport, type TransportHandlers, type WeatherAlerts, type WeatherElsewhere, type WeatherPlace, type YtmusicExplore, type YtmusicExploreShelf, type YtmusicPlaylist, type MusicLastPlayed, type MusicQueue, type YtmusicSearchResult, type MusicSession, type YtmusicStatus, type YtmusicTrack } from './transport'
 
 // URLs relatives : même origine en prod (Fastify sert le build) et via le proxy Vite en dev.
@@ -25,6 +26,8 @@ async function errorOf(res: Response): Promise<ApiRequestError> {
     if (body.success) ({ code, message } = body.data.error)
   } catch { /* corps non JSON */ }
   if (res.status === 401 && code === 'AUTH_REQUIRED') signInAgain()
+  // une démonstration ne s'écrit pas : le message le dit dans la langue de l'écran, avec la suite
+  if (code === 'DEMO_READONLY') message = t('properties.readOnly')
   return new ApiRequestError(res.status, code, message)
 }
 
@@ -138,6 +141,8 @@ export function createHttpTransport(base = ''): Transport {
     ),
     getProperties: () => request(`${base}/api/properties`, undefined, (j) => propertiesResponseSchema.parse(j)),
     selectProperty: (id) => request(`${base}/api/properties/${encodeURIComponent(id)}/select`, { method: 'POST' }, () => undefined),
+    createProperty: (body) => request(`${base}/api/properties`, json('POST', body), (j) => propertyCreatedSchema.parse(j).id),
+    duplicateProperty: (id, name) => request(`${base}/api/properties/${encodeURIComponent(id)}/duplicate`, json('POST', { name }), (j) => propertyCreatedSchema.parse(j).id),
     placeDevice: (id, placement: DevicePlacement) => request(
       `${base}/api/house/devices/${encodeURIComponent(id)}`,
       { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(placement) },

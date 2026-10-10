@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { automationsFileSchema, type Automation } from '@kasbah/shared'
+import { ReadOnlyHouseError } from '../../config/house'
 
 // Les automatisations d'une maison vivent dans un fichier À CÔTÉ d'elle : `maison.json` →
 // `maison.automations.json`. Deux maisons, deux fichiers ; et ce sont des données de l'utilisateur,
@@ -19,7 +20,8 @@ export interface AutomationsStore {
   save(automations: readonly Automation[]): Promise<void>
 }
 
-export function createAutomationsFile(path: string): AutomationsStore {
+/** `readOnly` : une démonstration — ses automatisations se lisent, aucune ne s'écrit (`ReadOnlyHouseError`). */
+export function createAutomationsFile(path: string, opts: { readOnly?: boolean } = {}): AutomationsStore {
   let queue: Promise<unknown> = Promise.resolve()
   return {
     async load() {
@@ -37,6 +39,7 @@ export function createAutomationsFile(path: string): AutomationsStore {
       return parsed.data.automations
     },
     save(automations) {
+      if (opts.readOnly) return Promise.reject(new ReadOnlyHouseError())
       const run = async () => {
         const text = `${JSON.stringify({ schemaVersion: 1, automations }, null, 2)}\n`
         await mkdir(dirname(path), { recursive: true })

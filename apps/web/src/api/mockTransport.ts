@@ -533,6 +533,9 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
       if (!opts.properties.list().properties.some((p) => p.id === id)) throw new ApiRequestError(404, 'NOT_FOUND', `unknown property "${id}"`)
       opts.properties.select(id)
     },
+    // maquette in-process : aucun fichier où écrire une propriété
+    async createProperty() { throw new ApiRequestError(409, 'NOT_SWITCHABLE', 'no server to create a property in this mode') },
+    async duplicateProperty() { throw new ApiRequestError(409, 'NOT_SWITCHABLE', 'no server to create a property in this mode') },
     connect(h) {
       handlers = h
       h.onStatus('connecting')

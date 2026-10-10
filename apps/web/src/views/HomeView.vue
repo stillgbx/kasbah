@@ -28,6 +28,7 @@ import { useHouseStore, type FloorTab } from '../stores/house'
 import { useSettingsStore } from '../stores/settings'
 import type { IconName } from '../lib/strokeIcons'
 import SceneLoader from '../components/home/SceneLoader.vue'
+import OnboardingCoach from '../components/property/OnboardingCoach.vue'
 import type { ScenePrepareStage } from '../three/HouseScene'
 
 defineOptions({ name: 'HomeView' })
@@ -419,6 +420,8 @@ const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] 
       <SceneDebug v-if="settings.sceneDebug" :scene="scene.controller" />
       <SceneTuningPanel v-if="settings.sceneTuningOpen" :scene="scene.controller" />
       <ReliefPanel v-if="settings.reliefEditing" :scene="scene.controller" :state="scene.relief.value" />
+      <!-- le guide qui suit la création d'une propriété (terrain, puis première pièce) -->
+      <OnboardingCoach :wide="wide" @room="panelOpen = true" />
     </div>
     <div class="home__header">
       <PageHeader>

@@ -1,7 +1,7 @@
 # Format house.json : décisions et validation
 
 > Dernière mise à jour : 2026-10-10
-> Sources : `packages/shared/src/house/{schema,validate,lookup,geo}.ts`, `docs/house-json.md`, `house/demo-house.json`, `packages/shared/src/house/autoplace.ts`, `house/fit-survey.mjs`, `house/maison.json`, `packages/shared/src/house/place.ts`, `apps/server/src/config/house.ts`, `packages/shared/src/house/panels.ts`, `packages/shared/src/house/openings.ts`, `packages/shared/src/house/parking.ts`, `packages/shared/src/house/geometry/relief.ts` (`site.relief`), `house/demos/*.json`, `apps/server/src/config/properties.ts`, `packages/shared/src/house/structure.ts`
+> Sources : `packages/shared/src/house/{schema,validate,lookup,geo}.ts`, `docs/house-json.md`, `house/demo-house.json`, `packages/shared/src/house/autoplace.ts`, `house/fit-survey.mjs`, `house/maison.json`, `packages/shared/src/house/place.ts`, `apps/server/src/config/house.ts`, `packages/shared/src/house/panels.ts`, `packages/shared/src/house/openings.ts`, `packages/shared/src/house/parking.ts`, `packages/shared/src/house/geometry/relief.ts` (`site.relief`), `house/demos/*.json`, `apps/server/src/config/properties.ts`, `packages/shared/src/house/structure.ts`, `packages/shared/src/house/newHouse.ts`
 
 La **référence complète du format** (champs, exemples) est `docs/house-json.md`. Cette page
 explique les décisions et ce que la validation garantit.
@@ -1286,3 +1286,28 @@ ligne) ; `rectRoomAt(doc, levelId, at, 4, 4)` — carré centré, coins calés a
 Tests : `packages/shared/src/house/structure.test.ts` (16).
 
 Sources : `packages/shared/src/house/{structure,edit,shape}.ts`.
+
+
+### Mise à jour 2026-10-10 (2) — la maison neuve de l'assistant de création, `meta.kind`
+
+`packages/shared/src/house/newHouse.ts` fabrique le JSON d'une propriété créée depuis l'UI
+(`newHouseJson`, valide pour `parseHouse`). **Pourquoi une première pièce d'office** : une maison sans
+pièce ne se voit pas et n'a rien à éditer ; l'utilisateur a choisi une pièce de **5 × 4 m** (`FIRST_ROOM`)
+avec **un coin au point 0**, puis un guide enchaîne contour du terrain → cotes de la pièce.
+
+- Contenu : `schemaVersion` 1, `origin` (lat, lon, cap, `alt` à 0 par défaut), niveau `rdc`
+  (élévation 0), pièce `piece-1` (libellés dans la langue de l'écran qui crée), `site.terrain`
+  rectangulaire, `devices: []`, **`plugins: {}`** (aucun plugin actif).
+- **Terrain** : rectangle `width × depth` **centré sur la pièce** (pas sur le point 0). Pour un
+  appartement, ou sans terrain donné, une **marge de 2 m** autour de la pièce (un sol où poser un
+  balcon).
+- **Toit** : plat sur `rdc` pour une maison ; **aucun** pour un appartement.
+- **`meta.kind: 'apartment'`** n'existe que pour un appartement : la nature d'une propriété se lit
+  donc dans `meta.demo.kind` (démos) puis `meta.kind` (propriétés créées), maison par défaut
+  (`kindOf`, `apps/server/src/config/properties.ts`).
+- `propertyIdFor(name, taken)` : id lisible tiré du nom (accents retirés, 40 caractères au plus,
+  `-2`, `-3`… si pris ; `propriete` si le nom ne donne rien).
+
+Tests : `packages/shared/src/house/newHouse.test.ts`.
+
+Sources : `packages/shared/src/house/newHouse.ts`, `apps/server/src/config/properties.ts`.

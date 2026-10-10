@@ -2,7 +2,18 @@ import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promise
 import { basename, dirname, join } from 'node:path'
 import { lintHouse, parseHouse, type House, type HouseWarning } from '@kasbah/shared'
 
-export interface LoadedHouse { house: House; warnings: HouseWarning[]; path: string; raw: string }
+export interface LoadedHouse {
+  house: House; warnings: HouseWarning[]; path: string; raw: string
+  /** Propriété de démonstration : toute écriture est refusée (`ReadOnlyHouseError`). */
+  readOnly?: boolean
+}
+
+/** Écriture refusée : la propriété montrée est une démonstration, qu'on duplique pour la modifier. */
+export class ReadOnlyHouseError extends Error {
+  readonly statusCode = 409
+  readonly code = 'DEMO_READONLY'
+  constructor() { super('this property is a demo: duplicate it to change it'); this.name = 'ReadOnlyHouseError' }
+}
 
 /** Lit et valide le JSON de la maison. Une maison invalide empêche le démarrage (échec rapide). */
 export async function loadHouse(path: string): Promise<LoadedHouse> {
@@ -38,6 +49,7 @@ async function keepHistory(path: string, raw: string): Promise<void> {
 }
 
 export async function updateHouseFile(loaded: LoadedHouse, mutate: (doc: unknown) => unknown): Promise<House> {
+  if (loaded.readOnly) throw new ReadOnlyHouseError()
   const run = async () => {
     const raw = await readFile(loaded.path, 'utf8')
     const doc = mutate(JSON.parse(raw))

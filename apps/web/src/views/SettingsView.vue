@@ -266,7 +266,15 @@ const houseStats = computed(() => {
                rien déplacer par mégarde -->
           <section class="card block">
             <div class="block__title">{{ $t('settings.editMode') }}</div>
-            <div class="auto-row">
+            <!-- une démo se regarde : on la duplique pour la modifier (le serveur refuse toute écriture) -->
+            <div v-if="properties.isDemo" class="auto-row">
+              <div class="min0">
+                <div class="auto-row__name">{{ $t('properties.demoReadOnly') }}</div>
+                <div class="muted small">{{ $t('properties.demoReadOnlyHint') }}</div>
+              </div>
+              <button v-if="properties.canCreate" type="button" class="pill pill--sm" :disabled="properties.busy || !!properties.switching" @click="properties.duplicateActive()">{{ $t('properties.duplicateShort') }}</button>
+            </div>
+            <div v-else class="auto-row">
               <div class="min0">
                 <div class="auto-row__name">{{ $t('render.houseEditing') }}</div>
                 <div class="muted small">{{ $t('render.houseEditingHint') }}</div>
@@ -275,7 +283,7 @@ const houseStats = computed(() => {
                         @update:model-value="(v: boolean | null) => setHouseEditing(v === true)" />
             </div>
             <!-- le relief et le contour s'écrivent dans le fichier de la maison, comme le reste du mode -->
-            <div class="auto-row">
+            <div v-if="!properties.isDemo" class="auto-row">
               <div class="min0">
                 <div class="auto-row__name">{{ $t('relief.title') }}</div>
                 <div class="muted small">{{ $t('relief.hint') }}</div>
@@ -286,7 +294,7 @@ const houseStats = computed(() => {
           <section v-if="properties.switchable" class="card block">
             <div class="block__title">{{ $t('properties.title') }}</div>
             <PropertyList />
-            <div class="muted small">{{ $t('properties.hint') }}</div>
+            <div class="muted small">{{ $t(properties.canCreate ? 'properties.hintCreate' : 'properties.hint') }}</div>
           </section>
           <section class="card block">
             <div class="block__title">{{ $t('settings.gps') }}</div>

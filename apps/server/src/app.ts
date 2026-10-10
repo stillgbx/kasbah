@@ -38,6 +38,8 @@ export interface BuildAppOptions {
   serveStatic?: boolean
   /** Propriétés entre lesquelles basculer (serveur de démonstration) ; absent = une seule maison. */
   properties?: PropertyHost
+  /** La maison est une démonstration : ni elle ni ses automatisations ne s'écrivent. */
+  readOnly?: boolean
 }
 
 export interface KasbahApp {
@@ -80,6 +82,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
   app.addHook('onRequest', publicHostFilter(mcpAuth.publicHosts, session.gate))
   app.addHook('onRequest', actAsHook)
   const house = opts.house ?? (await loadHouse(opts.env.KASBAH_HOUSE_FILE))
+  if (opts.readOnly) house.readOnly = true
   for (const w of house.warnings) opts.logger.warn({ path: w.path, code: w.code }, w.message)
 
   const bus = new Bus()
@@ -102,7 +105,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
   // Automatisations : un fichier à côté de la maison, exécutées ici (l'écran dort, le serveur
   // non). Après `host`, par qui passent les commandes ; avant le hub, dont le snapshot les porte.
   const automations = new AutomationEngine({
-    store: createAutomationsFile(automationsPathFor(house.path)),
+    store: createAutomationsFile(automationsPathFor(house.path), { readOnly: !!opts.readOnly }),
     registry, scenes, host, house, bus, clock, logger: opts.logger.child({ component: 'automations' }),
   })
   const hub = new WsHub(registry, bus, clock, opts.logger.child({ component: 'ws' }), { scenes, automations, propertyId: () => house.house.id })

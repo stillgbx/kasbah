@@ -2,7 +2,7 @@
   "app": { "name": "Kasbah" },
   "nav": { "main": "Navigation", "home": "Maison", "energy": "Énergie", "water": "Eau", "heating": "Chauffage", "vehicles": "Véhicules", "robots": "Robots", "pets": "Animaux", "weather": "Météo", "agenda": "Agenda", "school": "École", "settings": "Réglages", "lights": "Lumières", "covers": "Ouvrants", "cameras": "Caméras", "media": "Médias", "music": "Musique", "automations": "Automatisations", "tens": "TENS" },
   "alerts": { "pending": "{view} · alerte en cours", "dismiss": "Masquer", "dismissHint": "Ne plus la signaler sur le rail" },
-  "properties": { "title": "Propriété", "switch": "Changer de propriété (actuelle : {name})", "hint": "Mode démo : trois propriétés pour tout voir. En changer recharge l’application sur l’autre maison et son parc simulé.", "kinds": { "house": "Maison", "apartment": "Appartement" } },
+  "properties": { "title": "Propriété", "switch": "Changer de propriété (actuelle : {name})", "hint": "Mode démo : trois propriétés pour tout voir. En changer recharge l’application sur l’autre maison et son parc simulé.", "kinds": { "house": "Maison", "apartment": "Appartement" }, "mine": "Mes propriétés", "demos": "Démonstrations", "create": "Créer une propriété", "duplicate": "Dupliquer « {name} »", "duplicateShort": "Dupliquer", "copyName": "{name} (copie)", "readOnly": "Une démonstration ne se modifie pas : dupliquez-la (menu des propriétés) pour la changer.", "demoReadOnly": "Démonstration en lecture seule", "demoReadOnlyHint": "Une démo se regarde sans se modifier. Dupliquez-la : la copie garde la maison et son parc simulé, et tout s’y règle.", "hintCreate": "Les démos se regardent ; vos propriétés, créées ou dupliquées ici, se modifient. En changer recharge l’application." },
   "common": {
     "showIn3d": "Voir dans la vue 3D",
     "cancel": "Annuler", "close": "Fermer", "back": "Retour", "retry": "Réessayer", "all": "Tout", "none": "Aucun", "unavailable": "Indisponible",
@@ -1304,5 +1304,55 @@
     "removeRoom": "Retirer la pièce",
     "removeRoomHint": "Ses appareils restent connus, sans place dans la vue 3D. Annulable jusqu’à « Valider ».",
     "roofWindowUnder": "{room} — {opening} n’est plus sous le toit, monté sur le nouvel étage : retirez cette fenêtre de toit, ou l’étage"
+  },
+  "property": {
+    "wizard": {
+      "step": "Étape {n} sur {of}",
+      "steps": {
+        "name": "la propriété",
+        "origin": "le point 0",
+        "terrain": "le terrain"
+      },
+      "name": "Nom",
+      "namePlaceholder": "Ma maison",
+      "kind": "Type",
+      "nameHint": "Le nom s’affiche dans l’en-tête et le sélecteur ; il se change ensuite dans le fichier de la maison.",
+      "principle": "Toutes les mesures de la maison partent d’un point 0 que vous choisissez, en général un coin extérieur de la maison. Posez-le sur la carte, puis tournez le cap pour que la première pièce (5 × 4 m, en bleu) longe une façade : x et y sont les deux axes des cotes.",
+      "terrainHint": "Un rectangle autour de la première pièce, à la louche : vous en dessinerez le vrai contour ensuite, ou importerez le cadastre.",
+      "searchPlaceholder": "Adresse (France)",
+      "search": "Chercher",
+      "locate": "Ma position",
+      "locateUnavailable": "La position n’est pas disponible dans ce navigateur.",
+      "locateFailed": "Position refusée ou introuvable : posez le point sur la carte.",
+      "noPoint": "Touchez la carte pour poser le point 0",
+      "heading": "Cap",
+      "turnLeft": "Tourner à gauche",
+      "turnRight": "Tourner à droite",
+      "originHint": "Touchez la carte ou glissez le repère ; zoomez pour viser un coin précis.",
+      "width": "Largeur",
+      "depth": "Profondeur",
+      "back": "Retour",
+      "next": "Suivant",
+      "create": "Créer",
+      "levelName": "Rez-de-chaussée",
+      "roomName": "Pièce 1",
+      "satellite": "Satellite",
+      "plan": "Plan",
+      "legendRoom": "1re pièce",
+      "legendTerrain": "terrain"
+    },
+    "coach": {
+      "step": "Étape {n} sur 2",
+      "skip": "Passer",
+      "done": "C’est fait",
+      "terrain": {
+        "title": "Le contour du terrain",
+        "text": "Glissez les sommets, ajoutez-en, ou importez le cadastre. Puis « Terminer » dans le panneau du terrain."
+      },
+      "room": {
+        "title": "La première pièce",
+        "text": "Elle est au point 0. Dans l’onglet Dimensions, tapez ses vraies cotes ; ajoutez les autres pièces depuis un mur choisi ou « Pièces et niveaux », puis « Valider »."
+      }
+    }
   }
 }
