@@ -1,7 +1,7 @@
 # Installation et scripts
 
-> Dernière mise à jour : 2026-10-08
-> Sources : `package.json` (racine et workspaces), `.claude/launch.json`, `apps/web/vite.config.ts`, `apps/server/src/config/env.ts`, `apps/server/src/main.ts`, `README.md`, `scripts/fetch-textures.mjs`, `.claude/launch.json`
+> Dernière mise à jour : 2026-10-10
+> Sources : `package.json` (racine et workspaces), `.claude/launch.json`, `apps/web/vite.config.ts`, `apps/server/src/config/env.ts`, `apps/server/src/main.ts`, `README.md`, `scripts/fetch-textures.mjs`, `.claude/launch.json`, `scripts/dev-server.mjs`
 
 ## Prérequis
 
@@ -273,6 +273,10 @@ recopier depuis l'ancienne machine, puis ajuster dans `.env` ce qui porte l'IP d
 | `npm run dev:pot` | le générateur PO Token seul (`scripts/dev-pot.mjs`), déjà lancé par `npm run dev` |
 | `npm run mcp-user -w @kasbah/server -- add <nom>`, `… remove <nom>`, `… list` | comptes du serveur MCP (`mcp-users.json`), en secours de Réglages : `add` demande le mot de passe, `remove` coupe aussi les jetons (`apps/server/src/mcp/users-cli.ts`) |
 | `npm run build && npm start` | production de base : app + API sur `KASBAH_PORT` (8787), sans Vite (`5_2_production.md`) |
+
+*(Depuis le 2026-10-10, le serveur de `npm run dev` n'est plus relancé par `node --watch` mais par
+`scripts/dev-server.mjs`, qui ignore les simples lectures et regroupe les rafales d'écritures — voir
+`../6_faq/6_0_pieges-outillage.md`, section du 2026-10-10.)*
 
 Les trois lisent le même `apps/server/.env`, donc la même maison (`KASBAH_HOUSE_FILE`). Au premier
 lancement, Windows demande d'autoriser Node dans le pare-feu : accepter pour les réseaux **privés**,

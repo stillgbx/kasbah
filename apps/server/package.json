@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "node --watch --import tsx --env-file-if-exists=.env src/main.ts",
+    "dev": "node ../../scripts/dev-server.mjs",
     "house": "node --import tsx --env-file-if-exists=.env src/main.ts",
     "build": "node build.mjs",
     "start": "node --env-file-if-exists=.env dist/main.js",

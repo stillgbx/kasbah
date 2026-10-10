@@ -2,6 +2,24 @@
 
 Entrées les plus récentes en haut. Une session = une entrée.
 
+## [2026-10-10] update | Serveur de dev : `node --watch` remplacé par un watcher maison
+
+**Déclencheur** : « lors du démarrage du serveur avec `npm run dev` on voit de multiples
+`Restarting src/main.ts` ». Cause trouvée : sous Windows, libuv remonte l'heure de dernier accès NTFS
+comme un `change`, et le serveur relit ses modules au démarrage. Recherches documentées avec les
+issues qui confirment le mécanisme.
+
+**Pages modifiées** :
+- `6_faq/6_0_pieges-outillage.md` - entrée du 2026-10-10 (symptôme, diagnostic, sondes, issues
+  codegraph#1451, ttsc#1719, nodejs/node#21643, nodemon#1208, solution) ; notes datées dans les
+  entrées du 2026-09-23 (dépassée) et du 2026-10-01 (complément).
+- `1_architecture/1_0_monorepo-et-flux.md` - mise à jour datée : `scripts/dev-server.mjs`.
+- `5_setup/5_0_installation-et-scripts.md` - renvoi daté sous le tableau des scripts.
+
+**Pages créées** : aucune.
+
+**Index** : mis à jour (3 lignes).
+
 ## [2026-10-09] update | Dépôt public : wiki sans données personnelles, garde-fou
 
 **Déclencheur** : ouverture publique du dépôt. Le wiki entre dans le nouveau dépôt en une seule version,

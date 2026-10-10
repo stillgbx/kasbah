@@ -1,7 +1,7 @@
 # Monorepo et flux de données
 
-> Dernière mise à jour : 2026-10-06
-> Sources : `package.json`, `tsconfig.base.json`, `vitest.config.ts`, `apps/server/src/app.ts`, `README.md`
+> Dernière mise à jour : 2026-10-10
+> Sources : `package.json`, `tsconfig.base.json`, `vitest.config.ts`, `apps/server/src/app.ts`, `README.md`, `scripts/dev-server.mjs`
 
 ## Workspaces (npm)
 
@@ -73,3 +73,16 @@ générateur PO Token) mais le serveur par `node --import tsx` **sans** `--watch
 web recharge l'onglet sans relancer les plugins. Mêmes ports que `dev` (8787, 5173) : l'un **ou**
 l'autre ; la preview a ses propres ports (`.claude/launch.json`). Pourquoi : voir
 `../6_faq/6_0_pieges-outillage.md`, section du 2026-10-01.
+
+### Mise à jour 2026-10-10 — le serveur de dev tourne sous `scripts/dev-server.mjs`
+
+Le script `dev` de `apps/server/package.json` n'est plus `node --watch --import tsx …` mais
+`node ../../scripts/dev-server.mjs`, un watcher maison d'une centaine de lignes. Il lance le même
+`node --import tsx --env-file-if-exists=.env src/main.ts`, surveille `apps/server/src` et
+`packages/*/src` (tests exclus), et ne relance que si la date de modification ou la taille d'un fichier
+a changé, en regroupant une rafale d'écritures (300 ms) en une seule relance. Pourquoi : sous Windows,
+`node --watch` relançait le serveur sur une simple **lecture** de ses modules (heure de dernier accès
+NTFS), d'où plusieurs relances à chaque premier démarrage — détail, sondes et issues dans
+`../6_faq/6_0_pieges-outillage.md`, section du 2026-10-10. Ce qui ne change pas : `npm run house`
+reste le lancement sans watch de la maison au quotidien, et une relance coupe toujours l'enfant net
+sous Windows.

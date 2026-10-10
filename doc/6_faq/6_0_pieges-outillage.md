@@ -1,7 +1,7 @@
 # FAQ — pièges d'outillage
 
-> Dernière mise à jour : 2026-10-08
-> Sources : sessions des 2026-09-04 et 2026-09-08, `apps/web/src/stores/settings.ts`, `apps/web/vite.config.ts`, `apps/web/src/components/home/*.vue`, `apps/web/src/styles/app.css`, `apps/web/src/plugins/vuetify.ts`, `apps/web/src/three/markers/screenArt.ts`, `apps/web/src/three/HouseScene.ts`, `apps/web/src/components/energy/EnergyFlow.vue`, `apps/web/src/components/devices/RoomBands.vue`, `apps/web/src/views/EnergyView.vue`, `apps/web/src/components/home/PanelArraysCard.vue`, `apps/web/src/three/builders/details.ts`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/components/ui/Segmented.vue`, `apps/server/src/app.ts`, `apps/server/src/plugins/mixcloud/resolve.ts`, `apps/server/package.json`, `apps/web/src/components/controls/MediaPlayerControl.vue`, `docs/plugins/claude-assistant.md`, session du 2026-10-08
+> Dernière mise à jour : 2026-10-10
+> Sources : sessions des 2026-09-04 et 2026-09-08, `apps/web/src/stores/settings.ts`, `apps/web/vite.config.ts`, `apps/web/src/components/home/*.vue`, `apps/web/src/styles/app.css`, `apps/web/src/plugins/vuetify.ts`, `apps/web/src/three/markers/screenArt.ts`, `apps/web/src/three/HouseScene.ts`, `apps/web/src/components/energy/EnergyFlow.vue`, `apps/web/src/components/devices/RoomBands.vue`, `apps/web/src/views/EnergyView.vue`, `apps/web/src/components/home/PanelArraysCard.vue`, `apps/web/src/three/builders/details.ts`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/components/ui/Segmented.vue`, `apps/server/src/app.ts`, `apps/server/src/plugins/mixcloud/resolve.ts`, `apps/server/package.json`, `apps/web/src/components/controls/MediaPlayerControl.vue`, `docs/plugins/claude-assistant.md`, session du 2026-10-08, `scripts/dev-server.mjs`, session du 2026-10-10
 
 ## Vuetify 4 : changer de thème
 
@@ -647,6 +647,10 @@ Sources : `apps/web/src/components/music/MusicPlayerBar.vue`,
 - **Correction 2026-10-01** : « `main.ts` traite déjà le SIGTERM (arrêt propre des plugins) » est faux
   **sous Windows** — voir l'entrée du 2026-10-01 plus bas. Le reste de l'entrée tient.
 
+- *Dépassé le 2026-10-10 : le serveur de dev ne tourne plus sous `node --watch` mais sous
+  `scripts/dev-server.mjs` (voir l'entrée du 2026-10-10). Le diagnostic `tsx watch` + `concurrently`
+  tient toujours, re-vérifié ce jour.*
+
 ## 2026-09-24 — Le Vite de l'utilisateur sert un bloc `<style scoped>` périmé
 
 - **Symptôme** : dans le pied « Page Musique / Ouvrir » du lecteur du panneau appareil, la pastille
@@ -740,6 +744,11 @@ Sources : `apps/web/src/components/music/MusicPlayerBar.vue`,
 - **Source** : session du 2026-10-01, processus serveur inspecté (`node --watch … src/main.ts` sous
   `npm run dev`) et sonde dans le dossier de travail de la session.
 
+- *Complément 2026-10-10 : les relances « au lancement » ne venaient pas d'écritures mais des
+  lectures, via l'heure de dernier accès NTFS — voir l'entrée du 2026-10-10. Le watcher qui remplace
+  `node --watch` (`scripts/dev-server.mjs`) regroupe aussi une rafale d'écritures en une seule relance ;
+  l'arrêt brutal de l'enfant sous Windows, lui, demeure.*
+
 ## 2026-10-07 — `sed -i` sous Git Bash convertit un fichier CRLF en LF
 
 - **Date** : 2026-10-07
@@ -777,3 +786,70 @@ Sources : `apps/web/src/components/music/MusicPlayerBar.vue`,
 - **Solution** : pour un remplacement exact, lire et écrire en binaire (`open(p, 'rb')`), ou passer
   `newline=''` aussi à la **lecture** ; relire `git diff` pour toute ligne changée hors de la demande.
 - **Source** : session du 2026-10-08 (voix des réponses par compte).
+
+## 2026-10-10 — `node --watch` sous Windows : une simple LECTURE relance le serveur
+
+- **Date** : 2026-10-10
+- **Symptôme** : au lancement de `npm run dev`, la console du serveur enchaîne plusieurs
+  `Restarting 'src/main.ts'` alors que personne n'écrit rien (`git status` propre, aucune autre
+  session). Le watch de Node efface la console à chaque relance : le journal du démarrage précédent
+  est perdu. Une relance peut aussi survenir dans la journée, quand un outil lit des sources que
+  personne n'a lues depuis plus d'une heure (vitest, eslint, un éditeur).
+- **Diagnostic** :
+  - Sur Windows, libuv abonne `fs.watch` (donc `node --watch`) à **huit** types de notification de
+    `ReadDirectoryChangesW`, dont `FILE_NOTIFY_CHANGE_LAST_ACCESS` : une mise à jour de l'heure de
+    dernier accès arrive comme un `change`, identique à une écriture
+    ([`src/win/fs-event.c`, branche v1.x](https://github.com/libuv/libuv/blob/v1.x/src/win/fs-event.c)).
+  - NTFS réécrit cette heure à la **lecture** d'un fichier dont la valeur a plus d'une heure, si la
+    mise à jour est active : `fsutil behavior query disablelastaccess` répond `2` (« géré par le
+    système, mises à jour ACTIVÉES ») sur le poste de développement.
+  - Au premier démarrage après une pause, le serveur lit tous ses modules (`apps/server/src`,
+    `packages/*/src`, `node_modules`) : les heures d'accès bougent, les événements arrivent une fois
+    les fichiers inscrits au watch, et Node relance. À la relance, tout vient d'être lu, l'heure ne
+    bouge plus : la cascade s'éteint après une à trois relances (le chargement se fait par vagues :
+    `main.ts`, puis les plugins et leurs dépendances).
+  - Sondes de la session : la lecture (`readFileSync`) de trois fichiers de `node_modules/zod` non lus
+    depuis la veille a produit trois `change`, mtime inchangé ; une lecture de `packages/shared/src/index.ts`,
+    lu le matin même, n'a rien produit. Reproduction : heures d'accès des 360 sources reculées de 2 h
+    (`utimes`, mtime conservé), serveur démo sous `node --watch` : **deux** `Restarting` au démarrage,
+    aucun sans ce recul — ce qui explique pourquoi les premiers essais de la session ne
+    reproduisaient rien.
+  - Pourquoi si peu de monde le voit : il faut Windows, un watcher qui croit l'événement sans
+    regarder la date de modification (`node --watch` le fait ; chokidar, donc `tsx watch`, compare
+    `atime`/`mtime` avant d'émettre), et la mise à jour du dernier accès active sur le volume. Linux
+    (inotify) et macOS (FSEvents) ne signalent pas une lecture. `node --watch` n'a aucune option
+    d'exclusion, et `--watch-path` surveille alors tout le dossier, ce qui aggrave.
+  - Effet de bord à connaître : un plugin qui agit au démarrage refait son action à chaque relance
+    (le réveil de charge Renault garde son délai `lastWake` en mémoire, `apps/server/src/plugins/renault/index.ts`).
+- **Confirmations trouvées** (recherche du 2026-10-10 ; aucune issue ne vise `node --watch` lui-même,
+  et aucune issue libuv ne propose de retirer le drapeau) :
+  - [colbymchenry/codegraph#1451](https://github.com/colbymchenry/codegraph/issues/1451) — « File reads
+    flagged as edits on Windows (NTFS atime) », Windows 11 : même mécanisme, même règle de l'heure.
+    Corrigée le 2026-09-27 en ignorant un événement dont la taille et la date de modification n'ont
+    pas bougé (PR #1472 puis #2050), le correctif retenu ici.
+  - [samchon/ttsc#1719](https://github.com/samchon/ttsc/issues/1719) — démonstration identique à la
+    nôtre (Node 24.18, libuv 1.52.1) : atime reculé, simple `readFileSync`, `change` reçu alors que
+    seul `atimeNs` bouge ; une compilation y tournait trois fois au lieu d'une. Ouverte au 2026-10-10.
+  - [nodejs/node#21643](https://github.com/nodejs/node/issues/21643) — « fs.watch says every single
+    file in my folder changed, randomly » (2018, Windows 10). Un contributeur y désigne déjà
+    `FILE_NOTIFY_CHANGE_LAST_ACCESS` ; l'auteur l'a fermée après `fsutil behavior set disablelastaccess 1`,
+    sans changement dans Node ni libuv.
+  - [remy/nodemon#1208](https://github.com/remy/nodemon/issues/1208) — « Overkill Restarting On File
+    Opening » (Windows 10 / 8.1) : relances à la simple ouverture d'un fichier dans l'éditeur, « only
+    since the 1803 Window Update » pour l'un ; un autre les fait cesser en coupant la mise à jour du
+    dernier accès (`fsutil`). Réglé côté nodemon par une montée de version de chokidar (2019).
+- **Solution** : `node --watch` remplacé par un petit watcher maison, `scripts/dev-server.mjs`
+  (script `dev` de `apps/server/package.json` : `node ../../scripts/dev-server.mjs`). Il lance
+  `node --import tsx --env-file-if-exists=.env src/main.ts`, surveille `apps/server/src` et
+  `packages/*/src` (fichiers `.ts`/`.js`, tests exclus), et ne compte un événement que si la date de
+  modification ou la taille a changé ; les événements sont regroupés sur 300 ms, une relance cite les
+  fichiers en cause, et la console n'est plus effacée. Vérifié : zéro relance au démarrage avec les
+  heures d'accès reculées, rien sur une lecture, une seule relance pour trois `touch` d'affilée, aucune
+  pour un fichier de test, `npm run dev` complet qui écoute et ne laisse aucun processus orphelin.
+  `tsx watch` reste écarté : il bloque toujours sous `concurrently` (re-vérifié ce jour, entrée du
+  2026-09-23). L'autre voie, poste par poste, est de couper la mise à jour du dernier accès
+  (`fsutil behavior set disablelastaccess 1`, en administrateur) — réglage système, sans effet pour
+  les autres clones. Ce qui ne change pas : sous Windows, la relance coupe l'enfant net (`kill()`),
+  le `shutdown()` de `main.ts` ne tourne pas — comme sous `node --watch` (entrée du 2026-10-01).
+- **Source** : session du 2026-10-10 (sondes `fs.watch` et `utimes` dans le dossier de travail de la
+  session, recherche web).
