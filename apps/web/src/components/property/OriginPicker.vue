@@ -6,6 +6,7 @@ import { FIRST_ROOM, localToGeo, type GeoOrigin, type Vec2 } from '@kasbah/share
 import { IGN_MAX_ZOOM, planStyleUrl, satelliteStyle, satelliteStyleWithLabels, type MapMode } from '../../lib/map'
 import { useSettingsStore } from '../../stores/settings'
 import Segmented from '../ui/Segmented.vue'
+import { AXIS_COLORS } from './axes'
 
 // Le POINT 0 d'une propriété neuve, posé sur la carte : un coin de la maison, d'où partent toutes les
 // cotes. On le pose d'un tap (ou en glissant le repère), on tourne le cap jusqu'à ce que la première
@@ -59,19 +60,23 @@ function addOverlay(): void {
   map.addLayer({ id: 'origin-terrain', type: 'line', source: 'origin', filter: ['==', ['get', 'role'], 'terrain'], paint: { 'line-color': '#f5d76e', 'line-width': 2, 'line-dasharray': [2, 2] } })
   map.addLayer({ id: 'origin-room-fill', type: 'fill', source: 'origin', filter: ['==', ['get', 'role'], 'room'], paint: { 'fill-color': '#4fd1c5', 'fill-opacity': 0.25 } })
   map.addLayer({ id: 'origin-room', type: 'line', source: 'origin', filter: ['==', ['get', 'role'], 'room'], paint: { 'line-color': '#4fd1c5', 'line-width': 2.5 } })
-  map.addLayer({ id: 'origin-axis', type: 'line', source: 'origin', filter: ['==', ['get', 'role'], 'axis'], paint: { 'line-color': ['match', ['get', 'label'], 'x', '#ff6b6b', '#7ee081'], 'line-width': 3 } })
+  map.addLayer({ id: 'origin-axis', type: 'line', source: 'origin', filter: ['==', ['get', 'role'], 'axis'], paint: { 'line-color': ['match', ['get', 'label'], 'x', AXIS_COLORS.x, AXIS_COLORS.y], 'line-width': 3 } })
 }
 function refresh(): void { (map?.getSource('origin') as GeoJSONSource | undefined)?.setData(overlay()) }
 
 const planStyles = new Map<string, Promise<StyleSpecification>>()
+// `diff: false` : un changement de style « en différence » retire nos calques SANS émettre
+// `style.load`, qui les repose — la pièce, les axes et le terrain disparaissaient selon que le style
+// des étiquettes arrivait avant ou après le premier chargement.
+const FULL = { diff: false } as const
 async function applyStyle(): Promise<void> {
   if (!map) return
-  if (mode.value !== 'satellite') { map.setStyle(planStyleUrl(settings.isDark)); return }
+  if (mode.value !== 'satellite') { map.setStyle(planStyleUrl(settings.isDark), FULL); return }
   const url = planStyleUrl(settings.isDark)
   let p = planStyles.get(url)
   if (!p) { p = fetch(url).then((r) => r.json() as Promise<StyleSpecification>); planStyles.set(url, p) }
-  try { const plan = await p; if (map && mode.value === 'satellite') map.setStyle(satelliteStyleWithLabels(plan)) }
-  catch { if (map && mode.value === 'satellite') map.setStyle(satelliteStyle()) }
+  try { const plan = await p; if (map && mode.value === 'satellite') map.setStyle(satelliteStyleWithLabels(plan), FULL) }
+  catch { if (map && mode.value === 'satellite') map.setStyle(satelliteStyle(), FULL) }
 }
 
 function placeMarker(): void {
@@ -130,8 +135,8 @@ watch(() => settings.isDark, () => { if (mode.value === 'plan') void applyStyle(
     <Segmented class="op__mode" dense :model-value="mode" :options="[{ value: 'satellite', label: $t('property.wizard.satellite') }, { value: 'plan', label: $t('property.wizard.plan') }]"
                @update:model-value="(v: MapMode) => { mode = v }" />
     <div class="op__legend">
-      <span><i class="op__swatch op__swatch--x" />x</span>
-      <span><i class="op__swatch op__swatch--y" />y</span>
+      <span><i class="op__swatch" :style="{ background: AXIS_COLORS.x }" />x</span>
+      <span><i class="op__swatch" :style="{ background: AXIS_COLORS.y }" />y</span>
       <span><i class="op__swatch op__swatch--room" />{{ $t('property.wizard.legendRoom') }}</span>
       <span v-if="terrain"><i class="op__swatch op__swatch--terrain" />{{ $t('property.wizard.legendTerrain') }}</span>
     </div>
@@ -148,8 +153,6 @@ watch(() => settings.isDark, () => { if (mode.value === 'plan') void applyStyle(
 }
 .op__legend span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .op__swatch { display: inline-block; width: 12px; height: 3px; border-radius: 2px; }
-.op__swatch--x { background: #ff6b6b; }
-.op__swatch--y { background: #7ee081; }
 .op__swatch--room { background: #4fd1c5; height: 8px; }
 .op__swatch--terrain { background: #f5d76e; }
 :deep(.op__marker) {

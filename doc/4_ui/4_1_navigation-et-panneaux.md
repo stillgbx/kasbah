@@ -5784,7 +5784,13 @@ format : `../1_architecture/1_2_serveur-et-plugins.md`, `../1_architecture/1_3_p
 - **Carte de pose** (`components/property/OriginPicker.vue`, MapLibre) : satellite IGN ou plan
   OpenFreeMap, repère glissable pour le point 0, superposition de la pièce, des axes x / y et du
   terrain, zoom 20, recadrage sur le terrain à l'étape 3 (le terrain sortait de la carte avant ça).
-  Le cap est celui de l'axe +y, horaire depuis le nord (`geo.ts`).
+  Le cap est celui de l'axe +y, horaire depuis le nord (`geo.ts`). **Piège corrigé** (signalé par
+  l'utilisateur : point posé, rien dessiné) : `setStyle` « en différence » (défaut de MapLibre) retire
+  les calques ajoutés par le code SANS émettre `style.load`, qui les repose — selon que le style des
+  étiquettes arrivait avant ou après le premier chargement, la pièce, les axes et le terrain
+  disparaissaient. Les changements de style passent donc `{ diff: false }`. Les cotes du terrain
+  s'appellent « Le long de x / de y », avec la pastille de l'axe (couleurs partagées par
+  `components/property/axes.ts`) : « largeur / profondeur » ne disait pas à quel côté elles allaient.
 - **Guide** (`components/property/OnboardingCoach.vue`, monté par `HomeView.vue` ; état dans
   `lib/onboarding.ts`) : la création recharge l'application sur la maison neuve, donc l'étape est
   retenue en `localStorage` (`kasbah.onboarding` = `{ propertyId, step }`). Déroulé de « Créer »

@@ -7,6 +7,7 @@ import { useMediaQuery } from '@vueuse/core'
 import Segmented from '../ui/Segmented.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import OriginPicker from './OriginPicker.vue'
+import { AXIS_COLORS } from './axes'
 
 // « Créer une propriété » : trois étapes, puis la maison neuve s'ouvre et un guide prend le relais
 // (contour du terrain, puis cotes de la première pièce, dans le mode édition).
@@ -129,8 +130,8 @@ const kinds = computed(() => [
             </div>
           </div>
           <div v-else class="np__row np__dims np__top">
-            <label class="np__dim"><span class="section-label">{{ $t('property.wizard.width') }}</span><input v-model.number="width" class="np__input np__num" type="number" min="5" max="2000" step="1"><span class="muted">m</span></label>
-            <label class="np__dim"><span class="section-label">{{ $t('property.wizard.depth') }}</span><input v-model.number="depth" class="np__input np__num" type="number" min="5" max="2000" step="1"><span class="muted">m</span></label>
+            <label class="np__dim"><i class="np__swatch" :style="{ background: AXIS_COLORS.x }" /><span class="section-label">{{ $t('property.wizard.alongX') }}</span><input v-model.number="width" class="np__input np__num" type="number" min="5" max="2000" step="1"><span class="muted">m</span></label>
+            <label class="np__dim"><i class="np__swatch" :style="{ background: AXIS_COLORS.y }" /><span class="section-label">{{ $t('property.wizard.alongY') }}</span><input v-model.number="depth" class="np__input np__num" type="number" min="5" max="2000" step="1"><span class="muted">m</span></label>
           </div>
           <OriginPicker ref="picker" class="np__map" :lat="lat" :lon="lon" :heading="heading" :terrain="step === 3 ? { width, depth } : null" @pick="pick" />
           <!-- le cap reste réglable à l'étape du terrain : on le voit alors tourner avec lui -->
@@ -192,6 +193,8 @@ const kinds = computed(() => [
 .np__coords { font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .np__heading, .np__dim { display: inline-flex; align-items: center; gap: 6px; }
 .np__dims { justify-content: flex-start; gap: 20px; }
+/* la pastille de l'axe, comme dans la légende de la carte : on voit à quel côté du terrain va la cote */
+.np__swatch { display: inline-block; width: 12px; height: 3px; border-radius: 2px; flex: none; }
 .np__foot { display: flex; justify-content: space-between; gap: 8px; padding: 12px 20px 18px; }
 /* même largeur pour « Suivant » et « Créer » (fr comme en) : le bouton ne change pas de taille sous le doigt */
 .np__foot .np__next { gap: 8px; min-width: 104px; justify-content: center; border-color: var(--accent); color: var(--accent); }
