@@ -221,6 +221,8 @@ export interface SceneEvents {
   gardenDrop: (itemId: string) => void
   /** Élément du jardin armé : le point du TERRAIN touché (un sol de pièce ou un toit n'en est pas un). */
   gardenPlaceTap: (xy: [number, number]) => void
+  /** « Ajouter une pièce » armé : le point du sol touché (pièce, terrain ou zone), où elle naît. */
+  roomPlaceTap: (xy: [number, number]) => void
   /**
    * La maison se prépare avant d'être montrée (voir `prepare`) : l'étape en cours, avec son compte
    * quand elle en a un (les matières), puis `null` quand elle est prête.
@@ -495,7 +497,7 @@ export class HouseScene {
     deviceDrag: new Set(), deviceDrop: new Set(), journalTap: new Set(),
     openingTap: new Set(), openingDrag: new Set(), openingDrop: new Set(), placeTap: new Set(),
     parkingTap: new Set(), parkingDrag: new Set(), parkingDrop: new Set(), groundTap: new Set(), reliefChange: new Set(), prepare: new Set(),
-    gardenTap: new Set(), gardenDrag: new Set(), gardenDrop: new Set(), gardenPlaceTap: new Set(),
+    gardenTap: new Set(), gardenDrag: new Set(), gardenDrop: new Set(), gardenPlaceTap: new Set(), roomPlaceTap: new Set(),
     shapeWall: new Set(), shapeCorner: new Set(), shapeSelect: new Set(),
   }
   private detachInput: (() => void) | null = null
@@ -554,6 +556,8 @@ export class HouseScene {
   private selectedParkingId: string | null = null
   /** Une place est ARMÉE : le prochain tap au sol dit où elle se pose (mode « poser »). */
   private placingParking = false
+  /** Une pièce est ARMÉE : le prochain tap au sol dit où elle naît. */
+  private placingRoom = false
   private parkingNodes = new Map<string, ParkingNodes>()
   private parkingMats: ParkingMaterials | null = null
   /** Le « P » du marquage : une texture pour toutes les places, refaite avec le thème. */
@@ -1670,6 +1674,13 @@ export class HouseScene {
   setPlacingParking(on: boolean): void {
     if (this.placingParking === on) return
     this.placingParking = on
+    this.loop.invalidate()
+  }
+
+  /** Mode « poser une pièce » : le tap suivant rapporte le point du sol touché (`roomPlaceTap`). */
+  setPlacingRoom(on: boolean): void {
+    if (this.placingRoom === on) return
+    this.placingRoom = on
     this.loop.invalidate()
   }
 
@@ -3582,6 +3593,13 @@ export class HouseScene {
     if (this.placingOpening) {
       const xy = this.buildingPoint(this.placingOpening.roomId, this.placingOpening.type, ev.ndc)
       if (xy) this.emit('placeTap', xy)
+      else this.emit('backgroundTap')
+      return
+    }
+    // Une pièce armée : n'importe quel sol donne le point (un niveau neuf n'a pas encore de plancher)
+    if (this.placingRoom) {
+      const hit = this.groundPoint(ev.ndc)
+      if (hit) this.emit('roomPlaceTap', hit.xy)
       else this.emit('backgroundTap')
       return
     }

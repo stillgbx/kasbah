@@ -3,11 +3,13 @@ import { vec2Schema } from './schema'
 import { appearancePatchSchema, applyAppearanceToJson } from './appearance'
 import { fitSurvey, houseToSurveyPoint, overlappingRooms, surveyEdges, surveyPointsToHouse, type SurveyConventions, type SurveyDoc } from './survey'
 import { PlacementError } from './place'
+import { applyStructureToJson, structurePatchShape, structureReshapes } from './structure'
 import type { Vec2 } from './geometry/vec2'
 
-// Une SÉANCE d'édition de la maison, écrite d'un coup par « Valider » : l'apparence (finitions) et la
-// FORME des pièces (leurs cotes). Un seul patch, un seul brouillon côté écran, une seule route
-// (`PUT /api/house/edit`) — c'est aussi la base de la création de pièces et de niveaux à venir.
+// Une SÉANCE d'édition de la maison, écrite d'un coup par « Valider » : l'apparence (finitions), la
+// FORME des pièces (leurs cotes) et la STRUCTURE (pièces et niveaux qui naissent ou disparaissent,
+// nom et type d'une pièce, `structure.ts`). Un seul patch, un seul brouillon côté écran, une seule
+// route (`PUT /api/house/edit`).
 //
 // La forme s'écrit en COTES (`meta.survey.points`, unité du relevé) : le polygone, les murs
 // mitoyens et l'emprise des niveaux en sont recalculés par `fitSurvey`, et les ouvertures de chaque
@@ -17,6 +19,7 @@ export const houseEditPatchSchema = z.object({
   appearance: appearancePatchSchema.optional(),
   /** Nouvelles cotes, par pièce (unité et repère du relevé : `house.meta.survey`). */
   shapes: z.record(z.string().min(1), z.array(vec2Schema).min(3)).optional(),
+  ...structurePatchShape,
 })
 export type HouseEditPatch = z.infer<typeof houseEditPatchSchema>
 
@@ -169,10 +172,20 @@ export interface HouseEditResult<T> {
  */
 export function applyHouseEditToJson<T>(input: T, patch: HouseEditPatch): HouseEditResult<T> {
   if (!isObject(input)) throw new PlacementError('house document is not an object')
-  let doc: unknown = patch.appearance ? applyAppearanceToJson(input, patch.appearance) : input
-  const shapes = Object.entries(patch.shapes ?? {})
-  if (!shapes.length) return { doc: doc as T, blocking: [], warnings: [] }
-  const base = withSurveyPoints(doc as SurveyDoc)
+  // ce que la séance dit d'une pièce qu'elle retire ne compte plus (ses cotes, ses finitions)
+  const removed = new Set(patch.removeRooms ?? [])
+  const shapes = Object.entries(patch.shapes ?? {}).filter(([id]) => !removed.has(id))
+  const reshape = shapes.length > 0 || structureReshapes(patch)
+  // une pièce qui naît s'écrit en cotes : la maison est convertie en relevé AVANT
+  let doc: unknown = reshape ? withSurveyPoints(input as unknown as SurveyDoc) : input
+  const structure = applyStructureToJson(doc as Json, patch, Object.fromEntries(shapes), (doc as SurveyDoc).meta?.survey ?? {})
+  doc = structure.doc
+  const appearance = patch.appearance?.rooms
+    ? { ...patch.appearance, rooms: Object.fromEntries(Object.entries(patch.appearance.rooms).filter(([id]) => !removed.has(id))) }
+    : patch.appearance
+  if (appearance) doc = applyAppearanceToJson(doc, appearance)
+  if (!reshape) return { doc: doc as T, blocking: structure.blocking, warnings: [] }
+  const base = doc as SurveyDoc
   const known = new Set(base.rooms.map((r) => r.id))
   for (const [id] of shapes) if (!known.has(id)) throw new PlacementError(`unknown room "${id}"`)
   const conv: SurveyConventions = base.meta?.survey ?? {}
@@ -190,10 +203,10 @@ export function applyHouseEditToJson<T>(input: T, patch: HouseEditPatch): HouseE
     }),
   }
   let fit
-  try { fit = fitSurvey(doc as SurveyDoc) } catch (err) { return { doc: doc as T, blocking: [(err as Error).message], warnings: [] } }
+  try { fit = fitSurvey(doc as SurveyDoc) } catch (err) { return { doc: doc as T, blocking: [...structure.blocking, (err as Error).message], warnings: [] } }
   const rooms = fit.doc.rooms.map((r) => {
     const prev = prevPoly.get(r.id)
     return prev && JSON.stringify(prev) !== JSON.stringify(r.polygon) ? remapOpenings(r, prev, r.polygon) : r
   })
-  return { doc: { ...fit.doc, rooms } as T, blocking: [...fit.problems, ...overlappingRooms({ rooms: rooms as SurveyDoc['rooms'] })], warnings: fit.warnings }
+  return { doc: { ...fit.doc, rooms } as T, blocking: [...structure.blocking, ...fit.problems, ...overlappingRooms({ rooms: rooms as SurveyDoc['rooms'] })], warnings: fit.warnings }
 }

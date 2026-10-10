@@ -60,6 +60,8 @@ function removeCorner() { if (cornerSel.value !== null) { house.removeCorner(pro
     <div class="rs__actions">
       <button type="button" class="pill rs__btn" :disabled="wallSel === null || house.savingEdit" @click="addCorner()">{{ $t('shape.addCorner') }}</button>
       <button type="button" class="pill rs__btn" :disabled="cornerSel === null || shape.length <= 3 || house.savingEdit" @click="removeCorner()">{{ $t('shape.removeCorner') }}</button>
+      <!-- la pièce voisine naît de l'autre côté du mur choisi, sur la même cloison -->
+      <button type="button" class="pill rs__btn rs__wide" :disabled="wallSel === null || house.savingEdit" @click="house.addRoomAgainstWall(roomId, wallSel!)">{{ $t('structure.roomAgainstWall') }}</button>
     </div>
   </div>
 </template>
@@ -85,5 +87,6 @@ function removeCorner() { if (cornerSel.value !== null) { house.removeCorner(pro
 .rs__len:focus { outline: none; border-color: var(--accent); }
 .rs__unit { font-size: 12px; }
 .rs__actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.rs__wide { grid-column: 1 / -1; }
 .rs__btn { justify-content: center; min-width: 0; font-size: 13px; white-space: normal; line-height: 1.2; text-align: center; }
 </style>

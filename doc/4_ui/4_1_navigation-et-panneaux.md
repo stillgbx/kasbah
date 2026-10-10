@@ -1,7 +1,7 @@
 # Navigation et panneaux
 
-> Dernière mise à jour : 2026-10-08
-> Sources : `apps/web/src/App.vue`, `apps/web/src/components/layout/*.vue`, `apps/web/src/views/*.vue`, `apps/web/src/components/home/*.vue`, `apps/web/src/components/controls/*.vue`, `apps/web/src/views/LightsView.vue`, `apps/web/src/components/home/PlacementControl.vue`, `apps/web/src/components/scenes/SceneChips.vue`, `apps/web/src/components/devices/RoomBands.vue`, `apps/web/src/components/devices/RoomLightsToggle.vue`, `apps/web/src/views/CoversView.vue`, `apps/web/src/components/covers/CoverPill.vue`, `apps/web/src/lib/{cover,deviceState}.ts`, `apps/web/src/composables/useHomeSummary.ts`, `apps/web/src/components/devices/ForgetDeviceButton.vue`, `apps/web/src/components/controls/MediaPlayerControl.vue`, `apps/web/src/lib/audioRouting.ts`, `apps/web/src/components/energy/EnergyFlow.vue`, `apps/web/src/components/EnphasePairingCard.vue`, `apps/web/src/lib/energy.ts`, `apps/web/src/components/devices/RoomBrightness.vue`, `apps/web/src/components/devices/CoversMaster.vue`, `apps/web/src/components/devices/LightsMaster.vue`, `apps/web/src/composables/useRoomLights.ts`, `apps/web/src/components/home/PanelArraysCard.vue`, `apps/web/src/components/energy/InverterFields.vue`, `apps/web/src/components/TeslaLinkCard.vue`, `apps/web/src/views/VehiclesView.vue`, `apps/web/src/components/vehicles/VehicleMap.vue`, `apps/web/src/components/vehicles/VehicleTuning.vue`, `apps/web/src/lib/vehicleTuning.ts`, `apps/web/src/lib/map.ts`, `apps/web/src/components/controls/VehicleCard.vue`, `apps/web/src/components/vehicles/ChargeLimitCard.vue`, `apps/web/src/components/home/DevicePanel.vue`, `apps/web/src/components/settings/PluginSection.vue`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/components/ui/Segmented.vue`, `apps/web/src/components/home/SearchBar.vue`, `apps/web/src/composables/useSearch.ts`, `apps/web/src/components/layout/SearchPalette.vue`, `apps/web/src/lib/search.ts`, `apps/web/src/lib/navItems.ts`, `apps/web/src/views/HeatingView.vue`, `apps/web/src/components/heating/*.vue`, `apps/web/src/components/MelcloudLinkCard.vue`, `apps/web/src/components/home/OpeningPanel.vue`, `apps/web/src/components/home/RoomEditPanel.vue`, `apps/web/src/components/home/ParkingPanel.vue`, `apps/web/src/lib/deviceIcons.ts`, `apps/web/src/views/MusicView.vue`, `apps/web/src/components/music/{MusicPlayerBar,ListeningSessions,MusicItemRow,MusicTile,ChipRow}.vue`, `apps/web/src/stores/localPlayer.ts`, `apps/web/src/components/music/MixcloudBrowser.vue`, `apps/web/src/components/MixcloudLinkCard.vue`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/views/{AutomationsView,AutomationEditView}.vue`, `apps/web/src/components/automations/*.vue`, `apps/web/src/components/layout/NavRail.vue` (`meta.nav`), `apps/web/src/components/controls/LightHistoryChart.vue`, `apps/web/src/components/weather/WeatherPlaces.vue`, `apps/web/src/composables/useMusicSession.ts`, `apps/web/src/lib/streamQuality.ts`, `apps/web/src/components/home/ReliefPanel.vue`, `apps/web/src/lib/ignRelief.ts`, `apps/web/src/lib/moon.ts`, `apps/web/src/components/vehicles/VehicleSoftware.vue`, `apps/web/src/components/layout/AssistantReply.vue`, `apps/web/src/components/settings/AssistantCard.vue`, `apps/web/src/components/ClaudeLinkCard.vue`, `apps/web/src/composables/useVoiceInput.ts`, `apps/web/src/stores/properties.ts`, `apps/web/src/components/layout/PropertyList.vue`
+> Dernière mise à jour : 2026-10-10
+> Sources : `apps/web/src/App.vue`, `apps/web/src/components/layout/*.vue`, `apps/web/src/views/*.vue`, `apps/web/src/components/home/*.vue`, `apps/web/src/components/controls/*.vue`, `apps/web/src/views/LightsView.vue`, `apps/web/src/components/home/PlacementControl.vue`, `apps/web/src/components/scenes/SceneChips.vue`, `apps/web/src/components/devices/RoomBands.vue`, `apps/web/src/components/devices/RoomLightsToggle.vue`, `apps/web/src/views/CoversView.vue`, `apps/web/src/components/covers/CoverPill.vue`, `apps/web/src/lib/{cover,deviceState}.ts`, `apps/web/src/composables/useHomeSummary.ts`, `apps/web/src/components/devices/ForgetDeviceButton.vue`, `apps/web/src/components/controls/MediaPlayerControl.vue`, `apps/web/src/lib/audioRouting.ts`, `apps/web/src/components/energy/EnergyFlow.vue`, `apps/web/src/components/EnphasePairingCard.vue`, `apps/web/src/lib/energy.ts`, `apps/web/src/components/devices/RoomBrightness.vue`, `apps/web/src/components/devices/CoversMaster.vue`, `apps/web/src/components/devices/LightsMaster.vue`, `apps/web/src/composables/useRoomLights.ts`, `apps/web/src/components/home/PanelArraysCard.vue`, `apps/web/src/components/energy/InverterFields.vue`, `apps/web/src/components/TeslaLinkCard.vue`, `apps/web/src/views/VehiclesView.vue`, `apps/web/src/components/vehicles/VehicleMap.vue`, `apps/web/src/components/vehicles/VehicleTuning.vue`, `apps/web/src/lib/vehicleTuning.ts`, `apps/web/src/lib/map.ts`, `apps/web/src/components/controls/VehicleCard.vue`, `apps/web/src/components/vehicles/ChargeLimitCard.vue`, `apps/web/src/components/home/DevicePanel.vue`, `apps/web/src/components/settings/PluginSection.vue`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/components/ui/Segmented.vue`, `apps/web/src/components/home/SearchBar.vue`, `apps/web/src/composables/useSearch.ts`, `apps/web/src/components/layout/SearchPalette.vue`, `apps/web/src/lib/search.ts`, `apps/web/src/lib/navItems.ts`, `apps/web/src/views/HeatingView.vue`, `apps/web/src/components/heating/*.vue`, `apps/web/src/components/MelcloudLinkCard.vue`, `apps/web/src/components/home/OpeningPanel.vue`, `apps/web/src/components/home/RoomEditPanel.vue`, `apps/web/src/components/home/ParkingPanel.vue`, `apps/web/src/lib/deviceIcons.ts`, `apps/web/src/views/MusicView.vue`, `apps/web/src/components/music/{MusicPlayerBar,ListeningSessions,MusicItemRow,MusicTile,ChipRow}.vue`, `apps/web/src/stores/localPlayer.ts`, `apps/web/src/components/music/MixcloudBrowser.vue`, `apps/web/src/components/MixcloudLinkCard.vue`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/views/{AutomationsView,AutomationEditView}.vue`, `apps/web/src/components/automations/*.vue`, `apps/web/src/components/layout/NavRail.vue` (`meta.nav`), `apps/web/src/components/controls/LightHistoryChart.vue`, `apps/web/src/components/weather/WeatherPlaces.vue`, `apps/web/src/composables/useMusicSession.ts`, `apps/web/src/lib/streamQuality.ts`, `apps/web/src/components/home/ReliefPanel.vue`, `apps/web/src/lib/ignRelief.ts`, `apps/web/src/lib/moon.ts`, `apps/web/src/components/vehicles/VehicleSoftware.vue`, `apps/web/src/components/layout/AssistantReply.vue`, `apps/web/src/components/settings/AssistantCard.vue`, `apps/web/src/components/ClaudeLinkCard.vue`, `apps/web/src/composables/useVoiceInput.ts`, `apps/web/src/stores/properties.ts`, `apps/web/src/components/layout/PropertyList.vue`, `apps/web/src/components/home/{HouseEditPanel,RoomShapeSection}.vue`
 
 ## Grille
 
@@ -5714,3 +5714,46 @@ Vérification de la vue sur les trois maisons : configs de preview `kasbah-demo-
 
 Sources : `apps/web/src/components/layout/{PropertyList,NavRail}.vue`, `apps/web/src/stores/properties.ts`,
 `apps/web/src/views/SettingsView.vue`, `apps/web/src/api/demoProperties.ts`.
+
+### Mise à jour 2026-10-10 — pièces et niveaux en mode édition, relief dans la carte « Mode édition »
+
+Choix de l'utilisateur : poser une pièce **contre un mur** (et au tap pour un niveau vide), étage ou
+sous-sol avec le **toit qui suit**, retirer une pièce ou un niveau **vide**, nom et type **dans le
+brouillon**. Format : `../2_maison/2_0_format-house-json.md` (même date).
+
+- **Panneau maison** (`HouseEditPanel.vue`) : section repliable « Pièces et niveaux » en tête (clé
+  `structure` de l'accordéon), avec la barre du brouillon (`EditBar`). « Ajouter une pièce » arme
+  `house.placingRoom` (niveau de l'onglet, sinon le plus bas — `levelsSorted` est trié du haut vers
+  le bas) et devient « Annuler » dans la même boîte ; « Ajouter un étage » | « Ajouter un sous-sol » ;
+  « Retirer « niveau » » grisé hors d'un onglet de niveau ou si `levelRemovable` dit non. Consignes
+  sur des **lignes réservées** (3 et 2 lignes, `.hint--3` / `.hint--2`) : la première version faisait
+  sauter la suite de 18 px en armant, et la consigne anglaise passait à 4 lignes au zoom 1,5 (texte
+  raccourci).
+- **Panneau de pièce** (`RoomEditPanel.vue`) : section « Pièce » en tête (nom — vide refusé, le champ
+  reprend — et type, colonnes 3fr / 2fr), « Retirer la pièce » en pied (un seul tap : c'est dans le
+  brouillon, annulable). Onglet Dimensions (`RoomShapeSection.vue`) : « Ajouter une pièce de ce côté »
+  en pleine largeur sous les deux actions de sommet, grisé sans mur choisi.
+- **Store** (`stores/house.ts`) : `addRoomAgainstWall`, `startPlacingRoom` / `cancelPlacingRoom` /
+  `placeRoomAt`, `removeRoom`, `setRoomIdentity`, `addLevel` (« Étage N », N = niveaux habités ;
+  « Sous-sol »), `levelRemovable`, `removeLevel`. La pièce née devient la sélection, le niveau né
+  l'onglet. `mergeEdit` cumule ajouts et retraits ; `buildingOf` compare aussi ids, noms, types et
+  niveaux ; `issueText` nomme les pièces nées dans la séance. Abandonner la séance désarme la pose.
+- **Scène** : `setPlacingRoom` / événement `roomPlaceTap` — n'importe quel sol touché (un niveau neuf
+  n'a pas encore de plancher) ; tap hors sol = renoncement (`HomeView.vue`).
+- **Réglages** : « Modeler le terrain » quitte la carte Rendu 3D pour la carte « Mode édition » (il
+  écrit dans le fichier de la maison, comme le reste du mode).
+
+Limites connues : un niveau ne se renomme pas encore ; une automatisation qui nomme une pièce retirée
+garde la référence. Tant qu'une fenêtre de toit bloque, la pièce née ne se voit pas dans la 3D (la
+scène garde la dernière maison valide).
+
+Vérifié dans la preview simulée (`kasbah-mock`), en vrais boutons : pièce contre un mur, pièce sur un
+étage neuf (blocage par la fenêtre de toit, message), nom et type, « Valider », retrait et annulation,
+retrait d'un niveau ; rien ne bouge (mesure géométrique, trois états), aucun débordement fr / en aux
+zooms 1 / 1,25 / 1,5.
+
+Tests : `apps/web/src/stores/house.structure.test.ts`.
+
+Sources : `apps/web/src/components/home/{HouseEditPanel,RoomEditPanel,RoomShapeSection}.vue`,
+`apps/web/src/stores/house.ts`, `apps/web/src/three/HouseScene.ts`, `apps/web/src/composables/useHouseScene.ts`,
+`apps/web/src/views/{HomeView,SettingsView}.vue`, `apps/web/src/i18n/locales/{fr,en}.json` (`structure.*`).

@@ -2,6 +2,23 @@
 
 Entrées les plus récentes en haut. Une session = une entrée.
 
+## [2026-10-10] update | Lot A : pièces et niveaux qui naissent ou disparaissent en mode édition
+
+**Déclencheur** : le dépôt public doit permettre de créer une maison depuis une installation neuve ;
+préalable demandé par l'utilisateur : ajouter et retirer des pièces et des niveaux depuis le mode
+édition, avant l'assistant de création (lot B).
+
+**Pages modifiées** :
+- `2_maison/2_0_format-house-json.md` - mise à jour datée : patch de structure (`structure.ts`),
+  ordre d'application, règles d'élévation, du toit qui suit et du retrait, gestes `roomAgainstWall` /
+  `rectRoomAt`.
+- `4_ui/4_1_navigation-et-panneaux.md` - mise à jour datée : section « Pièces et niveaux », identité
+  et retrait d'une pièce, bouton de l'onglet Dimensions, pose au tap, relief dans « Mode édition ».
+
+**Pages créées** : aucune.
+
+**Index** : mis à jour (2 lignes).
+
 ## [2026-10-10] update | Serveur de dev : `node --watch` remplacé par un watcher maison
 
 **Déclencheur** : « lors du démarrage du serveur avec `npm run dev` on voit de multiples

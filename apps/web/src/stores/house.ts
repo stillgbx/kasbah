@@ -1,6 +1,6 @@
 import { computed, ref, shallowRef, watch } from 'vue'
 import { defineStore } from 'pinia'
-  import { applyHouseEditToJson, insertVertex, mergeAppearancePatch, moveVertex, openingLabel, pushWall, removeVertex, roomShape, safeParseHouse, setEdgeLength, autoPlaceDevices, computeRoof, fitHeight, fitParkingGap, houseIdForDevice, isSurfaceOpening, longestEdgeYawDeg, indexHouse, isPlaced, newOpeningDims, newParkingSize, openingLimits, openingSill, panelArrayDevices, panelOf, parkingGaps, parkingHost, pointInPolygon, resolveDefaults, resolveDeviceLevelId, roomHeight, slotFromPoint, slotFromSurfacePoint, surfaceFootprint, withPanelArrays, type DeviceDescriptor, type HouseEditPatch, type HouseIssue, type Shapes, type SurveyDoc, type DeviceEntry, type Finish, type DeviceKind, type DevicePlacement, type GardenItem, type GardenItemPatch, type GardenKind, type House, type HouseDevice, type HouseIndex, type Level, type Opening, type OpeningPatch, type OpeningType, type PanelArray, type PanelArrayPatch, type Parking, type ParkingPatch, type ParkingSide, type PlaceableDevice, type PlacedHouseDevice, type Relief, type Room, type SceneTuning, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
+  import { applyHouseEditToJson, insertVertex, rectRoomAt, roomAgainstWall, type NewLevelSide, type RoomKind, mergeAppearancePatch, moveVertex, openingLabel, pushWall, removeVertex, roomShape, safeParseHouse, setEdgeLength, autoPlaceDevices, computeRoof, fitHeight, fitParkingGap, houseIdForDevice, isSurfaceOpening, longestEdgeYawDeg, indexHouse, isPlaced, newOpeningDims, newParkingSize, openingLimits, openingSill, panelArrayDevices, panelOf, parkingGaps, parkingHost, pointInPolygon, resolveDefaults, resolveDeviceLevelId, roomHeight, slotFromPoint, slotFromSurfacePoint, surfaceFootprint, withPanelArrays, type DeviceDescriptor, type HouseEditPatch, type HouseIssue, type Shapes, type SurveyDoc, type DeviceEntry, type Finish, type DeviceKind, type DevicePlacement, type GardenItem, type GardenItemPatch, type GardenKind, type House, type HouseDevice, type HouseIndex, type Level, type Opening, type OpeningPatch, type OpeningType, type PanelArray, type PanelArrayPatch, type Parking, type ParkingPatch, type ParkingSide, type PlaceableDevice, type PlacedHouseDevice, type Relief, type Room, type SceneTuning, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
 import { getTransport } from '../api'
 import type { JournalPoint } from '../lib/journal'
 import { i18n, t } from '../i18n'
@@ -88,8 +88,13 @@ export const GARDEN_DEFAULT_HEIGHT: Record<GardenKind, number> = { broadleaf: 7,
  */
 const buildingOf = (h: House | null) => JSON.stringify([
   h?.style ?? null,
-  h?.rooms.map((r) => [r.polygon, r.openings, r.style?.floorFinish ?? null, r.style?.wallFinish ?? null]) ?? [],
+  h?.rooms.map((r) => [r.id, r.levelId, r.name, r.kind, r.polygon, r.openings, r.style?.floorFinish ?? null, r.style?.wallFinish ?? null]) ?? [],
+  h?.levels.map((l) => [l.id, l.name, l.elevation]) ?? [],
 ])
+
+/** Deux listes d'ajouts : la seconde complète la première, sans doublon d'id. */
+const unionById = <T extends { id: string }>(a: T[] = [], b: T[] = []): T[] => [...a, ...b.filter((x) => !a.some((y) => y.id === x.id))]
+const union = (a: string[] = [], b: string[] = []): string[] => [...new Set([...a, ...b])]
 
 /** Deux états de séance : le second passe devant (finitions surface par surface, formes pièce par pièce). */
 function mergeEdit(prev: HouseEditPatch | null, next: HouseEditPatch): HouseEditPatch {
@@ -98,6 +103,18 @@ function mergeEdit(prev: HouseEditPatch | null, next: HouseEditPatch): HouseEdit
   if (appearance) out.appearance = appearance
   const shapes = { ...prev?.shapes, ...next.shapes }
   if (Object.keys(shapes).length) out.shapes = shapes
+  // structure : les ajouts et les retraits s'accumulent, nom et type pièce par pièce
+  const newLevels = unionById(prev?.newLevels, next.newLevels)
+  if (newLevels.length) out.newLevels = newLevels
+  const newRooms = unionById(prev?.newRooms, next.newRooms)
+  if (newRooms.length) out.newRooms = newRooms
+  const removeRooms = union(prev?.removeRooms, next.removeRooms)
+  if (removeRooms.length) out.removeRooms = removeRooms
+  const removeLevels = union(prev?.removeLevels, next.removeLevels)
+  if (removeLevels.length) out.removeLevels = removeLevels
+  const rooms: NonNullable<HouseEditPatch['rooms']> = { ...prev?.rooms }
+  for (const [id, r] of Object.entries(next.rooms ?? {})) rooms[id] = { ...rooms[id], ...r }
+  if (Object.keys(rooms).length) out.rooms = rooms
   return out
 }
 
@@ -106,7 +123,10 @@ function issueText(h: House, i: HouseIssue): string {
   const m = /^rooms\[(\d+)\]\.openings\[(\d+)\]/.exec(i.path)
   const room = m ? h.rooms[Number(m[1])] : undefined
   const o = room?.openings[Number(m![2])]
-  return room && o ? t('shape.openingNoFit', { room: room.name, opening: openingLabel(o) }) : `${i.path} : ${i.message}`
+  if (!room || !o) return `${i.path} : ${i.message}`
+  // le toit est monté sur un étage neuf : la fenêtre de toit restée dessous n'est plus sous le toit
+  if (o.type === 'roof-window' && i.message.startsWith('roof-window must belong')) return t('structure.roofWindowUnder', { room: room.name, opening: openingLabel(o) })
+  return t('shape.openingNoFit', { room: room.name, opening: openingLabel(o) })
 }
 
 interface EditOutcome {
@@ -120,7 +140,8 @@ interface EditOutcome {
 function runEdit(h: House, patch: HouseEditPatch): EditOutcome {
   let r
   try { r = applyHouseEditToJson(h, patch) } catch (err) { return { house: null, raw: null, blocking: [(err as Error).message], warnings: [] } }
-  const names = new Map(h.rooms.map((x) => [x.id, x.name]))
+  // les pièces nées dans la séance se nomment aussi (le document de la séance les porte)
+  const names = new Map([...h.rooms, ...((r.doc as unknown as House).rooms ?? [])].map((x) => [x.id, x.name]))
   const named = (msg: string) => msg.replace(/[a-z0-9_.-]+/gi, (w) => names.get(w) ?? w)
   const parsed = safeParseHouse(r.doc)
   return {
@@ -499,6 +520,75 @@ export const useHouseStore = defineStore('house', () => {
     if (commit && tr) pushEdit({ shapes: tr })
   }
 
+  // -- structure : pièces et niveaux qui naissent ou disparaissent, nom et type d'une pièce. Tout
+  //    entre dans le même brouillon que les formes : annuler, rétablir, rien d'écrit avant « Valider ».
+  /** Niveau qui attend le tap où poser une pièce de 4 × 4 m (« Ajouter une pièce »). */
+  const placingRoom = ref<string | null>(null)
+  /** Un id libre dans la maison de la séance (les pièces et niveaux nés compris). */
+  function freeId(prefix: string, used: Iterable<string>): string {
+    const taken = new Set(used)
+    let n = 1
+    while (taken.has(`${prefix}-${n}`)) n++
+    return `${prefix}-${n}`
+  }
+  function addRoom(levelId: string, points: Vec2[]): void {
+    const v = editView.value
+    if (!v) return
+    const ids = [...v.rooms.map((r) => r.id), ...(editDraft.value?.newRooms ?? []).map((r) => r.id)]
+    const id = freeId('piece', ids)
+    const name = t('structure.newRoomName', { n: v.rooms.length + 1 })
+    pushEdit({ newRooms: [{ id, levelId }], shapes: { [id]: points }, rooms: { [id]: { name } } })
+    selectRoom(id)
+  }
+  /** Une pièce de l'autre côté du mur choisi : la longueur du mur sur 3 m, cloison partagée. */
+  function addRoomAgainstWall(roomId: string, edge: number): void {
+    const base = editBase()
+    const room = editView.value?.rooms.find((r) => r.id === roomId)
+    if (base && room) addRoom(room.levelId, roomAgainstWall(base, roomId, edge))
+  }
+  /** Le niveau où l'on posera : celui de l'onglet, sinon le plus bas. */
+  const roomTargetLevelId = computed<string | null>(() => focusedLevelId.value ?? levels.value.at(-1)?.id ?? null)   // trié du haut vers le bas
+  function startPlacingRoom(): void { placingRoom.value = roomTargetLevelId.value }
+  function cancelPlacingRoom(): void { placingRoom.value = null }
+  function placeRoomAt(xy: Vec2): void {
+    const levelId = placingRoom.value
+    const base = editBase()
+    placingRoom.value = null
+    if (levelId && base) addRoom(levelId, rectRoomAt(base, levelId, xy))
+  }
+  function removeRoom(roomId: string): void {
+    pushEdit({ removeRooms: [roomId] })
+    if (selectedRoomId.value === roomId) selectRoom(null)
+  }
+  function setRoomIdentity(roomId: string, ident: { name?: string; kind?: RoomKind }): void {
+    pushEdit({ rooms: { [roomId]: ident } })
+  }
+  function addLevel(side: NewLevelSide): void {
+    const v = editView.value
+    if (!v) return
+    const id = freeId('niveau', [...v.levels.map((l) => l.id), ...(editDraft.value?.newLevels ?? []).map((l) => l.id)])
+    // « Étage 2 » au-dessus d'un rez-de-chaussée et d'un étage : on compte les niveaux habités (ou nés
+    // dans la séance), pas le niveau vide du toit
+    const born = new Set((editDraft.value?.newLevels ?? []).map((l) => l.id))
+    const storeys = v.levels.filter((l) => born.has(l.id) || v.rooms.some((r) => r.levelId === l.id)).length
+    const name = side === 'above' ? t('structure.newLevelAbove', { n: storeys }) : t('structure.newLevelBelow')
+    pushEdit({ newLevels: [{ id, name, side }] })
+    focusLevel(id)
+  }
+  /** Un niveau se retire vide : ni pièce, ni appareil, ni champ, ni place, ni toit dessus. */
+  function levelRemovable(levelId: string): boolean {
+    const v = editView.value
+    if (!v || v.levels.length <= 1) return false
+    return !v.rooms.some((r) => r.levelId === levelId) && !v.devices.some((d) => d.levelId === levelId)
+      && !v.site.parkings.some((p) => p.levelId === levelId) && !(v.arrays ?? []).some((a) => a.levelId === levelId)
+      && v.roof?.levelId !== levelId
+  }
+  function removeLevel(levelId: string): void {
+    if (!levelRemovable(levelId)) return
+    pushEdit({ removeLevels: [levelId] })
+    if (focusedLevelId.value === levelId) focusLevel(null)
+  }
+
   const canUndoEdit = computed(() => editStep.value > 0)
   const canRedoEdit = computed(() => editStep.value < editHistory.value.length)
   function undoEdit() { if (canUndoEdit.value) editStep.value-- }
@@ -509,7 +599,7 @@ export const useHouseStore = defineStore('house', () => {
   const editBlocking = computed<string[]>(() => editOutcome.value?.blocking ?? [])
   const editWarnings = computed<string[]>(() => editOutcome.value?.warnings ?? [])
   /** Abandonne le brouillon : la scène revient à la maison écrite. */
-  function discardEdit() { editHistory.value = []; editStep.value = 0; shapeTransient.value = null; dragBase = null }
+  function discardEdit() { editHistory.value = []; editStep.value = 0; shapeTransient.value = null; dragBase = null; placingRoom.value = null }
   const savingEdit = ref(false)
   /** « Valider » : toute la séance d'un coup ; en cas de refus, le brouillon reste là. */
   async function saveEdit(): Promise<boolean> {
@@ -1681,6 +1771,7 @@ export const useHouseStore = defineStore('house', () => {
     focusedLevelId, gardenFocus, selectedRoomId, selectedLevelId, selectedKey, floorTab, selectedRoom, selectedZone, selectedDevice,
     roomFinish, facadeFinish, setRoomFinish, setFacadeFinish, canUndoEdit, canRedoEdit, undoEdit, redoEdit, editDirty, editBlocking, editWarnings, discardEdit, savingEdit, saveEdit,
     coupleWalls, shapeEditing, shapeSelection, shapeOf, pushRoomWall, setSideLength, addCorner, removeCorner, beginShapeDrag, previewRoomWall, previewCorner, endShapeDrag,
+    placingRoom, roomTargetLevelId, startPlacingRoom, cancelPlacingRoom, placeRoomAt, addRoomAgainstWall, removeRoom, setRoomIdentity, addLevel, levelRemovable, removeLevel,
     load, setFloorTab, focusLevel, selectRoom, selectLevel, selectDevice, clearSelection, backToHome, backFromRoom, backFromDevice, houseDeviceFor, renameDevice, setDeviceTuning, bodyColorPreview, previewBodyColor, setRoomOrder, saveRenderTuning, saveRelief, saveTerrain,
     journalOverlay, journalFocus, journalActive, showJournal, hideJournal, focusJournalPoint, markJournalPoint,
     placing, saving, draft, canRevert, isProvisional, startPlacing, startPlacingNew, stopPlacing, previewPosition, previewHeight, savePlacement, revertPlacement, removePlacement,

@@ -20,6 +20,9 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 // Deux matières ici : les places de stationnement (visibles sans défiler), et les fenêtres de toit —
 // elles n'appartiennent à aucun mur, et l'onglet Toit n'ouvre aucune pièce : sans cette section,
 // on ne pouvait pas les poser depuis la vue où le toit est visible.
+//
+// En tête, la STRUCTURE : ajouter une pièce (au tap, sur le niveau de l'onglet), un étage ou un
+// sous-sol, retirer le niveau de l'onglet s'il est vide. Tout entre dans le brouillon de la séance.
 const house = useHouseStore()
 const settings = useSettingsStore()
 const { t } = useI18n()
@@ -63,13 +66,18 @@ function openOutline() {
 const costume = computed(() => !styleById(settings.sceneStyle).assets)
 function startRoof() { house.startPlacingOpening('roof-window') }
 
+const levelName = (id: string | null) => (id ? house.index?.levelsById.get(id)?.name ?? '' : '')
+const targetLevel = computed(() => levelName(house.roomTargetLevelId))
+/** Le niveau de l'onglet, celui qu'on retirerait ; aucun sur « Tout ». */
+const tabLevel = computed(() => house.focusedLevelId)
+
 // Une section ouverte à la fois, retenue d'une visite à l'autre (confort de ce poste seulement).
-type Section = 'roof' | 'parking' | 'garden' | 'facade'
+type Section = 'structure' | 'roof' | 'parking' | 'garden' | 'facade'
 const STORE_KEY = 'kasbah.houseEdit.section'
 function remembered(): Section | null {
   try {
     const v = localStorage.getItem(STORE_KEY)
-    return v === 'roof' || v === 'parking' || v === 'garden' || v === 'facade' ? v : null
+    return v === 'structure' || v === 'roof' || v === 'parking' || v === 'garden' || v === 'facade' ? v : null
   } catch { return null }
 }
 const open = ref<Section | null>(remembered())
@@ -78,6 +86,7 @@ function toggle(s: Section) {
   if (house.placingOpening) house.cancelPlacingOpening()
   if (house.placingParking) house.cancelPlacingParking()
   if (house.placingGarden) house.cancelPlacingGarden()
+  if (house.placingRoom) house.cancelPlacingRoom()
   open.value = open.value === s ? null : s
   try { localStorage.setItem(STORE_KEY, open.value ?? '') } catch { /* stockage indisponible : on oublie */ }
 }
@@ -95,6 +104,27 @@ function toggle(s: Section) {
       </button>
     </div>
   </div>
+
+  <EditSection :title="$t('structure.section')" :meta="String(house.effective?.rooms.length ?? 0)" :open="open === 'structure'" @toggle="toggle('structure')">
+    <div class="block">
+      <EditBar />
+      <!-- même boîte armée ou non (« Annuler ») ; la consigne a sa place réservée -->
+      <button v-if="!house.placingRoom" type="button" class="pill add" :disabled="house.savingEdit || !house.roomTargetLevelId" @click="house.startPlacingRoom()">
+        <StrokeIcon name="plus" :size="16" /> {{ $t('structure.addRoom') }}
+      </button>
+      <button v-else type="button" class="pill add add--armed" @click="house.cancelPlacingRoom()">{{ $t('opening.cancel') }}</button>
+      <p class="muted hint hint--3">{{ $t(house.placingRoom ? 'structure.placeRoomHint' : 'structure.addRoomHint', { level: targetLevel }) }}</p>
+      <div class="pair">
+        <button type="button" class="pill add" :disabled="house.savingEdit" @click="house.addLevel('above')">{{ $t('structure.addAbove') }}</button>
+        <button type="button" class="pill add" :disabled="house.savingEdit" @click="house.addLevel('below')">{{ $t('structure.addBelow') }}</button>
+      </div>
+      <button type="button" class="pill add" :disabled="house.savingEdit || !tabLevel || !house.levelRemovable(tabLevel)" @click="tabLevel && house.removeLevel(tabLevel)">
+        <StrokeIcon name="trash" :size="16" />
+        <span class="ellipsis">{{ tabLevel ? $t('structure.removeLevel', { level: levelName(tabLevel) }) : $t('structure.removeLevelNone') }}</span>
+      </button>
+      <p class="muted hint hint--2">{{ tabLevel ? $t('structure.removeLevelHint') : $t('structure.removeLevelPick') }}</p>
+    </div>
+  </EditSection>
 
   <EditSection :title="$t('opening.roofList')" :meta="String(roofWindows.length)" :open="open === 'roof'" @toggle="toggle('roof')">
     <div class="block">
@@ -158,6 +188,10 @@ function toggle(s: Section) {
 .done { flex: none; gap: 6px; }
 .title { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
 .hint { font-size: 12px; margin: 0; min-height: 32px; }
+/* lignes réservées : armé ou non, niveau choisi ou non, la consigne garde sa hauteur */
+.hint--2, .hint--3 { line-height: 1.5; }
+.hint--2 { min-height: 3em; }
+.hint--3 { min-height: 4.5em; }
 .block { display: grid; gap: 8px; }
 .foot { margin-top: 12px; }
 .outline { margin-top: 12px; }
@@ -172,6 +206,9 @@ function toggle(s: Section) {
 .op-row__name { font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .op-row__sub { font-size: 12px; font-variant-numeric: tabular-nums; }
 .empty { font-size: 13px; margin: 0; }
-.add { width: 100%; justify-content: center; gap: 8px; }
+.add { width: 100%; min-width: 0; justify-content: center; gap: 8px; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pair .add { white-space: normal; line-height: 1.2; text-align: center; }
+.ellipsis { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .add--armed { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 </style>

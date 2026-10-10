@@ -213,13 +213,6 @@ const houseStats = computed(() => {
                 </div>
                 <button type="button" class="pill pill--sm" @click="openTuning()">{{ $t('render.tuning.open') }}</button>
               </div>
-              <div class="auto-row auto-row--default">
-                <div class="min0">
-                  <div class="auto-row__name">{{ $t('relief.title') }}</div>
-                  <div class="muted small">{{ $t('relief.hint') }}</div>
-                </div>
-                <button type="button" class="pill pill--sm" @click="openRelief()">{{ $t('relief.open') }}</button>
-              </div>
             </div>
             <!-- les deux segmentés reprennent TOUTE la largeur du bloc : leurs quatre libellés ne
                  se coupent pas et ne s'abrègent pas, ils demandent plus qu'une demi-colonne -->
@@ -280,6 +273,14 @@ const houseStats = computed(() => {
               </div>
               <v-switch :model-value="settings.houseEditing" hide-details density="compact"
                         @update:model-value="(v: boolean | null) => setHouseEditing(v === true)" />
+            </div>
+            <!-- le relief et le contour s'écrivent dans le fichier de la maison, comme le reste du mode -->
+            <div class="auto-row">
+              <div class="min0">
+                <div class="auto-row__name">{{ $t('relief.title') }}</div>
+                <div class="muted small">{{ $t('relief.hint') }}</div>
+              </div>
+              <button type="button" class="pill pill--sm" @click="openRelief()">{{ $t('relief.open') }}</button>
             </div>
           </section>
           <section v-if="properties.switchable" class="card block">

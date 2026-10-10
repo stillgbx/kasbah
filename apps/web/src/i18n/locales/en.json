@@ -1258,5 +1258,35 @@
     "area": "{m2} m² (measured)",
     "blocking": "Cannot apply",
     "openingNoFit": "{room} — {opening} no longer fits on its wall"
+  },
+  "structure": {
+    "section": "Rooms and levels",
+    "newRoomName": "Room {n}",
+    "newLevelAbove": "Floor {n}",
+    "newLevelBelow": "Basement",
+    "addRoom": "Add a room",
+    "addRoomHint": "Created on “{level}”, the current tab’s level. For a neighbouring room, pick a wall in a room’s Dimensions tab.",
+    "placeRoomHint": "Tap the ground: a 4 × 4 m room is created on “{level}”, to be adjusted in Dimensions.",
+    "addAbove": "Add a floor",
+    "addBelow": "Add a basement",
+    "removeLevel": "Remove “{level}”",
+    "removeLevelNone": "Remove a level",
+    "removeLevelHint": "Only an empty level can be removed: no room, device, panel or roof on it.",
+    "removeLevelPick": "Pick the level in the tabs first.",
+    "roomAgainstWall": "Add a room on this side",
+    "identity": "Room",
+    "name": "Name",
+    "kind": "Type",
+    "kinds": {
+      "room": "Room",
+      "corridor": "Corridor",
+      "stairs": "Stairs",
+      "garage": "Garage",
+      "terrace": "Terrace",
+      "balcony": "Balcony"
+    },
+    "removeRoom": "Remove the room",
+    "removeRoomHint": "Its devices stay known, with no place in the 3D view. Can be undone until “Apply”.",
+    "roofWindowUnder": "{room} — {opening} is no longer under the roof, which moved up to the new floor: remove this roof window, or the floor"
   }
 }

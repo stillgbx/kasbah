@@ -150,6 +150,9 @@ watch(() => house.placingOpening, (armed) => scene.setPlacingOpening(armed))
 // garage) est décidé par le magasin, comme pour une ouverture posée sur un mur.
 scene.onGroundTap((xy, levelId) => { void house.placeParkingAt(xy, levelId) })
 watch(() => house.placingParking, (armed) => scene.setPlacingParking(!!armed))
+// mode « poser une pièce » : le tap au sol donne le centre d'un carré de 4 m, sur le niveau armé
+scene.onRoomPlaceTap((xy) => house.placeRoomAt(xy))
+watch(() => house.placingRoom, (armed) => scene.setPlacingRoom(!!armed))
 scene.onRoomTap((roomId) => {
   // pendant le réglage d'une ouverture, d'une place ou d'un arbre, un tap sur le sol d'une pièce
   // OUVRE cette pièce : on quitte le réglage (chaque geste y est déjà écrit) sans repasser par le fil
@@ -181,6 +184,7 @@ scene.onBackgroundTap(() => {
   if (house.placingOpening) { house.cancelPlacingOpening(); return }
   if (house.placingParking) { house.cancelPlacingParking(); return }
   if (house.placingGarden) { house.cancelPlacingGarden(); return }
+  if (house.placingRoom) { house.cancelPlacingRoom(); return }
   // un élément du jardin réglé se quitte par un tap à côté : rien d'autre à fermer derrière lui
   if (house.selectedGardenId) { house.selectGardenItem(null); return }
   if (!house.editingArrayId && !house.selectedOpeningId && !house.selectedParkingId) house.clearSelection()

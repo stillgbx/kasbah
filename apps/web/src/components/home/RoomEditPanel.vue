@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { OPENING_TYPES, openingLabel, type Opening } from '@kasbah/shared'
+import { OPENING_TYPES, ROOM_KINDS, openingLabel, type Opening, type RoomKind } from '@kasbah/shared'
 import { useHouseStore } from '../../stores/house'
 import { useSettingsStore } from '../../stores/settings'
 import { styleById } from '../../three/styles'
@@ -16,9 +16,10 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 // relève la maison, on ne l'allume pas — et le même tap sur la même pièce donne toujours la même
 // chose, sans onglet à retenir dans le panneau.
 //
-// Trois matières : les ouvertures de la pièce, son apparence (finitions du sol et des murs, en
-// brouillon jusqu'à « Valider »), et les places de stationnement qu'elle porte — on ajoute la place
-// d'un garage DEPUIS le garage, et la place créée prend son niveau.
+// Quatre matières : son nom et son type, les ouvertures de la pièce, son apparence (finitions du sol
+// et des murs, en brouillon jusqu'à « Valider »), et les places de stationnement qu'elle porte — on
+// ajoute la place d'un garage DEPUIS le garage, et la place créée prend son niveau. En pied, la
+// retirer (dans le brouillon aussi : annulable jusqu'à « Valider »).
 const emit = defineEmits<{ back: [] }>()
 const house = useHouseStore()
 const { t } = useI18n()
@@ -47,6 +48,17 @@ onBeforeUnmount(() => { house.shapeEditing = false; house.shapeSelection = null 
 const settings = useSettingsStore()
 /** Un style « costume » garde sa palette : les finitions ne s'y voient pas, on le dit. */
 const costume = computed(() => !styleById(settings.sceneStyle).assets)
+
+/** Un nom vide ne s'écrit pas : le champ reprend celui de la pièce. */
+function rename(ev: Event) {
+  const input = ev.target as HTMLInputElement
+  const name = input.value.trim()
+  if (!room.value || !name || name === room.value.name) { input.value = room.value?.name ?? ''; return }
+  house.setRoomIdentity(room.value.id, { name })
+}
+function setKind(ev: Event) {
+  if (room.value) house.setRoomIdentity(room.value.id, { kind: (ev.target as HTMLSelectElement).value as RoomKind })
+}
 </script>
 
 <template>
@@ -61,6 +73,17 @@ const costume = computed(() => !styleById(settings.sceneStyle).assets)
         </div>
       </div>
     </div>
+
+    <section class="block">
+      <div class="section-label">{{ $t('structure.identity') }}</div>
+      <div class="ident">
+        <input class="field" type="text" maxlength="60" :value="room.name" :aria-label="$t('structure.name')" :disabled="house.savingEdit"
+               @change="rename" @keydown.enter="($event.target as HTMLInputElement).blur()">
+        <select class="field" :value="room.kind" :aria-label="$t('structure.kind')" :disabled="house.savingEdit" @change="setKind">
+          <option v-for="k in ROOM_KINDS" :key="k" :value="k">{{ $t(`structure.kinds.${k}`) }}</option>
+        </select>
+      </div>
+    </section>
 
     <section class="block">
       <div class="section-label">{{ $t('opening.list') }}</div>
@@ -114,6 +137,13 @@ const costume = computed(() => !styleById(settings.sceneStyle).assets)
     </section>
 
     <ParkingRows :list="parkings" :level-id="room.levelId" />
+
+    <section class="block">
+      <button type="button" class="pill add" :disabled="house.savingEdit" @click="house.removeRoom(room.id)">
+        <StrokeIcon name="trash" :size="16" /> {{ $t('structure.removeRoom') }}
+      </button>
+      <p class="muted hint">{{ $t('structure.removeRoomHint') }}</p>
+    </section>
   </template>
 </template>
 
@@ -125,6 +155,12 @@ const costume = computed(() => !styleById(settings.sceneStyle).assets)
 .title { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
 .sub { font-size: 13px; margin-top: 2px; }
 .block { display: grid; gap: 8px; }
+.ident { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 8px; }
+.field {
+  min-width: 0; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface);
+  color: var(--text); font: inherit; font-size: 14px;
+}
+.field:focus { outline: none; border-color: var(--accent); }
 .rows { display: grid; gap: 8px; }
 /* même ligne que dans le panneau des appareils, sans interrupteur : c'est un <button> */
 .op-row {

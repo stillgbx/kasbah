@@ -88,6 +88,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   const gardenDrag = new Set<Handler<[string, [number, number]]>>()
   const gardenDrop = new Set<Handler<[string]>>()
   const gardenPlaceTap = new Set<Handler<[[number, number]]>>()
+  const roomPlaceTap = new Set<Handler<[[number, number]]>>()
   const shapeWall = new Set<Handler<[number, number, boolean]>>()
   const shapeCorner = new Set<Handler<[number, [number, number], boolean]>>()
   const shapeSelect = new Set<Handler<[ShapeSelection]>>()
@@ -124,6 +125,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     scene.on('gardenDrag', (id, xy) => gardenDrag.forEach((f) => f(id, xy)))
     scene.on('gardenDrop', (id) => gardenDrop.forEach((f) => f(id)))
     scene.on('gardenPlaceTap', (xy) => gardenPlaceTap.forEach((f) => f(xy)))
+    scene.on('roomPlaceTap', (xy) => roomPlaceTap.forEach((f) => f(xy)))
     scene.on('shapeWall', (e, d, fin) => shapeWall.forEach((f) => f(e, d, fin)))
     scene.on('shapeCorner', (i, xy, fin) => shapeCorner.forEach((f) => f(i, xy, fin)))
     scene.on('shapeSelect', (sel) => shapeSelect.forEach((f) => f(sel)))
@@ -239,12 +241,14 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     onParkingDrop: (f: Handler<[string]>) => { parkingDrop.add(f) },
     setEditingGarden: (on: boolean) => scene?.setEditingGarden(on),
     setPlacingGarden: (on: boolean) => scene?.setPlacingGarden(on),
+    setPlacingRoom: (on: boolean) => scene?.setPlacingRoom(on),
     setSelectedGarden: (id: string | null) => scene?.setSelectedGarden(id),
     focusGarden: (id: string) => scene?.focusGarden(id),
     onGardenTap: (f: Handler<[string]>) => { gardenTap.add(f) },
     onGardenDrag: (f: Handler<[string, [number, number]]>) => { gardenDrag.add(f) },
     onGardenDrop: (f: Handler<[string]>) => { gardenDrop.add(f) },
     onGardenPlaceTap: (f: Handler<[[number, number]]>) => { gardenPlaceTap.add(f) },
+    onRoomPlaceTap: (f: Handler<[[number, number]]>) => { roomPlaceTap.add(f) },
     onPlaceTap: (f: Handler<[[number, number]]>) => { placeTap.add(f) },
     setShapeEditing: (roomId: string | null) => scene?.setShapeEditing(roomId),
     setShapeOutline: (points: readonly [number, number][]) => scene?.setShapeOutline(points),

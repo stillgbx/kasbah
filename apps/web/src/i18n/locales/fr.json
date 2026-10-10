@@ -1273,5 +1273,35 @@
     "area": "{m2} m² (cotes)",
     "blocking": "Impossible de valider",
     "openingNoFit": "{room} — {opening} ne tient plus sur son mur"
+  },
+  "structure": {
+    "section": "Pièces et niveaux",
+    "newRoomName": "Pièce {n}",
+    "newLevelAbove": "Étage {n}",
+    "newLevelBelow": "Sous-sol",
+    "addRoom": "Ajouter une pièce",
+    "addRoomHint": "Elle naît sur « {level} », le niveau de l’onglet. Pour une pièce voisine : un mur choisi dans l’onglet Dimensions d’une pièce.",
+    "placeRoomHint": "Touchez le sol : une pièce de 4 × 4 m naît sur « {level} », à recaler ensuite dans Dimensions.",
+    "addAbove": "Ajouter un étage",
+    "addBelow": "Ajouter un sous-sol",
+    "removeLevel": "Retirer « {level} »",
+    "removeLevelNone": "Retirer un niveau",
+    "removeLevelHint": "Seul un niveau vide se retire : ni pièce, ni appareil, ni panneau, ni toit dessus.",
+    "removeLevelPick": "Choisissez d’abord le niveau dans les onglets.",
+    "roomAgainstWall": "Ajouter une pièce de ce côté",
+    "identity": "Pièce",
+    "name": "Nom",
+    "kind": "Type",
+    "kinds": {
+      "room": "Pièce",
+      "corridor": "Couloir",
+      "stairs": "Escalier",
+      "garage": "Garage",
+      "terrace": "Terrasse",
+      "balcony": "Balcon"
+    },
+    "removeRoom": "Retirer la pièce",
+    "removeRoomHint": "Ses appareils restent connus, sans place dans la vue 3D. Annulable jusqu’à « Valider ».",
+    "roofWindowUnder": "{room} — {opening} n’est plus sous le toit, monté sur le nouvel étage : retirez cette fenêtre de toit, ou l’étage"
   }
 }

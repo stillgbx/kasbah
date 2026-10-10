@@ -130,3 +130,29 @@ export function removeVertex(doc: SurveyDoc, roomId: string, index: number): Sha
   pts.splice(index, 1)
   return { [roomId]: toSurvey(c, roomId, pts) }
 }
+
+/** Profondeur d'une pièce posée contre un mur (m). */
+export const NEW_ROOM_DEPTH = 3
+/** Côté d'une pièce posée au tap (m). */
+export const NEW_ROOM_SIDE = 4
+
+/**
+ * Les cotes d'une pièce qui naît CONTRE le mur `edge` de `roomId` : un rectangle de la longueur du
+ * mur sur `depth` m, de l'autre côté. Il partage exactement la ligne du relevé : `fitSurvey` en fait
+ * une cloison mitoyenne, et le mur coulissé ensuite entraîne les deux pièces.
+ */
+export function roomAgainstWall(doc: SurveyDoc, roomId: string, edge: number, depth = NEW_ROOM_DEPTH): Vec2[] {
+  const c = ctxOf(doc)
+  const e = surveyEdges(rawOf(c, roomId))[edge]
+  if (!e) throw new Error(`room "${roomId}" has no wall ${edge}`)
+  const out = (p: Vec2): Vec2 => [p[0] + e.n[0] * depth, p[1] + e.n[1] * depth]
+  return toSurvey(c, roomId, [e.b, e.a, out(e.a), out(e.b)])
+}
+
+/** Les cotes d'un rectangle `w` × `d` m centré sur `at` (repère de la maison), coins calés au décimètre. */
+export function rectRoomAt(doc: SurveyDoc, levelId: string, at: Vec2, w = NEW_ROOM_SIDE, d = NEW_ROOM_SIDE): Vec2[] {
+  const c = ctxOf(doc)
+  const snap = (v: number) => Math.round(v * 10) / 10
+  const x0 = snap(at[0] - w / 2), y0 = snap(at[1] - d / 2)
+  return [[x0, y0], [x0 + w, y0], [x0 + w, y0 + d], [x0, y0 + d]].map((p) => houseToSurveyPoint(p as Vec2, levelId, c.conv))
+}

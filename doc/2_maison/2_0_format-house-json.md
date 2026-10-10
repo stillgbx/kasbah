@@ -1,7 +1,7 @@
 # Format house.json : décisions et validation
 
-> Dernière mise à jour : 2026-10-08
-> Sources : `packages/shared/src/house/{schema,validate,lookup,geo}.ts`, `docs/house-json.md`, `house/demo-house.json`, `packages/shared/src/house/autoplace.ts`, `house/fit-survey.mjs`, `house/maison.json`, `packages/shared/src/house/place.ts`, `apps/server/src/config/house.ts`, `packages/shared/src/house/panels.ts`, `packages/shared/src/house/openings.ts`, `packages/shared/src/house/parking.ts`, `packages/shared/src/house/geometry/relief.ts` (`site.relief`), `house/demos/*.json`, `apps/server/src/config/properties.ts`
+> Dernière mise à jour : 2026-10-10
+> Sources : `packages/shared/src/house/{schema,validate,lookup,geo}.ts`, `docs/house-json.md`, `house/demo-house.json`, `packages/shared/src/house/autoplace.ts`, `house/fit-survey.mjs`, `house/maison.json`, `packages/shared/src/house/place.ts`, `apps/server/src/config/house.ts`, `packages/shared/src/house/panels.ts`, `packages/shared/src/house/openings.ts`, `packages/shared/src/house/parking.ts`, `packages/shared/src/house/geometry/relief.ts` (`site.relief`), `house/demos/*.json`, `apps/server/src/config/properties.ts`, `packages/shared/src/house/structure.ts`
 
 La **référence complète du format** (champs, exemples) est `docs/house-json.md`. Cette page
 explique les décisions et ce que la validation garantit.
@@ -1244,3 +1244,45 @@ la même origine, donc le constat vaut pour eux aussi (non revérifié le 2026-1
 
 Sources : `house/demos/*.json`, `packages/shared/src/house/demos.test.ts`,
 `apps/server/src/config/properties.ts`, `apps/web/src/api/demoProperties.ts`.
+
+### Mise à jour 2026-10-10 — pièces et niveaux qui naissent ou disparaissent dans la séance d'édition
+
+Suite de « les cotes deviennent la donnée » (2026-10-03 bis) : la séance d'édition porte aussi la
+**structure**. Demande de l'utilisateur, préalable à la création d'une maison depuis une installation
+neuve : ajouter une pièce (contre un mur choisi, ou au tap), un étage ou un sous-sol, retirer une pièce
+ou un niveau vide, changer le nom et le type d'une pièce.
+
+**Patch** (`packages/shared/src/house/structure.ts`, champs ajoutés à `houseEditPatchSchema`) :
+`newLevels[] { id, name, shortName?, side: 'above' | 'below' }`, `removeLevels[]`,
+`newRooms[] { id, levelId }`, `removeRooms[]`, `rooms: { [id]: { name?, kind? } }`. Une pièce qui
+naît a ses **cotes dans `shapes`**, comme les autres : tous les gestes de l'onglet Dimensions marchent
+sur elle. Tous optionnels : une séance qui ne s'en sert pas se comporte exactement comme avant.
+
+**Application** (`applyHouseEditToJson`, dans l'ordre) : conversion en relevé (`withSurveyPoints`) si
+une forme, une pièce ou un type change ; structure (`applyStructureToJson`) ; apparence ; formes ;
+`fitSurvey`. Ce que la séance dit d'une pièce qu'elle retire (cotes, finitions) est ignoré.
+
+- **Étage** : posé sur le plus haut niveau HABITÉ (qui a des pièces, ou né dans la séance) —
+  élévation = son élévation + sa hauteur (`height` ou `defaults.levelHeight`) + `slabThickness` ;
+  hauteur = `levelHeight`. Les niveaux vides au-dessus (le niveau du toit, cf. 2026-09-11) montent de
+  `levelHeight + slabThickness`. **Sous-sol** : sous le plus bas, mis en tête de `levels`. Deux étages
+  de suite s'empilent.
+- **Pièce retirée** : elle sort de `roomOrder` ; ses appareils perdent `position`, `roomId`,
+  `levelId`, `zoneId`, `openingId` (connus sans place, cf. 2026-09-14) ; un appareil lié à une de ses
+  ouvertures perd `openingId`. La voisine regagne sa demi-cloison au recalcul.
+- **Niveau retiré** : seulement vide (ni pièce, ni appareil, ni place, ni champ de panneaux, ni
+  `roof.levelId`) — sinon motif bloquant `<id> : niveau non vide`.
+- **Le toit suit** (`roof.levelId`) le plus haut niveau qui a des pièces murées, dès que la séance
+  ajoute ou retire une pièce ou un niveau ; calculé AVANT le contrôle des niveaux retirés (l'étage
+  qu'on vide puis retire n'est plus celui qui porte le toit). Conséquence : une fenêtre de toit restée
+  sous un nouvel étage habité est refusée par `parseHouse` — l'écran le dit (`structure.roofWindowUnder`).
+- **Type** `room` : non écrit s'il ne l'était pas (défaut du schéma).
+
+**Gestes** (`shape.ts`) : `roomAgainstWall(doc, roomId, edge, depth = 3)` — rectangle de la longueur
+du mur sur 3 m, de l'autre côté, sur la MÊME ligne de relevé : `fitSurvey` en fait une cloison, ce qui
+**reprend une demi-cloison à la pièce existante** (un mur de façade devient une cloison centrée sur la
+ligne) ; `rectRoomAt(doc, levelId, at, 4, 4)` — carré centré, coins calés au décimètre.
+
+Tests : `packages/shared/src/house/structure.test.ts` (16).
+
+Sources : `packages/shared/src/house/{structure,edit,shape}.ts`.
