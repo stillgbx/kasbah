@@ -343,3 +343,13 @@ propriétaire. Sans ce fichier, rien n'est bloqué.
 - `npm run check:private` : tout l'arbre suivi, à la demande.
 - La sortie nomme le fichier et la ligne, jamais la valeur. Un refus se corrige en retirant la valeur,
   jamais par `--no-verify`.
+
+### Mise à jour 2026-10-10 — la démonstration n'est plus « sans KASBAH_HOUSE_FILE »
+
+La mise à jour du 2026-10-08 ci-dessus décrit un serveur sans `KASBAH_HOUSE_FILE` comme « une
+démonstration à trois propriétés ». Depuis le 2026-10-10, c'est le catalogue de propriétés et son
+interrupteur Démo | Réel (`5_1_configuration-env.md`, `../1_architecture/1_2_serveur-et-plugins.md`).
+Les configs `kasbah-demo-server` et `kasbah-demo` restent valides : la variable vide et
+`KASBAH_STATE_DIR=.state/demo` leur donnent leur propre `property-mode.json`.
+
+Sources : `apps/server/src/main.ts`, `.claude/launch.json`.

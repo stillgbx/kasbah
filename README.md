@@ -24,6 +24,104 @@ Application web (**tablette, ordinateur, téléphone**) qui montre la maison et 
 Captures des trois propriétés de démonstration, sur la simulation (aucun appareil réel). D'autres vues sont
 montrées dans la fiche de chaque plugin ([docs/plugins](docs/plugins)).
 
+## Démarrage
+
+### Machine neuve (Windows)
+
+Les écrans n'installent rien : tout se passe sur la machine du serveur.
+
+| Outil | Requis pour | Installation |
+|---|---|---|
+| Node ≥ 22, npm ≥ 10, git | tout | `winget install OpenJS.NodeJS.LTS` puis `winget install Git.Git` |
+| ffmpeg | caméras (relais RTSP), lecture musicale (Cast / Sonos), matières 3D | `winget install Gyan.FFmpeg` |
+| yt-dlp | YouTube Music, Mixcloud | `yt-dlp.exe` dans `_external/` (`YTM_YTDLP_PATH`, `MIXCLOUD_YTDLP_PATH`) |
+| générateur PO Token + plugin yt-dlp `bgutil` | YouTube Music | voir [wiki, installation](doc/5_setup/5_0_installation-et-scripts.md) |
+
+Rouvrir le terminal après un `winget install` : un processus déjà lancé ne voit pas le nouveau `PATH`.
+
+```bash
+git clone <dépôt> kasbah && cd kasbah
+npm install
+cp apps/server/.env.example apps/server/.env   # puis ajuster (Hue, TaHoma…)
+npm run dev
+```
+
+Pour reprendre une maison existante, recopier depuis l'ancienne machine ce que git ne porte pas : `apps/server/.env`, `apps/server/mcp-users.json` (comptes de l'accès extérieur et des assistants IA), `apps/server/.state/` (jetons et sessions des fabricants, sessions de l'accès extérieur, propriété choisie), `house/properties/` (les maisons, leurs automatisations et leur historique) et `_external/`.
+
+### Lancer
+
+| Commande | Maison | Usage |
+|---|---|---|
+| `npm run dev` | celle choisie dans **Réglages → Propriété** (démo ou réelle) ; `KASBAH_HOUSE_FILE` en impose une | développement, serveur relancé à chaque modification |
+| `npm run house` | idem | la maison réelle au quotidien : serveur **sans** relance automatique, front Vite |
+| `npm run build && npm start` | idem | production de base : tout sur `KASBAH_PORT` (8787), sans Vite |
+
+Si npm bloque le script d'installation d'`esbuild` : `npm approve-scripts esbuild` puis `npm rebuild esbuild`.
+
+- Web (Vite, HMR) : <http://localhost:5173> — accessible depuis un téléphone ou une tablette via l'IP du poste (`host: true`).
+- Serveur : <http://localhost:8787> — `GET /api/health`, `GET /api/house`, `GET /api/devices`, WebSocket `/ws`, serveur MCP `/mcp` (voir [Serveur MCP](#serveur-mcp)).
+
+Sans aucune configuration, le serveur démarre en **démonstration** : trois propriétés fictives (`house/demos/`), chacune peuplée par la simulation, et tout est pilotable immédiatement. Les démos se regardent sans se modifier.
+
+**Votre maison** : **Réglages → Propriété → Créer une propriété** (ou le pavé d'initiales en haut du rail). Un assistant demande le nom, pose le **point 0** sur la carte (un coin de la maison, d'où partent toutes les cotes) et la taille du terrain, puis guide le dessin du contour et des pièces dans le mode édition. Les propriétés réelles vivent dans `house/properties/` (hors git) ; **Réglages → Propriété** passe du mode démo au mode réel et revient quand on veut.
+
+| Propriété | Lieu | Ce qu'elle montre |
+|---|---|---|
+| Les Tilleuls | Dijon | Maison R+1 à toit à deux pans : garage double et ses portes, terrasse d'étage, piscine, jardin en pente, panneaux en toiture et fenêtre de toit motorisée, caméras et sonnette, TV et barre de son, deux voitures et une borne, ambiances |
+| Les Embruns | Pornic | Plain-pied contemporain en L à toit plat : panneaux sur châssis, puits de lumière, brise-soleil orientables, carport, voile d'ombrage |
+| Le Belvédère | Lille | Appartement au 4e étage : balcon, rideaux motorisés, interphone, ni toit, ni jardin, ni voiture |
+
+On passe d'une démo à l'autre par le pavé d'initiales en haut du rail, ou **Réglages → Propriété** ; tous les écrans suivent. Les lieux sont des espaces publics, les noms sont fictifs.
+
+Front seul, sans serveur ni écriture dans la maison (les trois propriétés aussi, le choix est retenu par le navigateur) :
+
+```bash
+VITE_INPROCESS_MOCK=1 npm run dev -w @kasbah/web
+```
+
+### Production
+
+Sur le réseau local, l'interface et l'API ne demandent ni compte ni HTTPS : **réseau local de confiance**. Depuis Internet, tout passe par une adresse publique HTTPS où une connexion est exigée (voir [Accès depuis l'extérieur](#accès-depuis-lextérieur)).
+
+```bash
+npm run build      # web → apps/web/dist, serveur → apps/server/dist/main.js (bundle esbuild)
+npm start          # sert l'app web et l'API sur KASBAH_PORT (8787)
+```
+
+Depuis un autre appareil du réseau : `http://<ip-du-serveur>:8787`.
+
+### Accès depuis l'extérieur
+
+Depuis un téléphone hors de la maison, sans VPN : un **proxy inverse HTTPS** (celui du NAS Synology, ou un tunnel) publie Kasbah sous une adresse publique, déclarée dans `MCP_PUBLIC_URL`. Kasbah reconnaît ce nom (`Host`, ou `X-Forwarded-Host`) et y exige une **connexion** :
+
+- **Sous l'adresse publique** : page de connexion, puis toute l'application (interface, API, caméras, WebSocket). Le serveur MCP y répond aussi, avec ses propres jetons (voir [Serveur MCP](#serveur-mcp)).
+- **Sur le réseau local** (`http://<ip>:8787`, `kasbah.home.internal`) : rien ne change, aucun compte demandé. C'est le **nom** qui décide, pas l'endroit : l'adresse publique demande la connexion même depuis la maison (par le proxy, toutes les requêtes arrivent du NAS).
+- **Comptes** : les mêmes que ceux des assistants IA, dans **Réglages → Comptes**, gérés depuis le réseau local seulement (même connecté, l'adresse publique ne les montre pas).
+- **Session** : un cookie de 90 jours, prolongé à chaque usage ; on se connecte une fois par appareil. Changer le mot de passe d'un compte ferme toutes ses sessions (téléphone perdu) ; le retirer aussi. « Se déconnecter » est dans Réglages → Comptes.
+- **Blocage** : après 5 échecs de connexion d'affilée, le compte est bloqué 15 minutes, même avec le bon mot de passe (application et assistants IA ; `KASBAH_LOGIN_MAX_FAILURES`, `KASBAH_LOGIN_LOCK_MINUTES`). Les sessions ouvertes ne sont pas touchées.
+- **App installable** : en HTTPS, le navigateur propose d'installer Kasbah, dès la page de connexion. Sur iPhone, l'app ajoutée à l'écran d'accueil a ses propres cookies : s'y connecter une fois.
+
+**Mise en service sur un NAS Synology** (DSM 6 : Panneau de configuration → Portail des applications → Proxy inversé ; DSM 7 : Portail de connexion → Avancé → Proxy inversé) :
+
+1. **D'abord** `MCP_PUBLIC_URL=https://<adresse>` dans `apps/server/.env`, et relancer Kasbah. Dans l'autre ordre, la règle publierait l'application **sans** connexion dès son enregistrement.
+2. Règle de proxy inversé :
+   - source : HTTPS, nom d'hôte `<adresse>`, port 443, HTTP/2 activé, pas de contrôle d'accès ;
+   - destination : HTTP, IP du poste Kasbah, port 8787 ;
+   - **en-têtes personnalisés** : Créer → WebSocket, qui ajoute `Upgrade: $http_upgrade` et `Connection: $connection_upgrade`. Sans eux, l'état en direct ne passe pas (l'app reste « hors ligne »).
+3. Un certificat Let's Encrypt pour `<adresse>` (Sécurité → Certificat), associé à la règle.
+4. Sur le routeur : le port 443 redirigé vers le NAS.
+5. Lecture sur les enceintes (Cast, Sonos) depuis l'extérieur : `MUSIC_PUBLISH_BASE=http://<ip-du-poste>:8787`, sinon le serveur refuse (une enceinte ne peut pas lire l'adresse publique).
+
+**Vérifier**, depuis le téléphone en 4G : `https://<adresse>/` ouvre la page de connexion, `https://<adresse>/.well-known/oauth-protected-resource` annonce l'adresse **en https** (sinon le proxy ne transmet pas le nom d'origine, et rien n'est protégé : le corriger avant tout). Une fois connecté, une lumière allumée change d'état à l'écran sans recharger.
+
+### Qualité
+
+```bash
+npm test           # vitest, tous les workspaces (shared, mock-sim, server, web)
+npm run typecheck  # tsc / vue-tsc par workspace
+npm run lint       # eslint (flat config, TypeScript + Vue)
+```
+
 ## Architecture
 
 ```
@@ -32,7 +130,7 @@ kasbah/
   apps/server       Node 22 + Fastify 5 — REST + WebSocket, hôte des plugins, sert le build web
   packages/shared   Schémas zod : kinds, états, commandes, protocole, maison + géométrie pure
   packages/mock-sim Moteur de simulation déterministe (plugin `mock` et démo sans serveur)
-  house/            demos/ — trois propriétés de démonstration (maison à deux pans, toit plat, appartement) ; demo-house.json — maison des tests
+  house/            demos/ — trois propriétés de démonstration (maison à deux pans, toit plat, appartement) ; properties/ — vos propriétés (hors git) ; demo-house.json — maison des tests
   doc/              wiki du projet (architecture, plugins, UI, setup)
 ```
 
@@ -138,102 +236,6 @@ Un plugin implémente [`DevicePlugin`](apps/server/src/core/plugin.ts) :
 
 Déclarez-le dans [apps/server/src/plugins/index.ts](apps/server/src/plugins/index.ts). Le modèle d'appareils vit une seule fois dans [packages/shared/src/devices](packages/shared/src/devices). Marche à suivre et liste de contrôle : [doc/3_plugins/3_2_ecrire-un-plugin.md](doc/3_plugins/3_2_ecrire-un-plugin.md).
 
-## Démarrage
-
-### Machine neuve (Windows)
-
-Les écrans n'installent rien : tout se passe sur la machine du serveur.
-
-| Outil | Requis pour | Installation |
-|---|---|---|
-| Node ≥ 22, npm ≥ 10, git | tout | `winget install OpenJS.NodeJS.LTS` puis `winget install Git.Git` |
-| ffmpeg | caméras (relais RTSP), lecture musicale (Cast / Sonos), matières 3D | `winget install Gyan.FFmpeg` |
-| yt-dlp | YouTube Music, Mixcloud | `yt-dlp.exe` dans `_external/` (`YTM_YTDLP_PATH`, `MIXCLOUD_YTDLP_PATH`) |
-| générateur PO Token + plugin yt-dlp `bgutil` | YouTube Music | voir [wiki, installation](doc/5_setup/5_0_installation-et-scripts.md) |
-
-Rouvrir le terminal après un `winget install` : un processus déjà lancé ne voit pas le nouveau `PATH`.
-
-```bash
-git clone <dépôt> kasbah && cd kasbah
-npm install
-cp apps/server/.env.example apps/server/.env   # puis ajuster (Hue, TaHoma…)
-npm run dev
-```
-
-Pour reprendre une maison existante, recopier depuis l'ancienne machine ce que git ne porte pas : `apps/server/.env`, `apps/server/mcp-users.json` (comptes de l'accès extérieur et des assistants IA), `apps/server/.state/` (jetons et sessions des fabricants, sessions de l'accès extérieur), `house/maison.json` (+ `maison.automations.json`, `history/`) et `_external/`.
-
-### Lancer
-
-| Commande | Maison | Usage |
-|---|---|---|
-| `npm run dev` | celle de `KASBAH_HOUSE_FILE` (absent : les trois propriétés de démonstration) | développement, serveur relancé à chaque modification |
-| `npm run house` | idem | la maison réelle au quotidien : serveur **sans** relance automatique, front Vite |
-| `npm run build && npm start` | idem | production de base : tout sur `KASBAH_PORT` (8787), sans Vite |
-
-Si npm bloque le script d'installation d'`esbuild` : `npm approve-scripts esbuild` puis `npm rebuild esbuild`.
-
-- Web (Vite, HMR) : <http://localhost:5173> — accessible depuis un téléphone ou une tablette via l'IP du poste (`host: true`).
-- Serveur : <http://localhost:8787> — `GET /api/health`, `GET /api/house`, `GET /api/devices`, WebSocket `/ws`, serveur MCP `/mcp` (voir [Serveur MCP](#serveur-mcp)).
-
-Sans aucune configuration, le serveur démarre en **démonstration** : trois propriétés fictives (`house/demos/`), chacune peuplée par la simulation, et tout est pilotable immédiatement.
-
-| Propriété | Lieu | Ce qu'elle montre |
-|---|---|---|
-| Les Tilleuls | Dijon | Maison R+1 à toit à deux pans : garage double et ses portes, terrasse d'étage, piscine, jardin en pente, panneaux en toiture et fenêtre de toit motorisée, caméras et sonnette, TV et barre de son, deux voitures et une borne, ambiances |
-| Les Embruns | Pornic | Plain-pied contemporain en L à toit plat : panneaux sur châssis, puits de lumière, brise-soleil orientables, carport, voile d'ombrage |
-| Le Belvédère | Lille | Appartement au 4e étage : balcon, rideaux motorisés, interphone, ni toit, ni jardin, ni voiture |
-
-On passe de l'une à l'autre par le pavé d'initiales en haut du rail, ou **Réglages → Propriété** ; tous les écrans suivent. Les lieux sont des espaces publics, les noms sont fictifs.
-
-Front seul, sans serveur ni écriture dans la maison (les trois propriétés aussi, le choix est retenu par le navigateur) :
-
-```bash
-VITE_INPROCESS_MOCK=1 npm run dev -w @kasbah/web
-```
-
-### Production
-
-Sur le réseau local, l'interface et l'API ne demandent ni compte ni HTTPS : **réseau local de confiance**. Depuis Internet, tout passe par une adresse publique HTTPS où une connexion est exigée (voir [Accès depuis l'extérieur](#accès-depuis-lextérieur)).
-
-```bash
-npm run build      # web → apps/web/dist, serveur → apps/server/dist/main.js (bundle esbuild)
-npm start          # sert l'app web et l'API sur KASBAH_PORT (8787)
-```
-
-Depuis un autre appareil du réseau : `http://<ip-du-serveur>:8787`.
-
-### Accès depuis l'extérieur
-
-Depuis un téléphone hors de la maison, sans VPN : un **proxy inverse HTTPS** (celui du NAS Synology, ou un tunnel) publie Kasbah sous une adresse publique, déclarée dans `MCP_PUBLIC_URL`. Kasbah reconnaît ce nom (`Host`, ou `X-Forwarded-Host`) et y exige une **connexion** :
-
-- **Sous l'adresse publique** : page de connexion, puis toute l'application (interface, API, caméras, WebSocket). Le serveur MCP y répond aussi, avec ses propres jetons (voir [Serveur MCP](#serveur-mcp)).
-- **Sur le réseau local** (`http://<ip>:8787`, `kasbah.home.internal`) : rien ne change, aucun compte demandé. C'est le **nom** qui décide, pas l'endroit : l'adresse publique demande la connexion même depuis la maison (par le proxy, toutes les requêtes arrivent du NAS).
-- **Comptes** : les mêmes que ceux des assistants IA, dans **Réglages → Comptes**, gérés depuis le réseau local seulement (même connecté, l'adresse publique ne les montre pas).
-- **Session** : un cookie de 90 jours, prolongé à chaque usage ; on se connecte une fois par appareil. Changer le mot de passe d'un compte ferme toutes ses sessions (téléphone perdu) ; le retirer aussi. « Se déconnecter » est dans Réglages → Comptes.
-- **Blocage** : après 5 échecs de connexion d'affilée, le compte est bloqué 15 minutes, même avec le bon mot de passe (application et assistants IA ; `KASBAH_LOGIN_MAX_FAILURES`, `KASBAH_LOGIN_LOCK_MINUTES`). Les sessions ouvertes ne sont pas touchées.
-- **App installable** : en HTTPS, le navigateur propose d'installer Kasbah, dès la page de connexion. Sur iPhone, l'app ajoutée à l'écran d'accueil a ses propres cookies : s'y connecter une fois.
-
-**Mise en service sur un NAS Synology** (DSM 6 : Panneau de configuration → Portail des applications → Proxy inversé ; DSM 7 : Portail de connexion → Avancé → Proxy inversé) :
-
-1. **D'abord** `MCP_PUBLIC_URL=https://<adresse>` dans `apps/server/.env`, et relancer Kasbah. Dans l'autre ordre, la règle publierait l'application **sans** connexion dès son enregistrement.
-2. Règle de proxy inversé :
-   - source : HTTPS, nom d'hôte `<adresse>`, port 443, HTTP/2 activé, pas de contrôle d'accès ;
-   - destination : HTTP, IP du poste Kasbah, port 8787 ;
-   - **en-têtes personnalisés** : Créer → WebSocket, qui ajoute `Upgrade: $http_upgrade` et `Connection: $connection_upgrade`. Sans eux, l'état en direct ne passe pas (l'app reste « hors ligne »).
-3. Un certificat Let's Encrypt pour `<adresse>` (Sécurité → Certificat), associé à la règle.
-4. Sur le routeur : le port 443 redirigé vers le NAS.
-5. Lecture sur les enceintes (Cast, Sonos) depuis l'extérieur : `MUSIC_PUBLISH_BASE=http://<ip-du-poste>:8787`, sinon le serveur refuse (une enceinte ne peut pas lire l'adresse publique).
-
-**Vérifier**, depuis le téléphone en 4G : `https://<adresse>/` ouvre la page de connexion, `https://<adresse>/.well-known/oauth-protected-resource` annonce l'adresse **en https** (sinon le proxy ne transmet pas le nom d'origine, et rien n'est protégé : le corriger avant tout). Une fois connecté, une lumière allumée change d'état à l'écran sans recharger.
-
-### Qualité
-
-```bash
-npm test           # vitest, tous les workspaces (shared, mock-sim, server, web)
-npm run typecheck  # tsc / vue-tsc par workspace
-npm run lint       # eslint (flat config, TypeScript + Vue)
-```
-
 ## Serveur MCP
 
 Le serveur Kasbah expose aussi un serveur [MCP](https://modelcontextprotocol.io) sur `http://localhost:8787/mcp` (Streamable HTTP, SDK TypeScript officiel v2, spec 2026-07-28, clients 2025 acceptés). Il démarre avec le serveur, rien à activer.
@@ -322,7 +324,7 @@ Clients de bureau et de développement (serveur Kasbah lancé) :
 | Variable | Défaut | Rôle |
 |---|---|---|
 | `KASBAH_PORT` / `KASBAH_HOST` | `8787` / `0.0.0.0` | Écoute HTTP + WS |
-| `KASBAH_HOUSE_FILE` | — (démonstration : `house/demos/`) | Fichier de la maison ; absent, les trois propriétés de démonstration |
+| `KASBAH_HOUSE_FILE` | — | Impose une maison (forçage, facultatif) ; absent, les propriétés de `house/demos/` et `house/properties/`, choisies dans Réglages → Propriété |
 | `KASBAH_STATIC_DIR` | `apps/web/dist` | Build web servi en production |
 | `KASBAH_STATE_DIR` | `apps/server/.state` | Jetons, historiques, appareils déjà vus |
 | `KASBAH_STRICT_PLUGINS` | `false` | `true` : une config de plugin invalide empêche le démarrage |

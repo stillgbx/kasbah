@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import pino from 'pino'
@@ -8,7 +8,7 @@ import { loadEnv } from './env'
 import { loadHouse } from './house'
 import { parseHouse } from '@kasbah/shared'
 import { createAutomationsFile } from '../core/automations/store'
-import { DEMO_HOUSE_FILES, createLocalProperty, duplicateProperty, loadDemoProperties, loadLocalProperties, readActiveDemo, writeActiveDemo } from './properties'
+import { DEMO_HOUSE_FILES, createLocalProperty, duplicateProperty, loadDemoProperties, loadLocalProperties, readModeState, writeModeState } from './properties'
 
 // Les propriétés de démonstration et leurs routes : liste, bascule demandée, refus d'un serveur à
 // une seule maison. La reconstruction du serveur elle-même vit dans `main.ts`.
@@ -23,12 +23,14 @@ describe('demo properties', () => {
     ])
   })
 
-  it('remembers the active one across restarts, and reads nothing from a missing file', async () => {
+  it('remembers the mode and the property of each mode across restarts, and takes over the old single choice once', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'kasbah-props-'))
-    const file = join(dir, 'demo-property.json')
-    expect(await readActiveDemo(file)).toBeNull()
-    await writeActiveDemo('embruns', file)
-    expect(await readActiveDemo(file)).toBe('embruns')
+    const file = join(dir, 'property-mode.json'), legacy = join(dir, 'demo-property.json')
+    expect(await readModeState(file, legacy)).toEqual({})
+    await writeFile(legacy, JSON.stringify({ active: 'embruns' }))
+    expect(await readModeState(file, legacy)).toEqual({ demo: 'embruns', real: 'embruns' })
+    await writeModeState({ mode: 'real', demo: 'tilleuls', real: 'maison' }, file)
+    expect(await readModeState(file, legacy)).toEqual({ mode: 'real', demo: 'tilleuls', real: 'maison' })
     await rm(dir, { recursive: true, force: true })
   })
 })
@@ -92,6 +94,7 @@ describe('properties routes', () => {
       const sel = await k.app.inject({ method: 'POST', url: '/api/properties/embruns/select' })
       expect(sel.statusCode).toBe(409)
       expect((await k.app.inject({ method: 'POST', url: '/api/properties', payload: NEW_BODY })).statusCode).toBe(409)
+      expect((await k.app.inject({ method: 'POST', url: '/api/properties/mode', payload: { mode: 'demo' } })).statusCode).toBe(409)
     })
   })
 
@@ -100,11 +103,12 @@ describe('properties routes', () => {
     const asked: string[] = []
     const made: string[] = []
     beforeAll(async () => {
-      const list = { activeId: 'tilleuls', switchable: true, canCreate: true, properties: [{ id: 'tilleuls', name: 'Les Tilleuls', kind: 'house' as const, demo: true }, { id: 'belvedere', name: 'Le Belvédère', kind: 'apartment' as const, demo: true }] }
+      const list = { activeId: 'tilleuls', switchable: true, canCreate: true, mode: 'demo' as const, realAvailable: false, properties: [{ id: 'tilleuls', name: 'Les Tilleuls', kind: 'house' as const, demo: true }, { id: 'belvedere', name: 'Le Belvédère', kind: 'apartment' as const, demo: true }] }
       k = await build({
         list: () => list, select: (id) => { asked.push(id) },
         create: async (body) => { made.push(`new:${body.name}`); return 'maison-du-lac' },
         duplicate: async (id, name) => { made.push(`dup:${id}:${name}`); return 'copie' },
+        setMode: (mode) => { asked.push(`mode:${mode}`) },
       }, true)
     })
     afterAll(async () => { await k.close() })
@@ -113,6 +117,16 @@ describe('properties routes', () => {
       expect((await k.app.inject({ method: 'POST', url: '/api/properties/belvedere/select' })).statusCode).toBe(202)
       expect((await k.app.inject({ method: 'POST', url: '/api/properties/ailleurs/select' })).statusCode).toBe(404)
       expect(asked).toEqual(['belvedere'])
+    })
+
+    it('switches to the demo mode (202), refuses the real one while it has no property (409)', async () => {
+      expect((await k.app.inject({ method: 'POST', url: '/api/properties/mode', payload: { mode: 'demo' } })).statusCode).toBe(202)
+      const real = await k.app.inject({ method: 'POST', url: '/api/properties/mode', payload: { mode: 'real' } })
+      expect(real.statusCode).toBe(409)
+      expect(real.json().error.code).toBe('NO_REAL_PROPERTY')
+      expect((await k.app.inject({ method: 'POST', url: '/api/properties/mode', payload: { mode: 'other' } })).statusCode).toBe(400)
+      expect(asked).toContain('mode:demo')
+      expect(asked).not.toContain('mode:real')
     })
 
     it('creates (201), duplicates (201), and validates the body (400)', async () => {

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import type { NewPropertyBody, PropertiesResponse, ServerMessage } from '@kasbah/shared'
+import type { NewPropertyBody, PropertiesResponse, PropertyMode, ServerMessage } from '@kasbah/shared'
 import { getTransport } from '../api'
 import { useNotificationsStore } from './notifications'
 import { t } from '../i18n'
@@ -26,8 +26,12 @@ export const usePropertiesStore = defineStore('properties', () => {
   const active = computed(() => info.value?.properties.find((p) => p.id === info.value?.activeId) ?? null)
   /** La propriété montrée est une démo : elle se regarde, on la duplique pour la modifier. */
   const isDemo = computed(() => !!active.value?.demo)
-  /** Le serveur sait créer et dupliquer (serveur de démonstration). */
+  /** Le serveur sait créer et dupliquer (serveur sans maison imposée). */
   const canCreate = computed(() => !!info.value?.canCreate)
+  /** Démo ou réel ; `null` = maison imposée (`KASBAH_HOUSE_FILE`) ou maquette sans serveur. */
+  const mode = computed<PropertyMode | null>(() => info.value?.mode ?? null)
+  /** Le menu des propriétés a quelque chose à offrir : en changer, ou en créer une. */
+  const hasMenu = computed(() => switchable.value || canCreate.value)
   /** L'assistant « Créer une propriété » est ouvert (une seule boîte, montée par l'application). */
   const creating = ref(false)
   const busy = ref(false)
@@ -39,19 +43,36 @@ export const usePropertiesStore = defineStore('properties', () => {
     if (isDemo.value) { const settings = useSettingsStore(); settings.setHouseEditing(false); settings.setReliefEditing(false) }
   }
 
+  /** Le serveur redémarre sur l'autre maison : attendre qu'il dise l'avoir ouverte, puis tout recharger. */
+  async function reloadWhen(done: (r: PropertiesResponse) => boolean) {
+    const deadline = Date.now() + SWITCH_TIMEOUT_MS
+    while (Date.now() < deadline) {
+      try { if (done(await getTransport().getProperties())) break }
+      catch { /* serveur en cours de redémarrage */ }
+      await new Promise((r) => setTimeout(r, POLL_MS))
+    }
+    window.location.reload()
+  }
+
   async function select(id: string) {
     if (switching.value || id === info.value?.activeId) return
     switching.value = id
     try {
       await getTransport().selectProperty(id)
-      // le serveur redémarre sur l'autre maison : attendre qu'il la nomme, puis tout recharger
-      const deadline = Date.now() + SWITCH_TIMEOUT_MS
-      while (Date.now() < deadline) {
-        try { if ((await getTransport().getProperties()).activeId === id) break }
-        catch { /* serveur en cours de redémarrage */ }
-        await new Promise((r) => setTimeout(r, POLL_MS))
-      }
-      window.location.reload()
+      await reloadWhen((r) => r.activeId === id)
+    } catch (err) {
+      switching.value = null
+      useNotificationsStore().error((err as Error).message)
+    }
+  }
+
+  /** Passe en démo ou en réel : le serveur rouvre la propriété retenue de ce mode, l'app se recharge. */
+  async function setMode(next: PropertyMode) {
+    if (switching.value || next === mode.value) return
+    switching.value = next
+    try {
+      await getTransport().setPropertyMode(next)
+      await reloadWhen((r) => r.mode === next)
     } catch (err) {
       switching.value = null
       useNotificationsStore().error((err as Error).message)
@@ -93,5 +114,5 @@ export const usePropertiesStore = defineStore('properties', () => {
     else if (msg.propertyId !== seen) window.location.reload()
   }
 
-  return { info, switching, switchable, active, isDemo, canCreate, creating, busy, load, select, create, duplicateActive, apply }
+  return { info, switching, switchable, active, isDemo, canCreate, mode, hasMenu, creating, busy, load, select, setMode, create, duplicateActive, apply }
 })

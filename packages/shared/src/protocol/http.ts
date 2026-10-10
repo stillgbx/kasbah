@@ -93,6 +93,10 @@ export const propertiesResponseSchema = z.object({
   properties: z.array(propertySummarySchema),
   /** Le serveur sait créer et dupliquer une propriété (`POST /api/properties`, `…/duplicate`). */
   canCreate: z.boolean().optional(),
+  /** Le mode montré : les démonstrations, ou les propriétés réelles du poste. Absent = maison imposée. */
+  mode: z.enum(['demo', 'real']).optional(),
+  /** Il existe au moins une propriété réelle : le mode « réel » peut se choisir. */
+  realAvailable: z.boolean().optional(),
 })
 export type PropertiesResponse = z.infer<typeof propertiesResponseSchema>
 
@@ -115,6 +119,11 @@ export type NewPropertyBody = z.infer<typeof newPropertyBodySchema>
 /** `POST /api/properties/:id/duplicate` : la copie modifiable d'une propriété, sous un autre nom. */
 export const duplicatePropertyBodySchema = z.object({ name: propertyNameSchema })
 export const propertyCreatedSchema = z.object({ id: z.string().min(1) })
+/** Les deux modes d'un serveur sans maison imposée : démonstrations (lecture seule) ou propriétés réelles. */
+export const PROPERTY_MODES = ['demo', 'real'] as const
+export type PropertyMode = (typeof PROPERTY_MODES)[number]
+/** `POST /api/properties/mode` : passer en démo ou en réel (le serveur rouvre la propriété retenue du mode). */
+export const propertyModeBodySchema = z.object({ mode: z.enum(PROPERTY_MODES) })
 export type PluginsResponse = z.infer<typeof pluginsResponseSchema>
 
 export const healthResponseSchema = z.object({

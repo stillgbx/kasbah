@@ -1,7 +1,7 @@
 # Serveur et hôte de plugins
 
 > Dernière mise à jour : 2026-10-10
-> Sources : `apps/server/src/{app,main}.ts`, `apps/server/src/core/*.ts`, `apps/server/src/plugins/index.ts`, `apps/server/src/core/scene-registry.ts`, `apps/server/src/core/{plugin,plugin-host,scene-seeder}.ts`, `packages/shared/src/house/schema.ts`, `apps/server/src/plugins/comap/{history,state}.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/core/playbackBridge.ts`, `apps/server/src/music/{player,sources}.ts`, `apps/server/src/core/automations/engine.ts`, `apps/server/src/core/atomic-file.ts`, `apps/server/src/config/properties.ts`, `apps/server/src/main.ts`
+> Sources : `apps/server/src/{app,main}.ts`, `apps/server/src/core/*.ts`, `apps/server/src/plugins/index.ts`, `apps/server/src/core/scene-registry.ts`, `apps/server/src/core/{plugin,plugin-host,scene-seeder}.ts`, `packages/shared/src/house/schema.ts`, `apps/server/src/plugins/comap/{history,state}.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/core/playbackBridge.ts`, `apps/server/src/music/{player,sources}.ts`, `apps/server/src/core/automations/engine.ts`, `apps/server/src/core/atomic-file.ts`, `apps/server/src/config/properties.ts`, `apps/server/src/main.ts`, `apps/server/src/config/catalog.ts`
 
 ## Assemblage (`app.ts`)
 
@@ -541,3 +541,52 @@ Limite : le nom ne se change pas après création ; pas de création en mode in-
 
 Sources : `apps/server/src/main.ts`, `apps/server/src/config/{properties,house}.ts`,
 `apps/server/src/core/automations/store.ts`, `apps/server/src/app.ts`.
+
+### Mise à jour 2026-10-10 (2) — le catalogue de propriétés et le mode démo / réel
+
+**Décisions de l'utilisateur** : un interrupteur pour passer du mode démo au mode réel et revenir
+quand on veut ; `KASBAH_HOUSE_FILE` n'est plus nécessaire, les propriétés se lisent dans des dossiers
+(`house/demos/`, `house/properties/`) ; la variable est **gardée** en forçage facultatif ; **une seule
+propriété vivante à la fois** ; le vrai multi-propriétés (plusieurs maisons vivantes ensemble) est
+remis à plus tard, ce lot le **prépare** sans l'avoir.
+
+**Remplace** l'état décrit par les mises à jour du 2026-10-08 et du 2026-10-10 : « sans
+`KASBAH_HOUSE_FILE` = mode démonstration à trois démos, plus les propriétés du poste dans la même
+liste, retenue dans `demo-property.json` ». Ces paragraphes restent l'historique ; ce qui suit fait foi.
+
+- **`PropertyCatalog`** (`apps/server/src/config/catalog.ts`) remplace les variables de module de
+  `main.ts` (`demos`, `locals`, `all()`, `active`). Il tient les démos, les propriétés du poste et
+  **deux modes** : en démo on ne voit et ne choisit que les démos ; en réel, que les propriétés du
+  poste. `list()` ne rend donc que le mode courant, plus `mode` et `realAvailable` (le réel a au moins
+  une propriété).
+- **Une propriété retenue PAR mode** : revenir en démo rouvre la dernière démo, revenir au réel rouvre
+  sa maison. État dans `.state/property-mode.json` (`{ mode, demo, real }`, `ModeState`,
+  `readModeState` / `writeModeState` de `config/properties.ts`). Au premier passage, l'ancien
+  `demo-property.json` est repris une fois (son id vaut pour les deux modes, le catalogue garde celui
+  qui existe dans chacun). `readActiveDemo` / `writeActiveDemo` sont retirés.
+- **Quel mode au démarrage** : celui retenu ; sinon, au premier lancement, **réel s'il existe des
+  propriétés du poste, démo sinon** (une installation neuve démarre en démo, un poste qui a déjà ses
+  maisons démarre chez lui). Un réel demandé mais **sans propriété** retombe en démo.
+- **`choose(id)`** passe dans le mode de la propriété choisie : créer ou dupliquer puis choisir la copie
+  **bascule donc en réel** (une copie est toujours réelle). `chooseMode(mode)` rend `null` si le réel est
+  vide. `create` / `duplicate` relisent `house/properties/` après écriture.
+- **`main.ts`** : `KASBAH_HOUSE_FILE` non vide (le **forçage**) = on fait vivre ce fichier, sans
+  catalogue, sans mode, sans sélecteur (`singleProperty`, comme avant) ; sinon `PropertyCatalog.open()`.
+  Une seule reconstruction, `switchTo(entry)`, sert `select` et `setMode` (après la réponse, 50 ms ;
+  même arrêt puis `start()` que la bascule du 2026-10-08). Le journal de démarrage dit `mode` et
+  `property`.
+- **Pourquoi une classe à part** : la logique (mode, retenue par mode, retombée en démo) se teste sans
+  serveur (`config/catalog.test.ts`) ; `main.ts` ne garde que la reconstruction.
+
+**Reste à faire (connu, pas fait)**, prérequis de plusieurs maisons réelles vivantes :
+
+- **Un dossier d'état par propriété.** Les ~30 fichiers de `apps/server/.state/` sont globaux ; une
+  partie est propre à une maison (jetons Enphase et Tesla, appareils Cast connus, historiques MELCloud
+  et TaHoma, consommation COMAP…), une autre doit rester globale (comptes, sessions, MCP, musique). Tant
+  que ce n'est pas fait, passer d'une propriété réelle à une autre **partage** l'état propre à une
+  maison : ne pas faire vivre deux vraies maisons aux plugins différents sur un même poste.
+- **Les clés des plugins sont globales** dans `.env`.
+- **Migration de la maison réelle de l'utilisateur vers `house/properties/`** : proposée, **non faite**.
+
+Sources : `apps/server/src/config/{catalog,properties}.ts`, `apps/server/src/config/catalog.test.ts`,
+`apps/server/src/main.ts`.

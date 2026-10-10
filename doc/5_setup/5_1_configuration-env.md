@@ -1,7 +1,7 @@
 # Configuration (.env)
 
 > Dernière mise à jour : 2026-10-10
-> Sources : `apps/server/src/config/env.ts`, `apps/server/.env.example`, `apps/server/src/plugins/{mock,hue,tahoma,nest}/index.ts`, `apps/server/src/plugins/google_cast/{index,known}.ts`, `apps/server/src/plugins/google_cast/enrich/cover.ts`, `apps/server/src/plugins/google_cast/bravia.ts`, `apps/server/src/plugins/enphase/index.ts`, `apps/server/src/plugins/tesla/index.ts`, `apps/server/src/plugins/comap/index.ts`, `apps/server/src/plugins/sonos/index.ts`, `apps/server/src/plugins/ytmusic/index.ts`, `apps/server/src/core/paths.ts`, `apps/server/test/state-isolation.ts`, `apps/server/.env.example`, `apps/server/src/music/player.ts`, `apps/server/src/plugins/{mixcloud,radio}/index.ts`, `apps/server/src/core/automations/schedule.ts` (`TZ`), `apps/server/src/plugins/claude/index.ts`, `apps/server/src/plugins/transcription/index.ts`, `apps/server/src/main.ts`, `.gitignore`
+> Sources : `apps/server/src/config/env.ts`, `apps/server/.env.example`, `apps/server/src/plugins/{mock,hue,tahoma,nest}/index.ts`, `apps/server/src/plugins/google_cast/{index,known}.ts`, `apps/server/src/plugins/google_cast/enrich/cover.ts`, `apps/server/src/plugins/google_cast/bravia.ts`, `apps/server/src/plugins/enphase/index.ts`, `apps/server/src/plugins/tesla/index.ts`, `apps/server/src/plugins/comap/index.ts`, `apps/server/src/plugins/sonos/index.ts`, `apps/server/src/plugins/ytmusic/index.ts`, `apps/server/src/core/paths.ts`, `apps/server/test/state-isolation.ts`, `apps/server/.env.example`, `apps/server/src/music/player.ts`, `apps/server/src/plugins/{mixcloud,radio}/index.ts`, `apps/server/src/core/automations/schedule.ts` (`TZ`), `apps/server/src/plugins/claude/index.ts`, `apps/server/src/plugins/transcription/index.ts`, `apps/server/src/main.ts`, `.gitignore`, `apps/server/src/config/{catalog,properties}.ts`
 
 ## Où vivent les secrets
 
@@ -568,3 +568,26 @@ Une installation fraîche peut donc créer sa maison sans éditer de fichier. Un
 `KASBAH_HOUSE_FILE` fait toujours vivre ce seul fichier : ni sélecteur, ni création.
 
 Sources : `.gitignore`, `apps/server/src/config/properties.ts`, `apps/server/src/main.ts`.
+
+
+### Mise à jour 2026-10-10 (2) — `KASBAH_HOUSE_FILE` devient un forçage facultatif
+
+**Remplace** la lecture « absent ou vide = serveur de démonstration » des mises à jour du 2026-10-08 et
+du 2026-10-10 ci-dessus : ce n'est plus un mode du serveur mais le cas normal.
+
+- **Absent ou vide** (cas normal) : le serveur lit ses propriétés dans des **dossiers** :
+  `house/demos/` (trois démos, lecture seule) et `house/properties/` (propriétés réelles du poste,
+  ignoré par git). Une seule vit à la fois. Réglages → Propriété passe du mode démo au mode réel et
+  choisit la propriété. Une installation neuve démarre en démo ; un poste qui a déjà des propriétés
+  démarre en réel.
+- **Renseigné** : le serveur fait vivre ce seul fichier, **sans mode ni sélecteur** (409
+  `NOT_SWITCHABLE` sur `POST /api/properties/mode`). C'est le forçage : tests, previews, installation à
+  maison fixe. Le commentaire de `.env.example` est réécrit en ce sens ; son exemple pointe désormais
+  `../../house/properties/ma-maison.json`.
+- **Nouveau fichier d'état** : `.state/property-mode.json` (`{ mode, demo, real }` : mode montré et
+  propriété retenue dans chacun). Il remplace `demo-property.json`, repris une fois à la première
+  lecture, et suit `KASBAH_STATE_DIR` comme les autres.
+- Limite connue : l'état de `.state/` reste **global**, pas par propriété
+  (`../1_architecture/1_2_serveur-et-plugins.md`, même date).
+
+Sources : `apps/server/.env.example`, `apps/server/src/main.ts`, `apps/server/src/config/{catalog,properties}.ts`.

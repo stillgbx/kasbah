@@ -142,6 +142,7 @@ export function createHttpTransport(base = ''): Transport {
     getProperties: () => request(`${base}/api/properties`, undefined, (j) => propertiesResponseSchema.parse(j)),
     selectProperty: (id) => request(`${base}/api/properties/${encodeURIComponent(id)}/select`, { method: 'POST' }, () => undefined),
     createProperty: (body) => request(`${base}/api/properties`, json('POST', body), (j) => propertyCreatedSchema.parse(j).id),
+    setPropertyMode: (mode) => request(`${base}/api/properties/mode`, json('POST', { mode }), () => undefined),
     duplicateProperty: (id, name) => request(`${base}/api/properties/${encodeURIComponent(id)}/duplicate`, json('POST', { name }), (j) => propertyCreatedSchema.parse(j).id),
     placeDevice: (id, placement: DevicePlacement) => request(
       `${base}/api/house/devices/${encodeURIComponent(id)}`,

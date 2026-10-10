@@ -6,24 +6,16 @@ import { usePropertiesStore } from '../../stores/properties'
 
 // Les propriétés entre lesquelles basculer, une ligne chacune : la courante cochée, celle qu'on
 // rejoint annoncée pendant le rechargement. Sert au menu du rail et à la carte des Réglages.
-// Le serveur de démonstration y ajoute les propriétés du poste (au-dessus des démos) et deux gestes :
+// Le serveur ne liste que les propriétés du MODE montré (démos ou réelles) ; il y ajoute deux gestes :
 // créer une propriété neuve, ou dupliquer la démo montrée pour la modifier.
 const properties = usePropertiesStore()
 const all = computed<PropertySummary[]>(() => properties.info?.properties ?? [])
-const mine = computed(() => all.value.filter((p) => !p.demo))
-const demos = computed(() => all.value.filter((p) => p.demo))
-/** Deux groupes seulement quand il y a des deux : sinon la liste reste ce qu'elle était. */
-const grouped = computed(() => mine.value.length > 0 && demos.value.length > 0)
-const groups = computed(() => (grouped.value
-  ? [{ key: 'mine', title: 'properties.mine', list: mine.value }, { key: 'demos', title: 'properties.demos', list: demos.value }]
-  : [{ key: 'all', title: '', list: all.value }]))
 </script>
 
 <template>
   <div class="props">
-    <div v-for="g in groups" :key="g.key" class="props__group" role="list">
-      <div v-if="g.title" class="section-label props__title">{{ $t(g.title) }}</div>
-      <button v-for="p in g.list" :key="p.id" type="button" class="props__item" role="listitem"
+    <div class="props__group" role="list">
+      <button v-for="p in all" :key="p.id" type="button" class="props__item" role="listitem"
               :data-on="p.id === properties.info?.activeId ? '1' : '0'" :disabled="!!properties.switching"
               :aria-current="p.id === properties.info?.activeId ? 'true' : undefined" @click="properties.select(p.id)">
         <StrokeIcon :name="p.kind === 'apartment' ? 'layers' : 'home'" :size="18" />
@@ -50,7 +42,6 @@ const groups = computed(() => (grouped.value
 <style scoped>
 .props { display: grid; gap: 8px; }
 .props__group { display: grid; gap: 2px; }
-.props__title { padding: 4px 10px 2px; }
 .props__item {
   display: grid; grid-template-columns: 18px minmax(0, 1fr) auto 18px; align-items: center; gap: 10px;
   width: 100%; padding: 9px 10px; border: 0; border-radius: 10px; background: transparent;

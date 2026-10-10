@@ -2,6 +2,23 @@
 
 Entrées les plus récentes en haut. Une session = une entrée.
 
+## [2026-10-10] update | Lot C : catalogue de propriétés, interrupteur démo / réel
+
+**Déclencheur** : l'utilisateur veut passer du mode démo au mode réel et revenir quand il veut, sans
+dépendre de `KASBAH_HOUSE_FILE` (gardée en forçage facultatif) ; une seule propriété vivante à la
+fois, le vrai multi-propriétés remis à plus tard. Lot C, non commité à l'écriture.
+
+**Pages modifiées** :
+- `1_architecture/1_2_serveur-et-plugins.md` - `PropertyCatalog`, deux modes, propriété retenue par mode, `property-mode.json`, forçage ; reste à faire (état et clés par propriété, migration non faite). Remplace la lecture « sans `KASBAH_HOUSE_FILE` = démonstration ».
+- `1_architecture/1_3_protocole-rest-ws.md` - `POST /api/properties/mode`, `mode?` / `realAvailable?`, liste limitée au mode courant.
+- `4_ui/4_1_navigation-et-panneaux.md` - `ModeSwitch.vue`, confirmation sur ligne réservée, `hasMenu`, groupes du sélecteur retirés.
+- `5_setup/5_1_configuration-env.md` - `KASBAH_HOUSE_FILE` devient un forçage, nouveau fichier d'état.
+- `5_setup/5_0_installation-et-scripts.md` - renvoi : la démonstration n'est plus « sans `KASBAH_HOUSE_FILE` ».
+
+**Contradictions** : aucune entre code et wiki ; les descriptions du 2026-10-08 et du lot B sont marquées remplacées, non effacées. `2_maison/2_0_format-house-json.md` (sélection d'une autre maison) et `5_setup/5_2_production.md` citent encore `KASBAH_HOUSE_FILE` comme moyen de choisir la maison : toujours vrai en forçage, non retouchées.
+
+**Index** : updated (5 lines).
+
 ## [2026-10-10] update | Lot B : créer une propriété, démos en lecture seule, duplication, guide
 
 **Déclencheur** : le dépôt est public ; une installation fraîche doit pouvoir créer sa maison (par

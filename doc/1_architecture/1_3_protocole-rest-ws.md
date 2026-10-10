@@ -1,7 +1,7 @@
 # Protocole REST et WebSocket
 
 > Dernière mise à jour : 2026-10-10
-> Sources : `packages/shared/src/protocol/{ws,http}.ts`, `apps/server/src/http/{routes,errors}.ts`, `apps/server/src/ws/hub.ts`, `apps/web/src/api/httpTransport.ts`, `apps/server/src/plugins/tesla/index.ts`, `apps/server/src/config/house.ts`, `packages/shared/src/house/place.ts`, `apps/server/src/core/scene-registry.ts`, `packages/shared/src/protocol/http.ts` (`deviceConsumptionSchema`), `apps/server/src/http/routes.ts` (automatisations), `apps/server/src/http/relief.test.ts`, `apps/server/src/config/properties.ts`
+> Sources : `packages/shared/src/protocol/{ws,http}.ts`, `apps/server/src/http/{routes,errors}.ts`, `apps/server/src/ws/hub.ts`, `apps/web/src/api/httpTransport.ts`, `apps/server/src/plugins/tesla/index.ts`, `apps/server/src/config/house.ts`, `packages/shared/src/house/place.ts`, `apps/server/src/core/scene-registry.ts`, `packages/shared/src/protocol/http.ts` (`deviceConsumptionSchema`), `apps/server/src/http/routes.ts` (automatisations), `apps/server/src/http/relief.test.ts`, `apps/server/src/config/properties.ts`, `apps/server/src/config/catalog.ts`
 
 ## REST
 
@@ -641,3 +641,19 @@ d'automatisations d'une démo (`ReadOnlyHouseError`). Le client le traduit (`htt
 
 Sources : `packages/shared/src/protocol/http.ts`, `apps/server/src/http/routes.ts`,
 `apps/server/src/config/house.ts`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`.
+
+
+### Mise à jour 2026-10-10 (2) — `POST /api/properties/mode`, `mode` et `realAvailable`
+
+| Route | Réponse |
+|---|---|
+| `POST /api/properties/mode` | corps `{ mode: 'demo' \| 'real' }` (`propertyModeBodySchema`, `PROPERTY_MODES`). **202** `{ ok: true }` : le serveur rouvre la propriété retenue dans ce mode **après** la réponse, comme `select`. 400 corps invalide ; **409 `NOT_SWITCHABLE`** si la maison est imposée (`KASBAH_HOUSE_FILE`) ; **409 `NO_REAL_PROPERTY`** si le réel n'a encore aucune propriété. |
+
+`GET /api/properties` gagne `mode?` et `realAvailable?` (optionnels : absents sur une maison imposée).
+**Changement de sens** de la liste : elle ne porte plus que les propriétés du **mode courant**, et non
+plus démos et propriétés du poste ensemble comme le décrit la mise à jour précédente. `activeId` est
+celle du mode. Le client attend que `mode` change pour recharger. Le mode in-process répond 409 à
+`setPropertyMode`.
+
+Sources : `packages/shared/src/protocol/http.ts`, `apps/server/src/http/routes.ts`,
+`apps/web/src/api/{transport,httpTransport,mockTransport}.ts`.

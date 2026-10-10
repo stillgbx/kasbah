@@ -1,12 +1,13 @@
 import { readdir, readFile, rename, writeFile, mkdir } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
-import { PROPERTY_KINDS, newHouseJson, parseHouse, propertyIdFor, type NewPropertyBody, type PropertiesResponse, type PropertyKind } from '@kasbah/shared'
+import { PROPERTY_KINDS, newHouseJson, parseHouse, propertyIdFor, type NewPropertyBody, type PropertiesResponse, type PropertyKind, type PropertyMode } from '@kasbah/shared'
 import type { House } from '@kasbah/shared'
 import { REPO_ROOT, stateFile } from '../core/paths'
 
-// Les PROPRIÉTÉS DE DÉMONSTRATION (`house/demos/`) : un serveur lancé sans `KASBAH_HOUSE_FILE` les
-// propose toutes et en fait vivre une. Chaque maison dit elle-même quel parc simulé la peuple
-// (`meta.demo.scenario`) : le web lit le même champ, il n'y a qu'une source.
+// Les PROPRIÉTÉS qu'un serveur lancé sans `KASBAH_HOUSE_FILE` sait faire vivre, une à la fois : les
+// DÉMONSTRATIONS (`house/demos/`, en lecture seule) et les propriétés RÉELLES du poste
+// (`house/properties/`). Le choix et le mode montré vivent dans `catalog.ts`. Chaque maison dit
+// elle-même quel parc simulé la peuple (`meta.demo.scenario`) : le web lit le même champ.
 
 export const DEMO_HOUSE_FILES = ['tilleuls', 'embruns', 'belvedere'].map((id) => resolve(REPO_ROOT, `house/demos/${id}.json`))
 
@@ -30,10 +31,9 @@ export async function loadDemoProperties(files = DEMO_HOUSE_FILES): Promise<Demo
 }
 
 /**
- * Les propriétés CRÉÉES ou DUPLIQUÉES sur ce poste (assistant « Créer une propriété », « Dupliquer
- * cette démo ») : un fichier chacune, dans un dossier ignoré par git. Un dossier à part plutôt que
- * `house/` : le serveur de démonstration n'y ramasse pas la maison réelle (`house/maison.json`) ni
- * ses fichiers voisins (automatisations, sauvegardes, historique).
+ * Les propriétés RÉELLES du poste — créées, dupliquées, ou une maison existante qu'on y range : un
+ * fichier chacune (avec ses automatisations à côté), dans un dossier ignoré par git. Un dossier à
+ * part plutôt que `house/`, qui porte aussi la fixture des tests, des sauvegardes et l'historique.
  */
 export const LOCAL_PROPERTIES_DIR = resolve(REPO_ROOT, 'house/properties')
 
@@ -97,17 +97,26 @@ export async function duplicateProperty(source: PropertyEntry, name: string, tak
   return id
 }
 
-/** La propriété démo que le serveur a fait vivre en dernier : elle survit à un redémarrage. */
-const ACTIVE_FILE = 'demo-property.json'
+/**
+ * Le mode montré et la propriété retenue dans CHACUN : revenir en démo rouvre la dernière démo, revenir
+ * au réel rouvre sa maison. Survit à un redémarrage. `mode` absent = jamais choisi (premier lancement).
+ */
+export interface ModeState { mode?: PropertyMode; demo?: string; real?: string }
+const MODE_FILE = 'property-mode.json'
+/** Avant les deux modes, seule la propriété montrée était retenue : on la reprend une fois. */
+const LEGACY_FILE = 'demo-property.json'
 
-export async function readActiveDemo(file = stateFile(ACTIVE_FILE)): Promise<string | null> {
-  try { return (JSON.parse(await readFile(file, 'utf8')) as { active?: string }).active ?? null }
-  catch { return null }
+export async function readModeState(file = stateFile(MODE_FILE), legacy = stateFile(LEGACY_FILE)): Promise<ModeState> {
+  try { return JSON.parse(await readFile(file, 'utf8')) as ModeState } catch { /* pas encore écrit */ }
+  try {
+    const active = (JSON.parse(await readFile(legacy, 'utf8')) as { active?: string }).active
+    return active ? { demo: active, real: active } : {}   // le catalogue garde celle qui existe dans chaque mode
+  } catch { return {} }
 }
 
-export async function writeActiveDemo(id: string, file = stateFile(ACTIVE_FILE)): Promise<void> {
+export async function writeModeState(state: ModeState, file = stateFile(MODE_FILE)): Promise<void> {
   await mkdir(dirname(file), { recursive: true })
-  await writeFile(`${file}.tmp`, `${JSON.stringify({ active: id })}\n`, 'utf8')
+  await writeFile(`${file}.tmp`, `${JSON.stringify(state)}\n`, 'utf8')
   await rename(`${file}.tmp`, file)
 }
 
@@ -120,6 +129,8 @@ export interface PropertyHost {
   create(body: NewPropertyBody): Promise<string>
   /** Duplique une propriété sous un autre nom ; rend l'id de la copie. */
   duplicate(id: string, name: string): Promise<string>
+  /** Passe en démo ou en réel, APRÈS la réponse (même reconstruction qu'une bascule). */
+  setMode(mode: PropertyMode): void
 }
 
 /** La réponse d'un serveur à une seule maison : elle, et pas de bascule. */

@@ -1,4 +1,4 @@
-import { newPropertyBodySchema, duplicatePropertyBodySchema, applyHouseEditToJson, houseEditPatchSchema, SurveyError, addGardenItemToJson, addOpeningToJson, addParkingToJson, gardenItemPatchSchema, newGardenItemSchema, patchGardenItemInJson, removeGardenItemFromJson, assertCommandAllowed, automationBodySchema, automationIdSchema, automationPatchSchema, commandSchema, devicePlacementSchema, newOpeningSchema, newParkingSchema, openingPatchSchema, panelArrayPatchSchema, parkingPatchSchema, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, releaseNotesLang, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, roomOrderSchema, polygonSchema, reliefSchema, sceneTuningSchema, setReliefInJson, setTerrainInJson, setRenderTuningInJson, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
+import { propertyModeBodySchema, newPropertyBodySchema, duplicatePropertyBodySchema, applyHouseEditToJson, houseEditPatchSchema, SurveyError, addGardenItemToJson, addOpeningToJson, addParkingToJson, gardenItemPatchSchema, newGardenItemSchema, patchGardenItemInJson, removeGardenItemFromJson, assertCommandAllowed, automationBodySchema, automationIdSchema, automationPatchSchema, commandSchema, devicePlacementSchema, newOpeningSchema, newParkingSchema, openingPatchSchema, panelArrayPatchSchema, parkingPatchSchema, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, releaseNotesLang, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, roomOrderSchema, polygonSchema, reliefSchema, sceneTuningSchema, setReliefInJson, setTerrainInJson, setRenderTuningInJson, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { updateHouseFile, type LoadedHouse } from '../config/house'
 import { singleProperty, type PropertyHost } from '../config/properties'
@@ -350,6 +350,15 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
     if (!deps.properties?.list().canCreate) return sendError(reply, 409, 'NOT_SWITCHABLE', 'this server shows a single property (KASBAH_HOUSE_FILE)')
     const { name } = duplicatePropertyBodySchema.parse(req.body)
     return reply.code(201).send({ id: await deps.properties.duplicate(req.params.id, name) })
+  })
+  // Démo ou réel : le serveur rouvre la propriété retenue dans ce mode (après la réponse, 202).
+  app.post('/api/properties/mode', async (req, reply) => {
+    const list = deps.properties?.list()
+    if (!list?.mode) return sendError(reply, 409, 'NOT_SWITCHABLE', 'this server shows a single property (KASBAH_HOUSE_FILE)')
+    const { mode } = propertyModeBodySchema.parse(req.body)
+    if (mode === 'real' && !list.realAvailable) return sendError(reply, 409, 'NO_REAL_PROPERTY', 'no real property yet: create or duplicate one')
+    deps.properties!.setMode(mode)
+    return reply.code(202).send({ ok: true })
   })
 
   // Plugins : l'inventaire complet (tous déclarés, actifs ou non) et ce qu'on en choisit. Le choix

@@ -3,7 +3,8 @@ import { fileURLToPath } from 'node:url'
 import { config as loadDotenv } from 'dotenv'
 import { buildApp, type KasbahApp } from './app'
 import { loadEnv } from './config/env'
-import { createLocalProperty, duplicateProperty, loadDemoProperties, loadLocalProperties, readActiveDemo, writeActiveDemo, type PropertyEntry, type PropertyHost } from './config/properties'
+import { PropertyCatalog } from './config/catalog'
+import type { PropertyEntry, PropertyHost } from './config/properties'
 import { createLogger } from './core/logger'
 
 // Point d'entrée : .env (apps/server/.env) → env validé → app → plugins → écoute → arrêt propre.
@@ -12,23 +13,16 @@ const here = dirname(fileURLToPath(import.meta.url))
 loadDotenv({ path: resolve(here, '../.env'), quiet: true })
 loadDotenv({ path: resolve(here, '../../.env'), quiet: true }) // repli : .env à côté de dist/
 
-// Sans `KASBAH_HOUSE_FILE`, le serveur est une DÉMONSTRATION : il propose les propriétés de
-// `house/demos/` (en lecture seule) et celles créées ou dupliquées sur ce poste (`house/properties/`),
-// et fait vivre celle qu'on choisit (scénario mock lu dans la maison). Avec, il fait vivre ce seul
-// fichier, comme toujours.
-const demo = !process.env.KASBAH_HOUSE_FILE
+// Sans `KASBAH_HOUSE_FILE`, le serveur ouvre son CATALOGUE (`config/catalog.ts`) : les démonstrations
+// (`house/demos/`, en lecture seule) et les propriétés réelles du poste (`house/properties/`), une
+// seule vivante à la fois, en mode démo ou réel. Avec, il fait vivre ce seul fichier : c'est le
+// forçage (tests, previews, une installation qui veut une maison imposée).
+const forced = !!process.env.KASBAH_HOUSE_FILE
 const env = loadEnv()
 const logger = createLogger(env.KASBAH_LOG_LEVEL, env.KASBAH_LOG_PRETTY || process.stdout.isTTY === true)
 
-const demos: PropertyEntry[] = demo ? (await loadDemoProperties()).map((d) => ({ ...d, demo: true })) : []
-let locals: PropertyEntry[] = demo ? await loadLocalProperties() : []
-/** Les propriétés du poste d'abord, puis les démonstrations. */
-const all = (): PropertyEntry[] => [...locals, ...demos]
-let active: PropertyEntry | undefined
-if (demo) {
-  const remembered = await readActiveDemo()
-  active = all().find((p) => p.id === remembered) ?? demos[0]
-}
+const catalog = forced ? null : await PropertyCatalog.open()
+let active: PropertyEntry | undefined = catalog?.active
 
 let kasbah: KasbahApp
 let switching = false
@@ -36,25 +30,14 @@ let closing = false
 
 /** Assemble, écoute et démarre l'application sur la maison courante. */
 async function start(): Promise<void> {
-  const properties: PropertyHost | undefined = active && {
-    list: () => ({
-      activeId: active!.id, switchable: true, canCreate: true,
-      properties: all().map(({ id, name, kind, demo: isDemo }) => ({ id, name, kind, ...(isDemo ? { demo: true } : {}) })),
-    }),
-    select: (id) => { setTimeout(() => void switchTo(id), 50) },   // après l'envoi de la réponse
-    create: async (body) => {
-      const id = await createLocalProperty(body, all().map((p) => p.id))
-      locals = await loadLocalProperties()
-      return id
-    },
-    duplicate: async (id, name) => {
-      const source = all().find((p) => p.id === id)
-      if (!source) throw Object.assign(new Error(`unknown property "${id}"`), { statusCode: 404, code: 'NOT_FOUND' })
-      const copy = await duplicateProperty(source, name, all().map((p) => p.id))
-      locals = await loadLocalProperties()
-      return copy
-    },
-  }
+  const properties: PropertyHost | undefined = catalog ? {
+    list: () => catalog.list(),
+    // la bascule se fait APRÈS l'envoi de la réponse
+    select: (id) => { setTimeout(() => void catalog.choose(id).then((next) => next && switchTo(next)), 50) },
+    setMode: (mode) => { setTimeout(() => void catalog.chooseMode(mode).then((next) => next && switchTo(next)), 50) },
+    create: (body) => catalog.create(body),
+    duplicate: (id, name) => catalog.duplicate(id, name),
+  } : undefined
   // l'hiver demandé par `MOCK_SCENARIO=winter` vaut pour la propriété : son parc en version d'hiver
   const scenario = active?.scenario && (process.env.MOCK_SCENARIO === 'winter' ? `${active.scenario}-winter` : active.scenario)
   kasbah = await buildApp({
@@ -65,24 +48,22 @@ async function start(): Promise<void> {
     ...(active?.demo ? { readOnly: true } : {}),
   })
   await kasbah.app.listen({ port: env.KASBAH_PORT, host: env.KASBAH_HOST })
-  logger.info({ port: env.KASBAH_PORT, plugins: Object.entries(kasbah.house.house.plugins).filter(([, p]) => p.enabled).map(([id]) => id), house: kasbah.house.house.name, ...(active ? { demo: active.id } : {}) }, 'kasbah server listening')
+  logger.info({ port: env.KASBAH_PORT, plugins: Object.entries(kasbah.house.house.plugins).filter(([, p]) => p.enabled).map(([id]) => id), house: kasbah.house.house.name, ...(catalog ? { mode: catalog.mode, property: active?.id } : {}) }, 'kasbah server listening')
   await kasbah.startPlugins()
 }
 
-/** Bascule de propriété démo : on arrête tout, puis on reconstruit sur l'autre maison. */
-async function switchTo(id: string): Promise<void> {
-  const next = all().find((p) => p.id === id)
-  if (!next || next.id === active?.id || switching || closing) return
+/** Bascule de propriété (ou de mode) : on arrête tout, puis on reconstruit sur l'autre maison. */
+async function switchTo(next: PropertyEntry): Promise<void> {
+  if (next.id === active?.id || switching || closing) return
   switching = true
   try {
-    logger.info({ from: active?.id, to: next.id }, 'switching demo property')
+    logger.info({ from: active?.id, to: next.id, mode: catalog?.mode }, 'switching property')
     // les écrans gardent des connexions ouvertes (proxy de Vite, requêtes en cours) que `close()`
     // attendrait : passé une seconde, on les coupe — ils se reconnectent à l'autre maison
     const old = kasbah
     const cut = setTimeout(() => old.app.server.closeAllConnections(), 1000)
     try { await old.close() } finally { clearTimeout(cut) }
     active = next
-    await writeActiveDemo(next.id)
     await start()
   } finally { switching = false }
 }

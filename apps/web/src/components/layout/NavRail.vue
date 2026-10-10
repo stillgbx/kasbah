@@ -56,7 +56,7 @@ watch(current, () => void nextTick(() => {
 <template>
   <nav class="rail" :aria-label="$t('nav.main')">
     <div ref="scroller" class="rail__scroll">
-      <v-menu v-if="properties.switchable" location="end top" :offset="10">
+      <v-menu v-if="properties.hasMenu" location="end top" :offset="10">
         <template #activator="{ props: menu }">
           <button v-bind="menu" type="button" class="rail__avatar rail__avatar--btn" :title="house.house?.name"
                   :aria-label="$t('properties.switch', { name: house.house?.name ?? '' })">{{ initials }}</button>

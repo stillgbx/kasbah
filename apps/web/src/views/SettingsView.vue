@@ -9,6 +9,7 @@ import AssistantCard from '../components/settings/AssistantCard.vue'
 import McpUsersCard from '../components/settings/McpUsersCard.vue'
 import PluginSection from '../components/settings/PluginSection.vue'
 import PropertyList from '../components/layout/PropertyList.vue'
+import ModeSwitch from '../components/property/ModeSwitch.vue'
 import Segmented from '../components/ui/Segmented.vue'
 import { LOCALE_LABELS } from '../i18n'
 import { useDevicesStore } from '../stores/devices'
@@ -291,8 +292,9 @@ const houseStats = computed(() => {
               <button type="button" class="pill pill--sm" @click="openRelief()">{{ $t('relief.open') }}</button>
             </div>
           </section>
-          <section v-if="properties.switchable" class="card block">
+          <section v-if="properties.hasMenu" class="card block">
             <div class="block__title">{{ $t('properties.title') }}</div>
+            <ModeSwitch v-if="properties.mode" />
             <PropertyList />
             <div class="muted small">{{ $t(properties.canCreate ? 'properties.hintCreate' : 'properties.hint') }}</div>
           </section>

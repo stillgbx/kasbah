@@ -5832,3 +5832,36 @@ Une relecture indépendante de la mise à jour précédente a trouvé, puis corr
 
 Sources : `apps/web/src/stores/house.ts`, `apps/web/src/components/home/HouseEditPanel.vue`,
 `packages/shared/src/house/structure.ts`, `apps/web/src/i18n/locales/{fr,en}.json`.
+
+
+### Mise à jour 2026-10-10 (4) — l'interrupteur Démo | Réel
+
+Décision de l'utilisateur : passer du mode démo au mode réel, et revenir, quand on veut. Mécanique
+serveur : `../1_architecture/1_2_serveur-et-plugins.md` (catalogue) ; route :
+`../1_architecture/1_3_protocole-rest-ws.md` (même date).
+
+- **`components/property/ModeSwitch.vue`** : un `Segmented` **Démo | Réel** en tête de la carte
+  « Propriété » des Réglages. « Réel » est grisé tant que le serveur n'annonce pas de propriété réelle
+  (`realAvailable`) ; la consigne dit alors de créer une propriété ou de dupliquer une démo.
+- **Confirmation, pas d'action directe** : changer de mode recharge l'application sur une autre maison ;
+  une tablette murale ne doit pas basculer sur un doigt qui passe. Choisir l'autre mode arme une ligne
+  « Passer en mode … ? L'application se recharge. » avec Annuler / Confirmer.
+- **Rien ne bouge** : cette ligne est **réservée en permanence** (40 px de haut) ; au repos elle porte
+  la consigne, armée la confirmation. Mesuré avant / après : à la première version la ligne sautait de
+  **4 px** entre les deux états (hauteur au contenu) ; corrigé par la hauteur fixe. Vérifié en fr et en
+  en au zoom 1,5, sans débordement.
+- **Store `properties`** : `mode` (`null` pour une maison imposée ou la maquette sans serveur),
+  `setMode` (attend que le serveur annonce le nouveau mode, puis recharge ; l'attente est partagée avec
+  `select` par `reloadWhen`) et **`hasMenu`** = pouvoir changer **ou** créer. Le menu du rail et la carte
+  « Propriété » s'affichent donc **aussi avec une seule propriété réelle** : sans cela, aucun moyen d'en
+  créer une seconde.
+- **`PropertyList.vue`** : plus de groupes « Mes propriétés / Démonstrations » (remplace la description
+  de la mise à jour (2) ci-dessus) : le serveur ne liste que le mode courant ; les deux libellés i18n
+  sont retirés. Nouvelles clés `properties.mode*`.
+- Vérifié sur `kasbah-demo-server` + `kasbah-demo` : réel → démo → réel par la carte, propriété retenue
+  rouverte dans chaque mode, démos seules en démo, carte « Mode édition » en lecture seule en démo.
+  Pas de relecture UI indépendante pour ce lot au moment de l'écriture.
+
+Sources : `apps/web/src/components/property/ModeSwitch.vue`, `apps/web/src/stores/properties.ts`,
+`apps/web/src/components/layout/{NavRail,PropertyList}.vue`, `apps/web/src/views/SettingsView.vue`,
+`apps/web/src/i18n/locales/{fr,en}.json`.

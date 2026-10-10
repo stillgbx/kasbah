@@ -536,6 +536,7 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     // maquette in-process : aucun fichier où écrire une propriété
     async createProperty() { throw new ApiRequestError(409, 'NOT_SWITCHABLE', 'no server to create a property in this mode') },
     async duplicateProperty() { throw new ApiRequestError(409, 'NOT_SWITCHABLE', 'no server to create a property in this mode') },
+    async setPropertyMode() { throw new ApiRequestError(409, 'NOT_SWITCHABLE', 'no other mode in this mode') },
     connect(h) {
       handlers = h
       h.onStatus('connecting')
