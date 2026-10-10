@@ -125,6 +125,11 @@ export interface PropertyHost {
   list(): PropertiesResponse
   /** Bascule APRÈS la réponse : le serveur se reconstruit sur l'autre maison. */
   select(id: string): void
+  /**
+   * La propriété existe, quel que soit son mode. `list()` ne montre que le mode courant : une
+   * propriété réelle qu'on vient de créer depuis le mode démo n'y figure pas, et on bascule pourtant dessus.
+   */
+  has(id: string): boolean
   /** Crée une propriété neuve ; rend son id (la bascule est un `select` à part). */
   create(body: NewPropertyBody): Promise<string>
   /** Duplique une propriété sous un autre nom ; rend l'id de la copie. */

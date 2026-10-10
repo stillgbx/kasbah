@@ -2,6 +2,19 @@
 
 Entrées les plus récentes en haut. Une session = une entrée.
 
+## [2026-10-10] update | Renommer la propriété et un niveau, recherche d'adresse dans le monde, bascule depuis la démo
+
+**Déclencheur** : trois limites relevées en fin de lot C, que l'utilisateur veut lever.
+
+**Pages modifiées** :
+- `2_maison/2_0_format-house-json.md` - mise à jour datée : `propertyName` et `levels` dans le patch de structure.
+- `4_ui/4_1_navigation-et-panneaux.md` - mise à jour datée : champs de nom dans « Pièces et niveaux », géocodage IGN + Photon.
+- `1_architecture/1_3_protocole-rest-ws.md` - mise à jour datée : `select` vise une propriété de n'importe quel mode (correctif « unknown property » à la création depuis la démo).
+
+**Pages créées** : aucune.
+
+**Index** : inchangé (dates déjà au 2026-10-10).
+
 ## [2026-10-10] update | Lot C : catalogue de propriétés, interrupteur démo / réel
 
 **Déclencheur** : l'utilisateur veut passer du mode démo au mode réel et revenir quand il veut, sans

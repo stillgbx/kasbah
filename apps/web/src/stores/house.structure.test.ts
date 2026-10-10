@@ -47,6 +47,19 @@ describe('house store — séance d’édition : structure', () => {
     expect(store.editDirty).toBe(false)
   })
 
+  it('renommer un niveau et la propriété : dans le brouillon, annulable', () => {
+    const store = useHouseStore()
+    store.house = parseHouse(demo)
+    store.setLevelIdentity('etage', { name: 'Premier' })
+    store.setLevelIdentity('etage', { shortName: 'R+1' })
+    store.setPropertyName('Maison du lac')
+    expect(store.effective!.levels.find((l) => l.id === 'etage')).toMatchObject({ name: 'Premier', shortName: 'R+1' })
+    expect(store.effective!.name).toBe('Maison du lac')
+    expect(store.editDirty).toBe(true)
+    store.discardEdit()
+    expect(store.effective!.name).toBe(parseHouse(demo).name)
+  })
+
   it('poser au tap : le niveau de l’onglet, puis l’arme retombe', () => {
     const store = useHouseStore()
     store.house = parseHouse(demo)

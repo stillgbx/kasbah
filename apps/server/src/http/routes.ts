@@ -335,7 +335,7 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
 
   app.post<{ Params: { id: string } }>('/api/properties/:id/select', async (req, reply) => {
     if (!deps.properties) return sendError(reply, 409, 'NOT_SWITCHABLE', 'this server shows a single property (KASBAH_HOUSE_FILE)')
-    if (!deps.properties.list().properties.some((p) => p.id === req.params.id)) return sendError(reply, 404, 'NOT_FOUND', `unknown property "${req.params.id}"`)
+    if (!deps.properties.has(req.params.id)) return sendError(reply, 404, 'NOT_FOUND', `unknown property "${req.params.id}"`)
     deps.properties.select(req.params.id)
     return reply.code(202).send({ ok: true })
   })

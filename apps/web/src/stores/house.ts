@@ -89,7 +89,8 @@ export const GARDEN_DEFAULT_HEIGHT: Record<GardenKind, number> = { broadleaf: 7,
 const buildingOf = (h: House | null) => JSON.stringify([
   h?.style ?? null,
   h?.rooms.map((r) => [r.id, r.levelId, r.name, r.kind, r.polygon, r.openings, r.style?.floorFinish ?? null, r.style?.wallFinish ?? null]) ?? [],
-  h?.levels.map((l) => [l.id, l.name, l.elevation]) ?? [],
+  h?.levels.map((l) => [l.id, l.name, l.shortName ?? null, l.elevation]) ?? [],
+  h?.name ?? null,
 ])
 
 /** Deux listes d'ajouts : la seconde complète la première, sans doublon d'id. */
@@ -115,6 +116,11 @@ function mergeEdit(prev: HouseEditPatch | null, next: HouseEditPatch): HouseEdit
   const rooms: NonNullable<HouseEditPatch['rooms']> = { ...prev?.rooms }
   for (const [id, r] of Object.entries(next.rooms ?? {})) rooms[id] = { ...rooms[id], ...r }
   if (Object.keys(rooms).length) out.rooms = rooms
+  const lvls: NonNullable<HouseEditPatch['levels']> = { ...prev?.levels }
+  for (const [id, l] of Object.entries(next.levels ?? {})) lvls[id] = { ...lvls[id], ...l }
+  if (Object.keys(lvls).length) out.levels = lvls
+  const propertyName = next.propertyName ?? prev?.propertyName
+  if (propertyName !== undefined) out.propertyName = propertyName
   return out
 }
 
@@ -563,6 +569,11 @@ export const useHouseStore = defineStore('house', () => {
   function setRoomIdentity(roomId: string, ident: { name?: string; kind?: RoomKind }): void {
     pushEdit({ rooms: { [roomId]: ident } })
   }
+  /** Nom et nom court d'un niveau (un nom court vide le retire : l'onglet reprend le nom). */
+  function setLevelIdentity(levelId: string, ident: { name?: string; shortName?: string }): void {
+    pushEdit({ levels: { [levelId]: ident } })
+  }
+  function setPropertyName(name: string): void { pushEdit({ propertyName: name }) }
   function addLevel(side: NewLevelSide): void {
     const v = editView.value
     if (!v) return
@@ -1780,7 +1791,7 @@ export const useHouseStore = defineStore('house', () => {
     focusedLevelId, gardenFocus, selectedRoomId, selectedLevelId, selectedKey, floorTab, selectedRoom, selectedZone, selectedDevice,
     roomFinish, facadeFinish, setRoomFinish, setFacadeFinish, canUndoEdit, canRedoEdit, undoEdit, redoEdit, editDirty, editBlocking, editWarnings, discardEdit, savingEdit, saveEdit,
     coupleWalls, shapeEditing, shapeSelection, shapeOf, pushRoomWall, setSideLength, addCorner, removeCorner, beginShapeDrag, previewRoomWall, previewCorner, endShapeDrag,
-    placingRoom, roomTargetLevelId, startPlacingRoom, cancelPlacingRoom, placeRoomAt, addRoomAgainstWall, removeRoom, setRoomIdentity, addLevel, levelRemovable, removeLevel,
+    placingRoom, roomTargetLevelId, startPlacingRoom, cancelPlacingRoom, placeRoomAt, addRoomAgainstWall, removeRoom, setRoomIdentity, setLevelIdentity, setPropertyName, addLevel, levelRemovable, removeLevel,
     load, setFloorTab, focusLevel, selectRoom, selectLevel, selectDevice, clearSelection, backToHome, backFromRoom, backFromDevice, houseDeviceFor, renameDevice, setDeviceTuning, bodyColorPreview, previewBodyColor, setRoomOrder, saveRenderTuning, saveRelief, saveTerrain,
     journalOverlay, journalFocus, journalActive, showJournal, hideJournal, focusJournalPoint, markJournalPoint,
     placing, saving, draft, canRevert, isProvisional, startPlacing, startPlacingNew, stopPlacing, previewPosition, previewHeight, savePlacement, revertPlacement, removePlacement,

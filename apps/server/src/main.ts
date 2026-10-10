@@ -31,10 +31,15 @@ let closing = false
 /** Assemble, écoute et démarre l'application sur la maison courante. */
 async function start(): Promise<void> {
   const properties: PropertyHost | undefined = catalog ? {
-    list: () => catalog.list(),
+    // le nom de la propriété ouverte est celui de son fichier, tel que l'UI vient peut-être de l'écrire
+    list: () => {
+      const l = catalog.list()
+      return { ...l, properties: l.properties.map((p) => (p.id === active?.id ? { ...p, name: kasbah.house.house.name } : p)) }
+    },
     // la bascule se fait APRÈS l'envoi de la réponse
     select: (id) => { setTimeout(() => void catalog.choose(id).then((next) => next && switchTo(next)), 50) },
     setMode: (mode) => { setTimeout(() => void catalog.chooseMode(mode).then((next) => next && switchTo(next)), 50) },
+    has: (id) => !!catalog.find(id),
     create: (body) => catalog.create(body),
     duplicate: (id, name) => catalog.duplicate(id, name),
   } : undefined

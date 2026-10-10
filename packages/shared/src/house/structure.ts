@@ -6,7 +6,7 @@ import { surveyPointsToHouse, type SurveyConventions } from './survey'
 import type { Vec2 } from './geometry/vec2'
 
 // La STRUCTURE de la maison changée dans une séance d'édition : pièces et niveaux qui naissent ou
-// disparaissent, nom et type d'une pièce. Mêmes règles que le reste de la séance : tout est dans le
+// disparaissent, nom et type d'une pièce, nom d'un niveau, nom de la propriété. Mêmes règles que le reste de la séance : tout est dans le
 // patch, rien n'est écrit avant « Valider ». Une pièce qui naît a sa FORME dans `shapes` (des cotes,
 // comme les autres) : tous les gestes de l'onglet Dimensions marchent sur elle.
 
@@ -27,6 +27,13 @@ export const structurePatchShape = {
   /** Pièces nées dans la séance ; leurs cotes sont dans `shapes`, leur nom et leur type dans `rooms`. */
   newRooms: z.array(z.object({ id: newIdSchema, levelId: z.string().min(1) })).optional(),
   removeRooms: z.array(z.string().min(1)).optional(),
+  /** Nom et nom court (onglets ; vide = retiré), par niveau (existant ou né dans la séance). */
+  levels: z.record(z.string().min(1), z.object({
+    name: z.string().trim().min(1).max(60).optional(),
+    shortName: z.string().trim().max(12).optional(),
+  })).optional(),
+  /** Le nom de la propriété (en-tête, sélecteur). */
+  propertyName: z.string().trim().min(1).max(60).optional(),
   /** Nom et type, par pièce (existante ou née dans la séance). */
   rooms: z.record(z.string().min(1), z.object({
     name: z.string().trim().min(1).max(60).optional(),
@@ -103,6 +110,21 @@ export function applyStructureToJson(input: Json, patch: StructurePatch, shapes:
       openings: [],
       meta: { survey: { points: points.map((p) => [p[0], p[1]]) } },
     }]
+  }
+
+  // -- noms : la propriété, les niveaux (un nom court vide le retire : l'onglet reprend le nom)
+  if (patch.propertyName !== undefined) doc.name = patch.propertyName
+  for (const [id, ident] of Object.entries(patch.levels ?? {})) {
+    if ((patch.removeLevels ?? []).includes(id)) continue
+    const i = levels.findIndex((l) => l.id === id)
+    if (i < 0) throw new PlacementError(`unknown level "${id}"`)
+    const next: Json = { ...levels[i] }
+    if (ident.name !== undefined) next.name = ident.name
+    if (ident.shortName !== undefined) {
+      if (ident.shortName) next.shortName = ident.shortName
+      else delete next.shortName
+    }
+    levels = levels.map((l, k) => (k === i ? next : l))
   }
 
   // -- nom et type

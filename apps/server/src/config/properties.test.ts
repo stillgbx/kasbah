@@ -109,6 +109,8 @@ describe('properties routes', () => {
         create: async (body) => { made.push(`new:${body.name}`); return 'maison-du-lac' },
         duplicate: async (id, name) => { made.push(`dup:${id}:${name}`); return 'copie' },
         setMode: (mode) => { asked.push(`mode:${mode}`) },
+        // le catalogue connaît aussi les propriétés de l'AUTRE mode (une propriété réelle qu'on vient de créer en démo)
+        has: (id) => list.properties.some((p) => p.id === id) || id === 'nouvelle',
       }, true)
     })
     afterAll(async () => { await k.close() })
@@ -117,6 +119,11 @@ describe('properties routes', () => {
       expect((await k.app.inject({ method: 'POST', url: '/api/properties/belvedere/select' })).statusCode).toBe(202)
       expect((await k.app.inject({ method: 'POST', url: '/api/properties/ailleurs/select' })).statusCode).toBe(404)
       expect(asked).toEqual(['belvedere'])
+    })
+
+    it('bascule vers une propriété de l’autre mode : celle qu’on vient de créer en démo (202)', async () => {
+      expect((await k.app.inject({ method: 'POST', url: '/api/properties/nouvelle/select' })).statusCode).toBe(202)
+      expect(asked).toContain('nouvelle')
     })
 
     it('switches to the demo mode (202), refuses the real one while it has no property (409)', async () => {

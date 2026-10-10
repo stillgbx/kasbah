@@ -1260,6 +1260,11 @@
     "openingNoFit": "{room} — {opening} no longer fits on its wall"
   },
   "structure": {
+    "propertyName": "Property name",
+    "levelName": "Level of the tab",
+    "levelPick": "Pick a level in the tabs",
+    "levelShort": "Short",
+    "levelShortHint": "Short name, shown in the tabs (empty: the name)",
     "section": "Rooms and levels",
     "newRoomName": "Room {n}",
     "newLevelAbove": "Floor {n}",
@@ -1304,7 +1309,7 @@
       "nameHint": "The name shows in the header and the selector; it can be changed later in the house file.",
       "principle": "Every measurement of the house starts from a point 0 you choose, usually an outside corner of the house. Place it on the map, then turn the heading so the first room (5 × 4 m, in blue) runs along a wall: x and y are the two measuring axes.",
       "terrainHint": "A rough rectangle around the first room: you will draw the real outline next, or import the land register.",
-      "searchPlaceholder": "Address (France)",
+      "searchPlaceholder": "Address",
       "search": "Search",
       "locate": "My location",
       "locateUnavailable": "Location is not available in this browser.",

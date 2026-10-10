@@ -68,8 +68,26 @@ function startRoof() { house.startPlacingOpening('roof-window') }
 
 const levelName = (id: string | null) => (id ? house.index?.levelsById.get(id)?.name ?? '' : '')
 const targetLevel = computed(() => levelName(house.roomTargetLevelId))
-/** Le niveau de l'onglet, celui qu'on retirerait ; aucun sur « Tout ». */
+/** Le niveau de l'onglet, celui qu'on retirerait ou renommerait ; aucun sur « Tout ». */
 const tabLevel = computed(() => house.focusedLevelId)
+const tabLevelObj = computed(() => (tabLevel.value ? house.index?.levelsById.get(tabLevel.value) ?? null : null))
+
+/** Un nom vide ne s'écrit pas : le champ reprend l'ancien. Le nom court, lui, peut se vider. */
+function renameProperty(ev: Event) {
+  const input = ev.target as HTMLInputElement
+  const name = input.value.trim()
+  if (!name || name === house.effective?.name) { input.value = house.effective?.name ?? ''; return }
+  house.setPropertyName(name)
+}
+function renameLevel(ev: Event, field: 'name' | 'shortName') {
+  const input = ev.target as HTMLInputElement
+  const lvl = tabLevelObj.value
+  if (!lvl) return
+  const v = input.value.trim()
+  if (field === 'name' && (!v || v === lvl.name)) { input.value = lvl.name; return }
+  if (field === 'shortName' && v === (lvl.shortName ?? '')) return
+  house.setLevelIdentity(lvl.id, { [field]: v })
+}
 
 // Une section ouverte à la fois, retenue d'une visite à l'autre (confort de ce poste seulement).
 type Section = 'structure' | 'roof' | 'parking' | 'garden' | 'facade'
@@ -108,6 +126,23 @@ function toggle(s: Section) {
   <EditSection :title="$t('structure.section')" :meta="String(house.effective?.rooms.length ?? 0)" :open="open === 'structure'" @toggle="toggle('structure')">
     <div class="block">
       <EditBar />
+      <!-- les noms : la propriété, puis le niveau de l'onglet (champs grisés sur « Tout », jamais retirés) -->
+      <label class="names">
+        <span class="section-label">{{ $t('structure.propertyName') }}</span>
+        <input class="field" type="text" maxlength="60" :value="house.effective?.name ?? ''" :disabled="house.savingEdit"
+               @change="renameProperty" @keydown.enter="($event.target as HTMLInputElement).blur()">
+      </label>
+      <div class="names">
+        <span class="section-label">{{ $t('structure.levelName') }}</span>
+        <div class="names__row">
+          <input class="field" type="text" maxlength="60" :value="tabLevelObj?.name ?? ''" :placeholder="tabLevelObj ? '' : $t('structure.levelPick')"
+                 :aria-label="$t('structure.levelName')" :disabled="!tabLevelObj || house.savingEdit"
+                 @change="renameLevel($event, 'name')" @keydown.enter="($event.target as HTMLInputElement).blur()">
+          <input class="field names__short" type="text" maxlength="12" :value="tabLevelObj?.shortName ?? ''" :placeholder="$t('structure.levelShort')"
+                 :aria-label="$t('structure.levelShortHint')" :title="$t('structure.levelShortHint')" :disabled="!tabLevelObj || house.savingEdit"
+                 @change="renameLevel($event, 'shortName')" @keydown.enter="($event.target as HTMLInputElement).blur()">
+        </div>
+      </div>
       <!-- même boîte armée ou non (« Annuler ») ; la consigne a sa place réservée -->
       <button v-if="!house.placingRoom" type="button" class="pill add" :disabled="house.savingEdit || !house.roomTargetLevelId" @click="house.startPlacingRoom()">
         <StrokeIcon name="plus" :size="16" /> {{ $t('structure.addRoom') }}
@@ -208,6 +243,14 @@ function toggle(s: Section) {
 .empty { font-size: 13px; margin: 0; }
 .add { width: 100%; min-width: 0; justify-content: center; gap: 8px; }
 .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.names { display: grid; gap: 6px; }
+.names__row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 7em); gap: 8px; }
+.field {
+  min-width: 0; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface);
+  color: var(--text); font: inherit; font-size: 14px;
+}
+.field:focus { outline: none; border-color: var(--accent); }
+.field:disabled { opacity: .55; }
 .pair .add { white-space: normal; line-height: 1.2; text-align: center; }
 .ellipsis { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .add--armed { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }

@@ -7,6 +7,7 @@ import { useMediaQuery } from '@vueuse/core'
 import Segmented from '../ui/Segmented.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import OriginPicker from './OriginPicker.vue'
+import { searchAddress, type GeoResult } from '../../lib/geocode'
 import { AXIS_COLORS } from './axes'
 
 // « Créer une propriété » : trois étapes, puis la maison neuve s'ouvre et un guide prend le relais
@@ -17,7 +18,7 @@ import { AXIS_COLORS } from './axes'
 //   3. le terrain (une maison seulement) : un rectangle à la louche, qu'on retouche ou qu'on remplace
 //      par le cadastre ensuite.
 const properties = usePropertiesStore()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const phone = useMediaQuery('(max-width: 599px)')
 
 const step = ref(1)
@@ -44,19 +45,15 @@ watch(() => properties.creating, (open) => {
 function pick(a: number, b: number) { lat.value = Math.round(a * 1e7) / 1e7; lon.value = Math.round(b * 1e7) / 1e7 }
 function turn(delta: number) { heading.value = ((Math.round(heading.value + delta) % 360) + 360) % 360 }
 
-// -- recherche d'adresse : le géocodage de l'IGN (France, sans clé), lancé par l'utilisateur
+// -- recherche d'adresse : IGN (France) et Photon (monde), lancée par l'utilisateur (`lib/geocode.ts`)
 const query = ref('')
-const results = ref<{ label: string; lat: number; lon: number }[]>([])
+const results = ref<GeoResult[]>([])
 const searching = ref(false)
 async function search() {
   const q = query.value.trim()
   if (q.length < 3) return
   searching.value = true
-  try {
-    const r = await fetch(`https://data.geopf.fr/geocodage/search?q=${encodeURIComponent(q)}&limit=5`)
-    const j = await r.json() as { features?: { geometry: { coordinates: [number, number] }; properties: { label: string } }[] }
-    results.value = (j.features ?? []).map((f) => ({ label: f.properties.label, lon: f.geometry.coordinates[0], lat: f.geometry.coordinates[1] }))
-  } catch { results.value = [] }
+  try { results.value = await searchAddress(q, locale.value) }
   finally { searching.value = false }
 }
 function choose(r: { lat: number; lon: number }) { results.value = []; pick(r.lat, r.lon); picker.value?.flyTo(r.lat, r.lon) }

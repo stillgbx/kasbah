@@ -1311,3 +1311,15 @@ avec **un coin au point 0**, puis un guide enchaîne contour du terrain → cote
 Tests : `packages/shared/src/house/newHouse.test.ts`.
 
 Sources : `packages/shared/src/house/newHouse.ts`, `apps/server/src/config/properties.ts`.
+
+### Mise à jour 2026-10-10 (ter) — nom de la propriété et noms d'un niveau dans la séance d'édition
+
+Deux champs de plus dans le patch de structure (`packages/shared/src/house/structure.ts`) :
+`propertyName` (le `name` de la maison : en-tête, sélecteur de propriétés) et
+`levels: { [id]: { name?, shortName? } }` (niveau existant ou né dans la séance ; un `shortName`
+vide RETIRE la clé — l'onglet reprend alors le nom, cf. `shortName ?? name` dans `HomeView.vue`).
+Renommer ne convertit pas la maison en relevé (`structureReshapes` ne regarde que pièces et types).
+Un niveau inconnu lève `PlacementError`. Le serveur de catalogue donne au sélecteur le nom VIVANT de
+la propriété ouverte (`main.ts`), qu'un renommage vient peut-être d'écrire.
+
+Tests : `structure.test.ts`, `apps/web/src/stores/house.structure.test.ts`.

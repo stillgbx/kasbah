@@ -154,6 +154,25 @@ describe('nom et type', () => {
     expect(room(doc, 'salon')!.walls?.filter((w) => w.kind === 'interior')).toEqual([])   // reste le passage ouvert
   })
 
+  it('le nom de la propriété, et le nom court d’un niveau (vide = retiré, l’onglet reprend le nom)', () => {
+    const { doc, blocking } = applyHouseEditToJson(demo, {
+      propertyName: 'Maison du lac',
+      levels: { etage: { name: 'Premier étage', shortName: 'R+1' }, rdc: { shortName: '' } },
+    })
+    expect(blocking).toEqual([])
+    expect((doc as { name: string }).name).toBe('Maison du lac')
+    expect(level(doc, 'etage')).toMatchObject({ name: 'Premier étage', shortName: 'R+1' })
+    expect('shortName' in level(doc, 'rdc')!).toBe(false)
+    expect(as(doc).meta?.survey).toBeUndefined()              // renommer ne convertit rien
+    expect(() => parseHouse(doc)).not.toThrow()
+    expect(() => applyHouseEditToJson(demo, { levels: { nope: { name: 'X' } } })).toThrow(PlacementError)
+  })
+
+  it('un niveau né dans la séance se renomme aussi', () => {
+    const { doc } = applyHouseEditToJson(demo, { newLevels: [{ id: 'n', name: 'Étage 2', side: 'above' }], levels: { n: { name: 'Combles' } } })
+    expect(level(doc, 'n')!.name).toBe('Combles')
+  })
+
   it('une pièce inconnue est refusée', () => {
     expect(() => applyHouseEditToJson(demo, { rooms: { nope: { name: 'X' } } })).toThrow(PlacementError)
   })

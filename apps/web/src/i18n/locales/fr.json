@@ -1275,6 +1275,11 @@
     "openingNoFit": "{room} — {opening} ne tient plus sur son mur"
   },
   "structure": {
+    "propertyName": "Nom de la propriété",
+    "levelName": "Niveau de l’onglet",
+    "levelPick": "Choisissez un niveau dans les onglets",
+    "levelShort": "Court",
+    "levelShortHint": "Nom court, affiché dans les onglets (vide : le nom)",
     "section": "Pièces et niveaux",
     "newRoomName": "Pièce {n}",
     "newLevelAbove": "Étage {n}",
@@ -1319,7 +1324,7 @@
       "nameHint": "Le nom s’affiche dans l’en-tête et le sélecteur ; il se change ensuite dans le fichier de la maison.",
       "principle": "Toutes les mesures de la maison partent d’un point 0 que vous choisissez, en général un coin extérieur de la maison. Posez-le sur la carte, puis tournez le cap pour que la première pièce (5 × 4 m, en bleu) longe une façade : x et y sont les deux axes des cotes.",
       "terrainHint": "Un rectangle autour de la première pièce, à la louche : vous en dessinerez le vrai contour ensuite, ou importerez le cadastre.",
-      "searchPlaceholder": "Adresse (France)",
+      "searchPlaceholder": "Adresse",
       "search": "Chercher",
       "locate": "Ma position",
       "locateUnavailable": "La position n’est pas disponible dans ce navigateur.",

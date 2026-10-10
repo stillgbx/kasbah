@@ -657,3 +657,13 @@ celle du mode. Le client attend que `mode` change pour recharger. Le mode in-pro
 
 Sources : `packages/shared/src/protocol/http.ts`, `apps/server/src/http/routes.ts`,
 `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`.
+
+### Mise à jour 2026-10-10 (bis) — `select` vise une propriété de N'IMPORTE QUEL mode
+
+Correctif (signalé par l'utilisateur : « unknown property » au « Créer » de l'assistant, en mode
+démo). Depuis le lot C, `list()` ne rend que le mode courant ; `POST /api/properties/:id/select`
+vérifiait l'id dans cette liste, donc une propriété réelle tout juste créée (ou dupliquée) depuis le
+mode démo était refusée (404) — le fichier était pourtant écrit. La route demande désormais
+`PropertyHost.has(id)` (le catalogue, tous modes) ; choisir une propriété fait passer dans son mode :
+créer depuis la démo sort de la démo, comme voulu. Test : `apps/server/src/config/properties.test.ts`.
+
