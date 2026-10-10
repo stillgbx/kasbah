@@ -1281,6 +1281,7 @@
     "newLevelBelow": "Sous-sol",
     "addRoom": "Ajouter une pièce",
     "addRoomHint": "Elle naît sur « {level} », le niveau de l’onglet. Pour une pièce voisine : un mur choisi dans l’onglet Dimensions d’une pièce.",
+    "addRoomHintLowest": "Elle naît sur « {level} », le niveau le plus bas (aucun onglet de niveau choisi). Pour une pièce voisine : un mur choisi dans Dimensions.",
     "placeRoomHint": "Touchez le sol : une pièce de 4 × 4 m naît sur « {level} », à recaler ensuite dans Dimensions.",
     "addAbove": "Ajouter un étage",
     "addBelow": "Ajouter un sous-sol",

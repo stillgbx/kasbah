@@ -589,6 +589,15 @@ export const useHouseStore = defineStore('house', () => {
     if (focusedLevelId.value === levelId) focusLevel(null)
   }
 
+  // annuler, rétablir ou abandonner peut faire disparaître la pièce ou le niveau qu'on regardait :
+  // on remonte alors à la maison, plutôt que de garder un panneau et un onglet qui ne montrent rien
+  watch(index, (ix) => {
+    if (!ix) return
+    if (selectedRoomId.value && !ix.roomsById.has(selectedRoomId.value) && !ix.zonesById.has(selectedRoomId.value)) selectRoom(null)
+    if (focusedLevelId.value && !ix.levelsById.has(focusedLevelId.value)) focusLevel(null)
+    if (placingRoom.value && !ix.levelsById.has(placingRoom.value)) placingRoom.value = null
+  })
+
   const canUndoEdit = computed(() => editStep.value > 0)
   const canRedoEdit = computed(() => editStep.value < editHistory.value.length)
   function undoEdit() { if (canUndoEdit.value) editStep.value-- }

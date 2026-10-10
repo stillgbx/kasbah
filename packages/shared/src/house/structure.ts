@@ -62,9 +62,11 @@ export function applyStructureToJson(input: Json, patch: StructurePatch, shapes:
 
   // -- niveaux qui naissent : un étage se pose sur le plus haut niveau HABITÉ, un sous-sol sous le
   //    plus bas. Les niveaux vides au-dessus de l'étage (le niveau du toit) montent d'autant.
+  // un niveau né puis retiré dans la même séance n'a jamais existé : il ne monte pas le toit
+  const dropped = new Set(patch.removeLevels ?? [])
   const added = new Set<string>()
   const roomLevels = new Set([...rooms.map((r) => r.levelId as string), ...(patch.newRooms ?? []).map((r) => r.levelId)])
-  for (const nl of patch.newLevels ?? []) {
+  for (const nl of (patch.newLevels ?? []).filter((l) => !dropped.has(l.id))) {
     if (levels.some((l) => l.id === nl.id)) throw new PlacementError(`level "${nl.id}" already exists`)
     const storeys = levels.filter((l) => roomLevels.has(l.id as string) || added.has(l.id as string))
     const elev = (l: Json) => l.elevation as number
@@ -160,7 +162,7 @@ export function applyStructureToJson(input: Json, patch: StructurePatch, shapes:
   const parkings = (Array.isArray(site.parkings) ? site.parkings : []) as Json[]
   const arrays = (Array.isArray(doc.arrays) ? doc.arrays : []) as Json[]
   for (const id of patch.removeLevels ?? []) {
-    if (added.has(id)) { levels = levels.filter((l) => l.id !== id); continue }
+    if ((patch.newLevels ?? []).some((l) => l.id === id)) continue
     if (!levels.some((l) => l.id === id)) throw new PlacementError(`unknown level "${id}"`)
     const holds = rooms.some((r) => r.levelId === id) || devices.some((d) => d.levelId === id)
       || parkings.some((p) => p.levelId === id) || arrays.some((a) => a.levelId === id) || roof?.levelId === id

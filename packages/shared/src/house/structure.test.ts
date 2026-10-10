@@ -75,6 +75,13 @@ describe('un niveau qui naît', () => {
     expect(level(doc, 'b')!.elevation).toBeCloseTo(5.8 + 2.6 + 0.25, 4)
   })
 
+  it('né puis retiré dans la séance : le niveau du toit ne bouge pas', () => {
+    const { doc, blocking } = applyHouseEditToJson(demo, { newLevels: [{ id: 'a', name: 'A', side: 'above' }], removeLevels: ['a'] })
+    expect(blocking).toEqual([])
+    expect(level(doc, 'a')).toBeUndefined()
+    expect(level(doc, 'toit')!.elevation).toBe(5.55)
+  })
+
   it('en dessous : un sous-sol sous le plus bas', () => {
     const { doc } = applyHouseEditToJson(demo, { newLevels: [{ id: 'ss', name: 'Sous-sol', side: 'below' }] })
     expect(level(doc, 'ss')!.elevation).toBeCloseTo(0.2 - 0.25 - 2.6, 4)

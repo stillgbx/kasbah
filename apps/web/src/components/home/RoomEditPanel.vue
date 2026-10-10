@@ -10,6 +10,7 @@ import EditBar from './EditBar.vue'
 import RoomShapeSection from './RoomShapeSection.vue'
 import ParkingRows from './ParkingRows.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
+import MarqueeText from '../ui/MarqueeText.vue'
 
 // Panneau d'une pièce en MODE ÉDITION : ce qu'on peut modifier DE LA PIÈCE, à la place des appareils
 // qu'on pilote le reste du temps. Le mode est armé dans Réglages, donc le geste est déjà décidé : on
@@ -68,7 +69,8 @@ function setKind(ev: Event) {
       <button type="button" class="crumb" @click="emit('back')"><StrokeIcon name="back" :size="14" /> {{ levelName }}</button>
       <div class="head">
         <div class="min0">
-          <div class="title">{{ room.name }}</div>
+          <!-- le nom se modifie ici : un nom long défile sur une ligne au lieu de pousser le panneau -->
+          <MarqueeText class="title" :text="room.name" />
           <div class="muted sub">{{ levelName }} · {{ $t('opening.count', { n: openings.length }, openings.length) }}</div>
         </div>
       </div>

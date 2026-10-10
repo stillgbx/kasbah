@@ -1266,6 +1266,7 @@
     "newLevelBelow": "Basement",
     "addRoom": "Add a room",
     "addRoomHint": "Created on “{level}”, the current tab’s level. For a neighbouring room, pick a wall in a room’s Dimensions tab.",
+    "addRoomHintLowest": "Created on “{level}”, the lowest level (no level tab chosen). For a neighbouring room, pick a wall in Dimensions.",
     "placeRoomHint": "Tap the ground: a 4 × 4 m room is created on “{level}”, to be adjusted in Dimensions.",
     "addAbove": "Add a floor",
     "addBelow": "Add a basement",

@@ -1,3 +1,4 @@
+import { nextTick } from 'vue'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { parseHouse } from '@kasbah/shared'
@@ -26,6 +27,23 @@ describe('house store — séance d’édition : structure', () => {
     expect(store.selectedRoom).toMatchObject({ name: 'Bureau', kind: 'garage' })
     store.undoEdit(); store.undoEdit(); store.undoEdit()
     expect(store.effective!.rooms.some((r) => r.id === id)).toBe(false)
+    expect(store.editDirty).toBe(false)
+  })
+
+  it('annuler une pièce ou un niveau né remonte à la maison : ni panneau ni onglet vides', async () => {
+    const store = useHouseStore()
+    store.house = parseHouse(demo)
+    store.addRoomAgainstWall('salon', 0)
+    await nextTick()
+    expect(store.selectedRoom).not.toBeNull()
+    store.undoEdit()
+    await nextTick()
+    expect(store.selectedRoomId).toBeNull()
+    store.addLevel('above')
+    await nextTick()
+    store.discardEdit()
+    await nextTick()
+    expect(store.focusedLevelId).toBeNull()
     expect(store.editDirty).toBe(false)
   })
 

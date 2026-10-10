@@ -113,7 +113,7 @@ function toggle(s: Section) {
         <StrokeIcon name="plus" :size="16" /> {{ $t('structure.addRoom') }}
       </button>
       <button v-else type="button" class="pill add add--armed" @click="house.cancelPlacingRoom()">{{ $t('opening.cancel') }}</button>
-      <p class="muted hint hint--3">{{ $t(house.placingRoom ? 'structure.placeRoomHint' : 'structure.addRoomHint', { level: targetLevel }) }}</p>
+      <p class="muted hint hint--3">{{ $t(house.placingRoom ? 'structure.placeRoomHint' : tabLevel ? 'structure.addRoomHint' : 'structure.addRoomHintLowest', { level: targetLevel }) }}</p>
       <div class="pair">
         <button type="button" class="pill add" :disabled="house.savingEdit" @click="house.addLevel('above')">{{ $t('structure.addAbove') }}</button>
         <button type="button" class="pill add" :disabled="house.savingEdit" @click="house.addLevel('below')">{{ $t('structure.addBelow') }}</button>
