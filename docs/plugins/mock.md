@@ -8,6 +8,12 @@
 | **Compte** | aucun, rien à configurer |
 | **Vues** | toutes (Maison, Lumières, Ouvrants, Médias, Chauffage, Véhicules, Robots, Animaux, Énergie, Eau, Météo…), Réglages → Plugins |
 
+![Les Tilleuls](../screenshots/maison-tilleuls.webp)
+![Les Embruns](../screenshots/maison-embruns.webp)
+![Le Belvédère](../screenshots/maison-belvedere.webp)
+
+*Captures de la démonstration (simulation, aucun appareil réel).*
+
 ## Ce que fait le plugin
 
 - **Une maison qui vit toute seule**, sans matériel : volets qui montent à vitesse réaliste, thermostat qui rejoint sa consigne, aspirateur et tondeuse qui suivent leur planning, véhicules qui partent et rentrent, soleil et nuages qui font varier la production solaire, usure des consommables de la station d'eau…

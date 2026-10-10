@@ -8,6 +8,10 @@
 | **Compte** | une application créée sur `developer.husqvarnagroup.cloud` avec le compte de l'appli Automower Connect : une clé et un secret, sans consentement dans un navigateur |
 | **Vues** | Robots, Maison (marqueur du robot en 3D), Réglages → Plugins |
 
+![Vue Robots](../screenshots/robots.webp)
+
+*Capture de la démonstration (simulation, aucun appareil réel).*
+
 ## Ce que fait le plugin
 
 - **État** : activité (tond, en charge, rentre, à la station, en pause, arrêtée, en erreur), batterie, prochain départ, hauteur de coupe (en cm), connexion et âge du dernier statut.

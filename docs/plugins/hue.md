@@ -8,6 +8,10 @@
 | **Compte** | aucun compte en ligne : une clé d'application obtenue en appuyant sur le bouton du bridge |
 | **Vues** | Maison (pilules 3D, panneau pièce), Lumières, Réglages → Plugins |
 
+![Vue Lumières](../screenshots/lights.webp)
+
+*Capture de la démonstration (simulation, aucun appareil réel).*
+
 ## Ce que fait le plugin
 
 - **Lampes** : allumer, éteindre, luminosité, blanc chaud / froid (selon la lampe), couleur (selon la lampe).

@@ -8,6 +8,10 @@
 | **Compte** | aucun compte, aucun jeton |
 | **Vues** | Médias, Musique (comme enceinte de lecture), Maison (marqueur et onde sonore), Réglages → Plugins |
 
+![Vue Médias](../screenshots/media.webp)
+
+*Capture de la démonstration (simulation, aucun appareil réel).*
+
 ## Ce que fait le plugin
 
 - **Ce qui joue** : titre, artiste, pochette, appli source, volume et sourdine, quelle que soit l'origine de la lecture (téléphone, voix, Kasbah). L'appareil pousse lui-même ces informations, elles s'affichent aussitôt.

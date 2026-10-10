@@ -8,6 +8,10 @@
 | **Compte** | identifiant et mot de passe du compte MELCloud, saisis une seule fois dans Réglages ; seule une clé de session est gardée |
 | **Vues** | Chauffage, Maison (panneau pièce), Réglages → Plugins |
 
+![Vue Chauffage](../screenshots/heating.webp)
+
+*Capture de la démonstration (simulation, aucun appareil réel).*
+
 ## Ce que fait le plugin
 
 - **Une zone de chauffage = un appareil** : température mesurée, et consigne affichée. La machine est « allumée » presque toute l'année ; l'interface distingue ce qui est allumé de ce qui chauffe vraiment.

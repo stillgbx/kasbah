@@ -10,6 +10,10 @@
 
 > **Non officiel.** Le site n'offre aucune connexion déléguée ni API : Kasbah se connecte comme le fait un navigateur. Une évolution du site peut casser la lecture sans préavis.
 
+![Vue École](../screenshots/school.webp)
+
+*Capture de la démonstration (simulation, aucun appareil réel).*
+
 ## Ce que fait le plugin
 
 - **Devoirs** (cahier de texte) : regroupés par jour à rendre à partir d'aujourd'hui, le prochain jour à rendre mis en avant ; les devoirs passés des derniers jours se déplient. Une case **« fait »** par devoir.

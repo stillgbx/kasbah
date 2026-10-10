@@ -8,6 +8,10 @@
 | **Compte** | aucun compte en ligne : un jeton généré dans l'appli mobile « TaHoma by Somfy » |
 | **Vues** | Maison (marqueurs 3D, panneau pièce), Ouvrants, Réglages → Plugins |
 
+![Vue Ouvrants](../screenshots/covers.webp)
+
+*Capture de la démonstration (simulation, aucun appareil réel).*
+
 ## Ce que fait le plugin
 
 - **Ouvrants** : ouvrir, fermer, arrêter en pleine course ; viser une **position** en pourcentage quand le moteur sait le faire (moteurs io-homecontrol).

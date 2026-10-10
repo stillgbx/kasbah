@@ -8,6 +8,10 @@
 | **Compte** | identifiant et mot de passe du compte iRobot, saisis une seule fois dans Réglages ; seul le mot de passe local de chaque robot est gardé |
 | **Vues** | Robots, Maison (panneau pièce, base du robot), Réglages → Plugins |
 
+![Vue Robots](../screenshots/robots.webp)
+
+*Capture de la démonstration (simulation, aucun appareil réel).*
+
 ## Ce que fait le plugin
 
 - **État du robot** : activité (à la base, nettoyage, en pause, retour à la base, erreur), batterie, bac plein, message d'erreur, mis à jour en direct (le robot pousse son état de lui-même, sans sondage).

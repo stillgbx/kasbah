@@ -8,6 +8,10 @@
 | **Compte** | l'adresse e-mail et le mot de passe du compte MY Renault (sans double authentification) |
 | **Vues** | Véhicules, Maison (voiture en 3D, à la couleur de la caisse quand elle est connue), Réglages → Plugins |
 
+![Carte Renault de la vue Véhicules](../screenshots/renault.webp)
+
+*Capture de la démonstration (simulation, aucun appareil réel).*
+
 ## Ce que fait le plugin
 
 - **Lecture** : charge, autonomie, câble branché et charge en cours, temps restant, limite de charge (cible) et plancher, position, kilométrage, température intérieure, couleur de la caisse.

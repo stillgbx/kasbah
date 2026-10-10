@@ -8,6 +8,10 @@
 | **Compte** | une application sur `developer.tesla.com` (ID client et secret), un domaine public en HTTPS qui sert une clé publique, puis le compte Tesla qui consent |
 | **Vues** | Véhicules, Maison (voiture en 3D, aux couleurs de la peinture), Réglages → Plugins |
 
+![Carte Tesla de la vue Véhicules](../screenshots/tesla.webp)
+
+*Capture de la démonstration (simulation, aucun appareil réel).*
+
 ## Ce que fait le plugin
 
 - **Lecture** : charge, autonomie, câble branché et charge en cours, limite de charge, fin de charge estimée, verrouillage, position (sur la carte, avec le cap), kilométrage, vitesse et rapport, pression des quatre pneus, températures, version logicielle et mise à jour en attente, couleur de la peinture.

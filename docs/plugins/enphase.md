@@ -8,6 +8,10 @@
 | **Compte** | un jeton de passerelle valable un an ; pour la borne, en plus, une session liée avec le compte Enphase |
 | **Vues** | Énergie, Maison (panneaux et batteries en 3D), Réglages → Plugins |
 
+![Vue Énergie](../screenshots/energy.webp)
+
+*Capture de la démonstration (simulation, aucun appareil réel).*
+
 ## Ce que fait le plugin
 
 - **Site** : production solaire, consommation, échange avec le réseau et stockage, en temps réel (relevé toutes les 10 s).

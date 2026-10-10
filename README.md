@@ -1,10 +1,28 @@
 # Kasbah
 
+[![Licence MIT](https://img.shields.io/badge/licence-MIT-blue)](LICENSE)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/stillgbx)
+
 Application web (**tablette, ordinateur, téléphone**) qui montre la maison et le jardin en **3D** (souris et tactile) et permet de **visualiser et piloter les appareils connectés** placés dans les pièces : lumières, ventilateurs, ouvrants, lecteurs, caméras, chauffage, robots, eau, énergie solaire, véhicules et animaux. S'y ajoutent la musique (YouTube Music, Mixcloud, radios), la météo, l'agenda de la famille, le cahier de texte de l'école et des automatisations exécutées par le serveur.
 
 - La maison (étages, pièces, ouvertures, terrain, origine GPS, plugins actifs) est décrite dans un **fichier JSON** : voir [docs/house-json.md](docs/house-json.md) et le [wiki](doc/index.md).
 - Chaque fabricant est un **plugin** côté serveur ; les secrets d'API vivent dans un `.env` **serveur**, jamais dans le navigateur.
 - Six thèmes nommés, apparence clair / sombre / système / auto (soleil au-dessus de la maison), français et anglais.
+
+## Aperçu
+
+![Les Tilleuls, maison de démonstration, sous la bruine](docs/screenshots/maison-tilleuls.webp)
+
+| Les Embruns (plain-pied, toit plat) | Le Belvédère (appartement) |
+|---|---|
+| ![Les Embruns](docs/screenshots/maison-embruns.webp) | ![Le Belvédère](docs/screenshots/maison-belvedere.webp) |
+| **Énergie** | **Météo** |
+| ![Vue Énergie](docs/screenshots/energy.webp) | ![Vue Météo](docs/screenshots/weather.webp) |
+| **Véhicules** | **Robots** |
+| ![Vue Véhicules](docs/screenshots/vehicles.webp) | ![Vue Robots](docs/screenshots/robots.webp) |
+
+Captures des trois propriétés de démonstration, sur la simulation (aucun appareil réel). D'autres vues sont
+montrées dans la fiche de chaque plugin ([docs/plugins](docs/plugins)).
 
 ## Architecture
 

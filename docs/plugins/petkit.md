@@ -8,6 +8,10 @@
 | **Compte** | adresse du compte PetKit + code à usage unique reçu par courriel (aucun mot de passe) ; seul le jeton de session est gardé |
 | **Vues** | Animaux, Maison (panneau d'appareil), Réglages → Plugins |
 
+![Vue Animaux](../screenshots/pets.webp)
+
+*Capture de la démonstration (simulation, aucun appareil réel).*
+
 ## Ce que fait le plugin
 
 - **Mangeoires** : trémie garnie ou à remplir, dessiccant, batterie de secours, ration servie aujourd'hui et prévue, prochain repas du plan, distribution en cours. Bouton **Servir une ration**, dans la liste de portions que la machine accepte.

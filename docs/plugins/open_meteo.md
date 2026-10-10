@@ -8,6 +8,10 @@
 | **Compte** | aucun : ni compte, ni clé, ni jeton |
 | **Vues** | Météo, Maison (widget météo), alertes de vigilance, Réglages → Plugins |
 
+![Vue Météo](../screenshots/weather.webp)
+
+*Capture de la démonstration (simulation, aucun appareil réel).*
+
 ## Ce que fait le plugin
 
 - **Météo de la maison** : température et ressenti, conditions, vent et rafales, humidité, pression, indice UV, visibilité, point de rosée, risque de pluie, nébulosité, lever et coucher du soleil.

@@ -8,6 +8,10 @@
 | **Compte** | aucun : la station n'a pas d'authentification, rien à appairer ni à coller |
 | **Vues** | Eau, Maison (marqueur 3D de la station), Réglages → Plugins |
 
+![Vue Eau](../screenshots/water.webp)
+
+*Capture de la démonstration (simulation, aucun appareil réel).*
+
 ## Ce que fait le plugin
 
 Testé sur une station **Proteo 2** (antitartre électronique, préfiltre, deux cartouches de charbon actif, lampe UVc). Le plugin est en **lecture seule** : les réglages se font sur l'écran tactile de la station.
