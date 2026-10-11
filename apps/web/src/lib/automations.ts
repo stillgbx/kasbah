@@ -1,5 +1,5 @@
 import {
-  automationBodySchema, CLIMATE_MODES,
+  automationBodySchema, CLIMATE_MODES, inverseCommand,
   type AutomationBody, type AutomationHealth, type Capability, type CommandInput, type DeviceKind,
   type LeafPredicate, type Predicate, type SunEvent, type Target, type Trigger,
 } from '@kasbah/shared'
@@ -231,7 +231,8 @@ export function describeAction(a: ActionDraft, names: NameContext, t: Translate)
   if (a.type === 'recallScene') return t('automations.summary.scene', { name: names.sceneName(a.sceneId) })
   const key = choiceOf(a.command)?.key
   const verb = key ? t(`automations.command.${key}`, { n: paramOf(a.command) ?? '' }) : a.command.type
-  return `${verb} · ${describeTarget(a.target, names, t)}`
+  const forMin = a.forMin && inverseCommand(a.command) ? ` · ${t('automations.summary.forMin', { n: a.forMin })}` : ''
+  return `${verb} · ${describeTarget(a.target, names, t)}${forMin}`
 }
 
 /** La phrase d'une ligne de liste : « Quand · sauf si … → Alors ». */

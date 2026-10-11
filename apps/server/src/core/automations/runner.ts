@@ -1,4 +1,4 @@
-import { assertCommandAllowed, CommandNotAllowedError, type Automation, type AutomationRun } from '@kasbah/shared'
+import { assertCommandAllowed, CommandNotAllowedError, inverseCommand, type Automation, type AutomationRun, type Command, type DeviceId } from '@kasbah/shared'
 import { PluginError } from '../plugin'
 import type { PluginHost } from '../plugin-host'
 import type { SceneRegistry } from '../scene-registry'
@@ -21,13 +21,30 @@ export interface RunnerDeps {
 
 type RunError = AutomationRun['errors'][number]
 
+/** « Pendant N minutes » : la commande inverse à envoyer à un appareil, et quand. */
+export interface PendingRevert {
+  automationId: string
+  /** Rang de l'action dans la liste. */
+  action: number
+  deviceId: DeviceId
+  command: Command
+  dueAt: number
+}
+
+export interface RunResult {
+  run: AutomationRun
+  /** Retours à planifier : un par appareil qui a accusé une action « pendant N minutes ». */
+  reverts: PendingRevert[]
+}
+
 function codeOf(err: unknown): string {
   if (err instanceof PluginError || err instanceof CommandNotAllowedError) return err.code
   return 'INTERNAL'
 }
 
-export async function runActions(a: Automation, by: AutomationRun['by'], ctx: EvalContext, deps: RunnerDeps): Promise<AutomationRun> {
+export async function runActions(a: Automation, by: AutomationRun['by'], ctx: EvalContext, deps: RunnerDeps): Promise<RunResult> {
   const errors: RunError[] = []
+  const reverts: PendingRevert[] = []
   let attempted = 0
 
   for (const [i, action] of a.actions.entries()) {
@@ -54,12 +71,15 @@ export async function runActions(a: Automation, by: AutomationRun['by'], ctx: Ev
       assertCommandAllowed(e.descriptor, action.command)
       await deps.host.execute(e.descriptor.id, action.command)
     }))
+    const inverse = action.forMin ? inverseCommand(action.command) : undefined
     results.forEach((r, k) => {
-      if (r.status === 'rejected') errors.push({ action: i, deviceId: entries[k]!.descriptor.id, code: codeOf(r.reason), message: (r.reason as Error).message })
+      const deviceId = entries[k]!.descriptor.id
+      if (r.status === 'rejected') errors.push({ action: i, deviceId, code: codeOf(r.reason), message: (r.reason as Error).message })
+      else if (inverse) reverts.push({ automationId: a.id, action: i, deviceId, command: inverse, dueAt: ctx.now + action.forMin! * 60_000 })
     })
   }
 
   // Aucune cible (toutes les pièces écartées, aucun volet ce soir) n'est pas un échec : rien à faire.
   const outcome = !errors.length ? 'ok' : errors.length >= attempted ? 'failed' : 'partial'
-  return { at: ctx.now, by, outcome, errors }
+  return { run: { at: ctx.now, by, outcome, errors }, reverts }
 }

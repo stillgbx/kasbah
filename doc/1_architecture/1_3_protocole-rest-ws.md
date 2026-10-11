@@ -449,6 +449,7 @@ Sources : `apps/server/src/mcp/server.ts`, `apps/server/src/app.ts`.
 | `PUT` | `/api/automations/:id` | corps `automationBodySchema` (ni `id`, pris dans l'URL, ni `updatedAt`, posé par le serveur) → `{ automation }` (`automationResponseSchema`) ; crée ou remplace |
 | `PATCH` | `/api/automations/:id` | `{ enabled }` seul (`automationPatchSchema`) → `{ automation }` ; 404 si inconnue |
 | `DELETE` | `/api/automations/:id` | `{ ok: true }` ; 404 si inconnue |
+| `PUT` | `/api/automation-order` | `{ ids }` (`automationOrderSchema`) → `{ automations }` dans le nouvel ordre, celui du fichier ; id inconnu ignoré, règle non citée gardée après (2026-10-11 ; hors de `/api/automations/` : `order` y serait un id) |
 | `POST` | `/api/automations/:id/run` | `{ run }` (`automationRunResponseSchema`) : **les actions seules**, sans déclencheur ni « sauf si » ; **200 même en échec partiel**, `run.errors` dit ce qui a raté appareil par appareil |
 
 Un id hors `[a-z0-9_.-]{1,64}` ou un corps invalide → 400 (`ZodError`). `AutomationEntry` =

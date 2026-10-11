@@ -4,6 +4,7 @@ import { stateKeys } from '../devices/state'
 import { serverMessageSchema } from '../protocol/ws'
 import { automationBodySchema, automationSchema, automationsFileSchema, type Automation } from './automation'
 import { TRIGGER_FIELDS } from './fields'
+import { inverseCommand } from './inverse'
 import { predicateSchema } from './predicate'
 
 // Les volets au crépuscule, l'exemple qui a lancé le chantier : soleil décalé et borné, jours,
@@ -73,5 +74,15 @@ describe('TRIGGER_FIELDS', () => {
       const keys = stateKeys(kind)
       for (const f of TRIGGER_FIELDS[kind] ?? []) expect(keys.has(f.field), `${kind}.${f.field}`).toBe(true)
     }
+  })
+})
+
+describe('inverseCommand', () => {
+  it('inverts the obvious commands only', () => {
+    expect(inverseCommand({ type: 'cover.open' })).toEqual({ type: 'cover.close' })
+    expect(inverseCommand({ type: 'light.set', on: true })).toEqual({ type: 'light.set', on: false })
+    expect(inverseCommand({ type: 'light.set', on: true, brightness: 40 })).toBeUndefined()
+    expect(inverseCommand({ type: 'mower.start' })).toEqual({ type: 'mower.park', untilNextSchedule: true })
+    expect(inverseCommand({ type: 'cover.set_position', position: 30 })).toBeUndefined()
   })
 })

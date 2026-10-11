@@ -519,6 +519,13 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
       lastRuns.delete(id)
       pushAutomations()
     },
+    async setAutomationOrder(ids) {
+      const ordered = [...ids.flatMap((id) => automations.get(id) ?? []), ...[...automations.values()].filter((a) => !ids.includes(a.id))]
+      automations.clear()
+      for (const a of ordered) automations.set(a.id, a)
+      pushAutomations()
+      return automationList()
+    },
     // Exécute pour de vrai sur la simulation (les volets se ferment dans la 3D) ; une sélection
     // se résout ici sur le kind et la nature seulement, sans pièces ni exceptions.
     async runAutomation(id) {

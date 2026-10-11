@@ -1,6 +1,6 @@
 # Automatisations (règles « Quand / Sauf si / Alors »)
 
-> Dernière mise à jour : 2026-10-09
+> Dernière mise à jour : 2026-10-11
 > Sources : `packages/shared/src/automations/{predicate,automation,fields}.ts`, `packages/shared/src/house/{sun,geo}.ts`, `packages/shared/src/devices/activity.ts`, `apps/server/src/core/automations/{engine,schedule,evaluate,context,status,runner,store}.ts`, `apps/server/src/app.ts`, `apps/server/src/http/routes.ts`, `apps/server/src/ws/hub.ts`, `packages/mock-sim/src/behaviours/weather.ts`, `.gitignore`, tests listés en fin de page, arbre de travail NON COMMITÉ du 2026-09-23 (après 0f943a0)
 
 ## Ce que c'est, et pourquoi c'est le serveur qui s'en charge
@@ -275,3 +275,45 @@ Automatisations. Le test crée sa règle dans une copie temporaire de la maison 
 `<maison>.automations.json` n'atterrisse pas dans `house/`.
 
 Sources : `apps/server/src/mcp/{server,server.test}.ts`.
+
+### Mise à jour 2026-10-11 — ordre rangé à la main, et « pendant N minutes »
+
+**Ordre de la liste.** Il n'est plus alphabétique : c'est l'ordre du fichier, que l'utilisateur range par
+glisser-déposer (poignée à gauche de chaque ligne). Décision de l'utilisateur, contre un tri par prochaine
+exécution : un déclencheur d'état (« une voiture arrive au portail ») n'a pas de prochaine heure. Route
+`PUT /api/automation-order` `{ ids }` (`automationOrderSchema`), **hors de** `/api/automations/` parce que
+`order` est un id d'automatisation valide. `AutomationEngine.reorder` : id inconnu ignoré, règle absente de la
+liste gardée après les autres ; réécrire une règle ne la déplace pas, une neuve va en bas. Le store web garde
+un tableau `order` à part (une clé d'objet numérique comme « 12 » passerait devant les autres dans
+`Object.values`) ; le glissement est optimiste, l'ordre revient si le serveur refuse. Filtrée ou cherchée,
+la liste n'échange que les places des lignes affichées : les autres gardent les leurs dans le fichier.
+
+**« Pendant N minutes ».** Une action `command` porte un `forMin` facultatif (1 à 1440) : au bout, la
+commande **inverse** part sur les appareils qui ont accusé réception (« ouvrir le portail pendant 20 min »).
+`inverseCommand` (`packages/shared/src/automations/inverse.ts`) ne connaît que les inverses évidents, choix
+de l'utilisateur : ouvrir ↔ fermer, allumer ↔ éteindre (une commande qui ne fait QUE basculer `on`),
+lecture → arrêt, aspirateur → base, tondeuse → `mower.park` jusqu'au prochain créneau, verrouiller ↔
+déverrouiller, charge ↔ arrêt, préchauffage → arrêt. Ni position, ni luminosité, ni volume, ni consigne :
+il faudrait relever la valeur d'avant. Pour une commande sans inverse, l'éditeur grise le bouton
+« Pendant » et retire `forMin` ; le serveur l'ignore de toute façon.
+
+Côté moteur : `runActions` rend `{ run, reverts }`, un retour daté par appareil. Le moteur les garde par
+`automation#action#appareil` (un nouveau déclenchement **remplace** le retour en attente : l'attente
+repart de zéro), sous un seul minuteur. Un retour échu ne part que si son appareil a publié un état
+(`fresh`) et est disponible — jamais sur les valeurs par défaut d'un appareil pas encore relevé. Ni
+supprimer ni désactiver la règle n'annule un retour : le portail se referme quand même. Un échec du
+retour est seulement journalisé (`automation revert failed`), il n'entre pas dans `lastRun`.
+
+**Rattrapé après un redémarrage**, choix de l'utilisateur et contraire assumé de la règle des échéances
+horaires (non rattrapées) : laisser le portail ouvert serait pire que le fermer en retard. Les retours en
+attente sont écrits dans `.state/automation-reverts.json` (`reverts.ts`, `writeFileAtomic`) ; un fichier
+illisible est ignoré avec un avertissement, il ne bloque pas le démarrage. Un seul fichier pour le
+serveur, pas un par maison : les ids d'appareils sont ceux des plugins, communs aux maisons.
+
+Le mode simulé (`mockTransport`) range la liste mais **n'exécute pas** les retours.
+
+Sources : `packages/shared/src/automations/{automation,inverse}.ts`, `apps/server/src/core/automations/{runner,engine,reverts}.ts`,
+`apps/server/src/{app.ts,http/routes.ts}`, `apps/web/src/{stores/automations.ts,views/AutomationsView.vue,lib/automations.ts}`,
+`apps/web/src/components/automations/{AutomationRow,ActionEditor}.vue`. Tests : `engine.test.ts` (retour après N min, attente
+qui repart, rattrapage au redémarrage une fois l'appareil relevé, aucune commande sans inverse, ordre),
+`automations.test.ts` (`inverseCommand`), `stores/automations.test.ts` (ordre du serveur, retour arrière).

@@ -13,6 +13,8 @@ import { SceneRegistry } from '../scene-registry'
 import { HouseView } from './context'
 import { AutomationEngine } from './engine'
 import { evaluatePredicate, resolveTarget } from './evaluate'
+import type { RevertsStore } from './reverts'
+import type { PendingRevert } from './runner'
 import { automationsPathFor, createAutomationsFile, type AutomationsStore } from './store'
 
 const HOUSE = resolve(import.meta.dirname, '../../../../../house/demo-house.json')
@@ -42,10 +44,17 @@ class MemoryStore implements AutomationsStore {
   async save(list: readonly Automation[]) { this.saved = [...list] }
 }
 
+class MemoryReverts implements RevertsStore {
+  saved: PendingRevert[] | null = null
+  constructor(private initial: PendingRevert[] = []) {}
+  async load() { return this.initial }
+  async save(list: readonly PendingRevert[]) { this.saved = [...list] }
+}
+
 let house: LoadedHouse
 beforeEach(async () => { house = await loadHouse(HOUSE) })
 
-function harness(initial: Automation[] = []) {
+function harness(initial: Automation[] = [], reverts = new MemoryReverts()) {
   const clock = new ManualClock(Date.UTC(2026, 8, 22, 10))
   const bus = new Bus()
   const logger = pino({ level: 'silent' })
@@ -57,11 +66,11 @@ function harness(initial: Automation[] = []) {
     recallScene: vi.fn(async () => undefined),
   }
   const store = new MemoryStore(initial)
-  const engine = new AutomationEngine({ store, registry, scenes, host, house, bus, clock, logger })
+  const engine = new AutomationEngine({ store, reverts, registry, scenes, host, house, bus, clock, logger })
   registry.register('mock', DEVICES)
   const patch = (externalId: string, p: Record<string, unknown>) => registry.applyPatch(`mock:${externalId}`, { available: true, ...p } as StatePatch)
   const flush = () => new Promise((r) => setTimeout(r, 0))
-  return { clock, bus, registry, scenes, host, executed, store, engine, patch, flush }
+  return { clock, bus, registry, scenes, host, executed, store, reverts, engine, patch, flush }
 }
 
 const body = (over: Partial<AutomationBody> = {}): AutomationBody => ({
@@ -242,6 +251,78 @@ describe('AutomationEngine — status and actions', () => {
     expect(await h.engine.remove('a')).toBe(true)
     expect(h.store.saved).toEqual([])
     expect(cb).toHaveBeenCalled()
+  })
+})
+
+describe('AutomationEngine — for N minutes', () => {
+  const gate = (forMin = 20) => body({
+    actions: [{ type: 'command', target: { type: 'devices', deviceIds: ['mock:cover-living', 'mock:ghost'] }, command: { type: 'cover.open' }, forMin }],
+  })
+  const closes = (h: ReturnType<typeof harness>) => h.executed.filter((x) => x.cmd.type === 'cover.close')
+
+  it('sends the inverse command after forMin, to the devices that acknowledged', async () => {
+    const h = harness()
+    await h.engine.start()
+    h.patch('cover-living', { position: 0 })
+    await h.engine.upsert('g', gate())
+    await h.engine.runNow('g')
+    expect(h.reverts.saved).toMatchObject([{ automationId: 'g', action: 0, deviceId: 'mock:cover-living', command: { type: 'cover.close' } }])
+    h.clock.advance(19 * 60_000)
+    expect(closes(h)).toEqual([])
+    h.clock.advance(60_000)
+    await h.flush()
+    expect(closes(h)).toEqual([{ id: 'mock:cover-living', cmd: { type: 'cover.close' } }])
+    expect(h.reverts.saved).toEqual([])
+  })
+
+  it('restarts the wait when the rule runs again', async () => {
+    const h = harness()
+    await h.engine.start()
+    h.patch('cover-living', { position: 0 })
+    await h.engine.upsert('g', gate())
+    await h.engine.runNow('g')
+    h.clock.advance(10 * 60_000)
+    await h.engine.runNow('g')
+    h.clock.advance(15 * 60_000)
+    await h.flush()
+    expect(closes(h)).toEqual([])
+    h.clock.advance(5 * 60_000)
+    await h.flush()
+    expect(closes(h)).toHaveLength(1)
+  })
+
+  it('catches up a revert left by a restart, once its device has reported', async () => {
+    const now = Date.UTC(2026, 8, 22, 10)
+    const h = harness([], new MemoryReverts([{ automationId: 'gone', action: 0, deviceId: 'mock:cover-living', command: { type: 'cover.close' }, dueAt: now - 60_000 }]))
+    await h.engine.start()
+    await h.flush()
+    expect(closes(h)).toEqual([])                           // pas encore relevé : valeurs par défaut
+    h.patch('cover-living', { position: 100 })
+    await h.flush()
+    expect(closes(h)).toHaveLength(1)
+    expect(h.reverts.saved).toEqual([])
+  })
+
+  it('plans nothing for a command without an obvious inverse', async () => {
+    const h = harness()
+    await h.engine.start()
+    h.patch('cover-living', { position: 0 })
+    await h.engine.upsert('p', body({ actions: [{ type: 'command', target: { type: 'devices', deviceIds: ['mock:cover-living'] }, command: { type: 'cover.set_position', position: 40 }, forMin: 5 }] }))
+    await h.engine.runNow('p')
+    expect(h.reverts.saved).toBeNull()
+  })
+})
+
+describe('AutomationEngine — order', () => {
+  it('reorders the list and the file, unknown ids ignored, unlisted ones kept after', async () => {
+    const h = harness()
+    await h.engine.start()
+    for (const id of ['a', 'b', 'c']) await h.engine.upsert(id, body())
+    const list = await h.engine.reorder(['c', 'ghost', 'a'])
+    expect(list.map((e) => e.automation.id)).toEqual(['c', 'a', 'b'])
+    expect(h.store.saved.map((a) => a.id)).toEqual(['c', 'a', 'b'])
+    await h.engine.upsert('a', body({ name: 'Renommée' }))  // réécrire ne déplace pas
+    expect(h.engine.list().map((e) => e.automation.id)).toEqual(['c', 'a', 'b'])
   })
 })
 

@@ -1,5 +1,5 @@
 import type { Automation, AutomationBody, AutomationEntry, AutomationRun, AutomationStatus, DeviceId } from '@kasbah/shared'
-import { automationBodySchema } from '@kasbah/shared'
+import { assertCommandAllowed, automationBodySchema } from '@kasbah/shared'
 import type { Logger } from 'pino'
 import type { LoadedHouse } from '../../config/house'
 import type { Bus } from '../bus'
@@ -8,7 +8,8 @@ import type { DeviceRegistry } from '../registry'
 import type { SceneRegistry } from '../scene-registry'
 import { HouseView, type EvalContext } from './context'
 import { evaluatePredicate, touches, type Tri } from './evaluate'
-import { runActions, type RunnerDeps } from './runner'
+import type { RevertsStore } from './reverts'
+import { runActions, type PendingRevert, type RunnerDeps, type RunResult } from './runner'
 import { nextOccurrence } from './schedule'
 import { computeStatus } from './status'
 import type { AutomationsStore } from './store'
@@ -24,6 +25,13 @@ import type { AutomationsStore } from './store'
 // partent d'« inconnu » et ne déclenchent donc jamais. Les états produits par nos propres commandes
 // arrivent plus tard, sur un autre tour : front seul, pas de boucle.
 //
+// PENDANT N MINUTES : une action qui porte `forMin` laisse, par appareil qui a accusé, un RETOUR
+// (la commande inverse) daté. Ils sont notés sur disque (`reverts`) et survivent à un redémarrage ;
+// un retour échu part dès que son appareil a publié un état et répond — jamais sur les valeurs par
+// défaut d'un appareil pas encore relevé. Un nouveau déclenchement remplace le retour en attente du
+// même appareil (l'attente repart de zéro). Ni la suppression ni la désactivation de la règle ne
+// l'annulent : le portail se referme quand même.
+//
 // Chaque gestionnaire du bus est protégé : `Bus.emit` n'attrape rien, et une exception ici
 // remonterait dans le plugin qui a publié l'état.
 
@@ -32,6 +40,8 @@ const MAX_WAIT_MS = 6 * 3600_000
 
 export interface AutomationEngineDeps extends RunnerDeps {
   store: AutomationsStore
+  /** Retours « pendant N minutes » en attente ; absent = gardés en mémoire seulement. */
+  reverts?: RevertsStore
   registry: DeviceRegistry
   scenes: SceneRegistry
   house: LoadedHouse
@@ -49,6 +59,9 @@ export class AutomationEngine {
   private readonly last = new Map<string, Tri>()
   private readonly holds = new Map<string, unknown>()
   private readonly running = new Set<string>()
+  /** Retours en attente, par `automation#action#appareil`. */
+  private readonly reverts = new Map<string, PendingRevert>()
+  private revertTimer: unknown = null
   /** Appareils qui ont publié un état depuis leur apparition : les autres ont les valeurs par défaut. */
   private readonly fresh = new Set<DeviceId>()
   private readonly listeners = new Set<() => void>()
@@ -64,13 +77,15 @@ export class AutomationEngine {
 
   async start(): Promise<void> {
     for (const a of await this.deps.store.load()) this.automations.set(a.id, a)
+    try { for (const r of (await this.deps.reverts?.load()) ?? []) this.reverts.set(revertKey(r), r) }
+    catch (err) { this.deps.logger.warn({ err }, 'pending automation reverts unreadable, ignored') }
     const guard = <A extends unknown[]>(name: string, fn: (...args: A) => void) => (...args: A) => {
       try { fn(...args) } catch (err) { this.deps.logger.error({ err, event: name }, 'automation handler failed') }
     }
     const { bus } = this.deps
     this.unsubscribe.push(
-      bus.on('state', guard('state', (id: DeviceId) => { this.fresh.add(id); this.onDevices([id]) })),
-      bus.on('availability', guard('availability', (ids: DeviceId[]) => { this.onDevices(ids); this.notify() })),
+      bus.on('state', guard('state', (id: DeviceId) => { this.fresh.add(id); this.onDevices([id]); this.runDueReverts() })),
+      bus.on('availability', guard('availability', (ids: DeviceId[]) => { this.onDevices(ids); this.runDueReverts(); this.notify() })),
       bus.on('devices', guard('devices', (entries) => {
         const present = new Set(entries.map((e) => e.descriptor.id))
         for (const id of this.fresh) if (!present.has(id)) this.fresh.delete(id)
@@ -81,7 +96,8 @@ export class AutomationEngine {
     )
     for (const a of this.automations.values()) this.baseline(a)
     this.arm()
-    this.deps.logger.info({ count: this.automations.size }, 'automations loaded')
+    this.armReverts()
+    this.deps.logger.info({ count: this.automations.size, reverts: this.reverts.size }, 'automations loaded')
   }
 
   close(): void {
@@ -89,6 +105,7 @@ export class AutomationEngine {
     for (const u of this.unsubscribe) u()
     this.unsubscribe.length = 0
     if (this.timer) this.deps.clock.clearTimeout(this.timer)
+    if (this.revertTimer) this.deps.clock.clearTimeout(this.revertTimer)
     for (const h of this.holds.values()) this.deps.clock.clearTimeout(h)
     this.holds.clear()
     this.listeners.clear()
@@ -148,13 +165,33 @@ export class AutomationEngine {
     return this.entry(a, this.context())
   }
 
+  /**
+   * Range la liste dans l'ordre donné (celui du fichier, que l'interface affiche). Un id inconnu est
+   * ignoré ; une règle absente de la liste garde sa place relative, après les autres.
+   */
+  async reorder(ids: readonly string[]): Promise<AutomationEntry[]> {
+    const before = [...this.automations.values()]
+    const listed = ids.filter((id, k) => this.automations.has(id) && ids.indexOf(id) === k).map((id) => this.automations.get(id)!)
+    const rest = before.filter((a) => !listed.includes(a))
+    this.automations.clear()
+    for (const a of [...listed, ...rest]) this.automations.set(a.id, a)
+    try { await this.persist() }
+    catch (err) {
+      this.automations.clear()
+      for (const a of before) this.automations.set(a.id, a)
+      throw err
+    }
+    this.notify()
+    return this.list()
+  }
+
   /** « Exécuter maintenant » : les actions seules, sans déclencheur ni « sauf si » — on teste l'« Alors ». */
   async runNow(id: string): Promise<AutomationRun | undefined> {
     const a = this.automations.get(id)
     if (!a) return undefined
-    const run = await runActions(a, 'manual', this.context(), this.deps)
-    this.record(a, run)
-    return run
+    const result = await runActions(a, 'manual', this.context(), this.deps)
+    this.done(a, result)
+    return result.run
   }
 
   // ── interne ──────────────────────────────────────────────────────────────────────────────
@@ -305,9 +342,62 @@ export class AutomationEngine {
     this.running.add(a.id)
     // Jamais attendu ici : on est dans un gestionnaire du bus ou du minuteur.
     void runActions(a, by, ctx, this.deps)
-      .then((run) => this.record(a, run))
+      .then((result) => this.done(a, result))
       .catch((err) => this.deps.logger.error({ err, automation: a.id }, 'automation run failed'))
       .finally(() => this.running.delete(a.id))
+  }
+
+  private done(a: Automation, { run, reverts }: RunResult): void {
+    if (reverts.length) {
+      for (const r of reverts) this.reverts.set(revertKey(r), r)
+      this.saveReverts()
+      this.armReverts()
+    }
+    this.record(a, run)
+  }
+
+  // retours « pendant N minutes »
+
+  /** Un seul minuteur, sur le prochain retour pas encore échu ; les échus attendent leur appareil. */
+  private armReverts(): void {
+    if (this.closed) return
+    const { clock } = this.deps
+    if (this.revertTimer) { clock.clearTimeout(this.revertTimer); this.revertTimer = null }
+    const now = clock.now()
+    let earliest = Infinity
+    for (const r of this.reverts.values()) if (r.dueAt > now) earliest = Math.min(earliest, r.dueAt)
+    if (earliest !== Infinity) this.revertTimer = clock.setTimeout(() => {
+      this.revertTimer = null
+      try { this.runDueReverts() } catch (err) { this.deps.logger.error({ err }, 'automation revert tick failed') }
+      this.armReverts()
+    }, Math.min(earliest - now, MAX_WAIT_MS))
+    this.runDueReverts()
+  }
+
+  /** Envoie les retours échus dont l'appareil a publié un état et répond. */
+  private runDueReverts(): void {
+    if (!this.reverts.size) return
+    const now = this.deps.clock.now()
+    let sent = false
+    for (const [key, r] of this.reverts) {
+      if (r.dueAt > now || !this.fresh.has(r.deviceId)) continue
+      const entry = this.deps.registry.get(r.deviceId)
+      if (!entry?.state.available) continue
+      this.reverts.delete(key)
+      sent = true
+      void (async () => {
+        assertCommandAllowed(entry.descriptor, r.command)
+        await this.deps.host.execute(r.deviceId, r.command)
+      })()
+        .then(() => this.deps.logger.info({ automation: r.automationId, device: r.deviceId, command: r.command.type }, 'automation revert sent'))
+        .catch((err) => this.deps.logger.warn({ err, automation: r.automationId, device: r.deviceId, command: r.command.type }, 'automation revert failed'))
+    }
+    if (sent) this.saveReverts()
+  }
+
+  private saveReverts(): void {
+    void this.deps.reverts?.save([...this.reverts.values()])
+      .catch((err) => this.deps.logger.warn({ err }, 'pending automation reverts not saved'))
   }
 
   private record(a: Automation, run: AutomationRun): void {
@@ -317,3 +407,5 @@ export class AutomationEngine {
     this.notify()
   }
 }
+
+const revertKey = (r: PendingRevert) => `${r.automationId}#${r.action}#${r.deviceId}`

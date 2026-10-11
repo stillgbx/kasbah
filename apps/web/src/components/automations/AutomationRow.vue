@@ -14,8 +14,9 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 // et l'état (ce qui manque, ce qui ne répond pas). Empreinte FIXE : chaque ligne est toujours là
 // (« — » quand elle n'a rien à dire), chaque texte défile s'il déborde, la colonne de droite a sa
 // largeur réservée — basculer, perdre un appareil ou voir passer une exécution ne décale rien.
-const props = defineProps<{ entry: AutomationEntry; now: number }>()
-const emit = defineEmits<{ open: [] }>()
+// La poignée de gauche range la liste : le glissement lui-même est mené par la vue.
+const props = defineProps<{ entry: AutomationEntry; now: number; dragged?: boolean }>()
+const emit = defineEmits<{ open: []; grab: [ev: PointerEvent] }>()
 const store = useAutomationsStore()
 const { names } = useAutomationNames()
 const { t, locale } = useI18n()
@@ -62,7 +63,10 @@ const state = computed(() => {
 </script>
 
 <template>
-  <div class="row card" :data-on="a.enabled ? '1' : '0'">
+  <div class="row card" :data-on="a.enabled ? '1' : '0'" :data-automation="a.id" :data-dragged="dragged ? '1' : '0'">
+    <button type="button" class="row__grip" :title="$t('automations.reorder')" :aria-label="$t('automations.reorder')" @pointerdown="emit('grab', $event)">
+      <StrokeIcon name="grip" :size="16" />
+    </button>
     <button type="button" class="row__main" :aria-label="a.name" @click="emit('open')">
       <span class="icon-square row__icon" :data-on="a.enabled ? '1' : '0'"><StrokeIcon :name="triggerIcon(a.trigger)" :size="18" /></span>
       <span class="row__text">
@@ -92,8 +96,15 @@ const state = computed(() => {
 
 <style scoped>
 .row { display: flex; align-items: center; gap: 8px; height: 104px; padding: 0 10px 0 0; box-sizing: border-box; }
+.row[data-dragged='1'] { outline: 2px solid var(--accent); opacity: .65; }
+.row__grip {
+  flex: 0 0 auto; display: grid; place-items: center; width: 28px; height: 28px; margin-left: 6px;
+  border: 0; background: none; color: var(--muted); border-radius: 8px; cursor: grab; touch-action: none;
+}
+.row__grip:hover { background: var(--accent-soft); color: var(--accent); }
+.row__grip:active { cursor: grabbing; }
 .row__main {
-  flex: 1 1 0; min-width: 0; height: 100%; display: flex; align-items: center; gap: 14px; padding: 0 0 0 14px;
+  flex: 1 1 0; min-width: 0; height: 100%; display: flex; align-items: center; gap: 14px; padding: 0 0 0 2px;
   border: 0; background: transparent; color: inherit; text-align: left; font: inherit;
 }
 .row__icon { align-self: flex-start; margin-top: 12px; }

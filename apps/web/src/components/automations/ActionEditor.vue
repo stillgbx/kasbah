@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { commandKind, COVER_CLASSES, MEDIA_PLAYER_CLASSES, type DeviceKind, type SceneRecallMode, type Target } from '@kasbah/shared'
+import { commandKind, COVER_CLASSES, inverseCommand, MEDIA_PLAYER_CLASSES, type DeviceKind, type SceneRecallMode, type Target } from '@kasbah/shared'
 import { useAutomationNames } from '../../composables/useAutomationNames'
 import { choiceOf, choicesFor, COMMANDABLE_KINDS, kindLabel, paramOf, type ActionDraft, type CommandChoice } from '../../lib/automations'
 import { useDevicesStore } from '../../stores/devices'
@@ -11,6 +11,8 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 // Une action, dans une petite carte. Une commande vise des appareils NOMMÉS, ou une SÉLECTION
 // résolue au moment d'agir (« tous les volets du rez-de-chaussée ») — une lampe ajoutée demain y
 // entre sans rien réécrire. Les commandes proposées sont celles que les appareils visés déclarent.
+// « Pendant N min » : au bout, le serveur envoie la commande inverse — offert seulement quand elle
+// en a une (ouvrir ↔ fermer, allumer ↔ éteindre…).
 const props = defineProps<{ modelValue: ActionDraft }>()
 const emit = defineEmits<{ 'update:modelValue': [value: ActionDraft]; remove: [] }>()
 const devices = useDevicesStore()
@@ -36,7 +38,20 @@ const choice = computed(() => (a.value.type === 'command' ? choiceOf(a.value.com
 
 function setCommand(x: Partial<Extract<ActionDraft, { type: 'command' }>>) {
   if (a.value.type !== 'command') return
-  emit('update:modelValue', { ...a.value, ...x })
+  const next = { ...a.value, ...x }
+  if (next.forMin && !inverseCommand(next.command)) delete next.forMin   // la nouvelle commande n'a pas d'inverse
+  emit('update:modelValue', next)
+}
+const hasInverse = computed(() => a.value.type === 'command' && !!inverseCommand(a.value.command))
+const forMin = computed(() => (a.value.type === 'command' ? a.value.forMin : undefined))
+function setForMin(n: number | undefined) {
+  if (a.value.type !== 'command') return
+  const { forMin: _, ...rest } = a.value
+  emit('update:modelValue', n ? { ...rest, forMin: n } : rest)
+}
+function setForMinText(raw: string) {
+  const n = Number(raw.replace(',', '.'))
+  if (Number.isFinite(n)) setForMin(Math.min(1440, Math.max(1, Math.round(n))))
 }
 function setKind(k: DeviceKind) {
   const first = choicesFor(k)[0]
@@ -162,6 +177,14 @@ const recallModes = computed(() => (['static', 'dynamic', 'off'] as const).map((
         <v-select v-else-if="choice?.param?.type === 'enum'" class="act__grow" :model-value="paramOf(a.command)" :items="climateItems"
                   density="compact" variant="outlined" hide-details :aria-label="$t('automations.editor.param')" @update:model-value="(v: string | number) => setParam(String(v))" />
       </div>
+      <!-- « pendant N min » : place toujours là, éteinte pour une commande sans inverse -->
+      <div class="act__for" :title="hasInverse ? $t('automations.editor.forMinHint') : $t('automations.editor.noInverse')">
+        <button type="button" class="act__toggle" :disabled="!hasInverse" :data-on="forMin ? '1' : '0'" :aria-pressed="!!forMin"
+                @click="setForMin(forMin ? undefined : 20)">{{ $t('automations.editor.forMin') }}</button>
+        <input class="act__input act__input--num" :style="{ visibility: forMin ? 'visible' : 'hidden' }" type="text" inputmode="numeric" enterkeyhint="done"
+               :value="String(forMin ?? '')" :aria-label="$t('automations.editor.forMin')" @change="setForMinText(($event.target as HTMLInputElement).value)">
+        <span class="muted" :style="{ visibility: forMin ? 'visible' : 'hidden' }">{{ $t('automations.editor.minutes') }}</span>
+      </div>
     </template>
 
     <template v-else-if="a.type === 'recallScene'">
@@ -193,6 +216,8 @@ const recallModes = computed(() => (['static', 'dynamic', 'off'] as const).map((
   background: transparent; color: var(--muted); font: 500 12px/1 var(--font);
 }
 .act__toggle[data-on='1'] { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.act__toggle:disabled { opacity: .45; }
+.act__for { display: flex; align-items: center; gap: 8px; min-height: 36px; }
 .act__except-kind { flex: 1 1 0; min-width: 0; }
 .act__param { display: flex; align-items: center; gap: 6px; min-height: 36px; }
 .act__grow { flex: 1 1 0; min-width: 0; }

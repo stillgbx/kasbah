@@ -13,7 +13,7 @@ import { MIN_QUERY } from '../composables/useSearch'
 import { normalize, queryTerms, scoreQuery } from '../lib/search'
 import { useAutomationsStore } from '../stores/automations'
 
-// Automatisations de la maison : la liste (recherche, filtre, ordre fixe par nom). Toucher une ligne
+// Automatisations de la maison : la liste (recherche, filtre, ordre rangé à la main). Toucher une ligne
 // ouvre sa page d'édition (`AutomationEditView`) : une règle qui accumule des exceptions et des
 // actions ne tient pas dans un panneau de 340 px.
 const store = useAutomationsStore()
@@ -69,6 +69,50 @@ const shown = computed(() => {
   })
 })
 
+// ---- ranger la liste -------------------------------------------------------------------------
+// Le glissement part de la POIGNÉE (la ligne ouvre l'éditeur, l'interrupteur bascule) ; la liste se
+// réorganise sous le doigt, l'ordre part au relâchement. Filtrée, seules les lignes affichées
+// échangent leurs places : les autres gardent les leurs dans le fichier.
+const drag = ref<{ id: string; ids: string[]; from: string[] } | null>(null)
+const rows = computed(() => {
+  const ids = drag.value?.ids
+  return ids ? [...shown.value].sort((a, b) => ids.indexOf(a.automation.id) - ids.indexOf(b.automation.id)) : shown.value
+})
+
+function startDrag(ev: PointerEvent, id: string) {
+  ev.preventDefault()
+  const ids = shown.value.map((e) => e.automation.id)
+  drag.value = { id, ids, from: ids }
+  // sur la FENÊTRE : Vue déplace la ligne (donc la poignée) à chaque échange, ce qui relâche la capture
+  window.addEventListener('pointermove', moveDrag)
+  window.addEventListener('pointerup', endDrag)
+  window.addEventListener('pointercancel', endDrag)
+}
+function moveDrag(ev: PointerEvent) {
+  const d = drag.value
+  if (!d) return
+  const over = (document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null)?.closest<HTMLElement>('[data-automation]')?.dataset.automation
+  const from = d.ids.indexOf(d.id)
+  const to = over ? d.ids.indexOf(over) : -1
+  if (to < 0 || to === from) return
+  const ids = [...d.ids]
+  ids.splice(from, 1)
+  ids.splice(to, 0, d.id)
+  drag.value = { ...d, ids }
+}
+function endDrag() {
+  window.removeEventListener('pointermove', moveDrag)
+  window.removeEventListener('pointerup', endDrag)
+  window.removeEventListener('pointercancel', endDrag)
+  const d = drag.value
+  drag.value = null
+  if (!d || d.ids.join() === d.from.join()) return
+  const moved = new Set(d.ids)
+  let k = 0
+  void store.reorder(store.list.map((e) => (moved.has(e.automation.id) ? d.ids[k++]! : e.automation.id)))
+}
+onBeforeUnmount(endDrag)   // quitter la vue en plein glissement ne doit pas laisser d'écouteurs
+
 const open = (id: string) => router.push({ name: 'automation-edit', params: { id } })
 const create = () => open('new')
 </script>
@@ -100,7 +144,8 @@ const create = () => open('new')
     <div class="page__scroll">
       <div v-if="!shown.length" class="card card--soft empty muted">{{ store.list.length ? $t('automations.noMatch') : $t('automations.none') }}</div>
       <div class="rows">
-        <AutomationRow v-for="e in shown" :key="e.automation.id" :entry="e" :now="now" @open="open(e.automation.id)" />
+        <AutomationRow v-for="e in rows" :key="e.automation.id" :entry="e" :now="now" :dragged="drag?.id === e.automation.id"
+                       @open="open(e.automation.id)" @grab="startDrag($event, e.automation.id)" />
       </div>
     </div>
   </div>

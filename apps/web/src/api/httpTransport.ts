@@ -130,6 +130,11 @@ export function createHttpTransport(base = ''): Transport {
       (j) => automationResponseSchema.parse(j).automation as AutomationEntry,
     ),
     deleteAutomation: (id) => request(`${base}/api/automations/${encodeURIComponent(id)}`, { method: 'DELETE' }, () => undefined),
+    setAutomationOrder: (ids) => request(
+      `${base}/api/automation-order`,
+      { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids }) },
+      (j) => automationsResponseSchema.parse(j).automations as AutomationEntry[],
+    ),
     runAutomation: (id) => request(
       `${base}/api/automations/${encodeURIComponent(id)}/run`,
       { method: 'POST' },

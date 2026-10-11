@@ -87,8 +87,12 @@ export const automationRecallSchema = z.object({
 })
 
 export const actionSchema = z.discriminatedUnion('type', [
-  /** Une commande du contrat, vérifiée appareil par appareil comme depuis l'interface. */
-  z.object({ type: z.literal('command'), target: targetSchema, command: commandSchema }),
+  /**
+   * Une commande du contrat, vérifiée appareil par appareil comme depuis l'interface. `forMin` :
+   * « pendant N minutes » — au bout, la commande INVERSE part sur les appareils qui ont accusé
+   * réception (`inverseCommand`) ; ignoré pour une commande qui n'en a pas.
+   */
+  z.object({ type: z.literal('command'), target: targetSchema, command: commandSchema, forMin: z.number().int().positive().max(1440).optional() }),
   z.object({ type: z.literal('recallScene'), sceneId: sceneIdSchema, recall: automationRecallSchema }),
   // Itération 2 : { type: 'system.run', name } (liste blanche du .env) ; { type: 'webhook', url }
 ])
@@ -116,6 +120,9 @@ export type AutomationBody = z.input<typeof automationBodySchema>
 
 /** Corps d'un `PATCH` : écrit à la main (un `.partial()` réinjecterait les défauts de zod 4). */
 export const automationPatchSchema = z.object({ enabled: z.boolean() })
+
+/** Corps d'un `PUT /api/automation-order` : l'ordre de la liste, celui du fichier. */
+export const automationOrderSchema = z.object({ ids: z.array(automationIdSchema).max(1000) })
 
 /** Le fichier sur disque. */
 export const automationsFileSchema = z.object({ schemaVersion: z.literal(1), automations: z.array(automationSchema) })

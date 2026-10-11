@@ -2,6 +2,18 @@
 
 Entrées les plus récentes en haut. Une session = une entrée.
 
+## [2026-10-11] update | Automatisations : ordre manuel et « pendant N minutes »
+
+**Déclencheur** : demande de l'utilisateur — pouvoir changer l'ordre de la liste, et « ouvrir le portail pendant 20 minutes » (action inverse au bout du délai).
+
+**Pages modifiées** :
+- `1_architecture/1_8_automatisations.md` - mise à jour datée : ordre du fichier rangé par glisser-déposer, `forMin` et `inverseCommand`, retours persistés dans `.state/` et rattrapés au redémarrage.
+- `1_architecture/1_3_protocole-rest-ws.md` - route `PUT /api/automation-order`.
+
+**Pages créées** : aucune.
+
+**Index** : date de `1_8` relevée (`1_3` déjà au 2026-10-11).
+
 ## [2026-10-11] update | Vue Robots : cartes à l'horizontale
 
 **Déclencheur** : demande de l'utilisateur — cartes de la vue Robots en largeur sur grand écran, comme la vue Véhicules ; compteurs descendus sous la batterie à sa demande.

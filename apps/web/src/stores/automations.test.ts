@@ -21,10 +21,10 @@ function withTransport(over: Partial<Transport>) {
 describe('automations store', () => {
   beforeEach(() => { setActivePinia(createPinia()); setTransport(null); localStorage.clear() })
 
-  it('replaces the map on snapshot and automations messages, sorted by name', () => {
+  it('replaces the map on snapshot and automations messages, in the server order', () => {
     const store = useAutomationsStore()
-    store.apply({ type: 'snapshot', serverTime: 0, devices: [], scenes: [], automations: [entry('b', 'Volets'), entry('a', 'Arrosage')] })
-    expect(store.list.map((e) => e.automation.name)).toEqual(['Arrosage', 'Volets'])
+    store.apply({ type: 'snapshot', serverTime: 0, devices: [], scenes: [], automations: [entry('b', 'Volets'), entry('12', 'Arrosage')] })
+    expect(store.list.map((e) => e.automation.name)).toEqual(['Volets', 'Arrosage'])   // « 12 » ne passe pas devant
     store.apply({ type: 'automations', automations: [entry('c', 'Portail')] })
     expect(store.list.map((e) => e.automation.id)).toEqual(['c'])
   })
@@ -35,6 +35,16 @@ describe('automations store', () => {
     store.apply({ type: 'automations', automations: [entry('a', 'Arrosage'), entry('b', 'Volets')] })
     await store.setEnabled('a', false)
     expect(store.list.map((e) => [e.automation.id, e.automation.enabled])).toEqual([['a', false], ['b', true]])
+  })
+
+  it('reorders at once, and puts the order back when the server refuses', async () => {
+    withTransport({ setAutomationOrder: vi.fn(async () => { throw new ApiRequestError(500, 'INTERNAL', 'disk full') }) })
+    const store = useAutomationsStore()
+    store.apply({ type: 'automations', automations: [entry('a', 'Arrosage'), entry('b', 'Volets')] })
+    const pending = store.reorder(['b', 'a'])
+    expect(store.list.map((e) => e.automation.id)).toEqual(['b', 'a'])
+    expect(await pending).toBe(false)
+    expect(store.list.map((e) => e.automation.id)).toEqual(['a', 'b'])
   })
 
   it('rolls back an optimistic toggle the server refuses, and says so', async () => {

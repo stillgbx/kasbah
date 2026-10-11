@@ -536,6 +536,8 @@ export interface Transport {
   putAutomation(id: string, body: AutomationBody): Promise<AutomationEntry>
   setAutomationEnabled(id: string, enabled: boolean): Promise<AutomationEntry>
   deleteAutomation(id: string): Promise<void>
+  /** Range la liste (ordre du fichier) ; rend la liste entière dans le nouvel ordre. */
+  setAutomationOrder(ids: string[]): Promise<AutomationEntry[]>
   /** Exécute les actions tout de suite (ni déclencheur ni « sauf si ») ; rend le compte rendu. */
   runAutomation(id: string): Promise<AutomationRun>
   /** Liste de courses de la maison. Chaque écriture rend la liste entière (et le WebSocket la pousse). */

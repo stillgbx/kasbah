@@ -7,11 +7,13 @@ import type { Env } from './config/env'
 import { loadHouse, type LoadedHouse } from './config/house'
 import type { PropertyHost } from './config/properties'
 import { AutomationEngine } from './core/automations/engine'
+import { createRevertsFile } from './core/automations/reverts'
 import { automationsPathFor, createAutomationsFile } from './core/automations/store'
 import { Bus } from './core/bus'
 import { systemClock, type Clock } from './core/clock'
 import type { PluginFactory } from './core/plugin'
 import { PluginHost } from './core/plugin-host'
+import { stateFile } from './core/paths'
 import { DeviceRegistry } from './core/registry'
 import { SceneRegistry } from './core/scene-registry'
 import { SceneSeeder } from './core/scene-seeder'
@@ -107,6 +109,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
   // non). Après `host`, par qui passent les commandes ; avant le hub, dont le snapshot les porte.
   const automations = new AutomationEngine({
     store: createAutomationsFile(automationsPathFor(house.path), { readOnly: !!opts.readOnly }),
+    reverts: createRevertsFile(stateFile('automation-reverts.json')),
     registry, scenes, host, house, bus, clock, logger: opts.logger.child({ component: 'automations' }),
   })
   // Liste de courses : un fichier à côté de la maison, lu avant le hub, dont le snapshot la porte.

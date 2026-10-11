@@ -16,19 +16,20 @@ type Entries = Record<string, AutomationEntry>
 
 export const useAutomationsStore = defineStore('automations', () => {
   const entries = shallowRef<Entries>({})
+  /** Ordre du serveur (celui du fichier) : une clé d'objet numérique (« 12 ») passerait devant les autres. */
+  const order = shallowRef<string[]>([])
   /** Bascule, suppression ou exécution en cours, par automatisation. */
   const busy = ref<Record<string, boolean>>({})
   const saving = ref(false)
 
-  /** Ordre FIXE, par nom : une ligne qu'on désactive ne saute pas ailleurs sous le doigt. */
-  const list = computed<AutomationEntry[]>(() =>
-    Object.values(entries.value).sort((a, b) => a.automation.name.localeCompare(b.automation.name)),
-  )
+  /** Ordre FIXE, rangé à la main (`reorder`) : une ligne qu'on désactive ne saute pas ailleurs sous le doigt. */
+  const list = computed<AutomationEntry[]>(() => order.value.flatMap((id) => entries.value[id] ?? []))
 
   function setAll(all: AutomationEntry[]) {
     const next: Entries = {}
     for (const e of all) next[e.automation.id] = e
     entries.value = next
+    order.value = all.map((e) => e.automation.id)
   }
 
   function apply(msg: ServerMessage) {
@@ -37,6 +38,7 @@ export const useAutomationsStore = defineStore('automations', () => {
 
   function adopt(e: AutomationEntry) {
     entries.value = { ...entries.value, [e.automation.id]: e }
+    if (!order.value.includes(e.automation.id)) order.value = [...order.value, e.automation.id]   // une neuve va en bas, comme dans le fichier
   }
 
   const isBusy = (id: string) => busy.value[id] === true
@@ -119,6 +121,20 @@ export const useAutomationsStore = defineStore('automations', () => {
     }
   }
 
+  /** Range la liste. Optimiste : l'ordre change tout de suite, il revient si le serveur refuse. */
+  async function reorder(ids: string[]): Promise<boolean> {
+    const before = order.value
+    order.value = ids
+    try {
+      setAll(await getTransport().setAutomationOrder(ids))
+      return true
+    } catch (err) {
+      if (order.value === ids) order.value = before
+      fail(err, t('nav.automations'))
+      return false
+    }
+  }
+
   /** Exécute les actions tout de suite ; rend le compte rendu, ou `null` si l'appel a échoué. */
   async function runNow(id: string): Promise<AutomationRun | null> {
     const entry = entries.value[id]
@@ -134,5 +150,5 @@ export const useAutomationsStore = defineStore('automations', () => {
     }
   }
 
-  return { entries, list, busy, saving, apply, load, save, setEnabled, remove, runNow, isBusy }
+  return { entries, list, busy, saving, apply, load, save, setEnabled, remove, reorder, runNow, isBusy }
 })
