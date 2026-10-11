@@ -194,83 +194,95 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
         <!-- L'ASPIRATEUR. Quatre champs au contrat, donc quatre champs à l'écran : l'activité, la
              batterie, le bac, l'erreur. La ligne d'erreur garde sa place même vide (`min-height`),
              comme sur la tondeuse : rien ne se décale quand une panne tombe. -->
-        <article v-for="v in vacuums" :key="v.descriptor.id" class="card rcard" :data-unavailable="v.state.available ? '0' : '1'">
-          <div class="rcard__head">
-            <span class="icon-square" :data-on="v.state.activity === 'cleaning' ? '1' : '0'"><StrokeIcon name="vacuum" :size="18" /></span>
-            <div class="min0">
-              <div class="rcard__name">{{ displayName(v) }}</div>
-              <div class="muted rcard__sub">{{ makeAndModel(v) }}</div>
+        <article v-for="v in vacuums" :key="v.descriptor.id" class="card rcard rcard--vacuum" :data-unavailable="v.state.available ? '0' : '1'">
+          <div class="rcard__group rcard__energy">
+            <div class="rcard__head">
+              <span class="icon-square" :data-on="v.state.activity === 'cleaning' ? '1' : '0'"><StrokeIcon name="vacuum" :size="18" /></span>
+              <div class="min0">
+                <div class="rcard__name">{{ displayName(v) }}</div>
+                <div class="muted rcard__sub">{{ makeAndModel(v) }}</div>
+              </div>
+              <span class="rcard__activity" :data-tone="v.state.activity === 'error' ? 'error' : v.state.activity === 'cleaning' ? 'on' : 'off'">
+                {{ $t(`vacuum.activities.${v.state.activity}`) }}
+              </span>
             </div>
-            <span class="rcard__activity" :data-tone="v.state.activity === 'error' ? 'error' : v.state.activity === 'cleaning' ? 'on' : 'off'">
-              {{ $t(`vacuum.activities.${v.state.activity}`) }}
-            </span>
+            <div class="rcard__soc">
+              <div class="big-value">{{ formatPercent(v.state.battery, locale) }}</div>
+              <div class="muted">{{ $t('vacuum.battery') }}</div>
+            </div>
+            <div class="rcard__bar">
+              <div class="rcard__bar-fill" :data-low="v.state.battery < 20 ? '1' : '0'" :style="{ width: `${v.state.battery}%` }" />
+            </div>
+            <div class="rcard__status" :data-error="v.state.activity === 'error' ? '1' : '0'">
+              <span class="rcard__status-text">{{ v.state.errorMessage ?? '' }}</span>
+              <button v-if="alerts.closableFor(v.descriptor.id).length" type="button" class="rcard__dismiss" :title="$t('alerts.dismissHint')" @click="alerts.dismiss(alerts.closableFor(v.descriptor.id))">{{ $t('alerts.dismiss') }}</button>
+            </div>
           </div>
-          <div class="rcard__soc">
-            <div class="big-value">{{ formatPercent(v.state.battery, locale) }}</div>
-            <div class="muted">{{ $t('vacuum.battery') }}</div>
+          <div class="rcard__group rcard__state">
+            <div class="rcard__stats">
+              <div class="card card--soft stat"><div class="muted stat__k">{{ $t('vacuum.bin') }}</div><div class="stat__v">{{ binState(v.state) }}</div></div>
+              <div class="card card--soft stat"><div class="muted stat__k">{{ $t('vacuum.connection') }}</div><div class="stat__v">{{ v.state.available ? $t('vacuum.connected') : $t('vacuum.offline') }}</div></div>
+              <!-- serpillière : deux cases de plus, et seulement pour un robot qui LAVE. Un Roomba sec
+                   n'a pas de patin ni de réservoir, et deux cases à « — » vaudraient moins que rien. -->
+              <template v-if="has(v, 'mop')">
+                <div class="card card--soft stat"><div class="muted stat__k">{{ $t('vacuum.mopPad') }}</div><div class="stat__v">{{ padState(v.state) }}</div></div>
+                <div class="card card--soft stat"><div class="muted stat__k">{{ $t('vacuum.tank') }}</div><div class="stat__v">{{ tankState(v.state) }}</div></div>
+              </template>
+            </div>
           </div>
-          <div class="rcard__bar">
-            <div class="rcard__bar-fill" :data-low="v.state.battery < 20 ? '1' : '0'" :style="{ width: `${v.state.battery}%` }" />
-          </div>
-          <div class="rcard__status" :data-error="v.state.activity === 'error' ? '1' : '0'">
-            <span class="rcard__status-text">{{ v.state.errorMessage ?? '' }}</span>
-            <button v-if="alerts.closableFor(v.descriptor.id).length" type="button" class="rcard__dismiss" :title="$t('alerts.dismissHint')" @click="alerts.dismiss(alerts.closableFor(v.descriptor.id))">{{ $t('alerts.dismiss') }}</button>
-          </div>
-          <div class="rcard__stats">
-            <div class="card card--soft stat"><div class="muted stat__k">{{ $t('vacuum.bin') }}</div><div class="stat__v">{{ binState(v.state) }}</div></div>
-            <div class="card card--soft stat"><div class="muted stat__k">{{ $t('vacuum.connection') }}</div><div class="stat__v">{{ v.state.available ? $t('vacuum.connected') : $t('vacuum.offline') }}</div></div>
-            <!-- serpillière : deux cases de plus, et seulement pour un robot qui LAVE. Un Roomba sec
-                 n'a pas de patin ni de réservoir, et deux cases à « — » vaudraient moins que rien. -->
-            <template v-if="has(v, 'mop')">
-              <div class="card card--soft stat"><div class="muted stat__k">{{ $t('vacuum.mopPad') }}</div><div class="stat__v">{{ padState(v.state) }}</div></div>
-              <div class="card card--soft stat"><div class="muted stat__k">{{ $t('vacuum.tank') }}</div><div class="stat__v">{{ tankState(v.state) }}</div></div>
-            </template>
-          </div>
-          <div class="rcard__actions">
-            <button v-if="has(v, 'clean')" type="button" class="pill" :data-on="v.state.activity === 'cleaning' ? '1' : '0'" :disabled="!v.state.available || busy(v)" :aria-busy="busy(v)"
-                    @click="send(v.descriptor.id, v.state.activity === 'cleaning' ? { type: 'vacuum.pause' } : { type: 'vacuum.start' })">
-              <v-progress-circular v-if="busy(v)" indeterminate size="16" width="2" />
-              <StrokeIcon v-else :name="v.state.activity === 'cleaning' ? 'pause' : 'play'" :size="16" />
-              {{ v.state.activity === 'cleaning' ? $t('common.pause') : $t('common.start') }}
-            </button>
-            <button v-if="has(v, 'dock')" type="button" class="pill" :disabled="!v.state.available || busy(v) || v.state.activity === 'docked'"
-                    @click="send(v.descriptor.id, { type: 'vacuum.dock' })">
-              <StrokeIcon name="home" :size="16" />{{ $t('common.dock') }}
-            </button>
-            <button v-if="has(v, 'locate')" type="button" class="pill" :disabled="!v.state.available || busy(v)"
-                    @click="send(v.descriptor.id, { type: 'vacuum.locate' })">
-              <StrokeIcon name="crosshair" :size="16" />{{ $t('common.locate') }}
-            </button>
+          <div class="rcard__group rcard__side">
+            <div class="rcard__actions">
+              <button v-if="has(v, 'clean')" type="button" class="pill" :data-on="v.state.activity === 'cleaning' ? '1' : '0'" :disabled="!v.state.available || busy(v)" :aria-busy="busy(v)"
+                      @click="send(v.descriptor.id, v.state.activity === 'cleaning' ? { type: 'vacuum.pause' } : { type: 'vacuum.start' })">
+                <v-progress-circular v-if="busy(v)" indeterminate size="16" width="2" />
+                <StrokeIcon v-else :name="v.state.activity === 'cleaning' ? 'pause' : 'play'" :size="16" />
+                {{ v.state.activity === 'cleaning' ? $t('common.pause') : $t('common.start') }}
+              </button>
+              <button v-if="has(v, 'dock')" type="button" class="pill" :disabled="!v.state.available || busy(v) || v.state.activity === 'docked'"
+                      @click="send(v.descriptor.id, { type: 'vacuum.dock' })">
+                <StrokeIcon name="home" :size="16" />{{ $t('common.dock') }}
+              </button>
+              <button v-if="has(v, 'locate')" type="button" class="pill" :disabled="!v.state.available || busy(v)"
+                      @click="send(v.descriptor.id, { type: 'vacuum.locate' })">
+                <StrokeIcon name="crosshair" :size="16" />{{ $t('common.locate') }}
+              </button>
+            </div>
           </div>
         </article>
 
-        <article v-for="m in mowers" :key="m.descriptor.id" class="card rcard" :data-unavailable="m.state.available ? '0' : '1'">
-          <div class="rcard__head">
-            <span class="icon-square" :data-on="m.state.activity === 'mowing' ? '1' : '0'"><StrokeIcon name="mower" :size="18" /></span>
-            <div class="min0">
-              <div class="rcard__name">{{ displayName(m) }}</div>
-              <div class="muted rcard__sub">{{ makeAndModel(m) }}</div>
+        <!-- Ordre du DOM = la pile du téléphone. Plus large, les groupes deviennent des ZONES de grille,
+             comme la carte d'un véhicule : voir `.rcard__group` et ses deux @container. -->
+        <article v-for="m in mowers" :key="m.descriptor.id" class="card rcard rcard--mower" :data-unavailable="m.state.available ? '0' : '1'">
+          <div class="rcard__group rcard__energy">
+            <div class="rcard__head">
+              <span class="icon-square" :data-on="m.state.activity === 'mowing' ? '1' : '0'"><StrokeIcon name="mower" :size="18" /></span>
+              <div class="min0">
+                <div class="rcard__name">{{ displayName(m) }}</div>
+                <div class="muted rcard__sub">{{ makeAndModel(m) }}</div>
+              </div>
+              <span class="rcard__activity" :data-tone="m.state.activity === 'error' ? 'error' : m.state.activity === 'mowing' ? 'on' : 'off'">
+                {{ $t(`mower.activities.${m.state.activity}`) }}
+              </span>
             </div>
-            <span class="rcard__activity" :data-tone="m.state.activity === 'error' ? 'error' : m.state.activity === 'mowing' ? 'on' : 'off'">
-              {{ $t(`mower.activities.${m.state.activity}`) }}
-            </span>
+            <div class="rcard__soc">
+              <div class="big-value">{{ formatPercent(m.state.battery, locale) }}</div>
+              <div class="muted">{{ $t('mower.battery') }}</div>
+            </div>
+            <div class="rcard__bar">
+              <div class="rcard__bar-fill" :data-low="m.state.battery < 20 ? '1' : '0'" :style="{ width: `${m.state.battery}%` }" />
+            </div>
+            <!-- l'erreur du fabricant, ou ce qui retient le robot : place TOUJOURS réservée -->
+            <div class="rcard__status" :data-error="m.state.activity === 'error' ? '1' : '0'">
+              <span class="rcard__status-text">{{ statusLine(m.state) }}</span>
+              <button v-if="alerts.closableFor(m.descriptor.id).length" type="button" class="rcard__dismiss" :title="$t('alerts.dismissHint')" @click="alerts.dismiss(alerts.closableFor(m.descriptor.id))">{{ $t('alerts.dismiss') }}</button>
+            </div>
           </div>
-          <div class="rcard__soc">
-            <div class="big-value">{{ formatPercent(m.state.battery, locale) }}</div>
-            <div class="muted">{{ $t('mower.battery') }}</div>
-          </div>
-          <div class="rcard__bar">
-            <div class="rcard__bar-fill" :data-low="m.state.battery < 20 ? '1' : '0'" :style="{ width: `${m.state.battery}%` }" />
-          </div>
-          <!-- l'erreur du fabricant, ou ce qui retient le robot : place TOUJOURS réservée -->
-          <div class="rcard__status" :data-error="m.state.activity === 'error' ? '1' : '0'">
-            <span class="rcard__status-text">{{ statusLine(m.state) }}</span>
-            <button v-if="alerts.closableFor(m.descriptor.id).length" type="button" class="rcard__dismiss" :title="$t('alerts.dismissHint')" @click="alerts.dismiss(alerts.closableFor(m.descriptor.id))">{{ $t('alerts.dismiss') }}</button>
-          </div>
-          <div class="rcard__stats">
-            <div class="card card--soft stat"><div class="muted stat__k">{{ $t('mower.nextStartLabel') }}</div><div class="stat__v">{{ nextStart(m.state) }}</div></div>
-            <div class="card card--soft stat"><div class="muted stat__k">{{ $t('mower.cuttingHeight') }}</div><div class="stat__v">{{ cuttingHeight(m.state) }}</div></div>
-            <div class="card card--soft stat stat--wide"><div class="muted stat__k">{{ $t('mower.connection') }}</div><div class="stat__v">{{ connection(m.state) }}</div></div>
+          <div class="rcard__group rcard__state">
+            <div class="rcard__stats">
+              <div class="card card--soft stat"><div class="muted stat__k">{{ $t('mower.nextStartLabel') }}</div><div class="stat__v">{{ nextStart(m.state) }}</div></div>
+              <div class="card card--soft stat"><div class="muted stat__k">{{ $t('mower.cuttingHeight') }}</div><div class="stat__v">{{ cuttingHeight(m.state) }}</div></div>
+              <div class="card card--soft stat stat--wide"><div class="muted stat__k">{{ $t('mower.connection') }}</div><div class="stat__v">{{ connection(m.state) }}</div></div>
+            </div>
           </div>
           <!-- les compteurs de vie, quatre cases fixes -->
           <div class="card card--soft counters">
@@ -290,52 +302,56 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
                capacités, et ne vit pas dans la rangée des boutons) : c'est un relevé de la maison,
                posé une fois, qui range le robot sur sa base dès qu'il y rentre. La ligne existe
                dans les deux états, à la même hauteur — rien ne bouge quand la station est posée. -->
-          <div class="card card--soft dock">
-            <div class="min0">
-              <div class="muted stat__k">{{ $t('parking.dock') }}</div>
-              <div class="stat__v dock__state" :data-todo="dockOf(m) ? '0' : '1'">
-                {{ dockOf(m) ? $t('parking.dockPlaced') : $t('parking.dockMissing') }}
+          <div class="rcard__group rcard__side">
+            <div class="card card--soft dock">
+              <div class="min0">
+                <div class="muted stat__k">{{ $t('parking.dock') }}</div>
+                <div class="stat__v dock__state" :data-todo="dockOf(m) ? '0' : '1'">
+                  {{ dockOf(m) ? $t('parking.dockPlaced') : $t('parking.dockMissing') }}
+                </div>
               </div>
+              <button type="button" class="pill dock__btn" @click="dockOf(m) ? editDock(m) : placeDock(m)">
+                <StrokeIcon name="parking" :size="16" />{{ dockOf(m) ? $t('vehicle.tune') : $t('parking.dockPlace') }}
+              </button>
             </div>
-            <button type="button" class="pill dock__btn" @click="dockOf(m) ? editDock(m) : placeDock(m)">
-              <StrokeIcon name="parking" :size="16" />{{ dockOf(m) ? $t('vehicle.tune') : $t('parking.dockPlace') }}
-            </button>
+            <div class="rcard__actions">
+              <button v-if="has(m, 'mow')" type="button" class="pill" :data-on="m.state.activity === 'mowing' ? '1' : '0'" :disabled="!m.state.available || busy(m)" :aria-busy="busy(m)"
+                      @click="send(m.descriptor.id, m.state.activity === 'mowing' ? { type: 'mower.pause' } : { type: 'mower.start', durationMin: 60 })">
+                <v-progress-circular v-if="busy(m)" indeterminate size="16" width="2" />
+                <StrokeIcon v-else :name="m.state.activity === 'mowing' ? 'pause' : 'play'" :size="16" />
+                {{ m.state.activity === 'mowing' ? $t('common.pause') : $t('mower.startFor') }}
+              </button>
+              <button v-if="has(m, 'park')" type="button" class="pill" :disabled="!m.state.available || busy(m) || m.state.activity === 'parked' || m.state.activity === 'charging'"
+                      @click="send(m.descriptor.id, { type: 'mower.park', untilNextSchedule: true })">
+                <StrokeIcon name="parking" :size="16" />{{ $t('common.park') }}
+              </button>
+              <!-- le journal se signale : combien de lignes, et la gravité de la dernière en pastille -->
+              <button v-if="has(m, 'journal')" type="button" class="pill" :data-on="journalOpen === m.descriptor.id ? '1' : '0'"
+                      :aria-expanded="journalOpen === m.descriptor.id"
+                      @click="journalOpen = journalOpen === m.descriptor.id ? null : m.descriptor.id">
+                <StrokeIcon name="list" :size="16" />{{ $t('mower.journal') }}
+                <span class="rcard__count" :data-severity="journalOf(m)[0]?.severity ?? 'none'">{{ journalOf(m).length }}</span>
+              </button>
+              <!-- ce que le robot ne dira jamais : où il est VRAIMENT, à quelques mètres près -->
+              <button v-if="tunable(m)" type="button" class="pill" :data-on="tuning === m.descriptor.id ? '1' : '0'"
+                      :aria-expanded="tuning === m.descriptor.id"
+                      @click="tuning = tuning === m.descriptor.id ? null : m.descriptor.id">
+                <StrokeIcon name="gear" :size="16" />{{ $t('vehicle.tune') }}
+              </button>
+            </div>
+            <div v-if="journalOpen === m.descriptor.id" class="card card--soft journal">
+              <JournalList :entries="journalOf(m)" :active="journalFocus[m.descriptor.id]?.at" @pick="pickEntry(m, $event)" />
+            </div>
+            <MowerTuning v-if="tuning === m.descriptor.id" :descriptor="m.descriptor" />
           </div>
-          <div class="rcard__actions">
-            <button v-if="has(m, 'mow')" type="button" class="pill" :data-on="m.state.activity === 'mowing' ? '1' : '0'" :disabled="!m.state.available || busy(m)" :aria-busy="busy(m)"
-                    @click="send(m.descriptor.id, m.state.activity === 'mowing' ? { type: 'mower.pause' } : { type: 'mower.start', durationMin: 60 })">
-              <v-progress-circular v-if="busy(m)" indeterminate size="16" width="2" />
-              <StrokeIcon v-else :name="m.state.activity === 'mowing' ? 'pause' : 'play'" :size="16" />
-              {{ m.state.activity === 'mowing' ? $t('common.pause') : $t('mower.startFor') }}
-            </button>
-            <button v-if="has(m, 'park')" type="button" class="pill" :disabled="!m.state.available || busy(m) || m.state.activity === 'parked' || m.state.activity === 'charging'"
-                    @click="send(m.descriptor.id, { type: 'mower.park', untilNextSchedule: true })">
-              <StrokeIcon name="parking" :size="16" />{{ $t('common.park') }}
-            </button>
-            <!-- le journal se signale : combien de lignes, et la gravité de la dernière en pastille -->
-            <button v-if="has(m, 'journal')" type="button" class="pill" :data-on="journalOpen === m.descriptor.id ? '1' : '0'"
-                    :aria-expanded="journalOpen === m.descriptor.id"
-                    @click="journalOpen = journalOpen === m.descriptor.id ? null : m.descriptor.id">
-              <StrokeIcon name="list" :size="16" />{{ $t('mower.journal') }}
-              <span class="rcard__count" :data-severity="journalOf(m)[0]?.severity ?? 'none'">{{ journalOf(m).length }}</span>
-            </button>
-            <!-- ce que le robot ne dira jamais : où il est VRAIMENT, à quelques mètres près -->
-            <button v-if="tunable(m)" type="button" class="pill" :data-on="tuning === m.descriptor.id ? '1' : '0'"
-                    :aria-expanded="tuning === m.descriptor.id"
-                    @click="tuning = tuning === m.descriptor.id ? null : m.descriptor.id">
-              <StrokeIcon name="gear" :size="16" />{{ $t('vehicle.tune') }}
-            </button>
-          </div>
-          <div v-if="journalOpen === m.descriptor.id" class="card card--soft journal">
-            <JournalList :entries="journalOf(m)" :active="journalFocus[m.descriptor.id]?.at" @pick="pickEntry(m, $event)" />
-          </div>
-          <MowerTuning v-if="tuning === m.descriptor.id" :descriptor="m.descriptor" />
-          <p class="muted rcard__hint">{{ updatedAgo(m.state) }}</p>
-          <div v-if="quotaOf(m)" class="rcard__quota">
-            <span class="muted rcard__quota-text">{{ quotaLabel(quotaOf(m)!) }}</span>
-            <div class="rcard__quota-track">
-              <div class="rcard__quota-fill" :data-tense="quotaPercent(quotaOf(m)!.used, quotaOf(m)!.limit) >= QUOTA_TENSE_PCT ? '1' : '0'"
-                   :style="{ width: `${quotaPercent(quotaOf(m)!.used, quotaOf(m)!.limit)}%` }" />
+          <div class="rcard__group rcard__foot">
+            <p class="muted rcard__hint">{{ updatedAgo(m.state) }}</p>
+            <div v-if="quotaOf(m)" class="rcard__quota">
+              <span class="muted rcard__quota-text">{{ quotaLabel(quotaOf(m)!) }}</span>
+              <div class="rcard__quota-track">
+                <div class="rcard__quota-fill" :data-tense="quotaPercent(quotaOf(m)!.used, quotaOf(m)!.limit) >= QUOTA_TENSE_PCT ? '1' : '0'"
+                     :style="{ width: `${quotaPercent(quotaOf(m)!.used, quotaOf(m)!.limit)}%` }" />
+              </div>
             </div>
           </div>
         </article>
@@ -352,14 +368,42 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
 /* une station qui manque n'est pas une erreur, c'est un relevé à finir : la teinte d'accent le dit
    sans crier, comme le bouton armé d'une pose */
 .dock__state[data-todo='1'] { color: var(--accent); }
-.robots__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 var(--page-x) calc(var(--safe-bottom) + 24px); }
+.robots__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 var(--page-x) calc(var(--safe-bottom) + 24px); container-type: inline-size; }
 .empty { padding: 24px; text-align: center; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
 .rcard { padding: 18px 20px; display: grid; gap: 14px; align-content: start; }
 /* `min-width: 0` sur chaque rangée : sans lui, une ligne en `nowrap` (le modèle du fabricant, un
    compteur) fixe la largeur minimale de toute la carte, qui déborde alors de sa colonne au lieu de
    couper le texte — constaté sur une fenêtre étroite */
-.rcard > * { min-width: 0; }
+.rcard > *, .rcard__group > * { min-width: 0; }
+/* Téléphone : les groupes s'effacent (`contents`), leurs rangées restent celles de la carte, dans
+   l'ordre du DOM. Plus large, ils deviennent des zones, sur le modèle de la vue Véhicules. */
+.rcard__group { display: contents; }
+@container (min-width: 720px) {
+  .cards { grid-template-columns: 1fr; }
+  .rcard { column-gap: 20px; }
+  .rcard__group { display: grid; gap: 14px; align-content: start; }
+  .rcard__energy { grid-area: a; }
+  .rcard__state { grid-area: st; }
+  .rcard__side { grid-area: side; }
+  .rcard__foot { grid-area: f; align-self: end; }
+  .counters { grid-area: cnt; align-self: start; }
+  /* la carte prend toute la hauteur de sa colonne, 220 px au moins (`.rcard` en tête : la hauteur de
+     base, plus bas dans le fichier, l'emporterait) */
+  .rcard .rcard__map { grid-area: map; height: auto; min-height: 220px; }
+  /* tondeuse : tout à gauche, la carte à droite ; aspirateur (pas de carte) : énergie et boutons | état */
+  .rcard--mower { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: 'a map' 'st map' 'cnt map' 'side map' 'f map'; }
+  .rcard--vacuum { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: 'a st' 'side st'; }
+}
+/* Écran large : énergie puis compteurs | état puis station et boutons | carte sur toute la hauteur ;
+   la fraîcheur et le quota ferment la colonne de gauche. L'aspirateur : trois colonnes côte à côte. */
+@container (min-width: 1100px) {
+  .rcard--mower {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1fr);
+    grid-template-areas: 'a st map' 'cnt side map' 'f side map';
+  }
+  .rcard--vacuum { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1fr); grid-template-areas: 'a st side'; }
+}
 .rcard[data-unavailable='1'] .rcard__soc, .rcard[data-unavailable='1'] .rcard__stats, .rcard[data-unavailable='1'] .counters { opacity: .55; }
 .rcard__head { display: flex; align-items: center; gap: 12px; }
 .rcard__name { font-weight: 600; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

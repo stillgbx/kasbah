@@ -2,6 +2,17 @@
 
 Entrées les plus récentes en haut. Une session = une entrée.
 
+## [2026-10-11] update | Vue Robots : cartes à l'horizontale
+
+**Déclencheur** : demande de l'utilisateur — cartes de la vue Robots en largeur sur grand écran, comme la vue Véhicules ; compteurs descendus sous la batterie à sa demande.
+
+**Pages modifiées** :
+- `4_ui/4_1_navigation-et-panneaux.md` - mise à jour datée (10) : groupes en `display: contents` sur téléphone, zones de grille à 720 et 1100 px, compteurs à gauche, vérifications.
+
+**Pages créées** : aucune.
+
+**Index** : inchangé (date de `4_1` déjà au 2026-10-11).
+
 ## [2026-10-11] update | Vue École : devoirs en grille
 
 **Déclencheur** : demande de l'utilisateur — afficher les devoirs en grille plutôt qu'en une colonne étroite sur grand écran.

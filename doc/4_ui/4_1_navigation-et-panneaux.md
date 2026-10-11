@@ -5994,3 +5994,24 @@ rangé en `visibility: hidden` sur une ligne cochée, « − » qui devient corb
 estompée à la même taille. Détail, modèle et vérifications : `../1_architecture/1_10_liste-de-courses.md`.
 
 Sources : `apps/web/src/views/ShoppingView.vue`, `apps/web/src/lib/{navItems,strokeIcons}.ts`, `apps/web/src/router/index.ts`.
+
+### Mise à jour 2026-10-11 (10) — vue Robots : cartes à l'horizontale
+
+Demande de l'utilisateur : sur grand écran, les cartes de la vue Robots en largeur, comme celles de la
+vue Véhicules. Même mécanique (`RobotsView.vue`) : `.robots__scroll` est un conteneur
+(`container-type: inline-size`), les rangées de la carte sont regroupées en `.rcard__group`
+(énergie, état, côté = station + boutons + journal + réglage, pied = fraîcheur + quota).
+
+- **Téléphone** : les groupes sont en `display: contents` — la pile reste celle d'avant, dans l'ordre
+  du DOM (vérifié : même ordre, carte satellite à 220 px). `min-width: 0` passe aussi aux enfants des
+  groupes, sans quoi une ligne en `nowrap` élargirait la carte.
+- **≥ 720 px de conteneur** : une carte par ligne. Tondeuse : tout à gauche, carte satellite à droite
+  sur toute la hauteur (220 px au moins ; `.rcard .rcard__map` pour battre la hauteur de base déclarée
+  plus bas). Aspirateur (pas de carte) : énergie et boutons | état.
+- **≥ 1100 px** : tondeuse en trois colonnes `'a st map' 'cnt side map' 'f side map'` — les
+  **compteurs** descendent sous la batterie (choix de l'utilisateur : la colonne de gauche restait vide,
+  la carte passe de 370 à 299 px de haut à 1440 px) ; aspirateur `'a st side'`.
+- Journal et réglage du GPS dépliés s'ajoutent dans la colonne du milieu ; la carte satellite s'allonge
+  avec elle. Non vu en simulation (la tondeuse simulée n'a ni l'un ni l'autre).
+- Vérifié en mode simulé (maison de démo à tondeuse) : aucun débordement à 1900 / 1440 / 1024 / 853 /
+  375 px.
