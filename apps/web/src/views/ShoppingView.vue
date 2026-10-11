@@ -12,9 +12,10 @@ import { useShoppingStore } from '../stores/shopping'
 // - la liste, dans l'ordre d'ajout. Cocher BARRE la ligne sur place : rien ne bouge sous le doigt au
 //   magasin, et « Terminer les courses » retire les cochées d'un coup ;
 // - les habituels (produits étoilés), en ordre fixe : un toucher les remet dans la liste.
+// Coupée dans Réglages → Plugins, la page le dit et renvoie aux Réglages (le rail ne la montre plus).
 // Le compteur d'une ligne garde sa place : à 1, son « − » devient une corbeille au même endroit.
 const store = useShoppingStore()
-onMounted(() => { if (!store.list.products.length && !store.items.length) void store.load() })
+onMounted(() => { if (store.enabled && !store.list.products.length && !store.items.length) void store.load() })
 
 const query = ref('')
 const field = ref<HTMLInputElement | null>(null)
@@ -53,7 +54,7 @@ const toBuy = computed(() => store.items.length - store.checkedCount)
 <template>
   <div class="page">
     <PageHeader>
-      <div class="head">
+      <div v-if="store.enabled" class="head">
         <span class="muted head__count">{{ $t('shopping.count', { left: toBuy, checked: store.checkedCount }) }}</span>
         <!-- toujours là, éteint sans ligne cochée : le bouton ne surgit pas au premier coché -->
         <button type="button" class="pill" data-on="1" :disabled="store.checkedCount === 0" @click="store.finish()">
@@ -62,82 +63,92 @@ const toBuy = computed(() => store.items.length - store.checkedCount)
       </div>
     </PageHeader>
 
-    <div class="tools">
-      <div class="search" :data-open="open ? '1' : '0'">
-        <StrokeIcon name="plus" :size="18" class="search__icon" />
-        <input ref="field" v-model="query" type="search" class="search__input" enterkeyhint="done" autocomplete="off" :maxlength="SHOPPING_NAME_MAX"
-               :placeholder="$t('shopping.placeholder')" :aria-label="$t('shopping.placeholder')"
-               @focus="focused = true" @blur="focused = false" @keydown.enter.prevent="submit" @keydown.esc="query = ''">
-        <button type="button" class="search__clear" :class="{ 'is-hidden': !query }" :aria-label="$t('shopping.clear')" @mousedown.prevent @click="query = ''">
-          <StrokeIcon name="close" :size="14" />
-        </button>
-        <!-- par-dessus la page : la liste dessous ne se décale pas pendant la frappe.
-             `mousedown.prevent` garde le focus au champ, on enchaîne les ajouts au clavier. -->
-        <div v-if="open" class="card suggest" role="listbox">
-          <button v-if="isNew" type="button" class="suggest__row" @mousedown.prevent @click="addName(query)">
-            <StrokeIcon name="plus" :size="16" class="suggest__lead" />
-            <span class="suggest__name">{{ $t('shopping.addNew', { name: query.trim() }) }}</span>
+    <!-- coupée dans les Réglages pendant qu'on la regarde (ou adresse tapée) : le rail ne la propose plus -->
+    <div v-if="!store.enabled" class="body body--off">
+      <div class="card card--soft off">
+        <StrokeIcon name="cart" :size="28" class="muted" />
+        <p class="muted">{{ $t('shopping.disabled') }}</p>
+        <router-link :to="{ name: 'settings' }" class="pill">{{ $t('shopping.openSettings') }}</router-link>
+      </div>
+    </div>
+    <template v-else>
+      <div class="tools">
+        <div class="search" :data-open="open ? '1' : '0'">
+          <StrokeIcon name="plus" :size="18" class="search__icon" />
+          <input ref="field" v-model="query" type="search" class="search__input" enterkeyhint="done" autocomplete="off" :maxlength="SHOPPING_NAME_MAX"
+                 :placeholder="$t('shopping.placeholder')" :aria-label="$t('shopping.placeholder')"
+                 @focus="focused = true" @blur="focused = false" @keydown.enter.prevent="submit" @keydown.esc="query = ''">
+          <button type="button" class="search__clear" :class="{ 'is-hidden': !query }" :aria-label="$t('shopping.clear')" @mousedown.prevent @click="query = ''">
+            <StrokeIcon name="close" :size="14" />
           </button>
-          <div v-for="p in suggestions" :key="p.id" class="suggest__line">
-            <button type="button" class="suggest__row" @mousedown.prevent @click="addName(p.name)">
-              <StrokeIcon :name="store.isToBuy(p.name) ? 'check' : 'plus'" :size="16" class="suggest__lead" />
-              <span class="suggest__name">{{ p.name }}</span>
-              <span class="muted suggest__tag" :class="{ 'is-hidden': !store.isToBuy(p.name) }">{{ $t('shopping.inList') }}</span>
+          <!-- par-dessus la page : la liste dessous ne se décale pas pendant la frappe.
+               `mousedown.prevent` garde le focus au champ, on enchaîne les ajouts au clavier. -->
+          <div v-if="open" class="card suggest" role="listbox">
+            <button v-if="isNew" type="button" class="suggest__row" @mousedown.prevent @click="addName(query)">
+              <StrokeIcon name="plus" :size="16" class="suggest__lead" />
+              <span class="suggest__name">{{ $t('shopping.addNew', { name: query.trim() }) }}</span>
             </button>
-            <button type="button" class="star" :data-on="p.favorite ? '1' : '0'" :aria-pressed="p.favorite"
-                    :aria-label="p.favorite ? $t('shopping.unstar', { name: p.name }) : $t('shopping.star', { name: p.name })"
-                    :title="p.favorite ? $t('shopping.unstar', { name: p.name }) : $t('shopping.star', { name: p.name })"
-                    @mousedown.prevent @click="star(p.name)">
-              <StrokeIcon name="star" :size="16" />
-            </button>
+            <div v-for="p in suggestions" :key="p.id" class="suggest__line">
+              <button type="button" class="suggest__row" @mousedown.prevent @click="addName(p.name)">
+                <StrokeIcon :name="store.isToBuy(p.name) ? 'check' : 'plus'" :size="16" class="suggest__lead" />
+                <span class="suggest__name">{{ p.name }}</span>
+                <span class="muted suggest__tag" :class="{ 'is-hidden': !store.isToBuy(p.name) }">{{ $t('shopping.inList') }}</span>
+              </button>
+              <button type="button" class="star" :data-on="p.favorite ? '1' : '0'" :aria-pressed="p.favorite"
+                      :aria-label="p.favorite ? $t('shopping.unstar', { name: p.name }) : $t('shopping.star', { name: p.name })"
+                      :title="p.favorite ? $t('shopping.unstar', { name: p.name }) : $t('shopping.star', { name: p.name })"
+                      @mousedown.prevent @click="star(p.name)">
+                <StrokeIcon name="star" :size="16" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <div class="body">
-      <section class="list" :aria-label="$t('shopping.list')">
-        <div v-if="!store.items.length" class="card card--soft empty muted">{{ $t('shopping.empty') }}</div>
-        <div v-for="item in store.items" :key="item.id" class="card row" :data-checked="item.checked ? '1' : '0'">
-          <button type="button" class="row__main" role="checkbox" :aria-checked="item.checked" @click="toggle(item)">
-            <span class="row__box"><StrokeIcon name="check" :size="16" :stroke-width="2.4" /></span>
-            <MarqueeText class="row__name" :text="item.name" />
-          </button>
-          <button type="button" class="star" :data-on="store.isFavorite(item.name) ? '1' : '0'" :aria-pressed="store.isFavorite(item.name)"
-                  :aria-label="store.isFavorite(item.name) ? $t('shopping.unstar', { name: item.name }) : $t('shopping.star', { name: item.name })"
-                  :title="store.isFavorite(item.name) ? $t('shopping.unstar', { name: item.name }) : $t('shopping.star', { name: item.name })"
-                  @click="star(item.name)">
-            <StrokeIcon name="star" :size="16" />
-          </button>
-          <!-- rangé (pas retiré) quand la ligne est cochée : la ligne garde sa largeur -->
-          <div class="step" :class="{ 'is-hidden': item.checked }">
-            <button type="button" class="step__btn" :aria-label="item.quantity <= 1 ? $t('shopping.remove', { name: item.name }) : $t('shopping.less', { name: item.name })"
-                    :title="item.quantity <= 1 ? $t('shopping.remove', { name: item.name }) : $t('shopping.less', { name: item.name })" @click="less(item)">
-              <StrokeIcon :name="item.quantity <= 1 ? 'trash' : 'minus'" :size="16" />
+      <div class="body">
+        <section class="list" :aria-label="$t('shopping.list')">
+          <div v-if="!store.items.length" class="card card--soft empty muted">{{ $t('shopping.empty') }}</div>
+          <div v-for="item in store.items" :key="item.id" class="card row" :data-checked="item.checked ? '1' : '0'">
+            <button type="button" class="row__main" role="checkbox" :aria-checked="item.checked" @click="toggle(item)">
+              <span class="row__box"><StrokeIcon name="check" :size="16" :stroke-width="2.4" /></span>
+              <MarqueeText class="row__name" :text="item.name" />
             </button>
-            <span class="step__qty" :aria-label="$t('shopping.quantity', { qty: item.quantity })">{{ item.quantity }}</span>
-            <button type="button" class="step__btn" :disabled="item.quantity >= SHOPPING_QUANTITY_MAX" :aria-label="$t('shopping.more', { name: item.name })"
-                    :title="$t('shopping.more', { name: item.name })" @click="more(item)">
-              <StrokeIcon name="plus" :size="16" />
+            <button type="button" class="star" :data-on="store.isFavorite(item.name) ? '1' : '0'" :aria-pressed="store.isFavorite(item.name)"
+                    :aria-label="store.isFavorite(item.name) ? $t('shopping.unstar', { name: item.name }) : $t('shopping.star', { name: item.name })"
+                    :title="store.isFavorite(item.name) ? $t('shopping.unstar', { name: item.name }) : $t('shopping.star', { name: item.name })"
+                    @click="star(item.name)">
+              <StrokeIcon name="star" :size="16" />
+            </button>
+            <!-- rangé (pas retiré) quand la ligne est cochée : la ligne garde sa largeur -->
+            <div class="step" :class="{ 'is-hidden': item.checked }">
+              <button type="button" class="step__btn" :aria-label="item.quantity <= 1 ? $t('shopping.remove', { name: item.name }) : $t('shopping.less', { name: item.name })"
+                      :title="item.quantity <= 1 ? $t('shopping.remove', { name: item.name }) : $t('shopping.less', { name: item.name })" @click="less(item)">
+                <StrokeIcon :name="item.quantity <= 1 ? 'trash' : 'minus'" :size="16" />
+              </button>
+              <span class="step__qty" :aria-label="$t('shopping.quantity', { qty: item.quantity })">{{ item.quantity }}</span>
+              <button type="button" class="step__btn" :disabled="item.quantity >= SHOPPING_QUANTITY_MAX" :aria-label="$t('shopping.more', { name: item.name })"
+                      :title="$t('shopping.more', { name: item.name })" @click="more(item)">
+                <StrokeIcon name="plus" :size="16" />
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section class="favs" :aria-label="$t('shopping.favorites')">
+          <div class="section-label favs__title">{{ $t('shopping.favorites') }}</div>
+          <!-- l'aide tient dans la bande des tuiles, à la même hauteur : la première étoile ne décale pas la liste -->
+          <div class="favs__chips">
+            <p v-if="!store.favorites.length" class="muted favs__hint">{{ $t('shopping.noFavorites') }}</p>
+            <button v-for="p in store.favorites" :key="p.id" type="button" class="chip" :data-on="store.isToBuy(p.name) ? '1' : '0'"
+                    :disabled="store.isToBuy(p.name)" :title="store.isToBuy(p.name) ? $t('shopping.inList') : $t('shopping.addOne', { name: p.name })"
+                    @click="addName(p.name)">
+              <StrokeIcon :name="store.isToBuy(p.name) ? 'check' : 'plus'" :size="14" />
+              <span>{{ p.name }}</span>
             </button>
           </div>
-        </div>
-      </section>
-
-      <section class="favs" :aria-label="$t('shopping.favorites')">
-        <div class="section-label favs__title">{{ $t('shopping.favorites') }}</div>
-        <!-- l'aide tient dans la bande des tuiles, à la même hauteur : la première étoile ne décale pas la liste -->
-        <div class="favs__chips">
-          <p v-if="!store.favorites.length" class="muted favs__hint">{{ $t('shopping.noFavorites') }}</p>
-          <button v-for="p in store.favorites" :key="p.id" type="button" class="chip" :data-on="store.isToBuy(p.name) ? '1' : '0'"
-                  :disabled="store.isToBuy(p.name)" :title="store.isToBuy(p.name) ? $t('shopping.inList') : $t('shopping.addOne', { name: p.name })"
-                  @click="addName(p.name)">
-            <StrokeIcon :name="store.isToBuy(p.name) ? 'check' : 'plus'" :size="14" />
-            <span>{{ p.name }}</span>
-          </button>
-        </div>
-      </section>
-    </div>
+        </section>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -179,6 +190,9 @@ const toBuy = computed(() => store.items.length - store.checkedCount)
   flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 var(--page-x) calc(var(--safe-bottom) + 24px);
   display: grid; grid-template-columns: minmax(0, 720px) minmax(220px, 320px); gap: 24px; align-content: start; align-items: start;
 }
+.body--off { display: flex; }
+.off { margin: auto; max-width: 460px; padding: 28px; display: grid; justify-items: center; gap: 12px; text-align: center; }
+.off p { margin: 0; }
 .list { display: grid; gap: 8px; }
 .empty { padding: 24px; text-align: center; }
 

@@ -586,6 +586,18 @@ export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = { enabled: false, parts: 
 export const defaultPlugins = (): Record<string, PluginSettings> => ({ mock: { ...DEFAULT_PLUGIN_SETTINGS, enabled: true } })
 
 /**
+ * Plugins ALLUMÉS tant que la maison n'en dit rien : des fonctions de l'app qui ne demandent ni
+ * compte ni matériel (la liste de courses), qu'on coupe dans les Réglages si on n'en veut pas. Les
+ * fabricants, eux, restent éteints jusqu'à ce qu'on les coche.
+ */
+export const PLUGINS_ON_BY_DEFAULT: readonly string[] = ['shopping']
+
+/** Réglage effectif d'un plugin : celui de la maison, sinon son défaut. */
+export function pluginSettingsOf(plugins: Readonly<Record<string, PluginSettings>>, id: string): PluginSettings {
+  return plugins[id] ?? (PLUGINS_ON_BY_DEFAULT.includes(id) ? { ...DEFAULT_PLUGIN_SETTINGS, enabled: true } : DEFAULT_PLUGIN_SETTINGS)
+}
+
+/**
  * RÉGLAGE DE LA LUMIÈRE de la scène 3D, enregistré dans la maison (`render.tuning`). Ce sont des
  * MULTIPLICATEURS posés sur ce que le style de rendu calcule pour l'heure qu'il est : × 1 partout
  * rend le style tel quel, et la courbe jour/nuit du style survit au réglage. Les cinq derniers,

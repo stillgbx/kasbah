@@ -1,7 +1,7 @@
 # Liste de courses
 
 > Dernière mise à jour : 2026-10-11
-> Sources : `packages/shared/src/shopping/{shopping,shopping.test}.ts`, `packages/shared/src/protocol/{ws,http}.ts`, `apps/server/src/core/shopping.ts`, `apps/server/src/http/{routes,shopping.test}.ts`, `apps/server/src/ws/hub.ts`, `apps/server/src/app.ts`, `apps/server/src/mcp/{server,server.test}.ts`, `apps/web/src/stores/{shopping,shopping.test,devices}.ts`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`, `apps/web/src/views/ShoppingView.vue`, `apps/web/src/lib/{navItems,strokeIcons}.ts`, `apps/web/src/router/index.ts`, `.gitignore`
+> Sources : `packages/shared/src/shopping/{shopping,shopping.test}.ts`, `packages/shared/src/protocol/{ws,http}.ts`, `apps/server/src/core/shopping.ts`, `apps/server/src/http/{routes,shopping.test}.ts`, `apps/server/src/ws/hub.ts`, `apps/server/src/app.ts`, `apps/server/src/mcp/{server,server.test}.ts`, `apps/web/src/stores/{shopping,shopping.test,devices}.ts`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`, `apps/web/src/views/ShoppingView.vue`, `apps/web/src/lib/{navItems,strokeIcons}.ts`, `apps/web/src/router/index.ts`, `.gitignore`, `apps/server/src/plugins/shopping/index.ts`, `packages/shared/src/house/schema.ts` (`pluginSettingsOf`), `apps/web/src/components/layout/NavRail.vue`, `apps/web/src/composables/useSearch.ts`
 
 ## Ce que c'est
 
@@ -152,3 +152,46 @@ français et en anglais.
   se lisait transparente à `getComputedStyle` ; avec `transition: none` posé le temps de la lecture, elle
   rend bien la couleur d'accent. Même famille que `requestAnimationFrame`, qui ne part pas non plus
   quand le panneau est masqué.
+
+### Mise à jour 2026-10-11 (2) — une fonction qu'on peut couper
+
+**Demande de l'utilisateur** : tout le monde ne voudra pas de la liste de courses, il faut pouvoir la
+désactiver. Deux voies étudiées avec lui :
+
+- **retenue — un interrupteur dans Réglages → Plugins** : la liste reste une fonction du serveur, un
+  plugin sans appareil (`apps/server/src/plugins/shopping/index.ts`) ne sert qu'à la faire figurer dans
+  l'inventaire avec le même interrupteur que les autres ;
+- **écartée — en faire un vrai plugin** : il lui faut le chemin de la maison et la diffusion WebSocket,
+  que `PluginContext` ne donne pas ; élargir le contrat de TOUS les plugins pour une seule fonction ne
+  valait pas.
+
+**Allumée par défaut** (choix de l'utilisateur) : ni compte ni matériel à relier, on la voit tout de
+suite et on la coupe si on n'en veut pas. Mécanique : `PLUGINS_ON_BY_DEFAULT` et
+`pluginSettingsOf(plugins, id)` dans `packages/shared/src/house/schema.ts` — le réglage de la maison,
+sinon le défaut du plugin. Le `settingsOf` de `buildApp` passe par lui, si bien que l'inventaire de
+`/api/plugins` la donne allumée sur une maison qui n'en dit rien.
+
+**Coupée**, c'est `plugins.shopping.enabled` de la maison que tout le monde lit :
+
+| Où | Effet |
+|---|---|
+| routes `/api/shopping/*` | 409 `DISABLED` (crochet `onRequest` de `routes.ts`) |
+| MCP | les six outils ne sont pas enregistrés ; une instance par requête, la bascule vaut dès la suivante |
+| rail, barre du bas, recherche de la vue Maison | l'entrée disparaît (`NavItem.plugin`, second filtre de `visibleNavItems`) |
+| page `/shopping` (adresse tapée, ou coupée pendant qu'on la regarde) | une carte « coupée dans les Réglages » et un lien vers eux ; en-tête sans compteur ni bouton |
+| fichier `<maison>.shopping.json` | **gardé tel quel** : rallumée, la liste revient |
+
+Les écrans suivent sans protocole nouveau : la route `PATCH /api/plugins/:id` rediffuse déjà la maison
+(message `house`), et le web lit `house.plugins` dans le store de la maison. Avant que la maison
+n'arrive, le défaut vaut (allumée) : pas d'entrée qui surgit dans le rail au chargement.
+
+Différence voulue avec l'Agenda et l'École, qui restent dans le rail plugin coupé (page « plugin
+désactivé ») : ceux-là demandent une mise en route, la liste de courses non — la couper, c'est n'en pas
+vouloir.
+
+**Vérifié.** `http/shopping.test.ts` (inventaire allumé par défaut, coupure par `PATCH /api/plugins/shopping`,
+409 en lecture et en écriture, fichier intact, retour à l'allumage), `mcp/server.test.ts` (outils absents
+quand coupée, dans les deux versions du protocole), `shopping.test.ts` partagé (`pluginSettingsOf`),
+`navItems.test.ts`. Preview `kasbah-mock` : entrée retirée du rail et page « coupée » à la bascule,
+retour à l'identique, console sans erreur — le mock n'a pas la carte dans ses Réglages (son inventaire
+ne liste que la simulation), la bascule y a été faite sur le store. Suite complète, typecheck et lint verts.

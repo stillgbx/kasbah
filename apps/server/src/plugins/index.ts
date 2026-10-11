@@ -15,6 +15,7 @@ import { createOpenMeteoPlugin } from './open_meteo'
 import { createPetkitPlugin } from './petkit'
 import { createRadioPlugin } from './radio'
 import { createRenaultPlugin } from './renault'
+import { createShoppingPlugin } from './shopping'
 import { createSonosPlugin } from './sonos'
 import { createTahomaPlugin } from './tahoma'
 import { createTeslaPlugin } from './tesla'
@@ -50,4 +51,5 @@ export const PLUGIN_FACTORIES: Record<string, PluginFactory> = {
   toutemonannee: () => createToutemonanneePlugin(),
   claude: () => createClaudePlugin(),
   transcription: () => createTranscriptionPlugin(),
+  shopping: createShoppingPlugin,
 }

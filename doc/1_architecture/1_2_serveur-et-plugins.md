@@ -1,7 +1,7 @@
 # Serveur et hôte de plugins
 
-> Dernière mise à jour : 2026-10-10
-> Sources : `apps/server/src/{app,main}.ts`, `apps/server/src/core/*.ts`, `apps/server/src/plugins/index.ts`, `apps/server/src/core/scene-registry.ts`, `apps/server/src/core/{plugin,plugin-host,scene-seeder}.ts`, `packages/shared/src/house/schema.ts`, `apps/server/src/plugins/comap/{history,state}.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/core/playbackBridge.ts`, `apps/server/src/music/{player,sources}.ts`, `apps/server/src/core/automations/engine.ts`, `apps/server/src/core/atomic-file.ts`, `apps/server/src/config/properties.ts`, `apps/server/src/main.ts`, `apps/server/src/config/catalog.ts`
+> Dernière mise à jour : 2026-10-11
+> Sources : `apps/server/src/{app,main}.ts`, `apps/server/src/core/*.ts`, `apps/server/src/plugins/index.ts`, `apps/server/src/core/scene-registry.ts`, `apps/server/src/core/{plugin,plugin-host,scene-seeder}.ts`, `packages/shared/src/house/schema.ts`, `apps/server/src/plugins/comap/{history,state}.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/core/playbackBridge.ts`, `apps/server/src/music/{player,sources}.ts`, `apps/server/src/core/automations/engine.ts`, `apps/server/src/core/atomic-file.ts`, `apps/server/src/config/properties.ts`, `apps/server/src/main.ts`, `apps/server/src/config/catalog.ts`, `apps/server/src/plugins/shopping/index.ts` (2026-10-11)
 
 ## Assemblage (`app.ts`)
 
@@ -590,3 +590,13 @@ liste, retenue dans `demo-property.json` ». Ces paragraphes restent l'historiqu
 
 Sources : `apps/server/src/config/{catalog,properties}.ts`, `apps/server/src/config/catalog.test.ts`,
 `apps/server/src/main.ts`.
+
+### Mise à jour 2026-10-11 — un plugin peut être allumé par défaut
+
+Jusqu'ici, un plugin absent de `house.plugins` était éteint (`DEFAULT_PLUGIN_SETTINGS`). Depuis le
+2026-10-11, `pluginSettingsOf(plugins, id)` (`packages/shared/src/house/schema.ts`) donne le réglage de la
+maison, sinon le défaut du plugin : ALLUMÉ pour ceux de `PLUGINS_ON_BY_DEFAULT`, éteint pour les autres.
+Le `settingsOf` de `buildApp` passe par lui. Seul membre : `shopping`, interrupteur de la liste de
+courses — un plugin sans appareil ni configuration, qui ne fait rien lui-même ; les routes, le MCP et
+l'écran lisent son réglage. Les fabricants restent éteints par défaut. Détail :
+`1_10_liste-de-courses.md` (mise à jour 2).

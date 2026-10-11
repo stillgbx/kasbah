@@ -4,8 +4,12 @@ import type { LocalPluginId } from '../stores/localPlugins'
 // Les vues du rail, dans leur ordre d'affichage. Hors du composant parce que la recherche de la vue
 // Maison y emmène aussi (taper « météo » ouvre la page Météo) : une seule liste, deux lectures.
 
-/** `local` : l'entrée n'existe que sur le poste où ce plugin local est activé (voir `stores/localPlugins`). */
-export interface NavItem { name: string; icon: IconName; label: string; local?: LocalPluginId }
+/**
+ * `local` : l'entrée n'existe que sur le poste où ce plugin local est activé (voir `stores/localPlugins`).
+ * `plugin` : l'entrée n'existe que si ce plugin SERVEUR est allumé dans la maison — une fonction qu'on
+ * peut couper dans les Réglages (la liste de courses).
+ */
+export interface NavItem { name: string; icon: IconName; label: string; local?: LocalPluginId; plugin?: string }
 
 export const NAV_ITEMS: NavItem[] = [
   { name: 'home', icon: 'home', label: 'nav.home' },
@@ -16,7 +20,7 @@ export const NAV_ITEMS: NavItem[] = [
   // l'école après l'agenda : ce qui attend les enfants, devoirs et mots de l'enseignante
   { name: 'school', icon: 'school', label: 'nav.school' },
   // les courses avec l'agenda et l'école : la vie de la famille, qu'on remplit et consulte chaque jour
-  { name: 'shopping', icon: 'cart', label: 'nav.shopping' },
+  { name: 'shopping', icon: 'cart', label: 'nav.shopping', plugin: 'shopping' },
   // musique juste après la météo : on lance un titre, on voit l'enceinte dans la 3D
   { name: 'music', icon: 'music', label: 'nav.music' },
   { name: 'lights', icon: 'light', label: 'nav.lights' },
@@ -43,5 +47,6 @@ export const NAV_ITEMS: NavItem[] = [
   { name: 'settings', icon: 'gear', label: 'nav.settings' },
 ]
 
-/** Les entrées visibles sur ce poste : les plugins locaux non activés n'y figurent pas. */
-export const visibleNavItems = (isEnabled: (id: LocalPluginId) => boolean) => NAV_ITEMS.filter((it) => !it.local || isEnabled(it.local))
+/** Les entrées visibles sur ce poste : ni les plugins locaux non activés, ni les fonctions coupées dans la maison. */
+export const visibleNavItems = (isEnabled: (id: LocalPluginId) => boolean, pluginOn: (id: string) => boolean = () => true) =>
+  NAV_ITEMS.filter((it) => (!it.local || isEnabled(it.local)) && (!it.plugin || pluginOn(it.plugin)))

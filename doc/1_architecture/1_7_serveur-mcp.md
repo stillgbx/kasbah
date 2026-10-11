@@ -655,3 +655,8 @@ partagent le serveur : un produit par passage (`Lait <version>`). Le test travai
 temporaire de la maison déjà en place pour les automatisations : `<maison>.shopping.json` s'écrit à côté.
 
 Sources : `apps/server/src/mcp/{server,server.test}.ts`, `packages/shared/src/shopping/shopping.ts`, `README.md` (table « Serveur MCP »).
+
+**Ajout 2026-10-11 (2).** Coupée dans Réglages → Plugins (`plugins.shopping`), la liste de courses n'a
+plus d'outils : `buildServer` ne les enregistre pas (`registerShoppingTools`), et comme une instance est
+créée par requête, la bascule vaut dès la suivante. Test « retire les outils de la liste de courses quand
+elle est coupée ». Voir `1_10_liste-de-courses.md`.

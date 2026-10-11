@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch, watchEffect } from 'vue'
 import { useRoute } from 'vue-router'
+import { pluginSettingsOf } from '@kasbah/shared'
 import { useEventListener, useResizeObserver } from '@vueuse/core'
 import { useHouseStore } from '../../stores/house'
 import StrokeIcon from '../ui/StrokeIcon.vue'
@@ -26,7 +27,10 @@ const initials = computed(() => {
 // Les réglages restent dans NAV_ITEMS — la recherche de la vue Maison s'en sert pour ouvrir la
 // page — mais ils quittent la file des vues : leur place est en bas du rail, sous le spacer.
 const localPlugins = useLocalPluginsStore()
-const items = computed(() => visibleNavItems(localPlugins.isEnabled).filter((it) => it.name !== 'settings'))
+// une fonction coupée dans les Réglages (la liste de courses) quitte le rail ; avant que la maison
+// arrive, son défaut vaut (allumée) : pas d'entrée qui surgit au chargement
+const pluginOn = (id: string) => pluginSettingsOf(house.house?.plugins ?? {}, id).enabled
+const items = computed(() => visibleNavItems(localPlugins.isEnabled, pluginOn).filter((it) => it.name !== 'settings'))
 const settingsItem = NAV_ITEMS.find((it) => it.name === 'settings')!
 
 // Une pastille sur l'icône d'une vue qui a une alerte en attente. Être sur la vue suffit à voir ses

@@ -2,6 +2,19 @@
 
 Entrées les plus récentes en haut. Une session = une entrée.
 
+## [2026-10-11] update | Liste de courses désactivable
+
+**Déclencheur** : question de l'utilisateur — pouvoir couper la liste de courses pour qui n'en veut pas ; interrupteur dans les Réglages retenu, allumée par défaut.
+
+**Pages modifiées** :
+- `1_architecture/1_10_liste-de-courses.md` - mise à jour datée (2) : les deux voies et le choix, défaut allumé, effets de la coupure, vérifications.
+- `1_architecture/1_2_serveur-et-plugins.md` - mise à jour datée : `pluginSettingsOf` et `PLUGINS_ON_BY_DEFAULT`.
+- `1_architecture/1_7_serveur-mcp.md` - ajout : outils retirés quand la liste est coupée.
+
+**Pages créées** : aucune.
+
+**Index** : `1_2` et `1_10` complétés, date de `1_2` relevée.
+
 ## [2026-10-11] update | Liste de courses partagée (`/shopping`)
 
 **Déclencheur** : demande de l'utilisateur d'une nouvelle vue, une liste de courses partagée par maison que chacun remplit et coche, avec des produits habituels à remettre dans le panier, une recherche, et une gestion complète par le MCP ; présentation choisie avec lui en séance.

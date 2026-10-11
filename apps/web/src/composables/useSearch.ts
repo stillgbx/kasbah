@@ -1,7 +1,7 @@
 import { computed, ref, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { roomKey, type DeviceDescriptor } from '@kasbah/shared'
+import { pluginSettingsOf, roomKey, type DeviceDescriptor } from '@kasbah/shared'
 import { deviceIcon } from '../lib/deviceIcons'
 import { visibleNavItems } from '../lib/navItems'
 import { useLocalPluginsStore } from '../stores/localPlugins'
@@ -139,7 +139,7 @@ export function useSearch(query: Ref<string>, { withHome = false } = {}) {
       })
     }
 
-    for (const item of visibleNavItems(localPlugins.isEnabled)) {
+    for (const item of visibleNavItems(localPlugins.isEnabled, (id) => pluginSettingsOf(house.house?.plugins ?? {}, id).enabled)) {
       if (item.name === 'home' && !withHome) continue    // on y est déjà : la recherche vit dessus
       out.push({ key: `page:${item.name}`, label: t(item.label), sub: t('search.page'), icon: item.icon, family: 'page', go: () => { void router.push({ name: item.name }) } })
     }

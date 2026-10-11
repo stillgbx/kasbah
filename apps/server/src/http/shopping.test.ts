@@ -56,6 +56,20 @@ describe('/api/shopping', () => {
     expect(f.products.find((p) => p.id === 'pain')).toMatchObject({ favorite: true })
   })
 
+  it('turns off from the plugin settings, keeping the list, and comes back', async () => {
+    await inject('POST', '/api/shopping/items', { items: [{ name: 'Riz' }] })
+    const inventory = (await inject('GET', '/api/plugins')).json().plugins as { id: string; enabled: boolean }[]
+    expect(inventory.find((p) => p.id === 'shopping')).toMatchObject({ enabled: true })
+    expect((await inject('PATCH', '/api/plugins/shopping', { enabled: false })).statusCode).toBe(200)
+    const off = await inject('GET', '/api/shopping')
+    expect([off.statusCode, off.json().error.code]).toEqual([409, 'DISABLED'])
+    expect((await inject('POST', '/api/shopping/items', { items: [{ name: 'Pâtes' }] })).statusCode).toBe(409)
+    expect((await written()).items.map((i) => i.id)).toEqual(['riz'])
+    await inject('PATCH', '/api/plugins/shopping', { enabled: true })
+    expect((await inject('GET', '/api/shopping')).json().shopping.items.map((i: { id: string }) => i.id)).toEqual(['riz'])
+    await inject('DELETE', '/api/shopping/items/riz')
+  })
+
   it('answers 404 for an unknown line and 400 for a bad body', async () => {
     expect((await inject('PATCH', '/api/shopping/items/riz', { checked: true })).statusCode).toBe(404)
     expect((await inject('DELETE', '/api/shopping/items/riz')).statusCode).toBe(404)

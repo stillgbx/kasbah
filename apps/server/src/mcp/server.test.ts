@@ -200,6 +200,15 @@ describe.each<[string, VersionNegotiationMode]>([['2025', 'legacy'], ['2026-07-2
     expect((await client.callTool({ name: 'update_shopping_item', arguments: { item: milk } })).isError).toBe(true)
   })
 
+  it('retire les outils de la liste de courses quand elle est coupée dans les Réglages', async () => {
+    const plugins = kasbah.house.house.plugins
+    plugins.shopping = { enabled: false, parts: {}, autoDynamicForNewScenes: false }
+    try {
+      const { tools } = await client.listTools()
+      expect(tools.map((t) => t.name).filter((n) => n.includes('shopping'))).toEqual([])
+    } finally { delete plugins.shopping }
+  })
+
   it('sert la maison en ressource', async () => {
     const r = await client.readResource({ uri: 'kasbah://house' })
     expect(JSON.parse((r.contents[0] as { text: string }).text).name).toBe(kasbah.house.house.name)

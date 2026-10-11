@@ -11,4 +11,9 @@ describe('visibleNavItems', () => {
     const house = NAV_ITEMS.filter((i) => !i.local).map((i) => i.name)
     expect(visibleNavItems(() => false).map((i) => i.name)).toEqual(house)
   })
+
+  it('hides a feature turned off in the house settings', () => {
+    expect(visibleNavItems(() => false, (id) => id !== 'shopping').map((i) => i.name)).not.toContain('shopping')
+    expect(visibleNavItems(() => false).map((i) => i.name)).toContain('shopping')
+  })
 })

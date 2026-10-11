@@ -1,4 +1,4 @@
-import { DEFAULT_PLUGIN_SETTINGS } from '@kasbah/shared'
+import { pluginSettingsOf } from '@kasbah/shared'
 import fastifyCompress from '@fastify/compress'
 import Fastify, { type FastifyInstance } from 'fastify'
 import type { Logger } from 'pino'
@@ -91,7 +91,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
   const scenes = new SceneRegistry(bus, clock, opts.logger.child({ component: 'scenes' }))
   // Réglages par plugin : ils vivent DANS la maison (`house.plugins`), écrits par l'UI. `house`
   // est muté en place par `updateHouseFile`, donc cette lecture voit toujours la valeur courante.
-  const settingsOf = (pluginId: string) => house.house.plugins[pluginId] ?? DEFAULT_PLUGIN_SETTINGS
+  const settingsOf = (pluginId: string) => pluginSettingsOf(house.house.plugins, pluginId)
   const history = new EnergyHistory(bus, clock)
   const host = new PluginHost({
     settingsOf,

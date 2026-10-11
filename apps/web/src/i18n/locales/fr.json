@@ -872,6 +872,8 @@
     "more": "Augmenter la quantité de {name}",
     "remove": "Retirer {name} de la liste",
     "quantity": "Quantité : {qty}",
+    "disabled": "La liste de courses est coupée dans les Réglages.",
+    "openSettings": "Ouvrir les Réglages",
     "toast": { "error": "Liste de courses : {message}" }
   },
   "automations": {

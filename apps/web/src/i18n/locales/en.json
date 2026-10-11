@@ -872,6 +872,8 @@
     "more": "Increase the quantity of {name}",
     "remove": "Remove {name} from the list",
     "quantity": "Quantity: {qty}",
+    "disabled": "The shopping list is turned off in Settings.",
+    "openSettings": "Open Settings",
     "toast": { "error": "Shopping list: {message}" }
   },
   "automations": {

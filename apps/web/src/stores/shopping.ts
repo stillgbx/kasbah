@@ -1,11 +1,12 @@
 import { computed, shallowRef } from 'vue'
 import { defineStore } from 'pinia'
 import {
-  addShoppingItems, clearCheckedShoppingItems, EMPTY_SHOPPING_LIST, removeShoppingItem, setShoppingFavorite, shoppingKey,
+  addShoppingItems, clearCheckedShoppingItems, EMPTY_SHOPPING_LIST, pluginSettingsOf, removeShoppingItem, setShoppingFavorite, shoppingKey,
   updateShoppingItem, type ServerMessage, type ShoppingItemPatch, type ShoppingList, type ShoppingProduct,
 } from '@kasbah/shared'
 import { getTransport } from '../api'
 import { t } from '../i18n'
+import { useHouseStore } from './house'
 import { useNotificationsStore } from './notifications'
 
 // Liste de courses de la maison, miroir du serveur : REMPLACÉE à chaque message (`snapshot`,
@@ -18,6 +19,9 @@ export const SHOPPING_SUGGESTIONS = 8
 
 export const useShoppingStore = defineStore('shopping', () => {
   const list = shallowRef<ShoppingList>(EMPTY_SHOPPING_LIST)
+  /** Coupée dans Réglages → Plugins (`plugins.shopping` de la maison) ; allumée tant qu'elle n'en dit rien. */
+  const house = useHouseStore()
+  const enabled = computed(() => pluginSettingsOf(house.house?.plugins ?? {}, 'shopping').enabled)
 
   function apply(msg: ServerMessage) {
     if ((msg.type === 'snapshot' || msg.type === 'shopping') && msg.shopping) list.value = msg.shopping
@@ -79,5 +83,5 @@ export const useShoppingStore = defineStore('shopping', () => {
     catch (err) { useNotificationsStore().error(t('shopping.toast.error', { message: (err as Error).message })) }
   }
 
-  return { list, items, checkedCount, favorites, isFavorite, isToBuy, suggest, apply, load, add, update, remove, finish, setFavorite }
+  return { list, enabled, items, checkedCount, favorites, isFavorite, isToBuy, suggest, apply, load, add, update, remove, finish, setFavorite }
 })

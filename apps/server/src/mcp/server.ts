@@ -1,4 +1,4 @@
-import { assertCommandAllowed, commandSchema, DEVICE_KINDS, findShoppingItem, indexHouse, sceneRecallSchema, SHOPPING_ADD_MAX, shoppingNameSchema, shoppingQuantitySchema, type ShoppingList, type AutomationEntry, type AutomationRun, type DeviceConsumption, type DeviceEntry, type DeviceJournal, type EnergyHistory, type StateFor, type WeatherForecast } from '@kasbah/shared'
+import { assertCommandAllowed, commandSchema, DEVICE_KINDS, findShoppingItem, pluginSettingsOf, indexHouse, sceneRecallSchema, SHOPPING_ADD_MAX, shoppingNameSchema, shoppingQuantitySchema, type ShoppingList, type AutomationEntry, type AutomationRun, type DeviceConsumption, type DeviceEntry, type DeviceJournal, type EnergyHistory, type StateFor, type WeatherForecast } from '@kasbah/shared'
 import { hostHeaderValidation, originValidation } from '@modelcontextprotocol/fastify'
 import { createMcpHandler, McpServer, type McpRequestContext } from '@modelcontextprotocol/server'
 import type { FastifyInstance } from 'fastify'
@@ -415,71 +415,76 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null): 
 
   // Liste de courses de la maison, par les routes `/api/shopping` : même file d'écriture, même
   // diffusion aux écrans. Un agent désigne une ligne par son nom (« le lait ») autant que par son id.
-  const shoppingView = (l: ShoppingList) => ({
-    items: l.items.map((i) => ({ id: i.id, name: i.name, quantity: i.quantity, checked: i.checked })),
-    favorites: l.products.filter((p) => p.favorite).map((p) => p.name),
-  })
-  const shoppingItemId = async (item: string) => {
-    const { shopping } = await call<{ shopping: ShoppingList }>('GET', '/api/shopping')
-    return findShoppingItem(shopping, item)?.id
+  // Coupée dans les Réglages, ses outils ne sont pas proposés du tout (une instance par requête :
+  // la bascule vaut dès la requête suivante).
+  if (pluginSettingsOf(deps.house.house.plugins, 'shopping').enabled) registerShoppingTools()
+  function registerShoppingTools() {
+    const shoppingView = (l: ShoppingList) => ({
+      items: l.items.map((i) => ({ id: i.id, name: i.name, quantity: i.quantity, checked: i.checked })),
+      favorites: l.products.filter((p) => p.favorite).map((p) => p.name),
+    })
+    const shoppingItemId = async (item: string) => {
+      const { shopping } = await call<{ shopping: ShoppingList }>('GET', '/api/shopping')
+      return findShoppingItem(shopping, item)?.id
+    }
+    const notInList = (item: string) => fail(`« ${item} » n'est pas dans la liste de courses (voir get_shopping_list)`)
+
+    server.registerTool('get_shopping_list', {
+      title: 'Lire la liste de courses',
+      description: "Liste de courses partagée de la maison : lignes dans l'ordre d'ajout (id, name, quantity, checked = déjà pris), et les produits habituels (favorites) qu'on peut remettre dans la liste avec add_shopping_items.",
+      inputSchema: z.object({}),
+      annotations: { readOnlyHint: true },
+    }, async () => json(shoppingView((await call<{ shopping: ShoppingList }>('GET', '/api/shopping')).shopping)))
+
+    server.registerTool('add_shopping_items', {
+      title: 'Ajouter à la liste de courses',
+      description: `Ajoute un ou plusieurs produits (jusqu'à ${SHOPPING_ADD_MAX}) à la liste de courses. Un produit déjà dans la liste et pas encore pris voit sa quantité augmenter ; déjà pris (coché), il redevient à acheter. Noms courts, au singulier ou tels qu'on les dit (« lait », « pommes »), quantité facultative (1 par défaut). Rend la liste.`,
+      inputSchema: z.object({ items: z.array(z.object({ name: shoppingNameSchema, quantity: shoppingQuantitySchema.optional() })).min(1).max(SHOPPING_ADD_MAX) }),
+      annotations: { readOnlyHint: false },
+    }, async ({ items }) => json(shoppingView((await call<{ shopping: ShoppingList }>('POST', '/api/shopping/items', { items })).shopping)))
+
+    server.registerTool('update_shopping_item', {
+      title: 'Cocher ou changer une ligne',
+      description: "Coche une ligne de la liste de courses (checked: true = pris), la décoche, ou change sa quantité. La ligne se désigne par son id ou son nom. Rend la liste.",
+      inputSchema: z.object({
+        item: z.string().describe("Id ou nom de la ligne (get_shopping_list)"),
+        checked: z.boolean().optional(),
+        quantity: shoppingQuantitySchema.optional(),
+      }),
+      annotations: { readOnlyHint: false, idempotentHint: true },
+    }, async ({ item, checked, quantity }) => {
+      if (checked === undefined && quantity === undefined) return fail('checked ou quantity attendu')
+      const id = await shoppingItemId(item)
+      if (!id) return notInList(item)
+      const patch = { ...(checked !== undefined ? { checked } : {}), ...(quantity !== undefined ? { quantity } : {}) }
+      return json(shoppingView((await call<{ shopping: ShoppingList }>('PATCH', `/api/shopping/items/${encodeURIComponent(id)}`, patch)).shopping))
+    })
+
+    server.registerTool('remove_shopping_item', {
+      title: 'Retirer une ligne',
+      description: "Retire une ligne de la liste de courses sans l'acheter (id ou nom). Le produit reste connu pour la recherche et les habituels. Rend la liste.",
+      inputSchema: z.object({ item: z.string().describe("Id ou nom de la ligne (get_shopping_list)") }),
+      annotations: { readOnlyHint: false, destructiveHint: true },
+    }, async ({ item }) => {
+      const id = await shoppingItemId(item)
+      if (!id) return notInList(item)
+      return json(shoppingView((await call<{ shopping: ShoppingList }>('DELETE', `/api/shopping/items/${encodeURIComponent(id)}`)).shopping))
+    })
+
+    server.registerTool('finish_shopping', {
+      title: 'Terminer les courses',
+      description: "Retire de la liste de courses toutes les lignes cochées (déjà prises) ; celles qui restent à acheter ne bougent pas. Rend la liste.",
+      inputSchema: z.object({}),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+    }, async () => json(shoppingView((await call<{ shopping: ShoppingList }>('POST', '/api/shopping/finish')).shopping)))
+
+    server.registerTool('set_shopping_favorite', {
+      title: 'Marquer un produit habituel',
+      description: "Ajoute (favorite: true) ou retire (favorite: false) un produit des habituels de la liste de courses, qu'il ait déjà été acheté ou non. Ne l'ajoute pas à la liste. Rend la liste.",
+      inputSchema: z.object({ name: shoppingNameSchema, favorite: z.boolean() }),
+      annotations: { readOnlyHint: false, idempotentHint: true },
+    }, async ({ name, favorite }) => json(shoppingView((await call<{ shopping: ShoppingList }>('PUT', '/api/shopping/favorites', { name, favorite })).shopping)))
   }
-  const notInList = (item: string) => fail(`« ${item} » n'est pas dans la liste de courses (voir get_shopping_list)`)
-
-  server.registerTool('get_shopping_list', {
-    title: 'Lire la liste de courses',
-    description: "Liste de courses partagée de la maison : lignes dans l'ordre d'ajout (id, name, quantity, checked = déjà pris), et les produits habituels (favorites) qu'on peut remettre dans la liste avec add_shopping_items.",
-    inputSchema: z.object({}),
-    annotations: { readOnlyHint: true },
-  }, async () => json(shoppingView((await call<{ shopping: ShoppingList }>('GET', '/api/shopping')).shopping)))
-
-  server.registerTool('add_shopping_items', {
-    title: 'Ajouter à la liste de courses',
-    description: `Ajoute un ou plusieurs produits (jusqu'à ${SHOPPING_ADD_MAX}) à la liste de courses. Un produit déjà dans la liste et pas encore pris voit sa quantité augmenter ; déjà pris (coché), il redevient à acheter. Noms courts, au singulier ou tels qu'on les dit (« lait », « pommes »), quantité facultative (1 par défaut). Rend la liste.`,
-    inputSchema: z.object({ items: z.array(z.object({ name: shoppingNameSchema, quantity: shoppingQuantitySchema.optional() })).min(1).max(SHOPPING_ADD_MAX) }),
-    annotations: { readOnlyHint: false },
-  }, async ({ items }) => json(shoppingView((await call<{ shopping: ShoppingList }>('POST', '/api/shopping/items', { items })).shopping)))
-
-  server.registerTool('update_shopping_item', {
-    title: 'Cocher ou changer une ligne',
-    description: "Coche une ligne de la liste de courses (checked: true = pris), la décoche, ou change sa quantité. La ligne se désigne par son id ou son nom. Rend la liste.",
-    inputSchema: z.object({
-      item: z.string().describe("Id ou nom de la ligne (get_shopping_list)"),
-      checked: z.boolean().optional(),
-      quantity: shoppingQuantitySchema.optional(),
-    }),
-    annotations: { readOnlyHint: false, idempotentHint: true },
-  }, async ({ item, checked, quantity }) => {
-    if (checked === undefined && quantity === undefined) return fail('checked ou quantity attendu')
-    const id = await shoppingItemId(item)
-    if (!id) return notInList(item)
-    const patch = { ...(checked !== undefined ? { checked } : {}), ...(quantity !== undefined ? { quantity } : {}) }
-    return json(shoppingView((await call<{ shopping: ShoppingList }>('PATCH', `/api/shopping/items/${encodeURIComponent(id)}`, patch)).shopping))
-  })
-
-  server.registerTool('remove_shopping_item', {
-    title: 'Retirer une ligne',
-    description: "Retire une ligne de la liste de courses sans l'acheter (id ou nom). Le produit reste connu pour la recherche et les habituels. Rend la liste.",
-    inputSchema: z.object({ item: z.string().describe("Id ou nom de la ligne (get_shopping_list)") }),
-    annotations: { readOnlyHint: false, destructiveHint: true },
-  }, async ({ item }) => {
-    const id = await shoppingItemId(item)
-    if (!id) return notInList(item)
-    return json(shoppingView((await call<{ shopping: ShoppingList }>('DELETE', `/api/shopping/items/${encodeURIComponent(id)}`)).shopping))
-  })
-
-  server.registerTool('finish_shopping', {
-    title: 'Terminer les courses',
-    description: "Retire de la liste de courses toutes les lignes cochées (déjà prises) ; celles qui restent à acheter ne bougent pas. Rend la liste.",
-    inputSchema: z.object({}),
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
-  }, async () => json(shoppingView((await call<{ shopping: ShoppingList }>('POST', '/api/shopping/finish')).shopping)))
-
-  server.registerTool('set_shopping_favorite', {
-    title: 'Marquer un produit habituel',
-    description: "Ajoute (favorite: true) ou retire (favorite: false) un produit des habituels de la liste de courses, qu'il ait déjà été acheté ou non. Ne l'ajoute pas à la liste. Rend la liste.",
-    inputSchema: z.object({ name: shoppingNameSchema, favorite: z.boolean() }),
-    annotations: { readOnlyHint: false, idempotentHint: true },
-  }, async ({ name, favorite }) => json(shoppingView((await call<{ shopping: ShoppingList }>('PUT', '/api/shopping/favorites', { name, favorite })).shopping)))
 
   // La file musicale est celle de Kasbah (lecteur commun), pas celle de l'enceinte : `media_player.next`
   // de send_command n'y saute pas.

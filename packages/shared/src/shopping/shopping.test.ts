@@ -3,6 +3,7 @@ import {
   addShoppingItems, clearCheckedShoppingItems, EMPTY_SHOPPING_LIST, findShoppingItem, removeShoppingItem,
   setShoppingFavorite, shoppingFileSchema, shoppingItemPatchSchema, shoppingKey, updateShoppingItem,
 } from './shopping'
+import { pluginSettingsOf } from '../house/schema'
 
 describe('shoppingKey', () => {
   it('ignores case, accents and repeated spaces', () => {
@@ -93,5 +94,13 @@ describe('shoppingFileSchema', () => {
   it('round-trips a list', () => {
     const l = addShoppingItems(EMPTY_SHOPPING_LIST, [{ name: 'Lait' }], 10)
     expect(shoppingFileSchema.parse({ schemaVersion: 1, ...l })).toEqual({ schemaVersion: 1, ...l })
+  })
+})
+
+describe('pluginSettingsOf', () => {
+  it('turns the shopping list on until the house says otherwise, vendors off', () => {
+    expect(pluginSettingsOf({}, 'shopping').enabled).toBe(true)
+    expect(pluginSettingsOf({}, 'hue').enabled).toBe(false)
+    expect(pluginSettingsOf({ shopping: { enabled: false, parts: {}, autoDynamicForNewScenes: false } }, 'shopping').enabled).toBe(false)
   })
 })

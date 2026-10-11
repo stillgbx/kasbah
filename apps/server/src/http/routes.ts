@@ -1,4 +1,4 @@
-import { addShoppingItems, clearCheckedShoppingItems, removeShoppingItem, setShoppingFavorite, shoppingAddBodySchema, shoppingFavoriteBodySchema, shoppingItemPatchSchema, updateShoppingItem, propertyModeBodySchema, newPropertyBodySchema, duplicatePropertyBodySchema, applyHouseEditToJson, houseEditPatchSchema, SurveyError, addGardenItemToJson, addOpeningToJson, addParkingToJson, gardenItemPatchSchema, newGardenItemSchema, patchGardenItemInJson, removeGardenItemFromJson, assertCommandAllowed, automationBodySchema, automationIdSchema, automationPatchSchema, commandSchema, devicePlacementSchema, newOpeningSchema, newParkingSchema, openingPatchSchema, panelArrayPatchSchema, parkingPatchSchema, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, releaseNotesLang, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, roomOrderSchema, polygonSchema, reliefSchema, sceneTuningSchema, setReliefInJson, setTerrainInJson, setRenderTuningInJson, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
+import { pluginSettingsOf, addShoppingItems, clearCheckedShoppingItems, removeShoppingItem, setShoppingFavorite, shoppingAddBodySchema, shoppingFavoriteBodySchema, shoppingItemPatchSchema, updateShoppingItem, propertyModeBodySchema, newPropertyBodySchema, duplicatePropertyBodySchema, applyHouseEditToJson, houseEditPatchSchema, SurveyError, addGardenItemToJson, addOpeningToJson, addParkingToJson, gardenItemPatchSchema, newGardenItemSchema, patchGardenItemInJson, removeGardenItemFromJson, assertCommandAllowed, automationBodySchema, automationIdSchema, automationPatchSchema, commandSchema, devicePlacementSchema, newOpeningSchema, newParkingSchema, openingPatchSchema, panelArrayPatchSchema, parkingPatchSchema, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, releaseNotesLang, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, roomOrderSchema, polygonSchema, reliefSchema, sceneTuningSchema, setReliefInJson, setTerrainInJson, setRenderTuningInJson, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { updateHouseFile, type LoadedHouse } from '../config/house'
 import { singleProperty, type PropertyHost } from '../config/properties'
@@ -333,8 +333,14 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
 
   // Liste de courses de la maison. Chaque route rend la liste ENTIÈRE (elle est petite) et la
   // rediffuse par le WebSocket (message `shopping`) : l'écran d'à côté voit la coche tout de suite.
+  // Coupée dans Réglages → Plugins (`plugins.shopping`) : toutes ses routes répondent 409, la liste
+  // reste dans son fichier.
   const now = () => Date.now()
   const unknownItem = (reply: Parameters<typeof sendError>[0], id: string) => sendError(reply, 404, 'NOT_FOUND', `unknown shopping item "${id}"`)
+  app.addHook('onRequest', async (req, reply) => {
+    if (!req.url.startsWith('/api/shopping') || pluginSettingsOf(deps.house.house.plugins, 'shopping').enabled) return
+    return sendError(reply, 409, 'DISABLED', 'the shopping list is turned off (Settings → Plugins)')
+  })
   app.get('/api/shopping', async () => ({ shopping: deps.shopping.get() }))
 
   app.post('/api/shopping/items', async (req) => {
