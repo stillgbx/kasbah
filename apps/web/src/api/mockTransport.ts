@@ -1,4 +1,4 @@
-import { applyHouseEditToJson, SurveyError, addGardenItemToJson, addOpeningToJson, addParkingToJson, patchGardenItemInJson, removeGardenItemFromJson, automationBodySchema, commandSchema, deviceClassOf, defaultState, mergeState, parseHouse, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, setReliefInJson, setRenderTuningInJson, setTerrainInJson, setRoomOrderInJson, type Automation, type AutomationEntry, type AutomationRun, type AutomationStatus, type CommandInput, type DeviceConsumption, type DeviceEntry, type DeviceState, type House, type PluginSceneEntry, type PropertiesResponse, type SceneActivation, type StateFor, type StatePatch } from '@kasbah/shared'
+import { addShoppingItems, clearCheckedShoppingItems, EMPTY_SHOPPING_LIST, removeShoppingItem, setShoppingFavorite, shoppingAddBodySchema, shoppingItemPatchSchema, updateShoppingItem, type ShoppingList, applyHouseEditToJson, SurveyError, addGardenItemToJson, addOpeningToJson, addParkingToJson, patchGardenItemInJson, removeGardenItemFromJson, automationBodySchema, commandSchema, deviceClassOf, defaultState, mergeState, parseHouse, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, setReliefInJson, setRenderTuningInJson, setTerrainInJson, setRoomOrderInJson, type Automation, type AutomationEntry, type AutomationRun, type AutomationStatus, type CommandInput, type DeviceConsumption, type DeviceEntry, type DeviceState, type House, type PluginSceneEntry, type PropertiesResponse, type SceneActivation, type StateFor, type StatePatch } from '@kasbah/shared'
 import { SimError, Simulation, solarGeometry, type ScenarioName } from '@kasbah/mock-sim'
 import demoHouse from '@kasbah/shared/demo-house.json'
 import { createMockSchool } from './mockSchool'
@@ -174,6 +174,17 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     const a = automations.get(id)
     if (!a) throw new ApiRequestError(404, 'NOT_FOUND', `unknown automation "${id}"`)
     return a
+  }
+
+  // Liste de courses en mémoire, par les mêmes opérations que le serveur ; quelques habituels pour
+  // que la démo ne s'ouvre pas sur une page vide.
+  let shopping: ShoppingList = ['Lait', 'Pain', 'Café', 'Pommes', 'Œufs', 'Beurre']
+    .reduce((l, name) => setShoppingFavorite(l, name, true, 0), addShoppingItems(EMPTY_SHOPPING_LIST, [{ name: 'Lait', quantity: 2 }, { name: 'Pain' }, { name: 'Tomates' }], 0))
+  const writeShopping = (next: ShoppingList | null, id?: string) => {
+    if (!next) throw new ApiRequestError(404, 'NOT_FOUND', `unknown shopping item "${id}"`)
+    shopping = next
+    handlers?.onMessage({ type: 'shopping', shopping })
+    return shopping
   }
 
   // ambiances du parc simulé, présentées comme celles d'un pont (`mock:<id>`)
@@ -483,6 +494,12 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     async updateScene() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no vendor scenes in mock mode') },
     async createScene() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no vendor scenes in mock mode') },
     async deleteScene() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no vendor scenes in mock mode') },
+    async getShopping() { return shopping },
+    async addShoppingItems(items) { return writeShopping(addShoppingItems(shopping, shoppingAddBodySchema.parse({ items }).items, Date.now())) },
+    async updateShoppingItem(id, patch) { return writeShopping(updateShoppingItem(shopping, id, shoppingItemPatchSchema.parse(patch)), id) },
+    async removeShoppingItem(id) { return writeShopping(removeShoppingItem(shopping, id), id) },
+    async finishShopping() { return writeShopping(clearCheckedShoppingItems(shopping)) },
+    async setShoppingFavorite(name, favorite) { return writeShopping(setShoppingFavorite(shopping, name, favorite, Date.now())) },
     async getAutomations() { return automationList() },
     async putAutomation(id, body) {
       const a: Automation = { id, ...automationBodySchema.parse(body), updatedAt: Date.now() }
@@ -546,7 +563,7 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
         (externalId, event) => handlers?.onMessage({ type: 'deviceEvent', deviceId: `mock:${externalId}`, event, at: Date.now() }),
         onScene,
       )
-      h.onMessage({ type: 'snapshot', serverTime: Date.now(), devices: entries(), scenes: sceneEntries(), automations: automationList(), propertyId: house.id })
+      h.onMessage({ type: 'snapshot', serverTime: Date.now(), devices: entries(), scenes: sceneEntries(), automations: automationList(), shopping, propertyId: house.id })
       h.onStatus('online')
       return () => { sim.stop(); handlers = null }
     },

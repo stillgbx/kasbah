@@ -71,7 +71,7 @@ describe.each<[string, VersionNegotiationMode]>([['2025', 'legacy'], ['2026-07-2
 
   it('expose les outils', async () => {
     const { tools } = await client.listTools()
-    expect(tools.map((t) => t.name).sort()).toEqual(['control_music', 'get_agenda', 'get_device', 'get_device_history', 'get_health', 'get_music', 'get_school', 'get_weather', 'list_automations', 'list_devices', 'list_scenes', 'play_music', 'play_radio', 'queue_music', 'recall_scene', 'run_automation', 'search_music', 'send_command', 'set_automation_enabled'])
+    expect(tools.map((t) => t.name).sort()).toEqual(['add_shopping_items', 'control_music', 'finish_shopping', 'get_agenda', 'get_device', 'get_device_history', 'get_health', 'get_music', 'get_school', 'get_shopping_list', 'get_weather', 'list_automations', 'list_devices', 'list_scenes', 'play_music', 'play_radio', 'queue_music', 'recall_scene', 'remove_shopping_item', 'run_automation', 'search_music', 'send_command', 'set_automation_enabled', 'set_shopping_favorite', 'update_shopping_item'])
   })
 
   it('joue une piste par le lecteur commun, sur une enceinte', async () => {
@@ -179,6 +179,25 @@ describe.each<[string, VersionNegotiationMode]>([['2025', 'legacy'], ['2026-07-2
     expect(h).toMatchObject({ id: site.descriptor.id, energy: expect.any(Array) })
     const light = kasbah.registry.list().find((e) => e.descriptor.kind === 'light')!.descriptor.id
     expect((await client.callTool({ name: 'get_device_history', arguments: { id: light } })).isError).toBe(true)
+  })
+
+  it('tient la liste de courses : ajout, coche par le nom, habituels, fin des courses', async () => {
+    // les deux versions du protocole partagent le serveur : un produit par passage
+    const milk = `Lait ${_label}`
+    type View = { items: { id: string; name: string; quantity: number; checked: boolean }[]; favorites: string[] }
+    const view = (r: { content: unknown }) => JSON.parse(text(r)) as View
+    const line = (v: View) => v.items.find((i) => i.name === milk)
+    let v = view(await client.callTool({ name: 'add_shopping_items', arguments: { items: [{ name: milk }, { name: milk.toUpperCase(), quantity: 2 }] } }))
+    expect(line(v)).toMatchObject({ quantity: 3, checked: false })
+    v = view(await client.callTool({ name: 'update_shopping_item', arguments: { item: milk.toLowerCase(), checked: true } }))
+    expect(line(v)).toMatchObject({ checked: true })
+    v = view(await client.callTool({ name: 'set_shopping_favorite', arguments: { name: milk, favorite: true } }))
+    expect(v.favorites).toContain(milk)
+    v = view(await client.callTool({ name: 'finish_shopping', arguments: {} }))
+    expect(line(v)).toBeUndefined()
+    expect(view(await client.callTool({ name: 'get_shopping_list', arguments: {} })).favorites).toContain(milk)
+    expect((await client.callTool({ name: 'remove_shopping_item', arguments: { item: milk } })).isError).toBe(true)
+    expect((await client.callTool({ name: 'update_shopping_item', arguments: { item: milk } })).isError).toBe(true)
   })
 
   it('sert la maison en ressource', async () => {

@@ -103,6 +103,8 @@ export const ICONS = {
   paw: 'M6.6 10.2m-1.8 0a1.8 1.8 0 1 0 3.6 0a1.8 1.8 0 1 0-3.6 0M9.9 7.1m-1.9 0a1.9 1.9 0 1 0 3.8 0a1.9 1.9 0 1 0-3.8 0M14.1 7.1m-1.9 0a1.9 1.9 0 1 0 3.8 0a1.9 1.9 0 1 0-3.8 0M17.4 10.2m-1.8 0a1.8 1.8 0 1 0 3.6 0a1.8 1.8 0 1 0-3.6 0M12 16.4m-4.2 0a4.2 3.5 0 1 0 8.4 0a4.2 3.5 0 1 0-8.4 0',
   /** Calendrier : la vue Agenda. */
   calendar: 'M4 5.5h16v15H4zM4 10h16M8.5 3v4M15.5 3v4',
+  /** Liste de courses : un chariot. */
+  cart: 'M3 4h2.4l2.3 11h10.1L20 7.5H6.5M9.5 19.5m-1.5 0a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0M16.5 19.5m-1.5 0a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0',
   /** Cahier ouvert : la vue École (devoirs, cahier de liaison). */
   school: 'M12 6.5C10 5 7 4.5 4 5v13c3-.5 6 0 8 1.5c2-1.5 5-2 8-1.5V5c-3-.5-6 0-8 1.5zM12 6.5v13',
   /** Bulle : un message (cahier de liaison). */

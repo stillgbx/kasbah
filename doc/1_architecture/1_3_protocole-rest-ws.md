@@ -1,7 +1,7 @@
 # Protocole REST et WebSocket
 
-> Dernière mise à jour : 2026-10-10
-> Sources : `packages/shared/src/protocol/{ws,http}.ts`, `apps/server/src/http/{routes,errors}.ts`, `apps/server/src/ws/hub.ts`, `apps/web/src/api/httpTransport.ts`, `apps/server/src/plugins/tesla/index.ts`, `apps/server/src/config/house.ts`, `packages/shared/src/house/place.ts`, `apps/server/src/core/scene-registry.ts`, `packages/shared/src/protocol/http.ts` (`deviceConsumptionSchema`), `apps/server/src/http/routes.ts` (automatisations), `apps/server/src/http/relief.test.ts`, `apps/server/src/config/properties.ts`, `apps/server/src/config/catalog.ts`
+> Dernière mise à jour : 2026-10-11
+> Sources : `packages/shared/src/protocol/{ws,http}.ts`, `apps/server/src/http/{routes,errors}.ts`, `apps/server/src/ws/hub.ts`, `apps/web/src/api/httpTransport.ts`, `apps/server/src/plugins/tesla/index.ts`, `apps/server/src/config/house.ts`, `packages/shared/src/house/place.ts`, `apps/server/src/core/scene-registry.ts`, `packages/shared/src/protocol/http.ts` (`deviceConsumptionSchema`), `apps/server/src/http/routes.ts` (automatisations), `apps/server/src/http/relief.test.ts`, `apps/server/src/config/properties.ts`, `apps/server/src/config/catalog.ts`, `apps/server/src/core/shopping.ts` (2026-10-11)
 
 ## REST
 
@@ -667,3 +667,19 @@ mode démo était refusée (404) — le fichier était pourtant écrit. La route
 `PropertyHost.has(id)` (le catalogue, tous modes) ; choisir une propriété fait passer dans son mode :
 créer depuis la démo sort de la démo, comme voulu. Test : `apps/server/src/config/properties.test.ts`.
 
+### Mise à jour 2026-10-11 — `/api/shopping/*`, message `shopping` et liste au snapshot
+
+Six routes pour la liste de courses de la maison, qui rendent toutes la liste ENTIÈRE
+(`shoppingResponseSchema`, `{ shopping }`) : `GET /api/shopping`, `POST /api/shopping/items`,
+`PATCH` et `DELETE /api/shopping/items/:id` (404 `NOT_FOUND` pour une ligne inconnue),
+`POST /api/shopping/finish`, `PUT /api/shopping/favorites`. Corps validés par les schémas de
+`packages/shared/src/shopping/shopping.ts` (ZodError → 400 `INVALID_BODY`) ; démonstration en lecture
+seule → 409 `DEMO_READONLY`. Détail et décisions : `1_10_liste-de-courses.md`.
+
+WebSocket : nouveau message `{ type: 'shopping', shopping }` après chaque écriture (pas de patch, la
+liste est petite), et champ `shopping` au `snapshot`. Ce champ est **`.optional()`, pas `.default()`** :
+un défaut le rend obligatoire dans le type de sortie de `ServerMessage`, et tous les snapshots littéraux
+des tests web cessaient de compiler. Le hub le remplit toujours (`EMPTY_SHOPPING_LIST` sans service) ;
+un client qui reçoit un snapshot sans liste garde la sienne.
+
+Sources : `packages/shared/src/protocol/{ws,http}.ts`, `apps/server/src/http/routes.ts`, `apps/server/src/ws/hub.ts`, `apps/server/src/http/shopping.test.ts`.

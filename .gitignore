@@ -17,6 +17,9 @@ house/*.bak
 # automatisations d'une maison (données de l'utilisateur, à côté de sa maison)
 house/*.automations.json
 house/*.automations.json.tmp
+# liste de courses d'une maison (idem)
+house/*.shopping.json
+house/*.shopping.json.*tmp
 .tmp-check
 _external
 .claude/agents/

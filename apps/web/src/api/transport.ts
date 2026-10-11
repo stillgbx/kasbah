@@ -1,4 +1,4 @@
-import type { HouseEditPatch, AutomationBody, GardenItemPatch, NewGardenItem, AutomationEntry, AutomationRun, Relief, SceneTuning, Vec2, CommandInput, DeviceConsumption, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, PropertiesResponse, PropertyMode, NewPropertyBody, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal, DeviceReleaseNotes, StateFor } from '@kasbah/shared'
+import type { ShoppingAddBody, ShoppingItemPatch, ShoppingList, HouseEditPatch, AutomationBody, GardenItemPatch, NewGardenItem, AutomationEntry, AutomationRun, Relief, SceneTuning, Vec2, CommandInput, DeviceConsumption, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, PropertiesResponse, PropertyMode, NewPropertyBody, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal, DeviceReleaseNotes, StateFor } from '@kasbah/shared'
 
 // Abstraction du canal serveur. Deux implémentations : HTTP + WebSocket (réel) et simulation
 // in-process (tests, démo statique sans serveur). Les commandes passent TOUJOURS par une requête
@@ -538,6 +538,14 @@ export interface Transport {
   deleteAutomation(id: string): Promise<void>
   /** Exécute les actions tout de suite (ni déclencheur ni « sauf si ») ; rend le compte rendu. */
   runAutomation(id: string): Promise<AutomationRun>
+  /** Liste de courses de la maison. Chaque écriture rend la liste entière (et le WebSocket la pousse). */
+  getShopping(): Promise<ShoppingList>
+  addShoppingItems(items: ShoppingAddBody['items']): Promise<ShoppingList>
+  updateShoppingItem(id: string, patch: ShoppingItemPatch): Promise<ShoppingList>
+  removeShoppingItem(id: string): Promise<ShoppingList>
+  /** « Terminer les courses » : les lignes cochées quittent la liste. */
+  finishShopping(): Promise<ShoppingList>
+  setShoppingFavorite(name: string, favorite: boolean): Promise<ShoppingList>
   /** Inventaire des plugins : tous ceux que le serveur connaît, actifs ou non. */
   getPlugins(): Promise<PluginInfo[]>
   /** Écrit un choix (activation, sous-item, ambiances) dans la maison ; rend l'inventaire à jour. */

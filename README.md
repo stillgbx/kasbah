@@ -257,6 +257,7 @@ Le serveur Kasbah expose aussi un serveur [MCP](https://modelcontextprotocol.io)
 | `get_music` | Ce que joue chaque lecteur, les écoutes à reprendre, la file d'un lecteur |
 | `queue_music` / `control_music` | Ajouter à la file sans interrompre ; suivant, précédent, saut, retrait, répétition, vider, reprendre, transférer vers une autre enceinte |
 | `get_device_history` | Historique énergie (48 h), journal du fabricant, consommation d'eau d'un appareil |
+| `get_shopping_list` / `add_shopping_items` / `update_shopping_item` / `remove_shopping_item` / `finish_shopping` / `set_shopping_favorite` | Liste de courses de la maison : lire, ajouter, cocher ou changer la quantité (ligne désignée par son nom), retirer, retirer les lignes cochées, marquer un habituel |
 
 Ressource : `kasbah://house` (le `house.json` validé).
 

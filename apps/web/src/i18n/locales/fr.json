@@ -1,6 +1,6 @@
 {
   "app": { "name": "Kasbah" },
-  "nav": { "main": "Navigation", "scrollStart": "Vues précédentes", "scrollEnd": "Autres vues", "home": "Maison", "energy": "Énergie", "water": "Eau", "heating": "Chauffage", "vehicles": "Véhicules", "robots": "Robots", "pets": "Animaux", "weather": "Météo", "agenda": "Agenda", "school": "École", "settings": "Réglages", "lights": "Lumières", "covers": "Ouvrants", "cameras": "Caméras", "media": "Médias", "music": "Musique", "automations": "Automatisations", "tens": "TENS" },
+  "nav": { "main": "Navigation", "scrollStart": "Vues précédentes", "scrollEnd": "Autres vues", "home": "Maison", "energy": "Énergie", "water": "Eau", "heating": "Chauffage", "vehicles": "Véhicules", "robots": "Robots", "pets": "Animaux", "weather": "Météo", "agenda": "Agenda", "school": "École", "shopping": "Courses", "settings": "Réglages", "lights": "Lumières", "covers": "Ouvrants", "cameras": "Caméras", "media": "Médias", "music": "Musique", "automations": "Automatisations", "tens": "TENS" },
   "alerts": { "pending": "{view} · alerte en cours", "dismiss": "Masquer", "dismissHint": "Ne plus la signaler sur le rail" },
   "properties": { "title": "Propriété", "switch": "Changer de propriété (actuelle : {name})", "hint": "Mode démo : trois propriétés pour tout voir. En changer recharge l’application sur l’autre maison et son parc simulé.", "kinds": { "house": "Maison", "apartment": "Appartement" }, "create": "Créer une propriété", "duplicate": "Dupliquer « {name} »", "duplicateShort": "Dupliquer", "copyName": "{name} (copie)", "readOnly": "Une démonstration ne se modifie pas : dupliquez-la (menu des propriétés) pour la changer.", "demoReadOnly": "Démonstration en lecture seule", "demoReadOnlyHint": "Une démo se regarde sans se modifier. Dupliquez-la : la copie garde la maison et son parc simulé, et tout s’y règle.", "hintCreate": "Les démos se regardent ; vos propriétés, créées ou dupliquées ici, se modifient. En changer recharge l’application.", "mode": "Mode", "modeDemo": "Démo", "modeReal": "Réel", "modeHint": "Démo : des maisons d’exemple, en lecture seule. Réel : vos propriétés. On revient quand on veut ; l’application se recharge.", "modeHintNoReal": "Pas encore de propriété réelle : créez-en une, ou dupliquez une démo.", "modeConfirm": "Passer en mode {mode} ? L’application se recharge.", "modeGo": "Confirmer" },
   "common": {
@@ -853,6 +853,26 @@
     "referenceLegend": "Repère : moyenne française, {value}/jour pour {n} pers. (SISPEA 2023)",
     "referenceHint": "Ordre de grandeur, pas un verdict : la consommation par personne baisse dans les grands foyers (environ 148 L/pers. à deux, 101 L/pers. à quatre) et varie fortement d'une région à l'autre. Sur la vue Année, le repère est une moyenne mensuelle : février s'y compare à un mois moyen et paraît donc un peu plus économe qu'il ne l'est.",
     "referenceMark": "Repère du foyer : {value}"
+  },
+  "shopping": {
+    "placeholder": "Ajouter ou chercher un produit…",
+    "clear": "Effacer",
+    "addNew": "Ajouter « {name} »",
+    "addOne": "Ajouter {name}",
+    "inList": "Dans la liste",
+    "count": "{left} à acheter · {checked} pris",
+    "finish": "Terminer les courses",
+    "list": "Liste de courses",
+    "empty": "La liste est vide. Tapez un produit ci-dessus, ou touchez un habituel.",
+    "favorites": "Habituels",
+    "noFavorites": "Touchez l'étoile d'un produit pour le retrouver ici.",
+    "star": "Ajouter {name} aux habituels",
+    "unstar": "Retirer {name} des habituels",
+    "less": "Diminuer la quantité de {name}",
+    "more": "Augmenter la quantité de {name}",
+    "remove": "Retirer {name} de la liste",
+    "quantity": "Quantité : {qty}",
+    "toast": { "error": "Liste de courses : {message}" }
   },
   "automations": {
     "title": "Automatisations",

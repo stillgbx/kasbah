@@ -1,7 +1,7 @@
 # Serveur MCP (`/mcp`)
 
-> Dernière mise à jour : 2026-10-09
-> Sources : `apps/server/src/mcp/server.ts`, `apps/server/src/mcp/auth.ts`, `apps/server/src/http/session.ts`, `apps/server/src/mcp/users-cli.ts`, `apps/server/src/mcp/users-routes.ts`, `apps/web/src/components/settings/McpUsersCard.vue`, `apps/server/src/mcp/auth.test.ts`, `apps/server/src/music/player.ts`, `apps/server/src/plugins/{ytmusic,mixcloud,radio}/index.ts`, `apps/server/src/mcp/server.test.ts`, `apps/server/src/app.ts` (`registerMcp`), `apps/server/package.json`, `README.md` (section « Serveur MCP »), arbre de travail du 2026-09-23 (après c9abf58), `apps/server/src/assistant/assistant.ts` ; arbre de travail NON COMMITÉ du 2026-10-09 (après 00397bc) : `apps/server/src/mcp/{server,server.test}.ts`, `README.md`
+> Dernière mise à jour : 2026-10-11
+> Sources : `apps/server/src/mcp/server.ts`, `apps/server/src/mcp/auth.ts`, `apps/server/src/http/session.ts`, `apps/server/src/mcp/users-cli.ts`, `apps/server/src/mcp/users-routes.ts`, `apps/web/src/components/settings/McpUsersCard.vue`, `apps/server/src/mcp/auth.test.ts`, `apps/server/src/music/player.ts`, `apps/server/src/plugins/{ytmusic,mixcloud,radio}/index.ts`, `apps/server/src/mcp/server.test.ts`, `apps/server/src/app.ts` (`registerMcp`), `apps/server/package.json`, `README.md` (section « Serveur MCP »), arbre de travail du 2026-09-23 (après c9abf58), `apps/server/src/assistant/assistant.ts` ; arbre de travail NON COMMITÉ du 2026-10-09 (après 00397bc) : `apps/server/src/mcp/{server,server.test}.ts`, `README.md`, `packages/shared/src/shopping/shopping.ts` (2026-10-11)
 
 ## Ce que c'est
 
@@ -47,6 +47,7 @@ La configuration des clients est dans le `README.md` (section « Serveur MCP »)
 | `list_automations` / `run_automation` / `set_automation_enabled` | statut des règles, lancement immédiat, activation ; ni création ni modification ni suppression *(2026-10-09)* |
 | `get_music` / `queue_music` / `control_music` | ce qui joue et la file, ajout sans interruption, pilotage de la file *(2026-10-09)* |
 | `get_device_history` | énergie (`hours` 1 à 48), journal du fabricant, consommation d'eau *(2026-10-09)* |
+| `get_shopping_list` / `add_shopping_items` / `update_shopping_item` / `remove_shopping_item` / `finish_shopping` / `set_shopping_favorite` | liste de courses de la maison : lire, ajouter, cocher ou changer la quantité, retirer, retirer les cochées, marquer un habituel *(2026-10-11)* |
 
 > Mis à jour le 2026-10-06 (lint) : le tableau passe de 6 à 10 outils (`apps/server/src/mcp/server.ts`) ; `search_music`, `play_music` et `play_radio` viennent de la section 2026-09-23 (soir), `get_school` de la section 2026-10-04 (l'école).
 
@@ -618,3 +619,39 @@ d'environ 4,2 Ko. Typecheck serveur et lint des fichiers touchés verts.
 plugin est monté mais pas démarré : voir `../3_plugins/3_10_open-meteo.md`.
 
 Sources : `apps/server/src/mcp/{server,server.test}.ts`, `README.md` (table « Serveur MCP »).
+
+### Mise à jour 2026-10-11 — six outils pour la liste de courses
+
+> Le tableau des outils passe de 19 à **25**.
+
+La liste de courses partagée (`1_10_liste-de-courses.md`) se tient aussi par l'agent. Les six outils
+appellent les routes `/api/shopping/*` par `app.inject`, comme la musique ou les automatisations : même
+validation, même file d'écriture du `ShoppingService`, même diffusion WebSocket aux écrans — une ligne
+ajoutée à la voix apparaît tout de suite sur la tablette. Le type de `call` accepte désormais `PUT`
+(pour `PUT /api/shopping/favorites`).
+
+| Outil | Ce qu'il fait |
+|---|---|
+| `get_shopping_list` | lignes dans l'ordre d'ajout (`id`, `name`, `quantity`, `checked`) et noms des habituels (`favorites`). Lecture seule |
+| `add_shopping_items` | 1 à 50 produits `{ name, quantity? }` ; déjà là et pas pris → quantité augmentée, déjà coché → de nouveau à acheter |
+| `update_shopping_item` | `item` (id **ou nom**), `checked` et/ou `quantity` ; ni l'un ni l'autre → `isError` |
+| `remove_shopping_item` | retire une ligne sans l'acheter ; le produit reste connu |
+| `finish_shopping` | retire toutes les lignes cochées |
+| `set_shopping_favorite` | pose ou retire l'étoile d'un produit, connu ou non ; ne l'ajoute pas à la liste |
+
+**La ligne se désigne par son nom.** Un agent dit « le lait », pas `lait` : l'outil relit la liste et
+résout le nom par `findShoppingItem` (même clé sans casse ni accents que le serveur), puis vise la ligne
+par son id. Une ligne absente rend `isError` avec un message qui renvoie à `get_shopping_list`. Chaque
+écriture rend la liste réduite à ce qui sert à l'agent (`shoppingView` : ni `addedAt`, ni compteur
+d'usage, ni produits non étoilés).
+
+L'assistant (`1_9_assistant.md`) les a sans réglage : `claude -p` y est lancé avec
+`--allowedTools mcp__kasbah` (`apps/server/src/plugins/claude/run.ts`), tout le préfixe.
+
+**Vérifié.** `server.test.ts`, dans les deux versions du protocole : liste des 25 outils ; ajout du même
+produit sous deux casses (quantité 3), coche par le nom en minuscules, étoile, fin des courses (ligne
+partie, habituel resté), retrait et mise à jour d'une ligne absente → `isError`. Les deux passages
+partagent le serveur : un produit par passage (`Lait <version>`). Le test travaille sur la COPIE
+temporaire de la maison déjà en place pour les automatisations : `<maison>.shopping.json` s'écrit à côté.
+
+Sources : `apps/server/src/mcp/{server,server.test}.ts`, `packages/shared/src/shopping/shopping.ts`, `README.md` (table « Serveur MCP »).

@@ -1,4 +1,4 @@
-import { propertyModeBodySchema, newPropertyBodySchema, duplicatePropertyBodySchema, applyHouseEditToJson, houseEditPatchSchema, SurveyError, addGardenItemToJson, addOpeningToJson, addParkingToJson, gardenItemPatchSchema, newGardenItemSchema, patchGardenItemInJson, removeGardenItemFromJson, assertCommandAllowed, automationBodySchema, automationIdSchema, automationPatchSchema, commandSchema, devicePlacementSchema, newOpeningSchema, newParkingSchema, openingPatchSchema, panelArrayPatchSchema, parkingPatchSchema, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, releaseNotesLang, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, roomOrderSchema, polygonSchema, reliefSchema, sceneTuningSchema, setReliefInJson, setTerrainInJson, setRenderTuningInJson, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
+import { addShoppingItems, clearCheckedShoppingItems, removeShoppingItem, setShoppingFavorite, shoppingAddBodySchema, shoppingFavoriteBodySchema, shoppingItemPatchSchema, updateShoppingItem, propertyModeBodySchema, newPropertyBodySchema, duplicatePropertyBodySchema, applyHouseEditToJson, houseEditPatchSchema, SurveyError, addGardenItemToJson, addOpeningToJson, addParkingToJson, gardenItemPatchSchema, newGardenItemSchema, patchGardenItemInJson, removeGardenItemFromJson, assertCommandAllowed, automationBodySchema, automationIdSchema, automationPatchSchema, commandSchema, devicePlacementSchema, newOpeningSchema, newParkingSchema, openingPatchSchema, panelArrayPatchSchema, parkingPatchSchema, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, releaseNotesLang, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, roomOrderSchema, polygonSchema, reliefSchema, sceneTuningSchema, setReliefInJson, setTerrainInJson, setRenderTuningInJson, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { updateHouseFile, type LoadedHouse } from '../config/house'
 import { singleProperty, type PropertyHost } from '../config/properties'
@@ -7,6 +7,7 @@ import type { PluginHost } from '../core/plugin-host'
 import type { DeviceRegistry } from '../core/registry'
 import type { EnergyHistory } from '../core/history'
 import type { SceneRegistry } from '../core/scene-registry'
+import type { ShoppingService } from '../core/shopping'
 import type { WsHub } from '../ws/hub'
 import { describeError, sendError } from './errors'
 
@@ -18,6 +19,7 @@ export interface RoutesDeps {
   hub: WsHub
   history: EnergyHistory
   automations: AutomationEngine
+  shopping: ShoppingService
   startedAt: number
   /** Propriétés démo entre lesquelles basculer ; absent = la seule maison du fichier. */
   properties?: PropertyHost
@@ -327,6 +329,36 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
     const run = await deps.automations.runNow(req.params.id)
     if (!run) return sendError(reply, 404, 'NOT_FOUND', `unknown automation "${req.params.id}"`)
     return { run }
+  })
+
+  // Liste de courses de la maison. Chaque route rend la liste ENTIÈRE (elle est petite) et la
+  // rediffuse par le WebSocket (message `shopping`) : l'écran d'à côté voit la coche tout de suite.
+  const now = () => Date.now()
+  const unknownItem = (reply: Parameters<typeof sendError>[0], id: string) => sendError(reply, 404, 'NOT_FOUND', `unknown shopping item "${id}"`)
+  app.get('/api/shopping', async () => ({ shopping: deps.shopping.get() }))
+
+  app.post('/api/shopping/items', async (req) => {
+    const { items } = shoppingAddBodySchema.parse(req.body)
+    return { shopping: await deps.shopping.update((l) => addShoppingItems(l, items, now())) }
+  })
+
+  app.patch<{ Params: { id: string } }>('/api/shopping/items/:id', async (req, reply) => {
+    const patch = shoppingItemPatchSchema.parse(req.body)
+    const shopping = await deps.shopping.update((l) => updateShoppingItem(l, req.params.id, patch))
+    return shopping ? { shopping } : unknownItem(reply, req.params.id)
+  })
+
+  app.delete<{ Params: { id: string } }>('/api/shopping/items/:id', async (req, reply) => {
+    const shopping = await deps.shopping.update((l) => removeShoppingItem(l, req.params.id))
+    return shopping ? { shopping } : unknownItem(reply, req.params.id)
+  })
+
+  // « Terminer les courses » : les lignes cochées quittent le panier.
+  app.post('/api/shopping/finish', async () => ({ shopping: await deps.shopping.update(clearCheckedShoppingItems) }))
+
+  app.put('/api/shopping/favorites', async (req) => {
+    const { name, favorite } = shoppingFavoriteBodySchema.parse(req.body)
+    return { shopping: await deps.shopping.update((l) => setShoppingFavorite(l, name, favorite, now())) }
   })
 
   // Propriétés : la liste, et la bascule (serveur de démonstration seulement). La bascule répond

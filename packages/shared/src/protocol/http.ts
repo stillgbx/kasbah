@@ -3,6 +3,7 @@ import { WEATHER_CONDITIONS } from '../devices/kinds'
 import { deviceEntrySchema } from './ws'
 import { pluginSceneEntrySchema } from '../scenes/scene'
 import { automationEntrySchema, automationRunSchema } from '../automations/automation'
+import { shoppingListSchema } from '../shopping/shopping'
 
 export const apiErrorSchema = z.object({ error: z.object({ code: z.string(), message: z.string() }) })
 export type ApiError = z.infer<typeof apiErrorSchema>
@@ -20,6 +21,9 @@ export type AutomationsResponse = z.infer<typeof automationsResponseSchema>
 export const automationResponseSchema = z.object({ automation: automationEntrySchema })
 /** `POST /api/automations/:id/run` : le compte rendu, même en échec partiel. */
 export const automationRunResponseSchema = z.object({ run: automationRunSchema })
+
+/** Toutes les routes `/api/shopping` : la liste entière après l'opération. */
+export const shoppingResponseSchema = z.object({ shopping: shoppingListSchema })
 
 export const PLUGIN_HEALTH_STATUSES = ['ok', 'degraded', 'needs_pairing', 'error', 'not_implemented', 'disabled'] as const
 export const pluginHealthSchema = z.object({

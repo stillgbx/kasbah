@@ -26,6 +26,7 @@ export const router = createRouter({
     { path: '/weather', name: 'weather', component: () => import('../views/WeatherView.vue') },
     { path: '/agenda', name: 'agenda', component: () => import('../views/AgendaView.vue') },
     { path: '/school', name: 'school', component: () => import('../views/SchoolView.vue') },
+    { path: '/shopping', name: 'shopping', component: () => import('../views/ShoppingView.vue') },
     { path: '/automations', name: 'automations', component: () => import('../views/AutomationsView.vue') },
     // l'édition a sa page : « Sauf si » et « Alors » s'allongent, un panneau de 340 px n'y suffit pas.
     // `:id` = id de l'automatisation, ou `new`. `meta.nav` garde l'entrée du rail allumée.

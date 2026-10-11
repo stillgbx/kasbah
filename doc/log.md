@@ -2,6 +2,20 @@
 
 Entrées les plus récentes en haut. Une session = une entrée.
 
+## [2026-10-11] update | Liste de courses partagée (`/shopping`)
+
+**Déclencheur** : demande de l'utilisateur d'une nouvelle vue, une liste de courses partagée par maison que chacun remplit et coche, avec des produits habituels à remettre dans le panier, une recherche, et une gestion complète par le MCP ; présentation choisie avec lui en séance.
+
+**Pages modifiées** :
+- `1_architecture/1_7_serveur-mcp.md` - six outils ajoutés au tableau (25 en tout) et mise à jour datée : ligne désignée par son nom, vérifications.
+- `1_architecture/1_3_protocole-rest-ws.md` - mise à jour datée : routes `/api/shopping/*`, message `shopping`, champ `shopping` facultatif au snapshot (et pourquoi pas `.default()`).
+- `4_ui/4_1_navigation-et-panneaux.md` - mise à jour datée (9) : entrée Courses du rail et de la barre du bas, résumé de l'écran.
+
+**Pages créées** :
+- `1_architecture/1_10_liste-de-courses.md` - nouveau concept (ni plugin ni appareil) : décisions de l'utilisateur, modèle, persistance, REST/WS, MCP, écran, vérifications et piège de mesure des transitions dans le panneau masqué.
+
+**Index** : 1 ligne ajoutée, 2 dates relevées (`1_3`, `1_7`).
+
 ## [2026-10-11] update | Réponse de l'assistant : en-tête fixe, fondu, champ vide après la voix
 
 **Déclencheur** : capture de l'utilisateur sur téléphone (réponse longue qui emportait l'instruction et la croix au défilement, texte dicté à effacer avant la commande suivante).

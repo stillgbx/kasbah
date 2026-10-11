@@ -1,4 +1,4 @@
-import type { AutomationEntry, DeviceId, DeviceState, ServerMessage } from '@kasbah/shared'
+import { EMPTY_SHOPPING_LIST, type AutomationEntry, type DeviceId, type DeviceState, type ServerMessage, type ShoppingList } from '@kasbah/shared'
 import websocket from '@fastify/websocket'
 import type { FastifyInstance } from 'fastify'
 import type { Logger } from 'pino'
@@ -18,6 +18,8 @@ export interface WsHubOptions {
   scenes?: SceneRegistry
   /** Automatisations et leur statut (snapshot) ; le moteur pousse lui-même les changements. */
   automations?: { list(): AutomationEntry[] }
+  /** Liste de courses (snapshot) ; le service pousse lui-même les changements. */
+  shopping?: { get(): ShoppingList }
   /** Propriété que le serveur fait vivre : un écran qui la trouve changée se recharge. */
   propertyId?: () => string
 }
@@ -32,6 +34,7 @@ export class WsHub {
   private readonly heartbeatMs: number
   private readonly scenes: SceneRegistry | undefined
   private readonly automations: WsHubOptions['automations']
+  private readonly shopping: WsHubOptions['shopping']
   private readonly propertyId: WsHubOptions['propertyId']
 
   constructor(
@@ -45,6 +48,7 @@ export class WsHub {
     this.heartbeatMs = opts.heartbeatMs ?? 15_000
     this.scenes = opts.scenes
     this.automations = opts.automations
+    this.shopping = opts.shopping
     this.propertyId = opts.propertyId
     this.unsubscribe.push(
       bus.on('state', (id, state) => { this.pending.set(id, state); this.scheduleFlush() }),
@@ -77,7 +81,7 @@ export class WsHub {
     socket.on('close', () => this.clients.delete(socket))
     socket.on('error', (err) => { this.logger.debug({ err }, 'ws client error'); this.clients.delete(socket) })
     socket.on('message', () => { /* v1 : le client n'envoie rien d'utile */ })
-    this.send(socket, { type: 'snapshot', serverTime: this.clock.now(), devices: this.registry.list(), scenes: this.scenes?.list() ?? [], automations: this.automations?.list() ?? [], ...(this.propertyId ? { propertyId: this.propertyId() } : {}) })
+    this.send(socket, { type: 'snapshot', serverTime: this.clock.now(), devices: this.registry.list(), scenes: this.scenes?.list() ?? [], automations: this.automations?.list() ?? [], shopping: this.shopping?.get() ?? EMPTY_SHOPPING_LIST, ...(this.propertyId ? { propertyId: this.propertyId() } : {}) })
     this.logger.debug({ clients: this.clients.size }, 'ws client connected')
   }
 

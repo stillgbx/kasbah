@@ -4,6 +4,7 @@ import { deviceStateSchema } from '../devices/state'
 import { houseSchema } from '../house/schema'
 import { pluginSceneEntrySchema, pluginSceneStateSchema, sceneIdSchema } from '../scenes/scene'
 import { automationEntrySchema } from '../automations/automation'
+import { shoppingListSchema } from '../shopping/shopping'
 
 // Protocole WebSocket serveur → client. Les états sont envoyés ENTIERS (pas des patchs) :
 // messages idempotents, aucune fusion côté client, reconnexion = « recevoir un snapshot ».
@@ -25,6 +26,8 @@ export const serverMessageSchema = z.discriminatedUnion('type', [
     scenes: z.array(pluginSceneEntrySchema).default([]),
     /** Automatisations de la maison et leur statut ; absent d'un serveur qui n'en a pas. */
     automations: z.array(automationEntrySchema).default([]),
+    /** Liste de courses de la maison ; absente d'un serveur qui n'en a pas (l'écran garde la sienne). */
+    shopping: shoppingListSchema.optional(),
     /**
      * Propriété que le serveur fait vivre (`house.id`). Un écran qui se reconnecte et la trouve
      * changée (un autre écran a basculé de propriété démo) recharge tout plutôt que de mêler deux maisons.
@@ -42,6 +45,8 @@ export const serverMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('error'), code: z.string(), message: z.string() }),
   /** Liste ENTIÈRE des automatisations et de leur statut, à chaque changement (écriture, exécution, appareil disparu). */
   z.object({ type: z.literal('automations'), automations: z.array(automationEntrySchema) }),
+  /** Liste de courses ENTIÈRE, à chaque écriture (elle est petite : pas de patch). */
+  z.object({ type: z.literal('shopping'), shopping: shoppingListSchema }),
   /** Un appareil vient de signaler un événement (sonnette, mouvement) ; `at` = horloge serveur. */
   z.object({ type: z.literal('deviceEvent'), deviceId: deviceIdSchema, event: z.enum(DEVICE_EVENT_KINDS), at: z.number() }),
 ])

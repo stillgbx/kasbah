@@ -1,4 +1,4 @@
-import { apiErrorSchema, automationResponseSchema, automationRunResponseSchema, automationsResponseSchema, devicesResponseSchema, energyHistorySchema, healthResponseSchema, houseSchema, pluginsResponseSchema, propertiesResponseSchema, propertyCreatedSchema, scenesResponseSchema, serverMessageSchema, weatherForecastSchema, deviceJournalSchema, deviceConsumptionSchema, deviceReleaseNotesSchema, type AutomationBody, type AutomationEntry, type AutomationRun, type CommandInput, type DeviceConsumption, type DeviceJournal, type DeviceEntry, type DevicePlacement, type EnergyHistory, type HealthResponse, type House, type PluginInfo, type PluginSceneEntry, type PluginSettingsPatch, type SceneRecallInput, type SceneUpdate, type WeatherForecast } from '@kasbah/shared'
+import { shoppingResponseSchema, type ShoppingList, apiErrorSchema, automationResponseSchema, automationRunResponseSchema, automationsResponseSchema, devicesResponseSchema, energyHistorySchema, healthResponseSchema, houseSchema, pluginsResponseSchema, propertiesResponseSchema, propertyCreatedSchema, scenesResponseSchema, serverMessageSchema, weatherForecastSchema, deviceJournalSchema, deviceConsumptionSchema, deviceReleaseNotesSchema, type AutomationBody, type AutomationEntry, type AutomationRun, type CommandInput, type DeviceConsumption, type DeviceJournal, type DeviceEntry, type DevicePlacement, type EnergyHistory, type HealthResponse, type House, type PluginInfo, type PluginSceneEntry, type PluginSettingsPatch, type SceneRecallInput, type SceneUpdate, type WeatherForecast } from '@kasbah/shared'
 import { parseDeviceId } from '@kasbah/shared'
 import { t } from '../i18n'
 import { ApiRequestError, type AgendaCalendar, type AssistantEvent, type ClaudeAccount, type TranscriptionSettings, type AssistantLogEntry, type AgendaEvent, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type LightHistory, type McpUser, type MelcloudStatus, type MelcloudUnit, type MixcloudHomeSection, type MixcloudPage, type MixcloudStatus, type MixcloudUser, type PetkitStatus, type RadioStation, type RenaultStatus, type SchoolData, type TeslaStatus, type Transport, type TransportHandlers, type WeatherAlerts, type WeatherElsewhere, type WeatherPlace, type YtmusicExplore, type YtmusicExploreShelf, type YtmusicPlaylist, type MusicLastPlayed, type MusicQueue, type YtmusicSearchResult, type MusicSession, type YtmusicStatus, type YtmusicTrack } from './transport'
@@ -68,6 +68,8 @@ async function streamLines(url: string, init: RequestInit, onLine: (json: unknow
 
 const json = (method: string, body: unknown): RequestInit => ({ method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
 
+const shoppingOf = (j: unknown) => shoppingResponseSchema.parse(j).shopping as ShoppingList
+
 export function createHttpTransport(base = ''): Transport {
   /** Un geste sur la file d'un lecteur (`/queue/<step>`) : le serveur rend la file telle qu'elle est après. */
   const queueStep = (step: string, body: object) => request(
@@ -133,6 +135,12 @@ export function createHttpTransport(base = ''): Transport {
       { method: 'POST' },
       (j) => automationRunResponseSchema.parse(j).run as AutomationRun,
     ),
+    getShopping: () => request(`${base}/api/shopping`, undefined, shoppingOf),
+    addShoppingItems: (items) => request(`${base}/api/shopping/items`, json('POST', { items }), shoppingOf),
+    updateShoppingItem: (id, patch) => request(`${base}/api/shopping/items/${encodeURIComponent(id)}`, json('PATCH', patch), shoppingOf),
+    removeShoppingItem: (id) => request(`${base}/api/shopping/items/${encodeURIComponent(id)}`, { method: 'DELETE' }, shoppingOf),
+    finishShopping: () => request(`${base}/api/shopping/finish`, { method: 'POST' }, shoppingOf),
+    setShoppingFavorite: (name, favorite) => request(`${base}/api/shopping/favorites`, json('PUT', { name, favorite }), shoppingOf),
     getPlugins: () => request(`${base}/api/plugins`, undefined, (j) => pluginsResponseSchema.parse(j).plugins as PluginInfo[]),
     setPluginSettings: (pluginId, patch: PluginSettingsPatch) => request(
       `${base}/api/plugins/${encodeURIComponent(pluginId)}`,

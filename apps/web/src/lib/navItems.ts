@@ -15,6 +15,8 @@ export const NAV_ITEMS: NavItem[] = [
   { name: 'agenda', icon: 'calendar', label: 'nav.agenda' },
   // l'école après l'agenda : ce qui attend les enfants, devoirs et mots de l'enseignante
   { name: 'school', icon: 'school', label: 'nav.school' },
+  // les courses avec l'agenda et l'école : la vie de la famille, qu'on remplit et consulte chaque jour
+  { name: 'shopping', icon: 'cart', label: 'nav.shopping' },
   // musique juste après la météo : on lance un titre, on voit l'enceinte dans la 3D
   { name: 'music', icon: 'music', label: 'nav.music' },
   { name: 'lights', icon: 'light', label: 'nav.lights' },

@@ -15,6 +15,7 @@ import { PluginHost } from './core/plugin-host'
 import { DeviceRegistry } from './core/registry'
 import { SceneRegistry } from './core/scene-registry'
 import { SceneSeeder } from './core/scene-seeder'
+import { ShoppingService, shoppingPathFor } from './core/shopping'
 import { EnergyHistory } from './core/history'
 import { registerRoutes } from './http/routes'
 import { actAsHook, createAppSession, sessionConfigSchema } from './http/session'
@@ -108,8 +109,12 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
     store: createAutomationsFile(automationsPathFor(house.path), { readOnly: !!opts.readOnly }),
     registry, scenes, host, house, bus, clock, logger: opts.logger.child({ component: 'automations' }),
   })
-  const hub = new WsHub(registry, bus, clock, opts.logger.child({ component: 'ws' }), { scenes, automations, propertyId: () => house.house.id })
+  // Liste de courses : un fichier à côté de la maison, lu avant le hub, dont le snapshot la porte.
+  const shopping = new ShoppingService(shoppingPathFor(house.path), { readOnly: !!opts.readOnly })
+  await shopping.load()
+  const hub = new WsHub(registry, bus, clock, opts.logger.child({ component: 'ws' }), { scenes, automations, shopping, propertyId: () => house.house.id })
   automations.onChange(() => hub.broadcast({ type: 'automations', automations: automations.list() }))
+  shopping.onChange((list) => hub.broadcast({ type: 'shopping', shopping: list }))
   await automations.start()
 
   await hub.attach(app)
@@ -127,7 +132,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
   // laissés tranquilles par défaut, et le WebSocket ne passe pas par ce crochet.
   await app.register(fastifyCompress, { global: true })
 
-  registerRoutes(app, { registry, scenes, host, house, hub, history, automations, startedAt: clock.now(), ...(opts.properties ? { properties: opts.properties } : {}) })
+  registerRoutes(app, { registry, scenes, host, house, hub, history, automations, shopping, startedAt: clock.now(), ...(opts.properties ? { properties: opts.properties } : {}) })
   host.registerRoutes(app)
   await registerMcp(app, { registry, scenes, host, house, auth: mcpAuth })
   registerMcpUserRoutes(app, { usersFile: mcpConfig.MCP_USERS_FILE })
