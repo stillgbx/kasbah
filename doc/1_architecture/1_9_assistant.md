@@ -1,6 +1,6 @@
 # Assistant (« Demander à Kasbah »)
 
-> Dernière mise à jour : 2026-10-07
+> Dernière mise à jour : 2026-10-11
 > Sources : `apps/server/src/assistant/{assistant,engines}.ts`, tests `apps/server/src/assistant/assistant.test.ts`, `apps/server/src/mcp/auth.ts` (`runToken`), `apps/server/src/app.ts`, `apps/web/src/composables/useAssistant.ts`, `apps/web/src/components/layout/{AssistantReply,SearchPalette}.vue`, `apps/web/src/components/home/SearchBar.vue`, `apps/web/src/components/settings/AssistantCard.vue`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`, session du 2026-10-07, `apps/web/src/composables/useVoiceInput.ts`
 
 ## Ce que c'est
@@ -99,3 +99,23 @@ Realtime sur le serveur, API Mistral) par la même route compatible OpenAI. Le t
 l'assistant comme une instruction tapée : le cœur et les moteurs ne changent pas. Le micro sur le
 réseau local en `http://` demande un drapeau Chrome par appareil (même page). La synthèse vocale des
 réponses (Voxtral TTS, ≥ 16 Go de GPU, licence CC BY-NC) reste à faire.
+
+### Mise à jour 2026-10-11 — coût dans le journal
+
+- **Contrat** : `AssistantUsage` (`engines.ts`), `{ costUsd, inputTokens, outputTokens,
+  cacheReadTokens, cacheWriteTokens }`, **optionnel** sur le dernier mot (`done` ou `error`) : un moteur
+  qui ne le sait pas n'en met pas. Un champ en plus plutôt qu'un nouveau type d'événement : un client
+  web resté en cache traite tout type inconnu comme une erreur (`useAssistant.apply`).
+- **Journal** : `usage` gardé dans l'entrée (`record`) ; les entrées d'avant n'en ont pas.
+- **Carte Assistant** (`AssistantCard.vue`) : « … · 4,2 s · ≈ 0,0031 $ » sur la ligne de chaque
+  instruction chiffrée, les jetons au survol (`title`) ; sous le texte d'aide, « Total ≈ 0,016 $ pour
+  2 instructions, au prix de l'API : le forfait ne facture rien à l'instruction. » (instructions
+  chiffrées du journal affiché, absent s'il n'y en a aucune). Deux chiffres significatifs sous le
+  dollar, deux décimales au-dessus. Pluriel par `$t(clé, { cost, k }, nombre)` : pas de champ `count`
+  interpolé.
+- Le coût vient du moteur Claude : voir `../3_plugins/3_24_claude.md` (prix catalogue, pas une
+  facture).
+
+Tests : `assistant.test.ts` (journal avec et sans `usage`), `AssistantCard.test.ts` (+2 : coût,
+jetons et total ; pas de total sans instruction chiffrée) ; contrôle négatif fait. Vérifié dans la
+preview sur le serveur de démo avec un journal inventé : fr et en, 1 280 et 375 px, sans débordement.

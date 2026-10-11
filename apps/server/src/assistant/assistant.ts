@@ -7,7 +7,7 @@ import { writeFileAtomic } from '../core/atomic-file'
 import { stateFile } from '../core/paths'
 import { sendError } from '../http/errors'
 import type { McpAuth } from '../mcp/auth'
-import { currentAssistantEngine, type AssistantEvent } from './engines'
+import { currentAssistantEngine, type AssistantEvent, type AssistantUsage } from './engines'
 
 // L'assistant : une instruction en texte, passée au moteur d'un plugin (Claude aujourd'hui), qui
 // agit par les outils du MCP de Kasbah et répond en une phrase. Ce qui est commun à tous les moteurs
@@ -23,7 +23,7 @@ import { currentAssistantEngine, type AssistantEvent } from './engines'
 const TIMEOUT_MS = 60_000
 const MAX_TEXT = 2000
 
-/** Une instruction du journal : qui, quoi, les outils appelés, la réponse ou l'erreur. */
+/** Une instruction du journal : qui, quoi, les outils appelés, la réponse ou l'erreur, et ce qu'elle a consommé. */
 export interface AssistantLogEntry {
   at: number
   user: string | null
@@ -32,6 +32,8 @@ export interface AssistantLogEntry {
   answer: string
   error: { code: string; message: string } | null
   ms: number
+  /** Absent : moteur qui ne le dit pas, ou entrée d'avant le 2026-10-11. */
+  usage?: AssistantUsage
 }
 
 const LOG_MAX = 200
@@ -67,6 +69,7 @@ function record(entry: AssistantLogEntry, e: AssistantEvent): void {
     const t = entry.tools.find((x) => x.id === e.id)
     if (t) t.ok = e.ok
   } else if (e.type === 'error') entry.error = { code: e.code, message: e.message }
+  if ((e.type === 'done' || e.type === 'error') && e.usage) entry.usage = e.usage
 }
 
 export interface AssistantDeps {

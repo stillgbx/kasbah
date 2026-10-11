@@ -33,7 +33,10 @@ export const happy = (child: FakeChild) => {
   child.line({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 't1', name: 'mcp__kasbah__send_command', input: { deviceId: 'mock:light-living' } }] } })
   child.line({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 't1', is_error: false }] } })
   child.line({ type: 'assistant', message: { content: [{ type: 'text', text: 'Le plafonnier du salon est allumé.' }] } })
-  child.line({ type: 'result', subtype: 'success', is_error: false, result: 'Le plafonnier du salon est allumé.' })
+  child.line({
+    type: 'result', subtype: 'success', is_error: false, result: 'Le plafonnier du salon est allumé.', total_cost_usd: 0.0031,
+    usage: { input_tokens: 12, output_tokens: 40, cache_read_input_tokens: 9000, cache_creation_input_tokens: 1500 },
+  })
   child.exit()
 }
 

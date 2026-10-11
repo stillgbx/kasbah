@@ -23,7 +23,7 @@ const answer = async (run: AssistantRun) => {
   run.emit({ type: 'tool', id: 't1', name: 'send_command', input: { deviceId: 'mock:light-living' } })
   run.emit({ type: 'tool_result', id: 't1', ok: true })
   run.emit({ type: 'text', text: 'Le plafonnier du salon est allumé.' })
-  run.emit({ type: 'done', ms: 5 })
+  run.emit({ type: 'done', ms: 5, usage: { costUsd: 0.0031, inputTokens: 12, outputTokens: 40, cacheReadTokens: 9000, cacheWriteTokens: 1500 } })
 }
 /** Attend d'être annulé, sans rien dire (le contrat d'un moteur). */
 const waitAbort = (run: AssistantRun) => new Promise<void>((resolve) => { run.signal.addEventListener('abort', () => resolve()) })
@@ -132,8 +132,10 @@ describe('routes', () => {
     expect(first).toMatchObject({
       user: 'lou', text: 'Allume le salon', answer: 'Le plafonnier du salon est allumé.', error: null,
       tools: [{ id: 't1', name: 'send_command', input: { deviceId: 'mock:light-living' }, ok: true }],
+      usage: { costUsd: 0.0031, outputTokens: 40 },
     })
     expect(last).toMatchObject({ user: null, text: 'Éteins tout', tools: [], answer: '', error: { code: 'MCP_UNAVAILABLE' } })
+    expect(last).not.toHaveProperty('usage')
   })
 
   it('ne montre le journal qu’au réseau local', async () => {

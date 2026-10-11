@@ -210,13 +210,16 @@ export interface ClaudeAccount { user: string | null; savedAt: number | null; ho
  */
 export interface TranscriptionSettings { user: string | null; voice: string | null; houseVoice: string | null; defaultVoice: string | null }
 
+/** Ce qu'une instruction a consommé ; `costUsd` au prix catalogue de l'API (un forfait n'est pas facturé à l'instruction). */
+export interface AssistantUsage { costUsd: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number }
+
 /** Ce que l'assistant (`claude -p` sur le serveur) rend, au fil de l'eau, pour une instruction. */
 export type AssistantEvent =
   | { type: 'text'; text: string }
   | { type: 'tool'; id: string; name: string; input: unknown }
   | { type: 'tool_result'; id: string; ok: boolean }
-  | { type: 'done'; ms: number }
-  | { type: 'error'; code: string; message: string }
+  | { type: 'done'; ms: number; usage?: AssistantUsage }
+  | { type: 'error'; code: string; message: string; usage?: AssistantUsage }
 
 /** Une instruction du journal de l'assistant (les 200 dernières, tous comptes, réseau local seulement). */
 export interface AssistantLogEntry {
@@ -227,6 +230,8 @@ export interface AssistantLogEntry {
   answer: string
   error: { code: string; message: string } | null
   ms: number
+  /** Absent : moteur qui ne le dit pas, ou entrée d'avant le 2026-10-11. */
+  usage?: AssistantUsage
 }
 
 /** Un agenda de la maison (plugin `agenda`) ; son adresse iCal reste sur le serveur. */

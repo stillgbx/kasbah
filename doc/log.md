@@ -2,6 +2,18 @@
 
 Entrées les plus récentes en haut. Une session = une entrée.
 
+## [2026-10-11] update | Assistant : coût de chaque instruction dans le journal
+
+**Déclencheur** : demande de l'utilisateur d'obtenir le coût d'une course `claude -p` et de l'afficher dans le journal de la carte Assistant.
+
+**Pages modifiées** :
+- `3_plugins/3_24_claude.md` - mise à jour datée : champs du `result` (`total_cost_usd`, `usage`, `costBasis: "list"`), ce que vaut le chiffre avec un forfait, `usageOf`.
+- `1_architecture/1_9_assistant.md` - mise à jour datée : `AssistantUsage` optionnel sur le dernier mot, journal, carte (coût par ligne, total).
+
+**Pages créées** : aucune.
+
+**Index** : dates de `1_9_assistant` et `3_24_claude` au 2026-10-11.
+
 ## [2026-10-11] update | Voix : envoi à la fin de la phrase
 
 **Déclencheur** : demande de l'utilisateur de ne plus appuyer sur Terminer après une instruction dictée, avec un interrupteur sur la fiche du plugin.

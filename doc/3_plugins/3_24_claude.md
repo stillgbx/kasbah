@@ -1,6 +1,6 @@
 # Plugin Claude (moteur de l'assistant, `claude -p`)
 
-> Dernière mise à jour : 2026-10-08
+> Dernière mise à jour : 2026-10-11
 > Sources : `apps/server/src/plugins/claude/{index,run}.ts`, tests `apps/server/src/plugins/claude/{plugin,run}.test.ts` et `test-claude.ts`, `apps/server/src/assistant/engines.ts`, `apps/server/src/plugins/index.ts`, `apps/web/src/components/ClaudeLinkCard.vue`, `apps/web/src/components/settings/PluginSection.vue`, CLI Claude Code 2.1.288 (`claude --help`), session du 2026-10-07, page utilisateur `docs/plugins/claude-assistant.md` (2026-10-08)
 
 ## Ce que c'est
@@ -115,3 +115,25 @@ or the server PATH) » quand le binaire manque — visible dans Réglages avant 
 - En réel, sur un serveur jetable (maison de démo, plugin mock, port 9799) : plugin éteint →
   `NO_ENGINE` ; allumé → santé « claude 2.1.288 », plafonnier allumé en 6,5 s ; jeton invalide →
   `CLAUDE_AUTH` en 3,8 s.
+
+### Mise à jour 2026-10-11 — le coût de chaque instruction
+
+**Demande de l'utilisateur** : connaître le coût d'une course `claude -p`, et le voir dans le journal de
+la carte Assistant de Réglages.
+
+- **Source** : le `result` final de `claude -p` (en `json` comme en `stream-json`) porte
+  `total_cost_usd`, `usage` (`input_tokens`, `output_tokens`, `cache_read_input_tokens`,
+  `cache_creation_input_tokens`) et `modelUsage.<modèle>.costUSD` avec **`costBasis: "list"`** :
+  relevé le 2026-10-11 (CLI 2.1.296) avec un compte au forfait.
+- **Ce que vaut ce chiffre** : Claude Code le calcule lui-même, des jetons au **prix catalogue de
+  l'API**. Avec un forfait (jeton `setup-token`), rien n'est facturé à l'instruction : c'est ce que
+  coûterait une clé d'API. L'app l'écrit « ≈ … $ » et le rappelle sous le total.
+- **`run.ts`** : `usageOf(result)` → `usage: { costUsd, inputTokens, outputTokens, cacheReadTokens,
+  cacheWriteTokens }`, joint au `done` (ou à l'`error` d'un `result` en échec). Sans `total_cost_usd`
+  (autre version de la CLI), aucun `usage`.
+- Observé au passage, sur une course sans `--system-prompt` (prompt de Claude Code complet) : 49 173
+  jetons écrits en cache pour « ok », ≈ 0,0098 $ en Haiku. Kasbah remplace le prompt système : ses
+  courses sont à mesurer dans le journal.
+
+Tests : `run.test.ts` (+2 : coût et jetons lus ; `result` sans coût → fin sans `usage`), contrôle
+négatif fait.

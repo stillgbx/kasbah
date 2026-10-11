@@ -6,13 +6,25 @@
 // système, le délai, le journal, l'affichage. Ce que le moteur garde : son binaire, ses arguments,
 // son compte chez le fournisseur (par compte Kasbah), la traduction de sa sortie.
 
+/**
+ * Ce qu'une instruction a consommé, quand le moteur le sait. `costUsd` est calculé au prix catalogue
+ * de l'API : avec un forfait (Claude), personne ne le paie, c'est ce que coûterait une clé d'API.
+ */
+export interface AssistantUsage {
+  costUsd: number
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+}
+
 /** Ce que la route `/ask` écrit, une ligne JSON par événement. */
 export type AssistantEvent =
   | { type: 'text'; text: string }
   | { type: 'tool'; id: string; name: string; input: unknown }
   | { type: 'tool_result'; id: string; ok: boolean }
-  | { type: 'done'; ms: number }
-  | { type: 'error'; code: string; message: string }
+  | { type: 'done'; ms: number; usage?: AssistantUsage }
+  | { type: 'error'; code: string; message: string; usage?: AssistantUsage }
 
 export interface AssistantRun {
   /** Le compte qui demande (ses comptes chez le fournisseur) ; `null` = la maison. */

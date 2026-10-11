@@ -40,6 +40,17 @@ it('traduit la sortie de claude en événements : outil, résultat, texte, fin',
   expect(fake.calls[0]!.stdin).toBe('Allume le salon')
 })
 
+it('rend ce que l’instruction a consommé : coût au prix de l’API et jetons, lus dans le result', async () => {
+  const done = (await go()).at(-1)
+  expect(done).toMatchObject({ type: 'done', usage: { costUsd: 0.0031, inputTokens: 12, outputTokens: 40, cacheReadTokens: 9000, cacheWriteTokens: 1500 } })
+})
+
+it('sans coût dans le result (autre version de claude), la fin n’en porte pas', async () => {
+  script = (child) => { child.line(init()); child.line({ type: 'result', subtype: 'success', is_error: false, result: 'Fait.' }); child.exit() }
+  const done = (await go()).at(-1)
+  expect(done).toEqual({ type: 'done', ms: expect.any(Number) as number })
+})
+
 it('verrouille claude : aucun outil intégré, le seul MCP Kasbah, aucun réglage, pas de session gardée', async () => {
   await go()
   const { args } = fake.calls[0]!

@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
-import type { AssistantRun } from '../../assistant/engines'
+import type { AssistantRun, AssistantUsage } from '../../assistant/engines'
 import type { SpawnFn } from '../../music/proxy'
 
 // `claude -p` pour une instruction de l'assistant, verrouillé :
@@ -15,6 +15,26 @@ import type { SpawnFn } from '../../music/proxy'
 // `--safe-mode` n'est PAS une option : il coupe aussi les serveurs MCP (`mcp_servers: []`, vu le 2026-10-07).
 
 const TOOL_PREFIX = 'mcp__kasbah__'
+
+/** Le `result` de claude porte le coût (prix catalogue, `costBasis: "list"`, même avec un forfait) et les jetons. */
+interface ClaudeResult {
+  is_error?: boolean
+  result?: string
+  api_error_status?: number
+  total_cost_usd?: number
+  usage?: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number }
+}
+
+function usageOf(r: ClaudeResult): AssistantUsage | null {
+  if (typeof r.total_cost_usd !== 'number') return null
+  return {
+    costUsd: r.total_cost_usd,
+    inputTokens: r.usage?.input_tokens ?? 0,
+    outputTokens: r.usage?.output_tokens ?? 0,
+    cacheReadTokens: r.usage?.cache_read_input_tokens ?? 0,
+    cacheWriteTokens: r.usage?.cache_creation_input_tokens ?? 0,
+  }
+}
 
 export interface ClaudeRunOptions {
   bin: string
@@ -91,11 +111,12 @@ export async function runClaude(opts: ClaudeRunOptions, run: AssistantRun): Prom
             if (block.type === 'tool_result' && block.tool_use_id) run.emit({ type: 'tool_result', id: block.tool_use_id, ok: !block.is_error })
           }
         } else if (msg.type === 'result') {
-          const r = msg as { is_error?: boolean; result?: string; api_error_status?: number }
-          if (!r.is_error) finish({ type: 'done', ms: Date.now() - started })
+          const r = msg as ClaudeResult
+          const usage = usageOf(r)
+          if (!r.is_error) finish({ type: 'done', ms: Date.now() - started, ...(usage ? { usage } : {}) })
           else {
             const code = r.api_error_status === 401 ? 'CLAUDE_AUTH' : r.api_error_status === 429 ? 'CLAUDE_LIMIT' : 'CLAUDE_ERROR'
-            finish({ type: 'error', code, message: r.result ?? 'claude failed' })
+            finish({ type: 'error', code, message: r.result ?? 'claude failed', ...(usage ? { usage } : {}) })
           }
         }
       })
