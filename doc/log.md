@@ -2,6 +2,17 @@
 
 Entrées les plus récentes en haut. Une session = une entrée.
 
+## [2026-10-11] update | Vue École : devoirs en grille
+
+**Déclencheur** : demande de l'utilisateur — afficher les devoirs en grille plutôt qu'en une colonne étroite sur grand écran.
+
+**Pages modifiées** :
+- `3_plugins/3_23_toutemonannee.md` - mise à jour datée : un jour par case, `auto-fill` et garde sous 320 px, rangées à la hauteur du jour le plus chargé (maçonnerie écartée), vérifications.
+
+**Pages créées** : aucune.
+
+**Index** : ligne `3_23` complétée, date relevée.
+
 ## [2026-10-11] update | Liste de courses désactivable
 
 **Déclencheur** : question de l'utilisateur — pouvoir couper la liste de courses pour qui n'en veut pas ; interrupteur dans les Réglages retenu, allumée par défaut.

@@ -166,7 +166,7 @@ const documents = (files: SchoolFile[]) => files.filter((f) => f.type !== 'image
             <StrokeIcon :name="showPast ? 'chevronUp' : 'chevronDown'" :size="16" />
             {{ showPast ? $t('school.hidePast') : $t('school.showPast', { n: pastCount }, pastCount) }}
           </button>
-          <template v-if="showPast">
+          <div v-if="showPast" class="school__days">
             <section v-for="d in days.past" :key="d.date" class="school__day school__day--past">
               <h2 class="school__dayhead">{{ dayTitle(d.date) }}<span class="school__dayhint">{{ dayHint(d.date) }}</span></h2>
               <article v-for="h in d.items" :key="h.id" class="card school__item" :data-done="h.done ? '1' : '0'">
@@ -180,36 +180,38 @@ const documents = (files: SchoolFile[]) => files.filter((f) => f.type !== 'image
                 </div>
               </article>
             </section>
-          </template>
+          </div>
 
           <p v-if="!days.upcoming.length" class="card card--soft school__none muted">{{ $t('school.noHomework') }}</p>
-          <section v-for="d in days.upcoming" :key="d.date" class="school__day" :data-next="d.date === nextDue ? '1' : '0'">
-            <h2 class="school__dayhead">{{ dayTitle(d.date) }}<span class="school__dayhint">{{ dayHint(d.date) }}</span></h2>
-            <article v-for="h in d.items" :key="h.id" class="card school__item" :data-done="h.done ? '1' : '0'">
-              <button type="button" role="checkbox" class="school__check" :aria-checked="h.done" :disabled="school.pending.has(h.id)"
-                      :aria-label="$t('school.markDone', { what: heading(h) })" @click="tick(h)">
-                <StrokeIcon v-if="h.done" name="check" :size="16" />
-              </button>
-              <div class="school__content">
-                <div class="school__title">
-                  {{ heading(h) }}<span v-for="l in h.levels" :key="l" class="school__level">{{ l }}</span>
+          <div v-else class="school__days">
+            <section v-for="d in days.upcoming" :key="d.date" class="school__day" :data-next="d.date === nextDue ? '1' : '0'">
+              <h2 class="school__dayhead">{{ dayTitle(d.date) }}<span class="school__dayhint">{{ dayHint(d.date) }}</span></h2>
+              <article v-for="h in d.items" :key="h.id" class="card school__item" :data-done="h.done ? '1' : '0'">
+                <button type="button" role="checkbox" class="school__check" :aria-checked="h.done" :disabled="school.pending.has(h.id)"
+                        :aria-label="$t('school.markDone', { what: heading(h) })" @click="tick(h)">
+                  <StrokeIcon v-if="h.done" name="check" :size="16" />
+                </button>
+                <div class="school__content">
+                  <div class="school__title">
+                    {{ heading(h) }}<span v-for="l in h.levels" :key="l" class="school__level">{{ l }}</span>
+                  </div>
+                  <p class="school__text">{{ h.text }}</p>
+                  <div v-if="h.files.length" class="school__files">
+                    <a v-for="f in h.files" :key="f.url" :href="f.url" target="_blank" rel="noopener noreferrer" class="school__file">
+                      <StrokeIcon name="link" :size="14" />{{ f.name }}
+                    </a>
+                  </div>
+                  <div class="school__meta muted">
+                    <span v-if="h.author">{{ h.author }}</span>
+                    <span v-if="journals.length > 1">{{ journalName(h.journalId) }}</span>
+                    <span v-if="h.siteAck" class="school__ack" :title="$t('school.siteAckHint')">
+                      <StrokeIcon name="person" :size="13" />{{ $t('school.siteAck', { n: h.siteAck.validated, total: h.siteAck.total }) }}
+                    </span>
+                  </div>
                 </div>
-                <p class="school__text">{{ h.text }}</p>
-                <div v-if="h.files.length" class="school__files">
-                  <a v-for="f in h.files" :key="f.url" :href="f.url" target="_blank" rel="noopener noreferrer" class="school__file">
-                    <StrokeIcon name="link" :size="14" />{{ f.name }}
-                  </a>
-                </div>
-                <div class="school__meta muted">
-                  <span v-if="h.author">{{ h.author }}</span>
-                  <span v-if="journals.length > 1">{{ journalName(h.journalId) }}</span>
-                  <span v-if="h.siteAck" class="school__ack" :title="$t('school.siteAckHint')">
-                    <StrokeIcon name="person" :size="13" />{{ $t('school.siteAck', { n: h.siteAck.validated, total: h.siteAck.total }) }}
-                  </span>
-                </div>
-              </div>
-            </article>
-          </section>
+              </article>
+            </section>
+          </div>
         </template>
 
         <!-- Cahier de liaison ------------------------------------------------------------------ -->
@@ -291,7 +293,11 @@ const documents = (files: SchoolFile[]) => files.filter((f) => f.type !== 'image
 .school__scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-bottom: calc(var(--safe-bottom) + 24px); display: flex; flex-direction: column; gap: 10px; }
 .school__scroll > * { width: 100%; max-width: 820px; box-sizing: border-box; }
 
-.school__day { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+/* un jour par case, dans l'ordre de lecture ; auto-fill garde la largeur d'une colonne quel que soit
+   le nombre de jours */
+.school__scroll > .school__days { max-width: none; }
+.school__days { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: 12px 16px; align-items: start; }
+.school__day { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; min-width: 0; }
 .school__dayhead { margin: 0; font-size: 15px; font-weight: 600; display: flex; align-items: baseline; gap: 10px; }
 .school__dayhint { font-size: 12px; font-weight: 500; color: var(--muted); }
 /* le prochain jour à rendre : celui qu'on regarde en rentrant de l'école */

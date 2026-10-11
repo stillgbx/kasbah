@@ -1,6 +1,6 @@
 # Plugin TouteMonAnnée (cahier de texte, cahier de liaison, publications)
 
-> Dernière mise à jour : 2026-10-06
+> Dernière mise à jour : 2026-10-11
 > Sources : `apps/server/src/plugins/toutemonannee/{index,client,mapping,store}.ts`, tests `apps/server/src/plugins/toutemonannee/plugin.test.ts`, `apps/web/src/views/SchoolView.vue`, `apps/web/src/components/SchoolLinkCard.vue`, `apps/web/src/stores/school.ts`, `apps/web/src/lib/school.ts` (+ `school.test.ts`), `apps/web/src/api/{transport,httpTransport,mockTransport,mockSchool}.ts`, `apps/web/src/components/ui/Segmented.vue`
 
 ## Ce que c'est
@@ -132,3 +132,18 @@ liaison avec `read`, publications avec `new`, et `fetchedAt`. Il applique les fi
 de la vue École, sauf `includeHidden`, et se limite à une `section` si on la demande. **Lecture seule** :
 aucune écriture (case « fait », « j'ai lu ») ne passe par le MCP. Compte non relié : l'outil répond en
 erreur et renvoie vers la vue École.
+
+### Mise à jour 2026-10-11 — devoirs en grille
+
+Demande de l'utilisateur : la liste des devoirs n'occupait qu'une colonne de 820 px sur un grand
+écran. Chaque **jour** devient une case d'une grille (`.school__days`, `SchoolView.vue`) — titre du
+jour et ses cartes restent ensemble, ordre de lecture gauche → droite puis ligne suivante. Les jours
+passés ont leur propre grille sous « Afficher les N devoirs passés ».
+
+- `repeat(auto-fill, minmax(min(320px, 100%), 1fr))` : `auto-fill` (pas `auto-fit`) garde la largeur
+  d'une colonne quel que soit le nombre de jours ; `min(…, 100%)` évite le débordement sous 320 px.
+- `align-items: start` : une case ne s'étire pas, mais une rangée prend la hauteur de son jour le plus
+  chargé (vide possible sous un voisin court). Une maçonnerie en colonnes l'éviterait au prix d'un
+  ordre de lecture vertical — non retenu.
+- Vérifié en mode simulé : 4 colonnes à 1600 px, 2 à 1024 / 853 px, 1 à 375 px, aucun débordement ;
+  rien ne bouge au cochage (mesure géométrique sur les jours et les cartes).
