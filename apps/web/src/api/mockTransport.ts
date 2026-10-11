@@ -422,7 +422,7 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     },
     async assistantLog() { return { entries: [] } },
     // pas de moteur de transcription ici : le micro ne se montre pas
-    async transcriptionStatus() { return { ready: false, provider: null, speech: false } },
+    async transcriptionStatus() { return { ready: false, provider: null, speech: false, autoSend: false } },
     async speak() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no speech in mock mode') },
     async transcriptionVoices() { return { voices: [] } },
     async transcriptionSettings() { return { user: null, voice: null, houseVoice: null, defaultVoice: null } },

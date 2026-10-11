@@ -28,6 +28,9 @@ import { findVoiceStudio, killVoiceStudio, spawnVoiceStudio } from './voicestudi
 // `POST /v1/audio/speech` ; chez VoiceStudio, `tts-1` désigne le moteur de synthèse actif (OmniVoice,
 // profil « fast », décision de l'utilisateur 2026-10-07).
 //
+// Envoi à la fin de la phrase (sous-item `autoSend`, allumé par défaut) : l'app arrête l'écoute seule
+// après un silence, sans toucher au bouton (détection dans le navigateur, `apps/web/src/lib/vad.ts`).
+//
 // VoiceStudio sans son interface (sous-item `voicestudio`, éteint par défaut) : lancé avec le plugin
 // quand `STT_URL` est sur cette machine et que rien n'y répond, arrêté avec lui (`voicestudio.ts`).
 
@@ -95,7 +98,8 @@ const voicesSchema = z.object({
 export interface TranscriptionPluginDeps {
   fetch?: typeof fetch
   spawnImpl?: SpawnFn
-  /** Où chercher `VoiceStudiountime-location.json` (défaut `%APPDATA%`). */
+  /** Où chercher `VoiceStudio
+untime-location.json` (défaut `%APPDATA%`). */
   appData?: string
   /** Intervalle de l'attente de VoiceStudio lancé (défaut 2 s). */
   pollMs?: number
@@ -108,6 +112,8 @@ export function createTranscriptionPlugin(deps: TranscriptionPluginDeps = {}): D
   let target: { provider: SttProvider; url: string | null; model: string; hints: 'prompt' | 'context_bias'; key?: string; language: string; ttsModel: string; ttsVoice: string } | null = null
   /** Sous-item `speech` : les réponses aux instructions dictées sont dites à voix haute. */
   let speech = false
+  /** Sous-item `autoSend` : l'écoute s'arrête seule à la fin de la phrase. */
+  let autoSend = true
   let lastError: string | null = null
   /** Sous-item `voicestudio` : lancer VoiceStudio sans son interface. */
   let autostart = false
@@ -241,12 +247,14 @@ export function createTranscriptionPlugin(deps: TranscriptionPluginDeps = {}): D
     configSchema: transcriptionConfigSchema,
     parts: [
       { id: 'speech', labelKey: 'voice.speakAnswers', enabledByDefault: false },
+      { id: 'autoSend', labelKey: 'voice.autoSend', enabledByDefault: true },
       { id: 'voicestudio', labelKey: 'voice.voicestudioAutostart', enabledByDefault: false },
     ],
 
     async init(context) {
       ctx = context
       speech = context.parts.speech === true
+      autoSend = context.parts.autoSend !== false
       autostart = context.parts.voicestudio === true
       // déjà validée par l'hôte : la revalider casserait un champ transformé (doc/6_faq/6_1, config re-validée)
       const c = context.config as TranscriptionConfig
@@ -283,7 +291,7 @@ export function createTranscriptionPlugin(deps: TranscriptionPluginDeps = {}): D
 
     registerRoutes(app: FastifyInstance) {
       // L'app ne montre le micro que si le plugin tourne et sait où envoyer l'audio.
-      app.get('/status', async () => ({ ready: ctx !== null && target !== null && !missing(), provider: target?.provider ?? null, speech: ctx !== null && speech }))
+      app.get('/status', async () => ({ ready: ctx !== null && target !== null && !missing(), provider: target?.provider ?? null, speech: ctx !== null && speech, autoSend: ctx !== null && autoSend }))
 
       app.post('/transcribe', { bodyLimit: BODY_LIMIT }, async (req, reply) => {
         const body = z.object({

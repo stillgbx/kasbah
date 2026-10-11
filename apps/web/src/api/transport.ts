@@ -694,7 +694,7 @@ export interface Transport {
   /** Une instruction : les événements arrivent au fil de l'eau, la promesse tient jusqu'à la fin. */
   assistantAsk(text: string, onEvent: (e: AssistantEvent) => void, signal?: AbortSignal): Promise<void>
   /** Le plugin `transcription` tourne-t-il et sait-il où envoyer l'audio ? (le micro ne se montre qu'alors) */
-  transcriptionStatus(): Promise<{ ready: boolean; provider: string | null; speech: boolean }>
+  transcriptionStatus(): Promise<{ ready: boolean; provider: string | null; speech: boolean; autoSend: boolean }>
   /** Un WAV 16 kHz mono en base64, et les noms de la maison comme vocabulaire ; rend le texte entendu. */
   transcribe(audio: string, hints: string[]): Promise<{ text: string; ms: number }>
   /** La réponse de l'assistant dite à voix haute (sous-item `speech`) : le son, à jouer ici. */

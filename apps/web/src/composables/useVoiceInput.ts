@@ -2,6 +2,7 @@ import { onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getTransport } from '../api'
 import { ApiRequestError } from '../api/transport'
+import { createEndpointer, rms } from '../lib/vad'
 import { encodeWav, STT_RATE, toBase64, toMono16k } from '../lib/wav'
 import { useDevicesStore } from '../stores/devices'
 import { useHouseStore } from '../stores/house'
@@ -9,9 +10,11 @@ import { useNotificationsStore } from '../stores/notifications'
 import { useScenesStore } from '../stores/scenes'
 
 // Le micro de la recherche : appuyer pour parler, appuyer pour finir (arrêt seul au bout de 15 s),
-// et le texte entendu part tout de suite (`onText`). L'enregistrement est converti ici en WAV 16 kHz
-// mono, puis transcrit par le plugin `transcription` du serveur, avec les noms de la maison comme
-// vocabulaire (« Spots cuisine », « Robby » : des mots qu'un modèle ne devine pas).
+// et le texte entendu part tout de suite (`onText`). Sous-item `autoSend` allumé (défaut), l'écoute
+// s'arrête aussi seule à la fin de la phrase (`lib/vad.ts`) ; sans parole au bout de 5 s, rien n'est
+// envoyé (un modèle de transcription invente du texte sur un silence). L'enregistrement est converti
+// ici en WAV 16 kHz mono, puis transcrit par le plugin `transcription` du serveur, avec les noms de la
+// maison comme vocabulaire (« Spots cuisine », « Robby » : des mots qu'un modèle ne devine pas).
 //
 // Le micro n'existe qu'en contexte sûr (HTTPS, ou localhost) : sur le réseau local en `http://`, le
 // navigateur le refuse — on le dit au toucher, avec où trouver la manipulation (drapeau Chrome).
@@ -33,11 +36,15 @@ export const MAX_RECORDING_MS = 15_000
 const MIN_SECONDS = 0.3
 /** Le temps que « rien entendu » reste dans le champ. */
 export const HEARD_NOTHING_MS = 4000
+/** Une mesure du niveau du micro toutes les 50 ms (`setInterval` : un onglet masqué ne rend pas `requestAnimationFrame`). */
+const VAD_FRAME_MS = 50
 
 /** Le plugin tourne-t-il ? Demandé une fois par chargement de page, partagé par la palette et la barre. */
 const ready = ref<boolean | null>(null)
 /** Sous-item `speech` allumé : dire les réponses aux instructions dictées. */
 const speech = ref(false)
+/** Sous-item `autoSend` allumé : l'écoute s'arrête seule à la fin de la phrase. */
+const autoSend = ref(false)
 let asked = false
 
 /**
@@ -53,7 +60,7 @@ export function useVoiceInput(onText: (text: string) => void | Promise<string | 
 
   if (!asked) {
     asked = true
-    getTransport().transcriptionStatus().then((s) => { ready.value = s.ready; speech.value = s.speech }, () => { ready.value = false })
+    getTransport().transcriptionStatus().then((s) => { ready.value = s.ready; speech.value = s.speech; autoSend.value = s.autoSend === true }, () => { ready.value = false })
   }
 
   const phase = ref<VoicePhase>('idle')
@@ -65,6 +72,10 @@ export function useVoiceInput(onText: (text: string) => void | Promise<string | 
   let timer: ReturnType<typeof setTimeout> | null = null
   /** Démonté pendant l'enregistrement : on coupe le micro et on jette ce qui a été dit. */
   let discarded = false
+  /** Personne n'a parlé (détection) : rien à transcrire. */
+  let silent = false
+  /** L'écoute du niveau sonore, le temps d'un enregistrement. */
+  let listener: { audio: AudioContext; poll: ReturnType<typeof setInterval> } | null = null
   /** La réponse en train d'être dite (une seule à la fois). */
   let player: HTMLAudioElement | null = null
   let playerUrl: string | null = null
@@ -114,8 +125,28 @@ export function useVoiceInput(onText: (text: string) => void | Promise<string | 
     return [...new Set(names.map((n) => n.trim()).filter((n) => n && n.length <= 80))].slice(0, 400)
   }
 
+  /** Écoute le niveau du micro et arrête l'enregistrement à la fin de la phrase (ou sans parole). */
+  function watchSilence(source: MediaStream) {
+    const audio = new AudioContext()
+    void audio.resume()
+    const analyser = audio.createAnalyser()
+    analyser.fftSize = 1024
+    audio.createMediaStreamSource(source).connect(analyser)
+    const frame = new Float32Array(analyser.fftSize)
+    const vad = createEndpointer()
+    const t0 = performance.now()
+    const poll = setInterval(() => {
+      analyser.getFloatTimeDomainData(frame)
+      const event = vad.push(rms(frame), performance.now() - t0)
+      if (event === 'nothing') silent = true
+      if (event) stop()
+    }, VAD_FRAME_MS)
+    listener = { audio, poll }
+  }
+
   function release() {
     if (timer) { clearTimeout(timer); timer = null }
+    if (listener) { clearInterval(listener.poll); void listener.audio.close(); listener = null }
     stream?.getTracks().forEach((track) => track.stop())
     stream = null
   }
@@ -134,12 +165,14 @@ export function useVoiceInput(onText: (text: string) => void | Promise<string | 
     }
     chunks = []
     discarded = false
+    silent = false
     recorder = new MediaRecorder(stream)
     recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data) }
     recorder.onstop = () => { void finish(recorder?.mimeType ?? '') }
     recorder.start()
     phase.value = 'recording'
     timer = setTimeout(stop, MAX_RECORDING_MS)
+    if (autoSend.value) try { watchSilence(stream) } catch { /* pas d'analyse audio : le bouton reste */ }
   }
 
   function stop() {
@@ -149,6 +182,7 @@ export function useVoiceInput(onText: (text: string) => void | Promise<string | 
   async function finish(type: string) {
     release()
     if (discarded) { phase.value = 'idle'; return }
+    if (silent) { phase.value = 'idle'; setHeardNothing(true); return }
     phase.value = 'transcribing'
     try {
       const samples = await toMono16k(new Blob(chunks, { type }))

@@ -87,7 +87,7 @@ describe('VoiceStudio', () => {
   it('sans adresse, dit quoi régler et cache le micro', async () => {
     const { plugin } = await started({})
     expect(plugin.health!()).toMatchObject({ status: 'needs_pairing', detail: 'STT_URL is required for voicestudio (the address of its local API)' })
-    expect((await app!.inject({ method: 'GET', url: '/api/plugins/transcription/status' })).json()).toEqual({ ready: false, provider: 'voicestudio', speech: false })
+    expect((await app!.inject({ method: 'GET', url: '/api/plugins/transcription/status' })).json()).toEqual({ ready: false, provider: 'voicestudio', speech: false, autoSend: true })
     expect((await transcribe()).statusCode).toBe(409)
   })
 })
@@ -145,13 +145,19 @@ describe('pannes', () => {
   })
 })
 
+describe('envoi à la fin de la phrase (sous-item autoSend)', () => {
+  it('éteint : le statut le dit, l\'app garde le bouton seul', async () => {
+    await started({ STT_URL: 'http://localhost:7860' }, ok, { autoSend: false })
+    expect((await app!.inject({ method: 'GET', url: '/api/plugins/transcription/status' })).json()).toMatchObject({ autoSend: false })
+  })
+})
 
 describe('réponses parlées (sous-item speech)', () => {
   const speak = (text = 'Les spots de la cuisine sont allumés.') => app!.inject({ method: 'POST', url: '/api/plugins/transcription/speak', payload: { text } })
 
   it('éteint par défaut : le dit au statut et refuse de parler', async () => {
     await started({ STT_URL: 'http://localhost:7860' })
-    expect((await app!.inject({ method: 'GET', url: '/api/plugins/transcription/status' })).json()).toEqual({ ready: true, provider: 'voicestudio', speech: false })
+    expect((await app!.inject({ method: 'GET', url: '/api/plugins/transcription/status' })).json()).toEqual({ ready: true, provider: 'voicestudio', speech: false, autoSend: true })
     expect((await speak()).statusCode).toBe(409)
   })
 

@@ -390,7 +390,7 @@ export function createHttpTransport(base = ''): Transport {
     assistantAsk: (text, onEvent, signal) => streamLines(
       `${base}/api/assistant/ask`, { ...json('POST', { text }), ...(signal ? { signal } : {}) }, (j) => onEvent(j as AssistantEvent),
     ),
-    transcriptionStatus: () => request(`${base}/api/plugins/transcription/status`, undefined, (j) => j as { ready: boolean; provider: string | null; speech: boolean }),
+    transcriptionStatus: () => request(`${base}/api/plugins/transcription/status`, undefined, (j) => j as { ready: boolean; provider: string | null; speech: boolean; autoSend: boolean }),
     transcriptionVoices: () => request(`${base}/api/plugins/transcription/voices`, undefined, (j) => j as { voices: { id: string; name: string; language?: string }[] }),
     transcriptionSettings: () => request(`${base}/api/plugins/transcription/settings`, undefined, (j) => j as TranscriptionSettings),
     setTranscriptionVoice: (voice) => request(`${base}/api/plugins/transcription/settings`, json('PUT', { voice }), (j) => j as TranscriptionSettings),

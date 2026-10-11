@@ -11,6 +11,7 @@
 ## Ce que fait le plugin
 
 - **Dicter** : un bouton micro au bout du champ de la palette Ctrl+K et de la barre de la vue Maison. Appuyer pour parler, appuyer pour finir (arrêt seul au bout de 15 s) : le texte entendu part **aussitôt** à l'assistant, comme une instruction tapée puis envoyée.
+- **Envoi à la fin de la phrase** (interrupteur « Envoyer à la fin de la phrase », allumé par défaut) : l'écoute s'arrête seule après une seconde de silence, sans appuyer sur Terminer ; le bouton reste pour couper plus tôt. Si personne ne parle dans les 5 premières secondes, rien n'est envoyé. Une musique forte peut empêcher la fin d'être vue : le bouton reprend alors la main.
 - **Vocabulaire de la maison** : les noms des pièces, zones, ambiances et appareils sont envoyés au moteur, qui reconnaît ainsi « Spots cuisine » plutôt qu'un mot approchant.
 - **Réponses parlées** (interrupteur « Lire les réponses à voix haute », éteint par défaut) : la réponse de l'assistant à une instruction **dictée** est dite à voix haute, sur l'appareil qui a parlé (pas sur les enceintes). Une instruction tapée garde une réponse écrite.
 - **Voix des réponses** : la fiche du plugin propose les voix créées chez le fournisseur (les profils de VoiceStudio). Voir plus bas.

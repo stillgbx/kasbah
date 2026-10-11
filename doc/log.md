@@ -2,6 +2,17 @@
 
 Entrées les plus récentes en haut. Une session = une entrée.
 
+## [2026-10-11] update | Voix : envoi à la fin de la phrase
+
+**Déclencheur** : demande de l'utilisateur de ne plus appuyer sur Terminer après une instruction dictée, avec un interrupteur sur la fiche du plugin.
+
+**Pages modifiées** :
+- `3_plugins/3_25_transcription.md` - mise à jour datée : sous-item `autoSend`, détection à seuil (`lib/vad.ts`), plancher de bruit, rien entendu sans transcription, pistes écartées, limites.
+
+**Pages créées** : aucune.
+
+**Index** : date de `3_25_transcription` au 2026-10-11.
+
 ## [2026-10-10] update | Barre de navigation du bas : plus haute, chevrons de défilement ; keydown sans touche
 
 **Déclencheur** : sur un vrai téléphone, le glissement dans la barre du bas était pris par le système (doigt trop bas), et rien ne disait qu'elle défilait ; erreur `toLowerCase` à la palette sur un `keydown` du remplissage automatique.

@@ -1,7 +1,7 @@
 # Plugin Transcription (la voix de l'assistant)
 
-> Dernière mise à jour : 2026-10-10
-> Sources : `apps/server/src/plugins/transcription/index.ts`, `apps/server/src/plugins/transcription/voicestudio.ts` (+ test), tests `apps/server/src/plugins/transcription/plugin.test.ts`, `apps/web/src/composables/useVoiceInput.ts` (+ test), `apps/web/src/lib/wav.ts` (+ test), `apps/web/src/components/home/SearchBar.vue`, `apps/web/src/components/layout/SearchPalette.vue`, `apps/server/.env.example`, session du 2026-10-07, `apps/web/src/composables/useVoiceInput.speech.test.ts`, `apps/web/src/components/TranscriptionLinkCard.vue` (+ test), `docs/plugins/transcription.md`, session du 2026-10-08
+> Dernière mise à jour : 2026-10-11
+> Sources : `apps/server/src/plugins/transcription/index.ts`, `apps/server/src/plugins/transcription/voicestudio.ts` (+ test), tests `apps/server/src/plugins/transcription/plugin.test.ts`, `apps/web/src/composables/useVoiceInput.ts` (+ test), `apps/web/src/lib/wav.ts` (+ test), `apps/web/src/components/home/SearchBar.vue`, `apps/web/src/components/layout/SearchPalette.vue`, `apps/server/.env.example`, session du 2026-10-07, `apps/web/src/composables/useVoiceInput.speech.test.ts`, `apps/web/src/components/TranscriptionLinkCard.vue` (+ test), `docs/plugins/transcription.md`, session du 2026-10-08, `apps/web/src/lib/vad.ts` (+ test), `apps/web/src/composables/useVoiceInput.autosend.test.ts`, session du 2026-10-11
 
 ## Ce que c'est
 
@@ -292,3 +292,37 @@ l'utilisateur sur son installation (« ça fonctionne »).
 Tests : `useVoiceInput.test.ts` (rien entendu sans bandeau puis effacé au bout de 4 s ; effacé en
 reparlant), `useVoiceInput.speech.test.ts` (+2 : réécoute et arrêt ; une seule synthèse tant que la
 réponse n'est pas oubliée).
+
+### Mise à jour 2026-10-11 — envoi à la fin de la phrase
+
+**Demande de l'utilisateur** : ne plus avoir à appuyer sur Terminer ; l'instruction part seule quand
+on a fini de parler, le bouton restant pour couper plus tôt. Interrupteur sur la fiche du plugin,
+**allumé par défaut**.
+
+- **Interrupteur** : sous-item `autoSend` (« Envoyer à la fin de la phrase », `voice.autoSend`,
+  `enabledByDefault: true`), rendu par `GET /status` (`autoSend`). Éteint : le fonctionnement d'avant
+  (bouton, ou 15 s).
+- **Détection dans le navigateur, au niveau sonore** (`lib/vad.ts`, détection d'activité vocale à
+  seuil) : un `AnalyserNode` branché sur le flux du micro, lu toutes les 50 ms par `setInterval` (pas
+  de `requestAnimationFrame` : un onglet masqué ne le rend pas). La parole compte après 250 ms au-dessus
+  du seuil ; **1 s de silence** ensuite arrête l'enregistrement, qui part comme au bouton.
+- **Seuil** : 3 fois le plancher de bruit, 0,01 au moins (niveau efficace). Le plancher descend
+  aussitôt au niveau le plus bas entendu et ne remonte que lentement pendant les silences : une musique
+  de fond constante devient le plancher, une parole dès le premier instant ne le fausse pas (il
+  redescend au premier blanc entre deux mots). Les trames nulles du micro qui s'ouvre sont ignorées.
+- **Personne ne parle en 5 s** : arrêt, « rien entendu » dans le champ, et **rien n'est envoyé** à la
+  transcription (un modèle Whisper invente du texte sur un silence).
+- **Écarté** : un modèle neuronal (Silero VAD par `@ricky0123/vad-web`, ≈ 2 Mo plus un moteur ONNX en
+  WebAssembly), à reprendre derrière la même interface si le seuil se trompe à l'usage (TV, musique
+  forte) ; la reconnaissance du navigateur (audio chez Google) ; la fin de tour d'un moteur en continu
+  (Voxtral Realtime, que VoiceStudio ne fait pas).
+- **Limites connues** : une hésitation de plus d'1 s coupe l'instruction ; une musique plus forte que
+  la voix empêche la fin d'être vue (on retombe sur le bouton ou les 15 s). Les valeurs (1 s, 5 s,
+  facteur 3, 0,01) sont **à régler sur un vrai micro**.
+
+Tests : `vad.test.ts` (9 : fin après le silence voulu, hésitation, rien entendu, bruit bref, musique
+de fond, parole dès le début, trames nulles), `useVoiceInput.autosend.test.ts` (3 : arrêt seul et
+envoi, silence sans transcription, bouton toujours actif), `plugin.test.ts` (+1, interrupteur éteint) ;
+contrôles négatifs faits (plancher qui ne redescend pas, détection débranchée → rouge).
+**Non joué** : une vraie capture du micro (le panneau navigateur la bloque) et la pastille dans la
+fiche du plugin (elle n'apparaît que plugin allumé, sur un serveur qui fait tourner ce code).
