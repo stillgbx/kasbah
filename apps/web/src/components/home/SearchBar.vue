@@ -18,7 +18,8 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 // qui effacent aussi l'instruction du champ.
 //
 // Le micro (plugin `transcription` allumé) : appuyer pour parler, appuyer pour finir ; le texte
-// entendu devient l'instruction et part aussitôt à l'assistant. Le toucher du micro rend le focus :
+// entendu part aussitôt à l'assistant, sans passer par le champ, qui reste vide avec le micro au bout :
+// on enchaîne une autre commande vocale sans rien effacer. Le toucher du micro rend le focus :
 // sur téléphone, le clavier ne monte pas (ni à la fin de l'écoute, quand le champ redevient éditable).
 
 const emit = defineEmits<{ picked: [hit: SearchHit] }>()
@@ -33,13 +34,13 @@ const assistant = useAssistant()
 const { phase } = assistant
 const { t } = useI18n()
 const { ready: voiceReady, speech, phase: voicePhase, heardNothing, toggle: toggleVoice, replay, forgetSpoken } = useVoiceInput(async (text) => {
-  query.value = text
+  // le champ reste vide (l'instruction est en tête de la réponse) : le micro y reste, prêt pour la suivante
   await assistant.ask(text)
   // la réponse, à dire à voix haute si les réponses parlées sont allumées
   return assistant.phase.value === 'done' ? assistant.answer.value : null
 })
-/** La place du bout du champ : le micro pendant l'écoute, ou quand il n'y a rien à effacer. */
-const micSlot = computed(() => voiceReady.value === true && (voicePhase.value !== 'idle' || (!query.value && phase.value === 'idle')))
+/** La place du bout du champ : le micro pendant l'écoute, ou quand le champ est vide (la réponse a sa propre croix). */
+const micSlot = computed(() => voiceReady.value === true && (voicePhase.value !== 'idle' || !query.value))
 /** Parler, terminer l'écoute, ou arrêter la réponse dite à voix haute. */
 const micLabel = computed(() => t(voicePhase.value === 'recording' ? 'voice.stop' : voicePhase.value === 'speaking' ? 'voice.stopSpeaking' : 'voice.start'))
 /** Les résultats, plus la ligne de l'assistant. */
@@ -233,10 +234,11 @@ function onEscape() {
 /* la saisie vaut instruction : elle prend la place du lieu, le libellé ne s'étire pas */
 .search__label--ask { flex: none; }
 .search__sub--ask { flex: 1 1 0; text-align: right; }
-/* la réponse, au même endroit que la liste et du même verre, grandit vers le haut */
+/* la réponse, au même endroit que la liste et du même verre, grandit vers le haut ; au-delà de la
+   hauteur, son en-tête reste et le dessous défile (AssistantReply) */
 .search__reply {
   position: absolute; left: 0; right: 0; bottom: calc(100% + 8px);
-  max-height: min(50vh, 360px); overflow-y: auto; overscroll-behavior: contain;
+  max-height: min(50vh, 360px); overflow: hidden;
   border-radius: var(--radius); border: 1px solid var(--line); box-shadow: var(--shadow);
   background: color-mix(in srgb, var(--surface) 94%, transparent);
   backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);

@@ -1,6 +1,6 @@
 # Navigation et panneaux
 
-> Dernière mise à jour : 2026-10-10
+> Dernière mise à jour : 2026-10-11
 > Sources : `apps/web/src/App.vue`, `apps/web/src/components/layout/*.vue`, `apps/web/src/views/*.vue`, `apps/web/src/components/home/*.vue`, `apps/web/src/components/controls/*.vue`, `apps/web/src/views/LightsView.vue`, `apps/web/src/components/home/PlacementControl.vue`, `apps/web/src/components/scenes/SceneChips.vue`, `apps/web/src/components/devices/RoomBands.vue`, `apps/web/src/components/devices/RoomLightsToggle.vue`, `apps/web/src/views/CoversView.vue`, `apps/web/src/components/covers/CoverPill.vue`, `apps/web/src/lib/{cover,deviceState}.ts`, `apps/web/src/composables/useHomeSummary.ts`, `apps/web/src/components/devices/ForgetDeviceButton.vue`, `apps/web/src/components/controls/MediaPlayerControl.vue`, `apps/web/src/lib/audioRouting.ts`, `apps/web/src/components/energy/EnergyFlow.vue`, `apps/web/src/components/EnphasePairingCard.vue`, `apps/web/src/lib/energy.ts`, `apps/web/src/components/devices/RoomBrightness.vue`, `apps/web/src/components/devices/CoversMaster.vue`, `apps/web/src/components/devices/LightsMaster.vue`, `apps/web/src/composables/useRoomLights.ts`, `apps/web/src/components/home/PanelArraysCard.vue`, `apps/web/src/components/energy/InverterFields.vue`, `apps/web/src/components/TeslaLinkCard.vue`, `apps/web/src/views/VehiclesView.vue`, `apps/web/src/components/vehicles/VehicleMap.vue`, `apps/web/src/components/vehicles/VehicleTuning.vue`, `apps/web/src/lib/vehicleTuning.ts`, `apps/web/src/lib/map.ts`, `apps/web/src/components/controls/VehicleCard.vue`, `apps/web/src/components/vehicles/ChargeLimitCard.vue`, `apps/web/src/components/home/DevicePanel.vue`, `apps/web/src/components/settings/PluginSection.vue`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/components/ui/Segmented.vue`, `apps/web/src/components/home/SearchBar.vue`, `apps/web/src/composables/useSearch.ts`, `apps/web/src/components/layout/SearchPalette.vue`, `apps/web/src/lib/search.ts`, `apps/web/src/lib/navItems.ts`, `apps/web/src/views/HeatingView.vue`, `apps/web/src/components/heating/*.vue`, `apps/web/src/components/MelcloudLinkCard.vue`, `apps/web/src/components/home/OpeningPanel.vue`, `apps/web/src/components/home/RoomEditPanel.vue`, `apps/web/src/components/home/ParkingPanel.vue`, `apps/web/src/lib/deviceIcons.ts`, `apps/web/src/views/MusicView.vue`, `apps/web/src/components/music/{MusicPlayerBar,ListeningSessions,MusicItemRow,MusicTile,ChipRow}.vue`, `apps/web/src/stores/localPlayer.ts`, `apps/web/src/components/music/MixcloudBrowser.vue`, `apps/web/src/components/MixcloudLinkCard.vue`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/views/{AutomationsView,AutomationEditView}.vue`, `apps/web/src/components/automations/*.vue`, `apps/web/src/components/layout/NavRail.vue` (`meta.nav`), `apps/web/src/components/controls/LightHistoryChart.vue`, `apps/web/src/components/weather/WeatherPlaces.vue`, `apps/web/src/composables/useMusicSession.ts`, `apps/web/src/lib/streamQuality.ts`, `apps/web/src/components/home/ReliefPanel.vue`, `apps/web/src/lib/ignRelief.ts`, `apps/web/src/lib/moon.ts`, `apps/web/src/components/vehicles/VehicleSoftware.vue`, `apps/web/src/components/layout/AssistantReply.vue`, `apps/web/src/components/settings/AssistantCard.vue`, `apps/web/src/components/ClaudeLinkCard.vue`, `apps/web/src/composables/useVoiceInput.ts`, `apps/web/src/stores/properties.ts`, `apps/web/src/components/layout/PropertyList.vue`, `apps/web/src/components/home/{HouseEditPanel,RoomShapeSection}.vue`, `apps/web/src/components/property/*.vue`, `apps/web/src/lib/onboarding.ts`, `apps/web/src/lib/geocode.ts`
 
 ## Grille
@@ -5951,3 +5951,31 @@ les deux au milieu, celui de gauche seul à la fin, centres alignés à 769 px. 
 `EditBar.vue` et `ReliefPanel.vue`) ignorent les `keydown` sans `key` — le remplissage automatique de
 Chrome en émet (`key` `undefined` malgré le type), et `e.key.toLowerCase()` levait une erreur. Test :
 `SearchPalette.test.ts` (rouge sans la garde).
+
+### Mise à jour 2026-10-11 (8) — réponse de l'assistant : en-tête fixe, fondu, champ vide après la voix
+
+**Retour de l'utilisateur** (téléphone, une instruction qui a commandé sept volets) : toute la réponse
+défilait, l'instruction et sa croix partaient avec ; rien ne disait qu'il restait à faire défiler ; et
+après une commande vocale, le texte et la croix restaient dans le champ, à effacer avant la suivante.
+
+- **En-tête fixe** (`AssistantReply.vue`) : la réponse est une colonne ; l'instruction et la croix
+  (`.reply__asked`) restent, seul `.reply__body` (outils, réponse, « Réécouter », erreur) défile. Les
+  appelants bornent la hauteur (`max-height`, barre `min(50vh, 360px)`, palette `60vh`) en
+  `overflow: hidden` et ne font plus défiler eux-mêmes. Le corps a 4 px de marge rendus par une marge
+  négative : « Réécouter » (décalé de -4 px) n'y crée pas de défilement horizontal.
+- **Fondu du côté qui a une suite**, comme les genres Mixcloud et la barre du bas : 24 px, `data-fade-start`
+  / `data-fade-end` posés par `measure()` au défilement, au redimensionnement (`ResizeObserver`) et à
+  chaque ligne ou texte qui arrive.
+- **La vue suit la fin** tant que la réponse arrive (elle s'écrit en bas), sauf si l'on est remonté
+  (à plus de 4 px du bas). Ajout non demandé : sans lui, la réponse finale naissait sous le fondu.
+- **Champ vide après la voix** (barre et palette) : le texte dicté part à l'assistant sans passer par
+  le champ ; l'instruction se lit en tête de la réponse. Dans la barre, la place du bout du champ
+  revient au **micro dès que le champ est vide** (avant : seulement sans réponse), la réponse gardant
+  sa propre croix : un toucher du micro efface la réponse et rouvre l'écoute. Une instruction **tapée**
+  reste dans le champ (on la retouche).
+
+Vérifié dans la preview (`kasbah-mock`, réponse fabriquée par l'état du composant) : en-tête au même
+pixel en haut, au milieu et en bas du défilement ; fondu bas seul en haut, les deux au milieu, haut seul
+en bas ; croix dans le cadre et aucun débordement à 375, 300 et 250 px (zooms 1 / 1,25 / 1,5) et à
+1 280 px ; palette capturée sur la page Lumières. Non joué : thème clair (le masque ne dépend pas des
+couleurs). Test : `SearchBar.voice.test.ts` (rouge si le champ reprend le texte dicté).

@@ -2,6 +2,18 @@
 
 Entrées les plus récentes en haut. Une session = une entrée.
 
+## [2026-10-11] update | Réponse de l'assistant : en-tête fixe, fondu, champ vide après la voix
+
+**Déclencheur** : capture de l'utilisateur sur téléphone (réponse longue qui emportait l'instruction et la croix au défilement, texte dicté à effacer avant la commande suivante).
+
+**Pages modifiées** :
+- `4_ui/4_1_navigation-et-panneaux.md` - mise à jour datée (8) : en-tête fixe, corps qui défile avec fondu du côté qui a une suite, vue qui suit la fin, micro dès que le champ est vide.
+- `3_plugins/3_25_transcription.md` - mise à jour datée : le champ reste vide après une commande vocale.
+
+**Pages créées** : aucune.
+
+**Index** : date de `4_1_navigation-et-panneaux` au 2026-10-11.
+
 ## [2026-10-11] update | Assistant : coût de chaque instruction dans le journal
 
 **Déclencheur** : demande de l'utilisateur d'obtenir le coût d'une course `claude -p` et de l'afficher dans le journal de la carte Assistant.

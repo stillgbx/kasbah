@@ -31,7 +31,7 @@ const assistant = useAssistant()
 const { phase } = assistant
 const { t } = useI18n()
 const { ready: voiceReady, speech, phase: voicePhase, heardNothing, toggle: toggleVoice, replay, forgetSpoken } = useVoiceInput(async (text) => {
-  query.value = text
+  // le champ reste vide (l'instruction est en tête de la réponse) : le micro y reste, prêt pour la suivante
   await assistant.ask(text)
   // la réponse, à dire à voix haute si les réponses parlées sont allumées
   return assistant.phase.value === 'done' ? assistant.answer.value : null
@@ -220,7 +220,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
 /* la saisie vaut instruction : elle prend la place du lieu, le libellé ne s'étire pas */
 .palette__label--ask { flex: none; }
 .palette__sub--ask { flex: 1 1 0; text-align: right; }
-.palette__reply { border-top: 1px solid var(--line); max-height: 60vh; overflow-y: auto; overscroll-behavior: contain; }
+.palette__reply { border-top: 1px solid var(--line); max-height: 60vh; overflow: hidden; }
 .palette__label { flex: 1 1 auto; min-width: 0; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .palette__sub { flex: 0 1 auto; min-width: 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* téléphone : le texte indicatif français (283 px) ne tenait pas dans le champ (281 px) à 16 px

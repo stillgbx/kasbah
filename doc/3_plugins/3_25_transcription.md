@@ -326,3 +326,10 @@ envoi, silence sans transcription, bouton toujours actif), `plugin.test.ts` (+1,
 contrôles négatifs faits (plancher qui ne redescend pas, détection débranchée → rouge).
 **Non joué** : une vraie capture du micro (le panneau navigateur la bloque) et la pastille dans la
 fiche du plugin (elle n'apparaît que plugin allumé, sur un serveur qui fait tourner ce code).
+
+### Mise à jour 2026-10-11 (suite) — le champ reste vide après une commande vocale
+
+Le texte entendu ne remplit plus le champ (barre et palette) : il part à l'assistant, et l'instruction
+se lit en tête de la réponse. Dans la barre, le micro reprend la place du bout du champ dès que le champ
+est vide, réponse affichée ou non : on enchaîne une autre commande vocale sans rien effacer. Détail dans
+`../4_ui/4_1_navigation-et-panneaux.md` (mise à jour 8).

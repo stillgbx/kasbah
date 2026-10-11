@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AssistantAction, AssistantPhase } from '../../composables/useAssistant'
 import { useDevicesStore } from '../../stores/devices'
@@ -14,6 +14,10 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 // bas à droite de la réponse la fait dire à voix haute ; sa rangée existe dès que le texte arrive
 // (cachée jusqu'à la fin) : elle n'agrandit pas le panneau après coup. Avec `closable`, une croix en
 // haut à droite ferme la réponse, comme celle du champ de recherche.
+//
+// Hauteur bornée par l'appelant (`max-height`) : l'en-tête (l'instruction, la croix) reste en place et
+// seul le dessous défile, avec un fondu du côté où il y a une suite. Tant que la réponse arrive, la vue
+// suit la fin (la réponse s'écrit en bas), sauf si l'on est remonté la lire.
 
 const props = defineProps<{
   phase: AssistantPhase
@@ -57,6 +61,33 @@ const rows = computed(() => props.actions.map((a) => ({
   ok: a.ok,
 })))
 
+/** Le dessous qui défile, et de quel côté il a une suite (fondu). */
+const body = ref<HTMLElement | null>(null)
+const fade = ref({ start: false, end: false })
+/** Collé en bas (à 4 px près) : la vue suit ce qui arrive. */
+let atEnd = true
+
+function measure() {
+  const el = body.value
+  if (!el) return
+  atEnd = el.scrollTop + el.clientHeight >= el.scrollHeight - 4
+  fade.value = { start: el.scrollTop > 1, end: !atEnd }
+}
+
+let resize: ResizeObserver | null = null
+onMounted(() => {
+  measure()
+  if (typeof ResizeObserver !== 'undefined' && body.value) { resize = new ResizeObserver(measure); resize.observe(body.value) }
+})
+onBeforeUnmount(() => resize?.disconnect())
+// une ligne d'outil, la réponse, l'erreur : le contenu grandit sans que le cadre change de taille
+watch(() => [props.actions.length, props.actions.map((a) => a.ok), props.answer, props.phase, props.canReplay], async () => {
+  const follow = atEnd
+  await nextTick()
+  if (follow && body.value) body.value.scrollTop = body.value.scrollHeight
+  measure()
+})
+
 const errorText = computed(() => {
   const e = props.error
   if (!e) return ''
@@ -74,38 +105,50 @@ const errorText = computed(() => {
         <StrokeIcon name="close" :size="16" />
       </button>
     </div>
-    <div v-for="r in rows" :key="r.id" class="reply__action">
-      <StrokeIcon class="reply__icon" :name="r.icon" :size="16" />
-      <span class="reply__label">{{ r.label }}</span>
-      <span class="reply__target">{{ r.target }}</span>
-      <!-- place réservée : l'état de l'outil (en cours, fait, refusé) ne décale rien -->
-      <span class="reply__state">
-        <PulseDot v-if="r.ok === undefined" :on="phase === 'running'" />
-        <StrokeIcon v-else-if="r.ok" class="reply__ok" name="check" :size="14" />
-        <StrokeIcon v-else class="reply__ko" name="alert" :size="14" />
-      </span>
-    </div>
-    <div v-if="answer" class="reply__answer">{{ answer }}</div>
-    <div v-if="answer && canReplay" class="reply__foot">
-      <button type="button" class="reply__replay" :data-show="phase === 'done' ? '1' : '0'"
-              :tabindex="phase === 'done' ? 0 : -1" :data-speaking="speaking ? '1' : '0'"
-              :aria-label="$t(speaking ? 'voice.stopSpeaking' : 'voice.replay')" @mousedown.prevent @click="emit('replay')">
-        <StrokeIcon :name="speaking ? 'stop' : 'volume'" :size="16" />
-        <!-- les deux libellés dans la même case : le bouton garde la largeur du plus long -->
-        <span class="reply__replaylabel">
-          <span :data-on="speaking ? '0' : '1'">{{ $t('voice.replayShort') }}</span>
-          <span :data-on="speaking ? '1' : '0'">{{ $t('voice.stopShort') }}</span>
+    <div ref="body" class="reply__body" :data-fade-start="fade.start ? '1' : '0'" :data-fade-end="fade.end ? '1' : '0'" @scroll.passive="measure">
+      <div v-for="r in rows" :key="r.id" class="reply__action">
+        <StrokeIcon class="reply__icon" :name="r.icon" :size="16" />
+        <span class="reply__label">{{ r.label }}</span>
+        <span class="reply__target">{{ r.target }}</span>
+        <!-- place réservée : l'état de l'outil (en cours, fait, refusé) ne décale rien -->
+        <span class="reply__state">
+          <PulseDot v-if="r.ok === undefined" :on="phase === 'running'" />
+          <StrokeIcon v-else-if="r.ok" class="reply__ok" name="check" :size="14" />
+          <StrokeIcon v-else class="reply__ko" name="alert" :size="14" />
         </span>
-      </button>
+      </div>
+      <div v-if="answer" class="reply__answer">{{ answer }}</div>
+      <div v-if="answer && canReplay" class="reply__foot">
+        <button type="button" class="reply__replay" :data-show="phase === 'done' ? '1' : '0'"
+                :tabindex="phase === 'done' ? 0 : -1" :data-speaking="speaking ? '1' : '0'"
+                :aria-label="$t(speaking ? 'voice.stopSpeaking' : 'voice.replay')" @mousedown.prevent @click="emit('replay')">
+          <StrokeIcon :name="speaking ? 'stop' : 'volume'" :size="16" />
+          <!-- les deux libellés dans la même case : le bouton garde la largeur du plus long -->
+          <span class="reply__replaylabel">
+            <span :data-on="speaking ? '0' : '1'">{{ $t('voice.replayShort') }}</span>
+            <span :data-on="speaking ? '1' : '0'">{{ $t('voice.stopShort') }}</span>
+          </span>
+        </button>
+      </div>
+      <div v-else-if="phase === 'running'" class="reply__wait muted"><PulseDot :on="true" />{{ $t('assistant.thinking') }}</div>
+      <div v-if="phase === 'error'" class="reply__error">{{ errorText }}</div>
     </div>
-    <div v-else-if="phase === 'running'" class="reply__wait muted"><PulseDot :on="true" />{{ $t('assistant.thinking') }}</div>
-    <div v-if="phase === 'error'" class="reply__error">{{ errorText }}</div>
   </div>
 </template>
 
 <style scoped>
-.reply { display: grid; gap: 6px; padding: 12px 16px 14px; }
-.reply__asked { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; min-width: 0; }
+.reply { display: flex; flex-direction: column; gap: 6px; padding: 12px 16px 14px; min-height: 0; }
+/* le dessous défile dans la hauteur laissée par l'appelant ; fondu du côté où il continue. 4 px de
+   marge de chaque côté, rendus par une marge négative : « Réécouter » (décalé de -4 px) n'y crée pas
+   de défilement horizontal */
+.reply__body { display: grid; gap: 6px; min-height: 0; overflow: hidden auto; overscroll-behavior: contain; padding: 0 4px; margin: 0 -4px; }
+.reply__body[data-fade-start='1'] { --fade-t: 24px; }
+.reply__body[data-fade-end='1'] { --fade-b: 24px; }
+.reply__body[data-fade-start='1'], .reply__body[data-fade-end='1'] {
+  mask-image: linear-gradient(180deg, transparent 0, #000 var(--fade-t, 0px), #000 calc(100% - var(--fade-b, 0px)), transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 var(--fade-t, 0px), #000 calc(100% - var(--fade-b, 0px)), transparent 100%);
+}
+.reply__asked { flex: none; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; min-width: 0; }
 .reply__asked > :first-child { flex: none; color: var(--accent); }
 .reply__askedtext { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* la croix, dans la hauteur de la ligne (marges négatives) : elle n'agrandit rien */
