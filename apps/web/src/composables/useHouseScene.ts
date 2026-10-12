@@ -9,6 +9,7 @@ import { resolveSeason } from '../three/garden/season'
 import { styleById } from '../three/styles'
 import { HouseScene, type HouseSceneOptions, type ReliefEditState, type ScenePrepareStage } from '../three/HouseScene'
 import type { ShapeSelection } from '../three/shape/roomShapeEditor'
+import type { GroundShape } from '../three/builders/groundOverlay'
 import { useDevicesStore } from '../stores/devices'
 import { useSettingsStore } from '../stores/settings'
 import { useWeather } from './useWeather'
@@ -261,6 +262,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     setJournalPoints: (key: string | null, points: readonly JournalPoint[]) => scene?.setJournalPoints(key, points),
     focusJournalPoint: (at: number) => scene?.focusJournalPoint(at),
     setActiveJournalPoint: (at: number | null) => scene?.setActiveJournalPoint(at),
+    setGroundOverlay: (shapes: readonly GroundShape[]) => scene?.setGroundOverlay(shapes),
     controller: () => scene,
   }
 }

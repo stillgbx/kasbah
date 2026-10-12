@@ -1,6 +1,6 @@
 # Scène 3D (Three.js)
 
-> Dernière mise à jour : 2026-10-10
+> Dernière mise à jour : 2026-10-12
 > Sources : `apps/web/src/three/HouseScene.ts`, `apps/web/src/three/core/*.ts`, `apps/web/src/three/builders/*.ts`, `apps/web/src/three/markers/*.ts`, `apps/web/src/composables/useHouseScene.ts`, `apps/web/src/three/markers/DeviceMarker.ts`, `apps/web/src/three/markers/screenArt.ts`, `apps/web/src/lib/audioRouting.ts`, `packages/shared/src/house/panels.ts`, `apps/web/src/lib/orientation.ts`, `apps/web/src/three/markers/markers.ts`, `apps/web/src/three/core/theme.ts`, `apps/web/src/three/styles/*.ts`, `apps/web/src/three/textures/{procedural,assets}.ts`, `apps/web/src/three/core/layers.ts`, `packages/shared/src/house/openings.ts`, `apps/web/src/three/core/cameraFit.ts`, `apps/web/src/three/effects/water.ts`, `apps/web/src/three/effects/disco.ts`, `apps/web/src/three/effects/parade.ts`, `apps/web/src/three/builders/parking.ts`, `packages/shared/src/house/sun.ts`, `apps/web/src/three/builders/terrain.ts`, `apps/web/src/three/relief/reliefEditor.ts`, `apps/web/src/three/effects/roam.ts`, `apps/web/src/three/effects/bats.ts`, `apps/web/src/three/garden/gardenLayer.ts`
 
 ## Répartition
@@ -4518,3 +4518,40 @@ Non mesuré sur le téléphone : ce qui reste est le vrai travail (matières, sh
 Piste suivante si c'est encore long : afficher une capture de la dernière vue en attendant la 3D.
 
 Sources : `apps/web/src/components/home/SceneLoader.vue` (`SEEN_KEY`, `brief`), `SceneLoader.test.ts`.
+
+### Mise à jour 2026-10-12 — la carte du terrain d'une tondeuse, peinte sur le terrain
+
+`HouseScene.setGroundOverlay(shapes)` peint des formes sur le terrain, dans le repère de la maison :
+aplats et traits qui **épousent le relief**. Le constructeur est `builders/groundOverlay.ts` :
+
+- un aplat se maille par `drapeGeometry` (maille de 1 m, plus lâche que le terrain) puis se pose par
+  `applyTerrainHeights` à +3 cm — sous un plancher, il passe sous le plancher comme l'herbe ;
+- un trait est un ruban échantillonné tous les 50 cm, chaque sommet à `terrainHeight` + 5 cm ;
+- `MeshBasicMaterial` transparent, sans écriture de profondeur, `polygonOffset` ; aucun maillage ne
+  prend un tap (`raycast` vide) : le terrain dessous reste à lui.
+
+Les formes reçues sont gardées (`groundShapes`) et repeintes quand la racine est reconstruite (maison
+rechargée) ou que le terrain change (`afterTerrainChange`, relief édité). Le groupe vit dans
+`nodes.site`.
+
+Qui l'alimente : `composables/useSceneGroundOverlay.ts` (monté par `HomeView`) — les tondeuses dont on a
+demandé la carte (`stores/sceneZones`), la carte servie par `GET /api/devices/:id/map`, posée par sa
+station sur la **base** du robot, puis ramenée dans le repère maison (`sceneGroundShapes`,
+`lib/siteMap.ts`). Il ne repeint que si les formes ont changé.
+
+**Le `mapOffset` n'est PAS appliqué dans la scène** : il recale la carte sur la photo satellite,
+c'est-à-dire qu'il compense l'erreur de calage de la maison sur le monde (`origin`, `heading`). Dans la
+scène tout est dans le repère de la maison et la base y est juste ; l'appliquer décalait la carte
+d'autant (constaté sur la vraie maison). Reste, sur la vraie maison, une **rotation** de la carte par
+rapport aux murs (le contour de la tondeuse traverse la maison) : un ajustement du contour sur le plan
+du rez-de-chaussée la situe vers 16-20°, pour moins d'un mètre de translation résiduelle — le cap de la
+maison (`origin.heading`) est le suspect, pas la carte (sur la photo, la carte n'a eu besoin que d'une
+translation). À trancher par le calage de la maison sur la photo, voir `_generated-ai-doc/`.
+
+Non vérifié à l'écran dans la préversion (capture figée sur la 3D quand le panneau est masqué) :
+contrôlé par l'état de la scène (formes et maillages reçus, hauteurs qui suivent le relief) et par la
+capture de l'utilisateur.
+
+Sources : `apps/web/src/three/builders/groundOverlay.ts` (+ test), `apps/web/src/three/HouseScene.ts`,
+`apps/web/src/composables/{useSceneGroundOverlay,useHouseScene}.ts`, `apps/web/src/stores/sceneZones.ts`,
+`apps/web/src/lib/siteMap.ts`.

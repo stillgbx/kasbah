@@ -6162,3 +6162,30 @@ Sources : `apps/web/src/lib/mowerTask.ts` (+ test), `apps/web/src/components/con
 `apps/web/src/components/home/DevicePanel.vue`, `apps/web/src/components/robots/MowerZones.vue`,
 `apps/web/src/views/RobotsView.vue`, `apps/web/src/i18n/locales/{fr,en}.json` (`mower.task.*`,
 `mower.zonesTitle`).
+
+### Mise à jour 2026-10-12 (quinquies) — le panneau des zones : une liste, et la carte peinte dans la scène
+
+`MowerZones.vue` montre désormais **une seule liste**, dans cet ordre : tout le terrain (zone `0`, à
+tondre) et les câbles et la station, puis les zones de travail dans l'ordre du robot, enfin les zones
+d'exclusion et de réensauvagement. La liste fusionne ce que dit le **robot** (tondre, basculer) et ce
+que montre la **carte** (peindre) : `zoneRows` (`lib/siteMap.ts`), reliées par le nom pour une zone de
+travail, par l'id pour une exclusion ; une zone connue d'une seule source a sa ligne quand même.
+
+Dans le panneau détail de la vue Maison (`DevicePanel`, prop `sceneDeviceId`), la liste porte aussi la
+**carte peinte sur le terrain** :
+
+- en tête, l'interrupteur « Sur la scène » montre ou masque toute la carte ;
+- la **pastille** de chaque ligne (24 px) montre ou masque sa zone : pleine = peinte, cerclée = masquée,
+  pâlie tant que l'interrupteur est coupé (le choix attend) ;
+- choix propre au poste, par robot (`stores/sceneZones`, `localStorage` : `kasbah.sceneZones.shown`,
+  `kasbah.sceneZones.hidden` — on garde les MASQUÉS, une zone tracée plus tard se montre d'elle-même) ;
+- la carte reste peinte panneau fermé, tant que l'interrupteur est mis.
+
+Le bloc séparé « Sur la scène » d'une première version est retiré. La vue Robots garde la même liste,
+même ordre, sans la scène. Les calques de la carte satellite (`VehicleMap`) sont inchangés.
+
+Vérifié en mode simulé : ordre de la liste, interrupteur global, pastille qui masque sa zone (7 → 6
+formes reçues par la scène), géométrie des lignes identique avant/après bascule, console propre.
+
+Sources : `apps/web/src/components/robots/MowerZones.vue`, `apps/web/src/components/home/DevicePanel.vue`,
+`apps/web/src/lib/siteMap.ts` (`zoneRows`, `sceneEntryKey`, `sceneGroundShapes`), `apps/web/src/stores/sceneZones.ts`.

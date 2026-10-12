@@ -2,6 +2,17 @@
 
 Entrées les plus récentes en haut. Une session = une entrée.
 
+## [2026-10-12] update | Tondeuse : la carte peinte dans la scène 3D, le panneau des zones fusionné
+
+**Déclencheur** : suite de la session du jour — « afficher les zones sur la vue 3D quand on le souhaite, zone par zone », puis « fusionner les deux sections du panneau, trier les zones », et « on est certain des décalages appliqués ? ».
+
+**Pages modifiées** :
+- `1_architecture/1_5_scene-3d.md` - section datée : `setGroundOverlay` et `builders/groundOverlay.ts` (aplats drapés, rubans sur le relief, pas de tap, repeints au changement de terrain) ; `mapOffset` non appliqué dans la scène, et pourquoi ; rotation résiduelle de 16-20° constatée sur la vraie maison, cap de la maison suspect.
+- `4_ui/4_1_navigation-et-panneaux.md` - section (quinquies) : liste unique triée (`zoneRows`), interrupteur « Sur la scène », pastille-bascule par zone, `stores/sceneZones`.
+- `3_plugins/3_11_husqvarna-automower.md` - section (ter) : carte en 3D, et le calage de la maison qui reste à faire.
+
+**Index** : dates déjà au 2026-10-12 sauf `1_5_scene-3d` (mise à jour).
+
 ## [2026-10-12] update | Tondeuse : la tâche en cours, et ses zones depuis la vue Maison
 
 **Déclencheur** : suite de la session du jour — « afficher l'ordre en cours (en direction de la zone sud, tonte de la zone avant, retour à la station) » et « lancer la tonte d'une zone depuis le panneau détail du robot dans la vue 3D ».

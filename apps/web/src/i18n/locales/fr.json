@@ -228,12 +228,12 @@
     "connection": "Connexion", "connected": "Connectée", "offline": "Hors ligne", "statusAgo": "statut {ago}",
     "statistics": "Compteurs", "cuttingTime": "Tonte", "chargingCycles": "Recharges", "collisions": "Collisions", "driveDistance": "Distance",
     "positionAgo": "Position {ago}", "updatedAgo": "Mis à jour {ago}",
-    "task": {"leaving": "En route pour tondre", "leavingTo": "En route vers {zone}", "mowingIn": "Tonte · {zone}", "mowingAll": "Tonte · tout le terrain", "returning": "Retour à la station"}, "zonesTitle": "Zones du robot", "zones": "Zones", "workAreas": "Zones de travail", "stayOutZones": "Zones d'exclusion", "wholeLawn": "Tout le terrain", "areaUnnamed": "Zone {id}", "areaDisabled": "Désactivée", "stayOutNone": "Aucune : elles se tracent dans l'appli du fabricant", "stayOutKeepOut": "Le robot n'y entre pas : {name}",
+    "task": {"leaving": "En route pour tondre", "leavingTo": "En route vers {zone}", "mowingIn": "Tonte · {zone}", "mowingAll": "Tonte · tout le terrain", "returning": "Retour à la station"}, "zonesTitle": "Zones du robot", "onScene": "Sur la scène", "showOnScene": "Montrer {name} sur la scène", "hideOnScene": "Masquer {name} sur la scène", "rewilding": "Réensauvagement", "zones": "Zones", "workAreas": "Zones de travail", "stayOutZones": "Zones d'exclusion", "wholeLawn": "Tout le terrain", "areaUnnamed": "Zone {id}", "areaDisabled": "Désactivée", "stayOutNone": "Aucune : elles se tracent dans l'appli du fabricant", "stayOutKeepOut": "Le robot n'y entre pas : {name}",
     "quota": "{used}/{limit} {what}", "quotaRequests": "requêtes Husqvarna cette semaine",
     "journal": "Journal", "journalTitle": "Journal du robot", "journalEmpty": "Aucun message consigné", "journalCode": "code {code}", "journalLocate": "Voir où c'est arrivé", "journalNoLocation": "Sans position",
     "severity": { "info": "Information", "warning": "Avertissement", "error": "Erreur", "fatal": "Erreur grave" },
     "offsetHint": "En mètres, dans le repère de la maison (X vers la droite du plan, Y vers le haut). Le robot se déplace sur la carte et dans la scène 3D.",
-    "mapOffset": "Décalage de la carte (m)", "mapOffsetHint": "Même repère : la carte du terrain se recale sur la photo, sans déplacer le robot."
+    "mapOffset": "Décalage de la carte (m)", "mapOffsetHint": "Même repère : la carte du terrain se recale sur la photo satellite, sans déplacer le robot. Dans la scène 3D, elle reste posée sur la base du robot."
   },
   "energy": {
     "title": "Énergie", "production": "Production", "consumption": "Consommation", "house": "Maison", "grid": "Réseau",

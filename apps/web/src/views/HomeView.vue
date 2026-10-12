@@ -22,6 +22,7 @@ import ReliefPanel from '../components/home/ReliefPanel.vue'
 import SearchBar from '../components/home/SearchBar.vue'
 import WeatherWidget from '../components/home/WeatherWidget.vue'
 import { useHouseScene } from '../composables/useHouseScene'
+import { useSceneGroundOverlay } from '../composables/useSceneGroundOverlay'
 import { homePanelRequest, type SearchHit } from '../composables/useSearch'
 import { useDevicesStore } from '../stores/devices'
 import { useHouseStore, type FloorTab } from '../stores/house'
@@ -331,6 +332,8 @@ watch(() => house.bodyColorPreview, (p) => { if (p) scene.previewBodyColor(p.key
 watch(() => house.journalOverlay, (j) => scene.setJournalPoints(j?.key ?? null, j?.points ?? []))
 watch(() => house.journalFocus, (f) => { if (f) scene.focusJournalPoint(f.at) })
 watch(() => house.journalActive, (at) => scene.setActiveJournalPoint(at))
+// la carte du terrain des tondeuses, peinte sur le terrain quand on l'a demandé (panneau de la tondeuse)
+useSceneGroundOverlay(scene)
 // aperçu du champ glissé : tous ses modules suivent l'origine du brouillon
 watch(() => house.arrayDraft, () => {
   for (const m of house.editingArrayModules) if (isPlaced(m)) scene.moveMarker(m.id, m.position)

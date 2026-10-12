@@ -228,12 +228,12 @@
     "connection": "Connection", "connected": "Connected", "offline": "Offline", "statusAgo": "status {ago}",
     "statistics": "Counters", "cuttingTime": "Mowing", "chargingCycles": "Charges", "collisions": "Collisions", "driveDistance": "Distance",
     "positionAgo": "Position {ago}", "updatedAgo": "Updated {ago}",
-    "task": {"leaving": "Heading out to mow", "leavingTo": "Heading to {zone}", "mowingIn": "Mowing · {zone}", "mowingAll": "Mowing · whole lawn", "returning": "Returning to the station"}, "zonesTitle": "Mower zones", "zones": "Zones", "workAreas": "Work areas", "stayOutZones": "Stay-out zones", "wholeLawn": "Whole lawn", "areaUnnamed": "Area {id}", "areaDisabled": "Disabled", "stayOutNone": "None: they are drawn in the manufacturer's app", "stayOutKeepOut": "Mower keeps out: {name}",
+    "task": {"leaving": "Heading out to mow", "leavingTo": "Heading to {zone}", "mowingIn": "Mowing · {zone}", "mowingAll": "Mowing · whole lawn", "returning": "Returning to the station"}, "zonesTitle": "Mower zones", "onScene": "On the scene", "showOnScene": "Show {name} on the scene", "hideOnScene": "Hide {name} on the scene", "rewilding": "Rewilding", "zones": "Zones", "workAreas": "Work areas", "stayOutZones": "Stay-out zones", "wholeLawn": "Whole lawn", "areaUnnamed": "Area {id}", "areaDisabled": "Disabled", "stayOutNone": "None: they are drawn in the manufacturer's app", "stayOutKeepOut": "Mower keeps out: {name}",
     "quota": "{used}/{limit} {what}", "quotaRequests": "Husqvarna requests this week",
     "journal": "Log", "journalTitle": "Robot log", "journalEmpty": "Nothing logged", "journalCode": "code {code}", "journalLocate": "Show where it happened", "journalNoLocation": "No position",
     "severity": { "info": "Information", "warning": "Warning", "error": "Error", "fatal": "Fatal error" },
     "offsetHint": "In metres, in the house frame (X to the right of the plan, Y up). The robot moves on the map and in the 3D scene.",
-    "mapOffset": "Lawn map offset (m)", "mapOffsetHint": "Same frame: the lawn map moves onto the photo, the robot stays put."
+    "mapOffset": "Lawn map offset (m)", "mapOffsetHint": "Same frame: the lawn map moves onto the satellite photo, the robot stays put. In the 3D scene it stays on the robot base."
   },
   "energy": {
     "title": "Energy", "production": "Production", "consumption": "Consumption", "house": "Home", "grid": "Grid",

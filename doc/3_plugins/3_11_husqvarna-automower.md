@@ -490,3 +490,18 @@ documentation et la forme de la liste) ; la simulation et les tests le tiennent.
 
 Sources : `apps/server/src/plugins/automower/{mapping,index}.ts`, tests `mapping.test.ts` (« tâche en
 cours ») et `plugin.test.ts` (« la zone en cours suit les ordres »), `packages/shared/src/devices/state.ts`.
+
+### Mise à jour 2026-10-12 (ter) — la carte dans la scène 3D, et le calage qui reste à faire
+
+La carte du terrain se peint aussi sur le terrain de la scène 3D, zone par zone (voir
+`../1_architecture/1_5_scene-3d.md` et `../4_ui/4_1_navigation-et-panneaux.md`, même date). Deux
+enseignements de la vraie maison :
+
+- le `mapOffset` (réglé pour la photo satellite) ne doit **pas** s'appliquer dans la scène : il
+  compense le calage de la maison sur le monde, pas une erreur de la carte ;
+- le décalage du robot (`gpsOffset`) et celui de la carte valaient presque l'opposé l'un de l'autre,
+  plusieurs mètres chacun, et la carte peinte traversait la maison : un ajustement du contour du robot
+  sur le plan du rez-de-chaussée demande une **rotation** d'environ 16-20° (translation résiduelle
+  sous le mètre). Hypothèse : le cap de la maison (`origin.heading`) est faux d'autant. À vérifier par
+  le calage de la maison sur la photo (contour de la maison sur la carte satellite, puis cap et origine
+  réglables) — robot garé sur sa station, pour avoir aussi son GPS comme témoin.

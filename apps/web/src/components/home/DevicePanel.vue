@@ -77,7 +77,7 @@ const zonable = computed(() => {
   const d = resolved.value?.descriptor, s = resolved.value?.state
   if (d?.kind !== 'mower' || s?.kind !== 'mower') return null
   const workAreas = d.capabilities.includes('work_areas'), stayOutZones = d.capabilities.includes('stay_out_zones')
-  return workAreas || stayOutZones ? { id: d.id, state: s, workAreas, stayOutZones } : null
+  return workAreas || stayOutZones ? { id: d.id, state: s, workAreas, stayOutZones, siteMap: d.capabilities.includes('site_map') } : null
 })
 const zonesOpen = ref(false)
 const journalable = computed(() => {
@@ -332,7 +332,7 @@ function send(cmd: CommandInput) {
     <div v-if="zonable" class="card card--soft tuning">
       <div v-if="zonesOpen" class="tuning__body">
         <MowerZones :state="zonable.state" :work-areas="zonable.workAreas" :stay-out-zones="zonable.stayOutZones"
-                    :busy="devices.isPending(zonable.id)" @command="send" />
+                    :busy="devices.isPending(zonable.id)" :scene-device-id="zonable.siteMap ? zonable.id : undefined" @command="send" />
       </div>
       <div class="tuning__foot">
         <span class="muted">{{ $t('mower.zonesTitle') }}</span>
@@ -419,6 +419,8 @@ function send(cmd: CommandInput) {
 .tuning__body { padding-bottom: 12px; }
 /* la carte des réglages vit DANS celle-ci : sans ça, deux fonds et deux marges intérieures */
 .tuning__body :deep(.tune) { padding: 0; background: none; }
+/* les zones du robot : même règle, une seule carte autour */
+.tuning__body :deep(.zones) { padding-left: 0; padding-right: 0; background: none; }
 .tuning__count { min-width: 20px; padding: 0 6px; border-radius: 999px; font-size: 11px; font-weight: 600; background: var(--surface2); color: var(--text); }
 /* la carte des champs se colle au bloc « Emplacement » qui ferme le panneau */
 .arrays { margin-top: auto; }

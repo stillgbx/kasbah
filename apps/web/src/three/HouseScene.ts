@@ -38,6 +38,7 @@ import { GardenLayer } from './garden/gardenLayer'
 import { ReflectionProbe } from './effects/reflection'
 import type { Season } from './garden/season'
 import { buildParking, parkingGlyphTexture, parkingMaterials, type ParkingMaterials, type ParkingNodes } from './builders/parking'
+import { buildGroundOverlay, type GroundShape } from './builders/groundOverlay'
 import { extrudeRing, flatPolygon, flatRing, insetPolygon } from './builders/shapes'
 import {
   boxRadius, clamp, distanceForHeight, fitBox, fitZoom, ISO_FOV_DEG, ISO_POLAR, ORTHO_BASE_M, snapIsoAzimuth, sphericalOf, visibleHeight,
@@ -403,6 +404,12 @@ export class HouseScene {
    * chaque épingle avec sa tête (touchable), son étiquette (visible seulement quand elle est ACTIVE)
    * et sa date, qui l'identifie.
    */
+  /**
+   * Formes PEINTES sur le terrain (la carte du terrain d'une tondeuse) : celles qu'on a reçues, gardées
+   * pour être repeintes quand le terrain change (relief, maison rechargée), et leur groupe dans la scène.
+   */
+  private groundShapes: readonly GroundShape[] = []
+  private groundOverlay: Group | null = null
   private journal: { group: Group; points: { at: number; anchor: Object3D; head: Mesh; label: CSS2DObject | null }[]; pickables: Object3D[]; active: number | null } | null = null
   readonly supported: boolean
 
@@ -769,6 +776,7 @@ export class HouseScene {
     if (turned) this.applySky()            // le soleil du ciel suit le cap de la maison
     this.fitSunShadow()
     this.buildParkings()                   // le marquage au sol vit avec le terrain, avant les marqueurs
+    this.buildGroundOverlay()              // la carte peinte aussi : la racine est neuve
     this.buildGarden()
     this.buildMarkers()
     this.syncWindowGlow()                  // les verres sont neufs : ils reprennent le style et les lampes
@@ -2147,6 +2155,7 @@ export class HouseScene {
     }
     for (const p of this.journal?.points ?? []) p.anchor.position.z = this.groundZ(p.anchor.position.x, p.anchor.position.y)
     this.buildParkings()
+    this.buildGroundOverlay()
     this.buildGarden()
     this.applyMist()
     this.invalidateShadows()
@@ -2757,6 +2766,29 @@ export class HouseScene {
     }
     this.nodes.outdoorMarkers.add(group)
     this.journal = { group, points: anchors, pickables, active: null }
+    this.loop.invalidate()
+  }
+
+  /**
+   * Peint des formes sur le terrain (repère maison, mètres) : la carte du terrain d'une tondeuse —
+   * zones, obstacles, câbles —, qui épouse le relief. Liste vide = rien. Gardées, elles se repeignent
+   * d'elles-mêmes quand le terrain change.
+   */
+  setGroundOverlay(shapes: readonly GroundShape[]): void {
+    this.groundShapes = shapes
+    this.buildGroundOverlay()
+  }
+
+  private buildGroundOverlay(): void {
+    if (this.groundOverlay) {
+      this.groundOverlay.removeFromParent()
+      disposeObject3D(this.groundOverlay)
+      this.groundOverlay = null
+    }
+    if (this.nodes && this.geometry && this.groundShapes.length) {
+      this.groundOverlay = buildGroundOverlay(this.groundShapes, this.geometry.terrain)
+      this.nodes.site.add(this.groundOverlay)
+    }
     this.loop.invalidate()
   }
 
