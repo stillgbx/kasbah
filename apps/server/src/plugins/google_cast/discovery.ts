@@ -35,22 +35,55 @@ export function toCastService(s: Pick<Service, 'txt' | 'addresses' | 'host' | 'p
 export function createMdnsDiscovery(opts: { iface?: string; logger: Logger }): CastDiscovery {
   let bonjour: Bonjour | null = null
   let browser: Browser | null = null
+  let listener: ((service: CastService) => void) | null = null
+  /** Une panne déjà signalée : les essais suivants ne la redisent qu'en `debug`. */
+  let failing = false
+
+  function close(): void {
+    browser?.stop()
+    bonjour?.destroy()
+    browser = null
+    bonjour = null
+  }
+
+  function open(): void {
+    const onUp = listener
+    if (!onUp) return
+    // les options vont telles quelles à multicast-dns, dont `interface` : le typage de bonjour-service ne la connaît pas
+    const b = new Bonjour(opts.iface ? ({ interface: opts.iface } as unknown as Partial<ServiceConfig>) : undefined)
+    // bonjour-service n'écoute PAS les erreurs de son socket multicast : sans cet écouteur, une
+    // interface absente (`CAST_MDNS_INTERFACE` hors du réseau local : EADDRNOTAVAIL au bind) lève un
+    // `error` non géré qui fait tomber TOUT le serveur. On ferme, et le prochain `refresh` réessaie.
+    const mdns = (b as unknown as { server?: { mdns?: { on(ev: 'error', fn: (err: Error) => void): void } } }).server?.mdns
+    mdns?.on('error', (err) => {
+      if (bonjour !== b) return
+      const log = { err: err.message, iface: opts.iface ?? null }
+      if (failing) opts.logger.debug(log, 'mDNS still unavailable, Cast discovery paused')
+      else opts.logger.warn(log, 'mDNS unavailable (network interface missing?), Cast discovery paused until it comes back')
+      failing = true
+      close()
+    })
+    bonjour = b
+    browser = b.find({ type: 'googlecast' }, (s) => {
+      failing = false
+      const service = toCastService(s)
+      if (!service) { opts.logger.warn({ name: s.name, txt: s.txt }, 'googlecast service with an unexpected TXT record ignored'); return }
+      onUp(service)
+    })
+  }
+
   return {
     start(onUp) {
-      // les options vont telles quelles à multicast-dns, dont `interface` : le typage de bonjour-service ne la connaît pas
-      bonjour = new Bonjour(opts.iface ? ({ interface: opts.iface } as unknown as Partial<ServiceConfig>) : undefined)
-      browser = bonjour.find({ type: 'googlecast' }, (s) => {
-        const service = toCastService(s)
-        if (!service) { opts.logger.warn({ name: s.name, txt: s.txt }, 'googlecast service with an unexpected TXT record ignored'); return }
-        onUp(service)
-      })
+      listener = onUp
+      open()
     },
-    refresh() { browser?.update() },
+    refresh() {
+      if (browser) browser.update()
+      else open()
+    },
     stop() {
-      browser?.stop()
-      bonjour?.destroy()
-      browser = null
-      bonjour = null
+      listener = null
+      close()
     },
   }
 }
