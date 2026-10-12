@@ -1,6 +1,6 @@
 # Plugin Google Cast (enceintes, réveils, Chromecast, barres de son)
 
-> Dernière mise à jour : 2026-10-06
+> Dernière mise à jour : 2026-10-12
 > Sources : `apps/server/src/plugins/google_cast/{index,channel,discovery,mapping,protocol,types}.ts`, `apps/server/src/plugins/google_cast/__fixtures__/network.ts`, tests `protocol.test.ts`, `mapping.test.ts` et `plugin.test.ts`, `apps/server/.env.example`, `apps/web/src/views/MediaView.vue`, demande de l'utilisateur du 2026-09-09, `apps/server/src/plugins/google_cast/known.ts`, `apps/server/src/plugins/google_cast/enrich/cover.ts`, `tools/cast-probe.mts`, `apps/server/src/plugins/google_cast/bravia.ts`, `apps/server/src/plugins/google_cast/__fixtures__/bravia.ts`
 
 ## Ce que l'utilisateur veut, et ce que le protocole permet
@@ -649,3 +649,26 @@ pour la source d'un transfert). Voir `../1_architecture/1_2_serveur-et-plugins.m
 
 Sources : `apps/server/src/plugins/google_cast/{mapping,index}.ts`,
 `apps/server/src/plugins/google_cast/mapping.test.ts`, `apps/server/src/core/playbackBridge.ts`.
+
+### Mise à jour 2026-10-12 — une interface mDNS absente ne fait plus tomber le serveur
+
+**Symptôme.** Serveur lancé hors du réseau local avec `CAST_MDNS_INTERFACE`
+posé : tout le processus mourait au démarrage sur un `EADDRNOTAVAIL` non géré.
+
+**Diagnostic.** `bonjour-service` n'écoute **pas** les erreurs de son socket multicast (`server.mdns`) :
+l'adresse configurée n'existant plus sur la machine, le `bind` échoue, l'`error` émis n'a aucun
+écouteur et remonte comme exception non interceptée — pour un plugin d'enceintes, c'était le serveur
+entier qui tombait.
+
+**Correctif** (`apps/server/src/plugins/google_cast/discovery.ts`) : un écouteur `error` sur
+`server.mdns` ; la première panne produit **un** avertissement (« mDNS unavailable… Cast discovery
+paused »), les suivantes un `debug` (sans quoi chaque `refresh()` rejouerait l'avertissement) ; la
+découverte est **en pause** (`close()`), et le `refresh()` périodique du plugin (`CAST_MDNS_REFRESH_MS`) **rouvre** une découverte
+(`open()`) au lieu de ne rien faire — elle repart d'elle-même quand l'interface revient. Un service
+retrouvé remet le drapeau de panne à zéro.
+
+**Test** (`discovery.test.ts`) : vrai socket, sur `203.0.113.7` (adresse réservée à la documentation, aucune
+machine ne la porte) ; vérifie qu'aucune exception non interceptée ne passe, qu'un seul `warn` part malgré
+un `refresh()`, et qu'il nomme l'interface.
+
+Sources : `apps/server/src/plugins/google_cast/{discovery,discovery.test}.ts`.

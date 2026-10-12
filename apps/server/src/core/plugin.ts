@@ -1,4 +1,4 @@
-import type { Command, DeviceConsumption, DeviceDescriptor, DeviceEventKind, DeviceJournal, DeviceReleaseNotes, PluginHealth, PluginScene, SceneActivation, SceneRecall, SceneUpdate, StatePatch, WeatherForecast } from '@kasbah/shared'
+import type { Command, DeviceConsumption, DeviceDescriptor, DeviceEventKind, DeviceJournal, DeviceReleaseNotes, PluginHealth, PluginScene, SceneActivation, SceneRecall, SceneUpdate, SiteMap, StatePatch, WeatherForecast } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import type { Logger } from 'pino'
 import type { z } from 'zod'
@@ -60,6 +60,8 @@ export interface PluginSite {
 export type PluginForecast = Omit<WeatherForecast, 'deviceId'>
 /** Journal tel qu'un plugin le rend : l'hôte y ajoute le `deviceId` (voir `deviceJournalSchema`). */
 export type PluginJournal = Omit<DeviceJournal, 'deviceId'>
+/** Carte d'un terrain telle qu'un plugin la rend : l'hôte y ajoute le `deviceId` (voir `siteMapSchema`). */
+export type PluginSiteMap = Omit<SiteMap, 'deviceId'>
 /** Notes de version telles qu'un plugin les rend : l'hôte y ajoute le `deviceId` (voir `deviceReleaseNotesSchema`). */
 export type PluginReleaseNotes = Omit<DeviceReleaseNotes, 'deviceId'>
 /** Consommation telle qu'un plugin la rend : l'hôte y ajoute le `deviceId` (voir `deviceConsumptionSchema`). */
@@ -112,6 +114,12 @@ export interface DevicePlugin {
    * chaque affichage, surtout sur une API à quota.
    */
   journal?(externalId: string): Promise<PluginJournal>
+  /**
+   * Carte du terrain d'un appareil qui déclare la capacité `site_map`, servie À LA DEMANDE
+   * (`GET /api/devices/:id/map`). Rendre la carte tenue en cache : elle ne change qu'avec un tracé
+   * refait chez le fabricant, et chaque lecture coûte du quota.
+   */
+  siteMap?(externalId: string): Promise<PluginSiteMap>
   /**
    * Ce qu'un appareil a consommé, par pas de temps, servi À LA DEMANDE
    * (`GET /api/devices/:id/consumption`). Même règle que les prévisions et le journal : rendre un

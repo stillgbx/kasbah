@@ -48,12 +48,36 @@ export class AutomowerClient {
     return this.request('POST', `/mowers/${encodeURIComponent(mowerId)}/actions`, { body, signal })
   }
 
+  /** `PATCH /mowers/{id}/stayOutZones/{zoneId}` : active ou désactive une zone d'exclusion (202). */
+  stayOutZone(mowerId: string, zoneId: string, enable: boolean, signal?: AbortSignal): Promise<unknown> {
+    const body = { data: { type: 'stayOutZone', id: zoneId, attributes: { enable } } }
+    return this.request('PATCH', `/mowers/${encodeURIComponent(mowerId)}/stayOutZones/${encodeURIComponent(zoneId)}`, { body, signal })
+  }
+
+  /**
+   * `GET /mowers/{id}/maps/{kind}` : une carte en SVG (`generated` = le terrain relevé par un robot
+   * AIM, `zone` = ses zones d'exclusion et chemins tracés à la main, `site` = la carte d'un robot
+   * EPOS). `null` quand le robot n'en a pas (404 : aucune zone tracée, ou pas ce type de robot).
+   */
+  async mapSvg(mowerId: string, kind: 'generated' | 'zone' | 'site', signal?: AbortSignal): Promise<string | null> {
+    const path = `/mowers/${encodeURIComponent(mowerId)}/maps/${kind}`
+    const res = await this.exchange('GET', path, { signal, accept: 'image/svg+xml, application/vnd.api+json' })
+    if (res.status === 404) return null
+    if (res.status >= 400) this.interpret(res, path)
+    return res.text
+  }
+
   private deadline(signal?: AbortSignal): AbortSignal {
     const timeout = AbortSignal.timeout(this.opts.requestTimeoutMs ?? REQUEST_TIMEOUT_MS)
     return signal ? AbortSignal.any([signal, timeout]) : timeout
   }
 
-  async request(method: 'GET' | 'POST', path: string, o: { body?: unknown; signal?: AbortSignal } = {}): Promise<unknown> {
+  async request(method: 'GET' | 'POST' | 'PATCH', path: string, o: { body?: unknown; signal?: AbortSignal } = {}): Promise<unknown> {
+    return this.interpret(await this.exchange(method, path, o), path)
+  }
+
+  /** Un aller-retour, rejoué UNE fois avec un jeton neuf sur 401 ; la réponse brute, non interprétée. */
+  private async exchange(method: string, path: string, o: { body?: unknown; signal?: AbortSignal; accept?: string }): Promise<{ status: number; text: string }> {
     let token = await this.opts.auth.accessToken(o.signal)
     let res = await this.send(method, path, token, o)
     if (res.status === 401) {
@@ -61,10 +85,10 @@ export class AutomowerClient {
       token = await this.opts.auth.accessToken(o.signal)
       res = await this.send(method, path, token, o)
     }
-    return this.interpret(res, path)
+    return res
   }
 
-  private async send(method: string, path: string, token: string, o: { body?: unknown; signal?: AbortSignal }): Promise<{ status: number; text: string }> {
+  private async send(method: string, path: string, token: string, o: { body?: unknown; signal?: AbortSignal; accept?: string }): Promise<{ status: number; text: string }> {
     let res: Awaited<ReturnType<FetchLike>>
     try {
       res = await this.opts.fetchImpl(`${this.opts.baseUrl ?? API_BASE_URL}${path}`, {
@@ -73,7 +97,7 @@ export class AutomowerClient {
           authorization: `Bearer ${token}`,
           'authorization-provider': 'husqvarna',
           'x-api-key': this.opts.appKey,
-          accept: 'application/vnd.api+json',
+          accept: o.accept ?? 'application/vnd.api+json',
           ...(o.body !== undefined ? { 'content-type': 'application/vnd.api+json' } : {}),
         },
         ...(o.body !== undefined ? { body: JSON.stringify(o.body) } : {}),

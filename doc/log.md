@@ -2,6 +2,25 @@
 
 Entrées les plus récentes en haut. Une session = une entrée.
 
+## [2026-10-12] update | Tondeuse : zones, carte du terrain, calques ; Cast ne fait plus tomber le serveur
+
+**Déclencheur** : session du 2026-10-12 (code non commité à l'écriture) — commander les zones d'un robot tondeuse, poser la carte de son terrain sur la photo satellite, et corriger une chute du serveur quand l'interface mDNS configurée est absente.
+
+**Pages modifiées** :
+- `3_plugins/3_11_husqvarna-automower.md` - section datée : ce que l'API permet et ne permet pas (pas de création/redessin de zone, profils), commandes `StartInWorkArea` et `PATCH stayOutZones`, capacités déduites, état `workAreas` / `stayOutZones`, cartes SVG et leur code couleur, réensauvagement = affichage seul (PATCH refusé en 400, piste fermée), cache de carte, idée « mini-zone à la volée » écartée ; « Pistes pour la suite » marquées dépassées / faites en partie (la géométrie n'est PAS dans `GET /mowers`).
+- `1_architecture/1_1_contrat-appareils.md` - capacités, commandes (avec capacité requise), états et inverses d'automatisation de la tondeuse.
+- `1_architecture/1_3_protocole-rest-ws.md` - route `GET /api/devices/:id/map`, forme `SiteMap`, hook de plugin `siteMap?`.
+- `2_maison/2_0_format-house-json.md` - champ `devices[].mapOffset`, distinct de `gpsOffset`.
+- `4_ui/4_1_navigation-et-panneaux.md` - panneau Zones, carte du terrain (ancrage, couleurs), menu des calques, décalage de carte, fraîcheur.
+- `3_plugins/3_6_google-cast.md` - chute du serveur sur `EADDRNOTAVAIL` (écouteur `error` sur le socket mDNS, pause, `refresh()` qui réessaie).
+- `3_plugins/3_0_simulation-mock.md` - tondeuse simulée : deux zones, une exclusion, un réensauvagement, sa carte.
+
+**Pages créées** : aucune.
+
+**Contradictions relevées** : aucune dans le wiki. Écart de code noté (non tranché) : le commentaire de `apps/web/src/views/RobotsView.vue` sur le quota dit encore « 10 000 requêtes par mois » alors que la page du plugin établit 21 000 par fenêtre de sept jours (2026-09-16).
+
+**Index** : mis à jour (7 lignes).
+
 ## [2026-10-12] update | Panneau maison : les tuiles mènent à leur vue
 
 **Déclencheur** : demande de l'utilisateur — toucher une tuile du panneau de droite (« volets ouverts », une voiture…) emmène sur la vue concernée.

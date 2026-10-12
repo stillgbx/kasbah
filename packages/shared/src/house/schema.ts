@@ -376,6 +376,13 @@ export const houseDeviceSchema = z.object({
    */
   gpsOffset: vec2Schema.optional(),
   /**
+   * Correction (m, repère maison) de la CARTE DU TERRAIN d'une tondeuse (capacité `site_map`), posée
+   * par sa station sur la base du robot : ni la base ni la photo aérienne ne sont exactes au mètre,
+   * et c'est la carte entière qu'on recale sur la photo — indépendamment de `gpsOffset`, qui ne
+   * déplace que le robot.
+   */
+  mapOffset: vec2Schema.optional(),
+  /**
    * Correction (degrés) appliquée à l'orientation CALCULÉE d'un appareil placé par son GPS — un
    * véhicule. Elle s'ajoute à ce que la scène a déduit (cap du fabricant, axe de la pièce) : ni un
    * cap mesuré ni l'axe d'un garage ne disent de quel côté la voiture s'est garée, et un demi-tour

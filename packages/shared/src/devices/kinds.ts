@@ -40,7 +40,11 @@ export const CAPABILITIES = [
   // `mop` : l'appareil LAVE en plus d'aspirer, et dit ce qu'il faut pour savoir s'il le peut —
   // son patin est-il posé, lui reste-t-il de l'eau. Un aspirateur sec ne la déclare pas, et la
   // section n'apparaît pas plutôt que de s'afficher vide.
-  'clean', 'dock', 'battery', 'locate', 'mop', 'mow', 'park', 'schedule', 'journal',
+  // `work_areas` : la tondeuse connaît des ZONES DE TRAVAIL (tracées dans l'appli du fabricant) et
+  // sait partir tondre l'une d'elles. `stay_out_zones` : des zones d'EXCLUSION qu'on active ou
+  // désactive. `site_map` : elle publie la carte de son terrain (zones, obstacles, câbles guides),
+  // servie à la demande par `GET /api/devices/:id/map`.
+  'clean', 'dock', 'battery', 'locate', 'mop', 'mow', 'park', 'schedule', 'journal', 'work_areas', 'stay_out_zones', 'site_map',
   // sensor
   'measure',
   // energy
@@ -89,7 +93,7 @@ export const KIND_CAPABILITIES: Record<DeviceKind, readonly Capability[]> = {
   media_player: ['playback', 'volume', 'mute', 'now_playing', 'track_skip', 'seek', 'play_url'],
   climate: ['hvac_mode', 'target_temp', 'current_temp', 'humidity', 'fan_mode'],
   vacuum: ['clean', 'dock', 'battery', 'locate', 'mop'],
-  mower: ['mow', 'park', 'battery', 'schedule', 'journal'],
+  mower: ['mow', 'park', 'battery', 'schedule', 'journal', 'work_areas', 'stay_out_zones', 'site_map'],
   sensor: ['measure'],
   energy: ['production', 'consumption', 'grid', 'storage'],
   ev_charger: ['charge_control', 'charge_current'],

@@ -220,6 +220,43 @@ export const deviceJournalSchema = z.object({
 export type JournalEntry = z.infer<typeof journalEntrySchema>
 
 /**
+ * Carte du terrain d'une tondeuse (capacité `site_map`), servie à la demande
+ * (`GET /api/devices/:id/map`) : elle ne change que lorsqu'on retrace une zone dans l'appli du
+ * fabricant. Repère LOCAL du robot, en mètres : `x` vers l'est, `y` vers le nord, origine
+ * quelconque — elle ne se pose sur le monde que par la STATION (`station`), que la vue fait
+ * coïncider avec la base du robot. Husqvarna la publie en SVG (`/maps/generated`, `/maps/zone`).
+ */
+/**
+ * `lawn` : le terrain entier tel que le robot l'a relevé ; `work_area` : une zone de travail TRACÉE,
+ * dont le `name` est celui de `workAreas[].name` (Husqvarna ne la relie pas autrement : son `id` de
+ * carte est un UUID, pas le `workAreaId`). `rewilding` : une zone de RÉENSAUVAGEMENT (l'herbe y
+ * pousse), que Husqvarna ne publie QUE sur la carte — elle n'est pas dans `stayOutZones`.
+ */
+export const SITE_MAP_SHAPE_KINDS = ['lawn', 'work_area', 'obstacle', 'stay_out', 'rewilding', 'guide', 'transport', 'station'] as const
+export type SiteMapShapeKind = (typeof SITE_MAP_SHAPE_KINDS)[number]
+export const siteMapShapeSchema = z.object({
+  kind: z.enum(SITE_MAP_SHAPE_KINDS),
+  /** Identifiant du fabricant ; pour une zone d'exclusion, celui de `stayOutZones[].id` quand il le partage. */
+  id: z.string(),
+  name: z.string().optional(),
+  /**
+   * Zone d'exclusion ou de réensauvagement : activée selon la CARTE (absent = activée). L'état du robot
+   * (`stayOutZones[].enabled`) prime quand il connaît la zone ; il ne connaît pas le réensauvagement.
+   */
+  enabled: z.boolean().optional(),
+  /** Polygone (zones, obstacles) ou ligne (câbles, chemins, station), en mètres. */
+  points: z.array(z.tuple([z.number(), z.number()])),
+})
+export const siteMapSchema = z.object({
+  deviceId: z.string(),
+  /** Le point de la station dans ce repère ; `null` = carte sans station, impossible à poser. */
+  station: z.tuple([z.number(), z.number()]).nullable(),
+  shapes: z.array(siteMapShapeSchema),
+})
+export type SiteMapShape = z.infer<typeof siteMapShapeSchema>
+export type SiteMap = z.infer<typeof siteMapSchema>
+
+/**
  * Ce qu'un appareil a CONSOMMÉ, par pas de temps — servi à la demande
  * (`GET /api/devices/:id/consumption`) comme les prévisions et le journal : c'est un historique,
  * pas un état, et il n'a rien à faire dans les messages poussés à chaque sondage.

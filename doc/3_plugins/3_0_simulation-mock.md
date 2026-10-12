@@ -1,6 +1,6 @@
 # Simulation (`@kasbah/mock-sim` et plugin `mock`)
 
-> Dernière mise à jour : 2026-10-08
+> Dernière mise à jour : 2026-10-12
 > Sources : `packages/mock-sim/src/{simulation,scenarios,world,clock,rng,types}.ts`, `packages/mock-sim/src/behaviours/*.ts`, `apps/server/src/plugins/mock/index.ts`, `apps/web/src/api/mockTransport.ts`, `packages/mock-sim/src/behaviours/energy.ts`, `packages/mock-sim/src/demos.ts`, `packages/mock-sim/src/behaviours/camera.ts`
 
 ## Pourquoi un paquet séparé
@@ -453,3 +453,22 @@ fois : le serveur et le web les lisent au même endroit.
 Sources : `packages/mock-sim/src/{demos,simulation,types,scenarios}.ts`,
 `packages/mock-sim/src/behaviours/{camera,light,media,climate}.ts`,
 `apps/server/src/plugins/mock/index.ts`, `apps/web/src/api/mockTransport.ts`.
+
+### Mise à jour 2026-10-12 — la tondeuse simulée a des zones et une carte
+
+Pour que la vue Robots montre ses zones et sa carte sans compte fabricant, la tondeuse simulée
+(`packages/mock-sim/src/behaviours/robots.ts`) déclare `work_areas`, `stay_out_zones` et `site_map` et
+publie :
+
+- deux zones de travail, « Devant » (id 1) et « Fond » (id 2) — le rectangle d'errance coupé en deux ;
+- une zone d'exclusion, « Potager », dans la seconde, qu'on peut basculer (`mower.set_stay_out_zone`) ;
+- sur la **carte seulement**, une zone de réensauvagement « Prairie », comme chez Husqvarna ;
+- `siteMap()` : terrain, zones, câble guide et station, dans le **repère maison** (supposé plein nord,
+  comme la `location`) avec la station sur la base du robot.
+
+`mower.start_in_area` y fait errer le robot dans la seule zone demandée (`bounds`) ; `mower.start`
+remet tout le terrain. Une zone ou une zone d'exclusion inconnue lève `UNSUPPORTED_COMMAND`. La carte
+est relayée par `Simulation.siteMap`, par `siteMap` du plugin `mock` et par `mockTransport.getSiteMap`.
+Contrat : `../1_architecture/1_1_contrat-appareils.md`, même date.
+
+Sources : `packages/mock-sim/src/{behaviours/robots,simulation,types}.ts`, `apps/server/src/plugins/mock/index.ts`, `apps/web/src/api/mockTransport.ts`.

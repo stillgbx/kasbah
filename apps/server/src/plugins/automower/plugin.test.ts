@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { ManualClock } from '@kasbah/mock-sim'
 import type { PluginContext } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
-import { MESSAGES, MOWERS_ERROR, MOWERS_MOWING, MOWERS_PARKED, MOWER_ID, WS_MESSAGE_ERROR, TOKEN_INVALID_CLIENT, TOKEN_RESPONSE, TOKEN_RESPONSE_2, WS_MOWER_HOME, WS_MOWER_STOPPED, WS_PLANNER, WS_POSITION, WS_READY, WS_UNKNOWN_MOWER } from './__fixtures__/automower'
+import { MAP_GENERATED_SVG, MAP_ZONE_SVG, MOWERS_ZONES, STAY_OUT_ID, MESSAGES, MOWERS_ERROR, MOWERS_MOWING, MOWERS_PARKED, MOWER_ID, WS_MESSAGE_ERROR, TOKEN_INVALID_CLIENT, TOKEN_RESPONSE, TOKEN_RESPONSE_2, WS_MOWER_HOME, WS_MOWER_STOPPED, WS_PLANNER, WS_POSITION, WS_READY, WS_UNKNOWN_MOWER } from './__fixtures__/automower'
 import { TOKEN_URL } from './auth'
 import { API_BASE_URL } from './client'
 import { automowerConfigSchema, createAutomowerPlugin, type AutomowerStatus } from './index'
@@ -35,6 +35,8 @@ function fakeHusqvarna() {
     /** Ce que le serveur de jetons rend au prochain appel. */
     nextToken: TOKEN_RESPONSE as unknown,
     tokenStatus: 200,
+    /** Les cartes SVG ; `null` = 404, comme un robot sans zone tracée. */
+    maps: { generated: MAP_GENERATED_SVG as string | null, zone: null as string | null, site: null as string | null },
   }
   const calls: { method: string; path: string; body?: string; headers: Record<string, string> }[] = []
   const fetchImpl = vi.fn<FetchLike>(async (url, init) => {
@@ -52,6 +54,13 @@ function fakeHusqvarna() {
     if (path === '/mowers') return response(world.list)
     if (path.endsWith('/messages')) return response(MESSAGES)
     if (path.endsWith('/actions')) return response(null, 202)
+    if (method === 'PATCH' && path.includes('/stayOutZones/')) return response(null, 202)
+    const map = /\/maps\/(generated|zone|site)$/.exec(path)?.[1] as keyof typeof world.maps | undefined
+    if (map) {
+      const svg = world.maps[map]
+      if (svg === null) return response({ errors: [{ code: `map.${map}.not_found` }] }, 404)
+      return { ok: true, status: 200, body: null, json: async () => { throw new Error('not JSON') }, text: async () => svg }
+    }
     return response({ errors: [{ title: 'Not found' }] }, 404)
   })
   return { fetchImpl, calls, world }
@@ -374,5 +383,124 @@ describe('automower — routes et arrêt', () => {
     clock.advance(30 * MIN)
     await flush()
     expect(hq.calls.filter((c) => c.path === '/mowers')).toHaveLength(1)
+  })
+})
+
+describe('automower — zones et carte', () => {
+  it('tondre une zone : StartInWorkArea avec sa durée, accusé en 202', async () => {
+    const { plugin, hq } = await started()
+    await plugin.execute(MOWER_ID, { type: 'mower.start_in_area', workAreaId: 123456, durationMin: 60 })
+    const action = hq.calls.find((c) => c.path.endsWith('/actions'))!
+    expect(JSON.parse(action.body!)).toEqual({ data: { type: 'StartInWorkArea', attributes: { workAreaId: 123456, duration: 60 } } })
+  })
+
+  it('basculer une zone d’exclusion : PATCH JSON:API, puis UNE relecture quelques secondes après', async () => {
+    const hq = fakeHusqvarna()
+    hq.world.list = MOWERS_ZONES
+    const { plugin, clock, ctx } = await started({ hq })
+    const reads = () => hq.calls.filter((c) => c.path === '/mowers').length
+    const before = reads()
+    await plugin.execute(MOWER_ID, { type: 'mower.set_stay_out_zone', zoneId: STAY_OUT_ID, enabled: false })
+    await plugin.execute(MOWER_ID, { type: 'mower.set_stay_out_zone', zoneId: STAY_OUT_ID, enabled: true })
+    const patches = hq.calls.filter((c) => c.method === 'PATCH')
+    expect(patches.map((c) => c.path)).toEqual(Array(2).fill(`/mowers/${MOWER_ID}/stayOutZones/${STAY_OUT_ID}`))
+    expect(JSON.parse(patches[0]!.body!)).toEqual({ data: { type: 'stayOutZone', id: STAY_OUT_ID, attributes: { enable: false } } })
+    // l'effet n'est pas publié d'avance : c'est la relecture qui le dira
+    expect(reads()).toBe(before)
+    clock.advance(5_000)
+    await flush()
+    expect(reads()).toBe(before + 1)
+    expect(ctx.emitState).toHaveBeenLastCalledWith(MOWER_ID, expect.objectContaining({ stayOutZones: [{ id: STAY_OUT_ID, name: 'Massif', enabled: true }] }))
+  })
+
+  it('une carte en cours de synchronisation : le fabricant refuserait, le plugin le dit sans appeler', async () => {
+    const hq = fakeHusqvarna()
+    const m = MOWERS_ZONES.data[0]!
+    hq.world.list = { data: [{ ...m, attributes: { ...m.attributes, stayOutZones: { ...m.attributes.stayOutZones, dirty: true } } }] }
+    const { plugin } = await started({ hq })
+    await expect(plugin.execute(MOWER_ID, { type: 'mower.set_stay_out_zone', zoneId: STAY_OUT_ID, enabled: false })).rejects.toMatchObject({ code: 'DEVICE_UNAVAILABLE' })
+    expect(hq.calls.some((c) => c.method === 'PATCH')).toBe(false)
+  })
+
+  it('la carte : terrain puis zones (404 = aucune), lue UNE fois, relue quand la liste des zones change', async () => {
+    const { plugin, hq, clock } = await started()
+    const mapCalls = () => hq.calls.filter((c) => c.path.includes('/maps/')).map((c) => c.path.slice(c.path.lastIndexOf('/') + 1))
+    const map = await plugin.siteMap!(MOWER_ID)
+    expect(map.station).toEqual([2, -0.5])
+    expect(map.shapes.map((s) => s.kind)).toEqual(['station', 'lawn', 'obstacle', 'guide'])
+    await plugin.siteMap!(MOWER_ID)
+    expect(mapCalls()).toEqual(['generated', 'zone'])
+    // une zone tracée dans l'appli : la relecture le voit, la carte se relit avec ses zones
+    hq.world.list = MOWERS_ZONES
+    hq.world.maps.zone = MAP_ZONE_SVG
+    clock.advance(10 * MIN + 1)
+    await flush()
+    const next = await plugin.siteMap!(MOWER_ID)
+    expect(next.shapes.map((s) => s.kind)).toContain('stay_out')
+    expect(mapCalls()).toEqual(['generated', 'zone', 'generated', 'zone'])
+  })
+
+  it('un robot EPOS (pas de carte générée) : sa carte de site', async () => {
+    const hq = fakeHusqvarna()
+    hq.world.maps = { generated: null, zone: null, site: MAP_ZONE_SVG }
+    const { plugin } = await started({ hq })
+    const map = await plugin.siteMap!(MOWER_ID)
+    expect(map.shapes.map((s) => s.kind)).toEqual(['work_area', 'stay_out', 'rewilding', 'transport'])
+    expect(map.station).toBeNull()
+  })
+})
+
+describe('automower — carte : détecter un tracé modifié sans dépenser le quota', () => {
+  const zonesWith = (patch: (a: typeof MOWERS_ZONES.data[0]['attributes']) => object) => {
+    const m = MOWERS_ZONES.data[0]!
+    return { data: [{ ...m, attributes: { ...m.attributes, ...patch(m.attributes) } }] }
+  }
+  async function withMap() {
+    const hq = fakeHusqvarna()
+    hq.world.list = MOWERS_ZONES
+    hq.world.maps.zone = MAP_ZONE_SVG
+    const s = await started({ hq })
+    const mapReads = () => hq.calls.filter((c) => c.path.endsWith('/maps/generated')).length
+    const poll = async () => { s.clock.advance(10 * MIN + 1); await flush() }
+    await s.plugin.siteMap!(MOWER_ID)
+    return { ...s, hq, mapReads, poll }
+  }
+
+  it('rien de neuf dans la liste : la carte gardée sert, sans requête', async () => {
+    const { plugin, mapReads, poll } = await withMap()
+    await poll()
+    await plugin.siteMap!(MOWER_ID)
+    expect(mapReads()).toBe(1)
+  })
+
+  it('une zone RENOMMÉE dans l’appli : la carte se relit (son nom relie la forme à la zone)', async () => {
+    const { plugin, hq, mapReads, poll } = await withMap()
+    hq.world.list = zonesWith((a) => ({ workAreas: a.workAreas.map((w) => (w.workAreaId === 123456 ? { ...w, name: 'Verger' } : w)) }))
+    await poll()
+    await plugin.siteMap!(MOWER_ID)
+    expect(mapReads()).toBe(2)
+  })
+
+  it('la synchronisation d’une carte modifiée (`dirty`) : relue quand elle commence, et quand elle finit', async () => {
+    const { plugin, hq, mapReads, poll } = await withMap()
+    hq.world.list = zonesWith((a) => ({ stayOutZones: { ...a.stayOutZones, dirty: true } }))
+    await poll()
+    await plugin.siteMap!(MOWER_ID)
+    hq.world.list = MOWERS_ZONES
+    await poll()
+    await plugin.siteMap!(MOWER_ID)
+    expect(mapReads()).toBe(3)
+  })
+
+  it('un tracé redessiné sans rien changer d’autre : relu au plus tard le lendemain', async () => {
+    const { plugin, clock, mapReads } = await withMap()
+    clock.advance(23 * 60 * MIN)
+    await flush()
+    await plugin.siteMap!(MOWER_ID)
+    expect(mapReads()).toBe(1)
+    clock.advance(61 * MIN)
+    await flush()
+    await plugin.siteMap!(MOWER_ID)
+    expect(mapReads()).toBe(2)
   })
 })

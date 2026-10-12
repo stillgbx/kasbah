@@ -157,6 +157,13 @@ export const mowerStateSchema = z.object({
   cuttingHeight: z.number().int().min(1).max(9).optional(),
   /** Dernier statut REÇU du robot par le fabricant : plus vieux qu'`updatedAt` quand le robot ne parle plus. */
   statusAt: z.number().optional(),
+  /**
+   * Zones de travail (capacité `work_areas`), tracées dans l'appli du fabricant. Un nom vide est
+   * possible : Husqvarna publie une zone `0` sans nom, tout le terrain, tant qu'on n'en a pas tracé.
+   */
+  workAreas: z.array(z.object({ id: z.number().int().min(0), name: z.string(), enabled: z.boolean() })).optional(),
+  /** Zones d'exclusion (capacité `stay_out_zones`) : `enabled` = le robot n'y entre pas. */
+  stayOutZones: z.array(z.object({ id: z.string().min(1), name: z.string(), enabled: z.boolean() })).optional(),
   /** Compteurs de vie du robot, tels que le fabricant les tient (secondes, mètres, nombres). */
   statistics: z.object({
     cuttingTimeS: z.number().optional(),

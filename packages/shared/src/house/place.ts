@@ -47,6 +47,8 @@ export const devicePlacementSchema = z.object({
    * de revenir au relevé brut, comme la chaîne vide pour le nom.
    */
   gpsOffset: vec2Schema.optional(),
+  /** Correction (m, repère maison) de la carte du terrain d'une tondeuse (comme `HouseDevice.mapOffset`). `[0, 0]` EFFACE. */
+  mapOffset: vec2Schema.optional(),
   /**
    * Correction (degrés, ±180) de l'orientation calculée d'un appareil placé par son GPS — un
    * véhicule (comme `HouseDevice.yawOffset`). `0` EFFACE la correction, comme `[0, 0]` pour le
@@ -166,7 +168,7 @@ function alignDevicesOnOpenings(doc: JsonObject, openingIds: readonly string[]):
 
 /**
  * Renvoie une copie du document JSON avec l'appareil `id` (re)placé ou renommé : entrée existante
- * mise à jour (position, nom, pièce, mount, yaw, size, leaves, coverMaterial, coverColor, gpsOffset,
+ * mise à jour (position, nom, pièce, mount, yaw, size, leaves, coverMaterial, coverColor, gpsOffset, mapOffset,
  * yawOffset, batteryKwh, model3d, bodyColor, bodyFinish), ou entrée créée
  * `{ id, deviceId, … }` avec ce qui a été donné.
  *
@@ -200,6 +202,10 @@ export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePla
     if (placement.gpsOffset) {
       if (placement.gpsOffset[0] === 0 && placement.gpsOffset[1] === 0) delete next.gpsOffset
       else next.gpsOffset = placement.gpsOffset
+    }
+    if (placement.mapOffset) {
+      if (placement.mapOffset[0] === 0 && placement.mapOffset[1] === 0) delete next.mapOffset
+      else next.mapOffset = placement.mapOffset
     }
     if (placement.yawOffset !== undefined) {
       if (placement.yawOffset === 0) delete next.yawOffset
@@ -266,6 +272,7 @@ export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePla
     if (placement.size) next.size = placement.size
     if (placement.leaves !== undefined) next.leaves = placement.leaves
     if (placement.gpsOffset && (placement.gpsOffset[0] !== 0 || placement.gpsOffset[1] !== 0)) next.gpsOffset = placement.gpsOffset
+    if (placement.mapOffset && (placement.mapOffset[0] !== 0 || placement.mapOffset[1] !== 0)) next.mapOffset = placement.mapOffset
     if (placement.yawOffset) next.yawOffset = placement.yawOffset
     if (placement.batteryKwh) next.batteryKwh = placement.batteryKwh
     if (placement.model3d) next.model3d = placement.model3d

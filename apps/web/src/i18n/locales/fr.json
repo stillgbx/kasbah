@@ -228,10 +228,12 @@
     "connection": "Connexion", "connected": "Connectée", "offline": "Hors ligne", "statusAgo": "statut {ago}",
     "statistics": "Compteurs", "cuttingTime": "Tonte", "chargingCycles": "Recharges", "collisions": "Collisions", "driveDistance": "Distance",
     "positionAgo": "Position {ago}", "updatedAgo": "Mis à jour {ago}",
+    "zones": "Zones", "workAreas": "Zones de travail", "stayOutZones": "Zones d'exclusion", "wholeLawn": "Tout le terrain", "areaUnnamed": "Zone {id}", "areaDisabled": "Désactivée", "stayOutNone": "Aucune : elles se tracent dans l'appli du fabricant", "stayOutKeepOut": "Le robot n'y entre pas : {name}",
     "quota": "{used}/{limit} {what}", "quotaRequests": "requêtes Husqvarna cette semaine",
     "journal": "Journal", "journalTitle": "Journal du robot", "journalEmpty": "Aucun message consigné", "journalCode": "code {code}", "journalLocate": "Voir où c'est arrivé", "journalNoLocation": "Sans position",
     "severity": { "info": "Information", "warning": "Avertissement", "error": "Erreur", "fatal": "Erreur grave" },
-    "offsetHint": "En mètres, dans le repère de la maison (X vers la droite du plan, Y vers le haut). Le robot se déplace sur la carte et dans la scène 3D."
+    "offsetHint": "En mètres, dans le repère de la maison (X vers la droite du plan, Y vers le haut). Le robot se déplace sur la carte et dans la scène 3D.",
+    "mapOffset": "Décalage de la carte (m)", "mapOffsetHint": "Même repère : la carte du terrain se recale sur la photo, sans déplacer le robot."
   },
   "energy": {
     "title": "Énergie", "production": "Production", "consumption": "Consommation", "house": "Maison", "grid": "Réseau",
@@ -349,7 +351,7 @@
       "offHint": "Allumez la climatisation pour chauffer les sièges et le volant. La consigne s'applique tout de suite."
     },
     "seat": {"fl": "AV G", "fr": "AV D", "rl": "AR G", "rc": "AR C", "rr": "AR D"},
-    "map": {"plan": "Plan", "satellite": "Satellite", "fullscreen": "Plein écran", "close": "Fermer", "recenter": "Recentrer", "noPosition": "Position inconnue"},
+    "map": {"plan": "Plan", "satellite": "Satellite", "fullscreen": "Plein écran", "close": "Fermer", "recenter": "Recentrer", "noPosition": "Position inconnue", "layers": "Calques de la carte", "layerLawn": "Terrain et obstacles", "layerWorkAreas": "Zones de travail", "layerStayOut": "Zones d'exclusion", "layerRewilding": "Zones de réensauvagement", "layerGuides": "Câbles et station"},
     "quota": "≈ {used}/{limit} {what}",
     "quotaCredit": "de crédit Tesla",
     "quotaSince": "depuis le {date}",

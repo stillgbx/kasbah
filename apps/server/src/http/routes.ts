@@ -237,6 +237,14 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
     return deps.host.journal(entry.descriptor.id)
   })
 
+  // Carte du terrain d'une tondeuse : à la demande, pour qui déclare la capacité (le plugin sert son cache).
+  app.get<{ Params: { id: string } }>('/api/devices/:id/map', async (req, reply) => {
+    const entry = deps.registry.get(req.params.id)
+    if (!entry) return sendError(reply, 404, 'NOT_FOUND', `unknown device "${req.params.id}"`)
+    if (!entry.descriptor.capabilities.includes('site_map')) return sendError(reply, 400, 'KIND_MISMATCH', `device "${req.params.id}" publishes no site map`)
+    return deps.host.siteMap(entry.descriptor.id)
+  })
+
   // Notes de version d'un véhicule : à la demande, pour qui déclare la capacité (le plugin sert son cache).
   app.get<{ Params: { id: string }; Querystring: { lang?: string } }>('/api/devices/:id/release-notes', async (req, reply) => {
     const entry = deps.registry.get(req.params.id)

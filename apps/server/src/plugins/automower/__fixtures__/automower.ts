@@ -267,3 +267,48 @@ export const MESSAGES = {
     },
   },
 }
+
+// ---- Zones et cartes — INVENTÉES d'après le relevé du 2026-10-12 ------------------------------------
+//
+// La vraie carte n'est PAS reprise ici (le dépôt est public, et c'est le plan du terrain) : seule sa
+// FORME l'est. Ce que le relevé a appris : `GET /maps/generated` rend un SVG (`image/svg+xml`) en
+// millimètres, `x` vers l'est, `y` vers le nord ; le terrain relevé est un polygone vert
+// (`main_area_0`), les obstacles des polygones rouges (`island_*`), les câbles guides des lignes
+// bleues (`guide_*`) qui partent du premier point de la ligne jaune (`lona_cs`, la station) ;
+// `GET /maps/zone` répond 404 (`map.zone.not_found`) tant qu'aucune zone n'est tracée, et la liste
+// n'a alors PAS de section `stayOutZones`. Une zone de travail tracée y apparaît ensuite en VERT, avec
+// un UUID pour id et son nom pour `title` ; la liste porte alors `stayOutZones: { zones: [], dirty }`.
+
+export const MAP_GENERATED_SVG = '<svg xmlns="http://www.w3.org/2000/svg" version="1.1" map-version="2.1">'
+  + '<polyline stroke="yellow" id="lona_cs" points="2000,-500 4000,-900"/>'
+  + '<polygon stroke="green" fill="green" id="main_area_0" title="Working area 0" points="-20000,-10000 10000,-10000 10000,30000 -20000,30000"/>'
+  + '<polygon stroke="red" fill="red" id="island_1" title="Island 1" points="-5000,5000 -1000,5000 -1000,9000 -5000,9000"/>'
+  + '<polyline stroke="blue" id="guide_1" points="2000,-500 -15000,-8000"/>'
+  + '</svg>'
+
+export const STAY_OUT_ID = '81c6eea2-d139-4fea-b134-f22a6b3ea403'
+export const MAP_ZONE_SVG = '<svg>'
+  // une zone de travail tracée : id UUID (pas son workAreaId), `title` = son nom, espaces compris
+  + '<polygon stroke="green" fill="green" id="6f1c2a90-3b8e-4d57-9a41-0c2e7b5d8f13" title="Fond du jardin " points="-15000,15000 -5000,15000 -5000,25000 -15000,25000"/>'
+  + `<polygon fill="red" stroke="red" id="${STAY_OUT_ID}" points="0,10000 3000,10000 3000,13000" title="Massif"/>`
+  // une zone de réensauvagement, DÉSACTIVÉE : rouge marqué `rewildingzone`, masquée ; la liste ne la connaît pas
+  + '<polygon stroke="red" fill="red" id="0b9e4c2d-6a71-4f38-8d5e-2c7f1a9b3e60" title="Prairie" points="5000,5000 8000,5000 8000,8000" display="none" rewildingzone="true"/>'
+  + '<polyline stroke="blue" stroke-width="2500" id="d319f479-1d8d-4659-b2ef-56fb44099909" points="-2000,0 -2000,20000" title="Transport 1"/>'
+  + '</svg>'
+
+/** DÉRIVÉ : le robot capturé, avec deux zones de travail tracées et une zone d'exclusion. */
+export const MOWERS_ZONES = {
+  data: [
+    {
+      ...CAPTURED,
+      attributes: {
+        ...CAPTURED.attributes,
+        workAreas: [
+          { workAreaId: 0, name: '', type: 'RANDOM', cuttingHeight: 100, enabled: true, schedulable: true },
+          { workAreaId: 123456, name: 'Fond du jardin', type: 'RANDOM', cuttingHeight: 50, enabled: false, schedulable: true },
+        ],
+        stayOutZones: { dirty: false, zones: [{ id: STAY_OUT_ID, name: 'Massif', enabled: true }] },
+      },
+    },
+  ],
+}

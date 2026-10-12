@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
-  MOWERS_ERROR, MOWERS_MOWING, MOWERS_OFFLINE, MOWERS_PARKED, MOWER_ID, WS_BATTERY, WS_CUTTING_HEIGHT, WS_MOWER_HOME, WS_MOWER_HOME_PARKED, WS_MOWER_INACTIVE,
+  MAP_GENERATED_SVG, MAP_ZONE_SVG, MOWERS_ZONES, STAY_OUT_ID, MOWERS_ERROR, MOWERS_MOWING, MOWERS_OFFLINE, MOWERS_PARKED, MOWER_ID, WS_BATTERY, WS_CUTTING_HEIGHT, WS_MOWER_HOME, WS_MOWER_HOME_PARKED, WS_MOWER_INACTIVE,
   WS_MOWER_MAIN_PARKED, WS_MOWER_NOT_APPLICABLE, WS_MOWER_STOPPED, WS_MOWER_STOPPED_FULL, WS_PLANNER, WS_POSITION,
   MESSAGES, WS_MESSAGE_ERROR, WS_MOWER_ERROR_AT, WS_MOWER_ERROR_CODE, WS_MOWER_ERROR_FULL, WS_MOWER_ERROR_STATE, WS_MOWER_IN_OPERATION, WS_MOWER_LEAVING, WS_PLANNER_FORCE_MOW, WS_POSITION_2,
 } from './__fixtures__/automower'
-import { actionBody, applyEvent, connectedOf, localTimestamp, parseMowers, toActivity, toDescriptor, toJournal, toJournalEntry, toStatePatch } from './mapping'
+import { actionBody, applyEvent, connectedOf, localTimestamp, parseMowers, parseSvgMap, toActivity, toDescriptor, toJournal, toJournalEntry, toSiteMap, toStatePatch } from './mapping'
 import { wsEventSchema } from './types'
 
 // Le mappage est pur : les fixtures (provisoires, d'après la documentation) suffisent à le tenir.
@@ -17,7 +17,8 @@ describe('automower mapping — descripteur', () => {
   it('un robot = un appareil mower, nommé par le fabricant, identifié par son UUID', () => {
     const d = toDescriptor(first(MOWERS_ERROR))
     expect(d).toMatchObject({ id: `automower:${MOWER_ID}`, pluginId: 'automower', externalId: MOWER_ID, kind: 'mower', name: 'Tondeuse' })
-    expect(d.capabilities).toEqual(['mow', 'park', 'battery', 'schedule', 'journal'])
+    // la capture déclare zones de travail, zones d'exclusion et position : les trois capacités suivent
+    expect(d.capabilities).toEqual(['mow', 'park', 'battery', 'schedule', 'journal', 'work_areas', 'stay_out_zones', 'site_map'])
     expect(d.meta).toEqual({ manufacturer: 'Husqvarna', model: 'Husqvarna Automower® 435X AWD' })
   })
 
@@ -220,5 +221,74 @@ describe('automower mapping — commandes', () => {
     expect(actionBody({ type: 'mower.park', untilNextSchedule: true })).toEqual({ data: { type: 'ParkUntilNextSchedule' } })
     expect(actionBody({ type: 'mower.park', untilNextSchedule: false })).toEqual({ data: { type: 'ParkUntilFurtherNotice' } })
     expect(actionBody({ type: 'vacuum.start' })).toBeNull()
+  })
+})
+
+describe('automower mapping — zones', () => {
+  it('la capture : la zone 0 sans nom (tout le terrain), et AUCUNE zone d’exclusion — liste vide, pas inconnue', () => {
+    const p = toStatePatch(first(MOWERS_PARKED), { tz: TZ, now: NOW })
+    expect(p.workAreas).toEqual([{ id: 0, name: '', enabled: true }])
+    expect(p.stayOutZones).toEqual([])
+  })
+
+  it('des zones tracées : leur nom, leur état ; une zone d’exclusion activée', () => {
+    const p = toStatePatch(first(MOWERS_ZONES), { tz: TZ, now: NOW })
+    expect(p.workAreas).toEqual([{ id: 0, name: '', enabled: true }, { id: 123456, name: 'Fond du jardin', enabled: false }])
+    expect(p.stayOutZones).toEqual([{ id: STAY_OUT_ID, name: 'Massif', enabled: true }])
+  })
+
+  it('un robot qui ne gère pas les zones n’en dit rien, et ne déclare ni zones ni carte', () => {
+    const m = first(MOWERS_PARKED)
+    const bare = { ...m, attributes: { ...m.attributes, capabilities: { position: false, workAreas: false, stayOutZones: false }, workAreas: null } }
+    const p = toStatePatch(bare, { tz: TZ, now: NOW })
+    expect(p.workAreas).toBeUndefined()
+    expect(p.stayOutZones).toBeUndefined()
+    expect(toDescriptor(bare).capabilities).toEqual(['mow', 'park', 'battery', 'schedule', 'journal'])
+  })
+
+  it('tondre une zone : StartInWorkArea, avec sa durée', () => {
+    expect(actionBody({ type: 'mower.start_in_area', workAreaId: 123456, durationMin: 60 }))
+      .toEqual({ data: { type: 'StartInWorkArea', attributes: { workAreaId: 123456, duration: 60 } } })
+  })
+})
+
+describe('automower mapping — carte', () => {
+  it('la carte générée : millimètres en mètres, terrain vert, obstacle rouge, câble guide bleu, station jaune', () => {
+    const shapes = parseSvgMap(MAP_GENERATED_SVG, 'generated')
+    expect(shapes.map((s) => [s.kind, s.id, s.name])).toEqual([
+      ['station', 'lona_cs', undefined],
+      ['lawn', 'main_area_0', 'Working area 0'],
+      ['obstacle', 'island_1', 'Island 1'],
+      ['guide', 'guide_1', undefined],
+    ])
+    expect(shapes[0]!.points).toEqual([[2, -0.5], [4, -0.9]])
+    expect(shapes[1]!.points[2]).toEqual([10, 30])
+  })
+
+  it('la carte de zones : le vert y est une zone de travail tracée (nom sans ses espaces), le rouge une zone d’exclusion, le bleu un chemin', () => {
+    const shapes = parseSvgMap(MAP_ZONE_SVG, 'zone')
+    expect(shapes.map((s) => [s.kind, s.id, s.name])).toEqual([
+      ['work_area', '6f1c2a90-3b8e-4d57-9a41-0c2e7b5d8f13', 'Fond du jardin'],
+      ['stay_out', STAY_OUT_ID, 'Massif'],
+      ['rewilding', '0b9e4c2d-6a71-4f38-8d5e-2c7f1a9b3e60', 'Prairie'],
+      ['transport', 'd319f479-1d8d-4659-b2ef-56fb44099909', 'Transport 1'],
+    ])
+  })
+
+  it('une zone d’exclusion ou de réensauvagement dit son état : masquée (display=none) = désactivée', () => {
+    const shapes = parseSvgMap(MAP_ZONE_SVG, 'zone')
+    expect(shapes.filter((s) => s.kind === 'stay_out' || s.kind === 'rewilding').map((s) => [s.kind, s.enabled])).toEqual([['stay_out', true], ['rewilding', false]])
+    expect(shapes.find((s) => s.kind === 'work_area')).not.toHaveProperty('enabled')
+  })
+
+  it('les deux cartes fondues ; la station est le premier point de la ligne jaune', () => {
+    const map = toSiteMap([{ svg: MAP_GENERATED_SVG, source: 'generated' }, { svg: MAP_ZONE_SVG, source: 'zone' }])
+    expect(map.station).toEqual([2, -0.5])
+    expect(map.shapes).toHaveLength(8)
+  })
+
+  it('sans ligne jaune, pas de station ; une forme d’un seul point ou d’une couleur inconnue est sautée', () => {
+    const map = toSiteMap([{ svg: '<svg><polygon fill="green" points="0,0"/><polygon fill="purple" points="0,0 1000,0 0,1000"/></svg>', source: 'generated' }])
+    expect(map).toEqual({ station: null, shapes: [] })
   })
 })

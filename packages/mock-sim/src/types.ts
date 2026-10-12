@@ -1,4 +1,4 @@
-import type { Command, DeviceDescriptor, DeviceEventKind, DeviceKind, DeviceReleaseNotes, DeviceState, PluginScene, StateFor, WeatherForecast } from '@kasbah/shared'
+import type { Command, DeviceDescriptor, DeviceEventKind, DeviceKind, DeviceReleaseNotes, DeviceState, PluginScene, SiteMap, StateFor, WeatherForecast } from '@kasbah/shared'
 import type { Rng } from './rng'
 import type { World, WorldConfig } from './world'
 
@@ -49,12 +49,16 @@ export interface SimDevice<K extends DeviceKind = DeviceKind> {
   forecast?(ctx: TickCtx): SimForecast
   /** Notes de version (véhicule qui déclare `release_notes`). */
   releaseNotes?(lang?: string): SimReleaseNotes
+  /** Carte du terrain (tondeuse qui déclare `site_map`). */
+  siteMap?(): SimSiteMap
 }
 
 /** Prévisions telles que la simulation les rend : le serveur y ajoute le `deviceId`. */
 export type SimForecast = Omit<WeatherForecast, 'deviceId'>
 /** Notes de version telles que la simulation les rend : le serveur y ajoute le `deviceId`. */
 export type SimReleaseNotes = Omit<DeviceReleaseNotes, 'deviceId'>
+/** Carte d'un terrain telle que la simulation la rend : le serveur y ajoute le `deviceId`. */
+export type SimSiteMap = Omit<SiteMap, 'deviceId'>
 
 /** Union des SimDevice par kind (SimDevice<K> est invariant en K à cause de `state` mutable). */
 export type AnySimDevice = { [K in DeviceKind]: SimDevice<K> }[DeviceKind]

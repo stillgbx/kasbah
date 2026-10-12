@@ -1,11 +1,15 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import type { Capability, CommandInput, DeviceEntry, JournalEntry, StateFor } from '@kasbah/shared'
+import type { Capability, CommandInput, DeviceEntry, JournalEntry, SiteMap, StateFor } from '@kasbah/shared'
+import { getTransport } from '../api'
 import { useJournals } from '../composables/useJournals'
 import JournalList from '../components/robots/JournalList.vue'
+import MowerZones from '../components/robots/MowerZones.vue'
 import { journalPoints } from '../lib/journal'
+import { siteMapAnchor, siteMapFeatures } from '../lib/siteMap'
+import type { LatLon } from '../lib/map'
 import PageHeader from '../components/layout/PageHeader.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import MowerTuning from '../components/robots/MowerTuning.vue'
@@ -166,6 +170,50 @@ function pickAt(m: MowerEntry, at: number): void {
 const updatedAgo = (s: StateFor<'mower'>) => t('mower.updatedAgo', { ago: formatAgo(s.updatedAt, now.value, locale.value) })
 
 /**
+ * La CARTE DU TERRAIN (capacité `site_map`) : demandée une fois par robot, de nouveau quand ses zones
+ * changent (tracée, retirée, renommée dans l'appli), et toutes les cinq minutes tant que la vue est
+ * ouverte — le serveur la relit au fabricant quand IL la juge périmée (zones, synchronisation, un jour)
+ * et sert son cache sinon : la redemander ne coûte pas de quota. Remplacée seulement si elle a changé,
+ * pour ne pas redessiner la carte pour rien. Une carte qu'on ne peut pas lire n'empêche rien, elle manque.
+ */
+const siteMaps = ref<Record<string, SiteMap>>({})
+function loadSiteMap(id: string): void {
+  getTransport().getSiteMap(id)
+    .then((map) => {
+      if (JSON.stringify(map) !== JSON.stringify(siteMaps.value[id])) siteMaps.value = { ...siteMaps.value, [id]: map }
+    })
+    .catch(() => { /* pas de carte : le bouton n'apparaît pas */ })
+}
+const siteMapKeys = computed(() => mowers.value.filter((m) => has(m, 'site_map')).map((m) =>
+  `${m.descriptor.id}|${(m.state.workAreas ?? []).map((a) => `${a.id}:${a.name}`).join(',')}|${(m.state.stayOutZones ?? []).map((z) => `${z.id}:${z.name}`).join(',')}`))
+watch(siteMapKeys, (keys, old) => {
+  for (const key of keys) if (!old?.includes(key)) loadSiteMap(key.slice(0, key.indexOf('|')))
+}, { immediate: true })
+const SITE_MAP_RELOAD_MS = 5 * 60_000
+let siteMapTimer: ReturnType<typeof setInterval> | null = null
+onMounted(() => { siteMapTimer = setInterval(() => { for (const key of siteMapKeys.value) loadSiteMap(key.slice(0, key.indexOf('|'))) }, SITE_MAP_RELOAD_MS) })
+onBeforeUnmount(() => { if (siteMapTimer) clearInterval(siteMapTimer) })
+/**
+ * Où poser la carte : sa station sur la base du robot, ou sur le robot à la station (`lib/siteMap.ts`).
+ * Le dernier ancrage est GARDÉ : un robot sans base qui part tondre ne fait pas disparaître sa carte.
+ */
+const lastAnchors = new Map<string, LatLon>()
+const overlays = computed(() => Object.fromEntries(mowers.value.map((m) => {
+  const map = siteMaps.value[m.descriptor.id]
+  const anchor = siteMapAnchor({
+    origin: house.house?.origin, dock: dockOf(m)?.center, location: mapLocation(m),
+    atStation: m.state.activity === 'parked' || m.state.activity === 'charging',
+    offset: house.houseDeviceFor(m.descriptor.id)?.mapOffset,
+  }) ?? lastAnchors.get(m.descriptor.id)
+  if (anchor) lastAnchors.set(m.descriptor.id, anchor)
+  return [m.descriptor.id, map && anchor ? siteMapFeatures(map, anchor, m.state.stayOutZones, m.state.workAreas) : undefined]
+})))
+
+/** Le panneau des zones : tondre une zone, ouvrir ou fermer une zone d'exclusion. */
+const zonesOpen = ref<string | null>(null)
+const hasZones = (m: MowerEntry) => has(m, 'work_areas') || has(m, 'stay_out_zones')
+
+/**
  * Quota de l'API du fabricant (`PluginHealth.quota`) : 10 000 requêtes par mois chez Husqvarna. La
  * santé des plugins ne se pousse pas : on la redemande en arrivant, à chaque battement, après une
  * commande. Rien pour un plugin qui ne compte pas (la simulation).
@@ -296,7 +344,7 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
           </div>
           <!-- la carte : le robot (disque, il ne dit pas son cap), la maison, et — journal déplié — ses incidents -->
           <VehicleMap class="rcard__map" subject="mower" :location="mapLocation(m)" :home="house.house?.origin" :caption="caption(m.state)"
-                      :points="mapPoints(m)" :focus="journalFocus[m.descriptor.id]?.location" :active-at="journalFocus[m.descriptor.id]?.at"
+                      :overlay="overlays[m.descriptor.id]" :points="mapPoints(m)" :focus="journalFocus[m.descriptor.id]?.location" :active-at="journalFocus[m.descriptor.id]?.at"
                       @point-tap="pickAt(m, $event)" />
           <!-- Sa station. Ce n'est pas une commande du fabricant (elle ne suit donc pas les
                capacités, et ne vit pas dans la rangée des boutons) : c'est un relevé de la maison,
@@ -325,6 +373,11 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
                       @click="send(m.descriptor.id, { type: 'mower.park', untilNextSchedule: true })">
                 <StrokeIcon name="parking" :size="16" />{{ $t('common.park') }}
               </button>
+              <button v-if="hasZones(m)" type="button" class="pill" :data-on="zonesOpen === m.descriptor.id ? '1' : '0'"
+                      :aria-expanded="zonesOpen === m.descriptor.id"
+                      @click="zonesOpen = zonesOpen === m.descriptor.id ? null : m.descriptor.id">
+                <StrokeIcon name="layers" :size="16" />{{ $t('mower.zones') }}
+              </button>
               <!-- le journal se signale : combien de lignes, et la gravité de la dernière en pastille -->
               <button v-if="has(m, 'journal')" type="button" class="pill" :data-on="journalOpen === m.descriptor.id ? '1' : '0'"
                       :aria-expanded="journalOpen === m.descriptor.id"
@@ -339,6 +392,8 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
                 <StrokeIcon name="gear" :size="16" />{{ $t('vehicle.tune') }}
               </button>
             </div>
+            <MowerZones v-if="zonesOpen === m.descriptor.id" :state="m.state" :work-areas="has(m, 'work_areas')" :stay-out-zones="has(m, 'stay_out_zones')"
+                        :busy="busy(m)" @command="send(m.descriptor.id, $event)" />
             <div v-if="journalOpen === m.descriptor.id" class="card card--soft journal">
               <JournalList :entries="journalOf(m)" :active="journalFocus[m.descriptor.id]?.at" @pick="pickEntry(m, $event)" />
             </div>

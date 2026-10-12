@@ -1,6 +1,7 @@
-import type { Command, DeviceDescriptor, JournalEntry, JournalSeverity, MowerRestriction, StateFor, StatePatch } from '@kasbah/shared'
+import type { Capability, Command, DeviceDescriptor, JournalEntry, JournalSeverity, MowerRestriction, SiteMapShape, StateFor, StatePatch } from '@kasbah/shared'
 import { MOWER_RESTRICTIONS } from '@kasbah/shared'
-import { messageSchema, messagesResponseSchema, mowerDataSchema, mowerSectionSchema, plannerSchema, positionSchema, type MowerData, type WsEvent } from './types'
+import type { PluginSiteMap } from '../../core/plugin'
+import { messageSchema, messagesResponseSchema, mowerDataSchema, mowerSectionSchema, plannerSchema, positionSchema, stayOutZoneSchema, workAreaSchema, type MowerData, type WsEvent } from './types'
 
 // Automower Connect API → contrat Kasbah. Fonctions PURES, testées sur les fixtures.
 //
@@ -31,13 +32,27 @@ export function parseMowers(list: unknown, onReject?: (issue: string) => void): 
   return out
 }
 
+/**
+ * Ce que le robot déclare EN PLUS, d'après ses `capabilities` : des zones de travail, des zones
+ * d'exclusion, et une carte pour un robot qui se positionne (GPS ou EPOS) — un robot sans position
+ * n'a pas de terrain relevé à montrer.
+ */
+function optionalCapabilities(m: MowerData): Capability[] {
+  const c = m.attributes.capabilities
+  return [
+    ...(c?.workAreas ? ['work_areas' as const] : []),
+    ...(c?.stayOutZones ? ['stay_out_zones' as const] : []),
+    ...(c?.position ? ['site_map' as const] : []),
+  ]
+}
+
 export function toDescriptor(m: MowerData): DeviceDescriptor {
   const sys = m.attributes.system
   const model = sys?.model?.trim() || undefined
   const name = sys?.name?.trim() || model || 'Automower'
   return {
     id: `${PLUGIN_ID}:${m.id}`, pluginId: PLUGIN_ID, externalId: m.id, kind: 'mower', name,
-    capabilities: [...CAPABILITIES],
+    capabilities: [...CAPABILITIES, ...optionalCapabilities(m)],
     meta: { manufacturer: 'Husqvarna', ...(model ? { model } : {}) },
   }
 }
@@ -160,6 +175,24 @@ function statisticsOf(s: MowerData['attributes']['statistics']): StateFor<'mower
   return Object.keys(defined).length ? defined : undefined
 }
 
+/** Zones de travail lisibles ; une entrée à la forme inattendue est sautée. Absent = le robot n'en dit rien. */
+function workAreasOf(a: MowerData['attributes']): StateFor<'mower'>['workAreas'] {
+  if (!a.workAreas) return undefined
+  return a.workAreas.flatMap((raw) => {
+    const w = workAreaSchema.safeParse(raw)
+    return w.success ? [{ id: w.data.workAreaId, name: w.data.name?.trim() ?? '', enabled: w.data.enabled !== false }] : []
+  })
+}
+
+/** Zones d'exclusion : la section est ABSENTE tant qu'aucune n'est tracée — c'est une liste vide, pas une inconnue. */
+function stayOutZonesOf(a: MowerData['attributes']): StateFor<'mower'>['stayOutZones'] {
+  if (!a.capabilities?.stayOutZones) return undefined
+  return (a.stayOutZones?.zones ?? []).flatMap((raw) => {
+    const z = stayOutZoneSchema.safeParse(raw)
+    return z.success ? [{ id: z.data.id, name: z.data.name?.trim() ?? '', enabled: z.data.enabled === true }] : []
+  })
+}
+
 /** L'état complet d'un robot tel que la LISTE le rend. */
 export function toStatePatch(m: MowerData, o: MapOptions): StatePatch<'mower'> {
   const a = m.attributes
@@ -167,7 +200,11 @@ export function toStatePatch(m: MowerData, o: MapOptions): StatePatch<'mower'> {
   const first = positionSchema.safeParse(a.positions?.[0])
   const height = a.settings?.cuttingHeight
   const stats = statisticsOf(a.statistics)
+  const workAreas = workAreasOf(a)
+  const stayOutZones = stayOutZonesOf(a)
   return {
+    ...(workAreas ? { workAreas } : {}),
+    ...(stayOutZones ? { stayOutZones } : {}),
     activity: toActivity(a.mower),
     battery: clampPct(a.battery?.batteryPercent),
     ...errorFields(a.mower, o.tz),
@@ -288,10 +325,12 @@ export function toJournal(raw: unknown, tz: string): JournalEntry[] {
  * avec durée = partir pour ce temps ; se garer jusqu'au prochain créneau ou jusqu'à nouvel ordre.
  * `null` = commande que ce plugin ne sait pas traduire.
  */
-export function actionBody(cmd: Command): { data: { type: string; attributes?: { duration: number } } } | null {
+export function actionBody(cmd: Command): { data: { type: string; attributes?: { duration: number; workAreaId?: number } } } | null {
   switch (cmd.type) {
     case 'mower.start':
       return cmd.durationMin === undefined ? { data: { type: 'ResumeSchedule' } } : { data: { type: 'Start', attributes: { duration: cmd.durationMin } } }
+    case 'mower.start_in_area':
+      return { data: { type: 'StartInWorkArea', attributes: { workAreaId: cmd.workAreaId, duration: cmd.durationMin } } }
     case 'mower.pause':
       return { data: { type: 'Pause' } }
     case 'mower.park':
@@ -299,6 +338,69 @@ export function actionBody(cmd: Command): { data: { type: string; attributes?: {
     default:
       return null
   }
+}
+
+// ---- Carte du terrain ---------------------------------------------------------------------------
+
+/** Les attributs d'une balise SVG (`name="valeur"`), sans dépendre d'un DOM côté serveur. */
+function svgAttributes(raw: string): Record<string, string> {
+  return Object.fromEntries([...raw.matchAll(/([\w:-]+)\s*=\s*"([^"]*)"/g)].map((m) => [m[1]!, m[2]!]))
+}
+
+/** `"x,y x,y …"` en millimètres → points en mètres ; un nombre impair ou illisible ferme la liste. */
+function svgPoints(raw: string | undefined): [number, number][] {
+  const n = (raw ?? '').trim().split(/[\s,]+/).filter(Boolean).map(Number)
+  const out: [number, number][] = []
+  for (let i = 0; i + 1 < n.length; i += 2) {
+    if (!Number.isFinite(n[i]) || !Number.isFinite(n[i + 1])) break
+    out.push([n[i]! / 1000, n[i + 1]! / 1000])
+  }
+  return out
+}
+
+/**
+ * Une carte SVG du fabricant → les formes du contrat. Husqvarna code la nature par la COULEUR (sa
+ * documentation : vert = zone de travail, rouge = zone d'exclusion, bleu = chemin, jaune = station).
+ * Relevé sur un vrai 435X AWD le 2026-10-12 : coordonnées en MILLIMÈTRES, `x` vers l'est et `y`
+ * vers le nord (même forme que la carte de l'appli) ; dans la carte GÉNÉRÉE, le vert est le terrain
+ * entier (`main_area_0`), le rouge un obstacle relevé par le robot (`island_*`, la maison, un arbre)
+ * et le bleu un câble guide (`guide_*`) ; c'est dans la carte de ZONES que le vert est une zone de
+ * travail tracée à la main (id UUID, `title` = son nom, avec ses espaces) et le rouge une zone
+ * d'exclusion (même UUID que dans `stayOutZones`) — ou de RÉENSAUVAGEMENT quand il porte
+ * `rewildingzone="true"`, zone que la liste ne connaît pas. Désactivée, une zone y reste avec
+ * `display="none"` (relevé du 2026-10-12).
+ */
+export function parseSvgMap(svg: string, source: 'generated' | 'zone' | 'site'): SiteMapShape[] {
+  const shapes: SiteMapShape[] = []
+  for (const m of svg.matchAll(/<(polygon|polyline)\b([^>]*)>/g)) {
+    const a = svgAttributes(m[2]!)
+    const points = svgPoints(a.points)
+    if (points.length < 2) continue
+    const color = lower(a.fill && a.fill !== 'none' ? a.fill : a.stroke)
+    const id = a.id ?? ''
+    let kind: SiteMapShape['kind'] | null = null
+    if (m[1] === 'polygon') {
+      if (color === 'green') kind = source === 'generated' ? 'lawn' : 'work_area'
+      else if (color === 'red') kind = source === 'generated' ? 'obstacle' : a.rewildingzone === 'true' ? 'rewilding' : 'stay_out'
+    } else if (color === 'yellow') kind = 'station'
+    else if (color === 'blue') kind = id.startsWith('guide') ? 'guide' : 'transport'
+    if (!kind) continue
+    // une zone désactivée reste sur la carte, masquée (`display="none"`)
+    const toggled = kind === 'stay_out' || kind === 'rewilding'
+    shapes.push({ kind, id, ...(a.title?.trim() ? { name: a.title.trim() } : {}), ...(toggled ? { enabled: lower(a.display) !== 'none' } : {}), points })
+  }
+  return shapes
+}
+
+/**
+ * Les cartes d'un robot fondues en une. La station est le PREMIER point de la ligne jaune : sur le
+ * relevé, les câbles guides en partent tous, c'est la plaque de charge. Sans ligne jaune, pas de
+ * station, et la carte ne pourra pas se poser sur le monde.
+ */
+export function toSiteMap(maps: { svg: string; source: 'generated' | 'zone' | 'site' }[]): PluginSiteMap {
+  const shapes = maps.flatMap((m) => parseSvgMap(m.svg, m.source))
+  const station = shapes.find((s) => s.kind === 'station')?.points[0] ?? null
+  return { station, shapes }
 }
 
 /**

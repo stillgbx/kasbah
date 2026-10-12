@@ -1,7 +1,7 @@
 # Plugin Husqvarna Automower (robot tondeuse, Automower Connect API)
 
-> Dernière mise à jour : 2026-10-06
-> Sources : `apps/server/src/plugins/automower/{index,auth,client,ws,mapping,state,types}.ts`, `apps/server/src/plugins/automower/__fixtures__/automower.ts`, tests `mapping.test.ts` et `plugin.test.ts`, `apps/web/src/views/RobotsView.vue`, `apps/web/src/components/vehicles/VehicleMap.vue`, `apps/server/.env.example`, bibliothèque de référence aioautomower (Thomas55555, `const.py`, `model/*.py`, `commands.py`, `session.py`, `utils.py`), documentation du binding openHAB « automower », demande de l'utilisateur du 2026-09-16 (Automower 435X AWD)
+> Dernière mise à jour : 2026-10-12
+> Sources : `apps/server/src/plugins/automower/{index,auth,client,ws,mapping,state,types}.ts`, `apps/server/src/plugins/automower/__fixtures__/automower.ts`, tests `mapping.test.ts` et `plugin.test.ts`, `apps/web/src/views/RobotsView.vue`, `apps/web/src/components/vehicles/VehicleMap.vue`, `apps/web/src/components/robots/MowerZones.vue`, `apps/web/src/lib/siteMap.ts`, `apps/server/.env.example`, bibliothèque de référence aioautomower (Thomas55555, `const.py`, `model/*.py`, `commands.py`, `session.py`, `utils.py`), documentation du binding openHAB « automower », demande de l'utilisateur du 2026-09-16 (Automower 435X AWD)
 
 ## Ce que le plugin fait, et ce qu'il ne fait pas encore
 
@@ -147,9 +147,11 @@ d'après le schéma de configuration (`plugin-host.ts`), sans que le plugin les 
 
 ## Pistes pour la suite
 
+*(Dépassé le 2026-10-12 : `workAreas` ne porte AUCUN polygone dans `GET /mowers` — id, nom, état, hauteur de coupe et calendrier seulement ; la géométrie n'existe que dans les cartes SVG (`GET /maps/*`). Voir « Mise à jour 2026-10-12 — zones, carte du terrain ».)*
 - **Carte du robot** : `workAreas` (polygones, hauteur de coupe et planning par zone) et
   `stayOutZones` sont dans `GET /mowers` ; le fil des `positions` (une cinquantaine de points)
   dessinerait la trace. Le **câble périphérique** n'est pas publié par l'API : il ne se dessinera pas.
+*(Fait en partie le 2026-10-12 : `StartInWorkArea` et l'activation d'une zone d'exclusion existent ; la hauteur de coupe, les phares et la confirmation d'erreur restent à faire.)*
 - **Écritures** : `POST /mowers/{id}/settings` (hauteur de coupe, phares), `POST
   /mowers/{id}/errors/confirm` (erreur confirmable, `capabilities.canConfirmError`), `StartInWorkArea`.
 - **Messages** : `GET /mowers/{id}/messages` (journal des erreurs avec position et gravité).
@@ -358,3 +360,109 @@ Ce que le fichier de Tesla garde en plus — le dernier état de chaque véhicul
 ici : la liste se lit en une requête au démarrage, sans attendre un réveil.
 
 Sources : `apps/server/src/plugins/automower/{index,state}.ts`, `plugin.test.ts`, `apps/server/.env.example`.
+
+### Mise à jour 2026-10-12 — zones, carte du terrain, et ce que l'API ne laisse pas faire
+
+Session de l'utilisateur : voir et commander les zones du robot, et poser la carte de son terrain sur la
+photo satellite. Relevés faits sur le vrai robot : la liste et ses zones, les cartes SVG, le refus du
+réensauvagement. `StartInWorkArea` et la bascule d'une zone d'exclusion ne sont encore éprouvés qu'en
+simulation et par les tests (ni noms ni tracé ici : les exemples sont ceux des fixtures inventées,
+« Fond du jardin », « Massif », « Prairie »).
+
+#### Ce que l'API permet, et ne permet pas
+
+Lecture de la spécification officielle (`swagger.yml` v1.0.0, developer.husqvarnagroup.cloud) : **l'API
+NE PERMET PAS de créer, redessiner ou supprimer une zone** — ni de travail, ni d'exclusion. Elle permet
+seulement : la hauteur de coupe, le nom et l'activation d'une zone de travail (`PATCH workAreas`), son
+calendrier, et l'**activation** des zones d'exclusion. Côté profils de carte : créer (copie du profil
+actif), supprimer, activer, renommer ; **un seul est actif**, et changer de profil recharge zones et carte
+**sans événement de fin** (d'où la relecture périodique plus bas). Aucune limite de nombre de zones ou de
+profils n'est publiée — ni la spécification ni le support. Les zones se tracent donc dans l'appli du
+fabricant, et la vue Robots le dit quand il n'y en a aucune.
+
+*Idée écartée — « envoyer le robot à un point ».* Créer dynamiquement une mini-zone autour du point
+cliqué exigerait l'API **privée** de l'appli (rétro-ingénierie, conditions d'utilisation, fragilité,
+resynchronisation lente de la carte). Piste retenue à la place, **pas encore codée** : une grille de zones
+tracées une fois dans l'appli, puis un clic sur la carte lance `StartInWorkArea` sur la zone qui contient
+le point.
+
+#### Commandes
+
+- `mower.start_in_area` (`workAreaId`, `durationMin`) → action **`StartInWorkArea`** avec
+  `attributes.workAreaId` **et** `attributes.duration`, les deux obligatoires (`actionBody`, `mapping.ts`).
+  Capacité requise : `work_areas`. Le contrat refuse donc une durée absente (`durationMin` requis).
+- `mower.set_stay_out_zone` (`zoneId`, `enabled`) → `PATCH /mowers/{id}/stayOutZones/{zoneId}`, corps
+  `{ data: { type: 'stayOutZone', id, attributes: { enable } } }` (`AutomowerClient.stayOutZone`,
+  `client.ts` ; le client accepte désormais `PATCH`). Capacité requise : `stay_out_zones`. **Refusé côté
+  plugin** (`DEVICE_UNAVAILABLE`) tant que `stayOutZones.dirty` est vrai : la carte se synchronise avec le
+  cloud et le fabricant refuserait de toute façon.
+- **Relecture complète 5 s après une bascule** (`ZONE_REFRESH_MS`, `index.ts`) : aucun événement du
+  flux WebSocket ne porte ces zones, et le fabricant accuse en 202 avant que le robot n'ait appliqué. Un
+  seul minuteur à la fois, annulé par `stop()`.
+
+#### Capacités et état
+
+Les capacités s'ajoutent à `mow`, `park`, `battery`, `schedule`, `journal` d'après
+`attributes.capabilities` (`optionalCapabilities`, `mapping.ts`) : `work_areas`, `stay_out_zones`, et
+`site_map` **si `position`** — un robot sans position n'a pas de terrain relevé à montrer.
+
+État publié : `workAreas[]` (`id`, `name` rogné, `enabled`) et `stayOutZones[]` (`id` UUID, `name`,
+`enabled`). Piège relevé : la section `stayOutZones` est **ABSENTE** de la liste tant qu'aucune zone n'a
+jamais été tracée, puis devient `{ zones: [], dirty }` ; le plugin publie donc une liste **vide** (pas
+`undefined`) dès que le robot déclare gérer les zones, pour que « aucune zone » ne se lise pas « inconnu ».
+Le robot publie aussi une zone de travail `0` sans nom (tout le terrain) tant qu'aucune n'est tracée ; la
+hauteur de coupe d'une zone est en **pour cent**, celle de `settings` sur 1-9 (voir plus haut).
+
+#### Les cartes : du SVG, pas du JSON
+
+La géométrie n'est que dans trois cartes SVG, que le plugin lit (`AutomowerClient.mapSvg`) :
+`GET /mowers/{id}/maps/generated` (robot AIM : le terrain relevé), `/maps/zone` (AIM : les zones tracées ;
+**404 `map.zone.not_found`** tant qu'aucune), `/maps/site` (robot EPOS). Le parseur est `parseSvgMap` /
+`toSiteMap` (`mapping.ts`), sans DOM côté serveur. Relevé réel : **millimètres**, `x` vers l'est, `y` vers
+le nord, origine quelconque. Husqvarna code la nature par la couleur :
+
+| Carte | Vert | Rouge | Bleu | Jaune |
+|---|---|---|---|---|
+| générée | le terrain entier (`main_area_0`) → `lawn` | `island_*` : obstacle relevé (maison, arbre) → `obstacle` | `guide_*` : câble guide → `guide` | `lona_cs` : la station → `station` |
+| zones | une zone de travail tracée → `work_area` | zone d'exclusion → `stay_out` ; avec `rewildingzone="true"` → `rewilding` | chemin → `transport` | — |
+
+- Le **premier point** de la ligne jaune est la plaque de charge : les câbles guides en partent tous.
+  C'est lui qui devient `SiteMap.station`, le seul lien entre la carte et le monde.
+- Sur la carte de zones, l'`id` d'une zone de travail est un **UUID** qui n'est **pas** son `workAreaId`.
+  Le `title` porte son nom (avec ses espaces, d'où le `trim`) : **le nom est le seul lien** entre la forme
+  et `workAreas[]`. Une zone d'exclusion, elle, partage son UUID avec `stayOutZones`.
+- Une zone **désactivée** reste sur la carte, avec `display="none"`. Le parseur en tire `enabled` pour les
+  zones d'exclusion et de réensauvagement ; pas pour une zone de travail (son état vient de `workAreas`).
+
+#### Réensauvagement : affichage seul, piste fermée
+
+Une zone de réensauvagement (l'herbe y pousse) n'est publiée **que sur la carte** : elle est absente de
+`stayOutZones`. Essai du 2026-10-12 sur le vrai robot : `PATCH stayOutZones/{id de la zone de
+réensauvagement}` → **HTTP 400, code `rewilding.stay_out_zone`**, « is not a supported stay out zone ».
+Elle ne se bascule pas : la vue la dessine (jaune pâle), c'est tout. À ne pas rouvrir.
+
+#### Cache de la carte
+
+Lire une carte coûte deux requêtes de quota (terrain, puis zones). `siteMaps` (`index.ts`) la lit **à la
+demande**, la garde **en mémoire**, et la juge périmée dans deux cas :
+
+- `zonesKey` change : les ids **et les noms** des zones, plus le drapeau `dirty` — tout cela est déjà dans
+  la relecture de 10 minutes, donc sans coût ; les noms comptent parce que c'est par eux que la carte est
+  reliée à `workAreas` ;
+- elle a plus de 24 h (`SITE_MAP_MAX_AGE_MS`) : un tracé **redessiné** sans autre changement ne modifie ni
+  id ni nom, rien d'autre ne le signalerait.
+
+Pas de fichier sur disque : deux requêtes par redémarrage (contre le quota de 21 000 par semaine). Le
+cache est vidé par `init` (même leçon que `published` : une fermeture survit à `stop()`).
+
+#### Côté web
+
+Bouton « Zones » (panneau `MowerZones.vue`), carte du terrain sur la carte satellite, menu des calques et
+décalage `mapOffset` : voir `../4_ui/4_1_navigation-et-panneaux.md`, mise à jour du même jour. Contrat
+(capacités, commandes, route `GET /api/devices/:id/map`) : `../1_architecture/1_1_contrat-appareils.md` et
+`../1_architecture/1_3_protocole-rest-ws.md`. La tondeuse simulée sert aussi une carte (voir
+`3_0_simulation-mock.md`).
+
+Sources : `apps/server/src/plugins/automower/{index,client,mapping,types}.ts`, `__fixtures__/automower.ts`,
+tests `mapping.test.ts` et `plugin.test.ts`, `packages/shared/src/devices/{kinds,command,state}.ts`,
+`apps/web/src/lib/siteMap.ts`.

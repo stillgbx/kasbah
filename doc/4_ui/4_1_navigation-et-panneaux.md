@@ -6071,3 +6071,65 @@ Vérifié en mode simulé (1440 × 900, clair et sombre) : les neuf tuiles garde
 survol n'a pas été vu (capture figée sur la scène 3D).
 
 Sources : `apps/web/src/components/home/HomePanel.vue`.
+
+### Mise à jour 2026-10-12 (ter) — vue Robots : zones, carte du terrain, calques
+
+Demande de l'utilisateur : voir et commander les zones de sa tondeuse, et voir la carte de son terrain
+sur la photo satellite. Côté plugin et API (ce qu'elle permet et non) :
+`../3_plugins/3_11_husqvarna-automower.md`, même date. Tout ceci n'apparaît que pour un robot qui
+déclare les capacités `work_areas` / `stay_out_zones` / `site_map` (la tondeuse simulée les déclare).
+
+**Bouton « Zones » et panneau `MowerZones.vue`** (dans la rangée de boutons de la carte du robot,
+`RobotsView.vue`) :
+
+- *Zones de travail* : une ligne par zone, une **pastille de couleur** (celle de la zone sur la carte, voir
+  plus bas) et « Tondre 1 h » (`mower.start_in_area`, durée fixe d'une heure comme le bouton de la carte :
+  le fabricant exige une durée). La zone `0` sans nom s'appelle « Tout le terrain » ; une zone
+  désactivée est notée et son bouton grisé.
+- *Zones d'exclusion* : une ligne par zone avec un **interrupteur** (`mower.set_stay_out_zone`) ; s'il n'y
+  en a aucune, la ligne « Aucune : elles se tracent dans l'appli du fabricant » — l'API ne sait ni les créer
+  ni les redessiner.
+- Toutes les lignes ont la même hauteur (40 px, celle de l'interrupteur compact) : rien ne bouge
+  quand l'état change.
+
+**Carte du terrain sur la carte satellite** (`VehicleMap.vue`, prop `overlay` ; calcul pur dans
+`apps/web/src/lib/siteMap.ts`) :
+
+- *Où elle se pose.* Le fabricant la publie dans un repère local sans dire où. On fait coïncider **la
+  station de la carte** avec la **base du robot** (`site.parkings[]`, `dockFor`) de la maison, plus le
+  `mapOffset` réglé (`../2_maison/2_0_format-house-json.md`) ; à défaut de base, sur le robot quand il est
+  à la station (garé ou en charge, son GPS corrigé du `gpsOffset`). Le **dernier ancrage est gardé** : un
+  robot sans base qui part tondre ne fait pas disparaître sa carte. Rien d'ancrable, rien de dessiné.
+- *Couleurs* (celles de l'appli du fabricant, lisibles sur photo comme sur plan, quel que soit le thème) :
+  terrain vert pâle (`LAWN_COLOR`), **chaque zone tracée une teinte** (`WORK_AREA_COLORS`, par rang dans
+  `workAreas`, aucune proche des couleurs déjà prises), exclusion rouge, réensauvagement jaune pâle
+  (`REWILDING_COLOR`), câbles bleus, station jaune. Une zone d'exclusion **désactivée** est presque
+  transparente (fond à 0,06 au lieu de 0,42).
+- *Zone de travail reliée par son NOM* : la carte du fabricant ne donne pas le `workAreaId`, seulement un
+  nom ; la teinte vient donc du nom, **la même que la pastille du panneau**. Une zone que la liste ne
+  connaît pas encore (pas relue) prend la teinte suivante.
+- *État d'une zone d'exclusion* : celui du robot prime (il suit une bascule faite ici), à défaut celui de la
+  carte — seul à dire le réensauvagement.
+
+**Menu des calques** (bouton « calques », **premier de la rangée** des boutons de la carte, à gauche de
+Plan / Satellite : son apparition ne décale rien) :
+
+- cinq calques (`SITE_MAP_LAYERS`) : terrain et obstacles, zones de travail, zones d'exclusion,
+  réensauvagement, câbles et station ; le menu **ne propose que ceux que la carte contient** ;
+- on mémorise les calques **masqués**, pas les visibles (`localStorage`, clé `kasbah.mapLayers.v1`) : un
+  calque qui apparaît plus tard (une première zone d'exclusion) se montre de lui-même ;
+- le menu est posé **par-dessus** la carte et calé sur **le bord droit de la rangée** (celui de la
+  carte), pas sur le bouton : sur téléphone, calé sur le bouton, il sortait de la carte et se faisait
+  couper ; lignes de 28 px et `max-height` 164 px, de sorte que cinq calques tiennent dans la carte la plus
+  basse (220 px, boutons compris), il défile au-delà ; il se ferme au clic dehors et sur Échap.
+
+**Réglage** (`MowerTuning.vue`, panneau « Modifier ») : pour un robot `site_map`, une seconde ligne
+« Décalage de la carte (m) » (`mapOffset`) sous celle du GPS ; « Rétablir » rend les deux décalages comme
+ils étaient à l'ouverture.
+
+**Fraîcheur** : la vue demande la carte au serveur une fois par robot, de nouveau quand les zones
+(ids, noms) changent, et toutes les **5 minutes** ; le serveur sert son cache, la redemander ne coûte aucun
+quota. Elle ne remplace la carte reçue que si elle a **changé** (comparaison du JSON), pour ne pas
+redessiner pour rien. Une carte illisible n'empêche rien : le bouton des calques n'apparaît pas.
+
+Sources : `apps/web/src/views/RobotsView.vue`, `apps/web/src/components/robots/{MowerZones,MowerTuning}.vue`, `apps/web/src/components/vehicles/VehicleMap.vue`, `apps/web/src/lib/siteMap.ts` (+ `siteMap.test.ts`), `apps/web/src/i18n/locales/{fr,en}.json`.

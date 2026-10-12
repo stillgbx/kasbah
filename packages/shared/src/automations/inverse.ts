@@ -19,6 +19,8 @@ export function inverseCommand(cmd: CommandInput): Command | undefined {
     case 'media_player.play_url': return { type: 'media_player.stop' }
     case 'vacuum.start': return { type: 'vacuum.dock' }
     case 'mower.start': return { type: 'mower.park', untilNextSchedule: true }
+    case 'mower.start_in_area': return { type: 'mower.park', untilNextSchedule: true }
+    case 'mower.set_stay_out_zone': return { type: 'mower.set_stay_out_zone', zoneId: cmd.zoneId, enabled: !cmd.enabled }
     case 'vehicle.lock': return { type: 'vehicle.unlock' }
     case 'vehicle.unlock': return { type: 'vehicle.lock' }
     case 'vehicle.start_charge': return { type: 'vehicle.stop_charge' }

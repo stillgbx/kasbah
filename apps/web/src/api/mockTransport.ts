@@ -265,6 +265,13 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     },
     // la simulation ne tient aucun journal : ses appareils ne déclarent pas la capacité, la vue ne demande rien
     async getJournal(deviceId) { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', `no journal in mock mode for ${deviceId}`) },
+    async getSiteMap(deviceId) {
+      try { return { deviceId, ...sim.siteMap(deviceId.replace(/^mock:/, '')) } }
+      catch (err) {
+        if (err instanceof SimError) throw new ApiRequestError(STATUS[err.code] ?? 500, err.code, err.message)
+        throw err
+      }
+    },
     async getReleaseNotes(deviceId, lang) {
       try { return { deviceId, ...sim.releaseNotes(deviceId.replace(/^mock:/, ''), lang) } }
       catch (err) {

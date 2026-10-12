@@ -1,6 +1,6 @@
 # Protocole REST et WebSocket
 
-> Dernière mise à jour : 2026-10-11
+> Dernière mise à jour : 2026-10-12
 > Sources : `packages/shared/src/protocol/{ws,http}.ts`, `apps/server/src/http/{routes,errors}.ts`, `apps/server/src/ws/hub.ts`, `apps/web/src/api/httpTransport.ts`, `apps/server/src/plugins/tesla/index.ts`, `apps/server/src/config/house.ts`, `packages/shared/src/house/place.ts`, `apps/server/src/core/scene-registry.ts`, `packages/shared/src/protocol/http.ts` (`deviceConsumptionSchema`), `apps/server/src/http/routes.ts` (automatisations), `apps/server/src/http/relief.test.ts`, `apps/server/src/config/properties.ts`, `apps/server/src/config/catalog.ts`, `apps/server/src/core/shopping.ts` (2026-10-11)
 
 ## REST
@@ -684,3 +684,31 @@ des tests web cessaient de compiler. Le hub le remplit toujours (`EMPTY_SHOPPING
 un client qui reçoit un snapshot sans liste garde la sienne.
 
 Sources : `packages/shared/src/protocol/{ws,http}.ts`, `apps/server/src/http/routes.ts`, `apps/server/src/ws/hub.ts`, `apps/server/src/http/shopping.test.ts`.
+
+### Mise à jour 2026-10-12 — `GET /api/devices/:id/map` (carte du terrain d'une tondeuse)
+
+Quatrième lecture « à la demande » d'un appareil après `forecast`, `journal` et `consumption` : la
+carte n'est pas de l'état, elle ne change que quand on retrace une zone chez le fabricant, et chaque
+lecture coûte du quota.
+
+- **Route** (`apps/server/src/http/routes.ts`) : 404 `NOT_FOUND` si l'appareil est inconnu, 400
+  `KIND_MISMATCH` s'il ne déclare pas la capacité `site_map`, sinon `PluginHost.siteMap(deviceId)`
+  (`core/plugin-host.ts` : `DEVICE_UNAVAILABLE` si le plugin ne tourne pas, `NOT_IMPLEMENTED` s'il n'a
+  pas de méthode `siteMap`, délai des commandes comme pour le journal). Le plugin rend une carte SANS
+  `deviceId` (`PluginSiteMap`), l'hôte l'ajoute — comme `PluginJournal`.
+- **Plugin** (`core/plugin.ts`) : méthode facultative `siteMap?(externalId): Promise<PluginSiteMap>`,
+  avec la consigne de rendre une carte **tenue en cache**.
+- **Forme** (`siteMapSchema`, `protocol/http.ts`) : `SiteMap { deviceId, station: [x, y] | null,
+  shapes[] }`. Repère **local du robot**, en mètres, `x` est, `y` nord, origine quelconque : la carte ne se
+  pose sur le monde que par sa `station` (`null` = carte sans station, impossible à poser). Une forme :
+  `{ kind, id, name?, enabled?, points }`, `kind` parmi `SITE_MAP_SHAPE_KINDS` — `lawn`, `work_area`,
+  `obstacle`, `stay_out`, `rewilding`, `guide`, `transport`, `station`. Polygone pour les zones et
+  obstacles, ligne pour câbles, chemins et station.
+- **`enabled?`** sur une forme : l'état de la zone **lu sur la carte** (absent = activée). Pour une zone
+  d'exclusion, l'état du robot (`stayOutZones[].enabled`) prime côté web quand il la connaît ; il ne
+  connaît pas le réensauvagement, seule la carte le dit.
+- Client web : `Transport.getSiteMap` (`httpTransport` valide par `siteMapSchema` ; le transport simulé
+  appelle `sim.siteMap`).
+
+Sources : `packages/shared/src/protocol/http.ts`, `apps/server/src/http/routes.ts`,
+`apps/server/src/core/{plugin,plugin-host}.ts`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`.

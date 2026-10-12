@@ -1,6 +1,6 @@
 # Format house.json : décisions et validation
 
-> Dernière mise à jour : 2026-10-10
+> Dernière mise à jour : 2026-10-12
 > Sources : `packages/shared/src/house/{schema,validate,lookup,geo}.ts`, `docs/house-json.md`, `house/demo-house.json`, `packages/shared/src/house/autoplace.ts`, `house/fit-survey.mjs`, `house/maison.json`, `packages/shared/src/house/place.ts`, `apps/server/src/config/house.ts`, `packages/shared/src/house/panels.ts`, `packages/shared/src/house/openings.ts`, `packages/shared/src/house/parking.ts`, `packages/shared/src/house/geometry/relief.ts` (`site.relief`), `house/demos/*.json`, `apps/server/src/config/properties.ts`, `packages/shared/src/house/structure.ts`, `packages/shared/src/house/newHouse.ts`
 
 La **référence complète du format** (champs, exemples) est `docs/house-json.md`. Cette page
@@ -1323,3 +1323,22 @@ Un niveau inconnu lève `PlacementError`. Le serveur de catalogue donne au séle
 la propriété ouverte (`main.ts`), qu'un renommage vient peut-être d'écrire.
 
 Tests : `structure.test.ts`, `apps/web/src/stores/house.structure.test.ts`.
+
+### Mise à jour 2026-10-12 — `devices[].mapOffset` : décaler la CARTE du terrain d'une tondeuse
+
+Nouveau champ facultatif d'un appareil de la maison : `mapOffset: [x, y]` (`vec2`, **mètres, repère
+maison**), `houseDeviceSchema` (`packages/shared/src/house/schema.ts`). Il recale la **carte du terrain**
+qu'une tondeuse publie (capacité `site_map`), posée par sa station sur la base du robot : ni cette base ni
+la photo aérienne ne sont exactes au mètre, et c'est la carte entière qu'on recale sur la photo.
+
+Il est **indépendant de `gpsOffset`**, qui ne déplace que le robot : régler l'un ne bouge pas l'autre
+(le test de `place.test.ts` écrit les deux sur la même entrée et vérifie qu'ils cohabitent). Deux
+corrections parce que deux erreurs distinctes : le GPS du robot a son biais, la carte a le sien.
+
+Écriture : `placeDeviceInJson` (`packages/shared/src/house/place.ts`) accepte `mapOffset` dans
+`DevicePlacement`, à la manière de `gpsOffset` — **`[0, 0]` efface** la clé (retour au calage brut), y
+compris à la création d'une entrée (rien n'est écrit si le décalage est nul). Le réglage se fait dans le
+panneau « Modifier » de la vue Robots (`4_ui/4_1_navigation-et-panneaux.md`, même date) ; comment la vue
+pose la carte : même page.
+
+Sources : `packages/shared/src/house/{schema,place}.ts`, `place.test.ts` (« écrit le décalage de la carte d'une tondeuse »), `apps/web/src/stores/house.ts` (`setDeviceTuning`).

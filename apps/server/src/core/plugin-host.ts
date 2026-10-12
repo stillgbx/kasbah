@@ -1,4 +1,4 @@
-import { DEFAULT_PLUGIN_SETTINGS, parseDeviceId, parseSceneId, type Command, type DeviceState, type PluginHealth, type StatePatch, type PluginInfo, type PluginSettings, type SceneRecall, type SceneUpdate, type DeviceConsumption, type DeviceJournal, type DeviceReleaseNotes, type WeatherForecast } from '@kasbah/shared'
+import { DEFAULT_PLUGIN_SETTINGS, parseDeviceId, parseSceneId, type Command, type DeviceState, type PluginHealth, type StatePatch, type PluginInfo, type PluginSettings, type SceneRecall, type SceneUpdate, type DeviceConsumption, type DeviceJournal, type DeviceReleaseNotes, type SiteMap, type WeatherForecast } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import type { Logger } from 'pino'
 import { chargeLimitReached, chargerToForce, chargerToStop, chargingRefuted } from './chargeCoordination'
@@ -321,6 +321,16 @@ export class PluginHost {
     if (!slot.plugin.journal) throw new PluginError('NOT_IMPLEMENTED', `plugin "${pluginId}" has no journal`)
     const j = await withTimeout(slot.plugin.journal(externalId), this.opts.commandTimeoutMs ?? 10_000, this.opts.clock, `journal ${deviceId}`)
     return { deviceId, ...j }
+  }
+
+  /** Carte du terrain d'un appareil ; `NOT_IMPLEMENTED` si son plugin n'en publie pas. */
+  async siteMap(deviceId: string): Promise<SiteMap> {
+    const { pluginId, externalId } = parseDeviceId(deviceId)
+    const slot = this.slots.get(pluginId)
+    if (!slot || !slot.ctx) throw new PluginError('DEVICE_UNAVAILABLE', `plugin "${pluginId}" is not running`)
+    if (!slot.plugin.siteMap) throw new PluginError('NOT_IMPLEMENTED', `plugin "${pluginId}" has no site map`)
+    const m = await withTimeout(slot.plugin.siteMap(externalId), this.opts.commandTimeoutMs ?? 10_000, this.opts.clock, `site map ${deviceId}`)
+    return { deviceId, ...m }
   }
 
   /** Notes de version d'un véhicule ; `NOT_IMPLEMENTED` si son plugin n'en tient pas. */

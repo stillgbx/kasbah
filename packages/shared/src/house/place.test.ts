@@ -63,6 +63,17 @@ describe('placeDeviceInJson', () => {
     expect(entry(renamed)).toMatchObject({ gpsOffset: [2.5, -1], name: 'Voiture 1' })
   })
 
+  it('écrit le décalage de la carte d une tondeuse, à part de son décalage GPS, et [0, 0] l efface', () => {
+    const entry = (doc: Record<string, unknown>) => devices(doc).find((x) => x.id === 'mower.robot')
+    const created = placeDeviceInJson(demo, 'mower.robot', { deviceId: 'automower:abc', mapOffset: [-3, 1.5] })
+    expect(entry(created)).toEqual({ id: 'mower.robot', deviceId: 'automower:abc', mapOffset: [-3, 1.5] })
+    expect(() => parseHouse(created)).not.toThrow()
+    const both = placeDeviceInJson(created, 'mower.robot', { gpsOffset: [1, 0] })
+    expect(entry(both)).toMatchObject({ gpsOffset: [1, 0], mapOffset: [-3, 1.5] })
+    const cleared = placeDeviceInJson(both, 'mower.robot', { mapOffset: [0, 0] })
+    expect(entry(cleared)).toEqual({ id: 'mower.robot', deviceId: 'automower:abc', gpsOffset: [1, 0] })
+  })
+
   it('écrit la rotation d un véhicule, et 0 l efface', () => {
     const entry = (doc: Record<string, unknown>) => devices(doc).find((x) => x.id === 'vehicle.model-s')
     const created = placeDeviceInJson(demo, 'vehicle.model-s', { deviceId: 'tesla:5YJ', yawOffset: 180 })

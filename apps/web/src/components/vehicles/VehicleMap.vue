@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Map as MlMap, Marker, NavigationControl, type StyleSpecification } from 'maplibre-gl'
+import { Map as MlMap, Marker, NavigationControl, type FilterSpecification, type GeoJSONSource, type StyleSpecification } from 'maplibre-gl'
+import type { FeatureCollection, Geometry } from 'geojson'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { IGN_MAX_ZOOM, initialView, normalizeHeading, planStyleUrl, satelliteStyle, satelliteStyleWithLabels, type LatLon, type MapMode } from '../../lib/map'
 import { JOURNAL_COLORS, type JournalPoint } from '../../lib/journal'
+import { LAWN_COLOR, REWILDING_COLOR, SITE_MAP_LAYERS, WORK_AREA_COLORS, layerOf, type SiteMapFeatureProps, type SiteMapLayer } from '../../lib/siteMap'
 import { useSettingsStore } from '../../stores/settings'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
@@ -30,6 +32,11 @@ const props = defineProps<{
   focus?: LatLon | undefined
   /** L'incident ACTIF (sa date) : sa pastille grossit et passe devant. */
   activeAt?: number | undefined
+  /**
+   * La carte du terrain d'une tondeuse, déjà posée sur le monde (`lib/siteMap.ts`) : zones, obstacles,
+   * câbles. Présente = un bouton la montre ou la masque, choix gardé pour toutes les cartes.
+   */
+  overlay?: FeatureCollection<Geometry, SiteMapFeatureProps> | undefined
 }>()
 const emit = defineEmits<{ pointTap: [at: number] }>()
 
@@ -47,6 +54,37 @@ const full = ref(false)
 const mode = ref<MapMode>((() => { try { return localStorage.getItem(MODE_KEY) === 'plan' ? 'plan' : 'satellite' } catch { return 'satellite' } })())
 /** L'utilisateur a bougé la carte : on ne la recadre plus sous ses doigts, un bouton le propose. */
 const moved = ref(false)
+// La carte du terrain se montre par CALQUES (terrain, zones de travail, zones d'exclusion, câbles) :
+// tous visibles par défaut, ceux qu'on masque survivent, comme le mode. On garde les MASQUÉS, pas les
+// visibles : un calque qui apparaît plus tard (une première zone d'exclusion) se montre de lui-même.
+const LAYERS_KEY = 'kasbah.mapLayers.v1'
+const hiddenLayers = ref<ReadonlySet<SiteMapLayer>>((() => {
+  try {
+    const raw = JSON.parse(localStorage.getItem(LAYERS_KEY) ?? '[]') as unknown
+    return new Set(Array.isArray(raw) ? raw.filter((l): l is SiteMapLayer => (SITE_MAP_LAYERS as readonly unknown[]).includes(l)) : [])
+  } catch { return new Set<SiteMapLayer>() }
+})())
+/** Les calques que cette carte a vraiment : le menu ne propose que ceux-là. */
+const presentLayers = computed(() => SITE_MAP_LAYERS.filter((l) => props.overlay?.features.some((f) => layerOf(f.properties.kind) === l)))
+const anyLayerShown = computed(() => presentLayers.value.some((l) => !hiddenLayers.value.has(l)))
+function toggleLayer(l: SiteMapLayer): void {
+  const next = new Set(hiddenLayers.value)
+  if (next.has(l)) next.delete(l)
+  else next.add(l)
+  hiddenLayers.value = next
+}
+/** La teinte de la pastille de chaque calque dans le menu : celle qu'il a sur la carte. */
+const LAYER_COLORS: Record<SiteMapLayer, string> = { lawn: LAWN_COLOR, work_areas: WORK_AREA_COLORS[0], stay_out: '#e53935', rewilding: REWILDING_COLOR, guides: '#42a5f5' }
+const LAYER_LABELS: Record<SiteMapLayer, string> = { lawn: 'vehicle.map.layerLawn', work_areas: 'vehicle.map.layerWorkAreas', stay_out: 'vehicle.map.layerStayOut', rewilding: 'vehicle.map.layerRewilding', guides: 'vehicle.map.layerGuides' }
+/** Le menu des calques : un panneau posé SUR la carte, sous les boutons — rien ne bouge en l'ouvrant. */
+const layersOpen = ref(false)
+const layersEl = ref<HTMLElement | null>(null)
+function onOutside(e: PointerEvent): void { if (layersEl.value && !layersEl.value.contains(e.target as Node)) layersOpen.value = false }
+function onLayersKey(e: KeyboardEvent): void { if (e.key === 'Escape') layersOpen.value = false }
+watch(layersOpen, (open) => {
+  if (open) { document.addEventListener('pointerdown', onOutside, true); window.addEventListener('keydown', onLayersKey) }
+  else { document.removeEventListener('pointerdown', onOutside, true); window.removeEventListener('keydown', onLayersKey) }
+})
 
 let map: MlMap | null = null
 let carMarker: Marker | null = null
@@ -149,6 +187,46 @@ function placePoints(): void {
   }
 }
 
+/**
+ * La carte du terrain : une source GeoJSON et trois couches, SOUS les marqueurs (qui sont du DOM).
+ * Les couleurs sont celles de l'appli du fabricant (vert du terrain, rouge, bleu, jaune), plus une
+ * teinte par zone de travail tracée (`color`, celle de sa pastille dans le panneau Zones) : elles se
+ * lisent sur la photo comme sur le plan, quel que soit le thème. Un changement de style efface sources et couches ;
+ * `style.load` les repose. Masquée = une source vide, les couches restent.
+ */
+const EMPTY_OVERLAY: FeatureCollection = { type: 'FeatureCollection', features: [] }
+function applyOverlay(): void {
+  if (!map || !map.isStyleLoaded()) return
+  const hidden = hiddenLayers.value
+  const data = props.overlay ? { ...props.overlay, features: props.overlay.features.filter((f) => !hidden.has(layerOf(f.properties.kind))) } : EMPTY_OVERLAY
+  const source = map.getSource<GeoJSONSource>('site-map')
+  if (source) { source.setData(data); return }
+  map.addSource('site-map', { type: 'geojson', data })
+  const isArea: FilterSpecification = ['==', ['geometry-type'], 'Polygon']
+  map.addLayer({
+    id: 'site-map-fill', type: 'fill', source: 'site-map', filter: isArea,
+    paint: {
+      'fill-color': ['match', ['get', 'kind'], 'lawn', LAWN_COLOR, 'work_area', ['get', 'color'], 'rewilding', REWILDING_COLOR, '#e53935'],
+      'fill-opacity': ['match', ['get', 'kind'], 'lawn', 0.16, 'work_area', 0.32, 'obstacle', 0.3, ['case', ['get', 'enabled'], 0.42, 0.06]],
+    },
+  })
+  map.addLayer({
+    id: 'site-map-outline', type: 'line', source: 'site-map', filter: isArea,
+    paint: {
+      'line-color': ['match', ['get', 'kind'], 'lawn', '#66bb6a', 'work_area', ['get', 'color'], 'rewilding', REWILDING_COLOR, '#ef5350'],
+      'line-width': ['match', ['get', 'kind'], 'work_area', 2.5, 1.5],
+    },
+  })
+  map.addLayer({
+    id: 'site-map-lines', type: 'line', source: 'site-map', filter: ['==', ['geometry-type'], 'LineString'],
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': ['match', ['get', 'kind'], 'station', '#fdd835', '#42a5f5'],
+      'line-width': ['match', ['get', 'kind'], 'station', 4, 'transport', 3, 2],
+    },
+  })
+}
+
 function placeMarkers(): void {
   if (!map) return
   // la position AVANT `addTo` : MapLibre projette le marqueur en l'ajoutant, sans position il plante
@@ -176,6 +254,7 @@ onMounted(() => {
   map = m
   // le panneau n'est déplié qu'après le premier calcul des mentions : on guette les trois moments
   for (const ev of ['load', 'styledata', 'idle'] as const) m.on(ev, collapseAttribution)
+  m.on('style.load', applyOverlay)
   // en développement seulement : la carte est interrogeable depuis la console (`el.__map`), ce qui
   // permet de vérifier qu'elle rend bien des entités quand rien ne se voit à l'écran
   if (import.meta.env.DEV) (container.value as HTMLDivElement & { __map?: MlMap }).__map = m
@@ -215,6 +294,11 @@ watch(() => props.focus, (f) => {
   moved.value = true
 })
 watch([mode, () => settings.isDark], () => { void applyStyle() })
+watch([() => props.overlay, hiddenLayers], applyOverlay)
+watch(hiddenLayers, (h) => {
+  try { localStorage.setItem(LAYERS_KEY, JSON.stringify([...h])) } catch { /* stockage indisponible : le choix ne survit pas */ }
+})
+onBeforeUnmount(() => { layersOpen.value = false })
 // Le choix n'est écrit QUE lorsque le mode change. Il était auparavant réécrit à chaque changement
 // de thème, ce qui rangeait comme « choix de l'utilisateur » un mode qu'il n'avait jamais touché —
 // et le défaut n'avait alors plus jamais l'occasion de s'appliquer.
@@ -237,6 +321,19 @@ watch(full, (f) => { if (f) window.addEventListener('keydown', onKey); else wind
     <div ref="container" class="vmap__canvas" />
     <!-- nos boutons à droite ; les boutons natifs de MapLibre (zoom, boussole) sont à gauche -->
     <div class="vmap__tools">
+      <div v-if="presentLayers.length" ref="layersEl" class="vmap__layers-wrap">
+        <button type="button" class="vmap__btn" :data-on="anyLayerShown ? '1' : '0'" :aria-expanded="layersOpen" aria-haspopup="true"
+                :title="$t('vehicle.map.layers')" @click="layersOpen = !layersOpen">
+          <StrokeIcon name="layers" :size="16" />
+        </button>
+        <div v-if="layersOpen" class="vmap__layers" role="group" :aria-label="$t('vehicle.map.layers')">
+          <label v-for="l in presentLayers" :key="l" class="vmap__layer">
+            <input type="checkbox" :checked="!hiddenLayers.has(l)" @change="toggleLayer(l)" />
+            <span class="vmap__swatch" :style="{ background: LAYER_COLORS[l] }" aria-hidden="true" />
+            <span class="vmap__layer-name">{{ $t(LAYER_LABELS[l]) }}</span>
+          </label>
+        </div>
+      </div>
       <button type="button" class="vmap__btn" :data-on="mode === 'satellite' ? '1' : '0'" :title="$t(mode === 'plan' ? 'vehicle.map.satellite' : 'vehicle.map.plan')"
               @click="mode = mode === 'plan' ? 'satellite' : 'plan'">
         {{ $t(mode === 'plan' ? 'vehicle.map.satellite' : 'vehicle.map.plan') }}
@@ -267,6 +364,21 @@ watch(full, (f) => { if (f) window.addEventListener('keydown', onKey); else wind
   box-shadow: 0 1px 4px rgb(0 0 0 / .15);
 }
 .vmap__btn[data-on='1'] { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+/* le menu des calques : posé sous la rangée de boutons, calé sur SON bord droit (celui de la carte) et
+   non sur le bouton, le plus à gauche de la rangée — sur un téléphone il sortait de la carte, coupé.
+   PAR-DESSUS la carte : rien ne bouge en l'ouvrant. */
+.vmap__layers-wrap { position: static; }
+.vmap__layers {
+  position: absolute; top: calc(100% + 6px); right: 0; min-width: 200px; padding: 4px; display: grid; gap: 1px;
+  /* cinq calques tiennent dans la carte la plus basse (220 px, boutons compris) ; au-delà, il défile */
+  max-height: 164px; overflow-y: auto;
+  background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 4px 16px rgb(0 0 0 / .25);
+}
+.vmap__layer { display: flex; align-items: center; gap: 8px; min-height: 28px; padding: 0 8px; border-radius: 8px; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.vmap__layer:hover { background: var(--surface2); }
+.vmap__layer input { margin: 0; accent-color: var(--accent); }
+.vmap__swatch { flex: none; width: 12px; height: 12px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / .25); }
+.vmap__layer-name { flex: 1 1 auto; }
 .vmap__caption {
   /* s'arrête avant le ⓘ de l'attribution (26 px + ses marges), qui occupe le coin bas droit */
   position: absolute; left: 10px; bottom: 10px; max-width: calc(100% - 66px); padding: 4px 10px; border-radius: 999px; z-index: 2;

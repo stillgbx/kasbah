@@ -75,8 +75,17 @@ export const mowerDataSchema = z.looseObject({
     positions: z.array(z.unknown()).nullable().optional(),
     settings: z.looseObject({ cuttingHeight: num, headlight: z.unknown().optional() }).nullable().optional(),
     statistics: statisticsSchema.nullable().optional(),
+    /** Toujours au moins la zone `0` (tout le terrain, sans nom) chez un robot qui gère les zones. */
+    workAreas: z.array(z.unknown()).nullable().optional(),
+    /** ABSENT tant qu'aucune zone n'est tracée (relevé du 2026-10-12) ; `dirty` = carte en cours de synchronisation. */
+    stayOutZones: z.looseObject({ dirty: bool, zones: z.array(z.unknown()).nullable().optional() }).nullable().optional(),
   }),
 })
+
+/** Une zone de travail de `workAreas[]` ; `cuttingHeight` en POUR CENT, pas sur l'échelle 1-9 des réglages. */
+export const workAreaSchema = z.looseObject({ workAreaId: z.number(), name: str, enabled: bool, cuttingHeight: num })
+/** Une zone d'exclusion de `stayOutZones.zones[]`, identifiée par un UUID. */
+export const stayOutZoneSchema = z.looseObject({ id: z.string().min(1), name: str, enabled: bool })
 export type MowerData = z.infer<typeof mowerDataSchema>
 
 export const mowerListSchema = z.looseObject({ data: z.array(z.unknown()) })

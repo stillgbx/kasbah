@@ -1,6 +1,6 @@
 # Contrat des appareils (packages/shared)
 
-> Dernière mise à jour : 2026-10-06
+> Dernière mise à jour : 2026-10-12
 > Sources : `packages/shared/src/devices/{kinds,descriptor,state,command,rules,color}.ts`, `packages/shared/src/scenes/scene.ts`, `packages/shared/src/devices/activity.ts`, `packages/shared/src/house/geo.ts`
 
 ## Principe
@@ -984,3 +984,39 @@ est déjà revenue. Le serveur l'envoie quand la voiture forcée atteint sa limi
 (`1_2_serveur-et-plugins.md`, même date). La simulation la lit comme un retour à la charge permise.
 
 Sources : `packages/shared/src/devices/command.ts`, `packages/mock-sim/src/behaviours/ev.ts`.
+
+### Mise à jour 2026-10-12 — tondeuse : zones de travail, zones d'exclusion, carte du terrain
+
+Trois capacités s'ajoutent au kind `mower` (`KIND_CAPABILITIES`, `packages/shared/src/devices/kinds.ts`),
+**optionnelles** : un plugin ne les déclare que si son robot les a (l'Automower les déduit de
+`attributes.capabilities`, voir `../3_plugins/3_11_husqvarna-automower.md`) :
+
+- `work_areas` : la tondeuse connaît des zones de travail (tracées chez le fabricant) et sait partir en
+  tondre une ;
+- `stay_out_zones` : des zones d'exclusion qu'on active ou désactive ;
+- `site_map` : elle publie la carte de son terrain, servie à la demande (route dans
+  `1_3_protocole-rest-ws.md`, même date).
+
+**Commandes** (`command.ts`) et capacité exigée (`COMMAND_REQUIRES`) :
+
+| Commande | Champs | Capacité |
+|---|---|---|
+| `mower.start_in_area` | `workAreaId` (entier ≥ 0), `durationMin` (entier > 0, **requis**) | `work_areas` |
+| `mower.set_stay_out_zone` | `zoneId` (chaîne), `enabled` | `stay_out_zones` |
+
+La durée est requise parce que l'API Husqvarna l'exige pour `StartInWorkArea` ; `mower.start` garde sa
+durée facultative (sans durée = reprendre le planning).
+
+**État** (`mowerStateSchema`, `state.ts`) : `workAreas?: { id, name, enabled }[]` (un `name` vide est
+légal : la zone `0`, tout le terrain, n'a pas de nom) et `stayOutZones?: { id, name, enabled }[]`
+(`enabled` = le robot n'y entre pas). Absent = le robot n'en dit rien ; **liste vide = il gère les zones
+et n'en a aucune** — la distinction est voulue (voir la page du plugin : la section est absente côté
+fabricant tant qu'aucune zone n'a été tracée).
+
+**Inverse d'automatisation** (`packages/shared/src/automations/inverse.ts`) : `mower.start_in_area` →
+`mower.park` (jusqu'au prochain créneau), comme `mower.start` ; `mower.set_stay_out_zone` → la même
+commande avec `enabled` inversé.
+
+La simulation déclare les trois capacités (`../3_plugins/3_0_simulation-mock.md`).
+
+Sources : `packages/shared/src/devices/{kinds,command,state}.ts`, `packages/shared/src/automations/inverse.ts`.

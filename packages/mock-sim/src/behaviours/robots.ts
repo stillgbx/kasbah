@@ -75,15 +75,44 @@ export interface MowerOptions {
   home?: { lat: number; lon: number }
 }
 
+/** Rectangle [x0, y0, x1, y1] → polygone, sens trigonométrique. */
+const rect = ([x0, y0, x1, y1]: [number, number, number, number]): [number, number][] => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]
+
 export function mower(externalId: string, o: MowerOptions): SimDevice<'mower'> {
   const schedule = o.schedule === undefined ? { days: [1, 2, 3, 4, 5], startHour: 10, endHour: 12 } : o.schedule
   let heading = 0.7, parkedUntilNext = false, manualUntil = 0, returningLeftS = 0
-  const [x0, y0, x1, y1] = o.area
+  // Deux zones de travail (le rectangle d'errance coupé en deux) et une zone d'exclusion dans la
+  // seconde : de quoi montrer la carte et ses commandes. Repère maison supposé plein nord, comme la
+  // `location` : la carte est donc dans le repère maison, station comprise.
+  const [ax0, ay0, ax1, ay1] = o.area
+  const xm = (ax0 + ax1) / 2
+  const areas: Record<number, [number, number, number, number]> = { 1: [ax0, ay0, xm, ay1], 2: [xm, ay0, ax1, ay1] }
+  const potager: [number, number, number, number] = [ax1 - Math.min(6, (ax1 - xm) / 2), ay1 - Math.min(4, (ay1 - ay0) / 2), ax1 - 1, ay1 - 1]
+  /** Où le robot erre : tout le terrain, ou la zone qu'on lui a donnée. */
+  let bounds = o.area
   const dev: SimDevice<'mower'> = {
-    descriptor: descriptor(externalId, 'mower', o.name, ['mow', 'park', 'battery', 'schedule'], { manufacturer: 'Mock', model: 'Robotic mower' }),
+    descriptor: descriptor(externalId, 'mower', o.name, ['mow', 'park', 'battery', 'schedule', 'work_areas', 'stay_out_zones', 'site_map'], { manufacturer: 'Mock', model: 'Robotic mower' }),
     state: {
       kind: 'mower', updatedAt: 0, available: true, activity: 'parked', battery: 100, position: [...o.dock], cuttingHeight: 5,
       statistics: { cuttingTimeS: 2_694_600, chargingCycles: 412, collisions: 5836, driveDistanceM: 1_638_400 },
+      workAreas: [{ id: 1, name: 'Devant', enabled: true }, { id: 2, name: 'Fond', enabled: true }],
+      stayOutZones: [{ id: 'potager', name: 'Potager', enabled: true }],
+    },
+    siteMap() {
+      const [dx, dy] = o.dock
+      return {
+        station: [dx, dy],
+        shapes: [
+          { kind: 'lawn', id: 'main_area_0', points: rect(o.area) },
+          { kind: 'work_area', id: 'area-1', name: 'Devant', points: rect(areas[1]!) },
+          { kind: 'work_area', id: 'area-2', name: 'Fond', points: rect(areas[2]!) },
+          { kind: 'stay_out', id: 'potager', name: 'Potager', points: rect(potager) },
+          // une zone de réensauvagement : sur la carte seulement, comme chez Husqvarna
+          { kind: 'rewilding', id: 'prairie', name: 'Prairie', enabled: true, points: rect([ax0 + 1, ay0 + 1, ax0 + Math.min(6, (xm - ax0) / 2), ay0 + Math.min(4, (ay1 - ay0) / 2)]) },
+          { kind: 'guide', id: 'guide_1', points: [[dx, dy], [ax1 - 1, ay0 + 1]] },
+          { kind: 'station', id: 'station', points: [[dx, dy], [dx + 1.5, dy]] },
+        ],
+      }
     },
     tick(ctx) {
       const s = dev.state
@@ -111,6 +140,7 @@ export function mower(externalId: string, o: MowerOptions): SimDevice<'mower'> {
           s.battery = round1(clamp(s.battery - (1 / 90) * ctx.dtS, 0, 100))
           heading += (ctx.rng() - 0.5) * 0.6 * Math.min(ctx.dtS, 5)
           const speed = 0.5 // m/s
+          const [x0, y0, x1, y1] = bounds
           let [px, py] = s.position ?? o.dock
           px += Math.cos(heading) * speed * ctx.dtS
           py += Math.sin(heading) * speed * ctx.dtS
@@ -140,7 +170,21 @@ export function mower(externalId: string, o: MowerOptions): SimDevice<'mower'> {
         case 'mower.start':
           manualUntil = ctx.simTime + (cmd.durationMin ?? 60) * 60_000
           parkedUntilNext = false
+          bounds = o.area
           if (s.activity === 'paused' || s.activity === 'parked' || s.activity === 'charging') s.activity = 'mowing'
+          break
+        case 'mower.start_in_area': {
+          const area = areas[cmd.workAreaId]
+          if (!area) throw new SimError('UNSUPPORTED_COMMAND', `no work area ${cmd.workAreaId}`)
+          manualUntil = ctx.simTime + cmd.durationMin * 60_000
+          parkedUntilNext = false
+          bounds = area
+          if (s.activity === 'paused' || s.activity === 'parked' || s.activity === 'charging') s.activity = 'mowing'
+          break
+        }
+        case 'mower.set_stay_out_zone':
+          if (!s.stayOutZones?.some((z) => z.id === cmd.zoneId)) throw new SimError('UNSUPPORTED_COMMAND', `no stay-out zone ${cmd.zoneId}`)
+          s.stayOutZones = s.stayOutZones.map((z) => (z.id === cmd.zoneId ? { ...z, enabled: cmd.enabled } : z))
           break
         case 'mower.pause': if (s.activity === 'mowing') s.activity = 'paused'; break
         case 'mower.park':

@@ -2,13 +2,13 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import type { Command, DeviceDescriptor, JournalEntry, PluginHealth, StatePatch } from '@kasbah/shared'
 import { createBackoff } from '../../core/backoff'
-import { PluginError, type DevicePlugin, type PluginContext, type PluginJournal } from '../../core/plugin'
+import { PluginError, type DevicePlugin, type PluginContext, type PluginJournal, type PluginSiteMap } from '../../core/plugin'
 import { stateFile } from '../../core/paths'
 import { createPoller } from '../../core/poll'
 import type { FetchLike } from '../../core/sse'
 import { AutomowerAuth } from './auth'
 import { AutomowerClient } from './client'
-import { actionBody, applyEvent, connectedOf, isTimeZone, parseMowers, toDescriptor, toJournal, toJournalEntry, toStatePatch } from './mapping'
+import { actionBody, applyEvent, connectedOf, isTimeZone, parseMowers, toDescriptor, toJournal, toJournalEntry, toSiteMap, toStatePatch } from './mapping'
 import { WINDOW_MS, WINDOW_REQUESTS, createUsageFile, currentUsage, type AutomowerUsage, type UsageStore } from './state'
 import { AutomowerSocket, type WsFactory } from './ws'
 import { mowerListSchema, wsEventSchema, wsReadySchema, type MowerData } from './types'
@@ -82,6 +82,26 @@ export interface AutomowerPluginDeps {
 
 /** Entre deux relectures forcées par le flux (reconnexion, robot inconnu), au moins ceci. */
 const RESYNC_MIN_MS = 60_000
+/**
+ * Après une bascule de zone d'exclusion, on relit l'état au bout de ce délai : le fabricant accuse en
+ * 202 avant que le robot n'ait appliqué, et aucun événement du flux ne porte ces zones.
+ */
+const ZONE_REFRESH_MS = 5_000
+
+/** Au-delà, une carte gardée est relue à sa prochaine demande : un tracé REDESSINÉ ne change ni id ni nom. */
+const SITE_MAP_MAX_AGE_MS = 24 * 3_600_000
+
+/**
+ * Ce que la LISTE (lue toutes les dix minutes, sans coût en plus) dit des zones d'une carte : leurs
+ * identifiants et leurs NOMS — c'est par le nom que la carte relie une zone tracée à son `workAreaId`
+ * —, et le drapeau `dirty`, vrai pendant que le robot synchronise une carte modifiée dans l'appli.
+ * Pas l'état activé : il ne change rien au tracé. Une clé différente = la carte gardée est périmée.
+ */
+function zonesKey(m: MowerData): string {
+  const list = (items: unknown[] | null | undefined, id: string) =>
+    (items ?? []).map((z) => { const r = z as Record<string, unknown>; return `${String(r?.[id])}:${String(r?.name ?? '').trim()}` }).sort().join(',')
+  return `${list(m.attributes.workAreas, 'workAreaId')}|${list(m.attributes.stayOutZones?.zones, 'id')}|${m.attributes.stayOutZones?.dirty === true}`
+}
 
 export function createAutomowerPlugin(deps: AutomowerPluginDeps = {}): DevicePlugin {
   let ctx: PluginContext | null = null
@@ -111,6 +131,14 @@ export function createAutomowerPlugin(deps: AutomowerPluginDeps = {}): DevicePlu
    */
   const journals = new Map<string, { entries: JournalEntry[]; stale: boolean }>()
   const JOURNAL_MAX = 100
+  /**
+   * La CARTE de chaque robot, lue au fabricant à la première demande (deux requêtes : le terrain et
+   * les zones tracées), gardée avec la liste des zones qu'elle montrait. Quand cette liste change à
+   * une relecture (zone ajoutée ou retirée dans l'appli), la carte est oubliée et se relira.
+   */
+  const siteMaps = new Map<string, { map: PluginSiteMap; zones: string; at: number }>()
+  /** Relecture prévue après une bascule de zone d'exclusion : le flux ne publie pas ces zones. */
+  let zoneRefresh: unknown = null
   let published: DeviceDescriptor[] = []
 
   const log = () => ctx!.logger
@@ -146,6 +174,10 @@ export function createAutomowerPlugin(deps: AutomowerPluginDeps = {}): DevicePlu
     const list = parseMowers(raw, (issue) => log().warn({ issue }, 'Automower: a mower was skipped, unexpected shape'))
     mowers.clear()
     for (const m of list) mowers.set(m.id, m)
+    for (const [id, cached] of siteMaps) {
+      const m = mowers.get(id)
+      if (!m || zonesKey(m) !== cached.zones) siteMaps.delete(id)
+    }
     publishDescriptors()
     for (const m of list) emitFull(m)
     lastError = null
@@ -221,6 +253,8 @@ export function createAutomowerPlugin(deps: AutomowerPluginDeps = {}): DevicePlu
       lastError = null
       lastResync = 0
       journals.clear()
+      siteMaps.clear()
+      zoneRefresh = null
       tz = config.AUTOMOWER_TIMEZONE ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC'
       usageStore = deps.usageStore ?? (config.AUTOMOWER_USAGE_FILE ? createUsageFile(config.AUTOMOWER_USAGE_FILE, context.logger) : null)
       quotaAnchor = config.AUTOMOWER_QUOTA_RESET_AT ? Date.parse(config.AUTOMOWER_QUOTA_RESET_AT) : undefined
@@ -277,13 +311,54 @@ export function createAutomowerPlugin(deps: AutomowerPluginDeps = {}): DevicePlu
      */
     async execute(externalId: string, command: Command): Promise<void> {
       if (!configured()) throw new PluginError('NEEDS_PAIRING', 'Automower: no application key or secret')
+      const m = mowers.get(externalId)
+      if (command.type === 'mower.set_stay_out_zone') {
+        if (!m) throw new PluginError('DEVICE_UNAVAILABLE', `unknown mower ${externalId}`)
+        // la carte se synchronise avec le cloud : le fabricant refuse alors toute bascule
+        if (m.attributes.stayOutZones?.dirty) throw new PluginError('DEVICE_UNAVAILABLE', `stay-out zones of mower ${externalId} are syncing with Husqvarna, try again later`)
+        await client!.stayOutZone(externalId, command.zoneId, command.enabled, ctx?.signal)
+        log().info({ mower: externalId, zone: command.zoneId, enabled: command.enabled }, 'Automower stay-out zone change accepted')
+        if (zoneRefresh === null) {
+          zoneRefresh = ctx!.clock.setTimeout(() => {
+            zoneRefresh = null
+            if (!ctx) return
+            pollOnce(ctx.signal).catch((err) => { lastError = (err as Error).message; log().warn({ err }, 'Automower: read after a zone change failed') })
+          }, ZONE_REFRESH_MS)
+        }
+        return
+      }
       const body = actionBody(command)
       if (!body) throw new PluginError('UNSUPPORTED_COMMAND', `Automower plugin does not support ${command.type}`)
-      const m = mowers.get(externalId)
       if (!m) throw new PluginError('DEVICE_UNAVAILABLE', `unknown mower ${externalId}`)
       if (!connectedOf(m)) throw new PluginError('DEVICE_UNAVAILABLE', `mower ${externalId} is not connected to Husqvarna`)
       await client!.action(externalId, body, ctx?.signal)
       log().info({ mower: externalId, action: body.data.type }, 'Automower action accepted')
+    },
+
+    /**
+     * La carte du terrain : le relevé du robot (AIM, ou la carte d'un robot EPOS à défaut), plus les
+     * zones tracées à la main s'il y en a. Lue une fois, puis gardée tant que la liste ne dit rien de
+     * neuf (zones, noms, synchronisation : voir `zonesKey`), et vingt-quatre heures au plus : un tracé
+     * redessiné ne change ni id ni nom. Au pire deux requêtes par jour, et seulement si on la regarde.
+     */
+    async siteMap(externalId: string): Promise<PluginSiteMap> {
+      if (!configured()) throw new PluginError('NEEDS_PAIRING', 'Automower: no application key or secret')
+      const m = mowers.get(externalId)
+      if (!m) throw new PluginError('DEVICE_UNAVAILABLE', `unknown mower ${externalId}`)
+      const cached = siteMaps.get(externalId)
+      if (cached && ctx!.clock.now() - cached.at < SITE_MAP_MAX_AGE_MS) return cached.map
+      const maps: Parameters<typeof toSiteMap>[0] = []
+      const read = async (source: 'generated' | 'zone' | 'site') => {
+        const svg = await client!.mapSvg(externalId, source, ctx?.signal)
+        if (svg !== null) maps.push({ svg, source })
+        return svg !== null
+      }
+      // AIM : le terrain relevé, puis les zones tracées (404 tant qu'il n'y en a pas) ; EPOS : sa carte
+      if (await read('generated')) await read('zone')
+      else await read('site')
+      const map = toSiteMap(maps)
+      siteMaps.set(externalId, { map, zones: zonesKey(m), at: ctx!.clock.now() })
+      return map
     },
 
     /** Le journal du robot : lu une fois au fabricant, puis tenu par le flux. */
@@ -302,6 +377,8 @@ export function createAutomowerPlugin(deps: AutomowerPluginDeps = {}): DevicePlu
     async stop(): Promise<void> {
       poller?.stop()
       poller = null
+      if (zoneRefresh !== null) ctx?.clock.clearTimeout(zoneRefresh)
+      zoneRefresh = null
       socket?.stop()
       ctx = null
     },
