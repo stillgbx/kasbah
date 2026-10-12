@@ -90,8 +90,14 @@ describe('nest thermostat mapping', () => {
   it('eco overrides the HVAC mode and brings its own setpoint; OFF means off; HEATING means heating', () => {
     const eco = withTraits({ 'sdm.devices.traits.ThermostatEco': { ...THERMOSTAT.traits['sdm.devices.traits.ThermostatEco'], mode: 'MANUAL_ECO' } })
     expect(toClimatePatch(eco)).toMatchObject({ mode: 'eco', action: 'idle', targetTempC: 13.9 })
-    const off = withTraits({ 'sdm.devices.traits.ThermostatMode': { mode: 'OFF', availableModes: ['HEAT', 'OFF'] } })
-    expect(toClimatePatch(off)).toMatchObject({ mode: 'off', action: 'off', targetTempC: 18.8 })
+    // le vrai Google : à l'arrêt, le trait de consigne arrive VIDE. On rend la dernière consigne
+    // vue en chauffe, et l'ambiante seulement faute de mieux (serveur relancé pendant l'arrêt).
+    const off = withTraits({
+      'sdm.devices.traits.ThermostatMode': { mode: 'OFF', availableModes: ['HEAT', 'OFF'] },
+      'sdm.devices.traits.ThermostatTemperatureSetpoint': {},
+    })
+    expect(toClimatePatch(off, 20)).toMatchObject({ mode: 'off', action: 'off', targetTempC: 20 })
+    expect(toClimatePatch(off)).toMatchObject({ mode: 'off', targetTempC: 24.2 })
     const heating = withTraits({ 'sdm.devices.traits.ThermostatHvac': { status: 'HEATING' } })
     expect(toClimatePatch(heating)).toMatchObject({ mode: 'heat', action: 'heating' })
     // sans température ambiante il n'y a pas d'état à publier (le contrat l'exige)

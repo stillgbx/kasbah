@@ -135,6 +135,8 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
   /** Appareils retenus (caméras et thermostats), par externalId, dans leur dernière forme reçue. */
   let entries = new Map<string, SdmDevice>()
   let descriptors: DeviceDescriptor[] = []
+  /** Dernière consigne publiée hors arrêt et hors éco, par thermostat : Google la tait à l'arrêt. */
+  const lastSetpoint = new Map<string, number>()
   /** Appareils de l'API qui ne sont ni caméra ni thermostat : ignorés mais comptés. */
   let ignored = 0
   /** Dernière réponse brute de la liste, pour relever une fixture réelle. */
@@ -194,7 +196,8 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
   /** Publie l'état d'UN appareil : présence pour une caméra, état complet pour un thermostat. */
   function emitOne(externalId: string, device: SdmDevice): void {
     if (isThermostat(device)) {
-      const patch = toClimatePatch(device)
+      const patch = toClimatePatch(device, lastSetpoint.get(externalId))
+      if (patch?.targetTempC !== undefined && patch.mode !== 'off' && patch.mode !== 'eco') lastSetpoint.set(externalId, patch.targetTempC)
       if (patch) ctx!.emitState(externalId, patch)
       ctx!.setAvailable(externalId, thermostatAvailable(device))
     } else {

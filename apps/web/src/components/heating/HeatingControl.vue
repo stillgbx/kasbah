@@ -19,6 +19,11 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 // La consigne est répétée ENTRE les deux touches : ce qu'on règle doit être sous les doigts qui le
 // règlent, et la ligne du dessus continue de dire « mesurée → consigne » comme tous les autres
 // appareils de la maison.
+//
+// À l'ARRÊT, plus de consigne du tout, ni ici ni sur la ligne du dessus : aucune ne s'applique, et
+// un thermostat qui ne la publie pas éteint (Nest) affichait trois fois la même température. Les
+// modes passent donc DEVANT la consigne : choisir « Arrêt » la retire au bout de la rangée, sans
+// déplacer la touche qu'on vient de toucher.
 
 const props = defineProps<{ entry: DeviceEntry }>()
 const emit = defineEmits<{ command: [deviceId: string, cmd: CommandInput] }>()
@@ -29,8 +34,7 @@ const canSetTemp = computed(() => caps.value.includes('target_temp'))
 const canSetMode = computed(() => caps.value.includes('hvac_mode'))
 const modes = computed(() => props.entry.descriptor.meta.climate?.modes ?? [])
 const bounds = computed<[number, number]>(() => props.entry.descriptor.meta.targetTempC ?? [10, 30])
-/** Éteint ou injoignable : le geste serait refusé plus bas, autant ne pas le proposer. */
-const locked = computed(() => !props.entry.state.available || state.value.mode === 'off')
+const off = computed(() => state.value.mode === 'off')
 
 function step(d: number) {
   const [lo, hi] = bounds.value
@@ -45,21 +49,22 @@ const target = computed(() => `${state.value.targetTempC.toLocaleString(undefine
 <template>
   <!-- rien à régler : pas de rangée vide non plus (les zones de la pompe à chaleur sont lues) -->
   <div v-if="canSetTemp || canSetMode" class="controls">
-    <div v-if="canSetTemp" class="keys">
-      <button type="button" class="key" :disabled="locked" :title="$t('heating.lower')" :aria-label="$t('heating.lower')" @click="step(-0.5)">
-        <StrokeIcon name="minus" :size="18" />
-      </button>
-      <!-- la consigne entre ses deux touches : on règle un nombre en le regardant -->
-      <span class="target">{{ target }}</span>
-      <button type="button" class="key" :disabled="locked" :title="$t('heating.raise')" :aria-label="$t('heating.raise')" @click="step(0.5)">
-        <StrokeIcon name="plus" :size="18" />
-      </button>
-    </div>
-
     <div v-if="canSetMode" class="keys keys--modes">
       <button v-for="m in modes" :key="m" type="button" class="key key--text" :data-on="state.mode === m ? '1' : '0'"
               :disabled="!entry.state.available" @click="setMode(m)">
         {{ $t(`climate.modes.${m}`) }}
+      </button>
+    </div>
+
+    <!-- injoignable : grisée, le geste serait refusé plus bas -->
+    <div v-if="canSetTemp && !off" class="keys keys--target">
+      <button type="button" class="key" :disabled="!entry.state.available" :title="$t('heating.lower')" :aria-label="$t('heating.lower')" @click="step(-0.5)">
+        <StrokeIcon name="minus" :size="18" />
+      </button>
+      <!-- la consigne entre ses deux touches : on règle un nombre en le regardant -->
+      <span class="target">{{ target }}</span>
+      <button type="button" class="key" :disabled="!entry.state.available" :title="$t('heating.raise')" :aria-label="$t('heating.raise')" @click="step(0.5)">
+        <StrokeIcon name="plus" :size="18" />
       </button>
     </div>
   </div>
@@ -70,7 +75,9 @@ const target = computed(() => `${state.value.targetTempC.toLocaleString(undefine
    empêche tout chevauchement — les commandes ne partagent plus de colonne avec le statut. */
 .controls { grid-column: 1 / -1; display: flex; align-items: center; flex-wrap: wrap; gap: 14px; margin: 2px 4px 0; }
 .keys { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
-.keys--modes { gap: 6px; }
+/* cinq modes (thermostat simulé) font plus large qu'une carte étroite : ils passent à la ligne au
+   lieu de sortir de la carte */
+.keys--modes { gap: 6px; flex: 0 1 auto; flex-wrap: wrap; }
 .key {
   display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px;
   border: 1px solid var(--line); background: transparent; color: var(--text); transition: background .15s, color .15s;

@@ -10,7 +10,7 @@ import HeatingControl from './HeatingControl.vue'
 //    que la carte se resserrait ;
 //  - parler le vocabulaire de la maison : des touches `.key` carrées de 36 px, celles des vues
 //    Ouvrants et Médias, et pas des boutons ronds inventés pour l'occasion ;
-//  - garder la consigne ENTRE les deux touches qui la règlent ;
+//  - garder la consigne ENTRE les deux touches qui la règlent, et ne plus la montrer à l'arrêt ;
 //  - n'offrir aucun geste que le plugin refuserait (les zones MELCloud ne déclarent ni
 //    `target_temp` ni `hvac_mode`) et respecter les bornes de l'appareil.
 
@@ -45,7 +45,7 @@ describe('HeatingControl', () => {
 
   it('garde la consigne entre les deux touches qui la règlent', () => {
     const w = mount(HeatingControl, { props: { entry: thermostat } })
-    const keys = w.find('.keys')
+    const keys = w.find('.keys--target')
     expect(keys.find('.target').text()).toBe('19,5 °C')
     expect(keys.findAll('.key')).toHaveLength(2)
   })
@@ -57,7 +57,7 @@ describe('HeatingControl', () => {
 
   it('règle la consigne par pas de 0,5', () => {
     const w = mount(HeatingControl, { props: { entry: thermostat } })
-    const [minus, plus] = w.findAll('.keys').at(0)!.findAll('.key')
+    const [minus, plus] = w.find('.keys--target').findAll('.key')
     void plus!.trigger('click')
     void minus!.trigger('click')
     expect(w.emitted('command')).toEqual([
@@ -83,9 +83,16 @@ describe('HeatingControl', () => {
     expect(w.emitted('command')![0]).toEqual(['x:1', { type: 'climate.set_mode', mode: 'off' }])
   })
 
-  it('grise la consigne quand l’appareil est éteint ou injoignable', () => {
+  /** Les modes d'abord : choisir « Arrêt » retire la consigne au bout de la rangée, sans déplacer la touche touchée. */
+  it('ne montre plus de consigne à l’arrêt, et garde les modes devant', () => {
+    expect(mount(HeatingControl, { props: { entry: thermostat } }).findAll('.keys').map((k) => k.classes()).at(0)).toContain('keys--modes')
     const off = mount(HeatingControl, { props: { entry: entry({ ...thermostat.descriptor }, { mode: 'off' }) } })
-    expect(off.findAll('.keys').at(0)!.findAll('.key').every((b) => b.attributes('disabled') !== undefined)).toBe(true)
+    expect(off.find('.keys--target').exists()).toBe(false)
+    expect(off.text()).not.toContain('°C')
+    expect(off.findAll('.key--text')).toHaveLength(2)   // les modes restent, pour rallumer
+  })
+
+  it('grise tout quand l’appareil est injoignable', () => {
 
     const gone = mount(HeatingControl, { props: { entry: entry({ ...thermostat.descriptor }, { available: false }) } })
     // un appareil injoignable n'obéit à rien : le mode se refuse comme la consigne

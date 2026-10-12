@@ -34,6 +34,7 @@ function fakeGoogle(opts: { devices?: unknown; devicesStatus?: number; refreshSt
   const pubsub: { ackId: string; message: { data: string } }[] = []
   const acks: string[] = []
   const thermostat = structuredClone(THERMOSTAT) as unknown as { name: string; traits: Traits }
+  let heldSetpoint: Traits[string] | undefined
   const devices = () => {
     const base = (opts.devices ?? DEVICES_RESPONSE) as { devices?: { name: string }[] }
     if (!Array.isArray(base.devices)) return base as { devices: { name: string }[] }   // corps d'erreur servi tel quel
@@ -63,7 +64,12 @@ function fakeGoogle(opts: { devices?: unknown; devicesStatus?: number; refreshSt
       if (body.command.endsWith('StopRtspStream')) return json({})
       const t = thermostat.traits
       if (body.command.endsWith('ThermostatTemperatureSetpoint.SetHeat')) t['sdm.devices.traits.ThermostatTemperatureSetpoint'] = { heatCelsius: body.params.heatCelsius }
-      if (body.command.endsWith('ThermostatMode.SetMode')) t['sdm.devices.traits.ThermostatMode'] = { ...t['sdm.devices.traits.ThermostatMode'], mode: body.params.mode }
+      if (body.command.endsWith('ThermostatMode.SetMode')) {
+        // comme le vrai : à l'arrêt la consigne disparaît de l'API, et revient à la remise en chauffe
+        if (body.params.mode === 'OFF') { heldSetpoint = t['sdm.devices.traits.ThermostatTemperatureSetpoint']; t['sdm.devices.traits.ThermostatTemperatureSetpoint'] = {} }
+        else if (heldSetpoint) { t['sdm.devices.traits.ThermostatTemperatureSetpoint'] = heldSetpoint; heldSetpoint = undefined }
+        t['sdm.devices.traits.ThermostatMode'] = { ...t['sdm.devices.traits.ThermostatMode'], mode: body.params.mode }
+      }
       if (body.command.endsWith('ThermostatEco.SetMode')) t['sdm.devices.traits.ThermostatEco'] = { ...t['sdm.devices.traits.ThermostatEco'], mode: body.params.mode }
       return json({})
     }
@@ -255,6 +261,15 @@ describe('nest plugin', () => {
     expect(ctx.emitState).toHaveBeenLastCalledWith('DEVICE3', { ...THERMOSTAT_STATE, targetTempC: 21 })
 
     await expect(plugin.execute('nope', { type: 'climate.set_mode', mode: 'off' })).rejects.toMatchObject({ code: 'DEVICE_UNAVAILABLE' })
+    await plugin.stop()
+  })
+
+  it('a thermostat switched off keeps the last setpoint seen while heating, not the ambient temperature', async () => {
+    const google = fakeGoogle()
+    const { plugin, ctx } = await linked(google)
+    await plugin.execute('DEVICE3', { type: 'climate.set_target_temp', targetTempC: 21 })
+    await plugin.execute('DEVICE3', { type: 'climate.set_mode', mode: 'off' })
+    expect(ctx.emitState).toHaveBeenLastCalledWith('DEVICE3', { ...THERMOSTAT_STATE, mode: 'off', action: 'off', targetTempC: 21 })
     await plugin.stop()
   })
 

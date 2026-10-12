@@ -1,6 +1,6 @@
 # Plugin Google Nest (caméras, sonnettes)
 
-> Dernière mise à jour : 2026-10-06
+> Dernière mise à jour : 2026-10-12
 > Sources : `apps/server/src/plugins/nest/{index,client,mapping,types}.ts`, `apps/server/src/plugins/nest/__fixtures__/sdm.ts`, tests `mapping.test.ts` et `plugin.test.ts`, `apps/server/.env.example`, `apps/web/src/components/NestLinkCard.vue`, demande de l'utilisateur du 2026-09-09
 
 ## Ce que l'utilisateur veut, et par étapes
@@ -189,7 +189,7 @@ fragile ; écarté.
 | `ThermostatMode.mode` HEAT / COOL / HEATCOOL / OFF | `mode` heat / cool / auto / off |
 | `ThermostatEco.mode` MANUAL_ECO | `mode: 'eco'` — l'éco se superpose au mode HVAC chez Google, Kasbah n'a qu'un `mode` |
 | `ThermostatHvac.status` HEATING / COOLING / OFF | `action` heating / cooling / idle (off si le mode est OFF) |
-| `ThermostatTemperatureSetpoint.heatCelsius` (ou `coolCelsius` en COOL ; celles de l'éco quand il est actif) | `targetTempC` |
+| `ThermostatTemperatureSetpoint.heatCelsius` (ou `coolCelsius` en COOL ; celles de l'éco quand il est actif) | `targetTempC` *(à l'arrêt le trait est vide : voir « Mise à jour 2026-10-12 »)* |
 | `Temperature.ambientTemperatureCelsius`, `Humidity.ambientHumidityPercent` | `currentTempC`, `humidity` |
 | `Connectivity.status` OFFLINE | `available: false` |
 | `ThermostatMode.availableModes` + éco si proposé | `meta.climate.modes` (nouveau dans le contrat) |
@@ -488,3 +488,25 @@ Piège rappelé : `projects/{project}/…` attend l'**ID du projet Cloud**, pas 
 
 Tests : `plugin.test.ts` (faux Pub/Sub) — une sonnerie sur la sonnette est poussée (`emitEvent('…','chime')`)
 et acquittée ; un mouvement et un appareil inconnu sont acquittés mais **pas** poussés.
+
+### Mise à jour 2026-10-12 — thermostat à l'arrêt : Google tait la consigne
+
+Constaté sur la vraie maison : thermostat sur OFF, Kasbah affichait la **température ambiante comme
+consigne** (« mesurée → consigne » avec deux fois la même valeur). À l'arrêt, le trait `ThermostatTemperatureSetpoint`
+arrive **vide** : Google ne publie aucune consigne, et la sienne réapparaît à la remise en chauffe.
+`toClimatePatch` tombait alors sur son repli `target ?? current`. Le commentaire promettait « garde sa
+dernière consigne connue », mais rien ne la gardait, et la fixture (consigne présente en OFF) ne
+pouvait pas le voir.
+
+Désormais (`apps/server/src/plugins/nest/{mapping,index}.ts`) :
+- `toClimatePatch(device, lastSetpointC?)` rend, à défaut de consigne Google, `lastSetpointC`, puis
+  l'ambiante seulement en dernier recours (le contrat exige un nombre) ;
+- le plugin retient dans une `Map` en mémoire la dernière consigne publiée **hors arrêt et hors
+  éco** (celle que Nest reprend en revenant en chauffe). Pas persistée : un serveur relancé pendant
+  l'arrêt ne la connaît pas avant la prochaine remise en chauffe. Côté web, la consigne d'un appareil
+  arrêté n'est de toute façon plus affichée (voir `4_ui/4_1_navigation-et-panneaux.md`, mise à jour
+  2026-10-12).
+
+Tests : `mapping.test.ts` (OFF au trait vide, avec et sans consigne retenue) ; le faux Google de
+`plugin.test.ts` vide désormais la consigne à `SetMode OFF` et la restaure à la remise en chauffe,
+et un test vérifie qu'un thermostat éteint garde la consigne réglée avant.

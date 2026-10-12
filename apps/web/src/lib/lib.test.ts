@@ -40,6 +40,22 @@ describe('optimisticPatch', () => {
   })
 })
 
+describe('statut d un appareil de chauffage', () => {
+  const t = ((key: string) => key) as never
+  const climate: StateFor<'climate'> = { kind: 'climate', updatedAt: 0, available: true, mode: 'heat', action: 'idle', currentTempC: 18, targetTempC: 19.5 }
+
+  it('dit « mesurée → consigne » quand il chauffe', () => {
+    expect(statusLabel(sensor, climate, t, 'fr')).toBe('18,0 °C → 19,5 °C')
+  })
+
+  // éteint, aucune consigne ne s'applique : la répéter laissait croire qu'il visait 19,5 °C,
+  // et un thermostat qui ne la publie pas (Nest) affichait trois fois la même température
+  it('ne dit que la mesurée quand il est à l arrêt', () => {
+    expect(statusLabel(sensor, { ...climate, mode: 'off' }, t, 'fr')).toBe('18,0 °C')
+    expect(summarize(sensor, { ...climate, mode: 'off' }, 'fr')).toBe('18,0 °C')
+  })
+})
+
 describe('convention d affichage des ouvrants', () => {
   // Le contrat mesure une OUVERTURE, l'interface une FERMETURE. Ces tests epinglent l'inversion :
   // c'est le genre de convention qu'un refactor retourne sans le vouloir.

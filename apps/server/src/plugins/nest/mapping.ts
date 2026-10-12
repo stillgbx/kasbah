@@ -156,10 +156,11 @@ export function thermostatAvailable(device: SdmDevice): boolean {
 /**
  * État complet d'un thermostat, ou `undefined` sans température ambiante (le contrat l'exige).
  * La consigne suit le mode : celle de l'éco quand il est actif, sinon celle du mode HVAC ; en
- * HEATCOOL Kasbah ne montre que la consigne de chauffe. Un thermostat OFF garde sa dernière
- * consigne connue, sinon on répète l'ambiante plutôt que d'inventer une valeur.
+ * HEATCOOL Kasbah ne montre que la consigne de chauffe. À l'arrêt, Google ne publie AUCUNE
+ * consigne (trait vide) : on rend `lastSetpointC`, la dernière vue en chauffe que le plugin a
+ * retenue, sinon l'ambiante plutôt que d'inventer une valeur (le contrat exige un nombre).
  */
-export function toClimatePatch(device: SdmDevice): StatePatch<'climate'> | undefined {
+export function toClimatePatch(device: SdmDevice, lastSetpointC?: number): StatePatch<'climate'> | undefined {
   const current = num(readTrait(device, 'Temperature')?.ambientTemperatureCelsius)
   if (current === undefined) return undefined
   const sdmMode = str(readTrait(device, 'ThermostatMode')?.mode) ?? 'OFF'
@@ -173,7 +174,7 @@ export function toClimatePatch(device: SdmDevice): StatePatch<'climate'> | undef
     : sdmMode === 'COOL' ? num(setpoint?.coolCelsius) : num(setpoint?.heatCelsius) ?? num(setpoint?.coolCelsius)
   const humidity = num(readTrait(device, 'Humidity')?.ambientHumidityPercent)
   return {
-    mode, action, currentTempC: round1(current), targetTempC: round1(target ?? current),
+    mode, action, currentTempC: round1(current), targetTempC: round1(target ?? lastSetpointC ?? current),
     ...(humidity !== undefined ? { humidity: Math.round(humidity) } : {}),
   }
 }

@@ -41,6 +41,16 @@ describe('ClimateControl', () => {
     expect(w.find('.v-chip-group').exists()).toBe(false)
   })
 
+  it('ne montre aucune consigne à l’arrêt, et garde le mode au-dessus d’elle', () => {
+    const on = mount(ClimateControl, { props: { descriptor: thermostat, state } })
+    expect(on.text().indexOf('Mode')).toBeLessThan(on.text().indexOf('Consigne'))
+    const off = mount(ClimateControl, { props: { descriptor: thermostat, state: { ...state, mode: 'off', action: 'off' } } })
+    expect(off.text()).not.toContain('Consigne')
+    expect(off.text()).not.toContain('19,5')
+    expect(off.findAll('.v-btn')).toHaveLength(0)
+    expect(off.find('.v-chip-group').exists()).toBe(true)   // de quoi rallumer
+  })
+
   it('montre quand même la consigne et le mode, qui sont de l’état', () => {
     const w = mount(ClimateControl, { props: { descriptor: flowZone, state } })
     expect(w.text()).toContain('19,5')                // la consigne reste lisible

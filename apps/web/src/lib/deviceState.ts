@@ -108,7 +108,8 @@ export function statusLabel(descriptor: DeviceDescriptor, s: DeviceState, t: Tra
     case 'media_player': return s.playback === 'playing' ? `${t('media.playing')}${s.nowPlaying?.title || s.nowPlaying?.source ? ` · ${s.nowPlaying?.title || s.nowPlaying?.source}` : ''}`
       : s.playback === 'on' && s.nowPlaying?.source ? `${t('media.on')} · ${s.nowPlaying.source}`
       : t(`media.${s.playback}`)
-    case 'climate': return `${formatTemp(s.currentTempC, locale)} → ${formatTemp(s.targetTempC, locale)}`
+    // à l'arrêt, aucune consigne ne s'applique : on ne la montre pas
+    case 'climate': return s.mode === 'off' ? formatTemp(s.currentTempC, locale) : `${formatTemp(s.currentTempC, locale)} → ${formatTemp(s.targetTempC, locale)}`
     case 'vacuum': return `${t(`vacuum.activities.${s.activity}`)} · ${formatPercent(s.battery, locale)}`
     case 'mower': return `${t(`mower.activities.${s.activity}`)} · ${formatPercent(s.battery, locale)}`
     case 'sensor': return formatSensor(descriptor, s.value, locale)

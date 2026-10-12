@@ -40,14 +40,6 @@ const step = (d: number) => emit('command', { type: 'climate.set_target_temp', t
         {{ $t(`climate.actions.${state.action ?? 'idle'}`) }}
       </v-chip>
     </div>
-    <div class="text-caption text-medium-emphasis">{{ flow ? $t('climate.flowTarget') : $t('climate.target') }}</div>
-    <!-- centrée entre ses deux boutons quand il y en a ; sinon alignée sur son libellé, à gauche,
-         plutôt que flottant seule au milieu de la carte -->
-    <div class="d-flex align-center ga-4 my-2" :class="canSetTemp ? 'justify-center' : 'justify-start'">
-      <v-btn v-if="canSetTemp" icon="minus" variant="tonal" size="large" :disabled="disabled || state.mode === 'off'" @click="step(-0.5)" />
-      <span class="text-h3 font-weight-medium target">{{ formatTemp(state.targetTempC, $i18n.locale) }}</span>
-      <v-btn v-if="canSetTemp" icon="plus" variant="tonal" size="large" :disabled="disabled || state.mode === 'off'" @click="step(0.5)" />
-    </div>
     <div class="text-caption text-medium-emphasis mb-1">{{ $t('climate.mode') }}</div>
     <v-chip-group v-if="canSetMode" :model-value="state.mode" mandatory selected-class="text-primary" column
                   @update:model-value="(m: unknown) => m && emit('command', { type: 'climate.set_mode', mode: m as typeof state.mode })">
@@ -55,6 +47,19 @@ const step = (d: number) => emit('command', { type: 'climate.set_target_temp', t
     </v-chip-group>
     <!-- lecture seule : le mode se lit, il ne se choisit pas -->
     <v-chip v-else size="large" variant="tonal" class="mode-readonly">{{ $t(`climate.modes.${state.mode}`) }}</v-chip>
+    <!-- À l'arrêt, aucune consigne ne s'applique : on ne la montre pas (un Nest éteint ne la publie
+         même pas). Le mode passe donc AVANT elle : choisir « Arrêt » la retire en bas du panneau,
+         sans faire remonter la puce qu'on vient de toucher. -->
+    <template v-if="state.mode !== 'off'">
+      <div class="text-caption text-medium-emphasis mt-3">{{ flow ? $t('climate.flowTarget') : $t('climate.target') }}</div>
+      <!-- centrée entre ses deux boutons quand il y en a ; sinon alignée sur son libellé, à gauche,
+           plutôt que flottant seule au milieu de la carte -->
+      <div class="d-flex align-center ga-4 my-2" :class="canSetTemp ? 'justify-center' : 'justify-start'">
+        <v-btn v-if="canSetTemp" icon="minus" variant="tonal" size="large" :disabled="disabled" @click="step(-0.5)" />
+        <span class="text-h3 font-weight-medium target">{{ formatTemp(state.targetTempC, $i18n.locale) }}</span>
+        <v-btn v-if="canSetTemp" icon="plus" variant="tonal" size="large" :disabled="disabled" @click="step(0.5)" />
+      </div>
+    </template>
   </div>
 </template>
 

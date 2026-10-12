@@ -1,6 +1,6 @@
 # Navigation et panneaux
 
-> Dernière mise à jour : 2026-10-11
+> Dernière mise à jour : 2026-10-12
 > Sources : `apps/web/src/App.vue`, `apps/web/src/components/layout/*.vue`, `apps/web/src/views/*.vue`, `apps/web/src/components/home/*.vue`, `apps/web/src/components/controls/*.vue`, `apps/web/src/views/LightsView.vue`, `apps/web/src/components/home/PlacementControl.vue`, `apps/web/src/components/scenes/SceneChips.vue`, `apps/web/src/components/devices/RoomBands.vue`, `apps/web/src/components/devices/RoomLightsToggle.vue`, `apps/web/src/views/CoversView.vue`, `apps/web/src/components/covers/CoverPill.vue`, `apps/web/src/lib/{cover,deviceState}.ts`, `apps/web/src/composables/useHomeSummary.ts`, `apps/web/src/components/devices/ForgetDeviceButton.vue`, `apps/web/src/components/controls/MediaPlayerControl.vue`, `apps/web/src/lib/audioRouting.ts`, `apps/web/src/components/energy/EnergyFlow.vue`, `apps/web/src/components/EnphasePairingCard.vue`, `apps/web/src/lib/energy.ts`, `apps/web/src/components/devices/RoomBrightness.vue`, `apps/web/src/components/devices/CoversMaster.vue`, `apps/web/src/components/devices/LightsMaster.vue`, `apps/web/src/composables/useRoomLights.ts`, `apps/web/src/components/home/PanelArraysCard.vue`, `apps/web/src/components/energy/InverterFields.vue`, `apps/web/src/components/TeslaLinkCard.vue`, `apps/web/src/views/VehiclesView.vue`, `apps/web/src/components/vehicles/VehicleMap.vue`, `apps/web/src/components/vehicles/VehicleTuning.vue`, `apps/web/src/lib/vehicleTuning.ts`, `apps/web/src/lib/map.ts`, `apps/web/src/components/controls/VehicleCard.vue`, `apps/web/src/components/vehicles/ChargeLimitCard.vue`, `apps/web/src/components/home/DevicePanel.vue`, `apps/web/src/components/settings/PluginSection.vue`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/components/ui/Segmented.vue`, `apps/web/src/components/home/SearchBar.vue`, `apps/web/src/composables/useSearch.ts`, `apps/web/src/components/layout/SearchPalette.vue`, `apps/web/src/lib/search.ts`, `apps/web/src/lib/navItems.ts`, `apps/web/src/views/HeatingView.vue`, `apps/web/src/components/heating/*.vue`, `apps/web/src/components/MelcloudLinkCard.vue`, `apps/web/src/components/home/OpeningPanel.vue`, `apps/web/src/components/home/RoomEditPanel.vue`, `apps/web/src/components/home/ParkingPanel.vue`, `apps/web/src/lib/deviceIcons.ts`, `apps/web/src/views/MusicView.vue`, `apps/web/src/components/music/{MusicPlayerBar,ListeningSessions,MusicItemRow,MusicTile,ChipRow}.vue`, `apps/web/src/stores/localPlayer.ts`, `apps/web/src/components/music/MixcloudBrowser.vue`, `apps/web/src/components/MixcloudLinkCard.vue`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/views/{AutomationsView,AutomationEditView}.vue`, `apps/web/src/components/automations/*.vue`, `apps/web/src/components/layout/NavRail.vue` (`meta.nav`), `apps/web/src/components/controls/LightHistoryChart.vue`, `apps/web/src/components/weather/WeatherPlaces.vue`, `apps/web/src/composables/useMusicSession.ts`, `apps/web/src/lib/streamQuality.ts`, `apps/web/src/components/home/ReliefPanel.vue`, `apps/web/src/lib/ignRelief.ts`, `apps/web/src/lib/moon.ts`, `apps/web/src/components/vehicles/VehicleSoftware.vue`, `apps/web/src/components/layout/AssistantReply.vue`, `apps/web/src/components/settings/AssistantCard.vue`, `apps/web/src/components/ClaudeLinkCard.vue`, `apps/web/src/composables/useVoiceInput.ts`, `apps/web/src/stores/properties.ts`, `apps/web/src/components/layout/PropertyList.vue`, `apps/web/src/components/home/{HouseEditPanel,RoomShapeSection}.vue`, `apps/web/src/components/property/*.vue`, `apps/web/src/lib/onboarding.ts`, `apps/web/src/lib/geocode.ts`, `apps/web/src/views/ShoppingView.vue` (2026-10-11)
 
 ## Grille
@@ -6015,3 +6015,26 @@ vue Véhicules. Même mécanique (`RobotsView.vue`) : `.robots__scroll` est un c
   avec elle. Non vu en simulation (la tondeuse simulée n'a ni l'un ni l'autre).
 - Vérifié en mode simulé (maison de démo à tondeuse) : aucun débordement à 1900 / 1440 / 1024 / 853 /
   375 px.
+
+### Mise à jour 2026-10-12 — chauffage à l'arrêt : plus de consigne affichée
+
+Demande de l'utilisateur : la carte d'un thermostat arrêté montrait trois fois la même température
+(statut « mesurée → consigne », puis la consigne entre les touches − / +), ambigu. Deux causes : le
+plugin Nest publiait l'ambiante comme consigne à l'arrêt (corrigé, voir
+`3_plugins/3_5_google-nest.md`, mise à jour 2026-10-12), et l'interface montrait une consigne qui ne
+s'applique pas.
+
+- **Statut** (`statusLabel` de `apps/web/src/lib/deviceState.ts`, `summarize` de `lib/format.ts`) : à
+  l'arrêt (`mode === 'off'`), la température mesurée seule ; « mesurée → consigne » dans les autres
+  modes, éco compris.
+- **`HeatingControl.vue`** (vue Chauffage) : à l'arrêt, les touches − / + et la consigne sont
+  **retirées** (avant : grisées). Les **modes passent devant** la consigne : choisir « Arrêt » la retire
+  au bout de la rangée sans déplacer la touche qu'on vient de toucher (mesuré : positions des modes
+  identiques à l'arrêt et à la remise en chauffe). Injoignable : tout est grisé, comme avant. Les modes
+  passent à la ligne (`flex: 0 1 auto; flex-wrap: wrap`) : les cinq modes du thermostat simulé
+  sortaient d'une carte étroite (défaut antérieur, invisible sur un thermostat à trois modes).
+- **`ClimateControl.vue`** (panneau appareil) : même règle, et le bloc « Mode » remonte au-dessus de la
+  consigne pour la même raison.
+- Vérifié en mode simulé (vue Chauffage) : aucun débordement à 1280 / 1024 / 853 px, pas d'erreur
+  console. Panneau appareil couvert par les tests seulement. Tests : `HeatingControl.test.ts`,
+  `ClimateControl.test.ts`, `lib.test.ts` (statut d'un appareil de chauffage).

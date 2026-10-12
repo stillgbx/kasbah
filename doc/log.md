@@ -2,6 +2,18 @@
 
 Entrées les plus récentes en haut. Une session = une entrée.
 
+## [2026-10-12] update | Chauffage à l'arrêt : plus de consigne, et Nest ne l'invente plus
+
+**Déclencheur** : demande de l'utilisateur — la carte d'un thermostat arrêté affichait trois fois la même température.
+
+**Pages modifiées** :
+- `3_plugins/3_5_google-nest.md` - mise à jour datée : à l'arrêt Google publie un trait de consigne vide ; le plugin retient la dernière consigne vue hors arrêt et éco (en mémoire), l'ambiante en dernier recours.
+- `4_ui/4_1_navigation-et-panneaux.md` - mise à jour datée : statut sans consigne à l'arrêt, touches − / + retirées, modes placés avant la consigne (vue Chauffage et panneau appareil), modes qui passent à la ligne.
+
+**Pages créées** : aucune.
+
+**Index** : dates de `3_5` et `4_1` relevées (2 lignes).
+
 ## [2026-10-11] update | Automatisations : ordre manuel et « pendant N minutes »
 
 **Déclencheur** : demande de l'utilisateur — pouvoir changer l'ordre de la liste, et « ouvrir le portail pendant 20 minutes » (action inverse au bout du délai).
