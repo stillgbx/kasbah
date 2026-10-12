@@ -8,6 +8,7 @@ import { formatPercent, formatPower } from '../../lib/format'
 import StatTile from '../ui/StatTile.vue'
 
 // Panneau « maison » : tuiles de synthèse seulement pour l'instant (scènes / pièces plus tard).
+// Chaque tuile mène à la vue qui en donne le détail (`to` : nom de route du rail).
 const house = useHouseStore()
 const summary = useHomeSummary()
 const { t, locale } = useI18n()
@@ -20,19 +21,19 @@ const unreadVehicle = (s: StateFor<'vehicle'>) =>
   s.soc === 0 && s.rangeKm === 0 && s.odometerKm === undefined && s.location === undefined
 
 const stats = computed(() => {
-  const out: { key: string; value: string; label: string }[] = []
-  if (summary.lights.value.length) out.push({ key: 'lights', value: String(summary.lightsOn.value), label: t('home.lightsOn') })
+  const out: { key: string; value: string; label: string; to: string }[] = []
+  if (summary.lights.value.length) out.push({ key: 'lights', value: String(summary.lightsOn.value), label: t('home.lightsOn'), to: 'lights' })
   // volets et stores ont leur propre tuile : « ouverts » et « baissés » ne sont pas la même mesure
-  if (summary.shutters.value.length) out.push({ key: 'shutters', value: `${summary.shuttersOpen.value}/${summary.shutters.value.length}`, label: t('home.shuttersOpen') })
-  if (summary.awnings.value.length) out.push({ key: 'awnings', value: `${summary.awningsDown.value}/${summary.awnings.value.length}`, label: t('home.awningsDown') })
+  if (summary.shutters.value.length) out.push({ key: 'shutters', value: `${summary.shuttersOpen.value}/${summary.shutters.value.length}`, label: t('home.shuttersOpen'), to: 'covers' })
+  if (summary.awnings.value.length) out.push({ key: 'awnings', value: `${summary.awningsDown.value}/${summary.awnings.value.length}`, label: t('home.awningsDown'), to: 'covers' })
   // caméras et lecteurs : ces deux compteurs manquaient d'un endroit où se voir d'un coup d'œil.
-  if (summary.cameras.value.length) out.push({ key: 'cameras', value: String(summary.cameras.value.length), label: t('home.cameras') })
-  if (summary.players.value.length) out.push({ key: 'players', value: `${summary.playing.value}/${summary.players.value.length}`, label: t('home.players') })
+  if (summary.cameras.value.length) out.push({ key: 'cameras', value: String(summary.cameras.value.length), label: t('home.cameras'), to: 'cameras' })
+  if (summary.players.value.length) out.push({ key: 'players', value: `${summary.playing.value}/${summary.players.value.length}`, label: t('home.players'), to: 'media' })
   // énergie : la production de l'instant, et la charge de la batterie du site quand il y en a une —
   // deux mesures distinctes, donc deux tuiles. Le détail reste dans la vue Énergie.
   const site = summary.energy.value
-  if (site) out.push({ key: 'solar', value: formatPower(site.productionW, locale.value), label: t('home.solarNow') })
-  if (site?.batterySoc !== undefined) out.push({ key: 'battery', value: formatPercent(site.batterySoc, locale.value), label: t('home.battery') })
+  if (site) out.push({ key: 'solar', value: formatPower(site.productionW, locale.value), label: t('home.solarNow'), to: 'energy' })
+  if (site?.batterySoc !== undefined) out.push({ key: 'battery', value: formatPercent(site.batterySoc, locale.value), label: t('home.battery'), to: 'energy' })
   // une tuile PAR voiture : deux voitures ne se résument pas en un chiffre, et c'est leur charge
   // qu'on vient regarder. Le nom sert d'étiquette ; `devices.list` est trié par nom, l'ordre tient.
   for (const v of summary.vehicles.value) {
@@ -41,6 +42,7 @@ const stats = computed(() => {
       key: v.descriptor.id,
       value: unreadVehicle(s) ? '—' : formatPercent(s.soc, locale.value),
       label: house.houseDeviceFor(v.descriptor.id)?.name ?? v.descriptor.name,
+      to: 'vehicles',
     })
   }
   // grille à 2 colonnes : les tuiles passent à la ligne. Le plafond laisse la place aux 5 compteurs
@@ -51,10 +53,16 @@ const stats = computed(() => {
 
 <template>
   <div v-if="stats.length" class="tiles">
-    <StatTile v-for="s in stats" :key="s.key" :value="s.value" :label="s.label" />
+    <router-link v-for="s in stats" :key="s.key" :to="{ name: s.to }" class="tile-link">
+      <StatTile :value="s.value" :label="s.label" />
+    </router-link>
   </div>
 </template>
 
 <style scoped>
 .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+/* la tuile reste une tuile : ni soulignement ni couleur de lien, seul le fond répond au survol */
+.tile-link { display: block; min-width: 0; color: inherit; text-decoration: none; border-radius: var(--radius); }
+.tile-link:hover .stat-tile { background: var(--accent-soft); }
+.tile-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 </style>

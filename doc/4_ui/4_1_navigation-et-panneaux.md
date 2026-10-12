@@ -1825,6 +1825,8 @@ la vue Énergie s'en sert comme légende de son anneau.
 Les tuiles restent **décoratives** : ni bouton ni lien vers les vues Énergie et Véhicules. Choix de
 l'utilisateur, et changement minimal — les quatre tuiles existantes n'ont pas bougé.
 
+*(Dépassé le 2026-10-12 : chaque tuile mène à sa vue — voir « Mise à jour 2026-10-12 (bis) — les tuiles du panneau maison mènent à leur vue ».)*
+
 Mesuré dans l'app (panneau ancré 1440 × 900 et tiroir 834 × 1112, thèmes clair et sombre) : les sept
 tuiles de la maison simulée font toutes 84 px de haut, aucune valeur ni étiquette ne déborde de sa
 tuile. La règle « rien ne doit bouger » (`4_0_langage-visuel.md`) tient donc quand la production ou
@@ -6038,3 +6040,34 @@ s'applique pas.
 - Vérifié en mode simulé (vue Chauffage) : aucun débordement à 1280 / 1024 / 853 px, pas d'erreur
   console. Panneau appareil couvert par les tests seulement. Tests : `HeatingControl.test.ts`,
   `ClimateControl.test.ts`, `lib.test.ts` (statut d'un appareil de chauffage).
+
+### Mise à jour 2026-10-12 (bis) — les tuiles du panneau maison mènent à leur vue
+
+« Si je clique la carte "volets ouverts", je vais sur la vue Ouvrants ; la carte d'une voiture, sur la
+vue Véhicules. » L'utilisateur revient sur le choix du 2026-09-15 (tuiles **décoratives**, plus haut) :
+chaque tuile du `HomePanel` est désormais un lien vers la vue qui en donne le détail.
+
+| Tuile | Vue (nom de route) |
+|---|---|
+| lumières allumées | `lights` |
+| volets ouverts, stores baissés | `covers` |
+| caméras | `cameras` |
+| lecteurs | `media` |
+| solaire, batterie | `energy` |
+| chaque voiture | `vehicles` |
+
+- **Un `router-link` autour de `StatTile`**, pas un `@click` : clavier et focus viennent avec
+  (`:focus-visible` en contour accent). `StatTile` ne change pas — `HomePanel` est son seul
+  utilisateur, et la tuile reste la même boîte.
+- **Rien ne bouge au survol** : seul le fond passe en `--accent-soft`, ni bordure ni ombre ajoutée.
+  Le lien hérite de la couleur (`color: inherit`, sans soulignement).
+- **Une voiture ouvre la vue Véhicules, sans désigner laquelle** : la vue ne reçoit pas (encore) de
+  véhicule en paramètre.
+- Les six vues visées existent toujours au rail (aucune n'est conditionnée à un plugin), donc pas de
+  lien mort.
+
+Vérifié en mode simulé (1440 × 900, clair et sombre) : les neuf tuiles gardent 84 px de haut,
+« volets ouverts » ouvre `/covers`, une voiture ouvre `/vehicles`, aucune erreur console. L'effet de
+survol n'a pas été vu (capture figée sur la scène 3D).
+
+Sources : `apps/web/src/components/home/HomePanel.vue`.

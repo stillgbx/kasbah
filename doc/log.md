@@ -2,6 +2,17 @@
 
 Entrées les plus récentes en haut. Une session = une entrée.
 
+## [2026-10-12] update | Panneau maison : les tuiles mènent à leur vue
+
+**Déclencheur** : demande de l'utilisateur — toucher une tuile du panneau de droite (« volets ouverts », une voiture…) emmène sur la vue concernée.
+
+**Pages modifiées** :
+- `4_ui/4_1_navigation-et-panneaux.md` - mise à jour datée : correspondance tuile → vue, `router-link` autour de `StatTile`, survol sans décalage ; la mention « tuiles décoratives » du 2026-09-15 marquée dépassée.
+
+**Pages créées** : aucune.
+
+**Index** : date de `4_1` relevée.
+
 ## [2026-10-12] update | Chauffage à l'arrêt : plus de consigne, et Nest ne l'invente plus
 
 **Déclencheur** : demande de l'utilisateur — la carte d'un thermostat arrêté affichait trois fois la même température.
