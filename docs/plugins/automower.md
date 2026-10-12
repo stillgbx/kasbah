@@ -6,7 +6,7 @@
 | **Appareils** | robots tondeuses (`mower`), un par robot |
 | **Connexion** | **cloud Husqvarna** (Automower Connect API, officielle et gratuite) : il n'existe rien en local |
 | **Compte** | une application créée sur `developer.husqvarnagroup.cloud` avec le compte de l'appli Automower Connect : une clé et un secret, sans consentement dans un navigateur |
-| **Vues** | Robots, Maison (marqueur du robot en 3D), Réglages → Plugins |
+| **Vues** | Robots, Maison (marqueur du robot, zones et carte du terrain peinte en 3D), Réglages → Plugins |
 
 ![Vue Robots](../screenshots/robots.webp)
 
@@ -21,6 +21,9 @@
 - **Compteurs** de vie : temps de tonte, recharges, collisions, distance.
 - **Journal du robot** : les derniers messages, avec leur position quand elle est connue, posés comme incidents sur la carte.
 - **Commandes** : **Lancer la tonte** (reprend le planning du robot) ou **Tondre 1 h**, pause, **Rentrer** (jusqu'au prochain créneau ou jusqu'à nouvel ordre).
+- **Ce qu'il fait, et où** : « En route vers Zone sud », « Tonte · Zone avant », « Retour à la station », dans la carte Robots et le panneau du robot dans la vue Maison.
+- **Zones** (modèles qui les gèrent, par exemple le 435X AWD) : bouton **Zones** de la vue Robots et bloc « Zones du robot » du panneau 3D. **Tondre 1 h** sur tout le terrain ou sur une zone de travail, et un interrupteur par **zone d'exclusion**. Les zones se tracent dans l'appli du constructeur ; l'API ne sait ni les créer ni les redessiner.
+- **Carte du terrain** : le terrain relevé par le robot, ses zones de travail (une couleur chacune, la même que dans le panneau), ses zones d'exclusion et de réensauvagement, les câbles guides et la station, posés sur la photo satellite de la vue Robots. Un menu de calques choisit ce qui s'affiche ; un décalage réglable recale la carte sur la photo. Dans la vue Maison, la même carte se peint sur le terrain 3D, zone par zone.
 - **Temps réel** : le constructeur pousse les changements par un flux d'événements, sans consommer de requêtes.
 
 ## Connexion
@@ -54,7 +57,9 @@ Si elle s'écarte du portail (le portail fait foi), la caler avec `AUTOMOWER_QUO
 ## Limites
 
 - Le robot écrit ses heures (prochain départ, erreur) en heure locale : si `AUTOMOWER_TIMEZONE` est faux, elles sont décalées.
-- La carte du robot (zones de travail, zones interdites) n'est pas dessinée, et le câble périphérique n'est pas publié par l'API.
+- Les zones se créent et se redessinent dans l'appli du constructeur seulement. Une zone de **réensauvagement** s'affiche mais ne s'active pas à distance (l'API la refuse).
+- La carte du terrain se pose par la **station** du robot sur sa base, posée dans la maison. Son exactitude dans la 3D dépend du calage de la maison sur le monde (origine et cap).
+- La carte est relue à la demande (2 requêtes), puis gardée en mémoire jusqu'à un changement de zones ou 24 h ; le câble périphérique n'est pas publié par l'API.
 - Pas encore de réglage de la hauteur de coupe ni des phares, ni de confirmation d'une erreur à distance : à faire dans l'appli du constructeur.
 - Une erreur comme « No loop signal » ne se lève pas à distance.
 - Le GPS est un récepteur grand public (bruit de 2 à 3 m) ; le robot lui-même annonce une position toutes les 30 secondes environ.
