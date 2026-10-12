@@ -20,6 +20,7 @@
 - **Vigilance Météo-France** en cours sur le département de la maison, affichée dans les alertes. Elle vient du flux public MeteoAlarm, sans clé. Métropole seulement : ailleurs, la vigilance n'est pas affichée.
 - **Météo ailleurs** : la vue Météo permet de chercher un autre lieu, de le garder en favori, d'en voir les prévisions et la vigilance.
 - Côté assistant (MCP) : l'outil `get_weather` rend la météo, les prévisions, l'air, les pollens et la vigilance de la maison, ou d'un lieu cherché par son nom.
+- **Scène 3D** : la vue Maison prend cette météo. Pluie et neige tombent, inclinées par le vent, les sols se mouillent, le brouillard se pose, et l'eau de la piscine a une houle qui suit la force et la direction du vent.
 - **Radar de précipitations** dans la vue Météo : images observées (RainViewer), puis prévision AROME de Météo-France. Cette carte est chargée directement par le navigateur.
 
 ## Connexion

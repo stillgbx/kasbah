@@ -16,13 +16,67 @@ Application web (**tablette, ordinateur, téléphone**) qui montre la maison et 
 | Les Embruns (plain-pied, toit plat) | Le Belvédère (appartement) |
 |---|---|
 | ![Les Embruns](docs/screenshots/maison-embruns.webp) | ![Le Belvédère](docs/screenshots/maison-belvedere.webp) |
+
+### Les vues
+
 | **Énergie** | **Météo** |
+|---|---|
 | ![Vue Énergie](docs/screenshots/energy.webp) | ![Vue Météo](docs/screenshots/weather.webp) |
+| **Musique** | **Agenda** |
+| ![Vue Musique](docs/screenshots/music.webp) | ![Vue Agenda](docs/screenshots/agenda.webp) |
 | **Véhicules** | **Robots** |
 | ![Vue Véhicules](docs/screenshots/vehicles.webp) | ![Vue Robots](docs/screenshots/robots.webp) |
+| **Lumières** | **Ouvrants** |
+| ![Vue Lumières](docs/screenshots/lights.webp) | ![Vue Ouvrants](docs/screenshots/covers.webp) |
+| **Médias** | **Chauffage** |
+| ![Vue Médias](docs/screenshots/media.webp) | ![Vue Chauffage](docs/screenshots/heating.webp) |
+| **Eau** | **Animaux** |
+| ![Vue Eau](docs/screenshots/water.webp) | ![Vue Animaux](docs/screenshots/pets.webp) |
+| **École** | **Liste de courses** |
+| ![Vue École](docs/screenshots/school.webp) | ![Vue Liste de courses](docs/screenshots/shopping.webp) |
+| **Automatisations** | **Une automatisation** |
+| ![Vue Automatisations](docs/screenshots/automations.webp) | ![Édition d'une automatisation](docs/screenshots/automation-edit.webp) |
+| **Réglages** | **Réglages → Plugins** |
+| ![Réglages](docs/screenshots/settings.webp) | ![Réglages, plugins](docs/screenshots/settings-plugins.webp) |
 
-Captures des trois propriétés de démonstration, sur la simulation (aucun appareil réel). D'autres vues sont
-montrées dans la fiche de chaque plugin ([docs/plugins](docs/plugins)).
+### Thèmes
+
+La même vue Énergie dans six des thèmes, en clair et en sombre.
+
+| Kasbah, clair | Kasbah, sombre | Catppuccin, clair |
+|---|---|---|
+| ![Thème Kasbah clair](docs/screenshots/theme-kasbah-light.webp) | ![Thème Kasbah sombre](docs/screenshots/theme-kasbah-dark.webp) | ![Thème Catppuccin clair](docs/screenshots/theme-catppuccin-light.webp) |
+| **Dracula** | **Tokyo Night** | **Synthwave '84** |
+| ![Thème Dracula](docs/screenshots/theme-dracula-dark.webp) | ![Thème Tokyo Night](docs/screenshots/theme-tokyo-night-dark.webp) | ![Thème Synthwave '84](docs/screenshots/theme-synthwave84-dark.webp) |
+
+### Rendus 3D
+
+Les Tilleuls dans huit des treize styles de rendu, à différentes heures de la maison.
+
+| Réaliste, nuit | Réaliste, crépuscule |
+|---|---|
+| ![Style réaliste, nuit](docs/screenshots/style-realistic-night.webp) | ![Style réaliste, crépuscule](docs/screenshots/style-realistic-dusk.webp) |
+| **Maquette** | **Cyberpunk** |
+| ![Style maquette](docs/screenshots/style-maquette-day.webp) | ![Style cyberpunk](docs/screenshots/style-cyberpunk-night.webp) |
+| **Noël** | **Star Wars — Tatooine** |
+| ![Style Noël](docs/screenshots/style-noel-night.webp) | ![Style Tatooine](docs/screenshots/style-tatooine-day.webp) |
+| **Maison hantée** | **Candy** |
+| ![Style maison hantée](docs/screenshots/style-haunted-night.webp) | ![Style candy](docs/screenshots/style-candy-day.webp) |
+
+### Sur téléphone
+
+<img src="docs/screenshots/mobile-assistant.webp" alt="Vue Maison sur téléphone, après une instruction à l'assistant" width="300" align="right">
+
+En portrait, le rail passe en bas et le panneau devient un tiroir. La barre de recherche de la vue Maison sert
+aussi à parler à l'assistant (« Demander à Kasbah ») : il agit par les outils de Kasbah, puis dit ce qu'il a
+fait. Ici, il a replié le store de la terrasse et allumé le projecteur de la piscine.
+
+<br clear="right">
+
+Captures des trois propriétés de démonstration, sur la simulation (aucun appareil réel). Les données des vues
+Musique et Agenda sont inventées, et l'échange avec l'assistant est simulé : ces vues ont besoin d'un compte
+YouTube Music, d'un agenda ou d'un forfait Claude, que la démonstration n'a pas. D'autres vues sont montrées
+dans la fiche de chaque plugin ([docs/plugins](docs/plugins)).
 
 ## Démarrage
 
@@ -40,7 +94,7 @@ Les écrans n'installent rien : tout se passe sur la machine du serveur.
 Rouvrir le terminal après un `winget install` : un processus déjà lancé ne voit pas le nouveau `PATH`.
 
 ```bash
-git clone <dépôt> kasbah && cd kasbah
+git clone https://github.com/stillgbx/kasbah.git && cd kasbah
 npm install
 cp apps/server/.env.example apps/server/.env   # puis ajuster (Hue, TaHoma…)
 npm run dev
@@ -168,6 +222,8 @@ Mise en page en grand écran (paysage) en trois colonnes : **rail** à gauche, *
 ### Scène 3D
 
 La géométrie (murs, sols, toit, ouvertures, jardin, piscine) est construite depuis le JSON. Chaque appareil porte une **pilule** (icône + nom). Treize styles de rendu : réaliste, nature, indigo, maquette, cyberpunk, candy, maison hantée, disco, Halloween, Noël, Star Wars — Tatooine, Akira, Girlyversaire. L'ambiance solaire (auto / jour / crépuscule / nuit) est indépendante du thème de l'app. Véhicules et tondeuse se placent d'après leur GPS.
+
+La scène suit aussi la météo du plugin (Open-Meteo) : pluie et neige qui tombent, inclinées par le vent, sols mouillés, brouillard. L'eau de la piscine a une houle qui suit la force et la direction du vent, et des reflets au fond qui suivent le soleil.
 
 En **mode édition** (Réglages) : poser et coter des ouvertures, affecter un ouvrant, régler des places de stationnement, déplacer les appareils.
 

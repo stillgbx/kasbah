@@ -8,6 +8,10 @@
 | **Compte** | pas de connexion : une **adresse iCal secrète** par agenda, qui vaut mot de passe |
 | **Vues** | Agenda, Réglages → Plugins |
 
+![Vue Agenda](../screenshots/agenda.webp)
+
+*Capture de la démonstration : agendas et événements inventés.*
+
 ## Ce que fait le plugin
 
 - **Plusieurs agendas** réunis dans une seule vue, chacun avec sa **couleur** et son nom (agenda familial, jours fériés, agenda perso…). Pastille de couleur pour changer la couleur, flèches pour changer l'ordre, afficher ou masquer chaque agenda depuis la légende de la vue.

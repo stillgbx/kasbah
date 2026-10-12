@@ -8,6 +8,10 @@
 | **Compte** | votre compte Google / YouTube Music, relié par un **cookie** de navigateur (pas d'identifiant ni de mot de passe) |
 | **Vues** | Musique, Réglages → Plugins |
 
+![Vue Musique](../screenshots/music.webp)
+
+*Capture de la démonstration : genres, titres et pochettes inventés, la démo n'ayant pas de compte YouTube Music.*
+
 > **Non officiel.** Google ne propose pas d'API pour ça : Kasbah se fait passer pour le site web de YouTube Music. À réserver à un usage perso à la maison. Google peut casser le chemin sans préavis ; le plugin passe alors en erreur dans Réglages plutôt que de faire semblant.
 
 ## Ce que fait le plugin
