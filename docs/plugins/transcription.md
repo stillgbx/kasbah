@@ -14,6 +14,7 @@
 - **Envoi à la fin de la phrase** (interrupteur « Envoyer à la fin de la phrase », allumé par défaut) : l'écoute s'arrête seule après une seconde de silence, sans appuyer sur Terminer ; le bouton reste pour couper plus tôt. Si personne ne parle dans les 5 premières secondes, rien n'est envoyé. Une musique forte peut empêcher la fin d'être vue : le bouton reprend alors la main.
 - **Vocabulaire de la maison** : les noms des pièces, zones, ambiances et appareils sont envoyés au moteur, qui reconnaît ainsi « Spots cuisine » plutôt qu'un mot approchant.
 - **Réponses parlées** (interrupteur « Lire les réponses à voix haute », éteint par défaut) : la réponse de l'assistant à une instruction **dictée** est dite à voix haute, sur l'appareil qui a parlé (pas sur les enceintes). Une instruction tapée garde une réponse écrite.
+- **Prononciation** : avant la synthèse, la réponse est réécrite pour être dite en entier. « 8h00 » devient « 8 heures », « 21 °C » devient « 21 degrés », « 80 % » devient « 80 pour cent », « RDC » devient « rez-de-chaussée ». L'abréviation de chaque niveau de la maison est remplacée par son nom. Le texte affiché ne change pas. Les correspondances sont dans `apps/server/src/plugins/transcription/spoken-rules.ts`, une table par langue (français et anglais) : ajouter un remplacement, c'est y ajouter une ligne.
 - **Voix des réponses** : la fiche du plugin propose les voix créées chez le fournisseur (les profils de VoiceStudio). Voir plus bas.
 - **VoiceStudio sans son interface** (interrupteur « Lancer VoiceStudio sans son interface », éteint par défaut) : Kasbah lance le moteur de VoiceStudio à son démarrage et l'arrête avec lui, sans ouvrir l'application.
 
@@ -56,7 +57,7 @@ Le navigateur **refuse le micro** sur une adresse `http://` qui n'est pas `local
 | `STT_URL` | selon le fournisseur (aucune pour VoiceStudio) | Racine du serveur, sans `/v1` |
 | `STT_MODEL` | selon le fournisseur (`whisper-1` pour VoiceStudio) | Modèle de transcription |
 | `STT_API_KEY` | — | Clé du fournisseur, obligatoire pour Mistral |
-| `STT_LANGUAGE` | `fr` | Langue parlée (pas de détection) |
+| `STT_LANGUAGE` | `fr` | Langue parlée (pas de détection) ; choisit aussi la table de prononciation des réponses |
 | `TTS_MODEL` | `tts-1` | Modèle de synthèse (`tts-1` = le moteur actif de VoiceStudio) |
 | `TTS_VOICE` | `default` | Voix des réponses quand ni la maison ni le compte n'en ont choisi une |
 | `VOICESTUDIO_DIR` | celui que l'application note dans `%APPDATA%` | Runtime de VoiceStudio, pour le lancement sans interface |
@@ -66,6 +67,7 @@ Les choix de voix sont gardés par le serveur : `apps/server/.state/transcriptio
 ## Limites
 
 - Une instruction dure **15 s** au plus ; une réponse dite, 1 000 caractères.
+- La prononciation suit `STT_LANGUAGE`, pas la langue de chaque réponse : une langue sans table passe telle quelle (seules les abréviations des niveaux sont remplacées).
 - Réponses parlées et liste des voix essayées avec VoiceStudio seulement (ni vLLM ni Mistral).
 - Tout redémarrage du plugin (y compris basculer un de ses interrupteurs) recharge VoiceStudio lancé sans interface (environ 10 s).
 - Ne pas ouvrir l'application VoiceStudio pendant que Kasbah tient son port : éteindre l'interrupteur d'abord.

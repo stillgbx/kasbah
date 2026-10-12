@@ -2,6 +2,17 @@
 
 Entrées les plus récentes en haut. Une session = une entrée.
 
+## [2026-10-12] update | Transcription : la réponse réécrite pour la voix
+
+**Déclencheur** : « lors du TTS de la réponse à une commande, le modèle a du mal avec les abréviations comme RDC, le h de 8h00 ou les °C », puis « pouvoir facilement ajouter de nouveaux éléments à remplacer, penser au multilingue » et « reprends les shortName des étages automatiquement ».
+
+**Pages modifiées** :
+- `3_plugins/3_25_transcription.md` - section datée : `spokenText` dans `speak()`, les tables par langue (`words`, `units`, `plural`, `minus`, `hours`), la langue = `STT_LANGUAGE`, les abréviations des niveaux envoyées par l'app dans `/speak` (casse respectée, abréviation d'un seul caractère ou sans lettre écartée), ce qui a été écarté et ce qui n'a pas été joué.
+
+**Hors wiki** : `docs/plugins/transcription.md` (prononciation, `STT_LANGUAGE`, limite).
+
+**Index** : mis à jour (1 ligne).
+
 ## [2026-10-12] update | Tondeuse : la carte peinte dans la scène 3D, le panneau des zones fusionné
 
 **Déclencheur** : suite de la session du jour — « afficher les zones sur la vue 3D quand on le souhaite, zone par zone », puis « fusionner les deux sections du panneau, trier les zones », et « on est certain des décalages appliqués ? ».

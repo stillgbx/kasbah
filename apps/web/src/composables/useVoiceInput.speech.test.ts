@@ -2,9 +2,12 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { defineComponent, h } from 'vue'
+import { parseHouse } from '@kasbah/shared'
+import demo from '../../../../house/demo-house.json'
 import { setTransport } from '../api'
 import type { Transport } from '../api/transport'
 import type * as Wav from '../lib/wav'
+import { useHouseStore } from '../stores/house'
 import { useVoiceInput } from './useVoiceInput'
 
 // Réponses parlées allumées (sous-item `speech`) : la réponse rendue par l'appelant est demandée au
@@ -61,7 +64,7 @@ it('dit la réponse à voix haute sur cet appareil, et un toucher du micro l’a
   await flushPromises()
   api().toggle(); await flushPromises()
   api().toggle(); await flushPromises()
-  expect(speak).toHaveBeenCalledWith('Les spots de la cuisine sont allumés.')
+  expect(speak).toHaveBeenCalledWith('Les spots de la cuisine sont allumés.', {})
   expect(api().phase.value).toBe('speaking')
   expect(FakeAudio.last).toMatchObject({ src: 'blob:reponse', playing: true })
   api().toggle()
@@ -83,7 +86,7 @@ it('réécoute une réponse à la demande, et le même bouton l’arrête', asyn
   await flushPromises()
   expect(api().speech.value).toBe(true)
   api().replay('Il fait 19 degrés.'); await flushPromises()
-  expect(speak).toHaveBeenCalledWith('Il fait 19 degrés.')
+  expect(speak).toHaveBeenCalledWith('Il fait 19 degrés.', {})
   expect(api().phase.value).toBe('speaking')
   api().replay('Il fait 19 degrés.')
   expect(FakeAudio.last!.playing).toBe(false)
@@ -114,4 +117,12 @@ it('ne parle pas quand l’appelant ne rend pas de réponse (erreur de l’assis
   api().toggle(); await flushPromises()
   api().toggle(); await flushPromises()
   expect(speak).not.toHaveBeenCalled()
+})
+
+it('envoie les abréviations des niveaux avec la réponse, pour que la synthèse dise leur nom', async () => {
+  useHouseStore().house = parseHouse(demo)
+  const api = harness(null)
+  await flushPromises()
+  api().replay('Le RDC est éteint.'); await flushPromises()
+  expect(speak).toHaveBeenCalledWith('Le RDC est éteint.', { RDC: 'Rez-de-chaussée' })
 })

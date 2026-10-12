@@ -408,7 +408,7 @@ export function createHttpTransport(base = ''): Transport {
     transcriptionVoices: () => request(`${base}/api/plugins/transcription/voices`, undefined, (j) => j as { voices: { id: string; name: string; language?: string }[] }),
     transcriptionSettings: () => request(`${base}/api/plugins/transcription/settings`, undefined, (j) => j as TranscriptionSettings),
     setTranscriptionVoice: (voice) => request(`${base}/api/plugins/transcription/settings`, json('PUT', { voice }), (j) => j as TranscriptionSettings),
-    speak: (text) => requestBlob(`${base}/api/plugins/transcription/speak`, json('POST', { text })),
+    speak: (text, words) => requestBlob(`${base}/api/plugins/transcription/speak`, json('POST', { text, words })),
     transcribe: (audio, hints) => request(`${base}/api/plugins/transcription/transcribe`, json('POST', { audio, hints }), (j) => j as { text: string; ms: number }),
     assistantLog: () => request(`${base}/api/assistant/log`, undefined, (j) => j as { entries: AssistantLogEntry[] }),
     mcpUsers: () => request(`${base}/api/mcp/users`, undefined, (j) => j as { users: McpUser[] }),

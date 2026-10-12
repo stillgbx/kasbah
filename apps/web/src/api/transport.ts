@@ -714,8 +714,11 @@ export interface Transport {
   transcriptionStatus(): Promise<{ ready: boolean; provider: string | null; speech: boolean; autoSend: boolean }>
   /** Un WAV 16 kHz mono en base64, et les noms de la maison comme vocabulaire ; rend le texte entendu. */
   transcribe(audio: string, hints: string[]): Promise<{ text: string; ms: number }>
-  /** La réponse de l'assistant dite à voix haute (sous-item `speech`) : le son, à jouer ici. */
-  speak(text: string): Promise<Blob>
+  /**
+   * La réponse de l'assistant dite à voix haute (sous-item `speech`) : le son, à jouer ici. `words` : les
+   * abréviations de la maison à dire en entier (celle d'un étage → son nom).
+   */
+  speak(text: string, words: Record<string, string>): Promise<Blob>
   /** Les voix créées chez le fournisseur (profils VoiceStudio), pour la fiche du plugin. */
   transcriptionVoices(): Promise<{ voices: { id: string; name: string; language?: string }[] }>
   /** La voix des réponses parlées du compte courant (la maison sur le réseau local) ; `null` = celle de la maison, sinon `TTS_VOICE`. */

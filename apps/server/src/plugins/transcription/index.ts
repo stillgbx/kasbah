@@ -9,6 +9,7 @@ import { stateFile, userStateFile } from '../../core/paths'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
 import { sendError } from '../../http/errors'
 import type { SpawnFn } from '../../music/proxy'
+import { spokenText } from './spoken'
 import { findVoiceStudio, killVoiceStudio, spawnVoiceStudio } from './voicestudio'
 
 // Plugin Transcription : la voix de l'assistant. Le navigateur enregistre une instruction (WAV
@@ -230,14 +231,14 @@ export function createTranscriptionPlugin(deps: TranscriptionPluginDeps = {}): D
   }
 
   /** La réponse dite à voix haute : le son tel que le fournisseur le rend (WAV demandé). */
-  async function speak(text: string, user: string | null): Promise<{ audio: Buffer; type: string }> {
+  async function speak(text: string, words: Record<string, string>, user: string | null): Promise<{ audio: Buffer; type: string }> {
     const t = ready()
     // la voix du compte, sinon celle de la maison, sinon `TTS_VOICE`
     const voice = (user === null ? null : (await readSettings(user)).voice) ?? (await readSettings(null)).voice ?? t.ttsVoice
     const res = await call('/v1/audio/speech', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ model: t.ttsModel, input: text.slice(0, MAX_SPOKEN), voice, language: t.language, response_format: 'wav' }),
+      body: JSON.stringify({ model: t.ttsModel, input: spokenText(text, t.language, words).slice(0, MAX_SPOKEN), voice, language: t.language, response_format: 'wav' }),
     }, SPEAK_TIMEOUT_MS)
     return { audio: Buffer.from(await res.arrayBuffer()), type: res.headers.get('content-type') ?? 'audio/wav' }
   }
@@ -342,10 +343,15 @@ export function createTranscriptionPlugin(deps: TranscriptionPluginDeps = {}): D
       // La réponse de l'assistant dite à voix haute, jouée par le navigateur qui a dicté l'instruction.
       app.post('/speak', async (req, reply) => {
         if (!speech) return sendError(reply, 409, 'SPEECH_DISABLED', 'spoken answers are off (Settings → transcription)')
-        const body = z.object({ text: z.string().trim().min(1).max(4000) }).safeParse(req.body)
-        if (!body.success) return sendError(reply, 400, 'INVALID_BODY', 'text is required')
+        const body = z.object({
+          text: z.string().trim().min(1).max(4000),
+          /** Les mots de la maison à dire en entier : l'abréviation d'un étage → son nom (« RDC » → « Rez-de-chaussée »). */
+          words: z.record(z.string().trim().min(1).max(12), z.string().trim().min(1).max(80))
+            .refine((w) => Object.keys(w).length <= MAX_HINTS).default({}),
+        }).safeParse(req.body)
+        if (!body.success) return sendError(reply, 400, 'INVALID_BODY', 'text is required; words: { abbreviation: name }')
         const started = Date.now()
-        const { audio, type } = await speak(body.data.text, req.sessionUser ?? null)
+        const { audio, type } = await speak(body.data.text, body.data.words, req.sessionUser ?? null)
         ctx?.logger.info({ provider: target?.provider, ms: Date.now() - started, bytes: audio.length }, 'spoken')
         return reply.header('cache-control', 'no-store').type(type).send(audio)
       })

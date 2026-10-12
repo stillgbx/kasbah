@@ -1,7 +1,7 @@
 # Plugin Transcription (la voix de l'assistant)
 
-> Dernière mise à jour : 2026-10-11
-> Sources : `apps/server/src/plugins/transcription/index.ts`, `apps/server/src/plugins/transcription/voicestudio.ts` (+ test), tests `apps/server/src/plugins/transcription/plugin.test.ts`, `apps/web/src/composables/useVoiceInput.ts` (+ test), `apps/web/src/lib/wav.ts` (+ test), `apps/web/src/components/home/SearchBar.vue`, `apps/web/src/components/layout/SearchPalette.vue`, `apps/server/.env.example`, session du 2026-10-07, `apps/web/src/composables/useVoiceInput.speech.test.ts`, `apps/web/src/components/TranscriptionLinkCard.vue` (+ test), `docs/plugins/transcription.md`, session du 2026-10-08, `apps/web/src/lib/vad.ts` (+ test), `apps/web/src/composables/useVoiceInput.autosend.test.ts`, session du 2026-10-11
+> Dernière mise à jour : 2026-10-12
+> Sources : `apps/server/src/plugins/transcription/index.ts`, `apps/server/src/plugins/transcription/voicestudio.ts` (+ test), tests `apps/server/src/plugins/transcription/plugin.test.ts`, `apps/web/src/composables/useVoiceInput.ts` (+ test), `apps/web/src/lib/wav.ts` (+ test), `apps/web/src/components/home/SearchBar.vue`, `apps/web/src/components/layout/SearchPalette.vue`, `apps/server/.env.example`, session du 2026-10-07, `apps/web/src/composables/useVoiceInput.speech.test.ts`, `apps/web/src/components/TranscriptionLinkCard.vue` (+ test), `docs/plugins/transcription.md`, session du 2026-10-08, `apps/web/src/lib/vad.ts` (+ test), `apps/web/src/composables/useVoiceInput.autosend.test.ts`, session du 2026-10-11, `apps/server/src/plugins/transcription/spoken.ts` et `spoken-rules.ts` (+ test), session du 2026-10-12
 
 ## Ce que c'est
 
@@ -333,3 +333,52 @@ Le texte entendu ne remplit plus le champ (barre et palette) : il part à l'assi
 se lit en tête de la réponse. Dans la barre, le micro reprend la place du bout du champ dès que le champ
 est vide, réponse affichée ou non : on enchaîne une autre commande vocale sans rien effacer. Détail dans
 `../4_ui/4_1_navigation-et-panneaux.md` (mise à jour 8).
+
+### Mise à jour 2026-10-12 — la réponse réécrite pour la voix
+
+**Demande de l'utilisateur** : la synthèse prononce mal « RDC », le « h » de « 8h00 » ou « °C ». Il
+fallait réécrire la réponse avant de l'envoyer au moteur, en pouvant ajouter facilement des
+correspondances, et en pensant aux autres langues. Les abréviations des niveaux de la maison devaient
+aussi être reprises automatiquement.
+
+- **Où** : dans `speak()` (`index.ts`), juste avant `POST /v1/audio/speech`. Le champ `input` passe
+  par `spokenText(text, language, houseWords)` (`spoken.ts`). Le texte affiché et le texte de
+  l'historique ne changent pas : seule la synthèse reçoit la version réécrite.
+- **Les tables** (`spoken-rules.ts`, `SPOKEN_RULES`), une par langue, avec `fr` et `en` pour
+  commencer. Une ligne = une correspondance, sans ordre à tenir : les écritures les plus longues sont
+  essayées d'abord (`kWh` avant `kW` avant `W`). Chaque table a :
+  - `words` : mots et abréviations, en mot entier, casse ignorée (`RDC`, `n°`, `env.`, `1er`, `2e`…).
+    Une clé qui finit sur un signe (`n°`, `env.`) reprend l'espace qui suit : « n°3 » devient
+    « numéro 3 » ;
+  - `units` : un symbole placé après un nombre, collé ou non → [singulier, pluriel] (`°C`, `%`, `kWh`,
+    `km/h`, `A`, `€`…) ;
+  - `plural` : quand le nombre prend le pluriel (sous 2 en français, « 1,5 degré » ; tout sauf 1 en
+    anglais) ;
+  - `minus` : le signe d'un nombre négatif (« -3 °C » → « moins 3 degrés ») ; il ne touche pas
+    « 3-5 », où le tiret suit un nombre ;
+  - `hours`, facultatif : « 8h00 », « 8 h 30 », « 14:05 » → « 8 heures », « 8 heures 30 »,
+    « 14 heures 5 » (pas de « 00 », pas de zéro devant les minutes). Absent en anglais : l'heure est
+    laissée au moteur.
+- **La langue** est `STT_LANGUAGE`, celle de la dictée et de la synthèse. L'assistant répond dans la
+  langue de la demande, et la demande est dictée dans cette langue : c'est cohérent tant que la dictée
+  n'a qu'une langue. Une langue sans table passe telle quelle. **Non fait** : prendre la langue de
+  chaque réponse (il faudrait que l'app l'envoie).
+- **Les abréviations des niveaux** : l'app envoie `words` dans `POST /speak`
+  (`{ text, words: { [shortName]: name } }`, `useVoiceInput.spokenWords()`), pour chaque niveau dont
+  le `shortName` diffère du nom. C'est le même principe que le vocabulaire envoyé à la transcription :
+  le plugin ne lit pas la maison lui-même, et un niveau renommé compte dès la réponse suivante. Côté
+  serveur, ces mots passent **avant** les tables et **dans toutes les langues**, avec la **casse
+  respectée** (une abréviation « ET » ne touche pas « et »). Une abréviation d'un seul caractère ou sans
+  lettre (« E », « 1 ») est **écartée** : elle remplacerait des lettres ou des nombres de la phrase.
+  Au plus 100 abréviations, de 12 caractères chacune (la limite de `shortName`) ; au-delà, 400
+  `INVALID_BODY`.
+- **Écarté** : demander à l'assistant d'écrire sans abréviations. La réponse sert aussi à l'écran, où
+  « 8h00 » et « 21 °C » se lisent mieux. **Proposé, pas fait** : un fichier de correspondances propre à
+  la maison, modifiable sans toucher au code.
+
+Tests : `spoken.test.ts` (heures, unités et pluriel, abréviations, phrases qui ne doivent pas changer,
+anglais, langue sans table, mots de la maison, et deux tests qui parcourent **chaque ligne de chaque
+table** : une ligne ajoutée est testée d'office), `plugin.test.ts` (+2 : `input` réécrit,
+abréviations reçues de l'app et refus d'une clé trop longue), `useVoiceInput.speech.test.ts` (+1 :
+l'abréviation du niveau de la maison démo part avec la réponse). **Non joué** : l'écoute du rendu sur
+VoiceStudio (en mode simulé, la synthèse n'existe pas).

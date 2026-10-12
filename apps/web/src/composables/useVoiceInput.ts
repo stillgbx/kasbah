@@ -92,7 +92,7 @@ export function useVoiceInput(onText: (text: string) => void | Promise<string | 
   async function say(answer: string) {
     phase.value = 'speaking'
     try {
-      const audio = spoken?.text === answer ? spoken.audio : await getTransport().speak(answer)
+      const audio = spoken?.text === answer ? spoken.audio : await getTransport().speak(answer, spokenWords())
       spoken = { text: answer, audio }
       if (phase.value !== 'speaking') return              // arrêté pendant la synthèse
       playerUrl = URL.createObjectURL(audio)
@@ -123,6 +123,11 @@ export function useVoiceInput(onText: (text: string) => void | Promise<string | 
       ...Object.values(devices.descriptors).map((d) => d.name),
     ]
     return [...new Set(names.map((n) => n.trim()).filter((n) => n && n.length <= 80))].slice(0, 400)
+  }
+
+  /** L'abréviation de chaque niveau → son nom (« RDC » → « Rez-de-chaussée ») : la synthèse dit le nom. */
+  function spokenWords(): Record<string, string> {
+    return Object.fromEntries(house.levels.filter((l) => l.shortName && l.shortName !== l.name).map((l) => [l.shortName!, l.name]))
   }
 
   /** Écoute le niveau du micro et arrête l'enregistrement à la fin de la phrase (ou sans parole). */

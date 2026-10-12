@@ -173,6 +173,23 @@ describe('réponses parlées (sous-item speech)', () => {
     expect(JSON.parse(post.fields.json![0]!)).toEqual({ model: 'tts-1', input: 'Les spots de la cuisine sont allumés.', voice: 'default', language: 'fr', response_format: 'wav' })
   })
 
+  it('le moteur reçoit le texte réécrit pour la voix (heures, unités, abréviations)', async () => {
+    const { stt } = await started({ STT_URL: 'http://localhost:7860' }, ok, { speech: true })
+    await speak('Il fait 21 °C au RDC à 8h00.')
+    const post = stt.sent.find((x) => x.url.endsWith('/v1/audio/speech'))!
+    expect(JSON.parse(post.fields.json![0]!).input).toBe('Il fait 21 degrés au rez-de-chaussée à 8 heures.')
+  })
+
+  it('les abréviations des niveaux envoyées par l’app sont dites par leur nom', async () => {
+    const { stt } = await started({ STT_URL: 'http://localhost:7860' }, ok, { speech: true })
+    const res = await app!.inject({ method: 'POST', url: '/api/plugins/transcription/speak', payload: { text: 'Le R+1 est éteint.', words: { 'R+1': 'Premier étage' } } })
+    expect(res.statusCode).toBe(200)
+    const post = stt.sent.find((x) => x.url.endsWith('/v1/audio/speech'))!
+    expect(JSON.parse(post.fields.json![0]!).input).toBe('Le Premier étage est éteint.')
+    const bad = await app!.inject({ method: 'POST', url: '/api/plugins/transcription/speak', payload: { text: 'Fait.', words: { 'une abréviation trop longue': 'x' } } })
+    expect(bad.statusCode).toBe(400)
+  })
+
   it('un moteur de synthèse en panne se dit comme pour la transcription', async () => {
     await started({ STT_URL: 'http://localhost:7860' }, (url) => (url.endsWith('/v1/models') ? Response.json({}) : new Response('model not loaded', { status: 500 })), { speech: true })
     const res = await speak()
