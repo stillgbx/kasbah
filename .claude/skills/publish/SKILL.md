@@ -107,33 +107,31 @@ reconnaissent ; un refus se corrige en retirant la valeur, **jamais** par `--no-
 
 ## 6. GitNexus avant le commit
 
-D'abord l'analyse complète, au premier plan (jusqu'à 2 min), une fois les fichiers de la session
-dans leur état final (vérifications, wiki et docs faits) :
+L'index se refait après le push (étape 9). Avant le commit, on regarde seulement si la ligne des
+statistiques de `CLAUDE.md` et `AGENTS.md` (« indexed by GitNexus as kasbah (N symbols, N
+relationships, N execution flows) ») est trop loin de l'index, sans lancer d'analyse :
 
 ```bash
-node .gitnexus/run.cjs analyze
-git diff -- CLAUDE.md AGENTS.md
+node -e "const s=require('./.gitnexus/meta.json').stats;console.log(s.nodes,s.edges,s.processes)"
+grep -n "indexed by GitNexus" CLAUDE.md AGENTS.md
 ```
 
-Elle remet l'index à jour et réécrit la section GitNexus de `CLAUDE.md` et `AGENTS.md`. Ces deux
-fichiers partent **dans le même commit**, à une condition : leur diff se limite à la ligne des
-statistiques (« indexed by GitNexus as kasbah (N symbols, N relationships, N execution flows) »).
+Correspondance : symbols = `nodes`, relationships = `edges`, execution flows = `processes`. Ces
+chiffres sont ceux de l'index de la livraison précédente : un temps de retard, sans importance.
 
-- Le diff touche aussi le texte des règles (gabarit GitNexus mis à jour) : montrer le diff et
-  demander s'il part avec le commit.
-- `CLAUDE.md` ou `AGENTS.md` était déjà modifié par une autre session avant l'analyse : lancer
-  `analyze --index-only` à la place (index à jour, fichiers laissés tels quels) et le dire dans le
-  compte rendu.
-- Une autre session est en train d'analyser : attendre qu'elle ait fini, pas deux analyses à la
-  fois.
+- **Écart de plus de 10 %** sur l'un des trois : réécrire la ligne avec les chiffres de
+  `meta.json`, dans les deux fichiers (Edit sur la ligne seule), et les ajouter au commit.
+- **Sinon** : on ne touche pas aux deux fichiers.
+- `CLAUDE.md` ou `AGENTS.md` déjà modifié par une autre session : on ne les touche pas, on le dit.
 
-L'index est construit sur les fichiers du disque, travail en cours des autres sessions compris :
-les statistiques peuvent en être légèrement faussées, c'est accepté.
+Ces chiffres ne pilotent rien (aucun outil ne les lit) : on ne fait pas d'analyse ni de commit
+exprès pour eux. Le texte des règles de la section GitNexus ne change qu'avec une nouvelle version
+de GitNexus : un `analyze` sans option lancé à la main le reprend.
 
 Puis indexer, par chemins explicites (jamais `git add -A` ni `git add .`) :
 
 ```bash
-git add <fichiers de la session> CLAUDE.md AGENTS.md
+git add <fichiers de la session>   # + CLAUDE.md AGENTS.md si la ligne a été réécrite
 git status --porcelain
 ```
 
@@ -188,15 +186,26 @@ git log HEAD..origin/main --oneline
   (`git -C <checkout principal> merge --ff-only origin/main`) et vérifier son `git log -1`.
 - Push refusé : on ne force jamais (`--force` interdit sur main).
 
-## 9. Compte rendu
+## 9. GitNexus après le push
+
+L'index est lié au commit : après chaque commit, le hook le signale périmé. On le refait une fois,
+au premier plan (environ 2 min), sans toucher à `CLAUDE.md` ni `AGENTS.md` :
+
+```bash
+node .gitnexus/run.cjs analyze --index-only
+```
+
+Une autre session est en train d'analyser : attendre qu'elle ait fini, pas deux analyses à la fois.
+
+## 10. Compte rendu
 
 Court, dans la réponse (pas de fichier) :
 
 - le commit (hash court, titre) et le push (`main` à jour) ;
 - vérifications : jouées (vert), non requises (diff de doc), non jouées (et pourquoi) ;
 - pages mises à jour (wiki, README, `docs/`) ou « rien à documenter » ;
-- GitNexus : statistiques mises à jour dans le commit (ou `--index-only`, et pourquoi), résultat
-  de `detect_changes` (risque, flux touchés) ;
+- GitNexus : résultat de `detect_changes` (risque, flux touchés), ligne des statistiques
+  réécrite ou non (écart mesuré), index refait après le push ;
 - fichiers laissés de côté parce qu'ils sont à une autre session ;
 - si du code serveur a changé : le serveur de l'utilisateur ne tourne pas en mode watch, il faut le
   redémarrer, une fois le checkout principal à jour.
