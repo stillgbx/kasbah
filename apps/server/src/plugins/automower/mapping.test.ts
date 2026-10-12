@@ -292,3 +292,15 @@ describe('automower mapping — carte', () => {
     expect(map).toEqual({ station: null, shapes: [] })
   })
 })
+
+describe('automower mapping — tâche en cours', () => {
+  it('la liste dit la zone en cours ; garé, il n’est pas « en route »', () => {
+    expect(toStatePatch(first(MOWERS_PARKED), { tz: TZ, now: NOW })).toMatchObject({ workAreaId: 0, leaving: false })
+  })
+  it('un départ capté (LEAVING) : « en route », et la zone connue survit au delta qui ne la porte pas', () => {
+    const m = first(MOWERS_ZONES)
+    const current = { ...m, attributes: { ...m.attributes, mower: { ...m.attributes.mower!, workAreaId: 123456 } } }
+    const applied = applyEvent(wsEventSchema.parse(WS_MOWER_LEAVING), current, { tz: TZ, now: NOW })!
+    expect(applied.patch).toMatchObject({ activity: 'mowing', leaving: true, workAreaId: 123456 })
+  })
+})

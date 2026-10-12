@@ -23,6 +23,7 @@ import VehicleTuning from '../vehicles/VehicleTuning.vue'
 import CoverTuning from '../covers/CoverTuning.vue'
 import JournalList from '../robots/JournalList.vue'
 import MowerTuning from '../robots/MowerTuning.vue'
+import MowerZones from '../robots/MowerZones.vue'
 import { useJournals } from '../../composables/useJournals'
 import { journalPoints } from '../../lib/journal'
 import PanelArraysCard from './PanelArraysCard.vue'
@@ -68,6 +69,17 @@ const tunableCover = computed(() => {
   const d = resolved.value?.descriptor
   return d?.kind === 'cover' && resolved.value?.houseDevice ? d : null
 })
+/**
+ * Les ZONES de la tondeuse : tondre l'une d'elles, ouvrir ou fermer une zone d'exclusion — le même
+ * panneau que sur la vue Robots, robot sous les yeux. Replié derrière son bouton, comme le journal.
+ */
+const zonable = computed(() => {
+  const d = resolved.value?.descriptor, s = resolved.value?.state
+  if (d?.kind !== 'mower' || s?.kind !== 'mower') return null
+  const workAreas = d.capabilities.includes('work_areas'), stayOutZones = d.capabilities.includes('stay_out_zones')
+  return workAreas || stayOutZones ? { id: d.id, state: s, workAreas, stayOutZones } : null
+})
+const zonesOpen = ref(false)
 const journalable = computed(() => {
   const d = resolved.value?.descriptor
   return d?.kind === 'mower' && d.capabilities.includes('journal') ? d : null
@@ -89,7 +101,7 @@ function pickEntry(e: { at: number }): void {
   if (journalable.value) house.focusJournalPoint(journalable.value.id, e.at)
 }
 // changé d'appareil, les réglages et le journal se referment : le panneau suivant s'ouvre sur ses commandes
-watch(() => house.selectedKey, () => { tuningOpen.value = false; journalOpen.value = false; house.hideJournal() })
+watch(() => house.selectedKey, () => { tuningOpen.value = false; zonesOpen.value = false; journalOpen.value = false; house.hideJournal() })
 onBeforeUnmount(() => house.hideJournal())
 
 /**
@@ -313,6 +325,19 @@ function send(cmd: CommandInput) {
         <button type="button" class="pill tuning__cta" :data-on="tuningOpen ? '1' : '0'"
                 :aria-expanded="tuningOpen" @click="tuningOpen = !tuningOpen">
           <StrokeIcon name="gear" :size="16" /> {{ tuningOpen ? $t('place.done') : $t('vehicle.tune') }}
+        </button>
+      </div>
+    </div>
+    <!-- les zones du robot : tondre l'une d'elles, ouvrir ou fermer une exclusion -->
+    <div v-if="zonable" class="card card--soft tuning">
+      <div v-if="zonesOpen" class="tuning__body">
+        <MowerZones :state="zonable.state" :work-areas="zonable.workAreas" :stay-out-zones="zonable.stayOutZones"
+                    :busy="devices.isPending(zonable.id)" @command="send" />
+      </div>
+      <div class="tuning__foot">
+        <span class="muted">{{ $t('mower.zonesTitle') }}</span>
+        <button type="button" class="pill tuning__cta" :data-on="zonesOpen ? '1' : '0'" :aria-expanded="zonesOpen" @click="zonesOpen = !zonesOpen">
+          <StrokeIcon name="layers" :size="16" /> {{ zonesOpen ? $t('place.done') : $t('mower.zones') }}
         </button>
       </div>
     </div>

@@ -87,6 +87,8 @@ const RESYNC_MIN_MS = 60_000
  * 202 avant que le robot n'ait appliqué, et aucun événement du flux ne porte ces zones.
  */
 const ZONE_REFRESH_MS = 5_000
+/** Après « tondre une zone » : le temps que le robot prenne l'ordre et publie la zone visée. */
+const AREA_REFRESH_MS = 10_000
 
 /** Au-delà, une carte gardée est relue à sa prochaine demande : un tracé REDESSINÉ ne change ni id ni nom. */
 const SITE_MAP_MAX_AGE_MS = 24 * 3_600_000
@@ -137,7 +139,11 @@ export function createAutomowerPlugin(deps: AutomowerPluginDeps = {}): DevicePlu
    * une relecture (zone ajoutée ou retirée dans l'appli), la carte est oubliée et se relira.
    */
   const siteMaps = new Map<string, { map: PluginSiteMap; zones: string; at: number }>()
-  /** Relecture prévue après une bascule de zone d'exclusion : le flux ne publie pas ces zones. */
+  /**
+   * Relecture prévue après une commande dont le flux ne dira pas l'effet : une bascule de zone
+   * d'exclusion (aucun événement ne porte ces zones), « tondre une zone » (la zone visée n'arrive que
+   * par la lecture complète). Une seule à la fois.
+   */
   let zoneRefresh: unknown = null
   let published: DeviceDescriptor[] = []
 
@@ -165,6 +171,16 @@ export function createAutomowerPlugin(deps: AutomowerPluginDeps = {}): DevicePlu
     const patch: StatePatch<'mower'> = toStatePatch(m, mapOptions())
     ctx!.emitState(m.id, patch)
     ctx!.setAvailable(m.id, connectedOf(m))
+  }
+
+  /** Une lecture complète dans `ms`, sauf si une est déjà prévue. */
+  function readSoon(ms: number): void {
+    if (zoneRefresh !== null) return
+    zoneRefresh = ctx!.clock.setTimeout(() => {
+      zoneRefresh = null
+      if (!ctx) return
+      pollOnce(ctx.signal).catch((err) => { lastError = (err as Error).message; log().warn({ err }, 'Automower: read after a command failed') })
+    }, ms)
   }
 
   /** Une lecture complète : la liste, les descripteurs si besoin, l'état de chaque robot. */
@@ -222,6 +238,10 @@ export function createAutomowerPlugin(deps: AutomowerPluginDeps = {}): DevicePlu
     if (!applied) return
     mowers.set(ev.data.id, applied.next)
     ctx!.emitState(ev.data.id, applied.patch)
+    // l'activité a changé (départ, tonte, retour) chez un robot à zones : la zone en cours n'est que
+    // dans la lecture complète — on la relit, une fois par minute au plus (`resync`)
+    const was = current.attributes.mower?.activity, now = applied.next.attributes.mower?.activity
+    if (ev.data.type === 'mower-event-v2' && current.attributes.capabilities?.workAreas && now && now !== was) resync('mower activity changed')
   }
 
   function status(): AutomowerStatus {
@@ -318,13 +338,7 @@ export function createAutomowerPlugin(deps: AutomowerPluginDeps = {}): DevicePlu
         if (m.attributes.stayOutZones?.dirty) throw new PluginError('DEVICE_UNAVAILABLE', `stay-out zones of mower ${externalId} are syncing with Husqvarna, try again later`)
         await client!.stayOutZone(externalId, command.zoneId, command.enabled, ctx?.signal)
         log().info({ mower: externalId, zone: command.zoneId, enabled: command.enabled }, 'Automower stay-out zone change accepted')
-        if (zoneRefresh === null) {
-          zoneRefresh = ctx!.clock.setTimeout(() => {
-            zoneRefresh = null
-            if (!ctx) return
-            pollOnce(ctx.signal).catch((err) => { lastError = (err as Error).message; log().warn({ err }, 'Automower: read after a zone change failed') })
-          }, ZONE_REFRESH_MS)
-        }
+        readSoon(ZONE_REFRESH_MS)
         return
       }
       const body = actionBody(command)
@@ -333,6 +347,8 @@ export function createAutomowerPlugin(deps: AutomowerPluginDeps = {}): DevicePlu
       if (!connectedOf(m)) throw new PluginError('DEVICE_UNAVAILABLE', `mower ${externalId} is not connected to Husqvarna`)
       await client!.action(externalId, body, ctx?.signal)
       log().info({ mower: externalId, action: body.data.type }, 'Automower action accepted')
+      // la zone visée n'arrive que par la lecture complète : on la relit quand le robot a pris l'ordre
+      if (command.type === 'mower.start_in_area') readSoon(AREA_REFRESH_MS)
     },
 
     /**

@@ -9,6 +9,7 @@ import JournalList from '../components/robots/JournalList.vue'
 import MowerZones from '../components/robots/MowerZones.vue'
 import { journalPoints } from '../lib/journal'
 import { siteMapAnchor, siteMapFeatures } from '../lib/siteMap'
+import { mowerTask } from '../lib/mowerTask'
 import type { LatLon } from '../lib/map'
 import PageHeader from '../components/layout/PageHeader.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
@@ -104,7 +105,8 @@ function mapLocation(m: MowerEntry) {
 
 /**
  * La ligne d'état sous la jauge : l'ERREUR du fabricant quand il y en a une (« Erreur 2 · No loop
- * signal · il y a 3 h »), sinon pourquoi le robot ne tond pas (planning, pluie, gel, consigne).
+ * signal · il y a 3 h »), sinon pourquoi le robot ne tond pas (planning, pluie, gel, consigne), sinon
+ * ce qu'il fait et où (`lib/mowerTask.ts`).
  * Place toujours réservée : rien ne bouge quand l'erreur tombe.
  */
 function statusLine(s: StateFor<'mower'>): string {
@@ -115,7 +117,8 @@ function statusLine(s: StateFor<'mower'>): string {
     return parts.join(' · ')
   }
   if (s.restrictedReason && s.activity !== 'mowing' && s.activity !== 'returning') return t(`mower.restrictions.${s.restrictedReason}`)
-  return ''
+  // sinon ce qu'il fait, et où : « En route vers Fond », « Tonte · Devant », « Retour à la station »
+  return mowerTask(s, t)
 }
 const nextStart = (s: StateFor<'mower'>) => (s.nextStartAt ? d(new Date(s.nextStartAt), 'short') : EMPTY)
 const cuttingHeight = (s: StateFor<'mower'>) => (s.cuttingHeight === undefined ? EMPTY : t('mower.cuttingHeightValue', { h: s.cuttingHeight }))
@@ -214,7 +217,7 @@ const zonesOpen = ref<string | null>(null)
 const hasZones = (m: MowerEntry) => has(m, 'work_areas') || has(m, 'stay_out_zones')
 
 /**
- * Quota de l'API du fabricant (`PluginHealth.quota`) : 10 000 requêtes par mois chez Husqvarna. La
+ * Quota de l'API du fabricant (`PluginHealth.quota`) : 21 000 requêtes par fenêtre de sept jours chez Husqvarna. La
  * santé des plugins ne se pousse pas : on la redemande en arrivant, à chaque battement, après une
  * commande. Rien pour un plugin qui ne compte pas (la simulation).
  */

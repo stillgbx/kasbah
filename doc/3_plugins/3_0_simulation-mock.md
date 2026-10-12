@@ -472,3 +472,9 @@ est relayée par `Simulation.siteMap`, par `siteMap` du plugin `mock` et par `mo
 Contrat : `../1_architecture/1_1_contrat-appareils.md`, même date.
 
 Sources : `packages/mock-sim/src/{behaviours/robots,simulation,types}.ts`, `apps/server/src/plugins/mock/index.ts`, `apps/web/src/api/mockTransport.ts`.
+
+### Mise à jour 2026-10-12 (bis) — la tondeuse simulée dit où elle tond
+
+Elle publie `workAreaId` (`0` au planning et sur « tondre », la zone donnée sur « tondre une zone ») et
+`leaving` : une vingtaine de secondes « en route » à chaque départ de la station (`depart`), effacé au
+retour. De quoi voir la phrase de tâche sans robot réel (`packages/mock-sim/src/behaviours/robots.ts`).

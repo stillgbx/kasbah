@@ -466,3 +466,27 @@ décalage `mapOffset` : voir `../4_ui/4_1_navigation-et-panneaux.md`, mise à jo
 Sources : `apps/server/src/plugins/automower/{index,client,mapping,types}.ts`, `__fixtures__/automower.ts`,
 tests `mapping.test.ts` et `plugin.test.ts`, `packages/shared/src/devices/{kinds,command,state}.ts`,
 `apps/web/src/lib/siteMap.ts`.
+
+### Mise à jour 2026-10-12 (bis) — la tâche en cours : zone visée et départ
+
+Le robot publie la zone où il tond, ou qu'il rejoint, dans `mower.workAreaId` de la **lecture complète**
+(`GET /mowers`), et son départ dans l'activité `LEAVING`. Les événements du flux captés le 2026-09-16 ne
+portent **jamais** `workAreaId` (voir « les événements capturés : des DELTAS ») : un delta garde donc la
+zone telle que le robot fondu la connaît. `taskFields` (`mapping.ts`) publie `workAreaId` (absent →
+`null`, effacé) et `leaving` (`true` sur `LEAVING`, que l'activité Kasbah range toujours sous `mowing`).
+
+Pour que la zone suive les ordres sans attendre la relecture de dix minutes, deux relectures en plus
+(`index.ts`) :
+
+- un `mower-event-v2` qui **change l'activité** d'un robot à zones (`capabilities.workAreas`) déclenche
+  `resync` — une fois par minute au plus (`RESYNC_MIN_MS`) ; une même activité redite ne relit rien ;
+- « tondre une zone » (`StartInWorkArea` accepté) programme une lecture **10 s** après
+  (`AREA_REFRESH_MS`, même minuteur unique que la relecture après une bascule de zone d'exclusion,
+  `readSoon`).
+
+Coût : quelques requêtes par jour de tonte, face aux 21 000 par semaine. **Pas encore vérifié sur le vrai
+robot** : que `workAreaId` vaille bien la zone demandée pendant un `StartInWorkArea` (supposé d'après la
+documentation et la forme de la liste) ; la simulation et les tests le tiennent.
+
+Sources : `apps/server/src/plugins/automower/{mapping,index}.ts`, tests `mapping.test.ts` (« tâche en
+cours ») et `plugin.test.ts` (« la zone en cours suit les ordres »), `packages/shared/src/devices/state.ts`.

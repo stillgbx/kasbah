@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { ManualClock } from '@kasbah/mock-sim'
 import type { PluginContext } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
-import { MAP_GENERATED_SVG, MAP_ZONE_SVG, MOWERS_ZONES, STAY_OUT_ID, MESSAGES, MOWERS_ERROR, MOWERS_MOWING, MOWERS_PARKED, MOWER_ID, WS_MESSAGE_ERROR, TOKEN_INVALID_CLIENT, TOKEN_RESPONSE, TOKEN_RESPONSE_2, WS_MOWER_HOME, WS_MOWER_STOPPED, WS_PLANNER, WS_POSITION, WS_READY, WS_UNKNOWN_MOWER } from './__fixtures__/automower'
+import { MAP_GENERATED_SVG, MAP_ZONE_SVG, MOWERS_ZONES, STAY_OUT_ID, WS_MOWER_LEAVING, MESSAGES, MOWERS_ERROR, MOWERS_MOWING, MOWERS_PARKED, MOWER_ID, WS_MESSAGE_ERROR, TOKEN_INVALID_CLIENT, TOKEN_RESPONSE, TOKEN_RESPONSE_2, WS_MOWER_HOME, WS_MOWER_STOPPED, WS_PLANNER, WS_POSITION, WS_READY, WS_UNKNOWN_MOWER } from './__fixtures__/automower'
 import { TOKEN_URL } from './auth'
 import { API_BASE_URL } from './client'
 import { automowerConfigSchema, createAutomowerPlugin, type AutomowerStatus } from './index'
@@ -502,5 +502,41 @@ describe('automower — carte : détecter un tracé modifié sans dépenser le q
     await flush()
     await plugin.siteMap!(MOWER_ID)
     expect(mapReads()).toBe(2)
+  })
+})
+
+describe('automower — la zone en cours suit les ordres', () => {
+  it('un changement d’activité chez un robot à zones relit la liste (la zone n’est que là), une fois par minute au plus', async () => {
+    const hq = fakeHusqvarna()
+    hq.world.list = MOWERS_ZONES
+    const { ws, clock } = await started({ hq })
+    const reads = () => hq.calls.filter((c) => c.path === '/mowers').length
+    const before = reads()
+    clock.advance(61_000)
+    await flush()
+    ws.emit(0, 'open')
+    ws.emit(0, 'message', JSON.stringify(WS_MOWER_LEAVING))
+    await flush()
+    expect(reads()).toBe(before + 1)
+    // même activité redite : rien ; autre changement dans la minute : rien non plus
+    ws.emit(0, 'message', JSON.stringify(WS_MOWER_LEAVING))
+    ws.emit(0, 'message', JSON.stringify({ ...WS_MOWER_LEAVING, attributes: { mower: { activity: 'MOWING' } } }))
+    await flush()
+    expect(reads()).toBe(before + 1)
+  })
+
+  it('« tondre une zone » : la liste est relue dix secondes après, pour publier la zone visée', async () => {
+    const hq = fakeHusqvarna()
+    hq.world.list = MOWERS_ZONES
+    const { plugin, clock } = await started({ hq })
+    const reads = () => hq.calls.filter((c) => c.path === '/mowers').length
+    const before = reads()
+    await plugin.execute(MOWER_ID, { type: 'mower.start_in_area', workAreaId: 123456, durationMin: 60 })
+    clock.advance(9_000)
+    await flush()
+    expect(reads()).toBe(before)
+    clock.advance(1_000)
+    await flush()
+    expect(reads()).toBe(before + 1)
   })
 })

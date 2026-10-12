@@ -1,11 +1,17 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CommandInput, DeviceDescriptor, StateFor } from '@kasbah/shared'
 import { formatPercent } from '../../lib/format'
+import { mowerTask } from '../../lib/mowerTask'
 
-defineProps<{ descriptor: DeviceDescriptor; state: StateFor<'mower'>; pending?: boolean; disabled?: boolean }>()
+const props = defineProps<{ descriptor: DeviceDescriptor; state: StateFor<'mower'>; pending?: boolean; disabled?: boolean }>()
 const emit = defineEmits<{ command: [cmd: CommandInput] }>()
-const { d } = useI18n()
+const { d, t } = useI18n()
+// un robot à zones dit OÙ il tond (« Tonte · Devant », « En route vers Fond ») : ligne réservée
+// d'après sa capacité, fixe — rien ne bouge quand la phrase change ou s'efface
+const hasZones = computed(() => props.descriptor.capabilities.includes('work_areas'))
+const task = computed(() => mowerTask(props.state, t))
 </script>
 
 <template>
@@ -14,6 +20,7 @@ const { d } = useI18n()
       <v-chip variant="tonal" :color="state.activity === 'mowing' ? 'success' : state.activity === 'error' ? 'error' : undefined">{{ $t(`mower.activities.${state.activity}`) }}</v-chip>
       <span v-if="state.nextStartAt" class="text-caption text-medium-emphasis">{{ $t('mower.nextStart', { time: d(new Date(state.nextStartAt), 'short') }) }}</span>
     </div>
+    <div v-if="hasZones" class="text-caption text-medium-emphasis mower__task">{{ task }}</div>
     <div class="text-caption text-medium-emphasis">{{ $t('mower.battery') }} · {{ formatPercent(state.battery, $i18n.locale) }}</div>
     <v-progress-linear :model-value="state.battery" rounded height="8" :color="state.battery < 20 ? 'error' : 'success'" class="mb-4" />
     <div class="d-flex ga-2">
@@ -26,3 +33,7 @@ const { d } = useI18n()
     </div>
   </div>
 </template>
+
+<style scoped>
+.mower__task { min-height: 20px; margin: -4px 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+</style>

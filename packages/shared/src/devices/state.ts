@@ -162,6 +162,13 @@ export const mowerStateSchema = z.object({
    * possible : Husqvarna publie une zone `0` sans nom, tout le terrain, tant qu'on n'en a pas tracé.
    */
   workAreas: z.array(z.object({ id: z.number().int().min(0), name: z.string(), enabled: z.boolean() })).optional(),
+  /**
+   * La zone de travail où le robot tond, ou vers laquelle il part (`workAreas[].id` ; `0` = tout le
+   * terrain). Husqvarna la publie dans la lecture complète, pas dans ses événements temps réel.
+   */
+  workAreaId: z.number().int().min(0).optional(),
+  /** En route vers sa zone (Husqvarna `LEAVING`) : l'activité dit déjà `mowing`, ceci précise qu'il n'y est pas encore. */
+  leaving: z.boolean().optional(),
   /** Zones d'exclusion (capacité `stay_out_zones`) : `enabled` = le robot n'y entre pas. */
   stayOutZones: z.array(z.object({ id: z.string().min(1), name: z.string(), enabled: z.boolean() })).optional(),
   /** Compteurs de vie du robot, tels que le fabricant les tient (secondes, mètres, nombres). */

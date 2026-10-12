@@ -175,6 +175,17 @@ function statisticsOf(s: MowerData['attributes']['statistics']): StateFor<'mower
   return Object.keys(defined).length ? defined : undefined
 }
 
+/**
+ * Ce que le robot est en train de faire, au-delà de l'activité : la zone où il tond (ou qu'il rejoint)
+ * et s'il est encore EN ROUTE (`LEAVING`, que l'activité Kasbah range sous `mowing`). La zone n'arrive
+ * que par la lecture complète — les événements captés ne la portent jamais — : un delta la garde donc
+ * telle que le robot fondu la connaît. Absente = effacée (`null`).
+ */
+function taskFields(mower: { activity?: string | null; workAreaId?: number | null } | null | undefined): Pick<StatePatch<'mower'>, 'workAreaId' | 'leaving'> {
+  const id = mower?.workAreaId
+  return { workAreaId: typeof id === 'number' && id >= 0 ? id : null, leaving: lower(mower?.activity) === 'leaving' }
+}
+
 /** Zones de travail lisibles ; une entrée à la forme inattendue est sautée. Absent = le robot n'en dit rien. */
 function workAreasOf(a: MowerData['attributes']): StateFor<'mower'>['workAreas'] {
   if (!a.workAreas) return undefined
@@ -206,6 +217,7 @@ export function toStatePatch(m: MowerData, o: MapOptions): StatePatch<'mower'> {
     ...(workAreas ? { workAreas } : {}),
     ...(stayOutZones ? { stayOutZones } : {}),
     activity: toActivity(a.mower),
+    ...taskFields(a.mower),
     battery: clampPct(a.battery?.batteryPercent),
     ...errorFields(a.mower, o.tz),
     ...plannerFields(a.planner, a.mower, o.tz),
@@ -258,7 +270,7 @@ export function applyEvent(ev: WsEvent, current: MowerData, o: MapOptions): Appl
       const mower = { ...(a.mower ?? {}), ...defined(delta.data) }
       return {
         next: withAttributes({ mower }),
-        patch: { activity: toActivity(mower), ...errorFields(mower, o.tz), ...plannerFields(a.planner, mower, o.tz) },
+        patch: { activity: toActivity(mower), ...taskFields(mower), ...errorFields(mower, o.tz), ...plannerFields(a.planner, mower, o.tz) },
       }
     }
     case 'planner-event-v2': {

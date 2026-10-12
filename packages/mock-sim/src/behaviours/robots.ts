@@ -1,4 +1,4 @@
-import { localToGeo } from '@kasbah/shared'
+import { localToGeo, type StateFor } from '@kasbah/shared'
 import { SimError, type SimDevice } from '../types'
 import { clamp, descriptor, inWindow, nextOccurrence, round1 } from './common'
 
@@ -80,7 +80,7 @@ const rect = ([x0, y0, x1, y1]: [number, number, number, number]): [number, numb
 
 export function mower(externalId: string, o: MowerOptions): SimDevice<'mower'> {
   const schedule = o.schedule === undefined ? { days: [1, 2, 3, 4, 5], startHour: 10, endHour: 12 } : o.schedule
-  let heading = 0.7, parkedUntilNext = false, manualUntil = 0, returningLeftS = 0
+  let heading = 0.7, parkedUntilNext = false, manualUntil = 0, returningLeftS = 0, leavingLeftS = 0
   // Deux zones de travail (le rectangle d'errance coupé en deux) et une zone d'exclusion dans la
   // seconde : de quoi montrer la carte et ses commandes. Repère maison supposé plein nord, comme la
   // `location` : la carte est donc dans le repère maison, station comprise.
@@ -90,12 +90,15 @@ export function mower(externalId: string, o: MowerOptions): SimDevice<'mower'> {
   const potager: [number, number, number, number] = [ax1 - Math.min(6, (ax1 - xm) / 2), ay1 - Math.min(4, (ay1 - ay0) / 2), ax1 - 1, ay1 - 1]
   /** Où le robot erre : tout le terrain, ou la zone qu'on lui a donnée. */
   let bounds = o.area
+  /** Il part de la station : « en route » une vingtaine de secondes, le temps d'arriver sur sa zone. */
+  const depart = (s: StateFor<'mower'>) => { s.activity = 'mowing'; s.leaving = true; leavingLeftS = 20 }
   const dev: SimDevice<'mower'> = {
     descriptor: descriptor(externalId, 'mower', o.name, ['mow', 'park', 'battery', 'schedule', 'work_areas', 'stay_out_zones', 'site_map'], { manufacturer: 'Mock', model: 'Robotic mower' }),
     state: {
       kind: 'mower', updatedAt: 0, available: true, activity: 'parked', battery: 100, position: [...o.dock], cuttingHeight: 5,
       statistics: { cuttingTimeS: 2_694_600, chargingCycles: 412, collisions: 5836, driveDistanceM: 1_638_400 },
       workAreas: [{ id: 1, name: 'Devant', enabled: true }, { id: 2, name: 'Fond', enabled: true }],
+      workAreaId: 0, leaving: false,
       stayOutZones: [{ id: 'potager', name: 'Potager', enabled: true }],
     },
     siteMap() {
@@ -134,10 +137,15 @@ export function mower(externalId: string, o: MowerOptions): SimDevice<'mower'> {
           s.battery = round1(clamp(s.battery + (100 / 5400) * ctx.dtS, 0, 100))
           s.activity = s.battery < 100 ? 'charging' : 'parked'
           if (s.activity === 'charging') ctx.world.loadsW += 45
-          if (wantsMow && s.battery > 30) s.activity = 'mowing'
+          if (wantsMow && s.battery > 30) {
+            // le planning tond tout le terrain ; un ordre manuel garde la zone qu'il a donnée
+            if (ctx.simTime >= manualUntil) { bounds = o.area; s.workAreaId = 0 }
+            depart(s)
+          }
           break
         case 'mowing': {
           s.battery = round1(clamp(s.battery - (1 / 90) * ctx.dtS, 0, 100))
+          if (s.leaving && (leavingLeftS -= ctx.dtS) <= 0) s.leaving = false
           heading += (ctx.rng() - 0.5) * 0.6 * Math.min(ctx.dtS, 5)
           const speed = 0.5 // m/s
           const [x0, y0, x1, y1] = bounds
@@ -148,7 +156,7 @@ export function mower(externalId: string, o: MowerOptions): SimDevice<'mower'> {
           if (py < y0 || py > y1) { heading = -heading; py = clamp(py, y0, y1) }
           s.position = [Math.round(px * 100) / 100, Math.round(py * 100) / 100]
           geo(s.position)
-          if (!wantsMow || s.battery <= 20) { s.activity = 'returning'; returningLeftS = 90 }
+          if (!wantsMow || s.battery <= 20) { s.activity = 'returning'; s.leaving = false; returningLeftS = 90 }
           break
         }
         case 'returning': {
@@ -171,7 +179,9 @@ export function mower(externalId: string, o: MowerOptions): SimDevice<'mower'> {
           manualUntil = ctx.simTime + (cmd.durationMin ?? 60) * 60_000
           parkedUntilNext = false
           bounds = o.area
-          if (s.activity === 'paused' || s.activity === 'parked' || s.activity === 'charging') s.activity = 'mowing'
+          s.workAreaId = 0
+          if (s.activity === 'paused') s.activity = 'mowing'
+          else if (s.activity === 'parked' || s.activity === 'charging') depart(s)
           break
         case 'mower.start_in_area': {
           const area = areas[cmd.workAreaId]
@@ -179,7 +189,9 @@ export function mower(externalId: string, o: MowerOptions): SimDevice<'mower'> {
           manualUntil = ctx.simTime + cmd.durationMin * 60_000
           parkedUntilNext = false
           bounds = area
-          if (s.activity === 'paused' || s.activity === 'parked' || s.activity === 'charging') s.activity = 'mowing'
+          s.workAreaId = cmd.workAreaId
+          if (s.activity === 'paused') s.activity = 'mowing'
+          else if (s.activity === 'parked' || s.activity === 'charging') depart(s)
           break
         }
         case 'mower.set_stay_out_zone':
@@ -190,7 +202,7 @@ export function mower(externalId: string, o: MowerOptions): SimDevice<'mower'> {
         case 'mower.park':
           manualUntil = 0
           parkedUntilNext = cmd.untilNextSchedule
-          if (s.activity === 'mowing' || s.activity === 'paused') { s.activity = 'returning'; returningLeftS = 90 }
+          if (s.activity === 'mowing' || s.activity === 'paused') { s.activity = 'returning'; s.leaving = false; returningLeftS = 90 }
           break
         default: throw new SimError('UNSUPPORTED_COMMAND', `${cmd.type} on mower`)
       }

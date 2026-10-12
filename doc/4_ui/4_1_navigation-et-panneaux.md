@@ -6133,3 +6133,32 @@ quota. Elle ne remplace la carte reçue que si elle a **changé** (comparaison d
 redessiner pour rien. Une carte illisible n'empêche rien : le bouton des calques n'apparaît pas.
 
 Sources : `apps/web/src/views/RobotsView.vue`, `apps/web/src/components/robots/{MowerZones,MowerTuning}.vue`, `apps/web/src/components/vehicles/VehicleMap.vue`, `apps/web/src/lib/siteMap.ts` (+ `siteMap.test.ts`), `apps/web/src/i18n/locales/{fr,en}.json`.
+
+### Mise à jour 2026-10-12 (quater) — la tâche du robot, et ses zones dans le panneau de la vue Maison
+
+**Ce que fait la tondeuse, en une phrase.** `mowerTask` (`apps/web/src/lib/mowerTask.ts`) compose, à
+partir de l'activité, de `workAreaId` et de `leaving` : « En route vers {zone} », « En route pour
+tondre » (tout le terrain), « Tonte · {zone} », « Tonte · tout le terrain » (dit seulement chez un robot
+qui a des zones tracées), « Retour à la station » ; vide sinon (garé, en charge, en pause : l'activité
+suffit). Une zone inconnue de la liste garde son numéro (« Zone 999 »). Le nom d'une zone passe par
+`workAreaLabel` (zone `0` sans nom = « Tout le terrain »), partagé avec le panneau Zones.
+
+- **Vue Robots** : la ligne d'état sous la jauge dit, dans l'ordre, l'erreur, la restriction, puis cette
+  phrase — même ligne, place toujours réservée.
+- **Panneau de la vue Maison** (`MowerControl.vue`) : une ligne réservée sous la pastille d'activité,
+  présente seulement chez un robot qui déclare `work_areas` (capacité fixe : rien ne bouge quand la
+  phrase change ou s'efface).
+
+**Les zones depuis la vue Maison.** Le panneau détail d'une tondeuse à zones (`DevicePanel.vue`) a un
+bloc « Zones du robot », replié derrière son bouton comme le journal : le même `MowerZones.vue` que la
+vue Robots (« Tondre 1 h » par zone avec sa pastille, interrupteurs d'exclusion). Il se referme quand on
+sélectionne un autre appareil.
+
+Vérifié en mode simulé : « Tondre 1 h » sur une zone depuis la vue Robots puis depuis le panneau 3D
+(« Tonte · Fond », « Tonte · Devant »), « Rentrer » (« Retour à la station ») ; la ligne de tâche garde sa
+géométrie au pixel, aucune erreur console.
+
+Sources : `apps/web/src/lib/mowerTask.ts` (+ test), `apps/web/src/components/controls/MowerControl.vue`,
+`apps/web/src/components/home/DevicePanel.vue`, `apps/web/src/components/robots/MowerZones.vue`,
+`apps/web/src/views/RobotsView.vue`, `apps/web/src/i18n/locales/{fr,en}.json` (`mower.task.*`,
+`mower.zonesTitle`).

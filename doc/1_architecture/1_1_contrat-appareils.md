@@ -1020,3 +1020,16 @@ commande avec `enabled` inversé.
 La simulation déclare les trois capacités (`../3_plugins/3_0_simulation-mock.md`).
 
 Sources : `packages/shared/src/devices/{kinds,command,state}.ts`, `packages/shared/src/automations/inverse.ts`.
+
+### Mise à jour 2026-10-12 (bis) — tondeuse : la tâche en cours
+
+Deux champs d'état optionnels de plus sur `mower` (`packages/shared/src/devices/state.ts`) :
+
+- `workAreaId` (entier ≥ 0) : la zone de travail où le robot tond, ou qu'il rejoint (`workAreas[].id` ;
+  `0` = tout le terrain) ;
+- `leaving` (booléen) : il est **en route** vers sa zone. L'activité reste `mowing` — on n'a pas ajouté de
+  valeur à `MOWER_ACTIVITIES`, que lisent les automatisations, la scène et les contrôles ; ce champ
+  précise seulement qu'il n'y est pas encore.
+
+L'interface en tire une phrase (`apps/web/src/lib/mowerTask.ts`) : voir
+`../4_ui/4_1_navigation-et-panneaux.md`, même date.

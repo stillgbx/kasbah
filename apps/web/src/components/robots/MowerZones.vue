@@ -3,6 +3,7 @@ import type { CommandInput, StateFor } from '@kasbah/shared'
 import { useI18n } from 'vue-i18n'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import { workAreaColor } from '../../lib/siteMap'
+import { workAreaLabel } from '../../lib/mowerTask'
 
 // Les zones d'une tondeuse : tondre l'une de ses zones de travail (une heure, comme le bouton de la
 // carte : Husqvarna exige une durée), et ouvrir ou fermer ses zones d'exclusion. Les zones se TRACENT
@@ -19,8 +20,7 @@ const emit = defineEmits<{ command: [cmd: CommandInput] }>()
 const { t } = useI18n()
 
 type WorkArea = NonNullable<StateFor<'mower'>['workAreas']>[number]
-/** La zone `0` sans nom est tout le terrain (Husqvarna la publie ainsi tant qu'on n'en trace pas d'autre). */
-const areaName = (a: WorkArea) => a.name || (a.id === 0 ? t('mower.wholeLawn') : t('mower.areaUnnamed', { id: a.id }))
+const areaName = (a: WorkArea) => workAreaLabel(a, t)
 const disabled = () => !props.state.available || props.busy
 </script>
 

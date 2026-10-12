@@ -2,6 +2,20 @@
 
 Entrées les plus récentes en haut. Une session = une entrée.
 
+## [2026-10-12] update | Tondeuse : la tâche en cours, et ses zones depuis la vue Maison
+
+**Déclencheur** : suite de la session du jour — « afficher l'ordre en cours (en direction de la zone sud, tonte de la zone avant, retour à la station) » et « lancer la tonte d'une zone depuis le panneau détail du robot dans la vue 3D ».
+
+**Pages modifiées** :
+- `3_plugins/3_11_husqvarna-automower.md` - section datée (bis) : `workAreaId` et `LEAVING` n'arrivent que par la lecture complète ; `taskFields` ; relecture sur changement d'activité (une par minute au plus) et 10 s après `StartInWorkArea` ; la zone pendant un `StartInWorkArea` n'est pas encore vérifiée sur le vrai robot.
+- `1_architecture/1_1_contrat-appareils.md` - champs d'état `workAreaId` et `leaving` (pas de nouvelle valeur d'activité, et pourquoi).
+- `4_ui/4_1_navigation-et-panneaux.md` - section (quater) : phrase de tâche (`mowerTask`) dans la ligne d'état de la vue Robots et sous la pastille du panneau 3D, bloc « Zones du robot » dans `DevicePanel`.
+- `3_plugins/3_0_simulation-mock.md` - la tondeuse simulée publie sa zone et son départ.
+
+**Hors wiki** : le commentaire de quota de `RobotsView.vue` (signalé à l'entrée précédente) dit désormais 21 000 requêtes par fenêtre de sept jours.
+
+**Index** : dates déjà au 2026-10-12, inchangé.
+
 ## [2026-10-12] update | Tondeuse : zones, carte du terrain, calques ; Cast ne fait plus tomber le serveur
 
 **Déclencheur** : session du 2026-10-12 (code non commité à l'écriture) — commander les zones d'un robot tondeuse, poser la carte de son terrain sur la photo satellite, et corriger une chute du serveur quand l'interface mDNS configurée est absente.
