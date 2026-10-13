@@ -1,5 +1,6 @@
 import { BufferAttribute, BufferGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial } from 'three'
 import { terrainHeight, type TerrainDescriptor, type Vec2 } from '@kasbah/shared'
+import { SITE_DECOR_LAYER } from '../core/layers'
 import { applyTerrainHeights, drapeGeometry } from './terrain'
 
 // Des formes PEINTES sur le terrain : aplats et traits qui épousent le relief, posés juste au-dessus
@@ -71,6 +72,8 @@ export function ribbonGeometry(points: readonly Vec2[], closed: boolean, width: 
  * Les formes, peintes sur le terrain : un aplat drapé (la maille du terrain, posée par
  * `applyTerrainHeights` — sous un plancher, il passe sous le plancher comme l'herbe) et un ruban de
  * contour. Rien ne se touche : la carte peinte ne prend aucun tap (le terrain dessous reste à lui).
+ * Elle vit sur `SITE_DECOR_LAYER` : l'occlusion ambiante (qualité haute) prenait les rubans, 5 cm
+ * au-dessus de l'herbe, pour des obstacles et cernait chaque trait d'un liseré sombre.
  */
 export function buildGroundOverlay(shapes: readonly GroundShape[], terrain: TerrainDescriptor): Group {
   const group = new Group()
@@ -85,6 +88,7 @@ export function buildGroundOverlay(shapes: readonly GroundShape[], terrain: Terr
     if (s.line && s.line.opacity > 0) group.add(new Mesh(ribbonGeometry(s.points, s.closed, s.line.widthM, terrain), material(s.line.color, s.line.opacity)))
   }
   group.traverse((o) => {
+    o.layers.set(SITE_DECOR_LAYER)
     if (o instanceof Mesh) { o.raycast = () => {}; o.renderOrder = 1 }
   })
   return group

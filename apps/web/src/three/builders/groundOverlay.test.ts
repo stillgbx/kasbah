@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Mesh } from 'three'
 import { terrainHeight, type TerrainDescriptor } from '@kasbah/shared'
+import { SITE_DECOR_LAYER } from '../core/layers'
 import { buildGroundOverlay, ribbonGeometry } from './groundOverlay'
 
 // Les formes peintes épousent le terrain : chaque sommet est posé au-dessus de la surface, et rien ne
@@ -30,5 +31,7 @@ describe('groundOverlay', () => {
     const hits: unknown[] = []
     for (const m of meshes) m.raycast({} as never, hits as never)
     expect(hits).toHaveLength(0)
+    // hors de la vue de l'occlusion ambiante, qui cernait chaque trait de noir
+    for (const m of meshes) expect(m.layers.mask).toBe(1 << SITE_DECOR_LAYER)
   })
 })

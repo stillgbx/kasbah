@@ -1,6 +1,6 @@
 # Scène 3D (Three.js)
 
-> Dernière mise à jour : 2026-10-12
+> Dernière mise à jour : 2026-10-13
 > Sources : `apps/web/src/three/HouseScene.ts`, `apps/web/src/three/core/*.ts`, `apps/web/src/three/builders/*.ts`, `apps/web/src/three/markers/*.ts`, `apps/web/src/composables/useHouseScene.ts`, `apps/web/src/three/markers/DeviceMarker.ts`, `apps/web/src/three/markers/screenArt.ts`, `apps/web/src/lib/audioRouting.ts`, `packages/shared/src/house/panels.ts`, `apps/web/src/lib/orientation.ts`, `apps/web/src/three/markers/markers.ts`, `apps/web/src/three/core/theme.ts`, `apps/web/src/three/styles/*.ts`, `apps/web/src/three/textures/{procedural,assets}.ts`, `apps/web/src/three/core/layers.ts`, `packages/shared/src/house/openings.ts`, `apps/web/src/three/core/cameraFit.ts`, `apps/web/src/three/effects/water.ts`, `apps/web/src/three/effects/disco.ts`, `apps/web/src/three/effects/parade.ts`, `apps/web/src/three/builders/parking.ts`, `packages/shared/src/house/sun.ts`, `apps/web/src/three/builders/terrain.ts`, `apps/web/src/three/relief/reliefEditor.ts`, `apps/web/src/three/effects/roam.ts`, `apps/web/src/three/effects/bats.ts`, `apps/web/src/three/garden/gardenLayer.ts`
 
 ## Répartition
@@ -4555,3 +4555,17 @@ capture de l'utilisateur.
 Sources : `apps/web/src/three/builders/groundOverlay.ts` (+ test), `apps/web/src/three/HouseScene.ts`,
 `apps/web/src/composables/{useSceneGroundOverlay,useHouseScene}.ts`, `apps/web/src/stores/sceneZones.ts`,
 `apps/web/src/lib/siteMap.ts`.
+
+### Mise à jour 2026-10-13 — la carte peinte, cernée de noir en qualité haute
+
+**Symptôme** : « parfois », chaque trait de la carte peinte d'une tondeuse (`builders/groundOverlay.ts`)
+était cerné d'un liseré sombre, les teintes foncées du vert, du rouge et du bleu, l'aplat intact.
+**Cause** : l'occlusion ambiante GTAO (`ArchitectureGTAOPass`, `three/core/post.ts`, qualité **haute**
+seulement, d'où le « parfois ») relève la profondeur et les normales de la scène ; les rubans de contour,
+5 cm au-dessus de l'herbe, y passaient pour des obstacles. **Correction** : les maillages de la carte
+vont sur `SITE_DECOR_LAYER` (`three/core/layers.ts`) ; test de masque de couche dans
+`groundOverlay.test.ts`. Même famille que le carré noir sous les halos des lampes : tout décor
+translucide posé sur la scène sans en être la matière va sur une couche de décor. **Non vu à l'image**
+(la 3D ne se rend pas dans le panneau masqué de la préversion) : vérifié sur l'état de la scène.
+
+Sources : `apps/web/src/three/builders/groundOverlay.ts` (+ test), `apps/web/src/three/core/{post,layers}.ts`.
