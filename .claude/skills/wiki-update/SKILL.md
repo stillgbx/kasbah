@@ -54,13 +54,16 @@ Heuristics for this repo :
 | `apps/server/src/plugins/hue/*` | `3_plugins/3_1_philips-hue.md` |
 | new plugin folder | `3_plugins/3_2_ecrire-un-plugin.md`, `3_plugins/3_3_fabricants-a-venir.md` |
 | `apps/web/src/{stores,api,router}/*`, `apps/web/src/lib/optimistic.ts` | `1_architecture/1_4_app-web.md` |
-| `apps/web/src/three/*`, `apps/web/src/composables/useHouseScene.ts` | `1_architecture/1_5_scene-3d.md` |
+| `apps/web/src/three/*`, `apps/web/src/composables/useHouseScene.ts` | `1_architecture/1_5_scene-3d.md` (socle, interactions) ; rendu, styles, lumière, perf : `1_11_scene-3d-rendu.md` ; marqueurs et objets dessinés : `1_12_scene-3d-objets.md` |
 | `apps/server/src/music/*`, `apps/web/src/**/music/*` | `1_architecture/1_6_lecteur-musique.md` |
 | `apps/server/src/mcp/*` | `1_architecture/1_7_serveur-mcp.md` |
+| `apps/server/src/http/session.ts`, `apps/server/src/mcp/{auth,users-routes,users-cli}.ts`, `userStateDir` | `1_architecture/1_13_comptes-et-sessions.md` (+ `1_7` for the OAuth side) |
+| `apps/server/src/core/{history,chargeCoordination}.ts`, `energy` / `ev_charger` states | `1_architecture/1_14_energie.md` |
 | `apps/server/src/core/automations/*`, `packages/shared/src/automations/*` | `1_architecture/1_8_automatisations.md` |
 | `apps/server/src/plugins/<fabricant>/*` | the plugin's own `3_plugins/3_N_<fabricant>.md` (see `index.md`) |
 | `apps/web/src/styles/*`, `apps/web/src/plugins/vuetify.ts`, `apps/web/src/lib/strokeIcons.ts` | `4_ui/4_0_langage-visuel.md` |
-| `apps/web/src/views/*`, `apps/web/src/components/**` | `4_ui/4_1_navigation-et-panneaux.md` |
+| `apps/web/src/components/layout/*`, `apps/web/src/components/home/*`, `views/HomeView.vue` | `4_ui/4_1_navigation-et-panneaux.md` |
+| another view (`apps/web/src/views/*`) and its components | the page of that view : `4_ui/4_3` (Lumières, Ouvrants, Caméras) … `4_ui/4_8` (mode édition), see `doc/4_ui/README.md` |
 | `apps/web/src/stores/settings.ts`, `apps/web/src/i18n/*` | `4_ui/4_2_theme-et-langues.md` |
 | `package.json`, `apps/server/.env.example`, `apps/server/build.mjs`, `.claude/launch.json` | `5_setup/*` |
 | incident / gotcha | `6_faq/6_0_pieges-outillage.md` or `6_faq/6_1_pieges-runtime.md` |

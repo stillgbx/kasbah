@@ -20,7 +20,7 @@ Vision du projet, principes structurants et vocabulaire commun. Résumés : [0_o
 ## 1 — Architecture
 
 <!-- section:1_architecture:begin (généré par scripts/wiki-index.mjs depuis 1_architecture/README.md - ne pas éditer ici) -->
-Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/WebSocket, application web, scène 3D, et les briques transverses : lecteur musique, MCP, automatisations, assistant, liste de courses. Résumés : [1_architecture/README.md](1_architecture/README.md) (11 pages, dernière mise à jour 2026-10-13).
+Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/WebSocket, application web, scène 3D, et les briques transverses : lecteur musique, MCP, automatisations, assistant, liste de courses. Résumés : [1_architecture/README.md](1_architecture/README.md) (15 pages, dernière mise à jour 2026-10-13).
 
 | Pages | Dernière mise à jour |
 |---|---|
@@ -35,6 +35,10 @@ Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/Web
 | [1_8 Automatisations](1_architecture/1_8_automatisations.md) | 2026-10-11 |
 | [1_9 Assistant (« Demander à Kasbah »)](1_architecture/1_9_assistant.md) | 2026-10-11 |
 | [1_10 Liste de courses](1_architecture/1_10_liste-de-courses.md) | 2026-10-11 |
+| [1_11 Scène 3D : rendu](1_architecture/1_11_scene-3d-rendu.md) | 2026-10-13 |
+| [1_12 Scène 3D : objets dessinés](1_architecture/1_12_scene-3d-objets.md) | 2026-10-13 |
+| [1_13 Comptes et sessions](1_architecture/1_13_comptes-et-sessions.md) | 2026-10-13 |
+| [1_14 Énergie](1_architecture/1_14_energie.md) | 2026-10-13 |
 <!-- section:1_architecture:end -->
 
 ## 2 — Maison
@@ -90,13 +94,22 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 ## 4 — UI
 
 <!-- section:4_ui:begin (généré par scripts/wiki-index.mjs depuis 4_ui/README.md - ne pas éditer ici) -->
-Interface : langage visuel, navigation, vues et panneaux, thèmes et langues. Résumés : [4_ui/README.md](4_ui/README.md) (3 pages, dernière mise à jour 2026-10-13).
+Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et langues, puis une page par famille de vues. Résumés : [4_ui/README.md](4_ui/README.md) (9 pages, dernière mise à jour 2026-10-13).
 
-| Pages | Dernière mise à jour |
+| Socle | Dernière mise à jour |
 |---|---|
 | [4_0 Langage visuel](4_ui/4_0_langage-visuel.md) | 2026-10-06 |
 | [4_1 Navigation et panneaux](4_ui/4_1_navigation-et-panneaux.md) | 2026-10-13 |
 | [4_2 Thème et langues](4_ui/4_2_theme-et-langues.md) | 2026-10-06 |
+
+| Vues | Dernière mise à jour |
+|---|---|
+| [4_3 Vues Lumières, Ouvrants et Caméras](4_ui/4_3_vues-lumieres-ouvrants-cameras.md) | 2026-10-13 |
+| [4_4 Vues Énergie et Véhicules](4_ui/4_4_vues-energie-vehicules.md) | 2026-10-13 |
+| [4_5 Musique et médias](4_ui/4_5_musique-et-medias.md) | 2026-10-13 |
+| [4_6 Autres vues](4_ui/4_6_autres-vues.md) | 2026-10-13 |
+| [4_7 Vue Réglages](4_ui/4_7_reglages.md) | 2026-10-13 |
+| [4_8 Mode édition et propriétés](4_ui/4_8_mode-edition-et-proprietes.md) | 2026-10-13 |
 <!-- section:4_ui:end -->
 
 ## 5 — Setup

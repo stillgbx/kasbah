@@ -7,6 +7,33 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-13] update | Découpage de 4_1 et de 1_5, pages Comptes et sessions et Énergie
+
+**Déclencheur** : actions du lint du jour validées par l'utilisateur : `4_1` (~116k tokens) et `1_5`
+(~83k) dépassaient ce qu'une requête peut lire ; comptes et énergie étaient dispersés.
+
+**Pages modifiées** :
+- `4_ui/4_1_navigation-et-panneaux.md` - ne garde que la navigation et les panneaux de la vue Maison
+  (39 sections), avec un tableau « Où sont les vues » ; 92 Ko.
+- `1_architecture/1_5_scene-3d.md` - ne garde que le socle, les interactions et les chemins de
+  reconstruction (28 sections), avec un tableau des pages filles ; 82 Ko.
+
+**Pages créées** :
+- `4_ui/4_3` à `4_8` (Lumières / Ouvrants / Caméras, Énergie / Véhicules, Musique et médias, autres
+  vues, Réglages, mode édition et propriétés) - 159 sections reprises de `4_1`.
+- `1_architecture/1_11_scene-3d-rendu.md`, `1_12_scene-3d-objets.md` - 86 sections reprises de `1_5`.
+- `1_architecture/1_13_comptes-et-sessions.md`, `1_14_energie.md` - synthèses vérifiées sur le code,
+  qui renvoient aux sections datées.
+
+Sections déplacées sans retouche, dates comprises ; vérifié que chacune des 198 + 114 sections se
+retrouve dans exactement une page. Les renvois « plus haut / plus bas » d'une section déplacée peuvent
+désigner une page sœur : chaque page fille le dit en tête. Les 102 renvois d'autres pages vers `4_1`
+restent valides par le tableau « Où sont les vues ».
+
+**Hors wiki** : table de correspondance de `wiki-update` mise à jour (vues, scène 3D, comptes, énergie).
+
+**Index** : catalogues `1_architecture` et `4_ui` mis à jour (11 lignes), index.md régénéré.
+
 ## [2026-10-13] lint | Wiki health check
 
 **Orphans found** : 0 (`wiki-index.mjs --check` vert : 50 pages cataloguées, aucun lien mort).
