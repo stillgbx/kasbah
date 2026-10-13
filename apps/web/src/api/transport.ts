@@ -198,6 +198,33 @@ export interface YtmusicStatus {
 /** Un compte du serveur MCP (`mcp-users.json`) : le nom seul, le mot de passe haché reste sur le serveur. */
 export interface McpUser { name: string }
 
+/** Un commit du dépôt du serveur ; `date` ISO 8601. */
+export interface SystemCommit { sha: string; subject: string; date: string }
+
+/**
+ * Version du serveur (`/api/system/version`) : le commit chargé, ceux qui attendent sur `origin/main`
+ * (`null` si git n'a pas répondu, `error` dit pourquoi), et si un superviseur peut mettre à jour.
+ */
+export interface SystemVersion { supervised: boolean; running: SystemCommit | null; available: SystemCommit[] | null; error: string | null }
+
+export type UpdateStep = 'fetch' | 'deps' | 'build' | 'restart' | 'rollback'
+
+/** Avancement d'une mise à jour, écrit par le superviseur (`scripts/supervisor.mjs`). */
+export interface UpdateStatus {
+  state: 'running' | 'done' | 'failed'
+  step: UpdateStep | null
+  steps: UpdateStep[]
+  failedStep: UpdateStep | null
+  from: string | null
+  to: string | null
+  startedAt: number
+  finishedAt: number | null
+  error: string | null
+  rolledBack: boolean
+  supervisorChanged: boolean
+  log: string[]
+}
+
 /**
  * Le forfait Claude (plugin `claude`) du compte courant (`null` = la maison, sur le réseau local) :
  * jamais le jeton, seulement s'il y en a un et si la maison en a un en repli.
@@ -732,6 +759,12 @@ export interface Transport {
   mcpSetUser(name: string, password: string): Promise<{ users: McpUser[] }>
   /** Retire le compte : ses jetons ne passent plus. */
   mcpRemoveUser(name: string): Promise<{ users: McpUser[] }>
+  /** Version en service et commits disponibles ; `refresh` force un `git fetch`. Réseau local seulement. */
+  systemVersion(refresh?: boolean): Promise<SystemVersion>
+  /** Dernière mise à jour (`null` : jamais). */
+  systemUpdateStatus(): Promise<{ status: UpdateStatus | null }>
+  /** Demande la mise à jour au superviseur ; `NOT_SUPERVISED` sans lui, `UPDATE_RUNNING` si elle tourne. */
+  systemUpdate(): Promise<{ status: UpdateStatus }>
   /** Les agendas de la maison (plugin `agenda`, adresses iCal secrètes). */
   agendaCalendars(): Promise<{ calendars: AgendaCalendar[] }>
   /** Ajout par l'adresse iCal : le serveur la lit tout de suite et refuse ce qui n'est pas un agenda. */

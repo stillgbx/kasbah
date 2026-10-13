@@ -462,6 +462,10 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
       mcpUsers = mcpUsers.filter((n) => n !== name)
       return { users: mcpUsers.map((n) => ({ name: n })) }
     },
+    // démonstration : pas de dépôt derrière, donc pas de superviseur
+    async systemVersion() { return { supervised: false, running: { sha: '0000000000000000000000000000000000000000', subject: 'Démonstration', date: new Date(0).toISOString() }, available: [], error: null } },
+    async systemUpdateStatus() { return { status: null } },
+    async systemUpdate() { throw new ApiRequestError(409, 'NOT_SUPERVISED', 'no supervisor in mock mode') },
     async agendaCalendars() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no calendar in mock mode') },
     async agendaAddCalendar() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no calendar in mock mode') },
     async agendaUpdateCalendar() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no calendar in mock mode') },

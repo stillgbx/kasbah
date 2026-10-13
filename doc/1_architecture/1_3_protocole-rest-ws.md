@@ -1,7 +1,7 @@
 # Protocole REST et WebSocket
 
 > Dernière mise à jour : 2026-10-13
-> Sources : `packages/shared/src/protocol/{ws,http}.ts`, `apps/server/src/http/{routes,errors}.ts`, `apps/server/src/ws/hub.ts`, `apps/web/src/api/httpTransport.ts`, `apps/server/src/plugins/tesla/index.ts`, `apps/server/src/config/house.ts`, `packages/shared/src/house/place.ts`, `apps/server/src/core/scene-registry.ts`, `packages/shared/src/protocol/http.ts` (`deviceConsumptionSchema`), `apps/server/src/http/routes.ts` (automatisations), `apps/server/src/http/relief.test.ts`, `apps/server/src/config/properties.ts`, `apps/server/src/config/catalog.ts`, `apps/server/src/core/shopping.ts` (2026-10-11), `apps/server/src/http/static.ts` (`appBuild`, 2026-10-13)
+> Sources : `packages/shared/src/protocol/{ws,http}.ts`, `apps/server/src/http/{routes,errors}.ts`, `apps/server/src/ws/hub.ts`, `apps/web/src/api/httpTransport.ts`, `apps/server/src/plugins/tesla/index.ts`, `apps/server/src/config/house.ts`, `packages/shared/src/house/place.ts`, `apps/server/src/core/scene-registry.ts`, `packages/shared/src/protocol/http.ts` (`deviceConsumptionSchema`), `apps/server/src/http/routes.ts` (automatisations), `apps/server/src/http/relief.test.ts`, `apps/server/src/config/properties.ts`, `apps/server/src/config/catalog.ts`, `apps/server/src/core/shopping.ts` (2026-10-11), `apps/server/src/http/static.ts` (`appBuild`, 2026-10-13), `apps/server/src/http/system.ts` (2026-10-13)
 
 ## REST
 
@@ -738,3 +738,16 @@ rechargement immédiat. Détail : `../5_setup/5_2_production.md` (mise à jour 2
 
 Côté HTTP, le repli SPA exclut désormais `/assets/*` : un fichier absent y répond 404
 (`NOT_FOUND`), plus `index.html`.
+
+### Mise à jour 2026-10-13 (bis) — `/api/system/version` et `/api/system/update`
+
+Version du serveur et mise à jour depuis Réglages (`apps/server/src/http/system.ts`). Réseau local
+seulement : 403 `LAN_ONLY` sous l'adresse publique, même connecté (`../1_architecture/1_13_comptes-et-sessions.md`).
+
+| Route | Réponse |
+|---|---|
+| `GET /api/system/version[?refresh=1]` | `{ supervised, running, available, error }` : `running` = commit chargé (HEAD **au démarrage**, `{ sha, subject, date }`), `available` = commits de `running..origin/main` (50 au plus, `null` si git échoue, `error` dit pourquoi). `git fetch` au plus une fois par minute, `refresh=1` le force. |
+| `GET /api/system/update` | `{ status }` : la dernière mise à jour (`null` : jamais), lue dans `.state/update-status.json`. Un « en cours » de plus de 30 min est rendu `failed`, `error: 'interrupted'`. |
+| `POST /api/system/update` | 202 `{ status }` et la demande part au superviseur (IPC) ; 409 `NOT_SUPERVISED` sans superviseur, 409 `UPDATE_RUNNING` si une mise à jour tourne. |
+
+Déroulé et procédure d'installation : `../5_setup/5_2_production.md` (mise à jour 2026-10-13 (bis)).

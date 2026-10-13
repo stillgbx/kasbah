@@ -6,6 +6,7 @@ import { loadEnv } from './config/env'
 import { PropertyCatalog } from './config/catalog'
 import type { PropertyEntry, PropertyHost } from './config/properties'
 import { createLogger } from './core/logger'
+import type { UpdateRequest } from './http/system'
 
 // Point d'entrée : .env (apps/server/.env) → env validé → app → plugins → écoute → arrêt propre.
 
@@ -48,6 +49,7 @@ async function start(): Promise<void> {
   kasbah = await buildApp({
     env: active ? { ...env, KASBAH_HOUSE_FILE: active.path } : env,
     logger,
+    ...(process.send ? { supervisor: (msg: UpdateRequest) => process.send!(msg) } : {}),
     ...(scenario ? { envSource: { ...process.env, MOCK_SCENARIO: scenario } } : {}),
     ...(properties ? { properties } : {}),
     ...(active?.demo ? { readOnly: true } : {}),
@@ -85,3 +87,12 @@ async function shutdown(signal: string) {
 }
 process.on('SIGINT', () => void shutdown('SIGINT'))
 process.on('SIGTERM', () => void shutdown('SIGTERM'))
+
+// Sous le superviseur de production (`scripts/supervisor.mjs`) : « prêt » une fois les plugins
+// démarrés (sinon il revient au commit d'avant), arrêt propre à sa demande, et arrêt tout court
+// s'il disparaît (sous Windows, tuer un parent ne tue pas ses enfants : le port resterait pris).
+if (process.send) {
+  process.send({ type: 'ready' })
+  process.on('message', (m: { type?: string }) => { if (m?.type === 'shutdown') void shutdown('supervisor') })
+  process.on('disconnect', () => void shutdown('supervisor gone'))
+}

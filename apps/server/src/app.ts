@@ -20,6 +20,7 @@ import { SceneSeeder } from './core/scene-seeder'
 import { ShoppingService, shoppingPathFor } from './core/shopping'
 import { EnergyHistory } from './core/history'
 import { registerRoutes } from './http/routes'
+import { registerSystemRoutes, type SystemRoutesDeps } from './http/system'
 import { actAsHook, createAppSession, sessionConfigSchema } from './http/session'
 import { readAppBuild, registerStatic } from './http/static'
 import { createMcpAuth, mcpAuthConfigSchema, publicHostFilter } from './mcp/auth'
@@ -43,6 +44,8 @@ export interface BuildAppOptions {
   properties?: PropertyHost
   /** La maison est une démonstration : ni elle ni ses automatisations ne s'écrivent. */
   readOnly?: boolean
+  /** Canal vers le superviseur de production (`scripts/supervisor.mjs`) : la mise à jour depuis Réglages. */
+  supervisor?: SystemRoutesDeps['supervisor']
 }
 
 export interface KasbahApp {
@@ -141,6 +144,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
 
   registerRoutes(app, { registry, scenes, host, house, hub, history, automations, shopping, startedAt: clock.now(), ...(opts.properties ? { properties: opts.properties } : {}) })
   host.registerRoutes(app)
+  registerSystemRoutes(app, { supervisor: opts.supervisor, statusFile: stateFile('update-status.json') })
   await registerMcp(app, { registry, scenes, host, house, auth: mcpAuth })
   registerMcpUserRoutes(app, { usersFile: mcpConfig.MCP_USERS_FILE })
   registerAssistantRoutes(app, {

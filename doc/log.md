@@ -7,6 +7,24 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-13] update | Superviseur de production et mise à jour du serveur depuis Réglages
+
+**Déclencheur** : l'utilisateur ne veut plus aller sur le serveur pour mettre à jour (pull, build,
+relance de `npm start`). Choix faits avec lui : un superviseur maison plutôt que pm2 ou une tâche
+périodique, un bouton dans Réglages plutôt qu'une branche `prod` (toutes les branches d'un dépôt public
+sont visibles), procédures Windows et Linux décrites dans le setup.
+
+**Pages modifiées** :
+- `5_setup/5_2_production.md` - sous-section du 2026-10-13 (bis) : `scripts/supervisor.mjs`, déroulé
+  d'une mise à jour et retour en arrière, prérequis (clone de production séparé du dépôt de dev),
+  tâche planifiée Windows et service systemd, limites, pistes écartées, ce qui n'est pas encore éprouvé.
+- `5_setup/5_0_installation-et-scripts.md` - ligne `node scripts/supervisor.mjs` dans la table « Lancer ».
+- `1_architecture/1_3_protocole-rest-ws.md` - routes `/api/system/version` et `/api/system/update`.
+- `1_architecture/1_13_comptes-et-sessions.md` - `LAN_ONLY` devient une liste, `/api/system` y entre.
+- `4_ui/4_7_reglages.md` - la carte « Mise à jour du serveur ».
+
+**Index** : catalogue `5_setup/README.md` mis à jour (1 ligne, périmètre de 5_2), index.md régénéré.
+
 ## [2026-10-13] update | Éditeur d'automatisations : fondu, listes filtrables, aube et crépuscule précisés
 
 **Déclencheur** : reprise de la page d'édition demandée par l'utilisateur (saisie perdue au changement de

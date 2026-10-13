@@ -144,6 +144,13 @@ npm start          # sert l'app web et l'API sur KASBAH_PORT (8787)
 
 Depuis un autre appareil du réseau : `http://<ip-du-serveur>:8787`.
 
+Pour mettre le serveur à jour sans aller sur la machine, le lancer par son superviseur plutôt que par
+`npm start` : `node scripts/supervisor.mjs` construit l'application si besoin, relance le serveur s'il
+tombe, et applique la dernière version de `main` sur demande depuis **Réglages → Mise à jour du serveur**
+(depuis le réseau local). La mise à jour enchaîne pull, `npm ci` si les dépendances changent, build et
+redémarrage, et revient à la version précédente en cas d'échec. Démarrage avec la machine (tâche planifiée
+Windows, service systemd) : [doc/5_setup/5_2_production.md](doc/5_setup/5_2_production.md).
+
 ### Accès depuis l'extérieur
 
 Depuis un téléphone hors de la maison, sans VPN : un **proxy inverse HTTPS** (celui du NAS Synology, ou un tunnel) publie Kasbah sous une adresse publique, déclarée dans `MCP_PUBLIC_URL`. Kasbah reconnaît ce nom (`Host`, ou `X-Forwarded-Host`) et y exige une **connexion** :

@@ -142,6 +142,15 @@ it('laisse la gestion des comptes au réseau local, même connecté', async () =
   expect(res.json().error.code).toBe('LAN_ONLY')
 })
 
+it('laisse la mise à jour du serveur au réseau local, même connecté', async () => {
+  const c = await signIn()
+  for (const [method, url] of [['GET', '/api/system/version'], ['POST', '/api/system/update']] as const) {
+    const res = await req({ method, url, cookie: c, origin: ORIGIN })
+    expect(res.statusCode, url).toBe(403)
+    expect(res.json().error.code, url).toBe('LAN_ONLY')
+  }
+})
+
 it('coupe la session quand le compte est retiré ou que son mot de passe change', async () => {
   const c = await signIn()
   await writeUsers({ lou: 'nouveau-mot-de-passe' })

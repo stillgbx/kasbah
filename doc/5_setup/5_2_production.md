@@ -1,7 +1,7 @@
 # Production
 
 > Dernière mise à jour : 2026-10-13
-> Sources : `apps/server/build.mjs`, `apps/server/src/http/static.ts`, `apps/web/vite.config.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/config/env.ts`, `apps/web/index.html`, `apps/web/public/manifest.webmanifest`, `apps/web/public/icons/`, `apps/web/src/stores/appUpdate.ts`, `apps/web/src/components/AppUpdateBanner.vue` (2026-10-13)
+> Sources : `apps/server/build.mjs`, `apps/server/src/http/static.ts`, `apps/web/vite.config.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/config/env.ts`, `apps/web/index.html`, `apps/web/public/manifest.webmanifest`, `apps/web/public/icons/`, `apps/web/src/stores/appUpdate.ts`, `apps/web/src/components/AppUpdateBanner.vue`, `scripts/supervisor.mjs`, `apps/server/src/http/system.ts` (2026-10-13)
 
 ## Build
 
@@ -223,3 +223,163 @@ Sources : `apps/server/src/http/static.ts` (+ `static.test.ts`), `apps/server/sr
 `apps/server/src/app.ts`, `packages/shared/src/protocol/ws.ts`, `apps/web/vite.config.ts`,
 `apps/web/vitest.config.ts`, `apps/web/src/router/index.ts`, `apps/web/src/stores/appUpdate.ts`
 (+ test), `apps/web/src/components/AppUpdateBanner.vue`.
+
+### Mise à jour 2026-10-13 (bis) — superviseur et mise à jour depuis Réglages
+
+**Besoin.** Mettre le serveur à jour sans être devant la machine. Jusqu'ici : `git pull`, `npm run build`
+et relance de `npm start` à la main, dans un terminal du poste.
+
+**Ce qui est fait.**
+
+- **`scripts/supervisor.mjs`**, sans dépendance, lance `apps/server/dist/main.js` en processus enfant
+  avec un canal IPC (build d'abord si `dist/main.js` manque). Il relance le serveur s'il tombe, après
+  1 s, puis 2, 4… jusqu'à 60 s ; le délai revient à 1 s après une minute de marche. Le journal du
+  serveur et le sien vont dans `logs/kasbah.log` (ignoré par git, `*.log`), copié en `kasbah.1.log`
+  au-delà de 10 Mo.
+- **Réglages → Mise à jour du serveur** (`../4_ui/4_7_reglages.md`) montre le commit en service et ceux
+  qui attendent sur `origin/main`, et demande la mise à jour au superviseur (routes `/api/system/*`,
+  `apps/server/src/http/system.ts`, détail dans `../1_architecture/1_3_protocole-rest-ws.md`).
+  **Réseau local seulement**, même connecté (`LAN_ONLY`).
+- Le serveur, quand il a un superviseur (`process.send`, `apps/server/src/main.ts`) : dit « prêt »
+  une fois ses plugins démarrés, s'arrête proprement sur demande (`shutdown`), et s'arrête aussi si le
+  superviseur disparaît (`disconnect`). Sous Windows, tuer le parent ne tue pas l'enfant : le port
+  8787 resterait pris et le superviseur suivant ne pourrait plus démarrer le serveur.
+
+**Déroulé d'une mise à jour.** Le superviseur écrit chaque étape dans `.state/update-status.json`, que
+Réglages relit.
+
+| Étape | Ce qui se passe | Serveur |
+|---|---|---|
+| Récupération | vérifie qu'on est sur `main`, `git fetch origin main`, avance rapide (`git merge --ff-only`) | en service |
+| Dépendances | `npm ci`, **seulement si `package-lock.json` a changé** | **arrêté** : `npm ci` efface `node_modules`, que Windows verrouille (modules natifs) tant que le serveur tourne |
+| Construction | `npm run build` | en service (sauf si les dépendances ont changé) |
+| Redémarrage | arrêt propre, relance, attente du « prêt » (3 min au plus) | coupure de quelques secondes ; une à deux minutes avec `npm ci` |
+
+Une étape qui échoue avant tout changement (réseau absent, mauvaise branche, fichiers suivis modifiés
+localement qui bloquent l'avance rapide) **ne touche à rien**. Au-delà, le superviseur **revient au
+commit d'avant** : `git reset --keep`, `npm ci` si le lock avait changé, build, relance. Réglages dit
+l'étape en cause, si le retour a réussi, et les 60 dernières lignes de sortie. Un nouveau serveur qui
+tombe ou ne dit pas « prêt » compte comme un échec : un commit qui casse le démarrage revient en
+arrière tout seul.
+
+**Prérequis sur la machine.**
+
+- Un **clone git** dont `origin` est le dépôt GitHub, **sur `main`**, sans modification locale des
+  fichiers suivis. Dépôt public en HTTPS : `git fetch` ne demande rien.
+- Les outils et les fichiers hors dépôt de `5_0_installation-et-scripts.md` (mise à jour du
+  2026-10-04 (bis)) : Node, ffmpeg, `_external/`, `apps/server/.env`, `.state/`, `house/properties/`.
+- **Si la machine sert aussi au développement**, un clone réservé à la production (par exemple
+  `D:\kasbah-prod` ou `/opt/kasbah`). Une mise à jour ne touche alors jamais un travail en cours, et le
+  dépôt de développement tourne sur les démonstrations, sur d'autres ports et un autre état
+  (`KASBAH_PORT`, `KASBAH_SERVER`, `KASBAH_STATE_DIR`). Deux serveurs sur les mêmes `.env` et `.state/`
+  partagent les jetons des fabricants et les quotas des comptes, et leurs automatisations se
+  déclenchent deux fois.
+- Arrêter le `npm start` lancé à la main avant d'installer le superviseur (port 8787).
+
+**Windows — tâche planifiée.** Le superviseur doit tourner **avec le compte de l'utilisateur**, pas en
+service système : un service ne verrait ni son `PATH` (ffmpeg installé par winget) ni son profil. Dans
+un PowerShell ouvert dans le clone de production :
+
+```powershell
+$cred = Get-Credential "$env:USERDOMAIN\$env:USERNAME"   # le mot de passe Windows, pas le code PIN
+$action = New-ScheduledTaskAction -Execute (Get-Command node).Source -Argument 'scripts\supervisor.mjs' -WorkingDirectory (Get-Location).Path
+$trigger = New-ScheduledTaskTrigger -AtStartup
+$settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
+Register-ScheduledTask -TaskName 'Kasbah' -Action $action -Trigger $trigger -Settings $settings -User $cred.UserName -Password $cred.GetNetworkCredential().Password -RunLevel Limited
+Start-ScheduledTask -TaskName 'Kasbah'
+```
+
+- `-AtStartup` avec un mot de passe enregistré équivaut à « Exécuter même si l'utilisateur n'est pas
+  connecté » : Kasbah repart après un redémarrage imposé par Windows Update, sans ouverture de session.
+  Un compte Microsoft demande le mot de passe du compte Microsoft.
+- `-ExecutionTimeLimit 0` est **indispensable** : par défaut, le Planificateur arrête une tâche au bout
+  de 72 h.
+- `-RestartCount` / `-RestartInterval` : le filet si le superviseur lui-même tombe.
+- La même chose à la souris : Planificateur de tâches → Créer une tâche. Général : « Exécuter même si
+  l'utilisateur n'est pas connecté ». Déclencheurs : « Au démarrage ». Actions : programme `node.exe`
+  (chemin complet, `where node`), arguments `scripts\supervisor.mjs`, « Commencer dans » le clone.
+  Paramètres : décocher « Arrêter la tâche si elle s'exécute plus de », cocher « Si la tâche échoue,
+  redémarrer toutes les » 1 minute.
+- Suivre : `Get-Content logs\kasbah.log -Wait -Tail 50`. Arrêter : `Stop-ScheduledTask -TaskName Kasbah`
+  (le superviseur est tué, le serveur le voit et s'arrête proprement). Après une modification du
+  superviseur lui-même : `Stop-ScheduledTask` puis `Start-ScheduledTask`.
+- La tâche tourne sans fenêtre, et Windows ne peut donc pas y demander l'autorisation du pare-feu. Si
+  les écrans n'atteignent pas 8787, autoriser Node pour les réseaux **privés** (Pare-feu Windows →
+  Autoriser une application), ou lancer une fois `node scripts/supervisor.mjs` dans un terminal pour
+  faire apparaître la demande.
+
+**Linux — service systemd.** Fichier `/etc/systemd/system/kasbah.service`. L'utilisateur du service doit
+posséder le clone : le superviseur y écrit (`git`, `npm ci`, build).
+
+```ini
+[Unit]
+Description=Kasbah
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=kasbah
+WorkingDirectory=/opt/kasbah
+# chemin donné par `which node` pour cet utilisateur (nvm le met ailleurs que /usr/bin)
+ExecStart=/usr/bin/node scripts/supervisor.mjs
+Restart=on-failure
+RestartSec=5
+# SIGTERM au superviseur seul, qui arrête le serveur proprement ; le reste est tué après le délai
+KillMode=mixed
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now kasbah
+journalctl -u kasbah -f        # ou : tail -f /opt/kasbah/logs/kasbah.log
+```
+
+ffmpeg et yt-dlp doivent être dans le `PATH` du service (`/usr/bin`), ou désignés dans `.env`
+(`FFMPEG_PATH`, `YTM_YTDLP_PATH`).
+
+**Limites.**
+
+- Une modification de `scripts/supervisor.mjs` ne vaut qu'à son prochain démarrage (Réglages le
+  signale) : relancer la tâche ou le service.
+- Une nouvelle variable de `.env` reste à poser à la main.
+- Pas de retour à une version choisie : seulement le retour automatique au commit d'avant un échec.
+- Pendant la construction, Vite vide `apps/web/dist` : un écran qui ouvre une vue à ce moment la
+  recharge (mécanisme du 2026-10-13 ci-dessus), puis le bandeau « Nouvelle version » suit le
+  redémarrage.
+- La branche suivie est `main`, en dur.
+
+**Écarté.**
+
+- Un runner GitHub Actions installé sur le serveur : le dépôt est public, une PR venue d'un fork
+  pourrait exécuter du code sur la machine qui pilote la maison.
+- pm2 : il relance un processus mais ne fait pas la mise à jour. Sous Windows, son démarrage
+  automatique passe par un service système (`pm2-windows-startup`, `pm2-installer`), avec le problème
+  de `PATH` déjà noté.
+- Une tâche planifiée qui lance la mise à jour tous les quarts d'heure : elle ne serait pas le parent du
+  serveur, et devrait le retrouver par son port pour le tuer.
+
+**Vérifié** : les routes et la garde réseau local, par des tests (`apps/server/src/http/system.test.ts`,
+`session.test.ts`) ; la carte, dans la preview. Le superviseur, de bout en bout sous Windows 11, sur
+une copie de production (clone d'un dépôt « origine » local, maison de démonstration, port et état à
+part), un commit poussé par cas :
+
+| Cas | Résultat | Coupure |
+|---|---|---|
+| commit ordinaire | à jour en ~11 s, arrêt propre (code 0) | ~3,5 s |
+| build cassé | échec à « Construction », retour au commit d'avant ; le journal garde l'erreur d'esbuild (fichier, ligne) | ~3 s (relance après le rebuild) |
+| serveur qui plante au démarrage | échec à « Redémarrage », retour en arrière ; la pile d'erreur du serveur est dans le journal | ~11 s |
+| `package-lock.json` modifié | arrêt, `npm ci` (~30 s), build, relance : pas d'`EPERM` | ~56 s |
+| `scripts/supervisor.mjs` modifié | mise à jour faite, `supervisorChanged` signalé | ~3 s |
+| serveur tué hors mise à jour | relancé après 1 s | ~5 s |
+| superviseur tué (comme « Arrêter la tâche ») | le serveur s'arrête et libère le port | — |
+
+Ce premier essai a fait corriger deux défauts : le journal affiché était celui du rebuild de l'ancienne
+version, qui chassait l'erreur, et il gardait les codes de couleur du terminal. **Pas encore éprouvé** :
+la tâche planifiée Windows et le service systemd ci-dessus, à confirmer au premier déploiement.
+
+Sources : `scripts/supervisor.mjs`, `apps/server/src/http/system.ts` (+ test), `apps/server/src/main.ts`,
+`apps/server/src/app.ts`, `apps/server/src/http/session.ts`, `apps/web/src/components/settings/ServerUpdateCard.vue`.

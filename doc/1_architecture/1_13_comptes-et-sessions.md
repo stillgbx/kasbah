@@ -33,6 +33,9 @@ Access : [1_7 Serveur MCP](1_7_serveur-mcp.md), sections du 2026-10-04 (soir) et
   `passwordSchema`, communs au script et aux routes).
 - **Réseau local seulement, même connecté** : sous l'adresse publique, `/api/mcp/users` rend 401 sans
   session et 403 `LAN_ONLY` avec une session. Une session volée ne doit pas pouvoir créer de compte.
+  Depuis le 2026-10-13, même règle pour `/api/system/*` (version du serveur et mise à jour par le
+  superviseur, [5_2 Production](../5_setup/5_2_production.md)) : `LAN_ONLY` est une liste de préfixes
+  dans `session.ts`, et le message d'erreur ne nomme plus les comptes.
 - **Droits par compte** (un compte en lecture seule, par exemple) : pas encore faits, tout compte connecté
   peut tout. Voir [0_0 Vision et principes](../0_overview/0_0_vision-et-principes.md).
 

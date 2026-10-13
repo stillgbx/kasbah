@@ -7,6 +7,7 @@ import PageHeader from '../components/layout/PageHeader.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import AssistantCard from '../components/settings/AssistantCard.vue'
 import McpUsersCard from '../components/settings/McpUsersCard.vue'
+import ServerUpdateCard from '../components/settings/ServerUpdateCard.vue'
 import OriginCalibration from '../components/settings/OriginCalibration.vue'
 import PluginSection from '../components/settings/PluginSection.vue'
 import PropertyList from '../components/layout/PropertyList.vue'
@@ -337,6 +338,12 @@ const houseStats = computed(() => {
         <div class="block__title">{{ $t('assistant.title') }}</div>
         <p class="muted small plugins__hint">{{ $t('assistant.hint') }}</p>
         <AssistantCard />
+      </section>
+      <!-- la version du serveur, et sa mise à jour par le superviseur (réseau local seulement) -->
+      <section class="card block settings__plugins">
+        <div class="block__title">{{ $t('serverUpdate.title') }}</div>
+        <p class="muted small plugins__hint">{{ $t('serverUpdate.hint') }}</p>
+        <ServerUpdateCard />
       </section>
       <!-- les fabricants ferment la page : une liste pleine largeur, où chaque ligne a la place de
            dire nom, statut et interrupteur sans se serrer -->

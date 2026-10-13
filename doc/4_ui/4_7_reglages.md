@@ -320,3 +320,24 @@ on ne réécrit pas un fichier versionné.
 - **Écarté** : glisser le contour à la souris (non fait).
 
 Sources : `apps/web/src/components/settings/OriginCalibration.vue`, `apps/web/src/views/SettingsView.vue`.
+
+### Mise à jour 2026-10-13 (bis) — Réglages : la carte « Mise à jour du serveur »
+
+Pleine largeur, après « Assistant » et avant « Plugins » (`apps/web/src/components/settings/ServerUpdateCard.vue`) :
+
+- le commit **en service** (sha court et titre), boutons **Vérifier** (`git fetch` forcé) et **Mettre à jour** ;
+- une ligne toujours présente (en attente / à jour / dépôt injoignable), puis la liste des commits en
+  attente (titres coupés à une ligne, défilement au-delà de 180 px) ;
+- pendant une mise à jour, les étapes (Récupération, Dépendances si le lock change, Construction,
+  Redémarrage, et Retour en arrière après un échec) avec la courante en cours ; l'état est relu toutes
+  les 1,5 s, les échecs de lecture pendant le redémarrage sont ignorés ;
+- après un échec : l'étape en cause, si la version précédente est revenue, et le **Journal** (dépliable,
+  60 dernières lignes de sortie) ;
+- sans superviseur (`npm start`, `npm run dev`) : bouton grisé et renvoi au wiki ; sous l'adresse
+  publique : une ligne « depuis le réseau local », sans requête.
+
+Le rechargement des écrans après le redémarrage reste celui du bandeau « Nouvelle version »
+(`AppUpdateBanner.vue`). Colonne de la carte bornée (`minmax(0, 1fr)`) : à 375 px, un titre de commit
+long élargissait la page de 263 px avant correction. Vérifié dans la preview (serveur de démonstration,
+réponses de l'API simulées dans la page pour les états en cours et en échec) : sombre 1280 px, clair
+375 px, fr et en.

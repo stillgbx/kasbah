@@ -1,7 +1,7 @@
 # Installation et scripts
 
 > Dernière mise à jour : 2026-10-13
-> Sources : `package.json` (racine et workspaces), `.claude/launch.json`, `apps/web/vite.config.ts`, `apps/server/src/config/env.ts`, `apps/server/src/main.ts`, `README.md`, `scripts/fetch-textures.mjs`, `.claude/launch.json`, `scripts/dev-server.mjs`
+> Sources : `package.json` (racine et workspaces), `.claude/launch.json`, `apps/web/vite.config.ts`, `apps/server/src/config/env.ts`, `apps/server/src/main.ts`, `README.md`, `scripts/fetch-textures.mjs`, `.claude/launch.json`, `scripts/dev-server.mjs`, `scripts/supervisor.mjs`
 
 ## Prérequis
 
@@ -277,6 +277,7 @@ recopier depuis l'ancienne machine, puis ajuster dans `.env` ce qui porte l'IP d
 | `npm run dev:pot` | le générateur PO Token seul (`scripts/dev-pot.mjs`), déjà lancé par `npm run dev` |
 | `npm run mcp-user -w @kasbah/server -- add <nom>`, `… remove <nom>`, `… list` | comptes du serveur MCP (`mcp-users.json`), en secours de Réglages : `add` demande le mot de passe, `remove` coupe aussi les jetons (`apps/server/src/mcp/users-cli.ts`) |
 | `npm run build && npm start` | production de base : app + API sur `KASBAH_PORT` (8787), sans Vite (`5_2_production.md`) |
+| `node scripts/supervisor.mjs` | production supervisée : build si absent, serveur relancé s'il tombe, mise à jour depuis Réglages ; lancé au démarrage de la machine (`5_2_production.md`, mise à jour 2026-10-13 (bis)) |
 
 *(Depuis le 2026-10-10, le serveur de `npm run dev` n'est plus relancé par `node --watch` mais par
 `scripts/dev-server.mjs`, qui ignore les simples lectures et regroupe les rafales d'écritures — voir

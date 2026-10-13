@@ -17,7 +17,8 @@ import { sendError } from './errors'
 //   même site (`*.synology.me` est un suffixe public), SameSite ne les sépare pas.
 // - Session gardée hachée dans `.state/sessions.json`, 90 jours glissants. Elle tombe avec le compte,
 //   ET quand son mot de passe change (empreinte du haché) : de quoi couper un téléphone perdu.
-// - Comptes gérés (`/api/mcp/users`) depuis le réseau local seulement, même connecté.
+// - Comptes gérés (`/api/mcp/users`) et mise à jour du serveur (`/api/system`) depuis le réseau local
+//   seulement, même connecté.
 // - Les outils MCP passent par `app.inject` au nom du compte de leur jeton (`actAsHeaders`).
 
 export const sessionConfigSchema = z.object({
@@ -39,7 +40,7 @@ type SessionsFile = z.infer<typeof fileSchema>
 // app installable est demandé sans identifiants, ses icônes avec lui).
 const OPEN_PATHS = new Set(['/login', '/logout', '/manifest.webmanifest'])
 const OPEN_PREFIXES = ['/icons/']
-const LAN_ONLY = '/api/mcp/users'
+const LAN_ONLY = ['/api/mcp/users', '/api/system']
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 
 declare module 'fastify' {
@@ -166,8 +167,8 @@ ${error ? `<p class="err">${esc(error)}</p>` : ''}
         }
         return
       }
-      if (path === LAN_ONLY || path.startsWith(`${LAN_ONLY}/`)) {
-        await sendError(reply, 403, 'LAN_ONLY', 'accounts are managed from the local network only')
+      if (LAN_ONLY.some((p) => path === p || path.startsWith(`${p}/`))) {
+        await sendError(reply, 403, 'LAN_ONLY', 'managed from the local network only')
         return
       }
       // Tout WebSocket : `/ws`, et les flux des caméras sous `/api/plugins/<id>/cameras/…`.
