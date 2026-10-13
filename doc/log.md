@@ -7,6 +7,29 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-13] lint | Wiki health check
+
+**Orphans found** : 0 (`wiki-index.mjs --check` vert : 50 pages cataloguées, aucun lien mort).
+**Contradictions** : 1 ouverte - `5_setup/5_0` : la commande d'installation dit encore « ajuster
+`KASBAH_PLUGINS` », variable supprimée (signalé seulement dans une section datée plus bas). Les six
+sections « Contradiction détectée » des pages sont toutes tranchées.
+**Stale pages >6 months** : 0 (wiki commencé en septembre 2026).
+**Gaps** : 2 - comptes et sessions de l'UI (`http/session.ts`, `.state/users/`), dispersés entre
+`1_7`, `4_1`, `5_1` ; énergie (historique, coordination de charge, vue Énergie), entre `1_1`, `1_2`,
+`3_9`, `4_1`.
+
+**À arbitrer** : `3_plugins/3_11` (section du 2026-10-12 ter) chiffre une rotation constatée sur la
+vraie maison (CLAUDE.md §7), déjà relevé le 2026-10-13.
+**Observations** : `4_1` (~116k tokens, 187 sections datées) et `1_5` (~83k) dépassent ce qu'une
+requête peut lire ; 36 pages ne sont liées que par leur catalogue ; quelques chemins de fichiers
+déplacés depuis restent cités dans des sections datées (historique, non corrigé).
+
+**Actions taken** (validées par l'utilisateur) : commande d'installation de `5_0` corrigée, avec note
+datée ; chiffre de rotation remplacé par « plusieurs degrés » dans `3_11`, `1_5` et l'entrée du journal
+qui le citait (donnée réelle, CLAUDE.md §7).
+**Proposed actions not executed** : découper `4_1` puis `1_5` ; pages « Comptes et sessions » et
+« Énergie » (validés, à suivre).
+
 ## [2026-10-13] update | Index à deux niveaux et journal découpé par mois
 
 **Déclencheur** : reprise des principes adoptés par un autre wiki du même type : `index.md` (150 Ko,
@@ -82,7 +105,7 @@ entier à chaque requête.
 **Déclencheur** : suite de la session du jour — « afficher les zones sur la vue 3D quand on le souhaite, zone par zone », puis « fusionner les deux sections du panneau, trier les zones », et « on est certain des décalages appliqués ? ».
 
 **Pages modifiées** :
-- `1_architecture/1_5_scene-3d.md` - section datée : `setGroundOverlay` et `builders/groundOverlay.ts` (aplats drapés, rubans sur le relief, pas de tap, repeints au changement de terrain) ; `mapOffset` non appliqué dans la scène, et pourquoi ; rotation résiduelle de 16-20° constatée sur la vraie maison, cap de la maison suspect.
+- `1_architecture/1_5_scene-3d.md` - section datée : `setGroundOverlay` et `builders/groundOverlay.ts` (aplats drapés, rubans sur le relief, pas de tap, repeints au changement de terrain) ; `mapOffset` non appliqué dans la scène, et pourquoi ; rotation résiduelle de plusieurs degrés constatée sur la vraie maison, cap de la maison suspect.
 - `4_ui/4_1_navigation-et-panneaux.md` - section (quinquies) : liste unique triée (`zoneRows`), interrupteur « Sur la scène », pastille-bascule par zone, `stores/sceneZones`.
 - `3_plugins/3_11_husqvarna-automower.md` - section (ter) : carte en 3D, et le calage de la maison qui reste à faire.
 

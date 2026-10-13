@@ -501,7 +501,7 @@ enseignements de la vraie maison :
   compense le calage de la maison sur le monde, pas une erreur de la carte ;
 - le décalage du robot (`gpsOffset`) et celui de la carte valaient presque l'opposé l'un de l'autre,
   plusieurs mètres chacun, et la carte peinte traversait la maison : un ajustement du contour du robot
-  sur le plan du rez-de-chaussée demande une **rotation** d'environ 16-20° (translation résiduelle
+  sur le plan du rez-de-chaussée demande une **rotation** de plusieurs degrés (translation résiduelle
   sous le mètre). Hypothèse : le cap de la maison (`origin.heading`) est faux d'autant. À vérifier par
   le calage de la maison sur la photo (contour de la maison sur la carte satellite, puis cap et origine
   réglables) — robot garé sur sa station, pour avoir aussi son GPS comme témoin.

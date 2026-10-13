@@ -1,6 +1,6 @@
 # Installation et scripts
 
-> Dernière mise à jour : 2026-10-10
+> Dernière mise à jour : 2026-10-13
 > Sources : `package.json` (racine et workspaces), `.claude/launch.json`, `apps/web/vite.config.ts`, `apps/server/src/config/env.ts`, `apps/server/src/main.ts`, `README.md`, `scripts/fetch-textures.mjs`, `.claude/launch.json`, `scripts/dev-server.mjs`
 
 ## Prérequis
@@ -11,9 +11,13 @@ Node ≥ 22 (22.22 utilisé), npm ≥ 10 (11.16 utilisé). Windows 11 / Git Bash
 
 ```bash
 npm install
-cp apps/server/.env.example apps/server/.env   # ajuster KASBAH_PLUGINS, HUE_*
+cp apps/server/.env.example apps/server/.env   # secrets et réglages des fabricants (HUE_*, …)
 npm run dev
 ```
+
+*(Corrigé le 2026-10-13 : ce commentaire disait « ajuster `KASBAH_PLUGINS` », variable supprimée le
+2026-09-11. Les plugins actifs se cochent dans Réglages → Plugins et vivent dans `house.json`, voir
+« Mise à jour 2026-09-11 » plus bas.)*
 
 Web sur <http://localhost:5173> (Vite, `host: true` → accessible depuis un autre écran via l'IP du
 poste), serveur sur <http://localhost:8787>. Sans configuration : plugin `mock` + maison démo.

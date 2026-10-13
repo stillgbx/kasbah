@@ -4544,7 +4544,7 @@ c'est-à-dire qu'il compense l'erreur de calage de la maison sur le monde (`orig
 scène tout est dans le repère de la maison et la base y est juste ; l'appliquer décalait la carte
 d'autant (constaté sur la vraie maison). Reste, sur la vraie maison, une **rotation** de la carte par
 rapport aux murs (le contour de la tondeuse traverse la maison) : un ajustement du contour sur le plan
-du rez-de-chaussée la situe vers 16-20°, pour moins d'un mètre de translation résiduelle — le cap de la
+du rez-de-chaussée la situe à plusieurs degrés, pour moins d'un mètre de translation résiduelle — le cap de la
 maison (`origin.heading`) est le suspect, pas la carte (sur la photo, la carte n'a eu besoin que d'une
 translation). À trancher par le calage de la maison sur la photo, voir `_generated-ai-doc/`.
 
