@@ -9,7 +9,7 @@ import JournalList from '../components/robots/JournalList.vue'
 import MowerZones from '../components/robots/MowerZones.vue'
 import { journalPoints } from '../lib/journal'
 import { siteMapAnchor, siteMapFeatures } from '../lib/siteMap'
-import { mowerTask } from '../lib/mowerTask'
+import { mowerStatus } from '../lib/mowerTask'
 import type { LatLon } from '../lib/map'
 import PageHeader from '../components/layout/PageHeader.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
@@ -103,23 +103,8 @@ function mapLocation(m: MowerEntry) {
   return loc && origin && offset ? offsetLocation(origin, loc, offset) : loc
 }
 
-/**
- * La ligne d'état sous la jauge : l'ERREUR du fabricant quand il y en a une (« Erreur 2 · No loop
- * signal · il y a 3 h »), sinon pourquoi le robot ne tond pas (planning, pluie, gel, consigne), sinon
- * ce qu'il fait et où (`lib/mowerTask.ts`).
- * Place toujours réservée : rien ne bouge quand l'erreur tombe.
- */
-function statusLine(s: StateFor<'mower'>): string {
-  if (s.activity === 'error' || s.errorCode !== undefined) {
-    const parts = [s.errorCode === undefined ? t('mower.activities.error') : t('mower.error', { code: s.errorCode })]
-    if (s.errorMessage) parts.push(s.errorMessage)
-    if (s.errorAt) parts.push(formatAgo(s.errorAt, now.value, locale.value))
-    return parts.join(' · ')
-  }
-  if (s.restrictedReason && s.activity !== 'mowing' && s.activity !== 'returning') return t(`mower.restrictions.${s.restrictedReason}`)
-  // sinon ce qu'il fait, et où : « En route vers Fond », « Tonte · Devant », « Retour à la station »
-  return mowerTask(s, t)
-}
+/** La ligne d'état sous la jauge (`lib/mowerTask.ts`). Place toujours réservée : rien ne bouge quand l'erreur tombe. */
+const statusLine = (s: StateFor<'mower'>) => mowerStatus(s, t, now.value, locale.value)
 const nextStart = (s: StateFor<'mower'>) => (s.nextStartAt ? d(new Date(s.nextStartAt), 'short') : EMPTY)
 const cuttingHeight = (s: StateFor<'mower'>) => (s.cuttingHeight === undefined ? EMPTY : t('mower.cuttingHeightValue', { h: s.cuttingHeight }))
 /** « Connectée · statut il y a 2 min » : joignable, et de quand date ce que le fabricant en sait. */

@@ -2,6 +2,15 @@
 
 Entrées les plus récentes en haut. Une session = une entrée.
 
+## [2026-10-13] update | Panneau de la tondeuse : erreur en clair, blocs rangés
+
+**Déclencheur** : robot en erreur sur la vraie maison, sans le détail dans le panneau de la vue Maison ; sections du panneau éparpillées sur la hauteur.
+
+**Pages modifiées** :
+- `4_ui/4_1_navigation-et-panneaux.md` - section datée : `mowerStatus` partagé avec la vue Robots, pastille d'activité retirée (saut de 16 px), un seul `margin-top: auto` pour les blocs repliés.
+
+**Index** : date déjà au 2026-10-13.
+
 ## [2026-10-13] update | Mise à jour de l'application : bandeau et rechargement
 
 **Déclencheur** : « parfois quand on clique sur un élément du rail il ne se passe rien » après une mise à jour du serveur (vue paresseuse d'un build remplacé servie en `text/html`), et la demande d'un moyen d'indiquer qu'une mise à jour est disponible.

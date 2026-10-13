@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { StateFor } from '@kasbah/shared'
-import { mowerTask, workAreaLabel } from './mowerTask'
+import { mowerStatus, mowerTask, workAreaLabel } from './mowerTask'
 
 // La phrase de tâche dit OÙ le robot tond, ce que l'activité seule ne dit pas. Traduction factice :
 // la clé et ses valeurs, pour lire ce qui serait affiché.
@@ -27,5 +27,18 @@ describe('mowerTask', () => {
   it('une zone que la liste ne connaît pas (pas encore relue) garde son numéro', () => {
     expect(mowerTask(mower({ activity: 'mowing', workAreaId: 999 }), t)).toBe('mower.task.mowingIn(mower.areaUnnamed(999))')
     expect(workAreaLabel({ id: 0, name: '' }, t)).toBe('mower.wholeLawn')
+  })
+})
+
+describe('mowerStatus', () => {
+  const NOW = 10 * 3600_000
+  it("l'erreur du fabricant prime : code, texte, âge", () => {
+    const s = mowerStatus(mower({ activity: 'error', errorCode: 2, errorMessage: 'No loop signal', errorAt: NOW - 3 * 3600_000, workAreaId: 757 }), t, NOW, 'fr')
+    expect(s.startsWith('mower.error(2) · No loop signal · ')).toBe(true)
+    expect(mowerStatus(mower({ activity: 'error' }), t, NOW, 'fr')).toBe('mower.activities.error')
+  })
+  it('sinon ce qui retient le robot, sinon la tâche', () => {
+    expect(mowerStatus(mower({ activity: 'parked', restrictedReason: 'week_schedule' }), t, NOW, 'fr')).toBe('mower.restrictions.week_schedule')
+    expect(mowerStatus(mower({ activity: 'mowing', workAreaId: 757 }), t, NOW, 'fr')).toBe('mower.task.mowingIn(Devant)')
   })
 })

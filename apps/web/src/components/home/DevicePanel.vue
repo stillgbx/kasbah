@@ -413,6 +413,10 @@ function send(cmd: CommandInput) {
 .placement { margin-top: auto; }
 /* le réglage d'un véhicule ferme son panneau, comme « Emplacement » ferme celui d'un appareil posé */
 .tuning { margin-top: auto; padding: 12px 14px; font-size: 13px; }
+/* plusieurs blocs repliés (zones, journal, réglages d'un robot) : seul le PREMIER prend la marge
+   automatique, les suivants se rangent sous lui à l'écart ordinaire — sinon chaque marge auto prend
+   sa part de la hauteur libre et les blocs s'éparpillent sur tout le panneau */
+.tuning ~ .tuning, .tuning ~ .arrays, .tuning ~ .placement { margin-top: 0; }
 /* le pied porte le titre et l'unique bouton, qui garde sa place et sa largeur dans les deux états */
 .tuning__foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .tuning__cta { min-width: 124px; justify-content: center; }

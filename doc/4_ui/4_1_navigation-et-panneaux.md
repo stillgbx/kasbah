@@ -6216,3 +6216,33 @@ on ne réécrit pas un fichier versionné.
 - **Écarté** : glisser le contour à la souris (non fait).
 
 Sources : `apps/web/src/components/settings/OriginCalibration.vue`, `apps/web/src/views/SettingsView.vue`.
+
+### Mise à jour 2026-10-13 (bis) — panneau de la tondeuse : l'erreur en clair, les blocs rangés
+
+Demande, sur un robot réel en erreur : afficher le **détail du problème** dans le panneau détail de la
+vue Maison, et ranger les sections (« Zones du robot », « Journal du robot », « Réglages ») qui
+**s'éparpillaient** sur toute la hauteur du panneau.
+
+- **La ligne d'état de la vue Robots passe dans le panneau.** Elle sort de `RobotsView.vue` vers
+  `lib/mowerTask.ts` (`mowerStatus(state, t, now, locale)`) : l'**erreur du fabricant** d'abord
+  (« Erreur 2 · No loop signal · il y a 3 h », en rouge), sinon ce qui retient le robot (planning, gel…),
+  sinon où il tond (`mowerTask`). `MowerControl.vue` l'affiche sous le prochain départ, dans un
+  `MarqueeText` (un texte long défile, ne déborde pas), place **réservée** pour tous les robots — elle
+  ne l'était que pour un robot à zones. Une horloge de 30 s tient « il y a… » à jour.
+- **La pastille d'activité est retirée** de `MowerControl.vue` : elle répétait le grand titre du panneau
+  (« À la station » deux fois), et à côté d'elle « Prochain départ mer. 10:00 » manquait de 5 px et
+  passait sur deux lignes — **tout le panneau descendait de 16 px** entre « Erreur » et « À la station ».
+  Le prochain départ tient seul sa ligne réservée (vide sans départ, points de suspension s'il est trop
+  long). Perdu au passage : le vert de la tonte (le rouge de l'erreur reste sur la ligne d'état).
+- **Les blocs repliés se rangent ensemble en bas.** Chaque bloc (`.tuning`, `.arrays`, `.placement`)
+  portait `margin-top: auto` pour se caler au fond : avec trois blocs, trois marges automatiques se
+  partageaient la hauteur libre. Désormais seul le **premier** la garde
+  (`.tuning ~ .tuning, .tuning ~ .arrays, .tuning ~ .placement { margin-top: 0 }`), les suivants suivent
+  à l'écart ordinaire du panneau (20 px).
+
+Vérifié en simulation (erreur injectée, 1232 × 1000) : ligne d'état, prochain départ et boutons au même
+pixel en « Erreur », « À la station » et sans départ ; blocs collés en bas ; thèmes clair et sombre.
+Test `mowerTask.test.ts` (« mowerStatus »).
+
+Sources : `apps/web/src/lib/mowerTask.ts`, `apps/web/src/components/controls/MowerControl.vue`,
+`apps/web/src/components/home/DevicePanel.vue`, `apps/web/src/views/RobotsView.vue`.
