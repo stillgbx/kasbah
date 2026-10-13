@@ -75,8 +75,10 @@ journal des commits.
 - Plusieurs pages, ou contexte chargé : déléguer à l'agent `scribe` s'il existe, en lui donnant le
   diff, l'intention et ce qui a été écarté.
 
-`doc/index.md` (date de la page) et `doc/log.md` font partie de la mise à jour. Le wiki part
-**dans le même commit** que le code.
+Le catalogue de la section (`doc/<section>/README.md`, date de la page), `doc/index.md` régénéré par
+`node scripts/wiki-index.mjs`, et `doc/log.md` (après `node scripts/wiki-log.mjs`, avec les archives
+`doc/log/` qu'il aurait écrites) font partie de la mise à jour. Le wiki part **dans le même commit**
+que le code.
 
 ## 4. README et pages `docs/`
 
@@ -179,7 +181,9 @@ git log HEAD..origin/main --oneline
 
 - **Rien de nouveau sur origin** : `git push origin HEAD:main`.
 - **Origin a avancé** : `git rebase origin/main`, relancer les tests si le rebase a touché nos
-  fichiers, puis `git push origin HEAD:main`. Si le rebase est refusé parce que d'autres sessions
+  fichiers, puis `git push origin HEAD:main`. Conflit sur `doc/log.md` ou `doc/log/` : garder les deux
+  côtés, puis relancer `node scripts/wiki-log.mjs` ; sur `doc/index.md` : prendre l'un ou l'autre côté
+  et relancer `node scripts/wiki-index.mjs` (il réécrit les blocs depuis les catalogues). Si le rebase est refusé parce que d'autres sessions
   ont des modifications en cours dans le même checkout, on ne fait ni `--autostash` ni `stash` :
   on s'arrête et on demande.
 - **Dans un worktree** : après le push, avancer le checkout principal

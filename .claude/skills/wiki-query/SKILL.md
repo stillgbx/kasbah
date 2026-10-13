@@ -27,18 +27,33 @@ Consult the project wiki to answer a factual question with citations.
 
 Read first :
 1. `doc/SCHEMA.md` - wiki conventions (layers, structure, rules).
-2. `doc/index.md` - catalog of pages (title + 1-line summary + date).
+2. `doc/index.md` - catalog of pages : per section, an introduction line, then titles + dates.
 
 If `doc/` is missing or empty, say so and fall back to code exploration (`apps/`, `packages/`, `README.md`, `docs/`) or GitNexus for structure questions.
 
 ### Step 2 : identify candidate pages
 
-Match the question against :
-- titles in `index.md`,
-- 1-line summaries,
-- filenames (keywords).
+The index has two levels : `index.md` only gives each section's introduction and its pages' titles
+and dates ; the **summaries** live in the catalogue of `doc/<section>/README.md`.
 
-Pick **1 to 3 pages**. For code-level questions ("who calls X", "blast radius") prefer GitNexus tools (`gitnexus_*`) - the wiki is for narrative / design / procedure questions.
+1. In `index.md`, spot the 1 or 2 relevant sections (introduction line, titles, filenames).
+2. Read their `README.md` catalogue (summaries : what each page covers).
+3. Pick **1 to 3 pages**.
+
+For code-level questions ("who calls X", "blast radius") prefer GitNexus tools (`gitnexus_*`) - the wiki is for narrative / design / procedure questions.
+
+### Step 2 bis : history (only if the question is about the past)
+
+The log is split by month : `doc/log.md` holds the **current month** only, past months are in
+`doc/log/AAAA-MM.md` (catalogue : `doc/log/README.md`). Don't read them by default ; go there when :
+- the question is about **when / why / following what** something changed ;
+- a page, file or plugin named by the user doesn't appear in the pages read ;
+- a page's last update predates the current month and the session that produced it matters.
+
+Method : `Grep` on `doc/log/` (page filename, plugin name, keyword), then read **only the entry found**
+(`offset` / `limit`). The page's last-update date gives the month to open ; without a lead, the table
+of `doc/log/README.md` says which months touched which section. Cite
+`[source : log/AAAA-MM.md §[AAAA-MM-JJ] title]`.
 
 ### Step 3 : read
 
@@ -58,7 +73,7 @@ Relevant details with inline citations :
 Further reading : <list of pages if the user wants more>.
 ```
 
-Use real paths from `index.md` — never invent page names.
+Use real paths from `index.md` and the section catalogues — never invent page names.
 
 ### Step 5 : signal gaps or staleness
 
@@ -67,7 +82,7 @@ Use real paths from `index.md` — never invent page names.
 
 ## Rules
 
-- Never invent a page or citation. If `index.md` doesn't reference a page, it doesn't exist.
+- Never invent a page or citation. If neither `index.md` nor a section's `README.md` catalogue references a page, it doesn't exist.
 - Never modify a page during a query (that's `wiki-update`'s role).
 - Cite precisely : `[source : <path-relative-to-doc>.md §<section-name>]`.
 - If the question is better answered by GitNexus (code structure), redirect.

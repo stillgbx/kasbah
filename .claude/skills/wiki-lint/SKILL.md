@@ -22,22 +22,30 @@ Audit the project wiki health.
 ### Step 1 : inventory
 
 1. List all markdown pages : `find doc -name "*.md"` (or equivalent on Windows).
-2. Read `doc/index.md` for the official list.
-3. Build two sets : **on disk** vs **indexed**.
+2. Run `node scripts/wiki-index.mjs --check`. The official list is the catalogue of each
+   `doc/<section>/README.md` (`index.md` is generated from it) ; the script reports pages missing
+   from a catalogue, dead links and section folders without a block in `index.md` (ERREUR), summaries
+   over 350 characters, dated summaries, malformed rows and catalogue dates behind the page header
+   (ALERTE). Copy these lines as they are into the report.
+3. Build two sets : **on disk** vs **catalogued**.
 
 If `doc/` is absent, report "wiki not initialized" and stop (suggest `wiki-update` with SCHEMA bootstrap).
 
 ### Step 2 : detect orphans
 
 A page is **orphan** if :
-- it's on disk but absent from `index.md`, OR
-- it's not referenced by **any** other page (neither `index.md`, nor a section `README.md`, nor another page).
+- it's on disk but absent from its section's catalogue, OR
+- it's not referenced by **any** other page (neither a section `README.md` catalogue, nor another page).
 
-Legitimate exceptions : whatever `doc/SCHEMA.md` lists (typically `SCHEMA.md`, `log.md`, `index.md`, section `README.md` files, `_generated-ai-doc/*`, optional `doc/raw/*` assets not meant to be indexed).
+Legitimate exceptions : whatever `doc/SCHEMA.md` lists (typically `SCHEMA.md`, `log.md`, `log/*.md` monthly archives, `index.md`, section `README.md` files, `_generated-ai-doc/*`, optional `doc/raw/*` assets not meant to be indexed).
 
 For each orphan, propose :
-- either add it to `index.md`,
+- either add it to the section catalogue (then `node scripts/wiki-index.mjs`),
 - or remove it (after user confirmation).
+
+When a fix renames a page (`git mv`), update the links that point to it, including its catalogue row,
+but **leave the entries of `log.md` and `doc/log/*.md` untouched** : they are dated records, not live
+links ; rewriting them would falsify the log. The new lint entry explains the old path.
 
 ### Step 3 : detect contradictions
 
@@ -51,7 +59,7 @@ Most apparent contradictions are **current vs target** state differences : repor
 ### Step 4 : stale pages
 
 For each page :
-- Extract `Last updated` from header or the `index.md` column.
+- Extract `Last updated` from header or the catalogue column.
 - If > 6 months AND the referenced code has moved significantly (GitNexus index or `git log --since=...` on cited files), flag as **refresh candidate**.
 
 Heuristic : `git log --since="6 months ago" --oneline -- <cited-file>`. If the page cites files that have changed a lot, it deserves a look. Cited files must be paths **in this repo** (e.g. `apps/server/src/...`, `packages/shared/src/...`).
@@ -89,6 +97,10 @@ Produce a markdown report in conversation :
 ```
 
 ### Step 7 : append `log.md`
+
+Run `node scripts/wiki-log.mjs` first : it archives past months into `doc/log/AAAA-MM.md` (no effect
+otherwise). If it moved entries, mention it in the report as a catch-up, not as an error. Then insert
+at the top of `log.md`, below the generated `log-nav` block.
 
 `lint` entry :
 

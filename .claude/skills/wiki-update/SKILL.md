@@ -3,7 +3,8 @@ name: wiki-update
 description: >-
   Ingest new knowledge into the project wiki (./doc/) after a coding session :
   new feature, important bug fix, refactor, schema change, deployment change.
-  Updates existing pages or creates new ones, maintains index.md and log.md.
+  Updates existing pages or creates new ones, maintains the section catalogues
+  (index.md is generated from them) and log.md.
   Use when the user says "update the wiki", "document this", "mets a jour la
   doc", at the end of a feature branch, or when an important change merges.
   Also use when a wiki-query reveals that the wiki is stale or incomplete.
@@ -23,7 +24,7 @@ Ingest or update knowledge in the wiki.
 
 Read :
 1. `doc/SCHEMA.md` - conventions (section layout, naming, language).
-2. `doc/index.md` - existing pages.
+2. `doc/index.md` - existing pages (titles + dates per section) ; the summaries are in each section's `README.md` catalogue.
 
 If `doc/SCHEMA.md` or `doc/index.md` is missing, propose initializing the wiki skeleton (SCHEMA + index + log) before editing content pages.
 
@@ -64,7 +65,7 @@ Heuristics for this repo :
 | `package.json`, `apps/server/.env.example`, `apps/server/build.mjs`, `.claude/launch.json` | `5_setup/*` |
 | incident / gotcha | `6_faq/6_0_pieges-outillage.md` or `6_faq/6_1_pieges-runtime.md` |
 
-- **Touched file → page** : find the closest indexed page; if none, propose a new page (`N_M_title.md` per SCHEMA).
+- **Touched file → page** : find the closest indexed page; if none, propose a new page (`N_M_title.md` per SCHEMA). The new `M` is read **on disk** (largest `M` among the folder's `N_*.md` files, + 1), never from a table.
 - **Product concept** (scène maison, automatisation, source musicale…) → thematic page in the matching section.
 - **Incident / gotcha** → FAQ section (`6_faq/6_N_*.md`, format Date / Symptôme / Diagnostic / Solution).
 
@@ -83,17 +84,35 @@ Non-negotiable rules :
 - **Cite sources** (code files under this repo, commit SHA, issue numbers) in factual claims.
 - **Language** : follow `doc/SCHEMA.md` (French for this wiki).
 
-### Step 5 : update `index.md`
+### Step 5 : update the section catalogue, then regenerate `index.md`
 
-For each edited or created page :
-- Bump the "Last updated" column to today.
-- If new page : add line in the correct section table (sorted by number).
+The index has two levels (SCHEMA.md, « Index à deux niveaux »). **Never edit a section's block in
+`index.md`** (between `<!-- section:<N_section>:begin … -->` and `<!-- section:<N_section>:end -->`) :
+it is generated. Edit the catalogue of `doc/<N_section>/README.md`, between `<!-- catalogue:begin -->`
+and `<!-- catalogue:end -->` :
 
-Also update the section's own `README.md` entries list when SCHEMA defines section READMEs.
+- edited page : bump its "Dernière mise à jour" cell to today ; touch the summary **only if the page's
+  scope changed** ;
+- new page : add its row (sorted by number) ;
+- then run `node scripts/wiki-index.mjs`. Fix every `[ERREUR]` (page missing from the catalogue, dead
+  link) and `[ALERTE]` (summary too long or dated, catalogue date behind the page header) it prints.
+
+A summary says **what the page covers**, 350 characters at most. It never tells what changed : no
+« depuis le AAAA-MM-JJ », no « remplacé par … ». History lives in the page (dated sub-sections) and
+in `log.md`.
+
+**New section** : create its `README.md` with a catalogue, add to `index.md` a `## N — Name` followed
+by the two empty markers (numeric order), run the script.
 
 ### Step 6 : append `log.md`
 
-At the **top of the file** (after title + intro), add :
+**Archive first** : run `node scripts/wiki-log.mjs`. It decides alone : `log.md` keeps the current
+month, any entry of an earlier month moves to `doc/log/AAAA-MM.md` (catalogue `doc/log/README.md`,
+navigation blocks regenerated). No effect when there is nothing to do ; never move an entry by hand.
+Then read only the **top** of `log.md` (`limit` ~40 lines) to insert the entry, never the whole file
+nor the archives.
+
+At the **top of the file** (after title, intro and the generated `log-nav` block), add :
 
 ```markdown
 ## [YYYY-MM-DD] update | <short update title>
@@ -107,7 +126,7 @@ At the **top of the file** (after title + intro), add :
 **Pages created** (if applicable) :
 - <new-page> - <reason>
 
-**Index** : updated (N lines).
+**Index** : catalogue(s) updated (N lines), index.md regenerated.
 ```
 
 ### Step 7 : flag contradictions
@@ -122,5 +141,9 @@ If new info contradicts an existing page :
 - **Preserve existing content** : golden rule. Complement, don't rewrite.
 - **No personal data** : the repository is public. Never write names, real IPs or domains, GPS, the real house plan, device ids, real measurements, family, school or health details — see CLAUDE.md §7. Write « vérifié sur la vraie maison » without the details; quote the user's request in `log.md` without them.
 - **One session = one log.md entry**, even if multiple pages are touched.
+- **Generated files are never edited by hand** : the section blocks of `index.md`, the `log-nav`
+  blocks, `doc/log/README.md`. After a merge conflict on `log.md` or `doc/log/` (keep both sides),
+  rerun `node scripts/wiki-log.mjs` ; after one on `index.md`, take either side and rerun
+  `node scripts/wiki-index.mjs`.
 - **No auto-commit** : let the user review wiki modifications before committing.
 - If > 5 pages impacted by a single update, propose to split into several steps rather than doing it all at once.
