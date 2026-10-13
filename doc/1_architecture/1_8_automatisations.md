@@ -1,6 +1,6 @@
 # Automatisations (règles « Quand / Sauf si / Alors »)
 
-> Dernière mise à jour : 2026-10-11
+> Dernière mise à jour : 2026-10-13
 > Sources : `packages/shared/src/automations/{predicate,automation,fields}.ts`, `packages/shared/src/house/{sun,geo}.ts`, `packages/shared/src/devices/activity.ts`, `apps/server/src/core/automations/{engine,schedule,evaluate,context,status,runner,store}.ts`, `apps/server/src/app.ts`, `apps/server/src/http/routes.ts`, `apps/server/src/ws/hub.ts`, `packages/mock-sim/src/behaviours/weather.ts`, `.gitignore`, tests listés en fin de page, arbre de travail NON COMMITÉ du 2026-09-23 (après 0f943a0)
 
 ## Ce que c'est, et pourquoi c'est le serveur qui s'en charge
@@ -317,3 +317,59 @@ Sources : `packages/shared/src/automations/{automation,inverse}.ts`, `apps/serve
 `apps/web/src/components/automations/{AutomationRow,ActionEditor}.vue`. Tests : `engine.test.ts` (retour après N min, attente
 qui repart, rattrapage au redémarrage une fois l'appareil relevé, aucune commande sans inverse, ordre),
 `automations.test.ts` (`inverseCommand`), `stores/automations.test.ts` (ordre du serveur, retour arrière).
+
+### Mise à jour 2026-10-13 — éditeur : fondu des lumières, listes filtrables, aube et crépuscule précisés
+
+**Fondu des lumières.** Une action lumière (allumer, éteindre, allumer à N %) porte un fondu facultatif,
+saisi en secondes ou en minutes entières et plafonné à une heure (`FADE_MAX_MS`). Rien de neuf dans le
+contrat : c'est le `transitionMs` de `light.set` (`1_1_contrat-appareils.md`), que l'éditeur ne proposait
+pas. **Une seule commande par lampe** : le plugin Hue la traduit en `dynamics.duration`
+(`apps/server/src/plugins/hue/mapping.ts`) et c'est le pont qui fait la rampe ; le serveur n'envoie pas de
+pas intermédiaires. Hue v2 ne documente aucun plafond (la v1 s'arrêtait à 109 min), d'où l'heure. Les
+lumières Tuya ignorent le champ et changent d'un coup ; le mode simulé imite la rampe
+(`packages/mock-sim/src/behaviours/light.ts`). Avec « Pendant N min », la commande inverse **refait le même
+fondu**, choix de l'utilisateur : `inverseCommand` ne compte plus `transitionMs` comme un réglage qui
+empêche l'inverse, et le recopie. Passer d'« allumer » à « allumer à N % » garde le fondu choisi. La phrase
+de la règle le dit : « Allumer · … · en 10 min · pendant 120 min » (`fadeLabel`). Non vérifié sur la vraie
+installation : ce que la lampe publie pendant la rampe (valeur finale tout de suite, ou étapes).
+
+**Changer de mode ne perd plus la saisie.** Heure → Soleil → Heure rendait 07:30 et vidait la période.
+Chaque mode garde ce qu'on y a saisi le temps de l'édition (« Annuler » l'oublie), et passer de l'heure au
+soleil ne change que l'instant : jours et période restent, y compris après un détour par « Appareil »
+(`setTriggerKind`, `AutomationEditor.vue`).
+
+**Aube et crépuscule précisés.** `dawn` et `dusk` sont civils (soleil à −6°, voir « Le soleil » plus
+haut). Le menu ne disait que « Crépuscule », et « 5 min après le crépuscule » a été lu « 5 min après son
+début », qui est le coucher, environ 35 min plus tôt. L'utilisateur a voulu garder les termes justes en
+les précisant : « Début de l'aube », « Fin du crépuscule », un sous-titre dans le menu (« 6° sous
+l'horizon, ~35 min après le coucher ») et des phrases comme « 15 min avant la fin du crépuscule ». En
+anglais, *dawn* et *dusk* désignent déjà ces instants : seul le sous-titre s'ajoute. Aucune logique ne
+change.
+
+**Listes filtrables.** Les choix d'appareil, de pièce, de « Où » et d'ambiance sont des `v-autocomplete`
+(on tape pour filtrer). « Ajouter un appareil » est un choix multiple qui reste ouvert, coché pour les
+appareils déjà pris ; les pastilles au-dessus restent la liste visible, un appareil disparu y reste en
+orange. Les listes courtes (places, opérateurs, unités) restent des menus. Sur tablette, un champ
+filtrable fait monter le clavier.
+
+**Appliquer et Enregistrer.** « Enregistrer » ne fermait pas la page : il devient « Appliquer »
+(enregistre et reste), et « Enregistrer » enregistre puis revient à la liste, directement s'il n'y a
+rien à enregistrer. Seul le bouton appuyé dit « Enregistrement… ». Sur téléphone, les cinq boutons
+tiennent en deux rangées de trois.
+
+**Débordements en écran étroit.** Deux pièges de mise en page :
+- une carte en `display: grid` sans colonne déclarée prend la largeur minimale de son enfant le plus
+  large : les cartes d'action et d'exception débordaient de leur colonne vers 900-1000 px de large.
+  Corrigé par `grid-template-columns: minmax(0, 1fr)` ;
+- colonnes empilées (sous 900 px), le `min-height: 0` du bureau laissait la grille de hauteur fixe
+  écraser les rangées : les colonnes se chevauchaient sur téléphone. Elles reprennent `min-height: auto`
+  et c'est toute la zone qui défile.
+
+Vérifié dans le mode simulé : mesures géométriques aux largeurs 375, 768, 901, 973 et 1280 px, en
+français et en anglais (aucun débordement, rien ne bouge en ouvrant les menus, en activant le fondu ni en
+appliquant).
+
+Sources : `packages/shared/src/automations/inverse.ts`, `apps/web/src/lib/automations.ts`,
+`apps/web/src/components/automations/{AutomationEditor,ActionEditor,PredicateEditor}.vue`,
+`apps/web/src/i18n/locales/{fr,en}.json`. Tests : `automations.test.ts` (shared : inverse avec fondu),
+`apps/web/src/lib/automations.test.ts` (phrase avec fondu, crépuscule précisé).

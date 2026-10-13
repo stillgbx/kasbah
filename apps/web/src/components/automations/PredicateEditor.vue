@@ -106,7 +106,7 @@ function removeChild(i: number) {
     </div>
 
     <template v-if="p.type === 'device'">
-      <v-select :model-value="p.deviceId || null" :items="deviceOptions(FIELD_KINDS, p.deviceId)" :label="$t('automations.editor.device')"
+      <v-autocomplete :model-value="p.deviceId || null" :items="deviceOptions(FIELD_KINDS, p.deviceId)" :label="$t('automations.editor.device')"
                 density="compact" variant="outlined" hide-details @update:model-value="pickDevice" />
       <div class="pred__line">
         <v-select class="pred__grow" :model-value="p.field || null" :items="fieldItems" :disabled="!fieldItems.length" :label="$t('automations.editor.field')"
@@ -123,21 +123,21 @@ function removeChild(i: number) {
              :aria-label="$t('automations.editor.value')" @change="setNumber(($event.target as HTMLInputElement).value)">
     </template>
 
-    <v-select v-else-if="p.type === 'deviceOn'" :model-value="p.deviceId || null" :items="deviceOptions(ACTIVE_KINDS, p.deviceId)" :label="$t('automations.editor.device')"
+    <v-autocomplete v-else-if="p.type === 'deviceOn'" :model-value="p.deviceId || null" :items="deviceOptions(ACTIVE_KINDS, p.deviceId)" :label="$t('automations.editor.device')"
               density="compact" variant="outlined" hide-details @update:model-value="pickDevice" />
 
-    <v-select v-else-if="p.type === 'vehicleOnSite'" :model-value="p.deviceId || null" :items="deviceOptions(LOCATED_KINDS, p.deviceId)" :label="$t('automations.editor.vehicle')"
+    <v-autocomplete v-else-if="p.type === 'vehicleOnSite'" :model-value="p.deviceId || null" :items="deviceOptions(LOCATED_KINDS, p.deviceId)" :label="$t('automations.editor.vehicle')"
               density="compact" variant="outlined" hide-details @update:model-value="pickDevice" />
 
     <template v-else-if="p.type === 'vehicleParkedAt'">
-      <v-select :model-value="p.deviceId || null" :items="deviceOptions(LOCATED_KINDS, p.deviceId)" :label="$t('automations.editor.vehicle')"
+      <v-autocomplete :model-value="p.deviceId || null" :items="deviceOptions(LOCATED_KINDS, p.deviceId)" :label="$t('automations.editor.vehicle')"
                 density="compact" variant="outlined" hide-details @update:model-value="pickDevice" />
       <v-select :model-value="p.parkingId || null" :items="parkingOptions" :label="$t('automations.editor.parking')" :no-data-text="$t('automations.editor.noParking')"
                 density="compact" variant="outlined" hide-details @update:model-value="(v: string) => set({ parkingId: v })" />
     </template>
 
     <template v-else-if="p.type === 'anyInRoom'">
-      <v-select :model-value="p.roomId || null" :items="roomOptions" :label="$t('automations.editor.room')"
+      <v-autocomplete :model-value="p.roomId || null" :items="roomOptions" :label="$t('automations.editor.room')"
                 density="compact" variant="outlined" hide-details @update:model-value="(v: string) => set({ roomId: v })" />
       <div class="pred__line">
         <v-select class="pred__grow" :model-value="p.kind" :items="roomKindItems" :label="$t('automations.editor.kind')"
@@ -172,7 +172,7 @@ function removeChild(i: number) {
 </template>
 
 <style scoped>
-.pred { display: grid; gap: 8px; padding: 10px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); min-width: 0; }
+.pred { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 10px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); min-width: 0; }
 .pred__head { display: flex; align-items: center; gap: 8px; min-height: 30px; }
 .pred__type { flex: 1 1 0; min-width: 0; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* NON : même boîte cochée ou pas, lisible d'un coup d'œil */

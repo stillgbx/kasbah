@@ -7,6 +7,19 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-13] update | Éditeur d'automatisations : fondu, listes filtrables, aube et crépuscule précisés
+
+**Déclencheur** : reprise de la page d'édition demandée par l'utilisateur (saisie perdue au changement de
+mode, fondu des lumières, choix multiple filtrable, lecture fautive de « après le crépuscule », boutons,
+débordements sur tablette et téléphone).
+
+**Pages modifiées** :
+- `1_architecture/1_8_automatisations.md` - sous-section du 2026-10-13 : fondu (`transitionMs`, une
+  commande par lampe, inverse avec le même fondu, Hue seul), mémoire par mode, aube et crépuscule
+  précisés, listes filtrables, Appliquer / Enregistrer, deux pièges de mise en page en écran étroit.
+
+**Index** : catalogue `1_architecture/README.md` mis à jour (1 ligne), index.md régénéré.
+
 ## [2026-10-13] update | Découpage de 4_1 et de 1_5, pages Comptes et sessions et Énergie
 
 **Déclencheur** : actions du lint du jour validées par l'utilisateur : `4_1` (~116k tokens) et `1_5`

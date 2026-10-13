@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SUN_EVENTS, type AutomationBody, type Predicate, type SunEvent } from '@kasbah/shared'
+import { SUN_EVENTS, type AutomationBody, type Predicate, type StateTrigger, type SunEvent, type TimeTrigger } from '@kasbah/shared'
 import { useAutomationNames } from '../../composables/useAutomationNames'
 import {
   blankAction, blankAutomation, blankPredicate, describeAutomation, missingPart, PREDICATE_TYPES, triggerIcon, type ActionDraft,
@@ -45,20 +45,32 @@ const exists = computed(() => !!store.entries[props.id])
 const trigger = computed(() => draft.value.trigger)
 const triggerKind = computed<'clock' | 'sun' | 'state'>(() => (trigger.value.type === 'state' ? 'state' : trigger.value.at.kind))
 
+// Chaque mode garde ce qu'on y a saisi le temps de l'édition (heure → soleil → heure rend l'heure),
+// et passer de l'heure au soleil ne change que l'instant : jours et période restent.
+let stash: { clock?: TimeTrigger['at']; sun?: TimeTrigger['at']; time?: TimeTrigger; state?: StateTrigger } = {}
 function setTriggerKind(k: 'clock' | 'sun' | 'state') {
   const prev = trigger.value
-  const days = prev.type === 'time' ? prev.days : undefined
-  const keep = days ? { days } : {}
-  draft.value.trigger = k === 'state' ? { type: 'state', when: blankPredicate('deviceOn') }
-    : k === 'sun' ? { type: 'time', at: { kind: 'sun', event: 'dusk' }, ...keep }
-    : { type: 'time', at: { kind: 'clock', time: '07:30' }, ...keep }
+  if (prev.type === 'time') { stash[prev.at.kind] = prev.at; stash.time = prev } else stash.state = prev
+  if (k === 'state') {
+    draft.value.trigger = stash.state ?? { type: 'state', when: blankPredicate('deviceOn') }
+    return
+  }
+  const at = stash[k] ?? (k === 'sun' ? { kind: 'sun', event: 'dusk' } : { kind: 'clock', time: '07:30' })
+  const base = prev.type === 'time' ? prev : stash.time
+  draft.value.trigger = base ? { ...base, at } : { type: 'time', at }
 }
 const triggerOptions = computed(() => [
   { value: 'clock' as const, label: t('automations.trigger.clock') },
   { value: 'sun' as const, label: t('automations.trigger.sun') },
   { value: 'state' as const, label: t('automations.trigger.state') },
 ])
-const sunItems = computed(() => SUN_EVENTS.map((e) => ({ value: e, title: t(`automations.sun.${e}`) })))
+// L'aube et le crépuscule sont CIVILS (soleil à −6°) : le menu le dit sous leur nom, sinon « après le
+// crépuscule » se lit « après son début », qui est le coucher.
+const sunItems = computed(() => SUN_EVENTS.map((e) => ({
+  value: e, title: t(`automations.sun.${e}`),
+  // deux lignes permises : une colonne étroite (zoom 1,5) coupait la précision
+  ...(e === 'dawn' || e === 'dusk' ? { subtitle: t(`automations.sunHint.${e}`), lines: 'two' as const } : {}),
+})))
 
 function setAt(patch: Record<string, unknown>) {
   const tr = trigger.value
@@ -114,19 +126,26 @@ const setAction = (i: number, x: ActionDraft) => { draft.value.actions = draft.v
 const removeAction = (i: number) => { draft.value.actions = draft.value.actions.filter((_, k) => k !== i) }
 
 // ── pied ─────────────────────────────────────────────────────────────────────────────────────
-async function save() {
+// « Appliquer » enregistre et reste ; « Enregistrer » enregistre puis revient à la liste (directement
+// s'il n'y a rien à enregistrer). `pending` dit lequel affiche « Enregistrement… ».
+const pending = ref<'apply' | 'save' | null>(null)
+async function save(close: boolean) {
   if (missing.value) return
-  const e = await store.save(props.id, draft.value)
+  if (close && !dirty.value && exists.value) return emit('close')
+  pending.value = close ? 'save' : 'apply'
+  const e = await store.save(props.id, draft.value).finally(() => { pending.value = null })
   if (!e) return
   const { id: _id, updatedAt: _u, ...body } = e.automation
   draft.value = structuredClone(body)
   saved.value = JSON.stringify(draft.value)
   notifications.success(t('automations.toast.saved', { name: e.automation.name }))
   emit('saved', props.id)
+  if (close) emit('close')
 }
 
 function cancel() {
   if (props.isNew && !exists.value) return emit('close')
+  stash = {}
   draft.value = bodyOf(props.id)
   saved.value = JSON.stringify(draft.value)
 }
@@ -173,8 +192,11 @@ onBeforeUnmount(() => { if (disarm) clearTimeout(disarm) })
             {{ removeArmed ? $t('automations.editor.removeConfirm') : $t('automations.editor.remove') }}
           </button>
           <button type="button" class="pill edit__btn" :disabled="store.saving" @click="cancel">{{ $t('common.cancel') }}</button>
-          <button type="button" class="pill edit__btn" data-on="1" :disabled="!!missing || store.saving || (!dirty && exists)" @click="save">
-            {{ store.saving ? $t('automations.editor.saving') : $t('automations.editor.save') }}
+          <button type="button" class="pill edit__btn" :disabled="!!missing || store.saving || (!dirty && exists)" @click="save(false)">
+            {{ pending === 'apply' ? $t('automations.editor.saving') : $t('automations.editor.apply') }}
+          </button>
+          <button type="button" class="pill edit__btn" data-on="1" :disabled="!!missing || store.saving" @click="save(true)">
+            {{ pending === 'save' ? $t('automations.editor.saving') : $t('automations.editor.save') }}
           </button>
         </div>
       </div>
@@ -205,7 +227,7 @@ onBeforeUnmount(() => { if (disarm) clearTimeout(disarm) })
                         density="compact" variant="outlined" hide-details :aria-label="$t('automations.trigger.offset')"
                         @update:model-value="(v: 'before' | 'after') => setOffset(offsetAbs, v)" />
             </div>
-            <v-select :model-value="trigger.at.event" :items="sunItems" :label="$t('automations.trigger.sunEvent')" density="compact" variant="outlined" hide-details
+            <v-select :model-value="trigger.at.event" :items="sunItems" item-props :label="$t('automations.trigger.sunEvent')" density="compact" variant="outlined" hide-details
                       @update:model-value="(e: SunEvent) => setAt({ event: e })" />
             <div class="line">
               <label class="pair"><span class="muted">{{ $t('automations.trigger.notBefore') }}</span>
@@ -283,15 +305,17 @@ onBeforeUnmount(() => { if (disarm) clearTimeout(disarm) })
 }
 /* un champ Vuetify grandit par défaut (`flex: 1 1 auto`) : dans une colonne, il s'étirait en hauteur */
 .col > * { flex: 0 0 auto; }
-/* téléphone : les quatre boutons en deux rangées de deux, pas une colonne de quatre */
+/* téléphone : les cinq boutons en deux rangées de trois, pas une colonne de cinq */
 @media (max-width: 600px) {
   .edit__actions { flex: 1 1 100%; }
-  .edit__btn { width: calc(50% - 4px); }
+  .edit__btn { width: calc((100% - 16px) / 3); }
 }
 /* écran étroit : les colonnes s'empilent et c'est la zone entière qui défile */
 @media (max-width: 900px) {
   .edit__cols { grid-template-columns: minmax(0, 1fr); overflow-y: auto; align-content: start; }
-  .col { overflow: visible; }
+  /* `min-height: auto` : avec le 0 du bureau, la grille de hauteur fixe écrasait les rangées et les
+     colonnes se chevauchaient */
+  .col { overflow: visible; min-height: auto; }
 }
 .line { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .line__label { font-size: 13px; }

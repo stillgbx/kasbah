@@ -911,18 +911,18 @@
       "weekend": "Week-end",
       "at": "à {time}",
       "sun": {
-        "at": { "dawn": "À l'aube", "sunrise": "Au lever du soleil", "sunset": "Au coucher du soleil", "dusk": "Au crépuscule" },
+        "at": { "dawn": "Au début de l'aube", "sunrise": "Au lever du soleil", "sunset": "Au coucher du soleil", "dusk": "À la fin du crépuscule" },
         "before": {
-          "dawn": "{n} min avant l'aube",
+          "dawn": "{n} min avant le début de l'aube",
           "sunrise": "{n} min avant le lever du soleil",
           "sunset": "{n} min avant le coucher du soleil",
-          "dusk": "{n} min avant le crépuscule"
+          "dusk": "{n} min avant la fin du crépuscule"
         },
         "after": {
-          "dawn": "{n} min après l'aube",
+          "dawn": "{n} min après le début de l'aube",
           "sunrise": "{n} min après le lever du soleil",
           "sunset": "{n} min après le coucher du soleil",
-          "dusk": "{n} min après le crépuscule"
+          "dusk": "{n} min après la fin du crépuscule"
         }
       },
       "notBefore": "pas avant {time}",
@@ -930,6 +930,7 @@
       "dateRange": "du {from} au {to}",
       "when": "Quand {predicate}",
       "whenFor": "Quand {predicate} depuis {n} min",
+      "fade": "en {d}",
       "forMin": "pendant {n} min",
       "or": " ou ",
       "unless": "sauf si {conditions}",
@@ -1024,7 +1025,8 @@
       "pet_fountain": { "on": "Allumer la pompe", "off": "Arrêter la pompe" }
     },
     "recall": { "static": "Fixe", "dynamic": "Animée", "off": "Éteindre" },
-    "sun": { "dawn": "Aube", "sunrise": "Lever du soleil", "sunset": "Coucher du soleil", "dusk": "Crépuscule" },
+    "sun": { "dawn": "Début de l'aube", "sunrise": "Lever du soleil", "sunset": "Coucher du soleil", "dusk": "Fin du crépuscule" },
+    "sunHint": { "dawn": "6° sous l'horizon, ~35 min avant le lever", "dusk": "6° sous l'horizon, ~35 min après le coucher" },
     "trigger": {
       "clock": "Heure",
       "sun": "Soleil",
@@ -1072,6 +1074,10 @@
       "scope": "Où",
       "command": "Commande",
       "param": "Réglage",
+      "fade": "Fondu",
+      "fadeHint": "La lumière change progressivement sur cette durée (lumières Hue ; les autres changent d'un coup)",
+      "noFade": "Seules les lumières ont un fondu",
+      "seconds": "s",
       "forMin": "Pendant",
       "forMinHint": "Au bout du délai, l'action inverse part (fermer après ouvrir, éteindre après allumer…)",
       "noInverse": "Cette commande n'a pas d'action inverse",
@@ -1088,6 +1094,7 @@
         "actions": "Ajoutez au moins une action complète."
       },
       "unsaved": "Modifications non enregistrées.",
+      "apply": "Appliquer",
       "save": "Enregistrer",
       "saving": "Enregistrement…",
       "runNow": "Exécuter",

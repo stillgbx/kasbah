@@ -126,6 +126,15 @@ export function paramOf(cmd: CommandInput): number | string | undefined {
   }
 }
 
+/**
+ * Fondu d'une lumière (`transitionMs`), en secondes ou en minutes entières. Plafond d'une heure : Hue
+ * v2 n'en documente aucun, la v1 s'arrêtait à 109 min.
+ */
+export const FADE_MAX_MS = 3_600_000
+export function fadeLabel(ms: number): string {
+  return ms % 60_000 === 0 ? `${ms / 60_000} min` : `${Math.round(ms / 1000)} s`
+}
+
 // ── phrases ─────────────────────────────────────────────────────────────────────────────────────
 
 /** « Tous les jours », « Lun–ven », « Week-end », ou la liste des jours abrégés. */
@@ -231,8 +240,9 @@ export function describeAction(a: ActionDraft, names: NameContext, t: Translate)
   if (a.type === 'recallScene') return t('automations.summary.scene', { name: names.sceneName(a.sceneId) })
   const key = choiceOf(a.command)?.key
   const verb = key ? t(`automations.command.${key}`, { n: paramOf(a.command) ?? '' }) : a.command.type
+  const fade = a.command.type === 'light.set' && a.command.transitionMs ? ` · ${t('automations.summary.fade', { d: fadeLabel(a.command.transitionMs) })}` : ''
   const forMin = a.forMin && inverseCommand(a.command) ? ` · ${t('automations.summary.forMin', { n: a.forMin })}` : ''
-  return `${verb} · ${describeTarget(a.target, names, t)}${forMin}`
+  return `${verb} · ${describeTarget(a.target, names, t)}${fade}${forMin}`
 }
 
 /** La phrase d'une ligne de liste : « Quand · sauf si … → Alors ». */

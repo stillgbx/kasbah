@@ -237,7 +237,7 @@ Des règles **Quand / Sauf si / Alors**, exécutées par le **serveur** (un écr
 
 - **Quand** : une heure, un moment solaire (lever, coucher…) ou un changement d'état d'un appareil, éventuellement maintenu un certain temps ;
 - **Sauf si** : plages horaires, jours, dates, état d'un appareil, véhicule présent ou garé à une place, appareil allumé dans une pièce ;
-- **Alors** : une commande sur des appareils nommés ou sur une sélection (tous les volets d'un niveau…), ou le rappel d'une ambiance.
+- **Alors** : une commande sur des appareils nommés ou sur une sélection (tous les volets d'un niveau…), avec un fondu pour les lumières Hue, ou le rappel d'une ambiance.
 
 Elles s'écrivent sur le contrat d'appareil, jamais sur un fabricant : un plugin désactivé rend la règle incomplète sans rien supprimer. Elles vivent dans `<maison>.automations.json`, à côté du fichier de la maison.
 

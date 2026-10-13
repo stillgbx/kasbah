@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { commandKind, COVER_CLASSES, inverseCommand, MEDIA_PLAYER_CLASSES, type DeviceKind, type SceneRecallMode, type Target } from '@kasbah/shared'
 import { useAutomationNames } from '../../composables/useAutomationNames'
-import { choiceOf, choicesFor, COMMANDABLE_KINDS, kindLabel, paramOf, type ActionDraft, type CommandChoice } from '../../lib/automations'
+import { choiceOf, choicesFor, COMMANDABLE_KINDS, FADE_MAX_MS, kindLabel, paramOf, type ActionDraft, type CommandChoice } from '../../lib/automations'
 import { useDevicesStore } from '../../stores/devices'
 import Segmented from '../ui/Segmented.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
@@ -39,6 +39,8 @@ const choice = computed(() => (a.value.type === 'command' ? choiceOf(a.value.com
 function setCommand(x: Partial<Extract<ActionDraft, { type: 'command' }>>) {
   if (a.value.type !== 'command') return
   const next = { ...a.value, ...x }
+  // passer d'« allumer » à « luminosité » garde le fondu choisi
+  if (next.command.type === 'light.set' && next.command.transitionMs === undefined && fadeMs.value) next.command = { ...next.command, transitionMs: fadeMs.value }
   if (next.forMin && !inverseCommand(next.command)) delete next.forMin   // la nouvelle commande n'a pas d'inverse
   emit('update:modelValue', next)
 }
@@ -53,6 +55,24 @@ function setForMinText(raw: string) {
   const n = Number(raw.replace(',', '.'))
   if (Number.isFinite(n)) setForMin(Math.min(1440, Math.max(1, Math.round(n))))
 }
+// Fondu d'une lumière. L'unité vit ici, comme le sens du décalage au soleil : « min » choisi avant de
+// taper le nombre ne doit pas se perdre.
+const isLight = computed(() => a.value.type === 'command' && a.value.command.type === 'light.set')
+const fadeMs = computed(() => (a.value.type === 'command' && a.value.command.type === 'light.set' ? a.value.command.transitionMs : undefined))
+const fadeUnit = ref<'s' | 'min'>(fadeMs.value && fadeMs.value % 60_000 !== 0 ? 's' : 'min')
+const fadeValue = computed(() => (fadeMs.value ? fadeMs.value / (fadeUnit.value === 'min' ? 60_000 : 1000) : undefined))
+function setFade(n: number | undefined, unit = fadeUnit.value) {
+  fadeUnit.value = unit
+  if (a.value.type !== 'command' || a.value.command.type !== 'light.set') return
+  const { transitionMs: _, ...cmd } = a.value.command
+  const ms = n ? Math.min(FADE_MAX_MS, Math.max(1, Math.round(n)) * (unit === 'min' ? 60_000 : 1000)) : 0
+  emit('update:modelValue', { ...a.value, command: ms ? { ...cmd, transitionMs: ms } : cmd })
+}
+function setFadeText(raw: string) {
+  const n = Number(raw.replace(',', '.'))
+  if (Number.isFinite(n)) setFade(n > 0 ? n : undefined)
+}
+
 function setKind(k: DeviceKind) {
   const first = choicesFor(k)[0]
   const t0 = target.value
@@ -70,8 +90,8 @@ function setTarget(patch: Record<string, unknown>) {
   for (const [k, v] of Object.entries(patch)) if (v === undefined || (Array.isArray(v) && !v.length)) delete next[k]
   setCommand({ target: next as Target })
 }
-function addDevice(id: string | null) {
-  if (id && !selected.value.includes(id)) setTarget({ deviceIds: [...selected.value, id] })
+function setDevices(ids: string[]) {
+  setCommand({ target: { type: 'devices', deviceIds: ids } })
 }
 function removeDevice(id: string) {
   setCommand({ target: { type: 'devices', deviceIds: selected.value.filter((x) => x !== id) } })
@@ -89,7 +109,7 @@ function setParam(raw: string) {
 }
 
 const kindItems = computed(() => COMMANDABLE_KINDS.map((k) => ({ value: k, title: t(`kinds.${k}`) })))
-const addItems = computed(() => deviceOptions([kind.value]).filter((o) => !selected.value.includes(o.value)))
+const deviceItems = computed(() => deviceOptions([kind.value]))
 const choiceItems = computed(() => choices.value.map((c) => ({ value: c.key, title: t(`automations.command.${c.key}`, { n: '…' }) })))
 const classValues = computed(() => (kind.value === 'cover' ? COVER_CLASSES : kind.value === 'media_player' ? MEDIA_PLAYER_CLASSES : []))
 const classItems = computed(() => [{ value: '', title: t('automations.anyClass') }, ...classValues.value.map((v) => ({ value: v, title: kindLabel(kind.value, v, t) }))])
@@ -145,14 +165,17 @@ const recallModes = computed(() => (['static', 'dynamic', 'off'] as const).map((
             </button>
           </span>
         </div>
-        <v-select :model-value="null" :items="addItems" :label="$t('automations.editor.addDevice')" :no-data-text="$t('automations.editor.noDevice')"
-                  density="compact" variant="outlined" hide-details @update:model-value="addDevice" />
+        <!-- choix multiple filtrable, qui reste ouvert ; les choisis sont les pastilles au-dessus, le champ garde une ligne -->
+        <v-autocomplete class="act__pick" :model-value="selected" :items="deviceItems" multiple :label="$t('automations.editor.addDevice')" :no-data-text="$t('automations.editor.noDevice')"
+                        density="compact" variant="outlined" hide-details @update:model-value="setDevices">
+          <template #selection />
+        </v-autocomplete>
       </template>
 
       <template v-else>
         <v-select v-if="classValues.length" :model-value="target.deviceClass ?? ''" :items="classItems" :label="$t('automations.editor.class')"
                   density="compact" variant="outlined" hide-details @update:model-value="(v: string) => setTarget({ deviceClass: v || undefined })" />
-        <v-select :model-value="scope" :items="scopeOptions" multiple chips closable-chips :label="$t('automations.editor.scope')"
+        <v-autocomplete :model-value="scope" :items="scopeOptions" multiple chips closable-chips :label="$t('automations.editor.scope')"
                   :placeholder="$t('automations.summary.wholeHouse')" persistent-placeholder
                   density="compact" variant="outlined" hide-details @update:model-value="setScope" />
         <div class="act__except">
@@ -177,6 +200,17 @@ const recallModes = computed(() => (['static', 'dynamic', 'off'] as const).map((
         <v-select v-else-if="choice?.param?.type === 'enum'" class="act__grow" :model-value="paramOf(a.command)" :items="climateItems"
                   density="compact" variant="outlined" hide-details :aria-label="$t('automations.editor.param')" @update:model-value="(v: string | number) => setParam(String(v))" />
       </div>
+      <!-- fondu : place toujours là, éteinte pour ce qui n'est pas une lumière -->
+      <div class="act__for" :title="isLight ? $t('automations.editor.fadeHint') : $t('automations.editor.noFade')">
+        <button type="button" class="act__toggle" :disabled="!isLight" :data-on="fadeMs ? '1' : '0'" :aria-pressed="!!fadeMs"
+                @click="setFade(fadeMs ? undefined : 1)">{{ $t('automations.editor.fade') }}</button>
+        <input class="act__input act__input--num" :style="{ visibility: fadeMs ? 'visible' : 'hidden' }" type="text" inputmode="numeric" enterkeyhint="done"
+               :value="String(fadeValue ?? '')" :aria-label="$t('automations.editor.fade')" @change="setFadeText(($event.target as HTMLInputElement).value)">
+        <v-select class="act__unit" menu-icon="" :style="{ visibility: fadeMs ? 'visible' : 'hidden' }" :model-value="fadeUnit"
+                  :items="[{ value: 's', title: $t('automations.editor.seconds') }, { value: 'min', title: $t('automations.editor.minutes') }]"
+                  density="compact" variant="outlined" hide-details :aria-label="$t('automations.editor.fade')"
+                  @update:model-value="(u: 's' | 'min') => setFade(fadeValue, u)" />
+      </div>
       <!-- « pendant N min » : place toujours là, éteinte pour une commande sans inverse -->
       <div class="act__for" :title="hasInverse ? $t('automations.editor.forMinHint') : $t('automations.editor.noInverse')">
         <button type="button" class="act__toggle" :disabled="!hasInverse" :data-on="forMin ? '1' : '0'" :aria-pressed="!!forMin"
@@ -188,7 +222,7 @@ const recallModes = computed(() => (['static', 'dynamic', 'off'] as const).map((
     </template>
 
     <template v-else-if="a.type === 'recallScene'">
-      <v-select :model-value="a.sceneId || null" :items="sceneOptions" :label="$t('automations.editor.scene')" :no-data-text="$t('automations.editor.noScene')"
+      <v-autocomplete :model-value="a.sceneId || null" :items="sceneOptions" :label="$t('automations.editor.scene')" :no-data-text="$t('automations.editor.noScene')"
                 density="compact" variant="outlined" hide-details
                 @update:model-value="(v: string) => emit('update:modelValue', { ...a, sceneId: v } as ActionDraft)" />
       <Segmented dense fill :model-value="a.recall.mode" :options="recallModes" :label="$t('automations.editor.recallMode')"
@@ -198,7 +232,7 @@ const recallModes = computed(() => (['static', 'dynamic', 'off'] as const).map((
 </template>
 
 <style scoped>
-.act { display: grid; gap: 8px; padding: 10px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); min-width: 0; }
+.act { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 10px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); min-width: 0; }
 .act__head { display: flex; align-items: center; gap: 8px; min-height: 30px; }
 .act__type { flex: 1 1 0; min-width: 0; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .act__chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -219,13 +253,14 @@ const recallModes = computed(() => (['static', 'dynamic', 'off'] as const).map((
 .act__toggle:disabled { opacity: .45; }
 .act__for { display: flex; align-items: center; gap: 8px; min-height: 36px; }
 .act__except-kind { flex: 1 1 0; min-width: 0; }
+.act__unit { flex: 0 1 92px; min-width: 64px; }
 .act__param { display: flex; align-items: center; gap: 6px; min-height: 36px; }
 .act__grow { flex: 1 1 0; min-width: 0; }
 .act__input {
   flex: 1 1 0; min-width: 0; height: 36px; box-sizing: border-box; padding: 0 8px; border-radius: 8px;
   border: 1px solid var(--line); background: var(--surface); color: var(--text); font: inherit; font-size: 14px;
 }
-.act__input--num { flex: 0 0 7ch; text-align: right; font-variant-numeric: tabular-nums; }
+.act__input--num { flex: 0 1 7ch; min-width: 4ch; text-align: right; font-variant-numeric: tabular-nums; }
 .key {
   flex: 0 0 auto; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px;
   border: 1px solid var(--line); background: transparent; color: var(--muted); transition: background .15s, color .15s;

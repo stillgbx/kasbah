@@ -28,7 +28,7 @@ describe('describeAutomation', () => {
 
   it('reads the dusk shutters rule as one sentence', () => {
     expect(describeAutomation(dusk, names, t, 'fr')).toBe(
-      'Lun–ven · 15 min avant le crépuscule · pas après 22:00 → Fermer · chaque volet · Rez-de-chaussée · sauf si Lecteur en marche · Terrasse ou Lumière en marche · Terrasse',
+      'Lun–ven · 15 min avant la fin du crépuscule · pas après 22:00 → Fermer · chaque volet · Rez-de-chaussée · sauf si Lecteur en marche · Terrasse ou Lumière en marche · Terrasse',
     )
   })
 
@@ -40,6 +40,16 @@ describe('describeAutomation', () => {
       actions: [{ type: 'command', target: { type: 'devices', deviceIds: ['mock:cover-gate', 'mock:light-living'] }, command: { type: 'cover.open' } }],
     }
     expect(describeAutomation(a, names, t, 'fr')).toBe('Quand Tesla à la maison depuis 2 min → Ouvrir · 2 appareils · sauf si pas (entre 23:00 et 06:00)')
+  })
+
+  it('says how long a light fades, before the hold time', () => {
+    const a: AutomationBody = {
+      ...dusk, unless: [],
+      actions: [{ type: 'command', target: { type: 'devices', deviceIds: ['mock:light-living'] }, command: { type: 'light.set', on: true, transitionMs: 600_000 }, forMin: 120 }],
+    }
+    expect(describeAutomation(a, names, t, 'fr')).toBe('Lun–ven · 15 min avant la fin du crépuscule · pas après 22:00 → Allumer · Plafonnier salon · en 10 min · pendant 120 min')
+    a.actions = [{ type: 'command', target: { type: 'devices', deviceIds: ['mock:light-living'] }, command: { type: 'light.set', on: false, transitionMs: 90_000 } }]
+    expect(describeAutomation(a, names, t, 'fr')).toBe('Lun–ven · 15 min avant la fin du crépuscule · pas après 22:00 → Éteindre · Plafonnier salon · en 90 s')
   })
 
   it('speaks English too', () => {

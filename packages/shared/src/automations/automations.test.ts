@@ -85,4 +85,9 @@ describe('inverseCommand', () => {
     expect(inverseCommand({ type: 'mower.start' })).toEqual({ type: 'mower.park', untilNextSchedule: true })
     expect(inverseCommand({ type: 'cover.set_position', position: 30 })).toBeUndefined()
   })
+
+  it('undoes a fade with the same fade', () => {
+    expect(inverseCommand({ type: 'light.set', on: true, transitionMs: 600_000 })).toEqual({ type: 'light.set', on: false, transitionMs: 600_000 })
+    expect(inverseCommand({ type: 'light.set', on: true, brightness: 40, transitionMs: 5000 })).toBeUndefined()
+  })
 })
