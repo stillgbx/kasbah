@@ -21,8 +21,8 @@ export default defineConfig({
   // MapLibre charge son worker par `new URL('./maplibre-gl-worker.mjs', import.meta.url)` : une fois
   // pré-empaqueté dans `.vite/deps`, cette URL ne pointe plus sur rien, le worker ne démarre pas et
   // les tuiles VECTORIELLES ne sont jamais décodées (le satellite, raster, marchait ; le plan restait
-  // vide, sans erreur). Servi tel quel depuis node_modules, le worker se trouve. Le build, lui, sait
-  // empaqueter un worker désigné ainsi.
+  // vide, sans erreur). Servi tel quel depuis node_modules, le worker se trouve. Le build, lui, NE le
+  // voit pas (adresse calculée, pas littérale) : `src/lib/maplibreWorker.ts` le fait empaqueter.
   // Même piège pour le lecteur de fichiers `.om` d'Open-Meteo (couche AROME du radar) : son WASM est
   // trouvé par `new URL('om_reader_wasm.web.wasm', import.meta.url)`.
   optimizeDeps: { exclude: ['maplibre-gl', '@openmeteo/weather-map-layer', '@openmeteo/file-reader', '@openmeteo/file-format-wasm'] },

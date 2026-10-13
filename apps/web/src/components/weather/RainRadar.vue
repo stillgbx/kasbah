@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { addProtocol, Map as MlMap, Marker, NavigationControl, type RasterTileSource } from 'maplibre-gl'
+import '../../lib/maplibreWorker'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { AROME_META_URL, aromeFrames, aromeSourceUrl, type AromeMeta } from '../../lib/arome'
 import { planStyleUrl, type LatLon } from '../../lib/map'

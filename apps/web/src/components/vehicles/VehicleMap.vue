@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Map as MlMap, Marker, NavigationControl, type FilterSpecification, type GeoJSONSource, type StyleSpecification } from 'maplibre-gl'
+import '../../lib/maplibreWorker'
 import type { FeatureCollection, Geometry } from 'geojson'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { IGN_MAX_ZOOM, initialView, normalizeHeading, planStyleUrl, satelliteStyle, satelliteStyleWithLabels, type LatLon, type MapMode } from '../../lib/map'

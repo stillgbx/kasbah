@@ -13,6 +13,7 @@ Entrées les plus récentes en haut. Une session = une entrée.
 - `3_plugins/3_11_husqvarna-automower.md` - section datée : recette du GPS garé, lecture cap / translation, pelouse comme repère, `mapOffset` remis à zéro.
 - `1_architecture/1_5_scene-3d.md` - section datée : carte peinte sur `SITE_DECOR_LAYER`, cause GTAO.
 - `6_faq/6_1_pieges-runtime.md` - entrée : liseré noir GTAO ; `outline` du rez-de-chaussée pris pour l'emprise.
+- `6_faq/6_0_pieges-outillage.md` - section datée : le worker MapLibre absent du build (contredit l'entrée du 2026-09-14), `lib/maplibreWorker.ts`.
 
 **Contradiction / à arbitrer** : la section du 2026-10-12 de `3_11` chiffre la rotation résiduelle constatée sur la vraie maison ; à relire au regard de la règle « pas de valeur réelle » (CLAUDE.md §7).
 

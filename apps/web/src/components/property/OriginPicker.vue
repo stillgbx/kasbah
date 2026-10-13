@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Map as MlMap, Marker, NavigationControl, type GeoJSONSource, type StyleSpecification } from 'maplibre-gl'
+import '../../lib/maplibreWorker'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { FIRST_ROOM, localToGeo, type GeoOrigin, type Vec2 } from '@kasbah/shared'
 import { IGN_MAX_ZOOM, planStyleUrl, satelliteStyle, satelliteStyleWithLabels, type MapMode } from '../../lib/map'

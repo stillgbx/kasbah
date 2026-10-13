@@ -1,7 +1,7 @@
 # FAQ — pièges d'outillage
 
-> Dernière mise à jour : 2026-10-10
-> Sources : sessions des 2026-09-04 et 2026-09-08, `apps/web/src/stores/settings.ts`, `apps/web/vite.config.ts`, `apps/web/src/components/home/*.vue`, `apps/web/src/styles/app.css`, `apps/web/src/plugins/vuetify.ts`, `apps/web/src/three/markers/screenArt.ts`, `apps/web/src/three/HouseScene.ts`, `apps/web/src/components/energy/EnergyFlow.vue`, `apps/web/src/components/devices/RoomBands.vue`, `apps/web/src/views/EnergyView.vue`, `apps/web/src/components/home/PanelArraysCard.vue`, `apps/web/src/three/builders/details.ts`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/components/ui/Segmented.vue`, `apps/server/src/app.ts`, `apps/server/src/plugins/mixcloud/resolve.ts`, `apps/server/package.json`, `apps/web/src/components/controls/MediaPlayerControl.vue`, `docs/plugins/claude-assistant.md`, session du 2026-10-08, `scripts/dev-server.mjs`, session du 2026-10-10
+> Dernière mise à jour : 2026-10-13
+> Sources : sessions des 2026-09-04 et 2026-09-08, `apps/web/src/stores/settings.ts`, `apps/web/vite.config.ts`, `apps/web/src/components/home/*.vue`, `apps/web/src/styles/app.css`, `apps/web/src/plugins/vuetify.ts`, `apps/web/src/three/markers/screenArt.ts`, `apps/web/src/three/HouseScene.ts`, `apps/web/src/components/energy/EnergyFlow.vue`, `apps/web/src/components/devices/RoomBands.vue`, `apps/web/src/views/EnergyView.vue`, `apps/web/src/components/home/PanelArraysCard.vue`, `apps/web/src/three/builders/details.ts`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/components/ui/Segmented.vue`, `apps/server/src/app.ts`, `apps/server/src/plugins/mixcloud/resolve.ts`, `apps/server/package.json`, `apps/web/src/components/controls/MediaPlayerControl.vue`, `docs/plugins/claude-assistant.md`, session du 2026-10-08, `scripts/dev-server.mjs`, session du 2026-10-10, `apps/web/src/lib/maplibreWorker.ts`, session du 2026-10-13
 
 ## Vuetify 4 : changer de thème
 
@@ -853,3 +853,30 @@ Sources : `apps/web/src/components/music/MusicPlayerBar.vue`,
   le `shutdown()` de `main.ts` ne tourne pas — comme sous `node --watch` (entrée du 2026-10-01).
 - **Source** : session du 2026-10-10 (sondes `fs.watch` et `utimes` dans le dossier de travail de la
   session, recherche web).
+
+### Mise à jour 2026-10-13 — le worker MapLibre absent du BUILD
+
+**Contredit l'entrée du 2026-09-14** (« le build de production sait empaqueter un worker désigné
+ainsi ») : c'est faux. MapLibre 6.10 ne désigne pas son worker par un `new URL` LITTÉRAL mais par une
+adresse calculée à côté de son module (le nom est choisi à l'exécution entre `maplibre-gl-worker.mjs`
+et sa variante `-dev`) : Vite ne la voit pas, le build ne contient pas le worker.
+
+- **Date** : 2026-10-13
+- **Symptôme** : sur le build servi par Fastify, en console « Failed to load module script … The
+  server responded with a non-JavaScript MIME type of "text/html" » pour `assets/maplibre-gl-worker.mjs`
+  (le repli SPA rend `index.html` à la place du fichier absent). Le satellite s'affiche, le plan et les
+  noms de rues non — le même tableau qu'en développement le 2026-09-14, pour une autre raison.
+- **Diagnostic** : un build dans un dossier jetable (`npx vite build --outDir <tmp>`) ne contient aucun
+  fichier `*worker*`. Le worker importe en plus `./maplibre-gl-shared.mjs` : copier le seul fichier
+  (`?url`) ne suffirait pas.
+- **Solution** : `apps/web/src/lib/maplibreWorker.ts` importe
+  `maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url` (Vite l'EMPAQUETTE comme un worker, code
+  partagé compris, ~500 Ko) et passe l'adresse à `setWorkerUrl`. Les quatre composants qui créent une
+  carte (`VehicleMap`, `RainRadar`, `OriginPicker`, `OriginCalibration`) l'importent ; pas `main.ts`,
+  qui chargerait MapLibre à l'ouverture de l'application, carte ou pas. MapLibre ouvre un worker
+  MODULE dès que l'adresse ne finit pas par `.cjs` : le format `iife` par défaut de Vite y tourne.
+- **Vérifié** : build en mode simulé (`VITE_INPROCESS_MOCK=1`) servi par `vite preview` — le worker se
+  charge et le plan vectoriel se dessine ; en développement, `getWorkerUrl()` rend l'adresse donnée,
+  servie en `text/javascript`, et un worker s'y lance sans erreur.
+- **À retenir** : un `optimizeDeps.exclude` qui « répare » le dev ne dit rien du build ; un correctif de
+  chargement se vérifie aussi sur un build.
