@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { copyFile, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { copyFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ManualClock } from '@kasbah/mock-sim'
@@ -254,6 +254,28 @@ describe('WebSocket hub', () => {
     }
     ws.close()
     await kasbah.close()
+  })
+})
+
+describe('WebSocket hub : build web servi', () => {
+  // L'écran compare le build qu'il porte à celui du serveur : relu à chaque connexion, un build
+  // refait sans redémarrer est vu par l'écran qui se reconnecte.
+  it('porte l identifiant du build dans le snapshot, relu à chaque connexion', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'kasbah-web-'))
+    await writeFile(join(dir, 'index.html'), '<!doctype html>')
+    await writeFile(join(dir, 'build-id.txt'), 'build-1')
+    const env = loadEnv({ KASBAH_HOUSE_FILE: HOUSE, KASBAH_LOG_LEVEL: 'silent', KASBAH_STATIC_DIR: dir })
+    const kasbah = await buildApp({ env, logger: pino({ level: 'silent' }), clock: new ManualClock(MONDAY), envSource: { MOCK_SEED: '3' } })
+    const address = await kasbah.app.listen({ port: 0, host: '127.0.0.1' })
+    const firstSnapshot = () => new Promise<ServerMessage>((resolve) => {
+      const ws = new WebSocket(`${address.replace('http', 'ws')}/ws`)
+      ws.once('message', (d) => { ws.close(); resolve(serverMessageSchema.parse(JSON.parse(d.toString()))) })
+    })
+    expect(await firstSnapshot()).toMatchObject({ type: 'snapshot', appBuild: 'build-1' })
+    await writeFile(join(dir, 'build-id.txt'), 'build-2')
+    expect(await firstSnapshot()).toMatchObject({ type: 'snapshot', appBuild: 'build-2' })
+    await kasbah.close()
+    await rm(dir, { recursive: true, force: true })
   })
 })
 

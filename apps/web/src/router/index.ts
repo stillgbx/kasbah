@@ -38,4 +38,19 @@ export const router = createRouter({
 
 // Une vue qui ne se charge pas, sous l'adresse publique, c'est souvent une session finie (le serveur
 // refuse alors ses fichiers) : on le demande à l'API, qui renvoie à la connexion s'il le faut.
-router.onError(() => { getTransport().session().catch(() => {}) })
+// Session valide, c'est un build remplacé (l'écran est resté ouvert pendant une mise à jour, sa vue
+// n'existe plus) : on recharge la page sur la vue demandée, UNE fois — une vue toujours introuvable
+// après le rechargement ne doit pas boucler.
+const CHUNK_RELOAD_KEY = 'kasbah.chunkReloadAt'
+const CHUNK_RELOAD_WINDOW_MS = 10_000
+
+router.onError((err, to) => {
+  getTransport().session().then(() => {
+    if (!(err instanceof TypeError)) return // un import qui échoue est une TypeError dans tous les navigateurs
+    try {
+      if (Date.now() - Number(sessionStorage.getItem(CHUNK_RELOAD_KEY) ?? 0) < CHUNK_RELOAD_WINDOW_MS) return
+      sessionStorage.setItem(CHUNK_RELOAD_KEY, String(Date.now()))
+    } catch { return } // sans stockage, pas de garde : pas de rechargement automatique
+    window.location.assign(router.resolve(to).href)
+  }).catch(() => {})
+})

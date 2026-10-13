@@ -21,7 +21,7 @@ import { ShoppingService, shoppingPathFor } from './core/shopping'
 import { EnergyHistory } from './core/history'
 import { registerRoutes } from './http/routes'
 import { actAsHook, createAppSession, sessionConfigSchema } from './http/session'
-import { registerStatic } from './http/static'
+import { readAppBuild, registerStatic } from './http/static'
 import { createMcpAuth, mcpAuthConfigSchema, publicHostFilter } from './mcp/auth'
 import { registerMcp } from './mcp/server'
 import { registerMcpUserRoutes } from './mcp/users-routes'
@@ -115,7 +115,11 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
   // Liste de courses : un fichier à côté de la maison, lu avant le hub, dont le snapshot la porte.
   const shopping = new ShoppingService(shoppingPathFor(house.path), { readOnly: !!opts.readOnly })
   await shopping.load()
-  const hub = new WsHub(registry, bus, clock, opts.logger.child({ component: 'ws' }), { scenes, automations, shopping, propertyId: () => house.house.id })
+  const hub = new WsHub(registry, bus, clock, opts.logger.child({ component: 'ws' }), {
+    scenes, automations, shopping, propertyId: () => house.house.id,
+    // build web servi, relu à chaque connexion ; sans service statique, aucun build à comparer
+    ...((opts.serveStatic ?? true) ? { appBuild: () => readAppBuild(opts.env.KASBAH_STATIC_DIR) } : {}),
+  })
   automations.onChange(() => hub.broadcast({ type: 'automations', automations: automations.list() }))
   shopping.onChange((list) => hub.broadcast({ type: 'shopping', shopping: list }))
   await automations.start()

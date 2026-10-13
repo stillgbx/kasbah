@@ -14,6 +14,7 @@
     "connecting": "Connecting to the server…", "online": "Connected", "stale": "Silent link, reconnecting…",
     "offline": "Server unreachable. Displayed states may be outdated."
   },
+  "appUpdate": { "available": "A new version of the app is available", "reload": "Reload" },
   "summary": { "lightsOn": "{n} light on | {n} light on | {n} lights on",
     "shuttersOpen": "{n} shutter open | {n} shutter open | {n} shutters open",
     "awningsDown": "{n} awning deployed | {n} awning deployed | {n} awnings deployed",

@@ -6,6 +6,8 @@ import vue from '@vitejs/plugin-vue'
 export default defineConfig({
   plugins: [vue()],
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
+  // build fixe : les tests de la mise à jour comparent l'écran à un autre build
+  define: { __KASBAH_BUILD__: JSON.stringify('test-build') },
   test: {
     name: 'web',
     environment: 'happy-dom',

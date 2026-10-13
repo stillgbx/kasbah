@@ -2,6 +2,16 @@
 
 Entrées les plus récentes en haut. Une session = une entrée.
 
+## [2026-10-13] update | Mise à jour de l'application : bandeau et rechargement
+
+**Déclencheur** : « parfois quand on clique sur un élément du rail il ne se passe rien » après une mise à jour du serveur (vue paresseuse d'un build remplacé servie en `text/html`), et la demande d'un moyen d'indiquer qu'une mise à jour est disponible.
+
+**Pages modifiées** :
+- `5_setup/5_2_production.md` - section datée : symptôme et cause, 404 sous `/assets/`, rechargement sur une vue introuvable (une fois par 10 s), `build-id.txt` / `__KASBAH_BUILD__`, bandeau et rechargement automatique après 2 min (une fois par build), emplacement du bandeau, pistes écartées (`emptyOutDir: false`, service worker).
+- `1_architecture/1_3_protocole-rest-ws.md` - section datée : `appBuild` au snapshot, relu à chaque connexion ; repli SPA hors `/assets/`.
+
+**Index** : mis à jour (2 lignes).
+
 ## [2026-10-13] update | Origine de la maison réglable : caler sur la photo
 
 **Déclencheur** : calage de la maison sur l'orthophoto (cap et origine faux, carte du robot et GPS de l'appareil en désaccord), puis un liseré sombre autour de la carte peinte en qualité haute.

@@ -14,6 +14,7 @@
     "connecting": "Connexion au serveur…", "online": "Connecté", "stale": "Lien silencieux, reconnexion…",
     "offline": "Serveur injoignable. Les états affichés peuvent être périmés."
   },
+  "appUpdate": { "available": "Nouvelle version de l'application", "reload": "Recharger" },
   "summary": { "lightsOn": "{n} lumière allumée | {n} lumière allumée | {n} lumières allumées",
     "shuttersOpen": "{n} volet ouvert | {n} volet ouvert | {n} volets ouverts",
     "awningsDown": "{n} store déployé | {n} store déployé | {n} stores déployés",

@@ -22,6 +22,8 @@ export interface WsHubOptions {
   shopping?: { get(): ShoppingList }
   /** Propriété que le serveur fait vivre : un écran qui la trouve changée se recharge. */
   propertyId?: () => string
+  /** Build web servi : un écran qui porte un autre build propose de recharger. */
+  appBuild?: () => string | undefined
 }
 
 export class WsHub {
@@ -36,6 +38,7 @@ export class WsHub {
   private readonly automations: WsHubOptions['automations']
   private readonly shopping: WsHubOptions['shopping']
   private readonly propertyId: WsHubOptions['propertyId']
+  private readonly appBuild: WsHubOptions['appBuild']
 
   constructor(
     private readonly registry: DeviceRegistry,
@@ -50,6 +53,7 @@ export class WsHub {
     this.automations = opts.automations
     this.shopping = opts.shopping
     this.propertyId = opts.propertyId
+    this.appBuild = opts.appBuild
     this.unsubscribe.push(
       bus.on('state', (id, state) => { this.pending.set(id, state); this.scheduleFlush() }),
       bus.on('availability', (deviceIds, available) => {
@@ -81,7 +85,8 @@ export class WsHub {
     socket.on('close', () => this.clients.delete(socket))
     socket.on('error', (err) => { this.logger.debug({ err }, 'ws client error'); this.clients.delete(socket) })
     socket.on('message', () => { /* v1 : le client n'envoie rien d'utile */ })
-    this.send(socket, { type: 'snapshot', serverTime: this.clock.now(), devices: this.registry.list(), scenes: this.scenes?.list() ?? [], automations: this.automations?.list() ?? [], shopping: this.shopping?.get() ?? EMPTY_SHOPPING_LIST, ...(this.propertyId ? { propertyId: this.propertyId() } : {}) })
+    const appBuild = this.appBuild?.()
+    this.send(socket, { type: 'snapshot', serverTime: this.clock.now(), devices: this.registry.list(), scenes: this.scenes?.list() ?? [], automations: this.automations?.list() ?? [], shopping: this.shopping?.get() ?? EMPTY_SHOPPING_LIST, ...(this.propertyId ? { propertyId: this.propertyId() } : {}), ...(appBuild ? { appBuild } : {}) })
     this.logger.debug({ clients: this.clients.size }, 'ws client connected')
   }
 

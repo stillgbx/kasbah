@@ -4,6 +4,7 @@ import { useDevicesStore } from './stores/devices'
 import { useHouseStore } from './stores/house'
 import { useNotificationsStore } from './stores/notifications'
 import { usePropertiesStore } from './stores/properties'
+import AppUpdateBanner from './components/AppUpdateBanner.vue'
 import ConnectionBanner from './components/ConnectionBanner.vue'
 import NavRail from './components/layout/NavRail.vue'
 import SearchPalette from './components/layout/SearchPalette.vue'
@@ -32,6 +33,7 @@ onBeforeUnmount(() => devices.stop())
       </router-view>
     </main>
     <ConnectionBanner />
+    <AppUpdateBanner />
     <SearchPalette />
     <!-- « Créer une propriété » : ouverte depuis le sélecteur du rail ou la carte des Réglages -->
     <NewPropertyDialog />

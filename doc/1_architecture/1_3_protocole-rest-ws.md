@@ -1,7 +1,7 @@
 # Protocole REST et WebSocket
 
 > Dernière mise à jour : 2026-10-13
-> Sources : `packages/shared/src/protocol/{ws,http}.ts`, `apps/server/src/http/{routes,errors}.ts`, `apps/server/src/ws/hub.ts`, `apps/web/src/api/httpTransport.ts`, `apps/server/src/plugins/tesla/index.ts`, `apps/server/src/config/house.ts`, `packages/shared/src/house/place.ts`, `apps/server/src/core/scene-registry.ts`, `packages/shared/src/protocol/http.ts` (`deviceConsumptionSchema`), `apps/server/src/http/routes.ts` (automatisations), `apps/server/src/http/relief.test.ts`, `apps/server/src/config/properties.ts`, `apps/server/src/config/catalog.ts`, `apps/server/src/core/shopping.ts` (2026-10-11)
+> Sources : `packages/shared/src/protocol/{ws,http}.ts`, `apps/server/src/http/{routes,errors}.ts`, `apps/server/src/ws/hub.ts`, `apps/web/src/api/httpTransport.ts`, `apps/server/src/plugins/tesla/index.ts`, `apps/server/src/config/house.ts`, `packages/shared/src/house/place.ts`, `apps/server/src/core/scene-registry.ts`, `packages/shared/src/protocol/http.ts` (`deviceConsumptionSchema`), `apps/server/src/http/routes.ts` (automatisations), `apps/server/src/http/relief.test.ts`, `apps/server/src/config/properties.ts`, `apps/server/src/config/catalog.ts`, `apps/server/src/core/shopping.ts` (2026-10-11), `apps/server/src/http/static.ts` (`appBuild`, 2026-10-13)
 
 ## REST
 
@@ -724,3 +724,17 @@ décompte « sixième, septième » de cette page n'a pas été tenu au-delà. C
 maison : `../2_maison/2_0_format-house-json.md`, même date.
 
 Sources : `apps/server/src/http/routes.ts`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`.
+
+### Mise à jour 2026-10-13 — `appBuild` au snapshot
+
+Le message `snapshot` gagne **`appBuild`** (optionnel, `packages/shared/src/protocol/ws.ts`) :
+l'identifiant du build web que le serveur sert, lu dans `build-id.txt` du dossier statique
+(`readAppBuild`, `apps/server/src/http/static.ts`). Il est relu **à chaque connexion**
+(`WsHubOptions.appBuild`, `apps/server/src/ws/hub.ts`), absent sans service statique ou sans ce
+fichier. Le client le compare au sien (`__KASBAH_BUILD__`) et propose de recharger s'ils diffèrent
+(`apps/web/src/stores/appUpdate.ts`, branché sur le flux dans `stores/devices.ts` comme
+`propertyId`). Même mécanisme que `propertyId`, mais la réponse est un bandeau, pas un
+rechargement immédiat. Détail : `../5_setup/5_2_production.md` (mise à jour 2026-10-13).
+
+Côté HTTP, le repli SPA exclut désormais `/assets/*` : un fichier absent y répond 404
+(`NOT_FOUND`), plus `index.html`.

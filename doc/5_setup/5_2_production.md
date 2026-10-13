@@ -1,7 +1,7 @@
 # Production
 
-> Dernière mise à jour : 2026-10-07
-> Sources : `apps/server/build.mjs`, `apps/server/src/http/static.ts`, `apps/web/vite.config.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/config/env.ts`, `apps/web/index.html`, `apps/web/public/manifest.webmanifest`, `apps/web/public/icons/`
+> Dernière mise à jour : 2026-10-13
+> Sources : `apps/server/build.mjs`, `apps/server/src/http/static.ts`, `apps/web/vite.config.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/config/env.ts`, `apps/web/index.html`, `apps/web/public/manifest.webmanifest`, `apps/web/public/icons/`, `apps/web/src/stores/appUpdate.ts`, `apps/web/src/components/AppUpdateBanner.vue` (2026-10-13)
 
 ## Build
 
@@ -173,3 +173,53 @@ iOS ignore `fullscreen`, rien n'y change.
 
 Sources : `apps/web/public/manifest.webmanifest`, `apps/web/src/stores/settings.ts` (`fullscreen`),
 `apps/web/src/views/SettingsView.vue`, `apps/web/src/App.vue` (`100dvh`), `apps/web/src/components/layout/NavRail.vue` (barre du bas).
+
+### Mise à jour 2026-10-13 — un écran resté ouvert pendant une mise à jour
+
+**Symptôme.** Après un `npm run build` et le redémarrage du serveur, un clic dans le rail ne
+faisait rien sur un écran resté ouvert (la tablette murale, typiquement), avec en console
+`Failed to load module script: … MIME type of "text/html"`. Vite vide `dist/` à chaque build et
+renomme les vues paresseuses (`ShoppingView-<hash>.js`) : l'ancien `index.html`, encore en mémoire,
+demandait un fichier qui n'existait plus, et le repli SPA lui servait `index.html` à la place.
+
+**Ce qui est fait (trois parties).**
+
+1. **404 sous `/assets/`** (`apps/server/src/http/static.ts`) : le repli SPA ne couvre plus
+   `/assets/*`. Un fichier absent est un vrai 404 JSON, lisible, au lieu d'un faux type MIME.
+2. **Une vue qui ne se charge pas recharge la page** (`apps/web/src/router/index.ts`) :
+   `router.onError` demande d'abord `/api/session` (une session finie renvoie toujours à la
+   connexion) ; session bonne et erreur `TypeError` (un `import()` qui échoue, dans tous les
+   navigateurs), la page se recharge sur la vue demandée. Une seule fois par fenêtre de 10 s
+   (`sessionStorage`, clé `kasbah.chunkReloadAt`) : une vue toujours introuvable ne boucle pas.
+3. **Bandeau « Nouvelle version » et rechargement automatique** :
+   - le build écrit son identifiant (`Date.now()` en base 36) dans l'app (`__KASBAH_BUILD__`,
+     `define` de `apps/web/vite.config.ts`, vide en dev) et à côté d'elle (`dist/build-id.txt`) ;
+   - le serveur relit `build-id.txt` **à chaque connexion WebSocket** (`readAppBuild`,
+     `appBuild` du snapshot) : un build refait est vu à la reconnexion qui suit le redémarrage ;
+   - l'écran qui porte un autre build affiche `AppUpdateBanner.vue` et se recharge seul après
+     **2 min sans interaction** (`pointerdown`, `keydown`, `wheel` relancent le délai,
+     `apps/web/src/stores/appUpdate.ts`) ; **une fois par build** (`sessionStorage`,
+     `kasbah.reloadedForBuild`) : si l'écart persiste après, le bandeau reste, sans boucle.
+
+Le bandeau est en bas au centre, **au-dessus** de la barre de recherche de l'accueil, et seulement
+en ligne (recharger hors ligne ne mène nulle part). En haut, à côté de la pastille de connexion, il
+masquait le sélecteur d'étage, et il est cliquable, lui. Il s'abrège sur un écran étroit (vérifié à
+300 px), le bouton reste entier.
+
+**Écarté.** Garder les anciens fichiers (`emptyOutDir: false`) : les anciens écrans tournent, mais
+`dist/` grossit et l'ancienne app continue de parler à un serveur plus récent. Une PWA avec service
+worker (`vite-plugin-pwa`) : une couche de cache de plus, avec ses propres pièges, pour un besoin
+que le snapshot couvre.
+
+**À savoir.** L'identifiant est une heure, pas un hash du contenu : un build refait sans changement
+affiche aussi le bandeau (recharger ne coûte rien). Les écrans ouverts avant ce changement ne
+portent pas ce code : il faut les recharger à la main une dernière fois.
+
+Vérifié sur un build réel servi par le serveur de démonstration : vue d'un build remplacé en 404
+puis page rechargée sur `/shopping`, bandeau à la reconnexion, bouton Recharger ; thèmes clair et
+sombre, fr et en, 1280, 375 et 300 px.
+
+Sources : `apps/server/src/http/static.ts` (+ `static.test.ts`), `apps/server/src/ws/hub.ts`,
+`apps/server/src/app.ts`, `packages/shared/src/protocol/ws.ts`, `apps/web/vite.config.ts`,
+`apps/web/vitest.config.ts`, `apps/web/src/router/index.ts`, `apps/web/src/stores/appUpdate.ts`
+(+ test), `apps/web/src/components/AppUpdateBanner.vue`.

@@ -12,10 +12,19 @@ const DEV_PORT = Number(process.env.PORT ?? 5173)
 const SERVER = process.env.KASBAH_SERVER ?? 'http://localhost:8787'
 const FIXED_PORT = process.env.PORT === undefined || process.env.KASBAH_SERVER !== undefined
 
+// Identifiant du build : inscrit dans l'app (`__KASBAH_BUILD__`) et à côté d'elle (`build-id.txt`),
+// que le serveur relaie dans le snapshot WS. Un écran resté ouvert sur un build remplacé le voit
+// différer et propose de recharger. En dev, vide : Vite sert l'app à jour, rien à comparer.
+const BUILD_ID = Date.now().toString(36)
+
 // `base: '/'` : chemins absolus, sans quoi `/automations/new` rechargé chercherait ses fichiers sous
 // `/automations/assets/`. Le build est servi par le serveur Fastify sous / (repli SPA).
-export default defineConfig({
-  plugins: [vue(), vuetify({ autoImport: true })],
+export default defineConfig(({ command }) => ({
+  plugins: [
+    vue(), vuetify({ autoImport: true }),
+    { name: 'kasbah-build-id', apply: 'build', generateBundle() { this.emitFile({ type: 'asset', fileName: 'build-id.txt', source: BUILD_ID }) } },
+  ],
+  define: { __KASBAH_BUILD__: JSON.stringify(command === 'build' ? BUILD_ID : '') },
   base: '/',
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   // MapLibre charge son worker par `new URL('./maplibre-gl-worker.mjs', import.meta.url)` : une fois
@@ -51,4 +60,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))

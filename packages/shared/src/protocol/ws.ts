@@ -33,6 +33,11 @@ export const serverMessageSchema = z.discriminatedUnion('type', [
      * changée (un autre écran a basculé de propriété démo) recharge tout plutôt que de mêler deux maisons.
      */
     propertyId: z.string().optional(),
+    /**
+     * Identifiant du build web que le serveur sert (`build-id.txt` du dossier statique) ; absent sans
+     * build. Un écran qui ne porte pas le même propose de recharger : ses vues paresseuses n'existent plus.
+     */
+    appBuild: z.string().optional(),
   }),
   z.object({ type: z.literal('state'), deviceId: deviceIdSchema, state: deviceStateSchema }),
   z.object({ type: z.literal('availability'), deviceIds: z.array(deviceIdSchema), available: z.boolean() }),

@@ -9,6 +9,7 @@ import { useScenesStore } from './scenes'
 import { useAutomationsStore } from './automations'
 import { useShoppingStore } from './shopping'
 import { usePropertiesStore } from './properties'
+import { useAppUpdateStore } from './appUpdate'
 
 // Appareils des plugins : descripteurs + états, connexion push, commandes avec mise à jour
 // optimiste et retour arrière. INVARIANT : l'objet d'état d'un appareil est REMPLACÉ (jamais muté)
@@ -154,11 +155,12 @@ export const useDevicesStore = defineStore('devices', () => {
     const scenes = useScenesStore()
     const automations = useAutomationsStore()
     const properties = usePropertiesStore()
+    const appUpdate = useAppUpdateStore()
     const shopping = useShoppingStore()
     disconnect = getTransport().connect({
       // le même flux nourrit les appareils, les scènes des fabricants, les automatisations et la liste de courses, chacun son
       // store ; la propriété du snapshot dit si un autre écran a basculé de maison démo
-      onMessage: (msg) => { properties.apply(msg); applyMessage(msg); scenes.apply(msg); automations.apply(msg); shopping.apply(msg) },
+      onMessage: (msg) => { properties.apply(msg); appUpdate.apply(msg); applyMessage(msg); scenes.apply(msg); automations.apply(msg); shopping.apply(msg) },
       onStatus: (s) => { connection.value = s },
     })
   }
