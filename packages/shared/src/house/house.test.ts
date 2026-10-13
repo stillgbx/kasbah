@@ -5,7 +5,7 @@ import { computeHouseGeometry } from './geometry'
 import { roomBounds, buildingBounds } from './geometry/bounds'
 import { resolveDefaults } from './defaults'
 import { indexHouse, deviceFloorZ } from './lookup'
-import { geoDistance, geoToLocal, localToGeo, sitePosition } from './geo'
+import { geoDistance, geoToLocal, localToGeo, shiftOrigin, sitePosition, turnOrigin } from './geo'
 import { panelArrayDevices, panelOf, withPanelArrays } from './panels'
 import { PANEL_PEAK_W, panelArraySchema } from './schema'
 
@@ -216,5 +216,21 @@ describe('lookup & geo', () => {
     expect(Math.abs(north.lon - 5)).toBeLessThan(1e-9)
     expect(east.lon).toBeGreaterThan(5)
     expect(Math.abs(east.lat - 45)).toBeLessThan(1e-9)
+  })
+  it("le calage glisse l'origine en mètres du monde, et la tourne autour d'un point qui ne bouge pas", () => {
+    const o = { lat: 45, lon: 5, alt: 0, heading: 6 }
+    // 3 m vers l'est, 2 m vers le sud : le 0;0 de la maison se retrouve là sur la photo
+    const moved = shiftOrigin(o, 3, -2)
+    const at = geoToLocal({ ...o, heading: 0 }, moved)
+    expect(at[0]).toBeCloseTo(3, 3)
+    expect(at[1]).toBeCloseTo(-2, 3)
+    expect(moved.heading).toBe(6)
+    // tourner de 18° autour du centre de la maison : le centre reste à sa place, le coin bouge
+    const centre: [number, number] = [5, 7]
+    const turned = turnOrigin(o, 24, centre)
+    expect(turned.heading).toBe(24)
+    const before = localToGeo(o, [5, 7, 0]), after = localToGeo(turned, [5, 7, 0])
+    expect(geoDistance(before, after)).toBeLessThan(0.001)
+    expect(geoDistance(o, turned)).toBeGreaterThan(2)
   })
 })

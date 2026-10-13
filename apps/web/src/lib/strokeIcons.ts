@@ -172,6 +172,8 @@ export const ICONS = {
   chevronUp: 'M6 15l6-6 6 6',
   arrowUp: 'M12 20V4M6 10l6-6 6 6',
   arrowDown: 'M12 4v16M6 14l6 6 6-6',
+  arrowLeft: 'M20 12H4M10 6l-6 6 6 6',
+  arrowRight: 'M4 12h16M14 6l6 6-6 6',
   unfold: 'M8 9l4-4 4 4M8 15l4 4 4-4',
   eyedropper: 'M19.5 6.5a2.8 2.8 0 0 0-4-4l-2.3 2.3-1-1-1.5 1.5 6 6 1.5-1.5-1-1zM13.2 8.8L5 17v2h2l8.2-8.2',
   // « favori / mémorisé » : une pipette ou une coche ne se lisent pas à 16 px (essais rejetés)

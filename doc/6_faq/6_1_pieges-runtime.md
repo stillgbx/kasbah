@@ -1,6 +1,6 @@
 # FAQ — pièges à l'exécution
 
-> Dernière mise à jour : 2026-10-08
+> Dernière mise à jour : 2026-10-13
 > Sources : `apps/web/src/components/home/SceneLoader.vue`, `apps/web/src/three/HouseScene.ts` (`padLamps`), `apps/web/src/three/core/post.ts`, session du 2026-09-19 (`_generated-ai-doc/sessions/2026-09-19-irobot/journal.md`), sessions du 2026-09-04, du 2026-09-07, du 2026-09-08 et du 2026-09-09, `apps/server/src/plugins/tahoma/{client,index,mapping}.ts`, `apps/web/src/stores/devices.ts`, `apps/web/src/stores/scenes.ts`, `apps/server/src/plugins/hue/index.ts`, `apps/server/test/integration.test.ts`, `apps/web/src/styles/app.css`, `apps/server/src/core/registry.ts`, `packages/shared/src/devices/{state,rules}.ts`, `apps/web/src/lib/deviceState.ts`, `packages/mock-sim/src/simulation.ts`, `packages/shared/src/house/geometry/walls.ts`, `house/fit-survey.mjs`, `apps/web/src/composables/useHouseScene.ts`, `apps/server/src/plugins/google_cast/{index,known,discovery,channel,mapping}.ts`, session du 2026-09-17 (`_generated-ai-doc/sessions/2026-09-16-comap-proteo-2/journal.md`), `apps/web/src/components/automations/AutomationEditor.vue`, `apps/server/src/core/atomic-file.ts`, `apps/server/src/plugins/tesla/{state,index}.ts`, `apps/web/src/views/AutomationEditView.vue`, `apps/server/src/plugins/claude/run.ts`, `house/demos/tilleuls.json`
 
 ## ytmusic : « Best of » reste en Album alors que « Best Of » est en Compil
@@ -1482,3 +1482,16 @@ Entrée groupée : cinq constats de la mise en service de la connexion sous l'ad
   Embruns 7. Compter les finitions distinctes avant d'en ajouter à une maison.
 - **Source** : session du 2026-10-07 (démos multi-propriétés), `house/demos/tilleuls.json` ; voir
   `../2_maison/2_0_format-house-json.md`. Le seuil exact et le coût par finition n'ont pas été mesurés.
+
+## 2026-10-13 — Liseré noir autour de la carte peinte (qualité haute) ; `outline` du rez-de-chaussée pris pour l'emprise
+
+**Symptôme** : (1) en qualité haute seulement, les traits de la carte peinte d'une tondeuse sont cernés de
+sombre. (2) Une maison calée sur la photo au contour de son rez-de-chaussée se retrouve décalée de
+plusieurs mètres.
+
+**Diagnostic** : (1) l'occlusion ambiante GTAO traite les rubans, 5 cm au-dessus de l'herbe, comme des
+obstacles. (2) `levels[].outline` « sert au toit » : c'est une enveloppe, pas l'emprise réelle.
+
+**Solution** : (1) mettre la carte peinte sur `SITE_DECOR_LAYER`. (2) caler sur le contour du dernier
+étage, les pièces du rez-de-chaussée et la pelouse du robot posée sur sa base, jamais sur l'`outline` du
+rez-de-chaussée. Détails : `../1_architecture/1_5_scene-3d.md` et `../2_maison/2_0_format-house-json.md`.

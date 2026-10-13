@@ -1,6 +1,6 @@
 # Navigation et panneaux
 
-> Dernière mise à jour : 2026-10-12
+> Dernière mise à jour : 2026-10-13
 > Sources : `apps/web/src/App.vue`, `apps/web/src/components/layout/*.vue`, `apps/web/src/views/*.vue`, `apps/web/src/components/home/*.vue`, `apps/web/src/components/controls/*.vue`, `apps/web/src/views/LightsView.vue`, `apps/web/src/components/home/PlacementControl.vue`, `apps/web/src/components/scenes/SceneChips.vue`, `apps/web/src/components/devices/RoomBands.vue`, `apps/web/src/components/devices/RoomLightsToggle.vue`, `apps/web/src/views/CoversView.vue`, `apps/web/src/components/covers/CoverPill.vue`, `apps/web/src/lib/{cover,deviceState}.ts`, `apps/web/src/composables/useHomeSummary.ts`, `apps/web/src/components/devices/ForgetDeviceButton.vue`, `apps/web/src/components/controls/MediaPlayerControl.vue`, `apps/web/src/lib/audioRouting.ts`, `apps/web/src/components/energy/EnergyFlow.vue`, `apps/web/src/components/EnphasePairingCard.vue`, `apps/web/src/lib/energy.ts`, `apps/web/src/components/devices/RoomBrightness.vue`, `apps/web/src/components/devices/CoversMaster.vue`, `apps/web/src/components/devices/LightsMaster.vue`, `apps/web/src/composables/useRoomLights.ts`, `apps/web/src/components/home/PanelArraysCard.vue`, `apps/web/src/components/energy/InverterFields.vue`, `apps/web/src/components/TeslaLinkCard.vue`, `apps/web/src/views/VehiclesView.vue`, `apps/web/src/components/vehicles/VehicleMap.vue`, `apps/web/src/components/vehicles/VehicleTuning.vue`, `apps/web/src/lib/vehicleTuning.ts`, `apps/web/src/lib/map.ts`, `apps/web/src/components/controls/VehicleCard.vue`, `apps/web/src/components/vehicles/ChargeLimitCard.vue`, `apps/web/src/components/home/DevicePanel.vue`, `apps/web/src/components/settings/PluginSection.vue`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/components/ui/Segmented.vue`, `apps/web/src/components/home/SearchBar.vue`, `apps/web/src/composables/useSearch.ts`, `apps/web/src/components/layout/SearchPalette.vue`, `apps/web/src/lib/search.ts`, `apps/web/src/lib/navItems.ts`, `apps/web/src/views/HeatingView.vue`, `apps/web/src/components/heating/*.vue`, `apps/web/src/components/MelcloudLinkCard.vue`, `apps/web/src/components/home/OpeningPanel.vue`, `apps/web/src/components/home/RoomEditPanel.vue`, `apps/web/src/components/home/ParkingPanel.vue`, `apps/web/src/lib/deviceIcons.ts`, `apps/web/src/views/MusicView.vue`, `apps/web/src/components/music/{MusicPlayerBar,ListeningSessions,MusicItemRow,MusicTile,ChipRow}.vue`, `apps/web/src/stores/localPlayer.ts`, `apps/web/src/components/music/MixcloudBrowser.vue`, `apps/web/src/components/MixcloudLinkCard.vue`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/views/{AutomationsView,AutomationEditView}.vue`, `apps/web/src/components/automations/*.vue`, `apps/web/src/components/layout/NavRail.vue` (`meta.nav`), `apps/web/src/components/controls/LightHistoryChart.vue`, `apps/web/src/components/weather/WeatherPlaces.vue`, `apps/web/src/composables/useMusicSession.ts`, `apps/web/src/lib/streamQuality.ts`, `apps/web/src/components/home/ReliefPanel.vue`, `apps/web/src/lib/ignRelief.ts`, `apps/web/src/lib/moon.ts`, `apps/web/src/components/vehicles/VehicleSoftware.vue`, `apps/web/src/components/layout/AssistantReply.vue`, `apps/web/src/components/settings/AssistantCard.vue`, `apps/web/src/components/ClaudeLinkCard.vue`, `apps/web/src/composables/useVoiceInput.ts`, `apps/web/src/stores/properties.ts`, `apps/web/src/components/layout/PropertyList.vue`, `apps/web/src/components/home/{HouseEditPanel,RoomShapeSection}.vue`, `apps/web/src/components/property/*.vue`, `apps/web/src/lib/onboarding.ts`, `apps/web/src/lib/geocode.ts`, `apps/web/src/views/ShoppingView.vue` (2026-10-11)
 
 ## Grille
@@ -6189,3 +6189,30 @@ formes reçues par la scène), géométrie des lignes identique avant/après bas
 
 Sources : `apps/web/src/components/robots/MowerZones.vue`, `apps/web/src/components/home/DevicePanel.vue`,
 `apps/web/src/lib/siteMap.ts` (`zoneRows`, `sceneEntryKey`, `sceneGroundShapes`), `apps/web/src/stores/sceneZones.ts`.
+
+### Mise à jour 2026-10-13 — Réglages : « Caler sur la photo » (origine GPS)
+
+Le bloc « Origine GPS » des Réglages porte un bouton « Caler sur la photo » qui ouvre
+`components/settings/OriginCalibration.vue`. Masqué sur une propriété de démonstration, comme le relief :
+on ne réécrit pas un fichier versionné.
+
+- **Ce qu'elle montre** : l'orthophoto IGN (ou le plan), et par-dessus, en trait **épais** le contour du
+  dernier niveau qui a un `outline` (le toit que montre la photo), en trait **fin** les pièces du niveau
+  le plus bas (annexe, terrasse), le terrain en pointillé, les places, et la **pelouse** de chaque
+  tondeuse qui a une carte (`site_map`) et une base posée, posée sur sa base. Le `outline` du
+  rez-de-chaussée n'est volontairement PAS tracé (enveloppe pour le toit, pas l'emprise : piège dans
+  `../2_maison/2_0_format-house-json.md`). La pelouse est le meilleur repère : elle est au sol, alors
+  qu'un toit photographié d'avion est déporté d'un à deux mètres par la perspective.
+- **Commandes** : flèches nord / sud / est / ouest (nord en haut, mètres du monde), rotation autour du
+  centre de la maison, pas réglable 0,1 / 0,5 / 2 (mètres pour les flèches, degrés pour la rotation),
+  zoom jusqu'à `IGN_MAX_ZOOM` + 4 (photo agrandie). Rien n'est écrit avant « Enregistrer »
+  (`house.saveOrigin`, `PUT /api/house/origin`).
+- **Rien ne bouge** : la ligne de bilan (« 1,0 m E · 0,5 m S · +3,5° », glissement du CENTRE de la
+  maison depuis l'origine enregistrée ; exemple inventé) a sa propre ligne, car sa longueur change à
+  chaque clic.
+- **Après le calage** : le `mapOffset` d'une tondeuse (panneau « Modifier » de la vue Robots) est à
+  remettre à zéro ; ce qui en resterait n'est plus l'erreur de la maison. Voir
+  `../3_plugins/3_11_husqvarna-automower.md`.
+- **Écarté** : glisser le contour à la souris (non fait).
+
+Sources : `apps/web/src/components/settings/OriginCalibration.vue`, `apps/web/src/views/SettingsView.vue`.

@@ -68,3 +68,22 @@ export function sitePosition(
   const x = x0 + (offset?.[0] ?? 0), y = y0 + (offset?.[1] ?? 0)
   return pointInPolygon([x, y], house.site.terrain) ? [x, y, 0] : null
 }
+
+/**
+ * L'origine glissée de `east`, `north` mètres sur le terrain (repère du MONDE, pas de la maison) :
+ * toute la maison glisse d'autant sur la photo. C'est le geste du calage, flèches nord/sud/est/ouest.
+ */
+export function shiftOrigin(origin: GeoOrigin, east: number, north: number): GeoOrigin {
+  return { ...origin, lat: origin.lat + toDeg(north / R), lon: origin.lon + toDeg(east / (R * Math.cos(toRad(origin.lat)))) }
+}
+
+/**
+ * L'origine tournée au cap `heading` AUTOUR de `pivot` (repère maison) : ce point reste où il est sur
+ * la photo, la maison tourne sur elle-même. Tourner autour du 0;0, un coin, ferait glisser l'autre
+ * bout de la maison de plusieurs mètres à chaque degré.
+ */
+export function turnOrigin(origin: GeoOrigin, heading: number, pivot: Vec2): GeoOrigin {
+  const before = localToGeo(origin, [pivot[0], pivot[1], 0])
+  const after = localToGeo({ ...origin, heading }, [pivot[0], pivot[1], 0])
+  return { ...origin, heading, lat: origin.lat + before.lat - after.lat, lon: origin.lon + before.lon - after.lon }
+}

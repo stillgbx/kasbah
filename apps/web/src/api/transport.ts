@@ -1,4 +1,4 @@
-import type { ShoppingAddBody, ShoppingItemPatch, ShoppingList, HouseEditPatch, AutomationBody, GardenItemPatch, NewGardenItem, AutomationEntry, AutomationRun, Relief, SceneTuning, Vec2, CommandInput, DeviceConsumption, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, PropertiesResponse, PropertyMode, NewPropertyBody, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal, DeviceReleaseNotes, SiteMap, StateFor } from '@kasbah/shared'
+import type { GeoOrigin, ShoppingAddBody, ShoppingItemPatch, ShoppingList, HouseEditPatch, AutomationBody, GardenItemPatch, NewGardenItem, AutomationEntry, AutomationRun, Relief, SceneTuning, Vec2, CommandInput, DeviceConsumption, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, PropertiesResponse, PropertyMode, NewPropertyBody, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal, DeviceReleaseNotes, SiteMap, StateFor } from '@kasbah/shared'
 
 // Abstraction du canal serveur. Deux implémentations : HTTP + WebSocket (réel) et simulation
 // in-process (tests, démo statique sans serveur). Les commandes passent TOUJOURS par une requête
@@ -835,6 +835,8 @@ export interface Transport {
   saveRelief(relief: Relief | null): Promise<House>
   /** Enregistre le contour du terrain ; renvoie la maison réécrite (relief agrandi s'il le faut). */
   saveTerrain(polygon: Vec2[]): Promise<House>
+  /** Enregistre l'origine GPS de la maison (calage sur la photo) ; renvoie la maison réécrite. */
+  saveOrigin(origin: GeoOrigin): Promise<House>
   /** Écrit d'un coup une séance d'édition (finitions, cotes des pièces) ; renvoie la maison réécrite. */
   saveEdit(patch: HouseEditPatch): Promise<House>
   /** Ouvre le canal de push ; retourne la fonction de fermeture. */

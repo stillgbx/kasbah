@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { deviceIdSchema } from '../devices/descriptor'
-import { defaultPlugins, GARDEN_KINDS, hexColorSchema, MAX_GARDEN_HEIGHT, MAX_HEDGE_LENGTH, MAX_HEDGE_SPACING, MAX_HEDGE_WIDTH, MIN_GARDEN_HEIGHT, MIN_HEDGE_LENGTH, MIN_HEDGE_SPACING, MIN_HEDGE_WIDTH, MAX_OPENING_LEAVES, MIN_OPENING_LEAVES, MIN_PARKING_DIM, model3dSchema, MOUNTS, NEUTRAL_TUNING, OPENING_MATERIALS, OPENING_TYPES, SPEAKER_SHAPES, vec2Schema, vec3Schema, type PluginSettingsPatch, type Relief, type SceneTuning } from './schema'
+import { defaultPlugins, GARDEN_KINDS, hexColorSchema, MAX_GARDEN_HEIGHT, MAX_HEDGE_LENGTH, MAX_HEDGE_SPACING, MAX_HEDGE_WIDTH, MIN_GARDEN_HEIGHT, MIN_HEDGE_LENGTH, MIN_HEDGE_SPACING, MIN_HEDGE_WIDTH, MAX_OPENING_LEAVES, MIN_OPENING_LEAVES, MIN_PARKING_DIM, model3dSchema, MOUNTS, NEUTRAL_TUNING, OPENING_MATERIALS, OPENING_TYPES, SPEAKER_SHAPES, vec2Schema, vec3Schema, type GeoOrigin, type PluginSettingsPatch, type Relief, type SceneTuning } from './schema'
 import { DEVICE_KINDS, VEHICLE_FINISHES } from '../devices/kinds'
 import { computeHouseGeometry, extendReliefGrid, isSimplePolygon, openingCentre, parseRelief, serializeRelief, type Vec2 } from './geometry'
 import { parseHouse } from './validate'
@@ -334,6 +334,16 @@ export function setRenderTuningInJson(doc: unknown, tuning: SceneTuning): JsonOb
   else render.tuning = { ...tuning }
   const { render: _dropped, ...rest } = doc
   return Object.keys(render).length ? { ...rest, render } : rest
+}
+
+/**
+ * Renvoie une copie du document JSON avec l'origine GPS (`origin`) remplacée, telle qu'elle sort du
+ * calage sur la photo des Réglages. Rien d'autre ne change : pièces, terrain, relief, places et
+ * décalages des appareils restent en repère maison — c'est la maison ENTIÈRE qui glisse sur le monde.
+ */
+export function setOriginInJson(doc: unknown, origin: GeoOrigin): JsonObject {
+  if (!isObject(doc)) throw new PlacementError('house document is not an object')
+  return { ...doc, origin: { lat: origin.lat, lon: origin.lon, alt: origin.alt, heading: origin.heading } }
 }
 
 /**

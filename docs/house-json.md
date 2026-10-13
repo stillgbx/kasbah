@@ -144,7 +144,7 @@ Le script rentre chaque face de l'épaisseur que le voisin pousse dans elle, lai
 - **Une pièce sans mur** (`terrace`, `balcony` : terrasse, balcon, sas ouvert) ne crée pas de mitoyenneté : la pièce murée d'en face garde sa façade, et c'est la pièce sans mur qui l'absorbe. Son `polygon` est donc son **sol fini** — le décroché brut moins les façades qui le bordent.
 - **Les ouvertures sont ancrées sur un index d'arête** : elles sont à revoir dès qu'un relevé change un polygone. Idem pour la `position` des appareils, qui peut se retrouver hors de sa pièce.
 
-Enfin, `origin` attend le GPS du `0;0` du relevé. Si le seul point connu tombe ailleurs (marqueur d'adresse, repère d'un service de cartographie), le **ramener** au `0;0` plutôt que de le recopier tel quel ; et `heading` se mesure sur les arêtes du bâtiment, un relevé étant aligné sur les murs et non sur le nord.
+Enfin, `origin` attend le GPS du `0;0` du relevé. Si le seul point connu tombe ailleurs (marqueur d'adresse, repère d'un service de cartographie), le **ramener** au `0;0` plutôt que de le recopier tel quel ; et `heading` se mesure sur les arêtes du bâtiment, un relevé étant aligné sur les murs et non sur le nord. Les deux s'affinent ensuite sur la photo aérienne : **Réglages → Origine GPS → « Caler sur la photo »** fait glisser et tourner la maison (toit, pièces du rez-de-chaussée, pelouse d'une tondeuse) par pas de 0,1 à 2 m. Le `outline` d'un niveau sert au toit : sur un rez-de-chaussée, ce peut être une enveloppe plus grande que la maison, à ne pas caler sur la photo.
 
 ## Exemple complet
 

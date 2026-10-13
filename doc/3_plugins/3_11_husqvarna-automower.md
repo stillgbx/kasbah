@@ -1,6 +1,6 @@
 # Plugin Husqvarna Automower (robot tondeuse, Automower Connect API)
 
-> Dernière mise à jour : 2026-10-12
+> Dernière mise à jour : 2026-10-13
 > Sources : `apps/server/src/plugins/automower/{index,auth,client,ws,mapping,state,types}.ts`, `apps/server/src/plugins/automower/__fixtures__/automower.ts`, tests `mapping.test.ts` et `plugin.test.ts`, `apps/web/src/views/RobotsView.vue`, `apps/web/src/components/vehicles/VehicleMap.vue`, `apps/web/src/components/robots/MowerZones.vue`, `apps/web/src/lib/siteMap.ts`, `apps/server/.env.example`, bibliothèque de référence aioautomower (Thomas55555, `const.py`, `model/*.py`, `commands.py`, `session.py`, `utils.py`), documentation du binding openHAB « automower », demande de l'utilisateur du 2026-09-16 (Automower 435X AWD)
 
 ## Ce que le plugin fait, et ce qu'il ne fait pas encore
@@ -505,3 +505,30 @@ enseignements de la vraie maison :
   sous le mètre). Hypothèse : le cap de la maison (`origin.heading`) est faux d'autant. À vérifier par
   le calage de la maison sur la photo (contour de la maison sur la carte satellite, puis cap et origine
   réglables) — robot garé sur sa station, pour avoir aussi son GPS comme témoin.
+
+### Mise à jour 2026-10-13 — le calage de la maison fait, la pelouse comme repère
+
+Suite de l'hypothèse du 2026-10-12 (cap de la maison faux) : confirmée sur la vraie maison. Le calage se
+fait maintenant dans les Réglages (« Caler sur la photo », `../4_ui/4_1_navigation-et-panneaux.md`).
+
+**Recette de diagnostic** (à rejouer si la carte du robot et la maison se contredisent) :
+
+1. Relever le GPS du robot **garé** à sa station : moyenne d'une huitaine de positions, avec
+   `mower.mode` HOME / en charge. Ne pas se fier à `activity` (peut valoir `NOT_APPLICABLE`) ni à
+   `state` (`PAUSED` alors qu'il est sur sa base).
+2. Tracer le contour de la maison sur l'orthophoto pour plusieurs caps, et ajuster la carte du robot
+   (nord vrai) sur l'emprise réelle (contour de l'étage + pièces du rez-de-chaussée).
+3. Lire le défaut : une erreur de **cap** donne deux décalages presque opposés (GPS de l'appareil et
+   carte) qui grandissent avec la distance à l'origine ; une erreur de **translation** donne un
+   décalage commun.
+
+Précision atteignable : un à deux mètres (biais GPS de deux à trois mètres, perspective du toit).
+
+**La pelouse sert de repère de calage** : la fenêtre la trace posée sur la base de la tondeuse. Elle est
+au sol, donc plus fiable que le toit. **Après calage, `mapOffset` se remet à zéro** (décision de
+l'utilisateur, pas de correction automatique) : ce qui y resterait est l'écart toit/pelouse sur la photo
+ou l'erreur de la base. La scène 3D ne l'applique toujours pas (la carte s'y pose sur la base
+`site.parkings[]`), la vue satellite si : les deux vues peuvent différer d'un ou deux mètres, chacune
+juste dans son repère. Base mal posée : la déplacer dans l'éditeur 3D, la photo et la 3D suivent ensemble.
+
+Sources : `apps/web/src/components/settings/OriginCalibration.vue`, `packages/shared/src/house/geo.ts`.

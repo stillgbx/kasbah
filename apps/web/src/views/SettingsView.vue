@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { Color, SRGBColorSpace } from 'three'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -7,6 +7,7 @@ import PageHeader from '../components/layout/PageHeader.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import AssistantCard from '../components/settings/AssistantCard.vue'
 import McpUsersCard from '../components/settings/McpUsersCard.vue'
+import OriginCalibration from '../components/settings/OriginCalibration.vue'
 import PluginSection from '../components/settings/PluginSection.vue'
 import PropertyList from '../components/layout/PropertyList.vue'
 import ModeSwitch from '../components/property/ModeSwitch.vue'
@@ -128,6 +129,8 @@ const gps = computed(() => {
   const o = house.house?.origin
   return o ? `${o.lat.toFixed(5)}, ${o.lon.toFixed(5)} · alt ${o.alt} m · ${t('settings.gpsHeading')} ${o.heading}°` : ''
 })
+/** La boîte de calage de l'origine sur la photo (bloc « Origine GPS »). */
+const calibrating = ref(false)
 const houseStats = computed(() => {
   const h = house.house
   return h ? t('settings.houseStats', { levels: h.levels.length, rooms: h.rooms.length, devices: h.devices.length }) : ''
@@ -302,6 +305,11 @@ const houseStats = computed(() => {
             <div class="block__title">{{ $t('settings.gps') }}</div>
             <div class="mono">{{ gps }}</div>
             <div class="muted small">{{ houseStats }}</div>
+            <!-- comme le relief : une propriété de démonstration ne réécrit pas son fichier versionné -->
+            <template v-if="!properties.isDemo">
+              <button type="button" class="pill pill--sm gps__calibrate" :disabled="!house.house" @click="calibrating = true">{{ $t('settings.calibrate') }}</button>
+              <OriginCalibration v-model="calibrating" />
+            </template>
           </section>
         </div>
       </div>
@@ -380,6 +388,7 @@ const houseStats = computed(() => {
 .block { padding: 18px 20px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }   /* colonne bornée : rien ne l'élargit au-delà d'un téléphone */
 .block--row { grid-template-columns: 1fr auto; align-items: center; }
 .block__title { font-weight: 600; font-size: 15px; }
+.gps__calibrate { justify-self: start; }
 .w-100 { width: 100%; min-width: 0; display: flex; }
 .w-100 :deep(.segmented__item) { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; }   /* un téléphone coupe le libellé plutôt que de déborder */
 @media (max-width: 599px) {

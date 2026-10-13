@@ -1,6 +1,6 @@
 # Format house.json : décisions et validation
 
-> Dernière mise à jour : 2026-10-12
+> Dernière mise à jour : 2026-10-13
 > Sources : `packages/shared/src/house/{schema,validate,lookup,geo}.ts`, `docs/house-json.md`, `house/demo-house.json`, `packages/shared/src/house/autoplace.ts`, `house/fit-survey.mjs`, `house/maison.json`, `packages/shared/src/house/place.ts`, `apps/server/src/config/house.ts`, `packages/shared/src/house/panels.ts`, `packages/shared/src/house/openings.ts`, `packages/shared/src/house/parking.ts`, `packages/shared/src/house/geometry/relief.ts` (`site.relief`), `house/demos/*.json`, `apps/server/src/config/properties.ts`, `packages/shared/src/house/structure.ts`, `packages/shared/src/house/newHouse.ts`
 
 La **référence complète du format** (champs, exemples) est `docs/house-json.md`. Cette page
@@ -1342,3 +1342,32 @@ panneau « Modifier » de la vue Robots (`4_ui/4_1_navigation-et-panneaux.md`, m
 pose la carte : même page.
 
 Sources : `packages/shared/src/house/{schema,place}.ts`, `place.test.ts` (« écrit le décalage de la carte d'une tondeuse »), `apps/web/src/stores/house.ts` (`setDeviceTuning`).
+
+### Mise à jour 2026-10-13 — `origin` réglable : caler la maison sur la photo
+
+Jusque-là `origin` (`lat`, `lon`, `alt`, `heading`) ne s'écrivait qu'à la main dans le JSON. Elle se règle
+maintenant depuis les Réglages (fenêtre « Caler sur la photo », `../4_ui/4_1_navigation-et-panneaux.md`).
+
+- **Écriture** : `PUT /api/house/origin`, corps = l'origine ENTIÈRE (`geoOriginSchema`, pas un patch) ;
+  `setOriginInJson` (`packages/shared/src/house/place.ts`) remplace `origin` et **rien d'autre**. Pièces,
+  terrain, relief, places et décalages d'appareils restent en repère maison : c'est la maison entière
+  qui glisse et tourne sur le monde. Conséquence : le contour du terrain et le relief tournent avec elle ;
+  s'ils venaient de l'IGN (cadastre, altimétrie), les relire après un calage.
+- **Deux gestes purs** (`packages/shared/src/house/geo.ts`) : `shiftOrigin(origin, east, north)` glisse
+  l'origine en mètres du MONDE (nord en haut de la photo) ; `turnOrigin(origin, heading, pivot)` change le
+  cap en gardant fixe sur la photo le point `pivot` (repère maison). Pourquoi un pivot : tourner autour
+  du 0;0, souvent un coin, ferait partir l'autre bout de la maison de plusieurs mètres par degré. La
+  fenêtre pivote autour du centre de la maison.
+- **Piège : `levels[].outline` n'est pas l'emprise de la maison.** Il « sert au toit » : c'est une
+  enveloppe, et sur la vraie maison celui du rez-de-chaussée débordait de plusieurs mètres l'emprise
+  réelle d'un côté. Calé sur la gouttière à l'œil, il a décalé toute la maison d'autant. La fenêtre de
+  calage ne trace donc que l'`outline` du DERNIER niveau qui en a un (le toit que montre la photo), les
+  pièces du niveau le plus bas, le terrain, les places et la pelouse des tondeuses.
+- **`mapOffset` après un calage** : ce qui y reste n'est plus l'erreur de la maison mais l'écart entre
+  le toit et la pelouse sur la photo, ou l'erreur de la base de la tondeuse. Décision : remise à zéro
+  des décalages par appareil, **pas de correction automatique** quand l'origine bouge (jugée
+  « magique », et fausse si un appareil a été réglé sur la 3D et un autre sur la photo). Voir
+  `../3_plugins/3_11_husqvarna-automower.md`, même date.
+
+Sources : `packages/shared/src/house/{geo,place}.ts`, `apps/server/src/http/routes.ts`,
+`apps/web/src/components/settings/OriginCalibration.vue`.

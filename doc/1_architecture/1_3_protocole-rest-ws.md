@@ -1,6 +1,6 @@
 # Protocole REST et WebSocket
 
-> Dernière mise à jour : 2026-10-12
+> Dernière mise à jour : 2026-10-13
 > Sources : `packages/shared/src/protocol/{ws,http}.ts`, `apps/server/src/http/{routes,errors}.ts`, `apps/server/src/ws/hub.ts`, `apps/web/src/api/httpTransport.ts`, `apps/server/src/plugins/tesla/index.ts`, `apps/server/src/config/house.ts`, `packages/shared/src/house/place.ts`, `apps/server/src/core/scene-registry.ts`, `packages/shared/src/protocol/http.ts` (`deviceConsumptionSchema`), `apps/server/src/http/routes.ts` (automatisations), `apps/server/src/http/relief.test.ts`, `apps/server/src/config/properties.ts`, `apps/server/src/config/catalog.ts`, `apps/server/src/core/shopping.ts` (2026-10-11)
 
 ## REST
@@ -712,3 +712,15 @@ lecture coûte du quota.
 
 Sources : `packages/shared/src/protocol/http.ts`, `apps/server/src/http/routes.ts`,
 `apps/server/src/core/{plugin,plugin-host}.ts`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`.
+
+### Mise à jour 2026-10-13 — `PUT /api/house/origin`
+
+Écriture de `house.json` sur le modèle de `PUT /api/house/relief` : corps = l'origine GPS ENTIÈRE
+(`geoOriginSchema` : `lat`, `lon`, `alt`, `heading`), pas un patch ; `parse` zod (ZodError → 400),
+`updateHouseFile` avec `setOriginInJson` (`packages/shared/src/house/place.ts`), maison entière
+rediffusée (`house`). Test : `apps/server/src/http/origin.test.ts`. Client web : `Transport.saveOrigin`
+(`httpTransport`, `mockTransport`), `house.saveOrigin` dans le store. Pas de numéro d'écriture ici : le
+décompte « sixième, septième » de cette page n'a pas été tenu au-delà. Ce que l'écriture change côté
+maison : `../2_maison/2_0_format-house-json.md`, même date.
+
+Sources : `apps/server/src/http/routes.ts`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`.

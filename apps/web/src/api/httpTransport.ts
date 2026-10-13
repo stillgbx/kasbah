@@ -248,6 +248,11 @@ export function createHttpTransport(base = ''): Transport {
       { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(polygon) },
       (j) => houseSchema.parse((j as { house: unknown }).house) as House,
     ),
+    saveOrigin: (origin) => request(
+      `${base}/api/house/origin`,
+      { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(origin) },
+      (j) => houseSchema.parse((j as { house: unknown }).house) as House,
+    ),
     pairHue: () => request(`${base}/api/plugins/hue/pair`, { method: 'POST' }, (j) => j as { appKey: string; hint: string }),
     nestAuthUrl: () => request(`${base}/api/plugins/nest/auth/url`, undefined, (j) => j as { url: string; redirectUri: string }),
     enphaseTokenStatus: () => request(`${base}/api/plugins/enphase/token`, undefined, (j) => j as EnphaseTokenStatus),

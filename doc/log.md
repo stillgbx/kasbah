@@ -2,6 +2,22 @@
 
 Entrées les plus récentes en haut. Une session = une entrée.
 
+## [2026-10-13] update | Origine de la maison réglable : caler sur la photo
+
+**Déclencheur** : calage de la maison sur l'orthophoto (cap et origine faux, carte du robot et GPS de l'appareil en désaccord), puis un liseré sombre autour de la carte peinte en qualité haute.
+
+**Pages modifiées** :
+- `2_maison/2_0_format-house-json.md` - section datée : `origin` réglable (route, `setOriginInJson`, `shiftOrigin`, `turnOrigin` et son pivot), piège de `levels[].outline` (enveloppe du toit), sens de `mapOffset` après calage, correction automatique des décalages écartée.
+- `1_architecture/1_3_protocole-rest-ws.md` - section datée : `PUT /api/house/origin` (corps entier), transport et store.
+- `4_ui/4_1_navigation-et-panneaux.md` - section datée : fenêtre « Caler sur la photo » (ce qu'elle trace et pourquoi, commandes, bilan sur sa ligne, rien n'est écrit avant Enregistrer).
+- `3_plugins/3_11_husqvarna-automower.md` - section datée : recette du GPS garé, lecture cap / translation, pelouse comme repère, `mapOffset` remis à zéro.
+- `1_architecture/1_5_scene-3d.md` - section datée : carte peinte sur `SITE_DECOR_LAYER`, cause GTAO.
+- `6_faq/6_1_pieges-runtime.md` - entrée : liseré noir GTAO ; `outline` du rez-de-chaussée pris pour l'emprise.
+
+**Contradiction / à arbitrer** : la section du 2026-10-12 de `3_11` chiffre la rotation résiduelle constatée sur la vraie maison ; à relire au regard de la règle « pas de valeur réelle » (CLAUDE.md §7).
+
+**Index** : mis à jour (6 lignes).
+
 ## [2026-10-12] update | Transcription : la réponse réécrite pour la voix
 
 **Déclencheur** : « lors du TTS de la réponse à une commande, le modèle a du mal avec les abréviations comme RDC, le h de 8h00 ou les °C », puis « pouvoir facilement ajouter de nouveaux éléments à remplacer, penser au multilingue » et « reprends les shortName des étages automatiquement ».
