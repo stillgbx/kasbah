@@ -2492,8 +2492,15 @@ describe('météo dans la scène', () => {
   it('ne pose un brouillard qu’en dessous de 5 km, à l’échelle de la maison', () => {
     expect(fogDistance({ sunAltitudeDeg: 30, sunAzimuthDeg: 0, cloudiness: 0 })).toBeNull()
     expect(fogDistance({ sunAltitudeDeg: 30, sunAzimuthDeg: 0, cloudiness: 0, visibilityM: 25_000 })).toBeNull()
-    expect(fogDistance({ sunAltitudeDeg: 30, sunAzimuthDeg: 0, cloudiness: 0, visibilityM: 400 })).toBeCloseTo(33.3, 1)
-    expect(fogDistance({ sunAltitudeDeg: 30, sunAzimuthDeg: 0, cloudiness: 0, visibilityM: 50 })).toBe(18)
+    expect(fogDistance({ sunAltitudeDeg: 30, sunAzimuthDeg: 0, cloudiness: 0, visibilityM: 2000 })).toBe(220)
+    // le brouillard le plus épais voile la maison, il ne la fait pas disparaître
+    expect(fogDistance({ sunAltitudeDeg: 30, sunAzimuthDeg: 0, cloudiness: 0, visibilityM: 60 })).toBe(123)
+  })
+
+  it('ignore la visibilité annoncée quand rien n’est en l’air (couvert à 100 % d’humidité)', () => {
+    expect(resolveAmbience({ mode: 'day', condition: 'cloudy', cloudiness: 1, visibilityM: 60 })).not.toHaveProperty('visibilityM')
+    expect(resolveAmbience({ mode: 'day', condition: 'fog', cloudiness: 1, visibilityM: 60 })).toMatchObject({ visibilityM: 60 })
+    expect(resolveAmbience({ mode: 'day', visibilityM: 800 })).toMatchObject({ visibilityM: 800 })
   })
 
   it('la pluie fonce et lisse ce qui est dehors, la neige le blanchit, l’intérieur ne bouge pas', () => {

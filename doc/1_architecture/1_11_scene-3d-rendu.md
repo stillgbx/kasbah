@@ -1,6 +1,6 @@
 # Scène 3D : rendu
 
-> Dernière mise à jour : 2026-10-13
+> Dernière mise à jour : 2026-10-14
 > Sources : sections reprises telles quelles de `1_5_scene-3d.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre le rendu de la scène : styles et thèmes, lumière du jour et de la nuit, ombres, météo (nuages, pluie, neige, brume), eau de la piscine, matières photo, chaîne d'image et étalonnage, tilt-shift, banc de réglage, performance GPU (passes, MSAA, shaders précompilés, voile de mesure). Elle est née du découpage de
@@ -855,6 +855,27 @@ Ce que la scène en fait :
   l'échelle de la maison (`visibilityM / 12`, borné 18-300 m, rien au-dessus de 5 km) ; `applySky`
   pose un `Fog` de la couleur du fond. Vérifié en preview en forçant `cloudiness: 1, visibilityM: 400`
   par `window.kasbahScene.setAppearance` : brouillard à 33 m, ombres coupées, soleil divisé par deux.
+
+### Mise à jour 2026-10-14 — le brouillard ne noie plus la maison
+
+Un matin couvert, Open-Meteo annonçait une visibilité de quelques dizaines de mètres, air saturé,
+condition « cloudy » : l'échelle ci-dessus en faisait un brouillard opaque à 18 m, la caméra regardant la maison
+d'environ 55 m, et toute la vue devenait grise alors qu'on voyait clair dehors. La visibilité
+d'Open-Meteo est une sortie de modèle, pas une mesure. Deux changements (`core/ambience.ts`) :
+
+- **La visibilité ne compte que si quelque chose est en l'air.** `resolveAmbience` l'ignore sous
+  `clear`, `partly_cloudy` et `cloudy` (`DRY_AIR`) ; brouillard, bruine, pluie, neige, grésil et orage
+  gardent la leur. Sans condition connue, elle est prise telle quelle.
+- **Une portée plancher.** Auparavant `visibilityM / 12` borné 18-300 m ; désormais
+  `fogDistance = FOG_MIN_M + visibilityM / 20` avec `FOG_MIN_M` = 120 m (60 m réels → 123 m, 2 km →
+  220 m), toujours `null` au-dessus de 5 km ; `applySky` garde `near = 0,35 × far`. Le brouillard le
+  plus épais voile la maison et efface le jardin lointain sans la faire disparaître : la vue est un
+  tableau de bord, pas une simulation.
+
+Mesuré en preview (démo, brouillard forcé à 60 m, caméra à 55 m), écart-type de la luminance de
+l'image : 35,7 sans brouillard, 12 avec l'ancienne échelle (aplat gris), 36,9 avec la nouvelle.
+Sources : `apps/web/src/three/core/ambience.ts` (`DRY_AIR`, `FOG_MIN_M`, `fogDistance`),
+`apps/web/src/three/three.test.ts`.
 
 Pas encore fait (plan de session, palier C) : pluie et neige en particules, sols mouillés, blanc de
 neige, éclair d'orage — le palier qui coûte du GPU et casse le rendu à la demande, à mesurer avant.

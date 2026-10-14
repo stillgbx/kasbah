@@ -62,6 +62,14 @@ export function weatherEffects(condition: WeatherCondition | undefined): Pick<Sc
   }
 }
 
+/**
+ * Les conditions où rien n'est EN L'AIR. La visibilité d'Open-Meteo est une sortie de modèle, qui
+ * tombe à quelques dizaines de mètres dès que l'humidité touche 100 % : un matin annoncé « couvert »
+ * à cette visibilité-là noyait la maison alors qu'on y voyait clair. Sous ces conditions-là, elle ne
+ * fait pas de brouillard ; le brouillard, la pluie et la neige gardent le leur.
+ */
+const DRY_AIR: ReadonlySet<WeatherCondition> = new Set(['clear', 'partly_cloudy', 'cloudy'])
+
 /** Heures figées des modes manuels : une journée franche, un crépuscule bas, une nuit. */
 const FIXED: Record<Exclude<AmbienceMode, 'auto'>, SceneAmbience> = {
   day: { sunAltitudeDeg: 52, sunAzimuthDeg: 160, cloudiness: 0 },
@@ -90,7 +98,7 @@ export function resolveAmbience({ mode, date = new Date(), geo = null, cloudines
   // une ambiance `NaN` : tout le rendu en dépend — exposition comprise — et une exposition NaN rend
   // une image entièrement noire, sans la moindre erreur en console.
   const weather: Omit<SceneAmbience, 'sunAltitudeDeg' | 'sunAzimuthDeg'> = { cloudiness, ...weatherEffects(condition) }
-  if (visibilityM !== undefined) weather.visibilityM = visibilityM
+  if (visibilityM !== undefined && !(condition && DRY_AIR.has(condition))) weather.visibilityM = visibilityM
   if (windKmh !== undefined) weather.windKmh = windKmh
   if (windDirDeg !== undefined) weather.windDirDeg = windDirDeg
   const fixed = mode === 'auto' ? undefined : FIXED[mode]
@@ -99,15 +107,22 @@ export function resolveAmbience({ mode, date = new Date(), geo = null, cloudines
   return { sunAltitudeDeg: p.altitudeDeg, sunAzimuthDeg: p.azimuthDeg, ...weather }
 }
 
+/** Portée (m) du brouillard le plus épais : au-delà de la maison, que la caméra regarde de 50 à 90 m. */
+const FOG_MIN_M = 120
+
 /**
  * Portée du brouillard de scène (m), ou `null` s'il n'y a pas lieu d'en poser. La visibilité
- * météo se compte en kilomètres, la maison en mètres : on la ramène à l'échelle de la scène pour
- * que 400 m de brouillard réel noient la maison à une trentaine de mètres, et qu'une pluie à 6 km
- * ne fasse rien — le seuil est celui où l'œil commence à voir l'air.
+ * météo se compte en kilomètres, la maison en mètres : on la ramène à l'échelle de la scène, et une
+ * pluie à 6 km ne fait rien — le seuil est celui où l'œil commence à voir l'air.
+ *
+ * La portée ne descend JAMAIS sous `FOG_MIN_M` : la caméra regarde la maison de 50 à 90 m, et la
+ * vue est un tableau de bord, pas une simulation. L'ancienne échelle (400 m réels → 33 m, plancher
+ * 18 m) rendait la scène entièrement grise ; ici le brouillard le plus épais voile la maison et
+ * efface le jardin lointain, sans jamais la faire disparaître.
  */
 export function fogDistance(a: SceneAmbience): number | null {
   if (a.visibilityM === undefined || a.visibilityM >= 5000) return null
-  return Math.min(300, Math.max(18, a.visibilityM / 12))
+  return FOG_MIN_M + a.visibilityM / 20
 }
 
 /**

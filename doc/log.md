@@ -7,6 +7,17 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-14] update | Brouillard météo de la scène 3D : visibilité filtrée et portée plancher
+
+**Déclencheur** : par un matin couvert sur la vraie maison, la vue 3D était noyée dans un brouillard
+gris ; la visibilité d'Open-Meteo (sortie de modèle) tombait à quelques dizaines de mètres.
+
+**Pages modifiées** :
+- `1_architecture/1_11_scene-3d-rendu.md` - sous-section du 2026-10-14 : visibilité ignorée sous ciel
+  clair, peu nuageux ou couvert (`DRY_AIR`), `fogDistance` avec un plancher de 120 m, mesure avant/après.
+
+**Index** : catalogue `1_architecture/README.md` mis à jour (1 ligne, date), index.md régénéré.
+
 ## [2026-10-13] update | Superviseur de production et mise à jour du serveur depuis Réglages
 
 **Déclencheur** : l'utilisateur ne veut plus aller sur le serveur pour mettre à jour (pull, build,
