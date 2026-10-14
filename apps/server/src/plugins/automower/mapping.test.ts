@@ -17,8 +17,8 @@ describe('automower mapping — descripteur', () => {
   it('un robot = un appareil mower, nommé par le fabricant, identifié par son UUID', () => {
     const d = toDescriptor(first(MOWERS_ERROR))
     expect(d).toMatchObject({ id: `automower:${MOWER_ID}`, pluginId: 'automower', externalId: MOWER_ID, kind: 'mower', name: 'Tondeuse' })
-    // la capture déclare zones de travail, zones d'exclusion et position : les trois capacités suivent
-    expect(d.capabilities).toEqual(['mow', 'park', 'battery', 'schedule', 'journal', 'work_areas', 'stay_out_zones', 'site_map'])
+    // la capture déclare zones de travail, zones d'exclusion, position et erreur confirmable : les capacités suivent
+    expect(d.capabilities).toEqual(['mow', 'park', 'battery', 'schedule', 'journal', 'work_areas', 'stay_out_zones', 'site_map', 'confirm_error'])
     expect(d.meta).toEqual({ manufacturer: 'Husqvarna', model: 'Husqvarna Automower® 435X AWD' })
   })
 
@@ -84,6 +84,7 @@ describe('automower mapping — état complet', () => {
     expect(p.errorCode).toBe(2)
     expect(p.errorMessage).toBe('No loop signal')
     expect(p.errorAt).toBe(Date.UTC(2026, 8, 15, 16, 42, 10))
+    expect(p.errorConfirmable).toBe(true)                 // tel que la liste le dit (fixture : confirmable)
     expect(p.nextStartAt).toBeNull()
     expect(p.restrictedReason).toBe('not_applicable')
     expect(p.cuttingHeight).toBe(7)
@@ -163,11 +164,11 @@ describe('automower mapping — événements du flux (des DELTAS, fondus dans le
     expect(step(WS_PLANNER_FORCE_MOW)).toEqual({ nextStartAt: null, restrictedReason: 'none' })
     // `state: IN_OPERATION` seul, l'activité dit encore PARKED_IN_CS : garé (deux secondes) — puis en route
     expect(step(WS_MOWER_IN_OPERATION)!.activity).toBe('parked')
-    expect(step(WS_MOWER_LEAVING)).toMatchObject({ activity: 'mowing', errorCode: null })
+    expect(step(WS_MOWER_LEAVING)).toMatchObject({ activity: 'mowing', errorCode: null, errorConfirmable: null })
     expect(step(WS_POSITION)).toEqual({ location: { lat: WS_POSITION.attributes.position.latitude, lon: WS_POSITION.attributes.position.longitude, at: NOW } })
     expect(step(WS_POSITION_2)!.location).toMatchObject({ lat: WS_POSITION_2.attributes.position.latitude })
     // l'erreur : le code d'abord (l'état dit encore en route), puis l'état, puis la date — en SECONDES
-    expect(step(WS_MOWER_ERROR_CODE)).toMatchObject({ activity: 'mowing', errorCode: 2, errorMessage: 'No loop signal', errorAt: null })
+    expect(step(WS_MOWER_ERROR_CODE)).toMatchObject({ activity: 'mowing', errorCode: 2, errorMessage: 'No loop signal', errorAt: null, errorConfirmable: false })
     expect(step(WS_MOWER_ERROR_STATE)).toMatchObject({ activity: 'error', errorCode: 2 })
     expect(step(WS_MOWER_ERROR_FULL)).toMatchObject({ activity: 'error', errorCode: 2 })
     expect(step(WS_MESSAGE_ERROR)).toBeNull()             // le journal des messages : pas encore lu

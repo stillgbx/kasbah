@@ -7,6 +7,23 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-14] update | Tondeuse : effacer l'erreur, reprendre le programme
+
+**Déclencheur** : demande de l'utilisateur : lever une erreur depuis Kasbah et relancer le
+fonctionnement habituel après une pause ou une erreur, sur la vue Robots puis dans le panneau 3D.
+
+**Pages modifiées** :
+- `3_plugins/3_11_husqvarna-automower.md` - sous-section du 2026-10-14 : `mower.confirm_error` →
+  `POST /mowers/{id}/errors/confirm`, `errorConfirmable`, refus sans appel ; « reprendre » = `mower.start`
+  sans durée (`ResumeSchedule`).
+- `1_architecture/1_1_contrat-appareils.md` - capacité `confirm_error`, commande, champ d'état ; optimiste
+  sans « tonte » anticipée sans durée.
+- `4_ui/4_6_autres-vues.md` - lien « Effacer l'erreur » et bouton « Reprendre le programme », vue Robots
+  et panneau, mesures « rien ne bouge ».
+- `3_plugins/3_0_simulation-mock.md` - `mower.start` sans durée reprend le planning, `confirm_error`.
+
+**Index** : catalogues `3_plugins`, `1_architecture`, `4_ui` mis à jour (4 lignes, dates), index.md régénéré.
+
 ## [2026-10-14] update | Brouillard météo de la scène 3D : visibilité filtrée et portée plancher
 
 **Déclencheur** : par un matin couvert sur la vraie maison, la vue 3D était noyée dans un brouillard

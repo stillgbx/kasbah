@@ -310,6 +310,9 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
             <!-- l'erreur du fabricant, ou ce qui retient le robot : place TOUJOURS réservée -->
             <div class="rcard__status" :data-error="m.state.activity === 'error' ? '1' : '0'">
               <span class="rcard__status-text">{{ statusLine(m.state) }}</span>
+              <!-- une erreur que le fabricant lève à distance : le lien, sur la ligne même (rien ne bouge) -->
+              <button v-if="has(m, 'confirm_error') && m.state.activity === 'error' && m.state.errorConfirmable" type="button" class="rcard__dismiss"
+                      :disabled="!m.state.available || busy(m)" @click="send(m.descriptor.id, { type: 'mower.confirm_error' })">{{ $t('mower.confirmError') }}</button>
               <button v-if="alerts.closableFor(m.descriptor.id).length" type="button" class="rcard__dismiss" :title="$t('alerts.dismissHint')" @click="alerts.dismiss(alerts.closableFor(m.descriptor.id))">{{ $t('alerts.dismiss') }}</button>
             </div>
           </div>
@@ -360,6 +363,11 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
               <button v-if="has(m, 'park')" type="button" class="pill" :disabled="!m.state.available || busy(m) || m.state.activity === 'parked' || m.state.activity === 'charging'"
                       @click="send(m.descriptor.id, { type: 'mower.park', untilNextSchedule: true })">
                 <StrokeIcon name="parking" :size="16" />{{ $t('common.park') }}
+              </button>
+              <!-- « Tondre » sans durée : le robot oublie pause et consignes et suit son planning -->
+              <button v-if="has(m, 'schedule') && has(m, 'mow')" type="button" class="pill" :disabled="!m.state.available || busy(m)"
+                      @click="send(m.descriptor.id, { type: 'mower.start' })">
+                <StrokeIcon name="calendar" :size="16" />{{ $t('mower.resumeSchedule') }}
               </button>
               <button v-if="hasZones(m)" type="button" class="pill" :data-on="zonesOpen === m.descriptor.id ? '1' : '0'"
                       :aria-expanded="zonesOpen === m.descriptor.id"

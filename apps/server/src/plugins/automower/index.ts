@@ -341,6 +341,15 @@ export function createAutomowerPlugin(deps: AutomowerPluginDeps = {}): DevicePlu
         readSoon(ZONE_REFRESH_MS)
         return
       }
+      if (command.type === 'mower.confirm_error') {
+        if (!m) throw new PluginError('DEVICE_UNAVAILABLE', `unknown mower ${externalId}`)
+        if (!connectedOf(m)) throw new PluginError('DEVICE_UNAVAILABLE', `mower ${externalId} is not connected to Husqvarna`)
+        // une erreur que le fabricant ne lève pas à distance (code 2, pas de signal de boucle) : refusée sans appel
+        if (m.attributes.mower?.isErrorConfirmable !== true) throw new PluginError('DEVICE_UNAVAILABLE', `the current error of mower ${externalId} cannot be cleared remotely`)
+        await client!.confirmError(externalId, ctx?.signal)
+        log().info({ mower: externalId, code: m.attributes.mower?.errorCode }, 'Automower error confirmation accepted')
+        return
+      }
       const body = actionBody(command)
       if (!body) throw new PluginError('UNSUPPORTED_COMMAND', `Automower plugin does not support ${command.type}`)
       if (!m) throw new PluginError('DEVICE_UNAVAILABLE', `unknown mower ${externalId}`)

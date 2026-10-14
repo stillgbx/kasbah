@@ -1,6 +1,6 @@
 # Plugin Husqvarna Automower (robot tondeuse, Automower Connect API)
 
-> Dernière mise à jour : 2026-10-13
+> Dernière mise à jour : 2026-10-14
 > Sources : `apps/server/src/plugins/automower/{index,auth,client,ws,mapping,state,types}.ts`, `apps/server/src/plugins/automower/__fixtures__/automower.ts`, tests `mapping.test.ts` et `plugin.test.ts`, `apps/web/src/views/RobotsView.vue`, `apps/web/src/components/vehicles/VehicleMap.vue`, `apps/web/src/components/robots/MowerZones.vue`, `apps/web/src/lib/siteMap.ts`, `apps/server/.env.example`, bibliothèque de référence aioautomower (Thomas55555, `const.py`, `model/*.py`, `commands.py`, `session.py`, `utils.py`), documentation du binding openHAB « automower », demande de l'utilisateur du 2026-09-16 (Automower 435X AWD)
 
 ## Ce que le plugin fait, et ce qu'il ne fait pas encore
@@ -532,3 +532,26 @@ ou l'erreur de la base. La scène 3D ne l'applique toujours pas (la carte s'y po
 juste dans son repère. Base mal posée : la déplacer dans l'éditeur 3D, la photo et la 3D suivent ensemble.
 
 Sources : `apps/web/src/components/settings/OriginCalibration.vue`, `packages/shared/src/house/geo.ts`.
+
+### Mise à jour 2026-10-14 — effacer l'erreur, reprendre le programme
+
+Deux commandes demandées par l'utilisateur : lever une erreur depuis Kasbah, et relancer le
+fonctionnement habituel après une pause ou une erreur.
+
+- **`mower.confirm_error`** → `POST /mowers/{id}/errors/confirm`, **sans corps**, accusé en 202
+  (`AutomowerClient.confirmError`, `client.ts`). Capacité `confirm_error`, déclarée quand le robot dit
+  `capabilities.canConfirmError` (`optionalCapabilities`, `mapping.ts`). L'état publie
+  **`errorConfirmable`** : le `isErrorConfirmable` du fabricant tant qu'il y a une erreur, `null` sinon
+  (`errorFields`, partagé par la liste et le flux). Le plugin **refuse sans appeler**
+  (`DEVICE_UNAVAILABLE`, `index.ts`) un robot hors ligne ou une erreur que le robot connu dit non
+  confirmable : le code 2 (pas de signal de boucle, capture du 2026-09-16) ne se lève qu'au clavier.
+- **« Reprendre le programme »** n'est pas une commande nouvelle : `mower.start` **sans durée** était
+  déjà traduit en `ResumeSchedule` (`actionBody`), mais l'interface envoyait toujours 60 min. Le robot
+  oublie pause et consignes (`ParkUntilFurtherNotice` compris) et ne part que si un créneau est ouvert.
+  Après une erreur, il faut d'abord la lever.
+
+Côté web, les deux sont sur la vue Robots et dans le panneau de la vue Maison : voir
+`../4_ui/4_6_autres-vues.md`, même date. Pas encore essayé sur le robot réel.
+
+Sources : `apps/server/src/plugins/automower/{client,index,mapping}.ts`, tests `mapping.test.ts` et
+`plugin.test.ts` (« tondre sans durée », « effacer l'erreur »).

@@ -144,6 +144,8 @@ export const mowerStateSchema = z.object({
   errorCode: z.number().int().optional(),
   /** Quand l'erreur est survenue. */
   errorAt: z.number().optional(),
+  /** L'erreur en cours se lève à distance (commande `mower.confirm_error`) ; sinon, au clavier du robot. */
+  errorConfirmable: z.boolean().optional(),
   restrictedReason: z.enum(MOWER_RESTRICTIONS).optional(),
   /** Position locale (repère maison, mètres) si le robot la publie. */
   position: z.tuple([z.number(), z.number()]).optional(),

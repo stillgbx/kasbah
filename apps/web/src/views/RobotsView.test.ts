@@ -65,6 +65,23 @@ describe('RobotsView', () => {
     expect(sent).toHaveBeenCalledWith(ID, { type: 'mower.park', untilNextSchedule: true })
   })
 
+  it('« Reprendre le programme » envoie un départ SANS durée : le robot suit son planning', async () => {
+    const { button, sent } = setup(mower({ activity: 'paused' }))
+    await button('Reprendre le programme')!.trigger('click')
+    expect(sent).toHaveBeenCalledWith(ID, { type: 'mower.start' })
+  })
+
+  it('« Effacer l’erreur » sur la ligne d’état, seulement pour une erreur que le fabricant lève à distance', async () => {
+    const error = { activity: 'error' as const, errorCode: 18, errorMessage: 'Collision sensor problem, rear' }
+    const caps: DeviceDescriptor['capabilities'] = ['mow', 'park', 'battery', 'schedule', 'confirm_error']
+    expect(setup(mower({ ...error, errorConfirmable: false }, caps)).button("Effacer l'erreur")).toBeUndefined()
+    expect(setup(mower({ ...error, errorConfirmable: true })).button("Effacer l'erreur")).toBeUndefined()
+    const { w, button, sent } = setup(mower({ ...error, errorConfirmable: true }, caps))
+    expect(w.find('.rcard__status').text()).toContain("Effacer l'erreur")
+    await button("Effacer l'erreur")!.trigger('click')
+    expect(sent).toHaveBeenCalledWith(ID, { type: 'mower.confirm_error' })
+  })
+
   it('le journal se SIGNALE (compte et gravité sur la pilule), se déplie au clic, et une ligne positionnée est un bouton', async () => {
     const { w, button } = setup(mower({}, ['mow', 'park', 'battery', 'schedule', 'journal']))
     await flushPromises()

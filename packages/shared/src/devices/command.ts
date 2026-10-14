@@ -81,6 +81,8 @@ export const commandSchema = z.discriminatedUnion('type', [
   /** Tondre UNE zone de travail, pendant ce temps (Husqvarna exige la durée), puis rentrer. */
   z.object({ type: z.literal('mower.start_in_area'), workAreaId: z.number().int().min(0), durationMin: z.number().int().positive() }),
   z.object({ type: z.literal('mower.set_stay_out_zone'), zoneId: z.string().min(1), enabled: z.boolean() }),
+  // lève l'erreur en cours, quand le fabricant la dit confirmable (`errorConfirmable`)
+  z.object({ type: z.literal('mower.confirm_error') }),
   // ev_charger
   z.object({ type: z.literal('ev_charger.start') }),
   z.object({ type: z.literal('ev_charger.stop') }),
@@ -170,7 +172,7 @@ export const COMMAND_REQUIRES: Record<CommandType, Capability> = {
   'climate.set_mode': 'hvac_mode', 'climate.set_target_temp': 'target_temp',
   'vacuum.start': 'clean', 'vacuum.pause': 'clean', 'vacuum.dock': 'dock', 'vacuum.locate': 'locate',
   'mower.start': 'mow', 'mower.pause': 'mow', 'mower.park': 'park',
-  'mower.start_in_area': 'work_areas', 'mower.set_stay_out_zone': 'stay_out_zones',
+  'mower.start_in_area': 'work_areas', 'mower.set_stay_out_zone': 'stay_out_zones', 'mower.confirm_error': 'confirm_error',
   'ev_charger.start': 'charge_control', 'ev_charger.stop': 'charge_control', 'ev_charger.set_current': 'charge_current',
   'ev_charger.resume_mode': 'charge_control',
   'vehicle.lock': 'lock', 'vehicle.unlock': 'lock',

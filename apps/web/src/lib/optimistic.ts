@@ -68,7 +68,8 @@ export function optimisticPatch(state: DeviceState, cmd: CommandInput): Partial<
       }
     case 'mower':
       switch (cmd.type) {
-        case 'mower.start': return { activity: 'mowing' } as Partial<DeviceState>
+        // sans durée, le robot reprend son programme : il ne part que si un créneau est ouvert
+        case 'mower.start': return cmd.durationMin === undefined ? null : { activity: 'mowing' } as Partial<DeviceState>
         case 'mower.pause': return { activity: 'paused' } as Partial<DeviceState>
         case 'mower.park': return { activity: state.activity === 'mowing' || state.activity === 'paused' ? 'returning' : state.activity } as Partial<DeviceState>
         case 'mower.start_in_area': return { activity: 'mowing' } as Partial<DeviceState>

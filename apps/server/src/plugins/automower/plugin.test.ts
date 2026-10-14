@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { ManualClock } from '@kasbah/mock-sim'
 import type { PluginContext } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
-import { MAP_GENERATED_SVG, MAP_ZONE_SVG, MOWERS_ZONES, STAY_OUT_ID, WS_MOWER_LEAVING, MESSAGES, MOWERS_ERROR, MOWERS_MOWING, MOWERS_PARKED, MOWER_ID, WS_MESSAGE_ERROR, TOKEN_INVALID_CLIENT, TOKEN_RESPONSE, TOKEN_RESPONSE_2, WS_MOWER_HOME, WS_MOWER_STOPPED, WS_PLANNER, WS_POSITION, WS_READY, WS_UNKNOWN_MOWER } from './__fixtures__/automower'
+import { MAP_GENERATED_SVG, MAP_ZONE_SVG, MOWERS_ZONES, STAY_OUT_ID, WS_MOWER_LEAVING, MESSAGES, MOWERS_ERROR, MOWERS_MOWING, MOWERS_PARKED, MOWER_ID, WS_MESSAGE_ERROR, TOKEN_INVALID_CLIENT, TOKEN_RESPONSE, TOKEN_RESPONSE_2, WS_MOWER_ERROR_CODE, WS_MOWER_HOME, WS_MOWER_STOPPED, WS_PLANNER, WS_POSITION, WS_READY, WS_UNKNOWN_MOWER } from './__fixtures__/automower'
 import { TOKEN_URL } from './auth'
 import { API_BASE_URL } from './client'
 import { automowerConfigSchema, createAutomowerPlugin, type AutomowerStatus } from './index'
@@ -53,7 +53,7 @@ function fakeHusqvarna() {
     if (headers['x-api-key'] !== 'app-key' || headers['authorization-provider'] !== 'husqvarna') return response({ errors: [{ title: 'Forbidden' }] }, 403)
     if (path === '/mowers') return response(world.list)
     if (path.endsWith('/messages')) return response(MESSAGES)
-    if (path.endsWith('/actions')) return response(null, 202)
+    if (path.endsWith('/actions') || path.endsWith('/errors/confirm')) return response(null, 202)
     if (method === 'PATCH' && path.includes('/stayOutZones/')) return response(null, 202)
     const map = /\/maps\/(generated|zone|site)$/.exec(path)?.[1] as keyof typeof world.maps | undefined
     if (map) {
@@ -284,6 +284,25 @@ describe('automower — commandes', () => {
       { data: { type: 'ParkUntilNextSchedule' } },
     ])
     expect(actions[0]!.headers['content-type']).toBe('application/vnd.api+json')
+  })
+
+  it('tondre sans durée = reprendre le programme : ResumeSchedule', async () => {
+    const { plugin, hq } = await started()
+    await plugin.execute(MOWER_ID, { type: 'mower.start' })
+    expect(hq.calls.filter((c) => c.path.endsWith('/actions')).map((c) => JSON.parse(c.body!))).toEqual([{ data: { type: 'ResumeSchedule' } }])
+  })
+
+  it('effacer l’erreur : POST errors/confirm sans corps si le robot la dit confirmable, refus sans appel sinon', async () => {
+    const { plugin, hq, ws } = await started()
+    // la liste de départ : erreur confirmable
+    await plugin.execute(MOWER_ID, { type: 'mower.confirm_error' })
+    const confirm = () => hq.calls.filter((c) => c.path.endsWith('/errors/confirm'))
+    expect(confirm().map((c) => [c.method, c.path, c.body])).toEqual([['POST', `/mowers/${MOWER_ID}/errors/confirm`, undefined]])
+    // le flux dit l'erreur 2, que le fabricant ne lève pas à distance (capture du 2026-09-16)
+    ws.emit(0, 'open')
+    ws.emit(0, 'message', JSON.stringify(WS_MOWER_ERROR_CODE))
+    await expect(plugin.execute(MOWER_ID, { type: 'mower.confirm_error' })).rejects.toMatchObject({ code: 'DEVICE_UNAVAILABLE' })
+    expect(confirm()).toHaveLength(1)
   })
 
   it('refuse une commande d’un autre kind, un robot inconnu, un robot hors ligne', async () => {

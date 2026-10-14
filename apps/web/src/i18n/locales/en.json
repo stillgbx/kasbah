@@ -216,7 +216,7 @@
     "activities": { "docked": "Docked", "cleaning": "Cleaning", "paused": "Paused", "returning": "Returning to dock", "error": "Error" }
   },
   "mower": {
-    "battery": "Battery", "nextStart": "Next start {time}", "startFor": "Mow for 1 h",
+    "battery": "Battery", "nextStart": "Next start {time}", "startFor": "Mow for 1 h", "resumeSchedule": "Resume schedule", "confirmError": "Clear error",
     "activities": { "parked": "At the station", "mowing": "Mowing", "charging": "Charging", "returning": "Returning", "paused": "Paused", "stopped": "Stopped", "error": "Error" },
     "none": "No known robot",
     "error": "Error {code}",

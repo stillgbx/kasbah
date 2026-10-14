@@ -43,6 +43,7 @@ function optionalCapabilities(m: MowerData): Capability[] {
     ...(c?.workAreas ? ['work_areas' as const] : []),
     ...(c?.stayOutZones ? ['stay_out_zones' as const] : []),
     ...(c?.position ? ['site_map' as const] : []),
+    ...(c?.canConfirmError ? ['confirm_error' as const] : []),
   ]
 }
 
@@ -139,12 +140,18 @@ const pos = (n: number | null | undefined) => (typeof n === 'number' && n > 0 ? 
 /** Texte du fabricant pour un code d'erreur ; un code hors table garde son numéro. */
 export function errorText(code: number): string { return ERROR_TEXT[code] ?? `Error ${code}` }
 
-/** Ce qu'une section `mower` dit de l'erreur : code, texte, date — ou leur effacement (`null`). */
-function errorFields(mower: { errorCode?: number | null; errorCodeTimestamp?: number | null } | null | undefined, tz: string): Pick<StatePatch<'mower'>, 'errorCode' | 'errorMessage' | 'errorAt'> {
+/** Ce qu'une section `mower` dit de l'erreur : code, texte, date, levée à distance — ou leur effacement (`null`). */
+function errorFields(
+  mower: { errorCode?: number | null; errorCodeTimestamp?: number | null; isErrorConfirmable?: boolean | null } | null | undefined,
+  tz: string,
+): Pick<StatePatch<'mower'>, 'errorCode' | 'errorMessage' | 'errorAt' | 'errorConfirmable'> {
   const code = mower?.errorCode ?? 0
-  if (code <= 0) return { errorCode: null, errorMessage: null, errorAt: null }
+  if (code <= 0) return { errorCode: null, errorMessage: null, errorAt: null, errorConfirmable: null }
   const at = pos(mower?.errorCodeTimestamp)
-  return { errorCode: code, errorMessage: errorText(code), errorAt: at === undefined ? null : localTimestamp(at, tz) }
+  return {
+    errorCode: code, errorMessage: errorText(code), errorAt: at === undefined ? null : localTimestamp(at, tz),
+    errorConfirmable: mower?.isErrorConfirmable === true,
+  }
 }
 
 /**

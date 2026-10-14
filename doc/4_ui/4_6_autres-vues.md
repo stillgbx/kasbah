@@ -1,6 +1,6 @@
 # Autres vues : Météo, Robots, Eau, Chauffage, Animaux, Agenda, École, Courses, Automatisations
 
-> Dernière mise à jour : 2026-10-13
+> Dernière mise à jour : 2026-10-14
 > Sources : sections reprises telles quelles de `4_1_navigation-et-panneaux.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre les vues propres à un domaine : Météo et radar, Robots (tondeuse, aspirateur), Eau, Chauffage, Animaux, Agenda, École, Courses, Automatisations. Elle est née du découpage de
@@ -1090,3 +1090,23 @@ Test `mowerTask.test.ts` (« mowerStatus »).
 
 Sources : `apps/web/src/lib/mowerTask.ts`, `apps/web/src/components/controls/MowerControl.vue`,
 `apps/web/src/components/home/DevicePanel.vue`, `apps/web/src/views/RobotsView.vue`.
+
+### Mise à jour 2026-10-14 — « Effacer l'erreur » et « Reprendre le programme »
+
+Sur la **vue Robots** et dans le **panneau de la tondeuse** (vue Maison, `MowerControl.vue`) :
+
+- **« Effacer l'erreur »** : un lien au bout de la ligne d'état (à côté de « Masquer » sur la vue
+  Robots), présent seulement si le robot déclare `confirm_error`, est en erreur, et dit cette erreur
+  `errorConfirmable`. La ligne garde sa hauteur : seul le texte de l'erreur se raccourcit (ellipse sur la
+  vue Robots, défilement dans le panneau).
+- **« Reprendre le programme »** : envoie `mower.start` sans durée. Pilule de la rangée de boutons sur la
+  vue Robots ; bouton pleine largeur (44 px) sous « Tondre 1 h / Rentrer » dans le panneau. Toujours
+  présent quand le robot a `schedule` : rien ne bouge quand l'état change. La rangée de la vue Robots
+  passe sur deux lignes, le panneau grandit d'autant, une fois pour toutes.
+
+Vérifié en simulation (erreur injectée dans le store) : aucun élément ne bouge à l'apparition du lien,
+aucun débordement en fr et en en, à 1280 et 375 px (vue Robots), à 1280, 1024 et 853 px (panneau).
+Tests `RobotsView.test.ts` et `MowerControl.test.ts`.
+
+Sources : `apps/web/src/views/RobotsView.vue`, `apps/web/src/components/controls/MowerControl.vue`,
+`apps/web/src/i18n/locales/{fr,en}.json` (`mower.resumeSchedule`, `mower.confirmError`).

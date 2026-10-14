@@ -216,7 +216,7 @@
     "activities": { "docked": "À la base", "cleaning": "Nettoyage", "paused": "En pause", "returning": "Retour base", "error": "Erreur" }
   },
   "mower": {
-    "battery": "Batterie", "nextStart": "Prochain départ {time}", "startFor": "Tondre 1 h",
+    "battery": "Batterie", "nextStart": "Prochain départ {time}", "startFor": "Tondre 1 h", "resumeSchedule": "Reprendre le programme", "confirmError": "Effacer l'erreur",
     "activities": { "parked": "À la station", "mowing": "Tonte en cours", "charging": "En charge", "returning": "Rentre", "paused": "En pause", "stopped": "Arrêtée", "error": "Erreur" },
     "none": "Aucun robot connu",
     "error": "Erreur {code}",

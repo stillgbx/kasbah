@@ -48,6 +48,11 @@ export class AutomowerClient {
     return this.request('POST', `/mowers/${encodeURIComponent(mowerId)}/actions`, { body, signal })
   }
 
+  /** `POST /mowers/{id}/errors/confirm` : lève l'erreur en cours, si le robot la dit confirmable (202). */
+  confirmError(mowerId: string, signal?: AbortSignal): Promise<unknown> {
+    return this.request('POST', `/mowers/${encodeURIComponent(mowerId)}/errors/confirm`, { signal })
+  }
+
   /** `PATCH /mowers/{id}/stayOutZones/{zoneId}` : active ou désactive une zone d'exclusion (202). */
   stayOutZone(mowerId: string, zoneId: string, enable: boolean, signal?: AbortSignal): Promise<unknown> {
     const body = { data: { type: 'stayOutZone', id: zoneId, attributes: { enable } } }

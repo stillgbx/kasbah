@@ -93,7 +93,7 @@ export function mower(externalId: string, o: MowerOptions): SimDevice<'mower'> {
   /** Il part de la station : « en route » une vingtaine de secondes, le temps d'arriver sur sa zone. */
   const depart = (s: StateFor<'mower'>) => { s.activity = 'mowing'; s.leaving = true; leavingLeftS = 20 }
   const dev: SimDevice<'mower'> = {
-    descriptor: descriptor(externalId, 'mower', o.name, ['mow', 'park', 'battery', 'schedule', 'work_areas', 'stay_out_zones', 'site_map'], { manufacturer: 'Mock', model: 'Robotic mower' }),
+    descriptor: descriptor(externalId, 'mower', o.name, ['mow', 'park', 'battery', 'schedule', 'work_areas', 'stay_out_zones', 'site_map', 'confirm_error'], { manufacturer: 'Mock', model: 'Robotic mower' }),
     state: {
       kind: 'mower', updatedAt: 0, available: true, activity: 'parked', battery: 100, position: [...o.dock], cuttingHeight: 5,
       statistics: { cuttingTimeS: 2_694_600, chargingCycles: 412, collisions: 5836, driveDistanceM: 1_638_400 },
@@ -176,12 +176,14 @@ export function mower(externalId: string, o: MowerOptions): SimDevice<'mower'> {
       const s = dev.state
       switch (cmd.type) {
         case 'mower.start':
-          manualUntil = ctx.simTime + (cmd.durationMin ?? 60) * 60_000
           parkedUntilNext = false
           bounds = o.area
           s.workAreaId = 0
+          // sans durée = reprendre le programme : plus d'ordre manuel, le planning décide au prochain pas
+          // (en pause hors créneau, le robot repart… pour rentrer)
+          manualUntil = cmd.durationMin === undefined ? 0 : ctx.simTime + cmd.durationMin * 60_000
           if (s.activity === 'paused') s.activity = 'mowing'
-          else if (s.activity === 'parked' || s.activity === 'charging') depart(s)
+          else if (cmd.durationMin !== undefined && (s.activity === 'parked' || s.activity === 'charging')) depart(s)
           break
         case 'mower.start_in_area': {
           const area = areas[cmd.workAreaId]
@@ -197,6 +199,10 @@ export function mower(externalId: string, o: MowerOptions): SimDevice<'mower'> {
         case 'mower.set_stay_out_zone':
           if (!s.stayOutZones?.some((z) => z.id === cmd.zoneId)) throw new SimError('UNSUPPORTED_COMMAND', `no stay-out zone ${cmd.zoneId}`)
           s.stayOutZones = s.stayOutZones.map((z) => (z.id === cmd.zoneId ? { ...z, enabled: cmd.enabled } : z))
+          break
+        case 'mower.confirm_error':
+          if (s.activity !== 'error' || !s.errorConfirmable) throw new SimError('DEVICE_UNAVAILABLE', 'no error to clear remotely')
+          s.activity = 'parked'; s.errorCode = undefined; s.errorMessage = undefined; s.errorAt = undefined; s.errorConfirmable = undefined
           break
         case 'mower.pause': if (s.activity === 'mowing') s.activity = 'paused'; break
         case 'mower.park':

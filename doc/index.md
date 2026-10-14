@@ -25,7 +25,7 @@ Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/Web
 | Pages | Dernière mise à jour |
 |---|---|
 | [1_0 Monorepo et flux de données](1_architecture/1_0_monorepo-et-flux.md) | 2026-10-10 |
-| [1_1 Contrat des appareils](1_architecture/1_1_contrat-appareils.md) | 2026-10-12 |
+| [1_1 Contrat des appareils](1_architecture/1_1_contrat-appareils.md) | 2026-10-14 |
 | [1_2 Serveur et hôte de plugins](1_architecture/1_2_serveur-et-plugins.md) | 2026-10-11 |
 | [1_3 Protocole REST et WebSocket](1_architecture/1_3_protocole-rest-ws.md) | 2026-10-13 |
 | [1_4 Application web : stores, transport, routage](1_architecture/1_4_app-web.md) | 2026-10-06 |
@@ -56,11 +56,11 @@ La maison décrite en JSON : format et validation, géométrie dérivée (murs, 
 ## 3 — Plugins
 
 <!-- section:3_plugins:begin (généré par scripts/wiki-index.mjs depuis 3_plugins/README.md - ne pas éditer ici) -->
-Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin), puis chaque intégration, ses contraintes, ses pièges et ce qui a été vérifié sur du vrai matériel. Résumés : [3_plugins/README.md](3_plugins/README.md) (26 pages, dernière mise à jour 2026-10-13).
+Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin), puis chaque intégration, ses contraintes, ses pièges et ce qui a été vérifié sur du vrai matériel. Résumés : [3_plugins/README.md](3_plugins/README.md) (26 pages, dernière mise à jour 2026-10-14).
 
 | Socle | Dernière mise à jour |
 |---|---|
-| [3_0 Simulation (mock-sim et plugin mock)](3_plugins/3_0_simulation-mock.md) | 2026-10-12 |
+| [3_0 Simulation (mock-sim et plugin mock)](3_plugins/3_0_simulation-mock.md) | 2026-10-14 |
 | [3_2 Écrire un plugin](3_plugins/3_2_ecrire-un-plugin.md) | 2026-10-07 |
 | [3_3 Fabricants à venir](3_plugins/3_3_fabricants-a-venir.md) | 2026-10-06 |
 
@@ -74,7 +74,7 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 | [3_8 Tesla (Fleet API)](3_plugins/3_8_tesla.md) | 2026-10-06 |
 | [3_9 Renault (Gigya + Kamereon)](3_plugins/3_9_renault.md) | 2026-10-06 |
 | [3_10 Open-Meteo](3_plugins/3_10_open-meteo.md) | 2026-10-09 |
-| [3_11 Husqvarna Automower](3_plugins/3_11_husqvarna-automower.md) | 2026-10-13 |
+| [3_11 Husqvarna Automower](3_plugins/3_11_husqvarna-automower.md) | 2026-10-14 |
 | [3_12 COMAP Proteo 2](3_plugins/3_12_comap-proteo.md) | 2026-10-06 |
 | [3_13 Mitsubishi MELCloud](3_plugins/3_13_mitsubishi-melcloud.md) | 2026-10-02 |
 | [3_14 iRobot (Roomba)](3_plugins/3_14_irobot-roomba.md) | 2026-10-06 |
@@ -94,7 +94,7 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 ## 4 — UI
 
 <!-- section:4_ui:begin (généré par scripts/wiki-index.mjs depuis 4_ui/README.md - ne pas éditer ici) -->
-Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et langues, puis une page par famille de vues. Résumés : [4_ui/README.md](4_ui/README.md) (9 pages, dernière mise à jour 2026-10-13).
+Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et langues, puis une page par famille de vues. Résumés : [4_ui/README.md](4_ui/README.md) (9 pages, dernière mise à jour 2026-10-14).
 
 | Socle | Dernière mise à jour |
 |---|---|
@@ -107,7 +107,7 @@ Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et 
 | [4_3 Vues Lumières, Ouvrants et Caméras](4_ui/4_3_vues-lumieres-ouvrants-cameras.md) | 2026-10-13 |
 | [4_4 Vues Énergie et Véhicules](4_ui/4_4_vues-energie-vehicules.md) | 2026-10-13 |
 | [4_5 Musique et médias](4_ui/4_5_musique-et-medias.md) | 2026-10-13 |
-| [4_6 Autres vues](4_ui/4_6_autres-vues.md) | 2026-10-13 |
+| [4_6 Autres vues](4_ui/4_6_autres-vues.md) | 2026-10-14 |
 | [4_7 Vue Réglages](4_ui/4_7_reglages.md) | 2026-10-13 |
 | [4_8 Mode édition et propriétés](4_ui/4_8_mode-edition-et-proprietes.md) | 2026-10-13 |
 <!-- section:4_ui:end -->

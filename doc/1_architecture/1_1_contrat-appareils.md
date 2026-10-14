@@ -1,6 +1,6 @@
 # Contrat des appareils (packages/shared)
 
-> Dernière mise à jour : 2026-10-12
+> Dernière mise à jour : 2026-10-14
 > Sources : `packages/shared/src/devices/{kinds,descriptor,state,command,rules,color}.ts`, `packages/shared/src/scenes/scene.ts`, `packages/shared/src/devices/activity.ts`, `packages/shared/src/house/geo.ts`
 
 ## Principe
@@ -1033,3 +1033,15 @@ Deux champs d'état optionnels de plus sur `mower` (`packages/shared/src/devices
 
 L'interface en tire une phrase (`apps/web/src/lib/mowerTask.ts`) : voir
 `../4_ui/4_1_navigation-et-panneaux.md`, même date.
+
+### Mise à jour 2026-10-14 — tondeuse : lever une erreur à distance
+
+- Capacité **`confirm_error`** (kind `mower`, optionnelle) et commande **`mower.confirm_error`** (sans
+  argument) : lever l'erreur en cours sans passer par le clavier du robot.
+- Champ d'état **`errorConfirmable`** (booléen, optionnel) : l'erreur EN COURS se lève-t-elle à distance.
+  Toutes ne le peuvent pas ; l'interface ne propose le geste que s'il est vrai.
+- Rappel : `mower.start` **sans** `durationMin` = reprendre le programme (le robot suit son planning),
+  avec durée = partir pour ce temps. L'affichage optimiste (`apps/web/src/lib/optimistic.ts`) ne
+  suppose plus « tonte en cours » sans durée : hors créneau, le robot reste à la station.
+
+Sources : `packages/shared/src/devices/{kinds,command,state}.ts`. Plugin : `../3_plugins/3_11_husqvarna-automower.md`.

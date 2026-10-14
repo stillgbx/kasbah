@@ -1,6 +1,6 @@
 # Simulation (`@kasbah/mock-sim` et plugin `mock`)
 
-> Dernière mise à jour : 2026-10-12
+> Dernière mise à jour : 2026-10-14
 > Sources : `packages/mock-sim/src/{simulation,scenarios,world,clock,rng,types}.ts`, `packages/mock-sim/src/behaviours/*.ts`, `apps/server/src/plugins/mock/index.ts`, `apps/web/src/api/mockTransport.ts`, `packages/mock-sim/src/behaviours/energy.ts`, `packages/mock-sim/src/demos.ts`, `packages/mock-sim/src/behaviours/camera.ts`
 
 ## Pourquoi un paquet séparé
@@ -478,3 +478,12 @@ Sources : `packages/mock-sim/src/{behaviours/robots,simulation,types}.ts`, `apps
 Elle publie `workAreaId` (`0` au planning et sur « tondre », la zone donnée sur « tondre une zone ») et
 `leaving` : une vingtaine de secondes « en route » à chaque départ de la station (`depart`), effacé au
 retour. De quoi voir la phrase de tâche sans robot réel (`packages/mock-sim/src/behaviours/robots.ts`).
+
+### Mise à jour 2026-10-14 — reprendre le programme, lever une erreur
+
+`mower.start` **sans durée** reprend le programme : plus d'ordre manuel (`manualUntil = 0`), le planning
+décide au pas suivant ; en pause hors créneau, le robot repart pour rentrer. Avec durée, rien ne change.
+La tondeuse déclare `confirm_error` : `mower.confirm_error` la remet à la station et efface l'erreur si
+elle était `errorConfirmable`, sinon refuse (`DEVICE_UNAVAILABLE`). La simulation ne met jamais le robot
+en erreur d'elle-même : pour voir le lien, injecter l'erreur dans le store du navigateur
+(`packages/mock-sim/src/behaviours/robots.ts`).
