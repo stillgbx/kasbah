@@ -1,6 +1,6 @@
 # Plugin Somfy TaHoma
 
-> Dernière mise à jour : 2026-10-06
+> Dernière mise à jour : 2026-10-14
 > Sources : `apps/server/src/plugins/tahoma/{index,client,mapping,types}.ts`, tests `mapping.test.ts`,, `history.ts`, `solar.test.ts` (volets solaires, 2026-09-24)
 > `plugin.test.ts`, fixtures `__fixtures__/box.ts`, `apps/server/.env.example`,
 > [Somfy-Developer/Somfy-TaHoma-Developer-Mode](https://github.com/Somfy-Developer/Somfy-TaHoma-Developer-Mode)
@@ -149,6 +149,20 @@ extrapolations de la spec du fabricant, et c'est précisément ce qui manquait a
    gèlerait le sondage d'événements pour de bon, `health()` restant au vert. Chaque requête porte
    désormais son `AbortSignal.timeout` (`REQUEST_TIMEOUT_MS`, 8 s, injectable en test), mappé sur
    `PluginError('TIMEOUT')`.
+7. **La box décroche sous une rafale de requêtes simultanées** (relevé le 2026-10-14). Une
+   automatisation qui ferme 15 volets appelle `execute` 15 fois en parallèle (`runner.ts`), donc
+   15 `exec/apply` simultanés : 9 acceptés, les 6 derniers en `TIMEOUT` après 8 s et **jamais
+   exécutés** (volets restés ouverts). Les mêmes 15 requêtes envoyées **une à une** passent en
+   36 à 114 ms chacune (868 ms au total) ; une **seule** exécution portant les 15 actions (le champ
+   `actions` est une liste, comme dans un scénario TaHoma) est acceptée en 214 ms, mélange de
+   vitesse normale et de mode discret compris. Le plugin choisit par `TAHOMA_COMMAND_MODE` :
+   `queue` (défaut : une exécution par appareil, une requête `exec/apply` à la fois) ou `batch`
+   (les commandes reçues en 50 ms, `BATCH_WINDOW_MS`, partent en une exécution ; un appareil déjà
+   dans le lot part dans le suivant ; un refus fait échouer tout le lot). `batch` n'est pas le
+   défaut : un `stop` annule l'exécution en cours (voir « Robustesse »), et il reste à vérifier si
+   arrêter UN volet d'un lot arrête tout le lot. L'incident non reproduit du point 6 venait
+   probablement de la même cause. Dans les deux modes, la fenêtre et la file vivent en temps réel,
+   hors de l'horloge du contexte.
 
 ## Robustesse
 

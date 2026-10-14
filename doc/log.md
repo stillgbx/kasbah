@@ -7,6 +7,18 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-14] update | TaHoma : rafales de commandes, file ou exécution groupée
+
+**Déclencheur** : une automatisation fermant 15 volets a laissé 6 volets ouverts (6 `TIMEOUT` sur
+`exec/apply`). Cause : 15 requêtes simultanées ; une à une ou en une seule exécution, la box les prend.
+
+**Pages modifiées** :
+- `3_plugins/3_4_somfy-tahoma.md` - piège 7 : mesures sur la vraie box (une à une 868 ms, groupé
+  214 ms), `TAHOMA_COMMAND_MODE` `queue` (défaut) / `batch`, fenêtre `BATCH_WINDOW_MS`, l'arrêt d'un
+  volet dans un lot reste à vérifier.
+
+**Index** : catalogue `3_plugins` mis à jour (résumé, date), index.md régénéré.
+
 ## [2026-10-14] update | Tondeuse : effacer l'erreur, reprendre le programme
 
 **Déclencheur** : demande de l'utilisateur : lever une erreur depuis Kasbah et relancer le

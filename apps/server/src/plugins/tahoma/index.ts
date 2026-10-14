@@ -13,7 +13,7 @@ import {
   assumedPosition, coverCommands, deviceUrlToExternalId, hasPositionFeedback, isCover, isLightSensor, luminance,
   readStates, sameNode, toAction, toAvailability, toCoverPatch, toDescriptor, toLightSensorDescriptor, type CoverCommands,
 } from './mapping'
-import type { OverkizDevice, OverkizEvent } from './types'
+import type { OverkizAction, OverkizDevice, OverkizEvent } from './types'
 
 // Plugin Somfy TaHoma (plateforme Overkiz), API LOCALE du « mode développeur » : aucun appel cloud,
 // un jeton local collé dans .env (TAHOMA_TOKEN). Sans jeton : mode `needs_pairing`, zéro appareil.
@@ -28,12 +28,35 @@ import type { OverkizDevice, OverkizEvent } from './types'
 
 const bool = z.enum(['true', 'false', '1', '0']).transform((v) => v === 'true' || v === '1')
 
+/**
+ * Une automatisation ou une scène envoie ses volets d'un bloc : 15 `exec/apply` simultanés, la box
+ * en a pris 9 en 8 s et les 6 autres ont expiré sans être exécutés (relevé le 2026-10-14). Les
+ * requêtes partent donc une à une (`queue`), ou bien les commandes reçues dans cette fenêtre
+ * partent en UNE exécution (`batch`, 15 volets acceptés en ~200 ms le même soir). Fenêtre en temps
+ * réel, pas l'horloge du contexte : elle ne mesure que l'arrivée des requêtes d'une même rafale.
+ */
+export const BATCH_WINDOW_MS = 50
+
+/** Une commande en attente de la prochaine exécution groupée. */
+interface Pending {
+  action: OverkizAction
+  type: Command['type']
+  resolve(): void
+  reject(err: unknown): void
+}
+
 export const tahomaConfigSchema = z.object({
   TAHOMA_HOST: z.string().min(1).optional(),
   TAHOMA_PORT: z.coerce.number().int().min(1).max(65535).default(8443),
   TAHOMA_TOKEN: z.string().min(1).optional(),
   TAHOMA_TLS_INSECURE: bool.default(true),
   TAHOMA_POLL_MS: z.coerce.number().int().min(500).max(60_000).default(2000),
+  /**
+   * Envoi d'une rafale de commandes. `queue` : une exécution par appareil, une requête à la fois.
+   * `batch` : une seule exécution pour toute la rafale (comme un scénario TaHoma), plus rapide, mais
+   * un arrêt envoyé ensuite à UN appareil pourrait annuler l'exécution entière — non vérifié.
+   */
+  TAHOMA_COMMAND_MODE: z.enum(['queue', 'batch']).default('queue'),
   /** Historique de luminosité des volets solaires ; vide = pas de persistance. */
   TAHOMA_LIGHT_HISTORY_FILE: z.string().trim().default(stateFile('tahoma-light-history.json')),
   /** Volets en mode discret (un réglage de Kasbah, la box ne le retient pas) ; vide = pas de persistance. */
@@ -107,6 +130,11 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
   let localApiUp = false
   let lastError: string | null = null
   let needsResync = false
+  /** Commandes de la rafale en cours, envoyées ensemble à l'échéance de `batchTimer`. */
+  let batch: Pending[] = []
+  let batchTimer: ReturnType<typeof setTimeout> | null = null
+  /** Dernière requête `exec/apply` partie : la suivante attend qu'elle soit finie. */
+  let sending: Promise<unknown> = Promise.resolve()
 
   const log = () => ctx!.logger
   const ready = (): TahomaClient => {
@@ -231,6 +259,42 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
     }
   }
 
+  /** Une requête `exec/apply` à la fois : la box décroche quand elles arrivent ensemble. */
+  function applyInTurn(label: string, actions: OverkizAction[]): Promise<void> {
+    const sent = sending.then(() => ready().apply(label, actions, ctx!.signal))
+    sending = sent.catch(() => undefined)
+    return sent
+  }
+
+  /**
+   * Envoie une action selon `TAHOMA_COMMAND_MODE` ; se résout quand la box a pris l'exécution.
+   * En `batch`, un appareil déjà dans le lot part dans le lot suivant : deux actions sur un même
+   * appareil, dans une même exécution, n'ont pas d'ordre garanti.
+   */
+  function enqueue(action: OverkizAction, type: Command['type']): Promise<void> {
+    if (config!.TAHOMA_COMMAND_MODE === 'queue') return applyInTurn(`Kasbah ${type}`, [action])
+    if (batch.some((p) => p.action.deviceURL === action.deviceURL)) sendBatch()
+    return new Promise((resolve, reject) => {
+      batch.push({ action, type, resolve, reject })
+      batchTimer ??= setTimeout(sendBatch, BATCH_WINDOW_MS)
+    })
+  }
+
+  /** Envoie le lot en cours ; l'issue (prise ou échec) vaut pour toutes ses commandes. */
+  function sendBatch(): void {
+    if (batchTimer) clearTimeout(batchTimer)
+    batchTimer = null
+    const items = batch
+    batch = []
+    if (!items.length) return
+    const types = [...new Set(items.map((p) => p.type))]
+    const label = types.length === 1 ? `Kasbah ${types[0]}` : `Kasbah ${items.length} commands`
+    void applyInTurn(label, items.map((p) => p.action)).then(
+      () => { for (const p of items) p.resolve() },
+      (err: unknown) => { for (const p of items) p.reject(err) },
+    )
+  }
+
   /** Une passe de sondage : (ré)enregistrement de l'écouteur puis lecture des événements. */
   async function tick(): Promise<void> {
     const c = ready()
@@ -311,7 +375,7 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
     },
 
     async execute(externalId: string, command: Command) {
-      const c = ready()
+      ready()
       const entry = entries.get(externalId)
       if (!entry) throw new PluginError('DEVICE_UNAVAILABLE', `unknown TaHoma device ${externalId}`)
       if (command.type === 'cover.set_quiet') {
@@ -325,7 +389,7 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
       }
       const action = toAction(entry.device.deviceURL, command, entry.commands, quiet.has(externalId))
       if (!action) throw new PluginError('UNSUPPORTED_COMMAND', `${command.type} on ${entry.device.controllableName ?? externalId}`)
-      await c.apply(`Kasbah ${command.type}`, action, ctx!.signal)
+      await enqueue(action, command.type)
       if (entry.feedback) return
       // radio unidirectionnelle : la box ne dira jamais où en est l'ouvrant, on pose ce qu'on a demandé
       const assumed = assumedPosition(command)
@@ -349,6 +413,10 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
     async stop() {
       poller?.stop()
       poller = null
+      if (batchTimer) clearTimeout(batchTimer)
+      batchTimer = null
+      for (const p of batch) p.reject(new PluginError('DEVICE_UNAVAILABLE', 'TaHoma plugin stopped before the command was sent'))
+      batch = []
       await saveHistory()                               // l'heure en cours n'est écrite qu'à sa bascule
       if (client && listenerId) {
         try { await client.unregisterListener(listenerId) }

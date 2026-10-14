@@ -67,7 +67,7 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 | Intégrations | Dernière mise à jour |
 |---|---|
 | [3_1 Philips Hue](3_plugins/3_1_philips-hue.md) | 2026-10-02 |
-| [3_4 Somfy TaHoma](3_plugins/3_4_somfy-tahoma.md) | 2026-10-06 |
+| [3_4 Somfy TaHoma](3_plugins/3_4_somfy-tahoma.md) | 2026-10-14 |
 | [3_5 Google Nest (caméras, sonnettes)](3_plugins/3_5_google-nest.md) | 2026-10-12 |
 | [3_6 Google Cast](3_plugins/3_6_google-cast.md) | 2026-10-12 |
 | [3_7 Enphase](3_plugins/3_7_enphase.md) | 2026-10-06 |

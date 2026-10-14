@@ -50,6 +50,7 @@ function fakeContext(config: Record<string, unknown>, clock: ManualClock) {
 
 const CONFIG = { TAHOMA_HOST: '192.168.1.30', TAHOMA_TOKEN: 'secret-token' }
 const config = (extra: Record<string, string> = {}) => tahomaConfigSchema.parse({ ...CONFIG, ...extra })
+const BATCH = { TAHOMA_COMMAND_MODE: 'batch' }
 
 async function started(box: ReturnType<typeof fakeBox>, extra: Record<string, string> = {}) {
   const clock = new ManualClock(0)
@@ -212,6 +213,89 @@ describe('tahoma plugin', () => {
     vi.mocked(ctx.emitState).mockClear()
     await plugin.execute('io.1234-5678-9012.11110001', { type: 'cover.stop' })
     expect(ctx.emitState).not.toHaveBeenCalled()
+    await plugin.stop()
+  })
+
+  it('en mode batch, une rafale de commandes part en UNE execution', async () => {
+    // 15 exec/apply simultanes : la box en a pris 9 en 8 s, les 6 autres ont expire sans etre
+    // executes (releve le 2026-10-14). Une automatisation envoie ses volets d'un bloc.
+    const box = fakeBox({ events: [] })
+    const { plugin, ctx } = await started(box, BATCH)
+    await Promise.all([
+      plugin.execute('io.1234-5678-9012.11110001', { type: 'cover.close' }),
+      plugin.execute('io.1234-5678-9012.11110002', { type: 'cover.close' }),
+      plugin.execute('rts.1234-5678-9012.22220001', { type: 'cover.close' }),
+    ])
+    expect(box.applied).toEqual([{
+      label: 'Kasbah cover.close',
+      actions: [
+        { deviceURL: IO_SHUTTER.deviceURL, commands: [{ name: 'close', parameters: [] }] },
+        { deviceURL: IO_VENETIAN.deviceURL, commands: [{ name: 'close', parameters: [] }] },
+        { deviceURL: RTS_SHUTTER.deviceURL, commands: [{ name: 'down', parameters: [] }] },
+      ],
+    }])
+    // la suite propre a chaque appareil n'a pas change : le RTS pose toujours sa position supposee
+    expect(ctx.emitState).toHaveBeenCalledWith('rts.1234-5678-9012.22220001', { position: 0, motion: 'stopped' })
+    await plugin.stop()
+  })
+
+  it('en mode batch, un meme appareil deux fois dans la rafale part dans un second lot, dans l ordre', async () => {
+    const box = fakeBox({ events: [] })
+    const { plugin } = await started(box, BATCH)
+    await Promise.all([
+      plugin.execute('rts.1234-5678-9012.22220001', { type: 'cover.close' }),
+      plugin.execute('io.1234-5678-9012.11110001', { type: 'cover.open' }),
+      plugin.execute('rts.1234-5678-9012.22220001', { type: 'cover.stop' }),
+    ])
+    expect(box.applied.map((a) => a.label)).toEqual(['Kasbah 2 commands', 'Kasbah cover.stop'])
+    expect(box.applied[1]!.actions).toEqual([
+      { deviceURL: RTS_SHUTTER.deviceURL, commands: [{ name: 'stop', parameters: [] }] },
+    ])
+    await plugin.stop()
+  })
+
+  it('en mode batch, un lot refuse par la box fait echouer chacune de ses commandes', async () => {
+    const box = fakeBox({ events: [] })
+    const { plugin } = await started(box, BATCH)
+    box.fetchImpl.mockImplementationOnce(async () => json({ error: 'busy' }, 500))
+    const results = await Promise.allSettled([
+      plugin.execute('io.1234-5678-9012.11110001', { type: 'cover.close' }),
+      plugin.execute('rts.1234-5678-9012.22220001', { type: 'cover.close' }),
+    ])
+    expect(results).toEqual([
+      { status: 'rejected', reason: expect.objectContaining({ code: 'UPSTREAM_ERROR' }) },
+      { status: 'rejected', reason: expect.objectContaining({ code: 'UPSTREAM_ERROR' }) },
+    ])
+    await plugin.stop()
+  })
+
+  it('par defaut (queue), une rafale part en une execution par appareil, une requete a la fois', async () => {
+    // un arret envoye a UN volet ne doit pas pouvoir annuler l'execution des autres
+    const box = fakeBox({ events: [] })
+    const { plugin } = await started(box)
+    const serve = box.fetchImpl.getMockImplementation()!
+    let inFlight = 0
+    let maxInFlight = 0
+    let failNext = true                         // la premiere requete echoue : les suivantes partent quand meme
+    box.fetchImpl.mockImplementation(async (url, init) => {
+      maxInFlight = Math.max(maxInFlight, ++inFlight)
+      await new Promise((r) => setTimeout(r, 5))
+      try {
+        if (failNext) { failNext = false; return json({ error: 'busy' }, 500) }
+        return await serve(url, init)
+      } finally { inFlight-- }
+    })
+    const results = await Promise.allSettled([
+      plugin.execute('io.1234-5678-9012.11110001', { type: 'cover.close' }),
+      plugin.execute('io.1234-5678-9012.11110002', { type: 'cover.close' }),
+      plugin.execute('rts.1234-5678-9012.22220001', { type: 'cover.close' }),
+    ])
+    expect(results.map((r) => r.status)).toEqual(['rejected', 'fulfilled', 'fulfilled'])
+    expect(maxInFlight).toBe(1)
+    expect(box.applied.map((a) => a.actions)).toEqual([
+      [{ deviceURL: IO_VENETIAN.deviceURL, commands: [{ name: 'close', parameters: [] }] }],
+      [{ deviceURL: RTS_SHUTTER.deviceURL, commands: [{ name: 'down', parameters: [] }] }],
+    ])
     await plugin.stop()
   })
 

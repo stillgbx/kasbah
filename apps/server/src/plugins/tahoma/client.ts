@@ -140,9 +140,12 @@ export class TahomaClient {
     await this.request('POST', `/events/${listenerId}/unregister`)
   }
 
-  /** Exécute une action ; la box répond `{ execId }` dès qu'elle a pris la commande. */
-  async apply(label: string, action: OverkizAction, signal?: AbortSignal): Promise<void> {
-    await this.request('POST', '/exec/apply', { label, actions: [action] }, signal)
+  /**
+   * Exécute des actions (une par appareil) en UNE exécution, comme un scénario TaHoma ; la box
+   * répond `{ execId }` dès qu'elle a pris la commande.
+   */
+  async apply(label: string, actions: OverkizAction[], signal?: AbortSignal): Promise<void> {
+    await this.request('POST', '/exec/apply', { label, actions }, signal)
   }
 
   close(): void { void this.dispatcher?.close() }

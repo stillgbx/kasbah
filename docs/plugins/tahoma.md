@@ -55,6 +55,7 @@ L'état du plugin dans Réglages dit où on en est :
 | `TAHOMA_TOKEN` | — | Jeton généré dans l'appli mobile |
 | `TAHOMA_TLS_INSECURE` | `true` | Accepte le certificat de la box, signé par une autorité Overkiz non publique |
 | `TAHOMA_POLL_MS` | `2000` | Cadence d'interrogation de la box (500 à 60 000 ms) |
+| `TAHOMA_COMMAND_MODE` | `queue` | Envoi de plusieurs commandes à la fois (automatisation, scène) : `queue` les envoie une par une, `batch` les regroupe en une seule exécution, comme un scénario TaHoma |
 | `TAHOMA_LIGHT_HISTORY_FILE` | `apps/server/.state/tahoma-light-history.json` | Historique de luminosité des volets solaires ; vide = pas de sauvegarde |
 | `TAHOMA_QUIET_FILE` | `apps/server/.state/tahoma-quiet.json` | Volets en mode discret ; vide = pas de sauvegarde |
 
