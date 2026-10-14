@@ -102,8 +102,11 @@ export function useSeekHold(published: Ref<number | undefined>, deviceId?: Ref<s
   return { seekDraft, beginSeek, holding }
 }
 
-/** `m:ss` ; vide sans valeur. */
+/** `m:ss`, `h:mm:ss` à partir d'une heure ; vide sans valeur. */
 export function formatClock(s: number | undefined | null): string {
   if (s === undefined || s === null || !Number.isFinite(s)) return ''
-  return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const ss = String(Math.floor(s % 60)).padStart(2, '0')
+  return h ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`
 }

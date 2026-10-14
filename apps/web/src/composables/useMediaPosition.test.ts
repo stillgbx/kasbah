@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { nextTick, ref } from 'vue'
 import type { StateFor } from '@kasbah/shared'
-import { MEDIA_POSITION_SLACK_S, SEEK_HOLD_MAX_MS, SEEK_HOLD_MIN_MS, useMediaPosition, useSeekHold } from './useMediaPosition'
+import { formatClock, MEDIA_POSITION_SLACK_S, SEEK_HOLD_MAX_MS, SEEK_HOLD_MIN_MS, useMediaPosition, useSeekHold } from './useMediaPosition'
 
 function media(partial: Partial<StateFor<'media_player'>> & { nowPlaying?: StateFor<'media_player'>['nowPlaying'] }): StateFor<'media_player'> {
   return {
@@ -145,5 +145,17 @@ describe('useSeekHold', () => {
     await nextTick()
     expect(holding.value).toBe(false)
     expect(seekDraft.value).toBeNull()
+  })
+})
+
+describe('formatClock', () => {
+  it('écrit m:ss sous l\'heure, h:mm:ss au-delà, rien sans valeur', () => {
+    expect(formatClock(0)).toBe('0:00')
+    expect(formatClock(59.9)).toBe('0:59')
+    expect(formatClock(3599)).toBe('59:59')
+    expect(formatClock(3600)).toBe('1:00:00')
+    expect(formatClock(14233)).toBe('3:57:13')
+    expect(formatClock(undefined)).toBe('')
+    expect(formatClock(NaN)).toBe('')
   })
 })

@@ -443,8 +443,9 @@ const explicit = computed(() => (props.pending
 .key--small { width: 32px; height: 32px; border-radius: 10px; border-color: transparent; }
 .key--tiny { width: 28px; height: 28px; border-radius: 8px; border-color: transparent; }
 .key[data-on='1'] { background: var(--accent); color: var(--on-accent); }
-.bar__seek { width: var(--center-w); display: grid; grid-template-columns: 4ch 1fr 4ch; align-items: center; gap: 8px; min-width: 0; }
-.time { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bar__seek { width: var(--center-w); display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; min-width: 0; }
+/* largeur fixe dans la police des temps : 5,5ch tiennent h:mm:ss (deux-points étroits) */
+.time { min-width: 5.5ch; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .time--end { text-align: right; }
 .bar--hidden { visibility: hidden; }
 

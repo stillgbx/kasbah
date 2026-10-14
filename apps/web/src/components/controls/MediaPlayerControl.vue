@@ -5,7 +5,7 @@ import { useRouter } from 'vue-router'
 import { useLocalStorage } from '@vueuse/core'
 import type { CommandInput, DeviceDescriptor, StateFor } from '@kasbah/shared'
 import type { MusicRepeat } from '../../api/transport'
-import { useMediaPosition, useSeekHold } from '../../composables/useMediaPosition'
+import { formatClock, useMediaPosition, useSeekHold } from '../../composables/useMediaPosition'
 import { useMusicSession } from '../../composables/useMusicSession'
 import { streamQuality } from '../../lib/streamQuality'
 import { useNotificationsStore } from '../../stores/notifications'
@@ -25,7 +25,7 @@ const { t } = useI18n()
 const volume = ref(props.state.volume)
 watch(() => props.state.volume, (v) => { volume.value = v })
 const has = (c: string) => props.descriptor.capabilities.includes(c as never)
-const fmt = (s?: number) => (s === undefined ? '' : `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`)
+const fmt = formatClock
 
 // Le TITRE est déjà la grande valeur du panneau : le bloc ne répète rien de ce qu'on voit déjà. Il
 // dit, dans l'ordre et sans doublon, l'artiste, l'album (s'il diffère du titre — un single porte le
@@ -198,7 +198,7 @@ function nudgeVolume(delta: number) {
 .now__line1 > :last-child { min-width: 0; flex: 1 1 auto; }
 .now__seek { margin-top: 2px; }
 /* chiffres à largeur fixe : une valeur qui défile ne fait pas frémir ses voisins */
-.now__times { display: grid; grid-template-columns: 5ch minmax(0, 1fr) 5ch; align-items: center; font-variant-numeric: tabular-nums; }
+.now__times { display: grid; grid-template-columns: 5.5ch minmax(0, 1fr) 5.5ch; align-items: center; font-variant-numeric: tabular-nums; }
 .now__end { text-align: right; }
 /* une info de connaisseur, pas de lecture : plus petite et plus pâle que les temps qui l'encadrent */
 .now__quality { text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 10px; opacity: .6; letter-spacing: .02em; }
