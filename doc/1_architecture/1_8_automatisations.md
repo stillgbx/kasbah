@@ -271,7 +271,7 @@ santé, `missing`, `unavailableDeviceIds`, `nextRun`, `pendingSince`, `lastRun`)
 (`PATCH`) et `run_automation` (`POST /:id/run`). Ce dernier exécute les actions **tout de suite, sans « Sauf si »**,
 même règle désactivée : le contrat du bouton de l'app, pas celui d'un déclencheur. Décision : **ni création, ni
 modification, ni suppression par MCP** — une règle tourne sans surveillance, elle s'écrit dans la vue
-Automatisations. Le test crée sa règle dans une copie temporaire de la maison de démo, pour que
+Automatisations. *(Renversé le 2026-10-15 pour la création et la modification, voir plus bas.)* Le test crée sa règle dans une copie temporaire de la maison de démo, pour que
 `<maison>.automations.json` n'atterrisse pas dans `house/`.
 
 Sources : `apps/server/src/mcp/{server,server.test}.ts`.
@@ -413,3 +413,12 @@ inchangées) ; 1280 et 375 px sans débordement, console vide.
 Sources : `apps/web/src/{lib/automations.ts,views/AutomationEditView.vue,lib/strokeIcons.ts}`,
 `apps/web/src/components/automations/AutomationEditor.vue`, `apps/web/src/i18n/locales/{fr,en}.json`.
 Test : `apps/web/src/lib/automations.test.ts` (copie désactivée, nom borné, tableaux non partagés).
+
+### Mise à jour 2026-10-15 — créées et modifiées par le MCP
+
+À la demande de l'utilisateur, l'agent peut créer (`create_automation`) et modifier (`update_automation`)
+une règle, par la même route `PUT /api/automations/:id` que l'éditeur : même validation, même fichier,
+même diffusion. Rien ne change côté moteur. La modification ne remplace que les champs passés ; la
+suppression reste réservée à la vue. Détail : `1_7_serveur-mcp.md`, mise à jour du 2026-10-15.
+
+Sources : `apps/server/src/mcp/server.ts`.

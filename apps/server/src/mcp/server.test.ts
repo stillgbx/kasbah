@@ -71,7 +71,7 @@ describe.each<[string, VersionNegotiationMode]>([['2025', 'legacy'], ['2026-07-2
 
   it('expose les outils', async () => {
     const { tools } = await client.listTools()
-    expect(tools.map((t) => t.name).sort()).toEqual(['add_shopping_items', 'control_music', 'finish_shopping', 'get_agenda', 'get_device', 'get_device_history', 'get_health', 'get_music', 'get_school', 'get_shopping_list', 'get_weather', 'list_automations', 'list_devices', 'list_scenes', 'play_music', 'play_radio', 'queue_music', 'recall_scene', 'remove_shopping_item', 'run_automation', 'search_music', 'send_command', 'set_automation_enabled', 'set_shopping_favorite', 'update_shopping_item'])
+    expect(tools.map((t) => t.name).sort()).toEqual(['add_shopping_items', 'control_music', 'create_automation', 'finish_shopping', 'get_agenda', 'get_device', 'get_device_history', 'get_health', 'get_music', 'get_school', 'get_shopping_list', 'get_weather', 'list_automations', 'list_devices', 'list_scenes', 'play_music', 'play_radio', 'queue_music', 'recall_scene', 'remove_shopping_item', 'run_automation', 'search_music', 'send_command', 'set_automation_enabled', 'set_shopping_favorite', 'update_automation', 'update_shopping_item'])
   })
 
   it('joue une piste par le lecteur commun, sur une enceinte', async () => {
@@ -170,6 +170,33 @@ describe.each<[string, VersionNegotiationMode]>([['2025', 'legacy'], ['2026-07-2
     expect(JSON.parse(text(run))).toEqual({ outcome: 'ok' })
     expect(kasbah.registry.get(light)!.state).toMatchObject({ on: true })
     expect((await client.callTool({ name: 'run_automation', arguments: { id: 'inconnue' } })).isError).toBe(true)
+  })
+
+  it('crée puis modifie une automatisation, champ par champ', async () => {
+    const light = kasbah.registry.list().find((e) => e.descriptor.kind === 'light')!.descriptor.id
+    const actions = [{ type: 'command', target: { type: 'devices', deviceIds: [light] }, command: { type: 'light.set', on: true } }]
+    const created = await client.callTool({ name: 'create_automation', arguments: {
+      name: 'Réveil', trigger: { type: 'time', at: { kind: 'clock', time: '07:00' } }, actions,
+    } })
+    expect(created.isError, text(created)).toBeFalsy()
+    const rule = JSON.parse(text(created))
+    // allumée par défaut, sans « sauf si », et enregistrée par le moteur sous un id tiré par le serveur
+    expect(rule).toMatchObject({ name: 'Réveil', enabled: true, status: { health: 'ok', nextRun: expect.stringMatching(/ 07:00$/) } })
+    expect(kasbah.automations.list().find((e) => e.automation.id === rule.id)!.automation.unless).toEqual([])
+
+    const updated = await client.callTool({ name: 'update_automation', arguments: { id: rule.id, name: 'Réveil doux', enabled: false } })
+    expect(updated.isError, text(updated)).toBeFalsy()
+    const stored = kasbah.automations.list().find((e) => e.automation.id === rule.id)!.automation
+    // les champs non passés restent ceux d'avant
+    expect(stored).toMatchObject({ name: 'Réveil doux', enabled: false, trigger: { at: { time: '07:00' } }, actions })
+
+    const missing = await client.callTool({ name: 'update_automation', arguments: { id: 'inconnue', name: 'X' } })
+    expect(missing.isError).toBe(true)
+    // une référence absente n'empêche pas l'écriture : le statut la signale
+    const broken = JSON.parse(text(await client.callTool({ name: 'update_automation', arguments: {
+      id: rule.id, actions: [{ ...actions[0], target: { type: 'devices', deviceIds: ['mock:absente'] } }],
+    } })))
+    expect(broken.status).toMatchObject({ health: 'incomplete', missing: [{ kind: 'device', id: 'mock:absente' }] })
   })
 
   it('rend l\'historique d\'un appareil qui en garde un, et refuse les autres', async () => {

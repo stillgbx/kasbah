@@ -1,6 +1,6 @@
 # Serveur MCP (`/mcp`)
 
-> Dernière mise à jour : 2026-10-11
+> Dernière mise à jour : 2026-10-15
 > Sources : `apps/server/src/mcp/server.ts`, `apps/server/src/mcp/auth.ts`, `apps/server/src/http/session.ts`, `apps/server/src/mcp/users-cli.ts`, `apps/server/src/mcp/users-routes.ts`, `apps/web/src/components/settings/McpUsersCard.vue`, `apps/server/src/mcp/auth.test.ts`, `apps/server/src/music/player.ts`, `apps/server/src/plugins/{ytmusic,mixcloud,radio}/index.ts`, `apps/server/src/mcp/server.test.ts`, `apps/server/src/app.ts` (`registerMcp`), `apps/server/package.json`, `README.md` (section « Serveur MCP »), arbre de travail du 2026-09-23 (après c9abf58), `apps/server/src/assistant/assistant.ts` ; arbre de travail NON COMMITÉ du 2026-10-09 (après 00397bc) : `apps/server/src/mcp/{server,server.test}.ts`, `README.md`, `packages/shared/src/shopping/shopping.ts` (2026-10-11)
 
 ## Ce que c'est
@@ -44,7 +44,8 @@ La configuration des clients est dans le `README.md` (section « Serveur MCP »)
 | `get_school` | cahier de texte, cahier de liaison et publications de TouteMonAnnée, en lecture seule ; `section`, `includePast`, `includeHidden` |
 | `get_weather` | météo de la maison ou d'un lieu (`place`) : état, prévisions, air, pollens, vigilance à venir *(2026-10-09)* |
 | `get_agenda` | événements des agendas sur `from` + `days` (1 à 62, défaut 7), en lecture seule *(2026-10-09)* |
-| `list_automations` / `run_automation` / `set_automation_enabled` | statut des règles, lancement immédiat, activation ; ni création ni modification ni suppression *(2026-10-09)* |
+| `list_automations` / `run_automation` / `set_automation_enabled` | statut des règles, lancement immédiat, activation *(2026-10-09)* |
+| `create_automation` / `update_automation` | création et modification d'une règle ; pas de suppression *(2026-10-15)* |
 | `get_music` / `queue_music` / `control_music` | ce qui joue et la file, ajout sans interruption, pilotage de la file *(2026-10-09)* |
 | `get_device_history` | énergie (`hours` 1 à 48), journal du fabricant, consommation d'eau *(2026-10-09)* |
 | `get_shopping_list` / `add_shopping_items` / `update_shopping_item` / `remove_shopping_item` / `finish_shopping` / `set_shopping_favorite` | liste de courses de la maison : lire, ajouter, cocher ou changer la quantité, retirer, retirer les cochées, marquer un habituel *(2026-10-11)* |
@@ -594,7 +595,8 @@ du jeton (`actAsHeaders`). Le client interne `call` accepte maintenant `PATCH` e
   Contrôles négatifs faits : fuseau forcé à UTC → `weatherDigest` rouge ; fin incluse retirée →
   `agendaDigest` rouge.
 - **Pas de création, modification ni suppression d'automatisation par MCP.** Une règle tourne sans
-  surveillance : elle s'écrit dans la vue Automatisations. Seuls `run_automation` et
+  surveillance : elle s'écrit dans la vue Automatisations. *(Renversé le 2026-10-15 à la demande de
+  l'utilisateur pour la création et la modification ; la suppression reste hors MCP. Voir la section en bas de page.)* Seuls `run_automation` et
   `set_automation_enabled` agissent, et `run_automation` n'évalue pas le « Sauf si » (même contrat que le
   bouton).
 - **`control_music` lève la « limite connue » du 2026-09-23** : `media_player.next` / `previous` de
@@ -660,3 +662,37 @@ Sources : `apps/server/src/mcp/{server,server.test}.ts`, `packages/shared/src/sh
 plus d'outils : `buildServer` ne les enregistre pas (`registerShoppingTools`), et comme une instance est
 créée par requête, la bascule vaut dès la suivante. Test « retire les outils de la liste de courses quand
 elle est coupée ». Voir `1_10_liste-de-courses.md`.
+
+### Mise à jour 2026-10-15 — créer et modifier une automatisation
+
+> Le tableau des outils passe de 25 à **27**.
+
+**Pourquoi.** Demande de l'utilisateur : que l'agent puisse gérer les automatisations (activer et couper
+existaient déjà, il manquait la création et la modification). Cela renverse la décision du 2026-10-09
+(« une règle tourne sans surveillance, elle s'écrit dans la vue Automatisations ») pour ces deux
+opérations. **La suppression reste hors MCP** : non demandée.
+
+| Outil | Passe par | À savoir |
+|---|---|---|
+| `create_automation` `{ name, enabled?, trigger, unless?, actions }` | `PUT /api/automations/<uuid>` | id tiré par le serveur (`randomUUID`, comme `newAutomationId` de l'app) ; `enabled` vrai et `unless` vide par défaut ; la règle va en bas de la liste |
+| `update_automation` `{ id, name?, enabled?, trigger?, unless?, actions? }` | `GET /api/automations` puis `PUT /api/automations/:id` | seuls les champs passés changent, chacun **remplacé en entier** (ajouter une action = renvoyer toute la liste) ; id inconnu → `isError` (l'outil ne crée jamais) |
+
+- **Même forme que `list_automations`** : les schémas d'entrée sont les champs d'`automationBodySchema`
+  (`packages/shared/src/automations/automation.ts`), donc une règle lue se réécrit telle quelle et le
+  client voit la vraie structure (déclencheurs, prédicats, cibles) dans le JSON Schema de l'outil.
+- **Même validation que l'app** : l'écriture passe par la route (`automationBodySchema.parse`), le
+  moteur, le fichier `<maison>.automations.json` et la diffusion WebSocket — la règle apparaît tout de
+  suite sur les écrans.
+- **Les deux outils rendent la règle et son statut** (`automationView`, partagé avec `list_automations`) :
+  une référence absente (appareil, champ d'état, pièce) n'empêche pas l'écriture, elle se lit dans
+  `health: incomplete` et `missing`, comme dans l'app.
+- Description commune (`AUTOMATION_HELP`) : formes du déclencheur, « sauf si » en OU, contrainte d'heure
+  dans `unless` et pas dans `when`, cibles nommées ou sélection, ids de pièces dans `kasbah://house`.
+- Pas de garde contre une écriture concurrente : `update_automation` lit puis réécrit, une modification
+  faite dans l'app entre les deux serait perdue.
+
+**Vérifié.** `server.test.ts`, dans les deux versions du protocole : liste des 27 outils ; création
+(allumée, sans « sauf si », prochaine exécution à l'heure demandée), renommage et coupure sans toucher
+au déclencheur ni aux actions, id inconnu → `isError`, appareil absent → `incomplete` avec `missing`.
+
+Sources : `apps/server/src/mcp/{server,server.test}.ts`, `README.md` (table « Serveur MCP »).

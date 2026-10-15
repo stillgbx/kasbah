@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-15] update | MCP : créer et modifier une automatisation
+
+**Trigger** : demande de l'utilisateur, « permettre au MCP de gérer les automatisations : activation/désactivation, création, modification ».
+
+**Pages modified** :
+- 1_architecture/1_7_serveur-mcp.md - outils `create_automation` et `update_automation` (27 outils), décision du 2026-10-09 marquée renversée pour la création et la modification
+- 1_architecture/1_8_automatisations.md - section du 2026-10-15, renvoi vers 1_7
+
+**Index** : catalogue 1_architecture mis à jour (1 ligne), index.md régénéré.
+
 ## [2026-10-15] update | Automatisations : bouton « Dupliquer »
 
 **Déclencheur** : « un bouton "dupliquer" qui copie une automatisation, navigue vers la copie désactivée

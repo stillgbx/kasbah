@@ -1,4 +1,5 @@
-import { assertCommandAllowed, commandSchema, DEVICE_KINDS, findShoppingItem, pluginSettingsOf, indexHouse, sceneRecallSchema, SHOPPING_ADD_MAX, shoppingNameSchema, shoppingQuantitySchema, type ShoppingList, type AutomationEntry, type AutomationRun, type DeviceConsumption, type DeviceEntry, type DeviceJournal, type EnergyHistory, type StateFor, type WeatherForecast } from '@kasbah/shared'
+import { randomUUID } from 'node:crypto'
+import { assertCommandAllowed, automationBodySchema, commandSchema, DEVICE_KINDS, findShoppingItem, pluginSettingsOf, indexHouse, sceneRecallSchema, SHOPPING_ADD_MAX, shoppingNameSchema, shoppingQuantitySchema, type ShoppingList, type AutomationEntry, type AutomationRun, type DeviceConsumption, type DeviceEntry, type DeviceJournal, type EnergyHistory, type StateFor, type WeatherForecast } from '@kasbah/shared'
 import { hostHeaderValidation, originValidation } from '@modelcontextprotocol/fastify'
 import { createMcpHandler, McpServer, type McpRequestContext } from '@modelcontextprotocol/server'
 import type { FastifyInstance } from 'fastify'
@@ -366,31 +367,75 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null): 
     })
   })
 
-  // Automatisations : lire, lancer, activer ou couper. Ni création ni suppression : une règle tourne
-  // sans surveillance, elle s'écrit dans la vue Automatisations.
+  // Automatisations : lire, lancer, activer ou couper, créer et modifier, par les routes de la vue
+  // Automatisations (mêmes validations, même fichier, même diffusion aux écrans). Pas de suppression.
+  const automationView = ({ automation: a, status: s }: AutomationEntry) => {
+    const { at } = clockOf()
+    return {
+      id: a.id, name: a.name, enabled: a.enabled, trigger: a.trigger, ...(a.unless.length ? { unless: a.unless } : {}), actions: a.actions,
+      status: {
+        health: s.health,
+        ...optional({
+          missing: s.missing.length ? s.missing : null,
+          unavailableDeviceIds: s.unavailableDeviceIds.length ? s.unavailableDeviceIds : null,
+          nextRun: s.nextRunAt && at(s.nextRunAt),
+          pendingSince: s.pendingSince && at(s.pendingSince),
+          lastRun: s.lastRun && { at: at(s.lastRun.at), by: s.lastRun.by, outcome: s.lastRun.outcome, ...(s.lastRun.errors.length ? { errors: s.lastRun.errors } : {}) },
+        }),
+      },
+    }
+  }
+
   server.registerTool('list_automations', {
     title: 'Lister les automatisations',
-    description: "Automatisations de la maison : déclencheur (heure fixe, soleil, état d'un appareil), « sauf si » (unless), actions, et leur statut (santé, références manquantes, prochaine exécution nextRun, dernière lastRun). Heures locales de la maison. Les ids se passent à run_automation et set_automation_enabled. Elles se créent et se modifient dans la vue Automatisations de Kasbah, pas ici.",
+    description: "Automatisations de la maison : déclencheur (heure fixe, soleil, état d'un appareil), « sauf si » (unless), actions, et leur statut (santé, références manquantes, prochaine exécution nextRun, dernière lastRun). Heures locales de la maison. Les ids se passent à run_automation, set_automation_enabled et update_automation.",
     inputSchema: z.object({ query: z.string().optional().describe('Sous-chaîne sans casse du nom ou de l\'id') }),
     annotations: { readOnlyHint: true },
   }, async ({ query }) => {
-    const { at } = clockOf()
     const { automations } = await call<{ automations: AutomationEntry[] }>('GET', '/api/automations')
     const q = query?.toLowerCase()
-    return json(automations.filter(({ automation: a }) => !q || a.name.toLowerCase().includes(q) || a.id.toLowerCase().includes(q))
-      .map(({ automation: a, status: s }) => ({
-        id: a.id, name: a.name, enabled: a.enabled, trigger: a.trigger, ...(a.unless.length ? { unless: a.unless } : {}), actions: a.actions,
-        status: {
-          health: s.health,
-          ...optional({
-            missing: s.missing.length ? s.missing : null,
-            unavailableDeviceIds: s.unavailableDeviceIds.length ? s.unavailableDeviceIds : null,
-            nextRun: s.nextRunAt && at(s.nextRunAt),
-            pendingSince: s.pendingSince && at(s.pendingSince),
-            lastRun: s.lastRun && { at: at(s.lastRun.at), by: s.lastRun.by, outcome: s.lastRun.outcome, ...(s.lastRun.errors.length ? { errors: s.lastRun.errors } : {}) },
-          }),
-        },
-      })))
+    return json(automations.filter(({ automation: a }) => !q || a.name.toLowerCase().includes(q) || a.id.toLowerCase().includes(q)).map(automationView))
+  })
+
+  // Même forme que list_automations : une règle lue se réécrit telle quelle.
+  const { name: nameSchema, trigger: triggerSchema, unless: unlessSchema, actions: actionsSchema } = automationBodySchema.shape
+  const AUTOMATION_HELP = "trigger : heure fixe { type: 'time', at: { kind: 'clock', time: 'HH:MM' } }, passage du soleil { type: 'time', at: { kind: 'sun', event: dawn|sunrise|sunset|dusk, offsetMin (négatif = avant), notBefore, notAfter } } (days 0 = dimanche, dateRange facultatifs), ou état { type: 'state', when: prédicat, forMin } qui part quand le prédicat DEVIENT vrai. Une contrainte d'heure va dans unless, pas dans when. unless : prédicats combinés en OU, l'automatisation ne fait rien si l'un est vrai. actions, jouées dans l'ordre : commande du contrat (comme send_command) sur des appareils nommés (ids de list_devices) ou une sélection résolue au moment d'agir (kind, roomIds, levelIds, zoneIds : ids de la ressource kasbah://house) ; forMin = la commande inverse part au bout de N minutes ; ou recallScene (sceneId de list_scenes). Rend l'automatisation et son statut : health incomplete et missing signalent une référence qui n'existe pas (appareil, champ d'état, pièce), enregistrée quand même."
+
+  server.registerTool('create_automation', {
+    title: 'Créer une automatisation',
+    description: `Crée une automatisation, exécutée ensuite par le serveur sans surveillance. Elle apparaît dans la vue Automatisations, en bas de la liste. ${AUTOMATION_HELP}`,
+    inputSchema: z.object({
+      name: nameSchema,
+      enabled: z.boolean().default(true).describe('false = créée coupée, à activer plus tard'),
+      trigger: triggerSchema,
+      unless: unlessSchema.default([]),
+      actions: actionsSchema,
+    }),
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+  }, async (body) => {
+    const { automation } = await call<{ automation: AutomationEntry }>('PUT', `/api/automations/${randomUUID()}`, body)
+    return json(automationView(automation))
+  })
+
+  server.registerTool('update_automation', {
+    title: 'Modifier une automatisation',
+    description: `Modifie une automatisation existante (id venu de list_automations). Seuls les champs passés changent, et chacun est remplacé EN ENTIER : pour ajouter une action, renvoyer toute la liste actions. ${AUTOMATION_HELP}`,
+    inputSchema: z.object({
+      id: z.string(),
+      name: nameSchema.optional(),
+      enabled: z.boolean().optional(),
+      trigger: triggerSchema.optional(),
+      unless: unlessSchema.optional(),
+      actions: actionsSchema.optional(),
+    }),
+    annotations: { readOnlyHint: false, openWorldHint: true },
+  }, async ({ id, ...changes }) => {
+    const { automations } = await call<{ automations: AutomationEntry[] }>('GET', '/api/automations')
+    const current = automations.find((e) => e.automation.id === id)?.automation
+    if (!current) return fail(`automatisation inconnue "${id}" : voir list_automations`)
+    const { id: _id, updatedAt: _u, ...body } = current
+    const { automation } = await call<{ automation: AutomationEntry }>('PUT', `/api/automations/${encodeURIComponent(id)}`, { ...body, ...optional(changes) })
+    return json(automationView(automation))
   })
 
   server.registerTool('run_automation', {
