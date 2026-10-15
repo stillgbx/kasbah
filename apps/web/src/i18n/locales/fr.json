@@ -1113,10 +1113,15 @@
       "runNowHint": "Exécuter les actions maintenant, sans attendre le déclencheur",
       "runDirty": "Enregistrez d'abord : c'est la version enregistrée qui s'exécute.",
       "remove": "Supprimer",
-      "removeConfirm": "Confirmer"
+      "removeConfirm": "Confirmer",
+      "duplicate": "Dupliquer",
+      "duplicateHint": "Créer une copie désactivée et l'ouvrir",
+      "duplicateDirty": "Enregistrez d'abord : c'est la version enregistrée qui est copiée.",
+      "copyName": "{name} (copie)"
     },
     "toast": {
       "saved": "{name} enregistrée",
+      "duplicated": "Copie créée, désactivée : {name}",
       "ran": "{name} exécutée",
       "ranWithErrors": "{name} : {errors}",
       "saveError": "{name} non enregistrée : {message}"

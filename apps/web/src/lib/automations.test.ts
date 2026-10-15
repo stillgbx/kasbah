@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { AutomationBody } from '@kasbah/shared'
 import { i18n } from '../i18n'
 import {
-  blankAction, blankAutomation, blankPredicate, choiceOf, COMMAND_CHOICES, describeAutomation, involvedDeviceIds, involvedRoomIds, missingPart, type NameContext,
+  blankAction, blankAutomation, blankPredicate, choiceOf, COMMAND_CHOICES, describeAutomation, duplicateBody, involvedDeviceIds, involvedRoomIds, missingPart, type NameContext,
 } from './automations'
 
 const t = i18n.global.t as unknown as (key: string, named?: Record<string, unknown> | number, plural?: number) => string
@@ -66,6 +66,15 @@ describe('draft helpers', () => {
     expect(missingPart({ ...blankAutomation('Nuit'), actions: [blankAction('command')] })).toBe('actions')   // aucun appareil choisi
     expect(missingPart({ ...dusk, unless: [blankPredicate('deviceOn')] })).toBe('unless')
     expect(missingPart(dusk)).toBeNull()
+  })
+
+  it('duplicates a rule disabled, under a name that fits the schema, without sharing its arrays', () => {
+    const copy = duplicateBody({ ...dusk, enabled: true }, `${'x'.repeat(78)} (copie)`)
+    expect(copy.enabled).toBe(false)
+    expect(copy.name).toHaveLength(80)
+    expect(copy.actions).toEqual(dusk.actions)
+    expect(copy.actions).not.toBe(dusk.actions)
+    expect(missingPart(copy)).toBeNull()
   })
 
   it('finds the devices and rooms a rule names, for the search', () => {

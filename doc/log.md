@@ -7,6 +7,17 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-15] update | Automatisations : bouton « Dupliquer »
+
+**Déclencheur** : « un bouton "dupliquer" qui copie une automatisation, navigue vers la copie désactivée
+par défaut » ; le pourcentage pour lumières et ouvrants existait déjà, menu gardé tel quel.
+
+**Pages modifiées** :
+- `1_architecture/1_8_automatisations.md` - section datée : copie de la version enregistrée,
+  désactivée, piège du `router-view` sans clé, bascule « % » écartée.
+
+**Index** : catalogue `1_architecture` déjà à la date du jour, index.md régénéré.
+
 ## [2026-10-15] update | Vue Énergie : les commandes de la borne sur sa ligne, en rendu de ligne
 
 **Déclencheur** : « il faudrait ajouter les commandes de la borne sur sa carte dans la vue énergie »,

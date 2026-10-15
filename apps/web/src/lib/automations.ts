@@ -304,6 +304,24 @@ export function involvedRoomIds(a: Pick<AutomationBody, 'trigger' | 'unless' | '
   return [...ids]
 }
 
+/**
+ * Id d'une automatisation neuve. `crypto.randomUUID` n'existe qu'en contexte sécurisé (https ou
+ * localhost) ; servie en http sur le réseau local, l'app retombe sur 32 caractères hexadécimaux,
+ * admis aussi par `AUTOMATION_ID_RE`.
+ */
+export function newAutomationId(): string {
+  try {
+    return crypto.randomUUID()
+  } catch {
+    return Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('')
+  }
+}
+
+/** La copie d'une automatisation : même règle, DÉSACTIVÉE (deux règles identiques agiraient deux fois). */
+export function duplicateBody(body: AutomationBody, name: string): AutomationBody {
+  return { ...structuredClone(body), name: name.slice(0, 80), enabled: false }
+}
+
 /** Brouillon d'une automatisation neuve : chaque jour à 07:30, sans action (à compléter). */
 export function blankAutomation(name = ''): AutomationBody {
   return { name, enabled: true, trigger: { type: 'time', at: { kind: 'clock', time: '07:30' } }, unless: [], actions: [] }

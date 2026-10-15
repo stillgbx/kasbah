@@ -1103,9 +1103,13 @@
       "runNowHint": "Run the actions now, without waiting for the trigger",
       "runDirty": "Save first: the saved version is the one that runs.",
       "remove": "Delete",
-      "removeConfirm": "Confirm"
+      "removeConfirm": "Confirm",
+      "duplicate": "Duplicate",
+      "duplicateHint": "Create a disabled copy and open it",
+      "duplicateDirty": "Save first: the saved version is the one that is copied.",
+      "copyName": "{name} (copy)"
     },
-    "toast": { "saved": "{name} saved", "ran": "{name} ran", "ranWithErrors": "{name}: {errors}", "saveError": "{name} not saved: {message}" }
+    "toast": { "duplicated": "Copy created, disabled: {name}", "saved": "{name} saved", "ran": "{name} ran", "ranWithErrors": "{name}: {errors}", "saveError": "{name} not saved: {message}" }
   },
   "tens": {
     "device": "Device",

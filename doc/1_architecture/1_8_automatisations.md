@@ -382,3 +382,34 @@ Sources : `packages/shared/src/automations/inverse.ts`, `apps/web/src/lib/automa
 `apps/web/src/components/automations/{AutomationEditor,ActionEditor,PredicateEditor}.vue`,
 `apps/web/src/i18n/locales/{fr,en}.json`. Tests : `automations.test.ts` (shared : inverse avec fondu),
 `apps/web/src/lib/automations.test.ts` (phrase avec fondu, crépuscule précisé).
+
+### Mise à jour 2026-10-15 — « Dupliquer » une automatisation
+
+Demandé par l'utilisateur : un bouton « Dupliquer » dans l'en-tête de la page d'édition copie la règle
+et ouvre la copie. La copie part de la version **enregistrée** (le bouton est grisé tant qu'il y a des
+changements, comme « Exécuter »), elle est **désactivée** (deux règles identiques agiraient deux fois)
+et s'appelle « … (copie) », tronquée aux 80 caractères du schéma (`duplicateBody`,
+`apps/web/src/lib/automations.ts`). Un id neuf, puis le `PUT /api/automations/:id` habituel : rien
+ne change côté serveur, la copie va en bas de la liste comme toute règle neuve. Pour une règle neuve,
+le bouton garde sa place, masqué, comme « Exécuter » et « Supprimer » ; sur téléphone, les six boutons
+font deux rangées de trois.
+
+**Piège de routage.** `router-view` n'a pas de clé : passer de `/automations/A` à `/automations/B`
+réutilise `AutomationEditView`, et l'id lu une fois à sa création restait celui de A. L'id y est
+maintenant calculé depuis la prop, et `AutomationEditor` porte `:key` sur lui : la copie s'ouvre sur
+un brouillon neuf. Le passage `/automations/new` → son id après le premier enregistrement garde la
+même clé, donc ne recrée rien. `newAutomationId` (repli hexadécimal hors contexte sécurisé) a quitté
+la vue pour `lib/automations.ts`.
+
+**Écarté** : une bascule « % » sur « Allumer » et « Ouvrir ». Le menu des commandes propose déjà
+« Allumer à N % » et « Ouvrir à N % » (offerts seulement si les appareils nommés déclarent
+`brightness` ou `position`) ; l'utilisateur garde ce menu. « Allumer » sans pourcentage n'envoie pas
+de luminosité : la lampe reprend la sienne.
+
+Vérifié dans le mode simulé : copie ouverte à sa propre adresse, désactivée, sans changement en
+attente ; bouton grisé après une saisie ; place réservée sur une règle neuve (positions des boutons
+inchangées) ; 1280 et 375 px sans débordement, console vide.
+
+Sources : `apps/web/src/{lib/automations.ts,views/AutomationEditView.vue,lib/strokeIcons.ts}`,
+`apps/web/src/components/automations/AutomationEditor.vue`, `apps/web/src/i18n/locales/{fr,en}.json`.
+Test : `apps/web/src/lib/automations.test.ts` (copie désactivée, nom borné, tableaux non partagés).

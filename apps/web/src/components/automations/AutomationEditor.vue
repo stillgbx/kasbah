@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { SUN_EVENTS, type AutomationBody, type Predicate, type StateTrigger, type SunEvent, type TimeTrigger } from '@kasbah/shared'
 import { useAutomationNames } from '../../composables/useAutomationNames'
 import {
-  blankAction, blankAutomation, blankPredicate, describeAutomation, missingPart, PREDICATE_TYPES, triggerIcon, type ActionDraft,
+  blankAction, blankAutomation, blankPredicate, describeAutomation, duplicateBody, missingPart, newAutomationId, PREDICATE_TYPES, triggerIcon, type ActionDraft,
 } from '../../lib/automations'
 import { useAutomationsStore } from '../../stores/automations'
 import { useNotificationsStore } from '../../stores/notifications'
@@ -20,7 +20,7 @@ import PredicateEditor from './PredicateEditor.vue'
 // message du serveur qui arrive pendant la frappe ne l'écrase pas — et ne part qu'à
 // l'enregistrement. Page entière (`AutomationEditView`) : trois colonnes Quand / Alors / Sauf si.
 const props = defineProps<{ id: string; isNew: boolean }>()
-const emit = defineEmits<{ close: []; saved: [id: string] }>()
+const emit = defineEmits<{ close: []; saved: [id: string]; open: [id: string] }>()
 const store = useAutomationsStore()
 const scenes = useScenesStore()
 const notifications = useNotificationsStore()
@@ -169,6 +169,16 @@ async function runNow() {
   else notifications.error(t('automations.toast.ranWithErrors', { name, errors: run.errors.map((e) => `${e.deviceId ? `${names.deviceName(e.deviceId)} : ` : ''}${e.message}`).join(' · ') }))
 }
 
+// Copie de la version ENREGISTRÉE (bouton grisé tant qu'il y a des changements), désactivée, puis
+// ouverte : on la retouche avant de l'activer.
+async function duplicate() {
+  const id = newAutomationId()
+  const e = await store.save(id, duplicateBody(bodyOf(props.id), t('automations.editor.copyName', { name: draft.value.name })))
+  if (!e) return
+  notifications.success(t('automations.toast.duplicated', { name: e.automation.name }))
+  emit('open', id)
+}
+
 // suppression en deux temps : le premier appui arme, le second (dans les 4 s) confirme
 const removeArmed = ref(false)
 let disarm: ReturnType<typeof setTimeout> | null = null
@@ -197,6 +207,10 @@ onBeforeUnmount(() => { if (disarm) clearTimeout(disarm) })
           <button type="button" class="pill edit__btn" :style="{ visibility: exists ? 'visible' : 'hidden' }" :disabled="dirty || store.isBusy(id)"
                   :title="dirty ? $t('automations.editor.runDirty') : $t('automations.editor.runNowHint')" @click="runNow">
             <StrokeIcon name="play" :size="14" /> {{ $t('automations.editor.runNow') }}
+          </button>
+          <button type="button" class="pill edit__btn" :style="{ visibility: exists ? 'visible' : 'hidden' }" :disabled="dirty || store.saving"
+                  :title="dirty ? $t('automations.editor.duplicateDirty') : $t('automations.editor.duplicateHint')" @click="duplicate">
+            <StrokeIcon name="copy" :size="14" /> {{ $t('automations.editor.duplicate') }}
           </button>
           <button type="button" class="pill edit__btn" :class="{ 'edit__btn--armed': removeArmed }" :style="{ visibility: exists ? 'visible' : 'hidden' }"
                   :disabled="store.isBusy(id)" @click="clickRemove">
@@ -317,7 +331,7 @@ onBeforeUnmount(() => { if (disarm) clearTimeout(disarm) })
 }
 /* un champ Vuetify grandit par défaut (`flex: 1 1 auto`) : dans une colonne, il s'étirait en hauteur */
 .col > * { flex: 0 0 auto; }
-/* téléphone : les cinq boutons en deux rangées de trois, pas une colonne de cinq */
+/* téléphone : les six boutons en deux rangées de trois, pas une colonne de six */
 @media (max-width: 600px) {
   .edit__actions { flex: 1 1 100%; }
   .edit__btn { width: calc((100% - 16px) / 3); }

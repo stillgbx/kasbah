@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AutomationEditor from '../components/automations/AutomationEditor.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
+import { newAutomationId } from '../lib/automations'
 import { useAutomationsStore } from '../stores/automations'
 
 // Page d'édition d'une automatisation (`/automations/:id`, ou `/automations/new`). L'éditeur a besoin
@@ -10,24 +11,19 @@ import { useAutomationsStore } from '../stores/automations'
 //
 // Une automatisation neuve reçoit son id ici, une fois (le serveur fait un upsert sur `PUT /:id`) ;
 // après son premier enregistrement l'adresse devient la sienne, sans rouvrir l'éditeur.
+//
+// La vue n'est pas recréée quand l'id de l'adresse change (« Dupliquer » ouvre la copie) : l'id est
+// donc calculé, et l'éditeur, clé sur lui, repart d'un brouillon neuf.
 const props = defineProps<{ id: string }>()
 const store = useAutomationsStore()
 const router = useRouter()
 
-const isNew = props.id === 'new'
-// `crypto.randomUUID` n'existe qu'en contexte sécurisé (https ou localhost) ; servie en http sur le
-// réseau local, l'app retombe sur 32 caractères hexadécimaux, admis aussi par `AUTOMATION_ID_RE`.
-function newId(): string {
-  try {
-    return crypto.randomUUID()
-  } catch {
-    return Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('')
-  }
-}
-const realId = isNew ? newId() : props.id
+const generated = newAutomationId()
+const isNew = computed(() => props.id === 'new')
+const realId = computed(() => (isNew.value ? generated : props.id))
 /** Adresse ouverte directement : la liste peut ne pas être encore arrivée. */
-const ready = ref(isNew || !!store.entries[realId])
-const found = computed(() => isNew || !!store.entries[realId])
+const ready = ref(isNew.value || !!store.entries[realId.value])
+const found = computed(() => isNew.value || !!store.entries[realId.value])
 
 onMounted(async () => {
   if (ready.value) return
@@ -37,12 +33,13 @@ onMounted(async () => {
 
 const back = () => router.push({ name: 'automations' })
 function onSaved(id: string) {
-  if (isNew) void router.replace({ name: 'automation-edit', params: { id } })
+  if (isNew.value) void router.replace({ name: 'automation-edit', params: { id } })
 }
+const open = (id: string) => router.push({ name: 'automation-edit', params: { id } })
 </script>
 
 <template>
-  <AutomationEditor v-if="ready && found" :id="realId" :is-new="isNew" @close="back" @saved="onSaved" />
+  <AutomationEditor v-if="ready && found" :id="realId" :key="realId" :is-new="isNew" @close="back" @saved="onSaved" @open="open" />
   <div v-else-if="ready" class="missing">
     <p class="muted">{{ $t('automations.notFound') }}</p>
     <button type="button" class="pill" @click="back"><StrokeIcon name="back" :size="14" /> {{ $t('nav.automations') }}</button>
