@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { CLIMATE_MODES, FAN_DIRECTIONS, PET_PUMP_MODES, type Capability, type DeviceKind } from './kinds'
+import { CLIMATE_MODES, FAN_DIRECTIONS, PET_PUMP_MODES, SETTABLE_CHARGE_MODES, type Capability, type DeviceKind } from './kinds'
 import { xySchema } from './state'
 
 // Commandes nommées `<kind>.<verbe>` : le préfixe donne le kind gratuitement et
@@ -92,6 +92,11 @@ export const commandSchema = z.discriminatedUnion('type', [
    * programmée…), au lieu d'obéir au dernier démarrer / arrêter. Rien si elle y est déjà revenue.
    */
   z.object({ type: z.literal('ev_charger.resume_mode') }),
+  /**
+   * Choisir le mode de la borne. Le même mode alors qu'une annulation manuelle tient revient à
+   * `resume_mode` ; le même mode sans annulation ne fait rien.
+   */
+  z.object({ type: z.literal('ev_charger.set_mode'), mode: z.enum(SETTABLE_CHARGE_MODES) }),
   // vehicle
   z.object({ type: z.literal('vehicle.lock') }),
   z.object({ type: z.literal('vehicle.unlock') }),
@@ -174,7 +179,7 @@ export const COMMAND_REQUIRES: Record<CommandType, Capability> = {
   'mower.start': 'mow', 'mower.pause': 'mow', 'mower.park': 'park',
   'mower.start_in_area': 'work_areas', 'mower.set_stay_out_zone': 'stay_out_zones', 'mower.confirm_error': 'confirm_error',
   'ev_charger.start': 'charge_control', 'ev_charger.stop': 'charge_control', 'ev_charger.set_current': 'charge_current',
-  'ev_charger.resume_mode': 'charge_control',
+  'ev_charger.resume_mode': 'charge_control', 'ev_charger.set_mode': 'charge_mode',
   'vehicle.lock': 'lock', 'vehicle.unlock': 'lock',
   'vehicle.start_charge': 'charging', 'vehicle.stop_charge': 'charging',
   'vehicle.set_charge_limit': 'charge_limit', 'vehicle.wake': 'soc', 'vehicle.refresh': 'soc',

@@ -50,8 +50,9 @@ export const CAPABILITIES = [
   'measure',
   // energy
   'production', 'consumption', 'grid', 'storage',
-  // ev_charger
-  'charge_control', 'charge_current',
+  // ev_charger — `charge_mode` : on choisit le mode de la borne (charge verte, manuelle), comme dans
+  // l'appli du fabricant ; l'état dit le mode en cours (`chargeMode`)
+  'charge_control', 'charge_current', 'charge_mode',
   // vehicle — `charge_power` est une capacité de LECTURE, comme `soc` : le véhicule DIT sa puissance
   // de charge instantanée (Tesla). Sans elle, personne ne la connaît (la Renault 5 E-Tech, vérifié
   // voiture en charge) et l'UI l'estime, ce qui lui demande une capacité de batterie saisie à la main.
@@ -97,7 +98,7 @@ export const KIND_CAPABILITIES: Record<DeviceKind, readonly Capability[]> = {
   mower: ['mow', 'park', 'battery', 'schedule', 'journal', 'work_areas', 'stay_out_zones', 'site_map', 'confirm_error'],
   sensor: ['measure'],
   energy: ['production', 'consumption', 'grid', 'storage'],
-  ev_charger: ['charge_control', 'charge_current'],
+  ev_charger: ['charge_control', 'charge_current', 'charge_mode'],
   vehicle: ['soc', 'range', 'location', 'lock', 'charging', 'charge_limit', 'charge_power', 'climate_precondition', 'release_notes', 'software_update'],
   camera: ['live_stream', 'chime'],
   weather: ['forecast', 'air_quality', 'pollen'],
@@ -119,6 +120,21 @@ export const KIND_CAPABILITIES: Record<DeviceKind, readonly Capability[]> = {
  */
 export const PET_PUMP_MODES = ['continuous', 'intermittent'] as const
 export type PetPumpMode = (typeof PET_PUMP_MODES)[number]
+
+/**
+ * Mode d'une borne, celui que l'appli du fabricant appelle ainsi (Enphase : `GREEN_CHARGING`,
+ * `MANUAL_CHARGING`, `SCHEDULED_CHARGING`, `SMART_CHARGING`). `green` : sur le surplus solaire
+ * seul. `manual` : dès le branchement, sur le réseau s'il le faut. Une annulation manuelle (un
+ * démarrer / arrêter) ne le change pas : c'est le mode auquel la borne revient.
+ */
+export const CHARGE_MODES = ['green', 'manual', 'scheduled', 'smart'] as const
+export type ChargeMode = (typeof CHARGE_MODES)[number]
+/**
+ * Ceux qu'on sait CHOISIR (`ev_charger.set_mode`) : les deux essayés sur la vraie borne. Programmé
+ * et intelligent dépendent de réglages de l'appli (horaires, profil) que Kasbah ne lit pas.
+ */
+export const SETTABLE_CHARGE_MODES = ['green', 'manual'] as const satisfies readonly ChargeMode[]
+export type SettableChargeMode = (typeof SETTABLE_CHARGE_MODES)[number]
 
 /** Sens de rotation d'un ventilateur (capacité `fan_direction`). Valeurs Tuya / CREATE. */
 export const FAN_DIRECTIONS = ['forward', 'reverse'] as const

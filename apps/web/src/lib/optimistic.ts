@@ -80,6 +80,8 @@ export function optimisticPatch(state: DeviceState, cmd: CommandInput): Partial<
     case 'ev_charger':
       if (cmd.type === 'ev_charger.stop') return { status: state.status === 'charging' ? 'connected' : state.status, powerW: 0 } as Partial<DeviceState>
       if (cmd.type === 'ev_charger.set_current') return { maxCurrentA: cmd.amps } as Partial<DeviceState>
+      // choisir un mode lève l'annulation manuelle (le même mode sous annulation, c'est « reprendre »)
+      if (cmd.type === 'ev_charger.set_mode') return { chargeMode: cmd.mode, manualOverride: false } as Partial<DeviceState>
       return null
     case 'vehicle':
       switch (cmd.type) {

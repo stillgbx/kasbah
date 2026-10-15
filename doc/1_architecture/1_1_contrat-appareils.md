@@ -1,6 +1,6 @@
 # Contrat des appareils (packages/shared)
 
-> Dernière mise à jour : 2026-10-14
+> Dernière mise à jour : 2026-10-15
 > Sources : `packages/shared/src/devices/{kinds,descriptor,state,command,rules,color}.ts`, `packages/shared/src/scenes/scene.ts`, `packages/shared/src/devices/activity.ts`, `packages/shared/src/house/geo.ts`
 
 ## Principe
@@ -1045,3 +1045,20 @@ L'interface en tire une phrase (`apps/web/src/lib/mowerTask.ts`) : voir
   suppose plus « tonte en cours » sans durée : hors créneau, le robot reste à la station.
 
 Sources : `packages/shared/src/devices/{kinds,command,state}.ts`. Plugin : `../3_plugins/3_11_husqvarna-automower.md`.
+
+### Mise à jour 2026-10-15 — borne : annulation manuelle, mode lu et `ev_charger.set_mode`
+
+Trois ajouts au kind `ev_charger`, tous facultatifs :
+
+- état `manualOverride` : la borne obéit à une annulation manuelle (un démarrer / arrêter) jusqu'au
+  débranchement, plus à son mode ; `ev_charger.resume_mode` la lève ;
+- capacité `charge_mode` et état `chargeMode` : le mode choisi dans l'appli du fabricant
+  (`CHARGE_MODES` : `green`, `manual`, `scheduled`, `smart`) ;
+- commande `ev_charger.set_mode`, qui exige `charge_mode`, dont le `mode` se limite à
+  `SETTABLE_CHARGE_MODES` (`green`, `manual`) : les deux essayés sur la vraie borne. Le même mode sous
+  annulation revient à `resume_mode`, sans annulation il ne fait rien.
+
+Le MCP expose la commande sans code propre (`send_command` prend `commandSchema` pour schéma). La
+borne simulée ne déclare pas `charge_mode`. Détail et pièges : `../3_plugins/3_7_enphase.md`.
+
+Sources : `packages/shared/src/devices/{kinds,state,command}.ts` (+ `rules.test.ts`).

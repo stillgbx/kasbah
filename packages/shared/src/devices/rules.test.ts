@@ -67,6 +67,14 @@ describe('assertCommandAllowed', () => {
     catch (e) { expect((e as CommandNotAllowedError).code).toBe('UNSUPPORTED_COMMAND') }
     expect(() => assertCommandAllowed({ ...player, capabilities: ['playback', 'play_url'] }, { type: 'media_player.play_url', url: 'https://icecast.example/a.mp3' })).not.toThrow()
   })
+  it('choisir le mode d\'une borne : vert ou manuel seulement, et la capacité charge_mode exigée', () => {
+    expect(commandSchema.safeParse({ type: 'ev_charger.set_mode', mode: 'manual' }).success).toBe(true)
+    expect(commandSchema.safeParse({ type: 'ev_charger.set_mode', mode: 'scheduled' }).success).toBe(false)
+    const charger: DeviceDescriptor = { ...light, id: 'mock:e', externalId: 'e', kind: 'ev_charger', capabilities: ['charge_control'] }
+    try { assertCommandAllowed(charger, { type: 'ev_charger.set_mode', mode: 'green' }); expect.fail('should throw') }
+    catch (e) { expect((e as CommandNotAllowedError).code).toBe('UNSUPPORTED_COMMAND') }
+    expect(() => assertCommandAllowed({ ...charger, capabilities: ['charge_control', 'charge_mode'] }, { type: 'ev_charger.set_mode', mode: 'green' })).not.toThrow()
+  })
   it('every command type parses with its prefix as a known kind', () => {
     for (const opt of commandSchema.options) {
       const type = opt.shape.type.value

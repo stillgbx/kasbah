@@ -1,4 +1,4 @@
-import type { Command, DeviceDescriptor, PluginHealth } from '@kasbah/shared'
+import type { Command, DeviceDescriptor, PluginHealth, SettableChargeMode } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
@@ -10,7 +10,7 @@ import { sleep } from '../../core/clock'
 import { EnphaseClient } from './client'
 import {
   batteriesOf, chargerSummariesOf, chargersOf, enabledChargingMode, isBatteryAvailable, isPanelStale, toBatteryPatch, toChargerDescriptors,
-  toChargerPatch, toDailyPatch, toDescriptors, toPanelPatch, toSitePatch, SITE_ID, type EvCharger, type EvChargerSummary,
+  toChargerPatch, toDailyPatch, toDescriptors, toPanelPatch, toSitePatch, ENPHASE_CHARGE_MODE, SITE_ID, type EvCharger, type EvChargerSummary,
   type Inventory,
 } from './mapping'
 import {
@@ -77,6 +77,8 @@ const EV_FOLLOW_UP_MS = 45_000
 const MODE_RESTORE_GAP_MS = 5_000
 /** Le cloud met un moment à refléter le mode rendu : on ne recommence pas avant. */
 const MODE_RESTORE_RETRY_MS = 15 * 60_000
+/** Le mode de l'appli ne bouge qu'à la main : relu toutes les dix minutes, pas à chaque relecture. */
+const PREFERENCE_TTL_MS = 10 * 60_000
 
 /** Relevé brut : ce qu'il faut capturer une fois pour écrire les fixtures du mappage. */
 const RAW_PATHS = [
@@ -157,6 +159,8 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
   /** Mode à rendre après un passage en manuel dont le retour a échoué : on ne repasse pas par le manuel. */
   const owed = new Map<string, string>()
   const lastRestore = new Map<string, number>()
+  /** Mode de l'appli par borne, et quand il a été lu (`preferenceOf`). */
+  const preferences = new Map<string, { mode: string | undefined; at: number }>()
   let pollers: { stop(): void }[] = []
 
   const log = () => ctx!.logger
@@ -304,14 +308,40 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
     if (summary) chargerSummaries = chargerSummariesOf(summary)
   }
 
+  /**
+   * Le mode de l'appli ne change que par l'appli ou par Kasbah : on le relit toutes les dix minutes
+   * (`PREFERENCE_TTL_MS`), et tout de suite après l'avoir écrit, plutôt qu'à chaque relecture de la
+   * borne (une par minute). Une lecture ratée garde l'ancien.
+   */
+  async function preferenceOf(sn: string): Promise<string | undefined> {
+    const known = preferences.get(sn)
+    const now = ctx!.clock.now()
+    if (known && now - known.at < PREFERENCE_TTL_MS) return known.mode
+    const siteId = enlighten?.current?.siteId
+    if (!siteId || !enlighten) return known?.mode
+    try {
+      const mode = enabledChargingMode(await enlighten.getJson(modePath(siteId, sn), ctx!.signal))
+      preferences.set(sn, { mode, at: now })
+      return mode
+    } catch (err) {
+      log().debug({ err }, 'Enphase charger mode unread')
+      return known?.mode
+    }
+  }
+
+  function emitCharger(c: EvCharger): void {
+    const sum = chargerSummaries.find((s) => s.serialNumber === c.sn)
+    ctx!.emitState(c.sn, toChargerPatch(c, sum, preferences.get(c.sn)?.mode))
+  }
+
   async function pollChargers(): Promise<void> {
     await fetchChargers()
     publishDevices()
     for (const c of chargers ?? []) {
       if (!c.connected) ctx!.setAvailable(c.sn, false)
       else {
-        const sum = chargerSummaries.find((s) => s.serialNumber === c.sn)
-        ctx!.emitState(c.sn, toChargerPatch(c, sum))
+        await preferenceOf(c.sn)
+        emitCharger(c)
       }
     }
     try { await restoreModes() }
@@ -356,6 +386,7 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
   async function leaveOverride(siteId: string | number, sn: string, known: boolean): Promise<boolean> {
     const path = modePath(siteId, sn)
     const preferred = enabledChargingMode(await enlighten!.getJson(path, ctx!.signal))
+    preferences.set(sn, { mode: preferred, at: ctx!.clock.now() })
     if (!preferred || preferred === 'MANUAL_CHARGING') { forced.delete(sn); return false }
     if (!known && preferred !== 'GREEN_CHARGING') return false
     await enlighten!.send('PUT', path, { mode: 'MANUAL_CHARGING' }, ctx!.signal)
@@ -395,6 +426,47 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
   }
 
   /**
+   * `ev_charger.set_mode` : le mode de l'appli, vert ou manuel. Réécrire le mode en cours est refusé
+   * (`iqevc_sch_10028`, « already enabled ») : le même mode sous annulation, c'est `resumeMode` ;
+   * sans annulation, rien. Un autre mode : un seul PUT, qui lève aussi une annulation (c'est le
+   * second temps de `resumeMode`, essayé le 2026-10-02). Ce que Kasbah devait rendre ne l'est plus :
+   * le choix de l'utilisateur passe avant.
+   */
+  async function setMode(sn: string, mode: SettableChargeMode): Promise<void> {
+    if (!chargersOn() || !enlighten?.hasSession) throw new PluginError('NEEDS_PAIRING', 'no Enlighten session: pair with the Enphase account')
+    const siteId = await ensureSiteId()
+    if (!siteId) throw new PluginError('NEEDS_PAIRING', 'no Enlighten site')
+    const charger = chargers?.find((c) => c.sn === sn)
+    if (!charger) throw new PluginError('DEVICE_UNAVAILABLE', `unknown Enphase charger ${sn}`)
+    const target = ENPHASE_CHARGE_MODE[mode]
+    const path = modePath(siteId, sn)
+    const current = enabledChargingMode(await enlighten.getJson(path, ctx!.signal))
+    if (current === target) {
+      if (charger.manualOverride && target !== 'MANUAL_CHARGING') await resumeMode(sn)
+      return
+    }
+    await enlighten.send('PUT', path, { mode: target }, ctx!.signal)
+    owed.delete(sn)
+    forced.delete(sn)
+    lastRestore.delete(sn)
+    preferences.set(sn, { mode: target, at: ctx!.clock.now() })
+    // la borne ne suit plus une annulation : un autre mode la lève
+    emitCharger({ ...charger, manualOverride: false })
+    log().info({ mode: target }, 'Enphase charger mode set')
+    followUp()
+  }
+
+  /** Relire la borne `EV_FOLLOW_UP_MS` après une commande : le courant met de 20 s à 1 min à venir. */
+  function followUp(): void {
+    void (async () => {
+      await sleep(ctx!.clock, EV_FOLLOW_UP_MS, ctx!.signal)
+      if (ctx!.signal.aborted) return
+      try { await pollChargers() }
+      catch (err) { log().debug({ err }, 'Enphase charger follow-up read failed') }
+    })()
+  }
+
+  /**
    * Démarrer ou arrêter la borne. Essayé sur la vraie borne le 2026-10-01 : en charge verte, l'un
    * comme l'autre pose une ANNULATION MANUELLE « jusqu'au prochain débranchement » (le `mode` de
    * l'état passe de 1 à 0, la préférence reste `GREEN_CHARGING`), puis la borne reprend seule son
@@ -423,12 +495,7 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
     forced.add(sn)
     lastRestore.delete(sn)
     log().info({ start }, start ? 'Enphase charger forced to charge' : 'Enphase charger stopped')
-    void (async () => {
-      await sleep(ctx!.clock, EV_FOLLOW_UP_MS, ctx!.signal)
-      if (ctx!.signal.aborted) return
-      try { await pollChargers() }
-      catch (err) { log().debug({ err }, 'Enphase charger follow-up read failed') }
-    })()
+    followUp()
   }
 
   return {
@@ -523,6 +590,10 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
         await resumeMode(externalId)
         return
       }
+      if (command.type === 'ev_charger.set_mode') {
+        await setMode(externalId, command.mode)
+        return
+      }
       throw new PluginError('UNSUPPORTED_COMMAND', `Enphase devices are read-only (${command.type})`)
     },
 
@@ -535,6 +606,7 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
       inventory = null
       chargers = null
       chargerSummaries = []
+      preferences.clear()
       enlighten = null
     },
 

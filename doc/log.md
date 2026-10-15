@@ -7,6 +7,20 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-15] update | Borne Enphase : choisir le mode (charge verte ou manuel), sur la carte et par le MCP
+
+**Déclencheur** : « si on sait modifier le mode de la borne, pourquoi ne pas le proposer dans l'app
+directement ? aussi via le MCP ? » — vert et manuel seulement, les deux éprouvés.
+
+**Pages modifiées** :
+- `3_plugins/3_7_enphase.md` - `setMode` (un seul PUT, ou `resumeMode` pour le même mode sous
+  annulation), lecture du mode toutes les dix minutes, pas d'annulation publiée en mode manuel,
+  boutons de la carte, ce qui n'est pas encore vu sur la vraie borne.
+- `1_architecture/1_1_contrat-appareils.md` - `manualOverride`, capacité `charge_mode`, état
+  `chargeMode`, commande `ev_charger.set_mode`.
+
+**Index** : catalogues `1_architecture` et `3_plugins` (dates), index.md régénéré.
+
 ## [2026-10-15] update | Borne Enphase : annulation manuelle visible et levée depuis la carte
 
 **Déclencheur** : « pourquoi la R5 ne charge pas tout en gardant la borne en charge verte ? » —

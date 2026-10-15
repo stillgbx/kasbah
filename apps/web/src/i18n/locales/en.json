@@ -291,7 +291,12 @@
     "stopUntilUnplug": "Stopping blocks the charger until the next unplug: green charging will not resume with the sun.",
     "manualOverride": "Manual override until unplugged",
     "manualOverrideHint": "The charger no longer follows its mode (green, scheduled): a manual start or stop suspended it until the next unplug. Resume gives it back.",
-    "resumeMode": "Resume"
+    "resumeMode": "Resume",
+    "mode": { "green": "Green", "manual": "Manual" },
+    "modeHint": {
+      "green": "Charges on solar surplus only: it stops and resumes with the sun.",
+      "manual": "Charges as soon as it is plugged in, from the grid if needed."
+    }
   },
   "vehicle": {
     "soc": "Charge", "range": "Range", "chargeLimit": "Charge limit", "pluggedIn": "Plugged in", "unplugged": "Unplugged",

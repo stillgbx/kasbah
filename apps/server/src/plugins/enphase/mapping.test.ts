@@ -202,9 +202,9 @@ describe('borne IQ EV Charger 2 (capture Enlighten)', () => {
     expect(merged).toMatchObject({ kind: 'ev_charger', status: 'connected', sessionWh: 12363 })
   })
 
-  it('déclare un ev_charger qu\'on démarre et arrête (essayé sur la vraie borne le 2026-10-01)', () => {
+  it('déclare un ev_charger qu\'on démarre, arrête et dont on choisit le mode (vraie borne, 2026-10-01 et 02)', () => {
     const [d] = toChargerDescriptors(chargers, summaries)
-    expect(d).toMatchObject({ id: 'enphase:482000000001', kind: 'ev_charger', capabilities: ['charge_control'], meta: { model: 'IQ-EVSE-EU-3032' } })
+    expect(d).toMatchObject({ id: 'enphase:482000000001', kind: 'ev_charger', capabilities: ['charge_control', 'charge_mode'], meta: { model: 'IQ-EVSE-EU-3032' } })
     expect(deviceDescriptorSchema.parse(d)).toEqual(d)
   })
 

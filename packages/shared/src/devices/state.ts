@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { AQI_LEVELS, CLIMATE_MODES, FAN_DIRECTIONS, PET_PUMP_MODES, POLLEN_TYPES, WEATHER_CONDITIONS, type DeviceKind } from './kinds'
+import { AQI_LEVELS, CHARGE_MODES, CLIMATE_MODES, FAN_DIRECTIONS, PET_PUMP_MODES, POLLEN_TYPES, WEATHER_CONDITIONS, type DeviceKind } from './kinds'
 
 // État courant d'un appareil, discriminé par `kind`. `updatedAt` est posé par le serveur
 // (jamais par un plugin) ; `available:false` conserve les dernières valeurs connues
@@ -231,6 +231,8 @@ export const evChargerStateSchema = z.object({
    * `ev_charger.resume_mode` la lève. Absent = la borne ne le dit pas.
    */
   manualOverride: z.boolean().optional(),
+  /** Le mode choisi (capacité `charge_mode`). Absent = inconnu. */
+  chargeMode: z.enum(CHARGE_MODES).optional(),
 })
 
 /**

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CommandInput, DeviceDescriptor, StateFor } from '@kasbah/shared'
+import { SETTABLE_CHARGE_MODES, type CommandInput, type DeviceDescriptor, type StateFor } from '@kasbah/shared'
 import { formatEnergy, formatPower } from '../../lib/format'
 
 defineProps<{ descriptor: DeviceDescriptor; state: StateFor<'ev_charger'>; pending?: boolean; disabled?: boolean }>()
@@ -19,6 +19,12 @@ const emit = defineEmits<{ command: [cmd: CommandInput] }>()
         <v-icon icon="alert" size="16" />{{ $t('charger.safeLimit') }}
       </span>
       <span v-else-if="state.maxCurrentA">{{ $t('charger.maxCurrent') }} · {{ state.maxCurrentA }} A</span>
+    </div>
+    <!-- le mode de la borne, comme dans l'appli du fabricant : ni programmé ni intelligent, jamais essayés -->
+    <div v-if="descriptor.capabilities.includes('charge_mode')" class="d-flex ga-2 mb-3">
+      <v-btn v-for="m in SETTABLE_CHARGE_MODES" :key="m" class="flex-grow-1" height="48" variant="tonal"
+             :color="state.chargeMode === m ? 'primary' : undefined" :disabled="disabled" :title="$t(`charger.modeHint.${m}`)"
+             @click="emit('command', { type: 'ev_charger.set_mode', mode: m })">{{ $t(`charger.mode.${m}`) }}</v-btn>
     </div>
     <div v-if="descriptor.capabilities.includes('charge_control')" class="d-flex ga-2 mb-3">
       <v-btn class="flex-grow-1" height="56" variant="tonal" color="success" prepend-icon="bolt" :disabled="disabled || state.status === 'disconnected'"

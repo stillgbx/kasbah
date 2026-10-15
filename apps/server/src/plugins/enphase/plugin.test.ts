@@ -81,6 +81,8 @@ function fakeCloud(minted = token(365)) {
     if (url.includes('/ev_chargers/status') && url.includes('/api/v2/')) return response(JSON.stringify({ data: {} }))
     if (url.includes('/ev_chargers/status')) return response(JSON.stringify(EVSE_STATUS))
     if (url.includes('/ev_chargers/summary')) return response(JSON.stringify(EVSE_SUMMARY))
+    if (url.includes('/charging-mode/') && init?.method === 'PUT') return response('{"meta":{},"data":{"data":null,"error":{}},"error":{}}')
+    if (url.includes('/charging-mode/')) return response(JSON.stringify(EVSE_PREFERENCE))
     return response(minted)
   })
   return { fetchImpl, calls }
@@ -421,12 +423,12 @@ describe('appareils', () => {
     const charger = devices.find((d) => d.kind === 'ev_charger')
     expect(charger).toMatchObject({
       id: 'enphase:482000000001', kind: 'ev_charger', name: 'Borne Enphase',
-      capabilities: ['charge_control'], meta: { manufacturer: 'Enphase', model: 'IQ-EVSE-EU-3032' },
+      capabilities: ['charge_control', 'charge_mode'], meta: { manufacturer: 'Enphase', model: 'IQ-EVSE-EU-3032' },
     })
     await plugin.start()
     await settle()
     const state = (ctx.emitState as ReturnType<typeof vi.fn>).mock.calls.find(([id]) => id === '482000000001')
-    expect(state?.[1]).toMatchObject({ kind: 'ev_charger', status: 'connected', powerW: 0, sessionWh: 12363, maxCurrentA: 24 })
+    expect(state?.[1]).toMatchObject({ kind: 'ev_charger', status: 'connected', powerW: 0, sessionWh: 12363, maxCurrentA: 24, chargeMode: 'green' })
     await plugin.stop()
   })
 
@@ -585,6 +587,66 @@ describe('appareils', () => {
     await drain(manual.clock, 5_000)
     expect(modeWrites(cloud)).toEqual([])
     await manual.plugin.stop()
+  })
+
+  const lastPatch = (ctx: { emitState: unknown }) =>
+    (ctx.emitState as ReturnType<typeof vi.fn>).mock.calls.filter(([id]) => id === '482000000001').at(-1)?.[1]
+
+  it('choisir le manuel depuis le vert : un seul PUT, le mode publié suit sans attendre la relecture', async () => {
+    const minted = token(365)
+    const { plugin: p, cloud, ctx } = await pollWithOverride(fakeCloud(minted), minted)
+    await p.execute('482000000001', { type: 'ev_charger.set_mode', mode: 'manual' })
+    expect(modeWrites(cloud)).toEqual(['{"mode":"MANUAL_CHARGING"}'])
+    expect(lastPatch(ctx)).toMatchObject({ chargeMode: 'manual', manualOverride: false })
+    await p.stop()
+  })
+
+  it('choisir le mode en cours ne réécrit rien (le cloud le refuse) ; sous annulation, c\'est « reprendre »', async () => {
+    const minted = token(365)
+    const same = await pollWithOverride(fakeCloud(minted), minted) // fixture : charge verte, `mode` 1
+    await same.plugin.execute('482000000001', { type: 'ev_charger.set_mode', mode: 'green' })
+    expect(modeWrites(same.cloud)).toEqual([])
+    await same.plugin.stop()
+    const cloud = overriddenCloud(minted, { pluggedIn: true })
+    const { plugin: p, clock } = await pollWithOverride(cloud, minted)
+    await p.execute('482000000001', { type: 'ev_charger.set_mode', mode: 'green' })
+    await drain(clock, 5_000)
+    expect(modeWrites(cloud)).toEqual(['{"mode":"MANUAL_CHARGING"}', '{"mode":"GREEN_CHARGING"}'])
+    await p.stop()
+  })
+
+  it('revenir au vert depuis le manuel : un seul PUT, sans repasser par le manuel', async () => {
+    const minted = token(365)
+    const cloud = overriddenCloud(minted, { pluggedIn: true, preference: 'MANUAL_CHARGING' })
+    const { plugin: p, clock } = await pollWithOverride(cloud, minted)
+    await p.execute('482000000001', { type: 'ev_charger.set_mode', mode: 'green' })
+    await drain(clock, 5_000)
+    expect(modeWrites(cloud)).toEqual(['{"mode":"GREEN_CHARGING"}'])
+    await p.stop()
+  })
+
+  it('en mode manuel, `mode` 0 n\'est pas une annulation à lever : rien à « reprendre »', async () => {
+    const minted = token(365)
+    const cloud = overriddenCloud(minted, { pluggedIn: true, preference: 'MANUAL_CHARGING' })
+    const { plugin: p, ctx } = await pollWithOverride(cloud, minted)
+    expect(lastPatch(ctx)).toMatchObject({ chargeMode: 'manual', manualOverride: false })
+    await p.stop()
+    const green = await pollWithOverride(overriddenCloud(minted, { pluggedIn: true }), minted)
+    expect(lastPatch(green.ctx)).toMatchObject({ chargeMode: 'green', manualOverride: true })
+    await green.plugin.stop()
+  })
+
+  it('le mode se relit au plus toutes les dix minutes, pas à chaque relecture de la borne', async () => {
+    const minted = token(365)
+    const { plugin: p, cloud, clock } = await pollWithOverride(fakeCloud(minted), minted)
+    const reads = () => cloud.calls.filter((c) => c.url.includes('/charging-mode/') && c.method === 'GET').length
+    const first = reads()
+    expect(first).toBe(1)
+    await drain(clock, 60_000)
+    expect(reads()).toBe(first)
+    await drain(clock, 10 * 60_000)
+    expect(reads()).toBe(first + 1)
+    await p.stop()
   })
 
   it('le sous-item décoché retire la borne sans toucher au solaire', async () => {

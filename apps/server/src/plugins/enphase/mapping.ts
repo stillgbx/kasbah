@@ -1,4 +1,4 @@
-import type { Capability, DeviceDescriptor, StatePatch } from '@kasbah/shared'
+import type { Capability, ChargeMode, DeviceDescriptor, SettableChargeMode, StatePatch } from '@kasbah/shared'
 import {
   ENCHARGE, type EnsembleDevice, type EnsemblePower, type Inverter, type Livedata, type ProductionEntry, type ProductionReport,
 } from './types'
@@ -263,6 +263,13 @@ export function chargersOf(json: unknown): EvCharger[] {
   return out
 }
 
+/** Le mode de l'appli, dans le vocabulaire du contrat (`chargeMode`). */
+const CHARGE_MODE_OF: Record<string, ChargeMode> = {
+  GREEN_CHARGING: 'green', MANUAL_CHARGING: 'manual', SCHEDULED_CHARGING: 'scheduled', SMART_CHARGING: 'smart',
+}
+/** Et retour, pour les modes qu'on sait choisir (`ev_charger.set_mode`). */
+export const ENPHASE_CHARGE_MODE: Record<SettableChargeMode, string> = { green: 'GREEN_CHARGING', manual: 'MANUAL_CHARGING' }
+
 /**
  * Le mode choisi dans l'appli, d'après `…/charging-mode/{site}/{sn}/preference` : celui des `modes`
  * marqué `enabled` (`GREEN_CHARGING`, `SCHEDULED_CHARGING`, `MANUAL_CHARGING`, `SMART_CHARGING`).
@@ -309,8 +316,9 @@ export function toChargerDescriptors(chargers: EvCharger[], summaries: EvCharger
     return descriptor(
       c.sn, 'ev_charger', c.name || `Borne ${shortSerial(c.sn)}`,
       // démarrer / arrêter, essayés sur la vraie borne le 2026-10-01 ; l'intensité ne se règle pas
-      // encore (`charge_current`) : Démarrer prend celle par défaut de l'appli
-      ['charge_control'],
+      // encore (`charge_current`) : Démarrer prend celle par défaut de l'appli. Le mode (vert,
+      // manuel) se choisit comme dans l'appli : les deux PUT essayés sur la vraie borne le 2026-10-02
+      ['charge_control', 'charge_mode'],
       // arrêter pose une annulation manuelle « jusqu'au prochain débranchement » : plus de charge verte
       { manufacturer: 'Enphase', ...(sum?.modelName ? { model: sum.modelName } : {}), evCharger: { stopUntilUnplug: true } },
     )
@@ -322,8 +330,11 @@ export function toChargerDescriptors(chargers: EvCharger[], summaries: EvCharger
  * `INSUFFICIENT_SOLAR` (charge verte à l'arrêt faute de soleil). Ça reste `connected`, pas une
  * panne. Aucun watt dans cette trame : `powerW` vaut 0 hors charge, et 0 aussi EN charge tant
  * qu'une capture en cours n'a pas montré le champ — on n'invente pas 7 kW.
+ *
+ * `preference` : le mode de l'appli (`enabledChargingMode`), lu à part. En mode MANUEL, `mode` 0
+ * n'est pas une annulation à lever : il n'y a pas d'autre mode à rendre (`resumeMode` n'y fait rien).
  */
-export function toChargerPatch(charger: EvCharger, summary?: EvChargerSummary): StatePatch {
+export function toChargerPatch(charger: EvCharger, summary?: EvChargerSummary, preference?: string): StatePatch {
   const status = charger.faulted ? 'error'
     : charger.charging ? 'charging'
     : charger.pluggedIn ? 'connected'
@@ -336,6 +347,8 @@ export function toChargerPatch(charger: EvCharger, summary?: EvChargerSummary): 
     sessionWh: charger.sessionWh,
     ...(maxCurrentA !== undefined ? { maxCurrentA: Math.round(maxCurrentA) } : {}),
     ...(charger.safeLimit !== undefined ? { safeLimit: charger.safeLimit } : {}),
-    ...(charger.manualOverride !== undefined ? { manualOverride: charger.manualOverride } : {}),
+    ...(charger.manualOverride !== undefined
+      ? { manualOverride: charger.manualOverride && preference !== 'MANUAL_CHARGING' } : {}),
+    ...(preference && CHARGE_MODE_OF[preference] ? { chargeMode: CHARGE_MODE_OF[preference] } : {}),
   } as StatePatch
 }

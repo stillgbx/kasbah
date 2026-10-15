@@ -375,3 +375,47 @@ la fenêtre du réveil.
 Sources : `packages/shared/src/devices/state.ts`, `apps/server/src/plugins/enphase/mapping.ts`
 (test `mapping.test.ts`), `apps/web/src/components/controls/EvChargerControl.vue`, clés
 `charger.manualOverride` / `manualOverrideHint` / `resumeMode` des locales.
+
+### Mise à jour 2026-10-15 (bis) — le mode de la borne se CHOISIT : charge verte ou manuel
+
+Demande de l'utilisateur : puisque Kasbah sait écrire la préférence de l'appli (passage en manuel
+puis retour, section du 2026-10-02), la proposer directement, sur la carte et par le MCP. **Vert et
+manuel seulement**, les deux seuls PUT essayés sur la vraie borne ; programmé et intelligent
+dépendent de réglages de l'appli (horaires, profil) que Kasbah ne lit pas.
+
+**Le contrat** (`packages/shared/src/devices/`) : capacité `charge_mode` (`kinds.ts`), état
+`chargeMode` (`green` / `manual` / `scheduled` / `smart`, le mode de l'appli tel qu'il est lu) et
+commande `ev_charger.set_mode` dont le `mode` n'accepte que `SETTABLE_CHARGE_MODES` (`green`,
+`manual`). Le MCP n'a rien eu à faire : `send_command` prend `commandSchema` pour schéma d'entrée,
+la commande et ses deux valeurs y sont donc d'office.
+
+**Le plugin** (`setMode`, `index.ts`) :
+
+- autre mode que celui en cours : un seul PUT de la préférence. Il lève aussi une annulation : c'est
+  le second temps de `resumeMode`. Ce que Kasbah devait rendre (`owed`, `forced`) est oublié, le
+  choix de l'utilisateur passe avant ;
+- même mode sous annulation : `resumeMode` (manuel, puis retour) ; même mode sans annulation : rien,
+  le cloud refuserait (`iqevc_sch_10028`).
+
+**La lecture du mode** (`preferenceOf`) : relue au plus toutes les dix minutes
+(`PREFERENCE_TTL_MS`), et aussitôt après une écriture, au lieu d'une fois par relecture de la borne
+(chaque minute) : elle ne change qu'à la main. Une lecture ratée garde l'ancienne.
+
+**En mode manuel, `mode` 0 n'est plus publié comme annulation** (`toChargerPatch`, paramètre
+`preference`) : il n'y aurait rien à « reprendre », `resumeMode` ne fait rien en manuel. Déduit de la
+séquence du 2026-10-15 (`mode` 0 relu pendant le passage en manuel), pas encore observé en mode manuel
+tenu.
+
+**L'interface** (`EvChargerControl.vue`) : deux boutons « Charge verte » / « Manuel » au-dessus de
+Démarrer / Arrêter, celui du mode en cours en couleur primaire, une info-bulle par mode (le manuel
+charge sur le réseau s'il le faut). En programmé ou intelligent, aucun n'est allumé. Mise à jour
+optimiste : `chargeMode` et plus d'annulation (`optimistic.ts`). Mesuré sur la borne simulée : rien
+ne bouge au changement de mode, pas de débordement en fr / en aux zooms 1 / 1,25 / 1,5.
+
+**Pas encore vu sur la vraie borne** : un `set_mode` isolé. Les deux PUT l'ont été, enchaînés, le
+2026-10-02 et le 2026-10-15.
+
+Sources : `packages/shared/src/devices/{kinds,state,command}.ts` (test `rules.test.ts`),
+`apps/server/src/plugins/enphase/{index,mapping}.ts` (tests `plugin.test.ts`, `mapping.test.ts`),
+`apps/web/src/components/controls/EvChargerControl.vue`, `apps/web/src/lib/optimistic.ts`,
+`docs/plugins/enphase.md`.

@@ -291,7 +291,12 @@
     "stopUntilUnplug": "Arrêter bloque la borne jusqu'au prochain débranchement : la charge verte ne reprendra pas avec le soleil.",
     "manualOverride": "Annulation manuelle jusqu'au débranchement",
     "manualOverrideHint": "La borne ne suit plus son mode (charge verte, programmée) : un démarrage ou un arrêt manuel l'a suspendu jusqu'au débranchement. Reprendre le lui rend.",
-    "resumeMode": "Reprendre"
+    "resumeMode": "Reprendre",
+    "mode": { "green": "Charge verte", "manual": "Manuel" },
+    "modeHint": {
+      "green": "Charge sur le surplus solaire seul : elle s'arrête et reprend avec le soleil.",
+      "manual": "Charge dès le branchement, sur le réseau s'il le faut."
+    }
   },
   "vehicle": {
     "soc": "Charge", "range": "Autonomie", "chargeLimit": "Limite de charge", "pluggedIn": "Branché", "unplugged": "Débranché",
