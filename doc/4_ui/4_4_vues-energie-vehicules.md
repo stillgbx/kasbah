@@ -1,6 +1,6 @@
 # Vues Énergie et Véhicules
 
-> Dernière mise à jour : 2026-10-13
+> Dernière mise à jour : 2026-10-15
 > Sources : sections reprises telles quelles de `4_1_navigation-et-panneaux.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre la vue Énergie (schéma de flux, onduleurs, champs de panneaux, tuiles), la vue Véhicules et la carte d'un véhicule (charge, limite, carte, réveil, climatisation, logiciel). Elle est née du découpage de
@@ -929,3 +929,38 @@ dans la preview : rien de coupé ni de débordant en fr et en, zooms 1 / 1,25 / 
 bloc climatisation en clair et en sombre.
 
 Sources : `apps/web/src/components/controls/VehicleCard.vue`.
+
+### Mise à jour 2026-10-15 — vue Énergie : les commandes de la borne sur sa ligne
+
+Demande de l'utilisateur : la borne se pilote aussi depuis sa carte de pièce dans la vue Énergie, pas
+seulement depuis son panneau de la vue 3D.
+
+**Un composant, deux rendus** (`components/controls/EvChargerCommands.vue`, prop `variant`). Les
+commandes (mode, démarrer / arrêter, annulation, intensité) sortent d'`EvChargerControl`, qui garde
+son en-tête d'état et pose le rendu `panel` (défaut) : grands boutons. La ligne de la borne (slot
+`control` de `RoomBands`, `views/EnergyView.vue`) pose le rendu `row`. Premier essai avec les
+boutons du panneau tels quels (48 et 56 px de haut, aide en trois lignes) : la carte de pièce en
+était écrasée, et l'utilisateur a posé la règle — voir `4_1_navigation-et-panneaux.md`.
+
+**Le rendu `row`**, dans le vocabulaire des lignes des autres vues (repris de `HeatingControl`) :
+rangée à part (`grid-column: 1 / -1`), touches de 36 px à coins arrondis, modes en mots (`key--text`,
+`data-on` sur le mode en cours), démarrer / arrêter en touches à icône (`bolt`, `boltOff`) au bout,
+l'aide « arrêter bloque la borne… » devenue l'info-bulle de la touche d'arrêt, l'intensité (borne qui
+a `charge_current`) en curseur compact sur sa propre rangée.
+
+**L'annulation, sans touche de plus.** Une touche « Reprendre » à place réservée renvoyait démarrer /
+arrêter sur une seconde rangée (mesuré : 331 px de ligne). Sous annulation, c'est donc la touche du
+mode EN COURS qui passe dans la couleur d'alerte du thème (`data-on="warn"`, info-bulle qui
+l'explique), et la toucher rend le mode : `ev_charger.set_mode` du même mode sous annulation vaut
+`resume_mode` (`../3_plugins/3_7_enphase.md`). La ligne d'état le dit en mots, au bout (slot
+`status-after`, « annulation manuelle » en couleur d'alerte). Limite : une borne en mode programmé
+ou intelligent sous annulation n'a pas de touche à ce rôle sur la ligne ; le panneau garde
+« Reprendre ».
+
+Mesuré sur la borne simulée (vue Énergie, 1280 px) : une seule rangée de touches, rien ne bouge
+quand l'annulation apparaît, pas de débordement ni de libellé coupé en fr et en aux zooms 1 / 1,25 /
+1,5, couleur d'alerte lisible en clair et en sombre. La borne simulée réécrit son état à chaque pas :
+l'annulation et le mode ont été maintenus par une sonde le temps des mesures.
+
+Sources : `apps/web/src/components/controls/{EvChargerCommands,EvChargerControl}.vue`,
+`apps/web/src/views/EnergyView.vue`, `apps/web/src/i18n/locales/{fr,en}.json`.

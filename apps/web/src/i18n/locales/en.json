@@ -292,6 +292,8 @@
     "manualOverride": "Manual override until unplugged",
     "manualOverrideHint": "The charger no longer follows its mode (green, scheduled): a manual start or stop suspended it until the next unplug. Resume gives it back.",
     "resumeMode": "Resume",
+    "manualOverrideShort": "manual override",
+    "overrideKeyHint": "Manual override until unplugged: the charger is not following this mode. Tap to give it back.",
     "mode": { "green": "Green", "manual": "Manual" },
     "modeHint": {
       "green": "Charges on solar surplus only: it stops and resumes with the sun.",

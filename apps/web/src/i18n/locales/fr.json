@@ -292,6 +292,8 @@
     "manualOverride": "Annulation manuelle jusqu'au débranchement",
     "manualOverrideHint": "La borne ne suit plus son mode (charge verte, programmée) : un démarrage ou un arrêt manuel l'a suspendu jusqu'au débranchement. Reprendre le lui rend.",
     "resumeMode": "Reprendre",
+    "manualOverrideShort": "annulation manuelle",
+    "overrideKeyHint": "Annulation manuelle jusqu'au débranchement : la borne ne suit plus ce mode. Toucher pour le lui rendre.",
     "mode": { "green": "Charge verte", "manual": "Manuel" },
     "modeHint": {
       "green": "Charge sur le surplus solaire seul : elle s'arrête et reprend avec le soleil.",

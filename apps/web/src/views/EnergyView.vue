@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { EnergyHistoryPoint, StateFor } from '@kasbah/shared'
+import type { CommandInput, DeviceEntry, EnergyHistoryPoint, StateFor } from '@kasbah/shared'
 import { getTransport } from '../api'
 import PageHeader from '../components/layout/PageHeader.vue'
 import RoomBands from '../components/devices/RoomBands.vue'
+import EvChargerCommands from '../components/controls/EvChargerCommands.vue'
 import EnergyFlow from '../components/energy/EnergyFlow.vue'
 import InverterFields from '../components/energy/InverterFields.vue'
 import { useHomeSummary } from '../composables/useHomeSummary'
@@ -50,6 +51,7 @@ const bars = computed(() => {
     return { h, value: p?.productionW ?? 0, pct: p ? Math.max(2, (p.productionW / max) * 100) : 2, past }
   })
 })
+const send = (deviceId: string, cmd: CommandInput) => devices.sendCommand(deviceId, cmd)
 const todayWh = computed(() => e.value?.todayProductionWh ?? points.value.reduce((s, p) => s + p.productionW, 0))
 </script>
 
@@ -94,7 +96,20 @@ const todayWh = computed(() => e.value?.todayProductionWh ?? points.value.reduce
       <!-- Les appareils, comme dans les vues Lumières et Ouvrants : c'est ici qu'on place le site,
            les batteries et la borne. Les panneaux en sont absents volontairement — un module ne se
            place pas seul, il suit son champ (`arrays` de house.json). -->
-      <RoomBands :kind="['energy', 'ev_charger']" />
+      <RoomBands :kind="['energy', 'ev_charger']">
+        <!-- l'annulation manuelle de la borne en mots, au bout de sa ligne d'état (le statut défile à gauche) -->
+        <template #status-after="{ entry }">
+          <span v-if="((entry as DeviceEntry).state as StateFor<'ev_charger'>).manualOverride" class="override">{{ $t('charger.manualOverrideShort') }}</span>
+        </template>
+        <!-- les commandes de la borne sur leur propre rangée, sous son statut, comme le chauffage :
+             les mêmes que dans son panneau (mode, démarrer / arrêter, annulation), en touches de ligne -->
+        <template #control="{ entry }">
+          <EvChargerCommands v-if="(entry as DeviceEntry).state.kind === 'ev_charger'" variant="row"
+                             :descriptor="(entry as DeviceEntry).descriptor" :state="(entry as DeviceEntry).state as StateFor<'ev_charger'>"
+                             :disabled="!(entry as DeviceEntry).state.available"
+                             @command="(cmd: CommandInput) => send((entry as DeviceEntry).descriptor.id, cmd)" />
+        </template>
+      </RoomBands>
     </div>
   </div>
 </template>
@@ -122,6 +137,7 @@ const todayWh = computed(() => e.value?.todayProductionWh ?? points.value.reduce
 .bar__fill--past { background: var(--accent); }
 .chart__axis { display: flex; justify-content: space-between; font-size: 12px; margin-top: 8px; }
 .chart__hint { font-size: 12px; margin-top: 8px; }
+.override { flex: 0 0 auto; color: rgb(var(--v-theme-warning)); }
 /* Sous ~432 px de fenêtre, titre et total ne tiennent plus sur la même ligne : le total se repliait
    en deux lignes ou une SELON la production du jour, et l'en-tête grandissait donc tout seul au fil
    des heures. Ici il prend sa propre ligne, et la hauteur ne dépend plus de la valeur. */

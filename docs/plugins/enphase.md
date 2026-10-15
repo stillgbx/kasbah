@@ -20,8 +20,8 @@
 - **Borne IQ EV Charger 2** : état (branchée, en charge), énergie de la session, **Lancer la charge** / **Arrêter la charge**. L'intensité ne se règle pas : le démarrage reprend celle de l'appli Enphase.
 - La production n'est jamais affichée sous zéro : la veille des micro-onduleurs, la nuit, ne compte pas comme une consommation.
 - **Retour au mode d'avant** : un arrêt ou un forçage depuis Kasbah met la borne en « annulation manuelle ». Quand la voiture atteint sa limite ou est débranchée, Kasbah remet le mode choisi dans l'appli (par exemple la charge verte).
-- **Mode de la borne** : **Charge verte** (sur le surplus solaire seul) ou **Manuel** (dès le branchement, sur le réseau s'il le faut), au choix sur la carte de la borne ou par l'assistant (MCP). Les modes programmé et intelligent se règlent dans l'appli Enphase ; aucun des deux boutons n'est alors allumé.
-- **Annulation manuelle visible** : quand la borne ne suit plus son mode jusqu'au débranchement, sa carte le dit et **Reprendre** le lui rend.
+- **Mode de la borne** : **Charge verte** (sur le surplus solaire seul) ou **Manuel** (dès le branchement, sur le réseau s'il le faut), au choix depuis le panneau de la borne (vue Maison), sa ligne dans la vue Énergie, ou l'assistant (MCP). Les modes programmé et intelligent se règlent dans l'appli Enphase ; aucun des deux boutons n'est alors allumé.
+- **Annulation manuelle visible** : quand la borne ne suit plus son mode jusqu'au débranchement, son panneau le dit et **Reprendre** le lui rend ; dans la vue Énergie, sa ligne affiche « annulation manuelle » et la touche du mode en cours, en orange, le lui rend.
 
 ## Connexion
 

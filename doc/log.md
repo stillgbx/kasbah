@@ -7,6 +7,19 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-15] update | Vue Énergie : les commandes de la borne sur sa ligne, en rendu de ligne
+
+**Déclencheur** : « il faudrait ajouter les commandes de la borne sur sa carte dans la vue énergie »,
+puis la règle « si un composant [est] partagé alors il doit avoir [un] mode de rendu ».
+
+**Pages modifiées** :
+- `4_ui/4_4_vues-energie-vehicules.md` - `EvChargerCommands` (rendus `panel` / `row`), touches de
+  ligne, annulation portée par la touche du mode en cours et dite sur la ligne d'état, mesures.
+- `4_ui/4_1_navigation-et-panneaux.md` - règle : un contrôle partagé panneau / carte de vue a un rendu
+  par contexte.
+
+**Index** : catalogue `4_ui` (deux dates), index.md régénéré.
+
 ## [2026-10-15] update | Borne Enphase : choisir le mode (charge verte ou manuel), sur la carte et par le MCP
 
 **Déclencheur** : « si on sait modifier le mode de la borne, pourquoi ne pas le proposer dans l'app
