@@ -422,3 +422,28 @@ même diffusion. Rien ne change côté moteur. La modification ne remplace que l
 suppression reste réservée à la vue. Détail : `1_7_serveur-mcp.md`, mise à jour du 2026-10-15.
 
 Sources : `apps/server/src/mcp/server.ts`.
+
+### Mise à jour 2026-10-15 (2) — « écrite par l'assistant, à relire »
+
+Une règle créée ou modifiée par le MCP porte `byAssistant: { user?, at }` (`automation.ts`), posé par le
+serveur et absent du corps accepté. `AutomationEngine.upsert(id, body, byAssistant?)` le pose ; une
+écriture depuis l'app (route sans le secret interne) l'efface ; `setEnabled` le garde (basculer n'est pas
+relire). Garde-fous côté MCP (actions sensibles créées coupées, plafond, version d'avant) :
+`1_7_serveur-mcp.md`, mise à jour du 2026-10-15 (2).
+
+Dans l'app :
+- **Ligne** : l'état devient « OK · par l'assistant, à relire » (`AutomationRow.vue`, `stateText`), même
+  place, infobulle complète quand l'état est long.
+- **Éditeur** : la ligne d'indice dit « Écrite par l'assistant (compte) le …, pas encore relue :
+  « Appliquer » la valide », en orange. « Appliquer » reste actif sans changement, et « Enregistrer »
+  enregistre au lieu de seulement revenir à la liste : c'est ce qui efface la marque.
+- **La ligne d'indice défile** (`MarqueeText`) au lieu de passer à la ligne : au format téléphone, la
+  note (et les messages « manque » déjà là) faisait deux lignes et poussait les colonnes de 16 px.
+
+Vérifié dans le mode simulé (marque posée par le store) : rien ne bouge sur la liste (21 éléments) ni dans
+l'éditeur, à 1280 et 375 px, en français et en anglais ; « Appliquer » efface la marque et regrise le
+bouton ; console vide.
+
+Sources : `packages/shared/src/automations/automation.ts`, `apps/server/src/core/automations/engine.ts`,
+`apps/server/src/http/routes.ts`, `apps/web/src/components/automations/{AutomationRow,AutomationEditor}.vue`,
+`apps/web/src/i18n/locales/{fr,en}.json`.

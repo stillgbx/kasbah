@@ -907,7 +907,7 @@
     "enable": "Enable the automation",
     "missingShort": "Missing: {names}",
     "unavailableShort": "Not responding: {names}",
-    "row": { "next": "Next", "last": "Last", "state": "State" },
+    "row": { "next": "Next", "last": "Last", "state": "State", "byAssistant": "by the assistant, to review" },
     "outcomeShort": { "ok": "done", "partial": "partial · {n} error | partial · {n} error | partial · {n} errors", "failed": "failed", "skipped": "skipped (exception)" },
     "neverRun": "Not run yet",
     "health": { "ok": "OK", "incomplete": "Incomplete", "unavailable": "Unreachable" },
@@ -1096,6 +1096,8 @@
         "actions": "Add at least one complete action."
       },
       "unsaved": "Unsaved changes.",
+      "byAssistant": "Written by the assistant on {at}, not yet reviewed: “Apply” approves it.",
+      "byAssistantUser": "Written by the assistant ({user}) on {at}, not yet reviewed: “Apply” approves it.",
       "apply": "Apply",
       "save": "Save",
       "saving": "Saving…",

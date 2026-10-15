@@ -60,6 +60,8 @@ const state = computed(() => {
   if (s.health === 'unavailable') return t('automations.unavailableShort', { names: s.unavailableDeviceIds.map(names.deviceName).join(', ') })
   return t('automations.health.ok')
 })
+// écrite par un assistant (MCP) et pas encore relue dans l'éditeur
+const stateText = computed(() => (a.value.byAssistant ? `${state.value} · ${t('automations.row.byAssistant')}` : state.value))
 </script>
 
 <template>
@@ -80,8 +82,8 @@ const state = computed(() => {
         <span class="row__line"><span class="row__label">{{ $t('automations.row.last') }}</span><span class="row__fact" :data-tone="lastTone" :title="lastTitle">{{ last }}</span></span>
         <span class="row__line">
           <span class="row__label">{{ $t('automations.row.state') }}</span>
-          <span class="row__fact row__state" :data-health="status.health" :title="state">
-            <span class="row__dot" :style="{ background: HEALTH_DOT[status.health] }" /><span class="row__state-text">{{ state }}</span>
+          <span class="row__fact row__state" :data-health="status.health" :title="stateText">
+            <span class="row__dot" :style="{ background: HEALTH_DOT[status.health] }" /><span class="row__state-text">{{ stateText }}</span>
           </span>
         </span>
       </span>

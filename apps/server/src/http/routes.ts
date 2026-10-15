@@ -10,6 +10,7 @@ import type { SceneRegistry } from '../core/scene-registry'
 import type { ShoppingService } from '../core/shopping'
 import type { WsHub } from '../ws/hub'
 import { describeError, sendError } from './errors'
+import { fromMcp } from './session'
 
 export interface RoutesDeps {
   registry: DeviceRegistry
@@ -326,7 +327,9 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
   app.put<{ Params: { id: string } }>('/api/automations/:id', async (req) => {
     const id = automationIdSchema.parse(req.params.id)          // ZodError → 400
     const body = automationBodySchema.parse(req.body)
-    return { automation: await deps.automations.upsert(id, body) }
+    // écrite par un assistant : l'app la montrera « à relire » jusqu'à une écriture depuis l'app
+    const byAssistant = fromMcp(req) ? (req.sessionUser ? { user: req.sessionUser } : {}) : undefined
+    return { automation: await deps.automations.upsert(id, body, byAssistant) }
   })
 
   app.patch<{ Params: { id: string } }>('/api/automations/:id', async (req, reply) => {

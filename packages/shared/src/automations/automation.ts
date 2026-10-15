@@ -111,11 +111,16 @@ export const automationSchema = z.object({
   actions: z.array(actionSchema).min(1).max(20),
   /** Posé par le serveur à chaque écriture. */
   updatedAt: z.number().int().optional(),
+  /**
+   * Posé par le serveur : la dernière écriture vient d'un assistant (MCP), au nom de `user` (absent =
+   * la maison). L'app le montre comme « à relire » ; une écriture depuis l'app l'efface.
+   */
+  byAssistant: z.object({ user: z.string().optional(), at: z.number().int() }).optional(),
 })
 export type Automation = z.infer<typeof automationSchema>
 
-/** Corps d'un `PUT /api/automations/:id` : l'id vient de l'URL, `updatedAt` du serveur. */
-export const automationBodySchema = automationSchema.omit({ id: true, updatedAt: true })
+/** Corps d'un `PUT /api/automations/:id` : l'id vient de l'URL, `updatedAt` et `byAssistant` du serveur. */
+export const automationBodySchema = automationSchema.omit({ id: true, updatedAt: true, byAssistant: true })
 export type AutomationBody = z.input<typeof automationBodySchema>
 
 /** Corps d'un `PATCH` : écrit à la main (un `.partial()` réinjecterait les défauts de zod 4). */

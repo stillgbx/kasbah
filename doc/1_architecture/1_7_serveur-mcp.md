@@ -696,3 +696,44 @@ opérations. **La suppression reste hors MCP** : non demandée.
 au déclencheur ni aux actions, id inconnu → `isError`, appareil absent → `incomplete` avec `missing`.
 
 Sources : `apps/server/src/mcp/{server,server.test}.ts`, `README.md` (table « Serveur MCP »).
+
+### Mise à jour 2026-10-15 (2) — garde-fous des automatisations écrites par l'assistant
+
+**Pourquoi.** Question de l'utilisateur après la livraison de `create_automation` / `update_automation` :
+faut-il des garde-fous ? `send_command` agit déjà tout de suite ; le risque NOUVEAU est la
+**persistance** : une règle continue d'agir sans personne pour la regarder, et l'agent a pu lire du
+contenu extérieur (agenda, école) qui la lui dicte. Il n'y a pas d'outil de suppression, donc rien à
+« tout supprimer ». Quatre garde-fous retenus par l'utilisateur.
+
+1. **La version d'avant.** `update_automation` rend `previous` (`name`, `enabled`, `trigger`, `unless`,
+   `actions`) : la repasser telle quelle à l'outil annule la modification. Le serveur ne garde qu'un `.bak`.
+2. **Actions sensibles enregistrées coupées** (`sensitiveActions`, `apps/server/src/mcp/server.ts`) :
+   ouvrir (`cover.open`, `cover.preset`, `cover.set_position` > 0) un ouvrant de nature `gate`, `garage`
+   ou `window` ; `vehicle.unlock` ; `vehicle.schedule_update` (la mise à jour logicielle). Un appareil
+   inconnu du registre compte comme un accès possible, une sélection `cover` sans nature aussi (elle
+   prend le portail). Fermer n'est pas sensible. La règle est écrite `enabled: false` et la réponse porte
+   `safety: { disabled, actions, reason }`. Pas d'interdiction : « ouvrir le portail quand la voiture
+   arrive » est un vrai usage ; on l'active dans l'app, ou par `set_automation_enabled` si l'utilisateur
+   le demande expressément (dit dans la description de l'outil). En modification, le garde-fou ne joue que
+   si `trigger`, `unless` ou `actions` changent : renommer ou rallumer seul n'y touche pas.
+3. **Origine visible.** Champ `byAssistant: { user?, at }` d'`automationSchema`, posé par le SERVEUR (hors
+   d'`automationBodySchema`, donc ni l'app ni l'agent ne l'écrivent). La route `PUT /api/automations/:id`
+   le pose quand la requête vient du MCP (`fromMcp`, `apps/server/src/http/session.ts` : seul le MCP porte
+   le secret interne) et l'efface sur toute écriture venue de l'app. `actAsHeaders` accepte désormais
+   `null` (la maison, jeton de course de l'assistant de l'app) : la requête reste marquée MCP sans compte.
+   Côté app : voir `1_8_automatisations.md`.
+4. **Plafond** : `AUTOMATION_CREATE_LIMIT` = 10 créations par heure glissante, pour tout le serveur (le
+   compte vit dans `registerMcp`, une instance de serveur MCP étant créée par requête). Au-delà, `isError`.
+
+**Écarté.** La confirmation demandée par le serveur (*elicitation* MCP) : son support par claude.ai et
+l'app mobile n'est pas établi. Les clients demandent déjà l'accord de l'utilisateur pour un outil non
+lecture seule (`destructiveHint` vaut vrai par défaut).
+
+**Vérifié.** `server.test.ts`, deux versions du protocole : marque posée au nom du compte du jeton puis
+effacée par une écriture de l'app ; `previous` repassé rétablit la règle ; portail ouvert → créée coupée
+(`safety.actions: [1]`), renommée → toujours coupée, rallumée par `set_automation_enabled`, déclencheur
+changé → recoupée, portail fermé → non sensible ; plafond atteint → `isError` (après les deux passages) ;
+test pur de `sensitiveActions`. Contrôle négatif : garde-fou neutralisé → le test du portail rougit.
+
+Sources : `apps/server/src/mcp/{server,server.test}.ts`, `apps/server/src/http/{session,routes}.ts`,
+`apps/server/src/core/automations/engine.ts`, `packages/shared/src/automations/automation.ts`.

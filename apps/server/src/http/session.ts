@@ -76,7 +76,11 @@ export interface AppSession {
  * réclamer.
  */
 const INTERNAL_SECRET = randomBytes(32).toString('base64url')
-export const actAsHeaders = (user: string): Record<string, string> => ({ 'x-kasbah-internal': INTERNAL_SECRET, 'x-kasbah-user': user })
+/** `user` null : la maison (jeton de course de l'assistant de l'app) — la requête reste marquée MCP. */
+export const actAsHeaders = (user: string | null): Record<string, string> =>
+  ({ 'x-kasbah-internal': INTERNAL_SECRET, ...(user ? { 'x-kasbah-user': user } : {}) })
+/** La requête vient d'un outil MCP (seul porteur du secret). */
+export const fromMcp = (req: FastifyRequest): boolean => req.headers['x-kasbah-internal'] === INTERNAL_SECRET
 export async function actAsHook(req: FastifyRequest): Promise<void> {
   const user = req.headers['x-kasbah-user']
   if (req.headers['x-kasbah-internal'] === INTERNAL_SECRET && typeof user === 'string') req.sessionUser = user

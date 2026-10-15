@@ -907,7 +907,7 @@
     "enable": "Activer l'automatisation",
     "missingShort": "Manque : {names}",
     "unavailableShort": "Ne répond pas : {names}",
-    "row": { "next": "Prochaine", "last": "Dernière", "state": "État" },
+    "row": { "next": "Prochaine", "last": "Dernière", "state": "État", "byAssistant": "par l'assistant, à relire" },
     "outcomeShort": { "ok": "exécutée", "partial": "partielle · {n} erreur | partielle · {n} erreur | partielle · {n} erreurs", "failed": "échec", "skipped": "sautée (exception)" },
     "neverRun": "Pas encore exécutée",
     "health": { "ok": "OK", "incomplete": "Incomplète", "unavailable": "Injoignable" },
@@ -1106,6 +1106,8 @@
         "actions": "Ajoutez au moins une action complète."
       },
       "unsaved": "Modifications non enregistrées.",
+      "byAssistant": "Écrite par l'assistant le {at}, pas encore relue : « Appliquer » la valide.",
+      "byAssistantUser": "Écrite par l'assistant ({user}) le {at}, pas encore relue : « Appliquer » la valide.",
       "apply": "Appliquer",
       "save": "Enregistrer",
       "saving": "Enregistrement…",

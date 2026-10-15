@@ -127,10 +127,15 @@ export class AutomationEngine {
     return a ? this.entry(a, this.context()) : undefined
   }
 
-  /** Crée ou remplace. Le corps est validé ici aussi : le moteur ne garde jamais une règle invalide. */
-  async upsert(id: string, body: AutomationBody): Promise<AutomationEntry> {
+  /**
+   * Crée ou remplace. Le corps est validé ici aussi : le moteur ne garde jamais une règle invalide.
+   * `byAssistant` : écrite par un assistant (MCP) au nom de ce compte ; absent = depuis l'app, ce qui
+   * efface la marque.
+   */
+  async upsert(id: string, body: AutomationBody, byAssistant?: { user?: string }): Promise<AutomationEntry> {
     const parsed = automationBodySchema.parse(body)
-    const a: Automation = { id, ...parsed, updatedAt: this.deps.clock.now() }
+    const now = this.deps.clock.now()
+    const a: Automation = { id, ...parsed, updatedAt: now, ...(byAssistant ? { byAssistant: { ...byAssistant, at: now } } : {}) }
     const before = this.automations.get(id)
     this.automations.set(id, a)
     try { await this.persist() }

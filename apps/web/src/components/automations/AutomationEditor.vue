@@ -9,6 +9,7 @@ import {
 import { useAutomationsStore } from '../../stores/automations'
 import { useNotificationsStore } from '../../stores/notifications'
 import { useScenesStore } from '../../stores/scenes'
+import MarqueeText from '../ui/MarqueeText.vue'
 import Segmented from '../ui/Segmented.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import ActionEditor from './ActionEditor.vue'
@@ -30,7 +31,7 @@ const { t, locale } = useI18n()
 function bodyOf(id: string): AutomationBody {
   const e = store.entries[id]
   if (!e) return blankAutomation()
-  const { id: _id, updatedAt: _u, ...body } = e.automation
+  const { id: _id, updatedAt: _u, byAssistant: _b, ...body } = e.automation
   return structuredClone(body)
 }
 
@@ -40,6 +41,14 @@ const dirty = computed(() => JSON.stringify(draft.value) !== saved.value)
 const missing = computed(() => missingPart(draft.value))
 const summary = computed(() => (missing.value ? '' : describeAutomation(draft.value, names, t, locale.value)))
 const exists = computed(() => !!store.entries[props.id])
+// Écrite par un assistant (MCP) et pas encore relue ici : « Appliquer » la valide même sans changement.
+const byAssistant = computed(() => store.entries[props.id]?.automation.byAssistant)
+const assistantNote = computed(() => {
+  const b = byAssistant.value
+  if (!b) return ''
+  const at = new Intl.DateTimeFormat(locale.value, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(b.at))
+  return b.user ? t('automations.editor.byAssistantUser', { user: b.user, at }) : t('automations.editor.byAssistant', { at })
+})
 
 // ── déclencheur ──────────────────────────────────────────────────────────────────────────────
 const trigger = computed(() => draft.value.trigger)
@@ -142,11 +151,11 @@ const removeAction = (i: number) => { draft.value.actions = draft.value.actions.
 const pending = ref<'apply' | 'save' | null>(null)
 async function save(close: boolean) {
   if (missing.value) return
-  if (close && !dirty.value && exists.value) return emit('close')
+  if (close && !dirty.value && exists.value && !byAssistant.value) return emit('close')
   pending.value = close ? 'save' : 'apply'
   const e = await store.save(props.id, draft.value).finally(() => { pending.value = null })
   if (!e) return
-  const { id: _id, updatedAt: _u, ...body } = e.automation
+  const { id: _id, updatedAt: _u, byAssistant: _b, ...body } = e.automation
   draft.value = structuredClone(body)
   saved.value = JSON.stringify(draft.value)
   notifications.success(t('automations.toast.saved', { name: e.automation.name }))
@@ -217,7 +226,7 @@ onBeforeUnmount(() => { if (disarm) clearTimeout(disarm) })
             {{ removeArmed ? $t('automations.editor.removeConfirm') : $t('automations.editor.remove') }}
           </button>
           <button type="button" class="pill edit__btn" :disabled="store.saving" @click="cancel">{{ $t('common.cancel') }}</button>
-          <button type="button" class="pill edit__btn" :disabled="!!missing || store.saving || (!dirty && exists)" @click="save(false)">
+          <button type="button" class="pill edit__btn" :disabled="!!missing || store.saving || (!dirty && exists && !byAssistant)" @click="save(false)">
             {{ pending === 'apply' ? $t('automations.editor.saving') : $t('automations.editor.apply') }}
           </button>
           <button type="button" class="pill edit__btn" data-on="1" :disabled="!!missing || store.saving" @click="save(true)">
@@ -227,7 +236,9 @@ onBeforeUnmount(() => { if (disarm) clearTimeout(disarm) })
       </div>
       <!-- deux lignes réservées pour la phrase, une pour l'indice : rien ne pousse les colonnes -->
       <p class="muted edit__summary">{{ summary || $t('automations.editor.summaryPending') }}</p>
-      <p class="edit__hint" :data-warn="missing ? '1' : '0'">{{ missing ? $t(`automations.editor.missing.${missing}`) : (dirty ? $t('automations.editor.unsaved') : '') }}</p>
+      <!-- une ligne, qui défile si l'indice est trop long (téléphone) : il ne pousse pas les colonnes -->
+      <MarqueeText class="edit__hint" :data-warn="missing || (!dirty && byAssistant) ? '1' : '0'"
+                   :text="missing ? $t(`automations.editor.missing.${missing}`) : (dirty ? $t('automations.editor.unsaved') : assistantNote)" />
     </header>
 
     <!-- trois colonnes qui défilent chacune de leur côté, dans l'ordre où la règle se lit (quand,

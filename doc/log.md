@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-15] update | MCP : garde-fous des automatisations écrites par l'assistant
+
+**Trigger** : question de l'utilisateur (« faut-il des garde-fous ? »), quatre garde-fous retenus.
+
+**Pages modified** :
+- 1_architecture/1_7_serveur-mcp.md - section 2026-10-15 (2) : version d'avant, actions sensibles coupées, marque `byAssistant`, plafond de créations, elicitation écartée
+- 1_architecture/1_8_automatisations.md - section 2026-10-15 (2) : marque « à relire » dans la liste et l'éditeur, ligne d'indice en `MarqueeText`
+
+**Index** : catalogue 1_architecture et index.md inchangés (dates déjà au 2026-10-15).
+
 ## [2026-10-15] update | MCP : créer et modifier une automatisation
 
 **Trigger** : demande de l'utilisateur, « permettre au MCP de gérer les automatisations : activation/désactivation, création, modification ».

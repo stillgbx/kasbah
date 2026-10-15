@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { assertCommandAllowed, automationBodySchema, commandSchema, DEVICE_KINDS, findShoppingItem, pluginSettingsOf, indexHouse, sceneRecallSchema, SHOPPING_ADD_MAX, shoppingNameSchema, shoppingQuantitySchema, type ShoppingList, type AutomationEntry, type AutomationRun, type DeviceConsumption, type DeviceEntry, type DeviceJournal, type EnergyHistory, type StateFor, type WeatherForecast } from '@kasbah/shared'
+import { assertCommandAllowed, automationBodySchema, commandSchema, DEVICE_KINDS, deviceClassOf, findShoppingItem, pluginSettingsOf, indexHouse, sceneRecallSchema, SHOPPING_ADD_MAX, shoppingNameSchema, shoppingQuantitySchema, type ShoppingList, type AutomationAction, type AutomationEntry, type AutomationRun, type DeviceConsumption, type DeviceEntry, type DeviceJournal, type EnergyHistory, type StateFor, type WeatherForecast } from '@kasbah/shared'
 import { hostHeaderValidation, originValidation } from '@modelcontextprotocol/fastify'
 import { createMcpHandler, McpServer, type McpRequestContext } from '@modelcontextprotocol/server'
 import type { FastifyInstance } from 'fastify'
@@ -157,7 +157,34 @@ const localDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).pad
 
 const optional = <T extends object>(o: T) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== null && v !== undefined && v !== ''))
 
-function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null): McpServer {
+// Garde-fous des automatisations écrites par un assistant : une règle tourne ensuite sans personne pour
+// la regarder, et l'agent a pu lire du contenu venu de l'extérieur (agenda, école) qui la lui dicte.
+/** Créations permises par heure glissante, pour tout le serveur : un agent qui boucle s'arrête là. */
+export const AUTOMATION_CREATE_LIMIT = 10
+const HOUR_MS = 3_600_000
+const ACCESS_CLASSES = new Set(['gate', 'garage', 'window'])
+const VEHICLE_SENSITIVE = new Set(['vehicle.unlock', 'vehicle.schedule_update'])
+/**
+ * Rangs des actions qui ouvrent un accès à la maison (portail, garage, fenêtre), déverrouillent une
+ * voiture ou lancent sa mise à jour logicielle. `classOf` rend `null` pour un appareil inconnu, compté
+ * comme un accès possible ; une sélection d'ouvrants sans nature les prend tous, portail compris.
+ */
+export function sensitiveActions(actions: AutomationAction[], classOf: (id: string) => string | undefined | null): number[] {
+  return actions.flatMap((a, i) => {
+    if (a.type !== 'command') return []
+    const c = a.command
+    if (VEHICLE_SENSITIVE.has(c.type)) return [i]
+    const opens = c.type === 'cover.open' || c.type === 'cover.preset' || (c.type === 'cover.set_position' && c.position > 0)
+    if (!opens) return []
+    const t = a.target
+    const access = t.type === 'selector'
+      ? t.kind === 'cover' && (!t.deviceClass || ACCESS_CLASSES.has(t.deviceClass))
+      : t.deviceIds.some((id) => { const k = classOf(id); return k === null || (k !== undefined && ACCESS_CLASSES.has(k)) })
+    return access ? [i] : []
+  })
+}
+
+function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null, created: number[]): McpServer {
   const server = new McpServer({ name: 'kasbah', version: '0.1.0' })
 
   // La musique passe par les routes de l'app (recherche des sources, lecteur commun) : mêmes
@@ -165,7 +192,7 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null): 
   // enceintes. Une réponse d'erreur devient une exception, que le SDK rend en `isError`. Au nom du
   // compte du jeton : ce sont ses comptes musicaux qui cherchent et qui jouent.
   const call = async <T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', url: string, payload?: object): Promise<T> => {
-    const res = await app.inject({ method, url, ...(user ? { headers: actAsHeaders(user) } : {}), ...(payload ? { payload } : {}) })
+    const res = await app.inject({ method, url, headers: actAsHeaders(user), ...(payload ? { payload } : {}) })
     const body = res.json() as T & { error?: { message?: string } }
     if (res.statusCode >= 400) throw new Error(body.error?.message ?? `HTTP ${res.statusCode}`)
     return body
@@ -369,6 +396,7 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null): 
 
   // Automatisations : lire, lancer, activer ou couper, créer et modifier, par les routes de la vue
   // Automatisations (mêmes validations, même fichier, même diffusion aux écrans). Pas de suppression.
+  // Garde-fous des écritures : voir `sensitiveActions` et `AUTOMATION_CREATE_LIMIT`.
   const automationView = ({ automation: a, status: s }: AutomationEntry) => {
     const { at } = clockOf()
     return {
@@ -397,13 +425,20 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null): 
     return json(automations.filter(({ automation: a }) => !q || a.name.toLowerCase().includes(q) || a.id.toLowerCase().includes(q)).map(automationView))
   })
 
+  const safety = (risky: number[], wanted: boolean) => (risky.length && wanted
+    ? { safety: { disabled: true, actions: risky, reason: "action sensible (accès à la maison, voiture) : enregistrée coupée, à activer dans l'app de Kasbah" } }
+    : {})
+
   // Même forme que list_automations : une règle lue se réécrit telle quelle.
   const { name: nameSchema, trigger: triggerSchema, unless: unlessSchema, actions: actionsSchema } = automationBodySchema.shape
   const AUTOMATION_HELP = "trigger : heure fixe { type: 'time', at: { kind: 'clock', time: 'HH:MM' } }, passage du soleil { type: 'time', at: { kind: 'sun', event: dawn|sunrise|sunset|dusk, offsetMin (négatif = avant), notBefore, notAfter } } (days 0 = dimanche, dateRange facultatifs), ou état { type: 'state', when: prédicat, forMin } qui part quand le prédicat DEVIENT vrai. Une contrainte d'heure va dans unless, pas dans when. unless : prédicats combinés en OU, l'automatisation ne fait rien si l'un est vrai. actions, jouées dans l'ordre : commande du contrat (comme send_command) sur des appareils nommés (ids de list_devices) ou une sélection résolue au moment d'agir (kind, roomIds, levelIds, zoneIds : ids de la ressource kasbah://house) ; forMin = la commande inverse part au bout de N minutes ; ou recallScene (sceneId de list_scenes). Rend l'automatisation et son statut : health incomplete et missing signalent une référence qui n'existe pas (appareil, champ d'état, pièce), enregistrée quand même."
 
+  const classOf = (id: string) => { const e = deps.registry.get(id); return e ? deviceClassOf(e.descriptor) : null }
+  const SAFETY = "Une automatisation qui ouvre un portail, une porte de garage ou une fenêtre, déverrouille une voiture ou lance sa mise à jour logicielle est enregistrée COUPÉE (safety dans la réponse) : à activer dans l'app, ou par set_automation_enabled si l'utilisateur le demande expressément."
+
   server.registerTool('create_automation', {
     title: 'Créer une automatisation',
-    description: `Crée une automatisation, exécutée ensuite par le serveur sans surveillance. Elle apparaît dans la vue Automatisations, en bas de la liste. ${AUTOMATION_HELP}`,
+    description: `Crée une automatisation, exécutée ensuite par le serveur sans surveillance. Elle apparaît dans la vue Automatisations, en bas de la liste, marquée « écrite par l'assistant ». ${SAFETY} ${AUTOMATION_CREATE_LIMIT} créations par heure au plus. ${AUTOMATION_HELP}`,
     inputSchema: z.object({
       name: nameSchema,
       enabled: z.boolean().default(true).describe('false = créée coupée, à activer plus tard'),
@@ -413,13 +448,18 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null): 
     }),
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
   }, async (body) => {
-    const { automation } = await call<{ automation: AutomationEntry }>('PUT', `/api/automations/${randomUUID()}`, body)
-    return json(automationView(automation))
+    const now = Date.now()
+    while (created.length && created[0]! <= now - HOUR_MS) created.shift()
+    if (created.length >= AUTOMATION_CREATE_LIMIT) return fail(`déjà ${AUTOMATION_CREATE_LIMIT} automatisations créées dans l'heure : réessayer plus tard, ou la créer dans la vue Automatisations`)
+    const risky = sensitiveActions(body.actions, classOf)
+    const { automation } = await call<{ automation: AutomationEntry }>('PUT', `/api/automations/${randomUUID()}`, risky.length ? { ...body, enabled: false } : body)
+    created.push(now)
+    return json({ ...automationView(automation), ...safety(risky, body.enabled) })
   })
 
   server.registerTool('update_automation', {
     title: 'Modifier une automatisation',
-    description: `Modifie une automatisation existante (id venu de list_automations). Seuls les champs passés changent, et chacun est remplacé EN ENTIER : pour ajouter une action, renvoyer toute la liste actions. ${AUTOMATION_HELP}`,
+    description: `Modifie une automatisation existante (id venu de list_automations). Seuls les champs passés changent, et chacun est remplacé EN ENTIER : pour ajouter une action, renvoyer toute la liste actions. La réponse porte previous, la version d'avant : la repasser à update_automation annule la modification. ${SAFETY} Le garde-fou joue quand trigger, unless ou actions changent. ${AUTOMATION_HELP}`,
     inputSchema: z.object({
       id: z.string(),
       name: nameSchema.optional(),
@@ -433,9 +473,13 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null): 
     const { automations } = await call<{ automations: AutomationEntry[] }>('GET', '/api/automations')
     const current = automations.find((e) => e.automation.id === id)?.automation
     if (!current) return fail(`automatisation inconnue "${id}" : voir list_automations`)
-    const { id: _id, updatedAt: _u, ...body } = current
-    const { automation } = await call<{ automation: AutomationEntry }>('PUT', `/api/automations/${encodeURIComponent(id)}`, { ...body, ...optional(changes) })
-    return json(automationView(automation))
+    const { id: _id, updatedAt: _u, byAssistant: _b, ...previous } = current
+    const next = { ...previous, ...optional(changes) }
+    // le garde-fou suit ce que la règle FAIT ; renommer, couper ou rallumer seul n'y touche pas
+    const reshaped = changes.trigger !== undefined || changes.unless !== undefined || changes.actions !== undefined
+    const risky = reshaped ? sensitiveActions(next.actions, classOf) : []
+    const { automation } = await call<{ automation: AutomationEntry }>('PUT', `/api/automations/${encodeURIComponent(id)}`, risky.length ? { ...next, enabled: false } : next)
+    return json({ ...automationView(automation), ...safety(risky, next.enabled), previous })
   })
 
   server.registerTool('run_automation', {
@@ -450,7 +494,7 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null): 
 
   server.registerTool('set_automation_enabled', {
     title: 'Activer ou couper une automatisation',
-    description: "Active (enabled: true) ou coupe (enabled: false) une automatisation (id venu de list_automations) : coupée, son déclencheur ne la lance plus. Rien d'autre n'est modifié.",
+    description: "Active (enabled: true) ou coupe (enabled: false) une automatisation (id venu de list_automations) : coupée, son déclencheur ne la lance plus. Rien d'autre n'est modifié. Une automatisation coupée par le garde-fou (safety) ne s'active ici que si l'utilisateur l'a demandé expressément.",
     inputSchema: z.object({ id: z.string(), enabled: z.boolean() }),
     annotations: { readOnlyHint: false, idempotentHint: true },
   }, async ({ id, enabled }) => {
@@ -656,7 +700,9 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null): 
 
 export async function registerMcp(app: FastifyInstance, deps: McpDeps): Promise<void> {
   const userOf = (ctx: McpRequestContext) => (typeof ctx.authInfo?.extra?.user === 'string' ? ctx.authInfo.extra.user : null)
-  const handler = createMcpHandler((ctx) => buildServer(deps, app, userOf(ctx)))
+  // une instance par requête : le compte des créations vit ici, pour tout le serveur
+  const created: number[] = []
+  const handler = createMcpHandler((ctx) => buildServer(deps, app, userOf(ctx), created))
   app.addHook('onClose', () => handler.close())
   await app.register(async (sub) => {
     const hosts = [...ALLOWED_HOSTS, ...deps.auth.publicHosts]

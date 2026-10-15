@@ -2,7 +2,7 @@ import { copyFileSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { AddressInfo } from 'node:net'
-import type { StateFor, WeatherForecast } from '@kasbah/shared'
+import type { AutomationAction, StateFor, WeatherForecast } from '@kasbah/shared'
 import { Client, StreamableHTTPClientTransport, type VersionNegotiationMode } from '@modelcontextprotocol/client'
 import pino from 'pino'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -12,7 +12,7 @@ import { loadHouse } from '../config/house'
 import { registerMusicSource } from '../music/sources'
 import { createMockPlugin } from '../plugins/mock'
 import { hashPassword } from './auth'
-import { agendaDigest, schoolDigest, weatherDigest } from './server'
+import { agendaDigest, AUTOMATION_CREATE_LIMIT, schoolDigest, sensitiveActions, weatherDigest } from './server'
 import { signIn, type TestOAuthProvider } from './test-oauth'
 
 // `/mcp` servi par l'application assemblée, interrogé par le vrai client du SDK dans les DEUX
@@ -184,11 +184,24 @@ describe.each<[string, VersionNegotiationMode]>([['2025', 'legacy'], ['2026-07-2
     expect(rule).toMatchObject({ name: 'Réveil', enabled: true, status: { health: 'ok', nextRun: expect.stringMatching(/ 07:00$/) } })
     expect(kasbah.automations.list().find((e) => e.automation.id === rule.id)!.automation.unless).toEqual([])
 
+    // marquée « écrite par l'assistant », au nom du compte du jeton
+    expect(kasbah.automations.get(rule.id)!.automation.byAssistant).toEqual({ user: LOGIN.username, at: expect.any(Number) })
+
     const updated = await client.callTool({ name: 'update_automation', arguments: { id: rule.id, name: 'Réveil doux', enabled: false } })
     expect(updated.isError, text(updated)).toBeFalsy()
     const stored = kasbah.automations.list().find((e) => e.automation.id === rule.id)!.automation
     // les champs non passés restent ceux d'avant
     expect(stored).toMatchObject({ name: 'Réveil doux', enabled: false, trigger: { at: { time: '07:00' } }, actions })
+    // la version d'avant revient, prête à être repassée pour annuler
+    const { previous } = JSON.parse(text(updated))
+    expect(previous).toEqual({ name: 'Réveil', enabled: true, trigger: { type: 'time', at: { kind: 'clock', time: '07:00' } }, unless: [], actions })
+    await client.callTool({ name: 'update_automation', arguments: { id: rule.id, ...previous } })
+    expect(kasbah.automations.get(rule.id)!.automation).toMatchObject({ name: 'Réveil', enabled: true })
+
+    // une écriture depuis l'app efface la marque
+    const { id: _i, updatedAt: _u, byAssistant: _b, ...body } = kasbah.automations.get(rule.id)!.automation
+    await kasbah.app.inject({ method: 'PUT', url: `/api/automations/${rule.id}`, payload: body })
+    expect(kasbah.automations.get(rule.id)!.automation.byAssistant).toBeUndefined()
 
     const missing = await client.callTool({ name: 'update_automation', arguments: { id: 'inconnue', name: 'X' } })
     expect(missing.isError).toBe(true)
@@ -197,6 +210,30 @@ describe.each<[string, VersionNegotiationMode]>([['2025', 'legacy'], ['2026-07-2
       id: rule.id, actions: [{ ...actions[0], target: { type: 'devices', deviceIds: ['mock:absente'] } }],
     } })))
     expect(broken.status).toMatchObject({ health: 'incomplete', missing: [{ kind: 'device', id: 'mock:absente' }] })
+  })
+
+  it('enregistre COUPÉE une automatisation qui ouvre le portail', async () => {
+    const gate = kasbah.registry.list().find((e) => e.descriptor.kind === 'cover' && e.descriptor.meta.cover?.deviceClass === 'gate')!.descriptor.id
+    const light = kasbah.registry.list().find((e) => e.descriptor.kind === 'light')!.descriptor.id
+    const opens = [{ type: 'command', target: { type: 'devices', deviceIds: [light] }, command: { type: 'light.set', on: true } },
+      { type: 'command', target: { type: 'devices', deviceIds: [gate] }, command: { type: 'cover.open' } }]
+    const r = JSON.parse(text(await client.callTool({ name: 'create_automation', arguments: {
+      name: 'Arrivée', trigger: { type: 'time', at: { kind: 'clock', time: '18:00' } }, actions: opens,
+    } })))
+    expect(r).toMatchObject({ enabled: false, safety: { disabled: true, actions: [1] } })
+    // renommer ne touche pas au garde-fou ; rallumer explicitement, si
+    expect(JSON.parse(text(await client.callTool({ name: 'update_automation', arguments: { id: r.id, name: 'Arrivée du soir' } }))).enabled).toBe(false)
+    await client.callTool({ name: 'set_automation_enabled', arguments: { id: r.id, enabled: true } })
+    expect(kasbah.automations.get(r.id)!.automation.enabled).toBe(true)
+    // changer ce qu'elle fait la recoupe
+    const moved = JSON.parse(text(await client.callTool({ name: 'update_automation', arguments: { id: r.id, trigger: { type: 'time', at: { kind: 'clock', time: '19:00' } } } })))
+    expect(moved).toMatchObject({ enabled: false, safety: { actions: [1] } })
+    // fermer le portail n'est pas sensible
+    const closes = JSON.parse(text(await client.callTool({ name: 'update_automation', arguments: {
+      id: r.id, enabled: true, actions: [{ ...opens[1], command: { type: 'cover.close' } }],
+    } })))
+    expect(closes.enabled).toBe(true)
+    expect(closes.safety).toBeUndefined()
   })
 
   it('rend l\'historique d\'un appareil qui en garde un, et refuse les autres', async () => {
@@ -239,6 +276,47 @@ describe.each<[string, VersionNegotiationMode]>([['2025', 'legacy'], ['2026-07-2
   it('sert la maison en ressource', async () => {
     const r = await client.readResource({ uri: 'kasbah://house' })
     expect(JSON.parse((r.contents[0] as { text: string }).text).name).toBe(kasbah.house.house.name)
+  })
+})
+
+// Après les deux passages : le plafond compte toutes les créations du serveur.
+describe('plafond des créations d\'automatisations', () => {
+  it(`refuse au-delà de ${AUTOMATION_CREATE_LIMIT} créations dans l'heure`, async () => {
+    const client = new Client({ name: 'test', version: '0' }, { versionNegotiation: { mode: 'legacy' } })
+    await client.connect(new StreamableHTTPClientTransport(url, { authProvider: provider }))
+    const light = kasbah.registry.list().find((e) => e.descriptor.kind === 'light')!.descriptor.id
+    const before = kasbah.automations.list().length
+    let refused: { isError?: unknown; content: unknown } | undefined
+    for (let i = 0; i <= AUTOMATION_CREATE_LIMIT && !refused; i++) {
+      const r = await client.callTool({ name: 'create_automation', arguments: {
+        name: `Boucle ${i}`, trigger: { type: 'time', at: { kind: 'clock', time: '05:00' } },
+        actions: [{ type: 'command', target: { type: 'devices', deviceIds: [light] }, command: { type: 'light.set', on: false } }],
+      } })
+      if (r.isError) refused = r
+    }
+    await client.close()
+    expect(refused && text(refused)).toMatch(/dans l'heure/)
+    expect(kasbah.automations.list().length - before).toBeLessThan(AUTOMATION_CREATE_LIMIT)
+  })
+})
+
+describe('sensitiveActions', () => {
+  const cmd = (target: object, command: object) => ({ type: 'command', target, command }) as AutomationAction
+  const classes: Record<string, string | undefined> = { portail: 'gate', volet: 'shutter', lampe: undefined }
+  const classOf = (id: string) => (id in classes ? classes[id] : null)
+  const devices = (...deviceIds: string[]) => ({ type: 'devices', deviceIds })
+  it('repère ce qui ouvre un accès ou touche à la voiture, rien d\'autre', () => {
+    expect(sensitiveActions([
+      cmd(devices('volet'), { type: 'cover.open' }),
+      cmd(devices('portail'), { type: 'cover.set_position', position: 0 }),
+      cmd(devices('portail'), { type: 'cover.set_position', position: 40 }),
+      cmd(devices('inconnu'), { type: 'cover.open' }),
+      cmd({ type: 'selector', kind: 'cover', deviceClass: 'shutter' }, { type: 'cover.open' }),
+      cmd({ type: 'selector', kind: 'cover' }, { type: 'cover.open' }),
+      cmd(devices('voiture'), { type: 'vehicle.unlock' }),
+      cmd(devices('voiture'), { type: 'vehicle.lock' }),
+      cmd(devices('lampe'), { type: 'light.set', on: true }),
+    ], classOf)).toEqual([2, 3, 5, 6])
   })
 })
 
