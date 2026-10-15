@@ -288,7 +288,10 @@
     "power": "Power", "session": "Session", "maxCurrent": "Max current",
     "safeLimit": "Safe mode",
     "safeLimitHint": "The charger fell back to its safe current: its load management has no reading, usually because it lost the gateway.",
-    "stopUntilUnplug": "Stopping blocks the charger until the next unplug: green charging will not resume with the sun."
+    "stopUntilUnplug": "Stopping blocks the charger until the next unplug: green charging will not resume with the sun.",
+    "manualOverride": "Manual override until unplugged",
+    "manualOverrideHint": "The charger no longer follows its mode (green, scheduled): a manual start or stop suspended it until the next unplug. Resume gives it back.",
+    "resumeMode": "Resume"
   },
   "vehicle": {
     "soc": "Charge", "range": "Range", "chargeLimit": "Charge limit", "pluggedIn": "Plugged in", "unplugged": "Unplugged",

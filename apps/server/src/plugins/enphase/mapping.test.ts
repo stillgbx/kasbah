@@ -220,4 +220,13 @@ describe('borne IQ EV Charger 2 (capture Enlighten)', () => {
     expect(patch).toMatchObject({ safeLimit: true })
     expect(mergeState(defaultState('ev_charger'), patch, 1000)).toMatchObject({ safeLimit: true })
   })
+
+  it('`mode` 0 = annulation manuelle publiée, 1 = la borne suit son mode (vraie maison, 2026-10-15)', () => {
+    expect(toChargerPatch(chargers[0]!, summaries[0])).toMatchObject({ manualOverride: false })
+    const overridden = structuredClone(EVSE_STATUS) as unknown as { data: { chargers: { mode: number }[] } }
+    overridden.data.chargers[0]!.mode = 0
+    const patch = toChargerPatch(chargersOf(overridden)[0]!, summaries[0])
+    expect(patch).toMatchObject({ manualOverride: true })
+    expect(mergeState(defaultState('ev_charger'), patch, 1000)).toMatchObject({ manualOverride: true })
+  })
 })

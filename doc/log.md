@@ -7,6 +7,18 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-15] update | Borne Enphase : annulation manuelle visible et levée depuis la carte
+
+**Déclencheur** : « pourquoi la R5 ne charge pas tout en gardant la borne en charge verte ? » —
+borne sous annulation manuelle (`mode` 0, `SUSPENDED_EVSE`) malgré le surplus, invisible dans Kasbah.
+
+**Pages modifiées** :
+- `3_plugins/3_7_enphase.md` - constat sur la vraie maison, `manualOverride` publié dans l'état
+  `ev_charger`, avertissement et bouton « Reprendre » (`ev_charger.resume_mode`) sur la carte de la
+  borne, réveil de la R5 sous annulation laissé en l'état (un plugin ne voit pas les autres appareils).
+
+**Index** : catalogue `3_plugins` (date), index.md régénéré.
+
 ## [2026-10-15] update | Automatisations : champs « Pendant » et « Depuis au moins »
 
 **Déclencheur** : « Pendant » semblait plafonné à 60 min (60 tapé, 20 enregistré). Le plafond réel

@@ -1,6 +1,6 @@
 # Plugin Enphase (production solaire, micro-onduleurs, batteries)
 
-> Dernière mise à jour : 2026-10-06
+> Dernière mise à jour : 2026-10-15
 > Sources : `apps/server/src/plugins/enphase/{index,client,token,cloud,mapping,types}.ts`, `apps/server/src/plugins/enphase/__fixtures__/gateway.ts`, tests `token.test.ts`, `mapping.test.ts`, `plugin.test.ts` et `cloud.test.ts`, `apps/web/src/components/EnphasePairingCard.vue`, `apps/server/.env.example`, note technique du fabricant « Accessing IQ Gateway local APIs or local UI with token-based authentication » (2022-12-14), commits 3b4767a et a89ae3b
 
 ## Ce que le plugin lit, et ce qu'il ne peut pas lire
@@ -340,3 +340,38 @@ ne touche à rien tant que `mode` n'est pas 0.
 
 Sources : `apps/server/src/plugins/enphase/{index,mapping}.ts`, fixture `EVSE_PREFERENCE`
 (`__fixtures__/evse.ts`, capture du 2026-10-02), tests `plugin.test.ts`.
+
+### Mise à jour 2026-10-15 — l'annulation manuelle se VOIT, et se lève depuis la carte de la borne
+
+**Le constat, sur la vraie maison.** Voiture branchée sous sa cible, surplus solaire exporté,
+batteries pleines, préférence de la borne en charge verte, et pourtant rien ne coulait. Le
+connecteur disait `SUSPENDED_EVSE` (c'est la BORNE qui retient le courant, pas la voiture qui le
+refuse), sans `INSUFFICIENT_SOLAR`, et `mode` valait 0 : une annulation manuelle « jusqu'au
+débranchement » (section du 2026-10-01). L'appli comme Kasbah continuaient d'afficher la charge
+verte, puisque la préférence ne change pas. Origine non retrouvée : aucune automatisation ne touche
+à la charge, et un démarrer / arrêter depuis l'appli ou depuis Kasbah (« Arrêter la charge » de la
+R5 passe par la borne, `chargerToStop`) pose la même annulation. `ev_charger.resume_mode` envoyé à la
+main l'a levée (relu : `mode` 1), et la charge verte est repartie en quelques minutes.
+
+**Ce qui change.** `mode` 0 était lu (`manualOverride` sur `EvCharger`, `mapping.ts`) mais restait
+interne au plugin. Il est maintenant dans le contrat : `manualOverride` sur l'état `ev_charger`
+(`packages/shared/src/devices/state.ts`), publié par `toChargerPatch` quand la borne donne `mode`.
+Absent = la borne ne le dit pas (la borne simulée, par exemple).
+
+**Dans l'interface** (`apps/web/src/components/controls/EvChargerControl.vue`) : sous les boutons,
+« Annulation manuelle jusqu'au débranchement » (explication en info-bulle) et un bouton **Reprendre**
+qui envoie `ev_charger.resume_mode`, la commande déjà utilisée à la limite de charge
+(`resumeMode`, `index.ts`) : passage en manuel, puis retour à la préférence. L'avertissement et l'aide
+« Arrêter bloque la borne… » partagent la même cellule de grille, seule la visibilité change : la
+carte ne grandit pas et rien ne bouge quand l'annulation apparaît (mesuré en fr et en en, zooms 1 /
+1,25 / 1,5, sur la borne simulée).
+
+**Ce qui n'est pas fait.** Le réveil de charge de la R5 (`maybeWake`, `3_9_renault.md`) continue de
+partir pendant une annulation, pour rien : le blocage est côté borne. Le couper demanderait qu'un
+plugin voie l'état des autres appareils, ce que `PluginContext` ne donne pas (choix d'architecture,
+laissé à l'utilisateur). Coût actuel : au plus une écriture dans la voiture par quart d'heure, dans
+la fenêtre du réveil.
+
+Sources : `packages/shared/src/devices/state.ts`, `apps/server/src/plugins/enphase/mapping.ts`
+(test `mapping.test.ts`), `apps/web/src/components/controls/EvChargerControl.vue`, clés
+`charger.manualOverride` / `manualOverrideHint` / `resumeMode` des locales.

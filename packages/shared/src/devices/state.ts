@@ -224,6 +224,13 @@ export const evChargerStateSchema = z.object({
    * mesure, typiquement quand elle a perdu la passerelle. `maxCurrentA` ne vaut alors plus. Absent = inconnu.
    */
   safeLimit: z.boolean().optional(),
+  /**
+   * La borne obéit à une ANNULATION MANUELLE (un démarrer / arrêter, Enphase `mode: 0`), plus à son
+   * mode habituel (charge verte, programmée), jusqu'au débranchement. Sa préférence affichée, elle, ne
+   * change pas : sans ce champ, une borne branchée sous le soleil qui ne donne rien est inexplicable.
+   * `ev_charger.resume_mode` la lève. Absent = la borne ne le dit pas.
+   */
+  manualOverride: z.boolean().optional(),
 })
 
 /**

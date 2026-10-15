@@ -26,8 +26,19 @@ const emit = defineEmits<{ command: [cmd: CommandInput] }>()
       <v-btn class="flex-grow-1" height="56" variant="tonal" prepend-icon="boltOff" :disabled="disabled || state.status !== 'charging'"
              @click="emit('command', { type: 'ev_charger.stop' })">{{ $t('common.stop') }}</v-btn>
     </div>
-    <div v-if="descriptor.capabilities.includes('charge_control') && descriptor.meta.evCharger?.stopUntilUnplug"
-         class="text-caption text-medium-emphasis mb-3">{{ $t('charger.stopUntilUnplug') }}</div>
+    <!-- l'aide et l'annulation dans la MÊME cellule, seule la visibilité change : la carte ne saute pas -->
+    <div v-if="descriptor.capabilities.includes('charge_control') && (descriptor.meta.evCharger?.stopUntilUnplug || state.manualOverride !== undefined)"
+         class="charger-note mb-3">
+      <div v-if="descriptor.meta.evCharger?.stopUntilUnplug" class="text-caption text-medium-emphasis"
+           :style="{ visibility: state.manualOverride ? 'hidden' : 'visible' }">{{ $t('charger.stopUntilUnplug') }}</div>
+      <div v-if="state.manualOverride !== undefined" class="d-flex align-center ga-2" :title="$t('charger.manualOverrideHint')"
+           :style="{ visibility: state.manualOverride ? 'visible' : 'hidden' }">
+        <v-icon icon="alert" size="16" color="warning" />
+        <span class="text-caption flex-grow-1">{{ $t('charger.manualOverride') }}</span>
+        <v-btn size="small" variant="tonal" color="warning" :disabled="disabled || !state.manualOverride"
+               @click="emit('command', { type: 'ev_charger.resume_mode' })">{{ $t('charger.resumeMode') }}</v-btn>
+      </div>
+    </div>
     <template v-if="descriptor.capabilities.includes('charge_current')">
       <div class="text-caption text-medium-emphasis">{{ $t('charger.maxCurrent') }}</div>
       <v-slider :model-value="state.maxCurrentA ?? 16" :min="6" :max="32" :step="1" :disabled="disabled" thumb-label
@@ -35,3 +46,8 @@ const emit = defineEmits<{ command: [cmd: CommandInput] }>()
     </template>
   </div>
 </template>
+
+<style scoped>
+.charger-note { display: grid; }
+.charger-note > * { grid-area: 1 / 1; }
+</style>

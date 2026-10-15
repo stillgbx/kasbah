@@ -336,5 +336,6 @@ export function toChargerPatch(charger: EvCharger, summary?: EvChargerSummary): 
     sessionWh: charger.sessionWh,
     ...(maxCurrentA !== undefined ? { maxCurrentA: Math.round(maxCurrentA) } : {}),
     ...(charger.safeLimit !== undefined ? { safeLimit: charger.safeLimit } : {}),
+    ...(charger.manualOverride !== undefined ? { manualOverride: charger.manualOverride } : {}),
   } as StatePatch
 }
