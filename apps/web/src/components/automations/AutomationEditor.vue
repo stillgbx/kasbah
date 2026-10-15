@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SUN_EVENTS, type AutomationBody, type Predicate, type StateTrigger, type SunEvent, type TimeTrigger } from '@kasbah/shared'
 import { useAutomationNames } from '../../composables/useAutomationNames'
@@ -104,12 +104,23 @@ function setRange(which: 'from' | 'to', value: string) {
   const next = { from: dateRange?.from ?? iso, to: dateRange?.to ?? iso, [which]: value }
   draft.value.trigger = value ? { ...rest, dateRange: next } : rest
 }
+/** Borne de « depuis au moins », celle du schéma ; 0 ou vide = sans attente. */
+const FOR_MAX = 1440
 function setForMin(raw: string) {
   const tr = trigger.value
   if (tr.type !== 'state') return
   const n = Math.round(Number(raw))
   const { forMin: _f, ...rest } = tr
-  draft.value.trigger = Number.isFinite(n) && n > 0 ? { ...rest, forMin: Math.min(1440, n) } : rest
+  draft.value.trigger = Number.isFinite(n) && n > 0 ? { ...rest, forMin: Math.min(FOR_MAX, n) } : rest
+}
+// Texte en cours de frappe, montré à la place du brouillon jusqu'à la validation : un message du
+// serveur qui redessine la page ne remet plus l'ancienne valeur dans le champ (cf. ActionEditor).
+const forText = ref<string | null>(null)
+function commitForMin(e: Event) {
+  forText.value = null
+  const input = e.target as HTMLInputElement
+  setForMin(input.value)
+  void nextTick(() => { input.value = trigger.value.type === 'state' && trigger.value.forMin ? String(trigger.value.forMin) : '' })
 }
 
 // ── sauf si, alors ───────────────────────────────────────────────────────────────────────────
@@ -249,9 +260,10 @@ onBeforeUnmount(() => { if (disarm) clearTimeout(disarm) })
           <PredicateEditor :model-value="trigger.when" @update:model-value="(p: Predicate) => trigger.type === 'state' && (draft.trigger = { ...trigger, when: p })" />
           <div class="line">
             <span class="muted line__label">{{ $t('automations.trigger.for') }}</span>
-            <input class="field field--num" type="text" inputmode="numeric" enterkeyhint="done" :value="trigger.forMin ? String(trigger.forMin) : ''"
-                   placeholder="0" :aria-label="$t('automations.trigger.for')" @change="setForMin(($event.target as HTMLInputElement).value)">
-            <span class="muted">min</span>
+            <input class="field field--num" type="text" inputmode="numeric" enterkeyhint="done" :value="forText ?? (trigger.forMin ? String(trigger.forMin) : '')"
+                   placeholder="0" :aria-label="$t('automations.trigger.for')"
+                   @input="forText = ($event.target as HTMLInputElement).value" @change="commitForMin">
+            <span class="muted range">{{ $t('automations.editor.forMinRange', { min: 0, max: FOR_MAX }) }}</span>
           </div>
           <p class="muted hint">{{ $t('automations.trigger.stateHint') }}</p>
         </template>
@@ -328,5 +340,6 @@ onBeforeUnmount(() => { if (disarm) clearTimeout(disarm) })
 }
 .field--time { width: 9ch; flex: 0 0 auto; }
 .field--num { width: 6ch; flex: 0 0 auto; text-align: right; }
+.range { white-space: nowrap; }
 .hint { margin: 0; font-size: 12px; line-height: 16px; min-height: 32px; }
 </style>

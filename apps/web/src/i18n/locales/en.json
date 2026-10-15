@@ -1073,6 +1073,7 @@
       "forMinHint": "When the time is up, the opposite command is sent (close after open, off after on…)",
       "noInverse": "This command has no opposite",
       "minutes": "min",
+      "forMinRange": "min ({min} to {max})",
       "url": "Sound address",
       "urlPlaceholder": "https://…",
       "scene": "Scene",

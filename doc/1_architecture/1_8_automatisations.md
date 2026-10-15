@@ -1,6 +1,6 @@
 # Automatisations (règles « Quand / Sauf si / Alors »)
 
-> Dernière mise à jour : 2026-10-13
+> Dernière mise à jour : 2026-10-15
 > Sources : `packages/shared/src/automations/{predicate,automation,fields}.ts`, `packages/shared/src/house/{sun,geo}.ts`, `packages/shared/src/devices/activity.ts`, `apps/server/src/core/automations/{engine,schedule,evaluate,context,status,runner,store}.ts`, `apps/server/src/app.ts`, `apps/server/src/http/routes.ts`, `apps/server/src/ws/hub.ts`, `packages/mock-sim/src/behaviours/weather.ts`, `.gitignore`, tests listés en fin de page, arbre de travail NON COMMITÉ du 2026-09-23 (après 0f943a0)
 
 ## Ce que c'est, et pourquoi c'est le serveur qui s'en charge
@@ -295,7 +295,16 @@ de l'utilisateur : ouvrir ↔ fermer, allumer ↔ éteindre (une commande qui ne
 lecture → arrêt, aspirateur → base, tondeuse → `mower.park` jusqu'au prochain créneau, verrouiller ↔
 déverrouiller, charge ↔ arrêt, préchauffage → arrêt. Ni position, ni luminosité, ni volume, ni consigne :
 il faudrait relever la valeur d'avant. Pour une commande sans inverse, l'éditeur grise le bouton
-« Pendant » et retire `forMin` ; le serveur l'ignore de toute façon.
+« Pendant » et retire `forMin` ; le serveur l'ignore de toute façon. L'éditeur affiche la plage (« min
+(1 à 1440) », « 0 à 1440 » pour « Depuis au moins » du déclencheur) et ramène une saisie hors plage à la
+borne, que le champ montre ensuite.
+
+**Piège des champs numériques de l'éditeur.** Ils ne poussent leur valeur qu'à la validation (`change`).
+Or un état d'appareil reçu par WS redessine la carte d'action (la liste des appareils lit `available`),
+et Vue réécrit toujours la prop `value` d'un `<input>` quand elle diffère du DOM : le texte tapé repartait
+à l'ancienne valeur avant la validation (60 tapé, 20 enregistré, sans un mot). `ActionEditor` et
+`AutomationEditor` gardent donc le texte en cours de frappe (`@input`) et le montrent à la place du
+modèle jusqu'au `change` (`ActionEditor.test.ts`).
 
 Côté moteur : `runActions` rend `{ run, reverts }`, un retour daté par appareil. Le moteur les garde par
 `automation#action#appareil` (un nouveau déclenchement **remplace** le retour en attente : l'attente

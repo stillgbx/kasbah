@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { commandKind, COVER_CLASSES, inverseCommand, MEDIA_PLAYER_CLASSES, type DeviceKind, type SceneRecallMode, type Target } from '@kasbah/shared'
 import { useAutomationNames } from '../../composables/useAutomationNames'
@@ -20,6 +20,20 @@ const { names, deviceOptions, scopeOptions, sceneOptions } = useAutomationNames(
 const { t } = useI18n()
 
 const a = computed(() => props.modelValue)
+
+// Texte en cours de frappe d'un champ numérique, montré à la place du modèle jusqu'à la validation :
+// l'état d'un appareil qui change redessine la carte (la liste des appareils dit « indisponible »),
+// et Vue réécrivait alors le champ avec l'ancienne valeur — 60 tapé repartait à 20 sans un mot.
+const typing = ref<{ field: string; text: string } | null>(null)
+const shown = (field: string, value: unknown) => (typing.value?.field === field ? typing.value.text : String(value ?? ''))
+const onType = (field: string, e: Event) => { typing.value = { field, text: (e.target as HTMLInputElement).value } }
+/** Validation : le modèle reçoit le texte, et le champ montre ce qui a été retenu (borné). */
+function commit(e: Event, set: (raw: string) => void, kept: () => unknown) {
+  typing.value = null
+  const input = e.target as HTMLInputElement
+  set(input.value)
+  void nextTick(() => { input.value = String(kept() ?? '') })   // le modèle redescend au rendu suivant
+}
 
 // ── commande ─────────────────────────────────────────────────────────────────────────────────
 const kind = computed<DeviceKind>(() => {
@@ -51,9 +65,12 @@ function setForMin(n: number | undefined) {
   const { forMin: _, ...rest } = a.value
   emit('update:modelValue', n ? { ...rest, forMin: n } : rest)
 }
+/** Bornes de « pendant », celles du schéma : hors plage, la valeur se ramène à la borne. */
+const FOR_MIN = 1
+const FOR_MAX = 1440
 function setForMinText(raw: string) {
   const n = Number(raw.replace(',', '.'))
-  if (Number.isFinite(n)) setForMin(Math.min(1440, Math.max(1, Math.round(n))))
+  if (Number.isFinite(n)) setForMin(Math.min(FOR_MAX, Math.max(FOR_MIN, Math.round(n))))
 }
 // Fondu d'une lumière. L'unité vit ici, comme le sens du décalage au soleil : « min » choisi avant de
 // taper le nombre ne doit pas se perdre.
@@ -100,6 +117,7 @@ function pickChoice(key: string) {
   const c = choicesFor(kind.value).find((x) => x.key === key)
   if (c) setCommand({ command: c.build() })
 }
+const param = computed(() => (a.value.type === 'command' ? paramOf(a.value.command) : undefined))
 function setParam(raw: string) {
   const c = choice.value
   if (!c?.param) return
@@ -191,12 +209,12 @@ const recallModes = computed(() => (['static', 'dynamic', 'off'] as const).map((
       <!-- paramètre : place toujours là, vide pour une commande qui n'en a pas -->
       <div class="act__param">
         <template v-if="choice?.param?.type === 'pct' || choice?.param?.type === 'number'">
-          <input class="act__input act__input--num" type="text" inputmode="decimal" enterkeyhint="done" :value="String(paramOf(a.command) ?? '')"
-                 :aria-label="$t('automations.editor.param')" @change="setParam(($event.target as HTMLInputElement).value)">
+          <input class="act__input act__input--num" type="text" inputmode="decimal" enterkeyhint="done" :value="shown('param', param)"
+                 :aria-label="$t('automations.editor.param')" @input="onType('param', $event)" @change="commit($event, setParam, () => param)">
           <span class="muted">{{ choice.param.type === 'pct' ? '%' : choice.param.unit }}</span>
         </template>
         <input v-else-if="choice?.param?.type === 'url'" class="act__input" type="url" inputmode="url" :placeholder="$t('automations.editor.urlPlaceholder')"
-               :value="String(paramOf(a.command) ?? '')" :aria-label="$t('automations.editor.url')" @change="setParam(($event.target as HTMLInputElement).value)">
+               :value="shown('url', param)" :aria-label="$t('automations.editor.url')" @input="onType('url', $event)" @change="commit($event, setParam, () => param)">
         <v-select v-else-if="choice?.param?.type === 'enum'" class="act__grow" :model-value="paramOf(a.command)" :items="climateItems"
                   density="compact" variant="outlined" hide-details :aria-label="$t('automations.editor.param')" @update:model-value="(v: string | number) => setParam(String(v))" />
       </div>
@@ -205,7 +223,7 @@ const recallModes = computed(() => (['static', 'dynamic', 'off'] as const).map((
         <button type="button" class="act__toggle" :disabled="!isLight" :data-on="fadeMs ? '1' : '0'" :aria-pressed="!!fadeMs"
                 @click="setFade(fadeMs ? undefined : 1)">{{ $t('automations.editor.fade') }}</button>
         <input class="act__input act__input--num" :style="{ visibility: fadeMs ? 'visible' : 'hidden' }" type="text" inputmode="numeric" enterkeyhint="done"
-               :value="String(fadeValue ?? '')" :aria-label="$t('automations.editor.fade')" @change="setFadeText(($event.target as HTMLInputElement).value)">
+               :value="shown('fade', fadeValue)" :aria-label="$t('automations.editor.fade')" @input="onType('fade', $event)" @change="commit($event, setFadeText, () => fadeValue)">
         <v-select class="act__unit" menu-icon="" :style="{ visibility: fadeMs ? 'visible' : 'hidden' }" :model-value="fadeUnit"
                   :items="[{ value: 's', title: $t('automations.editor.seconds') }, { value: 'min', title: $t('automations.editor.minutes') }]"
                   density="compact" variant="outlined" hide-details :aria-label="$t('automations.editor.fade')"
@@ -216,8 +234,8 @@ const recallModes = computed(() => (['static', 'dynamic', 'off'] as const).map((
         <button type="button" class="act__toggle" :disabled="!hasInverse" :data-on="forMin ? '1' : '0'" :aria-pressed="!!forMin"
                 @click="setForMin(forMin ? undefined : 20)">{{ $t('automations.editor.forMin') }}</button>
         <input class="act__input act__input--num" :style="{ visibility: forMin ? 'visible' : 'hidden' }" type="text" inputmode="numeric" enterkeyhint="done"
-               :value="String(forMin ?? '')" :aria-label="$t('automations.editor.forMin')" @change="setForMinText(($event.target as HTMLInputElement).value)">
-        <span class="muted" :style="{ visibility: forMin ? 'visible' : 'hidden' }">{{ $t('automations.editor.minutes') }}</span>
+               :value="shown('forMin', forMin)" :aria-label="$t('automations.editor.forMin')" @input="onType('forMin', $event)" @change="commit($event, setForMinText, () => forMin)">
+        <span class="muted act__range" :style="{ visibility: forMin ? 'visible' : 'hidden' }">{{ $t('automations.editor.forMinRange', { min: FOR_MIN, max: FOR_MAX }) }}</span>
       </div>
     </template>
 
@@ -252,6 +270,7 @@ const recallModes = computed(() => (['static', 'dynamic', 'off'] as const).map((
 .act__toggle[data-on='1'] { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
 .act__toggle:disabled { opacity: .45; }
 .act__for { display: flex; align-items: center; gap: 8px; min-height: 36px; }
+.act__range { white-space: nowrap; }
 .act__except-kind { flex: 1 1 0; min-width: 0; }
 .act__unit { flex: 0 1 92px; min-width: 64px; }
 .act__param { display: flex; align-items: center; gap: 6px; min-height: 36px; }

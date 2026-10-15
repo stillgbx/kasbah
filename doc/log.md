@@ -7,6 +7,17 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-15] update | Automatisations : champs « Pendant » et « Depuis au moins »
+
+**Déclencheur** : « Pendant » semblait plafonné à 60 min (60 tapé, 20 enregistré). Le plafond réel
+était 1440 ; un rendu provoqué par un état d'appareil remettait l'ancienne valeur avant la validation.
+
+**Pages modifiées** :
+- `1_architecture/1_8_automatisations.md` - plage affichée et saisie ramenée à la borne ; piège des
+  champs numériques de l'éditeur (Vue réécrit `value`, texte en cours de frappe gardé jusqu'au `change`).
+
+**Index** : catalogue `1_architecture` (date), index.md régénéré.
+
 ## [2026-10-14] update | TaHoma : rafales de commandes, file ou exécution groupée
 
 **Déclencheur** : une automatisation fermant 15 volets a laissé 6 volets ouverts (6 `TIMEOUT` sur

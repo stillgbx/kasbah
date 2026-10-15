@@ -1083,6 +1083,7 @@
       "forMinHint": "Au bout du délai, l'action inverse part (fermer après ouvrir, éteindre après allumer…)",
       "noInverse": "Cette commande n'a pas d'action inverse",
       "minutes": "min",
+      "forMinRange": "min ({min} à {max})",
       "url": "Adresse du son",
       "urlPlaceholder": "https://…",
       "scene": "Ambiance",

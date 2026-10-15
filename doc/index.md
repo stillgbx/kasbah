@@ -20,7 +20,7 @@ Vision du projet, principes structurants et vocabulaire commun. Résumés : [0_o
 ## 1 — Architecture
 
 <!-- section:1_architecture:begin (généré par scripts/wiki-index.mjs depuis 1_architecture/README.md - ne pas éditer ici) -->
-Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/WebSocket, application web, scène 3D, et les briques transverses : lecteur musique, MCP, automatisations, assistant, liste de courses. Résumés : [1_architecture/README.md](1_architecture/README.md) (15 pages, dernière mise à jour 2026-10-14).
+Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/WebSocket, application web, scène 3D, et les briques transverses : lecteur musique, MCP, automatisations, assistant, liste de courses. Résumés : [1_architecture/README.md](1_architecture/README.md) (15 pages, dernière mise à jour 2026-10-15).
 
 | Pages | Dernière mise à jour |
 |---|---|
@@ -32,7 +32,7 @@ Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/Web
 | [1_5 Scène 3D (Three.js)](1_architecture/1_5_scene-3d.md) | 2026-10-13 |
 | [1_6 Lecteur musique commun](1_architecture/1_6_lecteur-musique.md) | 2026-10-09 |
 | [1_7 Serveur MCP](1_architecture/1_7_serveur-mcp.md) | 2026-10-11 |
-| [1_8 Automatisations](1_architecture/1_8_automatisations.md) | 2026-10-13 |
+| [1_8 Automatisations](1_architecture/1_8_automatisations.md) | 2026-10-15 |
 | [1_9 Assistant (« Demander à Kasbah »)](1_architecture/1_9_assistant.md) | 2026-10-11 |
 | [1_10 Liste de courses](1_architecture/1_10_liste-de-courses.md) | 2026-10-11 |
 | [1_11 Scène 3D : rendu](1_architecture/1_11_scene-3d-rendu.md) | 2026-10-14 |
