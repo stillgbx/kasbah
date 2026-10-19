@@ -20,6 +20,7 @@
 - **Arrêter la charge** passe par la borne de la maison quand elle est au bout du câble (la voiture n'a pas de commande d'arrêt) ; sans borne en charge, la commande est refusée en le disant.
 - **Réveil de charge** (sous-élément coché par défaut) : la R5 ne reprend pas la charge toute seule après une coupure de la borne (charge sur surplus solaire, un nuage suffit). Branchée, hors charge, sous sa limite, dans la fenêtre horaire, Kasbah dépose une commande qui réécrit les réglages de charge de la voiture **à l'identique** (heure de départ, durée, température inchangées). Dernier réveil visible dans la section Renault de Réglages → Plugins.
 - Les nombres affichés « en charge » sont recoupés : Renault annonce parfois « en attente » alors que le niveau monte, et inversement.
+- **Contrat d'entretien** (au clic, pour pré-remplir une LOA) : dans « Modifier » de la carte du véhicule, « Chercher chez Renault » lit les contrats du véhicule et propose celui d'entretien plafonné en km, souvent calé sur la LOA. Renault ne publie pas le contrat de financement lui-même : rien n'est repris sans votre clic.
 
 ## Connexion
 

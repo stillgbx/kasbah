@@ -102,6 +102,18 @@ export interface TeslaStatus {
 }
 
 /**
+ * Un contrat d'entretien plafonné en km chez Renault : la seule trace d'une LOA que Kamereon
+ * expose, proposée au panneau « Modifier » pour pré-remplir — jamais écrite d'office.
+ */
+export interface RenaultContract {
+  description: string
+  /** `AAAA-MM-JJ`, ou `null` quand Renault ne la donne pas. */
+  start: string | null
+  end: string | null
+  maxKm: number
+}
+
+/**
  * Mise en route du plugin Renault, telle que l'UI la voit. Le mot de passe n'y figure JAMAIS : il
  * ne fait que traverser `renaultLogin`, et ce qui en reste côté serveur est un jeton de session.
  */
@@ -621,6 +633,8 @@ export interface Transport {
   renaultLogin(body: { email: string; password: string }): Promise<RenaultStatus>
   /** Délie le compte : le jeton de session est effacé. */
   renaultLogout(): Promise<RenaultStatus>
+  /** Les contrats d'entretien plafonnés en km d'un véhicule (par VIN), lus au clic. */
+  renaultContracts(vin: string, lang: string): Promise<{ contracts: RenaultContract[] }>
   /** Où en est la liaison du compte MELCloud (machines vues sur le compte). */
   melcloudStatus(): Promise<MelcloudStatus>
   /**

@@ -230,3 +230,30 @@ export const SETTINGS_COMMAND = { commandId: 'ba6a5b31-0000-0000-0000-9f2c1d4e8a
 
 export const FORBIDDEN = { errors: [{ errorCode: 'err.func.wired.forbidden', errorMessage: 'The access is forbidden' }] }
 export const NOT_FOUND = { errors: [{ errorCode: 'err.func.wired.notFound', errorMessage: 'Not found' }] }
+
+/**
+ * `GET .../vehicles/{vin}/contracts` — FORME de la capture du 2026-10-19 (tableau nu, `conditions`
+ * en tableau), VALEURS inventées : libellés, dates et plafonds ne sont pas ceux du vrai compte.
+ * Ce qui compte : un seul contrat d'entretien plafonné en km, une garantie batterie AUSSI plafonnée
+ * (à ne pas prendre pour un forfait), et des services connectés sans aucune condition de km.
+ */
+export const CONTRACTS = [
+  {
+    type: 'WARRANTY_MAINTENANCE_CONTRACTS', code: '51', group: 'Service_Plan_And_Extended_Warranty',
+    groupLabel: "Contrat d'entretien et extension de garantie", description: 'EASYPACK 49MOIS EXEMPLE',
+    status: 'ACTIVE', statusLabel: 'Actif', durationMonths: 48, startDate: '2025-03-01', endDate: '2029-03-31',
+    conditions: [{ startDate: '2025-03-01', endDate: '2029-03-31', maximumMileage: 40000, mileageUnit: 'km', unlimitedMileage: false }],
+  },
+  {
+    type: 'CONNECTED_SERVICES', code: '15181', description: 'Pack Navigation', status: 'ACTIVE',
+    durationMonths: 60, startDate: '2025-02-20', endDate: '2030-02-20',
+  },
+  {
+    type: 'WARRANTY', code: 'BatteryWarranty', description: 'Garantie batterie', status: 'ACTIVE', durationMonths: 96,
+    endDate: '2033-02-20', conditions: [{ endDate: '2033-02-20', maximumMileage: 160000, mileageUnit: 'km', unlimitedMileage: false }],
+  },
+  {
+    type: 'WARRANTY', code: 'ManufacturerWarranty', description: 'Garantie fabricant', status: 'ACTIVE', durationMonths: 24,
+    endDate: '2027-02-20', conditions: [{ endDate: '2027-02-20', mileageUnit: 'km', unlimitedMileage: true }],
+  },
+]

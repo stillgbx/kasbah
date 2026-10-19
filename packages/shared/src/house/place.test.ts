@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import demo from './__fixtures__/demo-house.json'
 import { parseHouse } from './validate'
 import { NEUTRAL_TUNING } from './schema'
-import { addGardenItemToJson, addOpeningToJson, gardenItemPatchSchema, patchGardenItemInJson, removeGardenItemFromJson, patchOpeningInJson, PlacementError, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, setPluginInJson, setRenderTuningInJson, setRoomOrderInJson } from './place'
+import { addGardenItemToJson, devicePlacementSchema, addOpeningToJson, gardenItemPatchSchema, patchGardenItemInJson, removeGardenItemFromJson, patchOpeningInJson, PlacementError, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, setPluginInJson, setRenderTuningInJson, setRoomOrderInJson } from './place'
 
 const devices = (doc: Record<string, unknown>) => doc.devices as Record<string, unknown>[]
 
@@ -95,6 +95,20 @@ describe('placeDeviceInJson', () => {
 
     const cleared = placeDeviceInJson(generic, 'vehicle.model-s', { model3d: '', bodyColor: '' })
     expect(entry(cleared)).toEqual({ id: 'vehicle.model-s', deviceId: 'tesla:5YJ' })
+  })
+
+  it('écrit la LOA d un véhicule d un bloc, et la chaîne vide l efface', () => {
+    const entry = (doc: Record<string, unknown>) => devices(doc).find((x) => x.id === 'vehicle.model-s')
+    const lease = { start: '2025-01-01', end: '2028-01-01', km: 45000, startKm: 10 }
+    const created = placeDeviceInJson(demo, 'vehicle.model-s', { deviceId: 'tesla:5YJ', lease })
+    expect(entry(created)).toEqual({ id: 'vehicle.model-s', deviceId: 'tesla:5YJ', lease })
+    expect(() => parseHouse(created)).not.toThrow()
+    const cleared = placeDeviceInJson(created, 'vehicle.model-s', { lease: '' })
+    expect(entry(cleared)).toEqual({ id: 'vehicle.model-s', deviceId: 'tesla:5YJ' })
+  })
+
+  it('refuse une LOA qui finit avant de commencer', () => {
+    expect(devicePlacementSchema.safeParse({ lease: { start: '2028-01-01', end: '2025-01-01', km: 45000 } }).success).toBe(false)
   })
 
   it("écrit les vantaux, la matière et la couleur d'un ouvrant, et la chaîne vide les efface", () => {

@@ -176,9 +176,10 @@ describe('VehiclesView — détail de la charge', () => {
     const e = vehicle('online')
     const says = { ...e, descriptor: { ...e.descriptor, capabilities: [...e.descriptor.capabilities, 'charge_power'] } } as DeviceEntry
     const { w, button } = setup(says)
-    // placé par son GPS : décalage et rotation restent à régler, plus carrosserie 3D, peinture et couleur
+    // placé par son GPS : décalage et rotation restent à régler, plus carrosserie 3D, peinture et
+    // couleur — et les quatre lignes de la LOA, qui valent pour tout véhicule
     await button('Modifier')!.trigger('click')
-    expect(w.findAll('.tune__row')).toHaveLength(5)
+    expect(w.findAll('.tune__row')).toHaveLength(5 + 4)
     expect(w.find('.tune').text()).toContain('Rotation')
     expect(w.find('.tune').text()).not.toContain('Capacité')
 
@@ -186,9 +187,25 @@ describe('VehiclesView — détail de la charge', () => {
     // ni de la place ni de la batterie — le plugin tesla livre une carrosserie
     const { w: manual, button: quiet } = setup(says, { position: [1, 2, 0] })
     await quiet('Modifier')!.trigger('click')
-    expect(manual.findAll('.tune__row')).toHaveLength(3)
+    expect(manual.findAll('.tune__row')).toHaveLength(3 + 4)
     expect(manual.find('.tune').text()).toContain('Carrosserie 3D')
     expect(manual.find('.tune').text()).not.toContain('Rotation')
+  })
+
+  it('la LOA saisie se lit au pied de la carte, contre le compteur', () => {
+    vi.useFakeTimers({ now: Date.parse('2026-01-01T12:00:00Z'), toFake: ['Date'] })
+    const e = vehicle('online')
+    const driven = { ...e, state: { ...e.state, odometerKm: 11000 } } as DeviceEntry
+    const { w } = setup(driven, { lease: { start: '2025-01-01', end: '2027-01-01', km: 20000, startKm: 1000 } })
+    vi.useRealTimers()
+    // au milieu du contrat : 10 000 km parcourus depuis la remise des clés, ~10 000 autorisés
+    const text = w.find('.vcard__lease').text().replace(/\s/g, ' ')
+    expect(text).toContain('LOA · 10 000 km sur 10 0')
+    expect(text).toContain('(forfait 20 000)')
+    expect(w.find('.vcard__lease .vcard__quota-fill').attributes('data-tense')).toBe('0')
+    // sans LOA saisie, rien : pas même la place
+    const { w: none } = setup(driven, {})
+    expect(none.find('.vcard__lease').exists()).toBe(false)
   })
 
   it('hors charge, la ligne reste en place et se tait', () => {

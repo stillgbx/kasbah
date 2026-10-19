@@ -124,6 +124,17 @@ export class RenaultClient {
   }
 
   /**
+   * Les contrats du véhicule : garanties, services connectés, entretien. Lu À LA DEMANDE seulement
+   * (bouton du panneau « Modifier ») — rien n'y change d'une semaine sur l'autre.
+   */
+  vehicleContracts(accountId: string, vin: string, locale: string, signal?: AbortSignal): Promise<unknown> {
+    return this.request('GET', `/commerce/v1/accounts/${encodeURIComponent(accountId)}/vehicles/${encodeURIComponent(vin)}/contracts`, {
+      query: { locale, brand: 'RENAULT', connectedServicesContracts: 'true', warranty: 'true', warrantyMaintenanceContracts: 'true' },
+      signal,
+    })
+  }
+
+  /**
    * Réécrit les réglages VE. **C'est l'écriture qui réveille la voiture**, pas son contenu : sur la
    * plateforme récente (R5, Scenic), `charge/pause-resume` répond 403 et seul ce POST fait réagir le
    * boîtier télématique. Le corps est celui qu'on vient de LIRE, horodatage rafraîchi — surtout pas

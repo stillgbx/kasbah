@@ -5,7 +5,7 @@ import { ManualClock } from '@kasbah/mock-sim'
 import type { PluginContext } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
 import {
-  BATTERY_CHARGING, BATTERY_UNPLUGGED, BATTERY_WAITING, COCKPIT_V1, COCKPIT_V2_EASTER_EGG, EV_SETTINGS,
+  BATTERY_CHARGING, BATTERY_UNPLUGGED, BATTERY_WAITING, COCKPIT_V1, CONTRACTS, COCKPIT_V2_EASTER_EGG, EV_SETTINGS,
   FORBIDDEN, HVAC_STATUS, LOCATION, NOT_FOUND, SETTINGS_COMMAND, SETTINGS_PENDING, SOC_LEVELS,
 } from './__fixtures__/kamereon'
 import { JWT_TTL_S, type SessionStore, type StoredSession } from './auth'
@@ -104,6 +104,7 @@ function fakeRenault(over: { gigyaError?: number } = {}) {
     }
     if (path === `/commerce/v1/accounts/${ACCOUNT}/vehicles`) return response(VEHICLES)
     // ce que la R5 a répondu à la capture, refus compris
+    if (path.endsWith('/contracts')) return response(CONTRACTS)
     if (path.endsWith('/battery-status')) return response(world.battery)
     if (path.endsWith('/cockpit')) return response(path.includes('/v2/') ? COCKPIT_V2_EASTER_EGG : COCKPIT_V1)
     if (path.endsWith('/location')) return response(LOCATION)
@@ -242,6 +243,27 @@ describe('Renault — débit', () => {
     expect(await plugin.discover()).toEqual([])    // budget épuisé : la liste échoue proprement
     expect(renault.calls.filter((c) => c.path.startsWith('/commerce'))).toHaveLength(before)
     expect(plugin.health!().status).toBe('degraded')
+  })
+})
+
+describe('Renault — contrats à la demande', () => {
+  it('propose l entretien plafonné en km du véhicule demandé', async () => {
+    const { app, renault } = await setup({ session: { loginToken: LOGIN_TOKEN, personId: PERSON } })
+    const r = await app.inject({ method: 'GET', url: `/api/plugins/renault/contracts/${VIN}?lang=fr` })
+    expect(r.statusCode).toBe(200)
+    expect(r.json()).toEqual({ contracts: [{ description: 'EASYPACK 49MOIS EXEMPLE', start: '2025-03-01', end: '2029-03-31', maxKm: 40000 }] })
+    expect(renault.calls.some((c) => c.path.endsWith(`/vehicles/${VIN}/contracts`))).toBe(true)
+  })
+
+  it('refuse un VIN qui n est pas celui du compte, sans appeler les contrats', async () => {
+    const { app, renault } = await setup({ session: { loginToken: LOGIN_TOKEN, personId: PERSON } })
+    expect((await app.inject({ method: 'GET', url: '/api/plugins/renault/contracts/VF1AUTRE000000000' })).statusCode).toBe(404)
+    expect(renault.calls.some((c) => c.path.endsWith('/contracts'))).toBe(false)
+  })
+
+  it('refuse tant que le compte n est pas lié', async () => {
+    const { app } = await setup()
+    expect((await app.inject({ method: 'GET', url: `/api/plugins/renault/contracts/${VIN}` })).statusCode).toBe(409)
   })
 })
 

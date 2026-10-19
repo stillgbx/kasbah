@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount } from 'vue'
-import type { DeviceDescriptor } from '@kasbah/shared'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { vehicleLeaseSchema, type DeviceDescriptor, type VehicleLease } from '@kasbah/shared'
+import { getTransport } from '../../api'
+import type { RenaultContract } from '../../api/transport'
 import { useHouseStore } from '../../stores/house'
 import { bodyColorOf, bodyFinishOf, needsCapacity, tunableVehicle } from '../../lib/vehicleTuning'
 import { VEHICLE_FINISHES, type VehicleFinish } from '@kasbah/shared'
@@ -29,6 +32,7 @@ import { modelsFor, NO_MODEL, resolveModel } from '../../three/models/catalog'
  */
 const props = defineProps<{ descriptor: DeviceDescriptor }>()
 const house = useHouseStore()
+const { locale } = useI18n()
 
 const houseDevice = computed(() => house.houseDeviceFor(props.descriptor.id))
 const tunable = computed(() => tunableVehicle(props.descriptor, houseDevice.value))
@@ -60,6 +64,67 @@ function setCapacity(raw: string): void {
   if (!Number.isFinite(value) || value < 0 || value === capacity.value) return
   void house.setDeviceTuning(props.descriptor.id, { batteryKwh: value })
 }
+
+/**
+ * La LOA se saisit en BROUILLON : début, fin et forfait n'ont de sens qu'ensemble, et le contrat
+ * d'écriture la prend d'un bloc. Chaque champ modifié écrit dès que le tout est valable ; tout vider
+ * l'efface. Le brouillon suit la maison (« Rétablir », l'autre surface) tant qu'on n'y touche pas.
+ */
+const lease = computed(() => houseDevice.value?.lease)
+const draft = reactive({ start: '', end: '', km: '', startKm: '' })
+function syncDraft(l: VehicleLease | undefined): void {
+  draft.start = l?.start ?? ''
+  draft.end = l?.end ?? ''
+  draft.km = l ? String(l.km) : ''
+  draft.startKm = l?.startKm ? String(l.startKm) : ''
+}
+watch(lease, syncDraft, { immediate: true })
+function writeLease(): void {
+  if (!draft.start && !draft.end && !draft.km && !draft.startKm) {
+    if (lease.value) void house.setDeviceTuning(props.descriptor.id, { lease: '' })
+    return
+  }
+  const startKm = typed(draft.startKm)
+  const parsed = vehicleLeaseSchema.safeParse({
+    start: draft.start, end: draft.end, km: typed(draft.km), ...(startKm ? { startKm } : {}),
+  })
+  // incomplet : le brouillon attend la suite, rien n'est écrit
+  if (!parsed.success || JSON.stringify(parsed.data) === JSON.stringify(lease.value)) return
+  void house.setDeviceTuning(props.descriptor.id, { lease: parsed.data })
+}
+function setLeaseField(field: keyof typeof draft, raw: string): void {
+  draft[field] = raw.trim()
+  writeLease()
+}
+function clearLease(): void {
+  syncDraft(undefined)
+  writeLease()
+}
+
+/**
+ * « Chercher chez Renault » : un contrat d'entretien plafonné en km est souvent calé sur la LOA,
+ * mais rien ne le garantit — il est PROPOSÉ, jamais écrit d'office. Lu au clic seulement.
+ */
+const renaultVin = computed(() => (props.descriptor.pluginId === 'renault' ? props.descriptor.externalId : null))
+const contracts = ref<RenaultContract[] | null>(null)
+const checking = ref(false)
+const checkError = ref<string | null>(null)
+async function checkRenault(): Promise<void> {
+  if (!renaultVin.value || checking.value) return
+  checking.value = true
+  checkError.value = null
+  try { contracts.value = (await getTransport().renaultContracts(renaultVin.value, locale.value.slice(0, 2))).contracts }
+  catch (err) { checkError.value = (err as Error).message }
+  finally { checking.value = false }
+}
+function useContract(c: RenaultContract): void {
+  if (c.start) draft.start = c.start
+  if (c.end) draft.end = c.end
+  draft.km = String(c.maxKm)
+  writeLease()
+}
+const day = (iso: string | null) => (iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString(locale.value) : '—')
+const km = (n: number) => new Intl.NumberFormat(locale.value).format(n)
 
 /** Rien à proposer quand aucune carrosserie ne correspond : les deux lignes disparaissent. */
 const models = computed(() => modelsFor(props.descriptor.pluginId, props.descriptor.meta.manufacturer))
@@ -121,7 +186,7 @@ const tuned = () => {
   return {
     gpsOffset: hd?.gpsOffset ? ([...hd.gpsOffset] as [number, number]) : undefined,
     yawOffset: hd?.yawOffset, batteryKwh: hd?.batteryKwh,
-    model3d: hd?.model3d, bodyColor: hd?.bodyColor, bodyFinish: hd?.bodyFinish,
+    model3d: hd?.model3d, bodyColor: hd?.bodyColor, bodyFinish: hd?.bodyFinish, lease: hd?.lease,
   }
 }
 const opened = tuned()
@@ -130,6 +195,7 @@ function revert(): void {
   void house.setDeviceTuning(props.descriptor.id, {
     gpsOffset: opened.gpsOffset ?? [0, 0], yawOffset: opened.yawOffset ?? 0, batteryKwh: opened.batteryKwh ?? 0,
     model3d: opened.model3d ?? '', bodyColor: opened.bodyColor ?? '', bodyFinish: opened.bodyFinish ?? '',
+    lease: opened.lease ?? '',
   })
 }
 </script>
@@ -204,6 +270,38 @@ function revert(): void {
                @change="setBodyColor(($event.target as HTMLInputElement).value)" />
       </span>
     </label>
+    <!-- LOA : saisie à la main, le constructeur ne publie pas le contrat de financement -->
+    <div class="tune__section">
+      <span class="tune__title">{{ $t('vehicle.lease.title') }}</span>
+      <button v-if="lease" type="button" class="tune__reset" :title="$t('vehicle.lease.clear')"
+              :aria-label="$t('vehicle.lease.clear')" @click="clearLease">×</button>
+    </div>
+    <label v-for="f in (['start', 'end'] as const)" :key="f" class="tune__row">
+      <span class="muted tune__k">{{ $t(`vehicle.lease.${f}`) }}</span>
+      <span class="tune__fields">
+        <input type="date" class="tune__date" :value="draft[f]" @change="setLeaseField(f, ($event.target as HTMLInputElement).value)" />
+      </span>
+    </label>
+    <label v-for="f in (['km', 'startKm'] as const)" :key="f" class="tune__row">
+      <span class="muted tune__k">{{ $t(`vehicle.lease.${f}`) }}</span>
+      <span class="tune__fields">
+        <input type="number" step="1000" min="0" inputmode="numeric" class="tune__km" :value="draft[f]" placeholder="—"
+               @change="setLeaseField(f, ($event.target as HTMLInputElement).value)" />
+      </span>
+    </label>
+    <p class="muted tune__hint">{{ $t('vehicle.lease.hint') }}</p>
+    <template v-if="renaultVin">
+      <button type="button" class="pill tune__check" :disabled="checking" :aria-busy="checking" @click="checkRenault">
+        <v-progress-circular v-if="checking" indeterminate size="14" width="2" />
+        {{ $t('vehicle.lease.check') }}
+      </button>
+      <p v-if="checkError" class="muted tune__hint">{{ $t('vehicle.lease.checkError', { message: checkError }) }}</p>
+      <p v-else-if="contracts && !contracts.length" class="muted tune__hint">{{ $t('vehicle.lease.none') }}</p>
+      <div v-for="(c, i) in contracts ?? []" :key="i" class="tune__found">
+        <span class="tune__found-text">{{ $t('vehicle.lease.found', { name: c.description, km: km(c.maxKm), start: day(c.start), end: day(c.end) }) }}</span>
+        <button type="button" class="pill tune__use" @click="useContract(c)">{{ $t('vehicle.lease.use') }}</button>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -228,6 +326,15 @@ function revert(): void {
   border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text);
   font: inherit; font-size: 13px;
 }
+/* la LOA : un intertitre, puis des lignes au gabarit des autres réglages */
+.tune__section { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 22px; margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--line); }
+.tune__title { font-size: 12px; font-weight: 600; }
+.tune input.tune__date { width: 140px; }
+.tune input.tune__km { width: 96px; }
+.tune__check { justify-self: start; height: 28px; padding: 0 12px; font-size: 12px; gap: 6px; }
+.tune__found { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; background: var(--accent-soft); font-size: 12px; }
+.tune__found-text { flex: 1 1 auto; min-width: 0; }
+.tune__use { flex: none; height: 28px; padding: 0 12px; font-size: 12px; }
 /* même gabarit que les champs nombre : la ligne ne change pas de hauteur d'une section à l'autre */
 .tune input[type='color'] { width: 72px; height: 28px; padding: 2px; cursor: pointer; }
 .tune__reset {

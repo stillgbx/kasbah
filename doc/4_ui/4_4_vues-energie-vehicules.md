@@ -1,6 +1,6 @@
 # Vues Énergie et Véhicules
 
-> Dernière mise à jour : 2026-10-15
+> Dernière mise à jour : 2026-10-19
 > Sources : sections reprises telles quelles de `4_1_navigation-et-panneaux.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre la vue Énergie (schéma de flux, onduleurs, champs de panneaux, tuiles), la vue Véhicules et la carte d'un véhicule (charge, limite, carte, réveil, climatisation, logiciel). Elle est née du découpage de
@@ -964,3 +964,39 @@ l'annulation et le mode ont été maintenus par une sonde le temps des mesures.
 
 Sources : `apps/web/src/components/controls/{EvChargerCommands,EvChargerControl}.vue`,
 `apps/web/src/views/EnergyView.vue`, `apps/web/src/i18n/locales/{fr,en}.json`.
+
+### Mise à jour 2026-10-19 — la LOA d'un véhicule : saisie dans « Modifier », jauge au pied de la carte
+
+**Besoin** : voir si le kilométrage reste « dans les clous » du forfait de la LOA, au prorata de la durée.
+
+**Saisie** : section « LOA / LLD » du panneau « Modifier » de la carte (`VehicleTuning.vue`), et non la
+carte du plugin dans les Réglages : une LOA est par véhicule et vaut pour toute marque. Champs : Début,
+Fin, Forfait (km), Compteur au départ (km), une aide, et une croix d'effacement à côté de l'intertitre.
+La saisie est un **brouillon**, écrit dès que l'ensemble est valable ; tout vider l'efface (`''`, cf.
+`../2_maison/2_0_format-house-json.md`). « Rétablir » couvre aussi la LOA. Pour un véhicule Renault
+seulement (`descriptor.pluginId === 'renault'`, VIN = `externalId`), un bouton « Chercher chez Renault »
+propose le contrat d'entretien plafonné trouvé et « Reprendre » pré-remplit
+(`../3_plugins/3_9_renault.md`).
+
+**Calcul** (`apps/web/src/lib/vehicleLease.ts`, `leaseProgress(lease, odometerKm, now)`) : kilomètres
+parcourus (`compteur − startKm`), **autorisés à ce jour** (forfait × part du contrat écoulée, en jours
+entiers UTC), part consommée, part écoulée, projection à l'échéance au rythme actuel, `ended`. `null`
+sans compteur lu. `leaseOverPace` : plus de km que le prorata. **La projection reste `null` le premier
+mois** (`LEASE_PROJECTION_MIN_DAYS = 30`) : rapportée à quelques jours, une semaine de vacances se
+lirait comme 60 000 km à l'échéance. Ce mois-là la ligne de détail affiche « Fin le … ».
+
+**Affichage** (`VehiclesView.vue`) : le pied de la colonne de gauche, `.vcard__foot` (zone de grille `q`,
+celle du quota Tesla, que la R5 n'utilise pas), empile quota et LOA. Ligne « LOA · X km sur Y autorisés à
+ce jour », jauge (remplissage = part du forfait consommée, repère vertical = rythme autorisé, orangé
+`#d38b22` quand on roule plus vite que le prorata), ligne de détail « ≈ Z km au <date> (forfait N) » ou
+« LOA terminée ». **La ligne de détail garde sa hauteur même vide** (règle « rien ne bouge »).
+
+**Mesuré** (preview `kasbah-mock`, descripteur passé en `renault` à la main pour voir le bouton) : à
+1440 × 900 la carte garde sa hauteur (533 px) : le pied tient dans la place libre ; à 1152 × 720 et
+960 × 600 (zooms 1,25 et 1,5, disposition moyenne) elle **grandit de 48 px** quand une LOA est saisie,
+comme avec le quota Tesla (accepté, pas corrigé). À 375 × 812, ni débordement ni libellé coupé en fr et en,
+après raccourcissement de la ligne de projection. Clair et sombre : le repère prend `var(--text)`. Non
+joué : le bouton Renault contre le vrai serveur.
+
+Sources : `apps/web/src/components/vehicles/VehicleTuning.vue`, `apps/web/src/views/VehiclesView.vue`,
+`apps/web/src/lib/vehicleLease.ts`, `apps/web/src/i18n/locales/{fr,en}.json` (`vehicle.lease.*`).

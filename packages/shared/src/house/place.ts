@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { deviceIdSchema } from '../devices/descriptor'
-import { defaultPlugins, GARDEN_KINDS, hexColorSchema, MAX_GARDEN_HEIGHT, MAX_HEDGE_LENGTH, MAX_HEDGE_SPACING, MAX_HEDGE_WIDTH, MIN_GARDEN_HEIGHT, MIN_HEDGE_LENGTH, MIN_HEDGE_SPACING, MIN_HEDGE_WIDTH, MAX_OPENING_LEAVES, MIN_OPENING_LEAVES, MIN_PARKING_DIM, model3dSchema, MOUNTS, NEUTRAL_TUNING, OPENING_MATERIALS, OPENING_TYPES, SPEAKER_SHAPES, vec2Schema, vec3Schema, type GeoOrigin, type PluginSettingsPatch, type Relief, type SceneTuning } from './schema'
+import { defaultPlugins, GARDEN_KINDS, hexColorSchema, MAX_GARDEN_HEIGHT, MAX_HEDGE_LENGTH, MAX_HEDGE_SPACING, MAX_HEDGE_WIDTH, MIN_GARDEN_HEIGHT, MIN_HEDGE_LENGTH, MIN_HEDGE_SPACING, MIN_HEDGE_WIDTH, MAX_OPENING_LEAVES, MIN_OPENING_LEAVES, MIN_PARKING_DIM, model3dSchema, MOUNTS, NEUTRAL_TUNING, OPENING_MATERIALS, OPENING_TYPES, SPEAKER_SHAPES, vec2Schema, vec3Schema, type GeoOrigin, type PluginSettingsPatch, type Relief, type SceneTuning, vehicleLeaseSchema } from './schema'
 import { DEVICE_KINDS, VEHICLE_FINISHES } from '../devices/kinds'
 import { computeHouseGeometry, extendReliefGrid, isSimplePolygon, openingCentre, parseRelief, serializeRelief, type Vec2 } from './geometry'
 import { parseHouse } from './validate'
@@ -81,6 +81,11 @@ export const devicePlacementSchema = z.object({
    * revenir au cylindre par défaut.
    */
   speakerShape: z.union([z.literal(''), z.enum(SPEAKER_SHAPES)]).optional(),
+  /**
+   * LOA / LLD d'un véhicule (comme `HouseDevice.lease`), écrite d'un bloc : début, fin et forfait
+   * n'ont de sens qu'ensemble. **Chaîne vide = effacer**, comme pour le nom.
+   */
+  lease: z.union([z.literal(''), vehicleLeaseSchema]).optional(),
   /**
    * Ouverture que l'appareil habille (comme `HouseDevice.openingId`) : un volet, un capteur de
    * fenêtre épousent son rectangle au lieu d'occuper un point. **Chaîne vide = délier**, comme la
@@ -169,7 +174,7 @@ function alignDevicesOnOpenings(doc: JsonObject, openingIds: readonly string[]):
 /**
  * Renvoie une copie du document JSON avec l'appareil `id` (re)placé ou renommé : entrée existante
  * mise à jour (position, nom, pièce, mount, yaw, size, leaves, coverMaterial, coverColor, gpsOffset, mapOffset,
- * yawOffset, batteryKwh, model3d, bodyColor, bodyFinish), ou entrée créée
+ * yawOffset, batteryKwh, model3d, bodyColor, bodyFinish, lease), ou entrée créée
  * `{ id, deviceId, … }` avec ce qui a été donné.
  *
  * Tout est facultatif, position comprise : renommer un appareil qui n'a PAS de place dans la scène
@@ -231,6 +236,10 @@ export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePla
       if (placement.speakerShape) next.speakerShape = placement.speakerShape
       else delete next.speakerShape
     }
+    if (placement.lease !== undefined) {
+      if (placement.lease) next.lease = placement.lease
+      else delete next.lease
+    }
     if (placement.coverMaterial !== undefined) {
       if (placement.coverMaterial) next.coverMaterial = placement.coverMaterial
       else delete next.coverMaterial
@@ -279,6 +288,7 @@ export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePla
     if (placement.bodyColor) next.bodyColor = placement.bodyColor
     if (placement.bodyFinish) next.bodyFinish = placement.bodyFinish
     if (placement.speakerShape) next.speakerShape = placement.speakerShape
+    if (placement.lease) next.lease = placement.lease
     if (placement.coverMaterial) next.coverMaterial = placement.coverMaterial
     if (placement.coverColor) next.coverColor = placement.coverColor
     if (placement.openingId) {

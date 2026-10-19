@@ -106,3 +106,23 @@ export const kamereonErrorsSchema = z.looseObject({
     errorMessage: z.string().optional(),
   })).default([]),
 })
+
+/**
+ * Un contrat du véhicule (`GET .../vehicles/{vin}/contracts`) : garanties, services connectés,
+ * entretien. Forme lue sur la capture du vrai compte (2026-10-19) : la réponse est un TABLEAU nu, et
+ * `conditions` un tableau dont la première entrée porte le plafond (`maximumMileage`, en `km`).
+ * Aucun contrat de financement n'y figure — LOA et LLD vivent chez Mobilize, sans API connue.
+ */
+export const vehicleContractSchema = z.looseObject({
+  type: z.string().optional(),
+  description: z.string().optional(),
+  status: z.string().optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  durationMonths: z.number().optional(),
+  conditions: z.array(z.looseObject({
+    maximumMileage: z.number().optional(),
+    unlimitedMileage: z.boolean().optional(),
+    mileageUnit: z.string().optional(),
+  })).optional(),
+})

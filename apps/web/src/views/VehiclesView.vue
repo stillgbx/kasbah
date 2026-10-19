@@ -13,6 +13,7 @@ import VehicleSoftware from '../components/vehicles/VehicleSoftware.vue'
 import VehicleTuning from '../components/vehicles/VehicleTuning.vue'
 import { formatAgo, formatDistance, formatKm, formatMinutes, formatPercent, formatPower, formatTemp } from '../lib/format'
 import { QUOTA_TENSE_PCT, quotaPercent } from '../lib/map'
+import { leaseOverPace, leaseProgress } from '../lib/vehicleLease'
 import { tunableVehicle } from '../lib/vehicleTuning'
 import { useDevicesStore } from '../stores/devices'
 import { useHouseStore } from '../stores/house'
@@ -251,6 +252,33 @@ const quotaLabel = (q: Quota) => {
   const date = new Date(q.since).toLocaleDateString(locale.value, { day: 'numeric', month: 'short' })
   return `${line} · ${t('vehicle.quotaSince', { date })}`
 }
+/**
+ * La LOA saisie au panneau « Modifier », contre le compteur lu : deux lignes et une jauge, à la place
+ * du quota (la R5 n'en a pas). Rien sans LOA saisie ni compteur lu. Le repère de la jauge est le
+ * rythme autorisé à ce jour ; la jauge passe à l'orangé quand on roule plus vite que lui.
+ */
+const leases = computed(() => {
+  const out = new Map<string, { line: string; detail: string; fill: number; pace: number; tense: boolean }>()
+  const nf = new Intl.NumberFormat(locale.value)
+  for (const v of vehicles.value) {
+    const lease = house.houseDeviceFor(v.descriptor.id)?.lease
+    const p = lease ? leaseProgress(lease, v.state.odometerKm, now.value) : null
+    if (!lease || !p) continue
+    const end = new Date(`${lease.end}T12:00:00Z`).toLocaleDateString(locale.value, { day: 'numeric', month: 'short', year: 'numeric' })
+    const total = nf.format(lease.km)
+    const driven = nf.format(p.drivenKm)
+    out.set(v.descriptor.id, {
+      line: p.ended ? t('vehicle.lease.ended', { end, driven, total }) : t('vehicle.lease.line', { driven, allowed: nf.format(p.allowedKm) }),
+      detail: p.ended ? '' : p.projectedKm !== null
+        ? t('vehicle.lease.projection', { projected: nf.format(p.projectedKm), end, total })
+        : t('vehicle.lease.early', { end, total }),
+      fill: Math.min(p.usedShare, 1) * 100,
+      pace: p.elapsedShare * 100,
+      tense: leaseOverPace(p),
+    })
+  }
+  return out
+})
 onMounted(() => {
   void devices.refreshHealth()
   clockTimer = setInterval(() => { now.value = Date.now(); void devices.refreshHealth() }, 30_000)
@@ -404,13 +432,27 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
               </div>
             </Transition>
           </div>
-          <!-- ce qu'il reste du quota que le plugin s'impose (API du fabricant facturée) : rien pour
-               un plugin qui ne compte pas, la simulation par exemple -->
-          <div v-if="quotaOf(v)" class="vcard__quota">
-            <span class="muted vcard__quota-text" :title="quotaLabel(quotaOf(v)!)">{{ quotaLabel(quotaOf(v)!) }}</span>
-            <div class="vcard__quota-track">
-              <div class="vcard__quota-fill" :data-tense="quotaPercent(quotaOf(v)!.used, quotaOf(v)!.limit) >= QUOTA_TENSE_PCT ? '1' : '0'"
-                   :style="{ width: `${quotaPercent(quotaOf(v)!.used, quotaOf(v)!.limit)}%` }" />
+          <!-- le pied de la colonne de gauche : quota du fabricant et LOA, l'un sous l'autre -->
+          <div v-if="quotaOf(v) || leases.get(v.descriptor.id)" class="vcard__foot">
+            <!-- ce qu'il reste du quota que le plugin s'impose (API du fabricant facturée) : rien pour
+                 un plugin qui ne compte pas, la simulation par exemple -->
+            <div v-if="quotaOf(v)" class="vcard__quota">
+              <span class="muted vcard__quota-text" :title="quotaLabel(quotaOf(v)!)">{{ quotaLabel(quotaOf(v)!) }}</span>
+              <div class="vcard__quota-track">
+                <div class="vcard__quota-fill" :data-tense="quotaPercent(quotaOf(v)!.used, quotaOf(v)!.limit) >= QUOTA_TENSE_PCT ? '1' : '0'"
+                     :style="{ width: `${quotaPercent(quotaOf(v)!.used, quotaOf(v)!.limit)}%` }" />
+              </div>
+            </div>
+            <div v-if="leases.get(v.descriptor.id)" class="vcard__quota vcard__lease">
+              <span class="muted vcard__quota-text" :title="leases.get(v.descriptor.id)!.line">{{ leases.get(v.descriptor.id)!.line }}</span>
+              <div class="vcard__lease-bar">
+                <div class="vcard__quota-track">
+                  <div class="vcard__quota-fill" :data-tense="leases.get(v.descriptor.id)!.tense ? '1' : '0'"
+                       :style="{ width: `${leases.get(v.descriptor.id)!.fill}%` }" />
+                </div>
+                <span class="vcard__lease-pace" :style="{ left: `${leases.get(v.descriptor.id)!.pace}%` }" />
+              </div>
+              <span class="muted vcard__quota-text vcard__lease-detail" :title="leases.get(v.descriptor.id)!.detail">{{ leases.get(v.descriptor.id)!.detail }}</span>
             </div>
           </div>
         </article>
@@ -472,7 +514,7 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
   .vcard__overlay { position: absolute; inset: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
   .vcard__mapbox { flex: 1 1 auto; display: flex; flex-direction: column; }
   .vcard__mapbox > .vcard__map { flex: 1 1 auto; height: auto; min-height: var(--vmap-min); }
-  .vcard__quota { grid-area: q; align-self: end; }
+  .vcard__foot { grid-area: q; align-self: end; }
 }
 /* Écran large : énergie | état puis boutons | carte sur toute la hauteur. Le quota ferme la colonne
    de gauche. Carte à DROITE des boutons : ceux qui ouvrent un panneau passent dans la colonne qui la
@@ -557,6 +599,8 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
 /* un bouton qui ATTEND n'est pas un bouton indisponible : l'opacité des boutons désactivés (.45)
    rendait le spinner à peine visible, or c'est lui qui porte l'information */
 .vcard__actions .pill[aria-busy='true']:disabled { opacity: .7; }
+/* quota et LOA empilés au pied de la colonne */
+.vcard__foot { display: grid; gap: 12px; min-width: 0; }
 /* quota du fabricant : même langage que la jauge de charge en haut de carte, en plus discret */
 .vcard__quota { display: grid; gap: 6px; }
 /* une seule ligne : le texte tient dans la carte la plus étroite (320 px), la coupure n'est qu'un filet */
@@ -565,4 +609,9 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
 .vcard__quota-fill { height: 100%; border-radius: 999px; background: var(--accent); transition: width .4s; }
 /* le quota touche à sa fin : le même orangé que les avertissements des cartes de Réglages */
 .vcard__quota-fill[data-tense='1'] { background: #d38b22; }
+/* LOA : le repère du rythme autorisé dépasse de la jauge, qui elle rogne son remplissage */
+.vcard__lease-bar { position: relative; }
+.vcard__lease-pace { position: absolute; top: -3px; width: 2px; height: 10px; margin-left: -1px; border-radius: 1px; background: var(--text); opacity: .55; }
+/* la ligne du détail garde sa hauteur même vide (LOA terminée) : rien ne bouge sous la jauge */
+.vcard__lease-detail { height: 1.4em; line-height: 1.4em; }
 </style>

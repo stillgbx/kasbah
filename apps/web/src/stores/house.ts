@@ -806,11 +806,11 @@ export const useHouseStore = defineStore('house', () => {
   /**
    * Réglages d'un appareil que seul l'utilisateur peut connaître : le décalage de sa place calculée
    * par GPS, la correction de son orientation, la capacité de sa batterie (aucun fabricant ne la
-   * donne), les vantaux, la matière et la couleur d'un ouvrant (un moteur publie une course, pas un
+   * donne), la LOA d'un véhicule, les vantaux, la matière et la couleur d'un ouvrant (un moteur publie une course, pas un
    * volet bois blanc). Même chemin que le renommage : l'entrée de maison est créée au besoin, SANS position —
    * un véhicule n'a pas de place écrite. `[0, 0]` et `0` effacent, comme la chaîne vide efface un nom.
    */
-  async function setDeviceTuning(pluginDeviceId: string, tuning: Pick<DevicePlacement, 'gpsOffset' | 'mapOffset' | 'yawOffset' | 'batteryKwh' | 'model3d' | 'bodyColor' | 'bodyFinish' | 'leaves' | 'coverMaterial' | 'coverColor' | 'speakerShape'>): Promise<boolean> {
+  async function setDeviceTuning(pluginDeviceId: string, tuning: Pick<DevicePlacement, 'gpsOffset' | 'mapOffset' | 'yawOffset' | 'batteryKwh' | 'model3d' | 'bodyColor' | 'bodyFinish' | 'leaves' | 'coverMaterial' | 'coverColor' | 'speakerShape' | 'lease'>): Promise<boolean> {
     const hd = houseDeviceFor(pluginDeviceId)
     const placement: DevicePlacement = { ...tuning }
     if (!hd) placement.deviceId = pluginDeviceId

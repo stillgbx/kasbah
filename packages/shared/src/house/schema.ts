@@ -352,6 +352,21 @@ export const siteSchema = z.object({
 })
 export type Site = z.infer<typeof siteSchema>
 
+/**
+ * Location avec option d'achat (ou longue durée) d'un véhicule : ce qu'il faut pour suivre le
+ * kilométrage contre le forfait. **Aucun fabricant ne publie le contrat de financement** — Renault
+ * expose au mieux un contrat d'entretien calé dessus — : c'est une valeur SAISIE. `startKm`, le
+ * compteur à la remise des clés, manque à tout relevé ; absent = 0, un véhicule neuf.
+ */
+export const vehicleLeaseSchema = z.object({
+  start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date : AAAA-MM-JJ'),
+  end: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date : AAAA-MM-JJ'),
+  /** Forfait kilométrique de TOUT le contrat (km), pas par an. */
+  km: z.number().int().positive().max(2_000_000),
+  startKm: z.number().int().min(0).max(2_000_000).optional(),
+}).refine((l) => l.start < l.end, { message: 'lease must end after it starts' })
+export type VehicleLease = z.infer<typeof vehicleLeaseSchema>
+
 export const MOUNTS = ['ceiling', 'wall', 'floor', 'free'] as const
 export const houseDeviceSchema = z.object({
   id: idSchema,
@@ -415,6 +430,8 @@ export const houseDeviceSchema = z.object({
    * ce que l'utilisateur choisit l'emporte sur ce que le fabricant dit, et l'absence rend la main.
    */
   bodyFinish: z.enum(VEHICLE_FINISHES).optional(),
+  /** LOA / LLD d'un véhicule, pour suivre son kilométrage contre le forfait (`vehicleLeaseSchema`). */
+  lease: vehicleLeaseSchema.optional(),
   levelId: idSchema.optional(),
   roomId: idSchema.optional(),
   zoneId: idSchema.optional(),

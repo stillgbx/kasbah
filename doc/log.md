@@ -7,6 +7,19 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-19] update | Suivi de la LOA d'un véhicule
+
+**Trigger** : demande de l'utilisateur, suivre si le kilométrage reste dans les clous du forfait de sa LOA, au prorata de la durée ; fonctionnalité codée, non commitée (HEAD 06fd524).
+
+**Pages modified** :
+- 2_maison/2_0_format-house-json.md - section 2026-10-19 : `devices[].lease` (`start`, `end`, `km`, `startKm`), règles, écriture d'un bloc, `''` efface
+- 3_plugins/3_9_renault.md - section 2026-10-19 : `/contracts` (aucun contrat de financement chez Kamereon, ce que l'endpoint contient, filtre `toMileageContracts`, lecture au clic seulement, lecture quotidienne écartée, route et codes d'erreur)
+- 4_ui/4_4_vues-energie-vehicules.md - section 2026-10-19 : saisie dans « Modifier », calcul au prorata (projection muette le premier mois), jauge au pied de la carte, mesures de mise en page
+
+**Trous signalés** : le bouton « Chercher chez Renault » n'a pas été cliqué contre le vrai serveur depuis l'interface ; aucun `journal.md` de session n'existait, récit tiré du brief du fil principal et du code.
+
+**Index** : catalogues 2_maison, 3_plugins, 4_ui (1 ligne chacun, date seule), index.md regénéré.
+
 ## [2026-10-15] update | MCP : garde-fous des automatisations écrites par l'assistant
 
 **Trigger** : question de l'utilisateur (« faut-il des garde-fous ? »), quatre garde-fous retenus.

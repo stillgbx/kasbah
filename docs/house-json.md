@@ -91,6 +91,12 @@ Un appareil peut se réduire à sa **liaison** et à sa **position** (`{ id, dev
 
 **Depuis l'UI** : panneau d'un appareil → « Déplacer » → glisser dans la 3D (x;y), préréglages et curseur pour la hauteur. Chaque dépôt est envoyé au serveur (`PUT /api/house/devices/:id`, corps `{ position, roomId?, mount?, deviceId? }`) qui **réécrit le fichier** (`KASBAH_HOUSE_FILE`) après validation complète, garde la version précédente en `<fichier>.bak` et pousse la maison aux écrans connectés (message WebSocket `house`). Un appareil auto-placé y gagne son entrée minimale ; le fichier est reformaté (`JSON.stringify` à deux espaces), l'ordre des clés est conservé. Volets (ancrés à une ouverture) et tondeuse ne se déplacent pas ainsi.
 
+**Véhicule en LOA ou LLD** : `lease` donne le contrat, pour suivre le kilométrage contre le forfait. `start` et `end` sont au format `AAAA-MM-JJ`, `km` est le forfait du contrat **entier** et `startKm` (facultatif, 0 par défaut) le compteur à la remise des clés. La carte du véhicule affiche alors les km parcourus face aux km autorisés à ce jour, au prorata du temps écoulé, et une projection à l'échéance. Aucun constructeur ne publie le contrat de financement : il se saisit depuis la carte (« Modifier » → LOA / LLD). Pour une Renault, « Chercher chez Renault » propose le contrat d'entretien plafonné en km du compte, souvent calé sur la LOA.
+
+```jsonc
+{ "id": "vehicle.r5", "deviceId": "renault:VF1…", "lease": { "start": "2025-03-01", "end": "2029-03-31", "km": 40000, "startKm": 12 } }
+```
+
 Les ids des appareils du plugin `mock` sont stables (`mock:light-living`, `mock:cover-kitchen`, `mock:energy-site`, `mock:vehicle-tesla`…) ; les ids Hue sont les UUID des ressources `light` du bridge (visibles dans `GET /api/devices`).
 
 ### Scènes

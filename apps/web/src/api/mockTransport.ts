@@ -389,6 +389,10 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     async renaultStatus() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Renault account in mock mode') },
     async renaultLogin() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Renault account in mock mode') },
     async renaultLogout() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Renault account in mock mode') },
+    // un contrat d'exemple : de quoi voir la proposition du panneau « Modifier » sans compte réel
+    async renaultContracts() {
+      return { contracts: [{ description: 'EASYPACK 49MOIS EXEMPLE', start: '2025-03-01', end: '2029-03-31', maxKm: 40000 }] }
+    },
     async melcloudStatus() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no MELCloud account in mock mode') },
     async melcloudLogin() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no MELCloud account in mock mode') },
     async melcloudLogout() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no MELCloud account in mock mode') },

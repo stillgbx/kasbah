@@ -1,5 +1,5 @@
 import { makeDeviceId, type Capability, type CommandOf, type DeviceDescriptor, type StatePatch } from '@kasbah/shared'
-import { personAccountSchema, vehicleLinkSchema, vehiclesSchema, type PersonAccount, type VehicleLink } from './types'
+import { personAccountSchema, vehicleContractSchema, vehicleLinkSchema, vehiclesSchema, type PersonAccount, type VehicleLink } from './types'
 
 // Mappage PUR : ressources Renault ↔ contrat Kasbah. Aucun accès réseau, aucun état.
 //
@@ -57,6 +57,35 @@ export function toVehicleLinks(body: unknown): VehicleLink[] {
   for (const raw of parsed.data.vehicleLinks) {
     const link = vehicleLinkSchema.safeParse(raw)
     if (link.success) out.push(link.data)
+  }
+  return out
+}
+
+/** Un contrat d'entretien plafonné en km : ce qui, chez Renault, ressemble le plus à une LOA. */
+export interface MileageContract {
+  description: string
+  /** `AAAA-MM-JJ`, ou `null` quand Renault ne la donne pas. */
+  start: string | null
+  end: string | null
+  maxKm: number
+}
+
+/**
+ * Les contrats d'ENTRETIEN plafonnés en kilomètres, actifs ou non. Les garanties sont écartées même
+ * plafonnées (la batterie porte un plafond qui n'a rien d'un forfait de location), et un contrat
+ * illisible n'en cache pas d'autres. Ce n'est qu'une suggestion : Renault n'expose AUCUN contrat
+ * de financement — un Easypack se vend calé sur la LOA, mais rien ne le garantit.
+ */
+export function toMileageContracts(body: unknown): MileageContract[] {
+  if (!Array.isArray(body)) return []
+  const day = (v: string | undefined) => (v && /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : null)
+  const out: MileageContract[] = []
+  for (const raw of body) {
+    const c = vehicleContractSchema.safeParse(raw)
+    if (!c.success || c.data.type !== 'WARRANTY_MAINTENANCE_CONTRACTS') continue
+    const cap = c.data.conditions?.find((k) => k.unlimitedMileage === false && (k.maximumMileage ?? 0) > 0)
+    if (!cap || (cap.mileageUnit && cap.mileageUnit.toLowerCase() !== 'km')) continue
+    out.push({ description: c.data.description?.trim() ?? '', start: day(c.data.startDate), end: day(c.data.endDate), maxKm: cap.maximumMileage! })
   }
   return out
 }

@@ -44,11 +44,11 @@ Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/Web
 ## 2 — Maison
 
 <!-- section:2_maison:begin (généré par scripts/wiki-index.mjs depuis 2_maison/README.md - ne pas éditer ici) -->
-La maison décrite en JSON : format et validation, géométrie dérivée (murs, ouvertures, sols, toit), jardin. Résumés : [2_maison/README.md](2_maison/README.md) (3 pages, dernière mise à jour 2026-10-13).
+La maison décrite en JSON : format et validation, géométrie dérivée (murs, ouvertures, sols, toit), jardin. Résumés : [2_maison/README.md](2_maison/README.md) (3 pages, dernière mise à jour 2026-10-19).
 
 | Pages | Dernière mise à jour |
 |---|---|
-| [2_0 Format house.json : décisions et validation](2_maison/2_0_format-house-json.md) | 2026-10-13 |
+| [2_0 Format house.json : décisions et validation](2_maison/2_0_format-house-json.md) | 2026-10-19 |
 | [2_1 Géométrie : murs, ouvertures, sols, toit](2_maison/2_1_geometrie.md) | 2026-10-06 |
 | [2_2 Jardin : arbres, buissons, pierres](2_maison/2_2_jardin.md) | 2026-10-06 |
 <!-- section:2_maison:end -->
@@ -56,7 +56,7 @@ La maison décrite en JSON : format et validation, géométrie dérivée (murs, 
 ## 3 — Plugins
 
 <!-- section:3_plugins:begin (généré par scripts/wiki-index.mjs depuis 3_plugins/README.md - ne pas éditer ici) -->
-Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin), puis chaque intégration, ses contraintes, ses pièges et ce qui a été vérifié sur du vrai matériel. Résumés : [3_plugins/README.md](3_plugins/README.md) (26 pages, dernière mise à jour 2026-10-15).
+Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin), puis chaque intégration, ses contraintes, ses pièges et ce qui a été vérifié sur du vrai matériel. Résumés : [3_plugins/README.md](3_plugins/README.md) (26 pages, dernière mise à jour 2026-10-19).
 
 | Socle | Dernière mise à jour |
 |---|---|
@@ -72,7 +72,7 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 | [3_6 Google Cast](3_plugins/3_6_google-cast.md) | 2026-10-12 |
 | [3_7 Enphase](3_plugins/3_7_enphase.md) | 2026-10-15 |
 | [3_8 Tesla (Fleet API)](3_plugins/3_8_tesla.md) | 2026-10-06 |
-| [3_9 Renault (Gigya + Kamereon)](3_plugins/3_9_renault.md) | 2026-10-06 |
+| [3_9 Renault (Gigya + Kamereon)](3_plugins/3_9_renault.md) | 2026-10-19 |
 | [3_10 Open-Meteo](3_plugins/3_10_open-meteo.md) | 2026-10-09 |
 | [3_11 Husqvarna Automower](3_plugins/3_11_husqvarna-automower.md) | 2026-10-14 |
 | [3_12 COMAP Proteo 2](3_plugins/3_12_comap-proteo.md) | 2026-10-06 |
@@ -94,7 +94,7 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 ## 4 — UI
 
 <!-- section:4_ui:begin (généré par scripts/wiki-index.mjs depuis 4_ui/README.md - ne pas éditer ici) -->
-Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et langues, puis une page par famille de vues. Résumés : [4_ui/README.md](4_ui/README.md) (9 pages, dernière mise à jour 2026-10-15).
+Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et langues, puis une page par famille de vues. Résumés : [4_ui/README.md](4_ui/README.md) (9 pages, dernière mise à jour 2026-10-19).
 
 | Socle | Dernière mise à jour |
 |---|---|
@@ -105,7 +105,7 @@ Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et 
 | Vues | Dernière mise à jour |
 |---|---|
 | [4_3 Vues Lumières, Ouvrants et Caméras](4_ui/4_3_vues-lumieres-ouvrants-cameras.md) | 2026-10-13 |
-| [4_4 Vues Énergie et Véhicules](4_ui/4_4_vues-energie-vehicules.md) | 2026-10-15 |
+| [4_4 Vues Énergie et Véhicules](4_ui/4_4_vues-energie-vehicules.md) | 2026-10-19 |
 | [4_5 Musique et médias](4_ui/4_5_musique-et-medias.md) | 2026-10-13 |
 | [4_6 Autres vues](4_ui/4_6_autres-vues.md) | 2026-10-14 |
 | [4_7 Vue Réglages](4_ui/4_7_reglages.md) | 2026-10-13 |

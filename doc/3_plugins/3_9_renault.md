@@ -1,6 +1,6 @@
 # Plugin Renault (véhicules, Gigya + Kamereon)
 
-> Dernière mise à jour : 2026-10-06
+> Dernière mise à jour : 2026-10-19
 > Sources : `apps/server/src/plugins/renault/{index,auth,client,mapping,types}.ts`, `apps/server/src/plugins/renault/__fixtures__/kamereon.ts`, tests `mapping.test.ts` et `plugin.test.ts`, `apps/web/src/components/RenaultLinkCard.vue`, `apps/web/src/views/VehiclesView.vue`, `apps/server/.env.example`, capture du vrai compte le 2026-09-14 (Renault 5 E-Tech `R5E1VE`), documentation `renault-api` (hacf-fr), portail `developer.ampere.cars`, dépôt `evcc-io/evcc` (modes de réveil), forum communautaire Renault, écriture de la cible de charge essayée sur le vrai véhicule le 2026-09-14, diagnostic du 2026-09-19 sur le vrai véhicule et le vrai serveur (réveil de charge qui ne partait pas)
 
 ## Il n'existe aucune voie officielle
@@ -691,3 +691,45 @@ l'ancien mappage.
 Fixture : `BATTERY_WAITING_FRESH_ETA`, la trame du 02/10 telle quelle. Sources :
 `apps/server/src/plugins/renault/{index,mapping}.ts`, `mapping.test.ts`,
 `apps/server/src/plugins/renault/__fixtures__/kamereon.ts`.
+
+### Mise à jour 2026-10-19 — `/contracts` : les contrats d'entretien plafonnés, lus au clic seulement
+
+**Question de départ** : suivre le kilométrage d'une LOA. **Constat** (une sonde unique sur le vrai compte,
+puis plus rien) : Kamereon n'expose **aucun contrat de financement**. LOA et LLD vivent chez Mobilize
+Financial Services, sans API connue. La saisie de la LOA est donc manuelle
+(`../2_maison/2_0_format-house-json.md`, même date).
+
+**Ce que l'endpoint contient.**
+`GET /commerce/v1/accounts/{accountId}/vehicles/{vin}/contracts?country=FR&locale=fr-FR&brand=RENAULT&connectedServicesContracts=true&warranty=true&warrantyMaintenanceContracts=true`
+répond un **tableau nu** (pas d'enveloppe) de contrats de trois familles : services connectés
+(`CONNECTED_SERVICES`), garanties (`WARRANTY`, dont la garantie batterie, elle aussi plafonnée en km) et
+contrats d'entretien (`WARRANTY_MAINTENANCE_CONTRACTS`, ex. un « Easypack », groupe « Contrat d'entretien et
+extension de garantie »). Chaque contrat porte `startDate`, `endDate`, `durationMonths`, `status`,
+`description`, et `conditions`, un **tableau** dont une entrée donne `maximumMileage`, `mileageUnit: 'km'` et
+`unlimitedMileage`. Schéma : `vehicleContractSchema` (`types.ts`) ; fixture `CONTRACTS`
+(`__fixtures__/kamereon.ts`), forme réelle, valeurs inventées.
+
+**Ce qu'on en garde.** `toMileageContracts()` (`mapping.ts`) ne retient que
+`WARRANTY_MAINTENANCE_CONTRACTS` avec `unlimitedMileage: false` et un plafond en km. Les **garanties sont
+écartées même plafonnées** : leur plafond (batterie, constructeur) n'est pas celui du contrat de
+location, les proposer tromperait. Pourquoi l'entretien : un Easypack se vend souvent **calé sur la LOA**
+(même durée, même forfait). L'utilisateur l'a confirmé chez lui, mais ne veut pas s'y fier en général : le
+contrat est donc une **proposition** (« peut-être lié à votre LOA »), jamais une donnée.
+
+**Lu au clic, pas au fil de l'eau.** Une lecture quotidienne a été **écartée** : rien n'y change en cours
+de contrat, et chaque lecture coûte du quota (le compte partage un budget d'appels avec le serveur). Le
+bouton « Chercher chez Renault » du panneau « Modifier » appelle la route ; « Reprendre » pré-remplit
+début, fin, forfait ; rien n'est écrit avant ce clic.
+
+**Route** : `GET /api/plugins/renault/contracts/:vin?lang=fr` → `{ contracts: [{ description, start, end,
+maxKm }] }` (`apps/server/src/plugins/renault/index.ts`). Refus : **409** compte non lié, **404** VIN
+étranger au compte (vérifié contre les véhicules connus, **sans appeler Renault**), **429** budget de
+débit du plugin atteint, **502** pour toute autre panne. Client : `client.vehicleContracts()`. Côté web :
+`renaultContracts(vin, lang)` (`transport.ts`, `httpTransport.ts` ; `mockTransport.ts` renvoie un contrat
+d'exemple pour voir la proposition en simulation).
+
+**Limite de vérification** : forme éprouvée par la sonde unique et par les tests (fixture) ; le bouton n'a
+**pas** été cliqué contre le vrai serveur depuis l'interface.
+
+Sources : `apps/server/src/plugins/renault/{client,mapping,types,index}.ts`, `mapping.test.ts`,
+`plugin.test.ts`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`.

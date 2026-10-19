@@ -14,7 +14,7 @@ import {
 import { DEFAULT_RATE_PER_HOUR, RenaultClient, carDataPath, isDeferred, isEndpointUnavailable } from './client'
 import {
   chargeStartPayload, climateSettingsPayload, commandSummary, hvacSocThreshold, hvacStartPayload, inWindow, socTargetPayload, toAccounts, toDescriptor, toStatePatch, batteryFrame, levelRising, trackLevel, type LevelTrack,
-  toVehicleLinks, wakePayload, type VehicleReadings,
+  toMileageContracts, toVehicleLinks, wakePayload, type VehicleReadings,
 } from './mapping'
 import type { VehicleLink } from './types'
 
@@ -512,6 +512,26 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
         accounts = []
         links = []
         return status()
+      })
+
+      /**
+       * Les contrats d'entretien plafonnés en km d'un véhicule, pour PROPOSER une LOA au panneau
+       * « Modifier » : lus au clic, jamais au sondage. Rien n'est écrit, l'utilisateur choisit.
+       */
+      app.get<{ Params: { vin: string }; Querystring: { lang?: string } }>('/contracts/:vin', async (req, reply) => {
+        if (!auth?.linked) return reply.code(409).send({ error: 'no Renault account linked' })
+        try {
+          const id = accountId ?? await resolveAccount(ctx?.signal)
+          if (!id) return reply.code(409).send({ error: 'no Kamereon account found for this person' })
+          const known = links.length ? links : await listVehicles(ctx?.signal)
+          if (!known.some((l) => l.vin === req.params.vin)) return reply.code(404).send({ error: 'unknown vehicle' })
+          const lang = /^[a-z]{2}$/.test(req.query.lang ?? '') ? req.query.lang! : 'fr'
+          const body = await client!.vehicleContracts(id, req.params.vin, `${lang}-${config!.RENAULT_COUNTRY}`, ctx?.signal)
+          return { contracts: toMileageContracts(body) }
+        } catch (err) {
+          if (err instanceof PluginError && err.code === 'RATE_LIMITED') return reply.code(429).send({ error: err.message })
+          return reply.code(502).send({ error: (err as Error).message })
+        }
       })
 
       /**

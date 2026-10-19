@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
-  ACCOUNT_ID, BATTERY_CHARGING, BATTERY_CHARGING_LIAR, BATTERY_UNPLUGGED, BATTERY_WAITING, BATTERY_WAITING_FRESH_ETA, COCKPIT_V1, COCKPIT_V2_EASTER_EGG,
+  ACCOUNT_ID, BATTERY_CHARGING, CONTRACTS, BATTERY_CHARGING_LIAR, BATTERY_UNPLUGGED, BATTERY_WAITING, BATTERY_WAITING_FRESH_ETA, COCKPIT_V1, COCKPIT_V2_EASTER_EGG,
   EV_SETTINGS, HVAC_STATUS, LOCATION, PERSON, SOC_LEVELS, VEHICLES, VIN,
 } from './__fixtures__/kamereon'
-import { chargeStartPayload, commandSummary, inWindow, socTargetPayload, toAccounts, toDescriptor, toStatePatch, toVehicleLinks, vehicleName, wakePayload, CLIMATE_FEATURES, climateSettingsPayload, hvacStartPayload, hvacSocThreshold, levelRising, trackLevel, type LevelTrack } from './mapping'
+import { chargeStartPayload, commandSummary, inWindow, socTargetPayload, toAccounts, toDescriptor, toStatePatch, toMileageContracts, toVehicleLinks, vehicleName, wakePayload, CLIMATE_FEATURES, climateSettingsPayload, hvacStartPayload, hvacSocThreshold, levelRising, trackLevel, type LevelTrack } from './mapping'
 
 // Tout ce fichier travaille sur la CAPTURE du 2026-09-14, pas sur la documentation. Trois pièges
 // que seule la capture révèle sont testés nommément : le `cockpit` v2 farceur, le flottant de
@@ -285,5 +285,18 @@ describe('réveil de charge', () => {
     // bornes égales ou illisibles = jamais : c'est le moyen de couper la fonction
     expect(inWindow(at(12), '08:00', '08:00')).toBe(false)
     expect(inWindow(at(12), 'midi', '20:00')).toBe(false)
+  })
+})
+
+describe('contrats', () => {
+  it('ne retient que l entretien plafonné en km, pas la garantie batterie', () => {
+    expect(toMileageContracts(CONTRACTS)).toEqual([
+      { description: 'EASYPACK 49MOIS EXEMPLE', start: '2025-03-01', end: '2029-03-31', maxKm: 40000 },
+    ])
+  })
+
+  it('rend une liste vide pour une réponse illisible', () => {
+    expect(toMileageContracts({ errors: [] })).toEqual([])
+    expect(toMileageContracts([{ type: 'WARRANTY_MAINTENANCE_CONTRACTS', conditions: [{ unlimitedMileage: true }] }])).toEqual([])
   })
 })

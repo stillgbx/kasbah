@@ -1,6 +1,6 @@
 # Format house.json : décisions et validation
 
-> Dernière mise à jour : 2026-10-13
+> Dernière mise à jour : 2026-10-19
 > Sources : `packages/shared/src/house/{schema,validate,lookup,geo}.ts`, `docs/house-json.md`, `house/demo-house.json`, `packages/shared/src/house/autoplace.ts`, `house/fit-survey.mjs`, `house/maison.json`, `packages/shared/src/house/place.ts`, `apps/server/src/config/house.ts`, `packages/shared/src/house/panels.ts`, `packages/shared/src/house/openings.ts`, `packages/shared/src/house/parking.ts`, `packages/shared/src/house/geometry/relief.ts` (`site.relief`), `house/demos/*.json`, `apps/server/src/config/properties.ts`, `packages/shared/src/house/structure.ts`, `packages/shared/src/house/newHouse.ts`
 
 La **référence complète du format** (champs, exemples) est `docs/house-json.md`. Cette page
@@ -1371,3 +1371,27 @@ maintenant depuis les Réglages (fenêtre « Caler sur la photo », `../4_ui/4_1
 
 Sources : `packages/shared/src/house/{geo,place}.ts`, `apps/server/src/http/routes.ts`,
 `apps/web/src/components/settings/OriginCalibration.vue`.
+
+### Mise à jour 2026-10-19 — `devices[].lease` : la LOA d'un véhicule
+
+Un véhicule peut porter le contrat qui borne son kilométrage : `devices[].lease`, optionnel,
+`{ start, end, km, startKm? }` (`vehicleLeaseSchema`, `packages/shared/src/house/schema.ts`).
+
+- `start` et `end` : dates `AAAA-MM-JJ`, **`end` strictement après `start`** (sinon la validation
+  refuse : `lease must end after it starts`). Ex. `2025-03-01` → `2029-03-31`.
+- `km` : le forfait du contrat **entier** (pas par an), entier > 0. Ex. 40 000. C'est la vue qui le
+  proratise ; le fichier ne garde que ce que dit le contrat.
+- `startKm` : compteur à la remise des clés, absent = 0. Il sert à un véhicule déjà roulé à la remise :
+  les kilomètres comptés sont `compteur − startKm`.
+- Le champ vit sur le **véhicule** et non sur la configuration du plugin : une LOA est par véhicule et
+  vaut pour toute marque (décision de l'utilisateur).
+
+**Écriture.** Par le même `PUT /api/house/devices/:id` que les autres réglages du véhicule
+(`setDeviceTuning`, `apps/web/src/stores/house.ts`). `devicePlacementSchema.lease`
+(`packages/shared/src/house/place.ts`) accepte un objet ou la chaîne vide `''` ; `placeDeviceInJson` écrit
+l'objet **d'un bloc** (jamais champ à champ : un contrat à moitié écrit serait invalide). **La chaîne vide
+efface**, comme pour le nom : `undefined` ne touche à rien, `''` supprime la clé. Même sémantique, donc
+même piège : ne pas envoyer `''` pour dire « pas de changement ».
+
+Usage et affichage : `../4_ui/4_4_vues-energie-vehicules.md` (même date). Sources :
+`packages/shared/src/house/{schema,place}.ts`, `place.test.ts`.

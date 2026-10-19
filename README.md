@@ -219,7 +219,7 @@ Mise en page en grand écran (paysage) en trois colonnes : **rail** à gauche, *
 | **Énergie** | Schéma de flux (solaire, maison, réseau, batterie), champs de panneaux, historique. |
 | **Eau** | Station de filtration, débit, consommables, historique. |
 | **Chauffage** | Zones et machine (pompe à chaleur), historique de fonctionnement. |
-| **Véhicules** | Charge, carte (plan / satellite), réveil, limite de charge, carrosserie 3D. |
+| **Véhicules** | Charge, carte (plan / satellite), réveil, limite de charge, carrosserie 3D, suivi des km d'une LOA. |
 | **Robots** | Tondeuse (GPS, tâche en cours, zones à tondre ou à exclure, carte du terrain sur la photo et dans la 3D, journal, quota) et aspirateur (serpillière selon capacités). |
 | **Animaux** | Mangeoires et fontaines PetKit : repas, distribution, eau, consommables. |
 | **TENS** | Électrostimulateur actiTENS en Bluetooth, depuis le navigateur ; n'apparaît que sur les postes où il est activé. |
