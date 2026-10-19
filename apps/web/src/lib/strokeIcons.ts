@@ -149,6 +149,9 @@ export const ICONS = {
   wrench: 'M20.5 6.5a4.5 4.5 0 0 1-5.9 5.9L6.4 20.6a2 2 0 0 1-2.8-2.8l8.2-8.2a4.5 4.5 0 0 1 5.9-5.9l-3 3 2.8 2.8z',
   /** Recherche : la loupe. */
   search: 'M11 11m-7 0a7 7 0 1 0 14 0a7 7 0 1 0-14 0M16 16l4.5 4.5',
+  zoomIn: 'M11 11m-7 0a7 7 0 1 0 14 0a7 7 0 1 0-14 0M16 16l4.5 4.5M8 11h6M11 8v6',
+  zoomOut: 'M11 11m-7 0a7 7 0 1 0 14 0a7 7 0 1 0-14 0M16 16l4.5 4.5M8 11h6',
+  download: 'M12 4v11M7 10l5 5 5-5M5 20h14',
   /** Une pièce, vue en plan : quatre murs et une ouverture. */
   room: 'M4 4h16v16H4zM4 10h5M15 4v6',
   /** Éléments du jardin : feuillu, conifère, palmier, buisson, pierre, haie. */

@@ -1,6 +1,6 @@
 # Plugin TouteMonAnnée (cahier de texte, cahier de liaison, publications)
 
-> Dernière mise à jour : 2026-10-11
+> Dernière mise à jour : 2026-10-19
 > Sources : `apps/server/src/plugins/toutemonannee/{index,client,mapping,store}.ts`, tests `apps/server/src/plugins/toutemonannee/plugin.test.ts`, `apps/web/src/views/SchoolView.vue`, `apps/web/src/components/SchoolLinkCard.vue`, `apps/web/src/stores/school.ts`, `apps/web/src/lib/school.ts` (+ `school.test.ts`), `apps/web/src/api/{transport,httpTransport,mockTransport,mockSchool}.ts`, `apps/web/src/components/ui/Segmented.vue`
 
 ## Ce que c'est
@@ -111,7 +111,9 @@ Toutes les écritures rendent la forme de `/school`.
   se lisait comme 4 jours de calendrier alors qu'ils s'étalaient sur la semaine relue.
 - **Liaison** : messages récents d'abord, « Non lu ». **Publications** : « Nouveau » au-delà de
   `postsSeen` (marqué vu à l'ouverture de l'onglet, l'étiquette reste pendant la visite), images en
-  vignettes, documents en liens.
+  vignettes, documents en liens. Une vignette ouvre la visionneuse de l'app (flèches, zoom,
+  téléchargement — `../4_ui/4_6_autres-vues.md`, mise à jour 2026-10-19) : les URL `src` des images
+  sont publiques et servies avec `Access-Control-Allow-Origin: *`, d'où le téléchargement direct.
 - Pastilles : devoirs non faits du prochain jour à rendre, messages non lus, publications
   nouvelles — après filtres (`lib/school.ts`, `badges`).
 - La vue se fie à la réponse de `/school`, pas à l'inventaire des plugins : le mode simulé n'en

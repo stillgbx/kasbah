@@ -86,7 +86,7 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 | [3_20 Mixcloud](3_plugins/3_20_mixcloud.md) | 2026-10-08 |
 | [3_21 TENS actiTENS mini (Web Bluetooth)](3_plugins/3_21_actitens-tens.md) | 2026-10-06 |
 | [3_22 Agenda (adresse iCal secrète)](3_plugins/3_22_agenda.md) | 2026-10-09 |
-| [3_23 TouteMonAnnée](3_plugins/3_23_toutemonannee.md) | 2026-10-11 |
+| [3_23 TouteMonAnnée](3_plugins/3_23_toutemonannee.md) | 2026-10-19 |
 | [3_24 Claude (moteur de l'assistant)](3_plugins/3_24_claude.md) | 2026-10-11 |
 | [3_25 Transcription (la voix de l'assistant)](3_plugins/3_25_transcription.md) | 2026-10-12 |
 <!-- section:3_plugins:end -->
@@ -107,7 +107,7 @@ Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et 
 | [4_3 Vues Lumières, Ouvrants et Caméras](4_ui/4_3_vues-lumieres-ouvrants-cameras.md) | 2026-10-13 |
 | [4_4 Vues Énergie et Véhicules](4_ui/4_4_vues-energie-vehicules.md) | 2026-10-19 |
 | [4_5 Musique et médias](4_ui/4_5_musique-et-medias.md) | 2026-10-13 |
-| [4_6 Autres vues](4_ui/4_6_autres-vues.md) | 2026-10-14 |
+| [4_6 Autres vues](4_ui/4_6_autres-vues.md) | 2026-10-19 |
 | [4_7 Vue Réglages](4_ui/4_7_reglages.md) | 2026-10-13 |
 | [4_8 Mode édition et propriétés](4_ui/4_8_mode-edition-et-proprietes.md) | 2026-10-13 |
 <!-- section:4_ui:end -->

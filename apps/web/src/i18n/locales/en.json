@@ -806,6 +806,7 @@
     "remove": "Remove", "removeConfirm": "Confirm removal", "moveUp": "Move {name} up", "moveDown": "Move {name} down", "color": "Colour of {name}",
     "lastRead": "Read at {time}", "neverRead": "Not read yet", "readError": "Unreadable: {message}"
   },
+  "photoViewer": { "photo": "Photo", "open": "Enlarge photo {n}", "count": "{n} / {total}", "prev": "Previous photo", "next": "Next photo", "zoomIn": "Zoom in", "zoomOut": "Zoom out", "download": "Download" },
   "school": {
     "tabs": { "homework": "Homework", "messages": "Notes home", "posts": "Posts" }, "tabsLabel": "School notebooks",
     "disabled": "The TouteMonAnnée plugin is off. Turn it on in Settings → Plugins.",

@@ -806,6 +806,7 @@
     "remove": "Retirer", "removeConfirm": "Confirmer le retrait", "moveUp": "Monter {name}", "moveDown": "Descendre {name}", "color": "Couleur de {name}",
     "lastRead": "Lu à {time}", "neverRead": "Pas encore lu", "readError": "Illisible : {message}"
   },
+  "photoViewer": { "photo": "Photo", "open": "Agrandir la photo {n}", "count": "{n} / {total}", "prev": "Photo précédente", "next": "Photo suivante", "zoomIn": "Zoomer", "zoomOut": "Dézoomer", "download": "Télécharger" },
   "school": {
     "tabs": { "homework": "Devoirs", "messages": "Liaison", "posts": "Publications" }, "tabsLabel": "Cahiers de l'école",
     "disabled": "Le plugin TouteMonAnnée n'est pas activé. Activez-le dans Réglages → Plugins.",

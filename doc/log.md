@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-19] update | Vue École : visionneuse des photos
+
+**Trigger** : demande de l'utilisateur, les photos des publications ouvraient le navigateur ; les voir dans l'app, passer de l'une à l'autre, zoomer et télécharger.
+
+**Pages modified** :
+- 4_ui/4_6_autres-vues.md - section 2026-10-19 : `PhotoViewer.vue` (barre, flèches grisées aux extrémités, clavier, glissé, zoom 1× à 6× par boutons / molette / pincement / double-clic, déplacement borné, fermeture sur le fond), téléchargement par fetch → blob et son repli, icônes `zoomIn` / `zoomOut` / `download`, limites tactiles connues
+- 3_plugins/3_23_toutemonannee.md - les vignettes ouvrent la visionneuse ; images publiques servies avec `Access-Control-Allow-Origin: *`
+
+**Index** : catalogues 3_plugins et 4_ui (1 ligne chacun, date), index.md régénéré.
+
 ## [2026-10-19] update | Alertes : la pastille tient, la liste au fond du panneau maison
 
 **Trigger** : demande de l'utilisateur, plusieurs alertes en cours sur la vraie maison (tondeuse, distributeurs) : garder la pastille du rail tant qu'elles durent et les lister dans le panneau de résumé de la vue 3D, avec un accès à l'appareil.

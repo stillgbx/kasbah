@@ -1,6 +1,6 @@
 # Autres vues : Météo, Robots, Eau, Chauffage, Animaux, Agenda, École, Courses, Automatisations
 
-> Dernière mise à jour : 2026-10-14
+> Dernière mise à jour : 2026-10-19
 > Sources : sections reprises telles quelles de `4_1_navigation-et-panneaux.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre les vues propres à un domaine : Météo et radar, Robots (tondeuse, aspirateur), Eau, Chauffage, Animaux, Agenda, École, Courses, Automatisations. Elle est née du découpage de
@@ -883,6 +883,31 @@ l'utilisateur en itérant sur des données réelles :
 Carte de liaison dans Réglages → Plugins → toutemonannee (`SchoolLinkCard.vue`, sur le modèle de
 celle de MELCloud). Vérifié : rien ne bouge au cochage (mesure géométrique, 0 décalage), aucun
 débordement à 1280 / 1024 / 853 / 375 px, fr et en, clair et sombre.
+
+### Mise à jour 2026-10-19 — vue École : visionneuse des photos
+
+Une photo de publication ouvrait un onglet du navigateur ; elle s'ouvre maintenant dans
+`components/ui/PhotoViewer.vue` (générique : `photos`, `title`, `v-model:index`, `null` = fermée),
+branchée dans `views/SchoolView.vue` (les vignettes deviennent des boutons).
+
+- Plein écran sur fond noir quel que soit le thème, `Teleport` vers `body`. Barre : titre de la
+  publication, « 2 / 5 », zoom −/+, télécharger, fermer. Flèches aux deux bords, **grisées aux
+  extrémités, jamais retirées** (règle « rien ne bouge »).
+- Navigation : flèches, clavier (←/→, Échap, +/−), glissé d'un doigt à taille normale. Le zoom
+  revient à 1× en changeant de photo ; les voisines sont préchargées.
+- Zoom 1× à 6× : boutons par paliers, molette et pincement autour du point visé, double-clic
+  (1× ↔ 2,5×). Agrandie, la photo se déplace d'un doigt ou à la souris, bornée au cadre. Le
+  pincement ne déplace pas en même temps ; le double-tap dépend du navigateur (non garanti au doigt).
+- Un clic sur le fond ferme, pas la fin d'un glissé ni un clic sur la photo.
+- **Téléchargement par `fetch` → blob → `<a download>`** : un `<a download>` vers une autre origine
+  est ignoré (le navigateur ouvrirait la photo). L'hébergeur des photos répond
+  `Access-Control-Allow-Origin: *` (vérifié à la mise en place) ; si un jour il refuse, repli sur
+  l'ouverture dans un onglet. Nom : « titre de la publication (n).jpg ».
+- Icônes ajoutées à `lib/strokeIcons.ts` : `zoomIn`, `zoomOut`, `download`.
+
+Vérifié dans la preview (simulation, photos de test injectées dans le store) : navigation, zoom,
+déplacement borné, glissé, fermetures, nom du fichier, vignettes à la même taille qu'avant, rien
+ne déborde à 375 px. Gestes tactiles joués par événements pointeur simulés, pas sur un vrai écran.
 
 ### Mise à jour 2026-10-11 (9) — vue Courses (`/shopping`)
 

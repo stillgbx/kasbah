@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useIntervalFn, useLocalStorage } from '@vueuse/core'
 import type { SchoolFile, SchoolHomework } from '../api/transport'
 import PageHeader from '../components/layout/PageHeader.vue'
+import PhotoViewer from '../components/ui/PhotoViewer.vue'
 import Segmented from '../components/ui/Segmented.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import { badges, daysBetween, homeworkDays, isVisible, levelOptions, localDay, nextDueDate } from '../lib/school'
@@ -111,6 +112,14 @@ async function refresh() {
 
 const images = (files: SchoolFile[]) => files.filter((f) => f.type === 'image')
 const documents = (files: SchoolFile[]) => files.filter((f) => f.type !== 'image')
+
+// Les photos d'une publication s'ouvrent dans la visionneuse de l'app, plus dans un onglet du navigateur.
+const viewer = ref<{ title: string | null; photos: SchoolFile[] } | null>(null)
+const viewerIndex = ref<number | null>(null)
+function openPhoto(title: string | null, files: SchoolFile[], i: number) {
+  viewer.value = { title, photos: images(files) }
+  viewerIndex.value = i
+}
 </script>
 
 <template>
@@ -247,9 +256,10 @@ const documents = (files: SchoolFile[]) => files.filter((f) => f.type !== 'image
             </div>
             <p v-if="p.text" class="school__text">{{ p.text }}</p>
             <div v-if="images(p.files).length" class="school__images">
-              <a v-for="f in images(p.files)" :key="f.url" :href="f.url" target="_blank" rel="noopener noreferrer">
+              <button v-for="(f, i) in images(p.files)" :key="f.url" type="button" class="school__photo" :aria-label="$t('photoViewer.open', { n: i + 1 })"
+                      @click="openPhoto(p.title, p.files, i)">
                 <img :src="f.thumb ?? f.url" :alt="f.name" loading="lazy" referrerpolicy="no-referrer" />
-              </a>
+              </button>
             </div>
             <div v-if="documents(p.files).length" class="school__files">
               <a v-for="f in documents(p.files)" :key="f.url" :href="f.url" target="_blank" rel="noopener noreferrer" class="school__file">
@@ -260,6 +270,8 @@ const documents = (files: SchoolFile[]) => files.filter((f) => f.type !== 'image
         </template>
       </div>
     </div>
+
+    <PhotoViewer v-if="viewer" v-model:index="viewerIndex" :photos="viewer.photos" :title="viewer.title" />
   </div>
 </template>
 
@@ -329,6 +341,7 @@ const documents = (files: SchoolFile[]) => files.filter((f) => f.type !== 'image
 .school__files { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; }
 .school__file { display: inline-flex; align-items: center; gap: 5px; color: var(--accent); text-decoration: none; overflow-wrap: anywhere; }
 .school__images { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.school__photo { padding: 0; border: 0; background: none; cursor: zoom-in; border-radius: var(--radius); display: block; }
 .school__images img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: var(--radius); display: block; }
 
 .school__past {

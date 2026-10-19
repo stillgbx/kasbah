@@ -18,7 +18,7 @@
 
 - **Devoirs** (cahier de texte) : regroupés par jour à rendre à partir d'aujourd'hui, le prochain jour à rendre mis en avant ; les devoirs passés des derniers jours se déplient. Une case **« fait »** par devoir.
 - **Liaison** : les messages de l'enseignante, les plus récents d'abord, avec la mention « Non lu » et le nombre de réponses.
-- **Publications** de la classe (annonces, images, documents joints), avec « Nouveau » pour celles que vous n'avez pas encore vues.
+- **Publications** de la classe (annonces, images, documents joints), avec « Nouveau » pour celles que vous n'avez pas encore vues. Les photos s'ouvrent dans Kasbah : on passe de l'une à l'autre, on zoome et on les télécharge.
 - **Filtres** par classe (si le compte en a plusieurs) et par niveau (CP, CE1, CE2, CM1, CM2) pour ne voir que ce qui concerne votre enfant ; ce qui ne nomme aucun niveau reste affiché. Les filtres sont gardés par le serveur, donc les mêmes sur tous les écrans.
 - **Pastilles** dans la vue : devoirs non faits du prochain jour, messages non lus, publications nouvelles.
 - **Relecture automatique** toutes les 30 minutes, ou à la demande (« Mis à jour à HH:MM »).
