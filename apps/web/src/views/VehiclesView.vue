@@ -254,9 +254,10 @@ const quotaLabel = (q: Quota) => {
 }
 /**
  * La LOA saisie au panneau « Modifier », contre le compteur lu : deux lignes et une jauge, à la place
- * du quota (la R5 n'en a pas). Rien sans LOA saisie ni compteur lu. Sur la jauge, une graduation
- * grise par anniversaire du contrat, et le repère info du maximum autorisé à ce jour ; le
- * remplissage passe à l'orangé quand on roule plus vite que lui.
+ * du quota (la R5 n'en a pas). Rien sans LOA saisie ni compteur lu. La jauge parle la langue des
+ * autres de la carte : les anniversaires du contrat la découpent en BLOCS, comme les paliers de la
+ * limite de charge, et le maximum autorisé à ce jour est un repère de la jauge de batterie (cible,
+ * plancher) ; le remplissage passe au rouge quand on roule plus vite que lui.
  */
 type LeaseMark = { left: number; title: string }
 const leases = computed(() => {
@@ -452,10 +453,12 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
             <div v-if="leases.get(v.descriptor.id)" class="vcard__quota vcard__lease">
               <span class="muted vcard__quota-text" :title="leases.get(v.descriptor.id)!.line">{{ leases.get(v.descriptor.id)!.line }}</span>
               <div class="vcard__lease-bar">
-                <div class="vcard__lease-fill" :data-tense="leases.get(v.descriptor.id)!.tense ? '1' : '0'"
-                     :style="{ width: `${leases.get(v.descriptor.id)!.fill}%` }" />
-                <span v-for="y in leases.get(v.descriptor.id)!.years" :key="y.left" class="vcard__lease-year"
-                      :style="{ left: `${y.left}%` }" :title="y.title" />
+                <div class="vcard__lease-track">
+                  <div class="vcard__lease-fill" :data-tense="leases.get(v.descriptor.id)!.tense ? '1' : '0'"
+                       :style="{ width: `${leases.get(v.descriptor.id)!.fill}%` }" />
+                  <span v-for="y in leases.get(v.descriptor.id)!.years" :key="y.left" class="vcard__lease-year"
+                        :style="{ left: `${y.left}%` }" :title="y.title" />
+                </div>
                 <span class="vcard__lease-pace" :style="{ left: `${leases.get(v.descriptor.id)!.pace.left}%` }"
                       :title="leases.get(v.descriptor.id)!.pace.title" />
               </div>
@@ -616,16 +619,20 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
 .vcard__quota-fill { height: 100%; border-radius: 999px; background: var(--accent); transition: width .4s; }
 /* le quota touche à sa fin : le même orangé que les avertissements des cartes de Réglages */
 .vcard__quota-fill[data-tense='1'] { background: #d38b22; }
-/* LOA : la jauge de la batterie (`VehicleBattery`) — 8 px, sans `overflow: hidden`, les repères
-   DÉBORDENT par-dessus. Graduations d'anniversaire au gabarit de celles du TENS (2 × 12 px), en gris :
-   elles rythment, elles n'alertent pas. Le maximum autorisé à ce jour reprend le trait de la cible de
-   charge (3 × 16 px), en info : en warning, il se perdrait dans le remplissage orangé du dépassement. */
-.vcard__lease-bar { position: relative; height: 8px; border-radius: 999px; background: var(--line); }
-.vcard__lease-fill { height: 100%; border-radius: 999px; background: var(--accent); transition: width .4s, background .2s; }
-.vcard__lease-fill[data-tense='1'] { background: #d38b22; }
-.vcard__lease-year, .vcard__lease-pace { position: absolute; top: 50%; transform: translate(-50%, -50%); }
-.vcard__lease-year { width: 2px; height: 12px; border-radius: 1px; background: var(--muted); }
-.vcard__lease-pace { width: 3px; height: 16px; border-radius: 2px; background: rgb(var(--v-theme-info)); }
+/* LOA : la jauge de la batterie (`VehicleBattery`, 8 px), découpée en blocs par les anniversaires
+   comme la piste de la limite de charge (`ChargeLimitCard`, `.limit__mark`) : des fentes de 2 px de
+   la couleur du fond de la carte, dans une piste rognée. Le repère du maximum autorisé à ce jour est
+   `.soc__tick` de la batterie (3 × 16 px, warning), posé PAR-DESSUS la piste, donc hors du rognage.
+   Le dépassement passe au rouge, comme la batterie basse : en orangé, le repère s'y serait fondu. */
+.vcard__lease-bar { position: relative; height: 8px; }
+.vcard__lease-track { position: absolute; inset: 0; border-radius: 999px; background: var(--line); overflow: hidden; }
+.vcard__lease-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); transition: width .4s, background .2s; }
+.vcard__lease-fill[data-tense='1'] { background: rgb(var(--v-theme-error)); }
+.vcard__lease-year { position: absolute; top: 0; bottom: 0; width: 2px; transform: translateX(-1px); background: var(--surface); }
+.vcard__lease-pace {
+  position: absolute; top: 50%; width: 3px; height: 16px; border-radius: 2px;
+  transform: translate(-50%, -50%); background: rgb(var(--v-theme-warning));
+}
 /* la ligne du détail garde sa hauteur même vide (LOA terminée) : rien ne bouge sous la jauge */
 .vcard__lease-detail { height: 1.4em; line-height: 1.4em; }
 </style>

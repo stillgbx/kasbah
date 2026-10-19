@@ -1025,3 +1025,24 @@ sombre.
 
 Sources : `apps/web/src/views/VehiclesView.vue`, `apps/web/src/lib/vehicleLease.ts` (+ test),
 `apps/web/src/i18n/locales/{fr,en}.json`.
+
+### Mise à jour 2026-10-19 (ter) — jauge LOA en blocs, repère de la batterie
+
+L'utilisateur a demandé la cohérence graphique avec les autres jauges de la carte, ce qui remplace les
+choix de la section (bis) :
+
+- **Anniversaires = blocs**, comme les paliers de la limite de charge (`ChargeLimitCard.vue`,
+  `.limit__mark`) : la piste (`.vcard__lease-track`, 8 px, rognée) est découpée par des fentes de 2 px de
+  la couleur du fond de la carte (`var(--surface)`, celui de `.card`). Les graduations grises du TENS
+  sont abandonnées.
+- **Maximum autorisé à ce jour = repère de la batterie** (`VehicleBattery.vue`, `.soc__tick` : cible et
+  plancher), 3 × 16 px en **warning**, posé par-dessus la piste, hors du rognage. Le repère info est
+  abandonné.
+- **Dépassement en rouge** (`rgb(var(--v-theme-error))`, comme la batterie basse) au lieu de l'orangé
+  `#d38b22` : le repère warning se serait fondu dans un remplissage orangé, précisément quand on roule
+  plus vite que le forfait.
+
+Mesuré dans la preview `kasbah-mock` à 1440 × 900 : carte de 533 px, inchangée ; fentes de la couleur
+exacte de la carte en sombre comme en clair ; repère de la même couleur que ceux de la batterie.
+
+Sources : `apps/web/src/views/VehiclesView.vue`.
