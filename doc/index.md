@@ -20,12 +20,12 @@ Vision du projet, principes structurants et vocabulaire commun. Résumés : [0_o
 ## 1 — Architecture
 
 <!-- section:1_architecture:begin (généré par scripts/wiki-index.mjs depuis 1_architecture/README.md - ne pas éditer ici) -->
-Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/WebSocket, application web, scène 3D, et les briques transverses : lecteur musique, MCP, automatisations, assistant, liste de courses. Résumés : [1_architecture/README.md](1_architecture/README.md) (15 pages, dernière mise à jour 2026-10-15).
+Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/WebSocket, application web, scène 3D, et les briques transverses : lecteur musique, MCP, automatisations, assistant, liste de courses. Résumés : [1_architecture/README.md](1_architecture/README.md) (15 pages, dernière mise à jour 2026-10-19).
 
 | Pages | Dernière mise à jour |
 |---|---|
 | [1_0 Monorepo et flux de données](1_architecture/1_0_monorepo-et-flux.md) | 2026-10-10 |
-| [1_1 Contrat des appareils](1_architecture/1_1_contrat-appareils.md) | 2026-10-15 |
+| [1_1 Contrat des appareils](1_architecture/1_1_contrat-appareils.md) | 2026-10-19 |
 | [1_2 Serveur et hôte de plugins](1_architecture/1_2_serveur-et-plugins.md) | 2026-10-11 |
 | [1_3 Protocole REST et WebSocket](1_architecture/1_3_protocole-rest-ws.md) | 2026-10-13 |
 | [1_4 Application web : stores, transport, routage](1_architecture/1_4_app-web.md) | 2026-10-06 |
@@ -99,7 +99,7 @@ Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et 
 | Socle | Dernière mise à jour |
 |---|---|
 | [4_0 Langage visuel](4_ui/4_0_langage-visuel.md) | 2026-10-06 |
-| [4_1 Navigation et panneaux](4_ui/4_1_navigation-et-panneaux.md) | 2026-10-15 |
+| [4_1 Navigation et panneaux](4_ui/4_1_navigation-et-panneaux.md) | 2026-10-19 |
 | [4_2 Thème et langues](4_ui/4_2_theme-et-langues.md) | 2026-10-06 |
 
 | Vues | Dernière mise à jour |

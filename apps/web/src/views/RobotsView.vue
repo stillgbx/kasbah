@@ -18,7 +18,6 @@ import VehicleMap from '../components/vehicles/VehicleMap.vue'
 import { formatAgo, formatDistance, formatPercent } from '../lib/format'
 import { QUOTA_TENSE_PCT, offsetLocation, quotaPercent } from '../lib/map'
 import { useDevicesStore } from '../stores/devices'
-import { useAlertsStore } from '../stores/alerts'
 import { useHouseStore } from '../stores/house'
 
 // Vue Robots : une carte par robot — tondeuse ou aspirateur, les deux kinds que la maison range ici.
@@ -37,8 +36,6 @@ import { useHouseStore } from '../stores/house'
 // Les boutons suivent les CAPACITÉS du descripteur : un plugin en lecture seule ne se voit pas
 // proposer ce qu'il refuserait.
 const devices = useDevicesStore()
-// une panne reste signalée sur le rail tant qu'on ne l'a pas masquée ici (ou qu'elle se règle)
-const alerts = useAlertsStore()
 const house = useHouseStore()
 const router = useRouter()
 const { t, d, locale } = useI18n()
@@ -251,7 +248,6 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
             </div>
             <div class="rcard__status" :data-error="v.state.activity === 'error' ? '1' : '0'">
               <span class="rcard__status-text">{{ v.state.errorMessage ?? '' }}</span>
-              <button v-if="alerts.closableFor(v.descriptor.id).length" type="button" class="rcard__dismiss" :title="$t('alerts.dismissHint')" @click="alerts.dismiss(alerts.closableFor(v.descriptor.id))">{{ $t('alerts.dismiss') }}</button>
             </div>
           </div>
           <div class="rcard__group rcard__state">
@@ -313,7 +309,6 @@ onBeforeUnmount(() => { if (clockTimer) clearInterval(clockTimer) })
               <!-- une erreur que le fabricant lève à distance : le lien, sur la ligne même (rien ne bouge) -->
               <button v-if="has(m, 'confirm_error') && m.state.activity === 'error' && m.state.errorConfirmable" type="button" class="rcard__dismiss"
                       :disabled="!m.state.available || busy(m)" @click="send(m.descriptor.id, { type: 'mower.confirm_error' })">{{ $t('mower.confirmError') }}</button>
-              <button v-if="alerts.closableFor(m.descriptor.id).length" type="button" class="rcard__dismiss" :title="$t('alerts.dismissHint')" @click="alerts.dismiss(alerts.closableFor(m.descriptor.id))">{{ $t('alerts.dismiss') }}</button>
             </div>
           </div>
           <div class="rcard__group rcard__state">

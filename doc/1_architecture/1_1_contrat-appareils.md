@@ -1,6 +1,6 @@
 # Contrat des appareils (packages/shared)
 
-> Dernière mise à jour : 2026-10-15
+> Dernière mise à jour : 2026-10-19
 > Sources : `packages/shared/src/devices/{kinds,descriptor,state,command,rules,color}.ts`, `packages/shared/src/scenes/scene.ts`, `packages/shared/src/devices/activity.ts`, `packages/shared/src/house/geo.ts`
 
 ## Principe
@@ -949,7 +949,7 @@ Sources : `packages/shared/src/devices/{state,kinds,command}.ts`.
 rend les alertes en cours d'un appareil d'après son seul état, ou `null` pour « on ne sait pas »
 (appareil `available: false`, véhicule sans `readAt`, météo sans `vigilance`). `null` n'est PAS
 « aucune alerte » : c'est ce qui évite à un client d'oublier une alerte fermée sur une simple panne
-de lecture. Rien de neuf sur le fil. Elle vit dans `shared` pour que le serveur s'en serve plus tard
+de lecture. *(Le 2026-10-19, `null` sur un appareil injoignable ne vaut plus que pour le véhicule et la météo : voir la mise à jour de cette date.)* Rien de neuf sur le fil. Elle vit dans `shared` pour que le serveur s'en serve plus tard
 (automatisation, push, MCP) avec la même règle que l'écran.
 
 `DeviceAlert` : `{ id, deviceId, kind, severity, type }`. `ALERT_SEVERITIES` = `info`, `problem`,
@@ -1062,3 +1062,28 @@ Le MCP expose la commande sans code propre (`send_command` prend `commandSchema`
 borne simulée ne déclare pas `charge_mode`. Détail et pièges : `../3_plugins/3_7_enphase.md`.
 
 Sources : `packages/shared/src/devices/{kinds,state,command}.ts` (+ `rules.test.ts`).
+
+### Mise à jour 2026-10-19 — alertes des animaux, robots injoignables, champ `detail`
+
+`deviceAlerts` couvre deux kinds de plus, toutes leurs alertes en `problem` (ce sont des tâches à
+faire) :
+- `pet_feeder` : `errorMessage` (`device_error`, clé = le message), `foodLow` (`supply_low`, clé
+  `food`), `desiccantDays === 0` (`consumable`, clé `desiccant`) ;
+- `pet_fountain` : `errorMessage`, `waterLow` (`supply_low`, clé `water`), `filterPct < 20`
+  (`consumable`, clé `filter`), `batteryPct < 20` (`battery_low`). Le seuil de 20 % est celui que
+  la carte de la fontaine marque en rouge (`PetFountainCard.vue`, `LOW_PCT`) ; il est recopié, pas
+  partagé.
+
+`type` gagne donc `supply_low`, `consumable` et `battery_low`. **Champ `detail`** (optionnel) : ce
+que le texte de l'alerte nomme — la version proposée, le message du fabricant, le phénomène de la
+vigilance, le consommable (`desiccant` / `filter`). L'écran en tire son libellé sans relire l'état
+ni décoder l'id.
+
+**Disponibilité.** Avant : tout appareil `available: false` rendait `null`. Désormais seuls le
+véhicule (et toujours sans `readAt`) et la météo le font. Un robot ou un appareil pour animaux
+injoignable garde les alertes de son DERNIER état : une tondeuse en panne qui a perdu le réseau est
+toujours en panne, rien ne dit que c'est réglé (cas vu sur la vraie maison). Conséquence : pour ces kinds,
+injoignable sans alerte = `[]`, plus `null` ; sans effet, le « vu » du poste ne concernant plus que
+les `info` (`../4_ui/4_1_navigation-et-panneaux.md`, même date).
+
+Sources : `packages/shared/src/devices/alerts.ts` (+ `alerts.test.ts`).

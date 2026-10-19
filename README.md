@@ -207,7 +207,7 @@ Mise en page en grand écran (paysage) en trois colonnes : **rail** à gauche, *
 
 | Vue | Rôle |
 |---|---|
-| **Maison** | Scène 3D, tuiles de synthèse, recherche, panneau pièce → appareil. Un doigt tourne, deux doigts zooment ; la caméra ne passe jamais sous le sol. |
+| **Maison** | Scène 3D, tuiles de synthèse, alertes en cours (un clic mène à l'appareil), recherche, panneau pièce → appareil. Un doigt tourne, deux doigts zooment ; la caméra ne passe jamais sous le sol. |
 | **Météo** | Conditions, prévisions, qualité de l'air et pollens (Open-Meteo). |
 | **Agenda** | Agendas partagés de la famille (iCal) : mois, semaine, jour. |
 | **École** | Devoirs, cahier de liaison et publications de la classe (TouteMonAnnée). |

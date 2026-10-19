@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-19] update | Alertes : la pastille tient, la liste au fond du panneau maison
+
+**Trigger** : demande de l'utilisateur, plusieurs alertes en cours sur la vraie maison (tondeuse, distributeurs) : garder la pastille du rail tant qu'elles durent et les lister dans le panneau de résumé de la vue 3D, avec un accès à l'appareil.
+
+**Pages modified** :
+- 1_architecture/1_1_contrat-appareils.md - section 2026-10-19 : alertes `pet_feeder` / `pet_fountain` (défaut, réserve basse, consommables), robots et animaux injoignables gardant leurs alertes, champ `detail` ; renvoi daté dans la section 2026-10-02
+- 4_ui/4_1_navigation-et-panneaux.md - section 2026-10-19 : plus de fermeture (« Masquer » et la croix météo retirés, `info` seule vue en ouvrant sa vue), section « Alertes » du `HomePanel` (une ligne par appareil, au fond, clic = sélection dans la 3D) ; règles de fermeture du 2026-10-02 marquées dépassées
+
+**Index** : catalogues 1_architecture et 4_ui (1 ligne chacun ; résumé de 4_1 élargi aux alertes du panneau), index.md régénéré.
+
 ## [2026-10-19] update | Suivi de la LOA d'un véhicule
 
 **Trigger** : demande de l'utilisateur, suivre si le kilométrage reste dans les clous du forfait de sa LOA, au prorata de la durée ; fonctionnalité codée, non commitée (HEAD 06fd524).

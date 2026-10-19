@@ -1,6 +1,6 @@
 # Navigation et panneaux
 
-> Dernière mise à jour : 2026-10-15
+> Dernière mise à jour : 2026-10-19
 > Sources : `apps/web/src/App.vue`, `apps/web/src/components/layout/*.vue`, `apps/web/src/views/*.vue`, `apps/web/src/components/home/*.vue`, `apps/web/src/components/controls/*.vue`, `apps/web/src/views/LightsView.vue`, `apps/web/src/components/home/PlacementControl.vue`, `apps/web/src/components/scenes/SceneChips.vue`, `apps/web/src/components/devices/RoomBands.vue`, `apps/web/src/components/devices/RoomLightsToggle.vue`, `apps/web/src/views/CoversView.vue`, `apps/web/src/components/covers/CoverPill.vue`, `apps/web/src/lib/{cover,deviceState}.ts`, `apps/web/src/composables/useHomeSummary.ts`, `apps/web/src/components/devices/ForgetDeviceButton.vue`, `apps/web/src/components/controls/MediaPlayerControl.vue`, `apps/web/src/lib/audioRouting.ts`, `apps/web/src/components/energy/EnergyFlow.vue`, `apps/web/src/components/EnphasePairingCard.vue`, `apps/web/src/lib/energy.ts`, `apps/web/src/components/devices/RoomBrightness.vue`, `apps/web/src/components/devices/CoversMaster.vue`, `apps/web/src/components/devices/LightsMaster.vue`, `apps/web/src/composables/useRoomLights.ts`, `apps/web/src/components/home/PanelArraysCard.vue`, `apps/web/src/components/energy/InverterFields.vue`, `apps/web/src/components/TeslaLinkCard.vue`, `apps/web/src/views/VehiclesView.vue`, `apps/web/src/components/vehicles/VehicleMap.vue`, `apps/web/src/components/vehicles/VehicleTuning.vue`, `apps/web/src/lib/vehicleTuning.ts`, `apps/web/src/lib/map.ts`, `apps/web/src/components/controls/VehicleCard.vue`, `apps/web/src/components/vehicles/ChargeLimitCard.vue`, `apps/web/src/components/home/DevicePanel.vue`, `apps/web/src/components/settings/PluginSection.vue`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/components/ui/Segmented.vue`, `apps/web/src/components/home/SearchBar.vue`, `apps/web/src/composables/useSearch.ts`, `apps/web/src/components/layout/SearchPalette.vue`, `apps/web/src/lib/search.ts`, `apps/web/src/lib/navItems.ts`, `apps/web/src/views/HeatingView.vue`, `apps/web/src/components/heating/*.vue`, `apps/web/src/components/MelcloudLinkCard.vue`, `apps/web/src/components/home/OpeningPanel.vue`, `apps/web/src/components/home/RoomEditPanel.vue`, `apps/web/src/components/home/ParkingPanel.vue`, `apps/web/src/lib/deviceIcons.ts`, `apps/web/src/views/MusicView.vue`, `apps/web/src/components/music/{MusicPlayerBar,ListeningSessions,MusicItemRow,MusicTile,ChipRow}.vue`, `apps/web/src/stores/localPlayer.ts`, `apps/web/src/components/music/MixcloudBrowser.vue`, `apps/web/src/components/MixcloudLinkCard.vue`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/views/{AutomationsView,AutomationEditView}.vue`, `apps/web/src/components/automations/*.vue`, `apps/web/src/components/layout/NavRail.vue` (`meta.nav`), `apps/web/src/components/controls/LightHistoryChart.vue`, `apps/web/src/components/weather/WeatherPlaces.vue`, `apps/web/src/composables/useMusicSession.ts`, `apps/web/src/lib/streamQuality.ts`, `apps/web/src/components/home/ReliefPanel.vue`, `apps/web/src/lib/ignRelief.ts`, `apps/web/src/lib/moon.ts`, `apps/web/src/components/vehicles/VehicleSoftware.vue`, `apps/web/src/components/layout/AssistantReply.vue`, `apps/web/src/components/settings/AssistantCard.vue`, `apps/web/src/components/ClaudeLinkCard.vue`, `apps/web/src/composables/useVoiceInput.ts`, `apps/web/src/stores/properties.ts`, `apps/web/src/components/layout/PropertyList.vue`, `apps/web/src/components/home/{HouseEditPanel,RoomShapeSection}.vue`, `apps/web/src/components/property/*.vue`, `apps/web/src/lib/onboarding.ts`, `apps/web/src/lib/geocode.ts`, `apps/web/src/views/ShoppingView.vue` (2026-10-11)
 
 ## Où sont les vues
@@ -982,7 +982,7 @@ le serveur. Kasbah n'a pas de comptes : l'identité, c'est le poste. Fermer une 
 ne masque donc rien sur le téléphone. Limite assumée : une tablette partagée est un seul
 « utilisateur ».
 
-**Trois gravités, trois règles de fermeture.**
+**Trois gravités, trois règles de fermeture.** *(Dépassé le 2026-10-19 : plus aucune alerte ne se ferme, seule une `info` s'éteint en ouvrant sa vue — voir « Mise à jour 2026-10-19 — la pastille tient tant que l'alerte dure ».)*
 - `info` (mise à jour logicielle d'un véhicule) : vue en OUVRANT la vue. `NavRail` a un
   `watchEffect` qui appelle `markViewSeen(vue courante)`, donc aussi pour une alerte qui arrive
   pendant qu'on regarde la page.
@@ -1207,3 +1207,50 @@ boutons dans le panneau, touches de ligne dans la carte (36 px, coins arrondis, 
 vocabulaire de `HeatingControl` et des vues Ouvrants et Médias). Premier cas :
 `controls/EvChargerCommands.vue` (`variant` `panel` / `row`), détaillé dans
 `4_4_vues-energie-vehicules.md`.
+
+### Mise à jour 2026-10-19 — la pastille tient tant que l'alerte dure, et la liste au fond du panneau maison
+
+Demande de l'utilisateur, devant plusieurs alertes en cours sur la vraie maison (tondeuse, distributeurs
+de croquettes) : garder la pastille du rail tant que les alertes sont là, et les lister dans le panneau
+de résumé de la vue 3D, pour voir d'un coup d'œil ce qu'il reste à faire et ne pas l'oublier.
+
+**Plus de fermeture.** Une alerte `problem` ou `critical` se signale tant que sa cause dure : c'est
+une tâche, elle part quand elle est réglée. « Masquer » (cartes des robots) et la croix de la
+vigilance (page Météo) sont retirés, avec `dismiss` et `closableFor` du store et les clés
+`alerts.dismiss` / `alerts.dismissHint`. Seule une `info` (mise à jour d'un véhicule) s'éteint
+encore en ouvrant sa vue (`markViewSeen`), et ce « vu » reste propre au poste
+(`kasbah.alerts.dismissed`, qui ne garde plus que des `info` ; d'anciennes entrées `problem` sont
+ignorées puis oubliées à la résolution). Écartés à la question posée : garder « Masquer » pour le
+seul rail, ou le garder tel quel.
+
+**Nouvelles sources.** `pet_feeder` et `pet_fountain` → vue `pets` : défaut de l'appareil, réserve
+basse, et, choisi par l'utilisateur, les consommables (dessiccant à 0 jour, filtre ou batterie de
+fontaine sous 20 %). Un robot injoignable garde sa panne (règles dans
+`../1_architecture/1_1_contrat-appareils.md`, même date). `active` est trié du plus grave au moins
+grave.
+
+**Section « Alertes » du panneau maison** (`HomePanel.vue`). Sous les tuiles, calée au FOND du
+panneau (`margin-top: auto` dans la colonne flex de `SidePanel`) : elle paraît et part sans rien
+déplacer au-dessus, et n'existe que s'il y a une alerte. **Une ligne par appareil**, ses alertes à la
+suite (« Croquettes à remettre · Dessiccant à changer ») : c'est l'appareil qu'on va voir. Ligne au
+gabarit de `RoomRows` : carré d'icône de l'appareil (`deviceIcon`), nom de la maison sur une ligne
+avec ellipse, texte en `MarqueeText` (un message de fabricant fait plusieurs phrases), chevron. Le
+texte prend la couleur de la gravité : `warning` (assombri en thème clair, même correction AA que les
+cartes des animaux), `error` en critique, `--muted` pour une `info`. La liste montre aussi les
+`info` déjà vues : elle dit ce qui est en cours, la pastille ce qui est nouveau ou à régler.
+
+Libellés : la version (`alerts.updateVersion`), le message du fabricant ou « En défaut »
+(`alerts.deviceError`), la vigilance par `weather.alerts.label`, la réserve par `pets.foodLow` /
+`pets.waterLow`, et `alerts.desiccant`, `alerts.filter`, `alerts.batteryLow`.
+
+**Le clic** sélectionne l'appareil dans la scène (`house.selectDevice`, comme la recherche) : sa pièce
+se cadre, son panneau s'ouvre. Un appareil qu'aucune pièce ne réclame ouvre sa vue à la place.
+
+Vérifié en mode simulé, état des appareils forcé : pastilles sur Robots et Animaux, tuiles immobiles
+(`getBoundingClientRect`), section au fond, lignes de 59 px, rien qui déborde à 1440 et 375 px, clic
+sur la tondeuse et sur le distributeur → sélection dans la 3D, couleurs en clair et en sombre, aucune
+erreur console. **Non joué** : zooms 1,25 / 1,5, anglais à l'écran, captures (figées sur la 3D),
+repli vers la vue d'un appareil non placé (tout est placé dans la simulation).
+
+Sources : `apps/web/src/components/home/HomePanel.vue`, `apps/web/src/stores/alerts.ts` (+ test),
+`apps/web/src/views/{RobotsView,WeatherView}.vue`, `apps/web/src/i18n/locales/{fr,en}.json`.

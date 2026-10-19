@@ -28,14 +28,31 @@ describe('alerts store', () => {
     expect(alerts.viewSeverity('vehicles')).toBe('info')
   })
 
-  it('keeps a problem until it is dismissed, opening the view is not enough', () => {
-    useDevicesStore().setEntries([{ descriptor: robot, state: mowerState({ activity: 'error', errorCode: 2 }) }])
+  it('keeps a problem flagged as long as it lasts, opening the view is not enough', async () => {
+    const devices = useDevicesStore()
+    devices.setEntries([{ descriptor: robot, state: mowerState({ activity: 'error', errorCode: 2 }) }])
     const alerts = useAlertsStore()
     alerts.markViewSeen('robots')
     expect(alerts.viewSeverity('robots')).toBe('problem')
-    alerts.dismiss(alerts.closableFor('aut:m'))
+    devices.applyMessage({ type: 'state', deviceId: 'aut:m', state: mowerState({ activity: 'parked' }) })
+    await nextTick()
     expect(alerts.viewSeverity('robots')).toBeNull()
-    expect(alerts.closableFor('aut:m')).toEqual([])
+  })
+
+  it('flags the pets view for a feeder that needs food', () => {
+    const feeder: DeviceDescriptor = { id: 'pk:f', pluginId: 'pk', externalId: 'f', kind: 'pet_feeder', name: 'Feeder', capabilities: [], meta: {} }
+    useDevicesStore().setEntries([{ descriptor: feeder, state: { ...(defaultState('pet_feeder') as StateFor<'pet_feeder'>), available: true, foodLow: true } }])
+    expect(useAlertsStore().viewSeverity('pets')).toBe('problem')
+  })
+
+  it('lists the most severe alerts first', () => {
+    const wx: DeviceDescriptor = { id: 'om:home', pluginId: 'om', externalId: 'home', kind: 'weather', name: 'Home', capabilities: [], meta: {} }
+    const red = { type: 'wind', level: 'red' as const, onset: 1, expires: 9 }
+    useDevicesStore().setEntries([
+      { descriptor: car, state: carState(update) },
+      { descriptor: wx, state: { ...(defaultState('weather') as StateFor<'weather'>), available: true, vigilance: [red] } },
+    ])
+    expect(useAlertsStore().active.map((a) => a.severity)).toEqual(['critical', 'info'])
   })
 
   it('forgets a dismissed alert once a reading says it is over, not before', async () => {

@@ -21,7 +21,8 @@ describe('deviceAlerts', () => {
 
   it('cannot tell for an unavailable or never-read device', () => {
     expect(deviceAlerts('tesla:car', vehicle({ readAt: undefined, softwareUpdate: { status: 'available' } }))).toBeNull()
-    expect(deviceAlerts('m:1', mower({ available: false, activity: 'error' }))).toBeNull()
+    // une tondeuse en panne qui a perdu le réseau est toujours en panne
+    expect(deviceAlerts('m:1', mower({ available: false, activity: 'error', errorMessage: 'Stuck' }))).toMatchObject([{ type: 'device_error', detail: 'Stuck' }])
   })
 
   it('raises a problem for a robot in error, one per occurrence', () => {
@@ -31,6 +32,18 @@ describe('deviceAlerts', () => {
     expect(again[0]!.id).not.toBe(first[0]!.id)
     expect(deviceAlerts('m:1', mower({ activity: 'parked' }))).toEqual([])
     expect(deviceAlerts('v:1', { ...(defaultState('vacuum') as StateFor<'vacuum'>), available: true, activity: 'error', errorMessage: 'Stuck' })).toHaveLength(1)
+  })
+
+  it('raises what is to be done on a pet feeder or fountain, the device fault first', () => {
+    const feeder = (patch: Partial<StateFor<'pet_feeder'>> = {}): StateFor<'pet_feeder'> => ({ ...(defaultState('pet_feeder') as StateFor<'pet_feeder'>), available: true, ...patch })
+    const fountain = (patch: Partial<StateFor<'pet_fountain'>> = {}): StateFor<'pet_fountain'> => ({ ...(defaultState('pet_fountain') as StateFor<'pet_fountain'>), available: true, ...patch })
+    expect(deviceAlerts('pk:f', feeder({ foodLow: false, desiccantDays: 3 }))).toEqual([])
+    expect(deviceAlerts('pk:f', feeder({ foodLow: true, desiccantDays: 0, errorMessage: 'Door blocked' }))!.map((a) => [a.type, a.detail]))
+      .toEqual([['device_error', 'Door blocked'], ['supply_low', undefined], ['consumable', 'desiccant']])
+    expect(deviceAlerts('pk:w', fountain({ waterLow: false, filterPct: 50, batteryPct: 80 }))).toEqual([])
+    expect(deviceAlerts('pk:w', fountain({ waterLow: true, filterPct: 10, batteryPct: 15 }))!.map((a) => a.type))
+      .toEqual(['supply_low', 'consumable', 'battery_low'])
+    expect(deviceAlerts('pk:w', fountain({ waterLow: true }))!.every((a) => a.severity === 'problem' && a.kind === 'pet_fountain')).toBe(true)
   })
 
   it('flags orange and red weather warnings, not yellow; unknown without a reading', () => {
