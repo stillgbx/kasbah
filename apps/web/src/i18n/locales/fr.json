@@ -348,7 +348,9 @@
       "line": "LOA · {driven} km sur {allowed} autorisés à ce jour",
       "projection": "≈ {projected} km au {end} (forfait {total})",
       "early": "Fin le {end} · {total} km prévus",
-      "ended": "LOA terminée le {end} · {driven} km pour {total} prévus"
+      "ended": "LOA terminée le {end} · {driven} km pour {total} prévus",
+      "paceMark": "Autorisé à ce jour : {km} km",
+      "yearMark": "{date} : {km} km autorisés"
     },
     "model3d": "Carrosserie 3D",
     "model3dNone": "Silhouette",

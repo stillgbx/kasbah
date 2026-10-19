@@ -48,5 +48,23 @@ export function leaseProgress(lease: VehicleLease, odometerKm: number | undefine
   }
 }
 
+/**
+ * Les anniversaires du contrat (début + 1 an, + 2 ans…) strictement avant l'échéance : `share` en
+ * part du contrat — sur la jauge, c'est aussi la part du forfait autorisée à cette date — et `km`
+ * ce qu'elle autorise.
+ */
+export function leaseYearMarks(lease: VehicleLease): { share: number; date: string; km: number }[] {
+  const start = dayMs(lease.start)
+  const span = dayMs(lease.end) - start
+  const [y, m, d] = [Number(lease.start.slice(0, 4)), Number(lease.start.slice(5, 7)) - 1, Number(lease.start.slice(8, 10))]
+  const out: { share: number; date: string; km: number }[] = []
+  for (let n = 1; ; n++) {
+    const at = Date.UTC(y + n, m, d)
+    if (at - start >= span) return out
+    const share = (at - start) / span
+    out.push({ share, date: new Date(at).toISOString().slice(0, 10), km: Math.round(lease.km * share) })
+  }
+}
+
 /** En avance sur le forfait : plus de kilomètres que le prorata n'en autorise. */
 export const leaseOverPace = (p: LeaseProgress) => p.drivenKm > p.allowedKm

@@ -202,7 +202,13 @@ describe('VehiclesView — détail de la charge', () => {
     const text = w.find('.vcard__lease').text().replace(/\s/g, ' ')
     expect(text).toContain('LOA · 10 000 km sur 10 0')
     expect(text).toContain('(forfait 20 000)')
-    expect(w.find('.vcard__lease .vcard__quota-fill').attributes('data-tense')).toBe('0')
+    expect(w.find('.vcard__lease-fill').attributes('data-tense')).toBe('0')
+    // contrat de deux ans : une graduation au premier anniversaire, à mi-jauge ; le repère du
+    // maximum autorisé est, ce jour-là, au même endroit
+    const years = w.findAll('.vcard__lease-year')
+    expect(years).toHaveLength(1)
+    expect(parseFloat(years[0]!.attributes('style')!.match(/left: ([\d.]+)%/)![1]!)).toBeCloseTo(50, 0)
+    expect(w.find('.vcard__lease-pace').attributes('title')).toMatch(/Autorisé à ce jour/)
     // sans LOA saisie, rien : pas même la place
     const { w: none } = setup(driven, {})
     expect(none.find('.vcard__lease').exists()).toBe(false)

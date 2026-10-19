@@ -14,7 +14,7 @@ Entrées les plus récentes en haut. Une session = une entrée.
 **Pages modified** :
 - 2_maison/2_0_format-house-json.md - section 2026-10-19 : `devices[].lease` (`start`, `end`, `km`, `startKm`), règles, écriture d'un bloc, `''` efface
 - 3_plugins/3_9_renault.md - section 2026-10-19 : `/contracts` (aucun contrat de financement chez Kamereon, ce que l'endpoint contient, filtre `toMileageContracts`, lecture au clic seulement, lecture quotidienne écartée, route et codes d'erreur)
-- 4_ui/4_4_vues-energie-vehicules.md - section 2026-10-19 : saisie dans « Modifier », calcul au prorata (projection muette le premier mois), jauge au pied de la carte, mesures de mise en page
+- 4_ui/4_4_vues-energie-vehicules.md - section 2026-10-19 : saisie dans « Modifier », calcul au prorata (projection muette le premier mois), jauge au pied de la carte, mesures de mise en page ; section 2026-10-19 (bis) : jauge au gabarit de la batterie, graduations grises aux anniversaires (`leaseYearMarks`), repère info du maximum autorisé à ce jour (info et non warning, pour rester visible sur le dépassement orangé)
 
 **Trous signalés** : le bouton « Chercher chez Renault » n'a pas été cliqué contre le vrai serveur depuis l'interface ; aucun `journal.md` de session n'existait, récit tiré du brief du fil principal et du code.
 

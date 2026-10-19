@@ -13,7 +13,7 @@ import VehicleSoftware from '../components/vehicles/VehicleSoftware.vue'
 import VehicleTuning from '../components/vehicles/VehicleTuning.vue'
 import { formatAgo, formatDistance, formatKm, formatMinutes, formatPercent, formatPower, formatTemp } from '../lib/format'
 import { QUOTA_TENSE_PCT, quotaPercent } from '../lib/map'
-import { leaseOverPace, leaseProgress } from '../lib/vehicleLease'
+import { leaseOverPace, leaseProgress, leaseYearMarks } from '../lib/vehicleLease'
 import { tunableVehicle } from '../lib/vehicleTuning'
 import { useDevicesStore } from '../stores/devices'
 import { useHouseStore } from '../stores/house'
@@ -254,11 +254,13 @@ const quotaLabel = (q: Quota) => {
 }
 /**
  * La LOA saisie au panneau « Modifier », contre le compteur lu : deux lignes et une jauge, à la place
- * du quota (la R5 n'en a pas). Rien sans LOA saisie ni compteur lu. Le repère de la jauge est le
- * rythme autorisé à ce jour ; la jauge passe à l'orangé quand on roule plus vite que lui.
+ * du quota (la R5 n'en a pas). Rien sans LOA saisie ni compteur lu. Sur la jauge, une graduation
+ * grise par anniversaire du contrat, et le repère info du maximum autorisé à ce jour ; le
+ * remplissage passe à l'orangé quand on roule plus vite que lui.
  */
+type LeaseMark = { left: number; title: string }
 const leases = computed(() => {
-  const out = new Map<string, { line: string; detail: string; fill: number; pace: number; tense: boolean }>()
+  const out = new Map<string, { line: string; detail: string; fill: number; pace: LeaseMark; years: LeaseMark[]; tense: boolean }>()
   const nf = new Intl.NumberFormat(locale.value)
   for (const v of vehicles.value) {
     const lease = house.houseDeviceFor(v.descriptor.id)?.lease
@@ -273,7 +275,11 @@ const leases = computed(() => {
         ? t('vehicle.lease.projection', { projected: nf.format(p.projectedKm), end, total })
         : t('vehicle.lease.early', { end, total }),
       fill: Math.min(p.usedShare, 1) * 100,
-      pace: p.elapsedShare * 100,
+      pace: { left: p.elapsedShare * 100, title: t('vehicle.lease.paceMark', { km: nf.format(p.allowedKm) }) },
+      years: leaseYearMarks(lease).map((y) => ({
+        left: y.share * 100,
+        title: t('vehicle.lease.yearMark', { date: new Date(`${y.date}T12:00:00Z`).toLocaleDateString(locale.value), km: nf.format(y.km) }),
+      })),
       tense: leaseOverPace(p),
     })
   }
@@ -446,11 +452,12 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
             <div v-if="leases.get(v.descriptor.id)" class="vcard__quota vcard__lease">
               <span class="muted vcard__quota-text" :title="leases.get(v.descriptor.id)!.line">{{ leases.get(v.descriptor.id)!.line }}</span>
               <div class="vcard__lease-bar">
-                <div class="vcard__quota-track">
-                  <div class="vcard__quota-fill" :data-tense="leases.get(v.descriptor.id)!.tense ? '1' : '0'"
-                       :style="{ width: `${leases.get(v.descriptor.id)!.fill}%` }" />
-                </div>
-                <span class="vcard__lease-pace" :style="{ left: `${leases.get(v.descriptor.id)!.pace}%` }" />
+                <div class="vcard__lease-fill" :data-tense="leases.get(v.descriptor.id)!.tense ? '1' : '0'"
+                     :style="{ width: `${leases.get(v.descriptor.id)!.fill}%` }" />
+                <span v-for="y in leases.get(v.descriptor.id)!.years" :key="y.left" class="vcard__lease-year"
+                      :style="{ left: `${y.left}%` }" :title="y.title" />
+                <span class="vcard__lease-pace" :style="{ left: `${leases.get(v.descriptor.id)!.pace.left}%` }"
+                      :title="leases.get(v.descriptor.id)!.pace.title" />
               </div>
               <span class="muted vcard__quota-text vcard__lease-detail" :title="leases.get(v.descriptor.id)!.detail">{{ leases.get(v.descriptor.id)!.detail }}</span>
             </div>
@@ -609,9 +616,16 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
 .vcard__quota-fill { height: 100%; border-radius: 999px; background: var(--accent); transition: width .4s; }
 /* le quota touche à sa fin : le même orangé que les avertissements des cartes de Réglages */
 .vcard__quota-fill[data-tense='1'] { background: #d38b22; }
-/* LOA : le repère du rythme autorisé dépasse de la jauge, qui elle rogne son remplissage */
-.vcard__lease-bar { position: relative; }
-.vcard__lease-pace { position: absolute; top: -3px; width: 2px; height: 10px; margin-left: -1px; border-radius: 1px; background: var(--text); opacity: .55; }
+/* LOA : la jauge de la batterie (`VehicleBattery`) — 8 px, sans `overflow: hidden`, les repères
+   DÉBORDENT par-dessus. Graduations d'anniversaire au gabarit de celles du TENS (2 × 12 px), en gris :
+   elles rythment, elles n'alertent pas. Le maximum autorisé à ce jour reprend le trait de la cible de
+   charge (3 × 16 px), en info : en warning, il se perdrait dans le remplissage orangé du dépassement. */
+.vcard__lease-bar { position: relative; height: 8px; border-radius: 999px; background: var(--line); }
+.vcard__lease-fill { height: 100%; border-radius: 999px; background: var(--accent); transition: width .4s, background .2s; }
+.vcard__lease-fill[data-tense='1'] { background: #d38b22; }
+.vcard__lease-year, .vcard__lease-pace { position: absolute; top: 50%; transform: translate(-50%, -50%); }
+.vcard__lease-year { width: 2px; height: 12px; border-radius: 1px; background: var(--muted); }
+.vcard__lease-pace { width: 3px; height: 16px; border-radius: 2px; background: rgb(var(--v-theme-info)); }
 /* la ligne du détail garde sa hauteur même vide (LOA terminée) : rien ne bouge sous la jauge */
 .vcard__lease-detail { height: 1.4em; line-height: 1.4em; }
 </style>

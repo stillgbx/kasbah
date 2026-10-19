@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { leaseOverPace, leaseProgress } from './vehicleLease'
+import { leaseOverPace, leaseProgress, leaseYearMarks } from './vehicleLease'
 
 const LEASE = { start: '2025-01-01', end: '2027-01-01', km: 20000 }
 const at = (iso: string) => Date.parse(`${iso}T12:00:00Z`)
@@ -35,5 +35,18 @@ describe('leaseProgress', () => {
 
   it('ne suit rien sans compteur lu', () => {
     expect(leaseProgress(LEASE, undefined, at('2026-01-01'))).toBeNull()
+  })
+})
+
+describe('leaseYearMarks', () => {
+  it('un repère par anniversaire, avant l échéance', () => {
+    const marks = leaseYearMarks({ start: '2025-03-01', end: '2028-04-01', km: 45000 })
+    expect(marks.map((y) => y.date)).toEqual(['2026-03-01', '2027-03-01', '2028-03-01'])
+    expect(marks[0]!.share).toBeCloseTo(365 / 1127, 3)
+    expect(marks[0]!.km).toBe(Math.round(45000 * 365 / 1127))
+  })
+
+  it('pas de repère sur l échéance elle-même', () => {
+    expect(leaseYearMarks(LEASE)).toHaveLength(1)
   })
 })

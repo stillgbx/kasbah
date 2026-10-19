@@ -348,7 +348,9 @@
       "line": "Lease · {driven} km of {allowed} allowed to date",
       "projection": "≈ {projected} km by {end} ({total} allowed)",
       "early": "Ends {end} · {total} km allowed",
-      "ended": "Lease ended {end} · {driven} km of {total} allowed"
+      "ended": "Lease ended {end} · {driven} km of {total} allowed",
+      "paceMark": "Allowed to date: {km} km",
+      "yearMark": "{date}: {km} km allowed"
     },
     "model3d": "3D body",
     "model3dNone": "Outline",

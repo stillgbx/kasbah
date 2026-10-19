@@ -1000,3 +1000,28 @@ joué : le bouton Renault contre le vrai serveur.
 
 Sources : `apps/web/src/components/vehicles/VehicleTuning.vue`, `apps/web/src/views/VehiclesView.vue`,
 `apps/web/src/lib/vehicleLease.ts`, `apps/web/src/i18n/locales/{fr,en}.json` (`vehicle.lease.*`).
+
+### Mise à jour 2026-10-19 (bis) — jauge LOA : graduations d'anniversaire et repère du maximum autorisé
+
+Demande de l'utilisateur après un premier essai : un repère discret par année du contrat, un repère plus
+visible pour l'utilisation maximale théorique à l'instant T, **dans le langage des autres jauges**.
+
+- **La jauge est celle de la batterie** (`VehicleBattery.vue`) : 8 px, pas d'`overflow: hidden`, les
+  repères DÉBORDENT par-dessus ; remplissage accent, orangé `#d38b22` au-delà du rythme autorisé.
+- **Graduations d'anniversaire** (début + 1 an, + 2 ans…, aucune sur l'échéance elle-même) :
+  `leaseYearMarks(lease)` rend `{ share, date, km }` — la part du contrat est aussi la part du forfait
+  autorisée à cette date. Gabarit des graduations du TENS (2 × 12 px), en `var(--muted)` : elles
+  rythment, elles n'alertent pas. Infobulle « <date> : N km autorisés » (`vehicle.lease.yearMark`).
+- **Repère du maximum autorisé à ce jour** : gabarit du repère de cible de charge (3 × 16 px), mais en
+  **info** (`rgb(var(--v-theme-info))`) et non en warning comme les autres repères : en warning, il se
+  perdrait dans le remplissage orangé du dépassement, justement quand il compte. Infobulle « Autorisé à
+  ce jour : N km » (`vehicle.lease.paceMark`). Il remplace le trait `var(--text)` à 55 % de la première
+  version.
+
+Mesuré dans la preview `kasbah-mock` (contrat d'exemple de 37 mois, trois graduations) : à 1440 × 900 la
+carte garde sa hauteur ; en disposition moyenne (1152 × 720) elle grandit de **52 px** avec une LOA
+saisie (48 avant : la jauge passe de 4 à 8 px) ; aucun débordement ; couleurs relevées en clair et en
+sombre.
+
+Sources : `apps/web/src/views/VehiclesView.vue`, `apps/web/src/lib/vehicleLease.ts` (+ test),
+`apps/web/src/i18n/locales/{fr,en}.json`.
