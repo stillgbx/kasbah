@@ -3,70 +3,70 @@
 | | |
 |---|---|
 | **Id** | `tahoma` |
-| **Appareils** | volets roulants, stores, portails, portes de garage, fenêtres (`cover`), et le capteur de luminosité des volets solaires |
-| **Connexion** | **locale** : API « mode développeur » de la box (plateforme Overkiz), sur le réseau de la maison |
-| **Compte** | aucun compte en ligne : un jeton généré dans l'appli mobile « TaHoma by Somfy » |
-| **Vues** | Maison (marqueurs 3D, panneau pièce), Ouvrants, Réglages → Plugins |
+| **Devices** | roller shutters, blinds, gates, garage doors, windows (`cover`), and the light sensor of solar shutters |
+| **Connection** | **local**: the box's "developer mode" API (Overkiz platform), on the house network |
+| **Account** | no online account: a token generated in the "TaHoma by Somfy" mobile app |
+| **Views** | Home (3D markers, room panel), Covers, Settings → Plugins |
 
-![Vue Ouvrants](../screenshots/covers.webp)
+![Covers view](../screenshots/covers.webp)
 
-*Capture de la démonstration (simulation, aucun appareil réel).*
+*Screenshot of the demo (simulation, no real device).*
 
-## Ce que fait le plugin
+## What the plugin does
 
-- **Ouvrants** : ouvrir, fermer, arrêter en pleine course ; viser une **position** en pourcentage quand le moteur sait le faire (moteurs io-homecontrol).
-- **Position perso** (la touche « my » de Somfy) : la rappeler depuis Kasbah, et sur les volets io la **mémoriser** à nouveau (« Mémoriser cette position »).
-- **Mode discret** (volets io compatibles) : les manœuvres lancées depuis Kasbah roulent en vitesse lente, plus silencieuse. C'est un réglage de Kasbah, la télécommande murale garde sa vitesse.
-- **Batterie** des volets solaires, et **luminosité** captée par leur panneau, avec un graphique Jour / Mois / Année construit par Kasbah (la box n'en garde pas).
-- **Retour d'état** : la box est interrogée toutes les 2 secondes (elle ne pousse rien), donc un volet actionné à la télécommande est vu presque aussitôt.
-- Les moteurs **RTS** (radio à sens unique, sans retour) sont pilotables, mais leur position est seulement **supposée** d'après la dernière commande, et signalée comme telle : sans commande passée par Kasbah depuis le démarrage, l'état est « Inconnu ».
-- **Placement** : la box ne dit pas dans quelle pièce est un volet. Les ouvrants arrivent « Sans ouverture » : dans la vue **Ouvrants**, **Affecter à** une fenêtre ou une porte de la maison les place dans la scène 3D.
+- **Covers**: open, close, stop mid-travel; aim for a **position** as a percentage when the motor can do it (io-homecontrol motors).
+- **Preset position** (Somfy's "my" button): recall it from Kasbah, and on io shutters **save** it again ("Save this position").
+- **Quiet mode** (compatible io shutters): moves started from Kasbah run at low speed, which is quieter. This is a Kasbah setting; the wall remote keeps its speed.
+- **Battery** of the solar shutters, and the **light level** picked up by their panel, with a Day / Month / Year chart built by Kasbah (the box keeps none).
+- **State feedback**: the box is polled every 2 seconds (it pushes nothing), so a shutter operated with the remote is seen almost at once.
+- **RTS** motors (one-way radio, no feedback) can be controlled, but their position is only **assumed** from the last command, and flagged as such: with no command sent through Kasbah since startup, the state is "Unknown".
+- **Placement**: the box does not say which room a shutter is in. Covers arrive as "No opening": in the **Covers** view, **Assign to** a window or door of the house places them in the 3D scene.
 
-Le reste de la box (capteurs, chauffage, passerelles, lecteurs audio) est ignoré, et les scénarios de la box ne sont pas repris.
+The rest of the box (sensors, heating, gateways, audio players) is ignored, and the box's scenarios are not imported.
 
-## Connexion
+## Connection
 
-Tout passe par le réseau local : le serveur Kasbah parle en HTTPS à la box, sur le port 8443, avec le jeton en en-tête. Aucun appel au cloud Somfy au fonctionnement. Le certificat de la box est signé par une autorité Overkiz et établi pour le nom `gateway-<PIN>.local` : il est accepté pour ce seul client, ce qui permet aussi de joindre la box par son adresse IP.
+Everything goes through the local network: the Kasbah server talks HTTPS to the box, on port 8443, with the token in a header. No call to the Somfy cloud during operation. The box's certificate is signed by an Overkiz authority and issued for the name `gateway-<PIN>.local`: it is accepted for this one client only, which also makes it possible to reach the box by its IP address.
 
-## Mise en route
+## Setup
 
-Le **mode développeur** ne s'active que depuis l'appli mobile (c'est le cloud Somfy qui le pose sur la box) : ni un site web, ni le réseau local ne le permettent. Tant qu'il n'est pas actif, le port de la box reste fermé.
+**Developer mode** can only be enabled from the mobile app (the Somfy cloud is what sets it on the box): neither a website nor the local network can do it. As long as it is not active, the box's port stays closed.
 
-1. Dans l'appli **TaHoma by Somfy** : « Configurer l'installation », puis « Accéder aux paramètres » de la box. Taper **sept fois** sur le code PIN de la passerelle (de la forme `1234-5678-9012`) pour activer le mode développeur.
-2. **Resynchroniser la box** : l'API locale n'est réellement servie qu'après.
-3. Menu « Mode développeur » : **générer un jeton** et le copier tout de suite, il n'est affichable qu'à sa création.
-4. Dans `apps/server/.env`, renseigner `TAHOMA_HOST` (le nom `gateway-<PIN>.local`, ou l'IP de la box avec un bail DHCP fixe) et `TAHOMA_TOKEN` (le jeton).
-5. Cocher **Tahoma** dans **Réglages → Plugins**, puis redémarrer le serveur : `.env` n'est lu qu'au démarrage.
+1. In the **TaHoma by Somfy** app: "Configure the installation", then "Access the settings" of the box. Tap the gateway's PIN code (of the form `1234-5678-9012`) **seven times** to enable developer mode.
+2. **Resynchronise the box**: the local API is only really served afterwards.
+3. "Developer mode" menu: **generate a token** and copy it right away, it can only be displayed when it is created.
+4. In `apps/server/.env`, set `TAHOMA_HOST` (the name `gateway-<PIN>.local`, or the box's IP with a fixed DHCP lease) and `TAHOMA_TOKEN` (the token).
+5. Tick **Tahoma** in **Settings → Plugins**, then restart the server: `.env` is only read at startup.
 
-L'état du plugin dans Réglages dit où on en est :
+The plugin's status in Settings tells you where you stand:
 
-| Message | Signification |
+| Message | Meaning |
 |---|---|
-| « Erreur », « no local API on … » | box injoignable, ou mode développeur pas activé / box pas resynchronisée |
-| « Appairage requis » | l'API locale répond, mais `TAHOMA_TOKEN` manque |
-| « Erreur », « token rejected » | jeton refusé : en générer un nouveau (un jeton peut ne jamais être enregistré par la box) |
+| "Error", "no local API on …" | box unreachable, or developer mode not enabled / box not resynchronised |
+| "Pairing required" | the local API answers, but `TAHOMA_TOKEN` is missing |
+| "Error", "token rejected" | token refused: generate a new one (a token may never be registered by the box) |
 
 ## Configuration (`apps/server/.env`)
 
-| Variable | Défaut | Rôle |
+| Variable | Default | Purpose |
 |---|---|---|
-| `TAHOMA_HOST` | — (obligatoire) | `gateway-<PIN>.local` ou adresse IP de la box : il n'y a pas de découverte |
-| `TAHOMA_PORT` | `8443` | Port de l'API locale |
-| `TAHOMA_TOKEN` | — | Jeton généré dans l'appli mobile |
-| `TAHOMA_TLS_INSECURE` | `true` | Accepte le certificat de la box, signé par une autorité Overkiz non publique |
-| `TAHOMA_POLL_MS` | `2000` | Cadence d'interrogation de la box (500 à 60 000 ms) |
-| `TAHOMA_COMMAND_MODE` | `queue` | Envoi de plusieurs commandes à la fois (automatisation, scène) : `queue` les envoie une par une, `batch` les regroupe en une seule exécution, comme un scénario TaHoma |
-| `TAHOMA_LIGHT_HISTORY_FILE` | `apps/server/.state/tahoma-light-history.json` | Historique de luminosité des volets solaires ; vide = pas de sauvegarde |
-| `TAHOMA_QUIET_FILE` | `apps/server/.state/tahoma-quiet.json` | Volets en mode discret ; vide = pas de sauvegarde |
+| `TAHOMA_HOST` | — (required) | `gateway-<PIN>.local` or IP address of the box: there is no discovery |
+| `TAHOMA_PORT` | `8443` | Port of the local API |
+| `TAHOMA_TOKEN` | — | Token generated in the mobile app |
+| `TAHOMA_TLS_INSECURE` | `true` | Accepts the box's certificate, signed by a non-public Overkiz authority |
+| `TAHOMA_POLL_MS` | `2000` | Polling interval of the box (500 to 60 000 ms) |
+| `TAHOMA_COMMAND_MODE` | `queue` | Sending several commands at once (automation, scene): `queue` sends them one by one, `batch` groups them into a single execution, like a TaHoma scenario |
+| `TAHOMA_LIGHT_HISTORY_FILE` | `apps/server/.state/tahoma-light-history.json` | Light-level history of the solar shutters; empty = not saved |
+| `TAHOMA_QUIET_FILE` | `apps/server/.state/tahoma-quiet.json` | Shutters in quiet mode; empty = not saved |
 
-## Limites
+## Limitations
 
-- **Pas de position pendant la course** : la box ne la publie qu'à la fin du mouvement. L'interface montre le sens (« Fermeture en cours ») puis saute à la valeur finale.
-- **RTS** : la position supposée devient fausse dès qu'on utilise la télécommande murale. Arrêter ou rappeler la position perso d'un RTS **efface** la position affichée, par honnêteté. La touche de position perso est proposée dès que la box la déclare, même si le moteur n'en a mémorisé aucune ; elle s'enregistre à la télécommande murale.
-- Les portails à commande unique « cycle » (sans ouvrir ni fermer distincts) sont ignorés. L'inclinaison des lames existe mais n'a pas été vérifiée sur du matériel.
-- La luminosité des volets solaires n'est enregistrée que tant que le serveur tourne : une heure où il était arrêté reste vide. Que la box relaie bien la luminance en local est à confirmer par temps ensoleillé.
-- **Mémoriser** une position perso n'a pas été essayé sur une vraie box (essais sur la simulation seulement) : le mode discret, lui, a été vérifié sur un volet réel.
+- **No position during travel**: the box only publishes it at the end of the movement. The interface shows the direction ("Closing") then jumps to the final value.
+- **RTS**: the assumed position becomes wrong as soon as the wall remote is used. Stopping an RTS or recalling its preset position **clears** the displayed position, for honesty. The preset position button is offered as soon as the box declares it, even if the motor has none stored; it is recorded with the wall remote.
+- Gates with a single "cycle" command (no separate open and close) are ignored. Slat tilt exists but has not been verified on hardware.
+- The light level of the solar shutters is only recorded while the server is running: an hour when it was stopped stays empty. Whether the box actually relays luminance locally remains to be confirmed in sunny weather.
+- **Saving** a preset position has not been tried on a real box (simulation only): quiet mode, on the other hand, has been verified on a real shutter.
 
-## Pour aller plus loin
+## Further reading
 
-Fonctionnement interne, relevés sur la box et pièges : [wiki, Somfy TaHoma](../../doc/3_plugins/3_4_somfy-tahoma.md).
+Internals, captures from the box and pitfalls: [wiki, Somfy TaHoma](../../doc/3_plugins/3_4_somfy-tahoma.md) (in French).

@@ -3,74 +3,74 @@
 | | |
 |---|---|
 | **Id** | `tesla` |
-| **Appareils** | véhicules (`vehicle`), un par voiture |
-| **Connexion** | **cloud Tesla** (Fleet API officielle, payante à l'usage mais avec un crédit mensuel) : il n'existe rien en local |
-| **Compte** | une application sur `developer.tesla.com` (ID client et secret), un domaine public en HTTPS qui sert une clé publique, puis le compte Tesla qui consent |
-| **Vues** | Véhicules, Maison (voiture en 3D, aux couleurs de la peinture), Réglages → Plugins |
+| **Devices** | vehicles (`vehicle`), one per car |
+| **Connection** | **Tesla cloud** (official Fleet API, pay-per-use but with a monthly credit): there is nothing local |
+| **Account** | an application on `developer.tesla.com` (client ID and secret), a public HTTPS domain serving a public key, then the Tesla account that consents |
+| **Views** | Vehicles, Home (the car in 3D, in the paint colors), Settings → Plugins |
 
-![Carte Tesla de la vue Véhicules](../screenshots/tesla.webp)
+![Tesla card in the Vehicles view](../screenshots/tesla.webp)
 
-*Capture de la démonstration (simulation, aucun appareil réel).*
+*Screenshot of the demo (simulation, no real device).*
 
-## Ce que fait le plugin
+## What the plugin does
 
-- **Lecture** : charge, autonomie, câble branché et charge en cours, limite de charge, fin de charge estimée, verrouillage, position (sur la carte, avec le cap), kilométrage, vitesse et rapport, pression des quatre pneus, températures, version logicielle et mise à jour en attente, couleur de la peinture.
-- **Veille** : l'état « en veille » est un état normal, affiché comme tel. Les dernières valeurs connues restent visibles, datées (« Lu il y a 12 min »).
-- **Commandes** : **Réveiller**, **Actualiser** (relire maintenant, sans réveiller), régler la limite de charge, **Lancer la charge** / **Arrêter la charge**, **Climatiser** (consigne, sièges et volant chauffants), programmer ou annuler l'installation d'une mise à jour logicielle (**Installer maintenant**) avec ses notes de version dans la langue de l'app.
-- **Réveil** : jamais de réveil automatique, sauf pour les gestes que vous demandez (bouton, automatisation) : lancer la charge et climatiser réveillent la voiture si elle dort. Les autres réglages sont refusés tant qu'elle dort.
-- Climatiser est refusé quand la batterie est sous 20 % (refus du constructeur).
+- **Reading**: charge level, range, cable plugged in and charging in progress, charge limit, estimated end of charge, lock state, position (on the map, with the heading), mileage, speed and gear, pressure of the four tyres, temperatures, software version and pending update, paint color.
+- **Sleep**: the "asleep" state is a normal state, shown as such. The last known values stay visible, dated ("Read 12 min ago").
+- **Commands**: **Wake up**, **Refresh** (read now, without waking), set the charge limit, **Start charging** / **Stop charging**, **Climate** (target temperature, heated seats and steering wheel), schedule or cancel the installation of a software update (**Install now**) with its release notes in the app's language.
+- **Waking**: never an automatic wake-up, except for the actions you ask for (button, automation): starting a charge and climate wake the car if it is asleep. Other settings are refused while it sleeps.
+- Climate is refused when the battery is below 20% (refusal by the vendor).
 
-## Connexion
+## Connection
 
-Tout passe par le cloud Tesla (`fleet-api`, région `eu` par défaut). Trois contraintes en découlent :
+Everything goes through the Tesla cloud (`fleet-api`, region `eu` by default). Three constraints follow:
 
-- **Un domaine public en HTTPS**, même pour une simple lecture : Tesla exige que la clé publique de l'application soit servie à `https://maison.example.org/.well-known/appspecific/com.tesla.3p.public-key.pem`. Kasbah tourne sur votre réseau local : c'est à vous de poser ce fichier sur un domaine à vous (un NAS, un petit hébergement). Le serveur génère la paire de clés ; la clé privée ne quitte jamais `TESLA_KEY_FILE`.
-- **Un domaine n'appartient qu'à une application** : si vous recréez l'application (même sous un autre compte développeur), le domaine est « déjà pris ». Gardez la première application : n'importe quel compte Tesla peut ensuite lui donner accès à sa voiture.
-- **Les jetons** sont gardés par le serveur (`apps/server/.state/tesla-token.json`) : rien à recopier dans `.env`. Le jeton de renouvellement est à usage unique et réécrit à chaque usage : ne pas supprimer ce fichier.
+- **A public HTTPS domain**, even for a simple read: Tesla requires the application's public key to be served at `https://maison.example.org/.well-known/appspecific/com.tesla.3p.public-key.pem`. Kasbah runs on your local network: it is up to you to put that file on a domain of your own (a NAS, a small hosting plan). The server generates the key pair; the private key never leaves `TESLA_KEY_FILE`.
+- **A domain belongs to only one application**: if you recreate the application (even under another developer account), the domain is "already taken". Keep the first application: any Tesla account can then give it access to its car.
+- **The tokens** are kept by the server (`apps/server/.state/tesla-token.json`): nothing to copy into `.env`. The refresh token is single-use and rewritten every time it is used: do not delete this file.
 
-## Mise en route
+## Setup
 
-1. Sur `developer.tesla.com`, créer une application (type « Authorization Code »), origine autorisée `https://maison.example.org`, redirection égale à `TESLA_REDIRECT_URI`, toutes les portées véhicule cochées. Aucune carte bancaire n'est nécessaire.
-2. Renseigner `TESLA_CLIENT_ID`, `TESLA_CLIENT_SECRET`, `TESLA_DOMAIN` (le nom seul, sans `https://`) et `TESLA_REGION` dans `apps/server/.env`, puis redémarrer le serveur.
-3. Cocher **Tesla** dans **Réglages → Plugins**. La carte **Tesla** propose trois pas :
-   1. **Copier la clé** publique et la poser à l'adresse indiquée sur votre domaine (fichier texte, servi en HTTPS) ;
-   2. **Enregistrer le domaine** : le serveur le déclare à Tesla et vérifie que la clé lue est la sienne ;
-   3. **Lier le compte Tesla** : le consentement s'ouvre dans un onglet. Au retour, **Actualiser** : les véhicules apparaissent.
-4. La carte disparaît quand tout est fait. **Générer une nouvelle clé** existe si la clé est perdue : la reposer sur le domaine, puis enregistrer le domaine à nouveau.
+1. On `developer.tesla.com`, create an application ("Authorization Code" type), allowed origin `https://maison.example.org`, redirect equal to `TESLA_REDIRECT_URI`, all vehicle scopes ticked. No bank card is needed.
+2. Set `TESLA_CLIENT_ID`, `TESLA_CLIENT_SECRET`, `TESLA_DOMAIN` (the name alone, without `https://`) and `TESLA_REGION` in `apps/server/.env`, then restart the server.
+3. Tick **Tesla** in **Settings → Plugins**. The **Tesla** card offers three steps:
+   1. **Copy key**: copy the public key and put it at the indicated address on your domain (text file, served over HTTPS);
+   2. **Register the domain**: the server declares it to Tesla and checks that the key read back is its own;
+   3. **Link the Tesla account**: the consent screen opens in a tab. On return, **Refresh**: the vehicles appear.
+4. The card disappears when everything is done. **Generate a new key** exists in case the key is lost: put it back on the domain, then register the domain again.
 
-## Coût et crédit mensuel
+## Cost and monthly credit
 
-Tesla facture l'API depuis 2025 : crédit de **10 $ par mois et par compte** (cycle du 1er au dernier jour du mois), puis lecture complète 1 $ pour 500, réveil 1 $ pour 50, commande 1 $ pour 1 000. Sans carte enregistrée, Tesla coupe simplement au bout du crédit.
+Tesla has billed for the API since 2025: a credit of **$10 per month and per account** (cycle from the 1st to the last day of the month), then full read $1 per 500, wake-up $1 per 50, command $1 per 1,000. With no card on file, Tesla simply cuts off once the credit is used up.
 
-- **Lister les véhicules et suivre la veille est gratuit.** Seuls coûtent la lecture complète, le réveil et les commandes.
-- **Budget journalier** : au plus `TESLA_DAILY_DATA_BUDGET` lectures complètes par jour (100 par défaut, soit 6 $ par mois au pire). Épuisé, seule la veille est suivie jusqu'au lendemain.
-- Une voiture vue au repos n'est pas relue avant 15 minutes (`TESLA_REST_MS`), le temps de s'endormir ; en route ou en charge, elle est relue à chaque tour (10 minutes).
-- La jauge de la vue Véhicules est une estimation : la console du développeur Tesla reste la référence.
+- **Listing the vehicles and following sleep is free.** Only the full read, the wake-up and the commands cost anything.
+- **Daily budget**: at most `TESLA_DAILY_DATA_BUDGET` full reads per day (100 by default, i.e. $6 per month at worst). Once used up, only sleep is followed until the next day.
+- A car seen at rest is not read again for 15 minutes (`TESLA_REST_MS`), the time it takes to fall asleep; on the road or charging, it is read again every round (10 minutes).
+- The gauge in the Vehicles view is an estimate: the Tesla developer console remains the reference.
 
 ## Configuration (`apps/server/.env`)
 
-| Variable | Défaut | Rôle |
+| Variable | Default | Purpose |
 |---|---|---|
-| `TESLA_CLIENT_ID` | — | ID client de l'application |
-| `TESLA_CLIENT_SECRET` | — | Secret de l'application |
-| `TESLA_DOMAIN` | — | Domaine (nom seul) qui sert la clé publique |
-| `TESLA_REGION` | `eu` | Région du compte : `eu` ou `na` |
-| `TESLA_REDIRECT_URI` | `http://localhost:8787/api/plugins/tesla/auth/callback` | Doit être identique à la redirection déclarée dans l'application (le port est celui du serveur) |
-| `TESLA_TOKEN_FILE` | `apps/server/.state/tesla-token.json` | Où le serveur garde les jetons. Vide : la liaison est perdue au redémarrage |
-| `TESLA_KEY_FILE` | `apps/server/.state/tesla-key.json` | Où le serveur garde la paire de clés |
-| `TESLA_STATE_FILE` | `apps/server/.state/tesla-state.json` | Derniers états des véhicules, couleur et consommation du mois (rien de secret). Vide : rien n'est gardé |
-| `TESLA_POLL_MS` | `600000` | Cadence de lecture de la liste (60 000 à 3 600 000 ms) |
-| `TESLA_REST_MS` | `900000` | Délai sans relecture pour une voiture au repos (`0` = pas de repos) |
-| `TESLA_DAILY_DATA_BUDGET` | `100` | Lectures complètes par jour au plus (`0` = veille seule) |
+| `TESLA_CLIENT_ID` | — | Client ID of the application |
+| `TESLA_CLIENT_SECRET` | — | Secret of the application |
+| `TESLA_DOMAIN` | — | Domain (name alone) serving the public key |
+| `TESLA_REGION` | `eu` | Region of the account: `eu` or `na` |
+| `TESLA_REDIRECT_URI` | `http://localhost:8787/api/plugins/tesla/auth/callback` | Must be identical to the redirect declared in the application (the port is the server's) |
+| `TESLA_TOKEN_FILE` | `apps/server/.state/tesla-token.json` | Where the server keeps the tokens. Empty: the link is lost at restart |
+| `TESLA_KEY_FILE` | `apps/server/.state/tesla-key.json` | Where the server keeps the key pair |
+| `TESLA_STATE_FILE` | `apps/server/.state/tesla-state.json` | Last vehicle states, color and the month's usage (nothing secret). Empty: nothing is kept |
+| `TESLA_POLL_MS` | `600000` | Read interval of the list (60 000 to 3 600 000 ms) |
+| `TESLA_REST_MS` | `900000` | Delay with no re-read for a car at rest (`0` = no rest) |
+| `TESLA_DAILY_DATA_BUDGET` | `100` | At most this many full reads per day (`0` = sleep only) |
 
-## Limites
+## Limitations
 
-- Les commandes essayées sans signature (limite de charge, charge, climatisation) passent sur une Model S 2017 ; les modèles plus récents peuvent exiger une clé virtuelle installée dans la voiture, non gérée par Kasbah.
-- Verrouiller / déverrouiller n'est pas encore disponible.
-- La voiture met de 20 secondes à une minute à réagir à une commande de charge : l'état se met à jour à la relecture suivante.
-- Un Model S ou X d'avant 2021 peut rester éveillé à cause des lectures (batterie) ; réduire le budget ou allonger `TESLA_POLL_MS` si besoin.
-- Les échecs d'un préconditionnement lancé depuis une automatisation ne remontent que dans le journal du serveur.
+- Commands tried without a signature (charge limit, charging, climate) go through on a 2017 Model S; more recent models may require a virtual key installed in the car, which Kasbah does not handle.
+- Locking / unlocking is not yet available.
+- The car takes 20 seconds to a minute to react to a charge command: the state updates at the next read.
+- A Model S or X from before 2021 may stay awake because of the reads (battery); reduce the budget or lengthen `TESLA_POLL_MS` if needed.
+- Failures of a preconditioning started from an automation only show up in the server log.
 
-## Pour aller plus loin
+## Further reading
 
-Fonctionnement interne, routes, essais sur la vraie voiture et pièges : [wiki, Tesla](../../doc/3_plugins/3_8_tesla.md).
+Internals, routes, tests on the real car and pitfalls: [wiki, Tesla](../../doc/3_plugins/3_8_tesla.md) (in French).

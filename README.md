@@ -1,133 +1,135 @@
 # Kasbah
 
-[![Licence MIT](https://img.shields.io/badge/licence-MIT-blue)](LICENSE)
+[![MIT License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/stillgbx)
 
-Application web (**tablette, ordinateur, téléphone**) qui montre la maison et le jardin en **3D** (souris et tactile) et permet de **visualiser et piloter les appareils connectés** placés dans les pièces : lumières, ventilateurs, ouvrants, lecteurs, caméras, chauffage, robots, eau, énergie solaire, véhicules et animaux. S'y ajoutent la musique (YouTube Music, Mixcloud, radios), la météo, l'agenda de la famille, le cahier de texte de l'école et des automatisations exécutées par le serveur.
+*English · [Français](README.fr.md)*
 
-- La maison (étages, pièces, ouvertures, terrain, origine GPS, plugins actifs) est décrite dans un **fichier JSON** : voir [docs/house-json.md](docs/house-json.md) et le [wiki](doc/index.md).
-- Chaque fabricant est un **plugin** côté serveur ; les secrets d'API vivent dans un `.env` **serveur**, jamais dans le navigateur.
-- Six thèmes nommés, apparence clair / sombre / système / auto (soleil au-dessus de la maison), français et anglais.
+A web app (**tablet, computer, phone**) that shows the house and garden in **3D** (mouse and touch) and lets you **see and control the connected devices** placed in its rooms: lights, fans, covers, players, cameras, heating, robots, water, solar power, vehicles and pets. On top of that: music (YouTube Music, Mixcloud, radio), weather, the family calendar, the school homework diary, and automations run by the server.
 
-## Aperçu
+- The house (floors, rooms, openings, terrain, GPS origin, active plugins) is described in a **JSON file**: see [docs/house-json.md](docs/house-json.md) and the [wiki](doc/index.md) (in French).
+- Each vendor is a server-side **plugin**; API secrets live in a **server** `.env`, never in the browser.
+- Six named themes, light / dark / system / auto appearance (sun above the house), French and English.
 
-![Les Tilleuls, maison de démonstration, sous la bruine](docs/screenshots/maison-tilleuls.webp)
+## Overview
 
-| Les Embruns (plain-pied, toit plat) | Le Belvédère (appartement) |
+![Les Tilleuls, demo house, in light drizzle](docs/screenshots/maison-tilleuls.webp)
+
+| Les Embruns (single story, flat roof) | Le Belvédère (apartment) |
 |---|---|
 | ![Les Embruns](docs/screenshots/maison-embruns.webp) | ![Le Belvédère](docs/screenshots/maison-belvedere.webp) |
 
-### Les vues
+### Views
 
-| **Énergie** | **Météo** |
+| **Energy** | **Weather** |
 |---|---|
-| ![Vue Énergie](docs/screenshots/energy.webp) | ![Vue Météo](docs/screenshots/weather.webp) |
-| **Musique** | **Agenda** |
-| ![Vue Musique](docs/screenshots/music.webp) | ![Vue Agenda](docs/screenshots/agenda.webp) |
-| **Véhicules** | **Robots** |
-| ![Vue Véhicules](docs/screenshots/vehicles.webp) | ![Vue Robots](docs/screenshots/robots.webp) |
-| **Lumières** | **Ouvrants** |
-| ![Vue Lumières](docs/screenshots/lights.webp) | ![Vue Ouvrants](docs/screenshots/covers.webp) |
-| **Médias** | **Chauffage** |
-| ![Vue Médias](docs/screenshots/media.webp) | ![Vue Chauffage](docs/screenshots/heating.webp) |
-| **Eau** | **Animaux** |
-| ![Vue Eau](docs/screenshots/water.webp) | ![Vue Animaux](docs/screenshots/pets.webp) |
-| **École** | **Liste de courses** |
-| ![Vue École](docs/screenshots/school.webp) | ![Vue Liste de courses](docs/screenshots/shopping.webp) |
-| **Automatisations** | **Une automatisation** |
-| ![Vue Automatisations](docs/screenshots/automations.webp) | ![Édition d'une automatisation](docs/screenshots/automation-edit.webp) |
-| **Réglages** | **Réglages → Plugins** |
-| ![Réglages](docs/screenshots/settings.webp) | ![Réglages, plugins](docs/screenshots/settings-plugins.webp) |
+| ![Energy view](docs/screenshots/energy.webp) | ![Weather view](docs/screenshots/weather.webp) |
+| **Music** | **Calendar** |
+| ![Music view](docs/screenshots/music.webp) | ![Calendar view](docs/screenshots/agenda.webp) |
+| **Vehicles** | **Robots** |
+| ![Vehicles view](docs/screenshots/vehicles.webp) | ![Robots view](docs/screenshots/robots.webp) |
+| **Lights** | **Covers** |
+| ![Lights view](docs/screenshots/lights.webp) | ![Covers view](docs/screenshots/covers.webp) |
+| **Media** | **Heating** |
+| ![Media view](docs/screenshots/media.webp) | ![Heating view](docs/screenshots/heating.webp) |
+| **Water** | **Pets** |
+| ![Water view](docs/screenshots/water.webp) | ![Pets view](docs/screenshots/pets.webp) |
+| **School** | **Shopping list** |
+| ![School view](docs/screenshots/school.webp) | ![Shopping list view](docs/screenshots/shopping.webp) |
+| **Automations** | **One automation** |
+| ![Automations view](docs/screenshots/automations.webp) | ![Editing an automation](docs/screenshots/automation-edit.webp) |
+| **Settings** | **Settings → Plugins** |
+| ![Settings](docs/screenshots/settings.webp) | ![Settings, plugins](docs/screenshots/settings-plugins.webp) |
 
-### Thèmes
+### Themes
 
-La même vue Énergie dans six des thèmes, en clair et en sombre.
+The same Energy view in six of the themes, light and dark.
 
-| Kasbah, clair | Kasbah, sombre | Catppuccin, clair |
+| Kasbah, light | Kasbah, dark | Catppuccin, light |
 |---|---|---|
-| ![Thème Kasbah clair](docs/screenshots/theme-kasbah-light.webp) | ![Thème Kasbah sombre](docs/screenshots/theme-kasbah-dark.webp) | ![Thème Catppuccin clair](docs/screenshots/theme-catppuccin-light.webp) |
+| ![Kasbah light theme](docs/screenshots/theme-kasbah-light.webp) | ![Kasbah dark theme](docs/screenshots/theme-kasbah-dark.webp) | ![Catppuccin light theme](docs/screenshots/theme-catppuccin-light.webp) |
 | **Dracula** | **Tokyo Night** | **Synthwave '84** |
-| ![Thème Dracula](docs/screenshots/theme-dracula-dark.webp) | ![Thème Tokyo Night](docs/screenshots/theme-tokyo-night-dark.webp) | ![Thème Synthwave '84](docs/screenshots/theme-synthwave84-dark.webp) |
+| ![Dracula theme](docs/screenshots/theme-dracula-dark.webp) | ![Tokyo Night theme](docs/screenshots/theme-tokyo-night-dark.webp) | ![Synthwave '84 theme](docs/screenshots/theme-synthwave84-dark.webp) |
 
-### Rendus 3D
+### 3D rendering
 
-Les Tilleuls dans huit des treize styles de rendu, à différentes heures de la maison.
+Les Tilleuls in eight of the thirteen rendering styles, at different times of day.
 
-| Réaliste, nuit | Réaliste, crépuscule |
+| Realistic, night | Realistic, dusk |
 |---|---|
-| ![Style réaliste, nuit](docs/screenshots/style-realistic-night.webp) | ![Style réaliste, crépuscule](docs/screenshots/style-realistic-dusk.webp) |
-| **Maquette** | **Cyberpunk** |
-| ![Style maquette](docs/screenshots/style-maquette-day.webp) | ![Style cyberpunk](docs/screenshots/style-cyberpunk-night.webp) |
-| **Noël** | **Star Wars — Tatooine** |
-| ![Style Noël](docs/screenshots/style-noel-night.webp) | ![Style Tatooine](docs/screenshots/style-tatooine-day.webp) |
-| **Maison hantée** | **Candy** |
-| ![Style maison hantée](docs/screenshots/style-haunted-night.webp) | ![Style candy](docs/screenshots/style-candy-day.webp) |
+| ![Realistic style, night](docs/screenshots/style-realistic-night.webp) | ![Realistic style, dusk](docs/screenshots/style-realistic-dusk.webp) |
+| **Model** | **Cyberpunk** |
+| ![Model style](docs/screenshots/style-maquette-day.webp) | ![Cyberpunk style](docs/screenshots/style-cyberpunk-night.webp) |
+| **Christmas** | **Star Wars — Tatooine** |
+| ![Christmas style](docs/screenshots/style-noel-night.webp) | ![Tatooine style](docs/screenshots/style-tatooine-day.webp) |
+| **Haunted house** | **Candy** |
+| ![Haunted house style](docs/screenshots/style-haunted-night.webp) | ![Candy style](docs/screenshots/style-candy-day.webp) |
 
-### Sur téléphone
+### On a phone
 
-<img src="docs/screenshots/mobile-assistant.webp" alt="Vue Maison sur téléphone, après une instruction à l'assistant" width="300" align="right">
+<img src="docs/screenshots/mobile-assistant.webp" alt="Home view on a phone, after an instruction to the assistant" width="300" align="right">
 
-En portrait, le rail passe en bas et le panneau devient un tiroir. La barre de recherche de la vue Maison sert
-aussi à parler à l'assistant (« Demander à Kasbah ») : il agit par les outils de Kasbah, puis dit ce qu'il a
-fait. Ici, il a replié le store de la terrasse et allumé le projecteur de la piscine.
+In portrait, the rail moves to the bottom and the panel becomes a drawer. The search bar of the Home view
+also talks to the assistant (“Ask Kasbah”): it acts through Kasbah's tools, then says what it did. Here, it
+retracted the terrace awning and turned on the pool light.
 
 <br clear="right">
 
-Captures des trois propriétés de démonstration, sur la simulation (aucun appareil réel). Les données des vues
-Musique et Agenda sont inventées, et l'échange avec l'assistant est simulé : ces vues ont besoin d'un compte
-YouTube Music, d'un agenda ou d'un forfait Claude, que la démonstration n'a pas. D'autres vues sont montrées
-dans la fiche de chaque plugin ([docs/plugins](docs/plugins)).
+Screenshots of the three demo properties, running on the simulation (no real device). The data in the Music
+and Calendar views is made up, and the exchange with the assistant is simulated: those views need a YouTube
+Music account, a calendar or a Claude plan, which the demo doesn't have. Other views are shown on each
+plugin's page ([docs/plugins](docs/plugins)).
 
-## Démarrage
+## Getting started
 
-### Machine neuve (Windows)
+### Fresh machine (Windows)
 
-Les écrans n'installent rien : tout se passe sur la machine du serveur.
+The screens install nothing: everything happens on the server machine.
 
-| Outil | Requis pour | Installation |
+| Tool | Needed for | Install |
 |---|---|---|
-| Node ≥ 22, npm ≥ 10, git | tout | `winget install OpenJS.NodeJS.LTS` puis `winget install Git.Git` |
-| ffmpeg | caméras (relais RTSP), lecture musicale (Cast / Sonos), matières 3D | `winget install Gyan.FFmpeg` |
-| yt-dlp | YouTube Music, Mixcloud | `yt-dlp.exe` dans `_external/` (`YTM_YTDLP_PATH`, `MIXCLOUD_YTDLP_PATH`) |
-| générateur PO Token + plugin yt-dlp `bgutil` | YouTube Music | voir [wiki, installation](doc/5_setup/5_0_installation-et-scripts.md) |
+| Node ≥ 22, npm ≥ 10, git | everything | `winget install OpenJS.NodeJS.LTS` then `winget install Git.Git` |
+| ffmpeg | cameras (RTSP relay), music playback (Cast / Sonos), 3D materials | `winget install Gyan.FFmpeg` |
+| yt-dlp | YouTube Music, Mixcloud | `yt-dlp.exe` in `_external/` (`YTM_YTDLP_PATH`, `MIXCLOUD_YTDLP_PATH`) |
+| PO Token generator + `bgutil` yt-dlp plugin | YouTube Music | see [wiki, installation](doc/5_setup/5_0_installation-et-scripts.md) (in French) |
 
-Rouvrir le terminal après un `winget install` : un processus déjà lancé ne voit pas le nouveau `PATH`.
+Reopen the terminal after a `winget install`: a process that is already running doesn't see the new `PATH`.
 
 ```bash
 git clone https://github.com/stillgbx/kasbah.git && cd kasbah
 npm install
-cp apps/server/.env.example apps/server/.env   # puis ajuster (Hue, TaHoma…)
+cp apps/server/.env.example apps/server/.env   # then adjust (Hue, TaHoma…)
 npm run dev
 ```
 
-Pour reprendre une maison existante, recopier depuis l'ancienne machine ce que git ne porte pas : `apps/server/.env`, `apps/server/mcp-users.json` (comptes de l'accès extérieur et des assistants IA), `apps/server/.state/` (jetons et sessions des fabricants, sessions de l'accès extérieur, propriété choisie), `house/properties/` (les maisons, leurs automatisations et leur historique) et `_external/`.
+To move an existing house to a new machine, copy over what git doesn't carry: `apps/server/.env`, `apps/server/mcp-users.json` (accounts for remote access and AI assistants), `apps/server/.state/` (vendor tokens and sessions, remote-access sessions, selected property), `house/properties/` (the houses, their automations and their history) and `_external/`.
 
-### Lancer
+### Running
 
-| Commande | Maison | Usage |
+| Command | House | Use |
 |---|---|---|
-| `npm run dev` | celle choisie dans **Réglages → Propriété** (démo ou réelle) ; `KASBAH_HOUSE_FILE` en impose une | développement, serveur relancé à chaque modification |
-| `npm run house` | idem | la maison réelle au quotidien : serveur **sans** relance automatique, front Vite |
-| `npm run build && npm start` | idem | production de base : tout sur `KASBAH_PORT` (8787), sans Vite |
+| `npm run dev` | the one selected in **Settings → Property** (demo or real); `KASBAH_HOUSE_FILE` forces one | development, server restarted on every change |
+| `npm run house` | same | the real house day to day: server **without** auto-restart, Vite front end |
+| `npm run build && npm start` | same | basic production: everything on `KASBAH_PORT` (8787), no Vite |
 
-Si npm bloque le script d'installation d'`esbuild` : `npm approve-scripts esbuild` puis `npm rebuild esbuild`.
+If npm blocks `esbuild`'s install script: `npm approve-scripts esbuild` then `npm rebuild esbuild`.
 
-- Web (Vite, HMR) : <http://localhost:5173> — accessible depuis un téléphone ou une tablette via l'IP du poste (`host: true`).
-- Serveur : <http://localhost:8787> — `GET /api/health`, `GET /api/house`, `GET /api/devices`, WebSocket `/ws`, serveur MCP `/mcp` (voir [Serveur MCP](#serveur-mcp)).
+- Web (Vite, HMR): <http://localhost:5173> — reachable from a phone or tablet through the computer's IP (`host: true`).
+- Server: <http://localhost:8787> — `GET /api/health`, `GET /api/house`, `GET /api/devices`, WebSocket `/ws`, MCP server `/mcp` (see [MCP server](#mcp-server)).
 
-Sans aucune configuration, le serveur démarre en **démonstration** : trois propriétés fictives (`house/demos/`), chacune peuplée par la simulation, et tout est pilotable immédiatement. Les démos se regardent sans se modifier.
+With no configuration at all, the server starts in **demo** mode: three fictional properties (`house/demos/`), each populated by the simulation, and everything can be controlled right away. Demos can be viewed but not modified.
 
-**Votre maison** : **Réglages → Propriété → Créer une propriété** (ou le pavé d'initiales en haut du rail). Un assistant demande le nom, pose le **point 0** sur la carte (un coin de la maison, d'où partent toutes les cotes) et la taille du terrain, puis guide le dessin du contour et des pièces dans le mode édition. Les propriétés réelles vivent dans `house/properties/` (hors git) ; **Réglages → Propriété** passe du mode démo au mode réel et revient quand on veut.
+**Your own house**: **Settings → Property → Create a property** (or the initials pad at the top of the rail). A wizard asks for the name, places **point 0** on the map (a corner of the house, from which every measurement starts) and the size of the plot, then guides you through drawing the outline and the rooms in edit mode. Real properties live in `house/properties/` (outside git); **Settings → Property** switches from demo mode to real mode and back whenever you like.
 
-| Propriété | Lieu | Ce qu'elle montre |
+| Property | Location | What it shows |
 |---|---|---|
-| Les Tilleuls | Dijon | Maison R+1 à toit à deux pans : garage double et ses portes, terrasse d'étage, piscine, jardin en pente, panneaux en toiture et fenêtre de toit motorisée, caméras et sonnette, TV et barre de son, deux voitures et une borne, ambiances |
-| Les Embruns | Pornic | Plain-pied contemporain en L à toit plat : panneaux sur châssis, puits de lumière, brise-soleil orientables, carport, voile d'ombrage |
-| Le Belvédère | Lille | Appartement au 4e étage : balcon, rideaux motorisés, interphone, ni toit, ni jardin, ni voiture |
+| Les Tilleuls | Dijon | Two-story house with a gable roof: double garage and its doors, upstairs terrace, pool, sloping garden, roof panels and a motorized roof window, cameras and doorbell, TV and soundbar, two cars and a charger, light scenes |
+| Les Embruns | Pornic | Contemporary L-shaped single-story house with a flat roof: panels on frames, skylights, adjustable sun louvers, carport, shade sail |
+| Le Belvédère | Lille | Fourth-floor apartment: balcony, motorized curtains, intercom, no roof, no garden, no car |
 
-On passe d'une démo à l'autre par le pavé d'initiales en haut du rail, ou **Réglages → Propriété** ; tous les écrans suivent. Les lieux sont des espaces publics, les noms sont fictifs.
+Switch between demos with the initials pad at the top of the rail, or **Settings → Property**; every screen follows. The locations are public places; the names are fictional.
 
-Front seul, sans serveur ni écriture dans la maison (les trois propriétés aussi, le choix est retenu par le navigateur) :
+Front end only, without a server or writes to the house (also the three properties; the choice is remembered by the browser):
 
 ```bash
 VITE_INPROCESS_MOCK=1 npm run dev -w @kasbah/web
@@ -135,51 +137,51 @@ VITE_INPROCESS_MOCK=1 npm run dev -w @kasbah/web
 
 ### Production
 
-Sur le réseau local, l'interface et l'API ne demandent ni compte ni HTTPS : **réseau local de confiance**. Depuis Internet, tout passe par une adresse publique HTTPS où une connexion est exigée (voir [Accès depuis l'extérieur](#accès-depuis-lextérieur)).
+On the local network, the interface and the API require neither an account nor HTTPS: **the local network is trusted**. From the Internet, everything goes through a public HTTPS address that requires signing in (see [Remote access](#remote-access)).
 
 ```bash
-npm run build      # web → apps/web/dist, serveur → apps/server/dist/main.js (bundle esbuild)
-npm start          # sert l'app web et l'API sur KASBAH_PORT (8787)
+npm run build      # web → apps/web/dist, server → apps/server/dist/main.js (esbuild bundle)
+npm start          # serves the web app and the API on KASBAH_PORT (8787)
 ```
 
-Depuis un autre appareil du réseau : `http://<ip-du-serveur>:8787`.
+From another device on the network: `http://<server-ip>:8787`.
 
-Pour mettre le serveur à jour sans aller sur la machine, le lancer par son superviseur plutôt que par
-`npm start` : `node scripts/supervisor.mjs` construit l'application si besoin, relance le serveur s'il
-tombe, et applique la dernière version de `main` sur demande depuis **Réglages → Mise à jour du serveur**
-(depuis le réseau local). La mise à jour enchaîne pull, `npm ci` si les dépendances changent, build et
-redémarrage, et revient à la version précédente en cas d'échec. Démarrage avec la machine (tâche planifiée
-Windows, service systemd) : [doc/5_setup/5_2_production.md](doc/5_setup/5_2_production.md).
+To update the server without going to the machine, start it through its supervisor rather than
+`npm start`: `node scripts/supervisor.mjs` builds the app if needed, restarts the server if it
+crashes, and applies the latest version of `main` on request from **Settings → Server update**
+(from the local network). An update runs pull, `npm ci` if dependencies changed, build and
+restart, and rolls back to the previous version if anything fails. Starting with the machine (Windows
+scheduled task, systemd service): [doc/5_setup/5_2_production.md](doc/5_setup/5_2_production.md) (in French).
 
-### Accès depuis l'extérieur
+### Remote access
 
-Depuis un téléphone hors de la maison, sans VPN : un **proxy inverse HTTPS** (celui du NAS Synology, ou un tunnel) publie Kasbah sous une adresse publique, déclarée dans `MCP_PUBLIC_URL`. Kasbah reconnaît ce nom (`Host`, ou `X-Forwarded-Host`) et y exige une **connexion** :
+From a phone away from home, without a VPN: an **HTTPS reverse proxy** (the Synology NAS one, or a tunnel) publishes Kasbah under a public address, declared in `MCP_PUBLIC_URL`. Kasbah recognizes that name (`Host`, or `X-Forwarded-Host`) and requires **signing in** there:
 
-- **Sous l'adresse publique** : page de connexion, puis toute l'application (interface, API, caméras, WebSocket). Le serveur MCP y répond aussi, avec ses propres jetons (voir [Serveur MCP](#serveur-mcp)).
-- **Sur le réseau local** (`http://<ip>:8787`, `kasbah.home.internal`) : rien ne change, aucun compte demandé. C'est le **nom** qui décide, pas l'endroit : l'adresse publique demande la connexion même depuis la maison (par le proxy, toutes les requêtes arrivent du NAS).
-- **Comptes** : les mêmes que ceux des assistants IA, dans **Réglages → Comptes**, gérés depuis le réseau local seulement (même connecté, l'adresse publique ne les montre pas).
-- **Session** : un cookie de 90 jours, prolongé à chaque usage ; on se connecte une fois par appareil. Changer le mot de passe d'un compte ferme toutes ses sessions (téléphone perdu) ; le retirer aussi. « Se déconnecter » est dans Réglages → Comptes.
-- **Blocage** : après 5 échecs de connexion d'affilée, le compte est bloqué 15 minutes, même avec le bon mot de passe (application et assistants IA ; `KASBAH_LOGIN_MAX_FAILURES`, `KASBAH_LOGIN_LOCK_MINUTES`). Les sessions ouvertes ne sont pas touchées.
-- **App installable** : en HTTPS, le navigateur propose d'installer Kasbah, dès la page de connexion. Sur iPhone, l'app ajoutée à l'écran d'accueil a ses propres cookies : s'y connecter une fois.
+- **Under the public address**: a sign-in page, then the whole app (interface, API, cameras, WebSocket). The MCP server answers there too, with its own tokens (see [MCP server](#mcp-server)).
+- **On the local network** (`http://<ip>:8787`, `kasbah.home.internal`): nothing changes, no account required. The **name** decides, not the place: the public address requires signing in even from home (through the proxy, every request comes from the NAS).
+- **Accounts**: the same as the AI assistants' accounts, in **Settings → Accounts**, managed from the local network only (even when signed in, the public address doesn't show them).
+- **Session**: a 90-day cookie, extended on every use; you sign in once per device. Changing an account's password closes all its sessions (lost phone); so does removing it. “Sign out” is in Settings → Accounts.
+- **Lockout**: after 5 failed sign-ins in a row, the account is locked for 15 minutes, even with the right password (app and AI assistants; `KASBAH_LOGIN_MAX_FAILURES`, `KASBAH_LOGIN_LOCK_MINUTES`). Open sessions are not affected.
+- **Installable app**: over HTTPS, the browser offers to install Kasbah, starting from the sign-in page. On iPhone, the app added to the home screen has its own cookies: sign in to it once.
 
-**Mise en service sur un NAS Synology** (DSM 6 : Panneau de configuration → Portail des applications → Proxy inversé ; DSM 7 : Portail de connexion → Avancé → Proxy inversé) :
+**Setting it up on a Synology NAS** (DSM 6: Control Panel → Application Portal → Reverse Proxy; DSM 7: Login Portal → Advanced → Reverse Proxy):
 
-1. **D'abord** `MCP_PUBLIC_URL=https://<adresse>` dans `apps/server/.env`, et relancer Kasbah. Dans l'autre ordre, la règle publierait l'application **sans** connexion dès son enregistrement.
-2. Règle de proxy inversé :
-   - source : HTTPS, nom d'hôte `<adresse>`, port 443, HTTP/2 activé, pas de contrôle d'accès ;
-   - destination : HTTP, IP du poste Kasbah, port 8787 ;
-   - **en-têtes personnalisés** : Créer → WebSocket, qui ajoute `Upgrade: $http_upgrade` et `Connection: $connection_upgrade`. Sans eux, l'état en direct ne passe pas (l'app reste « hors ligne »).
-3. Un certificat Let's Encrypt pour `<adresse>` (Sécurité → Certificat), associé à la règle.
-4. Sur le routeur : le port 443 redirigé vers le NAS.
-5. Lecture sur les enceintes (Cast, Sonos) depuis l'extérieur : `MUSIC_PUBLISH_BASE=http://<ip-du-poste>:8787`, sinon le serveur refuse (une enceinte ne peut pas lire l'adresse publique).
+1. **First** set `MCP_PUBLIC_URL=https://<address>` in `apps/server/.env`, and restart Kasbah. In the other order, the rule would publish the app **without** sign-in as soon as it is saved.
+2. Reverse proxy rule:
+   - source: HTTPS, hostname `<address>`, port 443, HTTP/2 enabled, no access control;
+   - destination: HTTP, IP of the Kasbah computer, port 8787;
+   - **custom headers**: Create → WebSocket, which adds `Upgrade: $http_upgrade` and `Connection: $connection_upgrade`. Without them, live state doesn't get through (the app stays “offline”).
+3. A Let's Encrypt certificate for `<address>` (Security → Certificate), assigned to the rule.
+4. On the router: port 443 forwarded to the NAS.
+5. Playing on speakers (Cast, Sonos) from outside: `MUSIC_PUBLISH_BASE=http://<computer-ip>:8787`, otherwise the server refuses (a speaker can't play from the public address).
 
-**Vérifier**, depuis le téléphone en 4G : `https://<adresse>/` ouvre la page de connexion, `https://<adresse>/.well-known/oauth-protected-resource` annonce l'adresse **en https** (sinon le proxy ne transmet pas le nom d'origine, et rien n'est protégé : le corriger avant tout). Une fois connecté, une lumière allumée change d'état à l'écran sans recharger.
+**Check**, from the phone on mobile data: `https://<address>/` opens the sign-in page, `https://<address>/.well-known/oauth-protected-resource` advertises the address **as https** (otherwise the proxy isn't forwarding the original name, and nothing is protected: fix that before anything else). Once signed in, a light you turn on changes state on screen without reloading.
 
-### Qualité
+### Quality
 
 ```bash
-npm test           # vitest, tous les workspaces (shared, mock-sim, server, web)
-npm run typecheck  # tsc / vue-tsc par workspace
+npm test           # vitest, all workspaces (shared, mock-sim, server, web)
+npm run typecheck  # tsc / vue-tsc per workspace
 npm run lint       # eslint (flat config, TypeScript + Vue)
 ```
 
@@ -187,181 +189,181 @@ npm run lint       # eslint (flat config, TypeScript + Vue)
 
 ```
 kasbah/
-  apps/web          Vite 8 + Vue 3 + Vuetify 4 + Three.js — l'application web
-  apps/server       Node 22 + Fastify 5 — REST + WebSocket, hôte des plugins, sert le build web
-  packages/shared   Schémas zod : kinds, états, commandes, protocole, maison + géométrie pure
-  packages/mock-sim Moteur de simulation déterministe (plugin `mock` et démo sans serveur)
-  house/            demos/ — trois propriétés de démonstration (maison à deux pans, toit plat, appartement) ; properties/ — vos propriétés (hors git) ; demo-house.json — maison des tests
-  doc/              wiki du projet (architecture, plugins, UI, setup)
+  apps/web          Vite 8 + Vue 3 + Vuetify 4 + Three.js — the web app
+  apps/server       Node 22 + Fastify 5 — REST + WebSocket, plugin host, serves the web build
+  packages/shared   zod schemas: kinds, states, commands, protocol, house + pure geometry
+  packages/mock-sim Deterministic simulation engine (`mock` plugin and server-less demo)
+  house/            demos/ — three demo properties (gable-roof house, flat roof, apartment); properties/ — your properties (outside git); demo-house.json — the test house
+  doc/              project wiki, in French (architecture, plugins, UI, setup)
 ```
 
-Flux : les plugins découvrent des appareils et poussent des **patchs d'état** → le registre fusionne, horodate et publie → le hub WebSocket envoie des **états complets** (coalescés 50 ms) aux navigateurs connectés. Les commandes passent en **REST** (`POST /api/devices/:id/command`) ; l'état résultant revient par le WebSocket.
+Flow: plugins discover devices and push **state patches** → the registry merges, timestamps and publishes them → the WebSocket hub sends **full states** (coalesced over 50 ms) to connected browsers. Commands go through **REST** (`POST /api/devices/:id/command`); the resulting state comes back over the WebSocket.
 
-Le contrat d'appareil est unique : un `kind` (forme de l'état et des commandes) et des `capabilities` (ce que l'UI affiche). Kinds : `light`, `cover`, `media_player`, `climate`, `vacuum`, `mower`, `sensor`, `energy`, `ev_charger`, `vehicle`, `camera`, `weather`, `water`, `pet_feeder`, `pet_fountain`, `fan`.
+There is a single device contract: a `kind` (shape of the state and commands) and `capabilities` (what the UI shows). Kinds: `light`, `cover`, `media_player`, `climate`, `vacuum`, `mower`, `sensor`, `energy`, `ev_charger`, `vehicle`, `camera`, `weather`, `water`, `pet_feeder`, `pet_fountain`, `fan`.
 
-## Fonctionnalités
+## Features
 
-Mise en page en grand écran (paysage) en trois colonnes : **rail** à gauche, **scène 3D** au centre, **panneau** contextuel à droite. En portrait, le panneau devient un tiroir. L'URL reflète la sélection (`/?level=…&room=…&device=…`).
+On a large (landscape) screen, a three-column layout: the **rail** on the left, the **3D scene** in the middle, a contextual **panel** on the right. In portrait, the panel becomes a drawer. The URL reflects the selection (`/?level=…&room=…&device=…`).
 
-### Vues
+### Views
 
-| Vue | Rôle |
+| View | Purpose |
 |---|---|
-| **Maison** | Scène 3D, tuiles de synthèse, alertes en cours (un clic mène à l'appareil), recherche, panneau pièce → appareil. Un doigt tourne, deux doigts zooment ; la caméra ne passe jamais sous le sol. |
-| **Météo** | Conditions, prévisions, qualité de l'air et pollens (Open-Meteo). |
-| **Agenda** | Agendas partagés de la famille (iCal) : mois, semaine, jour. |
-| **École** | Devoirs, cahier de liaison et publications de la classe (TouteMonAnnée). |
-| **Musique** | Lecteur commun : recherche et file d'attente YouTube Music, Mixcloud ou radios, joués sur une enceinte Cast ou Sonos. |
-| **Lumières** | Bandes par niveau et pièce, interrupteur d'ensemble, curseur de luminosité ; ventilateurs (Tuya) au même endroit. |
-| **Ouvrants** | Volets, stores, portails : position, favori « my », gestes d'ensemble (sécuriser / ouvrir la maison, volets d'une pièce). |
-| **Médias** | Lecteurs Cast et Sonos : transport, volume, pochette, relais son (barre HDMI ARC). |
-| **Caméras** | Vignettes et direct (MSE / ffmpeg). |
-| **Énergie** | Schéma de flux (solaire, maison, réseau, batterie), champs de panneaux, historique. |
-| **Eau** | Station de filtration, débit, consommables, historique. |
-| **Chauffage** | Zones et machine (pompe à chaleur), historique de fonctionnement. |
-| **Véhicules** | Charge, carte (plan / satellite), réveil, limite de charge, carrosserie 3D, suivi des km d'une LOA. |
-| **Robots** | Tondeuse (GPS, tâche en cours, zones à tondre ou à exclure, carte du terrain sur la photo et dans la 3D, journal, quota) et aspirateur (serpillière selon capacités). |
-| **Animaux** | Mangeoires et fontaines PetKit : repas, distribution, eau, consommables. |
-| **TENS** | Électrostimulateur actiTENS en Bluetooth, depuis le navigateur ; n'apparaît que sur les postes où il est activé. |
-| **Automatisations** | Règles « Quand / Sauf si / Alors » (voir plus bas). |
-| **Réglages** | Thème, rendu 3D, plugins, cartes de mise en route, comptes des assistants IA (MCP), mode édition, calage de la maison sur la photo aérienne. |
+| **Home** | 3D scene, summary tiles, current alerts (a click leads to the device), search, room → device panel. One finger rotates, two fingers zoom; the camera never goes below the ground. |
+| **Weather** | Conditions, forecasts, air quality and pollen (Open-Meteo). |
+| **Calendar** | The family's shared calendars (iCal): month, week, day. |
+| **School** | Homework, the parent-teacher notebook and the class's posts (TouteMonAnnée). |
+| **Music** | Shared player: search and queue from YouTube Music, Mixcloud or radio, played on a Cast or Sonos speaker. |
+| **Lights** | Strips per level and room, all-on/all-off switch, brightness slider; fans (Tuya) in the same place. |
+| **Covers** | Shutters, blinds, gates: position, “my” favorite, house-wide actions (secure / open the house, a room's shutters). |
+| **Media** | Cast and Sonos players: transport, volume, artwork, audio relay (HDMI ARC soundbar). |
+| **Cameras** | Thumbnails and live view (MSE / ffmpeg). |
+| **Energy** | Flow diagram (solar, house, grid, battery), panel arrays, history. |
+| **Water** | Filtration station, flow rate, consumables, history. |
+| **Heating** | Zones and machine (heat pump), operating history. |
+| **Vehicles** | Charging, map (street / satellite), wake-up, charge limit, 3D body, mileage tracking for a lease. |
+| **Robots** | Mower (GPS, current task, zones to mow or exclude, map of the plot on the aerial photo and in 3D, log, quota) and vacuum (mopping depending on capabilities). |
+| **Pets** | PetKit feeders and fountains: meals, dispensing, water, consumables. |
+| **TENS** | actiTENS electrostimulator over Bluetooth, from the browser; only appears on the computers where it is enabled. |
+| **Automations** | “When / Unless / Then” rules (see below). |
+| **Settings** | Theme, 3D rendering, plugins, setup cards, AI assistant accounts (MCP), edit mode, aligning the house on the aerial photo. |
 
-### Scène 3D
+### 3D scene
 
-La géométrie (murs, sols, toit, ouvertures, jardin, piscine) est construite depuis le JSON. Chaque appareil porte une **pilule** (icône + nom). Treize styles de rendu : réaliste, nature, indigo, maquette, cyberpunk, candy, maison hantée, disco, Halloween, Noël, Star Wars — Tatooine, Akira, Girlyversaire. L'ambiance solaire (auto / jour / crépuscule / nuit) est indépendante du thème de l'app. Véhicules et tondeuse se placent d'après leur GPS.
+The geometry (walls, floors, roof, openings, garden, pool) is built from the JSON. Each device carries a **pill** (icon + name). Thirteen rendering styles: realistic, nature, indigo, model, cyberpunk, candy, haunted house, disco, Halloween, Christmas, Star Wars — Tatooine, Akira, Girlyversaire. The sun lighting (auto / day / dusk / night) is independent of the app theme. Vehicles and the mower are placed from their GPS.
 
-La scène suit aussi la météo du plugin (Open-Meteo) : pluie et neige qui tombent, inclinées par le vent, sols mouillés, brouillard. L'eau de la piscine a une houle qui suit la force et la direction du vent, et des reflets au fond qui suivent le soleil.
+The scene also follows the weather from the plugin (Open-Meteo): falling rain and snow, slanted by the wind, wet ground, fog. The pool water has a swell that follows the wind's strength and direction, and caustics on the bottom that follow the sun.
 
-En **mode édition** (Réglages) : poser et coter des ouvertures, affecter un ouvrant, régler des places de stationnement, déplacer les appareils.
+In **edit mode** (Settings): place and dimension openings, assign a cover, set up parking spots, move devices.
 
-### Ambiances
+### Light scenes
 
-Les ambiances viennent des **plugins** (Hue : scènes fixes et palettes animées), pas d'un lot de commandes dans le JSON. Elles se rappellent depuis le panneau Maison / pièce, et se gèrent dans Réglages → Plugins.
+Light scenes come from the **plugins** (Hue: static scenes and animated palettes), not from a batch of commands in the JSON. They are recalled from the Home / room panel, and managed in Settings → Plugins.
 
-### Automatisations
+### Automations
 
-Des règles **Quand / Sauf si / Alors**, exécutées par le **serveur** (un écran éteint ne les arrête pas) :
+**When / Unless / Then** rules, run by the **server** (a screen that is off doesn't stop them):
 
-- **Quand** : une heure, un moment solaire (lever, coucher…) ou un changement d'état d'un appareil, éventuellement maintenu un certain temps ;
-- **Sauf si** : plages horaires, jours, dates, état d'un appareil, véhicule présent ou garé à une place, appareil allumé dans une pièce ;
-- **Alors** : une commande sur des appareils nommés ou sur une sélection (tous les volets d'un niveau…), avec un fondu pour les lumières Hue, ou le rappel d'une ambiance.
+- **When**: a time, a solar event (sunrise, sunset…) or a change in a device's state, optionally held for a while;
+- **Unless**: time ranges, days, dates, a device's state, a vehicle present or parked in a spot, a device on in a room;
+- **Then**: a command on named devices or on a selection (all the shutters on a level…), with a fade for Hue lights, or recalling a light scene.
 
-Elles s'écrivent sur le contrat d'appareil, jamais sur un fabricant : un plugin désactivé rend la règle incomplète sans rien supprimer. Elles vivent dans `<maison>.automations.json`, à côté du fichier de la maison.
+They are written against the device contract, never against a vendor: a disabled plugin leaves the rule incomplete without deleting anything. They live in `<house>.automations.json`, next to the house file.
 
 ## Plugins
 
-Tous sont **implémentés** (plus aucun squelette). Ils sont tous disponibles au démarrage ; on coche ceux qu'on veut dans **Réglages → Plugins**. Le choix (et les sous-items, comme les types simulés par `mock`) est écrit dans le fichier de la maison, sous `plugins`, et prend effet sans redémarrer. Une maison sans cette section démarre avec la simulation seule.
+All of them are **implemented** (no more stubs). They are all available at startup; you tick the ones you want in **Settings → Plugins**. The choice (and the sub-items, such as the types simulated by `mock`) is written to the house file, under `plugins`, and takes effect without a restart. A house without that section starts with the simulation only.
 
-Chaque plugin a sa **page** : ce qu'il fait, comment il se connecte, sa mise en route pas à pas et ses variables `.env`.
+Each plugin has its own **page**: what it does, how it connects, step-by-step setup and its `.env` variables.
 
-| Id | Fabricant / service | Kinds | Accès | Page |
+| Id | Vendor / service | Kinds | Access | Page |
 |---|---|---|---|---|
-| `mock` | Simulation de tous les types | tous | local | [mock](docs/plugins/mock.md) |
+| `mock` | Simulation of every type | all | local | [mock](docs/plugins/mock.md) |
 | `hue` | Philips Hue | `light` | local (CLIP v2 + SSE) | [hue](docs/plugins/hue.md) |
-| `tahoma` | Somfy TaHoma | `cover` | local (API développeur Overkiz) | [tahoma](docs/plugins/tahoma.md) |
+| `tahoma` | Somfy TaHoma | `cover` | local (Overkiz developer API) | [tahoma](docs/plugins/tahoma.md) |
 | `nest` | Google Nest | `camera`, `climate` | cloud (Smart Device Management) | [nest](docs/plugins/nest.md) |
-| `google_cast` | Google Cast (enceintes, Chromecast, TV) | `media_player` | local (Cast v2 / mDNS) | [google_cast](docs/plugins/google_cast.md) |
+| `google_cast` | Google Cast (speakers, Chromecast, TV) | `media_player` | local (Cast v2 / mDNS) | [google_cast](docs/plugins/google_cast.md) |
 | `sonos` | Sonos | `media_player` | local (UPnP/SOAP) | [sonos](docs/plugins/sonos.md) |
-| `enphase` | Enphase (site, micro-onduleurs, batteries IQ) | `energy`, `sensor` | local (passerelle) | [enphase](docs/plugins/enphase.md) |
-| `tesla` | Tesla | `vehicle` | cloud (Fleet API, crédit mensuel) | [tesla](docs/plugins/tesla.md) |
-| `renault` | Renault (MY Renault) | `vehicle` | cloud privé (Gigya / Kamereon) | [renault](docs/plugins/renault.md) |
+| `enphase` | Enphase (site, microinverters, IQ batteries) | `energy`, `sensor` | local (gateway) | [enphase](docs/plugins/enphase.md) |
+| `tesla` | Tesla | `vehicle` | cloud (Fleet API, monthly credit) | [tesla](docs/plugins/tesla.md) |
+| `renault` | Renault (MY Renault) | `vehicle` | private cloud (Gigya / Kamereon) | [renault](docs/plugins/renault.md) |
 | `automower` | Husqvarna Automower | `mower` | cloud (Automower Connect) | [automower](docs/plugins/automower.md) |
-| `comap` | COMAP Proteo 2 | `water` | local (TCP/23, sans auth) | [comap](docs/plugins/comap.md) |
-| `melcloud` | Mitsubishi Ecodan (MELCloud) | `climate` | cloud non officiel | [melcloud](docs/plugins/melcloud.md) |
-| `irobot` | iRobot Roomba | `vacuum` | local (MQTT) après une liaison compte | [irobot](docs/plugins/irobot.md) |
-| `open_meteo` | Open-Meteo | `weather` | cloud sans clé (CC BY 4.0) | [open_meteo](docs/plugins/open_meteo.md) |
-| `petkit` | PetKit (mangeoires, fontaines) | `pet_feeder`, `pet_fountain` | cloud privé (connexion par code courriel) | [petkit](docs/plugins/petkit.md) |
-| `tuya` | Tuya (ventilateur-lumière) | `fan`, `light` | local (protocole Tuya 3.5) | [tuya](docs/plugins/tuya.md) |
-| `ytmusic` | YouTube Music | — (source musicale) | cloud non officiel (cookie du compte) | [ytmusic](docs/plugins/ytmusic.md) |
-| `mixcloud` | Mixcloud | — (source musicale) | cloud public sans clé | [mixcloud](docs/plugins/mixcloud.md) |
-| `radio` | Radios (radio-browser.info) | — (source musicale) | cloud libre sans clé | [radio](docs/plugins/radio.md) |
-| `agenda` | Agendas Google partagés | — (vue Agenda) | adresse iCal secrète | [agenda](docs/plugins/agenda.md) |
-| `toutemonannee` | TouteMonAnnée (école) | — (vue École) | cloud privé (compte parent) | [toutemonannee](docs/plugins/toutemonannee.md) |
-| `claude` | Claude (Claude Code, forfait de chaque compte) | — (assistant « Demander à Kasbah ») | `claude -p` sur le serveur, par le MCP de Kasbah | [claude](docs/plugins/claude-assistant.md) |
-| `transcription` | Voix de l'assistant (VoiceStudio, vLLM, Mistral) | — (micro, réponses parlées) | local ou cloud (route OpenAI `/v1/audio/*`) | [transcription](docs/plugins/transcription.md) |
-| `tens` | actiTENS mini (électrostimulation) | — (vue TENS) | **dans le navigateur** (Web Bluetooth), activé par poste | [actitens](docs/plugins/actitens.md) |
+| `comap` | COMAP Proteo 2 | `water` | local (TCP/23, no auth) | [comap](docs/plugins/comap.md) |
+| `melcloud` | Mitsubishi Ecodan (MELCloud) | `climate` | unofficial cloud | [melcloud](docs/plugins/melcloud.md) |
+| `irobot` | iRobot Roomba | `vacuum` | local (MQTT) after linking the account | [irobot](docs/plugins/irobot.md) |
+| `open_meteo` | Open-Meteo | `weather` | cloud, no key (CC BY 4.0) | [open_meteo](docs/plugins/open_meteo.md) |
+| `petkit` | PetKit (feeders, fountains) | `pet_feeder`, `pet_fountain` | private cloud (sign-in with an email code) | [petkit](docs/plugins/petkit.md) |
+| `tuya` | Tuya (fan light) | `fan`, `light` | local (Tuya protocol 3.5) | [tuya](docs/plugins/tuya.md) |
+| `ytmusic` | YouTube Music | — (music source) | unofficial cloud (account cookie) | [ytmusic](docs/plugins/ytmusic.md) |
+| `mixcloud` | Mixcloud | — (music source) | public cloud, no key | [mixcloud](docs/plugins/mixcloud.md) |
+| `radio` | Radio stations (radio-browser.info) | — (music source) | free cloud, no key | [radio](docs/plugins/radio.md) |
+| `agenda` | Shared Google calendars | — (Calendar view) | secret iCal address | [agenda](docs/plugins/agenda.md) |
+| `toutemonannee` | TouteMonAnnée (school) | — (School view) | private cloud (parent account) | [toutemonannee](docs/plugins/toutemonannee.md) |
+| `claude` | Claude (Claude Code, each account's plan) | — (“Ask Kasbah” assistant) | `claude -p` on the server, through Kasbah's MCP | [claude](docs/plugins/claude-assistant.md) |
+| `transcription` | Assistant voice (VoiceStudio, vLLM, Mistral) | — (microphone, spoken answers) | local or cloud (OpenAI route `/v1/audio/*`) | [transcription](docs/plugins/transcription.md) |
+| `tens` | actiTENS mini (electrostimulation) | — (TENS view) | **in the browser** (Web Bluetooth), enabled per computer | [actitens](docs/plugins/actitens.md) |
 
-La liste commentée des clés `.env` est dans [apps/server/.env.example](apps/server/.env.example) ; le fonctionnement interne et les pièges de chaque fabricant, dans le [wiki, section Plugins](doc/index.md).
+The commented list of `.env` keys is in [apps/server/.env.example](apps/server/.env.example); the internals and pitfalls of each vendor are in the [wiki, Plugins section](doc/index.md) (in French).
 
-Certains plugins sont encore **lecture seule** ou partiels (consignes MELCloud, borne Enphase, lancement de file Sonos…). Le détail est sur la page du plugin.
+Some plugins are still **read-only** or partial (MELCloud setpoints, Enphase charger, starting a Sonos queue…). The details are on each plugin's page.
 
-Les fabricants qui demandent une liaison ont leur **carte de mise en route** dans Réglages → Plugins (appairage Hue, OAuth Nest / Tesla, jeton Enphase, identifiants Renault / MELCloud / iRobot, code PetKit, cookie YouTube Music, adresse iCal, compte TouteMonAnnée…).
+Vendors that require linking have their **setup card** in Settings → Plugins (Hue pairing, Nest / Tesla OAuth, Enphase token, Renault / MELCloud / iRobot credentials, PetKit code, YouTube Music cookie, iCal address, TouteMonAnnée account…).
 
-### Écrire un plugin
+### Writing a plugin
 
-Un plugin implémente [`DevicePlugin`](apps/server/src/core/plugin.ts) :
+A plugin implements [`DevicePlugin`](apps/server/src/core/plugin.ts):
 
-- `configSchema` : schéma zod de **ses** variables d'environnement ;
-- `discover()` : retourne des `DeviceDescriptor` (`id = "<plugin>:<externalId>"`, `kind`, `capabilities`) ;
-- `start()` : pousse l'état initial puis les changements via `ctx.emitState(externalId, patch)` ;
-- `execute(externalId, command)` : traduit une commande générique (`light.set`, `cover.set_position`…) en appel fabricant ; lève `PluginError(code)` en cas d'échec ;
-- optionnel : `registerRoutes(app)` (monté sous `/api/plugins/<id>/`), `health()`, scènes, prévisions, journal, consommation.
+- `configSchema`: zod schema of **its own** environment variables;
+- `discover()`: returns `DeviceDescriptor`s (`id = "<plugin>:<externalId>"`, `kind`, `capabilities`);
+- `start()`: pushes the initial state, then changes, through `ctx.emitState(externalId, patch)`;
+- `execute(externalId, command)`: translates a generic command (`light.set`, `cover.set_position`…) into a vendor call; throws `PluginError(code)` on failure;
+- optional: `registerRoutes(app)` (mounted under `/api/plugins/<id>/`), `health()`, scenes, forecasts, log, consumption.
 
-Déclarez-le dans [apps/server/src/plugins/index.ts](apps/server/src/plugins/index.ts). Le modèle d'appareils vit une seule fois dans [packages/shared/src/devices](packages/shared/src/devices). Marche à suivre et liste de contrôle : [doc/3_plugins/3_2_ecrire-un-plugin.md](doc/3_plugins/3_2_ecrire-un-plugin.md).
+Declare it in [apps/server/src/plugins/index.ts](apps/server/src/plugins/index.ts). The device model lives in one place only: [packages/shared/src/devices](packages/shared/src/devices). Step-by-step guide and checklist: [doc/3_plugins/3_2_ecrire-un-plugin.md](doc/3_plugins/3_2_ecrire-un-plugin.md) (in French).
 
-## Serveur MCP
+## MCP server
 
-Le serveur Kasbah expose aussi un serveur [MCP](https://modelcontextprotocol.io) sur `http://localhost:8787/mcp` (Streamable HTTP, SDK TypeScript officiel v2, spec 2026-07-28, clients 2025 acceptés). Il démarre avec le serveur, rien à activer.
+The Kasbah server also exposes an [MCP](https://modelcontextprotocol.io) server at `http://localhost:8787/mcp` (Streamable HTTP, official TypeScript SDK v2, spec 2026-07-28, 2025 clients accepted). It starts with the server; nothing to enable.
 
-| Outil | Rôle |
+| Tool | Purpose |
 |---|---|
-| `list_devices` | Appareils et état courant, filtres `kind`, `room`, `query` |
-| `get_device` | Descripteur complet et état d'un appareil |
-| `send_command` | Commande un **vrai** appareil (même contrat et mêmes contrôles que `POST /api/devices/:id/command`) |
-| `list_scenes` / `recall_scene` | Scènes des fabricants, et leur rappel |
-| `get_health` | Santé des plugins |
-| `search_music` | Recherche YouTube Music (titres), Mixcloud (mixes) ou Radios (stations), résultats prêts à jouer |
-| `play_music` | Joue une piste ou une file sur une enceinte, par le lecteur commun (`/api/music/queue`) |
-| `play_radio` | Joue une station en direct (`/api/plugins/radio/play`) |
-| `get_school` | Devoirs à venir (ou passés), cahier de liaison et publications de l'école (TouteMonAnnée), en lecture seule, filtres de la vue École appliqués |
-| `get_weather` | Météo actuelle, prévisions 24 h et 7 jours, qualité de l'air, pollens et vigilance Météo-France, de la maison ou d'un lieu cherché par son nom |
-| `get_agenda` | Événements des agendas de la maison sur une période (62 jours au plus), en lecture seule |
-| `list_automations` / `run_automation` / `set_automation_enabled` / `create_automation` / `update_automation` | Automatisations et leur statut, lancement immédiat, activation ou coupure, création et modification ; pas de suppression. Une règle écrite par l'assistant est marquée « à relire » dans l'app, celle qui ouvre un portail ou déverrouille une voiture est créée coupée, 10 créations par heure au plus |
-| `get_music` | Ce que joue chaque lecteur, les écoutes à reprendre, la file d'un lecteur |
-| `queue_music` / `control_music` | Ajouter à la file sans interrompre ; suivant, précédent, saut, retrait, répétition, vider, reprendre, transférer vers une autre enceinte |
-| `get_device_history` | Historique énergie (48 h), journal du fabricant, consommation d'eau d'un appareil |
-| `get_shopping_list` / `add_shopping_items` / `update_shopping_item` / `remove_shopping_item` / `finish_shopping` / `set_shopping_favorite` | Liste de courses de la maison : lire, ajouter, cocher ou changer la quantité (ligne désignée par son nom), retirer, retirer les lignes cochées, marquer un habituel |
+| `list_devices` | Devices and current state, filters `kind`, `room`, `query` |
+| `get_device` | Full descriptor and state of a device |
+| `send_command` | Controls a **real** device (same contract and same checks as `POST /api/devices/:id/command`) |
+| `list_scenes` / `recall_scene` | Vendor scenes, and recalling them |
+| `get_health` | Plugin health |
+| `search_music` | Searches YouTube Music (tracks), Mixcloud (mixes) or Radio (stations), results ready to play |
+| `play_music` | Plays a track or a queue on a speaker, through the shared player (`/api/music/queue`) |
+| `play_radio` | Plays a live station (`/api/plugins/radio/play`) |
+| `get_school` | Upcoming (or past) homework, the parent-teacher notebook and school posts (TouteMonAnnée), read-only, with the School view's filters applied |
+| `get_weather` | Current weather, 24 h and 7-day forecasts, air quality, pollen and Météo-France warnings, for the house or a place looked up by name |
+| `get_agenda` | Events from the house's calendars over a period (62 days at most), read-only |
+| `list_automations` / `run_automation` / `set_automation_enabled` / `create_automation` / `update_automation` | Automations and their status, run now, enable or disable, create and edit; no deletion. A rule written by the assistant is flagged “to review” in the app, one that opens a gate or unlocks a car is created disabled, 10 creations per hour at most |
+| `get_music` | What each player is playing, listens to resume, a player's queue |
+| `queue_music` / `control_music` | Add to the queue without interrupting; next, previous, seek, remove, repeat, clear, resume, transfer to another speaker |
+| `get_device_history` | Energy history (48 h), vendor log, water consumption of a device |
+| `get_shopping_list` / `add_shopping_items` / `update_shopping_item` / `remove_shopping_item` / `finish_shopping` / `set_shopping_favorite` | The house's shopping list: read, add, tick or change the quantity (line picked by its name), remove, remove ticked lines, mark as a regular |
 
-Ressource : `kasbah://house` (le `house.json` validé).
+Resource: `kasbah://house` (the validated `house.json`).
 
-**Authentification OAuth, partout** (réseau local compris) : Kasbah est son propre serveur d'autorisation. À la première connexion, le client ouvre une page Kasbah (utilisateur + mot de passe), puis garde un jeton (accès 1 h, renouvellement 90 jours glissants). Les clients s'enregistrent seuls (enregistrement dynamique, ou document de métadonnées pour claude.ai).
+**OAuth authentication, everywhere** (local network included): Kasbah is its own authorization server. On first connection, the client opens a Kasbah page (user + password), then keeps a token (1 h access, 90-day sliding refresh). Clients register themselves (dynamic registration, or a metadata document for claude.ai).
 
-- **Comptes** : `apps/server/mcp-users.json`, à côté du `.env`, hors dépôt, mots de passe hachés (scrypt) ; les mêmes ouvrent l'application par l'adresse publique. Les gérer dans **Réglages → Comptes** (ajouter, changer le mot de passe, retirer ; depuis le réseau local seulement), ou en secours :
+- **Accounts**: `apps/server/mcp-users.json`, next to `.env`, outside the repo, hashed passwords (scrypt); the same accounts open the app through the public address. Manage them in **Settings → Accounts** (add, change password, remove; from the local network only), or as a fallback:
   ```bash
-  npm run mcp-user -w @kasbah/server -- add <nom>
+  npm run mcp-user -w @kasbah/server -- add <name>
   ```
-  (`remove <nom>` coupe aussi ses jetons, `list` les liste). Le fichier est relu à chaque connexion : pas besoin de redémarrer.
-- **Jetons et clients enregistrés** : `apps/server/.state/mcp-auth.json` (hachés). Le supprimer déconnecte tous les clients.
-- **Depuis Internet** (Claude sur le téléphone, connecteur claude.ai) : l'adresse publique de [Accès depuis l'extérieur](#accès-depuis-lextérieur). Sous ce nom, `/mcp`, `/oauth/*` et `/.well-known/oauth-*` répondent avec les jetons du MCP ; le reste exige la connexion de l'application. Puis sur claude.ai : Paramètres → Connecteurs → Ajouter un connecteur personnalisé → `https://<adresse>/mcp`.
-- **Réseau local** : les clients bâtis sur le SDK MCP refusent d'envoyer leurs identifiants à un serveur d'autorisation en `http://` hors de la machine : `http://localhost:8787/mcp` sur le poste du serveur, l'adresse publique en https ailleurs.
+  (`remove <name>` also revokes its tokens, `list` lists them). The file is re-read on every sign-in: no restart needed.
+- **Tokens and registered clients**: `apps/server/.state/mcp-auth.json` (hashed). Deleting it disconnects every client.
+- **From the Internet** (Claude on the phone, claude.ai connector): the public address from [Remote access](#remote-access). Under that name, `/mcp`, `/oauth/*` and `/.well-known/oauth-*` answer with the MCP tokens; everything else requires signing in to the app. Then on claude.ai: Settings → Connectors → Add custom connector → `https://<address>/mcp`.
+- **Local network**: clients built on the MCP SDK refuse to send their credentials to an authorization server over `http://` off the machine: use `http://localhost:8787/mcp` on the server computer, and the public https address elsewhere.
 
-`/mcp` n'accepte en plus que les requêtes adressées à `localhost` / `127.0.0.1`, `kasbah` / `kasbah.home.internal` ou au nom de `MCP_PUBLIC_URL` (en-têtes `Host` et `Origin`, protection contre le DNS rebinding).
+In addition, `/mcp` only accepts requests addressed to `localhost` / `127.0.0.1`, `kasbah` / `kasbah.home.internal` or the `MCP_PUBLIC_URL` name (`Host` and `Origin` headers, protection against DNS rebinding).
 
-### Brancher un assistant IA
+### Connecting an AI assistant
 
-Deux adresses : `http://localhost:8787/mcp` sur le poste du serveur, **`https://<adresse>/mcp`** (celle de `MCP_PUBLIC_URL`) partout ailleurs, **sans numéro de port** (le proxy répond sur 443 ; 8787 ne sert qu'entre le proxy et le poste). À la première connexion, la page Kasbah s'ouvre dans le navigateur : se connecter avec un compte de Réglages → Comptes. Nom conseillé pour le connecteur : `Kasbah`, en un mot, pour le viser dans le chat (`@Kasbah allume le salon`).
+Two addresses: `http://localhost:8787/mcp` on the server computer, **`https://<address>/mcp`** (the `MCP_PUBLIC_URL` one) everywhere else, **with no port number** (the proxy answers on 443; 8787 is only used between the proxy and the computer). On first connection, the Kasbah page opens in the browser: sign in with an account from Settings → Accounts. Suggested connector name: `Kasbah`, one word, so you can target it in the chat (`@Kasbah turn on the living room`).
 
-Procédures vérifiées avec Kasbah les 5 et 6 octobre 2026 (Claude, ChatGPT, Mistral Vibe, Grok).
+Procedures checked against Kasbah on 5 and 6 October 2026 (Claude, ChatGPT, Mistral Vibe, Grok).
 
-| Assistant | Où se configure le connecteur | Ensuite |
+| Assistant | Where to set up the connector | Then |
 |---|---|---|
-| **Claude** (claude.ai, app mobile) | app web : Paramètres → Connecteurs → Ajouter un connecteur personnalisé → `https://<adresse>/mcp` | suit le compte : disponible aussi dans l'app mobile |
-| **ChatGPT** | app web seulement, **mode développeur** activé : Plugins → Parcourir les plugins → **+** → Créer une application MCP. Nom, URL du serveur, authentification **OAuth** sans paramètres avancés, cocher « J'ai compris et je souhaite continuer », Créer, puis « Se connecter avec Kasbah » | disponible aussi dans l'app mobile |
-| **Mistral Vibe** | app web seulement : Contexte → Connecteurs → Ajouter un connecteur → Ajouter un connecteur personnalisé. Nom, serveur `https://<adresse>/mcp`, authentification **OAuth2.1** sans paramètres avancés | disponible aussi dans l'app mobile |
-| **Grok** | directement depuis l'**app mobile** : ajouter un connecteur personnalisé (nom, adresse) | — |
-| **Gemini** | pas encore possible en France : les « applications personnalisées » de l'app grand public sont réservées aux États-Unis (compte personnel, interface en anglais) ; Gemini Enterprise demande un client OAuth fixe avec secret, que Kasbah ne gère pas | — |
+| **Claude** (claude.ai, mobile app) | web app: Settings → Connectors → Add custom connector → `https://<address>/mcp` | follows the account: also available in the mobile app |
+| **ChatGPT** | web app only, with **developer mode** enabled: Plugins → Browse plugins → **+** → Create MCP app. Name, server URL, **OAuth** authentication without advanced settings, tick “I understand and want to continue”, Create, then “Connect to Kasbah” | also available in the mobile app |
+| **Mistral Vibe** | web app only: Context → Connectors → Add connector → Add custom connector. Name, server `https://<address>/mcp`, **OAuth2.1** authentication without advanced settings | also available in the mobile app |
+| **Grok** | directly from the **mobile app**: add a custom connector (name, address) | — |
+| **Gemini** | not possible yet in France: the consumer app's “custom apps” are limited to the United States (personal account, English interface); Gemini Enterprise requires a fixed OAuth client with a secret, which Kasbah doesn't support | — |
 
-- **Forfaits Claude gérés par une organisation** (Team, Enterprise…) : un membre ne peut pas ajouter son propre connecteur, c'est le propriétaire de l'organisation qui l'ajoute pour tous. Pour un serveur personnel comme Kasbah, passer par un compte Claude personnel.
-- Les clients s'inscrivent seuls : Mistral et Grok par enregistrement dynamique, ChatGPT et claude.ai par document de métadonnées client. Rien à régler côté Kasbah.
+- **Claude plans managed by an organization** (Team, Enterprise…): a member can't add their own connector; the organization owner adds it for everyone. For a personal server like Kasbah, use a personal Claude account.
+- Clients register themselves: Mistral and Grok through dynamic registration, ChatGPT and claude.ai through a client metadata document. Nothing to configure on the Kasbah side.
 
-Clients de bureau et de développement (serveur Kasbah lancé) :
+Desktop and development clients (with the Kasbah server running):
 
 - **Claude Code**
   ```bash
   claude mcp add --transport http kasbah http://localhost:8787/mcp
   ```
-  (`https://<adresse>/mcp` depuis un autre poste), puis `/mcp` dans Claude Code pour s'authentifier.
-- **VS Code** (`.vscode/mcp.json` ou configuration utilisateur)
+  (`https://<address>/mcp` from another computer), then `/mcp` in Claude Code to authenticate.
+- **VS Code** (`.vscode/mcp.json` or user configuration)
   ```json
   { "servers": { "kasbah": { "type": "http", "url": "http://localhost:8787/mcp" } } }
   ```
@@ -369,49 +371,49 @@ Clients de bureau et de développement (serveur Kasbah lancé) :
   ```json
   { "mcpServers": { "kasbah": { "url": "http://localhost:8787/mcp" } } }
   ```
-- **Claude Desktop** : par son fichier `claude_desktop_config.json` (Windows : `%APPDATA%\Claude\`, macOS : `~/Library/Application Support/Claude/`), indépendant du forfait. Le pont stdio `mcp-remote` (Node.js requis) vers l'adresse publique, ou `http://localhost:8787/mcp` sur le poste du serveur :
+- **Claude Desktop**: through its `claude_desktop_config.json` file (Windows: `%APPDATA%\Claude\`, macOS: `~/Library/Application Support/Claude/`), whatever the plan. The `mcp-remote` stdio bridge (Node.js required) to the public address, or `http://localhost:8787/mcp` on the server computer:
   ```json
-  { "mcpServers": { "kasbah": { "command": "npx", "args": ["-y", "mcp-remote", "https://<adresse>/mcp"] } } }
+  { "mcpServers": { "kasbah": { "command": "npx", "args": ["-y", "mcp-remote", "https://<address>/mcp"] } } }
   ```
-  Quitter complètement Claude Desktop (icône de la zone de notification comprise) et le relancer : la page de connexion s'ouvre. `mcp-remote` garde ses jetons dans `~/.mcp-auth` (le supprimer force une reconnexion).
-- **Tester à la main** : `npx @modelcontextprotocol/inspector`, transport « Streamable HTTP », URL ci-dessus.
+  Quit Claude Desktop completely (including its notification-area icon) and restart it: the sign-in page opens. `mcp-remote` keeps its tokens in `~/.mcp-auth` (deleting it forces a new sign-in).
+- **Testing by hand**: `npx @modelcontextprotocol/inspector`, “Streamable HTTP” transport, URL above.
 
-**Dépannage**
+**Troubleshooting**
 
-- Journal de Claude Desktop : `%LOCALAPPDATA%\Claude\Logs\mcp-server-kasbah.log` (Windows, Microsoft Store), `%APPDATA%\Claude\logs\` (installateur classique), `~/Library/Logs/Claude/` (macOS).
-- `ETIMEDOUT`, rien dans le journal de Kasbah : la connexion n'arrive pas jusqu'au serveur. Souvent un port dans l'adresse publique (`https://<adresse>:8787/mcp` au lieu de `https://<adresse>/mcp`).
-- `http://kasbah:8787/mcp --allow-http` depuis un autre poste : le nom est accepté, mais la connexion échoue pendant OAuth. `--allow-http` ne lève que le contrôle de l'URL ; le SDK embarqué refuse ensuite d'envoyer les identifiants en `http://` hors de la machine locale (`Refusing to send credentials to non-https token endpoint`). Passer par l'adresse publique.
-- « invalid state » à la fin de la connexion (Mistral) : la page de connexion venait d'un ajout précédent du connecteur, ou le formulaire a été envoyé deux fois. Supprimer le connecteur, l'ajouter une seule fois, se connecter en un seul clic.
+- Claude Desktop log: `%LOCALAPPDATA%\Claude\Logs\mcp-server-kasbah.log` (Windows, Microsoft Store), `%APPDATA%\Claude\logs\` (classic installer), `~/Library/Logs/Claude/` (macOS).
+- `ETIMEDOUT`, nothing in Kasbah's log: the connection never reaches the server. Often a port in the public address (`https://<address>:8787/mcp` instead of `https://<address>/mcp`).
+- `http://kasbah:8787/mcp --allow-http` from another computer: the name is accepted, but the connection fails during OAuth. `--allow-http` only lifts the URL check; the embedded SDK then refuses to send credentials over `http://` off the local machine (`Refusing to send credentials to non-https token endpoint`). Use the public address.
+- “invalid state” at the end of sign-in (Mistral): the sign-in page came from an earlier addition of the connector, or the form was submitted twice. Delete the connector, add it once only, sign in with a single click.
 
 ## Configuration (`apps/server/.env`)
 
-| Variable | Défaut | Rôle |
+| Variable | Default | Purpose |
 |---|---|---|
-| `KASBAH_PORT` / `KASBAH_HOST` | `8787` / `0.0.0.0` | Écoute HTTP + WS |
-| `KASBAH_HOUSE_FILE` | — | Impose une maison (forçage, facultatif) ; absent, les propriétés de `house/demos/` et `house/properties/`, choisies dans Réglages → Propriété |
-| `KASBAH_STATIC_DIR` | `apps/web/dist` | Build web servi en production |
-| `KASBAH_STATE_DIR` | `apps/server/.state` | Jetons, historiques, appareils déjà vus |
-| `KASBAH_STRICT_PLUGINS` | `false` | `true` : une config de plugin invalide empêche le démarrage |
-| `KASBAH_COMMAND_TIMEOUT_MS` | `10000` | Délai max d'une commande |
-| `KASBAH_LOG_LEVEL` / `KASBAH_LOG_PRETTY` | `info` / `false` | Journalisation pino |
-| `MOCK_SCENARIO` | `default` | `default`, `empty`, `chaos`, `winter` ; en démonstration, le parc suit la propriété (`winter` donne sa version d'hiver) |
-| `MOCK_TIME_SCALE` | `1` | Accélération du temps simulé (60 → une journée en 24 min) |
-| `FFMPEG_PATH` | `ffmpeg` | Relais vidéo des caméras |
-| `MCP_PUBLIC_URL` | — | Adresse publique HTTPS : application avec connexion et serveur MCP (voir [Accès depuis l'extérieur](#accès-depuis-lextérieur)) |
-| `KASBAH_LOGIN_MAX_FAILURES` / `KASBAH_LOGIN_LOCK_MINUTES` | `5` / `15` | Échecs de connexion d'affilée qui bloquent un compte (`0` = jamais), durée du blocage |
-| `KASBAH_SESSIONS_FILE` | `.state/sessions.json` | Sessions de l'adresse publique (hachées) ; le supprimer déconnecte tout le monde |
+| `KASBAH_PORT` / `KASBAH_HOST` | `8787` / `0.0.0.0` | HTTP + WS listener |
+| `KASBAH_HOUSE_FILE` | — | Forces a house (override, optional); when absent, the properties from `house/demos/` and `house/properties/`, selected in Settings → Property |
+| `KASBAH_STATIC_DIR` | `apps/web/dist` | Web build served in production |
+| `KASBAH_STATE_DIR` | `apps/server/.state` | Tokens, histories, devices already seen |
+| `KASBAH_STRICT_PLUGINS` | `false` | `true`: an invalid plugin config prevents startup |
+| `KASBAH_COMMAND_TIMEOUT_MS` | `10000` | Maximum duration of a command |
+| `KASBAH_LOG_LEVEL` / `KASBAH_LOG_PRETTY` | `info` / `false` | pino logging |
+| `MOCK_SCENARIO` | `default` | `default`, `empty`, `chaos`, `winter`; in demo mode, the device set follows the property (`winter` gives its winter version) |
+| `MOCK_TIME_SCALE` | `1` | Speed-up of simulated time (60 → one day in 24 min) |
+| `FFMPEG_PATH` | `ffmpeg` | Camera video relay |
+| `MCP_PUBLIC_URL` | — | Public HTTPS address: app with sign-in, and MCP server (see [Remote access](#remote-access)) |
+| `KASBAH_LOGIN_MAX_FAILURES` / `KASBAH_LOGIN_LOCK_MINUTES` | `5` / `15` | Failed sign-ins in a row that lock an account (`0` = never), lockout duration |
+| `KASBAH_SESSIONS_FILE` | `.state/sessions.json` | Public-address sessions (hashed); deleting it signs everyone out |
 
-Chaque plugin valide ses propres variables (`HUE_*`, `TAHOMA_*`, `NEST_*`, `CAST_*`, `SONOS_*`, `ENPHASE_*`, `TESLA_*`, `RENAULT_*`, `AUTOMOWER_*`, `COMAP_*`, `MELCLOUD_*`, `IROBOT_*`, `OPEN_METEO_*`, `PETKIT_*`, `TUYA_*`, `YTM_*`, `MIXCLOUD_*`, `RADIO_*`, `MUSIC_*`, `AGENDA_*`, `TMA_*`), détaillées sur la [page de chaque plugin](#plugins). Liste commentée : [apps/server/.env.example](apps/server/.env.example).
+Each plugin validates its own variables (`HUE_*`, `TAHOMA_*`, `NEST_*`, `CAST_*`, `SONOS_*`, `ENPHASE_*`, `TESLA_*`, `RENAULT_*`, `AUTOMOWER_*`, `COMAP_*`, `MELCLOUD_*`, `IROBOT_*`, `OPEN_METEO_*`, `PETKIT_*`, `TUYA_*`, `YTM_*`, `MIXCLOUD_*`, `RADIO_*`, `MUSIC_*`, `AGENDA_*`, `TMA_*`), detailed on [each plugin's page](#plugins). Commented list: [apps/server/.env.example](apps/server/.env.example).
 
-**Quels plugins sont actifs ne se règle pas ici.**
+**Which plugins are active is not set here.**
 
 ## Documentation
 
-- [docs/plugins/](docs/plugins/) — une page par plugin : fonctionnalités, connexion, mise en route (liste dans [Plugins](#plugins)).
-- [doc/index.md](doc/index.md) — wiki (architecture, contrat, chaque plugin, UI, setup, pièges).
-- [docs/house-json.md](docs/house-json.md) — format du fichier maison (repère, pièces, relevé métré).
-- [doc/5_setup/5_1_configuration-env.md](doc/5_setup/5_1_configuration-env.md) — variables d'environnement.
+- [docs/plugins/](docs/plugins/) — one page per plugin: features, connection, setup (list in [Plugins](#plugins)).
+- [doc/index.md](doc/index.md) — wiki, in French (architecture, contract, each plugin, UI, setup, pitfalls).
+- [docs/house-json.md](docs/house-json.md) — house file format (reference frame, rooms, survey).
+- [doc/5_setup/5_1_configuration-env.md](doc/5_setup/5_1_configuration-env.md) — environment variables (in French).
 
-## Licence
+## License
 
 [MIT](LICENSE).

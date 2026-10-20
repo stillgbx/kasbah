@@ -2,58 +2,58 @@
 
 | | |
 |---|---|
-| **Id** | `tens` (plugin **local**, pas un plugin serveur) |
-| **Appareils** | électrostimulateur actiTENS mini (nom Bluetooth `acTENSv2_…`) |
-| **Connexion** | **locale au poste** : Bluetooth basse consommation, directement entre le navigateur et l'appareil (Web Bluetooth) ; le serveur Kasbah n'intervient pas |
-| **Compte** | aucun |
-| **Vues** | TENS, Réglages → Sur cet appareil |
+| **Id** | `tens` (a **local** plugin, not a server plugin) |
+| **Devices** | actiTENS mini electrostimulator (Bluetooth name `acTENSv2_…`) |
+| **Connection** | **local to the computer**: Bluetooth Low Energy, directly between the browser and the device (Web Bluetooth); the Kasbah server is not involved |
+| **Account** | none |
+| **Views** | TENS, Settings → On this device |
 
-> Cet appareil envoie du courant dans le corps. Kasbah reprend les réglages de l'appli d'origine mais ne la remplace pas : se référer à la notice de l'actiTENS mini pour les précautions d'emploi. Le protocole a été déduit de l'observation de l'appli officielle, sans documentation du fabricant.
+> This device sends current through the body. Kasbah reproduces the settings of the original app but does not replace it: refer to the actiTENS mini manual for safety precautions. The protocol was worked out by observing the official app, without any vendor documentation.
 
-## Ce que fait le plugin
+## What the plugin does
 
-Il pilote le TENS depuis Kasbah, sans l'appli du téléphone :
+It drives the TENS from Kasbah, without the phone app:
 
-- **Marche, pause, reprise, arrêt**, durée de la séance, batterie (avec « En charge » sur le câble).
-- **Programmes P1 à P12** : Gate Control 100 Hz / 80 Hz, Endorphinique, Mixte, Séquentiel, Stimulation HAN, Burst 2 Hz, Modulation fréquentielle, Relaxation musculaire, Massage, Frottements, Traitement zones sensibles.
-- **Intensité par canal** (canaux 1 et 2) : curseur ou boutons +/−, par paliers de 0,5 mA, **plafonnée à 30 mA par canal**. Le TENS accepte mal les envois trop rapprochés : Kasbah fait monter l'intensité elle-même, de façon régulière.
-- **Intensités visées** : un curseur par canal sous « Canaux » ; la séance monte seule jusqu'à ces valeurs après le démarrage (0 = réglage à la main).
-- **Favoris** : l'étoile d'un programme enregistre le lancement complet (programme, durée, canaux, intensités visées). On peut en avoir plusieurs par programme ; ils se relancent d'un clic. Ils sont retenus par poste.
-- **Vérification des électrodes** au démarrage : « Électrodes non détectées » tant que le TENS n'est pas posé sur la peau.
+- **Start, pause, resume, stop**, session duration, battery (with "Charging" while on the cable).
+- **Programs P1 to P12**: Gate Control 100 Hz / 80 Hz, Endorphin, Mixed, Sequential, HAN stimulation, Burst 2 Hz, Frequency modulation, Muscle relaxation, Massage, Friction, Sensitive areas.
+- **Intensity per channel** (channels 1 and 2): slider or +/− buttons, in 0.5 mA steps, **capped at 30 mA per channel**. The TENS copes poorly with commands sent too close together: Kasbah ramps the intensity up itself, at a steady pace.
+- **Target intensities**: one slider per channel under "Channels"; after the start, the session ramps up to these values on its own (0 = manual adjustment).
+- **Favorites**: a program's star saves the complete launch (program, duration, channels, target intensities). You can have several per program; they relaunch in one click. They are remembered per computer.
+- **Electrode check** at start: "Electrodes not detected" until the TENS is placed on the skin.
 
-## Pourquoi un plugin local
+## Why a local plugin
 
-C'est voulu : **le TENS n'existe que sur le poste qui l'a activé.** Un plugin serveur diffuse ses appareils à tous les écrans ; celui-ci, jamais. Les autres écrans de la maison (la tablette du palier, par exemple) n'en voient rien, et **ni les automatisations, ni les scènes, ni l'assistant (MCP) ne peuvent l'atteindre**, par construction. Il n'a donc pas de section `.env` et ne figure pas dans Réglages → Plugins.
+This is deliberate: **the TENS exists only on the computer that enabled it.** A server plugin broadcasts its devices to every screen; this one never does. The other screens in the house (the landing tablet, for example) see nothing of it, and **neither automations, nor scenes, nor the assistant (MCP) can reach it**, by construction. It therefore has no `.env` section and does not appear in Settings → Plugins.
 
-## Navigateur requis
+## Required browser
 
-- **Chrome ou Edge** : Firefox et Safari ne proposent pas Web Bluetooth. Sans Bluetooth, la page TENS et Réglages le disent (« Bluetooth indisponible dans ce navigateur »).
-- Kasbah doit être ouvert en **`localhost` ou en HTTPS** : Web Bluetooth est refusé sur une adresse `http://` du réseau local. Le plus simple est d'ouvrir Kasbah en `localhost` sur le poste qui a le Bluetooth.
-- Le poste doit être **à portée** du TENS (quelques mètres) et disposer du Bluetooth.
+- **Chrome or Edge**: Firefox and Safari do not offer Web Bluetooth. Without Bluetooth, the TENS page and Settings say so ("Bluetooth unavailable in this browser").
+- Kasbah must be opened on **`localhost` or over HTTPS**: Web Bluetooth is refused on a local-network `http://` address. The simplest way is to open Kasbah on `localhost` on the computer that has Bluetooth.
+- The computer must be **within range** of the TENS (a few meters) and have Bluetooth.
 
-## Mise en route
+## Setup
 
-1. Ouvrir Kasbah dans Chrome ou Edge, sur le poste voulu, puis **Réglages → Sur cet appareil** et activer **TENS actiTENS mini**. L'entrée **TENS** apparaît dans le menu, sur ce navigateur seulement.
-2. **Fermer l'appli actiTENS du téléphone** : le TENS n'accepte qu'une connexion à la fois, et ne garde qu'une association (le téléphone devra être réappairé pour reprendre l'appli).
-3. **Première connexion**, dans l'ordre :
-   - allumer le TENS (voyant vert), puis **maintenir le bouton central 3 secondes** : le voyant clignote en **bleu**, il accepte un nouvel appareil ;
-   - l'appairer depuis **Windows** (Paramètres → Bluetooth et appareils → Ajouter un appareil → Bluetooth → `acTENSv2_…`) : Windows apprend ainsi son nom ;
-   - dans la vue **TENS**, **Connecter** : la liste ne propose alors que `acTENSv2_…`. Sans passer par Windows : **Autres appareils**, puis l'« appareil inconnu » dont l'adresse commence par `00:30:3A`.
-4. Poser le TENS, choisir un programme, une durée, régler les canaux, **Démarrer**.
+1. Open Kasbah in Chrome or Edge, on the chosen computer, then **Settings → On this device** and enable **TENS actiTENS mini**. The **TENS** entry appears in the menu, on this browser only.
+2. **Close the actiTENS phone app**: the TENS accepts only one connection at a time, and keeps only one pairing (the phone will have to be paired again to use the app).
+3. **First connection**, in this order:
+   - turn the TENS on (green light), then **hold the center button for 3 seconds**: the light blinks **blue**, it accepts a new device;
+   - pair it from **Windows** (Settings → Bluetooth & devices → Add device → Bluetooth → `acTENSv2_…`): this is how Windows learns its name;
+   - in the **TENS** view, **Connect**: the list then offers only `acTENSv2_…`. Without going through Windows: **Other devices**, then the "Unknown device" whose address starts with `00:30:3A`.
+4. Place the TENS, choose a program and a duration, adjust the channels, **Start**.
 
-**Reconnexion automatique (facultatif)** : pour que Kasbah se reconnecte sans clic, même après un rechargement de la page, activer dans Chrome `chrome://flags` → « Web Bluetooth new permissions backend » → *Enabled* (`edge://flags` dans Edge), puis redémarrer le navigateur. Sans ce réglage, recharger la page coupe la liaison et il faut recliquer sur Connecter. **La séance, elle, continue sur le TENS** et son état est relu à la reconnexion.
+**Automatic reconnection (optional)**: for Kasbah to reconnect without a click, even after a page reload, enable in Chrome `chrome://flags` → "Web Bluetooth new permissions backend" → *Enabled* (`edge://flags` in Edge), then restart the browser. Without this setting, reloading the page cuts the link and you have to click Connect again. **The session itself keeps running on the TENS** and its state is read back on reconnection.
 
-## Où c'est stocké
+## Where it is stored
 
-Dans le navigateur du poste (`localStorage`), jamais sur le serveur ni dans le fichier de la maison : l'activation du plugin, les favoris, l'identifiant de l'appareil appairé et le dernier lancement. Vider les données du site efface ces réglages.
+In the browser of the computer (`localStorage`), never on the server or in the house file: the plugin's activation, the favorites, the identifier of the paired device and the last launch. Clearing the site data erases these settings.
 
-## Limites
+## Limitations
 
-- **Un seul poste à la fois**, un seul TENS : pas d'accès depuis les autres écrans, pas d'automatisation.
-- Le TENS refuse un programme lancé quand il n'est pas posé sur la peau (« Électrodes non détectées »).
-- Après une coupure, la séance continue sur l'appareil ; si elle a été lancée depuis un autre poste, Kasbah indique « Lancée depuis un autre appareil » plutôt que le nom du programme.
-- Un voyant rose clignotant (erreur interne, d'après la notice : éteindre 15 minutes) a été vu une fois sans cause connue.
+- **One computer at a time**, one TENS: no access from the other screens, no automation.
+- The TENS refuses a program started when it is not placed on the skin ("Electrodes not detected").
+- After a disconnection, the session keeps running on the device; if it was started from another computer, Kasbah shows "Started from another device" instead of the program name.
+- A blinking pink light (internal error; according to the manual, switch off for 15 minutes) was seen once with no known cause.
 
-## Pour aller plus loin
+## Further reading
 
-Protocole Bluetooth, programmes, file d'intensité et pièges : [wiki, TENS actiTENS mini](../../doc/3_plugins/3_21_actitens-tens.md).
+Bluetooth protocol, programs, intensity queue and pitfalls: [wiki, TENS actiTENS mini](../../doc/3_plugins/3_21_actitens-tens.md) (in French).

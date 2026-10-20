@@ -1,56 +1,56 @@
-# Agenda
+# Calendar
 
 | | |
 |---|---|
 | **Id** | `agenda` |
-| **Rôle** | agenda : les agendas Google de la famille, en lecture seule |
-| **Connexion** | **cloud, officielle** : le flux iCal que Google publie pour chaque agenda, lu par le serveur |
-| **Compte** | pas de connexion : une **adresse iCal secrète** par agenda, qui vaut mot de passe |
-| **Vues** | Agenda, Réglages → Plugins |
+| **Role** | calendar: the family's Google calendars, read-only |
+| **Connection** | **cloud, official**: the iCal feed that Google publishes for each calendar, read by the server |
+| **Account** | no sign-in: one **secret iCal address** per calendar, which is as good as a password |
+| **Views** | Calendar, Settings → Plugins |
 
-![Vue Agenda](../screenshots/agenda.webp)
+![Calendar view](../screenshots/agenda.webp)
 
-*Capture de la démonstration : agendas et événements inventés.*
+*Screenshot of the demo: invented calendars and events.*
 
-## Ce que fait le plugin
+## What the plugin does
 
-- **Plusieurs agendas** réunis dans une seule vue, chacun avec sa **couleur** et son nom (agenda familial, jours fériés, agenda perso…). Pastille de couleur pour changer la couleur, flèches pour changer l'ordre, afficher ou masquer chaque agenda depuis la légende de la vue.
-- **Vue Agenda** : le mois en cours à l'arrivée, avec la **semaine** et le **jour** à côté ; événements sur plusieurs jours, journées entières, lieu et description dans le détail d'un événement.
-- **Récurrences** déroulées par Kasbah (événements qui se répètent, occurrences déplacées ou annulées, fuseaux horaires).
-- **Lecture seule** : Kasbah n'ajoute ni ne modifie aucun événement.
+- **Several calendars** combined in a single view, each with its own **color** and name (family calendar, public holidays, personal calendar…). Color dot to change the color, arrows to change the order, show or hide each calendar from the view's legend.
+- **Calendar view**: the current month on arrival, with the **week** and the **day** alongside; multi-day events, all-day events, place and description in an event's detail.
+- **Recurrences** expanded by Kasbah (repeating events, moved or canceled occurrences, time zones).
+- **Read-only**: Kasbah neither adds nor modifies any event.
 
-Le plugin ne publie aucun appareil : il n'apparaît pas dans la maison 3D. Côté assistant (MCP), l'outil `get_agenda` lit les événements sur une période, en lecture seule.
+The plugin publishes no device: it does not appear in the 3D house. On the assistant (MCP) side, the `get_agenda` tool reads the events over a period, read-only.
 
-## Connexion
+## Connection
 
-Aucun compte Google n'est relié à Kasbah. Pour chaque agenda, Google fournit une **adresse secrète au format iCal** : le serveur la lit toutes les 10 minutes. Cette adresse **donne accès à l'agenda à quiconque la possède** : elle est gardée dans `apps/server/.state/agenda-calendars.json` (hors dépôt, hors `.env`), ne s'affiche plus après l'ajout et ne ressort jamais par l'API.
+No Google account is linked to Kasbah. For each calendar, Google provides a **secret address in iCal format**: the server reads it every 10 minutes. This address **gives access to the calendar to anyone who has it**: it is kept in `apps/server/.state/agenda-calendars.json` (outside the repository, outside `.env`), is no longer displayed after it is added and never comes back out through the API.
 
-Si Google ne répond plus, la dernière lecture reste affichée avec un avertissement (« ne répond pas : dernière lecture affichée »).
+If Google stops answering, the last read stays displayed with a warning ("is not answering: showing the last read").
 
-## Mise en route
+## Setup
 
-1. Cocher **Agenda** dans **Réglages → Plugins**. Tant qu'aucun agenda n'est relié, le plugin est « Appairage requis » et sa section s'ouvre seule.
-2. Récupérer l'adresse iCal : dans **Google Agenda sur ordinateur**, avec le compte qui porte l'agenda (Google ne la montre qu'à son propriétaire, peut-être aussi à ceux qui peuvent le modifier) : **Paramètres** → l'agenda dans la colonne de gauche → **Intégrer l'agenda** → **Adresse secrète au format iCal**.
-3. Dans la section Agenda de Réglages → Plugins, coller l'adresse dans **Ajouter un agenda**, ajouter si besoin un nom (sinon celui de l'agenda), puis **Ajouter**. Le flux est lu tout de suite : une adresse illisible est refusée et n'est pas gardée.
-4. Répéter pour chaque agenda. Une adresse déjà ajoutée est refusée.
-5. Ouvrir la vue **Agenda**.
+1. Tick **Calendar** in **Settings → Plugins**. As long as no calendar is linked, the plugin is "Pairing required" and its section opens by itself.
+2. Get the iCal address: in **Google Calendar on a computer**, with the account that holds the calendar (Google shows it only to its owner, perhaps also to those who can edit it): **Settings** → the calendar in the left-hand column → **Integrate calendar** → **Secret address in iCal format**.
+3. In the Calendar section of Settings → Plugins, paste the address into **Add a calendar**, add a name if needed (otherwise the calendar's own), then **Add**. The feed is read immediately: an unreadable address is refused and is not kept.
+4. Repeat for each calendar. An address that was already added is refused.
+5. Open the **Calendar** view.
 
-Retirer un agenda : **Retirer**, puis **Confirmer le retrait**. Une adresse `webcal://` est acceptée.
+To remove a calendar: **Remove**, then **Confirm removal**. A `webcal://` address is accepted.
 
 ## Configuration (`apps/server/.env`)
 
-| Variable | Défaut | Rôle |
+| Variable | Default | Purpose |
 |---|---|---|
-| `AGENDA_FILE` | `.state/agenda-calendars.json` | Fichier des agendas (adresses secrètes comprises) |
-| `AGENDA_REFRESH_MS` | `600000` (10 min) | Relecture des flux, 1 minute au moins |
+| `AGENDA_FILE` | `.state/agenda-calendars.json` | File holding the calendars (secret addresses included) |
+| `AGENDA_REFRESH_MS` | `600000` (10 min) | Feed refresh interval, 1 minute at least |
 
-## Limites
+## Limitations
 
-- **Lecture seule** : écrire demanderait de passer par l'API Google Calendar (projet Google Cloud, autorisation OAuth), pas par l'adresse iCal.
-- Le flux iCal peut accuser un petit retard sur Google ; un changement n'apparaît qu'à la lecture suivante du serveur (10 min par défaut).
-- Une période affichée ne peut pas dépasser environ deux mois (la vue mois en couvre six semaines).
-- Pour un agenda public (jours fériés), le flux public d'un agenda Google fait aussi l'affaire.
+- **Read-only**: writing would require going through the Google Calendar API (Google Cloud project, OAuth authorization), not the iCal address.
+- The iCal feed can lag slightly behind Google; a change only shows up at the server's next read (10 min by default).
+- A displayed period cannot exceed about two months (the month view covers six weeks).
+- For a public calendar (public holidays), the public feed of a Google calendar also works.
 
-## Pour aller plus loin
+## Further reading
 
-Fonctionnement interne, lecture des récurrences et routes : [wiki, Agenda](../../doc/3_plugins/3_22_agenda.md).
+Internals, recurrence handling and routes: [wiki, Agenda](../../doc/3_plugins/3_22_agenda.md) (in French).

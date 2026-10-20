@@ -14,7 +14,7 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 | Page | Résumé | Dernière mise à jour |
 |---|---|---|
 | [3_0 Simulation (mock-sim et plugin mock)](3_0_simulation-mock.md) | Moteur de simulation partagé serveur / navigateur : horloge injectée, graine, comportements par kind, scénarios, émission, kinds simulés en sous-items cochables pour compléter un parc réel, maison de démo. | 2026-10-14 |
-| [3_2 Écrire un plugin](3_2_ecrire-un-plugin.md) | Interface `DevicePlugin` et son contexte, erreurs, routes propres, parties (`parts`), quota d'une API facturée (`PluginHealth.quota`), marche à suivre et liste de contrôle tirée des vrais fabricants (fixtures capturées, flux d'événements, état remis à zéro dans `init`). | 2026-10-07 |
+| [3_2 Écrire un plugin](3_2_ecrire-un-plugin.md) | Interface `DevicePlugin` et son contexte, erreurs, routes propres, parties (`parts`), quota d'une API facturée (`PluginHealth.quota`), marche à suivre et liste de contrôle tirée des vrais fabricants (fixtures capturées, flux d'événements, état remis à zéro dans `init`). | 2026-10-20 |
 | [3_3 Fabricants à venir](3_3_fabricants-a-venir.md) | Squelettes déclarés et pistes d'API ; tableau vide depuis que tous les squelettes ont été implémentés, chaque fabricant gardant sa mémoire dans sa section datée ; leçon sur les fixtures inventées. | 2026-10-06 |
 
 ### Intégrations

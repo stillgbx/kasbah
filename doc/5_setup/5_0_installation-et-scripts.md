@@ -1,6 +1,6 @@
 # Installation et scripts
 
-> Dernière mise à jour : 2026-10-13
+> Dernière mise à jour : 2026-10-20
 > Sources : `package.json` (racine et workspaces), `.claude/launch.json`, `apps/web/vite.config.ts`, `apps/server/src/config/env.ts`, `apps/server/src/main.ts`, `README.md`, `scripts/fetch-textures.mjs`, `.claude/launch.json`, `scripts/dev-server.mjs`, `scripts/supervisor.mjs`
 
 ## Prérequis
@@ -358,3 +358,25 @@ Les configs `kasbah-demo-server` et `kasbah-demo` restent valides : la variable 
 `KASBAH_STATE_DIR=.state/demo` leur donnent leur propre `property-mode.json`.
 
 Sources : `apps/server/src/main.ts`, `.claude/launch.json`.
+
+
+### Mise à jour 2026-10-20 — langue du dépôt public : vitrine et commits en anglais
+
+Le dépôt public s'adresse aussi à des lecteurs non francophones. Découpage retenu, en trois couches :
+
+- **Vitrine en anglais** : `README.md`, `docs/house-json.md` et les 23 pages `docs/plugins/` sont
+  traduits en place. Les libellés d'interface cités sont ceux de `apps/web/src/i18n/locales/en.json`
+  (l'app est bilingue) ; orthographe américaine. `README.fr.md` garde la version française du README,
+  liée en tête dans les deux sens, et se met à jour dans le même commit que lui. Les liens vers le
+  wiki portent la mention « (in French) ».
+- **Commits en anglais** à partir du 2026-10-20 (`Area: what changes, in one sentence.`) : skill
+  `publish` §7 et `CLAUDE.md` §5. L'historique d'avant reste en français : déjà réécrit une fois pour
+  la mise en public (2026-10-10), le réécrire encore casserait clones et forks pour un gain nul.
+- **Restent en français** : ce wiki (outil de travail interne, environ 430 000 mots, peu lu de
+  l'extérieur ; à reconsidérer si des contributeurs arrivent) et, pour l'instant, les commentaires
+  du code. Pour ces derniers, une passe unique est envisagée plutôt qu'une bascule au fil des
+  modifications (des fichiers mélangés pendant des mois) : contrôle que le code compilé sans
+  commentaires est identique avant et après, commit déclaré dans `.git-blame-ignore-revs`. Non décidé.
+
+Sources : `README.md`, `README.fr.md`, `docs/`, `.claude/skills/publish/SKILL.md` (§4 et §7),
+`CLAUDE.md` (§5).

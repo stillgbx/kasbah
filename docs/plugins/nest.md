@@ -3,74 +3,74 @@
 | | |
 |---|---|
 | **Id** | `nest` |
-| **Appareils** | caméras, sonnettes et écrans à caméra (`camera`), thermostat (`climate`) |
-| **Connexion** | **cloud, officielle** : API Smart Device Management (SDM) de Google, il n'existe pas d'API locale |
-| **Compte** | un compte Google, un projet Google Cloud et un projet Device Access (5 USD, une fois) ; un jeton de rafraîchissement stocké dans `apps/server/.env` |
-| **Vues** | Maison (panneau appareil, cadrage à la sonnerie), Caméras, Chauffage, Réglages → Plugins |
+| **Devices** | cameras, doorbells and displays with a camera (`camera`), thermostat (`climate`) |
+| **Connection** | **cloud, official**: Google's Smart Device Management (SDM) API, there is no local API |
+| **Account** | a Google account, a Google Cloud project and a Device Access project (USD 5, one time); a refresh token stored in `apps/server/.env` |
+| **Views** | Home (device panel, framing on doorbell ring), Cameras, Heating, Settings → Plugins |
 
-## Ce que fait le plugin
+## What the plugin does
 
-- **Caméras et sonnette** : image en **direct** dans le panneau de l'appareil (son en option, démarré en sourdine), avec environ 4 secondes de retard.
-- **Vue Caméras** : une **vignette** par caméra, rafraîchie toutes les 10 secondes, et pour chaque tuile trois états : **Arrêté**, **Aperçu** (l'image et son âge), **Direct**. Trois directs simultanés au plus dans cette vue. L'en-tête compte les caméras « actives ».
-- **Sonnette** (avec les événements Pub/Sub, voir plus bas) : quand on sonne, Kasbah revient sur la vue Maison, cadre la pièce de la sonnette et lance sa vidéo.
-- **Thermostat** : température mesurée, humidité, consigne et mode (chauffage, arrêt, éco, selon ce que le thermostat propose), état de chauffe. La consigne se règle entre 9 et 32 °C, sauf en éco ou à l'arrêt où Google la refuse.
-- **Placement automatique** : un appareil se place dans la pièce de la maison qui porte **le même nom** que sa pièce dans Google Home. Sinon il reste « non placé » et se place à la main depuis son panneau.
+- **Cameras and doorbell**: **live** image in the device panel (optional sound, started muted), with about 4 seconds of delay.
+- **Cameras view**: one **thumbnail** per camera, refreshed every 10 seconds, and for each tile three states: **Off**, **Preview** (the image and its age), **Live**. At most three simultaneous live streams in this view. The header counts the "active" cameras.
+- **Doorbell** (with Pub/Sub events, see below): when someone rings, Kasbah switches back to the Home view, frames the doorbell's room and starts its video.
+- **Thermostat**: measured temperature, humidity, setpoint and mode (heat, off, eco, depending on what the thermostat offers), heating state. The setpoint can be set between 9 and 32 °C, except in eco or off mode where Google refuses it.
+- **Automatic placement**: a device is placed in the house room that has **the same name** as its room in Google Home. Otherwise it stays "not placed" and is placed by hand from its panel.
 
-## Connexion
+## Connection
 
-Tout passe par le cloud de Google : le serveur Kasbah interroge l'API SDM avec un jeton OAuth renouvelé automatiquement (il dure une heure). La liste des appareils est relue toutes les 60 secondes. Pour la vidéo, le serveur demande à Google un flux RTSP et le relaie au navigateur avec **ffmpeg**, sans ré-encodage (un ffmpeg par caméra regardée, à installer sur la machine du serveur, jamais sur l'écran).
+Everything goes through Google's cloud: the Kasbah server queries the SDM API with an OAuth token that is renewed automatically (it lasts one hour). The device list is re-read every 60 seconds. For video, the server asks Google for an RTSP stream and relays it to the browser with **ffmpeg**, without re-encoding (one ffmpeg per camera being watched, to be installed on the server machine, never on the display).
 
-Les caméras doivent être rattachées à un **compte Google** : un ancien compte Nest se migre d'abord.
+Cameras must be attached to a **Google account**: an old Nest account has to be migrated first.
 
-## Mise en route
+## Setup
 
-**Côté Google, une seule fois (environ 15 minutes) :**
+**On the Google side, once (about 15 minutes):**
 
-1. Sur `console.cloud.google.com` : créer un projet, activer l'API **Smart Device Management**, puis créer un **ID client OAuth** de type **application web**. L'URI de redirection autorisée est exactement la valeur de `NEST_REDIRECT_URI`. Sur l'écran de consentement, s'ajouter comme utilisateur test, puis passer l'application **« In production »** : tant qu'elle reste en mode « Testing », Google fait expirer le jeton au bout de 7 jours et il faut tout relier (pour un usage personnel, Google affiche seulement un avertissement « application non vérifiée »).
-2. Sur `console.nest.google.com/device-access` : accepter les conditions (**5 USD**, une fois) et créer un projet en y collant l'ID client OAuth de l'étape 1. L'identifiant du projet (un UUID, **pas** le nom du projet Google Cloud) est `NEST_PROJECT_ID`.
+1. On `console.cloud.google.com`: create a project, enable the **Smart Device Management** API, then create an **OAuth client ID** of type **web application**. The authorized redirect URI is exactly the value of `NEST_REDIRECT_URI`. On the consent screen, add yourself as a test user, then switch the app to **"In production"**: as long as it stays in "Testing" mode, Google expires the token after 7 days and everything has to be linked again (for personal use, Google only shows an "unverified app" warning).
+2. On `console.nest.google.com/device-access`: accept the terms (**USD 5**, one time) and create a project, pasting in the OAuth client ID from step 1. The project identifier (a UUID, **not** the Google Cloud project name) is `NEST_PROJECT_ID`.
 
-**Côté Kasbah :**
+**On the Kasbah side:**
 
-3. Dans `apps/server/.env` : `NEST_PROJECT_ID`, `NEST_CLIENT_ID`, `NEST_CLIENT_SECRET` (et `NEST_REDIRECT_URI` si le serveur n'écoute pas sur le port 8787).
-4. Cocher **Nest** dans **Réglages → Plugins**, et redémarrer le serveur. Le plugin passe en **« Appairage requis »**.
-5. Dans la section Nest : **Lier le compte Google**. Le consentement Google s'ouvre dans un nouvel onglet : c'est là qu'on **choisit les caméras partagées** avec Kasbah.
-6. Au retour, la page affiche `NEST_REFRESH_TOKEN=…`. La recopier dans `apps/server/.env` pour qu'elle survive au redémarrage : le serveur n'écrit jamais ce fichier. Le plugin fonctionne déjà ; **Actualiser** fait apparaître les caméras.
+3. In `apps/server/.env`: `NEST_PROJECT_ID`, `NEST_CLIENT_ID`, `NEST_CLIENT_SECRET` (and `NEST_REDIRECT_URI` if the server does not listen on port 8787).
+4. Tick **Nest** in **Settings → Plugins**, and restart the server. The plugin goes to **"Pairing required"**.
+5. In the Nest section: **Link the Google account**. Google's consent screen opens in a new tab: this is where you **choose the cameras shared** with Kasbah.
+6. On return, the page shows `NEST_REFRESH_TOKEN=…`. Copy it into `apps/server/.env` so it survives a restart: the server never writes that file. The plugin already works; **Refresh** makes the cameras appear.
 
-**Relier le compte à nouveau** (même bouton) pour changer les caméras partagées.
+**Link the account again** (same button) to change the shared cameras.
 
-**Option, la sonnette en temps réel** : Google ne pousse la sonnerie que par Pub/Sub.
+**Optional, real-time doorbell**: Google only pushes the ring through Pub/Sub.
 
-7. Dans le projet Google Cloud : activer la **facturation** (Pub/Sub l'exige ; le volume d'un foyer reste dans le quota gratuit, donc environ 0 €), activer l'API **Cloud Pub/Sub**, créer un **sujet** avec son abonnement par défaut de type **pull**.
-8. Donner le droit **Pub/Sub Publisher** sur ce sujet au groupe `sdm-publisher@googlegroups.com`, puis saisir le sujet dans la console Device Access et **valider**.
-9. Relier le compte à nouveau (la portée Pub/Sub est demandée à la liaison), et renseigner `NEST_PUBSUB_SUBSCRIPTION` avec le nom complet de l'abonnement, `projects/<projet-cloud>/subscriptions/<abonnement>`.
+7. In the Google Cloud project: enable **billing** (Pub/Sub requires it; a household's volume stays within the free quota, so about €0), enable the **Cloud Pub/Sub** API, create a **topic** with its default **pull** subscription.
+8. Grant the **Pub/Sub Publisher** role on that topic to the group `sdm-publisher@googlegroups.com`, then enter the topic in the Device Access console and **validate**.
+9. Link the account again (the Pub/Sub scope is requested at link time), and set `NEST_PUBSUB_SUBSCRIPTION` to the subscription's full name, `projects/<cloud-project>/subscriptions/<subscription>`.
 
 ## Configuration (`apps/server/.env`)
 
-| Variable | Défaut | Rôle |
+| Variable | Default | Purpose |
 |---|---|---|
-| `NEST_PROJECT_ID` | — | UUID du projet Device Access |
-| `NEST_CLIENT_ID`, `NEST_CLIENT_SECRET` | — | Client OAuth « application web » du projet Google Cloud |
-| `NEST_REFRESH_TOKEN` | — | Jeton obtenu par la liaison du compte |
-| `NEST_REDIRECT_URI` | `http://localhost:8787/api/plugins/nest/auth/callback` | À déclarer à l'identique dans le client OAuth |
-| `NEST_POLL_MS` | `60000` | Relecture de la liste des appareils (10 s à 10 min) : Google borne les appels |
-| `FFMPEG_PATH` | `ffmpeg` | Binaire ffmpeg du relais vidéo (dans le `PATH`, ou chemin complet) |
-| `NEST_LIVE_BUDGET` | `10` | Sessions vidéo ouvertes en même temps, au plus (1 à 32) |
-| `NEST_SNAPSHOT_MS` | `10000` | Cadence des vignettes de la vue Caméras (2 s à 2 min) |
-| `NEST_PUBSUB_SUBSCRIPTION` | — | Abonnement Pub/Sub pull ; sans lui, aucun événement de sonnette |
-| `NEST_PUBSUB_POLL_MS` | `5000` | Cadence de tirage des événements (1 s à 60 s) |
+| `NEST_PROJECT_ID` | — | Device Access project UUID |
+| `NEST_CLIENT_ID`, `NEST_CLIENT_SECRET` | — | "Web application" OAuth client of the Google Cloud project |
+| `NEST_REFRESH_TOKEN` | — | Token obtained by linking the account |
+| `NEST_REDIRECT_URI` | `http://localhost:8787/api/plugins/nest/auth/callback` | To be declared identically in the OAuth client |
+| `NEST_POLL_MS` | `60000` | Re-reading of the device list (10 s to 10 min): Google limits the calls |
+| `FFMPEG_PATH` | `ffmpeg` | ffmpeg binary of the video relay (in the `PATH`, or a full path) |
+| `NEST_LIVE_BUDGET` | `10` | Video sessions open at the same time, at most (1 to 32) |
+| `NEST_SNAPSHOT_MS` | `10000` | Pace of the Cameras view thumbnails (2 s to 2 min) |
+| `NEST_PUBSUB_SUBSCRIPTION` | — | Pub/Sub pull subscription; without it, no doorbell events |
+| `NEST_PUBSUB_POLL_MS` | `5000` | Pace of event pulling (1 s to 60 s) |
 
-Une ligne laissée vide (`NEST_REFRESH_TOKEN=`) équivaut à « absente » et ne désactive pas le plugin.
+A line left empty (`NEST_REFRESH_TOKEN=`) counts as "absent" and does not disable the plugin.
 
-## Limites
+## Limitations
 
-- **Pas d'allumage ni d'extinction d'une caméra** : l'API publique de Google n'expose pas ce réglage (l'appli Google Home passe par une API privée, non reprise ici).
-- **Quota de Google** : quelques commandes par minute. Les sessions vidéo s'ouvrent donc une toutes les 8 secondes, avec une pause de 90 secondes si Google se plaint ; avec plus de caméras que `NEST_LIVE_BUDGET`, les vignettes **tournent**.
-- **Vidéo en RTSP uniquement** : une caméra qui ne sert que du WebRTC apparaît dans les listes, mais sa vidéo n'est pas encore prise en charge.
-- **Caméra éteinte** : l'API ne dit pas si une caméra est débranchée. Elle n'apparaît « inactive » qu'après un essai de flux qui échoue.
-- Seule la **sonnerie** est remontée ; mouvement, personne et son sont reçus mais pas encore utilisés. Les détecteurs de fumée Nest Protect ne sont pas dans cette API.
-- L'auto-placement ne connaît que les pièces : une caméra extérieure (garage, façade, toit) reste « non placée » tant qu'on ne la place pas à la main.
-- Le serveur arrêté brutalement pendant une lecture peut laisser un ffmpeg qui s'éteint seul en cinq minutes au plus.
+- **No switching a camera on or off**: Google's public API does not expose this setting (the Google Home app goes through a private API, not reproduced here).
+- **Google quota**: a few commands per minute. So video sessions open one every 8 seconds, with a 90-second pause if Google complains; with more cameras than `NEST_LIVE_BUDGET`, the thumbnails **rotate**.
+- **Video over RTSP only**: a camera that only serves WebRTC appears in the lists, but its video is not supported yet.
+- **Camera switched off**: the API does not say whether a camera is unplugged. It only shows as "inactive" after a stream attempt fails.
+- Only the **ring** is reported; motion, person and sound are received but not used yet. Nest Protect smoke detectors are not in this API.
+- Auto-placement only knows rooms: an outdoor camera (garage, front, roof) stays "not placed" until you place it by hand.
+- A server stopped abruptly during playback can leave an ffmpeg that shuts itself down within five minutes at most.
 
-## Pour aller plus loin
+## Further reading
 
-Fonctionnement interne, relais vidéo, quota et pièges : [wiki, Google Nest](../../doc/3_plugins/3_5_google-nest.md).
+Internals, video relay, quota and pitfalls: [wiki, Google Nest](../../doc/3_plugins/3_5_google-nest.md) (in French).

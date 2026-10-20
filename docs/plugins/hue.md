@@ -3,52 +3,52 @@
 | | |
 |---|---|
 | **Id** | `hue` |
-| **Appareils** | lampes (`light`), et en option les pièces Hue comme lampes de groupe |
-| **Connexion** | **locale** : API CLIP v2 du bridge, sur le réseau de la maison |
-| **Compte** | aucun compte en ligne : une clé d'application obtenue en appuyant sur le bouton du bridge |
-| **Vues** | Maison (pilules 3D, panneau pièce), Lumières, Réglages → Plugins |
+| **Devices** | lights (`light`), and optionally Hue rooms as group lights |
+| **Connection** | **local**: the bridge's CLIP v2 API, on the house network |
+| **Account** | no online account: an application key obtained by pressing the bridge button |
+| **Views** | Home (3D pills, room panel), Lights, Settings → Plugins |
 
-![Vue Lumières](../screenshots/lights.webp)
+![Lights view](../screenshots/lights.webp)
 
-*Capture de la démonstration (simulation, aucun appareil réel).*
+*Screenshot of the demo (simulation, no real device).*
 
-## Ce que fait le plugin
+## What the plugin does
 
-- **Lampes** : allumer, éteindre, luminosité, blanc chaud / froid (selon la lampe), couleur (selon la lampe).
-- **Effets de lampe** proposés par le bridge (bougie, feu, prisme, scintillement…), quand la lampe les accepte.
-- **Ambiances** (scènes Hue) : liste par pièce ou zone, avec leurs pastilles de couleur ; rappel **fixe** ou **animé** (palette qui défile), extinction de l'ambiance. Créer une ambiance pour une pièce depuis Kasbah, et régler « démarrer l'animation automatiquement ».
-- **Temps réel** : tout changement fait ailleurs (app Hue, interrupteur mural, autre écran) s'affiche aussitôt, par le flux d'événements du bridge.
-- **Placement automatique** : une lampe non déclarée dans le fichier de la maison se place dans la pièce de la maison qui porte **le même nom** que sa pièce Hue. Sinon, elle reste pilotable dans la vue Lumières, signalée « non placée ».
-- Option : exposer chaque **pièce Hue** comme une lampe de groupe (`HUE_EXPOSE_ROOMS=true`).
+- **Lights**: on, off, brightness, warm / cool white (depending on the light), color (depending on the light).
+- **Light effects** offered by the bridge (candle, fire, prism, sparkle…), when the light supports them.
+- **Light scenes** (Hue scenes): list by room or zone, with their color swatches; **static** or **animated** recall (scrolling palette), scene switch-off. Create a scene for a room from Kasbah, and set "start animation automatically".
+- **Real time**: any change made elsewhere (Hue app, wall switch, another screen) is displayed immediately, through the bridge's event stream.
+- **Automatic placement**: a light not declared in the house file is placed in the house room that has **the same name** as its Hue room. Otherwise, it stays controllable in the Lights view, flagged "Not placed".
+- Option: expose each **Hue room** as a group light (`HUE_EXPOSE_ROOMS=true`).
 
-## Connexion
+## Connection
 
-Tout passe par le réseau local : le serveur Kasbah parle directement au bridge en HTTPS (certificat du bridge auto-signé par Signify, accepté pour ce seul client). Aucun appel au cloud Philips, sauf la recherche du bridge si son adresse n'est pas connue.
+Everything goes over the local network: the Kasbah server talks directly to the bridge over HTTPS (the bridge's certificate is self-signed by Signify, accepted for this one client only). No call to the Philips cloud, except the bridge lookup if its address is not known.
 
-## Mise en route
+## Setup
 
-1. Cocher **Hue** dans **Réglages → Plugins**.
-2. Sans `HUE_BRIDGE_HOST`, le bridge est cherché par `discovery.meethue.com` ; son adresse apparaît dans le journal du serveur. La recopier ensuite dans `.env` (et lui fixer un bail DHCP).
-3. Le plugin passe en **« Appairage requis »**. Dans la section Hue de Réglages → Plugins : appuyer sur le **bouton rond du bridge**, puis dans les 30 s sur **Appairer le bridge**.
-4. La clé s'affiche et sert tout de suite. La recopier dans `apps/server/.env` (`HUE_APP_KEY=…`) pour qu'elle survive au redémarrage : le serveur n'écrit jamais ce fichier.
+1. Tick **Hue** in **Settings → Plugins**.
+2. Without `HUE_BRIDGE_HOST`, the bridge is looked up through `discovery.meethue.com`; its address appears in the server log. Then copy it into `.env` (and give it a DHCP reservation).
+3. The plugin goes to **"Pairing required"**. In the Hue section of Settings → Plugins: press the **round button on the bridge**, then within 30 s **Pair the bridge**.
+4. The key is displayed and works right away. Copy it into `apps/server/.env` (`HUE_APP_KEY=…`) so that it survives a restart: the server never writes this file.
 
-Une clé perdue se remplace par le même geste (**Réappairer le bridge**).
+A lost key is replaced with the same gesture (**Pair the bridge again**).
 
 ## Configuration (`apps/server/.env`)
 
-| Variable | Défaut | Rôle |
+| Variable | Default | Purpose |
 |---|---|---|
-| `HUE_BRIDGE_HOST` | — (découverte) | Adresse IP du bridge |
-| `HUE_APP_KEY` | — | Clé d'application issue de l'appairage |
-| `HUE_EXPOSE_ROOMS` | `false` | Expose aussi les pièces Hue comme lampes de groupe |
-| `HUE_TLS_INSECURE` | `true` | Accepte le certificat auto-signé du bridge |
+| `HUE_BRIDGE_HOST` | — (discovery) | IP address of the bridge |
+| `HUE_APP_KEY` | — | Application key obtained from pairing |
+| `HUE_EXPOSE_ROOMS` | `false` | Also exposes Hue rooms as group lights |
+| `HUE_TLS_INSECURE` | `true` | Accepts the bridge's self-signed certificate |
 
-## Limites
+## Limitations
 
-- La découverte en ligne est limitée par Philips (environ un appel par quart d'heure) : fixer l'adresse.
-- Débit : le bridge accepte une dizaine de commandes par seconde ; pendant un glissement de curseur, seule la dernière valeur part.
-- Une lampe ne peut pas recevoir effet et couleur à la fois : l'effet prime.
+- Online discovery is rate-limited by Philips (about one call per quarter of an hour): set the address.
+- Throughput: the bridge accepts about ten commands per second; while a slider is being dragged, only the last value is sent.
+- A light cannot receive an effect and a color at the same time: the effect takes priority.
 
-## Pour aller plus loin
+## Further reading
 
-Fonctionnement interne, mappage et pièges : [wiki, Philips Hue](../../doc/3_plugins/3_1_philips-hue.md).
+Internals, mapping and pitfalls: [wiki, Philips Hue](../../doc/3_plugins/3_1_philips-hue.md) (in French).

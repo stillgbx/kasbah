@@ -3,51 +3,51 @@
 | | |
 |---|---|
 | **Id** | `sonos` |
-| **Appareils** | enceintes Sonos (Play:3, Port, etc.), une par enceinte physique (`media_player`) |
-| **Connexion** | **locale** : UPnP / SOAP sur le port 1400 de chaque enceinte, découverte automatique par SSDP |
-| **Compte** | aucun compte, aucun jeton |
-| **Vues** | Médias, Musique (comme enceinte de lecture), Maison (marqueur et onde sonore), Réglages → Plugins |
+| **Devices** | Sonos speakers (Play:3, Port, etc.), one per physical speaker (`media_player`) |
+| **Connection** | **local**: UPnP / SOAP on port 1400 of each speaker, automatic discovery through SSDP |
+| **Account** | no account, no token |
+| **Views** | Media, Music (as a playback speaker), Home (marker and sound wave), Settings → Plugins |
 
-![Vue Médias](../screenshots/media.webp)
+![Media view](../screenshots/media.webp)
 
-*Capture de la démonstration (simulation, aucun appareil réel).*
+*Screenshot of the demo (simulation, no real device).*
 
-## Ce que fait le plugin
+## What the plugin does
 
-- **Ce qui joue** : titre, artiste, pochette, volume, sourdine et état de lecture, relus toutes les 2 secondes (quelle que soit l'origine de la lecture : appli Sonos, téléphone, Kasbah).
-- **Télécommande** : lecture / pause, arrêt, piste précédente / suivante (« précédent » ramène au début du morceau passé 3 secondes), position dans le morceau, volume, sourdine.
-- **Lire une URL** (MP3, flux radio, HLS) : champ « Lire une URL » de la vue Médias, et c'est ainsi que les plugins de musique (radios, YouTube Music, Mixcloud) lancent un morceau sur l'enceinte. L'enceinte va chercher le flux elle-même : Kasbah ne fait pas transiter l'audio.
-- **Groupes** : une enceinte groupée reste un lecteur à part dans Kasbah ; son volume est le sien, mais lecture, pause et pistes sont envoyées au chef du groupe.
-- **Enceinte éteinte** : elle ne répond plus à la découverte, Kasbah la garde donc dans la liste, indisponible, et la retrouve quand elle se rallume. **Oublier l'appareil** l'en retire pour de bon.
-- Les pochettes sont relayées par le serveur, pour que les écrans n'aillent pas les chercher eux-mêmes.
+- **What is playing**: title, artist, cover art, volume, mute and playback state, re-read every 2 seconds (whatever started the playback: Sonos app, phone, Kasbah).
+- **Remote control**: play / pause, stop, previous / next track ("previous" goes back to the start of the track once past 3 seconds), position in the track, volume, mute.
+- **Play a URL** (MP3, radio stream, HLS): "Play a URL" field in the Media view, and this is how the music plugins (radios, YouTube Music, Mixcloud) start a track on the speaker. The speaker fetches the stream itself: Kasbah does not relay the audio.
+- **Groups**: a grouped speaker remains a separate player in Kasbah; its volume is its own, but play, pause and tracks are sent to the group coordinator.
+- **Speaker switched off**: it no longer answers discovery, so Kasbah keeps it in the list, unavailable, and finds it again when it comes back on. **Forget device** removes it for good.
+- Cover art is relayed by the server, so that screens do not fetch it themselves.
 
-## Connexion
+## Connection
 
-Tout est local. Le serveur Kasbah cherche les enceintes par SSDP (diffusion sur le réseau, UDP 1900), puis leur parle en SOAP sur le port 1400, sans authentification. Rien ne passe par le cloud Sonos, et il n'y a ni compte, ni quota, ni carte de liaison dans Réglages.
+Everything is local. The Kasbah server looks for speakers through SSDP (network broadcast, UDP 1900), then talks to them in SOAP on port 1400, without authentication. Nothing goes through the Sonos cloud, and there is no account, no quota and no linking card in Settings.
 
-## Mise en route
+## Setup
 
-1. Cocher **Sonos** dans **Réglages → Plugins**. Les enceintes trouvées arrivent dans la bande « Hors maison » ; les placer dans les pièces depuis leur panneau.
-2. Si la **simulation** est aussi active, décocher « Lecteur » dans ses sous-items : sinon les lecteurs simulés doublent les vrais.
-3. Le serveur et les enceintes doivent être sur le **même réseau local**. Si la liste reste vide sur une machine à plusieurs cartes réseau (VPN, machines virtuelles, adresse en `169.254`), donner à `SONOS_SSDP_INTERFACE` l'adresse IPv4 de la carte qui est sur le réseau des enceintes, puis redémarrer le serveur.
+1. Tick **Sonos** in **Settings → Plugins**. The speakers found arrive in the "Not in the house" strip; place them in rooms from their panel.
+2. If the **simulation** is also active, untick "Player" in its sub-items: otherwise the simulated players duplicate the real ones.
+3. The server and the speakers must be on the **same local network**. If the list stays empty on a machine with several network cards (VPN, virtual machines, `169.254` address), set `SONOS_SSDP_INTERFACE` to the IPv4 address of the card that is on the speakers' network, then restart the server.
 
 ## Configuration (`apps/server/.env`)
 
-| Variable | Défaut | Rôle |
+| Variable | Default | Purpose |
 |---|---|---|
-| `SONOS_SSDP_INTERFACE` | — | IPv4 de la carte réseau du LAN, si la machine en a plusieurs |
-| `SONOS_SSDP_REFRESH_MS` | `60000` | Cadence des recherches suivantes : enceintes rallumées (10 s à 10 min) |
-| `SONOS_POLL_MS` | `2000` | Relecture du volume et de la lecture (0,5 à 30 s) |
-| `SONOS_REQUEST_TIMEOUT_MS` | `5000` | Délai maximal d'une requête vers une enceinte (0,5 à 15 s) |
-| `SONOS_KNOWN_FILE` | `apps/server/.state/sonos-devices.json` | Mémoire des enceintes déjà vues ; vide = une enceinte éteinte disparaît de la liste |
+| `SONOS_SSDP_INTERFACE` | — | IPv4 of the LAN network card, if the machine has several |
+| `SONOS_SSDP_REFRESH_MS` | `60000` | Interval of the following searches: speakers switched back on (10 s to 10 min) |
+| `SONOS_POLL_MS` | `2000` | Re-read of volume and playback (0.5 to 30 s) |
+| `SONOS_REQUEST_TIMEOUT_MS` | `5000` | Maximum time for a request to a speaker (0.5 to 15 s) |
+| `SONOS_KNOWN_FILE` | `apps/server/.state/sonos-devices.json` | Memory of the speakers already seen; empty = a switched-off speaker disappears from the list |
 
-## Limites
+## Limitations
 
-- **Pas de lancement de Spotify ni d'une file** depuis Kasbah : ces services sont liés dans l'appli Sonos, pas à une URL. Kasbah lit ce qui joue et lance des flux par adresse.
-- **Pas de vue des groupes** et pas de WebSocket Sonos (il demande une clé d'API cloud) : les changements sont vus par sondage, avec jusqu'à 2 secondes de délai.
-- **Pause d'un direct** : une radio en direct ne se met pas en pause, la pause devient un arrêt.
-- Sur une enceinte au repos, sans file, pause et « suivant » sont refusés : l'interface grise ces touches.
+- **No launching of Spotify or of a queue** from Kasbah: those services are linked in the Sonos app, not to a URL. Kasbah reads what is playing and starts streams by address.
+- **No group view** and no Sonos WebSocket (it needs a cloud API key): changes are seen by polling, with up to 2 seconds of delay.
+- **Pausing a live stream**: a live radio cannot be paused, so pause becomes stop.
+- On an idle speaker with no queue, pause and "next" are refused: the interface greys out those buttons.
 
-## Pour aller plus loin
+## Further reading
 
-Fonctionnement interne, relevés sur le réseau et pièges : [wiki, Sonos](../../doc/3_plugins/3_15_sonos.md).
+Internals, network captures and pitfalls: [wiki, Sonos](../../doc/3_plugins/3_15_sonos.md) (in French).

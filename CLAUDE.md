@@ -69,6 +69,10 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 No automatic markdown recap files - a response summary is enough. For structured knowledge (architecture, session outcomes), use `_generated-ai-doc/` (gitignored ephemeral) or the wiki in `doc/` via `wiki-update`.
 
+Language: commit messages, `README.md` and `docs/` are in **English** since 2026-10-20 (the earlier
+history stays in French and is never rewritten); `README.fr.md` mirrors the README; the wiki `doc/`
+stays in French.
+
 ## 6. LLM Wiki
 
 ### 6.1. Wiki-first reflex

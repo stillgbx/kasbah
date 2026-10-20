@@ -7,6 +7,19 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-20] update | Dépôt public : README, docs/ et commits en anglais
+
+**Trigger** : demande de l'utilisateur, le dépôt étant public : garder le français, basculer en anglais, ou tout reprendre ? Retenu : vitrine (`README.md`, `docs/`) et commits en anglais, historique et wiki en français.
+
+**Pages modified** :
+- 5_setup/5_0_installation-et-scripts.md - section « langue du dépôt public » : les trois couches, `README.fr.md`, l'historique non réécrit, la passe unique envisagée pour les commentaires du code
+- 3_plugins/3_2_ecrire-un-plugin.md - les conventions des pages `docs/plugins/` transposées en anglais, liste de contrôle (README et README.fr.md)
+- 2_maison/2_0_format-house-json.md - titres anglais des sections de `docs/house-json.md` citées, bouton « Edit » (`place.move`)
+- 1_architecture/1_7_serveur-mcp.md - section README « MCP server » (« Serveur MCP » dans `README.fr.md`)
+- SCHEMA.md - la langue du wiki reste le français, celle de la vitrine et des commits l'anglais
+
+**Index** : catalogues mis à jour (4 lignes), index.md régénéré.
+
 ## [2026-10-20] update | Vue Ouvrants : touches de pièce pour les volets
 
 **Trigger** : demande de l'utilisateur, ouvrir / arrêter / fermer tous les volets d'une pièce en un seul appui depuis la vue Ouvrants.

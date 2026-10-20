@@ -3,63 +3,63 @@
 | | |
 |---|---|
 | **Id** | `renault` |
-| **Appareils** | véhicules (`vehicle`), un par voiture (testé sur une Renault 5 E-Tech) |
-| **Connexion** | **cloud Renault, non officiel** : l'API privée de l'appli MY Renault (Gigya + Kamereon). Il n'existe aucune voie officielle pour un particulier, ni rien en local |
-| **Compte** | l'adresse e-mail et le mot de passe du compte MY Renault (sans double authentification) |
-| **Vues** | Véhicules, Maison (voiture en 3D, à la couleur de la caisse quand elle est connue), Réglages → Plugins |
+| **Devices** | vehicles (`vehicle`), one per car (tested on a Renault 5 E-Tech) |
+| **Connection** | **Renault cloud, unofficial**: the private API of the MY Renault app (Gigya + Kamereon). There is no official route for an individual, and nothing local |
+| **Account** | the email address and password of the MY Renault account (no two-factor authentication) |
+| **Views** | Vehicles, Home (the car in 3D, in the body color when it is known), Settings → Plugins |
 
-![Carte Renault de la vue Véhicules](../screenshots/renault.webp)
+![Renault card in the Vehicles view](../screenshots/renault.webp)
 
-*Capture de la démonstration (simulation, aucun appareil réel).*
+*Screenshot of the demo (simulation, no real device).*
 
-## Ce que fait le plugin
+## What the plugin does
 
-- **Lecture** : charge, autonomie, câble branché et charge en cours, temps restant, limite de charge (cible) et plancher, position, kilométrage, température intérieure, couleur de la caisse.
-- **Âge des valeurs** : l'heure affichée est celle de la **voiture**, pas celle de Kasbah. La R5 n'a pas de notion de veille : une donnée ancienne est le seul signe qu'elle a décroché.
-- **Commandes** : **Actualiser**, régler la limite de charge, **Lancer la charge**, **Climatiser** (consigne, sièges avant et volant chauffants).
-- **Arrêter la charge** passe par la borne de la maison quand elle est au bout du câble (la voiture n'a pas de commande d'arrêt) ; sans borne en charge, la commande est refusée en le disant.
-- **Réveil de charge** (sous-élément coché par défaut) : la R5 ne reprend pas la charge toute seule après une coupure de la borne (charge sur surplus solaire, un nuage suffit). Branchée, hors charge, sous sa limite, dans la fenêtre horaire, Kasbah dépose une commande qui réécrit les réglages de charge de la voiture **à l'identique** (heure de départ, durée, température inchangées). Dernier réveil visible dans la section Renault de Réglages → Plugins.
-- Les nombres affichés « en charge » sont recoupés : Renault annonce parfois « en attente » alors que le niveau monte, et inversement.
-- **Contrat d'entretien** (au clic, pour pré-remplir une LOA) : dans « Modifier » de la carte du véhicule, « Chercher chez Renault » lit les contrats du véhicule et propose celui d'entretien plafonné en km, souvent calé sur la LOA. Renault ne publie pas le contrat de financement lui-même : rien n'est repris sans votre clic.
+- **Reading**: charge level, range, cable plugged in and charging in progress, time remaining, charge limit (target) and floor, position, mileage, interior temperature, body color.
+- **Age of the values**: the time shown is the **car's**, not Kasbah's. The R5 has no notion of sleep: stale data is the only sign that it has dropped off.
+- **Commands**: **Refresh**, set the charge limit, **Start charging**, **Climate** (target temperature, heated front seats and steering wheel).
+- **Stop charging** goes through the house charger when it is at the end of the cable (the car has no stop command); with no charger charging, the command is refused, and says so.
+- **Charge wake-up** (sub-item ticked by default): the R5 does not resume charging by itself after the charger cuts out (solar-surplus charging, where a cloud is enough). When the car is plugged in, not charging, below its limit and within the time window, Kasbah queues a command that rewrites the car's charge settings **unchanged** (departure time, duration and temperature stay as they were). The last wake-up is visible in the Renault section of Settings → Plugins.
+- The "charging" figures shown are cross-checked: Renault sometimes reports "pending" while the level is rising, and the reverse.
+- **Maintenance contract** (on click, to pre-fill a lease): in "Edit" on the vehicle card, "Look up at Renault" reads the vehicle's contracts and suggests the mileage-capped maintenance one, often tied to the lease. Renault does not publish the financing contract itself: nothing is imported without your click.
 
-## Connexion
+## Connection
 
-- **Cloud, usage non prévu par les conditions du constructeur** : comme toutes les API privées, elle peut changer sans préavis. Renault a ainsi changé ses clés en mai 2026, ce qui a mis en panne les intégrations tierces.
-- **Mot de passe saisi dans l'interface, jamais dans `.env`** : il traverse le serveur une seule fois, n'est ni journalisé ni écrit. Seul un jeton de session est gardé dans `apps/server/.state/renault-session.json`. Il traverse en revanche votre réseau local en HTTP simple, Kasbah n'étant pas servi en HTTPS.
-- **Double authentification** : un compte qui l'active ne peut pas être relié (Renault la refuse à un tiers). La liaison le dit clairement.
-- **Débit** : Renault tolère environ 60 appels par heure et bloque le compte entier au-delà (l'appli MY Renault comprise, pour au moins une heure). Kasbah se limite lui-même et lit toutes les 10 minutes.
+- **Cloud, a use not intended by the vendor's terms**: like every private API, it can change without notice. Renault changed its keys in May 2026, for instance, which broke third-party integrations.
+- **Password entered in the interface, never in `.env`**: it goes through the server only once and is neither logged nor written. Only a session token is kept, in `apps/server/.state/renault-session.json`. It does, however, cross your local network in plain HTTP, since Kasbah is not served over HTTPS.
+- **Two-factor authentication**: an account that has it enabled cannot be linked (Renault refuses it to a third party). Linking says so clearly.
+- **Rate**: Renault tolerates about 60 calls per hour and blocks the whole account beyond that (the MY Renault app included, for at least an hour). Kasbah limits itself and reads every 10 minutes.
 
-## Mise en route
+## Setup
 
-1. Cocher **Renault** dans **Réglages → Plugins**. Décocher le sous-élément **Réveil de charge** si vous ne voulez pas que Kasbah écrive dans la voiture.
-2. Dans la section **Renault**, saisir **l'adresse e-mail MY Renault** et le **mot de passe**, puis **Lier le compte**. Les véhicules apparaissent : « Compte lié · 1 véhicule ».
-3. La voiture porte par défaut sa plaque comme nom (le surnom de l'appli n'est pas exposé par Renault) : le crayon de la vue Véhicules la renomme, dans le fichier de la maison.
-4. **Délier le compte** efface le jeton de session.
+1. Tick **Renault** in **Settings → Plugins**. Untick the **Charge wake-up** sub-item if you do not want Kasbah to write to the car.
+2. In the **Renault** section, enter the **MY Renault email address** and the **password**, then **Link the account**. The vehicles appear: "Account linked · 1 vehicle".
+3. By default the car is named after its license plate (Renault does not expose the app's nickname): the pencil in the Vehicles view renames it, in the house file.
+4. **Unlink the account** deletes the session token.
 
 ## Configuration (`apps/server/.env`)
 
-Rien d'obligatoire : tout est réglé dans les Réglages. Variables facultatives :
+Nothing is required: everything is set in Settings. Optional variables:
 
-| Variable | Défaut | Rôle |
+| Variable | Default | Purpose |
 |---|---|---|
-| `RENAULT_COUNTRY` | `FR` | Pays du compte (deux lettres) |
-| `RENAULT_ACCOUNT_ID` | — | Compte Kamereon à lire si le vôtre en compte plusieurs (vide : le compte MY Renault) |
-| `RENAULT_SESSION_FILE` | `apps/server/.state/renault-session.json` | Où le serveur garde le jeton de session. Vide : à relier à chaque démarrage |
-| `RENAULT_POLL_MS` | `600000` | Cadence de lecture (120 000 à 3 600 000 ms) |
-| `RENAULT_RATE_PER_HOUR` | `60` | Plafond d'appels par heure que Kasbah s'impose |
-| `RENAULT_WAKE_FROM` / `RENAULT_WAKE_TO` | `08:00` / `20:00` | Fenêtre horaire (heure du serveur) du réveil de charge. Bornes égales : jamais. Peut chevaucher minuit |
-| `RENAULT_WAKE_EVERY_MS` | `900000` | Délai minimal entre deux réveils de la même voiture (300 000 à 21 600 000 ms) |
-| `RENAULT_GIGYA_URL`, `RENAULT_GIGYA_API_KEY`, `RENAULT_KAMEREON_URL`, `RENAULT_KAMEREON_API_KEY` | valeurs de la France | À ne renseigner que si Renault change ses points d'entrée ou ses clés et que le plugin tombe en panne |
+| `RENAULT_COUNTRY` | `FR` | Country of the account (two letters) |
+| `RENAULT_ACCOUNT_ID` | — | Kamereon account to read if yours has several (empty: the MY Renault account) |
+| `RENAULT_SESSION_FILE` | `apps/server/.state/renault-session.json` | Where the server keeps the session token. Empty: to be linked again at every start |
+| `RENAULT_POLL_MS` | `600000` | Read interval (120 000 to 3 600 000 ms) |
+| `RENAULT_RATE_PER_HOUR` | `60` | Hourly call cap that Kasbah imposes on itself |
+| `RENAULT_WAKE_FROM` / `RENAULT_WAKE_TO` | `08:00` / `20:00` | Time window (server time) for the charge wake-up. Equal bounds: never. May span midnight |
+| `RENAULT_WAKE_EVERY_MS` | `900000` | Minimum delay between two wake-ups of the same car (300 000 to 21 600 000 ms) |
+| `RENAULT_GIGYA_URL`, `RENAULT_GIGYA_API_KEY`, `RENAULT_KAMEREON_URL`, `RENAULT_KAMEREON_API_KEY` | France's values | Only to be set if Renault changes its entry points or keys and the plugin breaks |
 
-## Limites
+## Limitations
 
-- **Une R5 endormie ne se réveille pas par l'API** : une fois son boîtier hors ligne, aucune commande ne la rappelle, pas même depuis l'appli officielle. Le réveil de charge ne rattrape donc pas toutes les situations.
-- Une commande est **déposée** chez Renault et n'agit que quand la voiture se reconnecte ; Kasbah relit après un délai pour le constater. Un refus « commande déjà en attente » est un report, pas une panne : réessayer dans quelques minutes.
-- **Lancer la charge** désactive les programmes de charge de la voiture (c'est eux qui la font attendre) et ne les rétablit pas : à rallumer dans l'appli MY Renault.
-- Absents pour la R5 : verrouillage, pression des pneus, vitesse, température extérieure, puissance de charge instantanée (estimée à l'affichage d'après la capacité de batterie saisie dans la maison).
-- La couleur n'est connue que pour les teintes déjà vérifiées sur une voiture réelle ; sinon la scène garde sa couleur de thème.
-- La climatisation et le lancement de charge n'ont pas encore été essayés sur la voiture réelle.
+- **A sleeping R5 cannot be woken through the API**: once its unit is offline, no command brings it back, not even from the official app. The charge wake-up therefore does not cover every situation.
+- A command is **queued** at Renault and only takes effect when the car reconnects; Kasbah reads again after a delay to confirm it. A "command already pending" refusal is a deferral, not a failure: try again in a few minutes.
+- **Start charging** disables the car's charging schedules (they are what make it wait) and does not restore them: turn them back on in the MY Renault app.
+- Not available for the R5: locking, tyre pressure, speed, outside temperature, instantaneous charging power (estimated at display time from the battery capacity entered in the house).
+- The color is only known for shades already checked on a real car; otherwise the scene keeps its theme color.
+- Climate and starting a charge have not yet been tried on the real car.
 
-## Pour aller plus loin
+## Further reading
 
-Fonctionnement interne, captures de l'API et diagnostics : [wiki, Renault](../../doc/3_plugins/3_9_renault.md).
+Internals, API captures and diagnostics: [wiki, Renault](../../doc/3_plugins/3_9_renault.md) (in French).

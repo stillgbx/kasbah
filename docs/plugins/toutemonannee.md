@@ -3,65 +3,65 @@
 | | |
 |---|---|
 | **Id** | `toutemonannee` |
-| **Rôle** | cahier de texte (devoirs), cahier de liaison et publications de la classe, pour les parents comme pour l'élève |
-| **Connexion** | **cloud, non officielle** : l'API privée de l'appli web de [toutemonannee.com](https://www.toutemonannee.com), sans API publique |
-| **Compte** | votre compte TouteMonAnnée (adresse e-mail ou identifiant + mot de passe), utilisés **une seule fois** ; seuls les cookies de session sont gardés |
-| **Vues** | École, Réglages → Plugins |
+| **Role** | homework notebook (homework), school-home communication notebook and class posts, for parents and pupil alike |
+| **Connection** | **cloud, unofficial**: the private API of the web app of [toutemonannee.com](https://www.toutemonannee.com), with no public API |
+| **Account** | your TouteMonAnnée account (email address or username + password), used **only once**; only the session cookies are kept |
+| **Views** | School, Settings → Plugins |
 
-> **Non officiel.** Le site n'offre aucune connexion déléguée ni API : Kasbah se connecte comme le fait un navigateur. Une évolution du site peut casser la lecture sans préavis.
+> **Unofficial.** The site offers no delegated sign-in and no API: Kasbah connects the way a browser does. A change to the site can break reading without notice.
 
-![Vue École](../screenshots/school.webp)
+![School view](../screenshots/school.webp)
 
-*Capture de la démonstration (simulation, aucun appareil réel).*
+*Screenshot of the demo (simulation, no real device).*
 
-## Ce que fait le plugin
+## What the plugin does
 
-- **Devoirs** (cahier de texte) : regroupés par jour à rendre à partir d'aujourd'hui, le prochain jour à rendre mis en avant ; les devoirs passés des derniers jours se déplient. Une case **« fait »** par devoir.
-- **Liaison** : les messages de l'enseignante, les plus récents d'abord, avec la mention « Non lu » et le nombre de réponses.
-- **Publications** de la classe (annonces, images, documents joints), avec « Nouveau » pour celles que vous n'avez pas encore vues. Les photos s'ouvrent dans Kasbah : on passe de l'une à l'autre, on zoome et on les télécharge.
-- **Filtres** par classe (si le compte en a plusieurs) et par niveau (CP, CE1, CE2, CM1, CM2) pour ne voir que ce qui concerne votre enfant ; ce qui ne nomme aucun niveau reste affiché. Les filtres sont gardés par le serveur, donc les mêmes sur tous les écrans.
-- **Pastilles** dans la vue : devoirs non faits du prochain jour, messages non lus, publications nouvelles.
-- **Relecture automatique** toutes les 30 minutes, ou à la demande (« Mis à jour à HH:MM »).
-- Côté assistant (MCP) : l'outil `get_school` lit les devoirs, messages et publications, avec les mêmes filtres que la vue École.
+- **Homework** (homework notebook): grouped by due day starting today, with the next due day highlighted; past homework from the last few days can be expanded. A **"done"** checkbox per item.
+- **Messages**: the teacher's messages, most recent first, with the "Unread" tag and the number of replies.
+- **Posts** from the class (announcements, images, attached documents), with "New" for those you have not seen yet. Photos open inside Kasbah: you can move from one to the next, zoom, and download them.
+- **Filters** by class (if the account has several) and by level (CP, CE1, CE2, CM1, CM2) to see only what concerns your child; anything that names no level stays shown. The filters are kept by the server, so they are the same on every screen.
+- **Pills** in the view: next day's homework not done, unread messages, new posts.
+- **Automatic refresh** every 30 minutes, or on demand ("Updated at HH:MM").
+- On the assistant side (MCP): the `get_school` tool reads the homework, messages and posts, with the same filters as the School view.
 
-Le plugin ne publie aucun appareil : il n'apparaît pas dans la maison 3D.
+The plugin publishes no device: it does not appear in the 3D house.
 
-## Connexion
+## Connection
 
-TouteMonAnnée ne propose aucune connexion via un tiers : il faut le **mot de passe du compte**. Il ne traverse le serveur Kasbah qu'**une fois**, au moment de relier le compte, et **n'est jamais enregistré**. Le serveur ne garde que les **cookies de session**, dans `apps/server/.state/toutemonannee.json` (droits restreints, hors dépôt, hors `.env`) ; l'un d'eux rouvre seul une session expirée. Ce fichier donne accès à votre compte : le traiter comme un secret.
+TouteMonAnnée offers no third-party sign-in: the **account password** is required. It goes through the Kasbah server **only once**, when the account is linked, and is **never stored**. The server only keeps the **session cookies**, in `apps/server/.state/toutemonannee.json` (restricted permissions, outside the repository, outside `.env`); one of them reopens an expired session by itself. This file gives access to your account: treat it as a secret.
 
-La lecture est faite par le serveur ; les écrans ne parlent jamais directement au site. Si le site refuse malgré tout la session, la vue affiche un bandeau, **garde la dernière lecture** et le formulaire de liaison réapparaît.
+Reading is done by the server; screens never talk to the site directly. If the site refuses the session anyway, the view shows a banner, **keeps the last reading**, and the linking form reappears.
 
-## Mise en route
+## Setup
 
-1. Cocher **Toutemonannee** dans **Réglages → Plugins**. Tant qu'aucun compte n'est relié, le plugin est « Appairage requis ».
-2. Dans la section TouteMonAnnée, saisir l'**adresse e-mail ou identifiant** et le **mot de passe** de votre compte, puis **Relier le compte**. La carte affiche « Relié : … ».
-3. Ouvrir la vue **École** (lien « Ouvrir la vue École » sur la carte). Les devoirs, messages et publications apparaissent après la première lecture.
-4. Si la classe n'est pas la bonne, ou s'il y a plusieurs enfants, régler les filtres de classes et de niveaux en haut de la vue.
+1. Tick **Toutemonannee** in **Settings → Plugins**. As long as no account is linked, the plugin is "Pairing required".
+2. In the TouteMonAnnée section, enter your account's **email address or username** and **password**, then **Link the account**. The card shows "Linked: …".
+3. Open the **School** view ("Open the School view" link on the card). The homework, messages and posts appear after the first read.
+4. If the class is not the right one, or if there are several children, set the class and level filters at the top of the view.
 
-**Délier le compte** efface les cookies ; les filtres et les cases « fait » locales sont conservés.
+**Unlink the account** deletes the cookies; the filters and the local "done" checkboxes are kept.
 
-## La case « fait »
+## The "done" checkbox
 
-- Quand l'enseignante a ouvert la case sur un devoir, c'est **celle du site** : la cocher dans Kasbah la coche sur TouteMonAnnée, et **l'enseignante voit qui l'a cochée**.
-- Sinon la case reste **dans Kasbah** seulement (pense-bête du foyer).
+- When the teacher has opened the checkbox on an item of homework, it is **the site's own**: ticking it in Kasbah ticks it on TouteMonAnnée, and **the teacher sees who ticked it**.
+- Otherwise the checkbox stays **in Kasbah** only (a household reminder).
 
 ## Configuration (`apps/server/.env`)
 
-| Variable | Défaut | Rôle |
+| Variable | Default | Purpose |
 |---|---|---|
-| `TMA_FILE` | `.state/toutemonannee.json` | Cookies de session, cases « fait » locales, filtres |
-| `TMA_REFRESH_MS` | `1800000` (30 min) | Relecture, 5 minutes au moins |
-| `TMA_PAST_DAYS` | `7` | Jours passés relus pour les devoirs (0 à 31) |
+| `TMA_FILE` | `.state/toutemonannee.json` | Session cookies, local "done" checkboxes, filters |
+| `TMA_REFRESH_MS` | `1800000` (30 min) | Refresh interval, 5 minutes at least |
+| `TMA_PAST_DAYS` | `7` | Past days re-read for homework (0 to 31) |
 
-## Limites
+## Limitations
 
-- Non officiel : dépend de l'appli web du site, qui peut changer.
-- **Lecture** surtout : on ne peut pas répondre à l'enseignante, commenter une publication ni marquer un message de liaison comme lu.
-- Le niveau (CE1, CE2…) n'est pas une donnée du site : Kasbah le lit dans le texte (« pour les CE1 »). Une mention absente ou inhabituelle n'est pas filtrée.
-- Le site ne garde que quelques jours de devoirs passés.
-- Cocher la case « fait » du site est la seule écriture que Kasbah fasse chez TouteMonAnnée.
+- Unofficial: depends on the site's web app, which can change.
+- Mostly **read-only**: you cannot reply to the teacher, comment on a post or mark a message as read.
+- The level (CE1, CE2…) is not data from the site: Kasbah reads it from the text ("for the CE1s"). A missing or unusual mention is not filtered.
+- The site only keeps a few days of past homework.
+- Ticking the site's "done" checkbox is the only write that Kasbah makes at TouteMonAnnée.
 
-## Pour aller plus loin
+## Further reading
 
-Fonctionnement interne, routes relevées et pièges : [wiki, TouteMonAnnée](../../doc/3_plugins/3_23_toutemonannee.md).
+Internals, routes observed and pitfalls: [wiki, TouteMonAnnée](../../doc/3_plugins/3_23_toutemonannee.md) (in French).

@@ -3,62 +3,62 @@
 | | |
 |---|---|
 | **Id** | `mixcloud` |
-| **Rôle** | source musicale : mix et émissions (DJ sets, radios en rediffusion), souvent longs de une à plusieurs heures |
-| **Connexion** | **cloud, partiellement non officielle** : API publique de Mixcloud pour le catalogue, `yt-dlp` pour le flux audio |
-| **Compte** | un simple **nom d'utilisateur** Mixcloud, sans mot de passe ni cookie |
-| **Vues** | Musique (source « Mixcloud »), Réglages → Plugins |
+| **Role** | music source: mixes and shows (DJ sets, radio replays), often one to several hours long |
+| **Connection** | **cloud, partly unofficial**: Mixcloud's public API for the catalog, `yt-dlp` for the audio stream |
+| **Account** | a plain Mixcloud **username**, no password or cookie |
+| **Views** | Music ("Mixcloud" source), Settings → Plugins |
 
-## Ce que fait le plugin
+## What the plugin does
 
-- **Recherche** de mix, d'émissions et de DJ.
-- **Votre compte** : accueil recomposé (vos créateurs suivis, nouveautés des comptes suivis, « Réécouter », plus de vos créateurs préférés, émissions populaires dans vos genres), favoris, écoutés, vos mix, playlists, comptes suivis (ouvrir un compte montre ses mix).
-- **Genres** : chaque mix porte ses pastilles de genre, et une rangée de filtres permet de **garder** ou d'**écarter** des genres (choix retenu dans le navigateur).
-- **Reprise** : un mix interrompu repart où vous l'avez laissé (« Reprendre à 1:23:45 », ou « Repartir du début »), sur n'importe quelle enceinte ou dans le navigateur. Mixcloud ne retient rien sans connexion au site : c'est Kasbah qui garde la position (au-delà de 60 s, jusqu'aux 90 dernières secondes).
-- **Lecture** par le lecteur commun (voir plus bas), avec file d'attente, transfert d'une enceinte à l'autre et lecture dans le navigateur.
-- Côté assistant (MCP) : `search_music` avec `source: mixcloud` cherche des mix, `play_music` les lance sur une enceinte.
+- **Search** for mixes, shows and DJs.
+- **Your account**: a home page rebuilt for you (the creators you follow, new uploads from followed accounts, "Listen again", more from your favorite creators, popular shows in your genres), favorites, listened, your mixes, playlists, followed accounts (opening an account shows its mixes).
+- **Genres**: each mix carries its genre pills, and a row of filters lets you **keep** or **rule out** genres (the choice is remembered in the browser).
+- **Resume**: an interrupted mix restarts where you left it ("Resume at 1:23:45", or "Start over"), on any speaker or in the browser. Mixcloud remembers nothing without a sign-in to the site: Kasbah keeps the position itself (beyond 60 s, up to the last 90 seconds).
+- **Playback** through the shared player (see below), with a queue, transfer from one speaker to another and playback in the browser.
+- On the assistant side (MCP): `search_music` with `source: mixcloud` searches mixes, `play_music` starts them on a speaker.
 
-Le plugin ne publie aucun appareil : il n'apparaît pas dans la maison 3D.
+The plugin publishes no device: it does not appear in the 3D house.
 
-## Le lecteur commun
+## The shared player
 
-La lecture est faite par le **lecteur de musique commun** de Kasbah, partagé avec YouTube Music (les radios vont directement de la station à l'enceinte). Mixcloud ne fournit que le catalogue et le flux d'un mix. Le lecteur commun :
+Playback is done by Kasbah's **shared music player**, shared with YouTube Music (radios go straight from the station to the speaker). Mixcloud only provides the catalog and the stream of a mix. The shared player:
 
-- sert le mix **sur le réseau de la maison** à l'enceinte, qui le lit comme un fichier : elle connaît la durée et se laisse déplacer dans un mix de trois heures ;
-- tient la **file d'attente côté serveur** et retient la **dernière écoute de chaque enceinte**, reprise après un redémarrage du serveur.
+- serves the mix **over the house network** to the speaker, which plays it as a file: it knows the duration and lets you seek within a three-hour mix;
+- keeps the **queue on the server side** and remembers **each speaker's last listen**, restored after a server restart.
 
-Les **enceintes cibles** sont les lecteurs **Google Cast** et **Sonos**, à activer eux aussi dans Réglages → Plugins. Elles refusent `127.0.0.1` : si vous ouvrez Kasbah en `localhost` sur le poste serveur, renseignez `MUSIC_PUBLISH_BASE` (variable du lecteur commun, voir la page [YouTube Music](ytmusic.md)).
+The **target speakers** are **Google Cast** and **Sonos** players, which must also be enabled in Settings → Plugins. They refuse `127.0.0.1`: if you open Kasbah as `localhost` on the server machine, set `MUSIC_PUBLISH_BASE` (a shared player variable, see the [YouTube Music](ytmusic.md) page).
 
-## Connexion
+## Connection
 
-Le catalogue vient de l'**API publique** de Mixcloud, qui ne demande ni clé ni jeton : Kasbah lit seulement ce que votre profil montre publiquement. Relier un compte, c'est donner votre nom d'utilisateur (celui de l'adresse de votre profil : `mixcloud.com/votre-nom/`) ; **aucun mot de passe ne transite, aucun secret n'est stocké**. Le nom et les positions de reprise sont gardés dans `apps/server/.state/mixcloud.json`.
+The catalog comes from Mixcloud's **public API**, which needs no key or token: Kasbah only reads what your profile shows publicly. Linking an account means giving your username (the one in your profile address: `mixcloud.com/your-name/`); **no password passes through, no secret is stored**. The name and the resume positions are kept in `apps/server/.state/mixcloud.json`.
 
-Le flux audio est trouvé par `yt-dlp` sur la page du mix. Pas de PO Token ici, contrairement à YouTube Music.
+The audio stream is found by `yt-dlp` on the mix page. No PO Token here, unlike YouTube Music.
 
-## Mise en route
+## Setup
 
-1. Installer **`yt-dlp`** sur la machine qui héberge Kasbah. S'il est déjà installé pour YouTube Music, rien d'autre : Mixcloud utilise le même (sinon, `MIXCLOUD_YTDLP_PATH`). `ffmpeg` n'est utile qu'en repli, si un flux ne peut pas être relayé tel quel.
-2. Cocher **Mixcloud** dans **Réglages → Plugins**.
-3. Tant qu'aucun compte n'est relié, la section Mixcloud (et la source Mixcloud de la page Musique) demande votre **nom d'utilisateur** : le saisir puis **Relier**. Kasbah vérifie qu'il existe chez Mixcloud.
-4. Ouvrir la vue **Musique**, choisir la source **Mixcloud**, lancer un mix sur une enceinte.
+1. Install **`yt-dlp`** on the machine that hosts Kasbah. If it is already installed for YouTube Music, nothing else is needed: Mixcloud uses the same one (otherwise, `MIXCLOUD_YTDLP_PATH`). `ffmpeg` is only useful as a fallback, if a stream cannot be relayed as is.
+2. Tick **Mixcloud** in **Settings → Plugins**.
+3. As long as no account is linked, the Mixcloud section (and the Mixcloud source on the Music page) asks for your **username**: enter it, then **Link**. Kasbah checks that it exists on Mixcloud.
+4. Open the **Music** view, choose the **Mixcloud** source, start a mix on a speaker.
 
-Changer de compte ou le retirer : **Changer de compte** / **Délier**. Sans compte relié, le plugin reste en attente (« à relier ») et les listes personnelles (accueil, favoris, suivis…) sont indisponibles.
+To change the account or remove it: **Change account** / **Unlink**. With no account linked, the plugin stays on hold ("to be linked") and the personal lists (home, favorites, following...) are unavailable.
 
 ## Configuration (`apps/server/.env`)
 
-| Variable | Défaut | Rôle |
+| Variable | Default | Purpose |
 |---|---|---|
-| `MIXCLOUD_STATE_FILE` | `.state/mixcloud.json` | Nom d'utilisateur et positions de reprise |
-| `MIXCLOUD_YTDLP_PATH` | — (puis `YTM_YTDLP_PATH`, puis `yt-dlp`) | Binaire `yt-dlp` |
-| `MIXCLOUD_API_URL` | `https://api.mixcloud.com` | Racine de l'API publique |
+| `MIXCLOUD_STATE_FILE` | `.state/mixcloud.json` | Username and resume positions |
+| `MIXCLOUD_YTDLP_PATH` | — (then `YTM_YTDLP_PATH`, then `yt-dlp`) | `yt-dlp` binary |
+| `MIXCLOUD_API_URL` | `https://api.mixcloud.com` | Root of the public API |
 
-## Limites
+## Limitations
 
-- Qualité plafonnée à **64 kb/s** (AAC) avec un compte gratuit ; un cookie de compte gratuit n'y change rien, il n'y en a donc pas.
-- Les recommandations que Mixcloud calcule chez lui pour un compte connecté n'existent pas : l'accueil est recomposé à partir de vos écoutes publiques (relu toutes les 30 min).
-- Aucune écoute n'est signalée à Mixcloud : Kasbah ne fait que lire.
-- Le lancement prend quelques secondes (recherche du flux par `yt-dlp`).
-- La reprise garde les 200 derniers mix entamés.
+- Quality capped at **64 kb/s** (AAC) with a free account; a free account's cookie changes nothing there, so there isn't one.
+- The recommendations that Mixcloud computes on its side for a signed-in account do not exist: the home page is rebuilt from your public listens (refreshed every 30 min).
+- No listen is reported to Mixcloud: Kasbah only reads.
+- Starting takes a few seconds (`yt-dlp` looks up the stream).
+- Resume keeps the last 200 mixes you started.
 
-## Pour aller plus loin
+## Further reading
 
-Fonctionnement interne, routes et pièges : [wiki, Mixcloud](../../doc/3_plugins/3_20_mixcloud.md) ; lecteur commun : [wiki, lecteur musique](../../doc/1_architecture/1_6_lecteur-musique.md).
+Internals, routes and pitfalls: [wiki, Mixcloud](../../doc/3_plugins/3_20_mixcloud.md) (in French); shared player: [wiki, music player](../../doc/1_architecture/1_6_lecteur-musique.md) (in French).

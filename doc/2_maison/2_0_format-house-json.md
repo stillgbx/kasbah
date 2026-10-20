@@ -1,6 +1,6 @@
 # Format house.json : décisions et validation
 
-> Dernière mise à jour : 2026-10-19
+> Dernière mise à jour : 2026-10-20
 > Sources : `packages/shared/src/house/{schema,validate,lookup,geo}.ts`, `docs/house-json.md`, `house/demo-house.json`, `packages/shared/src/house/autoplace.ts`, `house/fit-survey.mjs`, `house/maison.json`, `packages/shared/src/house/place.ts`, `apps/server/src/config/house.ts`, `packages/shared/src/house/panels.ts`, `packages/shared/src/house/openings.ts`, `packages/shared/src/house/parking.ts`, `packages/shared/src/house/geometry/relief.ts` (`site.relief`), `house/demos/*.json`, `apps/server/src/config/properties.ts`, `packages/shared/src/house/structure.ts`, `packages/shared/src/house/newHouse.ts`
 
 La **référence complète du format** (champs, exemples) est `docs/house-json.md`. Cette page
@@ -99,8 +99,8 @@ jamais perdre les mesures brutes, et rendre la dérivation rejouable. D'où la c
 mesures vivent dans `meta`, le `polygon` en est **dérivé**.
 
 Les champs (`unit`, `frame`, `partition`, `levelOffsets`, `points`, `note`) et un exemple sont
-décrits dans `docs/house-json.md`, section « Relevé métré » ; ci-dessous, le **pourquoi** et les
-pièges.
+décrits dans `docs/house-json.md`, section « Relevé métré » (« Measured survey » depuis que `docs/`
+est en anglais, le 2026-10-20) ; ci-dessous, le **pourquoi** et les pièges.
 
 Deux décisions structurantes. **`partition` est découplé de `defaults.interiorWallThickness`** : le
 défaut global reste celui des niveaux non relevés et alimente le sondage de classification, tandis
@@ -177,7 +177,9 @@ Décisions (`packages/shared/src/house/place.ts : placeDeviceInJson`, tests `pla
 
 Piège : si `KASBAH_HOUSE_FILE` pointe sur `house/demo-house.json`, l'UI salit la fixture versionnée
 (et les tests qui la lisent). En dev, viser une copie ou `house/maison.json`. La référence de format
-(`docs/house-json.md`, section « Appareils ») décrit le geste côté utilisateur.
+(`docs/house-json.md`, section « Appareils », « Devices » depuis le 2026-10-20) décrit le geste côté
+utilisateur. Le bouton qu'elle cite est celui de `place.move` : « Modifier » / « Edit » (la page
+française disait encore « Déplacer »).
 
 ### Mise à jour 2026-09-08 — ordre d'affichage des niveaux et des pièces
 

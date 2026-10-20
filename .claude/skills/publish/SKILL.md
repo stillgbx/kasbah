@@ -82,18 +82,20 @@ que le code.
 
 ## 4. README et pages `docs/`
 
-Elles s'adressent à l'utilisateur de Kasbah, pas au développeur. On les retouche seulement si ce
-qu'elles promettent a changé :
+Elles s'adressent à l'utilisateur de Kasbah, pas au développeur, et sont **en anglais** depuis le
+2026-10-20 (le wiki `doc/` reste en français). `README.fr.md` est la version française du README :
+toute retouche du README s'y reporte dans le même commit. Les libellés d'interface cités sont ceux
+de `apps/web/src/i18n/locales/en.json`. On les retouche seulement si ce qu'elles promettent a changé :
 
 | Le changement | À mettre à jour |
 |---|---|
 | nouveau plugin | `docs/plugins/<id>.md` (même gabarit que les autres) + ligne du tableau **Plugins** du README |
 | ce que fait un plugin, sa connexion, sa mise en route, ses variables | `docs/plugins/<id>.md` ; tableau du README si l'accès ou les kinds changent |
 | nouvelle variable d'environnement | `apps/server/.env.example`, la page du plugin, section **Configuration** du README si elle est générale |
-| nouvelle vue ou fonction visible | README, **Fonctionnalités** (tableau des vues, scène 3D, ambiances, automatisations) |
-| outil MCP ajouté ou changé | README, **Serveur MCP** |
+| nouvelle vue ou fonction visible | README, **Features** (tableau des vues, scène 3D, ambiances, automatisations) |
+| outil MCP ajouté ou changé | README, **MCP server** |
 | format de la maison | `docs/house-json.md` |
-| démarrage, scripts npm, production | README, **Démarrage** / **Qualité** |
+| démarrage, scripts npm, production | README, **Getting started** / **Quality** |
 
 Règles : une ligne de tableau reste courte ; on garde le ton et le gabarit des pages voisines ; les
 captures (`docs/screenshots/`) ne se refont que sur demande. Si le README ou la page est déjà
@@ -148,23 +150,25 @@ Puis l'analyse des changements indexés : `detect_changes({scope: "staged"})` pa
 
 ## 7. Commit
 
-Le message suit l'usage du dépôt, en français, écrit dans un fichier temporaire du scratchpad puis
-passé par `git commit -F <fichier>` (le hook `commit-msg` le relit) :
+Le message s'écrit **en anglais** depuis le 2026-10-20 (l'historique d'avant reste en français, on
+ne le réécrit pas), dans un fichier temporaire du scratchpad puis passé par `git commit -F <fichier>`
+(le hook `commit-msg` le relit) :
 
 ```
-Domaine : ce qui change, en une phrase.
+Area: what changes, in one sentence.
 
-Ce qui a été fait et pourquoi, en paragraphes de prose, lignes d'environ 100 caractères.
-Les choix qui ne se voient pas dans le code, ce qui a été écarté.
+What was done and why, in prose paragraphs, lines of about 100 characters.
+The choices that don't show in the code, what was ruled out.
 
-Vérifié … (tests, mode simulé, vraie maison sans détail). Reste … s'il reste quelque chose.
-Wiki : pages touchées.
+Verified … (tests, simulated mode, real house without details). Remaining … if anything remains.
+Wiki: pages touched.
 
 Co-Authored-By: <ligne d'attribution donnée par la session>
 ```
 
-- `Domaine` = le plugin, la vue ou la zone (« Tondeuse », « Transcription », « Scène 3D »…).
-- Une étape intermédiaire se dit comme telle (« première partie », « Reste : … »).
+- `Area` = le plugin, la vue ou la zone (« Mower », « Transcription », « 3D scene »…), le libellé
+  anglais de l'app quand il existe (`en.json`) ; les noms de pages du wiki restent tels quels.
+- Une étape intermédiaire se dit comme telle (« first part », « Remaining: … »).
 - Un sujet = un commit. Deux sujets sans rapport dans le diff de la session : deux commits.
 
 Hook refusé : lire la sortie, corriger, réindexer, refaire un **nouveau** commit (pas d'`--amend`

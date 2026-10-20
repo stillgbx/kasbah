@@ -1,6 +1,6 @@
 # Écrire un plugin
 
-> Dernière mise à jour : 2026-10-07
+> Dernière mise à jour : 2026-10-20
 > Sources : `apps/server/src/core/plugin.ts`, `apps/server/src/core/plugin-host.ts`, `apps/server/src/plugins/{mock,hue,tahoma,_stub}/index.ts`, `apps/server/src/plugins/comap/{socket,socket.test}.ts`, `apps/server/src/plugins/melcloud/{types,mapping}.ts`, `apps/server/src/plugins/irobot/{index,mapping,discovery}.ts`, `apps/server/src/plugins/sonos/{index,discovery,mapping}.ts`, `apps/server/src/core/atomic-file.ts`, `apps/server/src/assistant/engines.ts`
 
 ## Interface (`core/plugin.ts`)
@@ -373,3 +373,24 @@ CLI (Codex, Gemini, Cursor) suivrait la même forme, avec sa propre carte de com
 Rappel vérifié à nouveau ce jour-là : **ne pas revalider `ctx.config`** dans `init` (l'hôte la donne
 déjà transformée) ; et dans les tests, passer la config telle que l'hôte la donne
 (`schema.parse({})`), sinon le défaut ne se voit pas.
+
+
+### Mise à jour 2026-10-20 — les pages `docs/plugins/` en anglais
+
+Les pages utilisateur sont désormais en anglais (le pourquoi : `../5_setup/5_0_installation-et-scripts.md`,
+mise à jour du 2026-10-20). Les conventions du 2026-10-06 ci-dessus valent toujours, transposées :
+
+- titres fixes « What the plugin does », « Connection », « Setup », « Configuration
+  (`apps/server/.env`) », « Limitations », « Further reading » ; tableau d'en-tête Id / Devices /
+  Connection / Account / Views ; colonnes Variable / Default / Purpose ; légende des captures
+  « *Screenshot of the demo (simulation, no real device).* » ;
+- l'impératif anglais remplace la question du vouvoiement ;
+- l'état s'écrit comme l'i18n anglaise (« Pairing required »), et tout libellé cité vient de
+  `apps/web/src/i18n/locales/en.json` ; le plugin se coche toujours sous son id capitalisé (« Ytmusic ») ;
+- les liens vers ce wiki portent « (in French) ».
+
+Le point de la liste de contrôle ci-dessus devient : écrire `docs/plugins/<id>.md` **en anglais** sur
+le modèle (`docs/plugins/hue.md`) et l'ajouter au tableau « Plugins » du `README.md` **et** de
+`README.fr.md`.
+
+Sources : `docs/plugins/*.md`, `.claude/skills/publish/SKILL.md` (§4).

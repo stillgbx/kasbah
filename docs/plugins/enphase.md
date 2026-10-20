@@ -3,66 +3,66 @@
 | | |
 |---|---|
 | **Id** | `enphase` |
-| **Appareils** | site solaire (production, consommation, réseau), micro-onduleurs, batteries IQ, et en option la borne IQ EV Charger 2 |
-| **Connexion** | **locale** pour la passerelle IQ Gateway (production, onduleurs, batteries) ; **cloud Enphase** (API privée de l'appli) pour la borne uniquement |
-| **Compte** | un jeton de passerelle valable un an ; pour la borne, en plus, une session liée avec le compte Enphase |
-| **Vues** | Énergie, Maison (panneaux et batteries en 3D), Réglages → Plugins |
+| **Devices** | solar site (production, consumption, grid), microinverters, IQ batteries, and optionally the IQ EV Charger 2 |
+| **Connection** | **local** for the IQ Gateway (production, inverters, batteries); **Enphase cloud** (the app's private API) for the charger only |
+| **Account** | a gateway token valid for one year; for the charger, additionally, a session linked to the Enphase account |
+| **Views** | Energy, Home (panels and batteries in 3D), Settings → Plugins |
 
-![Vue Énergie](../screenshots/energy.webp)
+![Energy view](../screenshots/energy.webp)
 
-*Capture de la démonstration (simulation, aucun appareil réel).*
+*Screenshot of the demo (simulation, no real device).*
 
-## Ce que fait le plugin
+## What the plugin does
 
-- **Site** : production solaire, consommation, échange avec le réseau et stockage, en temps réel (relevé toutes les 10 s).
-- **Micro-onduleurs** : un capteur de puissance par onduleur, avec son record. Un onduleur muet depuis plus d'une demi-heure (la nuit, une panne) passe indisponible et garde sa dernière valeur, grisée.
-- **Batteries IQ** : une par batterie, avec son niveau de charge ; le stockage est positif en charge, négatif en décharge.
-- **Borne IQ EV Charger 2** : état (branchée, en charge), énergie de la session, **Lancer la charge** / **Arrêter la charge**. L'intensité ne se règle pas : le démarrage reprend celle de l'appli Enphase.
-- La production n'est jamais affichée sous zéro : la veille des micro-onduleurs, la nuit, ne compte pas comme une consommation.
-- **Retour au mode d'avant** : un arrêt ou un forçage depuis Kasbah met la borne en « annulation manuelle ». Quand la voiture atteint sa limite ou est débranchée, Kasbah remet le mode choisi dans l'appli (par exemple la charge verte).
-- **Mode de la borne** : **Charge verte** (sur le surplus solaire seul) ou **Manuel** (dès le branchement, sur le réseau s'il le faut), au choix depuis le panneau de la borne (vue Maison), sa ligne dans la vue Énergie, ou l'assistant (MCP). Les modes programmé et intelligent se règlent dans l'appli Enphase ; aucun des deux boutons n'est alors allumé.
-- **Annulation manuelle visible** : quand la borne ne suit plus son mode jusqu'au débranchement, son panneau le dit et **Reprendre** le lui rend ; dans la vue Énergie, sa ligne affiche « annulation manuelle » et la touche du mode en cours, en orange, le lui rend.
+- **Site**: solar production, consumption, exchange with the grid and storage, in real time (read every 10 s).
+- **Microinverters**: one power sensor per inverter, with its record. An inverter silent for more than half an hour (at night, a failure) becomes unavailable and keeps its last value, grayed out.
+- **IQ batteries**: one per battery, with its charge level; storage is positive when charging, negative when discharging.
+- **IQ EV Charger 2**: state (plugged in, charging), session energy, **Start charging** / **Stop charging**. The current cannot be set: starting resumes the one from the Enphase app.
+- Production is never shown below zero: the microinverters' standby draw at night does not count as consumption.
+- **Return to the previous mode**: a stop or a forced start from Kasbah puts the charger in "manual override". When the car reaches its limit or is unplugged, Kasbah restores the mode chosen in the app (for example green charging).
+- **Charger mode**: **Green** (on solar surplus only) or **Manual** (as soon as it is plugged in, from the grid if needed), chosen from the charger's panel (Home view), its row in the Energy view, or the assistant (MCP). The scheduled and smart modes are set in the Enphase app; neither button is then lit.
+- **Visible manual override**: when the charger no longer follows its mode until it is unplugged, its panel says so and **Resume** gives it back; in the Energy view, its row shows "manual override" and the key of the current mode, in orange, gives it back.
 
-## Connexion
+## Connection
 
-- **Passerelle** : le serveur Kasbah parle directement à la passerelle en HTTPS (nom `envoy.local` par défaut, certificat auto-signé accepté pour elle seule). Aucun appel à Internet une fois le jeton posé, aucun quota. Le numéro de série n'est jamais à saisir : la passerelle le donne.
-- **Jeton** : le logiciel 7.0 et plus exige un jeton, valable un an. Le serveur le garde dans `apps/server/.state/enphase-token.json` : il n'y a **rien à recopier** dans `.env`, et l'appairage survit aux redémarrages.
-- **Borne** : elle n'est pas sur la passerelle, elle ne parle qu'au cloud Enphase. Il faut pour cela lier le compte Enphase (Enlighten) ; la session est gardée dans `apps/server/.state/enphase-cloud.json`. Un jeton collé à la main ne suffit pas.
-- **Mot de passe** : celui du compte Enphase n'est jamais une clé de configuration. Il sert une fois à l'appairage, puis il est oublié (ni enregistré, ni journalisé). Il traverse toutefois votre réseau local en HTTP simple, Kasbah n'étant pas servi en HTTPS : la voie « jeton » évite cela, au prix de la borne.
+- **Gateway**: the Kasbah server talks directly to the gateway over HTTPS (name `envoy.local` by default, self-signed certificate accepted for it alone). No call to the Internet once the token is set, no quota. The serial number never has to be entered: the gateway provides it.
+- **Token**: software 7.0 and later requires a token, valid for one year. The server keeps it in `apps/server/.state/enphase-token.json`: there is **nothing to copy** into `.env`, and the pairing survives restarts.
+- **Charger**: it is not on the gateway, it only talks to the Enphase cloud. This requires linking the Enphase (Enlighten) account; the session is kept in `apps/server/.state/enphase-cloud.json`. A token pasted by hand is not enough.
+- **Password**: the Enphase account's password is never a configuration key. It is used once for pairing, then forgotten (neither saved nor logged). It does, however, cross your local network in plain HTTP, since Kasbah is not served over HTTPS: the "token" route avoids this, at the cost of the charger.
 
-## Mise en route
+## Setup
 
-1. Cocher **Enphase** dans **Réglages → Plugins**. Le sous-élément **Borne de recharge** est coché par défaut : le décocher si vous n'en avez pas.
-2. Si la passerelle ne répond pas à `envoy.local`, renseigner son adresse dans `ENPHASE_HOST` (et redémarrer le serveur).
-3. Dans la section **Passerelle Enphase** de Réglages → Plugins, deux voies :
-   - **Compte Enphase** (recommandée, et indispensable pour la borne) : saisir l'adresse du compte et le mot de passe, puis **Appairer la passerelle**. Le jeton d'un an est créé et gardé par le serveur ;
-   - **Jeton** : le créer sur `entrez.enphaseenergy.com`, le coller, puis valider.
-4. La carte affiche le rôle du jeton et son échéance. À moins de 30 jours, la pastille du plugin passe à l'orange : **Renouveler le jeton** avant.
-5. Pour la borne : choisir **Compte Enphase** et **Valider**. Le bouton lie la session cloud sans refaire de jeton si le jeton local est encore valable.
+1. Tick **Enphase** in **Settings → Plugins**. The **EV charger** sub-item is ticked by default: untick it if you do not have one.
+2. If the gateway does not answer to `envoy.local`, set its address in `ENPHASE_HOST` (and restart the server).
+3. In the **Enphase gateway** section of Settings → Plugins, there are two routes:
+   - **Enphase account** (recommended, and essential for the charger): enter the account's address and password, then **Pair the gateway**. The one-year token is created and kept by the server;
+   - **Token**: create it on `entrez.enphaseenergy.com`, paste it, then validate.
+4. The card shows the token's role and its expiry. With less than 30 days left, the plugin's pill turns orange: **Renew the token** before then.
+5. For the charger: choose **Enphase account** and **Validate**. The button links the cloud session without creating a new token if the local token is still valid.
 
 ## Configuration (`apps/server/.env`)
 
-Rien d'obligatoire dans le cas normal.
+Nothing is required in the normal case.
 
-| Variable | Défaut | Rôle |
+| Variable | Default | Purpose |
 |---|---|---|
-| `ENPHASE_HOST` | `envoy.local` | Nom ou adresse de la passerelle |
-| `ENPHASE_TOKEN` | — | Jeton d'amorçage facultatif (premier démarrage sans interface). Entre lui et celui du serveur, le plus tardif à expirer est retenu |
-| `ENPHASE_TOKEN_FILE` | `apps/server/.state/enphase-token.json` | Où le serveur garde le jeton. Vide : rien n'est gardé, il faut réappairer à chaque démarrage |
-| `ENPHASE_CLOUD_FILE` | `apps/server/.state/enphase-cloud.json` | Où le serveur garde la session de la borne. Vide : à relier à chaque démarrage |
-| `ENPHASE_POLL_MS` | `10000` | Cadence des compteurs (2 000 à 300 000 ms) |
-| `ENPHASE_SLOW_POLL_MS` | `60000` | Cadence des onduleurs, batteries et borne (30 000 à 900 000 ms) |
+| `ENPHASE_HOST` | `envoy.local` | Name or address of the gateway |
+| `ENPHASE_TOKEN` | — | Optional bootstrap token (first start without an interface). Between it and the server's own, the one that expires last is kept |
+| `ENPHASE_TOKEN_FILE` | `apps/server/.state/enphase-token.json` | Where the server keeps the token. Empty: nothing is kept, you have to pair again at every start |
+| `ENPHASE_CLOUD_FILE` | `apps/server/.state/enphase-cloud.json` | Where the server keeps the charger's session. Empty: to be linked at every start |
+| `ENPHASE_POLL_MS` | `10000` | Meter polling interval (2,000 to 300,000 ms) |
+| `ENPHASE_SLOW_POLL_MS` | `60000` | Polling interval for inverters, batteries and charger (30,000 to 900,000 ms) |
 
-## Limites
+## Limitations
 
-- **Jeton d'installateur** : pour un compte à la fois installateur et propriétaire, le formulaire web d'Enphase ne donne qu'un jeton de 12 heures. Seul l'appairage par compte, dans Kasbah, donne celui d'un an.
-- Un jeton est propre à une passerelle : celui d'une autre est refusé, comme un jeton expiré ou tronqué (la carte le dit).
-- La passerelle est lente par moments (jusqu'à une dizaine de secondes sur le relevé détaillé) : les totaux du jour se rafraîchissent une fois par minute.
-- **Arrêter la borne la bloque** jusqu'au prochain débranchement, soleil ou pas : Kasbah le signale sous le bouton et rend le mode d'avant quand il le peut. Elle revient normalement seule au mode choisi dans l'appli.
-- La borne ne dit pas quelle voiture est branchée.
-- Un seul site Enlighten est lu : celui retenu à l'appairage.
-- Mode sécurisé : si la borne n'est pas reliée à la passerelle, elle se replie sur une intensité réduite. Cela se règle dans l'appli Enphase (Connectivité du chargeur), pas dans Kasbah.
+- **Installer token**: for an account that is both installer and owner, Enphase's web form only gives a 12-hour token. Only pairing by account, in Kasbah, gives the one-year token.
+- A token belongs to one gateway: one from another gateway is refused, as is an expired or truncated one (the card says so).
+- The gateway is slow at times (up to about ten seconds on the detailed reading): the day's totals refresh once a minute.
+- **Stopping the charger blocks it** until the next unplug, sun or not: Kasbah flags this under the button and restores the previous mode when it can. It normally returns by itself to the mode chosen in the app.
+- The charger does not say which car is plugged in.
+- Only one Enlighten site is read: the one chosen at pairing.
+- Safe mode: if the charger is not connected to the gateway, it falls back to a reduced current. This is set in the Enphase app (Charger Connectivity), not in Kasbah.
 
-## Pour aller plus loin
+## Further reading
 
-Fonctionnement interne, cadences, API de la borne et pièges : [wiki, Enphase](../../doc/3_plugins/3_7_enphase.md).
+Internals, polling intervals, the charger's API and pitfalls: [wiki, Enphase](../../doc/3_plugins/3_7_enphase.md) (in French).

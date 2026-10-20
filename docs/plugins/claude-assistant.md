@@ -1,57 +1,57 @@
-# Claude (le moteur de l'assistant)
+# Claude (the assistant engine)
 
 | | |
 |---|---|
 | **Id** | `claude` |
-| **Rôle** | moteur de l'assistant « Demander à Kasbah » : une instruction en langage naturel, exécutée par Claude avec les outils de Kasbah |
-| **Connexion** | **Claude Code** (`claude -p`) lancé sur la machine du serveur, branché sur le serveur MCP de Kasbah |
-| **Compte** | le **forfait Claude** (abonnement, pas de clé d'API) de chaque compte, par un jeton de `claude setup-token` |
-| **Vues** | palette Ctrl+K et barre de la vue Maison (« Demander à Kasbah »), Réglages → Plugins, Réglages → Assistant (journal) |
+| **Role** | engine of the "Ask Kasbah" assistant: an instruction in natural language, carried out by Claude with Kasbah's tools |
+| **Connection** | **Claude Code** (`claude -p`) run on the server machine, plugged into Kasbah's MCP server |
+| **Account** | each account's **Claude plan** (subscription, no API key), through a token from `claude setup-token` |
+| **Views** | Ctrl+K palette and Home view bar ("Ask Kasbah"), Settings → Plugins, Settings → Assistant (log) |
 
-## Ce que fait le plugin
+## What the plugin does
 
-- **Demander à Kasbah** : une instruction tapée dans la recherche (Ctrl+K, ou la barre de la vue Maison) — « éteins tout au rez-de-chaussée », « mets France Inter dans la cuisine » — part à Claude sur le serveur, qui agit par les outils de Kasbah (appareils, ambiances, musique, radio, école, état du serveur) et répond en une phrase. Les outils employés s'affichent pendant qu'il travaille.
-- **Dictée** : avec le plugin [transcription](transcription.md), l'instruction se dit au micro, et la réponse peut être lue à voix haute.
-- **Journal** : les 200 dernières instructions, de tous les comptes, dans Réglages → Assistant (visible depuis le réseau local seulement).
+- **Ask Kasbah**: an instruction typed into search (Ctrl+K, or the Home view bar) — "turn everything off on the ground floor", "put France Inter on in the kitchen" — goes to Claude on the server, which acts through Kasbah's tools (devices, light scenes, music, radio, school, server status) and answers in one sentence. The tools in use are shown while it works.
+- **Dictation**: with the [transcription](transcription.md) plugin, the instruction can be spoken into the microphone, and the answer can be read aloud.
+- **Log**: the last 200 instructions, from all accounts, in Settings → Assistant (visible from the local network only).
 
-Le plugin ne publie aucun appareil : il n'apparaît pas dans la maison 3D. Sans lui, « Demander à Kasbah » répond qu'aucun assistant n'est activé.
+The plugin publishes no device: it does not appear in the 3D house. Without it, "Ask Kasbah" answers that no assistant is enabled.
 
-## Le forfait de chaque compte
+## Each account's plan
 
-Pas de clé d'API : chacun emploie **son abonnement Claude**.
+No API key: everyone uses **their own Claude subscription**.
 
-1. Sur un ordinateur où Claude Code est installé, lancer `claude setup-token`, se connecter à claude.ai : la commande affiche un jeton `sk-ant-oat01-…` valable **un an**.
-2. Le coller dans **Réglages → Plugins → claude**, puis **Enregistrer**.
+1. On a computer where Claude Code is installed, run `claude setup-token` and sign in to claude.ai: the command prints a token `sk-ant-oat01-…` valid for **one year**.
+2. Paste it into **Settings → Plugins → claude**, then **Save**.
 
-Connecté (adresse publique), le jeton est celui **de votre compte** ; sur le réseau local, celui **de la maison**. Pour une instruction, Kasbah prend le jeton du compte qui demande, sinon celui de la maison, sinon la connexion `claude` déjà faite sur la machine du serveur. La carte dit lequel sert. Le jeton est gardé par le serveur (fichier lisible par lui seul) et **ne repart jamais vers le navigateur**. Retirer le jeton : **Retirer le jeton**, puis confirmer.
+When signed in (public address), the token is the one **for your account**; on the local network, the one **for the house**. For an instruction, Kasbah uses the token of the account that is asking, otherwise the house's, otherwise the `claude` sign-in already done on the server machine. The card says which one is in use. The token is kept by the server (in a file readable only by it) and **never goes back to the browser**. To remove the token: **Remove token**, then confirm.
 
-Les conditions d'Anthropic réservent un compte Claude à une personne : le repli sur le forfait de la maison fait tourner les autres comptes sur celui-ci.
+Anthropic's terms reserve a Claude account for one person: falling back to the house plan makes the other accounts run on it.
 
-## Mise en route
+## Setup
 
-1. Installer **Claude Code** sur la machine qui héberge Kasbah (le binaire `claude`, dans le `PATH` du serveur ou indiqué par `CLAUDE_BIN`).
-2. Cocher **claude** dans **Réglages → Plugins**. La santé du plugin dit la version de `claude` et le modèle employé, ou que le binaire est introuvable.
-3. Coller un jeton (voir plus haut), ou s'être connecté une fois avec `claude` sur la machine du serveur.
-4. Ouvrir la recherche (Ctrl+K), taper une instruction, choisir **Demander à Kasbah**.
+1. Install **Claude Code** on the machine that hosts Kasbah (the `claude` binary, in the server's `PATH` or given by `CLAUDE_BIN`).
+2. Tick **claude** in **Settings → Plugins**. The plugin's health states the version of `claude` and the model used, or that the binary cannot be found.
+3. Paste a token (see above), or have signed in once with `claude` on the server machine.
+4. Open search (Ctrl+K), type an instruction, choose **Ask Kasbah**.
 
-## Sécurité
+## Security
 
-Claude ne reçoit **que** les outils de Kasbah : ni commandes, ni fichiers, ni web, aucun autre serveur MCP, aucun réglage ni fichier de la machine. Il agit avec les droits du compte qui demande, par un jeton de course révoqué à la fin de l'instruction.
+Claude receives **only** Kasbah's tools: no commands, no files, no web, no other MCP server, no setting or file of the machine. It acts with the rights of the account that is asking, through a per-run token revoked at the end of the instruction.
 
 ## Configuration (`apps/server/.env`)
 
-| Variable | Défaut | Rôle |
+| Variable | Default | Purpose |
 |---|---|---|
-| `CLAUDE_BIN` | `claude` | Binaire de Claude Code (le `PATH` du serveur, sinon un chemin absolu) |
-| `CLAUDE_MODEL` | `claude-haiku-5-5` | Modèle : un ID complet (version figée) ou un alias de la CLI (`haiku`, `sonnet`), qui suit les sorties avec du retard. Pris en compte au redémarrage |
-| `CLAUDE_KEEP_SESSIONS` | `false` | Garder les sessions de `claude -p` pour déboguer (réflexion comprise) |
+| `CLAUDE_BIN` | `claude` | Claude Code binary (the server's `PATH`, otherwise an absolute path) |
+| `CLAUDE_MODEL` | `claude-haiku-5-5` | Model: a full ID (pinned version) or a CLI alias (`haiku`, `sonnet`), which follows new releases with a delay. Applied at restart |
+| `CLAUDE_KEEP_SESSIONS` | `false` | Keep the `claude -p` sessions for debugging (reasoning included) |
 
-## Limites
+## Limitations
 
-- Une instruction à la fois par compte (un autre compte n'attend pas) ; au-delà de 60 s sans réponse, elle est abandonnée.
-- La limite d'usage du forfait Claude s'applique : l'assistant le dit quand elle est atteinte.
-- Un jeton refusé (expiré, révoqué) se dit à la première instruction : le refaire avec `claude setup-token`.
+- One instruction at a time per account (another account does not wait); after 60 s without an answer, it is abandoned.
+- The Claude plan's usage limit applies: the assistant says so when it is reached.
+- A rejected token (expired, revoked) is reported at the first instruction: renew it with `claude setup-token`.
 
-## Pour aller plus loin
+## Further reading
 
-Fonctionnement interne, lancement verrouillé, sortie de la CLI et pièges : [wiki, Claude](../../doc/3_plugins/3_24_claude.md) ; l'assistant : [wiki, assistant](../../doc/1_architecture/1_9_assistant.md).
+Internals, locked-down launch, CLI output and pitfalls: [wiki, Claude](../../doc/3_plugins/3_24_claude.md) (in French); the assistant: [wiki, assistant](../../doc/1_architecture/1_9_assistant.md) (in French).

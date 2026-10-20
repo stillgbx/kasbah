@@ -1,6 +1,6 @@
 # Serveur MCP (`/mcp`)
 
-> Dernière mise à jour : 2026-10-15
+> Dernière mise à jour : 2026-10-20
 > Sources : `apps/server/src/mcp/server.ts`, `apps/server/src/mcp/auth.ts`, `apps/server/src/http/session.ts`, `apps/server/src/mcp/users-cli.ts`, `apps/server/src/mcp/users-routes.ts`, `apps/web/src/components/settings/McpUsersCard.vue`, `apps/server/src/mcp/auth.test.ts`, `apps/server/src/music/player.ts`, `apps/server/src/plugins/{ytmusic,mixcloud,radio}/index.ts`, `apps/server/src/mcp/server.test.ts`, `apps/server/src/app.ts` (`registerMcp`), `apps/server/package.json`, `README.md` (section « Serveur MCP »), arbre de travail du 2026-09-23 (après c9abf58), `apps/server/src/assistant/assistant.ts` ; arbre de travail NON COMMITÉ du 2026-10-09 (après 00397bc) : `apps/server/src/mcp/{server,server.test}.ts`, `README.md`, `packages/shared/src/shopping/shopping.ts` (2026-10-11)
 
 ## Ce que c'est
@@ -11,7 +11,8 @@ mêmes données que le REST (`1_3_protocole-rest-ws.md`) : aucune logique propre
 le registre d'états, le registre des scènes et l'hôte de plugins comme le font les routes.
 
 Point d'accès : `http://localhost:8787/mcp`, Streamable HTTP, démarré avec le serveur, rien à activer.
-La configuration des clients est dans le `README.md` (section « Serveur MCP »).
+La configuration des clients est dans le `README.md` (section « Serveur MCP »). Depuis le 2026-10-20,
+le README est en anglais : la section s'appelle « MCP server » (« Serveur MCP » dans `README.fr.md`).
 
 ## Décisions (2026-09-23)
 
@@ -366,7 +367,8 @@ local). Les procédures des autres assistants ont été relevées les 5 et 6 oct
 **vérifiées par l'utilisateur avec Kasbah** sur les mêmes assistants (Claude, ChatGPT, Mistral Vibe,
 Grok) : aucun réglage propre à un assistant, le serveur d'autorisation (`auth.ts`) sert les deux
 modes d'inscription. Détail dans le `README.md`, section « Serveur MCP » → « Brancher un assistant
-IA ».
+IA » (« MCP server » → « Connecting an AI assistant » depuis que le README est en anglais, le
+2026-10-20).
 
 | Assistant | Configuration | Inscription auprès du serveur |
 |---|---|---|

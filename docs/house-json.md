@@ -1,173 +1,173 @@
-# Format `house.json`
+# The `house.json` format
 
-Le fichier décrit la maison et le jardin ; il est validé au démarrage du serveur (`parseHouse`, schéma zod dans `packages/shared/src/house/schema.ts`) : une erreur de structure empêche le démarrage avec un chemin lisible (`rooms[1].openings[0].offset: opening exceeds segment length`). Les incohérences non bloquantes (pièce sans appareil, appareil non lié) sont journalisées en avertissement.
+The file describes the house and garden; it is validated when the server starts (`parseHouse`, zod schema in `packages/shared/src/house/schema.ts`): a structural error prevents startup and is reported with a readable path (`rooms[1].openings[0].offset: opening exceeds segment length`). Non-blocking inconsistencies (a room without devices, an unlinked device) are logged as warnings.
 
-## Repère
+## Reference frame
 
-- **Unités : mètres. Axes : `x` vers l'est, `y` vers le nord, `z` vers le haut** (Z-up). Les polygones sont des listes de points `[x, y]` dans le plan ; les hauteurs s'expriment en `z`.
-- `origin` donne la position GPS du point `(0, 0, 0)` : `lat`, `lon`, `alt` et `heading` = cap (degrés, sens horaire depuis le nord vrai) de l'axe local `+y`. Avec `heading: 0`, `+y` pointe au nord ; avec `heading: 90`, `+y` pointe à l'est. Sert à placer les véhicules d'après leur GPS.
-- Les polygones de **pièces** sont la **face intérieure finie** des murs, en **sens trigonométrique (CCW)** — l'ordre est imposé car les ouvertures référencent un index d'arête.
+- **Units: meters. Axes: `x` east, `y` north, `z` up** (Z-up). Polygons are lists of `[x, y]` points in the plane; heights are expressed in `z`.
+- `origin` gives the GPS position of point `(0, 0, 0)`: `lat`, `lon`, `alt`, and `heading` = bearing (degrees, clockwise from true north) of the local `+y` axis. With `heading: 0`, `+y` points north; with `heading: 90`, `+y` points east. Used to place vehicles from their GPS.
+- **Room** polygons are the **finished inner face** of the walls, **counter-clockwise (CCW)** — the order is mandatory because openings reference an edge index.
 
 ## Structure
 
 ```jsonc
 {
   "schemaVersion": 1,
-  "id": "maison", "name": "Ma maison",
+  "id": "house", "name": "My house",
   "origin": { "lat": 47.309343, "lon": 5.045591, "alt": 180, "heading": 15 },
-  "defaults": {                       // tous optionnels
+  "defaults": {                       // all optional
     "levelHeight": 2.6, "slabThickness": 0.25,
     "interiorWallThickness": 0.10, "exteriorWallThickness": 0.30,
     "doorHeight": 2.10, "windowSill": 0.9
   },
-  "levels": [ { "id": "rdc", "name": "Rez-de-chaussée", "elevation": 0.2, "height": 2.6, "outline": [[…]] } ],
-  "rooms": [ /* voir ci-dessous */ ],
-  "site": { "elevation": 0, "terrain": [[…]], "zones": [ { "id": "pelouse", "name": "Pelouse", "kind": "lawn", "polygon": [[…]] } ] },
-  "devices": [ /* voir ci-dessous */ ],
-  "roof": { "type": "gable", "levelId": "etage", "ridgeAxis": "x", "pitch": 35, "overhang": 0.4 }
+  "levels": [ { "id": "ground", "name": "Ground floor", "elevation": 0.2, "height": 2.6, "outline": [[…]] } ],
+  "rooms": [ /* see below */ ],
+  "site": { "elevation": 0, "terrain": [[…]], "zones": [ { "id": "lawn", "name": "Lawn", "kind": "lawn", "polygon": [[…]] } ] },
+  "devices": [ /* see below */ ],
+  "roof": { "type": "gable", "levelId": "upstairs", "ridgeAxis": "x", "pitch": 35, "overhang": 0.4 }
 }
 ```
 
-### Niveaux (`levels`)
+### Levels (`levels`)
 
-- `elevation` : `z` du sol fini (absolu). Placez le rez-de-chaussée **au-dessus** du terrain (`0.2` si le terrain est à `0`) pour éviter que sol et terrain se confondent.
-- `shortName` (optionnel) : libellé court pour l'onglet de niveau (« RDC »).
-- `height` : hauteur sous plafond (défaut `defaults.levelHeight`).
-- `outline` (optionnel) : emprise extérieure, utilisée par le toit. Sinon la boîte englobante des pièces murées agrandie de l'épaisseur extérieure.
-- `roomOrder` (optionnel) : ordre d'affichage des pièces du niveau (ids). Les pièces absentes de la liste suivent par ordre alphabétique. Écrit par le glisser-déposer de la vue Lumières ; supprimez la clé pour revenir à l'ordre alphabétique. Les niveaux, eux, se lisent du plus haut au plus bas dans les listes (les onglets de niveau, eux, montent).
+- `elevation`: `z` of the finished floor (absolute). Put the ground floor **above** the terrain (`0.2` if the terrain is at `0`) so that floor and terrain don't merge.
+- `shortName` (optional): short label for the level tab (“GF”).
+- `height`: ceiling height (default `defaults.levelHeight`).
+- `outline` (optional): outer footprint, used by the roof. Otherwise the bounding box of the walled rooms, enlarged by the exterior wall thickness.
+- `roomOrder` (optional): display order of the level's rooms (ids). Rooms missing from the list follow in alphabetical order. Written by drag and drop in the Lights view; delete the key to go back to alphabetical order. Levels themselves read from top to bottom in lists (the level tabs, on the other hand, go up).
 
-### Pièces (`rooms`)
+### Rooms (`rooms`)
 
 ```jsonc
 {
-  "id": "salon", "levelId": "rdc", "name": "Salon",
-  "polygon": [[3.2, 0], [10, 0], [10, 5], [3.2, 5]],     // CCW, face intérieure
+  "id": "living", "levelId": "ground", "name": "Living room",
+  "polygon": [[3.2, 0], [10, 0], [10, 5], [3.2, 5]],     // CCW, inner face
   "kind": "room",                                        // room | corridor | stairs | garage | terrace | balcony
-  "height": 2.6,                                         // optionnel
-  "walls": [{ "segment": 2, "kind": "none" }],           // surcharges par arête : interior | exterior | none, thickness
+  "height": 2.6,                                         // optional
+  "walls": [{ "segment": 2, "kind": "none" }],           // per-edge overrides: interior | exterior | none, thickness
   "openings": [
-    { "id": "baie", "type": "window", "segment": 0, "offset": 1.5, "width": 2.4, "height": 2.15, "sill": 0.2 }
+    { "id": "bay", "type": "window", "segment": 0, "offset": 1.5, "width": 2.4, "height": 2.15, "sill": 0.2 }
   ],
   "style": { "floor": "wood" }                           // wood | tile | concrete | carpet
 }
 ```
 
-**Murs.** Chaque pièce porte ses murs vers l'extérieur de sa face intérieure. Une arête est classée automatiquement `interior` (une autre pièce murée du même niveau se trouve juste derrière) ou `exterior`, avec l'épaisseur correspondante. Deux pièces adjacentes s'écrivent donc avec un **écart égal à la somme des demi-cloisons** : `0.20 m` avec les défauts (`0.10 + 0.10`). Un espace ouvert (salon/cuisine) se déclare avec `"kind": "none"` sur l'arête commune, des deux côtés. Les coins sont mitrés automatiquement ; `terrace` et `balcony` n'ont pas de murs.
+**Walls.** Each room carries its walls outward from its inner face. An edge is automatically classified as `interior` (another walled room on the same level lies right behind it) or `exterior`, with the matching thickness. Two adjacent rooms are therefore written with a **gap equal to the sum of the half-partitions**: `0.20 m` with the defaults (`0.10 + 0.10`). An open space (living room/kitchen) is declared with `"kind": "none"` on the shared edge, on both sides. Corners are mitered automatically; `terrace` and `balcony` have no walls.
 
-**Ouvertures.** Ancrées sur l'arête `polygon[segment] → polygon[segment+1]` : `offset` est la distance depuis le premier sommet jusqu'au bord de l'ouverture, `width`/`height` ses dimensions, `sill` la hauteur d'allège (défaut `0` pour `door`/`passage`/`garage`, `defaults.windowSill` pour `window`). Une porte intérieure déclarée dans une pièce est **percée automatiquement dans le mur de la pièce en face** : inutile de la déclarer deux fois. Les fenêtres reçoivent un vitrage translucide ; un appareil de type volet lié à une ouverture (`openingId`) y anime une lame.
+**Openings.** Anchored on the edge `polygon[segment] → polygon[segment+1]`: `offset` is the distance from the first vertex to the edge of the opening, `width`/`height` its dimensions, `sill` the sill height (default `0` for `door`/`passage`/`garage`, `defaults.windowSill` for `window`). An interior door declared in one room is **cut automatically through the wall of the room opposite**: no need to declare it twice. Windows get translucent glazing; a shutter-type device linked to an opening (`openingId`) animates a slat there.
 
-### Jardin (`site`)
+### Garden (`site`)
 
-`terrain` : polygone de la parcelle (n'a pas besoin d'être CCW). `zones` : surfaces colorées (`lawn`, `terrace`, `driveway`, `path`, `pool`, `bed`, `other`) qui servent aussi d'ancre aux appareils extérieurs et de cibles de cadrage caméra.
+`terrain`: polygon of the plot (doesn't need to be CCW). `zones`: colored areas (`lawn`, `terrace`, `driveway`, `path`, `pool`, `bed`, `other`) that also serve as anchors for outdoor devices and as camera framing targets.
 
-`relief` (facultatif) : relief du terrain, en écart à `elevation`. `step` = pas de la grille (m), `origin` = coin sud-ouest de la grille (m), `rows` = une chaîne par rangée, du sud au nord, hauteurs en **centimètres entiers** séparées par une espace, d'ouest en est. Absent = terrain plat. Sous les pièces, le terrain reste sous le plancher ; autour d'une piscine, il reste plat. Se modèle depuis l'UI : Réglages → Rendu 3D → « Modeler le terrain ».
+`relief` (optional): terrain relief, as an offset from `elevation`. `step` = grid spacing (m), `origin` = south-west corner of the grid (m), `rows` = one string per row, from south to north, heights in **whole centimetres** separated by a space, from west to east. Absent = flat terrain. Under rooms, the terrain stays below the floor; around a pool, it stays flat. Shaped from the UI: Settings → 3D rendering → “Shape the terrain”.
 
 ```jsonc
 "relief": { "step": 2, "origin": [-28, -40], "rows": ["0 0 12 15", "0 3 20 41"] }
 ```
 
-`garden` (facultatif) : arbres, buissons et pierres, posés sur le terrain et qui en suivent le relief. `kind` = `broadleaf` (feuillu), `conifer`, `palm`, `shrub` (buisson), `rock` (pierre) ou `hedge` (haie) ; `center` = pied (m) ; `height` = hauteur (0,1 à 40 m, la largeur en découle) ; `yaw` = orientation (degrés, facultatif) ; `seed` = forme tirée (facultatif) ; `species` = espèce du catalogue de l'app (`cherry`…, facultatif ; inconnue = forme générique de la famille) ; pour une haie seulement, `length` = longueur du segment (0,5 à 100 m, facultatif, 3 par défaut, le long de l'axe tourné de `yaw`) et `width` = largeur (0,2 à 5 m, facultatif, 0,7 par défaut), `spacing` = espacement de pied à pied entre ses sujets (0,2 à 5 m, facultatif ; absent = automatique, les feuillages se chevauchent). Une haie en L = deux segments. Se pose depuis l'UI : Réglages → Mode édition, puis section « Jardin » de la vue Maison.
+`garden` (optional): trees, shrubs and rocks, placed on the terrain and following its relief. `kind` = `broadleaf`, `conifer`, `palm`, `shrub`, `rock` or `hedge`; `center` = base (m); `height` = height (0.1 to 40 m, the width follows from it); `yaw` = orientation (degrees, optional); `seed` = drawn shape (optional); `species` = species from the app's catalog (`cherry`…, optional; unknown = generic shape of the family); for a hedge only, `length` = length of the segment (0.5 to 100 m, optional, 3 by default, along the axis rotated by `yaw`) and `width` = width (0.2 to 5 m, optional, 0.7 by default), `spacing` = base-to-base spacing between its plants (0.2 to 5 m, optional; absent = automatic, the foliage overlaps). An L-shaped hedge = two segments. Placed from the UI: Settings → Edit mode, then the “Garden” section of the Home view.
 
 ```jsonc
 "garden": [{ "id": "garden.broadleaf-1", "kind": "broadleaf", "center": [4, 19], "height": 7, "yaw": 145, "species": "cherry" }]
 ```
 
-### Appareils (`devices`)
+### Devices (`devices`)
 
 ```jsonc
 {
-  "id": "light.salon", "name": "Plafonnier salon",  // optionnel : absent → le nom du plugin fait foi
-  "deviceId": "hue:6f2c…",              // liaison plugin : "<pluginId>:<externalId>" ; absent → affiché « non lié »
-  "kind": "light",                      // indice si non lié ; sinon le descripteur du plugin fait foi
-  "position": [6.6, 2.5, 2.5],          // x, y absolus ; z RELATIF au sol de l'ancre (niveau ou terrain)
-  "levelId": "rdc", "roomId": "salon",  // ancre intérieure
-  "zoneId": "allee",                    // ou ancre extérieure
-  "openingId": "baie",                  // volets : le marqueur épouse l'ouverture
-  "mount": "ceiling", "yaw": 0          // optionnels (yaw en degrés, 0 = face à +y)
+  "id": "light.living", "name": "Living room ceiling light",  // optional: absent → the plugin's name wins
+  "deviceId": "hue:6f2c…",              // plugin link: "<pluginId>:<externalId>"; absent → shown as “unlinked”
+  "kind": "light",                      // a hint if unlinked; otherwise the plugin's descriptor wins
+  "position": [6.6, 2.5, 2.5],          // absolute x, y; z RELATIVE to the anchor's floor (level or terrain)
+  "levelId": "ground", "roomId": "living",  // indoor anchor
+  "zoneId": "driveway",                 // or outdoor anchor
+  "openingId": "bay",                   // shutters: the marker fits the opening
+  "mount": "ceiling", "yaw": 0          // optional (yaw in degrees, 0 = facing +y)
 }
 ```
 
-Un appareil peut se réduire à sa **liaison** et à sa **position** (`{ id, deviceId, position, roomId, mount }`) : nom, kind et capacités viennent du plugin. Mieux : un appareil de plugin **absent** de ce tableau est placé automatiquement au centre du plafond de la pièce qui porte le nom de sa pièce côté fabricant (pièce Hue) ; l’entrée JSON ne sert donc qu’à **préciser** une position. Une lampe qu’aucune pièce ne réclame reste pilotable depuis la vue Lumières, sans marqueur 3D.
+A device can be reduced to its **link** and its **position** (`{ id, deviceId, position, roomId, mount }`): name, kind and capabilities come from the plugin. Better still: a plugin device **missing** from this array is placed automatically at the center of the ceiling of the room that has the name of its vendor-side room (Hue room); the JSON entry is therefore only needed to **refine** a position. A lamp that no room claims can still be controlled from the Lights view, without a 3D marker.
 
-**Depuis l'UI** : panneau d'un appareil → « Déplacer » → glisser dans la 3D (x;y), préréglages et curseur pour la hauteur. Chaque dépôt est envoyé au serveur (`PUT /api/house/devices/:id`, corps `{ position, roomId?, mount?, deviceId? }`) qui **réécrit le fichier** (`KASBAH_HOUSE_FILE`) après validation complète, garde la version précédente en `<fichier>.bak` et pousse la maison aux écrans connectés (message WebSocket `house`). Un appareil auto-placé y gagne son entrée minimale ; le fichier est reformaté (`JSON.stringify` à deux espaces), l'ordre des clés est conservé. Volets (ancrés à une ouverture) et tondeuse ne se déplacent pas ainsi.
+**From the UI**: a device's panel → “Edit” → drag in 3D (x;y), presets and a slider for the height. Each drop is sent to the server (`PUT /api/house/devices/:id`, body `{ position, roomId?, mount?, deviceId? }`), which **rewrites the file** (`KASBAH_HOUSE_FILE`) after full validation, keeps the previous version as `<file>.bak` and pushes the house to connected screens (`house` WebSocket message). An auto-placed device gains its minimal entry there; the file is reformatted (`JSON.stringify` with two spaces), and key order is preserved. Shutters (anchored to an opening) and the mower can't be moved this way.
 
-**Véhicule en LOA ou LLD** : `lease` donne le contrat, pour suivre le kilométrage contre le forfait. `start` et `end` sont au format `AAAA-MM-JJ`, `km` est le forfait du contrat **entier** et `startKm` (facultatif, 0 par défaut) le compteur à la remise des clés. La carte du véhicule affiche alors les km parcourus face aux km autorisés à ce jour, au prorata du temps écoulé, et une projection à l'échéance. Aucun constructeur ne publie le contrat de financement : il se saisit depuis la carte (« Modifier » → LOA / LLD). Pour une Renault, « Chercher chez Renault » propose le contrat d'entretien plafonné en km du compte, souvent calé sur la LOA.
+**Leased vehicle**: `lease` holds the contract, to track mileage against the allowance. `start` and `end` are in `YYYY-MM-DD` format, `km` is the allowance for the **whole** contract and `startKm` (optional, 0 by default) the odometer reading at handover. The vehicle card then shows the km driven against the km allowed to date, pro rata of the elapsed time, and a projection to the end date. No manufacturer publishes the financing contract: it is entered from the card (“Edit” → Lease). For a Renault, “Look up at Renault” suggests the account's mileage-capped maintenance contract, which is often aligned with the lease.
 
 ```jsonc
 { "id": "vehicle.r5", "deviceId": "renault:VF1…", "lease": { "start": "2025-03-01", "end": "2029-03-31", "km": 40000, "startKm": 12 } }
 ```
 
-Les ids des appareils du plugin `mock` sont stables (`mock:light-living`, `mock:cover-kitchen`, `mock:energy-site`, `mock:vehicle-tesla`…) ; les ids Hue sont les UUID des ressources `light` du bridge (visibles dans `GET /api/devices`).
+Device ids from the `mock` plugin are stable (`mock:light-living`, `mock:cover-kitchen`, `mock:energy-site`, `mock:vehicle-tesla`…); Hue ids are the UUIDs of the bridge's `light` resources (visible in `GET /api/devices`).
 
-### Scènes
+### Scenes
 
-Il n'y a plus de section `scenes` (retirée le 2026-10-06 : plus rien ne l'exécutait). Une clé `scenes` laissée dans un ancien fichier est ignorée au chargement, puis disparaît à la prochaine écriture du fichier par le serveur. Les ambiances viennent des plugins (Hue) et se rappellent depuis le panneau Maison ou une automatisation.
+There is no `scenes` section any more (removed on 2026-10-06: nothing executed it any longer). A `scenes` key left in an old file is ignored on load, then disappears the next time the server writes the file. Light scenes come from the plugins (Hue) and are recalled from the Home panel or an automation.
 
-### Toit (`roof`)
+### Roof (`roof`)
 
-`flat` (dalle sur l'emprise) ou `gable` (deux pentes) ; `pitch` en degrés, `ridgeAxis` (`x` ou `y`, défaut : le côté le plus long), `overhang` en mètres. Masqué dès qu'un niveau est mis au point.
+`flat` (a slab over the footprint) or `gable` (two slopes); `pitch` in degrees, `ridgeAxis` (`x` or `y`, default: the longer side), `overhang` in meters. Hidden as soon as a level is focused.
 
-## Relevé métré (`meta.survey`)
+## Measured survey (`meta.survey`)
 
-Une maison réelle se mesure **à l'intérieur des pièces** : chaque cloison mitoyenne s'y retrouve réduite à une seule ligne partagée, alors que les polygones doivent être écartés de la somme des demi-cloisons (cf. **Murs** ci-dessus). Plutôt que de corriger les cotes à la main, les mesures brutes sont conservées dans `meta` — que le schéma laisse libre — et les `polygon` en sont **dérivés** par un script.
+A real house is measured **inside the rooms**: each shared partition is reduced to a single shared line there, whereas the polygons must be spaced apart by the sum of the half-partitions (see **Walls** above). Rather than correcting the measurements by hand, the raw measurements are kept in `meta` — which the schema leaves free — and the `polygon`s are **derived** from them by a script.
 
 ```jsonc
 {
   "meta": {
     "survey": {
-      "unit": "cm",                        // cm | mm | absent → mètres
-      "frame": "0;0 = coin sud-ouest du plan, +x est, +y nord",
-      "partition": 0.08,                   // cloison COMPLÈTE entre deux pièces murées (m)
-      "levelOffsets": { "rdc": [0, 92] }   // correction de repère d'un niveau, dans l'unité du relevé
+      "unit": "cm",                        // cm | mm | absent → meters
+      "frame": "0;0 = south-west corner of the plan, +x east, +y north",
+      "partition": 0.08,                   // FULL partition between two walled rooms (m)
+      "levelOffsets": { "ground": [0, 92] }   // frame correction for a level, in the survey's unit
     }
   },
   "rooms": [{
-    "id": "chambre", "levelId": "etage", "name": "Chambre",
-    "polygon": [[…]],                                                    // DÉRIVÉ — ne pas éditer
-    "walls": [{ "segment": 2, "kind": "interior", "thickness": 0.04 }],  // DÉRIVÉ aussi
+    "id": "bedroom", "levelId": "upstairs", "name": "Bedroom",
+    "polygon": [[…]],                                                    // DERIVED — do not edit
+    "walls": [{ "segment": 2, "kind": "interior", "thickness": 0.04 }],  // DERIVED as well
     "meta": {
       "survey": {
-        "points": [[0, 0], [360, 0], [360, 120], [360, 300], [0, 300]],  // les cotes relevées, jamais retouchées
-        "note": "point 360;120 ajouté (colinéaire) : le mur est est mitoyen au-delà, en façade en dessous"
+        "points": [[0, 0], [360, 0], [360, 120], [360, 300], [0, 300]],  // the measurements as taken, never touched
+        "note": "point 360;120 added (collinear): the east wall is shared beyond it, a facade below it"
       }
     }
   }]
 }
 ```
 
-Régénérer après toute modification d'un relevé :
+Regenerate after any change to a survey:
 
 ```bash
-node house/fit-survey.mjs house/ma-maison.json           # réécrit polygon, walls et outline
-node house/fit-survey.mjs house/ma-maison.json --check   # vérifie sans écrire (sortie 1 si divergence)
+node house/fit-survey.mjs house/my-house.json           # rewrites polygon, walls and outline
+node house/fit-survey.mjs house/my-house.json --check   # checks without writing (exit 1 on divergence)
 ```
 
-Le script rentre chaque face de l'épaisseur que le voisin pousse dans elle, laisse les façades en place (l'emprise du relevé est donc conservée), pose `kind` et `thickness` sur les arêtes mitoyennes, et recalcule l'`outline` du niveau sur ses pièces murées. Cinq points à connaître :
+The script pulls each face in by the thickness its neighbor pushes into it, leaves the facades where they are (so the survey's footprint is preserved), sets `kind` and `thickness` on shared edges, and recomputes the level's `outline` from its walled rooms. Five things to know:
 
-- **`partition` est indépendant de `defaults.interiorWallThickness`** : le défaut global continue de servir aux niveaux non relevés ; un relevé peut porter des cloisons plus fines sans les déplacer.
-- **`levelOffsets`** corrige le **repère** d'une campagne de relevé dont le `0;0` ne tombe pas sur celui des autres niveaux : c'est une translation appliquée aux points bruts, donc un seul nombre à ajuster, et les cotes restent intactes.
-- **Une arête ne porte qu'une nature et qu'une épaisseur.** Une arête à cheval — mitoyenne sur une partie, en façade sur le reste (décroché de façade) — doit être coupée en insérant un point **colinéaire** dans `points` : la pièce mesurée est inchangée et chaque portion reçoit son mur. Le script signale les arêtes concernées.
-- **Une pièce sans mur** (`terrace`, `balcony` : terrasse, balcon, sas ouvert) ne crée pas de mitoyenneté : la pièce murée d'en face garde sa façade, et c'est la pièce sans mur qui l'absorbe. Son `polygon` est donc son **sol fini** — le décroché brut moins les façades qui le bordent.
-- **Les ouvertures sont ancrées sur un index d'arête** : elles sont à revoir dès qu'un relevé change un polygone. Idem pour la `position` des appareils, qui peut se retrouver hors de sa pièce.
+- **`partition` is independent of `defaults.interiorWallThickness`**: the global default still applies to levels without a survey; a survey can carry thinner partitions without moving them.
+- **`levelOffsets`** corrects the **frame** of a survey campaign whose `0;0` doesn't match the other levels': it is a translation applied to the raw points, so there is a single number to adjust, and the measurements stay intact.
+- **An edge carries only one nature and one thickness.** A straddling edge — shared over part of its length, facade over the rest (a step in the facade) — must be split by inserting a **collinear** point into `points`: the measured room is unchanged and each portion gets its own wall. The script reports the edges concerned.
+- **A room without walls** (`terrace`, `balcony`: terrace, balcony, open porch) doesn't create a shared wall: the walled room opposite keeps its facade, and it is the room without walls that absorbs it. Its `polygon` is therefore its **finished floor** — the raw step minus the facades that border it.
+- **Openings are anchored on an edge index**: they need reviewing as soon as a survey changes a polygon. The same goes for device `position`s, which may end up outside their room.
 
-Enfin, `origin` attend le GPS du `0;0` du relevé. Si le seul point connu tombe ailleurs (marqueur d'adresse, repère d'un service de cartographie), le **ramener** au `0;0` plutôt que de le recopier tel quel ; et `heading` se mesure sur les arêtes du bâtiment, un relevé étant aligné sur les murs et non sur le nord. Les deux s'affinent ensuite sur la photo aérienne : **Réglages → Origine GPS → « Caler sur la photo »** fait glisser et tourner la maison (toit, pièces du rez-de-chaussée, pelouse d'une tondeuse) par pas de 0,1 à 2 m. Le `outline` d'un niveau sert au toit : sur un rez-de-chaussée, ce peut être une enveloppe plus grande que la maison, à ne pas caler sur la photo.
+Finally, `origin` expects the GPS position of the survey's `0;0`. If the only known point lies elsewhere (an address marker, a mapping service's reference point), **bring it back** to `0;0` rather than copying it as is; and `heading` is measured on the building's edges, since a survey is aligned on the walls, not on north. Both are then refined on the aerial photo: **Settings → GPS origin → “Align on the photo”** slides and rotates the house (roof, ground-floor rooms, a mower's lawn) in steps of 0.1 to 2 m. A level's `outline` is used by the roof: on a ground floor, it can be an envelope larger than the house, which should not be aligned on the photo.
 
-## Exemple complet
+## Complete example
 
-Trois propriétés de démonstration, chacune liée appareil par appareil à son parc simulé :
+Three demo properties, each linked device by device to its simulated device set:
 
-- [house/demos/tilleuls.json](../house/demos/tilleuls.json) — maison R+1 à toit à deux pans : relief, jardin, places de parking (garage, allée, bases des robots), terrasse d'étage sur le garage, fenêtre de toit, finitions, champ de panneaux en toiture ;
-- [house/demos/embruns.json](../house/demos/embruns.json) — plain-pied en L à toit plat : pièces non rectangulaires ouvertes l'une sur l'autre, `outline` en L, puits de lumière, deux champs sur châssis (`tilt`) ;
-- [house/demos/belvedere.json](../house/demos/belvedere.json) — appartement en étage, balcon, sans toit.
+- [house/demos/tilleuls.json](../house/demos/tilleuls.json) — two-story house with a gable roof: relief, garden, parking spots (garage, driveway, robot docks), upstairs terrace over the garage, roof window, finishes, roof-mounted panel array;
+- [house/demos/embruns.json](../house/demos/embruns.json) — L-shaped single-story house with a flat roof: non-rectangular rooms open onto each other, L-shaped `outline`, skylights, two arrays on frames (`tilt`);
+- [house/demos/belvedere.json](../house/demos/belvedere.json) — upper-floor apartment, balcony, no roof.
 
-`meta.demo` (`{ "scenario": "tilleuls", "kind": "house" }`) marque une propriété de démonstration : le scénario du plugin `mock` qui la peuple et sa nature (`house` ou `apartment`). Un serveur lancé sans `KASBAH_HOUSE_FILE` les propose toutes.
+`meta.demo` (`{ "scenario": "tilleuls", "kind": "house" }`) marks a demo property: the `mock` plugin scenario that populates it and its nature (`house` or `apartment`). A server started without `KASBAH_HOUSE_FILE` offers them all.
 
-[house/demo-house.json](../house/demo-house.json) reste la maison des **tests** (deux niveaux, sept pièces, scénario `default`).
+[house/demo-house.json](../house/demo-house.json) remains the **test** house (two levels, seven rooms, `default` scenario).
 
-## Vérifier un fichier
+## Checking a file
 
 ```bash
-KASBAH_HOUSE_FILE=chemin/vers/ma-maison.json npm run dev -w @kasbah/server
+KASBAH_HOUSE_FILE=path/to/my-house.json npm run dev -w @kasbah/server
 ```
 
-Le serveur refuse de démarrer sur un fichier invalide et affiche chaque problème avec son chemin ; `GET /api/house/warnings` liste les avertissements.
+The server refuses to start on an invalid file and prints each problem with its path; `GET /api/house/warnings` lists the warnings.

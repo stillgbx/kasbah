@@ -1,77 +1,77 @@
-# Transcription (la voix de l'assistant)
+# Transcription (the assistant's voice)
 
 | | |
 |---|---|
 | **Id** | `transcription` |
-| **Rôle** | dicter une instruction à l'assistant au lieu de la taper ; en option, entendre sa réponse à voix haute |
-| **Connexion** | un moteur de transcription par la route compatible OpenAI `/v1/audio/transcriptions` : **VoiceStudio** en local, **vLLM** (Voxtral Realtime) sur un serveur, ou l'**API de Mistral** |
-| **Compte** | aucun, sauf la clé de l'API pour Mistral ; la voix des réponses se choisit **par compte connecté** |
-| **Vues** | palette Ctrl+K et barre de la vue Maison (bouton micro), Réglages → Plugins |
+| **Role** | dictate an instruction to the assistant instead of typing it; optionally, hear its answer read aloud |
+| **Connection** | a transcription engine through the OpenAI-compatible `/v1/audio/transcriptions` route: **VoiceStudio** locally, **vLLM** (Voxtral Realtime) on a server, or the **Mistral API** |
+| **Account** | none, except the API key for Mistral; the answers' voice is chosen **per signed-in account** |
+| **Views** | Ctrl+K palette and Home view bar (microphone button), Settings → Plugins |
 
-## Ce que fait le plugin
+## What the plugin does
 
-- **Dicter** : un bouton micro au bout du champ de la palette Ctrl+K et de la barre de la vue Maison. Appuyer pour parler, appuyer pour finir (arrêt seul au bout de 15 s) : le texte entendu part **aussitôt** à l'assistant, comme une instruction tapée puis envoyée.
-- **Envoi à la fin de la phrase** (interrupteur « Envoyer à la fin de la phrase », allumé par défaut) : l'écoute s'arrête seule après une seconde de silence, sans appuyer sur Terminer ; le bouton reste pour couper plus tôt. Si personne ne parle dans les 5 premières secondes, rien n'est envoyé. Une musique forte peut empêcher la fin d'être vue : le bouton reprend alors la main.
-- **Vocabulaire de la maison** : les noms des pièces, zones, ambiances et appareils sont envoyés au moteur, qui reconnaît ainsi « Spots cuisine » plutôt qu'un mot approchant.
-- **Réponses parlées** (interrupteur « Lire les réponses à voix haute », éteint par défaut) : la réponse de l'assistant à une instruction **dictée** est dite à voix haute, sur l'appareil qui a parlé (pas sur les enceintes). Une instruction tapée garde une réponse écrite.
-- **Prononciation** : avant la synthèse, la réponse est réécrite pour être dite en entier. « 8h00 » devient « 8 heures », « 21 °C » devient « 21 degrés », « 80 % » devient « 80 pour cent », « RDC » devient « rez-de-chaussée ». L'abréviation de chaque niveau de la maison est remplacée par son nom. Le texte affiché ne change pas. Les correspondances sont dans `apps/server/src/plugins/transcription/spoken-rules.ts`, une table par langue (français et anglais) : ajouter un remplacement, c'est y ajouter une ligne.
-- **Voix des réponses** : la fiche du plugin propose les voix créées chez le fournisseur (les profils de VoiceStudio). Voir plus bas.
-- **VoiceStudio sans son interface** (interrupteur « Lancer VoiceStudio sans son interface », éteint par défaut) : Kasbah lance le moteur de VoiceStudio à son démarrage et l'arrête avec lui, sans ouvrir l'application.
+- **Dictate**: a microphone button at the end of the Ctrl+K palette field and of the Home view bar. Press to speak, press to finish (stops by itself after 15 s): the text heard is sent **immediately** to the assistant, like an instruction typed and then submitted.
+- **Send at the end of the sentence** ("Send at the end of the sentence" switch, on by default): listening stops by itself after one second of silence, without pressing Finish; the button remains to cut it short. If nobody speaks within the first 5 seconds, nothing is sent. Loud music can prevent the end from being detected: the button then takes over.
+- **House vocabulary**: the names of rooms, zones, light scenes and devices are sent to the engine, which therefore recognizes "Kitchen spots" rather than a similar-sounding word.
+- **Spoken answers** ("Read answers aloud" switch, off by default): the assistant's answer to a **dictated** instruction is spoken aloud, on the device that spoke (not on the speakers). A typed instruction keeps a written answer.
+- **Pronunciation**: before synthesis, the answer is rewritten so that it can be spoken in full. In French, "8h00" becomes "8 heures", "21 °C" becomes "21 degrés", "80 %" becomes "80 pour cent", "RDC" becomes "rez-de-chaussée". The abbreviation of each level of the house is replaced by its name. The displayed text does not change. The mappings are in `apps/server/src/plugins/transcription/spoken-rules.ts`, one table per language (French and English): adding a replacement means adding a line there.
+- **Answers' voice**: the plugin's card offers the voices created at the provider (VoiceStudio's profiles). See below.
+- **VoiceStudio without its window** ("Start VoiceStudio without its window" switch, off by default): Kasbah starts VoiceStudio's engine at its own startup and stops it with itself, without opening the application.
 
-Le plugin ne publie aucun appareil : il n'apparaît pas dans la maison 3D. Le micro ne se montre que si le plugin tourne et sait où envoyer l'audio.
+The plugin publishes no device: it does not appear in the 3D house. The microphone only shows if the plugin is running and knows where to send the audio.
 
-## La voix des réponses, par compte
+## The answers' voice, per account
 
-Dans **Réglages → Plugins → transcription**, la liste « Voix des réponses parlées » :
+In **Settings → Plugins → transcription**, the "Spoken answers voice" list:
 
-- **sur le réseau local** (sans connexion), règle la **voix de la maison** ; « Voix par défaut » revient à `TTS_VOICE` ;
-- **connecté** (adresse publique), règle la voix **de votre compte seulement**. La première option, « Voix de la maison », veut dire « pas de choix personnel » : la voix de la maison sert, et suit ses changements.
+- **on the local network** (not signed in), it sets the **house voice**; "Default voice" goes back to `TTS_VOICE`;
+- **signed in** (public address), it sets the voice **of your account only**. The first option, "House voice", means "no personal choice": the house voice is used, and follows its changes.
 
-À chaque réponse, Kasbah prend la voix du compte qui a parlé, sinon celle de la maison, sinon `TTS_VOICE`. Le choix vaut dès la réponse suivante, sans redémarrer. Un compte connecté ne change pas la voix de la maison ; une voix supprimée chez le fournisseur reste affichée (« introuvable chez le fournisseur ») jusqu'à ce qu'on en choisisse une autre.
+For each answer, Kasbah takes the voice of the account that spoke, otherwise the house's, otherwise `TTS_VOICE`. The choice applies from the next answer, without a restart. A signed-in account does not change the house voice; a voice deleted at the provider stays displayed ("not found at the provider") until another is chosen.
 
-## Mise en route
+## Setup
 
-### VoiceStudio (par défaut, sur un PC Windows)
+### VoiceStudio (default, on a Windows PC)
 
-1. Installer [VoiceStudio](https://voicestudio.sh/), choisir un moteur de transcription Whisper et vérifier qu'il transcrit le français. Pour les réponses parlées, un moteur de synthèse (OmniVoice) ; les voix personnelles se créent dans l'application.
-2. Dans `apps/server/.env` : `STT_PROVIDER=voicestudio` et `STT_URL=http://127.0.0.1:3900` (ou l'adresse du PC qui le fait tourner).
-3. Cocher **transcription** dans **Réglages → Plugins**. Allumer au besoin les réponses parlées, et le lancement de VoiceStudio sans son interface (seulement si `STT_URL` est sur la machine du serveur).
+1. Install [VoiceStudio](https://voicestudio.sh/), choose a Whisper transcription engine and check that it transcribes French. For spoken answers, a synthesis engine (OmniVoice); personal voices are created in the application.
+2. In `apps/server/.env`: `STT_PROVIDER=voicestudio` and `STT_URL=http://127.0.0.1:3900` (or the address of the PC running it).
+3. Tick **transcription** in **Settings → Plugins**. Turn on spoken answers if wanted, and starting VoiceStudio without its window (only if `STT_URL` is on the server's machine).
 
 ### vLLM (Voxtral Realtime)
 
-`STT_PROVIDER=vllm` (et `STT_URL` si vLLM n'écoute pas sur `http://localhost:8000`). Il faut 16 Go de GPU et Linux (WSL2 sous Windows) : la recette est dans le wiki.
+`STT_PROVIDER=vllm` (and `STT_URL` if vLLM does not listen on `http://localhost:8000`). It needs 16 GB of GPU memory and Linux (WSL2 on Windows): the recipe is in the wiki.
 
-### API Mistral
+### Mistral API
 
-`STT_PROVIDER=mistral` et `STT_API_KEY=<clé de console.mistral.ai>`. Aucun GPU local.
+`STT_PROVIDER=mistral` and `STT_API_KEY=<key from console.mistral.ai>`. No local GPU.
 
-### Le micro sur le réseau local
+### The microphone on the local network
 
-Le navigateur **refuse le micro** sur une adresse `http://` qui n'est pas `localhost`. Deux voies : passer par l'adresse publique (HTTPS), ou autoriser l'adresse locale dans Chrome sur chaque appareil (`chrome://flags/#unsafely-treat-insecure-origin-as-secure`, y saisir par exemple `http://192.168.1.90:8787`, puis **Relaunch**). Rien d'équivalent sur iPhone et iPad : adresse publique.
+The browser **refuses the microphone** on an `http://` address that is not `localhost`. Two routes: go through the public address (HTTPS), or allow the local address in Chrome on each device (`chrome://flags/#unsafely-treat-insecure-origin-as-secure`, enter for example `http://192.168.1.90:8787`, then **Relaunch**). There is no equivalent on iPhone and iPad: public address.
 
 ## Configuration (`apps/server/.env`)
 
-| Variable | Défaut | Rôle |
+| Variable | Default | Purpose |
 |---|---|---|
-| `STT_PROVIDER` | `voicestudio` | `voicestudio`, `vllm` ou `mistral` |
-| `STT_URL` | selon le fournisseur (aucune pour VoiceStudio) | Racine du serveur, sans `/v1` |
-| `STT_MODEL` | selon le fournisseur (`whisper-1` pour VoiceStudio) | Modèle de transcription |
-| `STT_API_KEY` | — | Clé du fournisseur, obligatoire pour Mistral |
-| `STT_LANGUAGE` | `fr` | Langue parlée (pas de détection) ; choisit aussi la table de prononciation des réponses |
-| `TTS_MODEL` | `tts-1` | Modèle de synthèse (`tts-1` = le moteur actif de VoiceStudio) |
-| `TTS_VOICE` | `default` | Voix des réponses quand ni la maison ni le compte n'en ont choisi une |
-| `VOICESTUDIO_DIR` | celui que l'application note dans `%APPDATA%` | Runtime de VoiceStudio, pour le lancement sans interface |
+| `STT_PROVIDER` | `voicestudio` | `voicestudio`, `vllm` or `mistral` |
+| `STT_URL` | depends on the provider (none for VoiceStudio) | Root of the server, without `/v1` |
+| `STT_MODEL` | depends on the provider (`whisper-1` for VoiceStudio) | Transcription model |
+| `STT_API_KEY` | — | Provider key, required for Mistral |
+| `STT_LANGUAGE` | `fr` | Spoken language (no detection); also selects the pronunciation table for answers |
+| `TTS_MODEL` | `tts-1` | Synthesis model (`tts-1` = VoiceStudio's active engine) |
+| `TTS_VOICE` | `default` | Voice of the answers when neither the house nor the account has chosen one |
+| `VOICESTUDIO_DIR` | the one the application records in `%APPDATA%` | VoiceStudio runtime, for starting without its window |
 
-Les choix de voix sont gardés par le serveur : `apps/server/.state/transcription.json` pour la maison, le dossier d'état de chaque compte pour le sien.
+Voice choices are kept by the server: `apps/server/.state/transcription.json` for the house, each account's state folder for its own.
 
-## Limites
+## Limitations
 
-- Une instruction dure **15 s** au plus ; une réponse dite, 1 000 caractères.
-- La prononciation suit `STT_LANGUAGE`, pas la langue de chaque réponse : une langue sans table passe telle quelle (seules les abréviations des niveaux sont remplacées).
-- Réponses parlées et liste des voix essayées avec VoiceStudio seulement (ni vLLM ni Mistral).
-- Tout redémarrage du plugin (y compris basculer un de ses interrupteurs) recharge VoiceStudio lancé sans interface (environ 10 s).
-- Ne pas ouvrir l'application VoiceStudio pendant que Kasbah tient son port : éteindre l'interrupteur d'abord.
+- An instruction lasts **15 s** at most; a spoken answer, 1,000 characters.
+- Pronunciation follows `STT_LANGUAGE`, not the language of each answer: a language with no table goes through as is (only the level abbreviations are replaced).
+- Spoken answers and the voice list have only been tried with VoiceStudio (neither vLLM nor Mistral).
+- Any restart of the plugin (including flipping one of its switches) reloads the VoiceStudio started without its window (about 10 s).
+- Do not open the VoiceStudio application while Kasbah holds its port: turn the switch off first.
 
-## Pour aller plus loin
+## Further reading
 
-Fonctionnement interne, routes, mesures et pièges : [wiki, Transcription](../../doc/3_plugins/3_25_transcription.md) ; l'assistant : [wiki, assistant](../../doc/1_architecture/1_9_assistant.md).
+Internals, routes, measurements and pitfalls: [wiki, Transcription](../../doc/3_plugins/3_25_transcription.md) (in French); the assistant: [wiki, assistant](../../doc/1_architecture/1_9_assistant.md) (in French).

@@ -3,60 +3,60 @@
 | | |
 |---|---|
 | **Id** | `melcloud` |
-| **Appareils** | une zone de chauffage (`climate`) par zone de la pompe à chaleur, en lecture seule |
-| **Connexion** | **cloud, non officielle** : l'API de l'application mobile MELCloud (le module Wi-Fi d'une Ecodan ne parle qu'à ce cloud) |
-| **Compte** | identifiant et mot de passe du compte MELCloud, saisis une seule fois dans Réglages ; seule une clé de session est gardée |
-| **Vues** | Chauffage, Maison (panneau pièce), Réglages → Plugins |
+| **Devices** | one heating zone (`climate`) per heat pump zone, read-only |
+| **Connection** | **cloud, unofficial**: the MELCloud mobile app API (an Ecodan's Wi-Fi module only talks to this cloud) |
+| **Account** | MELCloud account e-mail and password, entered once in Settings; only a session key is kept |
+| **Views** | Heating, Home (room panel), Settings → Plugins |
 
-![Vue Chauffage](../screenshots/heating.webp)
+![Heating view](../screenshots/heating.webp)
 
-*Capture de la démonstration (simulation, aucun appareil réel).*
+*Screenshot of the demo (simulation, no real device).*
 
-## Ce que fait le plugin
+## What the plugin does
 
-- **Une zone de chauffage = un appareil** : température mesurée, et consigne affichée. La machine est « allumée » presque toute l'année ; l'interface distingue ce qui est allumé de ce qui chauffe vraiment.
-- **Vue Chauffage** : l'état de la machine (en marche, en veille, injoignable), dégivrage, appoint électrique, circulateurs, vanne 3 voies, températures de départ, de retour et extérieure, demande, erreur éventuelle, et l'heure de la dernière remontée.
-- **Historique de fonctionnement** sur les dernières 48 heures (quand la machine a chauffé, dégivré, sollicité l'appoint, face à quelle température extérieure). Il se construit au fil des lectures faites par Kasbah, une semaine au plus : il est vide au départ.
-- **Placement** : chaque zone se place dans la maison comme les autres appareils, par le fichier de la maison.
+- **One heating zone = one device**: measured temperature, and displayed setpoint. The unit is "on" almost all year round; the interface tells apart what is switched on from what is actually heating.
+- **Heating view**: the unit's state (running, standby, unreachable), defrost, electric backup heater, circulation pumps, 3-way valve, flow, return and outdoor temperatures, demand, any error, and the time of the last report.
+- **Operating history** over the last 48 hours (when the unit heated, defrosted, called on the backup heater, and at what outdoor temperature). It is built up from the readings Kasbah takes, one week at most: it starts out empty.
+- **Placement**: each zone is placed in the house like the other devices, through the house file.
 
-Ce que le plugin ne fait pas : voir Limites.
+What the plugin does not do: see Limitations.
 
-## Connexion
+## Connection
 
-Le serveur Kasbah interroge le cloud de Mitsubishi à intervalle régulier (une lecture toutes les 2 minutes par défaut, un seul appel pour tout le compte). Rien ne passe par le réseau local. Cette API n'est pas publiée par Mitsubishi pour les particuliers : c'est celle de l'application, avec le risque qu'elle change sans préavis.
+The Kasbah server polls Mitsubishi's cloud at regular intervals (one reading every 2 minutes by default, a single call for the whole account). Nothing goes through the local network. This API is not published by Mitsubishi for consumers: it is the app's API, with the risk that it changes without notice.
 
-Il n'y a pas de connexion déléguée (OAuth). Le mot de passe traverse le serveur **une seule fois**, il n'est ni écrit ni journalisé ; MELCloud rend en échange une clé de session, seule conservée, dans `apps/server/.state/melcloud-session.json`.
+There is no delegated sign-in (OAuth). The password passes through the server **only once**, and is neither written nor logged; in exchange MELCloud returns a session key, the only thing kept, in `apps/server/.state/melcloud-session.json`.
 
-## Mise en route
+## Setup
 
-1. Cocher **Melcloud** dans **Réglages → Plugins**.
-2. Dans la section Mitsubishi MELCloud de Réglages → Plugins : saisir l'**adresse e-mail MELCloud** et le **mot de passe**, puis **Lier le compte**.
-3. La carte affiche le nombre de machines et de zones de chauffage publiées, et les zones apparaissent aussitôt dans la vue Chauffage.
-4. Rien à recopier dans `.env`. **Délier le compte** supprime la clé de session.
+1. Tick **Melcloud** in **Settings → Plugins**.
+2. In the Mitsubishi MELCloud section of Settings → Plugins: enter the **MELCloud e-mail** and the **password**, then **Link the account**.
+3. The card shows the number of units and heating zones published, and the zones appear immediately in the Heating view.
+4. Nothing to copy into `.env`. **Unlink the account** deletes the session key.
 
-Si MELCloud refuse un jour la clé, le plugin repasse en « Appairage requis » : il suffit de lier le compte à nouveau.
+If MELCloud ever rejects the key, the plugin goes back to "Pairing required": just link the account again.
 
 ## Configuration (`apps/server/.env`)
 
-Tout est facultatif, aucun secret n'y figure.
+Everything is optional, no secret goes in there.
 
-| Variable | Défaut | Rôle |
+| Variable | Default | Purpose |
 |---|---|---|
-| `MELCLOUD_BASE_URL` | `https://app.melcloud.com/Mitsubishi.Wifi.Client` | Point d'entrée de l'API, au cas où le fabricant le déplace |
-| `MELCLOUD_APP_VERSION` | `1.34.12.0` | Version d'application annoncée à la connexion |
-| `MELCLOUD_SESSION_FILE` | `apps/server/.state/melcloud-session.json` | Où garder la clé de session (jamais le mot de passe). Vide : la liaison est perdue à chaque redémarrage |
-| `MELCLOUD_POLL_MS` | `120000` | Cadence de lecture, de 60 000 à 3 600 000 ms |
-| `MELCLOUD_HISTORY_FILE` | `apps/server/.state/melcloud-history.json` | Historique de fonctionnement. Vide : il repart de zéro à chaque redémarrage |
+| `MELCLOUD_BASE_URL` | `https://app.melcloud.com/Mitsubishi.Wifi.Client` | API entry point, in case the vendor moves it |
+| `MELCLOUD_APP_VERSION` | `1.34.12.0` | App version announced at sign-in |
+| `MELCLOUD_SESSION_FILE` | `apps/server/.state/melcloud-session.json` | Where to keep the session key (never the password). Empty: the link is lost on every restart |
+| `MELCLOUD_POLL_MS` | `120000` | Reading pace, from 60,000 to 3,600,000 ms |
+| `MELCLOUD_HISTORY_FILE` | `apps/server/.state/melcloud-history.json` | Operating history. Empty: it starts again from zero on every restart |
 
-## Limites
+## Limitations
 
-- **Lecture seule** : les consignes s'affichent, elles ne se règlent pas encore depuis Kasbah.
-- **Une machine MELCloud n'est pas une pompe à chaleur** : plusieurs pompes en cascade derrière un même régulateur n'apparaissent que comme une seule machine à deux zones.
-- **Pas de ballon d'eau chaude, pas de compteur d'énergie** : MELCloud ne les expose pas pour toutes les installations, rien n'est affiché en kWh.
-- Selon la zone, la température affichée est celle de la pièce ou la température de départ de l'eau (loi d'eau) : l'interface le précise.
-- L'historique ne suit que la première machine du compte.
-- L'indicateur « hors ligne » de MELCloud n'est pas fiable : Kasbah juge la machine joignable tant qu'elle a remonté des données dans les 15 dernières minutes.
+- **Read-only**: setpoints are displayed, they cannot be changed from Kasbah yet.
+- **A MELCloud unit is not a heat pump**: several heat pumps cascaded behind a single controller show up only as one unit with two zones.
+- **No hot water tank, no energy meter**: MELCloud does not expose them for every installation, nothing is shown in kWh.
+- Depending on the zone, the displayed temperature is the room temperature or the water flow temperature (weather compensation): the interface says which.
+- The history only follows the first unit on the account.
+- MELCloud's "offline" indicator is not reliable: Kasbah considers the unit reachable as long as it has reported data in the last 15 minutes.
 
-## Pour aller plus loin
+## Further reading
 
-Fonctionnement interne, pièges de l'API et mappage : [wiki, Mitsubishi MELCloud](../../doc/3_plugins/3_13_mitsubishi-melcloud.md).
+Internals, API pitfalls and mapping: [wiki, Mitsubishi MELCloud](../../doc/3_plugins/3_13_mitsubishi-melcloud.md) (in French).

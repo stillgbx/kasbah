@@ -8,6 +8,10 @@ Maintenu par les skills `wiki-update` / `wiki-query` / `wiki-lint`.
 **Français** (le projet et les commentaires de code sont en français). Le code, les
 identifiants et les chemins restent tels quels.
 
+Depuis le 2026-10-20, la vitrine du dépôt public (`README.md`, `docs/`) et les messages de commit
+sont en anglais ; le wiki, lui, reste en français (`5_setup/5_0_installation-et-scripts.md`,
+mise à jour du 2026-10-20). Il cite les sections de `docs/` et du README sous leur titre anglais.
+
 ## Arborescence
 
 ```
