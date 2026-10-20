@@ -380,3 +380,34 @@ Le dépôt public s'adresse aussi à des lecteurs non francophones. Découpage r
 
 Sources : `README.md`, `README.fr.md`, `docs/`, `.claude/skills/publish/SKILL.md` (§4 et §7),
 `CLAUDE.md` (§5).
+
+
+### Mise à jour 2026-10-20 (suite) — les commentaires du code passent en anglais
+
+La passe unique envisagée plus haut a eu lieu le jour même, à la demande de l'utilisateur : 786
+fichiers de `apps/`, `packages/`, `scripts/`, `tools/` et des configurations racine. Trois choses
+traduites : les commentaires (y compris JSDoc, commentaires HTML des templates, CSS et GLSL dans
+les shaders), les noms de tests (`it` / `describe`) et les messages de journal ou d'erreur destinés
+au développeur. Restent tels quels : les textes d'interface, les descriptions des outils MCP et les
+prompts écrits pour l'assistant, les tables françaises de `spoken-rules.ts`, les données françaises
+que le code lit ou produit, la sortie de `scripts/wiki-*.mjs` (le wiki est en français), et les
+messages d'erreur qu'un test vérifie ou que l'interface peut afficher (validation zod, relevé).
+
+**Garde-fou.** Chaque fichier a été comparé à sa version de `HEAD` par un script jetable (hors
+dépôt) : flux de jetons TypeScript sans commentaires identique (blocs `<script>` des `.vue`
+compris), template et styles identiques une fois les commentaires retirés, directives
+(`eslint-disable…`, `@ts-expect-error`) et balises JSDoc inchangées ; seules les chaînes en premier
+argument de `it`/`describe`, en argument d'un appel de journal ou d'un `new …Error`, ou dont seuls
+les commentaires GLSL diffèrent, ont le droit de changer. Éprouvé sur 15 cas positifs et négatifs
+avant usage. Bilan : 0 échec sur 786 fichiers, 1 696 noms de tests, 56 messages, 9 commentaires de
+shader ; typecheck et lint verts, suite complète verte hormis un échec intermittent
+(`plugins/claude/run.test.ts`, vert relancé seul).
+
+**GitNexus** classe ce diff en risque « critical » (966 flux) : il rattache chaque ligne modifiée au
+symbole qui la contient, commentaires compris. C'est attendu pour une passe de commentaires et ne
+dit rien du comportement ; le garde-fou, lui, le dit.
+
+Les commits de la passe sont listés dans `.git-blame-ignore-revs` (GitHub l'applique seul ; en
+local : `git config blame.ignoreRevsFile .git-blame-ignore-revs`).
+
+Sources : les commits « Code comments: … » du 2026-10-20, `.git-blame-ignore-revs`, `CLAUDE.md` (§5).

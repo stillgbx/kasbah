@@ -71,7 +71,8 @@ No automatic markdown recap files - a response summary is enough. For structured
 
 Language: commit messages, `README.md` and `docs/` are in **English** since 2026-10-20 (the earlier
 history stays in French and is never rewritten); `README.fr.md` mirrors the README; the wiki `doc/`
-stays in French.
+stays in French. Code comments, test names and developer log messages are in English too; UI text,
+assistant prompts and French data the code matches stay as they are.
 
 ## 6. LLM Wiki
 

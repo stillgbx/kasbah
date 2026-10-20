@@ -10,7 +10,8 @@ identifiants et les chemins restent tels quels.
 
 Depuis le 2026-10-20, la vitrine du dépôt public (`README.md`, `docs/`) et les messages de commit
 sont en anglais ; le wiki, lui, reste en français (`5_setup/5_0_installation-et-scripts.md`,
-mise à jour du 2026-10-20). Il cite les sections de `docs/` et du README sous leur titre anglais.
+mise à jour du 2026-10-20). Les commentaires du code sont passés en anglais le même jour : la
+parenthèse ci-dessus ne vaut plus pour eux. Il cite les sections de `docs/` et du README sous leur titre anglais.
 
 ## Arborescence
 

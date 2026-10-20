@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-20] update | Code : commentaires, noms de tests et journaux en anglais
+
+**Trigger** : demande de l'utilisateur, suite de la bascule de langue du dépôt public ; passe unique par workflow (9 lots), contrôlée par un garde-fou de comparaison à `HEAD`.
+
+**Pages modified** :
+- 5_setup/5_0_installation-et-scripts.md - section « les commentaires du code passent en anglais » : périmètre, ce qui reste en français, garde-fou, risque GitNexus attendu, `.git-blame-ignore-revs`
+- SCHEMA.md - la langue des commentaires du code n'est plus le français
+
+**Index** : catalogue inchangé (date déjà au 2026-10-20), index.md régénéré.
+
 ## [2026-10-20] update | Dépôt public : README, docs/ et commits en anglais
 
 **Trigger** : demande de l'utilisateur, le dépôt étant public : garder le français, basculer en anglais, ou tout reprendre ? Retenu : vitrine (`README.md`, `docs/`) et commits en anglais, historique et wiki en français.

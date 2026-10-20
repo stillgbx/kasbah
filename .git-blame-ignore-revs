@@ -1,0 +1,13 @@
+# Comment-only commits, skipped by git blame (GitHub applies this file on its own;
+# locally: git config blame.ignoreRevsFile .git-blame-ignore-revs).
+
+# 2026-10-20: code comments, test names and developer log messages translated to English
+c3e8b0e08d64532d70bd25604496d3b130da4fbf
+ec99d04775d50a77f61a62d201167a1d15fda72f
+d21763475027905091dbfa52baaf7002a3474af5
+25bdcf3de845a090236219373e4cac7fc220ba53
+8dfbcc63710e83304a68a8f8bbc82d6784c49718
+c5e7c238b9e990ca11fa9168c2d0392b855a532d
+cf3ee79e899a10dff16c116c7f27b10b993f4103
+d01e002ecfebdb41e64a5078313249b420d2b38d
+0d0445852a848b8aac836dfde2419c9fbafe7cfb
