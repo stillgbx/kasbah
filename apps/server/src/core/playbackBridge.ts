@@ -1,14 +1,14 @@
 import type { Command, DeviceEntry } from '@kasbah/shared'
 
-// Pont tardif vers le registre / l'hôte, pour les SOURCES musicales (YouTube Music, radios…) : elles
-// n'ont pas d'appareils, ni `PluginContext.execute` vers les lecteurs d'un autre fabricant. `app.ts`
-// branche après `PluginHost` ; les tests injectent directement via deps.
+// Late bridge to the registry / host, for music SOURCES (YouTube Music, radios…): they have no
+// devices, nor `PluginContext.execute` towards another vendor's players. `app.ts` wires it after
+// `PluginHost`; tests inject directly through deps.
 
 export interface PlaybackBridge {
   getDevice(deviceId: string): DeviceEntry | undefined
-  /** Commande à un lecteur d'un autre plugin : `play_url`, `pause` du flux qu'on remplace, `stop` de la source d'un transfert. */
+  /** Command to another plugin's player: `play_url`, `pause` of the stream being replaced, `stop` of a transfer's source. */
   execute(deviceId: string, command: Command): Promise<void>
-  /** Chaque état publié par un lecteur : la file y voit la fin d'un titre. Rend de quoi se désabonner. */
+  /** Every state a player publishes: the queue sees the end of a track there. Returns an unsubscribe. */
   onState(cb: (deviceId: string, state: unknown) => void): () => void
 }
 

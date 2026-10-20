@@ -2,8 +2,8 @@ import type { OAuthClientMetadata, OAuthClientProvider, StoredOAuthClientInforma
 import { auth } from '@modelcontextprotocol/client'
 
 /**
- * Client OAuth de test : le VRAI parcours du SDK client (découverte, enregistrement dynamique, PKCE,
- * échange du code), la page de connexion remplie par un POST au lieu d'un navigateur.
+ * Test OAuth client: the REAL flow of the client SDK (discovery, dynamic registration, PKCE, code
+ * exchange), the sign-in page filled in by a POST instead of a browser.
  */
 export class TestOAuthProvider implements OAuthClientProvider {
   info?: StoredOAuthClientInformation
@@ -34,7 +34,7 @@ export class TestOAuthProvider implements OAuthClientProvider {
   }
 }
 
-/** Se connecte et rend le fournisseur porteur des jetons ; `null` si la connexion est refusée. */
+/** Signs in and returns the provider holding the tokens; `null` if the sign-in is refused. */
 export async function signIn(serverUrl: URL, login: { username: string; password: string }): Promise<TestOAuthProvider | null> {
   const provider = new TestOAuthProvider(login)
   if (await auth(provider, { serverUrl }) !== 'REDIRECT') throw new Error('expected a redirect')

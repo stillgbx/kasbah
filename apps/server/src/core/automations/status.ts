@@ -3,10 +3,10 @@ import type { SceneRegistry } from '../scene-registry'
 import type { EvalContext } from './context'
 import { isComparableField } from './evaluate'
 
-// Santé d'une automatisation, telle que la montre la liste : ce qui lui MANQUE en ce moment (un
-// plugin éteint retire ses appareils, une pièce peut disparaître de la maison, un champ peut ne pas
-// exister pour ce kind) et ce qui ne RÉPOND pas. Rien n'est supprimé : l'appareil revient, la santé
-// redevient bonne.
+// Health of an automation, as the list shows it: what it is MISSING right now (a disabled plugin
+// withdraws its devices, a room can disappear from the house, a field may not exist for this kind)
+// and what does not RESPOND. Nothing is deleted: the device comes back, the health turns good
+// again.
 
 type Structural = Pick<AutomationStatus, 'health' | 'missing' | 'unavailableDeviceIds'>
 type Missing = AutomationStatus['missing'][number]

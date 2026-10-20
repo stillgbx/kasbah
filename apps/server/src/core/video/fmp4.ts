@@ -1,14 +1,14 @@
-// Découpage d'un flux MP4 fragmenté (fMP4) en boîtes, et lecture du strict nécessaire dans `moov`
-// pour annoncer au navigateur les codecs (`video/mp4; codecs="avc1.…, mp4a.40.2"`) — c'est ce que
-// Media Source Extensions exige avant le premier octet. PUR : des Buffers en entrée, des Buffers
-// et des chaînes en sortie ; testable sans ffmpeg.
+// Splitting a fragmented MP4 stream (fMP4) into boxes, and reading the bare minimum in `moov` to
+// announce the codecs to the browser (`video/mp4; codecs="avc1.…, mp4a.40.2"`) — that is what
+// Media Source Extensions demands before the first byte. PURE: Buffers in, Buffers and strings
+// out; testable without ffmpeg.
 
 export interface Mp4Box { type: string; data: Buffer }
 
 /**
- * Accumule des morceaux arbitraires (ce que ffmpeg écrit sur stdout) et rend les boîtes MP4
- * complètes au fil de l'eau. Une boîte = taille sur 4 octets, type sur 4, puis le contenu ; la
- * taille 1 annonce une taille sur 8 octets (jamais vue chez ffmpeg en fragmenté, gérée quand même).
+ * Accumulates arbitrary chunks (what ffmpeg writes to stdout) and returns complete MP4 boxes as
+ * they come. A box = size on 4 bytes, type on 4, then the content; size 1 announces a size on
+ * 8 bytes (never seen from ffmpeg in fragmented mode, handled anyway).
  */
 export class Mp4BoxParser {
   private pending: Buffer = Buffer.alloc(0)
@@ -34,7 +34,7 @@ export class Mp4BoxParser {
   }
 }
 
-/** Première occurrence d'une boîte par son type, à n'importe quelle profondeur (recherche d'octets). */
+/** First occurrence of a box by its type, at any depth (byte search). */
 function findBox(data: Buffer, type: string): Buffer | undefined {
   let from = 0
   for (;;) {
@@ -47,10 +47,10 @@ function findBox(data: Buffer, type: string): Buffer | undefined {
 }
 
 /**
- * Chaîne `codecs` MSE d'après `moov` : le profil H.264 vient de la boîte `avcC` (profil,
- * compatibilité, niveau, en hexadécimal) ; l'audio AAC est annoncé `mp4a.40.2` (AAC-LC, ce que
- * les caméras Nest émettent) dès qu'une entrée `mp4a` existe. Sans `avcC`, on ne sait pas décrire
- * la vidéo : `undefined`, et l'appelant refuse le flux plutôt que d'envoyer une chaîne fausse.
+ * MSE `codecs` string from `moov`: the H.264 profile comes from the `avcC` box (profile,
+ * compatibility, level, in hexadecimal); AAC audio is announced as `mp4a.40.2` (AAC-LC, what Nest
+ * cameras emit) as soon as an `mp4a` entry exists. Without `avcC`, we cannot describe the video:
+ * `undefined`, and the caller refuses the stream rather than sending a wrong string.
  */
 export function mseMimeFromMoov(moov: Buffer): string | undefined {
   const avcC = findBox(moov, 'avcC')

@@ -6,8 +6,8 @@ import { memoryLastPlayed, type LastPlayedStore } from './lastPlayed'
 import { createMusicPlayer } from './player'
 import type { MusicSource } from './sources'
 
-// La dernière écoute survit au redémarrage du serveur : la file et la position atteinte sont gardées,
-// `/last` les rend, `/resume` relance la piste là où elle en était.
+// The last listening survives a server restart: the queue and the position reached are kept,
+// `/last` returns them, `/resume` restarts the track where it was.
 
 const speaker = { id: 'sonos:bureau', kind: 'media_player', capabilities: ['play_url', 'seek'] }
 const source: MusicSource = {
@@ -49,12 +49,12 @@ describe('music last played', () => {
     const first = await boot(store, clock)
     const started = await first.app.inject({ method: 'POST', url: '/api/music/queue', payload: { deviceId: speaker.id, tracks } })
     expect(started.statusCode).toBe(200)
-    // tant que la piste joue, ce n'est pas une « dernière écoute » : la session est vivante
+    // while the track plays, it is not a "last listening": the session is alive
     expect((await first.app.inject({ method: 'GET', url: '/api/music/last' })).json()).toEqual({ last: [] })
 
     clock.t += 10_000
     first.publish({ kind: 'media_player', playback: 'playing', nowPlaying: { title: 'Alpha', positionS: 125.4 } })
-    first.music.stop() // arrêt du serveur : la position la plus récente part sur disque
+    first.music.stop() // server shutdown: the most recent position goes to disk
     await first.app.close()
     await flush()
 

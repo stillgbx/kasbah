@@ -1,14 +1,14 @@
 import { createInterface } from 'node:readline'
 import { deleteUser, mcpAuthConfigSchema, passwordSchema, readUsers, saveUser, userNameSchema } from './auth'
 
-// Comptes du serveur MCP (`mcp-users.json` à côté du `.env` serveur), en secours de Réglages :
-//   npm run mcp-user -w @kasbah/server -- add <nom>      (demande le mot de passe, remplace s'il existe)
-//   npm run mcp-user -w @kasbah/server -- remove <nom>   (coupe aussi ses jetons)
+// MCP server accounts (`mcp-users.json` next to the server `.env`), as a fallback for Settings:
+//   npm run mcp-user -w @kasbah/server -- add <name>      (asks for the password, replaces it if it exists)
+//   npm run mcp-user -w @kasbah/server -- remove <name>   (also cuts its tokens)
 //   npm run mcp-user -w @kasbah/server -- list
 
 /**
- * Lit les mots de passe sans écho. Une seule interface, lue en itérateur : les lignes déjà arrivées
- * (entrée redirigée) attendent la question suivante au lieu d'être perdues.
+ * Reads passwords without echo. A single interface, read as an iterator: lines that already arrived
+ * (redirected input) wait for the next question instead of being lost.
  */
 function prompter() {
   const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: process.stdin.isTTY })

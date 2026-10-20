@@ -9,21 +9,21 @@ import { sendError } from '../http/errors'
 import type { McpAuth } from '../mcp/auth'
 import { currentAssistantEngine, type AssistantEvent, type AssistantUsage } from './engines'
 
-// L'assistant : une instruction en texte, passée au moteur d'un plugin (Claude aujourd'hui), qui
-// agit par les outils du MCP de Kasbah et répond en une phrase. Ce qui est commun à tous les moteurs
-// vit ici (voir `engines.ts`) :
+// The assistant: a text instruction, passed to a plugin's engine (Claude today), which acts through
+// the tools of Kasbah's MCP and answers in one sentence. What is common to all engines lives here
+// (see `engines.ts`):
 //
-// - la route `/ask`, en flux NDJSON, une instruction à la fois par compte ;
-// - le jeton de course MCP au nom du compte qui demande (ses comptes musicaux), révoqué à la fin ;
-// - le prompt système, le délai ;
-// - le journal (`.state/assistant-log.json`, les 200 dernières), lu dans Réglages depuis le réseau
-//   local seulement : on y voit les instructions de chacun.
-// Une instruction = un appel, sans mémoire de la précédente.
+// - the `/ask` route, as an NDJSON stream, one instruction at a time per account;
+// - the per-run MCP token in the name of the requesting account (its music accounts), revoked at the end;
+// - the system prompt, the timeout;
+// - the log (`.state/assistant-log.json`, the last 200), read in Settings from the local network
+//   only: everyone's instructions show there.
+// One instruction = one call, with no memory of the previous one.
 
 const TIMEOUT_MS = 60_000
 const MAX_TEXT = 2000
 
-/** Une instruction du journal : qui, quoi, les outils appelés, la réponse ou l'erreur, et ce qu'elle a consommé. */
+/** A log instruction: who, what, the tools called, the answer or the error, and what it consumed. */
 export interface AssistantLogEntry {
   at: number
   user: string | null
@@ -32,12 +32,12 @@ export interface AssistantLogEntry {
   answer: string
   error: { code: string; message: string } | null
   ms: number
-  /** Absent : moteur qui ne le dit pas, ou entrée d'avant le 2026-10-11. */
+  /** Absent: an engine that does not report it, or an entry from before 2026-10-11. */
   usage?: AssistantUsage
 }
 
 const LOG_MAX = 200
-/** Une entrée d'outil plus grosse (une liste de 100 titres…) est gardée sans ses arguments. */
+/** A larger tool input (a list of 100 tracks…) is kept without its arguments. */
 const LOG_INPUT_MAX = 2000
 const logFile = () => stateFile('assistant-log.json')
 
@@ -48,7 +48,7 @@ async function readLog(file = logFile()): Promise<AssistantLogEntry[]> {
   } catch { return [] }
 }
 
-// Deux comptes peuvent finir en même temps : les ajouts passent l'un après l'autre (lire puis écrire).
+// Two accounts can finish at the same time: appends go one after the other (read then write).
 let logQueue: Promise<void> = Promise.resolve()
 function appendLog(entry: AssistantLogEntry, logger: Logger): Promise<void> {
   const file = logFile()
@@ -61,7 +61,7 @@ function appendLog(entry: AssistantLogEntry, logger: Logger): Promise<void> {
   return logQueue
 }
 
-/** Ajoute un événement à l'entrée du journal en cours. */
+/** Adds an event to the current log entry. */
 function record(entry: AssistantLogEntry, e: AssistantEvent): void {
   if (e.type === 'text') entry.answer = entry.answer ? `${entry.answer}\n${e.text}` : e.text
   else if (e.type === 'tool') entry.tools.push({ id: e.id, name: e.name, input: JSON.stringify(e.input ?? null).length <= LOG_INPUT_MAX ? e.input : null })
@@ -74,11 +74,11 @@ function record(entry: AssistantLogEntry, e: AssistantEvent): void {
 
 export interface AssistantDeps {
   auth: Pick<McpAuth, 'runToken'>
-  /** `/mcp` de CE serveur, joint en local par le moteur. */
+  /** `/mcp` of THIS server, reached locally by the engine. */
   mcpUrl: string
   logger: Logger
   now?: () => Date
-  /** Délai d'une instruction (tests). */
+  /** Timeout of an instruction (tests). */
   timeoutMs?: number
 }
 
@@ -94,9 +94,9 @@ function systemPrompt(user: string | null, now: Date): string {
 }
 
 /**
- * Passe l'instruction au moteur et rend ses événements, terminés par UN dernier mot (`done` ou
- * `error`) : celui du moteur, ou celui du cœur quand le client est parti, que le délai a passé ou
- * que le moteur s'est tu.
+ * Passes the instruction to the engine and returns its events, ended by ONE last word (`done` or
+ * `error`): the engine's, or the core's when the client has left, the timeout has passed or the
+ * engine has gone silent.
  */
 export async function runAssistant(deps: AssistantDeps, user: string | null, text: string, emit: (e: AssistantEvent) => void, signal: AbortSignal): Promise<void> {
   const engine = currentAssistantEngine()
@@ -138,7 +138,7 @@ export function registerAssistantRoutes(app: FastifyInstance, deps: AssistantDep
   const running = new Set<string>()
 
   void app.register(async (sub) => {
-    // Réponse en flux, une ligne JSON par événement : pas de compression (elle retiendrait les lignes).
+    // Streamed response, one JSON line per event: no compression (it would hold back the lines).
     sub.post('/ask', { compress: false }, async (req, reply) => {
       const { text } = z.object({ text: z.string().trim().min(1).max(MAX_TEXT) }).parse(req.body)
       const user = req.sessionUser
@@ -164,7 +164,7 @@ export function registerAssistantRoutes(app: FastifyInstance, deps: AssistantDep
       return reply.header('cache-control', 'no-store').type('application/x-ndjson; charset=utf-8').send(out)
     })
 
-    // Les instructions de TOUS les comptes : depuis le réseau local seulement, comme les comptes.
+    // The instructions of ALL accounts: from the local network only, like the accounts.
     sub.get('/log', async (req, reply) => {
       if (req.sessionUser !== null) return sendError(reply, 403, 'LAN_ONLY', 'the assistant log is read from the local network only')
       return { entries: await readLog() }

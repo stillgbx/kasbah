@@ -8,8 +8,8 @@ import { buildApp, type KasbahApp } from '../app'
 import { loadEnv } from '../config/env'
 import { loadHouse } from '../config/house'
 
-// Réglage d'une ouverture depuis le mode édition : la route ÉCRIT dans house.json, elle se teste
-// donc sur une COPIE de la maison de démo — sinon chaque exécution modifierait le dépôt.
+// Adjusting an opening from edit mode: the route WRITES into house.json, so it is tested on a COPY
+// of the demo house — otherwise each run would modify the repo.
 
 const DEMO_HOUSE = resolve(import.meta.dirname, '../../../../house/demo-house.json')
 
@@ -38,7 +38,7 @@ describe('PUT /api/house/rooms/:roomId/openings/:openingId', () => {
     expect(res.statusCode).toBe(200)
     const room = res.json().house.rooms.find((r: { id: string }) => r.id === 'entree')
     expect(room.openings[0]).toMatchObject({ id: 'porte-entree', width: 1.1, height: 2.2 })
-    // et le fichier, pas seulement la réponse : c'est le relevé de l'utilisateur qu'on corrige
+    // and the file, not just the response: it is the user's survey that is being corrected
     const written = JSON.parse(await readFile(file, 'utf8'))
     expect(written.rooms.find((r: { id: string }) => r.id === 'entree').openings[0].width).toBe(1.1)
   })
@@ -71,9 +71,9 @@ describe('PUT /api/house/rooms/:roomId/openings/:openingId', () => {
   })
 })
 
-// Poser et retirer une ouverture, depuis le panneau de la pièce. Même mécanique que le réglage —
-// copie de la maison de démo, écriture réelle du fichier, `parseHouse` en garde-fou.
-describe('POST et DELETE /api/house/rooms/:roomId/openings', () => {
+// Adding and removing an opening, from the room panel. Same mechanism as the adjustment — copy of
+// the demo house, real write of the file, `parseHouse` as a safeguard.
+describe('POST and DELETE /api/house/rooms/:roomId/openings', () => {
   let kasbah: KasbahApp
   let file: string
   beforeAll(async () => {
@@ -118,7 +118,7 @@ describe('POST et DELETE /api/house/rooms/:roomId/openings', () => {
   })
 
   it('removes the opening and frees the cover that was on it', async () => {
-    const res = await del('chambre1', 'fen-ch1')                    // cover.chambre1 y est posé
+    const res = await del('chambre1', 'fen-ch1')                    // cover.chambre1 sits on it
     expect(res.statusCode).toBe(200)
     expect(openingsOf(res, 'chambre1').map((o) => o.id)).not.toContain('fen-ch1')
     const cover = res.json().house.devices.find((d: { id: string }) => d.id === 'cover.chambre1')

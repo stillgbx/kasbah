@@ -14,8 +14,8 @@ const MONDAY = Date.UTC(2026, 8, 7, 12)
 
 async function makeApp(scenario: string, extraEnv: Record<string, string> = {}, houseFile = HOUSE) {
   const clock = new ManualClock(MONDAY)
-  // quels plugins tournent vient de la MAISON : demo-house.json n'a pas de section `plugins`,
-  // donc le defaut du schema s'applique (mock seul, tous ses kinds)
+  // which plugins run comes from the HOUSE: demo-house.json has no `plugins` section,
+  // so the schema default applies (mock alone, all its kinds)
   const env = loadEnv({ KASBAH_HOUSE_FILE: houseFile, KASBAH_LOG_LEVEL: 'silent' })
   const kasbah = await buildApp({
     env, logger: pino({ level: 'silent' }), clock, serveStatic: false,
@@ -26,10 +26,10 @@ async function makeApp(scenario: string, extraEnv: Record<string, string> = {}, 
   return { kasbah, clock }
 }
 
-// La simulation doit pouvoir COMPLETER un parc reel au lieu de le doubler : des qu'un vrai plugin
-// couvre un kind, ses equivalents simules n'ont plus a encombrer les listes en « hors plan ». Le
-// choix se fait dans l'UI (sous-items du plugin) et s'ecrit dans house.json.
-describe('sous-items du plugin mock', () => {
+// The simulation must be able to COMPLEMENT a real device set instead of duplicating it: as soon as
+// a real plugin covers a kind, its simulated equivalents no longer need to clutter the lists as
+// "off-plan". The choice is made in the UI (the plugin's sub-items) and written into house.json.
+describe('mock plugin sub-items', () => {
   async function withTempHouse(fn: (kasbah: KasbahApp, file: string) => Promise<void>) {
     const dir = await mkdtemp(join(tmpdir(), 'kasbah-plugins-'))
     const file = join(dir, 'house.json')
@@ -43,7 +43,7 @@ describe('sous-items du plugin mock', () => {
     return new Set<string>(devices.map((e: { descriptor: { kind: string } }) => e.descriptor.kind))
   }
 
-  it('decocher un kind le retire a chaud, garde les autres, et l ecrit dans la maison', async () => {
+  it('unchecking a kind removes it live, keeps the others, and writes it into the house', async () => {
     await withTempHouse(async (kasbah, file) => {
       expect(await kindsOf(kasbah)).toContain('light')
       const r = await kasbah.app.inject({ method: 'PATCH', url: '/api/plugins/mock', payload: { parts: { light: false, cover: false } } })
@@ -52,10 +52,10 @@ describe('sous-items du plugin mock', () => {
       expect(mock.parts.find((p: { id: string }) => p.id === 'light')).toEqual({ id: 'light', labelKey: 'kinds.light', enabled: false })
       expect(mock.parts.find((p: { id: string }) => p.id === 'vehicle').enabled).toBe(true)
 
-      const kinds = await kindsOf(kasbah)                  // redemarrage du plugin, sans redemarrer le serveur
+      const kinds = await kindsOf(kasbah)                  // plugin restart, without restarting the server
       expect(kinds.has('light')).toBe(false)
       expect(kinds.has('cover')).toBe(false)
-      expect(kinds.has('vehicle')).toBe(true)              // non traite par un vrai plugin : conserve
+      expect(kinds.has('vehicle')).toBe(true)              // not handled by a real plugin: kept
       expect(kinds.has('energy')).toBe(true)
 
       const health = (await kasbah.app.inject({ method: 'GET', url: '/api/health' })).json()
@@ -67,7 +67,7 @@ describe('sous-items du plugin mock', () => {
     })
   })
 
-  it('sans reglage, la maison muette simule tout', async () => {
+  it('without a setting, a silent house simulates everything', async () => {
     const { kasbah } = await makeApp('default')
     try {
       const kinds = await kindsOf(kasbah)
@@ -77,10 +77,10 @@ describe('sous-items du plugin mock', () => {
   })
 })
 
-// Activer / desactiver un fabricant depuis les Reglages : le choix vit dans house.json et prend
-// effet tout de suite, sans redemarrer le serveur.
-describe('activation des plugins (GET /api/plugins, PATCH /api/plugins/:id)', () => {
-  it('liste TOUS les plugins declares, allume et eteint a chaud, refuse un id inconnu', async () => {
+// Enabling / disabling a vendor from Settings: the choice lives in house.json and takes effect
+// right away, without restarting the server.
+describe('plugin activation (GET /api/plugins, PATCH /api/plugins/:id)', () => {
+  it('lists ALL declared plugins, turns them on and off live, refuses an unknown id', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'kasbah-plugins-'))
     const file = join(dir, 'house.json')
     await copyFile(HOUSE, file)
@@ -88,19 +88,19 @@ describe('activation des plugins (GET /api/plugins, PATCH /api/plugins/:id)', ()
     try {
       const list = (await kasbah.app.inject({ method: 'GET', url: '/api/plugins' })).json().plugins
       const byId = Object.fromEntries(list.map((p: { id: string }) => [p.id, p]))
-      expect(Object.keys(byId).length).toBeGreaterThan(5)          // tous disponibles, pas seulement les actifs
+      expect(Object.keys(byId).length).toBeGreaterThan(5)          // all available ones, not only the active ones
       expect(byId.mock).toMatchObject({ enabled: true, implemented: true })
-      expect(byId.sonos).toMatchObject({ enabled: false, implemented: true })     // plus de squelette : activable, eteint par defaut
-      expect(byId.mock.parts).toHaveLength(DEVICE_KINDS.length)  // un par kind simulé (tous, caméras comprises)
+      expect(byId.sonos).toMatchObject({ enabled: false, implemented: true })     // no longer a skeleton: can be enabled, off by default
+      expect(byId.mock.parts).toHaveLength(DEVICE_KINDS.length)  // one per simulated kind (all of them, cameras included)
 
-      // eteindre la simulation : ses appareils quittent le registre
+      // turning the simulation off: its devices leave the registry
       expect((await kasbah.app.inject({ method: 'PATCH', url: '/api/plugins/mock', payload: { enabled: false } })).statusCode).toBe(200)
       expect((await kasbah.app.inject({ method: 'GET', url: '/api/devices' })).json().devices).toHaveLength(0)
       const off = (await kasbah.app.inject({ method: 'GET', url: '/api/health' })).json()
       expect(off.plugins.mock.status).toBe('disabled')
       expect((await kasbah.app.inject({ method: 'POST', url: '/api/devices/mock:cover-living/command', payload: { type: 'cover.close' } })).statusCode).toBe(404)
 
-      // et la rallumer les fait revenir
+      // and turning it back on brings them back
       expect((await kasbah.app.inject({ method: 'PATCH', url: '/api/plugins/mock', payload: { enabled: true } })).statusCode).toBe(200)
       expect((await kasbah.app.inject({ method: 'GET', url: '/api/devices' })).json().devices.length).toBeGreaterThan(15)
 
@@ -130,7 +130,7 @@ describe('REST API', () => {
     const r = await kasbah.app.inject({ method: 'GET', url: '/api/house' })
     expect(r.statusCode).toBe(200)
     expect(r.json().name).toBe('Maison démo')
-    expect(r.json().rooms[0].kind).toBe('corridor')   // défauts zod appliqués
+    expect(r.json().rooms[0].kind).toBe('corridor')   // zod defaults applied
   })
   it('lists devices with available states', async () => {
     const r = await kasbah.app.inject({ method: 'GET', url: '/api/devices' })
@@ -163,7 +163,7 @@ describe('plugin scenes (GET /api/scenes, POST /api/scenes/:id/recall)', () => {
   it('lists the registered scenes and refuses impossible recalls', async () => {
     const { kasbah } = await makeApp('default')
     try {
-      // le plugin mock n'a pas de scènes : on en injecte pour exercer les routes
+      // the mock plugin has no scenes: some are injected to exercise the routes
       kasbah.scenes.register('mock', [
         { id: 'mock:s1', pluginId: 'mock', externalId: 's1', name: 'Soirée', group: { name: 'Salon', kind: 'room' }, dynamic: false, autoDynamic: false, swatches: ['#ff8800'] },
       ])
@@ -178,26 +178,26 @@ describe('plugin scenes (GET /api/scenes, POST /api/scenes/:id/recall)', () => {
       const notDynamic = await kasbah.app.inject({ method: 'POST', url: '/api/scenes/mock:s1/recall', payload: { mode: 'dynamic' } })
       expect(notDynamic.statusCode).toBe(400)
       expect(notDynamic.json().error.code).toBe('UNSUPPORTED_COMMAND')
-      // le plugin mock ne rappelle que les ambiances de SON parc : une scène injectée qu'il ne
-      // connaît pas est refusée comme un appareil absent ; il n'implémente pas updateScene
+      // the mock plugin only recalls the light scenes of ITS device set: an injected scene it does
+      // not know is refused like an absent device; it does not implement updateScene
       const noRecall = await kasbah.app.inject({ method: 'POST', url: '/api/scenes/mock:s1/recall', payload: {} })
       expect(noRecall.statusCode).toBe(503)
       expect(noRecall.json().error.code).toBe('DEVICE_UNAVAILABLE')
 
-      // PATCH : le réglage « démarrer animée » n'a pas de sens sans palette animée
+      // PATCH: the "Starts animated" setting makes no sense without an animated palette
       const notAnimated = await kasbah.app.inject({ method: 'PATCH', url: '/api/scenes/mock:s1', payload: { autoDynamic: true } })
       expect(notAnimated.statusCode).toBe(400)
       expect(notAnimated.json().error.code).toBe('UNSUPPORTED_COMMAND')
       expect((await kasbah.app.inject({ method: 'PATCH', url: '/api/scenes/mock:nope', payload: { autoDynamic: false } })).statusCode).toBe(404)
       expect((await kasbah.app.inject({ method: 'PATCH', url: '/api/scenes/mock:s1', payload: {} })).json().error.code).toBe('INVALID_BODY')
 
-      // POST /api/scenes : source inconnue, corps invalide, plugin incapable de créer
+      // POST /api/scenes: unknown source, invalid body, plugin unable to create
       expect((await kasbah.app.inject({ method: 'POST', url: '/api/scenes', payload: { fromSceneId: 'mock:nope', groupName: 'Salon' } })).statusCode).toBe(404)
       expect((await kasbah.app.inject({ method: 'POST', url: '/api/scenes', payload: { fromSceneId: 'mock:s1' } })).json().error.code).toBe('INVALID_BODY')
       const cannotCreate = await kasbah.app.inject({ method: 'POST', url: '/api/scenes', payload: { fromSceneId: 'mock:s1', groupName: 'Cuisine' } })
       expect(cannotCreate.statusCode).toBe(501)
 
-      // DELETE /api/scenes/:id : scène inconnue, puis plugin incapable de supprimer
+      // DELETE /api/scenes/:id: unknown scene, then plugin unable to delete
       expect((await kasbah.app.inject({ method: 'DELETE', url: '/api/scenes/mock:nope' })).statusCode).toBe(404)
       const cannotDelete = await kasbah.app.inject({ method: 'DELETE', url: '/api/scenes/mock:s1' })
       expect(cannotDelete.statusCode).toBe(501)
@@ -228,7 +228,7 @@ describe('WebSocket hub', () => {
     const { kasbah, clock } = await makeApp('default')
     const address = await kasbah.app.listen({ port: 0, host: '127.0.0.1' })
     const ws = new WebSocket(`${address.replace('http', 'ws')}/ws`)
-    // file de messages posée AVANT `open` : le snapshot peut arriver dans le même tick que l'ouverture
+    // message queue set up BEFORE `open`: the snapshot may arrive in the same tick as the opening
     const queue: ServerMessage[] = []
     const waiters: ((m: ServerMessage) => void)[] = []
     ws.on('message', (d) => {
@@ -245,22 +245,22 @@ describe('WebSocket hub', () => {
     const waitState = next()
     await kasbah.app.inject({ method: 'POST', url: '/api/devices/mock:light-living/command', payload: { type: 'light.set', on: true, brightness: 30 } })
     await kasbah.app.inject({ method: 'POST', url: '/api/devices/mock:light-living/command', payload: { type: 'light.set', brightness: 60 } })
-    clock.advance(50)                                   // fenêtre de coalescence
+    clock.advance(50)                                   // coalescing window
     const state = await waitState
     expect(state.type).toBe('state')
     if (state.type === 'state') {
       expect(state.deviceId).toBe('mock:light-living')
-      expect(state.state).toMatchObject({ kind: 'light', on: true, brightness: 60 })   // un seul message, dernier état
+      expect(state.state).toMatchObject({ kind: 'light', on: true, brightness: 60 })   // a single message, last state
     }
     ws.close()
     await kasbah.close()
   })
 })
 
-describe('WebSocket hub : build web servi', () => {
-  // L'écran compare le build qu'il porte à celui du serveur : relu à chaque connexion, un build
-  // refait sans redémarrer est vu par l'écran qui se reconnecte.
-  it('porte l identifiant du build dans le snapshot, relu à chaque connexion', async () => {
+describe('WebSocket hub: web build served', () => {
+  // The screen compares the build it carries with the server's: re-read on each connection, a build
+  // redone without restarting is seen by the screen that reconnects.
+  it('carries the build identifier in the snapshot, re-read on each connection', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'kasbah-web-'))
     await writeFile(join(dir, 'index.html'), '<!doctype html>')
     await writeFile(join(dir, 'build-id.txt'), 'build-1')
@@ -298,26 +298,26 @@ describe('device placement (PUT /api/house/devices/:id)', () => {
 
       const onDisk = JSON.parse(await readFile(file, 'utf8'))
       expect(onDisk.devices.find((d: { id: string }) => d.id === 'light.salon').position).toEqual([5, 3, 0.75])
-      expect(onDisk.rooms[1].kind).toBeUndefined()            // le fichier ne reçoit pas les défauts zod (salon : kind 'room' implicite)
+      expect(onDisk.rooms[1].kind).toBeUndefined()            // the file does not receive the zod defaults (salon: implicit 'room' kind)
       expect(JSON.parse(await readFile(`${file}.bak`, 'utf8')).devices.find((d: { id: string }) => d.id === 'light.salon').position).toEqual([6.6, 2.5, 2.5])
 
-      // création d'une entrée pour un appareil auto-placé
+      // creating an entry for an auto-placed device
       const created = await kasbah.app.inject({ method: 'PUT', url: '/api/house/devices/auto.hue-abc', payload: { position: [1, 1, 2.4], roomId: 'salon', deviceId: 'hue:abc' } })
       expect(created.statusCode).toBe(200)
       expect(JSON.parse(await readFile(file, 'utf8')).devices.at(-1)).toEqual({ id: 'auto.hue-abc', deviceId: 'hue:abc', position: [1, 1, 2.4], roomId: 'salon' })
 
-      // refus : corps invalide, pièce inconnue, appareil inconnu sans deviceId, pièce d'un autre niveau
+      // refusals: invalid body, unknown room, unknown device without deviceId, room on another level
       expect((await kasbah.app.inject({ method: 'PUT', url: '/api/house/devices/light.salon', payload: { position: [1, 2] } })).json().error.code).toBe('INVALID_BODY')
       expect((await kasbah.app.inject({ method: 'PUT', url: '/api/house/devices/light.salon', payload: { position: [1, 2, 3], roomId: 'veranda' } })).json().error.code).toBe('INVALID_PLACEMENT')
       expect((await kasbah.app.inject({ method: 'PUT', url: '/api/house/devices/nope', payload: { position: [1, 2, 3] } })).statusCode).toBe(400)
-      // changer de pièce entraîne le levelId ; un volet ancré à une ouverture d'une autre pièce est refusé par la validation croisée
+      // changing room carries the levelId along; a shutter anchored to an opening of another room is refused by the cross-validation
       const cross = await kasbah.app.inject({ method: 'PUT', url: '/api/house/devices/light.salon', payload: { position: [2.4, 2.4, 2.4], roomId: 'chambre1' } })
       expect(cross.statusCode).toBe(200)
       expect(cross.json().house.devices.find((d: { id: string }) => d.id === 'light.salon').levelId).toBe('etage')
       const invalid = await kasbah.app.inject({ method: 'PUT', url: '/api/house/devices/cover.baie', payload: { position: [6.6, 6.5, 1.3], roomId: 'cuisine' } })
       expect(invalid.statusCode).toBe(400)
       expect(invalid.json().error.code).toBe('INVALID_HOUSE')
-      expect(JSON.parse(await readFile(file, 'utf8')).devices.find((d: { id: string }) => d.id === 'cover.baie').roomId).toBe('salon')   // rien n'a été écrit
+      expect(JSON.parse(await readFile(file, 'utf8')).devices.find((d: { id: string }) => d.id === 'cover.baie').roomId).toBe('salon')   // nothing was written
     } finally {
       await kasbah.close()
       await rm(dir, { recursive: true, force: true })
@@ -325,8 +325,8 @@ describe('device placement (PUT /api/house/devices/:id)', () => {
   })
 })
 
-// Les prévisions se lisent À LA DEMANDE, comme l'historique : le plugin rend sa dernière lecture,
-// l'hôte y met le deviceId, et un appareil qui n'est pas une météo n'en a pas.
+// Forecasts are read ON DEMAND, like the history: the plugin returns its last reading, the host
+// adds the deviceId, and a device that is not a weather one has none.
 describe('GET /api/devices/:id/forecast', () => {
   it('serves the simulated forecast for the weather device and refuses other kinds', async () => {
     const { kasbah } = await makeApp('default')

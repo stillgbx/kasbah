@@ -37,14 +37,14 @@ export interface BuildAppOptions {
   clock?: Clock
   factories?: Record<string, PluginFactory>
   envSource?: NodeJS.ProcessEnv
-  /** Maison déjà chargée (tests) ; sinon lue depuis env.KASBAH_HOUSE_FILE. */
+  /** House already loaded (tests); otherwise read from env.KASBAH_HOUSE_FILE. */
   house?: LoadedHouse
   serveStatic?: boolean
-  /** Propriétés entre lesquelles basculer (serveur de démonstration) ; absent = une seule maison. */
+  /** Properties to switch between (demo server); absent = a single house. */
   properties?: PropertyHost
-  /** La maison est une démonstration : ni elle ni ses automatisations ne s'écrivent. */
+  /** The house is a demo: neither it nor its automations are written. */
   readOnly?: boolean
-  /** Canal vers le superviseur de production (`scripts/supervisor.mjs`) : la mise à jour depuis Réglages. */
+  /** Channel to the production supervisor (`scripts/supervisor.mjs`): the update from Settings. */
   supervisor?: SystemRoutesDeps['supervisor']
 }
 
@@ -57,24 +57,24 @@ export interface KasbahApp {
   host: PluginHost
   house: LoadedHouse
   automations: AutomationEngine
-  /** Démarre les plugins (après app.ready()/listen pour que les routes soient prêtes). */
+  /** Starts the plugins (after app.ready()/listen so that the routes are ready). */
   startPlugins(): Promise<void>
   close(): Promise<void>
 }
 
-/** Assemble l'application sans écouter : utilisé par main.ts et par les tests (app.inject). */
+/** Assembles the application without listening: used by main.ts and by the tests (app.inject). */
 export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
   const clock = opts.clock ?? systemClock
-  // le child pino spécialise le type générique de l'instance : on revient au FastifyInstance nominal
+  // the pino child specializes the instance's generic type: we go back to the nominal FastifyInstance
   const app = Fastify({
     loggerInstance: opts.logger.child({ component: 'http' }, { level: 'warn' }),
-    // Le défaut de Fastify (100 caractères par paramètre d'URL, sinon 414) est trop court pour les
-    // ids Google Nest : `nest:<id>` fait 99 caractères et l'id maison dérivé par l'auto-placement
-    // (`auto.nest-<id>`) 104 — le mode Déplacer échouait en 414 sur toute caméra auto-placée.
-    // Fastify 5 : les options du routeur vivent dans `routerOptions` (FSTDEP022 sinon).
+    // Fastify's default (100 characters per URL parameter, otherwise 414) is too short for Google
+    // Nest ids: `nest:<id>` is 99 characters and the house id derived by auto-placement
+    // (`auto.nest-<id>`) 104 — Move mode failed with 414 on any auto-placed camera.
+    // Fastify 5: router options live in `routerOptions` (FSTDEP022 otherwise).
     routerOptions: { maxParamLength: 512 },
   }) as unknown as FastifyInstance
-  // Sous le nom public : le MCP avec ses jetons, le reste derrière une session. Posé AVANT toute route.
+  // Under the public name: the MCP with its tokens, the rest behind a session. Set BEFORE any route.
   const mcpConfig = mcpAuthConfigSchema.parse(opts.envSource ?? process.env)
   const mcpAuth = createMcpAuth({ config: mcpConfig, logger: opts.logger.child({ component: 'mcp' }) })
   const session = createAppSession({
@@ -94,8 +94,8 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
   const bus = new Bus()
   const registry = new DeviceRegistry(bus, clock, opts.logger.child({ component: 'registry' }))
   const scenes = new SceneRegistry(bus, clock, opts.logger.child({ component: 'scenes' }))
-  // Réglages par plugin : ils vivent DANS la maison (`house.plugins`), écrits par l'UI. `house`
-  // est muté en place par `updateHouseFile`, donc cette lecture voit toujours la valeur courante.
+  // Per-plugin settings: they live IN the house (`house.plugins`), written by the UI. `house` is
+  // mutated in place by `updateHouseFile`, so this read always sees the current value.
   const settingsOf = (pluginId: string) => pluginSettingsOf(house.house.plugins, pluginId)
   const history = new EnergyHistory(bus, clock)
   const host = new PluginHost({
@@ -108,19 +108,19 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
     commandTimeoutMs: opts.env.KASBAH_COMMAND_TIMEOUT_MS,
   })
 
-  // Automatisations : un fichier à côté de la maison, exécutées ici (l'écran dort, le serveur
-  // non). Après `host`, par qui passent les commandes ; avant le hub, dont le snapshot les porte.
+  // Automations: a file next to the house, run here (the screen sleeps, the server doesn't). After
+  // `host`, through which commands go; before the hub, whose snapshot carries them.
   const automations = new AutomationEngine({
     store: createAutomationsFile(automationsPathFor(house.path), { readOnly: !!opts.readOnly }),
     reverts: createRevertsFile(stateFile('automation-reverts.json')),
     registry, scenes, host, house, bus, clock, logger: opts.logger.child({ component: 'automations' }),
   })
-  // Liste de courses : un fichier à côté de la maison, lu avant le hub, dont le snapshot la porte.
+  // Shopping list: a file next to the house, read before the hub, whose snapshot carries it.
   const shopping = new ShoppingService(shoppingPathFor(house.path), { readOnly: !!opts.readOnly })
   await shopping.load()
   const hub = new WsHub(registry, bus, clock, opts.logger.child({ component: 'ws' }), {
     scenes, automations, shopping, propertyId: () => house.house.id,
-    // build web servi, relu à chaque connexion ; sans service statique, aucun build à comparer
+    // web build served, re-read on each connection; without static serving, no build to compare
     ...((opts.serveStatic ?? true) ? { appBuild: () => readAppBuild(opts.env.KASBAH_STATIC_DIR) } : {}),
   })
   automations.onChange(() => hub.broadcast({ type: 'automations', automations: automations.list() }))
@@ -128,18 +128,18 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
   await automations.start()
 
   await hub.attach(app)
-  // initialise le réglage des ambiances qui APPARAISSENT (jamais l'existant) — après `host`,
-  // dont il utilise l'écriture chez le fabricant
+  // initializes the setting of light scenes that APPEAR (never the existing ones) — after `host`,
+  // whose vendor write it uses
   const seeder = new SceneSeeder({
     bus, settingsOf, logger: opts.logger.child({ component: 'scenes' }),
     updateScene: (sceneId, update) => host.updateScene(sceneId, update),
   })
 
-  // Compression des réponses, AVANT les routes : le crochet `onSend` ne vaut que pour ce qui est
-  // enregistré après lui. Le gros du gain est sur le bundle web et les carrosseries 3D
-  // (`model/gltf-binary`, que mime-db donne déjà pour compressible) — 815 Ko de modèles tombent à
-  // environ 550 Ko. Les types non compressibles (JPEG d'un instantané de caméra, flux vidéo) sont
-  // laissés tranquilles par défaut, et le WebSocket ne passe pas par ce crochet.
+  // Response compression, BEFORE the routes: the `onSend` hook only applies to what is registered
+  // after it. Most of the gain is on the web bundle and the 3D car bodies (`model/gltf-binary`,
+  // which mime-db already lists as compressible) — 815 KB of models drop to about 550 KB.
+  // Non-compressible types (JPEG of a camera snapshot, video stream) are left alone by default, and
+  // the WebSocket does not go through this hook.
   await app.register(fastifyCompress, { global: true })
 
   registerRoutes(app, { registry, scenes, host, house, hub, history, automations, shopping, startedAt: clock.now(), ...(opts.properties ? { properties: opts.properties } : {}) })
@@ -153,14 +153,14 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
     logger: opts.logger.child({ component: 'assistant' }),
   })
   session.routes(app)
-  // Les sources musicales n'ont pas d'appareils : pour `play_url` elles passent par Cast/Sonos via l'hôte.
+  // Music sources have no devices: for `play_url` they go through Cast/Sonos via the host.
   setPlaybackBridge({
     getDevice: (id) => registry.get(id),
     execute: (id, command) => host.execute(id, command),
     onState: (cb) => bus.on('state', cb),
   })
-  // Le lecteur COMMUN des sources musicales (file, relais LAN, transfert, écoute locale) : les
-  // sources s'y inscrivent à leur démarrage, il passe par le pont ci-dessus pour les enceintes.
+  // The SHARED player of the music sources (queue, LAN relay, transfer, local listening): sources
+  // register with it when they start, it goes through the bridge above for the speakers.
   const music = createMusicPlayer({
     config: musicConfigSchema.parse(opts.envSource ?? process.env),
     publicHosts: mcpAuth.publicHosts,
@@ -177,7 +177,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
     app, registry, scenes, bus, hub, host, house, automations,
     startPlugins: () => host.startAll(),
     async close() {
-      automations.close()                 // plus rien ne se déclenche pendant l'arrêt
+      automations.close()                 // nothing fires anymore during shutdown
       setPlaybackBridge(null)
       music.stop()
       await host.stopAll()

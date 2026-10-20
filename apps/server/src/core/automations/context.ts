@@ -5,31 +5,31 @@ import {
 import type { LoadedHouse } from '../../config/house'
 import type { DeviceRegistry } from '../registry'
 
-// Ce qu'un prédicat a besoin de savoir du monde, pris à un instant : les appareils, la maison
-// EFFECTIVE (celle du fichier, plus les appareils que l'auto-placement rattache à une pièce d'après
-// ce que déclare leur fabricant — la même que voit l'interface, `apps/web/src/stores/house.ts`),
-// et qui est garé où.
+// What a predicate needs to know about the world, taken at one instant: the devices, the EFFECTIVE
+// house (the one from the file, plus the devices that auto-placement attaches to a room based on
+// what their vendor declares — the same one the interface sees, `apps/web/src/stores/house.ts`),
+// and who is parked where.
 
 export interface EvalContext {
   now: number
   house: House
   index: HouseIndex
-  /** L'appareil, s'il est dans le registre. */
+  /** The device, if it is in the registry. */
   device(id: string): DeviceEntry | undefined
-  /** A-t-il publié un état depuis qu'il est apparu ? Sinon ses valeurs sont celles par défaut : inconnues. */
+  /** Has it published a state since it appeared? Otherwise its values are the defaults: unknown. */
   fresh(id: string): boolean
   entries(): DeviceEntry[]
   roomOf(id: string): string | undefined
   levelOf(id: string): string | undefined
   zoneOf(id: string): string | undefined
-  /** Place où l'engin est rangé, s'il l'est. */
+  /** Parking spot where the machine is stored, if it is. */
   parkingOf(id: string): string | undefined
 }
 
 /**
- * Index de la maison effective, recalculé seulement quand la maison change (`updateHouseFile`
- * RÉASSIGNE `loaded.house` : une comparaison de référence suffit) ou quand la liste des appareils
- * change (`invalidate`, branché sur l'événement `devices` du bus).
+ * Index of the effective house, recomputed only when the house changes (`updateHouseFile`
+ * REASSIGNS `loaded.house`: a reference comparison is enough) or when the device list changes
+ * (`invalidate`, wired to the bus `devices` event).
  */
 export class HouseView {
   private cache: { house: House; version: number; effective: House; index: HouseIndex } | null = null
@@ -69,9 +69,9 @@ export class HouseView {
 }
 
 /**
- * Qui est rangé où, pour tous les engins localisés d'un coup — la règle de la scène 3D
- * (`HouseScene.computeParkingFixes`) : un appareil dont la maison écrit la position n'est pas
- * candidat, sa place fait foi.
+ * Who is parked where, for all located machines at once — the 3D scene's rule
+ * (`HouseScene.computeParkingFixes`): a device whose position the house writes is not a candidate,
+ * its spot is authoritative.
  */
 function parkingFixes(house: House, index: HouseIndex, entries: DeviceEntry[]): Map<string, string> {
   const out = new Map<string, string>()

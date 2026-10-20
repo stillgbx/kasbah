@@ -1,5 +1,5 @@
-// Fuseau imposé : les échéances se raisonnent en heure murale locale. Node relit `TZ` à l'exécution ;
-// la garde saute le fichier si la plateforme l'ignorait.
+// Forced time zone: due times are reasoned in local wall-clock time. Node re-reads `TZ` at run time;
+// the guard skips the file if the platform ignored it.
 process.env.TZ = 'Europe/Paris'
 
 import type { TimeTrigger } from '@kasbah/shared'
@@ -19,7 +19,7 @@ describe.skipIf(!tzApplied)('nextOccurrence', () => {
   })
 
   it('skips to the next allowed weekday (the gate on Mondays and Fridays)', () => {
-    // mardi 22/09/2026 → vendredi 25
+    // Tuesday 22/09/2026 → Friday 25
     expect(nextOccurrence(clock('12:00', { days: [1, 5] }), at(2026, 9, 22, 13), DIJON)).toBe(at(2026, 9, 25, 12))
   })
 
@@ -30,10 +30,10 @@ describe.skipIf(!tzApplied)('nextOccurrence', () => {
   })
 
   it('offsets a sun event and clamps it to notAfter', () => {
-    // 21/06 à Dijon, crépuscule civil vers 22:20 : −15 min → 22:05, borné à 22:00
+    // 21/06 in Dijon, civil dusk around 22:20: −15 min → 22:05, clamped to 22:00
     const dusk: TimeTrigger = { type: 'time', at: { kind: 'sun', event: 'dusk', offsetMin: -15, notAfter: '22:00' } }
     expect(nextOccurrence(dusk, at(2026, 6, 21, 12), DIJON)).toBe(at(2026, 6, 21, 22))
-    // 21/12, crépuscule vers 17:28 : −15 min ≈ 17:13, pas de bornage
+    // 21/12, dusk around 17:28: −15 min ≈ 17:13, no clamping
     const winter = nextOccurrence(dusk, at(2026, 12, 21, 12), DIJON)!
     expect(Math.abs(winter - at(2026, 12, 21, 17, 13))).toBeLessThan(2 * 60_000)
   })
@@ -44,9 +44,9 @@ describe.skipIf(!tzApplied)('nextOccurrence', () => {
   })
 
   it('keeps the wall-clock time across the spring DST change', () => {
-    // 29/03/2026 : 02:00 → 03:00. Ajouter 24 h à 07:30 la veille donnerait 08:30.
+    // 29/03/2026: 02:00 → 03:00. Adding 24 h to 07:30 the day before would give 08:30.
     expect(local(nextOccurrence(clock('07:30'), at(2026, 3, 28, 8), DIJON))).toBe('29/03/2026 07:30:00')
-    // une heure qui n'existe pas ce jour-là tombe une seule fois, à 03:30
+    // a time that does not exist that day fires only once, at 03:30
     expect(local(nextOccurrence(clock('02:30'), at(2026, 3, 29, 0), DIJON))).toBe('29/03/2026 03:30:00')
   })
 

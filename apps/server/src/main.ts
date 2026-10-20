@@ -8,16 +8,16 @@ import type { PropertyEntry, PropertyHost } from './config/properties'
 import { createLogger } from './core/logger'
 import type { UpdateRequest } from './http/system'
 
-// Point d'entrée : .env (apps/server/.env) → env validé → app → plugins → écoute → arrêt propre.
+// Entry point: .env (apps/server/.env) → validated env → app → plugins → listen → clean shutdown.
 
 const here = dirname(fileURLToPath(import.meta.url))
 loadDotenv({ path: resolve(here, '../.env'), quiet: true })
-loadDotenv({ path: resolve(here, '../../.env'), quiet: true }) // repli : .env à côté de dist/
+loadDotenv({ path: resolve(here, '../../.env'), quiet: true }) // fallback: .env next to dist/
 
-// Sans `KASBAH_HOUSE_FILE`, le serveur ouvre son CATALOGUE (`config/catalog.ts`) : les démonstrations
-// (`house/demos/`, en lecture seule) et les propriétés réelles du poste (`house/properties/`), une
-// seule vivante à la fois, en mode démo ou réel. Avec, il fait vivre ce seul fichier : c'est le
-// forçage (tests, previews, une installation qui veut une maison imposée).
+// Without `KASBAH_HOUSE_FILE`, the server opens its CATALOG (`config/catalog.ts`): the demos
+// (`house/demos/`, read-only) and the machine's real properties (`house/properties/`), a single one
+// live at a time, in demo or real mode. With it, it runs that one file only: that is the override
+// (tests, previews, an installation that wants an imposed house).
 const forced = !!process.env.KASBAH_HOUSE_FILE
 const env = loadEnv()
 const logger = createLogger(env.KASBAH_LOG_LEVEL, env.KASBAH_LOG_PRETTY || process.stdout.isTTY === true)
@@ -29,22 +29,22 @@ let kasbah: KasbahApp
 let switching = false
 let closing = false
 
-/** Assemble, écoute et démarre l'application sur la maison courante. */
+/** Assembles, listens and starts the application on the current house. */
 async function start(): Promise<void> {
   const properties: PropertyHost | undefined = catalog ? {
-    // le nom de la propriété ouverte est celui de son fichier, tel que l'UI vient peut-être de l'écrire
+    // the name of the open property is that of its file, as the UI may just have written it
     list: () => {
       const l = catalog.list()
       return { ...l, properties: l.properties.map((p) => (p.id === active?.id ? { ...p, name: kasbah.house.house.name } : p)) }
     },
-    // la bascule se fait APRÈS l'envoi de la réponse
+    // the switch happens AFTER the response is sent
     select: (id) => { setTimeout(() => void catalog.choose(id).then((next) => next && switchTo(next)), 50) },
     setMode: (mode) => { setTimeout(() => void catalog.chooseMode(mode).then((next) => next && switchTo(next)), 50) },
     has: (id) => !!catalog.find(id),
     create: (body) => catalog.create(body),
     duplicate: (id, name) => catalog.duplicate(id, name),
   } : undefined
-  // l'hiver demandé par `MOCK_SCENARIO=winter` vaut pour la propriété : son parc en version d'hiver
+  // the winter requested by `MOCK_SCENARIO=winter` applies to the property: its device set in winter version
   const scenario = active?.scenario && (process.env.MOCK_SCENARIO === 'winter' ? `${active.scenario}-winter` : active.scenario)
   kasbah = await buildApp({
     env: active ? { ...env, KASBAH_HOUSE_FILE: active.path } : env,
@@ -59,14 +59,14 @@ async function start(): Promise<void> {
   await kasbah.startPlugins()
 }
 
-/** Bascule de propriété (ou de mode) : on arrête tout, puis on reconstruit sur l'autre maison. */
+/** Property (or mode) switch: stop everything, then rebuild on the other house. */
 async function switchTo(next: PropertyEntry): Promise<void> {
   if (next.id === active?.id || switching || closing) return
   switching = true
   try {
     logger.info({ from: active?.id, to: next.id, mode: catalog?.mode }, 'switching property')
-    // les écrans gardent des connexions ouvertes (proxy de Vite, requêtes en cours) que `close()`
-    // attendrait : passé une seconde, on les coupe — ils se reconnectent à l'autre maison
+    // screens keep connections open (Vite proxy, requests in flight) that `close()` would wait
+    // for: after one second, we cut them — they reconnect to the other house
     const old = kasbah
     const cut = setTimeout(() => old.app.server.closeAllConnections(), 1000)
     try { await old.close() } finally { clearTimeout(cut) }
@@ -88,9 +88,10 @@ async function shutdown(signal: string) {
 process.on('SIGINT', () => void shutdown('SIGINT'))
 process.on('SIGTERM', () => void shutdown('SIGTERM'))
 
-// Sous le superviseur de production (`scripts/supervisor.mjs`) : « prêt » une fois les plugins
-// démarrés (sinon il revient au commit d'avant), arrêt propre à sa demande, et arrêt tout court
-// s'il disparaît (sous Windows, tuer un parent ne tue pas ses enfants : le port resterait pris).
+// Under the production supervisor (`scripts/supervisor.mjs`): "ready" once the plugins are started
+// (otherwise it goes back to the previous commit), clean shutdown on its request, and plain shutdown
+// if it disappears (on Windows, killing a parent does not kill its children: the port would stay
+// taken).
 if (process.send) {
   process.send({ type: 'ready' })
   process.on('message', (m: { type?: string }) => { if (m?.type === 'shutdown') void shutdown('supervisor') })

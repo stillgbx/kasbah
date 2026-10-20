@@ -15,24 +15,24 @@ import { hashPassword } from './auth'
 import { agendaDigest, AUTOMATION_CREATE_LIMIT, schoolDigest, sensitiveActions, weatherDigest } from './server'
 import { signIn, type TestOAuthProvider } from './test-oauth'
 
-// `/mcp` servi par l'application assemblée, interrogé par le vrai client du SDK dans les DEUX
-// versions du protocole : 2025 (ce que parlent les clients d'aujourd'hui) et 2026-07-28 (sans état).
+// `/mcp` served by the assembled application, queried by the real SDK client in BOTH protocol
+// versions: 2025 (what today's clients speak) and 2026-07-28 (stateless).
 
 const DEMO_HOUSE = resolve(import.meta.dirname, '../../../../house/demo-house.json')
 
 let kasbah: KasbahApp
 let url: URL
-// Une source ytmusic factice : le vrai plugin demande un cookie et le réseau. Elle note pour quel
-// compte chaque piste est résolue.
+// A fake ytmusic source: the real plugin needs a cookie and the network. It records which account
+// each track is resolved for.
 let unregister: () => void
 const resolvedFor: (string | null)[] = []
-// Un compte dans un fichier jetable ; chaque client passe par la vraie connexion OAuth.
+// An account in a throwaway file; each client goes through the real OAuth sign-in.
 const LOGIN = { username: 'lou', password: 'correct horse battery' }
 let provider: TestOAuthProvider
 beforeAll(async () => {
   const dir = mkdtempSync(join(tmpdir(), 'kasbah-mcp-'))
   const usersFile = join(dir, 'mcp-users.json')
-  // une copie de la maison : ses automatisations s'écrivent à côté d'elle, pas dans le dépôt
+  // a copy of the house: its automations are written next to it, not in the repo
   const housePath = join(dir, 'demo-house.json')
   copyFileSync(DEMO_HOUSE, housePath)
   writeFileSync(usersFile, JSON.stringify({ users: [{ name: LOGIN.username, password: await hashPassword(LOGIN.password) }] }))
@@ -48,7 +48,7 @@ beforeAll(async () => {
     logger: pino({ level: 'silent' }),
     house: await loadHouse(housePath),
     factories: { mock: createMockPlugin },
-    // les enceintes refusent localhost : le lecteur commun exige une base publiée
+    // speakers refuse localhost: the shared player requires a published base
     envSource: { MUSIC_PUBLISH_BASE: 'http://192.0.2.1:8787', MCP_USERS_FILE: usersFile },
     serveStatic: false,
   })
@@ -69,12 +69,12 @@ describe.each<[string, VersionNegotiationMode]>([['2025', 'legacy'], ['2026-07-2
   })
   afterAll(async () => { await client.close() })
 
-  it('expose les outils', async () => {
+  it('exposes the tools', async () => {
     const { tools } = await client.listTools()
     expect(tools.map((t) => t.name).sort()).toEqual(['add_shopping_items', 'control_music', 'create_automation', 'finish_shopping', 'get_agenda', 'get_device', 'get_device_history', 'get_health', 'get_music', 'get_school', 'get_shopping_list', 'get_weather', 'list_automations', 'list_devices', 'list_scenes', 'play_music', 'play_radio', 'queue_music', 'recall_scene', 'remove_shopping_item', 'run_automation', 'search_music', 'send_command', 'set_automation_enabled', 'set_shopping_favorite', 'update_automation', 'update_shopping_item'])
   })
 
-  it('joue une piste par le lecteur commun, sur une enceinte', async () => {
+  it('plays a track through the shared player, on a speaker', async () => {
     const speaker = kasbah.registry.list().find((e) => e.descriptor.capabilities.includes('play_url'))!
     const r = await client.callTool({ name: 'play_music', arguments: {
       deviceId: speaker.descriptor.id,
@@ -83,11 +83,11 @@ describe.each<[string, VersionNegotiationMode]>([['2025', 'legacy'], ['2026-07-2
     expect(r.isError).toBeFalsy()
     const queue = (await kasbah.app.inject({ method: 'GET', url: `/api/music/queue?deviceId=${speaker.descriptor.id}` })).json()
     expect(JSON.stringify(queue)).toContain('Gymnopédie No.1')
-    // au nom du compte du jeton : ce sont ses comptes musicaux qui jouent
+    // in the name of the token's account: its music accounts are the ones playing
     expect(resolvedFor.at(-1)).toBe(LOGIN.username)
   })
 
-  it('lit et pilote la file du lecteur commun', async () => {
+  it('reads and drives the shared player\'s queue', async () => {
     const speaker = kasbah.registry.list().find((e) => e.descriptor.capabilities.includes('play_url'))!.descriptor.id
     const json = async (name: string, args: Record<string, unknown>) => {
       const r = await client.callTool({ name, arguments: args })
@@ -106,7 +106,7 @@ describe.each<[string, VersionNegotiationMode]>([['2025', 'legacy'], ['2026-07-2
     expect((await json('control_music', { deviceId: speaker, action: 'clear' })).queue).toMatchObject({ index: 0, length: 1 })
   })
 
-  it('dit pourquoi une source ne répond pas, au lieu d\'échouer en silence', async () => {
+  it('says why a source does not answer, instead of failing silently', async () => {
     const r = await client.callTool({ name: 'search_music', arguments: { query: 'erik satie', source: 'radio' } })
     expect(r.isError).toBe(true)
     const speaker = kasbah.registry.list().find((e) => e.descriptor.capabilities.includes('play_url'))!
@@ -115,13 +115,13 @@ describe.each<[string, VersionNegotiationMode]>([['2025', 'legacy'], ['2026-07-2
     expect(text(off)).toMatch(/mixcloud/)
   })
 
-  it('liste les appareils filtrés par kind', async () => {
+  it('lists devices filtered by kind', async () => {
     const lights = JSON.parse(text(await client.callTool({ name: 'list_devices', arguments: { kind: 'light' } })))
     expect(lights.length).toBeGreaterThan(0)
     expect(lights.every((d: { kind: string }) => d.kind === 'light')).toBe(true)
   })
 
-  it('commande un appareil et le registre suit', async () => {
+  it('commands a device and the registry follows', async () => {
     const light = kasbah.registry.list().find((e) => e.descriptor.kind === 'light')!
     for (const on of [true, false]) {
       const r = await client.callTool({ name: 'send_command', arguments: { deviceId: light.descriptor.id, command: { type: 'light.set', on } } })
@@ -130,7 +130,7 @@ describe.each<[string, VersionNegotiationMode]>([['2025', 'legacy'], ['2026-07-2
     }
   })
 
-  it('rend une erreur d\'outil, pas une exception, pour un appareil inconnu ou une commande refusée', async () => {
+  it('returns a tool error, not an exception, for an unknown device or a refused command', async () => {
     const unknown = await client.callTool({ name: 'send_command', arguments: { deviceId: 'mock:nope', command: { type: 'cover.open' } } })
     expect(unknown.isError).toBe(true)
     const light = kasbah.registry.list().find((e) => e.descriptor.kind === 'light')!
@@ -138,7 +138,7 @@ describe.each<[string, VersionNegotiationMode]>([['2025', 'legacy'], ['2026-07-2
     expect(refused.isError).toBe(true)
   })
 
-  it('rend la météo de la maison avec ses prévisions', async () => {
+  it('returns the house weather with its forecasts', async () => {
     const r = await client.callTool({ name: 'get_weather', arguments: {} })
     expect(r.isError).toBeFalsy()
     const w = JSON.parse(text(r))
@@ -149,12 +149,12 @@ describe.each<[string, VersionNegotiationMode]>([['2025', 'legacy'], ['2026-07-2
     expect(w.daily[0].date).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
 
-  it('dit pourquoi la météo d\'un autre lieu ne répond pas (plugin open meteo absent)', async () => {
+  it('says why the weather of another place does not answer (open meteo plugin absent)', async () => {
     const r = await client.callTool({ name: 'get_weather', arguments: { place: 'Pornic' } })
     expect(r.isError).toBe(true)
   })
 
-  it('lit, coupe et lance une automatisation', async () => {
+  it('reads, disables and runs an automation', async () => {
     const light = kasbah.registry.list().find((e) => e.descriptor.kind === 'light')!.descriptor.id
     await kasbah.app.inject({ method: 'PUT', url: '/api/automations/nuit', payload: {
       name: 'Nuit', enabled: true, trigger: { type: 'time', at: { kind: 'clock', time: '03:00' } }, unless: [],
@@ -172,7 +172,7 @@ describe.each<[string, VersionNegotiationMode]>([['2025', 'legacy'], ['2026-07-2
     expect((await client.callTool({ name: 'run_automation', arguments: { id: 'inconnue' } })).isError).toBe(true)
   })
 
-  it('crée puis modifie une automatisation, champ par champ', async () => {
+  it('creates then updates an automation, field by field', async () => {
     const light = kasbah.registry.list().find((e) => e.descriptor.kind === 'light')!.descriptor.id
     const actions = [{ type: 'command', target: { type: 'devices', deviceIds: [light] }, command: { type: 'light.set', on: true } }]
     const created = await client.callTool({ name: 'create_automation', arguments: {
@@ -180,39 +180,39 @@ describe.each<[string, VersionNegotiationMode]>([['2025', 'legacy'], ['2026-07-2
     } })
     expect(created.isError, text(created)).toBeFalsy()
     const rule = JSON.parse(text(created))
-    // allumée par défaut, sans « sauf si », et enregistrée par le moteur sous un id tiré par le serveur
+    // enabled by default, without "Unless", and saved by the engine under an id drawn by the server
     expect(rule).toMatchObject({ name: 'Réveil', enabled: true, status: { health: 'ok', nextRun: expect.stringMatching(/ 07:00$/) } })
     expect(kasbah.automations.list().find((e) => e.automation.id === rule.id)!.automation.unless).toEqual([])
 
-    // marquée « écrite par l'assistant », au nom du compte du jeton
+    // marked "written by the assistant", in the name of the token's account
     expect(kasbah.automations.get(rule.id)!.automation.byAssistant).toEqual({ user: LOGIN.username, at: expect.any(Number) })
 
     const updated = await client.callTool({ name: 'update_automation', arguments: { id: rule.id, name: 'Réveil doux', enabled: false } })
     expect(updated.isError, text(updated)).toBeFalsy()
     const stored = kasbah.automations.list().find((e) => e.automation.id === rule.id)!.automation
-    // les champs non passés restent ceux d'avant
+    // the fields not passed stay as they were
     expect(stored).toMatchObject({ name: 'Réveil doux', enabled: false, trigger: { at: { time: '07:00' } }, actions })
-    // la version d'avant revient, prête à être repassée pour annuler
+    // the previous version comes back, ready to be passed again to undo
     const { previous } = JSON.parse(text(updated))
     expect(previous).toEqual({ name: 'Réveil', enabled: true, trigger: { type: 'time', at: { kind: 'clock', time: '07:00' } }, unless: [], actions })
     await client.callTool({ name: 'update_automation', arguments: { id: rule.id, ...previous } })
     expect(kasbah.automations.get(rule.id)!.automation).toMatchObject({ name: 'Réveil', enabled: true })
 
-    // une écriture depuis l'app efface la marque
+    // a write from the app clears the mark
     const { id: _i, updatedAt: _u, byAssistant: _b, ...body } = kasbah.automations.get(rule.id)!.automation
     await kasbah.app.inject({ method: 'PUT', url: `/api/automations/${rule.id}`, payload: body })
     expect(kasbah.automations.get(rule.id)!.automation.byAssistant).toBeUndefined()
 
     const missing = await client.callTool({ name: 'update_automation', arguments: { id: 'inconnue', name: 'X' } })
     expect(missing.isError).toBe(true)
-    // une référence absente n'empêche pas l'écriture : le statut la signale
+    // a missing reference does not prevent the write: the status reports it
     const broken = JSON.parse(text(await client.callTool({ name: 'update_automation', arguments: {
       id: rule.id, actions: [{ ...actions[0], target: { type: 'devices', deviceIds: ['mock:absente'] } }],
     } })))
     expect(broken.status).toMatchObject({ health: 'incomplete', missing: [{ kind: 'device', id: 'mock:absente' }] })
   })
 
-  it('enregistre COUPÉE une automatisation qui ouvre le portail', async () => {
+  it('saves an automation that opens the gate as DISABLED', async () => {
     const gate = kasbah.registry.list().find((e) => e.descriptor.kind === 'cover' && e.descriptor.meta.cover?.deviceClass === 'gate')!.descriptor.id
     const light = kasbah.registry.list().find((e) => e.descriptor.kind === 'light')!.descriptor.id
     const opens = [{ type: 'command', target: { type: 'devices', deviceIds: [light] }, command: { type: 'light.set', on: true } },
@@ -221,14 +221,14 @@ describe.each<[string, VersionNegotiationMode]>([['2025', 'legacy'], ['2026-07-2
       name: 'Arrivée', trigger: { type: 'time', at: { kind: 'clock', time: '18:00' } }, actions: opens,
     } })))
     expect(r).toMatchObject({ enabled: false, safety: { disabled: true, actions: [1] } })
-    // renommer ne touche pas au garde-fou ; rallumer explicitement, si
+    // renaming does not touch the safeguard; explicitly re-enabling does
     expect(JSON.parse(text(await client.callTool({ name: 'update_automation', arguments: { id: r.id, name: 'Arrivée du soir' } }))).enabled).toBe(false)
     await client.callTool({ name: 'set_automation_enabled', arguments: { id: r.id, enabled: true } })
     expect(kasbah.automations.get(r.id)!.automation.enabled).toBe(true)
-    // changer ce qu'elle fait la recoupe
+    // changing what it does disables it again
     const moved = JSON.parse(text(await client.callTool({ name: 'update_automation', arguments: { id: r.id, trigger: { type: 'time', at: { kind: 'clock', time: '19:00' } } } })))
     expect(moved).toMatchObject({ enabled: false, safety: { actions: [1] } })
-    // fermer le portail n'est pas sensible
+    // closing the gate is not sensitive
     const closes = JSON.parse(text(await client.callTool({ name: 'update_automation', arguments: {
       id: r.id, enabled: true, actions: [{ ...opens[1], command: { type: 'cover.close' } }],
     } })))
@@ -236,8 +236,8 @@ describe.each<[string, VersionNegotiationMode]>([['2025', 'legacy'], ['2026-07-2
     expect(closes.safety).toBeUndefined()
   })
 
-  it('rend l\'historique d\'un appareil qui en garde un, et refuse les autres', async () => {
-    // le plugin simulé du serveur ne tient ni journal ni consommation d'eau : l'énergie seule
+  it('returns the history of a device that keeps one, and refuses the others', async () => {
+    // the server's simulated plugin keeps neither a log nor water consumption: energy only
     const site = kasbah.registry.list().find((e) => e.descriptor.kind === 'energy')!
     const h = JSON.parse(text(await client.callTool({ name: 'get_device_history', arguments: { id: site.descriptor.id, hours: 6 } })))
     expect(h).toMatchObject({ id: site.descriptor.id, energy: expect.any(Array) })
@@ -245,8 +245,8 @@ describe.each<[string, VersionNegotiationMode]>([['2025', 'legacy'], ['2026-07-2
     expect((await client.callTool({ name: 'get_device_history', arguments: { id: light } })).isError).toBe(true)
   })
 
-  it('tient la liste de courses : ajout, coche par le nom, habituels, fin des courses', async () => {
-    // les deux versions du protocole partagent le serveur : un produit par passage
+  it('keeps the shopping list: adding, checking by name, usual items, finishing shopping', async () => {
+    // both protocol versions share the server: one product per pass
     const milk = `Lait ${_label}`
     type View = { items: { id: string; name: string; quantity: number; checked: boolean }[]; favorites: string[] }
     const view = (r: { content: unknown }) => JSON.parse(text(r)) as View
@@ -264,7 +264,7 @@ describe.each<[string, VersionNegotiationMode]>([['2025', 'legacy'], ['2026-07-2
     expect((await client.callTool({ name: 'update_shopping_item', arguments: { item: milk } })).isError).toBe(true)
   })
 
-  it('retire les outils de la liste de courses quand elle est coupée dans les Réglages', async () => {
+  it('removes the shopping list tools when it is turned off in Settings', async () => {
     const plugins = kasbah.house.house.plugins
     plugins.shopping = { enabled: false, parts: {}, autoDynamicForNewScenes: false }
     try {
@@ -273,15 +273,15 @@ describe.each<[string, VersionNegotiationMode]>([['2025', 'legacy'], ['2026-07-2
     } finally { delete plugins.shopping }
   })
 
-  it('sert la maison en ressource', async () => {
+  it('serves the house as a resource', async () => {
     const r = await client.readResource({ uri: 'kasbah://house' })
     expect(JSON.parse((r.contents[0] as { text: string }).text).name).toBe(kasbah.house.house.name)
   })
 })
 
-// Après les deux passages : le plafond compte toutes les créations du serveur.
-describe('plafond des créations d\'automatisations', () => {
-  it(`refuse au-delà de ${AUTOMATION_CREATE_LIMIT} créations dans l'heure`, async () => {
+// After both passes: the cap counts all the server's creations.
+describe('cap on automation creations', () => {
+  it(`refuses beyond ${AUTOMATION_CREATE_LIMIT} creations within the hour`, async () => {
     const client = new Client({ name: 'test', version: '0' }, { versionNegotiation: { mode: 'legacy' } })
     await client.connect(new StreamableHTTPClientTransport(url, { authProvider: provider }))
     const light = kasbah.registry.list().find((e) => e.descriptor.kind === 'light')!.descriptor.id
@@ -305,7 +305,7 @@ describe('sensitiveActions', () => {
   const classes: Record<string, string | undefined> = { portail: 'gate', volet: 'shutter', lampe: undefined }
   const classOf = (id: string) => (id in classes ? classes[id] : null)
   const devices = (...deviceIds: string[]) => ({ type: 'devices', deviceIds })
-  it('repère ce qui ouvre un accès ou touche à la voiture, rien d\'autre', () => {
+  it('spots what opens an access or touches the car, nothing else', () => {
     expect(sensitiveActions([
       cmd(devices('volet'), { type: 'cover.open' }),
       cmd(devices('portail'), { type: 'cover.set_position', position: 0 }),
@@ -339,25 +339,25 @@ describe('schoolDigest', () => {
   }
   const opts = { today: '2026-10-04', section: 'all' as const, includePast: false, includeHidden: false }
 
-  it('rend les devoirs à venir triés, filtres de la vue École appliqués', () => {
+  it('returns upcoming homework sorted, with the School view filters applied', () => {
     const d = schoolDigest(data, opts)
     expect(d.homework!.map((h) => h.text)).toEqual(['texte 4', 'texte 3'])
     expect(d.homework![0]).toEqual({ date: '2026-10-05', class: 'CE1-CE2', title: 'devoirs', author: 'Mme Martin', text: 'texte 4', done: false })
   })
 
-  it('rend les devoirs passés et masqués sur demande', () => {
+  it('returns past and hidden homework on request', () => {
     const d = schoolDigest(data, { ...opts, includePast: true, includeHidden: true })
     expect(d.homework!.map((h) => h.text)).toEqual(['texte 1', 'texte 2', 'texte 4', 'texte 3'])
   })
 
-  it('marque messages lus et publications nouvelles, pièces jointes réduites', () => {
+  it('flags read messages and new posts, attachments trimmed down', () => {
     const d = schoolDigest(data, opts)
     expect(d.messages).toEqual([{ at: '2026-09-08T17:09', class: 'CE1-CE2', title: 'sport', author: 'Mme Durand', text: 'baskets', read: false }])
     expect(d.posts!.map((p) => [p.title, p.new])).toEqual([['Photos', true], ['Vote', false]])
     expect(d.posts![0]!.files).toEqual([{ name: 'a.jpg', url: 'https://s3.example/a.jpg' }])
   })
 
-  it('ne rend que la section demandée, et signale une session perdue', () => {
+  it('returns only the requested section, and reports a lost session', () => {
     const d = schoolDigest({ ...data, sessionLost: true }, { ...opts, section: 'messages' })
     expect(d.homework).toBeUndefined()
     expect(d.posts).toBeUndefined()
@@ -367,7 +367,7 @@ describe('schoolDigest', () => {
 })
 
 describe('agendaDigest', () => {
-  it('trie, nomme l\'agenda et rend la fin incluse d\'une journée entière', () => {
+  it('sorts, names the calendar and returns the inclusive end of an all-day event', () => {
     const T = Date.UTC(2026, 9, 9, 12)
     const events = [
       { id: '1', calendarId: 'c', title: 'Dentiste', allDay: false as const, start: T, end: T + 1_800_000, location: 'Dijon' },
@@ -383,7 +383,7 @@ describe('agendaDigest', () => {
 })
 
 describe('weatherDigest', () => {
-  // 2026-10-09 12:00 UTC = 14:00 à Paris
+  // 2026-10-09 12:00 UTC = 14:00 in Paris
   const T = Date.UTC(2026, 9, 9, 12)
   const state: StateFor<'weather'> = {
     kind: 'weather', updatedAt: T, available: true, condition: 'rain', tempC: 14, humidity: 80, windKmh: 20, windDirDeg: 250,
@@ -395,7 +395,7 @@ describe('weatherDigest', () => {
     daily: [{ t: Date.UTC(2026, 9, 8, 22), condition: 'rain', minC: 9, maxC: 15, precipMm: 6, sunrise: state.sunrise, sunset: state.sunset }],
   }
 
-  it('écrit les heures dans le fuseau du lieu et retire le bruit', () => {
+  it('writes times in the place\'s time zone and strips the noise', () => {
     const d = weatherDigest(state, forecast, { tz: 'Europe/Paris' })
     expect(d.now).toMatchObject({ observedAt: '2026-10-09 14:00', sunrise: '08:05', sunset: '19:10', tempC: 14 })
     expect(d.now).not.toHaveProperty('kind')
@@ -404,7 +404,7 @@ describe('weatherDigest', () => {
     expect(d.daily[0]).toMatchObject({ date: '2026-10-09', minC: 9, maxC: 15, sunrise: '08:05' })
   })
 
-  it('prend la vigilance du département, sinon celle en cours de l\'état', () => {
+  it('takes the department\'s weather warnings, otherwise the current ones from the state', () => {
     const area = { area: "Côte-d'Or", warnings: [{ type: 'wind', level: 'orange' as const, onset: T, expires: T + 7_200_000 }] }
     expect(weatherDigest(state, forecast, { tz: 'Europe/Paris', vigilance: area }).vigilance)
       .toEqual({ area: "Côte-d'Or", warnings: [{ type: 'wind', level: 'orange', from: '2026-10-09 14:00', to: '2026-10-09 16:00' }] })
@@ -414,14 +414,14 @@ describe('weatherDigest', () => {
   })
 })
 
-it('get_agenda sans le plugin rend une erreur d\'outil', async () => {
+it('get_agenda without the plugin returns a tool error', async () => {
   const client = new Client({ name: 'test', version: '0' })
   await client.connect(new StreamableHTTPClientTransport(url, { authProvider: provider }))
   expect((await client.callTool({ name: 'get_agenda', arguments: {} })).isError).toBe(true)
   await client.close()
 })
 
-it('get_school sans le plugin rend une erreur d\'outil', async () => {
+it('get_school without the plugin returns a tool error', async () => {
   const client = new Client({ name: 'test', version: '0' })
   await client.connect(new StreamableHTTPClientTransport(url, { authProvider: provider }))
   const r = await client.callTool({ name: 'get_school', arguments: {} })
@@ -429,12 +429,12 @@ it('get_school sans le plugin rend une erreur d\'outil', async () => {
   await client.close()
 })
 
-it('accepte le nom du poste sur le DNS local', async () => {
+it('accepts the machine\'s name on the local DNS', async () => {
   const res = await kasbah.app.inject({ method: 'POST', url: '/mcp', headers: { host: 'kasbah:8787', 'content-type': 'application/json' }, payload: {} })
   expect(res.statusCode).toBe(401)
 })
 
-it('exige un jeton, même en local, et dit où trouver le serveur d\'autorisation', async () => {
+it('requires a token, even locally, and says where to find the authorization server', async () => {
   const res = await kasbah.app.inject({ method: 'POST', url: '/mcp', headers: { host: 'kasbah:8787', 'content-type': 'application/json' }, payload: {} })
   expect(res.statusCode).toBe(401)
   expect(res.headers['www-authenticate']).toBe('Bearer resource_metadata="http://kasbah:8787/.well-known/oauth-protected-resource/mcp"')
@@ -443,13 +443,13 @@ it('exige un jeton, même en local, et dit où trouver le serveur d\'autorisatio
   expect(bad.headers['www-authenticate']).toContain('error="invalid_token"')
 })
 
-it('refuse un Host qui n\'est ni localhost ni le poste (DNS rebinding)', async () => {
+it('refuses a Host that is neither localhost nor the machine (DNS rebinding)', async () => {
   const res = await kasbah.app.inject({ method: 'POST', url: '/mcp', headers: { host: 'evil.example:8787', 'content-type': 'application/json' }, payload: {} })
   expect(res.statusCode).toBe(403)
 })
 
-describe("agir au nom d'un compte", () => {
-  it('ne se laisse pas réclamer depuis le réseau', async () => {
+describe("acting in the name of an account", () => {
+  it('cannot be claimed from the network', async () => {
     const speaker = kasbah.registry.list().find((e) => e.descriptor.capabilities.includes('play_url'))!
     const res = await fetch(new URL('/api/music/play', url), {
       method: 'POST',

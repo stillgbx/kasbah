@@ -10,9 +10,9 @@ import { loadHouse } from '../config/house'
 import { createMockPlugin } from '../plugins/mock'
 import { hashPassword } from './auth'
 
-// Sous le nom public (`MCP_PUBLIC_URL`, celui du proxy inverse du NAS), le MCP répond avec ses jetons
-// et le reste exige une session (détail dans `http/session.test.ts`) : le proxy transmet tout, c'est
-// l'application assemblée qui trie. Le réseau local ne change pas.
+// Under the public name (`MCP_PUBLIC_URL`, that of the NAS reverse proxy), the MCP answers with its
+// tokens and the rest requires a session (details in `http/session.test.ts`): the proxy forwards
+// everything, the assembled application does the sorting. The local network does not change.
 
 const PUBLIC = 'kasbah.example.org'
 const ORIGIN = `https://${PUBLIC}`
@@ -39,7 +39,7 @@ afterAll(async () => { await kasbah.close() })
 const get = (url: string, headers: Record<string, string>) => kasbah.app.inject({ method: 'GET', url, headers })
 const HTML = { accept: 'text/html' }
 
-it('ferme l\'interface, l\'API, le WebSocket et les comptes sans session sous le nom public', async () => {
+it('closes the interface, the API, the WebSocket and the accounts without a session under the public name', async () => {
   for (const url of ['/', '/settings', '/oauth', '/.well-known/other']) {
     const res = await get(url, { host: PUBLIC, ...HTML })
     expect(res.statusCode, url).toBe(302)
@@ -51,7 +51,7 @@ it('ferme l\'interface, l\'API, le WebSocket et les comptes sans session sous le
   expect((await get('/login', { host: PUBLIC })).statusCode).toBe(200)
 })
 
-it('laisse passer le MCP et son autorisation sous le nom public', async () => {
+it('lets the MCP and its authorization through under the public name', async () => {
   expect((await kasbah.app.inject({ method: 'POST', url: '/mcp', headers: { host: PUBLIC, 'content-type': 'application/json' }, payload: {} })).statusCode).toBe(401)
   const meta = await get('/.well-known/oauth-protected-resource/mcp', { host: PUBLIC })
   expect(meta.json()).toMatchObject({ resource: `https://${PUBLIC}/mcp` })
@@ -59,11 +59,11 @@ it('laisse passer le MCP et son autorisation sous le nom public', async () => {
   expect((await get('/oauth/authorize?client_id=x', { host: PUBLIC })).statusCode).toBe(400)
 })
 
-it('reconnaît aussi le nom public transmis par le proxy en X-Forwarded-Host', async () => {
+it('also recognizes the public name forwarded by the proxy in X-Forwarded-Host', async () => {
   expect((await get('/api/devices', { host: '192.168.1.90:8787', 'x-forwarded-host': `${PUBLIC}:443` })).statusCode).toBe(401)
 })
 
-it('ne change rien sur le réseau local', async () => {
+it('changes nothing on the local network', async () => {
   expect((await get('/api/devices', { host: 'kasbah:8787' })).statusCode).toBe(200)
   expect((await get('/api/mcp/users', { host: 'localhost:8787' })).statusCode).toBe(200)
   expect((await get('/api/session', { host: 'kasbah:8787' })).json()).toEqual({ user: null })
@@ -75,13 +75,13 @@ const login = (username: string, password: string) => kasbah.app.inject({
   payload: new URLSearchParams({ username, password }).toString(),
 })
 
-it('ouvre le WebSocket avec une session et l’origine du site, et le refuse sinon', async () => {
+it('opens the WebSocket with a session and the site origin, and refuses it otherwise', async () => {
   const ws = (headers: Record<string, string>) => kasbah.app.injectWS('/ws', { headers: { host: PUBLIC, ...headers } })
   await expect(ws({ origin: ORIGIN })).rejects.toThrow('401')
   const cookie = String((await login('lou', 'bon-mot-de-passe')).headers['set-cookie']).split(';')[0]!
   await expect(ws({ cookie })).rejects.toThrow('403')
   await expect(ws({ cookie, origin: 'https://nas.example.org' })).rejects.toThrow('403')
-  // L'instantané part dès l'ouverture : écouteur posé avant.
+  // The snapshot goes out on open: listener set beforehand.
   let first!: Promise<string>
   const socket = await kasbah.app.injectWS('/ws', { headers: { host: PUBLIC, cookie, origin: ORIGIN } }, {
     onInit: (s) => { first = new Promise((ok) => s.once('message', (m) => ok(String(m)))) },
@@ -90,7 +90,7 @@ it('ouvre le WebSocket avec une session et l’origine du site, et le refuse sin
   socket.terminate()
 })
 
-it('partage le blocage des comptes avec la connexion MCP, au seuil réglé', async () => {
+it('shares the account lockout with the MCP sign-in, at the configured threshold', async () => {
   for (let i = 0; i < 2; i++) expect((await login('lou', 'faux')).statusCode).toBe(401)
   expect((await login('lou', 'bon-mot-de-passe')).statusCode).toBe(429)
   const clientId = (await kasbah.app.inject({

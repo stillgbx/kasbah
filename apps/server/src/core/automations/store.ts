@@ -3,13 +3,13 @@ import { dirname } from 'node:path'
 import { automationsFileSchema, type Automation } from '@kasbah/shared'
 import { ReadOnlyHouseError } from '../../config/house'
 
-// Les automatisations d'une maison vivent dans un fichier À CÔTÉ d'elle : `maison.json` →
-// `maison.automations.json`. Deux maisons, deux fichiers ; et ce sont des données de l'utilisateur,
-// pas un cache du serveur — rien à voir avec `.state/`, qu'on peut effacer sans rien perdre.
+// A house's automations live in a file NEXT TO it: `maison.json` → `maison.automations.json`.
+// Two houses, two files; and this is user data, not a server cache — nothing to do with
+// `.state/`, which can be wiped without losing anything.
 //
-// Un fichier illisible EMPÊCHE le démarrage, comme une maison invalide : démarrer à vide ferait
-// écraser les règles de l'utilisateur par la première sauvegarde. Écriture atomique (temporaire +
-// rename) avec copie `.bak` de la version précédente, écritures sérialisées.
+// An unreadable file PREVENTS startup, like an invalid house: starting empty would let the first
+// save overwrite the user's rules. Atomic write (temporary + rename) with a `.bak` copy of the
+// previous version, serialized writes.
 
 export function automationsPathFor(housePath: string): string {
   return `${housePath.replace(/\.json$/i, '')}.automations.json`
@@ -20,7 +20,7 @@ export interface AutomationsStore {
   save(automations: readonly Automation[]): Promise<void>
 }
 
-/** `readOnly` : une démonstration — ses automatisations se lisent, aucune ne s'écrit (`ReadOnlyHouseError`). */
+/** `readOnly`: a demo — its automations can be read, none can be written (`ReadOnlyHouseError`). */
 export function createAutomationsFile(path: string, opts: { readOnly?: boolean } = {}): AutomationsStore {
   let queue: Promise<unknown> = Promise.resolve()
   return {

@@ -3,14 +3,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll } from 'vitest'
 
-// Un plugin construit avec sa configuration par défaut écrit dans `apps/server/.state` — y compris
-// sous vitest : un test qui appelle `plugin.init()` sans stub de store CHARGE l'état réel, y ajoute
-// ses fixtures et le réécrit (constaté le 2026-09-18 sur `comap-consumption.json` et
-// `melcloud-history.json`). Ce fichier, chargé avant chaque fichier de test, déplace le dossier.
+// A plugin built with its default configuration writes into `apps/server/.state` — including
+// under vitest: a test that calls `plugin.init()` without a store stub LOADS the real state, adds
+// its fixtures to it and writes it back (seen on 2026-09-18 on `comap-consumption.json` and
+// `melcloud-history.json`). This file, loaded before each test file, moves the folder.
 const dir = join(tmpdir(), 'kasbah-test-state', String(process.pid))
 process.env.KASBAH_STATE_DIR = dir
 
-// Les sauvegardes des plugins sont en « feu et oubli » : une écriture peut être encore en vol ici,
-// et son `rename` échouerait dans le vide — c'est justement ce qui laissait des `.tmp`, désormais
-// dans un dossier jetable.
+// Plugin saves are "fire and forget": a write may still be in flight here, and its `rename`
+// would fail into the void — that is exactly what left `.tmp` files behind, now in a throwaway
+// folder.
 afterAll(() => { rmSync(dir, { recursive: true, force: true, maxRetries: 3 }) })

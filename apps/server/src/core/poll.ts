@@ -14,8 +14,8 @@ export interface PollerOptions {
 }
 
 /**
- * Exécute `fn` tout de suite puis toutes les `intervalMs` en cas de succès ; en cas d'erreur,
- * journalise une fois (puis en debug jusqu'au rétablissement) et attend le prochain délai de backoff.
+ * Runs `fn` right away then every `intervalMs` on success; on error, logs once (then at debug level
+ * until recovery) and waits for the next backoff delay.
  */
 export function createPoller(opts: PollerOptions): { stop(): void; readonly running: boolean } {
   const backoff = opts.backoff ?? createBackoff({ initialMs: Math.min(opts.intervalMs, 2000), maxMs: 60_000 })
@@ -42,7 +42,7 @@ export function createPoller(opts: PollerOptions): { stop(): void; readonly runn
   return { stop() { running = false; ctrl.abort() }, get running() { return running } }
 }
 
-/** Rejette en PluginError('TIMEOUT') si la promesse n'est pas résolue dans `ms`. */
+/** Rejects with PluginError('TIMEOUT') if the promise is not settled within `ms`. */
 export function withTimeout<T>(p: Promise<T>, ms: number, clock: Clock, what = 'operation'): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const h = clock.setTimeout(() => reject(new PluginError('TIMEOUT', `${what} timed out after ${ms} ms`)), ms)

@@ -8,21 +8,21 @@ import type { Clock } from '../core/clock'
 import type { DeviceRegistry } from '../core/registry'
 import type { SceneRegistry } from '../core/scene-registry'
 
-// Hub WebSocket : snapshot à la connexion, puis push des états ENTIERS coalescés par appareil
-// (une rafale d'événements SSE Hue devient une trame). Ping protocolaire pour purger les morts.
+// WebSocket hub: snapshot on connection, then push of FULL states coalesced per device (a burst of
+// Hue SSE events becomes one frame). Protocol ping to purge dead clients.
 
 export interface WsHubOptions {
   coalesceMs?: number
   heartbeatMs?: number
-  /** Scènes des fabricants (snapshot et push) ; absentes des tests qui n'en ont pas besoin. */
+  /** Vendor scenes (snapshot and push); absent from tests that don't need them. */
   scenes?: SceneRegistry
-  /** Automatisations et leur statut (snapshot) ; le moteur pousse lui-même les changements. */
+  /** Automations and their status (snapshot); the engine pushes the changes itself. */
   automations?: { list(): AutomationEntry[] }
-  /** Liste de courses (snapshot) ; le service pousse lui-même les changements. */
+  /** Shopping list (snapshot); the service pushes the changes itself. */
   shopping?: { get(): ShoppingList }
-  /** Propriété que le serveur fait vivre : un écran qui la trouve changée se recharge. */
+  /** Property the server is running: a screen that finds it changed reloads. */
   propertyId?: () => string
-  /** Build web servi : un écran qui porte un autre build propose de recharger. */
+  /** Web build being served: a screen carrying another build offers to reload. */
   appBuild?: () => string | undefined
 }
 
@@ -57,16 +57,16 @@ export class WsHub {
     this.unsubscribe.push(
       bus.on('state', (id, state) => { this.pending.set(id, state); this.scheduleFlush() }),
       bus.on('availability', (deviceIds, available) => {
-        // les états complets suivent aussi par `state` ; on envoie la bascule groupée tout de suite
+        // the full states also follow through `state`; the grouped toggle is sent right away
         for (const id of deviceIds) { const e = registry.get(id); if (e) this.pending.set(id, e.state) }
         this.broadcast({ type: 'availability', deviceIds, available })
         this.scheduleFlush()
       }),
       bus.on('devices', (entries) => this.broadcast({ type: 'devices', devices: entries })),
-      // les scènes changent rarement (rappel manuel, interrupteur mural) : pas de coalescence
+      // scenes change rarely (manual recall, wall switch): no coalescing
       bus.on('scenes', (entries) => this.broadcast({ type: 'scenes', scenes: entries })),
       bus.on('scene', (sceneId, state) => this.broadcast({ type: 'scene', sceneId, state })),
-      // événement transitoire (sonnette, mouvement) : poussé tout de suite, jamais coalescé
+      // transient event (doorbell, motion): pushed right away, never coalesced
       bus.on('deviceEvent', (deviceId, event, at) => this.broadcast({ type: 'deviceEvent', deviceId, event, at })),
     )
   }
@@ -84,7 +84,7 @@ export class WsHub {
     socket.on('pong', () => { const c = this.clients.get(socket); if (c) c.alive = true })
     socket.on('close', () => this.clients.delete(socket))
     socket.on('error', (err) => { this.logger.debug({ err }, 'ws client error'); this.clients.delete(socket) })
-    socket.on('message', () => { /* v1 : le client n'envoie rien d'utile */ })
+    socket.on('message', () => { /* v1: the client sends nothing useful */ })
     const appBuild = this.appBuild?.()
     this.send(socket, { type: 'snapshot', serverTime: this.clock.now(), devices: this.registry.list(), scenes: this.scenes?.list() ?? [], automations: this.automations?.list() ?? [], shopping: this.shopping?.get() ?? EMPTY_SHOPPING_LIST, ...(this.propertyId ? { propertyId: this.propertyId() } : {}), ...(appBuild ? { appBuild } : {}) })
     this.logger.debug({ clients: this.clients.size }, 'ws client connected')
@@ -103,7 +103,7 @@ export class WsHub {
     this.flushTimer = this.clock.setTimeout(() => { this.flushTimer = null; this.flush() }, this.coalesceMs)
   }
 
-  /** Envoie les états en attente (le dernier par appareil). Public pour les tests. */
+  /** Sends the pending states (the last one per device). Public for tests. */
   flush(): void {
     for (const [deviceId, state] of this.pending) this.broadcast({ type: 'state', deviceId, state })
     this.pending.clear()

@@ -1,4 +1,4 @@
-// Horloge injectable (même forme que celle de @kasbah/mock-sim : une ManualClock de test y passe).
+// Injectable clock (same shape as the one in @kasbah/mock-sim: a test ManualClock fits in).
 export interface Clock {
   now(): number
   setInterval(fn: () => void, ms: number): unknown

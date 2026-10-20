@@ -3,9 +3,9 @@ import { z } from 'zod'
 import { sendError } from '../http/errors'
 import { deleteUser, passwordSchema, readUsers, saveUser, userNameSchema } from './auth'
 
-// Comptes du serveur MCP pour Réglages : les noms seulement, jamais les mots de passe hachés.
-// Comme le reste de `/api`, ouvert au réseau local sans authentification ; sous le nom PUBLIC
-// (`MCP_PUBLIC_URL`), le filtre global `publicHostFilter` (`auth.ts`) le rend introuvable.
+// MCP server accounts for Settings: the names only, never the hashed passwords.
+// Like the rest of `/api`, open to the local network without authentication; under the PUBLIC
+// name (`MCP_PUBLIC_URL`), the global `publicHostFilter` (`auth.ts`) makes it unreachable.
 
 export interface McpUserRoutesDeps {
   usersFile: string

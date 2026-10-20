@@ -10,8 +10,8 @@ import { parseHouse } from '@kasbah/shared'
 import { createAutomationsFile } from '../core/automations/store'
 import { DEMO_HOUSE_FILES, createLocalProperty, duplicateProperty, loadDemoProperties, loadLocalProperties, readModeState, writeModeState } from './properties'
 
-// Les propriétés de démonstration et leurs routes : liste, bascule demandée, refus d'un serveur à
-// une seule maison. La reconstruction du serveur elle-même vit dans `main.ts`.
+// The demo properties and their routes: list, requested switch, refusal from a single-house server.
+// The server rebuild itself lives in `main.ts`.
 
 describe('demo properties', () => {
   it('reads the three demo houses with their kind and simulated park', async () => {
@@ -109,7 +109,7 @@ describe('properties routes', () => {
         create: async (body) => { made.push(`new:${body.name}`); return 'maison-du-lac' },
         duplicate: async (id, name) => { made.push(`dup:${id}:${name}`); return 'copie' },
         setMode: (mode) => { asked.push(`mode:${mode}`) },
-        // le catalogue connaît aussi les propriétés de l'AUTRE mode (une propriété réelle qu'on vient de créer en démo)
+        // the catalog also knows the properties of the OTHER mode (a real property just created in demo)
         has: (id) => list.properties.some((p) => p.id === id) || id === 'nouvelle',
       }, true)
     })
@@ -121,7 +121,7 @@ describe('properties routes', () => {
       expect(asked).toEqual(['belvedere'])
     })
 
-    it('bascule vers une propriété de l’autre mode : celle qu’on vient de créer en démo (202)', async () => {
+    it('switches to a property of the other mode: the one just created in demo (202)', async () => {
       expect((await k.app.inject({ method: 'POST', url: '/api/properties/nouvelle/select' })).statusCode).toBe(202)
       expect(asked).toContain('nouvelle')
     })

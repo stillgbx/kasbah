@@ -20,7 +20,7 @@ beforeEach(() => {
 
 const put = (name: string, password: string) => app.inject({ method: 'PUT', url: `/api/mcp/users/${encodeURIComponent(name)}`, payload: { password } })
 
-it('crée un compte, change son mot de passe, ne rend jamais les hachés', async () => {
+it('creates an account, changes its password, never returns the hashes', async () => {
   expect((await app.inject({ method: 'GET', url: '/api/mcp/users' })).json()).toEqual({ users: [] })
   expect((await put('lou', 'premier-mdp')).json()).toEqual({ users: [{ name: 'lou' }] })
   const first = (await readUsers(usersFile)).users[0]!.password
@@ -33,19 +33,19 @@ it('crée un compte, change son mot de passe, ne rend jamais les hachés', async
   expect((await app.inject({ method: 'GET', url: '/api/mcp/users' })).body).not.toContain('scrypt')
 })
 
-it('refuse un mot de passe court ou un nom invalide', async () => {
+it('refuses a short password or an invalid name', async () => {
   expect((await put('lou', 'court')).statusCode).toBe(400)
   expect((await put('a b', 'assez-long')).statusCode).toBe(400)
 })
 
-it('retire un compte, 404 s\'il n\'existe pas', async () => {
+it('removes an account, 404 if it does not exist', async () => {
   await put('lou', 'premier-mdp')
   await put('zoe', 'premier-mdp')
   expect((await app.inject({ method: 'DELETE', url: '/api/mcp/users/lou' })).json()).toEqual({ users: [{ name: 'zoe' }] })
   expect((await app.inject({ method: 'DELETE', url: '/api/mcp/users/lou' })).statusCode).toBe(404)
 })
 
-it('efface les comptes musicaux du compte retiré, et ceux-là seulement', async () => {
+it('wipes the music accounts of the removed account, and only those', async () => {
   await put('lou', 'premier-mdp')
   await put('zoe', 'premier-mdp')
   for (const name of ['lou', 'zoe']) {
@@ -57,15 +57,15 @@ it('efface les comptes musicaux du compte retiré, et ceux-là seulement', async
   expect(existsSync(userStateFile('zoe', 'mixcloud.json'))).toBe(true)
 })
 
-it('range un nom en point dans son propre dossier, sous celui des comptes', () => {
-  // `userNameSchema` admet `.` et `..` : ils ne doivent désigner ni le dossier des comptes ni son parent
+it('stores a dot name in its own folder, under the accounts folder', () => {
+  // `userNameSchema` allows `.` and `..`: they must designate neither the accounts folder nor its parent
   expect(dirname(userStateDir('..'))).toBe(dirname(userStateDir('lou')))
   expect(userStateDir('.')).not.toBe(dirname(userStateDir('lou')))
-  // `Lou` et `lou` sont deux comptes : leurs dossiers diffèrent aussi sur un disque qui ignore la casse
+  // `Lou` and `lou` are two accounts: their folders also differ on a case-insensitive disk
   expect(userStateDir('Lou').toLowerCase()).not.toBe(userStateDir('lou').toLowerCase())
 })
 
-it('n\'écrase pas un fichier illisible', async () => {
+it('does not overwrite an unreadable file', async () => {
   writeFileSync(usersFile, '{ pas du json')
   const res = await put('lou', 'premier-mdp')
   expect(res.statusCode).toBe(500)

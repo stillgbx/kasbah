@@ -4,21 +4,21 @@ import {
   type ModeState, type PropertyEntry,
 } from './properties'
 
-// Le CATALOGUE d'un serveur sans maison imposée : les démonstrations et les propriétés réelles du
-// poste, une seule vivante à la fois. Deux MODES : en démo, on ne voit et ne choisit que les démos ;
-// en réel, que les propriétés du poste. Chaque mode retient sa dernière propriété : passer de l'un à
-// l'autre rouvre celle-là. Rien ici ne reconstruit le serveur — `main.ts` le fait avec ce qu'on lui rend.
+// The CATALOG of a server without an imposed house: the demos and the machine's real properties, a
+// single one live at a time. Two MODES: in demo, you only see and choose the demos; in real, only
+// the machine's properties. Each mode remembers its last property: switching from one to the other
+// reopens that one. Nothing here rebuilds the server — `main.ts` does it with what it gets back.
 //
-// Préparé pour plusieurs maisons réelles : on choisit déjà entre elles ; ce qui manque pour qu'elles
-// vivent ensemble (un état et des clés par propriété) est ailleurs.
+// Ready for several real houses: you can already choose between them; what is missing for them to
+// live together (a state and keys per property) is elsewhere.
 
 export interface CatalogDeps {
   demos?: PropertyEntry[]
   locals?: PropertyEntry[]
   state?: ModeState
-  /** Écrit le mode et les choix retenus (défaut : `.state/property-mode.json`). */
+  /** Writes the mode and the remembered choices (default: `.state/property-mode.json`). */
   persist?: (s: ModeState) => Promise<void>
-  /** Relit les propriétés du poste après une création (défaut : `house/properties/`). */
+  /** Re-reads the machine's properties after a creation (default: `house/properties/`). */
   reloadLocals?: () => Promise<PropertyEntry[]>
   create?: (body: NewPropertyBody, taken: string[]) => Promise<string>
   duplicate?: (source: PropertyEntry, name: string, taken: string[]) => Promise<string>
@@ -37,7 +37,7 @@ export class PropertyCatalog {
     this.state = { ...deps.state }
   }
 
-  /** Ouvre le catalogue : démos, propriétés du poste, choix retenus (ou ceux fournis, pour les tests). */
+  /** Opens the catalog: demos, the machine's properties, remembered choices (or those provided, for tests). */
   static async open(deps: CatalogDeps = {}): Promise<PropertyCatalog> {
     return new PropertyCatalog({
       ...deps,
@@ -48,8 +48,8 @@ export class PropertyCatalog {
   }
 
   /**
-   * Le mode montré. Au premier lancement, celui où il y a quelque chose de réel à montrer : une
-   * installation neuve démarre en démo, un poste qui a déjà ses propriétés démarre chez lui.
+   * The mode shown. On first launch, the one where there is something real to show: a fresh
+   * installation starts in demo, a machine that already has its properties starts at home.
    */
   get mode(): PropertyMode {
     const wanted = this.state.mode ?? (this.locals.length ? 'real' : 'demo')
@@ -59,7 +59,7 @@ export class PropertyCatalog {
   private of(mode: PropertyMode): PropertyEntry[] { return mode === 'demo' ? this.demos : this.locals }
   private all(): PropertyEntry[] { return [...this.locals, ...this.demos] }
 
-  /** La propriété qui vit : celle retenue dans le mode, sinon la première du mode. */
+  /** The live property: the one remembered in the mode, otherwise the first of the mode. */
   get active(): PropertyEntry {
     const list = this.of(this.mode)
     return list.find((p) => p.id === this.state[this.mode]) ?? list[0]!
@@ -74,7 +74,7 @@ export class PropertyCatalog {
 
   find(id: string): PropertyEntry | undefined { return this.all().find((p) => p.id === id) }
 
-  /** Choisit une propriété, de l'un ou l'autre mode : son mode devient celui montré. Rend la nouvelle active. */
+  /** Chooses a property, from either mode: its mode becomes the one shown. Returns the new active one. */
   async choose(id: string): Promise<PropertyEntry | null> {
     const entry = this.find(id)
     if (!entry) return null
@@ -83,21 +83,21 @@ export class PropertyCatalog {
     return entry
   }
 
-  /** Passe en démo ou en réel ; `null` si le réel n'a encore aucune propriété. Rend la nouvelle active. */
+  /** Switches to demo or real; `null` if real has no property yet. Returns the new active one. */
   async chooseMode(mode: PropertyMode): Promise<PropertyEntry | null> {
     if (!this.of(mode).length) return null
     await this.save({ ...this.state, mode })
     return this.active
   }
 
-  /** Crée une propriété réelle ; rend son id (la choisir est un `choose` à part). */
+  /** Creates a real property; returns its id (choosing it is a separate `choose`). */
   async create(body: NewPropertyBody): Promise<string> {
     const id = await (this.deps.create ?? ((b, t) => createLocalProperty(b, t)))(body, this.all().map((p) => p.id))
     await this.refresh()
     return id
   }
 
-  /** Copie réelle d'une propriété (une démo, le plus souvent) ; rend l'id de la copie. */
+  /** Real copy of a property (a demo, most often); returns the copy's id. */
   async duplicate(id: string, name: string): Promise<string> {
     const source = this.find(id)
     if (!source) throw Object.assign(new Error(`unknown property "${id}"`), { statusCode: 404, code: 'NOT_FOUND' })

@@ -4,39 +4,38 @@ import { lintHouse, parseHouse, type House, type HouseWarning } from '@kasbah/sh
 
 export interface LoadedHouse {
   house: House; warnings: HouseWarning[]; path: string; raw: string
-  /** Propriété de démonstration : toute écriture est refusée (`ReadOnlyHouseError`). */
+  /** Demo property: any write is refused (`ReadOnlyHouseError`). */
   readOnly?: boolean
 }
 
-/** Écriture refusée : la propriété montrée est une démonstration, qu'on duplique pour la modifier. */
+/** Write refused: the property shown is a demo, which you duplicate to change it. */
 export class ReadOnlyHouseError extends Error {
   readonly statusCode = 409
   readonly code = 'DEMO_READONLY'
   constructor() { super('this property is a demo: duplicate it to change it'); this.name = 'ReadOnlyHouseError' }
 }
 
-/** Lit et valide le JSON de la maison. Une maison invalide empêche le démarrage (échec rapide). */
+/** Reads and validates the house JSON. An invalid house prevents startup (fail fast). */
 export async function loadHouse(path: string): Promise<LoadedHouse> {
   const raw = await readFile(path, 'utf8')
   const house = parseHouse(JSON.parse(raw))
   return { house, warnings: lintHouse(house), path, raw }
 }
 
-// Écriture : la SEULE modification que le serveur fait au fichier (placement d'un appareil depuis
-// l'UI). Lire-modifier-écrire sur le fichier lui-même — pas depuis la mémoire — pour ne pas écraser
-// une édition manuelle faite depuis le démarrage ; validation complète avant d'écrire ; écriture
-// atomique (fichier temporaire + rename) avec copie `.bak` de la version précédente. Les écritures
-// sont sérialisées par fichier.
+// Writing: the ONLY change the server makes to the file (placing a device from the UI).
+// Read-modify-write on the file itself — not from memory — so as not to overwrite a manual edit
+// made since startup; full validation before writing; atomic write (temporary file + rename) with a
+// `.bak` copy of the previous version. Writes are serialized per file.
 
 const queues = new Map<string, Promise<unknown>>()
 
-/** Versions gardées dans `history/` : le `.bak` n'en garde qu'une, écrasée à l'écriture suivante. */
+/** Versions kept in `history/`: the `.bak` keeps only one, overwritten at the next write. */
 export const HOUSE_HISTORY_KEEP = 50
 
 /**
- * Copie horodatée de la version qu'on s'apprête à remplacer, dans `history/` à côté du fichier : une
- * erreur d'édition se rattrape même plusieurs écritures plus tard. Les plus anciennes au-delà de
- * `HOUSE_HISTORY_KEEP` sont retirées (l'horodatage ISO se trie comme une chaîne).
+ * Timestamped copy of the version about to be replaced, in `history/` next to the file: an editing
+ * mistake can be undone even several writes later. The oldest ones beyond `HOUSE_HISTORY_KEEP` are
+ * removed (the ISO timestamp sorts as a string).
  */
 async function keepHistory(path: string, raw: string): Promise<void> {
   const dir = join(dirname(path), 'history')
@@ -53,7 +52,7 @@ export async function updateHouseFile(loaded: LoadedHouse, mutate: (doc: unknown
   const run = async () => {
     const raw = await readFile(loaded.path, 'utf8')
     const doc = mutate(JSON.parse(raw))
-    const house = parseHouse(doc)             // HouseValidationError → 400 via le gestionnaire d'erreurs
+    const house = parseHouse(doc)             // HouseValidationError → 400 through the error handler
     const text = `${JSON.stringify(doc, null, 2)}\n`
     await writeFile(`${loaded.path}.bak`, raw, 'utf8')
     await keepHistory(loaded.path, raw)

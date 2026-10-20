@@ -1,6 +1,6 @@
 import type { DeviceEntry, DeviceEventKind, DeviceId, DeviceState, PluginSceneEntry, PluginSceneState, SceneId } from '@kasbah/shared'
 
-// Bus d'événements typé, seul canal entre le registre et les consommateurs (hub WS, plus tard automatisations).
+// Typed event bus, the only channel between the registry and its consumers (WS hub, later automations).
 
 export interface BusEvents {
   state: (deviceId: DeviceId, state: DeviceState) => void
@@ -8,7 +8,7 @@ export interface BusEvents {
   devices: (entries: DeviceEntry[]) => void
   scenes: (entries: PluginSceneEntry[]) => void
   scene: (sceneId: SceneId, state: PluginSceneState) => void
-  /** Événement transitoire d'un appareil (sonnette, mouvement) — poussé tel quel, jamais coalescé. */
+  /** Transient device event (doorbell, motion) — pushed as is, never coalesced. */
   deviceEvent: (deviceId: DeviceId, event: DeviceEventKind, at: number) => void
 }
 

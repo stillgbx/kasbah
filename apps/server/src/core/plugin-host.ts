@@ -10,14 +10,14 @@ import { withTimeout } from './poll'
 import type { DeviceRegistry } from './registry'
 import type { SceneRegistry } from './scene-registry'
 
-// Cycle de vie des plugins : TOUS sont instanciés, la MAISON dit lesquels tournent
-// (`house.plugins`, décidé depuis Réglages), validation de leur config, isolation (un fabricant en
-// panne ne fait jamais tomber la maison), arrêt propre.
+// Plugin lifecycle: ALL are instantiated, the HOUSE says which ones run (`house.plugins`, decided
+// from Settings), validation of their config, isolation (a broken vendor never brings the house
+// down), clean shutdown.
 
 export interface PluginHostOptions {
-  /** Position de la maison (`house.origin`), donnée aux plugins par `ctx.site`. Relue à chaque démarrage de plugin. */
+  /** Position of the house (`house.origin`), given to plugins through `ctx.site`. Re-read at each plugin start. */
   site: () => PluginSite
-  /** Réglages du plugin dans la maison courante. Relu à chaque fois : house.json peut changer. */
+  /** The plugin's settings in the current house. Re-read every time: house.json may change. */
   settingsOf: (pluginId: string) => PluginSettings
   strict: boolean
   factories: Record<string, PluginFactory>
@@ -26,14 +26,14 @@ export interface PluginHostOptions {
   bus: Bus
   clock: Clock
   logger: Logger
-  /** Source des variables d'environnement (process.env par défaut). */
+  /** Source of the environment variables (process.env by default). */
   envSource?: NodeJS.ProcessEnv
   commandTimeoutMs?: number
-  /** Premier délai avant de retenter un démarrage raté (doublé à chaque échec, plafonné à 10 min). */
+  /** First delay before retrying a failed start (doubled on each failure, capped at 10 min). */
   retryInitialMs?: number
 }
 
-/** Plafond des nouvelles tentatives : une box absente pour la nuit ne doit pas être sondée en boucle. */
+/** Cap on retries: a box gone for the night must not be polled in a loop. */
 const RETRY_MAX_MS = 10 * 60_000
 
 interface Slot {
@@ -42,9 +42,9 @@ interface Slot {
   ctx: PluginContext | null
   status: PluginHealth
   config: Record<string, unknown> | null
-  /** Sous-items avec lesquels le plugin TOURNE : en changer demande un redémarrage. */
+  /** Sub-items the plugin is RUNNING with: changing them requires a restart. */
   appliedParts: Record<string, boolean> | null
-  /** Nouvelle tentative de démarrage programmée après un échec (voir `startOne`). */
+  /** Start retry scheduled after a failure (see `startOne`). */
   retry: unknown
   retryBackoff: Backoff
 }
@@ -53,9 +53,9 @@ export class PluginHost {
   private readonly slots = new Map<string, Slot>()
   private readonly order: string[] = []
   private readonly logger: Logger
-  /** Véhicule → borne que Kasbah a forcée pour lui, jusqu'à sa limite ou son débranchement. */
+  /** Vehicle → charger that Kasbah forced for it, until its limit or its unplugging. */
   private readonly forcedFor = new Map<string, string>()
-  /** Véhicules dont le PLUGIN dit qu'ils chargent : ce que `chargingRefuted` peut démentir puis rendre. */
+  /** Vehicles whose PLUGIN says they are charging: what `chargingRefuted` can contradict then restore. */
   private readonly claimsCharging = new Set<string>()
 
   constructor(private readonly opts: PluginHostOptions) {
@@ -75,7 +75,7 @@ export class PluginHost {
       if (parsed.success) slot.config = parsed.data
       else {
         const detail = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')
-        // config illisible : le plugin reste déclaré et visible, il ne peut simplement pas démarrer
+        // unreadable config: the plugin stays declared and visible, it simply cannot start
         if (opts.strict && opts.settingsOf(id).enabled) throw new Error(`plugin "${id}" configuration invalid: ${detail}`)
         this.logger.warn({ plugin: id, detail }, 'plugin cannot start: invalid configuration')
         slot.status = { status: 'error', detail }
@@ -88,13 +88,13 @@ export class PluginHost {
   ids(): string[] { return [...this.order] }
   get(id: string): DevicePlugin | undefined { return this.slots.get(id)?.plugin }
 
-  /** Voulu allumé : coché dans la maison, et réellement implémenté (un squelette ne s'allume pas). */
+  /** Wanted on: checked in the house, and actually implemented (a skeleton does not turn on). */
   private isEnabled(id: string): boolean {
     const slot = this.slots.get(id)
     return this.opts.settingsOf(id).enabled && slot?.plugin.implemented !== false
   }
 
-  /** Sous-items effectifs : défaut déclaré par le plugin, écrasé par le choix de la maison. */
+  /** Effective sub-items: default declared by the plugin, overridden by the house's choice. */
   private resolveParts(id: string, slot: Slot): Record<string, boolean> {
     const chosen = this.opts.settingsOf(id).parts
     const out: Record<string, boolean> = {}
@@ -125,9 +125,9 @@ export class PluginHost {
   }
 
   /**
-   * Enregistre les routes propres à chaque plugin sous /api/plugins/<id>/ (avant app.ready()).
-   * Y compris pour un plugin éteint : Fastify n'accepte plus de route après `ready()`, et c'est
-   * souvent par là qu'on appaire un fabricant AVANT de l'allumer.
+   * Registers each plugin's own routes under /api/plugins/<id>/ (before app.ready()).
+   * Including for a plugin that is off: Fastify no longer accepts routes after `ready()`, and that
+   * is often how a vendor is paired BEFORE turning it on.
    */
   registerRoutes(app: FastifyInstance): void {
     for (const [id, slot] of this.slots) {
@@ -137,16 +137,16 @@ export class PluginHost {
   }
 
   /**
-   * Tous les plugins démarrent en même temps : un fabricant lent (la découverte Cast attend le mDNS
-   * puis chaque appareil) ne retarde plus les autres. `startOne` rattrape ses propres erreurs.
+   * All plugins start at the same time: a slow vendor (Cast discovery waits for mDNS then each
+   * device) no longer delays the others. `startOne` catches its own errors.
    */
   async startAll(): Promise<void> {
     await Promise.all(this.order.filter((id) => this.isEnabled(id)).map((id) => this.startOne(id)))
   }
 
   /**
-   * Aligne un plugin sur ce que dit la maison, après une écriture depuis l'UI : l'allume, l'éteint,
-   * ou le redémarre si ses sous-items ont changé. Seul chemin appelé par les routes.
+   * Aligns a plugin with what the house says, after a write from the UI: turns it on, off, or
+   * restarts it if its sub-items changed. The only path called by the routes.
    */
   async apply(id: string): Promise<void> {
     const slot = this.slots.get(id)
@@ -162,8 +162,8 @@ export class PluginHost {
     if (want) await this.startOne(id)
     else {
       await this.stopOne(id)
-      // éteint = sorti de la maison : ses appareils et ses ambiances quittent les registres, sinon
-      // les écrans garderaient une liste que plus personne n'alimente
+      // off = out of the house: its devices and light scenes leave the registries, otherwise the
+      // screens would keep a list that nobody feeds anymore
       this.opts.registry.register(id, [])
       this.opts.scenes.register(id, [])
       slot.status = { status: 'disabled' }
@@ -188,10 +188,10 @@ export class PluginHost {
       log.info({ devices: descriptors.length }, 'plugin started')
     } catch (err) {
       const message = (err as Error).message
-      // Un fabricant injoignable AU DÉMARRAGE (box qui redémarre, réseau pas encore monté) laissait
-      // le plugin en erreur jusqu'au prochain redémarrage du serveur — relevé le 2026-09-24 sur la
-      // TaHoma. On retente donc, de plus en plus espacé. Sauf un appairage manquant ou refusé : là,
-      // c'est à l'utilisateur d'agir, et le réessayer ne ferait que marteler le fabricant.
+      // A vendor unreachable AT STARTUP (box restarting, network not up yet) left the plugin in
+      // error until the next server restart — seen on 2026-09-24 on the TaHoma. So we retry, more
+      // and more spaced out. Except a missing or refused pairing: there, it is up to the user to
+      // act, and retrying would only hammer the vendor.
       if (err instanceof PluginError && err.code === 'NEEDS_PAIRING') {
         slot.status = { status: 'error', detail: message }
         log.error({ err }, 'plugin failed to start')
@@ -204,7 +204,7 @@ export class PluginHost {
     }
   }
 
-  /** Nouvelle tentative après un échec : on repart d'un plugin arrêté proprement, s'il est toujours voulu. */
+  /** Retry after a failure: start again from a cleanly stopped plugin, if it is still wanted. */
   private async retryStart(id: string): Promise<void> {
     const slot = this.slots.get(id)
     if (!slot || !this.isEnabled(id) || slot.status.status !== 'error') return
@@ -212,7 +212,7 @@ export class PluginHost {
     await this.startOne(id)
   }
 
-  /** Redémarre un plugin (ex. Hue après appairage). Éteint dans la maison, il le reste. */
+  /** Restarts a plugin (e.g. Hue after pairing). Off in the house, it stays off. */
   async restart(id: string): Promise<void> {
     const slot = this.slots.get(id)
     if (!slot || !this.isEnabled(id)) return
@@ -221,13 +221,13 @@ export class PluginHost {
   }
 
   /**
-   * Une commande, d'où qu'elle vienne (interface, automatisation, MCP). « Charger » une voiture force
-   * d'abord la borne où elle est branchée (`chargerToForce`) ; un échec de la borne n'empêche pas
-   * d'envoyer la commande à la voiture.
+   * A command, wherever it comes from (interface, automation, MCP). "Start charging" on a car first
+   * forces the charger it is plugged into (`chargerToForce`); a charger failure does not prevent
+   * sending the command to the car.
    */
   async execute(deviceId: string, command: Command): Promise<void> {
-    // un véhicule qui ne sait pas s'arrêter (`meta.vehicle.stopViaCharger`) : c'est sa borne qui
-    // s'arrête, et rien ne part au véhicule, qui refuserait
+    // a vehicle that cannot stop itself (`meta.vehicle.stopViaCharger`): its charger is what
+    // stops, and nothing goes to the vehicle, which would refuse
     const stopper = chargerToStop(deviceId, command, this.opts.registry.list(), this.opts.site())
     if (stopper) {
       await this.dispatch(stopper, { type: 'ev_charger.stop' })
@@ -249,8 +249,8 @@ export class PluginHost {
   }
 
   /**
-   * La voiture d'une borne forcée arrive à sa limite : la borne reprend son mode d'avant le forçage
-   * (`chargeLimitReached`). Débranchée avant, c'est la borne qui s'en aperçoit (plugin Enphase).
+   * The car of a forced charger reaches its limit: the charger goes back to its mode from before the
+   * forcing (`chargeLimitReached`). Unplugged before that, the charger notices it (Enphase plugin).
    */
   private onVehicleState(vehicleId: string, state: DeviceState): void {
     const charger = this.forcedFor.get(vehicleId)
@@ -265,9 +265,9 @@ export class PluginHost {
   }
 
   /**
-   * « En charge » dit par un véhicule passe par `chargingRefuted` : démenti tant qu'aucune borne de la
-   * maison ne charge, rendu dès qu'une charge (`recheckChargingClaims`). Le plugin garde sa parole :
-   * on retient ce qu'il a dit, pas ce qu'on a publié.
+   * "Charging" as said by a vehicle goes through `chargingRefuted`: contradicted as long as no charger
+   * of the house is charging, restored as soon as one charges (`recheckChargingClaims`). The plugin
+   * keeps its word: we remember what it said, not what we published.
    */
   private checkChargingClaim(deviceId: string, patch: StatePatch): StatePatch {
     if ('charging' in patch) {
@@ -283,7 +283,7 @@ export class PluginHost {
       : { ...patch, charging: true } as StatePatch
   }
 
-  /** Une borne a changé : la parole de chaque véhicule qui se dit en charge est relue. */
+  /** A charger changed: the word of each vehicle that says it is charging is re-read. */
   private recheckChargingClaims(): void {
     const { registry } = this.opts
     for (const id of this.claimsCharging) {
@@ -303,7 +303,7 @@ export class PluginHost {
     await withTimeout(slot.plugin.execute(externalId, command), this.opts.commandTimeoutMs ?? 10_000, this.opts.clock, `command ${command.type}`)
   }
 
-  /** Prévisions d'un appareil `weather` ; `NOT_IMPLEMENTED` si son plugin n'en sert pas. */
+  /** Forecasts of a `weather` device; `NOT_IMPLEMENTED` if its plugin serves none. */
   async forecast(deviceId: string): Promise<WeatherForecast> {
     const { pluginId, externalId } = parseDeviceId(deviceId)
     const slot = this.slots.get(pluginId)
@@ -313,7 +313,7 @@ export class PluginHost {
     return { deviceId, ...f }
   }
 
-  /** Journal d'un appareil ; `NOT_IMPLEMENTED` si son plugin n'en tient pas. */
+  /** A device's log; `NOT_IMPLEMENTED` if its plugin keeps none. */
   async journal(deviceId: string): Promise<DeviceJournal> {
     const { pluginId, externalId } = parseDeviceId(deviceId)
     const slot = this.slots.get(pluginId)
@@ -323,7 +323,7 @@ export class PluginHost {
     return { deviceId, ...j }
   }
 
-  /** Carte du terrain d'un appareil ; `NOT_IMPLEMENTED` si son plugin n'en publie pas. */
+  /** A device's plot map; `NOT_IMPLEMENTED` if its plugin publishes none. */
   async siteMap(deviceId: string): Promise<SiteMap> {
     const { pluginId, externalId } = parseDeviceId(deviceId)
     const slot = this.slots.get(pluginId)
@@ -333,7 +333,7 @@ export class PluginHost {
     return { deviceId, ...m }
   }
 
-  /** Notes de version d'un véhicule ; `NOT_IMPLEMENTED` si son plugin n'en tient pas. */
+  /** A vehicle's release notes; `NOT_IMPLEMENTED` if its plugin keeps none. */
   async releaseNotes(deviceId: string, lang: string): Promise<DeviceReleaseNotes> {
     const { pluginId, externalId } = parseDeviceId(deviceId)
     const slot = this.slots.get(pluginId)
@@ -343,7 +343,7 @@ export class PluginHost {
     return { deviceId, ...n }
   }
 
-  /** Consommation d'un appareil ; `NOT_IMPLEMENTED` si son plugin n'en tient pas. */
+  /** A device's consumption; `NOT_IMPLEMENTED` if its plugin keeps none. */
   async consumption(deviceId: string): Promise<DeviceConsumption> {
     const { pluginId, externalId } = parseDeviceId(deviceId)
     const slot = this.slots.get(pluginId)
@@ -385,7 +385,7 @@ export class PluginHost {
     await withTimeout(slot.plugin.deleteScene(externalId), this.opts.commandTimeoutMs ?? 10_000, this.opts.clock, `delete ${sceneId}`)
   }
 
-  /** `user` : le compte qui demande (session, jeton MCP) ; un plugin à comptes par utilisateur rend les siens. */
+  /** `user`: the requesting account (session, MCP token); a plugin with per-user accounts returns theirs. */
   async health(user: string | null = null): Promise<Record<string, PluginHealth>> {
     const out: Record<string, PluginHealth> = {}
     for (const [id, slot] of this.slots) out[id] = await this.healthOf(id, slot, user)
@@ -396,20 +396,20 @@ export class PluginHost {
     const shape = (slot.plugin.configSchema as unknown as { shape?: Record<string, unknown> }).shape
     const keys = shape ? Object.keys(shape) : []
     const deviceCount = this.opts.registry.countOf(id)
-    // éteint dans la maison : on ne demande pas son avis au plugin, il ne tourne pas
+    // off in the house: the plugin is not asked for its opinion, it is not running
     if (!this.isEnabled(id)) {
       const status = slot.plugin.implemented === false ? 'not_implemented' : 'disabled'
       return { status, ...(slot.status.detail ? { detail: slot.status.detail } : {}), deviceCount, keys }
     }
     const running = slot.ctx && slot.status.status !== 'error'
     const h = !running ? slot.status
-      // une santé par compte illisible ne fait pas tomber l'inventaire : celle de tous à la place
+      // an unreadable per-account health does not bring down the inventory: everyone's instead
       : user !== null && slot.plugin.healthFor ? await slot.plugin.healthFor(user).catch(() => slot.plugin.health?.() ?? slot.status)
         : slot.plugin.health?.() ?? slot.status
     return { ...h, deviceCount, keys }
   }
 
-  /** Inventaire de l'écran Réglages : ce qu'est chaque plugin, ce qu'on en a choisi, comment il va (pour `user`, cf. `health`). */
+  /** Inventory for the Settings screen: what each plugin is, what was chosen for it, how it is doing (for `user`, cf. `health`). */
   async inventory(user: string | null = null): Promise<PluginInfo[]> {
     return Promise.all(this.order.map(async (id) => {
       const slot = this.slots.get(id)!
@@ -419,7 +419,7 @@ export class PluginHost {
         id,
         implemented: slot.plugin.implemented !== false,
         enabled: settings.enabled,
-        // le réglage des ambiances n'a de sens que chez un fabricant qui en écrit
+        // the light scene setting only makes sense for a vendor that writes them
         ...(slot.plugin.updateScene ? { autoDynamicForNewScenes: settings.autoDynamicForNewScenes } : {}),
         parts: (slot.plugin.parts ?? []).map((p) => ({ id: p.id, labelKey: p.labelKey, enabled: parts[p.id] ?? p.enabledByDefault })),
         health: await this.healthOf(id, slot, user),
@@ -430,7 +430,7 @@ export class PluginHost {
   private async stopOne(id: string): Promise<void> {
     const slot = this.slots.get(id)
     if (!slot) return
-    // arrêté, éteint ou redémarré à la main : une tentative programmée n'a plus lieu d'être
+    // stopped, turned off or restarted by hand: a scheduled retry no longer has a reason to be
     if (slot.retry !== null) { this.opts.clock.clearTimeout(slot.retry); slot.retry = null }
     if (!slot.ctx) return
     slot.ctrl.abort()

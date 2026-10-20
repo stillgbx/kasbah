@@ -4,12 +4,12 @@ import type { Logger } from 'pino'
 import type { z } from 'zod'
 import type { Clock } from './clock'
 
-// Contrat d'un plugin d'appareils. Un plugin ne connaît ni HTTP ni WebSocket : il découvre des
-// descripteurs, pousse des patchs d'état via le contexte et exécute des commandes.
+// Contract of a device plugin. A plugin knows neither HTTP nor WebSocket: it discovers descriptors,
+// pushes state patches through the context and executes commands.
 
 export const PLUGIN_ERROR_CODES = [
   'DEVICE_UNAVAILABLE', 'UNSUPPORTED_COMMAND', 'UPSTREAM_ERROR', 'RATE_LIMITED', 'NEEDS_PAIRING', 'TIMEOUT', 'NOT_IMPLEMENTED',
-  // batterie trop faible pour ce que la commande demande (Tesla `low_soc` : pas de clim sous 20 %)
+  // battery too low for what the command asks (Tesla `low_soc`: no climate below 20 %)
   'LOW_BATTERY',
 ] as const
 export type PluginErrorCode = (typeof PLUGIN_ERROR_CODES)[number]
@@ -23,28 +23,28 @@ export class PluginError extends Error {
 
 export interface PluginContext {
   pluginId: string
-  /** Sortie de `configSchema.parse(process.env)`. */
+  /** Output of `configSchema.parse(process.env)`. */
   config: Record<string, unknown>
   logger: Logger
   clock: Clock
-  /** Annulé par stop() : à passer aux fetch/pollers. */
+  /** Aborted by stop(): to pass to fetches/pollers. */
   signal: AbortSignal
-  /** Patch d'état ; `available: true` est ajouté implicitement sauf mention contraire. */
+  /** State patch; `available: true` is added implicitly unless stated otherwise. */
   emitState(externalId: string, patch: StatePatch): void
   setAvailable(externalId: string | '*', available: boolean): void
-  /** Remplace l'ensemble des appareils du plugin (découverte tardive, ajout/suppression). */
+  /** Replaces the plugin's whole set of devices (late discovery, addition/removal). */
   emitDevices(descriptors: DeviceDescriptor[]): void
-  /** Remplace l'ensemble des scènes du plugin. */
+  /** Replaces the plugin's whole set of scenes. */
   emitScenes(scenes: PluginScene[]): void
   emitSceneState(externalId: string, active: SceneActivation): void
-  /** Événement transitoire (sonnette, mouvement) : poussé aux clients, pas d'état conservé. */
+  /** Transient event (doorbell, motion): pushed to clients, no state kept. */
   emitEvent(externalId: string, event: DeviceEventKind): void
-  /** Sous-items retenus pour cette maison, par id de `DevicePlugin.parts` (défauts déjà appliqués). */
+  /** Sub-items kept for this house, by `DevicePlugin.parts` id (defaults already applied). */
   parts: Record<string, boolean>
   /**
-   * Où EST la maison (`house.origin`), pour ce qui dépend du lieu : la météo au-dessus du toit. Un
-   * plugin ne va jamais chercher la maison lui-même, comme pour `parts` — c'est l'hôte qui lui donne
-   * la seule source de vérité, celle dont la scène 3D tire déjà son soleil.
+   * Where the house IS (`house.origin`), for what depends on location: the weather above the roof. A
+   * plugin never fetches the house itself, as for `parts` — the host gives it the single source of
+   * truth, the one the 3D scene already takes its sun from.
    */
   site: PluginSite
 }
@@ -52,95 +52,95 @@ export interface PluginContext {
 export interface PluginSite {
   lat: number
   lon: number
-  /** Altitude (m), 0 si la maison ne la dit pas. */
+  /** Altitude (m), 0 if the house does not state it. */
   alt: number
 }
 
-/** Prévisions telles qu'un plugin les rend : l'hôte y ajoute le `deviceId` (voir `weatherForecastSchema`). */
+/** Forecasts as a plugin returns them: the host adds the `deviceId` (see `weatherForecastSchema`). */
 export type PluginForecast = Omit<WeatherForecast, 'deviceId'>
-/** Journal tel qu'un plugin le rend : l'hôte y ajoute le `deviceId` (voir `deviceJournalSchema`). */
+/** Log as a plugin returns it: the host adds the `deviceId` (see `deviceJournalSchema`). */
 export type PluginJournal = Omit<DeviceJournal, 'deviceId'>
-/** Carte d'un terrain telle qu'un plugin la rend : l'hôte y ajoute le `deviceId` (voir `siteMapSchema`). */
+/** Map of a plot as a plugin returns it: the host adds the `deviceId` (see `siteMapSchema`). */
 export type PluginSiteMap = Omit<SiteMap, 'deviceId'>
-/** Notes de version telles qu'un plugin les rend : l'hôte y ajoute le `deviceId` (voir `deviceReleaseNotesSchema`). */
+/** Release notes as a plugin returns them: the host adds the `deviceId` (see `deviceReleaseNotesSchema`). */
 export type PluginReleaseNotes = Omit<DeviceReleaseNotes, 'deviceId'>
-/** Consommation telle qu'un plugin la rend : l'hôte y ajoute le `deviceId` (voir `deviceConsumptionSchema`). */
+/** Consumption as a plugin returns it: the host adds the `deviceId` (see `deviceConsumptionSchema`). */
 export type PluginConsumption = Omit<DeviceConsumption, 'deviceId'>
 
 /**
- * Sous-item activable d'un plugin : une part de ce qu'il fournit, qu'on peut vouloir ou non sans
- * renoncer au reste (les kinds de la simulation). Déclaré en STATIQUE, sans config ni init : les
- * Réglages les affichent même quand le plugin est éteint. Le choix vit dans `house.json`.
+ * Toggleable sub-item of a plugin: a part of what it provides, which one may want or not without
+ * giving up the rest (the simulation's kinds). Declared STATICALLY, without config or init:
+ * Settings shows them even when the plugin is off. The choice lives in `house.json`.
  */
 export interface PluginPart {
-  /** Id stable, écrit dans `house.json` (`plugins.<id>.parts`). */
+  /** Stable id, written in `house.json` (`plugins.<id>.parts`). */
   readonly id: string
-  /** Clé i18n du libellé côté web (`kinds.light`…) : le serveur ne connaît pas la langue. */
+  /** i18n key of the label on the web side (`kinds.light`…): the server does not know the language. */
   readonly labelKey: string
   readonly enabledByDefault: boolean
 }
 
 export interface DevicePlugin {
   readonly id: string
-  /** Sélectionne et valide ses propres clés d'environnement (ex. HUE_*). */
+  /** Selects and validates its own environment keys (e.g. HUE_*). */
   readonly configSchema: z.ZodType<Record<string, unknown>>
-  /** Squelette déclaré mais pas encore écrit : listé dans les Réglages, pas activable. */
+  /** Skeleton declared but not yet written: listed in Settings, cannot be enabled. */
   readonly implemented?: boolean
-  /** Sous-items activables (voir `PluginPart`) ; aucun pour la plupart des plugins. */
+  /** Toggleable sub-items (see `PluginPart`); none for most plugins. */
   readonly parts?: readonly PluginPart[]
   init(ctx: PluginContext): Promise<void>
   discover(): Promise<DeviceDescriptor[]>
   start(): Promise<void>
-  /** Résout à l'accusé de réception du fabricant ; lève PluginError sinon. */
+  /** Resolves on the vendor's acknowledgment; throws PluginError otherwise. */
   execute(externalId: string, command: Command): Promise<void>
-  /** Rappelle une scène du fabricant (les scènes sont publiées par `ctx.emitScenes`). */
+  /** Recalls a vendor scene (scenes are published through `ctx.emitScenes`). */
   recallScene?(externalId: string, recall: SceneRecall): Promise<void>
-  /** Écrit une préférence de scène chez le fabricant (la nouvelle valeur revient par ses événements). */
+  /** Writes a scene preference at the vendor (the new value comes back through its events). */
   updateScene?(externalId: string, update: SceneUpdate): Promise<void>
-  /** Crée une ambiance pour un groupe, en recopiant une ambiance existante (`externalId` source). */
+  /** Creates a light scene for a group, by copying an existing light scene (source `externalId`). */
   createScene?(fromExternalId: string, groupName: string): Promise<void>
-  /** Supprime une ambiance CHEZ le fabricant (geste destructif, confirmé côté UI). */
+  /** Deletes a light scene AT the vendor (destructive action, confirmed on the UI side). */
   deleteScene?(externalId: string): Promise<void>
   /**
-   * Prévisions d'un appareil `weather`, servies À LA DEMANDE (`GET /api/devices/:id/forecast`) et
-   * jamais poussées — même arbitrage que l'historique énergie. Absent = ce plugin n'en a pas
-   * (l'hôte répond `NOT_IMPLEMENTED`). Rendre la dernière réponse du sondage, pas refaire un appel.
+   * Forecasts of a `weather` device, served ON DEMAND (`GET /api/devices/:id/forecast`) and never
+   * pushed — same trade-off as the energy history. Absent = this plugin has none (the host answers
+   * `NOT_IMPLEMENTED`). Return the last poll response, don't make a new call.
    */
   forecast?(externalId: string): Promise<PluginForecast>
   /**
-   * Journal d'un appareil qui déclare la capacité `journal`, servi À LA DEMANDE
-   * (`GET /api/devices/:id/journal`). Même règle que les prévisions : rendre ce qu'on tient — une
-   * lecture mise en cache, complétée par les événements du fabricant —, pas refaire un appel à
-   * chaque affichage, surtout sur une API à quota.
+   * Log of a device that declares the `journal` capability, served ON DEMAND
+   * (`GET /api/devices/:id/journal`). Same rule as forecasts: return what you hold — a cached
+   * reading, completed by the vendor's events —, don't make a new call on every display, especially
+   * on a quota-limited API.
    */
   journal?(externalId: string): Promise<PluginJournal>
   /**
-   * Carte du terrain d'un appareil qui déclare la capacité `site_map`, servie À LA DEMANDE
-   * (`GET /api/devices/:id/map`). Rendre la carte tenue en cache : elle ne change qu'avec un tracé
-   * refait chez le fabricant, et chaque lecture coûte du quota.
+   * Map of the plot of a device that declares the `site_map` capability, served ON DEMAND
+   * (`GET /api/devices/:id/map`). Return the cached map: it only changes when the layout is redrawn
+   * at the vendor, and each reading costs quota.
    */
   siteMap?(externalId: string): Promise<PluginSiteMap>
   /**
-   * Ce qu'un appareil a consommé, par pas de temps, servi À LA DEMANDE
-   * (`GET /api/devices/:id/consumption`). Même règle que les prévisions et le journal : rendre un
-   * historique tenu au fil des sondages, jamais refaire un relevé. Absent = ce plugin n'en tient pas
-   * (l'hôte répond `NOT_IMPLEMENTED`).
+   * What a device has consumed, per time step, served ON DEMAND
+   * (`GET /api/devices/:id/consumption`). Same rule as forecasts and the log: return a history kept
+   * up over the polls, never take a new reading. Absent = this plugin keeps none (the host answers
+   * `NOT_IMPLEMENTED`).
    */
   consumption?(externalId: string): Promise<PluginConsumption>
   /**
-   * Notes de version d'un véhicule qui déclare la capacité `release_notes`, servies À LA DEMANDE
-   * (`GET /api/devices/:id/release-notes`). Rendre le cache tenu par le plugin, jamais refaire un
-   * appel : les notes ne changent qu'avec une version. `lang` : la langue voulue (deux lettres) ;
-   * le plugin rend l'anglais tant qu'il ne l'a pas, et dit dans `lang` ce qu'il sert.
+   * Release notes of a vehicle that declares the `release_notes` capability, served ON DEMAND
+   * (`GET /api/devices/:id/release-notes`). Return the cache held by the plugin, never make a new
+   * call: the notes only change with a version. `lang`: the wanted language (two letters); the
+   * plugin returns English as long as it doesn't have it, and says in `lang` what it serves.
    */
   releaseNotes?(externalId: string, lang: string): Promise<PluginReleaseNotes>
   stop(): Promise<void>
-  /** Routes propres au plugin, montées sous /api/plugins/<id>/. */
+  /** The plugin's own routes, mounted under /api/plugins/<id>/. */
   registerRoutes?(app: FastifyInstance): void
   health?(): PluginHealth
   /**
-   * La santé des comptes d'un utilisateur connecté, pour un plugin qui en tient par utilisateur
-   * (sources musicales) ; absent = la même pour tous, `health()`.
+   * The health of a signed-in user's accounts, for a plugin that keeps some per user (music
+   * sources); absent = the same for everyone, `health()`.
    */
   healthFor?(user: string): Promise<PluginHealth>
 }

@@ -1,14 +1,14 @@
-// Les moteurs de l'assistant (plugins sans appareil : Claude aujourd'hui, d'autres CLI demain)
-// s'inscrivent ici à leur démarrage, comme les sources musicales auprès du lecteur commun. Le cœur
-// (`assistant.ts`) ne sait d'eux que ceci : lancer une instruction et rendre ce qui se passe.
+// Assistant engines (plugins without devices: Claude today, other CLIs tomorrow) register here when
+// they start, like music sources with the shared player. The core (`assistant.ts`) knows only this
+// about them: run an instruction and report what happens.
 //
-// Ce que le cœur garde pour tous : la route, le jeton de course MCP au nom du compte, le prompt
-// système, le délai, le journal, l'affichage. Ce que le moteur garde : son binaire, ses arguments,
-// son compte chez le fournisseur (par compte Kasbah), la traduction de sa sortie.
+// What the core keeps for all of them: the route, the per-run MCP token in the account's name, the
+// system prompt, the timeout, the log, the display. What the engine keeps: its binary, its
+// arguments, its account at the provider (per Kasbah account), the translation of its output.
 
 /**
- * Ce qu'une instruction a consommé, quand le moteur le sait. `costUsd` est calculé au prix catalogue
- * de l'API : avec un forfait (Claude), personne ne le paie, c'est ce que coûterait une clé d'API.
+ * What an instruction consumed, when the engine knows it. `costUsd` is computed at the API list
+ * price: with a subscription (Claude), nobody pays it, it is what an API key would cost.
  */
 export interface AssistantUsage {
   costUsd: number
@@ -18,7 +18,7 @@ export interface AssistantUsage {
   cacheWriteTokens: number
 }
 
-/** Ce que la route `/ask` écrit, une ligne JSON par événement. */
+/** What the `/ask` route writes, one JSON line per event. */
 export type AssistantEvent =
   | { type: 'text'; text: string }
   | { type: 'tool'; id: string; name: string; input: unknown }
@@ -27,40 +27,40 @@ export type AssistantEvent =
   | { type: 'error'; code: string; message: string; usage?: AssistantUsage }
 
 export interface AssistantRun {
-  /** Le compte qui demande (ses comptes chez le fournisseur) ; `null` = la maison. */
+  /** The requesting account (its accounts at the provider); `null` = the house. */
   user: string | null
   text: string
   systemPrompt: string
-  /** Le MCP de Kasbah, et un jeton de course au nom du compte, révoqué par le cœur à la fin. */
+  /** Kasbah's MCP, and a per-run token in the account's name, revoked by the core at the end. */
   mcp: { url: string; token: string }
-  /** Outils sans préfixe (`send_command`), texte, puis UN dernier mot : `done` ou `error`. */
+  /** Unprefixed tools (`send_command`), text, then ONE last word: `done` or `error`. */
   emit(e: AssistantEvent): void
   /**
-   * Annulé quand le client s'en va ou que le délai passe : tout arrêter et rendre la main, SANS
-   * dernier mot — c'est le cœur qui dit pourquoi.
+   * Aborted when the client leaves or the timeout passes: stop everything and hand back, WITHOUT a
+   * last word — the core says why.
    */
   signal: AbortSignal
 }
 
 export interface AssistantEngine {
-  /** Id du plugin. */
+  /** Plugin id. */
   readonly id: string
-  /** Nom lisible, pour les messages. */
+  /** Readable name, for messages. */
   readonly label: string
   run(run: AssistantRun): Promise<void>
 }
 
 const engines = new Map<string, AssistantEngine>()
 
-/** Inscrit un moteur ; rend de quoi le retirer (au `stop()` du plugin). */
+/** Registers an engine; returns a way to remove it (at the plugin's `stop()`). */
 export function registerAssistantEngine(engine: AssistantEngine): () => void {
   engines.set(engine.id, engine)
   return () => { if (engines.get(engine.id) === engine) engines.delete(engine.id) }
 }
 
 /**
- * Le moteur qui répond. Un seul existe aujourd'hui : choisir entre plusieurs (par compte, pour la
- * maison) se décidera quand un deuxième arrivera. En attendant, le premier inscrit.
+ * The engine that answers. Only one exists today: choosing among several (per account, for the
+ * house) will be decided when a second one arrives. Meanwhile, the first registered.
  */
 export function currentAssistantEngine(): AssistantEngine | undefined {
   return engines.values().next().value

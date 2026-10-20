@@ -22,16 +22,16 @@ export interface McpDeps {
   auth: McpAuth
 }
 
-// Serveur MCP sur `/mcp` (Streamable HTTP, SDK v2) : les mêmes lectures et commandes que le REST,
-// pour un agent. Jeton OAuth exigé partout (`auth.ts`). Le Host et l'Origin doivent en plus être
-// localhost, le nom du poste sur le DNS local ou celui de `MCP_PUBLIC_URL` (protection contre le DNS
-// rebinding). Sans état : une instance par requête, clients 2025 servis aussi.
+// MCP server on `/mcp` (Streamable HTTP, SDK v2): the same reads and commands as the REST API, for
+// an agent. OAuth token required everywhere (`auth.ts`). The Host and the Origin must in addition be
+// localhost, the machine's name on the local DNS or that of `MCP_PUBLIC_URL` (protection against DNS
+// rebinding). Stateless: one instance per request, 2025 clients served too.
 const ALLOWED_HOSTS = ['localhost', '127.0.0.1', '[::1]', 'kasbah', 'kasbah.home.internal']
 
 const json = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value) }] })
 const fail = (message: string) => ({ content: [{ type: 'text' as const, text: message }], isError: true })
 
-// Pistes prêtes à jouer, dans la forme du lecteur commun (`/api/music`) — mêmes champs que l'app.
+// Tracks ready to play, in the shape of the shared player (`/api/music`) — same fields as the app.
 const playableTrackSchema = z.object({
   source: z.enum(['ytmusic', 'mixcloud']),
   id: z.string().min(1),
@@ -45,7 +45,7 @@ type PlayableTrack = z.infer<typeof playableTrackSchema>
 
 interface YtmTrack { videoId: string; title: string; artists: string[]; album?: string | null; artUrl: string | null; durationS: number | null; explicit?: boolean }
 interface MixcloudMix { key: string; name: string; user: { name: string }; artUrl: string | null; durationS: number | null }
-// Le lecteur commun, tel que `/api/music/{queue,sessions,last}` le rend.
+// The shared player, as `/api/music/{queue,sessions,last}` returns it.
 interface QueueTrack { source: string; id: string; title?: string; artist?: string; durationS?: number }
 interface QueueView { items: QueueTrack[]; index: number; repeat: RepeatMode }
 type QueueBrief = { length: number; index: number; repeat: RepeatMode } | null
@@ -53,7 +53,7 @@ interface MusicSession { deviceId: string; source: string; id: string; title: st
 interface LastPlayed { deviceId: string; track: QueueTrack; positionS: number; durationS: number | null; queue: QueueBrief; at: number }
 interface RadioStation { id: string; name: string; country?: string; tags: string[]; codec?: string; bitrateKbps?: number }
 
-// L'école, telle que `GET /api/plugins/toutemonannee/school` la rend.
+// The school, as `GET /api/plugins/toutemonannee/school` returns it.
 interface SchoolData {
   linked: boolean
   sessionLost: boolean
@@ -69,8 +69,8 @@ interface SchoolData {
 export type SchoolSection = 'all' | 'homework' | 'messages' | 'posts'
 
 /**
- * Devoirs, cahier de liaison et publications pour un agent : filtres de la vue École appliqués (même
- * règle que `isVisible` côté web), classe nommée plutôt que son uuid, pièces jointes réduites à nom + url.
+ * Homework, home-school notebook and posts for an agent: School view filters applied (same rule as
+ * `isVisible` on the web side), class named rather than by its uuid, attachments reduced to name + url.
  */
 export function schoolDigest(data: SchoolData, opts: { today: string; section: SchoolSection; includePast: boolean; includeHidden: boolean }) {
   const f = data.filters
@@ -99,8 +99,8 @@ export function schoolDigest(data: SchoolData, opts: { today: string; section: S
 }
 
 /**
- * Heures en clair (`2026-10-09 14:00`) : un agent convertit mal un epoch. `tz` absent = fuseau du
- * serveur, celui de la maison.
+ * Plain-text times (`2026-10-09 14:00`): an agent converts an epoch poorly. `tz` absent = the
+ * server's time zone, the house's.
  */
 function clockOf(tz?: string) {
   const part = (o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat('sv-SE', { timeZone: tz, ...o })
@@ -110,8 +110,8 @@ function clockOf(tz?: string) {
 }
 
 /**
- * L'agenda pour un agent : agenda nommé, heures en clair, triés par début. Une journée entière garde
- * ses dates `YYYY-MM-DD` mais avec une fin INCLUSE (le flux iCal l'exclut, un agent la lirait mal).
+ * The calendar for an agent: named calendar, plain-text times, sorted by start. An all-day event keeps
+ * its `YYYY-MM-DD` dates but with an INCLUSIVE end (the iCal feed excludes it, an agent would misread it).
  */
 export function agendaDigest(events: AgendaEvent[], calendars: { id: string; name: string }[], tz?: string) {
   const { at } = clockOf(tz)
@@ -130,9 +130,9 @@ export function agendaDigest(events: AgendaEvent[], calendars: { id: string; nam
 interface Vigilance { area: string | null; warnings: NonNullable<StateFor<'weather'>['vigilance']> }
 
 /**
- * La météo pour un agent : heures en clair dans le fuseau du lieu (un agent convertit mal un epoch),
- * champs absents omis. `tz` absent = fuseau du serveur, celui de la maison. `vigilance` : celle du
- * département, à venir comprise ; absente = inconnue.
+ * The weather for an agent: plain-text times in the place's time zone (an agent converts an epoch
+ * poorly), absent fields omitted. `tz` absent = the server's time zone, the house's. `vigilance`: the
+ * department's weather warnings, upcoming ones included; absent = unknown.
  */
 export function weatherDigest(state: StateFor<'weather'>, forecast: Pick<WeatherForecast, 'hourly' | 'daily'>, opts: { tz?: string; vigilance?: Vigilance | null | undefined }) {
   const { day, hour, at } = clockOf(opts.tz)
@@ -157,17 +157,17 @@ const localDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).pad
 
 const optional = <T extends object>(o: T) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== null && v !== undefined && v !== ''))
 
-// Garde-fous des automatisations écrites par un assistant : une règle tourne ensuite sans personne pour
-// la regarder, et l'agent a pu lire du contenu venu de l'extérieur (agenda, école) qui la lui dicte.
-/** Créations permises par heure glissante, pour tout le serveur : un agent qui boucle s'arrête là. */
+// Safeguards for automations written by an assistant: a rule then runs with nobody watching it, and
+// the agent may have read content from outside (calendar, school) that dictates it.
+/** Creations allowed per sliding hour, for the whole server: an agent stuck in a loop stops there. */
 export const AUTOMATION_CREATE_LIMIT = 10
 const HOUR_MS = 3_600_000
 const ACCESS_CLASSES = new Set(['gate', 'garage', 'window'])
 const VEHICLE_SENSITIVE = new Set(['vehicle.unlock', 'vehicle.schedule_update'])
 /**
- * Rangs des actions qui ouvrent un accès à la maison (portail, garage, fenêtre), déverrouillent une
- * voiture ou lancent sa mise à jour logicielle. `classOf` rend `null` pour un appareil inconnu, compté
- * comme un accès possible ; une sélection d'ouvrants sans nature les prend tous, portail compris.
+ * Ranks of the actions that open an access to the house (gate, garage, window), unlock a car or
+ * start its software update. `classOf` returns `null` for an unknown device, counted as a possible
+ * access; a selection of covers without a class takes them all, gate included.
  */
 export function sensitiveActions(actions: AutomationAction[], classOf: (id: string) => string | undefined | null): number[] {
   return actions.flatMap((a, i) => {
@@ -187,10 +187,10 @@ export function sensitiveActions(actions: AutomationAction[], classOf: (id: stri
 function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null, created: number[]): McpServer {
   const server = new McpServer({ name: 'kasbah', version: '0.1.0' })
 
-  // La musique passe par les routes de l'app (recherche des sources, lecteur commun) : mêmes
-  // validations, mêmes erreurs lisibles (source coupée, cookie expiré), même adresse publiée aux
-  // enceintes. Une réponse d'erreur devient une exception, que le SDK rend en `isError`. Au nom du
-  // compte du jeton : ce sont ses comptes musicaux qui cherchent et qui jouent.
+  // Music goes through the app's routes (source search, shared player): same validations, same
+  // readable errors (source turned off, expired cookie), same address published to the speakers. An
+  // error response becomes an exception, which the SDK returns as `isError`. In the name of the
+  // token's account: its music accounts are the ones searching and playing.
   const call = async <T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', url: string, payload?: object): Promise<T> => {
     const res = await app.inject({ method, url, headers: actAsHeaders(user), ...(payload ? { payload } : {}) })
     const body = res.json() as T & { error?: { message?: string } }
@@ -198,7 +198,7 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null, c
     return body
   }
 
-  // Nom et pièce tels que la maison les donne (renommage, placement), sinon ceux du fabricant.
+  // Name and room as the house gives them (renaming, placement), otherwise the vendor's.
   const describe = (e: DeviceEntry) => {
     const index = indexHouse(deps.house.house)
     const placed = index.devicesByBinding.get(e.descriptor.id)
@@ -362,7 +362,7 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null, c
     const state = entry.state as StateFor<'weather'>
     if (!state.available) return fail('météo de la maison pas encore lue ou indisponible : voir get_health')
     const forecast = await deps.host.forecast(entry.descriptor.id)
-    // la vigilance à venir vient de la route du plugin ; sans elle, celle en cours que porte l'état
+    // upcoming weather warnings come from the plugin's route; without it, the current ones carried by the state
     const { lat, lon } = deps.house.house.origin
     const vigilance = await alerts(lat, lon).catch(() => undefined)
     return json({
@@ -394,9 +394,9 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null, c
     })
   })
 
-  // Automatisations : lire, lancer, activer ou couper, créer et modifier, par les routes de la vue
-  // Automatisations (mêmes validations, même fichier, même diffusion aux écrans). Pas de suppression.
-  // Garde-fous des écritures : voir `sensitiveActions` et `AUTOMATION_CREATE_LIMIT`.
+  // Automations: read, run, enable or disable, create and update, through the routes of the
+  // Automations view (same validations, same file, same broadcast to screens). No deletion.
+  // Write safeguards: see `sensitiveActions` and `AUTOMATION_CREATE_LIMIT`.
   const automationView = ({ automation: a, status: s }: AutomationEntry) => {
     const { at } = clockOf()
     return {
@@ -429,7 +429,7 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null, c
     ? { safety: { disabled: true, actions: risky, reason: "action sensible (accès à la maison, voiture) : enregistrée coupée, à activer dans l'app de Kasbah" } }
     : {})
 
-  // Même forme que list_automations : une règle lue se réécrit telle quelle.
+  // Same shape as list_automations: a rule that was read can be written back as is.
   const { name: nameSchema, trigger: triggerSchema, unless: unlessSchema, actions: actionsSchema } = automationBodySchema.shape
   const AUTOMATION_HELP = "trigger : heure fixe { type: 'time', at: { kind: 'clock', time: 'HH:MM' } }, passage du soleil { type: 'time', at: { kind: 'sun', event: dawn|sunrise|sunset|dusk, offsetMin (négatif = avant), notBefore, notAfter } } (days 0 = dimanche, dateRange facultatifs), ou état { type: 'state', when: prédicat, forMin } qui part quand le prédicat DEVIENT vrai. Une contrainte d'heure va dans unless, pas dans when. unless : prédicats combinés en OU, l'automatisation ne fait rien si l'un est vrai. actions, jouées dans l'ordre : commande du contrat (comme send_command) sur des appareils nommés (ids de list_devices) ou une sélection résolue au moment d'agir (kind, roomIds, levelIds, zoneIds : ids de la ressource kasbah://house) ; forMin = la commande inverse part au bout de N minutes ; ou recallScene (sceneId de list_scenes). Rend l'automatisation et son statut : health incomplete et missing signalent une référence qui n'existe pas (appareil, champ d'état, pièce), enregistrée quand même."
 
@@ -475,7 +475,7 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null, c
     if (!current) return fail(`automatisation inconnue "${id}" : voir list_automations`)
     const { id: _id, updatedAt: _u, byAssistant: _b, ...previous } = current
     const next = { ...previous, ...optional(changes) }
-    // le garde-fou suit ce que la règle FAIT ; renommer, couper ou rallumer seul n'y touche pas
+    // the safeguard follows what the rule DOES; renaming, disabling or re-enabling alone does not touch it
     const reshaped = changes.trigger !== undefined || changes.unless !== undefined || changes.actions !== undefined
     const risky = reshaped ? sensitiveActions(next.actions, classOf) : []
     const { automation } = await call<{ automation: AutomationEntry }>('PUT', `/api/automations/${encodeURIComponent(id)}`, risky.length ? { ...next, enabled: false } : next)
@@ -502,10 +502,10 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null, c
     return json({ ok: true, id: automation.automation.id, enabled: automation.automation.enabled })
   })
 
-  // Liste de courses de la maison, par les routes `/api/shopping` : même file d'écriture, même
-  // diffusion aux écrans. Un agent désigne une ligne par son nom (« le lait ») autant que par son id.
-  // Coupée dans les Réglages, ses outils ne sont pas proposés du tout (une instance par requête :
-  // la bascule vaut dès la requête suivante).
+  // The house's shopping list, through the `/api/shopping` routes: same write queue, same broadcast
+  // to screens. An agent designates a line by its name ("le lait") as much as by its id.
+  // Turned off in Settings, its tools are not offered at all (one instance per request: the switch
+  // applies from the next request).
   if (pluginSettingsOf(deps.house.house.plugins, 'shopping').enabled) registerShoppingTools()
   function registerShoppingTools() {
     const shoppingView = (l: ShoppingList) => ({
@@ -575,8 +575,8 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null, c
     }, async ({ name, favorite }) => json(shoppingView((await call<{ shopping: ShoppingList }>('PUT', '/api/shopping/favorites', { name, favorite })).shopping)))
   }
 
-  // La file musicale est celle de Kasbah (lecteur commun), pas celle de l'enceinte : `media_player.next`
-  // de send_command n'y saute pas.
+  // The music queue is Kasbah's (shared player), not the speaker's: `media_player.next` from
+  // send_command does not skip within it.
   const deviceName = (id: string) => {
     const entry = deps.registry.get(id)
     return entry ? describe(entry).name : undefined
@@ -700,7 +700,7 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null, c
 
 export async function registerMcp(app: FastifyInstance, deps: McpDeps): Promise<void> {
   const userOf = (ctx: McpRequestContext) => (typeof ctx.authInfo?.extra?.user === 'string' ? ctx.authInfo.extra.user : null)
-  // une instance par requête : le compte des créations vit ici, pour tout le serveur
+  // one instance per request: the creation count lives here, for the whole server
   const created: number[] = []
   const handler = createMcpHandler((ctx) => buildServer(deps, app, userOf(ctx), created))
   app.addHook('onClose', () => handler.close())
@@ -708,8 +708,8 @@ export async function registerMcp(app: FastifyInstance, deps: McpDeps): Promise<
     const hosts = [...ALLOWED_HOSTS, ...deps.auth.publicHosts]
     sub.addHook('onRequest', hostHeaderValidation(hosts))
     deps.auth.routes(sub)
-    // Fastify a déjà lu le corps JSON : on reconstruit la requête web que le SDK attend.
-    // Pas de compression : la réponse peut être un flux SSE.
+    // Fastify has already read the JSON body: we rebuild the web request the SDK expects.
+    // No compression: the response may be an SSE stream.
     sub.route({
       method: ['GET', 'POST', 'DELETE'], url: '/mcp', compress: false,
       onRequest: [originValidation(hosts), deps.auth.requireToken],
@@ -719,7 +719,7 @@ export async function registerMcp(app: FastifyInstance, deps: McpDeps): Promise<
           if (v !== undefined && k !== 'content-length') headers.set(k, Array.isArray(v) ? v.join(', ') : v)
         }
         const body = req.method === 'POST' ? JSON.stringify(req.body) : undefined
-        // `requireToken` a posé le compte du jeton : le serveur de cette requête agit en son nom
+        // `requireToken` set the token's account: this request's server acts in its name
         const authInfo = { token: '', clientId: '', scopes: [], extra: { user: req.sessionUser } }
         return reply.send(await handler.fetch(new Request(`http://${req.host}${req.url}`, { method: req.method, headers, body }), { authInfo }))
       },

@@ -14,33 +14,32 @@ import { nextOccurrence } from './schedule'
 import { computeStatus } from './status'
 import type { AutomationsStore } from './store'
 
-// Moteur des automatisations, côté serveur (l'écran dort, le serveur non).
+// Automation engine, on the server side (the screen sleeps, the server doesn't).
 //
-// HORAIRE : un seul minuteur, posé sur la plus proche échéance de toutes les automatisations
-// actives, jamais plus loin que 6 h (le soleil se relit chaque jour, et `setTimeout` plafonne à
-// 24,8 jours). Une échéance manquée pendant un arrêt du serveur n'est pas rattrapée.
+// TIME: a single timer, set on the nearest due time of all active automations, never further than
+// 6 h (the sun is re-read every day, and `setTimeout` caps at 24.8 days). A due time missed while
+// the server is down is not caught up.
 //
-// ÉTAT : sur chaque état publié, les déclencheurs qui dépendent de cet appareil sont réévalués ;
-// seul un passage FAUX → VRAI déclenche. Un premier relevé, un appareil qui revient, un redémarrage
-// partent d'« inconnu » et ne déclenchent donc jamais. Les états produits par nos propres commandes
-// arrivent plus tard, sur un autre tour : front seul, pas de boucle.
+// STATE: on each published state, the triggers that depend on that device are re-evaluated; only a
+// FALSE → TRUE transition fires. A first reading, a device coming back, a restart start from
+// "unknown" and therefore never fire. States produced by our own commands arrive later, on another
+// turn: edge only, no loop.
 //
-// PENDANT N MINUTES : une action qui porte `forMin` laisse, par appareil qui a accusé, un RETOUR
-// (la commande inverse) daté. Ils sont notés sur disque (`reverts`) et survivent à un redémarrage ;
-// un retour échu part dès que son appareil a publié un état et répond — jamais sur les valeurs par
-// défaut d'un appareil pas encore relevé. Un nouveau déclenchement remplace le retour en attente du
-// même appareil (l'attente repart de zéro). Ni la suppression ni la désactivation de la règle ne
-// l'annulent : le portail se referme quand même.
+// FOR N MINUTES: an action carrying `forMin` leaves, per device that acknowledged, a dated REVERT
+// (the inverse command). They are recorded on disk (`reverts`) and survive a restart; a due revert
+// goes out as soon as its device has published a state and answers — never on the default values
+// of a device not read yet. A new trigger replaces the pending revert of the same device (the wait
+// starts over). Neither deleting nor disabling the rule cancels it: the gate closes anyway.
 //
-// Chaque gestionnaire du bus est protégé : `Bus.emit` n'attrape rien, et une exception ici
-// remonterait dans le plugin qui a publié l'état.
+// Each bus handler is guarded: `Bus.emit` catches nothing, and an exception here would bubble up
+// into the plugin that published the state.
 
-/** Plus longue attente d'un seul minuteur. */
+/** Longest wait of a single timer. */
 const MAX_WAIT_MS = 6 * 3600_000
 
 export interface AutomationEngineDeps extends RunnerDeps {
   store: AutomationsStore
-  /** Retours « pendant N minutes » en attente ; absent = gardés en mémoire seulement. */
+  /** Pending "for N minutes" reverts; absent = kept in memory only. */
   reverts?: RevertsStore
   registry: DeviceRegistry
   scenes: SceneRegistry
@@ -55,14 +54,14 @@ export class AutomationEngine {
   private readonly lastRun = new Map<string, AutomationRun>()
   private readonly nextRun = new Map<string, number>()
   private readonly pendingSince = new Map<string, number>()
-  /** Dernière valeur du prédicat d'un déclencheur d'état ; absent = jamais évalué. */
+  /** Last value of a state trigger's predicate; absent = never evaluated. */
   private readonly last = new Map<string, Tri>()
   private readonly holds = new Map<string, unknown>()
   private readonly running = new Set<string>()
-  /** Retours en attente, par `automation#action#appareil`. */
+  /** Pending reverts, by `automation#action#device`. */
   private readonly reverts = new Map<string, PendingRevert>()
   private revertTimer: unknown = null
-  /** Appareils qui ont publié un état depuis leur apparition : les autres ont les valeurs par défaut. */
+  /** Devices that have published a state since they appeared: the others have the default values. */
   private readonly fresh = new Set<DeviceId>()
   private readonly listeners = new Set<() => void>()
   private readonly unsubscribe: (() => void)[] = []
@@ -111,7 +110,7 @@ export class AutomationEngine {
     this.listeners.clear()
   }
 
-  /** Prévenu à chaque changement de la liste ou d'un statut (le hub WS rediffuse). */
+  /** Notified on each change of the list or of a status (the WS hub rebroadcasts). */
   onChange(cb: () => void): () => void {
     this.listeners.add(cb)
     return () => this.listeners.delete(cb)
@@ -128,9 +127,9 @@ export class AutomationEngine {
   }
 
   /**
-   * Crée ou remplace. Le corps est validé ici aussi : le moteur ne garde jamais une règle invalide.
-   * `byAssistant` : écrite par un assistant (MCP) au nom de ce compte ; absent = depuis l'app, ce qui
-   * efface la marque.
+   * Creates or replaces. The body is validated here too: the engine never keeps an invalid rule.
+   * `byAssistant`: written by an assistant (MCP) in the name of this account; absent = from the app,
+   * which clears the mark.
    */
   async upsert(id: string, body: AutomationBody, byAssistant?: { user?: string }): Promise<AutomationEntry> {
     const parsed = automationBodySchema.parse(body)
@@ -171,8 +170,8 @@ export class AutomationEngine {
   }
 
   /**
-   * Range la liste dans l'ordre donné (celui du fichier, que l'interface affiche). Un id inconnu est
-   * ignoré ; une règle absente de la liste garde sa place relative, après les autres.
+   * Puts the list in the given order (the file's, which the interface displays). An unknown id is
+   * ignored; a rule missing from the list keeps its relative place, after the others.
    */
   async reorder(ids: readonly string[]): Promise<AutomationEntry[]> {
     const before = [...this.automations.values()]
@@ -190,7 +189,7 @@ export class AutomationEngine {
     return this.list()
   }
 
-  /** « Exécuter maintenant » : les actions seules, sans déclencheur ni « sauf si » — on teste l'« Alors ». */
+  /** "Run" now: the actions alone, without trigger or "Unless" — this tests the "Then". */
   async runNow(id: string): Promise<AutomationRun | undefined> {
     const a = this.automations.get(id)
     if (!a) return undefined
@@ -199,7 +198,7 @@ export class AutomationEngine {
     return result.run
   }
 
-  // ── interne ──────────────────────────────────────────────────────────────────────────────
+  // ── internal ─────────────────────────────────────────────────────────────────────────────
 
   private context(): EvalContext {
     return this.view.context(this.deps.clock.now(), (id) => this.fresh.has(id))
@@ -220,7 +219,7 @@ export class AutomationEngine {
     await this.deps.store.save([...this.automations.values()])
   }
 
-  /** Une règle écrite ou (dés)activée repart de zéro : nouvelle photo, minuteurs recalculés. */
+  /** A rule written or (dis)abled starts over: new snapshot, timers recomputed. */
   private reset(a: Automation): void {
     this.forget(a.id)
     this.baseline(a)
@@ -233,7 +232,7 @@ export class AutomationEngine {
     this.nextRun.delete(id)
   }
 
-  /** Photo de référence d'un déclencheur d'état : sa valeur actuelle, qui ne déclenche rien. */
+  /** Reference snapshot of a state trigger: its current value, which fires nothing. */
   private baseline(a: Automation): void {
     if (!a.enabled || a.trigger.type !== 'state') return
     this.last.set(a.id, evaluatePredicate(a.trigger.when, this.context()))
@@ -247,7 +246,7 @@ export class AutomationEngine {
     for (const cb of this.listeners) cb()
   }
 
-  // horaire
+  // time
 
   private arm(): void {
     if (this.closed) return
@@ -281,7 +280,7 @@ export class AutomationEngine {
     this.notify()
   }
 
-  // état
+  // state
 
   private onDevices(ids: DeviceId[]): void {
     let ctx: EvalContext | null = null
@@ -303,7 +302,7 @@ export class AutomationEngine {
       if (this.clearHold(a.id)) this.notify()
       return
     }
-    if (prev !== false) return                           // pas un front : photo, inconnu → vrai, ou déjà vrai
+    if (prev !== false) return                           // not an edge: snapshot, unknown → true, or already true
     const forMin = a.trigger.forMin
     if (!forMin) { this.fire(a, 'state'); return }
     this.pendingSince.set(a.id, ctx.now)
@@ -321,7 +320,7 @@ export class AutomationEngine {
     this.notify()
   }
 
-  /** Annule une attente « pendant N minutes ». Rend vrai s'il y en avait une. */
+  /** Cancels a "for N minutes" wait. Returns true if there was one. */
   private clearHold(id: string): boolean {
     const h = this.holds.get(id)
     this.pendingSince.delete(id)
@@ -331,7 +330,7 @@ export class AutomationEngine {
     return true
   }
 
-  // exécution
+  // execution
 
   private fire(a: Automation, by: 'time' | 'state'): void {
     if (this.running.has(a.id)) {
@@ -345,7 +344,7 @@ export class AutomationEngine {
       return
     }
     this.running.add(a.id)
-    // Jamais attendu ici : on est dans un gestionnaire du bus ou du minuteur.
+    // Never awaited here: we are inside a bus or timer handler.
     void runActions(a, by, ctx, this.deps)
       .then((result) => this.done(a, result))
       .catch((err) => this.deps.logger.error({ err, automation: a.id }, 'automation run failed'))
@@ -361,9 +360,9 @@ export class AutomationEngine {
     this.record(a, run)
   }
 
-  // retours « pendant N minutes »
+  // "for N minutes" reverts
 
-  /** Un seul minuteur, sur le prochain retour pas encore échu ; les échus attendent leur appareil. */
+  /** A single timer, on the next revert not yet due; due ones wait for their device. */
   private armReverts(): void {
     if (this.closed) return
     const { clock } = this.deps
@@ -379,7 +378,7 @@ export class AutomationEngine {
     this.runDueReverts()
   }
 
-  /** Envoie les retours échus dont l'appareil a publié un état et répond. */
+  /** Sends the due reverts whose device has published a state and answers. */
   private runDueReverts(): void {
     if (!this.reverts.size) return
     const now = this.deps.clock.now()

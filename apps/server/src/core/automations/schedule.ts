@@ -1,33 +1,33 @@
 import { sunTimes, type TimeTrigger } from '@kasbah/shared'
 
-// Prochaine échéance d'un déclencheur horaire. Tout se raisonne en HEURE MURALE LOCALE (fuseau du
-// process, comme le reste du serveur) : un jour se construit par `new Date(a, m, j + k)` et jamais en
-// ajoutant 24 h, sans quoi un changement d'heure décalerait d'une heure toutes les échéances
-// suivantes. Une heure qui n'existe pas (02:30 le jour du passage à l'heure d'été) est normalisée
-// par `Date` à 03:30 ; une heure qui existe deux fois n'est prise qu'une fois.
+// Next due time of a time trigger. Everything is reasoned in LOCAL WALL-CLOCK TIME (the process
+// time zone, like the rest of the server): a day is built with `new Date(y, m, d + k)` and never by
+// adding 24 h, otherwise a DST change would shift every following due time by an hour. A time that
+// does not exist (02:30 on the day clocks go forward) is normalized by `Date` to 03:30; a time that
+// exists twice is taken only once.
 
-/** Au plus un an d'avance : au-delà, une période ou des jours qui ne se rencontrent jamais. */
+/** At most one year ahead: beyond that, a date range or weekdays that never meet. */
 const HORIZON_DAYS = 366
 
 export interface Site { lat: number; lon: number }
 
-/** « AAAA-MM-JJ » du jour local, pour comparer aux bornes d'une période. */
+/** "YYYY-MM-DD" of the local day, to compare with the bounds of a date range. */
 export function isoDay(d: Date): string {
   const p = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
 }
 
-/** Instant d'une heure murale « HH:MM » le jour local `day`. */
+/** Instant of a wall-clock time "HH:MM" on the local day `day`. */
 export function wallClock(day: Date, hhmm: string): number {
   const [h = 0, m = 0] = hhmm.split(':').map(Number)
   return new Date(day.getFullYear(), day.getMonth(), day.getDate(), h, m).getTime()
 }
 
-/** Heure du déclencheur le jour `day`, ou `undefined` si le soleil n'y passe pas ce jour-là. */
+/** Time of the trigger on day `day`, or `undefined` if the sun does not pass through it that day. */
 export function occurrenceOn(trigger: TimeTrigger, day: Date, site: Site): number | undefined {
   const at = trigger.at
   if (at.kind === 'clock') return wallClock(day, at.time)
-  // midi local : `sunTimes` découpe le jour qui CONTIENT la date donnée
+  // local noon: `sunTimes` slices the day that CONTAINS the given date
   const base = sunTimes(new Date(day.getFullYear(), day.getMonth(), day.getDate(), 12), site.lat, site.lon)[at.event]
   if (base === undefined) return undefined
   let t = base + (at.offsetMin ?? 0) * 60_000
@@ -36,7 +36,7 @@ export function occurrenceOn(trigger: TimeTrigger, day: Date, site: Site): numbe
   return t
 }
 
-/** Le jour est-il retenu par les jours de la semaine et la période du déclencheur ? */
+/** Is the day kept by the trigger's weekdays and date range? */
 function dayAllowed(trigger: TimeTrigger, day: Date): boolean {
   if (trigger.days && !trigger.days.includes(day.getDay())) return false
   if (trigger.dateRange) {
@@ -46,7 +46,7 @@ function dayAllowed(trigger: TimeTrigger, day: Date): boolean {
   return true
 }
 
-/** Première échéance STRICTEMENT après `fromMs`, ou `undefined` s'il n'y en a plus dans l'année. */
+/** First due time STRICTLY after `fromMs`, or `undefined` if there is none left within the year. */
 export function nextOccurrence(trigger: TimeTrigger, fromMs: number, site: Site): number | undefined {
   const from = new Date(fromMs)
   for (let k = 0; k <= HORIZON_DAYS; k++) {

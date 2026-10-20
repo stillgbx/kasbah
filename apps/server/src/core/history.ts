@@ -2,8 +2,8 @@ import type { DeviceId, DeviceState, EnergyHistoryPoint } from '@kasbah/shared'
 import type { Bus } from './bus'
 import type { Clock } from './clock'
 
-// Historique horaire en mémoire des appareils `energy` (moyenne des échantillons par heure).
-// Alimente le graphique « production du jour » sans base de données ; borné à `retentionHours`.
+// In-memory hourly history of `energy` devices (average of the samples per hour).
+// Feeds the "Production today" chart without a database; bounded to `retentionHours`.
 
 interface Bucket { t: number; production: number; consumption: number; grid: number; n: number }
 

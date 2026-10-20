@@ -4,10 +4,10 @@ import type { Logger } from 'pino'
 import { REPEAT_MODES } from './queue'
 import { writeFileAtomic } from '../core/atomic-file'
 
-// La dernière écoute de chaque lecteur : sa file, la piste où elle en était, la position atteinte.
-// Les sessions et les files vivent en mémoire — un redémarrage du serveur les perd, et l'enceinte
-// garde une URL morte. Ce fichier permet à la barre de montrer le titre interrompu, en pause à sa
-// position, et de le relancer de là (`POST /api/music/resume`). Écrit en `.tmp` + rename.
+// The last listening of each player: its queue, the track it was at, the position reached.
+// Sessions and queues live in memory — a server restart loses them, and the speaker keeps a dead
+// URL. This file lets the bar show the interrupted track, paused at its position, and restart it
+// from there (`POST /api/music/resume`). Written as `.tmp` + rename.
 
 const trackSchema = z.object({
   source: z.string(),
@@ -42,7 +42,7 @@ export function createLastPlayedFile(path: string, logger?: Logger): LastPlayedS
         const parsed = fileSchema.safeParse(JSON.parse(await readFile(path, 'utf8')))
         if (parsed.success) return parsed.data
         logger?.warn({ path }, 'music state file is unreadable, starting empty')
-      } catch { /* pas encore de fichier */ }
+      } catch { /* no file yet */ }
       return {}
     },
     async save(all) {

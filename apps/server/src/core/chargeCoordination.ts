@@ -3,17 +3,18 @@ import { HOME_RADIUS_M, geoDistance, type CHARGER_STATUSES, type Command, type D
 type ChargerStatus = (typeof CHARGER_STATUSES)[number]
 
 /**
- * « Charger » une voiture branchée sur une borne qui ne donne pas de courant ne fait rien : la borne
- * Enphase en charge verte, sans soleil, laisse la voiture branchée sans charger (constaté le
- * 2026-10-01). Le serveur force donc AUSSI la borne, pour l'interface comme pour une automatisation.
+ * "Start charging" on a car plugged into a charger that gives no current does nothing: the Enphase charger
+ * in green charging mode, without sun, leaves the car plugged in without charging (seen on
+ * 2026-10-01). So the server ALSO forces the charger, for the interface as for an automation.
  *
- * Quelle borne ? Aucune ne dit quelle voiture est au bout de son câble (celle de la maison réelle se
- * croit attelée à une Renault quand c'est la Tesla). D'où une règle prudente : la voiture se dit
- * branchée et pas en charge, elle est à la maison (position inconnue = on la croit), et UNE SEULE
- * borne pilotable a un câble branché sans charger. Deux bornes dans ce cas : on ne devine pas.
+ * Which charger? None says which car is at the end of its cable (the one at the real house thinks
+ * it is hooked to a Renault when it is the Tesla). Hence a cautious rule: the car says it is
+ * plugged in and not charging, it is at home (unknown position = we believe it), and ONE SINGLE
+ * controllable charger has a cable plugged in without charging. Two chargers in that case: we don't
+ * guess.
  *
- * L'arrêt n'est relayé que pour un véhicule qui ne sait pas s'arrêter lui-même (`chargerToStop`) :
- * arrêter la borne Enphase la bloque jusqu'au débranchement, soleil ou pas.
+ * Stopping is relayed only for a vehicle that cannot stop itself (`chargerToStop`): stopping the
+ * Enphase charger locks it until unplugging, sun or not.
  */
 export function chargerToForce(vehicleId: DeviceId, command: Command, devices: DeviceEntry[], site: { lat: number; lon: number }): DeviceId | undefined {
   if (command.type !== 'vehicle.start_charge') return undefined
@@ -23,11 +24,11 @@ export function chargerToForce(vehicleId: DeviceId, command: Command, devices: D
 }
 
 /**
- * « Arrêter la charge » d'un véhicule qui ne sait pas l'arrêter à distance (`meta.vehicle.stopViaCharger`,
- * la R5) : c'est la borne où il charge qu'on arrête, à sa place — choix de l'utilisateur du
- * 2026-10-01, en connaissance de cause : la borne Enphase reste alors bloquée jusqu'au débranchement.
- * Même prudence que pour forcer : branché, à la maison, et UNE SEULE borne pilotable en charge. On ne
- * demande pas au véhicule de se dire en charge : la R5 annonce parfois « en attente » en chargeant.
+ * "Stop charging" for a vehicle that cannot stop it remotely (`meta.vehicle.stopViaCharger`, the
+ * R5): it is the charger it charges on that we stop, in its place — the user's choice of
+ * 2026-10-01, made knowingly: the Enphase charger then stays locked until unplugging.
+ * Same caution as for forcing: plugged in, at home, and ONE SINGLE controllable charger charging. We
+ * don't require the vehicle to say it is charging: the R5 sometimes reports "waiting" while charging.
  */
 export function chargerToStop(vehicleId: DeviceId, command: Command, devices: DeviceEntry[], site: { lat: number; lon: number }): DeviceId | undefined {
   if (command.type !== 'vehicle.stop_charge') return undefined
@@ -38,10 +39,10 @@ export function chargerToStop(vehicleId: DeviceId, command: Command, devices: De
 }
 
 /**
- * Une voiture dont Kasbah a forcé la borne est arrivée à sa limite : la borne doit alors reprendre le
- * mode d'avant le forçage (choix de l'utilisateur du 2026-10-02), sans attendre le débranchement.
- * Arrivée = niveau au moins à la cible ET plus en charge : la R5 du 2026-10-02 s'est arrêtée à 51 %
- * pour 50 %, une voiture qui charge encore à sa cible n'a pas fini.
+ * A car whose charger Kasbah forced has reached its limit: the charger must then go back to the
+ * mode it had before forcing (the user's choice of 2026-10-02), without waiting for unplugging.
+ * Reached = level at least at the target AND no longer charging: the R5 on 2026-10-02 stopped at
+ * 51 % for 50 %, a car still charging at its target has not finished.
  */
 export function chargeLimitReached(state: DeviceState): boolean {
   if (state.kind !== 'vehicle' || state.charging === true) return false
@@ -49,14 +50,14 @@ export function chargeLimitReached(state: DeviceState): boolean {
 }
 
 /**
- * Une voiture qui se dit en charge, alors qu'aucune borne de la maison ne charge : on la dément.
- * Choix de l'utilisateur du 2026-10-02 : la R5 annonçait « en charge » depuis une trame de 14:00
- * (temps restant daté de la trame, `chargingStatus` 0.3) pendant que la borne, en charge verte sans
- * soleil, ne donnait rien. Prudence : la voiture est branchée, à la maison (position CONNUE, sinon
- * elle peut charger ailleurs), elle ne mesure pas sa propre puissance (Tesla la donne : elle sait
- * mieux que nous), et TOUTES les bornes sont joignables et ne chargent pas. Une borne qui charge ne
- * dément rien : aucune ne dit quelle voiture est au bout du câble. Faux si la voiture charge sur une
- * prise que Kasbah ne voit pas — risque accepté.
+ * A car that says it is charging while no charger of the house is charging: we contradict it.
+ * The user's choice of 2026-10-02: the R5 reported "charging" from a 14:00 frame (remaining time
+ * dated from the frame, `chargingStatus` 0.3) while the charger, in green charging without sun,
+ * gave nothing. Caution: the car is plugged in, at home (KNOWN position, otherwise it may be
+ * charging elsewhere), it does not measure its own power (Tesla gives it: it knows better than we
+ * do), and ALL chargers are reachable and not charging. A charging charger contradicts nothing: none
+ * says which car is at the end of the cable. Wrong if the car charges on an outlet Kasbah does not
+ * see — accepted risk.
  */
 export function chargingRefuted(vehicle: DeviceState, devices: DeviceEntry[], site: { lat: number; lon: number }): boolean {
   if (vehicle.kind !== 'vehicle' || vehicle.charging !== true || vehicle.pluggedIn !== true) return false

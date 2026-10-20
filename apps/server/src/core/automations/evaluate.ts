@@ -5,17 +5,17 @@ import {
 import type { EvalContext } from './context'
 import { isoDay } from './schedule'
 
-// Évaluation d'un prédicat à TROIS valeurs : vrai, faux, ou `null` = on ne sait pas (appareil
-// absent, indisponible, pas encore relevé, champ que le fabricant ne publie pas). Seul `true` compte
-// comme vrai partout : un déclencheur ne part que sur un passage faux → vrai, un « sauf si » ne
-// bloque que s'il est vrai. Un inconnu ne déclenche donc rien et n'empêche rien.
+// THREE-valued predicate evaluation: true, false, or `null` = we don't know (device absent,
+// unavailable, not read yet, a field the vendor does not publish). Only `true` counts as true
+// everywhere: a trigger fires only on a false → true transition, an "unless" blocks only if it is
+// true. An unknown therefore triggers nothing and prevents nothing.
 
 export type Tri = boolean | null
 
-/** Champs de base qui ne sont pas des mesures : on ne compare pas sur eux. */
+/** Base fields that are not measurements: no comparing on them. */
 const NOT_FIELDS = new Set(['kind', 'updatedAt', 'available'])
 
-/** Le champ existe-t-il dans l'état de ce kind ? */
+/** Does the field exist in this kind's state? */
 export function isComparableField(entry: DeviceEntry, field: string): boolean {
   return !NOT_FIELDS.has(field) && stateKeys(entry.descriptor.kind).has(field)
 }
@@ -35,10 +35,10 @@ function compare(actual: unknown, op: PredicateOp, expected: string | number | b
   if (typeof actual !== typeof expected) return null
   if (op === 'eq') return actual === expected
   if (op === 'ne') return actual !== expected
-  return null                                    // un ordre sur un booléen ou un mot n'a pas de sens
+  return null                                    // an ordering on a boolean or a word makes no sense
 }
 
-/** L'appareil, s'il est là, joignable et relevé depuis son apparition ; sinon rien. */
+/** The device, if it is there, reachable and read since it appeared; otherwise nothing. */
 function known(id: string, ctx: EvalContext): DeviceEntry | undefined {
   const e = ctx.device(id)
   return e && e.state.available && ctx.fresh(id) ? e : undefined
@@ -97,7 +97,7 @@ function leaf(p: LeafPredicate, ctx: EvalContext): Tri {
   }
 }
 
-/** Au moins un vrai → vrai ; sinon au moins un inconnu → inconnu ; sinon faux. */
+/** At least one true → true; otherwise at least one unknown → unknown; otherwise false. */
 export function anyOf(values: Tri[]): Tri {
   if (values.includes(true)) return true
   return values.includes(null) ? null : false
@@ -109,14 +109,14 @@ export function evaluatePredicate(p: Predicate, ctx: EvalContext): Tri {
 }
 
 /**
- * Le changement d'état de cet appareil peut-il changer la valeur du prédicat ? Filtre les
- * déclencheurs d'état à réévaluer : ceux qui ne parlent que de l'heure ne dépendent d'aucun appareil.
+ * Can this device's state change alter the predicate's value? Filters the state triggers to
+ * re-evaluate: those that only talk about the time depend on no device.
  */
 export function touches(p: Predicate, deviceId: string, ctx: EvalContext): boolean {
   if (p.type === 'any') return p.of.some((q) => touches(q, deviceId, ctx))
   switch (p.type) {
     case 'device': case 'deviceOn': case 'vehicleOnSite': return p.deviceId === deviceId
-    // l'accrochage d'un engin dépend aussi des AUTRES engins (une place ne prend qu'un occupant)
+    // a machine's spot assignment also depends on the OTHER machines (a spot takes only one occupant)
     case 'vehicleParkedAt': { const k = ctx.device(deviceId)?.descriptor.kind; return p.deviceId === deviceId || k === 'vehicle' || k === 'mower' }
     case 'anyInRoom': return ctx.roomOf(deviceId) === p.roomId
     default: return false
@@ -124,9 +124,9 @@ export function touches(p: Predicate, deviceId: string, ctx: EvalContext): boole
 }
 
 /**
- * Appareils visés par une action. Une cible NOMMÉE rend aussi les ids absents (erreur à rapporter) ;
- * une SÉLECTION se résout sur ce qui existe et répond au moment d'agir — une lampe injoignable n'en
- * fait pas partie, sans quoi chaque exécution nocturne se solderait par un échec partiel.
+ * Devices targeted by an action. A NAMED target also returns the absent ids (error to report); a
+ * SELECTION resolves on what exists and answers at the time of acting — an unreachable light is not
+ * part of it, otherwise every nightly run would end in a partial failure.
  */
 export function resolveTarget(t: Target, ctx: EvalContext): { entries: DeviceEntry[]; missing: string[] } {
   if (t.type === 'devices') {

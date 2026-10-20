@@ -2,9 +2,9 @@ import { resolve } from 'node:path'
 import { z } from 'zod'
 import { REPO_ROOT } from '../core/paths'
 
-// Variables KASBAH_* du serveur. Les clés propres à un plugin (HUE_*, CAST_*) sont validées par
-// le plugin lui-même (voir DevicePlugin.configSchema). Quels plugins sont ACTIFS ne se décide pas
-// ici mais dans la maison (`house.plugins`), depuis Réglages → Plugins.
+// The server's KASBAH_* variables. Keys specific to a plugin (HUE_*, CAST_*) are validated by the
+// plugin itself (see DevicePlugin.configSchema). Which plugins are ACTIVE is not decided here but
+// in the house (`house.plugins`), from Settings → Plugins.
 
 const bool = z.enum(['true', 'false', '1', '0']).transform((v) => v === 'true' || v === '1')
 

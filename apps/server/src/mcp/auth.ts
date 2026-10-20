@@ -8,27 +8,27 @@ import { z } from 'zod'
 import { writeFileAtomic } from '../core/atomic-file'
 import { REPO_ROOT, SERVER_ROOT, stateFile, userStateDir } from '../core/paths'
 
-// Authentification de `/mcp` : Kasbah est à la fois le serveur de ressource et son propre serveur
-// d'autorisation OAuth 2.1, le minimum que demande un connecteur claude.ai (qui appelle depuis le
-// cloud d'Anthropic, donc depuis Internet). Jeton exigé PARTOUT, réseau local compris : un seul
-// chemin, et rien ne dépend d'un `Host` qu'un client peut forger.
+// Authentication of `/mcp`: Kasbah is both the resource server and its own OAuth 2.1 authorization
+// server, the minimum a claude.ai connector asks for (it calls from Anthropic's cloud, hence from the
+// Internet). Token required EVERYWHERE, local network included: a single path, and nothing depends
+// on a `Host` that a client can forge.
 //
-// - Comptes : `mcp-users.json` à côté du `.env` serveur (hors dépôt), mots de passe en scrypt,
-//   écrits par `npm run mcp-user`. Relu à chaque connexion : retirer un compte coupe aussi ses jetons.
-//   Les mêmes comptes ouvrent l'application sous le nom public (`http/session.ts`).
-// - Clients : enregistrement dynamique (`/oauth/register`, RFC 7591) ou document de métadonnées
-//   (client_id = URL https, spec 2026-07-28). Clients publics : PKCE S256 obligatoire, pas de secret.
-// - Jetons opaques, gardés hachés dans `.state/mcp-auth.json` : accès 1 h, renouvellement 90 jours
-//   glissants, tourné à chaque usage.
+// - Accounts: `mcp-users.json` next to the server `.env` (outside the repo), passwords in scrypt,
+//   written by `npm run mcp-user`. Re-read on each sign-in: removing an account also cuts its tokens.
+//   The same accounts open the application under the public name (`http/session.ts`).
+// - Clients: dynamic registration (`/oauth/register`, RFC 7591) or metadata document
+//   (client_id = https URL, spec 2026-07-28). Public clients: PKCE S256 mandatory, no secret.
+// - Opaque tokens, kept hashed in `.state/mcp-auth.json`: access 1 h, refresh 90 sliding days,
+//   rotated on each use.
 
 export const mcpAuthConfigSchema = z.object({
   MCP_USERS_FILE: z.string().trim().default(resolve(SERVER_ROOT, 'mcp-users.json')),
   MCP_AUTH_FILE: z.string().trim().default(stateFile('mcp-auth.json')),
-  /** Adresse publique (tunnel), ex. `https://kasbah.example.com` : son nom est accepté, et sert d'émetteur en https. */
+  /** Public address (tunnel), e.g. `https://kasbah.example.com`: its name is accepted, and serves as the https issuer. */
   MCP_PUBLIC_URL: z.url().optional(),
-  /** Échecs de connexion d'affilée qui bloquent un compte (0 = jamais), pour l'app comme pour le MCP. */
+  /** Consecutive sign-in failures that lock an account (0 = never), for the app as for the MCP. */
   KASBAH_LOGIN_MAX_FAILURES: z.coerce.number().int().min(0).default(5),
-  /** Durée du blocage d'un compte, en minutes. */
+  /** Duration of an account lockout, in minutes. */
   KASBAH_LOGIN_LOCK_MINUTES: z.coerce.number().positive().default(15),
 })
 export type McpAuthConfig = z.infer<typeof mcpAuthConfigSchema>
@@ -41,14 +41,14 @@ const GLOBAL_WINDOW_MS = 15 * 60_000
 const GLOBAL_MAX_FAILURES = 10
 const MAX_TRACKED_NAMES = 1000
 
-// --- tentatives de connexion -------------------------------------------------------------------
+// --- sign-in attempts --------------------------------------------------------------------------
 
 /**
- * Les deux pages de connexion (application et MCP) passent par le même gardien, les comptes étant
- * partagés. Deux verrous : un plafond GLOBAL d'échecs (derrière un proxy, toutes les requêtes ont la
- * même adresse) et le blocage d'un COMPTE après `maxFailures` échecs d'affilée, chacun à moins de
- * `lockMs` du précédent. Suivi par nom saisi, qu'il existe ou non : le blocage ne trahit pas les
- * comptes. En mémoire : un redémarrage débloque tout. Les sessions déjà ouvertes ne sont pas touchées.
+ * Both sign-in pages (application and MCP) go through the same guard, since the accounts are shared.
+ * Two locks: a GLOBAL failure cap (behind a proxy, all requests have the same address) and the
+ * lockout of an ACCOUNT after `maxFailures` consecutive failures, each less than `lockMs` after the
+ * previous one. Tracked by the name typed, whether it exists or not: the lockout does not give the
+ * accounts away. In memory: a restart unlocks everything. Sessions already open are not affected.
  */
 export class LoginGuard {
   private readonly global: number[] = []
@@ -56,7 +56,7 @@ export class LoginGuard {
 
   constructor(private readonly opts: { maxFailures: number; lockMs: number; now: () => number; logger?: Logger }) {}
 
-  /** `null` si l'essai est permis ; sinon l'instant où il le redeviendra. */
+  /** `null` if the attempt is allowed; otherwise the instant when it will be again. */
   blockedUntil(name: string): number | null {
     const t = this.opts.now()
     while (this.global.length && this.global[0]! <= t - GLOBAL_WINDOW_MS) this.global.shift()
@@ -75,24 +75,24 @@ export class LoginGuard {
     this.names.delete(name)
     this.names.set(name, { count, last: t })
     if (count === this.opts.maxFailures) this.opts.logger?.warn({ username: name, minutes: this.opts.lockMs / 60_000 }, 'login locked for this account')
-    // Borne : les noms les plus anciennement essayés sortent (la Map garde l'ordre d'insertion).
+    // Bound: the names tried longest ago go out (the Map keeps insertion order).
     if (this.names.size > MAX_TRACKED_NAMES) this.names.delete(this.names.keys().next().value!)
   }
 
   succeed(name: string): void { this.names.delete(name) }
 }
 
-/** Message de refus pour un essai bloqué jusqu'à `until`. */
+/** Refusal message for an attempt blocked until `until`. */
 export const lockedMessage = (until: number, now: number) =>
   `Trop d’essais : réessayer dans ${Math.max(1, Math.ceil((until - now) / 60_000))} min.`
 
-// --- mots de passe ---------------------------------------------------------------------------
+// --- passwords ------------------------------------------------------------------------------
 
 const SCRYPT = { N: 16384, r: 8, p: 1 }
 const derive = (password: string, salt: Buffer) => new Promise<Buffer>((ok, ko) =>
   scrypt(password, salt, 32, SCRYPT, (err, key) => (err ? ko(err) : ok(key))))
 
-/** `scrypt$<sel base64url>$<clé base64url>`. */
+/** `scrypt$<base64url salt>$<base64url key>`. */
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16)
   return `scrypt$${salt.toString('base64url')}$${(await derive(password, salt)).toString('base64url')}`
@@ -106,7 +106,7 @@ export async function verifyPassword(password: string, stored: string): Promise<
   return got.length === expected.length && timingSafeEqual(got, expected)
 }
 
-// --- fichiers ---------------------------------------------------------------------------------
+// --- files ------------------------------------------------------------------------------------
 
 export const usersFileSchema = z.object({
   users: z.array(z.object({ name: z.string().min(1), password: z.string().min(1) })).default([]),
@@ -117,8 +117,8 @@ export async function readUsers(path: string): Promise<UsersFile> {
   try { return usersFileSchema.parse(JSON.parse(await readFile(path, 'utf8'))) } catch { return { users: [] } }
 }
 
-// Écritures du fichier des comptes (script `mcp-user` et Réglages). Un fichier absent est vide ; un
-// fichier illisible fait ÉCHOUER l'écriture plutôt que d'être écrasé par une liste vide.
+// Writes to the accounts file (`mcp-user` script and Settings). A missing file is empty; an
+// unreadable file makes the write FAIL rather than being overwritten by an empty list.
 export const userNameSchema = z.string().trim().regex(/^[\w.@-]{1,64}$/, 'letters, digits, . _ @ - (64 max)')
 export const passwordSchema = z.string().min(8, '8 characters at least').max(200)
 
@@ -134,7 +134,7 @@ async function readUsersForEdit(path: string): Promise<UsersFile> {
 }
 const writeUsers = (path: string, file: UsersFile) => writeFileAtomic(path, `${JSON.stringify(file, null, 2)}\n`, { mode: 0o600 })
 
-/** Crée le compte, ou change son mot de passe. Rend les noms. */
+/** Creates the account, or changes its password. Returns the names. */
 export async function saveUser(path: string, name: string, password: string): Promise<string[]> {
   const file = await readUsersForEdit(path)
   const users = [...file.users.filter((u) => u.name !== name), { name, password: await hashPassword(password) }]
@@ -142,7 +142,7 @@ export async function saveUser(path: string, name: string, password: string): Pr
   return users.map((u) => u.name)
 }
 
-/** Retire le compte (ses jetons ne passent plus) et ses comptes musicaux ; `null` s'il n'existait pas. */
+/** Removes the account (its tokens no longer pass) and its music accounts; `null` if it did not exist. */
 export async function deleteUser(path: string, name: string): Promise<string[] | null> {
   const file = await readUsersForEdit(path)
   const users = file.users.filter((u) => u.name !== name)
@@ -164,26 +164,26 @@ type Grant = z.infer<typeof grantSchema>
 export const sha256 = (s: string) => createHash('sha256').update(s).digest('base64url')
 export const token = () => randomBytes(32).toString('base64url')
 
-// Le logo de l'app, DANS la page : ni `/icons` ni le reste de l'interface ne sont servis sans session.
+// The app logo, INSIDE the page: neither `/icons` nor the rest of the interface is served without a session.
 const LOGO = (() => {
   try { return readFileSync(resolve(REPO_ROOT, 'apps/web/public/icons/icon.svg'), 'utf8').replace(/^<svg /, '<svg aria-hidden="true" ') } catch { return '' }
 })()
 
-// La police de l'app (Plus Jakarta Sans, jeu latin, 28 Ko), DANS la page pour la même raison. Sans
-// elle, la page retombe sur la police du système.
+// The app font (Plus Jakarta Sans, Latin subset, 28 KB), INSIDE the page for the same reason.
+// Without it, the page falls back to the system font.
 const FONT_FACE = (() => {
   const file = 'node_modules/@fontsource-variable/plus-jakarta-sans/files/plus-jakarta-sans-latin-wght-normal.woff2'
   for (const dir of [REPO_ROOT, resolve(REPO_ROOT, 'apps/web')]) {
     try {
       const data = readFileSync(resolve(dir, file)).toString('base64')
       return `@font-face{font-family:'Plus Jakarta Sans Variable';font-style:normal;font-display:swap;font-weight:200 800;src:url(data:font/woff2;base64,${data}) format('woff2-variations')}`
-    } catch { /* dossier suivant */ }
+    } catch { /* next folder */ }
   }
   return ''
 })()
 
-// Le thème « Kasbah » (apps/web/src/themes/kasbah.ts et les jetons dérivés de `cssVars`), clair et
-// sombre selon le système : la page n'a ni script ni accès au thème choisi dans l'app.
+// The "Kasbah" theme (apps/web/src/themes/kasbah.ts and the tokens derived from `cssVars`), light and
+// dark according to the system: the page has no script and no access to the theme chosen in the app.
 const PAGE_CSS = `${FONT_FACE}
 :root{--bg:#e9edf1;--surface:#fff;--surface2:#f2f5f8;--text:#141a22;--muted:#5f6a78;--line:rgba(20,26,34,.09);--accent:#1f6f78;--accent-soft:rgba(31,111,120,.12);--on-accent:#fff;--error:#d24a43;--shadow:0 8px 30px rgba(20,26,34,.08);color-scheme:light}
 @media (prefers-color-scheme:dark){:root{--bg:#0d1420;--surface:#161e2d;--surface2:#1d2839;--text:#e8edf3;--muted:#8d9ab0;--line:rgba(232,237,243,.08);--accent:#4fb3bd;--accent-soft:rgba(79,179,189,.18);--on-accent:#0d1420;--error:#e57373;--shadow:0 8px 30px rgba(0,0,0,.35);color-scheme:dark}}
@@ -203,10 +203,10 @@ button:hover{filter:brightness(1.08)}button:focus-visible{outline:none;box-shado
 export const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
 /**
- * Page HTML autonome des connexions (MCP et application) : styles et police en ligne, aucune
- * ressource externe. Pas de `form-action` dans la CSP : le navigateur l'applique aussi à la
- * redirection qui suit le formulaire, et refusait le retour vers le client (vu dans le navigateur,
- * invisible aux tests). `head` : balises en plus dans l'en-tête (le manifest de la connexion).
+ * Self-contained HTML page for sign-ins (MCP and application): inline styles and font, no external
+ * resource. No `form-action` in the CSP: the browser also applies it to the redirect that follows
+ * the form, and refused the return to the client (seen in the browser, invisible to tests). `head`:
+ * extra tags in the header (the sign-in page's manifest).
  */
 export const htmlPage = (reply: FastifyReply, status: number, body: string, head = '') => reply.code(status)
   .header('content-type', 'text/html; charset=utf-8')
@@ -217,7 +217,7 @@ export const htmlPage = (reply: FastifyReply, status: number, body: string, head
 <style>${PAGE_CSS}</style></head>
 <body><main><header class="brand">${LOGO}<h1>Kasbah</h1></header>${body}</main></body></html>`)
 
-/** Lecteur des comptes, relu quand le fichier change (un compte retiré est refusé sans redémarrage). */
+/** Accounts reader, re-read when the file changes (a removed account is refused without a restart). */
 export function usersReader(path: string): () => Promise<UsersFile> {
   let cached: { mtime: number; file: UsersFile } | null = null
   return async () => {
@@ -227,12 +227,12 @@ export function usersReader(path: string): () => Promise<UsersFile> {
   }
 }
 
-// Haché factice : un compte inconnu coûte le même calcul qu'un mauvais mot de passe.
+// Dummy hash: an unknown account costs the same computation as a wrong password.
 const DUMMY_HASH = 'scrypt$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
 
 /**
- * Vérifie un nom et un mot de passe en passant par le gardien. `blocked` : refusé sans essai (le
- * gardien bloque) ; `null` : mauvais couple ; sinon le compte.
+ * Checks a name and a password through the guard. `blocked`: refused without an attempt (the guard
+ * is blocking); `null`: wrong pair; otherwise the account.
  */
 export async function checkLogin(guard: LoginGuard, users: () => Promise<UsersFile>, username: string, password: string):
   Promise<{ user: UsersFile['users'][number] } | { blocked: number } | null> {
@@ -249,7 +249,7 @@ export async function checkLogin(guard: LoginGuard, users: () => Promise<UsersFi
 
 interface ClientInfo { name?: string; redirectUris: string[] }
 
-/** Une redirection en https, ou en http vers la machine du client (Claude Code, mcp-remote). */
+/** A redirect over https, or over http to the client's machine (Claude Code, mcp-remote). */
 function redirectAllowed(uri: string): boolean {
   try {
     const u = new URL(uri)
@@ -263,20 +263,20 @@ export interface McpAuthDeps {
   config: McpAuthConfig
   logger: Logger
   now?: () => number
-  /** Lecture d'un document de métadonnées client (tests). */
+  /** Reading of a client metadata document (tests). */
   fetch?: typeof fetch
 }
 
-// Ce qu'on joint sous le nom PUBLIC sans session : le serveur MCP et son autorisation, qui ont leurs
-// jetons. Un proxy inverse (celui du NAS) transmet tout ce qui arrive sous son nom ; c'est ici qu'on
-// trie, le reste passe par la porte à session (`http/session.ts`).
+// What can be reached under the PUBLIC name without a session: the MCP server and its authorization,
+// which have their tokens. A reverse proxy (the NAS's) forwards everything arriving under its name;
+// the sorting happens here, the rest goes through the session gate (`http/session.ts`).
 const MCP_PATHS = new Set([
   '/mcp',
   '/oauth/authorize', '/oauth/token', '/oauth/register',
   '/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp', '/.well-known/oauth-authorization-server',
 ])
 
-/** La requête arrive-t-elle sous un nom public (`Host`, ou premier `X-Forwarded-Host` d'un proxy) ? */
+/** Does the request arrive under a public name (`Host`, or a proxy's first `X-Forwarded-Host`)? */
 export function isPublicRequest(req: FastifyRequest, publicHosts: string[]): boolean {
   if (!publicHosts.length) return false
   const forwarded = String(req.headers['x-forwarded-host'] ?? '').split(',')[0]!.trim().replace(/:\d+$/, '')
@@ -287,8 +287,8 @@ type Hook = (req: FastifyRequest, reply: FastifyReply) => Promise<void>
 const notFound: Hook = async (_req, reply) => { await reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'not found' } }) }
 
 /**
- * Crochet `onRequest` GLOBAL : sous un nom public, les chemins du MCP passent, tout le reste va à
- * `gate` (404 par défaut). À poser avant toute route. Le réseau local n'est jamais filtré.
+ * GLOBAL `onRequest` hook: under a public name, the MCP paths go through, everything else goes to
+ * `gate` (404 by default). To be set before any route. The local network is never filtered.
  */
 export function publicHostFilter(publicHosts: string[], gate: Hook = notFound): Hook {
   return async (req, reply) => {
@@ -299,19 +299,19 @@ export function publicHostFilter(publicHosts: string[], gate: Hook = notFound): 
 }
 
 export interface McpAuth {
-  /** Routes OAuth et métadonnées, à monter dans la sous-application de `/mcp` (même contrôle de `Host`). */
+  /** OAuth and metadata routes, to mount in the `/mcp` sub-application (same `Host` check). */
   routes(sub: FastifyInstance): void
-  /** Crochet `onRequest` de `/mcp` : 401 et l'adresse des métadonnées sans jeton valide ; sinon `req.sessionUser` = le compte du jeton. */
+  /** `onRequest` hook of `/mcp`: 401 and the metadata address without a valid token; otherwise `req.sessionUser` = the token's account. */
   requireToken(req: FastifyRequest, reply: FastifyReply): Promise<void>
-  /** Noms d'hôte en plus de ceux du réseau local (celui de `MCP_PUBLIC_URL`). */
+  /** Host names on top of the local network ones (that of `MCP_PUBLIC_URL`). */
   publicHosts: string[]
-  /** Gardien des connexions, partagé avec la page de connexion de l'application. */
+  /** Sign-in guard, shared with the application's sign-in page. */
   guard: LoginGuard
-  /** Les comptes (partagés avec l'application). */
+  /** The accounts (shared with the application). */
   users: () => Promise<UsersFile>
   /**
-   * Jeton d'accès pour un client lancé par le serveur lui-même (l'assistant, `claude -p`) : en mémoire
-   * seulement, au nom de `user` (`null` = la maison), jusqu'à `revoke()` ou `ttlMs`.
+   * Access token for a client started by the server itself (the assistant, `claude -p`): in memory
+   * only, in the name of `user` (`null` = the house), until `revoke()` or `ttlMs`.
    */
   runToken(user: string | null, ttlMs: number): { token: string; revoke(): void }
 }
@@ -322,8 +322,8 @@ export function createMcpAuth(deps: McpAuthDeps): McpAuth {
   const doFetch = deps.fetch ?? fetch
   const publicUrl = config.MCP_PUBLIC_URL ? new URL(config.MCP_PUBLIC_URL) : null
 
-  // Émetteur et ressource se lisent sur la requête : `http://kasbah:8787` sur le réseau local,
-  // l'adresse publique (https, le tunnel termine le TLS) quand le Host est le sien.
+  // Issuer and resource are read from the request: `http://kasbah:8787` on the local network,
+  // the public address (https, the tunnel terminates TLS) when the Host is its own.
   const baseOf = (req: FastifyRequest) => (publicUrl && req.host === publicUrl.host ? publicUrl.origin : `http://${req.host}`)
 
   let state: Promise<AuthState> | null = null
@@ -336,7 +336,7 @@ export function createMcpAuth(deps: McpAuthDeps): McpAuth {
     try { await writeFileAtomic(config.MCP_AUTH_FILE, `${JSON.stringify(s, null, 2)}\n`, { mode: 0o600 }) } catch (err) { logger.warn({ err }, 'mcp auth state not saved') }
   }
 
-  // Les comptes, relus quand le fichier change (un compte retiré coupe ses jetons sans redémarrage).
+  // The accounts, re-read when the file changes (a removed account cuts its tokens without a restart).
   const currentUsers = usersReader(config.MCP_USERS_FILE)
   const guard = new LoginGuard({
     maxFailures: config.KASBAH_LOGIN_MAX_FAILURES, lockMs: config.KASBAH_LOGIN_LOCK_MINUTES * 60_000, now, logger,
@@ -373,10 +373,10 @@ export function createMcpAuth(deps: McpAuthDeps): McpAuth {
   const accountExists = async (user: string) => (await currentUsers()).users.some((u) => u.name === user)
   const userExists = (g: Grant) => accountExists(g.user)
 
-  // Jetons de course : jamais écrits sur disque, ils ne survivent pas au processus qui les a tirés.
+  // Per-run tokens: never written to disk, they do not survive the process that drew them.
   const runs = new Map<string, { user: string | null; expiresAt: number }>()
 
-  // Paramètres de `/oauth/authorize`, en query (GET) ou dans le formulaire (POST).
+  // Parameters of `/oauth/authorize`, in the query (GET) or in the form (POST).
   const authorizeSchema = z.object({
     response_type: z.literal('code'),
     client_id: z.string().min(1),
@@ -389,7 +389,7 @@ export function createMcpAuth(deps: McpAuthDeps): McpAuth {
   })
   type AuthorizeParams = z.infer<typeof authorizeSchema>
 
-  // Une requête invalide n'est JAMAIS renvoyée vers la redirection demandée : page d'erreur ici.
+  // An invalid request is NEVER sent back to the requested redirect: error page here.
   async function checkAuthorize(raw: unknown): Promise<{ params: AuthorizeParams; client: ClientInfo } | string> {
     const p = authorizeSchema.safeParse(raw)
     if (!p.success) return 'Requête d’autorisation invalide (PKCE S256 obligatoire).'
@@ -436,7 +436,7 @@ ${error ? `<p class="err">${esc(error)}</p>` : ''}
       }
       const grant = m ? (await load()).access[sha256(m[1]!)] : undefined
       if (grant && grant.expiresAt > now() && await userExists(grant)) {
-        // les outils agissent au nom de ce compte (ses comptes musicaux)
+        // the tools act in the name of this account (its music accounts)
         req.sessionUser = grant.user
         return
       }
@@ -446,7 +446,7 @@ ${error ? `<p class="err">${esc(error)}</p>` : ''}
     },
 
     routes(sub) {
-      // Les formulaires OAuth (`/oauth/token`, page de connexion) arrivent en urlencoded.
+      // OAuth forms (`/oauth/token`, sign-in page) arrive urlencoded.
       sub.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string' }, (_req, body, done) => {
         done(null, Object.fromEntries(new URLSearchParams(body as string)))
       })
@@ -481,7 +481,7 @@ ${error ? `<p class="err">${esc(error)}</p>` : ''}
         if (!body.success) return oauthError(reply, 400, 'invalid_client_metadata')
         if (!body.data.redirect_uris.every(redirectAllowed)) return oauthError(reply, 400, 'invalid_redirect_uri', 'https, or http to localhost')
         const s = await load()
-        // Ouvert à Internet : on borne le nombre de clients, les plus anciens sortent.
+        // Open to the Internet: the number of clients is bounded, the oldest go out.
         const ids = Object.keys(s.clients).sort((a, b) => s.clients[a]!.createdAt - s.clients[b]!.createdAt)
         for (const id of ids.slice(0, Math.max(0, ids.length - MAX_CLIENTS + 1))) delete s.clients[id]
         const clientId = `kasbah-${token().slice(0, 22)}`

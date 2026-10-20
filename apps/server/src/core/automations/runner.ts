@@ -5,14 +5,14 @@ import type { SceneRegistry } from '../scene-registry'
 import type { EvalContext } from './context'
 import { resolveTarget } from './evaluate'
 
-// Exécution des actions d'une automatisation. Le même chemin qu'une commande envoyée depuis
-// l'interface (`POST /api/devices/:id/command`) : la commande est vérifiée contre ce que l'appareil
-// déclare (`assertCommandAllowed`) avant d'aller à son plugin — jamais sautée.
+// Running an automation's actions. The same path as a command sent from the interface
+// (`POST /api/devices/:id/command`): the command is checked against what the device declares
+// (`assertCommandAllowed`) before going to its plugin — never skipped.
 //
-// Les actions s'enchaînent DANS L'ORDRE (fermer les volets, puis lancer la musique) ; les appareils
-// d'une même action partent ensemble. Un échec n'arrête rien : on fait tout ce qui peut l'être, et
-// le compte rendu dit ce qui a raté. Il dit « accusé », jamais « fait » : un fabricant qui acquitte
-// n'a pas forcément exécuté (voir les leçons iRobot et PetKit du wiki).
+// Actions run IN ORDER (close the shutters, then start the music); the devices of a single action
+// go out together. A failure stops nothing: we do everything that can be done, and the report says
+// what failed. It says "acknowledged", never "done": a vendor that acknowledges has not
+// necessarily executed (see the iRobot and PetKit lessons in the wiki).
 
 export interface RunnerDeps {
   host: Pick<PluginHost, 'execute' | 'recallScene'>
@@ -21,10 +21,10 @@ export interface RunnerDeps {
 
 type RunError = AutomationRun['errors'][number]
 
-/** « Pendant N minutes » : la commande inverse à envoyer à un appareil, et quand. */
+/** "For N minutes": the inverse command to send to a device, and when. */
 export interface PendingRevert {
   automationId: string
-  /** Rang de l'action dans la liste. */
+  /** Rank of the action in the list. */
   action: number
   deviceId: DeviceId
   command: Command
@@ -33,7 +33,7 @@ export interface PendingRevert {
 
 export interface RunResult {
   run: AutomationRun
-  /** Retours à planifier : un par appareil qui a accusé une action « pendant N minutes ». */
+  /** Reverts to schedule: one per device that acknowledged a "for N minutes" action. */
   reverts: PendingRevert[]
 }
 
@@ -79,7 +79,7 @@ export async function runActions(a: Automation, by: AutomationRun['by'], ctx: Ev
     })
   }
 
-  // Aucune cible (toutes les pièces écartées, aucun volet ce soir) n'est pas un échec : rien à faire.
+  // No target (all rooms excluded, no shutter tonight) is not a failure: nothing to do.
   const outcome = !errors.length ? 'ok' : errors.length >= attempted ? 'failed' : 'partial'
   return { run: { at: ctx.now, by, outcome, errors }, reverts }
 }

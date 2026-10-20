@@ -1,6 +1,6 @@
 import type { Clock } from './clock'
 
-/** Seau à jetons : `capacity` jetons, rechargés à `refillPerSecond`. */
+/** Token bucket: `capacity` tokens, refilled at `refillPerSecond`. */
 export class TokenBucket {
   private tokens: number
   private last: number
@@ -18,7 +18,7 @@ export class TokenBucket {
     if (this.tokens >= n) { this.tokens -= n; return true }
     return false
   }
-  /** Délai (ms) avant qu'un jeton soit disponible. */
+  /** Delay (ms) before a token is available. */
   waitMs(n = 1): number {
     this.refill()
     return this.tokens >= n ? 0 : Math.ceil(((n - this.tokens) / this.refillPerSecond) * 1000)

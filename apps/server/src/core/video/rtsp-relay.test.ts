@@ -17,7 +17,7 @@ const FTYP = box('ftyp', Buffer.from('isom'))
 const MOOV = box('moov', box('trak', box('stsd', box('avc1', [Buffer.alloc(78), avcC]))))
 const fragment = (n: number) => Buffer.concat([box('moof', Buffer.alloc(16, n)), box('mdat', Buffer.alloc(64, n))])
 
-/** Faux ffmpeg : un processus dont on pilote stdout et la sortie. */
+/** Fake ffmpeg: a process whose stdout and exit we drive. */
 function fakeFfmpeg() {
   const proc = Object.assign(new EventEmitter(), { stdout: new PassThrough(), stderr: new PassThrough(), exitCode: null as number | null, kill: vi.fn() })
   proc.kill.mockImplementation(() => { proc.exitCode = 0; proc.emit('exit', null, 'SIGTERM'); return true })
@@ -42,9 +42,9 @@ describe('RtspRelay', () => {
     relay.start()
     const args = (spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![1] as string[]
     expect(args).toEqual(expect.arrayContaining(['-rtsp_transport', 'tcp', '-c', 'copy', '-f', 'mp4', 'pipe:1']))
-    expect(args[0]).toBe('-y')                          // la vignette se réécrit en place
+    expect(args[0]).toBe('-y')                          // the thumbnail is rewritten in place
     expect(args[args.indexOf('-movflags') + 1]).toContain('frag_keyframe')
-    // l'entête arrive en morceaux quelconques
+    // the header arrives in arbitrary chunks
     const head = Buffer.concat([FTYP, MOOV, fragment(1)])
     proc.stdout.write(head.subarray(0, 20))
     proc.stdout.write(head.subarray(20))
@@ -52,7 +52,7 @@ describe('RtspRelay', () => {
     expect((a.got[0] as { mime: string }).mime).toBe('video/mp4; codecs="avc1.4D0020"')
     expect((a.got[0] as { data: Buffer }).data.equals(Buffer.concat([FTYP, MOOV]))).toBe(true)
     expect((a.got[1] as { data: Buffer }).data.equals(fragment(1))).toBe(true)
-    // un abonné qui arrive en cours de route reçoit d'abord l'entête, puis les fragments suivants
+    // a subscriber arriving midway first receives the header, then the following fragments
     const b = collect()
     relay.subscribe(b.fn)
     proc.stdout.write(fragment(2))
@@ -70,11 +70,11 @@ describe('RtspRelay', () => {
     relay.subscribe(b.fn)
     relay.unsubscribe(a.fn)
     clock.advance(10_000)
-    expect(onIdle).not.toHaveBeenCalled()             // il reste un abonné
+    expect(onIdle).not.toHaveBeenCalled()             // one subscriber is left
     relay.unsubscribe(b.fn)
     clock.advance(4000)
-    expect(onIdle).not.toHaveBeenCalled()             // délai de grâce : un écran peut revenir
-    relay.subscribe(a.fn)                             // … et elle revient : le délai est annulé
+    expect(onIdle).not.toHaveBeenCalled()             // grace period: a screen may come back
+    relay.subscribe(a.fn)                             // … and it does come back: the delay is cancelled
     clock.advance(10_000)
     expect(onIdle).not.toHaveBeenCalled()
     relay.unsubscribe(a.fn)
@@ -83,7 +83,7 @@ describe('RtspRelay', () => {
     relay.stop('no viewer left')
     expect(proc.kill).toHaveBeenCalled()
     expect(relay.hasEnded).toBe(true)
-    // un abonné tardif est prévenu tout de suite
+    // a late subscriber is told right away
     const late = collect()
     relay.subscribe(late.fn)
     expect(late.got).toEqual([{ kind: 'ended', reason: 'no viewer left' }])
@@ -110,7 +110,7 @@ describe('RtspRelay', () => {
     expect(onIdle).not.toHaveBeenCalled()
     clock.advance(1)
     expect(onIdle).toHaveBeenCalledTimes(1)
-    // …mais pas si un abonné est arrivé entre-temps
+    // …but not if a subscriber arrived in the meantime
     const clock2 = new ManualClock(0)
     const other = relayWith(clock2)
     other.relay.start()
@@ -129,7 +129,7 @@ describe('RtspRelay', () => {
     proc.stderr.write('rtsps://stream.example:443/sdm/abc?auth=g.0.SECRET: 401 Unauthorized\n')
     proc.exitCode = 1
     proc.emit('exit', 1, null)
-    // le jeton de la session ne doit jamais finir dans un journal
+    // the session token must never end up in a log
     expect(a.got).toEqual([{ kind: 'ended', reason: 'ffmpeg exited (1): rtsps://stream.example:443/… 401 Unauthorized' }])
     expect(redactStreamUrl('x rtsps://h/p?auth=t y rtsp://h2/q z')).toBe('x rtsps://h/… y rtsp://h2/… z')
     expect(relay.subscriberCount).toBe(0)
@@ -161,17 +161,17 @@ describe('RtspRelay.rotateSource', () => {
 
     relay.rotateSource('rtsps://cam/x?auth=t2')
     expect((spawnImpl.mock.calls[1] as unknown as [string, string[]])[1]).toContain('rtsps://cam/x?auth=t2')
-    // tant que la relève n'a pas livré d'image, l'ancienne source continue d'alimenter les abonnés
+    // as long as the replacement has not delivered a picture, the old source keeps feeding the subscribers
     spawned[0]!.stdout.write(fragment(2))
     spawned[1]!.stdout.write(Buffer.concat([FTYP, MOOV]))
     expect(a.got.map((m) => m.kind)).toEqual(['init', 'fragment', 'fragment'])
     expect(spawned[0]!.kill).not.toHaveBeenCalled()
-    // premier fragment de la relève : nouvelle entête, ce fragment, et l'ancien ffmpeg est arrêté
+    // first fragment of the replacement: new header, this fragment, and the old ffmpeg is stopped
     spawned[1]!.stdout.write(fragment(3))
     expect(a.got.map((m) => m.kind)).toEqual(['init', 'fragment', 'fragment', 'init', 'fragment'])
     expect((a.got[4] as { data: Buffer }).data.equals(fragment(3))).toBe(true)
     expect(spawned[0]!.kill).toHaveBeenCalledTimes(1)
-    // la traîne de l'ancienne source est ignorée, la nouvelle alimente seule
+    // the old source's tail is ignored, the new one feeds alone
     spawned[0]!.stdout.write(fragment(9))
     spawned[1]!.stdout.write(fragment(4))
     expect(a.got).toHaveLength(6)

@@ -8,8 +8,8 @@ import { loadEnv } from '../config/env'
 import { loadHouse } from '../config/house'
 import { ShoppingService } from '../core/shopping'
 
-// Liste de courses : les routes ÉCRIVENT `<maison>.shopping.json`, elles se testent donc sur une
-// COPIE de la maison de démo.
+// Shopping list: the routes WRITE `<maison>.shopping.json`, so they are tested on a COPY of the
+// demo house.
 
 const DEMO_HOUSE = resolve(import.meta.dirname, '../../../../house/demo-house.json')
 

@@ -7,8 +7,8 @@ import { buildApp, type KasbahApp } from '../app'
 import { loadEnv } from '../config/env'
 import { loadHouse } from '../config/house'
 
-// Origine GPS calée sur la photo depuis les Réglages : la route ÉCRIT dans house.json, elle se teste
-// donc sur une COPIE de la maison de démo.
+// GPS origin aligned on the photo from Settings: the route WRITES into house.json, so it is tested
+// on a COPY of the demo house.
 
 const DEMO_HOUSE = resolve(import.meta.dirname, '../../../../house/demo-house.json')
 
@@ -33,7 +33,7 @@ describe('PUT /api/house/origin', () => {
   const written = async () => JSON.parse(await readFile(file, 'utf8')) as { origin: unknown; site: { terrain: unknown } }
   const origin = { lat: 45.5, lon: 4.25, alt: 210, heading: 24 }
 
-  it("écrit l'origine et la rend dans la réponse, sans toucher au reste", async () => {
+  it('writes the origin and returns it in the response, without touching the rest', async () => {
     const before = await written()
     const res = await put(origin)
     expect(res.statusCode).toBe(200)
@@ -43,7 +43,7 @@ describe('PUT /api/house/origin', () => {
     expect(after.site.terrain).toEqual(before.site.terrain)
   })
 
-  it('refuse une latitude impossible, sans rien écrire', async () => {
+  it('refuses an impossible latitude, without writing anything', async () => {
     await put(origin)
     expect((await put({ ...origin, lat: 120 })).statusCode).toBe(400)
     expect((await written()).origin).toEqual(origin)

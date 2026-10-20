@@ -8,8 +8,8 @@ import { buildApp, type KasbahApp } from '../app'
 import { loadEnv } from '../config/env'
 import { loadHouse } from '../config/house'
 
-// Réglage de la lumière posé depuis le banc de la vue Maison : la route ÉCRIT dans house.json, elle
-// se teste donc sur une COPIE de la maison de démo — sinon chaque exécution modifierait le dépôt.
+// Lighting tuning set from the bench of the Home view: the route WRITES into house.json, so it is
+// tested on a COPY of the demo house — otherwise each run would modify the repo.
 
 const DEMO_HOUSE = resolve(import.meta.dirname, '../../../../house/demo-house.json')
 
@@ -33,14 +33,14 @@ describe('PUT /api/house/render', () => {
   const put = (payload: object) => kasbah.app.inject({ method: 'PUT', url: '/api/house/render', payload })
   const written = async () => JSON.parse(await readFile(file, 'utf8')) as { render?: { tuning?: Record<string, unknown> } }
 
-  it('écrit le réglage dans la maison et le rend dans la réponse', async () => {
+  it('writes the tuning into the house and returns it in the response', async () => {
     const res = await put({ ...NEUTRAL_TUNING, bloomThreshold: 1.45, glowOpacity: 0.5, toneMapping: 'agx' })
     expect(res.statusCode).toBe(200)
     expect(res.json().house.render.tuning).toMatchObject({ bloomThreshold: 1.45, glowOpacity: 0.5, toneMapping: 'agx' })
     expect((await written()).render!.tuning).toMatchObject({ bloomThreshold: 1.45 })
   })
 
-  it('un réglage neutre RETIRE la section : une maison sans retouche n’en porte pas', async () => {
+  it('a neutral tuning REMOVES the section: a house without adjustments carries none', async () => {
     await put({ ...NEUTRAL_TUNING, exposure: 0.8 })
     const res = await put(NEUTRAL_TUNING)
     expect(res.statusCode).toBe(200)
@@ -48,7 +48,7 @@ describe('PUT /api/house/render', () => {
     expect((await written()).render).toBeUndefined()
   })
 
-  it('refuse un réglage hors bornes plutôt que de l’écrire', async () => {
+  it('refuses an out-of-bounds tuning rather than writing it', async () => {
     expect((await put({ ...NEUTRAL_TUNING, ringWidth: 12 })).statusCode).toBe(400)
   })
 })

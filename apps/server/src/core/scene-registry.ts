@@ -3,17 +3,17 @@ import type { Logger } from 'pino'
 import type { Bus } from './bus'
 import type { Clock } from './clock'
 
-// Registre des scènes des fabricants : liste + scène active. Beaucoup plus simple que le registre
-// d'appareils (pas de patch : un seul champ change), mais une RÈGLE de concept s'y applique — une
-// seule scène active par groupe. Les ponts n'émettent pas toujours la désactivation de la scène
-// précédente ; sans cette règle l'UI en montrerait deux allumées à la fois.
+// Registry of vendor scenes: list + active scene. Much simpler than the device registry (no patch:
+// a single field changes), but a concept RULE applies — a single active scene per group. Bridges
+// do not always emit the deactivation of the previous scene; without this rule the UI would show
+// two lit at once.
 
 export class SceneRegistry {
   private entries = new Map<SceneId, PluginSceneEntry>()
 
   constructor(private readonly bus: Bus, private readonly clock: Clock, private readonly logger?: Logger) {}
 
-  /** Remplace l'ensemble des scènes d'un plugin. L'état des ids conservés survit. */
+  /** Replaces the whole set of a plugin's scenes. The state of the ids kept survives. */
   register(pluginId: string, scenes: PluginScene[]): void {
     const keep = new Set<string>()
     const now = this.clock.now()
@@ -36,7 +36,7 @@ export class SceneRegistry {
   list(): PluginSceneEntry[] { return [...this.entries.values()] }
   countOf(pluginId: string): number { return this.list().filter((e) => e.scene.pluginId === pluginId).length }
 
-  /** Pose la scène active ; les autres scènes du même groupe redeviennent inactives. */
+  /** Sets the active scene; the other scenes of the same group go back to inactive. */
   setActive(id: SceneId, active: SceneActivation): boolean {
     const e = this.entries.get(id)
     if (!e) { this.logger?.debug({ sceneId: id }, 'activation of unknown scene ignored'); return false }

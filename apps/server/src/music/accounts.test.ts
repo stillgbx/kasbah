@@ -6,9 +6,9 @@ import { memoryLastPlayed } from './lastPlayed'
 import { createMusicPlayer } from './player'
 import type { MusicSource, MusicUser } from './sources'
 
-// Chaque compte écoute avec SES comptes musicaux : une file garde le compte de qui l'a lancée (ses
-// pistes suivantes se résolvent et se notent chez lui, quel que soit l'écran qui la pilote), et un flux
-// résolu pour l'un ne sert pas à l'autre.
+// Each account listens with ITS OWN music accounts: a queue keeps the account of whoever started it
+// (its next tracks are resolved and recorded under that account, whatever screen drives it), and a
+// stream resolved for one is not used for another.
 
 const speaker = { id: 'sonos:bureau', kind: 'media_player', capabilities: ['play_url', 'seek'] }
 const tracks = [
@@ -44,7 +44,7 @@ async function boot() {
     lastStore: memoryLastPlayed(),
   })
   const app = Fastify()
-  // ce que fait la porte à session (ou le jeton MCP) : le compte de la requête
+  // what the session gate (or the MCP token) does: the account of the request
   app.decorateRequest('sessionUser', null)
   app.addHook('onRequest', async (req) => {
     const u = req.headers['x-test-user']
@@ -64,16 +64,16 @@ describe('music accounts', () => {
     const started = await t.app.inject({ method: 'POST', url: '/api/music/queue', headers: t.as('alice'), payload: { deviceId: speaker.id, tracks } })
     expect(started.statusCode).toBe(200)
     await flush()
-    // la piste lancée ET la suivante, résolue d'avance : chez Alice
+    // the started track AND the next one, resolved ahead: under Alice
     expect(t.resolved).toEqual([{ id: 'a', user: 'alice' }, { id: 'b', user: 'alice' }])
     expect(t.prepared.every((u) => u === 'alice')).toBe(true)
 
-    // la position de la piste va chez Alice
+    // the track position goes to Alice
     t.clock.t += 10_000
     t.publish({ kind: 'media_player', playback: 'playing', nowPlaying: { title: 'Alpha', positionS: 125 } })
     expect(t.progress).toHaveBeenLastCalledWith('a', 125, 600, false, 'alice')
 
-    // l'écran de la maison passe au suivant : c'est toujours la file d'Alice
+    // the house screen skips to the next one: it is still Alice's queue
     const next = await t.app.inject({ method: 'POST', url: '/api/music/queue/next', payload: { deviceId: speaker.id } })
     expect(next.statusCode).toBe(200)
     expect(t.resolved.filter((r) => r.user !== 'alice')).toEqual([])
@@ -89,7 +89,7 @@ describe('music accounts', () => {
     await t.app.inject({ method: 'POST', url: '/api/music/queue', headers: t.as('alice'), payload: { deviceId: speaker.id, tracks } })
     await flush()
     expect(t.resolved).toContainEqual({ id: 'b', user: 'alice' })
-    // la maison lance `b` : celle préparée pour Alice ne sert pas, `b` est résolue pour la maison
+    // the house starts `b`: the one prepared for Alice is not used, `b` is resolved for the house
     const house = await t.app.inject({ method: 'POST', url: '/api/music/play', payload: { deviceId: speaker.id, ...tracks[1] } })
     expect(house.statusCode).toBe(200)
     expect(t.resolved).toContainEqual({ id: 'b', user: null })

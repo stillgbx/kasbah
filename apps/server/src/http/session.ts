@@ -8,18 +8,18 @@ import { stateFile } from '../core/paths'
 import { checkLogin, esc, htmlPage, isPublicRequest, lockedMessage, sha256, token, type LoginGuard, type UsersFile } from '../mcp/auth'
 import { sendError } from './errors'
 
-// L'application sous le nom PUBLIC (`MCP_PUBLIC_URL`, le proxy inverse du NAS) : une session par
-// cookie, ouverte par les comptes du MCP. Le réseau local reste sans authentification.
+// The application under the PUBLIC name (`MCP_PUBLIC_URL`, the NAS reverse proxy): a cookie session,
+// opened with the MCP accounts. The local network stays without authentication.
 //
-// - Cookie `__Host-` (Secure, Path=/, aucun Domain), HttpOnly, SameSite=Lax : envoyé quand l'app
-//   s'ouvre depuis un lien, jamais par une requête d'un autre site.
-// - Origine exigée sur toute écriture et sur tout WebSocket : les autres services du NAS partagent le
-//   même site (`*.synology.me` est un suffixe public), SameSite ne les sépare pas.
-// - Session gardée hachée dans `.state/sessions.json`, 90 jours glissants. Elle tombe avec le compte,
-//   ET quand son mot de passe change (empreinte du haché) : de quoi couper un téléphone perdu.
-// - Comptes gérés (`/api/mcp/users`) et mise à jour du serveur (`/api/system`) depuis le réseau local
-//   seulement, même connecté.
-// - Les outils MCP passent par `app.inject` au nom du compte de leur jeton (`actAsHeaders`).
+// - `__Host-` cookie (Secure, Path=/, no Domain), HttpOnly, SameSite=Lax: sent when the app opens
+//   from a link, never by a request from another site.
+// - Origin required on every write and every WebSocket: the NAS's other services share the same
+//   site (`*.synology.me` is a public suffix), SameSite does not separate them.
+// - Session kept hashed in `.state/sessions.json`, 90 sliding days. It falls with the account, AND
+//   when its password changes (fingerprint of the hash): enough to cut off a lost phone.
+// - Account management (`/api/mcp/users`) and server update (`/api/system`) from the local network
+//   only, even when signed in.
+// - MCP tools go through `app.inject` in the name of their token's account (`actAsHeaders`).
 
 export const sessionConfigSchema = z.object({
   KASBAH_SESSIONS_FILE: z.string().trim().default(stateFile('sessions.json')),
@@ -28,7 +28,7 @@ export type SessionConfig = z.infer<typeof sessionConfigSchema>
 
 const COOKIE = '__Host-kasbah_session'
 const TTL_MS = 90 * 24 * 60 * 60_000
-/** Prolongée (et le cookie réécrit) au plus une fois par jour. */
+/** Extended (and the cookie rewritten) at most once a day. */
 const SLIDE_MS = 24 * 60 * 60_000
 
 const fileSchema = z.object({
@@ -36,8 +36,8 @@ const fileSchema = z.object({
 })
 type SessionsFile = z.infer<typeof fileSchema>
 
-// Ouverts sans session : la connexion, et ce que le navigateur charge SANS cookie (le manifest d'une
-// app installable est demandé sans identifiants, ses icônes avec lui).
+// Open without a session: sign-in, and what the browser loads WITHOUT a cookie (the manifest of an
+// installable app is requested without credentials, its icons along with it).
 const OPEN_PATHS = new Set(['/login', '/logout', '/manifest.webmanifest'])
 const OPEN_PREFIXES = ['/icons/']
 const LAN_ONLY = ['/api/mcp/users', '/api/system']
@@ -46,8 +46,8 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 declare module 'fastify' {
   interface FastifyRequest {
     /**
-     * Compte de la session, sous le nom public, ou celui du jeton d'un outil MCP ; `null` sur le
-     * réseau local. C'est lui qui choisit les comptes musicaux (`music/sources.ts`).
+     * Account of the session, under the public name, or that of an MCP tool's token; `null` on the
+     * local network. It is the one that picks the music accounts (`music/sources.ts`).
      */
     sessionUser: string | null
   }
@@ -55,7 +55,7 @@ declare module 'fastify' {
 
 export interface AppSessionDeps {
   config: SessionConfig
-  /** Adresse publique (`MCP_PUBLIC_URL`) ; sans elle, rien n'est filtré. */
+  /** Public address (`MCP_PUBLIC_URL`); without it, nothing is filtered. */
   publicUrl: string | undefined
   publicHosts: string[]
   guard: LoginGuard
@@ -65,21 +65,21 @@ export interface AppSessionDeps {
 }
 
 export interface AppSession {
-  /** Porte de `publicHostFilter` : tout ce qui, sous le nom public, n'est pas le MCP. */
+  /** Gate for `publicHostFilter`: everything under the public name that is not the MCP. */
   gate(req: FastifyRequest, reply: FastifyReply): Promise<void>
   routes(app: FastifyInstance): void
 }
 
 /**
- * Un outil MCP rejoue une route de l'app par `app.inject` AU NOM du compte de son jeton. Le secret est
- * tiré au démarrage et ne quitte jamais le processus : une requête venue du réseau ne peut pas s'en
- * réclamer.
+ * An MCP tool replays an app route through `app.inject` IN THE NAME of its token's account. The
+ * secret is drawn at startup and never leaves the process: a request coming from the network cannot
+ * claim it.
  */
 const INTERNAL_SECRET = randomBytes(32).toString('base64url')
-/** `user` null : la maison (jeton de course de l'assistant de l'app) — la requête reste marquée MCP. */
+/** `user` null: the house (per-run token of the app's assistant) — the request stays marked MCP. */
 export const actAsHeaders = (user: string | null): Record<string, string> =>
   ({ 'x-kasbah-internal': INTERNAL_SECRET, ...(user ? { 'x-kasbah-user': user } : {}) })
-/** La requête vient d'un outil MCP (seul porteur du secret). */
+/** The request comes from an MCP tool (the only holder of the secret). */
 export const fromMcp = (req: FastifyRequest): boolean => req.headers['x-kasbah-internal'] === INTERNAL_SECRET
 export async function actAsHook(req: FastifyRequest): Promise<void> {
   const user = req.headers['x-kasbah-user']
@@ -96,17 +96,17 @@ const cookieOf = (req: FastifyRequest): string | null => {
 const setCookie = (reply: FastifyReply, value: string, maxAgeMs: number) =>
   reply.header('set-cookie', `${COOKIE}=${value}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${Math.floor(maxAgeMs / 1000)}`)
 
-/** Empreinte du haché du mot de passe : la session ne survit pas à un changement. */
+/** Fingerprint of the password hash: the session does not survive a change. */
 const pwTag = (hash: string) => sha256(hash).slice(0, 16)
 
-// L'app s'installe dès la page de connexion : manifest et icônes sont servis sans session (le
-// manifest pointe `start_url` sur `/`). Mêmes balises que `apps/web/index.html`.
+// The app can be installed from the sign-in page already: manifest and icons are served without a
+// session (the manifest points `start_url` to `/`). Same tags as `apps/web/index.html`.
 const INSTALL_HEAD = `
 <link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/icons/icon.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Kasbah">
 <meta name="theme-color" content="#e9edf1" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0d1420" media="(prefers-color-scheme: dark)">`
 
-/** Retour après connexion : un chemin de CE site seulement, jamais la page de connexion elle-même. */
+/** Return after sign-in: a path of THIS site only, never the sign-in page itself. */
 const safeNext = (raw: unknown): string =>
   typeof raw === 'string' && raw.startsWith('/') && !raw.startsWith('//') && !raw.startsWith('/\\') && !raw.startsWith('/login') ? raw : '/'
 
@@ -125,7 +125,7 @@ export function createAppSession(deps: AppSessionDeps): AppSession {
     try { await writeFileAtomic(config.KASBAH_SESSIONS_FILE, `${JSON.stringify(s, null, 2)}\n`, { mode: 0o600 }) } catch (err) { logger.warn({ err }, 'sessions not saved') }
   }
 
-  /** Le compte de la session du cookie, ou `null`. Prolonge la session au passage. */
+  /** The account of the cookie's session, or `null`. Extends the session along the way. */
   async function authenticate(req: FastifyRequest, reply: FastifyReply): Promise<string | null> {
     const raw = cookieOf(req)
     if (!raw) return null
@@ -161,9 +161,9 @@ ${error ? `<p class="err">${esc(error)}</p>` : ''}
       }
       const user = await authenticate(req, reply)
       if (!user) {
-        // Une page demandée part vers la connexion. L'API, le WebSocket et les fichiers que la page
-        // charge (un script qui recevrait la page de connexion casserait la vue) disent 401 : le web y
-        // renvoie lui-même.
+        // A requested page goes to sign-in. The API, the WebSocket and the files the page loads (a
+        // script that received the sign-in page would break the view) say 401: the web app redirects
+        // there itself.
         if (req.method === 'GET' && !path.startsWith('/api/') && path !== '/ws' && String(req.headers.accept ?? '').includes('text/html')) {
           await reply.code(302).header('cache-control', 'no-store').redirect(`/login?next=${encodeURIComponent(req.url)}`)
         } else {
@@ -175,7 +175,7 @@ ${error ? `<p class="err">${esc(error)}</p>` : ''}
         await sendError(reply, 403, 'LAN_ONLY', 'managed from the local network only')
         return
       }
-      // Tout WebSocket : `/ws`, et les flux des caméras sous `/api/plugins/<id>/cameras/…`.
+      // Any WebSocket: `/ws`, and the camera streams under `/api/plugins/<id>/cameras/…`.
       if ((writes || req.headers.upgrade !== undefined) && req.headers.origin !== origin) {
         await sendError(reply, 403, 'BAD_ORIGIN', 'cross-site request refused')
         return
@@ -192,7 +192,7 @@ ${error ? `<p class="err">${esc(error)}</p>` : ''}
           done(null, Object.fromEntries(new URLSearchParams(body as string)))
         })
 
-        // Sur le réseau local il n'y a rien à ouvrir : retour à l'app.
+        // On the local network there is nothing to open: back to the app.
         sub.get('/login', async (req, reply) => {
           if (!isPublicRequest(req, publicHosts)) return reply.redirect('/')
           return form(reply, 200, safeNext((req.query as { next?: unknown }).next))

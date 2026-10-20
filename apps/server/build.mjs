@@ -1,5 +1,5 @@
-// Bundle du serveur : les paquets @kasbah/* (sources TS des workspaces) sont inclus,
-// les dépendances npm restent externes (chargées depuis node_modules en prod).
+// Server bundle: the @kasbah/* packages (TS sources of the workspaces) are inlined,
+// npm dependencies stay external (loaded from node_modules in production).
 import { build } from 'esbuild'
 import { readFile } from 'node:fs/promises'
 

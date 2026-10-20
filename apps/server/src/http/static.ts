@@ -3,14 +3,14 @@ import { join } from 'node:path'
 import fastifyStatic from '@fastify/static'
 import type { FastifyInstance } from 'fastify'
 
-/** Fichier que le build web écrit à sa racine : son identifiant (`apps/web/vite.config.ts`). */
+/** File the web build writes at its root: its identifier (`apps/web/vite.config.ts`). */
 const BUILD_ID_FILE = 'build-id.txt'
 
 /**
- * Sert le build de l'app web (prod) avec repli SPA : toute requête GET hors /api, /ws et /assets
- * renvoie index.html. Silencieux si le dossier n'existe pas (mode dev, Vite sert l'app).
- * Un fichier absent de /assets (vue d'un build remplacé, demandée par un écran resté ouvert) est un
- * vrai 404 : index.html à sa place se lisait « type MIME text/html » dans la console.
+ * Serves the web app build (prod) with SPA fallback: any GET request outside /api, /ws and /assets
+ * returns index.html. Silent if the folder does not exist (dev mode, Vite serves the app).
+ * A file missing from /assets (view of a replaced build, requested by a screen left open) is a
+ * real 404: index.html in its place read as "MIME type text/html" in the console.
  */
 export async function registerStatic(app: FastifyInstance, dir: string): Promise<boolean> {
   if (!existsSync(join(dir, 'index.html'))) return false
@@ -25,8 +25,9 @@ export async function registerStatic(app: FastifyInstance, dir: string): Promise
 }
 
 /**
- * Identifiant du build web présent dans `dir`, relu à chaque appel : un build refait sans redémarrer
- * le serveur est vu à la connexion suivante. `undefined` sans build (dev) ou d'un build plus ancien.
+ * Identifier of the web build present in `dir`, re-read on each call: a build redone without
+ * restarting the server is seen at the next connection. `undefined` without a build (dev) or for an
+ * older build.
  */
 export function readAppBuild(dir: string): string | undefined {
   try { return readFileSync(join(dir, BUILD_ID_FILE), 'utf8').trim() || undefined } catch { return undefined }

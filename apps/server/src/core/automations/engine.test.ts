@@ -18,14 +18,14 @@ import type { PendingRevert } from './runner'
 import { automationsPathFor, createAutomationsFile, type AutomationsStore } from './store'
 
 const HOUSE = resolve(import.meta.dirname, '../../../../../house/demo-house.json')
-// Origine de la maison de démo, et le « travail » du scénario mock (1,4 km)
+// Origin of the demo house, and the mock scenario's "work" (1.4 km)
 const HOME = { lat: 47.309343, lon: 5.045591, at: 0 }
 const WORK = { lat: 47.3216, lon: 5.0415, at: 0 }
 
 const d = (externalId: string, kind: DeviceDescriptor['kind'], capabilities: DeviceDescriptor['capabilities'], meta: DeviceDescriptor['meta'] = {}): DeviceDescriptor =>
   ({ id: `mock:${externalId}`, pluginId: 'mock', externalId, kind, name: externalId, capabilities, meta })
 
-// Ids de la maison de démo : la pièce de chacun vient du fichier (salon, cuisine…).
+// Ids of the demo house: each one's room comes from the file (salon, cuisine…).
 const DEVICES = [
   d('light-living', 'light', ['on_off']),
   d('light-kitchen', 'light', ['on_off']),
@@ -87,7 +87,7 @@ describe('evaluate', () => {
     const fresh = new Set<string>()
     const ctx = () => view.context(h.clock.now(), (id) => fresh.has(id))
     const on = { type: 'device', deviceId: 'mock:light-living', field: 'on', op: 'eq', value: true } as const
-    expect(evaluatePredicate(on, ctx())).toBeNull()                 // état par défaut : inconnu
+    expect(evaluatePredicate(on, ctx())).toBeNull()                 // default state: unknown
     h.patch('light-living', { on: true }); fresh.add('mock:light-living')
     expect(evaluatePredicate(on, ctx())).toBe(true)
     expect(evaluatePredicate({ ...on, not: true }, ctx())).toBe(false)
@@ -123,7 +123,7 @@ describe('evaluate', () => {
     const h = harness()
     const ctx = () => new HouseView(house, h.registry).context(h.clock.now(), () => true)
     for (const id of ['light-living', 'light-kitchen', 'light-bedroom1']) h.patch(id, { on: true })
-    h.patch('speaker-living', { playback: 'on', volume: 20, muted: false })   // TV à l'écran au salon
+    h.patch('speaker-living', { playback: 'on', volume: 20, muted: false })   // TV on screen in the living room
     const { entries } = resolveTarget({ type: 'selector', kind: 'light', exceptRoomsWith: { kind: 'media_player', deviceClass: 'tv' } }, ctx())
     expect(entries.map((e) => e.descriptor.id).sort()).toEqual(['mock:light-bedroom1', 'mock:light-kitchen'])
     const rdc = resolveTarget({ type: 'selector', kind: 'light', levelIds: ['rdc'] }, ctx())
@@ -169,14 +169,14 @@ describe('AutomationEngine — state', () => {
     const h = harness()
     await h.engine.start()
     await h.engine.upsert('arrive', onArrival)
-    h.patch('vehicle-tesla', { location: HOME })            // premier relevé : déjà à la maison, pas un front
+    h.patch('vehicle-tesla', { location: HOME })            // first reading: already at home, not an edge
     await h.flush()
     expect(h.executed).toEqual([])
     h.patch('vehicle-tesla', { location: WORK })
-    h.patch('vehicle-tesla', { location: HOME })            // elle rentre
+    h.patch('vehicle-tesla', { location: HOME })            // it comes home
     await h.flush()
     expect(h.executed).toEqual([{ id: 'mock:cover-living', cmd: { type: 'cover.open' } }])
-    h.patch('vehicle-tesla', { location: { ...HOME, at: 5 } }) // encore à la maison : pas de nouveau front
+    h.patch('vehicle-tesla', { location: { ...HOME, at: 5 } }) // still at home: no new edge
     await h.flush()
     expect(h.executed).toHaveLength(1)
   })
@@ -187,7 +187,7 @@ describe('AutomationEngine — state', () => {
     await h.engine.upsert('arrive', onArrival)
     h.patch('vehicle-tesla', { location: WORK })
     h.registry.setAvailable('mock', 'vehicle-tesla', false)
-    h.patch('vehicle-tesla', { location: HOME })            // revient disponible, déjà rentrée
+    h.patch('vehicle-tesla', { location: HOME })            // becomes available again, already home
     await h.flush()
     expect(h.executed).toEqual([])
   })
@@ -200,7 +200,7 @@ describe('AutomationEngine — state', () => {
     h.patch('light-kitchen', { on: true })
     expect(h.engine.get('hold')!.status.pendingSince).toBe(h.clock.now())
     h.clock.advance(5 * 60_000)
-    h.patch('light-kitchen', { on: false })                 // retombe avant les 10 min
+    h.patch('light-kitchen', { on: false })                 // drops before the 10 min
     h.clock.advance(10 * 60_000)
     await h.flush()
     expect(h.executed).toEqual([])
@@ -218,7 +218,7 @@ describe('AutomationEngine — status and actions', () => {
     await h.engine.upsert('r', body())
     h.patch('light-living', { on: false })
     expect(h.engine.get('r')!.status.health).toBe('ok')
-    h.registry.register('mock', DEVICES.filter((x) => x.externalId !== 'light-living'))  // plugin sans cette lampe
+    h.registry.register('mock', DEVICES.filter((x) => x.externalId !== 'light-living'))  // plugin without that light
     expect(h.engine.get('r')!.status).toMatchObject({ health: 'incomplete', missing: [{ kind: 'device', id: 'mock:light-living' }] })
     h.registry.register('mock', DEVICES)
     h.registry.setAvailable('mock', 'light-living', false)
@@ -296,7 +296,7 @@ describe('AutomationEngine — for N minutes', () => {
     const h = harness([], new MemoryReverts([{ automationId: 'gone', action: 0, deviceId: 'mock:cover-living', command: { type: 'cover.close' }, dueAt: now - 60_000 }]))
     await h.engine.start()
     await h.flush()
-    expect(closes(h)).toEqual([])                           // pas encore relevé : valeurs par défaut
+    expect(closes(h)).toEqual([])                           // not read yet: default values
     h.patch('cover-living', { position: 100 })
     await h.flush()
     expect(closes(h)).toHaveLength(1)
@@ -321,7 +321,7 @@ describe('AutomationEngine — order', () => {
     const list = await h.engine.reorder(['c', 'ghost', 'a'])
     expect(list.map((e) => e.automation.id)).toEqual(['c', 'a', 'b'])
     expect(h.store.saved.map((a) => a.id)).toEqual(['c', 'a', 'b'])
-    await h.engine.upsert('a', body({ name: 'Renommée' }))  // réécrire ne déplace pas
+    await h.engine.upsert('a', body({ name: 'Renommée' }))  // rewriting does not move it
     expect(h.engine.list().map((e) => e.automation.id)).toEqual(['c', 'a', 'b'])
   })
 })

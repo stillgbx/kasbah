@@ -2,26 +2,26 @@ import type { PluginSceneEntry, PluginSettings } from '@kasbah/shared'
 import type { Logger } from 'pino'
 import type { Bus } from './bus'
 
-// Initialise le réglage « démarrer animée » des ambiances QUI APPARAISSENT, avec le défaut du
-// plugin. Déclencher sur l'apparition (et non sur un inventaire mémorisé) garantit par construction
-// la règle voulue : l'existant n'est JAMAIS modifié, y compris après un redémarrage — la première
-// liste reçue sert de photo de référence, sans rien écrire.
+// Initializes the "Starts animated" setting of light scenes THAT APPEAR, with the plugin's default.
+// Triggering on appearance (rather than on a stored inventory) guarantees the intended rule by
+// construction: what exists is NEVER modified, including after a restart — the first list received
+// serves as the reference snapshot, without writing anything.
 //
-// Compte comme « apparue » : une nouvelle ambiance créée chez le fabricant, ou une ambiance
-// existante à qui on vient d'ajouter une palette (elle entre alors dans l'ensemble des animées).
-// Angle mort assumé : une ambiance créée pendant que le serveur est arrêté est vue comme existante.
+// Counts as "appeared": a new light scene created at the vendor, or an existing light scene that
+// just got a palette (it then joins the set of animated ones).
+// Accepted blind spot: a light scene created while the server is stopped is seen as existing.
 
 export interface SceneSeederDeps {
   bus: Bus
-  /** Réglages du plugin dans la maison (`house.plugins`). */
+  /** The plugin's settings in the house (`house.plugins`). */
   settingsOf: (pluginId: string) => PluginSettings
-  /** Écriture chez le fabricant (`PluginHost.updateScene`). */
+  /** Write at the vendor (`PluginHost.updateScene`). */
   updateScene: (sceneId: string, update: { autoDynamic: boolean }) => Promise<void>
   logger: Logger
 }
 
 export class SceneSeeder {
-  /** pluginId → ids des ambiances animées déjà connues. */
+  /** pluginId → ids of the animated light scenes already known. */
   private readonly known = new Map<string, Set<string>>()
   private readonly unsubscribe: () => void
 
@@ -41,7 +41,7 @@ export class SceneSeeder {
       const ids = new Set(animated.map((e) => e.scene.id))
       const baseline = this.known.get(pluginId)
       this.known.set(pluginId, ids)
-      if (!baseline) continue                                   // photo de référence : on n'écrit rien
+      if (!baseline) continue                                   // reference snapshot: nothing is written
       if (!this.deps.settingsOf(pluginId).autoDynamicForNewScenes) continue
       for (const e of animated) {
         if (baseline.has(e.scene.id) || e.scene.autoDynamic) continue

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { PropertyCatalog } from './catalog'
 import type { ModeState, PropertyEntry } from './properties'
 
-// Le catalogue : deux modes, une propriété retenue dans chacun, une seule vivante à la fois.
+// The catalog: two modes, one property remembered in each, a single one live at a time.
 
 const demo = (id: string): PropertyEntry => ({ id, name: id, kind: 'house', scenario: id, path: `demos/${id}.json`, demo: true })
 const real = (id: string): PropertyEntry => ({ id, name: id, kind: 'house', path: `properties/${id}.json`, demo: false })
@@ -21,7 +21,7 @@ async function open(locals: PropertyEntry[], state: ModeState = {}) {
 }
 
 describe('PropertyCatalog', () => {
-  it('installation neuve : mode démo, première démo, le réel indisponible', async () => {
+  it('fresh install: demo mode, first demo, real unavailable', async () => {
     const { catalog } = await open([])
     expect(catalog.mode).toBe('demo')
     expect(catalog.active.id).toBe('tilleuls')
@@ -30,14 +30,14 @@ describe('PropertyCatalog', () => {
     expect(await catalog.chooseMode('real')).toBeNull()
   })
 
-  it('un poste qui a ses propriétés démarre chez lui, et la liste ne montre que le mode courant', async () => {
+  it('a machine that has its own properties starts at home, and the list shows only the current mode', async () => {
     const { catalog } = await open([real('maison'), real('chalet')])
     expect(catalog.mode).toBe('real')
     expect(catalog.list().properties.map((p) => p.id)).toEqual(['maison', 'chalet'])
     expect(catalog.list().properties.some((p) => p.demo)).toBe(false)
   })
 
-  it('chaque mode retient sa propriété : aller-retour démo ↔ réel', async () => {
+  it('each mode remembers its property: round trip demo ↔ real', async () => {
     const { catalog, saved } = await open([real('maison'), real('chalet')], { mode: 'real', real: 'chalet', demo: 'embruns' })
     expect(catalog.active.id).toBe('chalet')
     expect((await catalog.chooseMode('demo'))?.id).toBe('embruns')
@@ -46,14 +46,14 @@ describe('PropertyCatalog', () => {
     expect(saved.at(-1)).toEqual({ mode: 'real', real: 'chalet', demo: 'embruns' })
   })
 
-  it('choisir une propriété d’un autre mode fait passer dans ce mode', async () => {
+  it('choosing a property of another mode switches to that mode', async () => {
     const { catalog } = await open([real('maison')], { mode: 'demo' })
     expect((await catalog.choose('maison'))?.id).toBe('maison')
     expect(catalog.mode).toBe('real')
     expect(await catalog.choose('inconnue')).toBeNull()
   })
 
-  it('créer ou dupliquer ajoute une propriété réelle, que le mode réel propose aussitôt', async () => {
+  it('creating or duplicating adds a real property, which the real mode offers right away', async () => {
     const { catalog } = await open([])
     expect(await catalog.create({ name: 'Neuve', kind: 'house', origin: { lat: 45, lon: 5, heading: 0 }, levelName: 'R', roomName: 'P' })).toBe('neuve')
     expect(catalog.list().realAvailable).toBe(true)
@@ -63,7 +63,7 @@ describe('PropertyCatalog', () => {
     expect(catalog.list().properties.map((p) => p.id)).toEqual(['neuve', 'copie'])
   })
 
-  it('une propriété retenue qui a disparu : la première du mode', async () => {
+  it('a remembered property that has disappeared: the first one of the mode', async () => {
     const { catalog } = await open([real('maison')], { mode: 'real', real: 'supprimee' })
     expect(catalog.active.id).toBe('maison')
   })

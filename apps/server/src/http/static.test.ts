@@ -20,7 +20,7 @@ afterEach(async () => {
 })
 
 describe('registerStatic', () => {
-  it('replie une adresse de page sur index.html, mais un fichier absent de /assets est un vrai 404', async () => {
+  it('falls back to index.html for a page address, but a file missing from /assets is a real 404', async () => {
     await webBuild({ 'index.html': '<!doctype html><title>k</title>', 'assets/HomeView-new.js': 'export {}' })
     app = Fastify()
     expect(await registerStatic(app, dir)).toBe(true)
@@ -33,7 +33,7 @@ describe('registerStatic', () => {
     expect(chunk.statusCode).toBe(200)
     expect(chunk.headers['content-type']).toMatch(/javascript/)
 
-    // la vue d'un build remplacé, demandée par un écran resté ouvert
+    // the view of a replaced build, requested by a screen left open
     const gone = await app.inject({ method: 'GET', url: '/assets/ShoppingView-old.js' })
     expect(gone.statusCode).toBe(404)
     expect(gone.headers['content-type']).toMatch(/json/)
@@ -41,7 +41,7 @@ describe('registerStatic', () => {
 })
 
 describe('readAppBuild', () => {
-  it('lit l identifiant du build, relu à chaque appel, et rend undefined sans fichier', async () => {
+  it('reads the build identifier, re-read on each call, and returns undefined without a file', async () => {
     await webBuild({ 'index.html': '' })
     expect(readAppBuild(dir)).toBeUndefined()
     await writeFile(join(dir, 'build-id.txt'), 'abc123\n')

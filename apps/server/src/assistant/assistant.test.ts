@@ -8,14 +8,14 @@ import { describeError, sendError } from '../http/errors'
 import { registerAssistantRoutes, runAssistant, type AssistantDeps } from './assistant'
 import { registerAssistantEngine, type AssistantEvent, type AssistantRun } from './engines'
 
-// Le cœur de l'assistant, éprouvé avec un moteur factice : le jeton de course, UN dernier mot quoi
-// qu'il arrive (client parti, délai, moteur muet ou en panne), une instruction à la fois par compte,
-// le journal et sa lecture réservée au réseau local.
+// The assistant core, exercised with a fake engine: the per-run token, ONE last word whatever happens
+// (client gone, timeout, silent or broken engine), one instruction at a time per account, the log
+// and its reading restricted to the local network.
 
 const stateDir = process.env.KASBAH_STATE_DIR
 let runs: AssistantRun[]
 let revoked: string[]
-/** Ce que fait le moteur factice d'une instruction. */
+/** What the fake engine does with an instruction. */
 let behave: (run: AssistantRun) => Promise<void>
 let unregister: (() => void) | null
 
@@ -25,7 +25,7 @@ const answer = async (run: AssistantRun) => {
   run.emit({ type: 'text', text: 'Le plafonnier du salon est allumé.' })
   run.emit({ type: 'done', ms: 5, usage: { costUsd: 0.0031, inputTokens: 12, outputTokens: 40, cacheReadTokens: 9000, cacheWriteTokens: 1500 } })
 }
-/** Attend d'être annulé, sans rien dire (le contrat d'un moteur). */
+/** Waits to be aborted, without saying anything (an engine's contract). */
 const waitAbort = (run: AssistantRun) => new Promise<void>((resolve) => { run.signal.addEventListener('abort', () => resolve()) })
 
 function deps(over: Partial<AssistantDeps> = {}): AssistantDeps {
@@ -51,7 +51,7 @@ beforeEach(() => {
 })
 afterEach(() => { unregister?.(); process.env.KASBAH_STATE_DIR = stateDir })
 
-it('passe au moteur l’instruction, le prompt et le MCP par un jeton de course au nom du compte, révoqué à la fin', async () => {
+it('passes the engine the instruction, the prompt and the MCP through a per-run token in the account’s name, revoked at the end', async () => {
   const events = await ask('lou')
   expect(events.map((e) => e.type)).toEqual(['tool', 'tool_result', 'text', 'done'])
   expect(runs[0]).toMatchObject({ user: 'lou', text: 'Allume le salon', mcp: { url: 'http://127.0.0.1:8787/mcp', token: 'run-lou' } })
@@ -59,12 +59,12 @@ it('passe au moteur l’instruction, le prompt et le MCP par un jeton de course 
   expect(revoked).toEqual(['run-lou'])
 })
 
-it('dit qu’aucun moteur n’est là quand aucun plugin d’assistant ne tourne', async () => {
+it('says no engine is there when no assistant plugin is running', async () => {
   unregister!(); unregister = null
   expect(await ask(null)).toEqual([{ type: 'error', code: 'NO_ENGINE', message: 'no assistant plugin is enabled' }])
 })
 
-it('arrête le moteur au délai et le dit', async () => {
+it('stops the engine at the timeout and says so', async () => {
   behave = waitAbort
   const events = await ask(null, deps({ timeoutMs: 30 }))
   expect(events).toEqual([{ type: 'error', code: 'TIMEOUT', message: 'no answer within 0.03 s' }])
@@ -72,7 +72,7 @@ it('arrête le moteur au délai et le dit', async () => {
   expect(revoked).toEqual(['run-maison'])
 })
 
-it('arrête le moteur quand le client s’en va, et n’écoute plus ce qu’il dit après', async () => {
+it('stops the engine when the client leaves, and no longer listens to what it says afterwards', async () => {
   behave = async (run) => { await waitAbort(run); run.emit({ type: 'text', text: 'trop tard' }) }
   const abort = new AbortController()
   const done = ask(null, deps(), abort.signal)
@@ -81,7 +81,7 @@ it('arrête le moteur quand le client s’en va, et n’écoute plus ce qu’il 
   expect(await done).toEqual([{ type: 'error', code: 'ABORTED', message: 'request closed' }])
 })
 
-it('donne un dernier mot à un moteur muet ou en panne, et un seul', async () => {
+it('gives a last word to a silent or broken engine, and only one', async () => {
   behave = async () => {}
   expect(await ask(null)).toEqual([{ type: 'error', code: 'ENGINE_ERROR', message: 'Faux ended without an answer' }])
   behave = async () => { throw new Error('boom') }
@@ -95,7 +95,7 @@ describe('routes', () => {
   beforeEach(async () => {
     app = Fastify()
     app.setErrorHandler((err, _req, reply) => { const d = describeError(err); return sendError(reply, d.status, d.code, d.message) })
-    // le compte de la requête, comme le pose la porte à session
+    // the request's account, as the session gate sets it
     app.decorateRequest('sessionUser', null)
     app.addHook('onRequest', async (req) => { const u = req.headers['x-test-user']; req.sessionUser = typeof u === 'string' ? u : null })
     registerAssistantRoutes(app, deps())
@@ -103,14 +103,14 @@ describe('routes', () => {
   })
   afterEach(() => app.close())
 
-  it('répond en NDJSON, une instruction à la fois par compte', async () => {
+  it('answers in NDJSON, one instruction at a time per account', async () => {
     const releases: (() => void)[] = []
     behave = async (run) => { await new Promise<void>((r) => { releases.push(r) }); await answer(run) }
     const first = app.inject({ method: 'POST', url: '/api/assistant/ask', payload: { text: 'Allume le salon' } })
     await vi.waitFor(() => expect(runs).toHaveLength(1))
     const busy = await app.inject({ method: 'POST', url: '/api/assistant/ask', payload: { text: 'Éteins' } })
     expect(busy.statusCode).toBe(409)
-    // un autre compte n'attend pas
+    // another account does not wait
     const other = app.inject({ method: 'POST', url: '/api/assistant/ask', headers: { 'x-test-user': 'lou' }, payload: { text: 'Éteins' } })
     await vi.waitFor(() => expect(runs).toHaveLength(2))
     releases[0]!()
@@ -121,12 +121,12 @@ describe('routes', () => {
     await other
   })
 
-  it('tient le journal des instructions : compte, outils, réponse, erreur, la plus récente d’abord', async () => {
+  it('keeps the instruction log: account, tools, answer, error, most recent first', async () => {
     await app.inject({ method: 'POST', url: '/api/assistant/ask', headers: { 'x-test-user': 'lou' }, payload: { text: 'Allume le salon' } })
     behave = async (run) => { run.emit({ type: 'error', code: 'MCP_UNAVAILABLE', message: 'Kasbah MCP failed' }) }
     await app.inject({ method: 'POST', url: '/api/assistant/ask', payload: { text: 'Éteins tout' } })
     const log = async () => (await app.inject({ method: 'GET', url: '/api/assistant/log' })).json() as { entries: unknown[] }
-    // l'ajout au journal suit la fin de la réponse : sous la charge de la suite complète, il traîne
+    // the log entry follows the end of the response: under the load of the full suite, it lags
     await vi.waitFor(async () => expect((await log()).entries).toHaveLength(2), { timeout: 5000 })
     const [last, first] = (await log()).entries
     expect(first).toMatchObject({
@@ -138,7 +138,7 @@ describe('routes', () => {
     expect(last).not.toHaveProperty('usage')
   })
 
-  it('ne montre le journal qu’au réseau local', async () => {
+  it('shows the log only to the local network', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/assistant/log', headers: { 'x-test-user': 'lou' } })
     expect(res.statusCode).toBe(403)
     expect(res.json().error.code).toBe('LAN_ONLY')

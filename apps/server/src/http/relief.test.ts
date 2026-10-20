@@ -7,8 +7,8 @@ import { buildApp, type KasbahApp } from '../app'
 import { loadEnv } from '../config/env'
 import { loadHouse } from '../config/house'
 
-// Relief du terrain posé depuis l'éditeur de la vue Maison : la route ÉCRIT dans house.json, elle se
-// teste donc sur une COPIE de la maison de démo.
+// Terrain relief set from the editor of the Home view: the route WRITES into house.json, so it is
+// tested on a COPY of the demo house.
 
 const DEMO_HOUSE = resolve(import.meta.dirname, '../../../../house/demo-house.json')
 
@@ -33,14 +33,14 @@ describe('PUT /api/house/relief', () => {
   const written = async () => JSON.parse(await readFile(file, 'utf8')) as { site: { relief?: unknown } }
   const bump = { step: 2, origin: [0, 0], rows: ['0 0 0', '0 40 0', '0 0 0'] }
 
-  it('écrit le relief dans le site et le rend dans la réponse', async () => {
+  it('writes the relief into the site and returns it in the response', async () => {
     const res = await put(JSON.stringify(bump))
     expect(res.statusCode).toBe(200)
     expect(res.json().house.site.relief).toEqual(bump)
     expect((await written()).site.relief).toEqual(bump)
   })
 
-  it('un relief plat, ou null, RETIRE le champ', async () => {
+  it('a flat relief, or null, REMOVES the field', async () => {
     await put(JSON.stringify(bump))
     expect((await put(JSON.stringify({ ...bump, rows: ['0 0', '0 0'] }))).statusCode).toBe(200)
     expect((await written()).site.relief).toBeUndefined()
@@ -50,7 +50,7 @@ describe('PUT /api/house/relief', () => {
     expect(res.json().house.site.relief).toBeUndefined()
   })
 
-  it('refuse des rangées de longueurs différentes plutôt que de les écrire', async () => {
+  it('refuses rows of different lengths rather than writing them', async () => {
     expect((await put(JSON.stringify({ ...bump, rows: ['0 0 0', '0 0'] }))).statusCode).toBe(400)
   })
 })

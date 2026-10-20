@@ -2,8 +2,8 @@ import { PassThrough } from 'node:stream'
 import { describe, expect, it } from 'vitest'
 import { FRAME_BYTES, FRAME_S, LengthLock, lengthFor, parseRange, seekFor } from './proxy'
 
-// Le « fichier » MP3 à trames fixes : taille depuis la durée, instant depuis l'octet, plages, et la
-// promesse de taille tenue quoi que produise ffmpeg.
+// The fixed-frame MP3 "file": size from the duration, instant from the byte, ranges, and the size
+// promise kept whatever ffmpeg produces.
 
 async function collect(lock: LengthLock, chunks: Buffer[]): Promise<Buffer> {
   const out = new PassThrough()
@@ -40,18 +40,18 @@ describe('the sized MP3 file', () => {
 
   it('delivers exactly the promised bytes: skips the head of the first frame, truncates, pads with silence', async () => {
     const silence = Buffer.alloc(960, 7)
-    // ffmpeg en produit trop : on coupe
+    // ffmpeg produces too much: we cut
     const a = await collect(new LengthLock(10, 0, silence), [Buffer.alloc(8, 1), Buffer.alloc(8, 2)])
     expect(a.length).toBe(10)
     expect([...a.subarray(0, 8)]).toEqual(Array(8).fill(1))
     expect([...a.subarray(8)]).toEqual([2, 2])
-    // ffmpeg s'arrête trop tôt : silence jusqu'à la taille promise
+    // ffmpeg stops too early: silence up to the promised size
     const b = await collect(new LengthLock(1000, 0, silence), [Buffer.alloc(100, 1)])
     expect(b.length).toBe(1000)
     expect(b[99]).toBe(1)
     expect(b[100]).toBe(7)
     expect(b[999]).toBe(7)
-    // plage qui commence au milieu d'une trame : les premiers octets sont avalés
+    // range starting in the middle of a frame: the first bytes are swallowed
     const c = await collect(new LengthLock(5, 3, silence), [Buffer.from([1, 2, 3, 4, 5, 6, 7, 8, 9])])
     expect([...c]).toEqual([4, 5, 6, 7, 8])
   })

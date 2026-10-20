@@ -3,23 +3,23 @@ import type { Logger } from 'pino'
 import type { Clock } from '../clock'
 import { Mp4BoxParser, mseMimeFromMoov, type Mp4Box } from './fmp4'
 
-// Relais RTSP → MP4 fragmenté, pour afficher dans un navigateur une caméra qui ne parle que RTSP
-// (tout le parc Nest de la maison). UN processus ffmpeg par caméra regardée, quel que soit le
-// nombre d'écrans : il recopie les flux tels quels (`-c copy`, aucun ré-encodage, donc presque
-// pas de CPU) dans un MP4 fragmenté que Media Source Extensions sait lire, et ce relais le distribue
-// à chaque abonné. Le premier fragment envoyé à un abonné est toujours l'entête (`ftyp` + `moov`),
-// puis les fragments (`moof` + `mdat`) au fil de l'eau.
+// RTSP → fragmented MP4 relay, to show in a browser a camera that only speaks RTSP (the house's
+// whole Nest device set). ONE ffmpeg process per watched camera, whatever the number of screens: it
+// copies the streams as is (`-c copy`, no re-encoding, so almost no CPU) into a fragmented MP4 that
+// Media Source Extensions can read, and this relay distributes it to each subscriber. The first
+// fragment sent to a subscriber is always the header (`ftyp` + `moov`), then the fragments
+// (`moof` + `mdat`) as they come.
 //
-// `frag_keyframe` : un fragment par groupe d'images, donc CHAQUE fragment commence par une image
-// clé — un abonné qui arrive en cours de route peut décoder dès le premier fragment reçu, sans
-// qu'on ait à repérer les images clés soi-même. Le prix : le fragment n'est écrit qu'à l'image clé
-// SUIVANTE, donc une latence d'un groupe d'images (une à deux secondes sur ces caméras).
+// `frag_keyframe`: one fragment per group of pictures, so EACH fragment starts with a keyframe — a
+// subscriber arriving midway can decode from the first fragment received, without us having to
+// locate keyframes ourselves. The price: the fragment is only written at the NEXT keyframe, hence a
+// latency of one group of pictures (one to two seconds on these cameras).
 //
-// `rotateSource(url)` : la source peut changer d'adresse en cours de route (chez Google, une session
-// RTSP expire au bout de cinq minutes et sa prolongation donne un NOUVEAU jeton, à utiliser sur une
-// nouvelle connexion — l'ancienne est coupée à l'échéance, constaté). Un second ffmpeg est lancé sur
-// la nouvelle adresse ; dès qu'il livre son entête et un premier fragment, il devient la source, les
-// abonnés reçoivent une nouvelle entête (le lecteur décale ses horodatages) et l'ancien est arrêté.
+// `rotateSource(url)`: the source may change address midway (at Google, an RTSP session expires
+// after five minutes and extending it gives a NEW token, to use on a new connection — the old one
+// is cut at the deadline, observed). A second ffmpeg is started on the new address; as soon as it
+// delivers its header and a first fragment, it becomes the source, subscribers receive a new header
+// (the player shifts its timestamps) and the old one is stopped.
 
 export type RelayMessage =
   | { kind: 'init'; mime: string; data: Buffer }
@@ -32,33 +32,33 @@ export interface RtspRelayOptions {
   url: string
   clock: Clock
   logger?: Logger
-  /** Plus aucun abonné depuis ce délai → `onIdle` (l'appelant arrête le relais et libère la source). */
+  /** No subscriber left for this long → `onIdle` (the caller stops the relay and frees the source). */
   idleGraceMs?: number
   onIdle: () => void
   /**
-   * Le relais s'est arrêté de LUI-MÊME (ffmpeg sorti : caméra éteinte, flux refusé). L'appelant doit
-   * alors libérer la source aussi — sinon la session reste comptée et jamais rendue (vu en réel).
+   * The relay stopped BY ITSELF (ffmpeg exited: camera off, stream refused). The caller must then
+   * free the source too — otherwise the session stays counted and is never returned (seen for real).
    */
   onEnded?: (reason: string) => void
   /**
-   * Vignette JPEG écrite dans `path` toutes les `intervalMs` (écriture atomique : le lecteur ne voit
-   * jamais un fichier à moitié écrit). C'est la seule sortie qui DÉCODE la vidéo — le relais MP4 ne
-   * fait que recopier — donc quelques pourcents de CPU par caméra, quel que soit l'intervalle : le
-   * décodage porte sur toutes les images, l'intervalle ne choisit que celles qu'on encode.
+   * JPEG thumbnail written to `path` every `intervalMs` (atomic write: the reader never sees a
+   * half-written file). It is the only output that DECODES the video — the MP4 relay only copies —
+   * hence a few percent of CPU per camera, whatever the interval: decoding covers every frame, the
+   * interval only picks the ones that get encoded.
    */
   snapshot?: { path: string; intervalMs: number; width: number }
-  /** Injection pour les tests : remplace `spawn`. */
+  /** Injection for tests: replaces `spawn`. */
   spawnImpl?: typeof spawn
 }
 
-/** Efface le jeton d'une URL de flux (`?auth=…`) et le chemin signé qui le précède. */
+/** Erases the token of a stream URL (`?auth=…`) and the signed path before it. */
 export function redactStreamUrl(text: string): string {
   return text.replace(/rtsps?:\/\/[^\s'"]+/g, (url) => {
     try { const u = new URL(url); return `${u.protocol}//${u.host}/…` } catch { return 'rtsps://…' }
   })
 }
 
-/** Un processus ffmpeg et ce qu'on a lu de sa sortie. */
+/** An ffmpeg process and what was read from its output. */
 interface Source {
   proc: ChildProcessWithoutNullStreams
   parser: Mp4BoxParser
@@ -69,9 +69,9 @@ interface Source {
 }
 
 export class RtspRelay {
-  /** La source qui alimente les abonnés. */
+  /** The source feeding the subscribers. */
   private current: Source | null = null
-  /** La source de remplacement, en attente de son entête et de son premier fragment. */
+  /** The replacement source, waiting for its header and its first fragment. */
   private next: Source | null = null
   private init: { mime: string; data: Buffer } | undefined
   private pendingMoof: Buffer | undefined
@@ -83,19 +83,19 @@ export class RtspRelay {
 
   get subscriberCount(): number { return this.subscribers.size }
   get hasEnded(): boolean { return this.ended !== null }
-  /** L'entête MP4 est passée : le flux a réellement démarré (une caméra éteinte ne l'atteint jamais). */
+  /** The MP4 header went through: the stream really started (a camera that is off never gets there). */
   get ready(): boolean { return this.init !== undefined }
 
   start(): void {
     if (this.current || this.ended) return
     this.current = this.launch(this.opts.url)
-    // Un relais démarre sans abonné (l'ouverture chez le fabricant prend quelques secondes, et
-    // l'écran a pu repartir entre-temps) : s'il n'en reçoit aucun dans le délai de grâce, il se
-    // signale inutile plutôt que de tourner sans fin — c'est arrivé, un ffmpeg orphelin à la clé.
+    // A relay starts without a subscriber (opening at the vendor takes a few seconds, and the screen
+    // may have left in the meantime): if it gets none within the grace period, it reports itself
+    // useless rather than running forever — it happened, with an orphan ffmpeg as the result.
     this.armIdle()
   }
 
-  /** Change de source sans coupure : le nouveau ffmpeg remplace l'ancien dès qu'il livre de l'image. */
+  /** Switches source without a cut: the new ffmpeg replaces the old one as soon as it delivers picture. */
   rotateSource(url: string): void {
     if (this.ended || !this.current) return
     if (this.next) this.discard(this.next, 'superseded')
@@ -115,16 +115,16 @@ export class RtspRelay {
     this.armIdle()
   }
 
-  /** Arrête ffmpeg et prévient les abonnés. Idempotent. */
+  /** Stops ffmpeg and notifies the subscribers. Idempotent. */
   stop(reason = 'stopped'): void {
     const sources = [this.current, this.next]
-    this.finish(reason)                                 // d'abord la raison de l'appelant : celle du `exit` qui suit n'apporte rien
+    this.finish(reason)                                 // the caller's reason first: the one from the `exit` that follows adds nothing
     for (const s of sources) if (s) this.kill(s)
   }
 
   private launch(url: string): Source {
     const args = [
-      // `-y` : la vignette est réécrite en place ; sans lui ffmpeg refuse un fichier déjà là et s'arrête
+      // `-y`: the thumbnail is rewritten in place; without it ffmpeg refuses an existing file and stops
       '-y', '-hide_banner', '-loglevel', 'warning', '-nostdin',
       '-rtsp_transport', 'tcp', '-fflags', 'nobuffer', '-flags', 'low_delay',
       '-i', url,
@@ -142,9 +142,9 @@ export class RtspRelay {
     const proc = spawnImpl(this.opts.ffmpegPath, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }) as unknown as ChildProcessWithoutNullStreams
     const source: Source = { proc, parser: new Mp4BoxParser(), stderrTail: '' }
     proc.stdout.on('data', (chunk: Buffer) => this.onData(source, chunk))
-    // ffmpeg n'écrit sur stderr qu'en cas de souci (`-loglevel warning`) : on garde la fin pour le diagnostic
+    // ffmpeg only writes to stderr when something is wrong (`-loglevel warning`): the tail is kept for diagnosis
     proc.stderr.on('data', (chunk: Buffer) => {
-      // ffmpeg recopie l'URL dans ses messages, jeton d'accès compris : on l'efface avant de journaliser
+      // ffmpeg copies the URL into its messages, access token included: it is erased before logging
       const text = redactStreamUrl(chunk.toString('utf8'))
       source.stderrTail = (source.stderrTail + text).slice(-2000)
       this.opts.logger?.debug({ ffmpeg: text.trim() }, 'ffmpeg')
@@ -160,7 +160,7 @@ export class RtspRelay {
   private onExit(source: Source, reason: string): void {
     if (source === this.current) this.finish(reason)
     else if (source === this.next) {
-      // la relève a échoué : l'ancienne source continue jusqu'à son terme, l'appelant réagira à sa fin
+      // the replacement failed: the old source carries on until its end, the caller will react to that
       this.next = null
       this.opts.logger?.warn({ reason }, 'rtsp relay replacement source failed')
     }
@@ -177,7 +177,7 @@ export class RtspRelay {
   }
 
   private onData(source: Source, chunk: Buffer): void {
-    if (source !== this.current && source !== this.next) return    // source déjà remplacée : on ignore sa traîne
+    if (source !== this.current && source !== this.next) return    // source already replaced: its tail is ignored
     let boxes: Mp4Box[]
     try { boxes = source.parser.push(chunk) }
     catch (err) {
@@ -211,11 +211,11 @@ export class RtspRelay {
           this.pendingMoof = undefined
         }
         break
-      default: break                                    // `sidx`, `mfra`… : rien d'utile pour MSE
+      default: break                                    // `sidx`, `mfra`…: nothing useful for MSE
     }
   }
 
-  /** La source de remplacement : on attend son entête ET un premier fragment complet avant de basculer. */
+  /** The replacement source: we wait for its header AND a first complete fragment before switching. */
   private onNextBox(source: Source, box: Mp4Box): void {
     switch (box.type) {
       case 'ftyp': source.ftyp = box.data; break

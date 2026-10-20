@@ -4,10 +4,10 @@ import { z } from 'zod'
 import { writeFileAtomic } from '../atomic-file'
 import type { PendingRevert } from './runner'
 
-// Les retours « pendant N minutes » en attente, sur disque : un redémarrage du serveur pendant
-// l'attente ne doit pas laisser le portail ouvert. Au démarrage, le moteur les reprend ; un retour
-// dont l'heure est passée part dès que son appareil répond. État du serveur (`.state/`), pas une
-// donnée de l'utilisateur : un fichier illisible est ignoré, il ne bloque pas le démarrage.
+// Pending "for N minutes" reverts, on disk: a server restart during the wait must not leave the
+// gate open. At startup, the engine picks them up again; a revert whose time has passed goes out as
+// soon as its device answers. Server state (`.state/`), not user data: an unreadable file is
+// ignored, it does not block startup.
 
 const fileSchema = z.object({
   reverts: z.array(z.object({

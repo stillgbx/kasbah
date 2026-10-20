@@ -4,21 +4,21 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { writeFileAtomic } from './atomic-file'
 
-// Écriture atomique à la file : la course vue le 2026-10-01 (deux `rename` du même `.tmp`, le second
-// en ENOENT) dépend du disque — deux écritures ne la déclenchent pas ici à coup sûr, dix si.
+// Queued atomic write: the race seen on 2026-10-01 (two `rename`s of the same `.tmp`, the second
+// with ENOENT) depends on the disk — two writes don't reliably trigger it here, ten do.
 
 const scratch = () => mkdtemp(join(tmpdir(), 'kasbah-atomic-'))
 
 describe('writeFileAtomic', () => {
-  it('des écritures rapprochées ne se marchent pas dessus, et la dernière l’emporte', async () => {
+  it('close writes do not trip over each other, and the last one wins', async () => {
     const dir = await scratch()
     const path = join(dir, 'state.json')
     await Promise.all(Array.from({ length: 10 }, (_, i) => writeFileAtomic(path, String(i))))
     expect(await readFile(path, 'utf8')).toBe('9')
-    expect(await readdir(dir)).toEqual(['state.json'])      // aucun `.tmp` laissé derrière
+    expect(await readdir(dir)).toEqual(['state.json'])      // no `.tmp` left behind
   })
 
-  it('un échec rejette, et ne bloque pas les écritures suivantes', async () => {
+  it('a failure rejects, and does not block the following writes', async () => {
     const dir = await scratch()
     const blocker = join(dir, 'sub')
     await writeFile(blocker, 'un fichier, pas un dossier', 'utf8')

@@ -9,9 +9,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { buildApp, type KasbahApp } from '../src/app'
 import { loadEnv } from '../src/config/env'
 
-// Automatisations de bout en bout : routes, fichier à côté de la maison, snapshot WebSocket, et un
-// vrai déclenchement par la simulation (la Tesla du scénario rentre du travail en fin de journée).
-// Maison COPIÉE dans un dossier temporaire : le fichier d'automatisations s'écrit à côté d'elle.
+// End-to-end automations: routes, file next to the house, WebSocket snapshot, and a real trigger by
+// the simulation (the scenario's Tesla comes home from work at the end of the day).
+// House COPIED into a temporary folder: the automations file is written next to it.
 
 const HOUSE = resolve(import.meta.dirname, '../../../house/demo-house.json')
 const MONDAY = Date.UTC(2026, 8, 7, 12)
@@ -29,7 +29,7 @@ beforeEach(async () => {
   const env = loadEnv({ KASBAH_HOUSE_FILE: houseFile, KASBAH_LOG_LEVEL: 'silent' })
   kasbah = await buildApp({
     env, logger: pino({ level: 'silent' }), clock, serveStatic: false,
-    // dix minutes simulées par seconde d'horloge : une journée tient en quelques pas
+    // ten simulated minutes per clock second: a day fits in a few steps
     envSource: { MOCK_SCENARIO: 'default', MOCK_SEED: '3', MOCK_START_TIME: new Date(MONDAY).toISOString(), MOCK_TIME_SCALE: '600' },
   })
   await kasbah.app.ready()
@@ -102,7 +102,7 @@ describe('automations over WebSocket and the simulation', () => {
     })
     const lastRun = () => kasbah.automations.get('arrivee')?.status.lastRun
     let steps = 0
-    // pas d'une seconde = 10 min simulées ; au plus 36 h simulées pour un départ et un retour
+    // one-second step = 10 simulated min; at most 36 simulated hours for a departure and a return
     while (!lastRun() && steps++ < 216) {
       clock.advance(1000)
       await new Promise((r) => setTimeout(r, 0))

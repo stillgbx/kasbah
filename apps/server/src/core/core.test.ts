@@ -43,9 +43,9 @@ describe('poller', () => {
     clock.advance(1); await flush()           // backoff 500 ms
     expect(calls).toEqual([0, 500])
     fail = false
-    clock.advance(1000); await flush()        // backoff 1000 ms (2e échec)
+    clock.advance(1000); await flush()        // backoff 1000 ms (2nd failure)
     expect(calls).toEqual([0, 500, 1500])
-    clock.advance(1000); await flush()        // succès → intervalle normal
+    clock.advance(1000); await flush()        // success → normal interval
     expect(calls).toEqual([0, 500, 1500, 2500])
     p.stop()
     clock.advance(5000); await flush()
@@ -89,7 +89,7 @@ describe('registry', () => {
     expect(states).toHaveBeenCalledWith('p:a', expect.objectContaining({ on: true, available: true, updatedAt: 1000 }))
     expect(reg.applyPatch('p:a', { on: true })).toBe(false)
     expect(states).toHaveBeenCalledTimes(1)
-    expect(reg.applyPatch('p:a', { position: 3 } as never)).toBe(false)     // invalide pour une lampe
+    expect(reg.applyPatch('p:a', { position: 3 } as never)).toBe(false)     // invalid for a light
     expect(reg.applyPatch('p:zzz', { on: true })).toBe(false)
   })
   it('bulk availability and re-registration', () => {
@@ -104,7 +104,7 @@ describe('registry', () => {
     expect(reg.setAvailable('p', '*', false)).toEqual([])
     reg.register('p', [light])
     expect(reg.has('p:b')).toBe(false)
-    expect(reg.get('p:a')!.state.available).toBe(false)       // état conservé
+    expect(reg.get('p:a')!.state.available).toBe(false)       // state kept
     expect(reg.countOf('p')).toBe(1)
   })
 })
@@ -188,7 +188,7 @@ describe('sse', () => {
     await flush()
     expect(events).toEqual(['hello'])
     expect(opens).toEqual([false])
-    clock.advance(5000); await flush()          // le flux s'est terminé → reconnexion
+    clock.advance(5000); await flush()          // the stream ended → reconnection
     expect(calls).toHaveLength(4)
     await flush()
     expect(opens).toEqual([false, true])

@@ -31,6 +31,6 @@ describe('EnergyHistory', () => {
     bus.emit('state', 'mock:e', { ...energy(1, 1), available: false })
     expect(h.points('mock:e')).toHaveLength(0)
     for (let i = 0; i < 5; i++) { bus.emit('state', 'mock:e', energy(i, 0)); clock.advance(3_600_000) }
-    expect(h.points('mock:e', 48).length).toBeLessThanOrEqual(3)   // fenêtre de rétention inclusive
+    expect(h.points('mock:e', 48).length).toBeLessThanOrEqual(3)   // inclusive retention window
   })
 })

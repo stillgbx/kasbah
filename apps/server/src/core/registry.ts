@@ -6,15 +6,15 @@ import type { Logger } from 'pino'
 import type { Bus } from './bus'
 import type { Clock } from './clock'
 
-// Registre des appareils : descripteurs + états courants. Fusionne les patchs, pose `updatedAt`,
-// valide (attrape tôt les bugs de plugin) et ne publie QUE s'il y a un changement.
+// Device registry: descriptors + current states. Merges patches, sets `updatedAt`, validates
+// (catches plugin bugs early) and publishes ONLY if something changed.
 
 export class DeviceRegistry {
   private entries = new Map<DeviceId, { descriptor: DeviceDescriptor; state: DeviceState }>()
 
   constructor(private readonly bus: Bus, private readonly clock: Clock, private readonly logger?: Logger) {}
 
-  /** Remplace l'ensemble des appareils d'un plugin. Les états des ids conservés survivent. */
+  /** Replaces the whole set of a plugin's devices. The states of the ids kept survive. */
   register(pluginId: string, descriptors: DeviceDescriptor[]): void {
     const keep = new Set(descriptors.map((d) => d.id))
     for (const [id, e] of this.entries) if (e.descriptor.pluginId === pluginId && !keep.has(id)) this.entries.delete(id)
@@ -52,7 +52,7 @@ export class DeviceRegistry {
     return true
   }
 
-  /** Bascule la disponibilité d'un appareil ou de tous ceux d'un plugin ('*'). */
+  /** Toggles the availability of a device or of all the devices of a plugin ('*'). */
   setAvailable(pluginId: string, externalId: string | '*', available: boolean): DeviceId[] {
     const ids = externalId === '*' ? this.idsOf(pluginId) : [`${pluginId}:${externalId}`]
     const changed: DeviceId[] = []

@@ -22,7 +22,7 @@ export function sendError(reply: FastifyReply, status: number, code: string, mes
   return reply.status(status).send(errorBody(code, message))
 }
 
-/** Traduit toute erreur levée par une route en (statut, code, message). */
+/** Translates any error thrown by a route into (status, code, message). */
 export function describeError(err: unknown): { status: number; code: string; message: string } {
   if (err instanceof PluginError) {
     return { status: STATUS_BY_CODE[err.code] ?? 500, code: err.code, message: err.message }

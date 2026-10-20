@@ -3,13 +3,12 @@ import { EMPTY_SHOPPING_LIST, shoppingFileSchema, type ShoppingList } from '@kas
 import { ReadOnlyHouseError } from '../config/house'
 import { writeFileAtomic } from './atomic-file'
 
-// La liste de courses d'une maison vit À CÔTÉ d'elle : `maison.json` → `maison.shopping.json`. Comme
-// les automatisations : données de l'utilisateur (pas un cache), fichier illisible = démarrage
-// refusé (démarrer à vide ferait écraser la liste par le premier ajout), copie `.bak` de la version
-// précédente.
+// A house's shopping list lives NEXT TO it: `maison.json` → `maison.shopping.json`. Like the
+// automations: user data (not a cache), unreadable file = startup refused (starting empty would let
+// the first addition overwrite the list), `.bak` copy of the previous version.
 //
-// Les opérations passent À LA FILE : chacune lit la liste laissée par la précédente, l'écrit, puis
-// seulement la publie. Deux écrans qui cochent en même temps ne s'écrasent pas.
+// Operations are QUEUED: each one reads the list left by the previous one, writes it, and only then
+// publishes it. Two screens ticking at the same time do not overwrite each other.
 
 export function shoppingPathFor(housePath: string): string {
   return `${housePath.replace(/\.json$/i, '')}.shopping.json`
@@ -20,7 +19,7 @@ export class ShoppingService {
   private queue: Promise<unknown> = Promise.resolve()
   private readonly listeners = new Set<(list: ShoppingList) => void>()
 
-  /** `readOnly` : une démonstration — sa liste se lit, rien ne s'écrit (`ReadOnlyHouseError`). */
+  /** `readOnly`: a demo — its list can be read, nothing is written (`ReadOnlyHouseError`). */
   constructor(private readonly path: string, private readonly opts: { readOnly?: boolean } = {}) {}
 
   async load(): Promise<void> {
@@ -45,7 +44,7 @@ export class ShoppingService {
     return () => this.listeners.delete(cb)
   }
 
-  /** Applique une opération pure ; `null` (ligne inconnue) ne touche à rien et se rend tel quel. */
+  /** Applies a pure operation; `null` (unknown line) touches nothing and is returned as is. */
   update(op: (list: ShoppingList) => ShoppingList | null): Promise<ShoppingList | null> {
     if (this.opts.readOnly) return Promise.reject(new ReadOnlyHouseError())
     const run = async () => {

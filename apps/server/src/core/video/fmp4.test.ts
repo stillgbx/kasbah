@@ -32,7 +32,7 @@ describe('Mp4BoxParser', () => {
 })
 
 describe('mseMimeFromMoov', () => {
-  // avcC : version 1, profil Main (0x4D), compatibilité 0x00, niveau 3.0 (0x1E), puis le reste
+  // avcC: version 1, Main profile (0x4D), compatibility 0x00, level 3.0 (0x1E), then the rest
   const avcC = box('avcC', Buffer.from([1, 0x4d, 0x00, 0x1e, 0xff, 0xe1, 0, 0]))
   it('describes H.264 + AAC from the sample entries', () => {
     const moov = box('moov', [box('trak', box('stsd', box('avc1', [Buffer.alloc(78), avcC]))), box('trak', box('stsd', box('mp4a', Buffer.alloc(28))))])

@@ -13,33 +13,33 @@ import { afterEnd, insert, jumpTo, removeAt, REPEAT_MODES, upcoming, type PlayQu
 import { createLastPlayedFile, type LastPlayedByDevice, type LastPlayedStore } from './lastPlayed'
 import { getMusicSource, musicUserOf as userOf, type MusicSource, type MusicUser } from './sources'
 
-// Lecteur COMMUN aux sources musicales, monté sous /api/music. Ce qui était le cœur du plugin YouTube
-// Music (2026-09-22) en est sorti le 2026-09-23 pour servir aussi Mixcloud : une source ne fournit que
-// son catalogue et le flux d'une piste (`sources.ts`) ; tout le reste vit ici.
+// Player SHARED by the music sources, mounted under /api/music. What was the core of the YouTube Music
+// plugin (2026-09-22) moved out of it on 2026-09-23 to serve Mixcloud too: a source only provides its
+// catalog and a track's stream (`sources.ts`); everything else lives here.
 //
-// - Lecture sur une enceinte : `play_url` d'une URL du serveur (proxy LAN, `proxy.ts`), servie comme
-//   un « fichier » de taille connue — relais des octets de la source, ou repli MP3 à trames fixes.
-// - File d'attente par lecteur : l'enceinte ne connaît jamais qu'un fichier ; la file surveille son
-//   état pour enchaîner à la fin de chaque piste.
-// - Transfert (bureau → salon) et écoute LOCALE (le navigateur lit lui-même le fichier).
-// - Pour qui : le compte de la requête (`userOf`) ; une file garde celui de qui l'a lancée, ses pistes
-//   suivantes se résolvent et se notent chez lui, quel que soit l'écran qui la pilote ensuite.
+// - Playback on a speaker: `play_url` of a server URL (LAN proxy, `proxy.ts`), served as a "file" of
+//   known size — relay of the source's bytes, or fixed-frame MP3 fallback.
+// - Queue per player: the speaker only ever knows one file; the queue watches its state to chain
+//   on at the end of each track.
+// - Transfer (office → living room) and LOCAL listening (the browser plays the file itself).
+// - For whom: the request's account (`userOf`); a queue keeps that of whoever started it, its next
+//   tracks are resolved and recorded under that account, whatever screen drives it afterwards.
 
 export const musicConfigSchema = z.object({
-  /** Binaire ffmpeg du repli MP3 (clé commune Nest / caméras). */
+  /** ffmpeg binary for the MP3 fallback (key shared with Nest / cameras). */
   FFMPEG_PATH: z.string().min(1).default('ffmpeg'),
   /**
-   * Base URL publiée pour Cast/Sonos (ex. `http://192.168.1.10:8787`). Vide = dérivée de la requête
-   * (Host du navigateur) — adapté au LAN. `YTM_PUBLISH_BASE` (ancien nom) est encore lu.
+   * Base URL published for Cast/Sonos (e.g. `http://192.168.1.10:8787`). Empty = derived from the
+   * request (the browser's Host) — suited to the LAN. `YTM_PUBLISH_BASE` (old name) is still read.
    */
   MUSIC_PUBLISH_BASE: z.string().trim().default(''),
   YTM_PUBLISH_BASE: z.string().trim().default(''),
-  /** La dernière écoute de chaque lecteur, reprise après un redémarrage (`lastPlayed.ts`). */
+  /** The last listening of each player, resumed after a restart (`lastPlayed.ts`). */
   MUSIC_STATE_FILE: z.string().trim().default(stateFile('music.json')),
 })
 export type MusicConfig = z.infer<typeof musicConfigSchema>
 
-/** Une piste telle que l'UI l'envoie (`/play`, la file) : sa source, son id, et ce que le catalogue en dit. */
+/** A track as the UI sends it (`/play`, the queue): its source, its id, and what the catalog says about it. */
 const trackSchema = z.object({
   source: z.string().trim().min(1),
   id: z.string().trim().min(1),
@@ -48,14 +48,14 @@ const trackSchema = z.object({
   artUrl: z.string().trim().min(1).max(2048).transform((u) => (u.startsWith('//') ? `https:${u}` : u))
     .pipe(z.string().url().refine((u) => /^https?:\/\//i.test(u), 'http or https only'))
     .optional(),
-  /** Durée catalogue, si la source n'en donne pas : elle fixe la taille du « fichier ». */
+  /** Catalog duration, if the source gives none: it sets the size of the "file". */
   durationS: z.number().positive().optional(),
-  /** Ce que le catalogue dit du morceau : l'enceinte, elle, ne le saura jamais. */
+  /** What the catalog says about the song: the speaker itself will never know. */
   explicit: z.boolean().optional(),
-  /** Partir de là (s) : la reprise d'un mix long. */
+  /** Start from there (s): resuming a long mix. */
   startS: z.number().min(0).optional(),
 })
-/** Une playlist de plusieurs heures tient largement ; au-delà, c'est une erreur de l'appelant. */
+/** A playlist several hours long fits easily; beyond that, it is a caller error. */
 const QUEUE_MAX = 1000
 
 export interface MusicPlayerDeps {
@@ -64,16 +64,16 @@ export interface MusicPlayerDeps {
   now?: () => number
   spawnImpl?: SpawnFn
   fetchImpl?: typeof fetch
-  /** Les sources inscrites (tests) ; sinon le registre `sources.ts`. */
+  /** The registered sources (tests); otherwise the `sources.ts` registry. */
   source?: (id: string) => MusicSource | undefined
-  /** Commande à un lecteur d'un autre plugin (tests) ; sinon le pont `app.ts`. */
+  /** Command to another plugin's player (tests); otherwise the `app.ts` bridge. */
   execute?: (deviceId: string, command: Command) => Promise<void>
   getDevice?: (deviceId: string) => { descriptor: { kind: string; capabilities: string[] }; state?: unknown } | undefined
-  /** Les états publiés par les lecteurs (tests) ; sinon le pont `app.ts`. */
+  /** The states published by players (tests); otherwise the `app.ts` bridge. */
   onState?: (cb: (deviceId: string, state: unknown) => void) => () => void
-  /** Où garder la dernière écoute (tests) ; sinon `MUSIC_STATE_FILE`. */
+  /** Where to keep the last listening (tests); otherwise `MUSIC_STATE_FILE`. */
   lastStore?: LastPlayedStore
-  /** Noms publics (proxy du NAS) : une enceinte ne lit pas l'adresse publique, qui exige une session. */
+  /** Public names (NAS proxy): a speaker cannot read the public address, which requires a session. */
   publicHosts?: string[]
 }
 
@@ -82,7 +82,7 @@ export interface MusicPlayer {
   stop(): void
 }
 
-/** Chemin commun des routes du lecteur. */
+/** Common path of the player's routes. */
 export const MUSIC_PREFIX = '/api/music'
 
 const sameTrack = (a: TrackRef, b: TrackRef) => a.source === b.source && a.id === b.id
@@ -117,7 +117,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
     return `${proto}://${host}`
   }
 
-  /** La source d'une piste, inscrite et active ; sinon une erreur claire (plugin coupé entre-temps). */
+  /** A track's source, registered and active; otherwise a clear error (plugin turned off meanwhile). */
   function requireSource(source: string): MusicSource {
     const s = sourceOf(source)
     if (!s) throw new PluginError('UNSUPPORTED_COMMAND', `music source "${source}" is not enabled`)
@@ -142,7 +142,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
     return { get, play, execute }
   }
 
-  /** Le lecteur peut recevoir `play_url` ; sinon l'erreur HTTP à rendre. */
+  /** The player can receive `play_url`; otherwise the HTTP error to return. */
   function playableOrError(reply: FastifyReply, get: (id: string) => { descriptor: { kind: string; capabilities: string[] } } | undefined, deviceId: string) {
     const entry = get(deviceId)
     if (!entry) return { error: sendError(reply, 404, 'NOT_FOUND', `unknown device "${deviceId}"`) }
@@ -153,9 +153,9 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
   }
 
   /**
-   * Position ACTUELLE de la source dans le morceau. Le relevé publié date du dernier sondage (Sonos :
-   * jusqu'à 2 s) : tant que ça joue, on y ajoute le temps écoulé depuis `updatedAt` — jamais plus que
-   * le vrai retard, puisqu'un autre changement d'état l'aurait rafraîchi entre-temps.
+   * CURRENT position of the source in the song. The published reading dates from the last poll
+   * (Sonos: up to 2 s): while it plays, the time elapsed since `updatedAt` is added — never more than
+   * the real lag, since another state change would have refreshed it meanwhile.
    */
   function trackPosition(get: (id: string) => { state?: unknown } | undefined, session: ProxySession): number {
     const st = get(session.deviceId)?.state as { kind?: string; playback?: string; updatedAt?: number; nowPlaying?: { positionS?: number } } | undefined
@@ -165,7 +165,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
     return Math.max(0, pos + sinceS)
   }
 
-  /** Ouvre une session pour ce lecteur (la précédente du même lecteur est fermée) et lui envoie `play_url`. */
+  /** Opens a session for this player (the previous one of the same player is closed) and sends it `play_url`. */
   async function launch(
     base: string,
     track: TrackRef,
@@ -176,27 +176,27 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
   ) {
     const { play } = resolvePlay()
     const session = proxy.open(track, deviceId, sourceUrl, meta, raw)
-    // L'extension n'est pas décorative : `streamLoad` (Sonos) en déduit le type annoncé dans le DIDL.
+    // The extension is not decorative: `streamLoad` (Sonos) derives from it the type announced in the DIDL.
     const streamUrl = `${base}${streamPath(session.sid, raw)}`
     await play(deviceId, streamUrl, meta)
     return { session, streamUrl }
   }
 
   /**
-   * Lecture LOCALE : le navigateur de la tablette (ou du téléphone) lit lui-même le « fichier ». Sa
-   * session porte un id de lecteur `local:<id du navigateur>` qui n'est aucun appareil : ni `play_url`,
-   * ni état publié, ni file côté serveur — le navigateur tient tout ça.
+   * LOCAL playback: the tablet's (or phone's) browser plays the "file" itself. Its session carries a
+   * player id `local:<browser id>` that is no device: no `play_url`, no published state, no queue on
+   * the server side — the browser holds all of that.
    */
   const LOCAL_PREFIX = 'local:'
   const isLocal = (deviceId: string) => deviceId.startsWith(LOCAL_PREFIX)
 
-  /** La cible d'un transfert met environ une seconde à démarrer : on la place d'autant plus loin. */
+  /** A transfer's target takes about a second to start: it is placed that much further on. */
   const TRANSFER_LEAD_S = 1
 
   /**
-   * Se placer dans le morceau juste après `play_url` : l'enceinte n'a pas forcément fini de charger,
-   * la première commande peut être refusée — on réessaie un peu. Le « fichier » ayant une taille, le
-   * déplacement est le sien (plage d'octets), précis à la trame.
+   * Seeking in the song right after `play_url`: the speaker has not necessarily finished loading, the
+   * first command may be refused — we retry a little. The "file" having a size, the seek is its own
+   * (byte range), accurate to the frame.
    */
   async function seekWhenReady(deviceId: string, positionS: number): Promise<void> {
     const { execute } = resolvePlay()
@@ -212,14 +212,14 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
   }
 
   /**
-   * Une session n'est « vivante » que si l'enceinte joue (ou a mis en pause) NOTRE piste : elle survit
-   * sinon à ce que l'enceinte joue ensuite (une radio lancée depuis Google Home), et l'UI aurait
-   * montré notre titre, notre durée, et transféré le mauvais morceau. L'enceinte le dit par son titre :
-   * le nôtre, ou rien de lisible (identifiant de flux, URL : elle ne sait pas mieux). Les cinq
-   * premières secondes sont accordées d'office, le temps que l'état de l'enceinte suive la commande.
+   * A session is "alive" only if the speaker plays (or has paused) OUR track: otherwise it outlives
+   * what the speaker plays next (a radio started from Google Home), and the UI would have shown our
+   * title, our duration, and transferred the wrong song. The speaker says so through its title: ours,
+   * or nothing readable (stream identifier, URL: it knows no better). The first five seconds are
+   * granted by default, the time for the speaker's state to follow the command.
    */
   function sessionActive(s: ProxySession): boolean {
-    // un navigateur (`/local`) tient sa lecture lui-même : elle n'est pas celle d'une enceinte
+    // a browser (`/local`) holds its playback itself: it is not a speaker's
     if (isLocal(s.deviceId)) return false
     if (now() - s.createdAt < 5_000) return true
     const { get } = resolvePlay()
@@ -227,14 +227,14 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
     if (st?.kind !== 'media_player') return false
     if (st.playback !== 'playing' && st.playback !== 'paused') return false
     const t = st.nowPlaying?.title?.trim() ?? ''
-    // un relais s'appelle `<sid>.m4a` : le Sonos publie parfois ce NOM DE FICHIER comme titre
+    // a relay is named `<sid>.m4a`: the Sonos sometimes publishes this FILE NAME as the title
     if (!t || /^[0-9a-f]{24}(\.[a-z0-9]{2,4})?$/i.test(t) || /^https?:\/\//i.test(t)) return true
     return !!s.meta.title && t.toLowerCase() === s.meta.title.trim().toLowerCase()
   }
 
-  // ---- lancer une piste ----------------------------------------------------------------------------
+  // ---- starting a track ----------------------------------------------------------------------------
 
-  /** Préparer la source puis résoudre ; toute erreur sort en `PluginError`. */
+  /** Prepare the source then resolve; any error comes out as a `PluginError`. */
   async function resolveTrack(track: TrackRef, user: MusicUser): Promise<ResolvedStream> {
     const source = requireSource(track.source)
     try {
@@ -247,10 +247,10 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
   }
 
   /**
-   * La piste suivante d'une file, résolue PENDANT que la courante joue : la résolution prend quelques
-   * secondes, qu'on ne veut pas entendre entre deux morceaux. Une URL googlevideo vaut ~6 h ; on n'en
-   * garde qu'une heure, une piste pas encore jouée au bout d'une heure sera résolue à nouveau.
-   * Par compte : un flux résolu avec les identifiants de l'un ne sert pas à l'autre.
+   * The next track of a queue, resolved WHILE the current one plays: resolution takes a few seconds,
+   * which we don't want to hear between two songs. A googlevideo URL is good for ~6 h; we keep it
+   * only an hour, a track not yet played after an hour will be resolved again.
+   * Per account: a stream resolved with one account's credentials is not used for another.
    */
   const prefetched = new Map<string, { at: number; p: Promise<ResolvedStream> }>()
   const PREFETCH_TTL_MS = 3_600_000
@@ -267,7 +267,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
     const hit = prefetched.get(key)
     if (hit && now() - hit.at < PREFETCH_TTL_MS) return
     const entry = { at: now(), p: resolveTrack(track, user) }
-    // un échec ne se garde pas : le lancement réessaiera pour de bon, et dira pourquoi
+    // a failure is not kept: the start will retry for real, and say why
     entry.p.catch((err) => {
       if (prefetched.get(key) === entry) prefetched.delete(key)
       log.debug({ err, track: key }, 'music queue: prefetch failed')
@@ -282,13 +282,13 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
     return hit && now() - hit.at < PREFETCH_TTL_MS ? hit.p : undefined
   }
 
-  /** La session d'un relais se relance telle quelle (transfert, piste rejouée) ; sinon le repli MP3. */
+  /** A relay's session is restarted as is (transfer, replayed track); otherwise the MP3 fallback. */
   function rawOf(s: ProxySession): { mime: string; sizeBytes: number; ext: string } | undefined {
     const ext = s.meta.source?.ext?.toLowerCase() ?? ''
     return s.raw && s.lengthBytes !== null && RAW_MIME[ext] ? { mime: s.mime, sizeBytes: s.lengthBytes, ext } : undefined
   }
 
-  /** Ce que la session retient d'une piste résolue, et si elle peut être relayée telle quelle. */
+  /** What the session keeps from a resolved track, and whether it can be relayed as is. */
   function describeResolved(track: QueueTrack, resolved: ResolvedStream, rawWanted?: boolean) {
     const durationS = resolved.durationS ?? track.durationS
     const art = track.artUrl ? sourceOf(track.source)?.playArt?.(track.artUrl) ?? track.artUrl : undefined
@@ -300,10 +300,10 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       ...(track.explicit ? { explicit: true } : {}),
       source: { ext: resolved.ext, formatId: resolved.formatId, abrKbps: resolved.abrKbps },
     }
-    // RELAIS PAR DÉFAUT : la source est déjà un fichier de taille exacte, découpable en plages —
-    // le réencoder ne fait que perdre de la qualité. Deux conditions : un conteneur que les
-    // enceintes lisent, et une taille annoncée (c'est elle qui en fait un « fichier »). Sinon,
-    // repli sur le MP3 à trames fixes, qui fabrique cette taille à partir de la durée.
+    // RELAY BY DEFAULT: the source is already a file of exact size, splittable into ranges —
+    // re-encoding it only loses quality. Two conditions: a container the speakers can play, and an
+    // announced size (that is what makes it a "file"). Otherwise, fall back to the fixed-frame MP3,
+    // which builds that size from the duration.
     const rawExt = resolved.ext?.toLowerCase() ?? ''
     const rawMime = RAW_MIME[rawExt]
     const raw = rawWanted !== false && rawMime && resolved.sizeBytes
@@ -315,24 +315,24 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
     return { meta, raw, durationS }
   }
 
-  /** Chemin du « fichier » d'une session, relatif à l'hôte (le relais porte l'extension du conteneur). */
+  /** Path of a session's "file", relative to the host (the relay carries the container's extension). */
   const streamPath = (sid: string, raw?: { ext: string }) => (raw
     ? `${MUSIC_PREFIX}/raw/${sid}.${raw.ext}`
     : `${MUSIC_PREFIX}/stream/${sid}`)
 
   /**
-   * Résoudre (ou reprendre la résolution préparée) puis envoyer `play_url`. `stillWanted` est relu
-   * après la résolution, qui dure plusieurs secondes : une autre commande a pu passer entre-temps, et
-   * cette piste-ci ne doit alors plus partir (null).
+   * Resolve (or pick up the prepared resolution) then send `play_url`. `stillWanted` is re-read after
+   * the resolution, which lasts several seconds: another command may have gone through meanwhile, and
+   * this track must then no longer start (null).
    */
   async function startTrack(base: string, deviceId: string, track: QueueTrack, user: MusicUser, opts: { raw?: boolean; stillWanted: () => boolean }) {
     const source = requireSource(track.source)
     await source.prepare?.(user)
-    // Un de nos flux joue déjà là : le mettre en pause TOUT DE SUITE, avant les secondes de
-    // résolution — l'écran montre un sablier, l'enceinte se tait, la nouvelle piste remplace
-    // l'ancienne. Pas `stop` : sur un Cast il fermerait l'appli, qu'il faudrait relancer.
-    // La pause est ATTENDUE avant `play_url` : une piste résolue d'avance part aussitôt, et une pause
-    // arrivée après elle laissait la nouvelle piste en pause à 0 s (vu sur le Sonos « Bureau »).
+    // One of our streams is already playing there: pause it RIGHT AWAY, before the seconds of
+    // resolution — the screen shows an hourglass, the speaker goes quiet, the new track replaces the
+    // old one. Not `stop`: on a Cast it would close the app, which would have to be relaunched.
+    // The pause is AWAITED before `play_url`: a track resolved ahead starts at once, and a pause
+    // arriving after it left the new track paused at 0 s (seen on the "Bureau" Sonos).
     const { get, execute } = resolvePlay()
     const playing = (get(deviceId)?.state as { playback?: string } | undefined)?.playback === 'playing'
     const paused = proxy.forDevice(deviceId) && playing
@@ -356,43 +356,43 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
     return started
   }
 
-  // ---- file d'attente ------------------------------------------------------------------------------
+  // ---- queue ---------------------------------------------------------------------------------------
 
-  /** Une file en cours : ce qu'elle contient, et de quoi voir la piste courante finir. */
+  /** A running queue: what it holds, and enough to see the current track finish. */
   interface RunningQueue extends PlayQueue {
-    /** URL publiée aux enceintes (dérivée de la requête qui a créé la file). */
+    /** URL published to the speakers (derived from the request that created the queue). */
     base: string
-    /** `false` : repli MP3 forcé pour toute la file. */
+    /** `false`: MP3 fallback forced for the whole queue. */
     raw?: boolean
-    /** Session du proxy de la piste courante ; une autre session sur ce lecteur = la file est finie. */
+    /** Proxy session of the current track; another session on this player = the queue is over. */
     sid: string | null
-    /** Dernière position de lecture relevée, et quand : de quoi estimer où en était la piste à l'arrêt. */
+    /** Last playback position read, and when: enough to estimate where the track was when it stopped. */
     heard: { positionS: number; at: number } | null
-    /** Une piste part (résolution, `play_url`, transfert) : les états du lecteur ne disent rien de la file. */
+    /** A track is starting (resolution, `play_url`, transfer): the player's states say nothing about the queue. */
     busy: boolean
-    /** Qui l'a lancée : ses comptes résolvent les pistes, sa reprise retient la position. */
+    /** Who started it: their accounts resolve the tracks, their resume remembers the position. */
     user: MusicUser
   }
   const queues = new Map<string, RunningQueue>()
-  /** Plus près de la fin que ça, un lecteur qui s'arrête a fini la piste (Sonos relevé toutes les 2 s). */
+  /** Closer to the end than this, a player that stops has finished the track (Sonos read every 2 s). */
   const END_SLACK_S = 5
-  /** Juste après `play_url`, le Sonos passe une seconde à l'arrêt, et un relevé en vol peut encore parler de la piste précédente. */
+  /** Right after `play_url`, the Sonos spends a second stopped, and a reading in flight may still be about the previous track. */
   const SETTLE_MS = 3_000
-  /** Précédent au-delà de ce temps de lecture : retour au début de la piste, comme le fait le plugin Sonos. */
+  /** Previous beyond this playback time: back to the start of the track, as the Sonos plugin does. */
   const RESTART_AFTER_S = 3
 
   const queueView = (q: RunningQueue) => ({ items: q.items, index: q.index, repeat: q.repeat })
 
-  // ---- dernière écoute -----------------------------------------------------------------------------
-  // Files et sessions ne survivent pas à un redémarrage : on garde sur disque, par lecteur, la file,
-  // la piste courante et la position atteinte. La barre en montre le titre en pause, `/resume` le
-  // relance de là. Oubliée quand la file finit d'elle-même : il n'y a plus rien à reprendre.
+  // ---- last listening ------------------------------------------------------------------------------
+  // Queues and sessions do not survive a restart: we keep on disk, per player, the queue, the current
+  // track and the position reached. The bar shows its title paused, `/resume` restarts it from there.
+  // Forgotten when the queue finishes on its own: there is nothing left to resume.
   const lastStore = deps.lastStore ?? createLastPlayedFile(cfg.MUSIC_STATE_FILE, log)
   let last: LastPlayedByDevice = {}
   const lastLoaded = lastStore.load()
     .then((v) => { last = { ...v, ...last } })
     .catch((err) => log.warn({ err }, 'music: last played state unreadable'))
-  /** Une position arrive à chaque relevé d'enceinte : sur disque au plus toutes les 15 s. */
+  /** A position arrives with every speaker reading: to disk at most every 15 s. */
   const LAST_SAVE_MS = 15_000
   let lastTimer: ReturnType<typeof setTimeout> | undefined
   function saveLast(soon: boolean): void {
@@ -406,13 +406,13 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
   function remember(deviceId: string, q: PlayQueue, positionS: number, durationS: number | undefined): void {
     if (isLocal(deviceId)) return
     last[deviceId] = {
-      // la reprise d'un mix vaut pour son premier lancement : `startS` ne se garde pas
+      // resuming a mix applies to its first start: `startS` is not kept
       items: q.items.map(({ startS: _startS, ...t }) => t),
       index: q.index, repeat: q.repeat, positionS: Math.max(0, positionS), durationS: durationS ?? null, at: now(),
     }
     saveLast(true)
   }
-  /** Une session sans file (écoute arrivée d'un navigateur sans la sienne) : la piste telle qu'elle joue. */
+  /** A session without a queue (listening arrived from a browser without its own): the track as it plays. */
   const trackOfSession = (s: ProxySession): QueueTrack => ({
     source: s.track.source, id: s.track.id,
     ...(s.meta.title ? { title: s.meta.title } : {}),
@@ -426,13 +426,13 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
     delete last[deviceId]
     saveLast(true)
   }
-  /** La file a changé (ajout, retrait, répétition) sans que la piste change : la position reste. */
+  /** The queue changed (addition, removal, repeat) without the track changing: the position stays. */
   function rememberQueue(deviceId: string, q: PlayQueue): void {
     const prev = last[deviceId]
     if (prev) remember(deviceId, q, prev.positionS, prev.durationS ?? undefined)
   }
 
-  /** La file d'un lecteur, tant que sa piste courante est bien celle que joue l'enceinte. */
+  /** A player's queue, as long as its current track is indeed the one the speaker plays. */
   function liveQueue(deviceId: string): RunningQueue | undefined {
     const q = queues.get(deviceId)
     if (!q) return undefined
@@ -442,7 +442,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
   }
 
   let unwatch: (() => void) | null = null
-  /** S'abonner aux états des lecteurs à la première file (pas au démarrage : le pont n'est pas encore branché). */
+  /** Subscribe to the players' states at the first queue (not at startup: the bridge is not wired yet). */
   function watchPlayers(): void {
     if (unwatch) return
     const on = deps.onState ?? getPlaybackBridge()?.onState
@@ -454,17 +454,17 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
   }
 
   /**
-   * Fin de piste : aucun lecteur ne l'annonce, l'état passe simplement à `idle` (Sonos STOPPED en fin
-   * de fichier, Cast IDLE). On l'y reconnaît à la position : partie de là où on l'a entendue jouer
-   * pour la dernière fois, elle doit avoir atteint la durée. Un `idle` en milieu de morceau (arrêt
-   * voulu, pause d'un flux que le Sonos change en Stop) laisse la file en attente, sans avancer.
+   * End of track: no player announces it, the state simply goes to `idle` (Sonos STOPPED at the end
+   * of the file, Cast IDLE). It is recognized by the position: starting from where it was last heard
+   * playing, it must have reached the duration. An `idle` mid-song (intended stop, pause of a stream
+   * that the Sonos turns into Stop) leaves the queue waiting, without moving on.
    */
   function onPlayerState(deviceId: string, state: unknown): void {
     const q = queues.get(deviceId)
     if (!q || q.busy) return
     const s = q.sid ? proxy.get(q.sid) : undefined
     if (!s || proxy.forDevice(deviceId)?.sid !== s.sid) {
-      // notre flux a été remplacé (un autre `play`) ou fermé (TTL) : la file s'en va avec
+      // our stream was replaced (another `play`) or closed (TTL): the queue goes with it
       queues.delete(deviceId)
       return
     }
@@ -477,11 +477,11 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
         queues.delete(deviceId)
         return
       }
-      // Un état republié pour autre chose (volume) garde l'ANCIENNE position : ne la redater que si
-      // elle a bougé, sinon l'estimation à l'arrêt partirait de trop tôt.
+      // A state republished for something else (volume) keeps the OLD position: only re-date it if it
+      // moved, otherwise the estimate at the stop would start from too early.
       const pos = st.nowPlaying?.positionS
       if (typeof pos === 'number' && pos !== q.heard?.positionS) {
-        // reprise après une pause, ou saut dans le morceau : une action, écrite tout de suite
+        // resume after a pause, or a jump within the song: an action, written right away
         const expected = q.heard ? q.heard.positionS + (now() - q.heard.at) / 1000 : null
         const acted = expected === null || Math.abs(pos - expected) > END_SLACK_S
         q.heard = { positionS: pos, at: now() }
@@ -495,7 +495,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       } else if (!q.heard) q.heard = { positionS: 0, at: now() }
       return
     }
-    // en pause : la position où l'on s'est arrêté, écrite tout de suite
+    // paused: the position where we stopped, written right away
     const mine = last[deviceId]
     if (st.playback === 'paused' && mine && typeof st.nowPlaying?.positionS === 'number') {
       mine.positionS = st.nowPlaying.positionS
@@ -511,7 +511,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
     void advance(deviceId, q)
   }
 
-  /** Enchaîner après une fin de piste. Une piste qui ne se lance pas est sautée, trois fois au plus d'affilée. */
+  /** Chain on after the end of a track. A track that does not start is skipped, three times in a row at most. */
   async function advance(deviceId: string, q: RunningQueue, failures = 0): Promise<void> {
     const next = afterEnd(q)
     if (!next) {
@@ -532,8 +532,8 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
   }
 
   /**
-   * Jouer la piste `index` de la file. La même piste rejouée (répétition) repart du flux déjà résolu :
-   * l'URL de la source est encore bonne, pas de nouvelle résolution.
+   * Play track `index` of the queue. The same track replayed (repeat) restarts from the stream already
+   * resolved: the source URL is still good, no new resolution.
    */
   async function playAt(deviceId: string, q: RunningQueue, index: number, repeat: RepeatMode) {
     const track = q.items[index]!
@@ -551,7 +551,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
         await seekWhenReady(deviceId, track.startS)
           .catch((err) => log.warn({ err, deviceId, startS: track.startS }, 'music: resume seek failed, playing from start'))
       }
-      // la reprise ne vaut qu'une fois : rejouée (répétition, précédent), la piste repart du début
+      // the resume applies only once: replayed (repeat, previous), the track starts from the beginning
       if (track.startS !== undefined) q.items[index] = { ...track, startS: undefined }
       prefetchUpcoming(q)
       return started
@@ -560,7 +560,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
     }
   }
 
-  /** Nouvelle file sur ce lecteur (l'ancienne est remplacée), qui joue `tracks[startIndex]`. */
+  /** New queue on this player (the old one is replaced), which plays `tracks[startIndex]`. */
   async function playQueue(reply: FastifyReply, base: string, deviceId: string, tracks: QueueTrack[], startIndex: number, user: MusicUser, raw?: boolean) {
     for (const t of tracks) requireSource(t.source)
     const q: RunningQueue = {
@@ -580,24 +580,24 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
     }
   }
 
-  /** Type de contenu d'un flux source relayé tel quel (le conteneur décide, pas le codec). */
+  /** Content type of a source stream relayed as is (the container decides, not the codec). */
   const RAW_MIME: Record<string, string> = { m4a: 'audio/mp4', mp4: 'audio/mp4', webm: 'audio/webm', opus: 'audio/ogg' }
 
   const sessionView = (s: ProxySession) => ({
     deviceId: s.deviceId, source: s.track.source, id: s.track.id, sid: s.sid,
     durationS: s.meta.durationS ?? null, title: s.meta.title ?? null, artist: s.meta.artist ?? null, artUrl: s.meta.artUrl ?? null,
-    // Ce que l'enceinte reçoit de NOUS, et ce que nous recevons de la source : de quoi juger à l'œil
-    // ce que vaut la chaîne, sans ouvrir le journal.
+    // What the speaker receives from US, and what we receive from the source: enough to judge by eye
+    // what the chain is worth, without opening the log.
     quality: {
       mime: s.mime,
-      // relais : ce que sert le proxy EST ce que la source a donné, il n'y a plus de sortie à nous
+      // relay: what the proxy serves IS what the source gave, there is no output of our own anymore
       bitrateKbps: s.raw ? s.meta.source?.abrKbps ?? null : OUT_BITRATE_KBPS,
       sampleRateHz: s.raw ? null : OUT_SAMPLE_RATE_HZ,
       channels: s.raw ? null : OUT_CHANNELS,
       lengthBytes: s.lengthBytes,
       source: s.meta.source ?? null,
     },
-    // de quoi griser précédent / suivant et montrer la répétition sans ouvrir la file
+    // enough to gray out previous / next and show the repeat without opening the queue
     queue: (() => {
       const q = queues.get(s.deviceId)
       return q && q.sid === s.sid ? { length: q.items.length, index: q.index, repeat: q.repeat } : null
@@ -605,14 +605,14 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
   })
 
   function registerRoutes(app: FastifyInstance) {
-    // Une piste seule est une file d'une piste : la répétition vaut aussi pour elle, et c'est la même
-    // mécanique qui la lance.
+    // A single track is a one-track queue: the repeat applies to it too, and the same mechanism
+    // starts it.
     app.post<{ Body: unknown }>('/play', async (req, reply) => {
       const body = trackSchema.extend({
         deviceId: z.string().trim().min(1),
         /**
-         * Par défaut le flux source est RELAYÉ tel quel ; `false` force le réencodage MP3 (échappatoire
-         * si un lecteur bute sur le conteneur d'origine).
+         * By default the source stream is RELAYED as is; `false` forces MP3 re-encoding (escape hatch
+         * if a player chokes on the original container).
          */
         raw: z.boolean().optional(),
       }).safeParse(req.body)
@@ -625,9 +625,9 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       return { ok: true as const, streamUrl: started.streamUrl, sid: started.session.sid }
     })
 
-    // Lecture LOCALE : le navigateur lit lui-même le « fichier » (même relais que les enceintes), et
-    // tient sa file. Le chemin rendu est relatif : c'est le navigateur qui parle au serveur, pas une
-    // enceinte du réseau. `next` : la piste qui suivra, résolue d'avance pendant l'écoute.
+    // LOCAL playback: the browser plays the "file" itself (same relay as the speakers), and holds its
+    // queue. The returned path is relative: it is the browser talking to the server, not a speaker on
+    // the network. `next`: the track that will follow, resolved ahead during listening.
     app.post<{ Body: unknown }>('/local', async (req, reply) => {
       const body = trackSchema.extend({
         clientId: z.string().regex(/^[A-Za-z0-9-]{8,64}$/),
@@ -645,9 +645,9 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       return { ok: true as const, streamUrl: streamPath(session.sid, raw), session: sessionView(session), ...(track.startS ? { startS: track.startS } : {}) }
     })
 
-    // ---- file d'attente -----------------------------------------------------------------------
-    // Elle vit ici, par lecteur : l'enceinte ne connaît jamais qu'un « fichier ». Précédent et
-    // suivant passent par ces routes, pas par `media_player.next` — l'enceinte n'aurait rien à sauter.
+    // ---- queue --------------------------------------------------------------------------------
+    // It lives here, per player: the speaker only ever knows one "file". Previous and next go through
+    // these routes, not through `media_player.next` — the speaker would have nothing to skip.
 
     app.post<{ Body: unknown }>('/queue', async (req, reply) => {
       const body = z.object({
@@ -672,7 +672,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       return queueView(q)
     })
 
-    /** Ajouter sans interrompre : juste après la piste courante, ou à la fin. Rien ne joue ? Ça part tout de suite. */
+    /** Add without interrupting: right after the current track, or at the end. Nothing playing? It starts right away. */
     app.post<{ Body: unknown }>('/queue/add', async (req, reply) => {
       const body = z.object({
         deviceId: z.string().trim().min(1),
@@ -709,7 +709,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       return queueView(q)
     })
 
-    /** Précédent : au début de la piste après quelques secondes de lecture (comme un lecteur de salon), sinon la piste d'avant. */
+    /** Previous: to the start of the track after a few seconds of playback (like a living-room player), otherwise the track before. */
     app.post<{ Body: unknown }>('/queue/previous', async (req, reply) => {
       const body = z.object({ deviceId: z.string().trim().min(1) }).safeParse(req.body)
       if (!body.success) return sendError(reply, 400, 'INVALID_BODY', 'deviceId is required')
@@ -726,7 +726,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       return queueView(q)
     })
 
-    /** Jouer une piste choisie dans la file. */
+    /** Play a track picked in the queue. */
     app.post<{ Body: unknown }>('/queue/jump', async (req, reply) => {
       const body = z.object({ deviceId: z.string().trim().min(1), index: z.number().int().min(0) }).safeParse(req.body)
       if (!body.success) return sendError(reply, 400, 'INVALID_BODY', 'deviceId and index are required')
@@ -763,7 +763,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       return queueView(q)
     })
 
-    /** Vider la file : la piste en cours continue, seule, rien ne la suit. */
+    /** Clear the queue: the current track carries on, alone, nothing follows it. */
     app.delete<{ Querystring: { deviceId?: string } }>('/queue', async (req, reply) => {
       const q = liveQueue(req.query.deviceId ?? '')
       if (!q) return sendError(reply, 404, 'NOT_FOUND', 'no music queue on this player')
@@ -774,8 +774,8 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
     })
 
     /**
-     * Où en est une piste lue dans un NAVIGATEUR (`/local`) : aucune enceinte n'en publie l'état, c'est
-     * lui qui le dit, de temps en temps et à la fin — pour la reprise d'un mix, comme sur une enceinte.
+     * Where a track played in a BROWSER (`/local`) stands: no speaker publishes its state, the browser
+     * says it, now and then and at the end — for resuming a mix, as on a speaker.
      */
     app.post<{ Body: unknown }>('/progress', async (req, reply) => {
       const body = z.object({
@@ -791,12 +791,12 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       return { ok: true as const }
     })
 
-    /** Ce que nos lecteurs jouent de nous en ce moment : titre, durée et transfert côté UI. */
+    /** What our players are playing from us right now: title, duration and transfer on the UI side. */
     app.get('/sessions', async () => ({ sessions: proxy.list().filter(sessionActive).map(sessionView) }))
 
     /**
-     * La dernière écoute des lecteurs qui ne jouent rien de nous en ce moment : de quoi montrer le
-     * titre interrompu (redémarrage du serveur, arrêt) en pause à sa position.
+     * The last listening of the players that play nothing from us right now: enough to show the
+     * interrupted track (server restart, stop) paused at its position.
      */
     app.get('/last', async () => {
       await lastLoaded
@@ -813,7 +813,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       }
     })
 
-    /** Relancer la dernière écoute d'un lecteur, sa file comprise, à sa position (ou à `positionS`). */
+    /** Restart a player's last listening, its queue included, at its position (or at `positionS`). */
     app.post<{ Body: unknown }>('/resume', async (req, reply) => {
       const body = z.object({ deviceId: z.string().trim().min(1), positionS: z.number().min(0).optional() }).safeParse(req.body)
       if (!body.success) return sendError(reply, 400, 'INVALID_BODY', 'deviceId is required')
@@ -825,7 +825,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       if ('error' in target) return target.error
       const startS = Math.floor(body.data.positionS ?? entry.positionS)
       const tracks = entry.items.map((t, i) => (i === entry.index && startS > 0 ? { ...t, startS } : t))
-      // relancer, c'est lancer : avec les comptes de qui relance, pas de qui écoutait avant
+      // restarting is starting: with the accounts of whoever restarts, not of whoever was listening before
       const started = await playQueue(reply, publishBase(req), deviceId, tracks, entry.index, userOf(req))
       if ('error' in started) return started.error
       started.queue.repeat = entry.repeat
@@ -833,13 +833,13 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       return { ok: true as const, streamUrl: started.streamUrl, sid: started.session.sid, queue: queueView(started.queue) }
     })
 
-    // Transfert : la piste que joue `from` repart sur `to` (même « fichier »), la cible se place à la
-    // position où `from` en était (relevée dans l'état publié du lecteur), puis `from` s'arrête. Pas de
-    // nouvelle résolution : l'URL de la source de la session est encore bonne.
+    // Transfer: the track `from` plays restarts on `to` (same "file"), the target seeks to the position
+    // `from` was at (read from the player's published state), then `from` stops. No new resolution:
+    // the URL of the session's source is still good.
     //
-    // Un navigateur (`local:…`) peut être l'un ou l'autre bout. Source : il n'a pas d'état publié, il
-    // donne sa position et sa file (`positionS`, `queue`), et s'arrête lui-même. Cible : rien à lancer,
-    // la réponse lui rend le chemin du fichier, la position et la file qu'il reprend à son compte.
+    // A browser (`local:…`) can be either end. Source: it has no published state, it gives its
+    // position and its queue (`positionS`, `queue`), and stops itself. Target: nothing to start, the
+    // response gives it the file path, the position and the queue it takes over.
     app.post<{ Body: unknown }>('/transfer', async (req, reply) => {
       const body = z.object({
         fromDeviceId: z.string().trim().min(1),
@@ -869,8 +869,8 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       }
       const positionS = fromLocal ? body.data.positionS! : trackPosition(get, source)
 
-      // la file suit la piste : elle ne réagit à rien le temps du transfert (la source va s'arrêter
-      // en milieu de morceau, ce n'est pas une fin de piste)
+      // the queue follows the track: it reacts to nothing during the transfer (the source is about to
+      // stop mid-song, it is not the end of a track)
       const queue = fromLocal ? undefined : queues.get(fromDeviceId)
       if (queue) queue.busy = true
       try {
@@ -881,7 +881,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
           proxy.closeDevice(fromDeviceId)
           const moved = queue && queue.sid === source.sid ? queueView(queue) : null
           if (queue && queues.get(fromDeviceId) === queue) queues.delete(fromDeviceId)
-          // le navigateur tient désormais l'écoute : l'enceinte n'a plus rien à reprendre
+          // the browser now holds the listening: the speaker has nothing left to resume
           forget(fromDeviceId)
           log.info({ track: trackKey(source.track), from: fromDeviceId, to: toDeviceId, positionS, queued: moved?.items.length ?? 0 }, 'music playback transferred to a browser')
           return { ok: true as const, streamUrl: streamPath(session.sid, rawOf(session)), sid: session.sid, positionS, session: sessionView(session), queue: moved }
@@ -893,8 +893,8 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
           await seekWhenReady(toDeviceId, positionS + TRANSFER_LEAD_S)
             .catch((err) => log.warn({ err, deviceId: toDeviceId, positionS }, 'music transfer: seek on target failed, playing from start'))
         }
-        // la source ne s'arrête qu'une fois la cible lancée : un échec laisse la musique où elle était
-        // (un navigateur s'arrête lui-même, à la réponse)
+        // the source only stops once the target is started: a failure leaves the music where it was
+        // (a browser stops itself, on the response)
         if (!fromLocal) {
           await execute(fromDeviceId, { type: 'media_player.stop' })
             .catch((err) => log.warn({ err, deviceId: fromDeviceId }, 'music transfer: source stop failed'))
@@ -905,7 +905,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
           Object.assign(queue, { sid: session.sid, heard: null, base })
           queues.set(toDeviceId, queue)
         } else if (body.data.queue) {
-          // la file du navigateur passe au serveur : c'est lui qui enchaînera sur l'enceinte
+          // the browser's queue moves to the server: it is the one that will chain on the speaker
           const { tracks, index, repeat } = body.data.queue
           queues.set(toDeviceId, { items: tracks, index, repeat, base, sid: session.sid, heard: null, busy: false, user: userOf(req) })
           watchPlayers()
@@ -925,8 +925,8 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
     })
 
     /**
-     * En-têtes du « fichier » : taille annoncée et plages acceptées quand la durée est connue ; sinon
-     * un flux vivant sans taille (direct). `connection: close` : une connexion par service ffmpeg.
+     * Headers of the "file": announced size and accepted ranges when the duration is known; otherwise
+     * a live stream without a size (live). `connection: close`: one connection per ffmpeg service.
      */
     const fileHeaders = (session: ProxySession): Record<string, string> => ({
       'content-type': session.mime,
@@ -937,8 +937,8 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
         : { 'accept-ranges': 'none' }),
     })
 
-    // Les lecteurs sondent le fichier par HEAD (taille, plages) : répondre sans lancer ffmpeg —
-    // Fastify dérive sinon HEAD du GET et exécuterait tout le handler, flux compris.
+    // Players probe the file with HEAD (size, ranges): answer without starting ffmpeg — otherwise
+    // Fastify derives HEAD from GET and would run the whole handler, stream included.
     app.head<{ Params: { sid: string } }>('/stream/:sid', async (req, reply) => {
       const session = proxy.get(req.params.sid)
       if (!session) return sendError(reply, 404, 'NOT_FOUND', 'stream session expired or unknown')
@@ -949,9 +949,9 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
     })
 
     /**
-     * Relais SANS réencodage : la source annonce une taille exacte et accepte les plages — le
-     * « fichier » que le MP3 fabrique, elle le fournit déjà. On repasse les octets, en reportant la
-     * plage demandée par l'enceinte. L'extension de l'URL (`.m4a`) fait annoncer `audio/mp4` au Sonos.
+     * Relay WITHOUT re-encoding: the source announces an exact size and accepts ranges — the "file"
+     * the MP3 builds, it already provides. The bytes are passed through, forwarding the range requested
+     * by the speaker. The URL extension (`.m4a`) makes the Sonos announce `audio/mp4`.
      */
     const rawSession = (file: string) => {
       const sid = file.split('.')[0] ?? ''
@@ -994,8 +994,8 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       }
       const len = upstream.headers.get('content-length')
       const contentRange = upstream.headers.get('content-range')
-      // `debug` : un Sonos lit le fichier par plages de 6 Ko, soit une requête par fraction de seconde —
-      // en `info`, ces lignes noyaient le journal. Le lancement d'une piste, lui, reste en `info`.
+      // `debug`: a Sonos reads the file in 6 KB ranges, i.e. one request per fraction of a second — at
+      // `info`, these lines drowned the log. Starting a track, on the other hand, stays at `info`.
       log.debug({
         sid: session.sid, deviceId: session.deviceId, range: range ?? null, status: upstream.status,
         len, contentRange, ua: req.headers['user-agent'] ?? null,
@@ -1008,9 +1008,9 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
         ...(len ? { 'content-length': len } : {}),
         ...(contentRange ? { 'content-range': contentRange } : {}),
       })
-      // Le lecteur coupe quand il veut (pause, changement de piste, fin de sonde) : on arrête alors
-      // de tirer sur la source. PIÈGE : l'annulation fait émettre une AbortError au flux ; sans
-      // écouteur d'erreur, Node la remonte en exception non gérée et le SERVEUR tombe.
+      // The player cuts whenever it wants (pause, track change, end of probe): we then stop pulling on
+      // the source. TRAP: aborting makes the stream emit an AbortError; without an error listener,
+      // Node raises it as an unhandled exception and the SERVER goes down.
       const body = Readable.fromWeb(upstream.body as Parameters<typeof Readable.fromWeb>[0])
       const stop = () => { if (!reply.raw.writableEnded) reply.raw.end() }
       body.on('error', (err) => {
@@ -1025,8 +1025,8 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       const session = proxy.get(req.params.sid)
       if (!session) return sendError(reply, 404, 'NOT_FOUND', 'stream session expired or unknown')
 
-      // Plage d'octets → instant où lancer ffmpeg (à la trame), octets de la première trame à sauter,
-      // et nombre d'octets promis. Sans durée connue : tout, depuis le début, sans taille.
+      // Byte range → instant at which to start ffmpeg (to the frame), bytes of the first frame to skip,
+      // and number of bytes promised. Without a known duration: everything, from the start, no size.
       const range = session.lengthBytes !== null ? parseRange(req.headers.range, session.lengthBytes) : null
       const start = range?.start ?? 0
       const end = range?.end ?? (session.lengthBytes !== null ? session.lengthBytes - 1 : null)
@@ -1036,7 +1036,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
         headers['content-range'] = `bytes ${range.start}-${range.end}/${session.lengthBytes}`
         headers['content-length'] = String(range.end - range.start + 1)
       }
-      // `debug`, comme le relais : une ligne par plage demandée par l'enceinte
+      // `debug`, like the relay: one line per range requested by the speaker
       log.debug({
         sid: session.sid, deviceId: session.deviceId, range: req.headers.range ?? null, startS: Number(startS.toFixed(3)),
         ua: req.headers['user-agent'] ?? null,
@@ -1067,7 +1067,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       unwatch = null
       queues.clear()
       prefetched.clear()
-      // la position la plus récente, pas celle d'il y a 15 s
+      // the most recent position, not the one from 15 s ago
       if (lastTimer) {
         clearTimeout(lastTimer)
         lastTimer = undefined

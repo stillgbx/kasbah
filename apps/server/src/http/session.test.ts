@@ -7,8 +7,8 @@ import { beforeEach, expect, it } from 'vitest'
 import { hashPassword, LoginGuard, publicHostFilter, usersReader } from '../mcp/auth'
 import { createAppSession } from './session'
 
-// L'application sous le nom public : session par cookie, origine contrôlée, blocage des comptes.
-// Sur une application réduite (quelques routes factices) pour maîtriser l'horloge.
+// The application under the public name: cookie session, checked origin, account lockout.
+// On a reduced application (a few fake routes) to control the clock.
 
 const PUBLIC = 'kasbah.example.org'
 const ORIGIN = `https://${PUBLIC}`
@@ -59,18 +59,18 @@ const login = (username = 'lou', password = 'bon-mot-de-passe', next?: string, o
   payload: new URLSearchParams({ username, password, ...(next !== undefined ? { next } : {}) }).toString(),
 })
 
-/** Se connecte et rend l'en-tête `cookie` à renvoyer. */
+/** Signs in and returns the `cookie` header to send back. */
 async function signIn(): Promise<string> {
   const res = await login()
   expect(res.statusCode).toBe(303)
   return String(res.headers['set-cookie']).split(';')[0]!
 }
 
-it('sans session : une page part vers la connexion, l’API et le WebSocket disent 401', async () => {
+it('without a session: a page goes to sign-in, the API and the WebSocket say 401', async () => {
   const page = await req({ method: 'GET', url: '/settings?tab=1', headers: { accept: 'text/html,application/xhtml+xml,*/*;q=0.8' } })
   expect(page.statusCode).toBe(302)
   expect(page.headers.location).toBe('/login?next=%2Fsettings%3Ftab%3D1')
-  // un script de la page : jamais la page de connexion à sa place
+  // a script of the page: never the sign-in page in its place
   const chunk = await req({ method: 'GET', url: '/assets/EnergyView-x.js', headers: { accept: '*/*' } })
   expect(chunk.statusCode).toBe(401)
   expect(chunk.json().error.code).toBe('AUTH_REQUIRED')
@@ -81,18 +81,18 @@ it('sans session : une page part vers la connexion, l’API et le WebSocket dise
   }
 })
 
-it('sert sans session la page de connexion et le manifest de l’app installable', async () => {
+it('serves the sign-in page and the installable app’s manifest without a session', async () => {
   const page = await req({ method: 'GET', url: '/login?next=/settings' })
   expect(page.statusCode).toBe(200)
   expect(page.body).toContain('action="/login"')
   expect(page.body).toContain('name="next" value="/settings"')
-  // l'app s'installe dès cette page : manifest annoncé, et permis par la CSP
+  // the app can be installed from this page already: manifest announced, and allowed by the CSP
   expect(page.body).toContain('<link rel="manifest" href="/manifest.webmanifest">')
   expect(page.headers['content-security-policy']).toContain("manifest-src 'self'")
   expect((await req({ method: 'GET', url: '/manifest.webmanifest' })).statusCode).toBe(200)
 })
 
-it('ouvre une session par un cookie __Host- protégé, et revient où l’on allait', async () => {
+it('opens a session through a protected __Host- cookie, and returns to where you were going', async () => {
   const res = await login('lou', 'bon-mot-de-passe', '/settings?tab=1')
   expect(res.statusCode).toBe(303)
   expect(res.headers.location).toBe('/settings?tab=1')
@@ -106,13 +106,13 @@ it('ouvre une session par un cookie __Host- protégé, et revient où l’on all
   expect((await req({ method: 'GET', url: '/api/session', cookie: c })).json()).toEqual({ user: 'lou' })
 })
 
-it('ne renvoie jamais ailleurs que sur le site après la connexion', async () => {
+it('never redirects anywhere but the site after sign-in', async () => {
   for (const next of ['//evil.example/x', 'https://evil.example', '/\\evil.example', '/login', 'settings']) {
     expect((await login('lou', 'bon-mot-de-passe', next)).headers.location, next).toBe('/')
   }
 })
 
-it('refuse un mauvais mot de passe ou un compte inconnu, sans cookie', async () => {
+it('refuses a wrong password or an unknown account, without a cookie', async () => {
   for (const res of [await login('lou', 'faux'), await login('inconnu')]) {
     expect(res.statusCode).toBe(401)
     expect(res.headers['set-cookie']).toBeUndefined()
@@ -120,7 +120,7 @@ it('refuse un mauvais mot de passe ou un compte inconnu, sans cookie', async () 
   }
 })
 
-it('exige l’origine du site pour se connecter, écrire et ouvrir le WebSocket', async () => {
+it('requires the site origin to sign in, write and open the WebSocket', async () => {
   expect((await login('lou', 'bon-mot-de-passe', '/', null)).statusCode).toBe(403)
   expect((await login('lou', 'bon-mot-de-passe', '/', 'https://nas.example.org')).statusCode).toBe(403)
   const c = await signIn()
@@ -135,14 +135,14 @@ it('exige l’origine du site pour se connecter, écrire et ouvrir le WebSocket'
   }
 })
 
-it('laisse la gestion des comptes au réseau local, même connecté', async () => {
+it('leaves account management to the local network, even when signed in', async () => {
   const c = await signIn()
   const res = await req({ method: 'GET', url: '/api/mcp/users', cookie: c })
   expect(res.statusCode).toBe(403)
   expect(res.json().error.code).toBe('LAN_ONLY')
 })
 
-it('laisse la mise à jour du serveur au réseau local, même connecté', async () => {
+it('leaves the server update to the local network, even when signed in', async () => {
   const c = await signIn()
   for (const [method, url] of [['GET', '/api/system/version'], ['POST', '/api/system/update']] as const) {
     const res = await req({ method, url, cookie: c, origin: ORIGIN })
@@ -151,7 +151,7 @@ it('laisse la mise à jour du serveur au réseau local, même connecté', async 
   }
 })
 
-it('coupe la session quand le compte est retiré ou que son mot de passe change', async () => {
+it('cuts the session when the account is removed or its password changes', async () => {
   const c = await signIn()
   await writeUsers({ lou: 'nouveau-mot-de-passe' })
   expect((await req({ method: 'GET', url: '/api/devices', cookie: c })).statusCode).toBe(401)
@@ -160,7 +160,7 @@ it('coupe la session quand le compte est retiré ou que son mot de passe change'
   expect((await req({ method: 'GET', url: '/api/devices', cookie: d })).statusCode).toBe(401)
 })
 
-it('ferme la session à la déconnexion', async () => {
+it('closes the session on sign-out', async () => {
   const c = await signIn()
   const out = await req({ method: 'POST', url: '/logout', cookie: c, origin: ORIGIN })
   expect(out.statusCode).toBe(303)
@@ -169,7 +169,7 @@ it('ferme la session à la déconnexion', async () => {
   expect((await req({ method: 'GET', url: '/api/devices', cookie: c })).statusCode).toBe(401)
 })
 
-it('prolonge la session à l’usage, au plus une fois par jour, et la perd après 90 jours sans visite', async () => {
+it('extends the session with use, at most once a day, and loses it after 90 days without a visit', async () => {
   const c = await signIn()
   clock += DAY / 2
   expect((await req({ method: 'GET', url: '/api/devices', cookie: c })).headers['set-cookie']).toBeUndefined()
@@ -183,7 +183,7 @@ it('prolonge la session à l’usage, au plus une fois par jour, et la perd apr�
   expect((await req({ method: 'GET', url: '/api/devices', cookie: c })).statusCode).toBe(401)
 })
 
-it('bloque un compte après trop d’échecs d’affilée, même avec le bon mot de passe, le temps réglé', async () => {
+it('locks an account after too many failures in a row, even with the right password, for the configured time', async () => {
   for (let i = 0; i < 3; i++) expect((await login('lou', 'faux')).statusCode).toBe(401)
   const locked = await login()
   expect(locked.statusCode).toBe(429)
@@ -192,7 +192,7 @@ it('bloque un compte après trop d’échecs d’affilée, même avec le bon mot
   expect((await login()).statusCode).toBe(303)
 })
 
-it('ne bloque que le compte visé, et remet le compteur à zéro après une connexion réussie', async () => {
+it('locks only the targeted account, and resets the counter after a successful sign-in', async () => {
   await writeUsers({ lou: 'bon-mot-de-passe', sam: 'autre-mot-de-passe' })
   for (let i = 0; i < 3; i++) await login('lou', 'faux')
   expect((await login('sam', 'autre-mot-de-passe')).statusCode).toBe(303)
@@ -203,13 +203,13 @@ it('ne bloque que le compte visé, et remet le compteur à zéro après une conn
   expect((await login()).statusCode).toBe(303)
 })
 
-it('ne bloque jamais un compte quand le seuil vaut 0', async () => {
+it('never locks an account when the threshold is 0', async () => {
   await build(0)
   for (let i = 0; i < 9; i++) await login('lou', 'faux')
   expect((await login()).statusCode).toBe(303)
 })
 
-it('ne change rien sur le réseau local', async () => {
+it('changes nothing on the local network', async () => {
   expect((await req({ method: 'GET', url: '/api/devices', host: 'kasbah:8787' })).statusCode).toBe(200)
   expect((await req({ method: 'GET', url: '/api/session', host: 'kasbah:8787' })).json()).toEqual({ user: null })
   expect((await req({ method: 'GET', url: '/login', host: 'kasbah:8787' })).headers.location).toBe('/')

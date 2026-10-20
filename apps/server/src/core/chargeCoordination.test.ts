@@ -10,7 +10,7 @@ import { PluginHost } from './plugin-host'
 import { DeviceRegistry } from './registry'
 import { SceneRegistry } from './scene-registry'
 
-// « Charger » une voiture branchée sur une borne en charge verte, sans soleil : il faut forcer la borne.
+// "Start charging" on a car plugged into a charger in green charging mode, without sun: the charger must be forced.
 
 const HOME = { lat: 45.18, lon: 5.72, alt: 0 }
 const flush = async () => { for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0)) }
@@ -32,32 +32,32 @@ function world(o: { vehicle?: Record<string, unknown>; chargers?: { d: DeviceDes
 
 const start: Command = { type: 'vehicle.start_charge' }
 
-describe('quelle borne forcer', () => {
-  it('voiture branchée, pas en charge, à la maison, une borne branchée sans charger : celle-là', () => {
+describe('which charger to force', () => {
+  it('car plugged in, not charging, at home, one charger plugged in without charging: that one', () => {
     expect(chargerToForce(car.id, start, world().registry.list(), HOME)).toBe('evse:a')
   })
 
-  it('rien pour une autre commande, et jamais pour l\'arrêt (il bloquerait la charge verte jusqu\'au débranchement)', () => {
+  it('nothing for another command, and never for stopping (it would lock green charging until unplugging)', () => {
     const devices = world().registry.list()
     expect(chargerToForce(car.id, { type: 'vehicle.stop_charge' }, devices, HOME)).toBeUndefined()
     expect(chargerToForce(car.id, { type: 'vehicle.wake' }, devices, HOME)).toBeUndefined()
   })
 
-  it('rien si la voiture est débranchée, déjà en charge, ou loin de la maison', () => {
+  it('nothing if the car is unplugged, already charging, or far from home', () => {
     expect(chargerToForce(car.id, start, world({ vehicle: { pluggedIn: false } }).registry.list(), HOME)).toBeUndefined()
     expect(chargerToForce(car.id, start, world({ vehicle: { charging: true } }).registry.list(), HOME)).toBeUndefined()
     const away = { location: { lat: 47.4, lon: 5.2, at: 0 } }
     expect(chargerToForce(car.id, start, world({ vehicle: away }).registry.list(), HOME)).toBeUndefined()
   })
 
-  it('position inconnue : on la croit à la maison', () => {
+  it('unknown position: we believe it is at home', () => {
     const { registry } = world()
     const devices = registry.list().map((e) => e.descriptor.id === car.id
       ? { ...e, state: { ...e.state, location: undefined } } : e) as ReturnType<typeof registry.list>
     expect(chargerToForce(car.id, start, devices, HOME)).toBe('evse:a')
   })
 
-  it('rien si aucune borne n\'attend, si elle n\'est pas pilotable, ou si DEUX attendent (on ne devine pas)', () => {
+  it('nothing if no charger is waiting, if it is not controllable, or if TWO are waiting (we don\'t guess)', () => {
     expect(chargerToForce(car.id, start, world({ chargers: [{ d: evse('a'), status: 'charging' }] }).registry.list(), HOME)).toBeUndefined()
     expect(chargerToForce(car.id, start, world({ chargers: [{ d: evse('a', []), status: 'connected' }] }).registry.list(), HOME)).toBeUndefined()
     const two = [{ d: evse('a'), status: 'connected' }, { d: evse('b'), status: 'connected' }]
@@ -65,22 +65,22 @@ describe('quelle borne forcer', () => {
   })
 })
 
-/** La R5 : elle ne sait pas arrêter sa charge à distance, c'est la borne qui l'arrête. */
+/** The R5: it cannot stop its charge remotely, the charger stops it. */
 const r5: DeviceDescriptor = { ...car, meta: { vehicle: { stopViaCharger: true } } }
 const stop: Command = { type: 'vehicle.stop_charge' }
 const charging = [{ d: evse('a'), status: 'charging' }]
 
-describe('quelle borne arrêter à la place du véhicule', () => {
-  it('véhicule qui s\'arrête par la borne, branché, à la maison, UNE borne en charge : celle-là', () => {
+describe('which charger to stop in place of the vehicle', () => {
+  it('vehicle that stops through the charger, plugged in, at home, ONE charger charging: that one', () => {
     expect(chargerToStop(car.id, stop, world({ car: r5, chargers: charging }).registry.list(), HOME)).toBe('evse:a')
   })
 
-  it('jamais pour un véhicule qui s\'arrête lui-même, ni pour le démarrage', () => {
+  it('never for a vehicle that stops itself, nor for starting', () => {
     expect(chargerToStop(car.id, stop, world({ chargers: charging }).registry.list(), HOME)).toBeUndefined()
     expect(chargerToStop(car.id, start, world({ car: r5, chargers: charging }).registry.list(), HOME)).toBeUndefined()
   })
 
-  it('rien si la borne ne charge pas, si DEUX chargent, si le véhicule est débranché ou loin', () => {
+  it('nothing if the charger is not charging, if TWO are charging, if the vehicle is unplugged or far away', () => {
     expect(chargerToStop(car.id, stop, world({ car: r5 }).registry.list(), HOME)).toBeUndefined()
     const two = [{ d: evse('a'), status: 'charging' }, { d: evse('b'), status: 'charging' }]
     expect(chargerToStop(car.id, stop, world({ car: r5, chargers: two }).registry.list(), HOME)).toBeUndefined()
@@ -90,14 +90,14 @@ describe('quelle borne arrêter à la place du véhicule', () => {
   })
 })
 
-describe('limite de charge atteinte', () => {
+describe('charge limit reached', () => {
   const at = (v: Record<string, unknown>) => ({ kind: 'vehicle', available: true, updatedAt: 0, pluggedIn: true, ...v }) as never
-  it('la voiture à sa limite et qui ne charge plus', () => {
+  it('the car at its limit and no longer charging', () => {
     expect(chargeLimitReached(at({ soc: 50, chargeLimit: 50, charging: false }))).toBe(true)
-    // la R5 du 2026-10-02 s'est arrêtée à 51 % pour 50 %
+    // the R5 on 2026-10-02 stopped at 51 % for 50 %
     expect(chargeLimitReached(at({ soc: 51, chargeLimit: 50, charging: false }))).toBe(true)
   })
-  it('pas tant qu\'elle charge encore, ni sous sa limite, ni limite ou niveau inconnus', () => {
+  it('not while it is still charging, nor below its limit, nor with an unknown limit or level', () => {
     expect(chargeLimitReached(at({ soc: 50, chargeLimit: 50, charging: true }))).toBe(false)
     expect(chargeLimitReached(at({ soc: 40, chargeLimit: 50, charging: false }))).toBe(false)
     expect(chargeLimitReached(at({ soc: 50, charging: false }))).toBe(false)
@@ -105,37 +105,37 @@ describe('limite de charge atteinte', () => {
   })
 })
 
-describe('une voiture qui se dit en charge, démentie par les bornes', () => {
+describe('a car that says it is charging, contradicted by the chargers', () => {
   const claimed = { soc: 52, pluggedIn: true, charging: true }
   const at = (w: ReturnType<typeof world>) => w.registry.get(car.id)!.state
   const refuted = (w: ReturnType<typeof world>) => chargingRefuted(at(w), w.registry.list(), HOME)
 
-  it('à la maison, branchée, et aucune borne ne charge : démentie (la R5 du 2026-10-02)', () => {
+  it('at home, plugged in, and no charger is charging: contradicted (the R5 on 2026-10-02)', () => {
     expect(refuted(world({ vehicle: claimed }))).toBe(true)
     expect(refuted(world({ vehicle: claimed, chargers: [{ d: evse('a'), status: 'connected' }, { d: evse('b'), status: 'disconnected' }] }))).toBe(true)
   })
-  it('pas quand une borne charge : on ne sait pas laquelle des voitures elle sert', () => {
+  it('not when a charger is charging: we don\'t know which of the cars it serves', () => {
     expect(refuted(world({ vehicle: claimed, chargers: [{ d: evse('a'), status: 'charging' }] }))).toBe(false)
   })
-  it('pas sans borne, ni avec une borne injoignable', () => {
+  it('not without a charger, nor with an unreachable charger', () => {
     expect(refuted(world({ vehicle: claimed, chargers: [] }))).toBe(false)
     const w = world({ vehicle: claimed })
     w.registry.setAvailable('evse', 'a', false)
     expect(refuted(w)).toBe(false)
   })
-  it('pas loin de la maison, ni sans position connue : elle peut charger ailleurs', () => {
+  it('not far from home, nor without a known position: it may be charging elsewhere', () => {
     expect(refuted(world({ vehicle: { ...claimed, location: { lat: 48.85, lon: 2.35, at: 0 } } }))).toBe(false)
     expect(refuted(world({ vehicle: { ...claimed, location: undefined } }))).toBe(false)
   })
-  it('pas quand la voiture MESURE sa puissance de charge (Tesla) : elle sait mieux que nous', () => {
+  it('not when the car MEASURES its charging power (Tesla): it knows better than we do', () => {
     expect(refuted(world({ vehicle: { ...claimed, chargePowerW: 3200 } }))).toBe(false)
   })
-  it('rien à démentir quand elle ne se dit pas en charge', () => {
+  it('nothing to contradict when it does not say it is charging', () => {
     expect(refuted(world({ vehicle: { charging: false } }))).toBe(false)
   })
 })
 
-describe('l\'hôte relaie', () => {
+describe('the host relays', () => {
   async function hosted(evseFails = false) {
     const bus = new Bus()
     const { registry, clock } = world({ bus })
@@ -156,14 +156,14 @@ describe('l\'hôte relaie', () => {
     })
     await host.startAll()
     await flush()
-    // les plugins de test ne publient rien : on remet la scène après leur `discover` vide
+    // the test plugins publish nothing: we set the stage again after their empty `discover`
     const w = world({ bus: new Bus() })
     registry.register('car', [car]); registry.register('evse', [evse('a')])
     for (const e of w.registry.list()) registry.applyPatch(e.descriptor.id, e.state as never)
     return { host, sent, registry, ctxs }
   }
 
-  it('« Arrêter » un véhicule qui s\'arrête par la borne : la borne SEULE, rien au véhicule', async () => {
+  it('"Stop charging" on a vehicle that stops through the charger: the charger ONLY, nothing to the vehicle', async () => {
     const { host, sent, registry } = await hosted()
     registry.register('car', [r5])
     registry.applyPatch('evse:a', { status: 'charging' } as never)
@@ -172,21 +172,21 @@ describe('l\'hôte relaie', () => {
     await host.stopAll()
   })
 
-  it('« Charger » force la borne PUIS lance la voiture', async () => {
+  it('"Start charging" forces the charger THEN starts the car', async () => {
     const { host, sent } = await hosted()
     await host.execute(car.id, start)
     expect(sent).toEqual(['evse:a ev_charger.start', 'car:1 vehicle.start_charge'])
     await host.stopAll()
   })
 
-  it('une borne en échec n\'empêche pas la commande à la voiture', async () => {
+  it('a failing charger does not prevent the command to the car', async () => {
     const { host, sent } = await hosted(true)
     await host.execute(car.id, start)
     expect(sent).toEqual(['car:1 vehicle.start_charge'])
     await host.stopAll()
   })
 
-  it('la voiture forcée arrive à sa limite : la borne reprend son mode, une seule fois', async () => {
+  it('the forced car reaches its limit: the charger goes back to its mode, only once', async () => {
     const { host, sent, registry } = await hosted()
     await host.execute(car.id, start)
     registry.applyPatch(car.id, { soc: 50, chargeLimit: 50, charging: true } as never)
@@ -200,7 +200,7 @@ describe('l\'hôte relaie', () => {
     await host.stopAll()
   })
 
-  it('rien sans forçage par Kasbah, ni après un débranchement (la borne s\'en charge)', async () => {
+  it('nothing without forcing by Kasbah, nor after unplugging (the charger handles it)', async () => {
     const { host, sent, registry } = await hosted()
     registry.applyPatch(car.id, { soc: 80, chargeLimit: 80, charging: false } as never)
     await flush()
@@ -212,7 +212,7 @@ describe('l\'hôte relaie', () => {
     await host.stopAll()
   })
 
-  it('« en charge » publié par le véhicule est démenti tant qu\'aucune borne ne charge, et rendu quand l\'une charge', async () => {
+  it('"charging" published by the vehicle is contradicted as long as no charger is charging, and restored when one charges', async () => {
     const { host, registry, ctxs } = await hosted()
     const charging = () => (registry.get(car.id)!.state as { charging?: boolean }).charging
     ctxs.car!.emitState('1', { charging: true, chargeMinutesRemaining: 480 } as never)
@@ -222,7 +222,7 @@ describe('l\'hôte relaie', () => {
     expect(charging()).toBe(true)
     registry.applyPatch('evse:a', { status: 'connected' } as never)
     expect(charging()).toBe(false)
-    // le véhicule se dit à l'arrêt : plus rien à rendre quand la borne charge (pour une autre voiture)
+    // the vehicle says it has stopped: nothing left to restore when the charger charges (for another car)
     ctxs.car!.emitState('1', { charging: false } as never)
     registry.applyPatch('evse:a', { status: 'charging' } as never)
     expect(charging()).toBe(false)

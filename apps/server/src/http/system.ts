@@ -5,21 +5,21 @@ import { writeFileAtomic } from '../core/atomic-file'
 import { REPO_ROOT } from '../core/paths'
 import { sendError } from './errors'
 
-// Version en service et mise à jour depuis Réglages. Le serveur ne se met pas à jour lui-même : il
-// transmet la demande au superviseur qui l'a lancé (`scripts/supervisor.mjs`, canal IPC), qui fait
-// pull, `npm ci`, build et redémarrage, et écrit l'avancement dans `statusFile`. Sans superviseur
-// (`npm start`, `npm run dev`), la version se lit mais la mise à jour est refusée.
-// Réservé au réseau local (`LAN_ONLY` de `session.ts`), comme la gestion des comptes.
+// Running version and update from Settings. The server does not update itself: it forwards the
+// request to the supervisor that started it (`scripts/supervisor.mjs`, IPC channel), which does the
+// pull, `npm ci`, build and restart, and writes the progress into `statusFile`. Without a supervisor
+// (`npm start`, `npm run dev`), the version can be read but the update is refused.
+// Restricted to the local network (`LAN_ONLY` in `session.ts`), like account management.
 
 export interface Commit { sha: string; subject: string; date: string }
 
 export type UpdateStep = 'fetch' | 'deps' | 'build' | 'restart' | 'rollback'
 
-/** Écrit par le superviseur, relu par Réglages pendant la mise à jour. */
+/** Written by the supervisor, re-read by Settings during the update. */
 export interface UpdateStatus {
   state: 'running' | 'done' | 'failed'
   step: UpdateStep | null
-  /** Les étapes prévues, connues une fois les commits récupérés (`deps` seulement si le lock change). */
+  /** The planned steps, known once the commits are fetched (`deps` only if the lock changes). */
   steps: UpdateStep[]
   failedStep: UpdateStep | null
   from: string | null
@@ -28,7 +28,7 @@ export interface UpdateStatus {
   finishedAt: number | null
   error: string | null
   rolledBack: boolean
-  /** Le superviseur lui-même a changé : pris en compte à son prochain démarrage. */
+  /** The supervisor itself changed: taken into account at its next start. */
   supervisorChanged: boolean
   log: string[]
 }
@@ -36,16 +36,16 @@ export interface UpdateStatus {
 export interface UpdateRequest { type: 'update'; statusFile: string; running: string | null }
 
 export interface SystemRoutesDeps {
-  /** Canal vers le superviseur ; absent quand le serveur a été lancé sans lui. */
+  /** Channel to the supervisor; absent when the server was started without it. */
   supervisor?: ((msg: UpdateRequest) => void) | undefined
   statusFile: string
   git?: (args: string[]) => Promise<string>
   now?: () => number
 }
 
-/** Une mise à jour « en cours » plus vieille que ça a été interrompue (superviseur arrêté en route). */
+/** A "running" update older than this was interrupted (supervisor stopped midway). */
 const STALE_MS = 30 * 60_000
-/** `git fetch` au plus une fois par minute, sauf demande explicite. */
+/** `git fetch` at most once a minute, unless explicitly requested. */
 const FETCH_TTL_MS = 60_000
 const MAX_COMMITS = 50
 const FORMAT = '--format=%H%x1f%s%x1f%cI'
@@ -65,7 +65,7 @@ const parseCommits = (out: string): Commit[] => out.split('\n').filter(Boolean).
 export function registerSystemRoutes(app: FastifyInstance, deps: SystemRoutesDeps): void {
   const git = deps.git ?? runGit
   const now = deps.now ?? Date.now
-  // le commit chargé : HEAD au démarrage, pas celui d'un `git pull` fait depuis
+  // the loaded commit: HEAD at startup, not that of a `git pull` done since
   const running = git(['log', '-1', FORMAT]).then((out) => parseCommits(out)[0] ?? null, () => null)
   let fetched: { at: number; available: Commit[] } | null = null
   let lastStatus: UpdateStatus | null = null
@@ -77,7 +77,7 @@ export function registerSystemRoutes(app: FastifyInstance, deps: SystemRoutesDep
         ? { ...s, state: 'failed', failedStep: s.step, step: null, error: 'interrupted' }
         : s
     } catch (err) {
-      // absent : jamais de mise à jour ; illisible (écrit à l'instant) : la dernière lecture tient
+      // absent: never any update; unreadable (being written right now): the last reading holds
       if ((err as NodeJS.ErrnoException).code === 'ENOENT') lastStatus = null
     }
     return lastStatus
@@ -105,7 +105,7 @@ export function registerSystemRoutes(app: FastifyInstance, deps: SystemRoutesDep
     if (!deps.supervisor) return sendError(reply, 409, 'NOT_SUPERVISED', 'the server was not started by scripts/supervisor.mjs')
     if ((await readStatus())?.state === 'running') return sendError(reply, 409, 'UPDATE_RUNNING', 'an update is already running')
     const current = await running
-    // écrit tout de suite : Réglages relit l'état dès la réponse, avant que le superviseur l'ait repris
+    // written right away: Settings re-reads the status upon the response, before the supervisor has taken it over
     const status: UpdateStatus = {
       state: 'running', step: 'fetch', steps: ['fetch'], failedStep: null,
       from: current?.sha ?? null, to: null, startedAt: now(), finishedAt: null,

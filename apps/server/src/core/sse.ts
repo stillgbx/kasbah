@@ -2,12 +2,12 @@ import type { Logger } from 'pino'
 import { createBackoff } from './backoff'
 import { sleep, type Clock } from './clock'
 
-// Client Server-Sent Events minimal sur fetch (compatible dispatcher undici → certificat auto-signé Hue).
-// Le paquet `eventsource` ne sait pas prendre un dispatcher, d'où cette implémentation.
+// Minimal Server-Sent Events client on fetch (compatible with an undici dispatcher → Hue self-signed
+// certificate). The `eventsource` package cannot take a dispatcher, hence this implementation.
 
 export interface SseEvent { id?: string; event?: string; data: string }
 
-/** Découpe un flux texte SSE en événements (gère les `data:` répartis sur plusieurs chunks). */
+/** Splits an SSE text stream into events (handles `data:` spread over several chunks). */
 export async function* parseSse(stream: ReadableStream<Uint8Array>): AsyncGenerator<SseEvent> {
   const reader = stream.getReader()
   const decoder = new TextDecoder()
@@ -49,7 +49,7 @@ export async function* parseSse(stream: ReadableStream<Uint8Array>): AsyncGenera
   }
 }
 
-/** Sous-ensemble de Response suffisant ici : permet d'injecter un faux fetch (tests) ou undici. */
+/** Subset of Response sufficient here: allows injecting a fake fetch (tests) or undici. */
 export interface MinimalResponse {
   ok: boolean
   status: number
@@ -68,14 +68,14 @@ export interface ConnectSseOptions {
   clock: Clock
   logger?: Logger
   onEvent: (ev: SseEvent) => void
-  /** Appelé à chaque (re)connexion réussie ; `isReconnect` permet de resynchroniser l'état manqué. */
+  /** Called on each successful (re)connection; `isReconnect` allows resyncing the missed state. */
   onOpen?: (isReconnect: boolean) => void | Promise<void>
   onDown?: (attempts: number) => void
-  /** Durée de connexion au-delà de laquelle le backoff est remis à zéro. */
+  /** Connection duration beyond which the backoff is reset. */
   stableAfterMs?: number
 }
 
-/** Boucle de connexion SSE avec reconnexion exponentielle ; se termine quand `signal` est annulé. */
+/** SSE connection loop with exponential reconnection; ends when `signal` is aborted. */
 export async function connectSse(opts: ConnectSseOptions): Promise<void> {
   const backoff = createBackoff({ initialMs: 1000, maxMs: 30_000 })
   let connections = 0

@@ -13,10 +13,10 @@ const scene = (id: string, dynamic: boolean, autoDynamic = false) => ({
   id: `hue:${id}`, pluginId: 'hue', externalId: id, name: id, dynamic, autoDynamic, swatches: [],
 })
 
-/** Règle : le défaut s'applique aux ambiances QUI APPARAISSENT, jamais à celles déjà connues. */
+/** Rule: the default applies to light scenes THAT APPEAR, never to those already known. */
 describe('scene seeder', () => {
   async function harness(autoDynamicForNewScenes: boolean) {
-    // le réglage vit dans house.json : ici une valeur qu'on peut changer en cours de test
+    // the setting lives in house.json: here a value that can be changed during the test
     const settings = { ...DEFAULT_PLUGIN_SETTINGS, enabled: true, autoDynamicForNewScenes }
     const settingsOf = () => settings
     const bus = new Bus()
@@ -40,7 +40,7 @@ describe('scene seeder', () => {
     try {
       h.registry.register('hue', [scene('a', true), scene('b', true, true)])
       await flush()
-      // « nouvelle » = créée chez le fabricant (d) OU qui vient de gagner une palette (c)
+      // "new" = created at the vendor (d) OR that just gained a palette (c)
       h.registry.register('hue', [scene('a', true), scene('b', true, true), scene('c', true), scene('d', true, true)])
       await flush()
       expect(h.updateScene.mock.calls).toEqual([['hue:c', { autoDynamic: true }]])
@@ -55,7 +55,7 @@ describe('scene seeder', () => {
       h.registry.register('hue', [scene('a', true), scene('b', true)])
       await flush()
       expect(h.updateScene).not.toHaveBeenCalled()
-      // …et l'activer plus tard ne rattrape PAS les ambiances déjà connues
+      // …and turning it on later does NOT catch up the light scenes already known
       h.settings.autoDynamicForNewScenes = true
       h.registry.register('hue', [scene('a', true), scene('b', true)])
       await flush()

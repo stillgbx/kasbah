@@ -9,11 +9,11 @@ import { PluginHost } from './plugin-host'
 import { DeviceRegistry } from './registry'
 import { SceneRegistry } from './scene-registry'
 
-// Démarrage raté d'un plugin : l'hôte retente, de plus en plus espacé, sauf si c'est un appairage.
+// Failed plugin start: the host retries, more and more spaced out, unless it is a pairing issue.
 
 const flush = async () => { for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0)) }
 
-/** Plugin dont `discover` échoue les `failures` premières fois, avec l'erreur donnée. */
+/** Plugin whose `discover` fails the first `failures` times, with the given error. */
 function flaky(failures: number, error: () => Error) {
   const calls = { discover: 0, stop: 0 }
   const plugin: DevicePlugin = {
@@ -48,14 +48,14 @@ describe('plugin host start retry', () => {
     const h = host(plugin, clock)
     await h.startAll()
     expect((await h.health()).flaky).toMatchObject({ status: 'error', detail: expect.stringContaining('retry in') })
-    clock.advance(1200); await flush()                      // 2ᵉ essai, raté aussi : délai doublé
+    clock.advance(1200); await flush()                      // 2nd attempt, failed too: delay doubled
     expect(calls.discover).toBe(2)
     clock.advance(1200); await flush()
-    expect(calls.discover).toBe(2)                          // pas encore : ~2 s cette fois
+    expect(calls.discover).toBe(2)                          // not yet: ~2 s this time
     clock.advance(1200); await flush()
     expect(calls.discover).toBe(3)
     expect((await h.health()).flaky).toMatchObject({ status: 'ok' })
-    expect(calls.stop).toBeGreaterThanOrEqual(2)            // chaque essai repart d'un plugin arrêté
+    expect(calls.stop).toBeGreaterThanOrEqual(2)            // each attempt starts again from a stopped plugin
     await h.stopAll()
   })
 
@@ -103,7 +103,7 @@ describe('plugin host startup', () => {
     })
     const all = h.startAll()
     await flush()
-    expect((await h.health()).fast).toMatchObject({ status: 'ok' })  // démarré sans attendre `slow`
+    expect((await h.health()).fast).toMatchObject({ status: 'ok' })  // started without waiting for `slow`
     expect((await h.health()).slow).not.toMatchObject({ status: 'ok' })
     release()
     await all
@@ -127,7 +127,7 @@ describe('plugin host health per account', () => {
     expect((await h.health()).flaky).toMatchObject({ status: 'needs_pairing', detail: 'house: link the account' })
     expect((await h.health('bob')).flaky).toMatchObject({ status: 'ok', detail: 'bob: linked' })
     expect((await h.inventory('bob'))[0]!.health).toMatchObject({ status: 'ok', detail: 'bob: linked' })
-    // une santé par compte illisible ne fait pas tomber l'inventaire
+    // an unreadable per-account health does not bring down the inventory
     expect((await h.inventory('eve'))[0]!.health).toMatchObject({ status: 'needs_pairing' })
     await h.stopAll()
   })

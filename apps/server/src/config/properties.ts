@@ -4,10 +4,10 @@ import { PROPERTY_KINDS, newHouseJson, parseHouse, propertyIdFor, type NewProper
 import type { House } from '@kasbah/shared'
 import { REPO_ROOT, stateFile } from '../core/paths'
 
-// Les PROPRIÉTÉS qu'un serveur lancé sans `KASBAH_HOUSE_FILE` sait faire vivre, une à la fois : les
-// DÉMONSTRATIONS (`house/demos/`, en lecture seule) et les propriétés RÉELLES du poste
-// (`house/properties/`). Le choix et le mode montré vivent dans `catalog.ts`. Chaque maison dit
-// elle-même quel parc simulé la peuple (`meta.demo.scenario`) : le web lit le même champ.
+// The PROPERTIES that a server started without `KASBAH_HOUSE_FILE` can run, one at a time: the
+// DEMOS (`house/demos/`, read-only) and the machine's REAL properties (`house/properties/`). The
+// choice and the mode shown live in `catalog.ts`. Each house says itself which simulated device set
+// populates it (`meta.demo.scenario`): the web app reads the same field.
 
 export const DEMO_HOUSE_FILES = ['tilleuls', 'embruns', 'belvedere'].map((id) => resolve(REPO_ROOT, `house/demos/${id}.json`))
 
@@ -15,7 +15,7 @@ export interface DemoProperty {
   id: string
   name: string
   kind: PropertyKind
-  /** Scénario du plugin `mock` qui peuple la maison. */
+  /** Scenario of the `mock` plugin that populates the house. */
   scenario: string
   path: string
 }
@@ -31,31 +31,31 @@ export async function loadDemoProperties(files = DEMO_HOUSE_FILES): Promise<Demo
 }
 
 /**
- * Les propriétés RÉELLES du poste — créées, dupliquées, ou une maison existante qu'on y range : un
- * fichier chacune (avec ses automatisations à côté), dans un dossier ignoré par git. Un dossier à
- * part plutôt que `house/`, qui porte aussi la fixture des tests, des sauvegardes et l'historique.
+ * The machine's REAL properties — created, duplicated, or an existing house put there: one file each
+ * (with its automations next to it), in a folder ignored by git. A separate folder rather than
+ * `house/`, which also holds the test fixture, backups and history.
  */
 export const LOCAL_PROPERTIES_DIR = resolve(REPO_ROOT, 'house/properties')
 
-/** Une propriété que le serveur sait faire vivre ; `demo` = une démonstration, en lecture seule. */
+/** A property the server can run; `demo` = a demo, read-only. */
 export interface PropertyEntry {
   id: string
   name: string
   kind: PropertyKind
-  /** Scénario du plugin `mock` (`meta.demo.scenario`) : une démo, ou sa copie, garde son parc simulé. */
+  /** Scenario of the `mock` plugin (`meta.demo.scenario`): a demo, or its copy, keeps its simulated device set. */
   scenario?: string
   path: string
   demo: boolean
 }
 
 type RawProperty = { id?: unknown; name?: unknown; meta?: { kind?: unknown; demo?: { scenario?: unknown; kind?: unknown } } }
-/** Le type se lit dans `meta.demo.kind` (démos) ou `meta.kind` (propriété créée) ; maison par défaut. */
+/** The kind is read from `meta.demo.kind` (demos) or `meta.kind` (created property); house by default. */
 function kindOf(raw: RawProperty): PropertyKind {
   const k = raw.meta?.demo?.kind ?? raw.meta?.kind
   return (PROPERTY_KINDS as readonly unknown[]).includes(k) ? k as PropertyKind : 'house'
 }
 
-/** Les propriétés locales, triées par nom ; un fichier illisible ou sans id est ignoré. */
+/** The local properties, sorted by name; an unreadable file or one without an id is ignored. */
 export async function loadLocalProperties(dir = LOCAL_PROPERTIES_DIR): Promise<PropertyEntry[]> {
   let names: string[]
   try { names = await readdir(dir) }
@@ -72,9 +72,9 @@ export async function loadLocalProperties(dir = LOCAL_PROPERTIES_DIR): Promise<P
   return out.sort((a, b) => a.name.localeCompare(b.name))
 }
 
-/** Écrit une maison neuve, validée, dans le dossier local ; son id est tiré du nom. */
+/** Writes a new, validated house into the local folder; its id is derived from the name. */
 async function writeLocal(dir: string, id: string, doc: unknown): Promise<string> {
-  parseHouse(doc)                                      // une maison invalide n'est jamais écrite
+  parseHouse(doc)                                      // an invalid house is never written
   await mkdir(dir, { recursive: true })
   const path = join(dir, `${id}.json`)
   await writeFile(`${path}.tmp`, `${JSON.stringify(doc, null, 2)}\n`, 'utf8')
@@ -82,14 +82,14 @@ async function writeLocal(dir: string, id: string, doc: unknown): Promise<string
   return path
 }
 
-/** Crée la maison d'une installation neuve (`newHouseJson`) ; rend son id. */
+/** Creates the house of a fresh installation (`newHouseJson`); returns its id. */
 export async function createLocalProperty(body: NewPropertyBody, taken: Iterable<string>, dir = LOCAL_PROPERTIES_DIR): Promise<string> {
   const id = propertyIdFor(body.name, taken)
   await writeLocal(dir, id, newHouseJson(id, body))
   return id
 }
 
-/** Copie modifiable d'une propriété (une démo, le plus souvent) : même maison, même parc simulé, autre nom. */
+/** Editable copy of a property (a demo, most often): same house, same simulated device set, another name. */
 export async function duplicateProperty(source: PropertyEntry, name: string, taken: Iterable<string>, dir = LOCAL_PROPERTIES_DIR): Promise<string> {
   const id = propertyIdFor(name, taken)
   const doc = JSON.parse(await readFile(source.path, 'utf8')) as Record<string, unknown>
@@ -98,19 +98,19 @@ export async function duplicateProperty(source: PropertyEntry, name: string, tak
 }
 
 /**
- * Le mode montré et la propriété retenue dans CHACUN : revenir en démo rouvre la dernière démo, revenir
- * au réel rouvre sa maison. Survit à un redémarrage. `mode` absent = jamais choisi (premier lancement).
+ * The mode shown and the property remembered in EACH: going back to demo reopens the last demo, going
+ * back to real reopens its house. Survives a restart. `mode` absent = never chosen (first launch).
  */
 export interface ModeState { mode?: PropertyMode; demo?: string; real?: string }
 const MODE_FILE = 'property-mode.json'
-/** Avant les deux modes, seule la propriété montrée était retenue : on la reprend une fois. */
+/** Before the two modes, only the property shown was remembered: we pick it up once. */
 const LEGACY_FILE = 'demo-property.json'
 
 export async function readModeState(file = stateFile(MODE_FILE), legacy = stateFile(LEGACY_FILE)): Promise<ModeState> {
-  try { return JSON.parse(await readFile(file, 'utf8')) as ModeState } catch { /* pas encore écrit */ }
+  try { return JSON.parse(await readFile(file, 'utf8')) as ModeState } catch { /* not written yet */ }
   try {
     const active = (JSON.parse(await readFile(legacy, 'utf8')) as { active?: string }).active
-    return active ? { demo: active, real: active } : {}   // le catalogue garde celle qui existe dans chaque mode
+    return active ? { demo: active, real: active } : {}   // the catalog keeps the one that exists in each mode
   } catch { return {} }
 }
 
@@ -120,25 +120,25 @@ export async function writeModeState(state: ModeState, file = stateFile(MODE_FIL
   await rename(`${file}.tmp`, file)
 }
 
-/** Ce que les routes savent des propriétés. Absent = une seule maison, celle du fichier. */
+/** What the routes know about properties. Absent = a single house, the file's. */
 export interface PropertyHost {
   list(): PropertiesResponse
-  /** Bascule APRÈS la réponse : le serveur se reconstruit sur l'autre maison. */
+  /** Switches AFTER the response: the server rebuilds itself on the other house. */
   select(id: string): void
   /**
-   * La propriété existe, quel que soit son mode. `list()` ne montre que le mode courant : une
-   * propriété réelle qu'on vient de créer depuis le mode démo n'y figure pas, et on bascule pourtant dessus.
+   * The property exists, whatever its mode. `list()` shows only the current mode: a real property
+   * just created from demo mode is not in it, and yet we switch to it.
    */
   has(id: string): boolean
-  /** Crée une propriété neuve ; rend son id (la bascule est un `select` à part). */
+  /** Creates a new property; returns its id (switching is a separate `select`). */
   create(body: NewPropertyBody): Promise<string>
-  /** Duplique une propriété sous un autre nom ; rend l'id de la copie. */
+  /** Duplicates a property under another name; returns the copy's id. */
   duplicate(id: string, name: string): Promise<string>
-  /** Passe en démo ou en réel, APRÈS la réponse (même reconstruction qu'une bascule). */
+  /** Switches to demo or real, AFTER the response (same rebuild as a switch). */
   setMode(mode: PropertyMode): void
 }
 
-/** La réponse d'un serveur à une seule maison : elle, et pas de bascule. */
+/** The response of a single-house server: that house, and no switching. */
 export function singleProperty(house: House): PropertiesResponse {
   return { activeId: house.id, switchable: false, properties: [{ id: house.id, name: house.name, kind: kindOf(house as RawProperty) }] }
 }
