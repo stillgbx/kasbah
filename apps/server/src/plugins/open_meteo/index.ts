@@ -10,31 +10,31 @@ import { ATTRIBUTION, HOME_ID, toDescriptor, toForecast, toPlaces, toStatePatch,
 import type { AirQualityResponse, ForecastResponse } from './types'
 import { VIGILANCE_ATTRIBUTION, VIGILANCE_WEB, VigilanceClient } from './vigilance'
 
-// Plugin Open-Meteo : la météo au-dessus de la maison, lue sur une API libre, sans clé ni compte
-// (usage non commercial, attribution CC BY 4.0 portée par `meta.weather.attribution`). Un seul
-// appareil `weather`, à la position de la maison (`ctx.site`) ; deux appels par sondage (prévisions,
-// puis qualité de l'air et pollens), toutes les dix minutes — quelque 300 appels par jour sur les
-// 10 000 tolérés, rien à rationner. Le flux de vigilance MeteoAlarm est relu au même rythme.
+// Open-Meteo plugin: the weather above the house, read from a free API, with no key or account
+// (non-commercial use, CC BY 4.0 attribution carried by `meta.weather.attribution`). A single
+// `weather` device, at the house's position (`ctx.site`); two calls per poll (forecast, then air
+// quality and pollens), every ten minutes — some 300 calls a day out of the 10,000 tolerated,
+// nothing to ration. The MeteoAlarm warning feed is re-read at the same pace.
 //
-// La qualité de l'air est FACULTATIVE : si son API ne répond pas, les champs d'air s'effacent
-// (patch `null`) et l'appareil est redéclaré SANS les capacités d'air — la vue ne montre pas de
-// section vide ; elles reviennent avec la première réponse.
+// Air quality is OPTIONAL: if its API doesn't answer, the air fields are cleared (`null` patch)
+// and the device is redeclared WITHOUT the air capabilities — the view doesn't show an empty
+// section; they come back with the first response.
 //
-// Les prévisions ne sont pas poussées : `forecast()` rend la DERNIÈRE réponse du sondage, mise en
-// forme à l'heure de la demande — pas un nouvel appel.
+// The forecast is not pushed: `forecast()` returns the poll's LAST response, shaped at the time of
+// the request — not a new call.
 
 export const openMeteoConfigSchema = z.object({
-  /** Cadence de sondage. Les modèles se relancent à l'heure : sonder plus souvent relit la même chose. */
+  /** Polling rate. The models rerun hourly: polling more often re-reads the same thing. */
   OPEN_METEO_POLL_MS: z.coerce.number().int().min(60_000).max(3_600_000).default(600_000),
 })
 export type OpenMeteoConfig = z.infer<typeof openMeteoConfigSchema>
 
-/** Ailleurs qu'à la maison : une position valide, arrondie au centième (~1 km) pour partager le cache. */
+/** Somewhere other than the house: a valid position, rounded to the hundredth (~1 km) to share the cache. */
 const atQuerySchema = z.object({ lat: z.coerce.number().min(-90).max(90), lon: z.coerce.number().min(-180).max(180) })
 const placesQuerySchema = z.object({ q: z.string().trim().min(2).max(100), lang: z.string().regex(/^[a-z]{2}$/).default('fr') })
-/** Lieux tenus en cache à la fois : les favoris d'une maison, avec de la marge. */
+/** Places held in cache at once: a house's favorites, with some margin. */
 const ELSEWHERE_MAX = 24
-/** Routes montées mais plugin jamais démarré (désactivé, ou démarrage pas encore passé). */
+/** Routes mounted but plugin never started (disabled, or startup not reached yet). */
 const NOT_STARTED = 'open_meteo plugin is not started'
 
 export interface OpenMeteoDeps {
@@ -48,12 +48,12 @@ export function createOpenMeteoPlugin(deps: OpenMeteoDeps = {}): DevicePlugin {
   let client: OpenMeteoClient | null = null
   let poller: { stop(): void } | null = null
   let last: { forecast: ForecastResponse; airQuality: AirQualityResponse | null } | null = null
-  /** Déclaré d'emblée : l'air fait partie d'Open-Meteo ; la première lecture qui le dément retire les capacités. */
+  /** Declared up front: air is part of Open-Meteo; the first reading that contradicts it removes the capabilities. */
   let hasAirQuality = true
   let lastError: string | null = null
-  /** Météo ailleurs (vue Météo), lue à la demande et gardée le temps d'un sondage : même règle que la maison. */
+  /** Weather elsewhere (Weather view), read on demand and kept for one poll interval: same rule as the house. */
   const elsewhere = new Map<string, { at: number; forecast: ForecastResponse; airQuality: AirQualityResponse | null }>()
-  /** Vigilance Météo-France (flux MeteoAlarm), lue à la demande de la vue : maison ou ailleurs. */
+  /** Météo-France weather warnings (MeteoAlarm feed), read on the view's request: house or elsewhere. */
   let vigilance: VigilanceClient | null = null
 
   async function readElsewhere(lat: number, lon: number) {
@@ -65,7 +65,7 @@ export function createOpenMeteoPlugin(deps: OpenMeteoDeps = {}): DevicePlugin {
     const forecast = await c.forecast(ctx!.signal)
     let airQuality: AirQualityResponse | null = null
     try { airQuality = await c.airQuality(ctx!.signal) }
-    catch { /* hors d'Europe ou API d'air tombée : la météo suffit */ }
+    catch { /* outside Europe or air API down: the weather is enough */ }
     const entry = { at: now, forecast, airQuality }
     elsewhere.delete(key)
     elsewhere.set(key, entry)
@@ -80,11 +80,11 @@ export function createOpenMeteoPlugin(deps: OpenMeteoDeps = {}): DevicePlugin {
     catch (err) { ctx!.logger.warn({ err }, 'air quality unavailable, weather kept') }
     last = { forecast, airQuality }
     lastError = null
-    // les capacités suivent ce que l'API d'air répond : redéclarer l'appareil quand ça change
+    // capabilities follow what the air API answers: redeclare the device when that changes
     if (!!airQuality !== hasAirQuality) { hasAirQuality = !!airQuality; ctx!.emitDevices([toDescriptor(hasAirQuality)]) }
     const patch = toStatePatch(forecast, airQuality)
-    // la vigilance EN COURS de la maison, dans l'état (les alertes du rail la lisent là). Facultative
-    // comme l'air : un flux tombé laisse la dernière valeur lue, hors de la métropole on l'efface
+    // the house's CURRENT weather warnings, in the state (the rail's alerts read them there). Optional
+    // like air: a feed that's down leaves the last value read, outside mainland France we clear it
     try {
       const r = await vigilance!.at(ctx!.site.lat, ctx!.site.lon, ctx!.signal)
       const now = ctx!.clock.now()
@@ -111,9 +111,9 @@ export function createOpenMeteoPlugin(deps: OpenMeteoDeps = {}): DevicePlugin {
       })
     },
     async discover(): Promise<DeviceDescriptor[]> {
-      // AUCUN appel réseau ici : les plugins démarrent l'un après l'autre, et une API lente
-      // retarderait toute la maison. L'appareil naît indisponible ; la première lecture du poller
-      // (tout de suite dans `start`) le remplit.
+      // NO network call here: plugins start one after the other, and a slow API would delay the
+      // whole house. The device is born unavailable; the poller's first reading (right away in
+      // `start`) fills it.
       return [toDescriptor(hasAirQuality)]
     },
     async start() {
@@ -135,12 +135,12 @@ export function createOpenMeteoPlugin(deps: OpenMeteoDeps = {}): DevicePlugin {
     },
     async stop() { poller?.stop(); poller = null },
     registerRoutes(app: FastifyInstance) {
-      /** Dernières réponses brutes : de quoi relever une fixture réelle. */
+      /** Last raw responses: enough to record a real fixture. */
       app.get('/raw', async (_req, reply) => {
         if (!client?.raw.forecast) return sendError(reply, 409, 'DEVICE_UNAVAILABLE', 'nothing read yet')
         return client.raw
       })
-      /** Recherche d'un lieu par son nom (géocodage Open-Meteo, sans clé lui non plus). */
+      /** Search for a place by name (Open-Meteo geocoding, no key either). */
       app.get('/places', async (req, reply) => {
         const query = placesQuerySchema.safeParse(req.query)
         if (!query.success) return sendError(reply, 400, 'INVALID_QUERY', 'q (2 to 100 characters) and lang (two letters) expected')
@@ -148,7 +148,7 @@ export function createOpenMeteoPlugin(deps: OpenMeteoDeps = {}): DevicePlugin {
         const { q, lang } = query.data
         return { places: toPlaces(await client.places(q, lang, ctx.signal)) }
       })
-      /** La météo d'un autre lieu : état complet et prévisions, au format de l'appareil de la maison. */
+      /** The weather of another place: full state and forecast, in the format of the house's device. */
       app.get('/at', async (req, reply) => {
         const query = atQuerySchema.safeParse(req.query)
         if (!query.success) return sendError(reply, 400, 'INVALID_QUERY', 'lat (-90 to 90) and lon (-180 to 180) expected')
@@ -163,7 +163,7 @@ export function createOpenMeteoPlugin(deps: OpenMeteoDeps = {}): DevicePlugin {
           attribution: ATTRIBUTION,
         }
       })
-      /** Vigilance du département d'un lieu ; `area: null` hors de la métropole (rien à lire). */
+      /** Weather warnings for a place's department; `area: null` outside mainland France (nothing to read). */
       app.get('/alerts', async (req, reply) => {
         const query = atQuerySchema.safeParse(req.query)
         if (!query.success) return sendError(reply, 400, 'INVALID_QUERY', 'lat (-90 to 90) and lon (-180 to 180) expected')

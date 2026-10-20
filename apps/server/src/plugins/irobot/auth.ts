@@ -5,40 +5,40 @@ import type { FetchLike } from '../../core/sse'
 import { cloudLoginSchema, endpointDiscoverySchema, gigyaLoginSchema, gigyaResponseSchema, storedSessionSchema, type StoredRobot, type StoredSession } from './types'
 import { writeFileAtomic } from '../../core/atomic-file'
 
-// Obtention des identifiants LOCAUX d'un robot iRobot — la seule partie du plugin qui touche
-// Internet, et elle ne sert qu'une fois.
+// Obtaining the LOCAL credentials of an iRobot robot — the only part of the plugin that touches
+// the Internet, and it is only used once.
 //
-// POURQUOI PASSER PAR LE CLOUD POUR PARLER EN LOCAL. Les Roomba ont longtemps rendu leur mot de
-// passe local à qui le demandait sur le réseau : un datagramme magique sur le port 8883, après un
-// appui long sur HOME. Sur le Combo du parc (firmware `stingray+24.29.5`, 22/11/2024) ce mécanisme
-// RÉPOND ENCORE mais pour refuser — 115 tentatives, toujours `f005efcc3b29`**`03`** là où un robot
-// coopératif renvoie le mot de passe. Le robot l'annonce d'ailleurs dans sa découverte : `cap.pw: 0`.
+// WHY GO THROUGH THE CLOUD TO TALK LOCALLY. Roombas long handed their local password to anyone who
+// asked on the network: a magic datagram on port 8883, after a long press on HOME. On the Combo in
+// the device set (firmware `stingray+24.29.5`, 11/22/2024) this mechanism STILL ANSWERS but only to
+// refuse — 115 attempts, always `f005efcc3b29`**`03`** where a cooperative robot sends back the
+// password. The robot even announces it in its discovery: `cap.pw: 0`.
 //
-// Reste la voie du compte, en trois temps :
-//   1. `GET /v1/discover/endpoints` (PUBLIC) → la clé Gigya du moment et la base HTTP du déploiement ;
-//   2. `POST accounts.login` chez Gigya → une signature d'identité (UID + signature + horodatage) ;
-//   3. `POST {httpBase}/v2/login` → pour chaque robot du compte, son MOT DE PASSE LOCAL.
+// What remains is the account route, in three steps:
+//   1. `GET /v1/discover/endpoints` (PUBLIC) → the current Gigya key and the deployment's HTTP base;
+//   2. `POST accounts.login` at Gigya → an identity signature (UID + signature + timestamp);
+//   3. `POST {httpBase}/v2/login` → for each robot on the account, its LOCAL PASSWORD.
 //
-// Ce qui survit : le mot de passe LOCAL de chaque robot, dans le fichier de session en 0600. Le mot
-// de passe du COMPTE traverse le serveur le temps de l'étape 2 — jamais écrit, jamais journalisé,
-// jamais en variable d'environnement. Même arbitrage que Renault et MELCloud.
+// What survives: each robot's LOCAL password, in the session file at 0600. The ACCOUNT password
+// passes through the server for the duration of step 2 — never written, never logged, never in an
+// environment variable. Same tradeoff as Renault and MELCloud.
 //
-// Piège commun à Gigya, déjà payé chez Renault : **HTTP 200 même quand il refuse**. C'est
-// `errorCode` qui tranche, pas le statut.
+// Pitfall common to Gigya, already paid for with Renault: **HTTP 200 even when it refuses**. It's
+// `errorCode` that decides, not the status.
 
 export const DEFAULT_DISCOVERY_URL = 'https://disc-prod.iot.irobotapi.com/v1/discover/endpoints'
 /**
- * Identifiant d'application de l'appli Android iRobot, attendu tel quel par `/v2/login`. En
- * configuration pour la raison qui a servi chez Renault : le fabricant peut le changer, et une
- * valeur neuve doit se poser dans `.env` sans toucher au code.
+ * Application identifier of the iRobot Android app, expected as is by `/v2/login`. In
+ * configuration for the same reason as with Renault: the vendor may change it, and a new value
+ * must be settable in `.env` without touching the code.
  */
 export const DEFAULT_APP_ID = 'ANDROID-C7FB240E-DF34-42D7-AE4E-A8C17079A294'
-/** L'appli mobile se présente ainsi ; l'endpoint de découverte refuse les clients anonymes. */
+/** The mobile app introduces itself this way; the discovery endpoint refuses anonymous clients. */
 export const DEFAULT_USER_AGENT = 'aspen%20production/2618 CFNetwork/1209 Darwin/20.2.0'
 
 const REQUEST_TIMEOUT_MS = 20_000
 
-/** Codes Gigya à distinguer d'une panne. Tous arrivent en HTTP 200. */
+/** Gigya codes to tell apart from an outage. All arrive as HTTP 200. */
 const GIGYA_INVALID_CREDENTIALS = 403042
 const GIGYA_PENDING_2FA = 403101
 
@@ -49,8 +49,8 @@ export interface SessionStore {
 }
 
 /**
- * Fichier JSON atomique (`.tmp` puis `rename`) en 0600, comme Renault. Fichier absent ou illisible
- * = pas de session, jamais une erreur fatale : le plugin doit démarrer même si le disque refuse.
+ * Atomic JSON file (`.tmp` then `rename`) at 0600, like Renault. Missing or unreadable file = no
+ * session, never a fatal error: the plugin must start even if the disk refuses.
  */
 export function createSessionFile(path: string, logger?: Logger): SessionStore {
   return {
@@ -76,7 +76,7 @@ export function createSessionFile(path: string, logger?: Logger): SessionStore {
 export interface IrobotAuthOptions {
   discoveryUrl: string
   appId: string
-  /** Code pays ISO envoyé à la découverte. Il choisit le centre Gigya, pas le déploiement. */
+  /** ISO country code sent to discovery. It picks the Gigya data center, not the deployment. */
   country: string
   userAgent: string
   fetchImpl: FetchLike
@@ -85,7 +85,7 @@ export interface IrobotAuthOptions {
   requestTimeoutMs?: number
 }
 
-/** Le compte iRobot : relié une fois, il ne sert plus qu'à retrouver des mots de passe locaux. */
+/** The iRobot account: once linked, it only serves to retrieve local passwords. */
 export class IrobotAuth {
   private session: StoredSession | null = null
 
@@ -95,20 +95,20 @@ export class IrobotAuth {
   get robots(): StoredRobot[] { return this.session?.robots ?? [] }
   get linkedAt(): number | null { return this.session?.linkedAt ?? null }
 
-  /** Mot de passe local d'un robot trouvé sur le réseau, ou `null` si le compte ne le connaît pas. */
+  /** Local password of a robot found on the network, or `null` if the account doesn't know it. */
   passwordFor(blid: string): string | null {
     return this.session?.robots.find((r) => r.blid === blid)?.password ?? null
   }
 
-  /** Au démarrage : reprend les identifiants du fichier s'il y en a. */
+  /** At startup: picks up the credentials from the file if there are any. */
   async restore(): Promise<boolean> {
     this.session = (await this.opts.store?.load()) ?? null
     return this.linked
   }
 
   /**
-   * Relie le compte et récupère les mots de passe locaux. Le mot de passe du compte ne sert QUE
-   * dans cet appel : ni gardé en mémoire au-delà, ni écrit, ni journalisé.
+   * Links the account and retrieves the local passwords. The account password is used ONLY in
+   * this call: not kept in memory beyond it, not written, not logged.
    */
   async login(email: string, password: string, signal?: AbortSignal): Promise<StoredRobot[]> {
     const { httpBase, gigyaUrl, gigyaApiKey } = await this.discover(signal)
@@ -125,7 +125,7 @@ export class IrobotAuth {
       }).toString(),
     }, signal)
 
-    // le cadre AVANT le contenu : Gigya refuse en HTTP 200
+    // the frame BEFORE the content: Gigya refuses with HTTP 200
     const framed = gigyaResponseSchema.safeParse(gigya)
     if (framed.success && framed.data.errorCode !== 0) this.throwGigya(framed.data)
     const login = gigyaLoginSchema.safeParse(gigya)
@@ -161,13 +161,13 @@ export class IrobotAuth {
     return robots
   }
 
-  /** Délier : les mots de passe locaux sont effacés, rien d'autre n'a jamais été gardé. */
+  /** Unlink: the local passwords are erased, nothing else was ever kept. */
   async forget(): Promise<void> {
     this.session = null
     await this.opts.store?.clear()
   }
 
-  /** Endpoint PUBLIC : la clé Gigya du moment et la base du déploiement courant. */
+  /** PUBLIC endpoint: the current Gigya key and the base of the current deployment. */
   private async discover(signal?: AbortSignal): Promise<{ httpBase: string; gigyaUrl: string; gigyaApiKey: string }> {
     const url = `${this.opts.discoveryUrl}?country_code=${encodeURIComponent(this.opts.country)}`
     const body = await this.json('iRobot endpoint discovery', url, { method: 'GET' }, signal)
@@ -175,7 +175,7 @@ export class IrobotAuth {
     if (!parsed.success) throw new PluginError('UPSTREAM_ERROR', 'iRobot endpoint discovery returned an unexpected shape')
     const deployments = parsed.data.deployments
     const current = parsed.data.current_deployment
-    // `current_deployment` désigne le déploiement à utiliser ; à défaut, le dernier déclaré (le plus récent)
+    // `current_deployment` names the deployment to use; failing that, the last one declared (the most recent)
     const chosen = (current ? deployments[current] : undefined) ?? Object.values(deployments).at(-1)
     if (!chosen) throw new PluginError('UPSTREAM_ERROR', 'iRobot endpoint discovery listed no deployment')
     return {
@@ -185,7 +185,7 @@ export class IrobotAuth {
     }
   }
 
-  /** Une requête bornée. Le corps est rendu tel quel : c'est l'appelant qui sait le lire. */
+  /** A bounded request. The body is returned as is: it's the caller who knows how to read it. */
   private async json(what: string, url: string, init: Parameters<FetchLike>[1], signal?: AbortSignal): Promise<unknown> {
     const timeout = AbortSignal.timeout(this.opts.requestTimeoutMs ?? REQUEST_TIMEOUT_MS)
     let res: Awaited<ReturnType<FetchLike>>
@@ -201,7 +201,7 @@ export class IrobotAuth {
     }
     const text = await res.text()
     const body = ((): unknown => { try { return JSON.parse(text) } catch { return null } })()
-    // Gigya refuse en 200 : un statut d'erreur ici est une vraie panne, pas un refus d'identifiants
+    // Gigya refuses with 200: an error status here is a real outage, not a credentials refusal
     if (body === null) throw new PluginError('UPSTREAM_ERROR', `${what} returned no JSON (HTTP ${res.status})`)
     if (res.status >= 400 && !gigyaResponseSchema.safeParse(body).success) {
       throw new PluginError('UPSTREAM_ERROR', `${what} refused the request (HTTP ${res.status})`)
@@ -209,7 +209,7 @@ export class IrobotAuth {
     return body
   }
 
-  /** Traduit un `errorCode` Gigya. Jamais le mot de passe dans le message. */
+  /** Translates a Gigya `errorCode`. Never the password in the message. */
   private throwGigya(r: { errorCode: number; errorMessage?: string | undefined; errorDetails?: string | undefined }): never {
     if (r.errorCode === GIGYA_PENDING_2FA) {
       throw new PluginError('NEEDS_PAIRING',

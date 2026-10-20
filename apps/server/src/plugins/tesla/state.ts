@@ -5,73 +5,73 @@ import type { Logger } from 'pino'
 import { z } from 'zod'
 import { writeFileAtomic } from '../../core/atomic-file'
 
-// Ce que le plugin Tesla garde entre deux démarrages, et qui n'est ni un secret ni un jeton :
+// What the Tesla plugin keeps between two startups, and which is neither a secret nor a token:
 //
-//  1. Le DERNIER ÉTAT de chaque véhicule. Sans lui, un redémarrage du serveur repart d'une carte
-//     vide (« Jamais lu », 0 %) jusqu'à la prochaine lecture — qui peut attendre des heures, le
-//     temps que la voiture se réveille d'elle-même. Ce sont les dernières valeurs connues : elles
-//     étaient déjà affichées comme telles (`readAt` les date), rien n'est inventé.
+//  1. The LAST STATE of each vehicle. Without it, a server restart starts again from an empty card
+//     ("Never read", 0 %) until the next reading — which may take hours, until the car wakes up
+//     on its own. These are the last known values: they were already displayed as such (`readAt`
+//     dates them), nothing is invented.
 //
-//  2. La PEINTURE (`vehicle_config`) : teinte et aspect lus dans une lecture complète. Absente de
-//     la liste des véhicules, elle disparaîtrait au redémarrage si la voiture dort — et la scène
-//     3D retomberait sur la couleur de thème jusqu'au prochain réveil.
+//  2. The PAINT (`vehicle_config`): color and finish read from a full reading. Missing from the
+//     vehicle list, it would disappear on restart if the car is asleep — and the 3D scene would
+//     fall back on the theme color until the next wake-up.
 //
-//  3. La CONSOMMATION du cycle de facturation. Tesla offre 10 $ par mois et par compte, et compte
-//     en mois CALENDAIRE (« Billing cycles are monthly, starting on the first day »,
-//     developer.tesla.com/docs/fleet-api/billing-and-limits). Le compteur doit donc survivre à un
-//     redémarrage, sinon la jauge repart de zéro et ne veut plus rien dire.
+//  3. The billing cycle's USAGE. Tesla offers $10 per month per account, and counts in CALENDAR
+//     months ("Billing cycles are monthly, starting on the first day",
+//     developer.tesla.com/docs/fleet-api/billing-and-limits). So the counter must survive a
+//     restart, otherwise the gauge starts again from zero and no longer means anything.
 
-/** Prix unitaires de la Fleet API, en dollars (relevé le 2026-09-13, tarifs en vigueur depuis 2025-01-01). */
+/** Fleet API unit prices, in dollars (recorded on 2026-09-13, rates in force since 2025-01-01). */
 export const PRICE_USD = {
-  /** Lecture de données : 1 $ pour 500 (`vehicle_data` ; la LISTE des véhicules, elle, ne coûte rien). */
+  /** Data read: $1 per 500 (`vehicle_data`; the vehicle LIST, for its part, costs nothing). */
   data: 1 / 500,
-  /** Réveil : 1 $ pour 50. Dix fois le prix d'une lecture, d'où le geste explicite dans l'UI. */
+  /** Wake-up: $1 per 50. Ten times the price of a read, hence the explicit action in the UI. */
   wake: 1 / 50,
-  /** Commande : 1 $ pour 1000. */
+  /** Command: $1 per 1000. */
   command: 1 / 1000,
 } as const
 export type BillableKind = keyof typeof PRICE_USD
 
-/** Crédit offert par Tesla, par compte et par mois : le quota que l'utilisateur veut ne pas dépasser. */
+/** Credit offered by Tesla, per account and per month: the quota the user wants not to exceed. */
 export const MONTHLY_CREDIT_USD = 10
 
 /**
- * Ce qu'un appel COÛTE, d'après son chemin. `null` = rien à compter.
+ * What a call COSTS, based on its path. `null` = nothing to count.
  *
- * **La LISTE des véhicules (`GET /api/1/vehicles`) ne coûte rien** : la documentation ne publie pas sa
- * catégorie tarifaire, mais la console du fabricant l'a tranché le 2026-09-14 — elle relevait 3
- * requêtes « Données » par jour là où le plugin en faisait 144 rien qu'en listant. Seules la lecture
- * complète, le réveil et les commandes sont facturés. Le chemin d'une lecture commence par celui de
- * la liste : c'est `vehicle_data` qu'il faut reconnaître, pas le préfixe.
+ * **The vehicle LIST (`GET /api/1/vehicles`) costs nothing**: the documentation doesn't publish its
+ * pricing category, but the vendor's console settled it on 2026-09-14 — it recorded 3 "Data"
+ * requests per day where the plugin made 144 just by listing. Only the full read, the wake-up and
+ * the commands are billed. A read's path starts with the list's: it's `vehicle_data` that must be
+ * recognized, not the prefix.
  */
 export function billableKind(path: string): BillableKind | null {
   if (path.includes('/wake_up')) return 'wake'
   if (path.includes('/command/')) return 'command'
-  // les NOTES DE VERSION ne coûtent rien : la console du fabricant l'a tranché le 2026-10-02 — cinq
-  // appels `release_notes` seuls, puis une lecture complète : « Données » n'a pris que 1
+  // RELEASE NOTES cost nothing: the vendor's console settled it on 2026-10-02 — five
+  // `release_notes` calls alone, then one full read: "Data" only went up by 1
   if (path.includes('/vehicle_data')) return 'data'
   return null
 }
 
 /**
- * Début du cycle, en millisecondes : le **1er du mois à 00:00 UTC**. La console du fabricant le dit
- * sans ambiguïté (« les cycles de facturation commencent le 1er de chaque mois ») : la date de
- * liaison du compte ne compte pour rien, et l'afficher laisserait croire à un cycle glissant.
- * DÉDUIT du mois, jamais gardé — un champ qui se recalcule ne peut pas mentir après un redémarrage.
+ * Start of the cycle, in milliseconds: the **1st of the month at 00:00 UTC**. The vendor's console
+ * says so unambiguously ("billing cycles start on the 1st of each month"): the account linking
+ * date counts for nothing, and displaying it would suggest a rolling cycle. DERIVED from the month,
+ * never stored — a field that is recomputed can't lie after a restart.
  */
 export function cycleStart(month: string): number {
   const [y, m] = month.split('-').map(Number)
   return Date.UTC(y ?? 1970, (m ?? 1) - 1, 1)
 }
 
-/** Mois calendaire d'une date, en UTC (`2026-09`) : la clé du cycle de facturation. */
+/** Calendar month of a date, in UTC (`2026-09`): the billing cycle key. */
 export function cycleKey(now: number): string {
   const d = new Date(now)
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
 }
 
 export const cycleSchema = z.object({
-  /** Mois du cycle (`2026-09`). Un mois différent = on repart de zéro. */
+  /** Month of the cycle (`2026-09`). A different month = we start again from zero. */
   month: z.string(),
   data: z.number().min(0).default(0),
   wakes: z.number().min(0).default(0),
@@ -88,13 +88,13 @@ export type VehiclePaint = z.infer<typeof vehiclePaintSchema>
 const notesVersionSchema = z.object({ version: z.string(), notes: z.array(releaseNoteSchema) })
 
 /**
- * Notes de version d'un véhicule, telles qu'on les a lues. Elles ne changent qu'avec une version :
- * relues quand `key` (version installée, version en attente) ne correspond plus, ou quand leurs
- * illustrations — des URL signées — approchent de leur échéance (`expiresAt`).
+ * A vehicle's release notes, as we read them. They only change with a version: re-read when `key`
+ * (installed version, pending version) no longer matches, or when their illustrations — signed
+ * URLs — approach their expiry (`expiresAt`).
  *
- * `history` s'ALLONGE au fil des mises à jour : Tesla ne rend que les versions depuis la dernière
- * grosse mise à jour, Kasbah garde les précédentes. Leurs illustrations finissent par expirer ; le
- * texte, lui, reste.
+ * `history` GROWS as updates come: Tesla only returns the versions since the last major update,
+ * Kasbah keeps the previous ones. Their illustrations end up expiring; the text, for its part,
+ * remains.
  */
 export const releaseNotesCacheSchema = z.object({
   key: z.string(),
@@ -103,7 +103,7 @@ export const releaseNotesCacheSchema = z.object({
   installedVersion: z.string().optional(),
   pending: notesVersionSchema.optional(),
   history: z.record(z.string(), z.array(releaseNoteSchema)).default({}),
-  /** Tesla a rendu les MÊMES textes qu'en anglais pour cette langue : il ne la publie pas, on sert l'anglais. */
+  /** Tesla returned the SAME texts as in English for this language: it doesn't publish it, we serve English. */
   ignored: z.boolean().optional(),
 })
 export type ReleaseNotesCache = z.infer<typeof releaseNotesCacheSchema>
@@ -111,23 +111,23 @@ export type ReleaseNotesCache = z.infer<typeof releaseNotesCacheSchema>
 export const teslaStateSchema = z.object({
   cycle: cycleSchema.optional(),
   /**
-   * Dernier état connu par VIN. Schéma volontairement LARGE (`z.unknown()` par clé) : le contrat de
-   * l'appareil peut gagner des champs, et un fichier écrit par une version précédente ne doit pas
-   * faire échouer le démarrage. Le registre valide de toute façon ce qu'on lui émet.
+   * Last known state per VIN. Deliberately LENIENT schema (`z.unknown()` per key): the device
+   * contract may gain fields, and a file written by a previous version must not make startup fail.
+   * The registry validates what we emit to it anyway.
    */
   vehicles: z.record(z.string(), z.record(z.string(), z.unknown())).default({}),
-  /** Peinture par VIN : survit au redémarrage quand la voiture dort (pas dans la liste Fleet). */
+  /** Paint per VIN: survives restart when the car is asleep (not in the Fleet list). */
   paints: z.record(z.string(), vehiclePaintSchema).default({}),
   /**
-   * Notes de version par VIN, puis par langue (`en`, `fr`…) : voir `releaseNotesCacheSchema`. Un
-   * cache d'une autre forme est OUBLIÉ, jamais bloquant (`catch`) : ce n'est que du contenu qu'on
-   * relit. Sans cela, un fichier écrit par une version précédente était rejeté EN ENTIER, compteur
-   * du mois compris (vu le 2026-10-02 : tout le 1er octobre perdu).
+   * Release notes per VIN, then per language (`en`, `fr`…): see `releaseNotesCacheSchema`. A cache
+   * of another shape is FORGOTTEN, never blocking (`catch`): it's only content we re-read. Without
+   * this, a file written by a previous version was rejected IN FULL, the month's counter included
+   * (seen on 2026-10-02: the whole of October 1 lost).
    */
   releaseNotes: z.record(z.string(), z.record(z.string(), releaseNotesCacheSchema)).default({}).catch({}),
   /**
-   * Langues dans lesquelles on a DEMANDÉ les notes (l'anglais, repli, est toujours lu en plus) :
-   * le serveur ne connaît pas la langue de l'app, il apprend celles qu'on lui demande.
+   * Languages in which the notes were REQUESTED (English, the fallback, is always read as well):
+   * the server doesn't know the app's language, it learns the ones it's asked for.
    */
   releaseNotesLangs: z.array(z.string()).default([]).catch([]),
 })
@@ -135,14 +135,14 @@ export type TeslaState = z.infer<typeof teslaStateSchema>
 
 export const emptyState = (): TeslaState => ({ vehicles: {}, paints: {}, releaseNotes: {}, releaseNotesLangs: [] })
 
-/** Le cycle en cours, remis à zéro si le mois a changé. Ne mute rien : rend le cycle à utiliser. */
+/** The current cycle, reset if the month changed. Mutates nothing: returns the cycle to use. */
 export function currentCycle(state: TeslaState, now: number): Cycle {
   const month = cycleKey(now)
   if (state.cycle?.month === month) return state.cycle
   return { month, data: 0, wakes: 0, commands: 0 }
 }
 
-/** Compte un appel facturable dans le cycle courant (en le faisant rouler si le mois a changé). */
+/** Counts a billable call in the current cycle (rolling it over if the month changed). */
 export function countCall(state: TeslaState, kind: BillableKind, now: number): Cycle {
   const cycle = { ...currentCycle(state, now) }
   if (kind === 'data') cycle.data += 1
@@ -152,7 +152,7 @@ export function countCall(state: TeslaState, kind: BillableKind, now: number): C
   return cycle
 }
 
-/** Dépense estimée du cycle, en dollars. Une ESTIMATION : seul le fabricant facture. */
+/** Estimated spend of the cycle, in dollars. An ESTIMATE: only the vendor bills. */
 export function cycleCostUsd(cycle: Cycle | undefined): number {
   if (!cycle) return 0
   const usd = cycle.data * PRICE_USD.data + cycle.wakes * PRICE_USD.wake + cycle.commands * PRICE_USD.command
@@ -165,8 +165,8 @@ export interface TeslaStateStore {
 }
 
 /**
- * Fichier JSON atomique (`.tmp` puis `rename`). Fichier absent ou illisible = état vide, jamais une
- * erreur fatale : le plugin doit démarrer même si le disque refuse — il relira la voiture, voilà tout.
+ * Atomic JSON file (`.tmp` then `rename`). Missing or unreadable file = empty state, never a fatal
+ * error: the plugin must start even if the disk refuses — it will read the car again, that's all.
  */
 export function createStateFile(path: string, logger?: Logger): TeslaStateStore {
   return {
@@ -179,12 +179,12 @@ export function createStateFile(path: string, logger?: Logger): TeslaStateStore 
       return parsed.data
     },
     async save(state) {
-      // `persist()` n'attend pas : la file de `writeFileAtomic` sépare deux écritures rapprochées
+      // `persist()` doesn't wait: the `writeFileAtomic` queue separates two close writes
       try { await writeFileAtomic(path, `${JSON.stringify(state, null, 2)}\n`) }
       catch (err) { logger?.warn({ err, path }, 'could not write Tesla state cache') }
     },
   }
 }
 
-/** Patch d'état d'un véhicule tel qu'on le garde (le contrat le valide à l'émission). */
+/** A vehicle's state patch as we keep it (the contract validates it on emission). */
 export type StoredVehicleState = StatePatch<'vehicle'>

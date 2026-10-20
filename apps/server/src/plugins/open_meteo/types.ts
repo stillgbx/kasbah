@@ -1,17 +1,17 @@
 import { z } from 'zod'
 
-// Réponses des deux API d'Open-Meteo, en schémas LARGES : `z.looseObject` pour les clés qu'on ne
-// lit pas, `z.unknown()` sur ce dont le type ne compte pas (la leçon TaHoma : contraindre un champ
-// inutile suffit à faire échouer toute la réponse). Les séries horaires et quotidiennes sont des
-// colonnes parallèles (`time[i]` va avec `temperature_2m[i]`) : un tableau par variable, jamais un
-// tableau d'objets. Une valeur peut être `null` quand le modèle ne la fournit pas (la probabilité de
-// précipitation avec un modèle seul) : on la lit comme absente.
+// Responses of Open-Meteo's two APIs, as LENIENT schemas: `z.looseObject` for the keys we don't
+// read, `z.unknown()` on what doesn't matter type-wise (the TaHoma lesson: constraining a useless
+// field is enough to make the whole response fail). The hourly and daily series are parallel
+// columns (`time[i]` goes with `temperature_2m[i]`): one array per variable, never an array of
+// objects. A value may be `null` when the model doesn't provide it (precipitation probability
+// with a single model): we read it as absent.
 
-/** Colonne numérique d'une série : les trous du modèle sont des `null`. */
+/** Numeric column of a series: the model's gaps are `null`s. */
 const column = z.array(z.number().nullable())
 
 export const currentSchema = z.looseObject({
-  /** Début du pas courant, en SECONDES epoch (`timeformat=unixtime`). */
+  /** Start of the current step, in epoch SECONDS (`timeformat=unixtime`). */
   time: z.number(),
   temperature_2m: z.number().nullable().optional(),
   relative_humidity_2m: z.number().nullable().optional(),
@@ -28,7 +28,7 @@ export const currentSchema = z.looseObject({
 
 export const forecastResponseSchema = z.looseObject({
   utc_offset_seconds: z.number(),
-  /** Fuseau IANA du lieu (`timezone=auto`) : l'UI y affiche les heures d'un lieu lointain. */
+  /** IANA time zone of the place (`timezone=auto`): the UI shows a distant place's times in it. */
   timezone: z.string().optional(),
   current: currentSchema,
   hourly: z.looseObject({
@@ -44,7 +44,7 @@ export const forecastResponseSchema = z.looseObject({
     dew_point_2m: column.optional(),
   }),
   daily: z.looseObject({
-    /** Minuit LOCAL de chaque jour, en secondes epoch. */
+    /** LOCAL midnight of each day, in epoch seconds. */
     time: z.array(z.number()),
     weather_code: column.optional(),
     temperature_2m_max: column.optional(),
@@ -72,7 +72,7 @@ export const airQualityResponseSchema = z.looseObject({
 })
 export type AirQualityResponse = z.infer<typeof airQualityResponseSchema>
 
-/** Un lieu trouvé par l'API de géocodage (`geocoding-api.open-meteo.com`, GeoNames). */
+/** A place found by the geocoding API (`geocoding-api.open-meteo.com`, GeoNames). */
 export const geocodingPlaceSchema = z.looseObject({
   id: z.number(),
   name: z.string(),
@@ -83,6 +83,6 @@ export const geocodingPlaceSchema = z.looseObject({
   admin1: z.string().optional(),
   timezone: z.string().optional(),
 })
-/** Sans résultat, la clé `results` est ABSENTE (pas un tableau vide). */
+/** With no result, the `results` key is ABSENT (not an empty array). */
 export const geocodingResponseSchema = z.looseObject({ results: z.array(geocodingPlaceSchema).optional() })
 export type GeocodingResponse = z.infer<typeof geocodingResponseSchema>

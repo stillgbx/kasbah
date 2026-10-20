@@ -12,17 +12,17 @@ import { JWT_TTL_S, type SessionStore, type StoredSession } from './auth'
 import { createRenaultPlugin, renaultConfigSchema } from './index'
 import { CLIMATE_FEATURES } from './mapping'
 
-// Ce que le plugin doit tenir face à Renault, et que seule une API privée impose :
+// What the plugin must guarantee against Renault, which only a private API imposes:
 //
-//  - GIGYA RÉPOND EN HTTP 200 MÊME QUAND ELLE REFUSE. Un mot de passe faux, une session périmée,
-//    une double authentification en attente : tout arrive en 200 avec un `errorCode`. C'est LE
-//    piège de cette API, et la moitié des tests ci-dessous ne sert qu'à le garder fermé.
-//  - Le MOT DE PASSE ne doit rien laisser derrière lui : ni dans le cache de session, ni ailleurs.
-//  - Le DÉBIT est serré (60 appels par heure) : le plugin doit refuser lui-même, sans appeler.
-//  - Un endpoint REFUSÉ pour ce véhicule (403 `err.func.wired.forbidden`, le cas de la R5 sur le
-//    verrouillage et la pression des pneus) n'est pas une panne et ne doit pas gâcher une capture.
+//  - GIGYA ANSWERS HTTP 200 EVEN WHEN IT REFUSES. A wrong password, an expired session, a pending
+//    two-factor authentication: everything arrives as 200 with an `errorCode`. It's THE pitfall
+//    of this API, and half the tests below only serve to keep it shut.
+//  - The PASSWORD must leave nothing behind: not in the session cache, nor anywhere else.
+//  - The RATE is tight (60 calls per hour): the plugin must refuse by itself, without calling.
+//  - An endpoint REFUSED for this vehicle (403 `err.func.wired.forbidden`, the R5's case for locking
+//    and tire pressure) is not an outage and must not spoil a capture.
 //
-// Aucun compte ni véhicule réel n'est touché.
+// No real account or vehicle is touched.
 
 const NOW = Date.UTC(2026, 8, 14, 10)
 const GIGYA = 'https://accounts.eu1.gigya.com'
@@ -54,19 +54,19 @@ const VEHICLES = {
   }],
 }
 
-/** Faux Renault : Gigya (authentification) et Kamereon (données), pilotés par un état mutable. */
+/** Fake Renault: Gigya (authentication) and Kamereon (data), driven by a mutable state. */
 function fakeRenault(over: { gigyaError?: number } = {}) {
   const world = {
-    /** Le JWT que Kamereon accepte ; un autre → 401. Change à chaque `accounts.getJWT`. */
+    /** The JWT Kamereon accepts; any other → 401. Changes on every `accounts.getJWT`. */
     jwt: 'jwt-1',
     minted: 0,
-    /** Kamereon répond 401 une fois avant d'accepter (JWT révoqué avant son échéance). */
+    /** Kamereon answers 401 once before accepting (JWT revoked before its expiry). */
     revokeOnce: false,
-    /** `hvac-status` répond 403 tant que vrai : une lecture que ce véhicule ne sert pas. */
+    /** `hvac-status` answers 403 while true: a reading this vehicle doesn't serve. */
     hvacForbidden: false,
-    /** Ce que `battery-status` renvoie : branchée en attente par défaut. */
+    /** What `battery-status` returns: plugged in and waiting by default. */
     battery: BATTERY_WAITING as unknown,
-    /** Une commande de réglages est déjà en attente : toute écriture est refusée en 409. */
+    /** A settings command is already pending: every write is refused with 409. */
     settingsPending: false,
   }
   const calls: { method: string; path: string; body?: string }[] = []
@@ -79,7 +79,7 @@ function fakeRenault(over: { gigyaError?: number } = {}) {
       const method_ = url.slice(GIGYA.length + 1)
       calls.push({ method, path: `gigya:${method_}` })
       const params = new URLSearchParams(body)
-      // TOUT sort en HTTP 200, y compris les refus : c'est `errorCode` qui tranche
+      // EVERYTHING goes out as HTTP 200, refusals included: it's `errorCode` that decides
       if (over.gigyaError) return response({ errorCode: over.gigyaError, errorMessage: 'refused' })
       if (method_ === 'accounts.login') {
         if (params.get('password') !== PASSWORD) return response({ errorCode: 403042, errorMessage: 'Invalid LoginID' })
@@ -103,7 +103,7 @@ function fakeRenault(over: { gigyaError?: number } = {}) {
       return response({ accounts: [{ accountId: ACCOUNT, accountType: 'MYRENAULT', accountStatus: 'ACTIVE' }] })
     }
     if (path === `/commerce/v1/accounts/${ACCOUNT}/vehicles`) return response(VEHICLES)
-    // ce que la R5 a répondu à la capture, refus compris
+    // what the R5 answered at capture, refusals included
     if (path.endsWith('/contracts')) return response(CONTRACTS)
     if (path.endsWith('/battery-status')) return response(world.battery)
     if (path.endsWith('/cockpit')) return response(path.includes('/v2/') ? COCKPIT_V2_EASTER_EGG : COCKPIT_V1)
@@ -112,10 +112,10 @@ function fakeRenault(over: { gigyaError?: number } = {}) {
     if (path.endsWith('/ev/soc-levels')) return response(method === 'POST' ? { ok: true } : SOC_LEVELS)
     if (path.endsWith('/ev/settings')) {
       if (method !== 'POST') return response(EV_SETTINGS)
-      // une écriture acceptée rend une COMMANDE ; une commande déjà en attente la refuse en 409
+      // an accepted write returns a COMMAND; a command already pending refuses it with 409
       return world.settingsPending ? response(SETTINGS_PENDING, 409) : response(SETTINGS_COMMAND)
     }
-    // les deux saveurs de refus : 403 « interdit » et 404 « inconnu »
+    // the two flavors of refusal: 403 "forbidden" and 404 "unknown"
     if (path.endsWith('/lock-status') || path.endsWith('/pressure')) return response(NOT_FOUND, 404)
     return response({ data: { attributes: {} } })
   })
@@ -142,7 +142,7 @@ async function setup(over: { env?: Record<string, string>; session?: StoredSessi
     config: renaultConfigSchema.parse({ ...over.env }),
     logger: pino({ level: 'silent' }), clock, signal: new AbortController().signal,
     emitState: vi.fn(), setAvailable: vi.fn(), emitDevices: vi.fn(), emitScenes: vi.fn(), emitSceneState: vi.fn(), emitEvent: vi.fn(),
-    // l'hôte applique les défauts des `parts` ; ici on les donne, le réveil étant coché par défaut
+    // the host applies the `parts` defaults; here we give them, the wake-up being checked by default
     parts: over.parts ?? { charge_wake: true }, site: { lat: 47.3, lon: 5.05, alt: 180 },
   }
   await plugin.init(ctx)
@@ -155,32 +155,32 @@ async function setup(over: { env?: Record<string, string>; session?: StoredSessi
 const login = (app: Awaited<ReturnType<typeof setup>>['app'], password = PASSWORD) =>
   app.inject({ method: 'POST', url: '/api/plugins/renault/login', payload: { email: 'moi@exemple.fr', password } })
 
-describe('Renault — liaison du compte', () => {
-  it('relie le compte et ne garde que le jeton, jamais le mot de passe', async () => {
+describe('Renault — account linking', () => {
+  it('links the account and keeps only the token, never the password', async () => {
     const { app, sessionStore } = await setup()
     const r = await login(app)
     expect(r.statusCode).toBe(200)
     expect(sessionStore.value).toEqual({ loginToken: LOGIN_TOKEN, personId: PERSON })
-    // le mot de passe ne doit se retrouver NULLE PART dans ce qui survit à la requête
+    // the password must end up NOWHERE in what survives the request
     expect(JSON.stringify(sessionStore.value)).not.toContain(PASSWORD)
     expect(r.json().vehicles).toEqual([{ vin: VIN, name: 'GA-123-BX' }])
   })
 
-  it('refuse un mot de passe faux, que Gigya rend pourtant en HTTP 200', async () => {
+  it('refuses a wrong password, which Gigya nonetheless returns as HTTP 200', async () => {
     const { app, sessionStore } = await setup()
     const r = await login(app, 'pas-le-bon')
     expect(r.statusCode).toBe(401)
     expect(sessionStore.value).toBeNull()
   })
 
-  it('dit explicitement qu’une double authentification bloque la liaison', async () => {
+  it('says explicitly that two-factor authentication blocks linking', async () => {
     const { app } = await setup({ gigyaError: 403101 })
     const r = await login(app)
     expect(r.statusCode).toBe(401)
     expect(r.json().error).toMatch(/two-factor/i)
   })
 
-  it('délier efface la session', async () => {
+  it('unlinking erases the session', async () => {
     const { app, sessionStore } = await setup()
     await login(app)
     const r = await app.inject({ method: 'POST', url: '/api/plugins/renault/logout' })
@@ -190,8 +190,8 @@ describe('Renault — liaison du compte', () => {
   })
 })
 
-describe('Renault — inventaire', () => {
-  it('reprend la session du cache et publie un appareil par VIN', async () => {
+describe('Renault — inventory', () => {
+  it('picks up the session from the cache and publishes one device per VIN', async () => {
     const { plugin } = await setup({ session: { loginToken: LOGIN_TOKEN, personId: PERSON } })
     const devices = await plugin.discover()
     expect(devices).toEqual([{
@@ -201,53 +201,53 @@ describe('Renault — inventaire', () => {
     }])
   })
 
-  it('ne déclare pas le verrouillage (404) : l’UI ne proposera rien que le plugin refuserait', async () => {
+  it('does not declare locking (404): the UI will offer nothing the plugin would refuse', async () => {
     const { plugin } = await setup({ session: { loginToken: LOGIN_TOKEN, personId: PERSON } })
     const [device] = await plugin.discover()
     expect(device!.capabilities).not.toContain('lock')
   })
 
-  it('sans compte lié, aucun appareil et une santé qui le dit', async () => {
+  it('without a linked account, no device and a health that says so', async () => {
     const { plugin } = await setup()
     expect(await plugin.discover()).toEqual([])
     expect(plugin.health!().status).toBe('needs_pairing')
   })
 })
 
-describe('Renault — jetons', () => {
-  it('réutilise le JWT tant qu’il est frais, et en redemande un une fois périmé', async () => {
+describe('Renault — tokens', () => {
+  it('reuses the JWT while it is fresh, and requests a new one once expired', async () => {
     const { plugin, renault, clock } = await setup({ session: { loginToken: LOGIN_TOKEN, personId: PERSON } })
     await plugin.discover()
     expect(renault.world.minted).toBe(1)
     await plugin.discover()
-    expect(renault.world.minted).toBe(1)          // même JWT : rien redemandé
+    expect(renault.world.minted).toBe(1)          // same JWT: nothing requested again
     clock.advance(JWT_TTL_S * 1000)
     await plugin.discover()
     expect(renault.world.minted).toBe(2)
   })
 
-  it('rejoue la requête une fois après un 401 de Kamereon', async () => {
+  it('replays the request once after a 401 from Kamereon', async () => {
     const { plugin, renault } = await setup({ session: { loginToken: LOGIN_TOKEN, personId: PERSON } })
     renault.world.revokeOnce = true
     const devices = await plugin.discover()
-    expect(devices).toHaveLength(1)               // le 401 a été rattrapé, pas remonté
+    expect(devices).toHaveLength(1)               // the 401 was caught, not surfaced
     expect(renault.world.minted).toBe(2)
   })
 })
 
-describe('Renault — débit', () => {
-  it('refuse lui-même au-delà du budget horaire, sans appeler Renault', async () => {
+describe('Renault — rate', () => {
+  it('refuses by itself beyond the hourly budget, without calling Renault', async () => {
     const { plugin, renault } = await setup({ session: { loginToken: LOGIN_TOKEN, personId: PERSON }, env: { RENAULT_RATE_PER_HOUR: '2' } })
-    await plugin.discover()                        // 2 appels : comptes puis véhicules
+    await plugin.discover()                        // 2 calls: accounts then vehicles
     const before = renault.calls.filter((c) => c.path.startsWith('/commerce')).length
-    expect(await plugin.discover()).toEqual([])    // budget épuisé : la liste échoue proprement
+    expect(await plugin.discover()).toEqual([])    // budget spent: the list fails cleanly
     expect(renault.calls.filter((c) => c.path.startsWith('/commerce'))).toHaveLength(before)
     expect(plugin.health!().status).toBe('degraded')
   })
 })
 
-describe('Renault — contrats à la demande', () => {
-  it('propose l entretien plafonné en km du véhicule demandé', async () => {
+describe('Renault — contracts on demand', () => {
+  it('suggests the km-capped maintenance of the requested vehicle', async () => {
     const { app, renault } = await setup({ session: { loginToken: LOGIN_TOKEN, personId: PERSON } })
     const r = await app.inject({ method: 'GET', url: `/api/plugins/renault/contracts/${VIN}?lang=fr` })
     expect(r.statusCode).toBe(200)
@@ -255,43 +255,42 @@ describe('Renault — contrats à la demande', () => {
     expect(renault.calls.some((c) => c.path.endsWith(`/vehicles/${VIN}/contracts`))).toBe(true)
   })
 
-  it('refuse un VIN qui n est pas celui du compte, sans appeler les contrats', async () => {
+  it('refuses a VIN that is not the account one, without calling the contracts', async () => {
     const { app, renault } = await setup({ session: { loginToken: LOGIN_TOKEN, personId: PERSON } })
     expect((await app.inject({ method: 'GET', url: '/api/plugins/renault/contracts/VF1AUTRE000000000' })).statusCode).toBe(404)
     expect(renault.calls.some((c) => c.path.endsWith('/contracts'))).toBe(false)
   })
 
-  it('refuse tant que le compte n est pas lié', async () => {
+  it('refuses as long as the account is not linked', async () => {
     const { app } = await setup()
     expect((await app.inject({ method: 'GET', url: `/api/plugins/renault/contracts/${VIN}` })).statusCode).toBe(409)
   })
 })
 
-describe('Renault — relevé brut', () => {
-  it('rend ce que le véhicule donne ET ce qu’il refuse, sans faire échouer la capture', async () => {
+describe('Renault — raw reading', () => {
+  it('returns what the vehicle gives AND what it refuses, without failing the capture', async () => {
     const { app } = await setup({ session: { loginToken: LOGIN_TOKEN, personId: PERSON }, env: { RENAULT_RATE_PER_HOUR: '200' } })
     const r = await app.inject({ method: 'GET', url: '/api/plugins/renault/raw' })
     expect(r.statusCode).toBe(200)
     const readings = r.json().readings as { endpoint: string; ok: boolean; unavailable?: boolean }[]
     expect(readings.find((x) => x.endpoint === 'battery-status')).toMatchObject({ ok: true })
-    // le verrouillage refusé est RENDU comme tel : c'est une information, pas une panne
+    // the refused locking is RETURNED as such: it's information, not an outage
     expect(readings.find((x) => x.endpoint === 'lock-status')).toMatchObject({ ok: false, unavailable: true })
     expect(readings.find((x) => x.endpoint === 'pressure')).toMatchObject({ ok: false, unavailable: true })
   })
 
-  it('refuse la capture tant que le compte n’est pas lié', async () => {
+  it('refuses the capture as long as the account is not linked', async () => {
     const { app } = await setup()
     expect((await app.inject({ method: 'GET', url: '/api/plugins/renault/raw' })).statusCode).toBe(409)
   })
 })
 
-describe('Renault — sondage', () => {
-  /** Cadence de ces tests, indépendante du défaut du plugin. */
+describe('Renault — polling', () => {
+  /** Rate of these tests, independent of the plugin default. */
   const POLL_MS = 5 * 60_000
-  /** Le poller enchaîne des promesses : quelques tours de boucle d'événements suffisent à les vider. */
-  // On rend la main a la boucle d'evenements, pas seulement aux microtaches : un tour de sondage
-  // enchaine plusieurs requetes (lectures, puis eventuellement le reveil), et un simple vidage de
-  // microtaches laissait la suite en plan.
+  /** The poller chains promises: a few event loop turns are enough to drain them. */
+  // We yield to the event loop, not just to microtasks: a polling round chains several requests
+  // (readings, then possibly the wake-up), and merely draining microtasks left the rest hanging.
   const flush = async () => { for (let i = 0; i < 8; i++) await new Promise((r) => setTimeout(r, 0)) }
   const patches = (ctx: PluginContext) => (ctx.emitState as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[1])
   const dataCalls = (renault: ReturnType<typeof fakeRenault>, endpoint: string) =>
@@ -309,7 +308,7 @@ describe('Renault — sondage', () => {
     return s
   }
 
-  it('publie l’état du véhicule dès le premier tour', async () => {
+  it('publishes the vehicle state from the first round', async () => {
     const { ctx, plugin } = await running()
     expect(patches(ctx).at(-1)).toMatchObject({
       soc: 58, rangeKm: 218, pluggedIn: true, charging: false, odometerKm: 12500, insideTempC: 37, chargeLimit: 80,
@@ -317,17 +316,17 @@ describe('Renault — sondage', () => {
     await plugin.stop()
   })
 
-  it('ne redemande JAMAIS une lecture que le véhicule refuse', async () => {
+  it('NEVER requests again a reading the vehicle refuses', async () => {
     const { plugin, renault, clock } = await running({ hvacForbidden: true })
     expect(dataCalls(renault, '/hvac-status')).toBe(1)
     clock.advance(POLL_MS + 60_000)
     await flush()
-    expect(dataCalls(renault, '/battery-status')).toBeGreaterThan(1)   // le tour a bien eu lieu
-    expect(dataCalls(renault, '/hvac-status')).toBe(1)                 // mais celle-là est rayée
+    expect(dataCalls(renault, '/battery-status')).toBeGreaterThan(1)   // the round did take place
+    expect(dataCalls(renault, '/hvac-status')).toBe(1)                 // but that one is struck off
     await plugin.stop()
   })
 
-  it('le refus d’une lecture n’empêche pas les autres de publier', async () => {
+  it('a refused reading does not stop the others from publishing', async () => {
     const { ctx, plugin } = await running({ hvacForbidden: true })
     const last = patches(ctx).at(-1)!
     expect(last).toMatchObject({ soc: 58, odometerKm: 12500 })
@@ -335,7 +334,7 @@ describe('Renault — sondage', () => {
     await plugin.stop()
   })
 
-  it('vehicle.refresh relit tout de suite', async () => {
+  it('vehicle.refresh re-reads right away', async () => {
     const { plugin, renault, ctx } = await running()
     const before = dataCalls(renault, '/battery-status')
     await plugin.execute(VIN, { type: 'vehicle.refresh' })
@@ -344,18 +343,18 @@ describe('Renault — sondage', () => {
     await plugin.stop()
   })
 
-  it('vehicle.set_charge_limit RELIT les niveaux, puis ne change QUE la cible', async () => {
+  it('vehicle.set_charge_limit RE-READS the levels, then changes ONLY the target', async () => {
     const { plugin, renault, ctx } = await running()
     await plugin.execute(VIN, { type: 'vehicle.set_charge_limit', percent: 70 })
     const write = renault.calls.filter((c) => c.method === 'POST' && c.path.endsWith('/ev/soc-levels')).at(-1)!
-    // le plancher est le réglage de l'utilisateur DANS la voiture : il est rejoué tel quel
+    // the floor is the user's setting IN the car: it is replayed as is
     expect(JSON.parse(write.body!)).toMatchObject({ socTarget: 70, socMin: SOC_LEVELS.socMin })
-    // la cible est publiée tout de suite : Kamereon relit l'ANCIENNE valeur pendant quelques secondes
+    // the target is published right away: Kamereon reads back the OLD value for a few seconds
     expect(patches(ctx).at(-1)).toMatchObject({ chargeLimit: 70 })
     await plugin.stop()
   })
 
-  it('lancer la charge : relit les réglages, les réécrit programmes coupés, puis relit une minute plus tard', async () => {
+  it('starting the charge: reads the settings, rewrites them with programs disabled, then re-reads a minute later', async () => {
     const { plugin, renault, clock } = await running()
     const posts = () => renault.calls.filter((c) => c.method === 'POST' && c.path.endsWith('/ev/settings'))
     const before = posts().length
@@ -371,20 +370,20 @@ describe('Renault — sondage', () => {
     await plugin.stop()
   })
 
-  it('une commande de réglages déjà en attente (409) : RATE_LIMITED, « réessayer », pas une panne', async () => {
+  it('a settings command already pending (409): RATE_LIMITED, "try again", not an outage', async () => {
     const { plugin, renault } = await running()
     renault.world.settingsPending = true
     await expect(plugin.execute(VIN, { type: 'vehicle.start_charge' })).rejects.toMatchObject({ code: 'RATE_LIMITED' })
     await plugin.stop()
   })
 
-  it('arrêter : la R5 ne sait pas, le plugin le dit (le serveur arrête la borne avant d’en arriver là)', async () => {
+  it('stopping: the R5 cannot, the plugin says so (the server stops the charger before it comes to that)', async () => {
     const { plugin } = await running()
     await expect(plugin.execute(VIN, { type: 'vehicle.stop_charge' })).rejects.toMatchObject({ code: 'UNSUPPORTED_COMMAND' })
     await plugin.stop()
   })
 
-  it('climatiser : l’action hvac-start à la consigne, puis une relecture une minute plus tard', async () => {
+  it('preconditioning: the hvac-start action at the setpoint, then a re-read a minute later', async () => {
     const { plugin, renault, clock } = await running()
     await plugin.execute(VIN, { type: 'vehicle.climate_start', targetTempC: 20 })
     const action = renault.calls.filter((c) => c.method === 'POST' && c.path.endsWith('/actions/hvac-start')).at(-1)!
@@ -392,13 +391,13 @@ describe('Renault — sondage', () => {
     const before = dataCalls(renault, '/hvac-status')
     clock.advance(60_000)
     await flush()
-    expect(dataCalls(renault, '/hvac-status')).toBe(before + 1)       // l'effet se CONSTATE
+    expect(dataCalls(renault, '/hvac-status')).toBe(before + 1)       // the effect is OBSERVED
     await plugin.execute(VIN, { type: 'vehicle.climate_stop' })
     expect(JSON.parse(renault.calls.at(-1)!.body!)).toEqual({ data: { type: 'HvacStart', attributes: { action: 'cancel' } } })
     await plugin.stop()
   })
 
-  it('sous le seuil que la voiture annonce (socThreshold), refusé SANS dépenser une action', async () => {
+  it('below the threshold the car announces (socThreshold), refused WITHOUT spending an action', async () => {
     const { plugin, renault } = await running()
     renault.world.battery = { data: { ...BATTERY_WAITING.data, attributes: { ...BATTERY_WAITING.data.attributes, batteryLevel: 12 } } }
     await plugin.execute(VIN, { type: 'vehicle.refresh' })
@@ -407,7 +406,7 @@ describe('Renault — sondage', () => {
     await plugin.stop()
   })
 
-  it('régler sièges et volant RÉÉCRIT les réglages lus, et publie `seatHeat` entier', async () => {
+  it('setting seats and steering wheel REWRITES the settings read, and publishes `seatHeat` whole', async () => {
     const { plugin, renault, ctx } = await running()
     await plugin.execute(VIN, { type: 'vehicle.climate_set', seatHeat: { fl: 1 }, steeringWheelHeat: true })
     const write = renault.calls.filter((c) => c.method === 'POST' && c.path.endsWith('/ev/settings')).at(-1)!
@@ -416,13 +415,13 @@ describe('Renault — sondage', () => {
     await plugin.stop()
   })
 
-  it('refuse toute autre commande plutôt que de faire semblant', async () => {
+  it('refuses any other command rather than pretending', async () => {
     const { plugin } = await running()
     await expect(plugin.execute(VIN, { type: 'vehicle.lock' })).rejects.toMatchObject({ code: 'UNSUPPORTED_COMMAND' })
     await plugin.stop()
   })
 
-  it('arrêter le plugin arrête le sondage', async () => {
+  it('stopping the plugin stops the polling', async () => {
     const { plugin, renault, clock } = await running()
     await plugin.stop()
     const before = dataCalls(renault, '/battery-status')
@@ -432,12 +431,12 @@ describe('Renault — sondage', () => {
   })
 })
 
-describe('Renault — réveil de charge', () => {
+describe('Renault — charge wake-up', () => {
   const flush = async () => { for (let i = 0; i < 8; i++) await new Promise((r) => setTimeout(r, 0)) }
   const wakes = (renault: ReturnType<typeof fakeRenault>) =>
     renault.calls.filter((c) => c.method === 'POST' && c.path.endsWith('/ev/settings'))
 
-  /** Une fenêtre qui CONTIENT l'heure locale de l'horloge de test, et une qui l'exclut à coup sûr. */
+  /** A window that CONTAINS the test clock's local time, and one that surely excludes it. */
   const hour = new Date(NOW).getHours()
   const pad = (h: number) => String((h + 24) % 24).padStart(2, '0')
   const DEDANS = { RENAULT_WAKE_FROM: `${pad(hour)}:00`, RENAULT_WAKE_TO: `${pad(hour + 1)}:00` }
@@ -457,12 +456,12 @@ describe('Renault — réveil de charge', () => {
     return s
   }
 
-  it('réveille une voiture BRANCHÉE qui ne charge pas, en rejouant ses propres réglages', async () => {
+  it('wakes a PLUGGED-IN car that is not charging, by replaying its own settings', async () => {
     const { plugin, renault } = await running()
     const sent = wakes(renault)
     expect(sent).toHaveLength(1)
     const body = JSON.parse(sent[0]!.body!) as Record<string, unknown>
-    // ses réglages, intacts — seul l'horodatage est neuf
+    // its settings, intact — only the timestamp is new
     expect(body.chargeTimeStart).toBe(EV_SETTINGS.chargeTimeStart)
     expect(body.chargeDuration).toBe(EV_SETTINGS.chargeDuration)
     expect(body.programs).toEqual(EV_SETTINGS.programs)
@@ -470,7 +469,7 @@ describe('Renault — réveil de charge', () => {
     await plugin.stop()
   })
 
-  it('ne réveille PAS une voiture qui charge déjà, ni une voiture débranchée', async () => {
+  it('does NOT wake a car that is already charging, nor an unplugged car', async () => {
     const a = await running({ battery: BATTERY_CHARGING })
     expect(wakes(a.renault)).toHaveLength(0)
     await a.plugin.stop()
@@ -480,40 +479,40 @@ describe('Renault — réveil de charge', () => {
   })
 
   /**
-   * Le cas ORDINAIRE d'une voiture branchée qui ne charge pas : elle est pleine. C'est l'état de la
-   * R5 chaque nuit après sa charge — la secouer n'y changerait rien, et ce réveil ÉCRIT dans la
-   * voiture.
+   * The ORDINARY case of a plugged-in car that isn't charging: it's full. It's the R5's state every
+   * night after its charge — shaking it wouldn't change anything, and this wake-up WRITES to the
+   * car.
    */
-  it('ne réveille pas une voiture déjà à sa limite de charge', async () => {
+  it('does not wake a car already at its charge limit', async () => {
     const atTarget = { data: { id: VIN, attributes: { ...BATTERY_WAITING.data.attributes, batteryLevel: 80 } } }
     const { plugin, renault } = await running({ battery: atTarget })   // socTarget = 80 (SOC_LEVELS)
     expect(wakes(renault)).toHaveLength(0)
     await plugin.stop()
   })
 
-  it('ne réveille pas hors de la fenêtre horaire', async () => {
+  it('does not wake outside the time window', async () => {
     const { plugin, renault } = await running({ env: DEHORS })
     expect(wakes(renault)).toHaveLength(0)
     await plugin.stop()
   })
 
-  it('ne réveille pas quand le sous-item est décoché', async () => {
+  it('does not wake when the sub-item is unchecked', async () => {
     const { plugin, renault } = await running({ parts: { charge_wake: false } })
     expect(wakes(renault)).toHaveLength(0)
     await plugin.stop()
   })
 
-  it('ne secoue pas la voiture en boucle : un réveil, puis le délai', async () => {
+  it('does not shake the car in a loop: one wake-up, then the delay', async () => {
     const { plugin, renault, clock } = await running({ env: { RENAULT_WAKE_EVERY_MS: String(30 * 60_000) } })
     expect(wakes(renault)).toHaveLength(1)
-    clock.advance(6 * 60_000)            // un tour de sondage de plus, toujours branchée et à l'arrêt
+    clock.advance(6 * 60_000)            // one more polling round, still plugged in and stopped
     await flush()
     expect(wakes(renault)).toHaveLength(1)
     await plugin.stop()
   })
 
-  it('un réveil qui échoue ne fait pas perdre la lecture', async () => {
-    // Kamereon refuse l'écriture : l'état doit tout de même avoir été publié
+  it('a failing wake-up does not lose the reading', async () => {
+    // Kamereon refuses the write: the state must have been published nonetheless
     const { plugin, ctx, renault } = await running({ pending: true })
     expect(wakes(renault)).toHaveLength(1)
     const patches = (ctx.emitState as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[1])
@@ -522,21 +521,21 @@ describe('Renault — réveil de charge', () => {
   })
 
   /**
-   * Le défaut que la journée du 2026-09-19 a mis au jour : cinq heures de réveils refusés, visibles
-   * NULLE PART hors de la console du serveur, pendant qu'une journée de surplus solaire se perdait.
+   * The flaw that the day of 2026-09-19 brought to light: five hours of refused wake-ups, visible
+   * NOWHERE outside the server console, while a day of solar surplus was being lost.
    */
-  it('garde la commande rendue par Renault, et la montre dans le statut', async () => {
+  it('keeps the command returned by Renault, and shows it in the status', async () => {
     const { plugin, app } = await running()
     const status = (await app.inject({ method: 'GET', url: '/api/plugins/renault/status' })).json()
     expect(status.lastWake).toMatchObject({ result: 'sent', detail: 'HVAC_CHARGE_SYNCH CREATED ba6a5b31-0000-0000-0000-9f2c1d4e8a70' })
     await plugin.stop()
   })
 
-  it('lit un 409 comme « pas maintenant », pas comme une panne', async () => {
+  it('reads a 409 as "not now", not as an outage', async () => {
     const { plugin, app } = await running({ pending: true })
     const status = (await app.inject({ method: 'GET', url: '/api/plugins/renault/status' })).json()
     expect(status.lastWake.result).toBe('deferred')
-    // le tour de sondage, lui, s'est bien passé : un refus de réveil n'est pas une panne du plugin
+    // the polling round itself went fine: a wake-up refusal is not a plugin failure
     expect(status.lastError).toBeNull()
     await plugin.stop()
   })

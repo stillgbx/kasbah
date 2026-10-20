@@ -1,17 +1,17 @@
-// Ce que la synthèse vocale prononce mal, langue par langue (`STT_LANGUAGE`). Ajouter un remplacement =
-// une ligne dans la table de la langue ; une langue absente passe telle quelle. L'ordre des lignes est
-// libre : les écritures les plus longues sont essayées d'abord (`kWh` avant `kW` avant `W`).
+// What speech synthesis mispronounces, language by language (`STT_LANGUAGE`). Adding a replacement =
+// one line in the language's table; a missing language goes through as is. The order of the lines is
+// free: the longest spellings are tried first (`kWh` before `kW` before `W`).
 
 export interface SpokenRules {
-  /** Mot ou abréviation, tel quel n'importe où dans la phrase (casse ignorée) → ce qui est dit. */
+  /** Word or abbreviation, as is anywhere in the sentence (case ignored) → what is said. */
   words: Record<string, string>
-  /** Symbole d'unité après un nombre (« 21 °C », « 21°C ») → [singulier, pluriel]. Casse respectée. */
+  /** Unit symbol after a number ("21 °C", "21°C") → [singular, plural]. Case respected. */
   units: Record<string, [string, string]>
-  /** Le nombre prend-il le pluriel ? */
+  /** Does the number take the plural? */
   plural: (n: number) => boolean
-  /** Le signe d'un nombre négatif (« -3 °C »). */
+  /** The sign of a negative number ("-3 °C"). */
   minus: string
-  /** « 8h30 », « 14:05 » → [heure, heures] ; absent : laissé au moteur. */
+  /** "8h30", "14:05" → [hour, hours]; absent: left to the engine. */
   hours?: [string, string]
 }
 
@@ -52,7 +52,7 @@ export const SPOKEN_RULES: Record<string, SpokenRules> = {
       V: ['volt', 'volts'],
       '€': ['euro', 'euros'],
     },
-    // « 1,5 degré » : singulier sous 2
+    // "1,5 degré": singular below 2
     plural: (n) => Math.abs(n) >= 2,
     minus: 'moins',
     hours: ['heure', 'heures'],
@@ -79,7 +79,7 @@ export const SPOKEN_RULES: Record<string, SpokenRules> = {
       A: ['amp', 'amps'],
       V: ['volt', 'volts'],
     },
-    // « 1.5 degrees » : singulier pour 1 seulement
+    // "1.5 degrees": singular for 1 only
     plural: (n) => Math.abs(n) !== 1,
     minus: 'minus',
   },

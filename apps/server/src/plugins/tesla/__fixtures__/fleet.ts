@@ -1,25 +1,24 @@
-// Réponses CAPTURÉES le 2026-09-13 sur le vrai compte (`GET /api/plugins/tesla/raw`), Model S de
-// 2017 avec MCU2, logiciel 2026.26.6.1, `api_version` 95. Anonymisées : VIN (4e caractère `S`
-// conservé, c'est la gamme), identifiants numériques, nom du véhicule, position (remplacée par une
-// position plausible). Tout le reste est tel que Tesla l'a envoyé, bizarreries comprises — c'est la
-// leçon TaHoma : des fixtures écrites d'après la documentation laissent passer ce que le vrai
-// matériel montre tout de suite.
+// Responses CAPTURED on 2026-09-13 on the real account (`GET /api/plugins/tesla/raw`), 2017 Model S
+// with MCU2, software 2026.26.6.1, `api_version` 95. Anonymized: VIN (4th character `S` kept, it's
+// the model line), numeric identifiers, vehicle name, position (replaced with a plausible
+// position). Everything else is as Tesla sent it, quirks included — it's the TaHoma lesson:
+// fixtures written from the documentation let through what the real hardware shows right away.
 //
-// Ce que la capture a confirmé ou appris, par rapport au premier jet écrit d'après la doc :
-//   - `speed` et `shift_state` sont `null` à l'arrêt, pas 0 ni "P" ;
-//   - `battery_range` et `odometer` en MILES, `charger_power` en kW ENTIERS, pressions en bar ;
-//   - `gps_as_of` en SECONDES à côté de `timestamp` en MILLISECONDES, dans la même section ;
-//   - `charging_state: "NoPower"` : câble branché (`conn_charge_cable: "IEC"`, `charge_port_latch:
-//     "Engaged"`) mais la borne ne délivre rien — branché, pas en charge ;
-//   - les quatre pressions sont présentes même à l'arrêt, avec `tpms_last_seen_pressure_time_*`
-//     (secondes) qui date la dernière mesure : ici la veille (le véhicule n'avait pas roulé) ;
-//   - `software_update` est là quand une mise à jour est programmée (non lue pour l'instant) ;
-//   - `access_type: "OWNER"` et `granular_access` en tête : le compte est celui du propriétaire ;
-//   - `media_info` décrit ce que joue la voiture (Spotify) — non lu.
-// VEHICLE_DATA_DRIVING et VEHICLE_DATA_CHARGING sont DÉRIVÉS de la capture (la voiture était garée) :
-// les champs modifiés sont ceux qu'un trajet ou une charge changent, d'après la documentation.
+// What the capture confirmed or taught, compared with the first draft written from the docs:
+//   - `speed` and `shift_state` are `null` when parked, not 0 or "P";
+//   - `battery_range` and `odometer` in MILES, `charger_power` in WHOLE kW, pressures in bar;
+//   - `gps_as_of` in SECONDS next to `timestamp` in MILLISECONDS, in the same section;
+//   - `charging_state: "NoPower"`: cable plugged in (`conn_charge_cable: "IEC"`, `charge_port_latch:
+//     "Engaged"`) but the charger delivers nothing — plugged in, not charging;
+//   - the four pressures are present even when parked, with `tpms_last_seen_pressure_time_*`
+//     (seconds) dating the last measurement: here the day before (the vehicle hadn't been driven);
+//   - `software_update` is there when an update is scheduled (not read for now);
+//   - `access_type: "OWNER"` and `granular_access` at the top: the account is the owner's;
+//   - `media_info` describes what the car is playing (Spotify) — not read.
+// VEHICLE_DATA_DRIVING and VEHICLE_DATA_CHARGING are DERIVED from the capture (the car was parked):
+// the modified fields are those a trip or a charge changes, according to the documentation.
 
-/** `GET /api/1/vehicles` : la voiture endormie (l'état capturé était `online`, tout le reste est identique). */
+/** `GET /api/1/vehicles`: the car asleep (the captured state was `online`, everything else is identical). */
 export const VEHICLES_ASLEEP = {
   "response": [
     {
@@ -90,7 +89,7 @@ export const VEHICLES_ONLINE = {
   "count": 1
 }
 
-/** `GET /api/1/vehicles/{vin}/vehicle_data?endpoints=…` : garée à la maison, câble branché sur une borne sans courant. */
+/** `GET /api/1/vehicles/{vin}/vehicle_data?endpoints=…`: parked at home, cable plugged into a charger with no current. */
 export const VEHICLE_DATA_PARKED = {
   "response": {
     "id": 1492931234567890,
@@ -317,7 +316,7 @@ export const VEHICLE_DATA_PARKED = {
   }
 }
 
-/** Dérivé : en route (rapport D, 52 mph, câble débranché, quelqu'un à bord, déverrouillée). */
+/** Derived: on the road (gear D, 52 mph, cable unplugged, someone on board, unlocked). */
 export const VEHICLE_DATA_DRIVING = {
   "response": {
     "id": 1492931234567890,
@@ -544,7 +543,7 @@ export const VEHICLE_DATA_DRIVING = {
   }
 }
 
-/** Dérivé : en charge à la maison, 7 kW annoncés en entier. */
+/** Derived: charging at home, 7 kW announced as a whole number. */
 export const VEHICLE_DATA_CHARGING = {
   "response": {
     "id": 1492931234567890,
@@ -771,10 +770,10 @@ export const VEHICLE_DATA_CHARGING = {
   }
 }
 
-/** Véhicule endormi interrogé quand même : Tesla répond 408 avec ce corps. */
+/** Sleeping vehicle queried anyway: Tesla answers 408 with this body. */
 export const ASLEEP_408 = { response: null, error: 'vehicle unavailable: vehicle is offline or asleep', error_description: '' }
 
-/** Réponse du serveur OAuth (échange de code ou rafraîchissement). Valeurs factices. */
+/** OAuth server response (code exchange or refresh). Dummy values. */
 export const TOKEN_RESPONSE = {
   access_token: 'eyJ.access.first',
   refresh_token: 'refresh-first',
@@ -787,10 +786,10 @@ export const TOKEN_REFRESHED = { ...TOKEN_RESPONSE, access_token: 'eyJ.access.se
 export const PARTNER_TOKEN = { access_token: 'eyJ.partner', expires_in: 28800, token_type: 'Bearer' }
 
 /**
- * `GET /api/1/vehicles/{vin}/release_notes`, CAPTURE RÉELLE du 2026-10-02 (voiture en 2026.32.7,
- * 2026.38 téléchargée) : seules les signatures des URL sont remplacées (`hmac=0`), leur échéance
- * (`exp=1792130420`, le 2026-10-16) est gardée. Titres à espace finale et « Minor Fixes »
- * (`show_in_history: false`) d'origine.
+ * `GET /api/1/vehicles/{vin}/release_notes`, REAL CAPTURE of 2026-10-02 (car on 2026.32.7,
+ * 2026.38 downloaded): only the URL signatures are replaced (`hmac=0`), their expiry
+ * (`exp=1792130420`, i.e. 2026-10-16) is kept. Titles with a trailing space and "Minor Fixes"
+ * (`show_in_history: false`) as originally sent.
  */
 export const RELEASE_NOTES_INSTALLED = {
   "response": {
@@ -887,7 +886,7 @@ export const RELEASE_NOTES_INSTALLED = {
   }
 }
 
-/** Même capture, `?staged=true` : la version EN ATTENTE (2026.38), suivie d'anciennes notes (2026.32). */
+/** Same capture, `?staged=true`: the PENDING version (2026.38), followed by older notes (2026.32). */
 export const RELEASE_NOTES_STAGED = {
   "response": {
     "release_notes": [

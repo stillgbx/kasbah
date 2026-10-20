@@ -1,14 +1,14 @@
 import { z } from 'zod'
 
-// Schémas SOUPLES des réponses iRobot. Règle du projet (`3_2_ecrire-un-plugin.md`) : ne jamais
-// contraindre le type d'un champ qu'on ne lit pas — en zod 4, `z.unknown()` seul ne rend PAS une
-// clé facultative, il faut `z.unknown().optional()`, faute de quoi un champ ignoré fait échouer la
-// réponse entière (leçon MELCloud du 17/09).
+// LENIENT schemas of the iRobot responses. Project rule (`3_2_ecrire-un-plugin.md`): never
+// constrain the type of a field we don't read — in zod 4, `z.unknown()` alone does NOT make a key
+// optional, you need `z.unknown().optional()`, otherwise an ignored field makes the whole response
+// fail (MELCloud lesson of 09/17).
 
 /**
- * Réponse du robot à la diffusion UDP/5678. Capturée sur le vrai parc le 19/09/2026 : un Roomba
- * Combo `stingray` annonce `robotid`, les anciens ne mettaient que `hostname` (`Roomba-<blid>`) —
- * d'où les deux chemins vers le BLID dans `discovery.ts`.
+ * The robot's answer to the UDP/5678 broadcast. Captured on the real device set on 09/19/2026: a
+ * `stingray` Roomba Combo announces `robotid`, older ones only put `hostname` (`Roomba-<blid>`) —
+ * hence the two paths to the BLID in `discovery.ts`.
  */
 export const discoveryPayloadSchema = z.looseObject({
   ver: z.unknown().optional(),
@@ -19,19 +19,19 @@ export const discoveryPayloadSchema = z.looseObject({
   mac: z.unknown().optional(),
   sw: z.string().optional(),
   sku: z.string().optional(),
-  /** `mqtt` = courtier local. Un robot qui annoncerait autre chose n'est pas pilotable en local. */
+  /** `mqtt` = local broker. A robot announcing anything else can't be driven locally. */
   proto: z.string().optional(),
   /**
-   * Table de capacités du fabricant. Deux clés nous ont servi tout de suite : `scrub` (serpillière,
-   * donc un Combo) et surtout `pw` — à `0`, le robot NE REND PLUS son mot de passe en local, ce que
-   * 115 tentatives de datagramme magique ont confirmé avant qu'on lise cette clé.
+   * The vendor's capability table. Two keys were useful right away: `scrub` (mop, hence a Combo)
+   * and above all `pw` — at `0`, the robot NO LONGER HANDS OUT its password locally, which 115
+   * magic-datagram attempts had confirmed before we read this key.
    */
   cap: z.record(z.string(), z.unknown()).optional(),
   cloudConnState: z.unknown().optional(),
 })
 export type DiscoveryPayload = z.infer<typeof discoveryPayloadSchema>
 
-/** `GET /v1/discover/endpoints?country_code=XX` — public, aucun identifiant. */
+/** `GET /v1/discover/endpoints?country_code=XX` — public, no credentials. */
 export const endpointDiscoverySchema = z.looseObject({
   current_deployment: z.string().optional(),
   deployments: z.record(z.string(), z.looseObject({
@@ -47,8 +47,8 @@ export const endpointDiscoverySchema = z.looseObject({
 })
 
 /**
- * `POST /accounts.login` chez Gigya. Même piège que Renault : **HTTP 200 même en cas de refus**,
- * l'échec est dans `errorCode`. Le cadre est donc lu avant le contenu.
+ * `POST /accounts.login` at Gigya. Same pitfall as Renault: **HTTP 200 even on refusal**, the
+ * failure is in `errorCode`. So the frame is read before the content.
  */
 export const gigyaResponseSchema = z.looseObject({
   errorCode: z.number(),
@@ -63,9 +63,9 @@ export const gigyaLoginSchema = z.looseObject({
 })
 
 /**
- * `POST {httpBase}/v2/login` — l'échange qui compte : il rend, pour chaque robot du compte, son
- * MOT DE PASSE LOCAL. C'est le seul secret que le plugin garde ; celui du compte ne survit pas à
- * la requête.
+ * `POST {httpBase}/v2/login` — the exchange that matters: it returns, for each robot on the
+ * account, its LOCAL PASSWORD. It's the only secret the plugin keeps; the account's doesn't
+ * survive the request.
  */
 export const cloudLoginSchema = z.looseObject({
   robots: z.record(z.string(), z.looseObject({
@@ -76,7 +76,7 @@ export const cloudLoginSchema = z.looseObject({
   })),
 })
 
-/** Identifiants locaux d'un robot, tels qu'ils vivent dans le fichier de session. */
+/** A robot's local credentials, as they live in the session file. */
 export const storedRobotSchema = z.object({
   blid: z.string().min(1),
   password: z.string().min(1),

@@ -2,25 +2,25 @@ import type { Command, DeviceDescriptor, DeviceId, FanDirection, StatePatch } fr
 import { PluginError } from '../../core/plugin'
 import type { TuyaDeviceConfig, TuyaDps } from './types'
 
-// Mappage Tuya CREATE (catégorie `fsd`, protocole 3.5) ↔ contrat Kasbah.
+// Tuya CREATE mapping (`fsd` category, protocol 3.5) ↔ Kasbah contract.
 //
-// Deux appareils par machine physique : un `light` et un `fan` (aucune commande commune —
-// précédent PetKit). Les DP ont été MESURÉS en lecture et en écriture ; l'accusé de réception
-// ment sur la température de couleur (piège 2) — d'où le refus côté plugin des valeurs hors
-// des trois crans, plutôt que de laisser l'appareil les avaler.
+// Two devices per physical machine: a `light` and a `fan` (no shared command — PetKit
+// precedent). The DPs were MEASURED for reading and writing; the acknowledgment lies about
+// the color temperature (pitfall 2) — hence the plugin-side refusal of values outside the
+// three steps, rather than letting the device swallow them.
 
 export const PLUGIN_ID = 'tuya'
 
-/** Vitesses acceptées (DP 62) — liste, pas intervalle. */
+/** Accepted speeds (DP 62) — a list, not a range. */
 export const FAN_SPEEDS = [1, 2, 3, 4, 5, 6] as const
 
 /**
- * Températures applicables, DP 23 → mirek. Seuls 0 / 500 / 1000 changent l'état ; 250, 750, 137
- * sont acceptés par le protocole et ignorés (mesuré).
+ * Applicable temperatures, DP 23 → mirek. Only 0 / 500 / 1000 change the state; 250, 750, 137
+ * are accepted by the protocol and ignored (measured).
  *
- * Sens MESURÉ sur le CREATE (2026-09-21, corrigé après essai UI) : **0 = froid / blanc
- * (4000 K), 1000 = chaud / jaune (2700 K)** — inverse de l'échelle Kelvin « naïve » souvent
- * documentée pour d'autres CCT Tuya.
+ * Direction MEASURED on the CREATE (2026-09-21, corrected after a UI trial): **0 = cool / white
+ * (4000 K), 1000 = warm / yellow (2700 K)** — the reverse of the "naive" Kelvin scale often
+ * documented for other Tuya CCT devices.
  */
 export const COLOR_TEMP_STEPS: readonly { dp: number; mirek: number; kelvin: number }[] = [
   { dp: 1000, mirek: 370, kelvin: 2700 },
@@ -49,8 +49,8 @@ export function fanExternalId(deviceId: string): string {
 }
 
 /**
- * Noms dérivés du nom PHYSIQUE de configuration. La pièce vit dans `house.json` — ne pas
- * l'injecter ici (« Bureau › Ventilateur Bureau »).
+ * Names derived from the PHYSICAL configuration name. The room lives in `house.json` — don't
+ * inject it here ("Bureau › Ventilateur Bureau").
  */
 export function deriveNames(physicalName: string): { fan: string; light: string } {
   const m = physicalName.match(/^Ventilateur\s+plafonnier\s+(.+)$/i)
@@ -58,7 +58,7 @@ export function deriveNames(physicalName: string): { fan: string; light: string 
   return { fan: physicalName, light: physicalName }
 }
 
-/** Deux descripteurs pour un appareil physique. */
+/** Two descriptors for one physical device. */
 export function toDescriptors(cfg: TuyaDeviceConfig): DeviceDescriptor[] {
   const { fan, light } = deriveNames(cfg.name)
   const lightId = lightExternalId(cfg.id)
@@ -95,7 +95,7 @@ export function toDescriptors(cfg: TuyaDeviceConfig): DeviceDescriptor[] {
   ]
 }
 
-/** Identifiant physique depuis un externalId `…_light` / `…_fan`. */
+/** Physical identifier from a `…_light` / `…_fan` externalId. */
 export function physicalIdOf(externalId: string): string | null {
   if (externalId.endsWith('_light')) return externalId.slice(0, -'_light'.length)
   if (externalId.endsWith('_fan')) return externalId.slice(0, -'_fan'.length)
@@ -130,7 +130,7 @@ function dpOfMirek(mirek: number): number | undefined {
   return COLOR_TEMP_STEPS.find((s) => s.mirek === mirek)?.dp
 }
 
-/** DP → patch lumière (clés absentes = inchangées). */
+/** DP → light patch (absent keys = unchanged). */
 export function toLightPatch(dps: TuyaDps): StatePatch<'light'> {
   const patch: StatePatch<'light'> = {}
   const get = (dp: number) => dps[String(dp)] ?? dps[dp as unknown as keyof TuyaDps]
@@ -149,7 +149,7 @@ export function toLightPatch(dps: TuyaDps): StatePatch<'light'> {
   return patch
 }
 
-/** DP → patch ventilateur. */
+/** DP → fan patch. */
 export function toFanPatch(dps: TuyaDps): StatePatch<'fan'> {
   const patch: StatePatch<'fan'> = {}
   const get = (dp: number) => dps[String(dp)] ?? dps[dp as unknown as keyof TuyaDps]
@@ -175,8 +175,8 @@ export function toFanPatch(dps: TuyaDps): StatePatch<'fan'> {
 export type DpWrite = { dps: number; set: unknown }
 
 /**
- * `light.set` → écritures DP. Refuse une température hors des trois crans
- * (`UNSUPPORTED_COMMAND`) plutôt que de laisser l'appareil l'avaler.
+ * `light.set` → DP writes. Refuses a temperature outside the three steps
+ * (`UNSUPPORTED_COMMAND`) rather than letting the device swallow it.
  */
 export function lightCommandToDps(cmd: Extract<Command, { type: 'light.set' }>): DpWrite[] {
   const out: DpWrite[] = []
@@ -198,8 +198,8 @@ export function lightCommandToDps(cmd: Extract<Command, { type: 'light.set' }>):
 }
 
 /**
- * `fan.set` → écritures DP.
- * Écrire la vitesse ALLUME le ventilateur (piège 1) — le patch optimiste côté UI le dit aussi.
+ * `fan.set` → DP writes.
+ * Writing the speed SWITCHES ON the fan (pitfall 1) — the optimistic UI-side patch says so too.
  */
 export function fanCommandToDps(cmd: Extract<Command, { type: 'fan.set' }>): DpWrite[] {
   const out: DpWrite[] = []
@@ -216,7 +216,7 @@ export function fanCommandToDps(cmd: Extract<Command, { type: 'fan.set' }>): DpW
   return out
 }
 
-/** Predicat : l'état accumulé contient déjà les valeurs attendues après une écriture. */
+/** Predicate: the accumulated state already contains the expected values after a write. */
 export function dpsMatchExpected(current: TuyaDps, writes: DpWrite[]): boolean {
   return writes.every((w) => {
     const v = current[String(w.dps)] ?? current[w.dps as unknown as keyof TuyaDps]

@@ -6,23 +6,23 @@ import type { FetchLike } from '../../core/sse'
 import type { RenaultAuth } from './auth'
 import { kamereonErrorsSchema } from './types'
 
-// Client HTTP de Kamereon, l'API véhicule de Renault. Ce qu'il traduit :
-//  - 401 → on renouvelle le JWT UNE fois et on rejoue ; encore 401 → `NEEDS_PAIRING` ;
-//  - 403 `err.func.wired.forbidden` → l'endpoint N'EXISTE PAS POUR CE VÉHICULE. Ce n'est pas une
-//    panne : sur une R5 E-Tech, `pressure`, `charge-mode` et `lock-status` répondent toujours ça.
-//    Le plugin doit pouvoir le reconnaître pour cesser de demander — d'où `upstreamCode` ;
-//  - 429 → `RATE_LIMITED` ;
-//  - le reste en `UPSTREAM_ERROR`.
+// HTTP client for Kamereon, Renault's vehicle API. What it translates:
+//  - 401 → we renew the JWT ONCE and replay; 401 again → `NEEDS_PAIRING`;
+//  - 403 `err.func.wired.forbidden` → the endpoint DOES NOT EXIST FOR THIS VEHICLE. It's not an
+//    outage: on an R5 E-Tech, `pressure`, `charge-mode` and `lock-status` always answer that.
+//    The plugin must be able to recognize it to stop asking — hence `upstreamCode`;
+//  - 429 → `RATE_LIMITED`;
+//  - the rest as `UPSTREAM_ERROR`.
 //
-// L'API est GRATUITE (rien à voir avec Tesla), mais son débit est serré et Renault l'a resserré fin
-// 2025 : un seau à jetons borne le plugin AVANT d'appeler, plutôt que d'attendre le 429.
+// The API is FREE (nothing like Tesla), but its rate is tight and Renault tightened it at the end
+// of 2025: a token bucket bounds the plugin BEFORE calling, rather than waiting for the 429.
 
-/** Ce que Renault tolère en pratique, la valeur retenue par les autres intégrations : 60 par heure. */
+/** What Renault tolerates in practice, the value used by the other integrations: 60 per hour. */
 export const DEFAULT_RATE_PER_HOUR = 60
-/** Kamereon interroge la voiture par le réseau mobile : plusieurs secondes sont normales. */
+/** Kamereon queries the car over the mobile network: several seconds are normal. */
 export const REQUEST_TIMEOUT_MS = 30_000
 
-/** Erreur Kamereon qui porte, en plus, le code maison du corps. */
+/** Kamereon error that also carries the body's in-house code. */
 export class RenaultApiError extends PluginError {
   constructor(code: PluginErrorCode, message: string, readonly upstreamCode?: string, options?: { cause?: unknown }) {
     super(code, message, options)
@@ -31,8 +31,8 @@ export class RenaultApiError extends PluginError {
 }
 
 /**
- * « Cet endpoint n'est pas servi pour ce véhicule » — définitif, pas une panne passagère. Le plugin
- * s'en sert pour rayer une lecture de sa liste au lieu de la retenter toutes les sept minutes.
+ * "This endpoint is not served for this vehicle" — permanent, not a passing outage. The plugin uses
+ * it to strike a reading off its list instead of retrying it every seven minutes.
  */
 export function isEndpointUnavailable(err: unknown): boolean {
   return err instanceof RenaultApiError
@@ -40,12 +40,12 @@ export function isEndpointUnavailable(err: unknown): boolean {
 }
 
 /**
- * « Pas maintenant » — et non une panne. Deux refus distincts, tous deux normaux :
- *   - HTTP 409 `err.func.vcps.ev.post-settings.error` : une commande de réglages est DÉJÀ en attente
- *     pour ce véhicule, la suivante est refusée tant qu'elle n'est pas purgée. Constaté le
- *     2026-09-19 : un même corps accepté à 14:21 était refusé à 14:22, puis encore à 14:33 ;
- *   - `RATE_LIMITED` (429) : les actions ont leur propre quota, plus serré que les lectures.
- * Les confondre avec une panne, c'est ce qui a rendu cinq heures d'échecs illisibles.
+ * "Not now" — and not an outage. Two distinct refusals, both normal:
+ *   - HTTP 409 `err.func.vcps.ev.post-settings.error`: a settings command is ALREADY pending for
+ *     this vehicle, the next one is refused until it is purged. Observed on 2026-09-19: the same
+ *     body accepted at 14:21 was refused at 14:22, then again at 14:33;
+ *   - `RATE_LIMITED` (429): actions have their own quota, tighter than readings'.
+ * Confusing them with an outage is what made five hours of failures unreadable.
  */
 export function isDeferred(err: unknown): boolean {
   return (err instanceof RenaultApiError && err.upstreamCode === 'err.func.vcps.ev.post-settings.error')
@@ -55,11 +55,11 @@ export function isDeferred(err: unknown): boolean {
 export type Adapter = 'kca' | 'kcm'
 
 /**
- * Chemin d'une lecture véhicule. Deux familles cohabitent, et elles ne se ressemblent pas :
- *   - `kca` : `.../kamereon/kca/car-adapter/v{n}/cars/{vin}/{endpoint}` (batterie, cockpit…) ;
- *   - `kcm` : `.../kamereon/kcm/v{n}/vehicles/{vin}/{endpoint}` (les réglages VE des modèles
- *     récents — `ev/soc-levels`, `ev/settings` : c'est par là que passe la R5).
- * Pur, donc réutilisable tel quel par le relevé brut.
+ * Path of a vehicle reading. Two families coexist, and they don't look alike:
+ *   - `kca`: `.../kamereon/kca/car-adapter/v{n}/cars/{vin}/{endpoint}` (battery, cockpit…);
+ *   - `kcm`: `.../kamereon/kcm/v{n}/vehicles/{vin}/{endpoint}` (the EV settings of recent
+ *     models — `ev/soc-levels`, `ev/settings`: that's the route the R5 takes).
+ * Pure, hence reusable as is by the raw reading.
  */
 export function carDataPath(o: { accountId: string; vin: string; endpoint: string; version?: number; adapter?: Adapter }): string {
   const account = encodeURIComponent(o.accountId)
@@ -73,7 +73,7 @@ export function carDataPath(o: { accountId: string; vin: string; endpoint: strin
 export interface RenaultClientOptions {
   baseUrl: string
   apiKey: string
-  /** Code pays (`FR`), exigé en paramètre de requête sur TOUTES les routes. */
+  /** Country code (`FR`), required as a query parameter on ALL routes. */
   country: string
   auth: RenaultAuth
   fetchImpl: FetchLike
@@ -91,10 +91,10 @@ export class RenaultClient {
     this.bucket = new TokenBucket(perHour, perHour / 3600, opts.clock)
   }
 
-  /** Délai (ms) avant qu'un appel soit permis — 0 si le budget de débit en laisse un passer. */
+  /** Delay (ms) before a call is allowed — 0 if the rate budget lets one through. */
   waitMs(): number { return this.bucket.waitMs() }
 
-  /** Une requête Kamereon, jeton renouvelé au besoin et débit respecté. */
+  /** A Kamereon request, token renewed as needed and rate respected. */
   async request(method: 'GET' | 'POST', path: string, o: { query?: Record<string, string>; body?: unknown; signal?: AbortSignal } = {}): Promise<unknown> {
     if (!this.bucket.tryTake()) {
       throw new PluginError('RATE_LIMITED', `Renault rate budget spent, next call in ${Math.ceil(this.bucket.waitMs() / 1000)} s`)
@@ -108,24 +108,24 @@ export class RenaultClient {
     return this.interpret(res, path)
   }
 
-  /** Les comptes Kamereon de la personne. */
+  /** The person's Kamereon accounts. */
   person(personId: string, signal?: AbortSignal): Promise<unknown> {
     return this.request('GET', `/commerce/v1/persons/${encodeURIComponent(personId)}`, { signal })
   }
 
-  /** Les véhicules d'un compte. */
+  /** An account's vehicles. */
   vehicles(accountId: string, signal?: AbortSignal): Promise<unknown> {
     return this.request('GET', `/commerce/v1/accounts/${encodeURIComponent(accountId)}/vehicles`, { signal })
   }
 
-  /** La fiche d'un véhicule : c'est là que vit ce que le compte sait en dire, au-delà du car-adapter. */
+  /** A vehicle's record: it's where what the account knows about it lives, beyond the car-adapter. */
   vehicleDetails(accountId: string, vin: string, signal?: AbortSignal): Promise<unknown> {
     return this.request('GET', `/commerce/v1/accounts/${encodeURIComponent(accountId)}/vehicles/${encodeURIComponent(vin)}/details`, { signal })
   }
 
   /**
-   * Les contrats du véhicule : garanties, services connectés, entretien. Lu À LA DEMANDE seulement
-   * (bouton du panneau « Modifier ») — rien n'y change d'une semaine sur l'autre.
+   * The vehicle's contracts: warranties, connected services, maintenance. Read ON DEMAND only
+   * ("Edit" panel button) — nothing there changes from one week to the next.
    */
   vehicleContracts(accountId: string, vin: string, locale: string, signal?: AbortSignal): Promise<unknown> {
     return this.request('GET', `/commerce/v1/accounts/${encodeURIComponent(accountId)}/vehicles/${encodeURIComponent(vin)}/contracts`, {
@@ -135,10 +135,10 @@ export class RenaultClient {
   }
 
   /**
-   * Réécrit les réglages VE. **C'est l'écriture qui réveille la voiture**, pas son contenu : sur la
-   * plateforme récente (R5, Scenic), `charge/pause-resume` répond 403 et seul ce POST fait réagir le
-   * boîtier télématique. Le corps est celui qu'on vient de LIRE, horodatage rafraîchi — surtout pas
-   * des valeurs inventées, qui écraseraient l'heure de départ et la température choisies.
+   * Rewrites the EV settings. **It's the write that wakes the car**, not its content: on the recent
+   * platform (R5, Scenic), `charge/pause-resume` answers 403 and only this POST makes the telematics
+   * unit react. The body is the one we just READ, timestamp refreshed — certainly not invented
+   * values, which would overwrite the chosen start time and temperature.
    */
   writeEvSettings(o: { accountId: string; vin: string; body: unknown; signal?: AbortSignal }): Promise<unknown> {
     const path = carDataPath({ accountId: o.accountId, vin: o.vin, endpoint: 'ev/settings', version: 1, adapter: 'kcm' })
@@ -146,9 +146,9 @@ export class RenaultClient {
   }
 
   /**
-   * Écrit les NIVEAUX VE (`ev/soc-levels`, kcm) : c'est là que vit la cible de charge, à côté du
-   * plancher que l'utilisateur a réglé dans la voiture. Même précaution que `writeEvSettings` : le
-   * corps est celui qu'on vient de lire, seule la cible change.
+   * Writes the EV LEVELS (`ev/soc-levels`, kcm): that's where the charge target lives, next to the
+   * floor the user set in the car. Same precaution as `writeEvSettings`: the body is the one we
+   * just read, only the target changes.
    */
   writeSocLevels(o: { accountId: string; vin: string; body: unknown; signal?: AbortSignal }): Promise<unknown> {
     const path = carDataPath({ accountId: o.accountId, vin: o.vin, endpoint: 'ev/soc-levels', version: 1, adapter: 'kcm' })
@@ -156,15 +156,15 @@ export class RenaultClient {
   }
 
   /**
-   * Climatiser maintenant (`start`, 10 min au plus) ou arrêter (`cancel`). Une ACTION `kca` : son
-   * quota est bien plus serré que celui des lectures (429 puis compte bloqué 1 h, le 2026-09-19).
+   * Precondition now (`start`, 10 min at most) or stop (`cancel`). A `kca` ACTION: its quota is much
+   * tighter than the readings' (429 then account blocked for 1 h, on 2026-09-19).
    */
   hvacStart(o: { accountId: string; vin: string; body: unknown; signal?: AbortSignal }): Promise<unknown> {
     const path = carDataPath({ accountId: o.accountId, vin: o.vin, endpoint: 'actions/hvac-start', version: 1, adapter: 'kca' })
     return this.request('POST', path, { body: o.body, signal: o.signal })
   }
 
-  /** Une lecture véhicule (cf. `carDataPath`). */
+  /** A vehicle reading (see `carDataPath`). */
   carData(o: { accountId: string; vin: string; endpoint: string; version?: number; adapter?: Adapter; signal?: AbortSignal }): Promise<unknown> {
     return this.request('GET', carDataPath(o), { signal: o.signal })
   }
@@ -216,7 +216,7 @@ export class RenaultClient {
   }
 }
 
-/** Le premier `errors[].errorCode` du corps, quand Kamereon en met un. */
+/** The body's first `errors[].errorCode`, when Kamereon puts one there. */
 function upstreamCode(body: unknown): string | undefined {
   const parsed = kamereonErrorsSchema.safeParse(body)
   if (!parsed.success) return undefined

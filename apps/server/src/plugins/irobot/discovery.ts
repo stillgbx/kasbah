@@ -3,38 +3,39 @@ import os from 'node:os'
 import type { Logger } from 'pino'
 import { discoveryPayloadSchema } from './types'
 
-// Découverte des robots iRobot sur le LAN : un datagramme `irobotmcs` en DIFFUSION sur UDP/5678,
-// et chaque robot répond par sa carte d'identité en JSON.
+// Discovery of iRobot robots on the LAN: an `irobotmcs` datagram BROADCAST on UDP/5678, and each
+// robot answers with its identity card in JSON.
 //
-// C'est ce qui évite de mettre une adresse IP en configuration : le robot est trouvé là où il est,
-// et une adresse changée par le DHCP se rattrape toute seule au tour suivant. Le BLID rendu ici
-// est la clé qui relie le robot du réseau au mot de passe obtenu par le compte (`auth.ts`).
+// This is what avoids putting an IP address in configuration: the robot is found where it is, and
+// an address changed by DHCP catches up on its own at the next round. The BLID returned here is
+// the key that links the robot on the network to the password obtained through the account
+// (`auth.ts`).
 
 const PORT = 5678
 const PROBE = 'irobotmcs'
 
 export interface DiscoveredRobot {
-  /** Identifiant fabricant, stable : c'est notre `externalId` et l'identifiant MQTT. */
+  /** Vendor identifier, stable: it's our `externalId` and the MQTT identifier. */
   blid: string
   ip: string
-  /** Nom donné dans l'appli iRobot. */
+  /** Name given in the iRobot app. */
   name: string | null
   sku: string | null
   sw: string | null
-  /** `mqtt` attendu : un robot qui annonce autre chose n'a pas de courtier local. */
+  /** `mqtt` expected: a robot that announces anything else has no local broker. */
   proto: string | null
   cap: Record<string, unknown>
 }
 
 /**
- * Lit une réponse de robot. Pur, donc testable sur la trame capturée.
+ * Reads a robot's answer. Pure, hence testable on the captured frame.
  *
- * Deux générations de robots : les récents donnent `robotid`, les anciens ne mettent le BLID que
- * dans `hostname` (`Roomba-<blid>`). L'adresse rendue par le robot prime sur celle du datagramme :
- * c'est celle qu'il croit avoir, et c'est celle que le courtier écoute.
+ * Two generations of robots: recent ones give `robotid`, older ones only put the BLID in
+ * `hostname` (`Roomba-<blid>`). The address returned by the robot wins over the datagram's: it's
+ * the one it believes it has, and it's the one the broker listens on.
  */
 export function parseDiscovery(text: string, fromIp: string): DiscoveredRobot | null {
-  if (text === PROBE) return null // notre propre diffusion revient sur la boucle locale
+  if (text === PROBE) return null // our own broadcast comes back on the loopback
   let body: unknown
   try { body = JSON.parse(text) } catch { return null }
   const parsed = discoveryPayloadSchema.safeParse(body)
@@ -53,7 +54,7 @@ export function parseDiscovery(text: string, fromIp: string): DiscoveredRobot | 
   }
 }
 
-/** Adresses de diffusion des interfaces IPv4 physiques, plus la diffusion générale en dernier recours. */
+/** Broadcast addresses of the physical IPv4 interfaces, plus the general broadcast as a last resort. */
 export function broadcastAddresses(interfaces: NodeJS.Dict<os.NetworkInterfaceInfo[]> = os.networkInterfaces()): string[] {
   const out = new Set<string>()
   for (const list of Object.values(interfaces)) {
@@ -70,16 +71,16 @@ export function broadcastAddresses(interfaces: NodeJS.Dict<os.NetworkInterfaceIn
 }
 
 export interface DiscoverOptions {
-  /** Durée d'écoute. Un robot répond en quelques dizaines de millisecondes ; 4 s couvre un réveil. */
+  /** Listening time. A robot answers within a few tens of milliseconds; 4 s covers a wake-up. */
   timeoutMs?: number
   signal?: AbortSignal
   logger?: Logger
 }
 
 /**
- * Diffuse et collecte pendant `timeoutMs`. Trois envois espacés : l'UDP se perd, et un robot qui
- * dort sur sa base répond parfois au deuxième. Ne lève jamais — un réseau qui refuse la diffusion
- * rend une liste vide, et le plugin le dira dans sa santé plutôt que de tomber.
+ * Broadcasts and collects for `timeoutMs`. Three spaced sends: UDP gets lost, and a robot sleeping
+ * on its dock sometimes answers the second one. Never throws — a network that refuses broadcast
+ * returns an empty list, and the plugin will say so in its health rather than falling over.
  */
 export async function discoverRobots(opts: DiscoverOptions = {}): Promise<DiscoveredRobot[]> {
   const timeoutMs = opts.timeoutMs ?? 4000
@@ -95,7 +96,7 @@ export async function discoverRobots(opts: DiscoverOptions = {}): Promise<Discov
       done = true
       for (const t of timers) clearTimeout(t)
       opts.signal?.removeEventListener('abort', finish)
-      try { socket.close() } catch { /* déjà fermé */ }
+      try { socket.close() } catch { /* already closed */ }
       resolve([...found.values()])
     }
 
@@ -106,11 +107,11 @@ export async function discoverRobots(opts: DiscoverOptions = {}): Promise<Discov
     })
 
     socket.bind(PORT, () => {
-      try { socket.setBroadcast(true) } catch { /* certaines piles refusent, on tente quand même */ }
+      try { socket.setBroadcast(true) } catch { /* some stacks refuse, we try anyway */ }
       const targets = broadcastAddresses()
       for (let n = 0; n < 3; n++) {
         timers.push(setTimeout(() => {
-          for (const t of targets) socket.send(PROBE, PORT, t, () => { /* perte d'UDP : sans conséquence */ })
+          for (const t of targets) socket.send(PROBE, PORT, t, () => { /* UDP loss: harmless */ })
         }, n * 700))
       }
       timers.push(setTimeout(finish, timeoutMs))

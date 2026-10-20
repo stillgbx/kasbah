@@ -23,19 +23,19 @@ import {
 } from './mapping'
 import { parseTuyaDevices, type TuyaDeviceConfig, type TuyaDps } from './types'
 
-// Plugin Tuya — protocole local 3.5 (tuyapi), pas de cloud après la clé.
+// Tuya plugin — local protocol 3.5 (tuyapi), no cloud once the key is obtained.
 //
-// Un appareil physique (ventilateur-lumière CREATE) produit DEUX descripteurs : `light` et `fan`,
-// liés par `meta.linkedTo` du fan vers la lumière. Découverte = configuration uniquement
-// (broadcast UDP filtré par l'AP Synology — mesuré, inutilisable).
+// One physical device (CREATE fan-light) yields TWO descriptors: `light` and `fan`,
+// linked by the fan's `meta.linkedTo` pointing to the light. Discovery = configuration only
+// (UDP broadcast filtered by the Synology AP — measured, unusable).
 //
-// Pièges tenus ici : jamais sonder un DP, attendre l'état republé pas l'accusé, reconnexion
-// obligatoire, écrire speed allume le ventilateur (patch optimiste côté UI).
+// Pitfalls handled here: never poll a DP, wait for the republished state not the acknowledgment,
+// reconnection required, writing speed switches the fan on (optimistic UI-side patch).
 
 export const tuyaConfigSchema = z.object({
   /**
-   * Tableau JSON d'appareils `{ id, key, ip, name, version? }`. Id + clé + IP sont
-   * indissociables ; la clé (16 car., caractères spéciaux) ne doit jamais passer en CLI ni en log.
+   * JSON array of devices `{ id, key, ip, name, version? }`. Id + key + IP are
+   * inseparable; the key (16 chars, special characters) must never go through a CLI or a log.
    */
   TUYA_DEVICES: z.string().default('').transform((s, ctx) => {
     try {
@@ -45,16 +45,16 @@ export const tuyaConfigSchema = z.object({
       return z.NEVER
     }
   }),
-  /** Délai d'attente de l'effet après écriture (ms). Plafonné aussi par KASBAH_COMMAND_TIMEOUT_MS. */
+  /** Time to wait for the effect after a write (ms). Also capped by KASBAH_COMMAND_TIMEOUT_MS. */
   TUYA_COMMAND_TIMEOUT_MS: z.coerce.number().int().min(500).max(30_000).default(8_000),
-  /** Intervalle de reconnexion (ms). Mesuré nécessaire : la socket tombe sans prévenir. */
+  /** Reconnection interval (ms). Measured as necessary: the socket drops without warning. */
   TUYA_RECONNECT_MS: z.coerce.number().int().min(100).max(30_000).default(700),
 })
 export type TuyaConfig = z.infer<typeof tuyaConfigSchema>
 
 export interface TuyaPluginDeps {
   createSocket?: TuyaSocketFactory
-  /** Délai d'attente d'effet injectable (tests). */
+  /** Injectable wait-for-effect delay (tests). */
   commandTimeoutMs?: number
 }
 
@@ -63,7 +63,7 @@ export function createTuyaPlugin(deps: TuyaPluginDeps = {}): DevicePlugin {
   let config: TuyaConfig | null = null
   let devices: TuyaDeviceConfig[] = []
   const sessions = new Map<string, DeviceSession>()
-  /** DP accumulés par appareil physique. */
+  /** Accumulated DPs per physical device. */
   const rawByPhysical = new Map<string, TuyaDps>()
   const connected = new Set<string>()
   let lastError: string | null = null
@@ -135,7 +135,7 @@ export function createTuyaPlugin(deps: TuyaPluginDeps = {}): DevicePlugin {
       await session.write(w.dps, w.set, writeSignal)
     }
 
-    // Attendre l'effet publié, pas l'accusé (piège 2). Passé le plafond → on résout quand même.
+    // Wait for the published effect, not the acknowledgment (pitfall 2). Past the cap → we resolve anyway.
     if (dpsMatchExpected(session.snapshot(), writes)) return
     const waitSignal = AbortSignal.any([ctx!.signal, AbortSignal.timeout(timeoutMs)])
     await session.waitForDps(writes, waitSignal)
@@ -148,7 +148,7 @@ export function createTuyaPlugin(deps: TuyaPluginDeps = {}): DevicePlugin {
     async init(c: PluginContext): Promise<void> {
       ctx = c
       config = c.config as TuyaConfig
-      // Fermeture qui survit à stop() : tout remettre à zéro (leçon iRobot / Tahoma).
+      // Closure that survives stop(): reset everything (iRobot / Tahoma lesson).
       await closeSessions()
       rawByPhysical.clear()
       lastError = null
@@ -159,7 +159,7 @@ export function createTuyaPlugin(deps: TuyaPluginDeps = {}): DevicePlugin {
     },
 
     async discover(): Promise<DeviceDescriptor[]> {
-      // Aucun appel réseau — les plugins démarrent en série.
+      // No network call — plugins start one after the other.
       return devices.flatMap(toDescriptors)
     },
 

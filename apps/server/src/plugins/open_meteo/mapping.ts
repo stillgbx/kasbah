@@ -5,17 +5,17 @@ import {
 import type { PluginForecast } from '../../core/plugin'
 import type { AirQualityResponse, ForecastResponse, GeocodingResponse } from './types'
 
-// Mappage PUR des réponses d'Open-Meteo vers le contrat `weather`. Écrit d'après des réponses
-// capturées (`__fixtures__/open-meteo.ts`), pas d'après la documentation.
+// PURE mapping of Open-Meteo responses to the `weather` contract. Written from captured responses
+// (`__fixtures__/open-meteo.ts`), not from the documentation.
 
 export const PLUGIN_ID = 'open_meteo'
 export const HOME_ID = 'home'
 export const ATTRIBUTION = 'Open-Meteo.com (CC BY 4.0)'
 
 /**
- * Codes WMO 4677 tels qu'Open-Meteo les émet → la condition du contrat. Les averses (80-82, 85-86)
- * rejoignent pluie et neige ; le verglaçant (56-57, 66-67) devient `sleet`, faute de mieux dans neuf
- * mots ; 1 (« principalement dégagé ») est un ciel dégagé.
+ * WMO 4677 codes as Open-Meteo emits them → the contract's condition. Showers (80-82, 85-86) join
+ * rain and snow; freezing precipitation (56-57, 66-67) becomes `sleet`, for lack of anything better
+ * in nine words; 1 ("mainly clear") is a clear sky.
  */
 export function wmoToCondition(code: number | null | undefined): WeatherCondition {
   if (code === null || code === undefined) return 'cloudy'
@@ -32,9 +32,9 @@ export function wmoToCondition(code: number | null | undefined): WeatherConditio
 }
 
 /**
- * Grains/m³ → niveau 0-4. Les seuils sont GROSSIERS et communs à tous les pollens : les échelles
- * officielles varient par espèce (le bouleau gêne dès 10, les graminées vers 50) et Open-Meteo ne
- * fournit que la concentration. Assez pour dire « faible / élevé », pas pour un bulletin allergique.
+ * Grains/m³ → level 0-4. The thresholds are ROUGH and shared by all pollens: official scales vary
+ * by species (birch bothers from 10, grasses around 50) and Open-Meteo only provides the
+ * concentration. Enough to say "low / high", not for an allergy bulletin.
  */
 export function pollenLevel(grains: number | null | undefined): number | undefined {
   if (grains === null || grains === undefined) return undefined
@@ -56,21 +56,21 @@ export function toDescriptor(hasAirQuality: boolean): DeviceDescriptor {
 const num = (v: number | null | undefined): number | undefined => (v === null || v === undefined ? undefined : v)
 const at = (col: (number | null)[] | undefined, i: number): number | undefined => (i < 0 ? undefined : num(col?.[i]))
 
-/** Indice du pas horaire qui contient `timeS`, ou −1 (les séries sont alignées sur l'heure pleine). */
+/** Index of the hourly step containing `timeS`, or −1 (the series are aligned on the full hour). */
 export function hourIndex(times: readonly number[], timeS: number): number {
   const hourStart = Math.floor(timeS / 3600) * 3600
   return times.indexOf(hourStart)
 }
 
-/** Indice du jour (minuit local) qui contient `timeS`, ou −1. */
+/** Index of the day (local midnight) containing `timeS`, or −1. */
 export function dayIndex(times: readonly number[], timeS: number): number {
   for (let i = times.length - 1; i >= 0; i--) if (times[i]! <= timeS) return i
   return -1
 }
 
 /**
- * L'actuel : le bloc `current`, complété par le pas horaire courant pour ce que `current` ne porte pas
- * (visibilité, UV, point de rosée, probabilité de pluie) et par le jour courant pour le soleil.
+ * Current conditions: the `current` block, completed by the current hourly step for what `current`
+ * doesn't carry (visibility, UV, dew point, rain probability) and by the current day for the sun.
  */
 export function toStatePatch(f: ForecastResponse, aq: AirQualityResponse | null): StatePatch<'weather'> {
   const c = f.current
@@ -88,7 +88,7 @@ export function toStatePatch(f: ForecastResponse, aq: AirQualityResponse | null)
     sunset: Math.round((at(f.daily.sunset, d) ?? 0) * 1000),
     observedAt: c.time * 1000,
   }
-  // `null` = « efface » côté patch : une valeur que ce sondage n'a pas ne doit pas survivre du précédent
+  // `null` = "clear" on the patch side: a value this poll doesn't have must not survive from the previous one
   patch.feelsLikeC = num(c.apparent_temperature) ?? null
   patch.pressureHpa = num(c.pressure_msl) ?? null
   patch.windGustKmh = num(c.wind_gusts_10m) ?? null
@@ -113,7 +113,7 @@ function toPollen(aq: AirQualityResponse): Partial<Record<PollenType, number>> {
   return out
 }
 
-/** Les 24 prochains pas horaires à partir de l'heure courante, et 7 jours à partir d'aujourd'hui. */
+/** The next 24 hourly steps from the current hour, and 7 days from today. */
 export function toForecast(f: ForecastResponse, nowS: number): PluginForecast {
   const h0 = Math.max(0, hourIndex(f.hourly.time, nowS))
   const hourly: WeatherHourlyPoint[] = []
@@ -151,11 +151,11 @@ export function toForecast(f: ForecastResponse, nowS: number): PluginForecast {
   return { issuedAt: f.current.time * 1000, hourly, daily }
 }
 
-/** Un lieu où lire la météo, hors de la maison (recherche et favoris de la vue Météo). */
+/** A place to read the weather for, away from the house (search and favorites of the Weather view). */
 export interface WeatherPlace {
   id: string
   name: string
-  /** Région et pays, pour départager deux homonymes (« Bourgogne, France »). */
+  /** Region and country, to tell two places with the same name apart ("Bourgogne, France"). */
   region?: string
   countryCode?: string
   lat: number
@@ -172,7 +172,7 @@ export function toPlaces(r: GeocodingResponse): WeatherPlace[] {
   })
 }
 
-/** L'état COMPLET d'un lieu quelconque, comme si un appareil l'avait publié (les `null` du patch effacent). */
+/** The FULL state of any place, as if a device had published it (the patch's `null`s clear). */
 export function toWeatherState(f: ForecastResponse, aq: AirQualityResponse | null, now: number): StateFor<'weather'> {
   const base = defaultState('weather', now) as StateFor<'weather'>
   return { ...mergeState(base, toStatePatch(f, aq), now), available: true }

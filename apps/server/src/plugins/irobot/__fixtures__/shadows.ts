@@ -1,27 +1,27 @@
 import type { RobotShadow } from '../mqtt'
 
-// Ombres d'un Roomba Combo RÉEL (`sku c755840`, firmware `stingray+24.29.5`), capturées le
-// 19/09/2026 sur le courtier local du robot, puis jouées en le pilotant depuis l'appli du fabricant.
+// Shadows of a REAL Roomba Combo (`sku c755840`, firmware `stingray+24.29.5`), captured on
+// 09/19/2026 from the robot's local broker, then played by driving it from the vendor's app.
 //
-// CE QUI EST GARDÉ ET CE QUI NE L'EST PAS. Le robot publie 80 clés de premier niveau ; celles qui
-// portent son réseau (`netinfo` : adresse, passerelle, BSSID ; `wlcfg` : SSID) et son matériel
-// (`hwPartsRev` : adresse MAC et numéros de série, `batInfo`, `secureBoot`) sont écartées — pas
-// parce qu'elles gênent le test, mais parce qu'une fixture est un fichier versionné. Le reste est
-// la valeur réelle, bizarreries comprises : `detectedPad: "invalid"` (patin retiré), `tankLvl: 10`,
-// `bin.type: "std"`, `dock.state: 300`.
+// WHAT IS KEPT AND WHAT IS NOT. The robot publishes 80 top-level keys; those that carry its
+// network (`netinfo`: address, gateway, BSSID; `wlcfg`: SSID) and its hardware (`hwPartsRev`: MAC
+// address and serial numbers, `batInfo`, `secureBoot`) are dropped — not because they get in the
+// test's way, but because a fixture is a versioned file. The rest is the real value, quirks
+// included: `detectedPad: "invalid"` (pad removed), `tankLvl: 10`, `bin.type: "std"`,
+// `dock.state: 300`.
 //
-// LES QUATRE ÉTATS viennent d'une séquence réellement jouée, horodatée dans le journal de session :
-//   14:26:43  cycle=clean  phase=stop       en pause depuis 14 min (cf. epochs)  → PAUSED
-//   14:28:59  cycle=clean  phase=hmUsrDock  « rentre », demandé par l'appli     → RETURNING
-//   14:30:33  cycle=clean  phase=charge     ARRIVÉ, mission encore ouverte      → DOCKED_MISSION_OPEN
-//   14:30:37  cycle=none   phase=charge     mission refermée, 4 s plus tard     → DOCKED
-//   14:34:04  cycle=clean  phase=run        reparti                             → CLEANING
+// THE FOUR STATES come from a sequence actually played, timestamped in the session log:
+//   14:26:43  cycle=clean  phase=stop       paused for 14 min (see epochs)       → PAUSED
+//   14:28:59  cycle=clean  phase=hmUsrDock  "go home", requested by the app      → RETURNING
+//   14:30:33  cycle=clean  phase=charge     ARRIVED, mission still open          → DOCKED_MISSION_OPEN
+//   14:30:37  cycle=none   phase=charge     mission closed, 4 s later            → DOCKED
+//   14:34:04  cycle=clean  phase=run        set off again                        → CLEANING
 //
-// Ces quatre secondes entre `phase=charge` et `cycle=none` sont la raison d'être de
-// `DOCKED_MISSION_OPEN` : un mappage qui lirait `cycle` avant `phase` y publierait « en pause » sur
-// un robot posé sur sa base.
+// Those four seconds between `phase=charge` and `cycle=none` are the reason `DOCKED_MISSION_OPEN`
+// exists: a mapping that read `cycle` before `phase` would publish "paused" there for a robot
+// sitting on its dock.
 
-/** Le tronc commun : ce que le robot dit de lui quoi qu'il fasse. */
+/** The common trunk: what the robot says about itself whatever it is doing. */
 const BASE: RobotShadow = {
   name: 'Robby',
   sku: 'c755840',
@@ -30,7 +30,7 @@ const BASE: RobotShadow = {
   batPct: 100,
   bin: { present: true, full: false, type: 'std' },
   binPause: true,
-  // la serpillière du Combo : trois champs, aucun encore au contrat en phase 1
+  // the Combo's mop: three fields, none of them in the contract yet in phase 1
   tankLvl: 10,
   tankPresent: true,
   detectedPad: 'invalid',
@@ -38,7 +38,7 @@ const BASE: RobotShadow = {
   evacAllowed: true,
   schedHold: false,
   dock: { known: true, state: 300, cap: { evac: 1, fr: 0, pw: 0, pd: 0 } },
-  // `scrub: 1` = ce robot LAVE (c'est un Combo) ; `pw: 0` = il ne rend plus son mot de passe local
+  // `scrub: 1` = this robot MOPS (it's a Combo); `pw: 0` = it no longer hands out its local password
   cap: { scrub: 1, pw: 0, pmaps: 9, maps: 3 },
   signal: { rssi: -41, snr: 55, noise: -96 },
 }
@@ -49,11 +49,11 @@ const mission = (over: Record<string, unknown>): RobotShadow['cleanMissionStatus
 })
 
 /**
- * 14:26:43 — mission ouverte mais robot immobile : EN PAUSE. `lastCommand` le confirme.
+ * 14:26:43 — mission open but robot still: PAUSED. `lastCommand` confirms it.
  *
- * Les epochs sont ceux de la capture et ne valent pas l'heure de celle-ci : la mission a démarré à
- * 14:11:37 (`mssnStrtTm`) et la pause a été demandée à 14:12:41 (`lastCommand.time`) — c'est donc un
- * robot arrêté depuis quatorze minutes qu'on a relevé.
+ * The epochs are those of the capture and don't match its time of day: the mission started at
+ * 14:11:37 (`mssnStrtTm`) and the pause was requested at 14:12:41 (`lastCommand.time`) — so what
+ * was recorded is a robot that had been stopped for fourteen minutes.
  */
 export const PAUSED: RobotShadow = {
   ...BASE,
@@ -61,26 +61,26 @@ export const PAUSED: RobotShadow = {
   lastCommand: { command: 'pause', initiator: 'manual', time: 1789819961 },
 }
 
-/** 14:28 — retour demandé depuis l'appli du fabricant (`initiator: "rmtApp"`). */
+/** 14:28 — return requested from the vendor's app (`initiator: "rmtApp"`). */
 export const RETURNING: RobotShadow = {
   ...BASE,
   cleanMissionStatus: mission({ cycle: 'clean', phase: 'hmUsrDock', operatingMode: 1 }),
   lastCommand: { command: 'dock', initiator: 'rmtApp', time: 1789820941 },
 }
 
-/** 14:30:33 — POSÉ sur sa base, mais la mission n'est pas encore refermée. Le cas piégeux. */
+/** 14:30:33 — SITTING on its dock, but the mission is not closed yet. The tricky case. */
 export const DOCKED_MISSION_OPEN: RobotShadow = {
   ...BASE,
   cleanMissionStatus: mission({ cycle: 'clean', phase: 'charge' }),
 }
 
-/** 14:30:37 — mission refermée : au repos sur sa base. */
+/** 14:30:37 — mission closed: idle on its dock. */
 export const DOCKED: RobotShadow = {
   ...BASE,
   cleanMissionStatus: mission({ cycle: 'none', phase: 'charge' }),
 }
 
-/** 14:34 — reparti nettoyer, lancé depuis l'appli. */
+/** 14:34 — set off cleaning again, started from the app. */
 export const CLEANING: RobotShadow = {
   ...BASE,
   cleanMissionStatus: mission({ cycle: 'clean', phase: 'run', initiator: 'rmtApp' }),
@@ -88,11 +88,11 @@ export const CLEANING: RobotShadow = {
 }
 
 /**
- * Bac plein : la seule alarme que le contrat `vacuum` sait porter aujourd'hui.
+ * Bin full: the only alarm the `vacuum` contract can carry today.
  *
- * CONSTRUITE, non capturée — le bac du robot réel était vide pendant toute la séance. Le champ,
- * lui, est bien celui que le robot publie (`bin.full`, vu à `false`) : seule sa valeur est posée
- * à la main. À remplacer par une vraie capture le jour où le bac se remplit.
+ * BUILT, not captured — the real robot's bin was empty throughout the session. The field itself is
+ * indeed the one the robot publishes (`bin.full`, seen at `false`): only its value is set by hand.
+ * To be replaced with a real capture the day the bin fills up.
  */
 export const BIN_FULL: RobotShadow = {
   ...DOCKED,
@@ -100,12 +100,12 @@ export const BIN_FULL: RobotShadow = {
 }
 
 /**
- * Robot en défaut.
+ * Robot in fault.
  *
- * CONSTRUITE, non capturée — le robot n'est tombé en panne à aucun moment de la séance, et on n'a
- * pas voulu l'y mettre. C'est donc la fixture la moins sûre du lot : le code 17 et l'appariement
- * `error` non nul ↔ `phase: "stuck"` viennent de ce que les implémentations tierces rapportent,
- * pas de ce robot. À remplacer par un relevé de `/raw` au premier vrai incident.
+ * BUILT, not captured — the robot never failed at any point during the session, and we didn't want
+ * to make it. So this is the least reliable fixture of the lot: code 17 and the pairing of a
+ * non-zero `error` ↔ `phase: "stuck"` come from what third-party implementations report, not from
+ * this robot. To be replaced with a `/raw` reading at the first real incident.
  */
 export const STUCK: RobotShadow = {
   ...BASE,
@@ -113,14 +113,14 @@ export const STUCK: RobotShadow = {
 }
 
 /**
- * Patin de serpillière POSÉ, relevé le 19/09 à 16:02 : `detectedPad` passe de `"invalid"` à
- * `"reusableWet"` dans la seconde qui suit la pose. Ce sont les deux seules valeurs observées sur ce
- * robot ; d'autres existent sûrement (patin sec, patin jetable), d'où la règle de lecture « tout ce
- * qui n'est pas `invalid` est un patin », plutôt qu'une liste blanche devinée.
+ * Mop pad ATTACHED, recorded on 09/19 at 16:02: `detectedPad` goes from `"invalid"` to
+ * `"reusableWet"` within the second after the pad is fitted. Those are the only two values seen on
+ * this robot; others surely exist (dry pad, disposable pad), hence the reading rule "anything that
+ * isn't `invalid` is a pad", rather than a guessed allowlist.
  *
- * Le réservoir, lui, est resté à 10 — et l'appli du fabricant affichait au même moment sa goutte
- * quasi vide avec « Remplissez le réservoir de Robby » : c'est ce qui établit que `tankLvl` est un
- * POUR CENT et non une échelle maison.
+ * The tank, for its part, stayed at 10 — and the vendor's app at the same moment showed its drop
+ * almost empty with "Remplissez le réservoir de Robby": that is what establishes that `tankLvl` is
+ * a PERCENTAGE and not a homemade scale.
  */
 export const MOP_ATTACHED: RobotShadow = {
   ...DOCKED,
@@ -129,7 +129,7 @@ export const MOP_ATTACHED: RobotShadow = {
   tankPresent: true,
 }
 
-/** Réservoir retiré : le niveau qui traîne dans l'ombre ne veut plus rien dire. CONSTRUITE. */
+/** Tank removed: the level lingering in the shadow no longer means anything. BUILT. */
 export const TANK_REMOVED: RobotShadow = {
   ...MOP_ATTACHED,
   tankPresent: false,

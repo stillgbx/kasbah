@@ -24,113 +24,113 @@ import {
 } from './state'
 import { commandResultSchema, partnerPublicKeySchema, releaseNotesResponseSchema, vehicleDataSchema, vehicleSummarySchema, vehiclesListSchema, type VehicleSummary } from './types'
 
-// Plugin Tesla : véhicules lus par la Fleet API (cloud du fabricant, il n'existe rien en local).
-// Lu : charge, autonomie, câble, verrouillage, position, kilométrage, vitesse et rapport, pression
-// des pneus, températures, et la VEILLE. Écrit : la limite de charge, seul réglage accepté pour
-// l'instant — plus le réveil et la relecture, à la demande.
+// Tesla plugin: vehicles read through the Fleet API (the vendor's cloud, nothing exists locally).
+// Read: charge, range, cable, locking, position, mileage, speed and gear, tire pressure,
+// temperatures, and the SLEEP STATE. Written: the charge limit, the only setting accepted for now —
+// plus wake-up and re-read, on demand.
 //
-// Trois contraintes du fabricant dictent la forme du plugin :
+// Three vendor constraints dictate the plugin's shape:
 //
-//  1. Une application déclarée sur developer.tesla.com, et un DOMAINE public en HTTPS qui sert la
-//     clé publique de l'application (`auth.ts`). Kasbah tourne sur le LAN : la clé publique est
-//     générée ici, affichée dans les Réglages, et c'est l'utilisateur qui la pose sur son domaine
-//     (un NAS). Le plugin enregistre ensuite le domaine auprès de Tesla et vérifie ce qu'il a lu.
+//  1. An application declared on developer.tesla.com, and a public HTTPS DOMAIN that serves the
+//     application's public key (`auth.ts`). Kasbah runs on the LAN: the public key is generated
+//     here, displayed in Settings, and it's the user who puts it on their domain (a NAS). The plugin
+//     then registers the domain with Tesla and checks what Tesla read.
 //
-//  2. L'API est FACTURÉE à l'usage depuis 2025, avec 10 $ de crédit mensuel par compte : une lecture
-//     complète (`vehicle_data`) coûte 1 $ pour 500, un réveil 1 $ pour 50. D'où un budget journalier
-//     de lectures (`TESLA_DAILY_DATA_BUDGET`), au-delà duquel on ne lit plus jusqu'au lendemain — sans
-//     carte bancaire enregistrée, Tesla coupe de toute façon au bout du crédit.
+//  2. The API has been BILLED by usage since 2025, with $10 of monthly credit per account: a full
+//     read (`vehicle_data`) costs $1 per 500, a wake-up $1 per 50. Hence a daily read budget
+//     (`TESLA_DAILY_DATA_BUDGET`), beyond which nothing is read until the next day — without a
+//     registered bank card, Tesla cuts off anyway once the credit is used up.
 //
-//  3. Le véhicule DORT. Un quart d'heure après s'être garé, il coupe son ordinateur et répond 408 à
-//     toute lecture. La liste des véhicules donne sa veille sans le réveiller : on ne lit
-//     `vehicle_data` que s'il est éveillé, et jamais on ne le réveille de nous-mêmes (un Model S
-//     d'avant 2021 vide sa batterie à rester éveillé). Une fois lu au REPOS — garé, personne à bord,
-//     pas en charge — on le laisse tranquille `TESLA_REST_MS`, le temps qu'il s'endorme.
+//  3. The vehicle SLEEPS. A quarter of an hour after parking, it shuts down its computer and answers
+//     408 to any read. The vehicle list gives its sleep state without waking it: we only read
+//     `vehicle_data` if it's awake, and we never wake it of our own accord (a pre-2021 Model S
+//     drains its battery staying awake). Once read at REST — parked, nobody on board, not charging
+//     — we leave it alone for `TESLA_REST_MS`, the time it takes to fall asleep.
 //
-// Les fixtures de `__fixtures__/fleet.ts` sont écrites d'après la documentation, faute de compte lié
-// au moment d'écrire : `GET /api/plugins/tesla/raw` sert à les remplacer par une vraie capture.
+// The fixtures in `__fixtures__/fleet.ts` are written from the documentation, for lack of a linked
+// account at the time of writing: `GET /api/plugins/tesla/raw` serves to replace them with a real capture.
 
 const optionalKey = z.string().trim().transform((s) => (s === '' ? undefined : s)).optional()
 
 export const teslaConfigSchema = z.object({
-  /** Identifiants de l'application créée sur developer.tesla.com. */
+  /** Credentials of the application created on developer.tesla.com. */
   TESLA_CLIENT_ID: optionalKey,
   TESLA_CLIENT_SECRET: optionalKey,
-  /** Domaine (hôte seul) qui sert la clé publique, celui déclaré dans l'application. */
+  /** Domain (host only) that serves the public key, the one declared in the application. */
   TESLA_DOMAIN: optionalKey,
-  /** Région du compte Tesla : décide la base de l'API. */
+  /** Region of the Tesla account: decides the API base. */
   TESLA_REGION: z.enum(['eu', 'na']).default('eu'),
-  /** Doit être déclarée telle quelle dans l'application (« Allowed Redirect URI »). */
+  /** Must be declared as is in the application ("Allowed Redirect URI"). */
   TESLA_REDIRECT_URI: z.string().url().default('http://localhost:8787/api/plugins/tesla/auth/callback'),
-  /** Où garder les jetons du compte (le refresh token est à usage unique : on le réécrit à chaque tour). */
+  /** Where to keep the account tokens (the refresh token is single-use: we rewrite it every round). */
   TESLA_TOKEN_FILE: z.string().trim().default(stateFile('tesla-token.json')),
-  /** Où garder la clé privée de l'application (sa clé publique est celle qu'on pose sur le domaine). */
+  /** Where to keep the application's private key (its public key is the one put on the domain). */
   TESLA_KEY_FILE: z.string().trim().default(stateFile('tesla-key.json')),
   /**
-   * Où garder le DERNIER ÉTAT de chaque véhicule et la consommation du mois (voir `state.ts`). Sans
-   * lui, un redémarrage repart d'une carte vide jusqu'à la prochaine lecture — qui peut attendre des
-   * heures — et la jauge de quota perd le compte. Chaîne vide = ne rien garder.
+   * Where to keep the LAST STATE of each vehicle and the month's usage (see `state.ts`). Without it,
+   * a restart starts again from an empty card until the next read — which may take hours — and the
+   * quota gauge loses count. Empty string = keep nothing.
    */
   TESLA_STATE_FILE: z.string().trim().default(stateFile('tesla-state.json')),
-  /** Cadence de la liste des véhicules (veille) et, quand un véhicule est éveillé, de sa lecture complète. */
+  /** Rate of the vehicle list (sleep state) and, when a vehicle is awake, of its full read. */
   TESLA_POLL_MS: z.coerce.number().int().min(60_000).max(3_600_000).default(600_000),
-  /** Après une lecture au repos, durée sans relecture : c'est le temps que le véhicule s'endorme. 0 = jamais de repos. */
+  /** After a read at rest, time without re-reading: the time it takes the vehicle to fall asleep. 0 = never rest. */
   TESLA_REST_MS: z.coerce.number().int().min(0).max(7_200_000).default(900_000),
-  /** Lectures complètes par jour, au plus (1 $ pour 500 chez Tesla). 0 = aucune lecture, veille seule. */
+  /** Full reads per day, at most ($1 per 500 at Tesla). 0 = no read, sleep state only. */
   TESLA_DAILY_DATA_BUDGET: z.coerce.number().int().min(0).max(10_000).default(100),
 })
 export type TeslaConfig = z.infer<typeof teslaConfigSchema>
 
-/** Après un réveil demandé, délai avant de relire : le véhicule met quelques secondes à répondre. */
+/** After a requested wake-up, delay before re-reading: the vehicle takes a few seconds to answer. */
 const WAKE_FOLLOW_UP_MS = 15_000
-/** Préconditionnement d'une voiture endormie : la veille relue (liste, gratuite) à ce pas, jusqu'à ce plafond. */
+/** Preconditioning a sleeping car: the sleep state re-read (list, free) at this step, up to this cap. */
 const CLIMATE_WAKE_POLL_MS = 5_000
 const CLIMATE_WAKE_MAX_MS = 90_000
 /**
- * Mise à jour logicielle : relire `UPDATE_FOLLOW_UP_MS` après l'accusé — Tesla fixe LUI-MÊME l'heure
- * d'un « maintenant » (un décompte, vu sur la vraie voiture le 2026-10-02) —, puis
- * `UPDATE_START_GRACE_MS` après l'heure prévue, pour constater que l'installation a démarré.
+ * Software update: re-read `UPDATE_FOLLOW_UP_MS` after the acknowledgment — Tesla ITSELF sets the
+ * time of a "now" (a countdown, seen on the real car on 2026-10-02) —, then `UPDATE_START_GRACE_MS`
+ * after the scheduled time, to confirm the installation has started.
  */
 const UPDATE_FOLLOW_UP_MS = 15_000
 const UPDATE_START_GRACE_MS = 60_000
-/** Au-delà, pas de minuterie : le sondage ordinaire constatera le démarrage. */
+/** Beyond this, no timer: the ordinary polling will notice the start. */
 const UPDATE_WATCH_MAX_MS = 6 * 3_600_000
-/** Après un démarrage ou un arrêt de charge, délai avant de relire : la borne met 20 s à 1 min à donner du courant. */
+/** After a charge start or stop, delay before re-reading: the charger takes 20 s to 1 min to deliver current. */
 const CHARGE_FOLLOW_UP_MS = 60_000
-/** Refus passager `could_not_wake_buses` : nouvelles tentatives, au pas de `CLIMATE_WAKE_POLL_MS`. */
+/** Transient `could_not_wake_buses` refusal: new attempts, at the `CLIMATE_WAKE_POLL_MS` step. */
 const BUSES_RETRIES = 3
 /**
- * Le même refus sur la limite de charge : retenté DANS la commande (l'UI attend le résultat, le
- * curseur tient la valeur demandée), donc plus court — 2 essais à 2,5 s tiennent, requêtes comprises,
- * sous le délai d'une commande (`KASBAH_COMMAND_TIMEOUT_MS`, 10 s par défaut).
+ * The same refusal on the charge limit: retried WITHIN the command (the UI awaits the result, the
+ * slider holds the requested value), hence shorter — 2 attempts at 2.5 s fit, requests included,
+ * under a command's timeout (`KASBAH_COMMAND_TIMEOUT_MS`, 10 s by default).
  */
 const LIMIT_BUSES_RETRIES = 2
 const LIMIT_BUSES_PAUSE_MS = 2_500
-/** Sous ce niveau, Tesla refuse `auto_conditioning_start` (`low_soc`). */
+/** Below this level, Tesla refuses `auto_conditioning_start` (`low_soc`). */
 const LOW_SOC_PCT = 20
-/** Notes de version relues un jour avant que leurs illustrations (URL signées, ~14 jours) n'expirent. */
+/** Release notes re-read one day before their illustrations (signed URLs, ~14 days) expire. */
 const NOTES_REFRESH_BEFORE_MS = 86_400_000
-/** Après un échec de lecture des notes, pas de nouvel essai avant : sinon chaque lecture complète le rejouerait. */
+/** After a failed notes read, no new attempt before this: otherwise every full read would replay it. */
 const NOTES_RETRY_MS = 6 * 3_600_000
-/** Règle de lecture des notes, dans la clé du cache : la changer fait relire les caches une fois. */
+/** Notes read rule, in the cache key: changing it makes the caches re-read once. */
 const NOTES_RULE = 'language+installed'
-/** Langues d'app retenues pour les notes, au plus (l'anglais en plus) : une requête ne peut pas en faire grossir la liste sans fin. */
+/** App languages kept for the notes, at most (English on top): a request can't grow the list endlessly. */
 const NOTES_MAX_LANGS = 4
-/** Sections de `vehicle_data` lues. `location_data` est OBLIGATOIRE pour la position depuis le logiciel 2023.38. */
+/** Sections of `vehicle_data` read. `location_data` is REQUIRED for the position since software 2023.38. */
 const DATA_ENDPOINTS = ['charge_state', 'drive_state', 'vehicle_state', 'climate_state', 'location_data', 'vehicle_config'].join(';')
 
 
-/** Ce que la carte des Réglages affiche. Ne porte jamais un secret, ni la clé privée. */
+/** What the Settings card displays. Never carries a secret, nor the private key. */
 export interface TeslaStatus {
-  /** Identifiants de l'application présents en configuration. */
+  /** Application credentials present in configuration. */
   configured: boolean
   domain: string | null
   region: TeslaRegion
   redirectUri: string
-  /** Clé publique à poser sur le domaine, et l'URL exacte où Tesla la lira. */
+  /** Public key to put on the domain, and the exact URL where Tesla will read it. */
   publicKeyPem: string | null
   publicKeyUrl: string | null
-  /** Dernière vérification de l'enregistrement du domaine ; `undefined` = jamais vérifié. */
+  /** Last check of the domain registration; `undefined` = never checked. */
   registered: boolean | undefined
   linked: boolean
   vehicles: { vin: string; name: string; sleepState: VehicleSleepState }[]
@@ -142,7 +142,7 @@ export interface TeslaStatus {
 }
 
 export interface TeslaPluginDeps {
-  /** Injecté par les tests : toutes les requêtes (serveur d'authentification et API). */
+  /** Injected by tests: all requests (auth server and API). */
   fetchImpl?: FetchLike
   tokenStore?: TokenStore
   keyStore?: KeyStore
@@ -152,12 +152,11 @@ export interface TeslaPluginDeps {
 interface VehicleTrack {
   summary: VehicleSummary
   sleepState: VehicleSleepState
-  /** Ne pas relire avant (véhicule vu au repos). */
+  /** Don't re-read before (vehicle seen at rest). */
   restUntil: number
   /**
-   * Peinture lue dans `vehicle_config` : teinte et aspect. Elle n'est PAS dans la liste des
-   * véhicules — elle n'arrive qu'avec une lecture complète, donc le descripteur naît sans peinture
-   * et la gagne ensuite.
+   * Paint read from `vehicle_config`: color and finish. It is NOT in the vehicle list — it only
+   * arrives with a full read, so the descriptor is born without paint and gains it afterwards.
    */
   paint?: { color?: string; finish?: VehicleFinish }
 }
@@ -171,21 +170,21 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
   let keyStore: KeyStore | null = null
   let registered: boolean | undefined
   let lastError: string | null = null
-  /** Sondage : un timer reposé après chaque tour, et après chaque lecture manuelle (le délai repart). */
+  /** Polling: a timer re-armed after each round, and after each manual read (the delay restarts). */
   let polling = false
   let timer: unknown = null
   const vehicles = new Map<string, VehicleTrack>()
-  /** `state` émis par /auth/url et attendus au retour : une liaison ne s'accepte que si on l'a lancée. */
+  /** `state` values issued by /auth/url and expected on return: a link is only accepted if we started it. */
   const pendingStates = new Set<string>()
-  /** Lectures complètes du jour (date locale du serveur) : c'est ce que le budget borne. */
+  /** Full reads of the day (server's local date): it's what the budget bounds. */
   let budget = { day: '', used: 0 }
   let budgetWarned = false
-  /** Ce qui survit à un redémarrage : dernier état par véhicule, consommation du mois (`state.ts`). */
+  /** What survives a restart: last state per vehicle, the month's usage (`state.ts`). */
   let store: TeslaStateStore | null = null
   let saved: TeslaState = emptyState()
 
   const log = () => ctx!.logger
-  /** Écrit le fichier d'état sans faire attendre l'appelant : le perdre n'empêche jamais de lire. */
+  /** Writes the state file without making the caller wait: losing it never prevents reading. */
   const persist = () => { void store?.save(saved) }
   const fetchImpl: FetchLike = deps.fetchImpl
     ?? ((url, init) => undiciFetch(url, init as Parameters<typeof undiciFetch>[1]) as unknown as ReturnType<FetchLike>)
@@ -219,7 +218,7 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     if (budget.day !== today()) { budget = { day: today(), used: 0 }; budgetWarned = false }
     return budget.used
   }
-  /** Réserve une lecture ; `false` quand le budget du jour est épuisé (journalisé une fois par jour). */
+  /** Reserves a read; `false` when the day's budget is spent (logged once a day). */
   function takeBudget(): boolean {
     const used = budgetUsedToday()
     if (used >= config!.TESLA_DAILY_DATA_BUDGET) {
@@ -233,12 +232,12 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     return true
   }
 
-  // ---- lectures -----------------------------------------------------------------------------
+  // ---- reads --------------------------------------------------------------------------------
 
   const descriptors = (): DeviceDescriptor[] => [...vehicles.values()].map((v) => toDescriptor(v.summary, v.paint))
   const vins = () => [...vehicles.keys()].sort().join(',')
 
-  /** Liste des véhicules : la veille de chacun, sans le réveiller. Valide véhicule par véhicule. */
+  /** Vehicle list: each one's sleep state, without waking it. Validates vehicle by vehicle. */
   async function listVehicles(): Promise<VehicleSummary[]> {
     const raw = vehiclesListSchema.parse(await client!.request('GET', '/api/1/vehicles', { signal: ctx!.signal }))
     const out: VehicleSummary[] = []
@@ -251,8 +250,8 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
   }
 
   /**
-   * Met la liste à jour et republie les descripteurs si un véhicule apparaît ou disparaît.
-   * `emit: false` pendant `discover` : c'est la valeur de retour qui compte alors, pas une émission.
+   * Updates the list and republishes the descriptors if a vehicle appears or disappears.
+   * `emit: false` during `discover`: it's the return value that counts then, not an emission.
    */
   function adoptList(list: VehicleSummary[], emit = true): void {
     const before = vins()
@@ -263,7 +262,7 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
       const paint = saved.paints[s.vin]
       if (track) {
         track.summary = s
-        // redémarrage : la piste renaît sans peinture, le fichier d'état la rend
+        // restart: the track is reborn without paint, the state file gives it back
         if (!track.paint && paint) track.paint = paint
       } else {
         vehicles.set(s.vin, {
@@ -279,7 +278,7 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     }
   }
 
-  /** Lecture complète d'UN véhicule, comptée au budget. Lève `DEVICE_UNAVAILABLE` s'il dort. */
+  /** Full read of ONE vehicle, counted against the budget. Throws `DEVICE_UNAVAILABLE` if it's asleep. */
   async function readVehicle(vin: string): Promise<void> {
     const track = vehicles.get(vin)
     if (!track) throw new PluginError('DEVICE_UNAVAILABLE', `unknown Tesla vehicle ${vin}`)
@@ -287,12 +286,12 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     const data = vehicleDataSchema.parse(await client!.request('GET', path, { signal: ctx!.signal })).response
     const patch = { ...toDataPatch(data), readAt: ctx!.clock.now() }
     ctx!.emitState(vin, patch)
-    // gardé pour le prochain démarrage : la carte retrouve ces valeurs au lieu de repartir vide
+    // kept for the next startup: the card gets these values back instead of starting empty
     saved.vehicles[vin] = { ...saved.vehicles[vin], ...patch } as Record<string, unknown>
     track.sleepState = toSleepState(data.state)
-    // La peinture n'arrive qu'ici, et elle peut CHANGER sans qu'on y soit pour rien : le « Coloriseur »
-    // de l'écran de bord choisit couleur ET aspect. On republie alors le descripteur —
-    // c'est le seul moment où il bouge sans que la liste des véhicules ait bougé.
+    // The paint only arrives here, and it can CHANGE without us having anything to do with it: the
+    // dashboard screen's "Colorizer" picks color AND finish. We then republish the descriptor —
+    // it's the only moment it changes without the vehicle list having changed.
     const paint = { color: bodyColor(data), finish: bodyFinish(data) }
     if (paint.color || paint.finish) {
       const changed = paint.color !== track.paint?.color || paint.finish !== track.paint?.finish
@@ -301,13 +300,13 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
       if (changed) ctx!.emitDevices(descriptors())
     }
     persist()
-    // la voiture est éveillée, c'est le moment : notes de version relues si une version a changé
+    // the car is awake, now's the time: release notes re-read if a version changed
     void refreshNotes(vin)
     watchUpdateStart(vin)
-    // au repos : on le laisse s'endormir, la prochaine lecture attendra
+    // at rest: we let it fall asleep, the next read will wait
     track.restUntil = isResting(data) && config!.TESLA_REST_MS > 0 ? ctx!.clock.now() + config!.TESLA_REST_MS : 0
-    // une lecture, d'où qu'elle vienne (sondage, réveil, rafraîchissement demandé), remet le compteur
-    // du sondage à zéro : relire dix minutes après la dernière lecture, pas selon un calendrier fixe
+    // a read, wherever it comes from (polling, wake-up, requested refresh), resets the polling
+    // countdown: re-read ten minutes after the last read, not on a fixed schedule
     if (polling) scheduleNext(config!.TESLA_POLL_MS)
   }
 
@@ -324,7 +323,7 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
       try {
         await readVehicle(vin)
       } catch (err) {
-        // endormi entre la liste et la lecture : réponse normale, pas un incident
+        // fell asleep between the list and the read: normal response, not an incident
         if (err instanceof PluginError && err.code === 'DEVICE_UNAVAILABLE') {
           track.sleepState = 'asleep'
           ctx!.emitState(vin, { sleepState: 'asleep' })
@@ -337,8 +336,8 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
   }
 
   /**
-   * Sondage maison plutôt que `createPoller` : il faut pouvoir REPOSER le timer après une lecture
-   * manuelle. Un échec ne fait pas de backoff serré — l'API est facturée, dix minutes plus tard suffit.
+   * Homemade polling rather than `createPoller`: the timer must be RE-ARMABLE after a manual read.
+   * A failure doesn't trigger a tight backoff — the API is billed, ten minutes later is enough.
    */
   function scheduleNext(ms: number): void {
     if (timer !== null) ctx!.clock.clearTimeout(timer)
@@ -365,9 +364,9 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     void runPoll()
   }
 
-  // ---- climatisation ------------------------------------------------------------------------
+  // ---- climate ------------------------------------------------------------------------------
 
-  /** Une commande REST, refusée en HTTP 200 par `result: false` (cf. la limite de charge). */
+  /** A REST command, refused as HTTP 200 with `result: false` (see the charge limit). */
   async function vehicleCommand(vin: string, name: string, body?: unknown): Promise<void> {
     const res = commandResultSchema.parse(await client!.request(
       'POST', `/api/1/vehicles/${encodeURIComponent(vin)}/command/${name}`, { body, signal: ctx!.signal },
@@ -378,7 +377,7 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     }
   }
 
-  /** La consigne d'abord (même valeur des deux côtés), puis la marche ou l'arrêt ; l'état suit sans relecture. */
+  /** The setpoint first (same value on both sides), then on or off; the state follows without a re-read. */
   async function climateCommand(vin: string, command: CommandOf<'vehicle.climate_start'> | CommandOf<'vehicle.climate_stop'>): Promise<void> {
     if (command.type === 'vehicle.climate_stop') {
       await vehicleCommand(vin, 'auto_conditioning_stop')
@@ -390,10 +389,10 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
       await vehicleCommand(vin, 'set_temps', { driver_temp: command.targetTempC, passenger_temp: command.targetTempC })
     }
     try {
-      // Sous 20 %, Tesla refuse (`low_soc`). Son appli fait confirmer puis force ; l'API REST, NON :
-      // le proxy officiel (vehicle-command, `pkg/proxy/command.go`) ne lit aucun `manual_override`
-      // pour `auto_conditioning_start` (seulement keeper / max / bioweapon), et l'envoyer quand même
-      // était ignoré — constaté sur la vraie voiture le 2026-10-01
+      // Below 20 %, Tesla refuses (`low_soc`). Its app asks for confirmation then forces; the REST API
+      // does NOT: the official proxy (vehicle-command, `pkg/proxy/command.go`) reads no
+      // `manual_override` for `auto_conditioning_start` (only keeper / max / bioweapon), and sending it
+      // anyway was ignored — observed on the real car on 2026-10-01
       await vehicleCommand(vin, 'auto_conditioning_start')
     } catch (err) {
       if (err instanceof PluginError && err.message.endsWith(': low_soc')) {
@@ -406,16 +405,16 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
   }
 
   /**
-   * Régler consigne, sièges et volant d'une voiture ÉVEILLÉE — jamais de réveil pour un réglage,
-   * comme pour la limite de charge (endormie : 408, `DEVICE_UNAVAILABLE`). Une commande par réglage,
-   * l'état publié au fil des accusés : un refus au milieu laisse la carte juste sur ce qui est passé.
+   * Set the setpoint, seats and steering wheel of an AWAKE car — never a wake-up for a setting, as
+   * for the charge limit (asleep: 408, `DEVICE_UNAVAILABLE`). One command per setting, the state
+   * published as acknowledgments come in: a refusal midway leaves the card right about what went through.
    */
   async function setClimate(vin: string, command: CommandOf<'vehicle.climate_set'>): Promise<void> {
     if (command.targetTempC !== undefined) {
       await vehicleCommand(vin, 'set_temps', { driver_temp: command.targetTempC, passenger_temp: command.targetTempC })
       ctx!.emitState(vin, { climateTargetC: command.targetTempC })
     }
-    // la fusion de l'état est SUPERFICIELLE : `seatHeat` se publie entier, à partir du dernier connu
+    // the state merge is SHALLOW: `seatHeat` is published whole, starting from the last known one
     const last = (saved.vehicles[vin] ??= {}) as { seatHeat?: Partial<Record<VehicleSeat, number>> }
     for (const [seat, level] of Object.entries(command.seatHeat ?? {}) as [VehicleSeat, number | undefined][]) {
       if (level === undefined) continue
@@ -431,17 +430,17 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
   }
 
   /**
-   * Préconditionner. Éveillée, la commande part tout de suite. Endormie — le cas normal d'un matin —,
-   * on la RÉVEILLE : c'est l'objet même de la commande, et l'utilisateur l'a voulu ainsi (accord du
-   * 2026-10-01, y compris depuis une automatisation). Le réveil met une dizaine de secondes, bien plus
-   * que le délai d'une commande : `execute` rend la main à l'accusé du réveil, la suite tourne derrière
-   * (veille relue par la liste, gratuite, toutes les `CLIMATE_WAKE_POLL_MS`), puis une lecture
-   * complète CONSTATE l'effet. Un échec en arrière-plan se lit dans le journal du serveur.
+   * Precondition. Awake, the command goes out right away. Asleep — the normal case on a morning —, we
+   * WAKE it: it's the very purpose of the command, and the user wanted it that way (agreed on
+   * 2026-10-01, including from an automation). The wake-up takes about ten seconds, far more than a
+   * command's timeout: `execute` returns at the wake-up's acknowledgment, the rest runs behind (sleep
+   * state re-read through the list, free, every `CLIMATE_WAKE_POLL_MS`), then a full read OBSERVES
+   * the effect. A background failure shows up in the server log.
    */
   async function startClimate(vin: string, command: CommandOf<'vehicle.climate_start'>): Promise<void> {
     const track = vehicles.get(vin)!
-    // le refus `low_soc` est CONNU d'avance : sous le seuil, on refuse AVANT de payer un réveil, qui
-    // serait suivi d'un refus que personne ne verrait (il arrive en arrière-plan)
+    // the `low_soc` refusal is KNOWN in advance: below the threshold, we refuse BEFORE paying for a
+    // wake-up, which would be followed by a refusal nobody would see (it arrives in the background)
     const soc = saved.vehicles[vin]?.soc
     if (typeof soc === 'number' && soc < LOW_SOC_PCT) {
       throw new PluginError('LOW_BATTERY', `battery at ${soc} %, below Tesla's ${LOW_SOC_PCT} % climate threshold (low_soc)`)
@@ -454,9 +453,9 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
   }
 
   /**
-   * Réveiller, puis lancer `run` dès que la liste (gratuite) dit la voiture en ligne, et la relire
-   * `followUpMs` plus tard pour CONSTATER l'effet. `execute` rend la main à l'accusé du réveil : la
-   * suite tourne derrière, et son échec se lit dans le journal du serveur.
+   * Wake up, then run `run` as soon as the (free) list says the car is online, and re-read it
+   * `followUpMs` later to OBSERVE the effect. `execute` returns at the wake-up's acknowledgment: the
+   * rest runs behind, and its failure shows up in the server log.
    */
   async function wakeThen(vin: string, what: string, run: () => Promise<void>, followUpMs: number): Promise<void> {
     await client!.request('POST', `/api/1/vehicles/${encodeURIComponent(vin)}/wake_up`, { signal: ctx!.signal })
@@ -489,10 +488,10 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
   // ---- charge -------------------------------------------------------------------------------
 
   /**
-   * `charge_start` / `charge_stop`, non signés comme la limite de charge. Déjà dans l'état voulu
-   * (`is_charging`, `not_charging`) n'est pas un échec. `charging` n'est PAS publié sur l'accusé : la
-   * voiture accepte avant que le courant coule (la borne met 20 s à 1 min, constaté le 2026-10-01),
-   * c'est une relecture `CHARGE_FOLLOW_UP_MS` plus tard qui le constate.
+   * `charge_start` / `charge_stop`, unsigned like the charge limit. Already in the desired state
+   * (`is_charging`, `not_charging`) is not a failure. `charging` is NOT published on the
+   * acknowledgment: the car accepts before current flows (the charger takes 20 s to 1 min, observed
+   * on 2026-10-01), it's a re-read `CHARGE_FOLLOW_UP_MS` later that observes it.
    */
   async function chargeCommand(vin: string, start: boolean): Promise<void> {
     try { await vehicleCommand(vin, start ? 'charge_start' : 'charge_stop') }
@@ -503,9 +502,9 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
   }
 
   /**
-   * Lancer ou arrêter la charge. Débranchée d'après le dernier état connu : refusé AVANT tout réveil.
-   * Endormie, l'arrêt n'a rien à faire (une voiture qui charge ne dort pas) ; le démarrage, lui, la
-   * RÉVEILLE, comme la climatisation : c'est un geste de l'utilisateur ou d'une règle qu'il a écrite.
+   * Start or stop the charge. Unplugged according to the last known state: refused BEFORE any
+   * wake-up. Asleep, stopping has nothing to do (a car that is charging doesn't sleep); starting, on
+   * the other hand, WAKES it, like the climate: it's an action of the user or of a rule they wrote.
    */
   async function charge(vin: string, start: boolean): Promise<void> {
     const track = vehicles.get(vin)!
@@ -521,8 +520,8 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
         await wakeThen(vin, 'start charging', () => chargeCommand(vin, true), CHARGE_FOLLOW_UP_MS)
         return
       }
-      // « en ligne » d'après la liste, mais ses bus internes dorment encore : refus PASSAGER, constaté
-      // sur la vraie voiture le 2026-10-01 juste après la borne forcée. On retente derrière.
+      // "online" according to the list, but its internal buses are still asleep: TRANSIENT refusal,
+      // observed on the real car on 2026-10-01 right after forcing the charger. We retry behind.
       if (!(err instanceof PluginError && err.message.endsWith(': could_not_wake_buses'))) throw err
       log().info({ vin }, 'Tesla buses still asleep: retrying the charge command')
       void retryThenFollowUp(vin, start)
@@ -550,7 +549,7 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     await followUp(vin)
   }
 
-  /** Relire `CHARGE_FOLLOW_UP_MS` plus tard : c'est la lecture qui dit si le courant coule. */
+  /** Re-read `CHARGE_FOLLOW_UP_MS` later: it's the read that says whether current is flowing. */
   async function followUp(vin: string): Promise<void> {
     await sleep(ctx!.clock, CHARGE_FOLLOW_UP_MS, ctx!.signal)
     if (ctx!.signal.aborted || !takeBudget()) return
@@ -558,20 +557,20 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     catch (err) { log().debug({ err, vin }, 'Tesla charge follow-up read failed') }
   }
 
-  // ---- logiciel : notes de version et mise à jour ---------------------------------------------
+  // ---- software: release notes and update -----------------------------------------------------
 
   type SoftwareUpdate = NonNullable<StateFor<'vehicle'>['softwareUpdate']>
   const lastSoftware = (vin: string) => saved.vehicles[vin] as { softwareVersion?: string; softwareUpdate?: SoftwareUpdate | null } | undefined
-  /** Lecture des notes en vol, par VIN : deux lectures complètes rapprochées n'en lancent qu'une. */
+  /** Notes read in flight, per VIN: two close full reads only start one. */
   const notesInFlight = new Set<string>()
-  /** Pas de nouvel essai avant cette date (ms epoch), par VIN, après un échec. */
+  /** No new attempt before this date (epoch ms), per VIN, after a failure. */
   const notesRetryAt = new Map<string, number>()
 
   /**
-   * Relire les notes de version — UNIQUEMENT quand la version installée ou celle en attente a changé
-   * depuis la dernière lecture, ou quand leurs illustrations vont expirer. Appelé après une lecture
-   * complète (voiture éveillée), sans la faire attendre : un échec ne coûte qu'un message de journal,
-   * et la prochaine lecture retentera.
+   * Re-read the release notes — ONLY when the installed or the pending version changed since the
+   * last read, or when their illustrations are about to expire. Called after a full read (car
+   * awake), without making it wait: a failure only costs a log message, and the next read will
+   * try again.
    */
   async function refreshNotes(vin: string): Promise<void> {
     const installed = lastSoftware(vin)?.softwareVersion
@@ -579,7 +578,7 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     if ((notesRetryAt.get(vin) ?? 0) > ctx!.clock.now()) return
     notesInFlight.add(vin)
     try {
-      // l'anglais d'abord : c'est le repli, et la référence qui dit si Tesla publie l'autre langue
+      // English first: it's the fallback, and the reference that tells whether Tesla publishes the other language
       for (const lang of [RELEASE_NOTES_FALLBACK_LANG, ...saved.releaseNotesLangs.filter((l) => l !== RELEASE_NOTES_FALLBACK_LANG)]) {
         await refreshNotesIn(vin, lang)
       }
@@ -593,19 +592,19 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
   }
 
   /**
-   * Les notes d'UNE langue, demandée à Tesla par le paramètre `language` (deux lettres). Essayé sur la
-   * vraie voiture le 2026-10-02 : `language=fr` rend le français de l'appli Tesla (« Cartes de sites
-   * Superchargeur ») ; `Accept-Language`, `locale=fr_FR` et `locale=fr-FR` sont ignorés (anglais).
-   * Rien n'est traduit ici : si Tesla rend les mêmes textes qu'en anglais, il ne publie pas cette
-   * langue (`ignored`), et on sert l'anglais.
+   * The notes of ONE language, requested from Tesla with the `language` parameter (two letters).
+   * Tried on the real car on 2026-10-02: `language=fr` returns the Tesla app's French ("Cartes de
+   * sites Superchargeur"); `Accept-Language`, `locale=fr_FR` and `locale=fr-FR` are ignored (English).
+   * Nothing is translated here: if Tesla returns the same texts as in English, it doesn't publish
+   * that language (`ignored`), and we serve English.
    */
   async function refreshNotesIn(vin: string, lang: string): Promise<void> {
     const last = lastSoftware(vin)
     const installed = last?.softwareVersion
     if (!installed) return
     const staged = last.softwareUpdate?.version
-    // la clé dit aussi COMMENT on a lu : façon de demander (`language=` ; `Accept-Language` est ignoré
-    // par Tesla) et règle de tri (`NOTES_RULE`). Un cache lu autrement est relu une fois
+    // the key also says HOW we read: the way of asking (`language=`; `Accept-Language` is ignored by
+    // Tesla) and the sorting rule (`NOTES_RULE`). A cache read differently is re-read once
     const key = `${NOTES_RULE}|${installed}|${staged ?? ''}`
     const byLang = (saved.releaseNotes[vin] ??= {})
     const cache = byLang[lang]
@@ -613,24 +612,24 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     {
       const base = `/api/1/vehicles/${encodeURIComponent(vin)}/release_notes`
       const current = releaseNotesResponseSchema.parse(await client!.request('GET', `${base}?language=${lang}`, { signal: ctx!.signal })).response
-      // l'historique : ce que Tesla montre lui-même dans « Notes de mise à jour » (`show_in_history`),
-      // PLUS les nouveautés de la version installée — que Tesla rend en `show_in_history: false` juste
-      // après l'installation (relevé du 2026-10-02, 2026.38) —, sans l'entrée générique d'une version
-      // mineure (« Minor Fixes », `is_fallback`). Ajouté à ce qu'on gardait : Tesla ne remonte pas avant
-      // la dernière grosse mise à jour
+      // the history: what Tesla itself shows in "Release Notes" (`show_in_history`), PLUS the new
+      // features of the installed version — which Tesla returns as `show_in_history: false` right
+      // after installation (recorded on 2026-10-02, 2026.38) —, without the generic entry of a minor
+      // version ("Minor Fixes", `is_fallback`). Added to what we kept: Tesla doesn't go back before
+      // the last major update
       const deployed = current.deployed_version ?? installed
       const shown = notesByVersion(parseReleaseNotes(current.release_notes).filter((e) =>
         e.show_in_history !== false || (e.customer_version === deployed && e.is_fallback !== true)))
       let pending: { version: string; notes: ReleaseNote[] } | undefined
       if (staged) {
         const next = releaseNotesResponseSchema.parse(await client!.request('GET', `${base}?staged=true&language=${lang}`, { signal: ctx!.signal })).response
-        // la réponse « en attente » mêle d'anciennes notes : seules celles de la version attendue comptent
+        // the "pending" response mixes in older notes: only those of the expected version count
         const notes = notesByVersion(parseReleaseNotes(next.release_notes))[staged]
         if (notes?.length) pending = { version: staged, notes }
       }
       const fetched = [...Object.values(shown).flat(), ...(pending?.notes ?? [])]
       const expiresAt = imagesExpireAt(fetched)
-      // mêmes titres qu'en anglais, lus à l'instant : Tesla ignore la langue demandée
+      // same titles as in English, just read: Tesla ignores the requested language
       const en = byLang[RELEASE_NOTES_FALLBACK_LANG]
       const enTitles = new Set([...Object.values(en?.history ?? {}).flat(), ...(en?.pending?.notes ?? [])].map((n) => n.title))
       const ignored = lang !== RELEASE_NOTES_FALLBACK_LANG && fetched.length > 0 && fetched.every((n) => enTitles.has(n.title))
@@ -646,7 +645,7 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     }
   }
 
-  /** Le cache, tel quel : jamais d'appel ici. Les notes en attente ne valent que pour la version encore attendue. */
+  /** The cache, as is: never a call here. Pending notes only count for the version still expected. */
   function releaseNotesOf(vin: string, wanted: string): PluginReleaseNotes {
     const byLang = saved.releaseNotes[vin] ?? {}
     const own = byLang[wanted]
@@ -669,19 +668,19 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
   }
 
   /**
-   * Programmer ou annuler l'installation d'une mise à jour DÉJÀ téléchargée. Voiture éveillée
-   * seulement (jamais de réveil implicite pour un réglage, comme la limite de charge), et refusé
-   * d'avance quand rien n'est prêt : Tesla n'installe pas ce qu'il n'a pas fini de télécharger.
-   * L'état suit l'accusé, sans relecture (facturée) : la prochaine lecture le confirmera.
+   * Schedule or cancel the installation of an ALREADY downloaded update. Awake car only (never an
+   * implicit wake-up for a setting, like the charge limit), and refused in advance when nothing is
+   * ready: Tesla doesn't install what it hasn't finished downloading. The state follows the
+   * acknowledgment, without a re-read (billed): the next read will confirm it.
    */
-  /** Une lecture prévue par VIN pour constater le démarrage d'une installation programmée. */
+  /** A read planned per VIN to observe the start of a scheduled installation. */
   const updateWatch = new Map<string, unknown>()
   function clearUpdateWatch(vin: string): void {
     const t = updateWatch.get(vin)
     if (t !== undefined) ctx!.clock.clearTimeout(t)
     updateWatch.delete(vin)
   }
-  /** Lire `delayMs` plus tard (comptée au budget) ; une voiture endormie entre-temps ne coûte qu'un journal. */
+  /** Read `delayMs` later (counted against the budget); a car fallen asleep in the meantime only costs a log line. */
   function readLater(vin: string, delayMs: number): unknown {
     return ctx!.clock.setTimeout(() => {
       updateWatch.delete(vin)
@@ -690,9 +689,9 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     }, delayMs)
   }
   /**
-   * Installation programmée : une lecture juste après l'heure prévue, pour la voir DÉMARRER (sinon la
-   * voiture vue au repos ne serait relue qu'après `TESLA_REST_MS`, et la carte annoncerait une heure
-   * passée). Pendant l'installation, `isResting` est faux : chaque tour du sondage relit.
+   * Scheduled installation: a read right after the scheduled time, to see it START (otherwise the
+   * car seen at rest would only be re-read after `TESLA_REST_MS`, and the card would announce a time
+   * already past). During installation, `isResting` is false: every polling round re-reads.
    */
   function watchUpdateStart(vin: string): void {
     clearUpdateWatch(vin)
@@ -715,7 +714,7 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
       next = { ...last, status: 'scheduled', scheduledAt: ctx!.clock.now() + command.delayS * 1000 }
       log().info({ vin, version: last.version, delayS: command.delayS }, 'Tesla software update scheduled')
     } else {
-      // rien de programmé : rien à annuler, et rien à payer
+      // nothing scheduled: nothing to cancel, and nothing to pay
       if (last?.status !== 'scheduled') return
       await vehicleCommand(vin, 'cancel_software_update')
       const { scheduledAt: _dropped, ...rest } = last
@@ -725,18 +724,18 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     ctx!.emitState(vin, { softwareUpdate: next })
     saved.vehicles[vin] = { ...saved.vehicles[vin], softwareUpdate: next }
     persist()
-    // l'heure publiée est la NÔTRE ; Tesla fixe la sienne (décompte d'un « maintenant ») : on la relit.
-    // Annulé, plus rien à surveiller
+    // the published time is OURS; Tesla sets its own (countdown of a "now"): we re-read it.
+    // Cancelled, nothing left to watch
     clearUpdateWatch(vin)
     if (command.type === 'vehicle.schedule_update') updateWatch.set(vin, readLater(vin, UPDATE_FOLLOW_UP_MS))
   }
 
-  // ---- enregistrement du domaine ------------------------------------------------------------
+  // ---- domain registration ------------------------------------------------------------------
 
   /**
-   * Tesla a-t-il lu NOTRE clé publique sur le domaine ? Il la rend en POINT EC hexadécimal (`04…`),
-   * pas en PEM (`samePublicKey` accepte les deux). Réenregistrer le domaine avec une clé changée
-   * MET À JOUR ce que Tesla tient (`updated_at` bouge) : une rotation se rattrape ainsi.
+   * Did Tesla read OUR public key on the domain? It returns it as a hexadecimal EC POINT (`04…`),
+   * not as PEM (`samePublicKey` accepts both). Registering the domain again with a changed key
+   * UPDATES what Tesla holds (`updated_at` moves): that's how a rotation is caught up.
    */
   async function verifyRegistration(partnerToken: string): Promise<boolean> {
     const raw = await client!.partnerRequest('GET', `/api/1/partner_accounts/public_key?domain=${encodeURIComponent(config!.TESLA_DOMAIN!)}`, partnerToken, { signal: ctx!.signal })
@@ -752,8 +751,8 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     async init(context) {
       ctx = context
       config = context.config as TeslaConfig
-      // la paire de clés ne dépend de rien : générée dès le premier démarrage, la carte des Réglages
-      // peut afficher la clé publique à poser sur le domaine avant même que l'application existe
+      // the key pair depends on nothing: generated from the very first startup, the Settings card
+      // can show the public key to put on the domain even before the application exists
       keyStore = deps.keyStore ?? (config.TESLA_KEY_FILE ? createKeyFile(config.TESLA_KEY_FILE, context.logger) : null)
       if (keyStore) keys = await ensureKeyPair(keyStore, context.logger)
 
@@ -783,7 +782,7 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
       else log().warn('no Tesla account linked: open the Settings card (GET /api/plugins/tesla/auth/url)')
     },
 
-    /** Sans compte, rien à publier : la carte des Réglages dit quoi faire. */
+    /** Without an account, nothing to publish: the Settings card says what to do. */
     async discover(): Promise<DeviceDescriptor[]> {
       if (!auth?.linked) return []
       try {
@@ -797,8 +796,8 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     },
 
     async start() {
-      // les dernières valeurs connues AVANT toute lecture : sinon la carte reste vide (« Jamais lu »)
-      // jusqu'à ce que la voiture se réveille, ce qui peut prendre des heures
+      // the last known values BEFORE any read: otherwise the card stays empty ("Never read")
+      // until the car wakes up, which can take hours
       for (const [vin, patch] of Object.entries(saved.vehicles)) {
         if (vehicles.has(vin)) ctx!.emitState(vin, patch as never)
       }
@@ -809,9 +808,9 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
       if (!client) throw new PluginError('NEEDS_PAIRING', 'Tesla plugin not configured')
       if (!vehicles.has(externalId)) throw new PluginError('DEVICE_UNAVAILABLE', `unknown Tesla vehicle ${externalId}`)
       if (command.type === 'vehicle.refresh') {
-        // relire MAINTENANT : la liste d'abord (le véhicule a pu s'endormir depuis l'affichage), puis la
-        // lecture complète s'il est éveillé, comptée au budget. Endormi, on ne le réveille pas : c'est
-        // l'autre bouton, et il coûte dix fois plus
+        // re-read NOW: the list first (the vehicle may have fallen asleep since it was displayed),
+        // then the full read if it's awake, counted against the budget. Asleep, we don't wake it:
+        // that's the other button, and it costs ten times more
         adoptList(await listVehicles())
         const track = vehicles.get(externalId)!
         track.sleepState = toSleepState(track.summary.state)
@@ -826,16 +825,16 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
         return
       }
       /**
-       * Régler la limite de charge. Une COMMANDE coûte 0,001 $ — dix fois moins qu'une lecture — mais
-       * exige la voiture ÉVEILLÉE : endormie, Tesla répond 408, et c'est le bouton « Réveiller »,
-       * payant et explicite, qui la ramène. Jamais de réveil implicite pour un réglage.
+       * Set the charge limit. A COMMAND costs $0.001 — ten times less than a read — but requires the
+       * car AWAKE: asleep, Tesla answers 408, and it's the "Wake up" button, paid and explicit, that
+       * brings it back. Never an implicit wake-up for a setting.
        *
-       * La cible est publiée TOUT DE SUITE : sans relecture (facturée, et la voiture peut se rendormir
-       * dans la minute), c'est notre écho qui tient la carte à jour jusqu'au prochain tour.
+       * The target is published RIGHT AWAY: without a re-read (billed, and the car may fall asleep
+       * again within the minute), it's our echo that keeps the card up to date until the next round.
        */
       if (command.type === 'vehicle.set_charge_limit') {
-        // « en ligne » d'après la liste, mais ses bus internes dorment encore : refus PASSAGER, vu sur
-        // la vraie voiture le 2026-10-01 (la première limite réglée échouait, la suivante passait)
+        // "online" according to the list, but its internal buses are still asleep: TRANSIENT refusal,
+        // seen on the real car on 2026-10-01 (the first limit set failed, the next one went through)
         for (let attempt = 0; ; attempt++) {
           const body = commandResultSchema.parse(await client.request(
             'POST', `/api/1/vehicles/${encodeURIComponent(externalId)}/command/set_charge_limit`,
@@ -855,7 +854,7 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
         return
       }
       if (command.type === 'vehicle.climate_stop') {
-        // endormie, la voiture n'a pas sa clim en marche : rien à arrêter, et surtout rien à réveiller
+        // asleep, the car doesn't have its climate running: nothing to stop, and above all nothing to wake
         if (vehicles.get(externalId)!.sleepState !== 'online') { ctx!.emitState(externalId, { climateOn: false }); return }
         await climateCommand(externalId, command)
         return
@@ -879,12 +878,12 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
       if (command.type !== 'vehicle.wake') {
         throw new PluginError('UNSUPPORTED_COMMAND', `Tesla plugin does not support ${command.type} yet`)
       }
-      // un réveil coûte dix lectures chez Tesla, et c'est un GESTE de l'utilisateur : jamais automatique
+      // a wake-up costs ten reads at Tesla, and it's a user ACTION: never automatic
       await client.request('POST', `/api/1/vehicles/${encodeURIComponent(externalId)}/wake_up`, { signal: ctx!.signal })
       log().info({ vin: externalId }, 'Tesla vehicle wake requested')
       const track = vehicles.get(externalId)!
       track.restUntil = 0
-      // relecture différée : c'est pour VOIR le véhicule qu'on l'a réveillé
+      // delayed re-read: we woke the vehicle in order to SEE it
       void (async () => {
         await sleep(ctx!.clock, WAKE_FOLLOW_UP_MS, ctx!.signal)
         if (ctx!.signal.aborted || !takeBudget()) return
@@ -906,19 +905,19 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     },
 
     registerRoutes(app: FastifyInstance) {
-      // Où en est la mise en route, pour la carte des Réglages. Jamais un secret.
+      // Where the setup stands, for the Settings card. Never a secret.
       app.get('/status', async () => status())
 
-      // La clé publique de l'application, telle qu'elle doit être servie sur le domaine.
+      // The application's public key, as it must be served on the domain.
       app.get('/public-key', async (_req, reply) => {
         if (!keys) return sendError(reply, 409, 'NEEDS_PAIRING', 'no key pair yet (TESLA_KEY_FILE is empty?)')
         return reply.type('application/x-pem-file').send(keys.publicPem)
       })
 
       /**
-       * Nouvelle paire de clés. Tesla n'accepte une clé publique que pour UNE application : recréer
-       * l'application (autre compte développeur) rend l'ancienne clé inutilisable. Après rotation, la
-       * clé publique est à REPOSER sur le domaine, puis le domaine à réenregistrer.
+       * New key pair. Tesla only accepts a public key for ONE application: recreating the application
+       * (another developer account) makes the old key unusable. After rotation, the public key must be
+       * PUT BACK on the domain, then the domain registered again.
        */
       app.post('/public-key/rotate', async (_req, reply) => {
         if (!keyStore) return sendError(reply, 409, 'NEEDS_PAIRING', 'no key store (TESLA_KEY_FILE is empty)')
@@ -932,20 +931,20 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
       })
 
       /**
-       * Enregistre le domaine auprès de Tesla (jeton partenaire), puis vérifie ce que Tesla a lu de
-       * la clé publique. À faire une fois la clé posée sur le domaine ; à refaire si elle change.
+       * Registers the domain with Tesla (partner token), then checks what Tesla read of the public
+       * key. To be done once the key is on the domain; to be redone if it changes.
        */
       app.post('/register', async (_req, reply) => {
         if (!client || !auth) return sendError(reply, 409, 'NEEDS_PAIRING', 'set TESLA_CLIENT_ID and TESLA_CLIENT_SECRET first')
         if (!config!.TESLA_DOMAIN) return sendError(reply, 409, 'NEEDS_PAIRING', 'set TESLA_DOMAIN: the domain that serves the public key')
         try {
           const token = await auth.partnerToken(ctx!.signal)
-          // vérifier d'abord : un domaine déjà enregistré avec CETTE clé n'a rien à refaire, et Tesla
-          // refuse d'ailleurs de le réenregistrer (422 « Public key hash has already been taken »,
-          // constaté sur le vrai compte). Ce 422-là veut donc dire « déjà fait », pas « raté ».
-          // la vérification elle-même peut être refusée (403 « This account does not have access to
-          // <domaine> » sur le vrai compte, alors que l'API de la région répond) : ce n'est pas une
-          // preuve de non-enregistrement, on la tente sans en dépendre
+          // check first: a domain already registered with THIS key has nothing to redo, and Tesla in
+          // fact refuses to register it again (422 "Public key hash has already been taken", observed
+          // on the real account). So that particular 422 means "already done", not "failed".
+          // the check itself may be refused (403 "This account does not have access to <domain>" on
+          // the real account, even though the region's API answers): it's not proof of
+          // non-registration, we try it without depending on it
           let taken: string | null = null
           const verify = () => verifyRegistration(token).catch((err) => { log().warn({ err }, 'could not verify the Tesla registration'); return undefined })
           if ((await verify()) !== true) {
@@ -958,25 +957,25 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
               alreadyTaken = m[0]
               log().info({ domain: config!.TESLA_DOMAIN, reason: alreadyTaken }, 'Tesla says the registration already exists')
             }
-            // Tesla connaît la clé (422) et ne peut pas nous dire laquelle il sert : on le croit
+            // Tesla knows the key (422) and can't tell us which one it serves: we take its word
             if ((await verify()) === undefined) registered = alreadyTaken ? true : undefined
             taken = alreadyTaken
           }
           lastError = registered ? null : `Tesla did not read our public key at ${publicKeyUrl()}`
           log().info({ domain: config!.TESLA_DOMAIN, registered }, 'Tesla partner account registered')
-          // un compte lié avant l'enregistrement n'avait pas pu lister ses véhicules : maintenant si.
-          // Et c'est la VRAIE épreuve de l'enregistrement : un 412 « must be registered » après un
-          // 422 « key already taken » veut dire que la clé est enregistrée par une AUTRE application
-          // (constaté : application recréée sous un second compte, même clé). Il faut alors une
-          // nouvelle paire de clés (`POST /public-key/rotate`), à reposer sur le domaine.
+          // an account linked before registration couldn't list its vehicles: now it can.
+          // And it's the REAL test of the registration: a 412 "must be registered" after a 422 "key
+          // already taken" means the key is registered by ANOTHER application (observed: application
+          // recreated under a second account, same key). A new key pair is then needed
+          // (`POST /public-key/rotate`), to be put back on the domain.
           if (auth.linked) {
             try { adoptList(await listVehicles()); ctx!.emitDevices(descriptors()); startPolling() }
             catch (err) {
               const msg = (err as Error).message
               if (/must be registered/i.test(msg)) {
-                // « déjà pris » + « pas enregistré » = pris par une AUTRE application (autre client id).
-                // Constaté : application recréée sous un second compte développeur, même domaine — un
-                // domaine n'appartient qu'à UNE application. La clé, elle, se change ; le domaine, non.
+                // "already taken" + "not registered" = taken by ANOTHER application (another client id).
+                // Observed: application recreated under a second developer account, same domain — a
+                // domain belongs to only ONE application. The key can be changed; the domain can't.
                 registered = false
                 lastError = /Domain/i.test(taken ?? '')
                   ? `Tesla refuses this application in region ${config!.TESLA_REGION}: the domain ${config!.TESLA_DOMAIN} is registered by ANOTHER application (another client id). Reuse that application's TESLA_CLIENT_ID / TESLA_CLIENT_SECRET (any Tesla account can then consent), or delete it on developer.tesla.com, then register again`
@@ -993,7 +992,7 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
         return status()
       })
 
-      // Lien à ouvrir dans un navigateur pour lier le compte Tesla à l'application.
+      // Link to open in a browser to link the Tesla account to the application.
       app.get('/auth/url', async (_req, reply) => {
         if (!auth) return sendError(reply, 409, 'NEEDS_PAIRING', 'set TESLA_CLIENT_ID and TESLA_CLIENT_SECRET first')
         const state = randomBytes(16).toString('hex')
@@ -1001,7 +1000,7 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
         return { url: authorizationUrl({ clientId: config!.TESLA_CLIENT_ID!, redirectUri: config!.TESLA_REDIRECT_URI, state }), redirectUri: config!.TESLA_REDIRECT_URI }
       })
 
-      // Retour de Tesla après consentement : le code devient des jetons, gardés par le serveur.
+      // Return from Tesla after consent: the code becomes tokens, kept by the server.
       app.get<{ Querystring: { code?: string; state?: string; error?: string; error_description?: string } }>('/auth/callback', async (req, reply) => {
         if (!auth) return sendError(reply, 409, 'NEEDS_PAIRING', 'plugin not configured')
         const { code, state, error } = req.query
@@ -1016,10 +1015,9 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
           const d = describeError(err)
           return sendError(reply, d.status, d.code, d.message)
         }
-        // le compte est lié et ses jetons gardés : ce qui suit peut échouer sans défaire la liaison
-        // (constaté : 412 « must be registered in the current region » quand l'application n'est
-        // pas encore enregistrée pour CE compte — le sondage réessaiera, l'enregistrement se fait
-        // depuis la carte)
+        // the account is linked and its tokens kept: what follows may fail without undoing the link
+        // (observed: 412 "must be registered in the current region" when the application isn't yet
+        // registered for THIS account — the polling will retry, registration is done from the card)
         let listError: string | null = null
         try {
           adoptList(await listVehicles())
@@ -1036,10 +1034,10 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
       })
 
       /**
-       * Recale le compteur du mois sur la CONSOLE du fabricant, qui seule facture. L'estimation dérive
-       * forcément : catégories tarifaires non publiées, arrondis, et appels faits hors de Kasbah (une
-       * autre application tierce partage le même crédit). Corps : `{ data, wakes, commands }` — la
-       * DATE ne se recale pas : le cycle commence le 1er du mois, la console le dit aussi.
+       * Realigns the month's counter on the vendor's CONSOLE, which alone bills. The estimate
+       * inevitably drifts: unpublished pricing categories, rounding, and calls made outside Kasbah
+       * (another third-party application shares the same credit). Body: `{ data, wakes, commands }`
+       * — the DATE isn't realigned: the cycle starts on the 1st of the month, the console says so too.
        */
       app.post('/usage', async (req, reply) => {
         if (!ctx) return sendError(reply, 409, 'NEEDS_PAIRING', 'plugin not started')
@@ -1055,15 +1053,15 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
       })
 
       /**
-       * Relevé BRUT : la liste, puis `vehicle_data` de chaque véhicule ÉVEILLÉ. Pour écrire les fixtures d'après de vraies réponses. Chaque lecture est facturée et comptée au budget ; un
-       * véhicule endormi n'est PAS réveillé, il figure avec son 408.
+       * RAW reading: the list, then `vehicle_data` of each AWAKE vehicle. To write the fixtures from real responses. Each read is billed and counted against the budget; a
+       * sleeping vehicle is NOT woken, it appears with its 408.
        */
       app.get('/raw', async (_req, reply) => {
         if (!client || !auth?.linked) return sendError(reply, 409, 'NEEDS_PAIRING', 'link the Tesla account first')
         const out: Record<string, unknown> = {}
         try {
-          // dans quelle région Tesla range ce compte : une liste VIDE vient souvent d'une base d'API qui
-          // n'est pas la bonne (`/users/me`, lui, exige la portée `user_data` qu'on ne demande pas)
+          // which region Tesla files this account in: an EMPTY list often comes from an API base that
+          // isn't the right one (`/users/me`, for its part, requires the `user_data` scope we don't request)
           try { out['/api/1/users/region'] = await client.request('GET', '/api/1/users/region', { signal: ctx!.signal }) }
           catch (err) { out['/api/1/users/region'] = { error: (err as Error).message } }
           const list = await client.request('GET', '/api/1/vehicles', { signal: ctx!.signal })
@@ -1075,8 +1073,8 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
             if (!takeBudget()) { out[path] = { skipped: 'daily budget spent' }; continue }
             try { out[path] = await client.request('GET', path, { signal: ctx!.signal }) }
             catch (err) { out[path] = { error: (err as Error).message } }
-            // notes de version : documentées sans format ni paramètres ; `staged=true` (cité par la
-            // communauté) viserait la version EN ATTENTE. Capturées ici pour en tirer le schéma
+            // release notes: documented with neither format nor parameters; `staged=true` (cited by
+            // the community) would target the PENDING version. Captured here to derive the schema
             for (const notes of [`/api/1/vehicles/${v.data.vin}/release_notes`, `/api/1/vehicles/${v.data.vin}/release_notes?staged=true`]) {
               try { out[notes] = await client.request('GET', notes, { signal: ctx!.signal }) }
               catch (err) { out[notes] = { error: (err as Error).message } }
@@ -1093,8 +1091,8 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     async releaseNotes(externalId, lang) {
       const track = vehicles.get(externalId)
       if (!track) throw new PluginError('DEVICE_UNAVAILABLE', `unknown Tesla vehicle ${externalId}`)
-      // une langue jamais demandée : retenue pour les prochaines lectures (l'anglais est servi d'ici là),
-      // et lue tout de suite si la voiture est éveillée — jamais de réveil pour des notes
+      // a language never requested before: kept for the next reads (English is served until then),
+      // and read right away if the car is awake — never a wake-up for notes
       if (lang !== RELEASE_NOTES_FALLBACK_LANG && !saved.releaseNotesLangs.includes(lang) && saved.releaseNotesLangs.length < NOTES_MAX_LANGS) {
         saved.releaseNotesLangs = [...saved.releaseNotesLangs, lang]
         persist()
@@ -1112,10 +1110,10 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
       const used = budgetUsedToday()
       const limit = config!.TESLA_DAILY_DATA_BUDGET
       const parc = `${deviceCount} véhicule(s), ${asleep} en veille · ${used}/${limit} lectures aujourd'hui`
-      // Le quota publié pour l'UI est le CRÉDIT MENSUEL du fabricant (10 $, cycle calendaire), pas le
-      // budget journalier que le plugin s'impose : c'est celui-là qu'on ne veut pas dépasser, et c'est
-      // ce que l'utilisateur veut voir. Une ESTIMATION, calculée sur les prix affichés : seul Tesla
-      // facture, et sa console reste la référence.
+      // The quota published for the UI is the vendor's MONTHLY CREDIT ($10, calendar cycle), not the
+      // daily budget the plugin imposes on itself: that's the one we don't want to exceed, and it's
+      // what the user wants to see. An ESTIMATE, computed from the listed prices: only Tesla bills,
+      // and its console remains the reference.
       const cycle = currentCycle(saved, ctx!.clock.now())
       const quota = {
         quota: {

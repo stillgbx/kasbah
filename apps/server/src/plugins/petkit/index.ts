@@ -11,51 +11,50 @@ import { PetkitClient, petkitDay } from './client'
 import { PLUGIN_ID, toDescriptor, toDevices, toDrinkPatch, toFeederPatch, toFountainPatch, toIdentity, type PetkitDevice } from './mapping'
 import { familyListSchema } from './types'
 
-// Plugin PetKit (mangeoires et fontaines pour animaux) — API privée de l'application mobile.
+// PetKit plugin (pet feeders and fountains) — the mobile app's private API.
 //
-// Il n'existe aucune voie officielle, et rien en local : les mangeoires ne parlent qu'au cloud du
-// fabricant, et les fontaines n'ont même pas de Wi-Fi (voir `ble.ts`). Trois conséquences qui
-// structurent tout le fichier :
+// There is no official route, and nothing local: the feeders only talk to the vendor's cloud, and
+// the fountains don't even have Wi-Fi (see `ble.ts`). Three consequences that shape the whole
+// file:
 //
-//  1. **Connexion par CODE, pas par mot de passe** (`auth.ts`). Une session perdue ne se reprend
-//     pas toute seule : il faut l'utilisateur et sa boîte aux lettres. On la prolonge donc tôt, et
-//     on annonce franchement `needs_pairing` quand elle est perdue.
-//  2. **Compte DÉDIÉ obligatoire.** Une nouvelle connexion invalide la précédente : sur le compte
-//     principal, le serveur et le téléphone se déconnecteraient mutuellement en boucle. La carte
-//     des Réglages l'affiche AVANT le formulaire — après, ce serait lu une fois le mal fait.
-//  3. **Deux cadences, pas une.** Les mangeoires se lisent comme n'importe quel appareil cloud ;
-//     une fontaine exige d'ouvrir une liaison Bluetooth par relais, qui peut coûter deux minutes
-//     et immobilise la mangeoire voisine pendant ce temps. D'où un sondage séparé, plus lent, et
-//     un `syncedAt` publié pour que l'interface montre l'âge du relevé au lieu de faire croire au
-//     temps réel.
+//  1. **Sign-in by CODE, not by password** (`auth.ts`). A lost session doesn't come back on its
+//     own: it takes the user and their mailbox. So we extend it early, and plainly announce
+//     `needs_pairing` when it is lost.
+//  2. **DEDICATED account required.** A new sign-in invalidates the previous one: on the main
+//     account, the server and the phone would keep signing each other out. The Settings card shows
+//     this BEFORE the form — after it, it would be read once the damage is done.
+//  3. **Two rates, not one.** Feeders are read like any cloud device; a fountain requires opening a
+//     Bluetooth link through a relay, which can cost two minutes and ties up the nearby feeder
+//     meanwhile. Hence a separate, slower poll, and a published `syncedAt` so the interface shows
+//     the reading's age instead of passing it off as real time.
 //
-// CE QUE LE PLUGIN NE FAIT PAS, volontairement : le plan de repas (il s'édite dans l'appli du
-// fabricant ; une ration servie ici s'y ajoute sans le toucher), les vidéos et la détection
-// d'animal (aucun de nos appareils n'a de caméra), les litières et purificateurs (aucun ici).
+// WHAT THE PLUGIN DELIBERATELY DOES NOT DO: the meal plan (it is edited in the vendor's app; a
+// portion served from here is added to it without touching it), videos and animal detection
+// (none of our devices has a camera), litter boxes and purifiers (none here).
 
 export const petkitConfigSchema = z.object({
-  /** Où demander la liste des passerelles régionales. En configuration : le fabricant la déplace. */
+  /** Where to request the list of regional gateways. In configuration: the vendor moves it. */
   PETKIT_PASSPORT_URL: z.string().url().default(DEFAULT_PASSPORT_URL),
-  /** Passerelle forcée ; vide = déduite de la région. */
+  /** Forced gateway; empty = derived from the region. */
   PETKIT_GATEWAY: z.string().trim().default(''),
-  /** Région du compte (code ISO) : c'est elle qui choisit la passerelle et elle seule accepte la session. */
+  /** The account's region (ISO code): it picks the gateway, and only that gateway accepts the session. */
   PETKIT_REGION: z.string().trim().min(2).max(3).default('FR'),
   PETKIT_TIMEZONE: z.string().trim().min(1).default('Europe/Paris'),
-  /** Version d'application annoncée ; PetKit l'exige et pourrait se mettre à la vérifier. */
+  /** Announced app version; PetKit requires it and might start checking it. */
   PETKIT_APP_VERSION: z.string().trim().min(1).default(DEFAULT_APP_VERSION),
-  /** Où garder le jeton de session. Aucun mot de passe, aucun code n'y est jamais écrit. */
+  /** Where to keep the session token. No password, no code is ever written there. */
   PETKIT_SESSION_FILE: z.string().trim().default(stateFile('petkit-session.json')),
-  /** Cadence de lecture : une gamelle et une fontaine sont des grandeurs lentes. */
+  /** Read rate: a bowl and a fountain are slow-moving quantities. */
   PETKIT_POLL_MS: z.coerce.number().int().min(60_000).max(3_600_000).default(300_000),
 })
 export type PetkitConfig = z.infer<typeof petkitConfigSchema>
 
-/** Ce que la carte des Réglages affiche. Ne porte ni jeton, ni code, ni adresse complète. */
+/** What the Settings card displays. Carries no token, no code, no full address. */
 export interface PetkitStatus {
   linked: boolean
   account: string | null
   gateway: string
-  /** Échéance de la session (ms epoch) : l'UI peut prévenir AVANT qu'un code soit redemandé. */
+  /** Session expiry (epoch ms): the UI can warn BEFORE a code is asked for again. */
   expiresAt: number | null
   devices: { externalId: string; name: string; type: string; kind: string }[]
   pollMs: number
@@ -76,11 +75,11 @@ export function createPetkitPlugin(deps: PetkitPluginDeps = {}): DevicePlugin {
   let devices: PetkitDevice[] = []
   let lastError: string | null = null
   let pollers: { stop(): void }[] = []
-  /** Dernier corps brut par appareil, pour `GET /raw` — c'est lui qui remplacera les suppositions. */
+  /** Last raw body per device, for `GET /raw` — it's what will replace the assumptions. */
   let raw = new Map<string, unknown>()
   /**
-   * Dernier régime CONNU de chaque fontaine. Nécessaire parce qu'une trame de pompe porte marche
-   * ET régime : pour n'en changer qu'un, il faut savoir où en est l'autre.
+   * Last KNOWN mode of each fountain. Needed because a pump frame carries on/off AND mode: to
+   * change only one, you need to know where the other stands.
    */
   let lastFountainMode = new Map<string, PetPumpMode>()
 
@@ -100,11 +99,12 @@ export function createPetkitPlugin(deps: PetkitPluginDeps = {}): DevicePlugin {
   }
 
   /**
-   * Relit l'inventaire et republie les descripteurs. Un compte non lié n'est pas une erreur ici.
+   * Re-reads the inventory and republishes the descriptors. An unlinked account is not an error
+   * here.
    *
-   * DEUX appels, pas un : PetKit n'expose aucune vue « tout le compte ». On demande d'abord les
-   * familles, puis l'inventaire de chacune — avec le jour et l'identifiant de groupe, faute de quoi
-   * la requête est refusée.
+   * TWO calls, not one: PetKit exposes no "whole account" view. We first ask for the families,
+   * then the inventory of each — with the day and the group identifier, otherwise the request is
+   * refused.
    */
   async function refreshRoster(signal?: AbortSignal): Promise<void> {
     if (!auth?.linked) { devices = []; ctx?.emitDevices([]); return }
@@ -120,9 +120,9 @@ export function createPetkitPlugin(deps: PetkitPluginDeps = {}): DevicePlugin {
       raw.set(`roster:${groupId}`, body)
       next.push(...toDevices(body, groupId))
     }
-    // On REPREND le nom et l'adresse Bluetooth déjà appris : le roster ne les porte pas, et les
-    // reconstruire à neuf à chaque tour les effacerait — une fontaine sans `mac` redevient
-    // injoignable, et son nom retombe sur « Eversweet Max 400000002 » entre deux sondages.
+    // We CARRY OVER the name and Bluetooth address already learned: the roster doesn't carry them,
+    // and rebuilding from scratch on every round would erase them — a fountain without `mac`
+    // becomes unreachable again, and its name falls back to "Eversweet Max 400000002" between polls.
     const known = new Map(devices.map((d) => [d.externalId, d]))
     for (const d of next) {
       const before = known.get(d.externalId)
@@ -134,15 +134,15 @@ export function createPetkitPlugin(deps: PetkitPluginDeps = {}): DevicePlugin {
   }
 
   /**
-   * Un tour de lecture de TOUS les appareils, par leur détail.
+   * One reading round over ALL devices, through their detail.
    *
-   * C'est aussi là que se découvre leur IDENTITÉ : le roster ne rend que `id` et `type` — ni nom
-   * ni adresse Bluetooth (vérifié le 21/09). Le nom choisi par l'utilisateur (« Distributeur 1 »,
-   * « Fontaine 1 ») et le `mac` sans lequel aucun relais n'est possible ne vivent que dans le détail.
-   * On les récolte ici, et les descripteurs sont republiés dès qu'ils changent.
+   * It's also where their IDENTITY is discovered: the roster only returns `id` and `type` — neither
+   * name nor Bluetooth address (verified on 09/21). The name chosen by the user ("Distributeur 1",
+   * "Fontaine 1") and the `mac` without which no relay is possible only live in the detail. We
+   * collect them here, and the descriptors are republished as soon as they change.
    *
-   * Pour une fontaine, ce tour rend la dernière synchro connue du cloud, sans relais : c'est peu
-   * cher et ça date de `syncTime`. Le rafraîchissement par relais est un tour à part.
+   * For a fountain, this round returns the cloud's last known sync, without relay: it's cheap and
+   * dates from `syncTime`. Refreshing through a relay is a separate round.
    */
   async function pollDevices(signal?: AbortSignal): Promise<void> {
     if (!auth?.linked) return
@@ -158,10 +158,10 @@ export function createPetkitPlugin(deps: PetkitPluginDeps = {}): DevicePlugin {
           const patch = toFountainPatch(body, ctx!.clock.now())
           if (patch.mode) lastFountainMode.set(d.externalId, patch.mode)
           ctx?.emitState(d.externalId, patch)
-          // Les passages du jour vivent dans un relevé À PART : une fontaine ne les met pas dans
-          // son état. C'est un appel de plus, et le seul moyen de dire « venu boire 6 fois ».
-          // Le relevé exige le propriétaire, qu'on n'apprend qu'au premier détail : au tout
-          // premier tour il manque encore, et les passages arriveront au tour suivant.
+          // The day's visits live in a SEPARATE log: a fountain doesn't put them in its state.
+          // It's one more call, and the only way to say "came to drink 6 times". The log requires
+          // the owner, which we only learn at the first detail: on the very first round it's still
+          // missing, and the visits will arrive on the next round.
           if (d.userId) {
             const rec = await client!.workRecord({ type: d.type, deviceId: d.deviceId, userId: d.userId }, petkitDay(ctx!.clock.now()), signal)
             ctx?.emitState(d.externalId, toDrinkPatch(rec))
@@ -169,8 +169,8 @@ export function createPetkitPlugin(deps: PetkitPluginDeps = {}): DevicePlugin {
         }
         lastError = null
       } catch (err) {
-        // Un appareil muet ne doit pas emporter les autres : on le marque indisponible et on
-        // continue la boucle. Ses dernières valeurs restent affichées, grisées.
+        // A silent device must not take the others down with it: we mark it unavailable and carry
+        // on with the loop. Its last values stay displayed, grayed out.
         ctx?.setAvailable(d.externalId, false)
         lastError = (err as Error).message
         log().warn({ err, device: d.externalId }, 'PetKit device read failed')
@@ -180,39 +180,39 @@ export function createPetkitPlugin(deps: PetkitPluginDeps = {}): DevicePlugin {
     if (identityChanged) ctx?.emitDevices(devices.map(toDescriptor))
   }
 
-  /** Reprend le nom et l'adresse Bluetooth d'un détail. Rend vrai si quelque chose a changé. */
+  /** Picks up the name and Bluetooth address from a detail. Returns true if something changed. */
   function adoptIdentity(d: PetkitDevice, body: unknown): boolean {
     const id = toIdentity(body)
     let changed = false
     if (id.name && id.name !== d.name) { d.name = id.name; changed = true }
     if (id.mac && id.mac !== d.mac) { d.mac = id.mac; changed = true }
-    // Le FACTEUR décide des rations proposées, donc du descripteur : le retenir ici évite de le
-    // redemander, et un changement republie la carte avec les bonnes valeurs.
+    // The FACTOR decides the offered portions, hence the descriptor: keeping it here avoids asking
+    // for it again, and a change republishes the card with the right values.
     if (id.factor !== null && id.factor !== d.factor) { d.factor = id.factor; changed = true }
     if (id.userId && id.userId !== d.userId) d.userId = id.userId
     return changed
   }
 
   /**
-   * PAS de tour de resynchronisation des fontaines, et c'est une décision mesurée le 21/09.
+   * NO fountain resync round, and it's a decision measured on 09/21.
    *
-   * On a essayé : ouvrir un relais Bluetooth (5 s, pas les 2 min redoutées) puis envoyer les deux
-   * trames de demande de données que fait l'application. Les trames sont ACCEPTÉES et `syncTime`
-   * **ne bouge pas**. Forcer une synchronisation n'est donc pas à notre portée — alors que la
-   * fontaine, elle, se synchronise très bien toute seule (06:35 puis 08:57 observés).
+   * We tried: opening a Bluetooth relay (5 s, not the dreaded 2 min) then sending the two
+   * data-request frames the app sends. The frames are ACCEPTED and `syncTime` **doesn't move**. So
+   * forcing a sync is beyond our reach — whereas the fountain syncs itself very well on its own
+   * (06:35 then 08:57 observed).
    *
-   * Un tour périodique aurait donc coûté une session radio toutes les dix minutes, mobilisé la
-   * mangeoire voisine à chaque fois — et une note tierce avertit que rouvrir un relais plus souvent
-   * que toutes les 7 minutes FIGE certains appareils — pour ne rien rafraîchir du tout.
+   * A periodic round would therefore have cost a radio session every ten minutes, tied up the
+   * nearby feeder each time — and a third-party note warns that reopening a relay more often than
+   * every 7 minutes FREEZES some devices — to refresh nothing at all.
    *
-   * Le relais reste utilisé pour les COMMANDES, où il est indispensable. Et la carte montre l'âge
-   * du relevé (`syncedAt`) plutôt que de faire croire au temps réel.
+   * The relay is still used for COMMANDS, where it is essential. And the card shows the reading's
+   * age (`syncedAt`) rather than passing it off as real time.
    */
 
   /**
-   * Ce qu'il faut pour ouvrir un relais : l'adresse Bluetooth (qui vient du DÉTAIL) et le code
-   * numérique du modèle (qui vient du ROSTER). Il manque l'un ou l'autre tant que l'appareil n'a
-   * pas été lu une fois — et il n'y a alors rien à tenter.
+   * What it takes to open a relay: the Bluetooth address (which comes from the DETAIL) and the
+   * numeric model code (which comes from the ROSTER). One or the other is missing until the device
+   * has been read once — and then there's nothing to try.
    */
   function bleTarget(d: PetkitDevice): BleTarget | null {
     return d.mac && d.typeId ? { bleId: d.deviceId, type: d.typeId, mac: d.mac, groupId: d.groupId } : null
@@ -225,9 +225,9 @@ export function createPetkitPlugin(deps: PetkitPluginDeps = {}): DevicePlugin {
     async init(c: PluginContext) {
       ctx = c
       config = petkitConfigSchema.parse(c.config)
-      // Remise à zéro EXPLICITE de tout ce qui décide « déjà publié » : un plugin est une fermeture
-      // qui survit à `stop()`, et sans cela un redémarrage republierait un inventaire fantôme
-      // (leçon du plugin Automower).
+      // EXPLICIT reset of everything that decides "already published": a plugin is a closure that
+      // survives `stop()`, and without this a restart would republish a ghost inventory (lesson
+      // from the Automower plugin).
       devices = []
       raw = new Map()
       lastFountainMode = new Map()
@@ -269,18 +269,18 @@ export function createPetkitPlugin(deps: PetkitPluginDeps = {}): DevicePlugin {
       if (!d) throw new PluginError('DEVICE_UNAVAILABLE', `unknown PetKit device ${externalId}`)
       switch (command.type) {
         case 'pet_feeder.feed': {
-          // On refuse ici plutôt que de laisser le fabricant arrondir en silence : une ration hors
-          // liste servirait autre chose que ce que l'utilisateur a demandé, sans rien dire.
+          // We refuse here rather than let the vendor round silently: a portion outside the list
+          // would serve something other than what the user asked for, without saying anything.
           const meta = toDescriptor(d).meta.petFeeder
           if (meta && !meta.portions.includes(command.amount)) {
             throw new PluginError('UNSUPPORTED_COMMAND', `${d.type} only accepts ${meta.portions.join(', ')} ${meta.unit}`)
           }
-          // La commande part dans l'unité BRUTE de l'API : l'utilisateur a demandé 0,3 tasse, la
-          // machine attend 30. Le facteur vient d'elle (`settings.factor`), jamais d'une constante.
+          // The command goes out in the API's RAW unit: the user asked for 0.3 cup, the machine
+          // expects 30. The factor comes from it (`settings.factor`), never from a constant.
           const raw = Math.round(command.amount * (d.factor ?? 1))
           await client!.manualFeed(d.type, d.deviceId, raw, petkitDay(ctx!.clock.now()), ctx!.signal)
-          // On ne publie PAS « servi » depuis la commande : l'accusé dit « reçu », pas « tombé ».
-          // C'est la relecture qui fait foi (même prudence que sur le Roomba).
+          // We do NOT publish "served" from the command: the acknowledgment says "received", not
+          // "dropped". The re-read is the authority (same caution as with the Roomba).
           await pollDevices(ctx!.signal)
           return
         }
@@ -291,17 +291,17 @@ export function createPetkitPlugin(deps: PetkitPluginDeps = {}): DevicePlugin {
         case 'pet_fountain.set_mode': {
           const target = bleTarget(d)
           if (!target) throw new PluginError('DEVICE_UNAVAILABLE', 'fountain has no Bluetooth address')
-          // Marche et régime voyagent dans la MÊME trame : changer l'un oblige à redire l'autre.
-          // On part donc de l'état connu et on n'en modifie qu'un champ — sinon éteindre la pompe
-          // la ferait aussi repasser en continu, à l'insu de tout le monde.
+          // On/off and mode travel in the SAME frame: changing one forces restating the other. So
+          // we start from the known state and change only one field — otherwise switching the
+          // pump off would also put it back to continuous, unbeknownst to everyone.
           const current = lastFountainMode.get(d.externalId) ?? 'continuous'
           const pump = command.type === 'pet_fountain.set_power'
             ? { on: command.on, mode: current }
             : { on: true, mode: command.mode }
           await relay!.withConnection(target, async () => {
             await relay!.setPump(target, pump)
-            // Relecture DANS la même session : rouvrir un relais coûterait deux minutes de plus, et
-            // la fontaine vient justement d'être jointe.
+            // Re-read IN the same session: reopening a relay would cost two more minutes, and the
+            // fountain has just been reached.
             const body = await client!.deviceDetail(d.type, d.deviceId, ctx!.signal)
             raw.set(d.externalId, body)
             const patch = toFountainPatch(body, ctx!.clock.now())
@@ -324,14 +324,14 @@ export function createPetkitPlugin(deps: PetkitPluginDeps = {}): DevicePlugin {
       app.get('/status', async () => status())
 
       /**
-       * Relevé BRUT du dernier sondage. C'est par lui que les suppositions de `types.ts` seront
-       * remplacées par du réel : les schémas de ce plugin ont été écrits AVANT toute capture.
+       * RAW reading of the last poll. It's through it that the assumptions in `types.ts` will be
+       * replaced with real data: this plugin's schemas were written BEFORE any capture.
        */
       app.get('/raw', async () => Object.fromEntries(raw))
 
       /**
-       * Étape 1 de l'appairage : demander un code. Il arrive par courriel et vaut dix minutes —
-       * c'est le fabricant qui le dit.
+       * Pairing step 1: request a code. It arrives by e-mail and is valid for ten minutes — the
+       * vendor says so.
        */
       app.post<{ Body: { email?: string } }>('/login/code', async (req, reply) => {
         const body = z.object({ email: z.string().trim().email() }).safeParse(req.body)
@@ -346,8 +346,8 @@ export function createPetkitPlugin(deps: PetkitPluginDeps = {}): DevicePlugin {
       })
 
       /**
-       * Étape 2 : échanger le code contre une session. Ni le code ni aucun mot de passe ne sont
-       * gardés ; ce qui survit est le jeton, dans le fichier de session.
+       * Step 2: exchange the code for a session. Neither the code nor any password is kept; what
+       * survives is the token, in the session file.
        */
       app.post<{ Body: { email?: string; code?: string } }>('/login', async (req, reply) => {
         const body = z.object({ email: z.string().trim().email(), code: z.string().trim().min(4).max(12) }).safeParse(req.body)
@@ -365,7 +365,7 @@ export function createPetkitPlugin(deps: PetkitPluginDeps = {}): DevicePlugin {
         }
       })
 
-      /** Délier : le jeton est effacé. Rien d'autre n'a jamais été gardé. */
+      /** Unlink: the token is erased. Nothing else was ever kept. */
       app.post('/logout', async () => {
         await auth!.unlink()
         devices = []
@@ -384,10 +384,10 @@ export function createPetkitPlugin(deps: PetkitPluginDeps = {}): DevicePlugin {
 }
 
 /**
- * Enveloppe d'erreur ATTENDUE par le client (`apiErrorSchema` : `{ error: { code, message } }`).
- * Renvoyer `{ error: '<texte>' }`, comme le font encore les routes de MELCloud et de Renault, fait
- * échouer l'analyse côté interface : le message du fabricant est perdu et l'utilisateur ne voit
- * qu'un « HTTP 502 » qui n'oriente vers rien. Vécu le 21/09 au premier appairage.
+ * Error envelope EXPECTED by the client (`apiErrorSchema`: `{ error: { code, message } }`).
+ * Returning `{ error: '<text>' }`, as the MELCloud and Renault routes still do, makes parsing fail
+ * on the interface side: the vendor's message is lost and the user only sees an "HTTP 502" that
+ * points nowhere. Experienced on 09/21 at the first pairing.
  */
 const apiError = (code: string, message: string) => ({ error: { code, message } })
 const codeOf = (err: unknown): string => (err instanceof PluginError ? err.code : 'UPSTREAM_ERROR')

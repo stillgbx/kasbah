@@ -2,47 +2,47 @@ import type { DeviceDescriptor, ReleaseNote, StatePatch, StateFor, VehicleFinish
 import { VEHICLE_GEARS, VEHICLE_SLEEP_STATES } from '@kasbah/shared'
 import { releaseNoteEntrySchema, type ReleaseNoteEntry, type VehicleData, type VehicleSummary } from './types'
 
-// Fleet API Tesla → contrat Kasbah. Fonctions PURES, testées sur les fixtures.
+// Tesla Fleet API → Kasbah contract. PURE functions, tested on the fixtures.
 //
-// Un véhicule = un appareil `vehicle`, identifié par son VIN (stable pour la vie du véhicule, sans
-// `:` ni espace : c'est ce que house.json liera). Deux sortes de patchs, parce que deux sortes de
-// lectures qui n'ont pas le même prix :
-//   - `toSleepPatch` : la liste des véhicules donne la VEILLE sans réveiller ni facturer cher ;
-//   - `toDataPatch` : `vehicle_data` est l'appel cher, et il ne répond que véhicule éveillé.
+// One vehicle = one `vehicle` device, identified by its VIN (stable for the vehicle's lifetime, no
+// `:` or space: it's what house.json will bind). Two kinds of patches, because two kinds of
+// readings that don't cost the same:
+//   - `toSleepPatch`: the vehicle list gives the SLEEP STATE without waking or costly billing;
+//   - `toDataPatch`: `vehicle_data` is the expensive call, and it only answers when the vehicle is awake.
 
 export const PLUGIN_ID = 'tesla'
 const MILE_KM = 1.609344
 
 /**
- * Ce que le véhicule DIT. `soc` porte aussi les commandes `vehicle.wake` et `vehicle.refresh` (voir
- * `COMMAND_REQUIRES`). `charge_power` dit que la voiture DONNE sa puissance de charge
- * (`charger_power`) : l'UI n'a donc ni à l'estimer, ni à demander la capacité de la batterie.
+ * What the vehicle REPORTS. `soc` also carries the `vehicle.wake` and `vehicle.refresh` commands (see
+ * `COMMAND_REQUIRES`). `charge_power` says the car GIVES its charging power (`charger_power`): so
+ * the UI neither has to estimate it nor ask for the battery capacity.
  */
 export const READ_CAPABILITIES = ['soc', 'range', 'location', 'charge_power', 'release_notes'] as const
 
 /**
- * Ce que le véhicule ACCEPTE qu'on change : la limite de charge (un réglage borné par le contrat), la
- * charge elle-même et le préconditionnement de l'habitacle — rien ne fait bouger ni ouvrir la voiture.
- * Verrouiller reste à faire.
+ * What the vehicle ACCEPTS being changed: the charge limit (a setting bounded by the contract), the
+ * charge itself and cabin preconditioning — nothing makes the car move or open. Locking is still to
+ * be done.
  */
 export const WRITE_CAPABILITIES = ['charge_limit', 'charging', 'climate_precondition', 'software_update'] as const
 
 /**
- * Ce que la climatisation sait faire, pour l'UI commune des véhicules. Les bornes sont celles que la
- * voiture annonce (`min/max_avail_temp`, 15-28 °C), le pas celui de son appli (0,5 °C). Cinq places
- * chauffées à trois crans et le volant : ce que l'appli Tesla montre sur la Model S de référence, et
- * ce que sa `climate_state` rapporte (les cinq `seat_heater_*`, `steering_wheel_heater`). Une autre
- * Tesla sans sièges arrière chauffés refuserait la commande, et le refus remonterait tel quel.
+ * What the climate control can do, for the vehicles' shared UI. The bounds are those the car
+ * announces (`min/max_avail_temp`, 15-28 °C), the step that of its app (0.5 °C). Five heated seats
+ * with three steps and the steering wheel: what the Tesla app shows on the reference Model S, and
+ * what its `climate_state` reports (the five `seat_heater_*`, `steering_wheel_heater`). Another
+ * Tesla without heated rear seats would refuse the command, and the refusal would surface as is.
  */
 export const CLIMATE_FEATURES = {
   minC: 15, maxC: 28, stepC: 0.5,
   seats: ['fl', 'fr', 'rl', 'rc', 'rr'] as VehicleSeat[], seatLevels: 3, steeringWheelHeat: true,
 }
 
-/** Numéro de siège de `remote_seat_heater_request` (3 et 6 sont les dossiers arrière, absents ici). */
+/** Seat number of `remote_seat_heater_request` (3 and 6 are the rear backrests, absent here). */
 export const SEAT_HEATER_INDEX: Record<VehicleSeat, number> = { fl: 0, fr: 1, rl: 2, rc: 4, rr: 5 }
 
-/** Le 4e caractère d'un VIN Tesla est la gamme : S, 3, X, Y (et C pour le Cybertruck). */
+/** The 4th character of a Tesla VIN is the model line: S, 3, X, Y (and C for the Cybertruck). */
 export function modelFromVin(vin: string): string | undefined {
   const code = vin.charAt(3).toUpperCase()
   const model = ({ S: 'Model S', '3': 'Model 3', X: 'Model X', Y: 'Model Y', C: 'Cybertruck' } as Record<string, string>)[code]
@@ -63,9 +63,9 @@ export function toDescriptor(v: VehicleSummary, paint?: { color?: string; finish
 }
 
 /**
- * Teintes d'usine de Tesla. APPROXIMATIONS : le fabricant nomme ses couleurs mais n'en publie pas
- * les valeurs. C'est acceptable ici — un nom lisible dit de quelle couleur il s'agit, là où un code
- * opaque (le cas de Renault) ne dirait rien —, et l'utilisateur corrige d'un clic si l'œil proteste.
+ * Tesla factory paints. APPROXIMATIONS: the vendor names its colors but doesn't publish their
+ * values. That's acceptable here — a readable name tells which color it is, where an opaque code
+ * (Renault's case) would say nothing —, and the user corrects it with one click if the eye objects.
  */
 const PAINT: Record<string, string> = {
   solidblack: '#171a1c',
@@ -89,29 +89,28 @@ const PAINT: Record<string, string> = {
 const hex2 = (n: number) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0')
 
 /**
- * L'ASPECT de la peinture, tiré des deux nombres qui suivent le RGB de `paint_color_override`.
+ * The paint's FINISH, taken from the two numbers that follow the RGB of `paint_color_override`.
  *
- * MESURÉ, aspect par aspect : le même véhicule, basculé sur son écran de bord entre trois relevés
- * du 2026-09-15.
+ * MEASURED, finish by finish: the same vehicle, switched on its dashboard screen between three
+ * readings on 2026-09-15.
  *
- *     Mate        40,90,200,0.9,0.30
- *     Métallique  40,90,200,0.9,0.01
- *     Unie        40,90,200,0.7,0.04
+ *     Matte       40,90,200,0.9,0.30
+ *     Metallic    40,90,200,0.9,0.01
+ *     Solid       40,90,200,0.7,0.04
  *
- * Deux axes, et il a fallu les trois relevés pour les voir. Le CINQUIÈME se comporte comme une
- * RUGOSITÉ : il s'effondre quand la peinture brille, il monte pour le mat. Le QUATRIÈME comme une
- * MÉTALLICITÉ : identique (0,9) pour les deux peintures à paillettes, plus bas (0,7) pour la teinte
- * unie, qui n'en a pas. Avec les deux premiers relevés seulement, le quatrième semblait constant et
- * ne rien dire — c'est le troisième qui l'a démenti.
+ * Two axes, and it took all three readings to see them. The FIFTH behaves like a ROUGHNESS: it
+ * collapses when the paint shines, it rises for matte. The FOURTH like a METALNESS: identical (0.9)
+ * for the two flake paints, lower (0.7) for the solid color, which has none. With only the first
+ * two readings, the fourth seemed constant and meaningless — it was the third that disproved it.
  *
- * Les seuils sont posés ENTRE des valeurs mesurées, pas lus au centième : aucun des trois aspects
- * n'est inventé, et un véhicule qui sortirait de ces plages retombe sur le plus proche.
+ * The thresholds are set BETWEEN measured values, not read to the hundredth: none of the three
+ * finishes is invented, and a vehicle that fell outside these ranges falls back on the nearest one.
  */
 const ROUGHNESS = 4
 const METALNESS = 3
-/** Entre 0,04 (unie, mesuré) et 0,30 (mate, mesuré) : au-dessus, la peinture diffuse. */
+/** Between 0.04 (solid, measured) and 0.30 (matte, measured): above it, the paint is diffuse. */
 const MATTE_ABOVE = 0.15
-/** Entre 0,7 (unie, mesuré) et 0,9 (à paillettes, mesuré). */
+/** Between 0.7 (solid, measured) and 0.9 (flake, measured). */
 const METALLIC_FROM = 0.8
 
 export function bodyFinish(data: Pick<VehicleData, 'vehicle_config'>): VehicleFinish | undefined {
@@ -124,11 +123,11 @@ export function bodyFinish(data: Pick<VehicleData, 'vehicle_config'>): VehicleFi
 }
 
 /**
- * La couleur de la carrosserie, du plus vrai au plus approché :
- *  1. `paint_color_override` — la teinte que le propriétaire a choisie DANS SA VOITURE, en RGB
- *     exact. Elle prime : c'est celle que son écran de bord affiche, donc celle qu'il a en tête.
- *  2. `exterior_color` — le nom de la peinture d'usine, approché par la table ci-dessus.
- *  3. rien, si le nom est inconnu : mieux vaut la couleur de thème qu'une couleur inventée.
+ * The body color, from the most accurate to the most approximate:
+ *  1. `paint_color_override` — the color the owner chose IN THEIR CAR, as exact RGB. It wins: it's
+ *     the one their dashboard screen displays, hence the one they have in mind.
+ *  2. `exterior_color` — the factory paint name, approximated by the table above.
+ *  3. nothing, if the name is unknown: better the theme color than an invented color.
  */
 export function bodyColor(data: Pick<VehicleData, 'vehicle_config'>): string | undefined {
   const cfg = data.vehicle_config
@@ -139,7 +138,7 @@ export function bodyColor(data: Pick<VehicleData, 'vehicle_config'>): string | u
   return name ? PAINT[name] : undefined
 }
 
-/** Veille normalisée ; une valeur inconnue de Tesla (`waking`…) est lue comme éveillé, sans erreur. */
+/** Normalized sleep state; a value unknown from Tesla (`waking`…) is read as awake, without error. */
 export function toSleepState(state: string | null | undefined): VehicleSleepState {
   return (VEHICLE_SLEEP_STATES as readonly string[]).includes(state ?? '') ? (state as VehicleSleepState) : 'online'
 }
@@ -153,9 +152,9 @@ const milesToKm = (mi: number) => round(mi * MILE_KM, 1)
 const defined = <T>(v: T | null | undefined): v is T => v !== null && v !== undefined
 
 /**
- * Lecture complète d'un véhicule éveillé. Les `null` du fabricant deviennent des champs ABSENTS du
- * patch (« je ne parle pas de ce champ »), jamais des zéros : une vitesse `null` à l'arrêt vaut 0,
- * mais une pression de pneu `null` veut dire « pas mesurée ».
+ * Full reading of an awake vehicle. The vendor's `null`s become fields ABSENT from the patch ("I'm
+ * not talking about this field"), never zeros: a `null` speed when parked is 0, but a `null` tire
+ * pressure means "not measured".
  */
 export function toDataPatch(d: VehicleData): StatePatch<'vehicle'> {
   const c = d.charge_state, dr = d.drive_state, vs = d.vehicle_state, cl = d.climate_state
@@ -164,15 +163,15 @@ export function toDataPatch(d: VehicleData): StatePatch<'vehicle'> {
   if (defined(c?.battery_level)) patch.soc = Math.max(0, Math.min(100, c.battery_level))
   if (defined(c?.battery_range)) patch.rangeKm = milesToKm(c.battery_range)
   if (defined(c?.charging_state)) {
-    // `Disconnected` est la seule valeur qui dise « pas branché » ; tout le reste (Stopped,
-    // Complete, NoPower, Charging, Starting) suppose un câble
+    // `Disconnected` is the only value that says "not plugged in"; everything else (Stopped,
+    // Complete, NoPower, Charging, Starting) implies a cable
     patch.pluggedIn = c.charging_state !== 'Disconnected'
     patch.charging = c.charging_state === 'Charging' || c.charging_state === 'Starting'
-    // le fabricant donne des kW ENTIERS : c'est grossier, et c'est ce qu'on a
+    // the vendor gives WHOLE kW: it's coarse, and it's what we have
     patch.chargePowerW = patch.charging && defined(c.charger_power) ? Math.round(c.charger_power * 1000) : 0
-    // `time_to_full_charge` est en HEURES décimales, et reste à sa dernière valeur une fois la
-    // charge finie : hors charge on EFFACE (`null`), sans quoi la carte annoncerait une fin de
-    // charge pour une voiture débranchée
+    // `time_to_full_charge` is in decimal HOURS, and stays at its last value once the charge is
+    // finished: outside charging we CLEAR it (`null`), otherwise the card would announce an end of
+    // charge for an unplugged car
     patch.chargeMinutesRemaining = patch.charging && defined(c.time_to_full_charge) && c.time_to_full_charge > 0
       ? Math.round(c.time_to_full_charge * 60)
       : null
@@ -186,18 +185,18 @@ export function toDataPatch(d: VehicleData): StatePatch<'vehicle'> {
   if (measured.length) patch.tirePressureBar = Object.fromEntries(measured.map(([k, v]) => [k, round(v, 2)]))
 
   if (defined(dr?.latitude) && defined(dr?.longitude)) {
-    // `gps_as_of` est en secondes, `timestamp` en millisecondes : deux bases de temps dans la même
-    // section, on normalise en ms et on préfère la date du GPS, qui est celle de la mesure
+    // `gps_as_of` is in seconds, `timestamp` in milliseconds: two time bases in the same section,
+    // we normalize to ms and prefer the GPS date, which is the measurement's
     const at = defined(dr.gps_as_of) ? dr.gps_as_of * 1000 : defined(dr.timestamp) ? dr.timestamp : undefined
     if (at !== undefined) patch.location = { lat: dr.latitude, lon: dr.longitude, at }
   }
   if (defined(dr?.heading)) patch.headingDeg = ((dr.heading % 360) + 360) % 360
   if (dr) {
-    // vitesse `null` = à l'arrêt (le fabricant ne met un nombre que quand ça roule)
+    // `null` speed = stationary (the vendor only puts a number when moving)
     patch.speedKmh = defined(dr.speed) ? milesToKm(dr.speed) : 0
     const gear = dr.shift_state?.toUpperCase()
     if (gear && (VEHICLE_GEARS as readonly string[]).includes(gear)) patch.gear = gear as VehicleGear
-    // `null` moteur coupé : le véhicule est garé, et le dire vaut mieux qu'un rapport qui reste au `D` du dernier trajet
+    // `null` when switched off: the vehicle is parked, and saying so beats a gear stuck on the last trip's `D`
     else if (dr.shift_state === null) patch.gear = 'P'
   }
 
@@ -210,7 +209,7 @@ export function toDataPatch(d: VehicleData): StatePatch<'vehicle'> {
   if (heated.length) patch.seatHeat = Object.fromEntries(heated.map(([k, v]) => [k, Math.max(0, Math.min(3, Math.round(v)))]))
   if (defined(cl?.steering_wheel_heater)) patch.steeringWheelHeat = cl.steering_wheel_heater
 
-  // le hash de build éventuel (« 2026.32.7 abc123 ») n'est pas la version qu'on montre
+  // the optional build hash ("2026.32.7 abc123") is not the version we show
   const version = vs?.car_version?.trim().split(/\s+/)[0]
   if (version) patch.softwareVersion = version
   if (vs?.software_update !== undefined) patch.softwareUpdate = toSoftwareUpdate(vs.software_update)
@@ -225,11 +224,11 @@ const UPDATE_STATUS: Record<string, VehicleUpdateStatus> = {
 type SoftwareUpdate = NonNullable<StateFor<'vehicle'>['softwareUpdate']>
 
 /**
- * `software_update` → `softwareUpdate`. Statut vide (rien en attente) = `null`, qui EFFACE le champ.
- * Chaque nombre n'est publié que dans le statut où il veut dire quelque chose : Tesla laisse
- * `install_perc` à 10 sur une mise à jour seulement disponible (capture du 2026-10-02). Un statut
- * inconnu de Tesla compte pour un téléchargement tant qu'il n'est pas complet, sinon pour une mise
- * à jour prête : il y a en tout cas quelque chose en attente.
+ * `software_update` → `softwareUpdate`. Empty status (nothing pending) = `null`, which CLEARS the
+ * field. Each number is only published in the status where it means something: Tesla leaves
+ * `install_perc` at 10 on an update that is merely available (capture of 2026-10-02). A status
+ * unknown from Tesla counts as a download while it isn't complete, otherwise as a ready update:
+ * either way there's something pending.
  */
 export function toSoftwareUpdate(su: NonNullable<VehicleData['vehicle_state']>['software_update']): SoftwareUpdate | null {
   const raw = su?.status?.trim()
@@ -246,9 +245,9 @@ export function toSoftwareUpdate(su: NonNullable<VehicleData['vehicle_state']>['
   }
 }
 
-// ---- notes de version ------------------------------------------------------------------------
+// ---- release notes ---------------------------------------------------------------------------
 
-/** Les entrées lisibles d'une réponse `release_notes` ; une entrée de forme inattendue est écartée seule. */
+/** The readable entries of a `release_notes` response; an entry of unexpected shape is dropped on its own. */
 export function parseReleaseNotes(raw: unknown[] | null | undefined): ReleaseNoteEntry[] {
   return (raw ?? []).flatMap((e) => {
     const parsed = releaseNoteEntrySchema.safeParse(e)
@@ -256,7 +255,7 @@ export function parseReleaseNotes(raw: unknown[] | null | undefined): ReleaseNot
   })
 }
 
-/** Une entrée Tesla → une note du contrat : titre rogné (« Apple Music  »), champs vides omis. */
+/** A Tesla entry → a contract note: title trimmed ("Apple Music  "), empty fields omitted. */
 export function toReleaseNote(e: ReleaseNoteEntry): ReleaseNote {
   const description = e.description?.trim()
   return {
@@ -267,7 +266,7 @@ export function toReleaseNote(e: ReleaseNoteEntry): ReleaseNote {
   }
 }
 
-/** Notes par version, dans l'ordre de la réponse. */
+/** Notes per version, in the response's order. */
 export function notesByVersion(entries: ReleaseNoteEntry[]): Record<string, ReleaseNote[]> {
   const out: Record<string, ReleaseNote[]> = {}
   for (const e of entries) {
@@ -277,26 +276,26 @@ export function notesByVersion(entries: ReleaseNoteEntry[]): Record<string, Rele
   return out
 }
 
-/** Échéance (ms epoch) d'une URL signée de Tesla (`__gda__=exp=<secondes>~…`) ; `undefined` = pas d'échéance lisible. */
+/** Expiry (epoch ms) of a signed Tesla URL (`__gda__=exp=<seconds>~…`); `undefined` = no readable expiry. */
 export function urlExpiresAt(url: string | undefined): number | undefined {
   const m = url ? /[?&]__gda__=exp=(\d+)/.exec(url) : null
   return m ? Number(m[1]) * 1000 : undefined
 }
 
-/** La plus proche échéance des illustrations de ces notes. */
+/** The nearest expiry of these notes' illustrations. */
 export function imagesExpireAt(notes: ReleaseNote[]): number | undefined {
   const all = notes.flatMap((n) => [urlExpiresAt(n.imageUrl), urlExpiresAt(n.lightImageUrl)]).filter(defined)
   return all.length ? Math.min(...all) : undefined
 }
 
-/** Retire les illustrations périmées : un lien mort afficherait une image cassée. */
+/** Removes expired illustrations: a dead link would display a broken image. */
 export function withoutExpiredImages(note: ReleaseNote, now: number): ReleaseNote {
   const { imageUrl, lightImageUrl, ...rest } = note
   const alive = (u: string | undefined) => u !== undefined && (urlExpiresAt(u) ?? Infinity) > now
   return { ...rest, ...(alive(imageUrl) ? { imageUrl } : {}), ...(alive(lightImageUrl) ? { lightImageUrl } : {}) }
 }
 
-/** Ordre des versions Tesla (`2026.32.7` > `2026.32` > `2026.26.6`), numérique segment par segment. */
+/** Order of Tesla versions (`2026.32.7` > `2026.32` > `2026.26.6`), numeric segment by segment. */
 export function compareVersions(a: string, b: string): number {
   const pa = a.split('.').map(Number), pb = b.split('.').map(Number)
   for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
@@ -307,16 +306,16 @@ export function compareVersions(a: string, b: string): number {
 }
 
 /**
- * Le véhicule est-il au REPOS : garé, personne à bord, pas en charge ? C'est le moment où il va
- * s'endormir de lui-même (un quart d'heure) — et où le laisser tranquille compte. Sur un Model S ou
- * X d'avant 2021, une lecture de `vehicle_data` peut retarder la veille ; sur les autres non, mais
- * relire toutes les dix minutes une voiture qui ne fait rien n'apprend rien non plus.
+ * Is the vehicle at REST: parked, nobody on board, not charging? It's the moment it will fall asleep
+ * on its own (a quarter of an hour) — and when leaving it alone matters. On a pre-2021 Model S or X,
+ * a `vehicle_data` read can delay sleep; on the others it can't, but re-reading every ten minutes a
+ * car that does nothing teaches nothing either.
  */
 export function isResting(d: VehicleData): boolean {
   const gear = d.drive_state?.shift_state
   const parked = gear === null || gear === undefined || gear.toUpperCase() === 'P'
   const charging = d.charge_state?.charging_state === 'Charging' || d.charge_state?.charging_state === 'Starting'
-  // une INSTALLATION en cours n'est pas du repos : on veut voir sa progression, puis la nouvelle version
+  // an INSTALLATION in progress is not rest: we want to see its progress, then the new version
   const installing = d.vehicle_state?.software_update?.status === 'installing'
   return parked && !charging && !installing && d.vehicle_state?.is_user_present !== true
 }

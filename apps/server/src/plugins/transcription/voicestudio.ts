@@ -4,22 +4,22 @@ import { join } from 'node:path'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import type { SpawnFn } from '../../music/proxy'
 
-// VoiceStudio sans son interface (sous-item `voicestudio`, décision de l'utilisateur 2026-10-07) : son
-// moteur est un programme Python (`backend/main.py`) qui sert la même API sur le même port que l'app,
-// avec les mêmes données (`%APPDATA%\OmniVoice` : voix, moteur choisi). Il vit avec Kasbah : lancé au
-// démarrage du plugin, arrêté à son arrêt. Rien à installer : l'app apporte son propre Python
-// (`<runtime>/.python`, relié par `<runtime>/project/.venv`), posé à son premier lancement.
+// VoiceStudio without its interface (`voicestudio` sub-item, the user's decision of 2026-10-07): its
+// engine is a Python program (`backend/main.py`) that serves the same API on the same port as the
+// app, with the same data (`%APPDATA%\OmniVoice`: voices, chosen engine). It lives with Kasbah:
+// launched when the plugin starts, stopped when it stops. Nothing to install: the app brings its own
+// Python (`<runtime>/.python`, linked through `<runtime>/project/.venv`), set up at its first launch.
 
 export interface VoiceStudioRuntime {
   python: string
-  /** `backend/` : `main.py` y lit ses modules. */
+  /** `backend/`: `main.py` reads its modules there. */
   backend: string
 }
 
 /**
- * Le runtime posé par l'app : `VOICESTUDIO_DIR` (le dossier `project`, celui qui porte `.venv` et
- * `backend`), sinon celui que l'app note dans `%APPDATA%\VoiceStudio\runtime-location.json`. Rend
- * la raison en clair quand il manque.
+ * The runtime set up by the app: `VOICESTUDIO_DIR` (the `project` folder, the one holding `.venv` and
+ * `backend`), otherwise the one the app records in `%APPDATA%\VoiceStudio\runtime-location.json`.
+ * Returns the reason in plain text when it's missing.
  */
 export async function findVoiceStudio(dir: string | undefined, appData = process.env.APPDATA): Promise<VoiceStudioRuntime | string> {
   let project = dir
@@ -39,7 +39,7 @@ export async function findVoiceStudio(dir: string | undefined, appData = process
   return { python, backend }
 }
 
-/** `python main.py` sur le port de `STT_URL`, sans fenêtre ; ses sorties sont lues (un tuyau plein le bloquerait), la fin gardée. */
+/** `python main.py` on the port of `STT_URL`, without a window; its output is read (a full pipe would block it), the tail kept. */
 export function spawnVoiceStudio(spawnImpl: SpawnFn, runtime: VoiceStudioRuntime, port: number): { child: ChildProcessWithoutNullStreams; tail: () => string } {
   const child = spawnImpl(runtime.python, ['main.py'], {
     cwd: runtime.backend, env: { ...process.env, OMNIVOICE_PORT: String(port) }, windowsHide: true,
@@ -51,7 +51,7 @@ export function spawnVoiceStudio(spawnImpl: SpawnFn, runtime: VoiceStudioRuntime
   return { child, tail: () => out.trim().split(/\r?\n/).slice(-3).join(' | ') }
 }
 
-/** Arrête le moteur et ce qu'il a lancé : sous Windows, `kill` ne touche que `python.exe`, ses moteurs resteraient. */
+/** Stops the engine and what it launched: on Windows, `kill` only reaches `python.exe`, its engines would remain. */
 export function killVoiceStudio(spawnImpl: SpawnFn, child: ChildProcessWithoutNullStreams): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve()
   return new Promise((resolve) => {

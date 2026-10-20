@@ -11,10 +11,10 @@ import { createIrobotPlugin, irobotConfigSchema, type IrobotStatus } from './ind
 import type { StoredSession } from './types'
 import { CLEANING, DOCKED, PAUSED } from './__fixtures__/shadows'
 
-// Ce que le plugin doit tenir : ne rien publier tant que le compte n'est pas relié, obtenir les
-// mots de passe LOCAUX en une fois puis ne plus toucher au réseau extérieur, marquer indisponible
-// un robot du compte absent du LAN plutôt que de l'oublier, et traduire les quatre gestes.
-// Aucun compte ni robot réel n'est touché.
+// What the plugin must guarantee: publish nothing until the account is linked, obtain the LOCAL
+// passwords in one go then never touch the outside network again, mark unavailable a robot of the
+// account missing from the LAN rather than forgetting it, and translate the four actions.
+// No real account or robot is touched.
 
 const BLID = '1111111111111111111111111111AAAA'
 const ROBOT: DiscoveredRobot = {
@@ -28,7 +28,7 @@ const response = (body: unknown, status = 200) => ({
   text: async () => (body === null ? '' : JSON.stringify(body)),
 })
 
-/** Faux cloud iRobot : découverte publique, Gigya, puis l'échange qui rend les mots de passe. */
+/** Fake iRobot cloud: public discovery, Gigya, then the exchange that returns the passwords. */
 function fakeCloud(overrides: { gigya?: unknown } = {}) {
   const calls: string[] = []
   const fetchImpl = vi.fn<FetchLike>(async (url) => {
@@ -41,7 +41,7 @@ function fakeCloud(overrides: { gigya?: unknown } = {}) {
       })
     }
     if (String(url).includes('accounts.login')) {
-      // Gigya répond TOUJOURS en HTTP 200, même pour refuser
+      // Gigya ALWAYS answers with HTTP 200, even to refuse
       return response(overrides.gigya ?? { errorCode: 0, UID: 'uid-1', UIDSignature: 'sig-1', signatureTimestamp: '1789820609' })
     }
     if (String(url).includes('/v2/login')) {
@@ -52,7 +52,7 @@ function fakeCloud(overrides: { gigya?: unknown } = {}) {
   return { fetchImpl, calls }
 }
 
-/** Faux lien MQTT : on pousse les ombres à la main et on note les commandes publiées. */
+/** Fake MQTT link: shadows are pushed by hand and published commands are recorded. */
 function fakeLink() {
   const published: string[] = []
   let handlers: { onShadow?: (s: RobotShadow) => void; onConnected?: () => void; onDisconnected?: (r: string) => void } = {}
@@ -68,7 +68,7 @@ function fakeLink() {
       async command(name: string) {
         if (!connected) throw new Error('not connected')
         published.push(name)
-        // comme le vrai robot : un `pause` le sort de la mission, et c'est ce que `settle` guette
+        // like the real robot: a `pause` takes it out of the mission, and that's what `settle` watches for
         if (name === 'pause') { shadow = PAUSED; handlers.onShadow?.(shadow) }
       },
       async close() { closed = true; connected = false },
@@ -123,15 +123,15 @@ function harness(opts: { store?: SessionStore; found?: DiscoveredRobot[] } = {})
   return { plugin, ctx, cloud, link, clock, emitted, available, get devices() { return devices } }
 }
 
-describe('plugin iRobot — compte non relié', () => {
-  it('ne publie aucun appareil et demande l appairage', async () => {
+describe('iRobot plugin — account not linked', () => {
+  it('publishes no device and asks for pairing', async () => {
     const h = harness()
     await h.plugin.init(h.ctx)
     expect(await h.plugin.discover()).toEqual([])
     expect(h.plugin.health!().status).toBe('needs_pairing')
   })
 
-  it('ne balaie pas le réseau au démarrage', async () => {
+  it('does not scan the network at startup', async () => {
     const h = harness()
     const discoverImpl = vi.fn(async () => [ROBOT])
     const plugin = createIrobotPlugin({ fetchImpl: h.cloud.fetchImpl, sessionStore: memoryStore(), discoverImpl, connectImpl: h.link.connectImpl as never })
@@ -141,8 +141,8 @@ describe('plugin iRobot — compte non relié', () => {
   })
 })
 
-describe('plugin iRobot — liaison du compte', () => {
-  it('obtient le mot de passe LOCAL puis ouvre le lien du robot', async () => {
+describe('iRobot plugin — account linking', () => {
+  it('obtains the LOCAL password then opens the robot link', async () => {
     const h = harness()
     await h.plugin.init(h.ctx)
     const app = Fastify()
@@ -154,12 +154,12 @@ describe('plugin iRobot — liaison du compte', () => {
     expect(status.linked).toBe(true)
     expect(status.robots).toEqual([expect.objectContaining({ blid: BLID, name: 'Robby', ip: '192.168.1.81' })])
 
-    // trois appels vers le cloud, et plus jamais ensuite
+    // three calls to the cloud, and never again afterwards
     expect(h.cloud.calls).toHaveLength(3)
     expect(h.link.connectImpl).toHaveBeenCalledWith(expect.objectContaining({ blid: BLID, password: ':1:mot-de-passe-local', ip: '192.168.1.81' }))
   })
 
-  it('ne renvoie JAMAIS un mot de passe dans le statut', async () => {
+  it('NEVER returns a password in the status', async () => {
     const h = harness()
     await h.plugin.init(h.ctx)
     const app = Fastify()
@@ -170,7 +170,7 @@ describe('plugin iRobot — liaison du compte', () => {
     expect(body).not.toContain('secret')
   })
 
-  it('distingue un refus d identifiants d une panne', async () => {
+  it('tells a credentials refusal from an outage', async () => {
     const cloud = fakeCloud({ gigya: { errorCode: 403042, errorMessage: 'Invalid LoginID' } })
     const plugin = createIrobotPlugin({ fetchImpl: cloud.fetchImpl, sessionStore: memoryStore(), discoverImpl: async () => [ROBOT], connectImpl: fakeLink().connectImpl as never })
     const h = harness()
@@ -182,7 +182,7 @@ describe('plugin iRobot — liaison du compte', () => {
     expect(res.json<{ error: string }>().error).toMatch(/refused the e-mail or password/)
   })
 
-  it('reprend les identifiants du fichier au redémarrage, sans toucher au cloud', async () => {
+  it('picks up the credentials from the file on restart, without touching the cloud', async () => {
     const store = memoryStore({ robots: [{ blid: BLID, password: ':1:pw', name: 'Robby', sku: 'c755840' }], linkedAt: 1 })
     const h = harness({ store })
     await h.plugin.init(h.ctx)
@@ -191,7 +191,7 @@ describe('plugin iRobot — liaison du compte', () => {
   })
 })
 
-describe('plugin iRobot — état et gestes', () => {
+describe('iRobot plugin — state and actions', () => {
   async function linked() {
     const store = memoryStore({ robots: [{ blid: BLID, password: ':1:pw', name: 'Robby', sku: 'c755840' }], linkedAt: 1 })
     const h = harness({ store })
@@ -201,7 +201,7 @@ describe('plugin iRobot — état et gestes', () => {
     return h
   }
 
-  it('publie l état à chaque ombre reçue', async () => {
+  it('publishes the state on every shadow received', async () => {
     const h = await linked()
     h.link.push(DOCKED)
     expect(h.emitted.at(-1)).toEqual({ id: BLID, patch: { activity: 'docked', battery: 100, binFull: false, errorMessage: null, mopAttached: false, tankLevel: 10 } })
@@ -209,7 +209,7 @@ describe('plugin iRobot — état et gestes', () => {
     expect(h.emitted.at(-1)!.patch).toMatchObject({ activity: 'paused' })
   })
 
-  it('traduit le bouton unique en `start` ou `resume` selon l activité', async () => {
+  it('translates the single button into `start` or `resume` depending on the activity', async () => {
     const h = await linked()
     h.link.push(DOCKED)
     await h.plugin.execute(BLID, { type: 'vacuum.start' })
@@ -220,7 +220,7 @@ describe('plugin iRobot — état et gestes', () => {
     expect(h.link.published.at(-1)).toBe('resume')
   })
 
-  it('traduit les trois autres gestes', async () => {
+  it('translates the three other actions', async () => {
     const h = await linked()
     h.link.push(DOCKED)
     await h.plugin.execute(BLID, { type: 'vacuum.pause' })
@@ -231,15 +231,15 @@ describe('plugin iRobot — état et gestes', () => {
   })
 
   /**
-   * Le robot ACCEPTE un `dock` en pleine mission et ne fait rien (mesuré sur Robby le 19/09 :
-   * `lastCommand` enregistré, `phase: "run"` deux minutes et demie après). Le plugin doit donc
-   * l'arrêter d'abord — sinon le bouton « Retour base » ne fait rien, en silence.
+   * The robot ACCEPTS a `dock` mid-mission and does nothing (measured on Robby on 09/19:
+   * `lastCommand` recorded, `phase: "run"` two and a half minutes later). So the plugin must stop
+   * it first — otherwise the "Return to dock" button does nothing, silently.
    */
-  it('arrête le robot avant de le renvoyer à sa base quand il nettoie', async () => {
+  it('stops the robot before sending it back to its dock while it is cleaning', async () => {
     const h = await linked()
     h.link.push(CLEANING)
     const geste = h.plugin.execute(BLID, { type: 'vacuum.dock' })
-    // le plugin laisse au robot le temps de s'arrêter POUR DE BON : on avance l'horloge à sa place
+    // the plugin gives the robot time to stop FOR GOOD: we advance the clock in its place
     for (let i = 0; i < 40 && h.link.published.length < 2; i++) {
       h.clock.advance(500)
       await Promise.resolve()
@@ -249,16 +249,16 @@ describe('plugin iRobot — état et gestes', () => {
   })
 
   /**
-   * Le délai de grâce n'est pas cosmétique : un `dock` envoyé trop tôt après le `pause` est avalé
-   * par le robot sans erreur et jamais rejoué. Le plugin ne doit donc PAS l'envoyer tant qu'il n'a
-   * pas laissé passer ce délai — ce test échouerait si on retirait l'attente.
+   * The grace delay is not cosmetic: a `dock` sent too soon after the `pause` is swallowed by the
+   * robot without error and never replayed. So the plugin must NOT send it until it has let that
+   * delay pass — this test would fail if the wait were removed.
    */
-  it('n envoie pas le `dock` dans la foulée du `pause`', async () => {
+  it('does not send the `dock` right on the heels of the `pause`', async () => {
     const h = await linked()
     h.link.push(CLEANING)
     const geste = h.plugin.execute(BLID, { type: 'vacuum.dock' })
-    // le robot s'arrête tout de suite (le faux lien le simule), et on avance JUSTE SOUS le délai
-    // de grâce : si le plugin ne l'observait pas, le `dock` serait déjà parti ici
+    // the robot stops right away (the fake link simulates it), and we advance JUST UNDER the grace
+    // delay: if the plugin didn't observe it, the `dock` would already have gone out here
     for (let i = 0; i < 5; i++) { h.clock.advance(500); await Promise.resolve() }
     expect(h.link.published).toEqual(['pause'])
     for (let i = 0; i < 40 && h.link.published.length < 2; i++) {
@@ -269,19 +269,19 @@ describe('plugin iRobot — état et gestes', () => {
     expect(h.link.published).toEqual(['pause', 'dock'])
   })
 
-  it('refuse une commande d un autre kind', async () => {
+  it('refuses a command of another kind', async () => {
     const h = await linked()
     await expect(h.plugin.execute(BLID, { type: 'light.on' } as never)).rejects.toMatchObject({ code: 'UNSUPPORTED_COMMAND' })
   })
 
-  it('refuse un geste vers un robot injoignable', async () => {
+  it('refuses an action toward an unreachable robot', async () => {
     const h = harness({ store: memoryStore({ robots: [{ blid: BLID, password: ':1:pw', name: 'Robby', sku: null }], linkedAt: 1 }), found: [] })
     await h.plugin.init(h.ctx)
     await h.plugin.discover()
     await expect(h.plugin.execute(BLID, { type: 'vacuum.dock' })).rejects.toMatchObject({ code: 'DEVICE_UNAVAILABLE' })
   })
 
-  it('garde dans l inventaire un robot du compte absent du réseau, en le disant indisponible', async () => {
+  it('keeps in the inventory an account robot missing from the network, marking it unavailable', async () => {
     const h = harness({ store: memoryStore({ robots: [{ blid: BLID, password: ':1:pw', name: 'Robby', sku: null }], linkedAt: 1 }), found: [] })
     await h.plugin.init(h.ctx)
     const list = await h.plugin.discover()
@@ -290,7 +290,7 @@ describe('plugin iRobot — état et gestes', () => {
     expect(h.plugin.health!().status).toBe('degraded')
   })
 
-  it('oublie tout à la déliaison', async () => {
+  it('forgets everything on unlinking', async () => {
     const h = await linked()
     const app = Fastify()
     h.plugin.registerRoutes!(app)

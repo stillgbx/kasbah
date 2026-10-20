@@ -4,12 +4,12 @@ import type { Clock } from '../../core/clock'
 import { PluginError } from '../../core/plugin'
 import type { TuyaDps } from './types'
 
-// Connexion locale tuyapi (protocole 3.5) avec boucle de reconnexion.
+// Local tuyapi connection (protocol 3.5) with a reconnection loop.
 //
-// Pièges mesurés sur le CREATE :
-//  3 — ne jamais sonder un DP isolé (`get({dps})` → ECONNRESET) : s'abonner à `data` / `dp-refresh`
-//  4 — l'état complet arrive à la connexion (`issueRefreshOnConnect: true`)
-//  5 — la connexion tombe sans prévenir → boucle de reconnexion (~700 ms)
+// Pitfalls measured on the CREATE:
+//  3 — never poll a single DP (`get({dps})` → ECONNRESET): subscribe to `data` / `dp-refresh`
+//  4 — the full state arrives on connection (`issueRefreshOnConnect: true`)
+//  5 — the connection drops without warning → reconnection loop (~700 ms)
 
 const RECONNECT_MS = 700
 
@@ -21,7 +21,7 @@ export interface TuyaSocketEvents {
   connected: () => void
 }
 
-/** Socket minimale injectable — la vraie passe par `tuyapi`. */
+/** Minimal injectable socket — the real one goes through `tuyapi`. */
 export interface TuyaSocket {
   connect(): Promise<void>
   disconnect(): void
@@ -47,7 +47,7 @@ export interface DeviceSessionOptions {
   createSocket: TuyaSocketFactory
   clock: Clock
   signal: AbortSignal
-  /** Délai entre deux tentatives de reconnexion (injectable pour les tests). */
+  /** Delay between two reconnection attempts (injectable for tests). */
   reconnectMs?: number
   onDps: (dps: TuyaDps) => void
   onConnectionChange: (connected: boolean) => void
@@ -55,8 +55,8 @@ export interface DeviceSessionOptions {
 }
 
 /**
- * Une session par appareil physique : accumule les DP (trames complètes à la connexion,
- * puis deltas), reconnecte en boucle tant que le plugin vit.
+   * One session per physical device: accumulates the DPs (full frames on connection,
+   * then deltas), reconnects in a loop as long as the plugin lives.
  */
 export class DeviceSession {
   private socket: TuyaSocket | null = null
@@ -69,7 +69,7 @@ export class DeviceSession {
     this.reconnectMs = opts.reconnectMs ?? RECONNECT_MS
   }
 
-  /** État DP accumulé (lecture seule). */
+  /** Accumulated DP state (read-only). */
   snapshot(): TuyaDps {
     return { ...this.dps }
   }
@@ -82,7 +82,7 @@ export class DeviceSession {
 
   async stop(): Promise<void> {
     this.running = false
-    try { this.socket?.disconnect() } catch { /* déjà fermé */ }
+    try { this.socket?.disconnect() } catch { /* already closed */ }
     this.socket = null
     this.opts.onConnectionChange(false)
     await this.loopPromise?.catch(() => undefined)
@@ -90,8 +90,8 @@ export class DeviceSession {
   }
 
   /**
-   * Écrit un DP, borné par `signal` (plugin + délai commande).
-   * N'attend PAS l'effet — c'est `waitForDps` qui le fait.
+   * Writes a DP, bounded by `signal` (plugin + command timeout).
+   * Does NOT wait for the effect — that's what `waitForDps` does.
    */
   async write(dps: number, set: unknown, signal: AbortSignal): Promise<void> {
     const sock = this.socket
@@ -112,8 +112,8 @@ export class DeviceSession {
   }
 
   /**
-   * Attend que l'état accumulé contienne les valeurs attendues (preuve d'effet, pas l'accusé).
-   * Résout aussi si `signal` est annulé — « continuer passé le plafond ».
+   * Waits until the accumulated state contains the expected values (proof of effect, not the acknowledgment).
+   * Also resolves if `signal` is aborted — "carry on past the cap".
    */
   waitForDps(expected: { dps: number; set: unknown }[], signal: AbortSignal): Promise<boolean> {
     if (expected.every((w) => (this.dps[String(w.dps)] ?? this.dps[w.dps as unknown as keyof TuyaDps]) === w.set)) {
@@ -158,7 +158,7 @@ export class DeviceSession {
       this.socket = sock
       const onData = (p: { dps?: TuyaDps }) => this.absorb(p?.dps)
       const onRefresh = (p: { dps?: TuyaDps }) => this.absorb(p?.dps)
-      const onError = () => { /* bruit de reconnexion — piège 5 */ }
+      const onError = () => { /* reconnection noise — pitfall 5 */ }
       sock.on('data', onData)
       sock.on('dp-refresh', onRefresh)
       sock.on('error', onError)
@@ -205,7 +205,7 @@ function sleep(clock: Clock, ms: number, signal: AbortSignal): Promise<void> {
   })
 }
 
-/** Fabrique réelle autour de `tuyapi` 7.7.1. */
+/** Real factory around `tuyapi` 7.7.1. */
 export function createTuyapiFactory(): TuyaSocketFactory {
   return (opts) => {
     const device = new TuyAPI({

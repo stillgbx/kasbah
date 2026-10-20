@@ -1,30 +1,29 @@
-// Fixtures PetKit — **CAPTURÉES SUR LE VRAI COMPTE le 2026-09-21**, puis anonymisées (adresses
-// matérielles, numéros de série, secrets, identifiant d'utilisateur et nom du réseau Wi-Fi
-// remplacés ; identifiants d'appareil et noms donnés par l'utilisateur conservés, ils ne révèlent
-// rien et rendent les tests lisibles).
+// PetKit fixtures — **CAPTURED ON THE REAL ACCOUNT on 2026-09-21**, then anonymized (hardware
+// addresses, serial numbers, secrets, user identifier and Wi-Fi network name replaced; device
+// identifiers and user-given names kept, they reveal nothing and make the tests readable).
 //
-// Elles remplacent des fixtures INVENTÉES d'après des bibliothèques tierces, qui se sont trompées
-// sur six points — chacun aurait produit un affichage faux :
+// They replace fixtures INVENTED from third-party libraries, which got six points wrong — each of
+// which would have produced a wrong display:
 //
-//  1. le roster ne porte NI nom NI adresse Bluetooth, seulement `id` et `type` (en casse mixte) ;
-//  2. une fontaine ne répond pas sur `device_detail` (404) mais sur `deviceData` ;
-//  3. la marche de la pompe est dans `status.powerStatus`, pas au premier niveau ;
-//  4. **`-1` est une sentinelle « non compté »** : la fontaine réelle rend -1 pour l'eau du jour,
-//     les jours de filtre et le temps de pompe. Les lire comme des zéros afficherait « 0 mL bus »
-//     et « 0 jour de filtre » ;
-//  5. les quantités de la mangeoire ne sont PAS des grammes : `settings.factor: 10` dit qu'elles
-//     comptent en dixièmes de tasse — « 30 g » affiché valait en réalité 0,3 tasse ;
-//  6. la fontaine ne mesure aucun volume mais tient le REGISTRE DE SES VISITES (`getWorkRecord`).
+//  1. the roster carries NEITHER name NOR Bluetooth address, only `id` and `type` (in mixed case);
+//  2. a fountain doesn't answer on `device_detail` (404) but on `deviceData`;
+//  3. the pump's on/off state is in `status.powerStatus`, not at the top level;
+//  4. **`-1` is a "not counted" sentinel**: the real fountain returns -1 for today's water, the
+//     filter days and the pump time. Reading them as zeros would display "0 mL drunk" and
+//     "0 filter days";
+//  5. the feeder's quantities are NOT grams: `settings.factor: 10` says they count in tenths of a
+//     cup — a displayed "30 g" was really 0.3 cup;
+//  6. the fountain measures no volume but keeps the LOG OF ITS VISITS (`getWorkRecord`).
 //
-// C'est exactement la leçon que le wiki tire de TaHoma et de COMAP : une fixture écrite d'après la
-// documentation valide ce que l'appareil ne fait pas.
+// It's exactly the lesson the wiki draws from TaHoma and COMAP: a fixture written from the
+// documentation validates what the device doesn't do.
 
-/** Les « familles » du compte : un seul foyer. */
+/** The account's "families": a single household. */
 export const FAMILIES = [{ groupId: 300000001, name: 'Maison' }]
 
 /**
- * Inventaire d'un groupe (`discovery/device_roster_v2`, exige `day` et `groupId`). Le `type` arrive
- * en CASSE MIXTE (`D4`, `Ctw3`) : il faut le normaliser avant toute comparaison.
+ * Inventory of a group (`discovery/device_roster_v2`, requires `day` and `groupId`). The `type`
+ * arrives in MIXED CASE (`D4`, `Ctw3`): it must be normalized before any comparison.
  */
 export const ROSTER = {
   hasRelay: true,
@@ -37,12 +36,12 @@ export const ROSTER = {
 }
 
 /**
- * Mangeoire Fresh Element Solo (`d4/device_detail`). Ce que la capture apprend :
- *  - `food: 1` = il reste des croquettes (la trémie était garnie) ;
- *  - `feedState` donne le SERVI (`realAmountTotal`) et le PRÉVU du jour (`planAmountTotal`), mais
- *    **pas `eatAmountTotal`** : sans plateau pesant, ce modèle ignore ce qui a été mangé ;
- *  - `batteryPower: 0` sur une machine au secteur SANS piles — ce n'est pas une batterie à plat ;
- *  - `desiccantLeftDays: 0` : le sachet n'a jamais été réarmé, la valeur est vraie.
+ * Fresh Element Solo feeder (`d4/device_detail`). What the capture teaches:
+ *  - `food: 1` = there is kibble left (the hopper was filled);
+ *  - `feedState` gives the day's SERVED (`realAmountTotal`) and PLANNED (`planAmountTotal`), but
+ *    **not `eatAmountTotal`**: without a weighing tray, this model doesn't know what was eaten;
+ *  - `batteryPower: 0` on a mains-powered machine WITHOUT batteries — it's not a flat battery;
+ *  - `desiccantLeftDays: 0`: the pouch was never reset, the value is true.
  */
 export const FEEDER_DETAIL = {
   id: 400000004,
@@ -55,9 +54,9 @@ export const FEEDER_DETAIL = {
   typeCode: 1,
   familyId: 300000001,
   locale: 'Europe/Paris',
-  // `factor: 10` = les `amount` sont des DIXIÈMES DE TASSE. C'est la machine qui le déclare.
+  // `factor: 10` = the `amount`s are TENTHS OF A CUP. It's the machine that declares it.
   settings: { factor: 10, feedNotify: 0, foodNotify: 1 },
-  // Le plan de la semaine : sept listes identiques ici, `repeats` 1 = lundi … 7 = dimanche.
+  // The week's plan: seven identical lists here, `repeats` 1 = Monday … 7 = Sunday.
   multiFeedItem: {
     feedDailyList: Array.from({ length: 7 }, (_, i) => ({
       suspended: 0, repeats: i + 1,
@@ -82,9 +81,9 @@ export const FEEDER_DETAIL = {
 }
 
 /**
- * Fontaine Eversweet Max (`ctw3/deviceData`). Filtre à bout (`filterPercent: 0`,
- * `filterWarning: 1`), pompe alimentée en cycle INTERMITTENT (`mode: 2`), batterie pleine, et TROIS
- * grandeurs à -1 que le modèle ne compte pas.
+ * Eversweet Max fountain (`ctw3/deviceData`). Filter worn out (`filterPercent: 0`,
+ * `filterWarning: 1`), pump powered in INTERMITTENT cycle (`mode: 2`), battery full, and THREE
+ * quantities at -1 that the model doesn't count.
  */
 export const FOUNTAIN_DETAIL = {
   id: 400000002,
@@ -121,8 +120,8 @@ export const FOUNTAIN_DETAIL = {
 }
 
 /**
- * `ctw3/getWorkRecord` : les passages du jour. Deux venues relevées, de 30 s et 21 s. C'est tout ce
- * qu'une Eversweet Max sait dire de la consommation — pas un millilitre.
+ * `ctw3/getWorkRecord`: the day's visits. Two visits recorded, of 30 s and 21 s. That's all an
+ * Eversweet Max can say about consumption — not a single milliliter.
  */
 export const WORK_RECORD = [
   { workTime: 1789959912, dayTime: 18312, stayTime: 30 },

@@ -18,68 +18,68 @@ import {
 } from './mapping'
 import type { VehicleLink } from './types'
 
-// Plugin Renault (véhicules) — API privée Gigya + Kamereon, celle de l'appli MY Renault.
+// Renault plugin (vehicles) — private Gigya + Kamereon API, the one used by the MY Renault app.
 //
-// Il n'existe AUCUNE voie officielle pour un particulier : le portail développeur d'Ampere ne sert
-// qu'à écrire des applications Android qui tournent DANS la voiture, et les données véhicule sont
-// revendues en B2B par un agrégateur. Reste l'API privée, avec ce que cela implique :
+// There is NO official route for an individual: Ampere's developer portal only serves to write
+// Android apps that run IN the car, and the vehicle data is resold B2B by an aggregator. What
+// remains is the private API, with what that implies:
 //
-//  1. Un MOT DE PASSE, pas un OAuth. Il traverse le serveur une fois (`POST /login`) et n'est
-//     jamais gardé ; seul le `login_token` de Gigya survit (voir `auth.ts`).
-//  2. Des CLÉS D'API que Renault fait tourner sans prévenir — mai 2026 a mis en panne toutes les
-//     intégrations tierces le même jour. D'où leur présence en configuration, avec un défaut.
-//  3. Un DÉBIT serré (60 appels par heure), tenu par le client, pas par la cadence du sondage.
+//  1. A PASSWORD, not OAuth. It passes through the server once (`POST /login`) and is never kept;
+//     only Gigya's `login_token` survives (see `auth.ts`).
+//  2. API KEYS that Renault rotates without notice — May 2026 broke every third-party integration
+//     on the same day. Hence their presence in configuration, with a default.
+//  3. A tight RATE (60 calls per hour), enforced by the client, not by the polling rate.
 //
-// Et une particularité de la R5 E-Tech, qui vaut pour toute la plateforme récente : plusieurs
-// lectures historiques répondent 403 `err.func.wired.forbidden` (verrouillage, pression des pneus,
-// mode de charge). Ce n'est pas une panne, c'est « pas pour ce véhicule » : le plugin les raye de
-// sa liste au lieu de les redemander.
+// And a peculiarity of the R5 E-Tech, which holds for the whole recent platform: several legacy
+// readings answer 403 `err.func.wired.forbidden` (locking, tire pressure, charge mode). It's not
+// an outage, it's "not for this vehicle": the plugin strikes them off its list instead of asking
+// for them again.
 //
-// ÉTAT DE CE FICHIER : liaison du compte, inventaire des véhicules et relevé brut. Le mappage des
-// lectures et le sondage attendent la capture du vrai compte (`GET /api/plugins/renault/raw`) —
-// écrire des fixtures d'après la documentation est l'erreur que ce projet a déjà commise deux fois.
+// STATE OF THIS FILE: account linking, vehicle inventory and raw reading. The readings mapping and
+// the polling await the capture of the real account (`GET /api/plugins/renault/raw`) — writing
+// fixtures from the documentation is the mistake this project has already made twice.
 
 const optionalKey = z.string().trim().transform((s) => (s === '' ? undefined : s)).optional()
 
 export const renaultConfigSchema = z.object({
-  /** Pays du compte, exigé en paramètre sur TOUTES les routes Kamereon. */
+  /** The account's country, required as a parameter on ALL Kamereon routes. */
   RENAULT_COUNTRY: z.string().trim().length(2).toUpperCase().default('FR'),
   /**
-   * Point d'entrée et clé Gigya (authentification) puis Kamereon (données). Les défauts sont ceux
-   * de `fr_FR` ; ils sont en configuration parce que Renault les fait tourner — une clé neuve se
-   * pose dans `.env` sans toucher au code.
+   * Endpoint and key for Gigya (authentication) then Kamereon (data). The defaults are those of
+   * `fr_FR`; they are in configuration because Renault rotates them — a new key goes into `.env`
+   * without touching the code.
    */
   RENAULT_GIGYA_URL: z.string().url().default(DEFAULT_GIGYA_URL),
   RENAULT_GIGYA_API_KEY: z.string().trim().min(1).default(DEFAULT_GIGYA_API_KEY),
   RENAULT_KAMEREON_URL: z.string().url().default(DEFAULT_KAMEREON_URL),
   RENAULT_KAMEREON_API_KEY: z.string().trim().min(1).default(DEFAULT_KAMEREON_API_KEY),
-  /** Compte Kamereon à lire, quand la personne en a plusieurs. Absent = le premier compte actif. */
+  /** Kamereon account to read, when the person has several. Absent = the first active account. */
   RENAULT_ACCOUNT_ID: optionalKey,
-  /** Où garder le jeton de session Gigya. Le mot de passe, lui, n'y est JAMAIS écrit. */
+  /** Where to keep the Gigya session token. The password, for its part, is NEVER written there. */
   RENAULT_SESSION_FILE: z.string().trim().default(stateFile('renault-session.json')),
   /**
-   * Cadence de lecture, 10 min comme Tesla. Cinq lectures par véhicule et par tour, soit une
-   * trentaine d'appels par heure — confortablement sous les 60 que Renault tolère.
+   * Read rate, 10 min like Tesla. Five readings per vehicle per round, i.e. some thirty calls per
+   * hour — comfortably under the 60 Renault tolerates.
    */
   RENAULT_POLL_MS: z.coerce.number().int().min(120_000).max(3_600_000).default(600_000),
-  /** Plafond d'appels par heure que le plugin s'impose, avant que Renault ne réponde 429. */
+  /** Cap on calls per hour that the plugin imposes on itself, before Renault answers 429. */
   RENAULT_RATE_PER_HOUR: z.coerce.number().int().min(1).max(600).default(DEFAULT_RATE_PER_HOUR),
   /**
-   * Fenêtre horaire du réveil de charge (heure LOCALE du serveur). Hors de cette plage, une
-   * voiture branchée qui ne charge pas attend le plus souvent sa charge programmée : la secouer
-   * serait se battre contre son propre réglage. Bornes égales = jamais.
+   * Time window of the charge wake-up (the server's LOCAL time). Outside this range, a plugged-in
+   * car that isn't charging is most often waiting for its scheduled charge: shaking it would mean
+   * fighting its own setting. Equal bounds = never.
    */
   RENAULT_WAKE_FROM: z.string().trim().default('08:00'),
   RENAULT_WAKE_TO: z.string().trim().default('20:00'),
-  /** Délai minimal entre deux réveils du MÊME véhicule. */
+  /** Minimum delay between two wake-ups of the SAME vehicle. */
   RENAULT_WAKE_EVERY_MS: z.coerce.number().int().min(300_000).max(21_600_000).default(900_000),
 })
 export type RenaultConfig = z.infer<typeof renaultConfigSchema>
 
 /**
- * Lectures tentées par le relevé brut : tout ce que la plateforme sait servir, y compris ce qu'on
- * s'attend à voir refusé. C'est justement l'intérêt — la capture dira ce que CE véhicule répond,
- * et c'est elle qui décidera la liste du sondage.
+ * Readings attempted by the raw reading: everything the platform can serve, including what we
+ * expect to see refused. That's precisely the point — the capture will tell what THIS vehicle
+ * answers, and it's the capture that will decide the polling list.
  */
 export const PROBE_ENDPOINTS = [
   { endpoint: 'battery-status', version: 2, adapter: 'kca' },
@@ -97,13 +97,13 @@ export const PROBE_ENDPOINTS = [
 ] as const
 
 /**
- * Les lectures du sondage : celles que la R5 a acceptées à la capture, chacune rangée sous la clé
- * que `toStatePatch` attend. `cockpit` est en **v1** — la v2 répond un HTTP 200 sans données.
+ * The polling readings: those the R5 accepted at capture, each filed under the key `toStatePatch`
+ * expects. `cockpit` is in **v1** — v2 answers an HTTP 200 with no data.
  *
- * Six appels par véhicule et par tour (`ev/settings` porte les réglages de la climatisation). Au
- * défaut de 10 minutes cela fait 36 appels par heure pour un véhicule, sous les 60 que Renault tolère ; la liste des véhicules n'est PAS relue à chaque tour
- * (contrairement à Tesla, il n'y a pas de veille à surveiller). Avec deux véhicules le plafond
- * serait franchi : c'est le seau à jetons du client qui refuse alors, sans appeler.
+ * Six calls per vehicle per round (`ev/settings` carries the climate settings). At the 10-minute
+ * default that makes 36 calls per hour for one vehicle, under the 60 Renault tolerates; the vehicle list is NOT re-read every round
+ * (unlike Tesla, there is no sleep to watch). With two vehicles the cap would be crossed: it's
+ * the client's token bucket that then refuses, without calling.
  */
 export const READ_ENDPOINTS = [
   { key: 'battery', endpoint: 'battery-status', version: 2, adapter: 'kca' },
@@ -115,48 +115,48 @@ export const READ_ENDPOINTS = [
 ] as const satisfies readonly { key: keyof VehicleReadings; endpoint: string; version: number; adapter: 'kca' | 'kcm' }[]
 
 /**
- * Le réveil de charge est un SOUS-ITEM cochable, pas une variable d'environnement : il écrit dans
- * la voiture, et l'utilisateur doit pouvoir le couper depuis l'interface sans toucher au serveur.
+ * The charge wake-up is a checkable SUB-ITEM, not an environment variable: it writes to the car,
+ * and the user must be able to turn it off from the interface without touching the server.
  */
-/** Relecture après une commande de climatisation : le temps que le boîtier la prenne et le dise. */
+/** Re-read after a climate command: the time for the telematics unit to take it and report it. */
 const CLIMATE_FOLLOW_UP_MS = 60_000
 
 export const CHARGE_WAKE = 'charge_wake'
 const CHARGE_WAKE_PART = [{ id: CHARGE_WAKE, labelKey: 'vehicle.chargeWake', enabledByDefault: true }] as const
 
 /**
- * Ce qu'est devenu le dernier réveil. Sans cela, un réveil qui échoue ne se voit NULLE PART sauf
- * dans la console du serveur : le 2026-09-19, cinq heures de refus ont passé inaperçues pendant
- * qu'une journée de surplus solaire se perdait. C'est le vrai défaut que cette séance a trouvé.
+ * What became of the last wake-up. Without this, a failing wake-up shows up NOWHERE except in the
+ * server console: on 2026-09-19, five hours of refusals went unnoticed while a day of solar
+ * surplus was being lost. It's the real flaw this session found.
  */
 export interface WakeOutcome {
   at: number
-  /** `sent` la commande est déposée ; `deferred` Renault dit « pas maintenant » ; `failed` le reste. */
+  /** `sent` the command is filed; `deferred` Renault says "not now"; `failed` the rest. */
   result: 'sent' | 'deferred' | 'failed'
-  /** La commande rendue (`type status commandId`), ou le message du refus. */
+  /** The returned command (`type status commandId`), or the refusal message. */
   detail: string | null
 }
 
-/** Ce que la carte des Réglages affiche. Ne porte jamais le mot de passe ni un jeton. */
+/** What the Settings card displays. Never carries the password or a token. */
 export interface RenaultStatus {
   linked: boolean
   country: string
-  /** Compte Kamereon retenu, et ceux que la personne possède. */
+  /** The chosen Kamereon account, and those the person owns. */
   accountId: string | null
   accounts: { accountId: string; accountType: string | null }[]
   vehicles: { vin: string; name: string }[]
   pollMs: number
   ratePerHour: number
-  /** Délai (s) avant que le budget de débit laisse passer un appel ; 0 = tout de suite. */
+  /** Delay (s) before the rate budget lets a call through; 0 = right away. */
   rateWaitS: number
   sessionFile: string | null
   lastError: string | null
-  /** Le dernier réveil de charge tenté, et ce qu'il est devenu. `null` : aucun depuis le démarrage. */
+  /** The last charge wake-up attempted, and what became of it. `null`: none since startup. */
   lastWake: WakeOutcome | null
 }
 
 export interface RenaultPluginDeps {
-  /** Injecté par les tests : toutes les requêtes (Gigya et Kamereon). */
+  /** Injected by tests: all requests (Gigya and Kamereon). */
   fetchImpl?: FetchLike
   sessionStore?: SessionStore
 }
@@ -172,37 +172,37 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
   let lastError: string | null = null
   let poller: { stop(): void } | null = null
   /**
-   * Lectures que CE véhicule ne sert pas (`vin:endpoint`). La R5 en refuse plusieurs, définitivement :
-   * les redemander toutes les sept minutes gaspillerait le budget de débit pour toujours la même
-   * réponse. Vidé au redémarrage — un modèle peut gagner un endpoint par mise à jour logicielle.
+   * Readings THIS vehicle doesn't serve (`vin:endpoint`). The R5 refuses several, permanently:
+   * asking for them again every seven minutes would waste the rate budget on always the same
+   * answer. Emptied on restart — a model can gain an endpoint through a software update.
    */
   const unavailable = new Set<string>()
-  /** Dernier réveil envoyé par VIN : un véhicule ne se secoue pas en boucle. */
+  /** Last wake-up sent per VIN: a vehicle doesn't get shaken in a loop. */
   const lastWake = new Map<string, number>()
-  /** Ce qu'est devenu le dernier réveil tenté, tous véhicules confondus. */
+  /** What became of the last wake-up attempted, all vehicles combined. */
   let lastWakeOutcome: WakeOutcome | null = null
-  /** Dernier niveau et dernier seuil de climatisation lus, par VIN : de quoi refuser AVANT l'action. */
+  /** Last level and last climate threshold read, per VIN: enough to refuse BEFORE the action. */
   const lastHvac = new Map<string, { soc?: number; threshold?: number }>()
-  /** Les sièges tels que publiés, par VIN : la fusion d'état est superficielle, `seatHeat` part entier. */
+  /** The seats as published, per VIN: the state merge is shallow, `seatHeat` goes out whole. */
   const lastSeats = new Map<string, Partial<Record<VehicleSeat, number>>>()
-  /** Niveau suivi trame après trame, par VIN : le second témoin de la charge ne vaut que s'il monte. */
+  /** Level tracked frame after frame, per VIN: the charge's second witness only counts if it rises. */
   const levels = new Map<string, LevelTrack>()
 
   const log = () => ctx!.logger
 
-  /** Le compte Kamereon à lire : celui de la configuration, sinon le premier compte actif. */
+  /** The Kamereon account to read: the configured one, otherwise the first active account. */
   async function resolveAccount(signal?: AbortSignal): Promise<string | null> {
     if (config!.RENAULT_ACCOUNT_ID) return (accountId = config!.RENAULT_ACCOUNT_ID)
     const personId = auth!.personId
     if (!personId) return null
     const found = toAccounts(await client!.person(personId, signal))
     accounts = found.map((a) => ({ accountId: a.accountId, accountType: a.accountType ?? null }))
-    // à défaut d'un compte Renault explicite, le premier actif : c'est le cas du foyer à un compte
+    // failing an explicit Renault account, the first active one: that's the single-account household case
     const preferred = found.find((a) => a.accountType?.toUpperCase() === 'MYRENAULT') ?? found[0]
     return (accountId = preferred?.accountId ?? null)
   }
 
-  /** Liste les véhicules du compte, en retenant les liens pour le statut et les descripteurs. */
+  /** Lists the account's vehicles, keeping the links for the status and the descriptors. */
   async function listVehicles(signal?: AbortSignal): Promise<VehicleLink[]> {
     const id = accountId ?? await resolveAccount(signal)
     if (!id) return (links = [])
@@ -210,9 +210,9 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
   }
 
   /**
-   * Lit un véhicule et publie son état. Chaque lecture est tentée séparément : une lecture refusée
-   * (403 ou 404) est rayée pour de bon, une lecture en panne n'empêche pas les autres de publier.
-   * On émet même partiellement — la moitié d'un état vaut mieux que rien, et `readAt` la date.
+   * Reads a vehicle and publishes its state. Each reading is attempted separately: a refused
+   * reading (403 or 404) is struck off for good, a failing reading doesn't stop the others from
+   * publishing. We emit even partially — half a state is better than nothing, and `readAt` dates it.
    */
   async function readVehicle(vin: string, signal?: AbortSignal): Promise<void> {
     const id = accountId ?? await resolveAccount(signal)
@@ -237,12 +237,11 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
     ctx!.emitState(vin, patch)
     lastHvac.set(vin, { soc: patch.soc ?? lastHvac.get(vin)?.soc, threshold: hvacSocThreshold(readings.hvac) ?? lastHvac.get(vin)?.threshold })
     if (patch.seatHeat) lastSeats.set(vin, { ...patch.seatHeat })
-    // un réveil raté ne doit pas faire échouer la lecture : l'état est déjà publié
+    // a failed wake-up must not make the reading fail: the state is already published
     try { await maybeWake(vin, patch, signal) }
     catch (err) {
-      // « Pas maintenant » n'est pas une panne : une commande déjà en attente (409) ou le quota des
-      // actions (429) sont la vie normale de cette API. Les journaliser en `warn` comme le reste
-      // noyait le vrai signal.
+      // "Not now" is not an outage: a command already pending (409) or the actions quota (429) are
+      // the normal life of this API. Logging them as `warn` like the rest drowned the real signal.
       const deferred = isDeferred(err)
       lastWakeOutcome = { at: ctx!.clock.now(), result: deferred ? 'deferred' : 'failed', detail: (err as Error).message }
       if (deferred) log().info({ vin, err }, 'Renault is not taking a charge wake-up right now')
@@ -251,29 +250,28 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
   }
 
   /**
-   * Le réveil de charge. La R5 NE REPREND PAS la charge d'elle-même après une coupure de courant
-   * (borne pilotée par le surplus solaire, nuage qui passe) : c'est un défaut du véhicule, non
-   * corrigé depuis plus d'un an. Le geste manuel équivalent est de la verrouiller/déverrouiller à
-   * la télécommande ; par l'API, ce qui la réveille est de RÉÉCRIRE ses réglages VE.
+   * The charge wake-up. The R5 DOES NOT RESUME charging on its own after a power cut (charger
+   * driven by solar surplus, a passing cloud): it's a vehicle defect, unfixed for over a year. The
+   * equivalent manual action is to lock/unlock it with the remote; through the API, what wakes it
+   * is REWRITING its EV settings.
    *
-   * Cinq conditions, toutes nécessaires : le sous-item est coché, on SAIT qu'elle est branchée et
-   * qu'elle ne charge pas (un champ manquant n'autorise rien), **la limite de charge n'est pas
-   * atteinte**, l'heure est dans la fenêtre, et le dernier réveil est assez ancien. Le plugin ne
-   * voit PAS le surplus solaire — aucun moteur d'automatisation ne relie encore deux plugins — mais
-   * il n'en a pas besoin : « branchée et pas en charge » est exactement ce que l'utilisateur
-   * constate avant d'aller secouer la voiture.
+   * Five conditions, all required: the sub-item is checked, we KNOW it's plugged in and not
+   * charging (a missing field authorizes nothing), **the charge limit is not reached**, the time
+   * is within the window, and the last wake-up is old enough. The plugin does NOT see the solar
+   * surplus — no automation engine links two plugins yet — but it doesn't need to: "plugged in and
+   * not charging" is exactly what the user notices before going to shake the car.
    *
-   * La limite atteinte est le cas ORDINAIRE d'une voiture branchée qui ne charge pas : la nuit
-   * suivant une charge terminée, elle ne charge plus parce qu'elle est PLEINE. La secouer n'y
-   * changerait rien, et ce réveil ÉCRIT dans la voiture — le faire tous les quarts d'heure toute la
-   * journée serait la déranger pour rien.
+   * Limit reached is the ORDINARY case of a plugged-in car that isn't charging: the night after a
+   * finished charge, it no longer charges because it's FULL. Shaking it wouldn't change anything,
+   * and this wake-up WRITES to the car — doing it every quarter hour all day would be disturbing
+   * it for nothing.
    */
   async function maybeWake(vin: string, patch: StatePatch<'vehicle'>, signal?: AbortSignal): Promise<void> {
     if (!ctx!.parts[CHARGE_WAKE]) return
     if (patch.pluggedIn !== true || patch.charging !== false) return
-    // niveau ou cible inconnus : on ne peut pas PROUVER que la charge est finie, et une voiture
-    // branchée qui ne charge pas reste le signe qu'on cherche — on réveille (contrairement à
-    // `pluggedIn` / `charging`, dont l'absence interdit tout)
+    // level or target unknown: we can't PROVE the charge is finished, and a plugged-in car that
+    // isn't charging remains the sign we're looking for — we wake it (unlike `pluggedIn` /
+    // `charging`, whose absence forbids everything)
     const target = patch.chargeLimit
     if (patch.soc !== undefined && target != null && patch.soc >= target) return
     const now = ctx!.clock.now()
@@ -282,11 +280,11 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
     if (since < config!.RENAULT_WAKE_EVERY_MS) return
     const id = accountId
     if (!id) return
-    // les réglages à rejouer se LISENT d'abord : on ne réécrit que ce que la voiture nous a donné
+    // the settings to replay are READ first: we only rewrite what the car gave us
     const body = wakePayload(await client!.carData({ accountId: id, vin, endpoint: 'ev/settings', version: 1, adapter: 'kcm', signal }), now)
     if (!body) return
-    // la réponse est une COMMANDE déposée, pas un enregistrement : c'est elle, et elle seule, qui
-    // dit si le réveil a été pris — on la jetait
+    // the response is a filed COMMAND, not a save: it, and it alone, says whether the wake-up was
+    // taken — we used to throw it away
     const command = commandSummary(await client!.writeEvSettings({ accountId: id, vin, body, signal }))
     lastWake.set(vin, now)
     lastWakeOutcome = { at: now, result: 'sent', detail: command }
@@ -294,7 +292,7 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
       'Renault charge wake-up sent (plugged in, not charging, below target)')
   }
 
-  /** Un tour : tous les véhicules connus. Une erreur remonte au poller, qui la journalise. */
+  /** One round: all known vehicles. An error goes up to the poller, which logs it. */
   async function pollOnce(signal?: AbortSignal): Promise<void> {
     for (const link of links) await readVehicle(link.vin, signal)
     lastError = null
@@ -367,8 +365,8 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
         clock: ctx!.clock,
         signal: ctx!.signal,
         logger: ctx!.logger,
-        // pas de reprise serrée après un échec : le débit est la ressource rare, et réessayer dans
-        // deux secondes ne ferait que vider le seau à jetons sur une API déjà fâchée
+        // no tight retry after a failure: the rate is the scarce resource, and retrying in two
+        // seconds would only empty the token bucket on an already annoyed API
         backoff: createBackoff({ initialMs: intervalMs, maxMs: intervalMs }),
         fn: () => pollOnce(ctx!.signal),
       })
@@ -376,21 +374,21 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
     },
 
     /**
-     * `vehicle.refresh` (relire MAINTENANT), la CIBLE de charge, la climatisation et le DÉMARRAGE de
-     * la charge. Chacune vient avec une capacité que le plugin déclare ; ne pas l'honorer ferait
-     * proposer par l'UI un bouton que le plugin refuserait. L'arrêt de la charge, la R5 ne le sait
-     * pas : le serveur arrête la borne à sa place (`meta.vehicle.stopViaCharger`).
+     * `vehicle.refresh` (re-read NOW), the charge TARGET, the climate and STARTING the charge. Each
+     * comes with a capability the plugin declares; not honoring it would make the UI offer a
+     * button the plugin would refuse. Stopping the charge is something the R5 can't do: the server
+     * stops the charger in its place (`meta.vehicle.stopViaCharger`).
      */
     async execute(externalId: string, command: Command): Promise<void> {
       if (command.type === 'vehicle.set_charge_limit') {
         const id = accountId
         if (!id) throw new PluginError('NEEDS_PAIRING', 'no Kamereon account for this person')
-        // les niveaux se LISENT d'abord : le plancher est le réglage de l'utilisateur, on le rejoue tel quel
+        // the levels are READ first: the floor is the user's setting, we replay it as is
         const levels = await client!.carData({ accountId: id, vin: externalId, endpoint: 'ev/soc-levels', version: 1, adapter: 'kcm', signal: ctx?.signal })
         const body = socTargetPayload(levels, command.percent, ctx!.clock.now())
         if (!body) throw new PluginError('UPSTREAM_ERROR', 'Renault gave no EV levels back to rewrite')
         await client!.writeSocLevels({ accountId: id, vin: externalId, body, signal: ctx?.signal })
-        // la cible est publiée tout de suite : le prochain tour de sondage la confirmera
+        // the target is published right away: the next polling round will confirm it
         ctx!.emitState(externalId, { chargeLimit: command.percent })
         log().info({ vin: externalId, percent: command.percent }, 'Renault charge target set')
         return
@@ -399,7 +397,7 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
         const id = accountId
         if (!id) throw new PluginError('NEEDS_PAIRING', 'no Kamereon account for this person')
         const start = command.type === 'vehicle.climate_start'
-        // la R5 dit elle-même sous quel niveau elle refuse : on ne dépense pas une action, rare, pour un refus certain
+        // the R5 itself says below which level it refuses: we don't spend an action, a scarce one, on a certain refusal
         const known = lastHvac.get(externalId)
         if (start && known?.soc !== undefined && known.threshold !== undefined && known.soc < known.threshold) {
           throw new PluginError('LOW_BATTERY', `battery at ${known.soc} %, below the ${known.threshold} % climate threshold of this vehicle`)
@@ -409,7 +407,7 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
           body: hvacStartPayload(start ? 'start' : 'cancel', start ? command.targetTempC : undefined),
         })
         log().info({ vin: externalId, action: start ? 'start' : 'cancel', command: commandSummary(res) }, 'Renault climate command sent')
-        // une COMMANDE déposée, pas un effet : on relit une minute plus tard pour CONSTATER (`hvacStatus`)
+        // a filed COMMAND, not an effect: we re-read a minute later to OBSERVE (`hvacStatus`)
         void (async () => {
           await sleep(ctx!.clock, CLIMATE_FOLLOW_UP_MS, ctx!.signal)
           if (!ctx || ctx.signal.aborted) return
@@ -421,7 +419,7 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
       if (command.type === 'vehicle.climate_set') {
         const id = accountId
         if (!id) throw new PluginError('NEEDS_PAIRING', 'no Kamereon account for this person')
-        // les réglages se LISENT d'abord : heure de départ et programmes sont ceux de l'utilisateur
+        // the settings are READ first: start time and programs are the user's
         const settings = await client!.carData({ accountId: id, vin: externalId, endpoint: 'ev/settings', version: 1, adapter: 'kcm', signal: ctx?.signal })
         const body = climateSettingsPayload(settings, command, ctx!.clock.now())
         if (!body) throw new PluginError('UPSTREAM_ERROR', 'Renault gave no EV settings back to rewrite')
@@ -439,7 +437,7 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
       if (command.type === 'vehicle.start_charge') {
         const id = accountId
         if (!id) throw new PluginError('NEEDS_PAIRING', 'no Kamereon account for this person')
-        // les réglages se LISENT d'abord : seuls les programmes de charge actifs changent (cf. `chargeStartPayload`)
+        // the settings are READ first: only the active charge programs change (see `chargeStartPayload`)
         const settings = await client!.carData({ accountId: id, vin: externalId, endpoint: 'ev/settings', version: 1, adapter: 'kcm', signal: ctx?.signal })
         const now = ctx!.clock.now()
         const payload = chargeStartPayload(settings, now)
@@ -447,14 +445,14 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
         let res: unknown
         try { res = await client!.writeEvSettings({ accountId: id, vin: externalId, body: payload.body, signal: ctx?.signal }) }
         catch (err) {
-          // une commande de réglages déjà en attente (409) : pas une panne, mais rien n'est parti
+          // a settings command already pending (409): not an outage, but nothing went out
           if (isDeferred(err)) throw new PluginError('RATE_LIMITED', 'a Renault settings command is already pending for this vehicle: try again in a few minutes', { cause: err })
           throw err
         }
-        // c'est aussi une écriture de réglages : le réveil de charge ne doit pas en reposter une derrière (409)
+        // it's also a settings write: the charge wake-up must not post another one right behind it (409)
         lastWake.set(externalId, now)
         log().info({ vin: externalId, deactivatedPrograms: payload.deactivated, command: commandSummary(res) }, 'Renault charge start sent')
-        // une COMMANDE déposée, pas un effet : on relit une minute plus tard pour CONSTATER la charge
+        // a filed COMMAND, not an effect: we re-read a minute later to OBSERVE the charge
         void (async () => {
           await sleep(ctx!.clock, CLIMATE_FOLLOW_UP_MS, ctx!.signal)
           if (!ctx || ctx.signal.aborted) return
@@ -464,8 +462,8 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
         return
       }
       if (command.type === 'vehicle.stop_charge') {
-        // le serveur arrête la BORNE à la place (`meta.vehicle.stopViaCharger`) ; on n'arrive ici que
-        // s'il n'en a trouvé aucune, unique, en train de charger à la maison
+        // the server stops the CHARGER instead (`meta.vehicle.stopViaCharger`); we only get here if
+        // it found no single charger charging it at home
         throw new PluginError('UNSUPPORTED_COMMAND', 'this Renault cannot stop its charge remotely, and no single charger is charging it at home: stop it from the charger')
       }
       if (command.type !== 'vehicle.refresh') {
@@ -484,8 +482,8 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
       app.get('/status', async () => status())
 
       /**
-       * Relier le compte. Le mot de passe ne vit que le temps de cette requête : il n'est ni gardé,
-       * ni journalisé, ni renvoyé. Ce qui en sort est un `login_token` dans le fichier de session.
+       * Link the account. The password only lives for the duration of this request: it is not
+       * kept, not logged, not sent back. What comes out of it is a `login_token` in the session file.
        */
       app.post<{ Body: { email?: string; password?: string } }>('/login', async (req, reply) => {
         const body = z.object({ email: z.string().trim().min(1), password: z.string().min(1) }).safeParse(req.body)
@@ -505,7 +503,7 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
         }
       })
 
-      /** Délier : le jeton de session est effacé, rien d'autre n'a jamais été gardé. */
+      /** Unlink: the session token is erased, nothing else was ever kept. */
       app.post('/logout', async () => {
         await auth!.forget()
         accountId = null
@@ -515,8 +513,8 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
       })
 
       /**
-       * Les contrats d'entretien plafonnés en km d'un véhicule, pour PROPOSER une LOA au panneau
-       * « Modifier » : lus au clic, jamais au sondage. Rien n'est écrit, l'utilisateur choisit.
+       * A vehicle's maintenance contracts capped in km, to SUGGEST a lease-purchase in the "Edit"
+       * panel: read on click, never when polling. Nothing is written, the user chooses.
        */
       app.get<{ Params: { vin: string }; Querystring: { lang?: string } }>('/contracts/:vin', async (req, reply) => {
         if (!auth?.linked) return reply.code(409).send({ error: 'no Renault account linked' })
@@ -535,9 +533,9 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
       })
 
       /**
-       * Relevé brut, à capturer dès le compte lié : c'est lui qui décidera le mappage et les
-       * fixtures. Chaque lecture est tentée séparément et son échec est RENDU plutôt que levé —
-       * savoir ce que le véhicule refuse vaut autant que savoir ce qu'il donne.
+       * Raw reading, to be captured as soon as the account is linked: it's what will decide the
+       * mapping and the fixtures. Each reading is attempted separately and its failure is RETURNED
+       * rather than thrown — knowing what the vehicle refuses is worth as much as knowing what it gives.
        */
       app.get('/raw', async (_req, reply) => {
         if (!auth?.linked) return reply.code(409).send({ error: 'no Renault account linked' })
@@ -571,8 +569,8 @@ export function createRenaultPlugin(deps: RenaultPluginDeps = {}): DevicePlugin 
       const keys = ['RENAULT_COUNTRY', 'RENAULT_ACCOUNT_ID', 'RENAULT_SESSION_FILE', 'RENAULT_POLL_MS', 'RENAULT_RATE_PER_HOUR']
       if (!auth?.linked) return { status: 'needs_pairing', detail: 'no MY Renault account linked', keys, deviceCount: 0 }
       if (lastError) return { status: 'degraded', detail: lastError, keys, deviceCount: links.length }
-      // « lecture seule » n'est plus vrai quand le reveil de charge est coche : il ECRIT dans la
-      // voiture. La sante doit le dire, c'est la seule ligne ou l'utilisateur peut s'en apercevoir.
+      // "read-only" is no longer true when the charge wake-up is checked: it WRITES to the car.
+      // Health must say so, it's the only line where the user can notice it.
       const wake = ctx?.parts[CHARGE_WAKE]
         ? `charge wake-up ${config!.RENAULT_WAKE_FROM}-${config!.RENAULT_WAKE_TO}`
         : 'read-only'

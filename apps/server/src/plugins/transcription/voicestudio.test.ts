@@ -10,8 +10,8 @@ import type { PluginContext } from '../../core/plugin'
 import type { SpawnFn } from '../../music/proxy'
 import { createTranscriptionPlugin, transcriptionConfigSchema } from '.'
 
-// VoiceStudio sans son interface : lancé avec le plugin quand rien ne répond à `STT_URL` (locale),
-// arrêté avec lui ; jamais lancé ni arrêté quand il tourne déjà (l'app ouverte).
+// VoiceStudio without its interface: launched with the plugin when nothing answers at `STT_URL` (local),
+// stopped with it; never launched or stopped when it's already running (the app open).
 
 class FakeProc extends EventEmitter {
   stdout = new PassThrough()
@@ -25,13 +25,13 @@ class FakeProc extends EventEmitter {
 }
 
 let spawned: { cmd: string; args: readonly string[]; cwd?: string; env?: NodeJS.ProcessEnv; proc: FakeProc }[]
-/** Ce que répond l'adresse de VoiceStudio : rien, en chargement (503), prêt. */
+/** What VoiceStudio's address answers: nothing, loading (503), ready. */
 let studio: 'down' | 'loading' | 'up'
 let appData: string
 
 const spawnImpl = ((cmd: string, args: readonly string[], opts?: { cwd?: string; env?: NodeJS.ProcessEnv }) => {
   const proc = new FakeProc()
-  // `taskkill /T` arrête l'arbre du moteur lancé
+  // `taskkill /T` stops the tree of the launched engine
   if (cmd === 'taskkill') setTimeout(() => spawned.find((s) => s.cmd !== 'taskkill')?.proc.exit(1), 1)
   spawned.push({ cmd, args, cwd: opts?.cwd, env: opts?.env, proc })
   return proc
@@ -42,7 +42,7 @@ const fetchImpl = (async () => {
   return studio === 'loading' ? new Response('', { status: 503 }) : Response.json({ data: [] })
 }) as unknown as typeof fetch
 
-/** Un runtime comme celui que l'app pose, et sa note dans `%APPDATA%\VoiceStudio`. */
+/** A runtime like the one the app sets up, and its record in `%APPDATA%\VoiceStudio`. */
 function runtime(): string {
   const root = mkdtempSync(join(tmpdir(), 'kasbah-vs-'))
   const project = join(root, 'project')
@@ -74,7 +74,7 @@ beforeEach(() => {
   appData = mkdtempSync(join(tmpdir(), 'kasbah-vs-appdata-'))
 })
 
-it('lance VoiceStudio sur le port de STT_URL, attend qu’il soit prêt, l’arrête avec le plugin', async () => {
+it('launches VoiceStudio on the STT_URL port, waits until it is ready, stops it with the plugin', async () => {
   const project = runtime()
   const plugin = await started()
   expect(spawned).toHaveLength(1)
@@ -94,7 +94,7 @@ it('lance VoiceStudio sur le port de STT_URL, attend qu’il soit prêt, l’arr
   if (process.platform === 'win32') expect(spawned[1]).toMatchObject({ cmd: 'taskkill', args: ['/PID', '4242', '/T', '/F'] })
 })
 
-it('ne lance rien et n’arrête rien quand VoiceStudio répond déjà (l’app ouverte)', async () => {
+it('launches nothing and stops nothing when VoiceStudio already answers (the app open)', async () => {
   runtime()
   studio = 'up'
   const plugin = await started()
@@ -104,7 +104,7 @@ it('ne lance rien et n’arrête rien quand VoiceStudio répond déjà (l’app 
   expect(spawned).toHaveLength(0)
 })
 
-it('ne lance rien quand l’interrupteur est éteint', async () => {
+it('launches nothing when the switch is off', async () => {
   runtime()
   const plugin = await started({}, false)
   expect(spawned).toHaveLength(0)
@@ -112,7 +112,7 @@ it('ne lance rien quand l’interrupteur est éteint', async () => {
   await plugin.stop()
 })
 
-it('dit pourquoi il ne lance pas : runtime introuvable, adresse sur une autre machine', async () => {
+it('says why it does not launch: runtime not found, address on another machine', async () => {
   const missing = await started()
   expect(missing.health!()).toMatchObject({ status: 'error', detail: expect.stringContaining('VoiceStudio runtime not found') })
   await missing.stop()
@@ -124,7 +124,7 @@ it('dit pourquoi il ne lance pas : runtime introuvable, adresse sur une autre ma
   expect(spawned).toHaveLength(0)
 })
 
-it('prend VOICESTUDIO_DIR avant la note de l’app', async () => {
+it('takes VOICESTUDIO_DIR before the app record', async () => {
   const project = runtime()
   writeFileSync(join(appData, 'VoiceStudio', 'runtime-location.json'), JSON.stringify({ root: join(appData, 'ailleurs') }))
   const plugin = await started({ VOICESTUDIO_DIR: project })
@@ -132,7 +132,7 @@ it('prend VOICESTUDIO_DIR avant la note de l’app', async () => {
   await plugin.stop()
 })
 
-it('dit la fin de ses sorties quand VoiceStudio s’arrête seul', async () => {
+it('reports the tail of its output when VoiceStudio stops on its own', async () => {
   runtime()
   const plugin = await started()
   spawned[0]!.proc.stderr.write('FATAL: port 3900 is already in use\n')

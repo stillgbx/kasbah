@@ -7,19 +7,19 @@ import type { FetchLike } from '../../core/sse'
 import { AIR_QUALITY, FORECAST } from './__fixtures__/open-meteo'
 import { createOpenMeteoPlugin, openMeteoConfigSchema } from './index'
 
-// Le plugin face à un faux Open-Meteo : deux hôtes, chacun peut tomber. L'horloge est celle de la
-// capture (16 septembre 2026, 09:50 à Paris) pour que « l'heure courante » tombe dans les séries.
+// The plugin facing a fake Open-Meteo: two hosts, each of which can go down. The clock is the
+// capture's (September 16, 2026, 09:50 in Paris) so that "the current hour" falls within the series.
 
 const NOW = 1789545000 * 1000
 
-/** Le flux MeteoAlarm d'un seul message, sur la Côte-d'Or (le département de `site`). */
+/** The MeteoAlarm feed with a single message, for Côte-d'Or (the department of `site`). */
 const alarm = (level: number, onset: string, expires: string) => ({ warnings: [{ alert: { sent: onset, info: [{
   onset, expires, area: [{ areaDesc: "Côte-d'Or" }],
   parameter: [{ valueName: 'awareness_type', value: '3; thunderstorm' }, { valueName: 'awareness_level', value: `${level}; x; y` }],
 }] } }] })
 
 function fakeService(over: { forecastStatus?: number; airStatus?: number; hang?: boolean; feed?: unknown; feedStatus?: number; departement?: string | null } = {}) {
-  /** Appels à Open-Meteo seulement ; ceux de la vigilance (MeteoAlarm, API Géo) à part. */
+  /** Calls to Open-Meteo only; the weather-warning ones (MeteoAlarm, Géo API) kept apart. */
   const calls: string[] = []
   const vigilanceCalls: string[] = []
   const fetchImpl: FetchLike = async (url, init) => {
@@ -40,7 +40,7 @@ function fakeService(over: { forecastStatus?: number; airStatus?: number; hang?:
   return { fetchImpl, calls, vigilanceCalls }
 }
 
-/** Laisse les promesses en vol se résoudre (le poller tourne sur l'horloge injectée). */
+/** Lets in-flight promises resolve (the poller runs on the injected clock). */
 const settle = () => new Promise((r) => setTimeout(r, 0))
 
 function makeCtx(clock: ManualClock, env: Record<string, string> = {}): PluginContext {
@@ -53,7 +53,7 @@ function makeCtx(clock: ManualClock, env: Record<string, string> = {}): PluginCo
   }
 }
 
-/** Cycle complet de l'hôte : init → discover → start, puis la première lecture du poller. */
+/** The host's full cycle: init → discover → start, then the poller's first reading. */
 async function started(fetchImpl: FetchLike, env: Record<string, string> = {}) {
   const plugin = createOpenMeteoPlugin({ fetchImpl, requestTimeoutMs: 500 })
   const clock = new ManualClock(NOW)
@@ -65,14 +65,14 @@ async function started(fetchImpl: FetchLike, env: Record<string, string> = {}) {
   return { plugin, ctx, clock, devices }
 }
 
-describe('démarrage', () => {
-  it('déclare l’appareil sans toucher au réseau, puis lit les deux API à la position de la maison', async () => {
+describe('startup', () => {
+  it('declares the device without touching the network, then reads both APIs at the house position', async () => {
     const service = fakeService()
     const plugin = createOpenMeteoPlugin({ fetchImpl: service.fetchImpl, requestTimeoutMs: 500 })
     const ctx = makeCtx(new ManualClock(NOW))
     await plugin.init(ctx)
     const devices = await plugin.discover()
-    expect(service.calls).toHaveLength(0)                    // les plugins démarrent l'un après l'autre : rien ne bloque
+    expect(service.calls).toHaveLength(0)                    // plugins start one after the other: nothing blocks
     expect(devices).toHaveLength(1)
     expect(devices[0]).toMatchObject({ id: 'open_meteo:home', kind: 'weather', capabilities: ['forecast', 'air_quality', 'pollen'] })
     await plugin.start()
@@ -80,13 +80,13 @@ describe('démarrage', () => {
     expect(service.calls).toHaveLength(2)
     expect(service.calls[0]).toContain('latitude=47.30934&longitude=5.04559')
     expect(ctx.emitState).toHaveBeenCalledWith('home', expect.objectContaining({ condition: 'cloudy', tempC: 16.8, aqi: 17 }))
-    expect(ctx.emitDevices).not.toHaveBeenCalled()          // l'air répond : rien à redéclarer
+    expect(ctx.emitDevices).not.toHaveBeenCalled()          // air answers: nothing to redeclare
     expect(plugin.health!()).toMatchObject({ status: 'ok' })
     expect(plugin.health!().keys).toEqual(['OPEN_METEO_POLL_MS'])
     await plugin.stop()
   })
 
-  it('sans qualité de l’air, l’appareil est redéclaré sans les capacités d’air mais la météo passe', async () => {
+  it('without air quality, the device is redeclared without the air capabilities but the weather goes through', async () => {
     const { ctx, plugin } = await started(fakeService({ airStatus: 503 }).fetchImpl)
     expect(ctx.emitDevices).toHaveBeenCalledWith([expect.objectContaining({ capabilities: ['forecast'] })])
     expect(ctx.emitState).toHaveBeenCalledWith('home', expect.objectContaining({ tempC: 16.8, aqi: null, pollen: null }))
@@ -94,7 +94,7 @@ describe('démarrage', () => {
     await plugin.stop()
   })
 
-  it('un service muet au démarrage ne bloque pas : appareil déclaré, indisponible, santé en erreur', async () => {
+  it('a silent service at startup does not block: device declared, unavailable, health in error', async () => {
     const { ctx, devices, plugin } = await started(fakeService({ forecastStatus: 500 }).fetchImpl)
     expect(devices).toHaveLength(1)
     expect(ctx.emitState).not.toHaveBeenCalled()
@@ -103,16 +103,16 @@ describe('démarrage', () => {
     await plugin.stop()
   })
 
-  it('borne chaque requête : un service qui ne répond pas donne TIMEOUT, pas un poller gelé', async () => {
+  it('bounds each request: a service that does not answer gives TIMEOUT, not a frozen poller', async () => {
     const { plugin } = await started(fakeService({ hang: true }).fetchImpl)
-    await new Promise((r) => setTimeout(r, 700))            // le délai de 500 ms est réel (AbortSignal.timeout)
+    await new Promise((r) => setTimeout(r, 700))            // the 500 ms delay is real (AbortSignal.timeout)
     expect(plugin.health!()).toMatchObject({ status: 'error', detail: expect.stringMatching(/did not answer/) })
     await plugin.stop()
   })
 })
 
-describe('prévisions et commandes', () => {
-  it('rend la dernière lecture mise en forme à l’heure courante, sans nouvel appel', async () => {
+describe('forecast and commands', () => {
+  it('returns the last reading shaped at the current hour, without a new call', async () => {
     const service = fakeService()
     const { plugin } = await started(service.fetchImpl)
     const before = service.calls.length
@@ -125,20 +125,20 @@ describe('prévisions et commandes', () => {
     await plugin.stop()
   })
 
-  it('refuse toute commande : la météo se lit', async () => {
+  it('refuses any command: weather is read-only', async () => {
     const { plugin } = await started(fakeService().fetchImpl)
     await expect(plugin.execute('home', { type: 'light.set', on: true })).rejects.toMatchObject({ code: 'UNSUPPORTED_COMMAND' })
     await plugin.stop()
   })
 })
 
-describe('sondage', () => {
-  it('relit à la cadence configurée, et marque l’appareil indisponible quand le service tombe', async () => {
+describe('polling', () => {
+  it('re-reads at the configured rate, and marks the device unavailable when the service goes down', async () => {
     const calls: string[] = []
     let status = 200
     const flaky: FetchLike = (url, init) => { if (url.includes('open-meteo')) calls.push(url); return fakeService({ forecastStatus: status, airStatus: status }).fetchImpl(url, init) }
     const { plugin, ctx, clock } = await started(flaky, { OPEN_METEO_POLL_MS: '60000' })
-    expect(calls).toHaveLength(2)                            // la première lecture vient du poller
+    expect(calls).toHaveLength(2)                            // the first reading comes from the poller
     clock.advance(60_000); await settle()
     expect(calls).toHaveLength(4)
     status = 500
@@ -149,8 +149,8 @@ describe('sondage', () => {
   })
 })
 
-describe('ailleurs qu’à la maison (vue Météo)', () => {
-  /** Géocodage réduit à ce que l'API renvoie vraiment (capture du 2026-09-24, codes postaux ôtés). */
+describe('away from the house (Weather view)', () => {
+  /** Geocoding reduced to what the API really returns (capture of 2026-09-24, postal codes removed). */
   const DIJON = { id: 3021372, name: 'Dijon', latitude: 47.31344, longitude: 5.01391, country_code: 'FR', timezone: 'Europe/Paris', country: 'France', admin1: 'Bourgogne' }
   function routed() {
     const service = fakeService()
@@ -169,7 +169,7 @@ describe('ailleurs qu’à la maison (vue Météo)', () => {
     return { ...s, app: a }
   }
 
-  it('cherche un lieu par son nom, et rend une liste vide sans résultat', async () => {
+  it('searches a place by name, and returns an empty list when there is no result', async () => {
     const { service, fetchImpl } = routed()
     const { app: a, plugin } = await app(fetchImpl)
     const res = await a.inject({ method: 'GET', url: '/places?q=Dijon&lang=fr' })
@@ -180,7 +180,7 @@ describe('ailleurs qu’à la maison (vue Météo)', () => {
     await plugin.stop()
   })
 
-  it('lit la météo d’une autre position, complète, et la garde le temps d’un sondage', async () => {
+  it('reads the full weather of another position, and keeps it for one poll interval', async () => {
     const { service, fetchImpl } = routed()
     const { app: a, plugin, clock } = await app(fetchImpl)
     const paris = () => service.calls.filter((u) => u.includes('latitude=48.85660&longitude=2.35220')).length
@@ -189,11 +189,11 @@ describe('ailleurs qu’à la maison (vue Météo)', () => {
     expect(service.calls.slice(before).every((u) => u.includes('latitude=48.85660&longitude=2.35220'))).toBe(true)
     expect(body.state).toMatchObject({ kind: 'weather', available: true })
     expect(body.state.tempC).toEqual(expect.any(Number))
-    expect(Object.values(body.state)).not.toContain(null)        // les effacements du patch ne fuient pas
+    expect(Object.values(body.state)).not.toContain(null)        // the patch's clears don't leak
     expect(body.forecast.hourly).toHaveLength(24)
     expect(body.attribution).toContain('Open-Meteo')
     await a.inject({ method: 'GET', url: '/at?lat=48.8566&lon=2.3522' })
-    expect(paris()).toBe(2)                                       // relue du cache : pas de nouvel appel
+    expect(paris()).toBe(2)                                       // re-read from cache: no new call
     clock.advance(600_000)
     await a.inject({ method: 'GET', url: '/at?lat=48.8566&lon=2.3522' })
     expect(paris()).toBe(4)
@@ -201,7 +201,7 @@ describe('ailleurs qu’à la maison (vue Météo)', () => {
     await plugin.stop()
   })
 
-  it('plugin monté mais jamais démarré : 409 DEVICE_UNAVAILABLE en clair, pas un 500', async () => {
+  it('plugin mounted but never started: a plain 409 DEVICE_UNAVAILABLE, not a 500', async () => {
     const a = Fastify()
     createOpenMeteoPlugin({ fetchImpl: fakeService().fetchImpl }).registerRoutes?.(a)
     for (const url of ['/places?q=Pornic', '/at?lat=47.11&lon=-2.1', '/alerts?lat=47.11&lon=-2.1']) {
@@ -212,10 +212,10 @@ describe('ailleurs qu’à la maison (vue Météo)', () => {
   })
 })
 
-describe('vigilance de la maison', () => {
+describe('house weather warnings', () => {
   const emitted = (ctx: PluginContext) => (ctx.emitState as ReturnType<typeof vi.fn>).mock.calls.at(-1)![1]
 
-  it('publie dans l’état les vigilances EN COURS du département, pas celles à venir', async () => {
+  it('publishes in the state the department CURRENT warnings, not upcoming ones', async () => {
     const feed = { warnings: [
       ...alarm(3, '2026-09-16T06:00:00+02:00', '2026-09-17T00:00:00+02:00').warnings,
       ...alarm(4, '2026-09-17T00:00:00+02:00', '2026-09-17T12:00:00+02:00').warnings,
@@ -223,18 +223,18 @@ describe('vigilance de la maison', () => {
     const service = fakeService({ feed })
     const { ctx, plugin } = await started(service.fetchImpl)
     expect(emitted(ctx).vigilance).toEqual([{ type: 'thunderstorm', level: 'orange', onset: Date.parse('2026-09-16T06:00:00+02:00'), expires: Date.parse('2026-09-17T00:00:00+02:00') }])
-    expect(service.calls).toHaveLength(2)                      // la vigilance n'ajoute rien à Open-Meteo
+    expect(service.calls).toHaveLength(2)                      // weather warnings add nothing to Open-Meteo
     await plugin.stop()
   })
 
-  it('aucune vigilance = liste vide ; hors de la métropole = effacée ; flux tombé = rien de touché', async () => {
+  it('no warning = empty list; outside mainland France = cleared; feed down = nothing touched', async () => {
     const none = await started(fakeService().fetchImpl)
     expect(emitted(none.ctx).vigilance).toEqual([])
     const abroad = await started(fakeService({ departement: '971' }).fetchImpl)
     expect(emitted(abroad.ctx).vigilance).toBeNull()
     const down = await started(fakeService({ feedStatus: 503 }).fetchImpl)
     expect(emitted(down.ctx)).not.toHaveProperty('vigilance')
-    expect(emitted(down.ctx)).toMatchObject({ condition: 'cloudy' })   // la météo passe quand même
+    expect(emitted(down.ctx)).toMatchObject({ condition: 'cloudy' })   // the weather goes through anyway
     for (const s of [none, abroad, down]) await s.plugin.stop()
   })
 })

@@ -18,7 +18,7 @@ const DEVICE = {
   version: '3.5',
 }
 
-/** Fausse socket tuyapi : EventEmitter + connect/set contrôlés. */
+/** Fake tuyapi socket: EventEmitter + controlled connect/set. */
 function fakeSocketFactory() {
   const sockets: FakeSocket[] = []
   let connectImpl: (s: FakeSocket) => Promise<void> = async (s) => {
@@ -57,8 +57,8 @@ class FakeSocket extends EventEmitter implements TuyaSocket {
 
   async set(opts: { dps: number; set: unknown }): Promise<unknown> {
     this.writes.push(opts)
-    if (this.dropOnWrite) return { success: true } // accusé menteur — pas d'événement
-    // Effet réel : publier le DP (et allumer le ventilateur si vitesse — piège 1)
+    if (this.dropOnWrite) return { success: true } // lying acknowledgment — no event
+    // Real effect: publish the DP (and switch the fan on if speed — pitfall 1)
     const dps: TuyaDps = { [String(opts.dps)]: opts.set }
     if (opts.dps === 62) dps['60'] = true
     queueMicrotask(() => this.emit('data', { dps }))
@@ -83,7 +83,7 @@ const patches = (ctx: PluginContext, externalId: string) =>
 describe('tuya plugin', () => {
   afterEach(() => vi.useRealTimers())
 
-  it('discover() déclare les deux appareils sans réseau', async () => {
+  it('discover() declares both devices without network', async () => {
     const clock = new ManualClock(0)
     const { ctx } = fakeContext(clock)
     const fake = fakeSocketFactory()
@@ -94,7 +94,7 @@ describe('tuya plugin', () => {
     expect(fake.sockets).toHaveLength(0)
   })
 
-  it('start() connecte et publie l\'état complet', async () => {
+  it('start() connects and publishes the full state', async () => {
     const clock = new ManualClock(0)
     const { ctx, ctrl } = fakeContext(clock)
     const fake = fakeSocketFactory()
@@ -108,7 +108,7 @@ describe('tuya plugin', () => {
     await plugin.stop()
   })
 
-  it('reconnecte après une coupure (piège 5)', async () => {
+  it('reconnects after a drop (pitfall 5)', async () => {
     const clock = new ManualClock(0)
     const { ctx, ctrl } = fakeContext(clock)
     const fake = fakeSocketFactory()
@@ -131,7 +131,7 @@ describe('tuya plugin', () => {
     await plugin.stop()
   })
 
-  it('execute light.set attend l\'effet, pas l\'accusé', async () => {
+  it('execute light.set waits for the effect, not the acknowledgment', async () => {
     const clock = new ManualClock(0)
     const { ctx, ctrl } = fakeContext(clock)
     const fake = fakeSocketFactory()
@@ -141,7 +141,7 @@ describe('tuya plugin', () => {
     await flush()
     await plugin.execute(`${DEVICE.id}_light`, { type: 'light.set', on: false })
     expect(fake.last().writes).toContainEqual({ dps: 20, set: false })
-    // Le fake publie l'effet ; un delta RF arrive aussi
+    // The fake publishes the effect; an RF delta arrives too
     fake.last().emit('data', { dps: DELTA_LIGHT_OFF })
     await flush()
     expect(patches(ctx, `${DEVICE.id}_light`).some((p) => p.on === false)).toBe(true)
@@ -149,7 +149,7 @@ describe('tuya plugin', () => {
     await plugin.stop()
   })
 
-  it('execute fan.set speed écrit le DP 62', async () => {
+  it('execute fan.set speed writes DP 62', async () => {
     const clock = new ManualClock(0)
     const { ctx, ctrl } = fakeContext(clock)
     const fake = fakeSocketFactory()
@@ -166,7 +166,7 @@ describe('tuya plugin', () => {
     await plugin.stop()
   })
 
-  it('refuse une température hors crans', async () => {
+  it('refuses a temperature outside the steps', async () => {
     const clock = new ManualClock(0)
     const { ctx, ctrl } = fakeContext(clock)
     const fake = fakeSocketFactory()
@@ -180,7 +180,7 @@ describe('tuya plugin', () => {
     await plugin.stop()
   })
 
-  it('health needs_pairing sans appareils', async () => {
+  it('health needs_pairing without devices', async () => {
     const clock = new ManualClock(0)
     const { ctx } = fakeContext(clock, [])
     const plugin = createTuyaPlugin({ createSocket: fakeSocketFactory().createSocket })

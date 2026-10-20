@@ -7,23 +7,23 @@ import type { FetchLike } from '../../core/sse'
 import { tokenResponseSchema } from './types'
 import { writeFileAtomic } from '../../core/atomic-file'
 
-// Identité et jetons de la Fleet API Tesla. Trois choses distinctes vivent ici :
+// Identity and tokens of the Tesla Fleet API. Three distinct things live here:
 //
-//  1. La PAIRE DE CLÉS de l'application. Tesla exige qu'une clé publique EC (courbe P-256) soit
-//     servie sur le domaine de l'application (`/.well-known/appspecific/com.tesla.3p.public-key.pem`)
-//     avant tout appel : c'est sa preuve de propriété du domaine. La clé privée reste sur ce serveur
-//     et n'a, en phase 1, rien à signer (un Model S d'avant 2021 accepte les commandes non signées) ;
-//     elle est générée ici pour que la clé publique existe, et gardée pour la suite.
-//  2. Le jeton PARTENAIRE (`client_credentials`) : il ne représente personne, sert à enregistrer le
-//     domaine auprès de Tesla et à vérifier ce qu'il a lu de la clé publique. Jamais mis en cache.
-//  3. Le jeton du COMPTE (code d'autorisation puis rafraîchissement). Le refresh token est À USAGE
-//     UNIQUE : chaque rafraîchissement en rend un nouveau qu'il faut sauver aussitôt, sinon le
-//     suivant échoue et il faut relier le compte. D'où le cache fichier écrit à chaque tour.
+//  1. The application's KEY PAIR. Tesla requires an EC public key (P-256 curve) to be served on
+//     the application's domain (`/.well-known/appspecific/com.tesla.3p.public-key.pem`) before any
+//     call: it's its proof of domain ownership. The private key stays on this server and, in phase 1,
+//     has nothing to sign (a pre-2021 Model S accepts unsigned commands); it is generated here so
+//     that the public key exists, and kept for later.
+//  2. The PARTNER token (`client_credentials`): it represents nobody, it's used to register the
+//     domain with Tesla and to check what Tesla read of the public key. Never cached.
+//  3. The ACCOUNT token (authorization code then refresh). The refresh token is SINGLE-USE: each
+//     refresh returns a new one that must be saved immediately, otherwise the next one fails and
+//     the account has to be linked again. Hence the file cache written on every round.
 
 export const AUTHORIZE_URL = 'https://auth.tesla.com/oauth2/v3/authorize'
 export const TOKEN_URL = 'https://fleet-auth.prd.vn.cloud.tesla.com/oauth2/v3/token'
 
-/** Base de l'API par région : le compte Tesla vit dans l'une d'elles, et `audience` doit la nommer. */
+/** API base per region: the Tesla account lives in one of them, and `audience` must name it. */
 export const REGION_BASE_URLS = {
   eu: 'https://fleet-api.prd.eu.vn.cloud.tesla.com',
   na: 'https://fleet-api.prd.na.vn.cloud.tesla.com',
@@ -31,18 +31,18 @@ export const REGION_BASE_URLS = {
 export type TeslaRegion = keyof typeof REGION_BASE_URLS
 
 /**
- * Portées demandées au compte. Les commandes y sont déjà (lecture seule en phase 1, mais relier le
- * compte une seconde fois pour un bouton « Verrouiller » n'aurait pas de sens). `offline_access`
- * est ce qui donne le refresh token.
+ * Scopes requested from the account. Commands are already included (read-only in phase 1, but
+ * linking the account a second time for a "Lock" button would make no sense). `offline_access` is
+ * what yields the refresh token.
  */
 export const ACCOUNT_SCOPES = ['openid', 'offline_access', 'vehicle_device_data', 'vehicle_location', 'vehicle_cmds', 'vehicle_charging_cmds'] as const
-/** Portées du jeton partenaire : pas d'`offline_access`, il ne représente aucun compte. */
+/** Partner token scopes: no `offline_access`, it represents no account. */
 export const PARTNER_SCOPES = ['openid', 'vehicle_device_data', 'vehicle_cmds', 'vehicle_charging_cmds'] as const
 
-/** Chemin, sur le domaine de l'application, où Tesla va lire la clé publique. */
+/** Path, on the application's domain, where Tesla reads the public key. */
 export const PUBLIC_KEY_PATH = '/.well-known/appspecific/com.tesla.3p.public-key.pem'
 
-/** Marge avant l'échéance de l'access token au-delà de laquelle on le rafraîchit d'avance. */
+/** Margin before the access token's expiry beyond which it is refreshed in advance. */
 const REFRESH_MARGIN_MS = 5 * 60_000
 const REQUEST_TIMEOUT_MS = 20_000
 
@@ -50,13 +50,13 @@ export function authorizationUrl(o: { clientId: string; redirectUri: string; sta
   const q = new URLSearchParams({
     response_type: 'code', client_id: o.clientId, redirect_uri: o.redirectUri,
     scope: ACCOUNT_SCOPES.join(' '), state: o.state,
-    // Tesla redemande les portées que l'utilisateur aurait décochées, plutôt que d'échouer en silence plus tard
+    // Tesla asks again for the scopes the user may have unchecked, rather than failing silently later
     prompt_missing_scopes: 'true',
   })
   return `${AUTHORIZE_URL}?${q.toString()}`
 }
 
-// ---- Paire de clés ---------------------------------------------------------------------------
+// ---- Key pair --------------------------------------------------------------------------------
 
 export interface KeyPair { privatePem: string; publicPem: string }
 
@@ -65,15 +65,15 @@ export interface KeyStore {
   save(privatePem: string): Promise<void>
 }
 
-/** Clé publique (SPKI, PEM) dérivée d'une clé privée PEM. */
+/** Public key (SPKI, PEM) derived from a PEM private key. */
 export function publicKeyOf(privatePem: string): string {
   return createPublicKey(privatePem).export({ type: 'spki', format: 'pem' }).toString()
 }
 
 /**
- * Le POINT de la courbe, non compressé, en hexadécimal : `04` puis X puis Y (65 octets, 130 hex).
- * C'est SOUS CETTE FORME que Tesla rend la clé enregistrée (`partner_accounts.public_key`), et non
- * en PEM — constaté sur le vrai compte, où une comparaison de PEM donnait toujours « pas la nôtre ».
+ * The curve POINT, uncompressed, in hexadecimal: `04` then X then Y (65 bytes, 130 hex). It's IN
+ * THIS FORM that Tesla returns the registered key (`partner_accounts.public_key`), and not as PEM —
+ * observed on the real account, where a PEM comparison always gave "not ours".
  */
 export function publicKeyPointHex(publicPem: string): string {
   const jwk = createPublicKey(publicPem).export({ format: 'jwk' }) as { x?: string; y?: string }
@@ -81,7 +81,7 @@ export function publicKeyPointHex(publicPem: string): string {
   return `04${hex(jwk.x ?? '')}${hex(jwk.y ?? '')}`
 }
 
-/** La clé rendue par Tesla est-elle la nôtre ? Accepte le point hex, le PEM, ou le base64 sans armure. */
+/** Is the key returned by Tesla ours? Accepts the hex point, the PEM, or the unarmored base64. */
 export function samePublicKey(served: string, publicPem: string): boolean {
   const norm = (s: string) => s.replace(/\s+/g, '')
   const s = norm(served)
@@ -90,7 +90,7 @@ export function samePublicKey(served: string, publicPem: string): boolean {
     || s === norm(publicPem.replace(/-----[A-Z ]+-----/g, ''))
 }
 
-/** Une nouvelle paire EC P-256 (`prime256v1`, celle que Tesla exige). */
+/** A new EC P-256 pair (`prime256v1`, the one Tesla requires). */
 export function generateKeyPair(): KeyPair {
   const { privateKey, publicKey } = generateKeyPairSync('ec', { namedCurve: 'prime256v1' })
   return {
@@ -99,7 +99,7 @@ export function generateKeyPair(): KeyPair {
   }
 }
 
-/** Relit la clé privée du cache, ou en génère une et la garde. La clé publique en découle toujours. */
+/** Re-reads the private key from the cache, or generates one and keeps it. The public key always derives from it. */
 export async function ensureKeyPair(store: KeyStore, logger?: Logger): Promise<KeyPair> {
   const existing = await store.load()
   if (existing) {
@@ -112,12 +112,12 @@ export async function ensureKeyPair(store: KeyStore, logger?: Logger): Promise<K
   return pair
 }
 
-// ---- Jetons du compte ----------------------------------------------------------------------
+// ---- Account tokens ------------------------------------------------------------------------
 
 export interface StoredTokens {
   refreshToken: string
   accessToken?: string | undefined
-  /** Échéance de l'access token (ms epoch). */
+  /** Expiry of the access token (epoch ms). */
   accessExpiresAt?: number | undefined
 }
 export interface TokenStore {
@@ -132,8 +132,8 @@ const storedTokensSchema = z.object({
 })
 
 /**
- * Fichier JSON atomique (`.tmp` puis `rename`) partagé par les deux caches du plugin. Fichier absent
- * ou illisible = vide, jamais une erreur fatale : le plugin doit démarrer même si le disque refuse.
+ * Atomic JSON file (`.tmp` then `rename`) shared by the plugin's two caches. Missing or unreadable
+ * file = empty, never a fatal error: the plugin must start even if the disk refuses.
  */
 function jsonFile<T>(path: string, schema: z.ZodType<T>, what: string, logger?: Logger) {
   return {
@@ -176,10 +176,10 @@ export interface TeslaAuthOptions {
   requestTimeoutMs?: number
 }
 
-/** Jetons du compte : échange du code, rafraîchissement à usage unique, cache. */
+/** Account tokens: code exchange, single-use refresh, cache. */
 export class TeslaAuth {
   private tokens: StoredTokens | null = null
-  /** Un seul rafraîchissement à la fois : deux en parallèle brûleraient le même refresh token. */
+  /** A single refresh at a time: two in parallel would burn the same refresh token. */
   private refreshing: Promise<string> | null = null
 
   constructor(private readonly opts: TeslaAuthOptions) {}
@@ -187,13 +187,13 @@ export class TeslaAuth {
   get audience(): string { return REGION_BASE_URLS[this.opts.region] }
   get linked(): boolean { return this.tokens !== null }
 
-  /** Au démarrage : reprend les jetons du cache s'il y en a. */
+  /** At startup: picks up the tokens from the cache if there are any. */
   async restore(): Promise<boolean> {
     this.tokens = (await this.opts.store?.load()) ?? null
     return this.linked
   }
 
-  /** Après le retour du consentement : le code devient un couple de jetons, gardé. */
+  /** After returning from consent: the code becomes a pair of tokens, kept. */
   async exchangeCode(code: string, signal?: AbortSignal): Promise<void> {
     const t = await this.tokenRequest({
       grant_type: 'authorization_code', client_id: this.opts.clientId, client_secret: this.opts.clientSecret,
@@ -203,12 +203,12 @@ export class TeslaAuth {
     await this.adopt(t)
   }
 
-  /** Oublie le compte (l'utilisateur relie, ou Tesla a révoqué). */
+  /** Forgets the account (the user relinks, or Tesla revoked). */
   async forget(): Promise<void> {
     this.tokens = null
   }
 
-  /** Access token valable, rafraîchi d'avance si l'échéance approche. */
+  /** Valid access token, refreshed in advance if expiry is approaching. */
   async accessToken(signal?: AbortSignal): Promise<string> {
     if (!this.tokens) throw new PluginError('NEEDS_PAIRING', 'no Tesla account linked: open /api/plugins/tesla/auth/url')
     const fresh = this.tokens.accessToken && this.tokens.accessExpiresAt && this.tokens.accessExpiresAt - this.opts.now() > REFRESH_MARGIN_MS
@@ -216,7 +216,7 @@ export class TeslaAuth {
     return this.refresh(signal)
   }
 
-  /** Rafraîchit maintenant (aussi après un 401 : le jeton a pu être révoqué avant son échéance). */
+  /** Refreshes now (also after a 401: the token may have been revoked before its expiry). */
   refresh(signal?: AbortSignal): Promise<string> {
     if (this.refreshing) return this.refreshing
     this.refreshing = (async () => {
@@ -232,7 +232,7 @@ export class TeslaAuth {
     return this.refreshing
   }
 
-  /** Jeton partenaire (`client_credentials`) : enregistrement et vérification du domaine. */
+  /** Partner token (`client_credentials`): domain registration and verification. */
   async partnerToken(signal?: AbortSignal): Promise<string> {
     const t = await this.tokenRequest({
       grant_type: 'client_credentials', client_id: this.opts.clientId, client_secret: this.opts.clientSecret,
@@ -248,7 +248,7 @@ export class TeslaAuth {
       refreshToken, accessToken: t.access_token,
       accessExpiresAt: this.opts.now() + (t.expires_in ?? 3600) * 1000,
     }
-    // sauvé AVANT tout usage : un refresh token consommé et non écrit, c'est un compte à relier
+    // saved BEFORE any use: a refresh token consumed and not written means an account to link again
     await this.opts.store?.save(this.tokens)
   }
 
@@ -267,7 +267,7 @@ export class TeslaAuth {
     }
     const text = await res.text()
     if (!res.ok) {
-      // un refresh token brûlé ou révoqué : le compte est à relier, ce n'est pas un incident réseau
+      // a burned or revoked refresh token: the account has to be linked again, it's not a network incident
       const gone = res.status === 400 || res.status === 401
       if (gone && params.grant_type === 'refresh_token') {
         this.tokens = null

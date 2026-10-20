@@ -2,41 +2,41 @@ import mqtt, { type MqttClient } from 'mqtt'
 import type { Logger } from 'pino'
 import { PluginError } from '../../core/plugin'
 
-// Lien LOCAL avec un robot iRobot : son propre courtier MQTT, en TLS sur le port 8883.
+// LOCAL link with an iRobot robot: its own MQTT broker, over TLS on port 8883.
 //
-// Le robot est à la fois le courtier et le seul appareil dessus. Il s'authentifie avec son BLID en
-// identifiant ET en mot de passe d'utilisateur, le mot de passe étant celui obtenu une fois par le
-// compte (`auth.ts`). Le certificat est signé par une autorité iRobot maison, au nom du robot :
-// invérifiable depuis ici, donc `rejectUnauthorized: false` — le secret qui protège la liaison est
-// le mot de passe, pas la chaîne de certification. Relevé sur le parc : TLS 1.3,
-// `TLS_AES_256_GCM_SHA384`, aucun chiffre hérité à réactiver.
+// The robot is both the broker and the only device on it. It authenticates with its BLID as client
+// identifier AND as user name, the password being the one obtained once through the account
+// (`auth.ts`). The certificate is signed by an in-house iRobot authority, in the robot's name:
+// unverifiable from here, hence `rejectUnauthorized: false` — the secret protecting the link is
+// the password, not the certificate chain. Recorded on the device set: TLS 1.3,
+// `TLS_AES_256_GCM_SHA384`, no legacy cipher to re-enable.
 //
-// LE ROBOT PARLE EN DELTAS. Il ne republie pas son ombre entière à chaque changement : il envoie le
-// fragment qui bouge, parfois une seule clé. Un mappage appliqué au seul fragment reçu ne peut donc
-// pas décider d'un état qui dépend de deux champs (l'activité tient à `phase` ET `cycle`). D'où
-// l'accumulation d'une ombre complète par robot, et le mappage appliqué à ELLE.
+// THE ROBOT SPEAKS IN DELTAS. It doesn't republish its whole shadow on every change: it sends the
+// fragment that moves, sometimes a single key. A mapping applied to the received fragment alone
+// therefore can't decide a state that depends on two fields (the activity depends on `phase` AND
+// `cycle`). Hence the accumulation of a full shadow per robot, and the mapping applied to IT.
 //
-// UNE SEULE SESSION À LA FOIS, ET C'EST LE PREMIER ARRIVÉ QUI LA GARDE. Mesuré le 19/09 : un second
-// client présenté pendant qu'un premier tenait le lien reçoit `ECONNREFUSED` — au niveau TCP, avant
-// même MQTT — tandis que le premier continue de recevoir sans être inquiété.
+// ONLY ONE SESSION AT A TIME, AND THE FIRST TO ARRIVE KEEPS IT. Measured on 09/19: a second client
+// presenting itself while a first one held the link gets `ECONNREFUSED` — at the TCP level, before
+// MQTT even — while the first keeps receiving undisturbed.
 //
-// Ce que cela implique, et qui dépasse ce fichier : tant que le serveur Kasbah tient le lien, un
-// AUTRE client local ne peut pas parler au robot. L'appli du fabricant passe normalement par le
-// cloud, donc elle n'en souffre pas ; mais si elle bascule en local (même réseau), elle se heurtera
-// à nous. Non vérifié avec l'appli elle-même — il faudrait l'ouvrir pendant qu'un lien est établi.
+// What this implies, beyond this file: as long as the Kasbah server holds the link, ANOTHER local
+// client can't talk to the robot. The vendor's app normally goes through the cloud, so it doesn't
+// suffer from it; but if it switches to local (same network), it will run into us. Not verified
+// with the app itself — it would have to be opened while a link is established.
 //
-// `reconnectPeriod` reste utile pour l'inverse : si quelqu'un nous précède, ou si le robot coupe,
-// on retente jusqu'à reprendre la main.
+// `reconnectPeriod` remains useful for the reverse: if someone gets there before us, or if the
+// robot cuts off, we retry until we take back control.
 
 const PORT = 8883
-/** Le courtier du robot coupe au-delà ; en deçà, on le réveille pour rien. */
+/** The robot's broker cuts off beyond this; below it, we wake it up for nothing. */
 const KEEPALIVE_S = 60
 const CONNECT_TIMEOUT_MS = 15_000
 const RECONNECT_MS = 10_000
 
-/** Topics par lesquels le robot pousse son ombre. `#` couvre les deux générations et les variantes. */
+/** Topics through which the robot pushes its shadow. `#` covers both generations and the variants. */
 const SUBSCRIBE_TOPIC = '#'
-/** Topic des commandes. Le robot n'accuse pas réception : il répond par un changement d'ombre. */
+/** Command topic. The robot doesn't acknowledge receipt: it answers with a shadow change. */
 const COMMAND_TOPIC = 'cmd'
 
 export type RobotShadow = Record<string, unknown>
@@ -45,20 +45,20 @@ export interface RobotConnectionOptions {
   blid: string
   password: string
   ip: string
-  /** Appelé à chaque fragment reçu, avec l'ombre ACCUMULÉE (jamais le seul fragment). */
+  /** Called on every fragment received, with the ACCUMULATED shadow (never the fragment alone). */
   onShadow?: (shadow: RobotShadow) => void
   onConnected?: () => void
   onDisconnected?: (reason: string) => void
   logger?: Logger
   signal?: AbortSignal
-  /** Injecté par les tests : remplace l'ouverture réelle du client MQTT. */
+  /** Injected by tests: replaces the real opening of the MQTT client. */
   connectImpl?: typeof mqtt.connect
 }
 
 /**
- * Fusion profonde d'un fragment dans l'ombre. Un objet se fond clé à clé, tout le reste REMPLACE —
- * un tableau rendu par le robot est une valeur entière (la liste des zones d'une carte), pas une
- * suite à compléter.
+ * Deep merge of a fragment into the shadow. An object merges key by key, everything else REPLACES —
+ * an array returned by the robot is a whole value (the list of zones of a map), not a sequence to
+ * extend.
  */
 export function mergeShadow(base: RobotShadow, patch: unknown): RobotShadow {
   if (patch === null || typeof patch !== 'object' || Array.isArray(patch)) return base
@@ -75,9 +75,9 @@ export function mergeShadow(base: RobotShadow, patch: unknown): RobotShadow {
 }
 
 /**
- * Extrait le fragment d'état d'un message. Le robot publie tantôt `{state:{reported:{…}}}` (forme
- * d'ombre AWS), tantôt l'objet nu sur ses topics propres. Rendre `null` plutôt que lever : un topic
- * inattendu ne doit pas couper la liaison.
+ * Extracts the state fragment of a message. The robot publishes sometimes `{state:{reported:{…}}}`
+ * (AWS shadow shape), sometimes the bare object on its own topics. Return `null` rather than throw:
+ * an unexpected topic must not cut the link.
  */
 export function extractReported(payload: string): unknown {
   let body: unknown
@@ -95,16 +95,16 @@ export function extractReported(payload: string): unknown {
 export interface RobotConnection {
   readonly blid: string
   readonly connected: boolean
-  /** L'ombre accumulée depuis l'ouverture. Vide tant que le robot n'a rien dit. */
+  /** The shadow accumulated since opening. Empty as long as the robot hasn't said anything. */
   shadow(): RobotShadow
-  /** Publie une commande et rend la main dès que le courtier l'a acceptée. */
+  /** Publishes a command and returns as soon as the broker has accepted it. */
   command(name: string, extra?: Record<string, unknown>): Promise<void>
   close(): Promise<void>
 }
 
 /**
- * Ouvre la liaison. Ne lève pas : la connexion se fait en tâche de fond et se retente toute seule,
- * `connected` disant où l'on en est. Un robot éteint n'est pas une panne du plugin.
+ * Opens the link. Doesn't throw: the connection happens in the background and retries on its own,
+ * with `connected` telling where things stand. A switched-off robot is not a plugin failure.
  */
 export function connectRobot(opts: RobotConnectionOptions): RobotConnection {
   let shadow: RobotShadow = {}
@@ -121,7 +121,7 @@ export function connectRobot(opts: RobotConnectionOptions): RobotConnection {
     reconnectPeriod: RECONNECT_MS,
     connectTimeout: CONNECT_TIMEOUT_MS,
     clean: false,
-    // certificat iRobot au nom du robot, signé par une autorité maison : invérifiable ici
+    // iRobot certificate in the robot's name, signed by an in-house authority: unverifiable here
     rejectUnauthorized: false,
   })
 
@@ -148,7 +148,7 @@ export function connectRobot(opts: RobotConnectionOptions): RobotConnection {
     opts.onDisconnected?.('closed')
   })
   client.on('error', (err) => {
-    // robot éteint, réseau coupé, ou quelqu'un tient déjà la session : rien d'anormal, on retentera
+    // robot switched off, network down, or someone already holds the session: nothing abnormal, we'll retry
     opts.logger?.debug({ err: err.message, blid: opts.blid }, 'iRobot link error')
   })
 
@@ -171,7 +171,7 @@ export function connectRobot(opts: RobotConnectionOptions): RobotConnection {
       if (!connected) throw new PluginError('DEVICE_UNAVAILABLE', `iRobot ${opts.blid} is not reachable on the network`)
       const body = JSON.stringify({
         command: name,
-        // le robot attend des SECONDES, pas des millisecondes
+        // the robot expects SECONDS, not milliseconds
         time: Math.floor(Date.now() / 1000),
         initiator: 'localApp',
         ...extra,

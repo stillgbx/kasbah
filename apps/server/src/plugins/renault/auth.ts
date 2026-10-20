@@ -6,52 +6,52 @@ import type { FetchLike } from '../../core/sse'
 import { gigyaAccountInfoSchema, gigyaJwtSchema, gigyaLoginSchema, gigyaResponseSchema } from './types'
 import { writeFileAtomic } from '../../core/atomic-file'
 
-// Authentification Renault — Gigya (SAP Customer Data Cloud), celle de l'appli MY Renault.
+// Renault authentication — Gigya (SAP Customer Data Cloud), the one used by the MY Renault app.
 //
-// Il n'y a PAS d'OAuth : le seul moyen d'entrer est l'identifiant et le mot de passe du compte.
-// C'est la première fois dans Kasbah, et la décision prise avec l'utilisateur borne le dégât :
+// There is NO OAuth: the only way in is the account's identifier and password. It's a first in
+// Kasbah, and the decision made with the user limits the damage:
 //
-//   le mot de passe traverse le serveur UNE fois (POST /api/plugins/renault/login), il n'est
-//   jamais écrit sur disque, jamais journalisé, jamais rangé dans une variable d'environnement.
-//   Seul survit le `login_token` que Gigya rend en échange — révocable en se déconnectant de
-//   l'appli, et qui ne permet pas de changer le mot de passe du compte.
+//   the password passes through the server ONCE (POST /api/plugins/renault/login), it is never
+//   written to disk, never logged, never stored in an environment variable. Only the
+//   `login_token` that Gigya returns in exchange survives — revocable by signing out of the app,
+//   and it doesn't allow changing the account's password.
 //
-// Deux jetons, à ne pas confondre :
-//   - le LOGIN TOKEN (`sessionInfo.cookieValue`) : durable, c'est lui qu'on garde ;
-//   - le JWT (`accounts.getJWT`) : 15 minutes, c'est lui que Kamereon accepte. Redemandé au besoin.
+// Two tokens, not to be confused:
+//   - the LOGIN TOKEN (`sessionInfo.cookieValue`): long-lived, it's the one we keep;
+//   - the JWT (`accounts.getJWT`): 15 minutes, it's the one Kamereon accepts. Requested again as needed.
 //
-// Piège central : GIGYA RÉPOND TOUJOURS EN HTTP 200. Un mot de passe faux, un jeton périmé, une
-// double authentification en attente — tout arrive en 200 avec un `errorCode` dans le corps. Un
-// client qui ne regarde que le statut croit avoir réussi à chaque fois.
+// Central pitfall: GIGYA ALWAYS ANSWERS WITH HTTP 200. A wrong password, an expired token, a
+// pending two-factor authentication — everything arrives as 200 with an `errorCode` in the body. A
+// client that only looks at the status believes it succeeded every time.
 
 /**
- * Valeurs par défaut pour `fr_FR`. Elles sont **surchargeables par l'environnement**, et ce n'est
- * pas du zèle : Renault a changé ses clés en mai 2026 et a mis en panne, le même jour, toutes les
- * intégrations tierces qui les avaient en dur. Ici, une clé neuve se pose dans `.env` sans toucher
- * au code ni republier quoi que ce soit.
+ * Default values for `fr_FR`. They can be **overridden by the environment**, and that's not
+ * overzealousness: Renault changed its keys in May 2026 and broke, on the same day, every
+ * third-party integration that had them hard-coded. Here, a new key goes into `.env` without
+ * touching the code or republishing anything.
  */
 export const DEFAULT_GIGYA_URL = 'https://accounts.eu1.gigya.com'
 export const DEFAULT_GIGYA_API_KEY = '3_VgdkgtIRH3AdHvJm-cjV2ug2EFE0lxt0IJzMC4MFqZjFpn_GYFXVdNZ19L7wZX0N'
 export const DEFAULT_KAMEREON_URL = 'https://api-wired-prod-1-euw1.wrd-aws.com'
 export const DEFAULT_KAMEREON_API_KEY = 'YjkKtHmGfaceeuExUDKGxrLZGGvtVS0J'
 
-/** Durée demandée pour le JWT (secondes) : le maximum que Gigya accorde ici. */
+/** Lifetime requested for the JWT (seconds): the maximum Gigya grants here. */
 export const JWT_TTL_S = 900
-/** Marge avant l'échéance du JWT au-delà de laquelle on en redemande un d'avance. */
+/** Margin before the JWT's expiry beyond which a new one is requested in advance. */
 const JWT_MARGIN_MS = 60_000
 const REQUEST_TIMEOUT_MS = 20_000
 
 /**
- * Codes Gigya qu'il faut distinguer d'une panne. Tous arrivent en HTTP 200.
- * `403101` mérite son message : un compte avec double authentification ne peut PAS être relié ici,
- * et l'utilisateur doit le savoir tout de suite plutôt que de croire à un mot de passe mal tapé.
+ * Gigya codes to tell apart from an outage. All arrive as HTTP 200.
+ * `403101` deserves its own message: an account with two-factor authentication can NOT be linked
+ * here, and the user must know it right away rather than believe they mistyped a password.
  */
 const GIGYA_INVALID_CREDENTIALS = 403042
 const GIGYA_PENDING_2FA = 403101
 const GIGYA_INVALID_TOKEN = 403005
 
 export interface StoredSession {
-  /** `sessionInfo.cookieValue` : le jeton durable. Le mot de passe, lui, n'est jamais gardé. */
+  /** `sessionInfo.cookieValue`: the long-lived token. The password, for its part, is never kept. */
   loginToken: string
   personId: string
 }
@@ -68,8 +68,8 @@ export interface SessionStore {
 }
 
 /**
- * Fichier JSON atomique (`.tmp` puis `rename`), en 0600. Fichier absent ou illisible = pas de
- * session, jamais une erreur fatale : le plugin doit démarrer même si le disque refuse.
+ * Atomic JSON file (`.tmp` then `rename`), at 0600. Missing or unreadable file = no session, never
+ * a fatal error: the plugin must start even if the disk refuses.
  */
 export function createSessionFile(path: string, logger?: Logger): SessionStore {
   return {
@@ -102,12 +102,12 @@ export interface RenaultAuthOptions {
   requestTimeoutMs?: number
 }
 
-/** Session Gigya : connexion par mot de passe (une fois), puis JWT courts à la demande. */
+/** Gigya session: sign-in by password (once), then short JWTs on demand. */
 export class RenaultAuth {
   private session: StoredSession | null = null
   private jwtToken: string | null = null
   private jwtExpiresAt = 0
-  /** Un seul renouvellement à la fois : Gigya limite le débit, deux en parallèle sont perdus. */
+  /** A single renewal at a time: Gigya rate-limits, two in parallel are lost. */
   private minting: Promise<string> | null = null
 
   constructor(private readonly opts: RenaultAuthOptions) {}
@@ -115,15 +115,15 @@ export class RenaultAuth {
   get linked(): boolean { return this.session !== null }
   get personId(): string | null { return this.session?.personId ?? null }
 
-  /** Au démarrage : reprend la session du cache s'il y en a une. */
+  /** At startup: picks up the session from the cache if there is one. */
   async restore(): Promise<boolean> {
     this.session = (await this.opts.store?.load()) ?? null
     return this.linked
   }
 
   /**
-   * Relie le compte. Le mot de passe ne sert QUE dans cet appel : il n'est ni gardé en mémoire
-   * au-delà, ni écrit, ni journalisé. Ce qui survit est le `login_token` et le `personId`.
+   * Links the account. The password is used ONLY in this call: it is not kept in memory beyond
+   * it, not written, not logged. What survives is the `login_token` and the `personId`.
    */
   async login(email: string, password: string, signal?: AbortSignal): Promise<StoredSession> {
     const login = await this.gigya('accounts.login', { loginID: email, password }, signal)
@@ -142,7 +142,7 @@ export class RenaultAuth {
     return this.session
   }
 
-  /** Oublie le compte (l'utilisateur délie, ou Gigya a révoqué la session). */
+  /** Forgets the account (the user unlinks, or Gigya revoked the session). */
   async forget(): Promise<void> {
     this.session = null
     this.jwtToken = null
@@ -150,14 +150,14 @@ export class RenaultAuth {
     await this.opts.store?.clear()
   }
 
-  /** JWT valable pour Kamereon, renouvelé d'avance si l'échéance approche. */
+  /** JWT valid for Kamereon, renewed in advance if expiry is approaching. */
   async jwt(signal?: AbortSignal): Promise<string> {
     if (!this.session) throw new PluginError('NEEDS_PAIRING', 'no Renault account linked: POST /api/plugins/renault/login')
     if (this.jwtToken && this.jwtExpiresAt - this.opts.now() > JWT_MARGIN_MS) return this.jwtToken
     return this.mintJwt(signal)
   }
 
-  /** Renouvelle maintenant (aussi après un 401 de Kamereon : le JWT a pu être révoqué d'avance). */
+  /** Renews now (also after a 401 from Kamereon: the JWT may have been revoked early). */
   mintJwt(signal?: AbortSignal): Promise<string> {
     if (this.minting) return this.minting
     this.minting = (async () => {
@@ -179,8 +179,8 @@ export class RenaultAuth {
   }
 
   /**
-   * Un appel Gigya. Le corps est en `application/x-www-form-urlencoded`, la réponse en JSON avec
-   * son `errorCode` — c'est lui qu'on interprète, pas le statut HTTP.
+   * One Gigya call. The body is `application/x-www-form-urlencoded`, the response JSON with its
+   * `errorCode` — that's what we interpret, not the HTTP status.
    */
   private async gigya(method: string, params: Record<string, string>, signal?: AbortSignal): Promise<unknown> {
     const timeout = AbortSignal.timeout(this.opts.requestTimeoutMs ?? REQUEST_TIMEOUT_MS)
@@ -199,7 +199,7 @@ export class RenaultAuth {
     const text = await res.text()
     const body = ((): unknown => { try { return JSON.parse(text) } catch { return null } })()
     const framed = gigyaResponseSchema.safeParse(body)
-    // pas de cadre lisible : ni succès ni échec identifiable, c'est une panne
+    // no readable frame: neither identifiable success nor failure, it's an outage
     if (!framed.success) {
       throw new PluginError('UPSTREAM_ERROR', `unexpected response from Renault sign-in on ${method} (HTTP ${res.status})`)
     }
@@ -207,7 +207,7 @@ export class RenaultAuth {
     return body
   }
 
-  /** Traduit un `errorCode` Gigya. Jamais le mot de passe ni le jeton dans le message. */
+  /** Translates a Gigya `errorCode`. Never the password or the token in the message. */
   private throwGigya(method: string, r: { errorCode: number; errorMessage?: string | undefined; errorDetails?: string | undefined }): never {
     const detail = [r.errorMessage, r.errorDetails].filter(Boolean).join(' — ')
     if (r.errorCode === GIGYA_PENDING_2FA) {
@@ -217,8 +217,8 @@ export class RenaultAuth {
     if (r.errorCode === GIGYA_INVALID_CREDENTIALS) {
       throw new PluginError('NEEDS_PAIRING', 'Renault refused the e-mail or password')
     }
-    // jeton périmé ou révoqué : le compte est à relier, ce n'est pas un incident réseau. La session
-    // est jetée ici pour que `health()` dise `needs_pairing` sans attendre le tour suivant.
+    // expired or revoked token: the account has to be linked again, it's not a network incident. The
+    // session is discarded here so that `health()` says `needs_pairing` without waiting for the next round.
     if (r.errorCode === GIGYA_INVALID_TOKEN) {
       this.session = null
       this.jwtToken = null

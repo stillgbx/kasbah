@@ -3,11 +3,11 @@ import { PluginError } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
 import { airQualityResponseSchema, forecastResponseSchema, geocodingResponseSchema, type AirQualityResponse, type ForecastResponse, type GeocodingResponse } from './types'
 
-// Client des deux API d'Open-Meteo : prévisions (`api.open-meteo.com`) et qualité de l'air
-// (`air-quality-api.open-meteo.com`). Sans clé, sans compte ; le seul paramètre est la position de
-// la maison. `timeformat=unixtime` évite de parser des dates locales : tout arrive en secondes epoch.
+// Client for Open-Meteo's two APIs: forecast (`api.open-meteo.com`) and air quality
+// (`air-quality-api.open-meteo.com`). No key, no account; the only parameter is the house's
+// position. `timeformat=unixtime` avoids parsing local dates: everything arrives in epoch seconds.
 
-/** Le défaut d'undici est 300 s : une requête coincée gèlerait le poller sans que `health()` le voie. */
+/** undici's default is 300 s: a stuck request would freeze the poller without `health()` noticing. */
 export const REQUEST_TIMEOUT_MS = 15_000
 
 const CURRENT = 'temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,cloud_cover,pressure_msl,wind_speed_10m,wind_direction_10m,wind_gusts_10m'
@@ -29,7 +29,7 @@ export class OpenMeteoClient {
   private readonly fetchImpl: FetchLike
   readonly forecastUrl: string
   readonly airQualityUrl: string
-  /** Dernières réponses brutes, pour capturer une fixture (`GET /api/plugins/open_meteo/raw`). */
+  /** Last raw responses, to capture a fixture (`GET /api/plugins/open_meteo/raw`). */
   raw: { forecast?: unknown; airQuality?: unknown } = {}
 
   constructor(private readonly opts: OpenMeteoClientOptions) {
@@ -48,7 +48,7 @@ export class OpenMeteoClient {
     return parsed.data
   }
 
-  /** Recherche de lieux par nom (villes, villages), noms rendus dans la langue demandée. */
+  /** Search for places by name (towns, villages), names returned in the requested language. */
   async places(name: string, language: string, signal: AbortSignal): Promise<GeocodingResponse> {
     const url = `${this.opts.geocodingBase ?? 'https://geocoding-api.open-meteo.com'}/v1/search?name=${encodeURIComponent(name)}&count=8&language=${encodeURIComponent(language)}&format=json`
     const parsed = geocodingResponseSchema.safeParse(await this.getJson(url, signal))

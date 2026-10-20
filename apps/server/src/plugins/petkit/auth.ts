@@ -6,62 +6,59 @@ import type { FetchLike } from '../../core/sse'
 import { loginSchema, petkitEnvelopeSchema, regionServersSchema } from './types'
 import { writeFileAtomic } from '../../core/atomic-file'
 
-// Authentification PetKit — le cloud privé de l'application mobile, seule voie d'accès : les
-// appareils ne parlent à rien d'autre, et les fontaines n'ont même pas de Wi-Fi.
+// PetKit authentication — the mobile app's private cloud, the only way in: the devices talk to
+// nothing else, and the fountains don't even have Wi-Fi.
 //
-// CE QUI DISTINGUE CE PLUGIN DE MELCLOUD ET DE RENAULT : il n'y a pas de mot de passe. Le compte de
-// l'utilisateur se connecte par CODE — on demande à PetKit d'envoyer un code à six chiffres par
-// courriel, valable dix minutes, et c'est lui qu'on échange contre une session. Bonne nouvelle pour
-// la sécurité (aucun mot de passe ne traverse jamais le serveur) et contrainte forte pour
-// l'exploitation, qui commande tout le reste de ce fichier :
+// WHAT SETS THIS PLUGIN APART FROM MELCLOUD AND RENAULT: there is no password. The user's account
+// signs in by CODE — we ask PetKit to send a six-digit code by e-mail, valid for ten minutes, and
+// that's what we exchange for a session. Good news for security (no password ever passes through
+// the server) and a strong constraint for operation, which drives the rest of this file:
 //
-//   **une session perdue ne se reprend pas toute seule.** Il faut un humain, sa boîte aux lettres
-//   et dix minutes. Donc on prolonge la session BIEN AVANT son échéance (`REFRESH_AT_RATIO`), et
-//   quand elle est malgré tout perdue on le dit franchement (`needs_pairing`) au lieu de marteler.
+//   **a lost session doesn't come back on its own.** It takes a human, their mailbox and ten
+//   minutes. So we extend the session WELL BEFORE it expires (`REFRESH_AT_RATIO`), and when it is
+//   lost anyway we say so plainly (`needs_pairing`) instead of hammering.
 //
-// Deux pièges relevés chez les bibliothèques tierces, traités ici :
+// Two pitfalls noted in the third-party libraries, handled here:
 //
-//  1. **Une nouvelle connexion invalide la précédente.** Le serveur et le téléphone de
-//     l'utilisateur se déconnecteraient mutuellement en boucle sur un même compte. D'où la consigne
-//     d'appairage : un compte PetKit DÉDIÉ, à qui l'on partage les appareils.
-//  2. **Deux connexions concurrentes condamnent la session pour la durée de son bail** (~36 h) :
-//     les deux voient le jeton périmé, les deux se reconnectent, l'un des deux jetons est mort-né
-//     et toutes les requêtes échouent ensuite en silence. D'où le verrou d'une seule connexion en
-//     vol à la fois (`inFlight`) — ce n'est pas une optimisation, c'est la correction d'un bug
-//     connu et coûteux.
+//  1. **A new sign-in invalidates the previous one.** The server and the user's phone would keep
+//     signing each other out on the same account. Hence the pairing instruction: a DEDICATED
+//     PetKit account, with which the devices are shared.
+//  2. **Two concurrent sign-ins doom the session for the length of its lease** (~36 h): both see
+//     the expired token, both sign in again, one of the two tokens is stillborn and every request
+//     then fails silently. Hence the lock allowing a single sign-in in flight at a time
+//     (`inFlight`) — it's not an optimization, it's the fix for a known and costly bug.
 
-/** Là où l'on demande la liste des passerelles régionales ; elle n'est pas régionale elle-même. */
+/** Where the list of regional gateways is requested; it isn't regional itself. */
 export const DEFAULT_PASSPORT_URL = 'https://passport.petkt.com/'
-/** Repli si la découverte échoue : la passerelle européenne, celle de cette maison. */
+/** Fallback if discovery fails: the European gateway, this house's. */
 export const DEFAULT_GATEWAY = 'https://api.eu-pet.com/latest/'
 const REQUEST_TIMEOUT_MS = 20_000
 
 /**
- * On renouvelle la session à la moitié de son bail. Un tiers serait plus prudent, la moitié suffit :
- * même un serveur arrêté une nuit se réveille avec une session encore valide sur un bail de 36 h,
- * et c'est exactement le cas qu'il faut éviter — celui où il faut réveiller l'utilisateur pour un
- * code.
+ * The session is renewed at half its lease. A third would be more cautious, half is enough: even a
+ * server stopped overnight wakes up with a still-valid session on a 36 h lease, and that's exactly
+ * the case to avoid — the one where the user has to be woken up for a code.
  */
 export const REFRESH_AT_RATIO = 0.5
 
-/** Ce que PetKit annonce comme client. En configuration : le fabricant peut se mettre à le vérifier. */
+/** What PetKit is told about the client. In configuration: the vendor may start checking it. */
 export const DEFAULT_APP_VERSION = '13.2.1'
 
-// Le téléphone que l'on prétend être. PetKit vérifie la COHÉRENCE de ces trois-là entre l'en-tête
-// `X-Client` et le champ `client` de la connexion ; ils sont donc posés à un seul endroit.
+// The phone we pretend to be. PetKit checks the CONSISTENCY of these three between the `X-Client`
+// header and the sign-in's `client` field; so they are set in a single place.
 const ANDROID_OS_VERSION = '16.1'
 const ANDROID_MODEL = '23127PN0CG'
 const USER_AGENT = 'okhttp/3.14.9'
 
 export interface StoredSession {
-  /** Jeton de session, posé en `X-Session` ET `F-Session` sur chaque appel. */
+  /** Session token, set as `X-Session` AND `F-Session` on every call. */
   id: string
-  /** Passerelle régionale retenue à la connexion : la session n'est valable que sur celle-là. */
+  /** Regional gateway chosen at sign-in: the session is only valid on that one. */
   gateway: string
-  /** Millisecondes epoch : émission et échéance, pour décider du renouvellement. */
+  /** Epoch milliseconds: issue and expiry, to decide on renewal. */
   createdAt: number
   expiresAt: number
-  /** Adresse du compte, seulement pour l'afficher dans les Réglages. */
+  /** The account's address, only to display it in Settings. */
   account: string | null
 }
 
@@ -79,7 +76,7 @@ export interface SessionStore {
   clear(): Promise<void>
 }
 
-/** Fichier JSON atomique en 0600 (même forme que MELCloud) : illisible = pas de session, jamais une erreur fatale. */
+/** Atomic JSON file at 0600 (same shape as MELCloud): unreadable = no session, never a fatal error. */
 export function createSessionFile(path: string, logger?: Logger): SessionStore {
   return {
     async load(): Promise<StoredSession | null> {
@@ -102,7 +99,7 @@ export function createSessionFile(path: string, logger?: Logger): SessionStore {
 
 export interface PetkitAuthOptions {
   passportUrl: string
-  /** Passerelle forcée par la configuration ; sinon découverte depuis la région. */
+  /** Gateway forced by configuration; otherwise discovered from the region. */
   gateway: string | null
   region: string
   timezone: string
@@ -114,14 +111,14 @@ export interface PetkitAuthOptions {
   requestTimeoutMs?: number
 }
 
-/** Ce que l'API renvoie quand la session n'est plus acceptée — vu en HTTP 200, dans le corps. */
+/** What the API returns when the session is no longer accepted — seen as HTTP 200, in the body. */
 const SESSION_ERROR_CODES = new Set([5, '5'])
 
 export class PetkitAuth {
   private session: StoredSession | null = null
-  /** Une seule connexion en vol : voir le piège n°2 en tête de fichier. */
+  /** A single sign-in in flight: see pitfall no. 2 at the top of the file. */
   private inFlight: Promise<StoredSession> | null = null
-  /** Passerelle et région résolues une fois pour toutes (la liste des serveurs ne bouge pas). */
+  /** Gateway and region resolved once and for all (the server list doesn't change). */
   private resolved: { gateway: string; region: string } | null = null
 
   constructor(private readonly opts: PetkitAuthOptions) {}
@@ -134,7 +131,7 @@ export class PetkitAuth {
 
   private now(): number { return this.opts.now?.() ?? Date.now() }
 
-  /** Au démarrage : reprend la session du cache, si elle n'est pas déjà périmée. */
+  /** At startup: picks up the session from the cache, if it hasn't already expired. */
   async restore(): Promise<boolean> {
     const cached = (await this.opts.store?.load()) ?? null
     this.session = cached && cached.expiresAt > this.now() ? cached : null
@@ -143,15 +140,15 @@ export class PetkitAuth {
   }
 
   /**
-   * Passerelle ET région retenues. Deux choses à ne pas confondre, et c'est ce qui a coûté un
-   * premier 502 : la RÉGION de configuration (« FR ») sert à trouver le serveur, mais ce que
-   * PetKit attend ensuite dans `region` est l'IDENTIFIANT de ce serveur, en minuscules.
+   * Chosen gateway AND region. Two things not to confuse, and that's what cost a first 502: the
+   * configured REGION ("FR") is used to find the server, but what PetKit then expects in `region`
+   * is that server's IDENTIFIER, in lowercase.
    *
-   * `v1/regionservers` est un **GET** — l'appeler en POST échouait, et l'échec étant rattrapé, on
-   * retombait en silence sur la passerelle européenne sans jamais résoudre la région.
+   * `v1/regionservers` is a **GET** — calling it with POST failed, and since the failure was
+   * caught, we silently fell back to the European gateway without ever resolving the region.
    *
-   * Échec de découverte = repli plutôt que blocage : une liste de serveurs indisponible ne veut
-   * pas dire que le compte est inutilisable.
+   * Discovery failure = fallback rather than blocking: an unavailable server list doesn't mean the
+   * account is unusable.
    */
   async resolveEndpoint(signal?: AbortSignal): Promise<{ gateway: string; region: string }> {
     const wanted = this.opts.region.toLowerCase()
@@ -174,11 +171,11 @@ export class PetkitAuth {
   }
 
   /**
-   * Étape 1 de l'appairage : demander à PetKit d'envoyer un code à l'adresse du compte. Le code
-   * vaut dix minutes — c'est le fabricant qui le dit, pas nous, et rien ici ne le prolonge.
+   * Pairing step 1: ask PetKit to send a code to the account's address. The code is valid for ten
+   * minutes — the vendor says so, not us, and nothing here extends it.
    *
-   * **C'est un GET, avec l'adresse en paramètre d'URL**, et non un POST de formulaire comme le
-   * reste de l'API. Envoyé en POST, PetKit refuse — le 502 du premier essai.
+   * **It's a GET, with the address as a URL parameter**, and not a form POST like the rest of the
+   * API. Sent as POST, PetKit refuses — the 502 of the first attempt.
    */
   async requestCode(email: string, signal?: AbortSignal): Promise<void> {
     const { gateway } = await this.resolveEndpoint(signal)
@@ -186,23 +183,23 @@ export class PetkitAuth {
   }
 
   /**
-   * Étape 2 : échanger le code contre une session. Aucun mot de passe n'entre ici, le compte n'en
-   * utilise pas.
+   * Step 2: exchange the code for a session. No password comes in here, the account doesn't use
+   * one.
    */
   async loginWithCode(email: string, code: string, signal?: AbortSignal): Promise<StoredSession> {
     const { gateway, region } = await this.resolveEndpoint(signal)
     const body = await this.post(`${gateway.replace(/\/$/, '')}/user/login`, {
       username: email, validCode: code.trim(), encrypt: '1', region, oldVersion: this.opts.appVersion,
-      // Descriptif du client, en UN champ sérialisé — c'est la forme que l'application mobile
-      // envoie. En JSON plutôt qu'en pseudo-dictionnaire Python comme le fait la bibliothèque de
-      // référence : un analyseur tolérant accepte les deux, un analyseur strict n'accepte que JSON.
+      // Client description, in ONE serialized field — it's the shape the mobile app sends. As
+      // JSON rather than as a pseudo Python dictionary like the reference library does: a lenient
+      // parser accepts both, a strict parser only accepts JSON.
       client: JSON.stringify(this.clientFields()),
     }, {}, signal)
     const parsed = loginSchema.safeParse(body)
     if (!parsed.success) throw new PluginError('UPSTREAM_ERROR', 'PetKit login: unexpected response shape')
     const created = this.now()
-    // Bail par défaut prudent (12 h) si PetKit ne le dit pas : mieux vaut renouveler pour rien que
-    // découvrir une session morte au moment de servir un repas.
+    // Cautious default lease (12 h) if PetKit doesn't say: better to renew for nothing than to
+    // discover a dead session when it's time to serve a meal.
     const lifetimeS = parsed.data.session.expiresIn ?? 12 * 3600
     const session: StoredSession = {
       id: parsed.data.session.id,
@@ -217,8 +214,8 @@ export class PetkitAuth {
   }
 
   /**
-   * Prolonge la session si elle a passé la moitié de son bail. Ne se connecte JAMAIS toute seule :
-   * sans mot de passe, une reconnexion exigerait un code que seul l'utilisateur peut lire.
+   * Extends the session if it has passed half its lease. NEVER signs in on its own: with no
+   * password, signing in again would require a code only the user can read.
    */
   async ensureFresh(signal?: AbortSignal): Promise<void> {
     const s = this.session
@@ -234,8 +231,8 @@ export class PetkitAuth {
     try {
       body = await this.post(`${s.gateway.replace(/\/$/, '')}/user/refreshsession`, this.clientFields(), this.headers(s.id), signal)
     } catch (err) {
-      // Un renouvellement raté n'est pas forcément une session morte (le réseau existe) : on garde
-      // la session, l'appel suivant retentera. C'est `invalidate()` qui tranche, sur un refus net.
+      // A failed renewal isn't necessarily a dead session (networks exist): we keep the session,
+      // the next call will retry. It's `invalidate()` that decides, on a clear refusal.
       this.opts.logger?.warn({ err }, 'PetKit session refresh failed, keeping the current session')
       return s
     }
@@ -250,8 +247,8 @@ export class PetkitAuth {
   }
 
   /**
-   * La session est refusée : on la JETTE. Sans mot de passe il n'y a rien à retenter, et garder une
-   * session morte ferait échouer chaque appel en silence — le bug exact qu'on cherche à éviter.
+   * The session is refused: we DISCARD it. With no password there's nothing to retry, and keeping
+   * a dead session would make every call fail silently — the exact bug we're trying to avoid.
    */
   async invalidate(): Promise<void> {
     this.session = null
@@ -261,13 +258,13 @@ export class PetkitAuth {
 
   async unlink(): Promise<void> { await this.invalidate() }
 
-  /** En-têtes de session : PetKit veut le MÊME jeton sous deux noms. */
+  /** Session headers: PetKit wants the SAME token under two names. */
   headers(id = this.sessionId): Record<string, string> {
     if (!id) throw new PluginError('NEEDS_PAIRING', 'PetKit account not linked')
     return { 'X-Session': id, 'F-Session': id }
   }
 
-  /** Vrai si ce corps de réponse dit « session morte » (l'API répond 200 et met l'échec dedans). */
+  /** True if this response body says "dead session" (the API answers 200 and puts the failure inside). */
   static isSessionError(body: unknown): boolean {
     const parsed = petkitEnvelopeSchema.safeParse(body)
     const code = parsed.success ? parsed.data.error?.code : undefined
@@ -275,10 +272,10 @@ export class PetkitAuth {
   }
 
   /**
-   * Descriptif du client, tel que l'application mobile le sérialise dans le champ `client` de la
-   * connexion. Les clés et leur ORTHOGRAPHE viennent des deux implémentations tierces qui
-   * fonctionnent en production ; `token` y est vide et `timezone` est un décalage en HEURES, pas
-   * un fuseau nommé (`timezoneId` porte celui-ci).
+   * Client description, as the mobile app serializes it in the sign-in's `client` field. The keys
+   * and their SPELLING come from the two third-party implementations that work in production;
+   * `token` is empty there and `timezone` is an offset in HOURS, not a named time zone
+   * (`timezoneId` carries that one).
    */
   private clientFields(): Record<string, string> {
     return {
@@ -295,10 +292,10 @@ export class PetkitAuth {
   }
 
   /**
-   * En-têtes envoyés sur CHAQUE requête, authentifiée ou non. Ce n'est pas du décor : sans eux,
-   * PetKit répond « Request is incorrect. (code 3) » — le refus obtenu au premier appairage réel,
-   * le 21/09, avec des en-têtes réduits au strict minimum. Le jeu ci-dessous est celui de deux
-   * implémentations tierces en production.
+   * Headers sent on EVERY request, authenticated or not. They're not decoration: without them,
+   * PetKit answers "Request is incorrect. (code 3)" — the refusal obtained at the first real
+   * pairing, on 09/21, with headers cut down to the bare minimum. The set below is the one used by
+   * two third-party implementations in production.
    */
   baseHeaders(): Record<string, string> {
     return {
@@ -325,9 +322,9 @@ export class PetkitAuth {
   }
 
   /**
-   * Un aller-retour, et la traduction de ce que PetKit répond. Le message d'erreur porte le
-   * CHEMIN, le statut et un extrait du corps : sans eux, un refus arrive dans l'interface sous
-   * la forme d'un « 502 » qui ne dit rien et n'oriente vers rien.
+   * One round trip, and the translation of what PetKit answers. The error message carries the
+   * PATH, the status and an excerpt of the body: without them, a refusal reaches the interface as
+   * a "502" that says nothing and points nowhere.
    */
   private async send(method: 'GET' | 'POST', url: string, body: string | undefined, headers: Record<string, string>, signal?: AbortSignal): Promise<unknown> {
     const ctrl = new AbortController()
@@ -346,8 +343,8 @@ export class PetkitAuth {
       })
       const text = await res.text()
       if (!res.ok) throw new PluginError('UPSTREAM_ERROR', `PetKit ${where}: HTTP ${res.status} ${excerpt(text)}`)
-      // Une réponse qui n'est pas du JSON (page d'erreur, portail) doit se lire dans le message,
-      // pas se perdre dans une exception d'analyse syntaxique.
+      // A response that isn't JSON (error page, captive portal) must be readable in the message,
+      // not lost in a parse exception.
       let parsedBody: unknown
       try { parsedBody = JSON.parse(text) }
       catch { throw new PluginError('UPSTREAM_ERROR', `PetKit ${where}: non-JSON response ${excerpt(text)}`) }
@@ -355,7 +352,7 @@ export class PetkitAuth {
       if (env.success && env.data.error) {
         const msg = String(env.data.error.msg ?? 'refused')
         const code = env.data.error.code === undefined ? '' : ` (code ${String(env.data.error.code)})`
-        // Refus de session : c'est l'appairage qui est en cause, pas le réseau.
+        // Session refusal: it's the pairing that's at fault, not the network.
         throw new PluginError(PetkitAuth.isSessionError(parsedBody) ? 'NEEDS_PAIRING' : 'UPSTREAM_ERROR', `PetKit ${where}: ${msg}${code}`)
       }
       return env.success && env.data.result !== undefined ? env.data.result : parsedBody
@@ -363,13 +360,13 @@ export class PetkitAuth {
   }
 }
 
-/** Extrait court d'une réponse, pour un message d'erreur lisible sans noyer le journal. */
+/** Short excerpt of a response, for a readable error message without flooding the log. */
 const excerpt = (text: string): string => (text.length > 200 ? `${text.slice(0, 200)}…` : text).replace(/\s+/g, ' ').trim()
 
 /**
- * Décalage horaire d'un fuseau, en heures et avec une décimale (« 2.0 », « -5.0 ») — la forme que
- * PetKit attend, et qui n'est pas celle d'un fuseau nommé. Calculé maintenant, donc heure d'été
- * comprise. Un fuseau inconnu vaut UTC plutôt que de faire échouer la connexion entière.
+ * A time zone's UTC offset, in hours with one decimal ("2.0", "-5.0") — the shape PetKit expects,
+ * which is not that of a named time zone. Computed now, so daylight saving time included. An
+ * unknown time zone counts as UTC rather than failing the whole sign-in.
  */
 function tzOffsetHours(timeZone: string, at = new Date()): string {
   try {

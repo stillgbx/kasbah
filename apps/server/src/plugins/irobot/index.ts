@@ -11,63 +11,64 @@ import { discoverRobots, type DiscoveredRobot } from './discovery'
 import { PLUGIN_ID, toActivity, toDescriptor, toRobotCommands, toStatePatch, readMissionStatus } from './mapping'
 import { connectRobot, type RobotConnection, type RobotShadow } from './mqtt'
 
-// Plugin iRobot (Roomba) — le robot se pilote EN LOCAL, le cloud ne sert qu'une fois.
+// iRobot plugin (Roomba) — the robot is driven LOCALLY, the cloud is only used once.
 //
-// Le robot héberge son propre courtier MQTT (TLS, port 8883) et y pousse son état en continu : pas
-// de sondage, pas de quota, rien qui sorte du réseau une fois le compte relié. Ce qui oblige à
-// passer par le cloud, c'est le seul MOT DE PASSE de ce courtier : les Roomba le rendaient jadis à
-// qui le demandait sur le réseau, le firmware `stingray` du parc ne le fait plus (`cap.pw: 0`,
-// vérifié par 115 tentatives). Il s'obtient donc une fois par le compte, et ne bouge plus (`auth.ts`).
+// The robot hosts its own MQTT broker (TLS, port 8883) and pushes its state there continuously: no
+// polling, no quota, nothing leaving the network once the account is linked. What forces us
+// through the cloud is just this broker's PASSWORD: Roombas used to hand it to anyone who asked
+// on the network, the `stingray` firmware in the device set no longer does (`cap.pw: 0`, verified
+// over 115 attempts). So it is obtained once through the account, and doesn't change (`auth.ts`).
 //
-// DEUX SOURCES POUR UN MÊME ROBOT, et il faut les deux :
-//   - le COMPTE dit quels robots existent et leur mot de passe — mais pas où ils sont ;
-//   - la DIFFUSION UDP dit quels robots sont sur le réseau et à quelle adresse — mais rien pour
-//     s'y connecter.
-// Un robot du compte introuvable sur le réseau reste dans l'inventaire, indisponible : perdre son
-// nom parce qu'il est éteint ferait disparaître son entrée de la maison.
+// TWO SOURCES FOR ONE ROBOT, and both are needed:
+//   - the ACCOUNT says which robots exist and their password — but not where they are;
+//   - the UDP BROADCAST says which robots are on the network and at what address — but nothing to
+//     connect to them.
+// A robot of the account that can't be found on the network stays in the inventory, unavailable:
+// losing its name because it is switched off would make its entry vanish from the house.
 //
-// PHASE 1 : le contrat `vacuum` tel qu'il existe (activité, batterie, bac plein, erreur, et les
-// quatre gestes). Le Combo dit bien plus — serpillière, réservoir, cartes de pièces, compteurs de
-// vie — et rien de cela n'entre encore au contrat ; la route `/raw` le montre en attendant.
+// PHASE 1: the `vacuum` contract as it exists (activity, battery, bin full, error, and the four
+// actions). The Combo says much more — mop, tank, room maps, lifetime counters — and none of it is
+// in the contract yet; the `/raw` route shows it in the meantime.
 
 /**
- * Budget de l'arrêt avant un `dock`, en deux temps — et les trois nombres sont MESURÉS sur le robot,
- * pas choisis. Ils doivent tenir dans `KASBAH_COMMAND_TIMEOUT_MS` (10 s par défaut), d'où leur
- * somme volontairement courte : 4 + 3 = 7 s au pire.
+ * Budget for stopping before a `dock`, in two steps — and the three numbers are MEASURED on the
+ * robot, not chosen. They must fit within `KASBAH_COMMAND_TIMEOUT_MS` (10 s by default), hence their
+ * deliberately short sum: 4 + 3 = 7 s at worst.
  *
- * `STOP_WAIT_MS` : le temps laissé au robot pour quitter `phase: "run"` après un `pause`. Mesuré à
- * 1 s le 19/09 ; 4 s laissent de la marge sans manger le budget.
+ * `STOP_WAIT_MS`: the time left to the robot to leave `phase: "run"` after a `pause`. Measured at
+ * 1 s on 09/19; 4 s leaves some margin without eating the budget.
  *
- * `DOCK_GRACE_MS` : le temps qu'il faut ENSUITE. Ce délai est la leçon de la séance — le robot
- * annonce `phase: "stop"` bien avant d'accepter un `dock`, et un `dock` envoyé dans cet intervalle
- * est avalé SANS ERREUR et jamais rejoué (robot resté en pause 2 min 30, vérifié). Mesures :
- * ~1 s ne suffit pas, 3 s suffisent, 8 s suffisent. On retient 3 s, le plus petit vérifié.
+ * `DOCK_GRACE_MS`: the time needed AFTERWARDS. This delay is the session's lesson — the robot
+ * announces `phase: "stop"` well before it accepts a `dock`, and a `dock` sent in that interval is
+ * swallowed WITHOUT ERROR and never replayed (robot stayed paused for 2 min 30, verified).
+ * Measurements: ~1 s is not enough, 3 s is enough, 8 s is enough. We keep 3 s, the smallest
+ * verified.
  */
 const STOP_WAIT_MS = 4_000
 const DOCK_GRACE_MS = 3_000
-/** Cadence de relecture de l'ombre pendant l'attente : le robot la pousse en continu. */
+/** Rate at which the shadow is re-read while waiting: the robot pushes it continuously. */
 const SETTLE_POLL_MS = 250
 
 export const irobotConfigSchema = z.object({
-  /** Mots de passe LOCAUX des robots. Le mot de passe du compte n'y est JAMAIS écrit. */
+  /** The robots' LOCAL passwords. The account password is NEVER written there. */
   IROBOT_SESSION_FILE: z.string().trim().default(stateFile('irobot-session.json')),
-  /** Code pays envoyé à la découverte d'endpoints : il choisit le centre Gigya. */
+  /** Country code sent to endpoint discovery: it picks the Gigya data center. */
   IROBOT_COUNTRY: z.string().trim().min(2).max(2).default('FR'),
-  /** En configuration comme les clés Renault : le fabricant peut les changer sans prévenir. */
+  /** In configuration like the Renault keys: the vendor may change them without notice. */
   IROBOT_DISCOVERY_URL: z.string().url().default(DEFAULT_DISCOVERY_URL),
   IROBOT_APP_ID: z.string().trim().min(1).default(DEFAULT_APP_ID),
   IROBOT_USER_AGENT: z.string().trim().min(1).default(DEFAULT_USER_AGENT),
   /**
-   * Cadence du balayage réseau. Il ne sert qu'à retrouver un robot qui rentre, s'allume ou change
-   * d'adresse : l'état, lui, arrive tout seul par MQTT. Deux minutes suffisent donc largement.
+   * Network scan rate. It only serves to find a robot that comes back, switches on or changes
+   * address: the state arrives on its own over MQTT. So two minutes is plenty.
    */
   IROBOT_SCAN_MS: z.coerce.number().int().min(15_000).max(3_600_000).default(120_000),
-  /** Durée d'écoute d'un balayage. Un robot répond en quelques dizaines de millisecondes. */
+  /** Listening time of a scan. A robot answers within a few tens of milliseconds. */
   IROBOT_SCAN_TIMEOUT_MS: z.coerce.number().int().min(500).max(30_000).default(4_000),
 })
 export type IrobotConfig = z.infer<typeof irobotConfigSchema>
 
-/** Ce que la carte des Réglages affiche. Ne porte jamais un mot de passe. */
+/** What the Settings card displays. Never carries a password. */
 export interface IrobotStatus {
   linked: boolean
   linkedAt: number | null
@@ -77,12 +78,12 @@ export interface IrobotStatus {
 }
 
 export interface IrobotPluginDeps {
-  /** Injecté par les tests : les requêtes de liaison du compte. */
+  /** Injected by tests: the account-linking requests. */
   fetchImpl?: FetchLike
   sessionStore?: SessionStore
-  /** Injecté par les tests : remplace la diffusion UDP. */
+  /** Injected by tests: replaces the UDP broadcast. */
   discoverImpl?: typeof discoverRobots
-  /** Injecté par les tests : remplace l'ouverture du lien MQTT. */
+  /** Injected by tests: replaces opening the MQTT link. */
   connectImpl?: typeof connectRobot
 }
 
@@ -93,14 +94,14 @@ export function createIrobotPlugin(deps: IrobotPluginDeps = {}): DevicePlugin {
   let lastError: string | null = null
   let scanner: { stop(): void } | null = null
 
-  /** Ce que le réseau a trouvé au dernier balayage, par BLID. */
+  /** What the network found at the last scan, by BLID. */
   const onNetwork = new Map<string, DiscoveredRobot>()
-  /** Les liens MQTT ouverts, par BLID. */
+  /** The open MQTT links, by BLID. */
   const links = new Map<string, RobotConnection>()
   /**
-   * Empreinte des descripteurs déjà publiés. Remise à zéro dans `init` : l'hôte redémarre un plugin
-   * SANS le réinstancier, et une empreinte survivante ferait croire à des appareils publiés que le
-   * registre vient justement de vider (piège du wiki, payé par Automower).
+   * Fingerprint of the descriptors already published. Reset in `init`: the host restarts a plugin
+   * WITHOUT re-instantiating it, and a surviving fingerprint would suggest published devices that
+   * the registry has just emptied (pitfall from the wiki, paid for by Automower).
    */
   let publishedFingerprint: string | null = null
 
@@ -117,7 +118,7 @@ export function createIrobotPlugin(deps: IrobotPluginDeps = {}): DevicePlugin {
     })
   }
 
-  /** Republie l'inventaire seulement s'il a changé : un robot renommé doit passer, pas le reste. */
+  /** Republishes the inventory only if it changed: a renamed robot must go through, not the rest. */
   function publishDevices(): void {
     const list = descriptors()
     const fingerprint = JSON.stringify(list)
@@ -128,15 +129,15 @@ export function createIrobotPlugin(deps: IrobotPluginDeps = {}): DevicePlugin {
 
   function onShadow(blid: string, shadow: RobotShadow): void {
     ctx?.emitState(blid, toStatePatch(shadow))
-    // le robot dit son nom dans son ombre : c'est lui qui fait foi une fois connecté
+    // the robot states its name in its shadow: it is the authority once connected
     publishDevices()
   }
 
-  /** Ouvre le lien d'un robot trouvé sur le réseau et dont le compte connaît le mot de passe. */
+  /** Opens the link of a robot found on the network whose password the account knows. */
   function openLink(robot: DiscoveredRobot): void {
     if (links.has(robot.blid)) return
     const password = auth?.passwordFor(robot.blid)
-    if (!password) return // robot d'un autre compte, ou compte non relié : rien à tenter
+    if (!password) return // robot from another account, or account not linked: nothing to try
     const link = connect_({
       blid: robot.blid,
       password,
@@ -156,15 +157,15 @@ export function createIrobotPlugin(deps: IrobotPluginDeps = {}): DevicePlugin {
   }
 
   /**
-   * Un balayage. Il sert à trois choses : trouver un robot qui vient de s'allumer, suivre une
-   * adresse changée par le DHCP, et marquer indisponible celui qui ne répond plus.
+   * One scan. It serves three purposes: finding a robot that has just switched on, following an
+   * address changed by DHCP, and marking unavailable the one that no longer answers.
    */
   async function scanOnce(): Promise<void> {
     const found = await discover_({ timeoutMs: config!.IROBOT_SCAN_TIMEOUT_MS, signal: ctx?.signal, logger: ctx?.logger })
     for (const robot of found) {
       const previous = onNetwork.get(robot.blid)
       onNetwork.set(robot.blid, robot)
-      // adresse changée : le lien pointe sur l'ancienne, on le refait
+      // address changed: the link points to the old one, we rebuild it
       if (previous && previous.ip !== robot.ip) {
         await links.get(robot.blid)?.close()
         links.delete(robot.blid)
@@ -178,15 +179,15 @@ export function createIrobotPlugin(deps: IrobotPluginDeps = {}): DevicePlugin {
   }
 
   /**
-   * Laisse le robot s'arrêter POUR DE BON avant le geste suivant. Deux attentes, et il faut les deux :
+   * Lets the robot stop FOR GOOD before the next action. Two waits, and both are needed:
    *
-   *  1. que son ombre cesse de dire « nettoie » — c'est elle qui fait foi, pas une horloge ;
-   *  2. puis `DOCK_GRACE_MS`, parce qu'il annonce son arrêt AVANT d'être en état de l'honorer.
+   *  1. that its shadow stops saying "cleaning" — the shadow is the authority, not a clock;
+   *  2. then `DOCK_GRACE_MS`, because it announces its stop BEFORE it is able to honor it.
    *
-   * Sans la seconde, le `dock` qui suit est accepté et perdu, en silence (vérifié le 19/09 : robot
-   * resté en pause deux minutes et demie, `lastCommand: "dock"` bien enregistré). Passé le délai de
-   * la première attente on continue quand même : mieux vaut un geste qui échoue franchement qu'un
-   * plugin suspendu à un robot qui ne répond plus.
+   * Without the second, the following `dock` is accepted and lost, silently (verified on 09/19:
+   * robot stayed paused two and a half minutes, `lastCommand: "dock"` duly recorded). Past the
+   * first wait's delay we carry on anyway: better an action that fails outright than a plugin
+   * hanging on a robot that no longer answers.
    */
   async function settle(link: RobotConnection): Promise<void> {
     const until = ctx!.clock.now() + STOP_WAIT_MS
@@ -243,7 +244,7 @@ export function createIrobotPlugin(deps: IrobotPluginDeps = {}): DevicePlugin {
     },
 
     async discover(): Promise<DeviceDescriptor[]> {
-      // le compte fait foi pour la LISTE ; le réseau ne fait que la localiser
+      // the account is the authority for the LIST; the network only locates it
       if (!auth?.linked) return []
       try { await scanOnce() }
       catch (err) { log().warn({ err }, 'iRobot network scan failed') }
@@ -273,7 +274,7 @@ export function createIrobotPlugin(deps: IrobotPluginDeps = {}): DevicePlugin {
       const verbs = toRobotCommands(command.type, activity)
       if (!verbs) throw new PluginError('UNSUPPORTED_COMMAND', `iRobot cannot do ${command.type}`)
       for (const [i, verb] of verbs.entries()) {
-        // un `dock` qui suit un `pause` ne porte que si le robot a enregistré l'arrêt
+        // a `dock` following a `pause` only takes effect if the robot has registered the stop
         if (i > 0) await settle(link)
         await link.command(verb)
       }
@@ -289,15 +290,15 @@ export function createIrobotPlugin(deps: IrobotPluginDeps = {}): DevicePlugin {
       app.get('/status', async () => status())
 
       /**
-       * Relier le compte. Le mot de passe ne vit que le temps de cette requête : ni gardé, ni
-       * journalisé, ni renvoyé. Ce qui en sort est le mot de passe LOCAL de chaque robot, et
-       * ensuite plus rien ne sort du réseau.
+       * Link the account. The password only lives for the duration of this request: not kept, not
+       * logged, not sent back. What comes out of it is each robot's LOCAL password, and after
+       * that nothing leaves the network anymore.
        */
       app.post<{ Body: { email?: string; password?: string } }>('/login', async (req, reply) => {
         const body = z.object({ email: z.string().trim().min(1), password: z.string().min(1) }).safeParse(req.body)
         if (!body.success) return reply.code(400).send({ error: 'email and password are required' })
-        // les routes sont montées même plugin éteint, mais `init` ne tourne que s'il est allumé :
-        // sans lui il n'y a pas de client à qui parler, et un 409 vaut mieux qu'un 500
+        // routes are mounted even with the plugin off, but `init` only runs if it's on:
+        // without it there is no client to talk to, and a 409 is better than a 500
         if (!auth) return reply.code(409).send({ error: 'enable the iRobot plugin before linking the account' })
         try {
           const robots = await auth!.login(body.data.email, body.data.password, ctx?.signal)
@@ -312,7 +313,7 @@ export function createIrobotPlugin(deps: IrobotPluginDeps = {}): DevicePlugin {
         }
       })
 
-      /** Délier : les mots de passe locaux sont effacés et les liens fermés. */
+      /** Unlink: the local passwords are erased and the links closed. */
       app.post('/logout', async (_req, reply) => {
         if (!auth) return reply.code(409).send({ error: 'enable the iRobot plugin before unlinking the account' })
         await closeLinks()
@@ -323,9 +324,9 @@ export function createIrobotPlugin(deps: IrobotPluginDeps = {}): DevicePlugin {
       })
 
       /**
-       * Relevé brut : l'ombre complète de chaque robot, telle qu'il la pousse. C'est par là qu'on
-       * capture les fixtures et qu'on décidera ce qui mérite d'entrer au contrat (serpillière,
-       * réservoir, cartes de pièces) — 80 clés dont la phase 1 n'en publie que quatre.
+       * Raw reading: each robot's full shadow, as it pushes it. This is how fixtures are captured
+       * and how we'll decide what deserves to enter the contract (mop, tank, room maps) — 80 keys
+       * of which phase 1 publishes only four.
        */
       app.get('/raw', async (_req, reply) => {
         if (!auth?.linked) return reply.code(409).send({ error: 'no iRobot account linked' })

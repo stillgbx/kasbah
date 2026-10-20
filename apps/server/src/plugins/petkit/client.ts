@@ -5,17 +5,17 @@ import { PetkitAuth } from './auth'
 import { detailPath } from './mapping'
 import { petkitEnvelopeSchema } from './types'
 
-// Client HTTP de PetKit. Ce qu'il traduit :
-//  - un refus de session (code 5, en HTTP 200) → la session est JETÉE et l'erreur remonte en
-//    `NEEDS_PAIRING`. Sans mot de passe, il n'y a rien à retenter tout seul : la carte des Réglages
-//    doit redemander un code. Garder une session morte ferait échouer chaque appel en silence,
-//    pendant toute la durée du bail — le bug connu qu'on refuse de reproduire ;
-//  - 429 → `RATE_LIMITED` ;
-//  - le reste en `UPSTREAM_ERROR`.
+// PetKit HTTP client. What it translates:
+//  - a session refusal (code 5, as HTTP 200) → the session is DISCARDED and the error surfaces as
+//    `NEEDS_PAIRING`. With no password, there's nothing to retry on its own: the Settings card
+//    must ask for a code again. Keeping a dead session would make every call fail silently, for
+//    the whole length of the lease — the known bug we refuse to reproduce;
+//  - 429 → `RATE_LIMITED`;
+//  - the rest as `UPSTREAM_ERROR`.
 //
-// Aucun seau à jetons : PetKit ne publie pas de quota. Ce qui protège ici est la CADENCE (cinq
-// minutes pour les mangeoires, dix pour les fontaines), pas un compteur. À revoir le jour où le
-// fabricant se met à répondre 429 — ce que `RATE_LIMITED` rendra visible dans les Réglages.
+// No token bucket: PetKit publishes no quota. What protects us here is the RATE (five minutes for
+// the feeders, ten for the fountains), not a counter. To be revisited the day the vendor starts
+// answering 429 — which `RATE_LIMITED` will make visible in Settings.
 
 export const REQUEST_TIMEOUT_MS = 30_000
 
@@ -30,60 +30,60 @@ export class PetkitClient {
   constructor(private readonly opts: PetkitClientOptions) {}
 
   /**
-   * Les « familles » du compte. Étape OBLIGATOIRE avant l'inventaire : le roster se demande par
-   * groupe, il n'existe pas de vue « tout le compte ». C'est aussi par là que passent les appareils
-   * qu'un autre compte a partagés — le cas de cette maison, puisque le compte est dédié.
+   * The account's "families". A REQUIRED step before the inventory: the roster is requested per
+   * group, there is no "whole account" view. It's also the route taken by devices shared by
+   * another account — this house's case, since the account is dedicated.
    */
   families(signal?: AbortSignal): Promise<unknown> {
     return this.post('group/family/list', {}, signal)
   }
 
   /**
-   * L'inventaire d'UN groupe. `day` et `groupId` sont exigés : sans eux, PetKit répond
-   * « Request is incorrect. » — vérifié sur le vrai compte le 21/09.
+   * The inventory of ONE group. `day` and `groupId` are required: without them, PetKit answers
+   * "Request is incorrect." — verified on the real account on 09/21.
    */
   roster(groupId: string, day: string, signal?: AbortSignal): Promise<unknown> {
     return this.post('discovery/device_roster_v2', { day, groupId }, signal)
   }
 
   /**
-   * L'état d'un appareil. Le chemin dépend de la FAMILLE, pas seulement du modèle : une mangeoire
-   * répond sur `<type>/device_detail`, une fontaine Bluetooth sur `<type>/deviceData` (voir
-   * `detailPath`). Pour une fontaine, ce que rend le cloud est la DERNIÈRE SYNCHRO — ouvrir un
-   * relais avant cet appel est ce qui la rafraîchit.
+   * A device's state. The path depends on the FAMILY, not just the model: a feeder answers on
+   * `<type>/device_detail`, a Bluetooth fountain on `<type>/deviceData` (see `detailPath`). For a
+   * fountain, what the cloud returns is the LAST SYNC — opening a relay before this call is what
+   * refreshes it.
    */
   deviceDetail(type: string, deviceId: string, signal?: AbortSignal): Promise<unknown> {
     return this.post(detailPath(type), { id: deviceId }, signal)
   }
 
   /**
-   * Servir une ration. `amount` en grammes pour une mangeoire à une seule trémie (`d4`) ; les
-   * modèles à deux trémies veulent `amount1`/`amount2`, et ne sont pas couverts ici.
+   * Serve a portion. `amount` in grams for a single-hopper feeder (`d4`); two-hopper models want
+   * `amount1`/`amount2`, and are not covered here.
    *
-   * `day` : PetKit range la ration dans le plan du JOUR courant, au format AAAAMMJJ. Sans lui, la
-   * ration part dans un jour indéterminé selon les bibliothèques tierces.
+   * `day`: PetKit files the portion in the plan of the current DAY, in YYYYMMDD format. Without it,
+   * the portion goes into an undetermined day according to the third-party libraries.
    */
   manualFeed(type: string, deviceId: string, grams: number, day: string, signal?: AbortSignal): Promise<unknown> {
     return this.post(`${type}/saveDailyFeed`, { deviceId, day, time: '-1', amount: String(grams) }, signal)
   }
 
   /**
-   * Les PASSAGES du jour à une fontaine. Trois paramètres exigés, dont l'identifiant de
-   * l'UTILISATEUR propriétaire — que porte l'appareil lui-même (`userId` de son relevé) : sans
-   * lui, « L'appareil n'a pas été trouvé. (code 703) ».
+   * The day's VISITS to a fountain. Three required parameters, including the identifier of the
+   * owning USER — which the device itself carries (`userId` in its reading): without it,
+   * "L'appareil n'a pas été trouvé. (code 703)".
    */
   workRecord(o: { type: string; deviceId: string; userId: string }, day: string, signal?: AbortSignal): Promise<unknown> {
     return this.post(`${o.type}/getWorkRecord`, { day, deviceId: o.deviceId, userId: o.userId }, signal)
   }
 
-  /** Jouer le son enregistré pour appeler l'animal. */
+  /** Play the recorded sound to call the animal. */
   callPet(type: string, deviceId: string, signal?: AbortSignal): Promise<unknown> {
     return this.post(`${type}/callPet`, { deviceId }, signal)
   }
 
   /**
-   * Requête authentifiée. `ensureFresh` d'abord : la session se prolonge avant d'être utilisée,
-   * jamais après un échec — sans mot de passe, un échec est déjà trop tard.
+   * Authenticated request. `ensureFresh` first: the session is extended before being used, never
+   * after a failure — with no password, a failure is already too late.
    */
   async post(path: string, form: Record<string, string>, signal?: AbortSignal): Promise<unknown> {
     await this.opts.auth.ensureFresh(signal)
@@ -94,9 +94,9 @@ export class PetkitClient {
       const res = await this.opts.fetchImpl(url, {
         method: 'POST',
         headers: {
-          // Le jeu COMPLET, comme sur les appels non authentifiés : `X-Api-Version`, `X-Client`,
-          // `X-TimezoneId`… Les omettre ici faisait répondre « Request is incorrect. » à
-          // `discovery/device_roster_v2` alors même que la session était valide (vérifié le 21/09).
+          // The FULL set, as on unauthenticated calls: `X-Api-Version`, `X-Client`,
+          // `X-TimezoneId`… Omitting them here made `discovery/device_roster_v2` answer "Request is
+          // incorrect." even though the session was valid (verified on 09/21).
           ...this.opts.auth.baseHeaders(),
           'Content-Type': 'application/x-www-form-urlencoded',
           ...this.opts.auth.headers(),
@@ -117,8 +117,8 @@ export class PetkitClient {
       }
       const env = petkitEnvelopeSchema.safeParse(body)
       if (env.success && env.data.error) {
-        // Le CODE dans le message : « Request is incorrect. » seul ne dit pas quoi corriger, alors
-        // que « (code 3) » désigne des en-têtes incomplets et « (code 5) » une session morte.
+        // The CODE in the message: "Request is incorrect." alone doesn't say what to fix, whereas
+        // "(code 3)" means incomplete headers and "(code 5)" a dead session.
         const code = env.data.error.code === undefined ? '' : ` (code ${String(env.data.error.code)})`
         throw new PluginError('UPSTREAM_ERROR', `PetKit ${path}: ${String(env.data.error.msg ?? 'refused')}${code}`)
       }
@@ -127,7 +127,7 @@ export class PetkitClient {
   }
 }
 
-/** Le jour courant au format que PetKit attend pour ranger une ration (AAAAMMJJ, heure locale). */
+/** The current day in the format PetKit expects to file a portion (YYYYMMDD, local time). */
 export function petkitDay(at: number): string {
   const d = new Date(at)
   return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`

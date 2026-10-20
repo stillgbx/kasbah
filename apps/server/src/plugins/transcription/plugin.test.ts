@@ -9,12 +9,12 @@ import type { PluginContext } from '../../core/plugin'
 import { describeError, sendError } from '../../http/errors'
 import { createTranscriptionPlugin, transcriptionConfigSchema } from '.'
 
-// Les trois fournisseurs par la même route compatible OpenAI : ce qui part (adresse, modèle, langue,
-// clé, vocabulaire en `prompt` ou en `context_bias`) et ce qui revient (texte, erreurs dites).
+// The three providers through the same OpenAI-compatible route: what goes out (address, model,
+// language, key, vocabulary as `prompt` or `context_bias`) and what comes back (text, reported errors).
 
 interface Sent { url: string; auth: string | null; fields: Record<string, string[]>; file: { name: string; type: string; size: number } | null }
 
-/** Un faux serveur de transcription : relève la requête, répond `answer`. */
+/** A fake transcription server: records the request, answers `answer`. */
 function fakeStt(answer: (url: string) => Response | Promise<Response>) {
   const sent: Sent[] = []
   const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
@@ -42,7 +42,7 @@ const ok = (url: string) => (url.endsWith('/v1/models') ? Response.json({ data: 
   ] })
   : url.endsWith('/v1/audio/speech') ? new Response(Buffer.from('RIFF0000WAVE'), { headers: { 'content-type': 'audio/wav' } })
   : Response.json({ text: '  Allume la cuisine. ' }))
-/** Un WAV minimal : l'en-tête RIFF suffit au contrôle de la route. */
+/** A minimal WAV: the RIFF header is enough for the route's check. */
 const wav = Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(40)]).toString('base64')
 
 let app: FastifyInstance | null = null
@@ -52,7 +52,7 @@ async function started(env: Record<string, string>, answer: (url: string) => Res
   const stt = fakeStt(answer)
   const plugin = createTranscriptionPlugin({ fetch: stt.fetchImpl })
   const ctx: PluginContext = {
-    // la config telle que l'hôte la donne : DÉJÀ validée
+    // the config as the host gives it: ALREADY validated
     pluginId: 'transcription', config: transcriptionConfigSchema.parse(env), logger: pino({ level: 'silent' }), clock: systemClock,
     signal: new AbortController().signal, emitState() {}, setAvailable() {}, emitDevices() {}, emitScenes() {}, emitSceneState() {},
     emitEvent() {}, parts, site: { lat: 0, lon: 0, alt: 0 },
@@ -60,7 +60,7 @@ async function started(env: Record<string, string>, answer: (url: string) => Res
   await plugin.init(ctx)
   await plugin.start()
   app = Fastify()
-  // le compte de la session, comme `http/session.ts` le pose : ici par un en-tête de test
+  // the session's account, as `http/session.ts` sets it: here through a test header
   app.decorateRequest('sessionUser', null)
   app.addHook('onRequest', async (req) => { const u = req.headers['x-test-user']; req.sessionUser = typeof u === 'string' ? u : null })
   app.setErrorHandler((err, _req, reply) => { const d = describeError(err); return sendError(reply, d.status, d.code, d.message) })
@@ -73,7 +73,7 @@ const transcribe = (hints: string[] = []) => app!.inject({ method: 'POST', url: 
 const lastPost = (sent: Sent[]) => sent.filter((s) => s.url.endsWith('/audio/transcriptions')).at(-1)!
 
 describe('VoiceStudio', () => {
-  it('envoie le WAV, whisper-1, la langue et les noms de la maison en `prompt`, sans clé', async () => {
+  it('sends the WAV, whisper-1, the language and the house names as `prompt`, without a key', async () => {
     const { stt } = await started({ STT_URL: 'http://localhost:7860/' })
     const res = await transcribe(['Cuisine', 'Spots cuisine', 'Cuisine', ' '])
     expect(res.json()).toMatchObject({ text: 'Allume la cuisine.' })
@@ -84,7 +84,7 @@ describe('VoiceStudio', () => {
     expect(post.file).toMatchObject({ name: 'instruction.wav', type: 'audio/wav' })
   })
 
-  it('sans adresse, dit quoi régler et cache le micro', async () => {
+  it('without an address, says what to set and hides the microphone', async () => {
     const { plugin } = await started({})
     expect(plugin.health!()).toMatchObject({ status: 'needs_pairing', detail: 'STT_URL is required for voicestudio (the address of its local API)' })
     expect((await app!.inject({ method: 'GET', url: '/api/plugins/transcription/status' })).json()).toEqual({ ready: false, provider: 'voicestudio', speech: false, autoSend: true })
@@ -93,7 +93,7 @@ describe('VoiceStudio', () => {
 })
 
 describe('vLLM (Voxtral Realtime)', () => {
-  it('prend localhost:8000 et le modèle Voxtral par défaut, et retire un `/v1` final de l’adresse', async () => {
+  it('takes localhost:8000 and the default Voxtral model, and strips a trailing `/v1` from the address', async () => {
     const def = await started({ STT_PROVIDER: 'vllm' })
     await transcribe()
     expect(lastPost(def.stt.sent)).toMatchObject({ url: 'http://localhost:8000/v1/audio/transcriptions', fields: { model: ['mistralai/Voxtral-Mini-4B-Realtime-2602'] } })
@@ -104,8 +104,8 @@ describe('vLLM (Voxtral Realtime)', () => {
   })
 })
 
-describe('API Mistral', () => {
-  it('envoie la clé, voxtral-mini-latest et le vocabulaire en `context_bias` (100 au plus)', async () => {
+describe('Mistral API', () => {
+  it('sends the key, voxtral-mini-latest and the vocabulary as `context_bias` (100 at most)', async () => {
     const { stt } = await started({ STT_PROVIDER: 'mistral', STT_API_KEY: 'k-test' })
     const names = Array.from({ length: 120 }, (_, i) => `Nom ${i}`)
     await transcribe(names)
@@ -117,12 +117,12 @@ describe('API Mistral', () => {
     expect(post.fields.prompt).toBeUndefined()
   })
 
-  it('sans clé, dit quoi régler', async () => {
+  it('without a key, says what to set', async () => {
     const { plugin } = await started({ STT_PROVIDER: 'mistral' })
     expect(plugin.health!()).toMatchObject({ status: 'needs_pairing', detail: 'STT_API_KEY is required for mistral' })
   })
 
-  it('une clé refusée devient une erreur de réglage, pas une panne', async () => {
+  it('a refused key becomes a settings error, not an outage', async () => {
     await started({ STT_PROVIDER: 'mistral', STT_API_KEY: 'k-test' }, (url) => (url.endsWith('/v1/models') ? Response.json({}) : new Response('Unauthorized', { status: 401 })))
     const res = await transcribe()
     expect(res.statusCode).toBe(409)
@@ -130,38 +130,38 @@ describe('API Mistral', () => {
   })
 })
 
-describe('pannes', () => {
-  it('un moteur éteint se voit dans la santé dès le démarrage, et la transcription dit 503', async () => {
+describe('failures', () => {
+  it('an engine that is off shows in health from startup, and transcription says 503', async () => {
     const { plugin } = await started({ STT_URL: 'http://localhost:7860' }, () => { throw new Error('ECONNREFUSED') })
     expect(plugin.health!()).toMatchObject({ status: 'degraded' })
     expect(plugin.health!().detail).toContain('voicestudio unreachable at http://localhost:7860 (ECONNREFUSED)')
     expect((await transcribe()).json().error.code).toBe('DEVICE_UNAVAILABLE')
   })
 
-  it('refuse ce qui n’est pas un WAV', async () => {
+  it('refuses what is not a WAV', async () => {
     await started({ STT_URL: 'http://localhost:7860' })
     const res = await app!.inject({ method: 'POST', url: '/api/plugins/transcription/transcribe', payload: { audio: Buffer.from('OggS0000000000000000000000000000000000000000000').toString('base64') } })
     expect(res.statusCode).toBe(400)
   })
 })
 
-describe('envoi à la fin de la phrase (sous-item autoSend)', () => {
-  it('éteint : le statut le dit, l\'app garde le bouton seul', async () => {
+describe('send at the end of the sentence (autoSend sub-item)', () => {
+  it('off: the status says so, the app keeps the button alone', async () => {
     await started({ STT_URL: 'http://localhost:7860' }, ok, { autoSend: false })
     expect((await app!.inject({ method: 'GET', url: '/api/plugins/transcription/status' })).json()).toMatchObject({ autoSend: false })
   })
 })
 
-describe('réponses parlées (sous-item speech)', () => {
+describe('spoken answers (speech sub-item)', () => {
   const speak = (text = 'Les spots de la cuisine sont allumés.') => app!.inject({ method: 'POST', url: '/api/plugins/transcription/speak', payload: { text } })
 
-  it('éteint par défaut : le dit au statut et refuse de parler', async () => {
+  it('off by default: says so in the status and refuses to speak', async () => {
     await started({ STT_URL: 'http://localhost:7860' })
     expect((await app!.inject({ method: 'GET', url: '/api/plugins/transcription/status' })).json()).toEqual({ ready: true, provider: 'voicestudio', speech: false, autoSend: true })
     expect((await speak()).statusCode).toBe(409)
   })
 
-  it('allumé : demande la synthèse au même serveur (tts-1, voix, langue, WAV) et rend le son', async () => {
+  it('on: asks the same server for synthesis (tts-1, voice, language, WAV) and returns the sound', async () => {
     const { stt } = await started({ STT_URL: 'http://localhost:7860' }, ok, { speech: true })
     expect((await app!.inject({ method: 'GET', url: '/api/plugins/transcription/status' })).json()).toMatchObject({ speech: true })
     const res = await speak()
@@ -173,14 +173,14 @@ describe('réponses parlées (sous-item speech)', () => {
     expect(JSON.parse(post.fields.json![0]!)).toEqual({ model: 'tts-1', input: 'Les spots de la cuisine sont allumés.', voice: 'default', language: 'fr', response_format: 'wav' })
   })
 
-  it('le moteur reçoit le texte réécrit pour la voix (heures, unités, abréviations)', async () => {
+  it('the engine receives the text rewritten for the voice (times, units, abbreviations)', async () => {
     const { stt } = await started({ STT_URL: 'http://localhost:7860' }, ok, { speech: true })
     await speak('Il fait 21 °C au RDC à 8h00.')
     const post = stt.sent.find((x) => x.url.endsWith('/v1/audio/speech'))!
     expect(JSON.parse(post.fields.json![0]!).input).toBe('Il fait 21 degrés au rez-de-chaussée à 8 heures.')
   })
 
-  it('les abréviations des niveaux envoyées par l’app sont dites par leur nom', async () => {
+  it('the level abbreviations sent by the app are said by their name', async () => {
     const { stt } = await started({ STT_URL: 'http://localhost:7860' }, ok, { speech: true })
     const res = await app!.inject({ method: 'POST', url: '/api/plugins/transcription/speak', payload: { text: 'Le R+1 est éteint.', words: { 'R+1': 'Premier étage' } } })
     expect(res.statusCode).toBe(200)
@@ -190,7 +190,7 @@ describe('réponses parlées (sous-item speech)', () => {
     expect(bad.statusCode).toBe(400)
   })
 
-  it('un moteur de synthèse en panne se dit comme pour la transcription', async () => {
+  it('a broken synthesis engine is reported as for transcription', async () => {
     await started({ STT_URL: 'http://localhost:7860' }, (url) => (url.endsWith('/v1/models') ? Response.json({}) : new Response('model not loaded', { status: 500 })), { speech: true })
     const res = await speak()
     expect(res.statusCode).toBe(502)
@@ -198,18 +198,18 @@ describe('réponses parlées (sous-item speech)', () => {
   })
 })
 
-describe('voix des réponses (fiche du plugin)', () => {
+describe('answers voice (plugin sheet)', () => {
   const stateDir = process.env.KASBAH_STATE_DIR
   beforeEach(() => { process.env.KASBAH_STATE_DIR = mkdtempSync(join(tmpdir(), 'kasbah-stt-state-')) })
   afterEach(() => { process.env.KASBAH_STATE_DIR = stateDir })
 
-  it('propose les profils du fournisseur, pas les alias OpenAI', async () => {
+  it('offers the provider profiles, not the OpenAI aliases', async () => {
     await started({ STT_URL: 'http://localhost:7860' })
     const res = await app!.inject({ method: 'GET', url: '/api/plugins/transcription/voices' })
     expect(res.json()).toEqual({ voices: [{ id: '0a1b2c3d', name: 'ma-voix', language: 'Auto' }] })
   })
 
-  it('dit la réponse avec la voix choisie, et revient à TTS_VOICE quand on l’efface', async () => {
+  it('says the answer with the chosen voice, and goes back to TTS_VOICE when it is cleared', async () => {
     const { stt } = await started({ STT_URL: 'http://localhost:7860', TTS_VOICE: 'default' }, ok, { speech: true })
     const voiceSent = () => JSON.parse(stt.sent.filter((x) => x.url.endsWith('/v1/audio/speech')).at(-1)!.fields.json![0]!).voice
     expect((await app!.inject({ method: 'GET', url: '/api/plugins/transcription/settings' })).json()).toEqual({ user: null, voice: null, houseVoice: null, defaultVoice: 'default' })
@@ -222,7 +222,7 @@ describe('voix des réponses (fiche du plugin)', () => {
     expect(voiceSent()).toBe('default')
   })
 
-  it('un compte connecté surcharge la voix de la maison pour lui seul, et la retrouve en effaçant son choix', async () => {
+  it('a signed-in account overrides the house voice for itself only, and gets it back by clearing its choice', async () => {
     const { stt } = await started({ STT_URL: 'http://localhost:7860' }, ok, { speech: true })
     const as = (user: string | null) => (user ? { 'x-test-user': user } : {})
     const settings = (user: string | null, voice?: string | null) => app!.inject({ method: voice === undefined ? 'GET' : 'PUT', url: '/api/plugins/transcription/settings', headers: as(user), ...(voice === undefined ? {} : { payload: { voice } }) })
@@ -234,7 +234,7 @@ describe('voix des réponses (fiche du plugin)', () => {
     expect(await said('Alice')).toBe('maison')
     expect((await settings('Alice', '0a1b2c3d')).json()).toEqual({ user: 'Alice', voice: '0a1b2c3d', houseVoice: 'maison', defaultVoice: 'default' })
     expect(await said('Alice')).toBe('0a1b2c3d')
-    // ni la maison ni un autre compte ne prennent sa voix
+    // neither the house nor another account takes its voice
     expect(await said(null)).toBe('maison')
     expect(await said('bob')).toBe('maison')
     expect((await settings(null)).json()).toMatchObject({ user: null, voice: 'maison' })
@@ -242,7 +242,7 @@ describe('voix des réponses (fiche du plugin)', () => {
     expect(await said('Alice')).toBe('maison')
   })
 
-  it('refuse une voix vide', async () => {
+  it('refuses an empty voice', async () => {
     await started({ STT_URL: 'http://localhost:7860' })
     expect((await app!.inject({ method: 'PUT', url: '/api/plugins/transcription/settings', payload: { voice: '' } })).statusCode).toBe(400)
   })

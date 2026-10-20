@@ -1,20 +1,20 @@
 import { z } from 'zod'
 
-// Formes des réponses Renault. Deux APIs très différentes se succèdent :
+// Shapes of the Renault responses. Two very different APIs follow one another:
 //
-//  - GIGYA (SAP Customer Data Cloud), l'authentification. Elle répond TOUJOURS en HTTP 200, même
-//    pour un mot de passe faux : c'est `errorCode` dans le corps qui dit l'échec. Un client qui ne
-//    regarde que le statut HTTP croit toujours avoir réussi.
-//  - KAMEREON, les données véhicule. Enveloppe JSON:API (`{ data: { id, type, attributes } }`) et
-//    erreurs dans `errors[]` avec un code maison (`err.func.wired.forbidden`…).
+//  - GIGYA (SAP Customer Data Cloud), authentication. It ALWAYS answers with HTTP 200, even for a
+//    wrong password: it's `errorCode` in the body that signals the failure. A client that only
+//    looks at the HTTP status always believes it succeeded.
+//  - KAMEREON, the vehicle data. JSON:API envelope (`{ data: { id, type, attributes } }`) and
+//    errors in `errors[]` with an in-house code (`err.func.wired.forbidden`…).
 //
-// Les schémas d'ATTRIBUTS (batterie, cockpit, position…) ne sont volontairement PAS ici : ils
-// seront écrits d'après la capture du vrai compte, pas d'après la documentation. Deux plugins de
-// cette maison ont déjà payé cette leçon (cf. `doc/3_plugins/3_2_ecrire-un-plugin.md`).
+// The ATTRIBUTE schemas (battery, cockpit, position…) are deliberately NOT here: they will be
+// written from the capture of the real account, not from the documentation. Two plugins in this
+// house have already paid for that lesson (see `doc/3_plugins/3_2_ecrire-un-plugin.md`).
 
 // ---- Gigya -------------------------------------------------------------------------------------
 
-/** Toute réponse Gigya porte ce cadre ; `errorCode: 0` est le seul succès. */
+/** Every Gigya response carries this frame; `errorCode: 0` is the only success. */
 export const gigyaResponseSchema = z.looseObject({
   errorCode: z.number(),
   errorMessage: z.string().optional(),
@@ -22,24 +22,24 @@ export const gigyaResponseSchema = z.looseObject({
 })
 export type GigyaResponse = z.infer<typeof gigyaResponseSchema>
 
-/** `accounts.login` : le jeton durable est `sessionInfo.cookieValue`, et rien d'autre. */
+/** `accounts.login`: the long-lived token is `sessionInfo.cookieValue`, and nothing else. */
 export const gigyaLoginSchema = z.looseObject({
   sessionInfo: z.looseObject({ cookieValue: z.string().min(1) }),
 })
 
-/** `accounts.getAccountInfo` : donne le `personId`, clé d'entrée de Kamereon. */
+/** `accounts.getAccountInfo`: gives the `personId`, the entry key to Kamereon. */
 export const gigyaAccountInfoSchema = z.looseObject({
   data: z.looseObject({ personId: z.string().min(1) }),
 })
 
-/** `accounts.getJWT` : le jeton court (15 min) que Kamereon accepte. */
+/** `accounts.getJWT`: the short token (15 min) that Kamereon accepts. */
 export const gigyaJwtSchema = z.looseObject({ id_token: z.string().min(1) })
 
 // ---- Kamereon ----------------------------------------------------------------------------------
 
 /**
- * `/persons/{personId}` : les comptes Kamereon de la personne. Un foyer en a souvent plusieurs
- * (`MYRENAULT`, `MYDACIA`, parfois un compte résilié) — d'où le choix explicite côté plugin.
+ * `/persons/{personId}`: the person's Kamereon accounts. A household often has several
+ * (`MYRENAULT`, `MYDACIA`, sometimes a closed account) — hence the explicit choice on the plugin side.
  */
 export const personSchema = z.looseObject({
   accounts: z.array(z.unknown()).default([]),
@@ -52,17 +52,17 @@ export const personAccountSchema = z.looseObject({
 export type PersonAccount = z.infer<typeof personAccountSchema>
 
 /**
- * `/accounts/{accountId}/vehicles` : un lien par véhicule. `z.unknown()` sur les éléments, validés
- * un par un ensuite : un véhicule à la forme inattendue ne doit pas priver le foyer des autres.
+ * `/accounts/{accountId}/vehicles`: one link per vehicle. `z.unknown()` on the items, validated one
+ * by one afterwards: a vehicle with an unexpected shape must not deprive the household of the others.
  */
 export const vehiclesSchema = z.looseObject({
   vehicleLinks: z.array(z.unknown()).default([]),
 })
 
 /**
- * Un lien véhicule. Seul le VIN est exigé — c'est l'identifiant stable, donc l'`externalId`. Le
- * reste sert à nommer l'appareil, et tout y est facultatif : `vehicleDetails` manque sur un
- * véhicule dont le contrat de services a expiré.
+ * A vehicle link. Only the VIN is required — it's the stable identifier, hence the `externalId`. The
+ * rest is used to name the device, and all of it is optional: `vehicleDetails` is missing on a
+ * vehicle whose services contract has expired.
  */
 export const vehicleLinkSchema = z.looseObject({
   vin: z.string().min(1),
@@ -74,9 +74,9 @@ export const vehicleLinkSchema = z.looseObject({
     model: z.looseObject({ code: z.string().optional(), label: z.string().optional() }).optional(),
     energy: z.looseObject({ code: z.string().optional(), label: z.string().optional() }).optional(),
     /**
-     * Les rendus du véhicule DANS SA CONFIGURATION (`3dv.renault.com`), sept points de vue. Seule
-     * source de la teinte : l'URL porte la référence d'usine, et Renault ne la nomme nulle part
-     * ailleurs. Voir `bodyColor`.
+     * The vehicle's renders IN ITS CONFIGURATION (`3dv.renault.com`), seven viewpoints. The only
+     * source for the paint color: the URL carries the factory reference, and Renault names it
+     * nowhere else. See `bodyColor`.
      */
     assets: z.array(z.looseObject({
       assetType: z.string().optional(),
@@ -87,9 +87,9 @@ export const vehicleLinkSchema = z.looseObject({
 export type VehicleLink = z.infer<typeof vehicleLinkSchema>
 
 /**
- * Enveloppe JSON:API des lectures véhicule. Les `attributes` restent `unknown` tant que la capture
- * du vrai compte n'a pas dicté leur forme : les lire au jugé serait exactement l'erreur que ce
- * projet a déjà commise deux fois.
+ * JSON:API envelope of the vehicle readings. The `attributes` stay `unknown` until the capture of
+ * the real account has dictated their shape: reading them by guesswork would be exactly the
+ * mistake this project has already made twice.
  */
 export const kamereonDataSchema = z.looseObject({
   data: z.looseObject({
@@ -99,7 +99,7 @@ export const kamereonDataSchema = z.looseObject({
   }).optional(),
 })
 
-/** Erreur Kamereon : `errors[].errorCode` porte le vrai motif (`err.func.wired.forbidden`…). */
+/** Kamereon error: `errors[].errorCode` carries the real reason (`err.func.wired.forbidden`…). */
 export const kamereonErrorsSchema = z.looseObject({
   errors: z.array(z.looseObject({
     errorCode: z.string().optional(),
@@ -108,10 +108,11 @@ export const kamereonErrorsSchema = z.looseObject({
 })
 
 /**
- * Un contrat du véhicule (`GET .../vehicles/{vin}/contracts`) : garanties, services connectés,
- * entretien. Forme lue sur la capture du vrai compte (2026-10-19) : la réponse est un TABLEAU nu, et
- * `conditions` un tableau dont la première entrée porte le plafond (`maximumMileage`, en `km`).
- * Aucun contrat de financement n'y figure — LOA et LLD vivent chez Mobilize, sans API connue.
+ * A vehicle contract (`GET .../vehicles/{vin}/contracts`): warranties, connected services,
+ * maintenance. Shape read from the capture of the real account (2026-10-19): the response is a bare
+ * ARRAY, and `conditions` an array whose first entry carries the cap (`maximumMileage`, in `km`).
+ * No financing contract appears there — lease-purchase and long-term leases live at Mobilize, with
+ * no known API.
  */
 export const vehicleContractSchema = z.looseObject({
   type: z.string().optional(),

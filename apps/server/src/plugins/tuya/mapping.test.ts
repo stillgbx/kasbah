@@ -23,14 +23,14 @@ import {
 } from './mapping'
 
 describe('tuya mapping', () => {
-  it('dérive les noms du physique sans répéter la pièce', () => {
+  it('derives the names from the physical one without repeating the room', () => {
     expect(deriveNames('Ventilateur plafonnier Bureau')).toEqual({
       fan: 'Ventilateur Bureau',
       light: 'Plafonnier Bureau',
     })
   })
 
-  it('émet deux descripteurs valides liés fan → light', () => {
+  it('emits two valid descriptors linked fan → light', () => {
     const [light, fan] = toDescriptors({
       id: 'bf0000000000000000abcd',
       key: 'xxxxxxxxxxxxxxxx',
@@ -45,14 +45,14 @@ describe('tuya mapping', () => {
     expect(fan!.meta.fan?.speeds).toEqual([1, 2, 3, 4, 5, 6])
   })
 
-  it('mappe la trame complète de connexion', () => {
+  it('maps the full connection frame', () => {
     expect(toLightPatch(CONNECT_FULL)).toEqual({ on: true, colorTempMirek: 303 })
     expect(toFanPatch(CONNECT_FULL)).toEqual({
       on: false, speed: 3, direction: 'forward', timerMin: 0, muted: true,
     })
   })
 
-  it('mappe les deltas capturés (dont timer 239)', () => {
+  it('maps the captured deltas (including timer 239)', () => {
     expect(toLightPatch(DELTA_LIGHT_OFF)).toEqual({ on: false })
     expect(toLightPatch(DELTA_TEMP_2700)).toEqual({ colorTempMirek: 370 })
     expect(toLightPatch(DELTA_TEMP_4000)).toEqual({ colorTempMirek: 250 })
@@ -63,7 +63,7 @@ describe('tuya mapping', () => {
     expect(toFanPatch(DELTA_FAN_OFF_CLEARS_TIMER)).toEqual({ on: false, timerMin: 0 })
   })
 
-  it('refuse une température hors des trois crans', () => {
+  it('refuses a temperature outside the three steps', () => {
     expect(() => lightCommandToDps({ type: 'light.set', colorTempMirek: 280 }))
       .toThrow(PluginError)
     expect(lightCommandToDps({ type: 'light.set', colorTempMirek: 370 }))
@@ -74,11 +74,11 @@ describe('tuya mapping', () => {
       .toEqual([{ dps: 23, set: 500 }])
   })
 
-  it('écrit la vitesse sans poser on côté DP (l\'appareil allume seul)', () => {
+  it('writes the speed without setting on DP-side (the device switches on by itself)', () => {
     expect(fanCommandToDps({ type: 'fan.set', speed: 4 })).toEqual([{ dps: 62, set: 4 }])
   })
 
-  it('refuse une vitesse hors liste', () => {
+  it('refuses a speed outside the list', () => {
     expect(() => fanCommandToDps({ type: 'fan.set', speed: 7 })).toThrow(PluginError)
   })
 })

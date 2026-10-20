@@ -1,37 +1,36 @@
 import { makeDeviceId, type Capability, type CommandOf, type DeviceDescriptor, type StatePatch } from '@kasbah/shared'
 import { personAccountSchema, vehicleContractSchema, vehicleLinkSchema, vehiclesSchema, type PersonAccount, type VehicleLink } from './types'
 
-// Mappage PUR : ressources Renault ↔ contrat Kasbah. Aucun accès réseau, aucun état.
+// PURE mapping: Renault resources ↔ Kasbah contract. No network access, no state.
 //
-// Deux moitiés : du COMPTE au DESCRIPTEUR, et des LECTURES à l'ÉTAT. La seconde est écrite
-// d'après la capture du 2026-09-14 (`__fixtures__/kamereon.ts`), pas d'après la documentation —
-// qui se serait trompée sur au moins trois points (version de `cockpit`, sens de la température,
-// nature de `chargingStatus`).
+// Two halves: from the ACCOUNT to the DESCRIPTOR, and from the READINGS to the STATE. The second is
+// written from the capture of 2026-09-14 (`__fixtures__/kamereon.ts`), not from the documentation —
+// which would have been wrong on at least three points (`cockpit` version, meaning of the
+// temperature, nature of `chargingStatus`).
 
 /**
- * Ce que la R5 dit, et ce qu'elle laisse changer : sa CIBLE de charge (`ev/soc-levels`), la
- * climatisation, et le DÉMARRAGE de la charge (`chargeStartPayload`). Verrouillage, pression : la
- * voiture répond 404 ; charge en pause/reprise : 403. L'ARRÊT de la charge, `charging` le déclare
- * aussi mais c'est la borne qui l'exécute (`meta.vehicle.stopViaCharger`, cf. `toDescriptor`).
+ * What the R5 reports, and what it lets you change: its charge TARGET (`ev/soc-levels`), the
+ * climate, and STARTING the charge (`chargeStartPayload`). Locking, pressure: the car answers 404;
+ * charge pause/resume: 403. STOPPING the charge is also declared by `charging`, but it's the
+ * charger that carries it out (`meta.vehicle.stopViaCharger`, see `toDescriptor`).
  */
 export const CAPABILITIES: readonly Capability[] = ['soc', 'range', 'location', 'charge_limit', 'charging', 'climate_precondition']
 
 /**
- * La climatisation de la R5, telle que son appli la montre (captures de l'utilisateur, 2026-10-01) :
- * « climatiser » maintenant, 10 min au plus ; une consigne ± et trois options — siège conducteur,
- * volant, siège passager — « communes à tous les programmes ». Ce sont des réglages du
- * PRÉCONDITIONNEMENT (`ev/settings` : `preconditioningTemperature`, `preconditioningHeated*`), en
- * marche / arrêt, qui se règlent clim éteinte. Bornes 16-26 °C au degré : HYPOTHÈSE, l'appli ne les
- * montre pas, à corriger au premier refus.
+ * The R5's climate control, as its app shows it (user's screenshots, 2026-10-01): "air-condition"
+ * now, 10 min at most; a ± setpoint and three options — driver seat, steering wheel, passenger
+ * seat — "shared by all programs". These are PRECONDITIONING settings (`ev/settings`:
+ * `preconditioningTemperature`, `preconditioningHeated*`), on / off, set while the climate is off.
+ * 16-26 °C bounds in 1-degree steps: ASSUMPTION, the app doesn't show them, to be corrected at the
+ * first refusal.
  */
 export const CLIMATE_FEATURES = {
   minC: 16, maxC: 26, stepC: 1, seats: ['fl', 'fr'] as ('fl' | 'fr')[], seatLevels: 1, steeringWheelHeat: true, heatWhileOff: true,
 }
 
 /**
- * Comptes Kamereon lisibles de la personne. Un foyer en a souvent plusieurs (`MYRENAULT`,
- * `MYDACIA`, parfois un compte résilié) : validés un par un, un compte biscornu n'écarte pas les
- * autres.
+ * The person's readable Kamereon accounts. A household often has several (`MYRENAULT`, `MYDACIA`,
+ * sometimes a closed account): validated one by one, an odd account doesn't push the others aside.
  */
 export function toAccounts(body: unknown): PersonAccount[] {
   const parsed = personAccountsOf(body)
@@ -49,7 +48,7 @@ function personAccountsOf(body: unknown): PersonAccount[] {
   return out
 }
 
-/** Véhicules d'un compte, validés un par un : un véhicule illisible n'en cache pas d'autres. */
+/** An account's vehicles, validated one by one: an unreadable vehicle doesn't hide the others. */
 export function toVehicleLinks(body: unknown): VehicleLink[] {
   const parsed = vehiclesSchema.safeParse(body)
   if (!parsed.success) return []
@@ -61,20 +60,20 @@ export function toVehicleLinks(body: unknown): VehicleLink[] {
   return out
 }
 
-/** Un contrat d'entretien plafonné en km : ce qui, chez Renault, ressemble le plus à une LOA. */
+/** A maintenance contract capped in km: what, at Renault, looks most like a lease-purchase (LOA). */
 export interface MileageContract {
   description: string
-  /** `AAAA-MM-JJ`, ou `null` quand Renault ne la donne pas. */
+  /** `YYYY-MM-DD`, or `null` when Renault doesn't give it. */
   start: string | null
   end: string | null
   maxKm: number
 }
 
 /**
- * Les contrats d'ENTRETIEN plafonnés en kilomètres, actifs ou non. Les garanties sont écartées même
- * plafonnées (la batterie porte un plafond qui n'a rien d'un forfait de location), et un contrat
- * illisible n'en cache pas d'autres. Ce n'est qu'une suggestion : Renault n'expose AUCUN contrat
- * de financement — un Easypack se vend calé sur la LOA, mais rien ne le garantit.
+ * The MAINTENANCE contracts capped in kilometers, active or not. Warranties are left out even when
+ * capped (the battery carries a cap that has nothing of a lease allowance), and an unreadable
+ * contract doesn't hide the others. It's only a suggestion: Renault exposes NO financing contract —
+ * an Easypack is sold aligned with the lease-purchase, but nothing guarantees it.
  */
 export function toMileageContracts(body: unknown): MileageContract[] {
   if (!Array.isArray(body)) return []
@@ -91,9 +90,9 @@ export function toMileageContracts(body: unknown): MileageContract[] {
 }
 
 /**
- * Un véhicule = un appareil `vehicle` identifié par son VIN — stable, sans `:` ni espace, donc un
- * `externalId` valable. Le nom suit ce que le compte sait en dire, du plus parlant au plus brut :
- * la plaque, puis le modèle, puis le VIN.
+ * One vehicle = one `vehicle` device identified by its VIN — stable, no `:` or space, hence a valid
+ * `externalId`. The name follows what the account knows about it, from the most telling to the
+ * rawest: the plate, then the model, then the VIN.
  */
 export function toDescriptor(link: VehicleLink, capabilities: readonly Capability[] = CAPABILITIES): DeviceDescriptor {
   const color = bodyColor(link)
@@ -104,30 +103,30 @@ export function toDescriptor(link: VehicleLink, capabilities: readonly Capabilit
     kind: 'vehicle',
     name: vehicleName(link),
     capabilities: [...capabilities],
-    // le fabricant, écrit comme il s'écrit : l'UI affiche sinon l'id du plugin (« renault »), et le
-    // constructeur, lui, CRIE ses libellés (`brand.label` = « RENAULT »)
-    // la R5 n'arrête pas sa charge à distance (« use charger to stop », renault-api) : le serveur
-    // arrête la borne à sa place
+    // the vendor, spelled the way it's spelled: otherwise the UI shows the plugin id ("renault"), and
+    // the carmaker SHOUTS its labels (`brand.label` = "RENAULT")
+    // the R5 doesn't stop its charge remotely ("use charger to stop", renault-api): the server stops
+    // the charger in its place
     meta: { manufacturer: 'Renault', vehicle: { ...(color ? { color } : {}), climate: CLIMATE_FEATURES, stopViaCharger: true } },
   }
 }
 
 /**
- * La teinte réelle du véhicule, déduite de sa configuration d'usine.
+ * The vehicle's actual paint color, derived from its factory configuration.
  *
- * Renault ne publie NULLE PART le nom de la couleur : ni `vehicleDetails`, ni `/details` — qui
- * pourtant étiquette en clair la batterie, l'autoradio ou la boîte. Ce qu'on a, c'est la référence
- * de configuration passée au moteur de rendu de ses images (`3dv.renault.com/ImageFromBookmark`,
- * paramètre `configuration`), une suite de codes dont `TE<teinte>` porte la peinture de caisse
- * (relevé du 2026-09-15 : `TEGNE`, doublé de `TPGNE` pour les boucliers et `TSGNE` pour les
- * rétroviseurs — même code, donc bien la teinte).
+ * Renault publishes the color's name NOWHERE: not in `vehicleDetails`, not in `/details` — which
+ * nonetheless labels the battery, the radio or the gearbox in plain text. What we have is the
+ * configuration reference passed to its image rendering engine (`3dv.renault.com/ImageFromBookmark`,
+ * `configuration` parameter), a sequence of codes in which `TE<paint>` carries the body paint
+ * (recorded on 2026-09-15: `TEGNE`, doubled by `TPGNE` for the bumpers and `TSGNE` for the
+ * mirrors — same code, so indeed the paint color).
  *
- * La table ne contient QUE des codes vérifiés sur une voiture réelle. Un code inconnu ne rend
- * rien : la scène retombe sur sa couleur de thème et l'utilisateur tranche à la main, ce qui vaut
- * mieux que d'afficher une couleur inventée.
+ * The table contains ONLY codes verified on a real car. An unknown code returns nothing: the scene
+ * falls back on its theme color and the user decides by hand, which is better than displaying an
+ * invented color.
  */
 const PAINT: Record<string, string> = {
-  // Noir Étoilé, vérifié sur le rendu Renault de la R5 E-Tech du 2026-09-15.
+  // Noir Étoilé, verified on Renault's render of the R5 E-Tech of 2026-09-15.
   GNE: '#14171a',
 }
 
@@ -136,12 +135,12 @@ export function bodyColor(link: VehicleLink): string | undefined {
   if (!url) return undefined
   const raw = /[?&]configuration=([^&]+)/.exec(url)?.[1]
   if (!raw) return undefined
-  // Les codes sont séparés par des `/`, encodés `%2F` dans l'URL — on décode avant de découper.
+  // The codes are separated by `/`, encoded as `%2F` in the URL — we decode before splitting.
   const code = decodeURIComponent(raw).split('/').find((c) => /^TE[A-Z0-9]{2,4}$/i.test(c))?.slice(2)
   return code ? PAINT[code.toUpperCase()] : undefined
 }
 
-/** « ZE-123-AB », sinon « Renault 5 E-Tech », sinon le VIN. Jamais vide : le contrat l'exige. */
+/** "ZE-123-AB", otherwise "Renault 5 E-Tech", otherwise the VIN. Never empty: the contract requires it. */
 export function vehicleName(link: VehicleLink): string {
   const d = link.vehicleDetails
   const plate = d?.registrationNumber?.trim()
@@ -150,15 +149,14 @@ export function vehicleName(link: VehicleLink): string {
   return model || link.vin
 }
 
-// ---- Réveil de charge --------------------------------------------------------------------------
+// ---- Charge wake-up ----------------------------------------------------------------------------
 
 /**
- * La charge utile du réveil : les réglages TELS QU'ILS SONT, avec un horodatage neuf. Rien d'autre
- * ne change — c'est l'écriture qui réveille la voiture, pas son contenu. Rejouer des valeurs codées
- * en dur (ce que font d'autres outils) écraserait l'heure de départ, la durée et la température que
- * l'utilisateur a choisies dans sa voiture.
+ * The wake-up payload: the settings AS THEY ARE, with a new timestamp. Nothing else changes — it's
+ * the write that wakes the car, not its content. Replaying hard-coded values (what other tools do)
+ * would overwrite the start time, duration and temperature the user chose in their car.
  *
- * `null` si les réglages lus ne sont pas un objet : mieux vaut ne rien envoyer que n'importe quoi.
+ * `null` if the settings read are not an object: better to send nothing than anything.
  */
 export function wakePayload(settings: unknown, now: number): Record<string, unknown> | null {
   if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return null
@@ -166,10 +164,10 @@ export function wakePayload(settings: unknown, now: number): Record<string, unkn
 }
 
 /**
- * Ce que Renault rend à une écriture de réglages n'est PAS un enregistrement : c'est une COMMANDE
- * déposée pour la voiture — `{ commandId, type: 'HVAC_CHARGE_SYNCH', status: 'CREATED' }` — que son
- * boîtier appliquera à sa prochaine connexion, ou jamais s'il dort. On la jetait ; c'est pourtant
- * la seule chose qui dise ce qu'est devenu un réveil. Rendue en une ligne lisible, jamais levée.
+ * What Renault returns to a settings write is NOT a save: it's a COMMAND filed for the car —
+ * `{ commandId, type: 'HVAC_CHARGE_SYNCH', status: 'CREATED' }` — that its telematics unit will
+ * apply at its next connection, or never if it's asleep. We used to throw it away; yet it's the
+ * only thing that tells what became of a wake-up. Returned as one readable line, never thrown.
  */
 export function commandSummary(res: unknown): string | null {
   if (!res || typeof res !== 'object') return null
@@ -179,9 +177,9 @@ export function commandSummary(res: unknown): string | null {
 }
 
 /**
- * Les niveaux VE avec une nouvelle CIBLE de charge. Même règle que `wakePayload` : on rejoue ce que
- * la voiture vient de donner — le plancher `socMin` est SON réglage, pas le nôtre — et on ne change
- * que la cible, horodatage rafraîchi comme le fait l'application du fabricant.
+ * The EV levels with a new charge TARGET. Same rule as `wakePayload`: we replay what the car just
+ * gave — the `socMin` floor is ITS setting, not ours — and change only the target, timestamp
+ * refreshed as the vendor's app does.
  */
 export function socTargetPayload(levels: unknown, percent: number, now: number): Record<string, unknown> | null {
   if (!levels || typeof levels !== 'object' || Array.isArray(levels)) return null
@@ -193,15 +191,15 @@ export function socTargetPayload(levels: unknown, percent: number, now: number):
 }
 
 /**
- * Lancer la charge MAINTENANT. Ce que fait l'appli MY Renault, relevé par renault-api pour la R5
- * (`actions/charge-start-via-settings`, ticket n°1348) : réécrire les réglages VE avec tous les
- * programmes de charge DÉSACTIVÉS — c'est la charge programmée qui fait attendre la voiture. Même
- * règle que `wakePayload` pour le reste : rejoué tel quel. Les programmes coupés ne sont PAS
- * restaurés (choix de l'utilisateur du 2026-10-01 : les rallumer couperait la charge en cours) ;
- * `deactivated` dit combien l'étaient, pour le journal.
+ * Start charging NOW. What the MY Renault app does, as recorded by renault-api for the R5
+ * (`actions/charge-start-via-settings`, issue no. 1348): rewrite the EV settings with all charge
+ * programs DISABLED — it's the scheduled charge that makes the car wait. Same rule as
+ * `wakePayload` for the rest: replayed as is. The disabled programs are NOT restored (the user's
+ * choice of 2026-10-01: turning them back on would cut the ongoing charge); `deactivated` says how
+ * many were on, for the log.
  *
- * Pas encore essayé sur la vraie voiture. `chargeModeRq` (`SCHEDULED` à la capture) n'est pas
- * touché : renault-api ne le touche pas, et ses autres valeurs sont inconnues.
+ * Not yet tried on the real car. `chargeModeRq` (`SCHEDULED` at capture) is not touched:
+ * renault-api doesn't touch it, and its other values are unknown.
  */
 export function chargeStartPayload(settings: unknown, now: number): { body: Record<string, unknown>; deactivated: number } | null {
   if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return null
@@ -221,20 +219,20 @@ export function chargeStartPayload(settings: unknown, now: number): { body: Reco
   }
 }
 
-/** Le corps de `actions/hvac-start` : démarrer à une consigne, ou annuler. */
+/** The body of `actions/hvac-start`: start at a setpoint, or cancel. */
 export function hvacStartPayload(action: 'start' | 'cancel', targetTemperature?: number): Record<string, unknown> {
   return { data: { type: 'HvacStart', attributes: { action, ...(action === 'start' && targetTemperature !== undefined ? { targetTemperature } : {}) } } }
 }
 
-/** Le seuil de batterie sous lequel la R5 refuse de climatiser (`hvac-status.socThreshold`, 15 % à la capture). */
+/** The battery threshold below which the R5 refuses to precondition (`hvac-status.socThreshold`, 15 % at capture). */
 export function hvacSocThreshold(hvac: unknown): number | undefined {
   return num(attributes(hvac)?.socThreshold)
 }
 
 /**
- * Les réglages VE avec la consigne, les sièges et le volant demandés. Même règle que `wakePayload` :
- * on rejoue ce que la voiture vient de donner (heure de départ, programmes : SES réglages) et on ne
- * change que les champs du préconditionnement que la commande nomme.
+ * The EV settings with the requested setpoint, seats and steering wheel. Same rule as `wakePayload`:
+ * we replay what the car just gave (start time, programs: ITS settings) and change only the
+ * preconditioning fields the command names.
  */
 export function climateSettingsPayload(settings: unknown, cmd: CommandOf<'vehicle.climate_set'>, now: number): Record<string, unknown> | null {
   if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return null
@@ -249,12 +247,12 @@ export function climateSettingsPayload(settings: unknown, cmd: CommandOf<'vehicl
 }
 
 /**
- * L'heure locale tombe-t-elle dans la fenêtre `HH:MM`–`HH:MM` ? Le réveil n'a de sens qu'en journée :
- * la nuit, une voiture branchée qui ne charge pas attend souvent SA charge programmée, et la secouer
- * serait se battre contre le réglage de l'utilisateur.
+ * Does the local time fall within the `HH:MM`–`HH:MM` window? The wake-up only makes sense during
+ * the day: at night, a plugged-in car that isn't charging is often waiting for ITS scheduled charge,
+ * and shaking it would mean fighting the user's setting.
  *
- * Une fenêtre qui passe minuit (`22:00`–`06:00`) est acceptée : elle se lit alors à cheval.
- * Bornes égales = fenêtre vide (jamais), ce qui est le moyen de couper la fonction par la configuration.
+ * A window that crosses midnight (`22:00`–`06:00`) is accepted: it then spans the two days.
+ * Equal bounds = empty window (never), which is the way to turn the feature off through configuration.
  */
 export function inWindow(date: Date, from: string, to: string): boolean {
   const min = (hhmm: string): number | null => {
@@ -269,41 +267,41 @@ export function inWindow(date: Date, from: string, to: string): boolean {
   return a < b ? t >= a && t < b : t >= a || t < b
 }
 
-// ---- Des lectures à l'état ---------------------------------------------------------------------
+// ---- From readings to state --------------------------------------------------------------------
 
 /**
- * `chargingStatus` est un FLOTTANT ÉNUMÉRÉ, pas un booléen. Les valeurs qui nous concernent :
- * `0.0` pas en charge, `0.1` en attente d'une charge programmée, `0.2` charge terminée,
- * `0.3` en attente de la charge courante, `1.0` charge en cours. Seul `1.0` est « en charge ».
+ * `chargingStatus` is an ENUMERATED FLOAT, not a boolean. The values that concern us: `0.0` not
+ * charging, `0.1` waiting for a scheduled charge, `0.2` charge finished, `0.3` waiting for the
+ * current charge, `1.0` charge in progress. Only `1.0` is "charging".
  *
- * `0.3` avec un câble branché est l'état où la R5 se coince quand la borne lui coupe le courant
- * (charge sur surplus solaire) : elle ne repart pas d'elle-même. C'est cet état qu'un futur mode
- * de réveil devra reconnaître.
+ * `0.3` with a cable plugged in is the state the R5 gets stuck in when the charger cuts its current
+ * (solar-surplus charging): it doesn't start again on its own. It's this state that a future wake-up
+ * mode will have to recognize.
  *
- * **Et `chargingStatus` MENT (2026-09-19).** Voiture en charge, 5,5 kW mesurés à la borne et par
- * l'onduleur, elle a servi pendant des heures un `0.3` dans des trames par ailleurs FRAÎCHES et
- * exactes : même trame, `batteryLevel` qui grimpe (63 → 71 → 73) et 52 minutes de charge restantes
- * datées de l'instant. L'appli MY Renault affichait la même erreur — c'est le champ qui est faux,
- * pas la liaison. D'où `isCharging()` ci-dessous, qui ne le croit plus sur parole.
+ * **And `chargingStatus` LIES (2026-09-19).** Car charging, 5.5 kW measured at the charger and by
+ * the inverter, it served a `0.3` for hours in frames that were otherwise FRESH and accurate: same
+ * frame, `batteryLevel` climbing (63 → 71 → 73) and 52 minutes of remaining charge dated from the
+ * instant. The MY Renault app showed the same error — it's the field that is wrong, not the link.
+ * Hence `isCharging()` below, which no longer takes it at its word.
  */
 export const CHARGE_IN_PROGRESS = 1
-/** `plugStatus` : `1` branché, `0` débranché, `-1` erreur, `-2147483648` inconnu. */
+/** `plugStatus`: `1` plugged in, `0` unplugged, `-1` error, `-2147483648` unknown. */
 export const PLUGGED = 1
 
 /**
- * « Cette voiture charge-t-elle ? » — deux témoins valent mieux qu'un menteur.
+ * "Is this car charging?" — two witnesses are better than one liar.
  *
- * `chargingStatus === 1.0` reste le oui franc. À défaut, on croit le **temps de charge restant
- * daté de la trame elle-même** : la capture du 2026-09-14 a établi que ce champ TRAÎNE hors charge
- * (rendu daté de l'avant-veille sur une voiture à l'arrêt) et n'est rafraîchi que pendant une
- * charge. Un temps restant à l'heure de la trame est donc une charge en cours, quoi qu'en dise
- * `chargingStatus`.
+ * `chargingStatus === 1.0` remains the plain yes. Failing that, we believe the **remaining charge
+ * time dated from the frame itself**: the capture of 2026-09-14 established that this field LINGERS
+ * outside charging (returned dated from two days before on a stationary car) and is only refreshed
+ * during a charge. A remaining time stamped with the frame's time is therefore a charge in
+ * progress, whatever `chargingStatus` says.
  *
- * Ce que cette règle ne couvrait PAS a fini par arriver (2026-10-02) : une voiture qui attend
- * vraiment du courant (charge verte sans soleil, 0 W à la borne) en rafraîchissant quand même son
- * estimation. Le second témoin ne vaut donc plus seul : il faut aussi que le NIVEAU MONTE
- * (`levelRising`, suivi trame après trame par le plugin), ce que faisait la menteuse du 19/09
- * (63 → 71 → 73) et pas l'attente du 02/10 (51 % à 11:44, 52 % à 14:00).
+ * What this rule did NOT cover eventually happened (2026-10-02): a car really waiting for current
+ * (green charging with no sun, 0 W at the charger) while still refreshing its estimate. So the
+ * second witness no longer counts on its own: the LEVEL must also RISE (`levelRising`, tracked
+ * frame after frame by the plugin), which the liar of 09/19 did (63 → 71 → 73) and the wait of
+ * 10/02 did not (51 % at 11:44, 52 % at 14:00).
  */
 export function isCharging(battery: Record<string, unknown>, levelRising = false): boolean | undefined {
   const status = num(battery.chargingStatus)
@@ -312,27 +310,27 @@ export function isCharging(battery: Record<string, unknown>, levelRising = false
   const fresh = eta !== undefined && eta > 0
     && at(battery.chargingRemainingTimeLastUpdateDateTime) === at(battery.timestamp)
   if (fresh && levelRising) return true
-  // ni l'un ni l'autre : on ne sait dire « non » que si la voiture a donné son état
+  // neither: we can only say "no" if the car has reported its state
   return status === undefined ? undefined : false
 }
 
 /**
- * Une hausse du niveau ne compte que si elle tient en moins d'une heure entre deux trames, et elle
- * vaut une heure de plus : à 5,5 kW (borne triphasée), 1 % passe en ~6 min ; à 8 A en mode sécurisé,
- * en ~20 min. Le 51 → 52 % du 2026-10-02 s'est étalé sur 2 h 16 sans courant : pas une charge.
+ * A level rise only counts if it happens within less than an hour between two frames, and it holds
+ * for one more hour: at 5.5 kW (three-phase charger), 1 % goes by in ~6 min; at 8 A in safe mode,
+ * in ~20 min. The 51 → 52 % of 2026-10-02 stretched over 2 h 16 with no current: not a charge.
  */
 export const LEVEL_RISE_WINDOW_MS = 60 * 60_000
 
-/** Ce qu'il faut retenir d'une trame à l'autre pour dire si le niveau monte. */
+/** What to remember from one frame to the next to tell whether the level is rising. */
 export interface LevelTrack {
-  /** Horodatage de la trame (`timestamp` de `battery-status`), pas de notre appel. */
+  /** The frame's timestamp (`timestamp` of `battery-status`), not our call's. */
   at: number
   soc: number
-  /** Trame où une hausse a été vue pour la dernière fois. */
+  /** Frame where a rise was last seen. */
   lastRiseAt?: number
 }
 
-/** Suivre le niveau trame après trame. La même trame relue (voiture endormie) ne change rien. */
+/** Track the level frame after frame. The same frame re-read (car asleep) changes nothing. */
 export function trackLevel(prev: LevelTrack | undefined, at: number, soc: number): LevelTrack {
   if (!prev || at <= prev.at) return prev && at === prev.at ? prev : { at, soc }
   const rose = soc > prev.soc && at - prev.at <= LEVEL_RISE_WINDOW_MS
@@ -344,7 +342,7 @@ export function levelRising(track: LevelTrack | undefined): boolean {
   return track?.lastRiseAt !== undefined && track.at - track.lastRiseAt <= LEVEL_RISE_WINDOW_MS
 }
 
-/** Niveau et horodatage de la trame `battery-status`, pour `trackLevel`. */
+/** Level and timestamp of the `battery-status` frame, for `trackLevel`. */
 export function batteryFrame(battery: unknown): { at: number; soc: number } | undefined {
   const a = attributes(battery)
   const when = at(a?.timestamp)
@@ -352,20 +350,20 @@ export function batteryFrame(battery: unknown): { at: number; soc: number } | un
   return when !== undefined && soc !== undefined ? { at: when, soc } : undefined
 }
 
-/** Les lectures d'un tour, chacune facultative : la R5 en refuse plusieurs, et une peut échouer. */
+/** A round's readings, each optional: the R5 refuses several, and one may fail. */
 export interface VehicleReadings {
   battery?: unknown
   cockpit?: unknown
   location?: unknown
   hvac?: unknown
   socLevels?: unknown
-  /** `ev/settings` (kcm) : les réglages du préconditionnement — consigne, sièges, volant. */
+  /** `ev/settings` (kcm): the preconditioning settings — setpoint, seats, steering wheel. */
   settings?: unknown
 }
 
 /**
- * Les `attributes` d'une réponse `kca`, ou `undefined`. Gère le cas où Renault rend un HTTP 200
- * SANS `data` — ce que fait `cockpit` en v2, avec un mot d'esprit à la place des données.
+ * The `attributes` of a `kca` response, or `undefined`. Handles the case where Renault returns an
+ * HTTP 200 WITHOUT `data` — what `cockpit` does in v2, with a witticism instead of the data.
  */
 function attributes(body: unknown): Record<string, unknown> | undefined {
   const data = (body as { data?: unknown } | null | undefined)?.data
@@ -373,12 +371,12 @@ function attributes(body: unknown): Record<string, unknown> | undefined {
   return attrs && typeof attrs === 'object' ? attrs as Record<string, unknown> : undefined
 }
 
-/** Un nombre fini, ou `undefined` : `null`, chaîne ou absent ne doivent jamais devenir un zéro. */
+/** A finite number, or `undefined`: `null`, string or absent must never become a zero. */
 function num(v: unknown): number | undefined {
   return typeof v === 'number' && Number.isFinite(v) ? v : undefined
 }
 
-/** Une date ISO en ms epoch, ou `undefined`. */
+/** An ISO date as epoch ms, or `undefined`. */
 function at(v: unknown): number | undefined {
   if (typeof v !== 'string') return undefined
   const ms = Date.parse(v)
@@ -386,25 +384,25 @@ function at(v: unknown): number | undefined {
 }
 
 /**
- * L'état d'un véhicule à partir des lectures du tour. Tout champ absent de la réponse est absent du
- * patch — JAMAIS un zéro : sur ce contrat, `soc: 0` se lirait « batterie vide » et `rangeKm: 0`
- * « plus d'autonomie ». `readAt` date les VALEURS et non notre appel (voir plus bas).
+ * A vehicle's state from the round's readings. Any field missing from the response is missing from
+ * the patch — NEVER a zero: on this contract, `soc: 0` would read as "battery empty" and
+ * `rangeKm: 0` as "no range left". `readAt` dates the VALUES and not our call (see below).
  *
- * Ce que la R5 ne donne PAS, et qui reste donc absent : verrouillage, cap, pression des pneus,
- * vitesse et rapport, température extérieure, et la PUISSANCE de charge (revérifié voiture en
- * charge, cf. `BATTERY_CHARGING`) — l'UI l'estime à l'affichage, à partir de la capacité saisie
- * dans la maison ; rien d'estimé n'entre dans l'état.
+ * What the R5 does NOT give, and which therefore stays absent: locking, heading, tire pressure,
+ * speed and gear, outside temperature, and the charging POWER (rechecked with the car charging,
+ * see `BATTERY_CHARGING`) — the UI estimates it at display time, from the capacity entered in the
+ * house; nothing estimated goes into the state.
  */
 export function toStatePatch(r: VehicleReadings, now: number, opts: { levelRising?: boolean } = {}): StatePatch<'vehicle'> {
   const patch: StatePatch<'vehicle'> = { readAt: now }
 
   const battery = attributes(r.battery)
   if (battery) {
-    // Kamereon ne va pas chercher la voiture : il rend le DERNIER état qu'elle a remonté, et son
-    // boîtier se tait dès qu'elle dort. Dater l'état de notre appel serait donc mentir — le
-    // 2026-09-19 il a servi six heures durant des chiffres de 11:42 pendant que l'UI annonçait
-    // « lu il y a 4 min ». Contrairement à Tesla, la R5 n'a aucune notion de veille : cet
-    // horodatage est le seul signe qu'elle a décroché, et c'est ce que `readAt` doit porter.
+    // Kamereon doesn't go and fetch the car: it returns the LAST state the car reported, and its
+    // telematics unit goes silent as soon as it sleeps. Dating the state from our call would thus
+    // be lying — on 2026-09-19 it served figures from 11:42 for six hours while the UI announced
+    // "read 4 min ago". Unlike Tesla, the R5 has no notion of sleep: this timestamp is the only sign
+    // it has dropped off, and it's what `readAt` must carry.
     patch.readAt = at(battery.timestamp) ?? now
     const soc = num(battery.batteryLevel)
     if (soc !== undefined) patch.soc = soc
@@ -414,8 +412,8 @@ export function toStatePatch(r: VehicleReadings, now: number, opts: { levelRisin
     if (plug !== undefined) patch.pluggedIn = plug === PLUGGED
     const charge = isCharging(battery, opts.levelRising)
     if (charge !== undefined) patch.charging = charge
-    // `chargingRemainingTime` (minutes) TRAÎNE : la capture réelle le donne daté de l'avant-veille
-    // sur une voiture débranchée. Il ne vaut que pendant la charge ; sinon on l'efface.
+    // `chargingRemainingTime` (minutes) LINGERS: the real capture gives it dated from two days
+    // before on an unplugged car. It's only valid while charging; otherwise we clear it.
     if (patch.charging) {
       const eta = num(battery.chargingRemainingTime)
       patch.chargeMinutesRemaining = eta !== undefined && eta > 0 ? eta : null
@@ -432,14 +430,14 @@ export function toStatePatch(r: VehicleReadings, now: number, opts: { levelRisin
     patch.location = { lat, lon, at: at(location?.lastUpdateTime) ?? now }
   }
 
-  // la R5 donne l'INTÉRIEUR de l'habitacle ; elle ne dit rien de la température extérieure
+  // the R5 gives the INSIDE of the cabin; it says nothing about the outside temperature
   const inside = num(attributes(r.hvac)?.internalTemperature)
   if (inside !== undefined) patch.insideTempC = inside
-  // `hvacStatus` vaut `off` à la capture ; `on` pendant une climatisation
+  // `hvacStatus` is `off` at capture; `on` while preconditioning
   const hvacStatus = attributes(r.hvac)?.hvacStatus
   if (typeof hvacStatus === 'string') patch.climateOn = hvacStatus.toLowerCase() === 'on'
 
-  // `ev/settings` (kcm), sans enveloppe : la conduite à gauche fait du siège GAUCHE celui du conducteur
+  // `ev/settings` (kcm), no envelope: left-hand drive makes the LEFT seat the driver's
   const settings = r.settings as Record<string, unknown> | null | undefined
   const preTemp = num(settings?.preconditioningTemperature)
   if (preTemp !== undefined) patch.climateTargetC = preTemp
@@ -448,11 +446,11 @@ export function toStatePatch(r: VehicleReadings, now: number, opts: { levelRisin
   const wheel = settings?.preconditioningHeatedStrgWheel
   if (typeof wheel === 'boolean') patch.steeringWheelHeat = wheel
 
-  // `ev/soc-levels` (kcm) n'a pas d'enveloppe `data` : les champs sont à la racine
+  // `ev/soc-levels` (kcm) has no `data` envelope: the fields are at the root
   const levels = r.socLevels as { socTarget?: unknown; socMin?: unknown } | null | undefined
   const target = num(levels?.socTarget)
   if (target !== undefined) patch.chargeLimit = target
-  // le plancher que l'utilisateur a réglé dans sa voiture : Tesla n'a pas cette notion, la R5 si
+  // the floor the user set in their car: Tesla has no such notion, the R5 does
   const floor = num(levels?.socMin)
   if (floor !== undefined) patch.socMin = floor
 

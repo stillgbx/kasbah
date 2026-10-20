@@ -1,23 +1,23 @@
 import type { DeviceDescriptor, StatePatch } from '@kasbah/shared'
 import { feederDataSchema, fountainDataSchema, rosterSchema, workRecordSchema, type FeederData, type RosterDevice } from './types'
 
-// Mappage PetKit → contrat Kasbah.
+// PetKit mapping → Kasbah contract.
 //
-// Deux règles tenues partout : ce que la machine ne dit pas reste INCONNU (jamais 0, jamais false —
-// règle du contrat), et on ne publie que les champs dont le sens est établi. Les dizaines d'autres
-// clés que l'API rend (réglages de notification, plans de repas, vidéos) n'ont pas de porteur dans
-// le contrat et n'en cherchent pas : elles sont lisibles par `GET /api/plugins/petkit/raw`.
+// Two rules held everywhere: what the machine doesn't say stays UNKNOWN (never 0, never false —
+// contract rule), and we only publish fields whose meaning is established. The dozens of other
+// keys the API returns (notification settings, meal plans, videos) have no carrier in the contract
+// and aren't looking for one: they are readable through `GET /api/plugins/petkit/raw`.
 
 export const PLUGIN_ID = 'petkit'
 
-/** Modèles couverts. La mangeoire de cette maison est un `d4`, la fontaine un `ctw3`. */
+/** Covered models. This house's feeder is a `d4`, the fountain a `ctw3`. */
 export const FEEDER_TYPES = ['d3', 'd4', 'd4h'] as const
 export const FOUNTAIN_TYPES = ['ctw2', 'ctw3'] as const
 
 /**
- * Rations acceptées, PAR MODÈLE, **dans l'unité BRUTE de l'API** — c'est le fabricant qui les
- * impose et elles ne se déduisent pas. Un `d4` n'en connaît que cinq ; un `d3` accepte tout de 5
- * à 200. Un modèle absent de cette table ne se voit pas proposer de ration plutôt qu'en inventer.
+ * Accepted portions, PER MODEL, **in the API's RAW unit** — the vendor imposes them and they can't
+ * be inferred. A `d4` only knows five; a `d3` accepts anything from 5 to 200. A model missing from
+ * this table is offered no portion rather than invented ones.
  */
 export const RAW_PORTIONS: Record<string, number[]> = {
   d4: [10, 20, 30, 40, 50],
@@ -26,35 +26,35 @@ export const RAW_PORTIONS: Record<string, number[]> = {
 }
 
 /**
- * L'unité dans laquelle un modèle compte. Un `d4` déclare `settings.factor: 10` et compte en
- * DIXIÈMES DE TASSE ; un `d3` pèse en grammes. La table dit l'unité, l'appareil dit le facteur —
- * afficher « 30 g » là où la machine veut dire 0,3 tasse se trompe d'un facteur trois, et c'est
- * l'erreur qu'on a commise jusqu'au 21/09.
+ * The unit a model counts in. A `d4` declares `settings.factor: 10` and counts in TENTHS OF A CUP;
+ * a `d3` weighs in grams. The table gives the unit, the device gives the factor — displaying
+ * "30 g" where the machine means 0.3 cup is off by a factor of three, and that's the mistake we
+ * made until 09/21.
  */
 export const FEEDER_UNITS: Record<string, 'cup' | 'g'> = { d4: 'cup', d4h: 'cup', d3: 'g' }
 
 /**
- * Modèles qui savent APPELER l'animal. Pas la Fresh Element Solo : elle n'a pas de haut-parleur,
- * et `d4/callPet` répond **404** (vérifié le 21/09, comme `call_pet` et `soundList`). Le bouton
- * existait et ne faisait rien — c'est l'utilisateur qui l'a remarqué. Seuls les modèles à caméra
- * et micro (gamme YumShare) portent la fonction.
+ * Models that can CALL the animal. Not the Fresh Element Solo: it has no speaker, and
+ * `d4/callPet` answers **404** (verified on 09/21, like `call_pet` and `soundList`). The button
+ * existed and did nothing — it was the user who noticed. Only the models with camera and
+ * microphone (YumShare range) carry the feature.
  */
 export const CALL_PET_TYPES: readonly string[] = ['d4h', 'd4sh']
-/** Facteur de repli quand la machine ne le déclare pas : 10 pour une mangeoire en tasses. */
+/** Fallback factor when the machine doesn't declare it: 10 for a feeder counting in cups. */
 const DEFAULT_FACTOR: Record<string, number> = { d4: 10, d4h: 10, d3: 1 }
 
-/** Quantité brute → unité affichée. Trois décimales suffisent (les dixièmes de tasse en ont une). */
+/** Raw quantity → displayed unit. Three decimals are enough (tenths of a cup have one). */
 const toUnit = (raw: number, factor: number): number => Math.round((raw / factor) * 1000) / 1000
 
 /**
- * Où lire l'état, par famille. Ce n'est PAS le même chemin des deux côtés : une mangeoire répond
- * sur `<type>/device_detail`, une fontaine Bluetooth sur `<type>/deviceData` — et `ctw3/device_detail`
- * rend un 404 franc (vérifié le 21/09). Le mauvais chemin ne se devine pas, il se relève.
+ * Where to read the state, per family. It's NOT the same path on both sides: a feeder answers on
+ * `<type>/device_detail`, a Bluetooth fountain on `<type>/deviceData` — and `ctw3/device_detail`
+ * returns a plain 404 (verified on 09/21). The wrong path can't be guessed, it has to be observed.
  */
 export const detailPath = (type: string): string =>
   (FOUNTAIN_TYPES as readonly string[]).includes(type) ? `${type}/deviceData` : `${type}/device_detail`
 
-/** Noms commerciaux, pour que la carte dise « Fresh Element Solo » et non « d4 ». */
+/** Commercial names, so the card says "Fresh Element Solo" and not "d4". */
 const MODEL_NAMES: Record<string, string> = {
   d3: 'Fresh Element Infinity', d4: 'Fresh Element Solo', d4h: 'YumShare Solo',
   ctw2: 'Eversweet', ctw3: 'Eversweet Max',
@@ -63,13 +63,13 @@ const MODEL_NAMES: Record<string, string> = {
 export interface PetkitDevice {
   externalId: string
   deviceId: string
-  /** Code modèle en minuscules (`d4`, `ctw3`), tel qu'il entre dans les CHEMINS d'API. */
+  /** Lowercase model code (`d4`, `ctw3`), as it goes into the API PATHS. */
   type: string
-  /** Code NUMÉRIQUE du modèle, attendu par les appels Bluetooth (24 pour une Ctw3). */
+  /** NUMERIC model code, expected by the Bluetooth calls (24 for a Ctw3). */
   typeId: string | null
-  /** Diviseur des quantités, déclaré par la machine (`settings.factor`) ; connu au premier détail. */
+  /** Quantity divisor, declared by the machine (`settings.factor`); known at the first detail. */
   factor: number | null
-  /** Propriétaire de l'appareil, exigé par le relevé des passages ; connu au premier détail. */
+  /** The device's owner, required by the visit log; known at the first detail. */
   userId: string | null
   name: string
   groupId: string
@@ -77,13 +77,13 @@ export interface PetkitDevice {
   kind: 'pet_feeder' | 'pet_fountain'
 }
 
-/** Aplatit l'inventaire, qui arrive à plat ou groupé par famille selon les comptes. */
+/** Flattens the inventory, which arrives flat or grouped by family depending on the account. */
 export function toDevices(body: unknown, groupId = ''): PetkitDevice[] {
   const parsed = rosterSchema.safeParse(body)
   if (!parsed.success) return []
   const flat: { dev: RosterDevice; groupId: string }[] = []
-  // Le roster est demandé PAR GROUPE : l'appareil ne répète pas l'identifiant du sien, c'est
-  // l'appelant qui le connaît. On garde `dev.groupId` quand il est là, pour la forme groupée.
+  // The roster is requested PER GROUP: the device doesn't repeat its group's identifier, it's the
+  // caller who knows it. We keep `dev.groupId` when it's there, for the grouped shape.
   for (const d of parsed.data.devices ?? []) flat.push({ dev: d, groupId: String(d.groupId ?? groupId) })
   for (const g of parsed.data.list ?? []) {
     for (const d of g.devices ?? []) flat.push({ dev: d, groupId: String(d.groupId ?? g.groupId ?? '') })
@@ -98,15 +98,15 @@ export function toDevices(body: unknown, groupId = ''): PetkitDevice[] {
     if (rawId === undefined) continue
     const deviceId = String(rawId)
     out.push({
-      // le type entre dans l'id externe : deux appareils de modèles différents peuvent porter le
-      // même identifiant numérique chez PetKit, et l'id doit rester stable d'un démarrage à l'autre
+      // the type goes into the external id: two devices of different models may carry the same
+      // numeric identifier at PetKit, and the id must stay stable from one startup to the next
       externalId: `${type}-${deviceId}`,
       deviceId, type, groupId,
       typeId: dev.deviceTypeId === undefined ? null : String(dev.deviceTypeId),
       factor: null,
       userId: null,
-      // Nom de REPLI seulement : le roster n'en porte pas. Le vrai nom, celui que l'utilisateur a
-      // donné dans l'appli, arrive au premier détail (`toIdentity`).
+      // FALLBACK name only: the roster carries none. The real name, the one the user gave in the
+      // app, arrives with the first detail (`toIdentity`).
       name: (dev.name ?? dev.deviceName)?.trim() || `${MODEL_NAMES[type] ?? type} ${deviceId}`,
       mac: dev.mac ?? null,
       kind,
@@ -124,9 +124,9 @@ export function toDescriptor(d: PetkitDevice): DeviceDescriptor {
     const portions = raw && unit ? raw.map((v) => toUnit(v, factor)) : undefined
     return {
       id: `${PLUGIN_ID}:${d.externalId}`, pluginId: PLUGIN_ID, externalId: d.externalId, kind: 'pet_feeder', name: d.name,
-      // `feed` seulement si l'on SAIT quelles rations ce modèle accepte ET dans quelle unité :
-      // déclarer la capacité sans la liste ferait afficher une section de boutons vide, et sans
-      // l'unité ferait afficher des nombres qui ne veulent rien dire.
+      // `feed` only if we KNOW which portions this model accepts AND in which unit: declaring the
+      // capability without the list would display an empty section of buttons, and without the
+      // unit would display numbers that mean nothing.
       capabilities: [
         ...(portions ? (['feed'] as const) : []),
         ...(CALL_PET_TYPES.includes(d.type) ? (['call_pet'] as const) : []),
@@ -137,18 +137,18 @@ export function toDescriptor(d: PetkitDevice): DeviceDescriptor {
   }
   return {
     id: `${PLUGIN_ID}:${d.externalId}`, pluginId: PLUGIN_ID, externalId: d.externalId, kind: 'pet_fountain', name: d.name,
-    // `water_usage` ne veut pas dire « un volume » : une Eversweet Max ne mesure aucun millilitre
-    // (elle rend -1) mais elle COMPTE LES PASSAGES de l'animal et leur durée, ce que l'appli du
-    // fabricant affiche en « 6 fois ». C'est cela qu'on publie.
+    // `water_usage` doesn't mean "a volume": an Eversweet Max measures no milliliter (it returns -1)
+    // but it COUNTS the animal's VISITS and their duration, which the vendor's app displays as
+    // "6 fois". That's what we publish.
     capabilities: ['water_usage', 'on_off', 'pump_mode', 'consumables', 'battery'],
     meta: { manufacturer: 'PetKit', model },
   }
 }
 
 /**
- * Le nom et l'adresse Bluetooth, tels que le DÉTAIL les porte — le roster ne les donne pas.
- * `btMac` est l'adresse radio propre d'une mangeoire ; `mac` celle de l'appareil. Pour une
- * fontaine, c'est `mac` qui sert de cible au relais.
+ * The name and Bluetooth address, as the DETAIL carries them — the roster doesn't give them.
+ * `btMac` is a feeder's own radio address; `mac` the device's. For a fountain, it's `mac` that
+ * serves as the relay's target.
  */
 export function toIdentity(body: unknown): { name: string | null; mac: string | null; factor: number | null; userId: string | null } {
   const o = (body ?? {}) as { name?: unknown; mac?: unknown; btMac?: unknown; userId?: unknown; settings?: { factor?: unknown } }
@@ -170,41 +170,41 @@ export function toFeederPatch(body: unknown, type: string, now: number): StatePa
   if (!st) return {}
   const factor = d.settings?.factor ?? DEFAULT_FACTOR[type] ?? 1
   const patch: StatePatch<'pet_feeder'> = {}
-  // `food` compte les portions restantes chez certains modèles et vaut 0/1 chez d'autres : dans les
-  // deux cas, 0 veut dire « plus rien ». On n'en tire donc QUE le manque, jamais un niveau.
+  // `food` counts the remaining portions on some models and is 0/1 on others: in both cases, 0
+  // means "nothing left". So we derive ONLY the shortage from it, never a level.
   if (st.food !== undefined) patch.foodLow = st.food <= 0
   if (st.feeding !== undefined) patch.feeding = st.feeding > 0
   if (st.desiccantLeftDays !== undefined) patch.desiccantDays = Math.max(0, Math.round(st.desiccantLeftDays))
-  // La machine réelle, sur secteur et SANS piles, répond `batteryPower: 0`. Publier 0 % ferait
-  // lire « batterie à plat » là où il n'y a simplement pas de pile. On ne publie donc que du
-  // positif — pile absente et pile vide se confondent ici, volontairement : les deux appellent le
-  // même geste, aller voir la machine (même arbitrage que le réservoir d'un aspirateur).
+  // The real machine, on mains power and WITHOUT batteries, answers `batteryPower: 0`. Publishing
+  // 0 % would read as "flat battery" where there simply is no battery. So we only publish positive
+  // values — missing battery and empty battery are deliberately conflated here: both call for the
+  // same action, going to look at the machine (same tradeoff as a vacuum's tank).
   if (st.batteryPower !== undefined && st.batteryPower > 0) patch.batteryPct = clampPct(st.batteryPower)
   const feed = st.feedState
   if (feed?.realAmountTotal !== undefined) patch.servedToday = toUnit(Math.max(0, feed.realAmountTotal), factor)
   if (feed?.planAmountTotal !== undefined) patch.plannedToday = toUnit(Math.max(0, feed.planAmountTotal), factor)
-  // Absent d'un `d4` : sans plateau pesant, la machine ne sait pas ce qui a été MANGÉ. La ligne
-  // reste alors vide plutôt que d'afficher le servi sous un autre nom.
+  // Absent from a `d4`: without a weighing tray, the machine doesn't know what was EATEN. The line
+  // then stays empty rather than showing the served amount under another name.
   if (feed?.eatAmountTotal !== undefined) patch.eatenToday = toUnit(Math.max(0, feed.eatAmountTotal), factor)
   const next = nextMeal(d, now)
   patch.nextMealAt = next?.at ?? null
   patch.nextMealAmount = next ? toUnit(next.amount, factor) : null
-  // `null` efface : une erreur résolue doit disparaître de la carte, pas y rester collée.
+  // `null` clears: a resolved error must disappear from the card, not stay stuck there.
   patch.errorMessage = st.errorMsg?.trim() ? st.errorMsg.trim() : null
   return patch
 }
 
 /**
- * Le prochain repas PROGRAMMÉ d'ici minuit. Le plan arrive en sept listes, une par jour de la
- * semaine (`repeats` : 1 = lundi … 7 = dimanche), chacune portant des repas datés en SECONDES
- * depuis minuit. On prend celle d'aujourd'hui et le premier repas encore à venir.
+ * The next SCHEDULED meal before midnight. The plan arrives as seven lists, one per day of the
+ * week (`repeats`: 1 = Monday … 7 = Sunday), each carrying meals timed in SECONDS since midnight.
+ * We take today's and the first meal still to come.
  *
- * Rien après le dernier repas du jour : on rend `undefined` plutôt que le premier de demain, parce
- * que « prochain repas 01:00 » affiché un soir se lirait comme dans une heure.
+ * Nothing after the day's last meal: we return `undefined` rather than tomorrow's first, because
+ * "next meal 01:00" shown in the evening would read as within the hour.
  */
 function nextMeal(d: FeederData, now: number): { at: number; amount: number } | undefined {
   const day = new Date(now)
-  // `repeats` compte à partir de LUNDI, `getDay()` à partir de dimanche.
+  // `repeats` counts from MONDAY, `getDay()` from Sunday.
   const weekday = ((day.getDay() + 6) % 7) + 1
   const today = d.multiFeedItem?.feedDailyList?.find((l) => Number(l.repeats) === weekday)
   if (!today || today.suspended) return undefined
@@ -220,10 +220,10 @@ export function toFountainPatch(body: unknown, now: number): StatePatch<'pet_fou
   if (!parsed.success) return {}
   const d = parsed.data
   const patch: StatePatch<'pet_fountain'> = {}
-  // La marche de la pompe est DANS `status`, pas au premier niveau — lue à côté, elle resterait
-  // introuvable et la fontaine paraîtrait éteinte en permanence.
+  // The pump's on/off state is IN `status`, not at the top level — read from the wrong place, it
+  // would never be found and the fountain would look permanently off.
   if (d.status?.powerStatus !== undefined) patch.on = d.status.powerStatus > 0
-  // 2 = cycle marche/repos (l'appli dit « Intermittent »), sinon débit continu.
+  // 2 = on/rest cycle (the app says "Intermittent"), otherwise continuous flow.
   if (d.mode !== undefined) patch.mode = d.mode === 2 ? 'intermittent' : 'continuous'
   patch.filterPct = known(d.filterPercent) ? clampPct(d.filterPercent) : null
   patch.filterDays = known(d.filterExpectedDays) ? Math.round(d.filterExpectedDays) : null
@@ -231,8 +231,8 @@ export function toFountainPatch(body: unknown, now: number): StatePatch<'pet_fou
   if (d.electricity?.batteryPercent !== undefined) patch.batteryPct = clampPct(d.electricity.batteryPercent)
   patch.todayMl = known(d.todayCleanWater) ? d.todayCleanWater : null
   if (d.breakdownWarning !== undefined) patch.errorMessage = d.breakdownWarning > 0 ? 'breakdown' : null
-  // Date du relevé : c'est la fontaine qui la donne, et à défaut l'instant du relais réussi. Sans
-  // elle, la carte laisserait croire au temps réel une valeur parfois vieille de plusieurs heures.
+  // Date of the reading: the fountain gives it, failing that the moment of the successful relay.
+  // Without it, the card would pass off as real time a value sometimes several hours old.
   patch.syncedAt = parseSync(d.syncTime ?? d.updateAt) ?? now
   return patch
 }
@@ -240,14 +240,14 @@ export function toFountainPatch(body: unknown, now: number): StatePatch<'pet_fou
 const clampPct = (v: number): number => Math.min(100, Math.max(0, Math.round(v)))
 
 /**
- * **`-1` est la sentinelle « je ne compte pas ça »**, pas une valeur. La fontaine réelle répond -1
- * pour l'eau du jour, les jours de filtre et le temps de pompe cumulé. Les ramener à 0 afficherait
- * « 0 mL bus » et « 0 jour de filtre » : deux affirmations fausses, là où il n'y a rien à dire
- * (même piège que la sonde absente rendue à -39 par MELCloud).
+ * **`-1` is the "I don't count that" sentinel**, not a value. The real fountain answers -1 for
+ * today's water, the filter days and the cumulative pump time. Bringing them to 0 would display
+ * "0 mL drunk" and "0 filter days": two false statements, where there's nothing to say (same
+ * pitfall as the missing sensor returned as -39 by MELCloud).
  */
 const known = (v: number | undefined): v is number => v !== undefined && v >= 0
 
-/** Les dates PetKit arrivent en ISO ; une valeur illisible vaut « on ne sait pas dater ». */
+/** PetKit dates arrive as ISO; an unreadable value means "we can't date it". */
 function parseSync(v: string | undefined): number | undefined {
   if (!v) return undefined
   const t = Date.parse(v)
@@ -255,9 +255,9 @@ function parseSync(v: string | undefined): number | undefined {
 }
 
 /**
- * Les passages du jour, lus dans `getWorkRecord` : combien de fois l'animal est venu boire, et
- * combien de temps il est resté en moyenne. C'est la seule mesure de consommation qu'une Eversweet
- * Max sache produire — elle ne connaît pas les millilitres.
+ * The day's visits, read from `getWorkRecord`: how many times the animal came to drink, and how
+ * long it stayed on average. It's the only consumption measure an Eversweet Max can produce — it
+ * doesn't know milliliters.
  */
 export function toDrinkPatch(body: unknown): StatePatch<'pet_fountain'> {
   const parsed = workRecordSchema.safeParse(body)
@@ -265,8 +265,8 @@ export function toDrinkPatch(body: unknown): StatePatch<'pet_fountain'> {
   const stays = parsed.data.map((r) => r.stayTime).filter((v): v is number => v !== undefined && v >= 0)
   return {
     drinksToday: parsed.data.length,
-    // Sans durée relevée, la moyenne n'existe pas : on l'EFFACE plutôt que de rendre 0, qui se
-    // lirait « il est venu sans boire ».
+    // Without a recorded duration, the average doesn't exist: we CLEAR it rather than return 0,
+    // which would read as "it came without drinking".
     drinkAvgS: stays.length ? Math.round(stays.reduce((a, b) => a + b, 0) / stays.length) : null,
   }
 }

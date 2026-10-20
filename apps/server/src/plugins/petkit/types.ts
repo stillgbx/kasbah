@@ -1,42 +1,43 @@
 import { z } from 'zod'
 
-// Schémas des réponses PetKit. Volontairement LARGES, pour la raison déjà payée chez TaHoma puis
-// MELCloud : un champ qu'on ne lit même pas suffit à faire échouer la réponse entière. Et le piège
-// vérifié en zod 4.5 — `z.unknown()` ne rend PAS la clé facultative — impose `.optional()` partout.
+// Schemas of the PetKit responses. Deliberately LENIENT, for the reason already paid for with
+// TaHoma then MELCloud: a field we don't even read is enough to make the whole response fail. And
+// the pitfall verified in zod 4.5 — `z.unknown()` does NOT make the key optional — requires
+// `.optional()` everywhere.
 //
-// ATTENTION, ces schémas sont écrits AVANT toute capture, d'après des bibliothèques tierces qui ont
-// reversé l'API de l'application mobile. Ils ne valident donc que de quoi ADRESSER un appareil et
-// lire les quelques grandeurs du contrat. La route `GET /api/plugins/petkit/raw` existe pour que la
-// première liaison remplace ces suppositions par du relevé — c'est la marche à suivre établie pour
-// un plugin cloud dont le compte n'est pas encore lié (précédent Nest).
+// BEWARE, these schemas were written BEFORE any capture, from third-party libraries that
+// reverse-engineered the mobile app's API. So they only validate enough to ADDRESS a device and
+// read the few quantities of the contract. The `GET /api/plugins/petkit/raw` route exists so that
+// the first linking replaces these assumptions with recorded data — it's the established procedure
+// for a cloud plugin whose account is not linked yet (Nest precedent).
 
-/** L'API répond en HTTP 200 même quand elle refuse : l'échec est dans `error`. */
+/** The API answers with HTTP 200 even when it refuses: the failure is in `error`. */
 export const petkitEnvelopeSchema = z.looseObject({
   result: z.unknown().optional(),
   error: z.looseObject({ code: z.unknown().optional(), msg: z.unknown().optional() }).optional(),
 })
 
-/** `v1/regionservers` : les passerelles régionales, servies par `passport.petkt.com`. */
+/** `v1/regionservers`: the regional gateways, served by `passport.petkt.com`. */
 export const regionServersSchema = z.looseObject({
   list: z.array(z.looseObject({
     id: z.unknown().optional(),
     name: z.unknown().optional(),
     gateway: z.string().min(1),
-    /** Code ISO du pays ; c'est lui qui relie « FR » à la passerelle européenne. */
+    /** ISO country code; it's what links "FR" to the European gateway. */
     accountType: z.unknown().optional(),
   })).optional(),
 })
 
 /**
- * `user/login`. La session porte sa propre durée de vie : PetKit ne rend PAS de jeton de
- * renouvellement, donc `expiresIn` est le seul garde-fou — voir `auth.ts` pour ce que cela impose.
+ * `user/login`. The session carries its own lifetime: PetKit returns NO refresh token, so
+ * `expiresIn` is the only safeguard — see `auth.ts` for what this requires.
  */
 export const loginSchema = z.looseObject({
   session: z.looseObject({
     id: z.string().min(1),
-    /** Date ISO d'émission, avec fuseau. */
+    /** ISO issue date, with time zone. */
     createdAt: z.unknown().optional(),
-    /** Durée de vie en SECONDES (de l'ordre de 36 h sur les comptes observés). */
+    /** Lifetime in SECONDS (around 36 h on the accounts observed). */
     expiresIn: z.number().optional(),
     region: z.unknown().optional(),
     userId: z.unknown().optional(),
@@ -44,10 +45,10 @@ export const loginSchema = z.looseObject({
 })
 
 /**
- * Un appareil tel que l'inventaire le nomme. `type` est le code modèle (`d4`, `ctw3`…) et `id`
- * l'identifiant numérique. Les variantes `deviceId` / `deviceType` / `deviceName` sont acceptées
- * en plus : les deux implémentations tierces ne s'accordent pas sur l'orthographe, et rien ne dit
- * que tous les comptes répondent pareil.
+ * A device as the inventory names it. `type` is the model code (`d4`, `ctw3`…) and `id` the
+ * numeric identifier. The `deviceId` / `deviceType` / `deviceName` variants are accepted as well:
+ * the two third-party implementations disagree on the spelling, and nothing says that all
+ * accounts answer the same way.
  */
 export const rosterDeviceSchema = z.looseObject({
   id: z.union([z.number(), z.string()]).optional(),
@@ -58,31 +59,31 @@ export const rosterDeviceSchema = z.looseObject({
   deviceType: z.string().optional(),
   groupId: z.union([z.number(), z.string()]).optional(),
   /**
-   * Code NUMÉRIQUE du modèle (11 pour un `D4`, 24 pour une `Ctw3`). C'est LUI que les appels
-   * Bluetooth attendent dans leur champ `type`, pas la chaîne : avec `"ctw3"`, `ble/connect`
-   * répond « Vous n'avez pas de permission. (code 4) » — vérifié le 21/09.
+   * NUMERIC model code (11 for a `D4`, 24 for a `Ctw3`). It's THIS that the Bluetooth calls expect
+   * in their `type` field, not the string: with `"ctw3"`, `ble/connect` answers "Vous n'avez pas de
+   * permission. (code 4)" — verified on 09/21.
    */
   deviceTypeId: z.union([z.number(), z.string()]).optional(),
-  /** Adresse Bluetooth, indispensable pour ouvrir un relais vers une fontaine. */
+  /** Bluetooth address, required to open a relay to a fountain. */
   mac: z.string().optional(),
 })
 
 /**
- * Réponse de `discovery/device_roster_v2` pour UN groupe. `hasRelay` dit si ce groupe compte un
- * appareil capable de relayer du Bluetooth — l'information est donnée ici, gratuitement, alors
- * qu'on la redemande aussi à `ble/ownSupportBleDevices` juste avant d'ouvrir une liaison.
+ * Response of `discovery/device_roster_v2` for ONE group. `hasRelay` says whether this group has
+ * a device able to relay Bluetooth — the information is given here, for free, whereas we also ask
+ * `ble/ownSupportBleDevices` for it again just before opening a link.
  */
 export const rosterSchema = z.looseObject({
   devices: z.array(rosterDeviceSchema).optional(),
   hasRelay: z.boolean().optional(),
-  /** Forme groupée, rencontrée sur certains comptes. */
+  /** Grouped shape, seen on some accounts. */
   list: z.array(z.looseObject({
     devices: z.array(rosterDeviceSchema).optional(),
     groupId: z.union([z.number(), z.string()]).optional(),
   })).optional(),
 })
 
-/** `group/family/list` : les « familles » du compte, dont les identifiants pilotent le roster. */
+/** `group/family/list`: the account's "families", whose identifiers drive the roster. */
 export const familyListSchema = z.array(z.looseObject({
   groupId: z.union([z.number(), z.string()]).optional(),
   id: z.union([z.number(), z.string()]).optional(),
@@ -90,29 +91,29 @@ export const familyListSchema = z.array(z.looseObject({
 }))
 
 /**
- * État d'une mangeoire (`d4`), CAPTURÉ le 2026-09-21 sur la machine réelle. Ce qui a surpris :
- * `feedState` ne porte PAS `eatAmountTotal` sur ce modèle (pas de plateau pesant), mais il donne
- * le PRÉVU du jour (`planAmountTotal`) à côté du servi (`realAmountTotal`).
+ * State of a feeder (`d4`), CAPTURED on 2026-09-21 on the real machine. What came as a surprise:
+ * `feedState` does NOT carry `eatAmountTotal` on this model (no weighing tray), but it gives the
+ * day's PLANNED (`planAmountTotal`) alongside the served (`realAmountTotal`).
  */
 export const feederDataSchema = z.looseObject({
   id: z.union([z.number(), z.string()]).optional(),
   name: z.string().optional(),
   mac: z.string().optional(),
-  /** Adresse Bluetooth de la mangeoire : c'est ELLE qui relaie vers la fontaine voisine. */
+  /** Bluetooth address of the feeder: IT is what relays to the nearby fountain. */
   btMac: z.string().optional(),
   /**
-   * `factor` : **par combien diviser les quantités pour obtenir l'unité affichée**. La machine
-   * réelle répond 10 — ses `amount` sont donc des DIXIÈMES DE TASSE, pas des grammes. C'est
-   * l'appareil qui le dit ; le déduire du modèle serait une supposition de plus.
+   * `factor`: **what to divide the quantities by to get the displayed unit**. The real machine
+   * answers 10 — so its `amount`s are TENTHS OF A CUP, not grams. It's the device that says so;
+   * inferring it from the model would be one more assumption.
    */
   settings: z.looseObject({ factor: z.number().optional() }).optional(),
-  /** Le plan de repas, une entrée par jour de la semaine (`repeats` = 1 lundi … 7 dimanche). */
+  /** The meal plan, one entry per day of the week (`repeats` = 1 Monday … 7 Sunday). */
   multiFeedItem: z.looseObject({
     feedDailyList: z.array(z.looseObject({
       repeats: z.union([z.number(), z.string()]).optional(),
       suspended: z.number().optional(),
       items: z.array(z.looseObject({
-        /** Heure du repas, en SECONDES depuis minuit (68400 = 19 h). */
+        /** Meal time, in SECONDS since midnight (68400 = 7 pm). */
         time: z.number().optional(),
         amount: z.number().optional(),
         name: z.string().optional(),
@@ -120,7 +121,7 @@ export const feederDataSchema = z.looseObject({
     })).optional(),
   }).optional(),
   state: z.looseObject({
-    /** 1 = il reste des croquettes, 0 = trémie vide. Vérifié : la machine garnie répond 1. */
+    /** 1 = there is kibble left, 0 = hopper empty. Verified: the filled machine answers 1. */
     food: z.number().optional(),
     batteryPower: z.number().optional(),
     batteryStatus: z.number().optional(),
@@ -129,11 +130,11 @@ export const feederDataSchema = z.looseObject({
     errorCode: z.string().optional(),
     errorMsg: z.string().optional(),
     feedState: z.looseObject({
-      /** Grammes réellement versés depuis minuit. */
+      /** Grams actually dispensed since midnight. */
       realAmountTotal: z.number().optional(),
-      /** Grammes que le plan du jour prévoit EN TOUT (50 g relevés pour deux repas). */
+      /** Grams the day's plan provides IN TOTAL (50 g recorded for two meals). */
       planAmountTotal: z.number().optional(),
-      /** Présent seulement sur les modèles à plateau pesant ; absent d'un `d4`. */
+      /** Present only on models with a weighing tray; absent from a `d4`. */
       eatAmountTotal: z.number().optional(),
       addAmountTotal: z.number().optional(),
     }).optional(),
@@ -141,23 +142,23 @@ export const feederDataSchema = z.looseObject({
 })
 
 /**
- * État d'une fontaine Bluetooth (`ctw3`), CAPTURÉ le 2026-09-21. Trois surprises :
+ * State of a Bluetooth fountain (`ctw3`), CAPTURED on 2026-09-21. Three surprises:
  *
- *  - la marche de la pompe est dans `status.powerStatus`, PAS au premier niveau ;
- *  - **`-1` est une sentinelle « inconnu »**, pas une valeur : `todayCleanWater`, `filterExpectedDays`
- *    et `waterPumpRunTime` valaient tous -1 sur la machine réelle. Les prendre au pied de la lettre
- *    afficherait « 0 mL bus » et « 0 jour de filtre » — deux mensonges (même piège que la sonde
- *    absente à -39 de MELCloud) ;
- *  - ces valeurs datent du dernier relais Bluetooth (`syncTime`), pas de l'instant.
+ *  - the pump's on/off state is in `status.powerStatus`, NOT at the top level;
+ *  - **`-1` is an "unknown" sentinel**, not a value: `todayCleanWater`, `filterExpectedDays`
+ *    and `waterPumpRunTime` were all -1 on the real machine. Taking them literally would display
+ *    "0 mL drunk" and "0 filter days" — two lies (same pitfall as MELCloud's missing sensor at
+ *    -39);
+ *  - these values date from the last Bluetooth relay (`syncTime`), not from now.
  */
 export const fountainDataSchema = z.looseObject({
   id: z.union([z.number(), z.string()]).optional(),
   name: z.string().optional(),
   mac: z.string().optional(),
-  /** 1 = continu, 2 = à l'approche. La machine réelle, réglée « intelligent », répond 2. */
+  /** 1 = continuous, 2 = on approach. The real machine, set to "smart", answers 2. */
   mode: z.number().optional(),
   status: z.looseObject({
-    /** 1 = la pompe est alimentée. */
+    /** 1 = the pump is powered. */
     powerStatus: z.number().optional(),
     suspendStatus: z.number().optional(),
     runStatus: z.number().optional(),
@@ -169,15 +170,15 @@ export const fountainDataSchema = z.looseObject({
   breakdownWarning: z.number().optional(),
   lowBattery: z.number().optional(),
   electricity: z.looseObject({ batteryPercent: z.number().optional() }).optional(),
-  /** Eau distribuée du jour. -1 = la machine ne la compte pas. Unité supposée : millilitres. */
+  /** Water dispensed today. -1 = the machine doesn't count it. Assumed unit: milliliters. */
   todayCleanWater: z.number().optional(),
   syncTime: z.string().optional(),
   updateAt: z.string().optional(),
 })
 
 /**
- * `ble/ownSupportBleDevices` : les appareils Wi-Fi capables de relayer, pour un groupe donné.
- * **`pim` dit s'ils sont EN LIGNE** — un relais listé mais débranché ne relaiera rien.
+ * `ble/ownSupportBleDevices`: the Wi-Fi devices able to relay, for a given group.
+ * **`pim` says whether they are ONLINE** — a relay that is listed but unplugged won't relay anything.
  */
 export const bleRelaysSchema = z.array(z.looseObject({
   id: z.union([z.number(), z.string()]).optional(),
@@ -191,15 +192,15 @@ export type FeederData = z.infer<typeof feederDataSchema>
 export type FountainData = z.infer<typeof fountainDataSchema>
 
 /**
- * `<type>/getWorkRecord` : les PASSAGES de l'animal à la fontaine, un par visite. C'est ce que
- * l'appli du fabricant affiche en « L'eau potable d'aujourd'hui : 6 fois » et en durée moyenne —
- * une Eversweet Max ne mesure aucun volume, elle compte des venues.
+ * `<type>/getWorkRecord`: the animal's VISITS to the fountain, one per visit. It's what the
+ * vendor's app displays as "L'eau potable d'aujourd'hui : 6 fois" and as an average duration — an
+ * Eversweet Max measures no volume, it counts visits.
  */
 export const workRecordSchema = z.array(z.looseObject({
-  /** Instant de la visite (secondes epoch). */
+  /** Time of the visit (epoch seconds). */
   workTime: z.number().optional(),
-  /** Secondes depuis minuit. */
+  /** Seconds since midnight. */
   dayTime: z.number().optional(),
-  /** Combien de temps l'animal est resté, en secondes. */
+  /** How long the animal stayed, in seconds. */
   stayTime: z.number().optional(),
 }))

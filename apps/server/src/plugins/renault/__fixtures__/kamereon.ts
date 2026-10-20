@@ -1,26 +1,26 @@
-// Capture du 2026-09-14 sur le vrai compte : une Renault 5 E-Tech (`R5E1VE`, mise en circulation
-// le 2024-06-03), branchée au garage sans courant délivré. ANONYMISÉE — VIN, plaque, identifiants
-// de compte et position ont été remplacés ; TOUT LE RESTE est ce que Renault a répondu, bizarreries
-// comprises. Ne pas « corriger » ces formes : c'est justement leur intérêt.
+// Capture of 2026-09-14 on the real account: a Renault 5 E-Tech (`R5E1VE`, first registered on
+// 2024-06-03), plugged in at the garage with no current delivered. ANONYMIZED — VIN, plate, account
+// identifiers and position were replaced; EVERYTHING ELSE is what Renault answered, quirks
+// included. Don't "fix" these shapes: that's precisely their value.
 //
-// Les bizarreries qu'il faut garder :
-//  1. `cockpit` en v2 répond un HTTP 200 SANS DONNÉES et avec une blague dedans. C'est la v1 qui
-//     porte le kilométrage. Un client qui se fie au statut HTTP croit avoir lu quelque chose.
-//  2. `chargingStatus` est un FLOTTANT énuméré, pas un booléen : 0.3 = en attente, 1.0 = en charge.
-//  3. Les lectures refusées le sont de DEUX façons — 403 `err.func.wired.forbidden` pour
-//     `charging-settings` et `charge-mode`, 404 `err.func.wired.notFound` pour `lock-status`,
-//     `pressure` et `res-state`. Traiter seulement le 403 laisserait trois lectures se répéter.
-//  4. `hvac-status` donne la température INTÉRIEURE (`internalTemperature`), pas l'extérieure.
-//  5. Pas de puissance de charge instantanée, pas de cap, pas de pression de pneus, pas de vitesse.
-//     La puissance a été REVÉRIFIÉE le 14/09 à 12:58, voiture EN CHARGE (`BATTERY_CHARGING`) : la
-//     réponse ne porte toujours aucun `chargingInstantaneousPower`. Ce n'est donc pas un effet de la
-//     première capture, prise câble branché sans courant — la R5 ne dit pas sa puissance, point.
+// The quirks to keep:
+//  1. `cockpit` in v2 answers HTTP 200 WITH NO DATA and a joke inside. It's v1 that carries the
+//     mileage. A client that trusts the HTTP status believes it has read something.
+//  2. `chargingStatus` is an enumerated FLOAT, not a boolean: 0.3 = waiting, 1.0 = charging.
+//  3. Refused readings are refused in TWO ways — 403 `err.func.wired.forbidden` for
+//     `charging-settings` and `charge-mode`, 404 `err.func.wired.notFound` for `lock-status`,
+//     `pressure` and `res-state`. Handling only the 403 would let three readings repeat.
+//  4. `hvac-status` gives the INSIDE temperature (`internalTemperature`), not the outside one.
+//  5. No instantaneous charging power, no heading, no tire pressure, no speed. The power was
+//     RECHECKED on 09/14 at 12:58, car CHARGING (`BATTERY_CHARGING`): the response still carries
+//     no `chargingInstantaneousPower`. So it's not an artifact of the first capture, taken with the
+//     cable plugged in and no current — the R5 doesn't report its power, period.
 
 export const VIN = 'VYSP0100000000001'
 export const ACCOUNT_ID = '00000000-1111-2222-3333-444444444444'
 export const PERSON_ID = '55555555-6666-7777-8888-999999999999'
 
-/** Deux comptes Kamereon pour une seule personne : les services connectés, et la fiche CRM. */
+/** Two Kamereon accounts for a single person: the connected services, and the CRM record. */
 export const PERSON = {
   accounts: [
     { accountId: ACCOUNT_ID, accountType: 'MYRENAULT', accountStatus: 'ACTIVE' },
@@ -28,7 +28,7 @@ export const PERSON = {
   ],
 }
 
-/** La liste des véhicules. `vehicleDetails` est une fiche technique : AUCUN surnom nulle part. */
+/** The list of vehicles. `vehicleDetails` is a spec sheet: NO nickname anywhere. */
 export const VEHICLES = {
   vehicleLinks: [{
     vin: VIN,
@@ -52,8 +52,8 @@ export const VEHICLES = {
       radioType: { code: 'NA498', label: 'IVI2 FULL10 PREM DAB', group: '425' },
       registrationCountry: { code: 'FR' },
       navigationAssistanceLevel: {},
-      // Les rendus du véhicule dans sa configuration. Tronqué à ce qui compte : `TEGNE` est le seul
-      // endroit de TOUT le relevé qui dit la couleur (Noir Étoilé). Capture du 2026-09-15.
+      // The vehicle's renders in its configuration. Truncated to what matters: `TEGNE` is the only
+      // place in the WHOLE reading that gives the color (Noir Étoilé). Capture of 2026-09-15.
       assets: [{
         assetType: 'PICTURE',
         viewpoint: 'mybrand_2',
@@ -68,9 +68,9 @@ export const VEHICLES = {
 }
 
 /**
- * Branchée, EN ATTENTE, rien qui coule : `plugStatus: 1` et `chargingStatus: 0.3`. C'est l'état que
- * produit une borne pilotée par le surplus solaire quand la production ne suffit pas — et c'est
- * aussi celui où la R5 reste coincée après une coupure.
+ * Plugged in, WAITING, nothing flowing: `plugStatus: 1` and `chargingStatus: 0.3`. It's the state
+ * produced by a charger driven by solar surplus when production isn't enough — and it's also the
+ * one the R5 stays stuck in after a power cut.
  */
 export const BATTERY_WAITING = {
   data: {
@@ -89,10 +89,10 @@ export const BATTERY_WAITING = {
 }
 
 /**
- * La même EN CHARGE, capture du 14/09 à 12:58 : `chargingStatus: 1.0`, et un `chargingRemainingTime`
- * cette fois FRAIS (son `lastUpdateDateTime` vaut le `timestamp` de la lecture, là où la capture à
- * l'arrêt le datait de l'avant-veille). C'est ce qui justifie de n'afficher le temps restant que
- * pendant la charge. Toujours pas de puissance instantanée : voir la bizarrerie 5 en tête de fichier.
+ * The same CHARGING, capture of 09/14 at 12:58: `chargingStatus: 1.0`, and a `chargingRemainingTime`
+ * FRESH this time (its `lastUpdateDateTime` equals the reading's `timestamp`, whereas the capture
+ * while stopped dated it from two days before). That's what justifies showing the remaining time
+ * only while charging. Still no instantaneous power: see quirk 5 at the top of the file.
  */
 export const BATTERY_CHARGING = {
   data: {
@@ -110,7 +110,7 @@ export const BATTERY_CHARGING = {
   },
 }
 
-/** Débranchée, pas en charge. */
+/** Unplugged, not charging. */
 export const BATTERY_UNPLUGGED = {
   data: {
     id: VIN,
@@ -118,14 +118,14 @@ export const BATTERY_UNPLUGGED = {
   },
 }
 
-/** `cockpit` en v1 : le kilométrage. `fuelQuantity: 0` sur une électrique. */
+/** `cockpit` in v1: the mileage. `fuelQuantity: 0` on an electric car. */
 export const COCKPIT_V1 = {
   data: { id: VIN, attributes: { fuelQuantity: 0, totalMileage: 12500, timestamp: '2026-09-14T08:18:31Z' } },
 }
 
 /**
- * `cockpit` en v2, TEL QUEL : HTTP 200, pas de `data`, et un mot d'esprit à la place. Le mappage
- * doit en sortir sans kilométrage plutôt qu'avec un zéro.
+ * `cockpit` in v2, AS IS: HTTP 200, no `data`, and a witticism instead. The mapping must come out
+ * of it with no mileage rather than with a zero.
  */
 export const COCKPIT_V2_EASTER_EGG = { message: 'you should not be there but well done for the effort' }
 
@@ -133,18 +133,18 @@ export const LOCATION = {
   data: { id: VIN, attributes: { lastUpdateTime: '2026-09-14T08:18:31Z', gpsLatitude: 47.32, gpsLongitude: 5.04 } },
 }
 
-/** `internalTemperature` : l'INTÉRIEUR de l'habitacle (voiture au soleil ce jour-là). */
+/** `internalTemperature`: the INSIDE of the cabin (car in the sun that day). */
 export const HVAC_STATUS = {
   data: { id: VIN, attributes: { internalTemperature: 37, hvacStatus: 'off', socThreshold: 15, lastUpdateTime: '2026-09-14T08:19:09Z' } },
 }
 
-/** Réglages VE (`kcm`) : pas d'enveloppe `data`, les champs sont à la racine. */
+/** EV settings (`kcm`): no `data` envelope, the fields are at the root. */
 export const SOC_LEVELS = { lastEnergyUpdateTimestamp: '2026-09-11T09:08:37Z', socMin: 20, socTarget: 80 }
 
 /**
- * Les réglages de charge, tels qu'ils sont. C'est la charge utile qu'un futur « réveil » devra
- * REJOUER À L'IDENTIQUE (seul l'horodatage change) : les valeurs codées en dur par d'autres outils
- * écraseraient l'heure de départ, la durée et la température choisies par l'utilisateur.
+ * The charging settings, as they are. It's the payload a future "wake-up" will have to REPLAY
+ * IDENTICALLY (only the timestamp changes): the values hard-coded by other tools would overwrite
+ * the start time, duration and temperature chosen by the user.
  */
 export const EV_SETTINGS = {
   lastSettingsUpdateTimestamp: '2026-09-06T12:08:10.89632Z',
@@ -171,15 +171,15 @@ export const EV_SETTINGS = {
 }
 
 /**
- * Les deux refus, avec les codes CONSTATÉS. Seul `errorCode` a été capturé tel quel ; le libellé
- * est reconstitué, il n'est lu par personne.
+ * The two refusals, with the codes OBSERVED. Only `errorCode` was captured as is; the label is
+ * reconstructed, nobody reads it.
  */
 /**
- * La trame qui a démasqué `chargingStatus` (capture du 2026-09-19, 16:11 locale). La voiture
- * charge — 5,5 kW mesurés à la borne ET par l'onduleur, `batteryLevel` passé de 63 à 73 dans
- * l'après-midi — et elle annonce pourtant `0.3`, « en attente de courant ». Deux champs de la
- * MÊME trame la démentent : le niveau qui monte, et un temps restant daté de la trame elle-même.
- * L'appli MY Renault affichait la même erreur : c'est le champ qui ment, pas la liaison.
+ * The frame that unmasked `chargingStatus` (capture of 2026-09-19, 16:11 local). The car is
+ * charging — 5.5 kW measured at the charger AND by the inverter, `batteryLevel` gone from 63 to 73
+ * during the afternoon — and yet it announces `0.3`, "waiting for current". Two fields of the SAME
+ * frame contradict it: the rising level, and a remaining time dated from the frame itself. The
+ * MY Renault app showed the same error: it's the field that lies, not the link.
  */
 export const BATTERY_CHARGING_LIAR = {
   data: {
@@ -197,10 +197,10 @@ export const BATTERY_CHARGING_LIAR = {
 }
 
 /**
- * Capture du 2026-10-02 (14:00 locale), relue telle quelle jusqu'au soir : la voiture dort. Borne en
- * charge verte sans soleil, rien ne passe (0 W à la borne) — et pourtant le temps restant (480 min)
- * est daté de la trame elle-même, comme chez la menteuse du 19/09. Seule différence : le niveau ne
- * monte pas (51 % à 11:44, 52 % à 14:00). `0.3` disait VRAI ce jour-là.
+ * Capture of 2026-10-02 (14:00 local), re-read unchanged until the evening: the car is asleep.
+ * Charger in green charging with no sun, nothing flows (0 W at the charger) — and yet the remaining
+ * time (480 min) is dated from the frame itself, as with the liar of 09/19. Only difference: the
+ * level doesn't rise (51 % at 11:44, 52 % at 14:00). `0.3` told the TRUTH that day.
  */
 export const BATTERY_WAITING_FRESH_ETA = {
   data: {
@@ -219,23 +219,23 @@ export const BATTERY_WAITING_FRESH_ETA = {
 }
 
 /**
- * Le refus d'une ÉCRITURE de réglages quand une commande est déjà en attente pour ce véhicule
- * (HTTP 409, constaté le 2026-09-19 : un même corps accepté à 14:21 était refusé à 14:22). Comme
- * pour les deux autres, seul `errorCode` a été capturé tel quel.
+ * The refusal of a settings WRITE when a command is already pending for this vehicle (HTTP 409,
+ * observed on 2026-09-19: the same body accepted at 14:21 was refused at 14:22). As for the other
+ * two, only `errorCode` was captured as is.
  */
 export const SETTINGS_PENDING = { errors: [{ errorCode: 'err.func.vcps.ev.post-settings.error', errorMessage: 'The settings cannot be posted' }] }
 
-/** La réponse d'une écriture acceptée : une COMMANDE déposée, pas un enregistrement. */
+/** The response to an accepted write: a COMMAND filed, not a save. */
 export const SETTINGS_COMMAND = { commandId: 'ba6a5b31-0000-0000-0000-9f2c1d4e8a70', type: 'HVAC_CHARGE_SYNCH', status: 'CREATED' }
 
 export const FORBIDDEN = { errors: [{ errorCode: 'err.func.wired.forbidden', errorMessage: 'The access is forbidden' }] }
 export const NOT_FOUND = { errors: [{ errorCode: 'err.func.wired.notFound', errorMessage: 'Not found' }] }
 
 /**
- * `GET .../vehicles/{vin}/contracts` — FORME de la capture du 2026-10-19 (tableau nu, `conditions`
- * en tableau), VALEURS inventées : libellés, dates et plafonds ne sont pas ceux du vrai compte.
- * Ce qui compte : un seul contrat d'entretien plafonné en km, une garantie batterie AUSSI plafonnée
- * (à ne pas prendre pour un forfait), et des services connectés sans aucune condition de km.
+ * `GET .../vehicles/{vin}/contracts` — SHAPE of the capture of 2026-10-19 (bare array, `conditions`
+ * as an array), invented VALUES: labels, dates and caps are not those of the real account. What
+ * matters: a single maintenance contract capped in km, a battery warranty ALSO capped (not to be
+ * mistaken for a service plan), and connected services with no km condition at all.
  */
 export const CONTRACTS = [
   {

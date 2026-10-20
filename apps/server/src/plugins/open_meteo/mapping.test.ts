@@ -4,28 +4,28 @@ import { AIR_QUALITY, FORECAST } from './__fixtures__/open-meteo'
 import { dayIndex, hourIndex, pollenLevel, toDescriptor, toForecast, toStatePatch, wmoToCondition } from './mapping'
 import { airQualityResponseSchema, forecastResponseSchema } from './types'
 
-// Mappage éprouvé sur des réponses CAPTURÉES (voir `__fixtures__/open-meteo.ts`) : 16 septembre 2026,
-// 09:45 à Dijon, ciel couvert (code 3), 16,8 °C, air « bon » (EAQI 17), un peu d'armoise.
+// Mapping tested on CAPTURED responses (see `__fixtures__/open-meteo.ts`): September 16, 2026,
+// 09:45 in Dijon, overcast sky (code 3), 16.8 °C, "good" air (EAQI 17), a little mugwort.
 
 const forecast = forecastResponseSchema.parse(FORECAST)
 const air = airQualityResponseSchema.parse(AIR_QUALITY)
 
-describe('lecture des réponses réelles', () => {
-  it('les schémas acceptent ce que le service envoie, séries de 192 heures et 8 jours comprises', () => {
+describe('reading real responses', () => {
+  it('the schemas accept what the service sends, 192-hour and 8-day series included', () => {
     expect(forecast.hourly.time).toHaveLength(192)
     expect(forecast.daily.time).toHaveLength(8)
     expect(forecast.current.weather_code).toBe(3)
     expect(air.current.european_aqi).toBe(17)
   })
 
-  it('tolère une colonne de `null` (probabilité absente avec un modèle seul)', () => {
+  it('tolerates a column of `null` (probability missing with a single model)', () => {
     const nulls = { ...FORECAST, hourly: { ...FORECAST.hourly, precipitation_probability: FORECAST.hourly.time.map(() => null) } }
     expect(forecastResponseSchema.safeParse(nulls).success).toBe(true)
   })
 })
 
 describe('wmoToCondition', () => {
-  it('couvre les codes WMO émis par Open-Meteo', () => {
+  it('covers the WMO codes emitted by Open-Meteo', () => {
     expect([0, 1, 2, 3, 45, 48].map(wmoToCondition)).toEqual(['clear', 'clear', 'partly_cloudy', 'cloudy', 'fog', 'fog'])
     expect([51, 55, 56, 61, 65, 66, 71, 77, 80, 82, 85, 95, 99].map(wmoToCondition))
       .toEqual(['drizzle', 'drizzle', 'sleet', 'rain', 'rain', 'sleet', 'snow', 'snow', 'rain', 'rain', 'snow', 'thunderstorm', 'thunderstorm'])
@@ -36,12 +36,12 @@ describe('wmoToCondition', () => {
 describe('toStatePatch', () => {
   const patch = toStatePatch(forecast, air)
 
-  it('lit l\'actuel dans `current`, complété par le pas horaire et le jour courants', () => {
+  it('reads current conditions from `current`, completed by the current hourly step and day', () => {
     expect(patch).toMatchObject({
       condition: 'cloudy', tempC: 16.8, feelsLikeC: 15.9, humidity: 71, pressureHpa: 1019.2, windKmh: 8.9, windGustKmh: 21.6,
       windDirDeg: 333, cloudCover: 100, precipMm: 0, isDay: true, observedAt: 1789544700 * 1000,
     })
-    // 09:45 locale : pas horaire 09:00 (index 9 du jour), jour 0
+    // 09:45 local: hourly step 09:00 (index 9 of the day), day 0
     const h = hourIndex(forecast.hourly.time, forecast.current.time)
     expect(forecast.hourly.time[h]).toBe(Math.floor(forecast.current.time / 3600) * 3600)
     expect(patch.visibilityM).toBe(forecast.hourly.visibility![h])
@@ -53,15 +53,15 @@ describe('toStatePatch', () => {
     expect(patch.sunset).toBe(1789580999 * 1000)
   })
 
-  it('gradue l\'air et les pollens', () => {
+  it('grades the air and the pollens', () => {
     expect(patch.aqi).toBe(17)
     expect(patch.aqiLevel).toBe('good')
-    // 1,2 grain d'armoise et 0,5 d'ambroisie : « faible » ; les zéros restent des zéros, jamais absents
+    // 1.2 grains of mugwort and 0.5 of ragweed: "low"; zeros stay zeros, never absent
     expect(patch.pollen).toEqual({ alder: 0, birch: 0, grass: 0, mugwort: 1, olive: 0, ragweed: 1 })
     expect([0, 5, 20, 100, 500].map(pollenLevel)).toEqual([0, 1, 2, 3, 4])
   })
 
-  it('efface l\'air quand son API manque, et l\'état fusionné reste valide', () => {
+  it('clears the air when its API is missing, and the merged state stays valid', () => {
     const without = toStatePatch(forecast, null)
     expect(without.aqi).toBeNull()
     expect(without.aqiLevel).toBeNull()
@@ -73,7 +73,7 @@ describe('toStatePatch', () => {
 })
 
 describe('toForecast', () => {
-  it('donne 24 heures à partir de l\'heure courante et 7 jours à partir d\'aujourd\'hui, au schéma partagé', () => {
+  it('gives 24 hours from the current hour and 7 days from today, in the shared schema', () => {
     const f = toForecast(forecast, forecast.current.time)
     expect(f.hourly).toHaveLength(24)
     expect(f.hourly[0]!.t).toBe(Math.floor(forecast.current.time / 3600) * 3600 * 1000)
@@ -83,7 +83,7 @@ describe('toForecast', () => {
     expect(weatherForecastSchema.parse({ deviceId: 'open_meteo:home', ...f })).toBeTruthy()
   })
 
-  it('se borne à ce qui reste quand l\'heure demandée est en fin de série', () => {
+  it('limits itself to what is left when the requested hour is at the end of the series', () => {
     const lastHour = forecast.hourly.time.at(-3)!
     const f = toForecast(forecast, lastHour)
     expect(f.hourly).toHaveLength(3)
@@ -92,7 +92,7 @@ describe('toForecast', () => {
 })
 
 describe('toDescriptor', () => {
-  it('déclare les capacités d\'air seulement quand l\'API répond, et porte l\'attribution', () => {
+  it('declares the air capabilities only when the API answers, and carries the attribution', () => {
     expect(deviceDescriptorSchema.parse(toDescriptor(true)).capabilities).toEqual(['forecast', 'air_quality', 'pollen'])
     expect(toDescriptor(false).capabilities).toEqual(['forecast'])
     expect(toDescriptor(false).meta.weather?.attribution).toMatch(/Open-Meteo/)

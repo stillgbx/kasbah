@@ -4,22 +4,23 @@ import { PluginError } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
 import { REQUEST_TIMEOUT_MS } from './client'
 
-// Vigilance météo de Météo-France, lue par le flux MeteoAlarm (`feeds.meteoalarm.org`, JSON, sans
-// clé ni compte, CC BY 4.0) : Météo-France y publie ses vigilances département par département, en
-// CAP. Open-Meteo n'en dit rien. Le flux ne porte PAS de polygones, seulement le nom du département
-// (`areaDesc`) : la position devient un département par l'API Géo de l'État (`geo.api.gouv.fr`,
-// sans clé elle non plus). Métropole seule : l'outre-mer n'est pas dans le flux France, et un
-// département absent du flux y voudrait dire « vert » à tort.
+// Météo-France weather warnings ("vigilance"), read through the MeteoAlarm feed
+// (`feeds.meteoalarm.org`, JSON, no key or account, CC BY 4.0): Météo-France publishes its warnings
+// there department by department, in CAP. Open-Meteo says nothing about them. The feed carries NO
+// polygons, only the department's name (`areaDesc`): the position becomes a department through
+// the French state's Géo API (`geo.api.gouv.fr`, no key either). Mainland France only: overseas
+// territories are not in the France feed, and a department missing from the feed would wrongly
+// mean "green" there.
 //
-// Le flux mêle les messages du jour et du lendemain, leurs mises à jour et les retours au vert
-// (niveau 1). Pour chaque phénomène : le message le plus RÉCENT (`sent`) qui couvre l'instant dit
-// le niveau du moment ; le plus récent qui commence plus tard dit le suivant. Deux fenêtres
-// contiguës au même niveau n'en font qu'une (« jusqu'à demain minuit » plutôt que deux lignes).
+// The feed mixes today's and tomorrow's messages, their updates and the returns to green (level 1).
+// For each phenomenon: the most RECENT message (`sent`) covering the instant gives the current
+// level; the most recent one starting later gives the next. Two contiguous windows at the same
+// level make just one ("until midnight tomorrow" rather than two lines).
 
 export const VIGILANCE_ATTRIBUTION = 'MeteoAlarm.org (CC BY 4.0) / Météo-France'
 export const VIGILANCE_WEB = 'https://vigilance.meteofrance.fr/'
 
-/** Phénomènes MeteoAlarm (`awareness_type`), numérotation commune aux services européens. */
+/** MeteoAlarm phenomena (`awareness_type`), numbering shared by the European services. */
 const TYPES: Record<string, string> = {
   1: 'wind', 2: 'snow_ice', 3: 'thunderstorm', 4: 'fog', 5: 'heat', 6: 'cold', 7: 'coastal',
   8: 'forest_fire', 9: 'avalanche', 10: 'rain', 12: 'flood', 13: 'rain_flood',
@@ -28,10 +29,10 @@ const LEVELS = ['yellow', 'orange', 'red'] as const
 export type VigilanceLevel = (typeof LEVELS)[number]
 
 export interface VigilanceWarning {
-  /** Phénomène (`thunderstorm`, `wind`…), `other` pour un numéro inconnu. */
+  /** Phenomenon (`thunderstorm`, `wind`…), `other` for an unknown number. */
   type: string
   level: VigilanceLevel
-  /** Début et fin, en ms epoch. */
+  /** Start and end, in epoch ms. */
   onset: number
   expires: number
 }
@@ -53,23 +54,23 @@ export type MeteoAlarmFeed = z.infer<typeof meteoAlarmFeedSchema>
 
 const communesSchema = z.array(z.looseObject({ departement: z.looseObject({ code: z.string(), nom: z.string() }).optional() }))
 
-/** « Côte-d'Or » = « cote d or » = « COTE-D'OR » : sans accents, ni casse, ni ponctuation. */
+/** "Côte-d'Or" = "cote d or" = "COTE-D'OR": no accents, case or punctuation. */
 const norm = (s: string) => s.normalize('NFD').replace(/[^a-zA-Z]/g, '').toLowerCase()
 
-/** Les vigilances d'un département (au moins jaunes), en cours puis à venir, la plus forte d'abord. Pur. */
+/** A department's warnings (at least yellow), current then upcoming, the strongest first. Pure. */
 export function vigilanceFor(feed: MeteoAlarmFeed, area: string, now: number): VigilanceWarning[] {
   const key = norm(area)
   type Msg = { type: string; level: number; onset: number; expires: number; sent: number }
   const byType = new Map<string, Msg[]>()
   for (const { alert } of feed.warnings) {
-    // les langues d'un message disent la même chose : la première suffit
+    // a message's languages say the same thing: the first one is enough
     const i = alert.info.find((x) => x.area.some((a) => norm(a.areaDesc) === key))
     if (!i) continue
     const p = (name: string) => i.parameter.find((x) => x.valueName === name)?.value
     const typeNo = p('awareness_type')?.split(';')[0]?.trim() ?? ''
     const msg: Msg = {
       type: TYPES[typeNo] ?? 'other',
-      // « 2; yellow; Moderate » ; un message annulé ramène au vert
+      // "2; yellow; Moderate"; a cancelled message brings back green
       level: alert.msgType === 'Cancel' ? 1 : Number(p('awareness_level')?.split(';')[0] ?? 1),
       onset: Date.parse(i.onset ?? i.effective ?? ''),
       expires: Date.parse(i.expires),
@@ -97,14 +98,14 @@ export function vigilanceFor(feed: MeteoAlarmFeed, area: string, now: number): V
 export interface VigilanceClientOptions {
   fetchImpl?: FetchLike
   requestTimeoutMs?: number
-  /** Durée de vie du flux en cache : celle du sondage météo. */
+  /** Lifetime of the cached feed: that of the weather poll. */
   ttlMs: number
   now: () => number
   feedUrl?: string
   geoBase?: string
 }
 
-/** Le flux (un seul, partagé, relu au plus une fois par `ttlMs`) et les départements par position. */
+/** The feed (a single shared one, re-read at most once per `ttlMs`) and the departments by position. */
 export class VigilanceClient {
   private readonly fetchImpl: FetchLike
   private feed: { at: number; data: Promise<MeteoAlarmFeed> } | null = null
@@ -115,7 +116,7 @@ export class VigilanceClient {
       ?? ((url, init) => undiciFetch(url, init as Parameters<typeof undiciFetch>[1]) as unknown as ReturnType<FetchLike>)
   }
 
-  /** `null` = hors de la métropole : pas de vigilance Météo-France à lire ici. */
+  /** `null` = outside mainland France: no Météo-France warning to read here. */
   async at(lat: number, lon: number, signal: AbortSignal): Promise<{ area: string | null; warnings: VigilanceWarning[] }> {
     const area = await this.area(lat, lon, signal)
     if (!area) return { area: null, warnings: [] }
@@ -133,7 +134,7 @@ export class VigilanceClient {
         const d = parsed.data[0]?.departement
         return d && !d.code.startsWith('97') ? d.nom : null
       })
-      // un échec ne reste pas en cache : la prochaine demande réessaie
+      // a failure doesn't stay cached: the next request retries
       hit.catch(() => this.areas.delete(key))
       this.areas.set(key, hit)
       if (this.areas.size > 24) this.areas.delete(this.areas.keys().next().value!)

@@ -5,65 +5,65 @@ import {
 } from './__fixtures__/kamereon'
 import { chargeStartPayload, commandSummary, inWindow, socTargetPayload, toAccounts, toDescriptor, toStatePatch, toMileageContracts, toVehicleLinks, vehicleName, wakePayload, CLIMATE_FEATURES, climateSettingsPayload, hvacStartPayload, hvacSocThreshold, levelRising, trackLevel, type LevelTrack } from './mapping'
 
-// Tout ce fichier travaille sur la CAPTURE du 2026-09-14, pas sur la documentation. Trois pièges
-// que seule la capture révèle sont testés nommément : le `cockpit` v2 farceur, le flottant de
-// `chargingStatus`, et le fait qu'aucune valeur manquante ne doit devenir un zéro.
+// This whole file works on the CAPTURE of 2026-09-14, not on the documentation. Three pitfalls that
+// only the capture reveals are tested by name: the prankster `cockpit` v2, the float of
+// `chargingStatus`, and the fact that no missing value must become a zero.
 
 const NOW = Date.UTC(2026, 8, 14, 10, 30)
 
-describe('comptes et véhicules', () => {
-  it('retient le compte de services connectés, pas la fiche CRM', () => {
+describe('accounts and vehicles', () => {
+  it('keeps the connected services account, not the CRM record', () => {
     const accounts = toAccounts(PERSON)
     expect(accounts).toHaveLength(2)
-    // le choix du MYRENAULT se fait dans le plugin ; ici on vérifie que les deux remontent bien
+    // choosing MYRENAULT happens in the plugin; here we check that both come through
     expect(accounts.map((a) => a.accountType)).toEqual(['MYRENAULT', 'SFDC'])
     expect(accounts[0]!.accountId).toBe(ACCOUNT_ID)
   })
 
-  it('publie un appareil par VIN, nommé par sa plaque', () => {
+  it('publishes one device per VIN, named by its plate', () => {
     const links = toVehicleLinks(VEHICLES)
     expect(links).toHaveLength(1)
     const d = toDescriptor(links[0]!)
     expect(d).toMatchObject({ id: `renault:${VIN}`, externalId: VIN, kind: 'vehicle', name: 'AA123BB' })
-    // la cible de charge et la climatisation : rien d'autre, l'UI grise le reste
+    // the charge target and the climate: nothing else, the UI grays out the rest
     expect(d.capabilities).toEqual(['soc', 'range', 'location', 'charge_limit', 'charging', 'climate_precondition'])
     expect(d.meta.vehicle?.stopViaCharger).toBe(true)
     expect(d.meta.vehicle?.climate).toEqual(CLIMATE_FEATURES)
   })
 
-  it('lit la teinte dans la référence de configuration, et ne devine jamais', () => {
+  it('reads the paint color from the configuration reference, and never guesses', () => {
     const links = toVehicleLinks(VEHICLES)
     expect(toDescriptor(links[0]!).meta.vehicle?.color).toBe('#14171a')       // TEGNE = Noir Étoilé
 
-    // Un code de peinture qu'aucune voiture réelle n'a confirmé ne publie RIEN : la scène retombe
-    // sur sa couleur de thème, et l'utilisateur tranche. Mieux vaut rien qu'une couleur inventée.
+    // A paint code that no real car has confirmed publishes NOTHING: the scene falls back on its
+    // theme color, and the user decides. Better nothing than an invented color.
     const inconnu = { vin: VIN, vehicleDetails: { assets: [{ assetType: 'PICTURE', renditions: [{ url: 'https://3dv.renault.com/x?configuration=PAVEH%2FTEZZZ%2FMET05' }] }] } }
     expect(toDescriptor(inconnu).meta.vehicle?.color).toBeUndefined()
 
-    // Contrat de services expiré : ni `vehicleDetails`, ni images, ni couleur — et surtout pas de plantage.
+    // Services contract expired: no `vehicleDetails`, no images, no color — and above all no crash.
     expect(toDescriptor({ vin: VIN }).meta.vehicle?.color).toBeUndefined()
   })
 
-  it('retombe sur le modèle puis le VIN quand la plaque manque', () => {
+  it('falls back on the model then the VIN when the plate is missing', () => {
     expect(vehicleName({ vin: VIN, vehicleDetails: { brand: { label: 'RENAULT' }, model: { label: 'RENAULT 5' } } }))
       .toBe('RENAULT RENAULT 5')
     expect(vehicleName({ vin: VIN })).toBe(VIN)
   })
 
-  it('ignore un véhicule illisible sans perdre les autres', () => {
+  it('ignores an unreadable vehicle without losing the others', () => {
     const links = toVehicleLinks({ vehicleLinks: [{ pasDeVin: true }, VEHICLES.vehicleLinks[0]] })
     expect(links).toHaveLength(1)
     expect(links[0]!.vin).toBe(VIN)
   })
 })
 
-describe('climatisation', () => {
-  it('lit consigne, sièges avant et volant dans les réglages du préconditionnement', () => {
+describe('climate', () => {
+  it('reads setpoint, front seats and steering wheel from the preconditioning settings', () => {
     const patch = toStatePatch({ settings: { ...EV_SETTINGS, preconditioningHeatedLeftSeat: true } }, NOW)
     expect(patch).toMatchObject({ climateTargetC: 21, seatHeat: { fl: 1, fr: 0 }, steeringWheelHeat: false })
   })
 
-  it('réécrit les réglages TELS QU’ILS SONT, seuls les champs nommés changent', () => {
+  it('rewrites the settings AS THEY ARE, only the named fields change', () => {
     const body = climateSettingsPayload(EV_SETTINGS, { type: 'vehicle.climate_set', seatHeat: { fr: 1 }, steeringWheelHeat: true }, NOW)!
     expect(body).toMatchObject({ preconditioningHeatedRightSeat: true, preconditioningHeatedStrgWheel: true, preconditioningHeatedLeftSeat: false, preconditioningTemperature: 21 })
     expect(body.programs).toEqual(EV_SETTINGS.programs)
@@ -71,21 +71,21 @@ describe('climatisation', () => {
     expect(body.lastSettingsUpdateTimestamp).not.toBe(EV_SETTINGS.lastSettingsUpdateTimestamp)
   })
 
-  it('le corps de hvac-start : la consigne au démarrage, rien à l’annulation', () => {
+  it('the hvac-start body: the setpoint on start, nothing on cancel', () => {
     expect(hvacStartPayload('start', 20)).toEqual({ data: { type: 'HvacStart', attributes: { action: 'start', targetTemperature: 20 } } })
     expect(hvacStartPayload('cancel')).toEqual({ data: { type: 'HvacStart', attributes: { action: 'cancel' } } })
     expect(hvacSocThreshold(HVAC_STATUS)).toBe(15)
   })
 })
 
-describe('lectures → état', () => {
-  it('mappe un tour complet', () => {
+describe('readings → state', () => {
+  it('maps a full round', () => {
     const patch = toStatePatch(
       { battery: BATTERY_WAITING, cockpit: COCKPIT_V1, location: LOCATION, hvac: HVAC_STATUS, socLevels: SOC_LEVELS },
       NOW,
     )
     expect(patch).toEqual({
-      // l'heure où la VOITURE a parlé, pas celle de notre appel
+      // the time the CAR spoke, not the time of our call
       readAt: Date.parse('2026-09-14T08:19:43Z'),
       soc: 58,
       rangeKm: 218,
@@ -97,33 +97,33 @@ describe('lectures → état', () => {
       climateOn: false,
       chargeLimit: 80,
       socMin: 20,
-      // la voiture n'est pas en charge : le temps restant qu'elle traîne depuis l'avant-veille est EFFACÉ
+      // the car is not charging: the remaining time it has carried since two days before is CLEARED
       chargeMinutesRemaining: null,
     })
   })
 
-  it('branchée mais EN ATTENTE n’est pas « en charge » (chargingStatus 0.3)', () => {
+  it('plugged in but WAITING is not "charging" (chargingStatus 0.3)', () => {
     const patch = toStatePatch({ battery: BATTERY_WAITING }, NOW)
     expect(patch.pluggedIn).toBe(true)
     expect(patch.charging).toBe(false)
   })
 
-  it('reconnaît la charge en cours (chargingStatus 1.0, et elle seule)', () => {
+  it('recognizes a charge in progress (chargingStatus 1.0, and only that)', () => {
     expect(toStatePatch({ battery: BATTERY_CHARGING }, NOW).charging).toBe(true)
     expect(toStatePatch({ battery: BATTERY_UNPLUGGED }, NOW)).toMatchObject({ pluggedIn: false, charging: false })
   })
 
   /**
-   * Le 2026-09-19, la voiture a servi des heures durant un `0.3` (« en attente de courant ») alors
-   * qu'elle avalait 5,5 kW. Deux champs de la MÊME trame la démentaient — d'où la règle du second
-   * témoin. Sans elle, l'UI ment et le réveil de charge secoue une voiture déjà en charge.
+   * On 2026-09-19, the car served a `0.3` ("waiting for current") for hours while it was drawing
+   * 5.5 kW. Two fields of the SAME frame contradicted it — hence the second-witness rule. Without
+   * it, the UI lies and the charge wake-up shakes a car that is already charging.
    */
-  it('démasque un `chargingStatus` menteur grâce au temps restant daté de la trame ET au niveau qui monte', () => {
+  it('unmasks a lying `chargingStatus` thanks to the remaining time dated from the frame AND the rising level', () => {
     const patch = toStatePatch({ battery: BATTERY_CHARGING_LIAR }, NOW, { levelRising: true })
     expect(patch.charging).toBe(true)
     expect(patch.chargeMinutesRemaining).toBe(52)
 
-    // le même corps, mais le temps restant TRAÎNE d'une trame précédente : on ne crie pas au loup
+    // the same body, but the remaining time LINGERS from a previous frame: we don't cry wolf
     const attrs = { ...BATTERY_CHARGING_LIAR.data.attributes, chargingRemainingTimeLastUpdateDateTime: '2026-09-17T14:45:35Z' }
     const stale = toStatePatch({ battery: { data: { id: 'VF1', attributes: attrs } } }, NOW, { levelRising: true })
     expect(stale.charging).toBe(false)
@@ -131,19 +131,19 @@ describe('lectures → état', () => {
   })
 
   /**
-   * Le 2026-10-02, la R5 attendait vraiment du courant (charge verte, pas de soleil, 0 W à la borne)
-   * avec un temps restant daté de la trame : le second témoin seul la disait en charge. Ce qui la
-   * distingue de la menteuse du 19/09, c'est le niveau qui ne monte pas.
+   * On 2026-10-02, the R5 was really waiting for current (green charging, no sun, 0 W at the
+   * charger) with a remaining time dated from the frame: the second witness alone said it was
+   * charging. What sets it apart from the liar of 09/19 is the level that doesn't rise.
    */
-  it('`0.3` et un temps restant frais, niveau qui ne monte pas : EN ATTENTE, pas en charge', () => {
+  it('`0.3` and a fresh remaining time, level not rising: WAITING, not charging', () => {
     const patch = toStatePatch({ battery: BATTERY_WAITING_FRESH_ETA }, NOW)
     expect(patch).toMatchObject({ pluggedIn: true, charging: false, chargeMinutesRemaining: null })
     expect(toStatePatch({ battery: BATTERY_CHARGING_LIAR }, NOW).charging).toBe(false)
-    // le oui franc ne demande aucun témoin
+    // the plain yes needs no witness
     expect(toStatePatch({ battery: BATTERY_CHARGING }, NOW).charging).toBe(true)
   })
 
-  describe('le niveau qui monte (`trackLevel`)', () => {
+  describe('the rising level (`trackLevel`)', () => {
     const MIN = 60_000
     const T = Date.parse('2026-10-02T12:00:07Z')
     const run = (frames: [number, number][]) => {
@@ -151,39 +151,39 @@ describe('lectures → état', () => {
       return frames.map(([at, soc]) => levelRising(track = trackLevel(track, at, soc)))
     }
 
-    it('une hausse entre deux trames rapprochées, et tant que la suivante tombe dans l\'heure', () => {
+    it('a rise between two close frames, and as long as the next one falls within the hour', () => {
       expect(run([[T, 63], [T + 10 * MIN, 64], [T + 25 * MIN, 64], [T + 50 * MIN, 65]])).toEqual([false, true, true, true])
     })
-    it('pas une hausse étalée sur plus d\'une heure (le 51 → 52 % du 2026-10-02, 11:44 → 14:00)', () => {
+    it('not a rise spread over more than an hour (the 51 → 52 % of 2026-10-02, 11:44 → 14:00)', () => {
       expect(run([[T - 136 * MIN, 51], [T, 52]])).toEqual([false, false])
     })
-    it('retombe une heure après la dernière hausse ; la même trame relue garde son verdict', () => {
+    it('drops back an hour after the last rise; the same frame re-read keeps its verdict', () => {
       expect(run([[T, 60], [T + 10 * MIN, 61], [T + 10 * MIN, 61], [T + 75 * MIN, 61]])).toEqual([false, true, true, false])
     })
-    it('un niveau qui baisse n\'est pas une charge', () => {
+    it('a falling level is not a charge', () => {
       expect(run([[T, 60], [T + 10 * MIN, 59]])).toEqual([false, false])
     })
   })
 
-  it('ne retient le temps de charge restant QUE pendant la charge', () => {
+  it('keeps the remaining charge time ONLY while charging', () => {
     expect(toStatePatch({ battery: BATTERY_CHARGING }, NOW).chargeMinutesRemaining).toBe(43)
     expect(toStatePatch({ battery: BATTERY_UNPLUGGED }, NOW).chargeMinutesRemaining).toBeNull()
   })
 
-  it('survit au cockpit v2 farceur : pas de kilométrage plutôt qu’un zéro', () => {
+  it('survives the prankster cockpit v2: no mileage rather than a zero', () => {
     const patch = toStatePatch({ battery: BATTERY_WAITING, cockpit: COCKPIT_V2_EASTER_EGG }, NOW)
     expect(patch.odometerKm).toBeUndefined()
-    expect(patch.soc).toBe(58)                    // le reste du tour n'en souffre pas
+    expect(patch.soc).toBe(58)                    // the rest of the round doesn't suffer from it
   })
 
-  it('date l’état de la VOITURE, pas de notre appel — et retombe sur le nôtre sans batterie', () => {
-    // Kamereon rend le dernier état remonté : sur une voiture qui dort, il a des heures. Dater du
-    // moment de l'appel ferait dire à l'UI « lu il y a 4 min » sur des chiffres de la mi-journée.
+  it('dates the state from the CAR, not from our call — and falls back on ours without battery', () => {
+    // Kamereon returns the last state reported: on a sleeping car, it's hours old. Dating it from
+    // the moment of the call would make the UI say "read 4 min ago" about midday figures.
     expect(toStatePatch({ battery: BATTERY_WAITING }, NOW).readAt).toBe(Date.parse('2026-09-14T08:19:43Z'))
     expect(toStatePatch({}, NOW).readAt).toBe(NOW)
   })
 
-  it('n’invente jamais un zéro quand une lecture manque', () => {
+  it('never invents a zero when a reading is missing', () => {
     const patch = toStatePatch({}, NOW)
     expect(patch).toEqual({ readAt: NOW })
     for (const k of ['soc', 'rangeKm', 'pluggedIn', 'charging', 'odometerKm', 'location', 'insideTempC', 'chargeLimit']) {
@@ -191,7 +191,7 @@ describe('lectures → état', () => {
     }
   })
 
-  it('ne publie rien que la R5 ne donne pas', () => {
+  it('publishes nothing the R5 does not give', () => {
     const patch = toStatePatch(
       { battery: BATTERY_WAITING, cockpit: COCKPIT_V1, location: LOCATION, hvac: HVAC_STATUS, socLevels: SOC_LEVELS },
       NOW,
@@ -201,28 +201,28 @@ describe('lectures → état', () => {
     }
   })
 
-  it('date la position de la lecture quand Renault ne la date pas', () => {
+  it('dates the position from the reading when Renault does not date it', () => {
     const patch = toStatePatch({ location: { data: { attributes: { gpsLatitude: 47.32, gpsLongitude: 5.04 } } } }, NOW)
     expect(patch.location).toEqual({ lat: 47.32, lon: 5.04, at: NOW })
   })
 })
 
-describe('cible de charge', () => {
-  it('ne change QUE la cible : le plancher est le réglage de l’utilisateur', () => {
+describe('charge target', () => {
+  it('changes ONLY the target: the floor is the user setting', () => {
     const body = socTargetPayload(SOC_LEVELS, 70, NOW)!
     expect(body.socTarget).toBe(70)
     expect(body.socMin).toBe(SOC_LEVELS.socMin)
     expect(body.lastEnergyUpdateTimestamp).toBe(new Date(NOW).toISOString())
   })
 
-  it('n’invente rien quand les niveaux ne sont pas un objet', () => {
+  it('invents nothing when the levels are not an object', () => {
     expect(socTargetPayload(null, 70, NOW)).toBeNull()
     expect(socTargetPayload([80], 70, NOW)).toBeNull()
   })
 })
 
-describe('lancer la charge', () => {
-  it('coupe les programmes de charge ACTIFS, garde tout le reste, horodatage neuf', () => {
+describe('starting the charge', () => {
+  it('disables the ACTIVE charge programs, keeps everything else, new timestamp', () => {
     const active = { ...EV_SETTINGS, programs: [{ ...EV_SETTINGS.programs[0]!, programActivationStatus: true }, { ...EV_SETTINGS.programs[0]!, programDepartureTime: '07:00:00' }] }
     const { body, deactivated } = chargeStartPayload(active, NOW)!
     expect(deactivated).toBe(1)
@@ -233,7 +233,7 @@ describe('lancer la charge', () => {
     expect(body.lastSettingsUpdateTimestamp).toBe(new Date(NOW).toISOString())
   })
 
-  it('aucun programme actif : rien de coupé, les réglages rejoués tels quels', () => {
+  it('no active program: nothing disabled, the settings replayed as is', () => {
     const { body, deactivated } = chargeStartPayload(EV_SETTINGS, NOW)!
     expect(deactivated).toBe(0)
     expect(body.programs).toEqual(EV_SETTINGS.programs)
@@ -241,29 +241,29 @@ describe('lancer la charge', () => {
   })
 })
 
-describe('réveil de charge', () => {
-  it('rejoue les réglages de la voiture À L’IDENTIQUE, horodatage neuf', () => {
+describe('charge wake-up', () => {
+  it('replays the car settings IDENTICALLY, new timestamp', () => {
     const body = wakePayload(EV_SETTINGS, NOW)!
-    // tout est conservé : l'heure de départ, la durée et la température sont des CHOIX de
-    // l'utilisateur, faits dans sa voiture — les écraser serait le prix caché du réveil
+    // everything is kept: the start time, duration and temperature are the user's CHOICES, made
+    // in their car — overwriting them would be the hidden cost of the wake-up
     expect(body.chargeTimeStart).toBe('12:00')
     expect(body.chargeDuration).toBe(420)
     expect(body.preconditioningTemperature).toBe(21)
     expect(body.chargeModeRq).toBe('SCHEDULED')
     expect(body.programs).toEqual(EV_SETTINGS.programs)
-    // seul l'horodatage change : c'est l'ÉCRITURE qui réveille, pas son contenu
+    // only the timestamp changes: it's the WRITE that wakes, not its content
     expect(body.lastSettingsUpdateTimestamp).toBe(new Date(NOW).toISOString())
     expect(body.lastSettingsUpdateTimestamp).not.toBe(EV_SETTINGS.lastSettingsUpdateTimestamp)
   })
 
-  it('n’invente rien quand les réglages ne sont pas un objet', () => {
+  it('invents nothing when the settings are not an object', () => {
     expect(wakePayload(null, NOW)).toBeNull()
     expect(wakePayload('nope', NOW)).toBeNull()
     expect(wakePayload([1, 2], NOW)).toBeNull()
   })
 
-  it('résume la COMMANDE rendue par Renault, et ne lève rien sur autre chose', () => {
-    // réponse réelle du 2026-09-19 : ce n'est pas un enregistrement, c'est une commande déposée
+  it('summarizes the COMMAND returned by Renault, and throws nothing on anything else', () => {
+    // real response of 2026-09-19: it's not a save, it's a filed command
     expect(commandSummary({ commandId: 'abc', type: 'HVAC_CHARGE_SYNCH', status: 'CREATED' }))
       .toBe('HVAC_CHARGE_SYNCH CREATED abc')
     expect(commandSummary({ status: 'CREATED' })).toBe('CREATED')
@@ -272,30 +272,30 @@ describe('réveil de charge', () => {
     expect(commandSummary('nope')).toBeNull()
   })
 
-  it('la fenêtre horaire borne le réveil à la journée', () => {
+  it('the time window confines the wake-up to daytime', () => {
     const at = (h: number, m = 0) => new Date(2026, 8, 14, h, m)
     expect(inWindow(at(12), '08:00', '20:00')).toBe(true)
-    expect(inWindow(at(8), '08:00', '20:00')).toBe(true)      // borne basse incluse
-    expect(inWindow(at(20), '08:00', '20:00')).toBe(false)    // borne haute exclue
+    expect(inWindow(at(8), '08:00', '20:00')).toBe(true)      // lower bound included
+    expect(inWindow(at(20), '08:00', '20:00')).toBe(false)    // upper bound excluded
     expect(inWindow(at(3), '08:00', '20:00')).toBe(false)
-    // une fenêtre à cheval sur minuit se lit des deux côtés
+    // a window straddling midnight reads on both sides
     expect(inWindow(at(23), '22:00', '06:00')).toBe(true)
     expect(inWindow(at(2), '22:00', '06:00')).toBe(true)
     expect(inWindow(at(12), '22:00', '06:00')).toBe(false)
-    // bornes égales ou illisibles = jamais : c'est le moyen de couper la fonction
+    // equal or unreadable bounds = never: it's the way to turn the feature off
     expect(inWindow(at(12), '08:00', '08:00')).toBe(false)
     expect(inWindow(at(12), 'midi', '20:00')).toBe(false)
   })
 })
 
-describe('contrats', () => {
-  it('ne retient que l entretien plafonné en km, pas la garantie batterie', () => {
+describe('contracts', () => {
+  it('keeps only maintenance capped in km, not the battery warranty', () => {
     expect(toMileageContracts(CONTRACTS)).toEqual([
       { description: 'EASYPACK 49MOIS EXEMPLE', start: '2025-03-01', end: '2029-03-31', maxKm: 40000 },
     ])
   })
 
-  it('rend une liste vide pour une réponse illisible', () => {
+  it('returns an empty list for an unreadable response', () => {
     expect(toMileageContracts({ errors: [] })).toEqual([])
     expect(toMileageContracts([{ type: 'WARRANTY_MAINTENANCE_CONTRACTS', conditions: [{ unlimitedMileage: true }] }])).toEqual([])
   })

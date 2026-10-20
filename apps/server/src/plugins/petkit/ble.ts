@@ -5,56 +5,55 @@ import type { PetkitClient } from './client'
 import type { PetPumpMode } from '@kasbah/shared'
 import { bleRelaysSchema } from './types'
 
-// Relais Bluetooth : comment on atteint une fontaine qui n'a PAS de Wi-Fi.
+// Bluetooth relay: how to reach a fountain that has NO Wi-Fi.
 //
-// Une Eversweet Max ne parle qu'en Bluetooth. Pour la lire ou lui commander quelque chose, le
-// cloud demande à un appareil PetKit Wi-Fi VOISIN (ici la mangeoire posée à côté d'elle) d'ouvrir
-// une liaison vers elle. La séquence est toujours la même :
+// An Eversweet Max only speaks Bluetooth. To read it or command anything, the cloud asks a
+// NEARBY Wi-Fi PetKit device (here the feeder standing next to it) to open a link to it. The
+// sequence is always the same:
 //
-//   ownSupportBleDevices → qui peut relayer ?   (vide = renoncer, ce n'est pas une panne)
-//   connect              → la demande est-elle acceptée ?
-//   poll × n             → la liaison est-elle établie ?   (0 en cours, 1 connecté, -1 échec)
-//   … lecture ou commande …
-//   cancel               → refermer
+//   ownSupportBleDevices → who can relay?           (empty = give up, it's not a failure)
+//   connect              → is the request accepted?
+//   poll × n             → is the link established?   (0 in progress, 1 connected, -1 failure)
+//   … read or command …
+//   cancel               → close
 //
-// Les 4 s entre deux `poll` sont un délai d'ÉTABLISSEMENT, pas une cadence de rafraîchissement :
-// c'est le temps que met une radio à accrocher, et il ne se règle pas. Ce qui se règle, c'est la
-// fréquence à laquelle on rouvre une session (dix minutes, voir `PETKIT_FOUNTAIN_SYNC_MS`).
+// The 4 s between two `poll`s are an ESTABLISHMENT delay, not a refresh rate: it's the time a radio
+// takes to lock on, and it can't be tuned. What can be tuned is how often a session is reopened
+// (ten minutes, see `PETKIT_FOUNTAIN_SYNC_MS`).
 //
-// Conséquence à ne pas perdre de vue : une lecture de fontaine peut coûter DEUX MINUTES au pire.
-// L'appelant ne doit jamais l'attendre en tenant une commande utilisateur.
+// A consequence not to lose sight of: a fountain reading can cost TWO MINUTES at worst. The caller
+// must never wait for it while holding a user command.
 
 export const BLE_POLL_INTERVAL_MS = 4000
 export const BLE_CONNECT_ATTEMPTS = 32
 
-/** Entête et pied que PetKit attend autour de chaque trame de commande. */
+/** Header and footer PetKit expects around each command frame. */
 const FRAME_START = [250, 252, 253]
 const FRAME_END = [251]
 
-/** États rendus par `ble/poll`. */
+/** States returned by `ble/poll`. */
 const CONNECTING = 0, CONNECTED = 1, FAILED = -1
 
 /**
- * La trame d'un ordre de pompe, MESUREE sur la vraie fontaine le 21/09.
+ * The frame of a pump command, MEASURED on the real fountain on 09/21.
  *
- *   [250,252,253]  en-tete
- *   220            code de l'ordre « regler la pompe »
- *   1, <compteur>  numero de sequence : deux trames identiques passeraient pour un doublon
- *   3, 0           longueur de la charge utile
- *   <marche>       1 = la pompe tourne, 0 = en pause
- *   <mode>, <mode> 1 = continu, 2 = intermittent — **REPETE deux fois**
- *   [251]          pied
+ *   [250,252,253]  header
+ *   220            code of the "set the pump" command
+ *   1, <counter>   sequence number: two identical frames would pass for a duplicate
+ *   3, 0           payload length
+ *   <on>           1 = the pump runs, 0 = paused
+ *   <mode>, <mode> 1 = continuous, 2 = intermittent — **REPEATED twice**
+ *   [251]          footer
  *
- * Le mode repete est ce que la table de la bibliotheque de reference avait faux : elle donne
- * `…,1,2,1` pour l'intermittent, et cette trame-la est ACCEPTEE (accuse « 1 ») sans rien changer.
- * Seul `…,1,2,2` fait passer la machine en intermittent. Un accuse ne prouve donc rien ici — c'est
- * la relecture du mode qui tranche, et c'est ainsi qu'on l'a trouve.
+ * The repeated mode is what the reference library's table had wrong: it gives `…,1,2,1` for
+ * intermittent, and that frame is ACCEPTED (acknowledged "1") without changing anything. Only
+ * `…,1,2,2` switches the machine to intermittent. So an acknowledgment proves nothing here — it's
+ * re-reading the mode that decides, and that's how it was found.
  *
- * L'ARRÊT est vérifié lui aussi : `marche: 0` fait passer `status.powerStatus` à 0 **et laisse le
- * mode intact** (2 avant, 2 après), puis la remise en route revient à 1 du premier coup. C'est
- * exactement ce que le motif annonçait, et la raison pour laquelle le mode ne se code pas en dur
- * dans la trame d'arrêt : une constante figée ferait repasser la fontaine en continu à chaque
- * extinction.
+ * STOPPING is verified too: `on: 0` brings `status.powerStatus` to 0 **and leaves the mode
+ * untouched** (2 before, 2 after), then restarting goes back to 1 at the first try. That's exactly
+ * what the pattern announced, and the reason why the mode isn't hard-coded in the stop frame: a
+ * fixed constant would switch the fountain back to continuous at every power-off.
  */
 export function pumpFrame(o: { on: boolean; mode: PetPumpMode; counter: number }): number[] {
   const m = o.mode === 'intermittent' ? 2 : 1
@@ -62,16 +61,16 @@ export function pumpFrame(o: { on: boolean; mode: PetPumpMode; counter: number }
 }
 
 export interface BleTarget {
-  /** Identifiant PetKit de la fontaine. */
+  /** PetKit identifier of the fountain. */
   bleId: string
   /**
-   * Code NUMÉRIQUE du modèle (24 pour une Ctw3), pris dans le roster. La chaîne (`"ctw3"`) est
-   * refusée par « Vous n'avez pas de permission. (code 4) », ce qui ne ressemble pourtant en rien
-   * à une erreur de paramètre — vérifié le 21/09.
+   * NUMERIC model code (24 for a Ctw3), taken from the roster. The string (`"ctw3"`) is refused
+   * with "Vous n'avez pas de permission. (code 4)", which looks nothing like a parameter error —
+   * verified on 09/21.
    */
   type: string
   mac: string
-  /** Groupe (« famille ») auquel elle appartient : c'est par groupe qu'on cherche un relais. */
+  /** Group ("family") it belongs to: relays are looked up per group. */
   groupId: string
 }
 
@@ -86,17 +85,17 @@ export interface BleRelayOptions {
 
 export class BleRelay {
   /**
-   * Compteur de trames, par fontaine. PetKit l'insère dans la commande ; deux commandes portant le
-   * même compteur passeraient pour un doublon.
+   * Frame counter, per fountain. PetKit inserts it into the command; two commands carrying the
+   * same counter would pass for a duplicate.
    */
   private counters = new Map<string, number>()
 
   constructor(private readonly opts: BleRelayOptions) {}
 
   /**
-   * Y a-t-il un appareil capable de relayer vers cette fontaine, ET en ligne ? Non ≠ panne : le
-   * relais peut être débranché ou hors de portée. `pim` est ce qui distingue les deux — un relais
-   * listé mais éteint accepterait la demande et ne relaierait rien.
+   * Is there a device able to relay to this fountain, AND online? No ≠ failure: the relay may be
+   * unplugged or out of range. `pim` is what tells the two apart — a relay listed but switched off
+   * would accept the request and relay nothing.
    */
   async hasRelay(target: BleTarget): Promise<boolean> {
     const body = await this.opts.client.post('ble/ownSupportBleDevices', { groupId: target.groupId }, this.opts.signal)
@@ -105,8 +104,8 @@ export class BleRelay {
   }
 
   /**
-   * Ouvre une liaison et la garde le temps de `run`, puis la referme QUOI QU'IL ARRIVE — une
-   * liaison laissée ouverte immobilise le relais, donc la mangeoire, pour les appels suivants.
+   * Opens a link and keeps it for the duration of `run`, then closes it WHATEVER HAPPENS — a link
+   * left open ties up the relay, hence the feeder, for the following calls.
    */
   async withConnection<T>(target: BleTarget, run: () => Promise<T>): Promise<T> {
     if (!await this.hasRelay(target)) throw new PluginError('DEVICE_UNAVAILABLE', 'no PetKit device in Bluetooth range to relay')
@@ -133,8 +132,8 @@ export class BleRelay {
   }
 
   /**
-   * Règle la pompe : marche/arrêt ET régime, en une trame — les deux voyagent ensemble, on ne peut
-   * pas en changer un sans redire l'autre. La liaison doit être ouverte (`withConnection`).
+   * Sets the pump: on/off AND mode, in one frame — both travel together, one can't be changed
+   * without restating the other. The link must be open (`withConnection`).
    */
   async setPump(target: BleTarget, o: { on: boolean; mode: PetPumpMode }): Promise<void> {
     const counter = (this.counters.get(target.bleId) ?? 0) + 1
@@ -144,9 +143,9 @@ export class BleRelay {
     const ack = await this.opts.client.post('ble/controlDevice', {
       ...this.frameTarget(target), cmd: String(body[0]), data,
     }, this.opts.signal)
-    // L'accusé dit « trame déposée », jamais « la pompe a obéi » — VÉRIFIÉ ici au sens fort : une
-    // trame au mauvais dernier octet est accusée « 1 » et ne change rien. C'est la relecture qui
-    // tranche, jamais l'accusé (même leçon que sur le Roomba).
+    // The acknowledgment says "frame delivered", never "the pump obeyed" — VERIFIED here in the
+    // strong sense: a frame with the wrong last byte is acknowledged "1" and changes nothing. It's
+    // the re-read that decides, never the acknowledgment (same lesson as with the Roomba).
     if (!isAccepted(ack)) throw new PluginError('UPSTREAM_ERROR', 'PetKit refused the Bluetooth frame')
   }
 
@@ -155,7 +154,7 @@ export class BleRelay {
   }
 }
 
-/** `1`, `{state:1}` ou `{"result":1}` selon les points d'entrée : tous veulent dire « accepté ». */
+/** `1`, `{state:1}` or `{"result":1}` depending on the endpoint: all mean "accepted". */
 function isAccepted(body: unknown): boolean {
   if (body === 1 || body === '1' || body === true) return true
   if (body && typeof body === 'object' && 'state' in body) return Number((body as { state: unknown }).state) === 1

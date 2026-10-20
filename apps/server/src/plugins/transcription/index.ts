@@ -12,35 +12,36 @@ import type { SpawnFn } from '../../music/proxy'
 import { spokenText } from './spoken'
 import { findVoiceStudio, killVoiceStudio, spawnVoiceStudio } from './voicestudio'
 
-// Plugin Transcription : la voix de l'assistant. Le navigateur enregistre une instruction (WAV
-// 16 kHz mono), le serveur la passe à un moteur de transcription par la route compatible OpenAI
-// `POST /v1/audio/transcriptions`, et rend le texte, que l'app envoie à l'assistant.
+// Transcription plugin: the assistant's voice. The browser records an instruction (16 kHz mono
+// WAV), the server passes it to a transcription engine through the OpenAI-compatible route
+// `POST /v1/audio/transcriptions`, and returns the text, which the app sends to the assistant.
 //
-// Trois fournisseurs, une seule route (décision de l'utilisateur, 2026-10-07 : le GPU local ne doit
-// pas forcément être pris par la voix) :
-// - `voicestudio` : l'application VoiceStudio en local (Whisper, Parakeet…), `model: whisper-1` ;
-// - `vllm` : Voxtral Realtime servi par vLLM (WSL2 sur un serveur Windows, 16 Go de GPU) ;
-// - `mistral` : l'API de Mistral (Voxtral Mini Transcribe), avec une clé.
-// Les noms de la maison (pièces, appareils, ambiances) partent comme vocabulaire : `prompt` pour les
-// deux premiers (Whisper l'emploie ainsi), `context_bias` pour Mistral (100 au plus).
+// Three providers, a single route (the user's decision, 2026-10-07: the local GPU shouldn't
+// necessarily be taken by voice):
+// - `voicestudio`: the VoiceStudio application, locally (Whisper, Parakeet…), `model: whisper-1`;
+// - `vllm`: Voxtral Realtime served by vLLM (WSL2 on a Windows server, 16 GB of GPU);
+// - `mistral`: Mistral's API (Voxtral Mini Transcribe), with a key.
+// The house's names (rooms, devices, light scenes) go along as vocabulary: `prompt` for the first
+// two (Whisper uses it that way), `context_bias` for Mistral (100 at most).
 //
-// Réponses parlées (sous-item `speech`, éteint par défaut) : la réponse de l'assistant à une instruction
-// DICTÉE est dite à voix haute, sur l'appareil qui a parlé. Même serveur, route compatible OpenAI
-// `POST /v1/audio/speech` ; chez VoiceStudio, `tts-1` désigne le moteur de synthèse actif (OmniVoice,
-// profil « fast », décision de l'utilisateur 2026-10-07).
+// Spoken answers (`speech` sub-item, off by default): the assistant's answer to a DICTATED
+// instruction is said aloud, on the device that spoke. Same server, OpenAI-compatible route
+// `POST /v1/audio/speech`; at VoiceStudio, `tts-1` designates the active synthesis engine
+// (OmniVoice, "fast" profile, the user's decision of 2026-10-07).
 //
-// Envoi à la fin de la phrase (sous-item `autoSend`, allumé par défaut) : l'app arrête l'écoute seule
-// après un silence, sans toucher au bouton (détection dans le navigateur, `apps/web/src/lib/vad.ts`).
+// Send at the end of the sentence (`autoSend` sub-item, on by default): the app stops listening on
+// its own after a silence, without touching the button (detection in the browser,
+// `apps/web/src/lib/vad.ts`).
 //
-// VoiceStudio sans son interface (sous-item `voicestudio`, éteint par défaut) : lancé avec le plugin
-// quand `STT_URL` est sur cette machine et que rien n'y répond, arrêté avec lui (`voicestudio.ts`).
+// VoiceStudio without its interface (`voicestudio` sub-item, off by default): launched with the
+// plugin when `STT_URL` is on this machine and nothing answers there, stopped with it (`voicestudio.ts`).
 
 export const STT_PROVIDERS = ['voicestudio', 'vllm', 'mistral'] as const
 export type SttProvider = (typeof STT_PROVIDERS)[number]
 
-/** Ce que chaque fournisseur prend par défaut ; `STT_URL` / `STT_MODEL` les remplacent. */
+/** What each provider uses by default; `STT_URL` / `STT_MODEL` override them. */
 const PRESETS: Record<SttProvider, { url: string | null; model: string; hints: 'prompt' | 'context_bias' }> = {
-  // le port de VoiceStudio n'est pas documenté : à donner dans `STT_URL`
+  // VoiceStudio's port is not documented: to be given in `STT_URL`
   voicestudio: { url: null, model: 'whisper-1', hints: 'prompt' },
   vllm: { url: 'http://localhost:8000', model: 'mistralai/Voxtral-Mini-4B-Realtime-2602', hints: 'prompt' },
   mistral: { url: 'https://api.mistral.ai', model: 'voxtral-mini-latest', hints: 'context_bias' },
@@ -48,40 +49,40 @@ const PRESETS: Record<SttProvider, { url: string | null; model: string; hints: '
 
 export const transcriptionConfigSchema = z.object({
   STT_PROVIDER: z.enum(STT_PROVIDERS).default('voicestudio'),
-  /** Racine du serveur (sans `/v1`) ; défaut selon le fournisseur. */
+  /** Server root (without `/v1`); default depends on the provider. */
   STT_URL: z.string().trim().url().optional(),
   STT_MODEL: z.string().trim().min(1).optional(),
-  /** Clé du fournisseur (`Authorization: Bearer`) : obligatoire pour `mistral`. */
+  /** Provider key (`Authorization: Bearer`): required for `mistral`. */
   STT_API_KEY: z.string().trim().min(1).optional(),
-  /** Langue parlée (ISO 639-1) : évite la détection, plus rapide et plus sûre sur une phrase courte. */
+  /** Spoken language (ISO 639-1): avoids detection, faster and more reliable on a short sentence. */
   STT_LANGUAGE: z.string().trim().regex(/^[a-z]{2}$/).default('fr'),
-  /** Modèle de synthèse des réponses parlées ; `tts-1` = le moteur actif de VoiceStudio. */
+  /** Synthesis model for spoken answers; `tts-1` = VoiceStudio's active engine. */
   TTS_MODEL: z.string().trim().min(1).default('tts-1'),
-  /** Voix : profil VoiceStudio, `default`, ou nom de voix du fournisseur. */
+  /** Voice: VoiceStudio profile, `default`, or the provider's voice name. */
   TTS_VOICE: z.string().trim().min(1).default('default'),
-  /** Le runtime de VoiceStudio (dossier `project`) ; défaut : celui que l'app note dans `%APPDATA%`. */
+  /** VoiceStudio's runtime (`project` folder); default: the one the app records in `%APPDATA%`. */
   VOICESTUDIO_DIR: z.string().trim().min(1).optional(),
 })
 export type TranscriptionConfig = z.infer<typeof transcriptionConfigSchema>
 
-/** 15 s d'instruction en WAV 16 kHz mono = 480 Ko, 640 Ko en base64 : de la marge, pas plus. */
+/** 15 s of instruction as 16 kHz mono WAV = 480 KB, 640 KB in base64: some margin, no more. */
 const BODY_LIMIT = 2 * 1024 * 1024
 const MAX_HINTS = 100
-/** Whisper ne lit que ~224 jetons de `prompt` : au-delà, rien ne sert. */
+/** Whisper only reads ~224 tokens of `prompt`: beyond that, nothing helps. */
 const MAX_PROMPT = 800
 const TIMEOUT_MS = 30_000
-/** Une réponse de l'assistant tient en une ou deux phrases ; au-delà, on coupe plutôt que d'attendre. */
+/** An assistant answer fits in one or two sentences; beyond that, we cut rather than wait. */
 const MAX_SPOKEN = 1000
-/** La synthèse est plus lente que la transcription (OmniVoice sur la 3060 : à mesurer). */
+/** Synthesis is slower than transcription (OmniVoice on the 3060: to be measured). */
 const SPEAK_TIMEOUT_MS = 60_000
-/** VoiceStudio lancé : `/health` répond 503 pendant le chargement (torch, modèles), 200 ensuite. */
+/** VoiceStudio launched: `/health` answers 503 while loading (torch, models), 200 afterwards. */
 const VOICESTUDIO_READY_MS = 180_000
 const LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]'])
 
 /**
- * Réglages de la fiche du plugin : la voix des réponses. Celle de la maison (`.state/transcription.json`,
- * réglée depuis le réseau local) et, par-dessus, celle d'un compte connecté (son dossier d'état) ;
- * `null` = pas de choix, la voix du niveau d'en dessous sert (compte → maison → `TTS_VOICE`).
+ * Settings of the plugin's sheet: the answers' voice. The house's (`.state/transcription.json`, set
+ * from the local network) and, on top of it, that of a signed-in account (its state folder);
+ * `null` = no choice, the voice of the level below applies (account → house → `TTS_VOICE`).
  */
 const settingsFile = (user: string | null) => (user === null ? stateFile('transcription.json') : userStateFile(user, 'transcription.json'))
 const settingsSchema = z.object({ voice: z.string().trim().min(1).max(100).nullable().default(null) })
@@ -91,7 +92,7 @@ async function readSettings(user: string | null): Promise<Settings> {
   try { return settingsSchema.parse(JSON.parse(await readFile(settingsFile(user), 'utf8'))) } catch { return settingsSchema.parse({}) }
 }
 
-/** Une voix proposée par le fournisseur (`GET /v1/audio/voices`, extension de VoiceStudio à l'API OpenAI). */
+/** A voice offered by the provider (`GET /v1/audio/voices`, VoiceStudio's extension to the OpenAI API). */
 const voicesSchema = z.object({
   voices: z.array(z.object({ voice_id: z.string(), name: z.string(), type: z.string().optional(), language: z.string().optional() })),
 })
@@ -99,10 +100,10 @@ const voicesSchema = z.object({
 export interface TranscriptionPluginDeps {
   fetch?: typeof fetch
   spawnImpl?: SpawnFn
-  /** Où chercher `VoiceStudio
-untime-location.json` (défaut `%APPDATA%`). */
+  /** Where to look for `VoiceStudio
+untime-location.json` (default `%APPDATA%`). */
   appData?: string
-  /** Intervalle de l'attente de VoiceStudio lancé (défaut 2 s). */
+  /** Polling interval while waiting for the launched VoiceStudio (default 2 s). */
   pollMs?: number
 }
 
@@ -111,15 +112,15 @@ export function createTranscriptionPlugin(deps: TranscriptionPluginDeps = {}): D
   const spawnImpl = deps.spawnImpl ?? (spawn as unknown as SpawnFn)
   let ctx: PluginContext | null = null
   let target: { provider: SttProvider; url: string | null; model: string; hints: 'prompt' | 'context_bias'; key?: string; language: string; ttsModel: string; ttsVoice: string } | null = null
-  /** Sous-item `speech` : les réponses aux instructions dictées sont dites à voix haute. */
+  /** `speech` sub-item: answers to dictated instructions are said aloud. */
   let speech = false
-  /** Sous-item `autoSend` : l'écoute s'arrête seule à la fin de la phrase. */
+  /** `autoSend` sub-item: listening stops on its own at the end of the sentence. */
   let autoSend = true
   let lastError: string | null = null
-  /** Sous-item `voicestudio` : lancer VoiceStudio sans son interface. */
+  /** `voicestudio` sub-item: launch VoiceStudio without its interface. */
   let autostart = false
   let studioDir: string | undefined
-  /** VoiceStudio vu par le lancement : ce que la santé en dit. */
+  /** VoiceStudio as seen by the launch: what health says about it. */
   let studio: { state: 'starting' | 'running' | 'external' | 'failed'; detail: string } | null = null
   let studioChild: ReturnType<typeof spawnVoiceStudio> | null = null
   let studioWait: AbortController | null = null
@@ -132,7 +133,7 @@ export function createTranscriptionPlugin(deps: TranscriptionPluginDeps = {}): D
     return null
   }
 
-  /** `GET /v1/models` : les trois l'exposent ; on n'en lit que la réponse. */
+  /** `GET /v1/models`: all three expose it; we only read whether it answers. */
   async function probe(): Promise<void> {
     if (!target?.url || missing()) return
     try {
@@ -143,12 +144,12 @@ export function createTranscriptionPlugin(deps: TranscriptionPluginDeps = {}): D
     }
   }
 
-  /** Quelque chose répond-il déjà à l'adresse (l'app ouverte, un lancement précédent) ? 503 compris. */
+  /** Does something already answer at the address (the app open, a previous launch)? 503 included. */
   async function answers(url: string): Promise<boolean> {
     try { await doFetch(`${url}/health`, { signal: AbortSignal.timeout(2000) }); return true } catch { return false }
   }
 
-  /** Lance VoiceStudio sans son interface si rien ne répond à `STT_URL`, puis attend qu'il soit prêt, sans bloquer le démarrage. */
+  /** Launches VoiceStudio without its interface if nothing answers at `STT_URL`, then waits until it's ready, without blocking startup. */
   async function launchStudio(): Promise<void> {
     const t = target
     if (!t?.url || t.provider !== 'voicestudio') return
@@ -183,7 +184,7 @@ export function createTranscriptionPlugin(deps: TranscriptionPluginDeps = {}): D
             await probe()
             return
           }
-        } catch { /* pas encore à l'écoute */ }
+        } catch { /* not listening yet */ }
       }
       if (!wait.signal.aborted) studio = { state: 'failed', detail: `not ready after ${VOICESTUDIO_READY_MS / 1000} s` }
     })()
@@ -197,7 +198,7 @@ export function createTranscriptionPlugin(deps: TranscriptionPluginDeps = {}): D
     return t
   }
 
-  /** Un appel au fournisseur : injoignable → `DEVICE_UNAVAILABLE`, clé refusée → `NEEDS_PAIRING`, autre refus → `UPSTREAM_ERROR`. */
+  /** A call to the provider: unreachable → `DEVICE_UNAVAILABLE`, key refused → `NEEDS_PAIRING`, other refusal → `UPSTREAM_ERROR`. */
   async function call(path: string, init: RequestInit, timeoutMs: number): Promise<Response> {
     const t = ready()
     let res: Response
@@ -230,10 +231,10 @@ export function createTranscriptionPlugin(deps: TranscriptionPluginDeps = {}): D
     return z.object({ text: z.string() }).parse(await res.json()).text.trim()
   }
 
-  /** La réponse dite à voix haute : le son tel que le fournisseur le rend (WAV demandé). */
+  /** The answer said aloud: the sound as the provider returns it (WAV requested). */
   async function speak(text: string, words: Record<string, string>, user: string | null): Promise<{ audio: Buffer; type: string }> {
     const t = ready()
-    // la voix du compte, sinon celle de la maison, sinon `TTS_VOICE`
+    // the account's voice, otherwise the house's, otherwise `TTS_VOICE`
     const voice = (user === null ? null : (await readSettings(user)).voice) ?? (await readSettings(null)).voice ?? t.ttsVoice
     const res = await call('/v1/audio/speech', {
       method: 'POST',
@@ -257,7 +258,7 @@ export function createTranscriptionPlugin(deps: TranscriptionPluginDeps = {}): D
       speech = context.parts.speech === true
       autoSend = context.parts.autoSend !== false
       autostart = context.parts.voicestudio === true
-      // déjà validée par l'hôte : la revalider casserait un champ transformé (doc/6_faq/6_1, config re-validée)
+      // already validated by the host: validating it again would break a transformed field (doc/6_faq/6_1, re-validated config)
       const c = context.config as TranscriptionConfig
       const preset = PRESETS[c.STT_PROVIDER]
       target = {
@@ -291,12 +292,12 @@ export function createTranscriptionPlugin(deps: TranscriptionPluginDeps = {}): D
     },
 
     registerRoutes(app: FastifyInstance) {
-      // L'app ne montre le micro que si le plugin tourne et sait où envoyer l'audio.
+      // The app only shows the microphone if the plugin is running and knows where to send the audio.
       app.get('/status', async () => ({ ready: ctx !== null && target !== null && !missing(), provider: target?.provider ?? null, speech: ctx !== null && speech, autoSend: ctx !== null && autoSend }))
 
       app.post('/transcribe', { bodyLimit: BODY_LIMIT }, async (req, reply) => {
         const body = z.object({
-          /** WAV en base64 (le navigateur l'encode lui-même : 16 kHz mono). */
+          /** WAV in base64 (the browser encodes it itself: 16 kHz mono). */
           audio: z.string().min(1),
           hints: z.array(z.string().max(80)).max(400).default([]),
         }).safeParse(req.body)
@@ -309,16 +310,16 @@ export function createTranscriptionPlugin(deps: TranscriptionPluginDeps = {}): D
         return { text, ms: Date.now() - started }
       })
 
-      // Les voix du fournisseur, pour la fiche du plugin. Les alias OpenAI (alloy, nova…) renvoient tous
-      // chez VoiceStudio à la voix par défaut du moteur : seuls les profils (voix créées) sont proposés.
+      // The provider's voices, for the plugin's sheet. At VoiceStudio, the OpenAI aliases (alloy,
+      // nova…) all point to the engine's default voice: only the profiles (created voices) are offered.
       app.get('/voices', async () => {
         const res = await call('/v1/audio/voices', { method: 'GET' }, 10_000)
         const list = voicesSchema.parse(await res.json()).voices
         return { voices: list.filter((v) => v.type !== 'openai_alias').map((v) => ({ id: v.voice_id, name: v.name, ...(v.language ? { language: v.language } : {}) })) }
       })
 
-      // La voix du compte courant : celle de la session (adresse publique), la maison sur le réseau
-      // local. `houseVoice` : ce qui sert au compte qui n'a rien choisi.
+      // The current account's voice: the session's (public address), the house's on the local
+      // network. `houseVoice`: what applies to an account that chose nothing.
       const settingsOf = async (user: string | null) => ({
         user,
         voice: (await readSettings(user)).voice,
@@ -340,12 +341,12 @@ export function createTranscriptionPlugin(deps: TranscriptionPluginDeps = {}): D
         return settingsOf(user)
       })
 
-      // La réponse de l'assistant dite à voix haute, jouée par le navigateur qui a dicté l'instruction.
+      // The assistant's answer said aloud, played by the browser that dictated the instruction.
       app.post('/speak', async (req, reply) => {
         if (!speech) return sendError(reply, 409, 'SPEECH_DISABLED', 'spoken answers are off (Settings → transcription)')
         const body = z.object({
           text: z.string().trim().min(1).max(4000),
-          /** Les mots de la maison à dire en entier : l'abréviation d'un étage → son nom (« RDC » → « Rez-de-chaussée »). */
+          /** The house's words to say in full: a level's abbreviation → its name ("RDC" → "Rez-de-chaussée"). */
           words: z.record(z.string().trim().min(1).max(12), z.string().trim().min(1).max(80))
             .refine((w) => Object.keys(w).length <= MAX_HINTS).default({}),
         }).safeParse(req.body)
