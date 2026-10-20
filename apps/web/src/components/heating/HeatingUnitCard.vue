@@ -6,27 +6,27 @@ import type { IconName } from '../../lib/strokeIcons'
 import { formatPercent, formatTemp } from '../../lib/format'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// L'état de la MACHINE, par opposition à celui des zones : ce qui tourne, ce qui chauffe en plus du
-// compresseur, et si elle va mal. Ces mesures ne sont pas des appareils de la maison — une douzaine
-// de capteurs pour des valeurs qu'on ne consulte qu'ici encombrerait l'inventaire, la recherche et
-// la scène 3D. Elles viennent du plugin (`GET /api/plugins/melcloud/system`).
+// The state of the MACHINE, as opposed to that of the zones: what runs, what heats in addition to the
+// compressor, and whether it is in trouble. These measurements are not devices of the house — a dozen
+// sensors for values that are only consulted here would clutter the inventory, the search and
+// the 3D scene. They come from the plugin (`GET /api/plugins/melcloud/system`).
 //
-// Mise en forme : les lignes `icône | libellé | valeur` de la vue Météo (`.wx-detail`), en deux
-// colonnes quand la carte est large. La version précédente serrait quatre mesures sur une ligne de
-// 14 px et alignait quatre pastilles muettes en dessous : illisible, et surtout elle TAISAIT la
-// moitié de ce que la machine dit. Ici la place sert à quelque chose — la température de
-// condensation, les circulateurs comptés, et les deux appoints électriques distingués, qui étaient
-// fondus en un seul voyant alors qu'ils ne coûtent pas la même chose.
+// Layout: the `icon | label | value` lines of the Weather view (`.wx-detail`), in two
+// columns when the card is wide. The previous version squeezed four measurements onto a 14 px line and
+// aligned four mute pills below: unreadable, and above all it SILENCED half of
+// what the machine says. Here the space serves a purpose — the condensing temperature,
+// the circulators counted, and the two electric backups told apart, which had been
+// merged into a single indicator although they do not cost the same.
 //
-// Rien ne bouge : les dix lignes sont TOUJOURS là, dans le même ordre. Une machine qui se met à
-// dégivrer allume une ligne déjà présente, elle ne pousse rien vers le bas.
+// Nothing moves: the ten lines are ALWAYS there, in the same order. A machine that starts
+// defrosting lights up a line that is already present, it pushes nothing down.
 
 const props = defineProps<{ unit: MelcloudUnit }>()
 const { t, locale } = useI18n()
 
 const temp = (v: number | null) => (v === null ? '—' : formatTemp(v, locale.value))
 
-/** Écart départ / retour : ce que la machine cède réellement au circuit. Absent si l'un des deux manque. */
+/** Flow / return difference: what the machine actually gives to the circuit. Absent if either is missing. */
 const deltaT = computed(() => {
   const { flowTempC: f, returnTempC: r } = props.unit
   return f === null || r === null ? null : Math.round((f - r) * 10) / 10
@@ -35,9 +35,9 @@ const deltaT = computed(() => {
 interface Line { key: string; icon: IconName; label: string; value: string; on: boolean; warn?: boolean }
 
 /**
- * Les mesures d'abord, les états ensuite. Un état inactif garde sa ligne et affiche un tiret :
- * c'est ce qui permet de lire « non, l'appoint électrique ne tourne pas » aussi vite que le
- * contraire — une pastille éteinte, elle, se confond avec une pastille qu'on n'a pas remarquée.
+ * Measurements first, states after. An inactive state keeps its line and shows a dash:
+ * that is what lets you read "no, the electric backup is not running" as quickly as the
+ * opposite — an unlit pill, for its part, gets mistaken for a pill one has not noticed.
  */
 const lines = computed<Line[]>(() => {
   const u = props.unit
@@ -58,8 +58,8 @@ const lines = computed<Line[]>(() => {
 })
 
 /**
- * « Injoignable » se lit dans `stale`, jamais dans `offline` : sur cette machine, le fabricant coche
- * `Offline` alors qu'elle remonte toutes les minutes. Le serveur tranche sur la fraîcheur.
+ * "Unreachable" is read from `stale`, never from `offline`: on this machine, the vendor ticks
+ * `Offline` although it reports every minute. The server decides on freshness.
  */
 const seen = computed(() => (props.unit.lastSeen === null ? null : new Date(props.unit.lastSeen)))
 </script>
@@ -83,7 +83,7 @@ const seen = computed(() => (props.unit.lastSeen === null ? null : new Date(prop
       </div>
     </div>
 
-    <!-- `hasError` et jamais le code : chez ce fabricant, 8000 est la valeur du BON fonctionnement -->
+    <!-- `hasError` and never the code: at this vendor, 8000 is the value of GOOD operation -->
     <p v-if="unit.error.hasError" class="unit__alert small">
       <StrokeIcon name="alert" :size="14" />
       {{ unit.error.message ?? $t('heating.unit.errorCode', { code: unit.error.code ?? '?' }) }}
@@ -105,8 +105,8 @@ const seen = computed(() => (props.unit.lastSeen === null ? null : new Date(prop
 </template>
 
 <style scoped>
-/* `space-between` : étirée à la hauteur de l'historique voisin, la carte répartit ses blocs au lieu
-   de les tasser en haut et de laisser un trou sous le dernier. */
+/* `space-between`: stretched to the height of the neighboring history, the card spreads its blocks instead
+   of packing them at the top and leaving a hole under the last one. */
 .unit { padding: 14px 16px; display: grid; gap: 12px; min-width: 0; align-content: space-between; }
 .unit__head { display: flex; align-items: center; gap: 12px; }
 .unit__main { flex: 1 1 auto; min-width: 0; }
@@ -117,19 +117,19 @@ const seen = computed(() => (props.unit.lastSeen === null ? null : new Date(prop
 .unit__status { font-size: 12px; margin-top: 2px; }
 .unit__alert { display: flex; align-items: center; gap: 8px; margin: 0; color: #d24a43; }
 
-/* Deux colonnes dès que la carte est assez large : dix lignes en une seule colonne feraient une
-   carte deux fois plus haute que l'historique voisin. */
+/* Two columns as soon as the card is wide enough: ten lines in a single column would make a
+   card twice as tall as the neighboring history. */
 .unit__rows { display: grid; gap: 2px 24px; margin: 0; grid-template-columns: 1fr; }
 @media (min-width: 520px) { .unit__rows { grid-template-columns: 1fr 1fr; } }
-/* la ligne de la vue Météo : icône, libellé, valeur, hauteur fixe */
+/* the Weather view's line: icon, label, value, fixed height */
 .line { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 10px; height: 30px; min-width: 0; }
 .line__icon { color: var(--muted); }
 .line__label { margin: 0; font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .line__value { margin: 0; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--muted); }
-/* ce qui tourne se voit : la valeur reprend l'encre du texte, l'icône passe à l'accent */
+/* what runs is visible: the value takes the text ink, the icon turns to the accent */
 .line[data-on="1"] .line__value { color: var(--text); }
 .line[data-on="1"] .line__icon { color: var(--accent); }
-/* un appoint ÉLECTRIQUE qui tourne est ce qui coûte cher sur cette carte : il s'annonce en orange */
+/* an ELECTRIC backup that runs is what costs a lot on this card: it announces itself in orange */
 .line[data-on="1"][data-warn="1"] .line__icon,
 .line[data-on="1"][data-warn="1"] .line__value { color: #d38b22; }
 .unit__seen { margin: 0; }

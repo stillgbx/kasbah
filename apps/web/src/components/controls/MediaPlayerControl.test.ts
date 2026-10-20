@@ -8,8 +8,8 @@ import MediaPlayerControl from './MediaPlayerControl.vue'
 
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn(() => Promise.resolve()) }) }))
 
-// Ce qu'un lecteur affiche quand il ne dit presque rien : appli native d'une TV Android (Prime Video),
-// direct sans durée, ou métadonnées en retard. Cas relevés en réel, voir le wiki 3_6_google-cast.
+// What a player displays when it says almost nothing: native app of an Android TV (Prime Video),
+// live stream without a duration, or late metadata. Cases observed on the real thing, see the wiki 3_6_google-cast.
 
 const descriptor: DeviceDescriptor = {
   id: 'google_cast:tv', pluginId: 'google_cast', externalId: 'tv', kind: 'media_player', name: 'TV Salon',
@@ -20,7 +20,7 @@ const base: StateFor<'media_player'> = { kind: 'media_player', updatedAt: 0, ava
 
 const times = (w: ReturnType<typeof mount>) => w.find('.now__times')
 const hidden = (w: ReturnType<typeof mount>, sel: string) => w.find(sel).classes().includes('now--hidden')
-// rangée de transport : répéter, précédent, −10 s, lecture, +10 s, suivant, stop
+// transport row: repeat, previous, −10 s, play, +10 s, next, stop
 const KEY = { repeat: 0, previous: 1, back: 2, play: 3, forward: 4, next: 5, stop: 6 } as const
 
 describe('MediaPlayerControl', () => {
@@ -31,13 +31,13 @@ describe('MediaPlayerControl', () => {
   })
 
   it('shows the position alone when the duration is unknown, and never a negative time', () => {
-    // Prime Video annonce `duration: -0.001` : le plugin la retire, mais l'UI ne doit pas non plus
-    // en faire un temps si elle arrive quand même (autre plugin, simulation)
+    // Prime Video announces `duration: -0.001`: the plugin removes it, but the UI must not
+    // make a time out of it either if it arrives anyway (other plugin, simulation)
     const w = mount(MediaPlayerControl, { props: { descriptor, state: { ...base, nowPlaying: { title: '', source: 'Prime Video', positionS: 141.89, durationS: -0.001 } } } })
-    expect(times(w).text()).toBe('2:21')                    // position seule, pas de total
+    expect(times(w).text()).toBe('2:21')                    // position only, no total
     expect(times(w).text()).not.toContain('-')
-    expect(w.findAll('.now__times > .now--hidden')).toHaveLength(0) // les temps sont visibles
-    expect(hidden(w, '.now__seek')).toBe(true)              // le curseur, non : rien à parcourir
+    expect(w.findAll('.now__times > .now--hidden')).toHaveLength(0) // the times are visible
+    expect(hidden(w, '.now__seek')).toBe(true)              // the slider is not: nothing to scrub
   })
 
   it('shows both times and an active slider on a real duration', () => {
@@ -47,13 +47,13 @@ describe('MediaPlayerControl', () => {
   })
 
   it('greys out previous / next / jumps / repeat / seek on a live stream, but not play-pause nor stop', () => {
-    // le direct de franceinfo : « précédent » y coupait le flux (SEEK à 0 côté plugin)
+    // the franceinfo live stream: "previous" cut the stream there (SEEK to 0 on the plugin side)
     const live = { descriptor, state: { ...base, nowPlaying: { title: 'franceinfo', source: 'Radio France', positionS: 38.2, live: true } } }
     const keys = mount(MediaPlayerControl, { props: live }).findAll('.v-btn')
     for (const k of ['repeat', 'previous', 'back', 'forward', 'next'] as const) expect(keys[KEY[k]]!.attributes('disabled'), k).toBeDefined()
-    expect(keys[KEY.play]!.attributes('disabled')).toBeUndefined()    // lecture / pause
+    expect(keys[KEY.play]!.attributes('disabled')).toBeUndefined()    // play / pause
     expect(keys[KEY.stop]!.attributes('disabled')).toBeUndefined()    // stop
-    // un direct à durée (rare) ne se parcourt pas davantage
+    // a live stream with a duration (rare) is no more scrubbable
     const w = mount(MediaPlayerControl, { props: { descriptor, state: { ...live.state, nowPlaying: { ...live.state.nowPlaying, durationS: 3600 } } } })
     expect(w.find('.now__seek input').attributes('disabled')).toBeDefined()
   })
@@ -61,7 +61,7 @@ describe('MediaPlayerControl', () => {
   it('keeps previous, next and the 10 s jumps active on an ordinary track', () => {
     const keys = mount(MediaPlayerControl, { props: { descriptor, state: { ...base, nowPlaying: { title: 'Terracotta', positionS: 42.5, durationS: 187.2 } } } }).findAll('.v-btn')
     for (const k of ['previous', 'back', 'play', 'forward', 'next', 'stop'] as const) expect(keys[KEY[k]]!.attributes('disabled'), k).toBeUndefined()
-    // sans flux Kasbah, pas de file : rien à répéter
+    // without a Kasbah stream, no queue: nothing to repeat
     expect(keys[KEY.repeat]!.attributes('disabled')).toBeDefined()
   })
 
@@ -75,10 +75,10 @@ describe('MediaPlayerControl', () => {
     expect(w.emitted('command')?.[2]).toEqual([{ type: 'media_player.seek', positionS: 187 }])
   })
 
-  it('keeps the four lines of the block when nothing plays (rien ne doit bouger)', () => {
+  it('keeps the four lines of the block when nothing plays (nothing must move)', () => {
     const w = mount(MediaPlayerControl, { props: { descriptor, state: { ...base, playback: 'idle' } } })
     expect(times(w).exists()).toBe(true)
-    expect(w.findAll('.now__times > .now--hidden')).toHaveLength(2)  // les deux temps
+    expect(w.findAll('.now__times > .now--hidden')).toHaveLength(2)  // the two times
     expect(hidden(w, '.now__seek')).toBe(true)
   })
 
@@ -88,17 +88,17 @@ describe('MediaPlayerControl', () => {
       const state = { ...base, playback: 'paused' as const, nowPlaying: { title: 'Terracotta', positionS: 40, durationS: 200 } }
       const w = mount(MediaPlayerControl, { props: { descriptor, state } })
       const sliders = w.findAllComponents({ name: 'VSlider' })
-      // premier VSlider = position ; le second est le volume
+      // first VSlider = position; the second is the volume
       await sliders[0]!.vm.$emit('end', 120)
       expect(w.emitted('command')?.[0]).toEqual([{ type: 'media_player.seek', positionS: 120 }])
       expect(times(w).text().startsWith('2:00')).toBe(true)
 
-      // écho optimiste puis relevé d'avant le geste : la cible reste affichée
+      // optimistic echo then a reading from before the gesture: the target stays displayed
       await w.setProps({ state: { ...state, nowPlaying: { ...state.nowPlaying, positionS: 120 } } })
       await w.setProps({ state: { ...state, nowPlaying: { ...state.nowPlaying, positionS: 42 } } })
       expect(times(w).text().startsWith('2:00')).toBe(true)
 
-      // le vrai relevé, après la tenue minimale
+      // the real reading, after the minimum hold
       vi.advanceTimersByTime(SEEK_HOLD_MIN_MS + 100)
       await w.setProps({ state: { ...state, nowPlaying: { ...state.nowPlaying, positionS: 119 } } })
       expect(times(w).text().startsWith('1:59')).toBe(true)
@@ -127,7 +127,7 @@ describe('MediaPlayerControl', () => {
       expect(keys[KEY.repeat]!.attributes('disabled')).toBeUndefined()
       await keys[KEY.next]!.trigger('click')
       expect(musicQueueNext).toHaveBeenCalledWith('google_cast:tv')
-      expect(w.emitted('command')).toBeUndefined()   // la file saute, pas l'enceinte
+      expect(w.emitted('command')).toBeUndefined()   // the queue jumps, not the speaker
       await keys[KEY.repeat]!.trigger('click')
       expect(musicQueueRepeat).toHaveBeenCalledWith('google_cast:tv', 'once')
     } finally {
@@ -147,7 +147,7 @@ describe('MediaPlayerControl', () => {
       const live = { ...base, nowPlaying: { title: 'France Info', artist: 'France', positionS: 30, live: true } }
       const w = mount(MediaPlayerControl, { props: { descriptor: castable, state: live } })
       await vi.waitFor(() => expect(w.find('.now__quality').text()).toBe('MP3 128 kb/s'))
-      // passé à autre chose : la station ne dit plus rien de ce qu'il joue
+      // moved on to something else: the station no longer says anything about what it plays
       await w.setProps({ state: { ...live, nowPlaying: { ...live.nowPlaying, title: 'FIP' } } })
       expect(w.find('.now__quality').text()).toBe('')
     } finally {

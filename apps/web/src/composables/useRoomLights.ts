@@ -2,12 +2,12 @@ import { computed } from 'vue'
 import type { DeviceDescriptor, StateFor } from '@kasbah/shared'
 import { useDevicesStore } from '../stores/devices'
 
-// Lampes d'une pièce, telles que les voient ses deux contrôles d'ensemble : l'interrupteur maître
-// (`RoomLightsToggle`) et le curseur de luminosité (`RoomBrightness`). Ils partagent la même lecture
-// pour ne jamais se contredire — l'un allumé, l'autre qui prétend qu'il n'y a rien à régler.
+// Lights of a room, as seen by its two overall controls: the master switch
+// (`RoomLightsToggle`) and the brightness slider (`RoomBrightness`). They share the same reading
+// so as never to contradict each other — one on, the other claiming there is nothing to set.
 //
-// L'INVENTAIRE décide de la présence des contrôles, pas la joignabilité : un pont qui ne répond plus
-// ne doit pas faire apparaître et disparaître un interrupteur sous le doigt (règle « rien ne bouge »).
+// The INVENTORY decides whether the controls are present, not reachability: a bridge that no longer answers
+// must not make a switch appear and disappear under the finger ("nothing moves" rule).
 
 export interface RoomLight {
   id: string

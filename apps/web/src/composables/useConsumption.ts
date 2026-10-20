@@ -2,13 +2,13 @@ import { onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue'
 import type { DeviceConsumption } from '@kasbah/shared'
 import { getTransport } from '../api'
 
-/** L'historique de consommation ne bouge qu'à l'heure ou au jour (cf. plugin comap, sondage 30 s) : pas la peine de le relire plus vite que ça. */
+/** The consumption history only moves on the hour or the day (cf. comap plugin, 30 s polling): no point re-reading it faster than that. */
 const CONSUMPTION_REFRESH_MS = 5 * 60 * 1000
 
 /**
- * Historique de consommation d'un appareil `water`, à la demande (`GET /api/devices/:id/consumption`),
- * comme les prévisions et le journal (`useForecast`, `useJournals`) : le serveur le tient à jour,
- * relire coûte une requête locale. Un échec garde l'historique d'avant ; sans appareil, rien n'est demandé.
+ * Consumption history of a `water` device, on demand (`GET /api/devices/:id/consumption`),
+ * like the forecasts and the log (`useForecast`, `useJournals`): the server keeps it up to date,
+ * re-reading costs one local request. A failure keeps the previous history; without a device, nothing is requested.
  */
 export function useConsumption(deviceId: Ref<string | undefined>) {
   const consumption = ref<DeviceConsumption | null>(null)

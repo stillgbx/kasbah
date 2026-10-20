@@ -10,9 +10,9 @@ import { useDevicesStore } from '../stores/devices'
 import { useNotificationsStore } from '../stores/notifications'
 import { HEARD_NOTHING_MS, useVoiceInput } from './useVoiceInput'
 
-// Le micro de la recherche : appuyer, parler, rappuyer → le WAV part au plugin avec les noms de la
-// maison, et le texte entendu revient à l'appelant. Le décodage audio du navigateur est simulé :
-// happy-dom n'a ni micro, ni `MediaRecorder`, ni `AudioContext`.
+// The search microphone: press, speak, press again → the WAV goes to the plugin with the house's
+// names, and the heard text comes back to the caller. The browser's audio decoding is simulated:
+// happy-dom has neither a microphone, nor `MediaRecorder`, nor `AudioContext`.
 
 vi.mock('../lib/wav', async (orig) => ({ ...(await orig<typeof Wav>()), toMono16k: vi.fn(async () => new Float32Array(16_000)) }))
 
@@ -31,7 +31,7 @@ const track = { stop: vi.fn() }
 const transcribe = vi.fn(async () => ({ text: 'Allume la cuisine', ms: 300 }))
 const speak = vi.fn(async () => new Blob(['RIFF'], { type: 'audio/wav' }))
 
-/** `answer` : ce que l'appelant rend après l'assistant (la réponse à dire, ou rien). */
+/** `answer`: what the caller returns after the assistant (the reply to say, or nothing). */
 function harness(answer: string | null = null) {
   const heard: string[] = []
   let api!: ReturnType<typeof useVoiceInput>
@@ -50,7 +50,7 @@ beforeEach(() => {
 afterEach(() => { setTransport(null); vi.unstubAllGlobals() })
 
 describe('useVoiceInput', () => {
-  it('sait si le plugin tourne, et transcrit ce qui a été dit avec les noms de la maison', async () => {
+  it('knows whether the plugin is running, and transcribes what was said with the house\'s names', async () => {
     useDevicesStore().setEntries([{ descriptor: { id: 'mock:l', pluginId: 'mock', externalId: 'l', kind: 'light', name: 'Spots cuisine', capabilities: ['on_off'], meta: {} } as DeviceDescriptor, state: { kind: 'light', updatedAt: 0, available: true, on: false } as DeviceEntry['state'] }])
     const { heard, api } = harness()
     await flushPromises()
@@ -60,14 +60,14 @@ describe('useVoiceInput', () => {
     api().toggle(); await flushPromises()
     expect(heard).toEqual(['Allume la cuisine'])
     expect(api().phase.value).toBe('idle')
-    expect(track.stop).toHaveBeenCalled()                       // le micro est rendu
+    expect(track.stop).toHaveBeenCalled()                       // the microphone is released
     const [audio, hints] = transcribe.mock.calls[0] as unknown as [string, string[]]
     expect(atob(audio).slice(0, 4)).toBe('RIFF')
-    expect(atob(audio).length).toBe(44 + 16_000 * 2)            // 1 s à 16 kHz, 16 bits
+    expect(atob(audio).length).toBe(44 + 16_000 * 2)            // 1 s at 16 kHz, 16 bits
     expect(hints).toContain('Spots cuisine')
   })
 
-  it('s’arrête seul au bout de 15 s', async () => {
+  it('stops by itself after 15 s', async () => {
     vi.useFakeTimers()
     try {
       const { heard, api } = harness()
@@ -80,7 +80,7 @@ describe('useVoiceInput', () => {
     } finally { vi.useRealTimers() }
   })
 
-  it('dit pourquoi le micro manque sur une adresse http, sans rien demander au navigateur', async () => {
+  it('says why the microphone is missing on an http address, without asking the browser anything', async () => {
     vi.stubGlobal('isSecureContext', false)
     const { api } = harness()
     api().toggle(); await flushPromises()
@@ -89,7 +89,7 @@ describe('useVoiceInput', () => {
     expect(useNotificationsStore().queue.at(-1)?.text).toContain('adresse http')
   })
 
-  it('dit « rien entendu » dans le champ, sans bandeau, quelques secondes', async () => {
+  it('says "heard nothing" in the field, without a banner, for a few seconds', async () => {
     transcribe.mockResolvedValueOnce({ text: '', ms: 1 })
     const { heard, api } = harness()
     const queued = useNotificationsStore().queue.length
@@ -105,7 +105,7 @@ describe('useVoiceInput', () => {
     } finally { vi.useRealTimers() }
   })
 
-  it('reparler efface « rien entendu »', async () => {
+  it('speaking again clears "heard nothing"', async () => {
     transcribe.mockResolvedValueOnce({ text: '', ms: 1 })
     const { api } = harness()
     api().toggle(); await flushPromises()
@@ -115,7 +115,7 @@ describe('useVoiceInput', () => {
     expect(api().heardNothing.value).toBe(false)
   })
 
-  it('ne dit rien quand les réponses parlées sont éteintes', async () => {
+  it('says nothing when spoken replies are off', async () => {
     const { api } = harness('Les spots de la cuisine sont allumés.')
     api().toggle(); await flushPromises()
     api().toggle(); await flushPromises()

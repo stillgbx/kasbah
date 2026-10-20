@@ -5,8 +5,8 @@ import type { AgendaCalendar, AgendaEvent } from '../../api/transport'
 import { addDays, fromKey } from '../../lib/agenda'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// La fiche d'une occurrence : quand, où, dans quel agenda, et ce que dit sa description. Lecture
-// seule, comme tout l'agenda pour l'instant.
+// An occurrence's sheet: when, where, in which calendar, and what its description says. Read-only,
+// like the whole calendar for now.
 
 const props = defineProps<{ event: AgendaEvent | null; calendar: AgendaCalendar | undefined }>()
 const emit = defineEmits<{ close: [] }>()

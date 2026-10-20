@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { geoToLocal, parseHouse, parseRelief, reliefDelta, type House } from '@kasbah/shared'
 import { fetchIgnRelief } from './ignRelief'
 
-// Le service IGN est simulé : une pente qui monte de 1 cm par mètre vers l'est, et un LiDAR qui ne
-// couvre que la moitié ouest de la parcelle.
+// The IGN service is simulated: a slope rising 1 cm per meter toward the east, and a LiDAR that
+// only covers the west half of the parcel.
 
 const house: House = parseHouse({
   schemaVersion: 1, id: 'h', name: 'H',
@@ -30,22 +30,22 @@ function fakeIgn(calls: string[]): typeof fetch {
   }) as typeof fetch
 }
 
-describe('relief IGN', () => {
-  it('prend le LiDAR là où il existe, le RGE ALTI ailleurs, et met le zéro sous la maison', async () => {
+describe('IGN relief', () => {
+  it('takes the LiDAR where it exists, the RGE ALTI elsewhere, and puts zero under the house', async () => {
     const calls: string[] = []
     const { relief, source } = await fetchIgnRelief(house, 2, fakeIgn(calls))
     expect(source).toBe('mixed')
     expect(calls).toContain('ign_lidar_hd_mnt_mono_wld')
     expect(calls).toContain('ign_rge_alti_wld')
     const g = parseRelief(relief)!
-    // sous la maison (x ≈ 3) : zéro, à un centimètre d'arrondi près
+    // under the house (x ≈ 3): zero, to within a centimeter of rounding
     expect(Math.abs(reliefDelta(g, 3, 3))).toBeLessThanOrEqual(0.01)
-    // 20 m plus à l'est : 20 cm plus haut
+    // 20 m further east: 20 cm higher
     expect(reliefDelta(g, 23, 3)).toBeCloseTo(0.2, 1)
     expect(reliefDelta(g, -17, 3)).toBeCloseTo(-0.2, 1)
   })
 
-  it('dit l’erreur du service plutôt que de rendre un terrain plat', async () => {
+  it('reports the service\'s error rather than returning a flat terrain', async () => {
     const failing = (async () => new Response('down', { status: 503 })) as unknown as typeof fetch
     await expect(fetchIgnRelief(house, 2, failing)).rejects.toThrow('IGN 503')
   })

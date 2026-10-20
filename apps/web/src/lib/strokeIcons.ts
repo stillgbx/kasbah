@@ -1,45 +1,45 @@
 import type { DeviceDescriptor, DeviceKind } from '@kasbah/shared'
 
-// Jeu d'icônes « trait » (24×24, stroke 1.8, arrondi) propre au langage visuel de l'app. Les
-// chemins sont dessinés au trait (fill none) : voir components/ui/StrokeIcon.vue.
+// "Stroke" icon set (24×24, stroke 1.8, rounded) specific to the app's visual language. The
+// paths are drawn as strokes (fill none): see components/ui/StrokeIcon.vue.
 
 export const ICONS = {
   light: 'M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.6.6 1 1.3 1 2.5h6c0-1.2.4-1.9 1-2.5A6 6 0 0 0 12 3z',
   shutter: 'M4 3h16v18H4zM4 8h16M4 13h16M4 18h16',
   speaker: 'M6 3h12v18H6zM12 8.5m-1.5 0a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0M12 15.5m-3 0a3 3 0 1 0 6 0a3 3 0 1 0-6 0',
-  /** Renommer : crayon posé sur une ligne. */
+  /** Rename: pencil resting on a line. */
   pencil: 'M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17v3zM14.5 7.5l2 2',
-  /** Rotation d'un quart de tour, sens horaire / antihoraire (orientation d'un écran). */
+  /** Quarter-turn rotation, clockwise / counterclockwise (orientation of a screen). */
   rotateRight: 'M20 12a8 8 0 1 1-2.6-5.9M20 4v5h-5',
   rotateLeft: 'M4 12a8 8 0 1 0 2.6-5.9M4 4v5h5',
-  /** Annuler / rétablir : flèche qui revient en arrière (ou repart) au-dessus d'une ligne. */
+  /** Undo / redo: arrow that goes back (or forward) above a line. */
   undo: 'M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11',
   redo: 'M15 14l5-5-5-5M20 9H9.5a5.5 5.5 0 0 0 0 11H13',
-  /** Téléviseur (ou boîtier branché dessus) : écran sur pied. */
+  /** TV (or box plugged into it): screen on a stand. */
   tv: 'M3 5h18v12H3zM8 21h8M12 17v4',
-  /** Médias (catégorie) : le glyphe cast — un écran et le flux qui y arrive. */
+  /** Media (category): the cast glyph — a screen and the stream arriving on it. */
   cast: 'M3 8V5.5h18v13h-8M3 11.5a7 7 0 0 1 7 7M3 15.5a3 3 0 0 1 3 3M3.4 18.5m-.5 0a.5.5 0 1 0 1 0a.5.5 0 1 0-1 0',
-  /** Note de musique — vue YouTube Music (non officiel). */
+  /** Musical note — YouTube Music view (unofficial). */
   music: 'M9 18V5l12-2v13M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0zm12-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0z',
-  /** Sources de la page Musique, au trait comme le reste (leurs logos redessinés, pas les marques en couleur). */
+  /** Music page sources, as strokes like the rest (their logos redrawn, not the colored brands). */
   sourceYtmusic: 'M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0-18 0M12 12m-5 0a5 5 0 1 0 10 0a5 5 0 1 0-10 0M10.5 9.8v4.4l3.6-2.2z',
   sourceRadio: 'M3 9h18v11H3zM7 9l11-5M8 14.5m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0M14 13h4M14 16h4',
   sourceMixcloud: 'M7 19h10.5a4.5 4.5 0 0 0 .4-8.98A7 7 0 0 0 4.6 12.6 4 4 0 0 0 7 19zM9 16v-3.5l1.5 2 1.5-2 1.5 2 1.5-2V16',
-  /** Silhouette artiste (placeholder pochette). */
+  /** Artist silhouette (cover placeholder). */
   person: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
-  /** Disque / album (placeholder pochette). */
+  /** Disc / album (cover placeholder). */
   disc: 'M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0-18 0M12 12m-2.5 0a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0',
-  /** Écran connecté (Nest Hub) : tablette posée, un trait pour le pied. */
+  /** Connected screen (Nest Hub): tablet set down, one stroke for the foot. */
   tablet: 'M4 5.5h16a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5H4A1.5 1.5 0 0 1 2.5 16V7A1.5 1.5 0 0 1 4 5.5zM9 20.5h6',
   thermostat: 'M12 3a2 2 0 0 1 2 2v9.2a4 4 0 1 1-4 0V5a2 2 0 0 1 2-2zM12 9v8',
   vacuum: 'M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0-18 0M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0-6 0M12 3v3',
   mower: 'M3 13h9l3-6h4v6h2M5 17m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0M17 17m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0M7 17h8',
   heatpump: 'M3 6h18v12H3zM3 10h18M7 14h2M12 14h5',
   /**
-   * Chauffage (rubrique du rail) : un RADIATEUR — corps, quatre ailettes verticales, deux pieds.
-   * `heatpump` y servait et ne se lisait pas à 18 px : un rectangle barré d'un trait ressemble à
-   * n'importe quel boîtier. Les ailettes sont VERTICALES et les pieds dépassent, pour ne pas se
-   * confondre avec `shutter`, qui est le seul autre cadre à lignes du rail et les a horizontales.
+   * Heating (rail section): a RADIATOR — body, four vertical fins, two feet.
+   * `heatpump` was used there and did not read at 18 px: a rectangle crossed by a stroke looks like
+   * any box. The fins are VERTICAL and the feet stick out, so as not to be
+   * confused with `shutter`, which is the only other frame with lines in the rail and has them horizontal.
    */
   radiator: 'M4.5 5.5h15v10h-15zM8.5 5.5v10M12 5.5v10M15.5 5.5v10M7 15.5v3M17 15.5v3',
   filtration: 'M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11zM9 14a3 3 0 0 0 3 3',
@@ -55,8 +55,8 @@ export const ICONS = {
   sun: 'M12 12m-4 0a4 4 0 1 0 8 0a4 4 0 1 0-8 0M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4',
   moon: 'M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z',
   auto: 'M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0-18 0M12 3v18M12 3a9 9 0 0 1 0 18',
-  /* Apparence « Automatique » : un soleil posé sur l'horizon, pour la distinguer de `auto` (le
-     disque mi-clair mi-sombre, qui dit « comme le système ») et de `sun` (l'apparence claire). */
+  /* "Auto" appearance: a sun resting on the horizon, to tell it apart from `auto` (the
+     half-light half-dark disc, which says "like the system") and from `sun` (the light appearance). */
   sunHorizon: 'M3 18h18M8 18a4 4 0 0 1 8 0M12 5v2.5M5.2 9.2l1.8 1.8M18.8 9.2l-1.8 1.8',
   back: 'M15 6l-6 6 6 6',
   chevron: 'M9 6l6 6-6 6',
@@ -70,18 +70,18 @@ export const ICONS = {
   pause: 'M7 5h4v14H7zM13 5h4v14h-4z',
   move: 'M12 2v20M2 12h20M12 2l-3 3M12 2l3 3M12 22l-3-3M12 22l3-3M2 12l3-3M2 12l3 3M22 12l-3-3M22 12l-3 3',
   link: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1',
-  /** Automatisation : un embranchement « si… alors » — une entrée, le losange du test, une sortie
-   *  fléchée. Distinct de l'engrenage (réglages), des étincelles et de la répétition. */
+  /** Automation: an "if… then" branch — an input, the test's diamond, an output
+   *  with an arrow. Distinct from the gear (settings), the sparkles and the repeat. */
   automation: 'M3 12h4M7 12l5-5 5 5-5 5zM17 12h4M18.5 9.5 21 12l-2.5 2.5',
   sparkle: 'M11 3l1.7 4.3L17 9l-4.3 1.7L11 15l-1.7-4.3L5 9l4.3-1.7zM17.5 14.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z',
   plus: 'M12 5v14M5 12h14',
   trash: 'M4 7h16M9 7V5h6v2M6.5 7l1 13h9l1-13M10 11v6M14 11v6',
-  /** Dupliquer : deux feuilles décalées. */
+  /** Duplicate: two offset sheets. */
   copy: 'M9 9h11v11H9zM5 15H4V4h11v1',
 
-  // variantes d'état (voir deviceIcons.ts) et classes de capteur
+  // state variants (see deviceIcons.ts) and sensor classes
   lightOn: 'M9 18h6M10 21h4M12 6a4.5 4.5 0 0 0-3 7.9c.5.5.8 1.1.8 2.1h4.4c0-1 .3-1.6.8-2.1A4.5 4.5 0 0 0 12 6zM12 1.5v1.6M4.6 5.1l1.2 1.2M19.4 5.1l-1.2 1.2M1.8 12.6h1.6M20.6 12.6h1.6',
-  /** Plafonnier + ventilateur : ampoule à gauche, souffle à droite — les deux fonctions au même plafond. */
+  /** Ceiling light + fan: bulb on the left, airflow on the right — the two functions on the same ceiling. */
   lightFan: 'M7 17h5M7.8 20h3.4M9.5 3a5 5 0 0 0-3.3 8.7c.5.5.8 1.1.8 2.1h5c0-1 .3-1.6.8-2.1A5 5 0 0 0 9.5 3zM15 7.5h6M15.5 11h5M16.5 14.5h3.5',
   lightFanOn: 'M7 17h5M7.8 20h3.4M9.5 5.5a3.8 3.8 0 0 0-2.5 6.6c.4.4.7.9.7 1.7h3.6c0-.8.3-1.3.7-1.7A3.8 3.8 0 0 0 9.5 5.5zM9.5 1.8v1.4M4 5.2l1 1M15 7.5h6M15.5 11h5M16.5 14.5h3.5',
   shutterOpen: 'M4 3h16v18H4zM4 6.5h16M4 10h16',
@@ -90,49 +90,49 @@ export const ICONS = {
   droplet: 'M12 3.5c3 3.7 5.5 6.6 5.5 9.4a5.5 5.5 0 0 1-11 0c0-2.8 2.5-5.7 5.5-9.4z',
   flask: 'M9 3h6M10 3v6.5L5.6 18a2 2 0 0 0 1.7 3h9.4a2 2 0 0 0 1.7-3L14 9.5V3M8 15h8',
   gauge: 'M4 17.5a8.5 8.5 0 1 1 16 0M12 14l3.5-3.5',
-  /** Chaud / froid : un soleil et un flocon de part et d'autre d'une diagonale (le sélecteur de mode
-   *  d'une clim). Pour des températures sans unité : ni °C ni °F, et pas de thermomètre, ambigu de loin. */
+  /** Hot / cold: a sun and a snowflake on either side of a diagonal (a mode selector
+   *  of an air conditioner). For temperatures without a unit: neither °C nor °F, and no thermometer, ambiguous from afar. */
   hotCold: 'M7 7m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0M7 1.8v1.8M7 10.4v1.8M1.8 7h1.8M10.4 7h1.8M3.3 3.3l1.3 1.3M9.4 9.4l1.3 1.3M3.3 10.7l1.3-1.3M9.4 4.6l1.3-1.3M20 4L4 20M17 13v8M13.5 15l7 4M13.5 19l7-4',
-  /** Pneu vu de côté : la bande de roulement crantée, la jante, le moyeu. */
+  /** Tire seen from the side: the notched tread, the rim, the hub. */
   tire: 'M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0-18 0M12 12m-4.5 0a4.5 4.5 0 1 0 9 0a4.5 4.5 0 1 0-9 0M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0-2 0M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8',
   waves: 'M3 9c1.5-1.6 3-1.6 4.5 0s3 1.6 4.5 0 3-1.6 4.5 0 3 1.6 4.5 0M3 15c1.5-1.6 3-1.6 4.5 0s3 1.6 4.5 0 3-1.6 4.5 0 3 1.6 4.5 0',
 
-  // animaux — la patte pour la vue, la trémie et le jet pour distinguer les deux appareils l'un de
-  // l'autre à 16 px : deux gamelles se ressembleraient trop, c'est ce qui les SURMONTE qui les dit.
-  /** Patte : quatre coussinets et la paume — la vue Animaux. */
-  /** TENS (électrostimulation) : une impulsion, trait plat puis pointe, comme un tracé de courant. */
+  // pets — the paw for the view, the hopper and the jet to tell the two devices apart
+  // at 16 px: two bowls would look too alike, it is what SURMOUNTS them that tells them.
+  /** Paw: four pads and the palm — the Pets view. */
+  /** TENS (electrostimulation): a pulse, flat stroke then spike, like a current trace. */
   pulse: 'M3 12h4l2.5-6 4 12 2.5-6H21',
   paw: 'M6.6 10.2m-1.8 0a1.8 1.8 0 1 0 3.6 0a1.8 1.8 0 1 0-3.6 0M9.9 7.1m-1.9 0a1.9 1.9 0 1 0 3.8 0a1.9 1.9 0 1 0-3.8 0M14.1 7.1m-1.9 0a1.9 1.9 0 1 0 3.8 0a1.9 1.9 0 1 0-3.8 0M17.4 10.2m-1.8 0a1.8 1.8 0 1 0 3.6 0a1.8 1.8 0 1 0-3.6 0M12 16.4m-4.2 0a4.2 3.5 0 1 0 8.4 0a4.2 3.5 0 1 0-8.4 0',
-  /** Calendrier : la vue Agenda. */
+  /** Calendar: the Agenda view. */
   calendar: 'M4 5.5h16v15H4zM4 10h16M8.5 3v4M15.5 3v4',
-  /** Liste de courses : un chariot. */
+  /** Shopping list: a cart. */
   cart: 'M3 4h2.4l2.3 11h10.1L20 7.5H6.5M9.5 19.5m-1.5 0a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0M16.5 19.5m-1.5 0a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0',
-  /** Cahier ouvert : la vue École (devoirs, cahier de liaison). */
+  /** Open notebook: the School view (homework, liaison notebook). */
   school: 'M12 6.5C10 5 7 4.5 4 5v13c3-.5 6 0 8 1.5c2-1.5 5-2 8-1.5V5c-3-.5-6 0-8 1.5zM12 6.5v13',
-  /** Bulle : un message (cahier de liaison). */
+  /** Bubble: a message (liaison notebook). */
   message: 'M4 5h16v11H10l-4 3.5V16H4zM8 9h8M8 12.5h5',
-  /** Journal : les publications d'une classe. */
+  /** Journal: a class's publications. */
   news: 'M4 5h12v13a1.5 1.5 0 0 0 1.5 1.5H6A2 2 0 0 1 4 17.5zM16 9h4v9a1.5 1.5 0 0 1-3 0M7 9h6M7 12.5h6M7 16h4',
-  /** Horloge : l'heure du prochain repas. */
+  /** Clock: the next meal's time. */
   clock: 'M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0-18 0M12 6.5V12l3.5 2',
-  /** Mangeoire : la trémie qui se vide dans la gamelle. */
+  /** Feeder: the hopper that empties into the bowl. */
   feeder: 'M4.5 13h15a7.5 7.5 0 0 1-15 0zM8 3h8v4.5a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2z',
-  /** Fontaine : la gamelle et le jet qui retombe des deux côtés. */
+  /** Fountain: the bowl and the jet falling back on both sides. */
   fountain: 'M4.5 13h15a7.5 7.5 0 0 1-15 0zM12 13V9.5M12 9.5a3.5 3.5 0 0 1 3.5-3.5M12 9.5A3.5 3.5 0 0 0 8.5 6',
 
-  // contrôles d'appareil
+  // device controls
   minus: 'M5 12h14',
   stop: 'M6 6h12v12H6z',
   skipPrev: 'M18 5v14L8 12zM6 5v14',
   skipNext: 'M6 5v14l10-7zM18 5v14',
-  /** Répéter : deux flèches en boucle, le centre laissé libre pour « 1 » ou « ∞ ». */
+  /** Repeat: two arrows in a loop, the center left free for "1" or "∞". */
   repeat: 'M17 2l3 3-3 3M4 11V9a4 4 0 0 1 4-4h12M7 22l-3-3 3-3M20 13v2a4 4 0 0 1-4 4H4',
-  /** File : lire ensuite (le plus en tête de liste) / ajouter à la fin (le plus en bas). */
+  /** Queue: play next (the one at the top of the list) / add to the end (the one at the bottom). */
   queueNext: 'M4 6h9M4 12h16M4 18h16M18 3v6M15 6h6',
   queueAdd: 'M4 6h16M4 12h16M4 18h9M18 15v6M15 18h6',
   volume: 'M4 9.5h3.5L12 5.5v13L7.5 14.5H4zM15.8 9.5a4 4 0 0 1 0 5M18.6 7a7.5 7.5 0 0 1 0 10',
   volumeOff: 'M4 9.5h3.5L12 5.5v13L7.5 14.5H4zM16 9.5l5 5M21 9.5l-5 5',
-  // micro de la recherche (voix de l'assistant) : capsule, arceau, pied
+  // search microphone (assistant's voice): capsule, arch, stand
   mic: 'M12 3.5a3 3 0 0 0-3 3V12a3 3 0 0 0 6 0V6.5a3 3 0 0 0-3-3zM5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9 21h6',
   collapseUp: 'M4 4h16M12 20V9M8 13l4-4 4 4',
   collapseDown: 'M4 20h16M12 4v11M8 11l4 4 4-4',
@@ -147,14 +147,14 @@ export const ICONS = {
   lockOpen: 'M6 10h12v11H6zM8.5 10V7a3.5 3.5 0 0 1 6.8-1.2M12 14v3',
   linkOff: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1M3 3l18 18',
   wrench: 'M20.5 6.5a4.5 4.5 0 0 1-5.9 5.9L6.4 20.6a2 2 0 0 1-2.8-2.8l8.2-8.2a4.5 4.5 0 0 1 5.9-5.9l-3 3 2.8 2.8z',
-  /** Recherche : la loupe. */
+  /** Search: the magnifying glass. */
   search: 'M11 11m-7 0a7 7 0 1 0 14 0a7 7 0 1 0-14 0M16 16l4.5 4.5',
   zoomIn: 'M11 11m-7 0a7 7 0 1 0 14 0a7 7 0 1 0-14 0M16 16l4.5 4.5M8 11h6M11 8v6',
   zoomOut: 'M11 11m-7 0a7 7 0 1 0 14 0a7 7 0 1 0-14 0M16 16l4.5 4.5M8 11h6',
   download: 'M12 4v11M7 10l5 5 5-5M5 20h14',
-  /** Une pièce, vue en plan : quatre murs et une ouverture. */
+  /** A room, in plan view: four walls and an opening. */
   room: 'M4 4h16v16H4zM4 10h5M15 4v6',
-  /** Éléments du jardin : feuillu, conifère, palmier, buisson, pierre, haie. */
+  /** Garden elements: broadleaf, conifer, palm, bush, stone, hedge. */
   treeFruit: 'M12 21v-7M12 14l-2.5-2M12 15.5l2.5-2M12 3a5 5 0 0 0-4.8 6.4A4 4 0 0 0 9 17h6a4 4 0 0 0 1.8-7.6A5 5 0 0 0 12 3zM9.5 8.5h.01M14.5 9h.01M11.5 12h.01',
   treeBroadleaf: 'M12 21v-7M12 14l-2.5-2M12 15.5l2.5-2M12 3a5 5 0 0 0-4.8 6.4A4 4 0 0 0 9 17h6a4 4 0 0 0 1.8-7.6A5 5 0 0 0 12 3z',
   treeConifer: 'M12 21v-3M12 3l-4 5h2.5L7 12.5h3L6 18h12l-4-5.5h3L13.5 8H16z',
@@ -163,10 +163,10 @@ export const ICONS = {
   shrub: 'M4 19h16M5.5 19a3.5 3.5 0 0 1 1.3-6.7A4.5 4.5 0 0 1 15 10.2a4 4 0 0 1 3.5 8.8',
   rock: 'M3 19l2.5-7 4-4 5 1 3.5 4 3 6zM9.5 8l1.5 5 3.5-4M11 13l-2 6',
   hedge: 'M2 19h20M3.5 19v-8.5c1.5-2 3-2 4.25 0 1.25-2 2.75-2 4.25 0 1.5-2 3-2 4.25 0 1.25-2 2.75-2 4.25 0V19',
-  /** Un niveau : des plans empilés. */
+  /** A level: stacked plans. */
   layers: 'M12 3l9 4.5-9 4.5-9-4.5zM3 12.5l9 4.5 9-4.5M3 17l9 4.5 9-4.5',
 
-  // états et alias Vuetify (voir plugins/icons.ts)
+  // Vuetify states and aliases (see plugins/icons.ts)
   check: 'M5 12.5l5 5L19 6.5',
   checkCircle: 'M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0-18 0M8.5 12.5l2.5 2.5 4.5-5',
   alert: 'M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0-18 0M12 7.5v5M12 16h.01',
@@ -181,14 +181,14 @@ export const ICONS = {
   arrowRight: 'M4 12h16M14 6l6 6-6 6',
   unfold: 'M8 9l4-4 4 4M8 15l4 4 4-4',
   eyedropper: 'M19.5 6.5a2.8 2.8 0 0 0-4-4l-2.3 2.3-1-1-1.5 1.5 6 6 1.5-1.5-1-1zM13.2 8.8L5 17v2h2l8.2-8.2',
-  // « favori / mémorisé » : une pipette ou une coche ne se lisent pas à 16 px (essais rejetés)
+  // "favorite / memorized": a pipette or a check mark do not read at 16 px (rejected trials)
   star: 'M12 3.5L14.1 9.4 20.4 9.6 15.4 13.4 17.2 19.4 12 15.9 6.8 19.4 8.6 13.4 3.6 9.6 9.9 9.4z',
   grip: 'M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01',
-  // caméra de surveillance : corps incliné, objectif, bras de fixation au mur
+  // surveillance camera: tilted body, lens, wall-mounting arm
   camera: 'M3.5 7.5l12.5-4 1.5 4.7-12.5 4zM5 12.2l.8 2.3M5.8 14.5h7.7M9.7 14.5V20M6 20h7.4M17.5 8.2l3.5-1.1',
-  // sonnette : boîtier vertical, œil de caméra en haut, bouton en bas
+  // doorbell: vertical case, camera eye at the top, button at the bottom
   doorbell: 'M8 2.5h8v19H8zM12 8m-2.2 0a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0-4.4 0M12 16.5m-1.2 0a1.2 1.2 0 1 0 2.4 0a1.2 1.2 0 1 0-2.4 0',
-  // météo : un nuage commun à toute la famille, et ce qui en tombe ou ce qui l'accompagne
+  // weather: a cloud common to the whole family, and what falls from it or accompanies it
   cloud: 'M7 19h10.5a4.5 4.5 0 0 0 .4-8.98A7 7 0 0 0 4.6 12.6 4 4 0 0 0 7 19z',
   cloudSun: 'M8 2.5V4M2.5 8H4M4.6 4.6l1 1M11.4 4.6l-1 1M5.4 9.6A3 3 0 0 1 10.6 7M9 20h9a3.5 3.5 0 0 0 .3-7A5.5 5.5 0 0 0 7.8 14.6 3 3 0 0 0 9 20z',
   cloudMoon: 'M14 2.5a4 4 0 0 0 5.6 5.1 4.5 4.5 0 0 1-6.9-2.2M9 20h9a3.5 3.5 0 0 0 .3-7A5.5 5.5 0 0 0 7.8 14.6 3 3 0 0 0 9 20z',
@@ -199,14 +199,14 @@ export const ICONS = {
   thunder: 'M7 14h10.5a4.5 4.5 0 0 0 .4-8.98A7 7 0 0 0 4.6 7.6 4 4 0 0 0 7 14zM13 15l-2.5 4h3L11 23',
   wind: 'M3 8h11a2.5 2.5 0 1 0-2.5-2.5M3 12h15a2.5 2.5 0 1 1-2.5 2.5M3 16h9a2 2 0 1 1-2 2',
 
-  // silhouettes d'enceinte (réglage Forme) : le libellé reste en infobulle du Segmented
-  /** Colonne / tube — enceinte cylindrique. */
+  // speaker silhouettes (Shape setting): the label stays in the Segmented's tooltip
+  /** Column / tube — cylindrical speaker. */
   speakerTube: 'M9 3.5h6a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2z',
-  /** Galet — ovale aplati. */
+  /** Pebble — flattened oval. */
   speakerPebble: 'M4 12a8 5.5 0 1 0 16 0a8 5.5 0 1 0-16 0',
-  /** Barre de son — rectangle allongé. */
+  /** Soundbar — elongated rectangle. */
   speakerBar: 'M2.5 10h19a1.5 1.5 0 0 1 0 4h-19a1.5 1.5 0 0 1 0-4z',
-  /** Bloc-réveil — petit rectangle. */
+  /** Alarm-clock block — small rectangle. */
   speakerBlock: 'M6.5 7.5h11v9h-11z',
 } as const
 export type IconName = keyof typeof ICONS
@@ -233,7 +233,7 @@ export function kindIcon(
   return KIND_ICON[kind]
 }
 
-/** Élément SVG autonome (pour les marqueurs DOM de la scène, hors Vue). */
+/** Standalone SVG element (for the scene's DOM markers, outside Vue). */
 export function iconSvg(name: IconName, size = 16, strokeWidth = 2): SVGSVGElement {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
   svg.setAttribute('viewBox', '0 0 24 24')

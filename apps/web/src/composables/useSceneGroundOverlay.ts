@@ -7,11 +7,11 @@ import { useDevicesStore } from '../stores/devices'
 import { useHouseStore } from '../stores/house'
 import { useSceneZonesStore } from '../stores/sceneZones'
 
-// La carte du terrain des tondeuses PEINTE dans la scène, pour celles où on l'a demandé (panneau de la
-// tondeuse, `stores/sceneZones`). Elle se pose par sa station sur la base du robot (SANS `mapOffset`,
-// voir plus bas), à défaut sur le robot quand il est à la station — dernier ancrage gardé,
-// un robot parti tondre ne fait pas disparaître sa carte. La scène ne repeint que si les formes ont
-// changé : la position d'un robot qui tond fait recalculer, pas repeindre.
+// The mowers' terrain map PAINTED in the scene, for those where it was requested (mower
+// panel, `stores/sceneZones`). It is placed by its station on the robot's base (WITHOUT `mapOffset`,
+// see below), failing that on the robot when it is at the station — last anchor kept,
+// a robot gone mowing does not make its map disappear. The scene only repaints if the shapes
+// changed: the position of a mowing robot triggers recomputing, not repainting.
 
 type MowerEntry = DeviceEntry & { state: StateFor<'mower'> }
 
@@ -24,7 +24,7 @@ export function useSceneGroundOverlay(scene: { ready: Ref<boolean>; setGroundOve
   const shownMowers = computed(() => devices.list.filter((e): e is MowerEntry =>
     e.state.kind === 'mower' && e.descriptor.capabilities.includes('site_map') && zones.isShown(e.descriptor.id)))
 
-  // la carte de chaque robot montré, redemandée quand ses zones changent (tracées, retirées, renommées)
+  // the map of each shown robot, re-requested when its zones change (drawn, removed, renamed)
   const mapKeys = computed(() => shownMowers.value.map((m) =>
     `${m.descriptor.id}|${(m.state.workAreas ?? []).map((a) => `${a.id}:${a.name}`).join(',')}|${(m.state.stayOutZones ?? []).map((z) => `${z.id}:${z.name}`).join(',')}`))
   watch(mapKeys, (keys, old) => {
@@ -41,10 +41,10 @@ export function useSceneGroundOverlay(scene: { ready: Ref<boolean>; setGroundOve
       const hd = house.houseDeviceFor(id)
       const loc = m.state.location
       const location = loc && hd?.gpsOffset ? offsetLocation(origin, loc, hd.gpsOffset) : loc
-      // PAS de `mapOffset` ici : il recale la carte sur la PHOTO satellite, c'est-à-dire qu'il compense
-      // l'erreur de calage de la maison sur le monde (`origin`). Dans la scène, tout est dans le repère
-      // de la maison et la base du robot y est juste : l'appliquer décalait la carte d'autant
-      // (constaté sur la vraie maison : la station à plusieurs mètres de la base).
+      // NO `mapOffset` here: it realigns the map on the satellite PHOTO, that is, it compensates
+      // the error of the house's alignment on the world (`origin`). In the scene, everything is in the
+      // house's frame and the robot's base is right there: applying it shifted the map by as much
+      // (observed on the real house: the station several meters from the base).
       const anchor = siteMapAnchor({
         origin, dock: house.dockFor(id)?.center, location,
         atStation: m.state.activity === 'parked' || m.state.activity === 'charging',
@@ -55,7 +55,7 @@ export function useSceneGroundOverlay(scene: { ready: Ref<boolean>; setGroundOve
     })
   })
 
-  // pas `immediate` seul : la scène se construit au montage — `ready` rejoue l'état quand elle est là
+  // not `immediate` alone: the scene is built at mount — `ready` replays the state when it is there
   let painted = ''
   watch([shapes, scene.ready], ([s, ready]) => {
     if (!ready) return

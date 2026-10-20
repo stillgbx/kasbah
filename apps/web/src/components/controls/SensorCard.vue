@@ -6,13 +6,13 @@ import { formatSensor } from '../../lib/format'
 import DeviceIcon from '../DeviceIcon.vue'
 import LightHistoryChart from './LightHistoryChart.vue'
 
-// Deux racines (rien où hériter) : l'aiguillage passe à tous les contrôles `@command` et `relay-from`, inutiles ici
+// Two roots (nothing to inherit): the dispatch passes `@command` and `relay-from` to all the controls, useless here
 defineOptions({ inheritAttrs: false })
 const props = defineProps<{ descriptor: DeviceDescriptor; state: StateFor<'sensor'>; pending?: boolean; disabled?: boolean }>()
 const { d } = useI18n()
 /**
- * Panneau d'un volet solaire : son historique est tenu par le serveur (voir `LightHistoryChart`).
- * Calculé, pas lu une fois : le panneau garde ce composant d'un capteur à l'autre.
+ * Panel of a solar shutter: its history is kept by the server (see `LightHistoryChart`).
+ * Computed, not read once: the panel keeps this component from one sensor to another.
  */
 const hasLightHistory = computed(() => props.descriptor.meta.sensor?.deviceClass === 'illuminance' && !!props.descriptor.meta.linkedTo)
 </script>

@@ -14,8 +14,8 @@ import { useDevicesStore } from '../stores/devices'
 import { useSettingsStore } from '../stores/settings'
 import { useWeather } from './useWeather'
 
-// Adaptateur Vue du contrôleur de scène : cycle de vie, taille, apparence (style de rendu, heure,
-// thème Vuetify) → scène, maison/états → scène (diff par référence), événements de tap → callbacks.
+// Vue adapter of the scene controller: lifecycle, size, appearance (rendering style, time,
+// Vuetify theme) → scene, house/states → scene (diff by reference), tap events → callbacks.
 
 export interface UseHouseSceneArgs {
   canvas: Ref<HTMLCanvasElement | null>
@@ -30,9 +30,9 @@ type Handler<T extends unknown[]> = (...args: T) => void
 export function useHouseScene(args: UseHouseSceneArgs) {
   const supported = ref(true)
   const ready = ref(false)
-  /** La maison se prépare (matières, shaders, première image) : l'étape en cours, ou `null`. */
+  /** The house is being prepared (materials, shaders, first frame): the current step, or `null`. */
   const preparing = ref<{ stage: ScenePrepareStage; progress: { done: number; total: number } | null } | null>(null)
-  /** Une maison a été préparée et montrée au moins une fois (ou la 3D est indisponible : rien à attendre). */
+  /** A house has been prepared and shown at least once (or 3D is unavailable: nothing to wait for). */
   const shown = ref(false)
   const relief = shallowRef<ReliefEditState | null>(null)
   let scene: HouseScene | null = null
@@ -42,21 +42,21 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   const settings = useSettingsStore()
 
   const style = computed(() => styleById(settings.sceneStyle))
-  /** Le soleil bouge : en mode `auto`, l'heure de la scène est relue régulièrement, pas une seule fois. */
+  /** The sun moves: in `auto` mode, the scene's time is re-read regularly, not just once. */
   const clock = ref(new Date())
   const geo = computed(() => {
     const o = args.house.value?.origin
     return o ? { lat: o.lat, lon: o.lon } : null
   })
-  // la nébulosité vient de l'appareil météo quand il y en a un : c'est elle qui efface les ombres
-  // et grise le ciel (`three/core/ambience.ts`) ; sans météo, ciel dégagé
+  // cloud cover comes from the weather device when there is one: it is what erases the shadows
+  // and greys the sky (`three/core/ambience.ts`); without weather, clear sky
   const weather = useWeather()
-  // En débogage, les Réglages peuvent FORCER une météo dans la scène (pour la regarder sous la
-  // neige sans attendre janvier) : elle remplace alors la vraie ici, et seulement ici.
+  // In debug, Settings can FORCE a weather in the scene (to look at it under
+  // snow without waiting for January): it then replaces the real one here, and only here.
   const forced = computed(() => (settings.sceneDebug && settings.sceneWeather !== 'real' ? settings.sceneWeather : null))
   const ambience = computed(() => resolveAmbience({
     mode: settings.sceneAmbience, date: clock.value, geo: geo.value,
-    // le vent, lui, est toujours le vrai : la météo forcée n'en a pas de curseur
+    // the wind, for its part, is always the real one: the forced weather has no slider for it
     ...(weather.live.value ? { windKmh: weather.live.value.windKmh, windDirDeg: weather.live.value.windDirDeg } : {}),
     ...(forced.value
       ? { cloudiness: settings.sceneCloudCover / 100, visibilityM: settings.sceneVisibilityM, condition: forced.value }
@@ -66,7 +66,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
         ...(weather.live.value ? { condition: weather.live.value.condition } : {}),
       }),
   }))
-  /** Saison du jardin : imposée par les Réglages, ou celle de la date dans l'hémisphère de la maison. */
+  /** Garden season: imposed by Settings, or that of the date in the house's hemisphere. */
   const season = computed(() => resolveSeason(settings.sceneSeason, clock.value, geo.value?.lat))
 
   const deviceTap = new Set<Handler<[string]>>()
@@ -101,9 +101,9 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     scene.setAppearance({ ui: readUiTheme(), style: style.value, ambience: ambience.value, assets: settings.sceneAssets, tuning: settings.sceneTuning })
     supported.value = scene.supported
     if (!scene.supported) shown.value = true
-    // Une scène 3D ne se débogue qu'en la regardant : en développement seulement, le contrôleur est
-    // posé sur `window` pour qu'une console (ou un pilote de navigateur) puisse lire ses lumières,
-    // ses matériaux et sa caméra sans instrumenter le code à chaque fois.
+    // A 3D scene can only be debugged by looking at it: in development only, the controller is
+    // placed on `window` so that a console (or a browser driver) can read its lights,
+    // materials and camera without instrumenting the code each time.
     if (import.meta.env.DEV) (window as unknown as { kasbahScene?: HouseScene }).kasbahScene = scene
     if (!scene.supported) return
     scene.on('deviceTap', (key) => deviceTap.forEach((f) => f(key)))
@@ -142,8 +142,8 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     useResizeObserver(parent, fit)
 
     scene.setDescriptors(devices.descriptors)
-    // Les deux réglages de la scène que les Réglages tiennent (budget de rendu, projection) passent
-    // d'abord ; ce que l'appelant impose par `options` gagne ensuite.
+    // The two scene settings that Settings holds (render budget, projection) go
+    // first; what the caller imposes through `options` wins afterwards.
     scene.setOptions({ quality: settings.sceneQuality, projection: settings.sceneProjection, ...(args.options ? args.options.value : {}) })
     if (args.house.value) scene.load(args.house.value)
     scene.updateStates(args.states.value)
@@ -151,20 +151,20 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     ready.value = true
   })
 
-  // seuls les appareils ont changé (placement, auto-placement) → marqueurs seulement, la caméra ne bouge pas
+  // only the devices changed (placement, auto-placement) → markers only, the camera does not move
   watch(args.house, (h, prev) => {
     if (!scene || !h) return
     if (prev && sameShell(prev, h)) { scene.updateDevices(h); return }
-    // seules des ouvertures ont bougé (on en règle une au doigt) → murs du seul niveau touché
+    // only openings moved (one is being adjusted by finger) → walls of the touched level only
     if (prev && sameShellButOpenings(prev, h)) { scene.updateOpenings(h); return }
-    // seul le BÂTI a changé (finitions, forme des pièces, emprises) → maillages des niveaux, toit et
-    // terrain s'il le faut, sans recharger la maison ni recentrer la caméra
+    // only the SHELL changed (finishes, room shape, footprints) → level meshes, roof and
+    // terrain if needed, without reloading the house nor recentering the camera
     if (prev && sameShellButBuilding(prev, h)) { scene.updateBuilding(h); return }
-    // seules des PLACES ont bougé → marquage au sol et engins qui s'y rangent, rien d'autre
+    // only PLACES moved → ground marking and vehicles stored there, nothing else
     if (prev && sameShellButParkings(prev, h)) { scene.updateParkings(h); return }
-    // seul le JARDIN a changé (on pose, glisse ou règle un arbre) → les éléments seulement
+    // only the GARDEN changed (a tree is placed, dragged or adjusted) → the elements only
     if (prev && sameShellButGarden(prev, h)) { scene.updateGarden(h); return }
-    // seul le TERRAIN a changé (relief ou contour enregistré) → le terrain et ce qui s'y pose
+    // only the TERRAIN changed (relief or outline saved) → the terrain and what is placed on it
     if (prev && sameShellButRelief(prev, h)) { scene.updateRelief(h); return }
     scene.load(h); scene.setDescriptors(devices.descriptors); scene.updateStates(args.states.value, true)
   })
@@ -173,14 +173,14 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   if (args.options) watch(args.options, (o) => scene?.setOptions(o), { deep: true })
   watch(() => settings.sceneQuality, (q) => scene?.setOptions({ quality: q }))
   watch(() => settings.sceneProjection, (p) => scene?.setOptions({ projection: p }))
-  // nextTick : les variables CSS du nouveau thème doivent être appliquées avant lecture
+  // nextTick: the new theme's CSS variables must be applied before reading
   watch(() => theme.global.name.value, () => { void nextTick(() => scene?.setAppearance({ ui: readUiTheme() })) })
   watch(style, (s) => scene?.setAppearance({ style: s }))
   watch(season, (s) => scene?.setSeason(s))
-  // Une ambiance refait le ciel (~35 ms) : les curseurs de la météo forcée en envoient une par cran,
-  // et le glissement accrochait. Au plus une tous les 100 ms, la dernière toujours appliquée.
-  // Et seulement si elle a CHANGÉ : l'ambiance est un objet recalculé, neuf à chaque relecture (le quart
-  // d'heure, un état météo aux mêmes valeurs), et chacune refaisait ciel, matières et ombres pour rien.
+  // A light scene redoes the sky (~35 ms): the forced weather's sliders send one per notch,
+  // and the drag stuttered. At most one every 100 ms, the last one always applied.
+  // And only if it CHANGED: the ambience is a recomputed object, new on each re-read (the quarter
+  // hour, a weather state with the same values), and each one redid sky, materials and shadows for nothing.
   let sentAmbience = JSON.stringify(ambience.value)
   watchThrottled(ambience, (a) => {
     const key = JSON.stringify(a)
@@ -189,10 +189,10 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     scene?.setAppearance({ ambience: a })
   }, { throttle: 100 })
   watch(() => settings.sceneAssets, (v) => scene?.setAppearance({ assets: v }))
-  // Le banc de réglage tire ses curseurs en direct : chemin court (chaîne d'image, halos, trait
-  // de pièce), là où `setAppearance` referait matières, ciel et ombres à chaque image du glissement.
+  // The tuning bench draws its sliders live: short path (frame chain, halos, room
+  // outline), where `setAppearance` would redo materials, sky and shadows at each frame of the drag.
   watch(() => settings.sceneTuning, (t) => scene?.setTuning(t))
-  // Un quart d'heure : le soleil se déplace de moins de 4°, et la scène ne rend qu'à la demande.
+  // A quarter hour: the sun moves by less than 4°, and the scene only renders on demand.
   useIntervalFn(() => { clock.value = new Date() }, 15 * 60 * 1000)
   watch(visibility, (v) => scene?.setPaused(v === 'hidden'))
 
@@ -231,7 +231,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     setEditingParkings: (on: boolean) => scene?.setEditingParkings(on),
     setEditingRelief: (on: boolean) => scene?.setEditingRelief(on),
     setTerrainTab: (tab: 'relief' | 'outline') => scene?.setTerrainTab(tab),
-    /** L'édition du relief telle que la scène la voit (rayon, point choisi, brouillon), `null` hors du mode. */
+    /** Relief editing as the scene sees it (radius, chosen point, draft), `null` outside the mode. */
     relief,
     setPlacingParking: (on: boolean) => scene?.setPlacingParking(on),
     onGroundTap: (f: Handler<[[number, number], string | null]>) => { groundTap.add(f) },
@@ -267,16 +267,16 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   }
 }
 
-/** Même bâti (niveaux, pièces, site, toit, défauts, apparence) : seul `devices` peut différer. */
+/** Same shell (levels, rooms, site, roof, defaults, appearance): only `devices` may differ. */
 function sameShell(a: House, b: House): boolean {
   const shell = (h: House) => JSON.stringify([h.levels, h.rooms, h.site, h.roof, h.defaults, h.style])
   return shell(a) === shell(b)
 }
 
 /**
- * Même bâti aux OUVERTURES près. `rooms` porte `openings[]` : régler une fenêtre sortait donc de
- * `sameShell` et passait par `load()` complet — toute la maison reconstruite, caméra recentrée, à
- * chaque mouvement de doigt. Ce cas-là a son chemin (`updateOpenings`).
+ * Same shell except the OPENINGS. `rooms` carries `openings[]`: adjusting a window thus left
+ * `sameShell` and went through a full `load()` — the whole house rebuilt, camera recentered, on
+ * every finger movement. This case has its own path (`updateOpenings`).
  */
 function sameShellButOpenings(a: House, b: House): boolean {
   const shell = (h: House) => JSON.stringify([h.levels, h.rooms.map((r) => ({ ...r, openings: [] })), h.site, h.roof, h.defaults, h.style])
@@ -284,32 +284,32 @@ function sameShellButOpenings(a: House, b: House): boolean {
 }
 
 /**
- * Même maison au BÂTI près : finitions (`room.style`, `house.style`), forme des pièces (polygone,
- * murs, ouvertures recalées, cotes), emprise des niveaux — et les appareils auto-placés qui en
- * suivent le centre. Ni le site, ni le toit déclaré, ni les défauts, ni l'élévation des niveaux.
+ * Same house except the SHELL: finishes (`room.style`, `house.style`), room shape (polygon,
+ * walls, readjusted openings, measurements), level footprint — and the auto-placed devices that
+ * follow their center. Neither the site, nor the declared roof, nor the defaults, nor the level elevation.
  */
 function sameShellButBuilding(a: House, b: House): boolean {
   const shell = (h: House) => JSON.stringify([h.levels.map((l) => ({ ...l, outline: null })), h.rooms.map((r) => [r.id, r.levelId]), h.site, h.roof, h.defaults])
   return shell(a) === shell(b)
 }
 
-/** Même bâti au TERRAIN près (relief, contour) : l'enregistrer ne doit pas recentrer la caméra. */
+/** Same shell except the TERRAIN (relief, outline): saving it must not recenter the camera. */
 function sameShellButRelief(a: House, b: House): boolean {
   const shell = (h: House) => JSON.stringify([h.levels, h.rooms, { ...h.site, relief: null, terrain: null }, h.roof, h.defaults])
   return shell(a) === shell(b)
 }
 
 /**
- * Même bâti aux PLACES DE STATIONNEMENT près. Elles vivent dans `site`, donc régler une place
- * sortait de `sameShell` et rechargeait la maison entière — caméra recentrée à chaque mouvement de
- * doigt, le même piège que les ouvertures. Ce cas-là a son chemin (`updateParkings`).
+ * Same shell except the PARKING SPACES. They live in `site`, so adjusting a space
+ * left `sameShell` and reloaded the whole house — camera recentered on every finger
+ * movement, the same trap as the openings. This case has its own path (`updateParkings`).
  */
 function sameShellButParkings(a: House, b: House): boolean {
   const shell = (h: House) => JSON.stringify([h.levels, h.rooms, { ...h.site, parkings: [] }, h.roof, h.defaults])
   return shell(a) === shell(b)
 }
 
-/** Même bâti au JARDIN près (arbres, buissons, pierres) : les glisser ne recharge pas la maison. */
+/** Same shell except the GARDEN (trees, bushes, stones): dragging them does not reload the house. */
 function sameShellButGarden(a: House, b: House): boolean {
   const shell = (h: House) => JSON.stringify([h.levels, h.rooms, { ...h.site, garden: [] }, h.roof, h.defaults])
   return shell(a) === shell(b)

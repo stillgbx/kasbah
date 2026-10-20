@@ -1,9 +1,9 @@
 import type { WeatherCondition } from '@kasbah/shared'
 import type { IconName } from './strokeIcons'
 
-// Ce que l'UI fait d'une condition météo : une icône, la même partout (widget, vue, carte). Le jour
-// et la nuit ne changent que les conditions où le ciel se voit — un nuage de pluie est le même à
-// minuit.
+// What the UI does with a weather condition: an icon, the same everywhere (widget, view, map). Day
+// and night only change the conditions where the sky is visible — a rain cloud is the same at
+// midnight.
 
 const CONDITION_ICONS: Record<WeatherCondition, IconName> = {
   clear: 'sun', partly_cloudy: 'cloudSun', cloudy: 'cloud', fog: 'fog', drizzle: 'drizzle', rain: 'rain',
@@ -16,7 +16,7 @@ export function conditionIcon(condition: WeatherCondition, isDay = true): IconNa
   return CONDITION_ICONS[condition]
 }
 
-/** Point cardinal (8 secteurs) d'une direction en degrés depuis le nord, pour l'annoncer en lettres. */
+/** Cardinal point (8 sectors) of a direction in degrees from north, to announce it in letters. */
 export function compassPoint(deg: number): 'N' | 'NE' | 'E' | 'SE' | 'S' | 'SW' | 'W' | 'NW' {
   const points = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'] as const
   return points[Math.round((((deg % 360) + 360) % 360) / 45) % 8]!

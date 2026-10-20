@@ -1,24 +1,24 @@
 import type { ConsumptionPoint, DeviceConsumption } from '@kasbah/shared'
 
 /**
- * Historique de consommation d'eau (`GET /api/devices/:id/consumption`) mis en colonnes pour un
- * graphique en barres. Trois principes, tous dictés par le contrat (`deviceConsumptionSchema`) :
+ * Water consumption history (`GET /api/devices/:id/consumption`) put into columns for a
+ * bar chart. Three principles, all dictated by the contract (`deviceConsumptionSchema`):
  *
- * 1. Chaque période a un nombre de colonnes FIXE (`PERIOD_STEPS`) : la largeur du graphique ne
- *    dépend jamais de ce que le serveur a mesuré, seulement de la période choisie.
- * 2. Un pas jamais mesuré reste `litres: null`, jamais `0` — c'est le contrat qui le dit
- *    (« un pas jamais mesuré est absent, pas à zéro »), et c'est ce qui distingue à l'écran
- *    « mesuré à 0 L » de « pas de mesure ».
- * 3. `week` et `month` lisent tous les deux `daily` (la même série sert les deux échelles) ; seul
- *    le nombre de colonnes gardées change.
+ * 1. Each period has a FIXED number of columns (`PERIOD_STEPS`): the chart's width
+ *    never depends on what the server measured, only on the chosen period.
+ * 2. A step never measured stays `litres: null`, never `0` — the contract says so
+ *    ("a step never measured is absent, not at zero"), and it is what distinguishes on screen
+ *    "measured at 0 L" from "no measurement".
+ * 3. `week` and `month` both read `daily` (the same series serves both scales); only
+ *    the number of columns kept changes.
  */
 export type ConsumptionPeriod = 'day' | 'week' | 'month' | 'year'
 export const CONSUMPTION_PERIODS: readonly ConsumptionPeriod[] = ['day', 'week', 'month', 'year']
 
-/** Nombre de colonnes réservées par période — jamais le nombre de points reçus. */
+/** Number of columns reserved per period — never the number of points received. */
 export const PERIOD_STEPS: Record<ConsumptionPeriod, number> = { day: 24, week: 7, month: 31, year: 12 }
 
-/** La série du contrat qui nourrit cette période. */
+/** The contract series that feeds this period. */
 export function seriesFor(consumption: DeviceConsumption | null, period: ConsumptionPeriod): readonly ConsumptionPoint[] {
   if (!consumption) return []
   switch (period) {
@@ -31,7 +31,7 @@ export function seriesFor(consumption: DeviceConsumption | null, period: Consump
 
 export interface ConsumptionSlot { t: number; litres: number | null }
 
-/** Début du pas courant (heure pleine / minuit / premier du mois), selon la période. */
+/** Start of the current step (full hour / midnight / first of the month), depending on the period. */
 function currentStepStart(period: ConsumptionPeriod, now: number): Date {
   const d = new Date(now)
   if (period === 'day') { d.setMinutes(0, 0, 0); return d }
@@ -40,7 +40,7 @@ function currentStepStart(period: ConsumptionPeriod, now: number): Date {
   return d
 }
 
-/** Recule `n` pas (heures, jours ou mois civils) depuis un début de pas. */
+/** Steps back `n` steps (hours, days or calendar months) from a step start. */
 function stepBack(period: ConsumptionPeriod, from: Date, n: number): number {
   const d = new Date(from)
   if (period === 'day') d.setHours(d.getHours() - n)
@@ -49,16 +49,16 @@ function stepBack(period: ConsumptionPeriod, from: Date, n: number): number {
   return d.getTime()
 }
 
-/** Tolérance de rapprochement point ↔ pas attendu : un peu moins qu'un demi-pas, pour ne jamais confondre deux pas voisins. */
+/** Tolerance for matching point ↔ expected step: a little less than half a step, to never confuse two neighboring steps. */
 function tolerance(period: ConsumptionPeriod, stepStart: number, prevStepStart: number): number {
   return (stepStart - prevStepStart) * 0.4
 }
 
 /**
- * Range les points reçus dans les `PERIOD_STEPS[period]` derniers pas attendus, DU PLUS ANCIEN AU
- * PLUS RÉCENT. Un pas sans point à proximité reste `null` : c'est un pas jamais mesuré, pas une
- * consommation nulle. Le rapprochement se fait par proximité (et non égalité stricte de `t`) parce
- * que rien dans le contrat ne garantit que l'horloge du serveur tombe pile sur l'heure du navigateur.
+ * Puts the received points into the last `PERIOD_STEPS[period]` expected steps, FROM OLDEST TO
+ * MOST RECENT. A step with no point nearby stays `null`: it is a step never measured, not a
+ * zero consumption. Matching is done by proximity (not strict equality of `t`) because
+ * nothing in the contract guarantees that the server's clock lands exactly on the browser's hour.
  */
 export function bucketSlots(points: readonly ConsumptionPoint[], period: ConsumptionPeriod, now = Date.now()): ConsumptionSlot[] {
   const count = PERIOD_STEPS[period]
@@ -71,22 +71,22 @@ export function bucketSlots(points: readonly ConsumptionPoint[], period: Consump
   })
 }
 
-/** Somme des pas mesurés d'une fenêtre (les pas absents ne comptent ni pour ni contre). */
+/** Sum of the measured steps of a window (absent steps count neither for nor against). */
 export function slotsTotal(slots: readonly ConsumptionSlot[]): number {
   return slots.reduce((sum, s) => sum + (s.litres ?? 0), 0)
 }
 
-/** Le plus grand pas mesuré d'une fenêtre, plancher à 1 pour ne jamais diviser par zéro. */
+/** The largest measured step of a window, floored at 1 to never divide by zero. */
 export function slotsMax(slots: readonly ConsumptionSlot[]): number {
   return Math.max(1, ...slots.map((s) => s.litres ?? 0))
 }
 
 /**
- * Repères ronds pour l'axe des ordonnées : 3 à 4 valeurs lisibles (multiples de 1, 2 ou 5 × 10ⁿ),
- * jamais le maximum brut mesuré (un axe qui affiche « 12 396 » n'apprend rien qu'un axe à 5 000 /
- * 10 000 ne dise mieux). Le pas de la série (D3 `tickStep`) arrondit vers le haut : un repère qui
- * dépasserait le maximum réel est écarté plutôt que d'étirer les barres pour l'atteindre — c'est ce
- * qui produit l'exemple ci-dessus (12 396 de maximum réel, repères 5 000 et 10 000 seulement).
+ * Round ticks for the y-axis: 3 to 4 readable values (multiples of 1, 2 or 5 × 10ⁿ),
+ * never the raw measured maximum (an axis showing "12,396" teaches nothing that an axis at 5,000 /
+ * 10,000 does not say better). The series step (D3 `tickStep`) rounds upward: a tick that
+ * would exceed the real maximum is discarded rather than stretching the bars to reach it — this is what
+ * produces the example above (12,396 real maximum, ticks 5,000 and 10,000 only).
  */
 export function niceAxisTicks(max: number, targetCount = 3): number[] {
   if (max <= 0) return []
@@ -100,38 +100,38 @@ export function niceAxisTicks(max: number, targetCount = 3): number[] {
 }
 
 /**
- * Consommation moyenne d'un foyer français, en litres par personne et par jour — Observatoire
- * national des services publics d'eau et d'assainissement (SISPEA, données 2023, publiées 2025) ;
- * stable entre 144 et 150 L depuis 2014.
+ * Average consumption of a French household, in liters per person per day — Observatoire
+ * national des services publics d'eau et d'assainissement (SISPEA, 2023 data, published 2025);
+ * stable between 144 and 150 L since 2014.
  *
- * Un ORDRE DE GRANDEUR, jamais un verdict : la consommation PAR PERSONNE baisse quand le foyer
- * grandit (≈148 L/pers. à deux, ≈101 L/pers. à quatre — CIEAU/INSEE) et varie fortement d'une
- * région à l'autre (l'INSEE relève 100 L/j/habitant dans 133 communes franciliennes). `N × 145` ne
- * prétend donc qu'à situer, pas à juger.
+ * An ORDER OF MAGNITUDE, never a verdict: consumption PER PERSON drops as the household
+ * grows (≈148 L/pers. for two, ≈101 L/pers. for four — CIEAU/INSEE) and varies strongly from one
+ * region to another (INSEE reports 100 L/d/inhabitant in 133 communes of the Paris region). `N × 145` therefore
+ * only claims to situate, not to judge.
  */
 export const FRENCH_AVERAGE_LPD_PER_PERSON = 145
 
-/** Repère de consommation moyenne française pour un foyer de `householdSize` personnes, en L/jour. */
+/** French average consumption marker for a household of `householdSize` people, in L/day. */
 export function frenchAverageDailyLitres(householdSize: number): number {
   return FRENCH_AVERAGE_LPD_PER_PERSON * householdSize
 }
 
-/** Durée moyenne d'un mois civil (365,25 / 12) : le repère annuel s'en sert pour rester une DROITE
- * plutôt qu'un escalier suivant le nombre de jours réel de chaque mois — choix du propriétaire (voir
+/** Average length of a calendar month (365.25 / 12): the yearly marker uses it to stay a STRAIGHT LINE
+ * rather than a staircase following the real number of days of each month — owner's choice (see
  * `frenchAverageReference`). */
 const AVERAGE_DAYS_PER_MONTH = 30.44
 
 /**
- * Le repère à comparer à UN pas de la période choisie, ou `null` quand la comparaison n'a pas de
- * sens pour ce pas :
- * - `day` : chaque barre est une HEURE — personne ne consomme uniformément sur 24 h, une ligne
- *   horaire mentirait. Le repère se compare au TOTAL du jour, pas à une barre (voir le graphique).
- * - `week` / `month` : chaque barre est un JOUR — le repère est le même pour toutes, `N × 145`.
- * - `year` : chaque barre est un MOIS — le repère est aussi une DROITE, `N × 145 × 30,44`, pas un
- *   escalier suivant le nombre de jours réel de chaque mois : une ligne plate se lit d'un coup d'œil
- *   sur un mur, ce que le propriétaire préfère à l'exactitude de l'escalier (13,49 m³ un mois de 31
- *   jours, 12,18 en février). Contrepartie assumée : février se compare à un mois moyen et paraît
- *   donc un peu plus économe qu'il ne l'est (nuance donnée en infobulle, voir `referenceHint`).
+ * The marker to compare to ONE step of the chosen period, or `null` when the comparison makes no
+ * sense for that step:
+ * - `day`: each bar is an HOUR — nobody consumes uniformly over 24 h, an hourly line
+ *   would lie. The marker is compared to the day's TOTAL, not to a bar (see the chart).
+ * - `week` / `month`: each bar is a DAY — the marker is the same for all, `N × 145`.
+ * - `year`: each bar is a MONTH — the marker is also a STRAIGHT LINE, `N × 145 × 30.44`, not a
+ *   staircase following the real number of days of each month: a flat line reads at a glance
+ *   on a wall, which the owner prefers to the staircase's exactness (13.49 m³ for a 31-day
+ *   month, 12.18 in February). Accepted trade-off: February is compared to an average month and thus appears
+ *   a bit more economical than it is (nuance given in a tooltip, see `referenceHint`).
  */
 export function frenchAverageReference(period: ConsumptionPeriod, householdSize: number): number | null {
   if (period === 'day') return null

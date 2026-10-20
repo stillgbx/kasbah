@@ -1,13 +1,13 @@
 import type { AgendaEvent } from '../api/transport'
 
-// Calcul de la vue Agenda, sans Vue : périodes affichées (mois de six semaines, semaine du lundi,
-// jour), répartition des occurrences par jour, et colonnes des rendez-vous qui se chevauchent.
-// Tout est en heure LOCALE du navigateur (celle de la maison).
+// Computation of the Agenda view, without Vue: displayed periods (six-week month, Monday-based week,
+// day), distribution of occurrences by day, and columns of overlapping appointments.
+// Everything is in the browser's LOCAL time (that of the house).
 
 export type AgendaMode = 'month' | 'week' | 'day'
 export const AGENDA_MODES: AgendaMode[] = ['month', 'week', 'day']
 
-/** Jour local `YYYY-MM-DD` (la forme des journées entières du serveur). */
+/** Local day `YYYY-MM-DD` (the shape of the server's whole days). */
 export function dayKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
@@ -21,14 +21,14 @@ export function addDays(d: Date, n: number): Date {
 export function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate())
 }
-/** La semaine commence le lundi. */
+/** The week starts on Monday. */
 export function startOfWeek(d: Date): Date {
   return addDays(startOfDay(d), -((d.getDay() + 6) % 7))
 }
 
 /**
- * Les jours affichés pour un mode autour d'une date. Le mois a TOUJOURS six semaines : la grille
- * garde la même hauteur de février à mars.
+ * The days displayed for a mode around a date. The month ALWAYS has six weeks: the grid
+ * keeps the same height from February to March.
  */
 export function visibleDays(mode: AgendaMode, anchor: Date): Date[] {
   if (mode === 'day') return [startOfDay(anchor)]
@@ -36,13 +36,13 @@ export function visibleDays(mode: AgendaMode, anchor: Date): Date[] {
   return Array.from({ length: mode === 'week' ? 7 : 42 }, (_, i) => addDays(first, i))
 }
 
-/** La date de la période suivante (`+1`) ou précédente (`-1`). */
+/** The date of the next (`+1`) or previous (`-1`) period. */
 export function shift(mode: AgendaMode, anchor: Date, dir: 1 | -1): Date {
   if (mode === 'month') return new Date(anchor.getFullYear(), anchor.getMonth() + dir, 1)
   return addDays(anchor, dir * (mode === 'week' ? 7 : 1))
 }
 
-/** Les jours (clés) que touche une occurrence. Un rendez-vous sans durée tient dans son jour. */
+/** The days (keys) that an occurrence touches. An appointment without a duration fits within its day. */
 export function eventDays(e: AgendaEvent): string[] {
   const out: string[] = []
   if (e.allDay) {
@@ -54,14 +54,14 @@ export function eventDays(e: AgendaEvent): string[] {
   return out
 }
 
-/** Terminée à `now` : une journée entière l'est le lendemain de son dernier jour (fin exclusive). */
+/** Ended at `now`: a whole day is so on the day after its last day (end exclusive). */
 export function isPast(e: AgendaEvent, now: number): boolean {
   if (!e.allDay) return e.end <= now
   const today = dayKey(new Date(now))
   return e.start < today && e.end <= today
 }
 
-/** Occurrences par jour, journées entières d'abord, puis par heure de début. */
+/** Occurrences per day, whole days first, then by start time. */
 export function byDay(events: AgendaEvent[]): Map<string, AgendaEvent[]> {
   const map = new Map<string, AgendaEvent[]>()
   for (const e of events) {
@@ -81,15 +81,15 @@ function compareEvents(a: AgendaEvent, b: AgendaEvent): number {
   return (a.start as number) - (b.start as number) || (b.end as number) - (a.end as number)
 }
 
-/** Un rendez-vous posé dans la colonne d'un jour : minutes depuis minuit, colonne parmi `cols`. */
+/** An appointment placed in a day's column: minutes since midnight, column among `cols`. */
 export interface PlacedEvent { event: AgendaEvent; startMin: number; endMin: number; col: number; cols: number }
 
-/** Durée minimale affichée : un rendez-vous de cinq minutes reste lisible et touchable. */
+/** Minimum displayed duration: a five-minute appointment stays readable and touchable. */
 export const MIN_BLOCK_MIN = 30
 
 /**
- * Les rendez-vous (hors journées entières) d'un jour, rognés au jour et répartis en colonnes : des
- * blocs qui se chevauchent se partagent la largeur, un groupe qui ne chevauche rien la garde entière.
+ * The appointments (excluding whole days) of a day, clipped to the day and distributed into columns:
+ * overlapping blocks share the width, a group that overlaps nothing keeps it whole.
  */
 export function layoutDay(events: AgendaEvent[], day: Date): PlacedEvent[] {
   const dayStart = startOfDay(day).getTime()
@@ -97,7 +97,7 @@ export function layoutDay(events: AgendaEvent[], day: Date): PlacedEvent[] {
   const items = events
     .filter((e): e is AgendaEvent & { allDay: false } => !e.allDay && e.start < dayEnd && (e.end > dayStart || (e.end === e.start && e.start >= dayStart)))
     .map((event) => {
-      // minutes réelles (le décalage d'heure d'été est ignoré : la grille compte 24 heures)
+      // real minutes (the daylight saving shift is ignored: the grid counts 24 hours)
       const startMin = Math.max(0, Math.round((event.start - dayStart) / 60_000))
       const endMin = Math.min(24 * 60, Math.round((event.end - dayStart) / 60_000))
       return { event, startMin, endMin: Math.max(endMin, startMin + MIN_BLOCK_MIN), col: 0, cols: 1 }

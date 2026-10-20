@@ -18,7 +18,7 @@ import FanControl from './FanControl.vue'
 import PetFeederCard from './PetFeederCard.vue'
 import PetFountainCard from './PetFountainCard.vue'
 
-// Aiguillage par kind : chaque contrôle reçoit (descriptor, state, pending) et émet `command`.
+// Dispatch by kind: each control receives (descriptor, state, pending) and emits `command`.
 const CONTROLS: Record<DeviceKind, Component> = {
   light: LightControl, cover: CoverControl, media_player: MediaPlayerControl, climate: ClimateControl, vacuum: VacuumControl,
   mower: MowerControl, sensor: SensorCard, energy: EnergyCard, ev_charger: EvChargerControl, vehicle: VehicleCard, camera: CameraCard,

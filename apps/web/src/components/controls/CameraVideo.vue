@@ -3,15 +3,15 @@ import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, 
 import { getTransport } from '../../api'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Vidéo en direct d'une caméra : le serveur relaie le flux RTSP en MP4 fragmenté sur un WebSocket
-// (`core/video/rtsp-relay.ts`), et ce composant le pousse dans un <video> par Media Source
-// Extensions. Le premier message est une ligne JSON qui annonce les codecs (MSE l'exige avant le
-// premier octet), puis l'entête MP4, puis les fragments — chacun commence par une image clé, donc
-// on peut décoder dès le premier reçu. On se tient au bord du direct : si le tampon prend plus de
-// quelques secondes d'avance (onglet en arrière-plan), on saute au bout plutôt que de traîner.
-// `autoplay` : le direct part tout seul (carte détail). Sinon (vue Caméras) la tuile montre la
-// dernière vignette JPEG que le serveur tient à jour, avec son âge ; là, le bouton stop arrête la
-// vignette (`paused`, émis à la vue qui le dit au serveur) et un bouton lecture lance le direct.
+// Live video of a camera: the server relays the RTSP stream as fragmented MP4 over a WebSocket
+// (`core/video/rtsp-relay.ts`), and this component pushes it into a <video> through Media Source
+// Extensions. The first message is a JSON line announcing the codecs (MSE requires it before the
+// first byte), then the MP4 header, then the fragments — each starts with a key frame, so
+// we can decode from the first one received. We stay at the live edge: if the buffer gets more than
+// a few seconds ahead (background tab), we jump to the end rather than lag behind.
+// `autoplay`: the live stream starts on its own (detail card). Otherwise (Cameras view) the tile shows the
+// last JPEG thumbnail the server keeps up to date, with its age; there, the stop button stops the
+// thumbnail (`paused`, emitted to the view which tells the server) and a play button starts the live stream.
 const props = withDefaults(defineProps<{ deviceId: string; autoplay?: boolean; snapshotAt?: number | null; inactive?: boolean; paused?: boolean; liveAllowed?: boolean }>(), { autoplay: true, snapshotAt: null, inactive: false, paused: false, liveAllowed: true })
 const emit = defineEmits<{ snapshots: [enabled: boolean]; live: [active: boolean] }>()
 
@@ -29,16 +29,16 @@ let ws: WebSocket | null = null
 let mediaSource: MediaSource | null = null
 let sourceBuffer: SourceBuffer | null = null
 let objectUrl: string | null = null
-/** Fragments en attente d'ajout ; `init` marque une entête (nouvelle source côté serveur). */
+/** Fragments waiting to be appended; `init` marks a header (new source on the server side). */
 const queue: { data: ArrayBuffer; init?: boolean }[] = []
 
-const KEEP_BEHIND_S = 30      // tampon conservé derrière la tête de lecture (au-delà, on libère)
-const PRIME_DELAY_MS = 600    // marge avant de lancer la lecture au premier fragment (voir plus bas)
+const KEEP_BEHIND_S = 30      // buffer kept behind the playhead (beyond that, we free it)
+const PRIME_DELAY_MS = 600    // margin before starting playback at the first fragment (see below)
 /**
- * Durée du plus long fragment reçu. Le relais coupe aux images clés, donc un fragment = un groupe
- * d'images (4 s sur la sonnette Nest), et il n'arrive qu'une fois complet : la lecture a FORCÉMENT
- * un fragment de retard sur le direct. Se caler plus près ferait geler l'image entre deux fragments
- * — c'est ce qu'un premier réglage à 0,3 s faisait : 0,3 s de vidéo, 3,7 s d'arrêt, en boucle.
+ * Duration of the longest fragment received. The relay cuts at key frames, so a fragment = a group
+ * of frames (4 s on the Nest doorbell), and it only arrives once complete: playback is NECESSARILY
+ * one fragment behind the live stream. Settling closer would freeze the image between two fragments
+ * — which is what a first setting of 0.3 s did: 0.3 s of video, 3.7 s of stall, in a loop.
  */
 let fragmentS = 1
 let lastEnd = 0
@@ -48,9 +48,9 @@ function flush() {
   if (!sb || sb.updating || queue.length === 0) return
   const item = queue.shift()!
   try {
-    // Nouvelle entête en cours de lecture : le serveur a changé de source (chez Google, une session
-    // se rouvre toutes les cinq minutes) et ses horodatages repartent de zéro. On les décale à la
-    // suite de ce qui est déjà en tampon, sinon la lecture reculerait et resterait bloquée.
+    // New header during playback: the server changed source (at Google, a session
+    // reopens every five minutes) and its timestamps restart from zero. We shift them to
+    // follow what is already buffered, otherwise playback would go backward and stay stuck.
     if (item.init && v && v.buffered.length) sb.timestampOffset = v.buffered.end(v.buffered.length - 1)
     sb.appendBuffer(item.data)
   } catch (err) { fail((err as Error).message) }
@@ -60,10 +60,10 @@ function trimAndCatchUp() {
   const v = video.value, sb = sourceBuffer
   if (!v || !sb || sb.updating || v.buffered.length === 0) return
   const start = v.buffered.start(0), end = v.buffered.end(v.buffered.length - 1)
-  // le premier fragment donne déjà la durée d'un groupe d'images ; ensuite chaque ajout la confirme
+  // the first fragment already gives the duration of a group of frames; then each append confirms it
   fragmentS = Math.max(fragmentS, Math.min(lastEnd > 0 ? end - lastEnd : end - start, 10))
   lastEnd = end
-  // en retard de plus de deux fragments (onglet en arrière-plan) : on revient à un fragment du bord
+  // more than two fragments behind (background tab): we come back to one fragment from the edge
   if (end - v.currentTime > fragmentS * 2 + 2) v.currentTime = end - fragmentS - 0.5
   if (v.currentTime - start > KEEP_BEHIND_S * 2) sb.remove(start, v.currentTime - KEEP_BEHIND_S)
 }
@@ -89,8 +89,8 @@ function start() {
   const ms = mediaSource
   let nextIsInit = false
   ms.addEventListener('sourceopen', () => {
-    // `start` a pu être rappelé entre-temps (montage PUIS activation, sous `<keep-alive>` les deux
-    // arrivent) : une MediaSource périmée n'ouvre pas de second WebSocket
+    // `start` may have been called again in the meantime (mount THEN activation, under `<keep-alive>` both
+    // happen): a stale MediaSource does not open a second WebSocket
     if (mediaSource !== ms) return
     ws = new WebSocket(url)
     ws.binaryType = 'arraybuffer'
@@ -98,7 +98,7 @@ function start() {
       if (typeof ev.data === 'string') {
         const msg = JSON.parse(ev.data) as { type: string; mime?: string; message?: string; reason?: string }
         if (msg.type === 'init' && msg.mime) {
-          if (sourceBuffer) { nextIsInit = true; return }   // changement de source : l'entête binaire qui suit se décale
+          if (sourceBuffer) { nextIsInit = true; return }   // source change: the binary header that follows is shifted
           if (!MediaSource.isTypeSupported(msg.mime)) { status.value = 'unsupported'; detail.value = msg.mime; close(); return }
           sourceBuffer = ms.addSourceBuffer(msg.mime)
           sourceBuffer.mode = 'segments'
@@ -118,10 +118,10 @@ function start() {
       flush()
       if (status.value === 'connecting') {
         status.value = 'playing'
-        // Le premier fragment couvre exactement un groupe d'images, et le suivant n'arrive qu'à la
-        // fin de ce groupe : démarrer tout de suite, c'est atteindre la fin du tampon au moment
-        // même où la suite arrive — la moindre gigue gèle l'image. Une demi-seconde de marge suffit.
-        setTimeout(() => { void v.play().catch(() => { /* lecture au geste suivant */ }) }, PRIME_DELAY_MS)
+        // The first fragment covers exactly one group of frames, and the next only arrives at the
+        // end of that group: starting right away means reaching the end of the buffer at the very
+        // moment the next one arrives — the slightest jitter freezes the image. Half a second of margin is enough.
+        setTimeout(() => { void v.play().catch(() => { /* playback on the next gesture */ }) }, PRIME_DELAY_MS)
       }
     }
     ws.onerror = () => { if (status.value === 'connecting') fail('connection failed') }
@@ -134,7 +134,7 @@ function close() {
   ws = null
   queue.length = 0
   sourceBuffer = null
-  if (mediaSource && mediaSource.readyState === 'open') { try { mediaSource.endOfStream() } catch { /* déjà fermé */ } }
+  if (mediaSource && mediaSource.readyState === 'open') { try { mediaSource.endOfStream() } catch { /* already closed */ } }
   mediaSource = null
   if (objectUrl) { URL.revokeObjectURL(objectUrl); objectUrl = null }
   if (video.value) video.value.removeAttribute('src')
@@ -142,27 +142,27 @@ function close() {
 
 function stop() { close(); status.value = 'idle' }
 
-// Trois états d'une tuile (vue Caméras) : arrêtée (aucun flux, dernière image figée), aperçu (image
-// rafraîchie toutes les ~10 s côté serveur), direct (vidéo en continu). L'état courant se déduit de
-// la lecture en cours et de `paused` (retenu par le serveur) ; la barre à trois boutons le change.
+// Three states of a tile (Cameras view): stopped (no stream, last image frozen), preview (image
+// refreshed every ~10 s on the server side), live (continuous video). The current state is deduced from
+// the current playback and from `paused` (kept by the server); the three-button bar changes it.
 type Mode = 'off' | 'preview' | 'live'
 const mode = computed<Mode>(() => (status.value === 'playing' || status.value === 'connecting' ? 'live' : props.paused ? 'off' : 'preview'))
 function setMode(m: Mode) {
   if (m === mode.value) return
-  if (m === 'live') { if (!props.liveAllowed) return; start(); return }   // aperçu/arrêt : on coupe le direct s'il tournait
+  if (m === 'live') { if (!props.liveAllowed) return; start(); return }   // preview/stop: we cut the live stream if it was running
   stop()
   emit('snapshots', m === 'preview')
 }
 
 /**
- * Chrome met en pause une vidéo MUETTE dès que la page passe en arrière-plan (« video-only
- * background media was paused to save power »), et ne la relance pas seul. Une tablette murale
- * qui se réveille doit retrouver l'image : on relance à chaque retour au premier plan, et après
- * toute pause qu'on n'a pas demandée pendant que la page est visible.
+ * Chrome pauses a MUTED video as soon as the page goes to the background ("video-only
+ * background media was paused to save power"), and does not restart it on its own. A wall tablet
+ * that wakes up must find the image again: we restart at every return to the foreground, and after
+ * any pause we did not ask for while the page is visible.
  */
 function resume() {
   const v = video.value
-  if (v && status.value === 'playing' && !document.hidden && v.paused) void v.play().catch(() => { /* geste requis */ })
+  if (v && status.value === 'playing' && !document.hidden && v.paused) void v.play().catch(() => { /* gesture required */ })
 }
 function onPause() { setTimeout(resume, 300) }
 function toggleMute() { muted.value = !muted.value; if (video.value) video.value.muted = muted.value }
@@ -179,14 +179,14 @@ onBeforeUnmount(() => {
   if (ageTimer) clearInterval(ageTimer)
   close()
 })
-// La vue Maison est gardée en vie (`<keep-alive>` dans App.vue) : quitter l'onglet ne démonte PAS
-// ce composant, `onBeforeUnmount` ne vient jamais, et sans ceci le flux continuait dans un
-// composant invisible — ffmpeg et la session Google avec lui (relevé sur la sonnette).
+// The House view is kept alive (`<keep-alive>` in App.vue): leaving the tab does NOT unmount
+// this component, `onBeforeUnmount` never comes, and without this the stream kept going in an
+// invisible component — ffmpeg and the Google session with it (observed on the doorbell).
 onDeactivated(close)
 onActivated(() => { if (props.autoplay) start() })
-// même composant réutilisé pour une autre caméra : on change de flux, ou on revient à la vignette
+// same component reused for another camera: we change stream, or go back to the thumbnail
 watch(() => props.deviceId, () => { if (props.autoplay || status.value === 'playing' || status.value === 'connecting') start(); else stop() })
-// la vue Caméras compte les directs pour n'en autoriser que trois : on la prévient à chaque bascule
+// the Cameras view counts the live streams to allow only three: we warn it at each switch
 watch(() => mode.value === 'live', (live) => emit('live', live))
 </script>
 
@@ -194,7 +194,7 @@ watch(() => mode.value === 'live', (live) => emit('live', live))
   <div class="cam" :class="{ 'cam--tile': !autoplay }">
     <video ref="video" class="cam__video" :muted="muted" autoplay playsinline />
     <img v-if="status === 'idle' && snapshotUrl" :src="snapshotUrl" class="cam__snapshot" alt="" />
-    <!-- badge d'état, toujours visible sur une tuile : direct, aperçu ou arrêté -->
+    <!-- state badge, always visible on a tile: live, preview or stopped -->
     <div v-if="!autoplay" class="cam__badge" :data-mode="mode">
       <span v-if="mode === 'live'" class="cam__dot" />{{ $t(`camera.video.mode.${mode}`) }}
     </div>
@@ -205,7 +205,7 @@ watch(() => mode.value === 'live', (live) => emit('live', live))
       <span v-else class="cam__msg">{{ $t(`camera.video.${status}`) }}<span v-if="detail" class="cam__detail"> · {{ detail }}</span></span>
     </div>
     <div class="cam__bar">
-      <!-- carte détail : lecture / arrêt du direct -->
+      <!-- detail card: live playback / stop -->
       <template v-if="autoplay">
         <button v-if="status === 'playing' || status === 'connecting'" type="button" class="key" :title="$t('camera.video.stop')" :aria-label="$t('camera.video.stop')" @click="stop">
           <StrokeIcon name="stop" :size="18" />
@@ -214,7 +214,7 @@ watch(() => mode.value === 'live', (live) => emit('live', live))
           <StrokeIcon name="play" :size="18" />
         </button>
       </template>
-      <!-- tuile : les trois états toujours affichés, l'actif surligné -->
+      <!-- tile: the three states always displayed, the active one highlighted -->
       <div v-else class="seg" role="group" :aria-label="$t('camera.video.mode.label')">
         <button type="button" class="seg__btn" :data-active="mode === 'off'" @click="setMode('off')">{{ $t('camera.video.mode.off') }}</button>
         <button type="button" class="seg__btn" :data-active="mode === 'preview'" @click="setMode('preview')">{{ $t('camera.video.mode.preview') }}</button>

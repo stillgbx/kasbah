@@ -1,7 +1,7 @@
 import type { SchoolData, SchoolHomework, Transport } from './transport'
 
-// Une classe de démonstration pour le mode simulé : la forme des réponses du plugin
-// `toutemonannee`, datée autour d'aujourd'hui, noms inventés. Les écritures restent en mémoire.
+// A demonstration class for simulated mode: the shape of the `toutemonannee` plugin's responses,
+// dated around today, invented names. Writes stay in memory.
 
 const pad = (n: number) => String(n).padStart(2, '0')
 function day(offset: number): string {

@@ -5,24 +5,24 @@ import { formatPercent, formatTemp } from '../../lib/format'
 
 const props = defineProps<{ descriptor: DeviceDescriptor; state: StateFor<'climate'>; pending?: boolean; disabled?: boolean }>()
 const emit = defineEmits<{ command: [cmd: CommandInput] }>()
-// Tout ce qui dépend de l'APPAREIL est calculé, pas lu une fois : le panneau garde ce composant
-// d'une zone à l'autre, et la zone 2 de l'Ecodan (départ d'eau, lecture seule) aurait sinon hérité
-// des boutons, des modes et de la plage du thermostat affiché avant elle.
+// Everything that depends on the DEVICE is computed, not read once: the panel keeps this component
+// from one zone to another, and Ecodan's zone 2 (water flow, read only) would otherwise have inherited
+// the buttons, modes and range of the thermostat displayed before it.
 const range = computed<[number, number]>(() => props.descriptor.meta.targetTempC ?? [10, 30])
-// seuls les modes que l'appareil déclare : proposer « Refroidir » à un thermostat qui ne chauffe
-// que promettrait une commande que le fabricant refuserait
+// only the modes the device declares: offering "Cool" to a thermostat that only heats
+// would promise a command the vendor would refuse
 const modes = computed(() => props.descriptor.meta.climate?.modes ?? CLIMATE_MODES)
 const has = (c: string) => props.descriptor.capabilities.includes(c as never)
-// Ce contrôle était le seul à ne pas consulter les capacités : la simulation les déclarait toutes,
-// et aucun vrai appareil `climate` n'existait. Une pompe à chaleur lue en SEULE LECTURE (MELCloud)
-// en publie l'état sans accepter de commande — afficher les boutons ferait promettre à l'UI ce que
-// le plugin refuserait. La VALEUR reste montrée dans tous les cas : c'est le geste qui manque.
+// This control was the only one not to consult the capabilities: the simulation declared them all,
+// and no real `climate` device existed. A heat pump read in READ-ONLY mode (MELCloud)
+// publishes its state without accepting commands — showing the buttons would make the UI promise what
+// the plugin would refuse. The VALUE is shown in every case: it is the gesture that is missing.
 const canSetTemp = computed(() => has('target_temp'))
 const canSetMode = computed(() => has('hvac_mode'))
 /**
- * Une zone de pompe à chaleur air-eau peut se régler sur l'eau de DÉPART plutôt que sur l'air de la
- * pièce (`meta.climate.control`). Les deux chiffres sont aux mêmes places, mais 45 °C de départ
- * n'est pas 45 °C de salon : seul le vocabulaire les distingue.
+ * An air-to-water heat pump zone can be set on the FLOW water rather than on the room's air
+ * (`meta.climate.control`). The two figures are in the same places, but a 45 °C flow
+ * is not 45 °C in a living room: only the vocabulary tells them apart.
  */
 const flow = computed(() => props.descriptor.meta.climate?.control === 'flow')
 const step = (d: number) => emit('command', { type: 'climate.set_target_temp', targetTempC: Math.min(range.value[1], Math.max(range.value[0], Math.round((props.state.targetTempC + d) * 2) / 2)) })
@@ -45,15 +45,15 @@ const step = (d: number) => emit('command', { type: 'climate.set_target_temp', t
                   @update:model-value="(m: unknown) => m && emit('command', { type: 'climate.set_mode', mode: m as typeof state.mode })">
       <v-chip v-for="m in modes" :key="m" :value="m" size="large" variant="tonal" :disabled="disabled">{{ $t(`climate.modes.${m}`) }}</v-chip>
     </v-chip-group>
-    <!-- lecture seule : le mode se lit, il ne se choisit pas -->
+    <!-- read only: the mode is read, not chosen -->
     <v-chip v-else size="large" variant="tonal" class="mode-readonly">{{ $t(`climate.modes.${state.mode}`) }}</v-chip>
-    <!-- À l'arrêt, aucune consigne ne s'applique : on ne la montre pas (un Nest éteint ne la publie
-         même pas). Le mode passe donc AVANT elle : choisir « Arrêt » la retire en bas du panneau,
-         sans faire remonter la puce qu'on vient de toucher. -->
+    <!-- When off, no setpoint applies: we do not show it (a switched-off Nest does not even publish it).
+         The mode therefore comes BEFORE it: choosing "Off" removes it at the bottom of the panel,
+         without making the chip we just touched move up. -->
     <template v-if="state.mode !== 'off'">
       <div class="text-caption text-medium-emphasis mt-3">{{ flow ? $t('climate.flowTarget') : $t('climate.target') }}</div>
-      <!-- centrée entre ses deux boutons quand il y en a ; sinon alignée sur son libellé, à gauche,
-           plutôt que flottant seule au milieu de la carte -->
+      <!-- centered between its two buttons when there are some; otherwise aligned on its label, to the left,
+           rather than floating alone in the middle of the card -->
       <div class="d-flex align-center ga-4 my-2" :class="canSetTemp ? 'justify-center' : 'justify-start'">
         <v-btn v-if="canSetTemp" icon="minus" variant="tonal" size="large" :disabled="disabled" @click="step(-0.5)" />
         <span class="text-h3 font-weight-medium target">{{ formatTemp(state.targetTempC, $i18n.locale) }}</span>

@@ -1,7 +1,7 @@
-// Une pochette YouTube Music dans une autre taille. Le catalogue les livre en 120 px (assez pour une
-// ligne ou une tuile) ; une pochette affichée en grand (le détail d'un album) les redemande plus
-// grandes au CDN, qui les sert à la taille demandée. Même réécriture que `upgradeArtUrl` côté
-// serveur (plugin ytmusic, `mapping.ts`).
+// A YouTube Music cover in another size. The catalog delivers them at 120 px (enough for a
+// line or a tile); a cover displayed large (an album's detail) re-requests them
+// larger from the CDN, which serves them at the requested size. Same rewrite as `upgradeArtUrl` on the
+// server side (ytmusic plugin, `mapping.ts`).
 
 export function artAt(url: string | null | undefined, size: number): string | null {
   if (!url) return null
@@ -10,7 +10,7 @@ export function artAt(url: string | null | undefined, size: number): string | nu
     return /=w\d+-h\d+/i.test(url) ? url.replace(/=w\d+-h\d+[^=/?#]*/i, token) : `${url}${token}`
   }
   if (/i\.ytimg\.com/i.test(url)) {
-    // pas `maxresdefault` : il manque pour bien des vidéos, et l'image serait cassée
+    // not `maxresdefault`: it is missing for many videos, and the image would be broken
     const leaf = size <= 120 ? 'default.jpg' : size <= 320 ? 'mqdefault.jpg' : 'hqdefault.jpg'
     return url.replace(/\/(default|mqdefault|hqdefault|sddefault|maxresdefault)\.jpg/i, `/${leaf}`)
   }

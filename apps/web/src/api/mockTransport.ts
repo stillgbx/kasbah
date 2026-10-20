@@ -11,8 +11,8 @@ const MOCK_PLACES: WeatherPlace[] = [
   { id: '2643743', name: 'Londres', region: 'Angleterre, Royaume-Uni', countryCode: 'GB', lat: 51.50853, lon: -0.12574 },
 ]
 
-// Transport sans serveur : la même simulation que le plugin serveur `mock`, dans l'onglet.
-// Sert aux tests de composants et à une démo statique (VITE_INPROCESS_MOCK=1).
+// Serverless transport: the same simulation as the server `mock` plugin, in the tab.
+// Used for component tests and a static demo (VITE_INPROCESS_MOCK=1).
 
 const STATUS: Record<string, number> = { UNSUPPORTED_COMMAND: 400, DEVICE_UNAVAILABLE: 503, UPSTREAM_ERROR: 502, TIMEOUT: 504 }
 
@@ -22,8 +22,8 @@ export interface MockTransportOptions {
   timeScale?: number
   house?: House
   /**
-   * Propriétés démo entre lesquelles basculer (mode démo). Absent : la seule maison du transport,
-   * sans bascule possible.
+   * Demo properties to switch between (demo mode). Absent: the transport's only house,
+   * with no switching possible.
    */
   properties?: { list(): PropertiesResponse; select(id: string): void }
 }
@@ -32,12 +32,12 @@ const HOUR_MS = 3_600_000
 const DAY_MS = 86_400_000
 
 /**
- * Débit domestique plausible, 24 valeurs (L/heure) : nuit à zéro, pointes petit-déjeuner et soir —
- * mêmes ordres de grandeur que la vraie station COMAP (`journal.md` du 2026-09-16 : 90-400 L/jour).
+ * Plausible household flow, 24 values (L/hour): zero at night, breakfast and evening peaks —
+ * same orders of magnitude as the real COMAP station (`journal.md` of 2026-09-16: 90-400 L/day).
  */
 const HOURLY_PROFILE_L = [0, 0, 0, 0, 0, 0, 4, 18, 26, 10, 3, 2, 8, 4, 0, 0, 2, 4, 10, 22, 30, 14, 4, 0]
 
-/** Fait varier le total du jour entre ~90 et ~400 L sans casser le profil horaire. */
+/** Varies the day's total between ~90 and ~400 L without breaking the hourly profile. */
 const dayMultiplier = (dayIndex: number): number => 1.5 + 0.9 * Math.sin(dayIndex * 0.9)
 
 const hourlyLitres = (hourStart: number): number =>
@@ -50,9 +50,9 @@ const dailyLitres = (dayStart: number): number => {
 }
 
 /**
- * Historique de consommation plausible, fabriqué à la volée (pas de vraie mémoire côté mock
- * in-process, comme `getHistory`) : 72 heures, 60 jours, 15 mois, tous mesurés — sert à voir le
- * graphique plein ; le cas « historique qui démarre » se vérifie côté composant (aucun point).
+ * Plausible consumption history, fabricated on the fly (no real memory on the in-process mock
+ * side, like `getHistory`): 72 hours, 60 days, 15 months, all measured — used to see the
+ * full chart; the "history that starts" case is checked on the component side (no point).
  */
 function mockConsumption(deviceId: string, now = Date.now()): DeviceConsumption {
   const hourStart0 = Math.floor(now / HOUR_MS) * HOUR_MS
@@ -74,9 +74,9 @@ function mockConsumption(deviceId: string, now = Date.now()): DeviceConsumption 
 }
 
 /**
- * Historique de luminosité plausible (courbe de soleil, nuages pseudo-aléatoires mais stables d'un
- * appel à l'autre), comme `mockConsumption` : 48 heures, 400 jours, les mois déduits des jours. Les
- * 6 dernières heures d'hier restent ABSENTES, pour voir le tiret d'un pas non mesuré.
+ * Plausible brightness history (sun curve, pseudo-random clouds but stable from one call
+ * to the next), like `mockConsumption`: 48 hours, 400 days, the months derived from the days. The
+ * last 6 hours of yesterday stay ABSENT, to see the dash of an unmeasured step.
  */
 function mockLightHistory(now = Date.now()) {
   const sun = (t: number) => {
@@ -106,8 +106,8 @@ function mockLightHistory(now = Date.now()) {
 }
 
 /**
- * Automatisations de démonstration du mode maquette : une horaire au soleil, une au calendrier,
- * et une qui vise un appareil que la simulation n'a pas — pour voir la pastille « incomplète ».
+ * Demonstration automations of mock mode: one on a sun schedule, one on the calendar,
+ * and one that targets a device the simulation does not have — to see the "Incomplete" pill.
  */
 const DEMO_AUTOMATIONS: Automation[] = [
   {
@@ -130,7 +130,7 @@ const DEMO_AUTOMATIONS: Automation[] = [
   },
 ]
 
-/** Prochain « HH:MM » d'un déclencheur horaire à heure fixe ; le soleil n'est pas calculé en maquette. */
+/** Next "HH:MM" of a fixed-time schedule trigger; the sun is not computed in mock mode. */
 function mockNextRun(a: Automation, now = Date.now()): number | undefined {
   if (!a.enabled || a.trigger.type !== 'time' || a.trigger.at.kind !== 'clock') return undefined
   const [h = 0, m = 0] = a.trigger.at.time.split(':').map(Number)
@@ -154,8 +154,8 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
   const entries = (): DeviceEntry[] => descriptors.map((descriptor) => ({ descriptor, state: states.get(descriptor.id) ?? defaultState(descriptor.kind) }))
   let handlers: TransportHandlers | null = null
 
-  // Automatisations en mémoire : même forme que le serveur, statut approché (appareils absents,
-  // prochaine heure fixe). Chaque écriture repousse la liste, comme le message WebSocket du serveur.
+  // In-memory automations: same shape as the server, approximate status (missing devices,
+  // next fixed time). Each write pushes the list again, like the server's WebSocket message.
   const automations = new Map(DEMO_AUTOMATIONS.map((a) => [a.id, a]))
   const lastRuns = new Map<string, AutomationRun>()
   const automationEntry = (a: Automation): AutomationEntry => {
@@ -176,8 +176,8 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     return a
   }
 
-  // Liste de courses en mémoire, par les mêmes opérations que le serveur ; quelques habituels pour
-  // que la démo ne s'ouvre pas sur une page vide.
+  // In-memory shopping list, through the same operations as the server; a few regulars so
+  // the demo does not open on an empty page.
   let shopping: ShoppingList = ['Lait', 'Pain', 'Café', 'Pommes', 'Œufs', 'Beurre']
     .reduce((l, name) => setShoppingFavorite(l, name, true, 0), addShoppingItems(EMPTY_SHOPPING_LIST, [{ name: 'Lait', quantity: 2 }, { name: 'Pain' }, { name: 'Tomates' }], 0))
   const writeShopping = (next: ShoppingList | null, id?: string) => {
@@ -187,7 +187,7 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     return shopping
   }
 
-  // ambiances du parc simulé, présentées comme celles d'un pont (`mock:<id>`)
+  // light scenes of the simulated device set, presented as those of a bridge (`mock:<id>`)
   const sceneEntry = (s: ReturnType<Simulation['scenes']>[number]): PluginSceneEntry => ({
     scene: { ...s, id: `mock:${s.externalId}`, pluginId: 'mock', autoDynamic: false },
     state: { active: sim.sceneState(s.externalId), updatedAt: Date.now() },
@@ -222,7 +222,7 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
       }
     },
     async getHistory(deviceId, hours = 24) {
-      // courbe plausible des heures écoulées de la journée (pas de vraie mémoire côté mock in-process)
+      // plausible curve of the hours elapsed in the day (no real memory on the in-process mock side)
       const now = Date.now()
       const hourStart = Math.floor(now / 3_600_000) * 3_600_000
       const points = []
@@ -241,7 +241,7 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
         throw err
       }
     },
-    // ailleurs : quelques villes en dur, et la météo simulée de la maison, décalée pour qu'on voie le changement
+    // elsewhere: a few hard-coded cities, and the house's simulated weather, shifted so the change shows
     async searchPlaces(query) {
       const q = query.trim().toLowerCase()
       return MOCK_PLACES.filter((p) => p.name.toLowerCase().startsWith(q))
@@ -253,7 +253,7 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
       const state = { ...(home.state as StateFor<'weather'>), available: true, tempC: (home.state as StateFor<'weather'>).tempC + shift }
       return { state, forecast: sim.forecast(home.descriptor.id.replace(/^mock:/, '')), attribution: 'Simulation' }
     },
-    // une vigilance jaune orages jusqu'à minuit, pour voir la ligne ; rien hors de la « métropole » simulée
+    // a yellow thunderstorm warning until midnight, to see the line; nothing outside the simulated "metropolitan area"
     async getWeatherAlerts(lat, lon) {
       const inFrance = lat > 41 && lat < 51.5 && lon > -5.5 && lon < 10
       const midnight = new Date(); midnight.setHours(24, 0, 0, 0)
@@ -263,7 +263,7 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
         attribution: 'Simulation', web: 'https://vigilance.meteofrance.fr/',
       }
     },
-    // la simulation ne tient aucun journal : ses appareils ne déclarent pas la capacité, la vue ne demande rien
+    // the simulation keeps no log: its devices do not declare the capability, the view asks for nothing
     async getJournal(deviceId) { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', `no journal in mock mode for ${deviceId}`) },
     async getSiteMap(deviceId) {
       try { return { deviceId, ...sim.siteMap(deviceId.replace(/^mock:/, '')) } }
@@ -281,7 +281,7 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     },
     async getConsumption(deviceId) { return mockConsumption(deviceId) },
     async placeDevice(id, placement) {
-      // même logique que le serveur, en mémoire (rien n'est écrit) ; le message `house` suit comme en réel
+      // same logic as the server, in memory (nothing is written); the `house` message follows as in real life
       house = parseHouse(placeDeviceInJson(house, id, placement))
       handlers?.onMessage({ type: 'house', house })
       return house
@@ -389,7 +389,7 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     async renaultStatus() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Renault account in mock mode') },
     async renaultLogin() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Renault account in mock mode') },
     async renaultLogout() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Renault account in mock mode') },
-    // un contrat d'exemple : de quoi voir la proposition du panneau « Modifier » sans compte réel
+    // a sample contract: enough to see the proposal in the "Edit" panel without a real account
     async renaultContracts() {
       return { contracts: [{ description: 'EASYPACK 49MOIS EXEMPLE', start: '2025-03-01', end: '2029-03-31', maxKm: 40000 }] }
     },
@@ -421,7 +421,7 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     async ytmusicExploreNew() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music cookie in mock mode') },
     async ytmusicExploreCovers() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music cookie in mock mode') },
     async musicPlay() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music cookie in mock mode') },
-    // aucun flux servi par la simulation : la page Musique montre ses lecteurs, sans transfert possible
+    // no stream served by the simulation: the Music page shows its players, without transfer possible
     async musicSessions() { return { sessions: [] } },
     async musicLast() { return { last: [] } },
     async musicResume() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
@@ -438,7 +438,7 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     async musicProgress() {},
     async musicQueueClear() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
     async session() { return { user: null } },
-    // assistant : pas de `claude` ici, une réponse de démonstration
+    // assistant: no `claude` here, a demonstration reply
     async claudeAccount() { return { user: null, savedAt: null, house: false } },
     async claudeSetToken() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Claude in mock mode') },
     async claudeClearToken() { return { user: null, savedAt: null, house: false } },
@@ -448,14 +448,14 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
       onEvent({ type: 'done', ms: 400 })
     },
     async assistantLog() { return { entries: [] } },
-    // pas de moteur de transcription ici : le micro ne se montre pas
+    // no transcription engine here: the microphone is not shown
     async transcriptionStatus() { return { ready: false, provider: null, speech: false, autoSend: false } },
     async speak() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no speech in mock mode') },
     async transcriptionVoices() { return { voices: [] } },
     async transcriptionSettings() { return { user: null, voice: null, houseVoice: null, defaultVoice: null } },
     async setTranscriptionVoice(voice) { return { user: null, voice, houseVoice: voice, defaultVoice: null } },
     async transcribe() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no transcription in mock mode') },
-    // comptes MCP : en mémoire, un compte de démonstration
+    // MCP accounts: in memory, a demonstration account
     async mcpUsers() { return { users: mcpUsers.map((name) => ({ name })) } },
     async mcpSetUser(name) {
       if (!mcpUsers.includes(name)) mcpUsers.push(name)
@@ -466,7 +466,7 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
       mcpUsers = mcpUsers.filter((n) => n !== name)
       return { users: mcpUsers.map((n) => ({ name: n })) }
     },
-    // démonstration : pas de dépôt derrière, donc pas de superviseur
+    // demonstration: no repository behind it, hence no supervisor
     async systemVersion() { return { supervised: false, running: { sha: '0000000000000000000000000000000000000000', subject: 'Démonstration', date: new Date(0).toISOString() }, available: [], error: null } },
     async systemUpdateStatus() { return { status: null } },
     async systemUpdate() { throw new ApiRequestError(409, 'NOT_SUPERVISED', 'no supervisor in mock mode') },
@@ -496,13 +496,13 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     async radioRemoveFavorite() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no radio directory in mock mode') },
     async radioPlay() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no radio directory in mock mode') },
     async radioPlaying() { return { playing: [] } },
-    // la simulation déclare ses appareils, elle n'en découvre aucun : il n'y a rien à oublier
+    // the simulation declares its devices, it discovers none: there is nothing to forget
     async forgetDevice() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'nothing to forget in mock mode') },
     cameraStreamUrl() { return null },
     async cameraSnapshots() { return {} },
-    async setCameraSnapshots() { /* pas de caméra en mode maquette */ },
+    async setCameraSnapshots() { /* no camera in mock mode */ },
     cameraSnapshotUrl() { return null },
-    // les ambiances du parc simulé se rappellent ; elles ne se créent ni ne se réglent (pas de fabricant)
+    // the simulated device set's light scenes can be recalled; they cannot be created or adjusted (no vendor)
     async getScenes() { return sceneEntries() },
     async recallScene(sceneId, recall) {
       try { await sim.recallScene(sceneId.replace(/^mock:/, ''), { mode: recall.mode ?? 'static', ...(recall.brightness !== undefined ? { brightness: recall.brightness } : {}) }) }
@@ -546,8 +546,8 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
       pushAutomations()
       return automationList()
     },
-    // Exécute pour de vrai sur la simulation (les volets se ferment dans la 3D) ; une sélection
-    // se résout ici sur le kind et la nature seulement, sans pièces ni exceptions.
+    // Runs for real on the simulation (the shutters close in the 3D); a selection
+    // is resolved here on kind and nature only, with no rooms or exceptions.
     async runAutomation(id) {
       const a = knownAutomation(id)
       const errors: AutomationRun['errors'] = []
@@ -566,7 +566,7 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
       pushAutomations()
       return run
     },
-    // maquette in-process : la simulation tourne dans la page, il n'y a pas de serveur à régler
+    // in-process mock: the simulation runs in the page, there is no server to configure
     async getPlugins() { return [] },
     async setPluginSettings() { return [] },
     async getProperties() {
@@ -577,7 +577,7 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
       if (!opts.properties.list().properties.some((p) => p.id === id)) throw new ApiRequestError(404, 'NOT_FOUND', `unknown property "${id}"`)
       opts.properties.select(id)
     },
-    // maquette in-process : aucun fichier où écrire une propriété
+    // in-process mock: no file to write a property to
     async createProperty() { throw new ApiRequestError(409, 'NOT_SWITCHABLE', 'no server to create a property in this mode') },
     async duplicateProperty() { throw new ApiRequestError(409, 'NOT_SWITCHABLE', 'no server to create a property in this mode') },
     async setPropertyMode() { throw new ApiRequestError(409, 'NOT_SWITCHABLE', 'no other mode in this mode') },

@@ -5,13 +5,13 @@ import { useElementSize } from '@vueuse/core'
 import type { AgendaEvent } from '../../api/transport'
 import { dayKey, isPast } from '../../lib/agenda'
 
-// Le mois : six semaines de sept jours, toujours. Chaque case montre autant d'occurrences que sa
-// hauteur en tient, puis « +n autres » — le nombre de lignes se déduit de la taille de la grille,
-// pas du contenu : une journée chargée ne pousse jamais ses voisines.
+// The month: six weeks of seven days, always. Each cell shows as many occurrences as its
+// height holds, then "+n more" — the number of lines is deduced from the grid's size,
+// not from the content: a busy day never pushes its neighbors.
 
 const props = defineProps<{
   days: Date[]
-  /** Le mois affiché : les jours d'avant et d'après sont estompés. */
+  /** The displayed month: the days before and after are faded. */
   month: number
   events: Map<string, AgendaEvent[]>
   colorOf: (e: AgendaEvent) => string
@@ -25,7 +25,7 @@ const grid = ref<HTMLElement | null>(null)
 const { height } = useElementSize(grid)
 const HEAD_PX = 28
 const LINE_PX = 20
-/** Lignes d'événements par case (numéro du jour déduit). */
+/** Event lines per cell (day number deducted). */
 const lines = computed(() => Math.max(1, Math.floor((height.value / 6 - HEAD_PX - 4) / LINE_PX)))
 
 const weekdays = computed(() => {
@@ -42,7 +42,7 @@ const cells = computed(() => props.days.map((d) => {
   return { d, key, shown, more: list.length - shown.length, out: d.getMonth() !== props.month }
 }))
 
-/** Un rendez-vous commencé la veille s'affiche sans heure : on ne lit pas « 22:00 » le lendemain. */
+/** An appointment that started the day before is displayed without a time: we do not read "22:00" the next day. */
 const startsOn = (e: AgendaEvent, key: string) => !e.allDay && dayKey(new Date(e.start)) === key
 </script>
 
@@ -77,7 +77,7 @@ const startsOn = (e: AgendaEvent, key: string) => !e.allDay && dayKey(new Date(e
 }
 .month__cell { background: var(--surface); padding: 4px 4px 0; min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; cursor: pointer; }
 .month__cell:hover { background: color-mix(in srgb, var(--surface) 92%, var(--text)); }
-/* hors du mois : la case se fond vers le fond de page, dans les deux thèmes */
+/* outside the month: the cell blends toward the page background, in both themes */
 .month__cell[data-out='1'] { background: color-mix(in srgb, var(--surface) 45%, var(--bg)); }
 .month__cell[data-out='1'] .month__num { color: var(--muted); }
 .month__num {

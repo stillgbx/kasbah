@@ -11,36 +11,36 @@ import { useAlertsStore } from '../../stores/alerts'
 import { usePropertiesStore } from '../../stores/properties'
 import PropertyList from './PropertyList.vue'
 
-// Rail de navigation (72 px) : initiales de la maison, vues, puis les réglages tout en bas. Sur un
-// téléphone, il DÉFILE : resserré à gauche en paysage, en barre horizontale en bas en portrait.
+// Navigation rail (72 px): the house's initials, views, then the settings at the very bottom. On a
+// phone, it SCROLLS: tightened on the left in landscape, as a horizontal bar at the bottom in portrait.
 const route = useRoute()
-/** Entrée du rail à allumer : une sous-page (l'édition d'une automatisation) nomme sa vue dans `meta.nav`. */
+/** Rail entry to light up: a sub-page (editing an automation) names its view in `meta.nav`. */
 const current = computed(() => (route.meta.nav as string | undefined) ?? route.name)
 const house = useHouseStore()
-// Plusieurs propriétés (mode démo) : le pavé d'initiales devient le sélecteur, à la même taille.
+// Several properties (demo mode): the initials block becomes the selector, at the same size.
 const properties = usePropertiesStore()
 
 const initials = computed(() => {
   const words = (house.house?.name ?? 'Kasbah').split(/\s+/).filter((w) => w.length > 2 || /^[A-Z0-9]/.test(w))
   return words.slice(0, 2).map((w) => w[0]!.toUpperCase()).join('') || 'K'
 })
-// Les réglages restent dans NAV_ITEMS — la recherche de la vue Maison s'en sert pour ouvrir la
-// page — mais ils quittent la file des vues : leur place est en bas du rail, sous le spacer.
+// Settings stay in NAV_ITEMS — the House view's search uses it to open the
+// page — but they leave the views queue: their place is at the bottom of the rail, under the spacer.
 const localPlugins = useLocalPluginsStore()
-// une fonction coupée dans les Réglages (la liste de courses) quitte le rail ; avant que la maison
-// arrive, son défaut vaut (allumée) : pas d'entrée qui surgit au chargement
+// a feature turned off in Settings (the shopping list) leaves the rail; before the house
+// arrives, its default applies (on): no entry popping up at load
 const pluginOn = (id: string) => pluginSettingsOf(house.house?.plugins ?? {}, id).enabled
 const items = computed(() => visibleNavItems(localPlugins.isEnabled, pluginOn).filter((it) => it.name !== 'settings'))
 const settingsItem = NAV_ITEMS.find((it) => it.name === 'settings')!
 
-// Une pastille sur l'icône d'une vue qui a une alerte en attente. Être sur la vue suffit à voir ses
-// alertes d'information, y compris celles qui arrivent pendant qu'on la regarde.
+// A pill on the icon of a view that has a pending alert. Being on the view is enough to see its
+// information alerts, including those that arrive while looking at it.
 const alerts = useAlertsStore()
 watchEffect(() => { if (typeof current.value === 'string') alerts.markViewSeen(current.value) })
 
-// La vue courante reste en vue dans la file qui défile : arrivé par la recherche sur « Réglages »,
-// on voit son bouton allumé au lieu d'une barre qui montre encore le début. Défilement du seul rail
-// (pas `scrollIntoView`, qui ferait aussi défiler la coquille, `overflow: hidden` ou non).
+// The current view stays in view in the scrolling queue: arrived through search on "Settings",
+// we see its button lit instead of a bar that still shows the start. Scrolling of the rail only
+// (not `scrollIntoView`, which would also scroll the shell, `overflow: hidden` or not).
 const scroller = ref<HTMLElement | null>(null)
 watch(current, () => void nextTick(() => {
   const box = scroller.value
@@ -57,10 +57,10 @@ watch(current, () => void nextTick(() => {
   if (to !== pos) box.scrollTo({ [horizontal ? 'left' : 'top']: to, behavior: 'smooth' })
 }), { immediate: true })
 
-// Barre du bas (portrait) : d'autres vues attendent d'un côté ? Ce côté-là se fond, et un chevron s'y
-// pose, qui fait défiler d'une bonne part de la largeur. Le fondu fixe des deux bouts ne disait pas
-// qu'il y avait une suite. Rien en hauteur : le rail vertical (paysage, bureau) ne déborde pas en
-// largeur, les deux côtés y restent éteints.
+// Bottom bar (portrait): other views waiting on one side? That side fades out, and a chevron
+// sits on it, which scrolls by a good part of the width. The fixed fade at both ends did not say
+// that there was more. Nothing vertically: the vertical rail (landscape, desktop) does not overflow in
+// width, both sides stay off there.
 const more = ref({ start: false, end: false })
 const moreStart = ref<HTMLButtonElement | null>(null)
 const moreEnd = ref<HTMLButtonElement | null>(null)
@@ -68,7 +68,7 @@ function measure() {
   const box = scroller.value
   if (!box) return
   more.value = { start: box.scrollLeft > 2, end: box.scrollLeft + box.clientWidth < box.scrollWidth - 2 }
-  // au clavier, le chevron qui s'éteint au bout de la file passe le focus à l'autre
+  // with the keyboard, the chevron that turns off at the end of the queue passes the focus to the other
   const focused = document.activeElement
   if (focused === moreStart.value && !more.value.start) moreEnd.value?.focus()
   else if (focused === moreEnd.value && !more.value.end) moreStart.value?.focus()
@@ -111,10 +111,10 @@ function page(dir: 1 | -1) {
         </button>
       </router-link>
     </div>
-    <!-- hors de la file qui défile (et de son masque) : posés sur ses bouts, ils ne décalent rien.
-         `inert` et non `aria-hidden` : le chevron touché qui disparaît au bout de la file gardait le
-         focus sous un `aria-hidden` (refusé par Chrome). Au doigt et à la souris il ne prend pas le
-         focus (`mousedown.prevent`) ; au clavier, `measure` le passe à l'autre chevron. -->
+    <!-- outside the scrolling queue (and its mask): placed on its ends, they shift nothing.
+         `inert` and not `aria-hidden`: the touched chevron that disappears at the end of the queue kept the
+         focus under an `aria-hidden` (refused by Chrome). By finger and mouse it does not take
+         the focus (`mousedown.prevent`); by keyboard, `measure` passes it to the other chevron. -->
     <button ref="moreStart" type="button" class="rail__more rail__more--start" :inert="!more.start"
             :aria-label="$t('nav.scrollStart')" @mousedown.prevent @click="page(-1)"><span class="rail__morechip"><StrokeIcon name="back" :size="16" /></span></button>
     <button ref="moreEnd" type="button" class="rail__more rail__more--end" :inert="!more.end"
@@ -123,10 +123,10 @@ function page(dir: 1 | -1) {
 </template>
 
 <style scoped>
-/* Posé sur la vue, sans fond ni bord : la scène 3D de la vue Maison passe dessous. */
+/* Laid over the view, with no background or border: the House view's 3D scene passes underneath. */
 .rail { position: absolute; top: 0; left: 0; bottom: 0; width: var(--rail-w); z-index: 5; display: flex; }
-/* La file des boutons, dans son propre conteneur : c'est LUI qui défile quand la fenêtre est trop
-   basse, et le voile (`::before` du rail) reste plus large que lui, sans être rogné. */
+/* The buttons queue, in its own container: it is THIS that scrolls when the window is too
+   low, and the veil (the rail's `::before`) stays wider than it, without being clipped. */
 .rail__scroll {
   flex: 1 1 auto; min-width: 0; min-height: 0;
   display: flex; flex-direction: column; align-items: center; gap: 8px;
@@ -134,21 +134,21 @@ function page(dir: 1 | -1) {
   overflow: auto; overscroll-behavior: contain; scrollbar-width: none;
 }
 .rail__scroll::-webkit-scrollbar { display: none; }
-/* Les boutons se TASSENT avant de défiler (jusqu'à 28 px, à peine plus que l'icône) : une fenêtre
-   de bureau un peu basse garde tout le rail en vue, comme avant ; le défilement n'arrive qu'au-delà,
-   et sur un téléphone, où les boutons gardent leur taille. */
+/* The buttons SQUEEZE before scrolling (down to 28 px, barely more than the icon): a slightly
+   low desktop window keeps the whole rail in view, as before; scrolling only comes beyond that,
+   and on a phone, where the buttons keep their size. */
 .rail__avatar { flex: none; }
 .rail__btn { flex: 0 1 auto; min-height: 28px; }
-/* Un voile du fond vers le transparent, plus large que le rail : les icônes se lisent par-dessus les
-   murs et les pilules de la scène, sans qu'un bord ne coupe la vue. Sur les autres vues, il a la
-   couleur de leur fond et ne se voit pas. Derrière les boutons (z-index -1 dans le rail), au-dessus
-   de la scène. */
+/* A veil from the background to transparent, wider than the rail: the icons read over the
+   walls and pills of the scene, without an edge cutting the view. On the other views, it has the
+   color of their background and is not seen. Behind the buttons (z-index -1 in the rail), above
+   the scene. */
 .rail::before {
   content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: calc(var(--rail-w) + 150px); z-index: -1; pointer-events: none;
-  /* discret et large : un assombrissement qui s'étale, pas une barre — on reste immergé. La rampe
-     est adoucie (opacité 0,8 → 0 par une courbe dont la pente s'annule à la fin) : une rampe
-     LINÉAIRE laisse une cassure de pente là où elle atteint zéro, et l'œil la lit comme un trait
-     vertical sur les aplats de la scène. Les paliers suivent a = .8 (1-t)² (1 + .345 t). */
+  /* discreet and wide: a darkening that spreads, not a bar — we stay immersed. The ramp
+     is softened (opacity 0.8 → 0 by a curve whose slope vanishes at the end): a
+     LINEAR ramp leaves a kink in the slope where it reaches zero, and the eye reads it as a
+     vertical line on the scene's flat areas. The steps follow a = .8 (1-t)² (1 + .345 t). */
   background: linear-gradient(to right,
     color-mix(in srgb, var(--bg) 80%, transparent) 0,
     color-mix(in srgb, var(--bg) 67%, transparent) 10%,
@@ -176,8 +176,8 @@ function page(dir: 1 | -1) {
 }
 .rail__btn:hover { color: var(--text); background: color-mix(in srgb, var(--surface) 55%, transparent); }
 .rail__btn[data-on='1'] { background: var(--accent-soft); color: var(--accent); }
-/* posée sur le coin de l'icône, hors du flux : rien ne bouge quand elle paraît. Un liseré du fond
-   la détache du trait de l'icône. */
+/* placed on the icon's corner, out of the flow: nothing moves when it appears. A background rim
+   sets it apart from the icon's stroke. */
 .rail__btn { position: relative; }
 .rail__badge {
   position: absolute; top: 9px; right: 9px; width: 9px; height: 9px; border-radius: 50%; pointer-events: none;
@@ -187,7 +187,7 @@ function page(dir: 1 | -1) {
 .rail__badge[data-severity='critical'] { background: rgb(var(--v-theme-error)); }
 .rail__spacer { flex: 1 1 0; }
 
-/* Téléphone en paysage : boutons de 44 px, et la file défile avec un fondu aux deux bouts. */
+/* Phone in landscape: 44 px buttons, and the queue scrolls with a fade at both ends. */
 @media (min-width: 600px) and (max-height: 500px) {
   .rail__scroll {
     gap: 4px; padding-top: calc(var(--safe-top) + 10px); padding-bottom: calc(var(--safe-bottom) + 10px);
@@ -199,13 +199,13 @@ function page(dir: 1 | -1) {
   .rail__spacer { flex: 0 0 4px; }
 }
 
-/* les chevrons n'existent que sur la barre du bas */
+/* the chevrons only exist on the bottom bar */
 .rail__more { display: none; }
 
-/* Téléphone en portrait : une barre en bas, qui défile de côté ; les réglages ferment la file.
-   Le voile monte du bas au lieu de venir de la gauche. Les boutons se posent 14 px au-dessus du bord
-   (encoche en plus) : loin de la zone des gestes du système. Le côté qui a une suite se fond sur
-   44 px, et son chevron s'y pose ; l'autre bout reste net. */
+/* Phone in portrait: a bar at the bottom, which scrolls sideways; the settings close the queue.
+   The veil rises from the bottom instead of coming from the left. The buttons sit 14 px above the edge
+   (notch included): away from the system gestures zone. The side that has more fades over
+   44 px, and its chevron sits there; the other end stays crisp. */
 @media (max-width: 599px) {
   .rail { top: auto; right: 0; width: auto; height: var(--dock-h); }
   .rail::before { top: auto; bottom: 0; right: 0; width: auto; height: calc(var(--dock-h) + 48px); }
@@ -227,14 +227,14 @@ function page(dir: 1 | -1) {
   .rail__btn { flex: none; width: 52px; height: 52px; border-radius: 16px; }
   .rail__spacer { flex: 0 0 6px; }
   .rail__more {
-    /* même bande que la file (au-dessus de ses 14 px de bas) et centré dedans, comme les boutons */
+    /* same band as the queue (above its 14 px of bottom) and centered in it, like the buttons */
     display: grid; place-items: center; position: absolute; top: 0; bottom: calc(var(--safe-bottom) + 14px); width: 32px;
     border: 0; padding: 0; background: transparent; color: var(--text); opacity: 0; pointer-events: none; transition: opacity .2s;
   }
   .rail__more--start { left: var(--safe-left); }
   .rail__more--end { right: var(--safe-right); }
   .rail[data-more-start='1'] .rail__more--start, .rail[data-more-end='1'] .rail__more--end { opacity: 1; pointer-events: auto; }
-  /* une pastille du verre de l'app : le chevron se lit sur l'icône à demi fondue qu'il recouvre */
+  /* a pill of the app's glass: the chevron reads over the half-faded icon it covers */
   .rail__morechip {
     width: 26px; height: 26px; border-radius: 999px; display: grid; place-items: center;
     border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 92%, transparent); box-shadow: var(--shadow);

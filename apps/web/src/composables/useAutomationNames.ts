@@ -6,10 +6,10 @@ import { useDevicesStore } from '../stores/devices'
 import { useHouseStore } from '../stores/house'
 import { useScenesStore } from '../stores/scenes'
 
-// Noms et listes de choix d'une automatisation, tirés des stores : ce que `lib/automations.ts`
-// reçoit en contexte pour rester pur, et ce que proposent les listes de l'éditeur. Un id qui
-// n'existe plus (plugin éteint, pièce supprimée) se montre TEL QUEL, marqué « inconnu » dans les
-// listes : c'est ainsi qu'on le voit et qu'on le remplace.
+// Names and choice lists of an automation, drawn from the stores: what `lib/automations.ts`
+// receives as context to stay pure, and what the editor's lists offer. An id that
+// no longer exists (plugin off, room deleted) is shown AS IS, marked "unknown" in the
+// lists: that is how it is seen and replaced.
 
 export interface Option { value: string; title: string }
 
@@ -33,7 +33,7 @@ export function useAutomationNames() {
     return roomId ? names.roomName(roomId) : ''
   }
 
-  /** Appareils de ces kinds (et de cette capacité), « Pièce · Nom », triés ; l'id courant s'il a disparu. */
+  /** Devices of these kinds (and this capability), "Room · Name", sorted; the current id if it has disappeared. */
   function deviceOptions(kinds: readonly DeviceKind[] | null, current?: string, capability?: Capability): Option[] {
     const opts = Object.values(devices.descriptors)
       .filter((d) => (!kinds || kinds.includes(d.kind)) && (!capability || d.capabilities.includes(capability)))
@@ -47,14 +47,14 @@ export function useAutomationNames() {
     return opts
   }
 
-  /** Pièces, niveau par niveau (ordre d'affichage de la maison). */
+  /** Rooms, level by level (the house's display order). */
   const roomOptions = computed<Option[]>(() => {
     const idx = house.index
     if (!idx) return []
     return idx.levelsSorted.flatMap((l) => (idx.roomsByLevel.get(l.id) ?? []).map((r) => ({ value: r.id, title: `${l.shortName ?? l.name} · ${r.name}` })))
   })
 
-  /** Portée d'une sélection : niveaux, pièces et zones du jardin, préfixés pour rester distincts. */
+  /** Scope of a selection: levels, rooms and garden zones, prefixed to stay distinct. */
   const scopeOptions = computed<Option[]>(() => {
     const idx = house.index
     if (!idx) return []
@@ -68,7 +68,7 @@ export function useAutomationNames() {
   const parkingOptions = computed<Option[]>(() =>
     (house.effective?.site.parkings ?? []).map((p) => ({ value: p.id, title: p.name ?? p.id })))
 
-  /** Ambiances des fabricants, « Groupe · Nom ». */
+  /** Vendors' light scenes, "Group · Name". */
   const sceneOptions = computed<Option[]>(() =>
     scenes.list.map((e) => ({ value: e.scene.id, title: `${e.scene.group ? `${e.scene.group.name} · ` : ''}${e.scene.name}` })))
 

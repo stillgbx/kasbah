@@ -10,14 +10,14 @@ import PulseDot from '../ui/PulseDot.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import LightHistoryChart from './LightHistoryChart.vue'
 
-// Contrôle d'un ouvrant dans le panneau appareil. Le pourcentage est une FERMETURE (0 % = ouvert),
-// voir `lib/cover.ts` — le grand nombre en tête du panneau suit la même convention, donc ce
-// contrôle ne le répète pas.
+// Control of a cover in the device panel. The percentage is a CLOSURE (0 % = open),
+// see `lib/cover.ts` — the big number at the top of the panel follows the same convention, so this
+// control does not repeat it.
 //
-// Le curseur affiche la POSITION VISÉE tant que le store la tient (`targetPosition`) : un moteur qui
-// ne publie sa position qu'à la fin de la course ferait sinon sauter la poignée en arrière juste
-// après le geste. Si l'ouvrant s'arrête ailleurs, le store abandonne la cible et le curseur revient
-// tout seul à la réalité.
+// The slider shows the TARGET POSITION as long as the store holds it (`targetPosition`): a motor that
+// only publishes its position at the end of the travel would otherwise make the handle jump back just
+// after the gesture. If the cover stops elsewhere, the store drops the target and the slider goes back
+// to reality on its own.
 const props = defineProps<{ descriptor: DeviceDescriptor; state: StateFor<'cover'>; pending?: boolean; disabled?: boolean }>()
 const emit = defineEmits<{ command: [cmd: CommandInput] }>()
 
@@ -26,10 +26,10 @@ const { t } = useI18n()
 const dragging = ref(false)
 const drag = ref(0)
 
-// la cible n'est qu'une surcouche : sans elle, l'état reçu en prop fait foi
+// the target is only an overlay: without it, the state received as a prop is authoritative
 const target = computed(() => devices.targetPosition(props.descriptor.id))
-// `undefined` = position inconnue (radio unidirectionnelle qui n'a rien reçu) : rien à affirmer,
-// donc pas de pourcentage et un libellé « Inconnu ». Le curseur, lui, a besoin d'un nombre.
+// `undefined` = unknown position (one-way radio that has received nothing): nothing to assert,
+// so no percentage and an "Unknown" label. The slider, though, needs a number.
 const shown = computed(() => {
   const p = target.value ?? props.state.position
   return p === undefined ? undefined : toClosure(p)
@@ -37,23 +37,23 @@ const shown = computed(() => {
 const closure = computed(() => (dragging.value ? drag.value : shown.value ?? 0))
 watch(shown, (v) => { if (!dragging.value) drag.value = v ?? 0 }, { immediate: true })
 
-// préfixe i18n du vocabulaire : un volet s'ouvre, un store se remonte (voir `lib/cover.ts`)
+// i18n prefix of the vocabulary: a shutter opens, a blind is raised (see `lib/cover.ts`)
 const w = computed(() => coverWords(props.descriptor))
 const moving = computed(() => props.state.motion !== 'stopped')
 /**
- * Texte de la ligne d'état : le mouvement quand il y en a un, sinon « Ouvert » / « Fermé » aux
- * extrêmes, sinon le nom du réglage. Jamais le pourcentage — il est déjà au bout de la ligne.
+ * Text of the status line: the movement when there is one, otherwise "Open" / "Closed" at the
+ * extremes, otherwise the name of the setting. Never the percentage — it is already at the end of the line.
  */
-// Capacités CALCULÉES, pas lues une fois : le panneau garde ce composant quand on passe d'un
-// ouvrant à un autre, et un volet aurait sinon hérité des lignes (inclinaison, batterie) du précédent.
+// COMPUTED capabilities, not read once: the panel keeps this component when going from one
+// cover to another, and a shutter would otherwise have inherited the previous one's lines (tilt, battery).
 const hasPosition = computed(() => props.descriptor.capabilities.includes('position'))
 const lineText = computed(() => {
   if (moving.value) return t(`cover.${w.value}.${props.state.motion}`)
-  // Position jamais reçue : la grande valeur montre l'état SUPPOSÉ (« Fermé », « Remonté ») et cette
-  // ligne est l'endroit où on le dit — sans elle, le mot passerait pour une certitude.
+  // Position never received: the big value shows the ASSUMED state ("Closed", "Raised") and this
+  // line is where we say so — without it, the word would pass for a certainty.
   if (shown.value === undefined) return t('cover.assumedHint')
-  // Moteur sans retour à position déduite : la grande valeur dit déjà le mot, la ligne garde sa
-  // hauteur sans le répéter (elle reprend la parole dès qu'un mouvement commence).
+  // Motor without position feedback and with a deduced position: the big value already says the word, the line keeps its
+  // height without repeating it (it speaks again as soon as a movement starts).
   if (!hasPosition.value) return '—'
   if (shown.value <= 0) return t(`cover.${w.value}.open`)
   if (shown.value >= 100) return t(`cover.${w.value}.closed`)
@@ -62,26 +62,26 @@ const lineText = computed(() => {
 const hasTilt = computed(() => props.descriptor.capabilities.includes('tilt'))
 const hasStop = computed(() => props.descriptor.capabilities.includes('stop'))
 
-// Position favorite mémorisée DANS le moteur (le « my » de Somfy). La capacité dit qu'on peut la
-// rappeler ; la valeur, seulement qu'on peut la montrer — un moteur unidirectionnel a la première
-// sans la seconde. D'où deux notions distinctes plutôt qu'une.
+// Favorite position memorized IN the motor (Somfy's "my"). The capability says it can be
+// recalled; the value, only that it can be shown — a one-way motor has the first
+// without the second. Hence two distinct notions rather than one.
 const hasPreset = computed(() => props.descriptor.capabilities.includes('preset'))
 const presetClosure = computed(() =>
   props.state.presetPosition === undefined ? undefined : toClosure(props.state.presetPosition))
-// Réécrire la mémoire du moteur : on grave la position ACTUELLE, comme le geste de la télécommande
-// Somfy (amener l'ouvrant au bon endroit, puis mémoriser) — donc on n'enregistre jamais une
-// position qu'on n'a pas vue. Impossible en pleine course : la position y est celle du départ.
+// Rewriting the motor's memory: we store the CURRENT position, like the remote's gesture
+// of Somfy (bring the cover to the right place, then memorize) — so we never record a
+// position we have not seen. Impossible mid-travel: the position there is the starting one.
 const hasPresetSet = computed(() => props.descriptor.capabilities.includes('preset_set'))
 const canSavePreset = computed(() => !props.disabled && !moving.value && props.state.position !== undefined)
 
-// Mode discret : un interrupteur tenu par le serveur, appliqué aux manœuvres SUIVANTES (vitesse
-// lente). Le basculer ne bouge rien, donc il reste actif pendant une course.
+// Quiet mode: a switch held by the server, applied to the NEXT maneuvers (slow
+// speed). Toggling it moves nothing, so it stays active during a travel.
 const hasQuiet = computed(() => props.descriptor.capabilities.includes('quiet'))
-/** Moteur sur batterie (volet solaire) : la ligne est réservée dès la capacité, la valeur peut manquer. */
+/** Battery-powered motor (solar shutter): the line is reserved as soon as the capability exists, the value may be missing. */
 const hasBattery = computed(() => props.descriptor.capabilities.includes('battery'))
 
-// Volet solaire : son panneau est un capteur de luminosité à part, qui déclare `meta.linkedTo` vers
-// ce volet. On l'affiche ici plutôt que comme un appareil de plus.
+// Solar shutter: its panel is a separate brightness sensor, which declares `meta.linkedTo` to
+// this shutter. We display it here rather than as one more device.
 const lightSensor = computed(() => {
   const e = devices.list.find((x) => x.descriptor.kind === 'sensor' && x.descriptor.meta.linkedTo === props.descriptor.id)
   return e && e.state.kind === 'sensor' ? { descriptor: e.descriptor, state: e.state } : undefined
@@ -92,9 +92,9 @@ function send(cmd: CommandInput) { emit('command', cmd) }
 
 <template>
   <div class="cover">
-    <!-- L'ouvrant vu de face, en grand, et ses trois manœuvres EMPILÉES à côté dans le sens du
-         mouvement (Ouvrir en haut, Fermer en bas) : la même vignette que la vue Ouvrants, qu'on fait
-         glisser verticalement. Un curseur horizontal se lisait à l'envers d'un volet. -->
+    <!-- The cover seen from the front, large, and its three maneuvers STACKED beside it in the direction of
+         movement (Open at the top, Close at the bottom): the same thumbnail as the Covers view, which can be
+         dragged vertically. A horizontal slider read backwards for a shutter. -->
     <div class="hero">
       <CoverPill class="hero__pill" :closure="dragging ? drag : shown" :preset="presetClosure"
                  :interactive="hasPosition && !disabled" :device-class="descriptor.meta.cover?.deviceClass"
@@ -102,9 +102,9 @@ function send(cmd: CommandInput) { emit('command', cmd) }
                  @drag="(v: number) => { dragging = true; drag = v }"
                  @commit="(v: number) => { dragging = false; send({ type: 'cover.set_position', position: fromClosure(Math.round(v)) }) }" />
       <div class="hero__side">
-        <!-- UNE seule ligne, de hauteur constante : le point garde sa place même éteint, le texte
-             occupe le milieu et le pourcentage reste collé à droite. Une ligne qui apparaît et
-             disparaît décalerait tout ce qui suit à chaque mouvement. -->
+        <!-- ONE single line, of constant height: the dot keeps its place even off, the text
+             takes the middle and the percentage stays glued to the right. A line that appears and
+             disappears would shift everything that follows at each movement. -->
         <div class="line line--hero" :data-moving="moving ? '1' : '0'">
           <PulseDot :on="moving" />
           <span class="line__text">{{ lineText }}</span>
@@ -122,10 +122,10 @@ function send(cmd: CommandInput) { emit('command', cmd) }
       </div>
     </div>
 
-    <!-- Une seule ligne pour les deux : le rappel prend la place (son libellé et sa valeur sont
-         écrits), la mémorisation se réduit à une icône. Cette dernière porte une teinte
-         d'AVERTISSEMENT parce qu'elle réécrit une mémoire qui vit dans le moteur et sert aussi au
-         bouton « my » des télécommandes murales — ce n'est pas une manœuvre de plus. -->
+    <!-- A single line for both: the recall takes the place (its label and value are
+         written), the memorization shrinks to an icon. The latter carries a WARNING
+         tint because it rewrites a memory that lives in the motor and also serves the
+         "my" button of wall remotes — it is not one more maneuver. -->
     <div v-if="hasPreset || hasPresetSet" class="preset">
       <button v-if="hasPreset" type="button" class="key preset__recall" :disabled="disabled" @click="send({ type: 'cover.preset' })">
         <StrokeIcon name="crosshair" :size="16" />
@@ -135,8 +135,8 @@ function send(cmd: CommandInput) { emit('command', cmd) }
       <button v-if="hasPresetSet" type="button" class="key preset__save" :disabled="!canSavePreset"
               :title="$t('cover.presetSave')" :aria-label="$t('cover.presetSave')"
               @click="send({ type: 'cover.set_preset', position: state.position! })">
-        <!-- Étoile = « favori / mémorisé », le seul glyphe qui se lise à 16 px pour cette idée. Une
-             coche (lue « validé ») puis une pipette (illisible à cette taille) ont été écartées. -->
+        <!-- Star = "favorite / memorized", the only glyph that reads at 16 px for this idea. A
+             check mark (read as "validated") then a pipette (unreadable at this size) were discarded. -->
         <StrokeIcon name="star" :size="16" />
       </button>
     </div>
@@ -156,8 +156,8 @@ function send(cmd: CommandInput) { emit('command', cmd) }
     </div>
 
     <template v-if="hasTilt">
-      <!-- Inclinaison : l'ANGLE des lames (store vénitien, brise-soleil orientable), sans monter ni
-           descendre — d'où un curseur horizontal ici, qui ne mime aucun mouvement. -->
+      <!-- Tilt: the ANGLE of the slats (venetian blind, adjustable sun-shading louvers), without raising or
+           lowering — hence a horizontal slider here, which mimics no movement. -->
       <div class="line">
         <PulseDot :on="false" />
         <span class="line__text">{{ $t('cover.tilt') }}</span>
@@ -174,17 +174,17 @@ function send(cmd: CommandInput) { emit('command', cmd) }
 
 <style scoped>
 .cover { display: grid; gap: 2px; }
-/* La vignette sur toute la hauteur de la colonne des touches (ligne d'état + trois touches). */
+/* The thumbnail over the whole height of the keys column (status line + three keys). */
 .hero { display: grid; grid-template-columns: auto 1fr; gap: 14px; --pill-w: 88px; --pill-h: 150px; --pill-r: 16px; --pill-rows: auto; }
 .hero__side { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .line--hero { margin: 0 0 4px; height: 18px; }
 .line { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin-top: 10px; }
 .line[data-moving='1'] { color: var(--accent); }
 .line__text { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-/* chiffres a largeur fixe : le pourcentage ne fremit pas quand il change */
+/* fixed-width digits: the percentage does not flicker when it changes */
 .line__pct { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
-/* `min-width: 0` est indispensable : trois boutons à largeur minimale par défaut débordent des
-   340 px du panneau. */
+/* `min-width: 0` is essential: three buttons at default minimum width overflow the
+   panel's 340 px. */
 .key {
   flex: 0 0 auto; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 5px;
   height: 40px; padding: 0 6px; border-radius: 10px; border: 1px solid var(--line);
@@ -194,22 +194,22 @@ function send(cmd: CommandInput) { emit('command', cmd) }
 .key:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
 .key:disabled { opacity: .4; }
 .key__pct { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
-/* Les deux touches de position perso sur UNE ligne : le rappel s'etire (son libelle et sa valeur
-   sont ecrits), la memorisation se reduit a une icone de 40 px. */
+/* The two custom-position keys on ONE line: the recall stretches (its label and value
+   are written), the memorization shrinks to a 40 px icon. */
 .preset { display: flex; gap: 6px; margin-top: 6px; }
-/* Mode discret : une ligne de hauteur fixe, l'interrupteur à droite comme dans les réglages. */
+/* Quiet mode: a fixed-height line, the switch on the right as in the settings. */
 .quiet { display: flex; align-items: center; gap: 8px; height: 40px; margin-top: 6px; font-size: 12px; color: var(--text); cursor: pointer; }
 .quiet__text { flex: 1 1 auto; min-width: 0; }
 .quiet :deep(.v-switch) { flex: 0 0 auto; }
-/* Batterie : même gabarit que la ligne du mode discret, la valeur à droite en chiffres fixes. */
+/* Battery: same template as the quiet-mode line, the value on the right in fixed digits. */
 .battery { display: flex; align-items: center; gap: 8px; height: 32px; font-size: 12px; color: var(--text); }
 .battery__text { flex: 1 1 auto; min-width: 0; }
 .battery__pct { flex: 0 0 auto; color: var(--muted); font-variant-numeric: tabular-nums; }
 .battery__pct--low { color: rgb(var(--v-theme-error)); }
 .preset__recall { flex: 1 1 auto; justify-content: flex-start; gap: 8px; }
-/* Teinte d'AVERTISSEMENT : cette touche reecrit un reglage qui vit dans le moteur et sert aussi au
-   bouton « my » des telecommandes murales. Regles placees APRES `.key:hover`, de meme specificite,
-   donc c'est l'ordre qui les fait gagner. */
+/* WARNING tint: this key rewrites a setting that lives in the motor and also serves the
+   "my" button of wall remotes. Rules placed AFTER `.key:hover`, of the same specificity,
+   so it is the order that makes them win. */
 .preset__save { flex: 0 0 40px; color: rgb(var(--v-theme-warning)); border-color: rgba(var(--v-theme-warning), .45); }
 .preset__save:hover:not(:disabled) { background: rgba(var(--v-theme-warning), .14); color: rgb(var(--v-theme-warning)); border-color: transparent; }
 </style>

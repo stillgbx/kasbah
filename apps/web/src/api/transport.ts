@@ -1,8 +1,8 @@
 import type { GeoOrigin, ShoppingAddBody, ShoppingItemPatch, ShoppingList, HouseEditPatch, AutomationBody, GardenItemPatch, NewGardenItem, AutomationEntry, AutomationRun, Relief, SceneTuning, Vec2, CommandInput, DeviceConsumption, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, PropertiesResponse, PropertyMode, NewPropertyBody, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal, DeviceReleaseNotes, SiteMap, StateFor } from '@kasbah/shared'
 
-// Abstraction du canal serveur. Deux implémentations : HTTP + WebSocket (réel) et simulation
-// in-process (tests, démo statique sans serveur). Les commandes passent TOUJOURS par une requête
-// (codes d'erreur, timeout, fonctionne pendant une reconnexion) ; le WS ne fait que pousser.
+// Abstraction of the server channel. Two implementations: HTTP + WebSocket (real) and in-process
+// simulation (tests, static demo without a server). Commands ALWAYS go through a request
+// (error codes, timeout, works during a reconnection); the WS only pushes.
 
 export type ConnectionStatus = 'connecting' | 'online' | 'stale' | 'offline'
 
@@ -18,46 +18,46 @@ export class ApiRequestError extends Error {
   }
 }
 
-/** Un lieu où lire la météo hors de la maison (recherche et favoris de la vue Météo). */
+/** A place to read the weather outside the house (search and favorites of the Weather view). */
 export interface WeatherPlace {
-  /** Identifiant GeoNames : deux homonymes restent deux favoris. */
+  /** GeoNames identifier: two namesakes remain two favorites. */
   id: string
   name: string
-  /** Région et pays, pour départager deux homonymes (« Bourgogne, France »). */
+  /** Region and country, to tell two namesakes apart ("Burgundy, France"). */
   region?: string
   countryCode?: string
   lat: number
   lon: number
 }
-/** La météo d'un lieu quelconque, au format de l'appareil de la maison. */
+/** The weather of any place, in the format of the house's device. */
 export interface WeatherElsewhere {
   state: StateFor<'weather'>
   forecast: Omit<WeatherForecast, 'deviceId'>
-  /** Fuseau IANA du lieu : ses heures s'y affichent. */
+  /** IANA time zone of the place: its hours are displayed in it. */
   timezone?: string
   attribution: string
 }
-/** Une vigilance Météo-France (au moins jaune), en cours ou à venir. */
+/** A Météo-France warning (at least yellow), ongoing or upcoming. */
 export interface WeatherAlert {
-  /** Phénomène : `thunderstorm`, `wind`, `rain_flood`… ; `other` pour un inconnu. */
+  /** Phenomenon: `thunderstorm`, `wind`, `rain_flood`…; `other` for an unknown one. */
   type: string
   level: 'yellow' | 'orange' | 'red'
   onset: number
   expires: number
 }
-/** La vigilance du département d'un lieu ; `area: null` hors de la métropole (rien à lire). */
+/** The warning for a place's département; `area: null` outside metropolitan France (nothing to read). */
 export interface WeatherAlerts {
   area: string | null
-  /** En cours d'abord, la plus forte en tête. Vide = vert. */
+  /** Ongoing first, the strongest at the top. Empty = green. */
   warnings: WeatherAlert[]
   attribution: string
   web: string
 }
 
 /**
- * Appairage de la passerelle Enphase, tel que l'UI le voit. Le jeton n'y figure jamais : seul le
- * serveur le détient, et `tokenFile` dit où il le garde — `null` si rien n'est gardé, et l'UI
- * prévient alors que l'appairage ne survivra pas à un redémarrage.
+ * Pairing of the Enphase gateway, as the UI sees it. The token never appears in it: only the
+ * server holds it, and `tokenFile` says where it keeps it — `null` if nothing is kept, and the UI
+ * then warns that the pairing will not survive a restart.
  */
 export interface EnphaseTokenStatus {
   paired: boolean
@@ -72,7 +72,7 @@ export interface EnphaseTokenStatus {
   source?: 'config' | 'cache' | 'minted'
   renewUnderDays: number
   tokenFile: string | null
-  /** Session Enlighten : indispensable à la borne, distincte du jeton local de la passerelle. */
+  /** Enlighten session: essential for the charger, distinct from the gateway's local token. */
   cloudLinked: boolean
   cloudFile: string | null
   siteId?: string
@@ -81,8 +81,8 @@ export interface EnphaseTokenStatus {
 export type EnphasePairing = { token: string } | { user: string; password: string; force?: boolean }
 
 /**
- * Mise en route du plugin Tesla, telle que l'UI la voit. Ni secret ni clé privée : la clé PUBLIQUE
- * y est, parce que c'est l'utilisateur qui doit la poser sur son domaine.
+ * Setup of the Tesla plugin, as the UI sees it. No secret or private key: the PUBLIC key
+ * is in it, because it is the user who must place it on their domain.
  */
 export interface TeslaStatus {
   configured: boolean
@@ -102,20 +102,20 @@ export interface TeslaStatus {
 }
 
 /**
- * Un contrat d'entretien plafonné en km chez Renault : la seule trace d'une LOA que Kamereon
- * expose, proposée au panneau « Modifier » pour pré-remplir — jamais écrite d'office.
+ * A mileage-capped service contract at Renault: the only trace of a lease that Kamereon
+ * exposes, offered to the "Edit" panel to pre-fill — never written automatically.
  */
 export interface RenaultContract {
   description: string
-  /** `AAAA-MM-JJ`, ou `null` quand Renault ne la donne pas. */
+  /** `YYYY-MM-DD`, or `null` when Renault does not give it. */
   start: string | null
   end: string | null
   maxKm: number
 }
 
 /**
- * Mise en route du plugin Renault, telle que l'UI la voit. Le mot de passe n'y figure JAMAIS : il
- * ne fait que traverser `renaultLogin`, et ce qui en reste côté serveur est un jeton de session.
+ * Setup of the Renault plugin, as the UI sees it. The password NEVER appears in it: it
+ * only passes through `renaultLogin`, and what remains of it on the server side is a session token.
  */
 export interface RenaultStatus {
   linked: boolean
@@ -129,27 +129,27 @@ export interface RenaultStatus {
   sessionFile: string | null
   lastError: string | null
   /**
-   * Ce qu'est devenu le dernier réveil de charge. Sans lui, un réveil refusé ne se voit nulle part
-   * sauf dans la console du serveur — c'est ce qui a laissé passer une journée entière de surplus
-   * solaire le 2026-09-19. `null` : aucun réveil tenté depuis le démarrage.
+   * What became of the last charge wake-up. Without it, a refused wake-up shows up nowhere
+   * except in the server console — which is what let a whole day of solar surplus go by
+   * on 2026-09-19. `null`: no wake-up attempted since startup.
    */
   lastWake: { at: number; result: 'sent' | 'deferred' | 'failed'; detail: string | null } | null
 }
 
 /**
- * Mise en route du plugin MELCloud, telle que l'UI la voit. Même règle que Renault : le mot de
- * passe n'y figure JAMAIS, il ne fait que traverser `melcloudLogin` et ce qui en reste côté serveur
- * est une clé de session.
+ * Setup of the MELCloud plugin, as the UI sees it. Same rule as Renault: the
+ * password NEVER appears in it, it only passes through `melcloudLogin` and what remains of it on the server
+ * side is a session key.
  *
- * `devices` sont les MACHINES vues sur le compte ; `zoneCount` compte ce que la maison reçoit, une
- * zone de chauffage par appareil. Les deux nombres diffèrent, et c'est normal : une machine porte
- * une ou deux zones, et plusieurs pompes à chaleur en cascade n'apparaissent que comme une seule
- * machine (l'installation de référence : trois Zubadan, un appareil, deux zones).
+ * `devices` are the MACHINES seen on the account; `zoneCount` counts what the house receives, one
+ * heating zone per device. The two numbers differ, and that is normal: a machine carries one
+ * or two zones, and several heat pumps in cascade appear as a single
+ * machine (the reference installation: three Zubadan, one device, two zones).
  */
 /**
- * État de la liaison PetKit. Pas de mot de passe dans cette interface, et ce n'est pas un oubli :
- * le fabricant connecte par CODE envoyé par courriel. `expiresAt` est donc une information utile à
- * l'écran — une session perdue ne se reprend pas toute seule, il faudra un nouveau code.
+ * State of the PetKit link. No password in this interface, and that is not an oversight:
+ * the vendor connects by CODE sent by email. `expiresAt` is thus useful information for
+ * the screen — a lost session does not resume by itself, a new code will be needed.
  */
 export interface PetkitStatus {
   linked: boolean
@@ -165,7 +165,7 @@ export interface MelcloudStatus {
   linked: boolean
   accountName: string | null
   devices: { deviceId: string; name: string; family: string | null; buildingName: string | null }[]
-  /** Appareils publiés à la maison : une ZONE de chauffage chacun, jamais une machine. */
+  /** Devices published to the house: one heating ZONE each, never a machine. */
   zoneCount: number
   pollMs: number
   sessionFile: string | null
@@ -173,11 +173,11 @@ export interface MelcloudStatus {
 }
 
 /**
- * Mise en route du plugin iRobot, telle que l'UI la voit. Aucun mot de passe n'y figure : ni celui
- * du compte (il ne fait que traverser `irobotLogin`), ni celui, local, de chaque robot.
+ * Setup of the iRobot plugin, as the UI sees it. No password appears in it: neither that
+ * of the account (it only passes through `irobotLogin`), nor the local one of each robot.
  *
- * `ip` et `connected` disent ce que le compte ne sait pas : où le robot est sur le réseau, et si le
- * lien MQTT est ouvert. Un robot du compte éteint reste listé, sans adresse et non connecté.
+ * `ip` and `connected` say what the account does not know: where the robot is on the network, and whether the
+ * MQTT link is open. A switched-off robot of the account stays listed, with no address and not connected.
  */
 export interface IrobotStatus {
   linked: boolean
@@ -188,8 +188,8 @@ export interface IrobotStatus {
 }
 
 /**
- * Mise en route YouTube Music (non officiel). Le cookie n'y figure jamais — il ne fait que
- * traverser `ytmusicPutCookie`.
+ * YouTube Music setup (unofficial). The cookie never appears in it — it only passes through
+ * `ytmusicPutCookie`.
  */
 export interface YtmusicStatus {
   linked: boolean
@@ -199,29 +199,29 @@ export interface YtmusicStatus {
   cookieFile: string | null
   poTokenUrl: string
   lastError: string | null
-  /** Navigateurs de la machine serveur pour l'import ; aucun pour un utilisateur connecté. */
+  /** Browsers of the server machine for the import; none for a logged-in user. */
   browsers: string[]
-  /** Le compte en jeu : l'utilisateur connecté, ou `null` pour celui de la maison. */
+  /** The account at stake: the logged-in user, or `null` for the house's. */
   user: string | null
-  /** Utilisateur connecté sans cookie : catalogue public seulement, ni likes ni playlists. */
+  /** Logged-in user without a cookie: public catalog only, no likes or playlists. */
   anonymous: boolean
 }
 
-/** Un compte du serveur MCP (`mcp-users.json`) : le nom seul, le mot de passe haché reste sur le serveur. */
+/** An account of the MCP server (`mcp-users.json`): the name only, the hashed password stays on the server. */
 export interface McpUser { name: string }
 
-/** Un commit du dépôt du serveur ; `date` ISO 8601. */
+/** A commit of the server's repository; `date` ISO 8601. */
 export interface SystemCommit { sha: string; subject: string; date: string }
 
 /**
- * Version du serveur (`/api/system/version`) : le commit chargé, ceux qui attendent sur `origin/main`
- * (`null` si git n'a pas répondu, `error` dit pourquoi), et si un superviseur peut mettre à jour.
+ * Server version (`/api/system/version`): the loaded commit, those waiting on `origin/main`
+ * (`null` if git did not answer, `error` says why), and whether a supervisor can update.
  */
 export interface SystemVersion { supervised: boolean; running: SystemCommit | null; available: SystemCommit[] | null; error: string | null }
 
 export type UpdateStep = 'fetch' | 'deps' | 'build' | 'restart' | 'rollback'
 
-/** Avancement d'une mise à jour, écrit par le superviseur (`scripts/supervisor.mjs`). */
+/** Progress of an update, written by the supervisor (`scripts/supervisor.mjs`). */
 export interface UpdateStatus {
   state: 'running' | 'done' | 'failed'
   step: UpdateStep | null
@@ -238,21 +238,21 @@ export interface UpdateStatus {
 }
 
 /**
- * Le forfait Claude (plugin `claude`) du compte courant (`null` = la maison, sur le réseau local) :
- * jamais le jeton, seulement s'il y en a un et si la maison en a un en repli.
+ * The Claude plan (`claude` plugin) of the current account (`null` = the house, on the local network):
+ * never the token, only whether there is one and whether the house has one as a fallback.
  */
 export interface ClaudeAccount { user: string | null; savedAt: number | null; house: boolean }
 
 /**
- * La voix des réponses parlées (plugin `transcription`) du compte courant (`user` `null` = la maison,
- * sur le réseau local). `voice` `null` : pas de choix, `houseVoice` sert, sinon `defaultVoice` (`TTS_VOICE`).
+ * The voice of spoken replies (`transcription` plugin) of the current account (`user` `null` = the house,
+ * on the local network). `voice` `null`: no choice, `houseVoice` is used, otherwise `defaultVoice` (`TTS_VOICE`).
  */
 export interface TranscriptionSettings { user: string | null; voice: string | null; houseVoice: string | null; defaultVoice: string | null }
 
-/** Ce qu'une instruction a consommé ; `costUsd` au prix catalogue de l'API (un forfait n'est pas facturé à l'instruction). */
+/** What an instruction consumed; `costUsd` at the API's list price (a plan is not billed per instruction). */
 export interface AssistantUsage { costUsd: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number }
 
-/** Ce que l'assistant (`claude -p` sur le serveur) rend, au fil de l'eau, pour une instruction. */
+/** What the assistant (`claude -p` on the server) returns, as it goes, for an instruction. */
 export type AssistantEvent =
   | { type: 'text'; text: string }
   | { type: 'tool'; id: string; name: string; input: unknown }
@@ -260,7 +260,7 @@ export type AssistantEvent =
   | { type: 'done'; ms: number; usage?: AssistantUsage }
   | { type: 'error'; code: string; message: string; usage?: AssistantUsage }
 
-/** Une instruction du journal de l'assistant (les 200 dernières, tous comptes, réseau local seulement). */
+/** An instruction from the assistant's log (the last 200, all accounts, local network only). */
 export interface AssistantLogEntry {
   at: number
   user: string | null
@@ -269,31 +269,31 @@ export interface AssistantLogEntry {
   answer: string
   error: { code: string; message: string } | null
   ms: number
-  /** Absent : moteur qui ne le dit pas, ou entrée d'avant le 2026-10-11. */
+  /** Absent: an engine that does not say it, or an entry from before 2026-10-11. */
   usage?: AssistantUsage
 }
 
-/** Un agenda de la maison (plugin `agenda`) ; son adresse iCal reste sur le serveur. */
+/** A calendar of the house (`agenda` plugin); its iCal address stays on the server. */
 export interface AgendaCalendar { id: string; name: string; color: string; fetchedAt: number | null; error: string | null }
 /**
- * Une occurrence d'événement. Journée entière : dates locales `YYYY-MM-DD`, fin exclue ; sinon des
- * instants en ms.
+ * An event occurrence. Whole day: local dates `YYYY-MM-DD`, end exclusive; otherwise
+ * instants in ms.
  */
 export type AgendaEvent = { id: string; calendarId: string; title: string; location?: string; description?: string }
   & ({ allDay: true; start: string; end: string } | { allDay: false; start: number; end: number })
 
-/** Pièce jointe d'une entrée TouteMonAnnée : image ou document hébergé par le site. */
+/** Attachment of a TouteMonAnnée entry: image or document hosted by the site. */
 export interface SchoolFile { type: string; url: string; thumb: string | null; name: string }
-/** Un cahier de texte (une classe) du compte TouteMonAnnée. */
+/** A class notebook (one class) of the TouteMonAnnée account. */
 export interface SchoolJournal { id: string; name: string; years: string | null; students: string[] }
-/** Un devoir : `date` = le jour où c'est à rendre (`YYYY-MM-DD`). */
+/** A homework item: `date` = the day it is due (`YYYY-MM-DD`). */
 export interface SchoolHomework {
   id: number; journalId: string; date: string; title: string | null; subject: string | null; author: string | null
   text: string; levels: string[]; files: SchoolFile[]; done: boolean
-  /** La case « fait » est celle du site : l'enseignante voit qui a coché. */
+  /** The "done" box is the site's: the teacher sees who ticked it. */
   siteAck: { validated: number; total: number } | null
 }
-/** Un message du cahier de liaison ; `at` = heure locale `YYYY-MM-DDTHH:mm`. */
+/** A message of the liaison notebook; `at` = local time `YYYY-MM-DDTHH:mm`. */
 export interface SchoolMessage {
   id: number; journalId: string; at: string; title: string | null; author: string | null
   text: string; levels: string[]; files: SchoolFile[]; read: boolean; responses: number
@@ -304,17 +304,17 @@ export interface SchoolPost {
 }
 export interface SchoolFilters { hiddenJournals: string[]; hiddenLevels: string[] }
 /**
- * Tout ce que le plugin `toutemonannee` sait, en une réponse : chaque écriture rend la même forme.
- * Le mot de passe n'y figure JAMAIS ; il ne fait que traverser `schoolLogin`.
+ * Everything the `toutemonannee` plugin knows, in one response: every write returns the same shape.
+ * The password NEVER appears in it; it only passes through `schoolLogin`.
  */
 export interface SchoolData {
   linked: boolean; username: string | null; sessionLost: boolean; fetchedAt: number | null; error: string | null
   journals: SchoolJournal[]; homework: SchoolHomework[]; messages: SchoolMessage[]; posts: SchoolPost[]
   filters: SchoolFilters
-  /** Identifiant de la plus récente publication vue. */
+  /** Identifier of the most recent publication seen. */
   postsSeen: number
 }
-/** Un mix Mixcloud (plugin `mixcloud`) ; `key` (`/user/slug/`) est son id pour le lecteur commun. */
+/** A Mixcloud mix (`mixcloud` plugin); `key` (`/user/slug/`) is its id for the common player. */
 export interface MixcloudMix {
   key: string
   name: string
@@ -323,16 +323,16 @@ export interface MixcloudMix {
   durationS: number | null
   createdAt: string | null
   tags: string[]
-  /** Les genres du mix (tags `/genres/<slug>/` de Mixcloud), dans l'ordre des tags. */
+  /** The mix's genres (Mixcloud `/genres/<slug>/` tags), in tag order. */
   genres: { slug: string; name: string }[]
-  /** Position retenue par le serveur (s), si ce mix a été écouté en partie d'ici. */
+  /** Position kept by the server (s), if this mix was partly listened to from here. */
   resumeS?: number
 }
 export interface MixcloudUser { username: string; name: string; artUrl: string | null }
-/** `account` : l'utilisateur connecté dont c'est le compte, `null` pour la maison. */
+/** `account`: the logged-in user whose account it is, `null` for the house. */
 export interface MixcloudStatus { username: string | null; user: MixcloudUser | null; lastError: string | null; account: string | null }
 export type MixcloudList = 'feed' | 'favorites' | 'listens' | 'uploads'
-/** Une rangée de l'accueil Mixcloud, recomposé par le serveur à partir des écoutes publiques du compte. */
+/** A row of the Mixcloud home, recomposed by the server from the account's public listens. */
 export type MixcloudHomeSection =
   | { kind: 'users'; id: 'topCreators'; users: MixcloudUser[] }
   | { kind: 'mixes'; id: 'following' | 'listenAgain'; items: MixcloudMix[] }
@@ -340,7 +340,7 @@ export type MixcloudHomeSection =
   | { kind: 'mixes'; id: 'popular'; genre: { slug: string; name: string }; items: MixcloudMix[] }
 export interface MixcloudPage { items: MixcloudMix[]; next: string | null }
 
-/** Une webradio de l'annuaire radio-browser (plugin `radio`). */
+/** A web radio of the radio-browser directory (`radio` plugin). */
 export interface RadioStation {
   id: string
   name: string
@@ -384,68 +384,68 @@ export interface YtmusicAlbum {
   artUrl: string | null
   artists: string[]
   year?: string | null
-  /** Déduit du sous-titre InnerTube — pas un champ API dédié. */
+  /** Deduced from the InnerTube subtitle — not a dedicated API field. */
   releaseType?: 'album' | 'single' | 'ep' | 'compilation' | null
   explicit?: boolean
 }
 
-/** Un lecteur en train de jouer un flux du proxy Kasbah (`GET /sessions`). */
-/** Ce que le proxy sert à l'enceinte, et ce qu'il a reçu de YouTube pour le produire. */
+/** A player currently playing a stream from the Kasbah proxy (`GET /sessions`). */
+/** What the proxy serves to the speaker, and what it received from YouTube to produce it. */
 export interface MusicStreamQuality {
   mime: string
-  /** null quand on relaie le flux source sans le connaître (débit variable). */
+  /** null when the source stream is relayed without knowing it (variable bitrate). */
   bitrateKbps: number | null
-  /** null quand le proxy ne réencode pas : c'est la source qui décide, on ne l'inspecte pas. */
+  /** null when the proxy does not re-encode: the source decides, we do not inspect it. */
   sampleRateHz: number | null
   channels: number | null
-  /** Taille annoncée à l'enceinte ; null si la durée est inconnue (flux sans taille). */
+  /** Size announced to the speaker; null if the duration is unknown (stream without a size). */
   lengthBytes: number | null
   source: { ext: string | null; formatId: string | null; abrKbps: number | null } | null
 }
 
 export interface MusicSession {
   deviceId: string
-  /** La source de la piste (`ytmusic`, `mixcloud`…) et son id chez elle. */
+  /** The track's source (`ytmusic`, `mixcloud`…) and its id there. */
   source: string
   id: string
   sid: string
-  /** Durée du titre (yt-dlp ou catalogue) ; le lecteur la connaît aussi par la taille du « fichier ». */
+  /** Track duration (yt-dlp or catalog); the player also knows it from the size of the "file". */
   durationS: number | null
-  /** Ce que le catalogue disait du titre : l'UI le préfère à ce que l'enceinte publie (parfois l'URL du flux). */
+  /** What the catalog said about the track: the UI prefers it to what the speaker publishes (sometimes the stream URL). */
   title: string | null
   artist: string | null
   artUrl: string | null
-  /** Absent d'un serveur plus ancien que l'affichage de la qualité. */
+  /** Absent from a server older than the quality display. */
   quality?: MusicStreamQuality | null
-  /** La file de ce lecteur (précédent / suivant, répétition) ; null ou absent sans file. */
+  /** This player's queue (previous / next, repeat); null or absent without a queue. */
   queue?: { length: number; index: number; repeat: MusicRepeat } | null
 }
 
-/** La dernière écoute d'un lecteur qui ne joue plus rien de nous (serveur redémarré, arrêt) : de quoi la reprendre. */
+/** The last listen of a player that no longer plays anything of ours (server restarted, stop): enough to resume it. */
 export interface MusicLastPlayed {
   deviceId: string
   track: MusicTrack
-  /** Position atteinte (s). */
+  /** Position reached (s). */
   positionS: number
   durationS: number | null
   queue: { length: number; index: number; repeat: MusicRepeat }
   at: number
 }
 
-/** Un genre ou une ambiance : son nom (dans la langue demandée), sa couleur, et de quoi ouvrir sa page. */
+/** A genre or a mood: its name (in the requested language), its color, and what it takes to open its page. */
 export interface YtmusicExploreCategory {
   title: string
   params: string
-  /** `#rrggbb`, la pastille chez YouTube Music. */
+  /** `#rrggbb`, the pill at YouTube Music. */
   color: string | null
 }
-/** « Pour vous » (personnalisé, parfois vide), « Humeurs et moments », « Genres » — titres localisés par YouTube. */
+/** "For you" (personalized, sometimes empty), "Moods and moments", "Genres" — titles localized by YouTube. */
 export interface YtmusicExplore {
   forYou: { title: string; categories: YtmusicExploreCategory[] }
   moods: { title: string; categories: YtmusicExploreCategory[] }
   genres: { title: string; categories: YtmusicExploreCategory[] }
 }
-/** Une rangée de la page d'une catégorie : titres, playlists officielles, albums. */
+/** A row of a category's page: tracks, official playlists, albums. */
 export interface YtmusicExploreShelf {
   title: string
   tracks: YtmusicTrack[]
@@ -453,10 +453,10 @@ export interface YtmusicExploreShelf {
   albums: YtmusicAlbum[]
 }
 
-/** Répétition du TITRE en cours : `once` le rejoue une fois puis la file reprend, `loop` sans fin. */
+/** Repeat of the current TRACK: `once` replays it once then the queue resumes, `loop` endlessly. */
 export type MusicRepeat = 'off' | 'once' | 'loop'
 
-/** Une piste telle que la file la garde (ce que `/api/music/play` accepte) : sa source et son id chez elle. */
+/** A track as the queue keeps it (what `/api/music/play` accepts): its source and its id there. */
 export interface MusicTrack {
   source: string
   id: string
@@ -465,11 +465,11 @@ export interface MusicTrack {
   artUrl?: string
   durationS?: number
   explicit?: boolean
-  /** Partir de là (s) : la reprise d'un mix long. */
+  /** Start from there (s): resuming a long mix. */
   startS?: number
 }
 
-/** La file d'un lecteur : `items[index]` joue. */
+/** A player's queue: `items[index]` is playing. */
 export interface MusicQueue {
   items: MusicTrack[]
   index: number
@@ -485,17 +485,17 @@ export interface YtmusicSearchResult {
 }
 
 /**
- * L'état d'une MACHINE de chauffage, servi par son plugin et non par le registre d'appareils : ce
- * sont une douzaine de mesures qu'on ne consulte que sur la page Chauffage, et qui n'avaient pas à
- * devenir autant de capteurs dans la maison et dans la scène 3D.
+ * The state of a heating MACHINE, served by its plugin and not by the device registry: these
+ * are a dozen measurements that are only consulted on the Heating page, and that did not have to
+ * become as many sensors in the house and in the 3D scene.
  */
 export interface MelcloudUnit {
   deviceId: string
   name: string
   power: boolean
-  /** Ce que le fabricant prétend — il se dit hors ligne en parlant. Gardé pour le diagnostic seul. */
+  /** What the vendor claims — it says it is offline while talking. Kept for diagnosis only. */
   offline: boolean
-  /** La dernière remontée est-elle trop vieille ? C'est CE champ qui dit « injoignable ». */
+  /** Is the last report too old? It is THIS field that says "unreachable". */
   stale: boolean
   outdoorTempC: number | null
   flowTempC: number | null
@@ -507,19 +507,19 @@ export interface MelcloudUnit {
   immersionHeater: boolean
   pumps: boolean[]
   valve3Way: boolean
-  /** `code` vaut 8000 quand tout va bien : c'est `hasError` qui tranche, jamais le code. */
+  /** `code` is 8000 when all is well: it is `hasError` that decides, never the code. */
   error: { hasError: boolean; code: number | null; message: string | null }
-  /** Ms epoch : le serveur a déjà ramené les deux bases de temps du fabricant au même instant. */
+  /** Epoch ms: the server has already brought the vendor's two time bases to the same instant. */
   lastSeen: number | null
   wifi: string | null
-  /** Faux = la machine n'a pas de compteur : la page omet la consommation au lieu d'afficher des zéros. */
+  /** False = the machine has no meter: the page omits consumption instead of showing zeros. */
   energyMeter: boolean
 }
 
 /**
- * Une heure d'historique de fonctionnement. Les compteurs sont des NOMBRES D'ÉCHANTILLONS, pas des
- * minutes : `n` donne l'échelle, et une heure mal sondée se lit pour ce qu'elle est au lieu de
- * passer pour une heure sans chauffage.
+ * One hour of operating history. The counters are NUMBERS OF SAMPLES, not
+ * minutes: `n` gives the scale, and a poorly polled hour reads for what it is instead of
+ * passing for an hour without heating.
  */
 export interface HeatingPoint {
   t: number
@@ -532,9 +532,9 @@ export interface HeatingPoint {
   returnC: number | null
 }
 
-/** Maximum de luminosité d'un pas (heure pleine, jour ou mois local), en lux. */
+/** Maximum brightness of a step (full hour, local day or month), in lux. */
 export interface LightPoint { t: number; maxLux: number }
-/** Historique de luminosité d'un volet solaire, tenu par le serveur au fil des trames de la box. */
+/** Brightness history of a solar shutter, kept by the server as the box's frames arrive. */
 export interface LightHistory { hourly: LightPoint[]; daily: LightPoint[]; monthly: LightPoint[] }
 
 export interface Transport {
@@ -542,159 +542,159 @@ export interface Transport {
   getDevices(): Promise<DeviceEntry[]>
   getHealth(): Promise<HealthResponse>
   getHistory(deviceId: string, hours?: number): Promise<EnergyHistory>
-  /** Prévisions d'un appareil `weather`, à la demande (le serveur rend la dernière lecture de son plugin). */
+  /** Forecast of a `weather` device, on demand (the server returns the last reading of its plugin). */
   getForecast(deviceId: string): Promise<WeatherForecast>
-  /** Lieux dont le nom répond à la recherche (géocodage Open-Meteo), noms dans la langue donnée. */
+  /** Places whose name matches the search (Open-Meteo geocoding), names in the given language. */
   searchPlaces(query: string, lang: string): Promise<WeatherPlace[]>
-  /** Météo actuelle et prévisions d'une autre position que la maison. */
+  /** Current weather and forecast of a position other than the house. */
   getWeatherAt(lat: number, lon: number): Promise<WeatherElsewhere>
-  /** Vigilance météo d'une position (Météo-France par MeteoAlarm, métropole seule). */
+  /** Weather warning of a position (Météo-France through MeteoAlarm, metropolitan France only). */
   getWeatherAlerts(lat: number, lon: number): Promise<WeatherAlerts>
-  /** Journal d'un appareil qui déclare la capacité `journal` (erreurs, avertissements consignés), du plus récent au plus ancien. */
+  /** Log of a device that declares the `journal` capability (recorded errors, warnings), from most recent to oldest. */
   getJournal(deviceId: string): Promise<DeviceJournal>
-  /** Carte du terrain d'une tondeuse qui déclare la capacité `site_map` (le serveur rend le cache de son plugin). */
+  /** Terrain map of a mower that declares the `site_map` capability (the server returns its plugin's cache). */
   getSiteMap(deviceId: string): Promise<SiteMap>
   /**
-   * Notes de version d'un véhicule qui déclare `release_notes`, dans `lang` si le fabricant la publie,
-   * sinon en anglais (`lang` de la réponse) : le serveur rend le cache de son plugin, sans appel au fabricant.
+   * Release notes of a vehicle that declares `release_notes`, in `lang` if the vendor publishes it,
+   * otherwise in English (`lang` of the response): the server returns its plugin's cache, with no call to the vendor.
    */
   getReleaseNotes(deviceId: string, lang: string): Promise<DeviceReleaseNotes>
-  /** Historique de consommation (litres par pas, jamais un cumul) d'un appareil `water`, en trois séries : heure, jour, mois. */
+  /** Consumption history (liters per step, never a cumulative total) of a `water` device, in three series: hour, day, month. */
   getConsumption(deviceId: string): Promise<DeviceConsumption>
   sendCommand(deviceId: string, command: CommandInput): Promise<void>
   getScenes(): Promise<PluginSceneEntry[]>
-  /** Rappelle une scène du fabricant (fixe ou palette animée). */
+  /** Recalls a vendor scene (fixed or animated palette). */
   recallScene(sceneId: string, recall: SceneRecallInput): Promise<void>
-  /** Écrit une préférence de scène chez le fabricant (source de vérité unique). */
+  /** Writes a scene preference at the vendor (single source of truth). */
   updateScene(sceneId: string, update: SceneUpdate): Promise<void>
-  /** Crée une ambiance pour un groupe, en recopiant une ambiance présente ailleurs. */
+  /** Creates a light scene for a group, by copying a scene present elsewhere. */
   createScene(fromSceneId: string, groupName: string): Promise<void>
-  /** Supprime une ambiance chez le fabricant (destructif). */
+  /** Deletes a light scene at the vendor (destructive). */
   deleteScene(sceneId: string): Promise<void>
-  /** Automatisations de la maison et leur statut (le WebSocket pousse ensuite chaque changement). */
+  /** The house's automations and their status (the WebSocket then pushes each change). */
   getAutomations(): Promise<AutomationEntry[]>
-  /** Crée ou remplace une automatisation ; rend son statut recalculé par le serveur. */
+  /** Creates or replaces an automation; returns its status recomputed by the server. */
   putAutomation(id: string, body: AutomationBody): Promise<AutomationEntry>
   setAutomationEnabled(id: string, enabled: boolean): Promise<AutomationEntry>
   deleteAutomation(id: string): Promise<void>
-  /** Range la liste (ordre du fichier) ; rend la liste entière dans le nouvel ordre. */
+  /** Reorders the list (file order); returns the whole list in the new order. */
   setAutomationOrder(ids: string[]): Promise<AutomationEntry[]>
-  /** Exécute les actions tout de suite (ni déclencheur ni « sauf si ») ; rend le compte rendu. */
+  /** Runs the actions right away (neither trigger nor "Unless"); returns the report. */
   runAutomation(id: string): Promise<AutomationRun>
-  /** Liste de courses de la maison. Chaque écriture rend la liste entière (et le WebSocket la pousse). */
+  /** The house's shopping list. Every write returns the whole list (and the WebSocket pushes it). */
   getShopping(): Promise<ShoppingList>
   addShoppingItems(items: ShoppingAddBody['items']): Promise<ShoppingList>
   updateShoppingItem(id: string, patch: ShoppingItemPatch): Promise<ShoppingList>
   removeShoppingItem(id: string): Promise<ShoppingList>
-  /** « Terminer les courses » : les lignes cochées quittent la liste. */
+  /** "Finish shopping": the ticked lines leave the list. */
   finishShopping(): Promise<ShoppingList>
   setShoppingFavorite(name: string, favorite: boolean): Promise<ShoppingList>
-  /** Inventaire des plugins : tous ceux que le serveur connaît, actifs ou non. */
+  /** Inventory of plugins: all those the server knows, active or not. */
   getPlugins(): Promise<PluginInfo[]>
-  /** Écrit un choix (activation, sous-item, ambiances) dans la maison ; rend l'inventaire à jour. */
+  /** Writes a choice (activation, sub-item, light scenes) into the house; returns the up-to-date inventory. */
   setPluginSettings(pluginId: string, patch: PluginSettingsPatch): Promise<PluginInfo[]>
-  /** Les propriétés que l'application sait montrer, et celle qui l'est. */
+  /** The properties the application can show, and the one that is shown. */
   getProperties(): Promise<PropertiesResponse>
   /**
-   * Bascule sur une autre propriété (mode démo seulement : 409 sinon). Le serveur redémarre sur
-   * l'autre maison ; l'appelant recharge l'application une fois la bascule faite.
+   * Switches to another property (demo mode only: 409 otherwise). The server restarts on
+   * the other house; the caller reloads the application once the switch is done.
    */
   selectProperty(id: string): Promise<void>
-  /** Crée une propriété neuve (serveur de démonstration seulement : 409 sinon) ; rend son id. */
+  /** Creates a new property (demo server only: 409 otherwise); returns its id. */
   createProperty(body: NewPropertyBody): Promise<string>
-  /** Duplique une propriété (une démo, pour la modifier) sous un autre nom ; rend l'id de la copie. */
+  /** Duplicates a property (a demo, to modify it) under another name; returns the copy's id. */
   duplicateProperty(id: string, name: string): Promise<string>
-  /** Passe en démo ou en réel (serveur sans maison imposée) ; le serveur rouvre la propriété retenue du mode. */
+  /** Switches to demo or real (server without an imposed house); the server reopens the property remembered for the mode. */
   setPropertyMode(mode: PropertyMode): Promise<void>
   pairHue(): Promise<{ appKey: string; hint: string }>
-  /** URL de consentement Google à ouvrir dans un navigateur pour lier le compte Nest. */
+  /** Google consent URL to open in a browser to link the Nest account. */
   nestAuthUrl(): Promise<{ url: string; redirectUri: string }>
-  /** État de l'appairage de la passerelle Enphase. Ne porte jamais le jeton lui-même. */
+  /** State of the Enphase gateway pairing. Never carries the token itself. */
   enphaseTokenStatus(): Promise<EnphaseTokenStatus>
   /**
-   * Appaire la passerelle Enphase : un jeton déjà obtenu, ou les identifiants du compte qui servent
-   * une fois à en frapper un et ne sont pas conservés. `force` remplace un jeton encore valable.
+   * Pairs the Enphase gateway: a token already obtained, or the account credentials, which serve
+   * once to mint one and are not kept. `force` replaces a still-valid token.
    */
   pairEnphase(body: EnphasePairing): Promise<EnphaseTokenStatus>
-  /** Où en est la mise en route Tesla (clé publique à poser, domaine enregistré, compte lié). */
+  /** Where the Tesla setup stands (public key to place, domain registered, account linked). */
   teslaStatus(): Promise<TeslaStatus>
-  /** Enregistre le domaine auprès de Tesla, une fois la clé publique posée dessus. */
+  /** Registers the domain with Tesla, once the public key is placed on it. */
   teslaRegister(): Promise<TeslaStatus>
-  /** URL de consentement Tesla à ouvrir dans un navigateur pour lier le compte. */
+  /** Tesla consent URL to open in a browser to link the account. */
   teslaAuthUrl(): Promise<{ url: string; redirectUri: string }>
-  /** Nouvelle paire de clés (l'ancienne clé publique cesse de valoir : à reposer sur le domaine). */
+  /** New key pair (the old public key stops being valid: to place again on the domain). */
   teslaRotateKey(): Promise<TeslaStatus>
-  /** Où en est la liaison du compte MY Renault (compte Kamereon retenu, véhicules). */
+  /** Where the MY Renault account link stands (Kamereon account kept, vehicles). */
   renaultStatus(): Promise<RenaultStatus>
   /**
-   * Relie le compte MY Renault. Gigya n'offre pas d'OAuth : le mot de passe traverse le serveur une
-   * fois et n'y est ni gardé ni journalisé — seul le jeton de session Gigya survit.
+   * Links the MY Renault account. Gigya does not offer OAuth: the password goes through the server once
+   * and is neither kept nor logged — only the Gigya session token survives.
    */
   renaultLogin(body: { email: string; password: string }): Promise<RenaultStatus>
-  /** Délie le compte : le jeton de session est effacé. */
+  /** Unlinks the account: the session token is erased. */
   renaultLogout(): Promise<RenaultStatus>
-  /** Les contrats d'entretien plafonnés en km d'un véhicule (par VIN), lus au clic. */
+  /** A vehicle's mileage-capped service contracts (by VIN), read on click. */
   renaultContracts(vin: string, lang: string): Promise<{ contracts: RenaultContract[] }>
-  /** Où en est la liaison du compte MELCloud (machines vues sur le compte). */
+  /** Where the MELCloud account link stands (machines seen on the account). */
   melcloudStatus(): Promise<MelcloudStatus>
   /**
-   * Relie le compte MELCloud. Le fabricant n'offre pas d'OAuth : le mot de passe traverse le
-   * serveur une fois et n'y est ni gardé ni journalisé — seule la clé de session survit.
+   * Links the MELCloud account. The vendor does not offer OAuth: the password goes through the
+   * server once and is neither kept nor logged — only the session key survives.
    */
   melcloudLogin(body: { email: string; password: string }): Promise<MelcloudStatus>
-  /** Délie le compte : la clé de session est effacée. */
+  /** Unlinks the account: the session key is erased. */
   melcloudLogout(): Promise<MelcloudStatus>
-  /** Où en est la liaison du compte PetKit. */
+  /** Where the PetKit account link stands. */
   petkitStatus(): Promise<PetkitStatus>
-  /** Étape 1 : demander à PetKit d'envoyer un code à cette adresse. Il vaut dix minutes. */
+  /** Step 1: ask PetKit to send a code to this address. It is valid for ten minutes. */
   petkitRequestCode(body: { email: string }): Promise<{ sent: boolean }>
-  /** Étape 2 : échanger le code contre une session. Aucun mot de passe n'entre jamais ici. */
+  /** Step 2: exchange the code for a session. No password ever enters here. */
   petkitLogin(body: { email: string; code: string }): Promise<PetkitStatus>
-  /** Délie le compte : le jeton de session est effacé. */
+  /** Unlinks the account: the session token is erased. */
   petkitLogout(): Promise<PetkitStatus>
-  /** L'état des machines de chauffage (dernière lecture du sondage, jamais un nouvel appel au fabricant). */
+  /** The state of the heating machines (last reading of the polling, never a new call to the vendor). */
   melcloudSystem(): Promise<{ units: MelcloudUnit[]; pollMs: number }>
-  /** L'historique de fonctionnement, construit par le serveur au fil des sondages. */
+  /** The operating history, built by the server as the polls go. */
   melcloudHistory(): Promise<{ hourly: HeatingPoint[]; pollMs: number }>
-  /** Historique de luminosité d'un capteur de volet solaire (TaHoma seulement). */
+  /** Brightness history of a solar-shutter sensor (TaHoma only). */
   lightHistory(deviceId: string): Promise<LightHistory>
-  /** Où en est la liaison du compte iRobot (robots connus, et lesquels répondent sur le réseau). */
+  /** Where the iRobot account link stands (known robots, and which ones answer on the network). */
   irobotStatus(): Promise<IrobotStatus>
   /**
-   * Relie le compte iRobot. Le mot de passe traverse le serveur une fois : il en ressort le mot de
-   * passe LOCAL de chaque robot, et plus rien ne sort ensuite du réseau de la maison.
+   * Links the iRobot account. The password goes through the server once: what comes out is each robot's
+   * LOCAL password, and nothing leaves the house's network afterwards.
    */
   irobotLogin(body: { email: string; password: string }): Promise<IrobotStatus>
-  /** Délie le compte : les mots de passe locaux sont effacés et les liens fermés. */
+  /** Unlinks the account: the local passwords are erased and the links closed. */
   irobotLogout(): Promise<IrobotStatus>
-  /** Où en est la liaison YouTube Music (cookie présent, PO Token joignable). */
+  /** Where the YouTube Music link stands (cookie present, PO Token reachable). */
   ytmusicStatus(): Promise<YtmusicStatus>
-  /** Colle le cookie du compte (corps JSON). Jamais journalisé. */
+  /** Pastes the account's cookie (JSON body). Never logged. */
   ytmusicPutCookie(cookie: string): Promise<YtmusicStatus>
   /**
-   * Importe les cookies YouTube via `yt-dlp --cookies-from-browser` sur la machine serveur
-   * (navigateur déjà connecté à music.youtube.com sur cet hôte).
+   * Imports the YouTube cookies via `yt-dlp --cookies-from-browser` on the server machine
+   * (browser already logged in to music.youtube.com on this host).
    */
   ytmusicImportCookieFromBrowser(browser: string): Promise<YtmusicStatus>
-  /** Efface le cookie. */
+  /** Erases the cookie. */
   ytmusicClearCookie(): Promise<YtmusicStatus>
   ytmusicSearch(q: string): Promise<YtmusicSearchResult>
   ytmusicLiked(): Promise<{ tracks: YtmusicTrack[] }>
   ytmusicPlaylists(): Promise<{ playlists: YtmusicPlaylist[] }>
   ytmusicPlaylist(id: string): Promise<{ tracks: YtmusicTrack[] }>
-  /** Titres d'un album, et son texte de présentation s'il en a un (dans la langue `hl`). */
+  /** Tracks of an album, and its description text if it has one (in the `hl` language). */
   ytmusicAlbum(id: string, hl?: string): Promise<{ tracks: YtmusicTrack[]; description?: string | null }>
-  /** Titres d'un artiste, et son texte de présentation s'il en a un (dans la langue `hl`). */
+  /** Tracks of an artist, and their description text if they have one (in the `hl` language). */
   ytmusicArtist(id: string, hl?: string): Promise<{ tracks: YtmusicTrack[]; description?: string | null }>
-  /** Humeurs et genres ; `hl` = langue de l'app (les noms viennent de YouTube). */
+  /** Moods and genres; `hl` = app language (the names come from YouTube). */
   ytmusicExplore(hl?: string): Promise<YtmusicExplore>
-  /** La page d'une catégorie, en rangées. */
+  /** A category's page, in rows. */
   ytmusicExploreCategory(params: string, hl?: string): Promise<{ shelves: YtmusicExploreShelf[] }>
-  /** Les nouveautés de YouTube Music (playlists phares, albums et singles récents), en rangées. */
+  /** YouTube Music's new releases (flagship playlists, recent albums and singles), in rows. */
   ytmusicExploreNew(hl?: string): Promise<{ shelves: YtmusicExploreShelf[] }>
-  /** Deux pochettes par catégorie (clé = `params`), prises dans sa page : lent la première fois (~10 s), gardé 6 h. */
+  /** Two covers per category (key = `params`), taken from its page: slow the first time (~10 s), kept 6 h. */
   ytmusicExploreCovers(hl?: string): Promise<{ covers: Record<string, string[]> }>
-  /** Résout le flux et envoie `play_url` au lecteur (métadonnées optionnelles pour titre / pochette). */
+  /** Resolves the stream and sends `play_url` to the player (optional metadata for title / cover). */
   musicPlay(body: {
     source: string
     id: string
@@ -703,189 +703,189 @@ export interface Transport {
     artist?: string
     artUrl?: string
     durationS?: number
-    /** Ce que dit le catalogue : l'enceinte ne le saura jamais, l'état le portera pour l'UI. */
+    /** What the catalog says: the speaker will never know it, the state will carry it for the UI. */
     explicit?: boolean
   }): Promise<{ ok: true; streamUrl: string; sid: string }>
-  /** Lecteurs qui jouent en ce moment un flux YouTube Music servi par Kasbah. */
+  /** Players currently playing a YouTube Music stream served by Kasbah. */
   musicSessions(): Promise<{ sessions: MusicSession[] }>
-  /** La dernière écoute des lecteurs qui ne jouent rien de nous en ce moment. */
+  /** The last listen of the players that are not playing anything of ours right now. */
   musicLast(): Promise<{ last: MusicLastPlayed[] }>
-  /** Relancer la dernière écoute d'un lecteur (sa file comprise), à sa position ou à `positionS`. */
+  /** Restart a player's last listen (queue included), at its position or at `positionS`. */
   musicResume(deviceId: string, positionS?: number): Promise<{ ok: true; streamUrl: string; sid: string; queue: MusicQueue }>
-  /** Le titre en cours sur `fromDeviceId` repart sur `toDeviceId`, qui se place à la même position ; la source s'arrête. */
+  /** The current track on `fromDeviceId` restarts on `toDeviceId`, which positions itself at the same position; the source stops. */
   musicTransfer(body: {
     fromDeviceId: string
     toDeviceId: string
-    /** Source = ce navigateur : sa position et sa file, que le serveur reprend. */
+    /** Source = this browser: its position and its queue, which the server picks up. */
     positionS?: number
     queue?: { tracks: MusicTrack[]; index: number; repeat: MusicRepeat }
   }): Promise<{
     ok: true; streamUrl: string; sid: string; positionS: number
-    /** Cible = ce navigateur : la session à lire, et la file qu'il reprend (null sans file). */
+    /** Target = this browser: the session to read, and the queue it picks up (null without a queue). */
     session?: MusicSession
     queue?: MusicQueue | null
   }>
-  /** Lecture dans CE navigateur : le serveur résout le titre et rend le chemin du « fichier » à lire. */
+  /** Playback in THIS browser: the server resolves the track and returns the path of the "file" to read. */
   musicLocalPlay(body: MusicTrack & { clientId: string; next?: { source: string; id: string } }): Promise<{ ok: true; streamUrl: string; session: MusicSession }>
-  /** Nouvelle file sur ce lecteur (l'ancienne est remplacée) : `tracks[startIndex]` joue, la suite enchaîne. */
+  /** New queue on this player (the old one is replaced): `tracks[startIndex]` plays, the rest follows. */
   musicQueuePlay(body: { deviceId: string; tracks: MusicTrack[]; startIndex?: number }): Promise<{ ok: true; streamUrl: string; sid: string; queue: MusicQueue }>
   musicQueue(deviceId: string): Promise<MusicQueue>
-  /** Ajouter sans interrompre ; rien ne joue sur ce lecteur ? Les titres partent tout de suite (`started`). */
+  /** Add without interrupting; nothing playing on this player? The tracks start right away (`started`). */
   musicQueueAdd(body: { deviceId: string; tracks: MusicTrack[]; where: 'next' | 'end' }): Promise<{ ok: true; started: boolean; queue: MusicQueue }>
   musicQueueNext(deviceId: string): Promise<MusicQueue>
-  /** Au début du titre s'il joue depuis quelques secondes, sinon le titre d'avant. */
+  /** To the start of the track if it has been playing for a few seconds, otherwise the previous track. */
   musicQueuePrevious(deviceId: string): Promise<MusicQueue>
   musicQueueJump(deviceId: string, index: number): Promise<MusicQueue>
   musicQueueRepeat(deviceId: string, mode: MusicRepeat): Promise<MusicQueue>
   musicQueueRemove(deviceId: string, index: number): Promise<MusicQueue>
-  /** Position atteinte dans une piste lue par CE navigateur (la reprise d'un mix) ; jamais bloquant. */
+  /** Position reached in a track played by THIS browser (resuming a mix); never blocking. */
   musicProgress(body: { source: string; id: string; positionS: number; durationS?: number; ended?: boolean }): Promise<void>
-  /** Vider la file : le titre en cours continue, seul. */
+  /** Clear the queue: the current track continues, alone. */
   musicQueueClear(deviceId: string): Promise<MusicQueue>
-  /** Le compte de la session, sous l'adresse publique ; `null` sur le réseau local (aucune session). */
+  /** The session's account, under the public address; `null` on the local network (no session). */
   session(): Promise<{ user: string | null }>
-  /** Le forfait Claude (plugin `claude`) du compte courant. */
+  /** The Claude plan (`claude` plugin) of the current account. */
   claudeAccount(): Promise<ClaudeAccount>
-  /** Range le jeton de `claude setup-token` pour le compte courant ; il ne revient jamais. */
+  /** Stores the `claude setup-token` token for the current account; it never comes back. */
   claudeSetToken(token: string): Promise<ClaudeAccount>
   claudeClearToken(): Promise<ClaudeAccount>
-  /** Une instruction : les événements arrivent au fil de l'eau, la promesse tient jusqu'à la fin. */
+  /** An instruction: events arrive as they go, the promise holds until the end. */
   assistantAsk(text: string, onEvent: (e: AssistantEvent) => void, signal?: AbortSignal): Promise<void>
-  /** Le plugin `transcription` tourne-t-il et sait-il où envoyer l'audio ? (le micro ne se montre qu'alors) */
+  /** Is the `transcription` plugin running and does it know where to send the audio? (the microphone only shows then) */
   transcriptionStatus(): Promise<{ ready: boolean; provider: string | null; speech: boolean; autoSend: boolean }>
-  /** Un WAV 16 kHz mono en base64, et les noms de la maison comme vocabulaire ; rend le texte entendu. */
+  /** A 16 kHz mono WAV in base64, and the house's names as vocabulary; returns the text heard. */
   transcribe(audio: string, hints: string[]): Promise<{ text: string; ms: number }>
   /**
-   * La réponse de l'assistant dite à voix haute (sous-item `speech`) : le son, à jouer ici. `words` : les
-   * abréviations de la maison à dire en entier (celle d'un étage → son nom).
+   * The assistant's reply spoken aloud (`speech` sub-item): the sound, to play here. `words`: the
+   * house's abbreviations to say in full (that of a floor → its name).
    */
   speak(text: string, words: Record<string, string>): Promise<Blob>
-  /** Les voix créées chez le fournisseur (profils VoiceStudio), pour la fiche du plugin. */
+  /** The voices created at the provider (VoiceStudio profiles), for the plugin's sheet. */
   transcriptionVoices(): Promise<{ voices: { id: string; name: string; language?: string }[] }>
-  /** La voix des réponses parlées du compte courant (la maison sur le réseau local) ; `null` = celle de la maison, sinon `TTS_VOICE`. */
+  /** The voice of spoken replies of the current account (the house on the local network); `null` = the house's, otherwise `TTS_VOICE`. */
   transcriptionSettings(): Promise<TranscriptionSettings>
   setTranscriptionVoice(voice: string | null): Promise<TranscriptionSettings>
-  /** Le journal des instructions, la plus récente d'abord ; refusé sous l'adresse publique (`LAN_ONLY`). */
+  /** The instruction log, most recent first; refused under the public address (`LAN_ONLY`). */
   assistantLog(): Promise<{ entries: AssistantLogEntry[] }>
-  /** Comptes de l'adresse publique et du serveur MCP (assistants IA) ; réseau local seulement. */
+  /** Accounts of the public address and of the MCP server (AI assistants); local network only. */
   mcpUsers(): Promise<{ users: McpUser[] }>
-  /** Crée le compte, ou change son mot de passe (8 caractères au moins). */
+  /** Creates the account, or changes its password (8 characters at least). */
   mcpSetUser(name: string, password: string): Promise<{ users: McpUser[] }>
-  /** Retire le compte : ses jetons ne passent plus. */
+  /** Removes the account: its tokens no longer get through. */
   mcpRemoveUser(name: string): Promise<{ users: McpUser[] }>
-  /** Version en service et commits disponibles ; `refresh` force un `git fetch`. Réseau local seulement. */
+  /** Version in service and available commits; `refresh` forces a `git fetch`. Local network only. */
   systemVersion(refresh?: boolean): Promise<SystemVersion>
-  /** Dernière mise à jour (`null` : jamais). */
+  /** Last update (`null`: never). */
   systemUpdateStatus(): Promise<{ status: UpdateStatus | null }>
-  /** Demande la mise à jour au superviseur ; `NOT_SUPERVISED` sans lui, `UPDATE_RUNNING` si elle tourne. */
+  /** Asks the supervisor for the update; `NOT_SUPERVISED` without it, `UPDATE_RUNNING` if it is running. */
   systemUpdate(): Promise<{ status: UpdateStatus }>
-  /** Les agendas de la maison (plugin `agenda`, adresses iCal secrètes). */
+  /** The house's calendars (`agenda` plugin, secret iCal addresses). */
   agendaCalendars(): Promise<{ calendars: AgendaCalendar[] }>
-  /** Ajout par l'adresse iCal : le serveur la lit tout de suite et refuse ce qui n'est pas un agenda. */
+  /** Add by iCal address: the server reads it right away and refuses what is not a calendar. */
   agendaAddCalendar(body: { url: string; name?: string; color?: string }): Promise<{ calendars: AgendaCalendar[] }>
   agendaUpdateCalendar(id: string, patch: { name?: string; color?: string }): Promise<{ calendars: AgendaCalendar[] }>
   agendaRemoveCalendar(id: string): Promise<{ calendars: AgendaCalendar[] }>
-  /** Nouvel ordre : TOUS les identifiants, chacun une fois. */
+  /** New order: ALL the identifiers, each once. */
   agendaReorderCalendars(ids: string[]): Promise<{ calendars: AgendaCalendar[] }>
-  /** Occurrences de tous les agendas sur `[from, to[` (ms, 62 jours au plus). */
+  /** Occurrences of all the calendars over `[from, to[` (ms, 62 days at most). */
   agendaEvents(from: number, to: number): Promise<{ events: AgendaEvent[] }>
-  /** Devoirs, cahier de liaison et publications de la classe (plugin `toutemonannee`). */
+  /** Homework, liaison notebook and publications of the class (`toutemonannee` plugin). */
   schoolData(): Promise<SchoolData>
-  /** Relier le compte : le mot de passe sert une fois, côté serveur, puis il est oublié. */
+  /** Link the account: the password is used once, on the server side, then forgotten. */
   schoolLogin(body: { username: string; password: string }): Promise<SchoolData>
   schoolLogout(): Promise<SchoolData>
   schoolRefresh(): Promise<SchoolData>
-  /** Cocher « fait » : sur le site quand l'enseignante a ouvert sa case, sinon dans Kasbah. */
+  /** Tick "done": on the site when the teacher has opened their box, otherwise in Kasbah. */
   schoolSetDone(journalId: string, id: number, done: boolean): Promise<SchoolData>
   schoolSetFilters(filters: SchoolFilters): Promise<SchoolData>
   schoolSeenPosts(id: number): Promise<SchoolData>
-  /** Le compte Mixcloud relié (un nom d'utilisateur : l'API publique ne demande rien d'autre). */
+  /** The linked Mixcloud account (a username: the public API asks for nothing else). */
   mixcloudStatus(): Promise<MixcloudStatus>
   mixcloudSetAccount(username: string): Promise<MixcloudStatus>
   mixcloudClearAccount(): Promise<MixcloudStatus>
-  /** Une liste du compte ; `next` = curseur rendu par la page précédente. `feed` = nouveautés des suivis. */
+  /** A list of the account; `next` = cursor returned by the previous page. `feed` = new releases from follows. */
   mixcloudList(list: MixcloudList, next?: string): Promise<MixcloudPage>
-  /** L'accueil : tes créateurs, tes suivis, réécouter, plus de tes créateurs, les populaires de tes genres. */
+  /** The home: your creators, your follows, listen again, more from your creators, the popular ones of your genres. */
   mixcloudHome(): Promise<{ sections: MixcloudHomeSection[] }>
   mixcloudPlaylists(): Promise<{ playlists: { key: string; name: string }[] }>
   mixcloudPlaylist(key: string, next?: string): Promise<MixcloudPage>
   mixcloudFollowing(): Promise<{ users: MixcloudUser[] }>
   mixcloudUserMixes(username: string, next?: string): Promise<MixcloudPage>
   mixcloudSearch(q: string, next?: string): Promise<MixcloudPage>
-  /** Repartir du début : oublier la position retenue d'un mix. */
+  /** Start over: forget a mix's remembered position. */
   mixcloudForgetResume(key: string): Promise<void>
-  /** Radios de l'annuaire dont le nom contient `q`, les plus écoutées d'abord. */
+  /** Radios of the directory whose name contains `q`, most listened first. */
   radioSearch(q: string): Promise<{ stations: RadioStation[] }>
-  /** Les plus écoutées d'un pays (défaut du serveur : `RADIO_COUNTRY`). */
+  /** The most listened of a country (server default: `RADIO_COUNTRY`). */
   radioTop(country?: string): Promise<{ stations: RadioStation[] }>
-  /** Les favorites de la maison, gardées par le serveur. */
+  /** The house's favorites, kept by the server. */
   radioFavorites(): Promise<{ stations: RadioStation[] }>
   radioAddFavorite(station: RadioStation): Promise<{ stations: RadioStation[] }>
   radioRemoveFavorite(id: string): Promise<{ stations: RadioStation[] }>
-  /** Ajoute aux favorites une radio que l'annuaire ne connaît pas (ou sous une adresse morte), par son flux. */
+  /** Adds to the favorites a radio the directory does not know (or under a dead address), by its stream. */
   radioAddCustom(body: { name: string; url: string }): Promise<{ stations: RadioStation[] }>
-  /** Lance la radio en direct sur un lecteur (`play_url` marqué `live`). */
+  /** Starts the live radio on a player (`play_url` marked `live`). */
   radioPlay(body: { deviceId: string; stationId: string }): Promise<{ ok: true; station: RadioStation }>
-  /** La dernière station lancée sur chaque lecteur (sa qualité : l'enceinte ne la dit pas). */
+  /** The last station started on each player (its quality: the speaker does not say it). */
   radioPlaying(): Promise<{ playing: { deviceId: string; station: RadioStation }[] }>
   /**
-   * Fait oublier un appareil au plugin qui le retenait (`meta.forgettable`), par convention
-   * `DELETE /api/plugins/<plugin>/devices/<externalId>` : il quitte l'inventaire jusqu'à ce qu'il
-   * se réannonce. Sert aux appareils découverts sur le réseau et disparus pour de bon.
+   * Makes the plugin that held a device forget it (`meta.forgettable`), by convention
+   * `DELETE /api/plugins/<plugin>/devices/<externalId>`: it leaves the inventory until it
+   * announces itself again. Used for devices discovered on the network and gone for good.
    */
   forgetDevice(deviceId: string): Promise<void>
   /**
-   * URL WebSocket du flux vidéo d'une caméra (`live_stream`), par convention
-   * `/api/plugins/<plugin>/cameras/<externalId>/stream` ; `null` si ce transport n'en sert pas.
+   * WebSocket URL of a camera's video stream (`live_stream`), by convention
+   * `/api/plugins/<plugin>/cameras/<externalId>/stream`; `null` if this transport does not serve any.
    */
   cameraStreamUrl(deviceId: string): string | null
   /**
-   * Vignettes des caméras d'un plugin (`externalId` → date), et `watch` pour signaler qu'on regarde
-   * la vue Caméras : c'est ce qui fait tenir les sessions de vignettes côté serveur.
+   * Thumbnails of a plugin's cameras (`externalId` → date), and `watch` to signal that we are watching
+   * the Cameras view: this is what keeps the thumbnail sessions alive on the server side.
    */
   cameraSnapshots(pluginId: string, watch: boolean): Promise<Record<string, { at?: number; live: boolean; inactive?: boolean; paused?: boolean }>>
-  /** Arrête (`false`) ou reprend (`true`) la vignette d'une caméra sur la vue Caméras. */
+  /** Stops (`false`) or resumes (`true`) a camera's thumbnail on the Cameras view. */
   setCameraSnapshots(deviceId: string, enabled: boolean): Promise<void>
-  /** URL de la vignette JPEG d'une caméra ; `at` sert à contourner le cache du navigateur. */
+  /** URL of a camera's JPEG thumbnail; `at` is used to get around the browser cache. */
   cameraSnapshotUrl(deviceId: string, at: number): string | null
-  /** (Re)place un appareil dans house.json ; renvoie la maison réécrite. */
+  /** (Re)places a device in house.json; returns the rewritten house. */
   placeDevice(id: string, placement: DevicePlacement): Promise<House>
-  /** Retire un appareil de house.json (il redevient non placé ou auto-placé) ; renvoie la maison réécrite. */
+  /** Removes a device from house.json (it becomes unplaced or auto-placed again); returns the rewritten house. */
   removeDevice(id: string): Promise<House>
-  /** Crée ou règle un champ de panneaux (`house.arrays`) ; renvoie la maison réécrite. */
+  /** Creates or adjusts a panel array (`house.arrays`); returns the rewritten house. */
   saveArray(id: string, patch: PanelArrayPatch): Promise<House>
-  /** Retire un champ de panneaux : ses modules disparaissent, ses onduleurs redeviennent à placer. */
+  /** Removes a panel array: its modules disappear, its inverters go back to being placed. */
   removeArray(id: string): Promise<House>
-  /** Règle une ouverture (cotes, place sur le mur) ; renvoie la maison réécrite. */
+  /** Adjusts an opening (measurements, place on the wall); returns the rewritten house. */
   saveOpening(roomId: string, openingId: string, patch: OpeningPatch): Promise<House>
-  /** Ajoute une ouverture à une pièce (nature, mur et cotes décidés par l'UI) ; renvoie la maison réécrite. */
+  /** Adds an opening to a room (kind, wall and measurements decided by the UI); returns the rewritten house. */
   addOpening(roomId: string, opening: NewOpening): Promise<House>
-  /** Retire une ouverture ; l'ouvrant qui l'habillait est libéré. Renvoie la maison réécrite. */
+  /** Removes an opening; the cover that dressed it is freed. Returns the rewritten house. */
   removeOpening(roomId: string, openingId: string): Promise<House>
-  /** Ajoute une place de stationnement (ce qui s'y range, où, dans quel sens) ; renvoie la maison réécrite. */
+  /** Adds a parking space (what is stored there, where, in which direction); returns the rewritten house. */
   addParking(parking: NewParking): Promise<House>
-  /** Règle une place (cotes, centre, cap) ; renvoie la maison réécrite. */
+  /** Adjusts a space (measurements, center, heading); returns the rewritten house. */
   saveParking(id: string, patch: ParkingPatch): Promise<House>
-  /** Retire une place : l'engin qui s'y rangeait retourne à son point GPS. Renvoie la maison réécrite. */
+  /** Removes a space: the vehicle stored there goes back to its GPS point. Returns the rewritten house. */
   removeParking(id: string): Promise<House>
-  /** Ajoute un élément au jardin (arbre, buisson, pierre) ; renvoie la maison réécrite. */
+  /** Adds an element to the garden (tree, bush, stone); returns the rewritten house. */
   addGardenItem(item: NewGardenItem): Promise<House>
-  /** Règle un élément du jardin (famille, pied, hauteur, cap, forme) ; renvoie la maison réécrite. */
+  /** Adjusts a garden element (family, base, height, heading, shape); returns the rewritten house. */
   saveGardenItem(id: string, patch: GardenItemPatch): Promise<House>
-  /** Retire un élément du jardin ; renvoie la maison réécrite. */
+  /** Removes a garden element; returns the rewritten house. */
   removeGardenItem(id: string): Promise<House>
-  /** Écrit l'ordre d'affichage des pièces d'un niveau ; renvoie la maison réécrite. */
+  /** Writes the display order of a level's rooms; returns the rewritten house. */
   setRoomOrder(levelId: string, roomIds: string[]): Promise<House>
-  /** Enregistre le réglage de lumière de la scène 3D dans la maison ; renvoie la maison réécrite. */
+  /** Saves the 3D scene's light setting in the house; returns the rewritten house. */
   saveRenderTuning(tuning: SceneTuning): Promise<House>
-  /** Enregistre le relief du terrain dans la maison (`null` = plat) ; renvoie la maison réécrite. */
+  /** Saves the terrain relief in the house (`null` = flat); returns the rewritten house. */
   saveRelief(relief: Relief | null): Promise<House>
-  /** Enregistre le contour du terrain ; renvoie la maison réécrite (relief agrandi s'il le faut). */
+  /** Saves the terrain outline; returns the rewritten house (relief enlarged if needed). */
   saveTerrain(polygon: Vec2[]): Promise<House>
-  /** Enregistre l'origine GPS de la maison (calage sur la photo) ; renvoie la maison réécrite. */
+  /** Saves the house's GPS origin (alignment on the photo); returns the rewritten house. */
   saveOrigin(origin: GeoOrigin): Promise<House>
-  /** Écrit d'un coup une séance d'édition (finitions, cotes des pièces) ; renvoie la maison réécrite. */
+  /** Writes an editing session in one go (finishes, room measurements); returns the rewritten house. */
   saveEdit(patch: HouseEditPatch): Promise<House>
-  /** Ouvre le canal de push ; retourne la fonction de fermeture. */
+  /** Opens the push channel; returns the closing function. */
   connect(handlers: TransportHandlers): () => void
 }

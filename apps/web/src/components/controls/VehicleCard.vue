@@ -11,7 +11,7 @@ import VehicleClimate from '../vehicles/VehicleClimate.vue'
 import VehicleSoftware from '../vehicles/VehicleSoftware.vue'
 
 const props = defineProps<{ descriptor: DeviceDescriptor; state: StateFor<'vehicle'>; pending?: boolean; disabled?: boolean }>()
-/** Charge demandée, pas encore constatée : la même attente que la vue Véhicules (tenue par le store). */
+/** Charge requested, not yet observed: the same wait as the Vehicles view (held by the store). */
 const devices = useDevicesStore()
 const chargeRequested = computed(() => devices.isChargeRequested(props.descriptor.id))
 const emit = defineEmits<{ command: [cmd: CommandInput] }>()
@@ -24,21 +24,21 @@ const distance = computed(() => {
 const atHome = computed(() => distance.value !== null && distance.value < HOME_RADIUS_M)
 const has = (c: string) => props.descriptor.capabilities.includes(c as never)
 
-/** La valeur qu'on TIENT le temps du va-et-vient : sans elle, le curseur reviendrait en arrière. */
+/** The value we HOLD during the back-and-forth: without it, the slider would go back. */
 const dragged = ref<number | null>(null)
 const limit = computed(() => dragged.value ?? props.state.chargeLimit ?? 80)
 function setLimit(percent: number): void {
   dragged.value = percent
   emit('command', { type: 'vehicle.set_charge_limit', percent })
 }
-// la main rendue à l'état dès que la commande a fini : acceptée il porte la cible, refusée il a
-// repris l'ancienne
+// control handed back to the state as soon as the command has finished: accepted it carries the target, refused it has
+// gone back to the old one
 watch(() => [props.state.chargeLimit, props.pending], () => { dragged.value = null })
 </script>
 
 <template>
   <div>
-    <!-- l'autonomie : le composant partagé avec la carte de la vue Véhicules ; le repère de cible suit le curseur -->
+    <!-- the range: the component shared with the Vehicles view's card; the target mark follows the slider -->
     <VehicleBattery class="mb-3" :state="state" :limit="limit" />
     <div class="d-flex flex-wrap ga-2 mb-3">
       <v-chip variant="tonal" size="small" :prepend-icon="state.pluggedIn ? 'plug' : 'plugOff'">{{ state.pluggedIn ? $t('vehicle.pluggedIn') : $t('vehicle.unplugged') }}</v-chip>
@@ -48,14 +48,14 @@ watch(() => [props.state.chargeLimit, props.pending], () => { dragged.value = nu
       </v-chip>
       <v-chip v-if="state.locked !== undefined" variant="tonal" size="small" :prepend-icon="state.locked ? 'lock' : 'lockOpen'">{{ state.locked ? $t('vehicle.locked') : $t('vehicle.unlocked') }}</v-chip>
     </div>
-    <!-- les tuiles de la vue Véhicules : deux colonnes identiques, TOUJOURS là, grisées avec leur raison
-         quand le véhicule ne sait pas (règle de l'utilisateur) ou que le câble est débranché -->
+    <!-- the Vehicles view's tiles: two identical columns, ALWAYS there, greyed out with their reason
+         when the vehicle cannot (user's rule) or the cable is unplugged -->
     <div class="tiles mb-3">
       <button type="button" class="pill" :disabled="disabled || !has('lock')" :title="has('lock') ? undefined : $t('vehicle.unsupported')"
               @click="emit('command', { type: state.locked ? 'vehicle.unlock' : 'vehicle.lock' })">
         <StrokeIcon :name="state.locked ? 'lockOpen' : 'lock'" :size="16" /><span class="tiles__label">{{ state.locked ? $t('common.unlock') : $t('common.lock') }}</span>
       </button>
-      <!-- demandée, la charge tourne jusqu'à ce que la voiture la DISE active (cf. le store) -->
+      <!-- requested, the charge spins until the car SAYS it is active (see the store) -->
       <button type="button" class="pill" :data-on="state.charging ? '1' : '0'"
               :disabled="disabled || !has('charging') || !state.pluggedIn || pending || chargeRequested" :aria-busy="chargeRequested"
               :title="!has('charging') ? $t('vehicle.unsupported') : state.pluggedIn ? undefined : $t('vehicle.unplugged')"
@@ -65,20 +65,20 @@ watch(() => [props.state.chargeLimit, props.pending], () => { dragged.value = nu
         <span class="tiles__label">{{ state.charging ? $t('vehicle.stopCharge') : $t('vehicle.startCharge') }}</span>
       </button>
     </div>
-    <!-- la cible de charge : le bloc de la vue Véhicules, repris tel quel -->
+    <!-- the charge target: the Vehicles view's block, taken as is -->
     <ChargeLimitCard v-if="has('charge_limit')" class="mb-3" :value="limit" :disabled="disabled"
                      @preview="dragged = $event" @change="setLimit" />
-    <!-- la climatisation : le panneau commun de la vue Véhicules, qui envoie lui-même ses commandes -->
+    <!-- the climate control: the common panel of the Vehicles view, which sends its own commands -->
     <VehicleClimate v-if="has('climate_precondition')" class="card card--soft mb-3" :descriptor="descriptor" :state="state" />
-    <!-- le logiciel : la ligne de la vue Véhicules et sa boîte (notes, installation). Toujours là, grisée
-         pour un véhicule qui n'en dit rien ; enveloppée parce que le composant a plusieurs racines -->
+    <!-- the software: the Vehicles view's line and its dialog (notes, installation). Always there, greyed out
+         for a vehicle that says nothing about it; wrapped because the component has several roots -->
     <div class="mb-3"><VehicleSoftware :descriptor="descriptor" :state="state" /></div>
     <div v-if="state.odometerKm" class="text-caption text-medium-emphasis">{{ $t('vehicle.odometer') }} · {{ formatKm(state.odometerKm, $i18n.locale) }}</div>
   </div>
 </template>
 
 <style scoped>
-/* mêmes tuiles que la vue Véhicules : icône au-dessus du libellé, « Arrêter la charge » tient sans être coupé */
+/* same tiles as the Vehicles view: icon above the label, "Stop charging" fits without being cut */
 .tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .tiles .pill { min-width: 0; height: 56px; padding: 0 8px; border-radius: 12px; flex-direction: column; justify-content: center; gap: 3px; font-size: 13px; }
 .tiles .pill[aria-busy='true']:disabled { opacity: .7; }

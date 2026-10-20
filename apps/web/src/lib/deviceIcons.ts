@@ -3,14 +3,14 @@ import { isMediaActive } from './deviceState'
 import { isEnergySite } from './energy'
 import type { IconName } from './strokeIcons'
 
-// Icônes (jeu « trait », voir strokeIcons.ts) par kind et état, pour <v-icon> comme pour StrokeIcon.
+// Icons ("stroke" set, see strokeIcons.ts) by kind and state, for <v-icon> as well as for StrokeIcon.
 
 const SENSOR_ICONS: Record<SensorClass, IconName> = {
   temperature: 'thermostat', humidity: 'droplet', power: 'bolt', energy: 'bolt', pressure: 'gauge',
   flow: 'waves', illuminance: 'sun', ph: 'flask', battery: 'battery', generic: 'sensor',
 }
 
-/** Un téléviseur et un écran connecté gardent la même icône en lecture : la couleur dit l'état. */
+/** A TV and a connected screen keep the same icon when playing: the color says the state. */
 const MEDIA_ICONS: Record<MediaPlayerClass, IconName> = { speaker: 'speaker', tv: 'tv', display: 'tablet' }
 
 export const KIND_ICONS: Record<DeviceKind, IconName> = {
@@ -20,9 +20,9 @@ export const KIND_ICONS: Record<DeviceKind, IconName> = {
 }
 
 /**
- * Catégorie d'un appareil telle que le rail la découpe (Lumières, Ouvrants, Caméras, Médias) : c'est
- * la teinte du disque d'icône de son marqueur 3D (`--cat-*` dans tokens.css). Les kinds sans vue
- * dédiée restent neutres.
+ * Category of a device as the rail cuts it up (Lights, Covers, Cameras, Media): it is
+ * the tint of its 3D marker's icon disc (`--cat-*` in tokens.css). Kinds without a dedicated
+ * view stay neutral.
  */
 export type DeviceCategory = 'light' | 'cover' | 'camera' | 'media' | 'other'
 
@@ -33,9 +33,9 @@ export function deviceCategory(kind: DeviceKind | undefined): DeviceCategory {
 }
 
 /**
- * Catégories du filtre de la liste d'une pièce : les quatre teintes du rail, plus le chauffage
- * (thermostat, pompe à chaleur, sonde de température) qui sinon tomberait dans « Autre ».
- * L'ordre est celui des onglets.
+ * Categories of a room's list filter: the rail's four tints, plus heating
+ * (thermostat, heat pump, temperature probe) which would otherwise fall into "Other".
+ * The order is that of the tabs.
  */
 export type RoomFilterCat = 'light' | 'cover' | 'climate' | 'media' | 'camera' | 'other'
 export const ROOM_FILTER_CATS: readonly RoomFilterCat[] = ['light', 'cover', 'climate', 'media', 'camera', 'other']
@@ -50,14 +50,14 @@ export function roomFilterCategory(kind: DeviceKind | undefined, descriptor?: De
   return (k && KIND_FILTER[k]) ?? 'other'
 }
 
-/** Catégories présentes dans une pièce, dans l'ordre des onglets — pas l'ordre d'apparition. */
+/** Categories present in a room, in tab order — not in order of appearance. */
 export function presentRoomFilters(cats: Iterable<RoomFilterCat>): RoomFilterCat[] {
   const seen = new Set<RoomFilterCat>()
   for (const cat of cats) seen.add(cat)
   return ROOM_FILTER_CATS.filter((c) => seen.has(c))
 }
 
-/** Icônes du filtre de pièce : les mêmes que le rail, thermostat pour la température, `devices` pour Tout. */
+/** Icons of the room filter: the same as the rail, thermostat for temperature, `devices` for All. */
 export const ROOM_FILTER_ICONS: Record<'all' | RoomFilterCat, IconName> = {
   all: 'devices', light: 'light', cover: 'shutter', climate: 'thermostat', media: 'cast', camera: 'camera', other: 'dots',
 }
@@ -81,13 +81,13 @@ export function deviceIcon(
     }
     case 'sensor': return SENSOR_ICONS[descriptor.meta.sensor?.deviceClass ?? 'generic']
     case 'vehicle': return state?.kind === 'vehicle' && state.charging ? 'charger' : 'vehicle'
-    // une unité de stockage est un `energy` qui ne mesure pas le réseau (même règle que `strokeIcons`)
+    // a storage unit is an `energy` that does not measure the grid (same rule as `strokeIcons`)
     case 'energy': return isEnergySite(descriptor) ? 'solar' : 'battery'
     default: return KIND_ICONS[descriptor.kind]
   }
 }
 
-/** Couleur sémantique (nom de token Vuetify) selon l'état. */
+/** Semantic color (Vuetify token name) by state. */
 export function deviceColor(state?: DeviceState): string | undefined {
   if (!state) return undefined
   if (!state.available) return 'on-surface-variant'

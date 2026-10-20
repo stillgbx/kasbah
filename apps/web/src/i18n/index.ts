@@ -10,7 +10,7 @@ export function isLocale(v: unknown): v is Locale {
   return typeof v === 'string' && (LOCALES as readonly string[]).includes(v)
 }
 
-/** Choix explicite (persisté par le store) sinon langues du navigateur, sinon anglais. */
+/** Explicit choice (persisted by the store) otherwise browser languages, otherwise English. */
 export function detectLocale(saved: string | null, languages: readonly string[] = navigator.languages ?? [navigator.language]): Locale {
   if (isLocale(saved)) return saved
   for (const l of languages) {
@@ -56,7 +56,7 @@ export const i18n: I18n<{ fr: typeof fr; en: typeof en }, typeof datetimeFormats
   datetimeFormats,
 })
 
-/** Traduction hors composant (stores, scène 3D). */
+/** Translation outside a component (stores, 3D scene). */
 export function t(key: string, named?: Record<string, unknown>): string {
   const fn = i18n.global.t as unknown as (k: string, n?: Record<string, unknown>) => string
   return named ? fn(key, named) : fn(key)

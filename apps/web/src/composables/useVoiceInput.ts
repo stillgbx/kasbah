@@ -9,47 +9,47 @@ import { useHouseStore } from '../stores/house'
 import { useNotificationsStore } from '../stores/notifications'
 import { useScenesStore } from '../stores/scenes'
 
-// Le micro de la recherche : appuyer pour parler, appuyer pour finir (arrêt seul au bout de 15 s),
-// et le texte entendu part tout de suite (`onText`). Sous-item `autoSend` allumé (défaut), l'écoute
-// s'arrête aussi seule à la fin de la phrase (`lib/vad.ts`) ; sans parole au bout de 5 s, rien n'est
-// envoyé (un modèle de transcription invente du texte sur un silence). L'enregistrement est converti
-// ici en WAV 16 kHz mono, puis transcrit par le plugin `transcription` du serveur, avec les noms de la
-// maison comme vocabulaire (« Spots cuisine », « Robby » : des mots qu'un modèle ne devine pas).
+// The search microphone: press to speak, press to finish (stops by itself after 15 s),
+// and the heard text goes out right away (`onText`). With the `autoSend` sub-item on (default), listening
+// also stops by itself at the end of the sentence (`lib/vad.ts`); with no speech after 5 s, nothing is
+// sent (a transcription model invents text over silence). The recording is converted
+// here to a 16 kHz mono WAV, then transcribed by the server's `transcription` plugin, with the house's
+// names as vocabulary ("Kitchen spots", "Robby": words a model cannot guess).
 //
-// Le micro n'existe qu'en contexte sûr (HTTPS, ou localhost) : sur le réseau local en `http://`, le
-// navigateur le refuse — on le dit au toucher, avec où trouver la manipulation (drapeau Chrome).
+// The microphone only exists in a secure context (HTTPS, or localhost): on the local network over `http://`, the
+// browser refuses it — we say so on touch, with where to find the workaround (Chrome flag).
 //
-// Réponses parlées (sous-item `speech` du plugin) : quand `onText` rend la réponse de l'assistant, elle
-// est dite à voix haute ICI, sur l'appareil qui a parlé. Seules les instructions dictées parlent ; un
-// toucher du micro pendant la lecture l'arrête. Une réponse tapée se réécoute à la demande (`replay`).
-// L'audio de la dernière réponse dite est gardé : la réécouter ne refait pas la synthèse. L'appelant
-// l'oublie (`forgetSpoken`) quand la réponse se ferme ; une autre réponse le remplace.
+// Spoken replies (`speech` sub-item of the plugin): when `onText` returns the assistant's reply, it
+// is said aloud HERE, on the device that spoke. Only dictated instructions speak; a
+// touch of the microphone during playback stops it. A typed reply can be replayed on demand (`replay`).
+// The audio of the last reply said is kept: replaying it does not redo the synthesis. The caller
+// forgets it (`forgetSpoken`) when the reply closes; another reply replaces it.
 //
-// Rien entendu : pas de bandeau d'erreur, le champ le dit à la place de son texte indicatif
-// (`heardNothing`, quelques secondes), là où l'on regardait déjà.
+// Heard nothing: no error banner, the field says it in place of its placeholder text
+// (`heardNothing`, a few seconds), where one was already looking.
 
 export type VoicePhase = 'idle' | 'recording' | 'transcribing' | 'speaking'
 
-/** Au plus 15 s : une instruction, pas une dictée (et 480 Ko de WAV). */
+/** At most 15 s: an instruction, not a dictation (and 480 KB of WAV). */
 export const MAX_RECORDING_MS = 15_000
-/** En dessous, c'est un toucher sans parole : rien à transcrire. */
+/** Below that, it is a touch without speech: nothing to transcribe. */
 const MIN_SECONDS = 0.3
-/** Le temps que « rien entendu » reste dans le champ. */
+/** How long "heard nothing" stays in the field. */
 export const HEARD_NOTHING_MS = 4000
-/** Une mesure du niveau du micro toutes les 50 ms (`setInterval` : un onglet masqué ne rend pas `requestAnimationFrame`). */
+/** A microphone level measurement every 50 ms (`setInterval`: a hidden tab does not render `requestAnimationFrame`). */
 const VAD_FRAME_MS = 50
 
-/** Le plugin tourne-t-il ? Demandé une fois par chargement de page, partagé par la palette et la barre. */
+/** Is the plugin running? Requested once per page load, shared by the palette and the bar. */
 const ready = ref<boolean | null>(null)
-/** Sous-item `speech` allumé : dire les réponses aux instructions dictées. */
+/** `speech` sub-item on: say the replies to dictated instructions. */
 const speech = ref(false)
-/** Sous-item `autoSend` allumé : l'écoute s'arrête seule à la fin de la phrase. */
+/** `autoSend` sub-item on: listening stops by itself at the end of the sentence. */
 const autoSend = ref(false)
 let asked = false
 
 /**
- * `onText` reçoit le texte entendu ; s'il rend (ou promet) la réponse de l'assistant, elle est dite à
- * voix haute quand les réponses parlées sont allumées.
+ * `onText` receives the heard text; if it returns (or promises) the assistant's reply, it is said
+ * aloud when spoken replies are on.
  */
 export function useVoiceInput(onText: (text: string) => void | Promise<string | null | undefined>) {
   const { t } = useI18n()
@@ -70,16 +70,16 @@ export function useVoiceInput(onText: (text: string) => void | Promise<string | 
   let stream: MediaStream | null = null
   let chunks: Blob[] = []
   let timer: ReturnType<typeof setTimeout> | null = null
-  /** Démonté pendant l'enregistrement : on coupe le micro et on jette ce qui a été dit. */
+  /** Unmounted during recording: we cut the microphone and throw away what was said. */
   let discarded = false
-  /** Personne n'a parlé (détection) : rien à transcrire. */
+  /** Nobody spoke (detection): nothing to transcribe. */
   let silent = false
-  /** L'écoute du niveau sonore, le temps d'un enregistrement. */
+  /** Listening to the sound level, for the duration of a recording. */
   let listener: { audio: AudioContext; poll: ReturnType<typeof setInterval> } | null = null
-  /** La réponse en train d'être dite (une seule à la fois). */
+  /** The reply being said (only one at a time). */
   let player: HTMLAudioElement | null = null
   let playerUrl: string | null = null
-  /** La dernière réponse synthétisée, et son audio. */
+  /** The last synthesized reply, and its audio. */
   let spoken: { text: string; audio: Blob } | null = null
 
   function stopSpeaking() {
@@ -94,7 +94,7 @@ export function useVoiceInput(onText: (text: string) => void | Promise<string | 
     try {
       const audio = spoken?.text === answer ? spoken.audio : await getTransport().speak(answer, spokenWords())
       spoken = { text: answer, audio }
-      if (phase.value !== 'speaking') return              // arrêté pendant la synthèse
+      if (phase.value !== 'speaking') return              // stopped during the synthesis
       playerUrl = URL.createObjectURL(audio)
       player = new Audio(playerUrl)
       player.onended = stopSpeaking
@@ -113,7 +113,7 @@ export function useVoiceInput(onText: (text: string) => void | Promise<string | 
     if (on) heardNothingTimer = setTimeout(() => setHeardNothing(false), HEARD_NOTHING_MS)
   }
 
-  /** Pièces, zones, niveaux, ambiances, puis appareils : le serveur en garde ce que le fournisseur accepte. */
+  /** Rooms, zones, levels, light scenes, then devices: the server keeps what the provider accepts. */
   function hints(): string[] {
     const names = [
       ...[...(house.index?.roomsById.values() ?? [])].map((r) => r.name),
@@ -125,12 +125,12 @@ export function useVoiceInput(onText: (text: string) => void | Promise<string | 
     return [...new Set(names.map((n) => n.trim()).filter((n) => n && n.length <= 80))].slice(0, 400)
   }
 
-  /** L'abréviation de chaque niveau → son nom (« RDC » → « Rez-de-chaussée ») : la synthèse dit le nom. */
+  /** Each level's abbreviation → its name ("GF" → "Ground floor"): the synthesis says the name. */
   function spokenWords(): Record<string, string> {
     return Object.fromEntries(house.levels.filter((l) => l.shortName && l.shortName !== l.name).map((l) => [l.shortName!, l.name]))
   }
 
-  /** Écoute le niveau du micro et arrête l'enregistrement à la fin de la phrase (ou sans parole). */
+  /** Listens to the microphone level and stops the recording at the end of the sentence (or without speech). */
   function watchSilence(source: MediaStream) {
     const audio = new AudioContext()
     void audio.resume()
@@ -177,7 +177,7 @@ export function useVoiceInput(onText: (text: string) => void | Promise<string | 
     recorder.start()
     phase.value = 'recording'
     timer = setTimeout(stop, MAX_RECORDING_MS)
-    if (autoSend.value) try { watchSilence(stream) } catch { /* pas d'analyse audio : le bouton reste */ }
+    if (autoSend.value) try { watchSilence(stream) } catch { /* no audio analysis: the button stays */ }
   }
 
   function stop() {
@@ -211,7 +211,7 @@ export function useVoiceInput(onText: (text: string) => void | Promise<string | 
     else if (phase.value === 'speaking') stopSpeaking()
   }
 
-  /** Réécouter une réponse (réponses parlées allumées), ou arrêter celle qui se dit. */
+  /** Replay a reply (spoken replies on), or stop the one being said. */
   function replay(answer: string) {
     if (phase.value === 'speaking') stopSpeaking()
     else if (phase.value === 'idle' && speech.value && answer) void say(answer)

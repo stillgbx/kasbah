@@ -8,9 +8,9 @@ import type * as Wav from '../lib/wav'
 import { NO_SPEECH_MS, SILENCE_MS } from '../lib/vad'
 import { useVoiceInput } from './useVoiceInput'
 
-// Envoi à la fin de la phrase allumé (sous-item `autoSend`) : le niveau du micro, lu par un
-// `AnalyserNode` simulé, arrête l'écoute seul après la parole ; sans parole, rien ne part. Fichier à
-// part : le statut du plugin n'est demandé qu'une fois par chargement de page (donc de module).
+// Send at the end of the sentence on (`autoSend` sub-item): the microphone level, read by a simulated
+// `AnalyserNode`, stops listening on its own after speech; without speech, nothing goes out. Separate
+// file: the plugin's status is only requested once per page load (hence per module).
 
 vi.mock('../lib/wav', async (orig) => ({ ...(await orig<typeof Wav>()), toMono16k: vi.fn(async () => new Float32Array(16_000)) }))
 
@@ -23,7 +23,7 @@ class FakeRecorder {
   stop() { this.state = 'inactive'; this.ondataavailable?.({ data: new Blob(['x']) }); this.onstop?.() }
 }
 
-/** Le niveau que le micro entend en ce moment (amplitude d'un signal carré). */
+/** The level the microphone is hearing right now (amplitude of a square signal). */
 let level = 0
 const closed = vi.fn()
 class FakeAudioContext {
@@ -58,7 +58,7 @@ function harness() {
   return { heard, api: () => api }
 }
 
-it('parler puis se taire : l\'écoute s\'arrête seule et le texte part, sans toucher au bouton', async () => {
+it('speak then fall silent: listening stops by itself and the text goes out, without touching the button', async () => {
   const { heard, api } = harness()
   await vi.advanceTimersByTimeAsync(0)
   api().toggle(); await vi.advanceTimersByTimeAsync(300)
@@ -72,7 +72,7 @@ it('parler puis se taire : l\'écoute s\'arrête seule et le texte part, sans to
   expect(closed).toHaveBeenCalled()
 })
 
-it('personne ne parle : rien entendu, et rien n\'est envoyé à la transcription', async () => {
+it('nobody speaks: nothing heard, and nothing is sent to the transcription', async () => {
   const { heard, api } = harness()
   await vi.advanceTimersByTimeAsync(0)
   api().toggle(); await vi.advanceTimersByTimeAsync(NO_SPEECH_MS + 100)
@@ -82,7 +82,7 @@ it('personne ne parle : rien entendu, et rien n\'est envoyé à la transcription
   expect(heard).toEqual([])
 })
 
-it('le bouton reste : un toucher pendant la parole envoie aussitôt', async () => {
+it('the button stays: a touch during speech sends right away', async () => {
   const { heard, api } = harness()
   await vi.advanceTimersByTimeAsync(0)
   api().toggle(); await vi.advanceTimersByTimeAsync(300)

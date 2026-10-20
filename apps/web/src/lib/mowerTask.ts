@@ -1,15 +1,15 @@
 import type { StateFor } from '@kasbah/shared'
 import { formatAgo } from './format'
 
-// Ce que la tondeuse est en train de faire, en une phrase : « En route vers Fond », « Tonte · Devant »,
-// « Retour à la station ». L'activité seule (« Tonte ») ne dit pas OÙ : c'est la zone en cours
-// (`workAreaId`) et le départ (`leaving`) qui le précisent. Vide quand il n'y a rien à ajouter à
-// l'activité — un robot sans zones qui tond, un robot garé.
+// What the mower is doing, in one sentence: "Heading to Back", "Mowing · Front",
+// "Returning to the station". The activity alone ("Mowing") does not say WHERE: it is the current zone
+// (`workAreaId`) and the departure (`leaving`) that specify it. Empty when there is nothing to add to
+// the activity — a robot without zones that is mowing, a parked robot.
 
 type Translate = (key: string, values?: Record<string, unknown>) => string
 type WorkArea = NonNullable<StateFor<'mower'>['workAreas']>[number]
 
-/** Le nom d'une zone ; la zone `0` sans nom est tout le terrain (Husqvarna la publie ainsi). */
+/** A zone's name; zone `0` without a name is the whole terrain (Husqvarna publishes it that way). */
 export function workAreaLabel(a: Pick<WorkArea, 'id' | 'name'>, t: Translate): string {
   return a.name || (a.id === 0 ? t('mower.wholeLawn') : t('mower.areaUnnamed', { id: a.id }))
 }
@@ -18,19 +18,19 @@ export function mowerTask(s: StateFor<'mower'>, t: Translate): string {
   if (s.activity === 'returning') return t('mower.task.returning')
   if (s.activity !== 'mowing') return ''
   const id = s.workAreaId
-  // une zone TRACÉE (autre que tout le terrain) : c'est elle qu'on nomme
+  // a DRAWN zone (other than the whole terrain): it is the one we name
   const traced = id !== undefined && id !== 0
   const zone = traced ? workAreaLabel(s.workAreas?.find((a) => a.id === id) ?? { id, name: '' }, t) : ''
   if (s.leaving) return traced ? t('mower.task.leavingTo', { zone }) : t('mower.task.leaving')
   if (traced) return t('mower.task.mowingIn', { zone })
-  // tout le terrain : à dire seulement chez un robot qui a des zones, sinon l'activité suffit
+  // whole terrain: to be said only for a robot that has zones, otherwise the activity is enough
   return (s.workAreas ?? []).some((a) => a.id !== 0) ? t('mower.task.mowingAll') : ''
 }
 
 /**
- * La ligne d'état sous la jauge : l'ERREUR du fabricant quand il y en a une (« Erreur 2 · No loop
- * signal · il y a 3 h »), sinon pourquoi le robot ne tond pas (planning, pluie, gel, consigne), sinon
- * ce qu'il fait et où (`mowerTask`). Partagée par la carte de la vue Robots et le panneau de la scène.
+ * The status line under the gauge: the vendor's ERROR when there is one ("Error 2 · No loop
+ * signal · 3 h ago"), otherwise why the robot is not mowing (schedule, rain, frost, setpoint), otherwise
+ * what it does and where (`mowerTask`). Shared by the Robots view card and the scene panel.
  */
 export function mowerStatus(s: StateFor<'mower'>, t: Translate, now: number, locale: string): string {
   if (s.activity === 'error' || s.errorCode !== undefined) {
@@ -40,6 +40,6 @@ export function mowerStatus(s: StateFor<'mower'>, t: Translate, now: number, loc
     return parts.join(' · ')
   }
   if (s.restrictedReason && s.activity !== 'mowing' && s.activity !== 'returning') return t(`mower.restrictions.${s.restrictedReason}`)
-  // sinon ce qu'il fait, et où : « En route vers Fond », « Tonte · Devant », « Retour à la station »
+  // otherwise what it does, and where: "Heading to Back", "Mowing · Front", "Returning to the station"
   return mowerTask(s, t)
 }

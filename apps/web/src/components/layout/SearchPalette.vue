@@ -9,14 +9,14 @@ import { normalize } from '../../lib/search'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import AssistantReply from './AssistantReply.vue'
 
-// Palette Ctrl+K (Cmd+K sur Mac) : la recherche de la vue Maison, ouverte depuis n'importe quelle
-// page. Même moteur, même règle — un résultat NAVIGUE, il n'agit jamais. Le champ est posé à une
-// hauteur fixe et la liste grandit vers le bas : rien ne bouge quand les résultats changent.
+// Ctrl+K palette (Cmd+K on Mac): the House view's search, opened from any
+// page. Same engine, same rule — a result NAVIGATES, it never acts. The field is placed at a
+// fixed height and the list grows downward: nothing moves when the results change.
 //
-// La dernière ligne passe la saisie à l'assistant (« Demander à Kasbah ») : lui AGIT, et sa réponse
-// prend la place de la liste. Fermer la palette ne l'arrête pas ; la rouvrir la montre.
-// Le micro (plugin `transcription` allumé) dicte l'instruction, qui part aussitôt ; au doigt, il ne
-// rend pas le focus au champ (le clavier monterait).
+// The last line passes the input to the assistant ("Ask Kasbah"): it ACTS, and its answer
+// takes the list's place. Closing the palette does not stop it; reopening it shows it.
+// The microphone (`transcription` plugin on) dictates the instruction, which is sent right away; by finger, it does not
+// give focus back to the field (the keyboard would come up).
 
 const route = useRoute()
 const router = useRouter()
@@ -31,24 +31,24 @@ const assistant = useAssistant()
 const { phase } = assistant
 const { t } = useI18n()
 const { ready: voiceReady, speech, phase: voicePhase, heardNothing, toggle: toggleVoice, replay, forgetSpoken } = useVoiceInput(async (text) => {
-  // le champ reste vide (l'instruction est en tête de la réponse) : le micro y reste, prêt pour la suivante
+  // the field stays empty (the instruction is at the top of the answer): the microphone stays there, ready for the next one
   await assistant.ask(text)
-  // la réponse, à dire à voix haute si les réponses parlées sont allumées
+  // the answer, to be spoken aloud if spoken replies are on
   return assistant.phase.value === 'done' ? assistant.answer.value : null
 })
-/** Parler, terminer l'écoute, ou arrêter la réponse dite à voix haute. */
+/** Speak, finish listening, or stop the answer spoken aloud. */
 const micLabel = computed(() => t(voicePhase.value === 'recording' ? 'voice.stop' : voicePhase.value === 'speaking' ? 'voice.stopSpeaking' : 'voice.start'))
-/** Les résultats, plus la ligne de l'assistant. */
+/** The results, plus the assistant's line. */
 const total = computed(() => results.value.length + 1)
-/** Ce qui avait le focus à l'ouverture : on le lui rend en fermant. */
+/** What had focus on opening: it is given back on closing. */
 let returnFocus: HTMLElement | null = null
 
 const showList = () => phase.value === 'idle' && normalize(query.value).length >= MIN_QUERY
 
 watch(results, () => { active.value = 0 })
-// la réponse fermée (ou remplacée par une autre question), son audio gardé pour la réécoute part avec elle
+// the answer closed (or replaced by another question), its audio kept for replay goes with it
 watch(phase, (p) => { if (p === 'idle') forgetSpoken() })
-// Retoucher l'instruction après la réponse revient à la recherche (pas la fermeture, qui vide le champ).
+// Touching up the instruction after the answer goes back to search (not closing, which empties the field).
 watch(query, (q) => {
   if (open.value && (phase.value === 'done' || phase.value === 'error') && q.trim() !== assistant.asked.value) assistant.reset()
 })
@@ -56,7 +56,7 @@ watch(query, (q) => {
 function show() {
   returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
   open.value = true
-  // la réponse en cours ou la dernière, l'instruction sélectionnée : la frappe suivante la remplace
+  // the current or last answer, the instruction selected: the next keystroke replaces it
   if (phase.value !== 'idle') query.value = assistant.asked.value
   void nextTick(() => { input.value?.focus(); if (phase.value !== 'idle') input.value?.select() })
 }
@@ -71,14 +71,14 @@ function close() {
 async function pick(hit: SearchHit) {
   close()
   if (hit.family === 'page') { hit.go(); return }
-  // ramener sur la maison AVANT de sélectionner : sinon le watcher qui reflète la sélection dans
-  // l'URL la réécrit sur la vue courante et annule la navigation (même course que la sonnette)
-  if (route.name !== 'home') await router.push({ name: 'home' }).catch(() => { /* navigation redondante */ })
+  // go back to the house BEFORE selecting: otherwise the watcher that reflects the selection in
+  // the URL rewrites it onto the current view and cancels the navigation (same race as the doorbell)
+  if (route.name !== 'home') await router.push({ name: 'home' }).catch(() => { /* redundant navigation */ })
   hit.go()
   homePanelRequest.value++
 }
 
-/** Le micro : la saisie s'efface pour laisser lire « J'écoute… » (sauf en `http://`, où il sera refusé). */
+/** The microphone: the input clears to let "Listening…" be read (except on `http://`, where it will be refused). */
 function talk() {
   if (voicePhase.value === 'idle' && window.isSecureContext) { assistant.reset(); query.value = '' }
   toggleVoice()
@@ -103,23 +103,23 @@ function move(delta: number) {
   void nextTick(() => listEl.value?.children[active.value]?.scrollIntoView({ block: 'nearest' }))
 }
 
-/** Fermer la réponse (Échap ou sa croix) : elle se tait, et l'instruction quitte le champ. */
+/** Close the answer (Escape or its cross): it falls silent, and the instruction leaves the field. */
 function closeReply() {
   if (voicePhase.value === 'speaking') toggleVoice()
   assistant.reset()
   query.value = ''
 }
 
-/** Échap arrête ou efface la réponse, puis efface la saisie, puis ferme, comme la barre de la vue Maison. */
+/** Escape stops or clears the answer, then clears the input, then closes, like the House view's bar. */
 function onEscape() {
   if (phase.value !== 'idle') closeReply()
   else if (query.value) query.value = ''
   else close()
 }
 
-// Écoute en phase de capture : le raccourci passe même quand un champ a le focus, et avant le
-// navigateur (Ctrl+K y met le focus sur la barre d'adresse). Le remplissage automatique de Chrome
-// émet des `keydown` SANS `key` (`undefined`, malgré le type) : on les ignore.
+// Listening in capture phase: the shortcut works even when a field has focus, and before the
+// browser (Ctrl+K puts the focus on the address bar there). Chrome's autofill
+// emits `keydown`s WITHOUT `key` (`undefined`, despite the type): we ignore them.
 function onKey(e: KeyboardEvent) {
   if (typeof e.key !== 'string' || e.key.toLowerCase() !== 'k' || !(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return
   e.preventDefault()
@@ -191,7 +191,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
 }
 .palette__input::placeholder { color: var(--muted); }
 .palette__input::-webkit-search-cancel-button { display: none; }
-/* rouge pendant l'écoute, qui pulse pendant la transcription (comme la barre de la vue Maison) */
+/* red while listening, which pulses during transcription (like the House view's bar) */
 .palette__mic {
   flex: none; width: 32px; height: 32px; margin-right: -6px; border: 0; border-radius: 999px; background: transparent;
   color: var(--muted); display: grid; place-items: center;
@@ -202,29 +202,29 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
 .palette__mic[data-phase='transcribing'] { color: var(--accent); animation: mic-wait 1.1s ease-in-out infinite; }
 @keyframes mic-wait { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .palette__mic { animation: none; } }
-/* huit lignes visibles, le reste au défilement : c'est la frappe suivante qui trie */
+/* eight visible lines, the rest scrolls: it is the next keystroke that sorts */
 .palette__list { max-height: calc(8 * 46px); overflow-y: auto; overscroll-behavior: contain; border-top: 1px solid var(--line); }
 .palette__row {
   display: flex; align-items: center; gap: 10px; width: 100%; height: 46px; padding: 0 16px;
   border: 0; background: transparent; color: var(--text); text-align: left;
 }
 .palette__row + .palette__row { border-top: 1px solid var(--line); }
-/* même ligne active que la barre de la vue Maison : teinte ET liseré, `outline` pour ne rien décaler */
+/* same active line as the House view's bar: tint AND rim, `outline` so as to shift nothing */
 .palette__row[data-on='1'] { background: color-mix(in srgb, var(--accent) 14%, transparent); outline: 2px solid var(--accent); outline-offset: -2px; }
-/* le gris seul tombe à 4,07:1 sur la teinte de la ligne active (thème clair) : un quart de texte
-   le remonte au-dessus de 4,5:1, dans le sens du texte, donc dans tous les thèmes */
+/* the gray alone falls to 4.07:1 on the active line's tint (light theme): a quarter of text
+   raises it above 4.5:1, in the direction of the text, hence in all themes */
 .palette__row[data-on='1'] .palette__sub { color: color-mix(in srgb, var(--muted) 75%, var(--text)); }
 .palette__row--empty { justify-content: center; }
 .palette__icon { color: var(--muted); flex: none; }
 .palette__icon--ask { color: var(--accent); }
-/* la saisie vaut instruction : elle prend la place du lieu, le libellé ne s'étire pas */
+/* the input counts as an instruction: it takes the place's slot, the label does not stretch */
 .palette__label--ask { flex: none; }
 .palette__sub--ask { flex: 1 1 0; text-align: right; }
 .palette__reply { border-top: 1px solid var(--line); max-height: 60vh; overflow: hidden; }
 .palette__label { flex: 1 1 auto; min-width: 0; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .palette__sub { flex: 0 1 auto; min-width: 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* téléphone : le texte indicatif français (283 px) ne tenait pas dans le champ (281 px) à 16 px
-   de marge ; 12 px lui rendent la place sans toucher à la boîte */
+/* phone: the French placeholder text (283 px) did not fit in the field (281 px) at 16 px
+   of margin; 12 px give it back the room without touching the box */
 @media (max-width: 599px) {
   .palette__field, .palette__row { padding: 0 12px; }
 }

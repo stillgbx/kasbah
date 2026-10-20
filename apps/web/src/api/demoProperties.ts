@@ -4,16 +4,16 @@ import tilleuls from '../../../../house/demos/tilleuls.json'
 import embruns from '../../../../house/demos/embruns.json'
 import belvedere from '../../../../house/demos/belvedere.json'
 
-// Les trois propriétés de démonstration (`house/demos/`), pour le mode démo sans serveur
-// (VITE_INPROCESS_MOCK=1). Chaque maison dit elle-même quel parc simulé la peuple
-// (`meta.demo.scenario`) : le serveur lit le même champ, il n'y a qu'une source.
+// The three demonstration properties (`house/demos/`), for demo mode without a server
+// (VITE_INPROCESS_MOCK=1). Each house itself says which simulated device set populates it
+// (`meta.demo.scenario`): the server reads the same field, so there is a single source.
 
 export interface DemoProperty {
   id: string
   name: string
   kind: PropertyKind
   scenario: ScenarioName
-  /** Le JSON brut de la maison, tel que le fichier le porte (parsé à l'usage). */
+  /** The raw house JSON, as the file carries it (parsed on use). */
   house: unknown
 }
 
@@ -25,15 +25,15 @@ export const DEMO_PROPERTIES: readonly DemoProperty[] = [property(tilleuls as ne
 
 const KEY = 'kasbah.demoProperty'
 
-/** La propriété démo retenue par CE navigateur ; la première si rien n'est retenu (ou si le stockage manque). */
+/** The demo property remembered by THIS browser; the first one if none is remembered (or if storage is missing). */
 export function activeDemoProperty(): DemoProperty {
   let id: string | null = null
-  try { id = localStorage.getItem(KEY) } catch { /* stockage indisponible : la première */ }
+  try { id = localStorage.getItem(KEY) } catch { /* storage unavailable: the first one */ }
   return DEMO_PROPERTIES.find((p) => p.id === id) ?? DEMO_PROPERTIES[0]!
 }
 
 export function rememberDemoProperty(id: string): void {
-  try { localStorage.setItem(KEY, id) } catch { /* le choix ne survivra pas au rechargement */ }
+  try { localStorage.setItem(KEY, id) } catch { /* the choice will not survive a reload */ }
 }
 
 export function demoPropertiesResponse(activeId: string): PropertiesResponse {

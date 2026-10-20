@@ -3,13 +3,13 @@ import type { JournalEntry } from '@kasbah/shared'
 import { getTransport } from '../api'
 
 /**
- * Les JOURNAUX des appareils demandés (capacité `journal`), servis à la demande par le serveur
- * (`GET /api/devices/:id/journal`), qui les tient à jour lui-même par le flux du fabricant : les
- * redemander à chaque demi-minute ne coûte qu'une requête locale. Un échec garde le journal d'avant ;
- * un appareil qui quitte la liste garde le sien en mémoire, sans être redemandé.
+ * The LOGS of the requested devices (`journal` capability), served on demand by the server
+ * (`GET /api/devices/:id/journal`), which keeps them up to date itself through the vendor's stream:
+ * re-requesting them every half minute only costs a local request. A failure keeps the previous log;
+ * a device that leaves the list keeps its own in memory, without being re-requested.
  *
- * Deux surfaces s'en servent : la vue Robots (un journal par robot) et le panneau de l'appareil
- * sélectionné (un seul).
+ * Two surfaces use them: the Robots view (one log per robot) and the selected device's
+ * panel (just one).
  */
 export function useJournals(ids: Ref<readonly string[]>) {
   const journals = ref<Record<string, JournalEntry[]>>({})
@@ -18,7 +18,7 @@ export function useJournals(ids: Ref<readonly string[]>) {
   async function reload(): Promise<void> {
     for (const id of ids.value) {
       try { journals.value = { ...journals.value, [id]: (await getTransport().getJournal(id)).entries } }
-      catch { /* le journal d'avant reste affiché */ }
+      catch { /* the previous log stays displayed */ }
     }
   }
 
@@ -27,7 +27,7 @@ export function useJournals(ids: Ref<readonly string[]>) {
     timer = setInterval(() => { void reload() }, 30_000)
   })
   onBeforeUnmount(() => { if (timer) clearInterval(timer) })
-  // la liste change (un robot arrive, l'appareil sélectionné change) : on lit tout de suite
+  // the list changes (a robot arrives, the selected device changes): we read right away
   watch(() => ids.value.join('|'), () => { void reload() })
 
   return { journals, reload }

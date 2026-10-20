@@ -1,9 +1,9 @@
-// Protocole Bluetooth de l'actiTENS mini (Sublimed, `acTENSv2_…`), relevé par capture le 2026-09-25 :
-// voir `_generated-ai-doc/tens/protocole.md`. Pur — ni Bluetooth ni Vue — pour se tester sans l'appareil.
+// Bluetooth protocol of the actiTENS mini (Sublimed, `acTENSv2_…`), recorded by capture on 2026-09-25:
+// see `_generated-ai-doc/tens/protocole.md`. Pure — neither Bluetooth nor Vue — to be tested without the device.
 //
-// Une trame : `1b 40 <commande> <longueur> <données…> <crc>` de Kasbah vers le TENS, et
-// `1b c0 <commande & 0x7f> <longueur> <données…> <crc>` en réponse (`1b e0 …` : événement spontané).
-// Le contrôle est un CRC-8/MAXIM sur toute la trame, vérifié sur les 74 trames capturées.
+// A frame: `1b 40 <command> <length> <data…> <crc>` from Kasbah to the TENS, and
+// `1b c0 <command & 0x7f> <length> <data…> <crc>` in response (`1b e0 …`: spontaneous event).
+// The checksum is a CRC-8/MAXIM over the whole frame, verified on the 74 captured frames.
 
 export const TENS_SERVICE = '59994ce0-ba92-4fe6-be82-84b98195945b'
 export const TENS_COMMAND_CHAR = '59994ce1-ba92-4fe6-be82-84b98195945b'
@@ -25,13 +25,13 @@ export const CMD = {
 } as const
 
 /**
- * Le jeton de 4 octets que l'appli joint à chaque commande. Aucune réponse du TENS ne le contient :
- * c'est peut-être un identifiant de séance choisi par l'appli, peut-être une valeur liée au compte.
- * On rejoue celui de la capture ; le premier essai en direct dira si une autre valeur passe.
+ * The 4-byte token that the app attaches to each command. No TENS reply contains it:
+ * it is perhaps a session identifier chosen by the app, perhaps a value tied to the account.
+ * We replay the one from the capture; the first live trial will tell whether another value passes.
  */
 export const TENS_TOKEN = Uint8Array.of(0x2a, 0x11, 0x5b, 0x4a)
 
-/** CRC-8/MAXIM (Dallas 1-Wire) : polynôme 0x31 réfléchi (0x8c), init 0, sans xor final. */
+/** CRC-8/MAXIM (Dallas 1-Wire): reflected polynomial 0x31 (0x8c), init 0, no final xor. */
 export function crc8Maxim(bytes: Uint8Array): number {
   let crc = 0
   for (const b of bytes) {
@@ -51,7 +51,7 @@ export function encodeFrame(cmd: number, payload: Uint8Array = new Uint8Array())
 
 export interface TensReply { kind: 'reply' | 'event'; cmd: number; payload: Uint8Array }
 
-/** Une trame reçue sur le canal de réponse, ou `null` si elle est tronquée ou corrompue. */
+/** A frame received on the reply channel, or `null` if it is truncated or corrupted. */
 export function parseFrame(bytes: Uint8Array): TensReply | null {
   if (bytes.length < 5 || bytes[0] !== 0x1b) return null
   const kind = bytes[1] === 0xc0 ? 'reply' : bytes[1] === 0xe0 ? 'event' : null
@@ -62,36 +62,36 @@ export function parseFrame(bytes: Uint8Array): TensReply | null {
   return { kind, cmd: bytes[2]!, payload: bytes.slice(4, 4 + len) }
 }
 
-/** La réponse attendue à une commande : même numéro, bit de poids fort retiré (a2 → 22). */
+/** The expected reply to a command: same number, high bit removed (a2 → 22). */
 export const replyCmd = (cmd: number) => cmd & 0x7f
 
-/** Réponse de REFUS : `1b c0 7f 02 <commande refusée> <code>` (code 5 pour un programme mal formé). */
+/** REFUSAL reply: `1b c0 7f 02 <refused command> <code>` (code 5 for a malformed program). */
 export const REFUSED = 0x7f
 
 const u16 = (v: number) => [v & 0xff, (v >> 8) & 0xff]
 
-/** Canaux 1, 2 ou les deux — le masque que porte la vérification des électrodes. */
+/** Channels 1, 2 or both — the mask carried by the electrode check. */
 export type TensChannels = 1 | 2 | 3
 
 /**
- * Vérification automatique des électrodes (le TENS y fait passer 0,5 mA), premier temps de chaque
- * lancement. La queue `64 00 00 00 10 27 00 00` est rejouée telle quelle : identique dans toutes
- * les captures, sens inconnu.
+ * Automatic electrode check (the TENS passes 0.5 mA through them), first step of each
+ * launch. The tail `64 00 00 00 10 27 00 00` is replayed as is: identical in all
+ * the captures, meaning unknown.
  */
 export const checkFrame = (channels: TensChannels) =>
   encodeFrame(CMD.check, Uint8Array.of(channels, ...TENS_TOKEN, 0x64, 0, 0, 0, 0x10, 0x27, 0, 0))
 
 /**
- * Un segment de programme : `<identifiant de séance> <nombre de segments> <corps capturé>`. Le
- * nombre de segments se lit dans toutes les captures (01 pour P1-P4 et P12, 02 pour P5-P8, P10,
- * P11, 04 pour P9) ; un mauvais nombre est refusé (`1b c0 7f 02 a0 05`, relevé en direct).
+ * A program segment: `<session identifier> <number of segments> <captured body>`. The
+ * number of segments is read in all the captures (01 for P1-P4 and P12, 02 for P5-P8, P10,
+ * P11, 04 for P9); a wrong number is refused (`1b c0 7f 02 a0 05`, observed live).
  */
 export const programFrame = (sessionTag: number, segmentCount: number, segment: Uint8Array) =>
   encodeFrame(CMD.program, Uint8Array.of(sessionTag & 0xff, segmentCount, ...segment))
 
 export const startFrame = (durationS: number) => encodeFrame(CMD.start, Uint8Array.of(...u16(durationS), ...TENS_TOKEN))
 
-/** Intensité ABSOLUE d'un canal, en dixièmes de milliampère (50 = 5,0 mA). */
+/** ABSOLUTE intensity of a channel, in tenths of a milliampere (50 = 5.0 mA). */
 export const intensityFrame = (channel: 1 | 2, tenths: number) =>
   encodeFrame(CMD.intensity, Uint8Array.of(channel, ...u16(tenths), ...TENS_TOKEN))
 
@@ -99,17 +99,17 @@ export const pauseFrame = () => encodeFrame(CMD.pause, TENS_TOKEN)
 export const resumeFrame = () => encodeFrame(CMD.resume, TENS_TOKEN)
 export const stopFrame = () => encodeFrame(CMD.stop, TENS_TOKEN)
 export const helloFrame = () => encodeFrame(CMD.hello)
-/** Registre 0x3c : l'appli l'arme (`ff`) juste après le démarrage et le remet à 0 après l'arrêt. */
+/** Register 0x3c: the app arms it (`ff`) right after startup and puts it back to 0 after the stop. */
 export const sessionFlagFrame = (on: boolean) => encodeFrame(CMD.register, Uint8Array.of(0x3c, on ? 0xff : 0))
 
 export interface TensBattery {
   charging: boolean
   millivolts: number
-  /** Déduit de la tension par l'appareil : un faux 100 % dès qu'il est sur le câble. */
+  /** Deduced from the voltage by the device: a false 100 % as soon as it is on the cable. */
   percent: number
 }
 
-/** Caractéristique batterie (`c2`) : `[en charge][?][mV LE16][%]`. */
+/** Battery characteristic (`c2`): `[charging][?][mV LE16][%]`. */
 export function decodeBattery(bytes: Uint8Array): TensBattery | null {
   if (bytes.length < 5) return null
   return { charging: bytes[0] === 1, millivolts: bytes[2]! | (bytes[3]! << 8), percent: bytes[4]! }
@@ -120,17 +120,17 @@ const SESSION_STATES: Record<number, TensSessionState> = { 0: 'idle', 1: 'ready'
 
 export interface TensSession {
   state: TensSessionState
-  /** Octet 1 : `02` après un arrêt demandé — raison de fin présumée, gardée brute. */
+  /** Byte 1: `02` after a requested stop — presumed end reason, kept raw. */
   reason: number
-  /** Octet bas de l'identifiant de séance envoyé avec le programme. */
+  /** Low byte of the session identifier sent with the program. */
   sessionTag: number
   remainingS: number
-  /** Intensités en dixièmes de mA. */
+  /** Intensities in tenths of mA. */
   ch1: number
   ch2: number
 }
 
-/** Caractéristique séance (`c4`) : `[état][raison][séance][s restantes LE16][c1 LE16][c2 LE16]`. */
+/** Session characteristic (`c4`): `[state][reason][session][s remaining LE16][c1 LE16][c2 LE16]`. */
 export function decodeSession(bytes: Uint8Array): TensSession | null {
   if (bytes.length < 9) return null
   return {
@@ -143,13 +143,13 @@ export function decodeSession(bytes: Uint8Array): TensSession | null {
   }
 }
 
-/** Pas des boutons + / − de l'appli, et de sa montée progressive : 0,5 mA. */
+/** Step of the app's + / − buttons, and of its progressive ramp-up: 0.5 mA. */
 export const INTENSITY_STEP = 5
 
 /**
- * Les paliers pour aller d'une intensité à une autre, comme le fait l'appli : jamais de saut, un
- * pas de 0,5 mA à la fois en montée. La descente, elle, est immédiate — baisser le courant ne
- * doit jamais attendre.
+ * The steps to go from one intensity to another, as the app does: never a jump, a
+ * step of 0.5 mA at a time on the way up. The way down, for its part, is immediate — lowering the current
+ * must never wait.
  */
 export function rampSteps(from: number, to: number, step = INTENSITY_STEP): number[] {
   if (to <= from) return to === from ? [] : [to]

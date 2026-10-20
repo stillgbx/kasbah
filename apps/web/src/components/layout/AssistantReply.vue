@@ -8,16 +8,16 @@ import type { IconName } from '../../lib/strokeIcons'
 import PulseDot from '../ui/PulseDot.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Ce que l'assistant a fait et répondu, sous le champ de la palette ou au-dessus de la barre de la
-// vue Maison. Une ligne par outil appelé, l'appareil ou l'ambiance nommés comme dans l'app ; puis la
-// réponse, ou l'erreur dite en clair. Avec `canReplay` (réponses parlées allumées), « Réécouter » en
-// bas à droite de la réponse la fait dire à voix haute ; sa rangée existe dès que le texte arrive
-// (cachée jusqu'à la fin) : elle n'agrandit pas le panneau après coup. Avec `closable`, une croix en
-// haut à droite ferme la réponse, comme celle du champ de recherche.
+// What the assistant did and answered, under the palette's field or above the House view's
+// bar. One line per tool called, the device or light scene named as in the app; then the
+// answer, or the error stated plainly. With `canReplay` (spoken replies on), "Replay" at the
+// bottom right of the answer has it said aloud; its row exists as soon as the text arrives
+// (hidden until the end): it does not enlarge the panel after the fact. With `closable`, a cross at the
+// top right closes the answer, like the search field's.
 //
-// Hauteur bornée par l'appelant (`max-height`) : l'en-tête (l'instruction, la croix) reste en place et
-// seul le dessous défile, avec un fondu du côté où il y a une suite. Tant que la réponse arrive, la vue
-// suit la fin (la réponse s'écrit en bas), sauf si l'on est remonté la lire.
+// Height bounded by the caller (`max-height`): the header (the instruction, the cross) stays in place and
+// only the part below scrolls, with a fade on the side where there is more. While the answer is arriving, the view
+// follows the end (the answer is written at the bottom), unless the user has scrolled up to read it.
 
 const props = defineProps<{
   phase: AssistantPhase
@@ -27,7 +27,7 @@ const props = defineProps<{
   error: { code: string; message: string } | null
   canReplay?: boolean
   closable?: boolean
-  /** La réponse est en train d'être dite : le bouton l'arrête. */
+  /** The answer is being spoken: the button stops it. */
   speaking?: boolean
 }>()
 const emit = defineEmits<{ replay: []; close: [] }>()
@@ -41,7 +41,7 @@ const TOOL_ICONS: Record<string, IconName> = {
   get_health: 'pulse', search_music: 'search', play_music: 'music', play_radio: 'sourceRadio', get_school: 'school',
 }
 
-/** Sur quoi l'outil a porté, dit avec les noms de l'app : appareil, ambiance, recherche, titre. */
+/** What the tool acted on, said with the app's names: device, light scene, search, title. */
 function target(a: AssistantAction): string {
   const input = (a.input ?? {}) as { deviceId?: string; id?: string; sceneId?: string; query?: string; tracks?: { title?: string }[] }
   const deviceId = input.deviceId ?? (a.name === 'get_device' ? input.id : undefined)
@@ -61,10 +61,10 @@ const rows = computed(() => props.actions.map((a) => ({
   ok: a.ok,
 })))
 
-/** Le dessous qui défile, et de quel côté il a une suite (fondu). */
+/** The part below that scrolls, and on which side it has more (fade). */
 const body = ref<HTMLElement | null>(null)
 const fade = ref({ start: false, end: false })
-/** Collé en bas (à 4 px près) : la vue suit ce qui arrive. */
+/** Stuck to the bottom (within 4 px): the view follows what arrives. */
 let atEnd = true
 
 function measure() {
@@ -80,7 +80,7 @@ onMounted(() => {
   if (typeof ResizeObserver !== 'undefined' && body.value) { resize = new ResizeObserver(measure); resize.observe(body.value) }
 })
 onBeforeUnmount(() => resize?.disconnect())
-// une ligne d'outil, la réponse, l'erreur : le contenu grandit sans que le cadre change de taille
+// a tool line, the answer, the error: the content grows without the frame changing size
 watch(() => [props.actions.length, props.actions.map((a) => a.ok), props.answer, props.phase, props.canReplay], async () => {
   const follow = atEnd
   await nextTick()
@@ -110,7 +110,7 @@ const errorText = computed(() => {
         <StrokeIcon class="reply__icon" :name="r.icon" :size="16" />
         <span class="reply__label">{{ r.label }}</span>
         <span class="reply__target">{{ r.target }}</span>
-        <!-- place réservée : l'état de l'outil (en cours, fait, refusé) ne décale rien -->
+        <!-- reserved place: the tool's state (running, done, refused) shifts nothing -->
         <span class="reply__state">
           <PulseDot v-if="r.ok === undefined" :on="phase === 'running'" />
           <StrokeIcon v-else-if="r.ok" class="reply__ok" name="check" :size="14" />
@@ -123,7 +123,7 @@ const errorText = computed(() => {
                 :tabindex="phase === 'done' ? 0 : -1" :data-speaking="speaking ? '1' : '0'"
                 :aria-label="$t(speaking ? 'voice.stopSpeaking' : 'voice.replay')" @mousedown.prevent @click="emit('replay')">
           <StrokeIcon :name="speaking ? 'stop' : 'volume'" :size="16" />
-          <!-- les deux libellés dans la même case : le bouton garde la largeur du plus long -->
+          <!-- both labels in the same cell: the button keeps the width of the longer one -->
           <span class="reply__replaylabel">
             <span :data-on="speaking ? '0' : '1'">{{ $t('voice.replayShort') }}</span>
             <span :data-on="speaking ? '1' : '0'">{{ $t('voice.stopShort') }}</span>
@@ -138,9 +138,9 @@ const errorText = computed(() => {
 
 <style scoped>
 .reply { display: flex; flex-direction: column; gap: 6px; padding: 12px 16px 14px; min-height: 0; }
-/* le dessous défile dans la hauteur laissée par l'appelant ; fondu du côté où il continue. 4 px de
-   marge de chaque côté, rendus par une marge négative : « Réécouter » (décalé de -4 px) n'y crée pas
-   de défilement horizontal */
+/* the part below scrolls in the height left by the caller; fade on the side where it continues. 4 px of
+   margin on each side, rendered by a negative margin: "Replay" (offset by -4 px) creates no
+   horizontal scroll there */
 .reply__body { display: grid; gap: 6px; min-height: 0; overflow: hidden auto; overscroll-behavior: contain; padding: 0 4px; margin: 0 -4px; }
 .reply__body[data-fade-start='1'] { --fade-t: 24px; }
 .reply__body[data-fade-end='1'] { --fade-b: 24px; }
@@ -151,13 +151,13 @@ const errorText = computed(() => {
 .reply__asked { flex: none; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; min-width: 0; }
 .reply__asked > :first-child { flex: none; color: var(--accent); }
 .reply__askedtext { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* la croix, dans la hauteur de la ligne (marges négatives) : elle n'agrandit rien */
+/* the cross, in the line's height (negative margins): it enlarges nothing */
 .reply__close {
   flex: none; width: 32px; height: 32px; margin: -8px -10px -8px 0; border: 0; border-radius: 999px; background: transparent;
   color: var(--muted); display: grid; place-items: center;
 }
 .reply__close:hover { color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); }
-/* « Réécouter » : une pastille libellée, en bas à droite de la réponse (l'icône seule était ambiguë) */
+/* "Replay": a labelled pill, at the bottom right of the answer (the icon alone was ambiguous) */
 .reply__foot { display: flex; justify-content: flex-end; margin-top: 2px; }
 .reply__replay {
   display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px 0 10px; margin-right: -4px;
@@ -171,7 +171,7 @@ const errorText = computed(() => {
 .reply__replaylabel > span[data-on='0'] { visibility: hidden; }
 .reply__action { display: flex; align-items: center; gap: 8px; min-height: 24px; font-size: 13px; min-width: 0; }
 .reply__icon { flex: none; color: var(--muted); }
-/* le libellé passe avant la cible (base 0), et se coupe plutôt que de pousser l'état hors du panneau */
+/* the label goes before the target (basis 0), and gets cut rather than pushing the state out of the panel */
 .reply__label { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .reply__target { flex: 1 1 0; min-width: 0; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .reply__state { flex: none; width: 14px; display: grid; place-items: center; }

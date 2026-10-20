@@ -12,12 +12,12 @@ const props = defineProps<{ descriptor: DeviceDescriptor; state: StateFor<'light
 const emit = defineEmits<{ command: [cmd: CommandInput] }>()
 
 const has = (c: string) => props.descriptor.capabilities.includes(c as never)
-// calculées, pas lues une fois : le panneau garde ce composant d'une lampe à l'autre, et chaque
-// modèle Hue a sa propre plage de blanc
+// computed, not read once: the panel keeps this component from one light to another, and each
+// Hue model has its own white range
 const mirekMin = computed(() => (props.descriptor.meta.colorTempMirek ?? [153, 500])[0])
 const mirekMax = computed(() => (props.descriptor.meta.colorTempMirek ?? [153, 500])[1])
 
-/** Liste de crans (3CCT) : prioritaire sur la plage — un curseur mentirait. */
+/** List of steps (3CCT): takes priority over the range — a slider would lie. */
 const tempSteps = computed(() => props.descriptor.meta.colorTempMirekSteps)
 
 const MIREK_TO_K: Record<number, number> = { 370: 2700, 303: 3300, 250: 4000 }
@@ -36,7 +36,7 @@ const tempOptions = computed(() => (tempSteps.value ?? []).map((step) => {
   }
 }))
 
-// Valeurs locales pendant le glissement ; resynchronisées depuis l'état quand on ne touche pas.
+// Local values during the drag; resynchronized from the state when we are not touching.
 const brightness = ref(props.state.brightness ?? 100)
 const mirek = ref(props.state.colorTempMirek ?? 366)
 watch(() => props.state.brightness, (v) => { if (v !== undefined) brightness.value = v })
@@ -54,7 +54,7 @@ const sendColor = useDebounceFn((h: string) => {
   emit('command', { type: 'light.set', on: true, color: { x: +x.toFixed(4), y: +y.toFixed(4) } })
 }, 200)
 
-// Ventilateur lié (D5) : section dans la carte lumière. Place réservée même si indisponible.
+// Linked fan (D5): section in the light card. Space reserved even if unavailable.
 const devices = useDevicesStore()
 const linkedFan = computed(() => devices.list.find(
   (e) => e.state.kind === 'fan' && e.descriptor.meta.linkedTo === props.descriptor.id,
@@ -108,7 +108,7 @@ const linkedFan = computed(() => devices.list.find(
                       @update:model-value="(h: string) => sendColor(h)" />
     </template>
 
-    <!-- Section ventilateur lié : hauteur réservée pour que la carte ne change pas selon l'état. -->
+    <!-- Linked fan section: reserved height so the card does not change with the state. -->
     <div v-if="linkedFan" class="linked-fan">
       <FanControl
         :descriptor="linkedFan.descriptor"

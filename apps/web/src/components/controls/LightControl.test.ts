@@ -19,7 +19,7 @@ describe('LightControl', () => {
     expect(w.findAll('.v-slider')).toHaveLength(2)
     expect(w.find('.v-color-picker').exists()).toBe(false)
     expect(w.find('input[type="checkbox"]').exists()).toBe(false)
-    expect(w.text()).toContain('3300 K')   // 300 mirek ≈ 3333 K arrondi à la centaine
+    expect(w.text()).toContain('3300 K')   // 300 mirek ≈ 3333 K rounded to the hundred
   })
   it('shows a color picker when the light supports color', () => {
     const w = mountLight({ descriptor: { ...descriptor, capabilities: ['on_off', 'color'] }, state })
@@ -41,8 +41,8 @@ describe('LightControl', () => {
     expect(w.text()).toContain('4000 K')
   })
 
-  // le panneau garde ce composant d'une lampe à l'autre : la plage de blanc est celle de la lampe AFFICHÉE
-  it('reprend la plage de température de la nouvelle lampe', async () => {
+  // the panel keeps this component from one light to another: the white range is that of the DISPLAYED light
+  it('picks up the temperature range of the new light', async () => {
     const w = mountLight({ descriptor, state })
     await w.setProps({ descriptor: { ...descriptor, id: 'mock:l2', meta: { colorTempMirek: [200, 454] } } })
     const ct = w.findAll('.v-slider')[1]!.find('.v-slider-thumb')

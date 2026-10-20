@@ -6,13 +6,13 @@ import { createI18n } from 'vue-i18n'
 import fr from '../src/i18n/locales/fr.json'
 import en from '../src/i18n/locales/en.json'
 
-// happy-dom ne fournit pas ResizeObserver ni matchMedia complets : stubs minimaux pour Vuetify.
+// happy-dom does not provide full ResizeObserver or matchMedia: minimal stubs for Vuetify.
 class RO { observe() {} unobserve() {} disconnect() {} }
 globalThis.ResizeObserver = globalThis.ResizeObserver ?? (RO as unknown as typeof ResizeObserver)
 if (!globalThis.matchMedia) {
   globalThis.matchMedia = (() => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} })) as unknown as typeof matchMedia
 }
-// Vuetify utilise visualViewport pour certains calculs
+// Vuetify uses visualViewport for some computations
 Object.defineProperty(globalThis, 'visualViewport', { value: globalThis.visualViewport ?? null, configurable: true })
 
 export const vuetify = createVuetify({ components, directives })

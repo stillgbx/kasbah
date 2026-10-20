@@ -3,8 +3,8 @@ import { parseHouse, type ServerMessage } from '@kasbah/shared'
 import { createMockTransport } from './mockTransport'
 import { activeDemoProperty, DEMO_PROPERTIES, demoPropertiesResponse, rememberDemoProperty } from './demoProperties'
 
-// Mode démo sans serveur : la propriété retenue par le navigateur, la bascule, et ce que le parc
-// simulé apporte de neuf (ambiances rappelables, propriété nommée dans le snapshot).
+// Demo mode without a server: the property remembered by the browser, the switch, and what the
+// simulated device set newly brings (recallable light scenes, property named in the snapshot).
 
 describe('demo properties (in-process)', () => {
   beforeEach(() => localStorage.clear())

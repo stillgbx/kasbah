@@ -15,7 +15,7 @@ const emit = defineEmits<{ command: [cmd: CommandInput] }>()
     </div>
     <div class="d-flex justify-space-between text-body-2 text-medium-emphasis mb-3">
       <span>{{ $t('charger.session') }} · {{ formatEnergy(state.sessionWh, $i18n.locale) }}</span>
-      <!-- même place que le courant max : en mode sécurisé, ce courant-là ne vaut plus -->
+      <!-- same place as the max current: in secure mode, that current no longer applies -->
       <span v-if="state.safeLimit" class="text-warning d-inline-flex align-center ga-1" :title="$t('charger.safeLimitHint')">
         <v-icon icon="alert" size="16" />{{ $t('charger.safeLimit') }}
       </span>

@@ -4,9 +4,9 @@ import { useI18n } from 'vue-i18n'
 import type { AgendaEvent } from '../../api/transport'
 import { dayKey, isPast, layoutDay } from '../../lib/agenda'
 
-// Semaine ou jour : une colonne par jour, les heures qui défilent, les journées entières dans une
-// bande de hauteur FIXE au-dessus (deux lignes, puis « +n ») — une semaine chargée ne décale pas
-// la grille. On arrive à 7 h, l'heure où la journée de la maison commence.
+// Week or day: one column per day, the hours scrolling, the whole-day events in a
+// band of FIXED height above (two lines, then "+n") — a busy week does not shift
+// the grid. We land at 7 a.m., the hour the house's day begins.
 
 const props = defineProps<{
   days: Date[]
@@ -95,7 +95,7 @@ const range = (e: AgendaEvent) => (e.allDay ? '' : `${timeFmt.value.format(e.sta
 .tg__wd { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .tg__num { height: 30px; min-width: 30px; padding: 0 6px; border-radius: 999px; display: grid; place-items: center; font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .tg__day[data-today='1'] .tg__num { background: var(--accent); color: var(--on-accent); }
-/* deux lignes de 20 px et leurs marges : hauteur fixe quelle que soit la semaine */
+/* two 20 px lines and their margins: fixed height whatever the week */
 .tg__allday { flex: 0 0 52px; border-bottom: 1px solid var(--line); }
 .tg__gutter { font-size: 11px; padding: 6px 6px 0 0; text-align: right; }
 .tg__allcell { border-left: 1px solid var(--line); padding: 4px 3px; display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow: hidden; }
@@ -106,7 +106,7 @@ const range = (e: AgendaEvent) => (e.allDay ? '' : `${timeFmt.value.format(e.sta
 }
 .tg__chip[data-past='1'], .tg__ev[data-past='1'] { opacity: .45; }
 .tg__more { flex: 0 0 20px; border: 0; background: transparent; text-align: left; padding: 0 6px; font: 600 12px/20px var(--font); cursor: pointer; }
-/* la barre de défilement des heures prend sa largeur aussi en tête : les colonnes restent alignées */
+/* the hours' scrollbar takes its width in the header too: the columns stay aligned */
 .tg__head, .tg__allday { overflow-y: hidden; scrollbar-gutter: stable; }
 .tg__scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
 .tg__body { position: relative; }
@@ -122,7 +122,7 @@ const range = (e: AgendaEvent) => (e.allDay ? '' : `${timeFmt.value.format(e.sta
   display: flex; flex-direction: column; align-items: stretch; gap: 1px; min-width: 0;
   background: color-mix(in srgb, var(--ev) 22%, var(--surface)); color: var(--text);
 }
-/* moins de 45 min : pas la hauteur de deux lignes, titre et heure côte à côte */
+/* less than 45 min: not the height of two lines, title and time side by side */
 .tg__ev[data-short='1'] { flex-direction: row; align-items: center; gap: 6px; padding-block: 0; }
 .tg__ev[data-short='1'] .tg__evtitle { flex: 0 1 auto; min-width: 0; }
 .tg__ev[data-short='1'] .tg__evtime { flex: 1 1 0; min-width: 0; }

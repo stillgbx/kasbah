@@ -3,29 +3,29 @@ import { geoToLocal, localToGeo, type GeoOrigin, type SiteMap, type SiteMapShape
 import type { GroundShape } from '../three/builders/groundOverlay'
 import { offsetLocation, type LatLon } from './map'
 
-// La carte du terrain d'une tondeuse (`GET /api/devices/:id/map`) posée sur le monde.
+// A mower's terrain map (`GET /api/devices/:id/map`) placed on the world.
 //
-// Le fabricant la publie dans le repère du robot (mètres, x est, y nord, origine quelconque) et ne
-// dit pas où elle est : seule sa STATION la rattache au terrain. On fait donc coïncider la station de
-// la carte avec la base du robot posée dans la maison (`site.parkings[]`) — la vraie place, relevée à
-// la main —, et à défaut avec la position du robot quand il est à la station (son GPS corrigé du
-// décalage réglé, bon à deux mètres près). Robot en vadrouille et pas de base : rien à poser.
+// The vendor publishes it in the robot's frame (meters, x east, y north, arbitrary origin) and does not
+// say where it is: only its STATION ties it to the terrain. We therefore make the map's station coincide with
+// the robot's base placed in the house (`site.parkings[]`) — the real place, surveyed by
+// hand —, and failing that with the robot's position when it is at the station (its GPS corrected by the
+// set offset, good to within two meters). Robot roaming and no base: nothing to place.
 
 export interface SiteMapFeatureProps {
   kind: SiteMapShapeKind
-  /** L'identifiant de la forme chez le fabricant : c'est par lui qu'on masque une zone dans la scène. */
+  /** The shape's identifier at the vendor: it is how a zone is hidden in the scene. */
   id: string
   name: string
-  /** Zone d'exclusion : activée (le robot n'y entre pas) ; vrai pour toute autre forme. */
+  /** Exclusion zone: enabled (the robot does not enter it); true for any other shape. */
   enabled: boolean
-  /** Teinte d'une zone de travail tracée (la même que sa pastille dans le panneau Zones) ; vide sinon. */
+  /** Tint of a drawn work zone (the same as its pill in the Zones panel); empty otherwise. */
   color: string
 }
 
 /**
- * Les CALQUES qu'on montre ou masque sur la carte : le terrain relevé (et ses obstacles), les zones de
- * travail tracées, les zones d'exclusion, celles de réensauvagement, les câbles guides avec les
- * chemins et la station.
+ * The LAYERS that are shown or hidden on the map: the surveyed terrain (and its obstacles), the drawn
+ * work zones, the exclusion zones, the rewilding ones, the guide cables with the
+ * paths and the station.
  */
 export const SITE_MAP_LAYERS = ['lawn', 'work_areas', 'stay_out', 'rewilding', 'guides'] as const
 export type SiteMapLayer = (typeof SITE_MAP_LAYERS)[number]
@@ -39,20 +39,20 @@ export function layerOf(kind: SiteMapShapeKind): SiteMapLayer {
   }
 }
 
-/** Une zone de réensauvagement : le jaune de l'abeille qui la signale dans l'appli du fabricant. */
+/** A rewilding zone: the yellow of the bee that marks it in the vendor's app. */
 export const REWILDING_COLOR = '#ffd54f'
-/** Le terrain entier : le vert de l'appli du fabricant. */
+/** The whole terrain: the green of the vendor's app. */
 export const LAWN_COLOR = '#43a047'
 /**
- * Les zones de travail TRACÉES, une teinte chacune, dans l'ordre où le robot les liste : aucune n'est
- * proche des couleurs déjà prises sur la carte (vert du terrain, rouge, bleu des câbles, jaune).
+ * The DRAWN work zones, one tint each, in the order the robot lists them: none is
+ * close to the colors already taken on the map (terrain green, red, cable blue, yellow).
  */
 export const WORK_AREA_COLORS = ['#26c6da', '#ab47bc', '#ff9800', '#ec407a', '#8d6e63', '#e0e0e0'] as const
 
 type WorkAreas = StateFor<'mower'>['workAreas']
 /**
- * La teinte d'une zone de travail : celle du terrain pour la zone `0` (tout le terrain), sinon son
- * rang parmi les zones tracées. C'est ce qui relie la pastille du panneau à la forme sur la carte.
+ * The tint of a work zone: the terrain's for zone `0` (the whole terrain), otherwise its
+ * rank among the drawn zones. It is what links the panel's pill to the shape on the map.
  */
 export function workAreaColor(workAreas: WorkAreas, id: number): string {
   if (id === 0) return LAWN_COLOR
@@ -64,9 +64,9 @@ const paletteAt = (i: number) => WORK_AREA_COLORS[i % WORK_AREA_COLORS.length]!
 const isClosed = (kind: SiteMapShapeKind) => kind === 'lawn' || kind === 'work_area' || kind === 'obstacle' || kind === 'stay_out' || kind === 'rewilding'
 
 /**
- * La teinte de chaque zone de travail TRACÉE de la carte, par l'id de sa forme. Reliée à `workAreas`
- * par son NOM (le seul lien que Husqvarna donne) ; une zone que la liste ne connaît pas encore (pas
- * relue) prend la teinte suivante.
+ * The tint of each DRAWN work zone of the map, by its shape's id. Linked to `workAreas`
+ * by its NAME (the only link Husqvarna gives); a zone the list does not know yet (not
+ * re-read) takes the next tint.
  */
 function workAreaShapeColors(map: SiteMap, workAreas: WorkAreas): Map<string, string> {
   const out = new Map<string, string>()
@@ -80,9 +80,9 @@ function workAreaShapeColors(map: SiteMap, workAreas: WorkAreas): Map<string, st
 }
 
 /**
- * Le point GPS où poser la station de la carte : la base du robot dans la maison si elle est posée,
- * sinon le robot lui-même tant qu'il est à la station. `offset` (m, repère maison : le `mapOffset`
- * réglé dans la maison) recale ensuite la carte entière sur la photo. `undefined` = elle ne se pose pas.
+ * The GPS point where to place the map's station: the robot's base in the house if it is placed,
+ * otherwise the robot itself while it is at the station. `offset` (m, house frame: the `mapOffset`
+ * set in the house) then realigns the whole map on the photo. `undefined` = it is not placed.
  */
 export function siteMapAnchor(o: { origin: GeoOrigin | undefined; dock: Vec2 | undefined; location: LatLon | undefined; atStation: boolean; offset?: Vec2 | undefined }): LatLon | undefined {
   const [dx, dy] = o.offset ?? [0, 0]
@@ -95,11 +95,11 @@ export function siteMapAnchor(o: { origin: GeoOrigin | undefined; dock: Vec2 | u
 }
 
 /**
- * Les formes de la carte en GeoJSON, la station de la carte posée sur `anchor`. Les zones d'exclusion
- * prennent leur état (activée ou non) dans l'état du robot, par leur identifiant ; une forme sans
- * correspondance est dite activée. Une zone de travail tracée prend sa teinte par son NOM (le seul
- * lien que Husqvarna donne entre la carte et `workAreas`) ; une zone que la liste ne connaît pas (pas
- * encore relue) prend la teinte suivante. Carte sans station : rien.
+ * The map's shapes as GeoJSON, the map's station placed on `anchor`. Exclusion zones
+ * take their state (enabled or not) from the robot's state, by their identifier; a shape with no
+ * match is said to be enabled. A drawn work zone takes its tint by its NAME (the only
+ * link Husqvarna gives between the map and `workAreas`); a zone the list does not know (not
+ * yet re-read) takes the next tint. Map without a station: nothing.
  */
 export function siteMapFeatures(map: SiteMap, anchor: LatLon, stayOutZones: StateFor<'mower'>['stayOutZones'], workAreas?: WorkAreas): FeatureCollection<Geometry, SiteMapFeatureProps> {
   const station = map.station
@@ -115,7 +115,7 @@ export function siteMapFeatures(map: SiteMap, anchor: LatLon, stayOutZones: Stat
     const coords = s.points.map(lonLat)
     const closed = isClosed(s.kind)
     if (closed && coords.length < 3) continue
-    // l'état du robot prime (il suit une bascule faite ici) ; à défaut celui de la carte, seul à dire le réensauvagement
+    // the robot's state prevails (it follows a toggle made here); failing that the map's, the only one to say rewilding
     const enabled = s.kind === 'stay_out' ? stayOutZones?.find((z) => z.id === s.id)?.enabled ?? s.enabled ?? true : s.enabled ?? true
     features.push({
       type: 'Feature',
@@ -126,12 +126,12 @@ export function siteMapFeatures(map: SiteMap, anchor: LatLon, stayOutZones: Stat
   return { type: 'FeatureCollection', features }
 }
 
-// ---- La carte peinte dans la scène 3D ----------------------------------------------------------
+// ---- The map painted in the 3D scene ----------------------------------------------------------
 
 /**
- * Ce qui se montre ou se masque UN PAR UN dans la scène : le terrain (avec ses obstacles), chaque
- * zone tracée (travail, exclusion, réensauvagement) par l'id de sa forme, les câbles avec les chemins
- * et la station.
+ * What is shown or hidden ONE BY ONE in the scene: the terrain (with its obstacles), each
+ * drawn zone (work, exclusion, rewilding) by its shape's id, the cables with the paths
+ * and the station.
  */
 export function sceneEntryKey(kind: SiteMapShapeKind, id: string): string {
   if (kind === 'lawn' || kind === 'obstacle') return 'lawn'
@@ -139,16 +139,16 @@ export function sceneEntryKey(kind: SiteMapShapeKind, id: string): string {
   return id
 }
 
-/** Les autres teintes de la carte (celles de la carte satellite). */
+/** The map's other tints (those of the satellite map). */
 export const STAY_OUT_COLOR = '#e53935'
 export const GUIDE_COLOR = '#42a5f5'
 const STATION_COLOR = '#fdd835'
 
 /**
- * Les formes à peindre sur le terrain, dans le repère de la MAISON (mètres) : la carte posée sur le
- * monde (`siteMapFeatures`), ramenée par l'origine de la maison ; les éléments masqués sont retirés.
- * Même lecture que sur la carte satellite : aplat léger, contour franc, zone désactivée presque
- * transparente.
+ * The shapes to paint on the terrain, in the HOUSE frame (meters): the map placed on the
+ * world (`siteMapFeatures`), brought back by the house's origin; hidden elements are removed.
+ * Same reading as on the satellite map: light fill, solid outline, disabled zone almost
+ * transparent.
  */
 export function sceneGroundShapes(fc: FeatureCollection<Geometry, SiteMapFeatureProps>, origin: GeoOrigin, hidden: ReadonlySet<string>): GroundShape[] {
   const out: GroundShape[] = []
@@ -175,35 +175,35 @@ export function sceneGroundShapes(fc: FeatureCollection<Geometry, SiteMapFeature
   return out
 }
 
-// ---- La liste des zones du panneau ---------------------------------------------------------------
+// ---- The panel's zone list ---------------------------------------------------------------
 
 /**
- * Une ligne du panneau des zones : ce que le ROBOT permet (tondre la zone, basculer l'exclusion) et
- * ce que la CARTE permet (la montrer ou la masquer dans la scène, `sceneKey`). Les deux sources se
- * rejoignent par le nom (zones de travail) ou l'id (exclusions) ; une zone connue d'une seule
- * source a une ligne quand même, avec ce que cette source permet.
+ * A line of the zones panel: what the ROBOT allows (mow the zone, toggle the exclusion) and
+ * what the MAP allows (show or hide it in the scene, `sceneKey`). The two sources
+ * meet by name (work zones) or id (exclusions); a zone known to only one
+ * source gets a line anyway, with what that source allows.
  */
 export interface ZoneRow {
   key: string
   group: 'base' | 'work' | 'stayOut'
-  /** Nom de la zone ; à défaut, clé i18n (`labelKey`). Une zone de travail se nomme par `workAreaId`. */
+  /** Name of the zone; failing that, i18n key (`labelKey`). A work zone is named by `workAreaId`. */
   label?: string
   labelKey?: string
   color: string
-  /** Se montre/masque dans la scène (`sceneEntryKey`) ; absent = pas sur la carte. */
+  /** Shown/hidden in the scene (`sceneEntryKey`); absent = not on the map. */
   sceneKey?: string
-  /** Se tond : la zone de travail du robot. */
+  /** Can be mowed: the robot's work zone. */
   workAreaId?: number
   workAreaEnabled?: boolean
-  /** Se bascule : la zone d'exclusion du robot. */
+  /** Can be toggled: the robot's exclusion zone. */
   stayOut?: { id: string; enabled: boolean }
-  /** Zone de réensauvagement : sur la carte seulement, l'API ne la bascule pas. */
+  /** Rewilding zone: on the map only, the API does not toggle it. */
   rewilding?: boolean
 }
 
 /**
- * Les lignes, dans l'ordre du panneau : d'abord le terrain (tout le terrain, à tondre) et les câbles,
- * puis les zones de travail dans l'ordre du robot, enfin les zones d'exclusion et de réensauvagement.
+ * The lines, in the panel's order: first the terrain (the whole terrain, to mow) and the cables,
+ * then the work zones in the robot's order, finally the exclusion and rewilding zones.
  */
 export function zoneRows(state: Pick<StateFor<'mower'>, 'workAreas' | 'stayOutZones'>, map: SiteMap | undefined): ZoneRow[] {
   const shapes = map?.shapes ?? []

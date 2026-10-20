@@ -4,10 +4,10 @@ import type { PropertySummary } from '@kasbah/shared'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import { usePropertiesStore } from '../../stores/properties'
 
-// Les propriétés entre lesquelles basculer, une ligne chacune : la courante cochée, celle qu'on
-// rejoint annoncée pendant le rechargement. Sert au menu du rail et à la carte des Réglages.
-// Le serveur ne liste que les propriétés du MODE montré (démos ou réelles) ; il y ajoute deux gestes :
-// créer une propriété neuve, ou dupliquer la démo montrée pour la modifier.
+// The properties to switch between, one line each: the current one ticked, the one being
+// joined announced during the reload. Serves the rail's menu and the Settings card.
+// The server only lists the properties of the MODE shown (demos or real ones); it adds two gestures:
+// create a new property, or duplicate the demo shown to modify it.
 const properties = usePropertiesStore()
 const all = computed<PropertySummary[]>(() => properties.info?.properties ?? [])
 </script>
@@ -21,7 +21,7 @@ const all = computed<PropertySummary[]>(() => properties.info?.properties ?? [])
         <StrokeIcon :name="p.kind === 'apartment' ? 'layers' : 'home'" :size="18" />
         <span class="props__name">{{ p.name }}</span>
         <span class="props__kind muted">{{ $t(`properties.kinds.${p.kind}`) }}</span>
-        <!-- une place réservée à droite : coche ou sablier s'y posent sans rien décaler -->
+        <!-- a reserved place on the right: tick or hourglass sit there without shifting anything -->
         <span class="props__mark">
           <v-progress-circular v-if="properties.switching === p.id" indeterminate size="16" width="2" />
           <StrokeIcon v-else-if="p.id === properties.info?.activeId" name="check" :size="16" />

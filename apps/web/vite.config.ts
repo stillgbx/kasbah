@@ -3,22 +3,22 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vuetify from 'vite-plugin-vuetify'
 
-// 5173 par défaut, mais `PORT` prend le dessus : un second front (preview d'un agent, deuxième
-// session de travail) doit pouvoir se poser ailleurs. Sur un port imposé, glisser d'un cran vaut
-// mieux qu'échouer — SAUF quand `KASBAH_SERVER` désigne aussi le serveur : c'est la signature d'une
-// pile complète lancée à des adresses fixes (cf. `.claude/launch.json`), et un volet de preview
-// figé sur un port n'affiche rien si le front s'est posé ailleurs. Échouer se voit, glisser non.
+// 5173 by default, but `PORT` takes precedence: a second front (an agent's preview, a second
+// work session) must be able to settle elsewhere. On an imposed port, sliding over by one is worth
+// more than failing — EXCEPT when `KASBAH_SERVER` also designates the server: that is the signature of a
+// full stack launched at fixed addresses (cf. `.claude/launch.json`), and a preview pane
+// stuck on a port shows nothing if the front settled elsewhere. Failing is visible, sliding is not.
 const DEV_PORT = Number(process.env.PORT ?? 5173)
 const SERVER = process.env.KASBAH_SERVER ?? 'http://localhost:8787'
 const FIXED_PORT = process.env.PORT === undefined || process.env.KASBAH_SERVER !== undefined
 
-// Identifiant du build : inscrit dans l'app (`__KASBAH_BUILD__`) et à côté d'elle (`build-id.txt`),
-// que le serveur relaie dans le snapshot WS. Un écran resté ouvert sur un build remplacé le voit
-// différer et propose de recharger. En dev, vide : Vite sert l'app à jour, rien à comparer.
+// Build identifier: written into the app (`__KASBAH_BUILD__`) and beside it (`build-id.txt`),
+// which the server relays in the WS snapshot. A screen left open on a replaced build sees it
+// differ and offers to reload. In dev, empty: Vite serves the up-to-date app, nothing to compare.
 const BUILD_ID = Date.now().toString(36)
 
-// `base: '/'` : chemins absolus, sans quoi `/automations/new` rechargé chercherait ses fichiers sous
-// `/automations/assets/`. Le build est servi par le serveur Fastify sous / (repli SPA).
+// `base: '/'`: absolute paths, without which a reloaded `/automations/new` would look for its files under
+// `/automations/assets/`. The build is served by the Fastify server under / (SPA fallback).
 export default defineConfig(({ command }) => ({
   plugins: [
     vue(), vuetify({ autoImport: true }),
@@ -27,21 +27,21 @@ export default defineConfig(({ command }) => ({
   define: { __KASBAH_BUILD__: JSON.stringify(command === 'build' ? BUILD_ID : '') },
   base: '/',
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
-  // MapLibre charge son worker par `new URL('./maplibre-gl-worker.mjs', import.meta.url)` : une fois
-  // pré-empaqueté dans `.vite/deps`, cette URL ne pointe plus sur rien, le worker ne démarre pas et
-  // les tuiles VECTORIELLES ne sont jamais décodées (le satellite, raster, marchait ; le plan restait
-  // vide, sans erreur). Servi tel quel depuis node_modules, le worker se trouve. Le build, lui, NE le
-  // voit pas (adresse calculée, pas littérale) : `src/lib/maplibreWorker.ts` le fait empaqueter.
-  // Même piège pour le lecteur de fichiers `.om` d'Open-Meteo (couche AROME du radar) : son WASM est
-  // trouvé par `new URL('om_reader_wasm.web.wasm', import.meta.url)`.
+  // MapLibre loads its worker through `new URL('./maplibre-gl-worker.mjs', import.meta.url)`: once
+  // pre-bundled in `.vite/deps`, this URL no longer points to anything, the worker does not start and
+  // the VECTOR tiles are never decoded (the satellite, raster, worked; the plan stayed
+  // empty, with no error). Served as is from node_modules, the worker is found. The build, for its part, does NOT
+  // see it (computed address, not literal): `src/lib/maplibreWorker.ts` makes it get bundled.
+  // Same trap for Open-Meteo's `.om` file reader (the radar's AROME layer): its WASM is
+  // found through `new URL('om_reader_wasm.web.wasm', import.meta.url)`.
   optimizeDeps: { exclude: ['maplibre-gl', '@openmeteo/weather-map-layer', '@openmeteo/file-reader', '@openmeteo/file-format-wasm'] },
   server: {
     port: DEV_PORT,
     strictPort: FIXED_PORT,
-    host: true, // accessible depuis les autres appareils du LAN
+    host: true, // reachable from the other devices on the LAN
     allowedHosts: ['kasbah.home.internal', 'kasbah'],
     proxy: {
-      // `ws: true` : les flux vidéo des caméras sont des WebSockets sous /api/plugins/<id>/cameras/…
+      // `ws: true`: the cameras' video streams are WebSockets under /api/plugins/<id>/cameras/…
       '/api': { target: SERVER, ws: true },
       '/ws': { target: SERVER.replace('http', 'ws'), ws: true },
     },
@@ -50,7 +50,7 @@ export default defineConfig(({ command }) => ({
     target: 'es2022',
     rollupOptions: {
       output: {
-        // Rolldown (Vite 8) : regroupement des grosses dépendances en chunks stables
+        // Rolldown (Vite 8): grouping of large dependencies into stable chunks
         codeSplitting: {
           groups: [
             { name: 'three', test: /[\\/]node_modules[\\/]three[\\/]/ },

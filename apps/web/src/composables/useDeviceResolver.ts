@@ -13,8 +13,8 @@ export interface ResolvedDevice {
 }
 
 /**
- * Une « clé » de sélection est soit l'id d'un appareil de la maison (lié ou non à un plugin),
- * soit directement l'id d'un appareil de plugin non placé. On résout vers descripteur + état.
+ * A selection "key" is either the id of a house device (linked to a plugin or not),
+ * or directly the id of an unplaced plugin device. We resolve to descriptor + state.
  */
 export function resolveDevice(key: string): ResolvedDevice {
   const house = useHouseStore()

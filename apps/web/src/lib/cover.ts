@@ -1,33 +1,33 @@
 import { coverWords, isFlatCover } from '@kasbah/shared'
 
-// Convention d'AFFICHAGE des ouvrants, isolée ici parce qu'elle est inverse du contrat.
+// DISPLAY convention of covers, isolated here because it is the inverse of the contract.
 //
-// Le contrat (`packages/shared`) mesure une OUVERTURE : `position` 0 = fermé, 100 = ouvert. C'est
-// ce que voient le JSON, le protocole, les plugins et `isDeviceOn` (« un volet ouvert est actif »).
-// L'interface, elle, montre une FERMETURE : 0 % = ouvert, 100 % = fermé — plus intuitif pour un
-// volet, et c'est aussi la convention du fabricant (`core:ClosureState` chez Overkiz).
+// The contract (`packages/shared`) measures an OPENING: `position` 0 = closed, 100 = open. This is
+// what the JSON, the protocol, the plugins and `isDeviceOn` see ("an open shutter is active").
+// The interface, for its part, shows a CLOSURE: 0 % = open, 100 % = closed — more intuitive for a
+// shutter, and it is also the vendor's convention (`core:ClosureState` at Overkiz).
 //
-// Le contrat n'a PAS été inversé : `position` sert à `isDeviceOn`, au comptage « volets ouverts »
-// du résumé, à la teinte des marqueurs 3D et à tous les plugins. Inverser le modèle aurait
-// propagé le changement partout ; inverser l'affichage le confine à ces deux fonctions.
+// The contract was NOT inverted: `position` serves `isDeviceOn`, the "open shutters" count
+// of the summary, the tint of the 3D markers and all the plugins. Inverting the model would have
+// propagated the change everywhere; inverting the display confines it to these two functions.
 
-// Règles partagées avec le serveur (automatisations) : elles vivent dans `@kasbah/shared`, ce
-// fichier les ré-exporte pour que les appelants de l'interface n'aient rien à changer.
+// Rules shared with the server (automations): they live in `@kasbah/shared`, this
+// file re-exports them so that the interface's callers have nothing to change.
 export { coverActivity, coverAtRest, coverWords, isFlatCover, type CoverWords } from '@kasbah/shared'
 
 type Coverish = { meta: { cover?: { deviceClass: string } } }
 
-/** Position du contrat (ouverture) → pourcentage affiché (fermeture). */
+/** Contract position (opening) → displayed percentage (closure). */
 export function toClosure(position: number): number {
   return 100 - position
 }
 
-/** Pourcentage affiché (fermeture) → position du contrat (ouverture). */
+/** Displayed percentage (closure) → contract position (opening). */
 export function fromClosure(closure: number): number {
   return 100 - closure
 }
 
-/** Un portail, une porte de garage donnent sur la rue : un geste d'ensemble ne les OUVRE jamais. */
+/** A gate, a garage door open onto the street: a group gesture never OPENS them. */
 const PASSAGE = new Set<string>(['gate', 'garage'])
 
 export function isPassageCover(descriptor: Coverish | undefined): boolean {
@@ -35,14 +35,14 @@ export function isPassageCover(descriptor: Coverish | undefined): boolean {
 }
 
 /**
- * Ouvrant qui ATTEND une ouverture : un volet, un store intérieur, un rideau, une fenêtre motorisée
- * n'ont aucun sens sans la fenêtre ou la porte qu'ils habillent. Tant qu'aucune ouverture ne leur est
- * affectée, ils sont à poser — c'est le cas de tous ceux que la découverte d'un plugin vient
- * d'apporter, quand la maison a été dessinée avant qu'on active ce plugin.
+ * Cover that EXPECTS an opening: a shutter, an interior blind, a curtain, a motorized window
+ * make no sense without the window or door they dress. As long as no opening is
+ * assigned to them, they are to be placed — this is the case for all those that a plugin's discovery has just
+ * brought, when the house was drawn before that plugin was activated.
  *
- * Un store BANNE en est exclu, bien qu'il se manœuvre comme un store intérieur : il se déploie
- * au-dessus d'une terrasse, pas dans une baie. Il PEUT être affecté à une ouverture si l'installation
- * le veut (`canTakeOpening` l'accepte), mais son absence d'ouverture n'est pas un travail en retard.
+ * An AWNING is excluded from it, although it is operated like an interior blind: it unfolds
+ * above a terrace, not in a bay. It CAN be assigned to an opening if the installation
+ * wants it (`canTakeOpening` accepts it), but its lack of an opening is not overdue work.
  */
 const EXPECTS_OPENING = new Set<string>(['shutter', 'blind', 'curtain', 'window'])
 
@@ -51,23 +51,23 @@ export function expectsOpening(descriptor: Coverish | undefined): boolean {
 }
 
 /**
- * Ouvrant qu'on a le DROIT d'affecter à une ouverture — tout sauf un PORTAIL. Plus large
- * qu'`expectsOpening` à dessein : un store banne posé au-dessus d'une baie est un cas réel, on ne
- * l'interdit pas ; on ne le réclame simplement pas.
+ * Cover that we have the RIGHT to assign to an opening — everything except a GATE. Wider
+ * than `expectsOpening` on purpose: an awning placed above a bay is a real case, we do not
+ * forbid it; we simply do not demand it.
  *
- * Une porte de GARAGE en fait partie, bien qu'elle donne sur la rue : quand le garage est relevé,
- * elle EST le panneau d'une ouverture de la façade — la lier lui donne les cotes de la baie, et le
- * bâti cesse alors d'y dessiner son propre vantail (`dressedOpenings`). Un portail, lui, se tient
- * dans le jardin : aucun mur ne le porte.
+ * A GARAGE door is part of it, although it opens onto the street: when the garage is raised,
+ * it IS the panel of an opening of the facade — linking it gives it the bay's measurements, and the
+ * shell then stops drawing its own leaf there (`dressedOpenings`). A gate, for its part, stands
+ * in the garden: no wall carries it.
  */
 export function canTakeOpening(descriptor: Coverish | undefined): boolean {
   return !!descriptor && descriptor.meta.cover?.deviceClass !== 'gate'
 }
 
 /**
- * Clé i18n du mot qui décrit le REPOS de cet ouvrant : « Fermé » pour ce qui se tient debout,
- * « Remonté » pour un store. Sert à MONTRER l'état supposé quand la position est inconnue — le mot
- * seul serait une affirmation, il est donc toujours accompagné de son « (supposé) ».
+ * i18n key of the word that describes this cover's REST: "Closed" for what stands upright,
+ * "Raised" for a blind. Serves to SHOW the assumed state when the position is unknown — the word
+ * alone would be an assertion, so it is always accompanied by its "(assumed)".
  */
 export function coverRestKey(descriptor: Coverish): string {
   return `cover.${coverWords(descriptor)}.${isFlatCover(descriptor) ? 'open' : 'closed'}`

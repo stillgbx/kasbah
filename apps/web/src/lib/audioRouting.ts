@@ -1,19 +1,19 @@
 import type { DeviceState, HouseDevice } from '@kasbah/shared'
 import { isMediaActive } from './deviceState'
 
-// Le son d'un lecteur ne sort pas toujours de lui : une TV branchée en HDMI ARC sur une barre de son fait
-// jouer la barre — qui, vue par son propre plugin, est au repos. Le lien est DÉCLARÉ dans house.json, sur
-// l'appareil SOURCE : `meta.audioOutput` = l'id MAISON de l'appareil qui joue son son (la barre). La
-// source, quand elle sait le dire (`state.audioOutput.terminal`, TV Sony), confirme ou infirme : réglée
-// sur ses propres haut-parleurs, le lien ne joue pas ; muette là-dessus, on croit la déclaration.
+// A player's sound does not always come out of it: a TV plugged by HDMI ARC into a soundbar makes
+// the bar play — which, seen by its own plugin, is at rest. The link is DECLARED in house.json, on
+// the SOURCE device: `meta.audioOutput` = the HOUSE id of the device that plays its sound (the bar). The
+// source, when it can say so (`state.audioOutput.terminal`, Sony TV), confirms or denies: set
+// to its own speakers, the link does not apply; silent on that, we believe the declaration.
 //
-// Tout ce qui « fait du bruit » dans l'UI (onde de la scène 3D, point pulsant, teinte de l'icône) passe
-// par ici ; l'état publié, lui, reste ce que chaque appareil dit de lui-même.
+// Everything that "makes noise" in the UI (3D scene wave, pulsing dot, icon tint) goes
+// through here; the published state, for its part, stays what each device says about itself.
 
 export interface SoundRouting {
-  /** Puits (id plugin) → source (id plugin) dont il joue le son en ce moment. */
+  /** Sink (plugin id) → source (plugin id) whose sound it is playing right now. */
   relays: Map<string, string>
-  /** Sources actives dont le son sort ailleurs : pas d'onde chez elles. */
+  /** Active sources whose sound comes out elsewhere: no wave on them. */
   silenced: Set<string>
 }
 
@@ -30,7 +30,7 @@ export function soundRouting(devices: readonly HouseDevice[], states: Record<str
     const s = states[src.deviceId]
     if (!s || s.kind !== 'media_player' || !s.available || !isMediaActive(s)) continue
     const terminal = s.audioOutput?.terminal
-    if (terminal === 'internal') continue                        // la TV joue sur ses haut-parleurs : le lien ne sert pas
+    if (terminal === 'internal') continue                        // the TV plays on its speakers: the link does not apply
     out ??= { relays: new Map(), silenced: new Set() }
     out.relays.set(sink.deviceId, src.deviceId)
     if (terminal !== 'both') out.silenced.add(src.deviceId)
@@ -39,8 +39,8 @@ export function soundRouting(devices: readonly HouseDevice[], states: Record<str
 }
 
 /**
- * L'appareil FAIT DU BRUIT : sa propre lecture quand le son sort de lui, ou celle qu'il relaie. Une TV
- * qui dit envoyer son son ailleurs se tait ici, qu'un lien soit déclaré ou non — l'image reste chez elle.
+ * The device MAKES NOISE: its own playback when the sound comes out of it, or the one it relays. A TV
+ * that says it sends its sound elsewhere goes quiet here, whether a link is declared or not — the picture stays with it.
  */
 export function emitsSound(id: string, state: DeviceState | undefined, routing: SoundRouting): boolean {
   if (routing.relays.has(id)) return true
@@ -50,7 +50,7 @@ export function emitsSound(id: string, state: DeviceState | undefined, routing: 
 
 type Translate = (key: string, named?: Record<string, unknown>) => string
 
-/** Libellé d'état d'un appareil qui relaie : « Son de TV Salon · Cs60 ». */
+/** Status label of a device that relays: "Sound from TV Living room · Cs60". */
 export function relayLabel(sourceName: string, source: DeviceState, t: Translate): string {
   const title = source.kind === 'media_player' ? source.nowPlaying?.title : undefined
   return `${t('media.relaying', { name: sourceName })}${title ? ` · ${title}` : ''}`

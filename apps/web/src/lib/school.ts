@@ -1,13 +1,13 @@
 import type { SchoolData, SchoolFilters, SchoolHomework } from '../api/transport'
 
-// Lectures de la vue École, hors composant pour être testées : ce qui reste visible une fois les
-// filtres posés, les devoirs rangés par jour, et les nombres des pastilles d'onglet.
+// Readings of the School view, outside the component to be tested: what stays visible once the
+// filters are set, homework arranged by day, and the numbers of the tab pills.
 
-/** L'ordre de l'école élémentaire : les puces de niveau se rangent ainsi, pas par ordre alphabétique. */
+/** The order of elementary school: the level chips line up this way, not alphabetically. */
 const LEVEL_ORDER = ['CP', 'CE1', 'CE2', 'CM1', 'CM2']
 const LEVEL_RE = /\b(CP|CE1|CE2|CM1|CM2)\b/gi
 
-/** Les niveaux qu'on peut filtrer : ceux que nomment les classes (« CE1-CE2 ») et les entrées. */
+/** The levels that can be filtered: those named by the classes ("CE1-CE2") and the entries. */
 export function levelOptions(data: Pick<SchoolData, 'journals' | 'homework' | 'messages' | 'posts'>): string[] {
   const found = new Set<string>()
   for (const j of data.journals) for (const m of j.name.matchAll(LEVEL_RE)) found.add(m[1]!.toUpperCase())
@@ -16,8 +16,8 @@ export function levelOptions(data: Pick<SchoolData, 'journals' | 'homework' | 'm
 }
 
 /**
- * Une entrée reste visible si sa classe l'est, et si elle ne nomme aucun niveau (elle parle à toute
- * la classe) ou au moins un niveau gardé.
+ * An entry stays visible if its class is, and if it names no level (it speaks to the whole
+ * class) or at least one kept level.
  */
 export function isVisible(e: { journalId: string; levels: string[] }, f: SchoolFilters): boolean {
   if (f.hiddenJournals.includes(e.journalId)) return false
@@ -26,7 +26,7 @@ export function isVisible(e: { journalId: string; levels: string[] }, f: SchoolF
 
 export interface HomeworkDay { date: string; items: SchoolHomework[] }
 
-/** Les devoirs rangés par jour à rendre, séparés en jours passés et jours à venir (aujourd'hui compris). */
+/** Homework arranged by due day, split into past days and upcoming days (today included). */
 export function homeworkDays(homework: SchoolHomework[], today: string): { past: HomeworkDay[]; upcoming: HomeworkDay[] } {
   const byDate = new Map<string, SchoolHomework[]>()
   for (const h of [...homework].sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id)) {
@@ -38,12 +38,12 @@ export function homeworkDays(homework: SchoolHomework[], today: string): { past:
   return { past: days.filter((d) => d.date < today).reverse(), upcoming: days.filter((d) => d.date >= today) }
 }
 
-/** Le prochain jour où quelque chose est à rendre APRÈS aujourd'hui : « pour demain » au sens de l'élève. */
+/** The next day something is due AFTER today: "for tomorrow" in the student's sense. */
 export function nextDueDate(homework: SchoolHomework[], today: string): string | null {
   return homework.map((h) => h.date).filter((d) => d > today).sort()[0] ?? null
 }
 
-/** Pastilles des onglets : devoirs non faits du prochain jour, messages non lus, publications nouvelles. */
+/** Tab pills: undone homework of the next day, unread messages, new posts. */
 export function badges(data: SchoolData, today: string): { homework: number; messages: number; posts: number } {
   const f = data.filters
   const homework = data.homework.filter((h) => isVisible(h, f))
@@ -55,12 +55,12 @@ export function badges(data: SchoolData, today: string): { homework: number; mes
   }
 }
 
-/** `YYYY-MM-DD` local d'un instant. */
+/** Local `YYYY-MM-DD` of an instant. */
 export function localDay(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-/** Écart en jours entre deux dates locales `YYYY-MM-DD` (b − a). */
+/** Difference in days between two local dates `YYYY-MM-DD` (b − a). */
 export function daysBetween(a: string, b: string): number {
   const [ya, ma, da] = a.split('-').map(Number)
   const [yb, mb, db] = b.split('-').map(Number)

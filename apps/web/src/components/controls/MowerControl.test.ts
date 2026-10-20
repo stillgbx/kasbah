@@ -17,14 +17,14 @@ const button = (w: ReturnType<typeof mount>, label: string) => w.findAll('button
 describe('MowerControl', () => {
   beforeEach(() => { setActivePinia(createPinia()) })
 
-  it('« Reprendre le programme » envoie un départ SANS durée ; absent sans planning', async () => {
+  it('"Resume schedule" sends a start WITHOUT a duration; absent without a schedule', async () => {
     const w = mount(MowerControl, { props: { descriptor: descriptor(ALL), state: state() } })
     await button(w, 'Reprendre le programme')!.trigger('click')
     expect(w.emitted('command')).toEqual([[{ type: 'mower.start' }]])
     expect(button(mount(MowerControl, { props: { descriptor: descriptor(['mow', 'park', 'battery']), state: state() } }), 'Reprendre le programme')).toBeUndefined()
   })
 
-  it("« Effacer l'erreur » seulement pour une erreur que le fabricant lève à distance", async () => {
+  it('"Clear error" only for an error the vendor clears remotely', async () => {
     expect(button(mount(MowerControl, { props: { descriptor: descriptor(ALL), state: state({ ...ERROR, errorConfirmable: false }) } }), "Effacer l'erreur")).toBeUndefined()
     expect(button(mount(MowerControl, { props: { descriptor: descriptor(['mow', 'park', 'battery', 'schedule']), state: state({ ...ERROR, errorConfirmable: true }) } }), "Effacer l'erreur")).toBeUndefined()
     const w = mount(MowerControl, { props: { descriptor: descriptor(ALL), state: state({ ...ERROR, errorConfirmable: true }) } })

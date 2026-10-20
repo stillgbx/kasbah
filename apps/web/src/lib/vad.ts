@@ -1,35 +1,35 @@
-// La fin de la phrase, devinée au niveau sonore du micro (détection d'activité vocale à seuil) : la
-// personne a parlé, puis se tait depuis `SILENCE_MS` → l'écoute s'arrête seule et l'instruction part.
-// Personne ne parle dans les `NO_SPEECH_MS` premières millisecondes → rien entendu.
+// The end of the sentence, guessed from the microphone's sound level (threshold voice activity detection): the
+// person has spoken, then has been quiet for `SILENCE_MS` → listening stops by itself and the instruction goes out.
+// Nobody speaks in the first `NO_SPEECH_MS` milliseconds → nothing heard.
 //
-// Le seuil suit le bruit de la pièce : le plancher descend aussitôt au niveau le plus bas entendu et ne
-// remonte que lentement, pendant les silences. Une musique de fond constante devient ainsi le plancher,
-// et la voix se détache au-dessus ; une parole dès le premier instant n'y reste pas (le plancher
-// redescend au premier blanc entre deux mots). Valeurs à régler à l'usage, sur un vrai micro.
+// The threshold follows the room's noise: the floor drops at once to the lowest level heard and only
+// rises slowly, during silences. A constant background music thus becomes the floor,
+// and the voice stands out above it; speech from the very first instant does not stay there (the floor
+// drops back at the first gap between two words). Values to be tuned in use, on a real microphone.
 
-/** Silence après la parole avant d'envoyer : plus court coupe les hésitations, plus long fait attendre. */
+/** Silence after speech before sending: shorter cuts hesitations, longer makes people wait. */
 export const SILENCE_MS = 1000
-/** Sans parole jusque-là : rien entendu. */
+/** No speech up to there: nothing heard. */
 export const NO_SPEECH_MS = 5000
-/** Durée au-dessus du seuil pour compter comme parole (un claquement, une porte n'y suffisent pas). */
+/** Duration above the threshold to count as speech (a slam, a door are not enough). */
 const SPEECH_MS = 250
-/** La voix doit dépasser le plancher de bruit de ce facteur (≈ +10 dB). */
+/** The voice must exceed the noise floor by this factor (≈ +10 dB). */
 const FACTOR = 3
-/** Seuil minimal (niveau efficace, échantillons entre -1 et 1) : sous lui, c'est du silence. */
+/** Minimum threshold (RMS level, samples between -1 and 1): below it, it is silence. */
 const MIN_LEVEL = 0.01
-/** Remontée du plancher par seconde de silence (part de l'écart comblée). */
+/** Floor rise per second of silence (share of the gap filled). */
 const RISE_PER_S = 0.5
 
 export type VadEvent = 'end' | 'nothing'
 
-/** Niveau efficace d'une trame d'échantillons. */
+/** RMS level of a frame of samples. */
 export function rms(frame: Float32Array): number {
   let sum = 0
   for (let i = 0; i < frame.length; i++) sum += frame[i]! * frame[i]!
   return frame.length ? Math.sqrt(sum / frame.length) : 0
 }
 
-/** Un détecteur par écoute : `push(niveau, ms depuis le début)` rend `end`, `nothing`, ou rien. */
+/** One detector per listening: `push(level, ms since the start)` returns `end`, `nothing`, or nothing. */
 export function createEndpointer() {
   let floor: number | null = null
   let last = 0
@@ -45,7 +45,7 @@ export function createEndpointer() {
       last = at
       const threshold = Math.max((floor ?? 0) * FACTOR, MIN_LEVEL)
       const loud = level > threshold
-      // les trames nulles (micro qui s'ouvre) ne disent rien du bruit de la pièce
+      // null frames (microphone opening) say nothing about the room's noise
       if (level > 0) {
         if (floor === null || level < floor) floor = level
         else if (!loud) floor += (level - floor) * Math.min(1, RISE_PER_S * dt)

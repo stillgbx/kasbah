@@ -1,19 +1,19 @@
 import { emptyReliefGrid, footprintCeiling, localToGeo, reliefNodeXY, resolveDefaults, serializeRelief, terrainFootprints, type House, type Relief } from '@kasbah/shared'
 
-// Relief RÉEL de la parcelle, lu au service d'altimétrie de l'IGN (Géoplateforme, ouvert, sans clé,
-// CORS ouvert — appelé depuis le navigateur comme la météo). Un point par nœud de la grille.
+// REAL relief of the parcel, read from the IGN altimetry service (Géoplateforme, open, no key,
+// CORS open — called from the browser like the weather). One point per grid node.
 //
-// Deux sources, de la plus fine à la plus sûre : le MNT LiDAR HD (50 cm) là où il est produit, le
-// RGE ALTI (1 m, France entière) ailleurs. Le LiDAR répond -99999 sur une zone pas encore couverte :
-// ces points-là seuls sont redemandés au RGE ALTI.
+// Two sources, from the finest to the safest: the LiDAR HD DTM (50 cm) where it is produced, the
+// RGE ALTI (1 m, all of France) elsewhere. The LiDAR answers -99999 on an area not yet covered:
+// only those points are re-requested from the RGE ALTI.
 //
-// Les hauteurs de la maison sont LOCALES : le zéro est l'altitude médiane SOUS le bâti (là où le
-// terrain est écrêté de toute façon), pas l'altitude de `origin.alt`, que rien ne garantit exacte.
+// The house's heights are LOCAL: zero is the median altitude UNDER the building (where the
+// terrain is clipped anyway), not the altitude of `origin.alt`, which nothing guarantees accurate.
 
 const ENDPOINT = 'https://data.geopf.fr/altimetrie/1.0/calcul/alti/rest/elevation.json'
 const LIDAR = 'ign_lidar_hd_mnt_mono_wld'
 const RGE = 'ign_rge_alti_wld'
-/** Points par requête : l'URL reste sous 4 Ko, et 1 000 points se lisent en ~1,5 s. */
+/** Points per request: the URL stays under 4 KB, and 1,000 points are read in ~1.5 s. */
 const CHUNK = 150
 
 export type IgnSource = 'lidar' | 'rge' | 'mixed'
@@ -27,7 +27,7 @@ async function altitudes(points: readonly { lon: number; lat: number }[], resour
     const res = await fetchImpl(url)
     if (!res.ok) throw new Error(`IGN ${res.status}`)
     const body = await res.json() as { elevations: unknown[] }
-    // une altitude absente se dit par un très grand négatif (-9999, -99999 selon la ressource)
+    // a missing altitude is expressed by a very large negative (-9999, -99999 depending on the resource)
     for (const z of body.elevations) out.push(typeof z === 'number' && z > -1000 ? z : null)
   }
   return out
@@ -38,7 +38,7 @@ const median = (xs: number[]): number => {
   return s.length % 2 ? s[(s.length - 1) / 2]! : (s[s.length / 2 - 1]! + s[s.length / 2]!) / 2
 }
 
-/** Le relief IGN de la parcelle, au pas `step` (m), prêt à poser comme brouillon de l'éditeur. */
+/** The parcel's IGN relief, at step `step` (m), ready to place as the editor's draft. */
 export async function fetchIgnRelief(house: House, step: number, fetchImpl: typeof fetch = fetch): Promise<{ relief: Relief; source: IgnSource }> {
   const grid = emptyReliefGrid(house.site.terrain, step)
   const nodes: [number, number][] = []

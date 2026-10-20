@@ -9,15 +9,15 @@ import { bucketSlots, niceAxisTicks, slotsMax, type ConsumptionPeriod } from '..
 import { formatSensor } from '../../lib/format'
 import Segmented from '../ui/Segmented.vue'
 
-// Luminosité d'un volet solaire : la valeur du moment, et le MAXIMUM atteint par heure (jour), par
-// jour (mois) et par mois (année) — les trois vues de l'appli Somfy. L'historique est tenu par le
-// serveur au fil des trames (`GET /api/plugins/tahoma/light/:id`) ; on le relit toutes les 5 min.
+// Brightness of a solar shutter: the current value, and the MAXIMUM reached per hour (day), per
+// day (month) and per month (year) — the three views of the Somfy app. The history is kept by the
+// server as the frames arrive (`GET /api/plugins/tahoma/light/:id`); it is re-read every 5 min.
 //
-// Le découpage en pas est celui du graphe de consommation d'eau (`lib/consumption`), qui parle en
-// `litres` : on y range des lux, seul le nom du champ ne convient pas.
+// The split into steps is that of the water consumption chart (`lib/consumption`), which speaks in
+// `litres`: we store lux in it, only the field name does not fit.
 //
-// Rien ne bouge : le tracé a une hauteur FIXE, et chaque période réserve toujours son nombre de
-// colonnes. Un pas jamais mesuré (serveur arrêté) reste un tiret en pointillé, pas une barre à 0.
+// Nothing moves: the plot has a FIXED height, and each period always reserves its number of
+// columns. A step never measured (server stopped) stays a dashed dash, not a bar at 0.
 
 const props = defineProps<{ descriptor: DeviceDescriptor; state: StateFor<'sensor'> }>()
 const { t, d, locale } = useI18n()
@@ -119,7 +119,7 @@ function tooltip(i: number): string {
 .lh__title { font-size: 13px; font-weight: 600; }
 .lh__now { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .lh__peak { font-size: 12px; font-variant-numeric: tabular-nums; }
-/* hauteur FIXE : ni la période, ni l'état vide ne la changent */
+/* FIXED height: neither the period nor the empty state changes it */
 .lh__body { height: 96px; position: relative; }
 .lh__empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 12px; padding: 0 12px; }
 .lh__stage { position: absolute; inset: 0; }

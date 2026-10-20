@@ -11,28 +11,28 @@ import { useDevicesStore } from '../stores/devices'
 import { useHouseStore } from '../stores/house'
 import { useScenesStore } from '../stores/scenes'
 
-// Ce que la recherche de la vue Maison peut atteindre, et ce que valider un résultat fait. Rien
-// n'est indexé : les entités vivent déjà dans les stores, on les aplatit en `SearchEntry` (le
-// `computed` ne se refait qu'à un changement de maison, d'appareils ou d'ambiances) et chaque
-// frappe balaye la liste. Aucun plugin n'a de champ à déclarer : le contrat appareil porte déjà le
-// nom, le kind et la pièce.
+// What the House view's search can reach, and what validating a result does. Nothing
+// is indexed: the entities already live in the stores, we flatten them into `SearchEntry` (the
+// `computed` is only redone on a change of house, devices or light scenes) and each
+// keystroke sweeps the list. No plugin has a field to declare: the device contract already carries the
+// name, the kind and the room.
 //
-// Un résultat NAVIGUE, il n'agit jamais : les mêmes setters que le tap dans la scène
-// (`selectRoom`, `selectDevice`…), qui cadrent la 3D et ouvrent le bon panneau. Une ambiance
-// emmène donc là où sa pastille se touche, elle ne se rappelle pas toute seule.
+// A result NAVIGATES, it never acts: the same setters as the tap in the scene
+// (`selectRoom`, `selectDevice`…), which frame the 3D and open the right panel. A light scene
+// therefore takes you where its pill is touched, it does not recall itself.
 
 export type SearchFamily = 'room' | 'zone' | 'level' | 'device' | 'scene' | 'page'
 
 export interface SearchEntry {
   key: string
   label: string
-  /** Où la chose se trouve (« 1er étage », « Salon ») ou ce qu'elle est (« Niveau », « Page »). */
+  /** Where the thing is ("1st floor", "Living room") or what it is ("Level", "Page"). */
   sub: string
   /**
-   * Ce qu'on peut taper d'autre pour tomber dessus, et qui ne s'affiche que si c'est par là qu'on
-   * est arrivé : la marque et le modèle d'un appareil (« COMAP Proteo V3 »), le nom court d'un
-   * niveau (« RDC »). Un appareil porte souvent le nom que le fabricant lui a donné — une Renault
-   * s'appelle « GA-123-BX » —, et personne ne cherche une voiture par sa plaque.
+   * What else can be typed to land on it, and which only shows if that is how one
+   * arrived: a device's brand and model ("COMAP Proteo V3"), a level's short name
+   * ("GF"). A device often carries the name the vendor gave it — a Renault
+   * is called "GA-123-BX" —, and nobody looks for a car by its plate.
    */
   alias?: string
   icon: IconName
@@ -42,30 +42,30 @@ export interface SearchEntry {
 
 export interface SearchHit extends SearchEntry { score: number }
 
-/** Une lettre ramènerait la maison entière : on attend le deuxième caractère. */
+/** One letter would bring back the whole house: we wait for the second character. */
 export const MIN_QUERY = 2
-/** Au-delà, la liste ne se lit plus — c'est la frappe suivante qui trie, pas le défilement. */
+/** Beyond that, the list is no longer readable — it is the next keystroke that sorts, not scrolling. */
 export const MAX_RESULTS = 20
 
-/** « COMAP Proteo V3 », « Tesla Model S », « Renault » : ce qu'un appareil est, pour qui le cherche par là. */
+/** "COMAP Proteo V3", "Tesla Model S", "Renault": what a device is, for whoever searches it that way. */
 function madeBy(descriptor: DeviceDescriptor | undefined): string | undefined {
   const parts = [descriptor?.meta.manufacturer, descriptor?.meta.model].filter(Boolean)
   return parts.length ? parts.join(' ') : undefined
 }
 
-/** À score égal, l'ordre des familles : la pièce avant la lampe qui la nomme, la page en dernier. */
+/** On equal score, the order of the families: the room before the light that names it, the page last. */
 const FAMILY_RANK: Record<SearchFamily, number> = { room: 0, zone: 1, level: 2, device: 3, scene: 4, page: 5 }
 
-/** Le nom passe AVANT la marque, toujours : la moindre correspondance de nom vaut mieux que « Tesla ». */
+/** The name comes BEFORE the brand, always: the slightest name match beats "Tesla". */
 const NAME_WEIGHT = 10
 
 /**
- * Un choix fait par la palette Ctrl+K qui vise la maison : la vue Maison, gardée en vie, ouvre
- * son panneau à chaque incrément — c'est elle seule qui sait s'il est replié (fenêtre étroite).
+ * A choice made through the Ctrl+K palette that targets the house: the House view, kept alive, opens
+ * its panel at each increment — it alone knows whether it is collapsed (narrow window).
  */
 export const homePanelRequest = ref(0)
 
-/** `withHome` : la palette vit sur toutes les pages, la page Maison y est donc une destination. */
+/** `withHome`: the palette lives on all pages, so the House page is a destination there. */
 export function useSearch(query: Ref<string>, { withHome = false } = {}) {
   const house = useHouseStore()
   const devices = useDevicesStore()
@@ -89,9 +89,9 @@ export function useSearch(query: Ref<string>, { withHome = false } = {}) {
       out.push({ key: `zone:${zone.id}`, label: zone.name, sub: t('home.garden'), icon: 'room', family: 'zone', go: () => house.selectRoom(zone.id) })
     }
 
-    // Appareils de la maison : ceux du JSON et ceux que l'auto-placement y a mis. Leur nom vient
-    // du descripteur quand le JSON n'en donne pas (c'est le cas général) ; une liaison morte n'en
-    // a aucun et se cherche alors par son id, qui est parlant (« light.cube-salon »).
+    // House devices: those of the JSON and those auto-placement put there. Their name comes
+    // from the descriptor when the JSON gives none (the general case); a dead link has
+    // none and is then searched by its id, which is telling ("light.cube-salon").
     for (const hd of house.effective?.devices ?? []) {
       const descriptor = hd.deviceId ? devices.descriptors[hd.deviceId] : undefined
       const room = hd.roomId ? index?.roomsById.get(hd.roomId) : undefined
@@ -107,9 +107,9 @@ export function useSearch(query: Ref<string>, { withHome = false } = {}) {
         go: () => house.selectDevice(hd.id),
       })
     }
-    // Appareils qu'aucune pièce de la maison ne réclame : absents de la scène, mais leur panneau
-    // s'ouvre quand même (`resolveDevice` accepte un id de plugin comme clé) — et c'est de là qu'on
-    // les place. Les cacher de la recherche ferait un appareil « introuvable » sans dire pourquoi.
+    // Devices that no room of the house claims: absent from the scene, but their panel
+    // opens anyway (`resolveDevice` accepts a plugin id as key) — and that is where they
+    // get placed. Hiding them from the search would make a device "unfindable" without saying why.
     for (const descriptor of Object.values(devices.descriptors)) {
       if (index?.devicesByBinding.has(descriptor.id)) continue
       out.push({
@@ -123,8 +123,8 @@ export function useSearch(query: Ref<string>, { withHome = false } = {}) {
       })
     }
 
-    // Une ambiance de pièce mène à sa pièce, les autres (zone du fabricant, pièce inconnue) au
-    // panneau maison : dans les deux cas, là où sa pastille se trouve.
+    // A room's light scene leads to its room, the others (vendor zone, unknown room) to the
+    // house panel: in both cases, where its pill is found.
     const rooms = [...(index?.roomsById.values() ?? [])]
     for (const e of scenes.list) {
       const group = e.scene.group
@@ -140,13 +140,13 @@ export function useSearch(query: Ref<string>, { withHome = false } = {}) {
     }
 
     for (const item of visibleNavItems(localPlugins.isEnabled, (id) => pluginSettingsOf(house.house?.plugins ?? {}, id).enabled)) {
-      if (item.name === 'home' && !withHome) continue    // on y est déjà : la recherche vit dessus
+      if (item.name === 'home' && !withHome) continue    // we are already there: the search lives on it
       out.push({ key: `page:${item.name}`, label: t(item.label), sub: t('search.page'), icon: item.icon, family: 'page', go: () => { void router.push({ name: item.name }) } })
     }
     return out
   })
 
-  /** Noms et alias normalisés, dans l'ordre des entrées : calculés une fois, pas à chaque frappe. */
+  /** Normalized names and aliases, in the order of the entries: computed once, not at each keystroke. */
   const haystacks = computed(() => entries.value.map((e) => [normalize(e.label), e.alias ? normalize(e.alias) : '']))
 
   const results = computed<SearchHit[]>(() => {
@@ -158,7 +158,7 @@ export function useSearch(query: Ref<string>, { withHome = false } = {}) {
       const entry = list[i]!, [name, alias] = hay[i]!
       const byName = scoreQuery(name!, terms)
       if (byName !== null) { hits.push({ ...entry, score: byName * NAME_WEIGHT }); continue }
-      // trouvé par la marque : on le DIT à la place du lieu, sinon la ligne paraît sortie de nulle part
+      // found by the brand: we SAY so in place of the location, otherwise the line looks like it came from nowhere
       const byAlias = alias ? scoreQuery(alias, terms) : null
       if (byAlias !== null) hits.push({ ...entry, sub: entry.alias!, score: byAlias })
     }

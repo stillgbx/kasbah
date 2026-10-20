@@ -30,10 +30,10 @@ describe('CoverControl', () => {
   it('offers a draggable cover pill and a tilt slider when the device can aim', () => {
     const w = mount(CoverControl, { props: { descriptor: descriptor(ALL), state: state() } })
     expect(w.find('.pill').attributes('role')).toBe('slider')
-    expect(w.findAll('.v-slider')).toHaveLength(1)              // l'inclinaison seule
-    expect(w.findAll('button')).toHaveLength(3)                 // ouvrir · stop · fermer
+    expect(w.findAll('.v-slider')).toHaveLength(1)              // the tilt only
+    expect(w.findAll('button')).toHaveLength(3)                 // open · stop · close
   })
-  it('the pill only SHOWS a one-way device (volet RTS), which keeps open and close', () => {
+  it('the pill only SHOWS a one-way device (RTS shutter), which keeps open and close', () => {
     const w = mount(CoverControl, { props: { descriptor: descriptor(['open_close', 'stop']), state: state() } })
     expect(w.find('.pill').attributes('role')).toBe('img')
     expect(w.findAll('button')).toHaveLength(3)
@@ -42,73 +42,73 @@ describe('CoverControl', () => {
     const w = mount(CoverControl, { props: { descriptor: descriptor(['open_close']), state: state() } })
     expect(w.findAll('button')).toHaveLength(2)
   })
-  it('signale le mouvement SANS changer la hauteur de la ligne', () => {
-    // le point et la ligne existent toujours : seul leur etat change, donc rien ne se decale
+  it('signals movement WITHOUT changing the line height', () => {
+    // the dot and the line always exist: only their state changes, so nothing shifts
     const still = mount(CoverControl, { props: { descriptor: descriptor(ALL), state: state() } })
     expect(still.find('.line').attributes('data-moving')).toBe('0')
     expect(still.find('.pulse').attributes('data-on')).toBe('0')
-    expect(still.find('.line__text').text()).toBe(fr.cover.openClose.open)          // 0 % de fermeture
+    expect(still.find('.line__text').text()).toBe(fr.cover.openClose.open)          // 0 % closure
 
     const moving = mount(CoverControl, { props: { descriptor: descriptor(ALL), state: state({ motion: 'closing' }) } })
     expect(moving.find('.line').attributes('data-moving')).toBe('1')
     expect(moving.find('.pulse').attributes('data-on')).toBe('1')
     expect(moving.find('.line__text').text()).toBe(fr.cover.openClose.closing)
-    // meme nombre de lignes de part et d'autre : aucune n'apparait ni ne disparait
+    // same number of lines on both sides: none appears or disappears
     expect(moving.findAll('.line')).toHaveLength(still.findAll('.line').length)
   })
 
-  it('le texte ne repete jamais le pourcentage, deja au bout de la ligne', () => {
+  it('the text never repeats the percentage, already at the end of the line', () => {
     const w = mount(CoverControl, { props: { descriptor: descriptor(ALL), state: state({ position: 30 }) } })
     expect(w.find('.line__text').text()).toBe(fr.cover.openClose.level)
     expect(w.find('.line__pct').text()).toBe('70 %')
   })
 
-  it('un ouvrant sans position garde la ligne, sans pourcentage', () => {
+  it('a cover without a position keeps the line, without a percentage', () => {
     const w = mount(CoverControl, { props: { descriptor: descriptor(['open_close', 'stop']), state: state({ motion: 'opening' }) } })
     expect(w.find('.line__text').text()).toBe(fr.cover.openClose.opening)
     expect(w.find('.line__pct').exists()).toBe(false)
   })
-  it('un STORE parle de remonte / baisse, pas d ouvert / ferme', () => {
-    // meme kind, memes commandes : seul le vocabulaire change (meta.cover.deviceClass)
+  it('a BLIND talks about raising / lowering, not open / closed', () => {
+    // same kind, same commands: only the vocabulary changes (meta.cover.deviceClass)
     const store = mount(CoverControl, { props: { descriptor: descriptor(ALL, 'awning'), state: state({ position: 0 }) } })
-    expect(store.find('.line__text').text()).toBe(fr.cover.upDown.closed)          // « Baissé »
+    expect(store.find('.line__text').text()).toBe(fr.cover.upDown.closed)          // "Lowered"
     expect(store.findAll('button').map((b) => b.text())).toEqual([
-      fr.cover.upDown.actionOpen, fr.common.stop, fr.cover.upDown.actionClose,     // Remonter / Stop / Baisser
+      fr.cover.upDown.actionOpen, fr.common.stop, fr.cover.upDown.actionClose,     // Raise / Stop / Lower
     ])
     const volet = mount(CoverControl, { props: { descriptor: descriptor(ALL, 'shutter'), state: state({ position: 0 }) } })
-    expect(volet.find('.line__text').text()).toBe(fr.cover.openClose.closed)       // « Fermé »
+    expect(volet.find('.line__text').text()).toBe(fr.cover.openClose.closed)       // "Closed"
   })
 
-  it('position inconnue : aucun pourcentage invente, et la supposition est dite', () => {
-    // store RTS jamais commande : `position` absente. Le curseur reste (la capacite est la), mais
-    // le pourcentage disparait plutot que d'afficher un 0 %. Le panneau montre en grand l'etat
-    // SUPPOSE (« Remonte ») : c'est cette ligne qui dit que c'en est un.
+  it('unknown position: no invented percentage, and the assumption is stated', () => {
+    // RTS blind never commanded: `position` absent. The slider stays (the capability is there), but
+    // the percentage disappears rather than showing 0 %. The panel shows the ASSUMED state in large
+    // ("Raised"): it is this line that says it is an assumption.
     const unknown: StateFor<'cover'> = { kind: 'cover', updatedAt: 0, available: true, motion: 'stopped' }
     const w = mount(CoverControl, { props: { descriptor: descriptor(ALL, 'awning'), state: unknown } })
-    const line = w.findAll('.line')[0]!                          // la 2e ligne est l'inclinaison
+    const line = w.findAll('.line')[0]!                          // the 2nd line is the tilt
     expect(line.find('.line__text').text()).toBe(fr.cover.assumedHint)
     expect(line.find('.line__pct').exists()).toBe(false)
-    expect(w.findAll('button')).toHaveLength(3)                 // remonter · stop · baisser
+    expect(w.findAll('button')).toHaveLength(3)                 // raise · stop · lower
 
-    // des qu'un mouvement est annonce, la ligne reprend la parole
+    // as soon as a movement is announced, the line speaks again
     const moving = mount(CoverControl, { props: { descriptor: descriptor(ALL, 'awning'), state: { ...unknown, motion: 'closing' } } })
     expect(moving.findAll('.line')[0]!.find('.line__text').text()).toBe(fr.cover.upDown.closing)
   })
 
-  it('position perso : touche de rappel large, valeur ecrite, repere sur le curseur', () => {
-    // deux notions distinctes : la CAPACITE dit qu'on peut rappeler la position favorite du moteur,
-    // la VALEUR seulement qu'on peut la montrer. Un moteur RTS a la premiere sans la seconde.
+  it('custom position: wide recall key, written value, reference mark on the slider', () => {
+    // two distinct notions: the CAPABILITY says the motor's favorite position can be recalled,
+    // the VALUE only that it can be shown. An RTS motor has the first without the second.
     const w = mount(CoverControl, {
       props: { descriptor: descriptor([...ALL, 'preset']), state: state({ position: 30, presetPosition: 27 }) },
     })
     const key = w.findAll('button').at(-1)!
     expect(key.text()).toContain(fr.cover.preset)
-    expect(key.find('.key__pct').text()).toBe('73 %')            // 27 d'ouverture = 73 de fermeture
+    expect(key.find('.key__pct').text()).toBe('73 %')            // 27 open = 73 closed
     expect(key.classes()).toContain('preset__recall')
-    // le repere se pose sur la vignette, a la fermeture memorisee
+    // the reference mark sits on the thumbnail, at the memorized closure
     expect(w.find('.pill__preset').exists()).toBe(true)
 
-    // valeur inconnue (RTS) : la touche reste, le chiffre disparait, aucun repere invente
+    // unknown value (RTS): the key stays, the figure disappears, no invented reference mark
     const rts = mount(CoverControl, {
       props: { descriptor: descriptor(['open_close', 'stop', 'preset'], 'awning'), state: state({ position: 0 }) },
     })
@@ -116,28 +116,28 @@ describe('CoverControl', () => {
     expect(rts.find('.key__pct').exists()).toBe(false)
     expect(rts.find('.pill__preset').exists()).toBe(false)
 
-    // sans la capacite, pas de touche du tout
+    // without the capability, no key at all
     const plain = mount(CoverControl, { props: { descriptor: descriptor(ALL), state: state() } })
     expect(plain.text()).not.toContain(fr.cover.preset)
   })
 
-  it('memoriser la position : grave l ACTUELLE, et jamais en pleine course', async () => {
-    // le geste de la telecommande Somfy : on amene l'ouvrant au bon endroit, puis on memorise —
-    // donc on n'enregistre jamais une position qu'on n'a pas vue.
+  it('memorize the position: stores the CURRENT one, and never mid-travel', async () => {
+    // the Somfy remote's gesture: we bring the cover to the right place, then memorize —
+    // so we never record a position we have not seen.
     const d = descriptor([...ALL, 'preset', 'preset_set'])
     const w = mount(CoverControl, { props: { descriptor: d, state: state({ position: 40, presetPosition: 27 }) } })
     const save = w.find('.preset__save')
-    // icone seule : le libelle passe par le title et l'aria-label, obligatoires sans texte
+    // icon only: the label goes through the title and aria-label, mandatory without text
     expect(save.attributes('aria-label')).toBe(fr.cover.presetSave)
     expect(save.attributes('title')).toBe(fr.cover.presetSave)
     await save.trigger('click')
     expect(w.emitted('command')).toEqual([[{ type: 'cover.set_preset', position: 40 }]])
 
-    // en mouvement, la position affichee est celle du depart : la touche est verrouillee
+    // in motion, the displayed position is the starting one: the key is locked
     const moving = mount(CoverControl, { props: { descriptor: d, state: state({ position: 40, motion: 'closing' }) } })
     expect(moving.find('.preset__save').attributes('disabled')).toBeDefined()
 
-    // sans la capacite d'ecriture, la touche n'existe pas — un RTS rappelle sans reecrire
+    // without the write capability, the key does not exist — an RTS recalls without rewriting
     const recallOnly = mount(CoverControl, { props: { descriptor: descriptor(['open_close', 'stop', 'preset']), state: state() } })
     expect(recallOnly.find('.preset__save').exists()).toBe(false)
     expect(recallOnly.text()).toContain(fr.cover.preset)
@@ -146,7 +146,7 @@ describe('CoverControl', () => {
   it('shows the position the store aims at, not the one the device still reports', () => {
     const devices = useDevicesStore()
     const d = descriptor(ALL)
-    // l'appareil est encore ouvert (position 100 = 0 % de fermeture) mais on vise la fermeture
+    // the device is still open (position 100 = 0 % closure) but we aim for closure
     devices.setEntries([{ descriptor: d, state: state({ position: 100 }) }])
     const w = mount(CoverControl, { props: { descriptor: d, state: state({ position: 100 }) } })
     expect(w.text()).toContain('0 %')

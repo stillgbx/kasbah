@@ -1,9 +1,9 @@
 import type { JournalEntry, JournalSeverity } from '@kasbah/shared'
 
-// Le journal d'un appareil, côté affichage : ce qui se décide sans composant (testable) et que la
-// carte satellite, la scène 3D et les deux surfaces (vue Robots, panneau détail) partagent.
+// A device's log, display side: what is decided without a component (testable) and that the
+// satellite map, the 3D scene and the two surfaces (Robots view, detail panel) share.
 
-/** Une ligne du journal QUI SAIT où elle s'est produite : ce que la carte et la scène posent. */
+/** A log line THAT KNOWS where it occurred: what the map and the scene place. */
 export interface JournalPoint {
   at: number
   lat: number
@@ -12,22 +12,22 @@ export interface JournalPoint {
   label: string
 }
 
-/** Les lignes positionnées, dans l'ordre du journal (le plus récent d'abord). */
+/** The positioned lines, in log order (most recent first). */
 export function journalPoints(entries: readonly JournalEntry[]): JournalPoint[] {
   return entries.flatMap((e) => (e.location
     ? [{ at: e.at, lat: e.location.lat, lon: e.location.lon, severity: e.severity, label: journalLabel(e) }]
     : []))
 }
 
-/** « No loop signal · code 2 » — le texte du fabricant, puis son code, celui que le support demande. */
+/** "No loop signal · code 2" — the vendor's text, then its code, the one support asks for. */
 export function journalLabel(e: JournalEntry): string {
   return e.code === undefined ? e.message : `${e.message} · ${e.code}`
 }
 
 /**
- * Teintes de gravité, les mêmes partout : neutre pour une information, l'orangé des avertissements
- * des Réglages, le rouge des erreurs, et le même rouge pour une erreur grave — que la pastille
- * distingue par un cerclage, et la scène par une taille.
+ * Severity tints, the same everywhere: neutral for information, the orange of the Settings
+ * warnings, the red of errors, and the same red for a severe error — which the pill
+ * distinguishes by a ring, and the scene by a size.
  */
 export const JOURNAL_COLORS: Record<JournalSeverity, string> = {
   info: '#8a94a6',
@@ -37,10 +37,10 @@ export const JOURNAL_COLORS: Record<JournalSeverity, string> = {
 }
 
 /**
- * « 16/09 18:22 » : le journal court sur des semaines (un jour de la semaine seul ne dirait pas
- * laquelle), et la date doit faire TOUJOURS la même largeur pour que les lignes s'alignent en
- * monospace — jour et mois à deux chiffres, heure sur 24 h ; « 7 juil. » et « 16 sept. » ne
- * faisaient pas la même longueur.
+ * "16/09 18:22": the log spans weeks (a weekday alone would not say which),
+ * and the date must ALWAYS have the same width so that the lines align in
+ * monospace — day and month on two digits, hour on 24 h; "7 juil." and "16 sept." did
+ * not have the same length.
  */
 export function journalWhen(at: number, locale: string): string {
   return new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(at))

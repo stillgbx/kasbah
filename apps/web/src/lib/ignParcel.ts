@@ -1,21 +1,21 @@
 import { ensureCCW, geoToLocal, isSimplePolygon, localToGeo, pointInPolygon, signedArea, type House, type Vec2 } from '@kasbah/shared'
 
-// Contour RÉEL de la parcelle, lu au cadastre de l'IGN (Parcellaire Express, WFS de la Géoplateforme,
-// ouvert, sans clé, CORS ouvert — appelé depuis le navigateur comme le relief).
+// REAL outline of the parcel, read from the IGN cadastre (Parcellaire Express, Géoplateforme WFS,
+// open, no key, CORS open — called from the browser like the relief).
 //
-// Interrogé par EMPRISE (BBOX) autour du bâti : un filtre `INTERSECTS(geom, POINT(…))` ne rend rien
-// sur ce service, dans un sens d'axes comme dans l'autre. On garde les parcelles qui portent la maison
-// (le centre d'une de ses pièces) ; une maison à cheval sur deux parcelles les reçoit fusionnées.
+// Queried by FOOTPRINT (BBOX) around the building: an `INTERSECTS(geom, POINT(…))` filter returns nothing
+// on this service, in one axis order as in the other. We keep the parcels that carry the house
+// (the center of one of its rooms); a house straddling two parcels receives them merged.
 //
-// Le contour est posé dans le repère de la maison par `origin` : il est aussi juste que lui (le
-// calage de `origin` sur la photo n'est pas fait, quelques mètres d'écart possibles).
+// The outline is placed in the house frame by `origin`: it is as accurate as it is (the
+// alignment of `origin` on the photo is not done, a few meters of offset possible).
 
 const ENDPOINT = 'https://data.geopf.fr/wfs/ows'
 const LAYER = 'CADASTRALPARCELS.PARCELLAIRE_EXPRESS:parcelle'
-/** Un sommet à moins de ça (m) de la droite de ses voisins est retiré : moins de poignées, même contour. */
+/** A vertex within this distance (m) of the line of its neighbors is removed: fewer handles, same outline. */
 const COLLINEAR_M = 0.05
 
-/** Échec qui se dit à l'utilisateur : aucune parcelle sous la maison (rue, domaine public, `origin` décalé), ou contour inutilisable. */
+/** Failure that is reported to the user: no parcel under the house (street, public domain, shifted `origin`), or unusable outline. */
 export class IgnParcelError extends Error {
   constructor(readonly code: 'none' | 'shape', message: string) { super(message); this.name = 'IgnParcelError' }
 }
@@ -29,7 +29,7 @@ interface Feature {
 const round = (v: number) => Math.round(v * 100) / 100
 const key = ([x, y]: Vec2) => `${Math.round(x * 100)},${Math.round(y * 100)}`
 
-/** Retire le sommet de fermeture, les doublons et les sommets presque alignés avec leurs voisins. */
+/** Removes the closing vertex, duplicates and vertices almost aligned with their neighbors. */
 function tidy(ring: Vec2[]): Vec2[] {
   let p = ring.map(([x, y]): Vec2 => [round(x), round(y)])
   p = p.filter((v, k) => key(v) !== key(p[(k + 1) % p.length]!))
@@ -46,10 +46,10 @@ function tidy(ring: Vec2[]): Vec2[] {
 }
 
 /**
- * Fusion de parcelles VOISINES par leurs côtés communs : chaque contour orienté dans le même sens,
- * un côté parcouru dans les deux sens est intérieur et disparaît, le reste se chaîne en une boucle.
- * Le cadastre partage les sommets entre voisines ; s'il ne le fait pas (ou si les parcelles ne se
- * touchent pas), la fusion ne fait pas UNE boucle et rend `null`.
+ * Merging NEIGHBORING parcels by their common sides: each outline oriented in the same direction,
+ * a side traversed in both directions is interior and disappears, the rest chains into a loop.
+ * The cadastre shares vertices between neighbors; if it does not (or if the parcels do not
+ * touch), the merge does not make ONE loop and returns `null`.
  */
 export function mergeParcels(rings: readonly Vec2[][]): Vec2[] | null {
   const edges = new Map<string, { from: Vec2; to: Vec2 }>()
@@ -64,7 +64,7 @@ export function mergeParcels(rings: readonly Vec2[][]): Vec2[] | null {
   }
   const byStart = new Map<string, { from: Vec2; to: Vec2 }>()
   for (const e of edges.values()) {
-    if (byStart.has(key(e.from))) return null                // deux départs du même sommet : pas une seule boucle
+    if (byStart.has(key(e.from))) return null                // two starts from the same vertex: not a single loop
     byStart.set(key(e.from), e)
   }
   const first = byStart.values().next().value
@@ -81,7 +81,7 @@ export function mergeParcels(rings: readonly Vec2[][]): Vec2[] | null {
   return loop.length === edges.size ? loop : null
 }
 
-/** Le contour cadastral sous la maison, en repère maison, prêt à poser comme brouillon de l'éditeur. */
+/** The cadastral outline under the house, in house frame, ready to place as the editor's draft. */
 export async function fetchIgnParcel(house: House, fetchImpl: typeof fetch = fetch): Promise<{ polygon: Vec2[]; parcels: IgnParcel[]; merged: boolean }> {
   const corners = house.rooms.flatMap((r) => r.polygon)
   const probes: Vec2[] = house.rooms.length
@@ -103,7 +103,7 @@ export async function fetchIgnParcel(house: House, fetchImpl: typeof fetch = fet
   for (const f of body.features ?? []) {
     const g = f.geometry
     if (!g) continue
-    // GeoJSON : [lon, lat] ; chaque partie garde son contour extérieur (les trous d'une parcelle sont rares)
+    // GeoJSON: [lon, lat]; each part keeps its outer outline (a parcel's holes are rare)
     const parts = g.type === 'Polygon' ? [g.coordinates] : g.coordinates
     for (const part of parts) {
       const outer = part[0]
@@ -118,7 +118,7 @@ export async function fetchIgnParcel(house: House, fetchImpl: typeof fetch = fet
   if (!kept.length) throw new IgnParcelError('none', 'no cadastral parcel under the house')
   const parcels = [...new Map(kept.map((k) => [k.parcel.idu, k.parcel])).values()]
   const merged = kept.length > 1 ? mergeParcels(kept.map((k) => k.ring)) : null
-  // pas de fusion possible : la parcelle qui porte le plus la maison, la plus grande à égalité
+  // no merge possible: the parcel that carries the house the most, the largest on a tie
   const best = [...kept].sort((a, b) => b.holds - a.holds || Math.abs(signedArea(b.ring)) - Math.abs(signedArea(a.ring)))[0]!
   const polygon = merged ? tidy(merged) : best.ring
   if (!isSimplePolygon(polygon)) throw new IgnParcelError('shape', 'cadastral outline is not a simple polygon')

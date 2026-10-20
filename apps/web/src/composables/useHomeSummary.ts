@@ -6,13 +6,13 @@ import { formatPower, formatTemp } from '../lib/format'
 import { useDevicesStore } from '../stores/devices'
 import { useHouseStore } from '../stores/house'
 
-// Chiffres de synthèse partagés par l'en-tête et les tuiles : lumières allumées, volets ouverts,
-// stores baissés, lecteurs en lecture, caméras, production solaire, batterie, température intérieure.
+// Summary figures shared by the header and the tiles: lights on, shutters open,
+// blinds lowered, players playing, cameras, solar production, battery, indoor temperature.
 //
-// Volets et stores sont comptés SÉPARÉMENT : ils ne se disent pas dans les mêmes mots (un volet est
-// ouvert, un store est baissé) et l'utilisateur ne les regarde pas pour la même raison. La nature
-// vient de `meta.cover.deviceClass`, posée par le plugin. Les portails, portes de garage, rideaux
-// et fenêtres motorisées ne sont dans aucun des deux compteurs : leur formulation reste à décider.
+// Shutters and blinds are counted SEPARATELY: they are not described in the same words (a shutter is
+// open, a blind is lowered) and the user does not look at them for the same reason. The kind
+// comes from `meta.cover.deviceClass`, set by the plugin. Gates, garage doors, curtains
+// and motorized windows are in neither counter: their wording remains to be decided.
 
 export function useHomeSummary() {
   const devices = useDevicesStore()
@@ -24,20 +24,20 @@ export function useHomeSummary() {
   const covers = computed(() => devices.list.filter((e) => e.state.kind === 'cover'))
   const pos = (e: DeviceEntry) => (e.state as StateFor<'cover'>).position
   const coversOpen = computed(() => covers.value.filter((e) => (pos(e) ?? 0) > 0).length)
-  /** `undefined` compte comme un volet : c'est la nature par défaut d'un ouvrant. */
+  /** `undefined` counts as a shutter: it is the default nature of a cover. */
   const ofClass = (e: DeviceEntry, ...classes: string[]) =>
     classes.includes(e.descriptor.meta.cover?.deviceClass ?? 'shutter')
-  // Position inconnue = HORS des deux compteurs, numérateur ET dénominateur : un ouvrant RTS ne dit
-  // jamais où il en est, et « 2/2 stores baissés » alors qu'ils sont remontés est pire qu'un
-  // compteur muet. Un dénominateur vide fait disparaître la ligne et la tuile ; la première
-  // commande depuis Kasbah donne une position déduite, et elles réapparaissent.
+  // Unknown position = OUT of both counters, numerator AND denominator: an RTS cover never says
+  // where it stands, and "2/2 blinds lowered" when they are raised is worse than a
+  // mute counter. An empty denominator makes the line and the tile disappear; the first
+  // command from Kasbah gives a deduced position, and they reappear.
   const known = (e: DeviceEntry) => pos(e) !== undefined
   const shutters = computed(() => covers.value.filter((e) => ofClass(e, 'shutter') && known(e)))
   const shuttersOpen = computed(() => shutters.value.filter((e) => pos(e)! > 0).length)
   const awnings = computed(() => covers.value.filter((e) => ofClass(e, 'awning', 'blind') && known(e)))
-  // un store « baissé » est déployé, donc position basse — l'inverse d'un volet ouvert
+  // a "lowered" blind is deployed, hence low position — the opposite of an open shutter
   const awningsDown = computed(() => awnings.value.filter((e) => pos(e)! < 100).length)
-  // le SITE : une batterie est aussi un `energy`, mais ne mesure ni la production ni le réseau
+  // the SITE: a battery is also an `energy`, but measures neither production nor the grid
   const energy = computed(() => findEnergySite(devices.list)?.state as StateFor<'energy'> | undefined)
   const climate = computed(() => devices.list.find((e) => e.state.kind === 'climate')?.state as StateFor<'climate'> | undefined)
   const indoorTemp = computed<number | null>(() => {
@@ -45,14 +45,14 @@ export function useHomeSummary() {
     const s = devices.list.find((e) => e.descriptor.kind === 'sensor' && e.descriptor.meta.sensor?.deviceClass === 'temperature' && e.descriptor.name.toLowerCase().indexOf('ext') < 0)
     return s ? (s.state as StateFor<'sensor'>).value : null
   })
-  // lecteurs (enceintes, écrans, téléviseurs) : combien diffusent en ce moment — une lecture propre, ou le
-  // son d'un autre (barre de son d'une TV en HDMI ARC, `lib/audioRouting.ts`) : les deux appareils comptent
+  // players (speakers, screens, TVs): how many are broadcasting right now — their own playback, or another's
+  // sound (a TV's soundbar over HDMI ARC, `lib/audioRouting.ts`): both devices count
   const players = computed(() => devices.list.filter((e) => e.state.kind === 'media_player'))
   const playing = computed(() => players.value.filter((e) => e.state.available
     && ((e.state as StateFor<'media_player'>).playback === 'playing' || house.soundRoutes.relays.has(e.descriptor.id))).length)
-  // caméras : seul le NOMBRE est connu — l'API Nest ne dit ni si une caméra filme ni si elle est
-  // joignable (voir `cameraStateSchema`), et l'« active » de la vue Caméras vient du sondage des
-  // vignettes, que le panneau maison ne fait pas. Donc pas de fraction ici.
+  // cameras: only the COUNT is known — the Nest API says neither whether a camera is recording nor whether it is
+  // reachable (see `cameraStateSchema`), and the "active" of the Cameras view comes from the polling of the
+  // thumbnails, which the house panel does not do. So no fraction here.
   const cameras = computed(() => devices.list.filter((e) => e.state.kind === 'camera'))
   const vehicles = computed(() => devices.list.filter((e) => e.state.kind === 'vehicle'))
   const chargers = computed(() => devices.list.filter((e) => e.state.kind === 'ev_charger'))

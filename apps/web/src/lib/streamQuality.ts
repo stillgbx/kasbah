@@ -1,12 +1,12 @@
 import type { StateFor } from '@kasbah/shared'
 import type { MusicStreamQuality, RadioStation } from '../api/transport'
 
-// Qualité du flux d'un lecteur, en une ligne (« MP3 192 kb/s ») et en info-bulle. Deux origines :
-// - un flux servi par Kasbah (YouTube Music, Mixcloud) : ce que le proxy sert, et en info-bulle ce
-//   que la source lui a donné pour le produire ;
-// - une radio : le flux va de la station à l'enceinte, qui ne dit rien — codec et débit sont ceux
-//   que l'annuaire annonce, pour la station que le plugin radio a lancée sur ce lecteur.
-// Partagé par la barre de la page Musique et le panneau appareil.
+// A player's stream quality, in one line ("MP3 192 kb/s") and as a tooltip. Two origins:
+// - a stream served by Kasbah (YouTube Music, Mixcloud): what the proxy serves, and in the tooltip what
+//   the source gave it to produce it;
+// - a radio: the stream goes from the station to the speaker, which says nothing — codec and bitrate are those
+//   that the directory announces, for the station the radio plugin started on this player.
+// Shared by the Music page bar and the device panel.
 
 type Translate = (key: string, named?: Record<string, unknown>) => string
 
@@ -34,9 +34,9 @@ export function qualityDetails(q: MusicStreamQuality, t: Translate): string {
 }
 
 /**
- * La ligne de qualité d'un lecteur, ou null. `ours` : la qualité de NOTRE flux s'il en joue un ;
- * `station` : la dernière station lancée sur ce lecteur — retenue seulement s'il publie encore un
- * direct à son nom (il a pu passer à autre chose depuis).
+ * A player's quality line, or null. `ours`: the quality of OUR stream if it is playing one;
+ * `station`: the last station started on this player — kept only if it still publishes a
+ * live stream under its name (it may have moved on to something else since).
  */
 export function streamQuality(
   t: Translate,

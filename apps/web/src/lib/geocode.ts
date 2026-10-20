@@ -1,21 +1,21 @@
 import { geoDistance } from '@kasbah/shared'
 
-// Recherche d'adresse pour poser le point 0 d'une propriété neuve, sans compte ni clé :
-//   - le géocodage de l'IGN (Géoplateforme) : la Base Adresse Nationale, le plus précis en France ;
-//   - Photon (komoot, données OpenStreetMap) : le monde entier.
-// Les deux partent ensemble ; l'IGN passe devant, Photon complète, un même lieu n'apparaît qu'une fois.
-// Lancée par l'utilisateur seulement (bouton ou Entrée), jamais à chaque frappe.
+// Address search to place point 0 of a new property, without an account or key:
+//   - the IGN geocoding (Géoplateforme): the Base Adresse Nationale, the most precise in France;
+//   - Photon (komoot, OpenStreetMap data): the whole world.
+// Both start together; IGN comes first, Photon completes, a same place only appears once.
+// Launched by the user only (button or Enter), never at each keystroke.
 
-export interface GeoResult { label: string; lat: number; lon: number; /** Pays (ISO 3166-1, Photon seulement). */ countryCode?: string }
+export interface GeoResult { label: string; lat: number; lon: number; /** Country (ISO 3166-1, Photon only). */ countryCode?: string }
 
 const LIMIT = 6
-/** Deux résultats plus proches que ça sont le même lieu (m). */
+/** Two results closer than that are the same place (m). */
 const SAME_PLACE_M = 30
 
 interface Feature<P> { geometry: { coordinates: [number, number] }; properties: P }
 interface PhotonProps { name?: string; housenumber?: string; street?: string; postcode?: string; city?: string; state?: string; country?: string; countrycode?: string }
 
-/** Le libellé d'un résultat Photon : « 10 Downing Street, SW1A 2AA London, Royaume-Uni ». */
+/** The label of a Photon result: "10 Downing Street, SW1A 2AA London, United Kingdom". */
 export function photonLabel(p: PhotonProps): string {
   const street = [p.housenumber, p.street].filter(Boolean).join(' ')
   const town = [p.postcode, p.city].filter(Boolean).join(' ')
@@ -24,10 +24,10 @@ export function photonLabel(p: PhotonProps): string {
 }
 
 /**
- * L'IGN d'abord, puis Photon ; au plus `LIMIT`. Quand l'IGN répond, il fait foi pour la France : les
- * résultats français de Photon sont écartés (une grande place n'a pas le même point dans les deux
- * services, la distance ne suffit pas à les reconnaître). Ailleurs, un lieu déjà donné à moins de
- * `SAME_PLACE_M` n'est pas répété.
+ * IGN first, then Photon; at most `LIMIT`. When IGN answers, it is authoritative for France: Photon's
+ * French results are discarded (a large square does not have the same point in the two
+ * services, distance is not enough to recognize them). Elsewhere, a place already given within
+ * `SAME_PLACE_M` is not repeated.
  */
 export function mergeResults(ign: GeoResult[], photon: GeoResult[]): GeoResult[] {
   const out = [...ign]
@@ -54,7 +54,7 @@ async function photon(q: string, lang: string): Promise<GeoResult[]> {
   }))
 }
 
-/** Cherche une adresse ; un service qui ne répond pas laisse simplement la place à l'autre. */
+/** Searches an address; a service that does not answer simply leaves room for the other. */
 export async function searchAddress(q: string, lang: string): Promise<GeoResult[]> {
   const [a, b] = await Promise.allSettled([ign(q), photon(q, lang)])
   return mergeResults(a.status === 'fulfilled' ? a.value : [], b.status === 'fulfilled' ? b.value : [])

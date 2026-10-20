@@ -3,30 +3,30 @@ import { parseDeviceId } from '@kasbah/shared'
 import { t } from '../i18n'
 import { ApiRequestError, type AgendaCalendar, type AssistantEvent, type ClaudeAccount, type TranscriptionSettings, type AssistantLogEntry, type AgendaEvent, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type LightHistory, type McpUser, type SystemVersion, type UpdateStatus, type MelcloudStatus, type MelcloudUnit, type MixcloudHomeSection, type MixcloudPage, type MixcloudStatus, type MixcloudUser, type PetkitStatus, type RadioStation, type RenaultContract, type RenaultStatus, type SchoolData, type TeslaStatus, type Transport, type TransportHandlers, type WeatherAlerts, type WeatherElsewhere, type WeatherPlace, type YtmusicExplore, type YtmusicExploreShelf, type YtmusicPlaylist, type MusicLastPlayed, type MusicQueue, type YtmusicSearchResult, type MusicSession, type YtmusicStatus, type YtmusicTrack } from './transport'
 
-// URLs relatives : même origine en prod (Fastify sert le build) et via le proxy Vite en dev.
+// Relative URLs: same origin in prod (Fastify serves the build) and through the Vite proxy in dev.
 
-const STALE_AFTER_MS = 45_000       // aucune trame depuis 45 s → on considère le lien mort et on reconnecte
+const STALE_AFTER_MS = 45_000       // no frame for 45 s → the link is considered dead and we reconnect
 const RECONNECT_MIN_MS = 1000
 const RECONNECT_MAX_MS = 30_000
 
 /**
- * Sous l'adresse publique, une session finie (expirée, mot de passe changé, compte retiré) : retour à
- * la page de connexion du serveur, qui ramènera ici. Le code seul compte : d'autres routes rendent 401
- * pour leur propre compte chez un fabricant.
+ * Under the public address, a finished session (expired, password changed, account removed): back to
+ * the server's login page, which will bring us back here. Only the code counts: other routes return 401
+ * for their own account at a vendor.
  */
 function signInAgain() {
   location.assign(`/login?next=${encodeURIComponent(location.pathname + location.search + location.hash)}`)
 }
 
-/** L'erreur d'une réponse non OK, avec le code et le message de l'API quand elle les donne. */
+/** The error of a non-OK response, with the API's code and message when it gives them. */
 async function errorOf(res: Response): Promise<ApiRequestError> {
   let code = 'HTTP_ERROR', message = `HTTP ${res.status}`
   try {
     const body = apiErrorSchema.safeParse(await res.json())
     if (body.success) ({ code, message } = body.data.error)
-  } catch { /* corps non JSON */ }
+  } catch { /* non-JSON body */ }
   if (res.status === 401 && code === 'AUTH_REQUIRED') signInAgain()
-  // une démonstration ne s'écrit pas : le message le dit dans la langue de l'écran, avec la suite
+  // a demonstration is not written to: the message says so in the screen's language, with what follows
   if (code === 'DEMO_READONLY') message = t('properties.readOnly')
   return new ApiRequestError(res.status, code, message)
 }
@@ -39,7 +39,7 @@ async function request<T>(url: string, init: RequestInit | undefined, parse: (js
   return parse(await res.json())
 }
 
-/** Réponse binaire (un son) : mêmes erreurs que `request`. */
+/** Binary response (a sound): same errors as `request`. */
 async function requestBlob(url: string, init: RequestInit): Promise<Blob> {
   let res: Response
   try { res = await fetch(url, init) }
@@ -48,7 +48,7 @@ async function requestBlob(url: string, init: RequestInit): Promise<Blob> {
   return res.blob()
 }
 
-/** Réponse en NDJSON (une ligne JSON par événement), lue au fil de l'eau. */
+/** NDJSON response (one JSON line per event), read as it arrives. */
 async function streamLines(url: string, init: RequestInit, onLine: (json: unknown) => void): Promise<void> {
   let res: Response
   try { res = await fetch(url, init) }
@@ -71,7 +71,7 @@ const json = (method: string, body: unknown): RequestInit => ({ method, headers:
 const shoppingOf = (j: unknown) => shoppingResponseSchema.parse(j).shopping as ShoppingList
 
 export function createHttpTransport(base = ''): Transport {
-  /** Un geste sur la file d'un lecteur (`/queue/<step>`) : le serveur rend la file telle qu'elle est après. */
+  /** A gesture on a player's queue (`/queue/<step>`): the server returns the queue as it is afterwards. */
   const queueStep = (step: string, body: object) => request(
     `${base}/api/music/queue/${step}`,
     { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
@@ -256,7 +256,7 @@ export function createHttpTransport(base = ''): Transport {
     pairHue: () => request(`${base}/api/plugins/hue/pair`, { method: 'POST' }, (j) => j as { appKey: string; hint: string }),
     nestAuthUrl: () => request(`${base}/api/plugins/nest/auth/url`, undefined, (j) => j as { url: string; redirectUri: string }),
     enphaseTokenStatus: () => request(`${base}/api/plugins/enphase/token`, undefined, (j) => j as EnphaseTokenStatus),
-    // le corps peut porter un mot de passe : POST, jamais en query (il finirait dans les journaux)
+    // the body may carry a password: POST, never in the query (it would end up in the logs)
     pairEnphase: (body: EnphasePairing) => request(
       `${base}/api/plugins/enphase/token`,
       { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
@@ -372,7 +372,7 @@ export function createHttpTransport(base = ''): Transport {
       { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
       (j) => {
         const r = j as Awaited<ReturnType<Transport['musicTransfer']>>
-        // cible = ce navigateur : le chemin rendu est relatif au serveur
+        // target = this browser: the returned path is relative to the server
         return r.session ? { ...r, streamUrl: `${base}${r.streamUrl}` } : r
       },
     ),
@@ -524,13 +524,13 @@ export function createHttpTransport(base = ''): Transport {
   }
 }
 
-/** Origine WebSocket : celle de `base` si elle est donnée, sinon la page elle-même (proxy Vite en dev). */
+/** WebSocket origin: that of `base` if given, otherwise the page itself (Vite proxy in dev). */
 function wsBase(base: string): string {
   if (base) return base.replace(/^http/, 'ws')
   return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`
 }
 
-/** WebSocket avec reconnexion exponentielle et détection de lien silencieux. */
+/** WebSocket with exponential reconnection and silent-link detection. */
 function connectWebSocket(base: string, handlers: TransportHandlers): () => void {
   let ws: WebSocket | null = null
   let closed = false
@@ -555,8 +555,8 @@ function connectWebSocket(base: string, handlers: TransportHandlers): () => void
     if (closed) return
     if (attempts > 0) setStatus(attempts > 2 ? 'offline' : 'connecting')
     ws = new WebSocket(url())
-    // IMPORTANT : traiter chaque trame dans onmessage, jamais via un watch sur une ref haute fréquence
-    // (un watcher coalesce et perdrait des messages intermédiaires).
+    // IMPORTANT: process each frame in onmessage, never through a watch on a high-frequency ref
+    // (a watcher coalesces and would lose intermediate messages).
     ws.onmessage = (ev) => {
       armStale()
       let msg
@@ -569,8 +569,8 @@ function connectWebSocket(base: string, handlers: TransportHandlers): () => void
       if (staleTimer) clearTimeout(staleTimer)
       if (closed) return
       if (status === 'online') setStatus('connecting')
-      // Un refus de session ne se lit pas sur un WebSocket : on le demande à l'API, qui renvoie à
-      // la connexion s'il le faut (`request`).
+      // A session refusal cannot be read on a WebSocket: we ask the API, which redirects to
+      // the login if needed (`request`).
       request(`${base}/api/session`, undefined, () => null).catch(() => {})
       scheduleReconnect()
     }

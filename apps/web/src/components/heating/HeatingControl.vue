@@ -3,27 +3,27 @@ import { computed } from 'vue'
 import type { CommandInput, DeviceEntry, StateFor } from '@kasbah/shared'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Les commandes d'un appareil de chauffage, sur la ligne de sa pièce (slot `control` de `RoomBands`).
+// The commands of a heating device, on its room's line (`control` slot of `RoomBands`).
 //
-// Deux erreurs corrigées ici, toutes deux visibles à l'écran :
+// Two errors fixed here, both visible on screen:
 //
-//  1. CHEVAUCHEMENT. La version précédente posait les boutons dans la colonne du STATUT, en
-//     `flex: 0 0 auto` : ils ne rétrécissaient donc jamais et débordaient sur la pastille de liaison
-//     et sur l'état dès que la carte se resserrait. Les commandes prennent maintenant leur propre
-//     rangée (`grid-column: 1 / -1`), comme le curseur d'une lampe ou les touches d'un ouvrant :
-//     rien ne peut plus se marcher dessus, quelle que soit la largeur.
-//  2. VOCABULAIRE. Boutons ronds et pastille d'état : deux formes que cette application n'emploie
-//     nulle part ailleurs. Les vues Ouvrants et Médias ont des touches CARRÉES à coins arrondis de
-//     36 px (`.key`), et leur état est du texte à la suite du statut. C'est repris tel quel.
+//  1. OVERLAP. The previous version put the buttons in the STATUS column, in
+//     `flex: 0 0 auto`: they never shrank and overflowed onto the link pill
+//     and onto the state as soon as the card tightened. The commands now take their own
+//     row (`grid-column: 1 / -1`), like a light's slider or a cover's keys:
+//     nothing can step on anything else anymore, whatever the width.
+//  2. VOCABULARY. Round buttons and a state pill: two shapes this application uses
+//     nowhere else. The Covers and Media views have SQUARE keys with rounded corners of
+//     36 px (`.key`), and their state is text following the status. It is taken as is.
 //
-// La consigne est répétée ENTRE les deux touches : ce qu'on règle doit être sous les doigts qui le
-// règlent, et la ligne du dessus continue de dire « mesurée → consigne » comme tous les autres
-// appareils de la maison.
+// The setpoint is repeated BETWEEN the two keys: what you set must be under the fingers that
+// set it, and the line above keeps saying "measured → setpoint" like all the other
+// devices of the house.
 //
-// À l'ARRÊT, plus de consigne du tout, ni ici ni sur la ligne du dessus : aucune ne s'applique, et
-// un thermostat qui ne la publie pas éteint (Nest) affichait trois fois la même température. Les
-// modes passent donc DEVANT la consigne : choisir « Arrêt » la retire au bout de la rangée, sans
-// déplacer la touche qu'on vient de toucher.
+// When OFF, no setpoint at all, neither here nor on the line above: none applies, and
+// a thermostat that does not publish it when off (Nest) displayed the same temperature three times. The
+// modes therefore come BEFORE the setpoint: choosing "Off" removes it at the end of the row, without
+// moving the key just touched.
 
 const props = defineProps<{ entry: DeviceEntry }>()
 const emit = defineEmits<{ command: [deviceId: string, cmd: CommandInput] }>()
@@ -47,7 +47,7 @@ const target = computed(() => `${state.value.targetTempC.toLocaleString(undefine
 </script>
 
 <template>
-  <!-- rien à régler : pas de rangée vide non plus (les zones de la pompe à chaleur sont lues) -->
+  <!-- nothing to set: no empty row either (the heat pump zones are read) -->
   <div v-if="canSetTemp || canSetMode" class="controls">
     <div v-if="canSetMode" class="keys keys--modes">
       <button v-for="m in modes" :key="m" type="button" class="key key--text" :data-on="state.mode === m ? '1' : '0'"
@@ -56,12 +56,12 @@ const target = computed(() => `${state.value.targetTempC.toLocaleString(undefine
       </button>
     </div>
 
-    <!-- injoignable : grisée, le geste serait refusé plus bas -->
+    <!-- unreachable: greyed out, the gesture would be refused further down -->
     <div v-if="canSetTemp && !off" class="keys keys--target">
       <button type="button" class="key" :disabled="!entry.state.available" :title="$t('heating.lower')" :aria-label="$t('heating.lower')" @click="step(-0.5)">
         <StrokeIcon name="minus" :size="18" />
       </button>
-      <!-- la consigne entre ses deux touches : on règle un nombre en le regardant -->
+      <!-- the setpoint between its two keys: you set a number by looking at it -->
       <span class="target">{{ target }}</span>
       <button type="button" class="key" :disabled="!entry.state.available" :title="$t('heating.raise')" :aria-label="$t('heating.raise')" @click="step(0.5)">
         <StrokeIcon name="plus" :size="18" />
@@ -71,12 +71,12 @@ const target = computed(() => `${state.value.targetTempC.toLocaleString(undefine
 </template>
 
 <style scoped>
-/* Repris des vues Ouvrants et Médias : une rangée à part, toute la largeur de la ligne. C'est ce qui
-   empêche tout chevauchement — les commandes ne partagent plus de colonne avec le statut. */
+/* Taken from the Covers and Media views: a separate row, the full width of the line. This is what
+   prevents any overlap — the commands no longer share a column with the status. */
 .controls { grid-column: 1 / -1; display: flex; align-items: center; flex-wrap: wrap; gap: 14px; margin: 2px 4px 0; }
 .keys { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
-/* cinq modes (thermostat simulé) font plus large qu'une carte étroite : ils passent à la ligne au
-   lieu de sortir de la carte */
+/* five modes (simulated thermostat) are wider than a narrow card: they wrap instead of
+   leaving the card */
 .keys--modes { gap: 6px; flex: 0 1 auto; flex-wrap: wrap; }
 .key {
   display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px;
@@ -84,9 +84,9 @@ const target = computed(() => `${state.value.targetTempC.toLocaleString(undefine
 }
 .key:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
 .key:disabled { opacity: .4; }
-/* une touche qui porte un mot et non un signe : même hauteur et même coin, largeur libre */
+/* a key that carries a word and not a sign: same height and same corner, free width */
 .key--text { width: auto; padding: 0 14px; font: inherit; font-size: 13px; }
 .key--text[data-on="1"] { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
-/* largeur fixe : passer de 9,5 à 10,0 ne doit pas écarter les deux touches */
+/* fixed width: going from 9.5 to 10.0 must not spread the two keys apart */
 .target { min-width: 6.5ch; text-align: center; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; margin: 0 2px; }
 </style>

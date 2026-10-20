@@ -3,9 +3,9 @@ import {
   CMD, crc8Maxim, TENS_BATTERY_CHAR, TENS_COMMAND_CHAR, TENS_REPLY_CHAR, TENS_SERVICE, TENS_SESSION_CHAR, TENS_STATUS_SERVICE,
 } from './protocol'
 
-// Doublure de test : un actiTENS mini qui répond comme l'appareil capturé le 2026-09-25 — une
-// réponse `1b c0 <cmd & 0x7f> 00 <crc>` par commande, et la caractéristique séance qui suit l'état.
-// Pour les tests seulement (aucun import depuis l'appli).
+// Test double: an actiTENS mini that answers like the device captured on 2026-09-25 — one
+// `1b c0 <cmd & 0x7f> 00 <crc>` response per command, and the session characteristic that follows the state.
+// For tests only (no import from the app).
 
 class FakeChar extends EventTarget implements BleCharacteristic {
   value: DataView | null = null
@@ -24,21 +24,21 @@ class FakeChar extends EventTarget implements BleCharacteristic {
 export class FakeTens extends EventTarget implements BleDevice {
   readonly id = 'fake-tens'
   readonly name = 'acTENSv2_015A9F'
-  /** Toutes les trames reçues, dans l'ordre. */
+  /** All the frames received, in order. */
   readonly written: Uint8Array[] = []
-  /** Commandes auxquelles le faux appareil ne répond pas (délai dépassé côté Kasbah). */
+  /** Commands the fake device does not answer (timeout exceeded on the Kasbah side). */
   readonly silent = new Set<number>()
   connected = false
   state = 0
   ch = { 1: 0, 2: 0 } as Record<1 | 2, number>
   remaining = 0
-  /** Électrodes posées sur la peau ; sinon le programme est refusé, code 0x11, comme en vrai. */
+  /** Electrodes placed on the skin; otherwise the program is refused, code 0x11, as in real life. */
   electrodes = true
-  /** Nombre de prochaines intensités à refuser « trop tôt » (code 0x33). */
+  /** Number of upcoming intensities to refuse "too early" (code 0x33). */
   refuseIntensity = 0
-  /** Instant (horloge du test) de chaque intensité acceptée. */
+  /** Instant (test clock) of each accepted intensity. */
   readonly intensityAt: number[] = []
-  /** Octet bas de l'identifiant de séance reçu avec le programme, renvoyé dans la séance comme le vrai. */
+  /** Low byte of the session identifier received with the program, returned in the session like the real one. */
   tag = 0
   private reply = new FakeChar()
   private command = new FakeChar()
@@ -63,7 +63,7 @@ export class FakeTens extends EventTarget implements BleDevice {
     this.command.onWrite = (b) => this.handle(b)
   }
 
-  /** Simule une coupure radio (hors de portée, appareil éteint). */
+  /** Simulates a radio cut (out of range, device off). */
   drop() {
     if (!this.connected) return
     this.connected = false
@@ -78,8 +78,8 @@ export class FakeTens extends EventTarget implements BleDevice {
     this.written.push(frame)
     const cmd = frame[2]!
     if (this.silent.has(cmd)) return
-    // comme le vrai : un programme qui annonce plus de 4 segments est refusé (code 5), un TENS non
-    // posé refuse le programme (0x11), une intensité trop rapprochée est refusée (0x33)
+    // like the real one: a program announcing more than 4 segments is refused (code 5), a TENS not
+    // placed refuses the program (0x11), an intensity too close together is refused (0x33)
     const code = cmd === CMD.program && frame[5]! > 4 ? 5
       : cmd === CMD.program && !this.electrodes ? 0x11
       : cmd === CMD.intensity && this.refuseIntensity > 0 ? (this.refuseIntensity--, 0x33)

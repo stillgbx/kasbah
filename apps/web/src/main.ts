@@ -7,7 +7,7 @@ import { vuetify } from './plugins/vuetify'
 import { useSettingsStore } from './stores/settings'
 import './styles/app.css'
 
-// Ordre : pinia → réglages (thème/langue appliqués AVANT le mount pour éviter tout flash) → mount.
+// Order: pinia → settings (theme/language applied BEFORE the mount to avoid any flash) → mount.
 const pinia = createPinia()
 const app = createApp(App).use(pinia).use(i18n).use(router).use(vuetify)
 

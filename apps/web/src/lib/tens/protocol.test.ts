@@ -5,8 +5,8 @@ import {
 } from './protocol'
 import { TENS_PROGRAMS, tensProgram } from './programs'
 
-// Toutes les trames attendues ici sont RECOPIÉES de la capture du 2026-09-25 (appli actiTENS →
-// TENS) : si l'encodage s'écarte d'un octet de ce que l'appli envoie, le test tombe.
+// All the frames expected here are COPIED from the 2026-09-25 capture (actiTENS app →
+// TENS): if the encoding deviates by a byte from what the app sends, the test fails.
 const hex = (s: string) => Uint8Array.from(s.trim().split(/\s+/).map((b) => parseInt(b, 16)))
 const h = (b: Uint8Array) => [...b].map((x) => x.toString(16).padStart(2, '0')).join(' ')
 
@@ -60,8 +60,8 @@ describe('parseFrame', () => {
     expect(parseFrame(hex('1b c0 22 00 af'))).toEqual({ kind: 'reply', cmd: 0x22, payload: new Uint8Array() })
     expect(parseFrame(hex('1b c0 13 01 3c 42'))).toEqual({ kind: 'reply', cmd: 0x13, payload: Uint8Array.of(0x3c) })
     expect(parseFrame(hex('1b e0 14 05 3c 00 00 00 00 20'))?.kind).toBe('event')
-    expect(parseFrame(hex('1b c0 22 00 00'))).toBeNull() // mauvais contrôle
-    expect(parseFrame(hex('1b c0 22 01 af'))).toBeNull() // longueur incohérente
+    expect(parseFrame(hex('1b c0 22 00 00'))).toBeNull() // bad checksum
+    expect(parseFrame(hex('1b c0 22 01 af'))).toBeNull() // inconsistent length
   })
 
   it('maps a command to its reply number', () => {

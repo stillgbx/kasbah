@@ -1,38 +1,38 @@
-// La prévision AROME de Météo-France au pas de 15 minutes, telle qu'Open-Meteo la publie en fichiers
-// `.om` sur un seau S3 ouvert (`data_spatial/<modèle>/<AAAA>/<MM>/<JJ>/<HH>00Z/<AAAA-MM-JJ>T<HHMM>.om`).
-// Le rendu se fait dans le navigateur par `@openmeteo/weather-map-layer` (protocole MapLibre `om://`).
+// The Météo-France AROME forecast at a 15-minute step, as Open-Meteo publishes it as
+// `.om` files on an open S3 bucket (`data_spatial/<model>/<YYYY>/<MM>/<DD>/<HH>00Z/<YYYY-MM-DD>T<HHMM>.om`).
+// Rendering is done in the browser by `@openmeteo/weather-map-layer` (MapLibre `om://` protocol).
 //
-// On ne passe PAS par le `latest.json?time_step=…` de la bibliothèque : elle bâtit le nom du fichier
-// avec des minutes à zéro (`T${HH}00.om`), donc les pas de 15 minutes s'écrasent tous sur l'heure
-// pleine. On lit `latest.json` nous-mêmes (il donne le run et ses échéances) et on construit l'URL
-// exacte de chaque pas. Tout ici est pur : testable sans carte.
+// We do NOT go through the library's `latest.json?time_step=…`: it builds the file name
+// with zeroed minutes (`T${HH}00.om`), so the 15-minute steps all collapse onto the full
+// hour. We read `latest.json` ourselves (it gives the run and its lead times) and build the exact
+// URL of each step. Everything here is pure: testable without a map.
 
 export const AROME_DOMAIN = 'meteofrance_arome_france_hd_15min'
 export const AROME_BASE = `https://openmeteo.s3.amazonaws.com/data_spatial/${AROME_DOMAIN}`
 export const AROME_META_URL = `${AROME_BASE}/latest.json`
-/** La variable dessinée : cumul de précipitations du pas (mm), même palette que la pluie du site d'Open-Meteo. */
+/** The variable drawn: precipitation accumulation of the step (mm), same palette as the rain on Open-Meteo's site. */
 export const AROME_VARIABLE = 'precipitation'
 
 export interface AromeMeta {
-  /** Le run est complet (sinon il manque des échéances). */
+  /** The run is complete (otherwise lead times are missing). */
   completed?: boolean
-  /** Heure du run (ISO). */
+  /** Run time (ISO). */
   reference_time: string
-  /** Échéances disponibles (ISO, pas de 15 min). */
+  /** Available lead times (ISO, 15 min step). */
   valid_times: string[]
   variables?: string[]
 }
 
 export interface AromeFrame {
-  /** Échéance (secondes epoch, comme les images RainViewer). */
+  /** Lead time (epoch seconds, like the RainViewer images). */
   time: number
-  /** URL HTTPS du fichier `.om` de ce pas. */
+  /** HTTPS URL of this step's `.om` file. */
   url: string
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')
 
-/** Chemin du fichier `.om` d'une échéance pour un run donné. */
+/** Path of the `.om` file of a lead time for a given run. */
 export function aromeFileUrl(referenceTime: Date, validTime: Date): string {
   const r = referenceTime, v = validTime
   return `${AROME_BASE}/${r.getUTCFullYear()}/${pad(r.getUTCMonth() + 1)}/${pad(r.getUTCDate())}/${pad(r.getUTCHours())}00Z/`
@@ -40,9 +40,9 @@ export function aromeFileUrl(referenceTime: Date, validTime: Date): string {
 }
 
 /**
- * Les pas à montrer APRÈS maintenant, bornés à `horizonMin` minutes : la prévision prend la suite du
- * radar observé. Un run qui ne porte pas la variable, ou qui n'a rien au-delà de maintenant (run
- * vieux), ne donne aucun pas — le radar reste seul.
+ * The steps to show AFTER now, bounded to `horizonMin` minutes: the forecast takes over from the
+ * observed radar. A run that does not carry the variable, or that has nothing beyond now (old
+ * run), gives no step — the radar stays alone.
  */
 export function aromeFrames(meta: AromeMeta, nowMs: number, horizonMin = 360): AromeFrame[] {
   if (meta.variables && !meta.variables.includes(AROME_VARIABLE)) return []
@@ -58,7 +58,7 @@ export function aromeFrames(meta: AromeMeta, nowMs: number, horizonMin = 360): A
   return out
 }
 
-/** L'URL `om://` que MapLibre demande : le fichier, la variable, et la palette du thème. */
+/** The `om://` URL MapLibre requests: the file, the variable, and the theme's palette. */
 export function aromeSourceUrl(frame: AromeFrame, dark: boolean): string {
   return `om://${frame.url}?variable=${AROME_VARIABLE}${dark ? '&dark=true' : ''}`
 }

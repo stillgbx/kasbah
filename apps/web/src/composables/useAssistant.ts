@@ -2,16 +2,16 @@ import { ref } from 'vue'
 import { getTransport } from '../api'
 import { ApiRequestError, type AssistantEvent } from '../api/transport'
 
-// Une instruction passée à l'assistant (`claude -p` sur le serveur, qui agit par les outils du MCP) :
-// ce qu'il fait, au fil de l'eau, puis sa réponse. Une instruction à la fois ; la suivante efface la
-// précédente, sans mémoire de l'une à l'autre.
+// An instruction passed to the assistant (`claude -p` on the server, which acts through the MCP tools):
+// what it does, as it goes, then its answer. One instruction at a time; the next one erases the
+// previous, with no memory from one to the other.
 
 export interface AssistantAction {
   id: string
-  /** Outil MCP, sans préfixe (`send_command`, `play_radio`…). */
+  /** MCP tool, without prefix (`send_command`, `play_radio`…). */
   name: string
   input: unknown
-  /** `undefined` tant que l'outil n'a pas répondu. */
+  /** `undefined` until the tool has answered. */
   ok?: boolean
 }
 
@@ -19,7 +19,7 @@ export type AssistantPhase = 'idle' | 'running' | 'done' | 'error'
 
 export function useAssistant() {
   const phase = ref<AssistantPhase>('idle')
-  /** L'instruction en cours ou la dernière. */
+  /** The current instruction or the last one. */
   const asked = ref('')
   const actions = ref<AssistantAction[]>([])
   const answer = ref('')
@@ -45,7 +45,7 @@ export function useAssistant() {
     const mine = (abort = new AbortController())
     try {
       await getTransport().assistantAsk(instruction, (e) => { if (abort === mine) apply(e) }, mine.signal)
-      // un flux coupé sans dernier mot (serveur relancé…) ne reste pas « en cours »
+      // a stream cut without a last word (server restarted…) does not stay "running"
       if (abort === mine && phase.value === 'running') {
         error.value = { code: 'NETWORK', message: 'connection closed' }
         phase.value = 'error'
@@ -57,7 +57,7 @@ export function useAssistant() {
     }
   }
 
-  /** Oublie l'instruction. Celle en cours est abandonnée : le serveur arrête claude. */
+  /** Forgets the instruction. The one in progress is abandoned: the server stops claude. */
   function reset() {
     abort?.abort()
     abort = null

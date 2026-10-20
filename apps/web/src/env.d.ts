@@ -1,11 +1,11 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  /** '1' → simulation in-process (aucun serveur), pour les tests et la démo statique. */
+  /** '1' → in-process simulation (no server), for tests and the static demo. */
   readonly VITE_INPROCESS_MOCK?: string
 }
 
-/** Identifiant du build (`vite.config.ts`) ; vide en dev. */
+/** Build identifier (`vite.config.ts`); empty in dev. */
 declare const __KASBAH_BUILD__: string
 
 declare module '*.vue' {

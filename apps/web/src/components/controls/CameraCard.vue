@@ -4,10 +4,10 @@ import type { DeviceDescriptor, StateFor } from '@kasbah/shared'
 import DeviceIcon from '../DeviceIcon.vue'
 import CameraVideo from './CameraVideo.vue'
 
-// Carte d'une caméra : la vidéo en direct quand la caméra sert un flux que le serveur sait relayer
-// (RTSP → MP4 fragmenté, voir `CameraVideo.vue`), et ce que le fabricant en déclare (nature, pièce,
-// protocoles). Une caméra WebRTC (génération récente, aucune dans la maison) attend encore sa
-// prise en charge : la carte le dit au lieu de promettre une vidéo.
+// A camera's card: the live video when the camera serves a stream the server can relay
+// (RTSP → fragmented MP4, see `CameraVideo.vue`), and what the vendor declares about it (kind, room,
+// protocols). A WebRTC camera (recent generation, none in the house) is still awaiting its
+// support: the card says so instead of promising a video.
 const props = defineProps<{ descriptor: DeviceDescriptor; state: StateFor<'camera'>; pending?: boolean; disabled?: boolean }>()
 const camera = computed(() => props.descriptor.meta.camera)
 const protocols = computed(() => camera.value?.protocols ?? [])

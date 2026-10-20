@@ -5,15 +5,15 @@ import type { CommandInput, DeviceDescriptor, FanDirection, StateFor } from '@ka
 import { FAN_DIRECTIONS } from '@kasbah/shared'
 import Segmented from '../ui/Segmented.vue'
 
-// Carte ventilateur : interrupteur, 6 vitesses (segmenté pleine largeur), sens, minuterie, mute.
-// Les vitesses viennent de `meta.fan.speeds` — liste, pas intervalle (même raison que les
-// portions de mangeoire). La minuterie affiche les crans télécommande (1 / 2 / 4 h → 59 / 119 / 239).
+// Fan card: switch, 6 speeds (segmented full width), direction, timer, mute.
+// The speeds come from `meta.fan.speeds` — a list, not a range (same reason as the
+// feeder portions). The timer displays the remote's steps (1 / 2 / 4 h → 59 / 119 / 239).
 const props = defineProps<{
   descriptor: DeviceDescriptor
   state: StateFor<'fan'>
   pending?: boolean
   disabled?: boolean
-  /** Section embarquée dans une carte lumière : pas de titre redondant. */
+  /** Section embedded in a light card: no redundant title. */
   embedded?: boolean
 }>()
 const emit = defineEmits<{ command: [cmd: CommandInput] }>()
@@ -26,7 +26,7 @@ const speedOptions = computed(() => speeds.value.map((n) => ({
   value: String(n), label: String(n), disabled: props.disabled,
 })))
 
-/** Crans de minuterie mesurés sur le CREATE (minutes restantes annoncées). */
+/** Timer steps measured on the CREATE (remaining minutes announced). */
 const TIMER_PRESETS = [
   { min: 0, key: 'off' },
   { min: 59, key: '1h' },
@@ -64,7 +64,7 @@ function setTimer(min: number) {
   run(`timer-${min}`, { type: 'fan.set', timerMin: min })
 }
 
-/** Place réservée : toujours 4 rangées de commandes, même si une capacité manque. */
+/** Reserved space: always 4 rows of controls, even if a capability is missing. */
 const showSpeed = computed(() => has('fan_speed'))
 const showDir = computed(() => has('fan_direction'))
 const showTimer = computed(() => has('fan_timer'))
@@ -86,7 +86,7 @@ const showMute = computed(() => has('mute'))
                 @update:model-value="run('power', { type: 'fan.set', on: !state.on })" />
     </div>
 
-    <!-- Place toujours réservée (règle « rien ne bouge ») : hauteur fixe même ventilateur éteint. -->
+    <!-- Space always reserved ("nothing moves" rule): fixed height even with the fan off. -->
     <div class="fan__section" :class="{ 'fan__section--off': !state.on }">
       <div v-if="showSpeed" class="text-caption text-medium-emphasis mb-1">{{ $t('fan.speed') }}</div>
       <Segmented
@@ -135,7 +135,7 @@ const showMute = computed(() => has('mute'))
 .fan__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .fan__head--embed { margin-bottom: 4px; }
 .fan__mute { display: flex; align-items: center; justify-content: space-between; min-height: 40px; }
-/* Place réservée : section toujours présente ; éteint → contrôles grisés mais hauteur inchangée. */
+/* Reserved space: section always present; off → controls greyed out but height unchanged. */
 .fan__section { min-height: 168px; }
 .fan__section--off { opacity: 0.55; }
 .fan--embedded .fan__section { min-height: 168px; }

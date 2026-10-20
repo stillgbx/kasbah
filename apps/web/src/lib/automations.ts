@@ -5,16 +5,16 @@ import {
 } from '@kasbah/shared'
 import type { IconName } from './strokeIcons'
 
-// Lecture humaine d'une automatisation, et ce que l'éditeur propose. Tout est PUR : les noms
-// (appareils, pièces, places, ambiances) arrivent par un contexte, les mots par `t` — testable sans
-// store ni composant.
+// Human reading of an automation, and what the editor offers. Everything is PURE: the names
+// (devices, rooms, places, light scenes) arrive through a context, the words through `t` — testable without
+// a store or a component.
 
-/** Action telle qu'on l'écrit (type d'ENTRÉE : `mower.park` a un défaut que zod pose au parse). */
+/** Action as it is written (INPUT type: `mower.park` has a default that zod sets at parse). */
 export type ActionDraft = AutomationBody['actions'][number]
 
 type Translate = (key: string, named?: Record<string, unknown> | number, plural?: number) => string
 
-/** Ce qu'il faut pour NOMMER ce qu'une automatisation référence. Un id inconnu se rend tel quel. */
+/** What it takes to NAME what an automation references. An unknown id is rendered as is. */
 export interface NameContext {
   deviceName(id: string): string
   roomName(id: string): string
@@ -24,23 +24,23 @@ export interface NameContext {
   sceneName(id: string): string
 }
 
-// ── icônes et couleurs ──────────────────────────────────────────────────────────────────────────
+// ── icons and colors ────────────────────────────────────────────────────────────────────────────
 
 export function triggerIcon(trigger: Trigger): IconName {
   if (trigger.type === 'state') return 'sensor'
   return trigger.at.kind === 'sun' ? 'sunHorizon' : 'clock'
 }
 
-/** Mêmes teintes que la santé d'un plugin dans les Réglages (`PluginSection`). */
+/** Same tints as a plugin's health in Settings (`PluginSection`). */
 export const HEALTH_DOT: Record<AutomationHealth, string> = {
   ok: 'var(--accent)',
   incomplete: '#d38b22',
   unavailable: '#d24a43',
 }
 
-// ── commandes proposées ─────────────────────────────────────────────────────────────────────────
+// ── offered commands ────────────────────────────────────────────────────────────────────────────
 
-/** Paramètre d'une commande : un pourcentage, un nombre, une adresse, ou un mode dans une liste. */
+/** Parameter of a command: a percentage, a number, an address, or a mode in a list. */
 export type CommandParam =
   | { type: 'pct' }
   | { type: 'number'; min: number; max: number; step: number; unit: string }
@@ -48,14 +48,14 @@ export type CommandParam =
   | { type: 'enum'; values: readonly string[] }
 
 export interface CommandChoice {
-  /** Clé i18n `automations.command.<key>` et identité dans l'éditeur. */
+  /** i18n key `automations.command.<key>` and identity in the editor. */
   key: string
   kind: DeviceKind
-  /** Capacité qu'un appareil doit déclarer pour se voir proposer la commande. */
+  /** Capability a device must declare to be offered the command. */
   requires: Capability
   param?: CommandParam
   build(param?: number | string): CommandInput
-  /** Cette commande est-elle celle-ci ? (relire une automatisation enregistrée) */
+  /** Is this command the same as that one? (re-reading a saved automation) */
   matches(cmd: CommandInput): boolean
 }
 
@@ -63,8 +63,8 @@ const is = (type: string) => (cmd: CommandInput) => cmd.type === type
 const choice = (c: CommandChoice) => c
 
 /**
- * Commandes offertes par kind, dans l'ordre des menus : l'usage courant d'abord. Ce n'est pas tout
- * le contrat — la mangeoire (portions par modèle) et les scènes de lampe attendront d'en avoir besoin.
+ * Commands offered per kind, in menu order: common use first. It is not the whole
+ * contract — the feeder (portions per model) and the lamp scenes will wait until they are needed.
  */
 export const COMMAND_CHOICES: readonly CommandChoice[] = [
   choice({ key: 'light.on', kind: 'light', requires: 'on_off', build: () => ({ type: 'light.set', on: true }), matches: (c) => c.type === 'light.set' && c.on === true && c.brightness === undefined }),
@@ -92,7 +92,7 @@ export const COMMAND_CHOICES: readonly CommandChoice[] = [
   choice({ key: 'vehicle.unlock', kind: 'vehicle', requires: 'lock', build: () => ({ type: 'vehicle.unlock' }), matches: is('vehicle.unlock') }),
   choice({ key: 'vehicle.start_charge', kind: 'vehicle', requires: 'charging', build: () => ({ type: 'vehicle.start_charge' }), matches: is('vehicle.start_charge') }),
   choice({ key: 'vehicle.stop_charge', kind: 'vehicle', requires: 'charging', build: () => ({ type: 'vehicle.stop_charge' }), matches: is('vehicle.stop_charge') }),
-  // bornes de Tesla (15-28 °C, celles du contrat) ; la voiture endormie est réveillée par le plugin
+  // Tesla's bounds (15-28 °C, those of the contract); the sleeping car is woken by the plugin
   choice({ key: 'vehicle.climate_start', kind: 'vehicle', requires: 'climate_precondition', param: { type: 'number', min: 15, max: 28, step: 0.5, unit: '°C' }, build: (p) => ({ type: 'vehicle.climate_start', targetTempC: Number(p ?? 20) }), matches: is('vehicle.climate_start') }),
   choice({ key: 'vehicle.climate_stop', kind: 'vehicle', requires: 'climate_precondition', build: () => ({ type: 'vehicle.climate_stop' }), matches: is('vehicle.climate_stop') }),
   choice({ key: 'ev_charger.start', kind: 'ev_charger', requires: 'charge_control', build: () => ({ type: 'ev_charger.start' }), matches: is('ev_charger.start') }),
@@ -101,7 +101,7 @@ export const COMMAND_CHOICES: readonly CommandChoice[] = [
   choice({ key: 'pet_fountain.off', kind: 'pet_fountain', requires: 'on_off', build: () => ({ type: 'pet_fountain.set_power', on: false }), matches: (c) => c.type === 'pet_fountain.set_power' && !c.on }),
 ]
 
-/** Kinds qu'une action peut commander (ceux qui ont au moins une commande proposée). */
+/** Kinds an action can command (those with at least one offered command). */
 export const COMMANDABLE_KINDS: readonly DeviceKind[] = [...new Set(COMMAND_CHOICES.map((c) => c.kind))]
 
 export function choicesFor(kind: DeviceKind): CommandChoice[] {
@@ -112,7 +112,7 @@ export function choiceOf(cmd: CommandInput): CommandChoice | undefined {
   return COMMAND_CHOICES.find((c) => c.matches(cmd))
 }
 
-/** Valeur du paramètre portée par une commande enregistrée (ce que l'éditeur ré-affiche). */
+/** Value of the parameter carried by a saved command (what the editor re-displays). */
 export function paramOf(cmd: CommandInput): number | string | undefined {
   switch (cmd.type) {
     case 'light.set': return cmd.brightness
@@ -127,8 +127,8 @@ export function paramOf(cmd: CommandInput): number | string | undefined {
 }
 
 /**
- * Fondu d'une lumière (`transitionMs`), en secondes ou en minutes entières. Plafond d'une heure : Hue
- * v2 n'en documente aucun, la v1 s'arrêtait à 109 min.
+ * Fade of a light (`transitionMs`), in seconds or whole minutes. Ceiling of one hour: Hue
+ * v2 documents none, v1 stopped at 109 min.
  */
 export const FADE_MAX_MS = 3_600_000
 export function fadeLabel(ms: number): string {
@@ -137,14 +137,14 @@ export function fadeLabel(ms: number): string {
 
 // ── phrases ─────────────────────────────────────────────────────────────────────────────────────
 
-/** « Tous les jours », « Lun–ven », « Week-end », ou la liste des jours abrégés. */
+/** "Every day", "Mon–Fri", "Weekend", or the list of abbreviated days. */
 export function daysLabel(days: readonly number[] | undefined, t: Translate, locale: string): string {
   if (!days || days.length === 7) return t('automations.summary.everyDay')
   const set = new Set(days)
   if (set.size === 5 && [1, 2, 3, 4, 5].every((d) => set.has(d))) return t('automations.summary.weekdays')
   if (set.size === 2 && set.has(0) && set.has(6)) return t('automations.summary.weekend')
   const fmt = new Intl.DateTimeFormat(locale, { weekday: 'short' })
-  // lundi en tête : 4 janvier 2026 est un dimanche
+  // Monday first: January 4, 2026 is a Sunday
   return [1, 2, 3, 4, 5, 6, 0].filter((d) => set.has(d)).map((d) => fmt.format(new Date(2026, 0, 4 + d))).join(', ')
 }
 
@@ -178,7 +178,7 @@ export function describeTrigger(trigger: Trigger, names: NameContext, t: Transla
   return parts.join(' · ')
 }
 
-/** Libellé d'un kind, précisé par sa nature quand elle est donnée (« Téléviseur » plutôt que « Lecteur »). */
+/** Label of a kind, refined by its nature when given ("TV" rather than "Player"). */
 export function kindLabel(kind: DeviceKind, deviceClass: string | undefined, t: Translate): string {
   if (deviceClass) {
     const ns = kind === 'cover' ? 'cover' : kind === 'media_player' ? 'media' : kind === 'camera' ? 'camera' : null
@@ -187,7 +187,7 @@ export function kindLabel(kind: DeviceKind, deviceClass: string | undefined, t: 
   return t(`kinds.${kind}`)
 }
 
-/** Espaces i18n existants qui nomment déjà les valeurs d'un champ énuméré. */
+/** Existing i18n namespaces that already name the values of an enumerated field. */
 const VALUE_NS: Record<string, string> = { playback: 'media', condition: 'weather.conditions', status: 'charger.status' }
 
 function fieldValue(field: string, value: string | number | boolean, t: Translate): string {
@@ -224,7 +224,7 @@ export function describeTarget(target: Target, names: NameContext, t: Translate)
       ? names.deviceName(target.deviceIds[0]!)
       : t('automations.summary.devices', target.deviceIds.length)
   }
-  // en milieu de phrase : « chaque volet », « sauf pièces avec téléviseur en marche »
+  // mid-sentence: "every shutter", "unless rooms with a TV playing"
   const what = kindLabel(target.kind, target.deviceClass, t).toLowerCase()
   const scope = [
     ...(target.levelIds ?? []).map((id) => names.levelName(id)),
@@ -245,31 +245,31 @@ export function describeAction(a: ActionDraft, names: NameContext, t: Translate)
   return `${verb} · ${describeTarget(a.target, names, t)}${fade}${forMin}`
 }
 
-/** La phrase d'une ligne de liste : « Quand · sauf si … → Alors ». */
-/** Les exceptions, jointes par « ou » (il suffit d'une pour bloquer) ; vide s'il n'y en a pas. */
+/** The phrase of a list line: "When · unless … → Then". */
+/** The exceptions, joined by "or" (one is enough to block); empty if there are none. */
 export function describeUnless(unless: readonly Predicate[], names: NameContext, t: Translate, locale: string): string {
   return unless.map((p) => describePredicate(p, names, t, locale)).join(t('automations.summary.or'))
 }
 
-/** Les actions, dans leur ordre d'exécution. */
+/** The actions, in their execution order. */
 export function describeActions(actions: readonly ActionDraft[], names: NameContext, t: Translate): string {
   return actions.map((x) => describeAction(x, names, t)).join(' ; ')
 }
 
-/** La phrase d'une automatisation, dans l'ordre de l'éditeur : « Quand → Alors · sauf si … ». */
+/** The phrase of an automation, in the editor's order: "When → Then · unless …". */
 export function describeAutomation(a: Pick<AutomationBody, 'trigger' | 'unless' | 'actions'>, names: NameContext, t: Translate, locale: string): string {
   const when = describeTrigger(a.trigger, names, t, locale)
   const unless = a.unless.length ? ` · ${t('automations.summary.unless', { conditions: describeUnless(a.unless, names, t, locale) })}` : ''
   return `${when} → ${describeActions(a.actions, names, t)}${unless}`
 }
 
-// ── brouillon ───────────────────────────────────────────────────────────────────────────────────
+// ── draft ───────────────────────────────────────────────────────────────────────────────────────
 
 export type MissingPart = 'name' | 'trigger' | 'unless' | 'actions'
 
 /**
- * Ce qui manque au brouillon pour être enregistrable, ou `null`. On se fie au schéma partagé — le
- * même que le serveur — plutôt qu'à une copie des règles : un brouillon accepté ici l'est là-bas.
+ * What is missing from the draft to be saveable, or `null`. We rely on the shared schema — the
+ * same as the server's — rather than a copy of the rules: a draft accepted here is accepted over there.
  */
 export function missingPart(draft: AutomationBody): MissingPart | null {
   const r = automationBodySchema.safeParse(draft)
@@ -278,7 +278,7 @@ export function missingPart(draft: AutomationBody): MissingPart | null {
   return first === 'name' || first === 'trigger' || first === 'unless' || first === 'actions' ? first : 'trigger'
 }
 
-/** Appareils nommés par une automatisation (prédicats et cibles nommées), pour la recherche. */
+/** Devices named by an automation (predicates and named targets), for the search. */
 export function involvedDeviceIds(a: Pick<AutomationBody, 'trigger' | 'unless' | 'actions'>): string[] {
   const ids = new Set<string>()
   const walk = (p: Predicate) => {
@@ -291,7 +291,7 @@ export function involvedDeviceIds(a: Pick<AutomationBody, 'trigger' | 'unless' |
   return [...ids]
 }
 
-/** Pièces nommées par une automatisation, pour la recherche. */
+/** Rooms named by an automation, for the search. */
 export function involvedRoomIds(a: Pick<AutomationBody, 'trigger' | 'unless' | 'actions'>): string[] {
   const ids = new Set<string>()
   const walk = (p: Predicate) => {
@@ -305,9 +305,9 @@ export function involvedRoomIds(a: Pick<AutomationBody, 'trigger' | 'unless' | '
 }
 
 /**
- * Id d'une automatisation neuve. `crypto.randomUUID` n'existe qu'en contexte sécurisé (https ou
- * localhost) ; servie en http sur le réseau local, l'app retombe sur 32 caractères hexadécimaux,
- * admis aussi par `AUTOMATION_ID_RE`.
+ * Id of a new automation. `crypto.randomUUID` only exists in a secure context (https or
+ * localhost); served over http on the local network, the app falls back to 32 hexadecimal characters,
+ * also accepted by `AUTOMATION_ID_RE`.
  */
 export function newAutomationId(): string {
   try {
@@ -317,20 +317,20 @@ export function newAutomationId(): string {
   }
 }
 
-/** La copie d'une automatisation : même règle, DÉSACTIVÉE (deux règles identiques agiraient deux fois). */
+/** The copy of an automation: same rule, DISABLED (two identical rules would act twice). */
 export function duplicateBody(body: AutomationBody, name: string): AutomationBody {
   return { ...structuredClone(body), name: name.slice(0, 80), enabled: false }
 }
 
-/** Brouillon d'une automatisation neuve : chaque jour à 07:30, sans action (à compléter). */
+/** Draft of a new automation: every day at 07:30, no action (to be completed). */
 export function blankAutomation(name = ''): AutomationBody {
   return { name, enabled: true, trigger: { type: 'time', at: { kind: 'clock', time: '07:30' } }, unless: [], actions: [] }
 }
 
-/** Types de condition offerts par les menus, dans l'ordre d'usage. */
+/** Condition types offered by the menus, in order of use. */
 export const PREDICATE_TYPES = ['anyInRoom', 'deviceOn', 'device', 'vehicleOnSite', 'vehicleParkedAt', 'timeWindow', 'days', 'dateRange', 'any'] as const satisfies readonly Predicate['type'][]
 
-/** Une condition neuve, à compléter (un id vide rend le brouillon incomplet). */
+/** A new condition, to be completed (an empty id makes the draft incomplete). */
 export function blankPredicate(type: Predicate['type'], today = new Date()): Predicate {
   const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   switch (type) {
@@ -345,7 +345,7 @@ export function blankPredicate(type: Predicate['type'], today = new Date()): Pre
   }
 }
 
-/** Une action neuve : allumer des lumières à choisir, ou rappeler une ambiance à choisir. */
+/** A new action: turn on lights to choose, or recall a light scene to choose. */
 export function blankAction(type: ActionDraft['type']): ActionDraft {
   return type === 'recallScene'
     ? { type, sceneId: '', recall: { mode: 'static' } }

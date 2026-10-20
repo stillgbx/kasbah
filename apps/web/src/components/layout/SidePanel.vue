@@ -1,20 +1,20 @@
 <script setup lang="ts">
-// Panneau latéral (340 px) : carte FLOTTANTE posée sur la scène à droite en paysage large (la scène
-// prend tout l'espace et se cadre dans la partie libre, cf. `HouseScene.setViewInset`), tiroir
-// superposé sinon — feuille qui monte du bas sur un téléphone en portrait.
+// Side panel (340 px): FLOATING card laid on the scene on the right in wide landscape (the scene
+// takes all the space and frames itself in the free part, cf. `HouseScene.setViewInset`), overlaid
+// drawer otherwise — a sheet that rises from the bottom on a portrait phone.
 //
-// La feuille se ferme en la glissant vers le bas par sa poignée (la barre en haut) : lâchée après un
-// quart de sa hauteur, ou lancée d'un geste vif, elle descend et se ferme ; sinon elle remonte.
+// The sheet closes by dragging it down by its handle (the bar at the top): released after a
+// quarter of its height, or thrown with a quick gesture, it goes down and closes; otherwise it comes back up.
 import { computed, nextTick, ref, watch } from 'vue'
 
 const props = defineProps<{ open: boolean; docked: boolean }>()
 const emit = defineEmits<{ close: [] }>()
 
-/** Vitesse (px/ms) d'un geste lancé, qui ferme même court. */
+/** Speed (px/ms) of a thrown gesture, which closes even when short. */
 const FLING = 0.5
 
 const sheet = ref<HTMLElement | null>(null)
-/** De combien la feuille est tirée vers le bas ; `'gone'` : elle part, avant la fermeture. */
+/** How far the sheet is pulled down; `'gone'`: it leaves, before closing. */
 const offset = ref<number | 'gone'>(0)
 const dragging = ref(false)
 let startY = 0
@@ -52,7 +52,7 @@ async function drop() {
   dragging.value = false
   const pulled = typeof offset.value === 'number' ? offset.value : 0
   if (pulled > (sheet.value?.offsetHeight ?? 0) / 4 || (speed > FLING && pulled > 16)) {
-    // elle descend d'où le doigt l'a laissée ; la fermeture suit, une fois le style posé
+    // it goes down from where the finger left it; the closing follows, once the style is set
     offset.value = 'gone'
     await nextTick()
     emit('close')
@@ -79,15 +79,15 @@ async function drop() {
 .side-panel { width: var(--aside-w); background: var(--surface); display: flex; flex-direction: column; min-height: 0; }
 .side-panel--docked {
   position: absolute; top: calc(var(--safe-top) + var(--panel-gap)); right: calc(var(--safe-right) + var(--panel-gap)); bottom: calc(var(--safe-bottom) + var(--panel-gap)); z-index: 3;
-  border-radius: 20px; border: 1px solid var(--line); box-shadow: var(--shadow); overflow: hidden;   /* la barre de défilement suit l'arrondi */
+  border-radius: 20px; border: 1px solid var(--line); box-shadow: var(--shadow); overflow: hidden;   /* the scrollbar follows the rounding */
   background: color-mix(in srgb, var(--surface) 86%, transparent); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
 }
 .side-panel--docked .side-panel__scroll { --panel-pad-top: 20px; }
-/* Le contenu s'évanouit en bas plutôt que d'être tranché par le bord : le masque fond les 36 derniers
-   pixels (barre de défilement comprise). En haut, c'est l'en-tête collant qui porte son propre fondu
-   (`.panel-head`, styles/app.css) — un masque en haut le ferait disparaître lui aussi. */
+/* The content fades out at the bottom rather than being cut by the edge: the mask melts the last 36
+   pixels (scrollbar included). At the top, it is the sticky header that carries its own fade
+   (`.panel-head`, styles/app.css) — a mask at the top would make it disappear too. */
 .side-panel__scroll { mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent); -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent); }
-/* barre fine, sans flèches (elles dépassaient de l'arrondi), qui ne se voit qu'au survol */
+/* thin bar, without arrows (they stuck out of the rounding), only seen on hover */
 .side-panel__scroll::-webkit-scrollbar { width: 6px; }
 .side-panel__scroll::-webkit-scrollbar-button { display: none; height: 0; }
 .side-panel__scroll::-webkit-scrollbar-track { background: transparent; }
@@ -96,20 +96,20 @@ async function drop() {
 .side-panel__scroll:hover { scrollbar-color: var(--line) transparent; }
 .side-panel--overlay { position: absolute; top: 0; right: 0; bottom: 0; z-index: 30; border-left: 1px solid var(--line); box-shadow: var(--shadow); max-width: 92vw; padding-top: var(--safe-top); }
 .side-panel__scrim { position: absolute; inset: 0; z-index: 29; background: rgba(0, 0, 0, .25); }
-/* la poignée n'existe que sur la feuille du téléphone */
+/* the handle only exists on the phone's sheet */
 .side-panel__grip { display: none; }
-/* colonne flex (et non grille) : un enfant peut se caler au FOND avec margin-top: auto, comme la section
-   « Emplacement » du panneau appareil ; les enfants s'étirent en largeur comme avant */
-/* `overflow-x: hidden` : garde-fou. Chaque contenu se charge de tenir dans la largeur (points de
-   suspension, MarqueeText, coupure d'un id) ; si l'un d'eux oublie, il est découpé ici plutôt que
-   de sortir du panneau et de passer par-dessus la vue 3D. */
-/* `--panel-pad-top` : la marge haute du contenu, que l'en-tête collant (`.panel-head`) reprend pour la
-   couvrir et s'y caler (voir styles/app.css) — une seule valeur, déclarée ici, lue là. */
+/* flex column (not grid): a child can pin itself to the BOTTOM with margin-top: auto, like the
+   "Location" section of the device panel; the children stretch in width as before */
+/* `overflow-x: hidden`: safeguard. Each content takes care of fitting in the width (ellipsis,
+   MarqueeText, cutting an id); if one of them forgets, it is clipped here rather than
+   leaving the panel and passing over the 3D view. */
+/* `--panel-pad-top`: the content's top margin, which the sticky header (`.panel-head`) takes back to
+   cover it and pin itself there (see styles/app.css) — a single value, declared here, read there. */
 .side-panel__scroll { --panel-pad-top: calc(var(--safe-top) + 20px); flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; padding: var(--panel-pad-top) 22px calc(var(--safe-bottom) + 36px); display: flex; flex-direction: column; gap: 20px; position: relative; isolation: isolate; }
 .side-panel--overlay .side-panel__scroll { padding-top: 20px; }
 .slide-enter-active, .slide-leave-active { transition: transform .22s ease; }
 .slide-enter-from, .slide-leave-to { transform: translateX(100%); }
-/* Téléphone en portrait : une feuille qui monte du bas, la scène reste visible au-dessus. */
+/* Phone in portrait: a sheet that rises from the bottom, the scene stays visible above. */
 @media (max-width: 599px) {
   .side-panel--overlay {
     top: auto; left: 0; width: auto; max-width: none; height: 64dvh; padding-top: 0;
@@ -117,10 +117,10 @@ async function drop() {
   }
   .side-panel--overlay .side-panel__scroll { padding-inline: var(--page-x); padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 36px); }
   .slide-enter-from, .slide-leave-to { transform: translateY(100%); }
-  /* lâchée, la feuille remonte (ou descend) au même pas que son ouverture */
+  /* released, the sheet goes back up (or down) at the same pace as its opening */
   .side-panel--overlay { transition: transform .22s ease; }
-  /* La poignée : une bande de 28 px posée sur la marge haute du contenu, que celle-ci prend (le
-     contenu descend de 8 px). Elle seule se glisse : le reste de la feuille défile. */
+  /* The handle: a 28 px band placed on the content's top margin, which takes it (the
+     content goes down by 8 px). Only it slides: the rest of the sheet scrolls. */
   .side-panel__grip {
     display: grid; place-items: center; position: absolute; top: 0; left: 0; right: 0; z-index: 3;
     height: 28px; touch-action: none; cursor: grab;

@@ -15,10 +15,10 @@ const state = (over: Partial<StateFor<'vehicle'>> = {}): StateFor<'vehicle'> =>
 const ticks = (w: ReturnType<typeof mount>) =>
   w.findAll('.soc__tick').map((t) => [t.attributes('style'), t.attributes('title')])
 
-describe('VehicleCard — repères de la jauge', () => {
+describe('VehicleCard — gauge marks', () => {
   beforeEach(() => { setActivePinia(createPinia()) })
 
-  it('pose la cible de charge et le plancher voulu quand le fabricant les donne', () => {
+  it('places the charge target and the desired floor when the vendor gives them', () => {
     const w = mount(VehicleCard, { props: { descriptor: descriptor(), state: state({ chargeLimit: 80, socMin: 20 }) } })
     expect(ticks(w)).toEqual([
       ['left: 20%;', 'Plancher voulu 20 %'],
@@ -26,25 +26,25 @@ describe('VehicleCard — repères de la jauge', () => {
     ])
   })
 
-  it('n’invente aucun repère : Tesla n’a pas de plancher, et un véhicule muet n’a rien à marquer', () => {
+  it('invents no mark: Tesla has no floor, and a silent vehicle has nothing to mark', () => {
     const tesla = mount(VehicleCard, { props: { descriptor: descriptor(), state: state({ chargeLimit: 80 }) } })
     expect(ticks(tesla)).toEqual([['left: 80%;', 'Cible de charge 80 %']])
     const mute = mount(VehicleCard, { props: { descriptor: descriptor(['soc', 'range']), state: state() } })
     expect(ticks(mute)).toHaveLength(0)
   })
 
-  /** Le repère est la CIBLE, pas l'état : il suit le palier qu'on vient de toucher, sans attendre la voiture. */
-  it('le repère de cible suit le réglage en cours', async () => {
+  /** The mark is the TARGET, not the state: it follows the step just touched, without waiting for the car. */
+  it('the target mark follows the current setting', async () => {
     const w = mount(VehicleCard, { props: { descriptor: descriptor(), state: state({ chargeLimit: 80 }) } })
     await w.findAll('.limit__step').find((b) => b.text() === '90')!.trigger('click')
     expect(ticks(w)).toEqual([['left: 90%;', 'Cible de charge 90 %']])
   })
 })
 
-describe('VehicleCard — tuiles', () => {
+describe('VehicleCard — tiles', () => {
   beforeEach(() => { setActivePinia(createPinia()) })
 
-  it('verrouiller et charger sont TOUJOURS là, grisés avec leur raison quand le véhicule ne sait pas', () => {
+  it('lock and charge are ALWAYS there, greyed out with their reason when the vehicle cannot', () => {
     const w = mount(VehicleCard, { props: { descriptor: descriptor(['soc', 'range']), state: state() } })
     const tiles = w.findAll('.tiles button')
     expect(tiles).toHaveLength(2)
@@ -53,10 +53,10 @@ describe('VehicleCard — tuiles', () => {
   })
 })
 
-describe('VehicleCard — charge demandée', () => {
+describe('VehicleCard — requested charge', () => {
   beforeEach(() => { setActivePinia(createPinia()); setTransport(null) })
 
-  it('le bouton TOURNE tant que la voiture ne se dit pas en charge, puis devient « Arrêter la charge »', async () => {
+  it('the button SPINS as long as the car does not report charging, then becomes "Stop charging"', async () => {
     setTransport({ ...createMockTransport({ seed: 1 }), sendCommand: async () => {} })
     const d = descriptor(['soc', 'range', 'charging'])
     const devices = useDevicesStore()

@@ -10,9 +10,9 @@ import NavRail from './components/layout/NavRail.vue'
 import SearchPalette from './components/layout/SearchPalette.vue'
 import NewPropertyDialog from './components/property/NewPropertyDialog.vue'
 
-// Coquille : rail de navigation à gauche (barre en bas sur un téléphone en portrait), POSÉ sur la vue courante (il n'a ni fond ni bord : la vue
-// Maison étend sa scène 3D dessous, les autres vues se décalent de sa largeur). Charge la maison et
-// ouvre le push.
+// Shell: navigation rail on the left (bar at the bottom on a portrait phone), LAID OVER the current view (it has no background or border: the
+// House view extends its 3D scene underneath, the other views shift by its width). Loads the house and
+// opens the push.
 const house = useHouseStore()
 const devices = useDevicesStore()
 const notifications = useNotificationsStore()
@@ -35,7 +35,7 @@ onBeforeUnmount(() => devices.stop())
     <ConnectionBanner />
     <AppUpdateBanner />
     <SearchPalette />
-    <!-- « Créer une propriété » : ouverte depuis le sélecteur du rail ou la carte des Réglages -->
+    <!-- "Create a property": opened from the rail selector or the Settings card -->
     <NewPropertyDialog />
     <v-snackbar-queue
       :model-value="notifications.queue.map((n) => ({ text: n.text, color: n.color, timeout: n.timeout }))"
@@ -48,6 +48,6 @@ onBeforeUnmount(() => devices.stop())
 <style>
 .app-shell .v-application__wrap { position: relative; height: 100dvh; overflow: hidden; }
 .app-main { position: relative; height: 100%; min-width: 0; min-height: 0; display: flex; flex-direction: column; padding-left: var(--rail-w); padding-bottom: var(--dock-h); background: var(--bg); }
-/* En portrait, la barre du bas porte l'encoche basse : les vues n'ont plus à la réserver. */
+/* In portrait, the bottom bar carries the bottom notch: views no longer need to reserve it. */
 @media (max-width: 599px) { .app-main { --safe-bottom: 0px; } }
 </style>

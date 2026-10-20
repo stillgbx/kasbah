@@ -1,74 +1,74 @@
 import { PANEL_PEAK_W, panelDeviceId, type DeviceDescriptor, type DeviceEntry, type PanelArray } from '@kasbah/shared'
 
-// Une installation publie PLUSIEURS appareils `energy` : le site, qui mesure production,
-// consommation et réseau, et une batterie par unité de stockage. Prendre « le premier `energy`
-// trouvé » donnait donc une batterie dès qu'il y en avait une, et la vue Énergie affichait 0 W de
-// production avec une charge à 100 %. Ce qui distingue le site, c'est qu'il mesure le RÉSEAU.
+// An installation publishes SEVERAL `energy` devices: the site, which measures production,
+// consumption and grid, and one battery per storage unit. Taking "the first `energy`
+// found" therefore gave a battery as soon as there was one, and the Energy view displayed 0 W of
+// production with a charge at 100 %. What distinguishes the site is that it measures the GRID.
 
 /**
- * Zone morte autour de zéro : en dessous, rien ne passe — un fil du schéma de flux ne doit pas
- * scintiller, ni un coffret de batterie pulser dans la scène. Le seuil est BAS, et c'est une
- * mesure, pas un confort de lecture. Deux relevés sur la vraie passerelle le fixent :
+ * Dead zone around zero: below it, nothing flows — a wire of the flow diagram must not
+ * flicker, nor a battery cabinet pulse in the scene. The threshold is LOW, and it is a
+ * measurement, not a reading comfort. Two readings on the real gateway set it:
  *
- *   - les pinces mesurent FIN : `prod 25 − réseau 5 + batterie 1089 = conso 1109` se ferme au watt.
- *     Un « −5 W » peut donc être 5 W d'injection réels, et rien n'oblige à un gros seuil ;
- *   - mais elles ne s'accordent pas toujours : sur huit relevés d'affilée, le bilan laisse un reste
- *     de 0 à 11 W. À quoi s'ajoutait une production à −7 W la nuit (la veille des onduleurs lue à
- *     l'envers), désormais ramenée à 0 par le plugin lui-même.
+ *   - the clamps measure FINELY: `prod 25 − grid 5 + battery 1089 = cons 1109` closes to the watt.
+ *     A "−5 W" can therefore be 5 W of real injection, and nothing requires a big threshold;
+ *   - but they do not always agree: over eight consecutive readings, the balance leaves a remainder
+ *     of 0 to 11 W. To which was added a production at −7 W at night (the inverters' standby read
+ *     backwards), now brought back to 0 by the plugin itself.
  *
- * 10 W est donc posé au niveau de ce DÉSACCORD entre compteurs, pas en dessous : plus bas, c'est le
- * désaccord lui-même qu'on dessinerait comme un flux. Et c'est encore sous une ampoule LED, donc
- * rien que le foyer appellerait une charge n'est masqué — 17 W de soutirage, relevés, s'affichent.
- * Ce qui reste est une zone morte autour de zéro, juste assez large pour que « soutirage » et
- * « injection » ne s'échangent pas d'une lecture à l'autre. Ne PAS caler ce seuil sur l'appli
- * Enphase (0,1 kW) : elle arrondit, elle ne mesure pas.
+ * 10 W is therefore set at the level of this DISAGREEMENT between meters, not below it: lower, it is the
+ * disagreement itself that we would draw as a flow. And it is still under an LED bulb, so
+ * nothing the household would call a load is masked — 17 W of draw, measured, are displayed.
+ * What remains is a dead zone around zero, just wide enough that "draw" and
+ * "injection" do not swap from one reading to the next. Do NOT set this threshold on the Enphase
+ * app (0.1 kW): it rounds, it does not measure.
  */
 export const IDLE_W = 10
 
-/** Le site d'une installation : lui seul déclare `grid`. Une batterie n'a que `storage`. */
+/** An installation's site: it alone declares `grid`. A battery only has `storage`. */
 export function isEnergySite(descriptor: DeviceDescriptor): boolean {
   return descriptor.kind === 'energy' && descriptor.capabilities.includes('grid')
 }
 
 /**
- * Le site parmi les appareils connus. Repli sur le premier `energy` venu si aucun ne déclare le
- * réseau : une passerelle sans compteur vaut mieux que rien du tout.
+ * The site among the known devices. Falls back to the first `energy` found if none declares the
+ * grid: a gateway without a meter is better than nothing at all.
  */
 export function findEnergySite(list: readonly DeviceEntry[]): DeviceEntry | undefined {
   return list.find((e) => isEnergySite(e.descriptor)) ?? list.find((e) => e.descriptor.kind === 'energy')
 }
 
-/** Les unités de stockage : des `energy` qui ne mesurent pas le réseau. */
+/** The storage units: `energy` devices that do not measure the grid. */
 export function findBatteries(list: readonly DeviceEntry[]): DeviceEntry[] {
   return list.filter((e) => e.descriptor.kind === 'energy' && !isEnergySite(e.descriptor))
 }
 
-// --- Onduleurs d'une installation, rangés par champ ---------------------------------------------
-// Un micro-onduleur est publié comme un CAPTEUR de puissance (un par module) : c'est `house.arrays`
-// qui dit lequel est posé où. La vue Énergie les redessine donc en GRILLE, rangées et colonnes du
-// champ — la même vue que la scène 3D, en texte : une case correspond à un module du toit, au même
-// endroit. Une liste à plat de vingt numéros de série ne dit rien du toit réel.
+// --- Inverters of an installation, arranged by array ---------------------------------------------
+// A micro-inverter is published as a power SENSOR (one per module): it is `house.arrays`
+// that says which one is placed where. The Energy view therefore redraws them as a GRID, rows and columns of the
+// array — the same view as the 3D scene, in text: a cell matches a module of the roof, in the same
+// place. A flat list of twenty serial numbers says nothing about the real roof.
 
-/** Une case du champ : sa place (comptée depuis 1), et l'onduleur qui s'y trouve — ou personne. */
+/** A cell of the array: its place (counted from 1), and the inverter found there — or nobody. */
 export interface InverterCell {
-  /** Identifiant de l'EMPLACEMENT (`panelDeviceId`) : stable même quand la case est vide. */
+  /** Identifier of the PLACE (`panelDeviceId`): stable even when the cell is empty. */
   key: string
   id: string | null
-  /** Nom publié par le plugin (« Onduleur 09158 »), vide pour une case sans onduleur. */
+  /** Name published by the plugin ("Onduleur 09158"), empty for a cell without an inverter. */
   name: string
-  /** Fin du numéro de série, comme dans la grille du panneau de réglage ; sinon la place (« 2-5 »). */
+  /** End of the serial number, as in the settings panel's grid; otherwise the place ("2-5"). */
   label: string
   row: number
   col: number
   watts: number
   available: boolean
-  /** Record de l'onduleur (W, 0 = il n'en publie pas) : sa plus haute valeur jamais rapportée. */
+  /** The inverter's record (W, 0 = it publishes none): its highest value ever reported. */
   maxW: number
 }
 
 /**
- * Les onduleurs d'un champ, en grille. `index` = rang du champ dans la liste reçue, `null` pour le
- * groupe des orphelins (une seule colonne : ils n'ont pas de place à montrer).
+ * The inverters of an array, as a grid. `index` = rank of the array in the received list, `null` for the
+ * group of orphans (a single column: they have no place to show).
  */
 export interface InverterGroup {
   id: string
@@ -76,42 +76,42 @@ export interface InverterGroup {
   index: number | null
   rows: number
   cols: number
-  /** `rows × cols` cases, rangée par rangée : la grille du champ, trous compris. */
+  /** `rows × cols` cells, row by row: the array's grid, gaps included. */
   cells: InverterCell[]
   totalW: number
-  /** Crête d'un module du champ (Wc), telle que déclarée. */
+  /** Peak of one of the array's modules (Wp), as declared. */
   peakW: number
   /**
-   * Échelle des jauges du champ : la plus grande des trois valeurs en jeu — crête du module,
-   * puissance de sortie de l'onduleur, meilleur record de ses onduleurs. Sans ça, un repère plus
-   * haut que la crête du verre disparaissait sans rien dire : un IQ8P à 480 W sous un module de
-   * 450 Wc, et le plafond n'était nulle part.
+   * Scale of the array's gauges: the greatest of the three values at play — module peak,
+   * inverter output power, best record of its inverters. Without it, a marker higher
+   * than the glass's peak disappeared without a word: an IQ8P at 480 W under a
+   * 450 Wp module, and the ceiling was nowhere.
    */
   scaleW: number
   /**
-   * Puissance de sortie max des onduleurs du champ (W, 0 = inconnue) : le plafond de ce qu'une case
-   * peut afficher. Marqué d'un repère sur la jauge — sans lui, une jauge qui s'arrête aux trois
-   * quarts par beau temps se lit comme un défaut alors que c'est l'onduleur qui est au taquet.
+   * Max output power of the array's inverters (W, 0 = unknown): the ceiling of what a cell
+   * can display. Marked with a tick on the gauge — without it, a gauge that stops at three
+   * quarters in fine weather reads as a defect while it is the inverter that is maxed out.
    */
   maxOutputW: number
 }
 
-/** Les capteurs de puissance de l'installation : un par micro-onduleur (voir `freeInverters`). */
+/** The installation's power sensors: one per micro-inverter (see `freeInverters`). */
 export function isInverter(descriptor: DeviceDescriptor, pluginId: string): boolean {
   return descriptor.kind === 'sensor' && descriptor.meta.sensor?.deviceClass === 'power' && descriptor.pluginId === pluginId
 }
 
 /**
- * Fin de l'identifiant du fabricant : de quoi reconnaître un onduleur dans une case. CINQ caractères,
- * la même longueur que celle des noms publiés par le plugin (« Onduleur 09158 ») — la grille de
- * réglage d'un champ et celle de la vue Énergie coupent le numéro de série au même endroit, et se
- * lisent donc l'une avec l'autre.
+ * End of the vendor's identifier: enough to recognize an inverter in a cell. FIVE characters,
+ * the same length as the names published by the plugin ("Onduleur 09158") — an array's
+ * settings grid and that of the Energy view cut the serial number at the same place, and thus
+ * read against each other.
  */
 const SHORT_SERIAL = 5
 export function shortInverterId(deviceId: string): string {
   const ext = deviceId.split(':')[1] ?? deviceId
-  // la FIN DES CHIFFRES quand il y en a (un numéro de série se retrouve par ses derniers chiffres) ;
-  // à défaut la fin de l'identifiant, sans ponctuation
+  // the END OF THE DIGITS when there are some (a serial number is found by its last digits);
+  // failing that the end of the identifier, without punctuation
   const digits = /\d+$/.exec(ext)?.[0]
   return (digits ?? ext.replace(/[^a-z0-9]/gi, '')).slice(-SHORT_SERIAL).toUpperCase()
 }
@@ -125,21 +125,21 @@ function toCell(key: string, row: number, col: number, entry: DeviceEntry | unde
     label: entry ? shortInverterId(entry.descriptor.id) : `${row}-${col}`,
     row,
     col,
-    // un onduleur muet (la nuit, ou en panne) ne vaut pas zéro : il ne dit rien, et la case le dit
+    // a mute inverter (at night, or broken) is not worth zero: it says nothing, and the cell says so
     watts: state?.available ? state.value : 0,
     available: !!state?.available,
-    // le record survit à l'indisponibilité : il ne décrit pas l'instant, et la nuit ne l'efface pas
+    // the record survives unavailability: it does not describe the instant, and the night does not erase it
     maxW: state?.maxValue ?? 0,
   }
 }
 
 /**
- * Les onduleurs groupés par champ, chaque groupe en grille `rows × cols` rangée par rangée — l'ordre
- * de `panels`, celui des modules dérivés (`panelArrayDevices`), donc celui de la scène 3D : la
- * rangée 1 est celle de l'origine du champ, la colonne 1 son premier module. Les emplacements vides
- * gardent leur case, sinon la grille ne ressemblerait plus au toit. Un champ dont AUCUN emplacement
- * n'est équipé ne fait pas de groupe ; les onduleurs qu'aucun champ ne porte se retrouvent dans un
- * dernier groupe anonyme (`index: null`), triés par nom — sinon ils disparaîtraient de la vue.
+ * The inverters grouped by array, each group as a `rows × cols` grid row by row — the order
+ * of `panels`, that of the derived modules (`panelArrayDevices`), hence that of the 3D scene: row 1
+ * is the one at the array's origin, column 1 its first module. Empty places
+ * keep their cell, otherwise the grid would no longer look like the roof. An array with NO place
+ * equipped makes no group; the inverters that no array carries end up in a
+ * last anonymous group (`index: null`), sorted by name — otherwise they would vanish from the view.
  */
 export function inverterGroups(arrays: readonly PanelArray[], inverters: readonly DeviceEntry[]): InverterGroup[] {
   const byId = new Map(inverters.map((e) => [e.descriptor.id, e]))
@@ -153,7 +153,7 @@ export function inverterGroups(arrays: readonly PanelArray[], inverters: readonl
       const row = Math.floor(i / a.cols) + 1, col = (i % a.cols) + 1
       const id = a.panels[i] ?? null
       if (id) placed.add(id)
-      // un identifiant écrit dans la maison dont le plugin ne publie rien : la case reste vide
+      // an identifier written in the house for which the plugin publishes nothing: the cell stays empty
       const entry = id ? byId.get(id) : undefined
       const cell = toCell(panelDeviceId(a.id, row - 1, col - 1), row, col, entry)
       if (entry) { bound++; totalW += cell.watts }
@@ -169,8 +169,8 @@ export function inverterGroups(arrays: readonly PanelArray[], inverters: readonl
     .sort((a, b) => a.descriptor.name.localeCompare(b.descriptor.name, undefined, { numeric: true }))
     .map((e, i) => toCell(e.descriptor.id, i + 1, 1, e))
   if (loose.length > 0) {
-    // une seule colonne : sans champ, aucune place à dessiner. La crête par défaut, faute de module
-    // déclaré, et aucun écrêtage — personne ne dit quels onduleurs sont derrière.
+    // a single column: without an array, no place to draw. The default peak, for lack of a declared
+    // module, and no clipping — nobody says which inverters are behind.
     groups.push({
       id: '', name: null, index: null, rows: loose.length, cols: 1, cells: loose, totalW: sumW(loose),
       peakW: PANEL_PEAK_W, maxOutputW: 0, scaleW: Math.max(PANEL_PEAK_W, ...loose.map((c) => c.maxW)),

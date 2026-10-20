@@ -63,7 +63,7 @@ describe('draft helpers', () => {
   it('says what is missing, in the order of the form', () => {
     expect(missingPart(blankAutomation())).toBe('name')
     expect(missingPart({ ...blankAutomation('Nuit') })).toBe('actions')
-    expect(missingPart({ ...blankAutomation('Nuit'), actions: [blankAction('command')] })).toBe('actions')   // aucun appareil choisi
+    expect(missingPart({ ...blankAutomation('Nuit'), actions: [blankAction('command')] })).toBe('actions')   // no device chosen
     expect(missingPart({ ...dusk, unless: [blankPredicate('deviceOn')] })).toBe('unless')
     expect(missingPart(dusk)).toBeNull()
   })

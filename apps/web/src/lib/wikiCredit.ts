@@ -1,9 +1,9 @@
 /**
- * Les présentations d'album ou d'artiste de YouTube Music sont souvent tirées de Wikipédia et finissent
- * par leur source et leur licence (« Source : Wikipedia (url), licence : Creative Commons… », « From
- * Wikipedia (url) under Creative Commons… »). On sépare le texte de cette mention, pour l'écrire en
- * petit dessous — sans les URL, que YouTube tronque (« …/Erik_Sa..., licence », parfois sans parenthèse
- * fermante) et qui peuvent contenir leurs propres parenthèses (« Paradise_(EP) »).
+ * YouTube Music's album or artist descriptions are often drawn from Wikipedia and end
+ * with their source and license ("Source : Wikipedia (url), licence : Creative Commons…", "From
+ * Wikipedia (url) under Creative Commons…"). We separate the text from this mention, to write it
+ * small below — without the URLs, which YouTube truncates ("…/Erik_Sa..., licence", sometimes without a closing
+ * parenthesis) and which may contain their own parentheses ("Paradise_(EP)").
  */
 const CREDIT = /\s*((?:Source\s*:|From)\s+Wikip[eé]dia\b[\s\S]*)$/i
 

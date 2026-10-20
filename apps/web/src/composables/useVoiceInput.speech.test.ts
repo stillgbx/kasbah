@@ -10,9 +10,9 @@ import type * as Wav from '../lib/wav'
 import { useHouseStore } from '../stores/house'
 import { useVoiceInput } from './useVoiceInput'
 
-// Réponses parlées allumées (sous-item `speech`) : la réponse rendue par l'appelant est demandée au
-// serveur et jouée ICI ; un toucher du micro pendant la lecture l'arrête. Fichier à part : le statut
-// du plugin n'est demandé qu'une fois par chargement de page (donc de module).
+// Spoken replies on (`speech` sub-item): the reply returned by the caller is requested from the
+// server and played HERE; a touch of the microphone during playback stops it. Separate file: the
+// plugin's status is only requested once per page load (hence per module).
 
 vi.mock('../lib/wav', async (orig) => ({ ...(await orig<typeof Wav>()), toMono16k: vi.fn(async () => new Float32Array(16_000)) }))
 
@@ -59,7 +59,7 @@ function harness(answer: string | null) {
   return () => api
 }
 
-it('dit la réponse à voix haute sur cet appareil, et un toucher du micro l’arrête', async () => {
+it('says the reply aloud on this device, and a touch of the microphone stops it', async () => {
   const api = harness('Les spots de la cuisine sont allumés.')
   await flushPromises()
   api().toggle(); await flushPromises()
@@ -72,7 +72,7 @@ it('dit la réponse à voix haute sur cet appareil, et un toucher du micro l’a
   expect(api().phase.value).toBe('idle')
 })
 
-it('revient au repos à la fin de la lecture', async () => {
+it('returns to rest at the end of playback', async () => {
   const api = harness('Fait.')
   await flushPromises()
   api().toggle(); await flushPromises()
@@ -81,7 +81,7 @@ it('revient au repos à la fin de la lecture', async () => {
   expect(api().phase.value).toBe('idle')
 })
 
-it('réécoute une réponse à la demande, et le même bouton l’arrête', async () => {
+it('replays a reply on demand, and the same button stops it', async () => {
   const api = harness(null)
   await flushPromises()
   expect(api().speech.value).toBe(true)
@@ -93,7 +93,7 @@ it('réécoute une réponse à la demande, et le même bouton l’arrête', asyn
   expect(api().phase.value).toBe('idle')
 })
 
-it('réécoute sans refaire la synthèse, tant que la réponse n’est pas oubliée', async () => {
+it('replays without redoing the synthesis, as long as the reply is not forgotten', async () => {
   const api = harness('Fait.')
   await flushPromises()
   api().toggle(); await flushPromises()
@@ -111,7 +111,7 @@ it('réécoute sans refaire la synthèse, tant que la réponse n’est pas oubli
   expect(speak).toHaveBeenCalledTimes(3)
 })
 
-it('ne parle pas quand l’appelant ne rend pas de réponse (erreur de l’assistant)', async () => {
+it('does not speak when the caller returns no reply (assistant error)', async () => {
   const api = harness(null)
   await flushPromises()
   api().toggle(); await flushPromises()
@@ -119,7 +119,7 @@ it('ne parle pas quand l’appelant ne rend pas de réponse (erreur de l’assis
   expect(speak).not.toHaveBeenCalled()
 })
 
-it('envoie les abréviations des niveaux avec la réponse, pour que la synthèse dise leur nom', async () => {
+it('sends the levels\' abbreviations with the reply, so that the synthesis says their name', async () => {
   useHouseStore().house = parseHouse(demo)
   const api = harness(null)
   await flushPromises()

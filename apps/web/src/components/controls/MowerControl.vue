@@ -9,22 +9,22 @@ import MarqueeText from '../ui/MarqueeText.vue'
 const props = defineProps<{ descriptor: DeviceDescriptor; state: StateFor<'mower'>; pending?: boolean; disabled?: boolean }>()
 const emit = defineEmits<{ command: [cmd: CommandInput] }>()
 const { d, t, locale } = useI18n()
-// la ligne d'état, la même que sur la vue Robots : l'erreur du fabricant (« Erreur 2 · No loop
-// signal · il y a 3 h »), sinon ce qui retient le robot, sinon OÙ il tond. Ligne réservée, fixe :
-// rien ne bouge quand la phrase change ou s'efface ; trop longue, elle défile
+// the status line, the same as on the Robots view: the vendor's error ("Error 2 · No loop
+// signal · 3 h ago"), otherwise what holds the robot back, otherwise WHERE it mows. Reserved, fixed line:
+// nothing moves when the sentence changes or clears; too long, it scrolls
 const now = ref(Date.now())
 let clock: ReturnType<typeof setInterval> | undefined
 onMounted(() => { clock = setInterval(() => { now.value = Date.now() }, 30_000) })
 onBeforeUnmount(() => clearInterval(clock))
 const status = computed(() => mowerStatus(props.state, t, now.value, locale.value))
 const has = (c: Capability) => props.descriptor.capabilities.includes(c)
-// une erreur que le fabricant lève à distance : le lien, au bout de la ligne d'état
+// an error the vendor clears remotely: the link, at the end of the status line
 const confirmable = computed(() => has('confirm_error') && props.state.activity === 'error' && props.state.errorConfirmable === true)
 </script>
 
 <template>
   <div>
-    <!-- l'activité est déjà le grand titre du panneau : ici, le prochain départ seul, ligne réservée -->
+    <!-- the activity is already the panel's big title: here, the next start only, reserved line -->
     <div class="text-caption text-medium-emphasis mower__next">{{ state.nextStartAt ? $t('mower.nextStart', { time: d(new Date(state.nextStartAt), 'short') }) : '' }}</div>
     <div class="mower__statusrow">
       <MarqueeText class="text-caption mower__status" :class="state.activity === 'error' ? 'text-error' : 'text-medium-emphasis'" :text="status" />
@@ -41,7 +41,7 @@ const confirmable = computed(() => has('confirm_error') && props.state.activity 
       <v-btn class="flex-grow-1" height="56" variant="tonal" prepend-icon="parking" :disabled="disabled || state.activity === 'parked'"
              @click="emit('command', { type: 'mower.park', untilNextSchedule: true })">{{ $t('common.park') }}</v-btn>
     </div>
-    <!-- « Tondre » sans durée : le robot oublie pause et consignes et suit son planning -->
+    <!-- "Mow" without a duration: the robot forgets pause and setpoints and follows its schedule -->
     <v-btn v-if="has('schedule') && has('mow')" block class="mt-2" height="44" variant="tonal" prepend-icon="calendar" :disabled="disabled"
            @click="emit('command', { type: 'mower.start' })">{{ $t('mower.resumeSchedule') }}</v-btn>
   </div>

@@ -14,8 +14,8 @@ const emit = defineEmits<{ command: [cmd: CommandInput] }>()
     </div>
     <div class="text-caption text-medium-emphasis">{{ $t('vacuum.battery') }} · {{ formatPercent(state.battery, $i18n.locale) }}</div>
     <v-progress-linear :model-value="state.battery" rounded height="8" :color="state.battery < 20 ? 'error' : 'success'" class="mb-4" />
-    <!-- Serpillière, pour un robot qui lave : le patin est-il posé, et reste-t-il de l'eau. Une
-         seule ligne, à place fixe, plutôt qu'une section — c'est un renseignement, pas un réglage. -->
+    <!-- Mop, for a robot that washes: is the pad fitted, and is there water left. A
+         single line, at a fixed place, rather than a section — it is information, not a setting. -->
     <div v-if="descriptor.capabilities.includes('mop')" class="d-flex ga-4 mb-4 text-caption text-medium-emphasis">
       <span>{{ $t('vacuum.mopPad') }} · {{ state.mopAttached === undefined ? '—' : state.mopAttached ? $t('vacuum.mopOn') : $t('vacuum.mopOff') }}</span>
       <span>{{ $t('vacuum.tank') }} · {{ state.tankLevel === undefined || state.tankLevel === null ? '—' : formatPercent(state.tankLevel, $i18n.locale) }}</span>
@@ -35,14 +35,14 @@ const emit = defineEmits<{ command: [cmd: CommandInput] }>()
 
 <style scoped>
 /*
- * Vuetify pose `flex-shrink: 0` sur tout `v-btn` : ses boutons savent grandir, jamais rétrécir.
- * À trois boutons — et l'aspirateur est le seul contrôle qui en a trois, la tondeuse n'en a que
- * deux — la rangée réclame 342 px là où le panneau d'appareil en offre 294, et « Localiser » sort
- * du cadre, inatteignable. Mesuré sur un vrai Roomba le 19/09/2026, à 1024 comme à 1280 de large :
- * le panneau est de largeur fixe, agrandir la fenêtre n'y change rien.
+ * Vuetify puts `flex-shrink: 0` on every `v-btn`: its buttons know how to grow, never shrink.
+ * With three buttons — and the vacuum is the only control that has three, the mower only has
+ * two — the row demands 342 px where the device panel offers 294, and "Locate" goes
+ * out of the frame, unreachable. Measured on a real Roomba on 19/09/2026, at 1024 as at 1280 wide:
+ * the panel is of fixed width, enlarging the window changes nothing.
  *
- * On rend donc leur élasticité aux deux boutons à texte. La hauteur, elle, ne bouge pas (56 px) :
- * les libellés se resserrent, la rangée garde son gabarit.
+ * We therefore give back their elasticity to the two text buttons. The height does not move (56 px):
+ * the labels squeeze together, the row keeps its template.
  */
 .vac__wide { flex-shrink: 1; min-width: 0; }
 </style>

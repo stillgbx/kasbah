@@ -1,17 +1,17 @@
-// La lune vue d'ici : phase, part éclairée, lever et coucher. Calcul PUR, comme `sun.ts` du paquet
-// partagé — Open-Meteo ne donne rien sur la lune. Formules « basse précision » (celles de SunCalc,
-// d'après Meeus) : la position à environ un degré, soit quelques minutes sur un lever ; la phase à
-// quelques heures près. Largement assez pour une carte météo.
+// The moon as seen from here: phase, lit fraction, rise and set. PURE computation, like `sun.ts` of the shared
+// package — Open-Meteo gives nothing on the moon. "Low precision" formulas (those of SunCalc,
+// after Meeus): position to about a degree, i.e. a few minutes on a rise; phase to
+// a few hours. More than enough for a weather map.
 
 const RAD = Math.PI / 180
 const OBLIQUITY = 23.4397 * RAD
 const DAY_MS = 86_400_000
-/** Mois synodique moyen, en jours : d'une nouvelle lune à la suivante. */
+/** Mean synodic month, in days: from one new moon to the next. */
 const SYNODIC_DAYS = 29.530589
-/** Hauteur géocentrique du centre au lever et au coucher : parallaxe (~0,95°) moins réfraction et demi-disque. */
+/** Geocentric height of the center at rise and set: parallax (~0.95°) minus refraction and half-disc. */
 const MOON_HORIZON_DEG = 0.125
 
-/** Jours (fractionnaires) écoulés depuis J2000.0. */
+/** Days (fractional) elapsed since J2000.0. */
 const days = (ms: number) => ms / DAY_MS + 2_440_587.5 - 2_451_545.0
 
 interface Equatorial { ra: number; dec: number; distKm: number }
@@ -31,25 +31,25 @@ function sunCoords(d: number): Equatorial {
 }
 
 function moonCoords(d: number): Equatorial {
-  const l = (218.316 + 13.176396 * d) * RAD // longitude moyenne
-  const m = (134.963 + 13.064993 * d) * RAD // anomalie moyenne
-  const f = (93.272 + 13.22935 * d) * RAD // argument de latitude
+  const l = (218.316 + 13.176396 * d) * RAD // mean longitude
+  const m = (134.963 + 13.064993 * d) * RAD // mean anomaly
+  const f = (93.272 + 13.22935 * d) * RAD // argument of latitude
   return eclipticToEquatorial(l + 6.289 * Math.sin(m) * RAD, 5.128 * Math.sin(f) * RAD, 385_001 - 20_905 * Math.cos(m))
 }
 
-/** Hauteur géocentrique de la lune au-dessus de l'horizon, en degrés. */
+/** Geocentric height of the moon above the horizon, in degrees. */
 export function moonAltitude(ms: number, lat: number, lon: number): number {
   const d = days(ms)
   const c = moonCoords(d)
-  const h = (280.16 + 360.9856235 * d) * RAD + lon * RAD - c.ra // angle horaire
+  const h = (280.16 + 360.9856235 * d) * RAD + lon * RAD - c.ra // hour angle
   const phi = lat * RAD
   return Math.asin(Math.sin(phi) * Math.sin(c.dec) + Math.cos(phi) * Math.cos(c.dec) * Math.cos(h)) / RAD
 }
 
 export interface MoonIllumination {
-  /** Part éclairée du disque, 0 à 1. */
+  /** Lit fraction of the disc, 0 to 1. */
   fraction: number
-  /** Âge dans le cycle, 0 à 1 : 0 nouvelle lune, 0,25 premier quartier, 0,5 pleine, 0,75 dernier quartier. */
+  /** Age in the cycle, 0 to 1: 0 new moon, 0.25 first quarter, 0.5 full, 0.75 last quarter. */
   phase: number
 }
 
@@ -66,7 +66,7 @@ export function moonIllumination(ms: number): MoonIllumination {
 export const MOON_PHASES = ['new', 'waxingCrescent', 'firstQuarter', 'waxingGibbous', 'full', 'waningGibbous', 'lastQuarter', 'waningCrescent'] as const
 export type MoonPhaseName = (typeof MOON_PHASES)[number]
 
-/** Nom de la phase : les quatre phases principales valent un jour de part et d'autre de leur instant. */
+/** Name of the phase: the four main phases last a day on either side of their instant. */
 export function moonPhaseName(phase: number): MoonPhaseName {
   const tol = 1 / SYNODIC_DAYS
   const near = (target: number) => Math.abs(((phase - target + 1.5) % 1) - 0.5) < tol
@@ -77,9 +77,9 @@ export function moonPhaseName(phase: number): MoonPhaseName {
   return phase < 0.25 ? 'waxingCrescent' : phase < 0.5 ? 'waxingGibbous' : phase < 0.75 ? 'waningGibbous' : 'waningCrescent'
 }
 
-/** Prochain instant où l'âge du cycle vaut `target` (0 nouvelle, 0,5 pleine), après `fromMs`. */
+/** Next instant when the cycle's age equals `target` (0 new, 0.5 full), after `fromMs`. */
 export function nextPhase(fromMs: number, target: number): number {
-  // écart signé à la cible, dans ]-0,5, 0,5] : il passe de négatif à positif au moment cherché
+  // signed deviation from the target, in ]-0.5, 0.5]: it goes from negative to positive at the moment sought
   const gap = (ms: number) => ((moonIllumination(ms).phase - target + 1.5) % 1) - 0.5
   const step = DAY_MS / 4
   let prev = fromMs
@@ -102,17 +102,17 @@ export function nextPhase(fromMs: number, target: number): number {
 }
 
 export interface MoonTimes {
-  /** Prochain lever après `fromMs` (dans les 26 h), en ms epoch. */
+  /** Next rise after `fromMs` (within 26 h), in ms epoch. */
   rise?: number
-  /** Prochain coucher après `fromMs` (dans les 26 h), en ms epoch. */
+  /** Next set after `fromMs` (within 26 h), in ms epoch. */
   set?: number
 }
 
 /**
- * Prochains lever et coucher à partir de maintenant — pas ceux « du jour » : la lune se lève chaque
- * jour ~50 min plus tard, et un jour sur vingt-neuf n'a pas de lever. Balayage par pas de 10 min puis
- * dichotomie, comme `sunTimes`. 26 h couvrent toujours un passage de chaque sorte, sauf aux hautes
- * latitudes où la lune peut rester levée ou couchée : le passage est alors absent.
+ * Next rise and set from now — not those "of the day": the moon rises each
+ * day ~50 min later, and one day in twenty-nine has no rise. Sweep in 10 min steps then
+ * bisection, like `sunTimes`. 26 h always cover one crossing of each kind, except at high
+ * latitudes where the moon may stay up or down: the crossing is then absent.
  */
 export function moonTimes(fromMs: number, lat: number, lon: number): MoonTimes {
   const alt = (t: number) => moonAltitude(t, lat, lon) - MOON_HORIZON_DEG

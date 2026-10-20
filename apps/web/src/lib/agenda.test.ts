@@ -30,7 +30,7 @@ describe('agenda days of an event', () => {
   it('spreads an all-day event up to its exclusive end, a night event over both days', () => {
     expect(eventDays(allDay('v', '2026-10-03', '2026-10-06'))).toEqual(['2026-10-03', '2026-10-04', '2026-10-05'])
     expect(eventDays(timed('n', at(2026, 10, 3, 22), at(2026, 10, 4, 2)))).toEqual(['2026-10-03', '2026-10-04'])
-    // finir pile à minuit ne déborde pas sur le lendemain ; sans durée, reste dans son jour
+    // ending exactly at midnight does not spill onto the next day; without a duration, stays within its day
     expect(eventDays(timed('m', at(2026, 10, 3, 20), at(2026, 10, 4)))).toEqual(['2026-10-03'])
     expect(eventDays(timed('z', at(2026, 10, 3, 9), at(2026, 10, 3, 9)))).toEqual(['2026-10-03'])
   })

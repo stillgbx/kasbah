@@ -6,8 +6,8 @@ import { formatTemp } from '../../lib/format'
 import { compassPoint, conditionIcon } from '../../lib/weather'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Carte d'un appareil météo dans le panneau détail : l'essentiel de l'actuel et le crédit de la
-// source. La vue Météo, elle, montre tout (prévisions, air, soleil).
+// Card of a weather device in the detail panel: the essentials of the current conditions and the credit of the
+// source. The Weather view, for its part, shows everything (forecast, air, sun).
 const props = defineProps<{ descriptor: DeviceDescriptor; state: StateFor<'weather'>; pending?: boolean; disabled?: boolean }>()
 const { d, locale } = useI18n()
 const icon = computed(() => conditionIcon(props.state.condition, props.state.isDay))

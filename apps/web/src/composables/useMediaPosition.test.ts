@@ -60,16 +60,16 @@ describe('useSeekHold', () => {
     const published = ref<number | undefined>(40)
     const { seekDraft, beginSeek, holding } = useSeekHold(published)
     beginSeek(120)
-    // le store répercute la commande tout de suite : la cible exacte, avant tout relevé
+    // the store reflects the command right away: the exact target, before any reading
     published.value = 120
     await nextTick()
     expect(holding.value).toBe(true)
     expect(seekDraft.value).toBe(120)
-    // relevé d'avant le geste : toujours tenu
+    // reading from before the gesture: still held
     published.value = 41
     await nextTick()
     expect(holding.value).toBe(true)
-    // le vrai relevé, après la tenue minimale : relâché
+    // the real reading, after the minimum hold: released
     settle()
     published.value = 121
     await nextTick()
@@ -123,7 +123,7 @@ describe('useSeekHold', () => {
 
     published.value = 100
     await nextTick()
-    // même valeur : le watch ne re-déclenche pas ; on force un tick voisin encore dans la marge
+    // same value: the watch does not re-trigger; we force a neighboring tick still within the margin
     published.value = 100.2
     await nextTick()
     expect(holding.value).toBe(true)
@@ -149,7 +149,7 @@ describe('useSeekHold', () => {
 })
 
 describe('formatClock', () => {
-  it('écrit m:ss sous l\'heure, h:mm:ss au-delà, rien sans valeur', () => {
+  it('writes m:ss under an hour, h:mm:ss beyond, nothing without a value', () => {
     expect(formatClock(0)).toBe('0:00')
     expect(formatClock(59.9)).toBe('0:59')
     expect(formatClock(3599)).toBe('59:59')

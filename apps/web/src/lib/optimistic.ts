@@ -1,8 +1,8 @@
 import type { CommandInput, DeviceState } from '@kasbah/shared'
 
 /**
- * Effet attendu d'une commande sur l'état courant, appliqué AVANT la réponse serveur pour que
- * l'interface réagisse au doigt. Retourne null quand rien n'est prévisible.
+ * Expected effect of a command on the current state, applied BEFORE the server's response so that
+ * the interface reacts to the finger. Returns null when nothing is predictable.
  */
 export function optimisticPatch(state: DeviceState, cmd: CommandInput): Partial<DeviceState> | null {
   switch (state.kind) {
@@ -16,12 +16,12 @@ export function optimisticPatch(state: DeviceState, cmd: CommandInput): Partial<
         ...(cmd.effect !== undefined ? { effect: cmd.effect } : {}),
       } as Partial<DeviceState>
     case 'cover':
-      // Le mouvement seulement : la POSITION visée ne s'écrit pas dans l'état, elle est tenue à
-      // part par le store (`coverTarget`). Un fabricant qui ne publie sa position qu'à la fin de
-      // la course réémettrait l'ancienne valeur et écraserait aussitôt une position optimiste.
+      // The movement only: the aimed POSITION is not written into the state, it is held
+      // separately by the store (`coverTarget`). A vendor that only publishes its position at the end of
+      // the travel would re-emit the old value and immediately overwrite an optimistic position.
       switch (cmd.type) {
-        // position inconnue : on ne sait pas si l'ouvrant est déjà au bout, donc on parie sur le
-        // mouvement — un indicateur qui s'allume pour rien vaut mieux qu'un geste sans écho
+        // unknown position: we do not know whether the cover is already at the end, so we bet on the
+        // movement — an indicator that lights up for nothing is better than a gesture without an echo
         case 'cover.open': return { motion: state.position !== undefined && state.position >= 100 ? 'stopped' : 'opening' } as Partial<DeviceState>
         case 'cover.close': return { motion: state.position !== undefined && state.position <= 0 ? 'stopped' : 'closing' } as Partial<DeviceState>
         case 'cover.stop': return { motion: 'stopped' } as Partial<DeviceState>
@@ -30,8 +30,8 @@ export function optimisticPatch(state: DeviceState, cmd: CommandInput): Partial<
           const p = state.position
           return { motion: cmd.position > p ? 'opening' : cmd.position < p ? 'closing' : 'stopped' } as Partial<DeviceState>
         }
-        // même raisonnement que `set_position`, sur la position favorite du moteur : sans elle on
-        // ne connaît pas le sens, donc on parie sur le mouvement
+        // same reasoning as `set_position`, on the motor's favorite position: without it we
+        // do not know the direction, so we bet on the movement
         case 'cover.preset': {
           const to = state.presetPosition
           if (to === undefined || state.position === undefined) return { motion: 'opening' } as Partial<DeviceState>
@@ -51,7 +51,7 @@ export function optimisticPatch(state: DeviceState, cmd: CommandInput): Partial<
         case 'media_player.set_volume': return { volume: cmd.volume } as Partial<DeviceState>
         case 'media_player.set_mute': return { muted: cmd.muted } as Partial<DeviceState>
         case 'media_player.seek':
-          // la position visée s'affiche tout de suite ; le récepteur confirme par son état
+          // the aimed position is displayed right away; the receiver confirms through its state
           return state.nowPlaying ? { nowPlaying: { ...state.nowPlaying, positionS: cmd.positionS } } as Partial<DeviceState> : null
         default: return null
       }
@@ -68,7 +68,7 @@ export function optimisticPatch(state: DeviceState, cmd: CommandInput): Partial<
       }
     case 'mower':
       switch (cmd.type) {
-        // sans durée, le robot reprend son programme : il ne part que si un créneau est ouvert
+        // without a duration, the robot resumes its program: it only leaves if a slot is open
         case 'mower.start': return cmd.durationMin === undefined ? null : { activity: 'mowing' } as Partial<DeviceState>
         case 'mower.pause': return { activity: 'paused' } as Partial<DeviceState>
         case 'mower.park': return { activity: state.activity === 'mowing' || state.activity === 'paused' ? 'returning' : state.activity } as Partial<DeviceState>
@@ -80,7 +80,7 @@ export function optimisticPatch(state: DeviceState, cmd: CommandInput): Partial<
     case 'ev_charger':
       if (cmd.type === 'ev_charger.stop') return { status: state.status === 'charging' ? 'connected' : state.status, powerW: 0 } as Partial<DeviceState>
       if (cmd.type === 'ev_charger.set_current') return { maxCurrentA: cmd.amps } as Partial<DeviceState>
-      // choisir un mode lève l'annulation manuelle (le même mode sous annulation, c'est « reprendre »)
+      // choosing a mode lifts the manual override (the same mode under override is "resume")
       if (cmd.type === 'ev_charger.set_mode') return { chargeMode: cmd.mode, manualOverride: false } as Partial<DeviceState>
       return null
     case 'vehicle':
@@ -89,9 +89,9 @@ export function optimisticPatch(state: DeviceState, cmd: CommandInput): Partial<
         case 'vehicle.unlock': return { locked: false } as Partial<DeviceState>
         case 'vehicle.set_charge_limit': return { chargeLimit: cmd.percent } as Partial<DeviceState>
         case 'vehicle.stop_charge': return { charging: false } as Partial<DeviceState>
-        // l'arrêt seul : la marche d'une voiture endormie attend son réveil, l'annoncer d'avance mentirait
+        // stopping only: a sleeping car's start waits for its wake-up, announcing it in advance would lie
         case 'vehicle.climate_stop': return { climateOn: false } as Partial<DeviceState>
-        // un réglage, lui, ne part que voiture éveillée : l'accusé suit d'une seconde
+        // a setting, for its part, only goes out with the car awake: the acknowledgment follows a second later
         case 'vehicle.climate_set': {
           const seats = Object.fromEntries(Object.entries(cmd.seatHeat ?? {}).filter(([, v]) => v !== undefined))
           return {
@@ -103,15 +103,15 @@ export function optimisticPatch(state: DeviceState, cmd: CommandInput): Partial<
         default: return null
       }
     case 'pet_feeder':
-      // On n'avance PAS le compteur du servi : la machine peut verser moins que demandé (trémie
-      // presque vide), et un chiffre qui saute ensuite est pire que pas de chiffre. « Distribution
-      // en cours » est vrai dans tous les cas, et la relecture du plugin suit d'une seconde.
+      // We do NOT advance the served counter: the machine may pour less than requested (hopper
+      // almost empty), and a figure that then jumps is worse than no figure. "Dispensing"
+      // is true in all cases, and the plugin's re-read follows a second later.
       return cmd.type === 'pet_feeder.feed' ? { feeding: true } as Partial<DeviceState> : null
     case 'pet_fountain':
       switch (cmd.type) {
         case 'pet_fountain.set_power': return { on: cmd.on } as Partial<DeviceState>
-        // Régler le régime rallume la pompe : c'est la même trame qui porte les deux, et
-        // l'appareil ne saurait pas appliquer un régime à l'arrêt.
+        // Setting the mode turns the pump back on: it is the same frame that carries both, and
+        // the device would not know how to apply a mode while off.
         case 'pet_fountain.set_mode': return { mode: cmd.mode, on: true } as Partial<DeviceState>
         default: return null
       }
@@ -119,7 +119,7 @@ export function optimisticPatch(state: DeviceState, cmd: CommandInput): Partial<
       if (cmd.type !== 'fan.set') return null
       return {
         ...(cmd.on !== undefined ? { on: cmd.on } : {}),
-        // Écrire la vitesse ALLUME le ventilateur (mesuré sur le CREATE).
+        // Writing the speed TURNS ON the fan (measured on the CREATE).
         ...(cmd.speed !== undefined ? { on: true, speed: cmd.speed } : {}),
         ...(cmd.direction !== undefined ? { direction: cmd.direction } : {}),
         ...(cmd.timerMin !== undefined ? { timerMin: cmd.timerMin } : {}),

@@ -9,9 +9,9 @@ import { homePanelRequest } from '../../composables/useSearch'
 import { useHouseStore } from '../../stores/house'
 import SearchPalette from './SearchPalette.vue'
 
-// Ce que la palette doit tenir : Ctrl+K l'ouvre et la referme, un résultat de la maison ramène
-// d'abord sur la vue Maison puis sélectionne (dans cet ordre, sinon l'URL annule la navigation),
-// et demande l'ouverture du panneau ; une page, elle, ne fait que naviguer.
+// What the palette must hold: Ctrl+K opens and closes it, a house result first brings back
+// to the House view then selects (in that order, otherwise the URL cancels the navigation),
+// and requests the panel to open; a page, for its part, only navigates.
 
 const route = { name: 'music' as string }
 const calls: string[] = []
@@ -35,7 +35,7 @@ describe('SearchPalette', () => {
     push.mockClear()
   })
 
-  it('ignore un keydown sans touche (remplissage automatique de Chrome)', async () => {
+  it('ignores a keydown without a key (Chrome autofill)', async () => {
     const { w } = await setup()
     expect(() => window.dispatchEvent(new Event('keydown'))).not.toThrow()
     await flushPromises()
@@ -43,7 +43,7 @@ describe('SearchPalette', () => {
     w.unmount()
   })
 
-  it('Ctrl+K ouvre la palette, un second Ctrl+K la referme', async () => {
+  it('Ctrl+K opens the palette, a second Ctrl+K closes it', async () => {
     const { w } = await setup()
     expect(w.find('.palette').exists()).toBe(false)
     ctrlK(); await flushPromises()
@@ -53,7 +53,7 @@ describe('SearchPalette', () => {
     w.unmount()
   })
 
-  it('depuis une autre page, ramène sur la maison AVANT de sélectionner, puis ouvre le panneau', async () => {
+  it('from another page, goes back to the house BEFORE selecting, then opens the panel', async () => {
     const { w, house } = await setup()
     const orig = house.selectRoom.bind(house)
     house.selectRoom = (id) => { calls.push(`select:${id}`); orig(id) }
@@ -69,7 +69,7 @@ describe('SearchPalette', () => {
     w.unmount()
   })
 
-  it('propose la page Maison, et une page ne demande pas le panneau', async () => {
+  it('offers the House page, and a page does not request the panel', async () => {
     const { w } = await setup()
     const before = homePanelRequest.value
     ctrlK(); await flushPromises()
@@ -84,24 +84,24 @@ describe('SearchPalette', () => {
     w.unmount()
   })
 
-  it('Échap efface d’abord, ferme ensuite', async () => {
+  it('Escape clears first, then closes', async () => {
     const { w } = await setup()
     ctrlK(); await flushPromises()
     const input = w.find('input')
     await input.setValue('salon')
     expect(w.find('.palette__list').exists()).toBe(true)
     await input.trigger('keydown.esc')
-    expect(w.find('.palette__list').exists()).toBe(false)   // la requête est effacée…
-    expect(w.find('.palette').exists()).toBe(true)          // …la palette reste ouverte
+    expect(w.find('.palette__list').exists()).toBe(false)   // the query is cleared…
+    expect(w.find('.palette').exists()).toBe(true)          // …the palette stays open
     await input.trigger('keydown.esc')
     expect(w.find('.palette').exists()).toBe(false)
     w.unmount()
   })
 
-  describe('Demander à Kasbah', () => {
+  describe('Ask Kasbah', () => {
     afterEach(() => { setTransport(null) })
 
-    it('Entrée sans résultat demande à Kasbah ; la réponse remplace la liste et survit à la fermeture', async () => {
+    it('Enter without a result asks Kasbah; the answer replaces the list and survives closing', async () => {
       const asked: string[] = []
       setTransport({
         async assistantAsk(text: string, onEvent: (e: AssistantEvent) => void) {
@@ -118,12 +118,12 @@ describe('SearchPalette', () => {
       expect(asked).toEqual(['zzz mets la radio'])
       expect(w.find('.palette__list').exists()).toBe(false)
       expect(w.find('.reply__answer').text()).toBe('La radio joue dans la cuisine.')
-      // fermer puis rouvrir : la réponse est toujours là, l'instruction dans le champ
+      // close then reopen: the answer is still there, the instruction in the field
       ctrlK(); await flushPromises()
       ctrlK(); await flushPromises()
       expect((w.find('input').element as HTMLInputElement).value).toBe('zzz mets la radio')
       expect(w.find('.reply__answer').exists()).toBe(true)
-      // Échap ferme la réponse et efface l'instruction : la palette reste ouverte, vide
+      // Escape closes the answer and clears the instruction: the palette stays open, empty
       await w.find('input').trigger('keydown', { key: 'Escape' })
       expect(w.find('.reply__answer').exists()).toBe(false)
       expect((w.find('input').element as HTMLInputElement).value).toBe('')

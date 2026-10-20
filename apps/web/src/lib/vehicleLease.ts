@@ -1,35 +1,35 @@
 import type { VehicleLease } from '@kasbah/shared'
 
 /**
- * Où en est une LOA : le kilométrage parcouru contre ce que le forfait autorise À CE JOUR, au
- * prorata du temps écoulé — le forfait de plusieurs années ne se consomme pas d'un coup, et
- * c'est l'écart au rythme qui dit si l'on « est dans les clous ».
+ * Where a lease stands: the mileage driven against what the allowance authorizes AS OF TODAY, pro
+ * rata to the elapsed time — a multi-year allowance is not consumed all at once, and
+ * it is the gap to the pace that says whether one is "on track".
  */
 export interface LeaseProgress {
-  /** Parcourus depuis la remise des clés (`compteur − startKm`). */
+  /** Driven since the key handover (`odometer − startKm`). */
   drivenKm: number
-  /** Autorisés à ce jour : forfait × part du contrat écoulée. */
+  /** Authorized as of today: allowance × share of the contract elapsed. */
   allowedKm: number
-  /** Part du forfait consommée (0 → 1, au-delà en dépassement). */
+  /** Share of the allowance consumed (0 → 1, beyond that, overrun). */
   usedShare: number
-  /** Part du contrat écoulée (0 → 1) : le repère du rythme sur la jauge. */
+  /** Share of the contract elapsed (0 → 1): the pace marker on the gauge. */
   elapsedShare: number
-  /** Au rythme actuel, le compteur de la LOA à l'échéance ; `null` trop tôt pour extrapoler. */
+  /** At the current pace, the lease's odometer at the due date; `null` too early to extrapolate. */
   projectedKm: number | null
   ended: boolean
 }
 
 const DAY_MS = 86_400_000
 /**
- * Pas de projection avant un mois : une semaine de vacances sur la première quinzaine se lirait
- * comme 60 000 km à l'échéance.
+ * No projection before a month: a week of vacation in the first fortnight would read
+ * as 60,000 km at the due date.
  */
 export const LEASE_PROJECTION_MIN_DAYS = 30
 
-/** `AAAA-MM-JJ` → minuit UTC : le calcul se fait en jours entiers, sans dépendre du fuseau. */
+/** `YYYY-MM-DD` → midnight UTC: the computation is done in whole days, without depending on the time zone. */
 const dayMs = (iso: string) => Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10)))
 
-/** `null` sans compteur lu : on ne suit rien sans savoir combien la voiture a roulé. */
+/** `null` without a reading: we track nothing without knowing how far the car has driven. */
 export function leaseProgress(lease: VehicleLease, odometerKm: number | undefined, nowMs: number): LeaseProgress | null {
   if (odometerKm === undefined) return null
   const start = dayMs(lease.start)
@@ -49,9 +49,9 @@ export function leaseProgress(lease: VehicleLease, odometerKm: number | undefine
 }
 
 /**
- * Les anniversaires du contrat (début + 1 an, + 2 ans…) strictement avant l'échéance : `share` en
- * part du contrat — sur la jauge, c'est aussi la part du forfait autorisée à cette date — et `km`
- * ce qu'elle autorise.
+ * The contract's anniversaries (start + 1 year, + 2 years…) strictly before the due date: `share` as a
+ * share of the contract — on the gauge, it is also the share of the allowance authorized at that date — and `km`
+ * what it authorizes.
  */
 export function leaseYearMarks(lease: VehicleLease): { share: number; date: string; km: number }[] {
   const start = dayMs(lease.start)
@@ -66,5 +66,5 @@ export function leaseYearMarks(lease: VehicleLease): { share: number; date: stri
   }
 }
 
-/** En avance sur le forfait : plus de kilomètres que le prorata n'en autorise. */
+/** Ahead of the allowance: more kilometers than the pro rata authorizes. */
 export const leaseOverPace = (p: LeaseProgress) => p.drivenKm > p.allowedKm

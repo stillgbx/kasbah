@@ -1,7 +1,7 @@
 import type { DeviceDescriptor, DeviceState, StateFor } from '@kasbah/shared'
 import { mirekToKelvin } from '@kasbah/shared'
 
-// Formats d'affichage. Les libellés traduits passent par `t` ; ici uniquement les nombres/unités.
+// Display formats. Translated labels go through `t`; here only numbers/units.
 
 const nf = (locale: string, digits: number) => new Intl.NumberFormat(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits })
 
@@ -9,9 +9,9 @@ export function formatPower(w: number, locale = 'fr'): string {
   return Math.abs(w) >= 1000 ? `${nf(locale, 1).format(w / 1000)} kW` : `${nf(locale, 0).format(w)} W`
 }
 /**
- * Une ration, DANS L'UNITE DE L'APPAREIL (`meta.petFeeder.unit`). Ce n'est pas toujours une masse :
- * une Fresh Element Solo compte en TASSES par dixiemes, une Infinity en grammes. Ecrire « g »
- * partout se tromperait d'un facteur dix sur la premiere.
+ * A portion, IN THE DEVICE'S UNIT (`meta.petFeeder.unit`). It is not always a mass:
+ * a Fresh Element Solo counts in CUPS by tenths, an Infinity in grams. Writing "g"
+ * everywhere would be off by a factor of ten on the first.
  */
 export function formatFeedAmount(v: number, unit: 'cup' | 'g', locale = 'fr'): string {
   if (unit === 'g') return `${nf(locale, 0).format(v)} g`
@@ -19,17 +19,16 @@ export function formatFeedAmount(v: number, unit: 'cup' | 'g', locale = 'fr'): s
 }
 
 /**
- * La contrepartie en grammes d'une ration comptée en tasses — **une ESTIMATION**, d'où le « ~ ».
- * La machine ne pèse rien : elle compte du volume, et le poids dépend des croquettes. `gPerCup`
- * vient d'un réglage que l'utilisateur ajuste après avoir pesé une ration une fois.
- *
- * Rien pour une mangeoire qui pèse déjà (`unit: 'g'`) : répéter la même valeur ne dirait rien.
+ * The gram counterpart of a portion counted in cups — **an ESTIMATE**, hence the "~".
+ * The machine weighs nothing: it counts volume, and the weight depends on the kibble. `gPerCup`
+ * comes from a setting the user adjusts after weighing a portion once.
+ * Nothing for a feeder that already weighs (`unit: 'g'`): repeating the same value would say nothing.
  */
 export function formatFeedGrams(v: number, unit: 'cup' | 'g', gPerCup: number, locale = 'fr'): string | null {
   if (unit === 'g') return null
   return `~ ${nf(locale, 0).format((v / 10) * gPerCup)} g`
 }
-/** Eau bue, en millilitres jusqu'au litre puis en litres : « 1,2 L » se lit mieux que « 1200 mL ». */
+/** Water drunk, in milliliters up to the liter then in liters: "1.2 L" reads better than "1200 mL". */
 export function formatMilliliters(ml: number, locale = 'fr'): string {
   return ml >= 1000 ? `${nf(locale, 1).format(ml / 1000)} L` : `${nf(locale, 0).format(ml)} mL`
 }
@@ -40,7 +39,7 @@ export const formatTemp = (c: number, locale = 'fr') => `${nf(locale, 1).format(
 export const formatPercent = (p: number, locale = 'fr') => `${nf(locale, 0).format(p)} %`
 export const formatKelvin = (mirek: number) => `${Math.round(mirekToKelvin(mirek) / 100) * 100} K`
 export const formatKm = (km: number, locale = 'fr') => `${nf(locale, 0).format(km)} km`
-/** Durée courte, à la minute : « 45 min », « 1 h 20 ». Une charge qui reste ne se compte pas en heures décimales. */
+/** Short duration, to the minute: "45 min", "1 h 20". A charge that remains is not counted in decimal hours. */
 export function formatMinutes(min: number, locale = 'fr'): string {
   const total = Math.max(0, Math.round(min))
   const h = Math.floor(total / 60)
@@ -48,10 +47,10 @@ export function formatMinutes(min: number, locale = 'fr'): string {
 }
 
 /**
- * Âge relatif court (« il y a 12 min », « il y a 3 h », « hier »), pour dater une lecture. En dessous
- * d'une minute : « maintenant » selon la langue (Intl, `numeric: 'auto'`). Une date DANS LE FUTUR est
- * ramenée à maintenant : l'horloge du serveur et celle du navigateur diffèrent de quelques secondes,
- * et la simulation vit dans un temps accéléré — « lu dans 8 min » ne veut rien dire.
+ * Short relative age ("12 min ago", "3 h ago", "yesterday"), to date a reading. Below
+ * a minute: "now" depending on the language (Intl, `numeric: 'auto'`). A date IN THE FUTURE is
+ * brought back to now: the server's clock and the browser's differ by a few seconds,
+ * and the simulation lives in accelerated time — "read in 8 min" means nothing.
  */
 export function formatAgo(at: number, now: number, locale = 'fr'): string {
   const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto', style: 'short' })
@@ -69,20 +68,20 @@ export function formatDistance(m: number, locale = 'fr'): string {
 }
 
 /**
- * Seuil d'1 m³ plein : sous ce volume, deux décimales de m³ perdraient de la précision (93 L, par
- * exemple, a besoin de trois décimales pour s'écrire « 0,093 m³ » sans arrondi) ; au-delà, deux
- * décimales suffisent et trois n'apprendraient rien (7 545 L → « 7,55 m³ »). Sert aussi à choisir
- * l'unité d'un AXE de volumes (`volumeAxisUnit`), où le litre resterait lisible en dessous.
+ * Threshold of a full 1 m³: below this volume, two decimals of m³ would lose precision (93 L, for
+ * example, needs three decimals to be written "0.093 m³" without rounding); beyond, two
+ * decimals suffice and three would teach nothing (7,545 L → "7.55 m³"). Also serves to choose
+ * the unit of a volume AXIS (`volumeAxisUnit`), where the liter would stay readable below.
  */
 const VOLUME_M3_THRESHOLD_L = 1000
 
 /**
- * Débit : toujours les deux unités — le m³/h est celui de la fiche technique du fabricant (2 m³/h
- * maxi). Trois décimales, pas deux : le débitmètre compte par pas EXACTS de 36 L/h (0,036 m³/h), un
- * pas constant sur toute sa plage (contrairement au volume, sa résolution ne dépend pas de la
- * grandeur mesurée) — deux décimales arrondiraient déjà ce pas et perdraient l'information à toute
- * valeur, pas seulement les petites. Un débit EXACTEMENT nul est une mesure, pas une approximation :
- * le m³/h n'y ajoute rien, « 0 L/h » se suffit.
+ * Flow: always both units — the m³/h is that of the vendor's datasheet (2 m³/h
+ * max). Three decimals, not two: the flowmeter counts in EXACT steps of 36 L/h (0.036 m³/h), a
+ * constant step over its whole range (unlike volume, its resolution does not depend on the
+ * measured quantity) — two decimals would already round this step and lose the information at any
+ * value, not only the small ones. An EXACTLY zero flow is a measurement, not an approximation:
+ * the m³/h adds nothing there, "0 L/h" is enough on its own.
  */
 export function formatFlow(lph: number, locale = 'fr'): string {
   if (lph === 0) return `${nf(locale, 0).format(0)} L/h`
@@ -90,12 +89,12 @@ export function formatFlow(lph: number, locale = 'fr'): string {
 }
 
 /**
- * Le complément m³ s'affiche désormais TOUJOURS pour un volume mesuré non nul (plus de seuil qui le
- * cache) : seule la PRÉCISION s'adapte, pour ne jamais écrire « 0,00 m³ » sur une valeur réelle — la
- * règle « absent n'est pas zéro », appliquée à l'arrondi. Trois décimales sous le seuil d'1 m³ (tout
- * volume en litres entiers s'y écrit alors EXACTEMENT, sans le moindre arrondi : 3 L → 0,003 m³),
- * deux au-delà, où un litre de plus ou de moins ne se lit plus. Un volume EXACTEMENT nul reste
- * « 0 L » seul : le m³ n'y apprend rien.
+ * The m³ complement is now ALWAYS displayed for a measured non-zero volume (no more threshold hiding
+ * it): only the PRECISION adapts, so as never to write "0.00 m³" on a real value — the
+ * rule "absent is not zero", applied to rounding. Three decimals below the 1 m³ threshold (any
+ * volume in whole liters is then written EXACTLY, without the slightest rounding: 3 L → 0.003 m³),
+ * two beyond, where one liter more or less can no longer be read. An EXACTLY zero volume stays
+ * "0 L" alone: the m³ teaches nothing there.
  */
 export function formatVolume(l: number, locale = 'fr'): string {
   const liters = `${nf(locale, 0).format(l)} L`
@@ -105,23 +104,23 @@ export function formatVolume(l: number, locale = 'fr'): string {
 }
 
 /**
- * Unité d'un AXE de volumes (jamais les deux à la fois, contrairement à `formatVolume`) : même seuil
- * qu'un volume isolé — en dessous, le litre reste lisible ; au-delà, des graduations en litres
- * afficheraient cinq chiffres (vue Année) là où le m³ tient sur deux ou trois.
+ * Unit of a volume AXIS (never both at once, unlike `formatVolume`): same threshold
+ * as an isolated volume — below, the liter stays readable; beyond, ticks in liters
+ * would display five digits (Year view) where the m³ fits in two or three.
  */
 export type VolumeAxisUnit = 'L' | 'm³'
 export function volumeAxisUnit(maxL: number): VolumeAxisUnit {
   return Math.abs(maxL) >= VOLUME_M3_THRESHOLD_L ? 'm³' : 'L'
 }
 
-/** Une graduation d'axe dans l'unité choisie par `volumeAxisUnit`, sans l'unité répétée à chaque valeur. */
+/** An axis tick in the unit chosen by `volumeAxisUnit`, without the unit repeated at each value. */
 export function formatVolumeAxisTick(l: number, unit: VolumeAxisUnit, locale = 'fr'): string {
   return unit === 'm³' ? new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(l / 1000) : nf(locale, 0).format(l)
 }
 
 /**
- * Le plus bas des consommables d'une station d'eau (COMAP) : plus il descend, plus il faut s'en
- * inquiéter — même lecture que `battery` pour un robot. Absent si aucun n'est encore connu.
+ * The lowest of a water station's consumables (COMAP): the lower it goes, the more it is
+ * a concern — same reading as `battery` for a robot. Absent if none is known yet.
  */
 export function waterLowestPct(s: StateFor<'water'>): number | undefined {
   const known = [s.prefilterPct, s.carbon1Pct, s.carbon2Pct, s.uvLampPct].filter((v): v is number => v !== undefined)
@@ -129,8 +128,8 @@ export function waterLowestPct(s: StateFor<'water'>): number | undefined {
 }
 
 /**
- * Résumé d'alerte d'une station d'eau : `ok` seulement si les DEUX résumés sont connus et faux — un
- * seul connu ne suffit pas à affirmer « aucune alerte » (voir `waterStateSchema`).
+ * Alert summary of a water station: `ok` only if BOTH summaries are known and false — a
+ * single known one is not enough to assert "no alert" (see `waterStateSchema`).
  */
 export function waterAlertState(s: StateFor<'water'>): 'ok' | 'warning' | 'defect' | 'unknown' {
   if (s.defect === true) return 'defect'
@@ -139,7 +138,7 @@ export function waterAlertState(s: StateFor<'water'>): 'ok' | 'warning' | 'defec
   return 'unknown'
 }
 
-/** Valeur d'un capteur avec son unité et sa précision déclarées. */
+/** Value of a sensor with its declared unit and precision. */
 export function formatSensor(descriptor: DeviceDescriptor, value: number, locale = 'fr'): string {
   const meta = descriptor.meta.sensor
   const digits = meta?.precision ?? 1
@@ -147,7 +146,7 @@ export function formatSensor(descriptor: DeviceDescriptor, value: number, locale
   return `${nf(locale, digits).format(value)}${unit ? (unit === '%' ? ' %' : ` ${unit}`) : ''}`
 }
 
-/** Résumé court d'un état pour les listes (une ligne, sans libellé traduit). */
+/** Short summary of a state for the lists (one line, without a translated label). */
 export function summarize(descriptor: DeviceDescriptor, state: DeviceState, locale = 'fr'): string {
   switch (state.kind) {
     case 'light': return state.on ? (state.brightness !== undefined ? formatPercent(state.brightness, locale) : '●') : '○'

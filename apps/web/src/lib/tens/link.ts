@@ -4,11 +4,11 @@ import {
   type TensBattery, type TensSession,
 } from './protocol'
 
-// Le lien Web Bluetooth avec le TENS. Il vit dans le NAVIGATEUR, jamais sur le serveur : seul le
-// poste appairé peut piloter l'appareil (voir le store `tens`).
+// The Web Bluetooth link with the TENS. It lives in the BROWSER, never on the server: only the
+// paired machine can drive the device (see the `tens` store).
 //
-// Les types du Web Bluetooth sont redéclarés au plus juste plutôt que tirés de `@types/web-bluetooth` :
-// on n'en utilise qu'une poignée, et des doublures de test les imitent sans rien d'autre.
+// The Web Bluetooth types are redeclared as tightly as possible rather than pulled from `@types/web-bluetooth`:
+// we only use a handful, and test doubles imitate them with nothing else.
 
 export interface BleCharacteristic extends EventTarget {
   readonly value?: DataView | null
@@ -34,11 +34,11 @@ export interface BleRequestOptions {
 }
 export interface BleBluetooth {
   requestDevice(options: BleRequestOptions): Promise<BleDevice>
-  /** Les appareils déjà autorisés — absent de certains navigateurs, d'où l'option. */
+  /** The already authorized devices — absent from some browsers, hence the option. */
   getDevices?(): Promise<BleDevice[]>
 }
 
-/** Le Bluetooth du navigateur, ou `null` : Firefox, Safari, ou page hors contexte sécurisé. */
+/** The browser's Bluetooth, or `null`: Firefox, Safari, or a page outside a secure context. */
 export function browserBluetooth(): BleBluetooth | null {
   const nav = globalThis.navigator as (Navigator & { bluetooth?: BleBluetooth }) | undefined
   return nav?.bluetooth ?? null
@@ -47,10 +47,10 @@ export function browserBluetooth(): BleBluetooth | null {
 export const TENS_NAME_PREFIX = 'acTENS'
 
 /**
- * Le sélecteur du navigateur. Le TENS n'annonce ni son nom ni ses services (son annonce ne porte
- * que drapeaux et puissance) : le filtre sur le nom ne le trouve qu'une fois que le SYSTÈME connaît
- * ce nom — après un appairage Windows ou une première connexion. `all` lève le filtre (liste
- * complète, où un TENS inconnu s'appelle « Appareil inconnu (00:30:3A:…) »).
+ * The browser's picker. The TENS announces neither its name nor its services (its advertisement only carries
+ * flags and power): the name filter only finds it once the SYSTEM knows
+ * that name — after a Windows pairing or a first connection. `all` lifts the filter (full
+ * list, where an unknown TENS is called "Unknown device (00:30:3A:…)").
  */
 export function requestTens(bt: BleBluetooth, all = false): Promise<BleDevice> {
   const optionalServices = [TENS_SERVICE, TENS_STATUS_SERVICE]
@@ -65,7 +65,7 @@ export interface TensLinkHandlers {
 
 const REPLY_TIMEOUT_MS = 2500
 const hexOf = (b: Uint8Array) => [...b].map((x) => x.toString(16).padStart(2, '0')).join(' ')
-/** Trace de chaque trame dans la console (diagnostic du protocole, tant qu'il n'est pas validé sur l'appareil). */
+/** Trace of each frame in the console (protocol diagnostics, as long as it is not validated on the device). */
 const trace = (dir: string, b: Uint8Array) => console.info(`[tens] ${dir} ${hexOf(b)}`)
 const bytesOf = (v: DataView) => new Uint8Array(v.buffer, v.byteOffset, v.byteLength)
 
@@ -73,7 +73,7 @@ export class TensLink {
   private server: BleServer | null = null
   private command: BleCharacteristic | null = null
   private waiting = new Map<number, { resolve(p: Uint8Array): void; reject(e: Error): void; timer: ReturnType<typeof setTimeout> }>()
-  /** Les écritures passent une par une : le TENS répond dans l'ordre, et l'appli n'en chevauche jamais deux. */
+  /** Writes go one by one: the TENS answers in order, and the app never overlaps two. */
   private queue: Promise<unknown> = Promise.resolve()
   private closed = false
 
@@ -81,7 +81,7 @@ export class TensLink {
 
   get connected(): boolean { return !this.closed && !!this.server?.connected }
 
-  /** Ouvre le lien ; une erreur dit à quelle étape elle est survenue (« services: … »), pour le diagnostic. */
+  /** Opens the link; an error says at which step it occurred ("services: …"), for diagnostics. */
   async open(): Promise<void> {
     let stage = 'gatt'
     try { await this.openSteps((s) => { stage = s }) } catch (e) {
@@ -110,14 +110,14 @@ export class TensLink {
     await battery.startNotifications()
     await session.startNotifications()
     at('read')
-    // L'état tout de suite, sans attendre la première notification (5 s pour la batterie).
+    // The state right away, without waiting for the first notification (5 s for the battery).
     this.emitBattery(bytesOf(await battery.readValue()))
     this.emitSession(bytesOf(await session.readValue()))
-    // L'appli commence toujours par là ; sans réponse, on continue quand même.
+    // The app always starts there; without a reply, we continue anyway.
     await this.send(helloFrame()).catch(() => undefined)
   }
 
-  /** Écrit une trame et rend les données de la réponse du même numéro. */
+  /** Writes a frame and returns the data of the reply with the same number. */
   send(frame: Uint8Array): Promise<Uint8Array> {
     const run = this.queue.then(() => this.write(frame))
     this.queue = run.catch(() => undefined)
@@ -135,7 +135,7 @@ export class TensLink {
     if (!this.command || !this.connected) throw new Error('disconnected')
     const cmd = replyCmd(frame[2]!)
     const reply = new Promise<Uint8Array>((resolve, reject) => {
-      const timer = setTimeout(() => { this.waiting.delete(cmd); console.warn(`[tens] pas de réponse à ${hexOf(frame)}`); reject(new Error('timeout')) }, REPLY_TIMEOUT_MS)
+      const timer = setTimeout(() => { this.waiting.delete(cmd); console.warn(`[tens] no reply to ${hexOf(frame)}`); reject(new Error('timeout')) }, REPLY_TIMEOUT_MS)
       this.waiting.set(cmd, { resolve, reject, timer })
     })
     try {
@@ -153,7 +153,7 @@ export class TensLink {
     trace('←', bytes)
     const f = parseFrame(bytes)
     if (!f || f.kind !== 'reply') return
-    // un refus nomme la commande refusée : c'est elle qui échoue, sans attendre le délai
+    // a refusal names the refused command: it is the one that fails, without waiting for the timeout
     const refused = f.cmd === REFUSED && f.payload.length >= 2
     const key = refused ? replyCmd(f.payload[0]!) : f.cmd
     const w = this.waiting.get(key)

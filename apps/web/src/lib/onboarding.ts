@@ -1,7 +1,7 @@
-// Le guide qui suit la création d'une propriété : la création recharge l'application sur la maison
-// neuve, il faut donc retenir où l'on en est — dessiner le terrain, puis régler la première pièce.
-// Confort de CE poste seulement (stockage du navigateur) : sans lui, la maison est créée quand même,
-// on n'est simplement pas guidé.
+// The guide that follows the creation of a property: creation reloads the application on the new
+// house, so we must remember where we are — draw the terrain, then set up the first room.
+// Comfort of THIS machine only (browser storage): without it, the house is created anyway,
+// we are simply not guided.
 
 export type OnboardingStep = 'terrain' | 'room'
 export interface Onboarding { propertyId: string; step: OnboardingStep }
@@ -19,5 +19,5 @@ export function writeOnboarding(o: Onboarding | null): void {
   try {
     if (o) localStorage.setItem(KEY, JSON.stringify(o))
     else localStorage.removeItem(KEY)
-  } catch { /* stockage indisponible : pas de guide */ }
+  } catch { /* storage unavailable: no guide */ }
 }

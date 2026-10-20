@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { geoToLocal, type SiteMap } from '@kasbah/shared'
 import { GUIDE_COLOR, LAWN_COLOR, REWILDING_COLOR, STAY_OUT_COLOR, WORK_AREA_COLORS, layerOf, zoneRows, sceneEntryKey, sceneGroundShapes, siteMapAnchor, siteMapFeatures, workAreaColor } from './siteMap'
 
-// La carte du robot n'a pas de coordonnées GPS : elle se pose par sa STATION. Ces tests tiennent
-// l'ancrage (base posée d'abord, robot à la station ensuite) et la pose (mètres est/nord autour de
-// la station, zones d'exclusion teintées selon l'état du robot).
+// The robot's map has no GPS coordinates: it is placed by its STATION. These tests hold
+// the anchoring (base placed first, robot at the station next) and the pose (meters east/north around
+// the station, exclusion zones tinted according to the robot's state).
 
 const ORIGIN = { lat: 47.3, lon: 5.05, alt: 200, heading: 30 }
 const ANCHOR = { lat: 47.3001, lon: 5.0502 }
@@ -20,13 +20,13 @@ const MAP: SiteMap = {
 }
 
 describe('siteMapAnchor', () => {
-  it('la base posée dans la maison prime, convertie par l’origine (cap compris)', () => {
+  it('the base placed in the house takes precedence, converted by the origin (heading included)', () => {
     const a = siteMapAnchor({ origin: ORIGIN, dock: [4, 6], location: ANCHOR, atStation: true })!
     const [x, y] = geoToLocal(ORIGIN, a)
     expect(x).toBeCloseTo(4, 6)
     expect(y).toBeCloseTo(6, 6)
   })
-  it('le décalage de la carte (repère maison) s’ajoute à la base, ou au robot à la station', () => {
+  it('the map\'s offset (house frame) is added to the base, or to the robot at the station', () => {
     const a = siteMapAnchor({ origin: ORIGIN, dock: [4, 6], location: ANCHOR, atStation: true, offset: [-1, 2] })!
     const [x, y] = geoToLocal(ORIGIN, a)
     expect(x).toBeCloseTo(3, 6)
@@ -38,7 +38,7 @@ describe('siteMapAnchor', () => {
     expect(ry - ay).toBeCloseTo(2, 6)
   })
 
-  it('sans base : le robot, seulement s’il est à la station', () => {
+  it('without a base: the robot, only if it is at the station', () => {
     expect(siteMapAnchor({ origin: ORIGIN, dock: undefined, location: ANCHOR, atStation: true })).toEqual(ANCHOR)
     expect(siteMapAnchor({ origin: ORIGIN, dock: undefined, location: ANCHOR, atStation: false })).toBeUndefined()
   })
@@ -48,27 +48,27 @@ describe('siteMapFeatures', () => {
   const fc = siteMapFeatures(MAP, ANCHOR, [{ id: 'massif', name: 'Massif', enabled: false }])
   const local = (lonLat: number[]) => geoToLocal({ ...ANCHOR, alt: 0, heading: 0 }, { lat: lonLat[1]!, lon: lonLat[0]! })
 
-  it('la station de la carte tombe sur l’ancrage ; un point à 10 m à l’est de la station, 10 m à l’est de l’ancrage', () => {
+  it('the map\'s station lands on the anchor; a point 10 m east of the station, 10 m east of the anchor', () => {
     const ring = (fc.features[0]!.geometry as { coordinates: number[][][] }).coordinates[0]!
     expect(local(ring[0]!)[0]).toBeCloseTo(0, 6)
     expect(local(ring[1]!)[0]).toBeCloseTo(10, 6)
     expect(local(ring[2]!)[1]).toBeCloseTo(10, 6)
-    // anneau fermé
+    // closed ring
     expect(ring.at(-1)).toEqual(ring[0])
   })
 
-  it('polygones pour les zones, ligne pour les câbles ; un polygone de deux points est sauté', () => {
+  it('polygons for zones, line for cables; a two-point polygon is skipped', () => {
     expect(fc.features.map((f) => [f.properties.kind, f.geometry.type])).toEqual([
       ['work_area', 'Polygon'], ['stay_out', 'Polygon'], ['guide', 'LineString'],
     ])
   })
 
-  it('une zone d’exclusion prend son état du robot ; sans correspondance, elle est dite activée', () => {
+  it('an exclusion zone takes its state from the robot; without a match, it is said to be enabled', () => {
     expect(fc.features[1]!.properties).toEqual({ kind: 'stay_out', id: 'massif', name: 'Massif', enabled: false, color: '' })
     expect(siteMapFeatures(MAP, ANCHOR, undefined).features[1]!.properties.enabled).toBe(true)
   })
 
-  it('l’état de la CARTE vaut quand le robot ne connaît pas la zone (réensauvagement) ; le sien prime sinon', () => {
+  it('the MAP\'s state applies when the robot does not know the zone (rewilding); its own prevails otherwise', () => {
     const map: SiteMap = { ...MAP, shapes: [
       { kind: 'rewilding', id: 'prairie', name: 'Prairie', enabled: false, points: [[0, 0], [3, 0], [3, 3]] },
       { kind: 'stay_out', id: 'massif', name: 'Massif', enabled: false, points: [[0, 10], [3, 10], [3, 13]] },
@@ -77,12 +77,12 @@ describe('siteMapFeatures', () => {
     expect(fc2.features.map((f) => [f.properties.kind, f.properties.enabled])).toEqual([['rewilding', false], ['stay_out', true]])
   })
 
-  it('une carte sans station ne se pose pas', () => {
+  it('a map without a station is not placed', () => {
     expect(siteMapFeatures({ ...MAP, station: null }, ANCHOR, []).features).toEqual([])
   })
 })
 
-describe('teintes des zones de travail', () => {
+describe('work zone tints', () => {
   const AREAS = [{ id: 0, name: '', enabled: true }, { id: 757, name: 'Devant', enabled: true }, { id: 812, name: 'Fond', enabled: true }]
   const MAP2: SiteMap = {
     deviceId: 'automower:x', station: [0, 0],
@@ -94,13 +94,13 @@ describe('teintes des zones de travail', () => {
     ],
   }
 
-  it('la zone 0 (tout le terrain) a le vert du terrain ; les zones tracées, une teinte chacune dans l’ordre du robot', () => {
+  it('zone 0 (the whole terrain) has the terrain green; drawn zones, one tint each in the robot\'s order', () => {
     expect(workAreaColor(AREAS, 0)).toBe(LAWN_COLOR)
     expect(workAreaColor(AREAS, 757)).toBe(WORK_AREA_COLORS[0])
     expect(workAreaColor(AREAS, 812)).toBe(WORK_AREA_COLORS[1])
   })
 
-  it('sur la carte, une zone prend sa teinte par son NOM (celle de sa pastille) ; une inconnue prend la suivante ; le terrain n’en a pas', () => {
+  it('on the map, a zone takes its tint by its NAME (that of its pill); an unknown one takes the next; the terrain has none', () => {
     const colors = siteMapFeatures(MAP2, ANCHOR, undefined, AREAS).features.map((f) => [f.properties.kind, f.properties.color])
     expect(colors).toEqual([
       ['lawn', ''],
@@ -111,14 +111,14 @@ describe('teintes des zones de travail', () => {
   })
 })
 
-describe('calques', () => {
-  it('chaque forme a son calque : terrain et obstacles, zones de travail, zones d’exclusion, câbles chemins et station', () => {
+describe('layers', () => {
+  it('each shape has its layer: terrain and obstacles, work zones, exclusion zones, cables paths and station', () => {
     expect((['lawn', 'obstacle', 'work_area', 'stay_out', 'rewilding', 'guide', 'transport', 'station'] as const).map(layerOf))
       .toEqual(['lawn', 'lawn', 'work_areas', 'stay_out', 'rewilding', 'guides', 'guides', 'guides'])
   })
 })
 
-describe('la carte peinte dans la scène', () => {
+describe('the map painted in the scene', () => {
   const MAP3: SiteMap = {
     deviceId: 'automower:x', station: [0, 0],
     shapes: [
@@ -133,7 +133,7 @@ describe('la carte peinte dans la scène', () => {
   }
   const AREAS = [{ id: 0, name: '', enabled: true }, { id: 758, name: 'Fond', enabled: true }]
 
-  it('une liste, dans l’ordre du panneau : tout le terrain et les câbles, les zones de travail, puis exclusions et réensauvagement', () => {
+  it('a list, in the panel\'s order: the whole terrain and the cables, work zones, then exclusions and rewilding', () => {
     const state = { workAreas: AREAS, stayOutZones: [{ id: 'massif', name: 'Massif', enabled: false }] }
     const rows = zoneRows(state, MAP3)
     expect(rows.map((r) => [r.key, r.group, r.sceneKey, r.color])).toEqual([
@@ -143,7 +143,7 @@ describe('la carte peinte dans la scène', () => {
       ['stay:massif', 'stayOut', 'massif', STAY_OUT_COLOR],
       ['shape:prairie', 'stayOut', 'prairie', REWILDING_COLOR],
     ])
-    // tout le terrain se tond (zone 0), l'exclusion se bascule, le réensauvagement se montre seulement
+    // the whole terrain is mowed (zone 0), the exclusion is toggled, the rewilding is only shown
     expect(rows[0]).toMatchObject({ labelKey: 'mower.wholeLawn', workAreaId: 0 })
     expect(rows[3]!.stayOut).toEqual({ id: 'massif', enabled: false })
     expect(rows[4]).toMatchObject({ rewilding: true, label: 'Prairie' })
@@ -152,7 +152,7 @@ describe('la carte peinte dans la scène', () => {
     expect(sceneEntryKey('station', 'lona_cs')).toBe('guides')
   })
 
-  it('sans carte (vue Robots) : les zones du robot seules, sans rien à peindre ; une zone tracée pas encore relue a sa ligne', () => {
+  it('without a map (Robots view): the robot\'s zones alone, nothing to paint; a drawn zone not yet re-read has its line', () => {
     const rows = zoneRows({ workAreas: AREAS, stayOutZones: [] }, undefined)
     expect(rows.map((r) => [r.key, r.sceneKey])).toEqual([['lawn', undefined], ['area:758', undefined]])
     const unknown = zoneRows({ workAreas: [AREAS[0]!] }, MAP3).find((r) => r.group === 'work')!
@@ -160,9 +160,9 @@ describe('la carte peinte dans la scène', () => {
     expect(unknown.workAreaId).toBeUndefined()
   })
 
-  it('les formes reviennent dans le repère de la MAISON (cap compris) ; un élément masqué disparaît, le terrain emporte ses obstacles', () => {
+  it('the shapes come back in the HOUSE frame (heading included); a hidden element disappears, the terrain takes its obstacles with it', () => {
     const origin = { lat: 47.3, lon: 5.05, alt: 200, heading: 30 }
-    // la base posée en (4, 6) dans la maison : la station de la carte y tombe
+    // the base placed at (4, 6) in the house: the map's station lands there
     const anchor = siteMapAnchor({ origin, dock: [4, 6], location: undefined, atStation: false })!
     const fc = siteMapFeatures(MAP3, anchor, undefined, AREAS)
     const all = sceneGroundShapes(fc, origin, new Set())
@@ -170,9 +170,9 @@ describe('la carte peinte dans la scène', () => {
     const station = all.find((s) => !s.closed && s.line?.widthM === 0.4)!
     expect(station.points[0]![0]).toBeCloseTo(4, 4)
     expect(station.points[0]![1]).toBeCloseTo(6, 4)
-    // anneau sans son point de fermeture GeoJSON
+    // ring without its GeoJSON closing point
     expect(all.find((s) => s.fill?.color === LAWN_COLOR)!.points).toHaveLength(4)
-    // la zone d'exclusion désactivée : presque transparente
+    // the exclusion zone disabled: almost transparent
     expect(all.find((s) => s.fill?.color === STAY_OUT_COLOR && s.points.length === 3 && s.fill.opacity < 0.1)).toBeTruthy()
     const some = sceneGroundShapes(fc, origin, new Set(['lawn', 'massif']))
     expect(some).toHaveLength(4)
