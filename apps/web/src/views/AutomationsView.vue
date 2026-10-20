@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useMediaQuery } from '@vueuse/core'
+import { useLocalStorage, useMediaQuery } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import AutomationRow from '../components/automations/AutomationRow.vue'
@@ -24,7 +24,7 @@ const router = useRouter()
 const narrow = useMediaQuery('(max-width: 600px)')
 
 type Filter = 'all' | 'enabled' | 'disabled' | 'check'
-const filter = ref<Filter>('all')
+const filter = useLocalStorage<Filter>('kasbah.automations.filter', 'all')
 const query = ref('')
 
 // « il y a 3 h » se tient à jour sans relire le serveur
