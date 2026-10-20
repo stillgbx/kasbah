@@ -70,6 +70,7 @@ function alertText(a: DeviceAlert): string {
     case 'supply_low': return t(a.kind === 'pet_fountain' ? 'pets.waterLow' : 'pets.foodLow')
     case 'consumable': return t(a.detail === 'filter' ? 'alerts.filter' : 'alerts.desiccant')
     case 'battery_low': return t('alerts.batteryLow')
+    case 'tire_low': return t('alerts.tireLow', { tires: (a.detail ?? '').split(',').map((k) => t(`vehicle.tire.${k}`)).join(', ') })
   }
 }
 

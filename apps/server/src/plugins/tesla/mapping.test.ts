@@ -128,6 +128,10 @@ describe('full reading (`vehicle_data`)', () => {
     // no wheel measured → no object, rather than an empty object that would be displayed
     const none = { ...parked, vehicle_state: { ...parked.vehicle_state, tpms_pressure_fl: null, tpms_pressure_fr: null, tpms_pressure_rl: null, tpms_pressure_rr: null } }
     expect(toDataPatch(none).tirePressureBar).toBeUndefined()
+    // the car's own warnings: none in the capture, a hard one wins over a soft one
+    expect(toDataPatch(parked).tireWarning).toEqual({})
+    const low = { ...parked, vehicle_state: { ...parked.vehicle_state, tpms_soft_warning_rr: true, tpms_soft_warning_fl: true, tpms_hard_warning_fl: true } }
+    expect(toDataPatch(low).tireWarning).toEqual({ fl: 'hard', rr: 'soft' })
   })
 
   it('the heading is taken as is (0 = north), normalized into [0, 360[', () => {

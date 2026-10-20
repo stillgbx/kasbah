@@ -63,6 +63,15 @@ export const vehicleStateSchema = z.looseObject({
   tpms_pressure_fr: num,
   tpms_pressure_rl: num,
   tpms_pressure_rr: num,
+  /** The car's own tire warnings: `soft` = under-inflated, `hard` = much lower. */
+  tpms_soft_warning_fl: bool,
+  tpms_soft_warning_fr: bool,
+  tpms_soft_warning_rl: bool,
+  tpms_soft_warning_rr: bool,
+  tpms_hard_warning_fl: bool,
+  tpms_hard_warning_fr: bool,
+  tpms_hard_warning_rl: bool,
+  tpms_hard_warning_rr: bool,
   is_user_present: bool,
   sentry_mode: bool,
   /** `2026.32.7`, sometimes followed by a space and a build hash. */

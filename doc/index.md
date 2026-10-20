@@ -25,7 +25,7 @@ Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/Web
 | Pages | Dernière mise à jour |
 |---|---|
 | [1_0 Monorepo et flux de données](1_architecture/1_0_monorepo-et-flux.md) | 2026-10-10 |
-| [1_1 Contrat des appareils](1_architecture/1_1_contrat-appareils.md) | 2026-10-19 |
+| [1_1 Contrat des appareils](1_architecture/1_1_contrat-appareils.md) | 2026-10-20 |
 | [1_2 Serveur et hôte de plugins](1_architecture/1_2_serveur-et-plugins.md) | 2026-10-11 |
 | [1_3 Protocole REST et WebSocket](1_architecture/1_3_protocole-rest-ws.md) | 2026-10-13 |
 | [1_4 Application web : stores, transport, routage](1_architecture/1_4_app-web.md) | 2026-10-06 |
@@ -71,7 +71,7 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 | [3_5 Google Nest (caméras, sonnettes)](3_plugins/3_5_google-nest.md) | 2026-10-12 |
 | [3_6 Google Cast](3_plugins/3_6_google-cast.md) | 2026-10-12 |
 | [3_7 Enphase](3_plugins/3_7_enphase.md) | 2026-10-15 |
-| [3_8 Tesla (Fleet API)](3_plugins/3_8_tesla.md) | 2026-10-06 |
+| [3_8 Tesla (Fleet API)](3_plugins/3_8_tesla.md) | 2026-10-20 |
 | [3_9 Renault (Gigya + Kamereon)](3_plugins/3_9_renault.md) | 2026-10-19 |
 | [3_10 Open-Meteo](3_plugins/3_10_open-meteo.md) | 2026-10-09 |
 | [3_11 Husqvarna Automower](3_plugins/3_11_husqvarna-automower.md) | 2026-10-14 |

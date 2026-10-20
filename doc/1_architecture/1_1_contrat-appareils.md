@@ -1,6 +1,6 @@
 # Contrat des appareils (packages/shared)
 
-> Dernière mise à jour : 2026-10-19
+> Dernière mise à jour : 2026-10-20
 > Sources : `packages/shared/src/devices/{kinds,descriptor,state,command,rules,color}.ts`, `packages/shared/src/scenes/scene.ts`, `packages/shared/src/devices/activity.ts`, `packages/shared/src/house/geo.ts`
 
 ## Principe
@@ -432,6 +432,7 @@ Six champs **optionnels** s'ajoutent à `vehicleStateSchema` pour le plugin Tesl
 | `speedKmh` | vitesse instantanée, 0 à l'arrêt ; absente = inconnue |
 | `gear` | `VEHICLE_GEARS` = `P` / `R` / `N` / `D` ; absent = inconnu |
 | `tirePressureBar` | `{ fl, fr, rl, rr }` en bar, **chaque roue optionnelle** : les capteurs ne rapportent qu'en roulant, un véhicule qui n'a pas bougé n'en donne aucune |
+| `tireWarning` | `{ fl, fr, rl, rr }`, chaque roue `TIRE_WARNINGS` = `soft` (sous-gonflée) / `hard` (bien plus basse) ou absente ; `{}` = aucune alerte, champ absent = inconnu. C'est le jugement **du véhicule** (ajout 2026-10-20) |
 | `insideTempC`, `outsideTempC` | températures |
 
 Règle appliquée par le mappage Tesla, transposable : un `null` du fabricant devient un champ **absent**
@@ -1087,3 +1088,19 @@ injoignable sans alerte = `[]`, plus `null` ; sans effet, le « vu » du poste n
 les `info` (`../4_ui/4_1_navigation-et-panneaux.md`, même date).
 
 Sources : `packages/shared/src/devices/alerts.ts` (+ `alerts.test.ts`).
+
+### Mise à jour 2026-10-20 — alerte de pneu sous-gonflé
+
+`type` gagne `tire_low` (véhicule). La règle ne calcule rien : elle reprend `tireWarning`, les
+alertes que le véhicule lève lui-même. Une seule alerte pour toutes les roues concernées (un seul
+arrêt au gonfleur), `detail` = les roues dans l'ordre `fl,fr,rl,rr` (`fl,rr`), clé vide : l'alerte
+est la même tant qu'une roue reste basse. Sévérité `problem`, `critical` dès qu'une roue est `hard`.
+L'écran la nomme « Pneu sous-gonflé (AR D) » (`alerts.tireLow`, roues par `vehicle.tire.*`).
+
+Écarté : un seuil calculé par Kasbah (90 % de la pression recommandée à froid, qui retombait sur le
+2,8 bar affiché par la voiture pour 3,1 recommandés). Il désignait la même roue sur la vraie voiture,
+mais 90 % restait une déduction ; l'indicateur du fabricant donne exactement ce que la voiture
+affiche, et le niveau critique en prime. Contrepartie : un véhicule qui ne publie pas `tireWarning`
+n'a pas d'alerte de pneu, même avec ses pressions.
+
+Sources : `packages/shared/src/devices/{alerts,state}.ts` (+ `alerts.test.ts`).

@@ -183,6 +183,12 @@ export function toDataPatch(d: VehicleData): StatePatch<'vehicle'> {
   const tires = { fl: vs?.tpms_pressure_fl, fr: vs?.tpms_pressure_fr, rl: vs?.tpms_pressure_rl, rr: vs?.tpms_pressure_rr }
   const measured = Object.entries(tires).filter(([, v]) => defined(v)) as [string, number][]
   if (measured.length) patch.tirePressureBar = Object.fromEntries(measured.map(([k, v]) => [k, round(v, 2)]))
+  // the warnings the car shows (2.8 bar for 3.1 recommended, verified on the real car): published
+  // as soon as one flag is read, `{}` included, so that a re-inflated tire clears its warning
+  const warning = (k: 'fl' | 'fr' | 'rl' | 'rr') => vs?.[`tpms_hard_warning_${k}`] ? 'hard' as const : vs?.[`tpms_soft_warning_${k}`] ? 'soft' as const : undefined
+  if ((['fl', 'fr', 'rl', 'rr'] as const).some((k) => defined(vs?.[`tpms_soft_warning_${k}`]) || defined(vs?.[`tpms_hard_warning_${k}`]))) {
+    patch.tireWarning = Object.fromEntries((['fl', 'fr', 'rl', 'rr'] as const).flatMap((k) => { const w = warning(k); return w ? [[k, w]] : [] }))
+  }
 
   if (defined(dr?.latitude) && defined(dr?.longitude)) {
     // `gps_as_of` is in seconds, `timestamp` in milliseconds: two time bases in the same section,

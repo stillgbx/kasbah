@@ -14,7 +14,7 @@
 
 ## What the plugin does
 
-- **Reading**: charge level, range, cable plugged in and charging in progress, charge limit, estimated end of charge, lock state, position (on the map, with the heading), mileage, speed and gear, pressure of the four tyres, temperatures, software version and pending update, paint color.
+- **Reading**: charge level, range, cable plugged in and charging in progress, charge limit, estimated end of charge, lock state, position (on the map, with the heading), mileage, speed and gear, pressure of the four tyres (a tyre the car flags as under-inflated raises an alert, critical if much lower), temperatures, software version and pending update, paint color.
 - **Sleep**: the "asleep" state is a normal state, shown as such. The last known values stay visible, dated ("Read 12 min ago").
 - **Commands**: **Wake up**, **Refresh** (read now, without waking), set the charge limit, **Start charging** / **Stop charging**, **Climate** (target temperature, heated seats and steering wheel), schedule or cancel the installation of a software update (**Install now**) with its release notes in the app's language.
 - **Waking**: never an automatic wake-up, except for the actions you ask for (button, automation): starting a charge and climate wake the car if it is asleep. Other settings are refused while it sleeps.

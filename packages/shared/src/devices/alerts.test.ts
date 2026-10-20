@@ -19,6 +19,14 @@ describe('deviceAlerts', () => {
     expect(deviceAlerts('tesla:car', vehicle())).toEqual([])
   })
 
+  it('raises one alert for the tire warnings of the vehicle, critical when one is hard', () => {
+    expect(deviceAlerts('tesla:car', vehicle({ tireWarning: {} }))).toEqual([])
+    const [a] = deviceAlerts('tesla:car', vehicle({ tireWarning: { fl: 'soft', rr: 'soft' } }))!
+    expect(a).toMatchObject({ severity: 'problem', type: 'tire_low', detail: 'fl,rr' })
+    const [b] = deviceAlerts('tesla:car', vehicle({ tireWarning: { fl: 'soft', rr: 'hard' } }))!
+    expect(b).toMatchObject({ severity: 'critical', detail: 'fl,rr' })
+  })
+
   it('cannot tell for an unavailable or never-read device', () => {
     expect(deviceAlerts('tesla:car', vehicle({ readAt: undefined, softwareUpdate: { status: 'available' } }))).toBeNull()
     // a mower in fault that lost the network is still in fault

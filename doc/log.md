@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-20] update | Véhicules : alerte de pneu sous-gonflé
+
+**Déclencheur** : « la Tesla a un pneu à moins de 2,8 bar, affiché en warn dans la voiture : on devrait afficher cette alerte (rail, etc.) ».
+
+**Pages modifiées** :
+- `1_architecture/1_1_contrat-appareils.md` - champ `tireWarning`, section datée : type `tire_low`, sévérités, seuil calculé écarté.
+- `3_plugins/3_8_tesla.md` - section datée : indicateurs `tpms_soft_warning_*` / `tpms_hard_warning_*`, relevé brut de vérification, couleurs de la vue Véhicules.
+- `index.md` - dates des deux pages.
+
 ## [2026-10-20] update | Code : commentaires, noms de tests et journaux en anglais
 
 **Trigger** : demande de l'utilisateur, suite de la bascule de langue du dépôt public ; passe unique par workflow (9 lots), contrôlée par un garde-fou de comparaison à `HEAD`.

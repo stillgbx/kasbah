@@ -1,6 +1,6 @@
 # Plugin Tesla (véhicules, Fleet API)
 
-> Dernière mise à jour : 2026-10-06
+> Dernière mise à jour : 2026-10-20
 > Sources : `apps/server/src/plugins/tesla/{index,auth,client,mapping,types}.ts`, `apps/server/src/plugins/tesla/__fixtures__/fleet.ts`, tests `mapping.test.ts` et `plugin.test.ts`, `apps/web/src/components/TeslaLinkCard.vue`, `apps/web/src/views/VehiclesView.vue`, `apps/server/.env.example`, documentation developer.tesla.com (Fleet API : billing-and-limits, vehicle-endpoints, third-party-tokens, virtual-keys), relevé de l'utilisateur (Model S, MCU2), mise en route sur le vrai compte le 2026-09-13 (soir), première écriture essayée sur la vraie voiture le 2026-09-14, console de facturation du fabricant (relevé du 2026-09-14), `apps/server/src/plugins/tesla/state.ts`, essais sur la vraie voiture du 2026-10-02 (notes de version, langue, facturation)
 
 ## Ce que le plugin fait, et ce qu'il ne fait pas encore
@@ -703,3 +703,18 @@ relire les notes une fois. Vérifié sur la vraie voiture : la version installé
 — que Tesla ne rend déjà plus, gardée par Kasbah. Tests : `plugin.test.ts`.
 
 Sources : `apps/server/src/plugins/tesla/index.ts`, relevé `GET /api/plugins/tesla/raw` du 2026-10-02.
+
+### Mise à jour 2026-10-20 — alertes de pneu de la voiture
+
+`vehicle_state` porte, par roue, `tpms_soft_warning_*` et `tpms_hard_warning_*` (booléens), à côté
+des pressions et de la pression recommandée à froid (`tpms_rcp_front_value` / `_rear_value`).
+Relevé brut sur la vraie voiture : une roue sous 2,8 bar pour 3,1 recommandés a `soft_warning: true`,
+les autres `false`, aucune `hard` — c'est l'avertissement que la voiture affiche. Le mappage publie
+`tireWarning` (`hard` l'emporte sur `soft`) dès qu'un indicateur est lu, `{}` compris, pour qu'un
+pneu regonflé efface son alerte au relevé suivant. La règle partagée en tire l'alerte `tire_low`
+(rail, liste du panneau maison) et la vue Véhicules colore la case du pneu : orange pour `soft`
+(assombri en thème clair, comme les cartes animaux), rouge pour `hard`. La pression recommandée n'est
+pas publiée (voir `../1_architecture/1_1_contrat-appareils.md`, même date, pour le seuil écarté).
+
+Sources : `apps/server/src/plugins/tesla/{mapping,types}.ts` (+ `mapping.test.ts`),
+`apps/web/src/views/VehiclesView.vue`, relevé `GET /api/plugins/tesla/raw` du 2026-10-20.

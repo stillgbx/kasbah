@@ -374,7 +374,7 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
               <StrokeIcon class="wm" name="tire" :size="56" />
               <div class="muted stat__k">{{ $t('vehicle.tires') }}</div>
               <div class="tires__grid">
-                <div v-for="k in TIRES" :key="k" class="tire"><span class="muted tire__k">{{ $t(`vehicle.tire.${k}`) }}</span><span class="tire__v">{{ tire(v.state, k) }}</span></div>
+                <div v-for="k in TIRES" :key="k" class="tire"><span class="muted tire__k">{{ $t(`vehicle.tire.${k}`) }}</span><span class="tire__v" :data-warn="v.state.tireWarning?.[k]">{{ tire(v.state, k) }}</span></div>
               </div>
             </div>
             <!-- software: installed version and pending update, always there; opens the release notes -->
@@ -600,6 +600,11 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
 .tire { display: grid; gap: 2px; font-variant-numeric: tabular-nums; }
 .tire__k { font-size: 11px; }
 .tire__v { font-weight: 500; font-size: 13px; white-space: nowrap; }
+/* the car's tire warning (the `tire_low` alert): the warning orange, darkened in light theme for
+   contrast like the pet cards; red when much lower */
+.tire__v[data-warn='soft'] { color: rgb(var(--v-theme-warning)); }
+html[data-theme='light'] .tire__v[data-warn='soft'] { color: color-mix(in srgb, rgb(var(--v-theme-warning)) 70%, black); }
+.tire__v[data-warn='hard'] { color: rgb(var(--v-theme-error)); }
 .vcard__map { height: var(--vmap-min); }
 /* the charge row holds its height even when empty: the card does not move when the charge
    starts. A HEIGHT equal to the row, not a minimum: `min-height: 16px` under an 18 px row let the

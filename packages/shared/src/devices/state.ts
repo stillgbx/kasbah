@@ -247,6 +247,8 @@ export type VehicleSleepState = (typeof VEHICLE_SLEEP_STATES)[number]
 /** Engaged gear: `P` = stopped. Absent = unknown (vehicle asleep, never read). */
 export const VEHICLE_GEARS = ['P', 'R', 'N', 'D'] as const
 export type VehicleGear = (typeof VEHICLE_GEARS)[number]
+/** A tire pressure warning raised by the vehicle: under-inflated, then much lower. */
+export const TIRE_WARNINGS = ['soft', 'hard'] as const
 
 /**
  * Where a software update of the vehicle stands. `available` = downloaded, ready to install;
@@ -306,6 +308,15 @@ export const vehicleStateSchema = z.object({
    */
   tirePressureBar: z.object({
     fl: z.number().optional(), fr: z.number().optional(), rl: z.number().optional(), rr: z.number().optional(),
+  }).optional(),
+  /**
+   * The tire pressure warnings the vehicle itself raises, per wheel: `soft` = under-inflated,
+   * `hard` = much lower (puncture). A wheel without a warning is absent; `{}` = none; the field
+   * absent = unknown.
+   */
+  tireWarning: z.object({
+    fl: z.enum(TIRE_WARNINGS).optional(), fr: z.enum(TIRE_WARNINGS).optional(),
+    rl: z.enum(TIRE_WARNINGS).optional(), rr: z.enum(TIRE_WARNINGS).optional(),
   }).optional(),
   insideTempC: z.number().optional(),
   outsideTempC: z.number().optional(),

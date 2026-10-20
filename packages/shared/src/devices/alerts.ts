@@ -20,10 +20,11 @@ export interface DeviceAlert {
   deviceId: string
   kind: DeviceKind
   severity: AlertSeverity
-  type: 'software_update' | 'device_error' | 'vigilance' | 'supply_low' | 'consumable' | 'battery_low'
+  type: 'software_update' | 'device_error' | 'vigilance' | 'supply_low' | 'consumable' | 'battery_low' | 'tire_low'
   /**
    * What the alert text names, depending on its type: the proposed version, the
-   * vendor's message, the phenomenon of the warning, the consumable (`desiccant`, `filter`).
+   * vendor's message, the phenomenon of the warning, the consumable (`desiccant`, `filter`),
+   * the under-inflated wheels (`fl,rr`).
    */
   detail?: string
 }
@@ -48,7 +49,13 @@ export function deviceAlerts(deviceId: string, state: DeviceState): DeviceAlert[
       // pending under all its statuses (scheduled, downloading…): the same update,
       // the same alert — seeing it holds for its whole life
       const up = state.softwareUpdate
-      return up ? [alert('info', 'software_update', up.version ?? '', up.version)] : []
+      const out = up ? [alert('info', 'software_update', up.version ?? '', up.version)] : []
+      // the vehicle's own judgement, one alert for all the low wheels (one stop at the pump),
+      // critical as soon as one of them is much lower
+      const tw = state.tireWarning ?? {}
+      const low = (['fl', 'fr', 'rl', 'rr'] as const).filter((k) => tw[k])
+      if (low.length) out.push(alert(low.some((k) => tw[k] === 'hard') ? 'critical' : 'problem', 'tire_low', '', low.join(',')))
+      return out
     }
     case 'mower':
       // same rule as the status line of the Robots view: an error code is enough
